@@ -8367,7 +8367,10 @@ fixed by the item's registration ADR before any code.
     its registered numbers). Not a candidate for a default. One unit check missed by round-off of its own test values
     (2.0e-12 against 1e-12) and was corrected by an amendment before the corrected run. Seven mutations caught. Not
     covered: accuracy with a moving component, RL at level 5, the combination with the other overset opt-ins beyond a
-    smoke check.
+    smoke check. ADR 0376 (F-450), 2026-11-12: G runs with the moving, turning component of ADR 0219 without a fault
+    (TG_1 and TG_2, quadratic stencils, continuity 6e-13, no refusal); the motion does not add to its excess over the
+    default coupling, which sits in the calculated background cells next to the background fringe (the one-sided
+    gradient of D5).
 - [ ] **F-446** Lab-frame memory as the behaviour of the attached matched sponge
   - depends on: F-407
   - acceptance: With the maintainer's approval, the matched forms in SpongeFrame::AttachedToMesh use the memory of the
@@ -8413,7 +8416,7 @@ fixed by the item's registration ADR before any code.
     crates/rcfd-cli/tests/workspace_graph.rs are removed with the maintainer's approval; every other crate and test is
     unchanged and the gate passes.
   - note: ADR 0350 section 5. NEEDS THE USER: removal of crates and an edit of an existing test.
-- [ ] **F-450** Overset: the prescribed fringe flux with a moving component
+- [~] **F-450** Overset: the prescribed fringe flux with a moving component
   - depends on: F-445, F-336
   - acceptance: With OversetSolver::set_fringe_flux(PrescribedOwnGradient) and the quadratic donor interpolation of
     F-336, the Taylor-Green set-up of ADR 0219 with the moving, turning component (levels 1 and 2, the corrected time
@@ -8422,7 +8425,24 @@ fixed by the item's registration ADR before any code.
     outflow balance hold to 1e-9 in every step, and no step is refused for a calculated cell between fringe cells on
     opposite sides; or the ADR names with a number what the moving fringe adds (the lag of the prescribed flux on the
     faces that change kind is the first candidate).
-  - note: From ADR 0347 question 4, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+  - note: From ADR 0347 question 4, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR
+    0376, 2026-11-12: PARTIAL. No library change: OversetSolver::set_fringe_flux(PrescribedOwnGradient) runs with the
+    moving, turning component as it stands. On TG_L of ADR 0219 with the quadratic donor interpolation on both runs and
+    dt proportional to h^2 (200 and 800 steps), every step is taken (no refusal of a cell between fringe cells, no
+    unconverged solve, no fallback), continuity 1.6e-13 and 6.2e-13, the flux into the hole region 3.8e-15 and 8.9e-15
+    and through the domain boundary 0, 142 and 503 kind changes. The largest error over the calculated and fringe cells
+    is 1.2636 times that of the default coupling at level 1 (9.7081e-4 against 7.6831e-4; limit 1.2, missed, kept as a
+    known miss) and 1.0001 at level 2 (both in the domain-boundary cell); the order of the error of G is 2.33. What the
+    moving fringe adds, measured against the same runs with the component at rest: nothing; the excess of G over the
+    default on the overlap is 1.21 and 1.06 moving against 1.43 and 1.10 at rest (m_G / m_default 0.844, 0.965), so the
+    lag on the faces that change kind does not show. The excess is local to the calculated background cells within two
+    cells of the background fringe (1.93 and 1.52 times the default there; elsewhere equal within 4 percent; the
+    hypothesis as registered after the first run is ruled out by its deciding numbers, its maximum leaving the band at
+    level 2), the one-sided pressure gradient of the ring cells of ADR 0347 D5. The root mean square error of each class
+    is that of the default within 1.1 percent or smaller. Defaults untouched (two hashes equal to the library before,
+    baseline_hashes and the existing overset tests pass). Four mutations: three caught by their checks, the fourth (the
+    flux taken relative to the moving faces) seen only by the number of the check that already misses (1.59e4). Open:
+    whether the alternative clause of the acceptance makes it done (ADR 0376 Q1).
 - [ ] **F-451** rcfd duct-modes command
   - depends on: F-333
   - acceptance: rcfd duct-modes reads a saved pressure time series on a duct section and writes the rcfd-duct-modes
@@ -8880,3 +8900,12 @@ fixed by the item's registration ADR before any code.
     entering wave's modal amplitudes at the inlet within 1 percent and ignores the returning one to 1 percent; a single
     section with a returning wave is reported by a measured residual.
   - note: From ADR 0372 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size M.
+- [ ] **F-479** Overset: a second-order own-part pressure gradient of the ring cells under the prescribed fringe flux
+  - depends on: F-450
+  - acceptance: An opt-in of FringeFlux::PrescribedOwnGradient whose ring cells take a pressure gradient of second order
+    from the calculated cells of their own part (exact for a linear pressure, no fringe value); with it, on TG_L of ADR
+    0219 moving with the quadratic donor interpolation, the largest error of the calculated background cells within two
+    cells of the background fringe is at most 1.2 times that of the default coupling at levels 1 and 2, the largest
+    error over the calculated and fringe cells at most 1.2 times, continuity and the outflow balance hold to 1e-9 in
+    every step, the checks of ADR 0347 (UA, UA2, U1) hold, and without the opt-in every result is bit-identical.
+  - note: From ADR 0376 question 2; low priority.
