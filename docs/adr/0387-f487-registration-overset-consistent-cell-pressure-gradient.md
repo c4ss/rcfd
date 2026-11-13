@@ -274,3 +274,156 @@ SSBoC near `1.5e-4`; `E(B0)` near `1.3e-3`, `E(BdL)` near `5e-3` with its larges
 ## Open questions
 
 Listed with options and a recommendation in the addendum, after the results.
+
+## Addendum 1: results (2026-11-13)
+
+Measured against the limits registered above; none was changed, no amendment was needed. Release builds on Windows.
+Commits: the registration `ea491736` (alone, before any code); the D1c record test `f49fdd1f`, run once on the unchanged
+library (fingerprints `0x6820a06f1b6a1496 0x861ab174c9e7dbe2`); the library opt-in C and the tests `d4bdd786`, compiled,
+formatted and linted before running. Run 1 of the test file (`cargo test --release -p rcfd-fv --test overset_f487 --
+--nocapture --test-threads=4`, 54 s for the ten tests, each run made once) on `d4bdd786`. Logs in
+`E:/projects/cfd/w49i-work/f487-scratch` (`d1c-record.log`, `f487-run1.log`, `existing-tests.log`, `baseline-hashes.log`,
+`f487-MU1.log` to `f487-MU4.log`).
+
+### Checks
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| A1 `E(W3oC) / E(P3oC)` (default interpolation) | `<= 2` | `1.210` (`E(W3oC) = 5.8022e-3`, `E(P3oC) = 4.7965e-3`) | met |
+| A1d `E(W3oC) / E(P3)` | `<= 2` | `1.210` (`E(P3) = 4.7965e-3`; P-diff `0`) | met |
+| A2 `E(W3qoC) / E(P3qoC)` (quadratic) | `<= 2` | `1.408` (`E(W3qoC) = 3.2887e-3`, `E(P3qoC) = 2.3353e-3`) | met |
+| A2d `E(W3qoC) / E(P3q)` | `<= 2` | `1.408` (P-diff `3.4e-13`) | met |
+| A3 continuity every step: P3oC, P3qoC, W3oC, W3qoC | `<= 1e-9` | `1.94e-14`, `1.43e-14`, `9.90e-15`, `9.29e-15` | met |
+| A4 shear with C: `E(SW3oC) / E(SP3oC)`, `/ E(SP3)`; `E(SW3qoC) / E(SP3qoC)`, `/ E(SP3q)` | `<= 2` each | `1.129`, `1.129`; `1.139`, `1.139` (`9.847e-4` over `8.720e-4`; `9.932e-4` over `8.720e-4`) | met |
+| A4c continuity SP3oC, SP3qoC, SW3oC, SW3qoC | `<= 1e-9` | `1.93e-14`, `1.91e-14`, `1.23e-14`, `1.13e-14` | met |
+| A4u uniform flow SU3oC: velocity, pressure, continuity | `<= 1e-10`, `<= 1e-10`, `<= 1e-9` | `7.47e-15`, `1.08e-13`, `6.71e-15` | met |
+| A4u uniform flow SU3qoC | the same | `7.29e-15`, `1.04e-13`, `5.56e-15` | met |
+| A4s SSBoC velocity; pressure | `<= 5e-4`; `<= 1e-3` | `1.505e-4`; `4.62e-5` | met |
+| A6 the share of the warped background in the remainder | named | see below | named |
+| C0 (set-up) C acts on W3qo | `>= 1e-6` | `0.396` | met |
+| R1 C with the corrections switched off refused | refused | refused, naming ADR 0387 | met |
+| R2 C and L both on refused | refused | refused, naming ADR 0387 | met |
+| U4 (set-up) kind changes P3oC, W3oC | `>= 20` | `99`, `92` | met |
+| Q1 (set-up) quadratic share P3qoC, W3qoC | `>= 0.95` | `1.0`, `1.0` | met |
+| U5 unconverged solves | printed | `0` in every run | - |
+| K1 C of a linear pressure under its normal gradients, warped background | `<= 1e-10` | `5.31e-15` (warped component `4.51e-15`) | met |
+| K2 (control) plain least squares, the same | `>= 1e-3` | `6.40e-2` (warped component `6.79e-2`) | held |
+| K3 plain least squares, planar background | `<= 1e-10` | `1.04e-14` | met |
+| K4 C minus plain for `p_ex` of V, planar background; planar component | `<= 1e-12` | `1.01e-14`; `1.04e-14` (the test's zero-gradient condition equals `pressure_bc`'s: met) | met |
+| K5 C over plain for `p_ex` of V, wall cells of the warped background | `<= 0.7` | `0.246` (C `2.34e-2`, plain `9.52e-2`; interior cells both `2.86e-2`) | met |
+| K6 C under the zero gradient and under the exact values, interior cells | equal | bit for bit | met |
+| D1 ADR 0367's eight default fingerprints | pass | passes (`overset_f368` 10 passed; the eight fingerprints equal) | met |
+| D1b ADR 0382's fingerprints of the corrections without L | pass | passes (`overset_f472` 8 passed, 3 ignored as before) | met |
+| D1c the corrections with L, two fingerprints | equal | equal, both (`0x6820a06f1b6a1496`, `0x861ab174c9e7dbe2`) | met |
+| D2 `baseline_hashes` (release), unedited | passes | 3 passed, 1 ignored (as before) | met |
+| D3 the 17 existing overset test files and the `rcfd-fv` lib tests (release), unedited | pass | all pass (lib 104 passed, 6 ignored; every file ok, its ignored tests left ignored; 12 min 23 s) | met |
+
+Per class (largest over the steps; BCw and BCi the background calculated cells with and without a boundary face), with the
+step and cell of the largest error:
+
+| Run | `E` | step, cell | BC | BCw | BCi | BF | CC | CF |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| P3oC (= P3) | `4.797e-3` | 6, 14990 (CF) | `1.52e-3` | `1.24e-3` | `1.52e-3` | `2.03e-3` | `3.52e-3` | `4.80e-3` |
+| P3qoC (= P3q) | `2.335e-3` | 40, 14200 (CC) | `1.24e-3` | `1.24e-3` | `9.9e-4` | `8.9e-4` | `2.34e-3` | `1.09e-3` |
+| W3oL | `5.832e-3` | 22, 14019 (CF) | `5.44e-3` | `5.44e-3` | `3.15e-3` | `2.30e-3` | `3.96e-3` | `5.83e-3` |
+| W3qoL | `5.443e-3` | 40, 13327 (BCw) | `5.44e-3` | `5.44e-3` | `3.15e-3` | `1.85e-3` | `3.28e-3` | `1.74e-3` |
+| W3oC | `5.802e-3` | 22, 14019 (CF) | `3.09e-3` | `2.99e-3` | `3.09e-3` | `2.30e-3` | `3.96e-3` | `5.80e-3` |
+| W3qoC | `3.289e-3` | 40, 14157 (CC) | `3.09e-3` | `2.99e-3` | `3.09e-3` | `1.85e-3` | `3.29e-3` | `1.74e-3` |
+| B0 (planar background alone) | `1.231e-3` | 40, 13265 (BCw) | `1.23e-3` | `1.23e-3` | `8.2e-4` | | | |
+| BdL (warped background alone, L) | `5.443e-3` | 40, 13327 (BCw) | `5.44e-3` | `5.44e-3` | `3.15e-3` | | | |
+| BdC (warped background alone, C) | `3.089e-3` | 40, 9190 (BCi) | `3.09e-3` | `3.00e-3` | `3.09e-3` | | | |
+
+### A6: the share of the warped background in the remainder
+
+The remainder `R_X = E(W3qoX) - E(P3q)` and `rho_X = (E(BdX) - E(B0)) / R_X`:
+
+- **L** (ADR 0382's remainder): `R_L = 3.108e-3`, `rho_L = (5.443e-3 - 1.231e-3) / 3.108e-3 = 1.36`; default interpolation
+  `R = 1.035e-3`, `rho = 4.07`. The warped background alone carries the whole remainder (a share above one because both
+  are differences of largest errors): BdL's largest error is W3qoL's, the same cell `13327` at step 40 and the same value
+  `5.443e-3` to four digits, a wall cell of the outflow patch (reading 2 of the registration, confirmed). Its interior
+  cells carry `3.15e-3`.
+- **C**: `R_C = 9.53e-4`, `rho_C = (3.089e-3 - 1.231e-3) / 9.53e-4 = 1.95`; default interpolation `R = 1.006e-3`,
+  `rho = 1.85`. With C the wall cells fall from `5.44e-3` to `3.0e-3` (in W3qoC, W3oC and BdC alike) and the background's
+  largest error is now interior (BCi `3.09e-3`, the same in BdC and W3qoC to three digits): what is left of the warped
+  background is the interior first-order error of the least-squares gradient (K: `2.86e-2` against the planar `1.60e-2`),
+  which C does not touch. W3qoC's largest error is in the component (CC `3.29e-3`, L's value).
+
+### Deviations and disclosures
+
+- The predictions held: A1 `1.21` (predicted `1.22`), A2 `1.41` (predicted `1.4` to `1.65`), W3qoC's largest error in
+  the component (CC), K5 `0.25` (predicted `0.3` to `0.5`), K2 `0.064` (predicted `0.02` to `0.07`), C0 `0.40` (predicted
+  `0.35`), `E(B0) = 1.23e-3` (predicted `1.3e-3`), `E(BdL) = 5.44e-3` in a wall cell (predicted `5e-3`, `BCw`), `E(BdC) =
+  3.09e-3` (predicted `2.5e-3`, inside `1.5e-3` to `3.5e-3`), `rho_L = 1.36` (predicted `1.2`).
+- The cell index `13327` was decoded before the registration from the mesh generator's numbering (no run), as disclosed
+  there.
+- On the warped and the planar component the printed wall-cell error of `p_ex` under a zero gradient is `0.70` for C and
+  plain least squares alike: the component's boundary is the overset outer patch, where V's pressure has no zero normal
+  gradient; the test applies the condition there only to print it (no check; in the solver those cells are fringe cells
+  and take donor-interpolated gradients).
+- On B3 C equals the default to the printed digits (P-diff `0` and `3.4e-13`), as derived.
+
+### Mutations
+
+Applied alone by `f487-scratch/mutate.py` (exact replacements, each found once) to a `git archive` copy of `d4bdd786`
+(`f487-scratch/mut`, own target directory); the named test run once each; `overset.rs` restored and compared byte for byte
+with the worktree afterwards.
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 the normal rows not used (full `d_b` with the condition's value) | K1 (and C0) | caught: K1 `6.40e-2` (C equals plain least squares), also K5 `1.0`; C0 `0` |
+| MU2 the flag of C on in `new` | D1, D1c | caught: all eight D1 fingerprints differ and both D1c fingerprints differ (every step refused) |
+| MU3 `piso` with the flag takes L's gradient | C0 | caught: C0 `0` |
+| MU4 the increment of a normal row with the opposite sign | K1 | caught: K1 `1.01` |
+
+`scripts/limit_audit.py` on the new test file: 0 hits.
+
+### After the tests
+
+`cargo fmt -p rcfd-fv --check` clean; `cargo clippy -p rcfd-fv --all-targets --release -- -D warnings` clean. Crate
+touched: `rcfd-fv` only (`src/overset.rs`: the module text, the field, the setter and getter, the refusal, the function C
+and the fringe-and-hole helper that `gradients` now calls with the same operations, the two branches of `piso`;
+`src/gradient.rs`: `solve_masked` made `pub(crate)`; new `tests/overset_f487.rs`); `docs/dynamic-mesh.md` gained a
+paragraph. The gate's share of the new file: ten tests, about 55 s.
+
+### Not run
+
+The whole workspace test suite (the lead runs the gate). No second resolution, warp amplitude or flow; no gradient exact
+for quadratic fields (the interior remainder); C4's pressure gradients and the velocity gradients keep their boundary rows.
+
+### Decision by the registered rule
+
+**Done.** Every acceptance clause is met: with `OversetSolver::set_consistent_geometry_corrections` (the corrections of
+`set_geometry_corrections` with a cell pressure gradient exact for linear fields under the step's conditions on B3d) the
+vortex on B3d is `1.21` and `1.41` times its error on B3 (limit 2, against B3 with the opt-in and with the default),
+continuity `2e-14` or less every step, ADR 0367's shear (`1.13`, `1.14`), uniform flow (`1e-13`) and K7 (`1.5e-4`)
+within their limits, and the warped background alone names its share (with L the whole remainder, in a wall cell; with C
+the interior least-squares error). Every other registered check is met, the control held, the four mutations were caught
+by their registered checks. One reading to note: the acceptance's "set_geometry_corrections takes ..." is met by a new
+entry point beside it, because existing fingerprints cover `set_geometry_corrections` itself (registration, "The decision
+on bit-identity").
+
+### Remaining questions (each with options and a recommendation)
+
+Recommendations are taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation) as proposals to
+the lead; none is a decision the maintainer made in person.
+
+- **Q1. Fold C into `set_geometry_corrections`.** Options: (a) keep the two entry points; (b) make
+  `set_geometry_corrections` take C, re-record ADR 0382's D1b fingerprints and retire its L0 check. Recommendation (a):
+  (b) needs the maintainer to re-record an existing fingerprint test, and gives a caller nothing the new entry point does
+  not.
+- **Q2. The interior remainder of the warped background** (`BCi 3.09e-3` against B3's `9.9e-4`). Options: (a) record;
+  (b) a pressure gradient exact for quadratic fields (a Hessian-corrected least squares). Recommendation (a): both ratios
+  are under 2 with room; revisit if a finer or more distorted mesh needs it.
+- **Q3. The same normal rows for C4's pressure gradients.** Options: (a) leave; (b) a separating run. Recommendation (a):
+  C4 sees the cell gradients only through the non-orthogonal part of internal faces, and the velocity gradients have value
+  conditions, which are exact already.
+
+## For the lead: roadmap entries
+
+No roadmap file was edited.
+
+**F-487**, proposed status: `done`. Proposed note:
+
+> From ADR 0382 Q1 and Q2, recommendations taken on the maintainer's standing instruction of 2026-11-11. ADR 0387, 2026-11-12: DONE. ADR 0382's L was a separate diagnostic flag whose gradient is exact for linear fields only with exact boundary values; the remainder it left on B3d is in the wall cells of the warped background (cell 13327, outflow patch), where a zero-gradient pressure row with the value p_c is exact only if the cell centre lies on the face normal. New opt-in OversetSolver::set_consistent_geometry_corrections (set_geometry_corrections kept as it is, because ADR 0382's fingerprints cover it): the corrections with the least-squares gradient whose prescribed-gradient boundary faces contribute their normal row only (GeometryCorrections::consistent_pressure_gradients), exact for linear fields under the step's pressure conditions on any mesh (5e-15 on B3d; plain least squares 6.4e-2). The Taylor-Green vortex with an axial velocity on B3d with the component moving: 1.21 (default stencils) and 1.41 (quadratic) times its error on B3 (limit 2), continuity 2e-14 every step; ADR 0367's shear 1.13 and 1.14, uniform flow 1e-13, warped background alone 1.5e-4, all within their limits. The warped background alone names its share: with L it carries the whole remainder (5.44e-3, the same wall cell), with C its wall cells fall to 3.0e-3 and what is left is the interior first-order least-squares error (3.09e-3). Defaults, the corrections without L and with L bit-identical (ADR 0367's eight fingerprints, ADR 0382's two, two new ones); baseline_hashes and the overset tests pass; four mutations caught.
+
+No follow-up item is proposed (Q2 is recorded).
