@@ -233,3 +233,145 @@ than two cells.
 The decision rule is unchanged. Said here before the further runs: A1 is missed at level 1, so by the registered rule only
 its alternative clause can give done, and by the campaign's Rule I (a missed registered check) the status is partial; the
 addendum states both.
+
+## Addendum 1: results (2026-11-12)
+
+Measured against the limits and deciding numbers registered above and in amendment 1; none was changed. Release builds on
+Windows. Commits: the registration `4407610a` (alone, before any code); the tests with the B1 reference hashes `2806c441`
+(the hashes measured once on the registration commit before any other run); amendment 1 with the level-1 known miss, the
+fast test of the met checks and HR `89c0d70d` (before the level-2 run and before the repeat of level 1); the record S1 and
+formatting `af8fb31d`; this addendum. Each registered run was made once; the deterministic level-1 runs were repeated once
+by the fast test of amendment 1 and printed the same digits. Logs: `E:/projects/cfd/w49i-work/f450-scratch`
+(`b1-base.log`, `f450-fast.log`, `f450-fast2.log`, `f450-level2.log`, `b2-*.log`, `f450-MU1.log` to `f450-MU4.log`).
+
+### What was built
+
+No library code. `crates/rcfd-fv/src/overset.rs`, `pimple.rs` and every other source file are untouched (`git diff
+56a14aa5 -- crates/*/src` is empty). New: `crates/rcfd-fv/tests/overset_f450.rs` (3 tests run, 2 ignored: the level-1 known
+miss and the level-2 record). The opt-in of ADR 0347 runs with a moving, turning component as it stands (item 1 of the
+arithmetic).
+
+### What the runs found, in short
+
+1. **G runs with the moving, turning component without a fault.** Every step of both levels is taken (200 and 800, no
+   refusal of D5, no unconverged solve, no fallback of the quadratic stencils), continuity `1.55e-13` and `6.23e-13`, flux
+   into the hole region `3.8e-15` and `8.9e-15`, through the domain boundary `0`; 142 and 503 kind changes.
+2. **The error ratio misses 1.2 at level 1 and is 1.0001 at level 2.** Level 1: `e_max` `9.7081e-4` (G) against
+   `7.6831e-4` (default): `1.2636`. Level 2: `1.9301e-4` against `1.9299e-4`. At level 2 both maxima are in the
+   domain-boundary cell of the background (item 2 of the arithmetic); at level 1 the maximum of G is a calculated
+   background cell one to two cells outside the background fringe.
+3. **The motion adds nothing to the excess of G; it is there at rest.** The split D: `e_ov(G) / e_ov(default)` (largest
+   error over CF, CC, BF) is `1.2065` moving and `1.4298` at rest at level 1, `1.0638` and `1.1021` at level 2; so `m_G /
+   m_default = 0.8438` and `0.9652`: with the component moving the excess of G over the default is smaller than at rest.
+   The first candidate of the acceptance, the lag of the prescribed flux on the faces that change kind, does not show: the
+   number it would have to produce (`m_G / m_default > 1`) is below one at both levels. With the component at rest the
+   `e_max` ratio is `1.3977` at level 1 (the motion lowers it to `1.2636`) and `1.0000` at level 2.
+4. **The excess lives next to the background fringe and falls faster than the error.** In the background band `B` (the
+   calculated cells within two face steps of a background fringe cell) the largest error of G is `9.7081e-4` and `1.7016e-4`
+   (order `2.51`) against `5.0226e-4` and `1.1219e-4` of the default (order `2.16`): `1.93` and `1.52` times, moving. Away
+   from the bands the background error of G equals the default's (`e_out` ratio `1.0000`, `1.0001` moving; `1.0419`,
+   `1.0000` at rest). This is the one-sided pressure gradient of D5 in the ring cells (ADR 0347 "limits": first order in
+   the gradient of the ring cells), at the background ring only: the component band ratio is `1.2065` and `1.0638`.
+
+### Checks
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| A1 `e_max(G) / e_max(default)`, level 1 | `<= 1.2` | `1.2636` (`9.7081e-4` / `7.6831e-4`) | **missed** (known-miss test) |
+| A1 the same, level 2 | `<= 1.2` | `1.0001` (`1.9301e-4` / `1.9299e-4`) | met |
+| A2 continuity of G, every step, levels 1, 2 | `<= 1e-9` | `1.55e-13`, `6.23e-13` | met |
+| A3 flux into the hole region; through the domain boundary, every step, levels 1, 2 | `<= 1e-9` each | `3.8e-15`, `8.9e-15`; `0`, `0` | met |
+| A4 no refused step, G, levels 1, 2 | all steps | 200 of 200, 800 of 800 | met |
+| C3 unconverged solves; fallbacks, all eight runs | `0`; `0` | `0`; `0` | met |
+| K (set-up) kind changes, G, level 1 | `>= 20` | 142 (503 at level 2) | held |
+| S1 order of `e_max(G)`, levels 1 to 2 (record between test processes) | `>= 1.7` | `2.330` | met |
+| B1 hashes without the opt-in, quadratic and linear stencils | exact | `e43a026a778e83b3`, `9c5ab1e5b21d5368`, equal to the unedited library | met |
+| B2 `baseline_hashes`; the existing `overset_*.rs` files; `rcfd-fv --lib`; release, unedited | all pass | `baseline_hashes` 3 passed; `overset_f134`, `f134_records`, `f314`, `f334`, `f335`, `f335_records`, `f336`, `f338`, `f349`, `f353`, `f357`, `f359`, `f368`, `f445`, `motion_f442`: 12, 1, 4, 3, 5, 4, 5, 9, 3, 1, 5, 5, 10, 9, 3 passed; `--lib` 104 passed; none failed (on `89c0d70d`, the library of 56a14aa5) | met |
+
+| Hypothesis (amendment 1) | Deciding numbers | Measured | Verdict |
+| --- | --- | --- | --- |
+| HR the excess of G is confined to the calculated cells next to a fringe ring | confirmed: the cell of `e_max(G)` in `B` or `B_C` in the four G runs, and `e_out(G) / e_out(default) <= 1.05` in the four pairs; ruled out: the maximum outside both bands in two or more G runs | maximum in `B`: level 1 moving and at rest yes, level 2 moving and at rest no (there the maximum is the domain-boundary cell, `B` holds `1.7016e-4` and `1.1795e-4` against `1.9301e-4` and `1.9300e-4`); `e_out` ratios `1.0000`, `1.0419`, `1.0001`, `1.0000` | **ruled out by its registered numbers** |
+
+Reading of HR, said plainly: the second half of its test (the error away from the bands is that of the default coupling,
+within 4.2 percent) holds in all four pairs, and the excess is in `B` at both levels (finding 4). The first half was
+posed badly: at level 2 the excess of the band lies below the boundary error of the background, so the maximum leaves the
+band although the excess is still there. By its registered deciding numbers HR is ruled out; I do not re-word it.
+
+Printed, no limit. Run times (one process, loaded machine): level 1 G moving 2.9 s, default moving 3.0 s, G at rest 2.8 s,
+default at rest 26.7 s (once, the machine was loaded by other builds); level 2 115 s, 203 s, 75 s, 83 s. Root mean square
+errors by class, level 1 moving, G / default: CF `3.73e-4` / `3.83e-4`, CC `3.56e-4` / `3.99e-4`, BF `3.41e-4` / `3.88e-4`,
+BC `5.51e-4` / `5.45e-4`: the root mean square of G is within 1.1 percent of the default or smaller; the excess is a local maximum.
+
+### Mutations
+
+Applied alone to a `git archive` copy of `89c0d70d` (`f450-scratch/mut`, own target directory) by `mutate.py` (an exact
+replacement that must occur once), the named test run once, the file restored and compared byte for byte with the
+worktree's (equal in all four). The commits after `89c0d70d` change only the test file (the record S1, formatting) and
+this ADR; `overset.rs` is the file of main 56a14aa5 in both.
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 `q_R = 0` | A2 or A3 | failed: continuity and flux into the hole region `1.2e-2` (A1 `7.44`) |
+| MU2 the threshold of D5 `0.3` | A4 | failed: step 1 refused (cell 532), no step taken |
+| MU3 the prescribed flux relative to the moving faces | A1 | A1 `1.59e4` (unmutated `1.2636`); disclosed: A1 at level 1 already misses without the mutation, so the test that asserts A1 (the known miss) fails either way; the fast test that ran passes (it does not assert A1, and A2 `1.3e-12`, A3, A4 hold). The mutation is seen by A1's number only |
+| MU4 the default mode builds the ring | B1 | failed: the hash of the quadratic run differs |
+
+`scripts/limit_audit.py`: no hit in the new test file.
+
+### Deviations and disclosures
+
+- No library change was made, as item 1 predicted; the defaults checks (B1, B2) therefore measure an unchanged library.
+- The registered level-1 test became an ignored known miss after its run (amendment 1); its met checks are asserted by a
+  new fast test on the same deterministic runs.
+- HR was registered after the level-1 run (amendment 1); its numbers at level 1 were read from the same deterministic runs.
+- MU3 (above): caught by the number of its check, not by a test that passes without it.
+- My predictions: A2, A3, A4, C3, K, S1, B1 right; A1 "within 1.02 at both levels" wrong at level 1 (`1.2636`), right at
+  level 2 (`1.0001`); "`e_ov` ratio between 1 and 1.5": right (`1.21`, `1.06`); "D unknown".
+
+### Not run
+
+Level 3; the linear stencils with G under motion; BDF2, outer iterations or `rhie_chow_step_consistent` with G under
+motion; the ignored records of the other overset files and the workspace suite (the lead runs the gate).
+
+### After the tests
+
+`cargo fmt -p rcfd-fv --check` clean; `cargo clippy -p rcfd-fv --all-targets -- -D warnings` clean. Final tree:
+`overset_f450` 3 passed, 2 ignored (13 s).
+
+### Decision by the registered rule
+
+The registered rule gives **done by its alternative clause**: A1 is missed at level 1, A2, A3, A4, C3, B1, B2 hold, and
+the split D registered before the runs names with its numbers what the moving fringe adds (`m_G / m_default = 0.844`,
+`0.965`: nothing) and what is there at rest (`e_ov(G) / e_ov(default) = 1.430`, `1.102`). The campaign's Rule I (a missed
+registered check makes it partial; MU3 caught only by the number of an already missing check) gives **partial**. Proposed:
+**partial** (question 1).
+
+### Open questions (each with options and a recommendation)
+
+- **Q1. The status of F-450.** Options: (a) partial by Rule I; (b) done by the alternative clause of the acceptance ("or the
+  ADR names with a number what the moving fringe adds": nothing, `0.844` and `0.965`). Recommendation (a). Taken on the
+  maintainer's standing instruction of 2026-11-11 (take the recommendation); not a decision the maintainer made in person,
+  and (b) is the maintainer's to choose.
+- **Q2. The excess of G next to the background fringe.** It is the one-sided gradient of D5 (finding 4), present at rest,
+  largest on the coarse level (`1.93` times the default in `B` at level 1, `1.52` at level 2). Options: (a) a follow-up item
+  for a second-order gradient of the ring cells under G (the own-part least-squares gradient over the cell and its
+  calculated neighbours, which is exact for a linear pressure and needs no fringe value), measured on this set-up and on RE;
+  (b) leave it, G being an opt-in without a default role. Recommendation (a), low priority. Taken on the standing
+  instruction as a proposal to the lead.
+- **Q3. G as a default.** It changes results, so it is not taken: **open** (as ADR 0347 Q3). My reading: no.
+
+### For the lead: roadmap entries
+
+No roadmap file was edited.
+
+**F-450**, proposed status: `partial`. Proposed note:
+
+> From ADR 0347 question 4, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0376, 2026-11-12: PARTIAL. No library change: OversetSolver::set_fringe_flux(PrescribedOwnGradient) runs with the moving, turning component as it stands. On TG_L of ADR 0219 with the quadratic donor interpolation on both runs and dt proportional to h^2 (200 and 800 steps), every step is taken (no refusal of a cell between fringe cells, no unconverged solve, no fallback), continuity 1.6e-13 and 6.2e-13, the flux into the hole region 3.8e-15 and 8.9e-15 and through the domain boundary 0, 142 and 503 kind changes. The largest error over the calculated and fringe cells is 1.2636 times that of the default coupling at level 1 (9.7081e-4 against 7.6831e-4; limit 1.2, missed, kept as a known miss) and 1.0001 at level 2 (both in the domain-boundary cell); the order of the error of G is 2.33. What the moving fringe adds, measured against the same runs with the component at rest: nothing; the excess of G over the default on the overlap is 1.21 and 1.06 moving against 1.43 and 1.10 at rest (m_G / m_default 0.844, 0.965), so the lag on the faces that change kind does not show. The excess is local to the calculated background cells within two cells of the background fringe (1.93 and 1.52 times the default there; elsewhere equal within 4 percent; the hypothesis as registered after the first run is ruled out by its deciding numbers, its maximum leaving the band at level 2), the one-sided pressure gradient of the ring cells of ADR 0347 D5. The root mean square error of each class is that of the default within 1.1 percent or smaller. Defaults untouched (two hashes equal to the library before, baseline_hashes and the existing overset tests pass). Four mutations: three caught by their checks, the fourth (the flux taken relative to the moving faces) seen only by the number of the check that already misses (1.59e4). Open: whether the alternative clause of the acceptance makes it done (ADR 0376 Q1).
+
+**F-445**, status unchanged (`partial`). Add to its note:
+
+> ADR 0376 (F-450), 2026-11-12: G runs with the moving, turning component of ADR 0219 without a fault (TG_1 and TG_2, quadratic stencils, continuity 6e-13, no refusal); the motion does not add to its excess over the default coupling, which sits in the calculated background cells next to the background fringe (the one-sided gradient of D5).
+
+Proposed follow-up item (the number is the lead's): **Overset: a second-order own-part pressure gradient of the ring cells under the prescribed fringe flux.** Depends on F-450. Acceptance:
+
+> An opt-in of FringeFlux::PrescribedOwnGradient whose ring cells take a pressure gradient of second order from the calculated cells of their own part (exact for a linear pressure, no fringe value); with it, on TG_L of ADR 0219 moving with the quadratic donor interpolation, the largest error of the calculated background cells within two cells of the background fringe is at most 1.2 times that of the default coupling at levels 1 and 2, the largest error over the calculated and fringe cells at most 1.2 times, continuity and the outflow balance hold to 1e-9 in every step, the checks of ADR 0347 (UA, UA2, U1) hold, and without the opt-in every result is bit-identical.
