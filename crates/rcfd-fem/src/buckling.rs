@@ -4,7 +4,8 @@
 //! The lowest positive factors `lambda` of `(K + lambda K_sigma) x = 0` (ADR 0390 D6), `K_sigma` the geometric stiffness of
 //! the pre-stress of a reference load ([`crate::geometric::Prestress`]): the load `lambda` times the reference one buckles
 //! the model. Both matrices are reduced by the elimination of the model's zero prescribed displacements, which must hold
-//! every rigid motion (`K` positive definite), and the factors come from
+//! every rigid motion and every mechanism (`K` positive definite; a reduced `K_FF` with a zero-shift pivot ratio below
+//! `1e-8` is refused, ADR 0402), and the factors come from
 //! [`rcfd_linalg::eigen::lowest_buckling_factors`], verified by its Sturm count of `K + s K_sigma`. A pre-stress with no
 //! direction of compression gives no factor, and the result says below which value there is none
 //! ([`BucklingResult::exhausted`]).
@@ -102,7 +103,9 @@ impl BucklingResult {
 /// `(T^T K_ext T + lambda T^T K_sigma T) q = 0`, `K_ext` with the supports, zero constraint values only, each mode expanded,
 /// `x = T q`; a motion the constraints and supports leave free, rigid or not, is refused by the zero-shift pivot-ratio rule
 /// of ADR 0384 on `T^T K_ext T` (a pivot `d_i < 1e-8 a_ii`; ADR 0401), `FemError::Solver` naming the unknown of the failing
-/// pivot. A spring so soft that its pivot ratio is below the rule is refused too.
+/// pivot. A spring so soft that its pivot ratio is below the rule is refused too. On the prescribed-displacement path the
+/// same rule is applied to `K_FF` after the rigid-motion test (ADR 0402): a mechanism that is not rigid, such as two parts
+/// joined by a hinge line, is refused with `FemError::Solver` naming the unknown of the failing pivot.
 pub fn factors(model: &SolidModel, prestress: &Prestress, options: &BucklingOptions) -> Result<BucklingResult> {
     model.validate()?;
     model.check_supported()?;
@@ -134,6 +137,17 @@ pub fn factors(model: &SolidModel, prestress: &Prestress, options: &BucklingOpti
             reason: format!(
                 "{} factors requested of a model with {nf} free unknowns (at least 1 and fewer than the unknowns)",
                 options.factors
+            ),
+        });
+    }
+    if let Ok(Some((row, ratio))) = crate::mpc::zero_shift_failing_pivot(&kr.matrix) {
+        let (node, component) = dofs.node_component(free[row]).expect("free equation");
+        return Err(FemError::Solver {
+            solver: "lowest_buckling_factors",
+            reason: format!(
+                "node {node} component {component}: pivot ratio {ratio:e} of K_FF at zero shift, below 1e-8 (the rule of \
+                 Shift::Auto, ADR 0384): the prescribed displacements leave a motion free that is not a rigid motion of a \
+                 part (a mechanism); a buckling analysis needs every motion held (ADR 0402)"
             ),
         });
     }
