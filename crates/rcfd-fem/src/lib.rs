@@ -34,6 +34,7 @@ pub mod mpc;
 pub mod nonlinear;
 pub mod quadrature;
 pub mod recover;
+pub mod refine;
 pub mod rotating;
 pub mod shell;
 pub mod solve;
