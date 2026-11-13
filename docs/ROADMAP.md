@@ -6949,7 +6949,10 @@ fixed by the item's registration ADR before any code.
     misses (the lag map of the settings that run below one; the map without the reconstruction below one; the raise of
     the map by the reconstruction; the faces leading the growth). Open (ADR 0374 Q1 to Q4): the form of the refusal (a
     smaller step also runs), PIMPLE with one corrector, the mechanism (a linearisation of the whole step), the lag
-    estimate at an immersed body (above one for a setting that runs).
+    estimate at an immersed body (above one for a setting that runs). ADR 0388 (2026-11-13, F-483): the estimate above
+    one at the body is an eigenvalue of the frozen map at the first BDF2 step (converged 1.175 for the first-order
+    forcing, 1.248 for the bounded form), below one by step 11 for both (0.977, 0.988); it is not caused by the pressure
+    solve and does not predict the stop.
 - [ ] **F-364** Second-order immersed forcing: one constructor with bounded weights
   - depends on: F-355
   - acceptance: `build_second_order` builds the bounded form of ADR 0254, the refusal of the unbounded form is removed,
@@ -7698,7 +7701,7 @@ fixed by the item's registration ADR before any code.
     errors with the element or the step.
   - note: Structural solver, intermediate tier (plan ADR 0290, 2026-11-12). Size M. Stub ADR 0300; the registration is
     written by the implementation agent before any code.
-- [ ] **F-398** Linear transient dynamics: Newmark and generalised-alpha integration, Rayleigh damping, load histories
+- [~] **F-398** Linear transient dynamics: Newmark and generalised-alpha integration, Rayleigh damping, load histories
   - depends on: F-388, F-373, F-374, F-383
   - acceptance: Every limit not stated here is registered in the ADR before the run. Free vibration started in the first
     axial mode of a bar (the discrete eigenvector): with Newmark the amplitude after 100 periods is within 1e-9 and the
@@ -7710,8 +7713,18 @@ fixed by the item's registration ADR before any code.
     factor within 1e-3 while the period error of the first mode keeps order >= 1.9. A run split in two by save and
     restore has the bits of the unsplit run; results are bit-identical for 1 and 8 threads; a non-positive step, a table
     that does not cover the run and a singular effective matrix are refused.
-  - note: Structural solver, intermediate tier (plan ADR 0290, 2026-11-12). Size M. Stub ADR 0301; the registration is
-    written by the implementation agent before any code.
+  - note: ADR 0389, 2026-11-13: rcfd-fem transient::Integrator: Newmark (beta, gamma; average acceleration by default)
+    and generalised-alpha (rho_inf, parameters re-derived: triple root -rho_inf at infinity), Rayleigh damping
+    (from_ratio), piecewise linear LoadTable with exact coverage checks, LoadHistory patterns, one factor of the
+    effective matrix, initial acceleration from M, state saved and restored as bytes (RCFDTRS1). Bar of 20 Hex8:
+    amplitude after 100 periods 9e-15, energy 2.5e-14, period error 0.9974 and 0.9993 of (omega dt)^2/12, order 1.997;
+    step-load peak 1.0e-5 from twice static; Rayleigh 0.02 decrement 1.7e-3; rho_inf = 1 equals Newmark to 1.6e-14;
+    split run and 1/8 threads bit-equal; the three refusals and 16 more. Known miss A8: the method decays at omega dt =
+    1e3 by 0.50785 and 0.80772 (its closed form to 5e-11), not by rho_inf within 1e-3 (it does at 1e6: 7.8e-5); the
+    acceptance text asks for a property the method does not have. Linear only; transformation path and prescribed motion
+    histories refused. Open for the maintainer (ADR 0389 Q1): re-word clause a8 to the method's closed-form spectral
+    radius within 1e-6 at omega dt = 1e3 and rho_inf within 1e-3 at 1e6 (A8c, A8d, both met), which would make the item
+    done. Follow-up F-490.
 - [ ] **F-399** Harmonic response by mode superposition: modal damping, static correction, effective mass, force harmonics
   - depends on: F-388, F-374, F-383
   - acceptance: Every limit not stated here is registered in the ADR before the run. A load proportional to M phi_1 at
@@ -9119,14 +9132,29 @@ fixed by the item's registration ADR before any code.
   - note: From ADR 0374 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR
     0374 narrowed the stop (the time step, the body, a period-two oscillation, two correctors damp it); the frozen
     pressure-lag map did not separate the settings.
-- [ ] **F-483** Pressure-lag estimate at an immersed body
+- [~] **F-483** Pressure-lag estimate at an immersed body
   - depends on: F-363
   - acceptance: The pressure-lag estimate of ADR 0073 for DFG 2D-2 on M2 with the first-order immersed forcing and one
     corrector at dt 1e-3 (ADR 0374: 1.13 to 1.30 for a run that runs, the mode in a solid cell at the surface) is
     explained by a registered measurement (the solid cells, the start and the tolerance of the pressure solve), and
     either the estimate leaves out what is not a fluid mode, opt-in or with the defaults bit-identical, so that it is
     below one for that run and above one for a setting that stops, or the limitation is documented with its numbers.
-  - note: From ADR 0374 question 4, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+  - note: PARTIAL (ADR 0388, 2026-11-13), in the library. From ADR 0374 question 4, recommendation taken on the
+    maintainer's standing instruction of 2026-11-11. The pressure-lag estimate of DFG 2D-2 on M2 with the first-order
+    immersed forcing and one corrector at dt 1e-3 was reproduced (1.19855 at step 2, 0.99826 at step 11 with 40 power
+    iterations) and explained by registered measurements: it is not the pressure solve (started from zero, or solved to
+    1e-12 without an absolute floor, the estimate is the same to seven digits), but an eigenvalue of the frozen map at
+    the surface at the first BDF2 step, converged at 1.1746 with 320 iterations (the 1.29 of 20 iterations is a
+    transient of the power iteration) and 0.977 at step 11; the mode has half its weight in the solid cells at step 2
+    and gives the same eigenvalue over the fluid cells alone (1.1749); the channel without the cylinder gives 0.787. The
+    bounded forcing, which stops at step 34, shows the same pattern (1.248 at step 2, 0.988 at step 11), so no variant
+    of the estimate is below one for the run and above one for the setting that stops: the limitation is documented with
+    its numbers. Delivered: the opt-in estimate options PimpleSolver::lag_fluid (LagFluid::FLUID: the pressure solves of
+    the map started from zero, the norm, level and mode cell over the fluid cells; a tolerance override as a diagnostic)
+    and PimpleSolver::lag_trial_mode (the estimate with its mode); the defaults are bit-identical (the fingerprints of
+    ADR 0374 including two lag estimates, baseline_hashes); six mutations caught. Partial by the registered rule: known
+    misses A1 at step 11, A2, A3, B1, and I1 and I2 of amendment 1. Open (ADR 0388 Q1, Q2): keep LagFluid as a
+    diagnostic; document a later start of the lag check for immersed runs.
 - [x] **F-484** Hex20 face loads through the model path
   - depends on: F-389
   - acceptance: Every limit not stated here is registered in the ADR before the run. Load::Traction and Load::Pressure
@@ -9213,3 +9241,12 @@ fixed by the item's registration ADR before any code.
     sets are accepted at k > 0 (their reference unknowns doubled) and the frequencies of a sector with a rigid set equal
     the full model's within 1e-8.
   - note: From ADR 0386 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S.
+- [ ] **F-490** Transient integrator on the transformation path and with prescribed motion histories
+  - depends on: F-398
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A bar with a nodal spring at its
+    free end (the support of ADR 0384) started in its first discrete mode: with Newmark the amplitude after 100 periods
+    within 1e-9 and the period long by (omega dt)^2/12 within 5 percent of that amount at omega dt = 0.2 and 0.1; a
+    rigid-set end gives the same history as the equivalent prescribed-only model within 1e-12; a base displacement given
+    by a table gives the relative motion of the closed-form base-excited oscillator within 1 percent at 40 steps per
+    period; models without these features give the bits of ADR 0389's integrator.
+  - note: From ADR 0389 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S.
