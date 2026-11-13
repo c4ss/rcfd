@@ -8863,13 +8863,25 @@ fixed by the item's registration ADR before any code.
     never interchange), T no longer stops at 2951, and its run differs from ADR 0363 H1 from step 2917 on. Seven
     mutations caught. Partial by Rule I: the check L4 missed (the Laplacian's coarsest LU interchanges at step 0,
     harmless to the order) and was corrected by amendment 1. Open: switching the default (maintainer; recommended).
-- [ ] **F-475** Studio preview of a case with [mesh.adapt] shows the adapted mesh
+- [~] **F-475** Studio preview of a case with [mesh.adapt] shows the adapted mesh
   - depends on: F-342
   - acceptance: The Studio mesh preview of a case with [mesh.adapt] shows the mesh the run solves on (the adapted mesh
     of Simulation::new, with its cell count and mesh hash), and preview_g1's
     g1_g7_shipped_cases_preview_the_solvers_mesh compares cases/cavity/adapt_re100.toml with Simulation::new like every
     other case, without the base-mesh exception added on 2026-11-13.
-  - note: From the gate 4 fix (ADR 0262 addendum, 2026-11-13).
+  - note: From the gate 4 fix (ADR 0262 addendum, 2026-11-13). ADR 0377, 2026-11-12: the Studio preview of a case with
+    [mesh.adapt] builds the mesh Simulation::new sets the run up on (the base lattice, 576 cells for
+    cases/cavity/adapt_re100.toml, with the solver's numbering and hash), then runs the run's adaptive loop
+    (rcfd_api::sim::adapted_mesh, the first step's loop with a cancellation poll before each solve) and shows its final
+    mesh, the mesh the run solves on after its first step (2799 cells, mesh hash 05bb8beae5da57da, equal bit for bit to
+    Simulation::new plus one step); the Mesh side gives its cells and mesh hash and the loop's cost (3 solves of 576,
+    1,269 and 2,799 cells, 97 + 122 + 188 iterations, about 2.5 s); a case the run refuses is shown unadapted with the
+    reason. g1_g7_shipped_cases_preview_the_solvers_mesh compares the adaptive case with Simulation::new like every
+    other case, without the 2026-11-13 exception (the file is again its text before gate 4). A newer request stops the
+    loop at the next solve (D2: the thread ended at 0.29 of a full build); no other case's preview, run, store or hash
+    changes (E1, all rcfd-studio tests, baseline_hashes, the F-342 and F-476 tests pass unedited). Five mutations each
+    failed their tests, M4 only after a corrected script (ADR 0377 amendment 2), hence partial by Rule I. Open: ADR 0377
+    Q1 (Simulation::new keeps the base lattice), Q2, Q4 (a solve in progress is not interrupted).
 - [x] **F-476** Field store of a run with [mesh.adapt] writes the adapted mesh
   - depends on: F-342, F-263
   - acceptance: A run of cases/cavity/adapt_re100.toml with output.store_interval set writes a readable field store
