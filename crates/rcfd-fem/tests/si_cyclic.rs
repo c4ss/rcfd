@@ -617,6 +617,7 @@ fn r5_cyclic_constraint_count_refused() {
 }
 
 #[test]
+#[ignore = "record of ADR 0386 before ADR 0395 (F-489) accepted rigid sets at k > 0; the valid row is kept in the _after_landed copy below (maintainer, 2026-11-13)"]
 fn r6_rigid_set_and_non_zero_value_refused_at_k_2() {
     let mut m = rs_sector();
     m.add_constraint(Constraint::rigid_set("spoke", [R - T / 2.0, 0.0, 0.0]))
@@ -633,6 +634,23 @@ fn r6_rigid_set_and_non_zero_value_refused_at_k_2() {
         ),
         "R6 {e:?}"
     );
+    let node = rs_mesh().node_set("ymin").unwrap()[0];
+    let (key, reason) = invalid(
+        modal_analysis_harmonic(
+            &rs_sector(),
+            &[Prescribed::new(node, 0, 1e-3)],
+            2,
+            &ModalOptions::new(2),
+        ),
+        "R6 value",
+    );
+    assert_eq!(key, "constraint");
+    assert!(reason.contains("zero values only"), "R6: {reason}");
+}
+
+/// The copy of R6 after ADR 0395 (F-489): a rigid set at `k = 2` is accepted; the refusal of a non-zero value stays.
+#[test]
+fn r6_non_zero_value_refused_at_k_2_after_landed() {
     let node = rs_mesh().node_set("ymin").unwrap()[0];
     let (key, reason) = invalid(
         modal_analysis_harmonic(
