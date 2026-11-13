@@ -267,3 +267,122 @@ made in person; none changes a default, a golden or a hash table.
 ## Open questions
 
 Listed with options and a recommendation in the addendum, after the results.
+
+## Addendum 1: results (2026-11-13)
+
+Measured against the limits of the registration (`98c9dd5d`); none was changed and no amendment was written. Release,
+Windows, the target directory of the worktree, other agents building on the machine. Commits: the registration `98c9dd5d`;
+the library and the tests, compiled and not run, `11353675`; rustfmt of the two test files (layout only) `18177206`; the two
+negated comparisons of D3 and D4 written in their equivalent direct forms for clippy `453ad632`; this addendum. Each
+registered run was made once (logs in `E:/projects/cfd/w49i-work/f468-scratch`: `mesh-fast.log`, `fv-fast.log`, `a7.log`,
+`mesh-existing.log`, `fv-existing.log`, `baseline.log`, `clippy.log`, `M1.log` to `M5.log`, `mut-summary.log`). After the two
+layout and clippy commits the fast tests were run again on the final tree as a confirmation (`fast-final.log`: all pass);
+A7 was not run again.
+
+**Said plainly.** `DonorInterpolation::Continuous` is built: a moving least-squares plane over the calculated cells of the
+other part whose own compact support contains the fringe centre. It is exact for linear fields to `2e-15`, it does not jump
+across the faces of a uniform, a graded or a curved donor mesh where the library's linear stencil jumps by `1e-3`
+(`2.3e-13`, `2.9e-11`, `6.2e-15` against `1e-9`), and at twelve moments where the linear stencil's donor switches in the
+moving TG_2 the fringe value changes by at most `7.1e-15` across a pose bracket of `4.5e-15` (the linear stencil by up to
+`1.6e-3`). On TG_2 with BDF2 the component cells' step-size-dependent remainder falls from `2.057e-5` (ratio 2.45, ADR 0359
+S0) to `1.112e-6` with a ratio of `5.07`, below the bilinear B of ADR 0359 (`1.16e-6`, `4.15`), and the error against the
+exact field from `3.186e-4` to `3.145e-4`. The defaults are unchanged (the four F0 fingerprints of ADR 0359 equal,
+`baseline_hashes` passes). What the stencil cannot remove stays: the background cells next to the hole, where cells change
+kind, keep `1.14e-5` at a ratio of `2.14` (ADR 0359 H5). **Done** by the registered rule.
+
+### Checks
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| A1 (defaults) the four F0 fingerprints, `f0_defaults_fingerprint_equals_the_base_tree` unedited | passes | passes (`overset_motion_f442`: 3 passed, 6 ignored) | met |
+| A1b (defaults) `baseline_hashes`; the existing tests | pass | `baseline_hashes` 3 passed, 1 ignored; the existing tests below all pass | met |
+| A2a linear field on TG_2 at `tg_pose(0)`, `(0.3)`, `(0.5)`; `abs(sum w - 1)`; fallbacks | `<= 1e-12`; `<= 1e-13`; 0 | `1.8e-15`, `2.2e-15`, `2.2e-15`; `4.4e-16`; 0 (weights in `[2.4e-10, 0.80]`, 4 to 9 cells) | met |
+| A2b linear field on TR at the five poses, relative; `abs(sum w - 1)`; fallbacks | `<= 1e-12`; `<= 1e-13`; 0 | at most `5.0e-17`; `4.4e-16`; 0 (weights in `[4.9e-9, 0.80]`, 4 to 16 cells) | met |
+| A3 faces of the uniform background of TG_2 (12640): `max J_c`; faces with `J_l >= 1e-4`; points without a stencil | `<= 1e-9`; `>= 90 %`; 0 | `2.27e-13`; 100 % (`J_l` in `[9.08e-4, 1.41e-3]`); 0 | met |
+| A3b faces of TR: graded background (40405), O-grid component (5664): `max J_c`; points without a stencil | `<= 1e-9`; 0 | `2.89e-11`, `6.2e-15`; 0, 0 (`J_l` up to `2.56` and `1.10e-2`; at least `1e-4` at 40404 and 5297 faces) | met |
+| A4 pose continuity at 12 linear-donor switches of TG_2: continuous jump; events with a linear jump `>= 1e-5` | each `<= 1e-9`; `>= 6` | at most `7.1e-15`; 12 (linear jumps `1.6e-5` to `1.64e-3`) | met |
+| A5 at the edge of 400 supports | `<= 1e-9` | `3.9e-14` | met |
+| A6 candidates against a full search, 4 x 2000 points | 0 differences | 0, 0, 0, 0 (points without a plane, printed: 64, 98, 8, 608: holes, the fringe ring, the inside of the O-grid) | met |
+| A7 TG_2, `Continuous`: component cells `max abs(d_200)` | `<= 2e-6` | `1.1120e-6` | met |
+| A7 the ratio to `d_400` over the component cells | `>= 4` | `5.067` | met |
+| A7 `e(TG_2)` in 800 steps | `<= 3.186e-4` | `3.1450e-4` | met |
+| A7 continuity every step; fallbacks every step | `<= 1e-9`; 0 | `5.9e-14`; 0 | met |
+| A8 TG_1, 20 steps: continuity; fallbacks | `<= 1e-9`; 0 | `2.3e-14`; 0 (completes in 0.6 s) | met |
+
+Printed in A7: the background cells `max abs(d_200) = 1.140e-5`, ratio `2.136`, the same over all non-hole cells (D2 overall
+`2.14`, no limit registered; ADR 0359 with B everywhere: `9.92e-6`, `1.85`); stencils of 4 to 9 cells; the three runs 42, 88
+and 166 s. Printed in A8: the error after 20 steps `8.09e-4` with `Continuous` against `1.18e-3` with `Linear`.
+
+**Existing tests (A1b), release, all passing.** `rcfd-mesh`: the unit tests `overset` (K1 to K5 and the pose inverse, 6
+passed), `overset_f336` (6 passed, 1 ignored), `overset_f352` (4), `overset_f356` (4, 1 ignored). `rcfd-fv`: the unit tests
+`overset` (2 passed, 1 ignored) and every `overset_*` test file with its default (not ignored) tests: `overset_motion_f442`,
+`overset_f134`, `overset_f134_records`, `overset_f314`, `overset_f334`, `overset_f335`, `overset_f335_records`,
+`overset_f336`, `overset_f338`, `overset_f349`, `overset_f353`, `overset_f357`, `overset_f359`, `overset_f368`,
+`overset_f445`, `overset_f450`, `overset_f472`, `overset_f487` (102 passed in all with the unit tests, none failed). The opt-ins of ADR 0387 and
+of ADR 0382 (L) are not touched; their tests are among these (`overset_f472`, `overset_f487`).
+
+### Mutations
+
+Applied alone to a `git archive` copy of `11353675` (`f468-scratch/mut`, its own target directory) by `f468-scratch/mut.py`
+(an exact replacement that occurs once), the named test run once, the file restored and compared byte for byte.
+
+| Id | Mutation | Must fail | Result |
+| --- | --- | --- | --- |
+| M1 | the bump removed from D3 | A5 | failed: `3.31e-4` against `1e-9` (caught) |
+| M2 | Shepard's weights `W_k / sum W` | A2a | failed: `1.16e-2` to `1.19e-2` against `1e-12` (caught) |
+| M3 | the support bins at half the radius | A6 | failed: 1100, 1090, 1464, 1271 differences (caught) |
+| M4 | `Overset::new` sets `Continuous` | A1 (F0) | failed: the fingerprints differ (caught) |
+| M5 | the kind filter removed | A6 | failed: 89, 304, 10, 509 differences (caught) |
+
+`scripts/limit_audit.py` on both new test files: 0 hits. `cargo fmt -p rcfd-mesh --check`, `cargo fmt -p rcfd-fv --check`:
+clean. `cargo clippy -p rcfd-mesh -p rcfd-fv --all-targets -- -D warnings`: clean (after `453ad632`; the first run refused
+the two negated comparisons `!(rho < kappa)` and `!(pivot > 1e-12 scale)`, rewritten as `rho.is_nan() || rho >= kappa` and
+`pivot.is_nan() || abs(pivot) <= 1e-12 scale`, the same result for every input that can occur).
+
+### Deviations and disclosures
+
+- The mutations ran on `11353675`, before the rustfmt commit (test files only) and the clippy rewrite of two comparisons
+  (equivalent). The fast checks were run again on the final tree as a confirmation; nothing else was run again.
+- A4 took its 12 events, by the registered order, all from the first interval `(0, 0.005)` and all at background fringe cells
+  (interpolated from the moving component): no component fringe cell is among them. The component fringe is covered by A3 (its
+  donor part, the uniform background) and by A7.
+- A7 prints "first-cell changes" (3266 to 3333 per run); with `Continuous` the first cell is the lowest-numbered candidate, so
+  that count is not a count of donor switches and means nothing here.
+- `e(TG_2)` of the linear stencil is ADR 0359's recorded `3.1859e-4`, not run again (the defaults are shown unchanged by F0).
+- Predictions: the component cells about `1.2e-6` at a ratio of about 4.2 (measured `1.11e-6`, `5.07`: better, as D3 is
+  continuously differentiable where B has kinks); `e(TG_2)` about `2.9e-4` (measured `3.145e-4`: the error of D3 is 1.2 times
+  the bilinear's on average, and B's own gain was not reached).
+
+### Not run
+
+The whole workspace suite, the gate, Linux; a 3-D overset case with `Continuous` (L4: the 3-D behaviour is the model
+arithmetic only); the ignored records of the existing test files.
+
+### Decision by the registered rule
+
+**Done.** A1, A1b, A2a, A2b, A3, A3b, A4, A5, A6, A7 and A8 are met; M1 to M5 were each caught by their registered check.
+
+### Open questions (each with options and a recommendation)
+
+- **Q1. The kind changes next to the hole** (ADR 0359 Q2, unchanged: `1.14e-5`, ratio `2.14` with `Continuous`). (a) a
+  research item on how a cell enters and leaves the calculated set within a BDF2 step; (b) accept, below the spatial error by
+  a factor 28. Recommendation (b), as in ADR 0359, until a case needs the BDF2 order on a moving overset mesh.
+- **Q2. A quadratic basis** (a continuous stencil exact for quadratic fields). (a) a follow-up item (supports of about 2
+  cells, more fallbacks near the edge of a part); (b) leave it. Recommendation (b): the linear basis already meets every
+  clause, and `Quadratic` remains for the spatial order.
+- **Q3. Exposing `Continuous` in the case file.** It would change the schema golden (the maintainer's approval). (a) a
+  follow-up item; (b) leave it library-only. Recommendation (b) until a case asks for it.
+- **Q4. `Continuous` as the default.** It would change default results and the hash tables. Not taken (rule 6);
+  recommendation: keep `Linear` the default.
+
+## For the lead: roadmap entries
+
+No roadmap file was edited. **F-468**, proposed status: `done`. Proposed note:
+
+> From ADR 0359 question 1, recommendation (a), taken on the maintainer's standing instruction of 2026-11-11. ADR 0396, 2026-11-12: DONE. DonorInterpolation::Continuous (opt-in, Overset::set_donor_interpolation): the moving least-squares plane over every calculated cell of the other part whose own compact support (1.5 times its largest extent) contains the fringe centre, weight (1 - (rho/1.5)^2)^2 / (rho^2 + 0.25), which vanishes with its slope at the edge; the donor does not choose the stencil, so the fringe value is a continuous (C1) function of the pose wherever no candidate cell changes kind; the linear stencil as a listed fallback where the candidates cannot carry a plane (none on the meshes checked). Exact for linear fields to 2e-15 (TG_2, TR); across every face of the uniform background of TG_2 the jump is 2.3e-13 where the linear stencil jumps by 9.1e-4 to 1.4e-3 (all 12640 faces), 2.9e-11 and 6.2e-15 on the graded and O-grid meshes of TR; at 12 donor switches of the moving TG_2 at most 7.1e-15 (linear up to 1.6e-3); candidates equal to a full search. TG_2 with BDF2, three outer iterations and C: the component cells' max abs(d_200) 1.11e-6 (limit 2e-6) at a ratio of 5.07 (limit 4; was 2.06e-5 at 2.45), e(TG_2) in 800 steps 3.145e-4 (limit 3.186e-4). Defaults bit-identical: the four F0 fingerprints of ADR 0359 equal, baseline_hashes passes, the existing overset tests pass. The background cells next to the hole keep 1.14e-5 at a ratio of 2.14 (kind changes, ADR 0359 H5; not a stencil matter). Five mutations caught.
+
+**F-442**, status unchanged. Append to its note:
+
+> The library opt-in that removes event 1 is F-468 (ADR 0396, DonorInterpolation::Continuous): component cells 1.11e-6 at a ratio of 5.07; event 2 remains (1.14e-5, ratio 2.14).
+
+No follow-up item is proposed (questions Q1 to Q4 recommend leaving things as they are).

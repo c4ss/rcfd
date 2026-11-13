@@ -142,6 +142,16 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   exact Taylor-Green solution is 1.6 to 1.8 times that of the default coupling; with the quadratic donor interpolation
   1.04 to 1.14 times. The variant that keeps the interpolated fringe pressure in that gradient
   (`FringeFlux::Prescribed`) is unstable and is kept for its record tests only.
+- **Pose-continuous donor stencil (F-468, ADR 0396).** `Overset::set_donor_interpolation(DonorInterpolation::Continuous)`
+  gives every fringe cell the calculated cells of the other part whose support (1.5 times the cell's largest extent)
+  contains its centre, with the weights of the moving least-squares plane under the weight `(1 - (rho / 1.5)^2)^2 /
+  (rho^2 + 0.25)`, which vanishes with its slope at the edge of the support. The donor cell does not choose the stencil,
+  so the fringe value no longer jumps when its centre crosses a face of the other part (the linear stencil jumps by
+  `1e-3` there for a quadratic field; this one by `2e-13`); it is exact for linear fields and continuous in the pose
+  wherever no candidate cell changes kind. A connectivity that does not ask for it is built as before, bit for bit. On
+  the moving Taylor-Green set-up with BDF2 (TG_2 of ADR 0359) the step-size-dependent remainder at the component cells
+  falls from `2.06e-5` (ratio 2.45) to `1.11e-6` (ratio 5.07) and the error against the exact field from `3.186e-4` to
+  `3.145e-4`; the remainder next to the hole, made by the background cells changing kind, stays (`1.14e-5`, ratio 2.14).
 - **Skewness and non-orthogonal corrections (F-368, ADR 0367).** `OversetSolver::set_geometry_corrections(true)` makes
   the face flux of a cell field (the Rhie-Chow flux of `HbyA`, the refreshed and the initial flux, the interpolation of
   the `ddt_correction` defect) the exact flux of a linear field through the mesh's triangulated faces (a skewness term
