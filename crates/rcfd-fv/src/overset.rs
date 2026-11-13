@@ -317,7 +317,7 @@ fn quadratic_fit(d: &[Vec3], active: [bool; 3]) -> Option<Vec<Vec3>> {
         for k in 0..j {
             s -= lo[j][k] * lo[j][k];
         }
-        if !(s > FIT_RANK_TOL * mm[j][j]) {
+        if s.partial_cmp(&(FIT_RANK_TOL * mm[j][j])) != Some(std::cmp::Ordering::Greater) {
             return None;
         }
         let r = s.sqrt();
@@ -1276,7 +1276,9 @@ impl OversetSolver {
             return Err("overset: the consistent pressure gradient (ADR 0387) needs the geometry corrections on and the least-squares pressure gradient of ADR 0382 off".into());
         }
         if self.ring_second_order && self.fringe_flux != FringeFlux::PrescribedOwnGradient {
-            return Err("overset: the second-order ring gradient (ADR 0409) needs FringeFlux::PrescribedOwnGradient".into());
+            return Err(
+                "overset: the second-order ring gradient (ADR 0409) needs FringeFlux::PrescribedOwnGradient".into(),
+            );
         }
         let old = self.geom.clone();
         let n = old.n_cells();
@@ -2330,7 +2332,8 @@ mod tests {
     #[test]
     fn q0_second_order_ring_gradient_of_a_quadratic_pressure() {
         let pi = std::f64::consts::PI;
-        let nodes = |x0: f64, len: f64, n: usize| -> Vec<f64> { (0..=n).map(|i| x0 + len * i as f64 / n as f64).collect() };
+        let nodes =
+            |x0: f64, len: f64, n: usize| -> Vec<f64> { (0..=n).map(|i| x0 + len * i as f64 / n as f64).collect() };
         let bg = rectilinear_2d(&nodes(0.0, pi, 40), &nodes(0.0, pi, 40), 0.1).unwrap();
         let cs = nodes(-0.6, 1.2, 20);
         let comp = rectilinear_2d(&cs, &cs, 0.1).unwrap();

@@ -248,3 +248,118 @@ that the quadratic fit turns into an `O(h)` gradient error (item 5's caveat).
 ## Open questions
 
 Listed with options and a recommendation in the addendum, after the results.
+
+## Addendum 1: results (2026-11-13)
+
+Measured against the limits registered above; none was changed, no amendment was needed. Release builds on Windows,
+`CARGO_BUILD_JOBS=4`. Commits: the registration `eb13160d` (alone, before any code); the hash of G without the opt-in measured
+once on that commit with an uncommitted probe test before any library edit (`b2b43812eb166b04`, log
+`w49i-work/f479-scratch/b-g-base.log`; the probe file was deleted); the library change with Q0, Q1 and
+`crates/rcfd-fv/tests/overset_f479.rs` `e5f6cc1e`; formatting, two clippy rewrites and this addendum after it. Each registered
+run was made once. Logs in `E:/projects/cfd/w49i-work/f479-scratch` (`unit.log`, `f479-fast.log`, `f479-level2.log`,
+`b2-overset.log`, `b2-baseline.log`, `b2-lib.log`, `f479-MQ1.log` to `f479-MQ5.log`, the `*-final.log` repeats).
+
+### What was built
+
+`crates/rcfd-fv/src/overset.rs`: `quadratic_fit` and `FIT_RANK_TOL` (D6, items 3 and 4), `RingCell::quad`,
+`FringeRing::new_with` (the stencil of the same region within two face steps, the fit, its refusal; `FringeRing::new` is now
+`#[cfg(test)]` and calls it with the switch off), the D6 branch at the head of `own_gradient`, the field `ring_second_order`
+with `set_second_order_ring_gradient` / `second_order_ring_gradient`, the refusal in `advance`, the switch passed in `piso`,
+the unit tests Q0 and Q1. Nothing else in the library changed. `docs/dynamic-mesh.md`: one paragraph.
+
+### Checks
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| A1 `e_B(Q) / e_B(default)`, level 1 | `<= 1.2` | `0.8924` (`4.4822e-4` / `5.0226e-4`; D5 of ADR 0376 `1.9329`) | met |
+| A1 the same, level 2 | `<= 1.2` | `1.0207` (`1.1452e-4` / `1.1219e-4`; D5 `1.5166`) | met |
+| A2 `e_max(Q) / e_max(default)`, levels 1, 2 | `<= 1.2` | `0.99996` (`7.6828e-4` / `7.6831e-4`), `1.0000` (`1.9300e-4` / `1.9299e-4`), both in the domain-boundary cell | met |
+| A3 continuity of Q, every step, levels 1, 2 | `<= 1e-9` | `3.02e-13`, `5.99e-13` | met |
+| A4 flux into the hole region; through the domain boundary, levels 1, 2 | `<= 1e-9` each | `3.5e-15`, `1.1e-14`; `0`, `0` | met |
+| A5 UA under Q: velocity, pressure, continuity | `1e-10`, `1e-9`, `1e-9` | `1.45e-15`, `1.78e-15`, `7.5e-15` | met |
+| A5 UA2 under Q: velocity, pressure after the first step, continuity | `1e-10`, `1e-9`, `1e-9` | `1.45e-15`, `1.78e-15` (also including the first step), `7.5e-15` | met |
+| A5 U1 under Q: velocity, pressure, continuity, `Gamma_B`, outflow, kind changes, unconverged | `1e-10`, `1e-10`, `1e-9`, `1e-9`, `1e-10`, `>= 20`, `0` | `3.6e-15`, `0`, `1.4e-15`, `3.8e-15`, `1.1e-16`, 245, 0 | met |
+| A6 hashes: default quadratic, default linear, G, G with the switch set off | exact | `e43a026a778e83b3`, `9c5ab1e5b21d5368`, `b2b43812eb166b04`, `b2b43812eb166b04` | met |
+| A6b `baseline_hashes`; the 19 existing `overset_*.rs` files; `rcfd-fv --lib`; release, unedited | all pass | `baseline_hashes` 3 passed; `f134` 12, `f134_records` 1, `f314` 4, `f334` 3, `f335` 5, `f335_records` 4, `f336` 5, `f338` 9, `f349` 3, `f353` 1, `f357` 5, `f359` 5, `f368` 10, `f445` 9, `f450` 3, `f468` 1, `f472` 8, `f487` 10, `motion_f442` 3 passed; `--lib` 106 passed; none failed | met |
+| A7 no refused step, levels 1, 2 | all | 200 of 200, 800 of 800 | met |
+| C3 unconverged; fallbacks, all four runs | `0`; `0` | `0`; `0` | met |
+| K kind changes, level 1 | `>= 20` | 142 (503 at level 2) | held |
+| Q0 quadratic; linear; control D5 (97 ring cells) | `<= 1e-10`; `<= 1e-10`; `>= 1e-2` | `7.5e-14`; `5.5e-14`; `6.33e-2` | met |
+| Q1 corner stencil; collinear refused | `<= 1e-12`; refused | `1.1e-15`; refused | met |
+| R the switch under the default coupling and under `Prescribed` | refused | both `Err` naming ADR 0409 | met |
+
+Printed, no limit (moving runs): component band `e_B_C(Q) / e_B_C(default)` `1.0927`, `1.0123`; background calculated cells
+outside `B` `1.0000`, `1.0000`; component calculated cells outside `B_C` `0.9266`, `1.0086`; root mean square by class at level
+1, Q / default: CF `3.89e-4` / `3.83e-4`, CC `3.61e-4` / `3.99e-4`, BF `3.57e-4` / `3.88e-4`, BC `5.485e-4` / `5.452e-4`. Run
+times: level 1 2.5 s (Q) and 2.7 s (default), level 2 57 s and 71 s. The band error of Q falls at order
+`log2(4.4822e-4 / 1.1452e-4) = 1.97` (D5: 2.51, the default 2.16).
+
+What the runs found, in short: the excess of G next to the background fringe (ADR 0376 finding 4) is gone with the
+quadratic fit: at level 1 the band is even below the default coupling (`0.89`), at level 2 it is 2 percent above. This
+supports item 2 (the excess is the first-order ring gradient). Item 5 predicted `1.05` to `1.2` and `1.01` to `1.08`;
+level 1 came out below that range, level 2 inside it. The remaining excess is on the component band (`1.09` at level 1), set
+by the interpolated normal velocity of G, which this item does not change.
+
+### Mutations
+
+Each applied alone to a `git archive` copy of `e5f6cc1e` (`f479-scratch/mut`, own target directory) by `mutate.py` (exact
+replacements that must occur once). After each one the file was restored and compared byte for byte with the original (equal).
+The later commits change only formatting, the two clippy rewrites below, the test file and documents.
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MQ1 linear fit only | Q0 (quadratic) | failed: `1.03e-1` (linear still `1.8e-14`) |
+| MQ2 fringe cells admitted | Q0 | failed: `79.0` |
+| MQ3 coefficients built under G without the opt-in | A6 (G hash) | failed: the G hash differs |
+| MQ4 rank threshold `1e30` | A7 and Q1 | failed: step 1 refused (cell 493); Q1 panics at the expected fit |
+| MQ5 the scale `1 / l` dropped | A5 (UA velocity) and Q0 | failed: UA velocity `9.6e-2`; Q0 `6.9` |
+
+### Deviations and disclosures
+
+- After the registered runs, clippy (`-D warnings`) asked for two rewrites. One was `!(s > tol)` in the Cholesky test, now
+  `s.partial_cmp(&tol) != Some(Greater)`, which gives the same result for every input including NaN. The other was
+  `.err().expect()` in the test R, now `.expect_err()`. Rustfmt reflowed three lines. After them, Q0, Q1, the fast tests of
+  `overset_f479` and `baseline_hashes` were run again and pass (`*-final.log`). These are repeats, not new registered runs.
+  The level-2 record was not repeated.
+- `FringeRing::new` became `#[cfg(test)]`, since only the unchanged unit test G0 calls it now. G0b passes.
+- My predictions: everything was met as predicted. A1 at level 1 came out below my range (`0.89` against `1.05` to `1.2`).
+
+### Not run
+
+Level 3; RE and RL of ADR 0347 with the opt-in; BDF2, outer iterations or `rhie_chow_step_consistent` with the opt-in; a
+three-dimensional mesh; the ignored records of the other overset files; the workspace suite (the lead runs the gate).
+
+### After the tests
+
+`cargo fmt -p rcfd-fv --check` clean; `cargo clippy -p rcfd-fv --all-targets --release -- -D warnings` clean. Final tree:
+`overset_f479` 4 passed, 1 ignored (the level-2 record).
+
+### Decision by the registered rule
+
+**Done.** A1 to A7, C3, K, Q0, Q1 and R are met at both levels, the controls hold, and each of the five mutations was caught
+by its registered check.
+
+### Open questions (each with options and a recommendation)
+
+- **Q1. Should the second-order ring gradient become G's behaviour, with no separate switch?** It changes G's results (the
+  G hash), so it is not taken here: **open**. Options: (a) keep it as a switch; (b) make it G's default and keep D5 behind
+  a switch for the records of ADR 0347 and 0376. My recommendation is (a) until RE and RL of ADR 0347 are measured with it.
+- **Q2. A follow-up measurement on RE and RL with the opt-in.** Options: (a) a low-priority item that reruns ADR 0347's
+  S3 and the HT runs with the opt-in; (b) leave it. Recommendation (a), low priority. It was taken on the standing
+  instruction only as a proposal to the lead.
+
+### For the lead: roadmap entries
+
+No roadmap file was edited.
+
+**F-479**, proposed status: `done`. Proposed note:
+
+> From ADR 0376 question 2, recommendation (a), taken on the maintainer's standing instruction of 2026-11-11. ADR 0409, 2026-11-13: DONE. Opt-in OversetSolver::set_second_order_ring_gradient(true) under FringeFlux::PrescribedOwnGradient (refused under the other modes): the pressure gradient of the calculated cells next to a fringe cell (momentum predictor, velocity correction, pressure levels of D3) is the weighted least-squares fit of a quadratic polynomial to the calculated cells of the same region within two face steps (exact for a quadratic pressure: 7.5e-14 on TG_1's composite at a rotated pose, where the one-sided gradient of ADR 0347 D5 is off by 6.3e-2; no fringe value; a rank-deficient fit refuses the step). On TG_L of ADR 0219 moving with the quadratic donor interpolation, the largest error of the calculated background cells within two cells of the background fringe is 0.892 and 1.021 times that of the default coupling at levels 1 and 2 (D5: 1.93 and 1.52). The largest error over the calculated and fringe cells is 1.0000 times at both levels (the domain-boundary cell). Continuity is 6.0e-13, the flux into the hole region 1.1e-14 and through the boundary 0 in every step, every step is taken, and UA, UA2 and U1 of ADR 0347 hold to 4e-15. Without the opt-in the default coupling and G are bit-identical (four state hashes, baseline_hashes, the 19 existing overset test files). Five mutations caught. Not covered: RE and RL of ADR 0347, level 3, 3D, BDF2 or outer iterations with the opt-in.
+
+**F-450**, status unchanged. Add to its note:
+
+> ADR 0409 (F-479), 2026-11-13: with the second-order ring gradient opt-in, the excess of G in the background band falls from 1.93 and 1.52 to 0.89 and 1.02 times the default coupling, and e_max(G) / e_max(default) at level 1 from 1.2636 to 1.0000.
+
+Proposed follow-up item (the number is the lead's): **Overset: the second-order ring gradient on RE and RL of ADR 0347.** Depends on F-479. Acceptance:
+
+> With OversetSolver::set_second_order_ring_gradient(true) under PrescribedOwnGradient and the quadratic donor interpolation, RE of ADR 0347 at levels 1 to 3 and RL at levels 1 to 3: the root mean square of the velocity error over the calculated cells at t = 0.5 is at most 1.05 times that of the default coupling with the same stencils, C1, C2 and U1 of ADR 0347 hold, and the orders of R_b on RE are at least 1.7; or the ADR names with a number why not.

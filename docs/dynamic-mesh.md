@@ -142,6 +142,14 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   exact Taylor-Green solution is 1.6 to 1.8 times that of the default coupling; with the quadratic donor interpolation
   1.04 to 1.14 times. The variant that keeps the interpolated fringe pressure in that gradient
   (`FringeFlux::Prescribed`) is unstable and is kept for its record tests only.
+- **Second-order ring gradient under the prescribed fringe flux (F-479, ADR 0409).** Under
+  `FringeFlux::PrescribedOwnGradient`, `OversetSolver::set_second_order_ring_gradient(true)` takes the pressure gradient
+  of the calculated cells next to a fringe cell from a weighted least-squares fit of a quadratic polynomial to the
+  calculated cells of the same region within two face steps (exact for a quadratic pressure, no fringe value; a
+  rank-deficient fit refuses the step) instead of the one-sided extrapolation of ADR 0347, which is first order there.
+  On the moving Taylor-Green set-up with the quadratic donor interpolation the largest error of the calculated
+  background cells within two cells of the background fringe falls from 1.93 and 1.52 times that of the default
+  coupling to 0.89 and 1.02 times (levels 1 and 2). A solver that does not call it runs as before, bit for bit.
 - **Pose-continuous donor stencil (F-468, ADR 0396).** `Overset::set_donor_interpolation(DonorInterpolation::Continuous)`
   gives every fringe cell the calculated cells of the other part whose support (1.5 times the cell's largest extent)
   contains its centre, with the weights of the moving least-squares plane under the weight `(1 - (rho / 1.5)^2)^2 /

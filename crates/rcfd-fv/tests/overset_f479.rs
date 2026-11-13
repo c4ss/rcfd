@@ -669,7 +669,9 @@ const G_EB13160D: u64 = 0xb2b43812eb166b04;
 fn a6_without_the_opt_in_every_bit_is_kept() {
     let (q, l) = (hash_40(Mode::Default, QD, false), hash_40(Mode::Default, LD, false));
     let (g, g_off) = (hash_40(Mode::G, QD, false), hash_40(Mode::G, QD, true));
-    println!("A6: default quadratic {q:016x}, default linear {l:016x}, G {g:016x}, G with the opt-in set off {g_off:016x}");
+    println!(
+        "A6: default quadratic {q:016x}, default linear {l:016x}, G {g:016x}, G with the opt-in set off {g_off:016x}"
+    );
     assert_eq!(q, B1_QUADRATIC, "default, quadratic stencils");
     assert_eq!(l, B1_LINEAR, "default, linear stencils");
     assert_eq!(g, G_EB13160D, "G");
@@ -689,7 +691,7 @@ fn r_second_order_ring_gradient_only_under_g() {
         assert!(s.second_order_ring_gradient());
         let g = s.geom.clone();
         tg_conditions(&g, &mut s.u, 0.0025);
-        let err = s.step(0.0025, tg_pose(0.0025), &[]).err().expect("refused");
+        let err = s.step(0.0025, tg_pose(0.0025), &[]).expect_err("refused");
         println!("R ({mode:?}): {err}");
         assert!(err.contains("ADR 0409"), "{err}");
     }
