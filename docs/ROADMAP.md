@@ -6952,7 +6952,11 @@ fixed by the item's registration ADR before any code.
     estimate at an immersed body (above one for a setting that runs). ADR 0388 (2026-11-13, F-483): the estimate above
     one at the body is an eigenvalue of the frozen map at the first BDF2 step (converged 1.175 for the first-order
     forcing, 1.248 for the bounded form), below one by step 11 for both (0.977, 0.988); it is not caused by the pressure
-    solve and does not predict the stop.
+    solve and does not predict the stop. ADR 0392 (2026-11-13, F-482): a finite-difference linearisation of the whole
+    step finds the period-two mode of the bounded form with one corrector at dt 1e-3 (-1.10 +- 0.35i at step 15, -1.27
+    at step 10, at the body) and every Ritz value inside the unit circle at dt 5e-4 and with two correctors; with one
+    corrector at dt 1e-3 both forcings also have positive pressure modes up to 1.9, so the one-step spectrum does not
+    separate the setting that stops from the first-order forcing that runs.
 - [ ] **F-364** Second-order immersed forcing: one constructor with bounded weights
   - depends on: F-355
   - acceptance: `build_second_order` builds the bounded form of ADR 0254, the refusal of the unbounded form is removed,
@@ -9142,16 +9146,30 @@ fixed by the item's registration ADR before any code.
     apart (0 bits, the old set-up). The mutation MU5 of ADR 0380 is caught on the first run, as are two more (every
     other patch fixed; the initial displacement reduced to x). No library line changed; baseline_hashes and
     case_hashes_w48u pass unedited.
-- [ ] **F-482** Second-order immersed forcing: the single-corrector mode by a linearisation of the whole step
+- [~] **F-482** Second-order immersed forcing: the single-corrector mode by a linearisation of the whole step
   - depends on: F-363
   - acceptance: The period-two growth of DFG 2D-2 on M2 with build_second_order_bounded and one PISO corrector (ADR
     0374: stop at step 34 at dt 1e-3, runs at 5e-4 and 2.5e-4) is measured by a registered finite-difference
     linearisation of the whole step (velocity and pressure) about the state of an early step, whose dominant eigenvalue
     is real and below -1 at dt 1e-3 and of magnitude below 1 at dt 5e-4 and with two correctors, with its mode at the
     first fluid cells; or the part of the step that carries the growth is identified by a registered measurement.
-  - note: From ADR 0374 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR
-    0374 narrowed the stop (the time step, the body, a period-two oscillation, two correctors damp it); the frozen
-    pressure-lag map did not separate the settings.
+  - note: PARTIAL (ADR 0392, 2026-11-13), test code only, no library change. From ADR 0374 question 3, recommendation
+    taken on the maintainer's standing instruction of 2026-11-11. The whole step of DFG 2D-2 on M2 (u_n, u_n-1, p,
+    phi_n, phi_n-1; 165296 unknowns) was linearised by central finite differences about early states, with the solves
+    converged to 1e-12, and its outer spectrum computed by Arnoldi with 40 vectors and a complex Hessenberg QR written
+    from first principles; the linearisation is valid (the map at zero is the step to the bit, linear to 2e-5, the
+    history shift exact, known spectra found to round-off, the stop at step 34 reproduced). With two correctors and at
+    dt 5e-4 every Ritz value lies inside the unit circle (largest 0.970 and 0.979; most negative -0.48 and -0.78, real).
+    With one corrector at dt 1e-3 the bounded form carries the period-two mode (at step 15 a converged pair -1.103 +-
+    0.346i, magnitude 1.156, and a real -1.073; the fluid part of the step a real -1.139; at step 10 a real -1.265; the
+    magnitude matches the run's growth of about 1.15 per step), at the body (0.0025 to 0.011 from the surface, a first
+    fluid cell at step 5), but it is not the dominant eigenvalue: pressure modes of the fluid four cells above the
+    cylinder have eigenvalues of positive real part up to 1.93, and the first-order forcing, which runs, has them too
+    (1.58) and a real -1.024. Partial by the registered rule: known misses E1 b to d (not real, not dominant, not at a
+    first fluid cell at step 15), E4 (the run that runs has -1.024), and after amendment 1 S1 (those modes are not in
+    the solid) and P3 c. Open (ADR 0392 Q2): the positive eigenvalues above one of the single corrector at dt 1e-3 in
+    both forcings, by a linearisation of several steps along the trajectory and the channel without the cylinder.
+    Follow-up F-494.
 - [~] **F-483** Pressure-lag estimate at an immersed body
   - depends on: F-363
   - acceptance: The pressure-lag estimate of ADR 0073 for DFG 2D-2 on M2 with the first-order immersed forcing and one
@@ -9309,3 +9327,13 @@ fixed by the item's registration ADR before any code.
     frequencies of the prescribed-displacement model within 1e-10; a nodal spring at the roller raises the first factor
     by the closed form of a spring-supported column within 1 percent.
   - note: From ADR 0390 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S.
+- [ ] **F-494** Second-order immersed forcing: the single-corrector growth over several steps
+  - depends on: F-482
+  - acceptance: The growth of DFG 2D-2 on M2 with build_second_order_bounded and one PISO corrector at dt 1e-3 (ADR
+    0392: the one-step linearisation at step 15 has eigenvalues up to 1.93 for the bounded form and 1.58 for the
+    first-order forcing, which runs, and a period-two pair of magnitude 1.16 for the bounded form) is measured by a
+    registered finite-difference linearisation of k >= 10 consecutive steps along the trajectory, whose dominant
+    eigenvalue per step is above one for the bounded form and below one for the first-order forcing; and the one-step
+    eigenvalues above one of the first-order forcing are explained by a registered measurement (the channel without the
+    cylinder, the state of the step).
+  - note: From ADR 0392 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11.
