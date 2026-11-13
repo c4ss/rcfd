@@ -7706,7 +7706,7 @@ fixed by the item's registration ADR before any code.
     definite is reported as a loss of stiffness with the speed, never as a non-finite frequency.
   - note: Structural solver, intermediate tier (plan ADR 0290, 2026-11-12). Size M. Stub ADR 0299; the registration is
     written by the implementation agent before any code.
-- [ ] **F-397** Geometric nonlinearity: total Lagrangian solid elements, Newton iteration with load steps
+- [~] **F-397** Geometric nonlinearity: total Lagrangian solid elements, Newton iteration with load steps
   - depends on: F-395, F-374, F-375
   - acceptance: Every limit not stated here is registered in the ADR before the run. The tangent agrees with central
     differences of the internal force within 1e-6 relative on distorted elements at displacements of 20 percent of the
@@ -7718,8 +7718,15 @@ fixed by the item's registration ADR before any code.
     (recomputed in the registration by integrating the elastica equation; recalled 0.302 L, 0.056 L and 0.494 L, 0.161
     L). An element inverted during the iteration and a step that does not converge after the registered halvings are
     errors with the element or the step.
-  - note: Structural solver, intermediate tier (plan ADR 0290, 2026-11-12). Size M. Stub ADR 0300; the registration is
-    written by the implementation agent before any code.
+  - note: Structural solver, intermediate tier (plan ADR 0290, 2026-11-13). Size M. ADR 0404, 2026-11-13 (registration
+    of stub ADR 0300): nonlinear::solve, total Lagrangian Tet4, Hex8, Tet10 and Hex20 with St. Venant-Kirchhoff, tangent
+    K_mat(F) + K_sigma(S) (the geometric stiffness of ADR 0390), Newton with load steps, residual and energy criteria,
+    step halving, inversion and non-convergence refused naming the element or the step; Element::internal_force and
+    tangent filled. Tangent against central differences 2e-11 to 8e-11 (limit 1e-6), rigid rotation 2e-16 E l^2, uniform
+    stretch nominal stress 1e-16, order 2.02 to 2.08, elastica within 2.4e-4 to 5.8e-4 of the ODE (limit 2e-2). Partial:
+    the linear limit (load factor 1e-6) missed in its registered run (cancellation in F^T F - I; met after amendment 1
+    at 2e-7), and a missing roll-back of a failed attempt is not caught by a registered check (follow-up F-NEW). Open
+    for the maintainer (ADR 0404 question 1): count A5 as met after amendment 1. Follow-up F-497.
 - [~] **F-398** Linear transient dynamics: Newmark and generalised-alpha integration, Rayleigh damping, load histories
   - depends on: F-388, F-373, F-374, F-383
   - acceptance: Every limit not stated here is registered in the ADR before the run. Free vibration started in the first
@@ -9479,3 +9486,10 @@ fixed by the item's registration ADR before any code.
     0390's and ADR 0394's models are bit-identical to the base library (7 hashes), their printed values unchanged,
     smallest ratios 5.8e-2 to 0.22. The error kind of a model refused today is kept; only its reason text changes (the
     hinge, from the eigensolver's unnamed pivot text). Five mutations caught.
+- [ ] **F-497** Nonlinear driver: roll-back of a failed attempt as a registered check
+  - depends on: F-397
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The one-step solve of ADR 0404's
+    load-controlled Hex8 bar with four iterations allowed (one halving) equals the two-step solve bit for bit, and the
+    mutation of ADR 0404 M7 (a failed attempt not rolled back) is caught by that check; every check of ADR 0404 keeps
+    its value.
+  - note: From ADR 0404 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S.

@@ -3558,9 +3558,9 @@
       "F-374",
       "F-375"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The tangent agrees with central differences of the internal force within 1e-6 relative on distorted elements at displacements of 20 percent of the element size (registered seed). A rigid rotation by 90 degrees with a translation gives an internal force below 1e-10 E L^2. Uniform stretch lambda = 1.2 of a bar with nu = 0: nominal stress E lambda (lambda^2 - 1)/2 within 1e-9; under load control the last three residuals of each step show an order >= 1.8. A load factor of 1e-6 reproduces the linear solution within 1e-5 relative. Elastica: a cantilever of slenderness 50, nu = 0, with tip force P L^2/(E I) = 1 and 2 has the tip deflection and shortening within 2 percent of the elliptic-integral solution (recomputed in the registration by integrating the elastica equation; recalled 0.302 L, 0.056 L and 0.494 L, 0.161 L). An element inverted during the iteration and a step that does not converge after the registered halvings are errors with the element or the step.",
-    "note": "Structural solver, intermediate tier (plan ADR 0290, 2026-11-12). Size M. Stub ADR 0300; the registration is written by the implementation agent before any code."
+    "note": "Structural solver, intermediate tier (plan ADR 0290, 2026-11-13). Size M. ADR 0404, 2026-11-13 (registration of stub ADR 0300): nonlinear::solve, total Lagrangian Tet4, Hex8, Tet10 and Hex20 with St. Venant-Kirchhoff, tangent K_mat(F) + K_sigma(S) (the geometric stiffness of ADR 0390), Newton with load steps, residual and energy criteria, step halving, inversion and non-convergence refused naming the element or the step; Element::internal_force and tangent filled. Tangent against central differences 2e-11 to 8e-11 (limit 1e-6), rigid rotation 2e-16 E l^2, uniform stretch nominal stress 1e-16, order 2.02 to 2.08, elastica within 2.4e-4 to 5.8e-4 of the ODE (limit 2e-2). Partial: the linear limit (load factor 1e-6) missed in its registered run (cancellation in F^T F - I; met after amendment 1 at 2e-7), and a missing roll-back of a failed attempt is not caught by a registered check (follow-up F-NEW). Open for the maintainer (ADR 0404 question 1): count A5 as met after amendment 1. Follow-up F-497."
   },
   {
     "id": "F-398",
@@ -4763,5 +4763,16 @@
     "status": "done",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. buckling::factors on the prescribed-displacement path refuses a model whose reduced stiffness K_FF has a zero-shift pivot ratio below 1e-8 (the rule of ADR 0401) with FemError naming the unknown of the failing pivot, checked on ADR 0401's two-block Hex8 hinge with its face held by Displacement rows (which passes the rigid-motion test); the factors of ADR 0390's and ADR 0394's models keep their values bit for bit.",
     "note": "From ADR 0401 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0402, 2026-11-13: buckling::factors on the prescribed-displacement path applies, after every existing refusal (the rigid-motion test, the pre-stress length, the factor count) and before the eigensolver, the zero-shift pivot-ratio rule of ADR 0401 to K_FF (mpc::zero_shift_failing_pivot; a factorisation error other than a pivot falls through to the eigensolver's own error), and refuses with FemError::Solver { lowest_buckling_factors } naming the unknown of the failing pivot. ADR 0401's two-block Hex8 hinge held by Displacement rows passes the rigid-motion test (free rigid motions 0) and is refused naming node 8 component 1, a node of the hinged block (ratio -2.1e-16, the name equal to the one computed in the test); held by one more Displacement row it is solved. The factors and modes of ADR 0390's and ADR 0394's models are bit-identical to the base library (7 hashes), their printed values unchanged, smallest ratios 5.8e-2 to 0.22. The error kind of a model refused today is kept; only its reason text changes (the hinge, from the eigensolver's unnamed pivot text). Five mutations caught."
+  },
+  {
+    "id": "F-497",
+    "title": "Nonlinear driver: roll-back of a failed attempt as a registered check",
+    "phase": 9,
+    "deps": [
+      "F-397"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The one-step solve of ADR 0404's load-controlled Hex8 bar with four iterations allowed (one halving) equals the two-step solve bit for bit, and the mutation of ADR 0404 M7 (a failed attempt not rolled back) is caught by that check; every check of ADR 0404 keeps its value.",
+    "note": "From ADR 0404 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S."
   }
 ]
