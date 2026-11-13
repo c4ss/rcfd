@@ -312,3 +312,102 @@ B1, X1, F1, N1, P3 and Q1 (cube) were met in run 1; an amended copy `b1_x1_f1_f3
 unchanged (deterministic, the same numbers) with F3b in place of F2 and F3, so that they run in the suite. By the decision rule
 the item is **partial** whatever F2b and F3b give: F2 and F3 were registered checks that missed, and their corrections are met
 (if they are) only after an amendment made after the run.
+
+## Addendum 1: results (2026-11-13)
+
+Code: `crates/rcfd-fem/src/rotating/whirl/state.rs` (new, 830 lines, with the unit test A2); additive lines of
+`crates/rcfd-fem/src/rotating/whirl.rs` (34 to 39: `mod state;` and its `pub use`) and of `crates/rcfd-fem/src/rotating.rs` (23
+to 26 the module comment, 51 to 54 the `pub use`); no line removed or changed. Tests: `crates/rcfd-fem/tests/si_rotating_whirl_state.rs`,
+7 tests and 1 ignored record, 0.4 s in release together. Run 1 (`f505-scratch/run1.log`) was made once on commit 2acf6906; after
+amendment 1 (committed as 680e4aa7) the two corrected tests were run once (`f505-scratch/run2.log`). Nothing was re-run to pick
+a result. A rustfmt commit and a type alias for clippy followed (layout only; the new tests and `si_rotating_whirl` passed again
+after it, `f505-scratch/post_check_tests.log`).
+
+| # | Check | Limit | Measured | Met |
+|---|---|---|---|---|
+| A1 | random gyroscopic problems against the symmetric solver; flag | `<= 1e-10`; Stable | 1.8e-15; Stable at all four | yes |
+| A2 | companion matrix roots | `<= 1e-9` | 3.0e-15 | yes |
+| B1 | cube at `1.2 omega_0`: loss `Some(2)`, 32 finite eigenvalues, 16 reported | each | holds | yes |
+| Q1 | residuals: PMI / PMA / CBI / CBA | `<= 1e-9` | 1.8e-15 / 1.1e-14 / 3.2e-12 / 8.8e-11 | yes |
+| X1 | cube at `0.5 omega_0` against `whirl_modes`: count, frequencies, loss None, Stable | count; `<= 1e-9`; each | 16 = 16; 3.6e-12; holds | yes |
+| F1 | cube without Coriolis at `1.2 omega_0`: Unstable, growth against `sqrt(Omega^2 - omega_0^2)` | `<= 1e-8` | Unstable, 663.32495807209 1/s, 1.0e-12 | yes |
+| F2 | cube at `2.0 omega_0`: `negative == Some(3)` and Unstable | each | **`Some(2)` and Stable** (amendment 1: torsion estimate wrong) | **no** (record `..._known_miss`) |
+| F3 | stability table and CSV with the expected columns `true, true, true, false`, `0, 2, 2, 3` | each | results equal; **last row `2000,2,true,0,...`** (same cause) | **no** (same record) |
+| F2b | (amendment 1) odd index, three-unknown point mass at `1.5 omega_0`: Unstable, growth `omega_0`; in-plane frequencies | flag; `<= 1e-8`; `<= 1e-8` | Unstable; 1.1e-16; 2.4e-15 | yes, after the amendment |
+| F3b | (amendment 1) CSV reproduces the results | each | holds | yes, after the amendment |
+| P1 | isotropic point mass at `1.1 .. 5 omega_0`: `Omega -/+ omega_0` relative to each value; Stable | `<= 1e-8`; each | 3.3e-15; Stable at all five (real defect `<= 1.5e-16`) | yes |
+| P2 | both modes backward, `kappa <= -1 + 1e-8` | each | `kappa = -1.0` for all ten | yes |
+| P3 | cube at `1.2`, `1.5 omega_0`: loss `Some(2)`, pair against `Omega -/+ omega_0`, backward, Stable | each; `<= 1e-8` | holds; 1.9e-12 | yes |
+| AN1 | anisotropic point mass at 11 speeds: flags; growth and frequencies against D5 | exact; `<= 1e-8` | Unstable exactly at `1.02 .. 1.18`; 1.1e-14 (growth 59.7344, 86.2300, 99.5893, 86.2623, 59.7702 1/s) | yes |
+| AN2 | band edges by bisection against `omega_x`, `omega_y` | `<= 1e-8` | 2.2e-15, 2.2e-15 | yes |
+| AN3 | anisotropic cube at 5 speeds: flags; growth and translation frequencies; losses | exact; `<= 1e-8`; exact | holds; 2.4e-12; None, `Some(1)` x 3, `Some(2)` | yes |
+| R1 | refusals (`speed` twice, `speeds`, `matrix`, `mass`, `unknowns`) | each | holds | yes |
+| R2 | `cargo test -p rcfd-fem --release`; `cargo check -p rcfd-post --tests` | pass | 308 passed, 0 failed, 61 ignored (60 before, plus the F-505 record); pass | yes |
+| N1 | without Coriolis the cube at `1.2 omega_0` is unstable | growth `> 1e2` | 663.3 | as expected |
+| N2 | isotropic point mass at `1.5 omega_0` with `G = 0` | Unstable, growth within `1e-8 omega_0` of 1118.0340 and `> 1e3` | 1118.033988749895, deviation 0 | as expected |
+
+Gyroscopic stabilisation observed as D3 and D5 predict: the cube on isotropic springs has `K_eff` with two negative
+eigenvalues from `omega_0` on and stays stable at `1.2`, `1.5` and `2.0 omega_0`, its translation pair at `Omega -/+ omega_0` with
+both modes whirling backward; without Coriolis the same speeds diverge.
+
+Mutations (on a `git archive` copy of 680e4aa7 in `f505-scratch/mut`, each run once against `si_rotating_whirl_state` and the
+unit tests of `whirl::state`; logs `f505-scratch/mut_*.log`, summary `f505-scratch/mutations.log`): seven of eight caught.
+
+| Mutation | Caught by |
+|---|---|
+| 1 `G^` dropped from the state matrix | A1, P1, P2, P3, X1, AN1 (the bisection brackets), AN3, F2b, Q1 |
+| 2 sign of `G^` reversed in the state matrix | **not caught** (see below) |
+| 3 imaginary part of a 2 x 2 block halved | A1, A2, P1, P2, P3, X1, AN1, AN3, F2b, Q1 |
+| 4 `STABILITY_TOLERANCE = 1e-2` | AN2 (2.27e-3, 2.26e-3), AN3, F1 |
+| 5 inverse iteration on `Q(conj s)` | P2, P3, Q1 (residuals `~1`) |
+| 6 right-hand application of the Francis reflections left out | A2, P1, P2, F2b, Q1; the QR iteration refused on the cubes (did not converge) |
+| 7 `G = Omega C` in `whirl_state` | X1, P3, AN3 |
+| 8 reported set from `Im s < 0` | P1, P2, P3, AN1, AN3, F2b |
+
+**Mutation 2 is an equivalent mutant.** The registration expected P2, P3 to catch it, on the argument that the vectors would
+"belong to `-s`". That argument was wrong: by D3 the spectrum of the state matrix is symmetric under `s -> -s`, so reversing `G^`
+gives the same set of eigenvalues (to rounding), and the vectors are computed from `Q(s)` with the true `G` at each value of that
+set, so they are the right ones. The outputs differ only by rounding (cube growth at `1.1 omega_0` 99.58931373522 against
+99.58931373283). No output check can catch it; it is recorded, not hidden.
+
+`cargo fmt -p rcfd-fem --check`: clean (after the layout commit). `cargo clippy -p rcfd-fem --all-targets -- -D warnings`: clean
+(after replacing a tuple type by an alias, layout only). `rcfd-linalg` not touched. `baseline_hashes` not run: no crate outside
+`rcfd-fem` uses `rotating` (`rcfd-post` checks), the edits of the two shared files are additive (`mod`, `pub use`, comment),
+and the existing `rcfd-fem` tests pass, so no case hash can move.
+
+Deviations: F2 and F3 rest on the wrong torsion estimate (amendment 1, diagnosed: the pre-stress cancels the spin softening on a
+rigid rotation about the axis); the expectation for mutation 2 was wrong (equivalent mutant). Not run: the cyclic sector (a
+registered limit).
+
+**Decision by the registered rule: partial.** Clauses c1 to c5 are met: the state solver above the loss (B1, P1, P3, AN1 to AN3,
+F2b), the flag with the growth rate (P1, AN1, F1, N2), the isotropic point mass within 3.3e-15 relative and flagged stable, the
+anisotropic band with edges within 2.2e-15. The rule makes it partial on three counts: F2 and F3 missed in the registered run;
+F2b and F3b were met only after an amendment made after that run; and mutation 2 was not caught (equivalent).
+
+### Remaining questions
+
+1. Promote to done? The misses are a wrong estimate in the set-up (torsion), not a defect of the code, and mutation 2 is
+   equivalent. Options: (a) leave partial and close the gap by a short follow-up that registers the odd-index check on a model
+   path (a cube with a negative axial support) before its run; (b) the maintainer accepts amendment 1 and the equivalence
+   argument and marks done. Recommendation: (a), under the house rule; the follow-up is small.
+2. The sector. Options: (a) wire `whirl_state` to `RotatingSector` (the reduced `K_eff`, `M`, `G` of index `k` from ADR 0411
+   D5 into the same dense state solve); (b) leave the whole part only. Recommendation: (a), small, as its own follow-up.
+3. Supercritical branches in a Campbell table (tracking across the zero crossing of the forward branch, where a mode at
+   `omega_0 - Omega` comes back as `Omega - omega_0` with the opposite whirl). Options: (a) per-speed table only (now); (b)
+   tracking with the complex MAC of ADR 0411 D4 on the reported modes. Recommendation: (a) until a fan case needs it.
+
+### For the lead: roadmap entries
+
+F-505, proposed status **partial**. New note:
+
+> From ADR 0411 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0416, 2026-11-13: whirl modes at any speed by the state matrix A = [[0, c I], [-K^/c, -G^]] of the mass-scaled gyroscopic problem, eigenvalues by Householder reduction to Hessenberg form and the Francis double-shift QR algorithm, mode vectors by inverse iteration on Q(s) = s^2 M + s G + K_eff; each speed flagged stable when max|Re s| <= 1e-8 max|s|, otherwise unstable with the growth rate max Re s (RotatingPart::whirl_state, whirl_stability with CSV, gyroscopic_state_eigen_dense); whirl_modes still reports such speeds as a loss. Isotropic point mass above omega_0: Omega - omega_0 and Omega + omega_0 within 3.3e-15 relative, both backward, flagged stable; cube on springs gyroscopically stabilised (two negative eigenvalues of K_eff, pair within 1.9e-12); anisotropic pair unstable exactly between the spring frequencies with the closed-form growth within 1.1e-14 of omega_0, band edges by bisection within 2.2e-15, the same band on the cube within 2.4e-12. Partial by the rule: the registered odd-index check on the cube rested on a wrong torsion estimate (the pre-stress cancels the spin softening on a rigid rotation about the axis; amendment 1, met on a corrected set-up after the run), and one planned mutation (sign of G in the state matrix) is equivalent by the symmetry of the spectrum.
+
+Follow-up items (proposed):
+
+- "Odd-index instability of a rotating part on the model path", deps F-505.
+
+> Every limit not stated here is registered in the ADR before the run. A rotating part whose K_eff has an odd number of negative eigenvalues (a cube on springs with a negative axial support, registered with its closed form) is flagged unstable by RotatingPart::whirl_state with the closed-form growth rate within 1e-8 relative, and the same part with an even number is flagged stable where the closed form says so.
+
+- "Whirl stability of a cyclic sector above the loss of stiffness", deps F-505.
+
+> Every limit not stated here is registered in the ADR before the run. RotatingSector solves each harmonic index by the state matrix of ADR 0416 at speeds where its reduced K_eff is not positive definite, with the stability flag and growth rate per index; on the disc sector of ADR 0411 the union of the sector's eigenvalues equals the full rotor's within 1e-8 relative at a speed above the first loss of stiffness, and the flags agree.
