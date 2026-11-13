@@ -4493,9 +4493,9 @@
     "deps": [
       "F-368"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "With OversetSolver::set_geometry_corrections on, a three-dimensional flow with a known varying pressure (a decaying vortex or a manufactured solution) on B3 and B3d with the component moving as in ADR 0255: the error of the calculated and fringe cells on B3d at most twice that on B3 with the default and the quadratic donor interpolation, continuity within 1e-9 at every step, with a run that names the share of the uncorrected Green-Gauss pressure gradient.",
-    "note": "From ADR 0367 question 2; low priority."
+    "note": "From ADR 0367 Q2, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0382, 2026-11-12: PARTIAL. A Taylor-Green vortex with an axial velocity (exact, zero normal pressure gradient on the box, pressure range V^2) on B3 and B3d with the component moving as in ADR 0255, OversetSolver::set_geometry_corrections on: E on B3d 1.588e-2 (default stencils and quadratic) against 4.80e-3 and 2.34e-3 on B3, ratios 3.31 and 6.80 (limit 2; missed, kept as known misses), the same against B3 with the default solver; continuity 2e-14 or less every step. The share of the uncorrected Green-Gauss pressure gradient is named by the new diagnostic opt-in OversetSolver::set_least_squares_pressure_gradient (only with the corrections): it carries 63 % and 66 % of the error on B3d (91 % and 77 % of the excess over B3); with it the ratios are 1.22 (met) and 2.33 (missed: the warped background's own error stays while the quadratic stencils halve B3's). At operator level the Green-Gauss gradient of a linear pressure is off by 0.195 |grad p| on B3d, the least-squares one exact. Defaults and the opt-in without the new flag bit-identical (ADR 0367's eight fingerprints and two new ones equal; baseline_hashes and the overset tests pass). Control held after an amendment (N1b 1.0e-3); three mutations caught by their registered checks. Limits: one flow, one warp, one resolution; a pressure error of 4.3e-2 V^2 common to all runs is not diagnosed."
   },
   {
     "id": "F-473",
@@ -4651,5 +4651,16 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. modal_analysis of a model with linear constraints, rigid sets or elastic supports reduces K and M by the transformation of ADR 0296 (T^T K T, T^T M T; zero right-hand sides only, a non-zero value refused naming the constraint) and expands the modes by T. A model with prescribed displacements only gives the bits of today's modal analysis. A bar (nu = 0) on an end spring k has its first axial frequency from the closed-form transcendental equation within 0.5 percent at 20 elements; the modes are M-orthonormal within 1e-10 and every constraint row holds on each expanded mode within 1e-12; a model held only by springs uses the automatic shift when a rigid motion is free.",
     "note": "From ADR 0296 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11; needed by the cyclic modes (F-394). Size S."
+  },
+  {
+    "id": "F-487",
+    "title": "Overset: a consistent cell pressure gradient in the geometry corrections",
+    "phase": 9,
+    "deps": [
+      "F-472"
+    ],
+    "status": "todo",
+    "acceptance": "OversetSolver::set_geometry_corrections takes the cell pressure gradient of the momentum predictor and of the velocity correction from the least-squares gradients of the corrections (or another gradient exact for linear fields on B3d), with the defaults bit-identical: the Taylor-Green vortex with an axial velocity of ADR 0382 on B3 and B3d with the component moving as in ADR 0255 has an error of the calculated and fringe cells on B3d at most twice that on B3 with the default and the quadratic donor interpolation, continuity within 1e-9 at every step, ADR 0367's linear shear and uniform flow within their limits, and a run of the warped background alone that names the share of the warped background in the remainder.",
+    "note": "From ADR 0382 questions 1 and 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size M."
   }
 ]
