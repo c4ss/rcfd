@@ -194,3 +194,87 @@ si_hex20_support_bore -- --nocapture`), `E = 2e11`, `nu = 0.3`, `rho = 7850`, `P
   Timoshenko deflection only to the precision of the acceptance.
 - No stress check of the cantilever (none is in the acceptance).
 - The cylinder is checked on 8 x 8 only; the rate is not re-measured (ADR 0292's diagnostic is quoted, not repeated).
+
+## Addendum 1: results (2026-11-13)
+
+The registered run: commit 70529d34, once, release, `cargo test -p rcfd-fem --release --test si_hex20_support_bore --
+--nocapture --test-threads=1` (log `w49i-work/f485-scratch/registered_run.log`). 5 tests, 5 passed. No library code was written.
+
+### Checks
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| C2 | `abs(delta / delta_T - 1) <= 0.01` | 3.92e-4 (ratio 0.999608; `delta = 1.602491e-3 m`, `delta_T = 1.603120e-3 m`) | yes |
+| R1 | `abs(ratio_clamp - 0.981949) <= 1e-6`; `abs(ratio_clamp - 1) > 0.01` | 2.8e-7; 1.805e-2 (ratio 0.981949, the ADR 0292 record reproduced) | yes |
+| T2a | bore `u_r` <= 0.002 (8 x 8) | 6.07e-6 | yes |
+| T2b | bore hoop stress <= 0.01 (8 x 8) | 3.75e-3 (3.7485e-3) | yes |
+| K1 | 8 root nodes, 2 neutral-line nodes at `y = 0`, `y = h` | 8; `(0, 0, 0.05)`, `(0, 0.1, 0.05)` | yes |
+| K2 | support accepted by the rigid-motion check | accepted | yes |
+| K3 | each <= 1e-8 | `sum R_z`: 1.8e-10; `R_z(n0)`, `R_z(n1)` against `P/2`: 2.9e-10, 6.9e-11; `R_y(n0)/P`: 1.3e-11; `sum R_x / P`: 2.0e-11; moment: 1.3e-10 | yes |
+| S2 | each `abs(ratio - 1) <= 0.1` | top and bottom 2.7e-6 (`-/+1.799995e-6 m` against `-/+1.8e-6 m`) | yes |
+| R2 | `abs(ratio_both - ratio) <= 1e-3` | 1.4e-15 | yes |
+| N1 | `u_z` at `n0` only refused | `RigidBodyMotionFree`, 1 motion: rotation about the `x` axis through `(1, 0.05, 0.05)` | yes |
+| N2 | clamp width changes exactly 0 | 0, 0 | yes |
+| N3 | 4 x 8 T2b measure > 0.01 | 1.1681e-2 (the ADR 0292 miss reproduced) | yes |
+| S1 | only the new file under `crates/`; `si_hex20` 0 failed | `git diff 4b8f3b59 -- crates` lists only `si_hex20_support_bore.rs`; `si_hex20` 10 passed, 4 ignored | yes |
+
+The bore mid-edge radius (not registered, printed): 1.1e-16.
+
+Reading. C2 at 0.04 percent is better than the estimate (0.1 to 0.2 percent): with the contraction free the element on this mesh
+is closer to the Timoshenko value than the `nu = 0` clamp of ADR 0292 (0.999037), which still restrained the shear warping
+in a section clamped in all components; the support restrains `u_x` only. S2 at 3e-6 against an estimate of 3 percent: the
+lateral strain of the root fibres is the beam-theory value almost exactly; the Flamant estimate of the line reaction's effect
+was a bound, and the reaction acts on the neutral line where its effect on the fibre strain is second order. R2 at 1e-15: the
+symmetric solution already has `u_y(n1) = u_y(n0) = 0`, as D1 argued (`eps_y = 0` on the neutral line), so the redundant
+condition carries no force. T2b and N3 reproduce the ADR 0292 diagnostic (3.75e-3) and record (1.168e-2).
+
+### Mutations (scratch copy `w49i-work/f485-scratch/copy`, script `mutate.py`, log `mutations.log`)
+
+| Id | Mutation | Caught by |
+| --- | --- | --- |
+| Mu1 | neutral line at `z = 0` | K1 (3 nodes), K3 (`R_z` sums 1.18 off), S2 bottom (0.214), R2 (1.9e-3); not C2 (ratio 0.997942, met) |
+| Mu2 | `u_y`, `u_z` on the whole root face | C2 (1.805e-2), K3, S2 (1.0), N1 (solved instead of refused) |
+| Mu3 | radial count 4 | T2b (1.168e-2) |
+| Mu4 | cylinder `nu = 0` | T2a (0.126), N3 (1.2e-3, not above 0.01) |
+| Mu5 | `u_x` at the 4 root corners only | C2 (ratio 1.0479), S2 (0.848) |
+
+All five caught. Mu1 shows that the 1 percent limit alone does not tell a neutral-line support from a bottom-fibre one; K1, K3
+and S2 do.
+
+### After the tests
+
+`cargo fmt -p rcfd-fem --check`: clean (after `cargo fmt -p rcfd-fem` on the new file before its commit). `cargo clippy -p
+rcfd-fem --all-targets --release -- -D warnings`: clean. No shared solver file changed, so no baseline-hash run is owed.
+
+### Deviations and disclosures
+
+- The bore mid-edge radius (T1c of ADR 0292) was not in the registered table; it is printed, not asserted.
+- The 8 x 8 cylinder result was known from ADR 0292's diagnostic before the run (disclosed in D2).
+
+### Not run
+
+The whole `rcfd-fem` suite and the workspace gate (the lead runs the gate); only `si_hex20_support_bore` and `si_hex20`.
+
+### Decision by the registered rule
+
+**Done**: C2, R1, T2a and T2b met; every K, S and R check met; N1 to N3 as expected; five mutations caught.
+
+### Remaining questions
+
+1. The ADR 0292 records `c1_amended_hex20_cantilever_known_miss` and `t1_thick_cylinder_plane_strain_known_miss` stay ignored
+   and unedited. (a) Leave them as records with a pointer from the roadmap note of F-389 to this ADR; (b) edit their ignore
+   reasons to name ADR 0385. Recommendation (a): records are not edited (house rule 2).
+2. F-389's status: its acceptance names "ONE element through the thickness ... within 1 percent" without naming the support,
+   and the thick cylinder "on a curved mesh" without naming the count. (a) F-389 stays partial (its registration fixed the full
+   clamp and 4 x 8), with F-485 done as the follow-up that meets both clauses under registered set-ups; (b) the lead marks F-389
+   done on the strength of F-485. Recommendation (a), for the maintainer to decide (it re-reads a registered acceptance).
+
+### For the lead: roadmap entries
+
+F-485, proposed status **done**, note:
+
+> ADR 0385, 2026-11-13: Hex20 cantilever (L/h = 20, nu = 0.3, 10 x 1 x 1) with the support of beam theory at the root, derived and registered: u_x = 0 on the 8 root-face nodes, u_z = 0 at the two neutral-line mid-edge nodes (0, 0, h/2) and (0, h, h/2), u_y = 0 at the first (six rigid motions removed, statically determinate in the section plane, no clamp): tip deflection ratio 0.999608 (0.04 percent, limit 1 percent); reactions P/2 and P/2, moment P L to 1.3e-10; root Poisson width change the beam value to 3e-6; the full clamp beside it reproduces 0.981949. Thick cylinder b/a = 2, plane strain, 8 radial x 8 circumferential Hex20 (8 from the second-order rate of ADR 0292's 1.168e-2 on 4 radial with margin 3): bore hoop stress 3.75e-3 (limit 1e-2), bore displacement 6.1e-6 (limit 2e-3); 4 x 8 still misses (1.168e-2). Five mutations caught. Test file si_hex20_support_bore.rs only, no library code.
+
+F-389, note unchanged except an appended sentence (status as the maintainer decides, remaining question 2):
+
+> The two known misses are met under registered follow-up set-ups by F-485 (ADR 0385): the cantilever with the support of beam theory at 0.04 percent and the bore hoop stress on 8 radial elements at 0.37 percent.
