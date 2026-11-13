@@ -251,3 +251,87 @@ zero on `A`).
    2026-11-11 (take the recommendation).
 3. The reading of (c4) as factors and modes, measured by hashes against the base library and by the printed logs. Taken on the
    maintainer's standing instruction of 2026-11-11 (take the recommendation).
+
+## Addendum 1: results (2026-11-13)
+
+Code: `crates/rcfd-fem/src/buckling.rs` (module doc, new lines 7 to 8; doc of `factors`, new lines 106 to 108; the guard in
+`factors`, prescribed path, new lines 143 to 153; nothing else changed, `mpc.rs` not touched). New test file
+`crates/rcfd-fem/tests/si_buckling_prescribed_mechanism.rs`. No existing test edited or ignored. The registered run: commit
+dc345c65, once, release, `CARGO_BUILD_JOBS=4 cargo test -p rcfd-fem --release --test si_buckling_prescribed_mechanism --
+--nocapture --test-threads=1`: 3 passed (log `f496-scratch/registered_run1.log`). A4 and C4: the four files run on 30bdaaa9 (this
+registration, before any code; `before_*.log`) and on dc345c65 (`after_*.log`). A3 (i) base side: the scratch copy (`git
+archive` of dc345c65 with `buckling.rs` of 3f2f0b9b), `--exact a3_c3_bit_for_bit_hashes` once (`a3_base_library.log`).
+
+### Checks
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| A1 | refused as registered; ratio `< 1e-8` | HP refused, `Solver { lowest_buckling_factors }` "node 8 component 1: pivot ratio -2.145767211914063e-16 of K_FF at zero shift ..."; identity yes; the named `u_y` of `(2a, a, 0)` moves 1.0 of the largest hinge value; the factorisation refused the pivot (ratio -2.1e-16), as predicted (arith. 1) | yes |
+| A2 | `Ok` | `check_rigid_body_motions(HP)`: `Ok(())` | yes |
+| A3 | 7 hashes equal of 7 | B threads 1 and 8 `99fc78cd43b110d5`, tension `a8c7f832281a39c5`, Hex8 `554980138f89aa07`, C `8dc8e754172cf4e6`, B20 `99fc78cd43b110d5`, B40 `cb1f5c2001aea9f3`: equal on the code commit and on the base library, 7 of 7 | yes |
+| A4 | 0 lines differ; passing both times | `si_geometric` 108 lines, `si_knife_edge_closed_form` 31 lines: 0 differ; 4 + 2 passed both times | yes |
+| C1 | `== 0` | HP free rigid motions 0 (smallest singular value 0.528) | yes |
+| C2 | as stated | `factors = 0`: `InvalidValue { factors }`; pre-stress of B: `FieldLength { prestress, expected 3, found 81 }`; HZ: `RigidBodyMotionFree` (translation z) | yes |
+| C3 | `> 1e-8`, solved | smallest ratios: B, tension, B20 8.88e-2; Hex8 0.218; C 0.209; B40 5.83e-2; each solved | yes |
+| C4 | exactly that one line differs | `si_buckling_mechanism` 44 lines: only line 39 `O1 HP (prescribed path)` differs (eigensolver text -> the named refusal of A1); `si_prestress_mpc` 111 lines: 0 differ; passing both times | yes |
+| N1 | `Ok` | HD solved, factors 6788.98, 21651.92; smallest ratio 0.413 | as expected |
+| N2 | another unknown | row 13 as a mesh equation is node 4 component 1; reported node 8 component 1 | as expected |
+| S1 | 0 failed | `cargo test -p rcfd-fem --release --no-fail-fast`: 252 passed, 0 failed, 54 ignored | yes |
+| S2 | builds | `cargo check -p rcfd-post --tests`: builds | yes |
+| S3 | as stated | `git diff 3f2f0b9b --stat -- crates`: `buckling.rs` and the new test file | yes |
+
+fmt: `cargo fmt -p rcfd-fem --check` clean. clippy: `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings` clean
+(release profile, to reuse the build on a shared machine).
+
+On the arithmetic: the solved models' ratios (5.8e-2 to 0.22) are far above the lower bounds of arithmetic 2 (7.8e-6 to
+1.25e-4): the bound used the largest diagonal against the largest flexibility, which belong to different unknowns. B and B20
+are the same model (ADR 0394's B20 is ADR 0390's B), hence the same hash.
+
+### Mutations (copy `f496-scratch/copy` from `git archive` of dc345c65, own target directory, script `mutate.py`, log `mutations.log`)
+
+| Id | Mutation | Caught by |
+| --- | --- | --- |
+| Mu1 | guard removed | A1 identity (HP refused with the eigensolver's unnamed text) |
+| Mu2 | row named as a mesh equation | A1 identity, N2 |
+| Mu3 | ratio `1e-1` | C3 (B, tension, B20, B40 refused), A4 (`si_geometric` 2 tests and `si_knife_edge_closed_form` 2 tests fail); not N1, Hex8 or C (ratios 0.2 to 0.41 above `1e-1`) |
+| Mu4 | guard before the rigid-motion test | C2 (all three rows), the existing `c7_refusals_after_transformation_landed` (B without its pin refused by the guard) |
+| Mu5 | guard before the factor count | C2 (`factors = 0`) |
+
+Every mutation was caught.
+
+### Deviations
+
+- The tension beam of ADR 0390 is at `s = +1e8` (as in `si_geometric.rs`); the registration's reading of (c4) wrote `+1e6` by
+  mistake. The model checked is the one of ADR 0390's test.
+- The hash test is named `a3_c3_bit_for_bit_hashes` (it holds A3 and C3); the A3 row of the registration named it
+  `a3_c5_...`, a slip (there is no C5).
+- clippy run in release profile instead of debug.
+
+### Which existing error texts change
+
+Only the prescribed-path models of D3: those refused today by the eigensolver's zero-shift factor keep the kind `Solver {
+lowest_buckling_factors }` with the new named reason (HP: measured, C4); none solved today is refused now among the tests (A3,
+A4, C3, S1). No existing test asserts either text; no existing test was marked ignored or edited.
+
+### What was not run
+
+The workspace suite (the lead's gate) and `rcfd-api`'s `baseline_hashes` (no `rcfd-api` path calls `buckling::factors`; the
+brief limits tests to `rcfd-fem`).
+
+### Decision by the registered rule
+
+**done**: A1 to A4 met, every C and S check met, the negative controls as expected, every mutation caught.
+
+### Remaining questions
+
+1. **`prestressed_modes` on the prescribed path** with a mechanism that is not rigid: its Auto shift moves a free motion off
+   zero and returns its zero mode, so it is not wrong, but the rigid-motion test passes it unnamed. Options: (a) leave it (a
+   modal analysis may legitimately show a mechanism's zero mode); (b) name it in the result. Recommendation (a).
+2. ADR 0401's questions 1 (the margin of the rule on larger meshes) and 3 (its resolution) apply to this path too. No new
+   proposal.
+
+## For the lead: roadmap entries
+
+F-496, proposed status **done**, note:
+
+> From ADR 0401 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0402, 2026-11-12: buckling::factors on the prescribed-displacement path applies, after every existing refusal (the rigid-motion test, the pre-stress length, the factor count) and before the eigensolver, the zero-shift pivot-ratio rule of ADR 0401 to K_FF (mpc::zero_shift_failing_pivot; a factorisation error other than a pivot falls through to the eigensolver's own error), and refuses with FemError::Solver { lowest_buckling_factors } naming the unknown of the failing pivot. ADR 0401's two-block Hex8 hinge held by Displacement rows passes the rigid-motion test (free rigid motions 0) and is refused naming node 8 component 1, a node of the hinged block (ratio -2.1e-16, the name equal to the one computed in the test); held by one more Displacement row it is solved. The factors and modes of ADR 0390's and ADR 0394's models are bit-identical to the base library (7 hashes), their printed values unchanged, smallest ratios 5.8e-2 to 0.22. The error kind of a model refused today is kept; only its reason text changes (the hinge, from the eigensolver's unnamed pivot text). Five mutations caught.
