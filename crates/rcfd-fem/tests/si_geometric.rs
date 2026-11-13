@@ -703,6 +703,7 @@ fn a10_c2_c10_clamped_free_column() {
 // -------------------------------------------------------------------------------------------------------- refusals
 
 #[test]
+#[ignore = "record of ADR 0390 C7 before ADR 0398 (F-493) retired the nodal-spring row; superseded by c7_refusals_after_transformation_landed (maintainer, 2026-11-13)"]
 fn c7_refusals() {
     let mut c = Checks::new();
     let b = beam(-1e6, true, true);
@@ -727,6 +728,36 @@ fn c7_refusals() {
     c.holds(
         "C7 B with a nodal spring",
         matches!(r, Err(FemError::InvalidValue { key: "constraint", .. })),
+        &format!("{:?}", r.as_ref().err()),
+    );
+    let comp = beam(-1e8, true, true);
+    let beyond = static_prestress(&comp).scaled(5.0);
+    let r = prestressed_modes(&comp, &beyond, &modal_options());
+    c.holds(
+        "C7 modes beyond the buckling stress",
+        matches!(r, Err(FemError::Solver { .. })),
+        &format!("{:?}", r.as_ref().err()),
+    );
+    c.finish();
+}
+
+#[test]
+fn c7_refusals_after_transformation_landed() {
+    let mut c = Checks::new();
+    let b = beam(-1e6, true, true);
+    let pb = static_prestress(&b);
+    let col = column(1e6);
+    let r = factors(&col, &pb, &BucklingOptions::new(2));
+    c.holds(
+        "C7 pre-stress of B on C",
+        matches!(r, Err(FemError::FieldLength { key: "prestress", .. })),
+        &format!("{:?}", r.as_ref().err()),
+    );
+    let free = beam(-1e6, true, false);
+    let r = factors(&free, &pb, &BucklingOptions::new(2));
+    c.holds(
+        "C7 B without its pin",
+        matches!(r, Err(FemError::RigidBodyMotionFree { .. })),
         &format!("{:?}", r.as_ref().err()),
     );
     let comp = beam(-1e8, true, true);
