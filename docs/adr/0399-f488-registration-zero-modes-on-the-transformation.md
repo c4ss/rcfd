@@ -261,3 +261,79 @@ if the count cannot be computed or the zero modes cannot be found on KF or FB1.
    the free value is 0 by definition, for a count of 6 the held value is not defined and passes). Limits unchanged.
 3. Library code as designed in D1 (`crates/rcfd-fem/src/free_motions.rs`, the `pub mod free_motions;` line of `lib.rs`); no
    edit of `mpc.rs` or `modal.rs`.
+
+## Addendum 1: results (2026-11-13)
+
+Code: new module `crates/rcfd-fem/src/free_motions.rs` (`COUNT_TOLERANCE`, `FreeRigidMotions` and `fields`, `rigid_field`,
+`free_rigid_motions`, the private one-sided Jacobi `singular_values` and `push_row`); `crates/rcfd-fem/src/lib.rs` line 23 (`pub
+mod free_motions;`); new test file `crates/rcfd-fem/tests/si_zero_modes_mpc.rs`. `mpc.rs`, `modal.rs` and every existing test
+are not edited. The library and the test file were committed (8fd75251, with amendment 1) before the run; the registered run of
+`si_zero_modes_mpc` was made once (release, `--test-threads=1 --nocapture`, log `w49i-work/f488-scratch/run1.log`): 3 tests, 3
+passed, 0.39 s. A rustfmt pass followed (layout only, 2314227b).
+
+| Id | Clause | Measured | Limit | Met |
+| --- | --- | --- | --- | --- |
+| Z1 | c1, c2 | KF: `rigid_free` true, `sigma = 3.058e6`; count 3 (hand 3), `n0 = 3`, the lowest three; `max abs(lambda_i) / sigma = 2.12e-13`; next `lambda_3 / sigma = 4.95e-2`. FB1: `sigma = 3.072e5`; count 5 (hand 5), `n0 = 5`, the lowest five; `max abs(lambda_i) / sigma = 4.20e-13`; next (the spring mode, `lambda_5 = 1.281e4`, estimate 1.28e4) `/ sigma = 4.17e-2` | `n0 = count = hand`; `<= 1e-9` | yes |
+| Z2 | c2 | FB2: count 4 (hand 4), `n0 = 4`, `3.03e-13`, next `3.56e-2`. FR: count 6 (hand 6), `n0 = 6`, `6.78e-13`, next `3.84e2` | as Z1 | yes |
+| R1 | c2 | KF 3.1e-12, FB1 2.2e-12, FB2 1.6e-12, FR 1.4e-15 (FS 9.3e-13, beyond the list) | `<= 1e-6` | yes |
+| S1 | c2 | smallest held and largest free singular value over `s_max`: KF 9.9e-2 and 0, FB1 (rank 1) 1 and 0, FB2 0.61 and 0, FR (rank 0) none and 0, FS 1 and 0; C1 models (rank 6): smallest held 4.1e-2 (CP, CL1, CL2, CN: 0.1722 / 4.2252), free none | held `> 1e-6`, free `<= 1e-12` | yes |
+| C1 | c2, c4 | counts KB, RB, SR, SA, CP, CL1, CL2, RC, CN, KN, KE 0; KF 3; default `rigid_free == (count > 0)` on all twelve models that give modes | as stated | yes |
+| E1 | c3, c4 | KB, KF, RB, SR, SA, CP, CL1, CL2, FB1, FB2, FR, FS: `rigid_free` at `Some(Auto)` and at `Some(Value(s_p))` equals the default's on all twelve; `Some(Value(0))`: `Ok`, `rigid_free` false, shift 0 on the seven without a free motion, `Err(Solver)` ("not positive definite for sigma = 0") on KF, FB1, FB2, FR, FS | as stated | yes |
+| E2 | c3 | KB, RB, SR, CL1 at `Value(s_p)` (`s_p` 3.25e7, 3.24e7, 3.01e6, 4.85e7): reported shift `s_p`, `rigid_free` false | as stated | yes |
+| E3 | c4 | RC ("the reference rotation y of constraint 3 (RigidSet) has no mass"), CN, KN, KE ("... a modal analysis takes zero values only"): the same `Debug` text at Auto, `Value(1e3)`, `Value(0)` as the default | equal | yes |
+
+Negative controls:
+
+| Id | Result | Held |
+| --- | --- | --- |
+| N1 | FS (two springs on one line): count 5, `n0 = 5`, `7.39e-13 sigma` | yes |
+| N2 | the bar without its springs: count 6 (0 rows) | yes |
+| N3 | FB1 `lambda_5 / (1e-9 sigma) = 4.17e7` | yes (`> 1e3`) |
+
+Mutations (a `git archive` copy of 2314227b in `w49i-work/f488-scratch/mut`, own target directory, `si_zero_modes_mpc` run once
+each by `f488-scratch/mutate.py`, the file restored and compared byte for byte; logs `f488-scratch/MU*.log`):
+
+| Id | Failed tests (first assertion) | Registered target caught |
+| --- | --- | --- |
+| MU1 supports left out | all three: Z1 (KF count 6), Z2 (FB2 count 5), C1 (KB count 1: its spring holds `t_x`) | yes (Z1) |
+| MU2 Linear rows left out | z2 (FB2 count 5), c1 (SR 3, CL1 6, CL2 6) | yes (Z2, C1) |
+| MU3 rotation fields zero | all three: Z1 (KF count 5), Z2 (FB2 2), C1 (KB 3) | yes (Z1) |
+| MU4 cleaning removed | z2: FR count 4 (the residues `9.7e-17` of the rigid-set rows become the largest singular values) | yes (Z2 FR) |
+| MU5 `+ w x d` in the rigid-set rows | z2 (FB2 count 2; FR count 3) | yes (Z2) |
+| MU6 explicit branch reports `shift != 0` | c1: E1 (KB, RB, SR, CL1, CL2 disagree) asserted first; E2 measured failing on KB, RB, SR, CL1 | yes (E2 measured; the test stops at E1, asserted first) |
+| MU7 explicit branch reports `false` | c1: E1 (KF, FB1, FB2, FR, FS disagree) | yes (E1 KF) |
+
+Other runs (release, `CARGO_BUILD_JOBS=4`): every test file of rcfd-fem (`cargo test -p rcfd-fem --release --no-fail-fast`,
+log `f488-scratch/fem_all.log`): all pass, exit 0. `cargo check -p rcfd-post --tests`: clean. `cargo fmt -p rcfd-fem --check`:
+clean. `cargo clippy -p rcfd-fem --all-targets --release -- -D warnings`: clean. Not run: `rcfd-api` `baseline_hashes` (no
+solver file is changed: one new module and its declaration, nothing existing calls it), the workspace suite (the lead's gate).
+
+**Deviations.** Amendment 1 (E3's positive shift for refused models; R1 and S1 also asserted on FS), before the run. A model
+with no rows reports its six singular values as `-0.0` (the empty sum of `f64` is `-0.0` in Rust); the count is right (6, N2)
+and nothing compares the sign. Nothing else deviates.
+
+**Decision by the registered rule: done.** Every check meets its limit, the three negative controls hold, the seven mutations
+are caught (MU4 caught, not a survival), and no existing test of rcfd-fem fails. ADR 0384's A1 known miss stays as its record
+(it measures the frequencies against the first flexible frequency, a measure ADR 0384 had not derived); in the measure of this
+ADR the same zero modes are `2.12e-13 sigma`.
+
+### Remaining questions
+
+1. The count is a separate function. Options: (a) keep it so; (b) add `free_rigid_motions` to `MpcModes` (computed in
+   `modal_analysis_mpc`). Recommendation: (a) until a caller (a report or the Studio) needs it next to the modes; (b) is
+   additive whenever it does.
+2. A mechanism makes `rigid_free` true with a count below the nullity of `K_r`. Options: (a) leave it documented (now); (b)
+   report "zero-energy motions that are not rigid" when `rigid_free` is true and the count is 0. Recommendation: (a); no model
+   of the repository has one that passes the mass check.
+
+## For the lead: roadmap entries
+
+Proposed status of F-488: **done**.
+
+Note for F-488:
+
+> ADR 0399, 2026-11-13: rcfd_fem::free_motions::free_rigid_motions counts the free rigid motions of a model as 6 minus the rank of the prescribed rows, the linear rows, the rigid-set rows and the support stiffness on the six scaled rigid fields (one-sided Jacobi, relative threshold 1e-8; the rigid-set rows hold identically on rigid motions, derived). With the automatic shift the zero modes satisfy |lambda_i| <= 1e-9 sigma: springs-only bar KF 2.1e-13 sigma, 3 zero modes = count 3; free block with one spring 4.2e-13 sigma, 5 = 5; with a tie and a rigid set 4 = 4; with a rigid set only 6 = 6; two springs on one line 5 = 5 (directions, not supports); the next mode at 3.6e-2 sigma or above; every zero mode in the span of the counted free fields within 3.1e-12. With a shift given by the caller (Auto, a positive value, zero) rigid_free from the zero-shift factor test agrees with the automatic case on all twelve solved models (ADR 0384's eight and four new) and the refusals are the same; a positive caller shift on a held model reports false. Seven mutations caught. No line of mpc.rs or modal.rs changed.
+
+Note for F-486, to append:
+
+> ADR 0399 (2026-11-13): the zero modes of KF measured against the shift are 2.1e-13 sigma (limit 1e-9 sigma) and their number equals the counted free rigid motions; the explicit-shift report of rigid_free is checked on every model of ADR 0384. The A1 record stays as it is.
