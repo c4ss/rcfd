@@ -143,7 +143,11 @@ fn a1_state_solver_against_the_symmetric_solver() {
         stable &= r.stability == Stability::Stable;
         q1 = r.residuals.iter().fold(q1, |a, &b| a.max(b));
     }
-    ch.le("A1 eigenvalues against +/- i omega of the symmetric solver", worst, 1e-10);
+    ch.le(
+        "A1 eigenvalues against +/- i omega of the symmetric solver",
+        worst,
+        1e-10,
+    );
     ch.holds("A1 flag", stable, "every random gyroscopic problem flagged Stable");
     println!("A1 (information) largest residual {q1:.3e}");
     ch.finish();
@@ -250,12 +254,19 @@ fn an1_an2_anisotropic_point_mass_band() {
         flags,
         "Unstable exactly at 1.02 .. 1.18 omega_0, Stable at the other six",
     );
-    ch.le("AN1 growth and frequencies against the closed form (/ omega_0)", an1, 1e-8);
+    ch.le(
+        "AN1 growth and frequencies against the closed form (/ omega_0)",
+        an1,
+        1e-8,
+    );
     ch.le("Q1 point mass anisotropic residual", q1, 1e-9);
     // AN2: the band edges by bisection of the flag.
     let stable = |w: f64| {
         let (k, m, g) = point_mass(W0, WY, w, true);
-        gyroscopic_state_eigen_dense(&k, &m, &g, 2).unwrap().stability.is_stable()
+        gyroscopic_state_eigen_dense(&k, &m, &g, 2)
+            .unwrap()
+            .stability
+            .is_stable()
     };
     assert!(
         stable(0.95 * W0) && !stable(1.1 * W0) && stable(1.3 * W0),
@@ -412,7 +423,11 @@ fn b1_x1_f1_f2_f3_p3_n1_isotropic_cube_known_miss() {
                     && r.eigenvalues.len() == 2 * r.unknowns
                     && r.unknowns == 16
                     && r.eigenvalues.iter().all(|s| s[0].is_finite() && s[1].is_finite())
-                    && r.eigenvalues.iter().filter(|s| s[1] > 0.0 || (s[1] == 0.0 && s[0] >= 0.0)).count() == 16,
+                    && r.eigenvalues
+                        .iter()
+                        .filter(|s| s[1] > 0.0 || (s[1] == 0.0 && s[0] >= 0.0))
+                        .count()
+                        == 16,
                 "loss with negative Some(2), 32 finite eigenvalues, 16 reported",
             );
         }
@@ -605,7 +620,11 @@ fn b1_x1_f1_f3b_p3_n1_isotropic_cube_amended() {
                     && r.eigenvalues.len() == 2 * r.unknowns
                     && r.unknowns == 16
                     && r.eigenvalues.iter().all(|s| s[0].is_finite() && s[1].is_finite())
-                    && r.eigenvalues.iter().filter(|s| s[1] > 0.0 || (s[1] == 0.0 && s[0] >= 0.0)).count() == 16,
+                    && r.eigenvalues
+                        .iter()
+                        .filter(|s| s[1] > 0.0 || (s[1] == 0.0 && s[0] >= 0.0))
+                        .count()
+                        == 16,
                 "loss with negative Some(2), 32 finite eigenvalues, 16 reported",
             );
         }

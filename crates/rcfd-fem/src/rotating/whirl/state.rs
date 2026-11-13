@@ -8,7 +8,9 @@
 //! max|s|`, otherwise [`Stability::Unstable`] with the growth rate `max Re s`. The mode vectors come from inverse iteration on
 //! `Q(s)` (D4). The F-499 functions are not changed: [`RotatingPart::whirl_modes`] still reports such a speed as a loss.
 
-use super::{check_size, cholesky, dense_matvec, dense_of, inertia, lower_solve, mass_refused, speed_refused, transpose};
+use super::{
+    check_size, cholesky, dense_matvec, dense_of, inertia, lower_solve, mass_refused, speed_refused, transpose,
+};
 use super::{whirl_number, Whirl};
 use crate::constraint::reduce;
 use crate::error::{FemError, Result};
@@ -218,7 +220,17 @@ fn house<const N: usize>(x: [f64; N]) -> Option<([f64; N], f64)> {
 /// Applies `I - beta v v^T` on rows `r..r+N` from the left (columns `c0..=c1`) and on columns `r..r+N` from the right (rows
 /// `l..=r1`).
 #[allow(clippy::too_many_arguments)]
-fn reflect<const N: usize>(h: &mut [f64], m: usize, r: usize, v: &[f64; N], beta: f64, c0: usize, c1: usize, l: usize, r1: usize) {
+fn reflect<const N: usize>(
+    h: &mut [f64],
+    m: usize,
+    r: usize,
+    v: &[f64; N],
+    beta: f64,
+    c0: usize,
+    c1: usize,
+    l: usize,
+    r1: usize,
+) {
     for j in c0..=c1 {
         let d: f64 = (0..N).map(|q| v[q] * h[(r + q) * m + j]).sum();
         let f = beta * d;
@@ -271,7 +283,13 @@ fn eig2(a: f64, b: f64, c: f64, d: f64) -> [[f64; 2]; 2] {
     if q >= 0.0 {
         let sq = q.sqrt();
         let r1 = if t >= 0.0 { t + sq } else { t - sq };
-        let r2 = if r1 != 0.0 { (a * d - b * c) / r1 } else if t >= 0.0 { t - sq } else { t + sq };
+        let r2 = if r1 != 0.0 {
+            (a * d - b * c) / r1
+        } else if t >= 0.0 {
+            t - sq
+        } else {
+            t + sq
+        };
         [[r1, 0.0], [r2, 0.0]]
     } else {
         let w = (-q).sqrt();
@@ -409,7 +427,12 @@ fn null_vector(k: &[f64], m: &[f64], g: &[f64], n: usize, s: [f64; 2]) -> (Vec<f
         }
     }
     let mut x: Vec<[f64; 2]> = (0..n)
-        .map(|i| [1.0 + ((7 * i + 3) % 11) as f64 / 11.0, ((5 * i + 1) % 13) as f64 / 13.0 - 0.5])
+        .map(|i| {
+            [
+                1.0 + ((7 * i + 3) % 11) as f64 / 11.0,
+                ((5 * i + 1) % 13) as f64 / 13.0 - 0.5,
+            ]
+        })
         .collect();
     for _ in 0..INVERSE_ITERATIONS {
         let mut y: Vec<[f64; 2]> = perm.iter().map(|&p| x[p]).collect();
@@ -485,12 +508,15 @@ fn state_residual(k: &[f64], m: &[f64], g: &[f64], n: usize, s: [f64; 2], re: &[
 // ------------------------------------------------------------------------------------------------------------------------
 // D1, D3: the state solve.
 
+/// `(s, re, im, residual)` of one reported mode.
+type StateMode = ([f64; 2], Vec<f64>, Vec<f64>, f64);
+
 struct StateOut {
     eigenvalues: Vec<[f64; 2]>,
     stability: Stability,
     real_defect: f64,
     /// `(s, re, im, residual)` of the lowest `wanted` reported modes.
-    modes: Vec<([f64; 2], Vec<f64>, Vec<f64>, f64)>,
+    modes: Vec<StateMode>,
 }
 
 fn state_solve(k: &[f64], m: &[f64], g: &[f64], n: usize, wanted: usize) -> Result<StateOut> {
@@ -764,7 +790,10 @@ mod tests {
     fn a2_companion_matrix_roots() {
         // Coefficients highest power first.
         let p = poly_mul(
-            &poly_mul(&poly_mul(&poly_mul(&[1.0, -1.0], &[1.0, -2.0]), &[1.0, -3.0]), &[1.0, 0.0, 1.0]),
+            &poly_mul(
+                &poly_mul(&poly_mul(&[1.0, -1.0], &[1.0, -2.0]), &[1.0, -3.0]),
+                &[1.0, 0.0, 1.0],
+            ),
             &[1.0, 2.0, 5.0],
         );
         let m = p.len() - 1;
@@ -776,7 +805,15 @@ mod tests {
             a[i * m + i - 1] = 1.0;
         }
         let ev = real_eigenvalues(a, m).unwrap();
-        let exact = [[1.0, 0.0], [2.0, 0.0], [3.0, 0.0], [0.0, 1.0], [0.0, -1.0], [-1.0, 2.0], [-1.0, -2.0]];
+        let exact = [
+            [1.0, 0.0],
+            [2.0, 0.0],
+            [3.0, 0.0],
+            [0.0, 1.0],
+            [0.0, -1.0],
+            [-1.0, 2.0],
+            [-1.0, -2.0],
+        ];
         assert_eq!(ev.len(), 7);
         let mut worst: f64 = 0.0;
         for e in exact {
