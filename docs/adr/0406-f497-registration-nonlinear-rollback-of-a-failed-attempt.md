@@ -101,3 +101,14 @@ rule).
    registered limit.
 2. The residual and energy histories are compared as well as the displacement: they are what makes the check sensitive for a
    hyperelastic material (D1).
+
+## Amendment 1 (2026-11-13, written after the first registered run and before the corrected run)
+
+The first registered run (test `r1_to_r4_n1_n2_rollback_of_a_failed_attempt`) met R1, R2, R4, N1 and N2 and missed R3. Cause: a
+defect of the test, not of the driver: R3 compared the user-step number of each record of the one-step solve (always 1) with the
+user-step number of the record of the two-step solve at the same position (1, 2), so `b.step == a.step` is false for the second
+record by construction. Printed in that run: 2 and 2 records, `halvings [1, 1]`, load factors 0.5 and 1, residual histories of 5
+entries and energy histories of 4 entries in both solves. The limits are not changed: R3 is as registered ("the load factors equal
+bit for bit, the residual and energy histories equal in length and bit for bit"); only the clause on the step number is stated
+correctly: the one-step records have `step == 1` and the two-step record number `k` has `step == k`. The old test stays as an
+ignored record; the corrected test is `r1_to_r4_n1_n2_corrected`, run once. Its R1 to R4, N1, N2 are the registered ones.
