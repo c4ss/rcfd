@@ -85,3 +85,30 @@ fn b0_no_beam_hashes_at_the_base() {
         println!("B0: {name}: hash 0x{h:016x}, length {len}");
     }
 }
+
+/// B1: the values recorded by B0 at the base commit 3cf27f63 (ADR 0423 addendum 0).
+#[test]
+fn b1_no_beam_bytes_unchanged() {
+    let recorded: [(&str, u64, usize); 6] = [
+        ("Hex8 reactions", 0x63fe_d7da_a56f_1a63, 15571),
+        ("Hex8 no reactions", 0x989f_7368_6c43_913e, 13987),
+        ("Tet4 reactions", 0xe741_f54c_e312_ad4d, 20588),
+        ("Tet4 no reactions", 0xf0a0_6ff6_536f_969c, 19006),
+        ("Tet10 reactions", 0x65e3_8c3b_684c_f06c, 68654),
+        ("Tet10 no reactions", 0x526b_f4d7_4d05_98c9, 62488),
+    ];
+    let now = fixtures();
+    let mut missed = Vec::new();
+    for ((name, h, len), (rn, rh, rl)) in now.iter().zip(recorded) {
+        assert_eq!(name, rn, "fixture order");
+        let ok = *h == rh && *len == rl;
+        println!(
+            "B1: {name}: hash 0x{h:016x} length {len} against 0x{rh:016x} {rl}: {}",
+            if ok { "met" } else { "MISSED" }
+        );
+        if !ok {
+            missed.push(name.clone());
+        }
+    }
+    assert!(missed.is_empty(), "B1 missed: {missed:?}");
+}

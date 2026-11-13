@@ -163,3 +163,19 @@ Negative controls:
    the maintainer's standing instruction of 2026-11-11 (take the recommendation).
 3. Mixed beam-solid models refused (L1) rather than written without stress: taken on the maintainer's standing instruction of
    2026-11-11 (take the recommendation).
+
+## Addendum 0: procedure B0 (the bytes before), 2026-11-13
+
+Run once on the library of `3cf27f63` (`cargo test -p rcfd-post --release --test si_beam_output_bytes`, before any library change
+of F-512). Recorded values, copied into `b1_no_beam_bytes_unchanged`:
+
+| fixture | FNV-1a 64 | length (bytes) |
+| --- | --- | --- |
+| Hex8 reactions | `0x63fed7daa56f1a63` | 15571 |
+| Hex8 no reactions | `0x989f73686c43913e` | 13987 |
+| Tet4 reactions | `0xe741f54ce312ad4d` | 20588 |
+| Tet4 no reactions | `0xf0a06ff6536f969c` | 19006 |
+| Tet10 reactions | `0x65e38c3b684cf06c` | 68654 |
+| Tet10 no reactions | `0x526bf4d74d0598c9` | 62488 |
+
+No limit, check or design text above is changed.
