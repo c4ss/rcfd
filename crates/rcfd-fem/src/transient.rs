@@ -51,10 +51,7 @@ impl Default for Method {
 impl Method {
     /// The average-acceleration Newmark method, `beta = 1/4`, `gamma = 1/2`.
     pub fn average_acceleration() -> Method {
-        Method::Newmark {
-            beta: 0.25,
-            gamma: 0.5,
-        }
+        Method::Newmark { beta: 0.25, gamma: 0.5 }
     }
 
     /// The four parameters `(alpha_m, alpha_f, beta, gamma)` (ADR 0389 D1).
@@ -317,7 +314,9 @@ impl TransientState {
     /// The state from [`TransientState::to_bytes`]; refuses a wrong magic or a wrong length.
     pub fn from_bytes(bytes: &[u8]) -> Result<TransientState> {
         if bytes.len() < 24 || &bytes[..8] != MAGIC {
-            return Err(state_error("not a saved transient state (magic RCFDTRS1 missing)".to_string()));
+            return Err(state_error(
+                "not a saved transient state (magic RCFDTRS1 missing)".to_string(),
+            ));
         }
         let word = |i: usize| -> u64 {
             let mut w = [0u8; 8];
@@ -402,9 +401,10 @@ impl Integrator {
         if crate::mpc::uses_transformation(model) {
             return Err(FemError::InvalidValue {
                 key: "constraint",
-                reason: "linear constraints, rigid sets and elastic supports are not taken by the transient integrator \
+                reason:
+                    "linear constraints, rigid sets and elastic supports are not taken by the transient integrator \
                          (ADR 0389: the transformation path is not included)"
-                    .to_string(),
+                        .to_string(),
             });
         }
         let dofs = model.dof_map();
@@ -634,7 +634,12 @@ impl Integrator {
                 state.dt, self.dt
             )));
         }
-        if state.parameters.iter().zip(&self.parameters).any(|(a, b)| a.to_bits() != b.to_bits()) {
+        if state
+            .parameters
+            .iter()
+            .zip(&self.parameters)
+            .any(|(a, b)| a.to_bits() != b.to_bits())
+        {
             return Err(state_error(format!(
                 "state of the method parameters {:?} for an integrator of {:?}",
                 state.parameters, self.parameters

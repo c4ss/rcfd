@@ -8,9 +8,7 @@ use rcfd_fem::loads::NodalForceAt;
 use rcfd_fem::mass::consistent;
 use rcfd_fem::modal::{modal_analysis, ModalOptions};
 use rcfd_fem::solve::{solve_static_with, StaticOptions};
-use rcfd_fem::transient::{
-    Integrator, LoadHistory, LoadTable, Method, Rayleigh, TransientOptions, TransientState,
-};
+use rcfd_fem::transient::{Integrator, LoadHistory, LoadTable, Method, Rayleigh, TransientOptions, TransientState};
 use rcfd_fem::{Constraint, ElasticSupport, FemError, Material, SolidModel};
 use rcfd_linalg::CsrMatrix;
 use std::f64::consts::PI;
@@ -28,14 +26,20 @@ impl Checks {
     }
     fn at_most(&mut self, name: &str, value: f64, limit: f64) {
         let ok = value <= limit;
-        println!("{name}: {value:.6e} (limit <= {limit:e}) {}", if ok { "met" } else { "MISSED" });
+        println!(
+            "{name}: {value:.6e} (limit <= {limit:e}) {}",
+            if ok { "met" } else { "MISSED" }
+        );
         if !ok {
             self.0.push(format!("{name} = {value:e} > {limit:e}"));
         }
     }
     fn at_least(&mut self, name: &str, value: f64, limit: f64) {
         let ok = value >= limit;
-        println!("{name}: {value:.6e} (limit >= {limit:e}) {}", if ok { "met" } else { "MISSED" });
+        println!(
+            "{name}: {value:.6e} (limit >= {limit:e}) {}",
+            if ok { "met" } else { "MISSED" }
+        );
         if !ok {
             self.0.push(format!("{name} = {value:e} < {limit:e}"));
         }
@@ -210,14 +214,25 @@ fn a1_to_a4_newmark_free_vibration() {
         let n = r.q.len() - 1;
         let a0 = amplitude(r.q[0], r.p[0], b.omega);
         let an = amplitude(r.q[n], r.p[n], b.omega);
-        ch.at_most(&format!("A1 Omega {omega_dt}: |A_N/A_0 - 1| ({n} steps)"), (an / a0 - 1.0).abs(), 1e-9);
+        ch.at_most(
+            &format!("A1 Omega {omega_dt}: |A_N/A_0 - 1| ({n} steps)"),
+            (an / a0 - 1.0).abs(),
+            1e-9,
+        );
         let e0 = r.energy[0];
         let de = r.energy.iter().fold(0.0f64, |m, e| m.max((e / e0 - 1.0).abs()));
         ch.at_most(&format!("A2 Omega {omega_dt}: max |E_n/E_0 - 1|"), de, 1e-10);
         let e = period_error(&r.q, dt, b.period);
         let amount = omega_dt * omega_dt / 12.0;
-        println!("A3 Omega {omega_dt}: period error {e:.9e}, Omega^2/12 = {amount:.9e}, ratio {:.6}", e / amount);
-        ch.at_most(&format!("A3 Omega {omega_dt}: |e/(Omega^2/12) - 1|"), (e / amount - 1.0).abs(), 0.05);
+        println!(
+            "A3 Omega {omega_dt}: period error {e:.9e}, Omega^2/12 = {amount:.9e}, ratio {:.6}",
+            e / amount
+        );
+        ch.at_most(
+            &format!("A3 Omega {omega_dt}: |e/(Omega^2/12) - 1|"),
+            (e / amount - 1.0).abs(),
+            0.05,
+        );
         errs.push(e);
     }
     ch.at_least("A4 observed order", (errs[0] / errs[1]).log2(), 1.9);
@@ -227,7 +242,16 @@ fn a1_to_a4_newmark_free_vibration() {
 #[test]
 fn n1_dissipative_newmark_fails_the_energy_check() {
     let b = bar();
-    let (r, _) = free_run(&b, Method::Newmark { beta: 0.3025, gamma: 0.6 }, 0.2, 100.0, None);
+    let (r, _) = free_run(
+        &b,
+        Method::Newmark {
+            beta: 0.3025,
+            gamma: 0.6,
+        },
+        0.2,
+        100.0,
+        None,
+    );
     let e0 = r.energy[0];
     let de = r.energy.iter().fold(0.0f64, |m, e| m.max((e / e0 - 1.0).abs()));
     let mut ch = Checks::new();
@@ -247,11 +271,19 @@ fn a9_n3_generalised_alpha_period_order() {
             let ratio = e / (omega_dt * omega_dt / 12.0);
             println!("A9 rho {rho} Omega {omega_dt}: period error {e:.9e}, ratio to Omega^2/12 {ratio:.6}");
             if rho == 0.5 && omega_dt == 0.1 {
-                ch.holds("N3 |ratio - 1| > 0.05", (ratio - 1.0).abs() > 0.05, &format!("{:.6e}", (ratio - 1.0).abs()));
+                ch.holds(
+                    "N3 |ratio - 1| > 0.05",
+                    (ratio - 1.0).abs() > 0.05,
+                    &format!("{:.6e}", (ratio - 1.0).abs()),
+                );
             }
             errs.push(e);
         }
-        ch.at_least(&format!("A9 rho {rho}: observed order"), (errs[0] / errs[1]).log2(), 1.9);
+        ch.at_least(
+            &format!("A9 rho {rho}: observed order"),
+            (errs[0] / errs[1]).log2(),
+            1.9,
+        );
     }
     ch.finish();
 }
@@ -264,7 +296,12 @@ fn a5_step_load_peak() {
     let dt = b.period / 40.0;
     let pattern = pattern_m_phi(&b);
     let table = LoadTable::new(vec![(0.0, 1.0), (10.0 * b.period, 1.0)]).unwrap();
-    let mut it = Integrator::new(&b.model, &[LoadHistory::new(pattern.clone(), table)], &TransientOptions::new(dt)).unwrap();
+    let mut it = Integrator::new(
+        &b.model,
+        &[LoadHistory::new(pattern.clone(), table)],
+        &TransientOptions::new(dt),
+    )
+    .unwrap();
     let zero = vec![0.0; pattern.len()];
     it.start(0.0, &zero, &zero).unwrap();
     let r = run_steps(&b, &mut it, 60);
@@ -278,7 +315,10 @@ fn a5_step_load_peak() {
         .collect();
     let s = solve_static_with(&b.model, &[], &forces, &StaticOptions::default()).unwrap();
     let us = s.displacement_values()[b.tip];
-    println!("A5: peak {peak:.9e}, static {us:.9e}, phi_tip/lambda {:.9e}", b.phi[b.tip] / (b.omega * b.omega));
+    println!(
+        "A5: peak {peak:.9e}, static {us:.9e}, phi_tip/lambda {:.9e}",
+        b.phi[b.tip] / (b.omega * b.omega)
+    );
     let mut ch = Checks::new();
     ch.at_most("A5 |peak/(2 u_s) - 1|", (peak / (2.0 * us) - 1.0).abs(), 0.005);
     ch.finish();
@@ -302,7 +342,11 @@ fn a6_c1_rayleigh_decrement() {
     let res = it.equilibrium_residual().unwrap();
     let ku = mv(&b.k, &b.phi);
     let ku_free: Vec<f64> = it.free().iter().map(|&e| ku[e]).collect();
-    ch.at_most("C1 |M a0 + C v0 + K u0 - f0| / |K u0|", inf_norm(&res) / inf_norm(&ku_free), 1e-12);
+    ch.at_most(
+        "C1 |M a0 + C v0 + K u0 - f0| / |K u0|",
+        inf_norm(&res) / inf_norm(&ku_free),
+        1e-12,
+    );
     let (r, _) = free_run(&b, Method::average_acceleration(), 0.1, 12.0, Some(damping));
     let mut peaks = Vec::new();
     for n in 1..r.q.len() - 1 {
@@ -312,7 +356,11 @@ fn a6_c1_rayleigh_decrement() {
     }
     let delta = (peaks[0] / peaks[10]).ln() / 10.0;
     let exact = 2.0 * PI * ZETA / (1.0 - ZETA * ZETA).sqrt();
-    println!("A6: {} peaks, delta {delta:.9e}, exact {exact:.9e}, relative {:.6e}", peaks.len(), delta / exact - 1.0);
+    println!(
+        "A6: {} peaks, delta {delta:.9e}, exact {exact:.9e}, relative {:.6e}",
+        peaks.len(),
+        delta / exact - 1.0
+    );
     ch.at_most("A6 |delta/exact - 1|", (delta / exact - 1.0).abs(), 0.01);
     ch.finish();
 }
@@ -343,13 +391,21 @@ fn a7_n2_generalised_alpha_one_is_newmark() {
     let mut ch = Checks::new();
     let (nm, _) = free_run(&b, Method::average_acceleration(), 0.2, 10.0, None);
     let (ga, _) = free_run(&b, Method::GeneralisedAlpha { rho_inf: 1.0 }, 0.2, 10.0, None);
-    ch.at_most("A7a free vibration, rho 1 vs Newmark", max_rel_diff(&ga.u, &nm.u), 1e-12);
+    ch.at_most(
+        "A7a free vibration, rho 1 vs Newmark",
+        max_rel_diff(&ga.u, &nm.u),
+        1e-12,
+    );
     let (ga8, _) = free_run(&b, Method::GeneralisedAlpha { rho_inf: 0.8 }, 0.2, 10.0, None);
     let d8 = max_rel_diff(&ga8.u, &nm.u);
     ch.holds("N2 rho 0.8 vs Newmark > 1e-12", d8 > 1e-12, &format!("{d8:.6e}"));
     let nm = loaded_damped_run(&b, Method::average_acceleration(), 200);
     let ga = loaded_damped_run(&b, Method::GeneralisedAlpha { rho_inf: 1.0 }, 200);
-    ch.at_most("A7b step load and damping, rho 1 vs Newmark", max_rel_diff(&ga.u, &nm.u), 1e-12);
+    ch.at_most(
+        "A7b step load and damping, rho 1 vs Newmark",
+        max_rel_diff(&ga.u, &nm.u),
+        1e-12,
+    );
     ch.finish();
 }
 
@@ -402,7 +458,11 @@ fn spectral_radius(a: &[[f64; 3]; 3]) -> f64 {
             z3.1 + coeff[0] * z2.1 + coeff[1] * z.1,
         )
     };
-    let mut r: [C; 3] = [(0.4, 0.9), cmul((0.4, 0.9), (0.4, 0.9)), cmul(cmul((0.4, 0.9), (0.4, 0.9)), (0.4, 0.9))];
+    let mut r: [C; 3] = [
+        (0.4, 0.9),
+        cmul((0.4, 0.9), (0.4, 0.9)),
+        cmul(cmul((0.4, 0.9), (0.4, 0.9)), (0.4, 0.9)),
+    ];
     for _ in 0..200 {
         for i in 0..3 {
             let mut den = (1.0, 0.0);
@@ -450,7 +510,11 @@ fn a8_decay_per_step_at_omega_dt_1e3_known_miss() {
     for rho in [0.5, 0.8] {
         let r = amplification(rho, 1e3 / Q_DT);
         println!("A8 rho {rho}: measured factor {r:.10}");
-        ch.at_most(&format!("A8 rho {rho}: |r - rho_inf| at Omega 1e3"), (r - rho).abs(), 1e-3);
+        ch.at_most(
+            &format!("A8 rho {rho}: |r - rho_inf| at Omega 1e3"),
+            (r - rho).abs(),
+            1e-3,
+        );
     }
     ch.finish();
 }
@@ -461,9 +525,17 @@ fn a8c_a8d_decay_against_the_closed_form_and_at_omega_dt_1e6() {
     let mut ch = Checks::new();
     for (rho, closed) in [(0.5, 0.507_847_168_3), (0.8, 0.807_721_245_8)] {
         let r = amplification(rho, 1e3 / Q_DT);
-        ch.at_most(&format!("A8c rho {rho}: |r - r_closed| at Omega 1e3 (r {r:.10})"), (r - closed).abs(), 1e-6);
+        ch.at_most(
+            &format!("A8c rho {rho}: |r - r_closed| at Omega 1e3 (r {r:.10})"),
+            (r - closed).abs(),
+            1e-6,
+        );
         let r6 = amplification(rho, 1e6 / Q_DT);
-        ch.at_most(&format!("A8d rho {rho}: |r - rho_inf| at Omega 1e6 (r {r6:.10})"), (r6 - rho).abs(), 1e-3);
+        ch.at_most(
+            &format!("A8d rho {rho}: |r - rho_inf| at Omega 1e6 (r {r6:.10})"),
+            (r6 - rho).abs(),
+            1e-3,
+        );
     }
     ch.finish();
 }
@@ -517,9 +589,17 @@ fn a8c_a8d_amended() {
     let mut ch = Checks::new();
     for (rho, closed) in [(0.5, 0.507_847_168_3), (0.8, 0.807_721_245_8)] {
         let r = amplification_with(rho, 1.0, 1e3 / Q_DT);
-        ch.at_most(&format!("A8c rho {rho}: |r - r_closed| at Omega 1e3 (r {r:.10})"), (r - closed).abs(), 1e-6);
+        ch.at_most(
+            &format!("A8c rho {rho}: |r - r_closed| at Omega 1e3 (r {r:.10})"),
+            (r - closed).abs(),
+            1e-6,
+        );
         let r6 = amplification_with(rho, 1e3 / Q_DT, 1e6 / Q_DT);
-        ch.at_most(&format!("A8d rho {rho}: |r - rho_inf| at Omega 1e6 (r {r6:.10})"), (r6 - rho).abs(), 1e-3);
+        ch.at_most(
+            &format!("A8d rho {rho}: |r - rho_inf| at Omega 1e6 (r {r6:.10})"),
+            (r6 - rho).abs(),
+            1e-3,
+        );
     }
     ch.finish();
 }
@@ -557,8 +637,16 @@ fn a10_a11_n4_save_restore_and_threads() {
     let mut second = ramp_integrator(&b, 1, 10.0 * b.period);
     second.restore(TransientState::from_bytes(&bytes).unwrap()).unwrap();
     let tail = run_steps(&b, &mut second, 123);
-    let equal = tail.states.iter().zip(&unsplit.states[77..]).all(|(x, y)| same_bits(x, y));
-    ch.holds("A10 steps 77 to 200 of the split run equal the unsplit run", equal && tail.states.len() == 124, "bit-equal");
+    let equal = tail
+        .states
+        .iter()
+        .zip(&unsplit.states[77..])
+        .all(|(x, y)| same_bits(x, y));
+    ch.holds(
+        "A10 steps 77 to 200 of the split run equal the unsplit run",
+        equal && tail.states.len() == 124,
+        "bit-equal",
+    );
     // N4: the restored step set to 0.
     let mut shifted = TransientState::from_bytes(&bytes).unwrap();
     shifted.step = 0;
@@ -597,7 +685,11 @@ fn a12_refusals() {
     let before = it.state().unwrap();
     let (ok, msg) = refused_with(it.run(200), "load table");
     ch.holds("A12b run(200) past the table refused", ok, &msg);
-    ch.holds("A12b state unchanged", same_bits(&it.state().unwrap(), &before), "bit-equal");
+    ch.holds(
+        "A12b state unchanged",
+        same_bits(&it.state().unwrap(), &before),
+        "bit-equal",
+    );
     ch.holds("A12b run(40) accepted", it.run(40).is_ok(), "accepted");
     let late = LoadTable::new(vec![(1e-3 * b.period, 1.0), (10.0 * b.period, 1.0)]).unwrap();
     let mut it = Integrator::new(
@@ -610,7 +702,10 @@ fn a12_refusals() {
     ch.holds("A12b table starting after t0 refused by start", ok, &msg);
     let k = CsrMatrix::from_triplets(2, vec![(0, 0, 1.0), (1, 1, -4.0)]);
     let m = CsrMatrix::from_triplets(2, vec![(0, 0, 1.0), (1, 1, 1.0)]);
-    let (ok, msg) = refused_with(Integrator::from_matrices(k, m, &[], &TransientOptions::new(1.0)), "effective matrix");
+    let (ok, msg) = refused_with(
+        Integrator::from_matrices(k, m, &[], &TransientOptions::new(1.0)),
+        "effective matrix",
+    );
     ch.holds("A12c singular effective matrix", ok, &msg);
     ch.finish();
 }
@@ -620,11 +715,20 @@ fn c2_c3_tables_and_refusals() {
     let b = bar();
     let mut ch = Checks::new();
     let t = LoadTable::new(vec![(0.0, 0.3), (0.7, 1.9), (1.1, -0.4)]).unwrap();
-    let at_points = t.points().iter().all(|&(ti, vi)| t.value(ti).unwrap().to_bits() == vi.to_bits());
+    let at_points = t
+        .points()
+        .iter()
+        .all(|&(ti, vi)| t.value(ti).unwrap().to_bits() == vi.to_bits());
     ch.holds("C2 values at the points", at_points, "bit-equal");
-    let mid = (t.value(0.35).unwrap() - 1.1).abs().max((t.value(0.9).unwrap() - 0.75).abs());
+    let mid = (t.value(0.35).unwrap() - 1.1)
+        .abs()
+        .max((t.value(0.9).unwrap() - 0.75).abs());
     ch.at_most("C2 midpoint |value - mean|", mid, 1e-15);
-    ch.holds("C2 outside the table", t.value(-1e-9).is_none() && t.value(1.1 + 1e-9).is_none(), "None");
+    ch.holds(
+        "C2 outside the table",
+        t.value(-1e-9).is_none() && t.value(1.1 + 1e-9).is_none(),
+        "None",
+    );
     for (name, pts) in [
         ("one point", vec![(0.0, 1.0)]),
         ("non-increasing times", vec![(0.0, 1.0), (0.0, 2.0)]),
@@ -636,7 +740,11 @@ fn c2_c3_tables_and_refusals() {
     let dt = b.period / 40.0;
     let table = LoadTable::constant(1.0, 0.0, 1.0).unwrap();
     let (ok, msg) = refused_with(
-        Integrator::new(&b.model, &[LoadHistory::new(vec![1.0; 3], table)], &TransientOptions::new(dt)),
+        Integrator::new(
+            &b.model,
+            &[LoadHistory::new(vec![1.0; 3], table)],
+            &TransientOptions::new(dt),
+        ),
         "load pattern",
     );
     ch.holds("C3 pattern of the wrong length", ok, &msg);
@@ -645,18 +753,29 @@ fn c2_c3_tables_and_refusals() {
         ("rho -0.1", Method::GeneralisedAlpha { rho_inf: -0.1 }),
         ("Newmark beta -1", Method::Newmark { beta: -1.0, gamma: 0.5 }),
     ] {
-        let (ok, msg) = refused_with(Integrator::new(&b.model, &[], &TransientOptions::new(dt).method(method)), "method");
+        let (ok, msg) = refused_with(
+            Integrator::new(&b.model, &[], &TransientOptions::new(dt).method(method)),
+            "method",
+        );
         ch.holds(&format!("C3 method {name}"), ok, &msg);
     }
-    let bad = Rayleigh { mass: -1.0, stiffness: 0.0 };
-    let (ok, msg) = refused_with(Integrator::new(&b.model, &[], &TransientOptions::new(dt).damping(bad)), "damping");
+    let bad = Rayleigh {
+        mass: -1.0,
+        stiffness: 0.0,
+    };
+    let (ok, msg) = refused_with(
+        Integrator::new(&b.model, &[], &TransientOptions::new(dt).damping(bad)),
+        "damping",
+    );
     ch.holds("C3 Rayleigh -1", ok, &msg);
     let mut moved = bar_model();
     moved.add_constraint(Constraint::displacement("xmax", 0, 1e-3)).unwrap();
     let (ok, msg) = refused_with(Integrator::new(&moved, &[], &TransientOptions::new(dt)), "constraint");
     ch.holds("C3 non-zero prescribed value", ok, &msg);
     let mut sprung = bar_model();
-    sprung.add_support(ElasticSupport::nodal_spring("xmax", 0, 1e6)).unwrap();
+    sprung
+        .add_support(ElasticSupport::nodal_spring("xmax", 0, 1e6))
+        .unwrap();
     let (ok, msg) = refused_with(Integrator::new(&sprung, &[], &TransientOptions::new(dt)), "constraint");
     ch.holds("C3 nodal spring", ok, &msg);
     let mut it = Integrator::new(&b.model, &[], &TransientOptions::new(dt)).unwrap();
@@ -679,9 +798,12 @@ fn c2_c3_tables_and_refusals() {
     let mut other_dt = Integrator::new(&b.model, &[], &TransientOptions::new(2.0 * dt)).unwrap();
     let (ok, msg) = refused_with(other_dt.restore(state.clone()), "state");
     ch.holds("C3 restore with another dt", ok, &msg);
-    let mut other_method =
-        Integrator::new(&b.model, &[], &TransientOptions::new(dt).method(Method::GeneralisedAlpha { rho_inf: 0.8 }))
-            .unwrap();
+    let mut other_method = Integrator::new(
+        &b.model,
+        &[],
+        &TransientOptions::new(dt).method(Method::GeneralisedAlpha { rho_inf: 0.8 }),
+    )
+    .unwrap();
     let (ok, msg) = refused_with(other_method.restore(state), "state");
     ch.holds("C3 restore with another method", ok, &msg);
     ch.finish();
