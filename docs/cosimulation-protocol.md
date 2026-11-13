@@ -95,7 +95,7 @@ rows alone) builds `H` from the structure's interface mesh (its nodes and **elem
 a segment, a triangle or a quadrilateral, which is split into two triangles) and the fluid's (wall points and faces). For a
 transport this means that `describe` of the structure also returns its elements: `Structure::elements` (a provided method,
 empty by default; ADR 0380) is carried by `cosim.describe` and returned by `RemoteStructure::elements`, so the coupler
-builds the map from the proxies. Two methods, `cosim::MapMethod`:
+builds the map from the proxies. Three methods, `cosim::MapMethod`:
 
 * **nearest-element projection** (`MapSettings::projection(max_distance)`): a wall point gets the barycentric weights of
   its nearest point on the nearest structural element. On a curved wall the two meshes are different facetted surfaces and
@@ -109,6 +109,13 @@ builds the map from the proxies. Two methods, `cosim::MapMethod`:
   support of three times the longest element edge is the documented choice; the report gives an estimate of the condition
   number of the kernel matrix (about 10 to 100 at that support). Rows are dense (one weight per node): meant for interface
   meshes of up to a few thousand nodes.
+* **bilinear projection** (`MapSettings::bilinear_projection(max_distance)`, `MapMethod::BilinearProjection`; F-504,
+  ADR 0414): the projection with the same nearest element, offset correction and unmapped policy, but on a quadrilateral
+  the nearest point of its bilinear patch (Newton's method from the centre, or the nearest edge point) and the bilinear
+  shape functions there instead of the split into two triangles. Its weights keep all eight symmetries of a square face
+  (to `1e-15`), equal the bilinear evaluation of ADR 0412 to `1e-15` on flat faces, and give 0.34 to 0.53 of the
+  projection's extra compliance on the 3:2 walls of F-502 (frequency change `2.2e-3`, `8.2e-4`, `2.8e-4` for faces of
+  2 x 2, 4 x 4, 8 x 8 elements, within `6.6e-4` of the static-compliance prediction). The default projection is unchanged.
 
 Why the polynomial and the correction: a rigid motion displaces a point by an affine function of its position, and a map
 with one weight per (point, node) reproduces every affine function, so every rigid translation and rotation, exactly when

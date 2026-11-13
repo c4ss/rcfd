@@ -9,6 +9,8 @@
 //! - [`MapMethod::Projection`]: the barycentric coordinates of the wall point's nearest point on the nearest structural
 //!   element, plus (by default) the smallest correction on the element's ring of neighbours that removes the offset of
 //!   the point from the element (a curved wall);
+//! - [`MapMethod::BilinearProjection`] (opt-in, F-504, ADR 0414): as the projection, but on a quadrilateral the nearest
+//!   point of its bilinear patch and the bilinear shape functions there instead of the split into two triangles;
 //! - [`MapMethod::RadialBasis`]: interpolation with Wendland's compactly supported function `(1 - r)^4 (4 r + 1)` and a
 //!   degree-1 polynomial built from the nodes' own directions, solved densely by Cholesky factorisations.
 //!
@@ -25,6 +27,13 @@ pub enum MapMethod {
     /// nearest one so that it reproduces the wall point's coordinates (exact rigid motion on a curved wall; some weights
     /// negative); without, the plain barycentric row (non-negative, one element).
     Projection {
+        /// Apply the offset correction.
+        correct_offset: bool,
+    },
+    /// Nearest-element projection that evaluates the bilinear shape functions on quadrilaterals at the nearest point of
+    /// the bilinear patch (ADR 0414); points, segments and triangles as [`MapMethod::Projection`]. The offset correction
+    /// as there.
+    BilinearProjection {
         /// Apply the offset correction.
         correct_offset: bool,
     },
@@ -62,6 +71,16 @@ impl MapSettings {
     pub fn projection(max_distance: f64) -> Self {
         MapSettings {
             method: MapMethod::Projection { correct_offset: true },
+            max_distance,
+            unmapped: Unmapped::Refuse,
+        }
+    }
+
+    /// Bilinear projection on quadrilaterals (ADR 0414) with the offset correction; points farther than `max_distance` are
+    /// refused.
+    pub fn bilinear_projection(max_distance: f64) -> Self {
+        MapSettings {
+            method: MapMethod::BilinearProjection { correct_offset: true },
             max_distance,
             unmapped: Unmapped::Refuse,
         }
@@ -118,7 +137,8 @@ const RANK: f64 = 1e-6;
 const POWER_STEPS: usize = 100;
 
 /// Rows of [`InterfaceMap`](super::InterfaceMap) for the wall `points` from the structure's `nodes` and `elements` (each
-/// 1 to 4 node indices: a point, a segment, a triangle, a quadrilateral split into `(0, 1, 2)` and `(0, 2, 3)`).
+/// 1 to 4 node indices: a point, a segment, a triangle, a quadrilateral split into `(0, 1, 2)` and `(0, 2, 3)`, or with
+/// [`MapMethod::BilinearProjection`] its bilinear patch).
 pub fn interface_rows(
     nodes: &[Vec3],
     elements: &[Vec<usize>],
@@ -156,8 +176,9 @@ pub fn interface_rows(
     }
     let rbf = match settings.method {
         MapMethod::RadialBasis { support } => Some(RadialBasis::new(nodes, support)?),
-        MapMethod::Projection { .. } => None,
+        MapMethod::Projection { .. } | MapMethod::BilinearProjection { .. } => None,
     };
+    let bilinear = matches!(settings.method, MapMethod::BilinearProjection { .. });
     let mut rings = Rings::new(nodes.len(), elements);
     let mut report = MapReport {
         distances: Vec::with_capacity(points.len()),
@@ -167,7 +188,7 @@ pub fn interface_rows(
     };
     let mut rows = Vec::with_capacity(points.len());
     for (p, &x) in points.iter().enumerate() {
-        let near = nearest(nodes, elements, x);
+        let near = nearest(nodes, elements, x, bilinear);
         report.distances.push(near.distance);
         let outside = near.distance > settings.max_distance;
         if outside {
@@ -184,7 +205,8 @@ pub fn interface_rows(
         }
         let row = match (&rbf, settings.method) {
             (Some(r), _) => r.row(if outside { near.foot } else { x }),
-            (None, MapMethod::Projection { correct_offset }) => {
+            (None, MapMethod::Projection { correct_offset })
+            | (None, MapMethod::BilinearProjection { correct_offset }) => {
                 let mut row = near.weights.clone();
                 if correct_offset && !outside {
                     correct(&mut row, nodes, rings.ring(elements, near.element), x);
@@ -219,10 +241,14 @@ struct Near {
 }
 
 /// The nearest point of the first element at the smallest distance.
-fn nearest(nodes: &[Vec3], elements: &[Vec<usize>], x: Vec3) -> Near {
+fn nearest(nodes: &[Vec3], elements: &[Vec<usize>], x: Vec3, bilinear: bool) -> Near {
     let mut best: Option<Near> = None;
     for (e, el) in elements.iter().enumerate() {
-        let (foot, weights) = nearest_on_element(nodes, el, x);
+        let (foot, weights) = if bilinear && el.len() == 4 {
+            on_bilinear(nodes, el, x)
+        } else {
+            nearest_on_element(nodes, el, x)
+        };
         let distance = vec3::norm(vec3::sub(x, foot));
         if best.as_ref().map_or(true, |b| distance < b.distance) {
             best = Some(Near {
@@ -264,6 +290,83 @@ fn nearest_on_element(nodes: &[Vec3], el: &[usize], x: Vec3) -> (Vec3, Vec<(usiz
             }
         }
     }
+}
+
+/// Largest number of Newton steps of the interior search on a bilinear patch (ADR 0414 D2).
+const BILINEAR_STEPS: usize = 50;
+/// Newton stops when the largest component of its step in `(s, t)` is at most this (ADR 0414 D2).
+const BILINEAR_STEP_TOL: f64 = 1e-14;
+
+/// Nearest point of the bilinear patch of the quadrilateral `el` to `x` and the bilinear shape functions there (ADR 0414
+/// D2): the interior stationary point found by Newton's method from the centre when it is a minimum inside the patch and
+/// no farther than the nearest point of the four edges, else that edge point.
+fn on_bilinear(nodes: &[Vec3], el: &[usize], x: Vec3) -> (Vec3, Vec<(usize, f64)>) {
+    let c = [nodes[el[0]], nodes[el[1]], nodes[el[2]], nodes[el[3]]];
+    let pick = |local: [f64; 4]| -> Vec<(usize, f64)> {
+        let mut out: BTreeMap<usize, f64> = BTreeMap::new();
+        for (k, w) in local.into_iter().enumerate() {
+            *out.entry(el[k]).or_insert(0.0) += w;
+        }
+        out.into_iter().filter(|r| r.1 != 0.0).collect()
+    };
+    let shape = |s: f64, t: f64| [(1.0 - s) * (1.0 - t), s * (1.0 - t), s * t, (1.0 - s) * t];
+    let point = |n: [f64; 4]| (0..4).fold(vec3::ZERO, |a, k| vec3::add(a, vec3::scale(c[k], n[k])));
+    let xst = vec3::add(vec3::sub(c[0], c[1]), vec3::sub(c[2], c[3]));
+    let (mut s, mut t) = (0.5, 0.5);
+    let mut interior = None;
+    for _ in 0..BILINEAR_STEPS {
+        let xs = vec3::add(
+            vec3::scale(vec3::sub(c[1], c[0]), 1.0 - t),
+            vec3::scale(vec3::sub(c[2], c[3]), t),
+        );
+        let xt = vec3::add(
+            vec3::scale(vec3::sub(c[3], c[0]), 1.0 - s),
+            vec3::scale(vec3::sub(c[2], c[1]), s),
+        );
+        let r = vec3::sub(point(shape(s, t)), x);
+        let (g0, g1) = (vec3::dot(r, xs), vec3::dot(r, xt));
+        let h00 = vec3::dot(xs, xs);
+        let h01 = vec3::dot(xs, xt) + vec3::dot(r, xst);
+        let h11 = vec3::dot(xt, xt);
+        let det = h00 * h11 - h01 * h01;
+        if !(h00 > 0.0 && det > 1e-12 * h00 * h11 && det.is_finite()) {
+            break;
+        }
+        let ds = -(h11 * g0 - h01 * g1) / det;
+        let dt = -(h00 * g1 - h01 * g0) / det;
+        s += ds;
+        t += dt;
+        if (s - 0.5).abs() > 1.5 || (t - 0.5).abs() > 1.5 {
+            break;
+        }
+        if ds.abs().max(dt.abs()) <= BILINEAR_STEP_TOL {
+            if (0.0..=1.0).contains(&s) && (0.0..=1.0).contains(&t) {
+                interior = Some((s, t));
+            }
+            break;
+        }
+    }
+    // the nearest point of the four edges (straight segments; the bilinear functions are linear along them)
+    let mut best: Option<(f64, Vec3, [f64; 4])> = None;
+    for (i, j) in [(0, 1), (1, 2), (2, 3), (3, 0)] {
+        let (y, u) = on_segment(c[i], c[j], x);
+        let d = vec3::norm(vec3::sub(x, y));
+        if best.as_ref().map_or(true, |b| d < b.0) {
+            let mut n = [0.0; 4];
+            n[i] = 1.0 - u;
+            n[j] += u;
+            best = Some((d, y, n));
+        }
+    }
+    let (d_edge, y_edge, n_edge) = best.expect("four edges");
+    if let Some((s, t)) = interior {
+        let n = shape(s, t);
+        let y = point(n);
+        if vec3::norm(vec3::sub(x, y)) <= d_edge {
+            return (y, pick(n));
+        }
+    }
+    (y_edge, pick(n_edge))
 }
 
 /// Nearest point of the segment `a b` to `x` and its parameter `t` (`y = a + t (b - a)`).
