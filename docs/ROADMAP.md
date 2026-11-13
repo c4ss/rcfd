@@ -9286,14 +9286,28 @@ fixed by the item's registration ADR before any code.
     the rigid sets; with a shift given by the caller, rigid_free is reported by the zero-shift factor test and agrees
     with the automatic case on every model of ADR 0384.
   - note: From ADR 0384 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S.
-- [ ] **F-489** Cyclic symmetry: harmonic loads and rigid sets at a non-zero harmonic index
+- [~] **F-489** Cyclic symmetry: harmonic loads and rigid sets at a non-zero harmonic index
   - depends on: F-394
   - acceptance: Every limit not stated here is registered in the ADR before the run. A static load given with a harmonic
     index k (cosine and sine parts per sector) is solved on the sector by the real pair of rows of ADR 0386 and equals
     the full 360-degree model's solution under the expanded load within 1e-8 relative for N = 12 and k = 0 to 6; rigid
     sets are accepted at k > 0 (their reference unknowns doubled) and the frequencies of a sector with a rigid set equal
     the full model's within 1e-8.
-  - note: From ADR 0386 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S.
+  - note: ADR 0395, 2026-11-12 (follow-up of ADR 0386): cyclic::solve_static_harmonic solves a static load of harmonic
+    index k given as a cosine and a sine part per sector (vectors over the sector's DofMap, reference loads per part) on
+    blockdiag(K, K) with the rows of mpc::harmonic_transformation (k = 0 on mpc::transformation, bit-equal to
+    solve_static_mpc; a sine part at k = 0 or N/2 refused, the model's own load list refused, Direct solver only, zero
+    prescribed values at k > 0); FullRotor::expand_load assembles the expanded load (shared nodes summed) and
+    expand_field the full solution (scale 1); rigid sets are accepted at k > 0 with their six reference unknowns doubled
+    (one block per part, Transformation::references lists the set per part), in the static solve and in
+    modal_analysis_harmonic. N = 12, Hex20 clamped disc: every k = 0 to 6 equal to the full 360-degree model under the
+    expanded load within 1.5e-13 (limit 1e-8), with a rim rigid set and reference loads within 1.2e-13 (displacements
+    and reference motions), with a shroud rigid set sharing nodes with its neighbours within 2.5e-13 (after amendment 2:
+    the registered shroud load had a zero exact solution at k = 0 and 6); frequencies of a sector with a rigid set equal
+    to the full model's within 3.2e-14 (rim) and 8.6e-14 (shroud), equal counts below the cut-off (23), pair splits
+    1.4e-13. Eight mutations caught. si_cyclic R6 kept as an ignored record with its valid row in an _after_landed copy
+    (maintainer decision 2026-11-13). Recorded as partial by the lead (rule of 2026-11-13: H3 was a defective set-up
+    corrected by amendment 2 after its run, H3b met); done is the maintainer's call.
 - [x] **F-490** Transient integrator on the transformation path and with prescribed motion histories
   - depends on: F-398
   - acceptance: Every limit not stated here is registered in the ADR before the run. A bar with a nodal spring at its
