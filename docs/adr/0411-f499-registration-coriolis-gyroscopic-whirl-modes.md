@@ -301,3 +301,99 @@ example; `M*` of D2 is then indefinite and the frequencies need a non-symmetric 
 damping; large parts (the dense solver stops at 1500 reduced unknowns; a sparse shift-invert Lanczos on `H` is the follow-up);
 frequencies in the stationary frame (for a mode of index `k` `omega_stat = omega -/+ k Omega` by the wave sense, not computed
 here); the pre-stress linear in `Omega^2` as F-396; one cube and one disc geometry; output through case files and the CLI.
+
+## Addendum 1: results (2026-11-13)
+
+Code: `crates/rcfd-fem/src/rotating/whirl.rs` (new, 1336 lines with a unit test of the dense solver), additive lines of
+`crates/rcfd-fem/src/rotating.rs` (in the new numbering: 18 to 22 the module comment, 41 to 47 `mod whirl` and the `pub use`, 105
+to 107 the field `coriolis`, 118 its default `false`, 136 to 140 the builder, 195 to 196 the private field `axis`, 266 its value;
+no line removed or changed). Tests: `crates/rcfd-fem/tests/si_rotating_whirl.rs`, 7 tests, 0.4 s in release together. The
+registered run was made once (log `f499-scratch/run1.log`); nothing was re-run to pick a result.
+
+Before the registered run, the unit test of the dense solver (random positive definite `K`, `M` and skew `G` of orders 1, 2, 5,
+12, residual below 1e-12) failed at order 2 with residual 0.15: the scaled gyroscopic block was assembled as `-G^` (the indices of
+`Y = G^^T` swapped). Fixed before any registered check ran; the unit test then passed. This was development of the code, not a
+registered run.
+
+| # | Check | Limit | Measured | Met |
+|---|---|---|---|---|
+| G1 | skew defect of `C`: cube, sector, full rotor | `<= 1e-14` | 0, 0, 0 (bit for bit) | yes |
+| G2 | `C 1_x = M 1_y`, `C 1_y = -M 1_x` | `<= 1e-14` | 0, 0 | yes |
+| Q1 | residuals: point mass / cube (5 speeds) / cube (12 Campbell speeds) / sector and full rotor | `<= 1e-9` | 1.6e-15 / 2.9e-12 / 2.0e-12 / 2.2e-13 | yes |
+| Q2 | Coriolis off against the subspace modes: cube at `0.5 omega_0`, sector index 1 at `0.4 omega_ref` | `<= 1e-9` | 4.0e-13, 1.4e-13 | yes |
+| Q3 | `n` positive finite frequencies (cube, sector, full rotor) | exact | holds | yes |
+| Z1 | rest bits: cube against `modes(0)` and `modal_analysis`; sector against `modal_analysis_harmonic`, `k = 0 .. 3` | identical | identical | yes |
+| Z2 | cube at `1e-6 omega_0` against rest | `<= 2e-6` | 1.000e-6 (`|kappa| Omega/omega_0`, as D3 predicts) | yes |
+| P1 | point mass, `omega_0 -/+ Omega` | `<= 1e-8` | 9.1e-16 | yes |
+| P1b | cube on springs, translation pair | `<= 1e-8` | 3.2e-13 | yes |
+| P2 | `kappa = +1` forward at `omega_0 - Omega`, `-1` backward at `omega_0 + Omega` (point mass and cube) | each | holds | yes |
+| P3 | Campbell tracks 0 and 1 against `omega_0 -/+ Omega`; directions; MAC | `<= 1e-8`; each; `>= 0.9` | 3.9e-13; forward/backward at every speed `> 0`, `None` at rest; smallest MAC 1.000000000000 | yes |
+| P4 | six crossings linear in `Omega` | count 6; `<= 1e-9` | 6; 2.1e-13 | yes |
+| P5 | CSV (14 rows, direction columns, round-trip bits), JSON | each | holds | yes |
+| S1 | sector union against full rotor at `0.4`, `0.8 omega_ref` | count; `<= 1e-8` | 252 = 252 (indices 42, 84, 84, 42); 2.2e-13, 3.0e-13 | yes |
+| S2 | expanded sector modes on the full quadratic problem | `<= 1e-8` | 2.1e-13, 1.9e-13 | yes |
+| S3 | `| |tau| - 1 |` of 16 separated pair modes per speed | `<= 1e-6` | 3.3e-16, 4.4e-16 | yes |
+| S4 | Coriolis split of index 1 at `0.8 omega_ref` | `> 1e-6` | 0.355 (an in-plane pair, `kappa = +0.81 / -0.60`) | yes |
+| S5 | sector whirl Campbell: 4 families, `1 2 2 1`, tracks `4 8 8 4`, finite, directions | each | holds; smallest stored MAC 0.675 (recorded, no limit) | yes |
+| L1 | cube at `1.2 omega_0`: `LossOfStiffness`, `negative == Some(2)` | exact | holds | yes |
+| R1 | refusals with their keys (`speed` twice, `speeds`, `harmonic`, `matrix`, `stiffness`) | each | holds | yes |
+| R2 | default `coriolis == false`; `modes`, `campbell` bit-identical with the option on; `cargo test -p rcfd-fem --release` (292 passed, 0 failed, 60 ignored); `cargo check -p rcfd-post --tests` | each | holds; pass; pass | yes |
+| N1 | Coriolis off against `omega_0 -/+ Omega` | `> 1e-2` | 0.634 | as expected |
+| N2 | sector without Coriolis against full rotor with it | `> 1e-6` | 0.156 | as expected |
+| N3 | crossings by the `Omega^2` rule | `> 1e-4` | 3.75e-4 (smallest of the six) | as expected |
+
+Mutations (on a `git archive` copy of bbc60503 in `f499-scratch/mut`, each run once against `si_rotating_whirl`; logs
+`f499-scratch/mut_*.log`): all eight caught.
+
+| Mutation | Caught by |
+|---|---|
+| 1 `G = Omega C` | P1b, P3, P4, S2 (P1 does not see it: the algebraic point mass builds its own `G`; the registration listed P1 there wrongly) |
+| 2 sign of `G` reversed | P2, P3, P4, S2 |
+| 3 `kappa` from the real part | P2, P3 directions, P5 |
+| 4 sector `G` as `blockdiag(G_s, 0)` | S1, S2, S3 |
+| 5 crossings in `Omega^2` | P4 (3.2e-3) |
+| 6 zero-speed shortcut removed | Z1 (cube and sector); also P3 to P5 (the degenerate pair at rest comes out as an arbitrary complex combination) |
+| 7 spin softening left out of the whirl operator | P1b, Q2, L1, P3, P4, P5, S1 |
+| 8 real-part MAC in the tracker | P3 (MAC 0, branches exchanged), P4, P5 (expected to survive; it did not) |
+
+`cargo fmt -p rcfd-fem --check`: clean (after one rustfmt commit of the new files, layout only). `cargo clippy -p rcfd-fem
+--all-targets -- -D warnings`: clean. `rcfd-linalg` not touched. `baseline_hashes` not run: no crate outside `rcfd-fem` uses
+`rotating` (grep), the edits of `rotating.rs` are additive and the existing `rcfd-fem` tests pass, so no case hash can move; the
+brief limited the runs to `-p rcfd-fem` and the `rcfd-post` check.
+
+Deviations: none from the registered set-up or limits. The expectation "P1" for mutation 1 was wrong (above). Not run: speeds
+above the loss of stiffness (registered as a limit), large parts (the dense cap).
+
+**Decision by the registered rule: done.** G1 to R2 met, S5 as registered, N1 to N3 as expected.
+
+### Remaining questions
+
+1. Speeds above the loss of stiffness of `K_eff`, where a gyroscopic system can still be stable (the point mass above
+   `omega_0`). Options: (a) keep reporting them as a loss, as F-396 does; (b) a non-symmetric eigensolver of the state matrix
+   (Hessenberg QR) for those speeds, with a stability flag. Recommendation: (a) now, (b) as the follow-up below; a fan blade on a
+   stiff hub does not reach it.
+2. The dense cap of 1500 reduced unknowns. Options: (a) keep it and solve large parts by the sector; (b) a shift-invert Lanczos
+   on the Hermitian `i A` with sparse factors of `K_eff` and `M`. Recommendation: (b) as a follow-up when the 120 mm fan sector
+   is meshed finer than the cap.
+3. Frequencies in the stationary frame (`omega -/+ k Omega` by the wave sense). Options: (a) leave to post-processing; (b) add
+   them as a column of the cyclic table. Recommendation: (b), small, as its own follow-up.
+
+### For the lead: roadmap entries
+
+F-499, proposed status **done**. New note:
+
+> From ADR 0403 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S. ADR 0411, 2026-11-13: the Coriolis matrix G = 2 Omega C (C skew bit for bit), whirl modes of (K_eff - omega^2 M + i omega G) phi = 0 by Meirovitch's symmetric linearisation (state form with M* = blockdiag(M, K_eff), skew G*) solved by a dense skew Householder reduction and the QL algorithm (cap 1500 reduced unknowns), the whirl number kappa = Im(phi^H C phi)/phi^H M phi giving forward and backward whirl, the Campbell table of F-396 with directions and crossings linear in Omega; point mass and cube on springs within 3.2e-13 of omega_0 -/+ Omega with kappa = +/-1; on a cyclic sector G enters index k as T_k^T blockdiag(G_s, G_s) T_k (the cos/sin coupling comes through the rows of T_k; ADR 0407 D1's remark superseded), the sector equals the full rotor's 252 whirl frequencies within 3e-13; speeds above the loss of stiffness of K_eff stay reported as a loss.
+
+Follow-up items (proposed):
+
+- "Whirl modes above the loss of stiffness: gyroscopic stabilisation", deps F-499.
+
+> Every limit not stated here is registered in the ADR before the run. At a speed where K_eff is not positive definite the whirl problem is solved by a non-symmetric eigensolver of the state matrix written from first principles; each speed is flagged stable (all frequencies real within a registered tolerance) or unstable with the growth rate; the point mass on isotropic springs gives Omega - omega_0 and Omega + omega_0 above omega_0 within 1e-8 and is flagged stable; an anisotropic spring pair gives the closed-form unstable band between the two spring frequencies.
+
+- "Sparse whirl solver for large rotating parts", deps F-499.
+
+> Every limit not stated here is registered in the ADR before the run. The lowest whirl modes of (K_eff - omega^2 M + i omega G) phi = 0 by a shift-invert Lanczos on the Hermitian form of ADR 0411 with sparse factors of K_eff and M, without the dense cap; on the cube and the disc sector of ADR 0411 the frequencies equal the dense solver's within 1e-9 relative and the whirl numbers within 1e-8; a part of at least 20 000 reduced unknowns is solved in under two minutes in release.
+
+- "Stationary-frame frequencies of a cyclic whirl table", deps F-499.
+
+> Every limit not stated here is registered in the ADR before the run. The cyclic whirl Campbell table carries for each mode of index k the stationary-frame frequency omega + tau k Omega (tau the wave sense); on the disc sector of ADR 0411 the stationary frequencies of a travelling pair agree with those of the full rotor's modes transformed to the stationary frame within 1e-8 relative.
