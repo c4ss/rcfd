@@ -179,3 +179,77 @@ Negative controls:
 - L2. Only volume, wall area and radius are checked; stresses on curved Hex20 are later packages' (ADR 0280). Interior
   circumferential edges stay chords; whether projecting them as well (an isoparametric polar map) helps the stress is not asked.
 - L3. Uniform radial division only; one angle (`pi / 2`) and one ratio `b / a = 2`.
+
+## Addendum 1: results (2026-11-13)
+
+Code: one new test file `crates/rcfd-fem/tests/sb_convert_hex20.rs` (2 tests, 0.08 s together in release); no library file
+changed. The test file was laid out by rustfmt before its commit. The registered run was made once (`f508-scratch/run1.log`),
+on the test commit, release profile, `--test-threads=1`.
+
+| id | check | limit | measured | met |
+| --- | --- | --- | --- | --- |
+| C1 | accepted at every level; one Hex20 block; `4 k^3` elements; nodes points + edges; projected nodes per wall | exact | 4, 32, 256, 2048 Hex20; 56, 261, 1505, 10017 nodes; 13, 42, 148, 552 projected per wall; none refused | yes |
+| C2 | radius of every projected node | `1e-14` | `4.4e-16`, `2.2e-16`, `4.4e-16`, `4.4e-16` | yes |
+| C3 | volume order against `3 pi / 4`, pairs (1,2), (2,4), (4,8) | `>= 3` | `3.9950`, `3.9988`, `3.9997` (errors `4.93179e-5`, `3.09300e-6`, `1.93479e-7`, `1.20950e-8`; estimate the same to 6 digits) | yes |
+| C4 | area order of `inner` against `pi a h / 2` and `outer` against `pi b h / 2` | `>= 3` | both `3.9905`, `3.9976`, `3.9994` (errors `2.45551e-5`, `1.54486e-6`, `9.67137e-8`, `6.04711e-9`, equal for the two walls; estimate the same) | yes |
+| C5 | volume against the closed form `V_p(k)` of the piecewise-quadratic walls | `1e-12` | `0`, `3.8e-16`, `5.7e-16`, `3.8e-15` | yes |
+| C6 | wall areas against `A_p(r, k)`; `4 k^2` faces per set | `1e-12`; exact | max `0`, `1.4e-16`, `8.5e-16`, `2.8e-15`; counts equal | yes |
+| C7 | radius of the wall corners | `1e-14` | max `2.2e-16` | yes |
+| C8 | node sets `inner`, `outer` of the upgrade equal the nodes of the surface sets | exact | equal at every level | yes |
+| N1 | unprojected volume order | `[1.9, 2.1]` | `1.9917`, `1.9979`, `1.9995` | yes |
+| N2 | unprojected wall area orders | `[1.9, 2.1]` | both `1.9979`, `1.9995`, `1.9999` | yes |
+| N3 | unprojected against the chord forms | `1e-12` | max `9.8e-15` (volume, `k = 8`), areas `<= 8.5e-16` | yes |
+
+Mutations (scratch copy `f508-scratch/mut` from `git archive`, script `f508-scratch/mutate.py`, log `f508-scratch/mutations.log`,
+one at a time, each run once):
+
+| id | mutation | caught by |
+| --- | --- | --- |
+| M1 | the projection's position ignored | C2 (`3.84e-2 = b (1 - cos(pi / 16))` at `k = 1`) |
+| M2 | node sets not extended by the upgrade | C8 (node set `inner` differs from its surface set's nodes), both tests |
+| M3 | `onto_cylinder` scaled by `radius / norm(d)` | C2 (`3.0e-1` at `k = 1`) |
+| M4 | `hex20::volume` with the 2 x 2 x 2 rule | **not caught**: C5 `7.5e-16`, every check met |
+| M5 | 8-node face area from the centre point only | C6 (`6.39e-3` at `k = 1`) |
+| M6 | 8-node face rule replaced by 2 x 2 Gauss | C6 (`1.63e-5` at `k = 1`) |
+
+**Diagnosis of M4 (an equivalent mutant on this geometry).** By arithmetic 1 every element of CQ is an extrusion of a Quad8 whose
+radial edges are straight with their mid-edge nodes at the midpoints, so its `(x, y)` is
+`((1 - xi) / 2) Q_-(eta) + ((1 + xi) / 2) Q_+(eta)` with `Q_+-` quadratic (the terms `1, eta, eta^2, xi, xi eta, xi eta^2` of the
+serendipity space): `x_xi` has degree 2 in `eta` and 0 in `xi`, `x_eta` degree 1 in each, so `det J` has degree at most 3 in
+`eta`, 1 in `xi` and 0 in `zeta`, and the 2-point rule integrates it exactly. The registration's claim that M4 would be caught by
+C5 overlooked this. The rule itself is covered elsewhere: the existing `si_hex20` test `e7_e8_volume_and_mass` (ADR 0292, E7,
+randomly distorted elements) run once on the same mutant fails, `1.34e-4` against its limit `1e-13`
+(`f508-scratch/m4_si_hex20.log`); that run is not a check of this registration.
+
+Other checks: `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --all-targets --release -- -D warnings` clean. No
+library file was changed, so no existing test covers a changed line; `baseline_hashes` cannot be affected and was not run (no file
+of `rcfd-mesh`, `rcfd-fv` or `rcfd-api` changed). No hash table, golden file or existing test edited; no scaffold row retired.
+
+**Not run:** the whole workspace suite (the lead's gate); the route through `upgrade_to_hex20_mapped` with a curved map (L1).
+
+**Decision by the registered rule: partial.** Every clause of the acceptance (C1 to C4) is met with margins above 20 on the
+rounding limits and about 1.0 on the orders, C5 to C8 and N1 to N3 as stated; but the planned mutation M4 was not caught by a
+registered check (an equivalent mutant on the quarter annulus, diagnosed above), and the rule asks every mutation to be caught.
+
+### Observations
+
+1. Volume and wall areas converge at order 4 from the coarsest level, as derived: the parabola through three points of a circle
+   has the circle's curvature at its middle, so the `phi^3` terms cancel. The volume errors equal the Tet10 errors of ADR 0413
+   digit for digit: both meshes have the same piecewise-quadratic boundary and both volume rules are exact.
+2. The Gauss rule of the face area contributes about 0.3 percent of the area error at `k = 1` (arithmetic 4); the rest is the
+   parabola's own arc length.
+
+### Remaining questions
+
+1. **M4 not caught by this registration.** Options: (a) keep partial and close the item as it stands, the volume rule being
+   covered by `si_hex20` E7; (b) the maintainer accepts the item as done on the diagnosis (equivalent mutant; E7 catches it);
+   (c) a follow-up adding a curved check whose `det J` has full degree (for example CQ with the interior mid-edge nodes displaced
+   by a registered seed, volume against a 125-point Gauss sum). Recommendation: (b); (c) would only repeat E7 on a curved mesh.
+2. **The mapped route** (L1). Options: (a) leave it to meshes built in a parameter space (ADR 0385); (b) a polar map for meshes
+   given in `(r, theta, z)`. Recommendation: (a).
+
+## For the lead: roadmap entries
+
+F-508: proposed status **partial**. Note:
+
+> Structural solver. ADR 0415, 2026-11-13: test sb_convert_hex20 (no library change). The quarter annulus of ADR 0413 (a = 1, b = 2, h = 1, levels k = 1, 2, 4, 8 with 4k x k x k cells) converted by from_mesh, upgraded by upgrade_to_hex20 and its wall mid-edge nodes (the node sets inner and outer, which the upgrade extends) moved by project_mid_edge_nodes with onto_cylinder. Derived before the run: each element is the extrusion of a Quad8, a wall edge is the quadratic interpolant of its circle, the 3 x 3 x 3 volume is exact, so the volume error is phi^4 / 30 and the 3 x 3 Gauss wall area error phi^4 / 60 (phi = pi / (16 k)), order 4. Met: projected nodes on their radius within 4.4e-16 (limit 1e-14), volume order 3.995, 3.999, 4.000 and inner and outer area orders 3.990, 3.998, 3.999 (limit 3), volume and areas within 3.8e-15 of the closed forms of the piecewise-quadratic walls; without the projection orders 1.99 to 2.00. Five of six mutations caught; the 2 x 2 x 2 volume rule is an equivalent mutant on this geometry (det J of degree at most 3 per direction there; caught by si_hex20 E7), so partial by the registered rule. The curved route through upgrade_to_hex20_mapped is not checked.
