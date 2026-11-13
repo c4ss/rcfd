@@ -226,3 +226,110 @@ Every value is printed; a test fails at the end if any of its checks missed (the
    existing struct literals of the F-362 tests, which may not be edited).
 2. The offset correction applies to the new variant as to the projection (on in the constructor), so that the cylinder's rigid
    rotation is reproduced (clause c5).
+
+## Addendum 1: results (2026-11-13)
+
+The registered run, made once: commit `0523351b` (the test files, after the library commit `15047a93` and the registration
+commit `44419e98`; the library's rustfmt line breaks went into `0523351b` before the run), `cargo test -p rcfd-fv --release
+--test cosim_f504 -- --nocapture --test-threads=1` (5 passed, 0.02 s) and `cargo test -p rcfd-post --release --test
+si_solid_dynamic_bilinear -- --nocapture --test-threads=1` (3 passed, 4.1 s), `CARGO_BUILD_JOBS=4`, logs
+`w49i-work/f504-scratch/run1_fv.log`, `run1_post.log`. No test is heavy. In each 3:2 test every static compliance and
+prediction is printed before the first coupled run of that face (C0, by the order of `face_refinement`).
+
+### Checks
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| A0 | limits registered before the run | registration `44419e98` precedes every code commit | yes |
+| W1 weights; distance | `<= 1e-12`; `<= 1e-13` | `1.1e-16`; `2.1e-17` | yes |
+| W2 weights; distance | `<= 1e-12`; `<= 1e-13` | `0`; `0` | yes |
+| D-a digest of the default rows and reports (BP, BC, BU, three Hex8 faces with 3:2 walls; `Projection` with and without correction, `RadialBasis`), parent `5638ad5a` against branch `0523351b` | equal | all 18 digests equal, total `4b84c87002355a6b` (logs `digest_parent.log`, `digest_branch.log`) | yes |
+| D-b `cosim_f362`; `si_solid_dynamic`; `si_solid_dynamic_nonmatching` (release, unedited) | pass, ignored as before | 11 passed, 1 ignored; 13 passed, 5 ignored; 3 passed | yes |
+| D-c `baseline_hashes` (release) | passes | 3 passed, 1 ignored | yes |
+| S-B-2, S-B-4, S-B-8 (seven symmetries each) | `<= 1e-13` | at most `7.0e-17`, `2.7e-16`, `9.9e-16` | yes |
+| Q-B-n weights `abs(w - w_Q)/max w` | `<= 1e-13` | `7.0e-17`, `1.8e-16`, `6.3e-16` | yes |
+| Q-B-n rows `abs(H - H_Q)` | `<= 1e-13` | `1.7e-16`, `6.1e-16`, `1.2e-15` | yes |
+| R-B BP (translation, rotation, both) | `<= 1e-12` | `2.3e-16`, `6.2e-16`, `5.5e-16` | yes |
+| R-B BC | `<= 1e-12` | `9.3e-16`, `9.3e-16`, `8.2e-16` | yes |
+| C-B BP, seeds 1 to 3 (resultant, moment, work) | `<= 1e-12` | at most `1.1e-16`, `5.8e-17`, `7.7e-17` | yes |
+| C-B BC | `<= 1e-12` | at most `8.5e-17`, `4.9e-17`, `7.3e-17` | yes |
+| C-B-2 (`Dc E A/L = 5.1222e-3`; `Delta_m = -2.16808e-3`, `Delta_pred = -2.16666e-3`) | `<= 0.1` | `6.59e-4` | yes |
+| C-B-4 (`1.9306e-3`; `-8.18014e-4`, `-8.18106e-4`) | `<= 0.1` | `1.13e-4` | yes |
+| C-B-8 (`6.6553e-4`; `-2.82393e-4`, `-2.82220e-4`) | `<= 0.1` | `6.13e-4` | yes |
+| R2-B BP, BC (row sums, coordinates, report) | `<= 1e-13` | at most `4.4e-16`; `8.9e-16` | yes |
+| G-B BP, BC | `<= 1e-15` m | `6.2e-17`, `7.8e-18` | yes |
+| U1-B | message names point 0, `0.024`, `0.008` | holds | yes |
+| U2-B (outside `0..6`; rigid against the feet; translation at the points) | `<= 1e-12` | outside `0..6`; at most `4.9e-16`; `3.4e-16` | yes |
+| E1 `abs(Delta_m(B)/Delta_m(Q) - 1)` | `<= 1e-6` | `7.7e-13`, `3.5e-12`, `2.0e-12` | yes |
+| PD | `<= 1e-14` | `1.1e-16`, `9.0e-16`, `9.1e-16` | yes |
+| K0; FM; I; MB | `1e-9`; `2e-5`; caps 4, 20; `1e-12` | at most `7.1e-15`; `1.462e-7`; every step converged in 3 iterations; at most `1.7e-15` | yes |
+| V | holds | `0`, `1` accepted; `-1`, `NaN` refused with the projection's message | yes |
+| N1 (default projection on the 3:2 walls) `abs(w_P - w_Q)/max w_P`; axis mirrors | `>= 0.05` | `0.111`, `0.0741`, `0.0741`; `0.167`, `0.111`, `0.111` | holds |
+| N2 (no correction on BC) rotation; moment | `>= 1e-4`; `>= 1e-5` | `4.98e-3`; `1.04e-4` (smallest of the seeds) | holds |
+
+The bilinear projection's compliances and frequency changes equal ADR 0412's measured `Q` values to all printed digits, as D3
+predicted; the default projection's compliances (`Dc E A/L = 1.4891e-2, 4.2334e-3, 1.2637e-3`) equal ADR 0412's.
+
+### Mutations (copy of `0523351b` by `git archive` in `f504-scratch/copy`, own target directory, `mutate.py`, logs `MU1.log` to `MU6.log`)
+
+| Mutation | Caught by |
+|---|---|
+| MU1 the new variant uses the triangle split | W1, S-B-n (the axis mirrors and quarter turns, `0.17`, `0.11`, `0.11`), Q-B-n, E1, as expected |
+| MU2 Newton limited to one step (written as: the first step accepted as converged; see deviations) | W1 (`6.4e-2`, the arithmetic's number), as expected; the flat walls unaffected, as predicted |
+| MU3 `N_2` and `N_3` exchanged | W1, U2-B; on BP, BC and the 3:2 walls the build itself refuses (the mutated patch is twisted, so wall points lie up to `0.17` off it, beyond `max_distance`), so R-B, C-B, Q-B-n, S-B-n were not reached: those tests fail on the refusal |
+| MU4 no offset correction in the new variant | R-B BC (`4.98e-3`), C-B BC moment (`1.0e-4` to `2.3e-4`), R2-B BC, as expected |
+| MU5 `Projection` dispatched to the bilinear search | F-502 `si_solid_dynamic_nonmatching` (S1, S3, all three faces), D-a (the projection digests change), N1, as expected |
+| MU6 interior point accepted outside `[0, 1]^2` | U1-B, U2-B, W2, and S-B-n, Q-B-n, E1, as expected |
+
+Every mutation was caught.
+
+### Formatting and lints
+
+`cargo fmt -p rcfd-fv --check`, `cargo fmt -p rcfd-post --check`: clean. `cargo clippy -p rcfd-fv -p rcfd-post --all-targets
+--release -- -D warnings`: clean.
+
+### Deviations
+
+* MU2 was registered as "Newton limited to one step". With the registered stopping test a literal cap of one step never
+  accepts an interior point (the first step is never below `1e-14`), so the mutation was written, before its run, as the first
+  step accepted as converged, the variant the arithmetic computed (`6.4e-2`). Its outcome matches the registration.
+* MU3 was caught by other checks than registered (the build's refusal on the flat walls instead of R-B, C-B, Q-B-n, S-B-n);
+  it was caught.
+* No registered check, limit or set-up changed.
+
+### What was not run
+
+* The whole workspace suite (the lead's gate). `cosim_case_f444` (rcfd-api): it builds maps only with the default methods,
+  whose rows D-a shows unchanged.
+
+### Changed files
+
+`crates/rcfd-fv/src/cosim/mapping.rs` (shared solver file: the new variant and constructor, the dispatch in `interface_rows` and
+`nearest`, the new `on_bilinear`; no expression of the default path changed, D-a), new `crates/rcfd-fv/tests/cosim_f504.rs`,
+new `crates/rcfd-post/tests/si_solid_dynamic_bilinear.rs`, `docs/cosimulation-protocol.md`, this ADR.
+
+### Decision by the registered rule
+
+**Done.** Every check of A met, every companion met, N1 and N2 hold, every planned mutation caught.
+
+### Remaining questions
+
+1. **Expose the bilinear projection in the case file** (the F-444 path). Options: (a) a map-method choice in the cosimulation
+   section; (b) leave it library-only. Recommendation: (a) as a follow-up; it changes the schema golden and so needs the
+   maintainer's approval; not taken here.
+2. **Make it the default for quadrilateral interfaces.** Options: (a) keep the projection as default (bit-identical records);
+   (b) switch, which changes the F-362, F-400 and F-502 records. Recommendation: (a).
+
+### For the lead: roadmap entries
+
+F-504, proposed status **done**, note:
+
+> DONE (ADR 0414, 2026-11-13; registered before the code, run once, no amendment). MapMethod::BilinearProjection (MapSettings::bilinear_projection) evaluates the bilinear shape functions on quadrilateral interface elements at the nearest point of the bilinear patch (Newton from the centre with the exact Hessian, or the nearest edge point), with the projection's nearest element, offset correction and unmapped policy; on a warped patch the closed-form feet are found within 1.1e-16. The default projection and the radial basis are bit for bit unchanged (digests of rows and reports equal on the parent and the branch; the F-362, F-400, F-502 tests and the baseline hashes pass unedited). On the 3:2 walls of F-502 its weights keep all eight symmetries of the square within 9.9e-16 and equal the test-side bilinear evaluation within 6.3e-16; rigid motion within 9.3e-16 and resultant, moment and work within 1.1e-16 on the planar and cylindrical walls of F-362; the coupled frequency changes -2.17e-3, -8.18e-4, -2.82e-4 for 2 x 2, 4 x 4, 8 x 8 faces equal the static-compliance prediction within 6.6e-4 of themselves (limit 10 percent). Six mutations caught. Open: ADR 0414 Q1 (case-file exposure, needs the schema golden), Q2.
+
+F-502, the note gains the sentence:
+
+> The projection's asymmetry is removed as an opt-in by F-504 (ADR 0414, 2026-11-13): the bilinear projection is symmetric to 1e-15 and gives the bilinear evaluation's frequency changes.
+
+Follow-up item (from Q1), title "Bilinear projection selectable in the cosimulation case file", deps F-504, F-444, acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. The cosimulation section of the case file accepts the bilinear projection as a map method; a case without it gives the same bytes as before (baseline and case hashes unchanged), the schema golden is updated only with the maintainer's approval, and a case naming it builds the same rows as MapSettings::bilinear_projection bit for bit.
