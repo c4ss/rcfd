@@ -222,3 +222,106 @@ after a post-run amendment. A miss of D1 to D6 (a default changed): **todo** unt
 
 `f470-scratch/probe/src/main.rs`: assembles the two reduced stiffnesses with the library's `stiffness_with`, `reduce` and
 `node_blocks` and prints the numbers of arithmetic 2. It calls no multigrid code.
+
+## Addendum 1: results (2026-11-13)
+
+Code: registration 340810da; library and tests b0c025c0 (`crates/rcfd-linalg/src/amg_elastic.rs`: lines inserted at new
+30-31 (field), 43-72 (`Aggregation`, `QUADRATIC_RATIO`, `quadratic()`), 105-113 and 130-133 (two error variants), 465-574
+(`aggregate_geometric`, `coarse_points`), 729-765 (`new` refuses `Geometric` and delegates to the private `build`;
+`with_points`), and one changed line, old 596 / new 788-792 (the `aggregate_blocks` call became a `match` whose default arm is
+that same call), new 794-798 (coarse points); `crates/rcfd-fem/src/solve.rs`: lines inserted only, new 23 (`use`) and 275-280
+(the branch of `smoothed_aggregation`); tests `crates/rcfd-fem/tests/si_amg_quadratic.rs`, `crates/rcfd-fem/tests/f470_defaults.rs`);
+165efa90 the known-miss rename after the heavy run. Release profile throughout. Logs in `w49i-work/f470-scratch`:
+`run1-si_amg_quadratic.log` (fast, once), `run1-h1.log` (heavy, once), `diag-h1b.log` (diagnosis), `run-d1-branch.log`,
+`run-d1-main.log` (the same file on a `git archive` of 7a533a53, own target), `run-d2-linalg.log`, `run-d2-fem.log`,
+`run-d3-baseline.log`, `mutations.log` (`mutate.py`).
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| H1a first coarse level, slenderness-20 Tet10 | in `[8112, 20280]` | **12 000** of 121 680 (1/10.14; exactly the Hex8 number) | yes |
+| H1b CG with one V-cycle to 1e-8 | `<= 30`, residual `<= 1e-8` | **31** iterations, 0 restarts, residual 9.17e-9 (floor estimate 8.64e-9), solve 3.1 s | **no** (`h1_slender20_tet10_quadratic_known_miss`) |
+| H1c operator complexity | `<= 1.5` | 1.4762 (levels 121 680 / 12 000 / 522; nnz 9.52e6 / 4.47e6 / 6.5e4), setup 0.95 s | yes |
+| H1d B1 every level | `<= 1e-12` | 2.8e-16 | yes |
+| DF settings | as stated | default = ADR 0305 with `Greedy`; ratio 1.8660254037844386 | yes |
+| E1 Hex8 cube 11 identity | equal | level-0 aggregates equal, counts 16 / 16, bit-equal | yes |
+| E2 reference aggregation, fast Tet10 | equal | level 0 (550 aggregates) and level 1 equal | yes |
+| E3 fast Tet10 | B1 `<= 1e-12`, S2 `<= 1e-10` positive, `Ok` `<= 1e-8` | B1 2.9e-16, S2 1.7e-16, positive; 27 iterations, 8.2e-9 (default 40); records: levels 32 448 / 3300 / 144, `n_1/n_0` 1/9.83, OC 1.4787 (default 1.0342) | yes |
+| E4 1 and 8 threads | equal | 27 / 27, bit-equal | yes |
+| E5 refusals | as stated | `MissingPoints`; `PointsLength { expected: 48, got: 47 }` | yes |
+| N1 quadratic / default first coarse level | `>= 2` | 3300 / 594 = 5.56 | yes |
+| N2 default outside the window | outside | 2220 | yes |
+| D1 default-route hashes branch / 7a533a53 | identical | identical five lines (cube 11 `63183f7b70a37472` 16 its, cube 23 `f4e0b9eacf326034` 17, fast Hex8 `eac2e37cdbf7447a` 15, P1 `6a5b29ee81bc9dc7` 16, fast Tet10 `3000b383efab3700` 40) | yes |
+| D2 existing tests | pass, counts equal | `rcfd-linalg` and `rcfd-fem` release, every test file passes (ignored not run); `si_amg` prints 16 / 17, 15 / 22, P1 16, AG1 64, N1 29 / 16 as ADR 0305 | yes |
+| D3 baseline_hashes | pass | 3 passed, 1 ignored | yes |
+| D4 scalar AMG | empty diff | empty | yes |
+| D5 Hex8 slenderness 20 default at 1e-8 | `== 15` | 15 | yes |
+| D6 Tet10 default first coarse level | `== 2220` | 2220 | yes |
+
+Record: the Hex8 slenderness-20 case with `quadratic()`: 15 iterations (as the default).
+
+**Diagnosis of the H1b miss** (`diag-h1b.log`, a diagnostic solve of the same case at looser tolerances, not a registered
+check, nothing tuned): 20 iterations to 1e-4, 23 to 1e-5, 26 to 1e-6, 28 to 1e-7, 31 to 1e-8, no restart at any tolerance.
+The convergence is steady to the end (about 3 iterations per decade, factor about 0.46 per iteration, against about 0.28 for
+Hex8 and 0.79 for the default Tet10 hierarchy), so the residual floor is not the cause. The coarsening clause is met exactly
+(12 000 coarse unknowns, as Hex8), so what remains is the cycle on the Tet10 operator: the point-block Gauss-Seidel smoother
+on mid-edge nodes (one pre- and one post-sweep) and the reach-2 prolongator smoothing (OC 1.48, as estimated in arithmetic 6).
+The count fell from 79 to 31 (2.5 times fewer); the miss is one iteration, within the registered estimate 18 to 33.
+
+**Mutations** (archive of 165efa90 in `f470-scratch/mut`, own target, each alone, files restored and compared by SHA-256, all
+restored):
+
+| Id | Registered | Caught by |
+| --- | --- | --- |
+| M1 no geometric order | E2 | E2 (the aggregate count differs from the reference) |
+| M2 ratio `sqrt 3` | DF, E2 | DF, E2, and E1 |
+| M3 `d_I` the largest distance | E2 | E2 (aggregate count) |
+| M4 coarse point the first member | E2 (level 1) | E2 (level 1) |
+| M5 pass 2 over all stored neighbours | E2 | **not caught**: every check held. On these meshes the strongest coupled neighbour of every pass-2 block is already one of its candidates, so the mutation changes no aggregate (equivalent here); no check registered can see it |
+| M6 default `Geometric` | DF | DF (and N1) |
+| M7 branch of `smoothed_aggregation` removed | E3 | E3 (`MissingPoints`), and E1, E2 |
+
+`cargo fmt -p rcfd-linalg --check`, `cargo fmt -p rcfd-fem --check`: clean. `cargo clippy -p rcfd-linalg -p rcfd-fem
+--all-targets --release -- -D warnings`: clean.
+
+**Deviations.**
+
+1. Arithmetic 4 predicted that the coarse levels might differ from the default on Hex8; the record shows the same count (15)
+   on the slenderness-20 Hex8 case; level orders of that run were not printed.
+2. E2's assertion that every aggregate has coarse unknowns (a precondition of the level-1 comparison) is what failed first
+   under M1 and M3; it is part of E2.
+3. Not run: the whole workspace (the lead runs the gate); the heavy records of ADR 0305 (H1 to H4, H2b) except H2b's count,
+   which D5 measured again.
+
+**Decision by the registered rule: partial.** H1b missed in its registered run (31 against 30), and (Rule I) the registered
+mutation M5 was not caught by its registered check E2. Every other clause holds: the first coarse level is 1/10.14 of the fine
+one (window 1/15 to 1/6), operator complexity 1.476, the rigid-body modes are in the range of the tentative prolongator to
+2.8e-16 on every level, and the defaults are unchanged bit for bit (D1 to D6).
+
+**Remaining questions.**
+
+1. The iteration limit (H1b). Options: (a) a follow-up item for the cycle on quadratic elements: a registered smoother change
+   (two pre- and post-sweeps, or a Chebyshev smoother) with the coarsening of this ADR, against the same limit 30; (b) accept
+   31 against 30 (2.5 times fewer than the default, coarsening like Hex8). Recommendation: (a), since the diagnosis places the
+   remaining gap in the smoother, not in the aggregation.
+2. M5. Options: (a) a test on a mesh where a leftover block's strongest coupling lies outside its candidates (a graded or
+   anisotropic Tet10 box), so that pass 2's restriction is observable; (b) drop the restriction from D1 as immaterial.
+   Recommendation: (a), as part of the follow-up of question 1.
+3. Reading 1 (a geometric strength counts as "a registered strength threshold"), taken on the maintainer's standing
+   instruction of 2026-11-11 (take the recommendation); the probe shows an algebraic threshold cannot separate the Tet10
+   couplings. Recommendation: accept the reading.
+4. Selection from a case file (F-386): an iterative key could map a mesh of quadratic elements onto
+   `ElasticAmgSettings::quadratic()`. Recommendation: note it on F-386.
+
+## For the lead: roadmap entries
+
+F-470: proposed status **partial**. Note:
+
+> From ADR 0305 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0370, 2026-11-13: rcfd_linalg::amg_elastic::Aggregation::Geometric (opt-in through ElasticAmgSettings::quadratic() and ElasticAmg::with_points; rcfd_fem::solve::smoothed_aggregation passes the node points): a coupled block is a candidate when it lies within (sqrt 3 + 2)/2 of the distance to the nearest coupled block (the gap between the Chebyshev-1 and Chebyshev-2 lattice neighbours), seeds visited in coordinate order, coarse points the aggregate centroids. On the Tet10 cantilever of slenderness 20 (121 680 unknowns) the first coarse level is 12 000 (1/10.14, the Hex8 number; default 2220), operator complexity 1.476, rigid-body modes in the range of the tentative prolongator to 2.8e-16; CG with one V-cycle reaches 1e-8 in 31 iterations (default 79) against the limit 30, steady at about 3 iterations per decade, so the remaining gap is the smoother, not the floor or the coarsening. On Hex8 the rule reproduces the default aggregates bit for bit. Defaults unchanged bit for bit (hashes against main, ADR 0305 counts 15 and 2220 measured again, baseline hashes pass). Partial by Rule I: the iteration limit missed by one, and one of seven mutations (pass 2 over all neighbours) equivalent on these meshes and not caught. Follow-up: the smoother on quadratic elements.
+
+Follow-up item (new), title "Elasticity multigrid on quadratic tetrahedra: a smoother that brings Tet10 within twice the Hex8 count", deps F-470:
+
+> Every limit not stated here is registered in the ADR before the run. With the geometric aggregation of ADR 0370 (ElasticAmgSettings::quadratic()), a registered opt-in smoother setting for quadratic elements (more block Gauss-Seidel sweeps or a Chebyshev smoother, derived before the run) such that on the Tet10 cantilever of slenderness 20 of ADR 0305 CG with one V-cycle reaches 1e-8 in at most 30 iterations with operator complexity <= 1.5 and the setup and solve time recorded beside ADR 0370's (31 iterations, 3.1 s); a test on a graded or anisotropic Tet10 box where pass 2's restriction to the candidates changes the aggregates (ADR 0370 mutation M5); every count and bit of ADR 0305 and ADR 0370 with their settings unchanged.
+
+F-386 (solid case file), sentence to append to its note:
+
+> ADR 0370 (2026-11-13): for meshes of quadratic elements an iterative key should be able to select CgPreconditioner::SmoothedAggregation(ElasticAmgSettings::quadratic()) (Tet10 slenderness 20: 31 iterations against 79 with the default settings).
