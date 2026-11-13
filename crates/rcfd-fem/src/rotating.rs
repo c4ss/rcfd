@@ -333,9 +333,7 @@ impl<'a> RotatingPart<'a> {
                         let (node, component) = dofs.node_component(free[i]).expect("free equation exists");
                         format!("node {node} component {component}")
                     }
-                    (Path::Transformation(tr), _) => {
-                        crate::mpc::unknown_name(tr, self.model, tr.independent()[i])
-                    }
+                    (Path::Transformation(tr), _) => crate::mpc::unknown_name(tr, self.model, tr.independent()[i]),
                     _ => unreachable!("the elimination path has its free list"),
                 };
                 return Err(FemError::InvalidValue {
@@ -678,7 +676,11 @@ impl CampbellTable {
             format!("[{}]", v.collect::<Vec<_>>().join(", "))
         }
         let mut s = String::from("{\n");
-        let _ = writeln!(s, "  \"speeds_rad_s\": {},", list(self.speeds.iter().map(|w| format!("{w}"))));
+        let _ = writeln!(
+            s,
+            "  \"speeds_rad_s\": {},",
+            list(self.speeds.iter().map(|w| format!("{w}")))
+        );
         s.push_str("  \"tracks\": [\n");
         for (t, tr) in self.tracks.iter().enumerate() {
             let _ = write!(

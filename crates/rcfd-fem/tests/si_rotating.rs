@@ -138,7 +138,12 @@ fn flap_lag(model: &SolidModel, m: &CsrMatrix, r: &ModalResult) -> (f64, f64, Ve
             .unwrap_or_else(|| panic!("no mode with a share above 0.5 in component {c}"))
     };
     let (f, l) = (pick(2), pick(1));
-    (r.eigenvalues[f], r.eigenvalues[l], r.modes[f].clone(), r.modes[l].clone())
+    (
+        r.eigenvalues[f],
+        r.eigenvalues[l],
+        r.modes[f].clone(),
+        r.modes[l].clone(),
+    )
 }
 
 fn same_bits(a: &ModalResult, b: &ModalResult) -> bool {
@@ -165,12 +170,19 @@ fn a1_zero_speed_has_the_bits_of_the_modal_analysis() {
     let part = RotatingPart::new(&f, AXIS, ORIGIN, &opts).unwrap();
     let r0 = modes_of(part.modes(0.0).unwrap());
     let reference = modal_analysis(&f, &opts.modal).unwrap();
-    ck.holds("A1 F", same_bits(&r0, &reference), "speed 0 against modal_analysis, every field by to_bits");
+    ck.holds(
+        "A1 F",
+        same_bits(&r0, &reference),
+        "speed 0 against modal_analysis, every field by to_bits",
+    );
     let table = part.campbell(&[0.0, 10.0]).unwrap();
     let column: Vec<f64> = table.tracks.iter().map(|t| t.eigenvalues[0].unwrap()).collect();
     ck.holds(
         "A1b F",
-        column.iter().zip(&reference.eigenvalues).all(|(a, b)| a.to_bits() == b.to_bits()),
+        column
+            .iter()
+            .zip(&reference.eigenvalues)
+            .all(|(a, b)| a.to_bits() == b.to_bits()),
         "the speed-0 column of the table against modal_analysis",
     );
     let k = block();
@@ -178,7 +190,11 @@ fn a1_zero_speed_has_the_bits_of_the_modal_analysis() {
     let kp = RotatingPart::new(&k, AXIS, ORIGIN, &ko).unwrap();
     let kr = modes_of(kp.modes(0.0).unwrap());
     let kref = modal_analysis(&k, &ko.modal).unwrap();
-    ck.holds("A1 K", same_bits(&kr, &kref), "speed 0 on the transformation path, every field by to_bits");
+    ck.holds(
+        "A1 K",
+        same_bits(&kr, &kref),
+        "speed 0 on the transformation path, every field by to_bits",
+    );
     ck.finish();
 }
 
@@ -202,12 +218,24 @@ fn a2_radial_bar_axial_modes() {
     for n in 0..2 {
         let l0 = rest.eigenvalues[n];
         let ratio = (l0 - r_off.eigenvalues[n]) / w2;
-        ck.at_most(&format!("A2a n={} |(w0^2 - w^2)/W^2 - 1| (softening only)", n + 1), (ratio - 1.0).abs(), 1e-3);
+        ck.at_most(
+            &format!("A2a n={} |(w0^2 - w^2)/W^2 - 1| (softening only)", n + 1),
+            (ratio - 1.0).abs(),
+            1e-3,
+        );
         let qh = p_full.stiffening_quotient(&rest.modes[n]);
         let slope = (r_full.eigenvalues[n] - l0) / w2;
         println!("  n={}: Q_n,h = {qh:.8}, measured slope {slope:.8}", n + 1);
-        ck.at_most(&format!("A2b n={} |slope - (Q_n,h - 1)|", n + 1), (slope - (qh - 1.0)).abs(), 1e-3);
-        ck.at_most(&format!("A2c n={} |Q_n,h/Q_n - 1|", n + 1), (qh / q_cf[n] - 1.0).abs(), 1e-2);
+        ck.at_most(
+            &format!("A2b n={} |slope - (Q_n,h - 1)|", n + 1),
+            (slope - (qh - 1.0)).abs(),
+            1e-3,
+        );
+        ck.at_most(
+            &format!("A2c n={} |Q_n,h/Q_n - 1|", n + 1),
+            (qh / q_cf[n] - 1.0).abs(),
+            1e-2,
+        );
         if n == 0 {
             let literal = (l0 - r_full.eigenvalues[0]) / w2;
             ck.below("N4 (w0^2 - w^2)/W^2 of the full operator, n=1", literal, 0.0);
@@ -259,8 +287,15 @@ fn a3_flap_lag_identity_known_miss() {
 fn a3b_n1_flap_lag_diagnosis() {
     let mut ck = Checks::new();
     let (d, fx, _) = flap_lag_at(&beam_options());
-    println!("(w_flap^2 - w_lag^2)/W^2 = {d:.8}, f_x,h = {fx:.4e}, 1 - 2 f_x,h = {:.8}", 1.0 - 2.0 * fx);
-    ck.at_most("A3b |(w_flap^2 - w_lag^2)/W^2 - (1 - 2 f_x,h)|", (d - (1.0 - 2.0 * fx)).abs(), 5e-4);
+    println!(
+        "(w_flap^2 - w_lag^2)/W^2 = {d:.8}, f_x,h = {fx:.4e}, 1 - 2 f_x,h = {:.8}",
+        1.0 - 2.0 * fx
+    );
+    ck.at_most(
+        "A3b |(w_flap^2 - w_lag^2)/W^2 - (1 - 2 f_x,h)|",
+        (d - (1.0 - 2.0 * fx)).abs(),
+        5e-4,
+    );
     let (d1, _, _) = flap_lag_at(&beam_options().spin_softening(false));
     ck.below("N1 |(w_flap^2 - w_lag^2)/W^2| without spin softening", d1.abs(), 1e-2);
     ck.finish();
@@ -299,7 +334,10 @@ fn a4_a5_stiffening_of_the_flap_mode() {
     let rest = modes_of(part.modes(0.0).unwrap());
     let l0 = rest.eigenvalues[0];
     let w0 = l0.sqrt();
-    println!("omega_0 = {w0:.6} rad/s, lambda_0,1 = {l0:.10e}, lambda_0,2 = {:.10e}", rest.eigenvalues[1]);
+    println!(
+        "omega_0 = {w0:.6} rad/s, lambda_0,1 = {l0:.10e}, lambda_0,2 = {:.10e}",
+        rest.eigenvalues[1]
+    );
     let phi_f = rest_flap(&f, part.mass(), &rest);
     let qh = part.stiffening_quotient(&phi_f);
     let slope = part.slope(&phi_f);
@@ -350,7 +388,11 @@ fn a6_synthetic_family_crossings() {
                 &format!("{} crossing(s)", c.len()),
             );
             if let Some(&x) = c.first() {
-                ck.at_most(&format!("A6 ({w0}, {s}) k={k} relative error"), (x / exact - 1.0).abs(), 1e-8);
+                ck.at_most(
+                    &format!("A6 ({w0}, {s}) k={k} relative error"),
+                    (x / exact - 1.0).abs(),
+                    1e-8,
+                );
             }
         }
     }
@@ -410,12 +452,25 @@ fn a7_a10_beam_campbell_table() {
     let lag = (0..2).find(|&t| kind(t) == 1).expect("a lag track");
     for (track, c, name, orders) in [(flap, 2usize, "flap", 1..=4u32), (lag, 1usize, "lag", 1..=4u32)] {
         for k in orders {
-            let cr: Vec<f64> = table.crossings(k).iter().filter(|x| x.track == track).map(|x| x.speed).collect();
+            let cr: Vec<f64> = table
+                .crossings(k)
+                .iter()
+                .filter(|x| x.track == track)
+                .map(|x| x.speed)
+                .collect();
             if c == 2 && k == 1 {
-                ck.holds("A7 flap order 1", cr.is_empty(), &format!("{} crossing(s) (none expected)", cr.len()));
+                ck.holds(
+                    "A7 flap order 1",
+                    cr.is_empty(),
+                    &format!("{} crossing(s) (none expected)", cr.len()),
+                );
                 continue;
             }
-            ck.holds(&format!("A7 {name} k={k} count"), cr.len() == 1, &format!("{} crossing(s)", cr.len()));
+            ck.holds(
+                &format!("A7 {name} k={k} count"),
+                cr.len() == 1,
+                &format!("{} crossing(s)", cr.len()),
+            );
             let Some(&x) = cr.first() else { continue };
             let j = speeds.iter().position(|&w| w > x).expect("inside the table");
             let reference = direct_crossing(&f, &part, c, k, speeds[j - 1], speeds[j]);
@@ -437,7 +492,11 @@ fn a7_a10_beam_campbell_table() {
             ok &= cells[2 + t].parse::<f64>().unwrap().to_bits() == tr.frequencies[j].unwrap().to_bits();
         }
     }
-    ck.holds("A10 CSV", ok && csv.lines().count() == speeds.len() + 1, "parses back to the table by to_bits");
+    ck.holds(
+        "A10 CSV",
+        ok && csv.lines().count() == speeds.len() + 1,
+        "parses back to the table by to_bits",
+    );
     ck.finish();
 }
 
@@ -469,7 +528,11 @@ fn a8_n3_tracking_through_a_flap_lag_crossing() {
     let mac_min = (1..speeds.len())
         .flat_map(|j| [t0.mac[j].unwrap(), t1.mac[j].unwrap()])
         .fold(1.0f64, f64::min);
-    ck.holds("A8 MAC with the previous mode", mac_min > 0.9, &format!("min {mac_min:.6} > 0.9"));
+    ck.holds(
+        "A8 MAC with the previous mode",
+        mac_min > 0.9,
+        &format!("min {mac_min:.6} > 0.9"),
+    );
     let (f06, f07) = (6, 7);
     let order_before = t0.eigenvalues[f06].unwrap() < t1.eigenvalues[f06].unwrap();
     let order_after = t0.eigenvalues[f07].unwrap() > t1.eigenvalues[f07].unwrap();
@@ -484,7 +547,11 @@ fn a8_n3_tracking_through_a_flap_lag_crossing() {
     );
     let a = modes_of(part.modes(speeds[f06]).unwrap());
     let b = modes_of(part.modes(speeds[f07]).unwrap());
-    ck.below("N3 MAC of mode 1 at 0.6 with mode 1 at 0.7 (by frequency order)", mac(m, &a.modes[0], &b.modes[0]), 0.1);
+    ck.below(
+        "N3 MAC of mode 1 at 0.6 with mode 1 at 0.7 (by frequency order)",
+        mac(m, &a.modes[0], &b.modes[0]),
+        0.1,
+    );
     ck.finish();
 }
 
@@ -497,7 +564,10 @@ fn a9_loss_of_stiffness_with_the_speed() {
     let part = RotatingPart::new(&k, AXIS, ORIGIN, &RotatingOptions::new(2)).unwrap();
     let rest = modes_of(part.modes(0.0).unwrap());
     let wr = rest.eigenvalues[0].sqrt();
-    println!("omega_r0 = {wr:.6} rad/s, lambda_2/lambda_1 at rest = {:.4}", rest.eigenvalues[1] / rest.eigenvalues[0]);
+    println!(
+        "omega_r0 = {wr:.6} rad/s, lambda_2/lambda_1 at rest = {:.4}",
+        rest.eigenvalues[1] / rest.eigenvalues[0]
+    );
     let speeds: Vec<f64> = [0.5, 0.9, 1.1, 1.5].iter().map(|r| r * wr).collect();
     for (j, &w) in speeds.iter().enumerate() {
         let s = part.modes(w).unwrap();
@@ -505,7 +575,11 @@ fn a9_loss_of_stiffness_with_the_speed() {
             (true, SpeedModes::Modes(r)) => {
                 let ok = r.eigenvalues.iter().all(|l| l.is_finite() && *l > 0.0)
                     && r.frequencies.iter().all(|f| f.is_finite());
-                ck.holds(&format!("A9 speed {:.1} w_r0", w / wr), ok, &format!("eigenvalues {:?}", r.eigenvalues));
+                ck.holds(
+                    &format!("A9 speed {:.1} w_r0", w / wr),
+                    ok,
+                    &format!("eigenvalues {:?}", r.eigenvalues),
+                );
             }
             (false, SpeedModes::LossOfStiffness(l)) => ck.holds(
                 &format!("A9 speed {:.1} w_r0", w / wr),
@@ -522,18 +596,28 @@ fn a9_loss_of_stiffness_with_the_speed() {
                 && t.frequencies.iter().flatten().all(|v| v.is_finite())
                 && t.mac.iter().flatten().all(|v| v.is_finite())
         });
-    let nones = table
-        .tracks
-        .iter()
-        .all(|t| t.frequencies[0].is_some() && t.frequencies[1].is_some() && t.frequencies[2].is_none() && t.frequencies[3].is_none());
+    let nones = table.tracks.iter().all(|t| {
+        t.frequencies[0].is_some()
+            && t.frequencies[1].is_some()
+            && t.frequencies[2].is_none()
+            && t.frequencies[3].is_none()
+    });
     let listed = table.losses.len() == 2
         && table.losses[0].speed.to_bits() == speeds[2].to_bits()
         && table.losses[1].speed.to_bits() == speeds[3].to_bits();
-    ck.holds("A9 table", finite && nones && listed, &format!("losses {:?}", table.losses));
+    ck.holds(
+        "A9 table",
+        finite && nones && listed,
+        &format!("losses {:?}", table.losses),
+    );
     let csv = table.to_csv();
     let json = table.to_json(&[1, 2]);
     let bad = |s: &str| s.contains("NaN") || s.contains("inf");
-    ck.holds("A9 CSV and JSON finite", !bad(&csv) && !bad(&json), "no NaN or inf in the text");
+    ck.holds(
+        "A9 CSV and JSON finite",
+        !bad(&csv) && !bad(&json),
+        "no NaN or inf in the text",
+    );
     let mut ok = true;
     for t in &table.tracks {
         let expected = format!(
@@ -559,9 +643,21 @@ fn a11_refusals() {
         Err(FemError::InvalidValue { key, .. }) => key.to_string(),
         other => format!("{other:?}"),
     };
-    ck.holds("A11 decreasing", key(part.campbell(&[0.0, 20.0, 10.0])) == "speeds", "refused, key speeds");
-    ck.holds("A11 negative", key(part.campbell(&[-1.0, 10.0])) == "speeds", "refused, key speeds");
-    ck.holds("A11 NaN", key(part.campbell(&[0.0, f64::NAN])) == "speeds", "refused, key speeds");
+    ck.holds(
+        "A11 decreasing",
+        key(part.campbell(&[0.0, 20.0, 10.0])) == "speeds",
+        "refused, key speeds",
+    );
+    ck.holds(
+        "A11 negative",
+        key(part.campbell(&[-1.0, 10.0])) == "speeds",
+        "refused, key speeds",
+    );
+    ck.holds(
+        "A11 NaN",
+        key(part.campbell(&[0.0, f64::NAN])) == "speeds",
+        "refused, key speeds",
+    );
     let zero_axis = RotatingPart::new(&b, [0.0; 3], ORIGIN, &RotatingOptions::new(2));
     ck.holds(
         "A11 zero axis",
