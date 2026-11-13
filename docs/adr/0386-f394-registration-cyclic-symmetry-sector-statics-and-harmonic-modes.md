@@ -334,3 +334,78 @@ or a model without a Cyclic constraint changes its result.
    limit of S2 is unchanged.
 2. **R3, 5-sector rotor at `k = 2`:** the eigen options were not fixed; they are those of the equivalence runs
    (`ModalOptions::new(2)` with tolerance `1e-9`, cap 400).
+
+## Addendum 1: results (2026-11-13)
+
+Run once, release: `cargo test -p rcfd-fem --release --test si_cyclic -- --test-threads=1 --nocapture` (11 tests, 1.5 s),
+after commit 44f32795. Then the whole `rcfd-fem` suite in release (every test passes; the ignored records below excepted),
+`cargo fmt -p rcfd-fem --check` clean, `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean, `cargo check -p
+rcfd-post --tests` clean.
+
+| Id | Check | Limit | Measured | Met |
+| --- | --- | --- | --- | --- |
+| E1 | RS: full count below `lambda_c` = sector count | equal | 36 = 36 | yes |
+| E1 | RS: `max |f_s/f_f - 1|` | 1e-8 | 3.96e-14 | yes |
+| E2 | DS: count | equal | 23 = 23 | yes |
+| E2 | DS: frequencies | 1e-8 | 1.78e-13 | yes |
+| E3 | RS / DS: per-harmonic counts; pair split | as stated; 1e-8 | hold; 9.19e-14 / 2.79e-13 | yes |
+| E4 | RS / DS: full eigen-equation residual of the expanded modes | 1e-7 | 7.50e-12 / 8.25e-12 (zero at the clamps) | yes |
+| E5 | RS / DS: full M-orthonormality | 1e-8 | 2.22e-15 / 2.33e-15 | yes |
+| E6 | RS / DS: k = 0, 6 single, 1..5 doubled | as stated | holds | yes |
+| C1 | RF, n = 2 at k = 2: `|lambda/omega_2^2 - 1|` | 0.02 | 4.40e-4 (+) | yes |
+| C2 | RF, n = 3 at k = 3 | 0.02 | 1.81e-3 (-) | yes |
+| C3 | RF: axial share of the selected pair | 1e-2 | 7.8e-24, 8.3e-26 | yes |
+| S1 | DP: rim `u_r` mean against `rho omega^2 b ((3+nu)a^2 + (1-nu)b^2)/(4E)` | 0.01 | 8.89e-5 (-) (rim spread 8.8915e-5 to 8.8923e-5 m); `solve_static` bit-equal to `solve_static_mpc` | yes |
+| S2 | DP against DP-full (amendment 1) | 1e-8 | 3.25e-13 | yes |
+| X1 | PENDING None; dispatch | as stated | holds | yes |
+
+Set-up guards: the full models' last computed eigenvalue is above `lambda_c` (RS 3.15e8 against 3.05e8, DS 1.99e8 against
+1.41e8); the nearest eigenvalue to the cut-off is 1.0e-3 relative for both (guard 1e-7). Every sector solve ran at zero
+shift, in 8 to 21 iterations.
+
+Negative controls, all held: R1 (moved high node 18; refused naming "low node 10", its partner, nearest at 1.025e-6 against
+the tolerance 1.025e-8; the static solve meets the same refusal), R1b (a move of 1e-10 L accepted, same 8 pairs), R1c (extra
+face: "high node 7 ... is the image of no node"), R1d (R7's model: "low node 0 ... no node of the high boundary"), R2 (N = 1
+and 0: key `sectors`), R3 (k = 7 of 12 and k = 3 of 5: key `harmonic`; k = 2 of 5 accepted, doubled), R4 ("node 0 is on both
+boundaries"), R5 (no and two Cyclic constraints: key `cyclic`), R6 (RigidSet at k = 2: NotYetSupported; value 1e-3: "zero
+values only").
+
+Mutations (on a `git archive` copy in `w49i-work/f394-scratch/mut`, own target, each file restored byte for byte): MU1 (sine
+sign) caught by E1, E2, E3, E4, E5, C1 to C3; MU2 (`R^T` in the rows) by C1, C2, E2, E4, E5, S1, S2 (and the RS set-up
+guard); MU3 (scale `sqrt(1/N)`) by E5 (0.5); MU4 (`k = N/2` doubled) by E6, the E1 count (39 against 36), E3, E5; MU5 (no
+matching tolerance) by R1; MU6 (`cos a + sin b`) by E4 (about 1.0) and E5; MU7 (pairs not merged) by E6 and R3; MU8 (no
+both-boundary refusal) by R4. Eight of eight caught.
+
+Existing tests: by the maintainer's decision of 2026-11-13, `si_scaffold.rs` `x1_the_scaffold_exists_after_landed`,
+`r1_to_r9_static_solve_refuses_each_new_variant_after_landed`, `r10_refused_on_every_static_path_after_landed` and
+`si_mpc.rs` `n5_cyclic_still_refused` are `#[ignore]` records naming ADR 0386 (bodies untouched; run with `--ignored` they
+fail, as expected); the copies `x1_..._after_cyclic_landed`, `r1_to_r9_..._after_cyclic_landed` and
+`r10_..._after_cyclic_landed`, without R7, pass. Defaults: a model without a Cyclic constraint builds the same rows in the
+same order (the tail of `transformation` moved into `eliminate` unchanged); every pre-existing `rcfd-fem` test passes.
+
+Not run: `rcfd-api` `baseline_hashes` (`rcfd-api` does not depend on `rcfd-fem`); the whole workspace (that is the lead's
+gate).
+
+Deviations: amendment 1 only (before any run). No limit changed.
+
+**Decision by the registered rule: done.** Every check met, every negative control held, every mutation caught, and no
+existing test failed other than the records of D4.
+
+### Remaining questions
+
+1. `modal_analysis` (and `solve_static`) of a model with a Cyclic constraint gives the `k = 0` result (the rows `u_H = R u_L`
+   are in the transformation). Options: (a) keep it and document it; (b) refuse it in `modal_analysis` and require
+   `modal_analysis_harmonic`. Recommendation: (a), taken on the maintainer's standing instruction of 2026-11-11 (take the
+   recommendation): `k = 0` is what the constraint says, and statics needs it.
+2. Rigid sets at `k > 0` and harmonic loads (`k > 0` statics, needed for the forced response of a bladed disc) are refused.
+   Options: a follow-up item (below), or leave them to the demonstration ADR 0309. Recommendation: the follow-up.
+
+### For the lead: roadmap entries
+
+F-394: status **done**. Note:
+
+> ADR 0386, 2026-11-12 (registration of plan ADR 0297): cyclic::boundary matches the low and high surface sets node for node under the rotation by 2 pi/N (MATCH_TOLERANCE 1e-8 of the largest radius; a node on both boundaries, the first low node without an image partner, a high node taken twice and the first high node left over are refused by name); the k = 0 rows u_H = R u_L are rows of mpc::transformation (statics with a load repeating in every sector, any constraint values, and the k = 0 modes; uses_transformation includes Cyclic); mpc::harmonic_transformation gives the real cos/sin pair a_H = R(cos a_L - sin b_L), b_H = R(sin a_L + cos b_L) on the elimination of ADR 0296; cyclic::modal_analysis_harmonic solves k = 0 and N/2 single and 0 < k < N/2 doubled with the pairs merged (k above N/2 refused; RigidSet at k > 0 and non-zero values refused); cyclic::full_rotor and FullRotor::expand build the full rotor and its M-orthonormal modes. N = 12, Hex20: supported ring and clamped disc, every harmonic 0 to 6, frequencies equal to the full 360-degree model within 4.0e-14 and 1.8e-13 (limit 1e-8) with equal counts below the cut-off (36, 23), pair splits 2.8e-13, expanded-mode residual 8.2e-12 (limit 1e-7) and M-orthonormality 2.3e-15; thin ring t/R = 0.05, nu = 0: n = 2 at k = 2 within 4.4e-4, n = 3 at k = 3 within 1.8e-3 (limit 2 percent); spinning annular disc b/a = 4, nu = 0.3: rim displacement within 8.9e-5 of rho omega^2 b ((3 + nu) a^2 + (1 - nu) b^2)/(4E) (derived; agrees with the roadmap; limit 1 percent), sector statics equal to the full disc within 3.3e-13. Refusals: unmatched boundaries with the first unmatched node, N < 2, k > N/2. Eight mutations caught. si_scaffold x1/r1-r9/r10 after landed and si_mpc N5 kept as ignored records (maintainer decision 2026-11-13).
+
+Follow-up item (new F number from the lead), title "Cyclic symmetry: harmonic loads and rigid sets at a non-zero harmonic index", deps F-394, size S:
+
+> Every limit not stated here is registered in the ADR before the run. A static load given with a harmonic index k (cosine and sine parts per sector) is solved on the sector by the real pair of rows of ADR 0386 and equals the full 360-degree model's solution under the expanded load within 1e-8 relative for N = 12 and k = 0 to 6; rigid sets are accepted at k > 0 (their reference unknowns doubled) and the frequencies of a sector with a rigid set equal the full model's within 1e-8.
