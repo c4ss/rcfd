@@ -338,3 +338,12 @@ The basic tier's types are not written yet. If its tests build `SolidModel` or t
 breaks them and house rule 2 forbids editing them: the new data then go into a side structure passed to the new entry points,
 which is uglier. The lead should ask the implementer of ADR 0271 to build the model through constructors (section 2.4 of ADR
 0290).
+
+## Amendment 1 (2026-11-13, written and committed before the corrected record run)
+
+The first record run of `si_scaffold_bits.rs` on the archive of main ee449e26 (the step that writes the digests, before any
+library code) stopped at the PCG solve of C: `cg-block-jacobi` did not reach the tolerance 1e-12 (true residual 2.4e-9 after
+529 iterations and 3 restarts; the slender cantilever, L/h = 10, is too ill-conditioned for 1e-12 with block Jacobi). A defective
+set-up of the record, not a check against a limit. Corrected: the PCG of C uses `tolerance: 1e-8, max_iterations: 20000`. The
+digests printed for P and C-direct by the first run are not used; the whole record is made again once with the corrected file,
+and those digests become `MAIN`. Nothing else changes.
