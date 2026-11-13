@@ -44,9 +44,9 @@ use std::fmt::Write as _;
 
 mod whirl;
 pub use whirl::{
-    coriolis_matrix, gyroscopic_eigen_dense, whirl_order_crossings, CyclicWhirlCampbell, DenseWhirl,
-    HarmonicWhirlSpeedModes, Whirl, WhirlCampbell, WhirlMode, WhirlModes, WhirlSpeedModes, MAX_WHIRL_UNKNOWNS,
-    WHIRL_TOLERANCE,
+    coriolis_matrix, gyroscopic_eigen_dense, stationary_frequency, whirl_order_crossings, CyclicWhirlCampbell,
+    DenseWhirl, HarmonicWhirlSpeedModes, Whirl, WhirlCampbell, WhirlMode, WhirlModes, WhirlSpeedModes,
+    MAX_WHIRL_UNKNOWNS, WHIRL_TOLERANCE,
 };
 pub use whirl::{
     gyroscopic_state_eigen_dense, DenseStateWhirl, Stability, StateWhirl, StateWhirlMode, WhirlStability,
