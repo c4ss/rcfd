@@ -332,3 +332,102 @@ A parameter the registration left unstated, fixed before the run: the modal opti
 holding every rigid motion). Reason: the relative residual's floor grows with `lambda_max / lambda_1`, about `1.2e5` here
 (element rotary modes against the first bending mode), and ADR 0354 gives the backward error with 1e-12 for slender models (as
 `sb_modal_scale.rs`). The free beam (F1) keeps the default options as registered. No limit changes.
+
+## Addendum 1: results (2026-11-13)
+
+Code: `crates/rcfd-fem/src/beam.rs` (the element, D3, D5, D7), `model.rs` (`DofMap::for_mesh`, `Load::NodalMoment`, the
+beam-aware checks), `assemble.rs` and `mass.rs` (dispatch, D6; `rigid_motions` with rotation components), `loads.rs`
+(`add_moment`), `solve.rs` and `modal.rs` (beam-aware entry checks, the multigrid refusal), `error.rs` (`BeamSolidNode`); new test
+`crates/rcfd-fem/tests/si_beam.rs` (9 tests, 0.01 s in release); the retired rows of `si_scaffold.rs` and `si_nonlinear.rs` as
+ignored records with `_after_beam_landed` copies. The registered run was made once (`f391-scratch/run1.log`), on the test commit,
+release profile, `--test-threads=1`. After it, one line of `beam::frame` was rewritten for clippy (`!(s > t)` to
+`s.is_nan() || s <= t`, the same result for every input); `si_beam`, `si_scaffold` and `si_nonlinear` were run again on that
+commit to confirm they still pass (not a registered run).
+
+| id | check | limit | measured | met |
+| --- | --- | --- | --- | --- |
+| D1 | unknown counts: solid-only, beam-only, Hex8 box with a separate beam | exact | uniform 3 (12 nodes); 18; 48 = 3 x 12 + 12 | yes |
+| B1 | `si_scaffold_bits` unedited | pass | pass | yes |
+| B2 | every existing `rcfd-fem` test | pass | 54 test binaries ok: 311 passed, 0 failed, 65 ignored (the retired rows among them); `rcfd-post` 260 passed | yes |
+| B3 | `baseline_hashes` (`rcfd-api`) | pass | 3 passed, 1 ignored (as before) | yes |
+| C1 | tip deflection `v` | `1e-10` | `3.5e-14` | yes |
+| C2 | tip deflection `w` | `1e-10` | `4.0e-14` | yes |
+| C3 | tip rotation `theta_z` | `1e-10` | `3.5e-14` | yes |
+| C4 | tip rotation `theta_y` | `1e-10` | `4.0e-14` | yes |
+| C5 | twist | `1e-10` | `3.9e-16` | yes |
+| C6 | elongation | `1e-10` | `1.8e-14` | yes |
+| C7 | root / tip section forces | `1e-10` | `4.0e-14` / `3.8e-14` | yes |
+| C8 | reaction forces / moments balance; free reactions 0 | `1e-10`; exact | `2.2e-14` / `3.4e-14`; exactly 0 | yes |
+| C9 | Jacobi CG against the direct solve | `1e-8` | `1.4e-13` | yes |
+| R1 | rotation of the whole model: one element / space frame, worst field | `1e-10` | `5.0e-14` / `2.1e-12` | yes |
+| A1 | arch against `pi P R^3 / (4 E I)` | `5e-3` | `4.863e-4` (estimate `4.863e-4`) | yes |
+| A2 | arch against the polygon closed form | `1e-6` | `1.17e-10` | yes |
+| F1 | free beam `max |f_1..6| / f_7` | `1e-6` | `1.65e-7` (`f_7 = 438.15 Hz`) | yes |
+| F2 | pinned-pinned against `c_n f_n^EB`, n = 1, 2, 3 | `5e-3, 1e-2, 2e-2` | `1.28e-5, 1.94e-4, 9.06e-4` | yes |
+| F3 | against `f_n^T` | `5e-5, 5e-4, 2e-3` | the same (estimate the same to 3 digits) | yes |
+| F4 | bending in x-y, `n - 1` sign changes | exact | 0, 1, 2 | yes |
+| S1 | beam node shared with a solid: static, modal, stiffness, two models | exact | `BeamSolidNode` naming node 1 and node 2; message `node N: shared by the beam element 2 and the solid element ...` | yes |
+| K1 | planes against the energy; symmetry | `1e-12`; exact | `4.7e-18`, `1.5e-18`; bit for bit | yes |
+| K2 | rigid motions | `1e-12` | `7.3e-17` | yes |
+| M1 | mass, centre, inertia | `1e-12` | `1.9e-16`, `1.4e-16`, `6.0e-16` | yes |
+| N1 | uncorrected Euler-Bernoulli outside the limits for n = 2, 3 | `> 1e-2`, `> 2e-2` | `3.05e-2`, `6.38e-2` (n = 1: `8.0e-3`) | yes |
+| N2 | spring (transformation), nonlinear states, multigrid, gravity refused | exact | as registered | yes |
+| N3 | no property, parallel orientation, moment on a solid node refused | exact | as registered | yes |
+| N4 | without the shear term the checks see it | `> 1e-3` | `5.97e-3`, `4.06e-3` | yes |
+
+Mutations (scratch copy `f391-scratch/mut` from `git archive` of the test commit, `f391-scratch/mutate.py`, log
+`f391-scratch/mutations.log`, one at a time, each run once): every one caught.
+
+| id | mutation | caught by |
+| --- | --- | --- |
+| MU1 | `Phi = 0` | C1 `5.9e-3`, C2, K1, A2, F2, F3 |
+| MU2 | `I_y`, `I_z` swapped | C1 to C4 (`0.66`, `0.40`), K1 |
+| MU3 | x-z plane without `S` | C4 (`2.0`), C7, C8, K1, K2, F2, F3 |
+| MU4 | torsion with `I_y + I_z` | C5 (`0.5`) |
+| MU5 | no rotary inertia | F3 (n = 1 `1.94e-3`), M1 (`7.4e-3`) |
+| MU6 | `T` with `Lambda^T` | K2 (`0.45`), M1; the solves of C, R1, A, F fail (singular stiffness) |
+| MU7 | start section forces `+f_0` | C7 (`2.0`) |
+| MU8 | moment on components 0 to 2 | C5, C6, C7, C8 |
+| MU9 | beam-solid check removed | S1 (all six) |
+| MU10 | six unknowns everywhere | D1 (84 unknowns) |
+
+Other checks: `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --all-targets --release -- -D warnings` clean
+(after the one-line rewrite above). No hash table, golden file or `baseline_hashes.rs` edited; no existing test edited except the
+retired rows (one `#[ignore]` line each).
+
+**Not run:** the whole workspace suite (the lead's gate).
+
+**Deviations:** none in the limits; amendment 1 (modal options of the pinned-pinned beam) was written before any run.
+
+**Decision by the registered rule: done.** Every clause of the acceptance met (margins above 100 on the 1e-10 checks, 10 on the
+arch, 6 on F1, 22 on F2 at n = 3), the stronger checks and N1 to N4 as stated, every mutation caught, no amendment after a run.
+
+### Remaining questions
+
+1. **Output of beam results** (L1): rotations as point data and VTK line cells in `rcfd_post::solid_output`. Options: (a) a
+   follow-up item; (b) leave it to the Studio work. Recommendation: (a), small.
+2. **Beams on the other paths and beam-solid joints** (L2). Options: (a) one follow-up for the transformation path (rigid sets
+   joining a beam to a solid, supports on rotations), the other paths with the packages that need them; (b) one item for all.
+   Recommendation: (a); the rotor items that depend on F-391 need the transformation and rotating paths first.
+3. **Distributed loads and gravity on beams.** Options: (a) a follow-up with the consistent loads of the interdependent shape
+   functions; (b) leave. Recommendation: (a).
+
+## For the lead: roadmap entries
+
+F-391: proposed status **done**. Note:
+
+> Structural solver, intermediate tier. ADR 0417, 2026-11-13: DofMap gives six unknowns (translations, then small rotations about x, y, z) to the nodes of Beam2 elements and three elsewhere (a mesh without beams keeps DofMap::uniform(n, 3): si_scaffold_bits and baseline_hashes unchanged); Load::NodalMoment; prescribed rotations and moment reactions through the existing constraint and reaction code; Beam2 with the exact prismatic Timoshenko stiffness (derived from the cantilever flexibility, equal to the energy of the interdependent shape functions within 4.7e-18), consistent mass with rotary inertia (rho I in bending, rho (I_y + I_z) in torsion), beam::section_forces, rectangle and circle section helpers. Beams are taken by the static and modal elimination paths and refused on the others (naming a follow-up of ADR 0417) and when a beam node is shared with a solid (FemError::BeamSolidNode naming the node). Met: one seeded element in space, tip deflections, rotations, twist and elongation within 4.0e-14, root section forces 4.0e-14, reactions 3.4e-14, whole-model rotation 2.1e-12 (limits 1e-10); quarter-circle arch (tip load along the clamp tangent, derived) 4.86e-4 of pi P R^3/(4 E I) (limit 5e-3) and 1.2e-10 of the polygon closed form; free beam six zeros at 1.65e-7 of f_7; pinned-pinned L/r = 50 within 1.3e-5, 1.9e-4, 9.1e-4 of the exact Timoshenko frequencies (limits 0.5, 1, 2 percent; uncorrected Euler-Bernoulli off by 3.1 and 6.4 percent at n = 2, 3). Ten mutations, all caught. Output of rotations (rcfd-post) and beams on the other paths are follow-ups.
+
+Follow-up items (proposed):
+
+- "Beam results in the solid output: rotations as point data and VTK line cells", deps F-391, F-377.
+
+> Every limit not stated here is registered in the ADR before the run. rcfd_post::solid_output writes a model with Beam2 elements: displacement and rotation point arrays, reaction forces and moments, Beam2 as VTK line cells and the section forces as cell data; a model without beams writes the bytes it wrote before; the arrays read back equal the result within 1e-15.
+
+- "Beams on the transformation path: rigid sets joining a beam to a solid, supports and linear constraints on rotations", deps F-391, F-393.
+
+> Every limit not stated here is registered in the ADR before the run. A cantilever beam joined to a solid block by a rigid set on a face of the block gives the beam's tip deflection plus the block's compliance within the registered limit; a nodal spring on a rotation gives k_theta theta = M within 1e-10; the modal analysis of a beam held by a rigid set has the frequencies of the equivalent clamped beam within the registered limit; the free rigid motions count takes rotational unknowns.
+
+- "Distributed and body loads on beams", deps F-391.
+
+> Every limit not stated here is registered in the ADR before the run. Uniform line load q on a cantilever: tip deflection q L^4/(8 E I) + q L^2/(2 kappa G A) within 1e-10 with one element (consistent load of the interdependent shape functions); gravity on a beam gives reactions rho A L g within 1e-12; a pinned-pinned beam under uniform load gives 5 q L^4/(384 E I) plus the shear term within 1e-10 at any element count.
