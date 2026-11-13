@@ -227,3 +227,33 @@ changed. Moving meshes (`lag_preflight_moving`) take the option as every estimat
   whenever `immersed` is set. (b) would change the estimate, and so `pressure_lag_check` warnings and the adaptive corrector
   count, of existing immersed runs: not taken (it changes a default result); left open for the maintainer.
 - **Q2. A case key.** Not added (a schema golden would change). Open.
+
+## Amendment 1 (2026-11-13): after the record H, a measurement of the number of power iterations
+
+Written after the single run of the record H (`f483-scratch/rec_h.log`) and of the fast checks (`fast_checks.log`), before the
+run registered here. No limit above is changed; the library is not changed. What bears on this amendment (the results are in
+the addendum): R1 and R2 held (F: 1.19855 at step 2, 0.99826 at step 11; B stops at step 34); the start and the tolerance do
+**not** change the estimate (Z 1.1985501, T 1.1985501 against P 1.1985501 at step 2: A2 and A3 missed, HS refuted); the mode
+holds 0.524 of its weight in the solid cells at step 2 and 0.275 at step 11 (A1 met at step 2 only); FL gives 1.1992 and 1.0027
+for F with the mode cell a first fluid cell 0.0015 and 0.0020 from the surface (B1 missed); the channel without the cylinder
+gives 0.788.
+
+So the number is a property of the linear frozen map itself, not of its pressure solve. One fact already in the record
+suggests what it is: for the same state (F at step 0, estimate at step 2) the estimate with 20 power iterations is 1.2913 (ADR
+0374 N0, FP3) and with 40 it is 1.1986. A power iteration on a non-normal map grows at first faster than its spectral radius;
+the estimate (the mean log growth over the second half of the iterations) then falls with the number of iterations towards
+the spectral radius. If that is what happens here, the estimate above one is the transient of an unconverged power iteration
+at the body (where the map couples the penalised solid cells to the fluid), and the dominant eigenvalue may be below one.
+
+**I1 (registered now; record H2).** For F, one corrector, the state at step 0 and after step 10: P with 20, 40, 80, 160 and 320
+power iterations (printed as a series). Limit: P with 320 iterations `< 1` at both instants ("the number above one is the
+transient of the power iteration").
+
+**I2 (the same record).** With 320 power iterations: FL of F at both instants and FL of B (`immersed_lag = true`) at both
+instants. Limit, the branch of the acceptance with the longer estimate: FL of F `< 1` at both instants and `max` of FL of B
+over the two instants `> 1`.
+
+Printed: P of the channel without the cylinder with 320 iterations at step 2; the mode cell of every estimate.
+
+I1 and I2 enter the addendum as a located description only: the decision is already **partial** by the rule (A2, A3, B1 and A1
+at step 11 missed), whatever they give.
