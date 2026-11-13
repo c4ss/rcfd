@@ -9726,12 +9726,19 @@ fixed by the item's registration ADR before any code.
     K_eff and M, without the dense cap; on the cube and the disc sector of ADR 0411 the frequencies equal the dense
     solver's within 1e-9 relative and the whirl numbers within 1e-8; a part of at least 20 000 reduced unknowns is
     solved in under two minutes in release.
-- [ ] **F-507** Stationary-frame frequencies of a cyclic whirl table
+- [x] **F-507** Stationary-frame frequencies of a cyclic whirl table
   - depends on: F-499
   - acceptance: Every limit not stated here is registered in the ADR before the run. The cyclic whirl Campbell table
     carries for each mode of index k the stationary-frame frequency omega + tau k Omega (tau the wave sense); on the
     disc sector of ADR 0411 the stationary frequencies of a travelling pair agree with those of the full rotor's modes
     transformed to the stationary frame within 1e-8 relative.
+  - note: From ADR 0411 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S.
+    ADR 0419, 2026-11-13: the cyclic whirl Campbell table carries CyclicWhirlCampbell::stationary (Hz, f + tau k Omega /
+    2 pi, tau the wave sense of ADR 0411 D5 shown to be the forward-minus-backward energy balance, 0 on single indices)
+    with stationary_csv and stationary_frequency; existing outputs unchanged; on the disc sector the 32 travelling pair
+    modes of indices 1 and 2 at 0.4 and 0.8 omega_ref agree within 7.2e-13 with the full rotor's omega_f + q Omega, q
+    (index and sense) read from the full eigenvectors by their discrete Fourier content over the copies (pure to
+    rounding, sense agreeing 32 of 32); aliased lines omega + (k + mN) Omega not reported.
 - [~] **F-508** Curved quadratic hexahedra on the quarter annulus
   - depends on: F-371, F-389
   - acceptance: Every limit not stated here is registered in the ADR before the run. The quarter annulus of ADR 0413
