@@ -162,7 +162,9 @@ fn set(m: &SolidModel, name: &str) -> Vec<usize> {
 fn beam(kind: Kind, s: f64) -> SolidModel {
     let (c30, s30) = (30f64.to_radians().cos(), 30f64.to_radians().sin());
     let mesh = match kind {
-        Kind::Br | Kind::Br2 => remap(&beam_mesh(), |x| [c30 * x[0] - s30 * x[1], s30 * x[0] + c30 * x[1], x[2]]),
+        Kind::Br | Kind::Br2 => remap(&beam_mesh(), |x| {
+            [c30 * x[0] - s30 * x[1], s30 * x[0] + c30 * x[1], x[2]]
+        }),
         _ => beam_mesh(),
     };
     let mut m = SolidModel::new(mesh);
@@ -234,8 +236,10 @@ fn beam(kind: Kind, s: f64) -> SolidModel {
         Kind::Br | Kind::Br2 => [c30, s30, 0.0],
         _ => [1.0, 0.0, 0.0],
     };
-    m.add_load(Load::traction("xmax", [s * dir[0], s * dir[1], 0.0])).unwrap();
-    m.add_load(Load::traction("xmin", [-s * dir[0], -s * dir[1], 0.0])).unwrap();
+    m.add_load(Load::traction("xmax", [s * dir[0], s * dir[1], 0.0]))
+        .unwrap();
+    m.add_load(Load::traction("xmin", [-s * dir[0], -s * dir[1], 0.0]))
+        .unwrap();
     m
 }
 
@@ -523,12 +527,20 @@ fn linear_knife_edges(rotated: Kind) {
     let pt = static_prestress(&nt);
     let rn = factors(&nt, &pt, &BucklingOptions::new(2)).expect("N2 buckling");
     println!("N2: factors {:?}", rn.factors);
-    c.above("N2 BR with unrotated tractions against B", max_rel(&rn.factors, &bb.factors), 1e-6);
+    c.above(
+        "N2 BR with unrotated tractions against B",
+        max_rel(&rn.factors, &bb.factors),
+        1e-6,
+    );
 
     // N3: BL with B's pre-stress scaled by 1 + 1e-8.
     let scaled = bp.scaled(1.0 + 1e-8);
     let n3 = factors(&lm, &scaled, &BucklingOptions::new(2)).expect("N3 buckling");
-    c.above("N3 BL with a pre-stress 1e-8 off", max_rel(&n3.factors, &bb.factors), 1e-10);
+    c.above(
+        "N3 BL with a pre-stress 1e-8 off",
+        max_rel(&n3.factors, &bb.factors),
+        1e-10,
+    );
     let _ = bm;
     c.finish();
 }
@@ -542,7 +554,11 @@ fn a3_c2_c3_c4_c5_c8_c11_c12_n1_spring_at_the_roller() {
     let kl = |k: f64| k * L;
     let (sm, _, s1) = buckle("BS(1e6)", Kind::Bs(1e6));
     two_factors(&mut c, "BS(1e6)", &s1);
-    c.at_most("A3 BS(1e6) |lambda_1 |s| A/(k L) - 1|", off(s1.factors[0], kl(1e6)), 0.01);
+    c.at_most(
+        "A3 BS(1e6) |lambda_1 |s| A/(k L) - 1|",
+        off(s1.factors[0], kl(1e6)),
+        0.01,
+    );
     let bf = beam(Kind::Bf, S_REF);
     let r = factors(&bf, &bp, &BucklingOptions::new(2));
     c.holds(
@@ -554,7 +570,11 @@ fn a3_c2_c3_c4_c5_c8_c11_c12_n1_spring_at_the_roller() {
 
     let (_, _, s15) = buckle("BS(1.5e6)", Kind::Bs(1.5e6));
     two_factors(&mut c, "BS(1.5e6)", &s15);
-    c.at_most("C2 BS(1.5e6) |lambda_1 |s| A/(k L) - 1|", off(s15.factors[0], kl(1.5e6)), 0.01);
+    c.at_most(
+        "C2 BS(1.5e6) |lambda_1 |s| A/(k L) - 1|",
+        off(s15.factors[0], kl(1.5e6)),
+        0.01,
+    );
     c.at_most(
         "C2 lambda_1(1.5e6)/(1.5 lambda_1(1e6)) - 1",
         (s15.factors[0] / (1.5 * s1.factors[0]) - 1.0).abs(),
@@ -573,7 +593,11 @@ fn a3_c2_c3_c4_c5_c8_c11_c12_n1_spring_at_the_roller() {
         (s1.factors[1] / bb.factors[0] - 1.0).abs(),
         1e-3,
     );
-    c.at_most("C4 BS(1e6) lambda_2 against ADR 0394 P_1", off(s1.factors[1], lower_root(1)), 1e-3);
+    c.at_most(
+        "C4 BS(1e6) lambda_2 against ADR 0394 P_1",
+        off(s1.factors[1], lower_root(1)),
+        1e-3,
+    );
     let (_, _, sbig) = buckle("BS(1e11)", Kind::Bs(1e11));
     two_factors(&mut c, "BS(1e11)", &sbig);
     c.at_most(
@@ -615,8 +639,8 @@ fn a3_c2_c3_c4_c5_c8_c11_c12_n1_spring_at_the_roller() {
     let sp = static_prestress(&sm);
     let t1 = factors(&sm, &sp, &BucklingOptions::new(2).threads(1)).unwrap();
     let t8 = factors(&sm, &sp, &BucklingOptions::new(2).threads(8)).unwrap();
-    let same = bits(&t1.factors) == bits(&t8.factors)
-        && t1.modes.iter().zip(&t8.modes).all(|(a, b)| bits(a) == bits(b));
+    let same =
+        bits(&t1.factors) == bits(&t8.factors) && t1.modes.iter().zip(&t8.modes).all(|(a, b)| bits(a) == bits(b));
     c.holds("C11 BS(1e6) buckling threads 1 and 8", same, "bit-equal");
     let _ = bm;
     c.finish();
@@ -710,9 +734,12 @@ fn zero_prestress_and_refusals(with_mechanism: bool) {
     let zp = Prestress::uniform(&bs, [0.0; 6]).unwrap();
     let z = prestressed_modes(&bs, &zp, &modal_options()).unwrap();
     let m0 = modal_analysis(&bs, &modal_options()).unwrap();
-    println!("BS(1e6) zero pre-stress: {:?}; modal_analysis {:?}", z.eigenvalues, m0.eigenvalues);
-    let same = bits(&z.eigenvalues) == bits(&m0.eigenvalues)
-        && z.modes.iter().zip(&m0.modes).all(|(a, b)| bits(a) == bits(b));
+    println!(
+        "BS(1e6) zero pre-stress: {:?}; modal_analysis {:?}",
+        z.eigenvalues, m0.eigenvalues
+    );
+    let same =
+        bits(&z.eigenvalues) == bits(&m0.eigenvalues) && z.modes.iter().zip(&m0.modes).all(|(a, b)| bits(a) == bits(b));
     c.holds("C9 BS(1e6) zero pre-stress against modal_analysis", same, "bit-equal");
 
     // A non-zero Linear value (the first pin row, constraint 0).

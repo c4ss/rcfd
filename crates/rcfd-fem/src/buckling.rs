@@ -207,10 +207,11 @@ fn factors_on_transformation(
             ),
         });
     }
-    let eig = lowest_buckling_factors(&kr, &gr, options.factors, &eigen_options(options)).map_err(|e| FemError::Solver {
-        solver: "lowest_buckling_factors",
-        reason: e.to_string(),
-    })?;
+    let eig =
+        lowest_buckling_factors(&kr, &gr, options.factors, &eigen_options(options)).map_err(|e| FemError::Solver {
+            solver: "lowest_buckling_factors",
+            reason: e.to_string(),
+        })?;
     let modes = eig.vectors.iter().map(|q| tr.expand(q)[..n].to_vec()).collect();
     Ok(BucklingResult {
         factors: eig.values,
