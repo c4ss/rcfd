@@ -8653,7 +8653,9 @@ fixed by the item's registration ADR before any code.
     is that of the default within 1.1 percent or smaller. Defaults untouched (two hashes equal to the library before,
     baseline_hashes and the existing overset tests pass). Four mutations: three caught by their checks, the fourth (the
     flux taken relative to the moving faces) seen only by the number of the check that already misses (1.59e4). Open:
-    whether the alternative clause of the acceptance makes it done (ADR 0376 Q1).
+    whether the alternative clause of the acceptance makes it done (ADR 0376 Q1). ADR 0409 (F-479), 2026-11-13: with the
+    second-order ring gradient opt-in, the excess of G in the background band falls from 1.93 and 1.52 to 0.89 and 1.02
+    times the default coupling, and e_max(G) / e_max(default) at level 1 from 1.2636 to 1.0000.
 - [ ] **F-451** rcfd duct-modes command
   - depends on: F-333
   - acceptance: rcfd duct-modes reads a saved pressure time series on a duct section and writes the rcfd-duct-modes
@@ -9192,7 +9194,7 @@ fixed by the item's registration ADR before any code.
     dropped from the residual, first off-plane face named). Limits: hard-walled duct, medium at rest; the single-section
     residual needs a second section (one section of pressure cannot be split); only the two-dimensional channel was run;
     no case key or CLI (F-451).
-- [ ] **F-479** Overset: a second-order own-part pressure gradient of the ring cells under the prescribed fringe flux
+- [x] **F-479** Overset: a second-order own-part pressure gradient of the ring cells under the prescribed fringe flux
   - depends on: F-450
   - acceptance: An opt-in of FringeFlux::PrescribedOwnGradient whose ring cells take a pressure gradient of second order
     from the calculated cells of their own part (exact for a linear pressure, no fringe value); with it, on TG_L of ADR
@@ -9200,7 +9202,20 @@ fixed by the item's registration ADR before any code.
     cells of the background fringe is at most 1.2 times that of the default coupling at levels 1 and 2, the largest
     error over the calculated and fringe cells at most 1.2 times, continuity and the outflow balance hold to 1e-9 in
     every step, the checks of ADR 0347 (UA, UA2, U1) hold, and without the opt-in every result is bit-identical.
-  - note: From ADR 0376 question 2; low priority.
+  - note: From ADR 0376 question 2, recommendation (a), taken on the maintainer's standing instruction of 2026-11-11.
+    ADR 0409, 2026-11-13: DONE. Opt-in OversetSolver::set_second_order_ring_gradient(true) under
+    FringeFlux::PrescribedOwnGradient (refused under the other modes): the pressure gradient of the calculated cells
+    next to a fringe cell (momentum predictor, velocity correction, pressure levels of D3) is the weighted least-squares
+    fit of a quadratic polynomial to the calculated cells of the same region within two face steps (exact for a
+    quadratic pressure: 7.5e-14 on TG_1's composite at a rotated pose, where the one-sided gradient of ADR 0347 D5 is
+    off by 6.3e-2; no fringe value; a rank-deficient fit refuses the step). On TG_L of ADR 0219 moving with the
+    quadratic donor interpolation, the largest error of the calculated background cells within two cells of the
+    background fringe is 0.892 and 1.021 times that of the default coupling at levels 1 and 2 (D5: 1.93 and 1.52). The
+    largest error over the calculated and fringe cells is 1.0000 times at both levels (the domain-boundary cell).
+    Continuity is 6.0e-13, the flux into the hole region 1.1e-14 and through the boundary 0 in every step, every step is
+    taken, and UA, UA2 and U1 of ADR 0347 hold to 4e-15. Without the opt-in the default coupling and G are bit-identical
+    (four state hashes, baseline_hashes, the 19 existing overset test files). Five mutations caught. Not covered: RE and
+    RL of ADR 0347, level 3, 3D, BDF2 or outer iterations with the opt-in. Follow-up F-503.
 - [ ] **F-480** Axial velocity in the surface-series format for a one-section split
   - depends on: F-478
   - acceptance: An rcfd-surface-series file carrying the axial velocity with the pressure lets a drive built from one
@@ -9621,3 +9636,12 @@ fixed by the item's registration ADR before any code.
     and an asymmetry is explained or removed with defaults bit-identical.
   - note: From ADR 0410 questions 1 and 2, recommendation taken on the maintainer's standing instruction of 2026-11-11.
     Size S.
+- [ ] **F-503** Overset: the second-order ring gradient on RE and RL of ADR 0347
+  - depends on: F-479
+  - acceptance: With OversetSolver::set_second_order_ring_gradient(true) under PrescribedOwnGradient and the quadratic
+    donor interpolation, RE of ADR 0347 at levels 1 to 3 and RL at levels 1 to 3: the root mean square of the velocity
+    error over the calculated cells at t = 0.5 is at most 1.05 times that of the default coupling with the same
+    stencils, C1, C2 and U1 of ADR 0347 hold, and the orders of R_b on RE are at least 1.7; or the ADR names with a
+    number why not.
+  - note: From ADR 0409 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. Low
+    priority.
