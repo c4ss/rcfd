@@ -9498,13 +9498,20 @@ fixed by the item's registration ADR before any code.
     0390's and ADR 0394's models are bit-identical to the base library (7 hashes), their printed values unchanged,
     smallest ratios 5.8e-2 to 0.22. The error kind of a model refused today is kept; only its reason text changes (the
     hinge, from the eigensolver's unnamed pivot text). Five mutations caught.
-- [ ] **F-497** Nonlinear driver: roll-back of a failed attempt as a registered check
+- [~] **F-497** Nonlinear driver: roll-back of a failed attempt as a registered check
   - depends on: F-397
   - acceptance: Every limit not stated here is registered in the ADR before the run. The one-step solve of ADR 0404's
     load-controlled Hex8 bar with four iterations allowed (one halving) equals the two-step solve bit for bit, and the
     mutation of ADR 0404 M7 (a failed attempt not rolled back) is caught by that check; every check of ADR 0404 keeps
     its value.
-  - note: From ADR 0404 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S.
+  - note: Nonlinear driver roll-back as a registered check. ADR 0406, 2026-11-13: new test file si_nonlinear_rollback.rs
+    (test code only); the one-step solve of the load-controlled Hex8 bar of ADR 0404 with four iterations allowed (one
+    halving) equals the two-step solve bit for bit (displacements, reactions, load factors, residual and energy
+    histories, iteration count, states: 0 differing entries); ADR 0404 mutation M7 (a failed attempt not rolled back),
+    and a second variant, are caught (19 displacement and 16 reaction entries differ), where C3 of ADR 0404 stays below
+    its limit at 2.8e-16; the existing checks of ADR 0404 keep their values. Limits: one material without history, Hex8,
+    one halving. Recorded as partial by the lead (rule of 2026-11-13: R3 missed in the registered run through a defect
+    of the test, corrected by amendment 1 after that run); done is the maintainer's call.
 - [ ] **F-498** Flap-lag identity of a rotating solid beam: the acceptance restated
   - depends on: F-396
   - acceptance: Every limit not stated here is registered in the ADR before the run. On the square radial beam of F-396
