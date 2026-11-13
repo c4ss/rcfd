@@ -126,16 +126,28 @@ pub struct StaticOptions {
     pub solver: StaticSolver,
     /// Worker threads of the assembly (`None`: the available parallelism); the result does not depend on it.
     pub threads: Option<usize>,
+    /// Steps of iterative refinement of the direct solve with the residual in compensated arithmetic (ADR 0397; 0, the
+    /// default, solves as before). Refused with another solver and on the transformation path.
+    pub refinement: usize,
 }
 
 impl StaticOptions {
     /// The given solver, the available parallelism.
     pub fn with_solver(solver: StaticSolver) -> StaticOptions {
-        StaticOptions { solver, threads: None }
+        StaticOptions {
+            solver,
+            threads: None,
+            refinement: 0,
+        }
     }
     /// The same options with a thread count for the assembly.
     pub fn threads(mut self, threads: usize) -> StaticOptions {
         self.threads = Some(threads);
+        self
+    }
+    /// The same options with `steps` steps of iterative refinement of the direct solve (ADR 0397).
+    pub fn refinement(mut self, steps: usize) -> StaticOptions {
+        self.refinement = steps;
         self
     }
 }
@@ -164,6 +176,9 @@ pub fn solve_static_report(
 ) -> Result<(SolidResult, SolveReport)> {
     model.validate()?;
     model.check_supported()?;
+    if options.refinement > 0 {
+        check_refinement(model, options)?;
+    }
     // ADR 0296 D6: a linear constraint, a rigid set or an elastic support takes the transformation u = T q + g.
     if crate::mpc::uses_transformation(model) {
         return crate::mpc::solve_static_mpc(model, prescribed, forces, &[], options).map(|s| (s.result, s.report));
@@ -187,6 +202,10 @@ pub fn solve_static_report(
         (Vec::new(), 0)
     } else {
         match &options.solver {
+            StaticSolver::Direct if options.refinement > 0 => {
+                report.solver = REFINED_NAME.to_string();
+                (direct_refined(&sys.matrix, &sys.rhs, sys.free(), &dofs, options.refinement)?, 0)
+            }
             StaticSolver::Direct => (direct(&sys.matrix, &sys.rhs, sys.free(), &dofs)?, 0),
             StaticSolver::ConjugateGradient {
                 tolerance,
@@ -453,7 +472,43 @@ fn preconditioned_cg(
     }
 }
 
+/// The solver name of the direct solve with iterative refinement (ADR 0397).
+pub const REFINED_NAME: &str = "skyline-ldlt-refined";
+
+/// The refusals of ADR 0397 D3: refinement only with the direct solver and not on the transformation path.
+fn check_refinement(model: &SolidModel, options: &StaticOptions) -> Result<()> {
+    if options.solver != StaticSolver::Direct {
+        return Err(FemError::Solver {
+            solver: solver_name(&options.solver),
+            reason: "iterative refinement (ADR 0397) applies to the direct solve only".to_string(),
+        });
+    }
+    if crate::mpc::uses_transformation(model) {
+        return Err(FemError::Solver {
+            solver: REFINED_NAME,
+            reason: "iterative refinement (ADR 0397) is not available on the transformation path (linear constraints,                      rigid sets, elastic supports)"
+                .to_string(),
+        });
+    }
+    Ok(())
+}
+
+/// The direct solve followed by `steps` steps of [`crate::refine::refine_step`] with the same factor (ADR 0397 D3).
+fn direct_refined(a: &CsrMatrix, b: &[f64], free: &[usize], dofs: &DofMap, steps: usize) -> Result<Vec<f64>> {
+    let ldlt = direct_factor(a, free, dofs)?;
+    let mut x = ldlt.solve(b);
+    for _ in 0..steps {
+        crate::refine::refine_step(a, b, &ldlt, &mut x);
+    }
+    Ok(x)
+}
+
 fn direct(a: &CsrMatrix, b: &[f64], free: &[usize], dofs: &crate::model::DofMap) -> Result<Vec<f64>> {
+    Ok(direct_factor(a, free, dofs)?.solve(b))
+}
+
+/// The `L D L^T` factor of the direct solve with its pivot checks (ADR 0275 arithmetic 4).
+fn direct_factor(a: &CsrMatrix, free: &[usize], dofs: &crate::model::DofMap) -> Result<SkylineLdlt> {
     let diag = a.diag();
     let at = |reduced: usize| dofs.node_component(free[reduced]).expect("free equation exists");
     let ldlt = SkylineLdlt::factor(a).map_err(|e| match e {
@@ -482,7 +537,7 @@ fn direct(a: &CsrMatrix, b: &[f64], free: &[usize], dofs: &crate::model::DofMap)
             });
         }
     }
-    Ok(ldlt.solve(b))
+    Ok(ldlt)
 }
 
 fn conjugate_gradient(a: &CsrMatrix, b: &[f64], tolerance: f64, max_iterations: usize) -> Result<(Vec<f64>, usize)> {
