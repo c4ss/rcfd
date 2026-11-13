@@ -8449,7 +8449,9 @@ fixed by the item's registration ADR before any code.
     in a longer run, so it is left over from the start-up ramp of the drive. Mutation MU3 (wall given the open flux)
     escaped the registered conservation check U8, whose initial field has a zero boundary mean; four duct checks caught
     it. Limits: two modes at one frequency each, one O-grid topology, no rectangular 3-D duct, one planar layer, medium
-    at rest; no case key or CLI (ADR 0351 question 1, F-451).
+    at rest; no case key or CLI (ADR 0351 question 1, F-451). The blind spot of U8 (mutation MU3 escaping with a
+    zero-boundary-mean field) is closed by F-473 (ADR 0371, 2026-11-12), whose closed-duct check with a non-zero
+    boundary mean catches it.
 - [~] **F-454** Fractional step: a step-consistent face flux for the projection
   - depends on: F-443
   - acceptance: The steady lid-driven cavity of ADR 0245 C3 with solver.time_advance = "fractional_step" (8.7e-2 between
@@ -8755,11 +8757,21 @@ fixed by the item's registration ADR before any code.
     interpolation, continuity within 1e-9 at every step, with a run that names the share of the uncorrected Green-Gauss
     pressure gradient.
   - note: From ADR 0367 question 2; low priority.
-- [ ] **F-473** Conservation check of the wave solver with a non-zero boundary mean
+- [x] **F-473** Conservation check of the wave solver with a non-zero boundary mean
   - depends on: F-453
   - acceptance: On the closed circular O-grid duct, an initial pressure with a non-zero mean on every patch keeps sum p
     V to 1e-12 over 100 steps with every patch a wall, and changes it by more than 1e-3 when one patch is open.
   - note: From ADR 0366 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S.
+    DONE, ADR 0371, 2026-11-12. Tests only: crates/rcfd-post/tests/wave_conservation_f473.rs; no library change. On the
+    closed circular O-grid duct (circular_duct_ogrid(6, 3, 6), 648 cells) the initial pressure p = 1 + 0.4 x/R + 0.3 y/R
+    + 0.5 z/L has a mean of 1.25 on the wall, 1.04 on the inlet and 1.46 on the outlet. With every patch a wall, 100
+    steps of cfl 0.48 change sum p V by 3.7e-15 relative (limit 1e-12). With one patch open the integral decreases by
+    0.76 (inlet), 0.72 (outlet), 0.98 (wall) of sum |p0| V (limit 1e-3; the registered estimate of 0.05 to 0.3 was too
+    low). Mutations: the wall given the open flux (MU3 of ADR 0366, which U8 missed with its zero-mean field) changes
+    the integral by 0.955 and is caught by the closed check; a wall leak of 1e-9 is caught (7.8e-9 against 1e-12); an
+    open face that lets no mass out is caught by all three open checks; the old U8 field is rejected by the
+    boundary-mean check, and with it the MU3 mutation is again invisible to the conservation check. Limits: one mesh,
+    one field, 100 steps, one patch open at a time; no driven patch. Done pending the maintainer's acceptance.
 - [ ] **F-474** AMG pressure preconditioner: loss of definiteness on the immersed T system
   - depends on: F-466
   - acceptance: On the pressure system of ADR 0363 (T, bounded immersed forcing, step 2951 corrector 1, rebuilt from the
