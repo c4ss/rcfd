@@ -735,7 +735,8 @@ fn fast_level_1_re_rl_u1_under_the_opt_in() {
     c.finish();
 }
 
-/// ADR 0418 E1, A2 and the controls on RE at levels 1 to 3 (heavy record, run once).
+/// ADR 0418 E1, A2 and the controls on RE at levels 1 to 3 (heavy record, run once, 517 s): all met. `e(Q) / e(default)`
+/// 1.002457, 1.000666, 1.000379; orders of `R_b(0.5)` 1.964 and 1.789 (`5.753316e-4`, `1.474341e-4`, `7.137494e-5`).
 #[test]
 #[ignore = "slow (RE at levels 1 to 3: Q, default and G with the quadratic stencils, and the Q pair, ADR 0418, about twenty minutes): run once"]
 fn re_levels_1_to_3() {
@@ -769,7 +770,8 @@ fn re_levels_1_to_3() {
     c.finish();
 }
 
-/// ADR 0418 E2 and the controls on RL at levels 1 to 3 (heavy record, run once).
+/// ADR 0418 E2 and the controls on RL at levels 1 to 3 (heavy record, run once, 238 s): all met. `e(Q) / e(default)`
+/// 1.001343, 0.999425, 0.999352.
 #[test]
 #[ignore = "slow (RL at levels 1 to 3: Q and default with the quadratic stencils, ADR 0418, about fifteen minutes): run once"]
 fn rl_levels_1_to_3() {

@@ -150,6 +150,10 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   On the moving Taylor-Green set-up with the quadratic donor interpolation the largest error of the calculated
   background cells within two cells of the background fringe falls from 1.93 and 1.52 times that of the default
   coupling to 0.89 and 1.02 times (levels 1 and 2). A solver that does not call it runs as before, bit for bit.
+  On RE and RL of ADR 0347 (component at rest) with the quadratic donor interpolation (F-503, ADR 0418) the root mean
+  square velocity error of the calculated cells at `t = 0.5` is 1.0025, 1.0007, 1.0004 (RE) and 1.0013, 0.9994,
+  0.9994 (RL) times that of the default coupling at levels 1 to 3, where G without it was 1.145, 1.056, 1.035 on RE;
+  the orders of `R_b` on RE stay 1.96 and 1.79.
 - **Pose-continuous donor stencil (F-468, ADR 0396).** `Overset::set_donor_interpolation(DonorInterpolation::Continuous)`
   gives every fringe cell the calculated cells of the other part whose support (1.5 times the cell's largest extent)
   contains its centre, with the weights of the moving least-squares plane under the weight `(1 - (rho / 1.5)^2)^2 /
