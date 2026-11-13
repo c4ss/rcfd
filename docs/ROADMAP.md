@@ -7644,7 +7644,9 @@ fixed by the item's registration ADR before any code.
     (Gauss-Jordan with designated dependents, mpc::DEPENDENCE_TOLERANCE 1e-10); Transformation::reduce gives T^T K T and
     T^T (f - K g), Transformation::expand gives x. The cyclic rows can be added as rows of the same elimination;
     prescribed_equations still refuses Cyclic (gated by cyclic::PENDING). Modal analysis on the transformation is
-    refused by mpc::refuse_in_modal and is needed by the cyclic modes.
+    refused by mpc::refuse_in_modal and is needed by the cyclic modes. ADR 0384 (2026-11-13): the modal analysis runs on
+    the transformation (mpc::modal_analysis_mpc: T^T K T, T^T M T, modes x = T q, Auto shift); the cyclic modes can add
+    their rows to the same elimination and reuse it (complex rows for a non-zero harmonic are not covered).
 - [ ] **F-395** Geometric (initial-stress) stiffness of solid elements: pre-stressed modal analysis and linear buckling
   - depends on: F-388, F-374, F-376, F-382, F-383
   - acceptance: Every limit not stated here is registered in the ADR before the run. K_sigma is symmetric within 1e-13
@@ -9144,7 +9146,7 @@ fixed by the item's registration ADR before any code.
     stress within 1 percent and bore displacement within 0.2 percent of Lame.
   - note: From ADR 0292's two known misses (cantilever 1.8 percent with the full clamp, bore hoop stress 1.17 percent on
     4 x 8 elements). Size S.
-- [ ] **F-486** Modal analysis on the transformation: linear constraints, rigid sets and supports in the modal analysis
+- [~] **F-486** Modal analysis on the transformation: linear constraints, rigid sets and supports in the modal analysis
   - depends on: F-393
   - acceptance: Every limit not stated here is registered in the ADR before the run. modal_analysis of a model with
     linear constraints, rigid sets or elastic supports reduces K and M by the transformation of ADR 0296 (T^T K T, T^T M
@@ -9153,8 +9155,23 @@ fixed by the item's registration ADR before any code.
     its first axial frequency from the closed-form transcendental equation within 0.5 percent at 20 elements; the modes
     are M-orthonormal within 1e-10 and every constraint row holds on each expanded mode within 1e-12; a model held only
     by springs uses the automatic shift when a rigid motion is free.
-  - note: From ADR 0296 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11; needed
-    by the cyclic modes (F-394). Size S.
+  - note: ADR 0384, 2026-11-13: modal_analysis of a model with linear constraints, rigid sets or elastic supports
+    reduces K (with the supports) and M by the transformation of ADR 0296 (T^T K T, T^T M T, the reference points
+    without mass of their own) and expands each mode by T (rcfd_fem::mpc::modal_analysis_mpc, which also returns the
+    reduced matrices and the modes over the reference unknowns; modal_analysis_with dispatches on
+    mpc::uses_transformation). Non-zero values are refused naming the row ("constraint 3 (Linear): value 1e-3; a modal
+    analysis takes zero values only"). Prescribed-only models keep the bits (P1 bit-equal; the clamp written as Linear
+    constraints gives bit-equal eigenvalues). Bar (nu = 0) on an end spring at 20 elements: 2.4e-5 from z tan z =
+    kL/(EA) (limit 0.5 percent), 5.5e-14 from the discrete closed form; rigid end of the fixed-free bar 2.6e-4 from
+    c/(4L), 1e-14 discrete; skew rollers at 30 degrees against the axis-aligned block: eigenvalues 9e-16, modes 2e-11;
+    M-orthonormality 9e-16; every constraint row on every expanded mode 1.5e-16; threads 1 and 8 bit-equal. Default
+    shift Shift::Auto on the transformation path: a bar held only by axial springs is shifted and reports rigid_free;
+    its three zero modes are at 2.07e-6 of the first flexible frequency against a registered 1e-6 (known miss: they are
+    fixed by the residual times the shift, 2e-13 of the shift). A collinear rigid set is refused naming its massless
+    reference rotation. Seven mutations caught, one (all models on the transformation) survives as predicted. si_mpc N4
+    (the modal refusal of ADR 0296) stays as an ignored record (the maintainer's si_scaffold decision of 2026-11-13
+    applied by the lead); the si_scaffold R11 modal row was retired by the maintainer's pattern. Follow-up F-488 (the
+    zero-mode measure and the explicit-shift report).
 - [ ] **F-487** Overset: a consistent cell pressure gradient in the geometry corrections
   - depends on: F-472
   - acceptance: OversetSolver::set_geometry_corrections takes the cell pressure gradient of the momentum predictor and
@@ -9166,3 +9183,11 @@ fixed by the item's registration ADR before any code.
     share of the warped background in the remainder.
   - note: From ADR 0382 questions 1 and 2, recommendation taken on the maintainer's standing instruction of 2026-11-11.
     Size M.
+- [ ] **F-488** Zero modes on the transformation: the eigenvalue measure against the shift and the explicit-shift report
+  - depends on: F-486
+  - acceptance: Every limit not stated here is registered in the ADR before the run. For a body held only by springs
+    (ADR 0384's KF and a free block with one spring), the zero modes found with the automatic shift satisfy |lambda_i|
+    <= 1e-9 sigma and their number equals the number of free rigid motions counted from the springs, the linear rows and
+    the rigid sets; with a shift given by the caller, rigid_free is reported by the zero-shift factor test and agrees
+    with the automatic case on every model of ADR 0384.
+  - note: From ADR 0384 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S.
