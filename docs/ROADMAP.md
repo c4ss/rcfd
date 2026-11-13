@@ -9805,13 +9805,25 @@ fixed by the item's registration ADR before any code.
   - acceptance: Every limit not stated here is registered in the ADR before the run. A rotating part whose K_eff has an
     odd number of negative eigenvalues (a cube on springs with a negative axial support, registered with its closed
     form) is flagged unstable by RotatingPart::whirl_state with the closed-form growth rate within 1e-8 relative, and
-    the same part with an even number is flagged stable where the closed form says so.
-- [ ] **F-511** Whirl stability of a cyclic sector above the loss of stiffness
+    the same part with an even number is flagged stable where the closed form says so. A cyclic sector whose single
+    index (k = 0 or 2k = N) has an odd number of negative eigenvalues of K_eff is flagged unstable by
+    RotatingSector::whirl_state with the full rotor's growth rate within 1e-8 relative.
+- [x] **F-511** Whirl stability of a cyclic sector above the loss of stiffness
   - depends on: F-505
   - acceptance: Every limit not stated here is registered in the ADR before the run. RotatingSector solves each harmonic
     index by the state matrix of ADR 0416 at speeds where its reduced K_eff is not positive definite, with the stability
     flag and growth rate per index; on the disc sector of ADR 0411 the union of the sector's eigenvalues equals the full
     rotor's within 1e-8 relative at a speed above the first loss of stiffness, and the flags agree.
+  - note: From ADR 0416 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR
+    0420, 2026-11-13: RotatingSector::whirl_state and whirl_stability solve each harmonic index at any speed by the
+    state matrix of ADR 0416 on its real cos/sin problem (the real 2 x 2-block form of the complex Hermitian problem of
+    the harmonic, whose spectrum is that problem's together with its conjugate), with the flag, growth rate and wave
+    sense per index, CyclicWhirlStability::rotor (Stability::combined: stable iff every index is) and CSV. On the disc
+    sector of ADR 0411 with both effects on, the first loss of stiffness (a half-line in Omega^2 by concavity, found by
+    bisection) is index 1 at 13.46 omega_ref; at 1.25 times that speed index 1 has two negative eigenvalues of K_eff and
+    is gyroscopically stabilised, and the union of the sector's 504 eigenvalues equals the full rotor's within 6.7e-14
+    relative, with the flags agreeing per index and for the rotor; Sylvester counts agree, expanded residuals 4.7e-14,
+    eight mutations caught.
 - [ ] **F-512** Beam results in the solid output: rotations as point data and VTK line cells
   - depends on: F-391, F-377
   - acceptance: Every limit not stated here is registered in the ADR before the run. rcfd_post::solid_output writes a
