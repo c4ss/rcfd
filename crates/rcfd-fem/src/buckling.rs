@@ -12,7 +12,7 @@
 use crate::assemble::stiffness_with;
 use crate::constraint::{check_rigid_body_motions, prescribed_equations, reduce};
 use crate::error::{FemError, Result};
-use crate::geometric::{geometric_stiffness, refuse_transformation, Prestress};
+use crate::geometric::{geometric_stiffness, Prestress};
 use crate::model::{DofMap, SolidModel};
 use rcfd_linalg::eigen::{lowest_buckling_factors, BucklingEigenOptions, ResidualTest, SturmCheck};
 
@@ -97,10 +97,17 @@ impl BucklingResult {
 }
 
 /// The lowest positive buckling factors of `model` for the pre-stress of its reference load (ADR 0390 D6).
+///
+/// A model with linear constraints, rigid sets or elastic supports is solved on the transformation `x = T q` (ADR 0398):
+/// `(T^T K_ext T + lambda T^T K_sigma T) q = 0`, `K_ext` with the supports, zero constraint values only, each mode expanded,
+/// `x = T q`; a motion the constraints and supports leave free is refused by the factorisation of `T^T K_ext T`
+/// (`FemError::Solver`).
 pub fn factors(model: &SolidModel, prestress: &Prestress, options: &BucklingOptions) -> Result<BucklingResult> {
     model.validate()?;
     model.check_supported()?;
-    refuse_transformation(model, "a buckling analysis")?;
+    if crate::mpc::uses_transformation(model) {
+        return factors_on_transformation(model, prestress, options);
+    }
     let dofs = model.dof_map();
     let fixed = prescribed_equations(model, &[])?;
     if let Some(&(eq, v)) = fixed.iter().find(|&&(_, v)| v != 0.0) {
@@ -159,6 +166,59 @@ pub fn factors(model: &SolidModel, prestress: &Prestress, options: &BucklingOpti
         iterations: eig.iterations,
         sturm: eig.sturm,
         unknowns: nf,
+        exhausted: eig.exhausted,
+        dofs,
+    })
+}
+
+fn eigen_options(options: &BucklingOptions) -> BucklingEigenOptions {
+    BucklingEigenOptions {
+        tolerance: options.tolerance,
+        residual_test: options.residual_test,
+        max_iterations: options.max_iterations,
+        subspace_size: options.subspace_size,
+        ..BucklingEigenOptions::default()
+    }
+}
+
+/// [`factors`] on the transformation (ADR 0398 D2).
+fn factors_on_transformation(
+    model: &SolidModel,
+    prestress: &Prestress,
+    options: &BucklingOptions,
+) -> Result<BucklingResult> {
+    crate::mpc::refuse_nonzero_values(model, "a buckling analysis")?;
+    let dofs = model.dof_map();
+    let tr = crate::mpc::transformation(model, &[])?;
+    let n = tr.n_mesh();
+    let mut k = stiffness_with(model, options.threads)?;
+    crate::mpc::add_supports(&mut k, model)?;
+    let kg = geometric_stiffness(model, prestress, options.threads)?;
+    let zero = vec![0.0; tr.n_unknowns()];
+    let (kr, _) = tr.reduce(&k, &zero)?;
+    let (gr, _) = tr.reduce(&kg, &zero)?;
+    let nq = kr.n;
+    if options.factors == 0 || options.factors >= nq {
+        return Err(FemError::InvalidValue {
+            key: "factors",
+            reason: format!(
+                "{} factors requested of a model with {nq} free unknowns (at least 1 and fewer than the unknowns)",
+                options.factors
+            ),
+        });
+    }
+    let eig = lowest_buckling_factors(&kr, &gr, options.factors, &eigen_options(options)).map_err(|e| FemError::Solver {
+        solver: "lowest_buckling_factors",
+        reason: e.to_string(),
+    })?;
+    let modes = eig.vectors.iter().map(|q| tr.expand(q)[..n].to_vec()).collect();
+    Ok(BucklingResult {
+        factors: eig.values,
+        modes,
+        residuals: eig.residuals,
+        iterations: eig.iterations,
+        sturm: eig.sturm,
+        unknowns: nq,
         exhausted: eig.exhausted,
         dofs,
     })

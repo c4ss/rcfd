@@ -200,27 +200,20 @@ pub(crate) fn add_on_pattern(k: &CsrMatrix, kg: &CsrMatrix) -> CsrMatrix {
     out
 }
 
-/// Refuses the transformation path (linear constraints, rigid sets, supports) for the analyses of ADR 0390.
-pub(crate) fn refuse_transformation(model: &SolidModel, analysis: &str) -> Result<()> {
-    if crate::mpc::uses_transformation(model) {
-        return Err(FemError::InvalidValue {
-            key: "constraint",
-            reason: format!(
-                "{analysis} takes zero prescribed displacements only; linear constraints, rigid sets and supports are not \
-                 supported yet (ADR 0390)"
-            ),
-        });
-    }
-    Ok(())
-}
-
 /// The modes of the pre-stressed model, `(K + K_sigma) phi = omega^2 M phi` (ADR 0390 D4): the steps of
 /// [`crate::modal::modal_analysis_with`] with `K + K_sigma` in place of `K`. With a zero pre-stress the result has the bits
 /// of [`crate::modal::modal_analysis`]. Beyond the buckling load the factorisation refuses (`FemError::Solver`).
+///
+/// A model with linear constraints, rigid sets or elastic supports is solved on the transformation `x = T q` (ADR 0398):
+/// `T^T (K_ext + K_sigma) T q = omega^2 T^T M T q`, `K_ext` with the supports, zero constraint values only, the default
+/// shift `Shift::Auto` (ADR 0384), each mode expanded, `x = T q`; a negative eigenvalue (beyond the buckling load) is
+/// refused (`FemError::Solver`).
 pub fn prestressed_modes(model: &SolidModel, prestress: &Prestress, options: &ModalOptions) -> Result<ModalResult> {
     model.validate()?;
     model.check_supported()?;
-    refuse_transformation(model, "a pre-stressed modal analysis")?;
+    if crate::mpc::uses_transformation(model) {
+        return prestressed_modes_on_transformation(model, prestress, options);
+    }
     let dofs = model.dof_map();
     let fixed = prescribed_equations(model, &[])?;
     if let Some(&(eq, v)) = fixed.iter().find(|&&(_, v)| v != 0.0) {
@@ -290,4 +283,80 @@ pub fn prestressed_modes(model: &SolidModel, prestress: &Prestress, options: &Mo
         })
         .collect();
     Ok(ModalResult::from_parts(eig, modes, nf, rigid_free, dofs))
+}
+
+/// Lowest eigenvalue below `-NEGATIVE_EIGENVALUE_RATIO |sigma|` (`sigma` the shift used): `K + K_sigma` is not positive
+/// semidefinite on the admissible motions (ADR 0398 D2 step 5).
+const NEGATIVE_EIGENVALUE_RATIO: f64 = 1e-8;
+
+/// [`prestressed_modes`] on the transformation (ADR 0398 D2): the steps of [`crate::mpc::modal_analysis_mpc`] with `K_ext +
+/// K_sigma` in place of `K_ext`.
+fn prestressed_modes_on_transformation(
+    model: &SolidModel,
+    prestress: &Prestress,
+    options: &ModalOptions,
+) -> Result<ModalResult> {
+    crate::mpc::refuse_nonzero_values(model, "a pre-stressed modal analysis")?;
+    let dofs = model.dof_map();
+    let tr = crate::mpc::transformation(model, &[])?;
+    let n = tr.n_mesh();
+    let mut k = stiffness_with(model, options.threads)?;
+    crate::mpc::add_supports(&mut k, model)?;
+    let kg = geometric_stiffness(model, prestress, options.threads)?;
+    let a = add_on_pattern(&k, &kg);
+    let m = consistent_with(model, options.threads)?;
+    let zero = vec![0.0; tr.n_unknowns()];
+    let (ar, _) = tr.reduce(&a, &zero)?;
+    let (mr, _) = tr.reduce(&m, &zero)?;
+    let nq = ar.n;
+    if options.modes == 0 || options.modes >= nq {
+        return Err(FemError::InvalidValue {
+            key: "modes",
+            reason: format!(
+                "{} modes requested of a model with {nq} free unknowns (at least 1 and fewer than the unknowns)",
+                options.modes
+            ),
+        });
+    }
+    for (i, d) in mr.diag().iter().enumerate() {
+        if d.is_nan() || *d <= 0.0 {
+            return Err(FemError::InvalidValue {
+                key: "density",
+                reason: format!(
+                    "{} has no mass (diagonal {d:e})",
+                    crate::mpc::unknown_name(&tr, model, tr.independent()[i])
+                ),
+            });
+        }
+    }
+    let opts = SubspaceOptions {
+        shift: options.shift.unwrap_or(Shift::Auto),
+        tolerance: options.tolerance,
+        residual_test: options.residual_test,
+        max_iterations: options.max_iterations,
+        subspace_size: options.subspace_size,
+        ..SubspaceOptions::default()
+    };
+    let eig = lowest_eigenpairs(&ar, &mr, options.modes, &opts).map_err(|e| FemError::Solver {
+        solver: "lowest_eigenpairs",
+        reason: e.to_string(),
+    })?;
+    if let Some(&lowest) = eig.values.first() {
+        if lowest < -NEGATIVE_EIGENVALUE_RATIO * eig.shift.abs() {
+            return Err(FemError::Solver {
+                solver: "lowest_eigenpairs",
+                reason: format!(
+                    "eigenvalue {lowest:e} at shift {:e}: K + K_sigma is not positive semidefinite on the admissible \
+                     motions (beyond the buckling load)",
+                    eig.shift
+                ),
+            });
+        }
+    }
+    let rigid_free = match options.shift {
+        None => eig.shift != 0.0,
+        Some(_) => crate::mpc::zero_shift_refused(&ar),
+    };
+    let modes = eig.vectors.iter().map(|q| tr.expand(q)[..n].to_vec()).collect();
+    Ok(ModalResult::from_parts(eig, modes, nq, rigid_free, dofs))
 }

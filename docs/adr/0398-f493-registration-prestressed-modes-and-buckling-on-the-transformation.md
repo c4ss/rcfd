@@ -362,3 +362,18 @@ buckling stress; the element rows are in another test) is added at the end of th
 3. The default shift on the transformation path is `Shift::Auto` (ADR 0384's rule), with the guard against negative eigenvalues
    beyond the buckling load (D2 step 5), rather than the zero shift of the prescribed path. Taken on the maintainer's standing
    instruction of 2026-11-11 (take the recommendation).
+
+## Amendment 1 (2026-11-13, written while writing the test file, before any run of a check)
+
+1. **N2 replaced.** Found while writing the test, by the arithmetic of D1, before any run: the knife-edge beam is insensitive to
+   the direction of the roller row. Tilting the roller normal by 1 degree couples the end deflection to the axial displacement
+   of the neutral axis at the roller, `cos 1 deg w(L) = sin 1 deg u_x(L)`; the static solution stays the uniform stress plus a
+   rigid rotation (strain free, so the pre-stress is unchanged), and in the buckling mode `u_x = 0` on the neutral axis, so the
+   tilt acts as a lateral spring of about `E A/(L tan^2 1 deg) = 3e12 N/m` on a roller whose reaction in the mode is near zero
+   (D1: the knife-edge mode does not load the roller in the Timoshenko column). The factors would move by far less than the
+   expected 1e-6, so BR31 does not test what N2 says. (Any two independent directions at the pin hold the same motions, so the
+   pin rows are no better.) Corrected control: **N2: C1's factor measure for BR with its tractions along the global `x` axis,
+   `(+-s_ref, 0, 0)`, not rotated with the mesh; expected `> 1e-6`** (the axial stress becomes `s_ref cos 30` and the end shear
+   tractions form a couple carried by the knife edges, about 0.15). BR31 is not run. The other checks are unchanged.
+2. **D6 wording.** The copy `c7_refusals_after_transformation_landed` keeps the **three** other rows of C7 (pre-stress of B on
+   C, B without its pin, modes beyond the buckling stress); D6 said "four". No change of a check.

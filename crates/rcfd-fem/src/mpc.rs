@@ -1282,7 +1282,7 @@ const ZERO_SHIFT_PIVOT_RATIO: f64 = 1e-8;
 
 /// A name of unknown `i` of the transformation: "node 4 component 1" or "the reference rotation y of constraint 3
 /// (RigidSet)".
-fn unknown_name(tr: &Transformation, model: &SolidModel, i: usize) -> String {
+pub(crate) fn unknown_name(tr: &Transformation, model: &SolidModel, i: usize) -> String {
     if i < tr.n_mesh() {
         let (node, component) = model.dof_map().node_component(i).expect("mesh unknown");
         return format!("node {node} component {component}");
@@ -1406,6 +1406,33 @@ pub fn modal_analysis_mpc(model: &SolidModel, extra: &[Prescribed], options: &Mo
         reduced_mass: mr,
         expanded,
     })
+}
+
+/// Refuses a non-zero constraint value for an analysis on the transformation that takes zero values only (ADR 0398 D3):
+/// the prescribed rows first, then the `Linear` values; the reason names the row and says "{analysis} takes zero values
+/// only".
+pub(crate) fn refuse_nonzero_values(model: &SolidModel, analysis: &str) -> Result<()> {
+    let dofs = model.dof_map();
+    for &(eq, v) in &prescribed_equations(model, &[])? {
+        if v != 0.0 {
+            let (node, component) = dofs.node_component(eq).expect("prescribed equation");
+            return Err(constraint_error(format!(
+                "{}: value {v:e}; {analysis} takes zero values only",
+                RowOrigin::Prescribed { node, component }.description(model)
+            )));
+        }
+    }
+    for (i, c) in model.constraints().iter().enumerate() {
+        if let Constraint::Linear { value, .. } = c {
+            if *value != 0.0 {
+                return Err(constraint_error(format!(
+                    "{}: value {value:e}; {analysis} takes zero values only",
+                    RowOrigin::Linear { constraint: i }.description(model)
+                )));
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Refuses, for the modal analysis, a linear constraint, a rigid set or an elastic support (ADR 0296 D7). Since ADR 0384
