@@ -15,14 +15,23 @@
 //! Also: participation factors `Gamma_r = phi_r^T M r_d` and effective masses `Gamma_r^2` of a rigid translation `r_d`
 //! ([`participation`], D4), and the Fourier harmonics of a uniformly sampled record of a whole number of periods
 //! ([`force_harmonics`], D5), whose [`ForceHarmonic::complex`] amplitude scales a load pattern ([`HarmonicLoad::from_harmonic`]).
+//!
+//! ADR 0400 (F-491) extends the static correction: for a free body (free rigid motions counted by
+//! [`crate::free_motions::free_rigid_motions`]) by inertia relief, the elastic residual flexibility `P^T K_c^{-1} P F` with
+//! `P = I - M R R^T` and `K_c` the stiffness on a statically determinate support (D1); on the transformation path by the
+//! reduced solve `T K_r^{-1} T^T F` (D2); and with a pre-stressed basis by the stiffness `K + K_sigma` the modes were
+//! computed with ([`HarmonicOptions::prestress`], D3). Models without these features take the code of ADR 0391 unchanged.
 
 use crate::assemble::stiffness_with;
 use crate::constraint::{prescribed_equations, reduce};
 use crate::error::{FemError, Result};
+use crate::free_motions::free_rigid_motions;
+use crate::geometric::{add_on_pattern, geometric_stiffness, Prestress};
 use crate::loads::nodal_load_vector;
 use crate::mass::{consistent_with, rigid_motions};
 use crate::modal::ModalResult;
-use crate::model::{DofMap, SolidModel};
+use crate::model::{Constraint, DofMap, SolidModel};
+use crate::mpc::Transformation;
 use crate::recover::IntegrationPointField;
 use crate::solve::PIVOT_TOLERANCE;
 use rcfd_core::vec3::Vec3;
@@ -36,6 +45,10 @@ pub const MAX_DENSE_UNKNOWNS: usize = 600;
 
 /// An undamped mode with `|lambda_r - omega^2| <= RESONANCE_TOLERANCE lambda_r` is a resonance without damping (refused).
 pub const RESONANCE_TOLERANCE: f64 = 1e-12;
+
+/// Inertia relief (ADR 0400 D1): a basis mode with rigid weight `|R^T M phi|^2 > 1 - RIGID_SEPARATION` is a rigid mode, one
+/// below `RIGID_SEPARATION` an elastic mode; a mode in between is refused.
+pub const RIGID_SEPARATION: f64 = 1e-6;
 
 /// A record spans a whole number `P` of periods when `|N dt / T - P| <= WHOLE_PERIOD_TOLERANCE max(1, P)`.
 pub const WHOLE_PERIOD_TOLERANCE: f64 = 1e-9;
@@ -445,6 +458,9 @@ pub struct HarmonicOptions {
     pub static_correction: bool,
     /// Worker threads of the assembly (`None`: the available parallelism); the result does not depend on it.
     pub threads: Option<usize>,
+    /// The pre-stress the basis was computed with ([`crate::geometric::prestressed_modes`]); the static correction then
+    /// uses `K + K_sigma` (ADR 0400 D3). Default `None` (the elastic `K`). Not used without the static correction.
+    pub prestress: Option<Prestress>,
 }
 
 impl Default for HarmonicOptions {
@@ -453,6 +469,7 @@ impl Default for HarmonicOptions {
             damping: ModalDamping::default(),
             static_correction: true,
             threads: None,
+            prestress: None,
         }
     }
 }
@@ -475,12 +492,32 @@ impl HarmonicOptions {
         self.threads = Some(threads);
         self
     }
+    /// The same options with the pre-stress of the basis for the static correction (ADR 0400 D3).
+    pub fn prestress(mut self, prestress: Prestress) -> HarmonicOptions {
+        self.prestress = Some(prestress);
+        self
+    }
 }
 
 #[derive(Debug, Clone)]
-struct StaticCorrection {
-    ldlt: SkylineLdlt,
-    free: Vec<usize>,
+enum StaticCorrection {
+    /// ADR 0391 D2: the reduced `K` (prescribed equations removed).
+    Plain { ldlt: SkylineLdlt, free: Vec<usize> },
+    /// ADR 0400 D1: inertia relief of a free body.
+    Relief {
+        /// The factor of `K_c` (prescribed and support equations removed).
+        ldlt: SkylineLdlt,
+        /// The equations of `K_c`.
+        kept: Vec<usize>,
+        /// `R`, M-orthonormal, over every equation (0 at prescribed ones).
+        rigid: Vec<Vec<f64>>,
+        /// `M R`.
+        m_rigid: Vec<Vec<f64>>,
+        /// Whether each basis mode is elastic (subtracted) or rigid (skipped).
+        elastic: Vec<bool>,
+    },
+    /// ADR 0400 D2: the reduced `K_r = T^T K_ext T`.
+    Transformation { ldlt: SkylineLdlt, tr: Transformation },
 }
 
 /// A load prepared for a sweep: its modal forces and its static correction.
@@ -500,25 +537,40 @@ pub struct HarmonicSolver {
 
 impl HarmonicSolver {
     /// The solver of a model from a basis of its modes. With the static correction the reduced `K` is factored (refused for
-    /// a free rigid motion, on the transformation path, for a non-zero prescribed value and for a basis with an eigenvalue
-    /// `<= 0`; key `"static correction"`).
+    /// a non-zero prescribed value and for a basis with an eigenvalue `<= 0`; key `"static correction"`). Since ADR 0400 a
+    /// free body takes inertia relief (its rigid modes must be in the basis), a model on the transformation path the
+    /// reduced `T^T K_ext T` (a free rigid motion and cyclic constraints refused there), and
+    /// [`HarmonicOptions::prestress`] adds `K_sigma` to the stiffness of the correction.
     pub fn new(model: &SolidModel, basis: ModalBasis, options: &HarmonicOptions) -> Result<HarmonicSolver> {
         basis.check_model(model)?;
         let coefficients = options.damping.coefficients(&basis.eigenvalues)?;
         let correction = if options.static_correction {
-            let fixed = zero_prescribed(model, "static correction", "the static correction")?;
-            if let Some((r, l)) = basis.eigenvalues.iter().enumerate().find(|(_, &l)| l <= 0.0) {
-                return Err(invalid(
-                    "static correction",
-                    format!("mode {r} has the eigenvalue {l:e} (a rigid motion: K^-1 does not exist)"),
-                ));
+            if crate::mpc::uses_transformation(model) {
+                Some(transformation_correction(model, &basis, options)?)
+            } else {
+                let fixed = zero_prescribed(model, "static correction", "the static correction")?;
+                let free_motions = free_rigid_motions(model, &[]).map_or(0, |f| f.count);
+                if free_motions > 0 {
+                    Some(relief_correction(model, &basis, options, &fixed)?)
+                } else {
+                    if let Some((r, l)) = basis.eigenvalues.iter().enumerate().find(|(_, &l)| l <= 0.0) {
+                        return Err(invalid(
+                            "static correction",
+                            format!("mode {r} has the eigenvalue {l:e} (a rigid motion: K^-1 does not exist)"),
+                        ));
+                    }
+                    let k = stiffness_with(model, options.threads)?;
+                    let k = match &options.prestress {
+                        Some(p) => add_on_pattern(&k, &geometric_stiffness(model, p, options.threads)?),
+                        None => k,
+                    };
+                    let kr = reduce(&k, &vec![0.0; k.n], &fixed)?;
+                    let free = kr.free().to_vec();
+                    let dofs = model.dof_map();
+                    let ldlt = factor(&kr.matrix, &free, &dofs)?;
+                    Some(StaticCorrection::Plain { ldlt, free })
+                }
             }
-            let k = stiffness_with(model, options.threads)?;
-            let kr = reduce(&k, &vec![0.0; k.n], &fixed)?;
-            let free = kr.free().to_vec();
-            let dofs = model.dof_map();
-            let ldlt = factor(&kr.matrix, &free, &dofs)?;
-            Some(StaticCorrection { ldlt, free })
         } else {
             None
         };
@@ -557,13 +609,36 @@ impl HarmonicSolver {
         let modal_im: Vec<f64> = self.basis.modes.iter().map(|phi| dot(phi, &load.im)).collect();
         let residual = self.correction.as_ref().map(|sc| {
             let part = |f: &[f64], modal: &[f64]| -> Vec<f64> {
-                let rhs: Vec<f64> = sc.free.iter().map(|&e| f[e]).collect();
-                let x = sc.ldlt.solve(&rhs);
-                let mut full = vec![0.0; n];
-                for (&e, &v) in sc.free.iter().zip(&x) {
-                    full[e] = v;
-                }
-                for ((phi, &l), &q) in self.basis.modes.iter().zip(&self.basis.eigenvalues).zip(modal) {
+                let (mut full, elastic) = match sc {
+                    StaticCorrection::Plain { ldlt, free } => {
+                        let rhs: Vec<f64> = free.iter().map(|&e| f[e]).collect();
+                        let x = ldlt.solve(&rhs);
+                        let mut full = vec![0.0; n];
+                        for (&e, &v) in free.iter().zip(&x) {
+                            full[e] = v;
+                        }
+                        (full, None)
+                    }
+                    StaticCorrection::Relief {
+                        ldlt,
+                        kept,
+                        rigid,
+                        m_rigid,
+                        elastic,
+                    } => (relief_part(ldlt, kept, rigid, m_rigid, f, n), Some(elastic)),
+                    StaticCorrection::Transformation { ldlt, tr } => {
+                        let mut f_ext = f.to_vec();
+                        f_ext.resize(tr.n_unknowns(), 0.0);
+                        let q = ldlt.solve(&tr.transpose_times(&f_ext));
+                        let mut full = tr.expand(&q);
+                        full.truncate(n);
+                        (full, None)
+                    }
+                };
+                for (r, ((phi, &l), &q)) in self.basis.modes.iter().zip(&self.basis.eigenvalues).zip(modal).enumerate() {
+                    if elastic.is_some_and(|el| !el[r]) {
+                        continue;
+                    }
                     let s = q / l;
                     for (xi, pi) in full.iter_mut().zip(phi) {
                         *xi -= pi * s;
@@ -654,11 +729,15 @@ impl HarmonicSolver {
 
 /// The factor of the reduced stiffness with the pivot rule of the static solve.
 fn factor(a: &CsrMatrix, free: &[usize], dofs: &DofMap) -> Result<SkylineLdlt> {
-    let diag = a.diag();
-    let at = |row: usize| match dofs.node_component(free[row]) {
+    factor_named(a, |row: usize| match dofs.node_component(free[row]) {
         Some((node, component)) => format!("reduced equation {row} (node {node} component {component})"),
         None => format!("equation {row}"),
-    };
+    })
+}
+
+/// [`factor`] with the rows named by `at`.
+fn factor_named(a: &CsrMatrix, at: impl Fn(usize) -> String) -> Result<SkylineLdlt> {
+    let diag = a.diag();
     let ldlt = SkylineLdlt::factor(a).map_err(|e| match e {
         SkylineError::Pivot { row, pivot, .. } => invalid(
             "static correction",
@@ -685,6 +764,219 @@ fn factor(a: &CsrMatrix, free: &[usize], dofs: &DofMap) -> Result<SkylineLdlt> {
         }
     }
     Ok(ldlt)
+}
+
+/// The inertia-relief residual flexibility of one load part (ADR 0400 D1), before the subtraction of the elastic basis
+/// modes: `P^T K_c^{-1} P f`, `P = I - M R R^T`.
+fn relief_part(
+    ldlt: &SkylineLdlt,
+    kept: &[usize],
+    rigid: &[Vec<f64>],
+    m_rigid: &[Vec<f64>],
+    f: &[f64],
+    n: usize,
+) -> Vec<f64> {
+    let mut pf = f.to_vec();
+    for (r, mr) in rigid.iter().zip(m_rigid) {
+        let a = dot(r, f);
+        for (p, v) in pf.iter_mut().zip(mr) {
+            *p -= v * a;
+        }
+    }
+    let rhs: Vec<f64> = kept.iter().map(|&e| pf[e]).collect();
+    let x = ldlt.solve(&rhs);
+    let mut y = vec![0.0; n];
+    for (&e, &v) in kept.iter().zip(&x) {
+        y[e] = v;
+    }
+    let b: Vec<f64> = m_rigid.iter().map(|mr| dot(mr, &y)).collect();
+    for (r, &bj) in rigid.iter().zip(&b) {
+        for (yi, v) in y.iter_mut().zip(r) {
+            *yi -= v * bj;
+        }
+    }
+    y
+}
+
+/// The inertia relief of a free body on the plain path (ADR 0400 D1).
+fn relief_correction(
+    model: &SolidModel,
+    basis: &ModalBasis,
+    options: &HarmonicOptions,
+    fixed: &[(usize, f64)],
+) -> Result<StaticCorrection> {
+    let key = "static correction";
+    if options.prestress.is_some() {
+        return Err(invalid(
+            key,
+            "a free body with a pre-stress: the null space of K + K_sigma is not the rigid motions (inertia relief of ADR \
+             0400 takes the elastic K only)"
+                .to_string(),
+        ));
+    }
+    let frm = free_rigid_motions(model, &[])?;
+    let dofs = model.dof_map();
+    let n = dofs.n_equations();
+    let mut is_fixed = vec![false; n];
+    for &(e, _) in fixed {
+        is_fixed[e] = true;
+    }
+    let m = consistent_with(model, options.threads)?;
+    // R: the free rigid fields, 0 at the prescribed equations, M-orthonormal (modified Gram-Schmidt, two passes).
+    let mut rigid: Vec<Vec<f64>> = Vec::with_capacity(frm.count);
+    let mut m_rigid: Vec<Vec<f64>> = Vec::with_capacity(frm.count);
+    for mut v in frm.fields(model) {
+        for (x, &fx) in v.iter_mut().zip(&is_fixed) {
+            if fx {
+                *x = 0.0;
+            }
+        }
+        for _ in 0..2 {
+            for (r, mr) in rigid.iter().zip(&m_rigid) {
+                let c = dot(mr, &v);
+                for (x, ri) in v.iter_mut().zip(r) {
+                    *x -= c * ri;
+                }
+            }
+        }
+        let mut mv = matvec(&m, &v);
+        let norm = dot(&v, &mv).sqrt();
+        if !(norm.is_finite() && norm > 0.0) {
+            return Err(invalid(key, format!("a free rigid motion has the mass norm {norm:e}")));
+        }
+        for x in v.iter_mut().chain(mv.iter_mut()) {
+            *x /= norm;
+        }
+        rigid.push(v);
+        m_rigid.push(mv);
+    }
+    let n_r = rigid.len();
+    // The basis: rigid and elastic modes.
+    let mut elastic = Vec::with_capacity(basis.len());
+    let mut rigid_modes = 0;
+    for (r, (phi, &l)) in basis.modes.iter().zip(&basis.eigenvalues).enumerate() {
+        let p: f64 = m_rigid.iter().map(|mr| dot(mr, phi).powi(2)).sum();
+        if p > 1.0 - RIGID_SEPARATION {
+            rigid_modes += 1;
+            elastic.push(false);
+        } else if p < RIGID_SEPARATION {
+            if l <= 0.0 {
+                return Err(invalid(
+                    key,
+                    format!("elastic mode {r} has the eigenvalue {l:e} (inertia relief needs lambda > 0)"),
+                ));
+            }
+            elastic.push(true);
+        } else {
+            return Err(invalid(
+                key,
+                format!(
+                    "mode {r} mixes rigid and elastic motion (rigid weight {p:e}, between {RIGID_SEPARATION:e} and 1 - \
+                     {RIGID_SEPARATION:e})"
+                ),
+            ));
+        }
+    }
+    if rigid_modes != n_r {
+        return Err(invalid(
+            key,
+            format!(
+                "the basis holds {rigid_modes} rigid modes of the {n_r} free rigid motions of the model (inertia relief \
+                 needs every rigid mode in the basis)"
+            ),
+        ));
+    }
+    // A statically determinate support: pivoted rows of R over the free equations.
+    let free: Vec<usize> = (0..n).filter(|&e| !is_fixed[e]).collect();
+    let mut w: Vec<Vec<f64>> = free.iter().map(|&e| rigid.iter().map(|r| r[e]).collect()).collect();
+    let mut support = Vec::with_capacity(n_r);
+    for _ in 0..n_r {
+        let (mut best, mut best_norm) = (usize::MAX, 0.0f64);
+        for (i, wi) in w.iter().enumerate() {
+            let s = dot(wi, wi).sqrt();
+            if s > best_norm {
+                best = i;
+                best_norm = s;
+            }
+        }
+        if best == usize::MAX {
+            return Err(invalid(key, "no statically determinate support of the rigid motions".to_string()));
+        }
+        let u: Vec<f64> = w[best].iter().map(|x| x / best_norm).collect();
+        for wi in w.iter_mut() {
+            let c = dot(wi, &u);
+            for (x, ui) in wi.iter_mut().zip(&u) {
+                *x -= c * ui;
+            }
+        }
+        w[best].iter_mut().for_each(|x| *x = 0.0);
+        support.push(free[best]);
+    }
+    let mut removed: Vec<(usize, f64)> = fixed.to_vec();
+    removed.extend(support.iter().map(|&e| (e, 0.0)));
+    removed.sort_by_key(|&(e, _)| e);
+    let k = stiffness_with(model, options.threads)?;
+    let kc = reduce(&k, &vec![0.0; k.n], &removed)?;
+    let kept = kc.free().to_vec();
+    let ldlt = factor(&kc.matrix, &kept, &dofs)?;
+    Ok(StaticCorrection::Relief {
+        ldlt,
+        kept,
+        rigid,
+        m_rigid,
+        elastic,
+    })
+}
+
+/// The static correction on the transformation path (ADR 0400 D2): `K_r = T^T (K_ext + K_sigma) T` factored.
+fn transformation_correction(
+    model: &SolidModel,
+    basis: &ModalBasis,
+    options: &HarmonicOptions,
+) -> Result<StaticCorrection> {
+    let key = "static correction";
+    model.validate()?;
+    model.check_supported()?;
+    if let Some(i) = model.constraints().iter().position(|c| matches!(c, Constraint::Cyclic { .. })) {
+        return Err(invalid(
+            key,
+            format!("constraint {i} (Cyclic): the static correction does not take cyclic constraints (ADR 0400)"),
+        ));
+    }
+    crate::mpc::refuse_nonzero_values(model, "the static correction").map_err(|e| match e {
+        FemError::InvalidValue { reason, .. } => invalid(key, reason),
+        other => other,
+    })?;
+    if let Ok(f) = free_rigid_motions(model, &[]) {
+        if f.count > 0 {
+            return Err(invalid(
+                key,
+                format!(
+                    "{} free rigid motions on the transformation path (inertia relief is taken on the path of prescribed \
+                     displacements only; ADR 0400)",
+                    f.count
+                ),
+            ));
+        }
+    }
+    if let Some((r, l)) = basis.eigenvalues.iter().enumerate().find(|(_, &l)| l <= 0.0) {
+        return Err(invalid(
+            key,
+            format!("mode {r} has the eigenvalue {l:e} (a rigid motion: K^-1 does not exist)"),
+        ));
+    }
+    let tr = crate::mpc::transformation(model, &[])?;
+    let mut k = stiffness_with(model, options.threads)?;
+    crate::mpc::add_supports(&mut k, model)?;
+    let k = match &options.prestress {
+        Some(p) => add_on_pattern(&k, &geometric_stiffness(model, p, options.threads)?),
+        None => k,
+    };
+    let (kr, _) = tr.reduce(&k, &vec![0.0; tr.n_unknowns()])?;
+    let ldlt = factor_named(&kr, |row| {
+        format!("reduced unknown {row} ({})", crate::mpc::unknown_name(&tr, model, tr.independent()[row]))
+    })?;
+    Ok(StaticCorrection::Transformation { ldlt, tr })
 }
 
 // --------------------------------------------------------------------------------------------------- participation
