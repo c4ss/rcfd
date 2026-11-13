@@ -36,6 +36,7 @@ pub use state::{
     gyroscopic_state_eigen_dense, DenseStateWhirl, Stability, StateWhirl, StateWhirlMode, WhirlStability,
     STABILITY_TOLERANCE,
 };
+pub use state::{CyclicWhirlStability, HarmonicStateWhirl};
 
 /// `|kappa|` at or below which a mode has no whirl direction (ADR 0411 D3).
 pub const WHIRL_TOLERANCE: f64 = 1e-6;

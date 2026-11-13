@@ -24,6 +24,9 @@
 //! ADR 0416 (F-505): at any speed, also above the loss of stiffness, the whirl problem by the eigenvalues of its state
 //! matrix (Hessenberg reduction and the Francis QR algorithm), each speed flagged stable or unstable with its growth rate
 //! ([`RotatingPart::whirl_state`], [`RotatingPart::whirl_stability`]); the functions above are not changed.
+//!
+//! ADR 0420 (F-511): the same on a cyclic sector, per harmonic index on its real cos/sin problem, with the flag and the growth
+//! rate per index and the rotor's flag from them ([`RotatingSector::whirl_state`], [`RotatingSector::whirl_stability`]).
 
 use crate::assemble::{assemble_with, stiffness_with};
 use crate::constraint::{check_rigid_body_motions, prescribed_equations, reduce};
@@ -52,6 +55,7 @@ pub use whirl::{
     gyroscopic_state_eigen_dense, DenseStateWhirl, Stability, StateWhirl, StateWhirlMode, WhirlStability,
     STABILITY_TOLERANCE,
 };
+pub use whirl::{CyclicWhirlStability, HarmonicStateWhirl};
 
 fn unit_axis(axis: Vec3) -> Result<Vec3> {
     let len = norm(axis);
