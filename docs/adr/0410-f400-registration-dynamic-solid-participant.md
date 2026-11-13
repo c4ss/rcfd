@@ -310,3 +310,43 @@ Every value is printed; a test fails at the end if any of its checks missed. "Re
    difference (lag; kept as the negative control N1). Taken: Newmark-consistent.
 3. The bar's end: clamped (`xmin`, three components) rather than the rollers of F-385, to keep the symmetry of D6 for the 3:2
    map; for the uniform axial field the two are the same (D5).
+
+## Amendment 1 (2026-11-13, written after the registered run of commit 25725152 and before the corrected run)
+
+**What the registered run showed.** The registered run (log `f400-scratch/run1.log`, made once) passed A1, A1b, D1, M1, R1, FS2,
+Z1, N1 (lag `7.3e-4`, limit `>= 2e-5`) and, inside the failing test functions, P1 (the step fails at the cap; growth `/ |s| - 1 =
+5.6e-16`) and P2 (`1.2e-15`); every coupled mass run, the spring runs and FS1 stopped after two to four steps: matching runs at the
+cap 4 with test quantities `6e-8` to `1.4e-3`, the 3:2 runs in their first step at the caps 20 (Aitken) and 8 (least squares),
+the spring runs in step 2 at the cap 4. The tests' results are in the addendum; their limits stand.
+
+**Diagnosis (one diagnostic print of the first six steps, matching, ratio 4, Aitken, cap 12, `AtCap::Keep`, not committed).**
+The secant step leaves the residual at `7.8e-13`, `5.5e-10`, `1.0e-6` in steps 1, 2, 3: a growth of about 700 per step, from
+rounding, in the patterns of the interface forces that are not uniform (the corner forces of step 5 differ by `5e-9` relative).
+Cause: the mock of D3 has an added mass per face (`m_a A_f/A` times the face's own acceleration), so its added-mass matrix is
+`B^T diag(m_f) B`, of rank 4 on the matching wall and 9 on the 3:2 wall, and the non-uniform face patterns have slopes of the
+fixed-point map of several hundred (a non-uniform tip load reaches only the elements next to the face within a step). A component
+of the force below the convergence test (`1e-8` of the total) is not iterated: it is loosely coupled, and a loosely coupled
+added-mass component grows by its slope per step (the artificial added-mass instability). The 1-D argument of D5/D6 holds for the
+uniform field but not for the rounding outside it. The same holds for the per-face springs of the spring run, and the 3:2 runs
+excite these patterns at once (several eigenvalues of hundreds: Aitken's scalar factor cannot converge, the least-squares update
+needs more than 8 columns). It is a defect of the mock's set-up, not of `DynamicSolid` (A1 and A1b are bit-equal to the
+integrator).
+
+**Correction (the set-up only; every limit unchanged).** The mock becomes a piston, as F-385's `LinearWall`: one wall acceleration
+and one wall displacement, the area-weighted means of the faces' `x` components, `a_bar = sum_f (A_f/A) a_f,x`, `d_bar` likewise,
+and the force `F_f = (A_f/A) (s(t) F_0 - k_f d_bar - m_a a_bar) e_x` on every face (uniform per area, axial). The points'
+kinematics are still the Newmark relation of D3 (so `a_bar` is the Newmark acceleration of `d_bar`: the relation is linear). The
+added-mass matrix is `m_a w w^T`, `w = B^T (A_f/A)_f e_x`, of rank 1 on both walls; the fixed-point map has the one non-zero
+slope `s = -m_a w^T S^{-1} w` (on the matching wall `w` is the consistent pattern of D5, so `s` is the slope of D6, computed by the
+test as before); every iterate's force lies in `span{w}` up to rounding, and the rounding outside it is mapped into `span{w}`
+(not amplified). Aitken and the least-squares update then end in iteration 3 on both walls, and the coupled pair is exactly
+Newmark's method on `M + m_a w w^T` (stable). This is the reading of the acceptance's "the force -m_a times the wall
+acceleration" (one acceleration of the wall), taken on the maintainer's standing instruction of 2026-11-11 (take the
+recommendation; the alternative, a per-face added mass with a tolerance below rounding, cannot converge).
+
+**Corrected tests** (new functions in `si_solid_dynamic.rs`; the four registered functions that missed stay as ignored records,
+unedited except for the `#[ignore]` attribute; the registered tests that passed stay as they are): `f2_..._piston`,
+`f1_..._piston`, `fs1_..._piston`, `k1_k2_..._piston`, `n1_..._piston` with the same checks, ids suffixed `c` (`F2c`, `I1c`, ...),
+the same limits and caps, and the same estimates except: the 3:2 caps of I2 (20) and I2b (8) stand, the estimate is now 3
+iterations; M2's estimate stands (`< 1e-5`). N1 stands as registered (met); `N1c` repeats the lag control on the piston set-up
+(limit `>= 2e-5`). FS2 (met) stands; it is not repeated. Each corrected run is made once.
