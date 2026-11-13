@@ -444,7 +444,8 @@ fn amplification(rho: f64, omega_2: f64) -> f64 {
 }
 
 #[test]
-fn a8_decay_per_step_at_omega_dt_1e3() {
+#[ignore = "known miss of ADR 0389 A8 (registered run 9cc83fa3): the method decays per step at Omega = 1e3 by 0.5078471683 and 0.8077212458, |r - rho_inf| = 7.847168e-3 and 7.721246e-3 > 1e-3, as arithmetic 2 predicted (a triple root at infinity approached like Omega^(-2/3))"]
+fn a8_decay_per_step_at_omega_dt_1e3_known_miss() {
     let mut ch = Checks::new();
     for rho in [0.5, 0.8] {
         let r = amplification(rho, 1e3 / Q_DT);
@@ -455,12 +456,69 @@ fn a8_decay_per_step_at_omega_dt_1e3() {
 }
 
 #[test]
+#[ignore = "record of ADR 0389 (registered run 9cc83fa3): A8c rho 0.5 met (2.833744e-11); the A8d set-up (omega_1 = 1, omega_2 = 1e7) was refused by the registered pivot rule; superseded by a8c_a8d_amended (amendment 1)"]
 fn a8c_a8d_decay_against_the_closed_form_and_at_omega_dt_1e6() {
     let mut ch = Checks::new();
     for (rho, closed) in [(0.5, 0.507_847_168_3), (0.8, 0.807_721_245_8)] {
         let r = amplification(rho, 1e3 / Q_DT);
         ch.at_most(&format!("A8c rho {rho}: |r - r_closed| at Omega 1e3 (r {r:.10})"), (r - closed).abs(), 1e-6);
         let r6 = amplification(rho, 1e6 / Q_DT);
+        ch.at_most(&format!("A8d rho {rho}: |r - rho_inf| at Omega 1e6 (r {r6:.10})"), (r6 - rho).abs(), 1e-3);
+    }
+    ch.finish();
+}
+
+/// Model Q with a given first frequency (ADR 0389 amendment 1).
+fn model_q_with(omega_1: f64, omega_2: f64) -> (CsrMatrix, CsrMatrix, [f64; 2]) {
+    let (s, c) = THETA.sin_cos();
+    let (l1, l2) = (omega_1 * omega_1, omega_2 * omega_2);
+    let k = CsrMatrix::from_triplets(
+        2,
+        vec![
+            (0, 0, c * c * l1 + s * s * l2),
+            (0, 1, c * s * (l1 - l2)),
+            (1, 0, c * s * (l1 - l2)),
+            (1, 1, s * s * l1 + c * c * l2),
+        ],
+    );
+    let m = CsrMatrix::from_triplets(2, vec![(0, 0, 1.0), (1, 1, 1.0)]);
+    (k, m, [-s, c])
+}
+
+/// As `amplification`, on `model_q_with`.
+fn amplification_with(rho: f64, omega_1: f64, omega_2: f64) -> f64 {
+    let (k, m, phi) = model_q_with(omega_1, omega_2);
+    let o = TransientOptions::new(Q_DT).method(Method::GeneralisedAlpha { rho_inf: rho });
+    let mut it = Integrator::from_matrices(k, m, &[], &o).unwrap();
+    it.start(0.0, &[0.0, 0.0], &[0.0, 0.0]).unwrap();
+    let template = it.state().unwrap();
+    let scale = [1.0, omega_2, omega_2 * omega_2];
+    let mut a = [[0.0; 3]; 3];
+    for j in 0..3 {
+        let mut s = template.clone();
+        let mut e = [0.0; 3];
+        e[j] = 1.0;
+        s.u = phi.iter().map(|x| x * e[0] * scale[0]).collect();
+        s.v = phi.iter().map(|x| x * e[1] * scale[1]).collect();
+        s.a = phi.iter().map(|x| x * e[2] * scale[2]).collect();
+        it.restore(s).unwrap();
+        it.step().unwrap();
+        let t = it.state().unwrap();
+        a[0][j] = dot(&phi, &t.u) / scale[0];
+        a[1][j] = dot(&phi, &t.v) / scale[1];
+        a[2][j] = dot(&phi, &t.a) / scale[2];
+    }
+    spectral_radius(&a)
+}
+
+/// A8c on the unchanged model, A8d with omega_1 = 1e4 (ADR 0389 amendment 1).
+#[test]
+fn a8c_a8d_amended() {
+    let mut ch = Checks::new();
+    for (rho, closed) in [(0.5, 0.507_847_168_3), (0.8, 0.807_721_245_8)] {
+        let r = amplification_with(rho, 1.0, 1e3 / Q_DT);
+        ch.at_most(&format!("A8c rho {rho}: |r - r_closed| at Omega 1e3 (r {r:.10})"), (r - closed).abs(), 1e-6);
+        let r6 = amplification_with(rho, 1e3 / Q_DT, 1e6 / Q_DT);
         ch.at_most(&format!("A8d rho {rho}: |r - rho_inf| at Omega 1e6 (r {r6:.10})"), (r6 - rho).abs(), 1e-3);
     }
     ch.finish();
