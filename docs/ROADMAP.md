@@ -7685,7 +7685,9 @@ fixed by the item's registration ADR before any code.
     1.7e-3. Known miss: the second factor is 2.0135e-2 from four times the first against 2e-2, because the solid's
     K_sigma also carries the axial stress on the rotating sections (r^2 k^2, the order of the shear term; the derived
     form matches within 1.7e-4). Transformation path (springs, linear constraints, rigid sets) refused. Follow-ups F-492
-    (the knife-edge factors against the derived closed form), F-493 (transformation path).
+    (the knife-edge factors against the derived closed form), F-493 (transformation path). The A9 clause is settled by
+    F-492 (ADR 0394): the solid's factors match the derived closed form within 1.7e-4, and at L/h = 40 the second factor
+    is four times the first within 0.52 percent.
 - [ ] **F-396** Modes of a rotating part: stress stiffening by the centrifugal pre-stress, spin softening, Campbell diagram
   - depends on: F-395, F-375, F-383
   - acceptance: Every limit not stated here is registered in the ADR before the run. At zero speed the result has the
@@ -9312,13 +9314,20 @@ fixed by the item's registration ADR before any code.
     solver of ADR 0391.
   - note: From ADR 0391 questions 1 and 2, recommendation taken on the maintainer's standing instruction of 2026-11-11.
     Size S.
-- [ ] **F-492** Buckling factors of the knife-edge column against the solid's closed form (ADR 0390 known miss)
+- [x] **F-492** Buckling factors of the knife-edge column against the solid's closed form (ADR 0390 known miss)
   - depends on: F-395
   - acceptance: Every limit not stated here is registered in the ADR before the run. The knife-edge Hex20 beam of ADR
     0390 (L/h = 20, nu = 0): the first two buckling factors within 1 percent of the lower root of (r^2 k^2/(kappa G A))
     P^2 - (1 + a + r^2 k^2) P + P_E = 0 (k = n pi/L, a = P_E/(kappa G A), r^2 = I/A), derived in the ADR; at L/h = 40
     the second factor four times the first within 2 percent.
-  - note: From ADR 0390 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S.
+  - note: From ADR 0390 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR
+    0394, 2026-11-13: the quadratic derived from a Timoshenko column with the solid's initial-stress term on the
+    rotating sections (P_E read as the Euler load of mode n, E I k^2, with a = P_E,n/(kappa G A); the factors compared
+    as lambda |s_ref| A with the root in N); test code only (crates/rcfd-fem/tests/si_knife_edge_closed_form.rs).
+    Knife-edge Hex20 beam at L/h = 20: factors 4.4e-5 and 1.7e-4 from the lower roots (Engesser alone 2.0e-3 and
+    7.7e-3); at L/h = 40 the second factor 5.16e-3 from four times the first (closed form 5.20e-3), each factor within
+    5.4e-5 of its root. Dropping the u_x block of K_sigma in a scratch mutation puts the solid onto Engesser within
+    1.8e-4, confirming the diagnosis of ADR 0390. Size S.
 - [ ] **F-493** Pre-stressed modes and buckling on the transformation path (linear constraints, rigid sets, supports)
   - depends on: F-395, F-486
   - acceptance: Every limit not stated here is registered in the ADR before the run. prestressed_modes and
