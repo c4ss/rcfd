@@ -1070,7 +1070,7 @@ impl Integrator {
         };
         self.check_coverage(self.time_of(t0, n), self.time_of(t0, n + steps))?;
         for _ in 0..steps {
-            self.advance();
+            self.advance_with(None);
         }
         Ok(())
     }
@@ -1080,13 +1080,63 @@ impl Integrator {
         self.run(1)
     }
 
-    fn advance(&mut self) {
+    /// Advances `steps` steps with, in addition to the load histories, the force `force` held over them: added to the load
+    /// at both ends of every step (ADR 0410 D1, the interface force of a co-simulation participant). One value per entry of
+    /// [`Integrator::n_unknowns`] (on the transformation path a vector of the mesh equations is also taken, as for load
+    /// patterns); reduced like a load pattern. Refuses, before any step, a wrong length, a non-finite value and a table that
+    /// does not cover the run.
+    pub fn run_with_force(&mut self, steps: u64, force: &[f64]) -> Result<()> {
+        let (t0, n) = {
+            let s = self.current()?;
+            (s.t0, s.step)
+        };
+        let extra = self.reduce_force(force)?;
+        self.check_coverage(self.time_of(t0, n), self.time_of(t0, n + steps))?;
+        for _ in 0..steps {
+            self.advance_with(Some(&extra));
+        }
+        Ok(())
+    }
+
+    /// A full force vector reduced like a load pattern (`F[free[i]]`, or `T^T F` on the transformation path).
+    fn reduce_force(&self, force: &[f64]) -> Result<Vec<f64>> {
+        let n_mesh = self.motion.as_ref().map(|mp| mp.tr.n_mesh());
+        if force.len() != self.n_full && Some(force.len()) != n_mesh {
+            return Err(FemError::FieldLength {
+                key: "held force",
+                expected: self.n_full,
+                found: force.len(),
+            });
+        }
+        if let Some(i) = force.iter().position(|x| !x.is_finite()) {
+            return Err(FemError::InvalidValue {
+                key: "held force",
+                reason: format!("value {:e} at equation {i} is not finite", force[i]),
+            });
+        }
+        Ok(match &self.motion {
+            None => self.free.iter().map(|&e| force[e]).collect(),
+            Some(mp) => {
+                let mut full = force.to_vec();
+                full.resize(self.n_full, 0.0);
+                mp.tr.transpose_times(&full)
+            }
+        })
+    }
+
+    fn advance_with(&mut self, extra: Option<&[f64]>) {
         let [am, af, beta, gamma] = self.parameters;
         let dt = self.dt;
         let state = self.state.as_ref().expect("state checked");
         let n = state.step;
-        let f0 = self.load(self.time_of(state.t0, n));
-        let f1 = self.load(self.time_of(state.t0, n + 1));
+        let mut f0 = self.load(self.time_of(state.t0, n));
+        let mut f1 = self.load(self.time_of(state.t0, n + 1));
+        if let Some(e) = extra {
+            for i in 0..e.len() {
+                f0[i] += e[i];
+                f1[i] += e[i];
+            }
+        }
         let len = state.u.len();
         let (u, v, a) = (&state.u, &state.v, &state.a);
         let mut ut = vec![0.0; len];
