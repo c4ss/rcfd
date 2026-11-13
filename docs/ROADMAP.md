@@ -7516,8 +7516,11 @@ fixed by the item's registration ADR before any code.
     frequencies, modes and stiffness with the bits of main ee449e26 (26 digests equal); assemble_with with the element
     stiffness equals assemble::stiffness bit for bit for 1 and 8 threads on four models; every sb_ test of rcfd-fem,
     rcfd-linalg, rcfd-io, rcfd-post passes unedited (rcfd-api has none); baseline hashes unchanged. Eleven mutations,
-    all caught.
-- [ ] **F-389** Quadratic hexahedron (Hex20) with its face loads, mass and the quadratic upgrade of a hexahedron box
+    all caught. 2026-11-13: with Hex20 (ADR 0292) and the mpc package (ADR 0296) landed, si_scaffold's X1, X3, R1 to R11
+    are ignored records of ADR 0291 and _after_landed copies without the retired rows (R1, R5, R6, R8, R9; R8 modal
+    refused by the ADR 0296 follow-up) pass; maintainer decision: every later package of the tier does the same for its
+    own rows.
+- [~] **F-389** Quadratic hexahedron (Hex20) with its face loads, mass and the quadratic upgrade of a hexahedron box
   - depends on: F-388, F-372, F-374, F-375, F-376, F-383
   - acceptance: Every limit not stated here is registered in the ADR before the run. Hex20 on the reference element and
     on randomly distorted ones (registered seed): shape functions sum to 1 and derivatives to 0 within 1e-14, analytic
@@ -7531,12 +7534,19 @@ fixed by the item's registration ADR before any code.
     Manufactured solution of F-378: observed L2 order >= 2.7. Mass: total mass and inertia tensor of a box within 1e-12;
     first axial frequency of a fixed-free bar (nu = 0) within 0.1 percent at 8 elements. The upgrade has (nodes + edges)
     nodes.
-  - note: Structural solver, intermediate tier (plan ADR 0290, 2026-11-12). Size S. Stub ADR 0292; the registration is
-    written by the implementation agent before any code. ADR 0291 (2026-11-13): hex20.rs holds PENDING, element(),
-    reference_nodes(), faces(), shape_gradients(), fit_basis() and volume(), to which mesh.rs, element.rs and recover.rs
-    delegate; landing Hex20 is filling these and setting PENDING to None in hex20.rs. The node order (corners as Hex8,
-    mid-edge nodes on the edges in HEX_EDGES order) is declared as VTK type 25's and mapped by identity in
-    solid_output.rs; confirm it.
+  - note: ADR 0292, 2026-11-12: Hex20 serendipity element in rcfd-fem (hex20.rs; node order confirmed as VTK type 25
+    from the published vtkQuadraticHexahedron definition; 3 x 3 x 3 rule for stiffness and mass; triquadratic recovery;
+    8-node face loads as per-node forces; upgrade_to_hex20 and upgrade_to_hex20_mapped). Met: partition 4.4e-16,
+    derivatives against central differences 2.6e-11, monomials 1.8e-15, symmetry, rank 54 and rigid motions on 21
+    elements, patch 4.4e-15, face loads -1/12 and 1/3 of p A to 1.6e-16, uniaxial 1.6e-12, bore displacement 7.3e-5,
+    manufactured solution L2 orders 3.05 (cases D and T), box mass and inertia 3e-15, bar frequency 1.03e-6 at 8
+    elements, 111 = 36 + 75 nodes; nine mutations caught. Missed (known misses, diagnosed): cantilever 1.8 percent
+    (ratio 0.981949; the full clamp with nu = 0.3, 0.999 with nu = 0) and bore hoop stress 1.17 percent on 4 x 8
+    elements (radial resolution). Model-path pressure and traction on Hex20 faces stay refused by loads.rs, and
+    SolidMesh::face_area panics on an 8-node face (follow-up). si_scaffold X1, X3, R1, R10 of ADR 0291 fail because
+    Hex20 is no longer refused: needs the maintainer. Resolved 2026-11-13 by the maintainer's decision (records and
+    copies): the retired si_scaffold rows stay as ignored records of ADR 0291 and the _after_landed copies without them
+    pass.
 - [ ] **F-390** Hex8 without locking: mean-dilatation (B-bar) and incompatible-mode formulations, opt-in per element block
   - depends on: F-388, F-372, F-374, F-376, F-379
   - acceptance: Every limit not stated here is registered in the ADR before the run. Two opt-in formulations of Hex8,
@@ -7583,7 +7593,7 @@ fixed by the item's registration ADR before any code.
     registered limit is refused with the element.
   - note: Structural solver, intermediate tier (plan ADR 0290, 2026-11-12). Size M. Stub ADR 0295; the registration is
     written by the implementation agent before any code.
-- [ ] **F-393** Linear multi-point constraints by a transformation, rigid sets with a reference point, elastic supports
+- [x] **F-393** Linear multi-point constraints by a transformation, rigid sets with a reference point, elastic supports
   - depends on: F-388, F-374, F-375
   - acceptance: Every limit not stated here is registered in the ADR before the run. A model with prescribed
     displacements only gives the bits of the basic tier; the same constraints written as linear constraints give the
@@ -7596,14 +7606,23 @@ fixed by the item's registration ADR before any code.
     applied within 1e-10. Supports: a bar on an end spring k has the tip displacement F (1/k + L/(E A)) within 1e-10; a
     block on a foundation k_f under pressure p settles by p/k_f within 1e-10. A redundant constraint is dropped with a
     report, a contradictory one and a chain that closes on itself are refused naming the constraints.
-  - note: Structural solver, intermediate tier (plan ADR 0290, 2026-11-12). Size M. Stub ADR 0296; the registration is
-    written by the implementation agent before any code. ADR 0275 (2026-11-12): constraint::reduce(k, f, prescribed)
-    returns a ReducedSystem (principal submatrix K_FF, f_F - K_FP g, expand); the rigid-body check
-    constraint::check_rigid_body_motions works on prescribed equations only and needs extending for linear constraints.
-    ADR 0291 (2026-11-13): Constraint::Linear { terms: Vec<LinearTerm>, value }, Constraint::RigidSet { set, reference
-    }, Constraint::Cyclic { low, high, axis, origin, sectors } and ElasticSupport::{NodalSpring, Foundation} exist and
-    are validated when added; constraints are refused in constraint::prescribed_equations (gated by mpc::PENDING and
-    cyclic::PENDING), supports in SolidModel::check_supported.
+  - note: ADR 0296, 2026-11-13: linear multi-point constraints, rigid sets and elastic supports by the transformation u
+    = T q + g in rcfd-fem::mpc (mpc::PENDING = None). Rows are eliminated in a fixed order (prescribed, then the model's
+    Linear and RigidSet constraints) with designated dependents (the first term of a Linear constraint) by Gauss-Jordan
+    substitution; a row implied by earlier ones is dropped and reported (threshold 1e-10), a contradictory row and a row
+    that closes a chain on itself are refused naming the constraints. A rigid set has six auxiliary reference unknowns
+    (translation and small rotation; no six-unknown node needed) and takes a force and a moment through
+    solve_static_mpc; nodal springs and a consistent foundation are added to K. solve_static_report dispatches to it for
+    any model with a Linear or RigidSet constraint or a support; every other model runs the old code (A1 bit-equal,
+    si_scaffold_bits and baseline hashes unchanged). Results: Linear-written prescribed values 3e-16 (limit 1e-12); K_r
+    symmetric to 1e-16; constraint work 3e-13; skew roller 7e-16; periodic box with displaced nodes: strain 4e-15, 33
+    redundant rows dropped as computed beforehand; rigid end of a Tet10 bar: F L/(E A) 3e-14, M L/(E I) 9e-11 (limit 1
+    percent), resultant and moment 5e-13; end spring 1.5e-14; foundation p/k_f 3e-14 (Hex8, Tet10); threads 1 and 8
+    bit-equal. Ten mutations caught. Modal analysis and the preconditioned CG refuse these constraints; Cyclic stays
+    refused. Four tests of ADR 0291's si_scaffold.rs (the mpc::PENDING assertion, cases R5, R6, R8, R9 and R8 modal) now
+    fail as registered and need the maintainer's edit. Resolved 2026-11-13 by the maintainer's decision (records and
+    copies): the retired si_scaffold rows stay as ignored records of ADR 0291 and the _after_landed copies without them
+    pass.
 - [ ] **F-394** Cyclic symmetry: one sector of a rotor for statics and for modal analysis by harmonic index
   - depends on: F-393, F-375, F-383
   - acceptance: Every limit not stated here is registered in the ADR before the run. Equivalence: for a ring and for a
@@ -7620,7 +7639,11 @@ fixed by the item's registration ADR before any code.
     Vec<LinearTerm>, value }, Constraint::RigidSet { set, reference }, Constraint::Cyclic { low, high, axis, origin,
     sectors } and ElasticSupport::{NodalSpring, Foundation} exist and are validated when added; constraints are refused
     in constraint::prescribed_equations (gated by mpc::PENDING and cyclic::PENDING), supports in
-    SolidModel::check_supported.
+    SolidModel::check_supported. ADR 0296 (2026-11-13): mpc::transformation builds T and g from rows c . x = b
+    (Gauss-Jordan with designated dependents, mpc::DEPENDENCE_TOLERANCE 1e-10); Transformation::reduce gives T^T K T and
+    T^T (f - K g), Transformation::expand gives x. The cyclic rows can be added as rows of the same elimination;
+    prescribed_equations still refuses Cyclic (gated by cyclic::PENDING). Modal analysis on the transformation is
+    refused by mpc::refuse_in_modal and is needed by the cyclic modes.
 - [ ] **F-395** Geometric (initial-stress) stiffness of solid elements: pre-stressed modal analysis and linear buckling
   - depends on: F-388, F-374, F-376, F-382, F-383
   - acceptance: Every limit not stated here is registered in the ADR before the run. K_sigma is symmetric within 1e-13
@@ -9081,3 +9104,33 @@ fixed by the item's registration ADR before any code.
     either the estimate leaves out what is not a fluid mode, opt-in or with the defaults bit-identical, so that it is
     below one for that run and above one for a setting that stops, or the limitation is documented with its numbers.
   - note: From ADR 0374 question 4, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+- [ ] **F-484** Hex20 face loads through the model path
+  - depends on: F-389
+  - acceptance: Every limit not stated here is registered in the ADR before the run. Load::Traction and Load::Pressure
+    on surface sets of Hex20 faces give through nodal_load_vector the per-node forces of hex20::pressure_loads and
+    hex20::traction_loads bit for bit; SolidMesh::face_area and face_area_vector of an 8-node face equal
+    hex20::face_area and the 3 x 3 Gauss area vector within 1e-15 relative (no panic); every load vector and area of
+    Tri3, Quad4 and Tri6 faces is bit-identical to before; the baseline hashes are unchanged.
+  - note: From ADR 0292 (Load::Pressure and Load::Traction on Hex20 faces refused by loads.rs; SolidMesh::face_area
+    panics on an 8-node face). Size S.
+- [ ] **F-485** Hex20 cantilever with the beam-theory support and the bore stress on a refined mesh
+  - depends on: F-389
+  - acceptance: Every limit not stated here is registered in the ADR before the run. Cantilever L/h = 20, nu = 0.3, one
+    Hex20 through the thickness and 10 along, with the support of beam theory at the root (u_x = 0 on the root face, u_y
+    and u_z fixed on its neutral line), registered before the run: tip deflection within 1 percent of P L^3/(3 E I) (1 +
+    3 E I/(kappa G A L^2)), the full clamp recorded beside it. Thick cylinder b/a = 2, plane strain, Hex20 with the
+    radial element count derived in the registration from the second-order rate of ADR 0292's diagnostic: bore hoop
+    stress within 1 percent and bore displacement within 0.2 percent of Lame.
+  - note: From ADR 0292's two known misses (cantilever 1.8 percent with the full clamp, bore hoop stress 1.17 percent on
+    4 x 8 elements). Size S.
+- [ ] **F-486** Modal analysis on the transformation: linear constraints, rigid sets and supports in the modal analysis
+  - depends on: F-393
+  - acceptance: Every limit not stated here is registered in the ADR before the run. modal_analysis of a model with
+    linear constraints, rigid sets or elastic supports reduces K and M by the transformation of ADR 0296 (T^T K T, T^T M
+    T; zero right-hand sides only, a non-zero value refused naming the constraint) and expands the modes by T. A model
+    with prescribed displacements only gives the bits of today's modal analysis. A bar (nu = 0) on an end spring k has
+    its first axial frequency from the closed-form transcendental equation within 0.5 percent at 20 elements; the modes
+    are M-orthonormal within 1e-10 and every constraint row holds on each expanded mode within 1e-12; a model held only
+    by springs uses the automatic shift when a rigid motion is free.
+  - note: From ADR 0296 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11; needed
+    by the cyclic modes (F-394). Size S.
