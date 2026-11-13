@@ -27,6 +27,8 @@ pub struct ElasticAmgSettings {
     /// A near-null column is dropped from an aggregate when its norm after orthogonalisation is at most this fraction of
     /// its norm before.
     pub drop_tolerance: f64,
+    /// The aggregation rule (ADR 0370); [`Aggregation::Greedy`] is the rule of ADR 0305.
+    pub aggregation: Aggregation,
 }
 
 impl Default for ElasticAmgSettings {
@@ -38,6 +40,36 @@ impl Default for ElasticAmgSettings {
             pre_sweeps: 1,
             post_sweeps: 1,
             drop_tolerance: 1e-10,
+            aggregation: Aggregation::Greedy,
+        }
+    }
+}
+
+/// The aggregation rule of [`ElasticAmg`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
+pub enum Aggregation {
+    /// ADR 0305 D2: strength by the threshold `theta` on the block norms, blocks visited in index order.
+    Greedy,
+    /// ADR 0370 D1: a coupled block is a candidate when its point lies within `ratio` times the distance to the nearest
+    /// coupled block; blocks visited in the lexicographic order `(z, y, x)` of their points; coarse points are the
+    /// centroids of the aggregates. Needs [`ElasticAmg::with_points`].
+    Geometric {
+        /// The distance ratio.
+        ratio: f64,
+    },
+}
+
+/// The ratio of [`ElasticAmgSettings::quadratic`]: `(sqrt 3 + 2) / 2`, the middle of the gap between the farthest
+/// Chebyshev-1 and the nearest Chebyshev-2 neighbour of a lattice (ADR 0370 arithmetic 3).
+pub const QUADRATIC_RATIO: f64 = 1.866_025_403_784_438_6;
+
+impl ElasticAmgSettings {
+    /// The default settings with the geometric aggregation of ADR 0370 (for meshes of quadratic elements).
+    pub fn quadratic() -> Self {
+        ElasticAmgSettings {
+            aggregation: Aggregation::Geometric { ratio: QUADRATIC_RATIO },
+            ..ElasticAmgSettings::default()
         }
     }
 }
@@ -70,6 +102,15 @@ pub enum ElasticAmgError {
         /// Its order.
         n: usize,
     },
+    /// The geometric aggregation needs block points ([`ElasticAmg::with_points`]).
+    MissingPoints,
+    /// The points do not match the blocks.
+    PointsLength {
+        /// The number of blocks.
+        expected: usize,
+        /// The number of points.
+        got: usize,
+    },
 }
 
 impl std::fmt::Display for ElasticAmgError {
@@ -85,6 +126,10 @@ impl std::fmt::Display for ElasticAmgError {
             }
             ElasticAmgError::CoarseTooLarge { n } => {
                 write!(f, "the coarsest level has order {n} > {MAX_DENSE}")
+            }
+            ElasticAmgError::MissingPoints => write!(f, "the geometric aggregation needs a point per block"),
+            ElasticAmgError::PointsLength { expected, got } => {
+                write!(f, "{got} points for {expected} blocks")
             }
         }
     }
@@ -417,6 +462,116 @@ fn aggregate_blocks(a: &CsrMatrix, bp: &[usize], theta: f64) -> (Vec<usize>, usi
     (agg, count)
 }
 
+/// Geometric aggregation on the block graph (ADR 0370 D1): candidates of `I` are the coupled blocks within `ratio` times
+/// the distance to the nearest coupled block; the three greedy passes of ADR 0305 D2 visit the blocks in the
+/// lexicographic order `(z, y, x)` of their points. Returns the aggregate of each block and the count.
+fn aggregate_geometric(a: &CsrMatrix, bp: &[usize], points: &[[f64; 3]], ratio: f64) -> (Vec<usize>, usize) {
+    const NONE: usize = usize::MAX;
+    let nb = bp.len() - 1;
+    let of = block_of_rows(bp, a.n);
+    let dist = |i: usize, j: usize| -> f64 {
+        let (p, q) = (points[i], points[j]);
+        ((q[0] - p[0]).powi(2) + (q[1] - p[1]).powi(2) + (q[2] - p[2]).powi(2)).sqrt()
+    };
+    let mut w2 = vec![0.0f64; nb];
+    let mut mark = vec![NONE; nb];
+    let mut touched: Vec<usize> = Vec::new();
+    let mut cand: Vec<Vec<(usize, f64)>> = Vec::with_capacity(nb);
+    for b in 0..nb {
+        touched.clear();
+        for r in bp[b]..bp[b + 1] {
+            for k in a.row_ptr[r]..a.row_ptr[r + 1] {
+                let c = of[a.col[k]];
+                if mark[c] != b {
+                    mark[c] = b;
+                    w2[c] = 0.0;
+                    touched.push(c);
+                }
+                w2[c] += a.val[k] * a.val[k];
+            }
+        }
+        touched.sort_unstable();
+        let dmin = touched
+            .iter()
+            .filter(|&&c| c != b)
+            .map(|&c| dist(b, c))
+            .fold(f64::INFINITY, f64::min);
+        let list: Vec<(usize, f64)> = touched
+            .iter()
+            .filter(|&&c| c != b && dist(b, c) <= ratio * dmin)
+            .map(|&c| (c, w2[c].sqrt()))
+            .collect();
+        cand.push(list);
+    }
+    let mut order: Vec<usize> = (0..nb).collect();
+    order.sort_by(|&i, &j| {
+        let (p, q) = (points[i], points[j]);
+        p[2].total_cmp(&q[2])
+            .then(p[1].total_cmp(&q[1]))
+            .then(p[0].total_cmp(&q[0]))
+            .then(i.cmp(&j))
+    });
+    let mut agg = vec![NONE; nb];
+    let mut count = 0;
+    // pass 1: seeds whose candidates are all free
+    for &b in &order {
+        if agg[b] != NONE {
+            continue;
+        }
+        if cand[b].iter().all(|&(c, _)| agg[c] == NONE) {
+            agg[b] = count;
+            for &(c, _) in &cand[b] {
+                agg[c] = count;
+            }
+            count += 1;
+        }
+    }
+    // pass 2: join the pass-1 aggregate of the strongest candidate
+    let snapshot = agg.clone();
+    for &b in &order {
+        if agg[b] != NONE {
+            continue;
+        }
+        let mut best = (-1.0, NONE);
+        for &(c, w) in &cand[b] {
+            if snapshot[c] != NONE && w > best.0 {
+                best = (w, snapshot[c]);
+            }
+        }
+        if best.1 != NONE {
+            agg[b] = best.1;
+        }
+    }
+    // pass 3: singletons
+    for &b in &order {
+        if agg[b] == NONE {
+            agg[b] = count;
+            count += 1;
+        }
+    }
+    (agg, count)
+}
+
+/// The points of the coarse blocks: the centroid of the member blocks of each aggregate that has coarse unknowns, in
+/// coarse block order (ADR 0370 D1).
+fn coarse_points(pt: &CsrMatrix, bp: &[usize], agg: &[usize], n_agg: usize, points: &[[f64; 3]]) -> Vec<[f64; 3]> {
+    let mut sum = vec![[0.0f64; 3]; n_agg];
+    let mut cnt = vec![0usize; n_agg];
+    let mut has = vec![false; n_agg];
+    for (b, &g) in agg.iter().enumerate() {
+        for d in 0..3 {
+            sum[g][d] += points[b][d];
+        }
+        cnt[g] += 1;
+        let r = bp[b];
+        has[g] |= pt.row_ptr[r + 1] > pt.row_ptr[r];
+    }
+    (0..n_agg)
+        .filter(|&g| has[g])
+        .map(|g| sum[g].map(|s| s / cnt[g] as f64))
+        .collect()
+}
+
 /// Spectral radius of `D^{-1} A` by power iteration (15 steps, times 1.1; the start vector of `amg.rs`).
 fn spectral_radius(a: &CsrMatrix, bp: &[usize], inv: &[f64], off: &[usize]) -> f64 {
     let n = a.n;
@@ -571,6 +726,43 @@ impl ElasticAmg {
         near_null: &[Vec<f64>],
         settings: &ElasticAmgSettings,
     ) -> Result<Self, ElasticAmgError> {
+        if settings.aggregation != Aggregation::Greedy {
+            return Err(ElasticAmgError::MissingPoints);
+        }
+        Self::build(a, block_ptr, near_null, None, settings)
+    }
+
+    /// As [`ElasticAmg::new`], with one point per block of `block_ptr` for [`Aggregation::Geometric`] (ADR 0370); with
+    /// [`Aggregation::Greedy`] the points are not used.
+    pub fn with_points(
+        a: &CsrMatrix,
+        block_ptr: &[usize],
+        near_null: &[Vec<f64>],
+        points: &[[f64; 3]],
+        settings: &ElasticAmgSettings,
+    ) -> Result<Self, ElasticAmgError> {
+        let expected = block_ptr.len().saturating_sub(1);
+        if points.len() != expected {
+            return Err(ElasticAmgError::PointsLength {
+                expected,
+                got: points.len(),
+            });
+        }
+        Self::build(a, block_ptr, near_null, Some(points.to_vec()), settings)
+    }
+
+    fn build(
+        a: &CsrMatrix,
+        block_ptr: &[usize],
+        near_null: &[Vec<f64>],
+        points: Option<Vec<[f64; 3]>>,
+        settings: &ElasticAmgSettings,
+    ) -> Result<Self, ElasticAmgError> {
+        let geometric = match settings.aggregation {
+            Aggregation::Geometric { ratio } => Some(ratio),
+            Aggregation::Greedy => None,
+        };
+        let mut pts = points;
         if a.n != a.ncols {
             return Err(ElasticAmgError::NotSquare);
         }
@@ -593,8 +785,17 @@ impl ElasticAmg {
             let mut built = None;
             if !coarsest {
                 let theta = settings.theta * 0.5f64.powi(l as i32);
-                let (agg, n_agg) = aggregate_blocks(&cur, &bp, theta);
+                let (agg, n_agg) = match (geometric, &pts) {
+                    (Some(ratio), Some(p)) => aggregate_geometric(&cur, &bp, p, ratio),
+                    (Some(_), None) => return Err(ElasticAmgError::MissingPoints),
+                    _ => aggregate_blocks(&cur, &bp, theta),
+                };
                 let (pt, cb, cbp) = tentative(cur.n, &bp, &agg, n_agg, &nn, settings.drop_tolerance);
+                if geometric.is_some() {
+                    if let Some(p) = &pts {
+                        pts = Some(coarse_points(&pt, &bp, &agg, n_agg, p));
+                    }
+                }
                 if pt.ncols == 0 || pt.ncols as f64 > 0.85 * cur.n as f64 {
                     coarsest = true;
                 } else {
