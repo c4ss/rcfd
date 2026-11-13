@@ -202,3 +202,12 @@ probe, not a check). Limits unchanged except the reason looked for: `Ok`; `adapt
 hash = `build_mesh`'s; `adapt_text` starts `[mesh.adapt]: not adapted`. Run once.
 
 Run 1 of A1, A2, C1, D1, D2 and E1 is counted as made (results in the addendum).
+
+## Amendment 2 (2026-11-13, after the mutation run, before the corrected run of M4): a defective mutation script
+
+In the mutation run (`f475-scratch/mutations.log`) M4 did not compile (`error[E0283]: type annotations needed`): the script
+replaced `report.solves = a.cycles...collect();` by `report.solves = Vec::new(); let _ = a.cycles...collect();`, and the
+`collect` of the discarded value has no type. The mutation was therefore not run; C1 was not exercised by it. Corrected M4 (the
+same mutation, the solves left empty): the discarded value is typed, `let _: Vec<(usize, usize, bool)> = a.cycles...collect();`.
+Run once, on the same copy, with the same check (C1, `a1_c1_the_preview_adapts_like_the_run`). M1, M2, M3, M5 of that run are
+counted.
