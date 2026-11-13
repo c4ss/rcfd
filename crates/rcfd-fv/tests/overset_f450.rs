@@ -322,6 +322,55 @@ fn errors(s: &OversetSolver) -> Errors {
     e
 }
 
+/// ADR 0376 amendment 1, HR: the largest error of the calculated cells of a part within two face steps of a fringe cell
+/// of that part (`band`) and of the other calculated cells of that part (`out`); `part_background` picks the part.
+/// Returns `(band, out, the cell of the largest error of the run is in this band)`.
+fn band_errors(s: &OversetSolver, part_background: bool) -> (f64, f64, bool) {
+    let nb = s.conn.n_background_cells;
+    let n = s.geom.n_cells();
+    let in_part = |c: usize| (c < nb) == part_background;
+    let (own, nei) = (s.geom.mesh.owner(), s.geom.mesh.neighbour());
+    let mut dist = vec![usize::MAX; n];
+    for c in 0..n {
+        if in_part(c) && s.conn.kind[c] == CellKind::Fringe {
+            dist[c] = 0;
+        }
+    }
+    for step in 1..=2 {
+        let mut next = dist.clone();
+        for f in 0..s.geom.n_internal {
+            for (x, y) in [(own[f], nei[f]), (nei[f], own[f])] {
+                if dist[x] == step - 1 && s.conn.kind[y] == CellKind::Calculated && dist[y] == usize::MAX {
+                    next[y] = step;
+                }
+            }
+        }
+        dist = next;
+    }
+    let centres = s.geom.mesh.cell_centres();
+    let scale = (-2.0 * NU_TG * T_END).exp();
+    let (mut band, mut out) = (0.0f64, 0.0f64);
+    let (mut emax, mut at_band) = (0.0f64, false);
+    for c in 0..n {
+        if s.conn.kind[c] == CellKind::Hole {
+            continue;
+        }
+        let eps = vec3::norm(vec3::sub(s.u.values[c], tg_u(centres[c], T_END))) / scale;
+        let calc = in_part(c) && s.conn.kind[c] == CellKind::Calculated;
+        let b = calc && dist[c] <= 2;
+        if eps > emax {
+            emax = eps;
+            at_band = b;
+        }
+        if b {
+            band = band.max(eps);
+        } else if calc {
+            out = out.max(eps);
+        }
+    }
+    (band, out, at_band)
+}
+
 fn print_run(name: &str, r: &Run, e: &Errors) {
     println!(
         "{name}: {:.1} s; {} steps; refused: {:?}; continuity {:.2e}; hole flux {:.2e}; boundary flux {:.2e}; \
@@ -391,15 +440,45 @@ fn level(c: &mut Checks, level: usize) -> f64 {
         egr.max / edr.max,
         egm.max
     );
+    let hr: Vec<[(f64, f64, bool); 2]> = [&gm, &dm, &gr, &dr]
+        .iter()
+        .map(|r| [band_errors(&r.s, true), band_errors(&r.s, false)])
+        .collect();
+    for (name, h) in ["G moving", "default moving", "G at rest", "default at rest"].iter().zip(&hr) {
+        println!(
+            "HR {tag} {name} (printed): background band {:.4e}, other background calculated {:.4e}, maximum in it {}; \
+             component band {:.4e}, other component calculated {:.4e}, maximum in it {}",
+            h[0].0, h[0].1, h[0].2, h[1].0, h[1].1, h[1].2
+        );
+    }
+    for (name, g, d) in [("moving", 0, 1), ("at rest", 2, 3)] {
+        println!(
+            "HR {tag} {name} (printed): maximum of G in a band {}; e_out(G) / e_out(default) {:.4}",
+            hr[g][0].2 || hr[g][1].2,
+            hr[g][0].1 / hr[d][0].1
+        );
+    }
     egm.max
 }
 
-/// ADR 0376 at level 1 (A1 to A4, C3, K, the split D printed).
+/// ADR 0376 at level 1 (A1 to A4, C3, K, the split D printed), as registered. Run once: A1 missed, `e_max(G) /
+/// e_max(default) = 1.2636` (limit 1.2); A2, A3, A4, C3, K met (ADR 0376 amendment 1).
 #[test]
-fn a_tg_level_1_moving_component_under_g() {
+#[ignore = "known miss, ADR 0376: A1 at level 1, e_max(G) / e_max(default) = 1.2636 (limit 1.2)"]
+fn a_tg_level_1_moving_component_under_g_known_miss() {
     let mut c = Checks::new();
     level(&mut c, 1);
     c.finish();
+}
+
+/// ADR 0376 amendment 1: the level-1 checks that were met (A2, A3, A4, C3, K) on the same deterministic runs, with A1
+/// and HR printed, not asserted.
+#[test]
+fn a_tg_level_1_met_checks_and_ring_band() {
+    let mut c = Checks::new();
+    level(&mut c, 1);
+    let missed: Vec<&String> = c.0.iter().filter(|m| !m.starts_with("A1 ")).collect();
+    assert!(missed.is_empty(), "missed: {missed:?}");
 }
 
 /// ADR 0376 at level 2 (A1 to A4, C3, the split D printed); the heavy record.

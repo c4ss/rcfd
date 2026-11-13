@@ -196,3 +196,40 @@ the default runs. `e_ov(G) / e_ov(default)` above `1` (the interpolation error h
 ## Open questions
 
 Listed with options and a recommendation in the addendum, after the results.
+
+## Amendment 1 (2026-11-12, written after the one run of B1's reference hashes and of the level-1 test, before any other run)
+
+Run so far, once each: the reference hashes of B1 on the registration commit (TG_1 moving, 40 steps, default coupling:
+quadratic `e43a026a778e83b3`, linear `9c5ab1e5b21d5368`; log `f450-scratch/b1-base.log`), then the level-1 test
+`a_tg_level_1_moving_component_under_g` (log `f450-scratch/f450-fast.log`, 35 s). No library code was written or changed.
+
+**A1 is missed at level 1.** `e_max(G) / e_max(default) = 9.7081e-4 / 7.6831e-4 = 1.2636` against `1.2`. A2 (`1.55e-13`),
+A3 (`3.8e-15`, `0`), A4 (200 steps, none refused), C3, K (142 kind changes) are met. Printed: the largest error of G is in
+a calculated background cell at `(1.6886, 1.2174)`, about `0.345` from the component centre across its side, that is just
+outside the hole (`0.25`) and its fringe layer; that of the default coupling is the domain-boundary cell of item 2 of the
+arithmetic, as estimated. The overlap ratio `e_ov(G) / e_ov(default)` is `1.2065` moving and `1.4298` at rest, so
+`m_G / m_default = 0.8438`: the motion does not add to the excess of G at level 1; the excess is there with the component
+at rest (`e_max` ratio at rest `1.3977`, the largest error of G at rest again a background cell just outside the fringe,
+at `(1.6101, 1.3744)`, `0.339` from the centre). My registered estimate (A1 within `1.02`, the maximum staying at the
+domain boundary) was wrong: the error of G in the background calculated cells near the hole exceeds the boundary error of
+the default runs.
+
+As the house rules ask: the registered level-1 test stays as registered and becomes the ignored known miss
+`a_tg_level_1_moving_component_under_g_known_miss` (limit intact, number in its reason); a new fast test
+`a_tg_level_1_met_checks_and_ring_band` asserts the level-1 checks that were met (A2, A3, A4, C3, K) on the same
+deterministic runs and prints A1 and the measurement of HR below. The level-2 record runs as registered, with HR printed.
+
+New hypothesis, registered here before its measurement:
+
+| Id | Hypothesis | Measurement | Deciding numbers |
+| --- | --- | --- | --- |
+| HR | the excess of G is confined to the calculated cells next to a fringe ring, where D5 takes the pressure gradient one-sided (first order in the gradient, ADR 0347 "limits"), and the rest of the domain is as under the default coupling | at `t = 0.5`, every run of both levels: the band `B` = the calculated background cells within two face steps of a background fringe cell (at the final connectivity), `B_C` the same of the component; `e_out` the largest error of the calculated background cells outside `B` | confirmed: in G moving and G at rest at both levels the cell of `e_max(G)` is in `B` or `B_C`, and `e_out(G) / e_out(default) <= 1.05` in the same four pairs; ruled out: the cell of `e_max(G)` lies outside both bands in at least two of the four G runs; otherwise mixed |
+
+Estimate behind it, disclosed: the two printed places of the level-1 maxima lie `0.339` and `0.345` from the centre across
+a side, while the hole edge is at `0.25` and the background cell size `0.0785`, that is one to two cells beyond the edge
+of the hole; the background fringe lies within one cell of the hole edge. Not known: whether the excess reaches further
+than two cells.
+
+The decision rule is unchanged. Said here before the further runs: A1 is missed at level 1, so by the registered rule only
+its alternative clause can give done, and by the campaign's Rule I (a missed registered check) the status is partial; the
+addendum states both.
