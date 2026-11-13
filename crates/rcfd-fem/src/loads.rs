@@ -9,8 +9,8 @@
 //! functions) and the thermal load `int B^T D eps_th dV` of a nodal temperature field ([`Load::Temperature`], ADR 0281,
 //! [`crate::thermal`]), then the per-node forces ([`NodalForceAt`]).
 //!
-//! Face integrals use the face functions of Tri3, Quad4 and Tri6 ([`face_shape_functions`]) in the local face orders of
-//! ADR 0271 and the face rules of [`face_rule`]; body integrals use the element's mass rule (ADR 0276 arithmetic 2: exact for
+//! Face integrals use the face functions of Tri3, Quad4, Tri6 and the 8-node face of Hex20 ([`face_shape_functions`]) in
+//! the local face orders of ADR 0271 and ADR 0292 and the face rules of [`face_rule`] (the 8-node arms: ADR 0383); body integrals use the element's mass rule (ADR 0276 arithmetic 2: exact for
 //! these loads on Tet4, on trilinear Hex8 and on straight-sided Tet10). [`body_force_loads`] gives the consistent load of a
 //! body force given by a function of position, as per-node forces for `solve_static_with` (ADR 0270 section 2.4). Every sum
 //! is sequential in a fixed order (loads, then faces or elements, then nodes): the vector does not depend on threads.
@@ -268,7 +268,8 @@ where
 /// Values and derivatives `(d/du, d/dv)` of the functions of a face with `n_nodes` nodes in the local face order of ADR
 /// 0271: Tri3 `(1 - u - v, u, v)` on the reference triangle; Quad4 `(1 + u u_a)(1 + v v_a)/4` on `[-1, 1]^2` with nodes
 /// `(-,-), (+,-), (+,+), (-,+)`; Tri6 `L_i (2 L_i - 1)` at the corners and `4 L_i L_j` at the mid-edge nodes of the edges
-/// (c0 c1), (c1 c2), (c2 c0), with `(L0, L1, L2) = (1 - u - v, u, v)`. Another node count is refused.
+/// (c0 c1), (c1 c2), (c2 c0), with `(L0, L1, L2) = (1 - u - v, u, v)`; the 8-node face of Hex20 as
+/// [`crate::hex20::face_shape_functions`] (ADR 0383). Another node count is refused.
 pub fn face_shape_functions(n_nodes: usize, uv: [f64; 2]) -> Result<(Vec<f64>, Vec<[f64; 2]>)> {
     let [u, v] = uv;
     match n_nodes {
@@ -301,6 +302,10 @@ pub fn face_shape_functions(n_nodes: usize, uv: [f64; 2]) -> Result<(Vec<f64>, V
             }
             Ok((n, d))
         }
+        8 => {
+            let (n, d) = crate::hex20::face_shape_functions(uv);
+            Ok((n.to_vec(), d.to_vec()))
+        }
         n => Err(face_count_error(n)),
     }
 }
@@ -308,7 +313,7 @@ pub fn face_shape_functions(n_nodes: usize, uv: [f64; 2]) -> Result<(Vec<f64>, V
 fn face_count_error(n: usize) -> FemError {
     FemError::InvalidValue {
         key: "face nodes",
-        reason: format!("a face of {n} nodes (faces of 3, 4 or 6 nodes are supported)"),
+        reason: format!("a face of {n} nodes (faces of 3, 4, 6 or 8 nodes are supported)"),
     }
 }
 
@@ -318,7 +323,8 @@ const GAUSS3_W: [f64; 3] = [5.0 / 9.0, 8.0 / 9.0, 5.0 / 9.0];
 
 /// The quadrature rule of a face with `n_nodes` nodes, as (point, weight): for the quadrilateral the 3 x 3 Gauss rule on
 /// `[-1, 1]^2` (exact to degree 5 per variable); for the triangles the collapsed product rule `u = s (1 - r)`, `v = s r`
-/// with 3-point Gauss in s and r on `[0, 1]` and weight `w_s w_r s` (exact to total degree 4; ADR 0276 arithmetic 2).
+/// with 3-point Gauss in s and r on `[0, 1]` and weight `w_s w_r s` (exact to total degree 4; ADR 0276 arithmetic 2); for
+/// the 8-node face of Hex20 [`crate::hex20::face_rule`] (ADR 0383).
 pub fn face_rule(n_nodes: usize) -> Result<Vec<([f64; 2], f64)>> {
     let mut out = Vec::with_capacity(9);
     match n_nodes {
@@ -338,6 +344,7 @@ pub fn face_rule(n_nodes: usize) -> Result<Vec<([f64; 2], f64)>> {
                 }
             }
         }
+        8 => out.extend_from_slice(&crate::hex20::face_rule()),
         n => return Err(face_count_error(n)),
     }
     Ok(out)

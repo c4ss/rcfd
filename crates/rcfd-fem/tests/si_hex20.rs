@@ -740,6 +740,7 @@ fn l1_element(ch: &mut Checks, tag: &str, mesh: &SolidMesh) {
 }
 
 #[test]
+#[ignore = "record of ADR 0292: its L3 row asserts the refusal of a model pressure on a Hex20 face, retired by F-484 (ADR 0383); L1 and L2 continue in l1_to_l2_face_loads_and_uniaxial_tension_after_landed"]
 fn l1_to_l3_face_loads_and_uniaxial_tension() {
     let mut ch = Checks::new();
     let base = hex_box([0.0; 3], [0.3, 0.5, 0.7], [1, 1, 1]).unwrap();
@@ -809,6 +810,66 @@ fn l1_to_l3_face_loads_and_uniaxial_tension() {
             );
         }
     }
+    ch.finish();
+}
+
+// L1 and L2 after F-484 (ADR 0383) retired the L3 refusal; the record above keeps the original.
+#[test]
+fn l1_to_l2_face_loads_and_uniaxial_tension_after_landed() {
+    let mut ch = Checks::new();
+    let base = hex_box([0.0; 3], [0.3, 0.5, 0.7], [1, 1, 1]).unwrap();
+    l1_element(&mut ch, "box", &upgrade_to_hex20(&base).unwrap().0);
+    l1_element(&mut ch, "affine", &upgrade_to_hex20_mapped(&base, shear).unwrap().0);
+    // L2
+    let lengths = [2.0, 0.5, 0.4];
+    let force = 1.0e6;
+    let mesh = hex20_box([0.0; 3], lengths, [3, 2, 2]);
+    let area = lengths[1] * lengths[2];
+    let t = force / area;
+    let mut loads = traction_loads(&mesh, "xmax", [t, 0.0, 0.0]).unwrap();
+    loads.extend(traction_loads(&mesh, "xmin", [-t, 0.0, 0.0]).unwrap());
+    let near = |x: Vec3| -> usize {
+        (0..mesh.nodes().len())
+            .min_by(|&a, &b| {
+                let da = sub(mesh.nodes()[a], x);
+                let db = sub(mesh.nodes()[b], x);
+                rcfd_core::vec3::dot(da, da)
+                    .partial_cmp(&rcfd_core::vec3::dot(db, db))
+                    .unwrap()
+            })
+            .unwrap()
+    };
+    let (p1, p2, p3) = (
+        near([0.0; 3]),
+        near([0.0, 0.0, lengths[2]]),
+        near([0.0, lengths[1], 0.0]),
+    );
+    let pres = vec![
+        Prescribed::new(p1, 0, 0.0),
+        Prescribed::new(p1, 1, 0.0),
+        Prescribed::new(p1, 2, 0.0),
+        Prescribed::new(p2, 0, 0.0),
+        Prescribed::new(p2, 1, 0.0),
+        Prescribed::new(p3, 0, 0.0),
+    ];
+    let model = model_of(mesh, NU);
+    let res = solve_static_with(&model, &pres, &loads, &StaticOptions::default()).unwrap();
+    let mesh = model.mesh();
+    let eps = force / (E_MOD * area);
+    let delta = eps * lengths[0];
+    let mut e1: f64 = 0.0;
+    for &n in mesh.node_set("xmax").unwrap() {
+        e1 = e1.max((res.displacement(n)[0] - delta).abs() / delta);
+    }
+    let (mut ey, mut ez): (f64, f64) = (0.0, 0.0);
+    for (n, x) in mesh.nodes().iter().enumerate() {
+        let u = res.displacement(n);
+        ey = ey.max((u[1] + NU * eps * x[1]).abs() / (NU * eps * lengths[1]));
+        ez = ez.max((u[2] + NU * eps * x[2]).abs() / (NU * eps * lengths[2]));
+    }
+    ch.at_most("L2 uniaxial elongation", e1, 1e-10);
+    ch.at_most("L2 uniaxial lateral y", ey, 1e-10);
+    ch.at_most("L2 uniaxial lateral z", ez, 1e-10);
     ch.finish();
 }
 

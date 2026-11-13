@@ -834,11 +834,29 @@ impl SolidMesh {
                 }
                 out
             }
+            8 => {
+                // The 8-node face of Hex20 on [-1, 1]^2 with its 3 x 3 Gauss rule, as hex20::face_area (ADR 0383).
+                let mut out = Vec::with_capacity(9);
+                for (uv, w) in crate::hex20::face_rule() {
+                    let (_, d) = crate::hex20::face_shape_functions(uv);
+                    let mut xu = [0.0; 3];
+                    let mut xv = [0.0; 3];
+                    for (xa, da) in x.iter().zip(&d) {
+                        for i in 0..3 {
+                            xu[i] += xa[i] * da[0];
+                            xv[i] += xa[i] * da[1];
+                        }
+                    }
+                    out.push((w, xu, xv));
+                }
+                out
+            }
             n => unreachable!("a face of {n} nodes"),
         }
     }
 
-    /// Area of a face (exact for planar Tri3, planar parallelogram Quad4 and straight-sided Tri6 faces).
+    /// Area of a face (exact for planar Tri3, planar parallelogram Quad4 and straight-sided Tri6 faces; an 8-node Hex20 face
+    /// by its 3 x 3 Gauss rule, exact for a parallelogram with mid-edge nodes at the midpoints, ADR 0383).
     pub fn face_area(&self, f: FaceRef) -> f64 {
         self.face_tangents(f)
             .into_iter()
