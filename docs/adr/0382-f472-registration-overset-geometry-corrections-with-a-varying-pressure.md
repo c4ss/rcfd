@@ -294,3 +294,23 @@ mutations fail their checks.
 ## Open questions
 
 Listed with options and a recommendation in the addendum, after the results.
+
+## Amendment 1 (2026-11-13, after run 1, before any corrected run): the control N1 measured as a deviation
+
+Run 1 of the registered test file (`dd51aef2`) gave `E(N1) - E(P3o) = -5.1e-4` against the limit `>= 3e-4`: the control as
+registered did not hold. By the classes above this is a defective set-up, not a finding. Diagnosis: N1 compares two largest
+errors, and the largest error is a signed quantity of the whole field; multiplying the weights by `1.001` changes the fringe
+values by about `1e-3 abs(u)`, but whether that raises or lowers the largest error of the run depends on the sign of the
+error it meets (here P3o's largest error, `4.80e-3`, sits in a component fringe cell at step 6, and the perturbed run's
+largest error is `4.29e-3`, in another cell at step 32). ADR 0367's N1o used the same form with the shear and held by
+chance of sign. The corrected control measures the effect of the perturbation itself, as ADR 0255's N1 did:
+
+| Id | Check | Limit | Estimate |
+| --- | --- | --- | --- |
+| N1b | P3o and N1 advanced side by side (the same set-up, the weights of N1 times `1.001` after `prepare` in every step): the largest `abs(u_N1 - u_P3o) / V` over the steps and the non-hole cells | `>= 3e-4` | a fringe value off by `1e-3 abs(u)`, `abs(u)` between `0.5` and `1.1` at the fringe: `5e-4` to `1.1e-3` from the first step on |
+
+The limit `3e-4` is the registered one. Disclosed: the number `5.1e-4` above (the difference of two largest errors) was seen
+before this amendment; the deviation N1b was not, and its estimate comes from the size of the perturbation alone. The test
+`n1_weights_control` stays as an ignored record (`n1_weights_control_defective_set_up`) with its limit and the measured
+number; N1b is the new test `n1b_weights_control_deviation`, run once. The decision rule reads N1 as N1b; nothing else
+changes.
