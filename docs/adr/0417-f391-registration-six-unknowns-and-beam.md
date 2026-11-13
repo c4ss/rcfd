@@ -324,3 +324,11 @@ Negative controls:
    modal only) and taken.
 3. The new error variant `BeamSolidNode` rather than a reused one: the acceptance asks the node id named; `FemError` is
    non-exhaustive. Taken.
+
+## Amendment 1 (2026-11-13, written before any run of a check)
+
+A parameter the registration left unstated, fixed before the run: the modal options of the pinned-pinned beam (F2 to F4) are
+`ModalOptions::new(3).tolerance(1e-12).residual_test(ResidualTest::Backward)` (zero shift by the default rule, the constraints
+holding every rigid motion). Reason: the relative residual's floor grows with `lambda_max / lambda_1`, about `1.2e5` here
+(element rotary modes against the first bending mode), and ADR 0354 gives the backward error with 1e-12 for slender models (as
+`sb_modal_scale.rs`). The free beam (F1) keeps the default options as registered. No limit changes.
