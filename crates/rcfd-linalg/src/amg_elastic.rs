@@ -72,7 +72,21 @@ impl ElasticAmgSettings {
             ..ElasticAmgSettings::default()
         }
     }
+
+    /// [`ElasticAmgSettings::quadratic`] with [`QUADRATIC_SWEEPS`] forward block Gauss-Seidel sweeps before and as many
+    /// backward sweeps after the coarse correction (ADR 0375; equal counts keep the cycle symmetric).
+    pub fn quadratic_smoothed() -> Self {
+        ElasticAmgSettings {
+            pre_sweeps: QUADRATIC_SWEEPS,
+            post_sweeps: QUADRATIC_SWEEPS,
+            ..ElasticAmgSettings::quadratic()
+        }
+    }
 }
+
+/// The sweeps per side of [`ElasticAmgSettings::quadratic_smoothed`]: the smallest count whose estimate brings the Tet10
+/// cantilever of slenderness 20 under twice the Hex8 count (ADR 0375 arithmetic 3).
+pub const QUADRATIC_SWEEPS: usize = 2;
 
 /// Largest coarsest order factored densely.
 pub const MAX_DENSE: usize = 6000;
