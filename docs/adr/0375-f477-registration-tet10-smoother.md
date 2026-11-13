@@ -189,3 +189,87 @@ repaired. No crate that builds: **todo**.
 - G1 and G2 are tensor-graded boxes; unstructured Tet10 meshes and other quadratic kinds (Hex20, Hex27, Wedge15) are not
   measured; on G1 and G2 only the aggregation is checked, convergence there is recorded.
 - No case-file key (F-386).
+
+## Addendum 1: results (2026-11-13)
+
+Code: registration 58d4069e; library and tests e4cd0d48 (`crates/rcfd-linalg/src/amg_elastic.rs`: 14 lines inserted, 0
+deleted, at new 75-84 (`quadratic_smoothed()`) and 87-90 (`QUADRATIC_SWEEPS`); no other source file changed; tests
+`crates/rcfd-fem/tests/si_amg_smoother.rs`, `crates/rcfd-fem/tests/f477_defaults.rs`). Release profile throughout. Logs in
+`w49i-work/f477-scratch`: `run1-si_amg_smoother.log` (fast, once), `run1-h1.log` (heavy, once), `run-d1-branch.log`,
+`run-d1-main.log` (the same file on a `git archive` of ee776d4d, own target), `run-d2-linalg.log`, `run-d2-fem.log`,
+`run-d3-baseline.log`, `mutations.log` (`mutate.py`), `clippy.log`.
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| H1a CG with one V-cycle to 1e-8, slenderness-20 Tet10, `quadratic_smoothed()` | `<= 30`, residual `<= 1e-8` | **23** iterations, 0 restarts, residual 7.22e-9 (floor estimate 8.64e-9) | yes |
+| H1b operator complexity; setup equal to `quadratic()`'s | `<= 1.5`; equal | 1.4762 (levels 121 680 / 12 000 / 522, nnz 9.52e6 / 4.47e6 / 6.5e4), identical | yes |
+| H1c times printed | printed | setup 0.86 s (`quadratic()` 0.83 s); solve with assembly 3.56 s (`quadratic()` 2.84 s in the same run; ADR 0370: 3.1 s) | yes |
+| D5 `quadratic()` on the same case | `== 31`, `== 12 000` | 31 (residual 9.166e-9, as ADR 0370's 9.17e-9), 12 000 | yes |
+| DF2 settings | as stated | default as ADR 0305, `quadratic()` as ADR 0370, `quadratic_smoothed()` = `quadratic()` with 2 / 2 sweeps | yes |
+| F1 fast Tet10 | levels equal; S2 `<= 1e-10`, positive; `Ok`, `<= 1e-8`, fewer than `quadratic()`, which `== 27` | levels equal; S2 1.56e-16, positive; 20 iterations, 8.67e-9, against 27 (== 27); 0.56 s against 0.54 s | yes |
+| F2 1 and 8 threads | equal | 20 / 20, bit-equal | yes |
+| G (i) library equal to the reference on G1, G2 | equal on both | equal on both | yes |
+| G (ii) pass 2's restriction changes the aggregates | `>= 1` block on one box | **G1 16** blocks (5408 blocks, 1121 aggregates, 870 left after pass 1); **G2 46** blocks (6936, 1750, 1034) | yes |
+| N1 uniform fast Tet10: the two references | equal | equal (0 differing of 10 816 blocks; 2704 left after pass 1) | yes |
+| N2 setup of the smoothed preset | identical | identical level orders and nnz (fast and heavy) | yes |
+| D1 hashes branch / ee776d4d | identical | 8 identical lines (default and `quadratic()`: cube 11 `63183f7b70a37472` 16 / 16, fast Hex8 `eac2e37cdbf7447a` 15 / 15, P1 `6a5b29ee81bc9dc7` 16 / 16, fast Tet10 default `3000b383efab3700` 40, `quadratic()` `d4e126c81ff1b533` 27) | yes |
+| D2 existing tests | pass, counts equal | `rcfd-linalg` release: every test file passes; `rcfd-fem` release: 117 passed, 0 failed, 25 ignored (not run); `si_amg` cube 16 / 17, X1 15 / 22, P1 16, AG1 64, N1 29 / 16; `si_amg_quadratic` E1 16 / 16, E3 27, default 40 | yes |
+| D3 baseline_hashes | pass | 3 passed, 1 ignored | yes |
+| D4 scope | as stated | `amg.rs`, `rcfd-fem/src`, `rcfd-fv` unchanged; `amg_elastic.rs` 14 inserted, 0 deleted | yes |
+
+Records: G1 to 1e-8: `default()` 60 iterations, `quadratic()` 26, `quadratic_smoothed()` 19 (no restarts). Hex8 slenderness
+20 with `quadratic_smoothed()`: 13 iterations (15 with the default), 3.09 s.
+
+**Deviations.**
+
+1. The heavy test took 12 s, not 1 to 3 minutes; it stays `#[ignore]` as registered.
+2. The solve time of the smoothed preset is 1.25 times that of `quadratic()` in the same run (3.56 s against 2.84 s), above the
+   estimate of arithmetic 5 (about 1.04 for the iterative phase): the iteration count fell less than the smoothing work rose
+   (23 against the central estimate 22, but two sweeps cost more than the matvec units assumed). Recorded; no limit.
+3. Not run: the whole workspace (the lead runs the gate); the heavy records of ADR 0305 and ADR 0370 (D5 measured ADR 0370's
+   count again).
+
+**Mutations** (archive of e4cd0d48 in `f477-scratch/mut`, own target, each alone, the file restored and compared by SHA-256,
+all restored):
+
+| Id | Registered | Caught by |
+| --- | --- | --- |
+| M1 `QUADRATIC_SWEEPS = 1` | DF2, F1 | DF2, F1 (27 iterations, not fewer than 27) |
+| M2 `post_sweeps: 1` | DF2, F1 (S2) | DF2, F1 (S2) |
+| M3 preset on `default()` | DF2, F1 (levels) | DF2, F1 (levels 32 448 / 594 against 32 448 / 3300 / 144) |
+| M4 post-smoothing forward | F1 (S2) | F1: S2 asymmetry 1.27e-4 (limit 1e-10); the test function stopped at the `quadratic()` reference solve of F1, which under the mutation did not converge in 60 000 iterations (the mutation changes every preset), before the S2 assertion line; the run took about 70 minutes for that reason |
+| M5 ADR 0370 M5 (pass 2 over all neighbours) | G (i) | G (i): the library differs from the reference on G1 and G2 (16 and 46 blocks); F1, N1 held |
+| M6 pass 2 removed | G (i) | G (i), and F1 (the fast Tet10 hierarchy changed: `quadratic()` 19 iterations, not 27) |
+
+`cargo fmt -p rcfd-linalg --check`, `cargo fmt -p rcfd-fem --check`: clean. `cargo clippy -p rcfd-linalg -p rcfd-fem
+--all-targets --release -- -D warnings`: clean.
+
+**Decision by the registered rule: done** (pending the maintainer's acceptance). Every registered check held in its
+registered run (H1a 23 iterations against 30; H1b OC 1.4762; H1c printed; D5 31 and 12 000; DF2, F1, F2, G, N1, N2, D1 to D4),
+and every mutation M1 to M6 failed a registered check of its own in the registered run, with no amendment. ADR 0370's
+uncaught mutation M5 is now caught on the graded boxes G1 and G2 (16 and 46 blocks change aggregate), and N1 confirms it is
+equivalent on the uniform box.
+
+**Remaining questions.**
+
+1. Cost. The smoothed preset needs 23 instead of 31 iterations but its solve took 3.56 s against 2.84 s for `quadratic()`
+   in the same run. Options: (a) keep both presets, `quadratic()` the cheaper and `quadratic_smoothed()` the one under the
+   iteration limit; (b) a follow-up for a cheaper smoother (Chebyshev on block Jacobi, or two sweeps on level 0 only) against
+   the time of `quadratic()`; (c) make `quadratic()` itself use two sweeps (changes ADR 0370's counts and bits: not taken).
+   Recommendation: (a), with (b) only if a solid case needs the time.
+2. Selection from a case file (F-386): the key that selects `quadratic()` for quadratic meshes could offer the smoothed
+   preset as well. Recommendation: note it on F-386.
+
+## For the lead: roadmap entries
+
+F-477: proposed status **done** (pending the maintainer's acceptance). Note:
+
+> From ADR 0370 questions 1 and 2 (with a graded or anisotropic Tet10 mesh on which mutation M5 changes the aggregates), recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0375, 2026-11-13: rcfd_linalg::amg_elastic::ElasticAmgSettings::quadratic_smoothed() (opt-in; quadratic() with QUADRATIC_SWEEPS = 2 forward block Gauss-Seidel sweeps before and 2 backward after the coarse correction, so the cycle stays symmetric; the count derived from ADR 0370's measured rate of 0.46 per iteration with a C/(C + nu) V-cycle model, estimate 22). On the Tet10 cantilever of slenderness 20 (121 680 unknowns) CG with one V-cycle reaches 1e-8 in 23 iterations (limit 30; quadratic() 31 in the same run), operator complexity 1.4762 (the setup is that of quadratic()), setup 0.86 s against 0.83 s, solve 3.56 s against 2.84 s (ADR 0370: 3.1 s): fewer iterations, more time. On two graded Tet10 boxes (x-graded 1.25 per cell; graded 1.2, 1.3, 1.4 in x, y, z) restricting pass 2 to the candidates changes 16 and 46 aggregates, so ADR 0370's mutation M5 is now caught; on the uniform box it changes none. Library change: 14 lines inserted in amg_elastic.rs, nothing else; counts and bits of ADR 0305 and ADR 0370 unchanged (hashes against main, ADR 0370 counts 27 and 31 measured again, baseline hashes pass). Six mutations, all caught. Done by the registered rule; acceptance is the maintainer's call.
+
+F-470, sentence to append to its note:
+
+> ADR 0375 (2026-11-13, F-477): with ElasticAmgSettings::quadratic_smoothed() (two block Gauss-Seidel sweeps per side) the slenderness-20 Tet10 cantilever reaches 1e-8 in 23 iterations, and the mutation M5 left uncaught here is caught on graded Tet10 boxes.
+
+F-386 (solid case file), sentence to append to its note:
+
+> ADR 0375 (2026-11-13): a quadratic-mesh key could also offer CgPreconditioner::SmoothedAggregation(ElasticAmgSettings::quadratic_smoothed()) (Tet10 slenderness 20: 23 iterations, 3.56 s, against 31 iterations, 2.84 s with quadratic()).
