@@ -7626,7 +7626,7 @@ fixed by the item's registration ADR before any code.
     fail as registered and need the maintainer's edit. Resolved 2026-11-13 by the maintainer's decision (records and
     copies): the retired si_scaffold rows stay as ignored records of ADR 0291 and the _after_landed copies without them
     pass.
-- [ ] **F-394** Cyclic symmetry: one sector of a rotor for statics and for modal analysis by harmonic index
+- [x] **F-394** Cyclic symmetry: one sector of a rotor for statics and for modal analysis by harmonic index
   - depends on: F-393, F-375, F-383
   - acceptance: Every limit not stated here is registered in the ADR before the run. Equivalence: for a ring and for a
     disc with N = 12 sectors, the frequencies of the sector for every harmonic index 0 to 6 equal the frequencies of the
@@ -7637,18 +7637,24 @@ fixed by the item's registration ADR before any code.
     b/a = 4 spinning about its axis (statics, k = 0): rim displacement rho omega^2 b ((3 + nu) a^2 + (1 - nu) b^2)/(4 E)
     within 1 percent. Boundaries that do not match under the rotation within the registered tolerance are refused with
     the first unmatched node; N < 2 and a harmonic index above N/2 are refused.
-  - note: Structural solver, intermediate tier (plan ADR 0290, 2026-11-12). Size M. Stub ADR 0297; the registration is
-    written by the implementation agent before any code. ADR 0291 (2026-11-13): Constraint::Linear { terms:
-    Vec<LinearTerm>, value }, Constraint::RigidSet { set, reference }, Constraint::Cyclic { low, high, axis, origin,
-    sectors } and ElasticSupport::{NodalSpring, Foundation} exist and are validated when added; constraints are refused
-    in constraint::prescribed_equations (gated by mpc::PENDING and cyclic::PENDING), supports in
-    SolidModel::check_supported. ADR 0296 (2026-11-13): mpc::transformation builds T and g from rows c . x = b
-    (Gauss-Jordan with designated dependents, mpc::DEPENDENCE_TOLERANCE 1e-10); Transformation::reduce gives T^T K T and
-    T^T (f - K g), Transformation::expand gives x. The cyclic rows can be added as rows of the same elimination;
-    prescribed_equations still refuses Cyclic (gated by cyclic::PENDING). Modal analysis on the transformation is
-    refused by mpc::refuse_in_modal and is needed by the cyclic modes. ADR 0384 (2026-11-13): the modal analysis runs on
-    the transformation (mpc::modal_analysis_mpc: T^T K T, T^T M T, modes x = T q, Auto shift); the cyclic modes can add
-    their rows to the same elimination and reuse it (complex rows for a non-zero harmonic are not covered).
+  - note: ADR 0386, 2026-11-13 (registration of plan ADR 0297): cyclic::boundary matches the low and high surface sets
+    node for node under the rotation by 2 pi/N (MATCH_TOLERANCE 1e-8 of the largest radius; a node on both boundaries,
+    the first low node without an image partner, a high node taken twice and the first high node left over are refused
+    by name); the k = 0 rows u_H = R u_L are rows of mpc::transformation (statics with a load repeating in every sector,
+    any constraint values, and the k = 0 modes; uses_transformation includes Cyclic); mpc::harmonic_transformation gives
+    the real cos/sin pair a_H = R(cos a_L - sin b_L), b_H = R(sin a_L + cos b_L) on the elimination of ADR 0296;
+    cyclic::modal_analysis_harmonic solves k = 0 and N/2 single and 0 < k < N/2 doubled with the pairs merged (k above
+    N/2 refused; RigidSet at k > 0 and non-zero values refused); cyclic::full_rotor and FullRotor::expand build the full
+    rotor and its M-orthonormal modes. N = 12, Hex20: supported ring and clamped disc, every harmonic 0 to 6,
+    frequencies equal to the full 360-degree model within 4.0e-14 and 1.8e-13 (limit 1e-8) with equal counts below the
+    cut-off (36, 23), pair splits 2.8e-13, expanded-mode residual 8.2e-12 (limit 1e-7) and M-orthonormality 2.3e-15;
+    thin ring t/R = 0.05, nu = 0: n = 2 at k = 2 within 4.4e-4, n = 3 at k = 3 within 1.8e-3 (limit 2 percent); spinning
+    annular disc b/a = 4, nu = 0.3: rim displacement within 8.9e-5 of rho omega^2 b ((3 + nu) a^2 + (1 - nu) b^2)/(4E)
+    (derived; agrees with the roadmap; limit 1 percent), sector statics equal to the full disc within 3.3e-13. Refusals:
+    unmatched boundaries with the first unmatched node, N < 2, k > N/2. Eight mutations caught. si_scaffold x1/r1-r9/r10
+    after landed and si_mpc N5 kept as ignored records (maintainer decision 2026-11-13). Open, taken on the standing
+    instruction: modal_analysis and solve_static on a model with a Cyclic constraint give the k = 0 result (documented).
+    Follow-up F-489 (harmonic loads, rigid sets at k > 0).
 - [ ] **F-395** Geometric (initial-stress) stiffness of solid elements: pre-stressed modal analysis and linear buckling
   - depends on: F-388, F-374, F-376, F-382, F-383
   - acceptance: Every limit not stated here is registered in the ADR before the run. K_sigma is symmetric within 1e-13
@@ -9199,3 +9205,11 @@ fixed by the item's registration ADR before any code.
     the rigid sets; with a shift given by the caller, rigid_free is reported by the zero-shift factor test and agrees
     with the automatic case on every model of ADR 0384.
   - note: From ADR 0384 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S.
+- [ ] **F-489** Cyclic symmetry: harmonic loads and rigid sets at a non-zero harmonic index
+  - depends on: F-394
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A static load given with a harmonic
+    index k (cosine and sine parts per sector) is solved on the sector by the real pair of rows of ADR 0386 and equals
+    the full 360-degree model's solution under the expanded load within 1e-8 relative for N = 12 and k = 0 to 6; rigid
+    sets are accepted at k > 0 (their reference unknowns doubled) and the frequencies of a sector with a rigid set equal
+    the full model's within 1e-8.
+  - note: From ADR 0386 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S.
