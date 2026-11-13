@@ -1,5 +1,8 @@
 //! F-388 (ADR 0291): the scaffold of the intermediate tier. Checks X1 to X3, H1, B5, R1 to R11, V1 and the negative
 //! controls N2, N3 of the registration (B1 to B4 and N1 are in `si_scaffold_bits.rs`).
+//!
+//! Maintainer decision 2026-11-13: when a package of the tier lands, the tests whose rows it retires stay as ignored
+//! records of ADR 0291 and a copy without those rows is added (the `_after_` tests at the end of this file).
 
 use rcfd_core::vec3::Vec3;
 use rcfd_fem::assemble::{assemble_with, stiffness, stiffness_with};
@@ -76,6 +79,7 @@ fn expect_refusal(
 // ---------------------------------------------------------------------------------------------------------------- X1
 
 #[test]
+#[ignore = "record of ADR 0291 before ADR 0292 (Hex20) and ADR 0296 (mpc) landed; superseded by the _after_ copy below (maintainer, 2026-11-13)"]
 fn x1_the_scaffold_exists() {
     assert_eq!(rcfd_fem::hex20::PENDING, Some("ADR 0292"));
     assert_eq!(rcfd_fem::hex8x::PENDING, Some("ADR 0293"));
@@ -164,6 +168,7 @@ fn x2_entry_points_refuse_by_default() {
 // ---------------------------------------------------------------------------------------------------------------- X3
 
 #[test]
+#[ignore = "record of ADR 0291 before ADR 0292 (Hex20) and ADR 0296 (mpc) landed; superseded by the _after_ copy below (maintainer, 2026-11-13)"]
 fn x3_placeholder_elements_refuse() {
     let d = steel().elasticity_matrix().unwrap();
     for (kind, package) in [
@@ -479,6 +484,7 @@ fn refusal_cases() -> Vec<(
 }
 
 #[test]
+#[ignore = "record of ADR 0291 before ADR 0292 (Hex20) and ADR 0296 (mpc) landed; superseded by the _after_ copy below (maintainer, 2026-11-13)"]
 fn r1_to_r9_static_solve_refuses_each_new_variant() {
     for (name, model, item, variant, location, package) in refusal_cases() {
         expect_refusal(
@@ -493,6 +499,7 @@ fn r1_to_r9_static_solve_refuses_each_new_variant() {
 }
 
 #[test]
+#[ignore = "record of ADR 0291 before ADR 0292 (Hex20) and ADR 0296 (mpc) landed; superseded by the _after_ copy below (maintainer, 2026-11-13)"]
 fn r10_refused_on_every_static_path() {
     let cg = StaticOptions::with_solver(StaticSolver::ConjugateGradient {
         tolerance: 1e-10,
@@ -531,6 +538,7 @@ fn r10_refused_on_every_static_path() {
 }
 
 #[test]
+#[ignore = "record of ADR 0291 before ADR 0292 (Hex20) and ADR 0296 (mpc) landed; superseded by the _after_ copy below (maintainer, 2026-11-13)"]
 fn r11_modal_and_stiffness_refuse() {
     let cases = refusal_cases();
     let get = |n: &str| cases.iter().find(|c| c.0 == n).unwrap();
@@ -620,4 +628,158 @@ fn v1_new_data_are_validated() {
     assert_eq!(m.constraints().len(), 3);
     assert!(m.supports().is_empty());
     assert_eq!(refused.len(), 13);
+}
+
+// ---------------------------------------------------------------------------------------------------------------- copies
+// Copies of X1, X3 and R1 to R11 without the rows of the packages that have landed: ADR 0292 (Hex20, F-389) and
+// ADR 0296 (linear constraints, rigid sets and supports, F-393). Every other row is as registered in ADR 0291.
+
+/// The packages that have landed; their refusal rows are retired.
+const LANDED: [&str; 5] = ["R1", "R5", "R6", "R8", "R9"];
+
+fn pending_refusal_cases() -> Vec<(
+    &'static str,
+    SolidModel,
+    &'static str,
+    &'static str,
+    String,
+    &'static str,
+)> {
+    refusal_cases().into_iter().filter(|c| !LANDED.contains(&c.0)).collect()
+}
+
+#[test]
+fn x1_the_scaffold_exists_after_landed() {
+    assert_eq!(rcfd_fem::hex20::PENDING, None);
+    assert_eq!(rcfd_fem::hex8x::PENDING, Some("ADR 0293"));
+    assert_eq!(rcfd_fem::beam::PENDING, Some("ADR 0294"));
+    assert_eq!(rcfd_fem::shell::PENDING, Some("ADR 0295"));
+    assert_eq!(rcfd_fem::mpc::PENDING, None);
+    assert_eq!(rcfd_fem::cyclic::PENDING, Some("ADR 0297"));
+    assert_eq!(ElementKind::Hex20.nodes_per_element(), 20);
+    assert_eq!(ElementKind::Hex20.pending(), None);
+    assert_eq!(ElementKind::Beam2.pending(), Some("ADR 0294"));
+    assert_eq!(ElementKind::Shell4.pending(), Some("ADR 0295"));
+    assert!(ElementKind::Hex20.is_solid() && !ElementKind::Beam2.is_solid() && !ElementKind::Shell4.is_solid());
+    assert_eq!(SolidFormulation::BBar.pending(), Some("ADR 0293"));
+}
+
+#[test]
+fn x3_placeholder_elements_refuse_after_landed() {
+    let d = steel().elasticity_matrix().unwrap();
+    for (kind, package) in [(ElementKind::Beam2, "ADR 0294"), (ElementKind::Shell4, "ADR 0295")] {
+        let el = element_for(kind);
+        let n = kind.nodes_per_element();
+        let coords: Vec<Vec3> = (0..n).map(|a| [a as f64, (a * a) as f64, 1.0]).collect();
+        let u = vec![0.0; 3 * n];
+        let name = kind.name();
+        expect_refusal(
+            "stiffness",
+            el.stiffness(&coords, &d),
+            "element kind",
+            name,
+            "element routines",
+            package,
+        );
+        expect_refusal(
+            "integration_points",
+            el.integration_points(&coords, quadrature::gauss_2()),
+            "element kind",
+            name,
+            "element routines",
+            package,
+        );
+        expect_refusal(
+            "strain_at",
+            el.strain_at(&coords, &u, [0.0; 3]),
+            "element kind",
+            name,
+            "element routines",
+            package,
+        );
+    }
+}
+
+#[test]
+fn r1_to_r9_static_solve_refuses_each_new_variant_after_landed() {
+    let cases = pending_refusal_cases();
+    assert_eq!(cases.len(), 5);
+    for (name, model, item, variant, location, package) in cases {
+        expect_refusal(
+            name,
+            solve_static(&model, &StaticOptions::default()),
+            item,
+            variant,
+            &location,
+            package,
+        );
+    }
+}
+
+#[test]
+fn r10_refused_on_every_static_path_after_landed() {
+    let cg = StaticOptions::with_solver(StaticSolver::ConjugateGradient {
+        tolerance: 1e-10,
+        max_iterations: 10_000,
+    });
+    for (name, model, item, variant, location, package) in pending_refusal_cases() {
+        expect_refusal(
+            &format!("{name} cg"),
+            solve_static_with(&model, &[], &[], &cg),
+            item,
+            variant,
+            &location,
+            package,
+        );
+        let extra = [Prescribed::new(0, 0, 0.0)];
+        expect_refusal(
+            &format!("{name} threads 8"),
+            solve_static_with(&model, &extra, &[], &StaticOptions::default().threads(8)),
+            item,
+            variant,
+            &location,
+            package,
+        );
+        expect_refusal(
+            &format!("{name} report"),
+            solve_static_report(&model, &[], &[], &StaticOptions::default()),
+            item,
+            variant,
+            &location,
+            package,
+        );
+    }
+}
+
+#[test]
+fn r11_modal_and_stiffness_refuse_after_landed() {
+    let cases = refusal_cases();
+    let get = |n: &str| cases.iter().find(|c| c.0 == n).unwrap();
+    let (name, model, item, variant, location, package) = get("R4");
+    expect_refusal(
+        &format!("{name} modal"),
+        modal_analysis(model, &ModalOptions::new(2)),
+        item,
+        variant,
+        location,
+        package,
+    );
+    expect_refusal(
+        &format!("{name} stiffness"),
+        stiffness(model),
+        item,
+        variant,
+        location,
+        package,
+    );
+    // R8's modal refusal moved to the follow-up of ADR 0296 (modal analysis on the transformation).
+    let (name, model, item, variant, location, _) = get("R8");
+    expect_refusal(
+        &format!("{name} modal"),
+        modal_analysis(model, &ModalOptions::new(2)),
+        item,
+        variant,
+        location,
+        "a follow-up of ADR 0296 (modal analysis on the transformation)",
+    );
 }
