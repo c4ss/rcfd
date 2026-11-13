@@ -333,3 +333,99 @@ The Coriolis term (D6); a pre-stress beyond linear in `Omega^2`; harmonic indice
 free body under rotation (reported as a loss of stiffness); beams and shells (no geometric stiffness there, ADR 0390); the
 model's other loads in the pre-stress; output through the case files and the CLI (F-386/ADR 0306). The bar and beam checks use
 `nu = 0`; with `nu > 0` the clamped root adds a local stress that the checks do not separate.
+
+## Addendum 1: results (2026-11-13)
+
+Code: `crates/rcfd-fem/src/rotating.rs` (new content of the stub; no other library file changed), tests
+`crates/rcfd-fem/tests/si_rotating.rs`. The registered run of `si_rotating` was made once (release, `--test-threads=2`, 7.8 s
+for the ten tests); A3 missed as predicted and its test became the ignored record `a3_flap_lag_identity_known_miss` with the limit
+intact (the body unchanged, only the name and the `#[ignore]` reason). Log: `f396-scratch/run1.log`.
+
+| # | Measured | Limit | Met |
+|---|---|---|---|
+| A1 F | speed 0 against `modal_analysis`, every field by `to_bits` | identical | yes |
+| A1b F | speed-0 column of the table | identical | yes |
+| A1 K | speed 0 on the transformation path | identical | yes |
+| A2a | n = 1: 1.92e-9; n = 2: 1.80e-9 (`Omega_B = 50.475` rad/s) | `<= 1e-3` | yes |
+| A2b | n = 1: 1.66e-6 (`Q_1,h = 1.0725406`, slope 0.0725389); n = 2: 3.12e-5 (`Q_2,h = 7.6604761`) | `<= 1e-3` | yes |
+| A2c | n = 1: 6.86e-5; n = 2: 1.08e-3 | `<= 1e-2` | yes |
+| A2d | 4.999e-5 | `< 1e-4` | yes |
+| A3 | **1.922e-3** (`(w_flap^2 - w_lag^2)/W^2 = 0.99807796` at `0.2 omega_0 = 51.15` rad/s; predicted 1.94e-3) | `<= 1e-4` | **no** (known miss) |
+| A3b | 1.12e-8 against `1 - 2 f_x,h`, `f_x,h = 9.610e-4` (predicted 9.68e-4) | `<= 5e-4` | yes |
+| A4 | 2.18e-3 (`S(0.2 omega_0) = 1.1907368`) | `<= 2e-2` | yes |
+| A4b | 8.73e-4 (`Q_h = 1.1922947`, z share of the rest flap mode 0.999037) | `<= 2e-2` | yes |
+| A4c | 1.24e-6 (slope of the rest flap mode 1.1913316) | `<= 1e-3` | yes |
+| A5 | S = 1.19074, 1.18771, 1.17799, 1.15061, 1.12462, 1.08852 at 0.2, 0.5, 1, 2, 3, 5 `omega_0`, all in `[1, 1.1922947]` | each | yes |
+| A6 | 12 crossings, one per order and family, largest relative error 2.2e-16 | `<= 1e-8` | yes |
+| A7 | flap k = 2, 3, 4: 3.2e-6, 8.7e-6, 4.5e-6; lag k = 1 to 4: 6.0e-6, 8.2e-6, 7.9e-6, 4.6e-6; no flap crossing with order 1 | `<= 1e-2` | yes |
+| A8 | flap track z share min 0.999037, lag track y share min 0.998616, MAC min 0.999991; flap/lag eigenvalue ratio 0.9475 at 0.6, 1.0328 at 0.7 `omega_0f` | each | yes |
+| A9 | K (`omega_r0 = 1595.9` rad/s): finite positive at 0.5 and 0.9; `LossOfStiffness { negative: Some(1) }` with the requested speed's bits at 1.1 and 1.5; table `None` at both, losses listed; CSV and JSON without NaN or inf | each | yes |
+| A9b | B, softening only, `1.1 omega_1,0 = 8722.09` rad/s: `negative: Some(1)` | each | yes |
+| A10 | CSV parses back by `to_bits`; JSON `null` exactly at the two losses | each | yes |
+| A11 | decreasing, negative, NaN speed lists (`speeds`), zero axis (`axis`), negative speed (`speed`) refused | each | yes |
+| A12 | `cargo test -p rcfd-fem --release`: 265 passed, 0 failed, 56 ignored (45 binaries); `cargo check -p rcfd-post --tests` clean | all pass | yes |
+| N1 | 9.61e-4 | `< 1e-2` | as expected |
+| N2 | 9.63e-4 | `< 1e-2` | as expected |
+| N3 | 7.1e-19 | `< 0.1` | as expected |
+| N4 | -7.254e-2 (predicted `1 - Q_1 = -0.0725`) | `< 0` | as expected |
+
+Mutations (a `git archive` copy of the branch in `f396-scratch/mut_src`, `f396-scratch/mutate.py`, each run once, logs
+`f396-scratch/M*.log`):
+
+| Mutation | Caught by |
+|---|---|
+| M1 `M_perp` with `delta_ij` only | A3b, A4, A5 (all six), N2, A7, A8, N3 |
+| M2 `K_sigma,1` scaled by `Omega` | A2b, N4, A3b, A4, A4c, A5 |
+| M3 spin softening sign flipped | A2a, A2b, A9b, A3b, A4c, A5, A7, A8, N3, A9, A10 |
+| M4 crossing linear in `Omega` | A6 (all twelve), A7 (k = 4) |
+| M5 tracking by frequency order | A8 |
+| M6 the inertia test removed | A9b and A9: the eigensolver refuses the indefinite factor, the tests fail with an error |
+| M7 zero-speed shortcut removed | **not caught** (as the registration allowed): adding `0 x` terms leaves every value's bits, so the general path gives the bits of `modal_analysis` on these models; the shortcut stays as the guarantee |
+| M8 greedy by increasing MAC | A8, A7 |
+
+`cargo fmt -p rcfd-fem --check`: clean (after one layout-only commit). `cargo clippy -p rcfd-fem --all-targets --release -- -D
+warnings`: clean. Shared files: none edited (`geometric.rs`, `modal.rs`, `mpc.rs`, `mass.rs`, `assemble.rs`, the element files
+are used read only), so `baseline_hashes` was not required and was not run.
+
+Deviations: none from the registered set-ups and limits. Not run: `baseline_hashes` (no shared solver file changed); the
+whole workspace suite (the lead's gate).
+
+**Decision by the registered rule: partial.** Every check except A3 is met and N1 to N4 are as expected; A3 missed by the
+amount and for the cause predicted before the code (arithmetic 3), and A3b confirms the diagnosis to 1.1e-8: on a 3-D solid the
+flap-lag difference is `(1 - 2 f_x) Omega^2`, `f_x` the axial (section-rotation) share of the bending mode's kinetic energy,
+because both bending modes' section rotation is spin-softened and the lateral centrifugal stress stiffens the lag mode by the same
+amount. The identity of the clause holds for an Euler-Bernoulli beam only. Clause (a2) was met in the reading registered before
+the code (the spin-softening term against its closed form; the full operator against `1 - Q_n,h`).
+
+Remaining questions:
+
+1. **Wording of (a3).** Options: (a) restate it for a solid, `(omega_flap^2 - omega_lag^2)/Omega^2 = 1 - 2 f_x` within 1e-4,
+   `f_x` the axial kinetic share of the flap mode (met: 1.1e-8), with the Euler-Bernoulli identity `1` within `3 f_x`; (b) keep it
+   and check it on a beam element once beams have geometric stiffness; (c) loosen the limit to 5e-3. Recommendation (a): it is
+   the identity of the operator the acceptance names, and with it F-396 is done.
+2. **Wording of (a2).** Options: (a) state that the bar's check is of the spin softening with the stress stiffening off, and that
+   the full operator gives `1 - Q_n` (`Q_n = k_n^2 L^2/3 + 1/4`); (b) leave it as read here. Recommendation (a).
+3. **Coriolis.** Options: (a) a follow-up with the gyroscopic matrix and the quadratic eigenproblem (forward and backward whirl);
+   (b) leave it out for the 120 mm fan blade (stiff hub). Recommendation (a), as a separate item after the fan's first blade
+   Campbell diagram.
+4. **Sector at harmonic index `h`.** Options: (a) a follow-up that applies `K_eff(Omega)` on the cyclic harmonic pair of ADR
+   0386/0395 (the pre-stress from the index-0 sector, by `RotatingPart::new` through the sector's cyclic constraint or by
+   `with_unit_prestress`); (b) only the full rotor. Recommendation (a): the fan rotor is meshed as a sector.
+
+### For the lead: roadmap entries
+
+F-396, proposed status **partial**, note:
+
+> Structural solver, intermediate tier (plan ADR 0290, 2026-11-12). ADR 0403, 2026-11-13: rotating.rs gives the modes of a part spinning about an axis in the rotating frame, K + Omega^2 (K_sigma,1 - M_perp) with the centrifugal pre-stress of one static solve at 1 rad/s and the spin-softening mass m_ab (delta_ij - a_i a_j), on the elimination and the transformation path; speed 0 gives the bits of the modal analysis; a speed at which K_eff is not positive definite is reported as a loss of stiffness with the speed and the negative count (Sylvester inertia), never as a frequency; modes over speeds tracked by the mass-weighted modal assurance, engine-order crossings linear in Omega^2 (exact for omega^2 = omega_0^2 + S Omega^2, 2e-16), the Campbell table as CSV and JSON. Radial bar: spin softening 1 within 1.9e-9, the full operator 1 - Q_n,h within 3.1e-5; square beam: stiffening 1.1907 at 0.2 omega_0 (2.2e-3 from 1.1933), between 1 and the rest quotient up to 5 omega_0, crossings within 8.7e-6 of direct solves; flap and lag of a rectangular section tracked through their crossing (MAC 0.99999). Partial: the flap-lag identity misses 1e-4 at 1.9e-3 (known miss, predicted in the registration): on a solid it is 1 - 2 f_x (met to 1.1e-8), f_x the axial kinetic share of the bending mode. Coriolis neglected. Follow-ups: the flap-lag clause restated for a solid, Coriolis coupling, rotating modes of a sector at a harmonic index.
+
+Follow-up 1 (title "Flap-lag identity of a rotating solid beam: the acceptance restated", deps F-396), acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. On the square radial beam of F-396 (Hex20, slenderness 20, nu = 0) at Omega = 0.2 omega_0: (omega_flap^2 - omega_lag^2)/Omega^2 = 1 - 2 f_x within 1e-4, f_x the axial share of the flap mode's kinetic energy, and = 1 within 3 f_x; the radial bar's clause reads: with the stress stiffening off (omega_n,0^2 - omega_n^2)/Omega^2 = 1 within 1e-3, with it the slope equals Q_n,h - 1 within 1e-3 and Q_n,h equals k_n^2 L^2/3 + 1/4 within 1 percent. No new code is needed if the checks of ADR 0403 are accepted as these.
+
+Follow-up 2 (title "Coriolis coupling of a rotating part: gyroscopic matrix, whirl modes and the Campbell table", deps F-396), acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. The gyroscopic matrix G = 2 Omega int rho N_a N_b [a x] is skew to rounding; the quadratic eigenproblem (K_eff - omega^2 M + i omega G) phi = 0 is solved by a symmetric linearisation; at Omega = 0 the frequencies are those of F-396; a point mass on an isotropic in-plane spring pair gives the closed-form whirl frequencies within 1e-8; the tracked forward and backward branches enter the Campbell table of F-396 with their direction.
+
+Follow-up 3 (title "Rotating modes of a cyclic sector at a harmonic index", deps F-396, F-394), acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. K_eff(Omega) of F-396 on the cyclic harmonic pair of ADR 0386/0395 with the pre-stress of the index-0 sector: at each harmonic index h and speed the frequencies of the sector equal those of the full rotor mesh for that nodal-diameter family within 1e-8 relative; at Omega = 0 the bits of the cyclic modes of F-394; a loss of stiffness is reported per index and speed; the Campbell table holds one family of tracks per index, with the crossings with the engine orders.
