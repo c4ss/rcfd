@@ -257,3 +257,15 @@ untouched), and a copy `r6_non_zero_value_refused_at_k_2_after_landed` keeps the
 1. The API carries the load as vectors rather than as a harmonic tag on `Load`. Taken on the maintainer's standing
    instruction of 2026-11-11 (take the recommendation): vectors, because `Load` is shared with the case schema and a new
    field there would change goldens.
+
+## Amendment 1 (2026-11-13, after the library code and before the test file was written or any check run)
+
+1. **MU8 could not be caught as registered.** The rigid set of N8 (two nodes on a line along the axis) leaves the reference
+   rotation about that line in no row at all: its row and column of `K_r` are empty, the pivot is exactly zero and the skyline
+   factor's own positive-pivot rule (`d <= (w + 1) eps (|a_ii| + sum)`) refuses it before the relative test `d <=
+   PIVOT_TOLERANCE a_ii` is reached. Removing that relative test (MU8) therefore leaves N8 unchanged. Replaced by **MU8'**:
+   the mapping of the factor's pivot refusal to the named refusal (`SkylineError::Pivot` -> "singular reduced stiffness at the
+   reference rotation ... (RigidSet)") replaced by the generic message of the factor; must fail N8 (whose check of the message
+   names "reference rotation" and "RigidSet"). The relative pivot test stays in the code (as in `mpc::solve_static_mpc`) and
+   is listed under the limits as not exercised by a check of this package.
+2. `StaticOptions::default()` (the Direct solver) is the option of every static solve of the checks, sector and full.
