@@ -102,7 +102,7 @@ pub fn frame(x0: Vec3, x1: Vec3, v: Vec3) -> Result<BeamFrame> {
     let c = cross(e1, v);
     let s = norm(c);
     let nv = norm(v);
-    if !(s > PARALLEL_TOLERANCE * nv) {
+    if s.is_nan() || s <= PARALLEL_TOLERANCE * nv {
         return Err(FemError::InvalidValue {
             key: "orientation",
             reason: format!(
