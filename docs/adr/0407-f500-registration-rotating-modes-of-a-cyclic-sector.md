@@ -250,3 +250,40 @@ Coriolis coupling (it couples the cos and sin parts and makes the pair problem n
 other than 0 (a non-repeating load); mistuning (sectors not identical); rigid sets at `k > 0` with speed are handled by the same
 transformation as ADR 0395 but not checked here (no rigid set in D); one disc geometry, solid elements only; the full rotor check
 on a mesh of 72 Hex20 elements only (the 120 mm fan's sector is a separate item); output through the case files and the CLI.
+
+## Amendment 1 (2026-11-13, written after the registered run of `si_rotating_cyclic` and before any corrected run)
+
+**What happened.** The registered run (release, `--test-threads=2`, 10.1 s for six tests; log `f500-scratch/run1.log`) met
+every check except **P2**: the smallest stored track assurance at `0.1 .. 0.9 omega_ref` was **0.8952** against the limit 0.9.
+The test became the ignored record `p1_p2_p3_p5_campbell_by_family_known_miss` (body unchanged, name and reason only). The loss
+speed rule took its registered fallback (no rest mode with `d_ki > 0` under both effects), so that test's Campbell table was
+built with `stress_stiffening = false`; P1, P3, P5 and C3b were met on it.
+
+**Diagnosis** (one diagnostic run of a throw-away test, `f500-scratch/diag_f500.rs`, log `f500-scratch/diag_p2.log`, printing each
+track's assurance; it re-ran nothing to choose a result). The low values are all in the family `k = N/2 = 6`, tracks (0, 1) and
+(2, 3), and nowhere else (every other family `>= 0.99996`). At rest those tracks are equal pairs, 1843.60527995505 Hz twice and
+3361.11617132096 Hz twice (relative difference `3e-15`), and stay equal at every speed. Cause: the disc D is axisymmetric, so at
+`2k = N` the anti-periodic sector problem `a_H = -R a_L` holds both the `cos 6 phi` and the `sin 6 phi` field of the continuum
+(only the sector rows, not the structure, single out a phase), and they have one frequency; D3 grouped vectors by the
+multiplicity of the index (1 at `k = N/2`), so each such vector was tracked alone, and the vector assurance between two arbitrary
+bases of one eigenspace is arbitrary. The same diagnostic with both effects on gave 0.874 in the same family. It is the
+degeneracy D3 handles for the pair, in a family where the registration did not expect it.
+
+**Correction (library).** The tracker groups by eigenvalue clusters as well: at each speed, consecutive sector frequencies of a
+family whose values differ by at most `1e-8` relative (the C1b pair-split limit; the pair splits measured `<= 1.1e-13`) form one
+cluster, and the subspace of a frequency is the span of all vectors of its cluster (the cos/sin pair vectors included). The
+assurance is generalised to subspaces of any dimension, `tr(G_V^{-1} C G_W^{-1} C^T)/min(d_V, d_W)` (the share of the smaller
+space inside the larger: 1 when one contains the other); for two single vectors it is the formula of D3 unchanged. A track's
+stored subspace is its frequency's cluster. Nothing else changes (the eigensolutions, `modes`, the losses, the crossings, the
+CSV and JSON are as before).
+
+**Corrected checks (fixed now, before the corrected run):**
+
+| # | Check | Limit |
+|---|---|---|
+| P2b | the test of the record repeated with the corrected tracker (the same set-up, speeds and fallback): P1, P3, P5, C3b as registered, and P2 | P2 `>= 0.9`, the rest as registered |
+| P2c | the Campbell table with **both effects on** over `0, 0.1, ..., 0.9 omega_ref` (no loss speed), indices `0 .. 6`: P2 (`>= 0.9`), P3 (at least one crossing per family with orders `1 .. 24`; each against a direct solve `<= 1e-2`), every number finite, 4 tracks per family | as stated |
+
+Disclosed beforehand: the diagnostic printed the old tracker's assurances for both tables (the minima above), and every
+non-degenerate track `>= 0.99996`; it did not run the corrected tracker. The decision rule is unchanged; P2 counts as missed in the
+registered run with its cause diagnosed, and P2b/P2c are reported beside it.
