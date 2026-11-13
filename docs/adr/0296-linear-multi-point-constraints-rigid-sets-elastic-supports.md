@@ -327,6 +327,19 @@ landed these assertions fail and are not edited here: `x1_the_scaffold_exists` (
 solve or fail otherwise), `r11_modal_and_stiffness_refuse` (case R8 modal: refused with the package string of D7, not "ADR
 0296"). The exact failing assertions are recorded in the addendum.
 
+## Amendment 1 (2026-11-13, before any code and any run): a check for the threshold
+
+Arithmetic done after the registration and before any code (disclosed): in Q every substituted coefficient is a product of
+the unit coefficients 1 and -1, so the redundant rows of Q cancel exactly and Q2 cannot see the threshold `tau` (mutation MU9
+would survive). Added check, and MU9's target extended:
+
+| Id | Clause | Check | Limit | Estimate behind it |
+| --- | --- | --- | --- | --- |
+| C4 | a12 | the cantilever of C1 with the tie `cos30 u_z(a) + sin30 u_z(b) = 0` and, as a second constraint, the same row times a factor `s`, for each `s` in (3.7, 0.3, 1.9, 7.1, 1/3) (five models): exactly one row dropped (the second constraint), the substituted residue printed, the displacement against the model with the tie once | one row named; `<= 1e-12` relative | residues of order 1e-16 relative, far below `tau` |
+
+MU9 must fail Q2 or C4 (it is caught if at least one of the five residues is not exactly zero; if all five cancel exactly the
+survival is recorded, not repaired).
+
 ## The planned stub, as written
 
 Status: **PLANNED 2026-11-12** (layout by the intermediate-tier plan, [ADR
