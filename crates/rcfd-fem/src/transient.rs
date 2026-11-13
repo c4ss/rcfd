@@ -13,16 +13,26 @@
 //!
 //! The state ([`TransientState`]: `t0`, the step index `n`, `u`, `v`, `a`) is saved and restored bit for bit; the time is
 //! `t0 + n dt`, never accumulated. The steps use no threads; the assembly is bit-identical for any thread count.
+//!
+//! The transformation path (ADR 0393): a model with linear constraints, rigid sets or elastic supports, or with prescribed
+//! motion histories ([`MotionHistory`]), is integrated on `x = T q + g(t)` of [`crate::mpc`], `g(t) = sum_j s_j(t) g_j`:
+//! `M_r q'' + C_r q' + K_r q = T^T f - sum_j (s_j T^T K g_j + s_j' T^T C g_j + s_j'' T^T M g_j)`, `M_r = T^T M T`, `K_r =
+//! T^T K T` (the supports added), `C_r = alpha_R M_r + beta_R K_r`. The derivatives of a motion table are its central
+//! differences with the step, `s' = (s(t + dt) - s(t - dt))/(2 dt)`, `s'' = (s(t + dt) - 2 s(t) + s(t - dt))/dt^2` (second
+//! order), so a motion table covers one step beyond each end of the run. A model without these features runs the lines of
+//! ADR 0389 unchanged.
 
 use crate::assemble::stiffness_with;
-use crate::constraint::{prescribed_equations, reduce};
+use crate::constraint::{prescribed_equations, reduce, Prescribed};
 use crate::error::{FemError, Result};
 use crate::loads::nodal_load_vector;
 use crate::mass::consistent_with;
-use crate::model::{DofMap, SolidModel};
+use crate::model::{Constraint, DofMap, SolidModel};
+use crate::mpc::{add_supports, transformation, Transformation};
 use crate::solve::PIVOT_TOLERANCE;
 use rcfd_linalg::skyline::{SkylineError, SkylineLdlt};
 use rcfd_linalg::CsrMatrix;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// The time integration method.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -221,6 +231,64 @@ impl LoadHistory {
     }
 }
 
+/// A prescribed motion history (ADR 0393): the displacement of each listed node component is its value (an amplitude, m)
+/// times the table's factor, `u(t) = value s(t)`. The table must cover one step beyond each end of the run (its first and
+/// second derivatives are central differences with the step).
+#[derive(Debug, Clone, PartialEq)]
+pub struct MotionHistory {
+    /// The moved node components with their amplitudes.
+    pub prescribed: Vec<Prescribed>,
+    /// The factor against time.
+    pub table: LoadTable,
+}
+
+impl MotionHistory {
+    /// Node components with amplitudes scaled by a table.
+    pub fn new(prescribed: Vec<Prescribed>, table: LoadTable) -> MotionHistory {
+        MotionHistory { prescribed, table }
+    }
+}
+
+/// One motion history on the transformation: `g_j` (all `N` unknowns) and the reduced patterns `T^T K g_j`, `T^T M g_j`,
+/// `T^T C g_j`.
+#[derive(Debug, Clone)]
+struct ReducedMotion {
+    g: Vec<f64>,
+    p_k: Vec<f64>,
+    p_m: Vec<f64>,
+    p_c: Vec<f64>,
+    table: LoadTable,
+}
+
+/// The transformation path (ADR 0393).
+#[derive(Debug, Clone)]
+struct MotionPath {
+    tr: Transformation,
+    motions: Vec<ReducedMotion>,
+}
+
+/// Relative tolerance of the admissibility of an initial state on the transformation path (ADR 0393 D3).
+const ADMISSIBLE_TOLERANCE: f64 = 1e-9;
+
+fn motion_error(reason: String) -> FemError {
+    FemError::InvalidValue {
+        key: "motion history",
+        reason,
+    }
+}
+
+/// `(s(t), s'(t), s''(t))` of a motion table by central differences with the step (the table covers `[t - dt, t + dt]`).
+fn motion_factors(table: &LoadTable, t: f64, dt: f64) -> (f64, f64, f64) {
+    let s_minus = table.value(t - dt).expect("motion coverage checked");
+    let s = table.value(t).expect("motion coverage checked");
+    let s_plus = table.value(t + dt).expect("motion coverage checked");
+    (
+        s,
+        (s_plus - s_minus) / (2.0 * dt),
+        (s_plus - 2.0 * s + s_minus) / (dt * dt),
+    )
+}
+
 /// Options of the integrator.
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
@@ -361,6 +429,7 @@ pub struct Integrator {
     dt: f64,
     damping: Rayleigh,
     state: Option<TransientState>,
+    motion: Option<MotionPath>,
 }
 
 fn check_time_step(dt: f64) -> Result<()> {
@@ -394,19 +463,190 @@ fn matvec(a: &CsrMatrix, x: &[f64]) -> Vec<f64> {
 
 impl Integrator {
     /// The integrator of a model with its zero prescribed displacements, the load histories (full patterns) and the options.
+    /// A model with linear constraints, rigid sets or elastic supports is integrated on the transformation (ADR 0393).
     pub fn new(model: &SolidModel, loads: &[LoadHistory], options: &TransientOptions) -> Result<Integrator> {
+        Integrator::with_motion(model, loads, &[], options)
+    }
+
+    /// The integrator of a model with prescribed motion histories (ADR 0393). Without motions and without linear
+    /// constraints, rigid sets and supports this is ADR 0389's integrator (the same lines). Otherwise the transformation
+    /// path: every constraint value of the model must be zero, a moved node component must not be prescribed by the model
+    /// nor named twice; load patterns have one value per mesh equation or per unknown of the transformation.
+    pub fn with_motion(
+        model: &SolidModel,
+        loads: &[LoadHistory],
+        motions: &[MotionHistory],
+        options: &TransientOptions,
+    ) -> Result<Integrator> {
+        if motions.is_empty() && !crate::mpc::uses_transformation(model) {
+            return Integrator::eliminated(model, loads, options);
+        }
+        Integrator::on_transformation(model, loads, motions, options)
+    }
+
+    fn on_transformation(
+        model: &SolidModel,
+        loads: &[LoadHistory],
+        motions: &[MotionHistory],
+        options: &TransientOptions,
+    ) -> Result<Integrator> {
         check_time_step(options.time_step)?;
         model.validate()?;
         model.check_supported()?;
-        if crate::mpc::uses_transformation(model) {
+        let parameters = options.method.parameters()?;
+        let damping = options.damping.unwrap_or(Rayleigh {
+            mass: 0.0,
+            stiffness: 0.0,
+        });
+        damping.check()?;
+        let dofs = model.dof_map();
+        let own = prescribed_equations(model, &[])?;
+        if let Some(&(eq, v)) = own.iter().find(|&&(_, v)| v != 0.0) {
+            let (node, component) = dofs.node_component(eq).expect("existing equation");
             return Err(FemError::InvalidValue {
                 key: "constraint",
-                reason:
-                    "linear constraints, rigid sets and elastic supports are not taken by the transient integrator \
-                         (ADR 0389: the transformation path is not included)"
-                        .to_string(),
+                reason: format!(
+                    "prescribed value {v:e} at node {node} component {component}: the transient integrator takes zero \
+                     constraint values only; give a MotionHistory"
+                ),
             });
         }
+        for (i, c) in model.constraints().iter().enumerate() {
+            if let Constraint::Linear { value, .. } = c {
+                if *value != 0.0 {
+                    return Err(FemError::InvalidValue {
+                        key: "constraint",
+                        reason: format!(
+                            "constraint {i} (Linear) has the value {value:e}: the transient integrator takes zero \
+                             constraint values only"
+                        ),
+                    });
+                }
+            }
+        }
+        let own: BTreeSet<usize> = own.iter().map(|&(eq, _)| eq).collect();
+        let mut seen: BTreeMap<usize, usize> = BTreeMap::new();
+        for (j, h) in motions.iter().enumerate() {
+            for p in &h.prescribed {
+                if !p.value.is_finite() {
+                    return Err(motion_error(format!(
+                        "history {j}: amplitude {:e} at node {} component {} is not finite",
+                        p.value, p.node, p.component
+                    )));
+                }
+                let eq = dofs.equation(p.node, p.component).ok_or_else(|| {
+                    motion_error(format!(
+                        "history {j}: node {} component {} is not an unknown of the model",
+                        p.node, p.component
+                    ))
+                })?;
+                if own.contains(&eq) {
+                    return Err(motion_error(format!(
+                        "history {j}: node {} component {} is prescribed by the model's constraints",
+                        p.node, p.component
+                    )));
+                }
+                if let Some(other) = seen.insert(eq, j) {
+                    return Err(motion_error(format!(
+                        "node {} component {} is moved by history {other} and again by history {j}",
+                        p.node, p.component
+                    )));
+                }
+            }
+        }
+        // The rows of every history, with the values of history `j` (or none) and 0 for the others.
+        let extra = |only: Option<usize>| -> Vec<Prescribed> {
+            let mut list = Vec::new();
+            for (j, h) in motions.iter().enumerate() {
+                for p in &h.prescribed {
+                    let value = if only == Some(j) { p.value } else { 0.0 };
+                    list.push(Prescribed::new(p.node, p.component, value));
+                }
+            }
+            list
+        };
+        let tr = transformation(model, &extra(None))?;
+        let mut gs = Vec::with_capacity(motions.len());
+        for j in 0..motions.len() {
+            let trj = transformation(model, &extra(Some(j)))?;
+            if trj.t() != tr.t() || trj.independent() != tr.independent() {
+                return Err(motion_error(format!(
+                    "history {j}: the constraint rows depend on its values (a row is redundant with zero values only)"
+                )));
+            }
+            gs.push(trj.g().to_vec());
+        }
+        let n = tr.n_mesh();
+        let nn = tr.n_unknowns();
+        let mut k = stiffness_with(model, options.threads)?;
+        add_supports(&mut k, model)?;
+        let m = consistent_with(model, options.threads)?;
+        let zero = vec![0.0; nn];
+        let (kr, _) = tr.reduce(&k, &zero)?;
+        let (mr, _) = tr.reduce(&m, &zero)?;
+        let mut reduced_loads = Vec::with_capacity(loads.len());
+        for l in loads {
+            if l.pattern.len() != n && l.pattern.len() != nn {
+                return Err(FemError::FieldLength {
+                    key: "load pattern",
+                    expected: nn,
+                    found: l.pattern.len(),
+                });
+            }
+            if let Some(i) = l.pattern.iter().position(|x| !x.is_finite()) {
+                return Err(FemError::InvalidValue {
+                    key: "load pattern",
+                    reason: format!("value {:e} at equation {i} is not finite", l.pattern[i]),
+                });
+            }
+            let mut full = l.pattern.clone();
+            full.resize(nn, 0.0);
+            reduced_loads.push((tr.transpose_times(&full), l.table.clone()));
+        }
+        let mut reduced_motions = Vec::with_capacity(motions.len());
+        for (h, g) in motions.iter().zip(gs) {
+            let mut kg = matvec(&k, &g[..n]);
+            kg.resize(nn, 0.0);
+            let mut mg = matvec(&m, &g[..n]);
+            mg.resize(nn, 0.0);
+            let p_k = tr.transpose_times(&kg);
+            let p_m = tr.transpose_times(&mg);
+            let p_c = p_m
+                .iter()
+                .zip(&p_k)
+                .map(|(pm, pk)| damping.mass * pm + damping.stiffness * pk)
+                .collect();
+            reduced_motions.push(ReducedMotion {
+                g,
+                p_k,
+                p_m,
+                p_c,
+                table: h.table.clone(),
+            });
+        }
+        let free = tr.independent().to_vec();
+        Integrator::finish(
+            kr,
+            mr,
+            free,
+            nn,
+            Some(dofs),
+            reduced_loads,
+            parameters,
+            damping,
+            options.time_step,
+            Some(MotionPath {
+                tr,
+                motions: reduced_motions,
+            }),
+        )
+    }
+
+    /// ADR 0389's integrator of a model with zero prescribed displacements only.
+    fn eliminated(model: &SolidModel, loads: &[LoadHistory], options: &TransientOptions) -> Result<Integrator> {
+        check_time_step(options.time_step)?;
+        model.validate()?;
+        model.check_supported()?;
         let dofs = model.dof_map();
         let fixed = prescribed_equations(model, &[])?;
         if let Some(&(eq, v)) = fixed.iter().find(|&&(_, v)| v != 0.0) {
@@ -479,7 +719,33 @@ impl Integrator {
             }
             reduced_loads.push((free.iter().map(|&e| l.pattern[e]).collect(), l.table.clone()));
         }
-        let dt = options.time_step;
+        Integrator::finish(
+            k,
+            m,
+            free,
+            n_full,
+            dofs,
+            reduced_loads,
+            parameters,
+            damping,
+            options.time_step,
+            None,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn finish(
+        k: CsrMatrix,
+        m: CsrMatrix,
+        free: Vec<usize>,
+        n_full: usize,
+        dofs: Option<DofMap>,
+        reduced_loads: Vec<(Vec<f64>, LoadTable)>,
+        parameters: [f64; 4],
+        damping: Rayleigh,
+        dt: f64,
+        motion: Option<MotionPath>,
+    ) -> Result<Integrator> {
         let [am, af, beta, gamma] = parameters;
         let c_m = (1.0 - am) + (1.0 - af) * gamma * dt * damping.mass;
         let c_k = (1.0 - af) * beta * dt * dt + (1.0 - af) * gamma * dt * damping.stiffness;
@@ -497,12 +763,25 @@ impl Integrator {
             dt,
             damping,
             state: None,
+            motion,
         })
     }
 
-    /// The free equations (reduced index `i` is full equation `free()[i]`).
+    /// The free equations (reduced index `i` is full equation `free()[i]`); on the transformation path the independent
+    /// unknowns of `x = T q + g` (ADR 0393).
     pub fn free(&self) -> &[usize] {
         &self.free
+    }
+
+    /// The transformation, on the transformation path (ADR 0393).
+    pub fn transformation(&self) -> Option<&Transformation> {
+        self.motion.as_ref().map(|mp| &mp.tr)
+    }
+
+    /// The length of the full vectors of `start`, `displacement`, `velocity` and `acceleration`: the model's equations, or
+    /// on the transformation path all its unknowns (mesh, then six per rigid set).
+    pub fn n_unknowns(&self) -> usize {
+        self.n_full
     }
 
     /// The four parameters `(alpha_m, alpha_f, beta, gamma)`.
@@ -525,10 +804,29 @@ impl Integrator {
                 });
             }
         }
+        self.check_motion_coverage(t_a, t_b)
+    }
+
+    fn check_motion_coverage(&self, t_a: f64, t_b: f64) -> Result<()> {
+        if let Some(mp) = &self.motion {
+            let (a, b) = (t_a - self.dt, t_b + self.dt);
+            for (j, mo) in mp.motions.iter().enumerate() {
+                if !mo.table.covers(a, b) {
+                    let (lo, hi) = mo.table.range();
+                    return Err(FemError::InvalidValue {
+                        key: "motion table",
+                        reason: format!(
+                            "motion table {j} covers [{lo:e}, {hi:e}], the run needs [{a:e}, {b:e}] (one step beyond \
+                             each end for the central differences)"
+                        ),
+                    });
+                }
+            }
+        }
         Ok(())
     }
 
-    /// The reduced load at `t` (the tables cover `t`).
+    /// The reduced load at `t` (the tables cover `t`), with the terms of the motion histories (ADR 0393 D1).
     fn load(&self, t: f64) -> Vec<f64> {
         let mut f = vec![0.0; self.free.len()];
         for (pattern, table) in &self.loads {
@@ -537,7 +835,61 @@ impl Integrator {
                 *fi += s * pi;
             }
         }
+        if let Some(mp) = &self.motion {
+            for mo in &mp.motions {
+                let (s, s1, s2) = motion_factors(&mo.table, t, self.dt);
+                for i in 0..f.len() {
+                    f[i] -= s * mo.p_k[i] + s1 * mo.p_c[i] + s2 * mo.p_m[i];
+                }
+            }
+        }
         f
+    }
+
+    /// `T x + sum_j c_j g_j` with `c_j` the factor `which` (0: `s`, 1: `s'`, 2: `s''`) of motion `j` at `t` (the motion
+    /// tables cover `[t - dt, t + dt]`).
+    fn expand_motion(&self, mp: &MotionPath, x: &[f64], t: f64, which: usize) -> Vec<f64> {
+        let mut full = mp.tr.expand(x);
+        for mo in &mp.motions {
+            let (s, s1, s2) = motion_factors(&mo.table, t, self.dt);
+            let c = [s, s1, s2][which];
+            for (xi, gi) in full.iter_mut().zip(&mo.g) {
+                *xi += c * gi;
+            }
+        }
+        full
+    }
+
+    /// The reduced vector of a full initial vector on the transformation path; refused if it is not admissible.
+    fn admissible(&self, mp: &MotionPath, x: &[f64], t0: f64, which: usize, key: &'static str) -> Result<Vec<f64>> {
+        if x.len() != self.n_full {
+            return Err(FemError::FieldLength {
+                key,
+                expected: self.n_full,
+                found: x.len(),
+            });
+        }
+        if let Some(e) = x.iter().position(|v| !v.is_finite()) {
+            return Err(FemError::InvalidValue {
+                key: "initial state",
+                reason: format!("{key} {:e} at unknown {e} is not finite", x[e]),
+            });
+        }
+        let q: Vec<f64> = self.free.iter().map(|&e| x[e]).collect();
+        let y = self.expand_motion(mp, &q, t0, which);
+        let norm = |v: &[f64]| v.iter().fold(0.0f64, |m, a| m.max(a.abs()));
+        let limit = ADMISSIBLE_TOLERANCE * norm(x).max(norm(&y));
+        for (e, (xe, ye)) in x.iter().zip(&y).enumerate() {
+            if (xe - ye).abs() > limit {
+                return Err(FemError::InvalidValue {
+                    key: "initial state",
+                    reason: format!(
+                        "{key} {xe:e} at unknown {e} is not admissible: the constraint rows and the motions give {ye:e}"
+                    ),
+                });
+            }
+        }
+        Ok(q)
     }
 
     fn reduced(&self, full: &[f64], key: &'static str) -> Result<Vec<f64>> {
@@ -585,8 +937,51 @@ impl Integrator {
                 reason: format!("start time {t0:e} is not finite"),
             });
         }
-        let u = self.reduced(u0, "initial displacement")?;
-        let v = self.reduced(v0, "initial velocity")?;
+        let (u, v) = match &self.motion {
+            None => (
+                self.reduced(u0, "initial displacement")?,
+                self.reduced(v0, "initial velocity")?,
+            ),
+            Some(mp) => {
+                self.check_coverage(t0, t0)?;
+                (
+                    self.admissible(mp, u0, t0, 0, "initial displacement")?,
+                    self.admissible(mp, v0, t0, 1, "initial velocity")?,
+                )
+            }
+        };
+        self.begin(t0, u, v)
+    }
+
+    /// Starts at `t0` from the reduced displacement and velocity (one value per entry of [`Integrator::free`]); the
+    /// acceleration solves `M a0 = f(t0) - C v0 - K u0` (ADR 0393).
+    pub fn start_reduced(&mut self, t0: f64, q0: &[f64], qdot0: &[f64]) -> Result<()> {
+        if !t0.is_finite() {
+            return Err(FemError::InvalidValue {
+                key: "initial state",
+                reason: format!("start time {t0:e} is not finite"),
+            });
+        }
+        let n = self.free.len();
+        for (key, x) in [("initial displacement", q0), ("initial velocity", qdot0)] {
+            if x.len() != n {
+                return Err(FemError::FieldLength {
+                    key,
+                    expected: n,
+                    found: x.len(),
+                });
+            }
+            if let Some(e) = x.iter().position(|v| !v.is_finite()) {
+                return Err(FemError::InvalidValue {
+                    key: "initial state",
+                    reason: format!("{key} {:e} at reduced unknown {e} is not finite", x[e]),
+                });
+            }
+        }
+        self.begin(t0, q0.to_vec(), qdot0.to_vec())
+    }
+
+    fn begin(&mut self, t0: f64, u: Vec<f64>, v: Vec<f64>) -> Result<()> {
         self.check_coverage(t0, t0)?;
         let f = self.load(t0);
         let ku = matvec(&self.k, &u);
@@ -728,19 +1123,35 @@ impl Integrator {
         full
     }
 
-    /// The displacement, one value per equation (0 at prescribed equations).
+    /// A full vector of the state (`which`: 0 displacement, 1 velocity, 2 acceleration); on the transformation path `T x +
+    /// sum_j c_j g_j` (ADR 0393 D1).
+    fn full(&self, which: usize) -> Result<Vec<f64>> {
+        let s = self.current()?;
+        let x = [&s.u, &s.v, &s.a][which];
+        match &self.motion {
+            None => Ok(self.expand(x)),
+            Some(mp) => {
+                let t = self.time_of(s.t0, s.step);
+                self.check_motion_coverage(t, t)?;
+                Ok(self.expand_motion(mp, x, t, which))
+            }
+        }
+    }
+
+    /// The displacement, one value per equation (0 at prescribed equations); on the transformation path `T q + g(t)` over
+    /// all unknowns (mesh, then six per rigid set).
     pub fn displacement(&self) -> Result<Vec<f64>> {
-        Ok(self.expand(&self.current()?.u))
+        self.full(0)
     }
 
-    /// The velocity, one value per equation.
+    /// The velocity, one value per equation; on the transformation path `T q' + g'(t)`.
     pub fn velocity(&self) -> Result<Vec<f64>> {
-        Ok(self.expand(&self.current()?.v))
+        self.full(1)
     }
 
-    /// The acceleration, one value per equation.
+    /// The acceleration, one value per equation; on the transformation path `T q'' + g''(t)`.
     pub fn acceleration(&self) -> Result<Vec<f64>> {
-        Ok(self.expand(&self.current()?.a))
+        self.full(2)
     }
 
     /// The kinetic energy `v^T M v/2`.

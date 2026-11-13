@@ -711,6 +711,7 @@ fn a12_refusals() {
 }
 
 #[test]
+#[ignore = "record of ADR 0389; its C3 row 'nodal spring' is retired by ADR 0393 (the transient integrator now takes the transformation path); superseded by c2_c3_tables_and_refusals_after_landed"]
 fn c2_c3_tables_and_refusals() {
     let b = bar();
     let mut ch = Checks::new();
@@ -778,6 +779,100 @@ fn c2_c3_tables_and_refusals() {
         .unwrap();
     let (ok, msg) = refused_with(Integrator::new(&sprung, &[], &TransientOptions::new(dt)), "constraint");
     ch.holds("C3 nodal spring", ok, &msg);
+    let mut it = Integrator::new(&b.model, &[], &TransientOptions::new(dt)).unwrap();
+    let (ok, msg) = refused_with(it.step(), "state");
+    ch.holds("C3 step before start", ok, &msg);
+    let mut u0 = vec![0.0; b.phi.len()];
+    let fixed_eq = b.model.dof_map().equation(0, 1).unwrap();
+    u0[fixed_eq] = 1e-6;
+    let (ok, msg) = refused_with(it.start(0.0, &u0, &vec![0.0; u0.len()]), "initial state");
+    ch.holds("C3 initial displacement at a prescribed equation", ok, &msg);
+    it.start(0.0, &b.phi, &vec![0.0; u0.len()]).unwrap();
+    let bytes = it.state().unwrap().to_bytes();
+    let mut wrong = bytes.clone();
+    wrong[0] = b'X';
+    let (ok, msg) = refused_with(TransientState::from_bytes(&wrong), "state");
+    ch.holds("C3 bad magic", ok, &msg);
+    let (ok, msg) = refused_with(TransientState::from_bytes(&bytes[..bytes.len() - 1]), "state");
+    ch.holds("C3 truncated buffer", ok, &msg);
+    let state = TransientState::from_bytes(&bytes).unwrap();
+    let mut other_dt = Integrator::new(&b.model, &[], &TransientOptions::new(2.0 * dt)).unwrap();
+    let (ok, msg) = refused_with(other_dt.restore(state.clone()), "state");
+    ch.holds("C3 restore with another dt", ok, &msg);
+    let mut other_method = Integrator::new(
+        &b.model,
+        &[],
+        &TransientOptions::new(dt).method(Method::GeneralisedAlpha { rho_inf: 0.8 }),
+    )
+    .unwrap();
+    let (ok, msg) = refused_with(other_method.restore(state), "state");
+    ch.holds("C3 restore with another method", ok, &msg);
+    ch.finish();
+}
+
+/// C2 and C3 of ADR 0389 without the row 'nodal spring', retired by ADR 0393.
+#[test]
+fn c2_c3_tables_and_refusals_after_landed() {
+    let b = bar();
+    let mut ch = Checks::new();
+    let t = LoadTable::new(vec![(0.0, 0.3), (0.7, 1.9), (1.1, -0.4)]).unwrap();
+    let at_points = t
+        .points()
+        .iter()
+        .all(|&(ti, vi)| t.value(ti).unwrap().to_bits() == vi.to_bits());
+    ch.holds("C2 values at the points", at_points, "bit-equal");
+    let mid = (t.value(0.35).unwrap() - 1.1)
+        .abs()
+        .max((t.value(0.9).unwrap() - 0.75).abs());
+    ch.at_most("C2 midpoint |value - mean|", mid, 1e-15);
+    ch.holds(
+        "C2 outside the table",
+        t.value(-1e-9).is_none() && t.value(1.1 + 1e-9).is_none(),
+        "None",
+    );
+    for (name, pts) in [
+        ("one point", vec![(0.0, 1.0)]),
+        ("non-increasing times", vec![(0.0, 1.0), (0.0, 2.0)]),
+        ("NaN value", vec![(0.0, 1.0), (1.0, f64::NAN)]),
+    ] {
+        let (ok, msg) = refused_with(LoadTable::new(pts), "load table");
+        ch.holds(&format!("C3 table {name}"), ok, &msg);
+    }
+    let dt = b.period / 40.0;
+    let table = LoadTable::constant(1.0, 0.0, 1.0).unwrap();
+    let (ok, msg) = refused_with(
+        Integrator::new(
+            &b.model,
+            &[LoadHistory::new(vec![1.0; 3], table)],
+            &TransientOptions::new(dt),
+        ),
+        "load pattern",
+    );
+    ch.holds("C3 pattern of the wrong length", ok, &msg);
+    for (name, method) in [
+        ("rho 1.5", Method::GeneralisedAlpha { rho_inf: 1.5 }),
+        ("rho -0.1", Method::GeneralisedAlpha { rho_inf: -0.1 }),
+        ("Newmark beta -1", Method::Newmark { beta: -1.0, gamma: 0.5 }),
+    ] {
+        let (ok, msg) = refused_with(
+            Integrator::new(&b.model, &[], &TransientOptions::new(dt).method(method)),
+            "method",
+        );
+        ch.holds(&format!("C3 method {name}"), ok, &msg);
+    }
+    let bad = Rayleigh {
+        mass: -1.0,
+        stiffness: 0.0,
+    };
+    let (ok, msg) = refused_with(
+        Integrator::new(&b.model, &[], &TransientOptions::new(dt).damping(bad)),
+        "damping",
+    );
+    ch.holds("C3 Rayleigh -1", ok, &msg);
+    let mut moved = bar_model();
+    moved.add_constraint(Constraint::displacement("xmax", 0, 1e-3)).unwrap();
+    let (ok, msg) = refused_with(Integrator::new(&moved, &[], &TransientOptions::new(dt)), "constraint");
+    ch.holds("C3 non-zero prescribed value", ok, &msg);
     let mut it = Integrator::new(&b.model, &[], &TransientOptions::new(dt)).unwrap();
     let (ok, msg) = refused_with(it.step(), "state");
     ch.holds("C3 step before start", ok, &msg);
