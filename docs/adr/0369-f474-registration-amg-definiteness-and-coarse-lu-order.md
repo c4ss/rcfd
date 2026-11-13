@@ -255,3 +255,35 @@ with `AmgSettings::default()`); a fluid run with the corrected solve exists only
   checks; (b) a library hook. Taken on the standing instruction: (a); (b) is state in the default path.
 - **Q4. The `rz <= 0` guard in `cg`.** Options: (a) add it only by an amendment if H does not reach the first branch; (b) add it
   anyway. Taken on the standing instruction: (a); (b) changes default solves (ADR 0363 Q6) and is the maintainer's.
+
+## Amendment 1 (2026-11-12, after the registered run of L1 to L6, before any code or run of what it registers)
+
+Written after the fast checks L1 to L6 ran once (code f08d7df9, log `f474-scratch/run-linalg-fast.log`), before F1, H and X1
+to X3 ran. Nothing above this amendment is changed.
+
+**What happened.** L1, L2, L3, L5, L6 held (L1: `(-13, 15, -5)`; L2: `(1, 1, 1)`; L3: interchanges at steps 0, 2, ..., 18,
+relative residual default 4.07e-3, opt-in 8.9e-19). **L4 missed its first clause**: the coarsest factorisation of the 40 x 40
+Laplacian hierarchy interchanges rows at step 0 (`coarse_interchanges() == [0]`), against the registered "empty". The
+assertion stopped the test, so its bit-equality clause did not run. The set-up assumed the reading 2 property (an M-matrix
+never interchanges) for the coarsest Galerkin operator, which is not an M-matrix.
+
+**The corrected reading.** An interchange at step 0 is harmless to the interleaved order: no multiplier is stored before it,
+so the interleaved and the interchanges-first solves perform the same operations in the same order. The two differ only
+when some step `k >= 1` interchanges (reading 1 said "no interchange"; the exact condition is "no interchange at a step
+`k >= 1`"). The same correction applies to the checks not yet run:
+
+- **L4** is kept as the ignored record `l4_opt_in_is_bit_identical_without_interchanges_known_miss` with its limit intact and
+  the measured `[0]` recorded.
+- **L4b** (new, fast): on the same 40 x 40 Laplacian and right-hand side, every interchange is at step 0 (limit: the steps
+  are a subset of `{0}`), and `apply` with and without the flag is bit-equal (0 differing values).
+- **F1** (not yet run): its neutrality condition becomes "no interchange at a step `k >= 1`" (in place of "no interchange");
+  the limit is unchanged otherwise.
+- **H1** (not yet run): "the defect active on the stopping system" means an interchange at a step `k >= 1`; the steps are
+  printed as registered.
+- **X1**: the record prints, per factorisation, the steps; the summary counts those with an interchange at `k >= 1`.
+
+**Mutation for L4b.** MU7: the opt-in branch skips the interchange of step 0 (`for k in 1..n` in the first loop); must fail
+L4b. (MU1 to MU6 unchanged.)
+
+**Rule.** Unchanged. L4 is a registered check missed in its registered run, so by the rule F-474 is at most **partial**
+unless the maintainer accepts this amendment.
