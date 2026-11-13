@@ -300,6 +300,31 @@ All in `crates/rcfd-fem/tests/si_transient.rs`, release profile, run once (`CARG
 - The decay check measures one isolated mode of a two-unknown model; the bar's high modes are not measured.
 - The thread check covers the assembly thread count only (the steps are sequential).
 
-## Addendum 1: results
+## Amendment 1 (2026-11-13, written after the registered run of commit 9cc83fa3 and before the corrected run)
 
-(to be written after the run)
+The registered run (`cargo test -p rcfd-fem --release --test si_transient -- --nocapture --test-threads=1`, once) stopped the
+test `a8c_a8d_decay_against_the_closed_form_and_at_omega_dt_1e6` after its first row: A8c for `rho_inf = 0.5` was measured
+(`2.833744e-11`, met), then `Integrator::from_matrices` refused model Q with `omega_2 = 1e7` as `"effective matrix"`: "singular
+at equation 0: pivot 1.0989 at most 1e-10 of the diagonal 2.5876e10". A8c for `rho_inf = 0.8` and both rows of A8d were not
+measured.
+
+Diagnosis: a defect of the set-up, not of the method. With `omega_1 = 1` and `omega_2 = 1e7` the eigenvalues of `K` differ by
+`1e14`, so the effective matrix `S` has a pivot `~1e-10.6` of its diagonal after the RCM order eliminates the coupled row; the
+registered pivot rule of D1 (`d_i <= 1e-10 S_ii` refused, the rule of the static solve) treats such a matrix as singular, as
+it was registered to. The rule stays; the set-up changes.
+
+Correction (fixed now, before the corrected run): A8d uses model Q with `omega_1 = 1e4` (`Omega_1 = 1e3`) and `omega_2 = 1e7`
+(`Omega_2 = 1e6`), `dt = 0.1`, `theta = 0.3` as before: the eigenvalue ratio of `K` is `1e6`, the smallest pivot of `S` about
+`1e-6` of its diagonal. Mode 2 stays isolated (a distinct eigenvalue; the measurement projects on `phi_2` only, D5). Limits
+unchanged: A8d `|r - rho_inf| <= 1e-3` (estimate `7.8e-5`, arithmetic 2 unchanged since the amplification of a mode depends on
+its own `Omega` only), A8c `|r - r_closed| <= 1e-6` for both `rho_inf` on the unchanged `omega_1 = 1`, `omega_2 = 1e4` model.
+The corrected test `a8c_a8d_amended` runs A8c for both values (the `rho_inf = 0.5` row repeats deterministic code and must give
+the bits of the registered run, `2.833744e-11` as printed; it is a reproduction, not a second pick) and A8d for both values. The
+old test stays as an ignored record.
+
+A8 missed as arithmetic 2 predicted (`7.847168e-3`, `7.721246e-3` against `1e-3`); it becomes the ignored
+`a8_decay_per_step_at_omega_dt_1e3_known_miss` with its limit intact.
+
+Limit added to the registration's limits by this finding: the relative pivot rule refuses an effective matrix whose pivots
+fall below `1e-10` of the diagonal, so a model whose effective stiffness spans more than about ten decades (here a two-unknown
+model with `(omega_2/omega_1)^2 = 1e14`) is refused although it is non-singular.
