@@ -250,3 +250,14 @@ if the count cannot be computed or the zero modes cannot be found on KF or FB1.
 2. The counting rule is the rank of the constraint and support rows on the six rigid fields with `tau_c = 1e-8`, rather than
    the nullity of `K_r` itself (which counts mechanisms too and needs a tolerance on a large factor). Taken on the maintainer's
    standing instruction of 2026-11-11 (take the recommendation).
+
+## Amendment 1 (2026-11-13, written with the code and the test file, before any run of the checks)
+
+1. **E3, the positive caller shift of a refused model.** `s_p` is defined from the reduced matrices of the default run, which
+   a refused model (RC, CN, KN, KE) does not have. E3 uses `Some(Shift::Value(1e3))` as its positive caller shift (any
+   positive value: the refusals come before the eigensolver). The check and its limit are unchanged.
+2. **Extent of R1 and S1.** The helper that runs Z1 and Z2 also asserts R1 and S1 on FS (the model of N1), beyond the
+   registered list; S1 is asserted on the C1 models in the form registered (held `> 1e-6`, free `<= 1e-12`; for a count of 0
+   the free value is 0 by definition, for a count of 6 the held value is not defined and passes). Limits unchanged.
+3. Library code as designed in D1 (`crates/rcfd-fem/src/free_motions.rs`, the `pub mod free_motions;` line of `lib.rs`); no
+   edit of `mpc.rs` or `modal.rs`.

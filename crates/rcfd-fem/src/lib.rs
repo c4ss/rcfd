@@ -20,6 +20,7 @@ pub mod convert;
 pub mod cyclic;
 pub mod element;
 pub mod error;
+pub mod free_motions;
 pub mod geometric;
 pub mod harmonic;
 pub mod hex20;
