@@ -125,10 +125,23 @@ fn c1_to_c6_curves_and_corrections() {
     let plain = [&good, &gerb, &sode]
         .iter()
         .all(|k| k.equivalent_amplitude(sa, sm).unwrap().to_bits() == sa.to_bits());
-    c.holds("C2c compressive mean, no credit: sigma_ar = sigma_a", plain, "bit-equal");
-    let cg = rel(good.with_compressive_credit(true).equivalent_amplitude(sa, sm).unwrap(), sa / (1.0 + 1.0 / 3.0));
-    let cs = rel(sode.with_compressive_credit(true).equivalent_amplitude(sa, sm).unwrap(), sa / 1.5);
-    let cr = rel(gerb.with_compressive_credit(true).equivalent_amplitude(sa, sm).unwrap(), sa / (1.0 - 1.0 / 9.0));
+    c.holds(
+        "C2c compressive mean, no credit: sigma_ar = sigma_a",
+        plain,
+        "bit-equal",
+    );
+    let cg = rel(
+        good.with_compressive_credit(true).equivalent_amplitude(sa, sm).unwrap(),
+        sa / (1.0 + 1.0 / 3.0),
+    );
+    let cs = rel(
+        sode.with_compressive_credit(true).equivalent_amplitude(sa, sm).unwrap(),
+        sa / 1.5,
+    );
+    let cr = rel(
+        gerb.with_compressive_credit(true).equivalent_amplitude(sa, sm).unwrap(),
+        sa / (1.0 - 1.0 / 9.0),
+    );
     c.at_most("C2c with credit Goodman", cg, 1e-12);
     c.at_most("C2c with credit Soderberg", cs, 1e-12);
     c.at_most("C2c with credit Gerber", cr, 1e-12);
@@ -137,15 +150,26 @@ fn c1_to_c6_curves_and_corrections() {
         ("Goodman at sigma_u", good, SU),
         ("Goodman at 1.1 sigma_u", good, 1.1 * SU),
         ("Gerber at sigma_u", gerb, SU),
-        ("Gerber with credit at -sigma_u", gerb.with_compressive_credit(true), -SU),
+        (
+            "Gerber with credit at -sigma_u",
+            gerb.with_compressive_credit(true),
+            -SU,
+        ),
         ("Soderberg at sigma_y", sode, SY),
     ] {
-        let (ok, msg) = refused_with(k.equivalent_amplitude(100e6, sm), "mean stress", "at or above the strength");
+        let (ok, msg) = refused_with(
+            k.equivalent_amplitude(100e6, sm),
+            "mean stress",
+            "at or above the strength",
+        );
         c.holds(&format!("C3 {name} refused"), ok, &msg);
     }
     let accepted = good.equivalent_amplitude(100e6, 0.999 * SU).is_ok()
         && gerb.equivalent_amplitude(100e6, 0.999 * SU).is_ok()
-        && gerb.with_compressive_credit(true).equivalent_amplitude(100e6, -0.999 * SU).is_ok()
+        && gerb
+            .with_compressive_credit(true)
+            .equivalent_amplitude(100e6, -0.999 * SU)
+            .is_ok()
         && sode.equivalent_amplitude(100e6, 0.999 * SY).is_ok();
     c.holds("C3 accepted at 0.999 of each strength", accepted, "");
     // C4
@@ -268,7 +292,11 @@ fn h1_to_h4_equivalent_stresses() {
     c.holds("H4 pure shear positive, hydrostatic 0", shear && hydro, "");
     let spec = FatigueSpec::new(basquin(), MeanStressCorrection::none(), Equivalent::MaxPrincipal);
     let pf = spec
-        .evaluate_harmonic(&[80e6, 0.0, 0.0, 0.0, 0.0, 0.0], &[100e6, 0.0, 0.0, 0.0, 0.0, 0.0], &[0.0; 6])
+        .evaluate_harmonic(
+            &[80e6, 0.0, 0.0, 0.0, 0.0, 0.0],
+            &[100e6, 0.0, 0.0, 0.0, 0.0, 0.0],
+            &[0.0; 6],
+        )
         .unwrap();
     c.at_most("H4 MaxPrincipal mean of a uniaxial mean", rel(pf.mean, 80e6), 1e-12);
     let hist: Vec<[f64; 6]> = (0..50)
@@ -294,9 +322,15 @@ fn s1_safety_factor() {
     let strength = SF * (2.0 * nd).powf(BB);
     let kinds = [
         ("None", MeanStressCorrection::none()),
-        ("Goodman", MeanStressCorrection::new(MeanStress::Goodman { ultimate: SU })),
+        (
+            "Goodman",
+            MeanStressCorrection::new(MeanStress::Goodman { ultimate: SU }),
+        ),
         ("Gerber", MeanStressCorrection::new(MeanStress::Gerber { ultimate: SU })),
-        ("Soderberg", MeanStressCorrection::new(MeanStress::Soderberg { yield_strength: SY })),
+        (
+            "Soderberg",
+            MeanStressCorrection::new(MeanStress::Soderberg { yield_strength: SY }),
+        ),
     ];
     let mut w = 0.0f64;
     for (_, k) in &kinds {
@@ -345,8 +379,10 @@ fn cantilever(p: f64) -> SolidModel {
     m.add_material("all", Material::isotropic_elastic(E_MOD, 0.0, RHO, 0.0).unwrap())
         .unwrap();
     m.add_constraint(Constraint::displacement("xmin", 0, 0.0)).unwrap();
-    m.add_constraint(Constraint::displacement("root_neutral", 2, 0.0)).unwrap();
-    m.add_constraint(Constraint::displacement("root_neutral_y", 1, 0.0)).unwrap();
+    m.add_constraint(Constraint::displacement("root_neutral", 2, 0.0))
+        .unwrap();
+    m.add_constraint(Constraint::displacement("root_neutral_y", 1, 0.0))
+        .unwrap();
     m.add_load(Load::traction("xmax", [0.0, 0.0, -p / (CB * CH)])).unwrap();
     m
 }
@@ -373,14 +409,22 @@ fn f1_to_f5_cantilever() {
     let dh = DirectHarmonic::new(&mh, &DirectHarmonicOptions::new()).unwrap();
     let resp = dh.response(&HarmonicLoad::from_model(&mh).unwrap(), w).unwrap();
     let st = dh.stress(&mh, &resp).unwrap();
-    println!("cantilever: {} unknowns, w = {w:.4} rad/s, {:.2} s", resp.re.len(), t0.elapsed().as_secs_f64());
+    println!(
+        "cantilever: {} unknowns, w = {w:.4} rad/s, {:.2} s",
+        resp.re.len(),
+        t0.elapsed().as_secs_f64()
+    );
     let spec = FatigueSpec::new(
         basquin(),
         MeanStressCorrection::new(MeanStress::Goodman { ultimate: SU }),
         Equivalent::VonMises,
     );
     let f_hz = w / (2.0 * PI);
-    let (nm, nr, ni) = (nodal(&ms, &field, field.stress()), nodal(&ms, &field, &st.re), nodal(&ms, &field, &st.im));
+    let (nm, nr, ni) = (
+        nodal(&ms, &field, field.stress()),
+        nodal(&ms, &field, &st.re),
+        nodal(&ms, &field, &st.im),
+    );
     let fld = FatigueField::harmonic(&spec, Some(&nm), &nr, &ni, f_hz).unwrap();
     let p = fld.largest_damage().unwrap();
     let x = ms.mesh().nodes()[p];
@@ -398,7 +442,11 @@ fn f1_to_f5_cantilever() {
         (0.767541..=1.308433).contains(&r),
         &format!("{r:.6} (life {:.6e}, hand {n_hand:.6e})", fld.points[p].life),
     );
-    c.at_most("F3 amplitude against 6 P_a L/(b h^2)", rel(fld.points[p].amplitude, sa), 0.02);
+    c.at_most(
+        "F3 amplitude against 6 P_a L/(b h^2)",
+        rel(fld.points[p].amplitude, sa),
+        0.02,
+    );
     c.at_most("F3 mean against 6 P_s L/(b h^2)", rel(fld.points[p].mean, sm), 0.02);
     let ip = FatigueField::harmonic(&spec, Some(field.stress()), &st.re, &st.im, f_hz).unwrap();
     let q = ip.largest_damage().unwrap();
@@ -410,7 +458,11 @@ fn f1_to_f5_cantilever() {
     );
     let pt = spec.evaluate_harmonic(&nm[p], &nr[p], &ni[p]).unwrap();
     c.holds("F5 field equals evaluate_harmonic", pt == fld.points[p], "bit-equal");
-    c.at_most("F5 damage rate = f/life", rel(fld.damage_rate(p), f_hz / fld.points[p].life), 1e-15);
+    c.at_most(
+        "F5 damage rate = f/life",
+        rel(fld.damage_rate(p), f_hz / fld.points[p].life),
+        1e-15,
+    );
     c.finish();
 }
 
@@ -441,7 +493,8 @@ fn plate_map(p: Vec3) -> Vec3 {
 }
 
 fn plate() -> SolidModel {
-    let (mut mesh, _) = upgrade_to_hex20_mapped(&hex_box([0.0; 3], [1.0, 1.0, HT], [24, 24, 1]).unwrap(), plate_map).unwrap();
+    let (mut mesh, _) =
+        upgrade_to_hex20_mapped(&hex_box([0.0; 3], [1.0, 1.0, HT], [24, 24, 1]).unwrap(), plate_map).unwrap();
     let right: Vec<_> = mesh
         .surface_set("xmax")
         .unwrap()
@@ -492,7 +545,11 @@ fn k1_to_k3_plate_with_a_hole() {
         .collect();
     let sxx = edge.iter().map(|&n| nr[n][0].hypot(ni[n][0])).fold(0.0, f64::max);
     println!("hole edge nodes {edge:?}");
-    c.at_most("K1 s_xx amplitude at (0, r) against 3 sigma_0", rel(sxx, 3.0 * S0), 0.03);
+    c.at_most(
+        "K1 s_xx amplitude at (0, r) against 3 sigma_0",
+        rel(sxx, 3.0 * S0),
+        0.03,
+    );
     let spec = FatigueSpec::new(basquin(), MeanStressCorrection::none(), Equivalent::VonMises);
     let fld = FatigueField::harmonic(&spec, None, &nr, &ni, 100.0 / (2.0 * PI)).unwrap();
     let p = fld.largest_damage().unwrap();
@@ -508,7 +565,11 @@ fn k1_to_k3_plate_with_a_hole() {
         rel(pt.life, basquin().life(pt.amplitude).unwrap()),
         1e-12,
     );
-    c.at_most("K3 von Mises amplitude against 3 sigma_0", rel(pt.amplitude, 3.0 * S0), 0.03);
+    c.at_most(
+        "K3 von Mises amplitude against 3 sigma_0",
+        rel(pt.amplitude, 3.0 * S0),
+        0.03,
+    );
     let r = pt.life / hand_life(3.0 * S0, BB);
     c.holds(
         "K3 life over N(3 sigma_0) in [0.720053, 1.402751]",
@@ -571,7 +632,9 @@ fn q1_to_q7_counting() {
         let h: Vec<f64> = (0..n).flat_map(|_| [s, -s]).collect();
         let r = rainflow_periodic(&h).unwrap();
         let good = r.cycles.len() == n
-            && r.cycles.iter().all(|c| c.range == 2.0 * s && c.mean == 0.0 && c.count == 1.0)
+            && r.cycles
+                .iter()
+                .all(|c| c.range == 2.0 * s && c.mean == 0.0 && c.count == 1.0)
             && r.residue.is_empty();
         ok1 &= good;
         detail += &format!("n {n}: {} cycles; ", r.cycles.len());
@@ -645,7 +708,11 @@ fn q1_to_q7_counting() {
         let rev: Vec<f64> = h.iter().rev().copied().collect();
         rev_ok &= key(&rainflow_periodic(&rev).unwrap().cycles, false) == k;
     }
-    c.holds("Q4 negated history: same ranges, negated means", neg_ok, &format!("{} histories", q4.len()));
+    c.holds(
+        "Q4 negated history: same ranges, negated means",
+        neg_ok,
+        &format!("{} histories", q4.len()),
+    );
     c.holds("Q4 reversed history: same counts", rev_ok, "");
     // Q5
     let (s1, n1, s2, n2) = (300e6, 1000usize, 150e6, 100_000usize);
@@ -772,8 +839,16 @@ fn b2_synthesised_narrow_band() {
     let counts = rainflow_periodic(&x).unwrap();
     let d = miner(&counts.cycles, &curve, &MeanStressCorrection::none()).unwrap();
     let theory = narrow_band_damage_rate_curve(nu0_t, s2.sqrt(), &curve).unwrap();
-    println!("B2: {} cycles, nu0 T {nu0_t:.1}, s {:.4}, counted {d:.6e}, theory {theory:.6e}", counts.cycles.len(), s2.sqrt());
-    c.holds("B2 at least 1e5 cycles", counts.cycles.len() >= 100_000, &format!("{}", counts.cycles.len()));
+    println!(
+        "B2: {} cycles, nu0 T {nu0_t:.1}, s {:.4}, counted {d:.6e}, theory {theory:.6e}",
+        counts.cycles.len(),
+        s2.sqrt()
+    );
+    c.holds(
+        "B2 at least 1e5 cycles",
+        counts.cycles.len() >= 100_000,
+        &format!("{}", counts.cycles.len()),
+    );
     c.at_most("B2 counted damage against the narrow-band rate", rel(d, theory), 0.05);
     c.finish();
 }
@@ -806,7 +881,11 @@ fn r1_to_r8_refusals() {
     );
     let z = [[0.0; 6]; 3];
     let r4 = FatigueField::harmonic(&spec, None, &z, &z[..2], 1.0);
-    c.holds("R4 field lengths differ", matches!(r4, Err(FemError::FieldLength { .. })), &format!("{r4:?}"));
+    c.holds(
+        "R4 field lengths differ",
+        matches!(r4, Err(FemError::FieldLength { .. })),
+        &format!("{r4:?}"),
+    );
     let endu = basquin().with_endurance(50e6).unwrap();
     let table = SnCurve::table(&[1e3, 1e5], &[300e6, 200e6]).unwrap();
     for (name, r) in [
@@ -820,7 +899,11 @@ fn r1_to_r8_refusals() {
     }
     let mean = [[0.0; 6], [SU, 0.0, 0.0, 0.0, 0.0, 0.0], [0.0; 6]];
     let re = [[10e6, 0.0, 0.0, 0.0, 0.0, 0.0]; 3];
-    let (ok, msg) = refused_with(FatigueField::harmonic(&spec, Some(&mean), &re, &z, 1.0), "mean stress", "point 1");
+    let (ok, msg) = refused_with(
+        FatigueField::harmonic(&spec, Some(&mean), &re, &z, 1.0),
+        "mean stress",
+        "point 1",
+    );
     c.holds("R6 field point at the strength", ok, &msg);
     let (ok, msg) = refused_with(FatigueField::harmonic(&spec, None, &re, &z, -1.0), "frequency", "");
     c.holds("R7 negative frequency", ok, &msg);

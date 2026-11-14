@@ -58,7 +58,10 @@ impl SnCurve {
     pub fn basquin(sigma_f: f64, b: f64) -> Result<SnCurve> {
         positive(CURVE, "fatigue strength coefficient", sigma_f)?;
         if !(b.is_finite() && b < 0.0) {
-            return Err(invalid(CURVE, format!("Basquin exponent {b:e} must be finite and negative")));
+            return Err(invalid(
+                CURVE,
+                format!("Basquin exponent {b:e} must be finite and negative"),
+            ));
         }
         Ok(SnCurve {
             law: Law::Basquin { sigma_f, b },
@@ -87,16 +90,25 @@ impl SnCurve {
             });
         }
         if lives.len() < 2 {
-            return Err(invalid(CURVE, format!("a table needs at least two points, got {}", lives.len())));
+            return Err(invalid(
+                CURVE,
+                format!("a table needs at least two points, got {}", lives.len()),
+            ));
         }
         for (i, (&n, &s)) in lives.iter().zip(amplitudes).enumerate() {
             positive(CURVE, "table life", n)?;
             positive(CURVE, "table amplitude", s)?;
             if i > 0 && n <= lives[i - 1] {
-                return Err(invalid(CURVE, format!("table lives must ascend strictly (point {i}: {n:e})")));
+                return Err(invalid(
+                    CURVE,
+                    format!("table lives must ascend strictly (point {i}: {n:e})"),
+                ));
             }
             if i > 0 && s >= amplitudes[i - 1] {
-                return Err(invalid(CURVE, format!("table amplitudes must descend strictly (point {i}: {s:e})")));
+                return Err(invalid(
+                    CURVE,
+                    format!("table amplitudes must descend strictly (point {i}: {s:e})"),
+                ));
             }
         }
         Ok(SnCurve {
@@ -299,7 +311,10 @@ pub fn safety_factor(
     design_life: f64,
 ) -> Result<f64> {
     if !(design_life.is_finite() && design_life > 0.0) {
-        return Err(invalid("design life", format!("{design_life:e} must be finite and positive")));
+        return Err(invalid(
+            "design life",
+            format!("{design_life:e} must be finite and positive"),
+        ));
     }
     // validates the arguments and the strength
     correction.equivalent_amplitude(sa, sm)?;
@@ -541,7 +556,10 @@ impl FatigueField {
         frequency_hz: f64,
     ) -> Result<FatigueField> {
         if !(frequency_hz.is_finite() && frequency_hz >= 0.0) {
-            return Err(invalid("frequency", format!("{frequency_hz:e} Hz must be finite and >= 0")));
+            return Err(invalid(
+                "frequency",
+                format!("{frequency_hz:e} Hz must be finite and >= 0"),
+            ));
         }
         let n = re.len();
         if im.len() != n {
@@ -808,7 +826,10 @@ const NARROW: &str = "narrow band";
 /// deviation `rms` and zero up-crossing rate `nu0` on the curve `N = c S^-m` (ADR 0449 D5).
 pub fn narrow_band_damage_rate(nu0: f64, rms: f64, m: f64, c: f64) -> Result<f64> {
     if !(nu0.is_finite() && nu0 >= 0.0) {
-        return Err(invalid(NARROW, format!("up-crossing rate {nu0:e} must be finite and >= 0")));
+        return Err(invalid(
+            NARROW,
+            format!("up-crossing rate {nu0:e} must be finite and >= 0"),
+        ));
     }
     if !(rms.is_finite() && rms >= 0.0) {
         return Err(invalid(NARROW, format!("rms {rms:e} must be finite and >= 0")));
