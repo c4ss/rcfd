@@ -1499,7 +1499,11 @@ fn schur_error(
             }
         }
         let overlap = re * re + im * im;
-        if best.is_none_or(|(_, o)| overlap > o) {
+        let better = match best {
+            None => true,
+            Some((_, o)) => overlap > o,
+        };
+        if better {
             best = Some((cm.omega, overlap));
         }
     }
