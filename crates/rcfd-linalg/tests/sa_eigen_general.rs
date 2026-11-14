@@ -438,3 +438,39 @@ fn q2_skew_coupling() {
     }
     c.finish();
 }
+
+// ADR 0450 amendment 1: the defect report of the quadratic problem with a gap relative to the roots.
+#[test]
+fn q4a_q4c_defect_report_relative_gap() {
+    let mut c = Checks::new();
+    let w = [1e2, 1e3, 1e4, 1e5];
+    let n = w.len();
+    let mut m = vec![0.0; n * n];
+    let mut k = vec![0.0; n * n];
+    for i in 0..n {
+        m[i * n + i] = 1.0;
+        k[i * n + i] = w[i] * w[i];
+    }
+    let q = quadratic_eigen(&m, &vec![0.0; n * n], &k, n).unwrap();
+    println!("Q4a values {:?}", q.values);
+    c.holds(
+        "Q4a undamped w = 1e2 to 1e5: no defect",
+        q.defects.is_empty(),
+        &format!("{:?}", q.defects),
+    );
+    for w in [3.0, 3000.0] {
+        let q = quadratic_eigen(&[1.0], &[2.0 * w], &[w * w], 1).unwrap();
+        println!("Q4c w {w}: {:?} defects {:?}", q.values, q.defects);
+        c.holds(
+            &format!("Q4c zeta 1, w {w}: one defect of 2"),
+            q.defects.len() == 1 && q.defects[0].indices.len() == 2,
+            "",
+        );
+        c.at_most(
+            &format!("Q4c zeta 1, w {w}: |lambda + w| / w"),
+            max_of(q.values.iter().map(|v| (*v - C64::from_real(-w)).abs())) / w,
+            1e-6,
+        );
+    }
+    c.finish();
+}

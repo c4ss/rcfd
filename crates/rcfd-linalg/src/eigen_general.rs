@@ -189,7 +189,7 @@ pub fn general_eigen_with(
             }
         })
         .collect();
-    let defects = defects_of(&values, &vectors, norm);
+    let defects = defects_of(&values, &vectors, Some(norm));
     Ok(GeneralEigen {
         values,
         vectors,
@@ -661,8 +661,9 @@ fn normalise(v: &mut [C64]) {
     }
 }
 
-/// The defect report of D1.6 on unit vectors.
-fn defects_of(values: &[C64], vectors: &[Vec<C64>], norm: f64) -> Vec<Defect> {
+/// The defect report of D1.6 on unit vectors: the gap relative to `norm` (`||A||_F`), or with `None` relative to
+/// `max(|lambda_j|, |lambda_k|)` (the quadratic problem, ADR 0450 amendment 1).
+fn defects_of(values: &[C64], vectors: &[Vec<C64>], norm: Option<f64>) -> Vec<Defect> {
     let n = values.len();
     let mut parent: Vec<usize> = (0..n).collect();
     fn find(p: &mut [usize], mut i: usize) -> usize {
@@ -685,7 +686,8 @@ fn defects_of(values: &[C64], vectors: &[Vec<C64>], norm: f64) -> Vec<Defect> {
         .collect();
     for j in 0..n {
         for k in j + 1..n {
-            if (values[j] - values[k]).abs() > DEFECT_GAP * norm {
+            let scale = norm.unwrap_or_else(|| values[j].abs().max(values[k].abs()));
+            if (values[j] - values[k]).abs() > DEFECT_GAP * scale {
                 continue;
             }
             let mut s = C64::ZERO;
@@ -730,7 +732,7 @@ pub struct QuadraticEigen {
     pub vectors: Vec<Vec<C64>>,
     /// `||Q(lambda) x|| / ((|lambda|^2 ||M|| + |lambda| ||C|| + ||K + i H||) ||x||)`, Frobenius norms.
     pub residuals: Vec<f64>,
-    /// The defect report of D1.6 on the state vectors.
+    /// The defect report of D1.6 on the state vectors, the gap relative to the roots (ADR 0450 amendment 1).
     pub defects: Vec<Defect>,
     /// Francis iterations made.
     pub iterations: usize,
@@ -827,12 +829,8 @@ pub fn quadratic_eigen_with(
             ar[(n + i) * n2 + n + j] = -ch[i * n + j];
         }
     }
-    let (values, states, iterations, state_norm) = match &hh {
-        None => {
-            let norm = frob(&ar);
-            let (v, z, it) = real_eigen(ar, n2, options)?;
-            (v, z, it, norm)
-        }
+    let (values, states, iterations) = match &hh {
+        None => real_eigen(ar, n2, options)?,
         Some(hh) => {
             // B = [[Ar, -Ai], [Ai, Ar]], Ai = [[0, 0], [-H^, 0]]
             let n4 = 2 * n2;
@@ -843,16 +841,13 @@ pub fn quadratic_eigen_with(
                     b[(n2 + i) * n4 + n2 + j] = ar[i * n2 + j];
                 }
             }
-            let mut ai_norm = 0.0;
             for i in 0..n {
                 for j in 0..n {
                     let ai = -hh[i * n + j];
-                    ai_norm += ai * ai;
                     b[(n2 + n + i) * n4 + j] = ai; // Ai block, bottom-left
                     b[(n + i) * n4 + n2 + j] = -ai; // -Ai block, top-right
                 }
             }
-            let norm = (frob(&ar).powi(2) + ai_norm).sqrt();
             let (v, w, it) = real_eigen(b, n4, options)?;
             let mut ranked: Vec<(f64, usize, Vec<C64>)> = w
                 .iter()
@@ -869,10 +864,10 @@ pub fn quadratic_eigen_with(
             ranked.sort_by_key(|r| r.1);
             let vals = ranked.iter().map(|r| v[r.1]).collect();
             let zs = ranked.into_iter().map(|r| r.2).collect();
-            (vals, zs, it, norm)
+            (vals, zs, it)
         }
     };
-    let defects = defects_of(&values, &states, state_norm);
+    let defects = defects_of(&values, &states, None);
     let (nm, nc) = (frob(m), frob(c));
     let nk = (frob(k).powi(2) + h.map_or(0.0, |h| frob(h).powi(2))).sqrt();
     let mut vectors = Vec::with_capacity(n2);

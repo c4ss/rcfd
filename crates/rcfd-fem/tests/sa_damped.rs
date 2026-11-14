@@ -411,3 +411,18 @@ fn s2_skew_coupling_against_the_whirl_solver() {
     }
     c.finish();
 }
+
+// ADR 0450 amendment 1: no spurious defect on a model with independent modes.
+#[test]
+fn q4b_no_spurious_defects() {
+    let model = cantilever();
+    let d = damped_modes(&model, &rayleigh_options(4).0).unwrap();
+    let ok = d.defects.is_empty() && !d.notes.iter().any(|n| n.contains("defective"));
+    println!(
+        "Q4b R1 cantilever: no defect: {} ({:?}, notes {:?})",
+        if ok { "met" } else { "MISSED" },
+        d.defects,
+        d.notes
+    );
+    assert!(ok);
+}
