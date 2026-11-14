@@ -289,3 +289,33 @@ after an amendment made after its run. **todo**: the solver does not build or a5
   path of `modal_analysis` only).
 - Dense algebra: `O((2m)^3)` (with loss factors `O((4m)^3)`); models are reached only through the modal subspace, never directly.
 - Left eigenvectors and eigenvalue condition numbers are not computed; the defect report is a heuristic on right vectors.
+
+## Amendment 1 (2026-11-14, written and committed after the registered runs of G1 to E1 and before any code change or run it describes)
+
+**Finding.** The R1 run printed "4 defective groups" for a damped cantilever with independent modes. A diagnostic in the scratch
+folder (`f414-scratch/tools/diag_f1.rs`, run on a copy; not a registered check) on the same cantilever without damping gave 5
+defect groups, each the two roots `+/- i w_j` of one mode. The shapes of the repeated bending pairs (y and z planes) are not
+parallel (`|cos|` 0.13 to 0.58), so the vectors are right; the report is wrong. **Cause:** D2 applies the gap test of D1.6
+relative to the norm of the state matrix (about 1e9 for this model: `K^` carries `w_12^2`), so `|lambda - conj(lambda)| = 2 w`
+always passes; and the cosine of the unscaled state vectors `[y; i w y]`, `[y; -i w y]` of a real `y` is `|1 - w^2|/(1 + w^2)`,
+within 1e-6 of 1 for `w > 1414 rad/s`. The report depends on the units of time. No registered check covered it (Q1b has `w = 3`).
+D1.6 of `general_eigen` (a given matrix, a gap relative to `||A||_F`) is not affected.
+
+**Correction (D2, defect report).** In `quadratic_eigen_with` two roots are linked only when `|lambda_j - lambda_k| <= DEFECT_GAP
+max(|lambda_j|, |lambda_k|)` (dimensionless) and `1 - |z_j^H z_k| <= DEFECT_COSINE` on the unit state vectors as before. A
+critically damped pair splits by about 1.5e-8 `|lambda|` (linked); the two roots of an oscillation differ by `2 w sqrt(1 -
+zeta^2)`, relative `2 sqrt(1 - zeta^2)` (linked only within `zeta > 1 - 1.25e-7` of critical, a genuine near-defect). Nothing
+else changes; `general_eigen` keeps D1.6.
+
+**New check Q4 (limits fixed now; run once on the amended code):**
+
+| Id | Check | Limit | Estimate |
+|---|---|---|---|
+| Q4a | `quadratic_eigen`, `M = I`, `C = 0`, `K = diag(w^2)`, `w = 1e2, 1e3, 1e4, 1e5` rad/s: no defect | none reported | holds |
+| Q4b | the R1 cantilever with R1's Rayleigh damping through `damped_modes`: `defects` empty, no note on defects | none reported | holds |
+| Q4c | one oscillator at `zeta = 1`, `w = 3` and `w = 3000`: one defect of 2, both roots within 1e-6 `w` of `-w` | 1e-6 | 1.5e-8 |
+| Q4d | the registered tests `sa_eigen_general` and `sa_damped` pass on the amended code (G4, Q1b and every other check) | pass | holds |
+
+The registered results of G1 to E1 stand as run (before this amendment). Mutation MU10 (defect report disabled) is run again on
+the amended code. By the decision rule this amendment adds a check and corrects an unregistered output; it does not re-run a
+registered check to change its result.
