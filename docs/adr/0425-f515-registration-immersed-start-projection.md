@@ -230,3 +230,120 @@ One flow, one mesh pair, one time step; the lift for Sb rests on L2 alone; other
   only forcings without a non-image face of weight above 1. Taken on the maintainer's standing instruction of 2026-11-11 (take
   the recommendation): (a), measured by L2 for Sb.
 - **Q2. A case-file key** for the projection (schema golden). Not taken (rule 3): a remaining step for the maintainer.
+
+## Addendum 1: results (2026-11-14)
+
+Measured against the limits registered above; no limit was changed and no amendment was made. Release builds on Windows, the
+machine shared with other building agents. Commits: the registration 2930410b; the library code, the test file with the fast
+checks and the records H1, L2 025f380d (before the run of the records). Each registered run was made once: the fast checks in
+release (`f515-scratch/fast_release.log`, before the commit of the test file), the records H1 and L2 once (`records.log`, 10.0
+s and 10.2 s, run at the same time), E1 in debug (`debug.log`), N1 (`n1_baseline.log`), N2 (`n2_existing.log`, `n2_lib.log`).
+No record was repeated.
+
+**Built.** `crates/rcfd-fv/src/immersed_start.rs` (new: `project_start`, `ProjectedStart`, `StartProjection`,
+`divergence_ratio`, `PROJECTION_TOL`, `PROJECTION_MAX_ITERATIONS`); `crates/rcfd-fv/src/lib.rs` line 28 (`pub mod
+immersed_start`); `crates/rcfd-fv/src/pimple.rs` (shared solver file): lines 1164 to 1166 (the field `start_projected`), 1247
+(its initialiser in `new`), 1284 (copied in `scratch`), 1869 to 1870 (the refusal of ADR 0374 D2 with `&& !self.start_projected`),
+2942 (cleared in `reinitialise`), 2945 to 2977 (`project_immersed_start`, `start_projected()`). New test file
+`crates/rcfd-fv/tests/immersed_start_projection_f515.rs`. No schema key, golden, hash table or existing test file was touched.
+
+### Checks
+
+| Check | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| P1 library against the F-501 reference, M1 and M2, `u` and `phi` | bit-equal | bit-equal on both (M1: 316 solid cells, 808 CG iterations; M2: 1264, 1585, as the reference) | yes |
+| P1 (a) divergence ratio, reported and recomputed | `<= 1e-10` | M1 5.9e-14, M2 1.75e-13 (both ways) | yes |
+| P1 (b) solid `u`, solid-face `phi` | exactly 0 | 0 | yes |
+| P1 (c) `into_solid > 0`; `solid_cells` equal to the count of `solid_mask` | as stated | 1.4697e-3 (M1 and M2); equal | yes |
+| P2 the start passed to the solver (M2, B) | `u`, `phi` bit-equal to `project_start`; `p`, `time` unchanged; flag false then true; report equal | all as stated | yes |
+| P2 (d) ratio of the solver's `phi` | `<= 1e-10` | 1.751e-13 | yes |
+| E1 (a) to (d) the errors | `Err` each | (a) no forcing, (b) after 1 step, (c) no fixed-pressure face, (d) 18304 against 4576 cells: all `Err`; also in debug | yes |
+| N1 `baseline_hashes` (release) | passes | 3 passed, 1 ignored (the existing ignore) | yes |
+| N2 existing tests (release): F-363 fast ones, F-501 fast ones, `pimple` unit tests | pass | F-363 4 passed (`n0_fingerprints_of_the_defaults`, `u1`, `u2`, `rf_refusal_with_one_corrector`); F-501 3 passed; `pimple` 8 passed | yes |
+| N3 the diff | only the listed files and hunks | as listed under "Built" | yes |
+| RF1 default refusal (B, one corrector, M2, unprojected) | step 1, stage, quantity, message | step 1, `pressure correctors`, `immersed flux corrector`, cell 9888, value 38.987, message with "ADR 0374" and "n_correctors" (as in ADR 0374) | yes |
+| RF2 projected: 3 steps | no stop | no stop, `max abs(u)` 2.72798 | yes |
+| RF3 `reinitialise` clears the lift | flag false, refused at step 1 | as stated | yes |
+| RF4 `lag_preflight(1e-3, 5)` | `None` unprojected, `Some` projected | `None`; `Some` (step 2, `rho` 0.6354, cell 12378) | yes |
+| H1 B, one corrector, `dt = 1e-3`, M2, check on, 200 steps | no stop; `abs(max abs(u) - 2.20802) <= 2e-5`; S1, S2 | no stop; **2.208021659**, difference 1.7e-6; S1 1.75e-13; S2 exact | yes |
+| L2 Sb, one corrector, `dt = 1e-3`, M2, check on, 200 steps | no stop | **no stop**, `max abs(u)` 2.207181 at step 200 (from the ADR 0249 start it stops at step 126) | yes |
+
+### What the measurements say
+
+- The library projection is the F-501 test projection to the bit on M1 and M2 of DFG 2D-2 (the outlet read from the pressure
+  condition selects exactly the `xmax` faces there), and the solver starts from its flux.
+- With it, the bounded form with one PISO corrector at `dt = 1e-3` runs 200 steps with the default checks on, `max abs(u)`
+  2.2080217 at step 200 against the 2.20802 of ADR 0421 (within its print rounding: the trajectory is the F-501 one).
+- The refusal of ADR 0374 is lifted only for a projected start; the default refuses as before (RF1, the F-363 tests unchanged).
+  The unbounded form with weights up to 2 (Sb), which ADR 0374 also refuses, runs 200 steps from the projected start too (it
+  stops at step 126 from the ADR 0249 start), so the lift of every covered form (Q1 (a)) is supported at this `dt` on this flow.
+
+### Mutations
+
+Applied one at a time to a `git archive` copy of 025f380d (`f515-scratch/mut`, its own target directory) by
+`f515-scratch/mutate.py` (an exact text replacement checked to occur once), the named test run once in release, the file
+restored and compared byte for byte (equal after each). The unmutated copy passed P1, P2 and RF first (`mut_base.log`);
+results in `mut.log`.
+
+| Id | Mutation | Must fail | Result |
+| --- | --- | --- | --- |
+| MU1 | the lift never applies | RF2 | failed: RF2 stopped at step 1 |
+| MU2 | the lift always applies | RF1 | failed: RF1 not refused |
+| MU3 | `reinitialise` keeps the flag | RF3 | failed: "RF3: flag kept" |
+| MU4 | `scratch` does not copy the flag | RF4 | failed: the trial of the projected start refused |
+| MU5 | sign of the flux correction | P1 | failed: `phi` differs from the reference |
+| MU6 | fluid-solid faces not zeroed | P1 | failed: `u` differs from the reference |
+| MU7 | fixed-pressure faces not opened | P1 | failed: the `Err` (no fixed-pressure face) unwrapped |
+| MU8 | `None` flux passed to `reinitialise` | P2 | failed: "phi is not the projected flux" |
+
+### Tools and the defaults
+
+`cargo fmt -p rcfd-fv --check`: clean. `cargo clippy -p rcfd-fv --all-targets -- -D warnings`: clean. Tests run: the new file in
+release (fast checks once, the records once) and in debug (E1; the others are release-only); `baseline_hashes` (rcfd-api,
+release); the F-363 and F-501 test files and the `pimple` unit tests of rcfd-fv (release). Defaults: the new field is `false`
+unless `project_immersed_start` is called, so every other path does the same operations (N1, N2).
+
+### Deviations and disclosures
+
+- The fast checks were run once in release before the commit of the test file (as in ADR 0421); P1, P2 and RF ran once more on
+  the unmutated scratch copy as the mutation baseline (deterministic, same pass). No limit depended on a choice between runs.
+- The registration estimated 40 to 60 s per heavy record; each took 10 s.
+- The restart of `rcfd-api` (`sim/restart.rs`) calls `reinitialise`, so a restarted run is not a projected start and the refusal
+  applies to it again (by D3); not checked.
+- Not run: the workspace suite and the gate; other meshes, `dt`, forms (B1, Sa), non-orthogonal or periodic meshes, moving bodies.
+
+### Decision by the registered rule
+
+P1, P2, E1, N1, N2, N3, RF1 to RF4, H1 and L2 met, every mutation caught by its named check, no amendment. **F-515 is done by the
+rule.** One step is left out by rule 3 (a case-file key, Q2 below).
+
+### Remaining questions
+
+- **Q1. Which forms the lift covers** (registration Q1). Taken (a); L2 supports it for Sb at `dt = 1e-3`. Recommendation: keep
+  (a).
+- **Q2. A case-file key** (for example `immersed.project_start: true`) so that a case can ask for the projection. Options: (a) add
+  it with the schema golden re-recorded (needs the maintainer); (b) library only. Recommendation: (a) as a follow-up, after the
+  maintainer approves the golden change.
+- **Q3. Restart of a projected run.** Options: (a) leave it (a restart is refused with one corrector, and the message says what to
+  do); (b) store the flag in the restart file. Recommendation: (a) until a case key exists (Q2), then (b) with it.
+- **Q4. The default for immersed cases.** Options: (a) opt-in (built); (b) default. Recommendation: (a); (b) changes default
+  results and hashes.
+
+### For the lead: roadmap entries
+
+**F-515: proposed status `done`.** Proposed note:
+
+> DONE (ADR 0425, 2026-11-14), in the library. From ADR 0421 questions 1 and 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. rcfd_fv::immersed_start::project_start projects a start velocity onto the fluid region of the immersed bodies (ADR 0421 D1: solid cells zero, fluid-solid faces closed, a discrete Helmholtz projection by Jacobi-preconditioned CG with the open boundary faces read from the fixed-pressure condition; divergence 1.8e-13 of the flux scale on DFG M2, bit-equal to the F-501 test projection on M1 and M2), and PimpleSolver::project_immersed_start (opt-in) puts the solver at it with the projected face flux. With it DFG 2D-2 on M2 with build_second_order_bounded and one PISO corrector at dt 1e-3 runs 200 steps with the default checks on (max abs(u) 2.2080217 at step 200; ADR 0421 2.20802). The refusal of ADR 0374 (a reversed flux face with one corrector) is lifted for a projected start only and kept unchanged by default; the unbounded form with weights up to 2 also runs 200 steps from the projected start (it stops at step 126 from the ADR 0249 start). Defaults bit-identical (baseline_hashes, the F-363 fingerprints and refusal tests unchanged). Eight mutations caught. Not done (needs the maintainer): a case-file key, which changes the schema golden.
+
+**F-363: proposed addition at the end of its note:**
+
+> ADR 0425 (2026-11-14, F-515): the refusal is lifted for a start projected onto the fluid region (PimpleSolver::project_immersed_start); from it the bounded form and the unbounded form with weights up to 2 run 200 steps with one corrector at dt 1e-3.
+
+**Proposed follow-up** (number to be given by the lead). *Case-file key for the immersed start projection.* Deps: F-515.
+Acceptance:
+
+> A case-file key asks for the immersed start projection of ADR 0425 (PimpleSolver::project_immersed_start) and is carried through restart so that a restarted projected run is not refused; with the key absent every case gives the bytes it gave before (baseline_hashes and the case hash tables unchanged); the schema golden change is approved by the maintainer.
+
+Note:
+
+> From ADR 0425 questions 2 and 3; needs the maintainer's approval of the schema golden change.
