@@ -11887,3 +11887,9 @@ fixed by the item's registration ADR before any code.
     and a free thermal expansion of an unconstrained elastic cube under a temperature step equals alpha dT within 1e-12.
     Models without a temperature keep their bits.
   - note: Structural solver, advanced tier. Optional. Follow-up of F-592 (ADR 0526, 2026-11-14).
+- [x] **F-614** A non-equilibrium quadratic displacement test for the error-estimate samples of an opted Hex8
+  - depends on: F-588
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A non-equilibrium quadratic
+    displacement test for estimate::element_samples with an opted Hex8 (BBar and Incompatible), which catches the
+    mutation MU12 of ADR 0525 (sampling with the compatible strain).
+  - note: Structural solver, intermediate tier. DONE. ADR 0530, 2026-11-14: a non-equilibrium quadratic displacement field (Navier residual |b|/E 1.4e-2, nonuniform dilatation) on the distorted F-374 patch box gives the recovered nodal stress of an opted Hex8 against an independent computation: BBar 4.5e-16 and 3.7e-4 away from the compatible-strain expectation (limits 1e-10 and 1e-5), Incompatible equal to the compatible one to 4.5e-16 (its enhanced strain is zero at the centroid sample, so no field can separate it there), Full control 4.5e-16. Mutation MU12 of ADR 0525 is caught (E1, E3), as are MU13 and an unweighted-mean mutation; the Incompatible-only form of MU12 is an equivalent mutant. Test only, no library change; defaults and baseline hashes untouched. Follow-up of F-588 (ADR 0525); closes F-588's open item.
