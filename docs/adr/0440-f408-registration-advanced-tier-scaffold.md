@@ -415,3 +415,19 @@ default.
    recommendation).
 4. `NotYetSupported` names the package as "ADR 03xx (F-4xx)", the plan's number and the roadmap id. Taken on the maintainer's
    standing instruction of 2026-11-11 (take the recommendation).
+
+## Amendment 1 (2026-11-14, written and committed after the library code and before any run of `sa_scaffold.rs`)
+
+Two set-up defects of the registration, found while writing the test file and before any run of a registered check:
+
+1. **N3 for the shell twins.** The row of R2 and R3 includes E5 (`nonlinear::solve`) and E6 (`Integrator::new`), which refuse
+   every Shell4 model on main (ADR 0404 takes solids only; the transient path does not take shells, ADR 0432 D3), so the isotropic
+   Shell4 twin cannot give `Ok` there, and E2's block-Jacobi CG on the thin plate has no registered convergence. Corrected: N3 for
+   the Shell4 twins (the plate with `Shell { 0.01 }`, which is also the Shell3 twin) is `Ok` through E1, E3, E4, E9, E10; through
+   E5 and E6 the twin is refused with an error that names Shell4 and neither Shell3 nor Layup; E2 is called with the direct
+   solver and `threads(8)` for the shell rows of R2, R3 and N3 (the refusal comes before the solver in every case). N3 for C is
+   unchanged (all ten entries `Ok`).
+2. **H3's measure.** "Max relative entry difference" is defined as `max_ij |K1_ij - K2_ij| / max_ij |K2_ij|` (an entry-wise
+   ratio is undefined at zero entries). The limit 1e-14 stays.
+
+Nothing else changes.
