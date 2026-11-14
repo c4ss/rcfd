@@ -20,9 +20,9 @@ use crate::constraint::prescribed_equations;
 use crate::element::element_for;
 use crate::error::{FemError, Result};
 use crate::harmonic::{HarmonicLoad, HarmonicResponse, HarmonicStress};
-use crate::recover::IntegrationPointField;
 use crate::mass::consistent_with;
 use crate::model::{DofMap, Material, SolidModel};
+use crate::recover::IntegrationPointField;
 use rcfd_linalg::complex::C64;
 use rcfd_linalg::cskyline::{ComplexCsr, ComplexSkylineError, ComplexSkylineLdlt, ComplexSkylineOptions};
 use std::collections::BTreeMap;
@@ -74,10 +74,16 @@ impl ModulusTable {
             }
         }
         if let Some(k) = storage.iter().position(|&e| !(e.is_finite() && e > 0.0)) {
-            return bad(format!("storage modulus {:e} at point {k} (must be finite and > 0)", storage[k]));
+            return bad(format!(
+                "storage modulus {:e} at point {k} (must be finite and > 0)",
+                storage[k]
+            ));
         }
         if let Some(k) = loss.iter().position(|&e| !(e.is_finite() && e >= 0.0)) {
-            return bad(format!("loss factor {:e} at point {k} (must be finite and >= 0)", loss[k]));
+            return bad(format!(
+                "loss factor {:e} at point {k} (must be finite and >= 0)",
+                loss[k]
+            ));
         }
         Ok(ModulusTable {
             frequencies,
@@ -385,7 +391,10 @@ impl DirectHarmonic {
             s
         };
         if mass_m.col != k_total_m.col || mass_m.row_ptr != k_total_m.row_ptr {
-            return Err(invalid("pattern", "stiffness and mass on different patterns".to_string()));
+            return Err(invalid(
+                "pattern",
+                "stiffness and mass on different patterns".to_string(),
+            ));
         }
 
         // dashpots
@@ -674,4 +683,3 @@ impl DirectHarmonic {
         Ok(HarmonicResponse { omega, re, im })
     }
 }
-

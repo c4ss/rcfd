@@ -37,10 +37,18 @@ pub struct ComplexCsr {
 impl ComplexCsr {
     /// A matrix from its arrays; the structure is checked (pointer lengths and monotonicity, columns in range and strictly
     /// ascending within each row).
-    pub fn new(n: usize, row_ptr: Vec<usize>, col: Vec<usize>, val: Vec<C64>) -> Result<ComplexCsr, ComplexSkylineError> {
+    pub fn new(
+        n: usize,
+        row_ptr: Vec<usize>,
+        col: Vec<usize>,
+        val: Vec<C64>,
+    ) -> Result<ComplexCsr, ComplexSkylineError> {
         let bad = |reason: String| Err(ComplexSkylineError::Malformed { reason });
         if row_ptr.len() != n + 1 || row_ptr[0] != 0 {
-            return bad(format!("row pointers of length {} for {n} rows (must be n + 1, starting at 0)", row_ptr.len()));
+            return bad(format!(
+                "row pointers of length {} for {n} rows (must be n + 1, starting at 0)",
+                row_ptr.len()
+            ));
         }
         if col.len() != val.len() || row_ptr[n] != col.len() {
             return bad(format!(
@@ -59,7 +67,11 @@ impl ComplexCsr {
                     return bad(format!("column {} of row {r} out of range 0..{n}", col[k]));
                 }
                 if k > row_ptr[r] && col[k] <= col[k - 1] {
-                    return bad(format!("columns of row {r} not strictly ascending ({} after {})", col[k], col[k - 1]));
+                    return bad(format!(
+                        "columns of row {r} not strictly ascending ({} after {})",
+                        col[k],
+                        col[k - 1]
+                    ));
                 }
             }
         }
@@ -334,7 +346,12 @@ fn validate(a: &ComplexCsr, delta: f64) -> Result<(), ComplexSkylineError> {
             let a_rc = a.val[k];
             let a_cr = a.get(c, r).unwrap_or(C64::ZERO);
             if (a_rc - a_cr).abs() > delta * (diag[r].abs() * diag[c].abs()).sqrt() {
-                return Err(ComplexSkylineError::Unsymmetric { row: r, col: c, a_rc, a_cr });
+                return Err(ComplexSkylineError::Unsymmetric {
+                    row: r,
+                    col: c,
+                    a_rc,
+                    a_cr,
+                });
             }
         }
     }
@@ -367,7 +384,10 @@ impl ComplexSkylineLdlt {
 
     /// Factorise `a` with the given options. The matrix is validated first (finite, complex symmetric within the
     /// tolerance); the lower triangle is used.
-    pub fn factor_with(a: &ComplexCsr, opts: &ComplexSkylineOptions) -> Result<ComplexSkylineLdlt, ComplexSkylineError> {
+    pub fn factor_with(
+        a: &ComplexCsr,
+        opts: &ComplexSkylineOptions,
+    ) -> Result<ComplexSkylineLdlt, ComplexSkylineError> {
         validate(a, opts.symmetry_tolerance)?;
         let tau = opts.min_relative_pivot;
         if !(tau.is_finite() && tau >= 0.0) {

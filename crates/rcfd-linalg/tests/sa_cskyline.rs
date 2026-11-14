@@ -15,7 +15,10 @@ impl Checks {
     }
     fn at_most(&mut self, name: &str, value: f64, limit: f64) {
         let ok = value <= limit;
-        println!("{name}: {value:.6e} (limit <= {limit:e}) {}", if ok { "met" } else { "MISSED" });
+        println!(
+            "{name}: {value:.6e} (limit <= {limit:e}) {}",
+            if ok { "met" } else { "MISSED" }
+        );
         if !ok {
             self.0.push(format!("{name} = {value:e} > {limit:e}"));
         }
@@ -68,7 +71,12 @@ fn csr_from_rows(n: usize, rows: Vec<Vec<(usize, C64)>>) -> ComplexCsr {
 
 fn dense(n: usize, a: &[C64]) -> ComplexCsr {
     let rows = (0..n)
-        .map(|r| (0..n).filter(|&c| a[r * n + c] != C64::ZERO).map(|c| (c, a[r * n + c])).collect())
+        .map(|r| {
+            (0..n)
+                .filter(|&c| a[r * n + c] != C64::ZERO)
+                .map(|c| (c, a[r * n + c]))
+                .collect()
+        })
         .collect();
     csr_from_rows(n, rows)
 }
@@ -189,7 +197,10 @@ fn l2_real_matrix_equals_real_factor() {
     c.at_most("L2 max |x_c - x_r| / max |x_r|", diff / xmax, 1e-13);
     c.holds("L2 max |Im x_c| == 0", imax == 0.0, &format!("{imax:e}"));
     let same = xr.iter().zip(&xc).all(|(r, z)| r.to_bits() == z.re.to_bits());
-    println!("L2 (report) real parts bit-equal to the real factor: {same}; orders equal: {}", real.order() == fc.order());
+    println!(
+        "L2 (report) real parts bit-equal to the real factor: {same}; orders equal: {}",
+        real.order() == fc.order()
+    );
     c.finish();
 }
 
@@ -238,21 +249,36 @@ fn l3_small_pivots_refused_with_the_equation() {
         Err(ComplexSkylineError::Pivot { row: 1, .. })
     );
     let accepted = ComplexSkylineLdlt::factor_with(&at, &with(0.05)).is_ok();
-    c.holds("L3t tau 0.2 refused at row 1, tau 0.05 accepted", refused && accepted, &format!("{refused} {accepted}"));
+    c.holds(
+        "L3t tau 0.2 refused at row 1, tau 0.05 accepted",
+        refused && accepted,
+        &format!("{refused} {accepted}"),
+    );
     c.finish();
 }
 
 #[test]
 fn l4_invalid_matrices_refused() {
     let mut c = Checks::new();
-    let nan = dense(2, &[C64::ONE, C64::new(f64::NAN, 0.0), C64::new(f64::NAN, 0.0), C64::ONE]);
+    let nan = dense(
+        2,
+        &[C64::ONE, C64::new(f64::NAN, 0.0), C64::new(f64::NAN, 0.0), C64::ONE],
+    );
     let r = ComplexSkylineLdlt::factor(&nan);
     c.holds(
         "L4 non-finite refused with row and column",
         matches!(r, Err(ComplexSkylineError::NonFinite { row: 0, col: 1, .. })),
         &format!("{r:?}"),
     );
-    let herm = dense(2, &[C64::from_real(2.0), C64::new(1.0, 1.0), C64::new(1.0, -1.0), C64::from_real(2.0)]);
+    let herm = dense(
+        2,
+        &[
+            C64::from_real(2.0),
+            C64::new(1.0, 1.0),
+            C64::new(1.0, -1.0),
+            C64::from_real(2.0),
+        ],
+    );
     let r = ComplexSkylineLdlt::factor(&herm);
     c.holds(
         "L4 Hermitian refused as unsymmetric at (0, 1)",

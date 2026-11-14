@@ -25,7 +25,10 @@ impl Checks {
     }
     fn at_most(&mut self, name: &str, value: f64, limit: f64) {
         let ok = value <= limit;
-        println!("{name}: {value:.6e} (limit <= {limit:e}) {}", if ok { "met" } else { "MISSED" });
+        println!(
+            "{name}: {value:.6e} (limit <= {limit:e}) {}",
+            if ok { "met" } else { "MISSED" }
+        );
         if !ok {
             self.0.push(format!("{name} = {value:e} > {limit:e}"));
         }
@@ -156,8 +159,9 @@ fn chain_tip(cells: usize, es: C64, w: f64, c: f64, f: f64, g: C64) -> C64 {
     let mut rp = rhs.clone();
     for j in 1..n {
         let m = off / dp[j - 1];
-        dp[j] = dp[j] - m * off;
-        rp[j] = rp[j] - m * rp[j - 1];
+        dp[j] -= m * off;
+        let r_prev = rp[j - 1];
+        rp[j] -= m * r_prev;
     }
     let mut x = vec![C64::ZERO; n];
     x[n - 1] = rp[n - 1] / dp[n - 1];
@@ -168,7 +172,10 @@ fn chain_tip(cells: usize, es: C64, w: f64, c: f64, f: f64, g: C64) -> C64 {
 }
 
 fn bits(r: &HarmonicResponse) -> Vec<(u64, u64)> {
-    r.re.iter().zip(&r.im).map(|(a, b)| (a.to_bits(), b.to_bits())).collect()
+    r.re.iter()
+        .zip(&r.im)
+        .map(|(a, b)| (a.to_bits(), b.to_bits()))
+        .collect()
 }
 
 fn key_of(e: &FemError) -> Option<&'static str> {
@@ -212,13 +219,25 @@ fn h1_h2_h7_loss_factor_bar() {
         let exact = csin(ks.scale(L)) / (ccos(ks.scale(L)) * es.scale(A) * ks);
         let amp = (xh.abs() - exact.abs()).abs() / exact.abs();
         let dphi = wrap(xh.arg() - exact.arg()).abs();
-        println!("H1 {r} w1: tip {xh} exact {exact} (|X| {:e}, arg {:.6})", exact.abs(), exact.arg());
+        println!(
+            "H1 {r} w1: tip {xh} exact {exact} (|X| {:e}, arg {:.6})",
+            exact.abs(),
+            exact.arg()
+        );
         c.at_most(&format!("H1{tag} amplitude error at {r} w1"), amp, 5e-3);
-        c.at_most(&format!("H1 phase error / |arg X| at {r} w1"), dphi / exact.arg().abs(), 5e-3);
+        c.at_most(
+            &format!("H1 phase error / |arg X| at {r} w1"),
+            dphi / exact.arg().abs(),
+            5e-3,
+        );
         c.at_most(&format!("H1 complex error at {r} w1"), rel(xh, exact), 5e-3);
         println!("H1 (report) phase error at {r} w1: {dphi:e} rad");
         let chain = chain_tip(N, es, w, 0.0, 1.0, C64::ZERO);
-        c.at_most(&format!("H2 loss-factor bar against the chain at {r} w1"), rel(xh, chain), 1e-8);
+        c.at_most(
+            &format!("H2 loss-factor bar against the chain at {r} w1"),
+            rel(xh, chain),
+            1e-8,
+        );
         // H7: the constant table
         let rt = tabled.response(&load, w).unwrap();
         let dmax = rt
@@ -228,7 +247,11 @@ fn h1_h2_h7_loss_factor_bar() {
             .zip(resp.re.iter().zip(&resp.im))
             .fold(0.0f64, |m, ((a, b), (p, q))| m.max(C64::new(a - p, b - q).abs()));
         let xmax = (0..resp.re.len()).fold(0.0f64, |m, j| m.max(resp.amplitude(j)));
-        c.at_most(&format!("H7 constant table against Constant at {r} w1"), dmax / xmax, 1e-12);
+        c.at_most(
+            &format!("H7 constant table against Constant at {r} w1"),
+            dmax / xmax,
+            1e-12,
+        );
     }
     c.finish();
 }
@@ -241,18 +264,30 @@ fn h7b_table_interpolation() {
     let w = 0.5 * w1();
     let fq = w / (2.0 * PI);
     let table = ModulusTable::new(vec![0.0, 2.0 * fq], vec![E_MOD, 2.0 * E_MOD], vec![0.0, 2.0 * ETA]).unwrap();
-    let rt = DirectHarmonic::new(&model, &DirectHarmonicOptions::new().loss_factor("all", LossFactor::Table(table)))
-        .unwrap()
-        .response(&load, w)
-        .unwrap();
+    let rt = DirectHarmonic::new(
+        &model,
+        &DirectHarmonicOptions::new().loss_factor("all", LossFactor::Table(table)),
+    )
+    .unwrap()
+    .response(&load, w)
+    .unwrap();
     let stiff = bar_with(N, 1.5 * E_MOD);
-    let rc = DirectHarmonic::new(&stiff, &DirectHarmonicOptions::new().loss_factor("all", LossFactor::Constant(ETA)))
-        .unwrap()
-        .response(&load, w)
-        .unwrap();
-    let dmax = (0..rc.re.len()).fold(0.0f64, |m, j| m.max(C64::new(rt.re[j] - rc.re[j], rt.im[j] - rc.im[j]).abs()));
+    let rc = DirectHarmonic::new(
+        &stiff,
+        &DirectHarmonicOptions::new().loss_factor("all", LossFactor::Constant(ETA)),
+    )
+    .unwrap()
+    .response(&load, w)
+    .unwrap();
+    let dmax = (0..rc.re.len()).fold(0.0f64, |m, j| {
+        m.max(C64::new(rt.re[j] - rc.re[j], rt.im[j] - rc.im[j]).abs())
+    });
     let xmax = (0..rc.re.len()).fold(0.0f64, |m, j| m.max(rc.amplitude(j)));
-    c.at_most("H7b table at the midpoint against 1.5 E with Constant(0.02)", dmax / xmax, 1e-10);
+    c.at_most(
+        "H7b table at the midpoint against 1.5 E with Constant(0.02)",
+        dmax / xmax,
+        1e-10,
+    );
     c.finish();
 }
 
@@ -264,8 +299,11 @@ fn s1_sw1_stress_and_sweep_known_miss() {
     let mut c = Checks::new();
     let model = bar();
     let load = tip_load(&model);
-    let solver = DirectHarmonic::new(&model, &DirectHarmonicOptions::new().loss_factor("all", LossFactor::Constant(ETA)))
-        .unwrap();
+    let solver = DirectHarmonic::new(
+        &model,
+        &DirectHarmonicOptions::new().loss_factor("all", LossFactor::Constant(ETA)),
+    )
+    .unwrap();
     let w = 0.5 * w1();
     let resp = solver.response(&load, w).unwrap();
     let st = resp.stress(&model).unwrap();
@@ -340,7 +378,9 @@ fn h3_rayleigh_against_mode_superposition() {
         let w = r * wb;
         let xm = modal.response(&load, w).unwrap();
         let xd = direct.response(&load, w).unwrap();
-        let dmax = (0..xm.re.len()).fold(0.0f64, |m, j| m.max(C64::new(xd.re[j] - xm.re[j], xd.im[j] - xm.im[j]).abs()));
+        let dmax = (0..xm.re.len()).fold(0.0f64, |m, j| {
+            m.max(C64::new(xd.re[j] - xm.re[j], xd.im[j] - xm.im[j]).abs())
+        });
         let xmax = (0..xm.re.len()).fold(0.0f64, |m, j| m.max(xm.amplitude(j)));
         c.at_most(&format!("H3 direct against all modes at {r} w_1"), dmax / xmax, 1e-8);
     }
@@ -365,7 +405,11 @@ fn h4_h5_h6_dashpots_and_base() {
         let exact = C64::ONE / C64::new(E_MOD * A * k / (k * L).tan(), w * c4);
         let xh = tip(&model, &s4.response(&load, w).unwrap());
         c.at_most(&format!("H4{tag} dashpot 0.1 matched at {r} w1"), rel(xh, exact), 5e-3);
-        c.at_most(&format!("H2 dashpot bar against the chain at {r} w1"), rel(xh, chain_tip(N, es, w, c4, 1.0, C64::ZERO)), 1e-8);
+        c.at_most(
+            &format!("H2 dashpot bar against the chain at {r} w1"),
+            rel(xh, chain_tip(N, es, w, c4, 1.0, C64::ZERO)),
+            1e-8,
+        );
     }
     // H5
     let s5 = DirectHarmonic::new(&model, &tip_dashpots(&model, cm, DirectHarmonicOptions::new())).unwrap();
@@ -374,10 +418,21 @@ fn h4_h5_h6_dashpots_and_base() {
         let k = w / c0();
         let exact = (k * L).sin().abs() / (E_MOD * A * k);
         let xh = tip(&model, &s5.response(&load, w).unwrap());
-        c.at_most(&format!("H5{tag} matched dashpot amplitude at {r} w1"), (xh.abs() - exact).abs() / exact, 5e-3);
+        c.at_most(
+            &format!("H5{tag} matched dashpot amplitude at {r} w1"),
+            (xh.abs() - exact).abs() / exact,
+            5e-3,
+        );
         let full = C64::ONE / C64::new(E_MOD * A * k / (k * L).tan(), w * cm);
-        println!("H5 (report) complex error against F/(EAk cot kL + i w c) at {r} w1: {:e}", rel(xh, full));
-        c.at_most(&format!("H2 matched bar against the chain at {r} w1"), rel(xh, chain_tip(N, es, w, cm, 1.0, C64::ZERO)), 1e-8);
+        println!(
+            "H5 (report) complex error against F/(EAk cot kL + i w c) at {r} w1: {:e}",
+            rel(xh, full)
+        );
+        c.at_most(
+            &format!("H2 matched bar against the chain at {r} w1"),
+            rel(xh, chain_tip(N, es, w, cm, 1.0, C64::ZERO)),
+            1e-8,
+        );
     }
     // H6
     let s6 = DirectHarmonic::new(&model, &DirectHarmonicOptions::new()).unwrap();
@@ -387,8 +442,16 @@ fn h4_h5_h6_dashpots_and_base() {
     let r6 = s6.response_with_base(&zero_load(&model), &base, w).unwrap();
     let xh = tip(&model, &r6);
     let exact = 1.0 / (PI / 4.0).cos();
-    c.at_most("H6 base motion tip amplitude at 0.5 w1", (xh.abs() - exact).abs() / exact, 5e-3);
-    c.at_most("H2 base bar against the chain", rel(xh, chain_tip(N, es, w, 0.0, 0.0, C64::ONE)), 1e-8);
+    c.at_most(
+        "H6 base motion tip amplitude at 0.5 w1",
+        (xh.abs() - exact).abs() / exact,
+        5e-3,
+    );
+    c.at_most(
+        "H2 base bar against the chain",
+        rel(xh, chain_tip(N, es, w, 0.0, 0.0, C64::ONE)),
+        1e-8,
+    );
     c.finish();
 }
 
@@ -402,7 +465,13 @@ fn h8_undamped_resonance_refused() {
     let basis = ModalBasis::all_modes(&model, Some(4)).unwrap();
     let w = basis.eigenvalues()[0].sqrt();
     let solver = DirectHarmonic::new(&model, &DirectHarmonicOptions::new()).unwrap();
-    refused(&mut c, "H8 undamped solve at the resonance", solver.response(&load, w), "frequency", &format!("{w:e}"));
+    refused(
+        &mut c,
+        "H8 undamped solve at the resonance",
+        solver.response(&load, w),
+        "frequency",
+        &format!("{w:e}"),
+    );
     match solver.response(&load, w * (1.0 + 1e-3)) {
         Ok(r) => c.holds(
             "H8n control at 1.001 w_1 accepted",
@@ -430,13 +499,23 @@ fn h9_threads_bit_identical() {
     let run = |threads: usize| -> Vec<Vec<(u64, u64)>> {
         let s1 = DirectHarmonic::new(
             &model,
-            &DirectHarmonicOptions::new().loss_factor("all", LossFactor::Constant(ETA)).threads(threads),
+            &DirectHarmonicOptions::new()
+                .loss_factor("all", LossFactor::Constant(ETA))
+                .threads(threads),
         )
         .unwrap();
-        let s3 = DirectHarmonic::new(&cant, &DirectHarmonicOptions::new().rayleigh(0.02 * wb, 0.02 / wb).threads(threads))
-            .unwrap();
-        let s4 = DirectHarmonic::new(&model, &tip_dashpots(&model, 0.1 * cm, DirectHarmonicOptions::new().threads(threads)))
-            .unwrap();
+        let s3 = DirectHarmonic::new(
+            &cant,
+            &DirectHarmonicOptions::new()
+                .rayleigh(0.02 * wb, 0.02 / wb)
+                .threads(threads),
+        )
+        .unwrap();
+        let s4 = DirectHarmonic::new(
+            &model,
+            &tip_dashpots(&model, 0.1 * cm, DirectHarmonicOptions::new().threads(threads)),
+        )
+        .unwrap();
         let s6 = DirectHarmonic::new(&model, &DirectHarmonicOptions::new().threads(threads)).unwrap();
         vec![
             bits(&s1.response(&load, w1()).unwrap()),
@@ -463,14 +542,20 @@ fn r1_to_r11_refusals() {
     refused(
         &mut c,
         "R1 negative loss factor",
-        DirectHarmonic::new(&model, &DirectHarmonicOptions::new().loss_factor("all", LossFactor::Constant(-0.1))),
+        DirectHarmonic::new(
+            &model,
+            &DirectHarmonicOptions::new().loss_factor("all", LossFactor::Constant(-0.1)),
+        ),
         "loss factor",
         "'all'",
     );
     refused(
         &mut c,
         "R2 loss factor on a set without material",
-        DirectHarmonic::new(&model, &DirectHarmonicOptions::new().loss_factor("nosuch", LossFactor::Constant(0.1))),
+        DirectHarmonic::new(
+            &model,
+            &DirectHarmonicOptions::new().loss_factor("nosuch", LossFactor::Constant(0.1)),
+        ),
         "loss factor",
         "nosuch",
     );
@@ -482,7 +567,11 @@ fn r1_to_r11_refusals() {
         "5e0",
     );
     let short = ModulusTable::new(vec![0.0, 100.0], vec![E_MOD, E_MOD], vec![0.0, 0.0]).unwrap();
-    let st = DirectHarmonic::new(&model, &DirectHarmonicOptions::new().loss_factor("all", LossFactor::Table(short))).unwrap();
+    let st = DirectHarmonic::new(
+        &model,
+        &DirectHarmonicOptions::new().loss_factor("all", LossFactor::Table(short)),
+    )
+    .unwrap();
     let w = w1();
     refused(
         &mut c,
@@ -494,14 +583,20 @@ fn r1_to_r11_refusals() {
     refused(
         &mut c,
         "R5 dashpot on a missing node",
-        DirectHarmonic::new(&model, &DirectHarmonicOptions::new().dashpot(Dashpot::ground(99_999, 0, 1.0))),
+        DirectHarmonic::new(
+            &model,
+            &DirectHarmonicOptions::new().dashpot(Dashpot::ground(99_999, 0, 1.0)),
+        ),
         "dashpot",
         "dashpot 0",
     );
     refused(
         &mut c,
         "R6 negative dashpot",
-        DirectHarmonic::new(&model, &DirectHarmonicOptions::new().dashpot(Dashpot::ground(0, 0, -1.0))),
+        DirectHarmonic::new(
+            &model,
+            &DirectHarmonicOptions::new().dashpot(Dashpot::ground(0, 0, -1.0)),
+        ),
         "dashpot",
         "dashpot 0",
     );
@@ -526,7 +621,9 @@ fn r1_to_r11_refusals() {
         "prescribed value",
     );
     let mut sprung = bar_with(10, E_MOD);
-    sprung.add_support(ElasticSupport::nodal_spring("xmax", 0, 1e6)).unwrap();
+    sprung
+        .add_support(ElasticSupport::nodal_spring("xmax", 0, 1e6))
+        .unwrap();
     refused(
         &mut c,
         "R9 elastic support (transformation path)",
@@ -534,8 +631,20 @@ fn r1_to_r11_refusals() {
         "constraint",
         "transformation path",
     );
-    refused(&mut c, "R10 negative frequency", plain.response(&load, -1.0), "frequency", "-1e0");
-    refused(&mut c, "R10 non-finite frequency", plain.response(&load, f64::NAN), "frequency", "NaN");
+    refused(
+        &mut c,
+        "R10 negative frequency",
+        plain.response(&load, -1.0),
+        "frequency",
+        "-1e0",
+    );
+    refused(
+        &mut c,
+        "R10 non-finite frequency",
+        plain.response(&load, f64::NAN),
+        "frequency",
+        "NaN",
+    );
     refused(
         &mut c,
         "R11 load of the wrong length",
@@ -555,14 +664,20 @@ fn r1_to_r11_refusals_amended() {
     refused(
         &mut c,
         "R1 negative loss factor",
-        DirectHarmonic::new(&model, &DirectHarmonicOptions::new().loss_factor("all", LossFactor::Constant(-0.1))),
+        DirectHarmonic::new(
+            &model,
+            &DirectHarmonicOptions::new().loss_factor("all", LossFactor::Constant(-0.1)),
+        ),
         "loss factor",
         "'all'",
     );
     refused(
         &mut c,
         "R2 loss factor on a set without material",
-        DirectHarmonic::new(&model, &DirectHarmonicOptions::new().loss_factor("nosuch", LossFactor::Constant(0.1))),
+        DirectHarmonic::new(
+            &model,
+            &DirectHarmonicOptions::new().loss_factor("nosuch", LossFactor::Constant(0.1)),
+        ),
         "loss factor",
         "nosuch",
     );
@@ -574,7 +689,11 @@ fn r1_to_r11_refusals_amended() {
         "5e0",
     );
     let short = ModulusTable::new(vec![0.0, 100.0], vec![E_MOD, E_MOD], vec![0.0, 0.0]).unwrap();
-    let st = DirectHarmonic::new(&model, &DirectHarmonicOptions::new().loss_factor("all", LossFactor::Table(short))).unwrap();
+    let st = DirectHarmonic::new(
+        &model,
+        &DirectHarmonicOptions::new().loss_factor("all", LossFactor::Table(short)),
+    )
+    .unwrap();
     let w = w1();
     refused(
         &mut c,
@@ -586,14 +705,20 @@ fn r1_to_r11_refusals_amended() {
     refused(
         &mut c,
         "R5 dashpot on a missing node",
-        DirectHarmonic::new(&model, &DirectHarmonicOptions::new().dashpot(Dashpot::ground(99_999, 0, 1.0))),
+        DirectHarmonic::new(
+            &model,
+            &DirectHarmonicOptions::new().dashpot(Dashpot::ground(99_999, 0, 1.0)),
+        ),
         "dashpot",
         "dashpot 0",
     );
     refused(
         &mut c,
         "R6 negative dashpot",
-        DirectHarmonic::new(&model, &DirectHarmonicOptions::new().dashpot(Dashpot::ground(0, 0, -1.0))),
+        DirectHarmonic::new(
+            &model,
+            &DirectHarmonicOptions::new().dashpot(Dashpot::ground(0, 0, -1.0)),
+        ),
         "dashpot",
         "dashpot 0",
     );
@@ -618,7 +743,9 @@ fn r1_to_r11_refusals_amended() {
         "prescribed value",
     );
     let mut sprung = bar_with(10, E_MOD);
-    sprung.add_support(ElasticSupport::nodal_spring("xmax", 0, 1e6)).unwrap();
+    sprung
+        .add_support(ElasticSupport::nodal_spring("xmax", 0, 1e6))
+        .unwrap();
     refused(
         &mut c,
         "R9 elastic support (transformation path)",
@@ -626,8 +753,20 @@ fn r1_to_r11_refusals_amended() {
         "constraint",
         "transformation path",
     );
-    refused(&mut c, "R10 negative frequency", plain.response(&load, -1.0), "frequency", "-1e0");
-    refused(&mut c, "R10 non-finite frequency", plain.response(&load, f64::NAN), "frequency", "NaN");
+    refused(
+        &mut c,
+        "R10 negative frequency",
+        plain.response(&load, -1.0),
+        "frequency",
+        "-1e0",
+    );
+    refused(
+        &mut c,
+        "R10 non-finite frequency",
+        plain.response(&load, f64::NAN),
+        "frequency",
+        "NaN",
+    );
     refused(
         &mut c,
         "R11 load of the wrong length",
@@ -645,8 +784,11 @@ fn s1b_s1c_stress_with_the_loss_part() {
     let mut c = Checks::new();
     let model = bar();
     let load = tip_load(&model);
-    let solver = DirectHarmonic::new(&model, &DirectHarmonicOptions::new().loss_factor("all", LossFactor::Constant(ETA)))
-        .unwrap();
+    let solver = DirectHarmonic::new(
+        &model,
+        &DirectHarmonicOptions::new().loss_factor("all", LossFactor::Constant(ETA)),
+    )
+    .unwrap();
     let w = 0.5 * w1();
     let resp = solver.response(&load, w).unwrap();
     let st = solver.stress(&model, &resp).unwrap();
@@ -666,7 +808,11 @@ fn s1b_s1c_stress_with_the_loss_part() {
     let r0 = plain.response(&load, w).unwrap();
     let a = plain.stress(&model, &r0).unwrap();
     let b = r0.stress(&model).unwrap();
-    c.holds("S1c without loss factor equal to HarmonicResponse::stress", a.re == b.re && a.im == b.im, "every component");
+    c.holds(
+        "S1c without loss factor equal to HarmonicResponse::stress",
+        a.re == b.re && a.im == b.im,
+        "every component",
+    );
     c.finish();
 }
 
@@ -675,8 +821,11 @@ fn sw1_sweep_bit_equal() {
     let mut c = Checks::new();
     let model = bar();
     let load = tip_load(&model);
-    let solver = DirectHarmonic::new(&model, &DirectHarmonicOptions::new().loss_factor("all", LossFactor::Constant(ETA)))
-        .unwrap();
+    let solver = DirectHarmonic::new(
+        &model,
+        &DirectHarmonicOptions::new().loss_factor("all", LossFactor::Constant(ETA)),
+    )
+    .unwrap();
     let ws = [0.5 * w1(), w1(), 1.5 * w1()];
     let sweep = solver.sweep(&load, &ws).unwrap();
     let same = ws
