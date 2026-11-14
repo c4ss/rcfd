@@ -297,3 +297,31 @@ the module does not build or a default bit changes and cannot be restored withou
    test is not changed. Taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation).
 3. The default stays the envelope everywhere (rule 3); whether `SparseDirect` should become the default above some size is left
    open (it would change default results).
+
+## Amendment 1 (2026-11-14, written and committed after the registered run of `sa_sparse_chol.rs` at 361868cc, before the corrected runs)
+
+The registered run (log `w49i-work/f431-scratch/run_sa_sparse_chol.log`) failed A4 and A5 on defects of their set-up, not of the
+library. Both tests stay as ignored records; the corrected tests below are run once after this amendment is committed.
+
+1. **A4: the closed form was wrong.** The registration took `sum_i min(i, 20)` = 7 790, as if every row of the first grid line
+   reached column 0. In the natural order the first stored column of row `i` is `i - 1` for `1 <= i < 20` (its left neighbour
+   only), `i - 20` for `i >= 20` and none for row 0, so the natural envelope is `0 + 19 x 1 + 380 x 20 = 7 619`. The run measured
+   `envelope_size(A, None)` = 7 619 and `factor_entries()` = 7 619: the band fills, which is what A4 checks. **A4'**: the
+   natural-order `factor_entries()` equals `envelope_size(A, None)` and both equal the corrected closed form 7 619
+   (`a4_natural_order_fills_the_band_amended`).
+2. **A5: the middle shift was singular for any unpivoted factorisation.** `lambda_j + lambda_{n+1-j} = 4 (sin^2 + cos^2) = 4`
+   with `n + 1 = 201`, so the midpoint of `(lambda_100, lambda_101)` is exactly 2 (the run gave `s - 2 = 0` in floating point):
+   every diagonal of `K - 2 I` is 0 and the first pivot of any order is 0, refused by `NonZero` (`Pivot { row: 199, position:
+   0, pivot: 0 }`). The first shift was run and met (10 negative pivots, 10 eigenvalues below); the third was not reached; N3
+   was not reached. **A5'**: the shifts are the midpoints of `(lambda_10, lambda_11)`, `(lambda_95, lambda_96)` (= 1.843 866,
+   `2 - s` = 0.156, not singular; 95 + 96 = 191 != 201) and `(lambda_190, lambda_191)`; expected counts 10, 95, 190, computed in
+   the test from the closed form; limit: equal. N3 runs unchanged after A5' (`a5_inertia_of_the_shifted_tridiagonal_and_n3_amended`).
+
+By the decision rule, A4 and A5 are met (if they are) only after an amendment made after their run: the item cannot be done.
+
+Disclosed: before the registered run, unregistered development probes (a throwaway test, not committed, copy in
+`w49i-work/f431-scratch/dev_f431_tmp.rs`) checked the code on random-pattern SPD matrices, a 9-point grid, Kronecker
+3-unknown-per-node matrices and 7-point grids 16^3, 20^3, 25^3 (ratio of `nnz(L)` to the RCM envelope 0.464, 0.448, 0.446),
+and a naive exact minimum degree on 10^3 and 12^3 (the approximate one filled 0.97 and 0.90 of it). An `ext = min(ext, d_old)`
+variant (the ADD 1996 old-degree bound left out by D1) was tried on the same probes, changed no count and was removed: D1 is as
+registered.

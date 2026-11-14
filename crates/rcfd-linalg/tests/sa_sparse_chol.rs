@@ -188,6 +188,7 @@ fn a2_a3_seven_point_30_residual_and_fill() {
 }
 
 #[test]
+#[ignore = "record of the registered run of ADR 0447 A4: the closed form 7 790 was wrong (the natural envelope is 7 619); superseded by a4_natural_order_fills_the_band_amended (amendment 1)"]
 fn a4_natural_order_fills_the_band() {
     let a = lap5(20);
     let f = SparseLdlt::factor_with(
@@ -210,6 +211,7 @@ fn a4_natural_order_fills_the_band() {
 }
 
 #[test]
+#[ignore = "record of the registered run of ADR 0447 A5: the middle shift is exactly 2, where every diagonal of K - s I is 0 (singular for an unpivoted factorisation); superseded by a5_inertia_of_the_shifted_tridiagonal_and_n3_amended (amendment 1)"]
 fn a5_inertia_of_the_shifted_tridiagonal_and_n3() {
     let n = 200;
     for (q, s) in shifts(n).into_iter().enumerate() {
@@ -361,4 +363,57 @@ fn minimum_degree_order_is_a_permutation() {
         }
         assert_eq!(o.len(), a.n);
     }
+}
+
+// ------------------------------------------------------------------------------------------------- amendment 1
+
+/// A4' (ADR 0447 amendment 1): the natural-order factor fills the band: `nnz(L)` = the natural envelope = 0 + 19 + 380 x 20.
+#[test]
+fn a4_natural_order_fills_the_band_amended() {
+    let a = lap5(20);
+    let f = SparseLdlt::factor_with(
+        &a,
+        &SparseOptions {
+            ordering: SparseOrdering::Natural,
+            ..SparseOptions::default()
+        },
+    )
+    .expect("A4'");
+    let env = envelope_size(&a, None);
+    let closed = 19 + 380 * 20;
+    println!(
+        "A4': natural order 5-point 20 x 20: nnz(L) {}, natural envelope {env}, closed form {closed}",
+        f.factor_entries()
+    );
+    assert_eq!(env, closed, "A4' envelope");
+    assert_eq!(f.factor_entries(), closed, "A4' nnz(L)");
+}
+
+/// A5' (ADR 0447 amendment 1): shifts at the midpoints of `(lambda_10, lambda_11)`, `(lambda_95, lambda_96)`,
+/// `(lambda_190, lambda_191)`; then N3 unchanged.
+#[test]
+fn a5_inertia_of_the_shifted_tridiagonal_and_n3_amended() {
+    let n = 200;
+    let mid = |j: usize| 0.5 * (tridiag_eigenvalue(n, j) + tridiag_eigenvalue(n, j + 1));
+    for (j, want) in [(10, 10), (95, 95), (190, 190)] {
+        let s = mid(j);
+        let expected = (1..=n).filter(|&q| tridiag_eigenvalue(n, q) < s).count();
+        let f = SparseLdlt::factor_with(&tridiag_shifted(n, s), &nonzero()).expect("A5' factor");
+        let (neg, pos) = f.inertia();
+        println!("A5': shift {s:.6}: negative pivots {neg}, positive {pos}, eigenvalues below {expected}");
+        assert_eq!(expected, want, "the shifts are where registered");
+        assert_eq!(neg, expected, "A5' at {s}");
+    }
+    let s = shifts(n)[0];
+    let rev: Vec<usize> = (0..n).rev().collect();
+    let f = SparseLdlt::factor_with(
+        &tridiag_shifted(n, s),
+        &SparseOptions {
+            ordering: SparseOrdering::Given(rev),
+            ..nonzero()
+        },
+    )
+    .expect("N3 factor");
+    println!("N3: reversed order: negative pivots {}", f.inertia().0);
+    assert_eq!(f.inertia().0, 10, "N3");
 }
