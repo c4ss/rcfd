@@ -256,3 +256,86 @@ pre-stressed tilt, not derived here). One sector geometry with the stress stiffe
 the first loss at index 1, a pair, at 13.46 `omega_ref`, and no single index lost by `16 omega_ref`, so no odd single index is
 reachable there without another disc). The odd count of a pair index is impossible (ADR 0420 D1: always even). Damping, tracking
 over speed and the flag at a defective double eigenvalue, as ADR 0416.
+
+## Addendum 1: results (2026-11-13)
+
+Code: `crates/rcfd-fem/src/rotating/whirl/state/springs.rs` (new, 50 lines: `RotatingPart::with_nodal_springs`); one additive
+line of `crates/rcfd-fem/src/rotating/whirl/state.rs` (23: `mod springs;`); no line removed or changed. Tests:
+`crates/rcfd-fem/tests/si_rotating_odd_index.rs` (new, five tests, 1.7 s in release together). The registered run
+(`f510-scratch/run1.log`, commit 120374bd, release) was made once; then a rustfmt commit (28db7831, layout only), after which
+the new tests passed again (`f510-scratch/post_fmt.log`). Nothing was re-run to pick a result; no amendment.
+
+Derived speeds of the sector (D4, printed by the run; stress stiffening off, Coriolis on): `omega_ref = 1655.322604` rad/s;
+`Omega_L,k = 2409.99, 5366.50, 8792.95, 12235.86` rad/s (`1.456, 3.242, 5.312, 7.392 omega_ref`) for `k = 0 .. 3`; so `k_o =
+0` (the torsion, first of all indices, as expected), `Omega_2 = 12278.94` rad/s, `Omega_next = Omega_L,1 = 5366.50` rad/s,
+**`Omega_T = 4159.766126974` rad/s `= 2.513 omega_ref`**. There index 0 has one negative eigenvalue and diverges with the growth
+rate 2782.6483299149 1/s (real `s`, no frequency), indices 1 to 3 are positive definite and stable, and the full rotor has one
+negative eigenvalue and the growth rate 2782.6483299145 1/s.
+
+| # | Check | Limit | Measured | Met |
+|---|---|---|---|---|
+| O1 | CTI- at `0, 0.5, 1.2, 1.5, 2.0 omega_0`: counts; flag; growth against `omega_a` | exact; Unstable; `<= 1e-8` | `1, 1, 3, 3, 3`; Unstable at all five; 8.5e-12 (growth 599.99999999 1/s) | yes |
+| O2 | only `+/- omega_a` off the axis; the root `-omega_a` | `<= 1e-8`; `<= 1e-8` | 5.8e-15; 8.6e-12 | yes |
+| O3 | the closed-form pair (`omega_0 -/+ Omega`, `Omega -/+ omega_0`) | `<= 1e-8` | 6.2e-12 | yes |
+| V1 | CTI+ at `0.5, 1.2, 1.5, 2.0`: counts; Stable; `omega_a` and the pair | exact; each; `<= 1e-8` | `None, 2, 2, 2`; Stable (real defect `<= 5.9e-15`); 1.5e-11 | yes |
+| V2 | CTA- at `1.1`: count 2 (even); Unstable, growth against `omega_a`; second real part against `sigma` | exact; flag; `<= 1e-8`; `<= 1e-8` | 2; Unstable; 2.2e-12; 7.2e-12 (`sigma = 99.5893137343`) | yes |
+| V3 | CTA+ at `1.1`: count 1 (odd); Unstable, growth against `sigma` | exact; flag; `<= 1e-8` | 1; Unstable; 2.5e-11 | yes |
+| Q1 | residuals CTI- / CTI+ / CTA | `<= 1e-9` | 8.5e-12 / 6.2e-12 / 1.4e-10 | yes |
+| S0 | derived speeds printed; `Omega_L,k_o > 0.8 omega_ref` | holds | above; 1.456 | yes |
+| S1 | index 0 at `Omega_T`: count 1; Unstable | each | `Some(1)`; Unstable, 2782.648 1/s | yes |
+| S2 | growth of index 0 against the full rotor's | `<= 1e-8` | 1.4e-13 | yes |
+| S3 | Sylvester: `1 + 0 + 0 + 0 = 1` = full count, odd | exact | holds | yes |
+| S4 | union against the full rotor; per-index flags | count; `<= 1e-8`; each | 504 = 504; 1.1e-12; equal for `k = 0 .. 3` | yes |
+| R1 | refusals (`UnknownSet`, `ComponentOutOfRange`, `stiffness` x 2); a zero spring bit-identical | each | holds | yes |
+| R2 | `cargo test -p rcfd-fem --release`; `cargo check -p rcfd-post --tests` | pass | 330 passed, 0 failed, 66 ignored (`f510-scratch/r2_full.log`); pass | yes |
+| N1 | CTI- at `1.5 omega_0` without Coriolis: growth `sqrt(1.25) omega_0` | `<= 1e-8` | Unstable, 1118.03398875 1/s, 1.7e-13 | as expected |
+| N2 | V2: an even count with the closed form unstable is flagged Unstable | as V2 | as V2 | as expected |
+
+The odd-index theorem (D1) is now exercised on the model path and on the sector: the tied cube with the negative axial support
+has an odd count (1 below `omega_0`, 3 above) and diverges with exactly the closed-form rate `omega_a`, while its in-plane pair
+stays gyroscopically stabilised beside it (O2: no other eigenvalue leaves the axis); with the positive support the count is even
+(0, 2) and the cube is stable. The even count of CTA- is unstable, as its closed form says (N2). On the sector with the
+pre-stress off the torsion of index 0 loses first, its count is 1 and it diverges at the full rotor's rate.
+
+Mutations (on a `git archive` copy of 28db7831 in `f510-scratch/mut`, each run once against `si_rotating_odd_index` and the
+unit tests of `rotating::whirl::state`; logs `f510-scratch/mut_*.log`, summary `f510-scratch/mutations.log`, script
+`f510-scratch/mutate.py`): **eight of eight caught**.
+
+| Mutation | Caught by |
+|---|---|
+| 1 `|stiffness|` added | O1 (counts, flags), O2, V2 |
+| 2 component `(c + 1) % 3` | O1, O2, O3, N1, R1 (component 3 accepted), V2 |
+| 3 first node only | O1, O2, V2 |
+| 4 half the stiffness | O1 and V2 tests: the state solve refused (`count_below`: "K is not symmetric", the net axial stiffness zero, the reduced `K` singular); registered "O1 growth", caught as a refusal instead |
+| 5 growth as the minimum real part | O1, N1, V2, V3 (growth `-omega_a` etc., deviation 2.0) |
+| 6 `G = 0` for a single index of the sector | S2 (0.22), S4 (0.35) |
+| 7 `K_eff` at speed 0 for a single index | the S0 set-up assertion ("no single index lost by 16 omega_ref"); registered S1, caught one step earlier |
+| 8 `STABILITY_TOLERANCE = 1.0` | O1, N1, S1, S2, V2, V3 |
+
+`cargo fmt -p rcfd-fem --check`: clean (after the layout commit). `cargo clippy -p rcfd-fem --all-targets -- -D warnings`: clean.
+`baseline_hashes` not run: no shared solver file changed (one `mod` line in `state.rs`, a new file reached only by the new
+method), no crate outside `rcfd-fem` uses `rotating` (`rcfd-post` checks), and the `rcfd-fem` tests pass.
+
+Deviations: none from the registration's checks. Mutations 4 and 7 were caught by a different check than registered (a refusal
+of the state solve, the set-up assertion of the sector test); both made the registered tests fail. Nothing registered was
+skipped.
+
+**Decision by the registered rule: done.** Every check was met in the single registered run with no amendment, N1 and N2 came
+out as expected, and all eight mutations were caught.
+
+### Remaining questions
+
+1. A negative support as a model support (D2 option (b)), for example a magnetic bearing's negative axial stiffness in a case
+   file. Options: (a) keep it on the rotating part only (now); (b) a model support that accepts a negative stiffness, refused by
+   the static solves. Recommendation: (a) until a case needs it; (b) touches the case schema golden and needs the maintainer.
+2. The untied cube (rocking with a negative axial support). Options: (a) not covered (now); (b) derive the closed form of the
+   pre-stressed rigid tilt and register it. Recommendation: (a); the odd-index property does not depend on it.
+3. With both effects on, no single index of the disc sector loses by `16 omega_ref` (ADR 0420), so the sector clause runs with
+   the stress stiffening off. Options: (a) keep; (b) a softer or thinner disc where index 0 loses with both effects on.
+   Recommendation: (a).
+
+### For the lead: roadmap entries
+
+F-510, proposed status **done**. New note:
+
+> From ADR 0416 question 1 and ADR 0420 question 1, recommendations taken on the maintainer's standing instruction of 2026-11-11. ADR 0424, 2026-11-12: RotatingPart::with_nodal_springs adds nodal springs of any sign to a rotating part after its pre-stress (opt-in; model supports stay positive). The cube on springs of ADR 0416 with its axial motion tied and a negative axial support has an odd count of negative eigenvalues of K_eff (1 below omega_0, 3 above) and is flagged unstable by whirl_state with the closed-form growth rate omega_a within 8.5e-12 relative at 0 to 2 omega_0, its in-plane pair still gyroscopically stabilised at Omega -/+ omega_0 within 6.2e-12; with a positive axial support the count is even (0, 2) and it is flagged stable with the closed-form frequencies within 1.5e-11; the anisotropic cube in its band gives an odd count unstable at sigma within 2.5e-11 and an even count unstable as its closed form says. On the disc sector with the stress stiffening off the torsion of index 0 loses first (1.456 omega_ref); at 2.513 omega_ref its count is 1 and RotatingSector::whirl_state flags it unstable with the full rotor's growth rate (2782.65 1/s) within 1.4e-13, union of 504 eigenvalues within 1.1e-12; eight mutations caught.
