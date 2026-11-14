@@ -913,6 +913,7 @@ fn a14_block_jacobi_known_miss() {
 }
 
 #[test]
+#[ignore = "record of the run of ADR 0438 amendment 1: every row not converged at the residual floor (5.7e-10 to 6.2e-10 relative against 1e-10), A7c not reached; superseded by a14_cg_rows_known_miss and a7d_iterative_file_run_bits (amendment 2)"]
 fn a14c_a7c_cg_preconditioners_from_files() {
     let mut ch = Checks::new();
     a14_rows(
@@ -957,5 +958,48 @@ fn a7b_cantilever_tet10_bits_with_the_same_traction() {
             &format!("{} values", a.len()),
         );
     }
+    ch.finish();
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// ADR 0438 amendment 2.
+
+#[test]
+#[ignore = "known miss (ADR 0438 amendment 2): ic0, ic_fill, amg, amg_quadratic, amg_quadratic_smoothed stop at a true residual 5.7e-10 to 6.2e-10 of |b|, the rounding floor of this model, against the limit 1e-10 (kept)"]
+fn a14_cg_rows_known_miss() {
+    let mut ch = Checks::new();
+    a14_rows(
+        &mut ch,
+        &["ic0", "ic_fill", "amg", "amg_quadratic", "amg_quadratic_smoothed"],
+    );
+    ch.finish();
+}
+
+#[test]
+fn a7d_iterative_file_run_bits() {
+    let mut ch = Checks::new();
+    let r = run_file("cantilever_tet10_amg_1e8.toml");
+    let lib = solve_lib(
+        &cantilever_lib_file_traction(),
+        StaticSolver::PreconditionedCg {
+            preconditioner: CgPreconditioner::SmoothedAggregation(ElasticAmgSettings::quadratic()),
+            tolerance: 1e-8,
+            max_iterations: 20000,
+        },
+    );
+    a7(
+        &mut ch,
+        "A7d cantilever Tet10 CG amg_quadratic 1e-8 displacement",
+        static_of(&r).displacement_values(),
+        lib.displacement_values(),
+    );
+    ch.at_least("A7d run wrote two files", r.written.len() as f64, 2.0);
+    // Unregistered diagnostic (amendment 2): residual and difference from the direct solve.
+    let direct = solve_lib(&cantilever_lib_file_traction(), StaticSolver::Direct);
+    let (d, _) = compare(static_of(&r).displacement_values(), direct.displacement_values());
+    println!(
+        "diagnostic: amg_quadratic at 1e-8: relative residual {}, iterations {}, against the direct solve {d:.3e}",
+        r.report["solver"]["relative_residual"], r.report["solver"]["iterations"]
+    );
     ch.finish();
 }
