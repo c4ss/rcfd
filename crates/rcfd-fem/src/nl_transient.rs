@@ -17,7 +17,10 @@
 //! viscoelastic material of [`crate::mat_visco`] relaxes over the step. A uniform temperature
 //! ([`NlTransientOptions::temperature`], ADR 0499 D3) enters that context, the start and the strain energy, and so reaches the
 //! materials that read it (the time-temperature shift of the viscoelastic material, the base of a tabulated material); without
-//! one no temperature is given.
+//! one no temperature is given. A uniform temperature against time ([`NlTransientOptions::temperature_history`], ADR 0526
+//! D3) is a piecewise linear table taken at the end time of every sub-step (and at the start, and at the time of the state
+//! for the strain energy); the stiffness part of the Rayleigh damping then takes its tangent at that temperature (ADR 0526
+//! D4; with the constant temperature at that one).
 //!
 //! The energy-momentum step ([`StepKind::EnergyMomentum`], ADR 0514, Simo and Tarnow) is opt-in: the midpoint step with the
 //! internal force `B_NL(F_{n+1/2})^T (S_n + S_{n+1})/2`, which conserves the energy and the linear and angular momenta of an
@@ -43,6 +46,7 @@ use crate::transient::{LoadHistory, LoadTable, Method, Rayleigh};
 use rcfd_core::vec3::Vec3;
 use rcfd_linalg::skyline::{SkylineError, SkylineLdlt};
 use rcfd_linalg::CsrMatrix;
+use std::borrow::Cow;
 
 /// The work package that fills this module; `None` once it has landed.
 pub const PENDING: Option<&'static str> = None;
@@ -86,6 +90,9 @@ pub struct NlTransientOptions {
     pub newton: NewtonOptions,
     /// A uniform temperature of every point, K (ADR 0499 D3; `None`: no temperature in the point context).
     pub temperature: Option<f64>,
+    /// A uniform temperature against time, K (ADR 0526 D3): a piecewise linear table taken at the end time of every
+    /// sub-step (`None`: none; refused together with `temperature`).
+    pub temperature_history: Option<LoadTable>,
     /// The step (ADR 0514 D3; default [`StepKind::Method`]).
     pub step: StepKind,
     /// The algorithmic stress of the energy-momentum step (ADR 0523 D4; default [`AlgorithmicStress::Auto`]); not read by
@@ -103,6 +110,7 @@ impl NlTransientOptions {
             damping: None,
             newton: NewtonOptions::new(1),
             temperature: None,
+            temperature_history: None,
             step: StepKind::Method,
             stress: AlgorithmicStress::Auto,
         }
@@ -130,6 +138,11 @@ impl NlTransientOptions {
     /// The same options with a uniform temperature of every point, K (ADR 0499 D3).
     pub fn temperature(mut self, temperature: f64) -> NlTransientOptions {
         self.temperature = Some(temperature);
+        self
+    }
+    /// The same options with a uniform temperature against time, K (ADR 0526 D3), taken at the end time of every sub-step.
+    pub fn temperature_history(mut self, table: LoadTable) -> NlTransientOptions {
+        self.temperature_history = Some(table);
         self
     }
     /// The same options with the energy-momentum step (ADR 0514 D3).
@@ -315,6 +328,12 @@ pub struct Integrator {
     layout: Vec<usize>,
     history: bool,
     temperature: Option<f64>,
+    /// The temperature against time (ADR 0526 D3).
+    temperature_history: Option<LoadTable>,
+    /// The Rayleigh coefficients (ADR 0526 D4: the damping is re-formed at another temperature of the history).
+    damping: Rayleigh,
+    /// The temperature at which `c` was formed (ADR 0526 D4).
+    c_temperature: Option<f64>,
     step: StepKind,
     /// The algorithmic stress of the energy-momentum step (ADR 0523 D4).
     stress: AlgorithmicStress,
@@ -517,6 +536,12 @@ impl Integrator {
         if let Some(t) = options.temperature {
             PointContext::new().with_temperature(t)?;
         }
+        if options.temperature.is_some() && options.temperature_history.is_some() {
+            return Err(invalid(
+                "temperature",
+                "a constant temperature and a temperature history together (ADR 0526 D1)".to_string(),
+            ));
+        }
         let parameters = options.method.parameters()?;
         if parameters[2] <= 0.0 {
             return Err(invalid(
@@ -579,8 +604,22 @@ impl Integrator {
         let threads = options.newton.threads;
         let m = consistent_with(model, threads)?;
         let initial = nonlinear::initial_states(model)?;
+        // ADR 0526 D4: the stiffness part at the temperature (the constant one, or the history's first value).
+        let c_temperature = match &options.temperature_history {
+            Some(table) => Some(table.points()[0].1),
+            None => options.temperature,
+        };
         let c = if damping.mass != 0.0 || damping.stiffness != 0.0 {
-            let k0 = nonlinear::tangent(model, &vec![0.0; n], &initial, threads)?;
+            let k0 = match c_temperature {
+                None => nonlinear::tangent(model, &vec![0.0; n], &initial, threads)?,
+                Some(t) => nonlinear::tangent_at(
+                    model,
+                    &vec![0.0; n],
+                    &initial,
+                    threads,
+                    &PointContext::new().with_temperature(t)?,
+                )?,
+            };
             Some(combine(damping.mass, &m, damping.stiffness, &k0))
         } else {
             None
@@ -600,6 +639,9 @@ impl Integrator {
             layout,
             history,
             temperature: options.temperature,
+            temperature_history: options.temperature_history.clone(),
+            damping,
+            c_temperature,
             step: options.step,
             stress: options.stress,
             hyper: false,
@@ -628,6 +670,17 @@ impl Integrator {
     }
 
     fn check_coverage(&self, t_a: f64, t_b: f64) -> Result<()> {
+        if let Some(table) = &self.temperature_history {
+            if !table.covers(t_a, t_b) {
+                let (lo, hi) = table.range();
+                return Err(invalid(
+                    "temperature",
+                    format!(
+                        "the temperature history covers [{lo:e}, {hi:e}], the run needs [{t_a:e}, {t_b:e}] (ADR 0526 D3)"
+                    ),
+                ));
+            }
+        }
         for (j, (_, table)) in self.loads.iter().enumerate() {
             if !table.covers(t_a, t_b) {
                 let (lo, hi) = table.range();
@@ -652,8 +705,44 @@ impl Integrator {
         f
     }
 
-    fn damping_force(&self, v: &[f64]) -> Vec<f64> {
-        match &self.c {
+    /// The temperature of the points at `t` (ADR 0526 D3): the history's value (the table covers `t`), else the constant
+    /// temperature, else none.
+    fn temperature_at(&self, t: f64) -> Option<f64> {
+        match &self.temperature_history {
+            Some(table) => Some(table.value(t).expect("temperature coverage checked")),
+            None => self.temperature,
+        }
+    }
+
+    /// The damping matrix at the temperature of `t` (ADR 0526 D4): the stored one, unless a temperature history gives
+    /// another temperature and the damping has a stiffness part; then `alpha M + beta K_0` at `u = 0`, the empty states and
+    /// that temperature. The neo-Hookean integrator keeps the stored one (its surrogate's `K_0` does not read the
+    /// temperature).
+    fn damping_at(&self, t: f64) -> Result<Option<Cow<'_, CsrMatrix>>> {
+        let Some(c) = &self.c else {
+            return Ok(None);
+        };
+        if self.temperature_history.is_none() || self.damping.stiffness == 0.0 || self.hyper {
+            return Ok(Some(Cow::Borrowed(c)));
+        }
+        let temperature = self.temperature_at(t).expect("a history gives a temperature");
+        if self.c_temperature.map(f64::to_bits) == Some(temperature.to_bits()) {
+            return Ok(Some(Cow::Borrowed(c)));
+        }
+        let n = self.m.n;
+        let initial = nonlinear::initial_states(&self.model)?;
+        let context = PointContext::new().with_temperature(temperature)?;
+        let k0 = nonlinear::tangent_at(&self.model, &vec![0.0; n], &initial, self.newton.threads, &context)?;
+        Ok(Some(Cow::Owned(combine(
+            self.damping.mass,
+            &self.m,
+            self.damping.stiffness,
+            &k0,
+        ))))
+    }
+
+    fn damping_force(c: Option<&CsrMatrix>, v: &[f64]) -> Vec<f64> {
+        match c {
             Some(c) => matvec(c, v),
             None => vec![0.0; v.len()],
         }
@@ -701,7 +790,7 @@ impl Integrator {
         } else {
             nonlinear::initial_states(&self.model)?
         };
-        let fint = match self.temperature {
+        let fint = match self.temperature_at(t0) {
             // ADR 0523 D5: the neo-Hookean internal force of the energy-momentum step.
             _ if self.hyper => emc::internal_force(&self.model, u0, &PointContext::default())?,
             None => nonlinear::internal_force(&self.model, u0, &states)?,
@@ -711,7 +800,8 @@ impl Integrator {
             }
         };
         let f = self.load(t0);
-        let cv = self.damping_force(v0);
+        let c0 = self.damping_at(t0)?;
+        let cv = Integrator::damping_force(c0.as_deref(), v0);
         let rhs: Vec<f64> = (0..n).map(|i| f[i] - cv[i] - fint[i]).collect();
         let sys = reduce(&self.m, &rhs, &self.fixed)?;
         let mut a = vec![0.0; n];
@@ -951,9 +1041,11 @@ impl Integrator {
             .map(|i| ((1.0 - af) * f1[i] + af * f0[i]) / (1.0 - af))
             .collect();
         let kin = Kinematics::new(u, v, a, self.parameters, h);
+        // ADR 0526 D4: the damping at the temperature of the sub-step's end.
+        let c = self.damping_at(t_b)?;
         let inertia = Inertia {
             m: &self.m,
-            c: self.c.as_ref(),
+            c: c.as_deref(),
             kin: &kin,
             fint_n: fint,
         };
@@ -962,7 +1054,8 @@ impl Integrator {
         list.extend_from_slice(contributions);
         // ADR 0485 D5: the point context of the sub-step (its end time and length), read by the viscoelastic material only.
         let mut context = PointContext::new().with_time(t_b, h)?;
-        if let Some(t) = self.temperature {
+        // ADR 0526 D3: the temperature at the sub-step's end.
+        if let Some(t) = self.temperature_at(t_b) {
             context = context.with_temperature(t)?;
         }
         let eq = nonlinear::solve_from_at(&self.model, &[], &load, u, states, &self.newton, &list, &context)?;
@@ -1014,7 +1107,7 @@ impl Integrator {
         let mesh = model.mesh();
         let dofs = model.dof_map();
         let materials = model.material_indices()?;
-        let context = match self.temperature {
+        let context = match self.temperature_at(self.time_of(s.t0, s.step)) {
             None => PointContext::default(),
             Some(t) => PointContext::new().with_temperature(t)?,
         };

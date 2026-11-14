@@ -887,7 +887,19 @@ pub fn internal_force_at(
 /// The assembled tangent of `model` at `u` (ADR 0404 D4) on the pattern of the stiffness, with `threads` workers (`None`:
 /// the available parallelism); bit-identical for any value.
 pub fn tangent(model: &SolidModel, u: &[f64], states: &[ElementState], threads: Option<usize>) -> Result<CsrMatrix> {
-    Ok(force_and_tangent(model, u, states, threads, &PointContext::default())?.1)
+    tangent_at(model, u, states, threads, &PointContext::default())
+}
+
+/// [`tangent`] at the point context `context` (ADR 0526 D4: the Rayleigh stiffness tangent of the nonlinear transient
+/// integrator at its temperature); with the default context it is [`tangent`].
+pub fn tangent_at(
+    model: &SolidModel,
+    u: &[f64],
+    states: &[ElementState],
+    threads: Option<usize>,
+    context: &PointContext,
+) -> Result<CsrMatrix> {
+    Ok(force_and_tangent(model, u, states, threads, context)?.1)
 }
 
 /// The internal force and the tangent in one pass: element matrices by [`assemble_with`], element forces stored per element
@@ -1886,6 +1898,9 @@ pub struct TimeSteppingOptions {
     pub max_halvings: usize,
     /// A uniform temperature of every point, K (ADR 0499 D2; `None`: no temperature in the point context).
     pub temperature: Option<f64>,
+    /// A uniform temperature against time, K (ADR 0526 D2): a piecewise linear table taken at the end time of every attempt
+    /// (`None`: none; refused together with `temperature`).
+    pub temperature_history: Option<LoadTable>,
 }
 
 impl TimeSteppingOptions {
@@ -1896,6 +1911,7 @@ impl TimeSteppingOptions {
             max_creep_increment,
             max_halvings: 5,
             temperature: None,
+            temperature_history: None,
         }
     }
     /// With the Newton options of each attempt.
@@ -1913,9 +1929,20 @@ impl TimeSteppingOptions {
         self.temperature = Some(temperature);
         self
     }
+    /// With a uniform temperature against time, K (ADR 0526 D2), taken at the end time of every attempt.
+    pub fn temperature_history(mut self, table: LoadTable) -> TimeSteppingOptions {
+        self.temperature_history = Some(table);
+        self
+    }
     fn check(&self) -> Result<()> {
         if let Some(t) = self.temperature {
             PointContext::new().with_temperature(t)?;
+        }
+        if self.temperature.is_some() && self.temperature_history.is_some() {
+            return Err(FemError::InvalidValue {
+                key: "temperature",
+                reason: "a constant temperature and a temperature history together (ADR 0526 D1)".to_string(),
+            });
         }
         if self.max_creep_increment.is_nan() || self.max_creep_increment <= 0.0 {
             return Err(FemError::InvalidValue {
@@ -2025,10 +2052,12 @@ pub fn solve_in_time(
 /// [`solve_in_time`] with load and displacement histories (ADR 0499 D1): every attempt (the instantaneous one at `t = 0` and
 /// every sub-step, halved or not, to its end time `t1`) takes the load `f_dead + sum_j pattern_j s_j(t1)` and the prescribed
 /// values of the model and `prescribed` (constant) and of each motion, `value s_j(t1)` (written into the start of the
-/// attempt). With `options.temperature` every point context carries that uniform temperature (D2). Refused before any
-/// attempt: a load pattern of the wrong length or with a non-finite value (key `"load pattern"`), a table that does not
-/// cover `[0, t_last]` (keys `"load history"`, `"motion history"`), a motion of an equation already prescribed by the model,
-/// by `prescribed` or by an earlier motion (key `"motion history"`).
+/// attempt). With `options.temperature` every point context carries that uniform temperature (D2); with
+/// `options.temperature_history` the table's value at the attempt's end time `t1` (ADR 0526 D2: the material relaxes over
+/// the attempt at that temperature). Refused before any attempt: a load pattern of the wrong length or with a non-finite
+/// value (key `"load pattern"`), a table that does not cover `[0, t_last]` (keys `"load history"`, `"motion history"`,
+/// `"temperature"`), a motion of an equation already prescribed by the model, by `prescribed` or by an earlier motion (key
+/// `"motion history"`), a temperature together with a temperature history (key `"temperature"`).
 pub fn solve_in_time_with(
     model: &SolidModel,
     prescribed: &[Prescribed],
@@ -2054,7 +2083,19 @@ pub fn solve_in_time_with(
     let n = model.dof_map().n_equations();
     let load = nodal_load_vector(model, &[])?;
     let fixed = prescribed_equations(model, prescribed)?;
-    let histories = Histories::new(model, &fixed, loading, times.last().copied().unwrap_or(0.0))?;
+    let t_last = times.last().copied().unwrap_or(0.0);
+    let histories = Histories::new(model, &fixed, loading, t_last)?;
+    if let Some(table) = &options.temperature_history {
+        if !table.covers(0.0, t_last) {
+            let (lo, hi) = table.range();
+            return Err(FemError::InvalidValue {
+                key: "temperature",
+                reason: format!(
+                    "the temperature history covers [{lo:e}, {hi:e}] s, not [0, {t_last:e}] s (ADR 0526 D2)"
+                ),
+            });
+        }
+    }
     let mut u = vec![0.0; n];
     for &(eq, v) in &fixed {
         u[eq] = v;
@@ -2066,6 +2107,10 @@ pub fn solve_in_time_with(
         .collect();
     let context = |t: f64, h: f64| -> Result<PointContext> {
         let c = PointContext::new().with_time(t, h)?;
+        // ADR 0526 D2: the temperature history at the end time of the attempt.
+        if let Some(table) = &options.temperature_history {
+            return c.with_temperature(table.value(t).expect("temperature coverage checked"));
+        }
         match options.temperature {
             None => Ok(c),
             Some(temperature) => c.with_temperature(temperature),
