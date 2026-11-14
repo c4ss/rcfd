@@ -59,6 +59,8 @@ impl IntegrationPointField {
             });
         }
         let materials = model.material_indices()?;
+        // ADR 0493 D5: the refusals of a model with a Hex8 formulation (none for a model without one).
+        crate::hex8x::check_model(model)?;
         let mesh = model.mesh();
         let ne = mesh.n_elements();
         let mut field = IntegrationPointField {
@@ -101,8 +103,19 @@ impl IntegrationPointField {
             let point_material = points
                 .as_ref()
                 .filter(|_| crate::mat_ortho::is_point_material(material));
-            for ip in element.integration_points(&coords, rule).map_err(located)? {
-                let eps = element.strain_at(&coords, &ue, ip.geometry.xi).map_err(located)?;
+            // ADR 0493 D3: the strains of a Hex8 element of a BBar or Incompatible block.
+            let opted = match crate::hex8x::opted(mesh, e) {
+                Some(f) => {
+                    let d = material.elasticity_matrix().map_err(located)?;
+                    Some(crate::hex8x::point_strains(f, &coords, &d, &ue).map_err(located)?)
+                }
+                None => None,
+            };
+            for (q, ip) in element.integration_points(&coords, rule).map_err(located)?.into_iter().enumerate() {
+                let eps = match &opted {
+                    Some(strains) => strains[q],
+                    None => element.strain_at(&coords, &ue, ip.geometry.xi).map_err(located)?,
+                };
                 if let Some(points) = point_material {
                     // ADR 0452 D5: the context and the thermal strain of the point.
                     let (point, dt) = points

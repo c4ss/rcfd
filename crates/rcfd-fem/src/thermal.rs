@@ -98,6 +98,8 @@ pub(crate) fn add_thermal_load(
     reference: f64,
 ) -> Result<()> {
     let materials = model.material_indices()?;
+    // ADR 0493 D5: a temperature load is refused with a Hex8 formulation.
+    crate::hex8x::check_model(model)?;
     let mesh = model.mesh();
     let delta: Vec<f64> = nodal.iter().map(|t| t - reference).collect();
     // ADR 0452 D5: the per-point data, only for a model with an orthotropic or tabulated material.

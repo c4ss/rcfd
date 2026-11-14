@@ -226,6 +226,8 @@ pub(crate) fn assemble_geometric(
     threads: Option<usize>,
 ) -> Result<CsrMatrix> {
     prestress.check_fits(model)?;
+    // ADR 0493 D5: the geometric stiffness does not take the Hex8 formulations.
+    crate::hex8x::refuse_formulations(model, "the geometric stiffness")?;
     assemble_with(model, threads, |ctx| {
         // ADR 0473 D6: a Beam2, Shell4 or Shell3 element takes the structural geometric stiffness.
         if crate::geometric_struct::is_structural(ctx.kind) {

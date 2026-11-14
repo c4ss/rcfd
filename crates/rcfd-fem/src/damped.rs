@@ -301,6 +301,8 @@ pub(crate) fn m_orthonormalise(mass: &CsrMatrix, r: &mut [f64], basis: &[&[f64]]
 pub fn damped_modes(model: &SolidModel, options: &DampedOptions) -> Result<DampedModes> {
     model.validate()?;
     model.check_supported()?;
+    // ADR 0493 D5: the damped modes do not take the Hex8 formulations.
+    crate::hex8x::refuse_formulations(model, "the damped modes")?;
     if crate::mpc::uses_transformation(model) {
         return Err(invalid(
             "constraint",

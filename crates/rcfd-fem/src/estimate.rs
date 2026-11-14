@@ -532,6 +532,8 @@ fn prepare(model: &SolidModel, displacement: &[f64]) -> Result<Prepared> {
             found: displacement.len(),
         });
     }
+    // ADR 0493 D5: the patch recovery does not take the Hex8 formulations.
+    crate::hex8x::refuse_formulations(model, "the patch recovery")?;
     let mesh = model.mesh();
     for (block, b) in mesh.blocks().iter().enumerate() {
         if sampling_rule(b.kind()).is_none() {
