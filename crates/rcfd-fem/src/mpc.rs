@@ -19,6 +19,10 @@
 //! the consistent `int k_f N_a N_b n n^T dA` over the faces of a surface set (the face functions and rule of
 //! [`crate::loads`]). A model with prescribed displacements only never comes here: [`crate::solve::solve_static_report`]
 //! dispatches on [`uses_transformation`].
+//!
+//! Beams (ADR 0426): a node of a rigid set with six unknowns also turns with the set, `theta_a - w = 0`; nodal springs, linear
+//! constraints and prescribed values act on rotational unknowns as on any other. The static solve and the modal analysis take
+//! beam models (a beam node shared with a solid stays refused; a beam model with a cyclic constraint is refused).
 
 use crate::assemble::stiffness_with;
 use crate::constraint::{prescribed_equations, Prescribed};
@@ -629,6 +633,22 @@ pub fn transformation(model: &SolidModel, prescribed: &[Prescribed]) -> Result<T
                             designated: eq,
                         });
                     }
+                    // ADR 0426 D1: a node with rotations turns with the set, theta_c - w_c = 0.
+                    if dofs.components(node) == 6 {
+                        for comp in 0..3 {
+                            let eq = dofs.equation(node, 3 + comp).expect("rotation unknown");
+                            rows.push(Row {
+                                origin: RowOrigin::RigidSet {
+                                    constraint: i,
+                                    node,
+                                    component: 3 + comp,
+                                },
+                                terms: vec![(eq, 1.0), (w0 + comp, -1.0)],
+                                value: 0.0,
+                                designated: eq,
+                            });
+                        }
+                    }
                 }
             }
             // The k = 0 rows u_H - R u_L = 0 of a cyclic constraint (ADR 0386).
@@ -1037,6 +1057,34 @@ pub fn add_supports(k: &mut CsrMatrix, model: &SolidModel) -> Result<()> {
     Ok(())
 }
 
+/// The entry check of the static solve and the modal analysis on the transformation (ADR 0426 D2): the checks of a path
+/// that takes beams ([`SolidModel::check_supported_with_beams`]: a beam node shared with a solid is refused with
+/// [`FemError::BeamSolidNode`]), and a model with Beam2 and a cyclic constraint refused naming [`crate::beam::FOLLOW_UP`]
+/// (the cyclic rows rotate translations only).
+fn check_transformation_model(model: &SolidModel) -> Result<()> {
+    model.check_supported_with_beams()?;
+    let beams = model
+        .mesh()
+        .blocks()
+        .iter()
+        .any(|b| b.kind() == crate::mesh::ElementKind::Beam2);
+    if beams {
+        if let Some(i) = model
+            .constraints()
+            .iter()
+            .position(|c| matches!(c, Constraint::Cyclic { .. }))
+        {
+            return Err(FemError::NotYetSupported {
+                item: "constraint",
+                variant: "Cyclic",
+                location: format!("constraint {i}, a model with Beam2"),
+                package: crate::beam::FOLLOW_UP,
+            });
+        }
+    }
+    Ok(())
+}
+
 /// The result of a static solve on the transformation.
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
@@ -1069,7 +1117,7 @@ pub fn solve_static_mpc(
     options: &StaticOptions,
 ) -> Result<MpcSolution> {
     model.validate()?;
-    model.check_supported()?;
+    check_transformation_model(model)?;
     if let StaticSolver::PreconditionedCg { .. } = options.solver {
         return Err(FemError::InvalidValue {
             key: "solver",
@@ -1348,7 +1396,7 @@ fn zero_values_only(what: String, v: f64) -> FemError {
 /// whose constraints and supports hold every motion is solved at zero shift, a free motion moves it.
 pub fn modal_analysis_mpc(model: &SolidModel, extra: &[Prescribed], options: &ModalOptions) -> Result<MpcModes> {
     model.validate()?;
-    model.check_supported()?;
+    check_transformation_model(model)?;
     let dofs = model.dof_map();
     for &(eq, v) in &prescribed_equations(model, extra)? {
         if v != 0.0 {

@@ -9,6 +9,10 @@
 //! `6 - rank(G)`, the rank taken from the singular values of `G` (one-sided Jacobi) with the relative threshold
 //! [`COUNT_TOLERANCE`]. The rows of a rigid set hold identically on the extended rigid fields (derived in ADR 0399): a
 //! rigid set never holds a rigid motion. Mechanisms (zero-energy motions that are not rigid) are not counted.
+//!
+//! Rotational unknowns (ADR 0426): the rigid field `t0 + w x (x - x_c)` has the rotation `w` at every point, so at a
+//! rotational unknown the scaled fields take their rotation; a six-unknown node of a rigid set adds the rows
+//! `theta_a - w = 0`, which hold identically on the rigid fields as the translation rows do.
 
 use crate::constraint::{prescribed_equations, Prescribed};
 use crate::error::{FemError, Result, SetKind};
@@ -68,8 +72,13 @@ impl FreeRigidMotions {
 }
 
 /// The value of scaled rigid field `j` at point `p` (component `comp`): `e_j` for `j < 3`, `e_(j-3) x (p - centre) / length`
-/// for `j >= 3`.
+/// for `j >= 3`; at a rotational component `3 + a` the rotation of the field, `0` for `j < 3` and `delta_(a, j-3) / length`
+/// for `j >= 3` (ADR 0426).
 fn field_at(p: Vec3, centre: Vec3, length: f64, j: usize, comp: usize) -> f64 {
+    if comp > 2 {
+        // Rotation e_(j-3) / length of field j >= 3 at component 3 + (j - 3) = j.
+        return if j == comp { 1.0 / length } else { 0.0 };
+    }
     if j < 3 {
         return if comp == j { 1.0 } else { 0.0 };
     }
@@ -93,9 +102,6 @@ pub fn rigid_field(model: &SolidModel, centre: Vec3, length: f64, j: usize) -> V
     (0..dofs.n_equations())
         .map(|eq| {
             let (node, comp) = dofs.node_component(eq).expect("mesh unknown");
-            if comp > 2 {
-                return 0.0;
-            }
             field_at(nodes[node], centre, length, j, comp)
         })
         .collect()
@@ -187,8 +193,8 @@ fn singular_values(g: &[[f64; 6]]) -> ([f64; 6], [[f64; 6]; 6]) {
 
 /// The free rigid motions of a model with the per-node prescribed displacements `extra` (ADR 0399): the rank of the
 /// prescribed equations, the linear constraints, the rows of the rigid sets and the support stiffness on the six scaled
-/// rigid fields. The constraint values are not used (the homogeneous rows are counted). Refused: a cyclic constraint, a
-/// model with rotational unknowns, a mesh without nodes.
+/// rigid fields. The constraint values are not used (the homogeneous rows are counted). Rotational unknowns take the
+/// rotation of the fields (ADR 0426). Refused: a cyclic constraint, a mesh without nodes.
 pub fn free_rigid_motions(model: &SolidModel, extra: &[Prescribed]) -> Result<FreeRigidMotions> {
     let dofs = model.dof_map();
     let mesh = model.mesh();
@@ -197,15 +203,6 @@ pub fn free_rigid_motions(model: &SolidModel, extra: &[Prescribed]) -> Result<Fr
         return Err(FemError::InvalidValue {
             key: "mesh",
             reason: "no nodes: the rigid motions are not defined".into(),
-        });
-    }
-    if let Some(eq) = (0..dofs.n_equations()).find(|&eq| dofs.node_component(eq).is_some_and(|(_, c)| c > 2)) {
-        let (node, component) = dofs.node_component(eq).expect("mesh unknown");
-        return Err(FemError::InvalidValue {
-            key: "free rigid motions",
-            reason: format!(
-                "node {node} has the rotational unknown {component}: the count of ADR 0399 covers translational unknowns only"
-            ),
         });
     }
     let mut centre = [0.0; 3];
@@ -276,6 +273,13 @@ pub fn free_rigid_motions(model: &SolidModel, extra: &[Prescribed]) -> Result<Fr
                             row.push((d[j], w_ref[k]));
                         }
                         push_row(&mut g, &row);
+                    }
+                    // ADR 0426: a node with rotations turns with the set, theta_c - w_c = 0.
+                    if dofs.components(node) == 6 {
+                        for comp in 0..3 {
+                            let eq = dofs.equation(node, 3 + comp).expect("rotation unknown");
+                            push_row(&mut g, &[(1.0, at(eq)), (-1.0, w_ref[comp])]);
+                        }
                     }
                 }
             }
