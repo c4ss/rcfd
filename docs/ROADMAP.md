@@ -11481,7 +11481,7 @@ fixed by the item's registration ADR before any code.
     shear and bulk split refused for Incompatible, whose condensed stiffness is not linear in D); the patch recovery
     with the formulations' strain; defaults bit-identical.
   - note: Structural solver, intermediate tier. Low priority. Follow-up of F-390 (ADR 0493, 2026-11-14).
-- [ ] **F-589** First and fourth spectral moments of a random stress component for broadband fatigue
+- [x] **F-589** First and fourth spectral moments of a random stress component for broadband fatigue
   - depends on: F-417, F-566
   - acceptance: Every limit not stated here is registered in the ADR before the run. RandomStress carries the
     covariances C_1 and C_4 (weighted by f and f^4) beside C_0 and C_2, the existing fields bit-identical; for a
@@ -11489,7 +11489,19 @@ fixed by the item's registration ADR before any code.
     the stress per unit displacement within 1e-10; the broadband rate of F-566 fed from a stress component equals the
     scaled channel rate within 1e-10; a von Mises equivalent is refused for the broadband rate with the reason (it is
     not Gaussian).
-  - note: Structural solver, advanced tier. Follow-up of F-566 (ADR 0497, 2026-11-14).
+  - note: Structural solver, advanced tier. Follow-up of F-566 (ADR 0497, 2026-11-14). ADR 0516, 2026-11-14: rcfd_fem::random
+    RandomStress gains first_covariance (C_1, weighted by f) and fourth_covariance (C_4, weighted by f^4) beside
+    covariance and rate_covariance, and ChannelResponse gains the same two matrices, from separate accumulators in
+    spectral_response and spectral_response_cross (the real constant-coherence route and the complex loop; the existing
+    fields are bit-identical, recorded in sa_random_stress_default_bits.rs at d41012db). New methods:
+    RandomStress::moments(p, component), combination_moments(p, weights) for a linear combination such as a normal
+    stress on a plane, broadband_damage_rate(p, component, m, c) and von_mises_broadband_damage_rate, which always
+    refuses (key "broadband": the von Mises equivalent is not Gaussian). On the one-mode bar the moments m0, m1, m2, m4
+    of a component equal those of the output channel times the square of the stress per unit displacement within 2.2e-15
+    (nu = 0, force and base, 320 points; the 6x6 matrices of nu = 0.3 within 2.2e-15), the broadband rate of F-566 fed
+    from a component equals the scaled channel rate within 3.0e-15 (m = 3 and 5), C_1/C_0 and C_4/C_0 equal the closed
+    forms of ADR 0477 within 3.0e-10 and 2.6e-8, and a complex pure-delay cross-spectrum through RandomSolver agrees
+    within 1.8e-15. Limits: Gaussian zero-mean stress, no critical-plane search, no case-file key.
 - [ ] **F-590** Benasciutti-Tovo broadband damage rate as a second method
   - depends on: F-566
   - acceptance: Every limit not stated here is registered in the ADR before the run. The rate (formula registered from a

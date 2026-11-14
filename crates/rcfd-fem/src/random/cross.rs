@@ -570,6 +570,8 @@ pub fn spectral_response_cross(
     let mut moments = vec![Moments::default(); no];
     let mut cov = vec![vec![0.0; g * g]; ng];
     let mut cov2 = vec![vec![0.0; g * g]; ng];
+    let mut cov1 = vec![vec![0.0; g * g]; ng];
+    let mut cov4 = vec![vec![0.0; g * g]; ng];
     let mut h = vec![(0.0, 0.0); nm];
     let mut yr = vec![vec![0.0; no]; np];
     let mut yi = vec![vec![0.0; no]; np];
@@ -644,6 +646,8 @@ pub fn spectral_response_cross(
                         let s = pair(k * g + i, k * g + j);
                         cov[k][i * g + j] += w * s;
                         cov2[k][i * g + j] += w * f * f * s;
+                        cov1[k][i * g + j] += w * f * s;
+                        cov4[k][i * g + j] += w * f * f * f * f * s;
                     }
                 }
             }
@@ -657,10 +661,19 @@ pub fn spectral_response_cross(
                 }
             }
         }
+        for c in cov1.iter_mut().chain(cov4.iter_mut()) {
+            for i in 0..g {
+                for j in 0..i {
+                    c[i * g + j] = c[j * g + i];
+                }
+            }
+        }
     } else {
         for (k, m) in moments.iter().enumerate() {
             cov[k][0] = m.m0;
             cov2[k][0] = m.m2;
+            cov1[k][0] = m.m1;
+            cov4[k][0] = m.m4;
         }
     }
     Ok(ChannelResponse {
@@ -670,5 +683,7 @@ pub fn spectral_response_cross(
         moments,
         covariance: cov,
         rate_covariance: cov2,
+        first_covariance: cov1,
+        fourth_covariance: cov4,
     })
 }
