@@ -299,3 +299,85 @@ sb_closed_forms -- --nocapture`).
 - The cylinder is plane strain through `u_z = 0`; the generalised plane strain of a long tube with closed ends is not covered.
   Only `nu = 0.3`; near-incompressible behaviour is not covered here.
 - The order is measured on the Hex8 bore displacement only, on one smooth graded family.
+
+## Addendum 1: results (2026-11-14)
+
+The registered run: commit bca71e66, once, release, `cargo test -p rcfd-fem --release --test sb_closed_forms -- --nocapture
+--test-threads=1` (log `w49i-work/f379-scratch/run1.log`): 5 passed, 0 failed, 0.48 s for the five tests. No amendment; nothing
+was re-run except the mutation runs on the scratch copy.
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| C1 Tet10 40 x 2 x 2, beam support | `abs(delta / delta_T - 1) <= 0.01` | 5.29e-4 (ratio 1.000529; `delta = 1.603967e-3 m`, `delta_T = 1.603120e-3 m`) | yes |
+| C2 Hex8 80 x 4 x 4, beam support | `<= 0.05` | 3.21e-2 (ratio 0.967873) | yes |
+| C3 Tet10 `sigma_xx` at `(h, h/2, h)`, `(h, h/2, 0)` | each `<= 0.03` | 2.00e-3 (`1.142280e7` against `1.14e7` Pa), 2.44e-3 | yes |
+| C3b Tet10 the five nodes of each surface line | each `<= 0.03` | top 3.36e-3, bottom 2.82e-3 | yes |
+| C4 / N1 Tet4 80 x 4 x 4 on the same nodes | ratio `< 0.9` | 0.795985 | yes |
+| T1 Hex8 `k = 8` (32 x 64 graded) `u_r` bore; outer | each `<= 0.005` | 1.83e-4; 1.44e-4 | yes |
+| T2 Hex8 `k = 8` bore hoop stress | `<= 0.02` | 5.75e-3 | yes |
+| T3 Hex8 observed order `log2(e_4 / e_8)` | `>= 1.8` | 1.999 (bore errors 1.152e-2, 2.915e-3, 7.311e-4, 1.829e-4; orders 1.983, 1.996, 1.999) | yes |
+| T4 Tet10 curved 8 x 16: `u_r` bore; outer; bore hoop | `<= 0.005`; `<= 0.005`; `<= 0.02` | 8.96e-5; 1.43e-4; 4.51e-3 | yes |
+| K0 2025 nodes on the grid, each mesh | as stated | Tet10, Tet4, Hex8: 2025 nodes, 2025 distinct points, deviation 2.2e-16 m | yes |
+| K1 reactions of the support (Tet10) | each `<= 1e-8` | `sum R_z` 1.7e-10, `R_z(n0)` 1.3e-10, `R_z(n1)` 2.0e-10, `R_y(n0)` 8.4e-12, `sum R_x` 8.0e-11 | yes |
+| K2 Tet10 wall nodes on their circles | `<= 1e-14` | 2.2e-16 | yes |
+| K3 load totals, Hex8 `k = 8`; Tet10 | each `<= 1e-9` | 7.0e-15, 7.3e-15; 1.3e-14, 2.7e-14 | yes |
+| R1 Tet10 full clamp: `ratio_clamp - ratio_beam <= 1e-12`; `ratio_clamp > 0.98` | as stated | -6.08e-3; 0.994446 | yes |
+| N2 Hex8 `k = 8`, `u_z` on `zmin` only: against plane strain `> 0.02`; against plane stress `<= 0.005` | as stated | 3.13e-2; 1.85e-4 | yes |
+| N3 Hex8 `k = 8` uniform radius: `e_u / e_T2` in `[2, 4.5]` | as stated | `e_u` 1.759e-2 (estimate 1.8e-2), ratio 3.06 (estimate 3.2) | yes |
+| S1 `git diff dcdda624 --stat -- crates` | the new test file only | `crates/rcfd-fem/tests/sb_closed_forms.rs`, 592 lines, nothing else | yes |
+
+Records. Full clamp: Tet10 ratio 0.994446, `sigma_xx` at the C3 nodes 6.0e-3 (top) and 3.2e-3 (bottom) off `M c / I`; Hex8 ratio
+0.962415 (5.5e-3 below its beam-support ratio). Hex8 beam support `sigma_xx` at the C3 nodes: 7.8e-3 off (not limited). Hex8
+levels 1, 2, 4: hoop errors 3.81e-2, 2.14e-2, 1.12e-2 (first order, halving with `dr_1`, as D8 derived); outer `u_r` errors
+9.05e-3, 2.29e-3, 5.74e-4. Solves of at most 10 593 unknowns, each below 0.1 s.
+
+Against the estimates. C2 (0.9679) and N3 are where D5 and D8 put them (0.967; 1.8 percent, ratio 3.2). T1, T2, T4 and the
+order are inside the estimates. Two deviations, both inside their limits:
+
+1. C1 is 5.3e-4 above `delta_T`, where D5 expected 1e-3 to 4e-3 below it. Not diagnosed by a run (no unregistered diagnostic
+   was made). The likely contributions: the local compliance of the two point reactions `P/2` at vertex nodes of quadratic
+   tetrahedra, which D2 bounded from the line-reaction estimate of ADR 0385 (a point force at a Tet10 vertex is more compliant
+   than that); and the difference between Timoshenko's `kappa = 5/6` and the 3-D shear deflection of a square section with
+   `nu = 0.3`. The 1 percent limit resolves neither.
+2. C4 is 0.796 where D5 expected about 0.69: the `(e/h)^2` scaling from ADR 0277's clamped `L/h = 10` run overstated the
+   locking under the beam support. The control still separates Tet4 from Tet10 by 20 percent on the same 2025 nodes.
+
+Mutations (scratch copy `w49i-work/f379-scratch/tree` from `git archive` of bca71e66, script `mutate.py`, logs `Mu1.log` to
+`Mu6.log`; each mutation applied alone and reverted):
+
+| Id | Mutation | Caught by |
+| --- | --- | --- |
+| Mu1 | `mu` times 1.02 in `isotropic_elasticity` | C1 (1.73e-2), T1 (1.87e-2, 1.64e-2), T4, T3, R1, N2 |
+| Mu2 | pressure traction `+p n` | T1, T2, T3, T4, K3 (2.0), N2, N3 |
+| Mu3 | `extrapolate` returns the element mean | C3 (0.415, 0.419), C3b, T4 hoop (3.83e-2); not T2 (Hex8 hoop) |
+| Mu4 | Lame `u_r` with `(1 - nu)` | T1 (6.4e-2, 0.177), T3, T4 |
+| Mu5 | hoop stress with `- 2 s_xy t_x t_y` | T2 (1.59), T4 (1.60), N3 |
+| Mu6 | Tet10 mid-edge nodes at the chord midpoints | K2 (2.4e-3), and also T4 hoop (2.28e-2 against 2e-2) |
+
+All six were caught. Mu3 survived T2: on the graded mesh the Hex8 element mean and the extrapolation at the bore differ by
+about `0.6 dr_1`, which keeps the mean inside 2 percent; C3 and T4 caught it. Mu6 was registered as caught by K2 only, but
+T4's hoop check also caught it: on this mesh a straight-sided Tet10 would miss a8.
+
+`cargo fmt -p rcfd-fem --check` is clean, and so is `cargo clippy -p rcfd-fem --all-targets -- -D warnings`. Only the new file
+was run (release). No library line changed, so no existing test covers a changed line and no baseline-hash run is owed. The
+whole workspace suite was not run (that is the lead's gate).
+
+Decision by the registered rule: **done**. Every A, K and R check met on its single registered run, every negative control
+behaved as expected, every mutation was caught, and no amendment was made. Scaffold rows: none exist for F-379 or ADR 0280, so
+there was nothing to retire.
+
+Remaining questions:
+
+1. The acceptance says "clamped root". The checks use the support of beam theory (D2), taken on the standing instruction. On
+   this mesh the full clamp would also have met C1 (0.994446) and C3 (6.0e-3), with less margin. Options: (a) accept D2 as the
+   reading of "clamped", with the clamp recorded; (b) add a registered full-clamp row to the acceptance. Recommendation: (a).
+   The closed form has no Poisson restraint at the root, and the record puts the clamp effect (0.6 percent) next to it.
+2. C1 sits 5.3e-4 above the closed form. Options: (a) leave it, since it is inside the limit and below what the acceptance can
+   resolve; (b) a follow-up that separates the point-reaction compliance from the shear coefficient, for example by a line of
+   `u_z` zeros along the neutral line, or by a mesh study. Recommendation: (a).
+
+### For the lead: roadmap entries
+
+Proposed status of F-379: **done**.
+
+> ADR 0433, 2026-11-14: closed-form benchmarks in rcfd-fem/tests/sb_closed_forms.rs (tests only, no library code). Cantilever L/h = 20, nu = 0.3, uniform tip traction, the support of beam theory at the root (u_x = 0 on the root face, u_z at both neutral-line nodes, u_y at one; ADR 0385), the full clamp recorded beside it: Tet10 40 x 2 x 2 tip deflection 5.3e-4 off P L^3/(3 E I)(1 + 3 E I/(kappa G A L^2)) (limit 1 percent; full clamp 0.994446); Hex8 80 x 4 x 4 (four through the thickness) 3.2 percent (limit 5); Tet10 bending stress at x = h on both surfaces within 2.4e-3 of M c/I (limit 3 percent); Tet4 on the same 2025 nodes 0.796 of the closed form (locking control, below 0.9). Lame thick cylinder b/a = 2, plane strain by u_z = 0 at every node, quarter model with symmetry rollers, radially graded map r(s) with beta = 2: Hex8 32 x 64 bore and outer u_r within 1.8e-4 and 1.4e-4 (limit 0.5 percent), bore hoop stress 5.7e-3 (limit 2 percent; uniform radius 1.8e-2, first order as derived), observed order of the bore u_r error 1.999 (limit 1.8); curved Tet10 8 x 16 (every node on the polar map) 9.0e-5, 1.4e-4 and 4.5e-3. Plane-stress control 3.1 percent off; six mutations caught.
