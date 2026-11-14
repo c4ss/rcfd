@@ -8087,7 +8087,8 @@ fixed by the item's registration ADR before any code.
     constant tables give the bits of the constant material; a temperature outside a table refused with the element and
     the temperature. Default paths bit-identical (14 digests of main 0ca10e83). Ten mutations caught. Files
     mat_ortho.rs, mat_table.rs, tests sa_ortho.rs, sa_mat_table.rs, sa_ortho_default_bits.rs; scaffold rows recorded and
-    copied in sa_scaffold.rs. Follow-up F-537.
+    copied in sa_scaffold.rs. Follow-up F-537. Follow-up F-537 (ADR 0457, 2026-11-14) opened the modal analysis, the
+    pre-stressed modes and the transformation path to both variants.
 - [ ] **F-410** Linear viscoelasticity: Prony series in time, complex modulus in frequency, time-temperature shift
   - depends on: F-408, F-397, F-398
   - acceptance: Every limit not stated here is registered in the ADR before the run. Relaxation of one element after a
@@ -10391,7 +10392,7 @@ fixed by the item's registration ADR before any code.
     within 1 percent at every level and its extrapolation the oscillating-channel impedance within 3 percent, with the
     outer iterations used per step recorded; the default results of every existing case stay bit-identical.
   - note: Numerics. Follow-up of F-530 (ADR 0451, 2026-11-14).
-- [ ] **F-537** Orthotropic and tabulated materials on the modal, prestressed-modal and transformation paths
+- [~] **F-537** Orthotropic and tabulated materials on the modal, prestressed-modal and transformation paths
   - depends on: F-409
   - acceptance: Every limit not stated here is registered in the ADR before the run. Modal analysis, prestressed modes
     and the transformation path (linear constraints, elastic supports) take the orthotropic and tabulated materials of
@@ -10399,7 +10400,23 @@ fixed by the item's registration ADR before any code.
     beam values with E1 within 1 percent; isotropic constants in an orthotropic material give the frequencies of the
     isotropic material within 1e-12; the paths still not opened refuse the variants by name; default paths
     bit-identical.
-  - note: Structural solver, advanced tier. Follow-up of F-409 (ADR 0452, 2026-11-14).
+  - note: ADR 0457, 2026-11-14: the orthotropic and tabulated materials of ADR 0452 on the modal analysis (elimination
+    and transformation), the pre-stressed modes (both paths, a uniform pre-stress allowed) and the static solve on the
+    transformation (linear constraints, elastic supports), through the per-point stiffness; a tabulated material takes
+    its stiffness at the model's temperature field at each integration point, the mass the base density; a cyclic
+    constraint with either variant, buckling, nonlinear, transient, harmonic with the static correction, rotating,
+    damped modes, the public stiffness and geometric stiffness, beams and shells refuse them by name (a follow-up of ADR
+    0452). Orthotropic Hex20 cantilever (E2 = E1/10, G13 = E1/20) at L/h = 40: first bending pair 0.27 percent below
+    Euler-Bernoulli with E1 (Timoshenko -0.30 percent derived; 3.5e-4 against it); at L/h = 20 1.3e-3 against Timoshenko
+    (Euler-Bernoulli -1.06 percent, recorded). Isotropic constants in the orthotropic material give the isotropic
+    frequencies within 5.9e-14 (modal and pre-stressed, both paths, on stocky non-degenerate models; a slender
+    degenerate pair moves 3e-10 for a one-ulp change of D); the inverse-iteration identity against the static solve
+    1.3e-15 for tabulated and cylindrical materials; a tabulated material at a uniform 443 K gives the bits of the
+    isotropic material at E(443). Default paths bit-identical (17 digests of main dab660ed). Seven of eight mutations
+    caught; Mu7 (buckling's entry check opened) is equivalent, stiffness_with refuses after it. Files modal.rs,
+    geometric.rs, mpc.rs, assemble.rs, model.rs; tests sa_ortho_modal.rs, sa_ortho_modal_default_bits.rs; sa_ortho
+    r1_r2_paths recorded and copied. Partial by the rule: the equivalent mutant Mu7 (buckling entry check opened;
+    refused identically next) not caught. Follow-up F-542.
 - [ ] **F-538** The averaged component diagonal in the relaxed PIMPLE loop
   - depends on: F-531
   - acceptance: Every limit not stated here is registered in the ADR before the run. The channel of ADR 0455 QF with
@@ -10425,3 +10442,14 @@ fixed by the item's registration ADR before any code.
     Shell4 checks repeated on triangles.
   - note: Structural solver, advanced tier. Follow-up of F-419 (ADR 0454, 2026-11-14). nonlinear, transient, buckling,
     cyclic, multigrid take Shell3 when they take Shell4 Also depends on the Shell4 follow-ups of ADR 0432.
+- [ ] **F-542** Orthotropic and tabulated materials on the rotating, buckling and transient paths
+  - depends on: F-537
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The rotating modes (stress
+    stiffening, spin softening), the buckling factors and the transient integrator take the orthotropic and tabulated
+    materials of ADR 0452 through the per-point stiffness; the rotating modes of an orthotropic disc or blade with
+    cylindrical axes match a closed form or a registered reference within registered limits; isotropic constants in an
+    orthotropic material give the results of the isotropic material within 1e-12 on stocky models; a cyclic constraint
+    with cylindrical axes about its own axis is opened or refused by name; the paths still not opened refuse the
+    variants by name; default paths bit-identical.
+  - note: Structural solver, advanced tier. Follow-up of F-537 (ADR 0457, 2026-11-14). Rotating modes first (fan blades
+    in glass-filled plastic).
