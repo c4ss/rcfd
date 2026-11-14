@@ -1784,3 +1784,17 @@ solid model of the existing solver (Hex20 for E1 to E3).
 | Spin-softening mass `int rho (P u) . (P u) dV`, `P = I - a a^T`, beam section and shell rotary terms; the flap-lag identity `w_flap^2 - w_lag^2 = Omega^2 (1 - f_rot)` | derived | ADR 0473 arithmetic 4, D3 |
 | Centrifugal load of a beam: the consistent nodal load of `rho A Omega^2 P (x - p)` and the section moment `-rho Omega^2 (I_z a_2 e_2 x a + I_y a_3 e_3 x a)` | derived | ADR 0473 arithmetic 5, amendment 1 (U6) |
 | Stiffening slope of a rotating radial cantilever (Southwell coefficient) `Q = 1.193336` of the first flap mode | computed | numpy Rayleigh quotient, `f420-scratch/probe_rot.py` (ADR 0473 arithmetic 4, after ADR 0403); measured 1.19395 (R3) |
+
+## F-432 stress recovery by element patches and the energy-norm error estimate (ADR 0478)
+
+No source was read for F-432; every method is cited from memory and derived in ADR 0478 as a discrete least-squares fit and an
+energy integral. The checks use closed forms (polynomial fields), the manufactured solution of F-378 (true error known) and
+Kirsch's hole as recorded above (F-413).
+
+| Item | Status | Source |
+|---|---|---|
+| Superconvergent patch recovery: least-squares fit of a complete polynomial to the stresses at the sampling points of the elements around a vertex node, nodal values from the fit; boundary nodes from an interior patch | from memory | Zienkiewicz and Zhu, "The superconvergent patch recovery and a posteriori error estimates. Part 1: The recovery technique", Int. J. Numer. Meth. Engng 33 (1992) 1331-1364: NOT read; ADR 0478 D1 to D3 (the nearest-centre rule of D3 is this repository's) |
+| Error estimate `eta_e^2 = int (sigma* - sigma_h) . D^{-1} (sigma* - sigma_h) dV`, relative estimate `eta/(||u_h||^2 + eta^2)^{1/2}` | from memory | Zienkiewicz and Zhu, "A simple error estimator and adaptive procedure for practical engineering analysis", Int. J. Numer. Meth. Engng 24 (1987) 337-357; Part 2 of the 1992 paper, ibid. 1365-1382: NOT read; ADR 0478 D4 |
+| Effectivity index `theta = eta/||u - u_h||_E`, asymptotic exactness when the recovered stress converges faster than the raw one | from memory | Ainsworth and Oden, A Posteriori Error Estimation in Finite Element Analysis, Wiley (2000), the chapter on recovery-based estimators: NOT read; measured in ADR 0478 (M1, M2) |
+| Optimal stress points: the centroid of the trilinear hexahedron, the 2 x 2 x 2 Gauss points of the quadratic hexahedron | from memory | Barlow, "Optimal stress locations in finite element models", Int. J. Numer. Meth. Engng 10 (1976) 243-251: NOT read; the 1-D argument of ADR 0478 arithmetic 3 |
+| One-dimensional effectivities of the rule (linear `1.080, 1.025, 1.007` and quadratic `0.854, 0.971, 0.995` at `n = 4, 8, 16`) | computed | numpy, `f432-scratch/probe_1d.py`, `probe_1d_quad.py` (ADR 0478 arithmetic 1, 2) |

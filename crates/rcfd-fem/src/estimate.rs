@@ -735,7 +735,12 @@ fn recover_prepared(
         let mut list: Vec<String> = short
             .iter()
             .take(20)
-            .map(|s| format!("node {}: {} points for {} terms, {}", s.node, s.points, s.terms, s.reason))
+            .map(|s| {
+                format!(
+                    "node {}: {} points for {} terms, {}",
+                    s.node, s.points, s.terms, s.reason
+                )
+            })
             .collect();
         if short.len() > 20 {
             list.push(format!("and {} more", short.len() - 20));
@@ -800,11 +805,7 @@ pub fn energy_error(
 ) -> Result<(Recovery, EnergyError)> {
     let prepared = prepare(model, displacement)?;
     let recovery = recover_prepared(model, &prepared, displacement, options)?;
-    let compliance: Vec<Option<Matrix6>> = prepared
-        .d
-        .iter()
-        .map(|d| d.as_ref().and_then(invert6))
-        .collect();
+    let compliance: Vec<Option<Matrix6>> = prepared.d.iter().map(|d| d.as_ref().and_then(invert6)).collect();
     let mesh = model.mesh();
     let dofs = model.dof_map();
     let per_element = parallel_map(mesh.n_elements(), options.threads, |e| -> Result<(f64, f64)> {
