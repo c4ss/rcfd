@@ -15,6 +15,8 @@ use rcfd_linalg::precond::{BlockJacobi, IcBreakdown, IcOptions, IncompleteCholes
 use rcfd_linalg::skyline::{SkylineError, SkylineLdlt};
 // ADR 0447 (F-431): the sparse L D L^T after approximate minimum degree.
 use rcfd_linalg::sparse_chol::SparseLdlt;
+// ADR 0503 (F-529): nested dissection and the supernodal L D L^T.
+use rcfd_linalg::sparse_chol::{nested_dissection_order_with_points, SparseOptions, SparseOrdering, SupernodalLdlt};
 use rcfd_linalg::vecops::norm2;
 use rcfd_linalg::{cg, CsrMatrix, Jacobi, Preconditioner, SolveControl};
 // ADR 0357 (F-460): fill levels and the node-wise ordering of the incomplete Cholesky.
@@ -54,6 +56,21 @@ pub enum StaticSolver {
     /// Sparse `L D L^T` after approximate minimum degree (ADR 0447), with the pivot checks of `Direct`. Not on the
     /// transformation path, the cyclic solve or with refinement.
     SparseDirect,
+    /// Supernodal multifrontal `L D L^T` after nested dissection of the free equations' node coordinates (ADR 0503), with
+    /// the pivot checks of `Direct`. Not on the transformation path, the cyclic solve or with refinement.
+    SupernodalDirect,
+}
+
+/// The direct factor a static solve built (ADR 0503 D5), reported in [`SolveReport::factor`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum DirectFactor {
+    /// The envelope `L D L^T` after reverse Cuthill-McKee (ADR 0274).
+    Envelope,
+    /// The up-looking sparse `L D L^T` after approximate minimum degree (ADR 0447).
+    SparseMinimumDegree,
+    /// The supernodal multifrontal `L D L^T` after nested dissection by the node coordinates (ADR 0503).
+    SupernodalNestedDissection,
 }
 
 /// The preconditioner of [`StaticSolver::PreconditionedCg`] (ADR 0282).
@@ -117,6 +134,9 @@ pub struct SolveReport {
     pub shift: Option<f64>,
     /// The breakdowns of the incomplete Cholesky factorisation, with the node and component of the failing row.
     pub breakdowns: Vec<(usize, usize, IcBreakdown)>,
+    /// The direct factor the solve built, as returned by the function that built it (`None` for CG and when no equation is
+    /// free; ADR 0503 D5).
+    pub factor: Option<DirectFactor>,
 }
 
 /// Restarts of the preconditioned CG from the true residual (ADR 0282 D5).
@@ -231,6 +251,7 @@ pub fn solve_static_report(
         relative_residual: 0.0,
         shift: None,
         breakdowns: Vec::new(),
+        factor: None,
     };
     let (u_free, iterations) = if nf == 0 {
         (Vec::new(), 0)
@@ -238,13 +259,26 @@ pub fn solve_static_report(
         match &options.solver {
             StaticSolver::Direct if options.refinement > 0 => {
                 report.solver = REFINED_NAME.to_string();
-                (
-                    direct_refined(&sys.matrix, &sys.rhs, sys.free(), &dofs, options.refinement)?,
-                    0,
-                )
+                let (u, built) = direct_refined(&sys.matrix, &sys.rhs, sys.free(), &dofs, options.refinement)?;
+                report.factor = Some(built);
+                (u, 0)
             }
-            StaticSolver::Direct => (direct(&sys.matrix, &sys.rhs, sys.free(), &dofs)?, 0),
-            StaticSolver::SparseDirect => (sparse_direct(&sys.matrix, &sys.rhs, sys.free(), &dofs)?, 0),
+            StaticSolver::Direct => {
+                let (u, built) = direct(&sys.matrix, &sys.rhs, sys.free(), &dofs)?;
+                report.factor = Some(built);
+                (u, 0)
+            }
+            StaticSolver::SparseDirect => {
+                let (u, built) = sparse_direct(&sys.matrix, &sys.rhs, sys.free(), &dofs)?;
+                report.factor = Some(built);
+                (u, 0)
+            }
+            StaticSolver::SupernodalDirect => {
+                let nodes = model.mesh().nodes();
+                let (u, built) = supernodal_direct(&sys.matrix, &sys.rhs, sys.free(), &dofs, nodes)?;
+                report.factor = Some(built);
+                (u, 0)
+            }
             StaticSolver::ConjugateGradient {
                 tolerance,
                 max_iterations,
@@ -281,6 +315,7 @@ fn solver_name(s: &StaticSolver) -> &'static str {
     match s {
         StaticSolver::Direct => "skyline-ldlt",
         StaticSolver::SparseDirect => SPARSE_NAME,
+        StaticSolver::SupernodalDirect => SUPERNODAL_NAME,
         StaticSolver::ConjugateGradient { .. } => "cg-jacobi",
         StaticSolver::PreconditionedCg {
             preconditioner: CgPreconditioner::BlockJacobi,
@@ -532,17 +567,23 @@ fn check_refinement(model: &SolidModel, options: &StaticOptions) -> Result<()> {
 }
 
 /// The direct solve followed by `steps` steps of [`crate::refine::refine_step`] with the same factor (ADR 0397 D3).
-fn direct_refined(a: &CsrMatrix, b: &[f64], free: &[usize], dofs: &DofMap, steps: usize) -> Result<Vec<f64>> {
+fn direct_refined(
+    a: &CsrMatrix,
+    b: &[f64],
+    free: &[usize],
+    dofs: &DofMap,
+    steps: usize,
+) -> Result<(Vec<f64>, DirectFactor)> {
     let ldlt = direct_factor(a, free, dofs)?;
     let mut x = ldlt.solve(b);
     for _ in 0..steps {
         crate::refine::refine_step(a, b, &ldlt, &mut x);
     }
-    Ok(x)
+    Ok((x, DirectFactor::Envelope))
 }
 
-fn direct(a: &CsrMatrix, b: &[f64], free: &[usize], dofs: &crate::model::DofMap) -> Result<Vec<f64>> {
-    Ok(direct_factor(a, free, dofs)?.solve(b))
+fn direct(a: &CsrMatrix, b: &[f64], free: &[usize], dofs: &crate::model::DofMap) -> Result<(Vec<f64>, DirectFactor)> {
+    Ok((direct_factor(a, free, dofs)?.solve(b), DirectFactor::Envelope))
 }
 
 /// The `L D L^T` factor of the direct solve with its pivot checks (ADR 0275 arithmetic 4).
@@ -582,7 +623,7 @@ fn direct_factor(a: &CsrMatrix, free: &[usize], dofs: &crate::model::DofMap) -> 
 pub const SPARSE_NAME: &str = "sparse-ldlt";
 
 /// The sparse `L D L^T` solve with the pivot checks of [`direct_factor`] (ADR 0447 D5).
-fn sparse_direct(a: &CsrMatrix, b: &[f64], free: &[usize], dofs: &DofMap) -> Result<Vec<f64>> {
+fn sparse_direct(a: &CsrMatrix, b: &[f64], free: &[usize], dofs: &DofMap) -> Result<(Vec<f64>, DirectFactor)> {
     let diag = a.diag();
     let at = |reduced: usize| dofs.node_component(free[reduced]).expect("free equation exists");
     let ldlt = SparseLdlt::factor(a).map_err(|e| match e {
@@ -611,7 +652,55 @@ fn sparse_direct(a: &CsrMatrix, b: &[f64], free: &[usize], dofs: &DofMap) -> Res
             });
         }
     }
-    Ok(ldlt.solve(b))
+    Ok((ldlt.solve(b), DirectFactor::SparseMinimumDegree))
+}
+
+/// The solver name of [`StaticSolver::SupernodalDirect`] (ADR 0503).
+pub const SUPERNODAL_NAME: &str = "sparse-ldlt-supernodal";
+
+/// The supernodal `L D L^T` solve after nested dissection by the coordinates of each free equation's node, with the pivot
+/// checks of [`direct_factor`] (ADR 0503 D5).
+fn supernodal_direct(
+    a: &CsrMatrix,
+    b: &[f64],
+    free: &[usize],
+    dofs: &DofMap,
+    nodes: &[rcfd_core::vec3::Vec3],
+) -> Result<(Vec<f64>, DirectFactor)> {
+    let diag = a.diag();
+    let at = |reduced: usize| dofs.node_component(free[reduced]).expect("free equation exists");
+    let points: Vec<[f64; 3]> = (0..a.n).map(|r| nodes[at(r).0]).collect();
+    let options = SparseOptions {
+        ordering: SparseOrdering::Given(nested_dissection_order_with_points(a, &points)),
+        ..SparseOptions::default()
+    };
+    let ldlt = SupernodalLdlt::factor_with(a, &options).map_err(|e| match e {
+        SkylineError::Pivot { row, pivot, .. } => {
+            let (node, component) = at(row);
+            FemError::SingularStiffness {
+                node,
+                component,
+                pivot,
+                diagonal: diag[row],
+            }
+        }
+        other => FemError::Solver {
+            solver: SUPERNODAL_NAME,
+            reason: other.to_string(),
+        },
+    })?;
+    for (&row, &d) in ldlt.order().iter().zip(ldlt.pivots()) {
+        if d <= PIVOT_TOLERANCE * diag[row] {
+            let (node, component) = at(row);
+            return Err(FemError::SingularStiffness {
+                node,
+                component,
+                pivot: d,
+                diagonal: diag[row],
+            });
+        }
+    }
+    Ok((ldlt.solve(b), DirectFactor::SupernodalNestedDissection))
 }
 
 fn conjugate_gradient(a: &CsrMatrix, b: &[f64], tolerance: f64, max_iterations: usize) -> Result<(Vec<f64>, usize)> {
