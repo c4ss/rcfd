@@ -64,6 +64,12 @@ impl IntegrationPointField {
         let delta_t: Option<Vec<f64>> =
             temperature.map(|(nodal, reference)| nodal.iter().map(|t| t - reference).collect());
         let mut thermal_strains: Vec<[f64; 6]> = Vec::new();
+        // ADR 0452 D5: the per-point data, only for a model with an orthotropic or tabulated material.
+        let points = if crate::mat_ortho::uses_point_materials(model) {
+            Some(crate::mat_ortho::MaterialPoints::new(model)?)
+        } else {
+            None
+        };
         for e in 0..ne {
             let located = |source: FemError| FemError::Element {
                 element: e,
@@ -76,8 +82,31 @@ impl IntegrationPointField {
             let material = &model.materials()[materials[e]].1;
             let rule = element.stiffness_rule();
             let dte: Option<Vec<f64>> = delta_t.as_ref().map(|d| nodes.iter().map(|&n| d[n]).collect());
+            let point_material = points
+                .as_ref()
+                .filter(|_| crate::mat_ortho::is_point_material(material));
             for ip in element.integration_points(&coords, rule).map_err(located)? {
                 let eps = element.strain_at(&coords, &ue, ip.geometry.xi).map_err(located)?;
+                if let Some(points) = point_material {
+                    // ADR 0452 D5: the context and the thermal strain of the point.
+                    let (point, dt) = points
+                        .context(e, material, ip.geometry.x, &ip.geometry.n)
+                        .map_err(located)?;
+                    let sigma = match (&dte, points.reference()) {
+                        (Some(_), Some(reference)) => {
+                            let eth = crate::mat_ortho::thermal_strain(material, &point, reference, dt).map_err(located)?;
+                            let elastic: [f64; 6] = std::array::from_fn(|k| eps[k] - eth[k]);
+                            thermal_strains.push(eth);
+                            material.stress(&elastic, &point, &[]).map_err(located)?.0
+                        }
+                        _ => material.stress(&eps, &point, &[]).map_err(located)?.0,
+                    };
+                    field.positions.push(ip.geometry.x);
+                    field.weights.push(ip.weight);
+                    field.strain.push(eps);
+                    field.stress.push(sigma);
+                    continue;
+                }
                 let (sigma, _) = match &dte {
                     None => material.stress(&eps, &context, &[]).map_err(located)?,
                     Some(dte) => {

@@ -54,6 +54,15 @@ pub fn element_thermal_load(
     material: &Material,
     delta_t_nodal: &[f64],
 ) -> Result<Vec<f64>> {
+    if crate::mat_ortho::is_point_material(material) {
+        // ADR 0452 D5: the per-point materials need the element and the reference temperature (the model path).
+        return Err(FemError::NotYetSupported {
+            item: "material",
+            variant: material.name(),
+            location: "thermal::element_thermal_load".to_string(),
+            package: crate::mat_ortho::FOLLOW_UP,
+        });
+    }
     let element = element_for(kind);
     if delta_t_nodal.len() != element.n_nodes() {
         return Err(FemError::FieldLength {
@@ -91,6 +100,12 @@ pub(crate) fn add_thermal_load(
     let materials = model.material_indices()?;
     let mesh = model.mesh();
     let delta: Vec<f64> = nodal.iter().map(|t| t - reference).collect();
+    // ADR 0452 D5: the per-point data, only for a model with an orthotropic or tabulated material.
+    let points = if crate::mat_ortho::uses_point_materials(model) {
+        Some(crate::mat_ortho::MaterialPoints::new(model)?)
+    } else {
+        None
+    };
     for e in 0..mesh.n_elements() {
         let nodes = mesh.element_nodes(e);
         let coords: Vec<Vec3> = nodes.iter().map(|&n| mesh.nodes()[n]).collect();
@@ -110,11 +125,15 @@ pub(crate) fn add_thermal_load(
             }
             continue;
         }
-        let fe = element_thermal_load(mesh.element_kind(e), &coords, material, &dte).map_err(|source| {
-            FemError::Element {
-                element: e,
-                source: Box::new(source),
+        let fe = match &points {
+            Some(points) if crate::mat_ortho::is_point_material(material) => {
+                crate::mat_ortho::element_thermal_load(points, e, mesh.element_kind(e), &coords, material)
             }
+            _ => element_thermal_load(mesh.element_kind(e), &coords, material, &dte),
+        }
+        .map_err(|source| FemError::Element {
+            element: e,
+            source: Box::new(source),
         })?;
         for (&node, fa) in nodes.iter().zip(fe.chunks(3)) {
             add_force(f, dofs, node, &[fa[0], fa[1], fa[2]])?;
