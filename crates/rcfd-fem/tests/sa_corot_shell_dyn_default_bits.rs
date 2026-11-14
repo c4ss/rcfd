@@ -117,7 +117,10 @@ fn n1_default_bits_f585() {
     // The nonlinear transient of the cantilever under a step load, 10 steps, by two methods.
     for (name, method) in [
         ("Hex8 transient average acceleration", Method::average_acceleration()),
-        ("Hex8 transient generalised alpha", Method::GeneralisedAlpha { rho_inf: 0.8 }),
+        (
+            "Hex8 transient generalised alpha",
+            Method::GeneralisedAlpha { rho_inf: 0.8 },
+        ),
     ] {
         let table = LoadTable::constant(1.0, 0.0, 1.0).unwrap();
         let loads = [LoadHistory::new(f.clone(), table)];

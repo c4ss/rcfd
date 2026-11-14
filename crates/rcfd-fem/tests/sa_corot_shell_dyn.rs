@@ -113,9 +113,12 @@ fn roof_shell(n: usize, tri: bool) -> (SolidModel, usize) {
     mesh.add_block(kind_of(tri), conn).unwrap();
     mesh.set_block_property(0, BlockProperty::shell(T_R).unwrap()).unwrap();
     mesh.add_element_set("all", (0..ne).collect()).unwrap();
-    mesh.add_node_set("sym_x", (0..=n).map(|j| idx(0, j)).collect()).unwrap();
-    mesh.add_node_set("sym_y", (0..=n).map(|i| idx(i, 0)).collect()).unwrap();
-    mesh.add_node_set("hinge", (0..=n).map(|j| idx(n, j)).collect()).unwrap();
+    mesh.add_node_set("sym_x", (0..=n).map(|j| idx(0, j)).collect())
+        .unwrap();
+    mesh.add_node_set("sym_y", (0..=n).map(|i| idx(i, 0)).collect())
+        .unwrap();
+    mesh.add_node_set("hinge", (0..=n).map(|j| idx(n, j)).collect())
+        .unwrap();
     mesh.add_node_set("apex", vec![idx(0, 0)]).unwrap();
     let mut m = SolidModel::new(mesh);
     m.add_material("all", roof_material()).unwrap();
@@ -158,12 +161,16 @@ fn roof_hex20(n: usize) -> (SolidModel, usize) {
     mesh.add_node_set("apex_f585", apex).unwrap();
     let mut m = SolidModel::new(mesh);
     m.add_material("all", roof_material()).unwrap();
-    m.add_constraint(Constraint::displacement("sym_x_f585", 0, 0.0)).unwrap();
-    m.add_constraint(Constraint::displacement("sym_y_f585", 1, 0.0)).unwrap();
+    m.add_constraint(Constraint::displacement("sym_x_f585", 0, 0.0))
+        .unwrap();
+    m.add_constraint(Constraint::displacement("sym_y_f585", 1, 0.0))
+        .unwrap();
     for c in 0..3 {
-        m.add_constraint(Constraint::displacement("hinge_f585", c, 0.0)).unwrap();
+        m.add_constraint(Constraint::displacement("hinge_f585", c, 0.0))
+            .unwrap();
     }
-    m.add_load(Load::nodal_force("apex_f585", [0.0, 0.0, -P_QUARTER])).unwrap();
+    m.add_load(Load::nodal_force("apex_f585", [0.0, 0.0, -P_QUARTER]))
+        .unwrap();
     (m, apex_node)
 }
 
@@ -212,7 +219,11 @@ fn roof_limit(name: &str, model: &SolidModel, apex: usize) -> Limit {
     };
     let path = trace(model, &[], &[], &options, &[], &mut stop).unwrap();
     let qz = model.dof_map().equation(apex, 2).expect("apex u_z");
-    let pts: Vec<(f64, f64)> = path.points.iter().map(|p| (-p.displacement[qz], p.load_factor)).collect();
+    let pts: Vec<(f64, f64)> = path
+        .points
+        .iter()
+        .map(|p| (-p.displacement[qz], p.load_factor))
+        .collect();
     let mut imax = 0;
     for (i, p) in pts.iter().enumerate() {
         if p.1.is_nan() || p.1 > pts[imax].1 {
@@ -240,7 +251,15 @@ fn roof_limit(name: &str, model: &SolidModel, apex: usize) -> Limit {
     println!(
         "{name}: P_lim {:.6e} N (vertex {}), apex deflection at the limit {:.4e}, {} points, {} halvings, stopped {}, \
          negative pivot after the limit {}, last load factor {:.4e}, {:.1} s",
-        l.p_lim, l.vertex, l.w_at_limit, l.points, l.halvings, l.stopped, l.negative_after, l.last_load_factor, l.seconds
+        l.p_lim,
+        l.vertex,
+        l.w_at_limit,
+        l.points,
+        l.halvings,
+        l.stopped,
+        l.negative_after,
+        l.last_load_factor,
+        l.seconds
     );
     for (i, (p, pp)) in pts.iter().zip(&path.points).enumerate() {
         println!(
@@ -258,7 +277,10 @@ fn a2(ck: &mut Checks, name: &str, l: &Limit) {
     ck.holds(
         &format!("A2 {name}: stopped by the rule past the limit, a negative pivot after it"),
         l.stopped && l.negative_after && l.p_lim.is_finite(),
-        &format!("stopped {}, negative after {}, P_lim {:e}", l.stopped, l.negative_after, l.p_lim),
+        &format!(
+            "stopped {}, negative after {}, P_lim {:e}",
+            l.stopped, l.negative_after, l.p_lim
+        ),
     );
 }
 
@@ -280,9 +302,17 @@ fn a1_a2_h0_hinged_roof_through_the_limit_point_known_miss() {
     let p_ref = h16.p_lim;
     ck.record("P_ref (Hex20 16 x 16 x 2), N", p_ref);
     let h0 = (h8.p_lim / p_ref - 1.0).abs();
-    ck.at_most("H0 |P_lim(Hex20 8)/P_ref - 1|", if h0.is_finite() { h0 } else { f64::NAN }, 2e-2);
+    ck.at_most(
+        "H0 |P_lim(Hex20 8)/P_ref - 1|",
+        if h0.is_finite() { h0 } else { f64::NAN },
+        2e-2,
+    );
     let a1 = (s16.p_lim / p_ref - 1.0).abs();
-    ck.at_most("A1 |P_lim(Shell4 16)/P_ref - 1|", if a1.is_finite() { a1 } else { f64::NAN }, 2e-2);
+    ck.at_most(
+        "A1 |P_lim(Shell4 16)/P_ref - 1|",
+        if a1.is_finite() { a1 } else { f64::NAN },
+        2e-2,
+    );
     for (name, l) in [
         ("Shell4 16", &s16),
         ("Hex20 16", &h16),
@@ -395,8 +425,8 @@ fn roof_hex20_patch(n: usize) -> (SolidModel, usize) {
 
 /// The corrected roof comparison of amendment 3: A1p, H0p, A2, records. Heavy (the Hex20 16 x 16 x 2 reference).
 #[test]
-#[ignore = "heavy registered record of ADR 0522 amendment 3 (the patch load); run once with --ignored"]
-fn a1p_h0p_roof_patch_load() {
+#[ignore = "ADR 0522 amendment 3 record: A1p 2.61e-2 missed (shell above the Hex20 reference; addendum 1)"]
+fn a1p_h0p_roof_patch_load_known_miss() {
     let mut ck = Checks::new();
     let (m, apex) = roof_shell_patch(16, false);
     let s16 = roof_limit("patch Shell4 16 x 16", &m, apex);
@@ -409,9 +439,17 @@ fn a1p_h0p_roof_patch_load() {
     let p_ref = h16.p_lim;
     ck.record("P_ref,p (Hex20 16 x 16 x 2, patch), N", p_ref);
     let h0 = (h8.p_lim / p_ref - 1.0).abs();
-    ck.at_most("H0p |P_lim(Hex20 8)/P_ref,p - 1|", if h0.is_finite() { h0 } else { f64::NAN }, 2e-2);
+    ck.at_most(
+        "H0p |P_lim(Hex20 8)/P_ref,p - 1|",
+        if h0.is_finite() { h0 } else { f64::NAN },
+        2e-2,
+    );
     let a1 = (s16.p_lim / p_ref - 1.0).abs();
-    ck.at_most("A1p |P_lim(Shell4 16)/P_ref,p - 1|", if a1.is_finite() { a1 } else { f64::NAN }, 2e-2);
+    ck.at_most(
+        "A1p |P_lim(Shell4 16)/P_ref,p - 1|",
+        if a1.is_finite() { a1 } else { f64::NAN },
+        2e-2,
+    );
     for (name, l) in [
         ("patch Shell4 16", &s16),
         ("patch Hex20 16", &h16),
@@ -562,7 +600,11 @@ fn vibrate(name: &str, tri: bool, periods: u64) -> Vibration {
 
 fn vibration_checks(ck: &mut Checks, name: &str, v: &Vibration) {
     ck.at_most(&format!("F1 {name} |f_m/f_1 - 1|"), (v.fm / v.f1 - 1.0).abs(), 1e-2);
-    ck.at_most(&format!("F1b {name} |f_m/(f_1 r) - 1|"), (v.fm / (v.f1 * v.r) - 1.0).abs(), 1e-3);
+    ck.at_most(
+        &format!("F1b {name} |f_m/(f_1 r) - 1|"),
+        (v.fm / (v.f1 * v.r) - 1.0).abs(),
+        1e-3,
+    );
     ck.at_most(&format!("E1 {name} max |H_n - H_0|/H_0"), v.energy_error, 1e-5);
     ck.record(&format!("{name} signed f_m/f_1 - 1"), v.fm / v.f1 - 1.0);
     ck.record(&format!("{name} signed f_m/(f_1 r) - 1"), v.fm / (v.f1 * v.r) - 1.0);
@@ -713,7 +755,12 @@ fn ez_clapeyron(tri: bool) -> f64 {
     let pi = it.strain_energy().unwrap();
     let f = nodal_load_vector(&m, &[]).unwrap();
     let work = 0.5 * f.iter().zip(&us).map(|(x, y)| x * y).sum::<f64>();
-    println!("EZ (amendment 4) {}: Pi {:.10e}, f . u/2 {:.10e}", kind_of(tri).name(), pi, work);
+    println!(
+        "EZ (amendment 4) {}: Pi {:.10e}, f . u/2 {:.10e}",
+        kind_of(tri).name(),
+        pi,
+        work
+    );
     (pi / work - 1.0).abs()
 }
 
@@ -870,7 +917,11 @@ fn sf1_corrected() {
         ck.holds(
             &format!("SF1 {} solve_from = solve bit for bit", kind_of(tri).name()),
             same && r.steps.len() == 1 && r.steps[0].halvings == 0,
-            &format!("tip u_z {tip:.6e}, steps {}, iterations {}", r.steps.len(), eq.residuals.len() - 1),
+            &format!(
+                "tip u_z {tip:.6e}, steps {}, iterations {}",
+                r.steps.len(),
+                eq.residuals.len() - 1
+            ),
         );
     }
     ck.finish();
@@ -896,7 +947,11 @@ fn sf1_solve_from_equals_solve_on_shells_known_miss() {
         ck.holds(
             &format!("SF1 {} solve_from = solve bit for bit", kind_of(tri).name()),
             same && r.steps.len() == 1 && r.steps[0].halvings == 0,
-            &format!("tip u_z {tip:.6e}, steps {}, iterations {}", r.steps.len(), eq.residuals.len() - 1),
+            &format!(
+                "tip u_z {tip:.6e}, steps {}, iterations {}",
+                r.steps.len(),
+                eq.residuals.len() - 1
+            ),
         );
     }
     ck.finish();
@@ -909,7 +964,16 @@ fn r2_refusals_kept() {
     let r = Integrator::new(&m, &[], &NlTransientOptions::new(1e-3).energy_momentum());
     let (ok, d) = match &r {
         Ok(_) => (false, "Ok".to_string()),
-        Err(e) => (matches!(e, FemError::InvalidValue { key: "nl_transient", .. }), format!("{e:?}")),
+        Err(e) => (
+            matches!(
+                e,
+                FemError::InvalidValue {
+                    key: "nl_transient",
+                    ..
+                }
+            ),
+            format!("{e:?}"),
+        ),
     };
     ck.holds("R2 the energy-momentum step refuses Shell4", ok, &d);
     let r = solve_in_time(&m, &[], &[0.0, 1.0], &TimeSteppingOptions::new(f64::INFINITY));

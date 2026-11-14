@@ -469,7 +469,13 @@ fn evaluate_in(c: &Corotated, ue: &[f64], want: Want) -> Result<Evaluated> {
     let q: Vec<Hd> = ue
         .iter()
         .enumerate()
-        .map(|(i, &v)| if energy_only { Hd::constant(0, v) } else { Hd::variable(m, v, i) })
+        .map(|(i, &v)| {
+            if energy_only {
+                Hd::constant(0, v)
+            } else {
+                Hd::variable(m, v, i)
+            }
+        })
         .collect();
     // The nodal rotations and the displacements `w_a = u_a + (R_a - I) r_a` of the projected points (D2 step 1).
     let mut w: Vec<V3> = Vec::with_capacity(nn);
