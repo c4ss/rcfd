@@ -1235,7 +1235,17 @@ fn cantilever(f: SolidFormulation) -> SolidModel {
 }
 
 #[test]
+#[ignore = "record of the registered run 1 of ADR 0525 RF3: the estimate::recover row ran on the strip, which has no interior node (set-up defective, ADR 0525 amendment 2); the other 28 rows met; corrected as rf1_rf2_rf3_refusals_after_f588_amended"]
 fn rf1_rf2_rf3_refusals_after_f588() {
+    rf_rows(false);
+}
+
+#[test]
+fn rf1_rf2_rf3_refusals_after_f588_amended() {
+    rf_rows(true);
+}
+
+fn rf_rows(estimate_on_box: bool) {
     let mut ch = Checks::new();
     // RF1: the formulations are a Hex8 choice.
     let tet4 = tet_box([0.0; 3], [1.0, 1.0, 1.0], [1, 1, 1]).unwrap();
@@ -1328,7 +1338,17 @@ fn rf1_rf2_rf3_refusals_after_f588() {
                 ("DirectHarmonic::new", r.is_ok(), format!("{:?}", r.err()))
             },
             {
-                let r = patch_recover(&c, &u, &PatchOptions::new());
+                let r = if estimate_on_box {
+                    // ADR 0525 amendment 2: a box with interior nodes (the strip has none).
+                    let b = model_with(
+                        with_formulation(hex_box([0.0; 3], [1.0, 0.5, 0.5], [4, 2, 2]).unwrap(), f),
+                        steel(0.3),
+                    );
+                    let nb = b.dof_map().n_equations();
+                    patch_recover(&b, &vec![0.0; nb], &PatchOptions::new())
+                } else {
+                    patch_recover(&c, &u, &PatchOptions::new())
+                };
                 ("estimate::recover", r.is_ok(), format!("{:?}", r.err()))
             },
         ];

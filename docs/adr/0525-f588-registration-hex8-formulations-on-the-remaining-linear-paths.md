@@ -276,6 +276,18 @@ with the exact field: `u_x = 0` on the whole root face, `u_y = u_z = 0` at the c
 `(0, h/2, h)`, where the exact `u_y = -nu M y' z' / (E I)` and `u_z` vanish. Interior nodes are those off the six faces of the
 box. No other check is changed. The negative control N-ES prints the same quantities for `Full`.
 
+## Amendment 2 (2026-11-14, written and committed before the corrected run of RF3)
+
+Run 1 of `si_hex8x_linear.rs` (log `f588-scratch/run1.log`) met every row but one: RF3 `estimate::recover` on the cantilever strip
+`20 x 1 x 1` (the model of the f587 copy) returned `InvalidValue { key: "patch recovery", reason: "no patch can be solved
+(ADR 0478 D3): 0 interior corner nodes, 0 short patches" }` for both formulations, an error that is not a formulation refusal:
+the strip has no interior node, so the registered set-up cannot show that the path is taken. The refusals of ADR 0493 that the
+row asserts lifted are not what failed (the message does not name a formulation), but the row as set up proves nothing, so it is
+a defective set-up and is corrected, not counted as met. The old test stays as an ignored record (`rf1_rf2_rf3_refusals_after_f588`,
+28 rows met, this row missed) and the corrected test `rf1_rf2_rf3_refusals_after_f588_amended` runs the same rows with the one
+change that `estimate::recover` is called on a box `1 x 0.5 x 0.5` of `4 x 2 x 2` elements with the formulation and a zero
+displacement (the sole row changed; the criterion is "returns Ok", unchanged).
+
 ## Addendum 1: results
 
 (to be written after the registered run)
