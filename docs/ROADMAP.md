@@ -11020,13 +11020,13 @@ fixed by the item's registration ADR before any code.
     every result of ADR 0473 bit-identical.
   - note: Structural solver, advanced tier. PARTIAL by the standing rule (every registered check met except the
     I-section clause, which needs a warping degree of freedom: FE -19.2 percent against the closed form, recorded in
-    ltb_i_section_known_miss). ADR 0508, 2026-11-14: opt-in Prestress::with_beam_resultants (moment, shear-force and
-    Wagner terms from the element end forces) and Prestress::with_shell_rotation_terms (t^2/12 on the shell
-    rotations). Rectangle lateral-torsional buckling 3.95e-4 (16 elements) and 5.2e-3 (8) of the closed form; thrust-
-    moment interaction 1.4e-3; frame invariance 2.5e-14 and 1.1e-16; end-force equilibrium 1.8e-16; thick plate (t/a
-    0.2) ratio of the Mindlin closed form to 1.9e-4 (Shell4) and 9.8e-5 (Shell3). Defaults bit-identical (16 digests).
-    Nine of ten registered mutations caught; one gap (scaled) closed by A3. Follow-up of F-420 (ADR 0473, 2026-11-14).
-    Follow-ups: warping degree of freedom for Beam2, case-file key, per-section Wagner coefficients (proposed).
+    ltb_i_section_known_miss). ADR 0508, 2026-11-14: opt-in `Prestress::with_beam_resultants` (moment, shear-force and
+    Wagner terms from the element end forces) and `Prestress::with_shell_rotation_terms` (t^2/12 on the shell
+    rotations). Rectangle lateral-torsional buckling 3.95e-4 (16 elements) and 5.2e-3 (8) of the closed form;
+    thrust-moment interaction 1.4e-3; frame invariance 2.5e-14 and 1.1e-16; end-force equilibrium 1.8e-16; thick plate
+    (t/a 0.2) ratio of the Mindlin closed form to 1.9e-4 (Shell4) and 9.8e-5 (Shell3). Defaults bit-identical (16
+    digests). Nine of ten registered mutations caught; one gap (`scaled`) closed by A3. Follow-up F-598. Open
+    (maintainer): the case-file key [structural] geometric_terms = "full".
 - [ ] **F-559** Craig-Bampton residual vectors of given load patterns and a harmonic acceptance at resonances
   - depends on: F-552
   - acceptance: Every limit not stated here is registered in the ADR before the run. The reduction of ADR 0474 takes
@@ -11319,7 +11319,11 @@ fixed by the item's registration ADR before any code.
     stationary field point-wise within 2 percent of p after the registered redistribution time, and the point-wise error
     does not grow between 5 t* and 20 t* by more than the registered bound. The fully integrated elements keep their
     bits.
-  - note: Structural solver, advanced tier. Follow-up of F-411 (ADR 0489, 2026-11-14).
+  - note: Structural solver, advanced tier. Follow-up of F-411 (ADR 0489, 2026-11-14). F-580 (note, ADR 0506,
+    2026-11-12/14): creep on the B-bar Hex8 through the nonlinear driver is met point-wise at 5 t* (9.5e-3) and 20 t*
+    (1.6e-2) against the stationary field; the growth bound between them is missed by the finite-strain drift (6.0e-3
+    against 2e-3). F-580 keeps its current status until the growth bound is measured on a reference that allows for
+    finite strain, or is re-registered at a smaller p/E.
 - [ ] **F-581** Creep with a temperature factor and load histories on the time-stepping driver
   - depends on: F-411, F-410
   - acceptance: Every limit not stated here is registered in the ADR before the run. Material::Creep takes an optional
@@ -11411,13 +11415,16 @@ fixed by the item's registration ADR before any code.
     differences within 1e-6; the F-390 patch test within 1e-10 through the driver; the J2 thick cylinder in plane strain
     and the creep cylinder of ADR 0489 point-wise within limits registered there, full integration the registered
     locking control; the Full results of ADR 0404, 0475, 0485 and 0489 bit-identical.
-  - note: Structural solver, intermediate tier. Follow-up of F-390 (ADR 0493, 2026-11-14). Partial (ADR 0506,
-    2026-11-12/14): BBar taken by the nonlinear driver as a variational F-bar on the total Lagrangian kinematics
-    (element mean of det F); tangent at rest equal to the B-bar stiffness to 4e-16, central differences to 1e-8 (SVK,
-    J2, creep, viscoelastic), patch tests to 5e-15, J2 cylinder at nu 0.499 within 1.1e-2 (Full 1.8 to 2.2), creep
-    cylinder within 1.6e-2 at 20 t* (Full 0.36); Incompatible refused; defaults bit-identical. Missed: the registered
-    growth bound C4 (6.0e-3 against 2e-3 from 5 t* to 20 t*), diagnosed as finite-strain drift against the small-strain
-    closed form.
+  - note: Structural solver, intermediate tier. PARTIAL (C4, the creep growth bound from 5 t* to 20 t*, missed: 6.0e-3
+    against 2e-3, recorded in c1_to_c4_cl_creep_cylinder_known_miss; amendment 1 fixed the PT5/PT6 set-ups before rerun;
+    all nine mutations caught). the B-bar Hex8 in the nonlinear driver as a variational F-bar element on the total
+    Lagrangian kinematics (element mean of det F; tangent at rest equal to the F-390 B-bar stiffness to 4e-16;
+    consistent tangent to 1e-8 for SVK, J2, creep and viscoelastic; patch tests to 5e-15 at nu 0.4999; J2 cylinder at nu
+    0.499 within 1.1e-2 of the closed form where Full gives 1.8 to 2.2; creep cylinder point-wise within 1.6e-2 at 20 t*
+    where Full gives 0.36). Incompatible stays refused in the nonlinear driver. The registered growth bound C4 (2e-3
+    between 5 t* and 20 t*) is missed at 6.0e-3, diagnosed as the total Lagrangian finite-strain drift of the bore
+    against the small-strain closed form (1.1e-4 at p/10). Defaults bit-identical (11 digests). Follow-ups F-596, F-597.
+    Open (maintainer): the block property formulation = "bbar" as a case-file key covering the nonlinear paths.
 - [ ] **F-588** The Hex8 formulations on the remaining linear paths (temperature load, per-point materials, geometric stiffness, damped and direct harmonic solves, patch recovery)
   - depends on: F-390
   - acceptance: Every limit not stated here is registered in the ADR before the run. The refusals of ADR 0493 D5 lifted
@@ -11533,3 +11540,25 @@ fixed by the item's registration ADR before any code.
     of the level-structure order's (both recorded) and the frequencies within 1e-9 of the level-structure run; results
     bit-identical for 1 and 8 threads; the default solver's results keep their bits.
   - note: Structural solver, advanced tier. Optional. Follow-up of F-594 (ADR 0509, 2026-11-14).
+- [ ] **F-596** The incompatible-modes Hex8 at finite strain (enhanced assumed strain, internal modes condensed in the Newton loop)
+  - depends on: F-587
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The incompatible-modes Hex8 of
+    F-390 at finite strain, as an enhanced assumed strain element with the internal modes condensed in the Newton loop;
+    the nonlinear driver no longer refuses it. Further limits are registered by the implementing ADR (follow-up text of
+    ADR 0506 gives no numbers).
+  - note: Structural solver, advanced tier. Follow-up of F-587 (ADR 0506, 2026-11-14).
+- [ ] **F-597** A finite-strain reference for the B-bar creep cylinder growth bound, and a Full-solve BBar-recovery locking control
+  - depends on: F-587
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A creep-cylinder reference for C4
+    that allows for finite strain, or C4 re-registered at a p/E small enough that the total Lagrangian drift stays below
+    the bound (the diagnostic gives 1.1e-4 at p/10); and a locking control on the creep cylinder that solves with Full
+    and recovers with BBar, the combination the mutation MU5 showed C2 does not see.
+  - note: Structural solver, advanced tier. Follow-up of F-587 (ADR 0506, 2026-11-14).
+- [ ] **F-598** Warping degree of freedom for Beam2 (14-DOF element) and the I-section lateral-torsional buckling
+  - depends on: F-558
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A warping degree of freedom for
+    Beam2 (a 14-DOF element), opt-in, with per-section Wagner coefficients from the section properties: the
+    lateral-torsional buckling moment of a simply supported I beam under uniform moment equals (pi/L) sqrt(E I_z G J) (1
+    + (pi^2 E C_w)/(G J L^2))^(1/2) within 1 percent at 16 elements (the clause of F-558 missed without warping); every
+    result without the option bit-identical.
+  - note: Structural solver, advanced tier. Follow-up of F-558 (ADR 0508, 2026-11-14).
