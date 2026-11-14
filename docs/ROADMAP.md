@@ -10363,7 +10363,7 @@ fixed by the item's registration ADR before any code.
     its corrected run by 7.9e-2 (limit 5e-2), diagnosed: the converged step is the two-corrector map, which an exact
     model reproduces to 0.4 percent. Five mutations caught (one only by a panic). No library line changed. Open: ADR
     0455 Q1, Q2. Follow-up F-538.
-- [ ] **F-532** Damped modes: residual vectors for boundary dampers near the impedance
+- [x] **F-532** Damped modes: residual vectors for boundary dampers near the impedance
   - depends on: F-414
   - acceptance: Every limit not stated here is registered in the ADR before the run. damped_modes gains static residual
     vectors (K^-1 times the damper influence vectors, orthogonalised against the undamped modes) as an option.
@@ -10371,7 +10371,19 @@ fixed by the item's registration ADR before any code.
     (2 j - 1) pi/2) within 2 percent on 20 modes with the residual vector, against a registered error without it; at c =
     2 A sqrt(E rho) the real root -(c0/L) atanh(A sqrt(E rho)/c) within 1 percent on 20 modes; without the option every
     result is bit-identical to F-414's.
-  - note: Structural solver, advanced tier. Follow-up of F-414 (ADR 0450, 2026-11-14).
+  - note: Structural solver, advanced tier. Follow-up of F-414 (ADR 0450). ADR 0464, 2026-11-14:
+    DampedOptions::residual_vectors adds one static residual vector per dashpot to the modal basis of damped_modes: K^-1
+    of its influence vector (sparse LDL^T of the reduced stiffness), M-orthogonalised twice against the undamped modes
+    and the vectors kept, M-normalised, dropped (and said) when already in the span; free-free models refused with the
+    option; off by default. Fixed-free bar with a tip dashpot c = 0.9 Z (Z = A sqrt(E rho)) on 20 modes: the first three
+    roots (c0/L)(-atanh(c/Z) + i (2j - 1) pi/2) within 3.3e-4 with the residual vectors (2 percent; what remains is the
+    mesh dispersion, estimated 3.3e-4), against 3.5e-2 to 3.8e-2 without them (registered band 2.5e-2 to 5.5e-2, from
+    the partial-fraction estimate). At c = 2 Z the real root -(c0/L) atanh(Z/c) within 2.7e-7 (1 percent; 1.33e-2
+    without). The closed forms were verified as written. Static compliance on the augmented basis equals L/(EA) within
+    4e-14 (tip dashpots) and (L - x)/(EA) within 7e-15 (dashpots between two nodes); vectors M-orthonormal to 1.4e-15.
+    Without the option nine F-414 results are bit-identical to main 80ebbd1e; bit-identical for 1 and 4 threads. Eight
+    of eight mutations caught. The pseudo-modes add fast overdamped real roots, reported as non-oscillating (|s| >= 27);
+    follow-up proposed. Follow-up F-548.
 - [ ] **F-533** Fatigue block in the solid case file: life, damage rate and safety-factor fields
   - depends on: F-413, F-386
   - acceptance: Every limit not stated here is registered in the ADR before the run. A solid case with a harmonic step
@@ -10573,3 +10585,11 @@ fixed by the item's registration ADR before any code.
     bit-identical.
   - note: Structural solver, advanced tier. Follow-up of F-544 (ADR 0462, 2026-11-14): a gap since ADR 0457
     (pre-stressed modes on the transformation accept a cyclic constraint with any per-point axes).
+- [ ] **F-548** Damped modes: flag the roots carried by the residual vectors
+  - depends on: F-532
+  - acceptance: Every limit not stated here is registered in the ADR before the run. Each DampedMode reports the
+    M-weighted share of its shape carried by the residual-vector coordinates of the basis, and roots with a share above
+    a registered threshold are flagged as pseudo-modes of the truncation. Bar of F-532 at c = 0.9 Z and 2 Z on 20 modes
+    with the residual vectors: the target roots of F-532 are not flagged, every other real root is; without the option
+    every result is bit-identical to F-532's.
+  - note: Structural solver, advanced tier. Follow-up of F-532 (ADR 0464, 2026-11-14). Size S.
