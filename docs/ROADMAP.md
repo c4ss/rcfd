@@ -8592,11 +8592,13 @@ fixed by the item's registration ADR before any code.
     pressed and pulled apart (1.2e-10, no tensile multiplier); Hertz sphere on a rigid plane at a/R = 0.1 (radius
     3.0e-4, peak 7.6e-4, approach 6.1e-4, 13 nodes); interference-fit pressure (8.0e-3) and Lame hoop stress (3.6e-3);
     tangent against central differences (2.3e-10); the cycling error names the nodes. Nine of nine mutations caught;
-    default bits unchanged. Missing: uniform shaft stress in the fit (7.0e-3 against 1e-6, a through-thickness variation
-    not yet explained) and the residual order of the total Lagrangian punch (least 0.17 against 1.8, the ADR 0404
-    measure on solves of three to five iterations). Both are recorded as known misses. No case-file key. Amendments 2
-    and 3 were committed before their corrected runs (no limit changed). Follow-ups F-599, F-600, F-601. Open
-    (maintainer): a [[contact]] case-file table.
+    default bits unchanged. Missing: uniform shaft stress in the fit (7.0e-3 against 1e-6, explained and re-registered
+    by F-599) and the residual order of the total Lagrangian punch (least 0.17 against 1.8, the ADR 0404 measure on
+    solves of three to five iterations). Both are recorded as known misses. No case-file key. Amendments 2 and 3 were
+    committed before their corrected runs (no limit changed). Follow-ups F-599, F-600, F-601. Open (maintainer): a
+    [[contact]] case-file table. The I3 miss is explained in ADR 0513 (F-599): a ring discretisation error shown by the
+    bottom constraint, and a reference that should have been mean (1 - d/a) cos(Delta/2); I3 re-registered there and met
+    (plane strain, 1.05e-12).
 - [x] **F-428** Laminated shell: layup stiffness, ply stresses and failure indices
   - depends on: F-409, F-392
   - acceptance: Every limit not stated here is registered in the ADR before the run. One isotropic ply gives the bits of
@@ -11607,12 +11609,24 @@ fixed by the item's registration ADR before any code.
     + (pi^2 E C_w)/(G J L^2))^(1/2) within 1 percent at 16 elements (the clause of F-558 missed without warping); every
     result without the option bit-identical.
   - note: Structural solver, advanced tier. Follow-up of F-558 (ADR 0508, 2026-11-14).
-- [ ] **F-599** Interference fit through-thickness variation of the contact pressure (re-register I3 of ADR 0507)
+- [x] **F-599** Interference fit through-thickness variation of the contact pressure (re-register I3 of ADR 0507)
   - depends on: F-427
   - acceptance: Every limit not stated here is registered in the ADR before the run. Find why the one-layer
     ring-on-shaft fit of ADR 0507 has node pressures of 0.9955 and 1.0045 of the mean at the bottom and top, then
     re-register I3. Fan relevance: hub-shaft press-fit stresses.
-  - note: Structural solver, advanced tier. Follow-up of F-427 (ADR 0507, 2026-11-14).
+  - note: Structural solver, advanced tier. Follow-up of F-427 (ADR 0507, 2026-11-14). ADR 0513, 2026-11-14. The 0.9955
+    and 1.0045 node pressures of the one-layer ring-on-shaft fit of ADR 0507 are a discretisation error of the ring made
+    visible by the u_z = 0 bottom constraint; contact.rs has no defect. The 8 linear cells through b - a miss Lame's
+    constant strain sum near the bore (1.41 of it at the bore node, O(h)), so the plane-stress thickness change varies
+    (-9.13e-6 against -7.5e-6 at the bore); its gradient, with the bottom held, tilts the bore and loads its top harder.
+    Without Poisson or in plane strain the pressures are uniform to 1e-11 and the shaft to 1e-12. The top/bottom split
+    falls with the radial cell (8.9e-3, 3.8e-3, 1.4e-3 at 8, 16, 32 cells), is linear in d, nearly vanishes with u_z
+    free (1.9e-4) and grows with layers through the thickness. The reference of ADR 0507's I3 was also wrong: the shaft
+    carries mean (1 - d/a) cos(Delta/2) = 0.9978 of the mean node pressure. I3 re-registered: in plane strain the shaft
+    is uniform within 1e-6 (1.05e-12), the pressure is within 3.6e-3 of E d (b^2 - a^2)/(2 a b^2 (1 - nu^2)) and the
+    hoop stress within 3.7e-3; ADR 0507's plane-stress set-up with the corrected reference is within 1e-2 (5.4e-3). The
+    original I3 stays an ignored record. Three of three required mutations caught. No library change, no case-file key.
+    Follow-up F-604.
 - [ ] **F-600** A contact Newton order measure for short solves
   - depends on: F-427
   - acceptance: Every limit not stated here is registered in the ADR before the run. A contact Newton order measure for
@@ -11645,3 +11659,11 @@ fixed by the item's registration ADR before any code.
     model up to that bound, the frequencies strictly lowered against the cutoff alone, and the statics of the corner
     load exact within 1e-10; without the option every result bit-identical to ADR 0511's.
   - note: Structural solver, advanced tier. Optional. Follow-up of F-559 (ADR 0511, 2026-11-14).
+- [ ] **F-604** Press fit of a finite hub on a longer shaft: edge pressure peaks and a bore-cell rule for the fan hub
+  - depends on: F-599
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A hub of length L on a shaft that
+    extends beyond both of its faces, same material, radial interference d, frictionless: the contact pressure at
+    mid-length against the plane-strain closed form within 2 percent for L >= 4 (b - a), the edge pressure peak located
+    at the hub faces and converging under refinement of the bore cells, and a bore-cell rule for the 120 mm fan hub
+    stated from the run. Fan relevance: hub-shaft press-fit stresses.
+  - note: Structural solver, advanced tier. Follow-up of F-599 (ADR 0513, 2026-11-14).
