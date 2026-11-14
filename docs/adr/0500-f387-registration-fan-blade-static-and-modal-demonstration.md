@@ -296,3 +296,96 @@ Every other check of that run was met (numbers in addendum 1). The old test stay
 attribute as superseded by this amendment); the corrected test `s_routes_and_m1_m2_amended` repeats the same computation
 (deterministic: the same numbers are expected for every other check) with the corrected S0, and is the test the gate runs. No limit
 is changed.
+
+## Addendum 1: results (2026-11-14)
+
+Code: commits c37c50a9 (the test as made in the first registered run) and da9d2bd3 (amendment 1: S0 after the parity, the first
+run kept as the ignored record `s_routes_and_m1_m2`); page and documentation bab74973. Base b1629305. **No library file changed**;
+the only code is `crates/rcfd-fem/tests/sb_fan_blade.rs`. Runs: the first registered run (`f387-scratch/run1.log`, all three
+fast tests), the corrected run of amendment 1 (`run2-amended.log`, `s_routes_and_m1_m2_amended` only), the heavy record once
+(`run3-heavy.log`). Nothing else was re-run to pick a result. Release profile throughout.
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| S0 one sign after the parity (amendment 1), M1; M2 | holds | 1056 of 1056; 4416 of 4416 | yes |
+| S0 (as first registered: one sign before orientation) | holds | 528 / 528; 2208 / 2208 | no: defective check, amendment 1 |
+| S0 no degenerate tetrahedron, M1; M2 | `min/mean > 0` | 8.46e-3; 1.12e-3 | yes |
+| S0 Tet10 accepted by `add_block` | holds | yes | yes |
+| S1 meshed volume, M1; M2 | 2e-2; 5e-3 | 1.263e-2; 3.17e-3 | yes |
+| S2 counts M1 (pressure 192, hub 44, tip 44, 1056 elements); M2 (768, 92, 92, 4416); M2/M1 | equal; `>= 2` | equal; equal; 4.18 | yes |
+| R1 `e_R` centrifugal, M1; M2 | 1e-8 | 1.19e-11; 1.29e-11 | yes |
+| P1 `e_P` pressure, M1; M2 | 1e-8 | 1.02e-10; 1.22e-10 | yes |
+| E1 `e_E` centrifugal and pressure, M1; M2 | 1e-8 | 4.19e-11, 4.63e-11; 8.58e-11, 1.04e-10 | yes |
+| C1 `d_tip` pressure, M1 4.178714e-5 m, M2 4.235557e-5 m | `< 0.05` | 1.360e-2 | yes |
+| C1b `d_tip` centrifugal, M1 1.970515e-4 m, M2 2.015810e-4 m | `< 0.05` | 2.299e-2 | yes |
+| C2 `f_1`, M1 188.8327 Hz, M2 186.0512 Hz | `< 0.05` | 1.473e-2 | yes |
+| MR backward modal residuals, M1; M2 | 1e-12 | 5.74e-13; 3.40e-13 | yes |
+| PL0 first bending mode of the plate is mode 1 | holds | mode 1 (z fraction 0.606) | yes |
+| PL `f_b` = 152.0407 Hz in `[141.4305, 155.9889]` Hz (`f_EB` 142.8591 Hz) | both bounds | `f_b / f_EB` = 1.0643 (upper ratio 1.0919) | yes |
+| DR1, DP1, DE1 route D | 1e-8 | 2.25e-11; 1.86e-10; 2.45e-10, 2.54e-10 | yes |
+| DREC route D against M2 (record) | none | `d_tip` -2.39e-3, `f_1` +1.24e-3; 2263 Tet4, min dihedral 0.160 deg | record |
+| NC1 axis shifted 1 mm | `>= 1e-2` | 2.447e-2 (= 1 mm / r_c) | yes |
+| NC2 against the suction-side force | `>= 1` | 2.002 | yes |
+| NC3 field scaled by 1 + 1e-3 | `>= 5e-4` | 1.000e-3 | yes |
+| NC4 Tet4 M1 against M2 | `>= 0.10` | 3.054 (754.2 Hz: linear tetrahedra lock) | yes |
+| NC5 plate `f_2` (426.06 Hz) above the window | holds | 270.1 Hz above | yes |
+| A7 `docs_site` | pass | 2 passed | yes |
+| N0 `baseline_hashes`; `cargo test -p rcfd-fem --release` | pass | 3 passed, 1 ignored; all 153 test binaries ok, none failed | yes |
+
+Modes at rest of the blade (M2): 186.05, 581.45, 1240.72, 1750.24 Hz. Mode 1 is the first flap-bending mode (effective mass
+fractions `t_y` 0.286, `t_z` 0.326, rotations about `x`, `y`, `z` 0.29, 0.42, 0.37: the bending direction is oblique to the axis
+because the sections are staggered), mode 2 mostly a rotation about `x` (the torsion and edgewise family), modes 3 and 4 the higher
+families. Reactions on M2: centrifugal `(-2.06129, 0.34394, -1.3e-11)` N, pressure `(0.001933, 0.032311, 0.041673)` N. Strain
+energy on M2: 1.0756e-5 J (centrifugal), 4.5138e-7 J (pressure). Meshed volume M2 8.9645e-7 m^3, `r_c` 40.88 mm; `V_b` 8.9930e-7
+m^3, `c_m` 29.000 mm, `t_m` 0.84960 mm.
+
+Heavy record (no limit): M3 = (24, 4, 16) against M2: `d_tip` pressure +2.04e-3, centrifugal +2.00e-3, `f_1` -1.02e-3; M3
+identities `e_R` 5.4e-11, `e_P` 4.8e-10, `e_E` 5.6e-11 and 9.1e-11. Plate on `[24, 18, 3]`: `f_b` 151.2422 Hz, `f_b / f_EB` 1.0587
+(the `[16, 12, 2]` value 1.0643 is 0.5 percent above it: the Tet10 discretisation error is of that order, as estimated). The heavy
+test ran in 22 s, so it could be a fast test; it stays ignored as registered.
+
+Mutations (scratch copy `f387-scratch/mut` from `git archive`, own target dir, `f387-scratch/mutations.log`, one at a time):
+
+| Id | Caught by |
+|---|---|
+| MU1 centrifugal `omega` for `omega^2` | R1 (M1, M2: 0.995), DR1 |
+| MU2 pressure halved | P1 (M1, M2: 0.5), DP1 |
+| MU3 energy density times `1 + 1e-6` | E1 (all four: 1.0e-6), DE1 |
+| MU4 mass density times 1.25 | PL (lower bound: `f_b / f_EB` 0.9519) |
+| MU5 mid-edge node at 0.45/0.55 | **not by R1 as expected**: C1 (8.0e-2), C1b (9.0e-2), PL (upper bound: 1.1004). R1 holds (4.3e-11 on D): the node moves along the straight edge, so the element keeps its straight shape and volume and the load sum stays `rho omega^2 S_perp`; only the interpolation is distorted. |
+
+fmt (`cargo fmt -p rcfd-fem --check`) clean; `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings` clean.
+
+Deviations: (1) amendment 1 (S0 defective as registered; the corrected run met it). (2) MU5 caught by other checks than the
+expected one (above). (3) The house rules (rule 9) say not to edit the roadmap files; the brief of this item asks for the F-387
+entry of `docs/ROADMAP.md` and `docs/roadmap.json` to be updated in a separate last commit, which was done (the brief is the more
+specific instruction); the svgs were not regenerated. Not run: the whole-workspace suite (the lead's gate), the case and mesh hash
+tables (no library file changed).
+
+Decision by the registered rule: every check of the table met (S0 after amendment 1), every negative control as stated, every
+planned mutation caught by at least one check, fmt, clippy, `docs_site` and `baseline_hashes` pass: **done**. The route-D rows
+were met as well.
+
+Remaining questions (none taken):
+
+1. A case-file key for the demonstration (open question 1): recommendation (b), a follow-up item for a centrifugal load and a
+   `fan_blade` mesh source in the solid case file. Not taken (the brief, and the solid schema's tests would change).
+2. A library blade mesher (open question 2): recommendation (b), `rcfd_fem::builders::fan_blade_tet10` with its own checks, in
+   the same follow-up; the tetrahedral mesher's thin-body failures (Probe) stay with F-132.
+3. Whether the prestressed and rotating Campbell item F-406 should take this structured blade as its mesh (its acceptance asks
+   "at rest the frequencies have the bits of F-387"): recommendation yes, through the library builder of question 2, so that both
+   items mesh the blade the same way.
+
+## For the lead: roadmap entries
+
+Proposed status of F-387: **done**. Proposed note (replacing the current note):
+
+> Structural solver, basic tier (plan ADR 0270). ADR 0500, 2026-11-14 (registration of stub ADR 0288): test crates/rcfd-fem/tests/sb_fan_blade.rs, no library change. Blade 0 of ComputerFan::default() (120 mm, span 36.5 mm, NACA sections, mean chord 29 mm, mean thickness 0.85 mm), nominal PBT-like E = 2.5 GPa, nu = 0.38, rho = 1300 kg/m^3 (not data), Tet10 from a structured split of the parametric blade (upgrade_to_tet10, straight edges), every hub node held; 2000 rpm centrifugal load and 50 Pa on the pressure side. Meshes of 1056 and 4416 Tet10: reactions against rho omega^2 times the first moment of the meshed volume within 1.3e-11, against the pressure force within 1.2e-10, strain energy against half the work within 1.0e-10 (limits 1e-8); mean tip displacement under the pressure 41.79 and 42.36 micrometres (change 1.36 percent), under the centrifugal load change 2.30 percent, first frequency 188.83 and 186.05 Hz (change 1.47 percent; limit 5 percent); a third mesh with twice the thickness layers changes them by 0.1 to 0.2 percent. Flat plate of the blade's span, mean chord and thickness: first bending 152.04 Hz, 1.0643 of the Euler-Bernoulli value 142.86 Hz, inside [0.99, 1.0919]. The tetrahedral mesher (F-132) meshes this blade only without refinement and at some surface resolutions, with slivers (min dihedral 0.16 deg); on its one mesh the identities hold within 2.5e-10 and tip displacement and first frequency are within 0.24 percent of the structured mesh. Five mutations caught. User page docs/structural-solver.md (scope, limits, not validated against a measured blade). Not covered: rotation effects (stress stiffening, spin softening), hub flexibility, root fillet, any validation.
+
+Proposed follow-up item (new; for the lead to number):
+
+> Title: Fan blade in the solid case file and a library blade mesher. Deps: F-387, F-386. Acceptance: Every limit not stated here is registered in the ADR before the run. rcfd_fem::builders gains the structured Tet10 blade mesh of ADR 0500 D1 for an AxialFan with given divisions, with the sets hub, tip, pressure and suction; the solid case file gains a centrifugal load (axis, origin, speed) and a mesh source fan_blade (a ComputerFan or its defaults, the blade index and the divisions); the F-387 blade run from a file gives the bits of the library run, the existing solid-case and schema tests pass unedited, and docs/solid-case-file.md and docs/structural-solver.md describe the keys.
+
+Note for F-406 (the rotating Campbell item, dep F-387), to be appended to its note:
+
+> ADR 0500, 2026-11-14 (F-387): the blade at rest is meshed by a structured split in the test sb_fan_blade.rs (the tetrahedral mesher leaves slivers on the thin blade); "the bits of F-387" at rest are reproducible once that mesh is a library builder (follow-up of ADR 0500).
