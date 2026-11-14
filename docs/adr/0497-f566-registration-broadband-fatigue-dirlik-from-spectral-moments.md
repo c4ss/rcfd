@@ -231,8 +231,80 @@ first run and is repeated.
 
 ## Addendum 1: results
 
-(to be written after the registered runs)
+Registered runs made once on the commits of this branch (`cargo test -p rcfd-fem --release --test sa_broadband -- --nocapture`, then
+the one corrected test after Amendment 1). Every number below is printed by the tests.
+
+| Id | Quantity | Limit | Measured | Met |
+|---|---|---|---|---|
+| C1 | one mode, `zeta = 0.01`, `m = 3`: broadband over narrow band | `<= 1e-2` | `6.60e-3` (ratio `0.993398435`) | yes |
+| C1b | the same, `m = 5` | `<= 1e-2` | `6.99e-3` (ratio `0.993012055`) | yes |
+| C1x | ratio against `0.9933984349739842` | `<= 1e-5` | `1.3e-10` | yes |
+| C2 | bar B, one-mode `RandomSolver` moments, `zeta = 0.02`, ratio against `0.9888264677733556` | `<= 1e-5` | `1.5e-10` (corrected test) | yes |
+| C2b | `zeta = 0.05`, ratio against `0.9748167797070537` | `<= 1e-5` | `5.3e-10` | yes |
+| C3 | `int p dZ` against 1; `int Z^3 p`, `int Z^5 p` against the closed forms | `<= 1e-8` | `3.7e-13`; `3.5e-14`; `2.4e-14` | yes |
+| C4 | T: counted rate over broadband rate minus 1 (seed 20261114, `N = 2^23`, `fs = 6000`) | `<= 1e-1` | `+6.21e-2` (counted `9.527921724e-8`, broadband `8.970802210e-8`) | yes |
+| C4b | closed cycles counted | `>= 1e5` | `212925` | yes |
+| C5 | T: narrow band over broadband | `> 1` | `1.195901` | yes |
+| C5b | T: narrow band over counted | `> 1` | `1.125974` | yes |
+| C5c | T: narrow band over broadband minus 1 | `>= 0.10` | `0.195901` | yes |
+| C6, C6b | moments of `RandomSolver` (one mode) and of the channels feed the rate: bit equality of the method and the free function, both rates | equal bits | equal | yes |
+| C7, C7b | `m0` in `{0, <0, NaN, inf}`, `m2` in `{0, <0, NaN}`, `Moments::default()`, `m4 <= 0`, `m1 < 0`, `m2^2 > m0 m4`, `m <= 0`, `c <= 0`, table curve, endurance limit: all refused with key `"broadband"` and the quantity named | all | all (messages printed) | yes |
+| C8 | amplitude scaling `k^m`; frequency scaling `s` | `<= 1e-12` | `1.1e-16`; `2.2e-16` | yes |
+| C9 | `D1 + D2 + D3 - 1` at S (`zeta = 0.02`) and T | `<= 1e-15` | `0`; `0` | yes |
+| B1 | digests of the narrow-band and counting paths (twelve), recorded at the base before any library line | equal | equal (`sa_broadband_default_bits`) | yes |
+
+Deviations: (1) the first run of C2 and C6 used the all-mode basis (`ModalBasis::all_modes(&m, Some(1))`, 40 modes, the second
+argument is the thread count), a defective set-up, ratio `0.941825219777` (rel `4.75e-2` against `0.9888264677733556`). Recorded in
+Amendment 1, kept as the ignored test `c2_c6_solver_moments_feed_it_unchanged`, continued by
+`c2_c6_one_mode_solver_moments_after_amendment_1`. (2) The estimate of C4 (`+5 .. +8 %` from numpy) held (`+6.2 %`); the margin to
+the 10 percent limit is 3.8 points; over the six numpy seeds the spread was 5.1 to 8.0 percent (the library generator was run once).
+
+Mutations (scratch copy `f566-scratch/mut`, own target dir, one at a time, the whole `sa_broadband` file run on each):
+
+| Id | Mutation | Caught by |
+|---|---|---|
+| M1 | `x_m` with `m0` for `m1` | the tests c1, c2, c2b_c3_c9, c4, c7_c8 (the per-check detail was not printed for this mutant) |
+| M2 | cycle rate `sqrt(m2/m0)` | C1, C1x, C2, C2b, C4 |
+| M3 | `R^m` for `\|R\|^m` | C2b only (the negative `R`), as planned |
+| M4 | `Gamma(1 + m)` for `Gamma(1 + m/2)` | C1, C1x, C2, C2b, C3, C4, C5 |
+| M5 | factor 1.25 of `Q` dropped | C1x, C2, C2b (not C3 as planned: C3 integrates the coefficients it tests, so it is blind to the scale of `Q`) |
+| M6 | `Moments::broadband_damage_rate` passes `m2` as `m1` | C1, C2, C2b, C4 |
+| M7 | refusal of `m2` weakened | C7 |
+| M8 | `2^m` for `(sqrt 2)^m` | C1, C1x, C2, C2b, C3, C4, C5 |
+| M9 | `D3 = 1 - D1` | the tests c1, c2, c2b_c3_c9, c4, c7_c8 (per-check detail not printed) |
+| M10 | the `gamma > 1` test removed | **not caught**: the downstream range checks of the coefficients still refuse the moments and their message also contains `gamma`, so the substring check of C7b is satisfied. The refusal itself is unchanged; a check of the text `exceeds 1` would separate them. Recorded, not repaired after the run. |
+
+Not run: the workspace test suite (the lead runs the gate); Benasciutti-Tovo and Zhao-Baker.
+
+Gates on this branch: `cargo test -p rcfd-fem --release`: 698 passed, 0 failed, 182 ignored; `cargo fmt -p rcfd-fem --check` clean;
+`cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean (one clippy form fixed: `!(g <= x)` written as `!g.is_finite() || g > x`,
+the same condition); `cargo test -p rcfd-api --release --test baseline_hashes` and `cargo test -p rcfd-cli --release --test
+docs_site`: both pass (baseline_hashes 3 passed, 1 ignored; docs_site 2 passed).
+
+Decision by the registered rule: **done** (every check C1 to C9 and B1 met, the gates clean; M10 survived as a message-level
+equivalent, the other mutations caught). Residual: the recalled form of the Dirlik coefficients is corroborated (the limit
+`zeta -> 0`, the density normalisation, counted damage within 6.2 percent of a synthesised bimodal history), not verified against
+the publication.
+
+Open questions (options and recommendation):
+
+- Q1. Method set: Dirlik only. Option: add Benasciutti-Tovo as a cross-check (it needs `m0, m1, m2, m4` only). Recommended: yes, as
+  a follow-up item.
+- Q2. Case-file key: not added. Recommended `[fatigue] method = "narrow-band" | "dirlik"` with `damage_rate` and `life` outputs per
+  point.
+- Q3. `RandomStress` should carry `C_1` and `C_4` so a stress component feeds the rate without scaling an output channel;
+  recommended as a follow-up of F-417.
+- Q4. A table S-N curve or an endurance limit is refused (as in the narrow-band rate of F-413); a rate by integrating `p(Z)` against
+  a table curve is possible. Recommended: later, with the endurance-limit question of F-413.
 
 ## For the lead: roadmap entries
 
-(to be written after the registered runs)
+Proposed status of F-566: **done**. Note:
+
+> ADR 0497, 2026-11-14: rcfd_fem::fatigue gains the broadband damage rate of a Gaussian stationary stress from its spectral moments m0, m1, m2, m4 (Dirlik's density of the cycle amplitude, T. Dirlik, PhD thesis, University of Warwick, 1985, cited from memory): dirlik_coefficients, DirlikCoefficients (density, amplitude_moment), broadband_damage_rate(m0, m1, m2, m4, m, c) and broadband_damage_rate_curve on the power law of an SnCurve, refusing a non-positive or non-finite m0, m2 or m4, a negative m1, m2^2 > m0 m4, a coefficient out of range, a table curve or an endurance limit; random::Moments::broadband_damage_rate and narrow_band_damage_rate pass the moments of RandomSolver and spectral_response unchanged (bit equal to the free functions). One mode at zeta = 0.01: broadband over narrow band 0.99340 (m = 3), 0.99301 (m = 5), 0.70 percent from 1 against the 1 percent limit; two modes at 50 and 150 Hz (zeta = 0.02) with a synthesised Gaussian history (seed 20261114, 2.1e5 closed cycles, rainflow_periodic and miner of F-413): the counted rate is 6.2 percent above the broadband rate, the narrow-band rate 19.6 percent above it and 12.6 percent above the counted rate. Limits: Gaussian zero-mean stress, power-law curve, no case-file key, RandomStress does not carry the moments m1 and m4.
+
+Follow-ups (numbers to be given by the lead):
+
+> Title: first and fourth spectral moments of a random stress component for broadband fatigue. Deps: F-417, F-566. Acceptance: Every limit not stated here is registered in the ADR before the run. RandomStress carries the covariances C_1 and C_4 (weighted by f and f^4) beside C_0 and C_2, the existing fields bit-identical; for a uniaxial stress the moments m0, m1, m2, m4 of a component equal those of the output channel scaled by the square of the stress per unit displacement within 1e-10; the broadband rate of F-566 fed from a stress component equals the scaled channel rate within 1e-10; a von Mises equivalent is refused for the broadband rate with the reason (it is not Gaussian).
+
+> Title: Benasciutti-Tovo broadband damage rate as a second method. Deps: F-566. Acceptance: Every limit not stated here is registered in the ADR before the run. The rate (formula registered from a cited source) reduces to the narrow-band rate of F-413 within 1 percent for a one-mode response at zeta = 0.01 and agrees with the Dirlik rate of F-566 within a limit registered from the one-mode and two-mode cases of ADR 0497; the counted damage of the synthesised history of ADR 0497 lies within 10 percent of it; a non-positive m0 or m2 is refused.
