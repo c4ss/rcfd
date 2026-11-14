@@ -341,3 +341,50 @@ refusal itself and its wording were met (P1 refused: met; accepted at tolerance 
 the **last** " is ". The registered test `p1_non_periodic_history_refused_with_the_change` stays as an ignored record (attribute
 only); `p1c_non_periodic_history_refused_with_the_change` repeats it with the corrected parse. P1 counts as met only after this
 amendment.
+
+## Amendment 2 (2026-11-14, written after the registered runs of W1, W5 and LF on commit b18d0635 and before the corrected runs)
+
+**What the registered runs showed** (each made once, `cargo test -p rcfd-post --release --test sa_aerodamp <name> -- --ignored`;
+logs `f421-scratch/run3_w1.log`, `run4_w5.log`, `run5_lf.log`):
+
+* **W1** (`Wo = 1`): every level refused as not periodic (cycle-to-cycle change `3.9e-3`, `8.3e-3`, `1.1e-3` at `N = 100, 200,
+  400`): no impedance. **LF** (`Wo = 0.25`): likewise (`8.2e-5`, `2.2e-1`, `8.2e-5`).
+* **W5** (`Wo = 5`): every level periodic (`<= 1.5e-11`); the extrapolated real part `+8.55e-2` off the formula (**missed**,
+  limit `3e-2`), the imaginary part `+2.4e-3` (met); observed orders 0.96 and 1.17 (met); NC1 `0.266` (holds), NC2 refused with
+  the change `0.30` between cycles 1 and 2 (holds).
+
+**W1 and LF: a defect of the set-up (the time step exceeds the flow step's stability limit).** Short unregistered runs (the
+diagnostic tests were kept in `f421-scratch/sa_aerodamp_with_diag.rs`, not in the repository) show that the velocity grows without
+bound (by `1e11` within some hundred steps) whenever the diffusion number `D = nu dt/dy^2` exceeds about 3.5: on the channel with
+40 cells across, stable at `D = 3`, divergent at `D = 4, 5, 6.3, 8, 25`; with 16 cells, stable at `D = 4` (24 steps), divergent at
+6.3, 8, 12. It does not depend on the side walls (slip walls diverge as well), on the grading or aspect ratio of the cells
+(uniform `x`, 200 cells, a depth of `h/40`), on the Rhie-Chow transient correction (`ddt_correction = false` diverges as well), on
+the mesh motion or on the prescribed wall gradient: the plain PISO step of `PimpleSolver` on a **fixed** mesh with a prescribed
+inflow velocity diverges the same way at `D = 8` and `25`. So it is a stability limit of the non-iterated PISO step of
+`rcfd-fv` at large diffusion numbers (not located further; `rcfd-fv` is not edited by this item). The registration did not
+derive this limit. With `D = (pi/2) n_y^2/(Wo^2 N)` (D6's parameters) the registered levels had `D = 25, 12.6, 6.3` (W1) and `400,
+200, 100` (LF), all above it, and `1.0, 0.5, 0.25` (W5), below it: W5 was a valid run, W1 and LF were not.
+
+**Correction (W1c, LFc; the limits unchanged).** The cells across the gap and the levels are chosen so that the coarsest level has
+`D <= 2` (a margin of 1.75 below the measured limit), with the fewest cells across that keep the cost of a level near that of the
+registered ones:
+
+* **W1c**: `n_y = 16` (`box_mesh([120, 16, 1], ...)`, the rest as D6), `N = 200, 400, 800` (`D = 2.01, 1.01, 0.50`), `C = 3`, `Z_ext
+  = 2 Z_800 - Z_400`, the observed order from the three levels. Estimate (the model of D4, both errors): `-7.5e-3` (real),
+  `-5.7e-3` (imaginary); time residual `2e-5`, `7e-5`.
+* **LFc**: `n_y = 12`, `N = 2000, 4000, 8000` (`D = 1.81, 0.90, 0.45`), `C = 3`, `Z_ext = 2 Z_8000 - Z_4000`. Estimate: real part
+  `-1.37e-2` against `12 mu L_f A/h^2` (space), time residual `2e-7`.
+
+The ends of the channel (D3) are not re-estimated here; W5's miss (below) says they are larger than D3's estimate at `Wo = 5`,
+and the same may hold at `Wo = 1` and `0.25`: the corrected runs are made once and recorded as they come. The registered tests
+`w1_womersley_1_record` and `lf_low_frequency_limit_record` stay as ignored records (unchanged); `w1c_womersley_1_record` and
+`lfc_low_frequency_limit_record` are the corrected runs. W1 and LF count as met only after this amendment, if met.
+
+**W5 is a miss, not a defect; it stays a miss.** The registered `w5_womersley_5_record` becomes the ignored
+`w5_womersley_5_known_miss` (name only, limit intact). The error of the real part does not fall with the step: `+0.441, +0.266,
++0.176` at `N = 100, 200, 400` against the model's `+0.375, +0.190, +0.098` (D4, 40 cells), so the runs carry a part independent
+of `dt` of about `+0.08` of the real part (`0.073` in `Re Z`, 1.3 % of `|Z|`), while the imaginary part follows the model (`-4.5e-3`
+against `-3.6e-3` at `N = 400`). The time-step extrapolation works (orders 0.96, 1.17); the cells across the gap account for
+`+4.8e-3` (D4). The remaining candidate is D3's end effect (the piston's scraper corners and the entrance from the plug), which
+D3 estimated below `1.5e-2` by an order-of-magnitude argument: wrong by a factor of about 5 for the real part at `Wo = 5`, where
+the real part is only a sixth of the impedance. An unregistered diagnosis at `L_f = 200 h` (`N = 400`) is reported in the addendum.
