@@ -152,14 +152,24 @@ fn digests() -> Vec<(&'static str, u64)> {
     let rr = model_r();
     static_case(
         &mut out,
-        ["G5 transformation u", "G5 transformation reactions", "G5 transformation report"],
+        [
+            "G5 transformation u",
+            "G5 transformation reactions",
+            "G5 transformation report",
+        ],
         &rr,
         StaticSolver::Direct,
     );
     // G6
     let mr = modal_analysis(&rr, &ModalOptions::new(6)).unwrap();
-    out.push(("G6 transformation modal frequencies", digest(mr.frequencies.iter().copied())));
-    out.push(("G6 transformation modal modes", digest(mr.modes.iter().flatten().copied())));
+    out.push((
+        "G6 transformation modal frequencies",
+        digest(mr.frequencies.iter().copied()),
+    ));
+    out.push((
+        "G6 transformation modal modes",
+        digest(mr.modes.iter().flatten().copied()),
+    ));
     // G7
     let a = lap7(20);
     let f = SupernodalLdlt::factor(&a).unwrap();

@@ -34,10 +34,12 @@ use crate::loads::{face_rule, face_shape_functions, nodal_load_vector, NodalForc
 use crate::mass::consistent_with;
 use crate::modal::{ModalOptions, ModalResult};
 use crate::model::{Constraint, ElasticSupport, SolidModel, SolidResult, SolverStats};
-use crate::solve::{DirectFactor, SolveReport, StaticOptions, StaticSolver, PIVOT_TOLERANCE};
+use crate::solve::{DirectFactor, SolveReport, StaticOptions, StaticSolver, PIVOT_TOLERANCE, SUPERNODAL_NAME};
+// ADR 0509 (F-594): the supernodal L D L^T on the transformation path.
 use rcfd_core::vec3::{cross, norm, Vec3};
 use rcfd_linalg::eigen::{lowest_eigenpairs, Shift, SubspaceOptions};
 use rcfd_linalg::skyline::{SkylineError, SkylineLdlt, SkylineOptions};
+use rcfd_linalg::sparse_chol::SupernodalLdlt;
 use rcfd_linalg::{cg, CsrMatrix, Jacobi, SolveControl};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -1256,7 +1258,8 @@ pub struct MpcSolution {
 }
 
 /// The static solve on the transformation `u = T q + g` (ADR 0296), with per-node prescribed values and forces and forces
-/// and moments at the reference points of rigid sets. Direct and Jacobi-CG solvers; the preconditioned CG is refused.
+/// and moments at the reference points of rigid sets. Direct, supernodal (ADR 0509) and Jacobi-CG solvers; the sparse
+/// minimum-degree factor and the preconditioned CG are refused.
 pub fn solve_static_mpc(
     model: &SolidModel,
     prescribed: &[Prescribed],
@@ -1276,15 +1279,7 @@ pub fn solve_static_mpc(
                     .into(),
         });
     }
-    // ADR 0503 D5: nor the supernodal L D L^T.
-    if let StaticSolver::SupernodalDirect = options.solver {
-        return Err(FemError::InvalidValue {
-            key: "solver",
-            reason: "the supernodal L D L^T (ADR 0503) is not available on the transformation path (ADR 0296): use \
-                     Direct or ConjugateGradient"
-                .into(),
-        });
-    }
+    // ADR 0509 D5: the supernodal L D L^T is taken (ADR 0503 D5 refused it).
     if let StaticSolver::PreconditionedCg { .. } = options.solver {
         return Err(FemError::InvalidValue {
             key: "solver",
@@ -1332,6 +1327,7 @@ pub fn solve_static_mpc(
                 let (q, it) = conjugate_gradient(&kr, &fr, *tolerance, *max_iterations)?;
                 ("cg-jacobi", q, it)
             }
+            StaticSolver::SupernodalDirect => (SUPERNODAL_NAME, supernodal(&kr, &fr, &tr, model)?, 0),
             _ => ("skyline-ldlt", direct(&kr, &fr, &tr, model)?, 0),
         }
     };
@@ -1368,8 +1364,15 @@ pub fn solve_static_mpc(
         relative_residual,
         shift: None,
         breakdowns: Vec::new(),
-        // ADR 0503 D5: the direct solve of the transformation path builds the envelope factor.
-        factor: (nq > 0 && solver == "skyline-ldlt").then_some(DirectFactor::Envelope),
+        // ADR 0503 D5: the direct solve of the transformation path builds the envelope factor; ADR 0509 D5: or the
+        // supernodal one.
+        factor: if nq > 0 && solver == "skyline-ldlt" {
+            Some(DirectFactor::Envelope)
+        } else if nq > 0 && solver == SUPERNODAL_NAME {
+            Some(DirectFactor::SupernodalNestedDissection)
+        } else {
+            None
+        },
     };
     let result = SolidResult::new(dofs, u)?
         .with_reactions(reactions)?
@@ -1390,6 +1393,7 @@ pub fn solve_static_mpc(
 fn solver_name(s: &StaticSolver) -> &'static str {
     match s {
         StaticSolver::ConjugateGradient { .. } => "cg-jacobi",
+        StaticSolver::SupernodalDirect => SUPERNODAL_NAME,
         _ => "skyline-ldlt",
     }
 }
@@ -1435,6 +1439,25 @@ fn direct(a: &CsrMatrix, b: &[f64], tr: &Transformation, model: &SolidModel) -> 
         SkylineError::Pivot { row, pivot, .. } => singular(tr, model, row, pivot, diag[row]),
         other => FemError::Solver {
             solver: "skyline-ldlt",
+            reason: other.to_string(),
+        },
+    })?;
+    for (&row, &d) in ldlt.order().iter().zip(ldlt.pivots()) {
+        if d <= PIVOT_TOLERANCE * diag[row] {
+            return Err(singular(tr, model, row, d, diag[row]));
+        }
+    }
+    Ok(ldlt.solve(b))
+}
+
+/// The supernodal `L D L^T` of `K_r` after nested dissection by level structures, with the pivot checks of [`direct`]
+/// (ADR 0509 D5).
+fn supernodal(a: &CsrMatrix, b: &[f64], tr: &Transformation, model: &SolidModel) -> Result<Vec<f64>> {
+    let diag = a.diag();
+    let ldlt = SupernodalLdlt::factor(a).map_err(|e| match e {
+        SkylineError::Pivot { row, pivot, .. } => singular(tr, model, row, pivot, diag[row]),
+        other => FemError::Solver {
+            solver: SUPERNODAL_NAME,
             reason: other.to_string(),
         },
     })?;

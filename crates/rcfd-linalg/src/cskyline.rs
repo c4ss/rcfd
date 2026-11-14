@@ -324,7 +324,9 @@ fn rcm_of(a: &ComplexCsr) -> Vec<usize> {
     rcm_order(a.n, &lower, &upper)
 }
 
-fn validate(a: &ComplexCsr, delta: f64) -> Result<(), ComplexSkylineError> {
+/// The validation of a complex symmetric matrix (finite; `|a_rc - a_cr| <= delta sqrt(|a_rr| |a_cc|)`), shared with the
+/// complex supernodal factor (ADR 0509 D2).
+pub(crate) fn validate(a: &ComplexCsr, delta: f64) -> Result<(), ComplexSkylineError> {
     for r in 0..a.n {
         for k in a.row_ptr[r]..a.row_ptr[r + 1] {
             if !a.val[k].is_finite() {

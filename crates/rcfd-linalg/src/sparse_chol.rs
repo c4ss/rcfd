@@ -15,15 +15,20 @@
 //! - [`SupernodalLdlt`]: the multifrontal `L D L^T` by fundamental supernodes (Duff and Reid, ACM Trans. Math. Softw. 9
 //!   (1983) 302; Liu, SIAM Review 34 (1992) 82; Liu, Ng and Peyton, SIAM J. Matrix Anal. Appl. 14 (1993) 242), ADR 0503 D2
 //!   and D3.
+//! - [`ComplexSupernodalLdlt`]: the same kernel in complex symmetric arithmetic without conjugation (ADR 0509 D1, D2), for
+//!   the direct harmonic solve.
 //!
 //! Every operation of the orderings and of [`SparseLdlt`] is sequential in a fixed order, so the bits of the ordering, the
 //! factor and a solution do not depend on the number of threads. [`SupernodalLdlt`] splits only the update of a large
 //! front's later columns over the rayon pool, each entry with a fixed summation order (ADR 0503 D3), so its bits do not
-//! depend on the number of threads either.
+//! depend on the number of threads either; nor do those of [`ComplexSupernodalLdlt`].
 
+use crate::complex::C64;
+use crate::cskyline::{ComplexCsr, ComplexSkylineError};
 use crate::matrix::CsrMatrix;
 use crate::reorder::inverse_permutation;
 use crate::skyline::{check_permutation, validate, PivotRule, SkylineError};
+use std::ops::{Add, AddAssign, Div, DivAssign, Mul, Sub, SubAssign};
 
 /// The work package that fills this module; `None` once it has landed.
 pub const PENDING: Option<&'static str> = None;
@@ -330,38 +335,48 @@ pub fn minimum_degree_order(a: &CsrMatrix) -> Vec<usize> {
 
 /// The strict lower triangle of `P A P^T` by rows: for each position `k`, the positions `j < k` with their values (the entry
 /// `(order[k], order[j])` if stored, else its transpose), sorted; and the diagonal.
-struct Permuted {
+struct Permuted<T = f64> {
     ptr: Vec<usize>,
     idx: Vec<usize>,
-    val: Vec<f64>,
-    diag: Vec<f64>,
+    val: Vec<T>,
+    diag: Vec<T>,
 }
 
-fn stored(a: &CsrMatrix, r: usize, c: usize) -> bool {
-    let (s, e) = (a.row_ptr[r], a.row_ptr[r + 1]);
-    a.col[s..e].binary_search(&c).is_ok()
+fn stored(row_ptr: &[usize], col: &[usize], r: usize, c: usize) -> bool {
+    let (s, e) = (row_ptr[r], row_ptr[r + 1]);
+    col[s..e].binary_search(&c).is_ok()
 }
 
 fn permuted_lower(a: &CsrMatrix, order: &[usize]) -> Permuted {
-    let n = a.n;
+    permuted_lower_parts(a.n, &a.row_ptr, &a.col, &a.val, order)
+}
+
+/// [`permuted_lower`] of a square matrix given by its arrays, of either scalar (ADR 0509 D1).
+fn permuted_lower_parts<T: FrontScalar>(
+    n: usize,
+    row_ptr: &[usize],
+    col: &[usize],
+    values: &[T],
+    order: &[usize],
+) -> Permuted<T> {
     let inv = inverse_permutation(order);
     let mut count = vec![0usize; n + 1];
-    let mut diag = vec![0.0; n];
+    let mut diag = vec![T::ZERO; n];
     let take = |r: usize, k: usize| -> Option<(usize, usize)> {
-        let c = a.col[k];
+        let c = col[k];
         let (i, j) = (inv[r], inv[c]);
         if j < i {
             Some((i, j))
-        } else if j > i && !stored(a, c, r) {
+        } else if j > i && !stored(row_ptr, col, c, r) {
             Some((j, i))
         } else {
             None
         }
     };
     for r in 0..n {
-        for k in a.row_ptr[r]..a.row_ptr[r + 1] {
-            if a.col[k] == r {
-                diag[inv[r]] = a.val[k];
+        for k in row_ptr[r]..row_ptr[r + 1] {
+            if col[k] == r {
+                diag[inv[r]] = values[k];
             } else if let Some((i, _)) = take(r, k) {
                 count[i + 1] += 1;
             }
@@ -373,22 +388,22 @@ fn permuted_lower(a: &CsrMatrix, order: &[usize]) -> Permuted {
     let ptr = count.clone();
     let mut fill = count;
     let mut idx = vec![0usize; ptr[n]];
-    let mut val = vec![0.0; ptr[n]];
+    let mut val = vec![T::ZERO; ptr[n]];
     for r in 0..n {
-        for k in a.row_ptr[r]..a.row_ptr[r + 1] {
-            if a.col[k] == r {
+        for k in row_ptr[r]..row_ptr[r + 1] {
+            if col[k] == r {
                 continue;
             }
             if let Some((i, j)) = take(r, k) {
                 idx[fill[i]] = j;
-                val[fill[i]] = a.val[k];
+                val[fill[i]] = values[k];
                 fill[i] += 1;
             }
         }
     }
     for i in 0..n {
         let (s, e) = (ptr[i], ptr[i + 1]);
-        let mut pairs: Vec<(usize, f64)> = idx[s..e].iter().copied().zip(val[s..e].iter().copied()).collect();
+        let mut pairs: Vec<(usize, T)> = idx[s..e].iter().copied().zip(val[s..e].iter().copied()).collect();
         pairs.sort_unstable_by_key(|&(j, _)| j);
         for (q, (j, v)) in pairs.into_iter().enumerate() {
             idx[s + q] = j;
@@ -399,7 +414,7 @@ fn permuted_lower(a: &CsrMatrix, order: &[usize]) -> Permuted {
 }
 
 /// The elimination tree and the column counts of `L` (strict lower) of the permuted matrix, by the row subtrees.
-fn symbolic(c: &Permuted) -> (Vec<usize>, Vec<usize>) {
+fn symbolic<T>(c: &Permuted<T>) -> (Vec<usize>, Vec<usize>) {
     let n = c.diag.len();
     let mut parent = vec![NONE; n];
     let mut counts = vec![0usize; n];
@@ -922,6 +937,33 @@ const NB: usize = 32;
 /// The later-column update of a panel is split over the rayon pool from this many multiply-adds (ADR 0503 D3).
 const SPLIT_WORK: usize = 1 << 20;
 
+/// The scalar of the supernodal kernel (ADR 0509 D1): `f64` or [`C64`] (complex symmetric, no conjugation).
+trait FrontScalar:
+    Copy
+    + Send
+    + Sync
+    + PartialEq
+    + std::fmt::Debug
+    + Add<Output = Self>
+    + Sub<Output = Self>
+    + Mul<Output = Self>
+    + Div<Output = Self>
+    + AddAssign
+    + SubAssign
+    + DivAssign
+{
+    /// Zero.
+    const ZERO: Self;
+}
+
+impl FrontScalar for f64 {
+    const ZERO: f64 = 0.0;
+}
+
+impl FrontScalar for C64 {
+    const ZERO: C64 = C64::ZERO;
+}
+
 /// Offset of column `c` in a front of order `m` packed by lower columns.
 fn off(c: usize, m: usize) -> usize {
     c * (2 * m - c + 1) / 2
@@ -929,9 +971,9 @@ fn off(c: usize, m: usize) -> usize {
 
 /// The dot product with the fixed summation order of ADR 0503 D3: four partial sums, `(s0 + s1) + (s2 + s3)`, the rest in
 /// order.
-fn dot4(a: &[f64], b: &[f64]) -> f64 {
+fn dot4<T: FrontScalar>(a: &[T], b: &[T]) -> T {
     let n4 = a.len() / 4 * 4;
-    let mut s = [0.0f64; 4];
+    let mut s = [T::ZERO; 4];
     for (x, y) in a[..n4].chunks_exact(4).zip(b[..n4].chunks_exact(4)) {
         s[0] += x[0] * y[0];
         s[1] += x[1] * y[1];
@@ -946,7 +988,7 @@ fn dot4(a: &[f64], b: &[f64]) -> f64 {
 }
 
 /// The elimination tree, the column counts and the row counts of `L` of the permuted matrix (ADR 0503 D2).
-fn symbolic_rows(c: &Permuted) -> (Vec<usize>, Vec<usize>, Vec<usize>) {
+fn symbolic_rows<T>(c: &Permuted<T>) -> (Vec<usize>, Vec<usize>, Vec<usize>) {
     let n = c.diag.len();
     let mut parent = vec![NONE; n];
     let mut counts = vec![0usize; n];
@@ -970,11 +1012,9 @@ fn symbolic_rows(c: &Permuted) -> (Vec<usize>, Vec<usize>, Vec<usize>) {
     (parent, counts, rows)
 }
 
-/// Supernodal multifrontal `L D L^T` of a symmetric matrix after a fill-reducing ordering (ADR 0503 D2, D3).
+/// The supernodes, fronts and values of a supernodal factor of either scalar (ADR 0503 D2, D3; ADR 0509 D1).
 #[derive(Debug, Clone, PartialEq)]
-pub struct SupernodalLdlt {
-    n: usize,
-    order: Vec<usize>,
+struct Supernodal<T> {
     /// First column of each supernode, and `n` at the end.
     sn_ptr: Vec<usize>,
     /// The supernode of each column.
@@ -982,21 +1022,21 @@ pub struct SupernodalLdlt {
     /// The rows of each supernode's front: its columns, then the rows below them.
     rows: Vec<Vec<usize>>,
     /// The packed lower trapezoid of each supernode (the first `n_s` columns of its front; the diagonal slot holds `d`).
-    values: Vec<Vec<f64>>,
-    d: Vec<f64>,
+    values: Vec<Vec<T>>,
+    d: Vec<T>,
     max_front: usize,
     split_fronts: usize,
     peak_front_bytes: usize,
 }
 
 /// The column structure of the strict lower triangle of `C`, rows increasing.
-struct Columns {
+struct Columns<T> {
     ptr: Vec<usize>,
     idx: Vec<usize>,
-    val: Vec<f64>,
+    val: Vec<T>,
 }
 
-fn columns_of(c: &Permuted) -> Columns {
+fn columns_of<T: FrontScalar>(c: &Permuted<T>) -> Columns<T> {
     let n = c.diag.len();
     let mut ptr = vec![0usize; n + 1];
     for &j in &c.idx {
@@ -1007,7 +1047,7 @@ fn columns_of(c: &Permuted) -> Columns {
     }
     let mut fill = ptr.clone();
     let mut idx = vec![0usize; c.idx.len()];
-    let mut val = vec![0.0; c.idx.len()];
+    let mut val = vec![T::ZERO; c.idx.len()];
     for k in 0..n {
         for q in c.ptr[k]..c.ptr[k + 1] {
             let j = c.idx[q];
@@ -1019,41 +1059,38 @@ fn columns_of(c: &Permuted) -> Columns {
     Columns { ptr, idx, val }
 }
 
+/// A refused pivot: its elimination position, the pivot, the threshold and the scale of the test.
+type Refusal<T> = (usize, T, f64, f64);
+
 /// The partial factorisation of a front's first `ns` columns in panels (ADR 0503 D3 step 2): the pivots go to `d[f..]`;
-/// a refusal returns the front position of the refused pivot with its value and threshold. Returns whether a panel's
-/// later-column update was split over the pool.
+/// `test(a_kk, d_k, w_k)` returns the threshold and the scale when it refuses the pivot, and the refusal is returned with
+/// the front position of the pivot. Returns whether a panel's later-column update was split over the pool.
 #[allow(clippy::too_many_arguments)]
-fn partial_factor(
-    front: &mut [f64],
+fn partial_factor<T: FrontScalar, P: Fn(T, T, usize) -> Option<(f64, f64)>>(
+    front: &mut [T],
     m: usize,
     ns: usize,
     f: usize,
-    diag: &[f64],
+    diag: &[T],
     wrow: &[usize],
-    pivots: PivotRule,
-    d: &mut [f64],
-) -> Result<bool, (usize, f64, f64)> {
+    test: &P,
+    d: &mut [T],
+) -> Result<bool, Refusal<T>> {
     let mut split = false;
-    let mut wtmp = vec![0.0; m];
+    let mut wtmp = vec![T::ZERO; m];
     let mut p0 = 0;
     while p0 < ns {
         let p1 = (p0 + NB).min(ns);
         let nb = p1 - p0;
         let tail = m - p1;
-        let mut lp = vec![0.0; tail * nb];
-        let mut wp = vec![0.0; tail * nb];
+        let mut lp = vec![T::ZERO; tail * nb];
+        let mut wp = vec![T::ZERO; tail * nb];
         for k in p0..p1 {
             let ok = off(k, m);
             let dk = front[ok];
             let g = f + k;
-            let akk = diag[g];
-            let theta = (wrow[g] as f64 + 1.0) * f64::EPSILON * (akk.abs() + (akk - dk).abs());
-            let refused = match pivots {
-                PivotRule::Positive => dk <= theta,
-                PivotRule::NonZero => dk.abs() <= theta,
-            };
-            if refused || !dk.is_finite() {
-                return Err((k, dk, theta));
+            if let Some((threshold, scale)) = test(diag[g], dk, wrow[g]) {
+                return Err((k, dk, threshold, scale));
             }
             d[g] = dk;
             for t in 1..m - k {
@@ -1076,14 +1113,14 @@ fn partial_factor(
             }
         }
         if tail > 0 {
-            let mut cols: Vec<(usize, &mut [f64])> = Vec::with_capacity(tail);
+            let mut cols: Vec<(usize, &mut [T])> = Vec::with_capacity(tail);
             let mut rest = &mut front[off(p1, m)..];
             for j in p1..m {
                 let (col, more) = rest.split_at_mut(m - j);
                 cols.push((j, col));
                 rest = more;
             }
-            let update = |(j, col): (usize, &mut [f64])| {
+            let update = |(j, col): (usize, &mut [T])| {
                 let wj = &wp[(j - p1) * nb..(j - p1 + 1) * nb];
                 for (t, x) in col.iter_mut().enumerate() {
                     let i = j + t;
@@ -1101,6 +1138,223 @@ fn partial_factor(
         p0 = p1;
     }
     Ok(split)
+}
+
+/// The supernodal factorisation of the permuted matrix `c` (ADR 0503 D2, D3) with the pivot test `test`; a refusal carries
+/// the elimination position of the refused pivot.
+fn supernodal_factor<T: FrontScalar, P: Fn(T, T, usize) -> Option<(f64, f64)>>(
+    c: Permuted<T>,
+    test: &P,
+) -> Result<Supernodal<T>, Refusal<T>> {
+    let n = c.diag.len();
+    let (parent, counts, wrow) = symbolic_rows(&c);
+    let cols = columns_of(&c);
+    let diag = c.diag;
+    // fundamental supernodes (D2)
+    let mut nchild = vec![0usize; n];
+    for &p in &parent {
+        if p != NONE {
+            nchild[p] += 1;
+        }
+    }
+    let mut sn_ptr = vec![0usize];
+    for j in 0..n.saturating_sub(1) {
+        let joins = parent[j] == j + 1 && counts[j] == counts[j + 1] + 1 && nchild[j + 1] == 1;
+        if !joins {
+            sn_ptr.push(j + 1);
+        }
+    }
+    if n > 0 {
+        sn_ptr.push(n);
+    }
+    let nsn = sn_ptr.len() - 1;
+    let mut col_sn = vec![0usize; n];
+    for s in 0..nsn {
+        col_sn[sn_ptr[s]..sn_ptr[s + 1]].fill(s);
+    }
+    let mut children: Vec<Vec<usize>> = vec![Vec::new(); nsn];
+    for s in 0..nsn {
+        let p = parent[sn_ptr[s + 1] - 1];
+        if p != NONE {
+            children[col_sn[p]].push(s);
+        }
+    }
+    // the rows of each front
+    let mut rows: Vec<Vec<usize>> = Vec::with_capacity(nsn);
+    let mut mark = vec![NONE; n];
+    for s in 0..nsn {
+        let (f, l) = (sn_ptr[s], sn_ptr[s + 1]);
+        let mut below = Vec::new();
+        for j in f..l {
+            for &i in &cols.idx[cols.ptr[j]..cols.ptr[j + 1]] {
+                if i >= l && mark[i] != s {
+                    mark[i] = s;
+                    below.push(i);
+                }
+            }
+        }
+        for &ch in &children[s] {
+            for &i in &rows[ch][sn_ptr[ch + 1] - sn_ptr[ch]..] {
+                if i >= l && mark[i] != s {
+                    mark[i] = s;
+                    below.push(i);
+                }
+            }
+        }
+        below.sort_unstable();
+        debug_assert_eq!(below.len(), counts[l - 1], "the rows below a supernode");
+        let mut r: Vec<usize> = (f..l).collect();
+        r.extend(below);
+        rows.push(r);
+    }
+    drop(mark);
+    // numeric (D3)
+    let bytes = std::mem::size_of::<T>();
+    let mut d = vec![T::ZERO; n];
+    let mut values: Vec<Vec<T>> = Vec::with_capacity(nsn);
+    let mut pending: Vec<Option<Vec<T>>> = vec![None; nsn];
+    let (mut live, mut peak, mut max_front, mut split_fronts) = (0usize, 0usize, 0usize, 0usize);
+    let mut local: Vec<usize> = Vec::new();
+    for s in 0..nsn {
+        let (f, l) = (sn_ptr[s], sn_ptr[s + 1]);
+        let ns = l - f;
+        let r = &rows[s];
+        let m = r.len();
+        max_front = max_front.max(m);
+        let mut front = vec![T::ZERO; off(m, m)];
+        live += bytes * front.len();
+        peak = peak.max(live);
+        // 1. assembly: the entries of C, then the children's update matrices in increasing order
+        for q in 0..ns {
+            let j = f + q;
+            let oq = off(q, m);
+            front[oq] += diag[j];
+            for p in cols.ptr[j]..cols.ptr[j + 1] {
+                let g = cols.idx[p];
+                let li = if g < l {
+                    g - f
+                } else {
+                    ns + r[ns..].binary_search(&g).expect("a row of the front")
+                };
+                front[oq + (li - q)] += cols.val[p];
+            }
+        }
+        for &ch in &children[s] {
+            let upd = pending[ch].take().expect("a child's update");
+            let rc = &rows[ch][sn_ptr[ch + 1] - sn_ptr[ch]..];
+            let mc = rc.len();
+            local.clear();
+            let mut t = ns;
+            for &g in rc {
+                if g < l {
+                    local.push(g - f);
+                } else {
+                    while r[t] != g {
+                        t += 1;
+                    }
+                    local.push(t);
+                }
+            }
+            for tc in 0..mc {
+                let oc = off(tc, mc);
+                let lt = local[tc];
+                let ol = off(lt, m);
+                for u in tc..mc {
+                    front[ol + (local[u] - lt)] += upd[oc + (u - tc)];
+                }
+            }
+            live -= bytes * upd.len();
+        }
+        // 2. partial factorisation
+        match partial_factor(&mut front, m, ns, f, &diag, &wrow, test, &mut d) {
+            Ok(split) => split_fronts += usize::from(split),
+            Err((k, pivot, threshold, scale)) => return Err((f + k, pivot, threshold, scale)),
+        }
+        // 3. hand-over: the trapezoid to the factor, the rest to the parent
+        live -= bytes * front.len();
+        let at = off(ns, m);
+        if m > ns {
+            let upd = front.split_off(at);
+            live += bytes * upd.len();
+            pending[s] = Some(upd);
+        }
+        front.shrink_to_fit();
+        values.push(front);
+    }
+    Ok(Supernodal {
+        sn_ptr,
+        col_sn,
+        rows,
+        values,
+        d,
+        max_front,
+        split_fronts,
+        peak_front_bytes: peak,
+    })
+}
+
+impl<T: FrontScalar> Supernodal<T> {
+    fn factor_entries(&self) -> usize {
+        self.values.iter().map(Vec::len).sum::<usize>() - self.d.len()
+    }
+
+    fn supernodes(&self) -> usize {
+        self.sn_ptr.len() - 1
+    }
+
+    fn column(&self, j: usize) -> (&[usize], &[T]) {
+        let s = self.col_sn[j];
+        let q = j - self.sn_ptr[s];
+        let m = self.rows[s].len();
+        let o = off(q, m);
+        (&self.rows[s][q + 1..], &self.values[s][o + 1..o + (m - q)])
+    }
+
+    /// Solve `A x = b` into `x` with the elimination order `order` (ADR 0503 D3, solve).
+    fn solve_into(&self, order: &[usize], b: &[T], x: &mut [T]) {
+        let n = self.d.len();
+        assert_eq!(b.len(), n, "right-hand side length");
+        assert_eq!(x.len(), n, "solution length");
+        let mut z: Vec<T> = order.iter().map(|&o| b[o]).collect();
+        let nsn = self.supernodes();
+        for s in 0..nsn {
+            let (rows, vals) = (&self.rows[s], &self.values[s]);
+            let m = rows.len();
+            for q in 0..self.sn_ptr[s + 1] - self.sn_ptr[s] {
+                let zj = z[rows[q]];
+                let o = off(q, m);
+                for t in 1..m - q {
+                    z[rows[q + t]] -= vals[o + t] * zj;
+                }
+            }
+        }
+        for (zj, dj) in z.iter_mut().zip(&self.d) {
+            *zj /= *dj;
+        }
+        for s in (0..nsn).rev() {
+            let (rows, vals) = (&self.rows[s], &self.values[s]);
+            let m = rows.len();
+            for q in (0..self.sn_ptr[s + 1] - self.sn_ptr[s]).rev() {
+                let o = off(q, m);
+                let mut acc = z[rows[q]];
+                for t in 1..m - q {
+                    acc -= vals[o + t] * z[rows[q + t]];
+                }
+                z[rows[q]] = acc;
+            }
+        }
+        for (i, &o) in order.iter().enumerate() {
+            x[o] = z[i];
+        }
+    }
+}
+
+/// Supernodal multifrontal `L D L^T` of a symmetric matrix after a fill-reducing ordering (ADR 0503 D2, D3).
+#[derive(Debug, Clone, PartialEq)]
+pub struct SupernodalLdlt {
+    n: usize,
+    order: Vec<usize>,
+    f: Supernodal<f64>,
 }
 
 impl SupernodalLdlt {
@@ -1123,158 +1377,25 @@ impl SupernodalLdlt {
         let n = a.n;
         let order = order_of(a, &opts.ordering)?;
         let c = permuted_lower(a, &order);
-        let (parent, counts, wrow) = symbolic_rows(&c);
-        let cols = columns_of(&c);
-        let diag = c.diag;
-        // fundamental supernodes (D2)
-        let mut nchild = vec![0usize; n];
-        for &p in &parent {
-            if p != NONE {
-                nchild[p] += 1;
-            }
+        let pivots = opts.pivots;
+        // the pivot test of ADR 0503 D3
+        let test = |akk: f64, dk: f64, w: usize| -> Option<(f64, f64)> {
+            let theta = (w as f64 + 1.0) * f64::EPSILON * (akk.abs() + (akk - dk).abs());
+            let refused = match pivots {
+                PivotRule::Positive => dk <= theta,
+                PivotRule::NonZero => dk.abs() <= theta,
+            };
+            (refused || !dk.is_finite()).then_some((theta, 0.0))
+        };
+        match supernodal_factor(c, &test) {
+            Ok(f) => Ok(SupernodalLdlt { n, order, f }),
+            Err((k, pivot, threshold, _)) => Err(SkylineError::Pivot {
+                row: order[k],
+                position: k,
+                pivot,
+                threshold,
+            }),
         }
-        let mut sn_ptr = vec![0usize];
-        for j in 0..n.saturating_sub(1) {
-            let joins = parent[j] == j + 1 && counts[j] == counts[j + 1] + 1 && nchild[j + 1] == 1;
-            if !joins {
-                sn_ptr.push(j + 1);
-            }
-        }
-        if n > 0 {
-            sn_ptr.push(n);
-        }
-        let nsn = sn_ptr.len() - 1;
-        let mut col_sn = vec![0usize; n];
-        for s in 0..nsn {
-            col_sn[sn_ptr[s]..sn_ptr[s + 1]].fill(s);
-        }
-        let mut children: Vec<Vec<usize>> = vec![Vec::new(); nsn];
-        for s in 0..nsn {
-            let p = parent[sn_ptr[s + 1] - 1];
-            if p != NONE {
-                children[col_sn[p]].push(s);
-            }
-        }
-        // the rows of each front
-        let mut rows: Vec<Vec<usize>> = Vec::with_capacity(nsn);
-        let mut mark = vec![NONE; n];
-        for s in 0..nsn {
-            let (f, l) = (sn_ptr[s], sn_ptr[s + 1]);
-            let mut below = Vec::new();
-            for j in f..l {
-                for &i in &cols.idx[cols.ptr[j]..cols.ptr[j + 1]] {
-                    if i >= l && mark[i] != s {
-                        mark[i] = s;
-                        below.push(i);
-                    }
-                }
-            }
-            for &ch in &children[s] {
-                for &i in &rows[ch][sn_ptr[ch + 1] - sn_ptr[ch]..] {
-                    if i >= l && mark[i] != s {
-                        mark[i] = s;
-                        below.push(i);
-                    }
-                }
-            }
-            below.sort_unstable();
-            debug_assert_eq!(below.len(), counts[l - 1], "the rows below a supernode");
-            let mut r: Vec<usize> = (f..l).collect();
-            r.extend(below);
-            rows.push(r);
-        }
-        drop(mark);
-        // numeric (D3)
-        let mut d = vec![0.0; n];
-        let mut values: Vec<Vec<f64>> = Vec::with_capacity(nsn);
-        let mut pending: Vec<Option<Vec<f64>>> = vec![None; nsn];
-        let (mut live, mut peak, mut max_front, mut split_fronts) = (0usize, 0usize, 0usize, 0usize);
-        let mut local: Vec<usize> = Vec::new();
-        for s in 0..nsn {
-            let (f, l) = (sn_ptr[s], sn_ptr[s + 1]);
-            let ns = l - f;
-            let r = &rows[s];
-            let m = r.len();
-            max_front = max_front.max(m);
-            let mut front = vec![0.0; off(m, m)];
-            live += 8 * front.len();
-            peak = peak.max(live);
-            // 1. assembly: the entries of C, then the children's update matrices in increasing order
-            for q in 0..ns {
-                let j = f + q;
-                let oq = off(q, m);
-                front[oq] += diag[j];
-                for p in cols.ptr[j]..cols.ptr[j + 1] {
-                    let g = cols.idx[p];
-                    let li = if g < l {
-                        g - f
-                    } else {
-                        ns + r[ns..].binary_search(&g).expect("a row of the front")
-                    };
-                    front[oq + (li - q)] += cols.val[p];
-                }
-            }
-            for &ch in &children[s] {
-                let upd = pending[ch].take().expect("a child's update");
-                let rc = &rows[ch][sn_ptr[ch + 1] - sn_ptr[ch]..];
-                let mc = rc.len();
-                local.clear();
-                let mut t = ns;
-                for &g in rc {
-                    if g < l {
-                        local.push(g - f);
-                    } else {
-                        while r[t] != g {
-                            t += 1;
-                        }
-                        local.push(t);
-                    }
-                }
-                for tc in 0..mc {
-                    let oc = off(tc, mc);
-                    let lt = local[tc];
-                    let ol = off(lt, m);
-                    for u in tc..mc {
-                        front[ol + (local[u] - lt)] += upd[oc + (u - tc)];
-                    }
-                }
-                live -= 8 * upd.len();
-            }
-            // 2. partial factorisation
-            match partial_factor(&mut front, m, ns, f, &diag, &wrow, opts.pivots, &mut d) {
-                Ok(split) => split_fronts += usize::from(split),
-                Err((k, pivot, threshold)) => {
-                    return Err(SkylineError::Pivot {
-                        row: order[f + k],
-                        position: f + k,
-                        pivot,
-                        threshold,
-                    })
-                }
-            }
-            // 3. hand-over: the trapezoid to the factor, the rest to the parent
-            live -= 8 * front.len();
-            let at = off(ns, m);
-            if m > ns {
-                let upd = front.split_off(at);
-                live += 8 * upd.len();
-                pending[s] = Some(upd);
-            }
-            front.shrink_to_fit();
-            values.push(front);
-        }
-        Ok(SupernodalLdlt {
-            n,
-            order,
-            sn_ptr,
-            col_sn,
-            rows,
-            values,
-            d,
-            max_front,
-            split_fronts,
-            peak_front_bytes: peak,
-        })
     }
 
     /// Dimension.
@@ -1289,54 +1410,50 @@ impl SupernodalLdlt {
 
     /// Pivots `d_i` in elimination order.
     pub fn pivots(&self) -> &[f64] {
-        &self.d
+        &self.f.d
     }
 
     /// Counts of negative and positive pivots.
     pub fn inertia(&self) -> (usize, usize) {
-        let neg = self.d.iter().filter(|&&v| v < 0.0).count();
+        let neg = self.f.d.iter().filter(|&&v| v < 0.0).count();
         (neg, self.n - neg)
     }
 
     /// Entries of the strict lower factor `L` (`nnz(L)`; no amalgamation, so equal to [`factor_count`]).
     pub fn factor_entries(&self) -> usize {
-        self.values.iter().map(Vec::len).sum::<usize>() - self.n
+        self.f.factor_entries()
     }
 
     /// Number of supernodes.
     pub fn supernodes(&self) -> usize {
-        self.sn_ptr.len() - 1
+        self.f.supernodes()
     }
 
     /// The largest front order.
     pub fn max_front(&self) -> usize {
-        self.max_front
+        self.f.max_front
     }
 
     /// Fronts of which a later-column update was split over the rayon pool.
     pub fn split_fronts(&self) -> usize {
-        self.split_fronts
+        self.f.split_fronts
     }
 
     /// The most bytes of fronts and pending update matrices alive at once during the factorisation.
     pub fn peak_front_bytes(&self) -> usize {
-        self.peak_front_bytes
+        self.f.peak_front_bytes
     }
 
     /// Bytes of the factor's arrays, 8 each: values and row indices of the supernodes, supernode pointers, `D` and order.
     pub fn storage_bytes(&self) -> usize {
-        let v: usize = self.values.iter().map(Vec::len).sum();
-        let r: usize = self.rows.iter().map(Vec::len).sum();
-        8 * (v + r + self.sn_ptr.len() + 2 * self.n)
+        let v: usize = self.f.values.iter().map(Vec::len).sum();
+        let r: usize = self.f.rows.iter().map(Vec::len).sum();
+        8 * (v + r + self.f.sn_ptr.len() + 2 * self.n)
     }
 
     /// Column `j` of `L` (positions in elimination order, increasing): its row positions and values.
     pub fn column(&self, j: usize) -> (&[usize], &[f64]) {
-        let s = self.col_sn[j];
-        let q = j - self.sn_ptr[s];
-        let m = self.rows[s].len();
-        let o = off(q, m);
-        (&self.rows[s][q + 1..], &self.values[s][o + 1..o + (m - q)])
+        self.f.column(j)
     }
 
     /// Solve `A x = b`.
@@ -1353,38 +1470,153 @@ impl SupernodalLdlt {
 
     /// Solve `A x = b` into `x`.
     pub fn solve_into(&self, b: &[f64], x: &mut [f64]) {
-        assert_eq!(b.len(), self.n, "right-hand side length");
-        assert_eq!(x.len(), self.n, "solution length");
-        let mut z: Vec<f64> = self.order.iter().map(|&o| b[o]).collect();
-        let nsn = self.supernodes();
-        for s in 0..nsn {
-            let (rows, vals) = (&self.rows[s], &self.values[s]);
-            let m = rows.len();
-            for q in 0..self.sn_ptr[s + 1] - self.sn_ptr[s] {
-                let zj = z[rows[q]];
-                let o = off(q, m);
-                for t in 1..m - q {
-                    z[rows[q + t]] -= vals[o + t] * zj;
-                }
-            }
+        self.f.solve_into(&self.order, b, x);
+    }
+}
+
+// ------------------------------------------------------------------------- complex supernodal (ADR 0509 D2)
+
+/// Options of [`ComplexSupernodalLdlt::factor_with`] (ADR 0509 D2).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ComplexSupernodalOptions {
+    /// Elimination order, computed on the pattern (default nested dissection by level structures).
+    pub ordering: SparseOrdering,
+    /// Relative symmetry tolerance `delta`: `|a_rc - a_cr| <= delta sqrt(|a_rr| |a_cc|)` (no conjugation). Default 1e-12.
+    pub symmetry_tolerance: f64,
+    /// `tau`: a pivot with `|d_k| <= tau s_k` is refused besides the rounding test (default 0; ADR 0509 D2).
+    pub min_relative_pivot: f64,
+}
+
+impl Default for ComplexSupernodalOptions {
+    fn default() -> Self {
+        ComplexSupernodalOptions {
+            ordering: SparseOrdering::NestedDissection,
+            symmetry_tolerance: 1e-12,
+            min_relative_pivot: 0.0,
         }
-        for (zj, dj) in z.iter_mut().zip(&self.d) {
-            *zj /= dj;
+    }
+}
+
+/// Supernodal multifrontal `L D L^T` of a complex symmetric matrix (`A = A^T`, not Hermitian), no conjugation, no pivoting
+/// (ADR 0509 D2): the kernel of [`SupernodalLdlt`] in complex arithmetic. A pivot `d_k` is refused when `|d_k| <=
+/// max((w_k + 1) eps s_k, tau s_k)` or is not finite, `s_k = |a_kk| + |a_kk - d_k|`, `w_k` the row count of `L`. For a real
+/// matrix the real parts are those of [`SupernodalLdlt`] in the same order and every imaginary part is zero.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ComplexSupernodalLdlt {
+    n: usize,
+    order: Vec<usize>,
+    f: Supernodal<C64>,
+}
+
+impl ComplexSupernodalLdlt {
+    /// Factorise with the default options (nested dissection by level structures, symmetry tolerance 1e-12, the rounding
+    /// pivot test only).
+    pub fn factor(a: &ComplexCsr) -> Result<ComplexSupernodalLdlt, ComplexSkylineError> {
+        Self::factor_with(a, &ComplexSupernodalOptions::default())
+    }
+
+    /// Factorise `a` with the given options. The matrix is validated first (finite, complex symmetric within the
+    /// tolerance, as [`crate::cskyline::ComplexSkylineLdlt`]); the lower triangle is used, a missing lower entry taken from
+    /// the upper.
+    pub fn factor_with(
+        a: &ComplexCsr,
+        opts: &ComplexSupernodalOptions,
+    ) -> Result<ComplexSupernodalLdlt, ComplexSkylineError> {
+        crate::cskyline::validate(a, opts.symmetry_tolerance)?;
+        let tau = opts.min_relative_pivot;
+        if !(tau.is_finite() && tau >= 0.0) {
+            return Err(ComplexSkylineError::Malformed {
+                reason: format!("minimum relative pivot {tau:e} (must be finite and >= 0)"),
+            });
         }
-        for s in (0..nsn).rev() {
-            let (rows, vals) = (&self.rows[s], &self.values[s]);
-            let m = rows.len();
-            for q in (0..self.sn_ptr[s + 1] - self.sn_ptr[s]).rev() {
-                let o = off(q, m);
-                let mut acc = z[rows[q]];
-                for t in 1..m - q {
-                    acc -= vals[o + t] * z[rows[q + t]];
-                }
-                z[rows[q]] = acc;
-            }
+        let n = a.n;
+        // the orderings read the pattern only
+        let pattern = CsrMatrix {
+            n,
+            ncols: n,
+            row_ptr: a.row_ptr.clone(),
+            col: a.col.clone(),
+            val: vec![1.0; a.col.len()],
+        };
+        let order = order_of(&pattern, &opts.ordering).map_err(|e| match e {
+            SkylineError::BadOrdering { reason } => ComplexSkylineError::BadOrdering { reason },
+            other => ComplexSkylineError::Malformed {
+                reason: other.to_string(),
+            },
+        })?;
+        drop(pattern);
+        let c = permuted_lower_parts(n, &a.row_ptr, &a.col, &a.val, &order);
+        let test = |akk: C64, dk: C64, w: usize| -> Option<(f64, f64)> {
+            let scale = akk.abs() + (akk - dk).abs();
+            let theta = ((w as f64 + 1.0) * f64::EPSILON * scale).max(tau * scale);
+            (dk.abs() <= theta || !dk.is_finite()).then_some((theta, scale))
+        };
+        match supernodal_factor(c, &test) {
+            Ok(f) => Ok(ComplexSupernodalLdlt { n, order, f }),
+            Err((k, pivot, threshold, scale)) => Err(ComplexSkylineError::Pivot {
+                row: order[k],
+                position: k,
+                pivot,
+                threshold,
+                scale,
+            }),
         }
-        for (i, &o) in self.order.iter().enumerate() {
-            x[o] = z[i];
-        }
+    }
+
+    /// Dimension.
+    pub fn n(&self) -> usize {
+        self.n
+    }
+
+    /// Elimination order: `order()[i]` = original index at position `i`.
+    pub fn order(&self) -> &[usize] {
+        &self.order
+    }
+
+    /// Pivots `d_i` in elimination order.
+    pub fn pivots(&self) -> &[C64] {
+        &self.f.d
+    }
+
+    /// Entries of the strict lower factor `L`.
+    pub fn factor_entries(&self) -> usize {
+        self.f.factor_entries()
+    }
+
+    /// Number of supernodes.
+    pub fn supernodes(&self) -> usize {
+        self.f.supernodes()
+    }
+
+    /// The largest front order.
+    pub fn max_front(&self) -> usize {
+        self.f.max_front
+    }
+
+    /// Fronts of which a later-column update was split over the rayon pool.
+    pub fn split_fronts(&self) -> usize {
+        self.f.split_fronts
+    }
+
+    /// The most bytes of fronts and pending update matrices alive at once during the factorisation (16 per value).
+    pub fn peak_front_bytes(&self) -> usize {
+        self.f.peak_front_bytes
+    }
+
+    /// Column `j` of `L` (positions in elimination order, increasing): its row positions and values.
+    pub fn column(&self, j: usize) -> (&[usize], &[C64]) {
+        self.f.column(j)
+    }
+
+    /// Solve `A x = b`.
+    pub fn solve(&self, b: &[C64]) -> Vec<C64> {
+        let mut x = vec![C64::ZERO; self.n];
+        self.solve_into(b, &mut x);
+        x
+    }
+
+    /// Solve `A x = b` into `x`.
+    pub fn solve_into(&self, b: &[C64], x: &mut [C64]) {
+        self.f.solve_into(&self.order, b, x);
     }
 }
