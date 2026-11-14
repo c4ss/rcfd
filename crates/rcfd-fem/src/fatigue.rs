@@ -81,7 +81,7 @@ pub fn dirlik_coefficients(m0: f64, m1: f64, m2: f64, m4: f64) -> Result<DirlikC
     }
     let x_m = m1 / m0 * (m2 / m4).sqrt();
     let g = m2 / (m0 * m4).sqrt();
-    if !(g <= 1.0 + 1e-12) {
+    if !g.is_finite() || g > 1.0 + 1e-12 {
         return Err(invalid(
             BROADBAND,
             format!("gamma = m2/sqrt(m0 m4) = {g:e} exceeds 1 (m2^2 > m0 m4)"),
