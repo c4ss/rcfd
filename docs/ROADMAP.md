@@ -9101,7 +9101,7 @@ fixed by the item's registration ADR before any code.
     (limit 3.186e-4). Defaults bit-identical: the four F0 fingerprints of ADR 0359 equal, baseline_hashes passes, the
     existing overset tests pass. The background cells next to the hole keep 1.14e-5 at a ratio of 2.14 (kind changes,
     ADR 0359 H5; not a stencil matter). Five mutations caught.
-- [ ] **F-469** Coupled step: failing-participant checks with a start state that does not use the restores at the start of an iteration
+- [x] **F-469** Coupled step: failing-participant checks with a start state that does not use the restores at the start of an iteration
   - depends on: F-465
   - acceptance: Every limit not stated here is registered in the ADR before the run. With the StaticSolid and the mock
     fluid of ADR 0286, a start state reached without any coupler iteration beyond the first (a loose-coupling first
@@ -9110,8 +9110,18 @@ fixed by the item's registration ADR before any code.
     mutations that skip the coupler's restore of the fluid or of the structure at the start of iteration 2 or of
     iteration 3 (ADR 0364 M16 to M19) and the mock's restore of the time (M25) are each caught by a failing-step or
     control check, not by a panic in the set-up.
-  - note: From ADR 0364 question 1, recommendation (b). Low priority: test isolation only; the mutations it targets are
-    already caught by a set-up panic.
+  - note: Structural solver, basic tier. ADR 0444, 2026-11-14: tests only,
+    crates/rcfd-post/tests/sb_solid_coupling_fail_fluid_loose.rs. The start state is a loose-coupling first step
+    (max_iterations 1, keep the last iterate) then F0 doubled, so no coupler iteration beyond the first and no restore
+    is used to build it (arithmetic registered: first-step test quantity 3, the mock's force 0.5 F0 at the start; the
+    healthy step then has test quantities 0.6 and 0.2727 and converges in 3 iterations for Aitken and least squares). A
+    mock fluid failing after taking its state in its 2nd and 3rd call stops the step with participant 'fluid', that
+    iteration, the mock's message and the start time, after n advances of both participants, both bit-equal to the
+    start; the retry reproduces the control bit for bit; a failure at the 4th call is never reached. Mutations that skip
+    the coupler's restore of the fluid or of the structure at the start of iteration 2 or 3 (ADR 0364 M16 to M19) and
+    the mock's restore of the time (M25) are each caught by the control (P1a, P4a, N1) and by failing-step checks
+    (message, participant, advance counts, bit equality), not by a panic in the set-up; the error-arm mutations M9, M11
+    and the mock's displacement restore M24 are still caught.
 - [~] **F-470** Elasticity multigrid on quadratic tetrahedra: aggregation that coarsens Tet10 like Hex8
   - depends on: F-402
   - acceptance: Every limit not stated here is registered in the ADR before the run. In rcfd_linalg::amg_elastic, an
