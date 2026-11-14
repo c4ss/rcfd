@@ -417,3 +417,137 @@ ends measured above, 0.2 % at `Wo = 5`): W5c real `+5.0e-3 + 2e-3`, imaginary `-
 (each with the ends, not measured at `Wo = 1` and `0.25`, below 1 % by diagnosis 1's size). `w5_womersley_5_known_miss` stays with
 the registered set-up (amendment 2). QF keeps its registered set-up (`Symmetry`; met, a test of the code path, not of the
 dissipation). W5 counts as a miss of the registered run; W5c, W1c and LFc, if met, count as met only after amendments 2 and 3.
+
+## Addendum 1: results (2026-11-14)
+
+Runs, each once, release profile, `CARGO_BUILD_JOBS=4`, logs in `w49i-work/f421-scratch`: the fast tests of commit `8100655a`
+(`run1_fast.log`, 17.8 s: the registered run of every fast check); P1c of amendment 1 on `b18d0635` (`run2_p1c.log`); the
+registered heavy records W1, W5, LF on `b18d0635` (`run3_w1.log` 17 s, `run4_w5.log` 197 s, `run5_lf.log` 15 s); the
+unregistered diagnoses of amendments 2 and 3 (`diag_length.log`, code in `sa_aerodamp_with_diag.rs`, `diag_qf_test.rs`); the
+corrected records W1c, W5c, LFc on `bd28f958` (`run6_w1c.log` 42 s, `run7_w5c.log` 198 s, `run8_lfc.log` 407 s); the file as it
+stands (`run9_file.log`: 6 passed, 7 ignored), and again after a clippy-only rewrite of the periodicity test (`!(change <= tol)`
+became `change.is_nan() || change > tol`, the same values; `run11_after_clippy.log`: 6 passed). The heavy records stay ignored.
+
+### Checks
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| A0 | registration first | `12721af1` precedes every code commit | yes |
+| H1 (c1) | `<= 1e-10` | `4.8e-16` (every cycle and the response) | yes |
+| H2 (c2) | `<= 1e-10` | `2.0e-16` per cycle, `4.0e-16` for `work_per_cycle` | yes |
+| H0 | `<= 1e-10` | `1.6e-16` | yes |
+| P1 as registered (c8) | refused, the number back within `1e-12` | refused, accepted at tolerance 1 with the change to `1.9e-14`; the parse of the number failed (amendment 1) | **no** (record `p1_non_periodic_history_refused_with_the_change`) |
+| P1c (amendment 1) | the same | refused, "the cycle-to-cycle change of the first harmonic between cycles 2 and 3 is 1.063580170800776e-2 (tolerance 1e-6)"; the number to `1.9e-14` of the test's own | yes, after the amendment |
+| C1 (c3) | `<= 2e-2` | `2.302e-3` (`m_a = 0.997698 rho_f A L_f`) | yes |
+| C2 (c4) | `zeta_col <= tan(w dt)/2 + 1e-4` | `zeta_col = 3.14582e-2`, estimate `3.15573e-2`: `-9.91e-5` | yes |
+| W5 as registered (c5) | `<= 3e-2` each | real **`8.55e-2`**, imaginary `2.45e-3` | **no** (`w5_womersley_5_known_miss`) |
+| W1 as registered (c5) | periodic, `<= 3e-2` each | every level refused as not periodic (`3.9e-3` to `8.3e-3`; the flow step diverges, amendment 2) | **no** (record) |
+| LF as registered (c6) | the same | every level refused (`8.2e-5` to `2.2e-1`; amendment 2) | **no** (record) |
+| W5c (amendments 2, 3) | `<= 3e-2` each | real `8.29e-3`, imaginary `1.58e-3` | yes, after the amendments |
+| W1c (amendments 2, 3) | `<= 3e-2` each | real `3.24e-3`, imaginary `7.30e-3` | yes, after the amendments |
+| LFc (amendments 2, 3) | `<= 3e-2` | `9.83e-3` (`Re Z_ext = 238.904` against `12 mu L_f A/h^2 = 241.274`) | yes, after the amendments |
+| B1 (c7, record) | record | `zeta_method` `1.7561e-2` (ratio 0.5; `m_s = 12395.67 kg`, `m_a = 15663.87 kg`), `2.8962e-2` (ratio 4; `10798.22`, `125310.92`) | recorded |
+| B2 (c7, record) | record | `zeta_decay` `1.7766e-2` (`E_1001/E_1 = 0.107216`), `2.8892e-2` (`0.026602`) | recorded |
+| C3 | `<= 1e-4` each | `8.8e-7`, `5.5e-8` | yes |
+| C4 | `<= 1e-6`; record | `7.5e-14`; the face work of the last cycle `-9084.70` against `pi q0 Q_q = -9090.68` (`-6.6e-4`) | yes |
+| O (W5) | `0.8 to 1.2` | real `0.959`, imaginary `1.170` | yes |
+| O (W5c, W1c, LFc) | `0.8 to 1.2` | W5c `0.959`, `1.153`; W1c real `0.863`, **imaginary `0.677`**; LFc real `0.861` | **no** for W1c imaginary (`w1c_womersley_1_known_miss`) |
+| PR | `<= 1e-6` | every run of W5, W5c, W1c, LFc and QF `<= 7.9e-13` (W1, LF refused, above) | yes where run validly |
+| BZ | `<= 5e-2` | `1.16e-2` (0.5), `2.46e-3` (4) | yes |
+| BC | converged, cap 10; `<= 2e-2` | 3 iterations every step; `1.56e-4`, `1.06e-3` | yes |
+| QF | `<= 0.2` each | real `0.111`, imaginary `0.046` | yes |
+| DR | refusals | all eleven refused with a message naming the cause | yes |
+| NC1 | `>= 5e-2` | `0.266` (W5), `0.191` (W5c) | holds |
+| NC2 | refused | refused, change `0.305` (W5 and W5c) between cycles 1 and 2 | holds |
+| NC3 | P1 refused at `1e-6`, accepted at 1 | holds | holds |
+
+What the numbers say:
+
+* **The energy method works on closed forms once the flow step is valid.** The open column gives the plug's added mass to the
+  discrete prediction within `5.5e-8` and the damping ratio `tan(w dt)/2` of the step's lag within `8.8e-7` (the viscous part,
+  a hundredth of the bound `1e-4`). On the plane channel the extrapolated impedance is within `8.3e-3` (real) and `1.6e-3`
+  (imaginary) at `Wo = 5`, `3.2e-3` and `7.3e-3` at `Wo = 1`, and the low-frequency limit within `9.8e-3` at `Wo = 0.25` (the
+  cells across the gap, `-1.4e-2` by the model, account for most of it).
+* **The lag of the pairing is the damping that the coupled run sees.** The bar's damping ratio from the prescribed motion and
+  from the decay of F-401's coupled run agree to `1.2e-2` and `2.5e-3` (the higher modes excited by the release decay faster at
+  ratio 0.5): both are `tan(w dt)/2` times the fluid's share of the modal mass, a numerical damping of the time step, not a
+  physical one (the open plug has none).
+* **Two properties of the flow solver found on the way**: the non-iterated PISO step diverges above a diffusion number `nu
+  dt/dy^2` of about 3.5 (also on a fixed mesh with an inflow velocity; amendment 2), and `Symmetry` planes add a dissipation to
+  a flow tangential to them (`+13 %` of the real part on QF, `+7 %` on W5; amendment 3). The second may be the cause of F-401's
+  VS miss.
+* **W1c's order companion**: the imaginary part departs from the model at the coarsest level (`+0.85 %` at `N = 200`, `D = 2.0`;
+  `+0.17 %` at 400; `+0.005 %` at 800), an error of the step that falls faster than `dt`; the three-level order mixes it with
+  the lag. The extrapolation from 400 and 800 is unaffected (`7.3e-3`, the model's `5.7e-3`).
+
+### Mutations (copy of commit `3dac7df1` from `git archive` in `f421-scratch/copy`, own target directory, `mutate.py`, logs `MU1.log` to `MU7.log`)
+
+| Mutation | Caught by |
+|---|---|
+| MU1 sine and cosine swapped | H1, H2, C1/C3, QF, BZ, as expected |
+| MU2 the mean dropped | H0 only (on full periods the columns are orthogonal), as expected |
+| MU3 `work_per_cycle` from `Q_p` | H2, C3, BZ, as expected |
+| MU4 change against cycle 1 | P1c (the number), and every flow run refused (C1, B, QF) |
+| MU5 refusal inverted | P1c, H1 (the response refused), C1, B, QF |
+| MU6 the wall one step late | C2, C3 (`zeta` doubles: `6.3e-2`), BZ, as expected |
+| MU7 the damping ratio without the 2 | C2, C3, BZ, as expected |
+
+Every mutation was caught.
+
+### Existing tests, formatting, lints
+
+* S1: `cargo test -p rcfd-post --release --test si_fsi_piston`: 8 passed, 5 ignored (`run10_s1.log`).
+* `cargo fmt -p rcfd-post --check`: clean. `cargo clippy -p rcfd-post --all-targets --release -- -D warnings`: clean.
+* The baseline hashes were not run: no line of `rcfd-fv`, `rcfd-fem`, `rcfd-api` or any shared solver file changed; the library
+  change is the content of `rcfd-post/src/solid_aerodamp.rs` (declared by ADR 0440, called by nothing in the library;
+  `PENDING` is now `None`, read by no test).
+
+### Deviations
+
+* Amendments 1 (P1's parse), 2 (W1, LF above the flow step's stability limit) and 3 (the `Symmetry` planes), each committed
+  before its corrected run; W5 stays a miss of its registered run.
+* The lint rewrite of the periodicity test after the registered runs (same values; the fast tests repeated, not the heavy ones).
+* `docs/` topic pages were not changed (the module is documented in its source and here).
+
+### What was not run
+
+* The whole workspace suite (the lead's gate); the baseline hashes (no shared file changed).
+* A study in the channel length beyond the one diagnosis, in the cells along the channel, in the amplitude; a bending mode; the
+  radial-basis map.
+
+### Decision by the registered rule
+
+**Partial.** The registered run of W5 missed the real part (`8.55e-2` against `3e-2`); W1, LF and P1 were met only after
+amendments made after their registered runs (W1c, LFc, P1c; W5c also after amendments); and the companion O missed for W1c's
+imaginary part. Every other check and control holds, the two damping ratios are recorded, and every mutation was caught.
+
+### Remaining questions
+
+1. **The PISO step's diffusion-number limit** (`nu dt/dy^2` about 3.5). Options: (a) a follow-up item that locates it in
+   `rcfd-fv` and either removes it or makes the step refuse beyond it; (b) a documented limit in `docs/cosimulation-protocol.md`
+   and in `FlowWall`'s comment; (c) nothing. Recommendation: (a), with (b) until it lands.
+2. **The `Symmetry` planes' dissipation of tangential flow.** Options: (a) a follow-up item that measures it on a closed form
+   (Stokes' second problem next to a symmetry plane) and corrects the condition; (b) nothing. Recommendation: (a); check F-401's
+   VS miss against it.
+3. **W1c's order companion.** Options: (a) accept the record (the extrapolated value is met); (b) repeat W1 in a later item at
+   `N = 400, 800, 1600`. Recommendation: (a).
+
+### For the lead: roadmap entries
+
+F-421, proposed status **partial**, note:
+
+> Structural solver, advanced tier (plan ADR 0310). PARTIAL (ADR 0446, 2026-11-12; registered before the code, amendments 1 to 3 after registered runs). rcfd_post::solid_aerodamp: drive_mode moves the wall of a cosim::Fluid in a mode shape through an InterfaceMap (q = q0 sin(w t)) and records the generalised force by the transposed map; Harmonic::fit (least squares of mean, sine and cosine), periodic_response (every cycle fitted; refused with the cycle-to-cycle change of the first harmonic above a tolerance), added mass Q_p/(w^2 q0), damping -Q_q/(w q0), impedance, work per cycle pi q0 Q_q, damping ratio -W/(2 pi w^2 q0^2 m). Synthetic history: in-phase and quadrature parts to 4.8e-16, work per cycle against pi q0 Q_q to 4.0e-16, a decaying history refused naming the change (after amendment 1: the test's parse of the message). F-401's open column at T/100: added mass 0.997698 rho_f A L_f (limit 2 percent), damping ratio 3.14582e-2 against the registered tan(w dt)/2 + 1e-4 (the step's lag; viscous part 8.8e-7). Plane channel (h = 0.02 m, L_f = 100 h), the roadmap's impedance A i w rho L_f/(1 - tanh(kappa)/kappa) verified by derivation (12 mu L_f/h^2 is the limit per unit piston area): after the Richardson extrapolation in the time step, real and imaginary parts within 8.3e-3 and 1.6e-3 at Womersley 5, 3.2e-3 and 7.3e-3 at Womersley 1, the low-frequency limit within 9.8e-3; but only after amendments: the registered Womersley-5 run missed the real part by 8.5e-2 (the Symmetry planes of the one-cell 2D reduction add dissipation, about 7 percent; corrected with zero-gradient planes), and the registered Womersley-1 and low-frequency runs diverged (the PISO step is unstable above nu dt/dy^2 of about 3.5, also on a fixed mesh; corrected with fewer cells across and more steps). Bar on the open column: damping ratio 1.756e-2 (ratio 0.5) and 2.896e-2 (ratio 4) by this method, 1.777e-2 and 2.889e-2 from the decay of F-401's coupled run (agreement 1.2e-2, 2.5e-3): the lag of the pairing. Partial: the W5 miss, the amendments, and the order companion of the Womersley-1 imaginary part (0.68, limit 0.8). Seven mutations caught. No line of rcfd-fv or rcfd-api changed. Open: ADR 0446 Q1 to Q3.
+
+F-401, sentence to append to its note:
+
+> ADR 0446 (F-421, 2026-11-12) found that Symmetry planes add a dissipation to a flow tangential to them in the PISO step (+7 to +13 percent of the viscous impedance of an oscillating channel); this may be the cause of the VS miss of ADR 0434 (not tested).
+
+Follow-up items proposed:
+
+* F-NEW-a, "Stability of the non-iterated PISO step at large diffusion numbers", deps F-421, acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. The divergence of the PISO step above nu dt/dy^2 of about 3.5 found by ADR 0446 (a plane channel driven by an oscillating inflow on a fixed mesh) is located in the step and either removed, so that the same channel at nu dt/dy^2 = 25 and 100 stays bounded over 3 periods and matches the oscillating-channel impedance as the stable runs do, or refused by the step with a message naming the diffusion number; the default results of every existing case stay bit-identical.
+
+* F-NEW-b, "Viscous flux of the Symmetry condition for flow tangential to the plane", deps F-421, acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. Stokes' second problem (a wall oscillating in its plane, the fluid bounded by a Symmetry plane at a registered distance) and the oscillating plane channel of ADR 0446 between the two Symmetry planes of a one-cell reduction give the closed-form wall shear and impedance within registered limits; the extra dissipation measured by ADR 0446 (+7 to +13 percent of the real part) is explained and removed or documented; F-401's VS check is repeated with the result.
