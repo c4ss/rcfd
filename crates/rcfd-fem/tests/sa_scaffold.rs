@@ -1802,6 +1802,7 @@ fn x1_modules_and_pending_after_f415() {
 
 // X1 after ADR 0472 (F-415) and ADR 0473 (F-420): gyro and geometric_struct have landed.
 #[test]
+#[ignore = "record of ADR 0472 and ADR 0473: ADR 0477 (F-417) landed random (PENDING None), retiring its row; continued in x1_modules_and_pending_after_f417 (ADR 0291 pattern, maintainer standing decision)"]
 fn x1_modules_and_pending_after_f415_f420() {
     use rcfd_fem as f;
     let fem: [(&str, Option<&str>, &str); 24] = [
@@ -1838,6 +1839,51 @@ fn x1_modules_and_pending_after_f415_f420() {
     let mut c = Checks::new();
     for (name, got, expect) in fem.iter().chain(&linalg) {
         // ADR 0448, ADR 0447, ADR 0450, ADR 0449, ADR 0452, ADR 0456, ADR 0469, ADR 0472, ADR 0473: a landed module has PENDING None
+        let want = if *expect == "landed" { None } else { Some(*expect) };
+        c.holds(&format!("X1 {name}"), *got == want, &format!("{got:?}"));
+    }
+    let _ = rcfd_linalg::complex::C64::ONE;
+    c.finish();
+}
+
+// X1 after ADR 0477 (F-417): random has landed as well.
+#[test]
+fn x1_modules_and_pending_after_f417() {
+    use rcfd_fem as f;
+    let fem: [(&str, Option<&str>, &str); 24] = [
+        ("mat_ortho", f::mat_ortho::PENDING, "landed"),
+        ("mat_table", f::mat_table::PENDING, "landed"),
+        ("mat_visco", f::mat_visco::PENDING, "ADR 0313 (F-410)"),
+        ("mat_creep", f::mat_creep::PENDING, "ADR 0314 (F-411)"),
+        ("harmonic_direct", f::harmonic_direct::PENDING, "landed"),
+        ("fatigue", f::fatigue::PENDING, "landed"),
+        ("damped", f::damped::PENDING, "landed"),
+        ("gyro", f::gyro::PENDING, "landed"),
+        ("rotor", f::rotor::PENDING, "ADR 0319 (F-416)"),
+        ("random", f::random::PENDING, "landed"),
+        ("shell3", f::shell3::PENDING, "landed"),
+        ("geometric_struct", f::geometric_struct::PENDING, "landed"),
+        ("mat_j2", f::mat_j2::PENDING, "ADR 0325 (F-422)"),
+        ("nl_transient", f::nl_transient::PENDING, "ADR 0326 (F-423)"),
+        ("follower", f::follower::PENDING, "ADR 0327 (F-424)"),
+        ("arclength", f::arclength::PENDING, "ADR 0327 (F-424)"),
+        ("mat_hyper", f::mat_hyper::PENDING, "ADR 0328 (F-425)"),
+        ("nonlinear_md", f::nonlinear_md::PENDING, "ADR 0328 (F-425)"),
+        ("tie", f::tie::PENDING, "landed"),
+        ("contact", f::contact::PENDING, "ADR 0330 (F-427)"),
+        ("laminate", f::laminate::PENDING, "ADR 0331 (F-428)"),
+        ("fracture", f::fracture::PENDING, "ADR 0332 (F-429)"),
+        ("cms", f::cms::PENDING, "landed"),
+        ("estimate", f::estimate::PENDING, "ADR 0335 (F-432)"),
+    ];
+    let linalg: [(&str, Option<&str>, &str); 3] = [
+        ("cskyline", rcfd_linalg::cskyline::PENDING, "landed"),
+        ("eigen_general", rcfd_linalg::eigen_general::PENDING, "landed"),
+        ("sparse_chol", rcfd_linalg::sparse_chol::PENDING, "landed"),
+    ];
+    let mut c = Checks::new();
+    for (name, got, expect) in fem.iter().chain(&linalg) {
+        // ADR 0448, ADR 0447, ADR 0450, ADR 0449, ADR 0452, ADR 0456, ADR 0469, ADR 0472, ADR 0473, ADR 0477: a landed module has PENDING None
         let want = if *expect == "landed" { None } else { Some(*expect) };
         c.holds(&format!("X1 {name}"), *got == want, &format!("{got:?}"));
     }
