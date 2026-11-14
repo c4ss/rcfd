@@ -189,7 +189,8 @@ const P_S: f64 = 3.0e7;
 // ------------------------------------------------------------------------------------------------------- S1s, S3s, K1
 
 #[test]
-fn s1s_s3s_k1_load_stiffness_against_central_differences() {
+#[ignore = "run 1 record of ADR 0487: K1 tangent missed by the sign of zero of the test's reference (amendment 1); corrected in s1s_s3s_k1_corrected"]
+fn s1s_s3s_k1_load_stiffness_against_central_differences_known_miss() {
     let mut ck = Checks::new();
     let mut seed = 0xF573_0487_u64;
     for (name, model, single_element) in [
@@ -325,7 +326,8 @@ fn cylinder(tri: bool) -> SolidModel {
 }
 
 #[test]
-fn c2_cylinder_at_a_prescribed_stretch() {
+#[ignore = "run 1 record of ADR 0487: C2b Shell3 missed, the end rings of the triangulation carry a tangential force (amendment 1); corrected in c2_cylinder_corrected"]
+fn c2_cylinder_at_a_prescribed_stretch_known_miss() {
     let mut ck = Checks::new();
     let (p, lambda) = (1.0e6, 1.5);
     for tri in [false, true] {
@@ -599,5 +601,144 @@ fn b1s_b2s_b3s_b4s_s2s_ring_buckling_with_shells() {
     ck.record("B4s Shell3 p_cr/(4 E I/R^3) - 1 without", q2 / (4.0 * ei_r3) - 1.0);
     ck.record("B4s Shell3 cos 2 theta correlation, with", d1);
     ck.record("B4s Shell3 cos 2 theta correlation, without", d2);
+    ck.finish();
+}
+
+// ------------------------------------------------------------------------------------------------------- amendment 1
+
+#[test]
+fn s1s_s3s_k1_corrected() {
+    let mut ck = Checks::new();
+    let mut seed = 0xF573_0487_u64;
+    for (name, model, single_element) in [
+        ("Shell4 element", warped4(), true),
+        ("Shell3 element", tri3(), true),
+        ("Shell4 patch", patch(false), false),
+        ("Shell3 patch", patch(true), false),
+    ] {
+        let n = model.dof_map().n_equations();
+        let fp = FollowerPressure::on_shells(&model, "all", P_S).unwrap();
+        let u: Vec<f64> = (0..n).map(|_| 0.05 * (2.0 * uniform(&mut seed) - 1.0)).collect();
+        let k = dense(n, &fp.load_stiffness(&u, 1.0).unwrap());
+        let h = 1e-6;
+        let mut kcd = vec![0.0; n * n];
+        for j in 0..n {
+            let mut up = u.clone();
+            let mut um = u.clone();
+            up[j] += h;
+            um[j] -= h;
+            let fpl = fp.force(&up, 1.0).unwrap();
+            let fmi = fp.force(&um, 1.0).unwrap();
+            for i in 0..n {
+                kcd[i * n + j] = (fpl[i] - fmi[i]) / (2.0 * h);
+            }
+        }
+        let diff: Vec<f64> = k.iter().zip(&kcd).map(|(a, b)| a - b).collect();
+        ck.at_most(
+            &format!("S1s {name} max |K - K_cd| / max |K|"),
+            max_abs(&diff) / max_abs(&k),
+            1e-6,
+        );
+        if single_element {
+            ck.at_least(&format!("S3s {name} max |K - K^T| / max |K|"), asymmetry(&k, n), 1e-3);
+            let f = fp.force(&u, 1.0).unwrap();
+            let mut force = vec![0.0; n];
+            let mut tangent = Vec::new();
+            fp.add(&u, 1.0, &mut force, &mut tangent).unwrap();
+            let same_f = force.iter().zip(&f).all(|(a, b)| a.to_bits() == (0.0 - b).to_bits());
+            let kt = dense(n, &tangent);
+            let mut same_k = true;
+            for i in 0..n {
+                for j in 0..n {
+                    let want = -0.5 * (k[i * n + j] + k[j * n + i]) + 0.0;
+                    same_k &= (kt[i * n + j] + 0.0).to_bits() == want.to_bits();
+                }
+            }
+            ck.holds(&format!("K1 {name} contribution force -f"), same_f, "bits");
+            ck.holds(
+                &format!("K1' {name} contribution tangent -(K + K^T)/2 (x + 0.0)"),
+                same_k,
+                "bits",
+            );
+        }
+    }
+    ck.finish();
+}
+
+#[test]
+fn c2_cylinder_corrected() {
+    let mut ck = Checks::new();
+    let (p, lambda) = (1.0e6, 1.5);
+    for tri in [false, true] {
+        let name = if tri { "Shell3" } else { "Shell4" };
+        let model = cylinder(tri);
+        let dofs = model.dof_map();
+        let n = dofs.n_equations();
+        let mut u = vec![0.0; n];
+        for (node, x) in model.mesh().nodes().iter().enumerate() {
+            u[dofs.equation(node, 0).unwrap()] = (lambda - 1.0) * x[0];
+            u[dofs.equation(node, 1).unwrap()] = (lambda - 1.0) * x[1];
+        }
+        let fp = FollowerPressure::on_shells(&model, "all", p).unwrap();
+        let f = fp.force(&u, 1.0).unwrap();
+        let mut dead = model.clone();
+        dead.add_load(Load::shell_pressure("all", p)).unwrap();
+        let fd = nodal_load_vector(&dead, &[]).unwrap();
+        let (mut sr, mut sd, mut st) = (0.0, 0.0, 0.0);
+        let (mut off, mut off_inner, mut fmax): (f64, f64, f64) = (0.0, 0.0, 0.0);
+        for (node, x) in model.mesh().nodes().iter().enumerate() {
+            let th = x[1].atan2(x[0]);
+            let (c, s) = (th.cos(), th.sin());
+            let g = |v: &[f64], comp: usize| v[dofs.equation(node, comp).unwrap()];
+            sr += g(&f, 0) * c + g(&f, 1) * s;
+            sd += g(&fd, 0) * c + g(&fd, 1) * s;
+            let ft = -g(&f, 0) * s + g(&f, 1) * c;
+            st += ft;
+            let o = ft.abs().max(g(&f, 2).abs());
+            off = off.max(o);
+            let ring = node / NC;
+            if ring > 0 && ring < NZ {
+                off_inner = off_inner.max(o);
+            }
+            for comp in 0..3 {
+                fmax = fmax.max(g(&f, comp).abs());
+            }
+        }
+        let want = p * NC as f64 * lambda * LC * (2.0 * PI / NC as f64).sin();
+        println!("C2 {name}: radial sum {sr:.12e}, closed form {want:.12e}, dead {sd:.12e}");
+        ck.at_most(
+            &format!("C2a {name} |sum f.e_r / (p N lambda R L sin(2 pi/N)) - 1|"),
+            (sr / want - 1.0).abs(),
+            1e-11,
+        );
+        if tri {
+            ck.record(
+                "C2b Shell3 all nodes max |f.e_theta|, |f.e_z| / max |f| (the end rings)",
+                off / fmax,
+            );
+            ck.at_most(
+                "C2b' Shell3 interior rings max |f.e_theta|, |f.e_z| / max |f|",
+                off_inner / fmax,
+                1e-11,
+            );
+            ck.at_most("C2b' Shell3 |sum f.e_theta| / max |f|", st.abs() / fmax, 1e-11);
+        } else {
+            ck.at_most(
+                &format!("C2b {name} max |f.e_theta|, |f.e_z| / max |f|"),
+                off / fmax,
+                1e-11,
+            );
+        }
+        ck.at_most(
+            &format!("C2c {name} |lambda sum f_dead.e_r / sum f.e_r - 1|"),
+            (lambda * sd / sr - 1.0).abs(),
+            1e-11,
+        );
+        ck.at_least(
+            &format!("C2d {name} sum f.e_r / sum f_dead.e_r - 1"),
+            sr / sd - 1.0,
+            0.49,
+        );
+    }
     ck.finish();
 }
