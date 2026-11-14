@@ -196,3 +196,105 @@ build or the DS runs cannot be made. By D4 the expected outcome is **partial** (
 - The undefined-ratio and the refused-estimate fallbacks are not exercised by any DS case (MJ11).
 - The cost of the fallback is that of the dense path for the fraction of modes it takes (D4); no cheaper fallback.
 - No case-file key, no CLI output; `split_campbell` computes neither value.
+
+## Addendum 1: results (2026-11-14)
+
+Registered run: `f612-scratch/run1.log` (tests commit 64cb2c2c, release, made once, `--test-threads=1`). J7 digests recorded at
+679081a1 (commit before any library line); library code in the commit "series-ratio indicator and PerturbationChecked
+fallback": `crates/rcfd-fem/src/gyro.rs` (the fields `perturbation_ratio` and `schur_fallback` of `HarmonicSplitModes`, the
+constant `SPLIT_SCHUR_RATIO_LIMIT = 0.08`, in `sector_split_at` the choice of the path and the fallback, `schur_perturbation`
+returns the ratio as a third entry) and `crates/rcfd-fem/src/rotating.rs` (the variant `SplitSchur::PerturbationChecked`,
+nothing else). Tests: `sa_gyro_sector_split_schur_checked.rs` (5 tests, one an ignored known miss, about 5 s) and
+`sa_gyro_sector_split_schur_checked_default_bits.rs`. After the run J6 was renamed `j6_cost_of_the_checked_run_known_miss` and
+ignored with its number (limit unchanged). A later commit replaced `Option::is_none_or` (stable since 1.82, the crate's MSRV is
+1.80, clippy `incompatible_msrv`) by `map_or(true, ..)` in the library and the test and removed an empty line after a doc
+comment in the J7 test; neither changes a value.
+
+`omega_ref = 1655.3226` rad/s.
+
+| Id | Check | Limit | Measured | Met |
+|---|---|---|---|---|
+| J1 | `abs(checked/dense - 1)` where the dense `schur_eta > 1e-9`; count | `<= 0.01`; `>= 30` | 6.338e-3 (a non-fallback mode, `r = 0.0758`); 34 | yes |
+| J2 | the same where the checked `schur_eta > 1e-9` | `<= 0.01` | 6.338e-3 | yes |
+| J3 | ratio `None` in default and dense, `Some` finite and equal in perturbation and checked; library against test-side ratio; count | `None`; equal; `<= 1e-4`; 48 | holds (8 of 8 cases); 2.404e-7; 48 | yes |
+| J4 | flags follow the ratio; none without the checked variant | each | holds (8 of 8) | yes |
+| J5 | checked values bit equal to dense (fallback) or perturbation (others); consistent | bit equal | holds (8 of 8) | yes |
+| J6 | wall time, checked over dense, 8 runs | `<= 0.5` | **0.8265** (0.627 s against 0.759 s; 54 of 96 split modes fall back) | **no** (predicted, D4: 0.83) |
+| J7 | 4 digests of 679081a1; ADR 0527 tests; ADR 0481, 0482, 0492 default-bits; `sa_gyro_sector_schur`; `baseline_hashes`; `rcfd-fem` | `==`; pass | 4 of 4 digests equal; 923 passed, 0 failed; `baseline_hashes` 3 passed; see Gate | yes |
+| J8 | checked run: every other field equal to the default | `==` | holds (8 of 8) | yes |
+| J9 | without the options: `None`, no fallback | each | holds (k = 0 .. 3, three set-ups) | yes |
+| J10 | B41: `Some(0)`, `theta' = theta`, no ratio, no fallback | each | holds (both speeds, every index) | yes |
+| J11 | DSS at `10 omega_ref`: all `None`, no fallback | each | holds (all four indices unstable; the "Some" half is vacuous) | yes |
+| NJ1 | unchecked perturbation, `max abs(pert/dense - 1)` on the J1 scope | `> 0.1` | 0.3835 | as expected |
+| NJ2 | fallback count over the J1 scope | 10 to 30 of 34 | 20 of 34 | as expected |
+
+Records: the fallback takes 54 of the 96 split modes (0 of 8 at `k = 0`, 9 of 16 at `k = 1`, 14 of 16 at `k = 2`, 4 of 8 at
+`k = 3`, same at both speeds). Every non-fallback matched mode has `r <= 0.0758` and an error of at most 6.34e-3 (arithmetic 1
+predicted 6.3e-3); the modes with `r` between 0.083 and 0.125 (errors 7.7e-3 to 1.6e-2) fall back, as designed. The unmatched
+top half of `k = 1` is only partly above the threshold (D4 expected most of it above), which is why the cost is 0.83 and not
+higher. Wall times per index and speed are in `run1.log`.
+
+### Mutations (scratch copy `f612-scratch/mut`, own target folder `target-f612-mut`, script `f612-scratch/mutate.py`, logs `mut_MJ*.log`)
+
+Each run once against both new test files. MJ11 (undefined ratio not falling back) was not run: no DS case has an undefined
+ratio.
+
+| Id | Mutation | Caught by |
+|---|---|---|
+| MJ1 | `RATIO_LIMIT` 0.2 | J1 (0.133), J2 |
+| MJ2 | comparison inverted | J4 (every case) |
+| MJ3 | ratio `delta_1/delta_2` | J3 (4.9e5), NJ2 (34 of 34) |
+| MJ4 | fallback `theta'` from the perturbation sum | J5 |
+| MJ5 | fallback never taken | J1 (0.3835), J2, NJ2 (0 of 34) |
+| MJ6 | fallback always taken | J4 |
+| MJ7 | mirror terms dropped | J3 (0.245), J1 (3.0e-2), J7 (digest of the perturbation run changed) |
+| MJ8 | default `split_schur` `PerturbationChecked` | J3 and J4 (the default run reports a ratio and flags). Not J7 or J8 as registered: J7 sets `split_schur` explicitly and the words of J8 do not include the new fields. The default-bits tests of ADR 0527 and 0492 (not part of this mutation run) would also catch it |
+| MJ9 | `Perturbation` also falling back | J7 (digest changed), J4 |
+| MJ10 | ratio filled on the `Dense` path | J3 |
+
+All ten caught.
+
+### Gate (commit 0c1c598a)
+
+J7 digests of 679081a1 (perturbation run B4, dense run B4, perturbation run B41, perturbation run DSS): 4 of 4 equal
+(`sa_gyro_sector_split_schur_checked_default_bits`, 1 passed, also after the final commit). `cargo test -p rcfd-fem --release`:
+923 passed, 0 failed, 263 ignored (all test binaries, including `sa_gyro_sector_split_schur` and its default-bits test, the
+ADR 0481, 0482, 0492 default-bits tests and `sa_gyro_sector_schur`; the ignored count includes the known misses of ADR 0527
+and 0535). `cargo test -p rcfd-api --release --test baseline_hashes`: 3 passed, 1 ignored (file unchanged). `cargo test -p
+rcfd-cli --release --test docs_site`: 2 passed. `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --all-targets
+--release -- -D warnings` clean. The workspace suite was not run (the lead's gate). J7 met.
+
+### Diagnosis of the miss
+
+As predicted in D4. The indicator works: every mode it lets through is within 6.3e-3, every other mode takes the dense value and
+agrees to the bit, so b1, b2, b3 and b5 are met. The cost clause is not met with this rule on this basis: the modes with `r >
+0.08` are 23 of the 32 split modes of the doubled indices `k = 1, 2` at each speed, and those two indices are about 90 percent
+of the dense work, so the checked run costs 0.83 of the dense one. The accuracy and the cost clauses conflict here, not because
+of the implementation: a mode needs the dense value exactly where the second-order series is not short.
+
+### Decision
+
+**Partial** by the registered rule: J6 missed (kept as `j6_cost_of_the_checked_run_known_miss`), every other check met , NJ1 and NJ2 as expected, all ten mutations caught. Clause by clause: b1 met (`perturbation_ratio`, reported by both
+`Perturbation` and `PerturbationChecked`); b2 met (`PerturbationChecked`, threshold 0.08 registered from the records of ADR
+0527); b3 met (6.3e-3 against 1e-2, 34 compared); b4 missed (0.83 against 0.5); b5 met.
+
+### Remaining questions
+
+1. The cost clause. Options: (a) keep `PerturbationChecked` as built (correct, about 1.2 times cheaper than dense); (b) a
+   follow-up that spends the dense work only where it matters, for example a floor on the estimate below which no fallback is
+   taken (the acceptance asks accuracy only above 1e-9; 8 of the 28 matched fallback modes have a dense value under 1e-9, which
+   lowers the cost somewhat, not to 0.5, by arithmetic on this run's records, not measured), or a cheaper second estimate (a
+   third-order term; the Pade form of ADR 0527's probe was 0.099 off, above 1 percent); (c) share the dense complement solves
+   across modes (they depend on `theta_a`, so not exactly). Recommendation: (a); no follow-up until a use needs the cheaper
+   path.
+2. `SplitSchur::Perturbation` stays as built (R1). Recommendation: keep both variants; the checked one is the one to use where
+   accuracy matters.
+3. Case-file key: none (as ADR 0492 and 0527).
+
+## For the lead: roadmap entries
+
+Proposed status of F-612: **partial**. New note:
+
+> Structural solver, advanced tier (plan ADR 0310). PARTIAL. ADR 0535, 2026-11-14: opt-in SplitSchur::PerturbationChecked, and the new fields HarmonicSplitModes::perturbation_ratio (the series ratio |delta_2/delta_1| of ADR 0527, also reported by SplitSchur::Perturbation, which keeps its bits) and schur_fallback; a split mode whose ratio exceeds 0.08 (registered from the records of ADR 0527: the truncation miss is about the square of the ratio, so 1 percent is crossed at 0.1), is undefined or whose estimate is refused takes the dense computation of ADR 0492, bit for bit. Met: on the disc sector with 4 modes per index at 0.4 and 0.8 omega_ref the checked schur_eta agrees with ADR 0492 within 6.3e-3 where it exceeds 1e-9 (34 modes; the unchecked estimate 0.38), the ratio equals an independent dense computation within 2.4e-7, 20 of the 34 modes fall back, the results of ADR 0527 and every default keep their bits, all ten mutations caught. Missed (predicted at registration, kept as a known miss): the cost is 0.83 of the dense path against the limit 0.5, because the modes that need the dense value (54 of 96) are most of the work of the doubled indices.
+
+No follow-up item proposed (remaining question 1, recommendation (a)).
