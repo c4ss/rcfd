@@ -175,8 +175,8 @@ pub fn solve_static_report(
     options: &StaticOptions,
 ) -> Result<(SolidResult, SolveReport)> {
     model.validate()?;
-    // ADR 0417 D4, ADR 0432 D3: the elimination path takes beams and shells; the transformation path takes beams and
-    // refuses shells (its own check).
+    // ADR 0417 D4, ADR 0432 D3, ADR 0435 D1: the elimination path and the transformation path take beams and shells (the
+    // transformation has its own check).
     model.check_supported_with_structures()?;
     if options.refinement > 0 {
         check_refinement(model, options)?;

@@ -14,8 +14,9 @@
 //! resultants and surface stresses at the element centres.
 //!
 //! The solid-element routines of the [`Element`] trait do not apply: [`element`] is a placeholder that refuses naming
-//! [`SOLID_ROUTINES`], so body, centrifugal and thermal loads and stress recovery refuse a shell (ADR 0432 D7). The assembly
-//! calls [`model_element_stiffness`] and [`model_element_mass`] for Shell4 (D6).
+//! [`SOLID_ROUTINES`], so nodal body-force fields, thermal loads and stress recovery refuse a shell (ADR 0432 D7). Gravity
+//! and the centrifugal load take the consistent load [`body_load_vector`] instead (ADR 0435 D2). The assembly calls
+//! [`model_element_stiffness`] and [`model_element_mass`] for Shell4 (D6).
 
 use crate::assemble::element_dofs;
 use crate::element::{Element, ElementMatrix, Pending};
@@ -534,6 +535,55 @@ pub fn pressure_load_vector(coords: &[Vec3], p: f64) -> Result<[f64; 24]> {
     Ok(out)
 }
 
+/// The consistent nodal load (forces and moments, global axes, the element's unknown order) of a body force per unit
+/// volume `b(x)` (global components, N/m^3) over the thickness: `F_i = t int N_i b(x) dA` by the 2 x 2 rule at the points
+/// `x = sum N_j p_j` of the projected facet, carried to the nodes by `T^T` (forces `F_i` and, on a warped facet, the moments
+/// `r_i x F_i`; ADR 0435 D2).
+pub fn body_load_vector<B>(coords: &[Vec3], thickness: f64, b: B) -> Result<[f64; 24]>
+where
+    B: Fn(Vec3) -> Result<Vec3>,
+{
+    let f = facet(coords)?;
+    let e3 = f.axes[2];
+    let mut p = [[0.0; 3]; 4];
+    for i in 0..4 {
+        for k in 0..3 {
+            p[i][k] = coords[i][k] - f.offsets[i] * e3[k];
+        }
+    }
+    let mut force = [[0.0; 3]; 4];
+    for &xi in &GAUSS {
+        for &eta in &GAUSS {
+            let q = point(&f.local, xi, eta);
+            let mut x = [0.0; 3];
+            for i in 0..4 {
+                for k in 0..3 {
+                    x[k] += q.n[i] * p[i][k];
+                }
+            }
+            let bx = b(x)?;
+            for i in 0..4 {
+                let s = thickness * q.n[i] * q.det;
+                for k in 0..3 {
+                    force[i][k] += s * bx[k];
+                }
+            }
+        }
+    }
+    let mut fl = [0.0; 24];
+    for i in 0..4 {
+        for a in 0..3 {
+            fl[6 * i + a] = dot(f.axes[a], force[i]);
+        }
+    }
+    let t = transformation(&f);
+    let mut out = [0.0; 24];
+    for (j, o) in out.iter_mut().enumerate() {
+        *o = (0..24).map(|i| t[i * 24 + j] * fl[i]).sum();
+    }
+    Ok(out)
+}
+
 /// The thickness of the block of a shell element, if it is a Shell4 element of a block with a Shell property.
 pub fn shell_thickness(mesh: &SolidMesh, element: usize) -> Option<f64> {
     if mesh.element_kind(element) != ElementKind::Shell4 {
@@ -545,7 +595,7 @@ pub fn shell_thickness(mesh: &SolidMesh, element: usize) -> Option<f64> {
     }
 }
 
-fn thickness_or_error(mesh: &SolidMesh, element: usize) -> Result<f64> {
+pub(crate) fn thickness_or_error(mesh: &SolidMesh, element: usize) -> Result<f64> {
     shell_thickness(mesh, element).ok_or_else(|| FemError::InvalidValue {
         key: "property",
         reason: format!(

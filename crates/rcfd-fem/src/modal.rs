@@ -147,8 +147,8 @@ pub fn modal_analysis(model: &SolidModel, options: &ModalOptions) -> Result<Moda
 /// The modal analysis with, in addition to the model's constraints, per-node prescribed values (all zero).
 pub fn modal_analysis_with(model: &SolidModel, extra: &[Prescribed], options: &ModalOptions) -> Result<ModalResult> {
     model.validate()?;
-    // ADR 0417 D4, ADR 0432 D3: the elimination path takes beams and shells; the transformation path takes beams and
-    // refuses shells (its own check).
+    // ADR 0417 D4, ADR 0432 D3, ADR 0435 D1: the elimination path and the transformation path take beams and shells (the
+    // transformation has its own check).
     model.check_supported_with_structures()?;
     // Linear constraints, rigid sets and supports: the reduction by the transformation of ADR 0296 (ADR 0384).
     if crate::mpc::uses_transformation(model) {

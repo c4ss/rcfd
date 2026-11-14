@@ -23,6 +23,10 @@
 //! Beams (ADR 0426): a node of a rigid set with six unknowns also turns with the set, `theta_a - w = 0`; nodal springs, linear
 //! constraints and prescribed values act on rotational unknowns as on any other. The static solve and the modal analysis take
 //! beam models (a beam node shared with a solid stays refused; a beam model with a cyclic constraint is refused).
+//!
+//! Shells (ADR 0435): Shell4 nodes have six unknowns and are treated as beam nodes are; the static solve and the modal
+//! analysis take shell models (a shell node shared with a solid stays refused; a shell model with a cyclic constraint is
+//! refused).
 
 use crate::assemble::stiffness_with;
 use crate::constraint::{prescribed_equations, Prescribed};
@@ -1057,18 +1061,22 @@ pub fn add_supports(k: &mut CsrMatrix, model: &SolidModel) -> Result<()> {
     Ok(())
 }
 
-/// The entry check of the static solve and the modal analysis on the transformation (ADR 0426 D2): the checks of a path
-/// that takes beams ([`SolidModel::check_supported_with_beams`]: a beam node shared with a solid is refused with
-/// [`FemError::BeamSolidNode`]), and a model with Beam2 and a cyclic constraint refused naming [`crate::beam::FOLLOW_UP`]
-/// (the cyclic rows rotate translations only).
+/// The entry check of the static solve and the modal analysis on the transformation (ADR 0426 D2, ADR 0435 D1): the checks
+/// of a path that takes beams and shells ([`SolidModel::check_supported_with_structures`]: a beam node shared with a solid
+/// is refused with [`FemError::BeamSolidNode`], a shell node shared with a solid naming the node), and a model with Beam2
+/// or Shell4 and a cyclic constraint refused naming [`crate::beam::FOLLOW_UP`] or [`crate::shell::FOLLOW_UP`] (the cyclic
+/// rows rotate translations only).
 fn check_transformation_model(model: &SolidModel) -> Result<()> {
-    model.check_supported_with_beams()?;
-    let beams = model
-        .mesh()
-        .blocks()
-        .iter()
-        .any(|b| b.kind() == crate::mesh::ElementKind::Beam2);
-    if beams {
+    model.check_supported_with_structures()?;
+    let has = |kind: crate::mesh::ElementKind| model.mesh().blocks().iter().any(|b| b.kind() == kind);
+    let refusal = if has(crate::mesh::ElementKind::Beam2) {
+        Some(("Beam2", crate::beam::FOLLOW_UP))
+    } else if has(crate::mesh::ElementKind::Shell4) {
+        Some(("Shell4", crate::shell::FOLLOW_UP))
+    } else {
+        None
+    };
+    if let Some((kind, package)) = refusal {
         if let Some(i) = model
             .constraints()
             .iter()
@@ -1077,8 +1085,8 @@ fn check_transformation_model(model: &SolidModel) -> Result<()> {
             return Err(FemError::NotYetSupported {
                 item: "constraint",
                 variant: "Cyclic",
-                location: format!("constraint {i}, a model with Beam2"),
-                package: crate::beam::FOLLOW_UP,
+                location: format!("constraint {i}, a model with {kind}"),
+                package,
             });
         }
     }
