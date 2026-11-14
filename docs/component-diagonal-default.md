@@ -160,3 +160,21 @@ field, not a solver defect.
 Option 2 above therefore needs no diagnosis of this channel. The two z4 tests would need an absolute (dynamic-pressure scaled)
 stationarity criterion, or `averaged` set explicitly, if the default were changed. The default is unchanged (the user's
 decision).
+
+## Update 2026-11-14 (F-531, ADR 0455): oscillating flows next to a `Symmetry` plane in the transient kernel
+
+ADR 0446 (F-421) found that the `Symmetry` planes of a one-cell-deep channel add 7 to 13 percent to the real part of an oscillating
+channel's impedance, and ADR 0434 (F-401) a tip motion proportional to `nu` on a plug with `Symmetry` side walls. ADR 0455 located
+both in the averaged diagonal of the PISO correctors (`HbyA_k = H_k/a_P`), not in the `Symmetry` coefficients, which give the
+tangential momentum exactly zero flux through an axis-aligned plane. Measured with `crates/rcfd-post/tests/symmetry_flux_f531.rs`
+and `symmetry_vs_f531.rs` (`PimpleSettings::component_diagonal` is the library form of the key):
+
+| case | averaged (default) | corrected |
+|------|--------------------|-----------|
+| Stokes' second problem, `Symmetry` plane one Stokes depth from the wall (20 and 40 cells) | impedance +32 percent real, -51 percent imaginary; does not fall with the mesh; matches the exact model of the two averaged correctors to 2e-14 | implicit Euler to 1e-11; extrapolated impedance and wall shear within 2.5e-4 of the closed form |
+| oscillating plane channel between two `Symmetry` planes (ADR 0446 QF and W5 set-ups) | +13 percent (QF), +7 percent (W5) of the real part | equal to the zero-gradient planes to 1e-5 (QF) and 2.4e-6 (W5, extrapolated); W5 within 8.3e-3 (real) and 1.6e-3 (imaginary) of the closed form |
+| F-401's VS (plug, four `Symmetry` side walls, `nu` x 100) | 8.28e-5 U | 1.0e-10 U |
+
+The default is unchanged (the maintainer's decision; options above). With the averaged diagonal a `Symmetry` plane acts on the
+tangential velocity of the adjacent cell like part of a no-slip wall, and in a transient run this part grows as the cells next to the
+plane get thinner.
