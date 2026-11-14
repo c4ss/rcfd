@@ -156,3 +156,73 @@ use the Gauss-Newton matrix on a refused pivot; its solves are not read). M3 is 
 `> 0` stopped with a singular tangent (a defect of the total Lagrangian path with a lifted contactor, recorded here, not
 diagnosed further). Friction, several pairs and `extra` contributions are not covered. The ADR 0507 T2 test stays an ignored
 record; this item does not edit it.
+
+## Addendum 1: results (2026-11-14)
+
+Registered run of `tests/sa_contact_order.rs` at 54a1ab4b (`f600-scratch/run1.log`), made once; the controls and the test
+mutations in scratch copies of that head (`mu1.log`, `mu2.log`; own `CARGO_TARGET_DIR`). No library line was changed:
+`contact.rs` and `nonlinear.rs` are as at the base `0d3ba7b9` (no shared solver file edited).
+
+| check | limit | measured | met |
+|---|---|---|---|
+| D1 one active set per residual, all residuals finite, M0 to M3 | all | all | yes |
+| D1 M3 has a solve with a changed set; M0 to M2 none | M3 >= 1 | M3 1 solve (1 exempt pair); M0 to M2 0 | yes |
+| Q1 Q(10, 1e-12) violations, M0 / M1 / M2 / M3 | 0 | 0 / 0 / 0 / 0 (read pairs 12 / 24 / 12 / 13) | yes |
+| Q2 an informative pair in every load step | all | M0 [3, 3], M1 [3, 3, 2, 2], M2 [4, 4], M3 [4, 3] | yes |
+| Q2 M0 at least 5 informative pairs | >= 5 | 6 | yes |
+| Q3 largest r_{k+1}/r_k^2 of the read pairs above F | <= 10, finite | 4.378 (M3); M0 2.611, M1 2.267, M2 3.995 | yes |
+| N1 MU1 (curvature part dropped) fails Q(10, 1e-12) on M0..M3 | all four | violations 18 / 32 / 21 / 19; largest ratio 7.7e7 / 7.6e7 / 8.8e8 / 3.1e8 | yes |
+| N2 MU2 (stiffness term halved) fails the reading on M0..M3 | all four | all four: the solve stops with `singular tangent: pivot ~1e-17` at node 81 (M3: pivot -18.5 at node 67); no residual series exists | yes (by a failed run, not by a violation) |
+| N3 Q(1, 1e-12) fails on M0 | violated | 3 violations | yes |
+| N4 Q(10, 0) fails on M0 | violated | 4 violations | yes |
+| N4 (report) M3 without the exemption | report | 0 violations: the exemption is exercised and not needed | report |
+| N5 (report) order of ADR 0404 (a4) on M0 | report | `[0.984, 1.157, 1.001, 1.135]`; M3 `[5.33, 1.15, 1.001, 1.135]` | report |
+| N5 (report) order of the last three read residuals above F, M0 | report | `[0.984, 1.001]` (two of the six solves have three such residuals) | report |
+
+N5 comment. The orders of ADR 0404 (a4) on M0 here are `0.98 .. 1.16`, not the `0.171 .. 1.57` of ADR 0507 amendment 3: the
+residuals are those of the corrected driver (amendment 3 changed the reference of the relative residual after the run that
+recorded 0.171 was made at 043ee2ea; the registered T2 test in `sa_contact.rs` is untouched and stays ignored). The order
+stays at 1 because the first kept residual of each solve is before the asymptotic range, as the arithmetic above says; the
+bound, not the order, is the reading.
+
+Mutations (scratch copies of 54a1ab4b):
+
+| id | mutation | caught by |
+|---|---|---|
+| MU1 | `contact.rs` line 823, curvature part dropped | N1 (4 of 4); `d1_q1_...` (Q1 on every model); ADR 0507 T1 |
+| MU2 | `contact.rs` line 822, `0.5 * eps` | N2 (4 of 4, by failed solves); `d1_q1_...` (the run panics); ADR 0507 T1 |
+| MR1 | `read` with every flag true (everything exempt) | Q2 (0 informative pairs in every model) |
+| MR2 | `read` with `r_{k+1} <= max(C r_k, F)` | N3 and N4 (0 violations) |
+
+All four caught.
+
+Gates (worktree, release): `cargo test -p rcfd-fem --release` passes (every test binary ok, none failed); `cargo test -p rcfd-api --release --test baseline_hashes` passes (3 passed, 1 ignored), unchanged; `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean; `cargo fmt -p rcfd-fem --check` clean; `cargo test -p rcfd-cli --release --test docs_site` passes (2 tests).
+
+Deviations from the registration: none. Not run: the "started near the solution" alternative of the item (the bound was
+registered); the linear-body Newton iterates; an initial gap `> 0` (probe 2: singular tangent in the total Lagrangian path
+when some contactor nodes start lifted; not diagnosed).
+
+**Decision by the rule: done**, for the clause as registered: the bound `r_{k+1} <= max(10 r_k^2, 1e-12)` on every Newton
+solve of the T2 punch (M0) and three variants, and the two controls fail it. Two limits of that: T2's active set never changes
+(the exemption is exercised only by M3, where it is not needed), and N2 fails by a singular tangent, not by a violation.
+
+Remaining questions, with recommendations:
+
+1. **The total Lagrangian path with a lifted contactor** (initial gap `> 0`, probe 2) stops with a singular tangent: the
+   indefinite curvature part of ADR 0507 amendment 2 has no fallback there (`nonlinear.rs` factors the tangent). Options: (a)
+   leave; (b) a follow-up that gives the total Lagrangian path a convexified tangent on a refused pivot (a `nonlinear.rs`
+   change); (c) document. Recommendation: (b) as a new item if the fan's press-fit or a gap-closing contact needs a lifted
+   start; (a) until then.
+2. **T2 of ADR 0507**: its ignored test stays a record of the ADR 0404 measure. Recommendation: leave it; this item's
+   `sa_contact_order.rs` M0 is the registered T2 measure.
+3. **A set change that the reading cannot judge**: the exemption has not been needed on any contact solve. Recommendation:
+   keep it (it costs nothing and is the F-560 reading); do not register further contact models for it until a case with a
+   chattering active set exists.
+
+## For the lead: roadmap entries
+
+> F-600 status done. Note: Structural solver, advanced tier. Follow-up of F-427 (ADR 0507, 2026-11-14). ADR 0519, 2026-11-14: the reading Q(C, F) of ADR 0515 applied to the contact solves of the total Lagrangian punch of ADR 0507 T2 (NewtonSolve residuals and active sets, no library change): every pair of consecutive residuals r_k, r_{k+1} of one Newton solve with k >= 1 whose correction did not change the set of active contactor nodes satisfies r_{k+1} <= max(C r_k^2, F), C = 10, F = 1e-12 (the rounding of the residual peaks at 9e-14); the Uzawa augmentation starts a new series (pairs with k = 0 and across augmentations are not read), with an informative pair in every load step. Met on T2 and three variants (4 steps, double pressure, an initial penetration that changes the set): no violation in 61 read pairs, largest r_{k+1}/r_k^2 2.6 (T2) and 4.4 over the four; the contact tangent without its curvature part violates it on all four (ratios 7.6e7 .. 8.8e8), with its stiffness term halved no solve converges; C = 1 and F = 0 fail on T2. The ADR 0404 order on T2 stays near 1 (0.98 .. 1.16); the reading is a bound, not an order. T2's active set never changes, so the exemption is exercised only by the penetration variant, where it is not needed. The total Lagrangian path stops with a singular tangent when some contactor nodes start lifted (initial gap > 0), not diagnosed. Mutations 4 of 4 caught. No library change, no case-file key.
+
+> Text F-427's note should gain: "Follow-up F-600 done (ADR 0519, 2026-11-14): the order of the T2 punch is read as the bound r_{k+1} <= max(10 r_k^2, 1e-12) per Newton solve, met; T2 of ADR 0507 stays an ignored record."
+
+> Follow-up (new item, optional): the total Lagrangian contact path with a lifted contactor (initial gap > 0): convexified tangent on a refused pivot in the nonlinear driver, deps F-427 and F-600; acceptance: "Every limit not stated here is registered in the ADR before the run. The total Lagrangian contact driver of ADR 0507 converges the punch of T2 with an initial gap of +3e-4 at the four nodes with x > 1.0, and the reading Q(10, 1e-12) of ADR 0519 holds on it (limits registered)."
