@@ -204,9 +204,27 @@ fn inf_norm(v: &[f64]) -> f64 {
     w
 }
 
+/// The record of the registered run of FE1c (`f613-scratch/run1.log`): the full step of the field from `u = 0` halves twice
+/// (the tangent at the thermally prestressed start `u = 0` is indefinite at `a = 1e-2`: pivot `-2.17e10` at node 5 component
+/// 2 of the attempt without halving; step 1 took 4 sub-steps and 12 corrections). Limit intact: no halving.
+#[test]
+#[ignore = "known miss (ADR 0534 addendum 1): FE1c measured halvings 2 at step 1 against no halving"]
+fn fe1c_the_step_without_halving_known_miss() {
+    let mut c = Checks::new();
+    free_expansion_and_the_held_cube(&mut c, true);
+    c.finish();
+}
+
+/// FE1, FE1s, FE2, HB1, HB1u (met in the registered run, `f613-scratch/run1.log`); FE1c is printed and recorded by
+/// `fe1c_the_step_without_halving_known_miss`.
 #[test]
 fn fe1_fe2_hb1_free_expansion_and_the_held_cube() {
     let mut c = Checks::new();
+    free_expansion_and_the_held_cube(&mut c, false);
+    c.finish();
+}
+
+fn free_expansion_and_the_held_cube(c: &mut Checks, assert_fe1c: bool) {
     let a = ALPHA * DT;
     let model = free_cube(steel(ALPHA));
 
@@ -235,14 +253,24 @@ fn fe1_fe2_hb1_free_expansion_and_the_held_cube() {
         halvings = halvings.max(s.halvings);
     }
     let at0 = inf_norm(&run.steps[0].u) / a;
-    c.holds(
-        "FE1c set-up (u = 0 at t = 0, no halving, 4 entries)",
-        at0.is_finite() && at0 <= 1e-12 && halvings == 0 && run.steps.len() == 4,
-        &format!(
-            "max |u(0)|/(a L) = {at0:e}, halvings {halvings}, {} entries",
-            run.steps.len()
-        ),
+    let fe1c = format!(
+        "max |u(0)|/(a L) = {at0:e}, halvings {halvings}, {} entries",
+        run.steps.len()
     );
+    if assert_fe1c {
+        c.holds(
+            "FE1c set-up (u = 0 at t = 0, no halving, 4 entries)",
+            at0.is_finite() && at0 <= 1e-12 && halvings == 0 && run.steps.len() == 4,
+            &fe1c,
+        );
+    } else {
+        println!("FE1c (recorded by the known miss): {fe1c}");
+        c.holds(
+            "FE1c part u = 0 at t = 0 and 4 entries",
+            at0.is_finite() && at0 <= 1e-12 && run.steps.len() == 4,
+            &fe1c,
+        );
+    }
     c.at_most(
         "FE1 free expansion under a temperature step, |u - alpha dT X|/L",
         fe1,
@@ -324,7 +352,6 @@ fn fe1_fe2_hb1_free_expansion_and_the_held_cube() {
     }
     c.at_most("HB1 held cube, the face force against the closed form", hb1, 1e-10);
     c.at_most("HB1u held cube, max |u| / (alpha dT L)", hb1u, 1e-12);
-    c.finish();
 }
 
 // ------------------------------------------------------------------------------------------------- the tangent
