@@ -216,6 +216,19 @@ Mutations, each expected to be caught by the check named:
 - Q3. Stress moments: `RandomStress` should carry the covariances `C_1` and `C_4` (weighted by `f` and `f^4`) so that a
   von Mises or a component stress feeds the rate without scaling an output channel. Recommended as a follow-up of F-417.
 
+## Amendment 1 (2026-11-14, before the corrected run): the basis of C2 and C6
+
+The first run of `sa_broadband` (once, all other tests met their limits there, see Addendum 1) built the bar B basis of C2 and C6
+with `ModalBasis::all_modes(&m, Some(1))`, which is the basis of **all** the modes of the 40-element bar (the argument is the
+thread count), not the one-mode basis the registration says ("one mode, bar B of ADR 0477"). The measured ratio of that
+set-up, `0.941825219777` against the registered `0.9888264677733556` (rel `4.75e-2`), is the broadband-over-narrow-band ratio
+of a many-mode response and not a miss of the formula: the test is a defective set-up. Its test
+`c2_c6_solver_moments_feed_it_unchanged` is kept as an ignored record (`#[ignore]`, with this number). The corrected test
+`c2_c6_one_mode_solver_moments_after_amendment_1` builds the one-mode basis as ADR 0477 M1 does: `modal_analysis(&m,
+&ModalOptions::new(1).tolerance(1e-12).residual_test(ResidualTest::Backward).threads(1))` and `ModalBasis::from_result`. Limits
+unchanged (C2 `<= 1e-5`, C6 bit equality); the bit equality of C6 on the all-mode moments had already held (exact) in the
+first run and is repeated.
+
 ## Addendum 1: results
 
 (to be written after the registered runs)
