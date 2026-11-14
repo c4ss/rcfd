@@ -300,6 +300,24 @@ B0 is committed after this ADR and before any library line; its constants are th
 - **Q3. Per-section Wagner coefficients.** Options: (a) uniform input as here; (b) `BeamSection::mono_symmetric(beta_y, beta_z)`.
   Recommendation (b) when a channel or a T section is wanted (changes the section constructor and its hash).
 
+## Amendment 1 (2026-11-14): two set-ups of the registration are defective; written after the library code was compiled and before any test of F-558 was run
+
+Two checks of the table cannot be run as written. No result of F-558 exists yet; the B0 digests of the base were recorded before.
+
+1. **L5.** A beam along `(1, 1, 0)/sqrt2` cannot be given fork supports with per-component displacement constraints (the
+   supports act on the global components). Replaced: L5 is the same LTB model along the global `y` axis with the orientation
+   vector `z` (so `e_1 = y`, `e_2 = z`, `e_3 = x`: the local DOF `u, v, w, theta_y` are the global components 1, 2, 0 and the
+   rotation about `z`), the end moments about `z` (component 5), the supports permuted; same limit `|M_cr/M_cr(axis x) - 1| <= 1e-6`.
+   New **L5b** (element level, skew): the global matrix of `element_resultant_geometric_stiffness` of an element along
+   `(1, 1, 0)/sqrt2` (and the orientation rotated with it) against `Q K Q^T` of the axis-`x` element, `Q` the rotation of the
+   coordinates: `max|difference| <= 1e-12 max|K|` (estimate `1e-15`).
+2. **R1.** An end-force set with shear and no moments is not in equilibrium (the moments change along the element by `M_y' =
+   V_z`, `M_z' = -V_y`, from the moment balance of the element about node 0). The shear terms and the moment terms jointly
+   give `omega x F` in the translation rows (by parts, `int M' (dtheta/dq) dx`: the moment terms supply the half that the shear
+   terms lack: the shear terms alone give half of it; hand check for the twist about `e_1`, row `w_1`, `V_y/2 + V_y/2`). R1
+   is run with the equilibrated set: `f = (-N, -V_y, -V_z, 0, 0, 0 | N, V_y, V_z, 0, L V_z, -L V_y)`; the compared quantity
+   and the limit (`<= 1e-12 max|F|`, all six translation rows, the three rotation axes) are unchanged.
+
 ## For the lead: roadmap entries
 
 (To be filled after the run, in the addendum.)
