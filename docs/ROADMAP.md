@@ -11949,7 +11949,7 @@ fixed by the item's registration ADR before any code.
     it exceeds a threshold registered from the records of ADR 0527; on the disc sector of ADR 0411 with 4 harmonic modes
     per index at 0.4 and 0.8 omega_ref the resulting schur_eta agrees with that of ADR 0492 within 1 percent where it
     exceeds 1e-9, the cost stays below half of the dense path, and the results of ADR 0527 keep their bits.
-  - note: Structural solver, advanced tier (plan ADR 0310). Optional. PARTIAL. ADR 0535, 2026-11-14: opt-in
+  - note: Structural solver, advanced tier (plan ADR 0310). PARTIAL. ADR 0535, 2026-11-14: opt-in
     SplitSchur::PerturbationChecked, and the new fields HarmonicSplitModes::perturbation_ratio (the series ratio
     |delta_2/delta_1| of ADR 0527, also reported by SplitSchur::Perturbation, which keeps its bits) and schur_fallback;
     a split mode whose ratio exceeds 0.08 (registered from the records of ADR 0527: the truncation miss is about the
