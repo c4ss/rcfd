@@ -7926,7 +7926,9 @@ fixed by the item's registration ADR before any code.
     coordinate's resolution). Six mutations caught. No line of rcfd-fv or rcfd-api changed. Open: ADR 0434 Q1 to Q3. ADR
     0446 (F-421, 2026-11-14) found that Symmetry planes add a dissipation to a flow tangential to them in the PISO step
     (+7 to +13 percent of the viscous impedance of an oscillating channel); this may be the cause of the VS miss of ADR
-    0434 (not tested). Re-check under F-531.
+    0434 (not tested). Re-check under F-531. ADR 0455 (F-531, 2026-11-14): the VS miss is the averaged component
+    diagonal of the PISO correctors next to the four Symmetry side walls; with PimpleSettings::component_diagonal = true
+    VS is 1.0e-10 U (limit 1e-6 U).
 - [~] **F-402** Aggregation multigrid for elasticity: rigid-body modes as near-null space, as a preconditioner of CG
   - depends on: F-026, F-381
   - acceptance: Every limit not stated here is registered in the ADR before the run. On every level the rigid-body modes
@@ -8322,7 +8324,9 @@ fixed by the item's registration ADR before any code.
     numbers), F-531 (Symmetry viscous flux). F-530 (ADR 0451, 2026-11-14): the divergence is the corrector instability
     of ADR 0214; with the consistent correctors and 8 outer iterations the Womersley-1 piston channel of this item (40
     cells across) runs at nu dt/dy^2 = 25 and 50 and matches the impedance within 0.46 and 0.32 percent after the
-    extrapolation.
+    extrapolation. ADR 0455 (F-531, 2026-11-14): the Symmetry-plane dissipation of amendment 3 is the averaged component
+    diagonal of the PISO correctors; with the opt-in corrected diagonal the registered W5 set-up (Symmetry planes) gives
+    8.3e-3 and 1.6e-3 against the formula, equal to W5c to 2.4e-6.
 - [ ] **F-422** J2 plasticity with isotropic and kinematic hardening: radial return and consistent tangent
   - depends on: F-408, F-389, F-397
   - acceptance: Every limit not stated here is registered in the ADR before the run. The tangent agrees with central
@@ -10310,14 +10314,29 @@ fixed by the item's registration ADR before any code.
     the match was met only after the amendment, with 8 outer iterations taken from a diagnosis. No library line changed
     (defaults bit-identical); six mutations caught; docs/dynamic-mesh.md. Open: ADR 0451 Q1 to Q3. Follow-ups F-535
     (opt-in refusal naming the diffusion number), F-536 (outer-iteration criterion).
-- [ ] **F-531** Viscous flux of the Symmetry condition for flow tangential to the plane
+- [~] **F-531** Viscous flux of the Symmetry condition for flow tangential to the plane
   - depends on: F-421
   - acceptance: Every limit not stated here is registered in the ADR before the run. Stokes' second problem (a wall
     oscillating in its plane, the fluid bounded by a Symmetry plane at a registered distance) and the oscillating plane
     channel of ADR 0446 between the two Symmetry planes of a one-cell reduction give the closed-form wall shear and
     impedance within registered limits; the extra dissipation measured by ADR 0446 (+7 to +13 percent of the real part)
     is explained and removed or documented; F-401's VS check is repeated with the result.
-  - note: Numerics. Found by F-421 (ADR 0446, 2026-11-14); may explain F-401's VS miss.
+  - note: Numerics. PARTIAL (ADR 0455, 2026-11-14; registered before the code, amendment 1 after a registered run). The
+    Symmetry condition's own coefficients give the tangential momentum exactly zero flux through an axis-aligned plane;
+    the extra dissipation found by ADR 0446 is the averaged component diagonal of the PISO correctors (HbyA_k = H_k/a_P;
+    the plane loads only the normal component's diagonal), located to round-off: Stokes' second problem with a Symmetry
+    plane one Stokes depth from the wall matches the exact two-corrector averaged step to 2e-14 and is +32 percent
+    (real) and -51 percent (imaginary) off the closed form rho sqrt(i w nu) tanh(k H), not falling with the mesh.
+    Removed by the existing opt-in PimpleSettings::component_diagonal (solver.component_diagonal = "corrected"): the
+    Stokes step is implicit Euler to 1e-11 and the extrapolated impedance and wall shear are within 2.5e-4 of the closed
+    form at 40 cells; ADR 0446's channel between two Symmetry planes equals the zero-gradient planes to 1e-5 (QF) and
+    2.4e-6 (W5 set-up, within 8.3e-3 and 1.6e-3 of the formula, where the registered W5 run of ADR 0446 missed with
+    8.55e-2); F-401's VS drops from 8.28e-5 U to 1.0e-10 U (limit 1e-6 U). Default unchanged (documented in
+    component-diagonal-default.md). Partial: Q4 (the default's excess with ten outer iterations against the
+    infinite-corrector sink 4 nu/(3 h^2)) missed on a defective set-up (the relaxed pimple constructor, amendment 1) and
+    its corrected run by 7.9e-2 (limit 5e-2), diagnosed: the converged step is the two-corrector map, which an exact
+    model reproduces to 0.4 percent. Five mutations caught (one only by a panic). No library line changed. Open: ADR
+    0455 Q1, Q2. Follow-up F-538.
 - [ ] **F-532** Damped modes: residual vectors for boundary dampers near the impedance
   - depends on: F-414
   - acceptance: Every limit not stated here is registered in the ADR before the run. damped_modes gains static residual
@@ -10375,3 +10394,11 @@ fixed by the item's registration ADR before any code.
     isotropic material within 1e-12; the paths still not opened refuse the variants by name; default paths
     bit-identical.
   - note: Structural solver, advanced tier. Follow-up of F-409 (ADR 0452, 2026-11-14).
+- [ ] **F-538** The averaged component diagonal in the relaxed PIMPLE loop
+  - depends on: F-531
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The channel of ADR 0455 QF with
+    Symmetry planes under PimpleSettings::pimple (alpha_u 0.8, alpha_p 0.5, one corrector, 10 outer iterations), whose
+    excess over the zero-gradient planes was -0.0021 against the averaged two-corrector PISO step's 0.36, is explained
+    by an exact linear model of the relaxed step that reproduces the measured impedance of both runs within registered
+    limits; the dependence on alpha_u is stated.
+  - note: Numerics. Follow-up of F-531 (ADR 0455, 2026-11-14). Size S.
