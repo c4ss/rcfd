@@ -291,6 +291,8 @@ Mutations (scratch copy `w49i-work/f524-scratch/tree` from `git archive` of 18ab
 | MU5 | closed-form `sigma_theta` with the factor 1 | ST, U (the test's `u` uses `sigma_theta`), O1, O2, P1, N2 |
 | MU6 | the polar turn with `- 2 p q N_xy` | SR (2.1e-1), ST, P1, O1 (`sigma_r` order 1.64) |
 
+Deviation: MU6 was registered as a sign change of `2 c s S_xy` in global components; the test turns the local tensor with `p = v . e_1`, `q = v . e_2`, so the same mutation is the sign of `2 p q N_xy` in that turn (it changes both polar components, hence SR caught it too).
+
 All six were caught. MU4 was caught by P1 alone, as registered ("P1, possibly U, SR, ST"): a body force sampled at the element
 centroid is still a second-order load error, so the closed-form checks with their 1.5 factor cannot see it; P1 can.
 
