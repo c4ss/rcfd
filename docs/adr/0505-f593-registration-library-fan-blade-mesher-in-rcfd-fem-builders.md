@@ -151,6 +151,57 @@ an inverted element; BM1 and BR1 cover only the default blade). No case-file key
 
 Both are open; none is taken.
 
+## Addendum 1: results (2026-11-14)
+
+Code: `fan_blade_tet4`, `fan_blade_tet10`, `computer_fan_blade_tet10` in `crates/rcfd-fem/src/builders.rs` (appended; no existing
+function changed); test `crates/rcfd-fem/tests/sb_fan_blade_builder.rs` (tests `builder_meshes_and_sets`, `builder_f387_results`);
+the subsection "The blade mesher in the library" in `docs/structural-solver.md`. One registered run of the test file (release),
+made once. No deviation from the registration; no limit changed; no known miss. The element-count formula of B1 and the
+`6 (n_c - 2) n_t n_s + 6 n_t n_s` of ADR 0500 are the same number.
+
+| id | limit | measured | met |
+|---|---|---|---|
+| BM1 | 0 differences, 1056 / 4416 elements | 0 and 0 differences; 1056 and 4416 | met |
+| BM2 | 0 differences (Tet10) | 0 and 0 | met |
+| BM3 | sets equal (Tet4 and Tet10) | 0 sets differ, both meshes | met |
+| BS1 | sizes `[hub, tip, pressure, suction]` | M1 `[44, 44, 192, 192]`, M2 `[92, 92, 768, 768]`, equal to the formulas, Tet4 and Tet10 | met |
+| BS2 | 0 common members | 0 | met |
+| BS3 | union = boundary, total formula | M1 472 = 472, M2 1720 = 1720, 0 missing, 0 extra | met |
+| BS4 | `<= 1e-12` | 2.9e-16 (M1), 1.8e-16 (M2) | met |
+| BS5 | `dot(A_s, A_p) < 0` | -1.11e-6 (M1), -1.12e-6 (M2) | met |
+| BR1 | `e_R`, `e_P <= 1e-8` | M1 1.19e-11, 1.02e-10; M2 1.29e-11, 1.22e-10 | met |
+| BR2 | 9 results bit-equal (M1, M2) | 0 of 9 differ on each; `d_tip` pressure 41.787 and 42.356 micrometres, centrifugal 197.05 and 201.58 micrometres, `f_1` 188.832747 and 186.051220 Hz | met |
+| BR3 | all finite | finite | met |
+| BC1 | 0 differences | 0 | met |
+| BC2 | equal to `axial_fan(1)`, differs from blade 0 | 0 differences to `axial_fan(1)`; 5712 to blade 0 | met |
+| BF1 | 7 refusals | 7 of 7 | met |
+| BF2 | `[2, 1, 1]` builds, 6 elements, sets non-empty | 6 elements, non-empty | met |
+| NC1 to NC3 | detected | 1 (differences > 0), 2 (checked), 3 (192 = 2 n_c n_s uncovered) | met |
+| DOC1 | docs_site passes | 2 passed | met |
+| EX1 | `cargo test -p rcfd-fem --release`, `baseline_hashes` | rcfd-fem: 166 test binaries ok, 0 failed (includes `sb_fan_blade.rs` unedited); baseline_hashes 3 passed, 1 ignored (as before) | met |
+| FM1 | fmt, clippy clean | `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean | met |
+
+Mutations (each once, on a scratch copy `f593-scratch/mut` with its own target directory):
+
+| id | mutation | caught by |
+|---|---|---|
+| MU1 | uniform chord spacing | BM1 (837 and 3415 differences), BM2, BR2 (9 of 9 differ) |
+| MU2 | `suction` also holds the pressure faces | BS1, BS2 (192 common), BS4 |
+| MU3 | `suction` drops one face | BS1, BS3 (1 missing), BS4 (6.4e-4) |
+| MU4 | orientation fix removed | not by BM1 as registered: the library's own `SolidMesh::add_block` refuses inverted elements, so the builder returned an error and the tests panicked at the `unwrap` (the failure is caught, by the construction check, earlier than the registered check) |
+| MU5 | `hub` classified at `j = 1` | the same way: the empty surface set made `add_surface_set` fail and the tests panicked at the `unwrap` (BM3, BS1 not reached) |
+| MU6 | blade index check removed | BF1 (the two blade-index refusals returned `Ok`) |
+| MU7 | `upgrade_to_tet10` omitted | BM2, BM3 |
+
+All seven mutations were caught; for MU4 and MU5 by an earlier library error rather than by the registered check.
+
+Decision by the rule: **partial**. Every check of the library half is met; the case-file clauses (c), (d) and the case-file part of
+(f) are not done (they need the maintainer's approval: the keys are in "Open questions").
+
+Remaining questions (both open, none taken): (1) the case-file keys; recommendation as written above (take them as proposed, in a
+follow-up item, with the schema golden updated by the maintainer and the file-vs-library bit test of clause (d)). (2) mid-edge
+nodes on the curved surface; recommendation (a), keep.
+
 ## For the lead: roadmap entries
 
-(To be written in addendum 1.)
+> F-593 status partial. Note: Structural solver, basic tier. Follow-up of F-387 (ADR 0500, 2026-11-14). Library half done in ADR 0505, 2026-11-14: rcfd_fem::builders has fan_blade_tet4, fan_blade_tet10 and computer_fan_blade_tet10 (the structured Tet10 blade mesh of ADR 0500 D1 for an AxialFan, or blade k of a ComputerFan, with the node sets all, hub, tip and the surface sets hub, tip, pressure and suction; zero divisions, n_c below 2, an invalid blade and a blade index out of range refused). At the F-387 divisions the meshes, the sets and the F-387 results (reactions, mean tip displacements, first frequency) equal the test's construction bit for bit; the four surface sets are disjoint and cover the boundary exactly (472 and 1720 faces; vector area sum 3e-16 of the total area); identities 1e-11 and 1e-10. Seven mutations caught. Section in docs/structural-solver.md. NEEDS THE USER for the case-file half: centrifugal load (axis, origin, speed) and mesh source fan_blade (fan, blade, divisions), proposed in the ADR open questions; the file-versus-library bit test and the solid-case-file.md keys follow with them.

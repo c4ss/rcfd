@@ -66,6 +66,23 @@ What it shows (measured 2026-11-14):
   the rotating blade are other roadmap items and are not part of this demonstration.
 * The blade surface is faceted (straight element edges): the meshed volume is 1.3 and 0.3 percent below the exact blade volume
   on the two meshes.
-* The structured blade mesh is built inside the test. It is not a library function, and the solid case file cannot describe
-  this blade or the centrifugal load yet (open questions of ADR 0500).
+* The structured blade mesh is available as a library function (see below). The solid case file cannot yet describe this blade
+  or the centrifugal load: the keys are proposed in [ADR 0505](adr/0505-f593-registration-library-fan-blade-mesher-in-rcfd-fem-builders.md)
+  and wait for the maintainer.
 * The tetrahedral mesher does not mesh the thin blade reliably (see above); the structured split is the route that works.
+
+## The blade mesher in the library
+
+`rcfd_fem::builders` has the structured blade mesh of the demonstration as a public function
+([ADR 0505](adr/0505-f593-registration-library-fan-blade-mesher-in-rcfd-fem-builders.md)):
+
+* `fan_blade_tet4(&AxialFan, [n_c, n_t, n_s])` and `fan_blade_tet10(...)`: the blade as linear or quadratic tetrahedra, with
+  `n_c` cells along the chord (cosine spaced, at least 2), `n_t` through the thickness and `n_s` along the span.
+  `computer_fan_blade_tet10(&ComputerFan, blade, [n_c, n_t, n_s])` takes blade number `blade` of a fan design (with its
+  manufacturing deviation, if any); `ComputerFan::default()` gives the blade of the demonstration.
+* Sets: the element set `all`; node sets `all`, `hub` and `tip`; surface sets `hub`, `tip`, `pressure` (the pressure side with
+  the leading and trailing edges) and `suction`. The four surface sets do not overlap and together make up the whole boundary.
+* Refused: a zero division, `n_c` below 2, a blade design that does not validate, a blade number at or above the blade count.
+* With the divisions `[12, 2, 8]` and `[24, 2, 16]` the meshes are bit for bit those of the demonstration test, and so are its
+  results. As there, the mid-edge nodes lie on the straight edges, not on the curved blade surface, and the function does not
+  check element quality of unusual blades.
