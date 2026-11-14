@@ -37,6 +37,9 @@
 //! omitted fixed-interface modes applied to the inertia load of the constraint modes), block `j + 1` is `K_ii^{-1} M_ii r` of
 //! the vectors kept in block `j`. Each candidate is M-orthonormalised (twice) against the kept modes and every vector before
 //! it and dropped when it lies in their span; the kept vectors are columns of `R`.
+//!
+//! Superelements of ADR 0536 (F-553): [`superelement::SuperelementModel`] attaches reduced parts to an ordinary model at its
+//! interface nodes for the static solve, the modal analysis and the direct harmonic solve.
 
 use crate::assemble::stiffness_with_materials;
 use crate::error::{FemError, Result, SetKind};
@@ -52,6 +55,8 @@ use rcfd_linalg::eigen::{
 use rcfd_linalg::skyline::SkylineLdlt;
 use rcfd_linalg::CsrMatrix;
 use std::path::Path;
+
+pub mod superelement;
 
 /// The work package that fills this module; `None` once it has landed.
 pub const PENDING: Option<&'static str> = None;

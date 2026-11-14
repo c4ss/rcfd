@@ -5399,9 +5399,9 @@
     "deps": [
       "F-430"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. A reduced part of ADR 0469 is added to a SolidModel on its interface nodes and solved with the model's ordinary elements in the static solve, the modal analysis and the direct harmonic solve. A bar of a reduced half and an ordinary half equals the full model within 1e-10 in statics and its first three frequencies are within 0.1 percent and not below the full model's; beams and shells as interface nodes covered; without a reduced part every result bit-identical.",
-    "note": "Structural solver, advanced tier. Follow-up of F-430 (ADR 0469, 2026-11-14)."
+    "note": "Structural solver, advanced tier. Follow-up of F-430 (ADR 0469). DONE. ADR 0536, 2026-11-14: rcfd_fem::cms::superelement: SuperelementModel attaches reduced parts of ADR 0469 to an ordinary host model at the host nodes of their boundary positions (same component; rotations of beam and shell nodes joined, a component the host lacks refused), the part's generalised coordinates numbered after the host's independent unknowns; static solve (part interior by the exact static recovery), modal analysis (subspace iteration on the combined K, M) and direct harmonic solve with loss-factor damping per host and part. Bar of a reduced half and an ordinary half: statics within 6.4e-13 (beam 4.8e-14, shell 8.5e-11), first three frequencies 4.5e-7 to 4.6e-4 above the full model (beam 5.4e-7 to 4.8e-4, shell 1.9e-8 to 9.4e-5) and never above the two-part assembly's, every mode kept exact within 3.1e-12, harmonic within 1.1e-11 of DirectHarmonic with every mode kept and 7.0e-3 up to 1000 rad/s with five; defaults bit-identical (10 digests). No case-file key (with F-603's interface_enrichment, open)."
   },
   {
     "id": "F-554",
