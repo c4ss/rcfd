@@ -383,3 +383,35 @@ Every measure is required finite before it is compared (a non-finite value misse
    key for the nonlinear driver.
 4. **F-580** (creep on the B-bar Hex8, point-wise, growth between `5 t*` and `20 t*`): C2 to C4 are its acceptance on this
    driver. Recommend that the lead mark F-580 by ADR 0506 if they are met (the note proposed in the addendum).
+
+## Amendment 1 (2026-11-14, written after the first registered run of `si_fbar.rs` and before any corrected run)
+
+**What happened.** In the single registered run (log `f587-scratch/run1-si_fbar.log`) the test
+`pt1_to_pt6_ps1_the_patch_through_the_driver` ran PT1 to PT4 and PS1 (all met, numbers in addendum 1) and then stopped at PT5
+with an error of the driver: `solve_in_time` refused step 1 after 5 halvings, "not converged in 20 iterations (relative
+residual 3.0e-16, energy ratio 2.8e-1)". PT6 was not reached.
+
+**Diagnosis: a defective set-up, not the element.** The boundary values of PT5 are constant in time and the creep flow of a
+homogeneous field is homogeneous, so at the start of every time step the interior is already in equilibrium: the first
+correction of the attempt is rounding noise and so is every later one, and the driver's energy criterion (the last correction's
+energy at most `1e-10` of the first, ADR 0404 D5) compares two rounding-level numbers and cannot be met although the residual is
+`3e-16`. The same holds for every formulation (the Full element gives the same homogeneous field) and for PT6. The set-up gives
+the driver no work to do; it does not test the patch.
+
+**Corrected set-up, registered now.** PT5' and PT6' prescribe the boundary field through a displacement history of
+`solve_in_time_with` (ADR 0499 D1): every boundary node component `u_k(x) = (FIELD_C + FIELD_A x)_k` as a `MotionHistory` with
+the factor `s(t)` linear from `s(0) = 1` to `s(2) = 2` (PT5', the creep material and times `[1, 2]`) and from `s(0) = 1` to
+`s(1) = 2` (PT6', the viscoelastic material and times `[0.01, 0.1, 1]`); the interior error at each step end against `s(t_k)`
+times the linear field, relative to the largest component of that scaled field (the measure of PT1). Each step then starts
+from the interior of the previous step end with new boundary values, a correction of order the field's increment. Limits
+unchanged: `1e-10` each; the set-up check of PT5 unchanged (creep strain `> 0` at every point at `t = 2`). The rows met in the
+first run (PT1 to PT4, PS1) continue unchanged in `pt1_to_pt4_ps1_met_rows`; the test of the first run stays as the ignored
+record of that run.
+
+**The known miss C4 is not amended.** C4 (the growth of the point-wise error from `5 t*` to `20 t*`, limit `2e-3`) was
+measured at `6.02e-3`: a miss of a registered limit, recorded as `c1_to_c4_cl_creep_cylinder_known_miss` with the limit intact;
+the met rows of that run (C1 to C3, CL) continue in `c1_to_c3_cl_creep_cylinder_met_rows`. Its diagnosis (addendum 1) uses one
+diagnostic run registered here, without a limit: the same cylinder with `p / 10` and `A = 1/(E (p/10)^3)` (so `t* = 1 s` and
+every stress over `p` unchanged in small strain, every strain ten times smaller), the point-wise error over `p` printed at `5,
+7.5, ..., 20 t*` with the radius and angle of the worst point; expected, if the growth is the total Lagrangian geometry change
+against the small-strain closed form, a growth about ten times smaller.
