@@ -244,3 +244,14 @@ is predicted.
 - No case-file key (open question). Everything not covered by ADRs 0469, 0474 and 0511 stays not covered (free-interface methods,
   damping other than a uniform loss factor in the assembly, pre-stress, cyclic constraints, non-zero constraint values, reduced
   parts in an ordinary model: F-553).
+
+## Amendment 1 (2026-11-14, written before any run of the checks)
+
+Found while writing the tests, before any check was run: `ReducedPart::recover_static` recovers the interior from
+`static_interior` (`K_ii^{-1} f_i`, exact) and `ReducedPart::solve_static` solves `K_hat u_b = f_hat`, and `K_hat` does not see the
+vectors (`K_bR = 0`), so ST-E3 and ST-E4 as registered do not go through `R` at all: they hold whatever the enrichment does. They
+are kept as registered (a record that the static recovery path is unchanged) and each gets a second form that goes through the
+vectors: **ST-E3b / ST-E4b**, the same parts and options, the single-part assembly `Assembly::new(vec![part])`, its `harmonic(0,
+0)` with the model's load, `expand` of the coordinates, against `solve_static` of S, every equation; limit `<= 1e-10` each,
+estimate 1e-13 (the measure of ADR 0511 ST-P4: 1.3e-14 to 9.5e-14). Both forms are in the decision rule. MU3 and MU4 are also
+expected to be caught by ST-E3b if they break the M-orthonormality the expansion relies on; nothing else changes.
