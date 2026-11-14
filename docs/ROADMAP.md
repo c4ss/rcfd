@@ -8120,7 +8120,10 @@ fixed by the item's registration ADR before any code.
     moduli refused with the key; default bits (12 digests) and baseline hashes unchanged; eight mutations caught. Two
     check set-ups were corrected by amendment 1, and their records were kept. Case-file key not added (recommended:
     viscoelastic = { base, terms, shift }, nonlinear transient study only). Follow-ups below. Follow-ups F-576, F-577.
-- [ ] **F-411** Creep: power law with time hardening, implicit integration with a consistent tangent
+    The quasi-static time-stepping driver proposed by ADR 0485 exists as nonlinear::solve_in_time (ADR 0489,
+    2026-11-14), with constant loads; it reproduces the loop of solve_from_at bit for bit for the viscoelastic element.
+    Load histories and a temperature remain for its follow-up.
+- [x] **F-411** Creep: power law with time hardening, implicit integration with a consistent tangent
   - depends on: F-408, F-397
   - acceptance: Every limit not stated here is registered in the ADR before the run. The tangent agrees with central
     differences within 1e-6. Uniaxial constant stress: creep strain A sigma^n t within 1e-8 for m = 0 and A sigma^n
@@ -8132,8 +8135,23 @@ fixed by the item's registration ADR before any code.
     rotation, n = 3: the tip creeps at the rate A times the integral of (rho Omega^2 (L^2 - r^2)/2)^n over the length
     within 0.5 percent (the stress is statically determinate). A step whose creep-strain increment exceeds the
     registered limit is halved; a non-converged local iteration is an error with the element.
-  - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size S. Stub ADR 0314; the registration is
-    written by the implementation agent before any code.
+  - note: Structural solver, advanced tier. DONE. ADR 0489, 2026-11-14 (registration of stub ADR 0314): power-law creep
+    with time hardening in rcfd-fem (mat_creep.rs). The von Mises form d eps_c/dt = (3/2) A q^(n-1) t^m s on an
+    isotropic base, integrated by backward Euler in the stress with the time exponent integrated exactly over the step,
+    a monotone local Newton (n >= 1, at most 50 iterations) and its consistent tangent; the state is the 7 values of ADR
+    0440. The Newton driver takes it at a point context with no new history store; nonlinear::solve_in_time is a minimal
+    quasi-static time-stepping driver over solve_from_at (constant loads and prescribed values, a limit of the
+    creep-strain increment of a step, halving); a non-converged local iteration is a located error with the element. The
+    static load-factor driver and every linear path refuse the material, naming mat_creep::FOLLOW_UP. Met: tangent
+    against central differences within 1.3e-9 (material) and 8.7e-10 (Hex8, Hex20 elements); uniaxial constant stress
+    within 5.8e-13 (m = 0) and 2.0e-13 (m = -0.5), one element within 4.5e-10; relaxation within 1.7e-3 (n = 3) and
+    7.2e-4 (n = 5) at 800 steps, order 0.994; plane-strain cylinder b/a = 2, n = 4, Lame within 3.6e-3 of p and the
+    stationary field within 2.0e-3 of p after 5 t* on element means (point-wise deviatoric part 9.7e-4; the point
+    pressure of the fully integrated Hex20 drifts by volumetric locking, 3.2e-2, reported); rotating radial bar, tip
+    creep rate within 9.6e-4; a step above the increment limit halved, bit-equal to the explicitly halved steps; a
+    non-converged local iteration located with its element; default bits (16 digests) and baseline hashes unchanged;
+    nine mutations caught. Case-file key not added. Follow-ups proposed in ADR 0489. Literature cited from memory
+    (marked in reference-data.md). Follow-ups F-580, F-581.
 - [~] **F-412** Direct harmonic solve: complex symmetric factorisation, structural (hysteretic) damping, discrete dampers, base excitation
   - depends on: F-408, F-373, F-374, F-383, F-399
   - acceptance: Every limit not stated here is registered in the ADR before the run. rcfd-linalg: a random complex
@@ -11112,7 +11130,7 @@ fixed by the item's registration ADR before any code.
     elements, or within a registered discretisation limit. For equal weights the result equals the LossFactor::Table
     route of ADR 0485 at the table points within 1e-12. The damped modes refuse the material or take it at a registered
     fixed frequency.
-  - note: Structural solver, advanced tier. Follow-up of F-410 (ADR 0485, 2026-11-14). ADR 0491, 2026-11-14: the direct
+  - note: Structural solver, advanced tier. DONE. Follow-up of F-410 (ADR 0485). ADR 0491, 2026-11-14: the direct
     harmonic solve (harmonic_direct.rs) takes a viscoelastic material directly, by mat_visco::complex_moduli at each
     frequency: with equal weights one part, the base stiffness times E*(omega)/E; with unequal weights two parts, the
     stiffness of 2 G_0 I_dev times G*/G_0 and that of K_0 1 (x) 1 times K*/K_0 (exact: the stiffness is linear in the
@@ -11125,7 +11143,7 @@ fixed by the item's registration ADR before any code.
     dispersion of the linear element, observed order 2.00); every response against the discrete chain within 1.4e-11;
     two materials within 2.1e-12; equal weights against the LossFactor::Table route at the table points within 1.4e-13;
     zero frequency, shift and no-term checks within 1.7e-14, 1.7e-15 and 0; threads bit-identical; seven mutations
-    caught; default bits (11 digests) and baseline hashes unchanged.
+    caught; default bits (11 digests) and baseline hashes unchanged. Follow-ups F-582, F-583.
 - [ ] **F-578** Geometrically nonlinear shells in the Newton driver
   - depends on: F-573
   - acceptance: Every limit not stated here is registered in the ADR before the run. Shell4 and Shell3 gain an internal
@@ -11145,3 +11163,40 @@ fixed by the item's registration ADR before any code.
     its first frequency in a light fluid compared with the first-order estimate from the added mass within a registered
     limit.
   - note: Structural solver, advanced tier. Optional. Follow-up of F-551 (ADR 0488, 2026-11-14).
+- [ ] **F-580** Creep on the B-bar Hex8: point-wise stationary field of the thick cylinder
+  - depends on: F-411, F-390
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The B-bar Hex8 takes the creep
+    material on the Newton driver and solve_in_time. The plane-strain cylinder of ADR 0489 (b/a = 2, n = 4) reaches the
+    stationary field point-wise within 2 percent of p after the registered redistribution time, and the point-wise error
+    does not grow between 5 t* and 20 t* by more than the registered bound. The fully integrated elements keep their
+    bits.
+  - note: Structural solver, advanced tier. Follow-up of F-411 (ADR 0489, 2026-11-14).
+- [ ] **F-581** Creep with a temperature factor and load histories on the time-stepping driver
+  - depends on: F-411, F-410
+  - acceptance: Every limit not stated here is registered in the ADR before the run. Material::Creep takes an optional
+    Arrhenius factor exp(-Q/(R T)) with the temperature of the point context; at a uniform temperature the uniaxial
+    creep strain equals the closed form with A exp(-Q/(R T)) within 1e-8. solve_in_time takes load and
+    prescribed-displacement histories against time (linear between points) and a uniform temperature; with constant
+    histories it gives the bits of ADR 0489. The relaxation and creep checks of ADR 0485 (R1, C1, C2) run on it with
+    their limits. Materials without the factor keep their bits.
+  - note: Structural solver, advanced tier. Follow-up of F-411 (ADR 0489, 2026-11-14). Changes the data model:
+    maintainer's call.
+- [ ] **F-582** The viscoelastic material in the damped modes at a fixed frequency
+  - depends on: F-577
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The damped modes take a
+    viscoelastic material at a reference frequency given in the options: the undamped basis from the storage shear and
+    bulk moduli at that frequency and the loss stiffness of their loss moduli projected on it. On the 40-element rod of
+    ADR 0491 (rod A) with the reference frequency at its first resonance, the first damped root equals the root of the
+    discrete chain with the complex modulus at that frequency within 1e-8 relative, and its loss factor 2 |Re lambda|/Im
+    lambda equals E''/E' at that frequency within 1e-2 relative (first order in the loss). Models without the material
+    keep their bits.
+  - note: Structural solver, advanced tier. Follow-up of F-577 (ADR 0491, 2026-11-14).
+- [ ] **F-583** The harmonic stress of a viscoelastic material in the direct harmonic solve
+  - depends on: F-577
+  - acceptance: Every limit not stated here is registered in the ADR before the run. DirectHarmonic::stress of a
+    response with a viscoelastic material returns (G*/G_0) dev sigma_0 + (K*/K_0) vol sigma_0 at each integration point,
+    sigma_0 the elastic stress of the base. On the rods A, B and C of ADR 0491 at 40 elements the axial (or shear)
+    stress at the integration points equals the modulus times the strain of the discrete chain within 1e-9 relative; for
+    equal weights it equals the stress of the LossFactor::Table route within 1e-12. Models without the material keep
+    their bits.
+  - note: Structural solver, advanced tier. Follow-up of F-577 (ADR 0491, 2026-11-14). Needed for blade fatigue.
