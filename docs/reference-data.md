@@ -1750,3 +1750,21 @@ by the existing solver paths (`solve_static`, `ModalBasis::all_modes`, `modal_an
 | Fixed-interface reduction `T_cb = [[I, 0], [Psi, Phi]]`, `K_r = diag(K_hat, Lambda)`, `M_r` with `M_hat = M_bb + M_bi Psi + Psi^T M_ib + Psi^T M_ii Psi`, `M_bq = (M_bi + Psi^T M_ii) Phi` | derived | Rayleigh-Ritz projection on `T_cb`, ADR 0469 design; R. R. Craig and M. C. C. Bampton, AIAA J. 6 (1968) 1313: NOT read, from memory |
 | Reduced frequencies bound the full ones from above; nested bases give non-increasing eigenvalues; every fixed-interface mode kept gives every frequency exactly; rigid motions of a free part carried by the constraint modes | derived | min-max principle; congruence by a square nonsingular `T_cb`; `K_q r = 0` gives `r_i = Psi r_b` (ADR 0469 design) |
 | Truncation estimate of the bar (16 x 2 x 2 Hex8, two halves, five modes each): first three frequency errors 2.8e-6, 2.8e-6, 3.4e-4, axial 0.10; harmonic error above 1e-2 from 1894 rad/s, 0.85 at the axial resonance | computed | numpy 1-D family chains fitted to the full model's first frequency per family, `f430-scratch/est/estimate.py`, `band.py` (ADR 0469 arithmetic 2, 3); measured 4.5e-6, 5.5e-6, 5.6e-4, 0.0999; 1978 rad/s and 0.94 |
+
+## F-420 stress stiffening of beams and shells (ADR 0473)
+
+No source was read for F-420; the books and the paper below are cited from memory for the names and the published form. Every
+matrix is derived in ADR 0473 (arithmetic 1 to 5, D1 to D5) from the second variation of the strain energy under a constant pre-stress
+and from the kinetic energy of the motion perpendicular to the axis; the references of the checks are closed forms or the
+solid model of the existing solver (Hex20 for E1 to E3).
+
+| Item | Status | Source |
+|---|---|---|
+| Euler loads `pi^2 E I/L^2` (pinned) and `pi^2 E I/(4 L^2)` (clamped-free) with the shear correction `P = P_E/(1 + P_E/(kappa G A))` (Engesser) | cited | S. P. Timoshenko and J. M. Gere, Theory of Elastic Stability, 2nd ed., McGraw-Hill 1961, ch. 2: NOT read, from memory |
+| Taut-beam frequencies `w_n^2 = ((n pi/L)^4 E I + (n pi/L)^2 T)/(rho A)` of a pinned beam under tension `T` | derived | separation of variables of `E I w'''' - T w'' + rho A w_tt = 0` (ADR 0473 arithmetic 3) |
+| Beam geometric stiffness `N/(30 L)[36, 3L, -36, 3L; ...]` per bending plane, `N/L` axial and `N I_p/(A L)` torsion terms, with the shear-flexible (Timoshenko) interpolation | derived | second variation of the axial strain under `N` (ADR 0473 arithmetic 1, D1); W. McGuire, R. H. Gallagher and R. D. Ziemian, Matrix Structural Analysis, 2nd ed., Wiley 2000, ch. 9: NOT read, from memory |
+| Plate buckling `N_cr = 4 pi^2 D/a^2` (uniaxial) and `2 pi^2 D/a^2` (equal biaxial) of a simply supported square plate, `D = E t^3/(12 (1 - nu^2))` | cited | Timoshenko and Gere, op. cit., ch. 9: NOT read, from memory |
+| Shell geometric stiffness `int N_ab (dN_i/dx_a)(dN_j/dx_b) dA` on the three translations, `N = t Lambda S Lambda^T` | derived | ADR 0473 D2 (second variation of the membrane strain) |
+| Spin-softening mass `int rho (P u) . (P u) dV`, `P = I - a a^T`, beam section and shell rotary terms; the flap-lag identity `w_flap^2 - w_lag^2 = Omega^2 (1 - f_rot)` | derived | ADR 0473 arithmetic 4, D3 |
+| Centrifugal load of a beam: the consistent nodal load of `rho A Omega^2 P (x - p)` and the section moment `-rho Omega^2 (I_z a_2 e_2 x a + I_y a_3 e_3 x a)` | derived | ADR 0473 arithmetic 5, amendment 1 (U6) |
+| Stiffening slope of a rotating radial cantilever (Southwell coefficient) `Q = 1.193336` of the first flap mode | computed | numpy Rayleigh quotient, `f420-scratch/probe_rot.py` (ADR 0473 arithmetic 4, after ADR 0403); measured 1.19395 (R3) |

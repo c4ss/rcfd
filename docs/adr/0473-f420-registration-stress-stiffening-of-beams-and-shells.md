@@ -331,3 +331,85 @@ force, `rho Omega^2 (A int (x_c - p) x P (x_c - p) dx + L m)` (Simpson's rule, e
 moment of arithmetic 5): max component difference over the largest component, limit `<= 1e-12`. The consistent load gives the
 exact resultant because a rigid rotation (`u_c = dtheta x (x_c - p)` linear, `theta = dtheta` constant) is in the element's
 fields. Mutation **MU9**: the sign of the section moment reversed; expected to be caught by U6.
+
+## Addendum 1 (2026-11-14): results
+
+Each registered run made once (`crates/rcfd-fem/tests/sa_geometric_struct.rs`, release build); every value is printed by the
+test.
+
+| Check | Measured | Limit | Result |
+|---|---|---|---|
+| B1 pinned, `P_h/P_Eng - 1` (`P_h` 1.60433e7) | 3.43e-4 | `1e-3` | met |
+| B2 clamped-free (`P_h` 4.08621e6) | 2.23e-5 | `1e-3` | met |
+| B3 n = 1, 2 | 5.15e-5, 2.58e-4 | `5e-3` | met |
+| R1 slender beam, `(w_f^2 - w_l^2)/Omega^2 - 1` | 9.69e-8 | `1e-6` | met |
+| R2 `S/Q_h - 1` (`S` 1.193358, `Q_h` 1.193947) | 4.93e-4 | `1e-2` | met |
+| R3 `Q_h/1.193336 - 1` | 5.12e-4 | `2e-3` | met |
+| R4 F-396 beam, identity against `1 - f_rot,h` (identity 0.999039) | 2.61e-9 | `1e-5` | met |
+| R5 `f_rot,h/9.683e-4 - 1` (`f_rot,h` 9.6087e-4) | 7.68e-3 | `2e-2` | met |
+| P1, P2 Shell4 16 x 16 | 3.30e-3, 3.30e-3 | `2e-2` | met |
+| P3, P4 Shell3 32 x 32 x 2 | 4.77e-3, 4.77e-3 | `4e-2` | met |
+| S1 Shell4 n = 1, 2 | 9.84e-4, 5.12e-3 | `1e-2` | met |
+| S2 Shell3 n = 1, 2 | 8.58e-4, 4.31e-3 | `1e-2` | met |
+| E1 Shell4 twisted strip against Hex20, tracks 1 to 4, four speeds | 5.92e-3 | `2e-2` | met |
+| E2 Shell3 twisted strip | 4.05e-2 | `4e-2` | **missed** (known miss, below) |
+| E3 no loss of stiffness, lowest MAC (Hex20, Shell4, Shell3) | 0.999712, 0.999709, 0.999708 | `> 0.9` | met |
+| U1 beam `K_sigma` at `Phi ~ 0` | 2.1e-16 | `1e-10` | met |
+| U2 `|K t|/|K|` beam, Shell4 (warped), Shell3; symmetry | 7.4e-18, 2.3e-16, 3.5e-16; exact | `1e-11`; exact | met |
+| U3 Shell4, Shell3 | 2.2e-16, 0 | `1e-11` | met |
+| U4 beam sum; shell translations; flat shell rotations | 3.2e-16; <= 2.2e-16; <= 2.2e-16 | `1e-11` | met |
+| U5 force sum; parallel beam | 2.3e-16, 4.6e-16 | `1e-12` | met |
+| U6 resultant moment | 1.8e-15 | `1e-12` | met |
+| D1 `si_beam.rs`, `si_beam_loads.rs`, `si_shell_transformation.rs` copies | 1.4e-14, 7.5e-15, 0 | `1e-12` | met |
+| B1b digests | equal | equal | met |
+| RF1 mixed Hex8 + Shell4 static pre-stress | `NotYetSupported { item: "pre-stress", .. }` | refused | met |
+| N1 B1, B2 against raw Euler | 2.47e-2, 6.35e-3 | `> 1e-3` | as expected |
+| N2 B3 n = 1 without pre-stress | 0.500 | `> 5e-2` | as expected |
+| N3 R1 without spin softening | 1.2e-13 | `< 1e-3` | as expected |
+| N4 without stress stiffening, `|S|` | 9.7e-8 | `< 1e-2` | as expected |
+| N5 P1 in tension | no positive factor | empty | as expected |
+| N6 E1 without stress stiffening at 360 rad/s, track 1 | 0.494 | `> 5e-2` | as expected |
+
+**Set-up correction (E1 to E3, before any comparison).** The registered map of the Hex20 strip, `p -> S(p[1], p[0]) + p[2] n`,
+swaps the first two box axes and so inverts every element (the first run stopped at the mesh: `InvertedElement`, Jacobian
+-2.2e-9). The test takes the thickness coordinate as `-p[2]`: the same set of points (the box is symmetric in `p[2]`), the
+element orientation kept. No limit, speed or mesh changed.
+
+**E2 known miss (diagnosed).** The worst ratio is on the third track (nearly speed-independent, 460.73 Hz Shell3 against 442.80
+Hz Hex20 at rest) at rest, 4.050e-2, and 4.006e-2 at 360 rad/s; the other three tracks are within 3.8e-3. The miss is in the
+Shell3 rest stiffness of that mode (Shell4 is within 5.3e-3 of Hex20 on the same track), which F-420 does not change: the speed
+trend of the track (461.630/460.730 = 1.00195) follows the Hex20 one (443.852/442.797 = 1.00238). Recorded as the ignored
+`e2_twisted_strip_shell3_known_miss`; the limit was not changed.
+
+**Mutations** (scratch copy, one at a time, the whole test file):
+
+| Id | Expected | Caught by (measured) |
+|---|---|---|
+| MU1 | R1, U2 | R1 (1.19), R2, R4, U1 (1.0), N3; U2 did not catch it (dropping a plane keeps `K t = 0`) |
+| MU2 | U4 | U4 beam sum (2.7e-4) |
+| MU3 | P1, P2, S1 | P1, P2 (0.99), P3, P4, S1, S2 (99.6), E1, E3 |
+| MU4 | E1 | E1 (0.467), S2 (0.127) |
+| MU5 | R3 | R3 (3.3e-2), U5 (1.16), U6 |
+| MU6 | B1 | B1, B2 (no factor: test panics), B3 (0.50), R2, R3, S1, S2, E1, P1 to P4 |
+| MU7 | U4 | U4 Shell4 flat rotation (1.0) |
+| MU8 | U4 | U4 Shell3 and Shell4 flat rotation (0.64) |
+| MU9 | U6 | U6 (5.0e-3) |
+
+Every mutation was caught by its expected check except MU1 by U2 (caught by R1 as registered first).
+
+**Decision (rule above): partial.** Every acceptance clause is met (B1, B2, B3, R1, R2, P1 to P4, S1, S2, E1, a10 by B1b);
+the supplementary E2 is missed and recorded as a known miss. The existing tests of `rcfd-fem` pass with the records of D7.
+
+Process notes: the brief asked for the F-420 entries of `docs/ROADMAP.md` and `docs/roadmap.json` to be updated on the branch,
+which AGENT_RULES rule 9 leaves to the lead; the brief was followed. A fourth record was retired beyond the three of D7: the
+N4 row "centrifugal on a beam (unchanged)" of `si_shell_transformation.rs::s3_n2_to_n4_refusals` (ADR 0432), now an ignored
+record continued as `s3_n2_to_n4_refusals_after_f420` with the D1 balance.
+
+## For the lead: roadmap entries
+
+> F-420 follow-up: the Shell3 rest stiffness of the twisted strip's third mode is 4.05 percent above Hex20 (Shell4 0.53
+> percent); a diagnosis of the Shell3 membrane-bending coupling on warped triangles (CST membrane, MITC3 shear) against the
+> Hex20 strip, before any change to Shell3.
+> F-420 follow-up: the pre-stress of a static result on a model with both solid and structural elements (refused now, RF1).
+> F-420 follow-up: the bending-moment, shear-force and Wagner terms of the beam's geometric stiffness (lateral-torsional
+> buckling) and the `t^2/12` rotation terms of the shells' geometric stiffness.
