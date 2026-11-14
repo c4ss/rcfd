@@ -250,3 +250,92 @@ made.
 - The rest basis at a loss of stiffness: as ADR 0482, the speed `K_eff` in `Q`, the rest factor as preconditioner; F8 checks
   the path only (all four indices unstable there).
 - No case-file key, no CLI output.
+
+## Addendum 1: results (2026-11-14)
+
+Registered run: `f575-scratch/run1.log` (commit 140f15db, release, made once, `--test-threads=1`). F5 digests recorded at
+12fce5c9 (commit 2ab63529) before any library line. Code: `crates/rcfd-fem/src/gyro.rs` only (the module comment; the field
+`HarmonicSplitModes::schur_eta`; `project_and_solve` now wraps `project_and_solve_with`, which also returns the symmetrised
+projected matrices; `sector_split_at` gains the flag `schur`, true from `split_modes`, false from `split_campbell`; the new
+section at the end of the file: `shifted_apply`, `schur_error`). `rotating.rs`, `damped.rs`, `cyclic.rs`, `mpc.rs` not edited.
+Tests: `crates/rcfd-fem/tests/sa_gyro_sector_schur.rs` (4 tests, 1.5 s together), `sa_gyro_sector_schur_default_bits.rs`.
+
+`omega_ref = 1655.3226` rad/s.
+
+| Id | Check | Limit | Measured | Met |
+|---|---|---|---|---|
+| F1 | matches (MAC `>= 0.99`, distinct), every index and speed | each | holds (smallest MAC 0.999982) | yes |
+| F1 | `|err/schur_eta - 1|` where `schur_eta > 1e-9`; count | `<= 0.1`; `>= 30` | **3.363e-4** (`err/schur_eta` in `[0.99966, 1.00000]`); 34 (16 at 0.4, 18 at 0.8) | yes |
+| F2 | the same where `err > 1e-9` | `<= 0.1` | 3.363e-4 over the same 34 modes | yes |
+| F3 | `schur_eta` Some, finite, `>= 0`, every matched mode | each | holds (48 of 48) | yes |
+| F4 | library against the test-side dense reference where the latter `> 1e-9` | `<= 1e-2` | 3.25e-7 (34 modes) | yes |
+| F6 | `None` without `split_correction` and without `coriolis`; lengths | each | holds | yes |
+| F7 | B41: every `schur_eta == Some(0)` | each | holds (42, 84, 84, 42 modes at both speeds) | yes |
+| F8 | DSS at `10 omega_ref`: `None` exactly where `eta` is `None` | each | holds (all four indices unstable: every entry `None`, so the "Some otherwise" half is vacuous, as in ADR 0482 L2) | yes |
+| F5 | 6 digests of 12fce5c9; the 13 digests of ADR 0481 and the 6 of ADR 0482; `baseline_hashes`; `cargo test -p rcfd-fem --release` | `==`; pass | 6 of 6 equal; 13 of 13; 6 of 6; `baseline_hashes` pass (3 passed, 1 ignored); `rcfd-fem` pass (668 passed, 0 failed, 169 ignored) | yes |
+| N1 | the `eta` of ADR 0482, largest `|err/eta - 1|` where `eta > 1e-9` | `> 0.1` | 1.621 | as expected |
+| N2 | test-side estimate without the gyroscopic coupling | `> 0.1` | 0.999 | as expected |
+
+Records: below 1e-9 (14 modes, `err` from 1.0e-11 to 8.3e-10) `err/schur_eta` lies in `[0.9877, 1.0183]` (rounding of the
+dense solves at the 1e-11 level). The unmatched split modes (the top half of the enlarged basis) all carry a `schur_eta` (no
+`None`), from 9.8e-4 to 73.6: they are poor approximations, and near the complement spectrum the frozen estimate is not
+validated (D3). Wall time of `split_modes` with the new value 0.007 to 0.21 s per index against 0.003 to 0.018 s for the same
+index and speed through `split_campbell` (no `schur_eta`): a factor of up to 13 on the pair indices (16 modes x 16 solves).
+
+### Mutations (scratch copy `f575-scratch/mut` of 140f15db, own target folder, script `f575-scratch/mutate.py`, logs `mut_MV*.log`)
+
+| Id | Mutation | Caught by |
+|---|---|---|
+| MV1 | complement projection removed from the Schur solves | F1 (count 0: every value below 1e-9), F2 (1.7e10), F4 (1.0) |
+| MV2 | gyroscopic term removed from `Q(theta)` in the Schur solves | F1 (1.000), F2, F4 (1.1e3) |
+| MV3 | `E_I` not folded | F1 (1.000), F2, F4 (1.5e3) |
+| MV4 | complement frozen at shift 0 | F1 (1.000), F2, F4 (1.1e3) |
+| MV5 | sign of `E` flipped | F1 (3.23), F2, F4 (0.76) |
+| MV6 | the lowest corrected root instead of the best overlap | F1 (1.000), F2, F4 (8.2e8) |
+| MV7 | `schur_eta` filled with the `eta` of ADR 0482 | F1 (1.621), F2, F4 (0.62) |
+| MV8 | split frequencies replaced by the corrected roots | F5 (the B4 `split_modes` digest), F1, F2 |
+
+MV1 and MV2 are the counterparts of MU3 and MU4 of ADR 0482, which survived there; here each is caught by three checks.
+
+### Deviations and what was not run
+
+- After the registered run `cargo clippy -D warnings` refused `Option::is_none_or` (the workspace MSRV is 1.80); the comparison
+  was rewritten as a `match` with the same result (commit fa79af7f). The checks and F5 were run once more on that commit only to
+  confirm the rewrite (`f575-scratch/after_msrv_fix.log`: F1 3.363e-4, F2 3.363e-4, F4 3.25e-7, F5 equal; the same numbers). No
+  limit and no test was changed.
+- The registered limits were met at the first run; no amendment. `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p
+  rcfd-fem --all-targets --release -- -D warnings` clean (after the rewrite); `cargo test -p rcfd-cli --release --test
+  docs_site` pass (2 passed). The whole workspace suite was not run (the lead's gate).
+
+### Decision
+
+**Done** by the registered rule: every check F1 to F8 met at its registered run, N1 and N2 as expected, all eight mutations
+caught, no amendment. Every clause holds: `split_modes` with `split_correction` reports `schur_eta` beside the `eta` of ADR 0482
+(one complement solve per basis vector and one dense quadratic solve per split mode); on the disc sector with 4 modes per index
+at 0.4 and 0.8 `omega_ref` it agrees with the measured error of all 34 matched modes above 1e-9 within 3.4e-4 (limit 0.1); the
+results of ADR 0482 (and 0481) keep their bits.
+
+### Remaining questions
+
+1. Cost. `n_b` complement solves per split mode (a factor up to 13 in `split_modes` on B4). Options: (a) keep as is; (b) a
+   follow-up with one solve per split mode (the column `E y`) and a second-order perturbation sum over the other Ritz vectors;
+   (c) an option to switch `schur_eta` off. Recommendation: (a) until a fan sector shows the cost matters, then (b).
+2. Report the corrected frequency `theta'` itself (within 1.1e-8 of the exact one on DS B4, against errors up to 4.5e-5 of
+   `theta`)? Options: (a) no; (b) an opt-in field. Recommendation: (b) as a small follow-up; it is already computed. Taken
+   here: not added (not asked by the acceptance), on the maintainer's standing instruction of 2026-11-11 (take the
+   recommendation of keeping the scope).
+3. Case-file key: none added (as ADR 0482 question 2).
+
+## For the lead: roadmap entries
+
+Proposed status of F-575: **done**. New note:
+
+> Structural solver, advanced tier (plan ADR 0310). DONE. Size S. ADR 0492, 2026-11-14: RotatingSector::split_modes with split_correction reports beside the first-order eta of ADR 0482 the field schur_eta, the Ritz error |theta/theta' - 1| of the projected problem condensed by the complement and frozen at the Ritz value (one MINRES complement solve per basis vector, then one dense quadratic solve per split mode with K_VV - Re E and the skew part of E folded into the gyroscopic matrix); not computed by split_campbell. On the disc sector of ADR 0411 with 4 harmonic modes per index at 0.4 and 0.8 omega_ref it agrees with the measured error of all 34 matched modes above 1e-9 within 3.4e-4 (the eta of ADR 0482 within a factor 2.62), and with an independent dense computation within 3.3e-7; with 41 modes per index it is 0. The results of ADR 0481 and 0482 and every default keep their bits (6 new digests plus 19). All eight mutations caught, including the counterparts of the uncaught MU3 and MU4 of ADR 0482. Cost: up to 13 times the split_modes time on the pair indices.
+
+Proposed addition to the note of F-569 (its missed clause a4 is now covered), as a final sentence:
+
+> The second-order Ritz error that clause a4 needed is reported by F-575 (ADR 0492, 2026-11-14): schur_eta within 3.4e-4 of the measured error.
+
+Follow-up (optional, number left to the lead): title "Corrected frequency and cheaper second-order Ritz error of the sector split modes", deps F-575.
+
+> Every limit not stated here is registered in the ADR before the run. RotatingSector::split_modes optionally reports the corrected frequency theta' of the Schur-complemented problem of ADR 0492, and computes schur_eta with one complement solve per split mode and a second-order perturbation sum over the other Ritz vectors; on the disc sector of ADR 0411 with 4 harmonic modes per index at 0.4 and 0.8 omega_ref it agrees with the schur_eta of ADR 0492 within 1 percent where it exceeds 1e-9, theta' equals RotatingSector::whirl_modes within 1e-7 for every matched mode, and the results of ADR 0492 keep their bits.
