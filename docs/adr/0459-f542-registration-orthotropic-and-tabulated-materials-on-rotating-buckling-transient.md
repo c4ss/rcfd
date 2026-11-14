@@ -331,3 +331,32 @@ Limits relative to the reference value unless stated. Frequencies in Hz from `Mo
   estimated, not computed (D9). A disc is not checked.
 - The temperature of a tabulated material is the model's static field on every path; a field that changes in time (in the
   transient integrator) or with the speed is not provided; the pre-stress of a rotating part has no thermal stress (D2).
+
+## Amendment 1 (2026-11-14, after the registered run of `sa_ortho_rotating`, before any corrected run)
+
+The registered run (commit c911ca5c, log `f542-scratch/run-sa_ortho_rotating.log`) stopped the blade test
+`rb1_to_rb4_nb1_to_nb4_rotating_blade` at NB3: with `stress_stiffening(false)` the part at `Omega_b = 379.0 rad/s` reported a
+loss of stiffness (`negative: Some(1)`). The set-up was defective: `Omega_b` is twice `omega_lag,0`, and without the
+centrifugal stiffening the spin softening `-Omega^2 M_perp` alone drives the lag eigenvalue, about `lambda_0 - Omega^2`,
+below zero, so `K_eff` is not positive definite there; the registration overlooked that NB3 is evaluated on the whole part,
+whose lowest mode is the lag mode. RB1 to RB4, NB1 and NB2 had run before it (their values are those of that run, addendum
+1); NB4 was not reached.
+
+Correction (no limit changed): **NB3b** = NB3 at `Omega_a = 94.76 rad/s` (half of `omega_lag,0`: without stiffening `K_eff`
+stays positive definite, the lag eigenvalue about `0.75 lambda_0`): flap `abs(S/S_ref(Omega_a) - 1)` with `S_ref(Omega_a) =
+2.73871527`, expected `> 0.5` (about 1: without stiffening the flap `S` is about `-f_x`, of order -1e-3). NB4 as registered.
+The test of the registered run becomes the ignored record `rb1_to_rb4_nb1_to_nb4_rotating_blade` (its measured values in its
+ignore text); the corrected test `rb1_to_rb4_nb1_nb2_nb3b_nb4_amended` repeats RB1 to RB4, NB1 and NB2 unchanged (a
+deterministic computation: the registered values are those of the first run; a difference would be reported) and runs NB3b
+and NB4 once.
+
+Not an amendment: TR2 missed its limit on `BLK` (1.65e-12 to 9.25e-12 against 1e-12; `TRB` met). It is kept as the ignored
+record `tr1_tr2_tr3_transient_known_miss` with the limit intact; a copy `tr1_tr2t_tr3_after_known_miss` keeps TR1, the `TRB`
+rows of TR2 and TR3 (all met in the registered run, same limits) in the suite. Diagnosis (a probe after the run, a temporary
+test file deleted afterwards, log `f542-scratch/probe-tr2.log`): the same `BLK` transient set-up with the isotropic material
+against the isotropic material with `nu` one ulp above moves the end displacement by 5.1e-12 and the velocity by 5.6e-12, and
+with `E` one ulp above by 1.5e-12 and 9.1e-12; on `TRB` by 6.6e-15 and 2.6e-13. The 1e-12 limit of TR2 on `BLK` lies below
+the rounding sensitivity of the set-up itself (the step load excites the high Hex20 modes, and 25 steps of solves with `c_M M
++ c_K K` carry a change of `D` in the last bit to about 1e-11 of the response); the per-point path performs no operation the
+isotropic one does not (TR3 bit-equal). The registration took its estimate (1e-14) from the eigenvalue checks of ADR 0457,
+without a transient probe.

@@ -392,6 +392,7 @@ fn s_of(f: f64, f0: f64, w: f64) -> f64 {
 }
 
 #[test]
+#[ignore = "record of the registered run of ADR 0459 (commit c911ca5c): RB1 met (lag 7.6e-4, 6.1e-4, 3.3e-4; flap 2.7e-4, 2.8e-4, 4.6e-4), RB2 met (5.2e-4, 7.0e-4, 5.2e-4, 1.12e-3), RB3 met (9.09e-3, 9.92e-3), RB4 met (9.8e-11), NB1 (0.318) and NB2 (0.602) as expected; NB3 set-up defective (loss of stiffness at Omega_b without stress stiffening), NB4 not reached; corrected by amendment 1 as rb1_to_rb4_nb1_nb2_nb3b_nb4_amended"]
 fn rb1_to_rb4_nb1_to_nb4_rotating_blade() {
     let mut c = Checks::new();
     let bl = blade(cyl_b(), None);
@@ -460,6 +461,86 @@ fn rb1_to_rb4_nb1_to_nb4_rotating_blade() {
         0.5,
     );
     // NB4: the turned blade with Fixed(I) axes.
+    let n4 = blade(blade_material(fixed(I3)), Some(0.7));
+    let p4 = RotatingPart::new(&n4, AXIS_Z, [0.0; 3], &rot_opts(4)).unwrap();
+    let r4 = modes_of(p4.modes(0.0).unwrap());
+    c.above(
+        "NB4 turned blade with Fixed(I) axes against the blade, at rest",
+        max_rel(&r4.frequencies, &all[0]),
+        1e-2,
+    );
+    c.finish();
+}
+
+/// Amendment 1 of ADR 0459: RB1 to RB4, NB1 and NB2 repeated unchanged; NB3b (NB3 at `Omega_a`) and NB4.
+#[test]
+fn rb1_to_rb4_nb1_nb2_nb3b_nb4_amended() {
+    let mut c = Checks::new();
+    let bl = blade(cyl_b(), None);
+    let (lf, all) = blade_run(&bl, &rot_opts(4));
+    let names = ["lag", "flap"];
+    for (i, &w) in SPEEDS.iter().enumerate() {
+        println!("Omega = {w}: frequencies {:?}", all[i]);
+        for k in 0..2 {
+            c.at_most(
+                &format!("RB1 {} at {w} rad/s ({:.10} Hz)", names[k], lf[i][k]),
+                (lf[i][k] / F_REF[i][k] - 1.0).abs(),
+                5e-3,
+            );
+        }
+    }
+    for i in 1..3 {
+        let w = SPEEDS[i];
+        for k in 0..2 {
+            let s = s_of(lf[i][k], lf[0][k], w);
+            c.at_most(
+                &format!("RB2 {} S at {w} rad/s ({s:.8})", names[k]),
+                (s / S_REF[i - 1][k] - 1.0).abs(),
+                1e-2,
+            );
+            if i == 1 {
+                c.at_most(
+                    &format!("RB3 {} S at {w} rad/s against the closed form {}", names[k], Q_CLOSED[k]),
+                    (s / Q_CLOSED[k] - 1.0).abs(),
+                    2e-2,
+                );
+            }
+        }
+    }
+    let bt = blade(cyl_b(), Some(0.7));
+    let (_, all_t) = blade_run(&bt, &rot_opts(4));
+    let worst = (0..3).map(|i| max_rel(&all_t[i], &all[i])).fold(0.0, f64::max);
+    c.at_most("RB4 turned blade against the blade", worst, 1e-9);
+    let n1 = blade(blade_material(fixed(rot(AXIS_Z, PI / 2.0))), None);
+    let p1 = RotatingPart::new(&n1, AXIS_Z, [0.0; 3], &rot_opts(4)).unwrap();
+    let r1 = modes_of(p1.modes(0.0).unwrap());
+    c.below(
+        "NB1 lag f/f_ref with E_2 along the span",
+        lag_flap(&n1, p1.mass(), &r1)[0] / F_REF[0][0],
+        0.5,
+    );
+    let (l2, _) = blade_run(&bl, &rot_opts(4).spin_softening(false));
+    let s2 = s_of(l2[2][0], l2[0][0], SPEEDS[2]);
+    c.above(
+        "NB2 lag |S/S_ref - 1| at Omega_b without spin softening",
+        (s2 / S_REF[1][0] - 1.0).abs(),
+        0.3,
+    );
+    // NB3b (amendment 1): at Omega_a, where K_eff without stiffening stays positive definite.
+    let p3 = RotatingPart::new(&bl, AXIS_Z, [0.0; 3], &rot_opts(4).stress_stiffening(false)).unwrap();
+    let r30 = modes_of(p3.modes(0.0).unwrap());
+    let r3a = modes_of(p3.modes(SPEEDS[1]).unwrap());
+    let s3 = s_of(
+        lag_flap(&bl, p3.mass(), &r3a)[1],
+        lag_flap(&bl, p3.mass(), &r30)[1],
+        SPEEDS[1],
+    );
+    println!("  NB3b: flap S without stress stiffening {s3:.6e}");
+    c.above(
+        "NB3b flap |S/S_ref - 1| at Omega_a without stress stiffening",
+        (s3 / S_REF[0][1] - 1.0).abs(),
+        0.5,
+    );
     let n4 = blade(blade_material(fixed(I3)), Some(0.7));
     let p4 = RotatingPart::new(&n4, AXIS_Z, [0.0; 3], &rot_opts(4)).unwrap();
     let r4 = modes_of(p4.modes(0.0).unwrap());
@@ -764,7 +845,8 @@ fn transient_run(m: &SolidModel, set: &str) -> (Vec<f64>, Vec<f64>) {
 }
 
 #[test]
-fn tr1_tr2_tr3_transient() {
+#[ignore = "known miss of ADR 0459 (registered run, commit c911ca5c): TR2 on BLK 1.65e-12 (displacement) and 9.25e-12 (velocity) with Fixed(I), 3.85e-12 and 6.24e-12 with Fixed(rot), limit 1e-12 kept; TRB met; TR1 and TR3 met; diagnosis in amendment 1 (a one-ulp change of the isotropic constants moves the set-up by 5e-12 to 9e-12); TR1, TR2 TRB and TR3 continued in tr1_tr2t_tr3_after_known_miss"]
+fn tr1_tr2_tr3_transient_known_miss() {
     let mut c = Checks::new();
     for (mat, field, tag) in [(tab(), Field::Linear, "TAB"), (cyl(), Field::None, "CYL")] {
         c.at_most(
@@ -784,6 +866,40 @@ fn tr1_tr2_tr3_transient() {
         let (u, v) = transient_run(&block(iso_o(r), Field::None), "xmax");
         c.at_most(&format!("TR2 {tag} BLK displacement"), dev(&u, &u_iso), 1e-12);
         c.at_most(&format!("TR2 {tag} BLK velocity"), dev(&v, &v_iso), 1e-12);
+        let (u, v) = transient_run(&tr_block(iso_o(r), Field::None, true, true), "tip");
+        c.at_most(&format!("TR2 {tag} TRB displacement"), dev(&u, &ut_iso), 1e-12);
+        c.at_most(&format!("TR2 {tag} TRB velocity"), dev(&v, &vt_iso), 1e-12);
+    }
+    let e443 = interpolate(&TABLE_T, &TABLE_E, 443.0).unwrap();
+    let (u, v) = transient_run(&block(tab(), Field::Uniform), "xmax");
+    let (ui, vi) = transient_run(&block(iso_e(e443), Field::None), "xmax");
+    c.at_most("TR3 TAB_U BLK displacement", dev(&u, &ui), 1e-12);
+    c.at_most("TR3 TAB_U BLK velocity", dev(&v, &vi), 1e-12);
+    let (u, v) = transient_run(&tr_block(tab(), Field::Uniform, true, true), "tip");
+    let (ui, vi) = transient_run(&tr_block(iso_e(e443), Field::None, true, true), "tip");
+    c.at_most("TR3 TAB_U TRB displacement", dev(&u, &ui), 1e-12);
+    c.at_most("TR3 TAB_U TRB velocity", dev(&v, &vi), 1e-12);
+    c.finish();
+}
+
+/// TR1, the `TRB` rows of TR2 and TR3 of `tr1_tr2_tr3_transient_known_miss` (all met in the registered run), same limits.
+#[test]
+fn tr1_tr2t_tr3_after_known_miss() {
+    let mut c = Checks::new();
+    for (mat, field, tag) in [(tab(), Field::Linear, "TAB"), (cyl(), Field::None, "CYL")] {
+        c.at_most(
+            &format!("TR1 {tag} BLK"),
+            transient_identity(&block(mat.clone(), field)),
+            1e-8,
+        );
+        c.at_most(
+            &format!("TR1 {tag} TRB"),
+            transient_identity(&tr_block(mat, field, true, true)),
+            1e-8,
+        );
+    }
+    let (ut_iso, vt_iso) = transient_run(&tr_block(iso_e(E_ISO), Field::None, true, true), "tip");
+    for (r, tag) in [(I3, "Fixed(I)"), (rot([1.0, 2.0, 3.0], 0.5), "Fixed(rot((1, 2, 3), 0.5))")] {
         let (u, v) = transient_run(&tr_block(iso_o(r), Field::None, true, true), "tip");
         c.at_most(&format!("TR2 {tag} TRB displacement"), dev(&u, &ut_iso), 1e-12);
         c.at_most(&format!("TR2 {tag} TRB velocity"), dev(&v, &vt_iso), 1e-12);
