@@ -260,6 +260,22 @@ same mesh printed (the parasitic shear): observation.
    or buckling model on a one-layer strip needs better than the registered `1e-2`; the registered result is `5e-4`.
 2. `Incompatible` with equal-weight viscoelastic materials (L2): recommendation: leave refused until a model needs it.
 
+## Amendment 1 (2026-11-14, written and committed before the first run of ES2 and of any other check of the file)
+
+Found while writing `tests/si_hex8x_linear.rs`, before any run of it. The ES2 row says the root face of the `8 x 2 x 2` box is
+"clamped in `u_x`, `u_z` and `u_y` at a corner as ADR 0493's cantilever". That support is exact for the one-element-thick strip of
+RS2 because the exact field of pure bending has `u_z(0, y, z) = -nu M (z'^2 - y'^2) / (2 E I) = 0` at the four corner nodes of
+the face (`|y'| = |z'| = h/2`) and `u_y = 0` there too; with `2 x 2` elements the root face has edge-mid and centre nodes where
+the exact `u_z` is not zero, so `u_z = 0` on the whole face would add a Saint-Venant disturbance of the order `nu` that decays
+over about `h`, i.e. beyond `1e-8` at the interior nodes of elements of length `2.5 h`. The registered set-up is therefore
+defective for this mesh (the limit `1e-8` was derived from RS2, where the field is exact). Corrected set-up, the limits unchanged
+(`1e-8` for the recovered stress and `1e-8` for the estimate over the solution norm): the same mesh `8 x 2 x 2`, the same end
+couple `M = 10` applied as the consistent nodal forces of the linear stress `sigma_xx = M (z - h/2) / I` on the tip face (the
+force of the node `(j, k)` is the product of the 1D integrals `int N_j dy` and `int N_k sigma dz`), and the supports compatible
+with the exact field: `u_x = 0` on the whole root face, `u_y = u_z = 0` at the centre node `(0, h/2, h/2)` and `u_y = 0` at
+`(0, h/2, h)`, where the exact `u_y = -nu M y' z' / (E I)` and `u_z` vanish. Interior nodes are those off the six faces of the
+box. No other check is changed. The negative control N-ES prints the same quantities for `Full`.
+
 ## Addendum 1: results
 
 (to be written after the registered run)
