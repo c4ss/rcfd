@@ -401,3 +401,75 @@ body needs the flag, and the one free body (S0c to S2c) is a known miss. **S3** 
 mesh of D5 without any constraint (a free Hex8), started undeformed with the uniform velocity `(0.3, 0.2, 0.1) m/s` plus `10
 m/s` along `x` at the four nodes of `x = L`, Newmark, `dt = T_lin/200`, 50 steps: every step converges (`Ok`) and `max |P_n -
 P_0| / |P_0| <= 1e-11` (arithmetic 3: rounding only, about 50 steps; the `1e-11` class of b5). Run once, then MU6 again.
+
+## Addendum 1: results (2026-11-14)
+
+Runs: registered (commit `409fbfe4`, `f423-scratch/run1.log`), amendment 1 (commit `1949023c`, `run2.log`), amendment 2
+(commit `dbb80e54`, `run3.log`). Each set-up ran once.
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| L1 | Newmark `7.53e-14`, damped `6.30e-14`, generalised-alpha `0.8` damped `6.54e-14` | `<= 1e-9` | met |
+| L1b | `3.19e-8`, `2.66e-8`, `2.66e-8` | `<= 1e-7` | met |
+| N1 | `3.19e-3` | `>= 1e-6` | met |
+| P0, P1, P2, T1 | registered set-up defective (amendment 1, item 1) | | ignored records |
+| P0c | 10 crossings | `>= 9` | met |
+| P1c | `2.09e-4` (`T_FE = 1.933740 s`) | `<= 1e-2` | met |
+| P2c | `2.76e-4`; largest step residual `1.82e-8`, no halving | `<= 1e-3` | met |
+| T1c | equal state bytes | exact | met |
+| S0, S1, S2 | registered set-up defective (amendment 1, item 1) | | ignored record |
+| S0c | converged | `Ok` | met |
+| S1c, S2c | Newmark stops at step 851 of 1000, singular tangent after an exponential growth from about step 350 (strain energy `7.917e-5 J` to `996 J`); up to the stop `dP/P` `3.2e-12`, `dJ/J` `2.2e-10` at step 100, `3.9e-6` at step 600 | `<= 1e-10`, `<= 1e-6` over ten turns | **missed** (known miss) |
+| S3 | step 50 of 50 not converged (residual floor `1.169e-10` against `1e-10`); `dP/P_0` `1.30e-14` over 49 steps | `Ok`; `<= 1e-11` | **missed** (known miss) |
+| A0 | crossings 6; four end nodes not bit-equal from step 43 (spread `1.9e-14` of `0.2 L`) | `>= 5`; bits | **missed** (known miss) |
+| A0b | `1.9e-14` | `<= 1e-11` | met |
+| A1 | `8.64e-5` (`T_FE/T_lin = 1.040834`) | `<= 5e-3` | met |
+| G1 | `1.27e-13` | `<= 1e-10` | met |
+| G2 | `1.57e-14` | `<= 1e-10` | met |
+| R0 | eqps `2.82e-3`, both methods | `> 0` | met |
+| R1 | equal state bytes, Newmark and generalised-alpha `0.8` | exact | met |
+| R2 | round trip; magic, truncation, step, method, layout refused | exact; all | met |
+| H1 | the error names `t = 0e0`, `t = 3.59e-6`, `after 5 halvings`; state unchanged | holds | met |
+| H2 | 1 halving, bits of two steps of `dt/2` | exact | met |
+| F1 | every refusal with its key | all | met |
+| B1 | the seven digests of base `23d6b8e6` | exact | met |
+| B2 | `baseline_hashes` | pass | met |
+| X1 | the `_after_f417` record ignored, `x1_modules_and_pending_after_f423` passes | pass | met |
+
+Also: `cargo test -p rcfd-fem --release` exit 0; `docs_site` exit 0; `cargo fmt -p rcfd-fem` and `cargo clippy -p rcfd-fem
+--release --all-targets -- -D warnings` clean.
+
+Diagnosis of S1c, S2c (`f423-scratch/diag/diag3.log`): the instability of the trapezoidal rule in nonlinear dynamics that the
+Limits section names (arithmetic 4), not an error of the momentum bookkeeping: `dP/P` stays at rounding until the blow-up.
+Generalised-alpha `0.9` (diagnosis only) keeps `dJ/J` at `7.6e-6`, above the limit, and stops at step 816 on the residual
+floor, which grows with the displacement and the translation (amendment 1, item 1). S3 misses on the same floor.
+
+**Mutations** (`f423-scratch/mutations.log`, `mut_MU6_s3.log`): MU1 caught (L1 generalised-alpha, L1b, G1, G2); MU2 (L1
+generalised-alpha, G2, A0b test); MU3 (L1 all three, P0c, T1c); MU4 (R1 generalised-alpha); MU5 (R1 both); MU7 (H2); MU8 (L1
+generalised-alpha). **MU6 not caught**: no active check fails, and the ignored S3 gives the same bits with and without the
+mutation (the free body's internal force dominates the reference over the 50 steps). MU2 was not caught by G1 as expected,
+MU3 not by A1; both were caught by other checks.
+
+**Deviations.** The tests and the library landed in one commit (`409fbfe4`); `StepReport::residual` was added after the
+registered run (diagnostic only); amendments 1 and 2 were written after runs, before the runs of their checks; the MU6
+rerun of amendment 2 ran S3 as an ignored test.
+
+**Decision: partial.** B1, B2 unchanged; (a1), (a5), (a6), (a7) met (L1, G1, G2, R1, H1); (a2) met after amendment 1; (a4)
+met by A1 with the A0 bit clause a known miss; (a3) missed and recorded as `s0c_s1c_s2c_free_spinning_bar_known_miss`; MU6
+uncaught. Not done.
+
+## For the lead: roadmap entries
+
+> F-423 status partial (ADR 0479, 2026-11-14): Newton inside Newmark and generalised-alpha (`nl_transient`), reusing the
+> ADR 0404 driver; load-factor, pendulum, axial period, rho_inf = 1, save/restore with J2 state and halving checks met; the
+> free spinning bar (a3) missed by the nonlinear instability of the trapezoidal rule, recorded as a known miss.
+> Follow-up: energy-momentum conserving step (Simo and Tarnow) for `nl_transient`. Deps F-423. Acceptance: the spinning bar
+> of ADR 0479 over ten turns, linear momentum within 1e-10, angular momentum within 1e-6, energy within 1e-6 relative.
+> Follow-up: the rounding floor of the total Lagrangian internal force under large rotation and translation (the relative
+> residual floor grows with |u|; a reference or tolerance reading that converges a free body). Deps F-423, F-397.
+> Acceptance: S3 of ADR 0479 (free Hex8, 50 steps) converges every step with the driver defaults, and MU6 of ADR 0479 is
+> caught.
+
+Open questions for the lead (recommendations): the case-file key `[study] kind = "transient"` with `nonlinear = true`
+(not added); whether (a2) counts as met after amendment 1 (recommend yes, the tolerance change is disclosed and the limits
+are unchanged); the averaged-force generalised-alpha form and the F-398 A5 reading of (a1), both taken.
