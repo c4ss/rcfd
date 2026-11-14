@@ -135,7 +135,9 @@ fn real_root(d: &DampedModes, exact: f64) -> f64 {
         .iter()
         .filter(|m| !m.oscillating)
         .min_by(|p, q| p.eigenvalue.abs().total_cmp(&q.eigenvalue.abs()))
-        .map_or(f64::INFINITY, |m| (m.eigenvalue - C64::from_real(exact)).abs() / exact.abs())
+        .map_or(f64::INFINITY, |m| {
+            (m.eigenvalue - C64::from_real(exact)).abs() / exact.abs()
+        })
 }
 
 fn print_modes(d: &DampedModes, count: usize) {
@@ -219,7 +221,9 @@ fn compliance(k: &CsrMatrix, basis: &[Vec<f64>], f: &[f64]) -> f64 {
     }
     let rhs: Vec<f64> = (0..n).map(|i| a[i][n]).collect();
     for col in 0..n {
-        let p = (col..n).max_by(|&x, &y| a[x][col].abs().total_cmp(&a[y][col].abs())).unwrap();
+        let p = (col..n)
+            .max_by(|&x, &y| a[x][col].abs().total_cmp(&a[y][col].abs()))
+            .unwrap();
         a.swap(col, p);
         for r in col + 1..n {
             let q = a[r][col] / a[col][col];
@@ -286,7 +290,11 @@ fn b1_b2_bar_near_the_impedance_on_20_modes() {
     print_modes(&without2, 6);
     let e2 = real_root(&with2, -a2 * s);
     let e2n = real_root(&without2, -a2 * s);
-    c.at_most("B2 c = 2 Z, 20 modes + residual vectors, the real root, relative", e2, 1e-2);
+    c.at_most(
+        "B2 c = 2 Z, 20 modes + residual vectors, the real root, relative",
+        e2,
+        1e-2,
+    );
     c.within("B2n without the option, the real root", e2n, 8e-3, 2e-2);
     println!("  B2n above 1e-2: {}", e2n > 1e-2);
     let mut eb = Vec::new();

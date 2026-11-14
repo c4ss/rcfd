@@ -328,7 +328,8 @@ pub fn damped_modes(model: &SolidModel, options: &DampedOptions) -> Result<Dampe
             Err(FemError::RigidBodyMotionFree { .. }) => {
                 return Err(invalid(
                     "residual vectors",
-                    "the static residual vectors need a model without free rigid-body motion (K^-1 of the dashpot                      influence vectors, ADR 0464)"
+                    "the static residual vectors need a model without free rigid-body motion (K^-1 of the dashpot \
+                     influence vectors, ADR 0464)"
                         .to_string(),
                 ))
             }
@@ -452,7 +453,8 @@ pub fn damped_modes(model: &SolidModel, options: &DampedOptions) -> Result<Dampe
     }
     if dropped > 0 {
         notes.push(format!(
-            "{dropped} residual vectors dropped: already in the span of the basis (M-norm after the orthogonalisation at most              {RESIDUAL_DROP:e} of its own)"
+            "{dropped} residual vectors dropped: already in the span of the basis (M-norm after the orthogonalisation at most \
+             {RESIDUAL_DROP:e} of its own)"
         ));
     }
     if non_oscillating > 0 {
