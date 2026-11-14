@@ -13,8 +13,8 @@ use rcfd_fem::geometric::{prestressed_modes, Prestress};
 use rcfd_fem::hex20::upgrade_to_hex20_mapped;
 use rcfd_fem::material::MaterialAxes;
 use rcfd_fem::modal::{ModalOptions, ModalResult};
-use rcfd_fem::solve::{solve_static, StaticOptions};
 use rcfd_fem::model::{ElasticSupport, LinearTerm};
+use rcfd_fem::solve::{solve_static, StaticOptions};
 use rcfd_fem::{Constraint, Load, Material, SolidMesh, SolidModel};
 use rcfd_linalg::eigen::ResidualTest;
 use std::f64::consts::PI;
@@ -204,8 +204,14 @@ const BASE: Option<&[(&str, u64)]> = Some(&[
     ("iso sector prestressed centrifugal modes", 0xfb0aac294902af18),
     ("iso sector prestressed uniform eigenvalues", 0xee520e967abc7c47),
     ("iso sector prestressed uniform modes", 0x29c52e08d865a099),
-    ("iso sector with field prestressed centrifugal eigenvalues", 0x8ee9a388e67c1271),
-    ("iso sector with field prestressed centrifugal modes", 0xd836afe091a83642),
+    (
+        "iso sector with field prestressed centrifugal eigenvalues",
+        0x8ee9a388e67c1271,
+    ),
+    (
+        "iso sector with field prestressed centrifugal modes",
+        0xd836afe091a83642,
+    ),
     ("ortho_c sector prestressed centrifugal eigenvalues", 0x3a00fa6e5abcdedc),
     ("ortho_c sector prestressed centrifugal modes", 0xa2b384490a671787),
     ("tab_o sector prestressed centrifugal eigenvalues", 0xbdbfd78a80e0b3a3),
