@@ -522,28 +522,60 @@ fn roll_up(ck: &mut Checks, label: &str, tri: bool, membrane: Membrane, planar: 
 }
 
 #[test]
-fn ru4_ru4b_shell4_strip_rolls_up_to_a_full_circle() {
+#[ignore = "run 1 of ADR 0490: Newton stalled at a rounding floor (absolute coordinates), recorded in amendment 2"]
+fn ru4_ru4b_shell4_strip_rolls_up_to_a_full_circle_known_miss() {
     let mut ck = Checks::new();
     roll_up(&mut ck, "RU4", false, Membrane::Default, true, 1.0, 40);
     ck.finish();
 }
 
 #[test]
-fn ru3_shell3_strip_rolls_up_to_a_full_circle() {
+fn ru4_ru4b_corrected() {
+    let mut ck = Checks::new();
+    roll_up(&mut ck, "RU4", false, Membrane::Default, true, 1.0, 40);
+    ck.finish();
+}
+
+#[test]
+#[ignore = "run 1 of ADR 0490: Newton stalled at a rounding floor (absolute coordinates), recorded in amendment 2"]
+fn ru3_shell3_strip_rolls_up_to_a_full_circle_known_miss() {
     let mut ck = Checks::new();
     roll_up(&mut ck, "RU3", true, Membrane::Default, true, 1.0, 40);
     ck.finish();
 }
 
 #[test]
-fn ru4a_shell4_andes_strip_rolls_up() {
+fn ru3_corrected() {
+    let mut ck = Checks::new();
+    roll_up(&mut ck, "RU3", true, Membrane::Default, true, 1.0, 40);
+    ck.finish();
+}
+
+#[test]
+#[ignore = "run 1 of ADR 0490: Newton stalled at a rounding floor (absolute coordinates), recorded in amendment 2"]
+fn ru4a_shell4_andes_strip_rolls_up_known_miss() {
     let mut ck = Checks::new();
     roll_up(&mut ck, "RU4a", false, Membrane::Andes, true, 1.0, 40);
     ck.finish();
 }
 
 #[test]
-fn ru4f_shell4_strip_without_the_planar_holds() {
+fn ru4a_corrected() {
+    let mut ck = Checks::new();
+    roll_up(&mut ck, "RU4a", false, Membrane::Andes, true, 1.0, 40);
+    ck.finish();
+}
+
+#[test]
+#[ignore = "run 1 of ADR 0490: Newton stalled at a rounding floor (absolute coordinates), recorded in amendment 2"]
+fn ru4f_shell4_strip_without_the_planar_holds_known_miss() {
+    let mut ck = Checks::new();
+    roll_up(&mut ck, "RU4f", false, Membrane::Default, false, 0.9, 36);
+    ck.finish();
+}
+
+#[test]
+fn ru4f_corrected() {
     let mut ck = Checks::new();
     roll_up(&mut ck, "RU4f", false, Membrane::Default, false, 0.9, 36);
     ck.finish();

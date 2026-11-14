@@ -365,3 +365,34 @@ Written after the code and the tests were written and compiled, before any run o
    zero only). This equality is a condition of the set-up, printed and asserted with the checks.
 2. RU4f registers `e` and the out-of-plane values only; its tip-rotation error is printed as a record.
 3. X2 was applied with the code: the attribute of D6 on `c1r_the_newton_driver_refuses_shells`, its body unchanged.
+
+## Amendment 2 (2026-11-14): a rounding floor of the element found by run 1; written before the corrected run
+
+Run 1 (`sa_corot_shell` once at c883de4e, `--release -- --nocapture --test-threads 1`, `f578-scratch/run1.log`) met T1, T1r,
+S1, L1, L1f, L2, CY4, CY3 and R1 (numbers in addendum 1) and recorded CY4a. The four roll-up runs did not reach a
+measurement: in each, the first increment failed after 5 halvings with the relative residual stalled at `1.02e-8` (RU4),
+`2.34e-8` (RU3), `1.51e-8` (RU4a), `9.59e-9` (RU4f), the energy ratio at `1e-20`: Newton had converged as far as the
+rounding allowed, the residual tolerance `1e-10` of `NewtonOptions::new` lay below the floor.
+
+**Diagnosis (a defect of the library code, not of the set-up).** The element formed the current projected points
+`p_a = X_a + u_a + ...` in absolute coordinates; on the strip `|X|` reaches `12`, so `p_a` carries a rounding of `eps |X| =
+2.7e-15` that enters the local deformational translations and, through the membrane stiffness `E t b/h = 1.6e5`, the force:
+about `4e-10` per entry, against a tip moment of `0.04` at the halved increment (`1/40/32` of `50 pi/3`). The floor is set by
+the coordinates of the model, not by the element, and would hit any model far from the origin. Likewise the Green strain was
+formed as `(g.g - 1)/2`, which cancels.
+
+**Correction** (in `shell_corot.rs`, no change of the formulation): every position is formed relative to the first projected
+point of the element as a difference of displacements plus a difference of reference points, `p_a - p_0 = (w_a - w_0) +
+((X_a - X_0) + (r_a - r_0))` with `w_a = u_a + (R_a - I) r_a`, so that its rounding is relative to the element size; the frame,
+the centroid and the local unknowns are translation invariant and are formed from these; the Green strain is formed from the
+displacement gradients `h_X = sum_a N_a,X (w_a - w_0)` as `(e_1 . h_X + h_X . h_X/2, e_2 . h_Y + h_Y . h_Y/2, e_1 . h_Y + e_2 .
+h_X + h_X . h_Y)`, the same function without the cancellation (the device of ADR 0404 amendment 1). Analytically nothing
+changes. Expected floor at the first increment of RU4 (the load `1.3`): about `eps h K/|f| ~ 1e-11`.
+
+The four tests of run 1 become ignored records with their bodies unchanged and the suffix `_known_miss`
+(`ru4_ru4b_shell4_strip_rolls_up_to_a_full_circle_known_miss`, `ru3_..._known_miss`, `ru4a_..._known_miss`,
+`ru4f_..._known_miss`); the corrected tests `ru4_ru4b_corrected`, `ru3_corrected`, `ru4a_corrected`, `ru4f_corrected` call the
+same function with the same arguments and are run once (run 2). No limit and no parameter changes. The checks met in run 1
+were measured with the uncorrected code; they are not re-run as registered runs, and run again as regression tests in the
+whole-crate run, whose numbers are recorded beside those of run 1. Mutation MU6 is re-targeted at the corrected code (the
+reference offsets `r_a - r_0` and the turned offsets dropped).

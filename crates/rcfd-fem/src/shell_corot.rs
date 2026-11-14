@@ -439,18 +439,18 @@ fn evaluate(c: &Corotated, ue: &[f64], want_tangent: bool) -> Result<(Vec<f64>, 
         });
     }
     let q: Vec<Hd> = ue.iter().enumerate().map(|(i, &v)| Hd::variable(m, v, i)).collect();
-    // The current projected points and the nodal rotations (D2 step 1).
-    let mut p: Vec<V3> = Vec::with_capacity(nn);
+    // The nodal rotations and the displacements `w_a = u_a + (R_a - I) r_a` of the projected points (D2 step 1).
+    let mut w: Vec<V3> = Vec::with_capacity(nn);
     let mut rot: Vec<M3> = Vec::with_capacity(nn);
     for a in 0..nn {
         let theta = [q[6 * a + 3].clone(), q[6 * a + 4].clone(), q[6 * a + 5].clone()];
         let r = rodrigues(&theta);
         let link = c.links[a];
-        let pa: Vec<Hd> = (0..3)
+        let wa: Vec<Hd> = (0..3)
             .map(|i| {
-                let mut x = q[6 * a + i].add_f(c.reference[a][i] + link[i]);
+                let mut x = q[6 * a + i].clone();
                 if link != [0.0; 3] {
-                    // `R r - r`: the offset turned with the node (zero at rest).
+                    // `(R - I) r`: the offset turned with the node (zero at rest).
                     for (j, lj) in link.iter().enumerate() {
                         let rij = if i == j { r[i][j].add_f(-1.0) } else { r[i][j].clone() };
                         x.axpy(*lj, &rij);
@@ -459,9 +459,23 @@ fn evaluate(c: &Corotated, ue: &[f64], want_tangent: bool) -> Result<(Vec<f64>, 
                 x
             })
             .collect();
-        p.push(pa.try_into().expect("three components"));
+        w.push(wa.try_into().expect("three components"));
         rot.push(r);
     }
+    // ADR 0490 amendment 2: the positions relative to the first projected point, each a difference of displacements plus
+    // a difference of reference points, so that the rounding is relative to the element and not to the coordinates.
+    let w_rel: Vec<V3> = w.iter().map(|wa| v_sub(wa, &w[0])).collect();
+    let p: Vec<V3> = (0..nn)
+        .map(|a| {
+            let pa: Vec<Hd> = (0..3)
+                .map(|i| {
+                    let dx = (c.reference[a][i] - c.reference[0][i]) + (c.links[a][i] - c.links[0][i]);
+                    w_rel[a][i].add_f(dx)
+                })
+                .collect();
+            pa.try_into().expect("three components")
+        })
+        .collect();
     // The current frame (D2 step 2).
     let normal = if nn == 4 {
         v_cross(&v_sub(&p[2], &p[0]), &v_sub(&p[3], &p[1]))
@@ -524,20 +538,30 @@ fn evaluate(c: &Corotated, ue: &[f64], want_tangent: bool) -> Result<(Vec<f64>, 
     }
     if let Some((a, points)) = &c.membrane {
         for pt in points {
-            let mut gx: Vec<Hd> = (0..3).map(|_| Hd::constant(m, 0.0)).collect();
-            let mut gy: Vec<Hd> = (0..3).map(|_| Hd::constant(m, 0.0)).collect();
-            for (b, pb) in p.iter().enumerate() {
+            // ADR 0490 amendment 2: the Green strain from the displacement gradients `h_X = sum N_a,X w_a` (the reference
+            // tangents are `e_1`, `e_2` of the facet), without forming `g . g - 1`.
+            let mut hx: Vec<Hd> = (0..3).map(|_| Hd::constant(m, 0.0)).collect();
+            let mut hy: Vec<Hd> = (0..3).map(|_| Hd::constant(m, 0.0)).collect();
+            for (b, wb) in w_rel.iter().enumerate() {
                 for k in 0..3 {
-                    gx[k].axpy(pt.nx[b], &pb[k]);
-                    gy[k].axpy(pt.ny[b], &pb[k]);
+                    hx[k].axpy(pt.nx[b], &wb[k]);
+                    hy[k].axpy(pt.ny[b], &wb[k]);
                 }
             }
-            let gx: V3 = gx.try_into().expect("three components");
-            let gy: V3 = gy.try_into().expect("three components");
+            let hx: V3 = hx.try_into().expect("three components");
+            let hy: V3 = hy.try_into().expect("three components");
+            let along = |e: &Vec3, h: &V3| {
+                let mut x = Hd::constant(m, 0.0);
+                for k in 0..3 {
+                    x.axpy(e[k], &h[k]);
+                }
+                x
+            };
+            let (e1, e2) = (&c.axes0[0], &c.axes0[1]);
             let eps = [
-                v_dot(&gx, &gx).add_f(-1.0).scale(0.5),
-                v_dot(&gy, &gy).add_f(-1.0).scale(0.5),
-                v_dot(&gx, &gy),
+                along(e1, &hx).add(&v_dot(&hx, &hx).scale(0.5)),
+                along(e2, &hy).add(&v_dot(&hy, &hy).scale(0.5)),
+                along(e1, &hy).add(&along(e2, &hx)).add(&v_dot(&hx, &hy)),
             ];
             for r in 0..3 {
                 let mut ae = Hd::constant(m, 0.0);
