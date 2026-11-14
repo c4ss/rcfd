@@ -7611,23 +7611,20 @@ fixed by the item's registration ADR before any code.
     B-bar gives the bore displacement within 1 percent of Lame on the mesh on which full integration is below 90 percent
     (control). Recovered stress on the patch test equals D eps within 1e-10; the condensed internal modes are recovered
     for the stress.
-  - note: Structural solver, intermediate tier (plan ADR 0290, 2026-11-12). Size M. Stub ADR 0293; the registration is
-    written by the implementation agent before any code. ADR 0291 (2026-11-13): the formulation is
-    ElementBlock::formulation() (set by SolidMesh::set_block_property with BlockProperty::solid); hex8x::PENDING gates
-    it. The stiffness and the recovery do not delegate to hex8x: the package needs assemble.rs (stiffness_with) and
-    recover.rs in its file list. ADR 0493, 2026-11-14: two opt-in Hex8 formulations through
-    `BlockProperty::solid(SolidFormulation::BBar | Incompatible)` (refused on other kinds), filled in rcfd_fem::hex8x
-    (element_stiffness, point_strains, internal_modes) and dispatched by assemble_stiffness and IntegrationPointField:
-    the mean-dilatation B-bar (Hughes) and nine incompatible modes (Wilson et al.) with the Taylor, Beresford and Wilson
-    correction (Jacobian at the centre, det J0/det J), condensed and recovered for the stress. Met: the F-374 patch on
-    two distortions within 8.2e-14 (Wilson's uncorrected element 3.7e-3, the control); six zero eigenvalues, the seventh
-    5.1e-2, 6.7e-4, 6.7e-6 of the largest at aspect ratios 1, 10, 100; the one-layer cantilever L/h = 20 at 0.99913 (nu
-    = 0) and 0.99894 (nu = 0.3) of the closed form, full integration 0.667 (control); L/h = 100 at aspect ratio 5
-    0.99927; Lame cylinder nu = 0.4999 on 8 x 16 with B-bar within 1.7e-3, full integration 0.225 (control); recovered
-    stress on the patch within 1.3e-14 of D eps, pure bending exact to 1.7e-11 with the recovered modes (0.29 without).
-    Static, modal and every recovery take them; temperature loads, per-point materials, the geometric stiffness, damped
-    and direct harmonic solves, the patch recovery and the nonlinear driver refuse them. Defaults bit-identical (26
-    digests), baseline_hashes unchanged; twelve mutations caught.
+  - note: Structural solver, intermediate tier (plan ADR 0290, 2026-11-12). Size M. Stub ADR 0293. ADR 0493, 2026-11-14:
+    two opt-in Hex8 formulations through `BlockProperty::solid(SolidFormulation::BBar | Incompatible)` (refused on other
+    kinds), filled in rcfd_fem::hex8x (element_stiffness, point_strains, internal_modes) and dispatched by
+    assemble_stiffness and IntegrationPointField: the mean-dilatation B-bar (Hughes) and nine incompatible modes (Wilson
+    et al.) with the Taylor, Beresford and Wilson correction (Jacobian at the centre, det J0/det J), condensed and
+    recovered for the stress. Met: the F-374 patch on two distortions within 8.2e-14 (Wilson's uncorrected element
+    3.7e-3, the control); six zero eigenvalues, the seventh 5.1e-2, 6.7e-4, 6.7e-6 of the largest at aspect ratios 1,
+    10, 100; the one-layer cantilever L/h = 20 at 0.99913 (nu = 0) and 0.99894 (nu = 0.3) of the closed form, full
+    integration 0.667 (control); L/h = 100 at aspect ratio 5 0.99927; Lame cylinder nu = 0.4999 on 8 x 16 with B-bar
+    within 1.7e-3, full integration 0.225 (control); recovered stress on the patch within 1.3e-14 of D eps, pure bending
+    exact to 1.7e-11 with the recovered modes (0.29 without). Static, modal and every recovery take them; temperature
+    loads, per-point materials, the geometric stiffness, damped and direct harmonic solves, the patch recovery and the
+    nonlinear driver refuse them. Defaults bit-identical (26 digests), baseline_hashes unchanged; twelve mutations
+    caught. Follow-ups F-587, F-588.
 - [x] **F-391** Six unknowns per node: rotations in the DofMap, nodal moments, and a two-node shear-flexible beam element
   - depends on: F-388, F-374, F-375, F-376, F-377, F-383
   - acceptance: Every limit not stated here is registered in the ADR before the run. Nodes carry three or six unknowns;
@@ -8523,7 +8520,9 @@ fixed by the item's registration ADR before any code.
     percent with the mean-dilatation element, the standard Hex8 on the same mesh being the registered locking control. A
     non-positive modulus is refused; an inverted element is an error with the element.
   - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0328; the registration is
-    written by the implementation agent before any code.
+    written by the implementation agent before any code. ADR 0493 (2026-11-14): the mean-dilatation B-bar Hex8 exists
+    for the linear paths (BlockProperty::solid(SolidFormulation::BBar)); the nonlinear driver refuses it; its F-bar form
+    for finite strain is proposed as follow-up 1 of ADR 0493.
 - [~] **F-426** Tied non-matching meshes, shell and beam joints to solids, non-matching cyclic boundaries and nodes on the axis
   - depends on: F-408, F-391, F-392, F-393, F-394
   - acceptance: Every limit not stated here is registered in the ADR before the run. With matching meshes the tied model
@@ -11294,3 +11293,21 @@ fixed by the item's registration ADR before any code.
     from the frozen-modulus root of F-582 by a registered amount. A 3-D cantilever with unequal weights, full basis
     against truncated basis, registers the truncation error. Models without the material keep their bits.
   - note: Structural solver, advanced tier. Follow-up of F-582 (ADR 0495, 2026-11-14).
+- [ ] **F-587** B-bar and F-bar Hex8 in the nonlinear driver (J2, creep, viscoelastic, geometric nonlinearity)
+  - depends on: F-390, F-411, F-397
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The BBar formulation of F-390 taken
+    by the nonlinear driver: at small strain the strain Bbar u at the points and the tangent sum w Bbar^T C_t Bbar, with
+    geometric nonlinearity the F-bar deformation gradient (det F_0 / det F)^(1/3) F; the tangent against central
+    differences within 1e-6; the F-390 patch test within 1e-10 through the driver; the J2 thick cylinder in plane strain
+    and the creep cylinder of ADR 0489 point-wise within limits registered there, full integration the registered
+    locking control; the Full results of ADR 0404, 0475, 0485 and 0489 bit-identical.
+  - note: Structural solver, intermediate tier. Follow-up of F-390 (ADR 0493, 2026-11-14).
+- [ ] **F-588** The Hex8 formulations on the remaining linear paths (temperature load, per-point materials, geometric stiffness, damped and direct harmonic solves, patch recovery)
+  - depends on: F-390
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The refusals of ADR 0493 D5 lifted
+    with consistent arithmetic: the free thermal expansion of the distorted F-374 patch stress-free within 1e-10 with
+    both formulations; an orthotropic patch within 1e-10; Euler buckling of a one-layer Incompatible strip within
+    registered limits; the damped modes and the direct harmonic solve with the formulations' stiffness (the viscoelastic
+    shear and bulk split refused for Incompatible, whose condensed stiffness is not linear in D); the patch recovery
+    with the formulations' strain; defaults bit-identical.
+  - note: Structural solver, intermediate tier. Low priority. Follow-up of F-390 (ADR 0493, 2026-11-14).
