@@ -688,7 +688,12 @@ impl Integrator {
             ));
         }
         self.check_coverage(t0, t0)?;
-        let states = nonlinear::initial_states(&self.model)?;
+        // ADR 0523 amendment 2: a neo-Hookean integrator takes the empty states of its surrogate's layout.
+        let states = if self.hyper {
+            self.layout.iter().map(|&k| ElementState::new(vec![0.0; k])).collect()
+        } else {
+            nonlinear::initial_states(&self.model)?
+        };
         let fint = match self.temperature {
             // ADR 0523 D5: the neo-Hookean internal force of the energy-momentum step.
             _ if self.hyper => emc::internal_force(&self.model, u0, &PointContext::default())?,
