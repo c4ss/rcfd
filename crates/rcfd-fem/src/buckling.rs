@@ -38,6 +38,10 @@ pub struct BucklingOptions {
     pub threads: Option<usize>,
     /// The factorisation of the eigensolver (default [`Factorisation::Envelope`]; ADR 0447).
     pub factorisation: Factorisation,
+    /// With [`Factorisation::Supernodal`], the factor's nested dissection by the coordinates of each free unknown's node
+    /// instead of level structures (default `false`; ADR 0531). Refused (key `"factorisation"`) with another factorisation
+    /// and on the transformation path.
+    pub coordinate_order: bool,
 }
 
 impl BucklingOptions {
@@ -51,6 +55,7 @@ impl BucklingOptions {
             subspace_size: None,
             threads: None,
             factorisation: Factorisation::Envelope,
+            coordinate_order: false,
         }
     }
     /// The same options with a residual tolerance.
@@ -76,6 +81,12 @@ impl BucklingOptions {
     /// The same options with a factorisation of the eigensolver (ADR 0447).
     pub fn factorisation(mut self, factorisation: Factorisation) -> BucklingOptions {
         self.factorisation = factorisation;
+        self
+    }
+    /// The same options with the supernodal factor ordered by the node coordinates (`true`) or by level structures
+    /// (ADR 0531).
+    pub fn coordinate_order(mut self, on: bool) -> BucklingOptions {
+        self.coordinate_order = on;
         self
     }
 }
@@ -135,6 +146,11 @@ pub(crate) fn factors_with(
     // with a cyclic constraint. ADR 0473 D6: also beams and shells.
     model.check_supported_with_materials()?;
     crate::mat_ortho::refuse_with_cyclic(model)?;
+    crate::modal::check_coordinate_order(
+        options.coordinate_order,
+        options.factorisation,
+        crate::mpc::uses_transformation(model),
+    )?;
     if crate::mpc::uses_transformation(model) {
         if !extra.is_empty() {
             return Err(FemError::InvalidValue {
@@ -194,6 +210,9 @@ pub(crate) fn factors_with(
         max_iterations: options.max_iterations,
         subspace_size: options.subspace_size,
         factorisation: options.factorisation,
+        points: options
+            .coordinate_order
+            .then(|| crate::modal::free_points(model, &dofs, &free)),
         ..BucklingEigenOptions::default()
     };
     let eig =

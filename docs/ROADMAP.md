@@ -11701,14 +11701,25 @@ fixed by the item's registration ADR before any code.
     by L4 (b) but not also by E4 (a), whose resonance pivot is below the rounding threshold too. Done is the
     maintainer's call. Follow-up F-595 (optional). The f3_refusals test of ADR 0503 is an ignored record (its
     transformation-path refusal is lifted).
-- [ ] **F-595** Coordinate nested dissection in the eigensolvers
+- [x] **F-595** Coordinate nested dissection in the eigensolvers
   - depends on: F-594
   - acceptance: Every limit not stated here is registered in the ADR before the run. The subspace and buckling
     eigensolvers take optional point coordinates for the supernodal factor's nested dissection and rcfd-fem modal and
     buckling pass the node coordinates of the free unknowns: on the clamped cube of 104 544 unknowns nnz(L) at most 0.85
     of the level-structure order's (both recorded) and the frequencies within 1e-9 of the level-structure run; results
     bit-identical for 1 and 8 threads; the default solver's results keep their bits.
-  - note: Structural solver, advanced tier. Optional. Follow-up of F-594 (ADR 0509, 2026-11-14).
+  - note: Structural solver, advanced tier. Optional. Follow-up of F-594 (ADR 0509). ADR 0531, 2026-11-14:
+    SubspaceOptions::points and BucklingEigenOptions::points (the coordinates of each unknown for the nested dissection
+    of Factorisation::Supernodal; None keeps the level structures; checked for length and finiteness; the other
+    factorisations do not read them), and ModalOptions::coordinate_order / BucklingOptions::coordinate_order in rcfd-fem
+    (the node coordinates of the free unknowns passed on the elimination path; refused, key "factorisation", with
+    another factorisation and on the transformation path). Clamped cube of 104 544 unknowns: nnz(L) 92 953 458 by
+    coordinates against 110 872 668 by level structures, ratio 0.838 (limit 0.85); frequencies 1.4e-14 from the
+    level-structure run (limit 1e-9); 98 s against 127 s per modal analysis, peak working set 2.9 GB. Clamped Hex8 cube
+    of 4 752 unknowns: frequencies 1.1e-15 and buckling factors 1.9e-15 from the level-structure run, and bit-equal to
+    the eigensolvers called directly with the free unknowns' node points. Results bit-identical for 1 and 8 threads; 24
+    digests of the default and level-structure paths equal to base; baseline_hashes passes. Eight mutations caught. No
+    case-file key (proposed: a value of the pending solver.factor key).
 - [ ] **F-596** The incompatible-modes Hex8 at finite strain (enhanced assumed strain, internal modes condensed in the Newton loop)
   - depends on: F-587
   - acceptance: Every limit not stated here is registered in the ADR before the run. The incompatible-modes Hex8 of

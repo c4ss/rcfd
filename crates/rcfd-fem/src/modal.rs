@@ -39,6 +39,10 @@ pub struct ModalOptions {
     pub threads: Option<usize>,
     /// The factorisation of the eigensolver (default [`Factorisation::Envelope`]; ADR 0447).
     pub factorisation: Factorisation,
+    /// With [`Factorisation::Supernodal`], the factor's nested dissection by the coordinates of each free unknown's node
+    /// instead of level structures (default `false`; ADR 0531). Refused (key `"factorisation"`) with another factorisation
+    /// and on the transformation path.
+    pub coordinate_order: bool,
 }
 
 impl ModalOptions {
@@ -54,6 +58,7 @@ impl ModalOptions {
             subspace_size: None,
             threads: None,
             factorisation: d.factorisation,
+            coordinate_order: false,
         }
     }
     /// The same options with a given shift.
@@ -81,6 +86,12 @@ impl ModalOptions {
     /// The same options with a factorisation of the eigensolver (ADR 0447).
     pub fn factorisation(mut self, factorisation: Factorisation) -> ModalOptions {
         self.factorisation = factorisation;
+        self
+    }
+    /// The same options with the supernodal factor ordered by the node coordinates (`true`) or by level structures
+    /// (ADR 0531).
+    pub fn coordinate_order(mut self, on: bool) -> ModalOptions {
+        self.coordinate_order = on;
         self
     }
 }
@@ -141,6 +152,38 @@ impl ModalResult {
     }
 }
 
+/// The refusals of the coordinate option (ADR 0531 D2): with a factorisation other than the supernodal one, and on the
+/// transformation path (`transformation`).
+pub(crate) fn check_coordinate_order(
+    coordinate_order: bool,
+    factorisation: Factorisation,
+    transformation: bool,
+) -> Result<()> {
+    if !coordinate_order {
+        return Ok(());
+    }
+    let reason = if factorisation != Factorisation::Supernodal {
+        format!("the coordinate order is an order of the supernodal factor, not of {factorisation:?} (ADR 0531)")
+    } else if transformation {
+        "the coordinate order is not offered on the transformation path (linear constraints, rigid sets, cyclic constraints, elastic supports), whose reduced unknowns are not all of one node (ADR 0531)"
+            .to_string()
+    } else {
+        return Ok(());
+    };
+    Err(FemError::InvalidValue {
+        key: "factorisation",
+        reason,
+    })
+}
+
+/// The coordinates of the node of each free equation `free[r]` (ADR 0531 D2; the rule of the static supernodal solve).
+pub(crate) fn free_points(model: &SolidModel, dofs: &DofMap, free: &[usize]) -> Vec<[f64; 3]> {
+    let nodes = model.mesh().nodes();
+    free.iter()
+        .map(|&q| nodes[dofs.node_component(q).expect("free equation exists").0])
+        .collect()
+}
+
 /// The frequency of an eigenvalue, `sqrt(lambda) / (2 pi)`; a negative (rounding) eigenvalue gives `-sqrt(-lambda) / (2
 /// pi)`.
 pub fn frequency(lambda: f64) -> f64 {
@@ -158,6 +201,11 @@ pub fn modal_analysis_with(model: &SolidModel, extra: &[Prescribed], options: &M
     // ADR 0417 D4, ADR 0432 D3, ADR 0435 D1: the elimination path and the transformation path take beams and shells (the
     // transformation has its own check). ADR 0457 D2: also the orthotropic and the tabulated material.
     model.check_supported_with_materials()?;
+    check_coordinate_order(
+        options.coordinate_order,
+        options.factorisation,
+        crate::mpc::uses_transformation(model),
+    )?;
     // Linear constraints, rigid sets and supports: the reduction by the transformation of ADR 0296 (ADR 0384).
     if crate::mpc::uses_transformation(model) {
         return crate::mpc::modal_analysis_mpc(model, extra, options).map(|s| s.result);
@@ -213,6 +261,7 @@ pub fn modal_analysis_with(model: &SolidModel, extra: &[Prescribed], options: &M
         max_iterations: options.max_iterations,
         subspace_size: options.subspace_size,
         factorisation: options.factorisation,
+        points: options.coordinate_order.then(|| free_points(model, &dofs, &free)),
         ..SubspaceOptions::default()
     };
     let eig = lowest_eigenpairs(&kr.matrix, &mr.matrix, options.modes, &opts).map_err(|e| FemError::Solver {
