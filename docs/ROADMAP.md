@@ -11096,7 +11096,8 @@ fixed by the item's registration ADR before any code.
     cylinder clause (the thin law to the stretch 1.5 by the Newton driver) not met: the nonlinear driver takes no shells
     (no geometrically nonlinear shell in the crate), recorded as a predicted known miss; follow-up proposed. Dead
     ShellPressure and default bits unchanged (10 digests), baseline hashes unchanged; six of six mutations caught. Two
-    set-up defects of run 1 corrected by amendment. Follow-up F-578.
+    set-up defects of run 1 corrected by amendment. Follow-up F-578. Its cylinder clause is met by F-578 (ADR 0490,
+    2026-11-14): Shell4 5.36e-4, Shell3 5.40e-4 to stretch 1.51.
 - [ ] **F-574** Warning for the constant-strain Shell3 membrane on warped meshes
   - depends on: F-556
   - acceptance: Every limit not stated here is registered in the ADR before the run. An opt-in model check reports
@@ -11154,7 +11155,7 @@ fixed by the item's registration ADR before any code.
     two materials within 2.1e-12; equal weights against the LossFactor::Table route at the table points within 1.4e-13;
     zero frequency, shift and no-term checks within 1.7e-14, 1.7e-15 and 0; threads bit-identical; seven mutations
     caught; default bits (11 digests) and baseline hashes unchanged. Follow-ups F-582, F-583.
-- [ ] **F-578** Geometrically nonlinear shells in the Newton driver
+- [~] **F-578** Geometrically nonlinear shells in the Newton driver
   - depends on: F-573
   - acceptance: Every limit not stated here is registered in the ADR before the run. Shell4 and Shell3 gain an internal
     force and a consistent tangent at finite displacements and rotations (a corotational facet formulation, its rotation
@@ -11162,7 +11163,24 @@ fixed by the item's registration ADR before any code.
     central differences of the internal force within 1e-6; a cantilever strip of shells under a tip moment rolls up to a
     full circle within 1 percent of the closed-form tip position; a thin cylinder of shells under the follower internal
     pressure of ADR 0487 follows p = E t (lambda^2 - 1)/(2 R) within 1 percent to the stretch 1.5 (the clause of F-573).
-  - note: Structural solver, advanced tier. Follow-up of F-573 (ADR 0487, 2026-11-14).
+  - note: Structural solver, advanced tier. Follow-up of F-573 (ADR 0487, 2026-11-14). PARTIAL by the standing rule (the
+    roll-ups met only after amendment 2, a library fix written after run 1 stalled on a 1e-8 residual floor; every
+    acceptance clause met, proposed done by the ADR). ADR 0490, 2026-11-14: Shell4 and Shell3 in the Newton driver as
+    corotated facets (shell_corot.rs): additive total rotation vector with the Rodrigues map (registered; singular at 2
+    pi), the rigid offset link turned with the node, the element frame from the current projected points, deformational
+    rotations by the logarithm; energy (1/2) d^T K_r d with the linear element (bending, MITC shear, drilling; the whole
+    linear matrix for the ANDES and Allman membranes) plus a total Lagrangian Green-strain membrane for the default
+    membranes; force and tangent as exact first and second derivatives (second-order forward differentiation), the
+    tangent symmetric bit for bit. Taken by nonlinear::solve and solve_with; arc length, the nonlinear transient and
+    solve_from still refuse shells. Tangent against central differences within 2.4e-10 (limit 1e-6); reduces to the
+    linear element at rest within 8e-16, rigid motions force-free within 4e-16. Cantilever strip under a dead tip moment
+    (L = 12, 16 elements) rolls into the full circle: tip within 1.19e-3 L of the closed-form arc (predicted 1.18e-3
+    from the chord geometry; limit 1 percent), back at the root within 5e-15 L, tip rotation within 7e-15, for Shell4,
+    Shell3, the ANDES Shell4 and, without the planar holds, to 0.9 of the circle. Quarter cylinder under the follower
+    internal pressure of ADR 0487 follows p = E t (lambda^2 - 1)/(2 R) within 5.4e-4 to the stretch 1.51 (Shell4 and
+    Shell3; the facet factor 1/cos(pi/96)). Default bits unchanged (9 digests), baseline hashes unchanged; nine of nine
+    mutations caught. A rounding floor of run 1 (absolute coordinates) fixed by amendment; five refusal tests superseded
+    by design, kept as ignored records. Follow-up F-585. F-573's cylinder clause is met here (5.4e-4).
 - [ ] **F-579** Mutual radiation impedance matrix of a baffled plane and the light-fluid added mass and damping of structural modes
   - depends on: F-551
   - acceptance: Every limit not stated here is registered in the ADR before the run. The radiation impedance matrix Z_mn
@@ -11219,3 +11237,12 @@ fixed by the item's registration ADR before any code.
     of ADR 0492 within 1 percent where it exceeds 1e-9, theta' equals RotatingSector::whirl_modes within 1e-7 for every
     matched mode, and the results of ADR 0492 keep their bits.
   - note: Structural solver, advanced tier. Optional. Follow-up of F-575 (ADR 0492, 2026-11-14).
+- [ ] **F-585** Corotated shells in the arc-length continuation and the nonlinear transient
+  - depends on: F-578
+  - acceptance: Every limit not stated here is registered in the ADR before the run. arclength::trace, solve_from and
+    the nonlinear transient integrator take Shell4 and Shell3 with the corotated element of ADR 0490 (the transient with
+    the consistent shell mass and the rotary inertia of the rotation vector, in a registered form), every default
+    bit-identical; a shallow cylindrical shell panel under a point load followed through its limit point by arc length
+    within 2 percent of a registered reference; a cantilever strip of shells in free vibration of small amplitude gives
+    the linear first frequency within 1 percent and conserves energy within a registered limit over 100 periods.
+  - note: Structural solver, advanced tier. Follow-up of F-578 (ADR 0490, 2026-11-14).
