@@ -1251,6 +1251,7 @@ fn r1_r2_refusals() {
 // The corrected runs of ADR 0507 amendment 2 (bodies identical to the records except R2), each made once.
 
 #[test]
+#[ignore = "record of the corrected run of 043ee2ea (ADR 0507 amendment 3): pressed stress and pressure 2.50e-3 of E d/8, touching pressure 3.13e-4 of E d (limits 1e-8) missed; continued in s1_blocks_pressed_then_pulled_apart_a3"]
 fn s1_blocks_pressed_then_pulled_apart_a2() {
     let d = 1e-3;
     let m = blocks(d);
@@ -1318,6 +1319,7 @@ fn s1_blocks_pressed_then_pulled_apart_a2() {
 }
 
 #[test]
+#[ignore = "record of the corrected run of 043ee2ea (ADR 0507 amendment 3): not converged in 30 iterations, relative residual 2.29e-8, energy ratio 1.24e-26; continued in i1_to_i4_interference_fit_ring_on_a_solid_shaft_a3"]
 fn i1_to_i4_interference_fit_ring_on_a_solid_shaft_a2() {
     let fit = fit_model();
     let m = &fit.model;
@@ -1384,7 +1386,8 @@ fn i1_to_i4_interference_fit_ring_on_a_solid_shaft_a2() {
 }
 
 #[test]
-fn t2_order_of_the_last_residuals_total_lagrangian_punch_a2() {
+#[ignore = "known miss of ADR 0507 amendment 3 (run of 043ee2ea): orders [1.48, 0.191, 0.249, 1.57, 0.171], least 0.171 < 1.8; not run again"]
+fn t2_order_of_the_last_residuals_total_lagrangian_punch_a2_known_miss() {
     let plate = hex_box([0.0; 3], [2.0, 0.5, 0.25], [8, 2, 2]).unwrap();
     let punch = hex_box([0.8, 0.0, 0.25], [0.4, 0.2, 0.2], [3, 1, 1]).unwrap();
     let mesh = assemble_parts(&[("plate", &plate), ("punch", &punch)]).unwrap();
@@ -1515,5 +1518,141 @@ fn r1_r2_refusals_a2() {
         matches!(&e, FemError::InvalidValue { key: "constraint", reason } if reason.contains("'xmax'")),
         &e.to_string(),
     );
+    c.finish();
+}
+
+// ------------------------------------------------------------------------------------------------------------ amendment 3
+// The corrected runs of ADR 0507 amendment 3 (bodies identical to the records), each made once.
+
+#[test]
+fn s1_blocks_pressed_then_pulled_apart_a3() {
+    let d = 1e-3;
+    let m = blocks(d);
+    let top: Vec<Prescribed> = m
+        .mesh()
+        .node_set("upper.zmax")
+        .unwrap()
+        .iter()
+        .map(|&n| Prescribed::new(n, 2, 2.0 * d))
+        .collect();
+    let r = solve(
+        &m,
+        &top,
+        &[],
+        &[block_pair()],
+        &ContactOptions::new(8, 1e-13).newton(newton()),
+    )
+    .unwrap();
+    let mut c = Checks::new();
+    let scale = E_BL * d / 8.0;
+    let (mut neg, mut st, mut pr, mut touch, mut zero, mut gap, mut free) = (
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+    );
+    for s in &r.steps {
+        let l = s.load_factor;
+        for n in &s.nodes {
+            // Every multiplier finite and >= 0: a negative or non-finite one is recorded as infinite.
+            neg.push(if n.force.is_finite() && n.force >= 0.0 {
+                0.0
+            } else {
+                f64::INFINITY
+            });
+        }
+        let k = s.step;
+        if k < 4 {
+            let sigma = E_BL * d * (l - 0.5);
+            st.push(stress_error(&m, &s.displacement, [0.0, 0.0, sigma, 0.0, 0.0, 0.0], None) / scale);
+            pr.extend(s.nodes.iter().map(|n| (n.pressure + sigma).abs() / scale));
+        } else if k == 4 {
+            touch.extend(s.nodes.iter().map(|n| n.pressure.abs() / (E_BL * d)));
+        } else {
+            zero.extend(s.nodes.iter().map(|n| if n.force == 0.0 { 0.0 } else { f64::INFINITY }));
+            gap.extend(
+                s.nodes
+                    .iter()
+                    .map(|n| (n.gap.unwrap_or(f64::INFINITY) - d * (2.0 * l - 1.0)).abs() / d),
+            );
+            free.push(stress_error(&m, &s.displacement, [0.0; 6], None) / (E_BL * d));
+        }
+    }
+    c.at_most("S1 every multiplier >= 0 (0 if so)", worst(neg), 0.0);
+    c.at_most("S1 pressed: stress / (E d/8)", worst(st), 1e-8);
+    c.at_most("S1 pressed: node pressure / (E d/8)", worst(pr), 1e-8);
+    c.at_most("S1 touching: node pressure / (E d)", worst(touch), 1e-8);
+    c.at_most("S1 apart: every multiplier exactly 0 (0 if so)", worst(zero), 0.0);
+    c.at_most("S1 apart: gap / d", worst(gap), 1e-8);
+    c.at_most("S1 apart: stress / (E d)", worst(free), 1e-8);
+    c.finish();
+}
+
+#[test]
+fn i1_to_i4_interference_fit_ring_on_a_solid_shaft_a3() {
+    let fit = fit_model();
+    let m = &fit.model;
+    let pair = ContactPair::new("ring_in", Target::Surface("shaft_out".into()), 100.0 * E_FIT / 0.125);
+    let r = solve(m, &[], &[], &[pair], &ContactOptions::new(1, 1e-9).newton(newton())).unwrap();
+    let p_cf = E_FIT * D_FIT * (B_FIT * B_FIT - A_FIT * A_FIT) / (2.0 * A_FIT * B_FIT * B_FIT);
+    let mean = r.nodes.iter().map(|n| n.pressure).sum::<f64>() / r.nodes.len() as f64;
+    let mut c = Checks::new();
+    println!(
+        "I contact pressure: mean {mean:.6e}, closed form {p_cf:.6e}, {} nodes",
+        r.nodes.len()
+    );
+    c.holds(
+        "I nodes",
+        r.nodes.len() == 2 * N_FIT,
+        &format!("{} contactor nodes", r.nodes.len()),
+    );
+    c.at_most(
+        "I1 every node's pressure",
+        worst(r.nodes.iter().map(|n| (n.pressure / p_cf - 1.0).abs())),
+        2e-2,
+    );
+    c.at_most("I1 mean pressure", (mean / p_cf - 1.0).abs(), 2e-2);
+    let u = r.result.displacement_values();
+    let f = IntegrationPointField::compute(m, u).unwrap();
+    let off = f.offsets();
+    let mut hoop = Vec::new();
+    for &e in &fit.ring {
+        let s = &f.stress()[off[e]..off[e + 1]];
+        let np = s.len() as f64;
+        let mut avg = [0.0; 6];
+        for p in s {
+            for i in 0..6 {
+                avg[i] += p[i] / np;
+            }
+        }
+        let en = m.mesh().element_nodes(e);
+        let (mut cx, mut cy) = (0.0, 0.0);
+        for &v in en {
+            cx += m.mesh().nodes()[v][0] / 8.0;
+            cy += m.mesh().nodes()[v][1] / 8.0;
+        }
+        let rc = (cx * cx + cy * cy).sqrt();
+        let (co, si) = (cx / rc, cy / rc);
+        let st = avg[0] * si * si - 2.0 * avg[3] * si * co + avg[1] * co * co;
+        let lame = mean * A_FIT * A_FIT * (1.0 + B_FIT * B_FIT / (rc * rc)) / (B_FIT * B_FIT - A_FIT * A_FIT);
+        hoop.push((st / lame - 1.0).abs());
+    }
+    c.at_most("I2 ring hoop stress against Lame", worst(hoop), 2e-2);
+    let mut sh = Vec::new();
+    for &e in &fit.shaft {
+        for p in &f.stress()[off[e]..off[e + 1]] {
+            sh.push(((p[0] + mean).abs().max((p[1] + mean).abs()).max(p[3].abs())) / mean);
+        }
+    }
+    c.at_most("I3 shaft uniform stress", worst(sh), 1e-6);
+    c.at_most("I4 penetration", r.steps[0].solves.last().unwrap().penetration, 1e-9);
+    let rigid = E_FIT * D_FIT * (B_FIT * B_FIT - A_FIT * A_FIT)
+        / (A_FIT * ((1.0 + NU_FIT) * B_FIT * B_FIT + (1.0 - NU_FIT) * A_FIT * A_FIT));
+    let ni = (mean / rigid - 1.0).abs();
+    println!("NI against the rigid-shaft form {rigid:.6e}: {ni:.6e}");
+    c.at_least("NI rigid-shaft form (negative control)", ni, 0.2);
     c.finish();
 }

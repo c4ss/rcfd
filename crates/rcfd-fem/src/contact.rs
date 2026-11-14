@@ -9,7 +9,7 @@
 //! * Augmented Lagrangian (D2; Simo and Laursen, Comput. Struct. 42 (1992) 97; Wriggers, Computational Contact Mechanics,
 //!   2006; from memory, re-derived in ADR 0507): per node a multiplier `lambda`, the force `t = max(0, lambda - eps A g)`,
 //!   the energy `t^2/(2 eps A)`, its exact force and tangent; Uzawa updates `lambda <- t` after each converged Newton solve
-//!   until the largest penetration is within the tolerance.
+//!   until the largest penetration and the largest gap at an active node are within the tolerance (amendment 3).
 //! * Driver (D3): [`solve`] and [`solve_with`], load control with the augmentation loop per step, a linear body
 //!   ([`Kinematics::Linear`], the stiffness of [`crate::assemble::stiffness`], Newton here with a sparse `L D L^T`) or the total
 //!   Lagrangian body of [`crate::nonlinear::solve_from`] ([`Kinematics::TotalLagrangian`], the contact as its first
@@ -26,7 +26,7 @@ use crate::loads::{nodal_load_vector, NodalForceAt};
 use crate::mesh::{ElementKind, FaceRef};
 use crate::model::{Constraint, DofMap, SolidModel, SolidResult, SolverStats};
 use crate::nonlinear::{add_triplets, initial_states, solve_from, Contribution, NewtonOptions};
-use rcfd_core::vec3::{cross, dot, norm, sub, Vec3};
+use rcfd_core::vec3::{add, cross, dot, norm, sub, Vec3};
 use rcfd_linalg::skyline::SkylineError;
 use rcfd_linalg::sparse_chol::SparseLdlt;
 use rcfd_linalg::CsrMatrix;
@@ -99,7 +99,8 @@ pub enum Kinematics {
 pub struct ContactOptions {
     /// Load steps of equal size (at least 1).
     pub steps: usize,
-    /// The largest penetration accepted after augmentation, m (absolute).
+    /// The largest penetration, and the largest gap at an active node, accepted after augmentation, m (absolute; ADR 0507
+    /// amendment 3).
     pub penetration_tolerance: f64,
     /// Newton solves after the first one of a step (Uzawa updates); 0 is the pure penalty without a tolerance test.
     pub max_augmentations: usize,
@@ -647,12 +648,30 @@ impl ContactSet {
         [x[0] + u[e], x[1] + u[e + 1], x[2] + u[e + 2]]
     }
 
+    fn displacement(&self, u: &[f64], node: usize) -> Vec3 {
+        let e = self.dofs.equation(node, 0).expect("checked node");
+        [u[e], u[e + 1], u[e + 2]]
+    }
+
+    /// ADR 0507 amendment 3: the gap `n . sum_a N_a ((X_s - X_a) + (u_s - u_a))` from differences.
+    fn face_gap(&self, u: &[f64], node: usize, face: &[usize; 4], xi: [f64; 2], n: Vec3) -> f64 {
+        let (nn, _) = shape(xi);
+        let (xs, us) = (self.reference[node], self.displacement(u, node));
+        let mut g = 0.0;
+        for (b, &v) in face.iter().enumerate() {
+            let d = add(sub(xs, self.reference[v]), sub(us, self.displacement(u, v)));
+            g += nn[b] * dot(d, n);
+        }
+        g
+    }
+
     fn kin(&self, pair: &PairData, u: &[f64], node: usize) -> Option<Kin> {
         let xs = self.position(u, node);
         match &pair.target {
             TargetData::Plane { point, normal } => Some(Kin {
                 nodes: vec![node],
-                gap: dot(sub(xs, *point), *normal),
+                // ADR 0507 amendment 3: from differences.
+                gap: dot(sub(self.reference[node], *point), *normal) + dot(self.displacement(u, node), *normal),
                 normal: *normal,
                 grad: normal.to_vec(),
                 hess: None,
@@ -678,9 +697,10 @@ impl ContactSet {
                     if !inside {
                         continue;
                     }
-                    let Some((xi, g, n, grad, hess)) = project(xs, &x) else {
+                    let Some((xi, _, n, grad, hess)) = project(xs, &x) else {
                         continue;
                     };
+                    let g = self.face_gap(u, node, fn_, xi, n);
                     if g.abs() > reach {
                         continue;
                     }
@@ -929,10 +949,12 @@ fn linear_solve(
         let mut fint = vec![0.0; n];
         k.matvec(&u, &mut fint);
         let internal = fint.clone();
+        let elastic_norm = norm2(internal.iter().copied());
         let mut trip = Vec::new();
         let mut trip_x = Vec::new();
         let mut fc = vec![0.0; n];
         set.add(&u, 1.0, &mut fc, &mut trip)?;
+        let contact_norm = norm2(fc.iter().copied());
         for (a, b) in fint.iter_mut().zip(&fc) {
             *a += b;
         }
@@ -947,8 +969,11 @@ fn linear_solve(
         let rfull: Vec<f64> = f.iter().zip(&fint).map(|(a, b)| a - b).collect();
         let rn = norm2(free.iter().map(|&i| rfull[i]));
         // ADR 0507 amendment 2: the reference is at least the largest of the run's earlier converged solves.
+        // ADR 0507 amendment 3: and at least |K u| and |f_c| over every equation (the pattern of ADR 0479 D2).
         let reference = norm2(free.iter().map(|&i| f[i]))
             .max(norm2(fint.iter().copied()))
+            .max(elastic_norm)
+            .max(contact_norm)
             .max(floor);
         let r = if reference > 0.0 { rn / reference } else { rn };
         if !r.is_finite() {
@@ -1033,7 +1058,7 @@ pub fn solve(
 /// The contact solve (ADR 0507 D3): load control `lambda = k/n` of the model's loads, `forces` and the prescribed values
 /// (the model's and `prescribed`), per step Newton solves with the contact set and `extra` (after the contact set; they are
 /// called with the load factor 1 of the step's load, as by [`solve_from`]) and Uzawa updates of the multipliers until the
-/// largest penetration is within `options.penetration_tolerance` (D2). Errors: the cycle error of D6, the augmentations
+/// largest penetration and active gap are within `options.penetration_tolerance` (D2, amendment 3). Errors: the cycle error of D6, the augmentations
 /// exhausted (naming the nodes above the tolerance), a failed Newton solve (located by step and augmentation), and with
 /// [`Kinematics::TotalLagrangian`] a non-zero model displacement constraint.
 pub fn solve_with(
@@ -1155,8 +1180,9 @@ pub fn solve_with(
                     if e.kin.is_some() && e.active {
                         let pen = (-e.gap).max(0.0);
                         penetration = penetration.max(pen);
-                        if pen > options.penetration_tolerance {
-                            over.push((p.nodes[i], pen));
+                        // ADR 0507 amendment 3: |g| at every active node (a penetrating node is active).
+                        if e.gap.abs() > options.penetration_tolerance {
+                            over.push((p.nodes[i], e.gap.abs()));
                         }
                     }
                 }
@@ -1202,7 +1228,7 @@ pub fn solve_with(
                 return Err(FemError::Solver {
                     solver: SOLVER_NAME,
                     reason: format!(
-                        "{label}: the penetration tolerance {:e} not met after {} augmentations; nodes and penetrations: \
+                        "{label}: the gap tolerance {:e} (penetration, or gap at an active node) not met after {} augmentations; nodes and |gap|: \
                          {over:?}",
                         options.penetration_tolerance, options.max_augmentations
                     ),
