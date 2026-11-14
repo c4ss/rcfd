@@ -9,7 +9,9 @@ use rcfd_fem::arclength::{trace, ArcLengthOptions, PathPoint};
 use rcfd_fem::builders::{hex_box, upgrade_to_tet10};
 use rcfd_fem::follower::FollowerPressure;
 use rcfd_fem::hex20::upgrade_to_hex20;
-use rcfd_fem::nonlinear::{initial_states, internal_force, solve, solve_with, tangent, DriverExtensions, NewtonOptions};
+use rcfd_fem::nonlinear::{
+    initial_states, internal_force, solve, solve_with, tangent, DriverExtensions, NewtonOptions,
+};
 use rcfd_fem::solve::{solve_static, StaticOptions};
 use rcfd_fem::{BlockProperty, Constraint, ElementKind, Load, Material, SolidMesh, SolidModel};
 

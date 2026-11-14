@@ -8,7 +8,8 @@ use rcfd_fem::assemble::stiffness;
 use rcfd_fem::follower::FollowerPressure;
 use rcfd_fem::nl_transient::{Integrator, NlTransientOptions};
 use rcfd_fem::nonlinear::{
-    initial_states, internal_force, solve, solve_from, solve_with, tangent, Contribution, DriverExtensions, NewtonOptions,
+    initial_states, internal_force, solve, solve_from, solve_with, tangent, Contribution, DriverExtensions,
+    NewtonOptions,
 };
 use rcfd_fem::shell::Shell4Membrane;
 use rcfd_fem::shell3::Shell3Membrane;
@@ -103,7 +104,11 @@ fn rotate(w: [f64; 3], x: [f64; 3]) -> [f64; 3] {
         return x;
     }
     let k = [w[0] / t, w[1] / t, w[2] / t];
-    let kx = [k[1] * x[2] - k[2] * x[1], k[2] * x[0] - k[0] * x[2], k[0] * x[1] - k[1] * x[0]];
+    let kx = [
+        k[1] * x[2] - k[2] * x[1],
+        k[2] * x[0] - k[0] * x[2],
+        k[0] * x[1] - k[1] * x[0],
+    ];
     let kd = k[0] * x[0] + k[1] * x[1] + k[2] * x[2];
     let (s, c) = t.sin_cos();
     [0, 1, 2].map(|i| x[i] * c + kx[i] * s + k[i] * kd * (1.0 - c))
@@ -130,7 +135,9 @@ fn shell_model(kind: ElementKind, nodes: Vec<[f64; 3]>, conn: Vec<usize>, membra
     mesh.add_block(kind, conn).unwrap();
     let property = match (kind, membrane) {
         (_, Membrane::Default) => BlockProperty::shell(T_EL).unwrap(),
-        (ElementKind::Shell4, Membrane::Andes) => BlockProperty::shell4_with_membrane(T_EL, Shell4Membrane::AndesOpt).unwrap(),
+        (ElementKind::Shell4, Membrane::Andes) => {
+            BlockProperty::shell4_with_membrane(T_EL, Shell4Membrane::AndesOpt).unwrap()
+        }
         (_, Membrane::Andes) => BlockProperty::shell_with_membrane(T_EL, Shell3Membrane::AndesOpt).unwrap(),
         (_, Membrane::Allman) => BlockProperty::shell_with_membrane(T_EL, Shell3Membrane::Allman).unwrap(),
     };
@@ -229,7 +236,10 @@ fn size(model: &SolidModel) -> f64 {
         }
     }
     nodes.iter().fold(0.0, |m, x| {
-        nmax(m, ((x[0] - c[0]).powi(2) + (x[1] - c[1]).powi(2) + (x[2] - c[2]).powi(2)).sqrt())
+        nmax(
+            m,
+            ((x[0] - c[0]).powi(2) + (x[1] - c[1]).powi(2) + (x[2] - c[2]).powi(2)).sqrt(),
+        )
     })
 }
 
@@ -237,12 +247,21 @@ fn size(model: &SolidModel) -> f64 {
 fn t1_t1r_s1_tangent_against_central_differences() {
     let mut ck = Checks::new();
     let configurations = [
-        ("warped Shell4 element", single(ElementKind::Shell4, warped4(), Membrane::Default)),
+        (
+            "warped Shell4 element",
+            single(ElementKind::Shell4, warped4(), Membrane::Default),
+        ),
         ("Shell3 element", single(ElementKind::Shell3, tri3(), Membrane::Default)),
         ("Shell4 patch", patch(false)),
         ("Shell3 patch", patch(true)),
-        ("Shell4 ANDES element", single(ElementKind::Shell4, warped4(), Membrane::Andes)),
-        ("Shell3 ANDES element", single(ElementKind::Shell3, tri3(), Membrane::Andes)),
+        (
+            "Shell4 ANDES element",
+            single(ElementKind::Shell4, warped4(), Membrane::Andes),
+        ),
+        (
+            "Shell3 ANDES element",
+            single(ElementKind::Shell3, tri3(), Membrane::Andes),
+        ),
     ];
     let mut rng: u64 = 0xF578_0490;
     let w: [f64; 3] = [0.6, -0.9, 0.4];
@@ -312,7 +331,10 @@ fn t1_t1r_s1_tangent_against_central_differences() {
 fn l1_l1f_l2_linear_limit_and_rigid_motions() {
     let mut ck = Checks::new();
     let elements = [
-        ("warped Shell4", single(ElementKind::Shell4, warped4(), Membrane::Default)),
+        (
+            "warped Shell4",
+            single(ElementKind::Shell4, warped4(), Membrane::Default),
+        ),
         ("Shell3", single(ElementKind::Shell3, tri3(), Membrane::Default)),
         ("flat Shell4", single(ElementKind::Shell4, flat4(), Membrane::Default)),
         ("Shell4 ANDES", single(ElementKind::Shell4, warped4(), Membrane::Andes)),
@@ -332,7 +354,11 @@ fn l1_l1f_l2_linear_limit_and_rigid_motions() {
             d = nmax(d, (a - b).abs());
         }
         let scale = max_abs(&klin);
-        ck.at_most(&format!("L1 {name}: max |K(0) - K_lin| / max |K_lin|"), d / scale, 1e-10);
+        ck.at_most(
+            &format!("L1 {name}: max |K(0) - K_lin| / max |K_lin|"),
+            d / scale,
+            1e-10,
+        );
         let l = size(model);
         let f0 = internal_force(model, &zero, &states).unwrap();
         ck.at_most(
@@ -400,7 +426,8 @@ fn roll_strip(tri: bool, membrane: Membrane, planar: bool, scale: f64) -> SolidM
         }
     }
     let moment = scale * 2.0 * PI * ei() / L_S;
-    m.add_load(Load::nodal_moment("tip", [0.0, -0.5 * moment, 0.0])).unwrap();
+    m.add_load(Load::nodal_moment("tip", [0.0, -0.5 * moment, 0.0]))
+        .unwrap();
     m
 }
 
@@ -461,7 +488,11 @@ fn roll_up(ck: &mut Checks, label: &str, tri: bool, membrane: Membrane, planar: 
     let r = match solve_with(&m, &[], &[], &NewtonOptions::new(steps), ext) {
         Ok(r) => r,
         Err(e) => {
-            ck.holds(&format!("{label} the Newton driver rolls the strip up"), false, &format!("{e:?}"));
+            ck.holds(
+                &format!("{label} the Newton driver rolls the strip up"),
+                false,
+                &format!("{e:?}"),
+            );
             return;
         }
     };
@@ -473,7 +504,11 @@ fn roll_up(ck: &mut Checks, label: &str, tri: bool, membrane: Membrane, planar: 
         .iter()
         .zip(r.result.displacement_values())
         .all(|(a, b)| a == b);
-    ck.holds(&format!("{label} solve gives the final state of the recorder run"), same, "");
+    ck.holds(
+        &format!("{label} solve gives the final state of the recorder run"),
+        same,
+        "",
+    );
     let dofs = m.dof_map();
     let tips = [N_S, 2 * N_S + 1];
     let (mut e_max, mut rot_max, mut out_max) = (0.0, 0.0, 0.0);
@@ -510,14 +545,21 @@ fn roll_up(ck: &mut Checks, label: &str, tri: bool, membrane: Membrane, planar: 
     ck.at_most(&format!("{label}: max over the steps of the tip error e"), e_max, 1e-2);
     ck.holds(&format!("{label}: last load factor 1"), last == 1.0, &format!("{last}"));
     ck.record(&format!("{label}: increments"), r.steps.len() as f64);
-    ck.record(&format!("{label}: total iterations"), iterations.iter().sum::<usize>() as f64);
+    ck.record(
+        &format!("{label}: total iterations"),
+        iterations.iter().sum::<usize>() as f64,
+    );
     if planar {
         ck.at_most(&format!("{label}b: max |theta_y,tip/(-phi) - 1|"), rot_max, 1e-6);
     } else {
         ck.record(&format!("{label}: max |theta_y,tip/(-phi) - 1|"), rot_max);
     }
     if !planar {
-        ck.at_most(&format!("{label}: out-of-plane max |u_y|/L, |theta_x|, |theta_z|"), out_max, 1e-6);
+        ck.at_most(
+            &format!("{label}: out-of-plane max |u_y|/L, |theta_x|, |theta_z|"),
+            out_max,
+            1e-6,
+        );
     }
 }
 
@@ -658,7 +700,11 @@ fn cylinder(ck: &mut Checks, label: &str, tri: bool, membrane: Membrane, record:
             if record {
                 println!("{label}: the step sequence failed: {e:?} (recorded)");
             } else {
-                ck.holds(&format!("{label} the Newton driver expands the ring"), false, &format!("{e:?}"));
+                ck.holds(
+                    &format!("{label} the Newton driver expands the ring"),
+                    false,
+                    &format!("{e:?}"),
+                );
             }
             return;
         }
@@ -711,7 +757,14 @@ fn is_shell4_refusal(r: &rcfd_fem::Result<impl Sized>) -> (bool, String) {
     match r {
         Ok(_) => (false, "Ok".to_string()),
         Err(e) => (
-            matches!(e, FemError::NotYetSupported { item: "element kind", variant: "Shell4", .. }),
+            matches!(
+                e,
+                FemError::NotYetSupported {
+                    item: "element kind",
+                    variant: "Shell4",
+                    ..
+                }
+            ),
             format!("{e:?}"),
         ),
     }

@@ -416,7 +416,10 @@ fn corotated(mesh: &SolidMesh, element: usize, coords: &[Vec3], material: &Mater
         }
         other => Err(FemError::InvalidValue {
             key: "element kind",
-            reason: format!("the corotated shell takes Shell4 and Shell3 elements, not {}", other.name()),
+            reason: format!(
+                "the corotated shell takes Shell4 and Shell3 elements, not {}",
+                other.name()
+            ),
         }),
     }
 }
@@ -657,7 +660,8 @@ pub fn element_force_and_tangent(model: &SolidModel, element: usize, ue: &[f64])
     }
     let materials = model.material_indices()?;
     let coords: Vec<Vec3> = mesh.element_nodes(element).iter().map(|&n| mesh.nodes()[n]).collect();
-    model_force_and_tangent(mesh, element, &coords, &model.materials()[materials[element]].1, ue).map_err(locate(element))
+    model_force_and_tangent(mesh, element, &coords, &model.materials()[materials[element]].1, ue)
+        .map_err(locate(element))
 }
 
 /// The refusals of the Newton driver for a model with shells (ADR 0490 D3): the shell checks of the linear path
