@@ -254,6 +254,7 @@ fn f3(v: &toml::Value) -> [f64; 3] {
 }
 
 #[test]
+#[ignore = "record of the registered run (ADR 0443 amendment 1): Q1 to Q4 met, then panicked in N3 (the set-up asked for a model the library refuses); superseded by q1_to_q4_n3b_box_bounds_equal_to_coordinates"]
 fn q1_to_q4_n3_box_bounds_equal_to_coordinates() {
     let mut ch = Checks::new();
     let text = text_of("box_exact_bounds.toml");
@@ -291,6 +292,46 @@ fn q1_to_q4_n3_box_bounds_equal_to_coordinates() {
         "N3 bound 1e-9 below the coordinate",
         hit == 0,
         &format!("{hit} of 49 xmax nodes selected"),
+    );
+    ch.finish();
+}
+
+#[test]
+fn q1_to_q4_n3b_box_bounds_equal_to_coordinates() {
+    let mut ch = Checks::new();
+    let text = text_of("box_exact_bounds.toml");
+    let case = SolidCase::parse_toml_in(&text, &cases()).unwrap();
+    let (nodes, sets) = mesh_nodes_of(&case);
+    let corner = [8.0f64, 0.0, 0.75];
+    for name in ["corner_hi", "corner_lo", "point"] {
+        let s = sets.get(name);
+        let exact = s.len() == 1 && (0..3).all(|c| nodes[s[0]][c].to_bits() == corner[c].to_bits());
+        ch.holds(
+            &format!("Q {name} selects the node (8, 0, 0.75)"),
+            exact,
+            &format!("{} node(s)", s.len()),
+        );
+    }
+    let setup = case.build().unwrap();
+    let xmax = setup.model.mesh().node_set("xmax").unwrap().to_vec();
+    let face = sets.get("face_hi");
+    ch.holds(
+        "Q2 face_hi equals xmax",
+        face == xmax.as_slice() && face.len() == 49,
+        &format!("{} nodes", face.len()),
+    );
+    // N3b: the upper x bound 1e-9 below the coordinate: the library refuses the empty selection with the key and line.
+    let below = text.replace("box_max = [8.0, 2.0, 2.0]", "box_max = [7.999999999, 2.0, 2.0]");
+    assert_ne!(below, text);
+    let err = SolidCase::parse_toml_in(&below, &cases()).unwrap().build().err();
+    let ok = err.as_ref().is_some_and(|e| {
+        e.iter()
+            .any(|d| d.path == "node_sets.face_hi.box_min" && d.line.is_some() && d.message.contains("selects no node"))
+    });
+    ch.holds(
+        "N3b bound 1e-9 below the coordinate is refused",
+        ok,
+        &format!("{err:?}"),
     );
     ch.finish();
 }
