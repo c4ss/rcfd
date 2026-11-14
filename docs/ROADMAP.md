@@ -11550,7 +11550,17 @@ fixed by the item's registration ADR before any code.
     registered limits; the damped modes and the direct harmonic solve with the formulations' stiffness (the viscoelastic
     shear and bulk split refused for Incompatible, whose condensed stiffness is not linear in D); the patch recovery
     with the formulations' strain; defaults bit-identical.
-  - note: Structural solver, intermediate tier. PARTIAL. ADR 0525, 2026-11-14: the refusals of ADR 0493 D5 lifted in rcfd_fem::hex8x and its callers: free thermal expansion of the distorted F-374 patch stress-free to 1e-10 for BBar and Incompatible (7.4e-11 worst at nu 0.4999), orthotropic and per-point patches to 1.7e-14, Euler buckling of a one-layer Incompatible strip within 5.1e-4 (Full control 1.5), damped modes and direct harmonic solve with the formulations' stiffness (loss factors to 1.0e-11; viscoelastic BBar by bounds and the static limit), Incompatible with a viscoelastic material refused, patch recovery with the formulations' strain (1.8e-12). Defaults bit-identical (18 new digests). Missed: the ES3b control (Full also recovers the bending box, 3.45e-13) and mutation MU12 (estimate sampling with the compatible strain) is caught by no check; the RF3 set-up was amended once. Open: a discriminating test of estimate::element_samples for an opted Hex8.
+  - note: F-588 PARTIAL. ADR 0525, 2026-11-14: the refusals of ADR 0493 D5 lifted in rcfd_fem::hex8x
+    (element_stiffness_at, element_thermal_load, internal_modes_at, point_strains_at, strain_at) and its callers: free
+    thermal expansion of the distorted F-374 patch stress-free to 1e-10 for BBar and Incompatible (7.4e-11 worst at nu
+    0.4999), orthotropic and per-point patches to 1.7e-14, Euler buckling of a one-layer Incompatible strip within
+    5.1e-4 (Full control 1.5), damped modes and direct harmonic solve with the formulations' stiffness (loss factors to
+    1.0e-11; viscoelastic BBar by bounds and the static limit), Incompatible with a viscoelastic material refused, patch
+    recovery with the formulations' strain (ES2 1.8e-12). Defaults bit-identical (18 new digests, baseline_hashes
+    unchanged). Missed: ES3b control (Full also recovers the bending box, 3.45e-13) and mutation MU12 (estimate sampling
+    with the compatible strain) not caught by any check; RF3 set-up amended once (Amendment 2). Follow-ups (numbers left
+    to the lead): a discriminating test of the estimate sampling; equal-weight viscoelastic Incompatible, only if a
+    model needs it. Follow-up F-614.
 - [x] **F-589** First and fourth spectral moments of a random stress component for broadband fatigue
   - depends on: F-417, F-566
   - acceptance: Every limit not stated here is registered in the ADR before the run. RandomStress carries the
@@ -11887,3 +11897,9 @@ fixed by the item's registration ADR before any code.
     and a free thermal expansion of an unconstrained elastic cube under a temperature step equals alpha dT within 1e-12.
     Models without a temperature keep their bits.
   - note: Structural solver, advanced tier. Optional. Follow-up of F-592 (ADR 0526, 2026-11-14).
+- [ ] **F-614** A non-equilibrium quadratic displacement test for the error-estimate samples of an opted Hex8
+  - depends on: F-588
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A non-equilibrium quadratic
+    displacement test for estimate::element_samples with an opted Hex8 (BBar and Incompatible), which catches the
+    mutation MU12 of ADR 0525 (sampling with the compatible strain).
+  - note: Structural solver, intermediate tier. Low priority. Follow-up of F-588 (ADR 0525, 2026-11-14); closes F-588.
