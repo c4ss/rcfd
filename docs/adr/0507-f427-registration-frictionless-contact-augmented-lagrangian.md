@@ -418,3 +418,50 @@ the bar is `F - R + S = 0` with the stop's force `R` and the support's reaction 
 -min(F, E A g/L)` (the reactions of the driver are `f_int + f_c - f` at the prescribed equations, summed over the `x` components
 of `xmin`). The corrected P1 quantity is `|S + min(F, E A g/L)| / F_max <= 1e-8`; the other two parts of P1 and every other
 check are unchanged. No check had been run.
+
+## Amendment 2 (2026-11-14): three driver defects and one test defect found by the registered run of 8ca0d696; written after that run and before any corrected run
+
+The registered run of `sa_contact.rs` at 8ca0d696 (`f427-scratch/run1-sa_contact.log`) met P1, P2, NP, B1, C1, C1t, NC, C2, H0,
+HF, T1, NT, T1r and R1, and stopped four tests with errors before any of their limits was evaluated:
+
+- **I (fit)**: `tangent factorisation at Newton iteration 0: pivot -1.29e10 ... not positive definite`. Diagnosis (arithmetic): at
+  the first iteration the multipliers are 0 and every ring node carries the whole penalty force of the overlap, `t = eps A_s d =
+  1.6e14 x 4.9e-3 x 1e-3 = 7.9e8 N`, 2100 times its force at equilibrium (`p A_s = 3.7e5 N`). The curvature part `- t d2g/dq2` of
+  the exact contact matrix is of order `t/|a|` (`|a|` half a face): `7.9e8/0.05 = 1.6e10`, the order of the elastic stiffness
+  `E h = 2e10`, and indefinite (the rotation of a face under a follower-like force). The exact tangent of the penalty energy is
+  indefinite there; the solver refuses it.
+- **T2 (punch, total Lagrangian)**: `singular tangent: pivot -0.469 at node 57 component 2`. Diagnosis (a spy contribution,
+  scratch only): after the first iteration the four punch nodes on the symmetry plane `y = 0` (on the target's boundary edge
+  `eta = -1`) project to `eta = -1 - 7.3e-7`, outside the registered slack `1e-8`, so they lose contact; the punch then sinks
+  `4.4e-3` into the plate at those nodes and the second iteration carries forces `t = 0.024`, whose curvature part makes the
+  tangent indefinite as in I.
+- **S1 (blocks pulled apart)**: `load step 4 of 8, augmentation 0: not converged in 30 iterations (relative residual 1.1e-7,
+  energy ratio 4.1e-23)`. Diagnosis: at `lambda = 1/2` the blocks just touch with no force, so the reference of the relative
+  residual (`max(|lambda f_F|, |f_int + f_c|)`, ADR 0404 D5) is itself of the order of rounding and the relative residual stays
+  at `1e-7` although the energy has converged.
+- **R2**: the test's extra constraint `u_y = 1e-3` on `xmax` conflicts with the model's `u_y = 0` on `ymin` at node 4; the
+  refusal came from `prescribed_equations` (`ConflictingConstraint`), before the check. A defect of the test.
+
+Corrections, registered before their run (no limit changes):
+
+1. **D1, the slack of the inside test**: `1e-8` becomes `1e-2` in face coordinates: a node may take the bilinear face extended by
+   one percent of its half-width beyond its edges (the gap, the gradient and the second derivative are those of the extended
+   bilinear surface, exact). A node on the boundary edge of a target drifts off it by the face's twist times the gap (here
+   `7.3e-7`); one percent covers that with a wide margin while the extension stays within one percent of a face. Inside a
+   target surface two faces may then both take a node near their common edge; the smaller `|g|` decides, as before.
+2. **D3, the linear body, an indefinite tangent**: when the reduced tangent with the exact contact matrix fails the pivot test
+   of `SparseLdlt`, that iteration is taken with the contact matrix without its curvature part, `eps_s G G^T` (positive
+   semi-definite, the Gauss-Newton matrix of the penalty energy); the exact matrix is used at every iteration where it factors,
+   so the iteration near the solution, where `t` is near its equilibrium value, is Newton's. The number of such iterations is
+   reported per Newton solve (`NewtonSolve::convex_iterations`). The total Lagrangian path is unchanged (its factorisation is in
+   `nonlinear.rs`, not edited).
+3. **D3, the linear body, the reference of the relative residual**: `max(|lambda f_F|, |f_int + f_c + f_extra|, r_run)` with
+   `r_run` the largest reference of the converged Newton solves of the run so far (0 at the first): a state without force after
+   a loaded one compares its residual with the run's force scale. The first solve of a run is unchanged.
+4. **R2, the test**: the non-zero model constraint becomes `u_x = 1e-3` on `xmax` (no other constraint on that component there).
+
+Records and copies (ADR 0291 pattern): the four tests of the registered run stay with `#[ignore = "record: ..."]` and their
+bodies unchanged; the copies `i1_to_i4_..._a2`, `s1_..._a2`, `t2_..._a2` (bodies identical, run on the corrected driver) and
+`r1_r2_refusals_a2` (R2 corrected) are the corrected runs, each made once. The tests that passed are not re-run to select a
+result; they run again only as part of the crate's suite, on the corrected driver, and their numbers are reported from that
+suite run in the addendum next to the numbers of the registered run.
