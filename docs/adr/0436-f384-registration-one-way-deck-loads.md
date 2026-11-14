@@ -273,3 +273,25 @@ rcfd-post --release --test sb_deck_loads -- --nocapture --test-threads=1`). `tol
 3. "1e-12 relative" is read as relative to the deck's load scale `S_d` (force) and `S_d L_d` (moment), with the force also
    relative to `|F_d|` where it is not small (A1b): the uniform tube has `F_d = 0` up to rounding, where a ratio to `|F_d|` is
    undefined.
+
+## Amendment 1 (2026-11-14, after the registered run, before the corrected run): the set-up of N2 was defective
+
+The registered run (commit f779af3c, log `w49i-work/f384-scratch/run1.log`) met every A and K check and every negative control
+except N2: the warped face gave `|M_n - M_d| / (S_d L_d) = 1.14e-17`, not above `1e-6`. Diagnosis (first principles, no run):
+the warped face of N2 is the unit square with one corner raised, `x(u, v) = (u, v, d u v)` on `[0, 1]^2`. Then `x_u x x_v = (-d
+v, -d u, 1)`, and `int x x (x_u x x_v)` has the x component `int (v + d^2 u^2 v) = 1/2 + d^2/6`; `quad_geom` gives `A = (-d/2,
+-d/2, 1)` and the centroid of the triangles `(0, 1, 2)` and `(0, 2, 3)`, `c = (1/2, 1/2, d/3)`, with `(c x A)_x = 1/2 + d^2/6`:
+equal (and the y component by the symmetry `u <-> v`). The face is symmetric about its diagonal through the raised corner, and
+for that warp the centroid formula is exact. The pre-registration arithmetic used an asymmetric quad (corner `(1.3, 1, d)`),
+which the set-up did not reproduce. The control was defective; the claim it was meant to show (D3: the equality needs a planar
+face) is unchanged.
+
+Corrected control **N2a** (new test `n2a_warped_asymmetric_face`; the old test
+`negative_controls_warped_and_triangles` stays unchanged as an ignored record, its N5 part met in the registered run): the same
+single Hex8, the node at `(1, 1, 1)` moved to `(1.3, 1, 1.01)` (the quad of the arithmetic, on the `zmin` face), `p = 1e5`,
+`about = (0.5, 0.5, 1)`. Expected: force `|F_n - F_d| / S_d <= 1e-12`; moment `|M_n - M_d| / (S_d L_d) > 1e-6`, estimate from the
+arithmetic `2.17e-4 / (1.15 x 0.943) = 2.0e-4` (`|A| = 1.15`, `L_d = |(0.8, 0.5, 0.01)| = 0.943`; the difference of the moments
+does not depend on the reference point because the forces agree). Run once.
+
+By the decision rule a negative control that did not behave as expected in the registered run is not "as expected"; whatever
+N2a gives, the proposal is **partial** (a check met only after an amendment made after its run).
