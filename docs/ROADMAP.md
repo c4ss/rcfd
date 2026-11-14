@@ -7520,7 +7520,7 @@ fixed by the item's registration ADR before any code.
     w48v_case_hashes, physics_schema, rules_w19c, cli, default_f1, tool_list_f275, project_list_f270 pass unedited).
     Eight of nine mutations caught (the exclusive box bound not). No CLI subcommand or MCP tool (golden edits: the
     maintainer's step). Partial by the rule; follow-up item below.
-- [x] **F-387** Demonstration on a fan blade: static response to centrifugal and pressure load, and the modes at rest; user page
+- [~] **F-387** Demonstration on a fan blade: static response to centrifugal and pressure load, and the modes at rest; user page
   - depends on: F-371, F-375, F-376, F-383, F-386, F-132
   - acceptance: Every limit not stated here is registered in the ADR before the run. One blade of the parametric fan
     geometry, meshed in quadratic tetrahedra and clamped at the hub: under the centrifugal load at a registered speed
@@ -7531,22 +7531,23 @@ fixed by the item's registration ADR before any code.
     thickness has its first bending frequency between the Euler-Bernoulli beam value and that value divided by sqrt(1 -
     nu^2), with a 1 percent margin on each side. The page docs/structural-solver.md states the scope, the limits and
     that nothing is validated against a measured blade.
-  - note: Structural solver, basic tier (plan ADR 0270). ADR 0500, 2026-11-14 (registration of stub ADR 0288): test
-    crates/rcfd-fem/tests/sb_fan_blade.rs, no library change. Blade 0 of ComputerFan::default() (120 mm, span 36.5 mm,
-    NACA sections, mean chord 29 mm, mean thickness 0.85 mm), nominal PBT-like E = 2.5 GPa, nu = 0.38, rho = 1300 kg/m^3
-    (not data), Tet10 from a structured split of the parametric blade (upgrade_to_tet10, straight edges), every hub node
-    held; 2000 rpm centrifugal load and 50 Pa on the pressure side. Meshes of 1056 and 4416 Tet10: reactions against rho
-    omega^2 times the first moment of the meshed volume within 1.3e-11, against the pressure force within 1.2e-10,
-    strain energy against half the work within 1.0e-10 (limits 1e-8); mean tip displacement under the pressure 41.79 and
-    42.36 micrometres (change 1.36 percent), under the centrifugal load change 2.30 percent, first frequency 188.83 and
-    186.05 Hz (change 1.47 percent; limit 5 percent); a third mesh with twice the thickness layers changes them by 0.1
-    to 0.2 percent. Flat plate of the blade's span, mean chord and thickness: first bending 152.04 Hz, 1.0643 of the
-    Euler-Bernoulli value 142.86 Hz, inside [0.99, 1.0919]. The tetrahedral mesher (F-132) meshes this blade only
-    without refinement and at some surface resolutions, with slivers (min dihedral 0.16 deg); on its one mesh the
-    identities hold within 2.5e-10 and tip displacement and first frequency are within 0.24 percent of the structured
-    mesh. Five mutations caught. User page docs/structural-solver.md (scope, limits, not validated against a measured
-    blade). Not covered: rotation effects (stress stiffening, spin softening), hub flexibility, root fillet, any
-    validation.
+  - note: Structural solver, basic tier (plan ADR 0270). PARTIAL by the standing rule (set-up check S0 met only after
+    amendment 1, written after the first run; the first run kept as an ignored record; every other check met, proposed
+    done by the ADR). ADR 0500, 2026-11-14 (registration of stub ADR 0288): test crates/rcfd-fem/tests/sb_fan_blade.rs,
+    no library change. Blade 0 of ComputerFan::default() (120 mm, span 36.5 mm, NACA sections, mean chord 29 mm, mean
+    thickness 0.85 mm), nominal PBT-like E = 2.5 GPa, nu = 0.38, rho = 1300 kg/m^3 (not data), Tet10 from a structured
+    split of the parametric blade (upgrade_to_tet10, straight edges), every hub node held; 2000 rpm centrifugal load and
+    50 Pa on the pressure side. Meshes of 1056 and 4416 Tet10: reactions against rho omega^2 times the first moment of
+    the meshed volume within 1.3e-11, against the pressure force within 1.2e-10, strain energy against half the work
+    within 1.0e-10 (limits 1e-8); mean tip displacement under the pressure 41.79 and 42.36 micrometres (change 1.36
+    percent), under the centrifugal load change 2.30 percent, first frequency 188.83 and 186.05 Hz (change 1.47 percent;
+    limit 5 percent); a third mesh with twice the thickness layers changes them by 0.1 to 0.2 percent. Flat plate of the
+    blade's span, mean chord and thickness: first bending 152.04 Hz, 1.0643 of the Euler-Bernoulli value 142.86 Hz,
+    inside [0.99, 1.0919]. The tetrahedral mesher (F-132) meshes this blade only without refinement and at some surface
+    resolutions, with slivers (min dihedral 0.16 deg); on its one mesh the identities hold within 2.5e-10 and tip
+    displacement and first frequency are within 0.24 percent of the structured mesh. Five mutations caught. User page
+    docs/structural-solver.md (scope, limits, not validated against a measured blade). Not covered: rotation effects
+    (stress stiffening, spin softening), hub flexibility, root fillet, any validation. Follow-up F-593.
 - [x] **F-388** Scaffold of the intermediate tier: module layout, model extension data, element-trait extension points
   - depends on: F-370, F-372, F-374, F-377
   - acceptance: Every limit not stated here is registered in the ADR before the run. The modules, element kinds,
@@ -8029,7 +8030,9 @@ fixed by the item's registration ADR before any code.
     scope, that the Coriolis term is neglected, that the damping is assumed and that nothing is validated against a
     measured blade.
   - note: Structural solver, intermediate tier (plan ADR 0290, 2026-11-12). Size M. Stub ADR 0309; the registration is
-    written by the implementation agent before any code.
+    written by the implementation agent before any code. ADR 0500, 2026-11-14 (F-387): the blade at rest is meshed by a
+    structured split in the test sb_fan_blade.rs (the tetrahedral mesher leaves slivers on the thin blade); "the bits of
+    F-387" at rest are reproducible once that mesh is a library builder (follow-up of ADR 0500).
 - [~] **F-407** Matched sponge on a mesh moving along the layer or rotating
   - depends on: F-341
   - acceptance: An isolated plane pulse at 30 and 45 degrees through a matched layer attached to a mesh translating
@@ -11418,3 +11421,13 @@ fixed by the item's registration ADR before any code.
     Models without a temperature keep their bits.
   - note: Structural solver, advanced tier. Optional. Follow-up of F-576 (ADR 0499, 2026-11-14); includes the Rayleigh
     stiffness tangent at the temperature (still refused for a shifted material).
+- [ ] **F-593** Fan blade in the solid case file and a library blade mesher
+  - depends on: F-387, F-386
+  - acceptance: Every limit not stated here is registered in the ADR before the run. rcfd_fem::builders gains the
+    structured Tet10 blade mesh of ADR 0500 D1 for an AxialFan with given divisions, with the sets hub, tip, pressure
+    and suction; the solid case file gains a centrifugal load (axis, origin, speed) and a mesh source fan_blade (a
+    ComputerFan or its defaults, the blade index and the divisions); the F-387 blade run from a file gives the bits of
+    the library run, the existing solid-case and schema tests pass unedited, and docs/solid-case-file.md and
+    docs/structural-solver.md describe the keys.
+  - note: Structural solver, basic tier. Follow-up of F-387 (ADR 0500, 2026-11-14). NEEDS THE USER for the case-file
+    keys (centrifugal load, mesh source fan_blade) before the case-file half; the library builder half can go first.
