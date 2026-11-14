@@ -377,3 +377,36 @@ The three tests of run 1 become ignored records with their bodies unchanged and 
 (`f1_e1_strip_free_vibration_100_periods`, body unchanged). The corrected tests `f1_e1_3_corrected`, `f1_e1_4_corrected`,
 `sf1_corrected` and the heavy `f1_e1_100_periods_corrected` are run once (run 2; the heavy one with `--ignored`). Mutations
 MU1, MU2 and MU5 are aimed at the corrected tests.
+
+## Amendment 3 (2026-11-14): the solid reference under a point load does not converge; written before the corrected run
+
+The registered roof run (`a1_a2_h0_hinged_roof_through_the_limit_point`, once at 7884d878, `f585-scratch/run1-roof.log`): A2
+met on all five traces; H0 met (`7.85e-3`); **A1 missed: `|P_lim(Shell4 16)/P_ref - 1| = 2.53e-2`** (limit `2e-2`), with
+`P_ref = 2167.5` N (Hex20 `16 x 16 x 2`), Shell4 `16 x 16` `2222.4` N, Shell4 `8 x 8` `2223.6` N, Shell3 `16 x 16`
+`2221.3` N; the fast test of run 1 gave Hex20 `4 x 4 x 2` `2213.9` N. The test stays as it is, an ignored record; it is
+renamed `a1_a2_h0_hinged_roof_through_the_limit_point_known_miss` with its body unchanged.
+
+**Diagnosis (a defect of the registered reference, not of the element).** The Hex20 limit load falls with every refinement,
+`2213.9, 2184.5, 2167.5` N at `n = 4, 8, 16`: differences `29.4` and `17.0`, a ratio `1.7`, not the `4` of a second-order
+convergence that D5 assumed. A force at one node of a three-dimensional continuum has no mesh limit (the displacement under a
+point force on an elastic solid is unbounded, the Boussinesq singularity), so the solid's local indentation under the load grows
+as the mesh is refined, and with it the softening of the panel; the shell has a finite deflection under a point load (its
+singularity is only in the moments), and its limit load is converged: Shell4 `8` to `16` `5.4e-4`, Shell4 and Shell3 at `16`
+within `5.0e-4`. H0 compared two meshes only and could not see the divergence. The point-load solid is therefore not a
+reference of the shell point-load limit; the registered A1 stays a miss.
+
+**Corrected comparison (A1p, H0p; no limit changes).** Both models carry the **same distributed load**, for which the solid
+has a mesh limit: a uniform dead pressure over the patch `s in [0, theta_0/8]`, `y in [0, 254/8]` of the quarter (the element
+of the `8 x 8` mesh at the apex; a union of elements for `n = 8, 16`), on the shell elements of the patch (`Load::shell_pressure`)
+and on the outer faces of the solid elements of the patch (`Load::pressure` on the faces of the `zmax` set of the parameter
+box whose element centroids lie in the patch), the pressure scaled so that the consistent nodal forces of the patch sum to
+`250` N towards the axis (the value of the load factor 1 as in D5). The same trace, stop and vertex rule as D5. **A1p**:
+`|P_lim(Shell4 16, patch)/P_ref,p - 1| <= 2e-2`, `P_ref,p` the Hex20 `16 x 16 x 2` patch value; **H0p**: `|P_lim(Hex20 8,
+patch)/P_ref,p - 1| <= 2e-2`; A2 on every trace; records: the Shell4 `8 x 8` patch value (the patch is a union of elements for `n` a multiple of 8 only, so the
+coarsest solid is `8`). Estimate: the patch (`31.75 x 31.75` of the quarter, `2.5 t` across) removes the singularity; the solid then converges
+at second order, its residual difference from the shell `O((t/l)^2)` with `l = 63.5` the full patch width: `0.04` at most if taken
+literally, about `1e-2` expected as the transverse shear and the thickness stresses are confined to a region of size `t` at the
+patch edge. Heavy (`a1p_h0p_roof_patch_load`, ignored), run once.
+
+This does not replace the acceptance clause, which asks for a point load: under the point load the shell limit load is recorded
+(and converged in the shell sequence), and A1 is a miss against the registered reference; the decision follows the rule.

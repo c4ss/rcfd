@@ -264,8 +264,8 @@ fn a2(ck: &mut Checks, name: &str, l: &Limit) {
 
 /// The registered roof run (D5): A1, A2, H0 and the records A1c, A3. Heavy (the Hex20 16 x 16 x 2 reference).
 #[test]
-#[ignore = "heavy registered record of ADR 0522 D5 (the Hex20 reference); run once with --ignored"]
-fn a1_a2_h0_hinged_roof_through_the_limit_point() {
+#[ignore = "ADR 0522 roof run record: A1 2.53e-2 missed, the point-load solid reference has no mesh limit (amendment 3)"]
+fn a1_a2_h0_hinged_roof_through_the_limit_point_known_miss() {
     let mut ck = Checks::new();
     let (m, apex) = roof_shell(16, false);
     let s16 = roof_limit("Shell4 16 x 16", &m, apex);
@@ -304,6 +304,125 @@ fn a1_a2_h0_hinged_roof_through_the_limit_point() {
     ] {
         ck.record(name, l.seconds);
     }
+    ck.finish();
+}
+
+/// The sum of the `z` components of the consistent nodal load of a model's loads.
+fn load_z(m: &SolidModel) -> f64 {
+    let f = nodal_load_vector(m, &[]).unwrap();
+    let dofs = m.dof_map();
+    (0..m.mesh().nodes().len())
+        .filter_map(|v| dofs.equation(v, 2))
+        .map(|q| f[q])
+        .sum()
+}
+
+/// A copy of a roof model with its loads replaced by `load(pressure)`, the pressure scaled so that the `z` forces sum to
+/// `-P_QUARTER` (amendment 3).
+fn with_patch_load(model: &SolidModel, load: &dyn Fn(f64) -> Load) -> SolidModel {
+    let build = |p: f64| {
+        let mut m = SolidModel::new(model.mesh().clone());
+        for (set, mat) in model.materials() {
+            m.add_material(set, mat.clone()).unwrap();
+        }
+        for c in model.constraints() {
+            m.add_constraint(c.clone()).unwrap();
+        }
+        m.add_load(load(p)).unwrap();
+        m
+    };
+    let unit = load_z(&build(1.0));
+    assert!(unit != 0.0 && unit.is_finite(), "patch load {unit:e}");
+    let m = build(-P_QUARTER / unit);
+    let total = load_z(&m);
+    assert!((total / -P_QUARTER - 1.0).abs() < 1e-12, "patch total {total:e}");
+    m
+}
+
+/// The quarter roof of shells under the patch load of amendment 3.
+fn roof_shell_patch(n: usize, tri: bool) -> (SolidModel, usize) {
+    let (m, apex) = roof_shell(n, tri);
+    let k = n / 8;
+    let per = if tri { 2 } else { 1 };
+    let mut mesh = m.mesh().clone();
+    let elements: Vec<usize> = (0..k)
+        .flat_map(|j| (0..k).flat_map(move |i| (0..per).map(move |t| per * (j * n + i) + t)))
+        .collect();
+    mesh.add_element_set("patch_f585", elements).unwrap();
+    let mut base = SolidModel::new(mesh);
+    for (set, mat) in m.materials() {
+        base.add_material(set, mat.clone()).unwrap();
+    }
+    for c in m.constraints() {
+        base.add_constraint(c.clone()).unwrap();
+    }
+    (with_patch_load(&base, &|p| Load::shell_pressure("patch_f585", p)), apex)
+}
+
+/// The quarter roof of Hex20 under the patch load of amendment 3 (the outer faces of the patch).
+fn roof_hex20_patch(n: usize) -> (SolidModel, usize) {
+    let (m, apex) = roof_hex20(n);
+    let mut mesh = m.mesh().clone();
+    let (sp, yp) = (THETA_0 / 8.0, HALF_LENGTH / 8.0);
+    let faces: Vec<_> = mesh
+        .surface_set("zmax")
+        .unwrap()
+        .iter()
+        .copied()
+        .filter(|f| {
+            let nodes = mesh.element_nodes(f.element);
+            let mut c = [0.0; 3];
+            for &v in nodes {
+                for k in 0..3 {
+                    c[k] += mesh.nodes()[v][k] / nodes.len() as f64;
+                }
+            }
+            let s = c[0].atan2(c[2] + R_R);
+            s < sp && c[1] < yp
+        })
+        .collect();
+    assert_eq!(faces.len(), (n / 8) * (n / 8), "the patch faces");
+    mesh.add_surface_set("patch_f585", faces).unwrap();
+    let mut base = SolidModel::new(mesh);
+    for (set, mat) in m.materials() {
+        base.add_material(set, mat.clone()).unwrap();
+    }
+    for c in m.constraints() {
+        base.add_constraint(c.clone()).unwrap();
+    }
+    (with_patch_load(&base, &|p| Load::pressure("patch_f585", -p)), apex)
+}
+
+/// The corrected roof comparison of amendment 3: A1p, H0p, A2, records. Heavy (the Hex20 16 x 16 x 2 reference).
+#[test]
+#[ignore = "heavy registered record of ADR 0522 amendment 3 (the patch load); run once with --ignored"]
+fn a1p_h0p_roof_patch_load() {
+    let mut ck = Checks::new();
+    let (m, apex) = roof_shell_patch(16, false);
+    let s16 = roof_limit("patch Shell4 16 x 16", &m, apex);
+    let (m, apex) = roof_hex20_patch(16);
+    let h16 = roof_limit("patch Hex20 16 x 16 x 2", &m, apex);
+    let (m, apex) = roof_hex20_patch(8);
+    let h8 = roof_limit("patch Hex20 8 x 8 x 2", &m, apex);
+    let (m, apex) = roof_shell_patch(8, false);
+    let s8 = roof_limit("patch Shell4 8 x 8", &m, apex);
+    let p_ref = h16.p_lim;
+    ck.record("P_ref,p (Hex20 16 x 16 x 2, patch), N", p_ref);
+    let h0 = (h8.p_lim / p_ref - 1.0).abs();
+    ck.at_most("H0p |P_lim(Hex20 8)/P_ref,p - 1|", if h0.is_finite() { h0 } else { f64::NAN }, 2e-2);
+    let a1 = (s16.p_lim / p_ref - 1.0).abs();
+    ck.at_most("A1p |P_lim(Shell4 16)/P_ref,p - 1|", if a1.is_finite() { a1 } else { f64::NAN }, 2e-2);
+    for (name, l) in [
+        ("patch Shell4 16", &s16),
+        ("patch Hex20 16", &h16),
+        ("patch Hex20 8", &h8),
+        ("patch Shell4 8", &s8),
+    ] {
+        a2(&mut ck, name, l);
+    }
+    ck.record("A1p signed P_lim(Shell4 16)/P_ref,p - 1", s16.p_lim / p_ref - 1.0);
+    ck.record("patch P_lim(Shell4 8)/P_ref,p", s8.p_lim / p_ref);
+    ck.record("patch P_lim(Hex20 8)/P_ref,p", h8.p_lim / p_ref);
     ck.finish();
 }
 
