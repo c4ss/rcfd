@@ -154,3 +154,76 @@ not build.
   of ADR 0364 on another trajectory.
 - The bit comparison covers fluid time and wall displacement and solid time, displacement and interface forces; the checkpoint
   slots and `f0` are not compared.
+
+## Addendum 1: results (2026-11-14)
+
+Registered run: commit 4e89922e (the test file, written after the registration commit 4cdf7149; no limit changed),
+`cargo test --release -p rcfd-post --test sb_solid_coupling_fail_fluid_loose -- --nocapture --test-threads=1`, log
+`w49i-work/f469-scratch/registered_run.log`, run once: 6 passed, 0.07 s. Release profile.
+
+### Checks
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| S1 loose first step | `Ok`, 1 iteration, not converged; test quantity vs 3 relative `<= 1e-6` | as stated; 8.1e-15 | yes |
+| S2 force at the start vs `0.5 F0` | relative `<= 1e-6` | 1.2e-14 | yes |
+| S3 times `dt`, wall displacement off zero | as stated | as stated | yes |
+| P1a, P4a healthy step | converged, 3 iterations | converged, 3 | yes |
+| P1b, P4b test quantity 1 vs 0.6 | relative `<= 1e-6` | 1.1e-14 | yes |
+| P1c, P4c test quantity 2 vs 0.1875/0.6875 | relative `<= 1e-6` | 3.8e-14 | yes |
+| P1d, P4d test quantity 3 | `<= 1e-10` | 4.4e-16 | yes |
+| P1e, P4e advances | 3, 3 | 3, 3 | yes |
+| P1f, P4f both states change | differ | differ | yes |
+| F2, F3, G2, G3 a to g | as registered | all met (participant `fluid`, iteration `n`, message with entry time `t0`, error time bits, `n` advances, both bit-equal to the start, both off the start at the failure, retry bit-equal to the control) | yes |
+| N1 | `Ok`, 3 iterations, 3 advances each, bit-equal | as stated | yes |
+
+The Aitken and least-squares trajectories coincide bit for bit (residuals 0.6000000000000068, 0.2727272727272831,
+4.4e-16), as the arithmetic predicts. Example failing error: `co-simulation: 'fluid' at t = 0.001, iteration 3: linear wall:
+injected failure at advance 3, entered at t = 0.001`.
+
+### Mutations (scratch copy `w49i-work/f469-scratch/mut` of the committed tree at 4e89922e, `mutate.py`/`mutate2.py`)
+
+The first pass (`mutations.log`) listed only the checks whose line began a line; it missed P1a, P4a and N1, whose lines follow
+the `test ... ...` prefix. The second pass (`mutations2.log`, full logs `full_M*.log`) uses a regex that also matches those; it
+is the same eight mutations on the same tree, run for the extraction only, no result was chosen between them. In every
+mutation the failing tests fail at `Checks::finish` (line 45, the assertion over the missed checks), not at an `unwrap` in
+`start`; S1 to S3 pass under M16 to M19 and M25 (3 `met` lines of S in each log).
+
+| Id | Change | Caught by (missed checks) |
+|---|---|---|
+| M16 | fluid restore skipped at every `k > 1` | P1a, P4a, N1, F2b, F3a, F3b, F3d, F3f, G2b, G3a, G3b, G3d, G3f, retries |
+| M17 | structure restore skipped at every `k > 1` | P1a, P4a, N1, F2a, F2b, F2d, F2f, F3a, F3b, F3d, F3f, G2 and G3 likewise, retries |
+| M18 | fluid restore skipped for `k > 2` | P1a, P4a, N1, F3b, G3b, and the retries F2g, F3g, G2g, G3g (F2 and G2 a to f do not see it, as registered) |
+| M19 | structure restore skipped for `k > 2` | P1a, P4a, N1, F3a, F3b, F3d, F3f, G3a, G3b, G3d, G3f, retries |
+| M25 | mock restore without the time | P1a, P4a, N1, F2b, F2e, F3a, F3b, F3d, F3e, F3f, G2 and G3 likewise, retries |
+| M9 | error arm, structure restore skipped | F2e, F3e, G2e, G3e, retries |
+| M11 | error arm, fluid restore skipped | F2e, F3e, G2e, G3e, retries |
+| M24 | mock restore without the wall displacement | F2e, F3e, G2e, G3e, retries |
+
+All eight are caught by a registered failing-step or control check; none by a set-up panic; none survived.
+
+### Other checks run
+
+`cargo fmt -p rcfd-post --check`: clean. `cargo clippy -p rcfd-post --all-targets --release -- -D warnings`: clean. The other
+`rcfd-post` test files were not run (no line outside the new file changed). Defaults: tests only; no library, shared solver
+file, golden or hash table touched; `baseline_hashes` not run (rule 3).
+
+### Not run
+
+The cases of "Limits" above; the whole `rcfd-post` suite.
+
+### Decision by the registered rule
+
+**done.** Every check met on its registered run, M16 to M19 and M25 each caught by registered control and failing-step checks
+with the set-up unaffected, M9, M11 and M24 still caught.
+
+### Remaining questions
+
+None new. Recommendation: keep `sb_solid_coupling_fail_fluid.rs` (ADR 0364) as it is; it remains a record that M16 to M19 and
+M25 break its converged-step start.
+
+### For the lead: roadmap entries
+
+F-469: proposed status **done**. Note:
+
+> Structural solver, basic tier. ADR 0444, 2026-11-14: tests only, crates/rcfd-post/tests/sb_solid_coupling_fail_fluid_loose.rs. The start state is a loose-coupling first step (max_iterations 1, keep the last iterate) then F0 doubled, so no coupler iteration beyond the first and no restore is used to build it (arithmetic registered: first-step test quantity 3, the mock's force 0.5 F0 at the start; the healthy step then has test quantities 0.6 and 0.2727 and converges in 3 iterations for Aitken and least squares). A mock fluid failing after taking its state in its 2nd and 3rd call stops the step with participant 'fluid', that iteration, the mock's message and the start time, after n advances of both participants, both bit-equal to the start; the retry reproduces the control bit for bit; a failure at the 4th call is never reached. Mutations that skip the coupler's restore of the fluid or of the structure at the start of iteration 2 or 3 (ADR 0364 M16 to M19) and the mock's restore of the time (M25) are each caught by the control (P1a, P4a, N1) and by failing-step checks (message, participant, advance counts, bit equality), not by a panic in the set-up; the error-arm mutations M9, M11 and the mock's displacement restore M24 are still caught.
