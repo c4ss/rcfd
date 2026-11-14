@@ -1239,3 +1239,47 @@ fn j1_j2_diagnosis() {
     let d = work_deflection(&plate, &[], sol.result.displacement_values(), P_TIP);
     println!("D5 one-piece Hex20 plate L = 1: signed {:+.4e}", d / dt2 - 1.0);
 }
+
+/// Diagnosis of the J2 known miss (ADR 0456 addendum 1): the one-piece Shell4 strip of the J2 mesh density; no limit.
+#[test]
+#[ignore = "diagnosis of the J2 known miss of ADR 0456 (addendum 1); numbers only, no limit"]
+fn j2_shell_strip_diagnosis() {
+    for (nx, t) in [(20usize, 0.02f64), (20, 0.01), (40, 0.02)] {
+        let ny = 2usize;
+        let mut nodes = Vec::new();
+        for j in 0..=ny {
+            for i in 0..=nx {
+                nodes.push([i as f64 / nx as f64, 0.1 * j as f64 / ny as f64, 0.0]);
+            }
+        }
+        let id = |i: usize, j: usize| i + (nx + 1) * j;
+        let mut b = SolidMesh::new(nodes).unwrap();
+        let mut conn = Vec::new();
+        for j in 0..ny {
+            for i in 0..nx {
+                conn.extend_from_slice(&[id(i, j), id(i + 1, j), id(i + 1, j + 1), id(i, j + 1)]);
+            }
+        }
+        let k = b.add_block(ElementKind::Shell4, conn).unwrap();
+        b.set_block_property(k, BlockProperty::shell(t).unwrap()).unwrap();
+        b.add_element_set("all", (0..nx * ny).collect()).unwrap();
+        b.add_node_set("root", (0..=ny).map(|j| id(0, j)).collect()).unwrap();
+        let mut m = SolidModel::new(b);
+        m.add_material("all", material(E, 0.0)).unwrap();
+        clamp(&mut m, "root", 6);
+        let forces = vec![
+            NodalForceAt::new(id(nx, 0), [0.0, 0.0, -P_TIP / 4.0]),
+            NodalForceAt::new(id(nx, 1), [0.0, 0.0, -P_TIP / 2.0]),
+            NodalForceAt::new(id(nx, 2), [0.0, 0.0, -P_TIP / 4.0]),
+        ];
+        let sol = solve(&m, &forces);
+        let d = work_deflection(&m, &forces, sol.result.displacement_values(), P_TIP);
+        let dt = timoshenko(P_TIP, 1.0, E, 0.0, 0.1 * t.powi(3) / 12.0, 0.1 * t, 5.0 / 6.0);
+        let eb = P_TIP / (3.0 * E * 0.1 * t.powi(3) / 12.0);
+        println!(
+            "D6 one-piece Shell4 strip {nx} x {ny}, t = {t}: signed {:+.4e} (against Euler-Bernoulli {:+.4e})",
+            d / dt - 1.0,
+            d / eb - 1.0
+        );
+    }
+}
