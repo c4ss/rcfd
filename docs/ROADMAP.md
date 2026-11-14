@@ -11003,12 +11003,21 @@ fixed by the item's registration ADR before any code.
     symmetric models); the linear-table critical speed equals the closed form to 0 (parallel quadratic model) and
     4.4e-16 (series cubic model), limit 1e-6; whirl, Campbell and unbalance response against closed forms 4.4e-16,
     limit 1e-9; defaults bit-identical; 9 mutations caught. No case-file key.
-- [ ] **F-564** Damped critical speeds as unbalance-response peaks and checked Campbell crossings
+- [x] **F-564** Damped critical speeds as unbalance-response peaks and checked Campbell crossings
   - depends on: F-416
   - acceptance: Every limit not stated here is registered in the ADR before the run. On the damped Jeffcott rotor the
     response peak equals w_n / sqrt(1 - 2 zeta^2) within 1e-6 and the crossing of the forward track with engine order 1
     equals the undamped critical speed within 1e-6 at zeta = 0.
-  - note: Structural solver, advanced tier. Follow-up of F-416 (ADR 0476, 2026-11-14).
+  - note: Structural solver, advanced tier. Follow-up of F-416 (ADR 0476, 2026-11-14). DONE. F-564 (ADR 0501,
+    2026-11-14): rcfd_fem::rotor::RotorModel::unbalance_peaks (peaks of the unbalance response over the spin, grid
+    plus golden-section search) and campbell_crossings (Campbell crossings with an engine order refined by bisection
+    on the frozen whirl problem, each with its residual). On the damped Jeffcott rotor the response peak equals w_n /
+    sqrt(1 - 2 zeta^2) to 4.4e-9 and its amplitude e / (2 zeta sqrt(1 - zeta^2)) to 4.4e-16 (limit 1e-6; the wording
+    of the acceptance matches the unbalance excitation, the constant-force peak at w_n sqrt(1 - 2 zeta^2) is confirmed
+    to 4.8e-9); the crossing of the tracks with engine order 1 equals the undamped critical speed to 2.2e-16 at zeta =
+    0 and w_n sqrt(1 - zeta^2) to 4.4e-16 at zeta > 0; on a gyroscopic rotor the forward crossings equal
+    critical_speeds() to 6.3e-14 with residuals below 3.4e-13; defaults bit-identical; 7 of 8 mutations caught, the
+    eighth declared equivalent. No case-file key.
 - [ ] **F-565** Random response in the case file and the CLI
   - depends on: F-417, F-533
   - acceptance: Every limit not stated here is registered in the ADR before the run. A case with analysis = "random", a
