@@ -318,6 +318,36 @@ Two checks of the table cannot be run as written. No result of F-558 exists yet;
    is run with the equilibrated set: `f = (-N, -V_y, -V_z, 0, 0, 0 | N, V_y, V_z, 0, L V_z, -L V_y)`; the compared quantity
    and the limit (`<= 1e-12 max|F|`, all six translation rows, the three rotation axes) are unchanged.
 
+## Amendment 2 (2026-11-14): three set-ups of the first run were defective; written after the first run of `sa_geometric_struct_f558.rs` and before any corrected run
+
+The first run (log `w49i-work/f558-scratch/run1.log`) met every check except three, each with a diagnosed cause that is a
+defect of the registered set-up or hand arithmetic, not of the library terms (the terms are confirmed by R1, S1, S2, L1 to L5, C1):
+
+1. **H3, hand arithmetic.** Arithmetic 4(iii) took the shear function as `V_y phi w'` and forgot the term `(1/2) V_y phi theta_y`
+   of D1; in the Euler limit `theta_y = -w'`, so the function is `(1/2) V_y phi w'` and the entries are a half of the registered
+   ones: measured `K[3][8] = K[9][8] = +V_y/4`, `K[3][2] = K[9][2] = -V_y/4` (`V_y = 5`: `1.25`, hand `2.5`). Corrected hand
+   values: `+V_y/4`, `-V_y/4`; same limit `1e-7 V`. (R1, which uses the same functions, met at `1.8e-16`.)
+2. **N2, outcome not anticipated.** Without the option the pure-moment model has no geometric stiffness (`N = 0`); the
+   buckling solver refuses it (`the iterated subspace lost rank at iteration 1`), so the registered alternatives (an empty list
+   or a large factor) were not the outcome. Replaced by **N2'**: the C1 loading (thrust `0.3 P_z`, moment `M_0`) without the
+   option gives the weak-axis Euler factor, `|lambda_base 0.3 P_z/P_z - 1| <= 5e-3` (estimate `1e-4`: the Hermite-type element
+   is nearly exact for the Euler column), and with the option `lambda_with < 0.5 lambda_base`; the refusal of N2 is the recorded
+   outcome of N2 (a miss of the registered alternatives, kept in the ignored test).
+3. **S3, S4: the lowest factor is not the plate mode at `t/a = 0.2`.** The first factor of the base model at `t/a = 0.2` is not
+   the plate mode: its mode shape has `|u_z|` of `1e-16` against `1e-5` in `u_x, u_y, theta_z` (an in-plane mode carried by the
+   drilling rotation, factor `4.630e6` = `2.315e-2 E` per `N_ref = 1000`, which the t^2/12 terms do not touch: the factor list
+   with the option has `4.630e6` as its second entry); the plate mode is the second base factor, `4.7405e6` (`2.370e-2 E`, `+0.4`
+   percent of the Reissner-Mindlin `n_0 = 2.3598e-2`), and with the option the first, `4.5388e6` (ratio `0.95747`, closed
+   `0.95765`). The diagnostic (a throwaway test, deleted; ratios at `t = 0.05, 0.1, 0.15` agree with the closed form to `1e-4`:
+   `0.995992/0.996017`, `0.985378/0.985463`, `0.971436/0.971581`) shows the term is right. The first-run numbers of S3 and S4
+   (`0.98021` against `0.95765`, `0.96859`) are the ratio of the wrong pair of modes. Corrected S3, S4, S5: the factor of a
+   mode is that of the lowest of the first four modes of the model whose out-of-plane translation is the plate mode, `max |u_z|
+   >= 1e-6 max |phi|` (the two classes differ by `1e-11`); the ratio is of the plate modes; limits unchanged (`5e-3`, `1e-2`,
+   `5e-5`). The in-plane mode is a finding recorded in the addendum (it exists in the base library and is not part of F-558).
+
+The old test functions stay with `#[ignore]` as records of the first run (the checks that were met in them are repeated,
+unchanged, in the corrected functions: deterministic, same numbers); corrected functions are `a2_*`.
+
 ## For the lead: roadmap entries
 
 (To be filled after the run, in the addendum.)
