@@ -9759,13 +9759,24 @@ fixed by the item's registration ADR before any code.
     check on the cube rested on a wrong torsion estimate (the pre-stress cancels the spin softening on a rigid rotation
     about the axis; amendment 1, met on a corrected set-up after the run), and one planned mutation (sign of G in the
     state matrix) is equivalent by the symmetry of the spectrum.
-- [ ] **F-506** Sparse whirl solver for large rotating parts
+- [~] **F-506** Sparse whirl solver for large rotating parts
   - depends on: F-499
   - acceptance: Every limit not stated here is registered in the ADR before the run. The lowest whirl modes of (K_eff -
     omega^2 M + i omega G) phi = 0 by a shift-invert Lanczos on the Hermitian form of ADR 0411 with sparse factors of
     K_eff and M, without the dense cap; on the cube and the disc sector of ADR 0411 the frequencies equal the dense
     solver's within 1e-9 relative and the whirl numbers within 1e-8; a part of at least 20 000 reduced unknowns is
     solved in under two minutes in release.
+  - note: From ADR 0411 question 2 (b), recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR
+    0427, 2026-11-14: the lowest whirl modes by a shift-invert skew Lanczos process on the state form of ADR 0411 in the
+    M* inner product (W = G*^-1 M*, W [a; b] = [-b; K^-1 (M a + G b)], one solve with the skyline factor of K_eff per
+    step, M factored as the positive-definiteness test; equivalent to Lanczos on A^-1 of ADR 0411), full
+    reorthogonalisation, deflated restarts with locking for multiple frequencies; opt-in WhirlSolver (Dense the default,
+    Sparse, Auto above the cap of 1500); the cube and the disc sector equal the dense solver within 6.7e-13
+    (frequencies) and 4.6e-14 (whirl numbers), double frequencies with Coriolis off found within 1.6e-13; a ring of 20
+    064 reduced unknowns solved in 6.3 s (new + whirl_modes, release) and equal to its dense sector union within
+    1.5e-12; all eight mutations caught; partial because the negative control N1 (one run blind to double frequencies)
+    was not as expected (rounding found the copies on a spread spectrum) and its corrected form was met only after an
+    amendment.
 - [x] **F-507** Stationary-frame frequencies of a cyclic whirl table
   - depends on: F-499
   - acceptance: Every limit not stated here is registered in the ADR before the run. The cyclic whirl Campbell table
@@ -9855,13 +9866,27 @@ fixed by the item's registration ADR before any code.
     model mixing Beam2 with other kinds is refused naming ADR 0423. Partial: of seven mutations MU7 (the DofMap equality
     check removed) was not caught by the registered checks (the registered wrong-numbering result had another length);
     caught by check N2b added after the run.
-- [ ] **F-513** Beams on the transformation path: rigid sets joining a beam to a solid, supports and linear constraints on rotations
+- [~] **F-513** Beams on the transformation path: rigid sets joining a beam to a solid, supports and linear constraints on rotations
   - depends on: F-391, F-393
   - acceptance: Every limit not stated here is registered in the ADR before the run. A cantilever beam joined to a solid
     block by a rigid set on a face of the block gives the beam's tip deflection plus the block's compliance within the
     registered limit; a nodal spring on a rotation gives k_theta theta = M within 1e-10; the modal analysis of a beam
     held by a rigid set has the frequencies of the equivalent clamped beam within the registered limit; the free rigid
     motions count takes rotational unknowns.
+  - note: Structural solver, intermediate tier. ADR 0426, 2026-11-14: beams on the transformation path. A six-unknown
+    node of a rigid set turns with it (rows theta - w = 0 in mpc::transformation); solve_static_mpc and
+    modal_analysis_mpc take beam models (BeamSolidNode for a node shared directly kept; a beam model with a cyclic
+    constraint refused naming a follow-up of ADR 0417); nodal springs, linear constraints and prescribed values act on
+    rotations; free_rigid_motions counts with rotational unknowns (the rigid fields carry their rotation). Solid-only
+    bits unchanged (si_scaffold_bits, baseline_hashes, every rcfd-fem test). Met: cantilever joined to a Hex8 block by a
+    rigid set on its face, tip = cantilever closed form + the rigid face motion of an independent solid-only solve
+    within 3.9e-14 (limit 1e-8; the block's share 38 percent); k_theta theta = M within 1.9e-15 (limit 1e-10), spring in
+    series with the beam 2.1e-15; rotations as linear constraints bit-equal to prescribed ones, guided and
+    prescribed-rotation tips within 1.7e-15; a beam held by a rigid set on a fixed block has the clamped beam's six
+    frequencies bit for bit and the Euler-Bernoulli cantilever's five lowest within 2.2e-3 (limit 5e-3); counts 6, 2, 1,
+    6, 0 on models known by hand, rigid fields in the beam's null space to 3.7e-19. Seven of eight mutations caught; the
+    eighth (the beam check left out of the transformation entry) is not observable because assembly repeats the check:
+    partial by the rule.
 - [~] **F-514** Distributed and body loads on beams
   - depends on: F-391
   - acceptance: Every limit not stated here is registered in the ADR before the run. Uniform line load q on a
@@ -9913,3 +9938,15 @@ fixed by the item's registration ADR before any code.
     refused; with the key absent every case gives the bytes it gave before (baseline_hashes and the case hash tables
     unchanged); the schema golden change is approved by the maintainer.
   - note: From ADR 0425 questions 2 and 3; needs the maintainer's approval of the schema golden change.
+- [ ] **F-518** Beams on the transformation: a check that observes the entry refusal before the transformation is built
+  - depends on: F-513
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A model with a beam node shared
+    with a solid and a contradictory linear constraint is refused with BeamSolidNode naming the node, not with the
+    contradiction, on solve_static_mpc and modal_analysis_mpc; the mutation that leaves the beam check out of the
+    transformation entry is caught.
+- [ ] **F-519** Sparse whirl state solver above the loss of stiffness
+  - depends on: F-506, F-505
+  - acceptance: Every limit not stated here is registered in the ADR before the run. Above the loss of stiffness, the
+    whirl state of a part above the dense cap by a shift-invert Arnoldi process on the state matrix of ADR 0416 with a
+    sparse factor of K_eff - sigma M at a registered shift; on the cube of ADR 0416 and the disc sector of ADR 0420 the
+    eigenvalues equal the dense state solver's within 1e-9 relative and the stability flags agree.
