@@ -396,3 +396,13 @@ same function with the same arguments and are run once (run 2). No limit and no 
 were measured with the uncorrected code; they are not re-run as registered runs, and run again as regression tests in the
 whole-crate run, whose numbers are recorded beside those of run 1. Mutation MU6 is re-targeted at the corrected code (the
 reference offsets `r_a - r_0` and the turned offsets dropped).
+
+## Amendment 3 (2026-11-14): a second existing test superseded by design; written before the whole-crate run
+
+The whole-crate run (`fem-suite.log`, stopped at the first failing binary) failed `sa_scaffold::r2b_to_r4b_refusals_after_f419`
+in one row, `R2c Shell3 E5 nonlinear::solve`, which asserts that `nonlinear::solve` refuses a Shell3 model: the refusal that
+F-578 removes by its acceptance, as X2. Following the pattern that test itself continues (ADR 0291, the maintainer's standing
+decision: an ignored record and a continued twin), the test receives `#[ignore]` with its reason, body unchanged, and a new
+test `r2b_to_r4b_refusals_after_f578` in the same file repeats it with row E5 expecting no `NotYetSupported` (every other row
+unchanged: E6 still refuses Shell3, R3b the layup on every path including E5, R4b). The whole-crate run is then made with
+`--no-fail-fast`. No limit changes.
