@@ -346,3 +346,31 @@ Corrections, written and committed before their run:
 
 By the registered rule the item is partial whatever the corrected run gives (A14 missed for block Jacobi; A14 for the other
 preconditioners is met, if it is, only after this amendment).
+
+## Amendment 2 (2026-11-14, after the run of amendment 1, before the corrected run): the 1e-10 tolerance is below this model's residual floor
+
+The run of amendment 1 (log `f386-scratch/run2.log`, run once): A7b met (displacement and reactions bit-identical, 0 against
+1e-12, all 6075 values). A14c: every row stopped with "not converged ... and 3 restart(s)" at a true residual of 1.49e-7 to
+1.65e-7 against the target 2.635e-8 (`1e-10 |b|`, `|b| = 263.5`): `ic0` after 1849 iterations, `ic_fill` 803, `amg` 71,
+`amg_quadratic` 54, `amg_quadratic_smoothed` 37 (block Jacobi, run 1: 5063 iterations, 1.53e-7). A7c was not reached with a
+result: `cantilever_tet10_amg.toml` (tolerance 1e-10) failed the same way.
+
+Diagnosis (by these numbers, no further run): five preconditioners whose iteration counts differ by a factor of 140 all stop at
+the same true residual, 5.7e-10 to 6.2e-10 of `|b|`; that is a floor of the residual `b - K u` evaluated in floating point, not
+a convergence failure. Its size: the internal nodal forces of this model are much larger than the load (`|b|` is the tip load
+`P = 1000 N` spread over the end face, while the bending stresses near the root, `sigma ~ 1.2e7 Pa` on faces of `~2.5e-3 m^2`,
+give nodal forces of order 3e4 N; with 6075 equations, `eps x 3e4 x sqrt(6075) ~ 5e-10 x |b|`). F-381 met 1e-10 on Hex8
+cantilevers whose load is a larger share of the internal forces; this registration's estimate ("just below 1e-10") did not
+check that ratio. The registered limit 1e-10 is kept: every A14 row is a miss.
+
+Corrections, written and committed before their run:
+
+- `a14c_a7c_cg_preconditioners_from_files` stays as an ignored record; its A14 rows become `a14_cg_rows_known_miss` (ignored,
+  limits intact, measured numbers above).
+- A7d (the iterative row of c9, whose purpose is the bit comparison, not the tolerance): `cantilever_tet10_amg_1e8.toml`, the
+  same file with `tolerance = 1e-8`, against the library model of A7b with the same `StaticSolver`: largest relative difference
+  <= 1e-12, bits recorded (expected identical).
+- Unregistered diagnostic printed in the same test (not a check): the relative residual and the difference from the direct
+  solve of that run.
+
+By the registered rule the item is partial (A14 missed; c9's iterative row met, if it is, only after this amendment).
