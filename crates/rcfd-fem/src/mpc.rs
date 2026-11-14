@@ -28,7 +28,6 @@
 //! analysis take shell models (a shell node shared with a solid stays refused; a shell model with a cyclic constraint is
 //! refused).
 
-use crate::assemble::stiffness_with;
 use crate::constraint::{prescribed_equations, Prescribed};
 use crate::error::{FemError, Result, SetKind};
 use crate::loads::{face_rule, face_shape_functions, nodal_load_vector, NodalForceAt};
@@ -1067,7 +1066,28 @@ pub fn add_supports(k: &mut CsrMatrix, model: &SolidModel) -> Result<()> {
 /// or Shell4 and a cyclic constraint refused naming [`crate::beam::FOLLOW_UP`] or [`crate::shell::FOLLOW_UP`] (the cyclic
 /// rows rotate translations only).
 fn check_transformation_model(model: &SolidModel) -> Result<()> {
-    model.check_supported_with_structures()?;
+    // ADR 0457 D2: also the orthotropic and the tabulated material on solid elements (ADR 0452 D6).
+    model.check_supported_with_materials()?;
+    // ADR 0457 D3: the cyclic rows rotate translations; a material with its own axes is not opened with them.
+    if let Some(j) = model
+        .constraints()
+        .iter()
+        .position(|c| matches!(c, Constraint::Cyclic { .. }))
+    {
+        if let Some((i, (set, m))) = model
+            .materials()
+            .iter()
+            .enumerate()
+            .find(|(_, (_, m))| crate::mat_ortho::is_point_material(m))
+        {
+            return Err(FemError::NotYetSupported {
+                item: "material",
+                variant: m.name(),
+                location: format!("material {i}, element set '{set}', with the cyclic constraint {j}"),
+                package: crate::mat_ortho::FOLLOW_UP,
+            });
+        }
+    }
     let has = |kind: crate::mesh::ElementKind| model.mesh().blocks().iter().any(|b| b.kind() == kind);
     let refusal = if has(crate::mesh::ElementKind::Beam2) {
         Some(("Beam2", crate::beam::FOLLOW_UP))
@@ -1170,7 +1190,7 @@ pub fn solve_static_mpc(
             f[r0 + 3 + i] += l.moment[i];
         }
     }
-    let mut k = stiffness_with(model, options.threads)?;
+    let mut k = crate::assemble::stiffness_with_materials(model, options.threads)?;
     add_supports(&mut k, model)?;
     let (kr, fr) = tr.reduce(&k, &f)?;
     let nq = kr.n;
@@ -1439,7 +1459,7 @@ pub fn modal_analysis_mpc(model: &SolidModel, extra: &[Prescribed], options: &Mo
     }
     let tr = transformation(model, extra)?;
     let n = tr.n_mesh();
-    let mut k = stiffness_with(model, options.threads)?;
+    let mut k = crate::assemble::stiffness_with_materials(model, options.threads)?;
     add_supports(&mut k, model)?;
     let m = consistent_with(model, options.threads)?;
     let zero = vec![0.0; tr.n_unknowns()];

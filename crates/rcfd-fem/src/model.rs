@@ -1152,6 +1152,19 @@ impl SolidModel {
         self.check_supports()
     }
 
+    /// As [`SolidModel::check_elements_supported`] (solid elements only) for a path that also takes the orthotropic and the
+    /// tabulated material (ADR 0457 D2: the pre-stressed modes, a uniform pre-stress), then [`crate::mat_ortho::check_model`].
+    pub(crate) fn check_elements_solids_with_materials(&self) -> Result<()> {
+        self.check_elements(false, false, true)?;
+        crate::mat_ortho::check_model(self)
+    }
+
+    /// [`SolidModel::check_elements_solids_with_materials`], then the supports (ADR 0457 D2).
+    pub(crate) fn check_supported_solids_with_materials(&self) -> Result<()> {
+        self.check_elements_solids_with_materials()?;
+        self.check_supports()
+    }
+
     fn check_supports(&self) -> Result<()> {
         for (i, s) in self.supports.iter().enumerate() {
             if let Some(package) = crate::mpc::PENDING {

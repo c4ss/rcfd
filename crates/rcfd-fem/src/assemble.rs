@@ -195,6 +195,12 @@ pub fn stiffness_with(model: &SolidModel, threads: Option<usize>) -> Result<CsrM
 /// [`crate::mat_ortho::element_stiffness`] with the elasticity at each integration point.
 pub(crate) fn stiffness_with_materials(model: &SolidModel, threads: Option<usize>) -> Result<CsrMatrix> {
     model.check_elements_supported_with_materials()?;
+    point_stiffness(model, threads)
+}
+
+/// The assembly of [`stiffness_with_materials`] without its entry check, for a caller that made its own (ADR 0457 D1: the
+/// pre-stressed modes). Without the orthotropic or tabulated material it is the assembly of [`stiffness_with`].
+pub(crate) fn point_stiffness(model: &SolidModel, threads: Option<usize>) -> Result<CsrMatrix> {
     if crate::mat_ortho::uses_point_materials(model) {
         let points = crate::mat_ortho::MaterialPoints::new(model)?;
         assemble_stiffness(model, threads, Some(&points))

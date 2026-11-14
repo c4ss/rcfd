@@ -729,6 +729,7 @@ fn refusal(r: &rcfd_fem::Result<()>, variant: &str) -> bool {
 }
 
 #[test]
+#[ignore = "record of ADR 0452: ADR 0457 (F-537) opened modal_analysis_with, prestressed_modes, solve_static_mpc and modal_analysis_mpc to Orthotropic and Tabulated, retiring rows E3, E8, E9, E10; continued in r1_r2_paths_after_f537 of sa_ortho_modal.rs (ADR 0291 pattern, maintainer standing decision)"]
 fn r1_r2_paths() {
     let mut c = Checks::new();
     let steel = Material::isotropic_elastic(2.0e11, 0.3, 7850.0, 0.0).unwrap();
