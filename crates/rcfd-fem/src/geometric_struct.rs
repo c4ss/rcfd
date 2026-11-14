@@ -17,6 +17,11 @@
 //!   the element's own kinematics, the section `u_c + theta x s` of a beam and the director `u + zeta theta x n` of a shell
 //!   (D3).
 //!
+//! A model with both solid and structural elements takes the same pre-stress: each solid element the stress of
+//! [`crate::recover::IntegrationPointField`] at the points of its stiffness rule, each structural element its one point
+//! ([`prestress_from_static`], ADR 0486, F-557, which lifts the refusal RF1 of ADR 0473); the parts are joined by the linear
+//! constraints of [`crate::tie`].
+//!
 //! The centrifugal load on a beam is [`crate::beam::centrifugal_load_vector`] (D5). The trait method
 //! [`crate::element::Element::geometric_stiffness`] of the placeholders of Beam2, Shell4 and Shell3 still refuses: the
 //! assembly calls this module for them.
@@ -32,7 +37,7 @@ use rcfd_core::vec3::Vec3;
 /// The work package that fills this module; `None` once it has landed (ADR 0473).
 pub const PENDING: Option<&'static str> = None;
 
-/// The package named by the refusals of this module (ADR 0473 D4).
+/// The package named by the refusals of this module (ADR 0473 D4; the refusal of a mixed model is lifted by ADR 0486).
 pub const FOLLOW_UP: &str = "a follow-up of ADR 0473";
 
 /// Whether elements of `kind` take the structural geometric stiffness of this module (Beam2, Shell4, Shell3).
@@ -110,8 +115,9 @@ fn beam_property_or_error(mesh: &SolidMesh, element: usize) -> Result<(crate::me
 
 /// The pre-stress of a static result of a model of beams and shells (ADR 0473 D4): per Beam2 element the stress `(N/A) e_1
 /// e_1^T` of its average axial force ([`crate::beam::axial_force`]), per Shell4 or Shell3 element `(1/t) sum N_{alpha beta}
-/// e_alpha e_beta^T` of the membrane resultants of [`crate::shell::stresses`] at its centre. A model that also has solid
-/// elements is refused ([`FemError::NotYetSupported`], item `"pre-stress"`, package [`FOLLOW_UP`]).
+/// e_alpha e_beta^T` of the membrane resultants of [`crate::shell::stresses`] at its centre. A solid element of a model that
+/// also has solid elements takes the stress of [`crate::recover::IntegrationPointField::compute`] at the points of its
+/// stiffness rule, `D (eps - eps_th)`, as in a model of solid elements only (ADR 0486 D1: the refusal RF1 of ADR 0473 lifted).
 pub fn prestress_from_static(model: &SolidModel, result: &SolidResult) -> Result<Prestress> {
     prestress_from_displacement(model, result.displacement_values())
 }
@@ -127,22 +133,16 @@ pub fn prestress_from_displacement(model: &SolidModel, displacement: &[f64]) -> 
             found: displacement.len(),
         });
     }
-    if let Some((b, block)) = mesh
-        .blocks()
-        .iter()
-        .enumerate()
-        .find(|(_, b)| b.kind().is_solid() && !b.is_empty())
-    {
-        return Err(FemError::NotYetSupported {
-            item: "pre-stress",
-            variant: "solid and structural elements",
-            location: format!(
-                "block {b} ({}) of a model with beams or shells: the pre-stress of a static result",
-                block.kind().name()
-            ),
-            package: FOLLOW_UP,
-        });
-    }
+    // ADR 0486 D1: the solid elements of a model with both solid and structural elements take the stress of
+    // `IntegrationPointField::compute` at the points of their stiffness rules (the refusal RF1 of ADR 0473 lifted).
+    let solids = if mesh.blocks().iter().any(|b| b.kind().is_solid() && !b.is_empty()) {
+        Some(crate::recover::IntegrationPointField::compute_solids(
+            model,
+            displacement,
+        )?)
+    } else {
+        None
+    };
     let materials = model.material_indices()?;
     let ne = mesh.n_elements();
     let mut shells: Vec<Option<crate::shell::ShellStresses>> = vec![None; ne];
@@ -159,6 +159,11 @@ pub fn prestress_from_displacement(model: &SolidModel, displacement: &[f64]) -> 
     offsets.push(0);
     let mut stress = Vec::with_capacity(ne);
     for e in 0..ne {
+        if let Some(field) = solids.as_ref().filter(|_| !is_structural(mesh.element_kind(e))) {
+            stress.extend_from_slice(&field.stress()[field.points_of(e)]);
+            offsets.push(stress.len());
+            continue;
+        }
         let located = |source: FemError| FemError::Element {
             element: e,
             source: Box::new(source),
@@ -188,10 +193,10 @@ pub fn prestress_from_displacement(model: &SolidModel, displacement: &[f64]) -> 
                 let st = shells[e].as_ref().expect("a shell element has its stresses");
                 shell_stress(&st.axes, t, st.membrane)
             }
-            _ => unreachable!("solid blocks are refused above"),
+            _ => unreachable!("solid elements take the field above"),
         };
         stress.push(s);
-        offsets.push(e + 1);
+        offsets.push(stress.len());
     }
     Ok(Prestress::from_parts(offsets, stress))
 }

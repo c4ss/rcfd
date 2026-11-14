@@ -1972,3 +1972,15 @@ there from memory, NOT read); the references of the checks are closed forms and 
 | Vector area of a bilinear quad `(1/2)(x_2 - x_0) x (x_3 - x_1)`, equal to that of its projected facet: the resultants of the follower and the dead shell pressure agree on a warped Shell4 | derived | ADR 0487 arithmetic 5 |
 | Cylinder of `N` facets at the stretch `lambda`: `sum f . e_r = p N lambda R L sin(2 pi/N)` (follower), `p N R L sin(2 pi/N)` (dead); the hoop tension `p lambda R cos(pi/N)` and, with an SVK membrane of `nu = 0`, `p = E t (lambda^2 - 1)/(2 R cos(pi/N))` | derived | node balance of the facet polygon, ADR 0487 arithmetic 6 |
 | Ring buckling of shells under external pressure: `3 E I/R^3` with the load stiffness (hydrostatic), `4 E I/R^3` without (fixed-direction forces), `n = 2` | derived | ADR 0480 arithmetic 3 re-used (ADR 0487 arithmetic 7) |
+## F-557 the pre-stress of a static result on a model with solid and structural elements (ADR 0486)
+
+No source was read for F-557. The references of the checks are the closed forms of the F-420 section above (the taut-beam
+frequencies) and solid models of the existing solver (Hex20 for T3 and H1 to H3); the corrections that set the estimates are
+derived in ADR 0486 from first principles.
+
+| Item | Status | Source |
+|---|---|---|
+| Taut-beam frequencies `w_n^2 = ((n pi/L)^4 E I + (n pi/L)^2 T)/(rho A)`, `T = pi^2 E I/L^2` | derived | the F-420 section above (ADR 0473 arithmetic 3) |
+| End spring `T c` of a block of length `c` in tension rotating rigidly about its hinge (`int sigma_xx dV = T c`, the virial of the block), and its Rayleigh increase `2 c T/(L (E I k^2 + T))` of `omega_n^2` | derived | ADR 0486 arithmetic 1 |
+| Overall against local buckling of a square plate with a central eccentric rib by the Rayleigh quotient of `sin(pi x/a) sin(pi y/a)` against the half-panel load `4 pi^2 D/b'^2` | derived | ADR 0486 arithmetic 2 |
+| Joints of structural to solid elements: the consistent face coupling of ADR 0460, the node-to-surface tie of ADR 0456 | shared | ADR 0456, ADR 0460 |

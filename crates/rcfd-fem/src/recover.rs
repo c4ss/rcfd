@@ -39,6 +39,17 @@ impl IntegrationPointField {
     /// The field of a displacement vector (one value per unknown of `model.dof_map()`). Refuses a displacement of the
     /// wrong length and an element without material; an element error is returned as [`FemError::Element`].
     pub fn compute(model: &SolidModel, displacement: &[f64]) -> Result<IntegrationPointField> {
+        IntegrationPointField::compute_with(model, displacement, false)
+    }
+
+    /// [`IntegrationPointField::compute`] with the Beam2, Shell4 and Shell3 elements given no points (ADR 0486 D1): the field
+    /// of the solid elements of a model with both solid and structural elements, the arithmetic of each solid element that of
+    /// `compute`.
+    pub(crate) fn compute_solids(model: &SolidModel, displacement: &[f64]) -> Result<IntegrationPointField> {
+        IntegrationPointField::compute_with(model, displacement, true)
+    }
+
+    fn compute_with(model: &SolidModel, displacement: &[f64], solids_only: bool) -> Result<IntegrationPointField> {
         let dofs = model.dof_map();
         if displacement.len() != dofs.n_equations() {
             return Err(FemError::FieldLength {
@@ -71,6 +82,11 @@ impl IntegrationPointField {
             None
         };
         for e in 0..ne {
+            // ADR 0486 D1: a structural element has no points in the field of the solid elements.
+            if solids_only && crate::geometric_struct::is_structural(mesh.element_kind(e)) {
+                field.offsets.push(field.weights.len());
+                continue;
+            }
             let located = |source: FemError| FemError::Element {
                 element: e,
                 source: Box::new(source),

@@ -916,6 +916,7 @@ fn rotate<const N: usize>(pts: &[Vec3; N]) -> ([Vec3; N], ()) {
 }
 
 #[test]
+#[ignore = "retired by ADR 0486 (F-557): the mixed pre-stress is taken; continued as a1_rf1_model_prestress_after_f557 in sa_prestress_mixed.rs"]
 fn rf1_mixed_model_prestress_refused() {
     let mut c = Checks::new();
     let hex = hex_box([0.0; 3], [1.0, 1.0, 1.0], [1, 1, 1]).unwrap();
