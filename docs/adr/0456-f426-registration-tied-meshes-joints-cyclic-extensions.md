@@ -282,3 +282,15 @@ a check met only after an amendment made after its run. **todo**: a T check miss
   `cyclic_rows`, so those paths take them where they use the transformation, untested).
 - The mortar tie is used for the cyclic interpolation as a scalar weight map rotated by `R`; prescribed high-boundary
   components are not excluded there.
+
+## Amendment 1 (2026-11-14, after the registered run of commit 11ec84f8, before any corrected run)
+
+The registered run of `sa_tie` (commit 11ec84f8, log `f426-scratch/run1.log`) stopped C3 and C4 before any check: the
+subspace iteration of the rod at `k = 1` did not converge to the test's tolerance `1e-10` in 400 iterations (residuals of the
+wanted pairs `1.13e-8`, `1.24e-8`, `2.96e-10`, `3.01e-10`). That tolerance was a set-up choice of the test, not a registered
+limit; a residual of `1e-8` bounds the eigenvalue error far below the 1 percent of C3. Correction: the test `c3b_c4b_rod_on_the_axis`
+runs C3 and C4 unchanged with the modal tolerance `1e-8` (the rod and the beam) and 600 iterations; the old test stays as an
+ignored record. By the decision rule C3 and C4 count as met only after an amendment made after their run.
+
+J1 and J2 missed in the same run (J1 `2.25e-2` against `1e-2`, J2 `2.36e-2` against `2e-2`); they become ignored
+`*_known_miss` records with the limits intact (diagnosis in addendum 1).
