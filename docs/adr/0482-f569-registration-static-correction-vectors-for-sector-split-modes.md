@@ -244,3 +244,108 @@ met only after an amendment made after its run. **todo**: the module does not bu
 - No case-file key, no CLI output; the 120 mm fan sector is not run here.
 - The MINRES solve costs one factor of `K_b` per index and speed (shared with D1) and two triangular solves per iteration and
   split mode; on a large sector the iteration counts are not measured here.
+
+## Addendum 1: results (2026-11-14)
+
+Registered run: `f569-scratch/run1.log` (commit 00c1edd8, release, made once; cargo stopped after the first failing binary,
+so B1 ran right after it, unchanged, `f569-scratch/run1_b1.log`). B1 digests recorded at 44b6c812 (commit 6523d01d) before any
+library line. Code: `crates/rcfd-fem/src/gyro.rs` (`sector_split_at` gains the optional correction and `eta`;
+`sector_split_without` fills the new fields; the new section at the end of the file: `RITZ_TOLERANCE`, `CorrectionBasis`,
+`correction_basis`, `ritz_error`, `minres`), `crates/rcfd-fem/src/rotating.rs` (the field `split_correction` and its builder,
+nothing else). `damped.rs` is not edited (`m_orthonormalise` reused). Tests: `crates/rcfd-fem/tests/sa_gyro_sector_correction.rs`
+(7 tests and the ignored known miss, 3.4 s together), `sa_gyro_sector_correction_default_bits.rs`.
+
+`omega_ref = 1655.3226` rad/s (as ADR 0481).
+
+| Id | Check | Limit | Measured | Met |
+|---|---|---|---|---|
+| E1 | lowest split frequency against `whirl_modes`, B4, every index, 0.4 / 0.8 `omega_ref`; MAC | `<= 1e-5`; `>= 0.99` | worst 2.50e-8 (0.4, k = 3) / 1.38e-7 (0.8, k = 3); k = 0 to 2 between 3.2e-12 and 4.0e-10; every MAC 1.000000 | yes |
+| E2 | matches (MAC `>= 0.99`, distinct) | each | holds, every index and speed (smallest MAC 0.999982) | yes |
+| E2 | `|err/eta - 1|` where the reported `eta > 1e-9` (16 modes at 0.4, 18 at 0.8) | `<= 0.1` | **1.607** (0.4) and **1.621** (0.8); met on k = 0 (0.063, 0.065), missed on k = 1, 2, 3 (0.4: 0.881, 1.479, 1.607; 0.8: 0.767, 1.412, 1.621); `err/eta` in `[1.0002, 2.6212]` | **no** (known miss) |
+| E3 | `eta` reported, finite, `>= 0`, every split mode of the B4 runs | each | holds | yes |
+| K2 | basis `Speed`, stable, no real roots, `4 mu` kept, 0 dropped, basis and split modes `8 mu` | each | holds | yes |
+| D1 | B41: kept `n_q - 41 mu` (1 or 2), dropped `41 mu - kept`; `eta == Some(0)`; matches; `max |theta/omega - 1|` | each; `<= 1e-9` | holds; worst 2.1e-13 | yes |
+| G3 | raw skew defect of the projected `C`, enlarged bases | `<= 1e-11` | 1.30e-15 | yes |
+| C2 | corrected split Campbell: tracks `8, 16, 16, 8`, frequencies by bits, distinct, stable | each | holds | yes |
+| L2 | DSS at `10 omega_ref`: rest basis at the loss, finite roots, corrections kept, `eta` `None` exactly at unstable speeds | each | holds; kept 4, 8, 8, 4, none dropped; all four indices unstable with the correction (growth 1702 to 3622 1/s; index 3 was stable without it in ADR 0481), so every `eta` is `None` and the "Some otherwise" half is vacuous | yes |
+| B1 | 6 digests of 44b6c812; ADR 0481's `sa_gyro_sector_default_bits` (13 digests); `baseline_hashes`; `cargo test -p rcfd-fem --release` | `==`; pass | 6 of 6 equal; 13 of 13 equal; `baseline_hashes` pass (3 passed, 1 ignored); `rcfd-fem` pass (618 passed, 0 failed, 147 ignored) | yes |
+| B3 | the option without `coriolis`: `split_modes` and `split_campbell` equal by bits, no corrections, no `eta` | identical | identical | yes |
+| X2 | DSR (rigid set on `xmax`): the sector and `modes` accept it; with the option refused `"constraint"`, without it not | as stated | reachable; refused `"constraint"` with the option, `Ok` without | yes |
+| N1 | without the option, largest lowest-mode error at 0.8 `omega_ref` | `> 1e-5` | 8.90e-5 | as expected |
+| N2 | reported `eta` of the lowest mode `< 0.1` times the plain lowest-mode error, every index, 0.8 | each | holds (6.6e-11 against 1.8e-5 for k = 0, up to 6.3e-8 against 8.9e-5 for k = 3) | as expected |
+
+Records: the correction lowers the worst matched error on B4 from 8.05e-4 to 6.9e-6 (0.4) and from 3.54e-3 to 4.5e-5 (0.8), and
+the lowest-mode errors by 2.8 to 6.2 orders of magnitude. B12 (not registered): lowest-mode errors at most 8.1e-11; `err/eta` in `[1.0003,
+1.1256]` (0.4) and `[1.0001, 1.1384]` (0.8), so E2's limit would be missed there too, narrowly (0.126, 0.138). The unmatched
+split modes of the top half carry `eta` 1e-3 to 1.4 (poor approximations, as expected). For `1e-10 < eta <= 1e-9`, `err/eta`
+lies in `[1.0001, 1.0045]` at 0.4 and `[1.65, 1.66]` at 0.8. The MINRES iteration counts are not exposed by the API and were not
+recorded.
+
+### Diagnosis of E2 (diagnostic `f569-scratch/zz_diag_f569.rs`, log `diag1.log`; not a registered check)
+
+D2 claimed that replacing the exact mode by the Ritz pair changes the complement part only at second order. That holds for a basis
+of eigenvectors of `(K_eff, M)` (ADR 0481: there `V^H (K - w^2 M) W = 0`, the basis couples with the complement only through `G`).
+The modes plus correction vectors are not invariant: `V^H K W != 0`, so the complement couples with the other Ritz vectors of
+the basis at first order. Written as a Schur complement, the reported `eta` is exactly the first-order shift of the projected
+problem `Q_VV - Q_VW Q_WW^-1 Q_WV`; its second-order terms `sum_j |y_j^H E y|^2/(theta - theta_j)` involve the large residuals of
+the other Ritz vectors (the top half of the enlarged basis) and push the lowest values further down, so the measured error
+exceeds the estimate. The diagnostic built the enlarged basis test-side and evaluated ADR 0481's own `eta` from the exact
+reference mode on it: it **over**estimates by about the inverse factor (`err/eta_0481` in `[0.381, 1.000]`), and the measured
+error lies between the two for every matched mode; the ratio `err^2/(eta_lib eta_0481)` lies in `[0.898, 1.001]` over the 34
+modes with `eta > 1e-9` (observed, not derived). The modes with `err/eta` near 1 (1.000 to 1.14) are those whose coupling stays
+nearly inside the original modes (k = 0, and part of the modes of k = 1, 2, 3). So clause a4 ("eta of ADR 0481 within 10
+percent") cannot hold on a corrected basis with either first-order form: it needs an estimate of second order in the basis
+coupling (follow-up below).
+
+### Mutations (scratch copy `f569-scratch/mut` of 1ef1c13b, script `f569-scratch/mutate.py`, logs `mut_MU*.log`)
+
+| Id | Mutation | Caught by |
+|---|---|---|
+| MU1 | corrections not appended | K2 (basis `4 mu`), E1 (k = 2 at 0.4: 1.04e-5), C2, D1 (up to 2.0e-6) |
+| MU2 | load `M_r q_a` | K2, D1 (none kept), C2 |
+| MU3 | complement projection removed from the eta solve | **not caught** (every `eta` near 0: E3 and N2 still hold; only the ignored E2 sees it) |
+| MU4 | gyroscopic term removed from the denominator | **not caught** (changes `eta` by under 20 percent; only the ignored E2 sees it) |
+| MU5 | drop rule disabled | D1 (refused `"mass"`: the reduced mass not positive definite) |
+| MU6 | corrections normalised, not orthogonalised | E3 (MINRES fails for some modes), D1 |
+| MU7 | corrections also without the option | B1, N1, N2 |
+
+MU3 and MU4 survive because the only registered check sensitive to the value of `eta` is E2, which is the known miss.
+
+### Deviations and what was not run
+
+- The registered B4 test missed E2; it is kept as `e1_e2_e3_k2_g3_n1_n2_disc_sector_b4_known_miss` (ignored, limit intact,
+  numbers in its doc comment); the checks that met are run by `e1_e3_k2_g3_n1_n2_disc_sector_b4`, which applies every limit of
+  the registration except E2's ratio (printed as a record). No limit was changed and nothing was re-run to pick a result.
+- `cargo fmt` changed the layout of `gyro.rs` and `sa_gyro_sector_correction.rs` after the registered run (commit 05434ef2).
+- `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --all-targets --release -- -D warnings` clean; `cargo test -p rcfd-cli --release --test docs_site` pass (2 passed). The whole
+  workspace suite was not run (the lead's gate).
+
+### Decision
+
+**Partial** by the registered rule: E2 missed at its run (clause a4), and MU3 and MU4 were not caught by a registered check. Clauses
+a1, a2, a3 and a5 hold: the correction vectors are added on request (dependent ones dropped by the rule of ADR 0464, which on B41
+exactly completes the space), `eta` is reported for every split mode at a stable speed, the lowest split frequency of every index
+of the disc sector on 4 modes per index equals `whirl_modes` within 1.4e-7 at 0.4 and 0.8 `omega_ref` (limit 1e-5), and without
+the option every result is bit-identical (6 plus 13 digests, `baseline_hashes`).
+
+### Remaining questions
+
+1. The estimate of clause a4. Options: (a) keep the first-order `eta` as reported (within a factor of about 2.6 on a corrected
+   basis, within 1 to 14 percent where the coupling stays in the modes); (b) a follow-up that solves the Schur-complemented
+   projected problem `Q_VV(l) - Q_VW Q_WW(theta)^-1 Q_WV` (one complement solve per basis vector, then the dense quadratic problem
+   once more), which gives the error to second order; (c) report both first-order forms as a bracket (the diagnostic found the
+   error between them). Recommendation: (b), with this addendum's record as its reference.
+2. Case-file key (not added). Recommendation: `[rotating] split_correction = true`, read only with `coriolis = true` and `campbell
+   = "split"` on a cyclic model; the maintainer's call.
+3. Rigid sets in a sector are refused with the option (X2). Recommendation: leave until a fan model needs one; the reduced
+   coordinates would then have to be stored with the harmonic modes.
+
+## For the lead: roadmap entries
+
+Proposed status of F-569: **partial**. New note:
+
+> Structural solver, advanced tier (plan ADR 0310). PARTIAL. Size S. ADR 0482, 2026-11-14: RotatingOptions::split_correction (off by default) adds to the basis of RotatingSector::split_modes and split_campbell the static correction vectors K_b^-1 C_r q_i of the F-396 harmonic modes of each index (reduced coordinates, M-orthonormalised by the shared m_orthonormalise of ADR 0464 and 0474, dependent vectors dropped by its 1e-8 rule) and reports for every split mode at a stable speed the first-order Ritz error eta from the split mode alone (complement-projected correction equation, MINRES preconditioned by K_b^-1). On the disc sector of ADR 0411 with 4 modes per index at 0.4 and 0.8 omega_ref the lowest split frequency of every index equals RotatingSector::whirl_modes within 1.4e-7 (without the option 4.7e-6 to 8.9e-5) and the worst matched error falls from 3.5e-3 to 4.5e-5; with 41 modes the corrections complete the space and the split frequencies equal the whole-sector solve within 2.1e-13. Missed: eta agrees with the measured error within 10 percent only on k = 0 (err/eta up to 2.62 on k = 1 to 3), because the corrected basis is not invariant and the first-order estimate neglects its coupling with the other Ritz vectors (ADR 0481's eta from the exact mode overestimates by about the inverse factor). Without the option bit-identical (6 plus 13 digests). Five of seven mutations caught; the two that change only the value of eta are seen only by the missed check. Follow-up for a second-order Ritz error.
+
+Follow-up (number left to the lead): title "Second-order Ritz error of the corrected sector split modes", deps F-569.
+
+> Every limit not stated here is registered in the ADR before the run. RotatingSector::split_modes with split_correction reports beside the eta of ADR 0482 the Ritz error of the Schur-complemented projected problem (the coupling of the complement with every basis vector: one complement solve per basis vector and one more dense quadratic solve); on the disc sector of ADR 0411 with 4 harmonic modes per index at 0.4 and 0.8 omega_ref it agrees with the measured error of every matched mode within 10 percent where it exceeds 1e-9, and the results of ADR 0482 keep their bits.
