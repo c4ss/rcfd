@@ -200,3 +200,77 @@ W3's count "21 of 21" is an arithmetic slip of the registration: the `xmax` face
 faces) has 13 nodes (6 corners, 4 mid-edge nodes along `y` at `z = +/-0.01`, 3 mid-edge nodes along `z` at `y = 0, 0.05,
 0.1`; ADR 0456: three columns of three nodes and the four mid-edge nodes). Corrected before any run: W3 requires a non-zero
 force on every node of the face, 13 of 13. No limit changes.
+
+## Addendum 1: results (2026-11-14)
+
+Registered run: `sa_joint` and `sa_joint_default_bits` of commit c30fb0cf (release, one thread), log `f543-scratch/run1.log`,
+made once. Amendment 1 was written and committed (b976cc52) before that run and changed no limit.
+
+| ID | Limit | Measured | Met |
+|---|---|---|---|
+| W1 beam, uniform force against `traction_field_loads` | `<= 1e-12` | 5.1e-16 | yes |
+| W2 beam, moment about `y` against the linear traction | `<= 1e-12` | 4.5e-16 | yes |
+| W3 shell, uniform line force; every face node loaded | `<= 1e-12`; 13 of 13 | 6.8e-16; 13 of 13 | yes |
+| W4 shell, line moment about `y` against the linear traction | `<= 1e-12` | 2.6e-15 | yes |
+| R1 six rigid motions: J1 consistent / rigid; J2 consistent / rigid | `<= 1e-12` | 4.2e-15 / 3.5e-17; 1.6e-13 / 1.3e-17 | yes |
+| J1 beam continuing a solid bar, consistent | `<= 1e-2` | 5.44e-6 (signed -5.44e-6) | yes |
+| J1R the same, rigid face (`nu = 0`) | `<= 1e-3` | 9.09e-6 (signed -9.09e-6) | yes |
+| J2 shell continuing a solid plate, consistent | `<= 2e-2` | 5.56e-4 (signed -5.56e-4) | yes |
+| J2R the same, rigid face | `<= 2e-3` | 5.56e-4 (signed -5.56e-4) | yes |
+| N1 one-node shell set | refused naming the set | "shell edge 'B.one': no shell element edge with both nodes in the set" | yes |
+| N2 solid node as beam node | refused naming the node | "coupling node 0 has 3 unknowns ..." | yes |
+| N3 beam node `0.05` off the face (lever), R1 consistent / rigid | accepted, `<= 1e-12` | 1.9e-15 / 3.5e-17 | yes |
+| K1 `sa_tie.rs`, `sa_tie_default_bits.rs`, ADR 0456 unchanged; known-miss tests re-run | `==` | `git diff 2504fd62` empty; J1 +2.2527e-2, J2 +2.3645e-2 (the recorded +2.25e-2, +2.36e-2) | yes |
+| B1 default joint words | `==` | the 6 words equal to `BASE`; `sa_tie_default_bits` passes | yes |
+
+The estimates held: J1 `-5.4e-6` (estimate `<= 1e-3`; it lies between D1 `-2.0e-5` and the rigid face), J1R reproduces ADR
+0456 D2 (`-9.1e-6`), J2 `-5.6e-4` (estimate about `-4.5e-4` from the parts). J2 and J2R agree to `4e-11` relative: with one
+Hex20 element through the plate thickness at `nu = 0` the plate's end section stays a plane section under the consistent
+traction, so both rows give the same solution (noted, not a check). The R1 residual of the J2 consistent rows (`1.6e-13`) is
+above the other couplings' because of the eigenvector noise of the threefold drilling null space; it is within the limit.
+
+### Mutations (scratch copy `f543-scratch/mut` of commit c30fb0cf, `sa_joint` per mutation, logs `f543-scratch/mut_Mu*.log`)
+
+| ID | Mutation | Caught by |
+|---|---|---|
+| Mu1 | unit nodal weights at the node positions (A and G; the ADR 0456 rule) | J1 (2.25e-2, the ADR 0456 number), W1 (0.79), W2 (0.83), W3 (0.67), W4 (0.36) |
+| Mu2 | lumped nodal areas `w_i` at the node positions | W2 (0.33); the shell couplings refused (7 undetermined motions), so W3, W4, R1, J2 stop |
+| Mu3 | shell edge: nearer node instead of `L_j` | R1 J2 consistent (4.0e-2) and rigid (8.3e-2), J2R (4.5e-3) |
+| Mu4 | fibre offset `p - x` | R1 (2.0), W2, W4 (2.0), J1 (0.28), J2 (0.19) |
+| Mu5 | rigid option without rotation terms | R1 rigid (0.25, 0.09), N3, the J1R solve singular |
+| Mu6 | one quadrature point per face | W1, W2 (1.0), J1 (2.6e-2); the shell couplings refused (12 undetermined motions) |
+| Mu7 | face nodes off the edge columns dropped | W3 (0.5; 9 of 13 nodes loaded), W1, W2, R1, J1, J2 (0.43) |
+
+All seven caught.
+
+### Deviations and what was not run
+
+- Amendment 1 (the W3 node count 21 to 13) was made before any run; no limit changed.
+- The rest of `sa_tie` (its non-ignored checks) was not run: no existing line of `tie.rs` changed except one module
+  documentation line; the new code is appended. `baseline_hashes` was not run (no rcfd-fv or rcfd-api source touched, and no
+  default path changed: B1).
+- No check at `nu > 0`, on curved faces or with edge kinks inside a face (limits of the registration).
+- `cargo fmt -p rcfd-fem --check` and `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean.
+
+### Decision by the registered rule
+
+**done.** Every check of the table met, the negative controls as expected, all seven planned mutations caught, B1 and K1 green,
+and no amendment after a run.
+
+### Remaining questions
+
+1. `nu > 0`. Options: (a) a check of J1 and J1R at `nu = 0.3` against a fine one-piece solid (the rigid face is expected to be
+   over-stiff); (b) leave it documented. Recommendation: (a) as a small follow-up only if the joints are used with `nu > 0`
+   material in a validation case.
+2. Fill of the consistent rows (dense over the face and the edge, a dense `6n x 6n` eigen-decomposition). Recommendation: keep
+   it until a long shell edge needs it, then split the edge into per-node patches of the edge interpolation.
+
+## For the lead: roadmap entries
+
+Proposed status of F-543: **done**.
+
+> Structural solver, advanced tier. Follow-up of F-426 (ADR 0456, 2026-11-14): the J1/J2 misses. ADR 0460, 2026-11-14: tie::beam_to_solid_with and tie::shell_to_solid_with with JointCoupling::Consistent (the L2 projection of the solid face field onto the reference motions, so the face receives the consistent nodal forces of a linear traction; a shell edge coupled to every face node through its linear edge interpolation with the fibre offset, drilling rotations left free by complete pivoting on the null space) and JointCoupling::Rigid; the unit-weight couplings of ADR 0456 unchanged (bits B1) with their known-miss records kept. Met: beam continuing a solid bar 5.4e-6 (limit 1 percent), shell continuing a solid plate 5.6e-4 (limit 2 percent), rigid face 9.1e-6 at nu = 0 (limit 0.1 percent), shell rigid face 5.6e-4; the six rigid motions exact to 1.6e-13; the dual nodal forces equal hex20::traction_field_loads of the uniform and linear tractions to 2.6e-15 on both faces, every face node loaded. Seven mutations caught. Not covered: nu > 0, curved faces, dense rows over long edges.
+
+Proposed note addition for F-426 (append to its note):
+
+> F-543 (ADR 0460, 2026-11-14): the consistent and rigid joint couplings meet J1 (5.4e-6) and J2 (5.6e-4); the unit-weight couplings and their known-miss records are kept unchanged.
