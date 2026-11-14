@@ -149,3 +149,68 @@ residual vectors) equals constants printed at main 69cb996a by the same file in 
 corrected run; the notes of those results are compared by the content `existing notes ++ [the new line]` in
 `sa_damped_flag.rs` P2 (the note is present iff flagged roots exist). Per the decision rule this makes D3 met only after an
 amendment, hence the decision cannot be **done**.
+
+## Addendum 1: results (2026-11-14)
+
+Commits: e1297d3d (registration, alone), f93ea030 (the bit record file at main 69cb996a, constants printed before any library line),
+then the library change and checks, bf9b007f (amendment 1), and the D3b constants. Registered runs, each made once, release
+profile: `cargo test --release -p rcfd-fem --test sa_damped_flag` (log `f548-scratch/run_flag.log`), `--test
+sa_damped_flag_default_bits`, and the existing `sa_damped` (7), `sa_damped_residual` (5), `sa_damped_residual_default_bits` (1),
+`sa_scaffold` (9, 11 ignored records), all unedited and passing. The D3b constants were printed in a scratch archive of main 69cb996a
+(`f548-scratch/base`).
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| P1 share in [0, 1]; against the share recomputed from the public shapes and residual vectors | `<= 1e-10` | 1.2e-15 (0.9 Z), 2.2e-15 (2 Z) | yes |
+| P2 flag exactly `share > 0.1`, count, note | exact | 7 flagged (0.9 Z), 8 (2 Z); holds | yes |
+| T0 `c = 0.9 Z` targets not flagged; share | `false`; `<= 1e-2` | none flagged; 1.46e-4 | yes |
+| T1 `c = 2 Z` real target and oscillating targets not flagged; share | `false`; `<= 1e-2` | none flagged; 1.70e-4 (real target 3.2e-6) | yes |
+| R1 `c = 0.9 Z`: every real root flagged | all | 6 of 6 (share 1.0000) | yes |
+| R2 `c = 2 Z`: every real root except the target flagged | all | 7 of 7 | yes |
+| M1 smallest share of those roots | `>= 0.3` | 1.0 (0.9 Z); 0.682 (2 Z; estimate 0.68) | yes |
+| M2 largest unflagged oscillating share; recorded count of flagged oscillating | `<= 5e-2` | 1.27e-2, 1.50e-2; 1 each (0.399 and 0.182) | yes |
+| D1 nine digests without the option, base constants; shares 0, no flag | `==` | 9 of 9; clean | yes |
+| D2 option on without dashpots equals off | bits | identical | yes |
+| D3 option-on digests including notes | `==` | **0 of 2** | **no** (miss, below) |
+| D3b corrected: option-on numbers without the notes | `==` | 2 of 2 | yes, after amendment 1 |
+| E1 existing tests | pass | pass | yes |
+| H1 1 and 4 threads | bits | identical | yes |
+
+The one-dimensional estimate agreed with the 3-D bar: the pseudo-root of the axial class has share 0.399 at `c = 0.9 Z` (an
+oscillating root, not real) and 0.682 at `c = 2 Z` (real); the other pseudo-roots have share 1.0 exactly (decoupled classes).
+The chain's 1.3e-2 and 1.5e-2 for the 20th physical root were reproduced (1.27e-2, 1.50e-2).
+
+Deviation and miss: D3 as registered digested the notes, and an option-on result with flagged roots has one more note by design;
+the check was over-written (the registration meant the numbers). Missed as registered; recorded as the ignored
+`d3_option_on_results_unchanged_known_miss` with its limit; corrected as D3b by amendment 1 before its run. Also: `cargo fmt`
+re-laid out the bits file after its base commit (layout only; the constants were printed by the earlier layout).
+
+Mutations (scratch copy `f548-scratch/copy`, `mutate.py`, logs `MU_*.log`; MU7 was re-run by hand because the script stopped before it):
+
+| Id | Caught by |
+|---|---|
+| MU1 `1 - share` | P1, T0, R1, M1 |
+| MU2 flag when below | P2, T0, R1, M2, D1 |
+| MU3 only the first residual vector counted | P1, R1, R2, M1 |
+| MU4 threshold 0.9 | P2, R2, M2 |
+| MU5 threshold 1e-4 | P2, T0, T1 |
+| MU6 count not set | P2 |
+| MU7 share 1.0 without the option | D1, D2 (both files) |
+
+Seven of seven caught. Not run: the whole workspace and `baseline_hashes` (only `damped.rs` of rcfd-fem changed; no default
+path changed). `cargo fmt -p rcfd-fem --check` clean, `cargo clippy -p rcfd-fem --all-targets --release -- -D warnings` clean.
+
+**Decision by the registered rule: partial.** Every roadmap clause is met (a1 to a5 by P1 to R2 and D1, D2, D3b), but D3 as registered
+missed and D3b was met only after an amendment made after the run.
+
+Remaining questions:
+
+1. The share is a diagnostic; an oscillating pseudo-root (share 0.399, 0.182 here) is also flagged. Options: (a) keep (a flag on
+   share only, as registered); (b) restrict flags to real roots. Recommendation: (a).
+2. A caller-set threshold. Options: (a) constant `PSEUDO_SHARE` (here); (b) an option. Recommendation: (a) until a second use.
+
+### For the lead: roadmap entries
+
+F-548, proposed status **partial**:
+
+> Structural solver, advanced tier. Follow-up of F-532 (ADR 0464). ADR 0467, 2026-11-14: each DampedMode of damped_modes with the residual vectors reports residual_share, the M-weighted share of its shape carried by the residual-vector coordinates of the basis (0 without them), and pseudo = share > PSEUDO_SHARE (0.1, fixed from a one-dimensional chain estimate: physical roots at most 1.5e-2, pseudo-roots at least 0.18 to 0.40); DampedModes::pseudo_modes counts them and a note says so. Bar of F-532 at c = 0.9 Z and 2 Z on 20 modes: target roots not flagged (shares at most 1.7e-4), every other real root flagged (6 and 7 roots, shares 0.68 to 1.0); one oscillating pseudo-root each (0.399, 0.182) also flagged; share equals the one recomputed from shapes and residual vectors within 2.2e-15. Without the option the nine F-414/F-532 results are bit-identical (shares 0, no flag). Partial: the registered check D3 (option-on digests including notes) missed because an option-on result gains a note by design; the corrected D3b (numbers without notes) was met after amendment 1. Seven of seven mutations caught.
