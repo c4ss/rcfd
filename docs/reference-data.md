@@ -1946,3 +1946,19 @@ constant of the checks is an input (decision A1 of ADR 0310).
 | Complex modulus `G*(omega) = G_0 (g_inf + sum g_i i omega tau_i/(1 + i omega tau_i))`, `E* = 9 K* G*/(3 K* + G*)`; dissipation per cycle and volume `pi eps0^2 E''` | derived | steady state of the hereditary law, ADR 0485 arithmetic 2 |
 | Logarithmic decrement of a mode of the standard solid, `delta = pi eta/(1 - (omega/2)(dE'/d omega)/E')` to first order in the loss (`pi E''/E'` without the dispersion term); at `omega tau = 1`, `w = 2/21`: `eta = 0.05`, `delta/(pi eta) - 1 = 2.56e-2` (first order), `2.525e-2` (exact root) | derived, computed | ADR 0485 arithmetic 3; root of `s^2 + lambda (w_inf + w s tau/(1 + s tau)) = 0` by Newton (probe and test) |
 | Time-temperature shift: WLF `log10 a_T = -c1 (T - T_ref)/(c2 + T - T_ref)`, Arrhenius `ln a_T = (E_a/R)(1/T - 1/T_ref)`, `R = 8.314462618 J/(mol K)` (CODATA 2018, exact); the "universal" WLF constants `c1 = 17.44`, `c2 = 51.6 K` used as inputs only | cited | M. L. Williams, R. F. Landel and J. D. Ferry, J. Am. Chem. Soc. 77 (1955) 3701; Ferry (1980), chapter 11 (the chapter number not checked): NOT read, from memory; the CODATA 2018 value of `R` from memory |
+
+## F-411 power-law creep with time hardening (ADR 0489)
+
+No source was read for F-411; the books below are cited from memory for the names and the published forms (the chapters,
+editions and page numbers were not checked). Every formula used is derived in ADR 0489 (arithmetic 1 to 7) and checked by plain
+numpy prototypes (`f411-scratch/probe_point.py`, `probe_extra.py`, `probe_cylinder.py`, `probe_bar.py` and their logs), no
+rcfd code. No polymer data is used: every creep constant, modulus and load of the checks is an input (decision A1 of ADR 0310).
+
+| Item | Status | Source |
+|---|---|---|
+| Von Mises form of the power law with time hardening, `d eps_c/dt = (3/2) A q^(n-1) t^m s`, uniaxial `A sigma^n t^m` (Norton for `m = 0`) | cited, derived | H. Kraus, Creep Analysis, Wiley, 1980; F. K. G. Odqvist, Mathematical Theory of Creep and Creep Rupture, Oxford, 1966; R. K. Penny and D. L. Marriott, Design for Creep, McGraw-Hill, 1971: NOT read, from memory |
+| Backward Euler radial return, local equation `q_tr - q - 3 G A tau q^n = 0`, `tau = int t^m dt` exact over the step; consistent tangent `K 1 (x) 1 + 2 G theta I_dev + 2 G (beta - theta) N (x) N` | derived | ADR 0489 arithmetic 1; the radial return of ADR 0475; J. C. Simo and T. J. R. Hughes, Computational Inelasticity, Springer, 1998 (viscoplasticity chapter, number not checked): NOT read, from memory; probe: tangent against central differences `<= 1.3e-9` |
+| Uniaxial constant stress `eps_c = A sigma^n t^(m+1)/(m+1)`; relaxation at fixed strain `sigma(t) = (sigma0^(1-n) + (n - 1) E A t)^(1/(1-n))` | derived | integrals of the uniaxial law, ADR 0489 arithmetic 2, 3; probe of the relaxation: `1.717e-3` (`n = 3`), `7.16e-4` (`n = 5`) at 800 steps to `10 t*`, order `0.994` |
+| Stationary creep of a thick cylinder in plane strain, `sigma_r = -p ((b/r)^(2/n) - 1)/((b/a)^(2/n) - 1)`, `sigma_theta = p ((2 - n)/n (b/r)^(2/n) + 1)/((b/a)^(2/n) - 1)` (Lame at `n = 1`) | derived | incompressible stationary flow, compatibility `v = C/r`, equilibrium, ADR 0489 arithmetic 6; the classical result as in Kraus (1980), J. T. Boyle and J. Spence, Stress Analysis for Creep, Butterworths, 1983, Penny and Marriott (1971): NOT read, from memory |
+| Redistribution time of the cylinder, estimate `t* = 1/(E A p^(n-1))`; registered `5 t*` | estimate, computed | ADR 0314 (stub); probe on 12 x 8 serendipity quadrilaterals (element means `1.2e-4` of `p` at `5 t*`; point values drift by volumetric locking, `3.0e-2`) |
+| Rotating radial bar, `sigma(r) = rho Omega^2 (L^2 - r^2)/2`, tip creep rate `A (rho Omega^2/2)^n int_0^L (L^2 - r^2)^n dr`, `int_0^L (L^2 - r^2)^3 dr = (16/35) L^7` | derived | statics of the bar, ADR 0489 arithmetic 7 |

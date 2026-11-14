@@ -393,3 +393,107 @@ than about two minutes in release is an ignored heavy record run once, with a fa
    `n >= 1`, and the monotone Newton of arithmetic 1 is the one whose convergence is shown.
 4. **Case-file key.** Not added (as F-410). Recommendation for the lead: a material entry `creep = { base, a, n, m }` and a study
    kind "creep" over the driver D5, offered when the maintainer opens the case file to the nonlinear studies.
+
+## Addendum 1: results (2026-11-14)
+
+Registered run: commit e4672c5e (`cargo test -p rcfd-fem --release --test sa_creep -- --nocapture --test-threads=1`, log
+`f411-scratch/run1.log`). Each check ran once; no amendment. The bit record B0 was printed on the base 81960c8d
+(`b0-base.log`, commit b04f70dd) and written into the test at commit 310d08c6, before any library code.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| T1 material tangent, five cases | `<= 1e-6` | `7.6e-10 .. 1.25e-9` | yes |
+| T2 element tangent, Hex8 (8 of 8 points creeping), Hex20 (27 of 27) | `<= 1e-6` | `4.6e-10`, `8.7e-10` | yes |
+| U1 material point, `m = 0` | `<= 1e-8` | `5.83e-13` | yes |
+| U1e one Hex8, dead traction, `m = 0` | `<= 1e-8` | `4.51e-10` | yes |
+| U2 material point, `m = -0.5` | `<= 1e-3` | `1.95e-13` | yes |
+| U2e one Hex8, `m = -0.5` | `<= 1e-3` | `3.97e-10` | yes |
+| R1 relaxation `n = 3`, 800 steps (no halving) | `<= 5e-3` | `1.719e-3` | yes |
+| R2 relaxation `n = 5`, 800 steps (no halving) | `<= 5e-3` | `7.171e-4` | yes |
+| R3 observed order 400 to 800 | `>= 0.9` | `0.9941` (`n = 3`), `0.9942` (`n = 5`) | yes |
+| C1 cylinder at `t = 0`, point-wise against Lame | `<= 1e-2` | `3.57e-3` (element means `1.28e-4`, reported) | yes |
+| C2 cylinder at `5 t*`, element means against the stationary field | `<= 2e-2` | `1.99e-3` | yes |
+| C2d point-wise deviatoric part at `5 t*` | `<= 2e-2` | `9.72e-4` | yes |
+| C2r point-wise `sigma_r`, `sigma_theta` at `5 t*` (report) | none | `3.19e-2` (locking, as the probe's `2.97e-2`) | reported |
+| B1 rotating bar, tip creep rate | `<= 5e-3` | `9.60e-4` | yes |
+| H1 halving: 2 halvings, 4 sub-steps, increment `9.33e-5 <= 1e-4`, bits of the explicit quarter steps | exact | as registered; bits equal | yes |
+| H2 refused after `max_halvings = 1` | refused | `Solver { solver: "creep time stepping" }`, "step 1 of 1 ... the creep-strain increment 1.52e-4 exceeds the limit 1e-4" | yes |
+| NC1 step of `1e40 s`: located error, not halved | `FemError::Element { element: 1 }`, key `"creep iteration"` | as registered (50 iterations, `q/q_tr = 1.43e-5`); the material point refused with the key | yes |
+| Q1 driver equals the loop of `solve_from_at`, creep and viscoelastic elements, 20 steps | bits | equal | yes |
+| N1 B0, 16 digests of 81960c8d (the 12 of ADR 0485 also unchanged) | equal | equal | yes |
+| N2 linear paths, `elasticity_matrix`, static driver, orthotropic base, `n = 0.5`, no time, times not increasing | all | all | yes |
+| N3 no time, no creep | every state `0.0` | yes | yes |
+| N4 `baseline_hashes` | pass | 3 passed, 1 ignored | yes |
+| X1 records and copies | pass | `sa_scaffold`: 9 passed, 25 ignored | yes |
+
+Other runs: `cargo test -p rcfd-fem --release` (every test binary of the crate): 662 passed, 0 failed, 165 ignored; `cargo
+test -p rcfd-cli --release --test docs_site`: 2 passed; `cargo clippy -p rcfd-fem --all-targets --release -- -D warnings`:
+clean; `cargo fmt -p rcfd-fem --check`: clean. Not run: the workspace test suite (the lead's gate).
+
+Shared solver files changed (line ranges at the tip against 310d08c6): `nonlinear.rs` 31-34 (module doc), 190-195 (the creep
+arm of `evaluate`), 325-338 (`element_force_and_tangent_at`), 615-618 (`classify` keeps the creep-iteration error located),
+1132-1145 (`solve_with` refuses the creep material), 1391-1596 (`TimeSteppingOptions`, `TimeStep`, `TimeHistory`,
+`solve_in_time`); `material.rs` 366-372 (`elasticity_matrix` arm), 419-421 (doc), 444-448 (`stress` arm); `model.rs` 1108
+(doc), 1205-1213 (`check_elements` refusal). Every other material takes the lines it took (B0). Before them, commit 81960c8d
+is the one-line fix of the base (the arc-length `Problem` context), as on main.
+
+**Mutations** (`f411-scratch/mutate.py` on a git-archive copy of 525fe3e0 with its own target directory, log
+`mutations.log`; MU0, the copy without a mutation, passes 9 of 9):
+
+| Id | Caught by |
+|---|---|
+| MU1 `tau = dt t1^m` | U2, U2e (`0.50`); not U1 (`m = 0`), as expected |
+| MU2 `beta = theta` | T1 (`1.5e-5 .. 5.8e-2`), T2 (`7.9e-2`, `1.8e-2`) |
+| MU3 creep strain not added | U1 (`1.0`), C2 (`1.61`), C2d, B1, R1, H1, Q1 (solves fail or limits missed) |
+| MU4 never halved | H1, H2 |
+| MU5 no time increment in the driver | R1, B1, C1/C2, H1, Q1, U1e: the attempts at a constant state fail the energy criterion (ADR 0485 arithmetic 6), the solves fail |
+| MU6 `q^(n-1)` in the local equation | U1, U1e, U2, U2e, R1, R2, R3, B1 (`1.0`), T1, T2, C2, H1 |
+| MU7 history flag ignored | N2 (the four linear paths take the material and fail later, in the element-constant matrix or on the prescribed value) |
+| MU8 creep-iteration error not located | NC1 (the step is halved five times and refused as a solver failure) |
+| MU9 flow increment without the engineering shear factor | C2 (`0.60`), C2d (`1.39`); not T1, T2, named in the registration: the factor changes the stored creep strain, not the stress or tangent of the step |
+
+Every planned mutation was caught; MU9 by the cylinder only.
+
+**Deviations.** (1) The base did not compile (the merge of F-424 and F-410); the fix of main was committed first (81960c8d) on
+the lead's instruction, and B0 was recorded on it. (2) B0 holds 16 digests: the three registered F-410 and F-422 paths give
+four (the viscoelastic transient run has a state digest as well). The viscoelastic `solve_from_at` record of B0, N3 and the
+viscoelastic part of Q1 use the residual criterion alone (`tol_e = 1`, ADR 0485 arithmetic 6), set-up details the registration
+did not state. (3) In C1 the last time is written as exactly `5.0` (the formula gives it to rounding). (4) The element-mean
+error of C2, `1.99e-3`, is sixteen times the small-strain Q8 probe's `1.2e-4`; it falls to `1.5e-3` at `3.7 t*` and rises to
+`2.0e-3` at `5 t*`, consistent with the total Lagrangian terms of relative size of the creep strain (`2.5e-3`, arithmetic 6);
+not diagnosed further; a tenth of the limit. (5) T1 case 4 (`n = 1.5`) creeps very little in its step (`d eps_bar = 1.9e-17`):
+that case tests the near-elastic branch. (6) Citations: Kraus, Odqvist, Boyle and Spence, Penny and Marriott and Simo and
+Hughes are cited from memory, chapters and editions not checked; `docs/reference-data.md` says so.
+
+**Decision by the registered rule: done.** Every check of the table is met, every planned mutation is caught, fmt and clippy
+are clean, and B0 and the baseline hashes are unchanged. The reading of the cylinder clause on element means (arithmetic 6,
+open question 2) is the part the maintainer may want to look at: the point values of the fully integrated Hex20 drift by
+volumetric locking (`3.2e-2` at `5 t*`, growing in time).
+
+### Remaining questions
+
+1. **Locking in long creep.** Options: (a) keep the element-mean reading; (b) land the B-bar Hex8 of ADR 0293 and repeat C2
+   point-wise on it. Recommendation: (b), before the creep run of the fan blade (F-436).
+2. **A temperature factor.** The data model has no temperature term. Options: (a) leave it; (b) an Arrhenius factor `exp(-Q/(R
+   T))` in `Material::Creep` read from the point context. Recommendation: (b), follow-up 2; it changes the data model, so it
+   is the maintainer's call.
+3. **Case-file key.** Options: (a) none yet; (b) `creep = { base, a, n, m }` and a creep study over `solve_in_time`.
+   Recommendation: (b), with F-435.
+
+## For the lead: roadmap entries
+
+Proposed status of F-411: **done**. Proposed note:
+
+> ADR 0489, 2026-11-14 (registration of stub ADR 0314): power-law creep with time hardening in rcfd-fem (mat_creep.rs). The von Mises form d eps_c/dt = (3/2) A q^(n-1) t^m s on an isotropic base, integrated by backward Euler in the stress with the time exponent integrated exactly over the step, a monotone local Newton (n >= 1, at most 50 iterations) and its consistent tangent; the state is the 7 values of ADR 0440. The Newton driver takes it at a point context with no new history store; nonlinear::solve_in_time is a minimal quasi-static time-stepping driver over solve_from_at (constant loads and prescribed values, a limit of the creep-strain increment of a step, halving); a non-converged local iteration is a located error with the element. The static load-factor driver and every linear path refuse the material, naming mat_creep::FOLLOW_UP. Met: tangent against central differences within 1.3e-9 (material) and 8.7e-10 (Hex8, Hex20 elements); uniaxial constant stress within 5.8e-13 (m = 0) and 2.0e-13 (m = -0.5), one element within 4.5e-10; relaxation within 1.7e-3 (n = 3) and 7.2e-4 (n = 5) at 800 steps, order 0.994; plane-strain cylinder b/a = 2, n = 4, Lame within 3.6e-3 of p and the stationary field within 2.0e-3 of p after 5 t* on element means (point-wise deviatoric part 9.7e-4; the point pressure of the fully integrated Hex20 drifts by volumetric locking, 3.2e-2, reported); rotating radial bar, tip creep rate within 9.6e-4; a step above the increment limit halved, bit-equal to the explicitly halved steps; a non-converged local iteration located with its element; default bits (16 digests) and baseline hashes unchanged; nine mutations caught. Case-file key not added. Follow-ups proposed in ADR 0489.
+
+Note for F-410 (to append to its note):
+
+> The quasi-static time-stepping driver proposed by ADR 0485 exists as nonlinear::solve_in_time (ADR 0489, 2026-11-14), with constant loads; it reproduces the loop of solve_from_at bit for bit for the viscoelastic element. Load histories and a temperature remain for its follow-up.
+
+Follow-up 1. Title: "Creep on the B-bar Hex8: point-wise stationary field of the thick cylinder". Deps: F-411 and the item that lands the B-bar formulation of ADR 0293. Acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. The B-bar Hex8 takes the creep material on the Newton driver and solve_in_time. The plane-strain cylinder of ADR 0489 (b/a = 2, n = 4) reaches the stationary field point-wise within 2 percent of p after the registered redistribution time, and the point-wise error does not grow between 5 t* and 20 t* by more than the registered bound. The fully integrated elements keep their bits.
+
+Follow-up 2. Title: "Creep with a temperature factor and load histories on the time-stepping driver". Deps: F-411, F-410. Acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. Material::Creep takes an optional Arrhenius factor exp(-Q/(R T)) with the temperature of the point context; at a uniform temperature the uniaxial creep strain equals the closed form with A exp(-Q/(R T)) within 1e-8. solve_in_time takes load and prescribed-displacement histories against time (linear between points) and a uniform temperature; with constant histories it gives the bits of ADR 0489. The relaxation and creep checks of ADR 0485 (R1, C1, C2) run on it with their limits. Materials without the factor keep their bits.
