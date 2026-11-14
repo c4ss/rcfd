@@ -98,8 +98,6 @@ pub(crate) fn add_thermal_load(
     reference: f64,
 ) -> Result<()> {
     let materials = model.material_indices()?;
-    // ADR 0493 D5: a temperature load is refused with a Hex8 formulation.
-    crate::hex8x::check_model(model)?;
     let mesh = model.mesh();
     let delta: Vec<f64> = nodal.iter().map(|t| t - reference).collect();
     // ADR 0452 D5: the per-point data, only for a model with an orthotropic or tabulated material.
@@ -135,6 +133,17 @@ pub(crate) fn add_thermal_load(
             continue;
         }
         let fe = match &points {
+            // ADR 0525 D1: a Hex8 element of a BBar or Incompatible block takes the formulation's load.
+            _ if crate::hex8x::opted(mesh, e).is_some() => {
+                let f = crate::hex8x::opted(mesh, e).expect("checked");
+                crate::hex8x::element_data(material, points.as_ref(), e, &coords, Some(&dte)).and_then(|(ds, eth)| {
+                    let eth = eth.ok_or_else(|| FemError::InvalidValue {
+                        key: "temperature",
+                        reason: "a thermal strain at each point needs the model's temperature field".into(),
+                    })?;
+                    crate::hex8x::element_thermal_load(f, &coords, &ds, &eth)
+                })
+            }
             Some(points) if crate::mat_ortho::is_point_material(material) => {
                 crate::mat_ortho::element_thermal_load(points, e, mesh.element_kind(e), &coords, material)
             }
