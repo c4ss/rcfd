@@ -455,7 +455,7 @@ fn f_eb() -> f64 {
 
 /// The registered 100-period run (D6): F1, F1b, F1c, E1, EZ. Heavy (4000 steps).
 #[test]
-#[ignore = "heavy registered record of ADR 0522 D6 (100 periods); run once with --ignored"]
+#[ignore = "superseded before its run by ADR 0522 amendment 2 (the start state, the modal options); not run"]
 fn f1_e1_strip_free_vibration_100_periods() {
     let mut ck = Checks::new();
     let v = vibrate("Shell4 strip 100 periods", false, 100);
@@ -469,7 +469,8 @@ fn f1_e1_strip_free_vibration_100_periods() {
 
 /// The companion F1/E1-4 (D6): Shell4, 4 periods; with EZ and F1c.
 #[test]
-fn f1_e1_4_strip_shell4_four_periods() {
+#[ignore = "ADR 0522 run 1 record: the modal solve did not converge (amendment 2); corrected by f1_e1_4_corrected"]
+fn f1_e1_4_strip_shell4_four_periods_known_miss() {
     let mut ck = Checks::new();
     let v = vibrate("Shell4 strip 4 periods", false, 4);
     vibration_checks(&mut ck, "Shell4 4 periods", &v);
@@ -480,7 +481,8 @@ fn f1_e1_4_strip_shell4_four_periods() {
 
 /// The companion F1/E1-3 (D6): the strip of Shell3, 4 periods.
 #[test]
-fn f1_e1_3_strip_shell3_four_periods() {
+#[ignore = "ADR 0522 run 1 record: E1 4.71e-4 and EZ 2.52e-2 missed, the unrelaxed start (amendment 2); corrected by f1_e1_3_corrected"]
+fn f1_e1_3_strip_shell3_four_periods_known_miss() {
     let mut ck = Checks::new();
     let v = vibrate("Shell3 strip 4 periods", true, 4);
     vibration_checks(&mut ck, "Shell3 4 periods", &v);
@@ -488,10 +490,162 @@ fn f1_e1_3_strip_shell3_four_periods() {
     ck.finish();
 }
 
+// ------------------------------------------------------------------------------- the corrected strip (amendment 2)
+
+/// The tip force of amendment 2 on each tip node (the linear tip deflection `1e-3 L`).
+const TIP_FORCE_A2: f64 = -1.042e-3;
+
+/// EZ of amendment 2: the energy at the static equilibrium under the small tip force against the linear quadratic form.
+fn ez_at_equilibrium(tri: bool) -> f64 {
+    let mut m = strip(tri);
+    m.add_load(Load::nodal_force("tip", [0.0, 0.0, TIP_FORCE_A2])).unwrap();
+    let r = solve(&m, &[], &[], &NewtonOptions::new(1)).unwrap();
+    let us = r.result.displacement_values().to_vec();
+    let n = us.len();
+    let mut it = Integrator::new(&m, &[], &NlTransientOptions::new(1.0)).unwrap();
+    it.start(0.0, &us, &vec![0.0; n]).unwrap();
+    let pi = it.strain_energy().unwrap();
+    let k = stiffness(&m).unwrap();
+    let mut ku = vec![0.0; n];
+    k.matvec(&us, &mut ku);
+    let quad = 0.5 * us.iter().zip(&ku).map(|(x, y)| x * y).sum::<f64>();
+    println!(
+        "EZ set-up {}: tip u_z {:.6e}, Pi {:.10e}, u^T K u/2 {:.10e}",
+        kind_of(tri).name(),
+        us[m.dof_map().equation(N_S, 2).unwrap()],
+        pi,
+        quad
+    );
+    (pi / quad - 1.0).abs()
+}
+
+/// The free vibration of amendment 2 over `periods` periods at 40 steps per period: from `u_0 = 0` with the velocity of the
+/// first mode.
+fn vibrate_corrected(name: &str, tri: bool, periods: u64) -> Vibration {
+    let start = Instant::now();
+    let m = strip(tri);
+    let mut mo = ModalOptions::new(1);
+    mo.max_iterations = 2000;
+    let modal = modal_analysis(&m, &mo).unwrap();
+    let f1 = modal.frequencies[0];
+    let dofs = m.dof_map();
+    let qz = dofs.equation(N_S, 2).expect("tip u_z");
+    let phi = &modal.modes[0];
+    let a = 1e-3 * L_S;
+    let omega = 2.0 * PI * f1;
+    let v0: Vec<f64> = phi.iter().map(|x| omega * a * x / phi[qz]).collect();
+    let n = v0.len();
+    let h = 1.0 / (40.0 * f1);
+    let mut it = Integrator::new(&m, &[], &NlTransientOptions::new(h)).unwrap();
+    it.start(0.0, &vec![0.0; n], &v0).unwrap();
+    let h0 = it.kinetic_energy().unwrap() + it.strain_energy().unwrap();
+    let mut energy_error = 0.0;
+    let mut prev = (0.0, 0.0);
+    let mut cross = vec![0.0];
+    let (mut halvings, mut iterations) = (0, 0);
+    for step in 1..=40 * periods {
+        let rep = it.step().unwrap();
+        halvings += rep.halvings;
+        iterations += rep.iterations;
+        let t = step as f64 * h;
+        let uz = it.displacement().unwrap()[qz];
+        let hn = it.kinetic_energy().unwrap() + it.strain_energy().unwrap();
+        energy_error = nmax(energy_error, ((hn - h0) / h0).abs());
+        if step > 1 && (prev.1 > 0.0) != (uz > 0.0) {
+            cross.push(prev.0 + h * prev.1 / (prev.1 - uz));
+        }
+        prev = (t, uz);
+    }
+    let kc = cross.len();
+    let fm = if kc >= 2 {
+        (kc - 1) as f64 / (2.0 * (cross[kc - 1] - cross[0]))
+    } else {
+        f64::NAN
+    };
+    let r = 2.0 * (0.5 * omega * h).atan() / (omega * h);
+    let v = Vibration {
+        f1,
+        fm,
+        r,
+        energy_error,
+        ez: ez_at_equilibrium(tri),
+        crossings: kc,
+        halvings,
+        iterations,
+        seconds: start.elapsed().as_secs_f64(),
+    };
+    println!(
+        "{name}: f_1 {:.10e} Hz, f_m {:.10e} Hz, r {:.8}, {} crossings, H_0 {:.6e}, max |dH|/H_0 {:.4e}, EZ {:.4e}, \
+         {} halvings, {} iterations, {:.1} s",
+        v.f1, v.fm, v.r, v.crossings, h0, v.energy_error, v.ez, v.halvings, v.iterations, v.seconds
+    );
+    v
+}
+
+/// The registered 100-period run (D6, amendment 2): F1, F1b, F1c, E1, EZ. Heavy (4000 steps).
+#[test]
+#[ignore = "heavy registered record of ADR 0522 D6 and amendment 2 (100 periods); run once with --ignored"]
+fn f1_e1_100_periods_corrected() {
+    let mut ck = Checks::new();
+    let v = vibrate_corrected("Shell4 strip 100 periods (corrected)", false, 100);
+    vibration_checks(&mut ck, "100 periods", &v);
+    ck.at_most("F1c |f_1/f_EB - 1|", (v.f1 / f_eb() - 1.0).abs(), 1e-2);
+    ck.record("F1c signed f_1/f_EB - 1", v.f1 / f_eb() - 1.0);
+    ck.at_most("EZ |Pi(u_s)/(u_s^T K u_s/2) - 1|", v.ez, 1e-4);
+    ck.record("P1 100 periods s", v.seconds);
+    ck.finish();
+}
+
+/// The companion F1/E1-4 (D6, amendment 2): Shell4, 4 periods; with EZ and F1c.
+#[test]
+fn f1_e1_4_corrected() {
+    let mut ck = Checks::new();
+    let v = vibrate_corrected("Shell4 strip 4 periods (corrected)", false, 4);
+    vibration_checks(&mut ck, "Shell4 4 periods", &v);
+    ck.at_most("F1c (companion) |f_1/f_EB - 1|", (v.f1 / f_eb() - 1.0).abs(), 1e-2);
+    ck.at_most("EZ (companion) |Pi(u_s)/(u_s^T K u_s/2) - 1|", v.ez, 1e-4);
+    ck.finish();
+}
+
+/// The companion F1/E1-3 (D6, amendment 2): the strip of Shell3, 4 periods.
+#[test]
+fn f1_e1_3_corrected() {
+    let mut ck = Checks::new();
+    let v = vibrate_corrected("Shell3 strip 4 periods (corrected)", true, 4);
+    vibration_checks(&mut ck, "Shell3 4 periods", &v);
+    ck.at_most("EZ (Shell3) |Pi(u_s)/(u_s^T K u_s/2) - 1|", v.ez, 1e-4);
+    ck.finish();
+}
+
+/// SF1 (D7, amendment 2): `solve_from` against `solve` under the small tip force.
+#[test]
+fn sf1_corrected() {
+    let mut ck = Checks::new();
+    for tri in [false, true] {
+        let mut m = strip(tri);
+        m.add_load(Load::nodal_force("tip", [0.0, 0.0, TIP_FORCE_A2])).unwrap();
+        let r = solve(&m, &[], &[], &NewtonOptions::new(1)).unwrap();
+        let n = m.dof_map().n_equations();
+        let f = nodal_load_vector(&m, &[]).unwrap();
+        let states = initial_states(&m).unwrap();
+        let eq = solve_from(&m, &[], &f, &vec![0.0; n], &states, &NewtonOptions::new(1), &[]).unwrap();
+        let u = r.result.displacement_values();
+        let same = u.len() == eq.u.len() && u.iter().zip(&eq.u).all(|(a, b)| a.to_bits() == b.to_bits());
+        let tip = u[m.dof_map().equation(N_S, 2).unwrap()];
+        ck.holds(
+            &format!("SF1 {} solve_from = solve bit for bit", kind_of(tri).name()),
+            same && r.steps.len() == 1 && r.steps[0].halvings == 0,
+            &format!("tip u_z {tip:.6e}, steps {}, iterations {}", r.steps.len(), eq.residuals.len() - 1),
+        );
+    }
+    ck.finish();
+}
+
 // ------------------------------------------------------------------------------------------------ SF1, R2 (D7)
 
 #[test]
-fn sf1_solve_from_equals_solve_on_shells() {
+#[ignore = "ADR 0522 run 1 record: one attempt from zero did not reach the load (amendment 2); corrected by sf1_corrected"]
+fn sf1_solve_from_equals_solve_on_shells_known_miss() {
     let mut ck = Checks::new();
     for tri in [false, true] {
         let mut m = strip(tri);

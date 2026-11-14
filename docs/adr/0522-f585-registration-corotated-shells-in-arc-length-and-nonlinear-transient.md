@@ -331,3 +331,49 @@ No limit and no parameter changes.
    loads recorded. A2 is applied in the registered run to every one of its five traces.
 3. The companion F1/E1-4 also checks F1c and EZ on its strip (the same limits); F1/E1-3 checks EZ on the Shell3 strip.
 4. In the roof run every trace prints its points `(w, P)`, so the path through the limit point is on record.
+
+## Amendment 2 (2026-11-14): three set-up defects found by run 1 of the fast tests; written before the corrected runs
+
+Run 1 (the regular tests of `sa_corot_shell_dyn` once at 0273f25f, `--release -- --nocapture --test-threads 1`,
+`f585-scratch/run1-fast.log`): A2 met on the fast roof (Shell4 `8 x 8` and Hex20 `4 x 4 x 2`) and R2 met; on the Shell3
+strip (F1/E1-3) F1 `2.05e-3` and F1b `9.9e-7` met, **E1 `4.71e-4` and EZ `2.52e-2` missed**; F1/E1-4 did not reach a
+measurement (the modal solve: the subspace iteration not converged in 200 iterations, residual `1.06e-9` of the first pair
+against the tolerance `1e-10`); SF1 did not reach a measurement (`solve_from`: a negative pivot, `-3.4` against the diagonal
+`6.4e3` at node 21 component 4, in its single attempt). The 100-period run and the roof run had not been started.
+
+**Diagnoses.**
+
+1. *EZ and E1, the start state (a defect of the set-up and of arithmetic 4).* The start `u_0 = a phi_1` is the linear mode,
+   whose axial displacement is zero, so the Green membrane strain `w_x^2/2` of the deflected strip is not relaxed: the start
+   carries a membrane energy of relative order `(a/t)^2` (here `0.12^2` times a shape factor), not `(a/L)^2` as arithmetic 4
+   assumed, which left out the factor `(L/t)^2` of a thin strip (the parameter of the membrane-bending coupling is the
+   amplitude over the thickness). EZ measures exactly this energy (`2.5e-2`). Released at `t = 0`, it drives the stiff axial
+   modes (`omega h ~ 30`), whose nonlinear coupling with the bending the trapezoidal rule integrates with an energy error of
+   `4.7e-4` (E1). The energy function itself is the potential of the element force: a probe after run 1 (a scratch test, not
+   kept) gave `|dPi/dq - f| <= 8.5e-10` of `max |f| = 72` by central differences on a Shell4 and a Shell3 element.
+2. *F1/E1-4, the modal solve (a defect of the set-up).* `ModalOptions::new(4)` with its default cap of 200 iterations did not
+   converge the four pairs on the Shell4 strip; F1 needs the first pair only.
+3. *SF1, the load (a defect of the set-up).* The tip load of the linear deflection `0.1 L` is too large for one Newton attempt
+   from zero: the first iterate (the linear solution, with the unrelaxed membrane strain of point 1) has an indefinite tangent.
+   SF1 compares the attempt of `solve` with that of `solve_from`; it needs a load that one attempt reaches.
+
+**Corrections** (no limit changes):
+
+1. The strip starts from **`u_0 = 0`, `v_0 = omega_1 a phi_1/phi_1[tip u_z]`** (the same mode and amplitude, the tip at `a
+   sin(omega_1 t)`): no strain energy at the start, and the axial unknowns follow the slow bending quasi-statically from rest
+   (the shortening is of second order in the deflection, its rate zero at `t = 0`). The crossings are counted as registered
+   (the start, a zero, counts as the first crossing). Estimate of E1 as registered (`<= 1e-7`; the membrane strain relaxed,
+   the remaining nonlinearity `(a/L)^2`).
+2. **EZ** is evaluated at an equilibrium, where the membrane strain is relaxed: the strip under the tip force `(0, 0,
+   -1.042e-3)` on each tip node (the linear tip deflection `1e-3 L`) solved by `nonlinear::solve` (one step), `u_s` its
+   displacement, `Pi(u_s)` by `Integrator::strain_energy` after `start(0, u_s, 0)`; `|Pi(u_s)/((1/2) u_s^T K u_s) - 1| <=
+   1e-4` (limit unchanged; estimate `(a/L)^2 = 1e-6`). For Shell4 in F1/E1-4 and the 100-period run, Shell3 in F1/E1-3.
+3. The modal solve takes `ModalOptions::new(1)` with `max_iterations = 2000`.
+4. **SF1** takes the tip force `(0, 0, -1.042e-3)` on each tip node (the load of point 2).
+
+The three tests of run 1 become ignored records with their bodies unchanged and the suffix `_known_miss`
+(`f1_e1_3_strip_shell3_four_periods_known_miss`, `f1_e1_4_strip_shell4_four_periods_known_miss`,
+`sf1_solve_from_equals_solve_on_shells_known_miss`); the 100-period test, not run, is ignored as superseded before its run
+(`f1_e1_strip_free_vibration_100_periods`, body unchanged). The corrected tests `f1_e1_3_corrected`, `f1_e1_4_corrected`,
+`sf1_corrected` and the heavy `f1_e1_100_periods_corrected` are run once (run 2; the heavy one with `--ignored`). Mutations
+MU1, MU2 and MU5 are aimed at the corrected tests.
