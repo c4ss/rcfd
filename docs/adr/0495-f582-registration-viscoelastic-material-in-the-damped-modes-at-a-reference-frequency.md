@@ -196,3 +196,78 @@ Every aggregated error is required finite (a NaN anywhere is a miss; `worst` ret
   the loss stiffness projected on the storage modes has off-diagonal terms and the truncation is the usual modal one
   (ADR 0450).
 - The isotropic base, solid elements, the elimination path only (as ADR 0450).
+
+## Addendum 1: results (2026-11-14)
+
+Code: commit 48da159c on the base db105e2d (B0 record, run on aa0e4d5b before any library code, `f582-scratch/b0-base.log`).
+Files: `crates/rcfd-fem/src/damped.rs` (option `viscoelastic_reference`, `ViscoReference`, the loss stiffness added into `hr`),
+`model.rs` (`with_materials`, 7 lines), `mat_visco.rs` (module doc), tests `sa_damped_visco.rs` and
+`sa_damped_visco_default_bits.rs`. The registered run was made once (`f582-scratch/run1.log`); nothing was re-run to pick a result.
+`harmonic_direct.rs` and `sa_harmonic_visco.rs` were not touched; the rod set-up is copied into `sa_damped_visco.rs`.
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| SU mu_1 against the library | 1e-9 | 4.25e-14 | yes |
+| DA rod A, basis 6, first root against the chain | 1e-8 | 2.54e-14 | yes |
+| DAm rod A, basis 2 and 39 | 1e-8 | 2.60e-14, 2.24e-14 | yes |
+| LA loss factor against E''/E' (A) | 1e-2 | 6.24e-4 | yes |
+| LAx against 2 tan(atan(eta)/2) (A) | 1e-8 | 7.8e-14 | yes |
+| DB, LB, LBx (rod B) | 1e-8, 1e-2, 1e-8 | 1.36e-14, 5.30e-4, 9.4e-14 | yes |
+| DC, LC, LCx (rod C) | 1e-8, 1e-2, 1e-8 | 1.21e-14, 1.64e-3, 6.9e-14 | yes |
+| DE 3-D cantilever against the constant loss factor (6 roots) | 1e-9 | 1.05e-13 | yes |
+| DF shift against tau a_T | 1e-12 | 1.19e-16 | yes |
+| C0 no terms against the base | 1e-12 | 0 | yes |
+| P1 threads 1 and 4 | bits equal | equal | yes |
+| RV1 residual vectors | finite | runs, basis 5, finite | yes |
+| NC1 reference at 0.5 omega_c | >= 5e-3 | 1.59e-2 | yes |
+| NC2 lossless rod loss factor | >= 0.5 | 1.0 | yes |
+| NC3 one-part modulus on rod B | >= 5e-3 | 1.83e-2 | yes |
+| RF (i) to (vii) | as stated | all as stated | yes |
+| N1 B0 digests (5) | equal | equal (run on the code) | yes |
+| N2 `baseline_hashes` | pass | 3 passed, 1 ignored | yes |
+| N3 `cargo test -p rcfd-fem --release` | pass | all test binaries ok (146 results) | yes |
+
+Rods: eta 0.05 (A), 0.046077 (B), 0.081081 (C); measured loss factors 0.049969, 0.046053, 0.080948; first roots
+`-49.463 + 1979.763 i` (A), `-52.988 + 2301.192 i` (B), `-49.000 + 1210.633 i` (C). The first root is independent of the basis size
+(2, 6, 39 modes) to rounding, as arithmetic 3 says for the rod.
+
+Mutations (scratch copy, own target dir, `f582-scratch/mutations.log`):
+
+| Id | Caught by |
+|---|---|
+| MU1 loss stiffness dropped | LA, LAx, LB, LBx, LC, LCx, DA, DAm, DB, DC, DE |
+| MU2 basis from the instantaneous base | DA, DAm, LA, LAx, DB, DC, DE (and the L checks) |
+| MU3 `omega/(2 pi)` in `complex_moduli` | DA, DAm, DB, DC, DE, L checks |
+| MU4 shear and bulk loss moduli swapped | DA (also: `G_0 != K_0` at `nu = 0`, so rod A sees it, contrary to the expectation), DB, DC, DE |
+| MU5 temperature dropped | DF (the solve is refused: the test's `unwrap` panics) |
+| MU6 `D''` from the storage moduli | DA, DB, DC, DE, C0, L checks |
+| MU7 J2 check skipped on the clone | **not caught**: equivalent mutant, `modal_analysis` runs the same J2 refusal with the same message, so RF (vii) still passes |
+
+fmt (`cargo fmt -p rcfd-fem --check`) clean; `cargo clippy -p rcfd-fem --all-targets --release -- -D warnings` clean;
+`cargo test -p rcfd-cli --release --test docs_site` 2 passed.
+
+Deviations: (1) the roadmap entry F-582 does not exist on the base aa0e4d5b (it was added to main later), so the separate roadmap
+commit asked for in the brief could not update an entry and was not made; the proposed note is below. (2) MU4 is caught by DA as
+well as DB and DC (an expected-but-unneeded difference). (3) The ADR text said the B0 file was run on aa0e4d5b "before any
+library code": it was (the library code is the next commit). Not run: the whole-workspace suite (the lead's gate), the mesh and
+case hash tables.
+
+Decision by the registered rule: every check met and B0, `baseline_hashes` unchanged, but MU7 is not caught, and the rule says
+**done** needs every planned mutation caught: by the letter this is **partial**. The cause is diagnosed (the mutated check is
+redundant with the check inside `modal_analysis`), so I recommend done.
+
+Remaining questions (taken or open):
+
+1. Reference frequency in rad/s or Hz? Taken: rad/s, as `complex_moduli` (on the standing instruction of 2026-11-11, take the
+   recommendation).
+2. A case-file key for the reference frequency: open (as ADR 0491 D5, the maintainer's call).
+3. A per-mode update of the reference frequency (the nonlinear eigenproblem `lambda^2 M + K*(lambda) = 0`, a fixed-point loop on
+   each root's own frequency): recommended as a follow-up item.
+4. The truncated-basis error for a model whose loss stiffness is not proportional to its storage stiffness (3-D, unequal
+   weights) is unmeasured; the rod is exact. Recommended: a check against a full-basis solve on a small 3-D model, with the item above.
+
+## For the lead: roadmap entries
+
+> Status for F-582: done (ADR 0495, 2026-11-14). The damped modes take a viscoelastic material at a reference frequency given in the options (DampedOptions::viscoelastic_reference(omega, temperature)): the undamped basis is the modal analysis of the model with the material replaced by the elastic material of its storage shear and bulk moduli at that frequency, and the loss stiffness of the loss moduli (D'' = 2 G'' I_dev + K'' 1 (x) 1) is projected on it and added to the loss stiffness of the equation; the root carries the moduli at that one frequency. On the 40-element rod A at its first resonance the first root equals the root of the discrete chain with E*(omega_ref) within 2.5e-14 (limit 1e-8, for 2, 6 and 39 modes alike: the loss stiffness of the rod is proportional to its storage stiffness), and its loss factor 2 |Re lambda|/Im lambda equals E''/E' within 6.2e-4 (limit 1e-2) and 2 tan(atan(eta)/2) within 7.8e-14; the unequal-weight rod B and the shear rod C within 1.4e-14 and 1.2e-14, the 3-D cantilever against the elastic model with the constant loss factor within 1.0e-13, a shifted material against tau a_T within 1.2e-16. A reference frequency without the material, a loss factor on its set, a missing temperature and an orthotropic base are refused. Models without the material keep their bits (5 digests, baseline hashes unchanged). Six of seven mutations caught, the seventh (J2 check on the clone) is redundant with the one in modal_analysis. Follow-ups: per-mode reference frequency (fixed-point on each root's own frequency), the truncated-basis error of a general 3-D model.
+
+> Follow-up item (proposed): "The viscoelastic damped modes at each root's own frequency", deps F-582; acceptance: "Every limit not stated here is registered in the ADR before the run. The damped modes of a viscoelastic material iterate the reference frequency of each root to its own Im lambda (a fixed point of lambda^2 M + K*(Im lambda) x = 0 on the modal basis of the storage moduli). On the 40-element rod A the converged first root equals the root of the discrete chain with the complex modulus at that root's own frequency within 1e-8 relative, and differs from the frozen-modulus root of F-582 by a registered amount. A 3-D cantilever with unequal weights, full basis against truncated basis, registers the truncation error. Models without the material keep their bits."
