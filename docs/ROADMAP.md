@@ -8551,7 +8551,7 @@ fixed by the item's registration ADR before any code.
     A5 (a shift where every diagonal is zero) met only after amendment 1, H1 not run, mutations MU6 (row equal to
     position in the test matrix), MU7 (solver name from the option) and MU9 (equivalent) survived. Done is the
     maintainer's call. Follow-up F-529.
-- [ ] **F-432** Stress recovery by element patches and an energy-norm error estimate
+- [~] **F-432** Stress recovery by element patches and an energy-norm error estimate
   - depends on: F-408, F-376, F-378
   - acceptance: Every limit not stated here is registered in the ADR before the run. A linear displacement field gives
     the exact stress and a zero estimate within 1e-10. On the manufactured solution of F-378 for Hex8, Tet10 and Hex20:
@@ -8562,10 +8562,21 @@ fixed by the item's registration ADR before any code.
     tenth of the elements with the largest indicator contains the elements at the hole edge. Boundary and corner nodes
     take the patch of the nearest interior node by the registered rule; the result is bit-identical for 1 and 8 threads;
     a patch with too few points is reported, not solved.
-  - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size S. Stub ADR 0335; the registration is
-    written by the implementation agent before any code. ADR 0277 (2026-11-12): recover::IntegrationPointField carries
-    per element the positions, weights w det J, strain and stress of the stiffness rule's points (offsets,
-    points_of(e)); recover::nodal_average is the averaged nodal stress to compare against.
+  - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size S. ADR 0478, 2026-11-14: rcfd_fem::estimate
+    (stub of ADR 0440 filled, PENDING None): superconvergent patch recovery (sampling at the centroid of Hex8 and Tet4,
+    the 2 x 2 x 2 points of Hex20 and the four points of Tet10; a complete linear or quadratic fit around every interior
+    corner node by Householder QR; every other node takes the mean of the fits of the nearest solved centres, ties
+    within 1e-9), the energy-norm estimate of Zienkiewicz and Zhu with element indicators, a ranking and the relative
+    estimate; short patches (too few points or rank deficient) reported, not solved; structural kinds, a temperature
+    field and a material interface in a patch refused; bit-identical for 1 and 8 threads. A linear field is exact within
+    1e-14 (limit 1e-10). Manufactured solution of F-378, case D, n = 4, 8, 16: effectivity Hex8 1.180, 1.073, 1.025;
+    Tet10 1.091, 1.005, 0.992; Hex20 1.337 (MISSED at n = 4), 1.028, 0.994; distance from 1 non-increasing except Tet10
+    from 8 to 16 (0.0051 to 0.0083 as theta crosses 1: MISSED); Hex8 recovered L2 order 1.81 (limit 1.7), raw 1.00
+    (limit 0.9). Plate with a hole (the ADR 0449 plate with two layers): recovered peak +1.41 percent of 3 sigma (limit
+    2), nodal average of F-376 +1.23 percent on the same mesh; the tenth of largest indicator holds 18 of the 48
+    hole-edge elements (MISSED: the graded mesh makes them small). Seven of eight mutations caught (removing the rank
+    test survives, as registered). Partial by the registered rule; the misses are kept as known-miss records with their
+    limits.
 - [x] **F-433** Elasticity solves on the ranks of rcfd-dist and on the CUDA device
   - depends on: F-016, F-101, F-374, F-381
   - acceptance: Every limit not stated here is registered in the ADR before the run. Ranks: with one rank the iteration
