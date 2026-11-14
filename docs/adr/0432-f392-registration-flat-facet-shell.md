@@ -395,3 +395,17 @@ Negative controls:
 4. The pressure on shells as a new `Load::ShellPressure` on element sets (D5) rather than surface sets on shell faces.
 5. A shell node shared with a solid refused (D4) with a located `InvalidValue`, not a new error variant.
 6. The shell output in `rcfd-post` refused for now (L1; the brief allows it).
+
+## Amendment 1 (2026-11-14, written before any run of a check)
+
+1. **Negative control N1, set-up corrected before its run.** `lowest_eigenpairs` verifies its result by a Sturm count above the
+   last converged cluster (`eigen.rs`, read, not run): with `alpha = 0` the flat free plate has `6 + 81` zero eigenvalues (one
+   extra per node), more than its subspace of 16 vectors holds, so it would refuse with `SturmMismatch` instead of returning
+   eight frequencies. N1 is therefore measured by the Sturm count itself: `rcfd_linalg::eigen::count_below(K_0, M, lambda_7 / 4,
+   &SkylineOrdering::Rcm)` with `K_0` the free plate's stiffness assembled through `assemble_with` with `ShellOptions { drilling:
+   0 }`, `M = mass::consistent`, and `lambda_7` the seventh eigenvalue of FR1: expected `87`, registered limit `> 6`. Added as a
+   stronger check of FR1 (**FR3**): the same count with the element's `K` (`assemble::stiffness`) is exactly `6`.
+2. **The full-integration control SS3, parameters not stated above:** `K` by `assemble_with` with `element_stiffness_with(...,
+   ShellOptions::default().shear(TransverseShear::FullIntegration))`, `f = loads::nodal_load_vector`, the prescribed equations of
+   the model by `constraint::prescribed_equations`, `constraint::reduce`, and `SkylineLdlt::factor` / `solve` of `rcfd-linalg`.
+   No limit changes.
