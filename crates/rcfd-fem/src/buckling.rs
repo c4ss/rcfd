@@ -118,12 +118,32 @@ impl BucklingResult {
 /// same rule is applied to `K_FF` after the rigid-motion test (ADR 0402): a mechanism that is not rigid, such as two parts
 /// joined by a hinge line, is refused with `FemError::Solver` naming the unknown of the failing pivot.
 pub fn factors(model: &SolidModel, prestress: &Prestress, options: &BucklingOptions) -> Result<BucklingResult> {
+    factors_with(model, prestress, &[], options)
+}
+
+/// [`factors`] with `extra` triplets added to `K_sigma` after its assembly (ADR 0480 D3: the negative symmetric load
+/// stiffness of a follower pressure); with none it executes the operations of [`factors`]. A non-empty `extra` is refused on
+/// the transformation path (key `"load stiffness"`).
+pub(crate) fn factors_with(
+    model: &SolidModel,
+    prestress: &Prestress,
+    extra: &[(usize, usize, f64)],
+    options: &BucklingOptions,
+) -> Result<BucklingResult> {
     model.validate()?;
     // ADR 0459 D1, D3: solid elements, also of the orthotropic and the tabulated material (the per-point stiffness); not
     // with a cyclic constraint. ADR 0473 D6: also beams and shells.
     model.check_supported_with_materials()?;
     crate::mat_ortho::refuse_with_cyclic(model)?;
     if crate::mpc::uses_transformation(model) {
+        if !extra.is_empty() {
+            return Err(FemError::InvalidValue {
+                key: "load stiffness",
+                reason: "a load stiffness is not offered on the transformation path (linear constraints, rigid sets, \
+                         cyclic constraints, elastic supports; ADR 0480 D3)"
+                    .to_string(),
+            });
+        }
         return factors_on_transformation(model, prestress, options);
     }
     let dofs = model.dof_map();
@@ -138,7 +158,10 @@ pub fn factors(model: &SolidModel, prestress: &Prestress, options: &BucklingOpti
         });
     }
     check_rigid_body_motions(model, &fixed)?;
-    let kg = assemble_geometric(model, prestress, options.threads)?;
+    let mut kg = assemble_geometric(model, prestress, options.threads)?;
+    if !extra.is_empty() {
+        crate::nonlinear::add_triplets(&mut kg, extra);
+    }
     let k = point_stiffness(model, options.threads)?;
     let zero = vec![0.0; k.n];
     let kr = reduce(&k, &zero, &fixed)?;
