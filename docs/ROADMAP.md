@@ -11127,7 +11127,7 @@ fixed by the item's registration ADR before any code.
     and miner of F-413): the counted rate is 6.2 percent above the broadband rate, the narrow-band rate 19.6 percent
     above it and 12.6 percent above the counted rate. Limits: Gaussian zero-mean stress, power-law curve, no case-file
     key, RandomStress does not carry the moments m1 and m4. Follow-ups F-589, F-590.
-- [ ] **F-567** Complex cross-spectral matrices and frequency-dependent coherence of random loads
+- [x] **F-567** Complex cross-spectral matrices and frequency-dependent coherence of random loads
   - depends on: F-417
   - acceptance: Every limit not stated here is registered in the ADR before the run. A cross-spectral table G_ab(f) with
     real and imaginary parts, Hermitian and positive semi-definite at every table frequency (refused otherwise with the
@@ -11135,7 +11135,16 @@ fixed by the item's registration ADR before any code.
     patterns with a pure delay tau (G_12 = G e^{-i 2 pi f tau}) on a one-mode system give the closed-form mean square
     within 1e-6; a field with coherence exp(-|x_a - x_b|/L) on a plate tends to the uncorrelated result as L goes to 0
     and to the fully correlated one as L grows, each within 1e-8 at the registered limits.
-  - note: Structural solver, advanced tier. Follow-up of F-417 (ADR 0477, 2026-11-14).
+  - note: Structural solver, advanced tier. ADR 0510, 2026-11-14: rcfd_fem::random gains CrossSpectrum (a table
+    G_ab(f_k) with real and imaginary parts, or spectra with a Coherence), Coherence (constant real, table, or
+    function of the frequency), check_cross_matrix (Hermitian to 1e-12 of the largest diagonal and positive semi-
+    definite to 1e-12 of the trace by a complex Cholesky, refusal names the frequency), exponential_coherence,
+    spectral_response_cross and Excitation::cross (stress included). Convention G_ab = E[conj(F_a) F_b]; a real
+    constant coherence is routed to spectral_response, so F-417 is reproduced bit for bit (also by the general loop,
+    switched on with SpectralOptions::real_route(false)). Pure delay on one mode within 1.2e-7 of the closed form
+    (1e-6), a two-mode delay with the sign of the phase tested within 1.2e-7; exponential coherence on a Hex8 plate: 0
+    against the uncorrelated result at L = d_min/40 and 3.3e-11 against the fully correlated at L = 1e10 plate sides
+    (1e-8). Mutations all caught (one equivalent). No case-file key.
 - [ ] **F-568** Error indicator per unit volume and the effectivity criterion near one
   - depends on: F-432
   - acceptance: Every limit not stated here is registered in the ADR before the run. EnergyError gives the density
