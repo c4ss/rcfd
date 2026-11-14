@@ -187,3 +187,16 @@ Found on reading `DofMap` while writing the test, before N3 was compiled or run:
 component check that N3 is meant to cover. Corrected set-up: the result's numbering is `DofMap::from_counts([6, 0, 3, ..., 3])`
 (`3 n` unknowns, node 0 with six, node 1 with none), which passes the length check; expected: refused with the message containing
 `node 0 has 6 components; the solid output writes 3`. The limit (exact) and every other check are unchanged.
+
+## Amendment 2: check N2b, 2026-11-13 (written after the run of N2 and of MU7, before the run of N2b)
+
+MU7 (the `DofMap` equality check removed) was not caught: N2's result (`DofMap::uniform(5, 3)`, 15 unknowns against 27) is
+refused by the length test that stays, so N2 cannot see the equality test. The equality test only decides when the number of
+unknowns agrees and the layout does not. New check, registered now and run once after this amendment is committed:
+
+| id | control | expected | limit |
+| --- | --- | --- | --- |
+| N2b | F with the result `SolidResult::new(DofMap::from_counts([6, 6, 6, 3, 6]), zeros)` (27 unknowns, as the model, but node 3 with three and node 4 with six) | `solid_vtu_string` and `beam_fields` refused naming `displacement` | exact |
+
+MU7 is then run once more against N2b. By the decision rule the item stays **partial** whatever N2b gives: MU7 was not caught by
+the registered checks, and N2b is a check added after the run.

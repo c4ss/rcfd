@@ -406,3 +406,18 @@ fn n1_n2_n3_refusals() {
     );
     c.finish();
 }
+
+/// N2b (ADR 0423 amendment 2): a result with the model's number of unknowns and another layout.
+#[test]
+fn n2b_same_count_other_layout_refused() {
+    let model = frame_model();
+    let other = SolidResult::new(DofMap::from_counts(&[6, 6, 6, 3, 6]), vec![0.0; 27]).unwrap();
+    assert_eq!(model.dof_map().n_equations(), 27);
+    let e = solid_vtu_string(&model, &other).unwrap_err().to_string();
+    println!("N2b: {e}");
+    assert!(
+        e.contains("displacement") && beam_fields(&model, &other).is_err(),
+        "N2b MISSED: {e}"
+    );
+    println!("N2b: refused naming displacement met");
+}
