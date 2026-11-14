@@ -379,6 +379,7 @@ fn body_record(m: &SolidModel) -> Vec<(&'static str, Vec<u64>)> {
 }
 
 #[test]
+#[ignore = "record: ADR 0502 amendment 1, its BB3 frequency row was at a speed above the loss of stiffness (vacuous); continued in bb1_bb2_bb3_one_isotropic_ply_bits_after_amendment_1 (ADR 0291 pattern, maintainer standing decision)"]
 fn bb1_bb2_bb3_one_isotropic_ply_bits() {
     let mut c = Checks::new();
     let twin = warped_plate(BlockProperty::shell(0.01).unwrap(), steel());
@@ -396,6 +397,64 @@ fn bb1_bb2_bb3_one_isotropic_ply_bits() {
             ),
         );
     }
+    c.finish();
+}
+
+/// The rows of [`body_record`] with the BB3 frequency row replaced (ADR 0502 amendment 1): the loss of stiffness at 100 rad/s
+/// (speed, negative count) and the frequencies and modes at 10 rad/s; and whether the latter are four finite frequencies.
+fn body_record_after_amendment_1(m: &SolidModel) -> (Vec<(&'static str, Vec<u64>)>, bool) {
+    let mut out = body_record(m);
+    let last = out.pop().expect("the BB3 frequency row");
+    assert_eq!(last.0, "BB3 frequencies at 100 rad/s");
+    let part = RotatingPart::new(m, AXIS, ORIGIN, &RotatingOptions::new(4).modal(ModalOptions::new(4))).unwrap();
+    let loss = match part.modes(100.0).unwrap() {
+        SpeedModes::LossOfStiffness(l) => vec![l.speed, l.negative.map(|n| n as f64).unwrap_or(-1.0)],
+        SpeedModes::Modes(_) => vec![f64::NAN],
+    };
+    println!("BB3 loss of stiffness at 100 rad/s {loss:?}");
+    out.push(("BB3 loss of stiffness at 100 rad/s", bits(&loss)));
+    let (modes, ok) = match part.modes(10.0).unwrap() {
+        SpeedModes::Modes(r) => {
+            println!("BB3 frequencies at 10 rad/s {:?}", r.frequencies);
+            let ok = r.frequencies.len() == 4 && r.frequencies.iter().all(|f| f.is_finite() && *f > 0.0);
+            let mut v = r.frequencies.clone();
+            for phi in &r.modes {
+                v.extend_from_slice(phi);
+            }
+            (v, ok)
+        }
+        SpeedModes::LossOfStiffness(_) => (vec![f64::NAN], false),
+    };
+    out.push(("BB3 frequencies and modes at 10 rad/s", bits(&modes)));
+    (out, ok)
+}
+
+/// BB1 to BB3 after ADR 0502 amendment 1.
+#[test]
+fn bb1_bb2_bb3_one_isotropic_ply_bits_after_amendment_1() {
+    let mut c = Checks::new();
+    let twin = warped_plate(BlockProperty::shell(0.01).unwrap(), steel());
+    let lay = warped_plate(
+        BlockProperty::layup(vec![Ply::new(steel(), 0.01, 0.3).unwrap()]).unwrap(),
+        aluminium(),
+    );
+    let (rl, okl) = body_record_after_amendment_1(&lay);
+    let (rt, okt) = body_record_after_amendment_1(&twin);
+    for ((name, a), (_, b)) in rl.into_iter().zip(rt) {
+        c.holds(
+            name,
+            a == b && !a.is_empty(),
+            &format!(
+                "{} values, one-ply layup (aluminium block) against the steel Shell twin",
+                a.len()
+            ),
+        );
+    }
+    c.holds(
+        "BB3 the modes at 10 rad/s are four finite frequencies (both models)",
+        okl && okt,
+        &format!("layup {okl}, twin {okt}"),
+    );
     c.finish();
 }
 
