@@ -274,3 +274,87 @@ measured ones in Hz (`1F` 36.9 Hz = 232 rad/s); the spectrum is as estimated.
 Corrected set-up: the same models, speeds, tracks (1 to 4), checks and limits, with **8 modes** computed (the cut between the
 eighth mode, about 1597 Hz, and the ninth, about 2021 Hz, far from any crossing in the speed range). The registered test stays
 as an ignored record; the corrected test is `h1_h3_n4_hub_with_a_shell_blade_rotating_8_modes`. No limit changes.
+
+## Addendum 1 (2026-11-14): results
+
+Registered run: `sa_prestress_mixed` of commit 26da9acf (release), log `f557-scratch/run1.log`, made once; the hub checks by
+the corrected test of amendment 1 (commit da3502b1), log `f557-scratch/run2_h.log`, made once. Every value is printed by the
+tests.
+
+| Check | Measured | Limit | Result |
+|---|---|---|---|
+| A1 RF1 model taken, `check_fits`, Hex8 and Shell4 parts bit-equal to the parts alone | taken; fits; equal; equal | holds, equal | met |
+| T1 beam carried by a block, `n = 1, 2` (signed) | +2.44e-3, +7.30e-4 | `1e-2` | met |
+| T2 Shell4 strip carried by a block, `n = 1, 2` (signed) | +3.48e-3, +6.12e-3 | `1e-2` | met |
+| T2b Shell3 strip, `n = 1, 2` (signed) | +3.35e-3, +5.30e-3 | `1e-2` | met |
+| M1 solid part bit-equal (T1, T2) | equal, equal | equal | met |
+| M2 structural part bit-equal (T1, T2) | equal, equal | equal | met |
+| M3 assembled `K_sigma` (T1, T2) | 0 entries differ, 0 missing; the same | equal | met |
+| T3 stiffened plate, `lambda_mixed/lambda_solid - 1` (517.756 against 513.702, `sigma_cr` 5.18e8 Pa) | +7.89e-3 | `3e-2` | met |
+| T3u uniform pre-stress, mixed / solid | 2.3e-13 / 4.3e-12 | `1e-8` | met |
+| T3m overall mode (rib `u_z` over the plate's largest), mixed / solid | 0.997 / 0.9999 | `>= 0.5` | met |
+| H1 hub with a Shell4 blade against all-Hex20, tracks 1 to 4, four speeds (8 modes) | 2.29e-3 | `2e-2` | met |
+| H2 stiffening increment of track 1 (5518.6 against 5527.8 Hz^2) | 1.67e-3 | `3e-2` | met |
+| H3 losses, lowest MAC, mixed / solid | 0, 0.999692 / 0, 0.999693 | `> 0.9` | met |
+| B0 digests of `sa_prestress_mixed_bits.rs` (22 words) | equal | equal | met |
+| B1b `sa_geometric_struct_bits.rs`; `baseline_hashes` | passes; passes | passes | met |
+| N1 zero pre-stress T1 / T2 | 0.500 / 0.499 | `> 5e-2` | as expected |
+| N2 rib pre-stress masked | 0.3755 | `> 3e-2` | as expected (estimate 0.375) |
+| N3 shell pre-stress masked | 2.454 | `> 3e-2` | as expected |
+| N4 hub without stress stiffening, track 1 at 360 rad/s | 0.556 | `> 5e-2` | as expected |
+
+The estimates held: T1 `+2.4e-3` against the end spring `c/L = 2.5e-3` (n = 1) and `+7.3e-4` against `1.0e-3 - 2.6e-4` (n =
+2); T2 is S1 of ADR 0473 plus the block term; T3's lowest mode is the overall one predicted (the Rayleigh upper value
+`pi^2 E 2.86e-4 = 5.64e8` Pa against 5.18e8 measured) and N2 reproduces the rib's share `0.375` of the geometric work.
+
+**Set-up correction (H1 to H3, N4; amendment 1).** The registered six-mode count cut through a crossing pair of the sixth and
+seventh modes at 240 rad/s and the solver refused before any comparison; the record `h1_h3_n4_hub_with_a_shell_blade_rotating`
+is ignored, the corrected test computes 8 modes, limits unchanged. The diagnosis printed the frequencies of both models before
+the corrected run (disclosed in amendment 1).
+
+**Rotating path (b1).** `RotatingPart::new` takes the mixed model with no change beyond D1: the hub's joint rows put it on the
+transformation path, its unit centrifugal pre-stress comes from D1, and the Campbell table of the Shell4 blade on a Hex20 hub
+equals the all-Hex20 table within 2.3e-3. No follow-up is needed for the F-396 path; the whirl and Coriolis paths still refuse
+beams and shells (ADR 0473 Limits).
+
+**Mutations** (scratch copy `f557-scratch/mut`; `sa_prestress_mixed`, `sa_prestress_mixed_bits` and `sa_geometric_struct_bits`
+per mutation; logs `f557-scratch/mut_MU*.log`):
+
+| Id | Expected | Caught by (measured) |
+|---|---|---|
+| MU1 solid stress zero | M1, T3, N2 | A1, M1, M3 (4059 entries), T3u (1.0), T3 (0.376) |
+| MU2 previous element's points | M1, T3u | M1, M3 (3216 entries); T3u not (the stress is uniform, every element's points are equal) |
+| MU3 a dummy point per structural element in `compute_solids` | A1, M1 | **not caught**: the solid elements are read by `points_of(e)`, the structural slots are never read (an equivalent mutation) |
+| MU4 RF1 restored | A1, T1 to T3, H1 | A1 and every mixed test (refused) |
+| MU5 structural stress zero | M2, T1, T2, T3, H1 | T1 (0.50), T2, T2b, T3u, T3 (2.45), H1 (0.56), H2, B0 (the structural-only pre-stress) |
+| MU6 the default `compute` with the flag on | B0, A1 | **not caught**: the flag acts only on structural elements, and the default `compute` is reached only by models of solid elements (a structural model takes the path of ADR 0473 D4): an equivalent mutation |
+
+MU3 and MU6 are equivalent under every current caller; registering them as catchable was a slip of the registration, recorded
+here.
+
+**Other runs.** `cargo test -p rcfd-fem --release`: every test passes (133 result lines, none failed; the record of D4 and the
+amendment-1 record ignored). `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --all-targets --release -- -D
+warnings` clean. `cargo test -p rcfd-api --release --test baseline_hashes` passes unchanged. `cargo test -p rcfd-cli --release
+--test docs_site` passes.
+
+**Shared files changed.** `recover.rs` (`compute` split into `compute_with`, `compute_solids` added, one skip in the loop),
+`geometric_struct.rs` (`prestress_from_displacement` and its documentation), `geometric.rs` (`Prestress::masked`, one doc
+line); the test file `sa_geometric_struct.rs` gains one `#[ignore]` line (D4).
+
+**Decision (rule above): done.** Every registered check met (the hub checks by the corrected set-up of amendment 1), every
+negative control as expected, the existing tests pass, fmt and clippy clean. Two planned mutations proved equivalent (MU3,
+MU6); the rule does not count mutations.
+
+### Remaining questions
+
+- **R1. MU3 and MU6.** Options: (a) accept them as equivalent mutations; (b) add a unit test of the `pub(crate)` helper.
+  Recommendation (a): no caller can observe them.
+- **R2. Geometric stiffness of a joint lever.** A joint row carries no second-order term of an offset lever (Limits). Options:
+  (a) leave it (the joints here have no lever, and the mixed models agree with the solid ones within 8e-3); (b) a follow-up for
+  offset joints under a large pre-load. Recommendation (a); propose (b) only when a fan model needs offset joints.
+
+## For the lead: roadmap entries
+
+Proposed status of F-557: **done**. No follow-up item.
+
+> Structural solver, advanced tier. Follow-up of F-420 (ADR 0473, 2026-11-14). ADR 0486, 2026-11-14: the refusal RF1 of ADR 0473 is lifted. Prestress::from_static of a model with solid, beam and shell elements gives each solid element the stress of IntegrationPointField at its rule points and each Beam2, Shell4 and Shell3 element its ADR 0473 point, both bit-equal to the parts computed alone, and the assembled K_sigma bit-equal to the parts' (M1 to M3). Parts are joined by the linear-constraint joints of ADR 0456 and ADR 0460 (consistent coupling; shared nodes stay refused). A Hex20 block carrying a beam in tension: n = 1, 2 at 2.4e-3 and 7.3e-4 of the taut-beam formula; carrying a Shell4 strip 3.5e-3 and 6.1e-3 (Shell3 3.4e-3, 5.3e-3), limit 1e-2. A Shell4 plate stiffened by a Hex20 rib buckles at 7.9e-3 of the all-Hex20 model (limit 3e-2); masking the rib's pre-stress moves it by 0.38, the shells' by 2.45. Rotating: a Hex20 hub with a Shell4 blade through the F-396 path matches the all-Hex20 Campbell table within 2.3e-3 over four tracks and four speeds, stiffening increment 1.7e-3 (corrected set-up with 8 modes, amendment 1). New Prestress::masked. Models without mixed elements bit-identical (22 digests, sa_geometric_struct_bits, baseline_hashes). Four of six mutations caught; two proved equivalent.
