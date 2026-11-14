@@ -341,3 +341,103 @@ Limits are relative to the reference value unless stated. Constants: `ORTHO` = `
 - The cantilever limit of 1 percent hardly sees the shear term (1.5 percent of the deflection) and not `kappa` of an orthotropic
   section; O6 confirms the span modulus and the beam limit.
 - The constants of a real moulded blade and its fibre directions are inputs (decision A1 of ADR 0310), not in the repository.
+
+## Addendum 1: results (2026-11-14)
+
+Registered runs at commit 838c4fb3 (code and tests committed before any run), release profile, each file run once:
+`sa_ortho_default_bits`, `sa_ortho`, `sa_mat_table` (logs `f409-scratch/run-*.log`), then the whole `rcfd-fem` test suite
+(80 test binaries: 441 passed, 0 failed, 92 ignored; it contains `sa_scaffold.rs` with D9, `sa_scaffold_bits.rs`,
+`si_hex20.rs`, `si_hex20_support_bore.rs`; log `f409-scratch/run-fem-all.log`).
+
+| Check | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| O1 isotropic constants, global axes (nu 0, 0.3, 0.45, -0.2) | `<= 1e-13` | 0, 5.7e-17, 6.4e-16, 1.4e-16 | yes |
+| O1 the same, axes `rot((1, 2, 3), 0.5)` | `<= 1e-13` | 1.5e-16, 2.3e-16, 4.8e-16, 4.3e-16 | yes |
+| O2 refusals naming `nu_12`, `nu_13`, `nu_23`, `nu_12, nu_13, nu_23`; three admissible sets accepted | as stated | all as stated | yes |
+| O3 compliance and rotated stiffness symmetric bit for bit; reciprocity | `==`; `<= 1e-15` | bit-equal; 0 | yes |
+| O4 axial strain at 15, 30, 45, 60 degrees | `<= 1e-10` | 2.2e-15, 8.9e-16, 1.2e-15, 3.3e-16 | yes |
+| O4 shear-extension ratio (`eta` = -2.2430, -1.2645, -0.6132, -0.2252) | `<= 1e-10` | 3.4e-15, 1.1e-15, 2.4e-15, 2.6e-15 | yes |
+| O4 six strains against the test's rotated compliance | `<= 1e-10` | 1.4e-14, 3.0e-15, 2.3e-15, 7.8e-16 | yes |
+| O5 `abs(W'/W - 1)`; recovered energies against `W`, `W'` | `<= 1e-12` | 4.4e-16; 3.3e-16, 2.2e-16 | yes |
+| O6 orthotropic cantilever `abs(delta/delta_T - 1)` | `<= 0.01` | 1.85e-3 (ratio 0.998146, `delta = 2.315698e-3` m, `delta_T = 2.32e-3` m) | yes |
+| O7 free heating: material-axes strain; stress | `<= 1e-10` | 2.0e-15; 1.7e-15 | yes |
+| O8 full restraint: material-axes stress against `-C alpha dT` | `<= 1e-10` | 4.2e-16 | yes |
+| O9 polar-orthotropic tube, bore hoop stress (16 x 8, 1019 nodes, 43 bore nodes) | `<= 0.01` | 7.82e-4 | yes |
+| O9b bore radial displacement | `<= 2e-3` | 1.43e-6 | yes |
+| O10 bar with a varying modulus (20 Hex8) | `<= 1e-3` | 1.1265e-4 (estimate 1.126e-4) | yes |
+| O11 integrated expansion: normal; shear strains | `<= 1e-10` | 1.8e-15; 2.4e-15 | yes |
+| O11b orthotropic base, material-axes strains | `<= 1e-10` | 5.3e-15 | yes |
+| O12 constant table on steel; O12b on `ORTHO` (displacement, stress, thermal strain, energy) | `==` | bit-equal, all four, both | yes |
+| O13 outside the table | element 19, `outside the table`, `T` in `(693, 800]` | element 19, `temperature 699.838258 K is outside the table [293.000000, 693.000000] K` | yes |
+| K1 cylindrical axes; on-axis point refused | `<= 1e-15` | 0; refused | yes |
+| P1 `PerElement([R])` bits of `Fixed(R)`; two triads for one element refused | `==` | bit-equal; refused (`axes`) | yes |
+| R1 E1, E2 solve; E3 to E10 refused with `FOLLOW_UP` (both variants) | as stated | 20 of 20 | yes |
+| R2 Shell4 with `Orthotropic` | as stated | `NotYetSupported`, `element 0 (Shell4)`, `FOLLOW_UP` | yes |
+| R3, R4, R5 (two cases), R6 | as stated | all refused with the registered key | yes |
+| B1 14 digests of main 0ca10e83; the existing bit records and scaffold tests | `==` | 14 of 14; `sa_scaffold_bits`, `sa_scaffold`, `si_hex20*` pass | yes |
+| X1 `x1_modules_and_pending_after_f409`, `m1_to_m4_after_f409` | as stated | pass | yes |
+| N1 axes turned 90 degrees | `> 5` | 9.8666 | as expected |
+| N2 `k = 1` against Lame; Lame against the `k = 2` value | `<= 0.01`; `> 0.2` | 1.75e-4; 0.2647 | as expected |
+| N4 isotropic constants at 30 degrees, `abs(gamma_xy/eps_xx)` | `<= 1e-10` | 9.0e-16 | as expected |
+
+Reading. Every rounding check sits at 1.4e-14 or below. O6 at 0.19 percent is the orthotropic shear term (1.5 percent of
+`delta_T`) seen through the 1 percent limit with `kappa = 5/6`; it is below the estimate 3e-3. O9 at 7.8e-4 is better than the
+estimate 2.5e-3: the curvature argument was conservative for the `r` and `r^-3` profile on 16 radial Hex20. O10 equals the
+midpoint-rule estimate to four digits: the discretisation error is the whole error, as F8 predicted.
+
+### Mutations (scratch copy `f409-scratch/mut` of commit 81f5d82c, `sa_ortho` and `sa_mat_table` per mutation, logs `f409-scratch/mut_Mu*.log`)
+
+| Mutation | Caught by |
+| --- | --- |
+| Mu1 `T C T^T` | O1 rotated (up to 0.84), O4 (axial 1.98), the O5 test failed |
+| Mu2 shear factor 2 dropped | O1 (0.375), O4, O6 |
+| Mu3 `S_12 = -nu_12/E_2` | O3 (13.0), O4 and O5 (models singular), O9b (0.11), R1 E1 and E2 (singular) |
+| Mu4 radial and tangential swapped | K1 (1.41), O9 (0.338), O9b (1.40) |
+| Mu5 table property at the first point | O10 (1.04e-2, the arithmetic 4 value), O9 (0.103: the cylindrical axes froze too) |
+| Mu6 secant `alpha(T) dT` | O11 (0.122), O11b (7.3e-2) |
+| Mu7 thermal strain not rotated | O7 (0.722), O8 (1.63), O12b |
+| Mu8 determinant test removed | O2 (`nu = 0.5` accepted) |
+| Mu9 temperature clamped to the table | O13 (solved instead of refused) |
+| Mu10 constant-column case removed | O12 and O12b (bits differ) |
+
+All ten caught.
+
+### Deviations and what was not run
+
+- Before the first run a compile error of the new test file (an untyped float literal in `sa_ortho.rs` O9) was fixed; nothing
+  had run.
+- After the registered runs clippy asked for three negated float comparisons and one type alias in `mat_ortho.rs` and
+  `mat_table.rs`. They were rewritten as equivalent comparisons that still refuse NaN (`v.is_nan() || v * v >= bound` and
+  the like) and committed separately (fb0518a1). `sa_ortho`, `sa_mat_table`, `sa_ortho_default_bits` and `sa_scaffold` were
+  then run once more as a check of that change: the same results and the same printed numbers (logs
+  `f409-scratch/rerun-lint-*.log`). No limit, check or set-up was changed; this is not an amendment.
+- The test of O9 also checks the closed form `34/15` as arithmetic (not a registered row).
+- `baseline_hashes` (rcfd-api) and the `docs_site` test of `rcfd-cli` were run after this addendum; their results are in the
+  report of this item to the lead.
+- Not run: the whole workspace (the lead's gate).
+
+### Decision by the registered rule
+
+**Done**: every check O1 to O13, K1, P1, R1 to R6, B1, X1 met in its single registered run, N1, N2, N4 as expected, all ten
+mutations caught, no amendment.
+
+### Remaining questions
+
+1. The other paths (modal, transient, nonlinear, buckling, harmonic, cyclic, rotating, linear constraints and elastic
+   supports) refuse the two variants. Options: (a) a follow-up item that opens them through the per-point stiffness of D5
+   (the mass needs only the density); (b) leave them refused. Recommendation (a), modal, prestressed modes and the
+   transformation path first: the fan blade needs prestressed modes with an orthotropic material.
+2. Shells: an orthotropic section is F-428 (layup); F-525's refusal of a material without one expansion coefficient stays.
+   Recommendation: no change here.
+3. Nodal averaging of stresses across elements with different material axes is the isotropic one (global components).
+   Options: (a) leave it; (b) average in material axes per region. Recommendation (a) until a case needs it.
+
+## For the lead: roadmap entries
+
+Proposed status of F-409: **done**.
+
+> ADR 0452, 2026-11-14: orthotropic elasticity from nine constants (not positive definite refused naming nu_12, nu_13, nu_23 or the determinant) with fixed, cylindrical or per-element material axes evaluated at every integration point, orthotropic expansion, and properties from temperature tables (piecewise linear, nothing extrapolated, the thermal strain the integral of alpha from the reference) on the linear static solve of solid elements with the recovery; every other path, beams and shells refuse both variants by name (a follow-up of ADR 0452). Isotropic constants 6.4e-16; off-axis strain and shear-extension ratio at 15 to 60 degrees to 1.4e-14; rotation of model and axes 4.4e-16; orthotropic Hex20 cantilever (L/h = 20, E2 = E1/10) 0.19 percent; free heating and full restraint 2e-15; polar-orthotropic tube (k = 2, bore hoop 34 p/15 derived) 7.8e-4 on 16 x 8 Hex20; bar with a linear modulus 1.13e-4 with 20 elements; alpha = a0 + a1 T 1.8e-15; constant tables give the bits of the constant material; a temperature outside a table refused with the element and the temperature. Default paths bit-identical (14 digests of main 0ca10e83). Ten mutations caught. Files mat_ortho.rs, mat_table.rs, tests sa_ortho.rs, sa_mat_table.rs, sa_ortho_default_bits.rs; scaffold rows recorded and copied in sa_scaffold.rs.
+
+Follow-up item (id by the lead), title "Orthotropic and tabulated materials on the modal, prestressed-modal and transformation paths", deps F-409:
+
+> Every limit not stated here is registered in the ADR before the run. Modal analysis, prestressed modes and the transformation path (linear constraints, elastic supports) take the orthotropic and tabulated materials of ADR 0452 through the per-point stiffness; the first bending frequencies of an orthotropic Hex20 cantilever match the beam values with E1 within 1 percent; isotropic constants in an orthotropic material give the frequencies of the isotropic material within 1e-12; the paths still not opened refuse the variants by name; default paths bit-identical.
