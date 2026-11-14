@@ -256,3 +256,92 @@ Nothing else changes.
 (`FemError::InvalidValue` key `"factorisation"`), so `crates/rcfd-fem/src/mpc.rs` is touched after all (D3 said it would
 not be): the refusal only, nothing else of the module. No check or limit changes; E5 (c) covers the path through
 `modal_analysis`.
+
+## Addendum 1: results (2026-11-14)
+
+Registered runs, release profile, each run once: U1 (`f595-scratch/run_u1.log`) and `sa_eigen_points.rs`
+(`run_linalg.log`) at 29ab9acc; `sa_coordinate_modes.rs` and `sa_f595_bits.rs` (`run_fem.log`) at 29ab9acc; H1 alone through
+`f595-scratch/heavy.ps1` (`run_h1.log`, `run_h1_memory.log`; free physical memory at the start 10.84e9 bytes) with the test
+binary built at 29ab9acc. The bit record `sa_f595_bits.rs` was run at d01020c1 (base 291a210c plus this ADR and amendment 1)
+plus the file (`bits_base_run.log`), its 24 constants filled in and committed at a00250c5 before any library line. No probe
+or development run was made before the registered runs. No limit was changed. Commit 9687b867, after the fast runs and before
+H1, removed ten spaces from the text of the transformation-path refusal (a string continuation that rustfmt left with its
+indentation); it changes no check (E5 tests the key, not the text). A first start of the H1 script waited for free memory
+(`run_h1_memory_wait1.log`, 8.0e9 and 8.5e9 bytes free) and was stopped by me before the test started so that the mutations
+could run first; the test itself was started once.
+
+### Checks
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| U1 (c2, c3) | equal; equal; differ | the factor's order equals `nested_dissection_order_with_points` with points and `nested_dissection_order` without; the two orders differ (7-point `10^3`) | yes |
+| P1 (c2) | `<= 1e-9`; Sturm equal | 6.325e-14; Sturm 5 = 5; 12 iterations | yes |
+| P2 (c3) | `<= 1e-9`; Sturm equal | 6.303e-14; Sturm 3 = 3 | yes |
+| P3 | as stated | (a) `DimensionMismatch` "199 points for 200 unknowns"; (b) `NonFinite { "points", 7, 1 }`; (c) `DimensionMismatch` "201 points for 200 unknowns"; (d) the envelope with 3 points bit-equal to the envelope without | yes |
+| E1 (c4, c7 on S) | `<= 1e-9`; residuals `<= 1e-10`; Sturm | 1.051e-15; largest residual 5.363e-11; Sturm 6 = 6; 23 iterations each | yes |
+| E2 (c5) | `<= 1e-9`; 2 factors | 1.898e-15 (239.61515575162, double) | yes |
+| E3 (c4, c5) | bit for bit | modal values and vectors, buckling values and vectors equal to the direct eigensolver calls given the free unknowns' node points (4 752) | yes |
+| E4 (c8) | bit for bit | modal frequencies and modes, buckling factors and modes with coordinates equal for 1 and 8 threads | yes |
+| E5 | key `"factorisation"` | (a), (b) "not of Envelope"; (c), (d) "not offered on the transformation path" | yes |
+| H1 (c6, c7) | complete, residuals, Sturm; `<= 1e-9`; `<= 0.85` | levels: 126.5 s, 22 iterations, largest residual 6.284e-11, Sturm 6 = 6; coordinates: 97.5 s, 22 iterations, 6.396e-11, Sturm 6 = 6; frequencies 537.05 (double), 729.96, 1 282.81, 1 420.87 (double) Hz; coordinates against levels **1.355e-14**; nnz(K_FF) 7 960 014; nnz(L) by level structures **110 872 668** (0.887 GB of values), by coordinates **92 953 458** (0.744 GB), ratio **0.8384**; process wall 227.3 s, peak working set 2.944e9 B | yes |
+| B (c9) | equal; pass; pass | 24 digests equal to base; see "Other checks run" | yes |
+| N1 | not bit-equal | false | holds |
+| N2 | not bit-equal | false | holds |
+| N3 | not bit-equal | false (largest eigenvalue difference 4.6e-16) | holds |
+
+H1 against the estimates: the two nnz(L) are exactly ADR 0509's (ratio 0.838 as predicted); frequency difference 1.4e-14
+(estimate about 1e-14); 3.8 minutes and 2.9 GB (estimate about 3 minutes, about 3 GB). The levels run took 126.5 s against
+ADR 0509's 77.7 s for the same computation: the machine was shared (other agents building and testing); the coordinate run
+was 23 percent faster than the levels run in the same process.
+
+### Mutations (copy `f595-scratch/mut/tree` of 9687b867, own target `target-f595-mut`, `f595-scratch/mutate.py`, each alone; log `mutations.log`)
+
+| Id | Caught by | Registered | Result |
+| --- | --- | --- | --- |
+| M1 | U1 (order), N1, N2 | U1 and N1 | caught |
+| M2 | E3 (modal values) | E3 | caught |
+| M3 | E3 (modal values) | E3 | caught |
+| M4 | E3 (buckling values), N2 | E3 (buckling) and N2 | caught |
+| M5 | E5 (a) | E5 (a) | caught |
+| M6 | P3 (a) (the ordering's panic on a wrong length) | P3 (a) | caught |
+| M7 | B (G1: the default modal analysis refused) | B | caught |
+| M8 | N3 | N3 (amendment 1) | caught |
+
+### Other checks run
+
+`cargo test --release -p rcfd-linalg` (18 binaries, 119 passed, 0 failed, 6 ignored; `run_linalg_all.log`) and `cargo test
+--release -p rcfd-fem` (211 binaries, 915 passed, 0 failed, 258 ignored; `run_fem_all.log`), `sa_f594_bits.rs`, `sa_nd_bits.rs`
+and `sa_f595_bits.rs` among them. `cargo test -p rcfd-api --release --test baseline_hashes`: 3 passed, 1 ignored
+(`run_baseline.log`). `cargo test -p rcfd-cli --release --test docs_site`: 2 passed. `cargo fmt -p rcfd-linalg --check`,
+`cargo fmt -p rcfd-fem --check`: clean. `cargo clippy --release -p rcfd-linalg -p rcfd-fem --all-targets -- -D warnings`:
+clean (`clippy.log`).
+
+Shared solver files changed: `crates/rcfd-linalg/src/eigen.rs` (the `points` fields, `checked_points`, the argument of
+`factor_by` and its three callers, the U1 test module), `crates/rcfd-fem/src/modal.rs` (the option and builder,
+`check_coordinate_order`, `free_points`, the check and the points in `modal_analysis_with`), `crates/rcfd-fem/src/buckling.rs`
+(the option and builder, the check and the points in `factors_with`), `crates/rcfd-fem/src/mpc.rs` (one refusal at the entry of
+`modal_analysis_mpc`, amendment 2). No existing test file was edited.
+
+### Not run
+
+Nothing registered was left out.
+
+### Decision by the registered rule
+
+**Done**: every check met its limit on its registered run (H1 included), every negative control held and every mutation was
+caught by a check named for it on the first run. Amendments 1 and 2 were written before any run.
+
+### Remaining questions
+
+1. Case-file key (open question 1). Options: (a) `modal.coordinate_order`; (b) a value of the pending single key
+   `solver.factor` (ADR 0509); (c) none. Recommendation: (b), after the maintainer approves the schema golden change.
+2. Coordinates as the order of `Factorisation::Supernodal` without the flag (open question 2): it changes the bits of the
+   F-594 path (not a default). Recommendation: keep the flag until a case-file key exists, then decide with it; open.
+3. The transformation path (finding 6): its reduced unknowns of mesh nodes could take their node's point and the reference
+   unknowns their reference point. Recommendation: a follow-up only if large models with rigid sets need it.
+
+## For the lead: roadmap entries
+
+Proposed status of F-595: **done**.
+
+> Structural solver, advanced tier. Optional. Follow-up of F-594 (ADR 0509). ADR 0531, 2026-11-14: SubspaceOptions::points and BucklingEigenOptions::points (the coordinates of each unknown for the nested dissection of Factorisation::Supernodal; None keeps the level structures; checked for length and finiteness; the other factorisations do not read them), and ModalOptions::coordinate_order / BucklingOptions::coordinate_order in rcfd-fem (the node coordinates of the free unknowns passed on the elimination path; refused, key "factorisation", with another factorisation and on the transformation path). Clamped cube of 104 544 unknowns: nnz(L) 92 953 458 by coordinates against 110 872 668 by level structures, ratio 0.838 (limit 0.85); frequencies 1.4e-14 from the level-structure run (limit 1e-9); 98 s against 127 s per modal analysis, peak working set 2.9 GB. Clamped Hex8 cube of 4 752 unknowns: frequencies 1.1e-15 and buckling factors 1.9e-15 from the level-structure run, and bit-equal to the eigensolvers called directly with the free unknowns' node points. Results bit-identical for 1 and 8 threads; 24 digests of the default and level-structure paths equal to base; baseline_hashes passes. Eight mutations caught. No case-file key (proposed: a value of the pending solver.factor key).
