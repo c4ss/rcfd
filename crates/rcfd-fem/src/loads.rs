@@ -13,7 +13,8 @@
 //! ([`Load::ShellPressure`]) gives the consistent forces and moments of [`crate::shell::pressure_load_vector`] (ADR 0432),
 //! and gravity and the centrifugal load give those of [`crate::shell::body_load_vector`] (`t int N_i b dA`, ADR 0435), a
 //! nodal body-force field that of the interpolated field and a nodal temperature field the membrane thermal load of
-//! [`crate::shell::thermal_load_vector`] (ADR 0445). Shell3 elements take the same loads from [`crate::shell3`] (ADR 0454).
+//! [`crate::shell::thermal_load_vector`] (ADR 0445). Shell3 elements take the same loads from [`crate::shell3`] (ADR 0454);
+//! [`Load::ShellPressureAngleWeighted`] shares each Shell3 element's pressure force by its angles (ADR 0461).
 //!
 //! Face integrals use the face functions of Tri3, Quad4, Tri6 and the 8-node face of Hex20 ([`face_shape_functions`]) in
 //! the local face orders of ADR 0271 and ADR 0292 and the face rules of [`face_rule`] (the 8-node arms: ADR 0383); body integrals use the element's mass rule (ADR 0276 arithmetic 2: exact for
@@ -127,7 +128,16 @@ pub fn nodal_load_vector(model: &SolidModel, extra: &[NodalForceAt]) -> Result<V
                     name: set.clone(),
                 })?;
                 for &e in elements {
-                    add_shell_pressure(&mut f, &dofs, mesh, e, *pressure)?;
+                    add_shell_pressure(&mut f, &dofs, mesh, e, *pressure, false)?;
+                }
+            }
+            Load::ShellPressureAngleWeighted { set, pressure } => {
+                let elements = mesh.element_set(set).ok_or_else(|| FemError::UnknownSet {
+                    kind: crate::error::SetKind::Element,
+                    name: set.clone(),
+                })?;
+                for &e in elements {
+                    add_shell_pressure(&mut f, &dofs, mesh, e, *pressure, true)?;
                 }
             }
             Load::Traction { set, traction } => {
@@ -349,11 +359,21 @@ fn add_line_load(f: &mut [f64], dofs: &DofMap, mesh: &SolidMesh, e: usize, q: Ve
     Ok(())
 }
 
-/// The uniform pressure on a shell element as its consistent nodal forces and moments (ADR 0432 D5, ADR 0454 D2).
-fn add_shell_pressure(f: &mut [f64], dofs: &DofMap, mesh: &SolidMesh, e: usize, p: f64) -> Result<()> {
+/// The uniform pressure on a shell element as its consistent nodal forces and moments (ADR 0432 D5, ADR 0454 D2); with
+/// `angle_weighted` a Shell3 element takes the angle-weighted split of ADR 0461 instead.
+fn add_shell_pressure(
+    f: &mut [f64],
+    dofs: &DofMap,
+    mesh: &SolidMesh,
+    e: usize,
+    p: f64,
+    angle_weighted: bool,
+) -> Result<()> {
     let nodes = mesh.element_nodes(e);
     let coords: Vec<Vec3> = nodes.iter().map(|&n| mesh.nodes()[n]).collect();
-    let fe: Vec<f64> = if mesh.element_kind(e) == crate::mesh::ElementKind::Shell3 {
+    let fe: Vec<f64> = if mesh.element_kind(e) == crate::mesh::ElementKind::Shell3 && angle_weighted {
+        crate::shell3::pressure_load_vector_angle_weighted(&coords, p).map(|v| v.to_vec())
+    } else if mesh.element_kind(e) == crate::mesh::ElementKind::Shell3 {
         crate::shell3::pressure_load_vector(&coords, p).map(|v| v.to_vec())
     } else {
         crate::shell::pressure_load_vector(&coords, p).map(|v| v.to_vec())
