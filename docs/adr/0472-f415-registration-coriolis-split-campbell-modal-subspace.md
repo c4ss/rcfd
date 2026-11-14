@@ -313,3 +313,18 @@ made after its run. **todo**: the module does not build or the ring and beam run
 - No damping (the quadratic problem has `G` only; viscous or structural damping in the rotating frame would add `C + G` to the
   same solver), no stationary-frame rotor (F-416), no case-file key, no CLI or post-processing output beyond CSV and JSON.
 - The ring is checked in plane (`u_z = 0`, `nu = 0`); out-of-plane modes and `nu != 0` are not covered.
+
+## Amendment 1 (2026-11-14, written after the registered run of `sa_gyro.rs` and before any run of the copies below)
+
+The registered run (`f415-scratch/sa_gyro_run1.log`) met every check except **Z1 on R and on F**: `max |omega_split/omega_F396 -
+1|` at rest is `4.57e-10` (R) and `1.03e-10` (F) against the limit 1e-10 (CB `1.04e-13`, met). The limit stays. A diagnostic on a
+scratch copy (`diag_z1`, not a registered check) compared each F-396 rest eigenvalue `lambda_i` with the Rayleigh quotient
+`rho_i = phi_i^T K phi_i / phi_i^T M phi_i` of its own vector: `|rho_i/lambda_i - 1|` reaches `9.2e-10` (R, the foundation
+modes) and `1.4e-10` (F, the flap and lag pair), while the split frequencies agree with `sqrt(rho_i)` within `1.7e-12` (R) and
+`3.4e-11` (F, the exactly degenerate flap and lag pair at rest, which the projection may rotate). So the deviation is the accuracy
+of the F-396 reference eigenvalues with respect to their own vectors (the subspace solver's stopping test, a backward residual
+relative to `||K||`), not of the reduced quadratic solve; arithmetic 6 of the registration wrongly took that agreement to be
+`eps`-level. The miss is kept, per rule 2: the two test functions as run are renamed `*_known_miss` and ignored with the measured
+numbers in the attribute; their other checks, unchanged in code and limits, continue in copies without the Z1 call
+(`g_r1_r2_n1_n2_x1_ring_after_z1_miss`, `g_b1_l1_l2_l3_n3_x2_beam_after_z1_miss`), and Z1 of R and F stays with its limit in
+the ignored record. By the decision rule the item is **partial**.
