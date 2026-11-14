@@ -22,6 +22,13 @@
 //!
 //! ADR 0491 (F-577): the viscoelastic material, whose complex modulus depends on the frequency, is refused (through
 //! [`SolidModel::check_supported`], naming [`crate::mat_visco::FOLLOW_UP`]); the direct harmonic solve takes it.
+//!
+//! ADR 0495 (F-582): with [`DampedOptions::viscoelastic_reference`] (a circular frequency `omega_ref`, and the temperature of
+//! a shifted material) the viscoelastic material is taken at that one frequency. The basis is the undamped modes of the model
+//! with each viscoelastic material replaced by the isotropic elastic material of its storage shear and bulk moduli at
+//! `omega_ref`; its loss stiffness `int B^T D'' B`, `D'' = 2 G'' I_dev + K'' 1 (x) 1` of the loss moduli, is projected on that
+//! basis and added to the loss stiffness `H` of the equation. Every root carries the moduli at `omega_ref`. Without the option
+//! the material is refused as before; the option on a model without the material is refused.
 
 use crate::assemble::{assemble_with, stiffness_with};
 use crate::constraint::{check_rigid_body_motions, prescribed_equations, reduce};
@@ -29,8 +36,9 @@ use crate::element::element_for;
 use crate::error::{FemError, Result};
 use crate::harmonic_direct::{Dashpot, LossFactor};
 use crate::mass::consistent_with;
+use crate::material::Matrix6;
 use crate::modal::{modal_analysis, ModalOptions};
-use crate::model::{DofMap, SolidModel};
+use crate::model::{DofMap, Material, SolidModel};
 use rcfd_linalg::complex::C64;
 use rcfd_linalg::eigen_general::{quadratic_eigen_with, Defect, GeneralEigenOptions};
 use rcfd_linalg::sparse_chol::SparseLdlt;
@@ -67,6 +75,10 @@ pub struct DampedOptions {
     pub loss_factors: Vec<(String, LossFactor)>,
     /// Static residual vectors of the dashpots in the basis (ADR 0464; default off).
     pub residual_vectors: bool,
+    /// The circular frequency, rad/s, at which a viscoelastic material is taken (ADR 0495; default none: refused).
+    pub reference_omega: Option<f64>,
+    /// The temperature, K, of a viscoelastic material with a time-temperature shift (ADR 0495; default none).
+    pub reference_temperature: Option<f64>,
 }
 
 impl DampedOptions {
@@ -82,7 +94,16 @@ impl DampedOptions {
             dashpots: Vec::new(),
             loss_factors: Vec::new(),
             residual_vectors: false,
+            reference_omega: None,
+            reference_temperature: None,
         }
+    }
+    /// With the viscoelastic material of the model taken at the circular frequency `omega` (rad/s) and, for a shifted
+    /// material, the temperature (ADR 0495): the basis from its storage moduli there, its loss moduli as loss stiffness.
+    pub fn viscoelastic_reference(mut self, omega: f64, temperature: Option<f64>) -> DampedOptions {
+        self.reference_omega = Some(omega);
+        self.reference_temperature = temperature;
+        self
     }
     /// With Rayleigh damping `a M + b K`.
     pub fn rayleigh(mut self, a: f64, b: f64) -> DampedOptions {
@@ -297,9 +318,103 @@ pub(crate) fn m_orthonormalise(mass: &CsrMatrix, r: &mut [f64], basis: &[&[f64]]
     true
 }
 
-/// The damped modes of a model with Rayleigh damping, dashpots and constant loss factors, on its lowest undamped modes.
+/// `2 G I_dev` in Voigt form with engineering shear strain (the shear part of an isotropic stiffness of shear modulus `g`).
+fn shear_matrix(g: f64) -> Matrix6 {
+    let mut d = [[0.0; 6]; 6];
+    for (i, row) in d.iter_mut().enumerate().take(3) {
+        for (j, v) in row.iter_mut().enumerate().take(3) {
+            *v = 2.0 * g * (if i == j { 1.0 } else { 0.0 } - 1.0 / 3.0);
+        }
+    }
+    for (k, row) in d.iter_mut().enumerate().skip(3) {
+        row[k] = g;
+    }
+    d
+}
+
+/// `K 1 (x) 1` in Voigt form.
+fn bulk_matrix(k: f64) -> Matrix6 {
+    let mut d = [[0.0; 6]; 6];
+    for row in d.iter_mut().take(3) {
+        for v in row.iter_mut().take(3) {
+            *v = k;
+        }
+    }
+    d
+}
+
+/// The viscoelastic materials taken at the reference frequency (ADR 0495 D1): the model with each replaced by the elastic
+/// material of its storage moduli, and per material index the loss matrix `D''`.
+struct ViscoReference {
+    storage: SolidModel,
+    loss: Vec<Option<Matrix6>>,
+}
+
+fn viscoelastic_reference(model: &SolidModel, options: &DampedOptions) -> Result<Option<ViscoReference>> {
+    let has = model
+        .materials()
+        .iter()
+        .any(|(_, m)| matches!(m, Material::Viscoelastic { .. }));
+    let Some(omega) = options.reference_omega else {
+        return Ok(None);
+    };
+    if !(omega.is_finite() && omega >= 0.0) {
+        return Err(invalid(
+            "reference frequency",
+            format!("{omega:e} rad/s (must be finite and >= 0)"),
+        ));
+    }
+    if !has {
+        return Err(invalid(
+            "reference frequency",
+            "a reference frequency is given but the model has no viscoelastic material (ADR 0495)".to_string(),
+        ));
+    }
+    let mut materials = Vec::with_capacity(model.materials().len());
+    let mut loss = Vec::with_capacity(model.materials().len());
+    for (set, material) in model.materials() {
+        if let Material::Viscoelastic { base, .. } = material {
+            let c = crate::mat_visco::complex_moduli(material, omega, options.reference_temperature)?;
+            let (gs, ks) = (c.shear.re, c.bulk.re);
+            let e = 9.0 * ks * gs / (3.0 * ks + gs);
+            let nu = (3.0 * ks - 2.0 * gs) / (2.0 * (3.0 * ks + gs));
+            let Material::IsotropicElastic { density, expansion, .. } = base.as_ref() else {
+                return Err(FemError::NotYetSupported {
+                    item: "material",
+                    variant: material.name(),
+                    location: "an orthotropic base".to_string(),
+                    package: crate::mat_visco::FOLLOW_UP,
+                });
+            };
+            materials.push((set.clone(), Material::isotropic_elastic(e, nu, *density, *expansion)?));
+            let (ds, db) = (shear_matrix(c.shear.im), bulk_matrix(c.bulk.im));
+            let mut d = [[0.0; 6]; 6];
+            for i in 0..6 {
+                for j in 0..6 {
+                    d[i][j] = ds[i][j] + db[i][j];
+                }
+            }
+            loss.push(Some(d));
+        } else {
+            materials.push((set.clone(), material.clone()));
+            loss.push(None);
+        }
+    }
+    Ok(Some(ViscoReference {
+        storage: model.with_materials(materials),
+        loss,
+    }))
+}
+
+/// The damped modes of a model with Rayleigh damping, dashpots and constant loss factors, on its lowest undamped modes. A
+/// viscoelastic material is taken at the reference frequency of the options (ADR 0495).
 pub fn damped_modes(model: &SolidModel, options: &DampedOptions) -> Result<DampedModes> {
     model.validate()?;
+    let visco = viscoelastic_reference(model, options)?;
+    let model = match &visco {
+        Some(v) => &v.storage,
+        None => model,
+    };
     model.check_supported()?;
     if crate::mpc::uses_transformation(model) {
         return Err(invalid(
@@ -323,6 +438,14 @@ pub fn damped_modes(model: &SolidModel, options: &DampedOptions) -> Result<Dampe
         })?;
         if eta[mi].is_some() {
             return Err(invalid("loss factor", format!("element set '{set}' given twice")));
+        }
+        if visco.as_ref().is_some_and(|v| v.loss[mi].is_some()) {
+            return Err(invalid(
+                "loss factor",
+                format!(
+                    "element set '{set}' carries a viscoelastic material, whose damping is its loss modulus (ADR 0495)"
+                ),
+            ));
         }
         match loss {
             LossFactor::Constant(e) => {
@@ -419,7 +542,7 @@ pub fn damped_modes(model: &SolidModel, options: &DampedOptions) -> Result<Dampe
             }
         }
     }
-    let hr = if eta.iter().any(|e| e.is_some()) {
+    let mut hr = if eta.iter().any(|e| e.is_some()) {
         let mut h = vec![0.0; m * m];
         if materials.len() == 1 {
             let e = eta[0].unwrap_or(0.0);
@@ -448,6 +571,25 @@ pub fn damped_modes(model: &SolidModel, options: &DampedOptions) -> Result<Dampe
     } else {
         None
     };
+    if let Some(v) = &visco {
+        let mut h = hr.unwrap_or_else(|| vec![0.0; m * m]);
+        let which = model.material_indices()?;
+        for (mi, d) in v.loss.iter().enumerate() {
+            let Some(d) = *d else { continue };
+            let km = assemble_with(model, threads, |ctx| {
+                if which[ctx.element] != mi {
+                    let size: usize = ctx.nodes.iter().map(|&a| dofs.components(a)).sum();
+                    return Ok(crate::element::ElementMatrix::zeros(size));
+                }
+                element_for(ctx.kind).stiffness(ctx.coords, &d)
+            })?;
+            let p = project(&km, phi);
+            for i in 0..m * m {
+                h[i] += p[i];
+            }
+        }
+        hr = Some(h);
+    }
     let q = quadratic_eigen_with(&mr, &cr, &kr, hr.as_deref(), m, &GeneralEigenOptions::default()).map_err(|e| {
         FemError::Solver {
             solver: "quadratic_eigen",

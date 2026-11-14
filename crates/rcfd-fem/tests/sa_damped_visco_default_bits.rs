@@ -104,7 +104,10 @@ fn n1_default_bits_of_the_base() {
         .rayleigh(5.0, 2e-6)
         .dashpot(Dashpot::ground(tip[0], 1, 30.0))
         .loss_factor("all", LossFactor::Constant(0.02));
-    got.push(("cantilever constant loss", digest(&flat(&damped_modes(&c, &o).unwrap()))));
+    got.push((
+        "cantilever constant loss",
+        digest(&flat(&damped_modes(&c, &o).unwrap())),
+    ));
 
     let o = DampedOptions::new(5)
         .rayleigh(5.0, 2e-6)
@@ -112,12 +115,18 @@ fn n1_default_bits_of_the_base() {
         .dashpot(Dashpot::between(tip[1], tip[2], 2, 1.0e4))
         .residual_vectors(true)
         .threads(2);
-    got.push(("cantilever residual vectors", digest(&flat(&damped_modes(&c, &o).unwrap()))));
+    got.push((
+        "cantilever residual vectors",
+        digest(&flat(&damped_modes(&c, &o).unwrap())),
+    ));
 
     let o = DampedOptions::new(6)
         .loss_factor("left", LossFactor::Constant(0.03))
         .loss_factor("right", LossFactor::Constant(0.01));
-    got.push(("two-material cantilever", digest(&flat(&damped_modes(&two_cantilever(), &o).unwrap()))));
+    got.push((
+        "two-material cantilever",
+        digest(&flat(&damped_modes(&two_cantilever(), &o).unwrap())),
+    ));
 
     let b = bar(steel(0.0));
     got.push(("bar", digest(&flat(&damped_modes(&b, &DampedOptions::new(6)).unwrap()))));
