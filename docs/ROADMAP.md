@@ -10079,12 +10079,21 @@ fixed by the item's registration ADR before any code.
     and the lumped-load mutation is caught.
   - note: Priority P3. Size S. Area: structural. Opened by ADR 0436: the consistent load of deck_pressure_loads is
     checked only on parallelogram faces, where lumping is exact (mutation not caught).
-- [ ] **F-524** Rotating plane-stress disc of Shell4 facets against the closed form
+- [x] **F-524** Rotating plane-stress disc of Shell4 facets against the closed form
   - depends on: F-522
   - acceptance: Every limit not stated here is registered in the ADR before the run. A flat annular disc of Shell4
     elements spinning about its axis has the radial displacement and the hoop and radial membrane stresses of the
     plane-stress rotating disc within limits registered from a discretisation estimate; the error decreases at the
     registered order under two mesh refinements.
+  - note: ADR 0439, 2026-11-12: rotating plane-stress annular disc of Shell4 facets against the closed form (tests only,
+    rcfd-fem/tests/si_shell_rotating_disc.rs, no library code). Full annulus b/a = 3, nu = 0.3, free edges, every node
+    on its circle, six point zeros on three bore nodes (tangential in-plane components and w) that remove the rigid
+    motions without restraining the expansion. Limits 1.5 times an independent prototype of the element (numpy, the
+    formulas of ADR 0432 and 0435), the two second-order sources derived (radial discretisation; chords, a ring of
+    chords carries 1 - Delta theta^2/6 of the hoop force). Levels 4 x 24, 8 x 48, 16 x 96: radial displacement 2.7e-2,
+    7.3e-3, 1.9e-3; radial stress 4.4e-2, 1.2e-2, 3.0e-3; hoop stress 1.4e-2, 3.7e-3, 9.3e-4 (each of its own peak);
+    observed orders 1.90 to 1.99 (limit 1.8); the element equals the prototype within 5.2e-10. Bending unknowns exactly
+    zero, reactions 2e-12. Bore-held and chord controls as expected; six mutations caught.
 - [ ] **F-525** Nodal body-force fields and thermal loads on Shell4
   - depends on: F-522
   - acceptance: Every limit not stated here is registered in the ADR before the run. Load::BodyForceNodal on a shell
