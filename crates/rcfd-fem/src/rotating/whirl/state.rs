@@ -20,6 +20,7 @@ use std::f64::consts::PI;
 use std::fmt::Write as _;
 
 mod sector;
+mod springs;
 pub use sector::{CyclicWhirlStability, HarmonicStateWhirl};
 
 /// `max|Re s| / max|s|` at or below which a speed is stable (ADR 0416 D3).
