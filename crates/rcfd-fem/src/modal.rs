@@ -11,7 +11,7 @@
 //! [`crate::mpc`] (`T^T K T`, `T^T M T`, the modes expanded by `T`; zero values only): [`crate::mpc::modal_analysis_mpc`]
 //! (ADR 0384).
 
-use crate::assemble::stiffness_with;
+use crate::assemble::stiffness_with_materials;
 use crate::constraint::{check_rigid_body_motions, prescribed_equations, reduce, Prescribed};
 use crate::error::{FemError, Result};
 use crate::mass::consistent_with;
@@ -156,8 +156,8 @@ pub fn modal_analysis(model: &SolidModel, options: &ModalOptions) -> Result<Moda
 pub fn modal_analysis_with(model: &SolidModel, extra: &[Prescribed], options: &ModalOptions) -> Result<ModalResult> {
     model.validate()?;
     // ADR 0417 D4, ADR 0432 D3, ADR 0435 D1: the elimination path and the transformation path take beams and shells (the
-    // transformation has its own check).
-    model.check_supported_with_structures()?;
+    // transformation has its own check). ADR 0457 D2: also the orthotropic and the tabulated material.
+    model.check_supported_with_materials()?;
     // Linear constraints, rigid sets and supports: the reduction by the transformation of ADR 0296 (ADR 0384).
     if crate::mpc::uses_transformation(model) {
         return crate::mpc::modal_analysis_mpc(model, extra, options).map(|s| s.result);
@@ -178,7 +178,7 @@ pub fn modal_analysis_with(model: &SolidModel, extra: &[Prescribed], options: &M
         Err(FemError::RigidBodyMotionFree { .. }) => true,
         Err(e) => return Err(e),
     };
-    let k = stiffness_with(model, options.threads)?;
+    let k = stiffness_with_materials(model, options.threads)?;
     let m = consistent_with(model, options.threads)?;
     let zero = vec![0.0; k.n];
     let kr = reduce(&k, &zero, &fixed)?;

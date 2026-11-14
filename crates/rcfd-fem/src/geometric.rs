@@ -13,7 +13,7 @@
 //!
 //! Linear buckling, `(K + lambda K_sigma) x = 0`, is [`crate::buckling::factors`].
 
-use crate::assemble::{assemble_with, stiffness_with};
+use crate::assemble::{assemble_with, point_stiffness};
 use crate::constraint::{check_rigid_body_motions, prescribed_equations, reduce};
 use crate::element::{element_for, Element, ElementMatrix};
 use crate::error::{FemError, Result};
@@ -106,7 +106,8 @@ impl Prestress {
 
     /// The same stress at every point of every element of `model`.
     pub fn uniform(model: &SolidModel, stress: [f64; 6]) -> Result<Prestress> {
-        model.check_elements_supported()?;
+        // ADR 0457 D2: also a model of the orthotropic or the tabulated material.
+        model.check_elements_solids_with_materials()?;
         let mesh = model.mesh();
         let mut offsets = Vec::with_capacity(mesh.n_elements() + 1);
         offsets.push(0);
@@ -184,6 +185,11 @@ impl Prestress {
 /// with `threads` workers (`None`: the available parallelism); bit-identical for any value.
 pub fn geometric_stiffness(model: &SolidModel, prestress: &Prestress, threads: Option<usize>) -> Result<CsrMatrix> {
     model.check_elements_supported()?;
+    assemble_geometric(model, prestress, threads)
+}
+
+/// The assembly of [`geometric_stiffness`] after its entry check (ADR 0457 D2: the pre-stressed modes make their own).
+fn assemble_geometric(model: &SolidModel, prestress: &Prestress, threads: Option<usize>) -> Result<CsrMatrix> {
     prestress.check_fits(model)?;
     assemble_with(model, threads, |ctx| {
         element_for(ctx.kind).geometric_stiffness(ctx.coords, prestress.of_element(ctx.element))
@@ -210,7 +216,8 @@ pub(crate) fn add_on_pattern(k: &CsrMatrix, kg: &CsrMatrix) -> CsrMatrix {
 /// refused (`FemError::Solver`).
 pub fn prestressed_modes(model: &SolidModel, prestress: &Prestress, options: &ModalOptions) -> Result<ModalResult> {
     model.validate()?;
-    model.check_supported()?;
+    // ADR 0457 D2: solid elements, also of the orthotropic and the tabulated material (the per-point stiffness).
+    model.check_supported_solids_with_materials()?;
     if crate::mpc::uses_transformation(model) {
         return prestressed_modes_on_transformation(model, prestress, options);
     }
@@ -230,8 +237,8 @@ pub fn prestressed_modes(model: &SolidModel, prestress: &Prestress, options: &Mo
         Err(FemError::RigidBodyMotionFree { .. }) => true,
         Err(e) => return Err(e),
     };
-    let kg = geometric_stiffness(model, prestress, options.threads)?;
-    let k = add_on_pattern(&stiffness_with(model, options.threads)?, &kg);
+    let kg = assemble_geometric(model, prestress, options.threads)?;
+    let k = add_on_pattern(&point_stiffness(model, options.threads)?, &kg);
     let m = consistent_with(model, options.threads)?;
     let zero = vec![0.0; k.n];
     let kr = reduce(&k, &zero, &fixed)?;
@@ -301,9 +308,9 @@ fn prestressed_modes_on_transformation(
     let dofs = model.dof_map();
     let tr = crate::mpc::transformation(model, &[])?;
     let n = tr.n_mesh();
-    let mut k = stiffness_with(model, options.threads)?;
+    let mut k = point_stiffness(model, options.threads)?;
     crate::mpc::add_supports(&mut k, model)?;
-    let kg = geometric_stiffness(model, prestress, options.threads)?;
+    let kg = assemble_geometric(model, prestress, options.threads)?;
     let a = add_on_pattern(&k, &kg);
     let m = consistent_with(model, options.threads)?;
     let zero = vec![0.0; tr.n_unknowns()];
