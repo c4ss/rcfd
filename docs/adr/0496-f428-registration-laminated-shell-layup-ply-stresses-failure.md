@@ -469,3 +469,11 @@ Not taken (open, for the maintainer): **the case-file key** (b4; it changes the 
 shell block of the case file, `layup = [{ material = "<name>", thickness = <m>, angle_deg = <deg> }, ...]` bottom first, as an
 alternative to `thickness`, with `[[material]]` entries naming the ply materials, and `[[ply_strength]]` keyed by the material
 name for the failure output. Recommendation: that form, with angles in degrees in the file and radians in the library.
+
+## Amendment 1 (2026-11-14): the superseded test of `si_shell_thermal.rs` is misnamed in D10; written before its corrected run
+
+D10 names `th4_th5_consistent_thermal_loads` as the test holding row N2 ("temperature on a Layup shell"). The row is in the
+next test of the file, `b3_n1_n2_mixed_model_bits_and_refusals` (found when the copy was made, before any run of it). The
+record and copy of D10 apply to that test: `#[ignore = "record: ..."]` on `b3_n1_n2_mixed_model_bits_and_refusals`, and the copy
+`b3_n1_n2_mixed_model_bits_and_refusals_after_f428` with N2 replaced by N2b (as registered), every other row unchanged.
+`th4_th5_consistent_thermal_loads` is not touched. No limit changes.
