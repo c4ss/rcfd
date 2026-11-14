@@ -276,7 +276,7 @@ Tests: `crates/rcfd-fem/tests/sa_gyro_sector_schur.rs` (4 tests, 1.5 s together)
 | N1 | the `eta` of ADR 0482, largest `|err/eta - 1|` where `eta > 1e-9` | `> 0.1` | 1.621 | as expected |
 | N2 | test-side estimate without the gyroscopic coupling | `> 0.1` | 0.999 | as expected |
 
-Records: below 1e-9 (14 modes, `err` from 1.0e-11 to 8.3e-10) `err/schur_eta` lies in `[0.9877, 1.0183]` (rounding of the
+Records: below 1e-9 (14 modes, `err` from 3.2e-12 to 8.3e-10) `err/schur_eta` lies in `[0.9877, 1.0183]` (rounding of the
 dense solves at the 1e-11 level). The unmatched split modes (the top half of the enlarged basis) all carry a `schur_eta` (no
 `None`), from 9.8e-4 to 73.6: they are poor approximations, and near the complement spectrum the frozen estimate is not
 validated (D3). Wall time of `split_modes` with the new value 0.007 to 0.21 s per index against 0.003 to 0.018 s for the same
