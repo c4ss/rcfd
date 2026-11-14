@@ -221,3 +221,93 @@ The limit (exact) is unchanged. The registered N6 stays in the file as an ignore
 line); the corrected test `n3_to_n7_layout_refusals_amended` re-runs N3, N4, N5, N7 (met in the first run, repeated unchanged
 because they sit in the same test) and N6b. By the decision rule the item is **partial** whatever N6b gives: a check was met only
 after an amendment made after its run.
+
+## Addendum 1: results, 2026-11-14
+
+Runs: `cargo test -p rcfd-post --release` (release profile, target directory in the scratch folder) for the whole crate (43 test
+binaries: 290 passed, 0 failed, 37 ignored, of which two are the new records of D4 and Amendment 1 and the rest pre-existing);
+after the one `cargo fmt -p rcfd-post` the three files of this item (`si_shell_output.rs`, `si_shell_output_bytes.rs`,
+`si_shell_output_vtk.rs`) were run again (all pass). `rcfd-fem` and every shared solver file are untouched (`solid_output.rs` and
+test files of `rcfd-post` only), so `baseline_hashes` was not run. `solid_loads.rs` not touched.
+
+| id | check | limit | measured | met |
+| --- | --- | --- | --- | --- |
+| S1 | displacement, rotation read back (S, S-prime); NaN rotation at node 10 only | `1e-15`; NaN exact | 0, 0; NaN exactly at node 10 | yes |
+| S2 | reaction, reaction_moment read back (S); absent for S-prime; moment NaN at node 10 | `1e-15`; exact | 0, 0; as stated | yes |
+| S3 | 11 points bit for bit, 4 cells of type 9, offsets `4, 8, 12, 16`, connectivity = element nodes | exact | as stated | yes |
+| S4 | six cell arrays against `shell::stresses` (S and S-prime) | `1e-15` | 0 for all six, both | yes |
+| S4b | `stress_top - stress_bottom` against `12 M / t^2` from the file | `1e-12` | 0 | yes |
+| S5 | point and cell array names and components | exact | as registered | yes |
+| S6 | `shell_fields` bits against the result and `shell::stresses`; file equals string | exact | equal | yes |
+| X1 | mixed beam-first model: types `3, 9, 9, 9, 9`, offsets, connectivity, NaN on the beam cell for the six shell arrays, NaN on the shell cells for the two section-force arrays, all read back; point arrays; names | exact / `1e-15` | 0 for every array; all patterns as stated | yes |
+| B1 | `si_beam_output_bytes.rs` unedited: six hashes and lengths | exact | all six equal | yes |
+| B1b | beam frame F with and without reactions: hash and length against Addendum 0 | exact | both equal (`0x34ff07d075a2933a`, 2637; `0xde67d0587843b447`, 2231) | yes |
+| B2 | whole `rcfd-post` suite, existing tests unedited except the ignore line of `si_shell_output.rs` | pass | 290 passed, 0 failed | yes |
+| R1 | `n2_shell_result_refused_by_the_solid_output_after_landed` passes; retired row ignored | pass | pass | yes |
+| N1 | Tet4 + Shell4 refused naming `Tet4`, `Shell4`, `ADR 0437` | exact | refused as stated | yes |
+| N2 | Hex8 box and a beam model refused by `shell_fields` with `no Shell4 block` | exact | refused | yes |
+| N3 | 33 unknowns: `length 33`, `expected 63` | exact | as stated | yes |
+| N4 | node 4 in another layout, both counts named | exact | `node 4 has 3 unknowns in the result and 6 in the model` | yes |
+| N5 | node 0 named | exact | as stated | yes |
+| N6 | 9 nodes, 27 unknowns: `the result numbers 9 nodes and the model 11` | exact | **missed as registered: refused by the length test (`length 27, expected 63`)**, a defective set-up (Amendment 1) | no |
+| N6b (amendment 1) | 12 nodes, 63 unknowns | exact | `the result numbers 12 nodes and the model 11` | yes (after the amendment) |
+| N7 | own layout accepted by both entry points | exact | accepted | yes |
+| N8 | Shell4 block without thickness refused naming `Shell property` | exact | `block 0 (Shell4) has no Shell property` | yes |
+
+Mutations (scratch copy `f521-scratch/mut`, `mutate.py`, logs `mutations.log`, `mutations2.log`; one at a time):
+
+| id | mutation | caught by |
+| --- | --- | --- |
+| MU1 | `rotation` from components 0 to 2 | S1 (and X1, R1) |
+| MU2 | `reaction_moment` from components 0 to 2 | S2 (and X1) |
+| MU3 | `stress_bottom` from `top` | S4 (and X1, R1) |
+| MU4 | `shear_force` from `bending` | S4 (and X1, R1) |
+| MU5 | shell path for every model | B1 (`b0`, `b1`), B1b |
+| MU6 | quad connectivity reversed | S3 (and X1) |
+| MU7 | layout check removed from `shell_fields` | N4, N5 and N6b, which sit in the amended test; N4 and N5 had been run and met in the registered test before the amendment |
+| MU8 | NaN fill written as 0 | X1 |
+| MU9 | shell rows placed by running count | X1 |
+| MU10 | beam tested before shell | X1 |
+| MU11 | refusal of solid blocks removed | N1 |
+| MU12 | `shell_axes` written as `e_1` for all three rows | S4 (and X1, R1) |
+
+All twelve caught by a check registered before the run. MU12 as run differs from the registered text (all three rows `e_1`, not
+`e_1, e_1, e_3`); it is the same kind of fault.
+
+Deviations:
+
+- Amendment 1 (N6 set-up) after the first run: N6 was a defective set-up (27 unknowns against 63), written into the registration
+  without counting the unknowns of the second fixture.
+- Fixture X as registered said "node 12 of no element replaces node 10" without saying what node 10 is. As built, nodes 10 (at
+  `(1, 1, 1)`) and 12 (at `(2, 2, 2)`) are both of no element, both with components 0 to 2 prescribed zero, node 11 the beam end;
+  13 nodes, 72 unknowns. X1 tested NaN at nodes 10 and 12. No limit changed.
+- `cargo fmt` reformatted two files after the first whole-crate run (import order, line wraps); the new tests were re-run after it.
+- The tag of S-prime in the tests is `Sp`; the check texts are as registered.
+- `check_layout` was extracted from `beam_fields` (same code, same texts): the beam bytes (B1b) and the layout checks C1 to C5 of
+  ADR 0430 (`si_beam_layout.rs`, in the whole-crate run) are unchanged.
+
+Not run: the whole workspace (the lead's gate); `baseline_hashes` (no shared solver file changed); results of the modal path of
+shell models (L3).
+
+fmt (`cargo fmt -p rcfd-post --check`) and clippy (`cargo clippy -p rcfd-post --all-targets -- -D warnings`): clean.
+
+**Decision by the registered rule: partial.** Every acceptance clause (a1 to a6) is met and all twelve mutations are caught, but
+N6 missed as registered (a defective set-up in the registration) and N6b was met only after Amendment 1.
+
+### Remaining questions
+
+1. **Close F-521 on N6b?** Options: (a) accept partial with N6b recorded; (b) no further work. Recommendation: (a): the
+   node-count refusal is the shared `check_layout`, also covered for the beam by C4 of ADR 0430, and no acceptance clause depends
+   on it.
+2. **Shell-solid mixed models (L1).** Options: (a) a follow-up once a shell-solid joint exists (ADR 0432); (b) leave refused.
+   Recommendation: (a), after the joint.
+3. **Global-axis resultants.** The cell arrays are in local axes with `shell_axes` beside them. Options: (a) leave; (b) add
+   global-axis arrays for display. Recommendation: (a) until a user asks.
+
+## For the lead: roadmap entries
+
+F-521: proposed status **partial**. Note:
+
+> Structural solver, intermediate tier. ADR 0437, 2026-11-14: rcfd_post::solid_output writes a model with Shell4 blocks through shell_fields: point arrays displacement (3), rotation (3, NaN at a node with three unknowns), reaction and reaction_moment (3 each, when the result carries reactions); Shell4 as VTK_QUAD (type 9) cells in element order; cell arrays membrane_force (3), moment (3), shear_force (2), stress_top (3), stress_bottom (3) and shell_axes (9) from rcfd_fem::shell::stresses at the element centre in local axes. A model mixing Beam2 with Shell4 is written too (beam cells NaN in the shell arrays, shell cells NaN in section_force_start and section_force_end); a solid block with Shell4 is refused naming ADR 0437. Read back: every array equal to the result (error 0, limit 1e-15). A model without shells writes the same bytes: the six F-377 fixtures (F-512 test unedited) and the beam frame (hash and length recorded at af0fd223) equal. The retired refusal row of ADR 0432 is an ignored record with a running copy. The layout refusals of ADR 0430 are shared with the beam output. Twelve mutations all caught. Partial: the registered node-count check N6 had a defective set-up (27 unknowns against 63 reached the length test), corrected as N6b by Amendment 1 after the run.
+
+No other item's note changes. No follow-up item is proposed beyond open question 2 (a shell-solid joint output), which waits for the joint.
