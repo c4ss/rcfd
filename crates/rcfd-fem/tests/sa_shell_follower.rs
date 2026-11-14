@@ -455,6 +455,7 @@ fn mean_stretch(model: &SolidModel, u: &[f64]) -> f64 {
 }
 
 #[test]
+#[ignore = "superseded by ADR 0490 (F-578): the Newton driver takes shells; ADR 0487 D0 record"]
 fn c1r_the_newton_driver_refuses_shells() {
     let mut ck = Checks::new();
     for (tri, want) in [(false, "Shell4"), (true, "Shell3")] {

@@ -66,6 +66,7 @@ pub mod rotating;
 pub mod rotor;
 pub mod shell;
 pub mod shell3;
+pub mod shell_corot;
 pub mod solve;
 pub mod thermal;
 pub mod tie;

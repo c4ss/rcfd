@@ -352,3 +352,16 @@ record with a fast test on the same path (house rule 7); none is expected.
    (a): the acceptance's law is the SVK ring; (b) would not meet (a5) for any stretch beyond about 1.01.
 4. **Dead or follower moment** (b4). Taken the dead `NodalMoment` about the fixed axis, equal to the follower moment for the
    planar roll-up (D1, D5), with the closed form derived in D5.
+
+## Amendment 1 (2026-11-14): how the per-step values of the roll-up are read; written before any run
+
+Written after the code and the tests were written and compiled, before any run of a registered check. No limit changes.
+
+1. `nonlinear::solve` returns the displacement at the load factor 1 only, so the per-step values of RU4, RU4b, RU3, RU4a and
+   RU4f are read as in ADR 0487 C1: the same strip by `solve_with` with one zero contribution that records the displacement of
+   each call (the driver calls the contributions at every iteration, the converged iterate included); a step's displacement is
+   that of the last call at its load factor. The run by `nonlinear::solve` (the registered call) is made as well and must give
+   the final displacement of the recorder run (values equal; the zero contribution adds `+0.0`, which can change the sign of a
+   zero only). This equality is a condition of the set-up, printed and asserted with the checks.
+2. RU4f registers `e` and the out-of-plane values only; its tip-rotation error is printed as a record.
+3. X2 was applied with the code: the attribute of D6 on `c1r_the_newton_driver_refuses_shells`, its body unchanged.
