@@ -10034,13 +10034,25 @@ fixed by the item's registration ADR before any code.
     whirl state solver of ADR 0428 is refined by inverse iteration at its own eigenvalue, so that on the cube of ADR
     0416 at both registered shifts with count 6 every stored mode residual is at most 1e-8, while the eigenvalues still
     equal the dense state solver's within 1e-9 relative and the stability flags agree.
-- [ ] **F-521** Shell results in the solid output: VTK quad cells, rotations and the resultants as cell data
+- [~] **F-521** Shell results in the solid output: VTK quad cells, rotations and the resultants as cell data
   - depends on: F-392, F-512
   - acceptance: Every limit not stated here is registered in the ADR before the run. rcfd_post::solid_output writes a
     model with Shell4 elements: displacement and rotation point arrays, reaction forces and moments, Shell4 as VTK quad
     cells and the membrane forces, moments, shear forces and top and bottom surface stresses of
     rcfd_fem::shell::stresses as cell data; a model without shells writes the bytes it wrote before; the arrays read
     back equal the result within 1e-15.
+  - note: Structural solver, intermediate tier. ADR 0437, 2026-11-14: rcfd_post::solid_output writes a model with Shell4
+    blocks through shell_fields: point arrays displacement (3), rotation (3, NaN at a node with three unknowns),
+    reaction and reaction_moment (3 each, when the result carries reactions); Shell4 as VTK_QUAD (type 9) cells in
+    element order; cell arrays membrane_force (3), moment (3), shear_force (2), stress_top (3), stress_bottom (3) and
+    shell_axes (9) from rcfd_fem::shell::stresses at the element centre in local axes. A model mixing Beam2 with Shell4
+    is written too (beam cells NaN in the shell arrays, shell cells NaN in section_force_start and section_force_end); a
+    solid block with Shell4 is refused naming ADR 0437. Read back: every array equal to the result (error 0, limit
+    1e-15). A model without shells writes the same bytes: the six F-377 fixtures (F-512 test unedited) and the beam
+    frame (hash and length recorded at af0fd223) equal. The retired refusal row of ADR 0432 is an ignored record with a
+    running copy. The layout refusals of ADR 0430 are shared with the beam output. Twelve mutations all caught. Partial:
+    the registered node-count check N6 had a defective set-up (27 unknowns against 63 reached the length test),
+    corrected as N6b by Amendment 1 after the run.
 - [x] **F-522** Shells on the transformation path and body loads on shells: rigid sets and supports on shell nodes, gravity and centrifugal loads
   - depends on: F-392, F-513
   - acceptance: Every limit not stated here is registered in the ADR before the run. Gravity on a shell model gives
