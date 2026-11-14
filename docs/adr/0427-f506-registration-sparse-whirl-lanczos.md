@@ -307,3 +307,99 @@ corrected control (registered now, run once):
 The corrected test `u1_r1_n1b_algebraic` holds U1 and R1 unchanged (the same code and limits; deterministic, so their values are
 those of the record, compared in the addendum) and N1b in place of N1. The decision rule is unchanged; by it the item is at most
 **partial** (a control met only after an amendment made after its run).
+
+## Addendum 1: results (2026-11-14)
+
+Code: `crates/rcfd-fem/src/rotating/whirl/sparse.rs` (new, 586 lines with one development unit test against the dense solver on
+random banded problems, run before the registered run, not a registered check); `crates/rcfd-fem/src/rotating/whirl.rs` (`mod
+sparse` and the `pub use`, new lines 41 to 43; the doc of `frequencies_all`, 145 to 146; in `RotatingPart::whirl_at`, lines 767
+to 822, and `RotatingSector::whirl_at`, lines 955 to 1021, the dense lines are wrapped in the `else` of the new branch and the
+whirl number is computed in that branch from the same inputs, so the dense bits are unchanged, R2); `crates/rcfd-fem/src/rotating.rs`
+(module comment 30 to 33, re-export 58, field 125 to 126, default 138, builder 161 to 165; additive). Tests:
+`crates/rcfd-fem/tests/si_rotating_whirl_sparse.rs` (4 fast tests, 4.0 s in release together; the record
+`u1_r1_n1_algebraic_known_miss` and the heavy record `t1_t2_t3_large_part`, both ignored). Registered runs: the fast tests once
+(`f506-scratch/run1.log`), the heavy test once (`heavy1.log`, 40.6 s in all), the corrected N1b once (`run2.log`, amendment 1;
+U1 and R1 in it gave the values of the record line for line). After `rustfmt` and one clippy rewrite of the breakdown predicate
+(the same predicate: `beta > 1e-13 max beta` false or NaN), the whole `cargo test -p rcfd-fem --release` ran (`fem-all.log`),
+with the fast tests in it; deterministic, not a selection.
+
+| # | Check | Limit | Measured | Met |
+|---|---|---|---|---|
+| A1 | registration committed alone first | holds | `128e2ab6` before `b9ec8b78` | yes |
+| A2 | MP (2112 unknowns): `Dense` refused `"unknowns"`, `Sparse` 10 modes; no dense matrix on the sparse path | each | holds; LP solved at `n = 20 064` (a dense state would be 12.9 GB) | yes |
+| E1 | cube frequencies, 5 speeds | `<= 1e-9` | 6.7e-13 | yes |
+| E2 | cube whirl numbers (0 modes excluded) | `<= 1e-8` | 2.2e-16 | yes |
+| E3 | DS frequencies, `k = 0 .. 3`, both speeds | `<= 1e-9` | 1.7e-13 | yes |
+| E4 | DS whirl numbers (0 excluded) | `<= 1e-8` | 4.6e-14 | yes |
+| E5 | DF frequencies; whirl numbers (0 excluded) | `<= 1e-9`; `<= 1e-8` | 9.8e-14; 2.0e-15 | yes |
+| E6 | Coriolis off (double frequencies): DS `k = 1`; DF | `<= 1e-9` | 1.4e-13; 1.6e-13 | yes |
+| Q1 | sparse residuals: random / cube / DS and DF / MP / LP on / LP off | `<= 1e-9` | 1.4e-15 / 2.8e-12 / 3.5e-13 / 2.0e-12 / 3.5e-12 / 4.6e-12 | yes |
+| U1 | random matrices, orders 1 to 30 | `<= 1e-9` | 1.2e-15 (runs 1, 1, 1, 1, 2: the space is exhausted up to order 12) | yes |
+| M1 | MP `Auto` bits of `Sparse` | identical | identical | yes |
+| M2 | MP against the dense sector union `k = 0 .. 8` (valid) | `<= 1e-8` | 7.1e-13 | yes |
+| M3 | MP whirl numbers against the union (0 excluded) | `<= 1e-6` | 6.8e-15 | yes |
+| M4 | MP Coriolis off against `modes` | `<= 1e-8` | 3.7e-14 | yes |
+| T1 | LP unknowns; wall time `new + whirl_modes`, release | `>= 20 000`; `< 120 s` | 20 064; **6.3 s** (`new` 1.0 s, `whirl_modes` 5.3 s) | yes |
+| T2 | LP against the dense sector union `k = 0 .. 76` (valid) | `<= 1e-8` | 1.5e-12 (whirl numbers, recorded: 6.1e-14) | yes |
+| T3 | LP Coriolis off against `modes` | `<= 1e-8` | 4.4e-14 | yes |
+| R1 | refusals `matrix`, `modes` twice, `stiffness`, `mass` | each | holds | yes |
+| R2 | default `Dense`; `Dense` and `Auto` below the cap bit-identical to the default (cube, DS `k = 1`); `cargo test -p rcfd-fem --release` | each | holds; 339 passed, 0 failed, 70 ignored | yes |
+| R3 | `cargo check -p rcfd-post --tests` | passes | passes | yes |
+| N1 | one run on `diag(1, 1, 4, 4, ...)` misses the copies | `> 0.1` | **0, not as expected**: the run found `1, 1, 2, 2, 3, 3` (amendment 1) | **no** |
+| N1b | (amendment 1) one run on `K = M = I`: refused; default both `1` | refused; `<= 1e-12` | refused (1 of 2 converged in 1 run, 2 steps); 4.4e-16 (3 runs) | after amendment |
+| N2 | sparse off against dense on (cube) | `> 1e-2` | 0.73 | as expected |
+
+LP spectrum at `0.4 omega_lp = 620.8 rad/s`: 1696.0 and 1717.6 (a split bending pair, `kappa = +/-0.017`), 1801.3 (`kappa ~
+0`), 2119.4, 2163.3, 2408.2, 3689.6, 3757.6, 4860.8 and 5781.8 rad/s (an in-plane pair, `kappa = +0.78 / -0.69`); with the
+Coriolis matrix off the pairs are double to `1e-13` and both copies were found (T3).
+
+Mutations (on a `git archive` copy of `87d9406f` in `f506-scratch/mut`, script `mutate.py`, logs `mut_*.log`, each run once
+against the fast tests): all eight caught.
+
+| Mutation | Caught by |
+|---|---|
+| 1 sign of `G` in `W` | E2, E4, E5, M3 (whirl numbers), Q1 (cube, DS, MP, random) |
+| 2 no restart (`max_runs = 1`) | every fast test: the solver's refusal "not confirmed by a deflated run" at the sparse solve before E1, E3, A2, U1 (the registration expected E6, M4: the refusal comes first) |
+| 3 reorthogonalisation dropped | E1, E2, Q1, U1 (and the refusal after 8 runs in MP and DS) |
+| 4 `TOL = 1e-6` | Q1 only (MP 1.9e-7, DS 2.8e-8); E2 and E4 were met (the registration expected them) |
+| 5 `omega` from the positive `mu` | E2, E4, E5, M3, Q1 |
+| 6 the phase matrix `D` dropped | E1 to E6, M2 to M4, U1, Q1 |
+| 7 `Auto` reversed | R2 (cube and sector), M1 (refused `"unknowns"`) |
+| 8 deflation removed | E1, E2, U1, Q1, and the refusal after 8 runs (MP, DS) |
+
+`cargo fmt -p rcfd-fem --check`: clean (after one rustfmt commit, layout only). `cargo clippy -p rcfd-fem --all-targets -- -D
+warnings`: clean (after replacing `!(beta > x)` by the `partial_cmp` form, the same predicate). `baseline_hashes` not run: no
+crate outside `rcfd-fem` and `rcfd-post` uses `rotating` (grep), the default path is the existing code (R2 bit-identical, the
+whole `rcfd-fem` suite passes), as for ADR 0411.
+
+Deviations: N1's premise was wrong (amendment 1; the record `u1_r1_n1_algebraic_known_miss`); the expectations of mutations 2 and
+4 named other checks than those that caught them. The heavy test made a rest-frequency probe (`new` and `whirl_modes(0)`) before
+the timed span, so the timed span may have run on warm caches (disclosed). Not run: speeds above the loss of stiffness, shifts
+other than 0, threads (all registered as limits).
+
+**Decision by the registered rule: partial.** Every check of the acceptance (A2, E1 to E4, T1) and every other registered check
+was met and every mutation caught, but the negative control N1 was not as expected, and its corrected form N1b was met only after
+amendment 1, written after the run; the rule makes that partial.
+
+### Remaining questions
+
+1. Status. Options: (a) partial by the rule (the miss is a negative control whose premise was wrong; every clause met); (b) done,
+   if the lead reads the rule's "check" as excluding negative controls. Recommendation: (a), as the rule is written; no follow-up
+   is needed for the clauses.
+2. A sparse path for the state solver above the loss of stiffness (ADR 0416, `M*` indefinite) and the sector stability (ADR 0420).
+   Options: (a) leave them dense; (b) a shift-invert Arnoldi process on the state matrix with the same factor. Recommendation: (a)
+   until a fan sector above the cap needs a stability map.
+3. Selection. Options: (a) keep `Dense` the default and `Auto` opt-in; (b) make `Auto` the default (no result below the cap
+   changes; the refusal above the cap becomes a result). Recommendation: (a) now; (b) changes what a default call returns above the
+   cap, so it is the maintainer's.
+
+### For the lead: roadmap entries
+
+F-506, proposed status **partial**. New note:
+
+> From ADR 0411 question 2 (b), recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0427, 2026-11-14: the lowest whirl modes by a shift-invert skew Lanczos process on the state form of ADR 0411 in the M* inner product (W = G*^-1 M*, W [a; b] = [-b; K^-1 (M a + G b)], one solve with the skyline factor of K_eff per step, M factored as the positive-definiteness test; equivalent to Lanczos on A^-1 of ADR 0411), full reorthogonalisation, deflated restarts with locking for multiple frequencies; opt-in WhirlSolver (Dense the default, Sparse, Auto above the cap of 1500); the cube and the disc sector equal the dense solver within 6.7e-13 (frequencies) and 4.6e-14 (whirl numbers), double frequencies with Coriolis off found within 1.6e-13; a ring of 20 064 reduced unknowns solved in 6.3 s (new + whirl_modes, release) and equal to its dense sector union within 1.5e-12; all eight mutations caught; partial because the negative control N1 (one run blind to double frequencies) was not as expected (rounding found the copies on a spread spectrum) and its corrected form was met only after an amendment.
+
+Proposed follow-up (from question 2, only if the lead wants it), "Sparse whirl state solver above the loss of stiffness", deps
+F-506, F-505:
+
+> Every limit not stated here is registered in the ADR before the run. Above the loss of stiffness, the whirl state of a part above the dense cap by a shift-invert Arnoldi process on the state matrix of ADR 0416 with a sparse factor of K_eff - sigma M at a registered shift; on the cube of ADR 0416 and the disc sector of ADR 0420 the eigenvalues equal the dense state solver's within 1e-9 relative and the stability flags agree.
