@@ -341,7 +341,11 @@ fn arnoldi(op: &Op, opts: &SparseStateOptions) -> Result<Run> {
             if breakdown || last {
                 return Err(not_converged(format!(
                     "{count} Ritz values not converged in {m} Arnoldi steps ({})",
-                    if breakdown { "breakdown" } else { "the largest number of steps" }
+                    if breakdown {
+                        "breakdown"
+                    } else {
+                        "the largest number of steps"
+                    }
                 )));
             }
         }
@@ -430,7 +434,9 @@ fn solve(k: &CsrMatrix, m: &CsrMatrix, g: &CsrMatrix, scale: f64, opts: &SparseS
     let n = k.n;
     let sigma = opts.shift;
     if !(sigma.is_finite() && sigma > 0.0) {
-        return Err(shift_refused(format!("{sigma} is not a finite shift above 0 (rad^2/s^2)")));
+        return Err(shift_refused(format!(
+            "{sigma} is not a finite shift above 0 (rad^2/s^2)"
+        )));
     }
     if !(opts.tolerance > 0.0 && opts.tolerance < 1.0) {
         return Err(FemError::InvalidValue {

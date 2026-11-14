@@ -249,9 +249,17 @@ fn p1_u1b_q1_i1_r1_n1_algebraic() {
     // P1: the isotropic point mass at 1.5 omega_0.
     let w = 1.5 * W0;
     let (k, m, g) = point_mass(W0, W0, w);
-    let r = gyroscopic_state_eigen_sparse(&csr(&k, 2), &csr(&m, 2), &csr(&g, 2), &SparseStateOptions::new(SIGMA_A, 2))
-        .unwrap();
-    println!("PMI: eigenvalues {:?}, {:?}, omegas {:?}", r.eigenvalues, r.stability, r.omegas);
+    let r = gyroscopic_state_eigen_sparse(
+        &csr(&k, 2),
+        &csr(&m, 2),
+        &csr(&g, 2),
+        &SparseStateOptions::new(SIGMA_A, 2),
+    )
+    .unwrap();
+    println!(
+        "PMI: eigenvalues {:?}, {:?}, omegas {:?}",
+        r.eigenvalues, r.stability, r.omegas
+    );
     let p1i = if r.omegas.len() == 2 {
         (r.omegas[0] / (w - W0) - 1.0)
             .abs()
@@ -267,8 +275,13 @@ fn p1_u1b_q1_i1_r1_n1_algebraic() {
     let w = 1.1 * W0;
     let (k, m, g) = point_mass(W0, WY, w);
     let (lp, lm) = closed(W0, WY, w);
-    let r = gyroscopic_state_eigen_sparse(&csr(&k, 2), &csr(&m, 2), &csr(&g, 2), &SparseStateOptions::new(SIGMA_A, 2))
-        .unwrap();
+    let r = gyroscopic_state_eigen_sparse(
+        &csr(&k, 2),
+        &csr(&m, 2),
+        &csr(&g, 2),
+        &SparseStateOptions::new(SIGMA_A, 2),
+    )
+    .unwrap();
     println!(
         "PMA: eigenvalues {:?}, {:?}, growth {:?}, omegas {:?} (closed growth {}, frequency {})",
         r.eigenvalues,
@@ -312,8 +325,13 @@ fn p1_u1b_q1_i1_r1_n1_algebraic() {
             }
         }
         let d = gyroscopic_state_eigen_dense(&k, &m, &g, n).unwrap();
-        let r = gyroscopic_state_eigen_sparse(&csr(&k, n), &csr(&m, n), &csr(&g, n), &SparseStateOptions::new(1.0, count))
-            .unwrap();
+        let r = gyroscopic_state_eigen_sparse(
+            &csr(&k, n),
+            &csr(&m, n),
+            &csr(&g, n),
+            &SparseStateOptions::new(1.0, count),
+        )
+        .unwrap();
         let (dev, valid, _, covered) = compare(&r.eigenvalues, &d.eigenvalues, 1.0);
         println!(
             "RND n = {n}: {} eigenvalues, deviation {dev:.3e}, boundary valid {valid}, sparse {:?}, dense {:?}, unstable \
@@ -467,7 +485,11 @@ fn e1_f1_l1_w1_q1_i1_n2_n3_cube_known_miss() {
     }
     ch.holds("E1 boundary", valid, "every reference boundary valid");
     ch.le("E1 cube eigenvalues against the dense state solver", e1, 1e-9);
-    ch.holds("F1 flags", flags, "the sparse flag equals the dense flag at every speed and shift");
+    ch.holds(
+        "F1 flags",
+        flags,
+        "the sparse flag equals the dense flag at every speed and shift",
+    );
     ch.holds(
         "F1 expected flags",
         expected,
@@ -555,7 +577,11 @@ fn e1_f1_l1_w1_i1_n2_n3_cube_amended() {
     }
     ch.holds("E1 boundary", valid, "every reference boundary valid");
     ch.le("E1 cube eigenvalues against the dense state solver", e1, 1e-9);
-    ch.holds("F1 flags", flags, "the sparse flag equals the dense flag at every speed and shift");
+    ch.holds(
+        "F1 flags",
+        flags,
+        "the sparse flag equals the dense flag at every speed and shift",
+    );
     ch.holds(
         "F1 expected flags",
         expected,
@@ -721,10 +747,7 @@ fn e2_f2_e3_w1_q1_i1_r1_disc_sector() {
     let sector = sector_model(sectors, [2, 1, 1]);
     let (w_ref, stress, _, _, w_t) = test_speed(&sector, sectors);
     let rs = RotatingSector::new(&sector, &options(8, stress)).unwrap();
-    let shifts = [
-        ("sigma_a", (0.5 * w_ref).powi(2)),
-        ("sigma_b", (2.0 * w_ref).powi(2)),
-    ];
+    let shifts = [("sigma_a", (0.5 * w_ref).powi(2)), ("sigma_b", (2.0 * w_ref).powi(2))];
     let (mut e2, mut q1, mut i1, mut w1): (f64, f64, f64, f64) = (0.0, 0.0, 0.0, 0.0);
     let (mut valid, mut flags, mut rotor, mut some_loss) = (true, true, true, false);
     let mut w1n = 0;
@@ -758,8 +781,16 @@ fn e2_f2_e3_w1_q1_i1_r1_disc_sector() {
     }
     ch.holds("E2 boundary", valid, "every reference boundary valid");
     ch.le("E2 DS eigenvalues against the dense sector state solver", e2, 1e-9);
-    ch.holds("F2 index flags", flags, "the sparse flag equals the dense flag per index");
-    ch.holds("F2 rotor flag", rotor, "combined sparse flags equal the combined dense flags");
+    ch.holds(
+        "F2 index flags",
+        flags,
+        "the sparse flag equals the dense flag per index",
+    );
+    ch.holds(
+        "F2 rotor flag",
+        rotor,
+        "combined sparse flags equal the combined dense flags",
+    );
     ch.holds("L1 DS", some_loss, "an index has lost stiffness at Omega_T");
     println!("W1 DS: {w1n} modes compared");
     ch.le("W1 DS whirl numbers", w1, 1e-6);
@@ -773,7 +804,10 @@ fn e2_f2_e3_w1_q1_i1_r1_disc_sector() {
         let r = fp.whirl_state_sparse(w_t, &SparseStateOptions::new(sigma, 8)).unwrap();
         print_sparse(&format!("DS full {sname}"), &r);
         let (dev, ok, _, _) = compare(&r.eigenvalues, &fd.eigenvalues, sigma);
-        println!("  E3 deviation {dev:.3e}, boundary valid {ok}; dense {:?}", fd.stability);
+        println!(
+            "  E3 deviation {dev:.3e}, boundary valid {ok}; dense {:?}",
+            fd.stability
+        );
         e3 = e3.max(dev);
         v3 &= ok;
         f3 &= same_flag(r.stability, fd.stability);
@@ -840,7 +874,11 @@ fn a2_m1_m2_q1_i1_medium_ring() {
         union.extend_from_slice(&h.state.eigenvalues);
         dflags.push(h.state.stability);
     }
-    println!("MP dense sector union {:.2} s, {} eigenvalues", t.elapsed().as_secs_f64(), union.len());
+    println!(
+        "MP dense sector union {:.2} s, {} eigenvalues",
+        t.elapsed().as_secs_f64(),
+        union.len()
+    );
     let (dev, ok, _, covered) = compare(&r.eigenvalues, &union, sigma);
     ch.holds("M1 boundary", ok, "the reference boundary valid");
     ch.le("M1 MP against the dense sector union", dev, 1e-8);

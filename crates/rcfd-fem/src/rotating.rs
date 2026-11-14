@@ -66,8 +66,8 @@ pub use whirl::{
     gyroscopic_state_eigen_dense, DenseStateWhirl, Stability, StateWhirl, StateWhirlMode, WhirlStability,
     STABILITY_TOLERANCE,
 };
-pub use whirl::{CyclicWhirlStability, HarmonicStateWhirl};
 pub use whirl::{gyroscopic_state_eigen_sparse, SparseStateEigen, SparseStateOptions, SparseStateWhirl};
+pub use whirl::{CyclicWhirlStability, HarmonicStateWhirl};
 
 fn unit_axis(axis: Vec3) -> Result<Vec3> {
     let len = norm(axis);
