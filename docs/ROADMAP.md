@@ -10638,13 +10638,22 @@ fixed by the item's registration ADR before any code.
     vectors within 2.2e-15. Without the option the nine F-414/F-532 results are bit-identical (shares 0, no flag).
     Partial: the registered check D3 (option-on digests including notes) missed because an option-on result gains a note
     by design; the corrected D3b (numbers without notes) was met after amendment 1. Seven of seven mutations caught.
-- [ ] **F-549** Drilling membrane for Shell4 matching the ANDES edge
+- [x] **F-549** Drilling membrane for Shell4 matching the ANDES edge
   - depends on: F-539, F-392
   - acceptance: Every limit not stated here is registered in the ADR before the run. An opt-in Shell4 membrane with the
     vertex-rotation edge field of ADR 0466, so that ANDES Shell3 and Shell4 may share edges: the mixed Shell3 + Shell4
     membrane patch of ADR 0454 within 1e-8, the 8 x 2 in-plane cantilever strip of ADR 0466 on quadrilaterals within 2 %
     of beam theory, defaults bit-identical.
-  - note: Structural solver, advanced tier. Follow-up of F-539 (ADR 0466, 2026-11-14): the PT5 mixed-mesh miss.
+  - note: Structural solver, advanced tier. Follow-up of F-539 (ADR 0466, 2026-11-14): the PT5 mixed-mesh miss. F-549
+    (ADR 0470, 2026-11-14): an opt-in drilling membrane for Shell4 through `BlockProperty::shell4_with_membrane(t,
+    Shell4Membrane::AndesOpt)`: the mean of the two diagonal splits into ANDES OPT triangles (the Shell3 membrane of ADR
+    0466), no drilling penalty; every edge carries the ANDES edge field with weight one (derived), so ANDES Shell3 and
+    Shell4 share edges, and the refusal of mixed drilling edges is lifted for that pairing only. Met: the mixed Shell3 +
+    Shell4 membrane patch of ADR 0454 2.1e-14 (limit 1e-8; 2.1e-1 with the default Shell4), all-Shell4 patches 2.2e-14
+    and 2.9e-15; 8 x 2 in-plane cantilever strip on quadrilaterals 0.99579 of Timoshenko beam theory (end couple
+    0.99676; default bilinear 0.884); pure bending of rectangles exact to 2.6e-14; six zero modes per element and per
+    free plate; consistent thermal load and centre stresses; within 4.6e-11 of a numpy prototype. Default Shell4, Shell3
+    and the ANDES Shell3 bit-identical (17 digests), baseline_hashes unchanged; twelve mutations caught.
 - [ ] **F-550** A non-vanishing scale for the outer-iteration criterion
   - depends on: F-536
   - acceptance: Every limit not stated here is registered in the ADR before the run. The opt-in outer-iteration
