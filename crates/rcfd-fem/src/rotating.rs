@@ -153,6 +153,10 @@ pub struct RotatingOptions {
     pub coriolis: bool,
     /// The eigensolver of the whirl analyses at speeds above zero (default [`WhirlSolver::Dense`], ADR 0411; ADR 0427).
     pub whirl_solver: WhirlSolver,
+    /// Whether the sector split modes ([`RotatingSector::split_modes`], [`RotatingSector::split_campbell`]) with
+    /// [`RotatingOptions::coriolis`] add the static correction vectors `K_eff^-1 C phi_i` of the harmonic modes of each index to
+    /// the basis and report the Ritz error `eta` of every split mode (default false; ADR 0482). No effect elsewhere.
+    pub split_correction: bool,
 }
 
 impl RotatingOptions {
@@ -165,6 +169,7 @@ impl RotatingOptions {
             static_options: StaticOptions::default(),
             coriolis: false,
             whirl_solver: WhirlSolver::Dense,
+            split_correction: false,
         }
     }
     /// The same options with other modal options.
@@ -190,6 +195,11 @@ impl RotatingOptions {
     /// The same options with another eigensolver of the whirl analyses (ADR 0427).
     pub fn whirl_solver(mut self, solver: WhirlSolver) -> RotatingOptions {
         self.whirl_solver = solver;
+        self
+    }
+    /// The same options with the static correction vectors of the sector split modes switched on or off (ADR 0482).
+    pub fn split_correction(mut self, on: bool) -> RotatingOptions {
+        self.split_correction = on;
         self
     }
 }
