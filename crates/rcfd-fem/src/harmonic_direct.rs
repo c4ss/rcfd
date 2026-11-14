@@ -20,8 +20,9 @@
 //! stiffness times `E*(omega)/E`; otherwise two parts, the stiffness of `2 G_0 I_dev` times `G*(omega)/G_0` and that of
 //! `K_0 1 (x) 1` times `K*(omega)/K_0` (the stiffness is linear in the elasticity matrix, so this is exact). A shifted
 //! material takes [`DirectHarmonicOptions::temperature`]. The Rayleigh term `beta K` takes its instantaneous base
-//! stiffness; a loss factor on its set and the harmonic stress are refused. A model without the material takes the code of
-//! ADR 0448 as it was.
+//! stiffness; a loss factor on its set is refused. A model without the material takes the code of ADR 0448 as it was.
+//! ADR 0494 (F-583): [`DirectHarmonic::stress`] of a viscoelastic material is `(G*/G_0) dev sigma_0 + (K*/K_0) vol
+//! sigma_0` at each integration point, `sigma_0` the elastic stress of the base (`E*/E_0 sigma_0` for equal weights).
 
 use crate::assemble::{assemble_with, stiffness_with};
 use crate::constraint::prescribed_equations;
@@ -747,18 +748,13 @@ impl DirectHarmonic {
     /// [`HarmonicResponse::stress`] times the coefficient `s_m (1 + i eta_m)` of each element's material at the response's
     /// frequency, so that a loss factor gives the stress `E* eps` of the complex modulus (ADR 0448 amendment 2).
     pub fn stress(&self, model: &SolidModel, response: &HarmonicResponse) -> Result<HarmonicStress> {
-        // ADR 0491 D2: the recovery evaluates the material at the points, which the viscoelastic material refuses.
+        // ADR 0494 D1: a viscoelastic part takes the split stress of the elastic base.
         if self
             .k_parts
             .iter()
             .any(|(_, d)| matches!(d, Damping::Viscoelastic { .. }))
         {
-            return Err(FemError::NotYetSupported {
-                item: "material",
-                variant: "Viscoelastic",
-                location: "the harmonic stress".to_string(),
-                package: crate::mat_visco::FOLLOW_UP,
-            });
+            return self.stress_viscoelastic(model, response);
         }
         let mut st = response.stress(model)?;
         let coef = self.coefficients(response.omega)?;
@@ -773,6 +769,76 @@ impl DirectHarmonic {
             for q in field.points_of(e) {
                 for comp in 0..6 {
                     let z = C64::new(st.re[q][comp], st.im[q][comp]) * k;
+                    st.re[q][comp] = z.re;
+                    st.im[q][comp] = z.im;
+                }
+            }
+        }
+        Ok(st)
+    }
+
+    /// The stress of a response of a solver with a viscoelastic part (ADR 0494 D1): `sigma_0` of the model with every
+    /// viscoelastic material replaced by its elastic base, then per element `(G*/G_0) dev sigma_0 + (K*/K_0) vol sigma_0`
+    /// for unequal weights and `(E*/E_0) sigma_0` (as the other materials) otherwise.
+    fn stress_viscoelastic(&self, model: &SolidModel, response: &HarmonicResponse) -> Result<HarmonicStress> {
+        let coef = self.coefficients(response.omega)?;
+        // the coefficient pair of each material, walking the parts in the order the matrices were built
+        let mut pairs: Vec<(C64, C64, bool)> = Vec::new();
+        let mut cursor = 0;
+        for (i, (_, material)) in model.materials().iter().enumerate() {
+            let Some((_, d)) = self.k_parts.get(cursor) else {
+                return Err(invalid(
+                    "model",
+                    "the model has fewer materials than the solver".to_string(),
+                ));
+            };
+            if is_viscoelastic(material) != matches!(d, Damping::Viscoelastic { .. }) {
+                return Err(invalid(
+                    "model",
+                    format!("material {i} of the model is not the material of the solver's part"),
+                ));
+            }
+            if let Damping::Viscoelastic {
+                part: ViscoPart::Shear, ..
+            } = d
+            {
+                if cursor + 1 >= self.k_parts.len() {
+                    return Err(invalid("model", "the model does not match the solver".to_string()));
+                }
+                pairs.push((coef[cursor], coef[cursor + 1], true));
+                cursor += 2;
+            } else {
+                pairs.push((coef[cursor], coef[cursor], false));
+                cursor += 1;
+            }
+        }
+        if cursor != self.k_parts.len() {
+            return Err(invalid(
+                "model",
+                "the model has more materials than the solver's parts".to_string(),
+            ));
+        }
+        let elastic = model.with_viscoelastic_bases();
+        let mut st = response.stress(&elastic)?;
+        let which = model.material_indices()?;
+        let field = IntegrationPointField::compute(&elastic, &vec![0.0; self.n])?;
+        for (e, &m) in which.iter().enumerate() {
+            let (cs, ck, split) = pairs[m];
+            for q in field.points_of(e) {
+                if !split {
+                    for comp in 0..6 {
+                        let z = C64::new(st.re[q][comp], st.im[q][comp]) * cs;
+                        st.re[q][comp] = z.re;
+                        st.im[q][comp] = z.im;
+                    }
+                    continue;
+                }
+                let (re0, im0) = (st.re[q], st.im[q]);
+                let (mr, mi) = ((re0[0] + re0[1] + re0[2]) / 3.0, (im0[0] + im0[1] + im0[2]) / 3.0);
+                for comp in 0..6 {
+                    let (vr, vi) = if comp < 3 { (mr, mi) } else { (0.0, 0.0) };
+                    let dev = C64::new(re0[comp] - vr, im0[comp] - vi);
+                    let z = dev * cs + C64::new(vr, vi) * ck;
                     st.re[q][comp] = z.re;
                     st.im[q][comp] = z.im;
                 }

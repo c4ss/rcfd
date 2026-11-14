@@ -1985,6 +1985,16 @@ constants are inputs (the values of ADR 0485 V1), not data.
 | Clamped rod with an end force `F`: `u(L) = F tan(kL)/(A Mod* k)`, `k = omega sqrt(rho/Mod*)`; the rod with the lateral motion held is in uniaxial strain, modulus `K* + 4 G*/3` (`= E*` for `nu = 0` and equal weights), the shear rod `G*` | derived | ADR 0491 arithmetic 2 |
 | Discretisation error of the linear element with consistent mass near the first resonance, `2 (kh)^2/(24 eta)` at the peak (`kh = (pi/2)/n`); `2.47e-3` (rod A), `2.65e-3` (B), `1.60e-3` (C) at 40 elements, second order | derived, computed | ADR 0491 arithmetic 4; probe `f577-scratch/probe.py` (numpy, no rcfd code), reproduced by the test |
 
+## F-583 the harmonic stress of a viscoelastic material (ADR 0494)
+
+No source was read for F-583. Every formula used is derived in ADR 0494 (arithmetic 1 to 7) or re-used from ADR 0491; the
+references of the checks are the modulus times the strain of the 1-D chain solved in the test.
+
+| Item | Status | Source |
+|---|---|---|
+| Split stress of the isotropic viscoelastic solid, `sigma* = (G*/G_0) dev sigma_0 + (K*/K_0) vol sigma_0`, `sigma_0` the elastic stress of the base (`dev sigma_0 = 2 G_0 dev eps*`, `vol sigma_0 = K_0 tr eps* 1`); for equal weights `(E*/E_0) sigma_0` | derived | ADR 0494 arithmetic 1 (the correspondence principle as in ADR 0491 arithmetic 1) |
+| Stress of the rods of ADR 0491 with the lateral motion held: `sigma_xx = (K* + 4 G*/3) eps`, `sigma_yy = sigma_zz = (K* - 2 G*/3) eps` (axial), `sigma_xy = G* gamma` (shear) | derived | ADR 0494 arithmetic 2 |
+
 ## F-573 follower pressure on shells (ADR 0487)
 
 No source was read for F-573. Every formula used is derived in ADR 0487 (arithmetic 1 to 8) or re-used from ADR 0480 (cited
