@@ -269,3 +269,15 @@ rule, run and recorded):
 3. **Case-file key.** Not added (b3). Recommendation for the lead: `temperature = [[t, T], ...]` (a table) or a number in the
    quasi-static time study and in the nonlinear transient study proposed by ADR 0499 open question 3, offered when the maintainer
    opens the case file to the nonlinear studies.
+
+## Amendment 1 (2026-11-14, before the corrected run): the set-up of S3e
+
+The registered run (commit 3026c9a9, `f592-scratch/run1.log`) made every check of the table once. The test
+`v2t_nc2_rt1_s3i_s3e_the_nonlinear_transient_integrator` printed V2T, NC2, RT1 and S3i and then panicked in the set-up of S3e:
+its run helper records the committed `S_xx` of every point by `committed_sxx`, which splits the element state into chunks of
+`Material::state_size()`, and the elastic bar of S3e has no state (`chunks(0)` panics). The defect is in the test's recording,
+not in the library or in the check: S3e compares only the bits of `u`, `v`, `a`, the internal force and the state bytes, never
+the stresses. Correction: the run helper records no stress for a material without state (an empty list; for a material with
+state it does what it did), and S3e runs in a test of its own, `s3e_amended_constant_table_on_the_energy_momentum_step`, with
+the set-up, measure and limit registered above unchanged. The old test stays as an ignored record of the registered run of
+V2T, NC2, RT1 and S3i (their numbers are those of `run1.log`, not re-run); the corrected test runs S3e once.
