@@ -8149,7 +8149,7 @@ fixed by the item's registration ADR before any code.
     within 5 percent of it.
   - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0316; the registration is
     written by the implementation agent before any code.
-- [ ] **F-414** Damped and complex modes: a dense eigensolver for general real matrices and the quadratic eigenproblem on a modal subspace
+- [x] **F-414** Damped and complex modes: a dense eigensolver for general real matrices and the quadratic eigenproblem on a modal subspace
   - depends on: F-408, F-382, F-383
   - acceptance: Every limit not stated here is registered in the ADR before the run. rcfd-linalg: the companion matrix
     of a polynomial with registered real and complex roots returns them within 1e-10; a random matrix of order 50 has
@@ -8161,8 +8161,27 @@ fixed by the item's registration ADR before any code.
     with a tip dashpot c below A sqrt(E rho): lambda_j = (c0/L) (-atanh(c/(A sqrt(E rho))) + i (2 j - 1) pi/2), the
     first three within 2 percent on 40 modes; at c above that value no oscillating root is returned and the result says
     so. Damping ratios are -Re(lambda)/|lambda|; conjugate pairs are reported once.
-  - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0317; the registration is
-    written by the implementation agent before any code.
+  - note: Structural solver, advanced tier (plan ADR 0310). ADR 0450, 2026-11-14: rcfd_linalg::eigen_general:
+    general_eigen of a dense real matrix by balancing (powers of 2), Householder Hessenberg reduction, Francis
+    double-shift QR with exceptional shifts (cap 30 n iterations, NotConverged otherwise), real 2 x 2 blocks split,
+    eigenvectors by back-substitution, and a defect report (numerically parallel vectors) for Jordan blocks;
+    quadratic_eigen of (lambda^2 M + lambda C + K + i H) x = 0 by the Cholesky factor of M and the state matrix (a
+    complex stiffness through the real embedding). rcfd_fem::damped::damped_modes on m undamped modes with Rayleigh
+    damping, F-412's dashpots and constant loss factors; each conjugate pair reported once, real roots reported as
+    non-oscillating, damping ratio -Re/|lambda|. Companion roots within 1.8e-15 (limit 1e-10); order 50 residuals
+    8.5e-16 (1e-10); symmetric order 40 equals the Jacobi values of F-382 within 4.0e-15 (1e-10); Jordan blocks J_2 and
+    J_3 under similarity returned with their defect report, mean within 1.3e-15 (1e-6); the cap is an error; the cyclic
+    permutation of order 6 needs the exceptional shifts; oscillator within 1.5e-16 (1e-12), critical damping reported as
+    a defect; Rayleigh ratios on a Hex8 cantilever within 3.5e-14 (1e-8); skew coupling within 6.9e-16 (1e-12) and equal
+    to the whirl solver of F-505 within 1.2e-15; bar with a tip dashpot c = Z/2 (Z = A sqrt(E rho)) on 40 modes: first
+    three roots within 1.45e-3 (2 percent). The draft's clause for c > Z was wrong: the roots are (c0/L)(-atanh(Z/c) + i
+    j pi), one real and the rest oscillating at the fixed-fixed frequencies; registered in that form, at c = 2 Z within
+    6.3e-3 with the real roots reported as non-oscillating. Constant loss factor 0.04 within 3.8e-13 of i w sqrt(1 + i
+    eta); bit-identical for 1 and 4 threads; ten of ten mutations caught. Amendment 1 corrected the defect report of the
+    quadratic problem (a gap relative to the roots; check Q4) after a diagnostic found it unit-dependent. The
+    transformation path (linear constraints, rigid sets, supports) and frequency-dependent moduli are refused. Done by
+    the registered rule; amendment 1 (post-run, covering an output no registered check had) is disclosed for the
+    maintainer's acceptance. Follow-up F-532.
 - [ ] **F-415** Coriolis term of a rotating part: gyroscopic matrix in the rotating frame and the Campbell table with split modes
   - depends on: F-414, F-396
   - acceptance: Every limit not stated here is registered in the ADR before the run. G is skew within 1e-13 of its norm
@@ -10256,3 +10275,12 @@ fixed by the item's registration ADR before any code.
     impedance within registered limits; the extra dissipation measured by ADR 0446 (+7 to +13 percent of the real part)
     is explained and removed or documented; F-401's VS check is repeated with the result.
   - note: Numerics. Found by F-421 (ADR 0446, 2026-11-14); may explain F-401's VS miss.
+- [ ] **F-532** Damped modes: residual vectors for boundary dampers near the impedance
+  - depends on: F-414
+  - acceptance: Every limit not stated here is registered in the ADR before the run. damped_modes gains static residual
+    vectors (K^-1 times the damper influence vectors, orthogonalised against the undamped modes) as an option.
+    Fixed-free bar with a tip dashpot c = 0.9 A sqrt(E rho): the first three roots (c0/L)(-atanh(c/(A sqrt(E rho))) + i
+    (2 j - 1) pi/2) within 2 percent on 20 modes with the residual vector, against a registered error without it; at c =
+    2 A sqrt(E rho) the real root -(c0/L) atanh(A sqrt(E rho)/c) within 1 percent on 20 modes; without the option every
+    result is bit-identical to F-414's.
+  - note: Structural solver, advanced tier. Follow-up of F-414 (ADR 0450, 2026-11-14).
