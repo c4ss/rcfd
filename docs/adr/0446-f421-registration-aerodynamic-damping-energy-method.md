@@ -334,7 +334,7 @@ sa_aerodamp -- --test-threads=1`, 17.8 s): every fast check met except one part 
 reported "no number after ' is '". The heavy records were not run yet; this amendment does not touch them.
 
 **P1's parse is defective by construction.** The library's message is "... the force history is not periodic: the
-cycle-to-cycle change of the first harmonic between cycles 2 and 3 is 1.0635801708007963e-2 (tolerance 1e-6)"; the test took
+cycle-to-cycle change of the first harmonic between cycles 2 and 3 is 1.063580170800776e-2 (tolerance 1e-6)"; the test took
 the text after the **first** " is ", which is "not periodic: ...", so it read the word "not" and never reached the number. The
 refusal itself and its wording were met (P1 refused: met; accepted at tolerance 1 with the change equal to the test's own within
 `1.9e-14`: met). Correction (the set-up of the check only, the limit `1e-12` relative unchanged): **P1c** takes the text after

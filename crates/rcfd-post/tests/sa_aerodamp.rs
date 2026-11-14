@@ -146,6 +146,7 @@ fn h0_h1_h2_synthetic_harmonics_and_work() {
 }
 
 #[test]
+#[ignore = "registered record of P1 (ADR 0446 amendment 1: its parse took the first ' is ')"]
 fn p1_non_periodic_history_refused_with_the_change() {
     let mut c = Checks::new();
     let dt = s_dt();
@@ -172,6 +173,58 @@ fn p1_non_periodic_history_refused_with_the_change() {
             let number = m
                 .split(" is ")
                 .nth(1)
+                .and_then(|s| s.split_whitespace().next())
+                .and_then(|s| s.parse::<f64>().ok());
+            match number {
+                Some(x) => c.at_most("P1 change in the message", (x - expected).abs() / expected, 1e-12),
+                None => c.holds("P1 change in the message", false, "no number after ' is '"),
+            }
+        }
+    }
+    match periodic_response(&values, S_N, S_Q0, S_W, 1.0) {
+        Ok(r) => c.at_most(
+            "P1/NC3 accepted at tolerance 1, change",
+            (r.cycle_change - expected).abs() / expected,
+            1e-12,
+        ),
+        Err(m) => c.holds("P1/NC3 accepted at tolerance 1", false, &m),
+    }
+    let periodic: Vec<f64> = (1..=3 * S_N).map(|n| synthetic(n as f64 * dt)).collect();
+    match periodic_response(&periodic, S_N, S_Q0, S_W, TOL_PERIODIC) {
+        Ok(r) => c.at_most("P1 periodic history accepted, change", r.cycle_change, 1e-14),
+        Err(m) => c.holds("P1 periodic history accepted", false, &m),
+    }
+    c.finish();
+}
+
+/// P1 with the parse of ADR 0446 amendment 1 (the text after the last " is ").
+#[test]
+fn p1c_non_periodic_history_refused_with_the_change() {
+    let mut c = Checks::new();
+    let dt = s_dt();
+    let period = 2.0 * PI / S_W;
+    let values: Vec<f64> = (1..=3 * S_N)
+        .map(|n| {
+            let t = n as f64 * dt;
+            synthetic(t) + 0.1 * (-t / period).exp() * (S_W * t).cos()
+        })
+        .collect();
+    let (p2, q2) = dft(&values, 1);
+    let (p3, q3) = dft(&values, 2);
+    let expected = (p3 - p2).hypot(q3 - q2) / p3.hypot(q3);
+    println!("P1 change computed by the test {expected:e}");
+    match periodic_response(&values, S_N, S_Q0, S_W, TOL_PERIODIC) {
+        Ok(r) => c.holds(
+            "P1 refused",
+            false,
+            &format!("accepted with change {:e}", r.cycle_change),
+        ),
+        Err(m) => {
+            println!("P1 message: {m}");
+            c.holds("P1 refused", m.contains("not periodic"), "refused as not periodic");
+            let number = m
+                .rsplit(" is ")
+                .next()
                 .and_then(|s| s.split_whitespace().next())
                 .and_then(|s| s.parse::<f64>().ok());
             match number {
