@@ -8250,7 +8250,7 @@ fixed by the item's registration ADR before any code.
     square. A spectrum with a negative value or a non-increasing frequency list is refused with the entry.
   - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size S. Stub ADR 0320; the registration is
     written by the implementation agent before any code.
-- [ ] **F-418** Radiated sound of a vibrating surface: equivalent radiated power and the Rayleigh integral of a baffled plane
+- [~] **F-418** Radiated sound of a vibrating surface: equivalent radiated power and the Rayleigh integral of a baffled plane
   - depends on: F-408, F-136, F-399
   - acceptance: Every limit not stated here is registered in the ADR before the run. Equivalent radiated power: a rigid
     piston gives rho c S v^2/2 within 1e-12 and a plate mode sin sin gives rho c A v0^2/8 within 0.5 percent. Rayleigh
@@ -8261,8 +8261,21 @@ fixed by the item's registration ADR before any code.
     percent. Levels: 1e-12 W gives 0 dB and the third-octave sums equal the narrow-band total within 1e-10. A surface
     that is not plane within the registered tolerance is refused by the Rayleigh integral with its deviation; the
     equivalent radiated power accepts any surface and its report says that it assumes a radiation efficiency of one.
-  - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size S. Stub ADR 0321; the registration is
-    written by the implementation agent before any code.
+  - note: Structural solver, advanced tier. PARTIAL. ADR 0468, 2026-11-14: rcfd-post solid_acoustic: VibratingSurface
+    (Tri3/Quad4 faces, nodal complex velocity; from_response of a HarmonicResponse of ADR 0391 or 0315, V = i omega U),
+    equivalent_radiated_power (any surface, report notes the radiation efficiency of one), BaffledPlane (refuses a
+    surface off its mean plane by more than 1e-6 of its diameter, stating the deviation; pressure by the Rayleigh
+    integral with near-field splitting, far field, directivity, power by the sin(kR)/R double sum, far-field power over
+    acoustics::sphere_quadrature), power_level_db re 1e-12 W, PowerSpectrum third-octave bands, erp_spectrum. Baffled
+    piston, faces of a tenth of a wavelength or finer: ERP of a rigid piston 1.1e-15 and 3.7e-14 from rho c S v^2/2;
+    plate mode (1,1) 2.85e-3 from rho c A v0^2/8 (the bilinear interpolant's exact value to 2.3e-15); on-axis pressure
+    1.6e-3 and 6.5e-4 (k a = 2, 10); directivity 5.7e-4 and 3.2e-4 of the on-axis value; W/ERP against 1 - J1(2ka)/(ka)
+    1.5e-3, 5.7e-4, 1.1e-4 (k a = 0.5, 2, 10); k a = 0.1 power 4.9e-3 from rho c k^2 (S v)^2/(4 pi); baffled monopole
+    pair and dipole 4.9e-4; far-field power equal to the double sum to 3.4e-14; 1e-12 W gives 0 dB exactly; band sums
+    equal the total to 2.2e-16; the closed forms (including the impedance with J1 and H1) verified by independent
+    quadrature. Partial because E1 at k a = 10 met its 1e-12 limit but not the registered one-ulp probe condition (limit
+    751, not 1000, times the one-ulp change: the rounding of a 14400-term sum); nine of nine mutations caught. Not
+    covered: radiation reactance, unbaffled or curved radiators by an integral method. Follow-up F-551.
 - [~] **F-419** Three-node shell element (flat facet, assumed shear strain) for triangulated surfaces
   - depends on: F-408, F-391, F-392
   - acceptance: Every limit not stated here is registered in the ADR before the run. Membrane patch test and
@@ -10666,3 +10679,12 @@ fixed by the item's registration ADR before any code.
     than with the scale of ADR 0458; the default results of every existing case stay bit-identical.
   - note: Numerics. Follow-up of F-536 (ADR 0458, 2026-11-14): the K1 miss at the pressure extremes. A case key for the
     criterion needs the maintainer's schema approval.
+- [ ] **F-551** Radiation reactance and surface pressure of a baffled plane: analytic self-face integrals of the Rayleigh kernel
+  - depends on: F-418
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The surface pressure of a baffled
+    plane by the Rayleigh integral with the singular part 1/R integrated analytically over each face; the radiation
+    impedance of a baffled circular piston equal to rho c S (1 - J1(2 k a)/(k a) + i H1(2 k a)/(k a)) within 1 percent
+    in resistance and reactance at k a = 0.1, 0.5, 2 and 10 with faces of a tenth of a wavelength; the resistance equal
+    to the power of F-418 within 1e-6; the low-frequency reactance giving the added mass 8 rho a^3/3 within 2 percent at
+    k a = 0.1.
+  - note: Structural solver, advanced tier. Follow-up of F-418 (ADR 0468, 2026-11-14).
