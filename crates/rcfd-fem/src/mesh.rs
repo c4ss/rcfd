@@ -367,8 +367,9 @@ pub enum BlockProperty {
         /// The membrane of a Shell4 block (ADR 0470); a Shell3 block takes only the default.
         shell4_membrane: crate::shell::Shell4Membrane,
     },
-    /// A laminated shell block: its plies from the bottom (`-e_3` side) to the top (ADR 0440 D5). Refused by every solve
-    /// until [`crate::laminate`] lands (ADR 0331, F-428).
+    /// A laminated shell block: its plies from the bottom (`-e_3` side) to the top (ADR 0440 D5). Taken by a Shell4 block
+    /// through [`crate::laminate`] (ADR 0496, F-428): stiffness, mass, shell pressure, temperature and stresses; the paths
+    /// that need one thickness refuse it naming [`crate::laminate::FOLLOW_UP`]; a Shell3 block refuses it.
     #[non_exhaustive]
     Layup {
         /// The plies, bottom first.

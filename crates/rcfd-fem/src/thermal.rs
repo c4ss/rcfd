@@ -113,21 +113,19 @@ pub(crate) fn add_thermal_load(
         let material = &model.materials()[materials[e]].1;
         if matches!(mesh.element_kind(e), ElementKind::Shell4 | ElementKind::Shell3) {
             // ADR 0445 D2, ADR 0454 D2: the membrane thermal load of a shell, forces and moments at its nodes.
-            let fe: Vec<f64> = crate::shell::thickness_or_error(mesh, e)
-                .and_then(|t| {
-                    if mesh.element_kind(e) == ElementKind::Shell3 {
-                        let membrane = crate::shell3::model_membrane(mesh, e);
-                        crate::shell3::thermal_load_vector_with(&coords, t, material, &dte, membrane)
-                            .map(|v| v.to_vec())
-                    } else {
-                        let membrane = crate::shell::model_membrane(mesh, e);
-                        crate::shell::thermal_load_vector_with(&coords, t, material, &dte, membrane).map(|v| v.to_vec())
-                    }
+            // ADR 0496 D4: a Shell4 element takes its block's layup through the shell's model function.
+            let fe: Vec<f64> = if mesh.element_kind(e) == ElementKind::Shell3 {
+                crate::shell::thickness_or_error(mesh, e).and_then(|t| {
+                    let membrane = crate::shell3::model_membrane(mesh, e);
+                    crate::shell3::thermal_load_vector_with(&coords, t, material, &dte, membrane).map(|v| v.to_vec())
                 })
-                .map_err(|source| FemError::Element {
-                    element: e,
-                    source: Box::new(source),
-                })?;
+            } else {
+                crate::shell::model_thermal_load_vector(mesh, e, &coords, material, &dte)
+            }
+            .map_err(|source| FemError::Element {
+                element: e,
+                source: Box::new(source),
+            })?;
             for (a, &node) in nodes.iter().enumerate() {
                 add_force(f, dofs, node, &[fe[6 * a], fe[6 * a + 1], fe[6 * a + 2]])?;
                 add_moment(f, dofs, node, &[fe[6 * a + 3], fe[6 * a + 4], fe[6 * a + 5]])?;
