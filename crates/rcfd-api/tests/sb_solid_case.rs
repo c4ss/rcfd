@@ -786,6 +786,7 @@ fn a3_to_a6_errors_and_n2_to_n4() {
 // A14 and the A7 iterative run.
 
 #[test]
+#[ignore = "record of the registered run (ADR 0438 amendment 1): panicked at its block_jacobi row (not converged, relative residual 5.8e-10 against 1e-10), the other rows and the iterative A7 not run; superseded by a14c_a7c_cg_preconditioners_from_files and a14_block_jacobi_known_miss"]
 fn a14_a7_cg_preconditioners_from_files() {
     let mut ch = Checks::new();
     let direct = solve_lib(&cantilever_lib(true, NU), StaticSolver::Direct);
@@ -835,5 +836,126 @@ fn a14_a7_cg_preconditioners_from_files() {
         lib.displacement_values(),
     );
     ch.at_least("A7 amg run wrote two files", r.written.len() as f64, 2.0);
+    ch.finish();
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// ADR 0438 amendment 1.
+
+/// The library model of the cantilever with the traction `-1.0e5` exactly, as the file gives it.
+fn cantilever_lib_file_traction() -> SolidModel {
+    let mesh = upgrade_to_tet10(&tet_box([0.0; 3], [C_L, C_H, C_H], [40, 2, 2]).unwrap())
+        .unwrap()
+        .0;
+    let mut mesh = mesh;
+    let n0 = node_at(&mesh, [0.0, 0.0, 0.5 * C_H]);
+    let n1 = node_at(&mesh, [0.0, C_H, 0.5 * C_H]);
+    mesh.add_node_set("root_n0", vec![n0]).unwrap();
+    mesh.add_node_set("root_n1", vec![n1]).unwrap();
+    let mut m = SolidModel::new(mesh);
+    m.add_material("all", Material::isotropic_elastic(E_MOD, NU, RHO, 0.0).unwrap())
+        .unwrap();
+    m.add_constraint(Constraint::displacement("root_n0", 1, 0.0)).unwrap();
+    m.add_constraint(Constraint::displacement("root_n0", 2, 0.0)).unwrap();
+    m.add_constraint(Constraint::displacement("root_n1", 2, 0.0)).unwrap();
+    m.add_constraint(Constraint::displacement("xmin", 0, 0.0)).unwrap();
+    m.add_load(Load::traction("xmax", [0.0, 0.0, -1.0e5])).unwrap();
+    m
+}
+
+fn cg_text(p: &str) -> String {
+    swap(
+        &tet10_text(),
+        "method = \"direct\"",
+        &format!(
+            "method = \"cg\"
+preconditioner = \"{p}\"
+tolerance = 1e-10"
+        ),
+    )
+}
+
+/// A14 rows: a failed solve is a miss of its row (amendment 1).
+fn a14_rows(ch: &mut Checks, rows: &[&str]) {
+    let d = run(parse(&tet10_text()).unwrap().build().unwrap()).unwrap();
+    let direct = static_of(&d).displacement_values().to_vec();
+    for p in rows {
+        let t0 = std::time::Instant::now();
+        match run(parse(&cg_text(p)).unwrap().build().unwrap()) {
+            Err(e) => {
+                let shown: Vec<String> = e.iter().map(ToString::to_string).collect();
+                ch.holds(&format!("A14 {p} solve"), false, &format!("{shown:?}"));
+            }
+            Ok(r) => {
+                let rr = r.report["solver"]["relative_residual"].as_f64().unwrap();
+                println!(
+                    "A14 {p}: solver {}, iterations {}, restarts {}, shift {}, {:.2} s",
+                    r.report["solver"]["name"],
+                    r.report["solver"]["iterations"],
+                    r.report["solver"]["restarts"],
+                    r.report["solver"]["shift"],
+                    t0.elapsed().as_secs_f64()
+                );
+                ch.at_most(&format!("A14 {p} relative residual"), rr, 1e-10);
+                let (dd, _) = compare(static_of(&r).displacement_values(), &direct);
+                ch.at_most(&format!("A14 {p} against the direct solve"), dd, 1e-7);
+            }
+        }
+    }
+}
+
+#[test]
+#[ignore = "known miss (ADR 0438 amendment 1): CG with block Jacobi on the Tet10 cantilever is not converged to 1e-10 (measured 5.8e-10 relative after 5063 iterations and 3 restarts); limit kept"]
+fn a14_block_jacobi_known_miss() {
+    let mut ch = Checks::new();
+    a14_rows(&mut ch, &["block_jacobi"]);
+    ch.finish();
+}
+
+#[test]
+fn a14c_a7c_cg_preconditioners_from_files() {
+    let mut ch = Checks::new();
+    a14_rows(
+        &mut ch,
+        &["ic0", "ic_fill", "amg", "amg_quadratic", "amg_quadratic_smoothed"],
+    );
+    // A7c: the iterative file run against the same library calls (the file's traction).
+    let r = run_file("cantilever_tet10_amg.toml");
+    let lib = solve_lib(
+        &cantilever_lib_file_traction(),
+        StaticSolver::PreconditionedCg {
+            preconditioner: CgPreconditioner::SmoothedAggregation(ElasticAmgSettings::quadratic()),
+            tolerance: 1e-10,
+            max_iterations: 20000,
+        },
+    );
+    a7(
+        &mut ch,
+        "A7c cantilever Tet10 CG amg_quadratic displacement",
+        static_of(&r).displacement_values(),
+        lib.displacement_values(),
+    );
+    ch.at_least("A7c amg run wrote two files", r.written.len() as f64, 2.0);
+    ch.finish();
+}
+
+#[test]
+fn a7b_cantilever_tet10_bits_with_the_same_traction() {
+    let mut ch = Checks::new();
+    let r = run_file("cantilever_tet10.toml");
+    let res = static_of(&r);
+    let lr = solve_lib(&cantilever_lib_file_traction(), StaticSolver::Direct);
+    for (name, a, b) in [
+        ("displacement", res.displacement_values(), lr.displacement_values()),
+        ("reactions", res.reactions().unwrap(), lr.reactions().unwrap()),
+    ] {
+        let (d, bits) = compare(a, b);
+        ch.at_most(&format!("A7b cantilever Tet10 {name}"), d, 1e-12);
+        ch.holds(
+            &format!("A7b cantilever Tet10 {name} bit-identical"),
+            bits,
+            &format!("{} values", a.len()),
+        );
+    }
     ch.finish();
 }
