@@ -325,3 +325,98 @@ Disclosed: before the registered run, unregistered development probes (a throwaw
 and a naive exact minimum degree on 10^3 and 12^3 (the approximate one filled 0.97 and 0.90 of it). An `ext = min(ext, d_old)`
 variant (the ADD 1996 old-degree bound left out by D1) was tried on the same probes, changed no count and was removed: D1 is as
 registered.
+
+## Addendum 1: results (2026-11-14)
+
+Registered runs: `sa_sparse_chol.rs` at 361868cc (log `f431-scratch/run_sa_sparse_chol.log`); A4' and A5' after amendment 1 at
+f11ad076 (`run_sa_sparse_chol_amended.log`); `sa_sparse_solve.rs` and `sa_sparse_bits.rs` at f11ad076 (`run_fem.log`); H0 at
+d00b5f4d (`run_h0.log`). Release profile, each run once. Commit d00b5f4d after the runs changed only formatting, the line
+continuation of two strings (the S6a message and H1's print) and `docs/reference-data.md`; no limit and no logic.
+
+### Checks
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| A1 (c2) | `< 1e-12` | 5.357e-15 | yes |
+| A2 (c3) | `< 1e-12` | 2.919e-15 (factor 1.58 s) | yes |
+| A3 (c4) | `nnz(L) <= 0.5 |Env|` | nnz(L) 5 659 458, RCM envelope 13 546 161, ratio 0.4178 | yes |
+| A3r | record | 5-point 100 x 100: 185 035 against 671 550 (0.2755) | record |
+| A4 | = 7 790 | 7 619 (= the natural envelope 7 619): the registered closed form was wrong | **no** (record) |
+| A4' (amendment 1) | = 7 619 | 7 619, 7 619 | yes, after amendment |
+| A4b | equal | 185 035 = 185 035 | yes |
+| A5 (c7) | equal | shift 1: 10 = 10; shift 2 is exactly 2, every diagonal 0: refused | **no** (record) |
+| A5' (amendment 1) | equal | 10 = 10, 95 = 95, 190 = 190 | yes, after amendment |
+| A6a (c8) | `Pivot { row: 137 }`, negative, message | row 137, pivot -1, "row 137 ... not positive definite" | yes |
+| A6b (c8) | `Pivot`, row < 200, pivot <= threshold; NonZero accepted | row 181 (position 18), pivot -7.21; accepted | yes |
+| A7 (c9) | bit for bit | order, tree, L (805 029 values), D, x equal | yes |
+| A8 | bit for bit; `<= 1e-10` | equal; 1.871e-14 | yes |
+| A9 | as stated | four refusals with their locations | yes |
+| S1 (c5) | `<= 1e-10`; name; residual `<= 1e-12` | 2.704e-14; "sparse-ldlt"; 1.905e-13 (0.24 s against 0.16 s) | yes |
+| S2 (c6) | `<= 1e-9` | 9.253e-15 (23 iterations each) | yes |
+| S3 | `<= 1e-9` | 1.601e-14 (factor 239.6152, double) | yes |
+| S4 (c9) | bit for bit | equal | yes |
+| S5 (c8) | `SingularStiffness` | node 13 component 0 | yes |
+| S6 | refusals | transformation path `InvalidValue(solver)`; refinement refused | yes |
+| B1-B6 (c11) | 14 digests of main | all equal | yes |
+| X1' | as stated | passes (in the full rcfd-fem run) | yes |
+| N1 | `> 0.5` | 23 516 129 / 13 546 161 = 1.736 | holds |
+| N2 | not all bit-equal | not equal | holds |
+| N3 | 10 | 10 | holds |
+| H0 (c10) | record | n 304 842, nnz(K) 23 648 904; ordering 0.9 s, count 2.7 s; nnz(L) 848 257 887, predicted 13.58 GB; envelope after RCM 3 252 350 217 entries, 26.03 GB, 2.17e13 multiply-adds, about 4 713 s at 4.6e9 per second | record |
+| H1 (c10) | completes, residual `<= 1e-10` | **not run**: predicted 13.58 GB + 2 GB against 12.36 GB free (the registered gate needs 4 GB to spare) | **not run** |
+
+H0's fill is 0.26 of the envelope's but about three to five times the disclosed estimate (1.6e8 to 3e8): the estimate scaled
+nested dissection by an assumed factor 2 to 3, and minimum degree on this 27-point, three-unknown cube fills far more (the
+probes of amendment 1 already showed minimum degree's fill growing near `N^(5/3)` at small sizes). The heavy cube needs about
+16 GB for the factor and the assembly; it would run on a machine with 20 GB free.
+
+### Mutations (copy `f431-scratch/mut/tree` of d00b5f4d, own target, `mutate.py`, each alone)
+
+| Id | Caught by | Registered | Result |
+| --- | --- | --- | --- |
+| MU1 | A2/A3 | A3 | caught |
+| MU2 | A1, A2 | A1, A2 | caught |
+| MU3 | A1, A2 | A1 | caught |
+| MU4 | A5' | A5 | caught by the amended form (A5 is an ignored record) |
+| MU5 | A6 | A6a | caught |
+| MU6 | nothing | A6a | **survived**: minimum degree puts equation 137 at position 137 in A6a's matrix, so row and position coincide; A6b, where they differ (181, 18), checks only `row < 200` |
+| MU7 | nothing | S1 (name) | **survived**: the solver name comes from the option, not from the path; S1's difference is then 0 |
+| MU8 | N2 | N2 | caught |
+| MU9 | nothing | B2 | **survived**: the option defaults name `Factorisation::Envelope` explicitly, so `Factorisation::default()` reaches no path (an equivalent mutation) |
+| MU10 | N2 | N2 | caught |
+| MU11 | S6 | S6 | caught |
+| MU12 | A1 to A8 (panic in `inverse_permutation`) | any | caught |
+
+### Other checks run
+
+`cargo test --release -p rcfd-linalg` (13 binaries) and `cargo test --release -p rcfd-fem` (72 binaries, every `sb_`, `si_`,
+`sa_` file): all pass, 0 failed. `cargo fmt -p rcfd-linalg --check` and `cargo fmt -p rcfd-fem --check`: clean.
+`cargo clippy -p rcfd-linalg -p rcfd-fem --all-targets -- -D warnings`: clean. No file of `rcfd-fv` or `rcfd-api` was touched,
+so `baseline_hashes` was not run (rule 3); the default paths are covered by B1 to B6 and the unedited suites.
+
+### Not run
+
+H1 (memory). The records `x1_modules_and_pending`, A4 and A5 are ignored by design.
+
+### Decision by the registered rule
+
+**Partial**: A4 and A5 were met only after amendment 1, made after their run; H1 was not run; MU6, MU7 and MU9 survived.
+
+### Remaining questions
+
+1. H1. Options: (a) run H1 as registered on a machine with at least 20 GB free; (b) a follow-up with nested dissection and
+   supernodes, H1 as its heavy record. Recommendation: (b), and (a) if a large machine is at hand.
+2. MU6 and MU7. Options: (a) a follow-up check with a matrix where the failing equation's position differs from its index, and
+   a report field naming the factor the static solve built; (b) leave as is. Recommendation: (a).
+3. MU9 is equivalent. Recommendation: the option defaults take `Factorisation::default()` in the follow-up (no bit changes).
+4. Whether `SparseDirect` should become the default above some size changes default results: not taken (rule 6), open.
+
+### For the lead: roadmap entries
+
+Proposed status of F-431: **partial**.
+
+> Structural solver, advanced tier (plan ADR 0310). ADR 0447, 2026-11-14: rcfd_linalg::sparse_chol (approximate minimum degree on the quotient graph with element absorption, mass elimination and supervariables; elimination tree and column counts from the row subtrees; up-looking L D L^T with the envelope solver's pivot test and refusals, inertia, solve and solve_many; factor_count from the pattern), rcfd_linalg::eigen::Factorisation (Envelope default, Sparse) in the subspace and buckling eigensolvers, rcfd_fem::solve::StaticSolver::SparseDirect ("sparse-ldlt", refused on the transformation path and with refinement) and the factorisation choice of ModalOptions and BucklingOptions. 5-point 100 x 100 and 7-point 30^3: relative residuals 5.4e-15 and 2.9e-15 (limit 1e-12); 30^3 nnz(L) 5 659 458 against the RCM envelope 13 546 161 (0.418, limit 0.5); clamped Hex8 cube of 4 752 unknowns: static solution within 2.7e-14 of the envelope solve (limit 1e-10), modal frequencies within 9.3e-15 and buckling factors within 1.6e-14 (limit 1e-9); inertia of the tridiagonal (2, -1) n = 200 at three shifts equal to the closed form (10, 95, 190); a non-positive-definite matrix refused with its equation; factor and solution bit-identical for 1 and 8 threads; 14 digests of the default static, modal, buckling and eigen paths equal to main; every rcfd-linalg and rcfd-fem test passes. Heavy cube of 304 842 unknowns: nnz(L) 848 257 887 (13.6 GB predicted) against the envelope's 3.25e9 entries (26 GB, about 4 700 s); not solved for memory. Partial by the registered rule: A4 (closed form) and A5 (a shift where every diagonal is zero) met only after amendment 1, H1 not run, mutations MU6 (row equal to position in the test matrix), MU7 (solver name from the option) and MU9 (equivalent) survived. Done is the maintainer's call.
+
+Follow-up item, title "Nested dissection and supernodal L D L^T for the sparse direct solver; heavy record of 3e5 unknowns", deps F-431, acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. A nested-dissection ordering and a supernodal numeric factorisation in rcfd_linalg::sparse_chol: on the 7-point 30^3 grid the factor entries at most 0.6 of minimum degree's (both recorded) and the residual below 1e-12 relative; the clamped Hex8 cube of 304 842 unknowns is solved with the relative residual below 1e-10 in less than 8 GB, time and memory recorded; a refusal names an equation whose elimination position differs from its index; the static solve reports which factor it built; factor and solution bit-identical for 1 and 8 threads; the default solver's results keep their bits.
