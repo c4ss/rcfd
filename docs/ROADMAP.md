@@ -10597,11 +10597,20 @@ fixed by the item's registration ADR before any code.
     Six other axes refused by name; models without a cyclic constraint unaffected. Default paths bit-identical (15
     digests of main a52a5291). Four of four mutations caught. File geometric.rs; tests sa_ortho_cyclic_prestress.rs,
     sa_ortho_cyclic_prestress_default_bits.rs.
-- [ ] **F-548** Damped modes: flag the roots carried by the residual vectors
+- [~] **F-548** Damped modes: flag the roots carried by the residual vectors
   - depends on: F-532
   - acceptance: Every limit not stated here is registered in the ADR before the run. Each DampedMode reports the
     M-weighted share of its shape carried by the residual-vector coordinates of the basis, and roots with a share above
     a registered threshold are flagged as pseudo-modes of the truncation. Bar of F-532 at c = 0.9 Z and 2 Z on 20 modes
     with the residual vectors: the target roots of F-532 are not flagged, every other real root is; without the option
     every result is bit-identical to F-532's.
-  - note: Structural solver, advanced tier. Follow-up of F-532 (ADR 0464, 2026-11-14). Size S.
+  - note: Structural solver, advanced tier. Follow-up of F-532 (ADR 0464). ADR 0467, 2026-11-14: each DampedMode of
+    damped_modes with the residual vectors reports residual_share, the M-weighted share of its shape carried by the
+    residual-vector coordinates of the basis (0 without them), and pseudo = share > PSEUDO_SHARE (0.1, fixed from a
+    one-dimensional chain estimate: physical roots at most 1.5e-2, pseudo-roots at least 0.18 to 0.40);
+    DampedModes::pseudo_modes counts them and a note says so. Bar of F-532 at c = 0.9 Z and 2 Z on 20 modes: target
+    roots not flagged (shares at most 1.7e-4), every other real root flagged (6 and 7 roots, shares 0.68 to 1.0); one
+    oscillating pseudo-root each (0.399, 0.182) also flagged; share equals the one recomputed from shapes and residual
+    vectors within 2.2e-15. Without the option the nine F-414/F-532 results are bit-identical (shares 0, no flag).
+    Partial: the registered check D3 (option-on digests including notes) missed because an option-on result gains a note
+    by design; the corrected D3b (numbers without notes) was met after amendment 1. Seven of seven mutations caught.
