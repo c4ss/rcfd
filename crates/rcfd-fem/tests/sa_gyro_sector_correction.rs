@@ -324,11 +324,19 @@ fn sweep(model: &SolidModel, mb: usize, speed: f64, tag: &str, checks: Option<&m
             1e-11,
         );
         // E3
-        let e3 = sp.eta.len() == s.modes.len() && sp.eta.iter().all(|e| matches!(e, Some(v) if v.is_finite() && *v >= 0.0));
+        let e3 = sp.eta.len() == s.modes.len()
+            && sp
+                .eta
+                .iter()
+                .all(|e| matches!(e, Some(v) if v.is_finite() && *v >= 0.0));
         local.holds(
             &format!("E3 {tag} k = {k} eta of every split mode"),
             e3,
-            &format!("{} of {} reported", sp.eta.iter().filter(|e| e.is_some()).count(), s.modes.len()),
+            &format!(
+                "{} of {} reported",
+                sp.eta.iter().filter(|e| e.is_some()).count(),
+                s.modes.len()
+            ),
         );
         // E1
         let r0 = &reference.modes[0];
@@ -389,7 +397,9 @@ fn sweep(model: &SolidModel, mb: usize, speed: f64, tag: &str, checks: Option<&m
                 0.1,
             );
         } else {
-            println!("record E2 {tag} k = {k} max |err/eta - 1| over eta > 1e-9: {worst_ratio:.3e} (known miss, limit 0.1)");
+            println!(
+                "record E2 {tag} k = {k} max |err/eta - 1| over eta > 1e-9: {worst_ratio:.3e} (known miss, limit 0.1)"
+            );
         }
         out.e2_worst = out.e2_worst.max(worst_ratio);
         let top: Vec<String> = sp
@@ -397,7 +407,13 @@ fn sweep(model: &SolidModel, mb: usize, speed: f64, tag: &str, checks: Option<&m
             .iter()
             .enumerate()
             .filter(|(j, _)| !mt.iter().any(|&(b, _)| b == *j))
-            .map(|(j, e)| format!("{:.4e}:{}", s.modes[j].omega, e.map_or("None".to_string(), |v| format!("{v:.2e}"))))
+            .map(|(j, e)| {
+                format!(
+                    "{:.4e}:{}",
+                    s.modes[j].omega,
+                    e.map_or("None".to_string(), |v| format!("{v:.2e}"))
+                )
+            })
             .collect();
         println!("  record {tag} k = {k}: unmatched split modes (omega:eta) {top:?}");
     }
@@ -451,7 +467,11 @@ fn b4_checks(e2_limit: bool) {
     let s8 = sweep(&model, 4, 0.8 * w_ref, "B4 0.8 omega_ref", Some(&mut ch), e2_limit);
     // N1: without the correction, the lowest split frequency at 0.8 omega_ref.
     let n1 = s8.lowest_plain.iter().fold(0.0f64, |a, b| a.max(*b));
-    ch.gt("N1 B4 0.8 omega_ref without the option: largest lowest-mode error", n1, 1e-5);
+    ch.gt(
+        "N1 B4 0.8 omega_ref without the option: largest lowest-mode error",
+        n1,
+        1e-5,
+    );
     // N2: the reported eta of the lowest mode against the plain error, every index.
     for (k, (e, p)) in s8.lowest_eta.iter().zip(&s8.lowest_plain).enumerate() {
         ch.holds(
@@ -650,7 +670,11 @@ fn b3_correction_without_coriolis_is_inert() {
             && a.corrections == 0
             && a.dropped_corrections == 0
             && a.eta.iter().all(Option::is_none);
-        ch.holds(&format!("B3 split_modes k = {k}"), ok, "bits of the result without the option");
+        ch.holds(
+            &format!("B3 split_modes k = {k}"),
+            ok,
+            "bits of the result without the option",
+        );
     }
     let speeds: Vec<f64> = [0.0, 0.2, 0.4, 0.6, 0.8].iter().map(|f| f * w_ref).collect();
     let ta = with.split_campbell(&[0, 1, 2, 3], &speeds).unwrap();
@@ -715,11 +739,7 @@ fn x2_rigid_set_refused_with_the_option() {
                     Ok(_) => true,
                     Err(e) => key_of(e) != Some("constraint"),
                 };
-                ch.holds(
-                    "X2 with the option",
-                    with_ok,
-                    &format!("{:?}", with.as_ref().err()),
-                );
+                ch.holds("X2 with the option", with_ok, &format!("{:?}", with.as_ref().err()));
                 ch.holds(
                     "X2 without the option",
                     without_ok,

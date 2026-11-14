@@ -1071,10 +1071,7 @@ fn correction_basis(h: &HarmonicModes, phi: &[Vec<f64>], c: &CsrMatrix) -> Resul
         ));
     }
     let ind = tr.independent();
-    let mut v: Vec<Vec<f64>> = phi
-        .iter()
-        .map(|x| ind.iter().map(|&i| x[i]).collect())
-        .collect();
+    let mut v: Vec<Vec<f64>> = phi.iter().map(|x| ind.iter().map(|&i| x[i]).collect()).collect();
     let modes = v.len();
     let c2 = if h.multiplicity == 2 {
         doubled_matrix(c)
