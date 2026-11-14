@@ -692,6 +692,49 @@ pub fn element_geometric_stiffness(coords: &[Vec3], thickness: f64, stress: &[f6
     Ok(to_global(&local_geometric_stiffness(&f, n), &transformation(&f)))
 }
 
+/// The 24 x 24 `t^2/12` rotation terms of the geometric stiffness in local axes of the membrane resultant `n` (ADR 0508 D2):
+/// `K[(a, c), (b, c)] = (t^2/12) int grad N_a . n grad N_b dA` for `c = theta_x, theta_y`, the integral of
+/// [`local_geometric_stiffness`]; the drilling rotation takes none.
+pub fn local_rotation_geometric_stiffness(f: &Facet, thickness: f64, n: [[f64; 2]; 2]) -> ElementMatrix {
+    let c2 = thickness * thickness / 12.0;
+    let mut k = ElementMatrix::zeros(24);
+    let v = k.values_mut();
+    for &xi in &GAUSS {
+        for &eta in &GAUSS {
+            let p = point(&f.local, xi, eta);
+            for a in 0..4 {
+                let ga = [p.nx[a], p.ny[a]];
+                for b in 0..4 {
+                    let gb = [p.nx[b], p.ny[b]];
+                    let s = c2
+                        * p.det
+                        * (ga[0] * (n[0][0] * gb[0] + n[0][1] * gb[1]) + ga[1] * (n[1][0] * gb[0] + n[1][1] * gb[1]));
+                    for c in 3..5 {
+                        v[(6 * a + c) * 24 + 6 * b + c] += s;
+                    }
+                }
+            }
+        }
+    }
+    symmetrise(&mut k);
+    k
+}
+
+/// The global `t^2/12` rotation terms of a shell element for the stress of its one pre-stress point (ADR 0508 D2); the matrix
+/// that [`element_geometric_stiffness`] gains with the option.
+pub fn element_rotation_geometric_stiffness(
+    coords: &[Vec3],
+    thickness: f64,
+    stress: &[f64; 6],
+) -> Result<ElementMatrix> {
+    let f = facet(coords)?;
+    let n = crate::geometric_struct::membrane_resultant(&f.axes, thickness, stress)?;
+    Ok(to_global(
+        &local_rotation_geometric_stiffness(&f, thickness, n),
+        &transformation(&f),
+    ))
+}
+
 /// The 3 x 3 rotational factor `R` of the spin softening of a shell in local axes for the unit axis `a` in local components:
 /// `theta^T R theta = |theta x e_3|^2 - (a . (theta x e_3))^2` (ADR 0473 D3).
 pub(crate) fn rotary_softening_factor(a: Vec3) -> [[f64; 3]; 3] {

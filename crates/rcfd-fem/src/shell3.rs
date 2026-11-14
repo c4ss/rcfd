@@ -694,6 +694,41 @@ pub fn element_geometric_stiffness(coords: &[Vec3], thickness: f64, stress: &[f6
     Ok(to_global(&local_geometric_stiffness(&f, n), &transformation(&f)))
 }
 
+/// The 18 x 18 `t^2/12` rotation terms of the geometric stiffness in local axes (ADR 0508 D2): `(t^2/12) A grad N_a . n grad N_b`
+/// on `theta_x, theta_y` with the linear functions.
+pub fn local_rotation_geometric_stiffness(f: &Facet3, thickness: f64, n: [[f64; 2]; 2]) -> ElementMatrix {
+    let c2 = thickness * thickness / 12.0;
+    let (nx, ny) = derivatives(f);
+    let mut k = ElementMatrix::zeros(18);
+    let v = k.values_mut();
+    for a in 0..3 {
+        for b in 0..3 {
+            let s = c2
+                * f.area
+                * (nx[a] * (n[0][0] * nx[b] + n[0][1] * ny[b]) + ny[a] * (n[1][0] * nx[b] + n[1][1] * ny[b]));
+            for c in 3..5 {
+                v[(6 * a + c) * 18 + 6 * b + c] = s;
+            }
+        }
+    }
+    symmetrise(&mut k);
+    k
+}
+
+/// The global `t^2/12` rotation terms of a Shell3 element for the stress of its one pre-stress point (ADR 0508 D2).
+pub fn element_rotation_geometric_stiffness(
+    coords: &[Vec3],
+    thickness: f64,
+    stress: &[f64; 6],
+) -> Result<ElementMatrix> {
+    let f = facet(coords)?;
+    let n = crate::geometric_struct::membrane_resultant(&f.axes, thickness, stress)?;
+    Ok(to_global(
+        &local_rotation_geometric_stiffness(&f, thickness, n),
+        &transformation(&f),
+    ))
+}
+
 /// The 18 x 18 spin-softening mass in local axes for the unit axis `a` in local components (ADR 0473 D3), with the scalars of
 /// [`local_mass`]; the drilling rotation takes no term.
 pub fn local_spin_softening_mass(f: &Facet3, thickness: f64, density: f64, a: Vec3) -> ElementMatrix {

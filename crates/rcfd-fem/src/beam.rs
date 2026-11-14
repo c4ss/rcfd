@@ -451,6 +451,233 @@ pub fn local_geometric_stiffness(
     k
 }
 
+// ------------------------------------------------------------ moment, shear and Wagner terms (ADR 0508, F-558, opt-in)
+
+/// The twelve local unknowns' rows of the fields of one element at `xi` (ADR 0508 D1): the section rotations `theta = (phi,
+/// theta_y, theta_z)` and their derivatives, and the slopes `(u', v', w')` of the translations (the deflection functions of
+/// each plane, as the axial-force term of [`local_geometric_stiffness`]).
+struct SecondOrderRows {
+    theta: [[f64; 12]; 3],
+    theta_p: [[f64; 12]; 3],
+    slope: [[f64; 12]; 3],
+}
+
+fn second_order_rows(length: f64, section: &BeamSection, material: &Material, xi: f64) -> SecondOrderRows {
+    let (e, g) = moduli(material);
+    let a = section.area();
+    let l = length;
+    let phi_xy = 12.0 * e * section.i_z() / (section.shear_y() * g * a * l * l);
+    let phi_xz = 12.0 * e * section.i_y() / (section.shear_z() * g * a * l * l);
+    let (cxy, cxz) = (plane_shape_coefficients(phi_xy), plane_shape_coefficients(phi_xz));
+    let (_, np_xy) = plane_functions(&cxy, phi_xy, l, xi);
+    let (_, np_xz) = plane_functions(&cxz, phi_xz, l, xi);
+    let sl_xy = plane_slopes(&cxy, l, xi);
+    let sl_xz = plane_slopes(&cxz, l, xi);
+    // psi' = (2 b_2 + 6 b_3 xi)/L^2 of each plane.
+    let rot_slope = |c: &[[f64; 4]; 4]| {
+        let pp = [0.0, 0.0, 2.0 / (l * l), 6.0 * xi / (l * l)];
+        let scale = [1.0, l, 1.0, l];
+        let mut r = [0.0; 4];
+        for q in 0..4 {
+            for j in 0..4 {
+                r[q] += pp[j] * c[j][q] * scale[q];
+            }
+        }
+        r
+    };
+    let (npp_xy, npp_xz) = (rot_slope(&cxy), rot_slope(&cxz));
+    let mut r = SecondOrderRows {
+        theta: [[0.0; 12]; 3],
+        theta_p: [[0.0; 12]; 3],
+        slope: [[0.0; 12]; 3],
+    };
+    r.theta[0][3] = 1.0 - xi;
+    r.theta[0][9] = xi;
+    r.theta_p[0][3] = -1.0 / l;
+    r.theta_p[0][9] = 1.0 / l;
+    r.slope[0][0] = -1.0 / l;
+    r.slope[0][6] = 1.0 / l;
+    let (ixy, ixz) = ([1, 5, 7, 11], [2, 4, 8, 10]);
+    let sxz = [1.0, -1.0, 1.0, -1.0];
+    for q in 0..4 {
+        r.slope[1][ixy[q]] = sl_xy[q];
+        r.theta[2][ixy[q]] = np_xy[q];
+        r.theta_p[2][ixy[q]] = npp_xy[q];
+        r.slope[2][ixz[q]] = sxz[q] * sl_xz[q];
+        // theta_y = -psi of the x-z plane.
+        r.theta[1][ixz[q]] = -sxz[q] * np_xz[q];
+        r.theta_p[1][ixz[q]] = -sxz[q] * npp_xz[q];
+    }
+    r
+}
+
+/// The section resultants `(N, V_y, V_z, T, M_y, M_z)` at the ends of an element from its twelve local end forces: `-f` at
+/// `x = 0` and `+f` at `x = L` (the force of the rest of the structure on the cut face).
+fn end_resultants(f: &[f64; 12]) -> ([f64; 6], [f64; 6]) {
+    let mut r0 = [0.0; 6];
+    let mut r1 = [0.0; 6];
+    for k in 0..6 {
+        r0[k] = -f[k];
+        r1[k] = f[6 + k];
+    }
+    (r0, r1)
+}
+
+/// `K += c (a b^T + b a^T)`: the Hessian of `c (a . x)(b . x)`.
+fn add_product(k: &mut ElementMatrix, c: f64, a: &[f64; 12], b: &[f64; 12]) {
+    let v = k.values_mut();
+    for i in 0..12 {
+        for j in 0..12 {
+            v[i * 12 + j] += c * (a[i] * b[j] + b[i] * a[j]);
+        }
+    }
+}
+
+/// The bending-moment and torsion-moment terms of the geometric stiffness in local axes (ADR 0508 D1): the Hessian of `int M .
+/// K_2 dx`, `K_2 = -(1/2) theta x theta'`, with the section moments `(T, M_y, M_z)` of the twelve local end forces `end_forces`
+/// varying linearly between the ends; four-point Gauss (exact).
+pub fn local_moment_geometric_stiffness(
+    length: f64,
+    section: &BeamSection,
+    material: &Material,
+    end_forces: &[f64; 12],
+) -> ElementMatrix {
+    let (r0, r1) = end_resultants(end_forces);
+    let mut k = ElementMatrix::zeros(12);
+    for (x, w) in GAUSS4_X.iter().zip(GAUSS4_W) {
+        let xi = 0.5 * (x + 1.0);
+        let wl = 0.5 * w * length;
+        let f = second_order_rows(length, section, material, xi);
+        let m = |c: usize| (1.0 - xi) * r0[c] + xi * r1[c];
+        let (t, my, mz) = (m(3), m(4), m(5));
+        let (ph, ty, tz) = (&f.theta[0], &f.theta[1], &f.theta[2]);
+        let (php, typ, tzp) = (&f.theta_p[0], &f.theta_p[1], &f.theta_p[2]);
+        // -(1/2) { T (th_y th_z' - th_z th_y') + M_y (th_z ph' - ph th_z') + M_z (ph th_y' - th_y ph') }.
+        add_product(&mut k, -0.5 * wl * t, ty, tzp);
+        add_product(&mut k, 0.5 * wl * t, tz, typ);
+        add_product(&mut k, -0.5 * wl * my, tz, php);
+        add_product(&mut k, 0.5 * wl * my, ph, tzp);
+        add_product(&mut k, -0.5 * wl * mz, ph, typ);
+        add_product(&mut k, 0.5 * wl * mz, ty, php);
+    }
+    k
+}
+
+/// The shear-force terms of the geometric stiffness in local axes (ADR 0508 D1): the Hessian of `int [V_y ((1/2) phi theta_y -
+/// theta_z u' + phi w') + V_z ((1/2) phi theta_z - phi v' + theta_y u')] dx` with the shear forces of the end forces varying
+/// linearly.
+pub fn local_shear_geometric_stiffness(
+    length: f64,
+    section: &BeamSection,
+    material: &Material,
+    end_forces: &[f64; 12],
+) -> ElementMatrix {
+    let (r0, r1) = end_resultants(end_forces);
+    let mut k = ElementMatrix::zeros(12);
+    for (x, w) in GAUSS4_X.iter().zip(GAUSS4_W) {
+        let xi = 0.5 * (x + 1.0);
+        let wl = 0.5 * w * length;
+        let f = second_order_rows(length, section, material, xi);
+        let vy = (1.0 - xi) * r0[1] + xi * r1[1];
+        let vz = (1.0 - xi) * r0[2] + xi * r1[2];
+        let (ph, ty, tz) = (&f.theta[0], &f.theta[1], &f.theta[2]);
+        let (up, vp, wp) = (&f.slope[0], &f.slope[1], &f.slope[2]);
+        add_product(&mut k, 0.5 * wl * vy, ph, ty);
+        add_product(&mut k, -wl * vy, tz, up);
+        add_product(&mut k, wl * vy, ph, wp);
+        add_product(&mut k, 0.5 * wl * vz, ph, tz);
+        add_product(&mut k, -wl * vz, ph, vp);
+        add_product(&mut k, wl * vz, ty, up);
+    }
+    k
+}
+
+/// The Wagner terms of the geometric stiffness in local axes (ADR 0508 D1): the Hessian of `(1/2) int (beta_y M_y - beta_z M_z)
+/// phi'^2 dx`, `wagner = (beta_y, beta_z)` the section's cubic coefficients (zero for a section with two axes of symmetry).
+pub fn local_wagner_geometric_stiffness(length: f64, end_forces: &[f64; 12], wagner: [f64; 2]) -> ElementMatrix {
+    let (r0, r1) = end_resultants(end_forces);
+    let mut k = ElementMatrix::zeros(12);
+    let b = |r: &[f64; 6]| wagner[0] * r[4] - wagner[1] * r[5];
+    // The integral of the linear `beta M` against the constant `phi'^2`: the mean of the end values times L.
+    let c = 0.5 * (b(&r0) + b(&r1)) / length;
+    place_pair(&mut k, 3, [[c, -c], [-c, c]]);
+    k
+}
+
+/// The sum of the moment, shear-force and Wagner terms in local axes (ADR 0508 D1).
+pub fn local_resultant_geometric_stiffness(
+    length: f64,
+    section: &BeamSection,
+    material: &Material,
+    end_forces: &[f64; 12],
+    wagner: [f64; 2],
+) -> ElementMatrix {
+    let mut k = local_moment_geometric_stiffness(length, section, material, end_forces);
+    let parts = [
+        local_shear_geometric_stiffness(length, section, material, end_forces),
+        local_wagner_geometric_stiffness(length, end_forces, wagner),
+    ];
+    for p in &parts {
+        for (a, b) in k.values_mut().iter_mut().zip(p.values()) {
+            *a += b;
+        }
+    }
+    k
+}
+
+/// The global matrix of [`local_resultant_geometric_stiffness`] of a beam element (ADR 0508 D4).
+pub fn element_resultant_geometric_stiffness(
+    coords: &[Vec3],
+    section: &BeamSection,
+    orientation: Vec3,
+    material: &Material,
+    end_forces: &[f64; 12],
+    wagner: [f64; 2],
+) -> Result<ElementMatrix> {
+    if end_forces.iter().chain(&wagner).any(|v| !v.is_finite()) {
+        return Err(FemError::InvalidValue {
+            key: "stress",
+            reason: "the end forces or the Wagner coefficients of a Beam2 element are not finite".to_string(),
+        });
+    }
+    let f = frame_of(coords, orientation)?;
+    Ok(to_global(
+        &local_resultant_geometric_stiffness(f.length, section, material, end_forces, wagner),
+        &f.axes,
+    ))
+}
+
+/// The twelve local end forces `K_loc u_loc` of a beam element for its twelve global unknowns `ue` (ADR 0508 D3): the forces
+/// of the nodes on the element, in local axes.
+pub fn local_end_forces(
+    coords: &[Vec3],
+    section: &BeamSection,
+    orientation: Vec3,
+    material: &Material,
+    ue: &[f64],
+) -> Result<[f64; 12]> {
+    if ue.len() != 12 {
+        return Err(FemError::FieldLength {
+            key: "element unknowns",
+            expected: 12,
+            found: ue.len(),
+        });
+    }
+    let f = frame_of(coords, orientation)?;
+    let mut ul = [0.0; 12];
+    for b in 0..4 {
+        for k in 0..3 {
+            ul[3 * b + k] = (0..3).map(|c| f.axes[k][c] * ue[3 * b + c]).sum();
+        }
+    }
+    let kl = local_stiffness(f.length, section, material);
+    let mut out = [0.0; 12];
+    for (i, o) in out.iter_mut().enumerate() {
+        *o = (0..12).map(|j| kl.values()[i * 12 + j] * ul[j]).sum();
+    }
+    Ok(out)
+}
+
 fn check_stress(stress: &[f64; 6]) -> Result<()> {
     if stress.iter().any(|v| !v.is_finite()) {
         return Err(FemError::InvalidValue {

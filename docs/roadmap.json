@@ -5455,9 +5455,9 @@
     "deps": [
       "F-420"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The beam's geometric stiffness gains the bending-moment, shear-force and Wagner terms and the shells' the t^2/12 rotation terms, opt-in: the lateral-torsional buckling moment of a simply supported I or rectangular beam under uniform moment equals the closed form (pi/L) sqrt(E I_z G J) (1 + (pi^2 E C_w)/(G J L^2))^(1/2) within 1 percent at 16 elements; without the option every result of ADR 0473 bit-identical.",
-    "note": "Structural solver, advanced tier. Follow-up of F-420 (ADR 0473, 2026-11-14)."
+    "note": "Structural solver, advanced tier. PARTIAL by the standing rule (every registered check met except the I-section clause, which needs a warping degree of freedom: FE -19.2 percent against the closed form, recorded in ltb_i_section_known_miss). ADR 0508, 2026-11-14: opt-in Prestress::with_beam_resultants (moment, shear-force and Wagner terms from the element end forces) and Prestress::with_shell_rotation_terms (t^2/12 on the shell rotations). Rectangle lateral-torsional buckling 3.95e-4 (16 elements) and 5.2e-3 (8) of the closed form; thrust-moment interaction 1.4e-3; frame invariance 2.5e-14 and 1.1e-16; end-force equilibrium 1.8e-16; thick plate (t/a 0.2) ratio of the Mindlin closed form to 1.9e-4 (Shell4) and 9.8e-5 (Shell3). Defaults bit-identical (16 digests). Nine of ten registered mutations caught; one gap (scaled) closed by A3. Follow-up of F-420 (ADR 0473, 2026-11-14). Follow-ups: warping degree of freedom for Beam2, case-file key, per-section Wagner coefficients (proposed)."
   },
   {
     "id": "F-559",
