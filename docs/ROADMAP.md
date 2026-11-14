@@ -8417,7 +8417,7 @@ fixed by the item's registration ADR before any code.
     1.44 against 1.8 (the reading of ADR 0404 includes the residual of the active-set change; the asymptotic step is
     quadratic and reaches the floor at once). Case-file key not added (recommended: j2 = { base, yield_stress,
     isotropic, kinematic }, nonlinear static study only). Follow-ups below. Follow-ups F-560, F-561.
-- [ ] **F-423** Nonlinear transient dynamics: Newton iteration inside the Newmark and generalised-alpha step
+- [~] **F-423** Nonlinear transient dynamics: Newton iteration inside the Newmark and generalised-alpha step
   - depends on: F-408, F-397, F-398
   - acceptance: Every limit not stated here is registered in the ADR before the run. At a load factor of 1e-6 the
     history equals the linear one of F-398 within 1e-9 relative. A stiff slender bar pinned at one end and released from
@@ -8429,8 +8429,11 @@ fixed by the item's registration ADR before any code.
     the spectral radius 1 the generalised-alpha result equals Newmark within 1e-10. A run split by save and restore has
     the bits of the unsplit run, with a material state included. A step that does not converge after the registered
     halvings is an error with the time.
-  - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0326; the registration is
-    written by the implementation agent before any code.
+  - note: Structural solver, advanced tier. PARTIAL. (ADR 0479, 2026-11-14): Newton inside Newmark and generalised-alpha
+    (`nl_transient`), reusing the ADR 0404 driver; load-factor, pendulum, axial period, rho_inf = 1, save/restore with
+    J2 state and halving checks met; the free spinning bar (a3) missed by the nonlinear instability of the trapezoidal
+    rule, recorded as a known miss. Mutation MU6 (driver ignoring in_residual_reference) not caught. Follow-ups F-570,
+    F-571.
 - [ ] **F-424** Follower pressure, arc-length continuation, and modes about a nonlinear equilibrium
   - depends on: F-408, F-395, F-396, F-397
   - acceptance: Every limit not stated here is registered in the ADR before the run. Follower pressure: the load
@@ -10943,3 +10946,13 @@ fixed by the item's registration ADR before any code.
     equals RotatingSector::whirl_modes within 1e-5, and eta agrees with the measured error within 10 percent where it
     exceeds 1e-9; without the option every result bit-identical.
   - note: Structural solver, advanced tier. Follow-up of F-555 (ADR 0481, 2026-11-14).
+- [ ] **F-570** Energy-momentum conserving step (Simo and Tarnow) for nonlinear transient dynamics
+  - depends on: F-423
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The spinning bar of ADR 0479 over
+    ten turns, linear momentum within 1e-10, angular momentum within 1e-6, energy within 1e-6 relative.
+  - note: Structural solver, advanced tier. Follow-up of F-423 (ADR 0479, 2026-11-14).
+- [ ] **F-571** Rounding floor of the total Lagrangian internal force under large rotation and translation
+  - depends on: F-423, F-397
+  - acceptance: Every limit not stated here is registered in the ADR before the run. S3 of ADR 0479 (free Hex8, 50
+    steps) converges every step with the driver defaults, and MU6 of ADR 0479 is caught.
+  - note: Structural solver, advanced tier. Follow-up of F-423 (ADR 0479, 2026-11-14).

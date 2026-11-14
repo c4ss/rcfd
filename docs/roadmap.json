@@ -3910,7 +3910,7 @@
     ],
     "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. At a load factor of 1e-6 the history equals the linear one of F-398 within 1e-9 relative. A stiff slender bar pinned at one end and released from the horizontal under gravity swings with the period 2 pi sqrt(2 L/(3 g)) (2/pi) K(sin 45 degrees) (factor 1.1803, recomputed in the registration) within 1 percent, the total energy constant within 1e-3 of its swing over five periods at the registered step. A free spinning elastic bar keeps its linear momentum within 1e-10 and its angular momentum within 1e-6 relative over ten turns. Large axial oscillation of a bar element with nu = 0 from the stretch 1.2: period equal to the quadrature of the energy integral (computed in the registration) within 0.5 percent. With the spectral radius 1 the generalised-alpha result equals Newmark within 1e-10. A run split by save and restore has the bits of the unsplit run, with a material state included. A step that does not converge after the registered halvings is an error with the time.",
-    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). PARTIAL. Size M. ADR 0479, 2026-11-14 (registration of stub ADR 0326): nonlinear transient dynamics in rcfd-fem (nl_transient.rs): Newton inside the Newmark and generalised-alpha (averaged internal force) step, on the Newton driver of ADR 0404 without a second loop (inertia and damping as a driver contribution, solve_from), J2 states of F-422 carried, step halving (5 levels) and an error with the time. Met: load factor 1e-6 against F-398 within 7.5e-14 (limit 1e-9), pendulum released from the horizontal period 2.09e-4 and energy 2.76e-4 of its swing over five periods (Newton residual tolerance 1e-7 by amendment 1, the 1e-10 default below the rounding floor), large axial oscillation period 8.64e-5 against the energy-integral quadrature, rho_inf = 1 against Newmark 1.3e-13 and 1.6e-14 (J2 bar), split run with the J2 state bit for bit (both methods), halving bit for bit and the error with the time, threads bit for bit, default bits (7 digests) and baseline hashes unchanged; seven of eight mutations caught. Missed (known misses, diagnosed): the free spinning bar (Newmark stops at step 851 of 1000 by the nonlinear instability of the trapezoidal rule; linear momentum at rounding up to the blow-up), the free Hex8 of amendment 2 (residual floor 1.17e-10 against 1e-10 at step 50), the bit equality of the four end nodes of the axial oscillator (spread 1.9e-14); the mutation dropping the inertia from the residual reference is not caught. Case-file key not added (recommended: [study] kind = \"transient\" with nonlinear = true). Follow-ups proposed in ADR 0479 (energy-momentum conserving step; residual floor of the total Lagrangian internal force under large rotation and translation)."
+    "note": "Structural solver, advanced tier. PARTIAL. (ADR 0479, 2026-11-14): Newton inside Newmark and generalised-alpha (`nl_transient`), reusing the ADR 0404 driver; load-factor, pendulum, axial period, rho_inf = 1, save/restore with J2 state and halving checks met; the free spinning bar (a3) missed by the nonlinear instability of the trapezoidal rule, recorded as a known miss. Mutation MU6 (driver ignoring in_residual_reference) not caught. Follow-ups F-570, F-571."
   },
   {
     "id": "F-424",
@@ -5581,5 +5581,28 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The basis of RotatingSector::split_modes optionally adds the static correction vectors K_eff^-1 G phi_i of the F-396 harmonic modes of each index and reports the first-order Ritz error eta of ADR 0481 for every split mode; on the disc sector of ADR 0411 with 4 harmonic modes per index at 0.4 and 0.8 omega_ref the lowest split frequency of every index equals RotatingSector::whirl_modes within 1e-5, and eta agrees with the measured error within 10 percent where it exceeds 1e-9; without the option every result bit-identical.",
     "note": "Structural solver, advanced tier. Follow-up of F-555 (ADR 0481, 2026-11-14)."
+  },
+  {
+    "id": "F-570",
+    "title": "Energy-momentum conserving step (Simo and Tarnow) for nonlinear transient dynamics",
+    "phase": 9,
+    "deps": [
+      "F-423"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The spinning bar of ADR 0479 over ten turns, linear momentum within 1e-10, angular momentum within 1e-6, energy within 1e-6 relative.",
+    "note": "Structural solver, advanced tier. Follow-up of F-423 (ADR 0479, 2026-11-14)."
+  },
+  {
+    "id": "F-571",
+    "title": "Rounding floor of the total Lagrangian internal force under large rotation and translation",
+    "phase": 9,
+    "deps": [
+      "F-423",
+      "F-397"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. S3 of ADR 0479 (free Hex8, 50 steps) converges every step with the driver defaults, and MU6 of ADR 0479 is caught.",
+    "note": "Structural solver, advanced tier. Follow-up of F-423 (ADR 0479, 2026-11-14)."
   }
 ]
