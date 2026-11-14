@@ -8160,7 +8160,9 @@ fixed by the item's registration ADR before any code.
     creep rate within 9.6e-4; a step above the increment limit halved, bit-equal to the explicitly halved steps; a
     non-converged local iteration located with its element; default bits (16 digests) and baseline hashes unchanged;
     nine mutations caught. Case-file key not added. Follow-ups proposed in ADR 0489. Literature cited from memory
-    (marked in reference-data.md). Follow-ups F-580, F-581.
+    (marked in reference-data.md). Follow-ups F-580, F-581. The driver solve_in_time takes load and displacement
+    histories and a uniform temperature as solve_in_time_with (ADR 0499, 2026-11-14); with none it gives the bits of ADR
+    0489.
 - [~] **F-412** Direct harmonic solve: complex symmetric factorisation, structural (hysteretic) damping, discrete dampers, base excitation
   - depends on: F-408, F-373, F-374, F-383, F-399
   - acceptance: Every limit not stated here is registered in the ADR before the run. rcfd-linalg: a random complex
@@ -11031,12 +11033,22 @@ fixed by the item's registration ADR before any code.
     bearing bit for bit (X and Y, 1, 2, 3 knots); linear-table critical speed against the closed form 0 (parallel
     quadratic model) and 4.4e-16 (series cubic model), limit 1e-6; whirl, Campbell and unbalance response against closed
     forms 4.4e-16, limit 1e-9; defaults bit-identical; 9 mutations caught. No case-file key.
-- [ ] **F-564** Damped critical speeds as unbalance-response peaks and checked Campbell crossings
+- [x] **F-564** Damped critical speeds as unbalance-response peaks and checked Campbell crossings
   - depends on: F-416
   - acceptance: Every limit not stated here is registered in the ADR before the run. On the damped Jeffcott rotor the
     response peak equals w_n / sqrt(1 - 2 zeta^2) within 1e-6 and the crossing of the forward track with engine order 1
     equals the undamped critical speed within 1e-6 at zeta = 0.
-  - note: Structural solver, advanced tier. Follow-up of F-416 (ADR 0476, 2026-11-14).
+  - note: Structural solver, advanced tier. Follow-up of F-416 (ADR 0476, 2026-11-14). DONE. F-564 (ADR 0501,
+    2026-11-14): rcfd_fem::rotor::RotorModel::unbalance_peaks (peaks of the unbalance response over the spin, grid plus
+    golden-section search) and campbell_crossings (Campbell crossings with an engine order refined by bisection on the
+    frozen whirl problem, each with its residual). On the damped Jeffcott rotor the response peak equals w_n / sqrt(1 -
+    2 zeta^2) to 4.4e-9 and its amplitude e / (2 zeta sqrt(1 - zeta^2)) to 4.4e-16 (limit 1e-6; the wording of the
+    acceptance matches the unbalance excitation, the constant-force peak at w_n sqrt(1 - 2 zeta^2) is confirmed to
+    4.8e-9); the crossing of the tracks with engine order 1 equals the undamped critical speed to 2.2e-16 at zeta = 0
+    and w_n sqrt(1 - zeta^2) to 4.4e-16 at zeta > 0; on a gyroscopic rotor the forward crossings equal critical_speeds()
+    to 6.3e-14 with residuals below 3.4e-13; defaults bit-identical; 7 of 8 mutations caught, the eighth declared
+    equivalent. No case-file key. MU6 (amplitude from the minor axis) survived, declared equivalent in the registration
+    for the circular orbit.
 - [ ] **F-565** Random response in the case file and the CLI
   - depends on: F-417, F-533
   - acceptance: Every limit not stated here is registered in the ADR before the run. A case with analysis = "random", a
@@ -11179,20 +11191,20 @@ fixed by the item's registration ADR before any code.
     caller. A uniform temperature given to the nonlinear transient integrator reproduces S1b of ADR 0485 in a free
     vibration run against the run at the reference temperature with all relaxation times scaled by a_T, within 1e-10
     relative. Models without the viscoelastic material keep their bits.
-  - note: Structural solver, advanced tier. DONE. ADR 0499, 2026-11-14: nonlinear::solve_in_time_with generalises the
-    quasi-static time-stepping driver of ADR 0489 (solve_in_time, now its form without histories) with load and
-    displacement histories against time (TimeLoading of transient::LoadHistory and MotionHistory, piecewise linear factors
-    taken at the end of every attempt, halved or not), with the halvings of ADR 0404, and a uniform temperature
-    (TimeSteppingOptions::temperature); the nonlinear transient integrator takes a uniform temperature
-    (NlTransientOptions::temperature) in the point context of every step, at its start and in its strain energy;
-    nonlinear::internal_force_at. Met: ADR 0485 R1 by one call within 4.7e-16, C1 within 1.21e-5 at 20 steps per tau with
-    order 1.996, bit-equal to the loop of solve_from_at; a strain ramp within 4.7e-9 and creep under a load ramp within
-    5.0e-5 (order 1.97); a step halved once under a load history, bit-equal to the explicit half steps; S1b by the driver
-    at a temperature within 4.7e-16; a free vibration of the viscoelastic rod at T = T_ref + 10 K against the run at T_ref
-    with every relaxation time scaled by a_T: displacements and stresses equal (0, a rounding coincidence; the unscaled
-    run differs by 1.47); an elastic model with a temperature keeps its bits; default bits (13 digests) and baseline
-    hashes unchanged; eight mutations caught. Case-file key not added (recommended: a quasi-static time study and a
-    temperature in the nonlinear transient study).
+  - note: Structural solver, advanced tier. Follow-up of F-410. DONE. ADR 0499, 2026-11-14:
+    nonlinear::solve_in_time_with generalises the quasi-static time-stepping driver of ADR 0489 (solve_in_time, now its
+    form without histories) with load and displacement histories against time (TimeLoading of transient::LoadHistory and
+    MotionHistory, piecewise linear factors taken at the end of every attempt, halved or not), with the halvings of ADR
+    0404, and a uniform temperature (TimeSteppingOptions::temperature); the nonlinear transient integrator takes a
+    uniform temperature (NlTransientOptions::temperature) in the point context of every step, at its start and in its
+    strain energy; nonlinear::internal_force_at. Met: ADR 0485 R1 by one call within 4.7e-16, C1 within 1.21e-5 at 20
+    steps per tau with order 1.996, bit-equal to the loop of solve_from_at; a strain ramp within 4.7e-9 and creep under
+    a load ramp within 5.0e-5 (order 1.97); a step halved once under a load history, bit-equal to the explicit half
+    steps; S1b by the driver at a temperature within 4.7e-16; a free vibration of the viscoelastic rod at T = T_ref + 10
+    K against the run at T_ref with every relaxation time scaled by a_T: displacements and stresses equal (0, a rounding
+    coincidence; the unscaled run differs by 1.47); an elastic model with a temperature keeps its bits; default bits (13
+    digests) and baseline hashes unchanged; eight mutations caught. Case-file key not added (recommended: a quasi-static
+    time study and a temperature in the nonlinear transient study). Follow-up F-592 (optional).
 - [x] **F-577** The viscoelastic material in the direct harmonic solve and the damped modes
   - depends on: F-410, F-412, F-414
   - acceptance: Every limit not stated here is registered in the ADR before the run. The direct harmonic solve takes a
@@ -11388,3 +11400,12 @@ fixed by the item's registration ADR before any code.
     [0/90]s plate under uniaxial compression is pi^2 (D11 + 2 (D12 + 2 D66) + D22)/a^2 within 2 percent with 16 x 16
     elements.
   - note: Structural solver, advanced tier. Follow-up of F-428 (ADR 0496, 2026-11-14).
+- [ ] **F-592** A temperature history on the quasi-static driver and the nonlinear transient integrator
+  - depends on: F-576
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The quasi-static driver and the
+    nonlinear transient integrator take a uniform temperature against time (a piecewise linear table, the step-end
+    value) and the Rayleigh stiffness tangent at that temperature. A relaxation under a temperature step equals the
+    closed form with the reduced time of the two temperatures within 1e-10; a constant table gives the bits of ADR 0499.
+    Models without a temperature keep their bits.
+  - note: Structural solver, advanced tier. Optional. Follow-up of F-576 (ADR 0499, 2026-11-14); includes the Rayleigh
+    stiffness tangent at the temperature (still refused for a shifted material).
