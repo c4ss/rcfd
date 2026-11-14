@@ -262,3 +262,100 @@ Limits relative to the reference value unless stated. Every check uses the frequ
 - The temperature of a tabulated material is the static field of the model; a temperature that changes with the vibration,
   or a stiffness taken at another temperature than the static load case, is not provided. Density is not tabulated.
 - Mode superposition (`HarmonicSolver` without the static correction) takes a basis as data, as before.
+
+## Addendum 1: results (2026-11-14)
+
+Registered runs at commit 9d30389c (library code and tests committed before any run), release profile, each file run once:
+`sa_ortho_modal_default_bits` (log `f537-scratch/run-b1.log`), `sa_ortho_modal` (log `f537-scratch/run-sa_ortho_modal.log`);
+then the whole `rcfd-fem` test suite (83 test result blocks: 450 passed, 0 failed, 93 ignored, at commit 10014be0; log `f537-scratch/run-fem-all.log`) and `baseline_hashes` of `rcfd-api`
+(3 passed, 0 failed, 1 ignored as before; log `f537-scratch/run-baseline_hashes.log`).
+
+| Check | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| C1 cantilever `L/h = 40`, modes 1 and 2 against `f_EB = 9.444181` Hz | `<= 0.01` | 2.666e-3 both (`f = 9.4190072` Hz) | yes |
+| C1b the same against Timoshenko 9.415729 Hz | `<= 3e-3` | 3.48e-4 | yes |
+| C1c `L/h = 20` against Timoshenko 37.327353 Hz | `<= 5e-3` | 1.28e-3 (`f = 37.375019` Hz); against EB -1.063e-2 (recorded, no limit) | yes |
+| C2 block modal, axes I; rotated | `<= 1e-12` | 3.2e-14; 4.0e-14 | yes |
+| C2p block pre-stressed, axes I; rotated | `<= 1e-12` | 3.8e-14; 5.9e-14 | yes |
+| C2t transformation modal, axes I; rotated | `<= 1e-12` | 1.8e-15; 9.0e-15 | yes |
+| C2tp transformation pre-stressed, axes I; rotated | `<= 1e-12` | 2.0e-15; 1.4e-14 | yes |
+| Q1 inverse-iteration identity, block, `TAB`; `CYL` | `<= 1e-9` | 6.7e-16; 1.3e-15 | yes |
+| Q1t the same, transformation block | `<= 1e-9` | 5.6e-16; 1.3e-15 | yes |
+| Z1 zero pre-stress, bits of the modal analysis, `TAB`, `CYL` | `==` | bit-equal, both | yes |
+| Z1t the same on the transformation | `<= 1e-12` | 0, both | yes |
+| P1 `TAB_U` modal; pre-stressed, against `ISO` at `E(443) = 1.757e11` | `<= 1e-12` | 0; 0 | yes |
+| P1t transformation pre-stressed | `<= 1e-12` | 0 | yes |
+| T1 modal, linear constraints against elimination (`ORTHO`, rotated axes) | `<= 1e-10` | 0 | yes |
+| T3 static, the same | `<= 1e-10` | 0 | yes |
+| R1 (copy) E1, E2, E3, E8, E9, E10 solve; E4 to E7 refused; R2 | as stated | 20 of 20; R2 as stated | yes |
+| R3 seven paths refused for each variant; Shell4 modal; cyclic constraint; `TAB` without a field | as stated | 17 of 17 | yes |
+| B1 17 digests of main dab660ed | `==` | 17 of 17 | yes |
+| N1 axes turned 90 degrees, `f_1/f_EB` | `< 0.5` | 0.3161 | as expected |
+| N2 P1 against `E(T_ref)` | `> 1e-3` | 4.01e-2 | as expected |
+| N3 `G_12` times `(1 + 1e-6)` | `> 1e-9` | 3.05e-7 | as expected |
+
+Reading. C1 at -0.27 percent is the estimate of the registration (Timoshenko -0.30 percent, the one-element depth slightly
+stiffer in shear); C1b at 3.5e-4 is what remains after the beam's shear and rotary inertia are taken out. At the slenderness
+of ADR 0452 O6 the Euler-Bernoulli reading is -1.06 percent, as arithmetic 1 predicted (C1c, recorded). The isotropic
+equivalence sits at the rounding level of probe 2 (at most 5.9e-14). P1, T1, T3 and Z1 are bit-equal because the per-point
+path performs the operations of the element-constant one when the material is the same at every point.
+
+### Mutations (scratch copy `f537-scratch/mut` of commit 9d30389c, `sa_ortho_modal` per mutation, logs `f537-scratch/mut_Mu*.log`)
+
+| Mutation | Caught by |
+| --- | --- |
+| Mu1 modal with the element-constant `D` | Q1 and P1 (`TAB` refused by the element-constant matrix), R1 E3 |
+| Mu2 `modal_analysis_mpc` with the element-constant `D` | Q1t, R1 E10 (C2t not: `Fixed` axes give the same matrix) |
+| Mu3 pre-stressed (elimination) with the element-constant `D` | P1, the Q1/Z1 test, R1 E8 (C2p not, as for Mu2) |
+| Mu4 pre-stressed transformation without the supports | Z1t (0.42, 0.73), C2tp (0.216), P1t (0.234) |
+| Mu5 the geometric stiffness left out for the variants | C2p (3.4e-2), C2tp (1.4e-2), P1, P1t |
+| Mu6 the cyclic refusal removed | R3 (the model reaches the transformation and is refused for its geometry instead) |
+| Mu7 `buckling::factors` with `check_supported_with_materials` | **not caught** |
+| Mu8 the point temperature replaced by the reference in the per-point stiffness | P1 (4.18e-2), P1t, N2 (0) |
+
+Seven of eight caught. Mu7 is an equivalent mutant: after the opened check, `buckling::factors` assembles `stiffness_with`
+and `geometric_stiffness`, whose own checks refuse both variants with the same error (`NotYetSupported`, `"material 0,
+element set 'all'"`, `FOLLOW_UP`), so no observable behaviour changed and no check can see it. The registration did not
+foresee that the entry check is a second line of defence there.
+
+### Deviations and what was not run
+
+- No compile error and no set-up defect before or after the registered runs; no amendment.
+- After the registered runs `rustfmt` reformatted the two new test files (line breaks only; commit 10014be0); the tests were
+  not run again for it except inside the whole `rcfd-fem` suite. Clippy (debug and release, `--all-targets -D warnings`) and
+  `cargo fmt -p rcfd-fem --check` pass.
+- Not run: the whole workspace (the lead's gate); the `docs_site` test (no documentation page changed).
+
+### Decision by the registered rule
+
+**Partial**: every registered check met in its single run, N1 to N3 as expected, no amendment, but Mu7 was not caught. The
+rule counts a mutation not caught; that Mu7 is equivalent (no behaviour to catch) is the diagnosis, not a reason to change the
+rule after the run.
+
+### Remaining questions
+
+1. Mu7, an equivalent mutant. Options: (a) keep F-537 partial as the rule gives and close it by a follow-up that only records
+   the equivalence (no code); (b) the maintainer accepts that an equivalent mutant does not count and sets F-537 done; (c) in
+   a follow-up, make the refusal of the unopened paths visible at their entry check (for example a location naming the path),
+   so that such a mutation changes the message. Recommendation (b): the mutation leaves every output of the crate unchanged;
+   (c) changes error texts that the tests of ADR 0452 assert.
+2. The other paths (buckling, transient, nonlinear, harmonic with the static correction, cyclic harmonics, rotating, damped)
+   still refuse both variants. Options: (a) follow-ups through `point_stiffness`; (b) leave them. Recommendation (a), the
+   rotating modes (stress stiffening and spin softening of an orthotropic blade) first.
+3. Cylindrical axes with a cyclic constraint about the same axis would be cyclically symmetric. Options: (a) open them when
+   the axes rule is `Cylindrical` with the constraint's axis and origin; (b) keep the refusal. Recommendation (a), with the
+   rotating follow-up.
+
+## For the lead: roadmap entries
+
+Proposed status of F-537: **partial** (every check met; one equivalent mutant not caught, question 1).
+
+> ADR 0457, 2026-11-14: the orthotropic and tabulated materials of ADR 0452 on the modal analysis (elimination and transformation), the pre-stressed modes (both paths, a uniform pre-stress allowed) and the static solve on the transformation (linear constraints, elastic supports), through the per-point stiffness; a tabulated material takes its stiffness at the model's temperature field at each integration point, the mass the base density; a cyclic constraint with either variant, buckling, nonlinear, transient, harmonic with the static correction, rotating, damped modes, the public stiffness and geometric stiffness, beams and shells refuse them by name (a follow-up of ADR 0452). Orthotropic Hex20 cantilever (E2 = E1/10, G13 = E1/20) at L/h = 40: first bending pair 0.27 percent below Euler-Bernoulli with E1 (Timoshenko -0.30 percent derived; 3.5e-4 against it); at L/h = 20 1.3e-3 against Timoshenko (Euler-Bernoulli -1.06 percent, recorded). Isotropic constants in the orthotropic material give the isotropic frequencies within 5.9e-14 (modal and pre-stressed, both paths, on stocky non-degenerate models; a slender degenerate pair moves 3e-10 for a one-ulp change of D); the inverse-iteration identity against the static solve 1.3e-15 for tabulated and cylindrical materials; a tabulated material at a uniform 443 K gives the bits of the isotropic material at E(443). Default paths bit-identical (17 digests of main dab660ed). Seven of eight mutations caught; Mu7 (buckling's entry check opened) is equivalent, stiffness_with refuses after it. Files modal.rs, geometric.rs, mpc.rs, assemble.rs, model.rs; tests sa_ortho_modal.rs, sa_ortho_modal_default_bits.rs; sa_ortho r1_r2_paths recorded and copied.
+
+Note of F-409 (sentence to append):
+
+> Follow-up F-537 (ADR 0457, 2026-11-14) opened the modal analysis, the pre-stressed modes and the transformation path to both variants.
+
+Follow-up item (id by the lead), title "Orthotropic and tabulated materials on the rotating, buckling and transient paths", deps F-537:
+
+> Every limit not stated here is registered in the ADR before the run. The rotating modes (stress stiffening, spin softening), the buckling factors and the transient integrator take the orthotropic and tabulated materials of ADR 0452 through the per-point stiffness; the rotating modes of an orthotropic disc or blade with cylindrical axes match a closed form or a registered reference within registered limits; isotropic constants in an orthotropic material give the results of the isotropic material within 1e-12 on stocky models; a cyclic constraint with cylindrical axes about its own axis is opened or refused by name; the paths still not opened refuse the variants by name; default paths bit-identical.
