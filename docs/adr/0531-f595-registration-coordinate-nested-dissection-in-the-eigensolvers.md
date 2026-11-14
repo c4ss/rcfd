@@ -248,3 +248,11 @@ here before anything is run:
    effect); the "Must fail" entry of M8 is N3 alone.
 
 Nothing else changes.
+
+## Amendment 2 (2026-11-14, written with the library code, before any run of any check)
+
+`crate::mpc::modal_analysis_mpc` is public: a direct call with `coordinate_order(true)` would bypass the refusal of D2 in
+`modal_analysis` and silently order by level structures. One line at its entry refuses it in the same way
+(`FemError::InvalidValue` key `"factorisation"`), so `crates/rcfd-fem/src/mpc.rs` is touched after all (D3 said it would
+not be): the refusal only, nothing else of the module. No check or limit changes; E5 (c) covers the path through
+`modal_analysis`.
