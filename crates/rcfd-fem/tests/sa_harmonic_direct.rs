@@ -259,7 +259,8 @@ fn h7b_table_interpolation() {
 // ------------------------------------------------------------------------------------------------------- S1, SW1
 
 #[test]
-fn s1_sw1_stress_and_sweep() {
+#[ignore = "known miss of ADR 0448 S1 (registered run): 1.99958e-2 against 1e-3, HarmonicResponse::stress lacks the loss part i eta D eps; SW1 met in the same run; S1b, S1c and sw1_sweep_bit_equal of amendment 2"]
+fn s1_sw1_stress_and_sweep_known_miss() {
     let mut c = Checks::new();
     let model = bar();
     let load = tip_load(&model);
@@ -454,6 +455,7 @@ fn h9_threads_bit_identical() {
 // ------------------------------------------------------------------------------------------------------ refusals
 
 #[test]
+#[ignore = "record of the registered run of ADR 0448: R1 to R7 and R9 to R11 met; R8 set-up defective (the value 1e-3 conflicted with the zero of set all on component 1); corrected by amendment 2 as r1_to_r11_refusals_amended"]
 fn r1_to_r11_refusals() {
     let mut c = Checks::new();
     let model = bar_with(10, E_MOD);
@@ -541,5 +543,146 @@ fn r1_to_r11_refusals() {
         "harmonic load",
         "length 3",
     );
+    c.finish();
+}
+
+// ADR 0448 amendment 2: R8 corrected (R8b); the other rows unchanged.
+#[test]
+fn r1_to_r11_refusals_amended() {
+    let mut c = Checks::new();
+    let model = bar_with(10, E_MOD);
+    let load = tip_load(&model);
+    refused(
+        &mut c,
+        "R1 negative loss factor",
+        DirectHarmonic::new(&model, &DirectHarmonicOptions::new().loss_factor("all", LossFactor::Constant(-0.1))),
+        "loss factor",
+        "'all'",
+    );
+    refused(
+        &mut c,
+        "R2 loss factor on a set without material",
+        DirectHarmonic::new(&model, &DirectHarmonicOptions::new().loss_factor("nosuch", LossFactor::Constant(0.1))),
+        "loss factor",
+        "nosuch",
+    );
+    refused(
+        &mut c,
+        "R3 table not ascending",
+        ModulusTable::new(vec![10.0, 5.0], vec![E_MOD, E_MOD], vec![0.0, 0.0]),
+        "modulus table",
+        "5e0",
+    );
+    let short = ModulusTable::new(vec![0.0, 100.0], vec![E_MOD, E_MOD], vec![0.0, 0.0]).unwrap();
+    let st = DirectHarmonic::new(&model, &DirectHarmonicOptions::new().loss_factor("all", LossFactor::Table(short))).unwrap();
+    let w = w1();
+    refused(
+        &mut c,
+        "R4 frequency outside the table",
+        st.response(&load, w),
+        "modulus table",
+        &format!("{:e}", w / (2.0 * PI)),
+    );
+    refused(
+        &mut c,
+        "R5 dashpot on a missing node",
+        DirectHarmonic::new(&model, &DirectHarmonicOptions::new().dashpot(Dashpot::ground(99_999, 0, 1.0))),
+        "dashpot",
+        "dashpot 0",
+    );
+    refused(
+        &mut c,
+        "R6 negative dashpot",
+        DirectHarmonic::new(&model, &DirectHarmonicOptions::new().dashpot(Dashpot::ground(0, 0, -1.0))),
+        "dashpot",
+        "dashpot 0",
+    );
+    let plain = DirectHarmonic::new(&model, &DirectHarmonicOptions::new()).unwrap();
+    let tip_node = model.mesh().node_set("xmax").unwrap()[0];
+    let mut free_base = BaseMotion::new();
+    free_base.add(tip_node, 0, C64::ONE);
+    refused(
+        &mut c,
+        "R7 base motion on a free equation",
+        plain.response_with_base(&load, &free_base, 0.5 * w1()),
+        "base motion",
+        &format!("node {tip_node} component 0"),
+    );
+    let mut moved = bar_with(10, E_MOD);
+    moved.add_constraint(Constraint::displacement("xmax", 0, 1e-3)).unwrap();
+    refused(
+        &mut c,
+        "R8b non-zero prescribed value (amendment 2)",
+        DirectHarmonic::new(&moved, &DirectHarmonicOptions::new()),
+        "constraint",
+        "prescribed value",
+    );
+    let mut sprung = bar_with(10, E_MOD);
+    sprung.add_support(ElasticSupport::nodal_spring("xmax", 0, 1e6)).unwrap();
+    refused(
+        &mut c,
+        "R9 elastic support (transformation path)",
+        DirectHarmonic::new(&sprung, &DirectHarmonicOptions::new()),
+        "constraint",
+        "transformation path",
+    );
+    refused(&mut c, "R10 negative frequency", plain.response(&load, -1.0), "frequency", "-1e0");
+    refused(&mut c, "R10 non-finite frequency", plain.response(&load, f64::NAN), "frequency", "NaN");
+    refused(
+        &mut c,
+        "R11 load of the wrong length",
+        plain.response(&HarmonicLoad::real(vec![0.0; 3]).unwrap(), 1.0),
+        "harmonic load",
+        "length 3",
+    );
+    c.finish();
+}
+
+// ------------------------------------------------------------------------------------------- amendment 2: S1b, S1c, SW1
+
+#[test]
+fn s1b_s1c_stress_with_the_loss_part() {
+    let mut c = Checks::new();
+    let model = bar();
+    let load = tip_load(&model);
+    let solver = DirectHarmonic::new(&model, &DirectHarmonicOptions::new().loss_factor("all", LossFactor::Constant(ETA)))
+        .unwrap();
+    let w = 0.5 * w1();
+    let resp = solver.response(&load, w).unwrap();
+    let st = solver.stress(&model, &resp).unwrap();
+    let es = C64::new(E_MOD, E_MOD * ETA);
+    let ks = csqrt(C64::from_real(RHO) / es).scale(w);
+    let h = L / N as f64;
+    let (mut dmax, mut smax) = (0.0f64, 0.0f64);
+    for (p, pos) in st.positions.iter().enumerate() {
+        let xc = h * ((pos[0] / h).floor() + 0.5);
+        let exact = ccos(ks.scale(xc)) / ccos(ks.scale(L)).scale(A);
+        let got = C64::new(st.re[p][0], st.im[p][0]);
+        dmax = dmax.max((got - exact).abs());
+        smax = smax.max(exact.abs());
+    }
+    c.at_most("S1b DirectHarmonic::stress at the element centres", dmax / smax, 1e-3);
+    let plain = DirectHarmonic::new(&model, &DirectHarmonicOptions::new()).unwrap();
+    let r0 = plain.response(&load, w).unwrap();
+    let a = plain.stress(&model, &r0).unwrap();
+    let b = r0.stress(&model).unwrap();
+    c.holds("S1c without loss factor equal to HarmonicResponse::stress", a.re == b.re && a.im == b.im, "every component");
+    c.finish();
+}
+
+#[test]
+fn sw1_sweep_bit_equal() {
+    let mut c = Checks::new();
+    let model = bar();
+    let load = tip_load(&model);
+    let solver = DirectHarmonic::new(&model, &DirectHarmonicOptions::new().loss_factor("all", LossFactor::Constant(ETA)))
+        .unwrap();
+    let ws = [0.5 * w1(), w1(), 1.5 * w1()];
+    let sweep = solver.sweep(&load, &ws).unwrap();
+    let same = ws
+        .iter()
+        .zip(&sweep)
+        .all(|(&w, s)| bits(s) == bits(&solver.response(&load, w).unwrap()));
+    c.holds("SW1 sweep bit-equal to response", same, "three frequencies");
     c.finish();
 }

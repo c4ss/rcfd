@@ -19,7 +19,8 @@ use crate::assemble::{assemble_with, stiffness_with};
 use crate::constraint::prescribed_equations;
 use crate::element::element_for;
 use crate::error::{FemError, Result};
-use crate::harmonic::{HarmonicLoad, HarmonicResponse};
+use crate::harmonic::{HarmonicLoad, HarmonicResponse, HarmonicStress};
+use crate::recover::IntegrationPointField;
 use crate::mass::consistent_with;
 use crate::model::{DofMap, Material, SolidModel};
 use rcfd_linalg::complex::C64;
@@ -537,6 +538,31 @@ impl DirectHarmonic {
     /// The responses at several frequencies, each bit-equal to [`DirectHarmonic::response`] at its frequency.
     pub fn sweep(&self, load: &HarmonicLoad, omegas: &[f64]) -> Result<Vec<HarmonicResponse>> {
         omegas.iter().map(|&w| self.response(load, w)).collect()
+    }
+
+    /// The stress of a response of this solver at the integration points: the elastic stress of
+    /// [`HarmonicResponse::stress`] times the coefficient `s_m (1 + i eta_m)` of each element's material at the response's
+    /// frequency, so that a loss factor gives the stress `E* eps` of the complex modulus (ADR 0448 amendment 2).
+    pub fn stress(&self, model: &SolidModel, response: &HarmonicResponse) -> Result<HarmonicStress> {
+        let mut st = response.stress(model)?;
+        let coef = self.coefficients(response.omega)?;
+        let which: Vec<usize> = if self.k_parts.len() == 1 {
+            vec![0; model.mesh().n_elements()]
+        } else {
+            model.material_indices()?
+        };
+        let field = IntegrationPointField::compute(model, &vec![0.0; self.n])?;
+        for (e, &m) in which.iter().enumerate() {
+            let k = coef[m];
+            for q in field.points_of(e) {
+                for comp in 0..6 {
+                    let z = C64::new(st.re[q][comp], st.im[q][comp]) * k;
+                    st.re[q][comp] = z.re;
+                    st.im[q][comp] = z.im;
+                }
+            }
+        }
+        Ok(st)
     }
 
     fn solve(&self, load: &HarmonicLoad, base: &BaseMotion, omega: f64) -> Result<HarmonicResponse> {
