@@ -960,6 +960,9 @@ pub struct NewtonOptions {
     pub max_halvings: usize,
     /// Worker threads of the assembly (`None`: the available parallelism); the result does not depend on it.
     pub threads: Option<usize>,
+    /// Record per iteration the yielded points and whether that set changed (ADR 0515 D2); off by default, no arithmetic
+    /// depends on it.
+    pub record_active_set: bool,
 }
 
 impl NewtonOptions {
@@ -972,7 +975,13 @@ impl NewtonOptions {
             energy_tolerance: 1e-10,
             max_halvings: 5,
             threads: None,
+            record_active_set: false,
         }
+    }
+    /// The same options with the active-set record of [`LoadStep::yielded`] switched on or off.
+    pub fn record_active_set(mut self, on: bool) -> NewtonOptions {
+        self.record_active_set = on;
+        self
     }
     /// The same options with a thread count for the assembly.
     pub fn threads(mut self, threads: usize) -> NewtonOptions {
@@ -1026,6 +1035,12 @@ pub struct LoadStep {
     pub energies: Vec<f64>,
     /// Halvings of the user step before this increment converged.
     pub halvings: usize,
+    /// With [`NewtonOptions::record_active_set`], per iteration (one value per residual) the number of integration points
+    /// whose trial state differs from the committed one (the yielded points of a history material); empty otherwise.
+    pub yielded: Vec<usize>,
+    /// With the record, per iteration whether that set differs from the one of the previous iteration (`false` at
+    /// iteration 0); empty otherwise.
+    pub set_changed: Vec<bool>,
 }
 
 /// The result of [`solve`]: the displacement, the reactions and the solver statistics at load factor 1, and the converged
@@ -1064,8 +1079,27 @@ struct Attempt {
     states: Vec<ElementState>,
     residuals: Vec<f64>,
     energies: Vec<f64>,
+    /// The active-set record of the iterations (ADR 0515 D2); empty unless asked for.
+    yielded: Vec<usize>,
+    set_changed: Vec<bool>,
     /// The internal force of the converged iterate, without the contributions (ADR 0479 D2).
     fint: Vec<f64>,
+}
+
+/// The points whose trial state differs bitwise from the committed one, element-major (ADR 0515 D2).
+fn yielded_points(layout: &StateLayout, committed: &[ElementState], trial: &[ElementState]) -> Vec<bool> {
+    let mut out = Vec::new();
+    for (e, (c, t)) in committed.iter().zip(trial).enumerate() {
+        let k = layout.values_per_point(e);
+        if k == 0 {
+            out.extend(std::iter::repeat(false).take(layout.points(e)));
+            continue;
+        }
+        for (a, b) in c.values().chunks(k).zip(t.values().chunks(k)) {
+            out.push(a.iter().zip(b).any(|(x, y)| x.to_bits() != y.to_bits()));
+        }
+    }
+    out
 }
 
 fn norm(v: impl Iterator<Item = f64>) -> f64 {
@@ -1276,6 +1310,8 @@ impl Problem<'_> {
         let mut u = u_c.to_vec();
         let mut residuals = Vec::new();
         let mut energies = Vec::new();
+        let (mut yielded, mut set_changed) = (Vec::new(), Vec::new());
+        let mut previous_set: Option<Vec<bool>> = None;
         let (mut e_first, mut e_last) = (0.0, 0.0);
         let dofs = self.model.dof_map();
         for k in 0..=o.max_iterations {
@@ -1303,12 +1339,21 @@ impl Problem<'_> {
                 return Err(Failure::Other(format!("non-finite residual at iteration {k}")));
             }
             residuals.push(r);
+            if o.record_active_set {
+                let layout = StateLayout::of(self.model).map_err(classify)?;
+                let set = yielded_points(&layout, states_c, &trial);
+                yielded.push(set.iter().filter(|&&y| y).count());
+                set_changed.push(previous_set.as_ref().is_some_and(|p| *p != set));
+                previous_set = Some(set);
+            }
             if k >= 1 && r <= o.residual_tolerance && e_last <= o.energy_tolerance * e_first {
                 return Ok(Attempt {
                     u,
                     states: trial,
                     residuals,
                     energies,
+                    yielded,
+                    set_changed,
                     fint: elastic.unwrap_or(fint),
                 });
             }
@@ -1646,6 +1691,8 @@ pub fn solve_with(
                         residuals: a.residuals,
                         energies: a.energies,
                         halvings,
+                        yielded: a.yielded,
+                        set_changed: a.set_changed,
                     });
                     if let Some(hook) = step_control.as_mut() {
                         hook.converged(records.last().expect("just pushed"));
