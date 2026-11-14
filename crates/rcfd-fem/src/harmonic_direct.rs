@@ -376,6 +376,9 @@ fn check_viscoelastic_model(model: &SolidModel) -> Result<()> {
     Ok(())
 }
 
+/// The values of each stiffness part on the mesh pattern and its damping.
+type StiffnessParts = Vec<(Vec<f64>, Damping)>;
+
 /// The stiffness parts of a model with a viscoelastic material (ADR 0491 D1): per material one part (two for a
 /// viscoelastic material with unequal weights), each assembled over the elements of its material, and the sum of the parts
 /// (the total stiffness on the mesh pattern).
@@ -383,11 +386,11 @@ fn viscoelastic_parts(
     model: &SolidModel,
     damping: &[Damping],
     options: &DirectHarmonicOptions,
-) -> Result<(CsrMatrix, Vec<(Vec<f64>, Damping)>)> {
+) -> Result<(CsrMatrix, StiffnessParts)> {
     let materials = model.materials();
     let which = model.material_indices()?;
     let dofs = model.dof_map();
-    let mut parts: Vec<(Vec<f64>, Damping)> = Vec::new();
+    let mut parts: StiffnessParts = Vec::new();
     let mut total: Option<CsrMatrix> = None;
     for (m, (_, material)) in materials.iter().enumerate() {
         let pieces: Vec<(Option<Matrix6>, Damping)> = if is_viscoelastic(material) {
