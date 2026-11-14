@@ -3852,9 +3852,9 @@
       "F-391",
       "F-392"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. Membrane patch test and constant-curvature bending patch test on an irregular flat mesh, and on a mesh mixing Shell3 and Shell4, within 1e-8. Simply supported square plate under uniform load, 32 x 32 squares each cut in two, nu = 0.3: centre deflection within 2 percent of the Navier series at thickness/side 0.01 and within 3 percent at 0.001, and within 1 percent of each other for the two diagonal directions. Cantilever strip, nu = 0: tip deflection within 1 percent. Pinched ring strip, 32 elements per quarter: loaded diameter within 3 percent of (pi/4 - 2/pi) P R^3/(E I). Cylinder under internal pressure: radial displacement p R^2/(E t) within 1 percent. First frequency of the simply supported plate within 2 percent. A free plate has six zero frequencies below 1e-6 of the seventh; a single element has exactly six zero eigenvalues; a triangle with an angle below the registered limit is refused with the element.",
-    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0322; the registration is written by the implementation agent before any code."
+    "note": "Structural solver, advanced tier (plan ADR 0310). F-419 (ADR 0454, 2026-11-14): Shell3, a three-node flat shell for triangulated surfaces: CST membrane, Reissner-Mindlin bending, MITC3 shear with the Lyly-Stenberg-Vihinen stabilisation (alpha 0.1, longest edge), Shell4's drilling penalty, consistent mass with rotary inertia; pressure, gravity, centrifugal, nodal body force and thermal loads, centroid stresses, VTK_TRIANGLE output. Patch tests to 1e-13, SS plate 0.998 and 0.997 of Navier at t/a 0.01 and 0.001 (plain MITC3 locks at 0.899), cantilever 0.99986, pinched ring 0.9991, cylinder within 1.8e-3, free plates six zero modes; models without Shell3 bit-identical. Partial: the .vtu check met only after amendment 1 added the triangle cell to rcfd_io::vtk. Follow-ups F-539, F-540, F-541."
   },
   {
     "id": "F-420",
@@ -5236,5 +5236,38 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The channel of ADR 0455 QF with Symmetry planes under PimpleSettings::pimple (alpha_u 0.8, alpha_p 0.5, one corrector, 10 outer iterations), whose excess over the zero-gradient planes was -0.0021 against the averaged two-corrector PISO step's 0.36, is explained by an exact linear model of the relaxed step that reproduces the measured impedance of both runs within registered limits; the dependence on alpha_u is stated.",
     "note": "Numerics. Follow-up of F-531 (ADR 0455, 2026-11-14). Size S."
+  },
+  {
+    "id": "F-539",
+    "title": "Allman membrane for Shell3",
+    "phase": 9,
+    "deps": [
+      "F-419"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. In-plane bending of a cantilever strip within 2 % of beam theory on a 8 x 2 mesh, patch tests kept.",
+    "note": "Structural solver, advanced tier. Follow-up of F-419 (ADR 0454, 2026-11-14). a drilling-unknown membrane"
+  },
+  {
+    "id": "F-540",
+    "title": "Consistent pressure on curved facet meshes",
+    "phase": 9,
+    "deps": [
+      "F-419"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The one-diagonal 32 x 16 cylinder (O1) within 1 % of `p R^2/(E t)` at every node.",
+    "note": "Structural solver, advanced tier. Follow-up of F-419 (ADR 0454, 2026-11-14). acceptance: the one-diagonal 32 x 16 cylinder (O1) within 1 % of `p R^2/(E t)` at every node."
+  },
+  {
+    "id": "F-541",
+    "title": "Shell3 on the remaining paths",
+    "phase": 9,
+    "deps": [
+      "F-419"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The N2 refusals replaced by the Shell4 checks repeated on triangles.",
+    "note": "Structural solver, advanced tier. Follow-up of F-419 (ADR 0454, 2026-11-14). nonlinear, transient, buckling, cyclic, multigrid take Shell3 when they take Shell4 Also depends on the Shell4 follow-ups of ADR 0432."
   }
 ]

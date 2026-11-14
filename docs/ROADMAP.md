@@ -8262,7 +8262,7 @@ fixed by the item's registration ADR before any code.
     equivalent radiated power accepts any surface and its report says that it assumes a radiation efficiency of one.
   - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size S. Stub ADR 0321; the registration is
     written by the implementation agent before any code.
-- [ ] **F-419** Three-node shell element (flat facet, assumed shear strain) for triangulated surfaces
+- [~] **F-419** Three-node shell element (flat facet, assumed shear strain) for triangulated surfaces
   - depends on: F-408, F-391, F-392
   - acceptance: Every limit not stated here is registered in the ADR before the run. Membrane patch test and
     constant-curvature bending patch test on an irregular flat mesh, and on a mesh mixing Shell3 and Shell4, within
@@ -8273,8 +8273,14 @@ fixed by the item's registration ADR before any code.
     internal pressure: radial displacement p R^2/(E t) within 1 percent. First frequency of the simply supported plate
     within 2 percent. A free plate has six zero frequencies below 1e-6 of the seventh; a single element has exactly six
     zero eigenvalues; a triangle with an angle below the registered limit is refused with the element.
-  - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0322; the registration is
-    written by the implementation agent before any code.
+  - note: Structural solver, advanced tier (plan ADR 0310). F-419 (ADR 0454, 2026-11-14): Shell3, a three-node flat
+    shell for triangulated surfaces: CST membrane, Reissner-Mindlin bending, MITC3 shear with the Lyly-Stenberg-Vihinen
+    stabilisation (alpha 0.1, longest edge), Shell4's drilling penalty, consistent mass with rotary inertia; pressure,
+    gravity, centrifugal, nodal body force and thermal loads, centroid stresses, VTK_TRIANGLE output. Patch tests to
+    1e-13, SS plate 0.998 and 0.997 of Navier at t/a 0.01 and 0.001 (plain MITC3 locks at 0.899), cantilever 0.99986,
+    pinched ring 0.9991, cylinder within 1.8e-3, free plates six zero modes; models without Shell3 bit-identical.
+    Partial: the .vtu check met only after amendment 1 added the triangle cell to rcfd_io::vtk. Follow-ups F-539, F-540,
+    F-541.
 - [ ] **F-420** Stress stiffening of beams and shells: buckling, pre-stressed modes and the Campbell table of a shell blade
   - depends on: F-419, F-391, F-392, F-395, F-396
   - acceptance: Every limit not stated here is registered in the ADR before the run. Beam: Euler loads pi^2 E I/L^2
@@ -10402,3 +10408,20 @@ fixed by the item's registration ADR before any code.
     by an exact linear model of the relaxed step that reproduces the measured impedance of both runs within registered
     limits; the dependence on alpha_u is stated.
   - note: Numerics. Follow-up of F-531 (ADR 0455, 2026-11-14). Size S.
+- [ ] **F-539** Allman membrane for Shell3
+  - depends on: F-419
+  - acceptance: Every limit not stated here is registered in the ADR before the run. In-plane bending of a cantilever
+    strip within 2 % of beam theory on a 8 x 2 mesh, patch tests kept.
+  - note: Structural solver, advanced tier. Follow-up of F-419 (ADR 0454, 2026-11-14). a drilling-unknown membrane
+- [ ] **F-540** Consistent pressure on curved facet meshes
+  - depends on: F-419
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The one-diagonal 32 x 16 cylinder
+    (O1) within 1 % of `p R^2/(E t)` at every node.
+  - note: Structural solver, advanced tier. Follow-up of F-419 (ADR 0454, 2026-11-14). acceptance: the one-diagonal 32 x
+    16 cylinder (O1) within 1 % of `p R^2/(E t)` at every node.
+- [ ] **F-541** Shell3 on the remaining paths
+  - depends on: F-419
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The N2 refusals replaced by the
+    Shell4 checks repeated on triangles.
+  - note: Structural solver, advanced tier. Follow-up of F-419 (ADR 0454, 2026-11-14). nonlinear, transient, buckling,
+    cyclic, multigrid take Shell3 when they take Shell4 Also depends on the Shell4 follow-ups of ADR 0432.
