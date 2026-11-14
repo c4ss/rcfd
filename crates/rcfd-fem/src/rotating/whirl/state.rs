@@ -22,6 +22,8 @@ use std::fmt::Write as _;
 mod sector;
 mod springs;
 pub use sector::{CyclicWhirlStability, HarmonicStateWhirl};
+mod arnoldi;
+pub use arnoldi::{gyroscopic_state_eigen_sparse, SparseStateEigen, SparseStateOptions, SparseStateWhirl};
 
 /// `max|Re s| / max|s|` at or below which a speed is stable (ADR 0416 D3).
 pub const STABILITY_TOLERANCE: f64 = 1e-8;

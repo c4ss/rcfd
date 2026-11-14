@@ -37,6 +37,7 @@ pub use state::{
     STABILITY_TOLERANCE,
 };
 pub use state::{CyclicWhirlStability, HarmonicStateWhirl};
+pub use state::{gyroscopic_state_eigen_sparse, SparseStateEigen, SparseStateOptions, SparseStateWhirl};
 
 mod sparse;
 pub use sparse::{gyroscopic_eigen_sparse, gyroscopic_eigen_sparse_with, LanczosOptions, SparseWhirl, WhirlSolver};
