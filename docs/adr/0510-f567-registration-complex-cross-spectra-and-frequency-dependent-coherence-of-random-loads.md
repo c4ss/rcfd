@@ -261,3 +261,13 @@ is not added.
 
 Taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation): the convention `G_ab = E[conj(F_a) F_b]`
 (the acceptance's sign), the shift-by-trace PSD test with `1e-12`, the exponential coherence as a library helper.
+
+## Amendment 1 (2026-11-14, written after the checks ran and before any mutation run)
+
+The checks of the table above were run once (results in Addendum 1). Before the mutations are run, a defect of the mutation plan
+is corrected: M7 as registered (the imaginary and real sums merged in one accumulator) cannot change a bit when every imaginary
+entry is zero, because `s - 0.0 * x = s` exactly in IEEE arithmetic (an equivalent mutant: B3 cannot catch it). M7 is still run as
+registered and its result is recorded, and a mutation that does change the order is added: **M7'** the loops over `a` and `b` of
+the real sum exchanged (`for b { for a { ... } }`), expected to be caught by B3 and B1 to B5 only where the sum is not
+order-insensitive (B3 at least). The decision rule counts M7' as the order mutation and M7 as an equivalent mutant (reported, not
+counted as a miss if the run confirms it leaves every bit unchanged).
