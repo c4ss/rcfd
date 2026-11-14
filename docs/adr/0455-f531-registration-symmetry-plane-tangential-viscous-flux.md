@@ -249,3 +249,24 @@ value is printed; a test fails at the end if any of its checks missed. Relative 
 * The corrected diagonal with the consistent correctors (ADR 0214 F0) is refused on moving meshes (ADR 0258 V2); not exercised.
 * No change of the default: whether `corrected` becomes the default is the maintainer's open decision
   (`component-diagonal-default.md`, options 1 to 3); it would move the registered `packed_bed` hash and is not taken here.
+
+## Amendment 1 (2026-11-14, written after the registered runs of S1, S0, Q and Q4 on commit `8c64b9be`, before any corrected run)
+
+**What the registered Q4 run showed** (`cargo test -p rcfd-post --release --test symmetry_flux_f531 q4_ -- --nocapture`, log
+`f531-scratch/run4_q4.log`): `QD10 = 3.03084 + 1.08003 i`, `QZ10 = 3.03293 + 1.08075 i`, `Delta Z = -0.00209 - 0.00073 i` against
+the model's `0.39152 - 0.01714 i`: `Re Delta Z/Re Delta Z_model - 1 = -1.005` (**missed**, limit `5e-2`). The other registered
+runs so far (S1, S0, Q1 to Q3, Q5, NC1, NC2) are reported in the addendum.
+
+**A defect of the set-up.** The test built the ten-outer-iteration settings with `PimpleSettings::pimple(nu, 10)`, which also
+sets `alpha_u = 0.8`, `alpha_p = 0.5` and `n_correctors = 1`. D1's fixed point is derived without under-relaxation and with the
+correctors of `piso`, and Q4's estimate rests on ADR 0446's diagnosis, which set `n_outer = 10` on the `piso` settings
+(`f421-scratch/diag_qf_test.rs`: `fl.settings.n_outer = outer`; two correctors, no relaxation). The registered run therefore
+measured another configuration than the one registered. (The relaxed configuration shows no excess at all; this is recorded, not
+explained here: a 0-D version of the fixed point with relaxation predicts a sink `(a_P - a_k)/alpha_u`, larger, not zero, so the
+relaxed PIMPLE loop does something D1 does not describe. It is listed as a remaining question in the addendum.)
+
+**Correction (Q4c, the limit `5e-2` unchanged).** `PimpleSettings::piso(nu)` with `n_outer = 10` (everything else as Q4 and QF:
+two correctors, `alpha_u = alpha_p = 1`), QD10c and QZ10c at `N = 100`, `Re Delta Z/Re Delta Z_model - 1`. Estimate (ADR 0446's
+QD with ten outer iterations, `3.3961`; the zero-gradient run with ten outer iterations not known): within `3e-2`. The registered
+test `q4_default_excess_with_ten_outer_iterations` stays as an ignored record (attribute only); `q4c_default_excess_with_ten_piso_outer_iterations`
+is the corrected run. Q4 counts as met only after this amendment, if met.
