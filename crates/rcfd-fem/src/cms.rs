@@ -30,6 +30,9 @@
 //! its own residual vector `K_ii^{-1} p_i`, M-orthogonalised (twice) against the kept modes and the vectors before it (after
 //! the vector of the model's load when that is asked), and dropped when it lies in their span. [`ReducedPart::reduce_load`]
 //! reduces any load vector to the part's unknowns; [`Assembly::load_from`] and [`Assembly::harmonic_with_load`] use it.
+//!
+//! Superelements of ADR 0536 (F-553): [`superelement::SuperelementModel`] attaches reduced parts to an ordinary model at its
+//! interface nodes for the static solve, the modal analysis and the direct harmonic solve.
 
 use crate::assemble::stiffness_with_materials;
 use crate::error::{FemError, Result, SetKind};
@@ -45,6 +48,8 @@ use rcfd_linalg::eigen::{
 use rcfd_linalg::skyline::SkylineLdlt;
 use rcfd_linalg::CsrMatrix;
 use std::path::Path;
+
+pub mod superelement;
 
 /// The work package that fills this module; `None` once it has landed.
 pub const PENDING: Option<&'static str> = None;
