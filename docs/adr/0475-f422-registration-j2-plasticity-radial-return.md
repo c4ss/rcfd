@@ -313,3 +313,121 @@ of that run (`6.9e-11`) is kept as recorded, not counted for (a1).
 `5e-5` (a quarter: the largest point strain of T2's draw scaled by four below the yield strain), set-up check: no point
 yielded; measure and limit as T2, `max |K - K_fd| / max |K| <= 1e-6`, `h = 1e-9`. The record of the run of cb17790f stays as the
 ignored test `t2_element_tangent_central_differences`; T2b is `t2b_hex20_elastic_tangent`. Run once.
+
+## Addendum 1: results (2026-11-14)
+
+Registered run: commit cb17790f (`cargo test -p rcfd-fem --release --test sa_j2`, log `f422-scratch/run1.log`), each check run
+once. T2b of amendment 1: commit 21fec884 (log `run2.log`). The bit record B0 was printed on the unchanged base 4abff5fe
+(`b0-base.log`, written into the test at commit c8df338e) before any library code.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| T1 isotropic, kinematic, mixed, perfect: elastic | `<= 1e-6` | `3.2e-11, 1.8e-11, 2.4e-11, 7.9e-11` | yes |
+| T1 the same: plastic | `<= 1e-6` | `4.7e-10, 8.8e-10, 2.4e-10, 1.4e-10` | yes |
+| T2 Hex8 elastic, Hex8 plastic, Hex20 plastic | `<= 1e-6` | `5.3e-11, 1.3e-9, 2.4e-9` (8 of 8 and 27 of 27 points yielded) | yes |
+| T2 Hex20 elastic (registered set-up) | set-up: no point yielded | 3 of 27 yielded (measured `6.9e-11`, not counted) | set-up defective |
+| T2b Hex20 elastic (amendment 1) | `<= 1e-6` | `1.7e-11` (0 of 27 yielded) | yes |
+| U1 isotropic: one step, 100 steps | `<= 1e-10` | `1.0e-15`, `2.9e-16` | yes |
+| U1 kinematic: one step, 100 steps | `<= 1e-10` | `1.0e-15`, `4.3e-16` | yes |
+| U2 re-yield at `-sigma_max` (isotropic) | `<= 1e-10` | `5.7e-16` (`-2.079207920792e8`) | yes |
+| U3 re-yield at `sigma_max - 2 sigma_y` (kinematic) | `<= 1e-10` | `1.2e-15` (`-1.920792079208e8`) | yes |
+| U4 model bar, 1 and 100 steps | `<= 1e-8` | `8.6e-16`, `1.0e-15` | yes |
+| S1 `c = 1.25 a` | `<= 1e-2` | `7.8e-4` (`c_FE = 1.249385`, 1944 elastic points) | yes |
+| S2 `c = 1.5 a` | `<= 1e-2` | `4.0e-4` (`c_FE = 1.500625`) | yes |
+| C1 at S1 and S2 | 0 wrong | 0 of 2592 each | yes |
+| S3 converges at `0.98 p_lim` | `Ok` | `Ok`, 20 increments, no halving, `c_FE = 1.818` (closed form 1.808) | yes |
+| S4 residual hoop stress at the bore | `<= 2e-2` | `2.627e-2` (`-0.612380` against `-0.628903 sigma_y`) | **no** (known miss) |
+| P1 `kappa/kappa_y = 1.25, 1.5, 2, 3, 4, 5` | `<= 1e-2` | `4.1e-5, 2.4e-4, 5.1e-6, 1.6e-4, 8.0e-6, 4.5e-5` | yes |
+| C2 elastic `0.5 kappa_y` | `<= 1e-2` | `8.5e-8` | yes |
+| O1 S1, S2, S3 | `>= 1.8`, none short | least `1.279, 1.279, 1.274`; S3 6 increments short | **no** (known miss) |
+| O1 P1 (six solves) | `>= 1.8`, none short | least `1.270 .. 1.435`; 4 increments short per solve | **no** (known miss) |
+| H1 halved step = two steps | bits equal | equal (6834 values), one halving, plastic state | yes |
+| R1 five refusals with the key | all | all (`yield_stress` three times, `isotropic`, `kinematic`) | yes |
+| N1 B0, 11 digests of 4abff5fe | equal | equal | yes |
+| N2 never-yielding J2 = elastic base (bar, Hex20 cantilever) | bits equal | equal (64 and 788 values) | yes |
+| N3 six paths refuse J2, `elasticity_matrix` refused, `nonlinear::solve` takes it | all | all | yes |
+| N4 `baseline_hashes` | pass | pass (3 passed, 1 ignored) | yes |
+| X1 records and copies of `sa_scaffold.rs` | pass | `sa_scaffold` 9 passed, 14 ignored | yes |
+
+Other runs: `cargo test -p rcfd-fem --release` (every test of the crate, 110 binaries): 548 passed, 0 failed, 121 ignored;
+`cargo test -p rcfd-cli --release --test docs_site`: 2 passed; `cargo clippy -p rcfd-fem --all-targets -- -D warnings`: clean;
+`cargo fmt -p rcfd-fem --check`: clean after commit 1851851c (layout only).
+
+Shared solver files changed: `nonlinear.rs` (module doc; `Evaluation::state`; the J2 arm of `evaluate`;
+`element_trial_state`; `force_and_tangent` returns the trial states; `Problem::attempt` keeps them; `check_model`,
+`initial_states`, `solve_with` call the nonlinear checks), `material.rs` (the J2 arms of `elasticity_matrix` and `stress`),
+`model.rs` (the `history` flag of `check_elements`, `check_elements_supported_nonlinear`, `check_supported_nonlinear`, the J2
+refusal). Every other material takes the lines it took (B0, N2).
+
+**Diagnosis of S4.** The fit itself is not the cause: the registration's arithmetic 4 took the inner layer as `[1, 1.25]`; with 8
+layers over `[1, 2]` it is `[1, 1.125]` (a slip in the text; the code builds the registered mesh of D5), and the fit of the
+exact residual field at its Gauss radii `1.0141, 1.0625, 1.1109` is off by only `7.4e-4` (computed after the run). A diagnostic
+run (not a check; a temporary test file, removed) compared the point values of the inner layer with the closed forms: the
+*elastic* Lame field of the same mesh (J2 with `sigma_y = 1e30`) already scatters by `-1.4 .. +1.0` percent in the hoop stress
+(`0.65038` against `0.65930` at `r = 1.010`, `0.66297` against `0.65656` at `1.015`), the loaded plastic field by up to `0.015
+sigma_y`, and the residual, a difference of two numbers of the size of `sigma_y`, by up to `3.5` percent of its value at single
+radii. Cause: the angular resolution of the 2 x 2 cubed-sphere octant (Hex20 faces spanning 45 degrees), not the material,
+the return map or the unloading. S1, S2 and C1 pass because they read the elastic shell as a whole (the mean of 1944 points),
+which averages the same scatter (largest deviation of a single-point `c_i`: `3.6e-3`). Remedy: a finer octant (follow-up).
+
+**Diagnosis of O1.** Residual sequences (diagnostic print of S1): elastic increments `[1.0, 3.35e-4, 1.53e-11, 7.6e-15]`,
+order `2.11`; plastic increments `[0.167, 0.153, 6.89e-5, 3.63e-9, 7.5e-15]` and `[0.143, 0.153, 3.74e-2, 1.43e-5, 1.99e-10,
+8.4e-15]`. The first correction of a plastic increment does not reduce the residual (points enter the yield surface; the
+tangent at the start of the increment is that of the converged state, the active set changes), so the last three residuals
+above `1e-12` mix one pre-asymptotic residual with the asymptotic ones; the asymptotic constant `r_{k+1}/r_k^2` is bounded
+(`0.76` for `3.63e-9 / (6.89e-5)^2`, `0.97` for `1.99e-10 / (1.43e-5)^2`), i.e. quadratic, and the next correction reaches the
+rounding floor (about `1e-14`), below the `1e-12` floor of the reading. In the beam (displacement control) the increments
+converge in two corrections (`[0, 2.07e-4, 6.15e-12, 1.4e-15]`), so only two residuals lie above `1e-12`. The reading of ADR
+0404 (made for an elastic, smooth problem) does not fit an active-set change. The consistent tangent itself is confirmed by T1,
+T2 and by mutation MU1 (continuum tangent), under which the order falls to `0.91 .. 1.0` and the solves take 2 to 10 times
+more increments (S3 then fails to converge). Not tuned: the known miss keeps the limit and the reading.
+
+**Mutations** (`f422-scratch/mutate.py`, on a git-archive copy of the tree of d9b91a44, log `mutations.log`; MU0 the unmutated
+copy, which reproduces exactly the registered misses and the defective T2 set-up):
+
+| Id | Caught by (beyond the unmutated misses) |
+|---|---|
+| MU1 continuum tangent | T1 plastic (`1.4e-1 .. 3.2e-1`), T2 plastic (`5.4e-1`, `3.4e-1`), S3 (not converged at step 19 after 5 halvings), O1 (order `0.91 .. 1.0`), H1 |
+| MU2 `dg = f/(2 mu + H)` | U1 (`1.9e-2` one step), U2, U3, U4, T1, T2 |
+| MU3 back stress not updated | U1 kinematic 100 steps (`3.8e-2`), U3 (`5.0e-4`) |
+| MU4 `alpha` not updated | U1 isotropic 100 steps (`3.8e-2`), U2 (`5.0e-4`), U4, S1, S2, C1, H1 set-up |
+| MU5 driver keeps the committed states | S1 (`4.1e-2`), S2 (`9.1e-2`), C1, S4 (`1.0`), O1, H1 set-up; not U4 (a proportional homogeneous path gives the same final stress from the virgin state) |
+| MU6 driver evaluates from the previous iterate | U4 100 steps (`4.2e-4`), O1 (order `0.66 .. 0.93`) |
+| MU7 history flag ignored | N3 (the six paths take J2 and fail later, in the element-constant matrix) |
+
+Every planned mutation was caught; MU5 not by U4, one of its expected catchers, but by S1, S2, S4 and H1.
+
+**Deviations.** (1) The T2 Hex20 elastic set-up was defective; corrected by amendment 1 (T2b), the record kept. (2) The text of
+arithmetic 4 named the inner layer `[1, 1.25]`; the registered mesh (D5) has `[1, 1.125]`; limit and code as registered. (3) MU5
+was expected to be caught by U4 and was not. (4) The diagnostic runs for S4 and O1 were made after the registered run with a
+temporary test file (removed, not committed); no check was re-run to pick a result. Not run: the whole workspace test suite
+(the lead's gate).
+
+**Decision by the registered rule: partial.** B0 and the baseline hashes are unchanged; (a1) (through amendment 1), (a2),
+(a3), (a4), (a5), (a7), (a9), (a10) are met; (a6) S4 and (a8) O1 are missed, diagnosed and recorded as
+`s4_sphere_residual_hoop_stress_known_miss` and `o1_order_known_miss` with the limits intact.
+
+### Remaining questions
+
+1. **O1's reading for plasticity.** Options: (a) keep the ADR 0404 reading and accept O1 as a known miss; (b) a follow-up that
+   registers a reading fit for an active-set change (the order from the first correction that does not change the set of
+   yielded points, a floor of `1e-14`, or a bound `r_{k+1} <= C r_k^2` over the last two corrections); (c) change the driver's
+   first iteration of an increment. Recommendation: (b), follow-up 1 below; (c) is a driver change for its own item.
+2. **S4.** Options: (a) accept the known miss; (b) a follow-up on a 4 x 4-per-face octant with the same checks. Recommendation:
+   (b), follow-up 2 below.
+3. **Case-file key.** Not added (the maintainer's call). Recommendation: `j2 = { base, yield_stress, isotropic, kinematic }`
+   read into `Material::j2`, offered with the nonlinear static study only.
+
+## For the lead: roadmap entries
+
+Proposed status of F-422: **partial**. Proposed note:
+
+> ADR 0475, 2026-11-14 (registration of stub ADR 0325): J2 plasticity in rcfd-fem (mat_j2.rs): radial return with linear isotropic and kinematic hardening (closed-form dg) and its consistent tangent, 13 state values per point (plastic strain, back stress, equivalent plastic strain), on the Newton driver of ADR 0404 without a second loop (trial states from the committed states at every iteration, committed on convergence, dropped on a failed attempt; element_trial_state); J2 taken by nonlinear::solve only and refused by every other path naming mat_j2::FOLLOW_UP. Met: tangent against central differences 1.4e-10 .. 2.4e-9 plastic and 1.7e-11 .. 7.9e-11 elastic (limit 1e-6; the Hex20 elastic set-up corrected by amendment 1), uniaxial bilinear bar in one step and in 100 within 1e-15, re-yield at -sigma_max and sigma_max - 2 sigma_y within 1.2e-15, sphere b/a = 2 pressure at c = 1.25 a and 1.5 a within 7.8e-4 and 4.0e-4, converged at 0.98 p_lim, narrow beam in pure bending M/M_y within 2.4e-4 up to 5 kappa_y, halved step bit for bit, non-positive yield stress and softening refused with the key, default bits (11 digests) and baseline hashes unchanged; seven mutations caught. Missed (known misses, diagnosed): residual hoop stress at the bore 2.6 percent against 2 (point-wise hoop stress scatter of the 2 x 2 cubed-sphere octant, 1.4 percent already in the elastic field) and the order of the last three residuals 1.27 .. 1.44 against 1.8 (the reading of ADR 0404 includes the residual of the active-set change; the asymptotic step is quadratic and reaches the floor at once). Case-file key not added (recommended: j2 = { base, yield_stress, isotropic, kinematic }, nonlinear static study only). Follow-ups below.
+
+Follow-up 1. Title: "Convergence order of the Newton driver with plasticity: a reading for an active-set change". Deps: F-422. Acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. On the sphere and beam solves of ADR 0475 (S1, S2, S3, P1), a reading of the convergence order fit for an active-set change, registered before the run (for example the order of the last three residuals counted from the first correction that does not change the set of yielded points, with a floor of 1e-14, or r_{k+1} <= C r_k^2 over the last two corrections with C registered), gives an order >= 1.8 or the bound on every increment, and the continuum tangent (mutation MU1 of ADR 0475) fails it.
+
+Follow-up 2. Title: "Thick sphere with J2 on a refined octant: residual hoop stress after unloading". Deps: F-422. Acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. The partly plastic sphere of ADR 0475 on a 4 x 4-per-face cubed-sphere octant with 8 radial Hex20 layers: the residual hoop stress at the bore after unloading from p(1.25 a) within 2 percent of sigma_y - (12/7) p, the elastic Lame hoop stress of the same mesh at every point of the inner layer within 1 percent, and S1, S2 of ADR 0475 still within 1 percent.
