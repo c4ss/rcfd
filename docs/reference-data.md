@@ -1615,3 +1615,22 @@ spectrum of the tridiagonal (2, -1) and the envelope solver of ADR 0274.
 | Nested dissection of a grid (used only for an order-of-magnitude fill estimate before the registration) | from memory | George, SIAM J. Numer. Anal. 10 (1973) 345-363: NOT read; `w49i-work/f431-scratch/nd_estimate.py` |
 | Eigenvalues of the tridiagonal (2, -1) of order n: `4 sin^2(j pi/(2 (n + 1)))`; `lambda_j + lambda_{n+1-j} = 4` | derived | closed form (as F-382, ADR 0283); the symmetry made the registered middle shift of ADR 0447 A5 exactly 2 (amendment 1) |
 | Sylvester's law of inertia: the negative pivots of `C = L D L^T` count the negative eigenvalues of `C` | derived | congruence (as ADR 0283 D8) |
+
+## F-413 high-cycle fatigue: stress-life curves, mean stress, rainflow, Miner, narrow band (ADR 0449)
+
+No source was read for F-413; every definition is cited from memory, and every number checked comes from a closed form derived
+in ADR 0449 or from the library's own finite-element models (Kirsch and the beam formula as the references). The material values
+used (`sigma_f = 900` MPa, `b = -0.09`, `sigma_u = 600` MPa, `sigma_y = 400` MPa) are illustrative, not data of a material.
+
+| Item | Status | Source |
+|---|---|---|
+| Basquin `sigma_a = sigma_f (2 N)^b`, so `N = (sigma_a/sigma_f)^(1/b)/2` (the factor 2 on the reversals); power-law form `m = -1/b`, `C = sigma_f^m/2` | derived | Basquin, "The exponential law of endurance tests", Proc. ASTM 10 (1910) 625-630, in the reversal notation of Morrow: NOT read; ADR 0449 closed forms |
+| Goodman `sigma_a/(1 - sigma_m/sigma_u)`, Gerber `sigma_a/(1 - (sigma_m/sigma_u)^2)`, Soderberg `sigma_a/(1 - sigma_m/sigma_y)`; no credit for a compressive mean by default | from memory | Goodman (1899), Gerber (1874), Soderberg, Trans. ASME 52 (1930); standard texts (e.g. Dowling, Mechanical Behavior of Materials): NOT read; derived as the lines (parabola) through the strength in ADR 0449 |
+| Von Mises amplitude of `Re((A + i B) e^{i w t})`: `sqrt((q_A + q_B)/2 + sqrt(((q_A - q_B)/2)^2 + p_AB^2))` | derived | first principles, ADR 0449; checked against `max(s, sqrt 3 t)` and 200 sampled cases |
+| Rainflow counting: four-point closing of hysteresis loops; periodic history rotated to its turning point of largest modulus | from memory | Matsuishi and Endo (1968); Downing and Socie, Int. J. Fatigue 4 (1982) 31-40; ASTM E1049-85 (2017) section 5.4.4: NOT read (the standard's worked example not used); properties derived and checked in ADR 0449 (`f413-scratch/rainflow.py`) |
+| Palmgren-Miner linear damage `D = sum n_i/N_i` | from memory | Palmgren (1924); Miner, "Cumulative damage in fatigue", J. Appl. Mech. 12 (1945) A159-A164: NOT read |
+| Narrow-band damage rate `nu0 (sqrt 2 s)^m Gamma(1 + m/2)/C`; `nu0 = sqrt(m2/m0)`, `s = sqrt(m0)` | derived | Rice, Bell Syst. Tech. J. 23 (1944) and 24 (1945); Miles, J. Aeronaut. Sci. 21 (1954) 753-762; Bendat (1964): NOT read; the Rayleigh integral evaluated in ADR 0449 |
+| `ln Gamma` by Stirling's series with `B_2 .. B_14` for `x >= 15` and the recurrence below | from memory | Abramowitz and Stegun, Handbook of Mathematical Functions, 6.1.40: NOT read; Bernoulli numbers exact rationals; checked against factorials and half-integer values (B1) |
+| Kirsch: hoop stress `3 sigma_0` at the edge of a circular hole, 90 degrees from remote tension | from memory | Kirsch, Z. VDI 42 (1898) 797-807; Timoshenko and Goodier, Theory of Elasticity: NOT read; measured 1.0123 on the quarter plate of ADR 0449 (`r/W = 0.05`) |
+| Finite-width factor of a hole, `K_tn = 3 - 3.14 (d/W) + 3.667 (d/W)^2 - 1.527 (d/W)^3` (gross 3.023 at `d/W = 0.1`) | from memory | Peterson's Stress Concentration Factors after Howland (1930): NOT read; used only for the estimate of K1 in ADR 0449, not for a limit |
+| Cantilever root stress `6 P L/(b h^2)` | derived | Euler-Bernoulli beam; the support of beam theory of ADR 0433 D2 |

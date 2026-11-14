@@ -311,3 +311,117 @@ met only after an amendment made after its run; **todo** if the module cannot be
 - The narrow-band rate is the Rayleigh (narrow-band) bound; wide-band corrections (Wirsching-Light, Dirlik) are not included.
 - The root stress of a real fillet needs a converged mesh (ADR 0335); here a square-edged beam with the support of beam theory.
 - No wiring into the case file, CLI or API (a follow-up).
+
+## Addendum 1: results (2026-11-14)
+
+The registered run: commit ce1c9f50 (the library of 1776b351 and the tests), `cargo test -p rcfd-fem --release --test sa_fatigue
+-- --test-threads=1`, made once, log `f413-scratch/run_fatigue.log` (9 tests, 1.85 s in total: the cantilever 0.18 s, the plate
+0.80 s for 12 825 unknowns). X1: `cargo test -p rcfd-fem --release --test sa_scaffold` (9 passed, 5 ignored, among them the two
+X1 records). No amendment was written; no check was re-run. The only later commit to code is 2b796700, rustfmt layout of the two
+new files (no token changed).
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| C1 Basquin life; `strength_at(life(s))` | `<= 1e-12` | 0; 2.2e-16 | yes |
+| C2 Goodman, Gerber, Soderberg; corrected life | `<= 1e-12` | 0, 0, 0; 0 | yes |
+| C2c no credit (bit-equal); with credit Goodman, Soderberg, Gerber | `==`; `<= 1e-12` | bit-equal; 0, 0, 0 | yes |
+| C3 five refusals (key `"mean stress"`); 0.999 of each accepted | as stated | all refused, all accepted | yes |
+| C4 table at its points; table = Basquin 30 to 1500 MPa | `<= 1e-12` | 6.7e-16; 7.1e-14 | yes |
+| C5 endurance limit | as stated | `life(100), life(99) = inf`, `life(101 MPa) = 1.7933e10` = Basquin, `strength_at(1e12) = 1e8` | yes |
+| C6 power law = Basquin; `power_law` | `<= 1e-12`; equal | 6.7e-16; `(11.1111, 1.5508e99)` | yes |
+| H1 90 degrees out of phase; in phase | `<= 1e-10` | 0; 0 | yes |
+| H2 sampled above closed form; closed form above sampled | `<= 1e-12`; `<= 1e-8` | 0; 1.07e-10 (the sampling step) | yes |
+| H3 max principal closed forms | `<= 1e-9` | 6.7e-16 | yes |
+| H4 signed von Mises; shear, hydrostatic; MaxPrincipal mean; history | as stated | 0; as stated; 0; 0 | yes |
+| S1 life at `lambda` times the stress; Goodman `lambda` | `<= 1e-10`; `<= 1e-12` | 2.0e-15; 0 | yes |
+| F1 node of largest damage on the root surface | `x = 0`, `z = h` | node 915 at `(0, 0.0125, 0.05)` | yes |
+| F2 life over hand life | `[0.767541, 1.308433]` | 0.952655 (2.781244e7 against 2.919466e7) | yes |
+| F3 amplitude; mean against `6 P L/(b h^2)` | `<= 0.02` each | 3.66e-3; 3.55e-3 | yes |
+| F4 integration point of largest damage | `x < L/20`, `z > 3h/4` | `(0.00282, 0.0125, 0.04859)` | yes |
+| F5 field = point evaluation; damage rate | bit-equal; `<= 1e-15` | bit-equal; 1.1e-16 | yes |
+| K1 `s_xx` amplitude at `(0, r)` over `3 sigma_0` | within 3 percent | +1.234e-2 | yes |
+| K2 node of largest damage | at `(0, r)` | node 1225 at `(0, 0.005, 0.001)` | yes |
+| K3 life = Basquin of its amplitude; amplitude; life ratio | `<= 1e-12`; 3 percent; `[0.720053, 1.402751]` | 0; +1.263e-2; 0.869850 | yes |
+| Q1 `[S, -S] x n`; sampled sine | as stated | 1, 7, 1000 cycles of `2S`; 50 cycles, error 0 | yes |
+| Q2 ripples `m` = 1, 4, 25 | 1 and `m` | 1 and 1, 1 and 4, 1 and 25 | yes |
+| Q3 started at the maximum (27 histories) | as stated | no residual, plain residue `[M, min, M]`, rotation invariant | yes |
+| Q4 negated; reversed (227 histories) | bit-equal | equal; equal | yes |
+| Q5 counts; Miner against `n1/N1 + n2/N2` | as stated; `<= 1e-12` | 1000 and 100 000; 0 | yes |
+| Q6 cycle and residue; Miner with half cycles | as stated; `<= 1e-12` | as stated; 0 | yes |
+| Q7 turning points | exact | exact | yes |
+| B1 narrow-band rate; Gamma recurrence | `<= 1e-12`; `<= 1e-13` | 2.0e-15; 8.9e-16 | yes |
+| B2 cycles; counted against the rate | `>= 1e5`; within 5 percent | 131 154; -8.24e-3 (`nu0 T = 131104.4`, `s = 73.592`) | yes |
+| R1 to R8 (18 refusals) | keys as stated | each refused with its key and text | yes |
+| X1 `x1_modules_and_pending_after_fatigue` | passes | passes; the old X1 ignored | yes |
+
+Remarks on the measured numbers. K1 (+1.23 percent) is at the upper end of the estimate (0.3 to 1.3 percent). The finite width
+alone accounts for about +0.8 percent (Howland's factor, from memory), so the check measures the finite plate rather than Kirsch's
+infinite one. F3 (+0.37 percent) matches the support effect estimated at 0.4 percent. B2 (-0.82 percent) lies 1.1 standard
+deviations from the numpy estimate (`-0.4 +- 0.37` percent; the 0.4 percent bias comes from sampling the peaks at 32 samples per
+cycle).
+
+### Mutations (scratch copy `f413-scratch/mut`, the whole `sa_fatigue` suite per mutation, logs `f413-scratch/mut_M*.log`)
+
+| Id | Change | Caught by |
+|---|---|---|
+| M1 | Basquin without the factor 2 | C1, C2, C6, F2, K3, Q5, Q6, S1 |
+| M2 | Gerber exponent 1 | C2, C2c, S1 |
+| M3 | refusal at `>` | C3, R6 |
+| M4 | `sqrt(q_A + q_B)` | H1, H2 |
+| M5 | closing with `<` | Q3 (not Q1, see below) |
+| M6 | no rotation | Q1, Q3, Q4 |
+| M7 | half cycles counted 1 | Q6 |
+| M8 | `Gamma(1 + m)` | B1, B2 |
+| M9 | sign of the `B_4` term | B1 |
+| M10 | signed von Mises by minus the trace | F1, F4, H4, R6 (not F2: the life at the wrong node was within the factor) |
+| M11 | Goodman safety factor `- S sigma_m/sigma_u` | S1 |
+| M12 | `lambda_1` only | H3 |
+
+Every mutation was caught by a registered check. Two registered catchers did not catch their mutation (Q1 for M5, F2 for M10);
+another registered catcher caught each. M5 escaped Q1 because `rainflow_periodic` counts every second window of three of a residue
+longer than `[M, v, M]` as a cycle: with the mutation a constant-amplitude residue `[S, -S, S, ..]` still gives `n` cycles. The
+proof of closed forms (i) says such a residue cannot occur with the registered rule. The count is then right only by accident, so
+a residue longer than 3 should be refused as an internal error (open question 2).
+
+### Deviations and what was not run
+
+- None of the registered set-ups was changed. The planned catcher lists of M5 and M10 were wider than what caught them (above).
+- The message of the Gerber refusal with credit at `-sigma_u` says "at or above the strength" for a negative mean. The text is
+  checked by C3, so it was left unchanged (open question 3).
+- Not run: the whole workspace suite (the lead's gate). `baseline_hashes` was not run because no shared solver file and no
+  rcfd-fv or rcfd-api source was touched. `cargo fmt -p rcfd-fem --check` is clean and `cargo clippy -p rcfd-fem --all-targets --
+  -D warnings` is clean. `cargo test -p rcfd-cli --release --test docs_site` passed (2 tests).
+
+### Decision by the registered rule
+
+**done**: every registered check was met in its single registered run, without an amendment, and every planned mutation was caught
+by at least one registered check.
+
+### Remaining questions
+
+1. Wiring into the case file, the CLI and the API (fatigue fields from a harmonic case). Options: (a) a follow-up item that adds a
+   `fatigue` block to the solid case; (b) leave it as a library until the fan blade case needs it. Recommendation (a), after the
+   F-412 transformation-path follow-up, so that cyclic blade models can use it.
+2. A residue longer than `[M, v, M]` in `rainflow_periodic`. Options: (a) return an internal error; (b) keep the current pairing.
+   Recommendation (a), with a mutation test like M5. This is a one-line follow-up, because the registered rule cannot produce
+   such a residue.
+3. The message of the Gerber refusal for a compressive mean. Options: (a) say "at or beyond the strength in modulus"; (b) leave
+   it. Recommendation (a), with a new check, in the follow-up of question 2.
+4. Wide-band damage (Dirlik, Wirsching-Light) and a critical-plane amplitude for non-proportional loading. Recommendation: a
+   follow-up item if the random-vibration work (F-417) needs it. The narrow-band rate is the conservative bound.
+
+## For the lead: roadmap entries
+
+Proposed status of F-413: **done**.
+
+> Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. ADR 0449, 2026-11-14: rcfd_fem::fatigue (stub of ADR 0440 filled, PENDING None) with Basquin, power and log-log table curves with an endurance limit, Goodman, Gerber and Soderberg corrections (a mean at or above the strength refused, no compressive credit by default), the closed-form von Mises amplitude of a harmonic tensor maximised over the phase, the largest principal amplitude, the signed von Mises mean, fields of life, damage rate and safety factor, four-point rainflow with a periodic form, Miner with compensated summation, and the narrow-band rate with a Stirling Gamma. Every registered check was met in one run: curves and corrections within 0 to 7e-14 of the closed forms; harmonic amplitude 90 degrees out of phase exact; Hex20 cantilever (L/h = 10, support of beam theory): largest damage at the root top surface, life 0.9527 of the hand value from 6 P L/(b h^2) (registered factor [0.7675, 1.3084] for 2 percent), stresses 0.37 percent off; quarter plate with a hole r/W = 0.05 (576 Hex20, harmonic through DirectHarmonic): hole-edge amplitude +1.23 percent of 3 sigma, the largest damage there and its life the Basquin life of that stress; counting checks exact (constant amplitude, ripples, no residual, negation and reversal invariant, two blocks within 0); narrow band within 2e-15 as a function and -0.82 percent for a synthesised history of 131 154 cycles; 12 of 12 mutations caught.
+
+Follow-up items:
+
+- **Fatigue in the solid case file and CLI** (deps F-413, F-386).
+
+> Every limit not stated here is registered in the ADR before the run. A solid case with a harmonic step and a fatigue block (curve, mean-stress correction, equivalent stress, design life) writes the fields of life, damage rate and safety factor at the nodes; on the plate with a hole of ADR 0449 the written fields equal the library's within 1e-12, a case without a fatigue block gives bit-identical outputs, and a mean at or above the strength is refused with the point and the case path.
+
+- **Rainflow residue guard and refusal messages** (deps F-413).
+
+> Every limit not stated here is registered in the ADR before the run. rainflow_periodic returns an internal error when the residue of the closed sequence is longer than three points, and a mutation that closes loops with a strict inequality is then caught by the constant-amplitude check; the Gerber refusal of a compressive mean at or beyond the strength says so in modulus; all checks of ADR 0449 still pass unedited.
