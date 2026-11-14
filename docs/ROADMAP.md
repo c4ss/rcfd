@@ -10831,14 +10831,27 @@ fixed by the item's registration ADR before any code.
     results and defaults bit-identical (13 digests). Six of seven mutations caught; removing the axes check of
     RotatingSector::new is not caught because RotatingPart::new and the transformation check it again. Follow-up for
     static correction vectors. Follow-up F-569.
-- [ ] **F-556** Diagnosis of the Shell3 rest stiffness of a twisted strip against Hex20
+- [~] **F-556** Diagnosis of the Shell3 rest stiffness of a twisted strip against Hex20
   - depends on: F-420
   - acceptance: Every limit not stated here is registered in the ADR before the run. The 4.05 percent excess of the
     Shell3 rest frequency of the third mode of the twisted strip of ADR 0473 over Hex20 (Shell4 0.53 percent) is located
     in the Shell3 membrane-bending coupling on warped triangles (CST or ANDES membrane, MITC3 shear) by registered
     element and mesh variations against the Hex20 strip, before any change to Shell3; any fix is opt-in and the default
     Shell3 results stay bit-identical.
-  - note: Structural solver, advanced tier. Follow-up of F-420 (ADR 0473, 2026-11-14).
+  - note: Structural solver, advanced tier. Follow-up of F-420 (ADR 0473, 2026-11-14). PARTIAL. ADR 0483, 2026-11-14:
+    diagnosis, no library change. The 4.05 percent Shell3 excess on the twisted strip's first torsion (third mode,
+    460.730 against 442.797 Hz) is located in the constant-strain membrane acting through the membrane-bending coupling
+    of the warped triangles: three quarters of the torsion energy is the fibre strain theta' phi' s^2 coupled by the
+    pretwist (closed form G c t^3/3 + E t c^5 theta'^2/180), which the CST follows only with parasitic in-plane shear
+    (9.2 percent membrane-energy excess at 12 x 36). Registered variations against Hex20: flat strip -2.0e-3; the excess
+    scales with the membrane share over twist 15 deg and thickness 0.5 and 2 mm (0.93 to 1.04 of the prediction) and as
+    h^2 (0.257, 0.264 per halving); MITC3 stabilisation and drilling factor below 2e-3; diagonals AC and BD congruent
+    (torsion 4.7e-13), alternating 0.65 of AC. The existing opt-in ANDES membrane (ADR 0466) removes it: rest 3.3e-4,
+    Campbell table within 2.98e-3 of Hex20 (E2 limit 4e-2). Default Shell3, ANDES Shell3, Shell4 and Hex20 strip bits
+    recorded and unchanged (12 digests). Partial by the registered rule: the auxiliary checks C3 (AC/BD to 1e-8, 3.7e-8
+    on modes 5 and 6 at the solver tolerance) and C7/N3 (closed form at twist 0, which neglects the root restraint,
+    9.3e-2) missed and are recorded as known misses. Seven of eight mutations caught; the BD split mutation enters only
+    the known-miss C3. One optional follow-up proposed (a warning for the CST membrane on warped meshes).
 - [ ] **F-557** Pre-stress of a static result on a model with both solid and structural elements
   - depends on: F-420
   - acceptance: Every limit not stated here is registered in the ADR before the run. The refusal RF1 of ADR 0473 is
