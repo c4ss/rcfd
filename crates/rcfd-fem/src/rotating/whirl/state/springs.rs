@@ -26,12 +26,14 @@ impl<'a> RotatingPart<'a> {
         let dofs = model.dof_map();
         let mut equations = Vec::with_capacity(nodes.len());
         for &node in nodes {
-            let eq = dofs.equation(node, component).ok_or_else(|| FemError::ComponentOutOfRange {
-                set: set.to_string(),
-                node,
-                component,
-                available: dofs.components(node),
-            })?;
+            let eq = dofs
+                .equation(node, component)
+                .ok_or_else(|| FemError::ComponentOutOfRange {
+                    set: set.to_string(),
+                    node,
+                    component,
+                    available: dofs.components(node),
+                })?;
             equations.push(eq);
         }
         let k = &mut self.k;

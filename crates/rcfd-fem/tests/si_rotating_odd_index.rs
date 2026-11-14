@@ -234,7 +234,11 @@ fn o1_o2_o3_q1_n1_negative_axial_support_odd() {
     print_state("N1 CTI- 1.5 omega_0 without Coriolis", &r);
     let expected = (w * w - W0 * W0).sqrt();
     match growth_of(r.stability) {
-        Some(g) => ch.le("N1 growth against sqrt(Omega^2 - omega_0^2)", (g / expected - 1.0).abs(), 1e-8),
+        Some(g) => ch.le(
+            "N1 growth against sqrt(Omega^2 - omega_0^2)",
+            (g / expected - 1.0).abs(),
+            1e-8,
+        ),
         None => ch.holds("N1 flag", false, "Unstable"),
     }
     ch.finish();
@@ -248,7 +252,12 @@ fn v1_q1_positive_axial_support_even() {
     let (mut v1, mut q1) = (0.0f64, 0.0f64);
     let mut flags = true;
     let mut counts = true;
-    for (f, c) in [(0.5, None), (1.2, Some(Some(2))), (1.5, Some(Some(2))), (2.0, Some(Some(2)))] {
+    for (f, c) in [
+        (0.5, None),
+        (1.2, Some(Some(2))),
+        (1.5, Some(Some(2))),
+        (2.0, Some(Some(2))),
+    ] {
         let w = f * W0;
         let r = p.whirl_state(w).unwrap();
         print_state(&format!("CTI+ {f} omega_0"), &r);
@@ -283,7 +292,11 @@ fn v2_v3_q1_anisotropic_tied_cube_in_the_band() {
     }
     let mut re: Vec<f64> = r.eigenvalues.iter().map(|s| s[0]).collect();
     re.sort_by(|a, b| b.total_cmp(a));
-    ch.le("V2 second largest real part against sigma", (re[1] / sigma - 1.0).abs(), 1e-8);
+    ch.le(
+        "V2 second largest real part against sigma",
+        (re[1] / sigma - 1.0).abs(),
+        1e-8,
+    );
     q1 = q1.max(residuals(&r));
     // V3: positive axial support, odd count.
     let r = part(&cb, false, true).whirl_state(w).unwrap();
@@ -323,13 +336,16 @@ fn r1_refusals_and_a_zero_spring() {
             Ok(_) => "accepted".to_string(),
             Err(e) => key_of(e),
         };
-        ch.holds(&format!("R1 ({set}, {c}, {k})"), got == want, &format!("{got} (expected {want})"));
+        ch.holds(
+            &format!("R1 ({set}, {c}, {k})"),
+            got == want,
+            &format!("{got} (expected {want})"),
+        );
     }
     let a = p().operator(1.5 * W0);
     let b = p().with_nodal_springs("all", 2, 0.0).unwrap().operator(1.5 * W0);
-    let same = a.row_ptr == b.row_ptr
-        && a.col == b.col
-        && a.val.iter().zip(&b.val).all(|(x, y)| x.to_bits() == y.to_bits());
+    let same =
+        a.row_ptr == b.row_ptr && a.col == b.col && a.val.iter().zip(&b.val).all(|(x, y)| x.to_bits() == y.to_bits());
     ch.holds("R1 zero spring", same, "operator bit-identical");
     ch.finish();
 }
@@ -372,10 +388,7 @@ fn ds_sector() -> SolidModel {
 fn ds_options() -> RotatingOptions {
     let mut o = ModalOptions::new(4).tolerance(1e-9);
     o.max_iterations = 400;
-    RotatingOptions::new(4)
-        .modal(o)
-        .coriolis(true)
-        .stress_stiffening(false)
+    RotatingOptions::new(4).modal(o).coriolis(true).stress_stiffening(false)
 }
 
 fn count_of(r: &StateWhirl) -> Option<usize> {
@@ -458,14 +471,21 @@ fn s0_s1_s2_s3_s4_sector_single_index_odd() {
     println!("S0: omega_ref = {w_ref:.9e} rad/s (stress stiffening off, Coriolis on)");
     let w_l: Vec<f64> = (0..=N / 2)
         .map(|k| {
-            assert_eq!(c_of(&rs, k, 0.8 * w_ref), 0, "defective set-up: index {k} lost at 0.8 omega_ref");
+            assert_eq!(
+                c_of(&rs, k, 0.8 * w_ref),
+                0,
+                "defective set-up: index {k} lost at 0.8 omega_ref"
+            );
             let w = crossing(&rs, k, 1, 0.8 * w_ref, w_ref);
             println!("S0: Omega_L,{k} = {w:.12e} rad/s = {:.9} omega_ref", w / w_ref);
             w
         })
         .collect();
     let k_o = if w_l[0] <= w_l[N / 2] { 0 } else { N / 2 };
-    assert!(w_l[k_o].is_finite(), "defective set-up: no single index lost by 16 omega_ref");
+    assert!(
+        w_l[k_o].is_finite(),
+        "defective set-up: no single index lost by 16 omega_ref"
+    );
     let w_2 = crossing(&rs, k_o, 2, w_l[k_o], w_ref);
     let earlier: Vec<usize> = (0..=N / 2).filter(|&k| k != k_o && w_l[k] <= w_l[k_o]).collect();
     let w_next = (0..=N / 2)
@@ -486,8 +506,16 @@ fn s0_s1_s2_s3_s4_sector_single_index_odd() {
         print_state(&format!("k = {}", h.harmonic), &h.state);
     }
     let ho = &hs[k_o].state;
-    ch.holds("S1 count of k_o", count_of(ho) == Some(1), &format!("{:?}", count_of(ho)));
-    ch.holds("S1 flag of k_o", !ho.stability.is_stable(), &format!("{:?}", ho.stability));
+    ch.holds(
+        "S1 count of k_o",
+        count_of(ho) == Some(1),
+        &format!("{:?}", count_of(ho)),
+    );
+    ch.holds(
+        "S1 flag of k_o",
+        !ho.stability.is_stable(),
+        &format!("{:?}", ho.stability),
+    );
 
     let rotor = full_rotor(&sector).unwrap();
     let mut full = model_on(rotor.mesh().clone());
