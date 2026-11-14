@@ -250,3 +250,66 @@ si_shell_rotating_disc -- --nocapture --test-threads=1`).
 2. The limits from an independent prototype of the element (D4) times 1.5, with the first-principles derivation of the two
    second-order sources, rather than from the derivation alone (which gives only the order and an order of magnitude).
    Recommended and taken.
+
+## Addendum 1: results (2026-11-14)
+
+The registered run: commit 18ab2d16, once, release, `cargo test -p rcfd-fem --release --test si_shell_rotating_disc --
+--nocapture --test-threads=1` (log `w49i-work/f524-scratch/run1.log`): 3 passed, 0 failed, 0.29 s. No amendment; nothing was
+re-run except the mutation runs on the scratch copy.
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| U1 / U2 / U3 `e_u` (4 x 24, 8 x 48, 16 x 96) | 4.2e-2 / 1.2e-2 / 2.9e-3 | 2.7370e-2 / 7.3480e-3 / 1.8750e-3 | yes |
+| SR1 / SR2 / SR3 `e_sr` | 6.6e-2 / 1.8e-2 / 4.5e-3 | 4.3880e-2 / 1.1595e-2 / 2.9722e-3 | yes |
+| ST1 / ST2 / ST3 `e_st` | 2.2e-2 / 5.6e-3 / 1.5e-3 | 1.4444e-2 / 3.7069e-3 / 9.3471e-4 | yes |
+| O1 orders level 1 -> 2 (`u`, `sigma_r`, `sigma_theta`) | each >= 1.8 | 1.897, 1.920, 1.962 | yes |
+| O2 orders level 2 -> 3 | each >= 1.8 | 1.971, 1.964, 1.988 | yes |
+| P1 the nine errors against the prototype | each <= 1e-6 | largest 5.2e-10 (level 3 `e_sr`); level 1 at most 1.4e-11 | yes |
+| K1 `max |u_theta| / max u` | <= 1e-9 | 8.3e-15, 4.1e-14, 2.5e-13 | yes |
+| K2 `max(|w|, a |theta_x|, a |theta_y|) / max u` | <= 1e-9 | 0 at every level (exactly) | yes |
+| K3 `a max |theta_z| / max u` | <= 1e-6 | 8.2e-15, 3.2e-14, 2.2e-13 | yes |
+| K4 reactions / `max |f|` | <= 1e-9 | 3.0e-14, 1.2e-13, 2.0e-12 | yes |
+| K5 free rigid motions | == 0 | 0, 0, 0 | yes |
+| K6 nodes on their circles; counts | 1e-15 m; as stated | 5.6e-17 m; (120, 96), (432, 384), (1632, 1536) | yes |
+| N1 bore held, `e_u` | >= 0.5 | 1.0000 (`e_sr` 2.59, `e_st` 0.725) | yes |
+| N2 `16 x 24`: `e_st`; ratio to level 3 | >= 1e-2; in [10, 40] | 2.0998e-2; 22.46 | yes |
+| S1 `git diff d3d05478 --stat -- crates` | the new test file only | `crates/rcfd-fem/tests/si_shell_rotating_disc.rs`, 342 lines | yes |
+
+Every measured error equals the prototype's to within 5e-10 relative, so the estimate of D4 was the discretisation error of this
+element exactly, and the 1.5 factor of the limits was not needed. The bending unknowns are exactly zero (the unloaded,
+decoupled bending part of D3). The orders approach 2 from below, as D4 expected.
+
+Mutations (scratch copy `w49i-work/f524-scratch/tree` from `git archive` of 18ab2d16, script `mutate.py`, logs `MU1.log` to
+`MU6.log`, summary `mutations.log`; each applied alone and reverted):
+
+| Id | Mutation | Caught by |
+| --- | --- | --- |
+| MU1 | `plane_matrix` without the `nu` coupling | U (1.6e-1), SR, ST, O1, O2, P1, K1 (`u_theta` 1.5e-1), K3, N2 |
+| MU2 | the shell centrifugal closure with `rho omega` | U (0.997), SR, ST, O1, O2, P1, N2 |
+| MU3 | shell stresses at the Gauss point `(-G, -G)` | SR (1.7e-1 at level 1), ST, O1, O2 (orders 0.55 to 0.83), P1, N2; U unaffected, as expected |
+| MU4 | the body force at the vertex centroid for every Gauss point | P1 only (2.5e-1 to 4.3e-1); U, SR, ST and the orders met |
+| MU5 | closed-form `sigma_theta` with the factor 1 | ST, U (the test's `u` uses `sigma_theta`), O1, O2, P1, N2 |
+| MU6 | the polar turn with `- 2 p q N_xy` | SR (2.1e-1), ST, P1, O1 (`sigma_r` order 1.64) |
+
+All six were caught. MU4 was caught by P1 alone, as registered ("P1, possibly U, SR, ST"): a body force sampled at the element
+centroid is still a second-order load error, so the closed-form checks with their 1.5 factor cannot see it; P1 can.
+
+`cargo fmt -p rcfd-fem --check` is clean, and so is `cargo clippy -p rcfd-fem --all-targets -- -D warnings`. Only the new
+file was run (release). No library line changed, so no existing test covers a changed line and no baseline-hash run is owed.
+The whole workspace suite was not run (that is the lead's gate).
+
+Decision by the registered rule: **done**. Every A, P and K check met on the single registered run, both negative controls as
+expected, S1 as stated, every mutation caught, no amendment.
+
+Remaining questions:
+
+1. Only one disc and uniform radial divisions (L1). Options: (a) leave it; (b) add a graded mesh or a second `b/a`.
+   Recommendation: (a). The prototype agreement (P1) shows the element is what ADR 0432 says, and the order is the registered one.
+2. Shell stresses exist only at element centres (L3). Options: (a) a follow-up for nodal recovery of shell resultants (the
+   same averaging as `recover::nodal_average` for solids); (b) none until a user needs it. Recommendation: (b).
+
+### For the lead: roadmap entries
+
+Proposed status of F-524: **done**.
+
+> ADR 0439, 2026-11-12: rotating plane-stress annular disc of Shell4 facets against the closed form (tests only, rcfd-fem/tests/si_shell_rotating_disc.rs, no library code). Full annulus b/a = 3, nu = 0.3, free edges, every node on its circle, six point zeros on three bore nodes (tangential in-plane components and w) that remove the rigid motions without restraining the expansion. Limits 1.5 times an independent prototype of the element (numpy, the formulas of ADR 0432 and 0435), the two second-order sources derived (radial discretisation; chords, a ring of chords carries 1 - Delta theta^2/6 of the hoop force). Levels 4 x 24, 8 x 48, 16 x 96: radial displacement 2.7e-2, 7.3e-3, 1.9e-3; radial stress 4.4e-2, 1.2e-2, 3.0e-3; hoop stress 1.4e-2, 3.7e-3, 9.3e-4 (each of its own peak); observed orders 1.90 to 1.99 (limit 1.8); the element equals the prototype within 5.2e-10. Bending unknowns exactly zero, reactions 2e-12. Bore-held and chord controls as expected; six mutations caught.
