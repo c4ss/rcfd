@@ -234,3 +234,47 @@ test kept on the rods (rule 7); estimated about 10 s (P2 times).
 - The real part of `lambda` does not enter the moduli (the acceptance's `K*(Im lambda)`), so the iterated root is not a root of
   `lambda^2 M + K*(lambda/i)` for a strongly damped root (the analytic continuation in `lambda` is not taken).
 - The isotropic base, solid elements, the elimination path only (as ADR 0495).
+
+## Amendment 1 (2026-11-14): three misses of the registered run, diagnosed; corrected set-ups registered before their run
+
+Written after the registered run and a diagnostic, before any corrected run. Nothing above is changed.
+
+**The registered run** (commit 07997bbe, `f586-scratch/run1.log`, made once): every check met except **TF** (`inf`: the dense
+reference returned NaN for one root), **DM** (`6.87e-9` against `1e-9`) and **RV1** (refused: `Solver`, "viscoelastic own
+frequency", root 0 not converged in 50 iterations, last change `3.3e-5`). The acceptance checks DA (`1.09e-13`), DD
+(`9.6405e-6`) and T (`1.504e-4`) are met. The numbers of every check go in Addendum 1.
+
+**Diagnostic** (disclosed; `f586-scratch/probe/src/bin/diag.rs`, the test's helpers copied, the dense iteration instrumented,
+output `f586-scratch/diag1-tail.log` and the console):
+
+1. **TF.** The test's dense fixed point stalls at its own noise: the relative frequency changes of T root 1 go `3.3e-2,
+   1.1e-3, 3.7e-5, 1.3e-6, 4.3e-8, 1.4e-9, 4.0e-11` and then wander between `3e-12` and `2.7e-11`; the convergence test
+   `1e-13` is below the noise floor of the dense 144-unknown quadratic solve (the library's 71-mode solve converges to
+   `2e-14`). A defect of the test's reference, not of the library.
+2. **DM.** With the point dashpot the missing highest mode of basis `n - 1` is not negligible: library basis `n - 2` against
+   `n - 1` differs by `2.0e-8, 2.0e-9, 1.9e-8, 2.3e-8` with the dashpot and `1.9e-14, 2.0e-9, 3.3e-14, 1.3e-14` without; the
+   DM error against the dense solve is `5.8e-9, 2.2e-11, 5.6e-9, 6.9e-9` with the dashpot and `5.6e-11, 1.2e-11, 3.8e-12,
+   1.9e-13` without (Rayleigh, two materials and the loss factor kept). The probe P2 behind the limit had no dashpot: the
+   estimate was wrong for a point dashpot, which couples into the high modes (the reason for the residual vectors of ADR
+   0464). The library is not at fault; the basis `n - 1` is not the full space for this load.
+3. **RV1.** The lowest reported root of the frozen solve is the pseudo-mode of the residual vector (`-2.137e5 + 1251 i`,
+   share `0.986`, flagged `pseudo`); its own-frequency iteration contracts at about `0.86` per step (changes `2.0e-1, 1.2e-1,
+   8.0e-2, 4.5e-2` after 1, 2, 3, 5 iterations, `1.6e-2` after 10, `3.0e-3` after 20, `3.3e-5` after 50) and converges
+   after 170 iterations at `634 rad/s` (with `max_iterations(1000)`); the physical roots take 7 and 6. Its `Im` is a tiny
+   part of a huge `|lambda|` and very sensitive to the moduli. The refusal is the registered behaviour (D1); the registered
+   expectation (runs) was wrong for a basis whose lowest root is a pseudo-mode.
+
+**Records.** The registered test is kept as the ignored record `f586_checks_known_miss` (its checks and limits unchanged;
+the function body moves into a helper run with the registered variant, which executes the same values).
+
+**Corrected set-ups** (variant `amended`, a new test `f586_checks_amended`; every other check as registered, same limits):
+
+| Id | Correction | Limit |
+|---|---|---|
+| TF | the dense reference converged when `|dw| <= 1e-10 w` (above the noise floor `2.7e-11` of item 1); not converged in 100 steps is still NaN | `<= 1e-9` (unchanged) |
+| TT | the same reference | record |
+| DMb | DM without the dashpot (Rayleigh `(5, 2e-6)`, the aluminium set with `Constant(0.01)`, `K_rest`), dense tolerance as TF | `<= 1e-9` (unchanged; disclosed: the diagnostic printed `5.6e-11` for this set-up, so this limit is not set blind) |
+| RV1b | RV1 with `OwnFrequency::new(3).max_iterations(500)`: runs, every reported root finite, and root 0 takes more than 50 iterations | finite; `> 50` (disclosed: the diagnostic printed 170) |
+
+DM (with the dashpot) and RV1 (50 iterations) stay missed in the record. The decision rule applies as registered: these misses
+are diagnosed and recorded, so at best **partial**. MU10 (Rayleigh at `w`) and MU8, MU9 are expected to be caught by DMb.
