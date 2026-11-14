@@ -229,3 +229,71 @@ row with `0.5 nx` (B1, C1); MU7 the library `ANDES_ALPHA_B` 1.5 to 1.4 (B1, F1);
 - The Hex20 reference with one element through the thickness (C6 bounds its in-plane mesh error, not the through-thickness one).
 - No library change: a remedy other than the existing ANDES membrane is a follow-up.
 - No Shell3 default changes (a change of default is a maintainer decision that would move results and hashes).
+
+## Addendum 1: results of the first run (2026-11-14)
+
+Run once at 723a5e19, release, `cargo test -p rcfd-fem --release --test sa_shell3_twist_diagnosis -- --nocapture
+--test-threads=3` (log `f556-scratch/run1.log`, 15 s); B1 recorded at dcf83a9f on the base (`f556-scratch/b1-base.log`).
+`d2_refinement` and `f1_andes_shell3_twisted_strip_campbell` passed; `d1_variation_matrix_base_twist_thickness_energy` failed on
+four checks (below).
+
+| check | measured | limit | |
+|---|---|---|---|
+| C1 Hex20, Shell4, Shell3 torsion against the F-420 log | 8.3e-10, 4.4e-10, 4.6e-10 | `1e-7` | met |
+| C1b `delta_3`, `delta_4` | 4.049873e-2 (2.7e-7 off), 5.339560e-3 (4.0e-8 off) | `1e-5` | met |
+| C2 `tau` of the chosen mode, every run | lowest 0.98803 | `>= 0.8` | met |
+| C2b third mode at the base (Hex20, Shell4, Shell3) | 2, 2, 2 | each | met |
+| C3 AC against BD, six frequencies | 3.69e-8 (modes 5 and 6; modes 1 to 4 equal to the printed 6 decimals) | `1e-8` | **missed** |
+| C4 own assembly against the model | 0 (bit-equal frequencies) | `1e-8` | met |
+| C5 sum of parts; whole against `lambda/2` (CST, ANDES, Shell4) | 1.5e-12, 1.9e-12, 2.8e-12; 4.9e-13, 3.2e-14, 3.0e-12 | `1e-11`; `1e-8` | met |
+| C6 Hex20 24 x 72 against 12 x 36 | 1.17e-3 | `5e-3` | met |
+| C7 Hex20 against the closed form: base, twist 15, 0.5 mm, 2 mm | 2.32e-2, 5.71e-2, 1.43e-3, 4.77e-2 | `6e-2` | met |
+| C7 twist 0 | 9.29e-2 (228.084 against 208.690 Hz) | `6e-2` | **missed** |
+| F1 ANDES Shell3 Campbell against Hex20, tracks 1 to 4, four speeds | 2.98e-3; no loss, lowest MAC 0.999708 | `4e-2`; `> 0.9` | met |
+| N1 second-largest `tau` at the base | 0.98395 | `< 0.5` | **missed** |
+| N2 without the membrane part (CST, ANDES, Shell4) | 0.751, 0.730, 0.732 | `> 0.5` | as expected |
+| N3 Hex20 twist 30 / twist 0 against the closed-form ratio 2.0736 | 1.9414 (0.132 off) | `> 1.5`, within `0.1` | **missed** |
+
+**N1: a defect of the identification rule (set-up).** Every torsion mode is antisymmetric at the tip, so the second torsion has
+`tau ~ 1` as well; "the largest `tau`" does not separate the first torsion from the second. At the base and in every run of
+the twisted strips (15 and 30 degrees, every thickness and mesh) the rule took the third mode, the first torsion (its frequency
+continuous with the base: 442.80, 298.02, 393.77, 590.75 Hz for Hex20); at twist 0 it took the first torsion for Hex20 and Shell4
+(index 1, 228.08 and 228.01 Hz) but the second torsion for Shell3 CST and ANDES and the own assembly (index 4, 716.06 Hz), so
+P1 (twist 0, `Delta = 2.14`) and the twist-0 part of Q3 (`7.47e-3`) were measured on the wrong mode. Corrected by amendment 1.
+
+**C3: the limit ignored the eigensolver tolerance.** The two meshes are congruent (arithmetic 4); the first four frequencies
+agree to the printed 6 decimals (the torsion 460.730207 Hz on both), the fifth and sixth differ by 3.7e-8 and 1.8e-8. The
+pairs are converged to the backward error `1e-10`, which for the higher pairs allows an eigenvalue difference of order
+`1e-10 ||K|| / (lambda ||M||)`, not rounding. Kept as a known miss (`c3_ac_bd_congruence_known_miss`), the limit intact.
+
+**C7 at twist 0 and N3: the closed form neglects the root restraint.** The clamped root sets `phi'(0) = 0` as well as `phi(0)
+= 0` (the slope `w_r = phi' s` vanishes along the clamp): a plate strip has the warping-like stiffness `D c^3/12` of the
+chordwise-linear `w_rr`, with the decay length `sqrt(D c^3/(12 G J)) = 0.128 m`, comparable with `L = 0.15`. At twist 0 this
+raises the torsion by 9.3 percent over the free-warping closed form (Shell4 228.010 Hz agrees with Hex20 228.084 Hz within
+3.2e-4, so the reference is not in question); at 30 degrees the pretwist term dominates and the effect is 2.3 percent. The
+registration estimated the base only. Kept as a known miss (`c7_n3_twist0_closed_form_known_miss`), the limits intact.
+
+**The diagnostic predictions of the first run** (P1 and the twist-0 Q3 on the wrong mode; the others on the first torsion):
+
+| id | measured | range | |
+|---|---|---|---|
+| P2 ANDES `|Delta|/Delta_b` (`Delta_b = 3.5159e-2`) | 0.161 | `[0, 0.25]` | holds |
+| P3 twist 15, 0.5 mm, 2 mm: `Delta/((1/2) m e_m)` (`e_m = 9.163e-2`) | 0.927, 1.044, 0.969 | `[0.6, 1.4]` | holds |
+| P4 `Delta(24 x 72)/Delta(12 x 36)`, `Delta(48 x 144)/Delta(24 x 72)` | 0.257, 0.264 | `[0.15, 0.40]` | holds |
+| P5 ALT `Delta/Delta_b` | 0.652 | `[0.5, 1.5]` | holds |
+| P6 OA stabilisation 0, drilling `1e-4`, `1e-2` | 1.94e-3, 2.76e-4, 6.44e-5 | `<= 5e-3` | holds |
+| P7 CST membrane share; drilling share | 0.7508; 8.1e-5 | `[0.65, 0.90]`; `<= 2e-2` | holds |
+| Q2; Q4 | false; false | — | not indicated |
+
+## Amendment 1 (2026-11-14, written and committed before the corrected run)
+
+1. **The first torsion** of a run is the lowest-frequency mode of the six with `tau >= 0.8` (the registered `tau` of D2
+   unchanged). C2 becomes: such a mode exists in every run. C2b unchanged (index 2 at the base).
+2. **N1 corrected:** every mode below the first torsion has `tau < 0.5`, in every run (the identification separates the
+   torsion from the flap and edge modes below it). Its limit `0.5` unchanged.
+3. The corrected test `d1b_variation_matrix_first_torsion` repeats the runs of `d1` (deterministic; the same bits) with the
+   corrected identification and asserts C1, C1b, C2, C2b, C4, C5, C6 is in `d2`, C7 except at twist 0, N1 (corrected), N2; the
+   predictions P1 to P7 and Q2 to Q4 are printed and classified with the registered ranges. C3, C7 at twist 0 and N3 are
+   printed, not asserted, and asserted with their limits in the ignored known-miss tests. `d1` becomes an ignored record of the
+   first run. `d2` and F1 are not re-run: their choices were the third mode in every run, the first torsion (addendum 1).
+4. No limit, range, mesh or option changes.
