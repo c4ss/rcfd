@@ -8232,7 +8232,7 @@ fixed by the item's registration ADR before any code.
     at 1.2 w0 with the growth within 2e-13; eight of eight mutations caught. Zero-speed frequencies against F-396 within
     1e-13 on the block but missed on the ring (4.6e-10) and the beam (1.0e-10) against 1e-10: the F-396 rest eigenvalues
     differ from their own vectors' Rayleigh quotients by up to 9e-10, and the split solve agrees with those quotients
-    within 3.4e-11. Follow-ups for the zero-speed comparison and for cyclic sectors. Stub ADR 0318.
+    within 3.4e-11. Follow-ups for the zero-speed comparison and for cyclic sectors. Follow-ups F-554, F-555.
 - [ ] **F-416** Flexible rotor on bearings in the stationary frame: whirl, critical speeds, unbalance response, joined to the rigid-rotor model
   - depends on: F-414, F-391, F-393
   - acceptance: Every limit not stated here is registered in the ADR before the run. At zero speed the frequencies equal
@@ -10725,3 +10725,19 @@ fixed by the item's registration ADR before any code.
     1e-10 in statics and its first three frequencies are within 0.1 percent and not below the full model's; beams and
     shells as interface nodes covered; without a reduced part every result bit-identical.
   - note: Structural solver, advanced tier. Follow-up of F-430 (ADR 0469, 2026-11-14).
+- [ ] **F-554** Zero-speed split frequencies against the Rayleigh quotients of the F-396 basis
+  - depends on: F-415
+  - acceptance: Every limit not stated here is registered in the ADR before the run. At zero speed with the Coriolis
+    option the split frequencies of ADR 0472 equal the square roots of the Rayleigh quotients of the F-396 rest modes
+    within 1e-10 on the block, the ring and the radial beam of ADR 0472, and the difference between F-396's reported
+    rest eigenvalues and those quotients is reported per mode; no default result changes.
+  - note: Structural solver, advanced tier. Follow-up of F-415 (ADR 0472, 2026-11-14).
+- [ ] **F-555** Split Campbell table of a cyclic sector on the modal subspace
+  - depends on: F-415, F-544
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The gyroscopic problem of ADR 0472
+    on the harmonic modes of each index of a cyclic sector (a cos/sin basis and the doubled Coriolis matrix of ADR 0411
+    D5): on the disc sector of ADR 0411 at 0.4 and 0.8 of its reference speed the split frequencies of every index equal
+    those of RotatingSector::whirl_modes within 1e-6 for the modes whose coupling stays inside the basis; the refusal of
+    ADR 0472 is lifted only for sectors whose material axes pass the check of ADR 0462; without the option every result
+    bit-identical.
+  - note: Structural solver, advanced tier. Follow-up of F-415 (ADR 0472, 2026-11-14).

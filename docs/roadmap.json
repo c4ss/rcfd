@@ -3803,7 +3803,7 @@
     ],
     "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. G is skew within 1e-13 of its norm and x^T G x = 0 within 1e-12. Without the option the table has the bits of F-396; with it at zero speed the frequencies equal those of F-396 within 1e-10. A mass on isotropic springs in the plane of rotation (two unknowns): frequencies |w0 - Omega| and w0 + Omega within 1e-10; the same as a stiff block on elastic supports within 1e-3. Thin ring spinning about its axis (thickness/radius 0.05, nu = 0, full model): the two travelling waves of in-plane mode n differ in frequency by 4 n Omega/(n^2 + 1) within 2 percent for n = 2 and 3 at Omega = 0.1 w_2. Radial beam of square section: the flap frequency equals that of F-396 within 1e-6 relative and the lag frequency moves by the registered second-order estimate within 20 percent of that estimate. Crossings of split modes are tracked without exchange (modal assurance on the complex shapes above 0.9). A speed at which an eigenvalue has a positive real part is reported as unstable with the speed.",
-    "note": "Structural solver, advanced tier (plan ADR 0310). PARTIAL. Size M. ADR 0472, 2026-11-14: rcfd_fem::gyro (gyro::PENDING = None): the gyroscopic matrix G = 2 Omega C (skew bit for bit), the gyroscopic problem projected on the F-396 modes at the speed (on the rest modes at a loss of stiffness) and solved by the quadratic eigensolver of ADR 0450, split modes with growth, whirl number and direction, the split Campbell table tracked by the complex-line tracker of ADR 0411 with the stability per speed and the unstable speeds; opt-in by RotatingOptions::coriolis, without it the F-396 table bit for bit; cyclic models refused. G skew 0 and x^T G x 2.8e-18 of its absolute sum; mass on springs 1.4e-15, the stiff block 2.7e-12 of it (also above w0, gyroscopically stable); thin ring split 5.1e-4 (n = 2) and 1.5e-3 (n = 3) of 4 n Omega/(n^2 + 1); radial beam flap 9.3e-8 of F-396, lag shift 0.96 percent from the second-order estimate; tracks through a crossing with MAC 1 - 4e-16; anisotropic supports reported unstable at 1.2 w0 with the growth within 2e-13; eight of eight mutations caught. Zero-speed frequencies against F-396 within 1e-13 on the block but missed on the ring (4.6e-10) and the beam (1.0e-10) against 1e-10: the F-396 rest eigenvalues differ from their own vectors' Rayleigh quotients by up to 9e-10, and the split solve agrees with those quotients within 3.4e-11. Follow-ups for the zero-speed comparison and for cyclic sectors. Stub ADR 0318."
+    "note": "Structural solver, advanced tier (plan ADR 0310). PARTIAL. Size M. ADR 0472, 2026-11-14: rcfd_fem::gyro (gyro::PENDING = None): the gyroscopic matrix G = 2 Omega C (skew bit for bit), the gyroscopic problem projected on the F-396 modes at the speed (on the rest modes at a loss of stiffness) and solved by the quadratic eigensolver of ADR 0450, split modes with growth, whirl number and direction, the split Campbell table tracked by the complex-line tracker of ADR 0411 with the stability per speed and the unstable speeds; opt-in by RotatingOptions::coriolis, without it the F-396 table bit for bit; cyclic models refused. G skew 0 and x^T G x 2.8e-18 of its absolute sum; mass on springs 1.4e-15, the stiff block 2.7e-12 of it (also above w0, gyroscopically stable); thin ring split 5.1e-4 (n = 2) and 1.5e-3 (n = 3) of 4 n Omega/(n^2 + 1); radial beam flap 9.3e-8 of F-396, lag shift 0.96 percent from the second-order estimate; tracks through a crossing with MAC 1 - 4e-16; anisotropic supports reported unstable at 1.2 w0 with the growth within 2e-13; eight of eight mutations caught. Zero-speed frequencies against F-396 within 1e-13 on the block but missed on the ring (4.6e-10) and the beam (1.0e-10) against 1e-10: the F-396 rest eigenvalues differ from their own vectors' Rayleigh quotients by up to 9e-10, and the split solve agrees with those quotients within 3.4e-11. Follow-ups for the zero-speed comparison and for cyclic sectors. Follow-ups F-554, F-555."
   },
   {
     "id": "F-416",
@@ -5402,5 +5402,28 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. A reduced part of ADR 0469 is added to a SolidModel on its interface nodes and solved with the model's ordinary elements in the static solve, the modal analysis and the direct harmonic solve. A bar of a reduced half and an ordinary half equals the full model within 1e-10 in statics and its first three frequencies are within 0.1 percent and not below the full model's; beams and shells as interface nodes covered; without a reduced part every result bit-identical.",
     "note": "Structural solver, advanced tier. Follow-up of F-430 (ADR 0469, 2026-11-14)."
+  },
+  {
+    "id": "F-554",
+    "title": "Zero-speed split frequencies against the Rayleigh quotients of the F-396 basis",
+    "phase": 9,
+    "deps": [
+      "F-415"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. At zero speed with the Coriolis option the split frequencies of ADR 0472 equal the square roots of the Rayleigh quotients of the F-396 rest modes within 1e-10 on the block, the ring and the radial beam of ADR 0472, and the difference between F-396's reported rest eigenvalues and those quotients is reported per mode; no default result changes.",
+    "note": "Structural solver, advanced tier. Follow-up of F-415 (ADR 0472, 2026-11-14)."
+  },
+  {
+    "id": "F-555",
+    "title": "Split Campbell table of a cyclic sector on the modal subspace",
+    "phase": 9,
+    "deps": [
+      "F-415",
+      "F-544"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The gyroscopic problem of ADR 0472 on the harmonic modes of each index of a cyclic sector (a cos/sin basis and the doubled Coriolis matrix of ADR 0411 D5): on the disc sector of ADR 0411 at 0.4 and 0.8 of its reference speed the split frequencies of every index equal those of RotatingSector::whirl_modes within 1e-6 for the modes whose coupling stays inside the basis; the refusal of ADR 0472 is lifted only for sectors whose material axes pass the check of ADR 0462; without the option every result bit-identical.",
+    "note": "Structural solver, advanced tier. Follow-up of F-415 (ADR 0472, 2026-11-14)."
   }
 ]
