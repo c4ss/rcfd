@@ -8101,7 +8101,7 @@ fixed by the item's registration ADR before any code.
     registered limit is halved; a non-converged local iteration is an error with the element.
   - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size S. Stub ADR 0314; the registration is
     written by the implementation agent before any code.
-- [ ] **F-412** Direct harmonic solve: complex symmetric factorisation, structural (hysteretic) damping, discrete dampers, base excitation
+- [~] **F-412** Direct harmonic solve: complex symmetric factorisation, structural (hysteretic) damping, discrete dampers, base excitation
   - depends on: F-408, F-373, F-374, F-383, F-399
   - acceptance: Every limit not stated here is registered in the ADR before the run. rcfd-linalg: a random complex
     symmetric diagonally dominant matrix of order 200 is solved to a residual of 1e-12 relative; a real matrix gives the
@@ -8114,8 +8114,21 @@ fixed by the item's registration ADR before any code.
     clamped end, undamped: tip amplitude 1/cos(k L) of the base within 0.5 percent at half the first frequency. A table
     of modulus against frequency reproduces the constant-modulus result when constant (1e-12). An undamped solve at a
     resonance is refused with the frequency; results are bit-identical for 1 and 8 threads.
-  - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0315; the registration is
-    written by the implementation agent before any code.
+  - note: Structural solver, advanced tier. ADR 0448, 2026-11-14: rcfd_linalg::cskyline, complex symmetric envelope L D
+    L^T after reverse Cuthill-McKee without pivoting (ComplexCsr, ComplexSkylineLdlt; pivot refused at |d| <= max((w+1)
+    eps s, tau s) with the equation; a real matrix gives SkylineLdlt's bits); rcfd_fem::harmonic_direct, DirectHarmonic
+    with loss factors per material (constant or a table of storage modulus and loss factor against frequency), Rayleigh,
+    ground and two-node dashpots, base motion at prescribed equations, response, sweep and stress with the complex
+    modulus; an undamped solve with a relative pivot <= 1e-8 refused as a resonance with the frequency. Random complex
+    order 200 residual 4.1e-16 (limit 1e-12); real Laplacian bit-equal to the real factor; zero pivots refused at rows 1
+    and 2. Bar of 80 Hex8, loss factor 0.02: tip response within 2.3e-6, 1.6e-3, 2.1e-4 (amplitude and phase, limit
+    5e-3) at 0.5, 1.0, 1.5 f1 (k* complex in the roadmap's E* A k); Rayleigh direct against F-399 with all 162 modes
+    within 2.6e-10 (limit 1e-8); tip dashpot within 2.5e-4, matched dashpot |sin kL| amplitude within 3.4e-4 at five
+    frequencies; base motion 1/cos(kL) within 3.2e-6; constant table bit-equal to the constant loss factor; undamped
+    resonance refused with omega; bit-identical for 1 and 8 threads; every bar response equal to the 1-D chain within
+    1.3e-11. Partial: the stress check S1 missed (2.0e-2: HarmonicResponse::stress omits the loss part;
+    DirectHarmonic::stress added, 7.2e-6) and refusal R8 was met only after a set-up amendment. Eleven mutations caught.
+    Follow-up F-528.
 - [ ] **F-413** High-cycle fatigue: stress-life curves, mean-stress corrections, harmonic and counted histories, linear damage
   - depends on: F-408, F-376, F-399
   - acceptance: Every limit not stated here is registered in the ADR before the run. Curves and corrections reproduce N
@@ -10172,3 +10185,12 @@ fixed by the item's registration ADR before any code.
     alpha dT_grad; a free plate under a uniform gradient takes the curvature alpha dT_grad and zero moment within 1e-12;
     a model without a gradient gives the bits it gave before.
   - note: Structural solver. Follow-up of F-525 (ADR 0445, 2026-11-14); a new load variant, schema question if exposed.
+- [ ] **F-528** Direct harmonic solve on the transformation path (constraints, rigid sets, elastic supports) and with pre-stress
+  - depends on: F-412
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The direct harmonic solve of ADR
+    0448 takes linear constraints, rigid sets and elastic supports through the transformation u = T q (complex
+    right-hand side T^T F, response T q) and a pre-stress as the added stiffness K_sigma: a bar on a nodal spring at the
+    tip equals the 1-D chain with that spring within 1e-8; a model with a rigid set equals the same model with the set's
+    nodes merged within 1e-8; with a pre-stress the undamped direct solve equals the F-399 mode superposition with the
+    pre-stressed basis and all modes within 1e-8; defaults bit-identical.
+  - note: Structural solver, advanced tier. Follow-up of F-412 (ADR 0448, 2026-11-14; named F-412b there).
