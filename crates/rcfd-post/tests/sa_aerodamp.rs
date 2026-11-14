@@ -875,8 +875,8 @@ fn w5c_womersley_5_record() {
 }
 
 #[test]
-#[ignore = "corrected record (ADR 0446 amendments 2, 3): run once with --ignored"]
-fn w1c_womersley_1_record() {
+#[ignore = "known miss (ADR 0446 W1c, companion O): the observed order of the imaginary part 0.68 (limit 0.8)"]
+fn w1c_womersley_1_known_miss() {
     womersley_case(&ChannelCase::corrected(1.0, 3, 16, [200, 400, 800]), "W1c");
 }
 
