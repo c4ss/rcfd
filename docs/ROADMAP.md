@@ -11090,7 +11090,7 @@ fixed by the item's registration ADR before any code.
     vibration run against the run at the reference temperature with all relaxation times scaled by a_T, within 1e-10
     relative. Models without the viscoelastic material keep their bits.
   - note: Structural solver, advanced tier. Follow-up of F-410 (ADR 0485, 2026-11-14).
-- [ ] **F-577** The viscoelastic material in the direct harmonic solve and the damped modes
+- [x] **F-577** The viscoelastic material in the direct harmonic solve and the damped modes
   - depends on: F-410, F-412, F-414
   - acceptance: Every limit not stated here is registered in the ADR before the run. The direct harmonic solve takes a
     viscoelastic material directly, with its complex shear and bulk moduli at each frequency (unequal weights included).
@@ -11099,7 +11099,20 @@ fixed by the item's registration ADR before any code.
     elements, or within a registered discretisation limit. For equal weights the result equals the LossFactor::Table
     route of ADR 0485 at the table points within 1e-12. The damped modes refuse the material or take it at a registered
     fixed frequency.
-  - note: Structural solver, advanced tier. Follow-up of F-410 (ADR 0485, 2026-11-14).
+  - note: Structural solver, advanced tier. Follow-up of F-410 (ADR 0485, 2026-11-14). ADR 0491, 2026-11-14: the direct
+    harmonic solve (harmonic_direct.rs) takes a viscoelastic material directly, by mat_visco::complex_moduli at each
+    frequency: with equal weights one part, the base stiffness times E*(omega)/E; with unequal weights two parts, the
+    stiffness of 2 G_0 I_dev times G*/G_0 and that of K_0 1 (x) 1 times K*/K_0 (exact: the stiffness is linear in the
+    elasticity matrix). DirectHarmonicOptions::temperature serves a shifted material. A loss factor on its set and the
+    harmonic stress are refused; the Rayleigh term takes its instantaneous stiffness. The damped modes refuse the
+    material (NotYetSupported, mat_visco::FOLLOW_UP). Met: the tip response of a clamped 40-element Hex8 rod of the
+    standard solid at 10 frequencies from 0.9 to 1.1 of its first resonance against the closed form of the rod with the
+    complex modulus within 2.47e-3 (E*, nu = 0, equal weights), 2.65e-3 (unequal weights, K* + 4 G*/3) and 1.60e-3
+    (shear rod, G*), against the registered discretisation limit 4e-3 (1e-6 is out of reach at 40 elements: the
+    dispersion of the linear element, observed order 2.00); every response against the discrete chain within 1.4e-11;
+    two materials within 2.1e-12; equal weights against the LossFactor::Table route at the table points within 1.4e-13;
+    zero frequency, shift and no-term checks within 1.7e-14, 1.7e-15 and 0; threads bit-identical; seven mutations
+    caught; default bits (11 digests) and baseline hashes unchanged.
 - [ ] **F-578** Geometrically nonlinear shells in the Newton driver
   - depends on: F-573
   - acceptance: Every limit not stated here is registered in the ADR before the run. Shell4 and Shell3 gain an internal
