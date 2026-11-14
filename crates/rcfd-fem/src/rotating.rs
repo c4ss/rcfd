@@ -144,6 +144,10 @@ pub enum SplitSchur {
     Dense,
     /// One complement solve per split mode and the second-order perturbation sum over the other Ritz pairs (ADR 0527 D1).
     Perturbation,
+    /// [`SplitSchur::Perturbation`] with the series-ratio indicator checked: a split mode whose `|delta_2 / delta_1|` exceeds
+    /// [`crate::gyro::SPLIT_SCHUR_RATIO_LIMIT`], is undefined or whose estimate is refused takes the dense computation of ADR
+    /// 0492 instead (ADR 0535 D2).
+    PerturbationChecked,
 }
 
 /// Options of a rotating modal analysis.
