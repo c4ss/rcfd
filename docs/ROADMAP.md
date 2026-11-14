@@ -7876,8 +7876,10 @@ fixed by the item's registration ADR before any code.
     against the face refinement and the map). Follow-up F-502. The frequency change between the maps (M2c, 6.3e-3) is
     the extra static compliance of the mapped weights; its dependence on the face refinement and the map is measured by
     F-502 (ADR 0412, 2026-11-13): below 1e-3 from 8 x 8 elements with the projection and from 4 x 4 with the radial
-    basis.
-- [ ] **F-401** Two-way coupling of an elastic solid with the incompressible flow solver: the piston on an elastic bar
+    basis. The added-mass growth of the per-face mock (amendment 1) does not occur with the flow solver: in F-401 (ADR
+    0434, 2026-11-14) the non-uniform part of the interface force stays at rounding on the matching wall and decays on
+    the 3:2 wall, its slopes being those of the local flow, far below 1.
+- [~] **F-401** Two-way coupling of an elastic solid with the incompressible flow solver: the piston on an elastic bar
   - depends on: F-400, F-251, F-351, F-361, F-362
   - acceptance: Every limit not stated here is registered in the ADR before the run. Elastic bar (nu = 0) closing a
     channel of incompressible fluid of length L_f, started from a displaced state, mass ratios rho_f L_f/(rho_s L_s) of
@@ -7888,11 +7890,26 @@ fixed by the item's registration ADR before any code.
     the loose coupling (one pass) at ratio 4 grows (registered control). With a 3:2 non-matching interface mapped by
     F-362 the frequency changes by less than 2e-3. A failure of either participant leaves both at the start of the step.
     The existing co-simulation tests (cosim_f139, cosim_f361, cosim_f362) pass unedited.
-  - note: Structural solver, intermediate tier (plan ADR 0290, 2026-11-12). Size M. Stub ADR 0304; the registration is
-    written by the implementation agent before any code. ADR 0410 (F-400, 2026-11-13) amendment 1: with an added mass
-    that acts per wall face, the interface force components below the convergence test are loosely coupled and grew by
-    about 700 per step on the bar of F-400; the registration of this item should check the growth of the non-uniform
-    part of the interface force over the run (ADR 0410 Q3).
+  - note: Structural solver, intermediate tier (plan ADR 0290). PARTIAL (ADR 0434, 2026-11-14; registered before the
+    code, amendment 1 after the first run). The elastic bar of F-400 (DynamicSolid, Hex8 20 x 4 x 4, nu = 0, clamped,
+    L_s = 4 m) closes a channel of incompressible fluid (FlowWall, moving-mesh PISO with the prescribed wall gradient of
+    F-351, slip side walls, open end, L_f = 32 m), coupled by coupled_step at mass ratios rho_f L_f/(rho_s L_s) of 0.5
+    and 4 from the static release of a tip traction (solid and fluid start consistent, at rest);
+    rcfd_post::solid_fsi::ChannelMotion moves the channel mesh with the axial interface displacement. Over 1001 steps at
+    T/100: Aitken and the least-squares update converge to 1e-6 in 3 iterations every step on the matching wall and in 4
+    to 12 on a 3:2 wall (bilinear projection of F-504 on a 4 x 4 face); the first coupled frequency is the root of k L
+    tan(k L) = rho_s L_s/(rho_f L_f) to 1.6e-4 (0.5) and 1.1e-3 (4), and the discrete model of the pairing (the Newmark
+    bar with the plug force of the flow step, one step of lag: the registered time-step estimate) to 4e-7 (limit 2
+    percent after the estimate); over ten periods the fluid's work on the interface equals the change of the solid's
+    energy to 5e-6 of its amplitude (limit 1e-4); the loose coupling at ratio 4 grows by 13.8 per step; the 3:2 wall
+    changes the frequency by 8.2e-4 (4) and 3.1e-4 (0.5) (limit 2e-3; ADR 0414's piston mock gave 8.18e-4); a failing
+    solid (load table) or fluid (mesh motion) stops the step naming it, both sides bit-equal to the start of the step.
+    The non-uniform part of the interface force (ADR 0410 Q3) stays at 1e-9 of the force on the matching wall and decays
+    over the run on the 3:2 wall (at most 8.8e-4): with a real column its slopes are far below 1, so the growth seen
+    with F-400's per-face mock does not occur. Partial: the registered viscous estimate 0 is wrong in kind (the PISO
+    step's viscous splitting moves the tip by 8.3e-5 U at nu x 100, proportional to nu; a known miss, below 1e-6 in
+    frequency at the case's viscosity), and the helper check H1 was met only after amendment 1 (a limit below the
+    coordinate's resolution). Six mutations caught. No line of rcfd-fv or rcfd-api changed. Open: ADR 0434 Q1 to Q3.
 - [~] **F-402** Aggregation multigrid for elasticity: rigid-body modes as near-null space, as a preconditioner of CG
   - depends on: F-026, F-381
   - acceptance: Every limit not stated here is registered in the ADR before the run. On every level the rigid-body modes
