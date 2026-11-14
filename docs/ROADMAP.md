@@ -11022,14 +11022,25 @@ fixed by the item's registration ADR before any code.
     non-increasing frequency list and a correlation that is not positive semi-definite are refused with the key and the
     entry.
   - note: Structural solver, advanced tier. Follow-up of F-417 (ADR 0477, 2026-11-14).
-- [ ] **F-566** Broadband fatigue of a random stress from its spectral moments
+- [x] **F-566** Broadband fatigue of a random stress from its spectral moments
   - depends on: F-417, F-413
   - acceptance: Every limit not stated here is registered in the ADR before the run. The broadband damage rate (formula
     registered from a cited source) reduces to the narrow-band rate of F-413 within 1 percent for a one-mode response at
     zeta = 0.01; for a two-mode response with well separated modes the counted damage of a synthesised Gaussian history
     (registered seed, 1e5 cycles, rainflow of F-413) lies within 10 percent of the broadband rate and the narrow-band
     rate is above it; the moments m0, m1, m2, m4 of RandomSolver feed it unchanged; a non-positive m0 or m2 is refused.
-  - note: Structural solver, advanced tier. Follow-up of F-417 (ADR 0477, 2026-11-14).
+  - note: ADR 0497, 2026-11-14: rcfd_fem::fatigue gains the broadband damage rate of a Gaussian stationary stress from
+    its spectral moments m0, m1, m2, m4 (Dirlik's density of the cycle amplitude, T. Dirlik, PhD thesis, University of
+    Warwick, 1985, cited from memory): dirlik_coefficients, DirlikCoefficients (density, amplitude_moment),
+    broadband_damage_rate(m0, m1, m2, m4, m, c) and broadband_damage_rate_curve on the power law of an SnCurve,
+    refusing a non-positive or non-finite m0, m2 or m4, a negative m1, m2^2 > m0 m4, a coefficient out of range, a
+    table curve or an endurance limit; random::Moments::broadband_damage_rate and narrow_band_damage_rate pass the
+    moments of RandomSolver and spectral_response unchanged (bit equal to the free functions). One mode at zeta =
+    0.01: broadband over narrow band 0.99340 (m = 3), 0.99301 (m = 5), 0.70 percent from 1 against the 1 percent
+    limit; two modes at 50 and 150 Hz (zeta = 0.02) with a synthesised Gaussian history (seed 20261114, 2.1e5 closed
+    cycles, rainflow_periodic and miner of F-413): the counted rate is 6.2 percent above the broadband rate, the
+    narrow-band rate 19.6 percent above it and 12.6 percent above the counted rate. Limits: Gaussian zero-mean stress,
+    power-law curve, no case-file key, RandomStress does not carry the moments m1 and m4.
 - [ ] **F-567** Complex cross-spectral matrices and frequency-dependent coherence of random loads
   - depends on: F-417
   - acceptance: Every limit not stated here is registered in the ADR before the run. A cross-spectral table G_ab(f) with
