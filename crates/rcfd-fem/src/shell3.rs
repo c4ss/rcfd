@@ -797,7 +797,13 @@ pub fn thermal_load_vector(
     material: &Material,
     delta_t_nodal: &[f64],
 ) -> Result<[f64; 18]> {
-    thermal_load_vector_with(coords, thickness, material, delta_t_nodal, Shell3Membrane::ConstantStrain)
+    thermal_load_vector_with(
+        coords,
+        thickness,
+        material,
+        delta_t_nodal,
+        Shell3Membrane::ConstantStrain,
+    )
 }
 
 /// The consistent membrane thermal load for a membrane: `A B^T A_m alpha dT_mean (1, 1, 0)` with `B` the rows of

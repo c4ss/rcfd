@@ -108,8 +108,7 @@ fn plate(shell4_cells: &[usize], loads: bool) -> SolidModel {
     }
     m.add_load(Load::shell_pressure("all", 1000.0)).unwrap();
     if loads {
-        m.add_load(Load::shell_pressure_angle_weighted("all", -300.0))
-            .unwrap();
+        m.add_load(Load::shell_pressure_angle_weighted("all", -300.0)).unwrap();
         m.add_load(Load::gravity([0.5, -1.5, -9.81])).unwrap();
         m.add_load(Load::centrifugal([0.0, 0.3, 1.0], [0.4, 0.2, 0.0], 120.0))
             .unwrap();
