@@ -44,7 +44,14 @@ pub fn compliance(e: [f64; 3], nu: [f64; 3], g: [f64; 3]) -> Matrix6 {
 /// Refuses constants whose compliance is not positive definite (ADR 0452 F2), naming the ratio of the first failing 2 x 2
 /// minor (`nu_12`, `nu_13`, `nu_23`) or, for the determinant, all three. The moduli must be positive (checked first).
 pub fn check_positive_definite(e: [f64; 3], nu: [f64; 3], g: [f64; 3]) -> Result<()> {
-    for (key, v) in [("e_1", e[0]), ("e_2", e[1]), ("e_3", e[2]), ("g_12", g[0]), ("g_13", g[1]), ("g_23", g[2])] {
+    for (key, v) in [
+        ("e_1", e[0]),
+        ("e_2", e[1]),
+        ("e_3", e[2]),
+        ("g_12", g[0]),
+        ("g_13", g[1]),
+        ("g_23", g[2]),
+    ] {
         if !(v > 0.0 && v.is_finite()) {
             return Err(FemError::InvalidMaterial {
                 key,
@@ -308,7 +315,10 @@ impl<'a> MaterialPoints<'a> {
                 MaterialAxes::Cylindrical { origin, axis } => cylindrical_axes(*origin, *axis, x)?,
                 MaterialAxes::PerElement(list) => *list.get(self.local[e]).ok_or_else(|| FemError::InvalidValue {
                     key: "axes",
-                    reason: format!("no per-element axes for the element at index {} of its set", self.local[e]),
+                    reason: format!(
+                        "no per-element axes for the element at index {} of its set",
+                        self.local[e]
+                    ),
                 })?,
             };
             point.axes = Some(r);

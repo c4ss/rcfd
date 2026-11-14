@@ -25,7 +25,10 @@ impl Checks {
     }
     fn at_most(&mut self, name: &str, value: f64, limit: f64) {
         let ok = value <= limit;
-        println!("{name}: {value:.4e} (limit <= {limit:e}) {}", if ok { "met" } else { "MISSED" });
+        println!(
+            "{name}: {value:.4e} (limit <= {limit:e}) {}",
+            if ok { "met" } else { "MISSED" }
+        );
         if !ok {
             self.failed.push(format!("{name} = {value:e} > {limit:e}"));
         }
@@ -172,7 +175,11 @@ fn o10_o13_bar_with_a_varying_modulus() {
     let u: f64 = end.iter().map(|&n| res.displacement(n)[0]).sum::<f64>() / end.len() as f64;
     let exact = BAR_F * 1.0 * (BAR_E1 / BAR_E0).ln() / (BAR_A * (BAR_E1 - BAR_E0));
     println!("O10: stretch {u:.9e} m, closed form {exact:.9e} m");
-    c.at_most("O10 |stretch/closed form - 1| (20 elements)", (u / exact - 1.0).abs(), 1e-3);
+    c.at_most(
+        "O10 |stretch/closed form - 1| (20 elements)",
+        (u / exact - 1.0).abs(),
+        1e-3,
+    );
     // O13.
     let r = solve_static(&bar(Some(800.0)), &StaticOptions::default());
     let (element, text) = match &r {
@@ -185,10 +192,12 @@ fn o10_o13_bar_with_a_varying_modulus() {
         .filter_map(|(i, s)| text[i + s.len()..].split_whitespace().next()?.parse::<f64>().ok())
         .next();
     println!("O13: {text}");
-    let ok = element == Some(19)
-        && text.contains("outside the table")
-        && t.is_some_and(|t| t > 693.0 && t <= 800.0);
-    c.holds("O13 temperature outside the table refused with element 19 and the temperature", ok, &format!("{element:?} {t:?}"));
+    let ok = element == Some(19) && text.contains("outside the table") && t.is_some_and(|t| t > 693.0 && t <= 800.0);
+    c.holds(
+        "O13 temperature outside the table refused with element 19 and the temperature",
+        ok,
+        &format!("{element:?} {t:?}"),
+    );
     c.finish();
 }
 
@@ -265,7 +274,10 @@ fn same_bits(a: &SolidModel, b: &SolidModel) -> (bool, String) {
     let ds = flat(fa.stress()) == flat(fb.stress());
     let dt = flat(fa.thermal_strain().unwrap()) == flat(fb.thermal_strain().unwrap());
     let de = fa.strain_energy().to_bits() == fb.strain_energy().to_bits();
-    (du && ds && dt && de, format!("displacement {du}, stress {ds}, thermal strain {dt}, energy {de}"))
+    (
+        du && ds && dt && de,
+        format!("displacement {du}, stress {ds}, thermal strain {dt}, energy {de}"),
+    )
 }
 
 #[test]
@@ -314,10 +326,12 @@ fn o12_constant_table_bits() {
 #[test]
 fn r4_to_r6_table_refusals() {
     let mut c = Checks::new();
-    let table = |columns: Vec<(String, Vec<f64>)>, temps: Vec<f64>| Material::tabulated(steel(1e-5), temps, columns).unwrap();
+    let table =
+        |columns: Vec<(String, Vec<f64>)>, temps: Vec<f64>| Material::tabulated(steel(1e-5), temps, columns).unwrap();
     // R4: no temperature field.
     let mut m = SolidModel::new(hex_box([0.0; 3], [1.0, 0.1, 0.1], [4, 1, 1]).unwrap());
-    m.add_material("all", table(vec![col("e", vec![2e11, 1.9e11])], vec![200.0, 600.0])).unwrap();
+    m.add_material("all", table(vec![col("e", vec![2e11, 1.9e11])], vec![200.0, 600.0]))
+        .unwrap();
     for comp in 0..3 {
         m.add_constraint(Constraint::displacement("xmin", comp, 0.0)).unwrap();
     }
@@ -331,7 +345,10 @@ fn r4_to_r6_table_refusals() {
     // R5: unknown and repeated columns.
     for (tag, columns) in [
         ("density", vec![col("density", vec![7850.0, 7800.0])]),
-        ("repeated e", vec![col("e", vec![2e11, 1.9e11]), col("e", vec![2e11, 1.8e11])]),
+        (
+            "repeated e",
+            vec![col("e", vec![2e11, 1.9e11]), col("e", vec![2e11, 1.8e11])],
+        ),
     ] {
         let m = b1_model(table(columns, vec![200.0, 600.0]));
         let r = solve_static(&m, &StaticOptions::default());

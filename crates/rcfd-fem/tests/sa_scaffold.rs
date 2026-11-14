@@ -1700,8 +1700,15 @@ fn m1_to_m4_after_f409() {
             "the element-constant elasticity matrix",
             rcfd_fem::mat_ortho::FOLLOW_UP,
         ) && matches!(&st0, Err(FemError::InvalidValue { key: "temperature", .. }))
-            && st1.as_ref().is_ok_and(|(_, m)| bits(&m.concat()) == bits(&d300.concat())),
-        &format!("{:?} / {:?} / {:?}", em.as_ref().err(), st0.as_ref().err(), st1.as_ref().err()),
+            && st1
+                .as_ref()
+                .is_ok_and(|(_, m)| bits(&m.concat()) == bits(&d300.concat())),
+        &format!(
+            "{:?} / {:?} / {:?}",
+            em.as_ref().err(),
+            st0.as_ref().err(),
+            st1.as_ref().err()
+        ),
     );
     c.finish();
 }

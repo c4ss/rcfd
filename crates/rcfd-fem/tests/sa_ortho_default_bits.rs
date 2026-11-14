@@ -67,18 +67,30 @@ fn solid_digests(mesh: SolidMesh, tag: &str, out: &mut Vec<(String, u64)>) {
     m.add_load(Load::temperature(t, 293.0)).unwrap();
     let res = solve_static(&m, &StaticOptions::default()).unwrap();
     let field = IntegrationPointField::compute(&m, res.displacement_values()).unwrap();
-    out.push((format!("{tag} displacement"), digest(res.displacement_values().iter().copied())));
+    out.push((
+        format!("{tag} displacement"),
+        digest(res.displacement_values().iter().copied()),
+    ));
     out.push((format!("{tag} stress"), digest(flat(field.stress()))));
-    out.push((format!("{tag} thermal strain"), digest(flat(field.thermal_strain().unwrap()))));
+    out.push((
+        format!("{tag} thermal strain"),
+        digest(flat(field.thermal_strain().unwrap())),
+    ));
     out.push((format!("{tag} energy"), digest([field.strain_energy()])));
 }
 
 fn all_digests() -> Vec<(String, u64)> {
     let mut out = Vec::new();
     // Hex8 cantilever 20 x 2 x 2 with a temperature field.
-    solid_digests(hex_box([0.0; 3], [1.0, 0.1, 0.1], [20, 2, 2]).unwrap(), "hex8", &mut out);
+    solid_digests(
+        hex_box([0.0; 3], [1.0, 0.1, 0.1], [20, 2, 2]).unwrap(),
+        "hex8",
+        &mut out,
+    );
     // Tet10 box with a temperature field.
-    let tet = upgrade_to_tet10(&tet_box([0.0; 3], [1.0, 0.4, 0.3], [4, 2, 2]).unwrap()).unwrap().0;
+    let tet = upgrade_to_tet10(&tet_box([0.0; 3], [1.0, 0.4, 0.3], [4, 2, 2]).unwrap())
+        .unwrap()
+        .0;
     solid_digests(tet, "tet10", &mut out);
     // Hex20 quarter cylinder 4 x 8 under bore pressure (ADR 0292 T1).
     let param = hex_box([1.0, 0.0, 0.0], [1.0, PI / 2.0, 0.2], [4, 8, 1]).unwrap();
@@ -92,7 +104,10 @@ fn all_digests() -> Vec<(String, u64)> {
     let res = solve_static_with(&m, &[], &loads, &StaticOptions::default()).unwrap();
     let field = IntegrationPointField::compute(&m, res.displacement_values()).unwrap();
     let nodal = nodal_average(&m, &field, field.stress(), None).unwrap();
-    out.push(("hex20 displacement".into(), digest(res.displacement_values().iter().copied())));
+    out.push((
+        "hex20 displacement".into(),
+        digest(res.displacement_values().iter().copied()),
+    ));
     out.push(("hex20 stress".into(), digest(flat(field.stress()))));
     out.push((
         "hex20 nodal stress".into(),
@@ -101,7 +116,10 @@ fn all_digests() -> Vec<(String, u64)> {
     // Hex8 cantilever stiffness.
     let mut c = SolidModel::new(hex_box([0.0; 3], [1.0, 0.1, 0.1], [20, 2, 2]).unwrap());
     c.add_material("all", steel(0.0)).unwrap();
-    out.push(("hex8 stiffness".into(), digest(stiffness(&c).unwrap().val.iter().copied())));
+    out.push((
+        "hex8 stiffness".into(),
+        digest(stiffness(&c).unwrap().val.iter().copied()),
+    ));
     // The element thermal load of one distorted Hex8.
     let coords: Vec<Vec3> = vec![
         [0.0, 0.0, 0.0],
@@ -151,7 +169,10 @@ fn all_digests() -> Vec<(String, u64)> {
     s.add_load(Load::shell_pressure("all", 1000.0)).unwrap();
     s.add_load(Load::temperature(t, 293.0)).unwrap();
     let res = solve_static_with(&s, &pres, &[], &StaticOptions::default()).unwrap();
-    out.push(("shell4 displacement".into(), digest(res.displacement_values().iter().copied())));
+    out.push((
+        "shell4 displacement".into(),
+        digest(res.displacement_values().iter().copied()),
+    ));
     out
 }
 

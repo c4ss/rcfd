@@ -38,14 +38,20 @@ impl Checks {
     }
     fn at_most(&mut self, name: &str, value: f64, limit: f64) {
         let ok = value <= limit;
-        println!("{name}: {value:.4e} (limit <= {limit:e}) {}", if ok { "met" } else { "MISSED" });
+        println!(
+            "{name}: {value:.4e} (limit <= {limit:e}) {}",
+            if ok { "met" } else { "MISSED" }
+        );
         if !ok {
             self.failed.push(format!("{name} = {value:e} > {limit:e}"));
         }
     }
     fn above(&mut self, name: &str, value: f64, limit: f64) {
         let ok = value > limit;
-        println!("{name}: {value:.4e} (expected > {limit:e}) {}", if ok { "met" } else { "MISSED" });
+        println!(
+            "{name}: {value:.4e} (expected > {limit:e}) {}",
+            if ok { "met" } else { "MISSED" }
+        );
         if !ok {
             self.failed.push(format!("{name} = {value:e} <= {limit:e}"));
         }
@@ -308,12 +314,20 @@ fn o1_to_o3_constants() {
         ([0.5, 0.5, 0.5], "nu_12, nu_13, nu_23"),
     ] {
         let got = refused(nu, eq);
-        c.holds(&format!("O2 {nu:?} refused naming {key}"), got == Some(key), &format!("{got:?}"));
+        c.holds(
+            &format!("O2 {nu:?} refused naming {key}"),
+            got == Some(key),
+            &format!("{got:?}"),
+        );
     }
     let ok1 = Material::orthotropic(eq, [0.499; 3], gq, RHO, [0.0; 3], fixed(about_z(0.0))).is_ok();
     let ok2 = Material::orthotropic(E_O, NU_O, G_O, RHO, ALPHA, fixed(about_z(0.0))).is_ok();
     let ok3 = Material::orthotropic(E_O, [-0.5, 0.3, 0.45], G_O, RHO, ALPHA, fixed(about_z(0.0))).is_ok();
-    c.holds("O2 accepted: nu 0.499, ORTHO, nu_12 = -0.5", ok1 && ok2 && ok3, &format!("{ok1} {ok2} {ok3}"));
+    c.holds(
+        "O2 accepted: nu 0.499, ORTHO, nu_12 = -0.5",
+        ok1 && ok2 && ok3,
+        &format!("{ok1} {ok2} {ok3}"),
+    );
     // O3.
     let s = compliance(E_O, NU_O, G_O);
     let sym = (0..6).all(|i| (0..6).all(|j| s[i][j].to_bits() == s[j][i].to_bits()));
@@ -342,7 +356,8 @@ fn o4_n4_p1_off_axis_tension() {
         let res = solve_static(&m, &StaticOptions::default()).unwrap();
         let field = field_of(&m, &res);
         let (s, co) = (deg * PI / 180.0).sin_cos();
-        let inv_ex = co.powi(4) / E_O[0] + s.powi(4) / E_O[1] + (1.0 / G_O[0] - 2.0 * NU_O[0] / E_O[0]) * s * s * co * co;
+        let inv_ex =
+            co.powi(4) / E_O[0] + s.powi(4) / E_O[1] + (1.0 / G_O[0] - 2.0 * NU_O[0] / E_O[0]) * s * s * co * co;
         let (s11, s22, s12, s66) = (1.0 / E_O[0], 1.0 / E_O[1], -NU_O[0] / E_O[0], 1.0 / G_O[0]);
         let s16 = (2.0 * s11 - 2.0 * s12 - s66) * s * co.powi(3) - (2.0 * s22 - 2.0 * s12 - s66) * s.powi(3) * co;
         let eta = s16 / inv_ex;
@@ -356,7 +371,11 @@ fn o4_n4_p1_off_axis_tension() {
         println!("O4 {deg} deg: eta = {eta:.6}, {} points", field.n_points());
         c.at_most(&format!("O4 {deg} deg axial strain sigma/E_x"), ea, 1e-10);
         c.at_most(&format!("O4 {deg} deg shear-extension ratio"), ee, 1e-10);
-        c.at_most(&format!("O4 {deg} deg six strains against the rotated compliance"), ec, 1e-10);
+        c.at_most(
+            &format!("O4 {deg} deg six strains against the rotated compliance"),
+            ec,
+            1e-10,
+        );
     }
     // N4: isotropic constants at 30 degrees, no shear-extension coupling.
     let (e, nu) = (2.0e11, 0.3);
@@ -412,7 +431,11 @@ fn apply3(q: &Axes, x: Vec3) -> Vec3 {
 fn energy_model(mesh: SolidMesh, r: Axes, forces: &[Vec3]) -> (SolidModel, Vec<NodalForceAt>) {
     let mut xmax: Vec<usize> = mesh.node_set("xmax").unwrap().to_vec();
     xmax.sort_unstable();
-    let loads: Vec<NodalForceAt> = xmax.iter().zip(forces).map(|(&n, &f)| NodalForceAt::new(n, f)).collect();
+    let loads: Vec<NodalForceAt> = xmax
+        .iter()
+        .zip(forces)
+        .map(|(&n, &f)| NodalForceAt::new(n, f))
+        .collect();
     let mut m = SolidModel::new(mesh);
     m.add_material("all", ortho(fixed(r))).unwrap();
     for c in 0..3 {
@@ -430,10 +453,12 @@ fn rebuild(mesh: &SolidMesh, nodes: Vec<Vec3>) -> SolidMesh {
         out.add_node_set(name, mesh.node_set(name).unwrap().to_vec()).unwrap();
     }
     for name in mesh.element_set_names() {
-        out.add_element_set(name, mesh.element_set(name).unwrap().to_vec()).unwrap();
+        out.add_element_set(name, mesh.element_set(name).unwrap().to_vec())
+            .unwrap();
     }
     for name in mesh.surface_set_names() {
-        out.add_surface_set(name, mesh.surface_set(name).unwrap().to_vec()).unwrap();
+        out.add_surface_set(name, mesh.surface_set(name).unwrap().to_vec())
+            .unwrap();
     }
     out
 }
@@ -441,12 +466,7 @@ fn rebuild(mesh: &SolidMesh, nodes: Vec<Vec3>) -> SolidMesh {
 #[test]
 fn o5_rotation_invariance() {
     let mut c = Checks::new();
-    let forces: [Vec3; 4] = [
-        [1e5, 2e5, -3e5],
-        [-2e5, 1e5, 1e5],
-        [3e5, -1e5, 2e5],
-        [1e5, 1e5, 1e5],
-    ];
+    let forces: [Vec3; 4] = [[1e5, 2e5, -3e5], [-2e5, 1e5, 1e5], [3e5, -1e5, 2e5], [1e5, 1e5, 1e5]];
     let r = rot([1.0, -1.0, 2.0], 0.4);
     let q = rot([1.0, 2.0, 3.0], 0.7);
     let base = hex_box([0.0; 3], [1.0; 3], [1, 1, 1]).unwrap();
@@ -468,8 +488,16 @@ fn o5_rotation_invariance() {
     let (w1, u1) = work(&m1, &l1);
     println!("O5: W = {w0:.12e}, rotated {w1:.12e}; recovered {u0:.12e}, {u1:.12e}");
     c.at_most("O5 |W'/W - 1|", (w1 / w0 - 1.0).abs(), 1e-12);
-    c.at_most("O5 recovered energy of the model against W", (u0 / w0 - 1.0).abs(), 1e-12);
-    c.at_most("O5 recovered energy of the twin against W'", (u1 / w1 - 1.0).abs(), 1e-12);
+    c.at_most(
+        "O5 recovered energy of the model against W",
+        (u0 / w0 - 1.0).abs(),
+        1e-12,
+    );
+    c.at_most(
+        "O5 recovered energy of the twin against W'",
+        (u1 / w1 - 1.0).abs(),
+        1e-12,
+    );
     c.finish();
 }
 
@@ -499,18 +527,32 @@ fn cantilever_ratio(r: Axes, tag: &str) -> f64 {
     mesh.add_node_set("root_neutral_y", vec![neutral[0]]).unwrap();
     let mut model = SolidModel::new(mesh);
     model
-        .add_material("all", Material::orthotropic(E_C, NU_C, G_C, RHO, [0.0; 3], fixed(r)).unwrap())
+        .add_material(
+            "all",
+            Material::orthotropic(E_C, NU_C, G_C, RHO, [0.0; 3], fixed(r)).unwrap(),
+        )
         .unwrap();
     model.add_constraint(Constraint::displacement("xmin", 0, 0.0)).unwrap();
-    model.add_constraint(Constraint::displacement("root_neutral", 2, 0.0)).unwrap();
-    model.add_constraint(Constraint::displacement("root_neutral_y", 1, 0.0)).unwrap();
+    model
+        .add_constraint(Constraint::displacement("root_neutral", 2, 0.0))
+        .unwrap();
+    model
+        .add_constraint(Constraint::displacement("root_neutral_y", 1, 0.0))
+        .unwrap();
     let res = solve_static_with(&model, &[], &loads, &StaticOptions::default()).unwrap();
-    let delta: f64 = loads.iter().map(|f| f.force[2] * res.displacement(f.node)[2]).sum::<f64>() / C_P;
+    let delta: f64 = loads
+        .iter()
+        .map(|f| f.force[2] * res.displacement(f.node)[2])
+        .sum::<f64>()
+        / C_P;
     let i = C_H.powi(4) / 12.0;
     let a = C_H * C_H;
     let kappa = 5.0 / 6.0;
     let delta_t = C_P * C_L.powi(3) / (3.0 * E_C[0] * i) + C_P * C_L / (kappa * G_C[1] * a);
-    println!("{tag}: delta {delta:.6e} m, delta_T {delta_t:.6e} m, ratio {:.6}", delta / delta_t);
+    println!(
+        "{tag}: delta {delta:.6e} m, delta_T {delta_t:.6e} m, ratio {:.6}",
+        delta / delta_t
+    );
     delta / delta_t
 }
 
@@ -584,7 +626,10 @@ fn tube(n_r: usize, n_t: usize, e: [f64; 3], s_c: f64, u_c: f64, tag: &str) -> (
     let mut model = SolidModel::new(mesh);
     let axes = MaterialAxes::cylindrical([0.0; 3], [0.0, 0.0, 1.0]).unwrap();
     model
-        .add_material("all", Material::orthotropic(e, [0.1, 0.0, 0.0], [5e9; 3], RHO, [0.0; 3], axes).unwrap())
+        .add_material(
+            "all",
+            Material::orthotropic(e, [0.1, 0.0, 0.0], [5e9; 3], RHO, [0.0; 3], axes).unwrap(),
+        )
         .unwrap();
     for (set, comp) in [("zmin", 2), ("zmax", 2), ("ymin", 1), ("ymax", 0)] {
         model.add_constraint(Constraint::displacement(set, comp, 0.0)).unwrap();
@@ -689,13 +734,11 @@ fn r1_r2_paths() {
     let steel = Material::isotropic_elastic(2.0e11, 0.3, 7850.0, 0.0).unwrap();
     let twin = cantilever_with(steel.clone(), false);
     let prestress = Prestress::uniform(&twin, [-1e6, 0.0, 0.0, 0.0, 0.0, 0.0]).unwrap();
-    let table = Material::tabulated(
-        steel,
-        vec![200.0, 600.0],
-        vec![("e".to_string(), vec![2.0e11, 1.8e11])],
-    )
-    .unwrap();
-    for (mat, name) in [(ortho(fixed(rot([0.0, 0.0, 1.0], 0.5))), "Orthotropic"), (table, "Tabulated")] {
+    let table = Material::tabulated(steel, vec![200.0, 600.0], vec![("e".to_string(), vec![2.0e11, 1.8e11])]).unwrap();
+    for (mat, name) in [
+        (ortho(fixed(rot([0.0, 0.0, 1.0], 0.5))), "Orthotropic"),
+        (table, "Tabulated"),
+    ] {
         let m = cantilever_with(mat, true);
         let cg = StaticOptions::with_solver(StaticSolver::PreconditionedCg {
             preconditioner: CgPreconditioner::BlockJacobi,
@@ -703,27 +746,59 @@ fn r1_r2_paths() {
             max_iterations: 20000,
         });
         let solved: Vec<(&str, rcfd_fem::Result<()>)> = vec![
-            ("E1 solve_static", solve_static(&m, &StaticOptions::default()).map(|_| ())),
-            ("E2 solve_static_with CG", solve_static_with(&m, &[], &[], &cg).map(|_| ())),
+            (
+                "E1 solve_static",
+                solve_static(&m, &StaticOptions::default()).map(|_| ()),
+            ),
+            (
+                "E2 solve_static_with CG",
+                solve_static_with(&m, &[], &[], &cg).map(|_| ()),
+            ),
         ];
         for (entry, r) in solved {
-            c.holds(&format!("R1 {name} {entry} solves"), r.is_ok(), &format!("{:?}", r.err()));
+            c.holds(
+                &format!("R1 {name} {entry} solves"),
+                r.is_ok(),
+                &format!("{:?}", r.err()),
+            );
         }
         let refused: Vec<(&str, rcfd_fem::Result<()>)> = vec![
-            ("E3 modal_analysis_with", modal_analysis_with(&m, &[], &ModalOptions::new(2)).map(|_| ())),
+            (
+                "E3 modal_analysis_with",
+                modal_analysis_with(&m, &[], &ModalOptions::new(2)).map(|_| ()),
+            ),
             ("E4 stiffness", stiffness(&m).map(|_| ())),
-            ("E5 nonlinear::solve", solve(&m, &[], &[], &NewtonOptions::new(1)).map(|_| ())),
-            ("E6 Integrator::new", Integrator::new(&m, &[], &TransientOptions::new(1e-4)).map(|_| ())),
-            ("E7 buckling::factors", factors(&m, &prestress, &BucklingOptions::new(1)).map(|_| ())),
-            ("E8 prestressed_modes", prestressed_modes(&m, &prestress, &ModalOptions::new(2)).map(|_| ())),
+            (
+                "E5 nonlinear::solve",
+                solve(&m, &[], &[], &NewtonOptions::new(1)).map(|_| ()),
+            ),
+            (
+                "E6 Integrator::new",
+                Integrator::new(&m, &[], &TransientOptions::new(1e-4)).map(|_| ()),
+            ),
+            (
+                "E7 buckling::factors",
+                factors(&m, &prestress, &BucklingOptions::new(1)).map(|_| ()),
+            ),
+            (
+                "E8 prestressed_modes",
+                prestressed_modes(&m, &prestress, &ModalOptions::new(2)).map(|_| ()),
+            ),
             (
                 "E9 solve_static_mpc",
                 solve_static_mpc(&m, &[], &[], &[], &StaticOptions::default()).map(|_| ()),
             ),
-            ("E10 modal_analysis_mpc", modal_analysis_mpc(&m, &[], &ModalOptions::new(2)).map(|_| ())),
+            (
+                "E10 modal_analysis_mpc",
+                modal_analysis_mpc(&m, &[], &ModalOptions::new(2)).map(|_| ()),
+            ),
         ];
         for (entry, r) in refused {
-            c.holds(&format!("R1 {name} {entry} refused"), refusal(&r, name), &format!("{:?}", r.err()));
+            c.holds(
+                &format!("R1 {name} {entry} refused"),
+                refusal(&r, name),
+                &format!("{:?}", r.err()),
+            );
         }
     }
     // R2: a Shell4 plate with the orthotropic material.
@@ -761,6 +836,10 @@ fn r1_r2_paths() {
     let r2 = solve_static_with(&s, &pres, &[], &StaticOptions::default());
     let ok = matches!(&r2, Err(FemError::NotYetSupported { item: "material", variant: "Orthotropic", location, package })
         if location.starts_with("element 0") && location.contains("Shell4") && *package == FOLLOW_UP);
-    c.holds("R2 Shell4 with Orthotropic refused", ok, &format!("{:?}", r2.as_ref().err()));
+    c.holds(
+        "R2 Shell4 with Orthotropic refused",
+        ok,
+        &format!("{:?}", r2.as_ref().err()),
+    );
     c.finish();
 }

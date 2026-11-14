@@ -94,7 +94,8 @@ impl IntegrationPointField {
                         .map_err(located)?;
                     let sigma = match (&dte, points.reference()) {
                         (Some(_), Some(reference)) => {
-                            let eth = crate::mat_ortho::thermal_strain(material, &point, reference, dt).map_err(located)?;
+                            let eth =
+                                crate::mat_ortho::thermal_strain(material, &point, reference, dt).map_err(located)?;
                             let elastic: [f64; 6] = std::array::from_fn(|k| eps[k] - eth[k]);
                             thermal_strains.push(eth);
                             material.stress(&elastic, &point, &[]).map_err(located)?.0
