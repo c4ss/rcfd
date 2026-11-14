@@ -348,6 +348,100 @@ defect of the registered set-up or hand arithmetic, not of the library terms (th
 The old test functions stay with `#[ignore]` as records of the first run (the checks that were met in them are repeated,
 unchanged, in the corrected functions: deterministic, same numbers); corrected functions are `a2_*`.
 
+## Addendum 1 (2026-11-14): results
+
+Written after the corrected run and the mutation runs; the numbers are those printed by
+`sa_geometric_struct_f558.rs` and `sa_geometric_struct_f558_bits.rs` (release).
+
+### Results against the registered limits
+
+| id | measured | limit | verdict |
+|---|---|---|---|
+| B0 | 16 digests bit-identical to the base record | equal | met |
+| L1 (16 elements) | 3.95e-4 (FE factor 4.2678, M_ref 1000, closed `M_cr` = 4266.115 N m) | 1e-2 | met |
+| L2 (8 elements) | 5.22e-3 | 2e-2 | met |
+| L3 | 4.4e-16 | 1e-8 | met |
+| L4 | 1.3e-15 | 1e-9 | met |
+| L5 (axis y, amendment 1) | 2.5e-14 | 1e-6 | met |
+| L5b (skew element) | 1.1e-16 | 1e-12 | met |
+| C1 | 1.38e-3 | 1.5e-2 | met |
+| H1 | 6.5e-14 | 1e-7 | met |
+| H2 | 0 | 1e-12 | met |
+| H3 (hand value `V/4`, amendment 2) | 6.5e-12 | 1e-7 | met |
+| H4 | 0 | 1e-14 | met |
+| R1 | 1.8e-16 | 1e-12 | met |
+| R2 | 1.0e-13 of `M_ref` | 1e-8 | met |
+| S1, S2 | about 1e-17 | 1e-12 | met |
+| N3 | exact | exact | met |
+| S3 (Shell4, `t/a` = 0.2) | ratio 0.957465 against closed 0.957650, error 1.93e-4 | 5e-3 | met |
+| S4 (Shell3, `t/a` = 0.2) | 9.8e-5 | 1e-2 | met |
+| S5 (`t/a` = 0.01) | 1.06e-6 | 5e-5 | met |
+| N1 | base minus with positive in every case | > 0 | met |
+| N2' (amendment 2) | `lambda_base 0.3 - 1` = 2.6e-5; with the option 0.862 against base 3.333 | 5e-3; below half | met |
+| A3 (added after the mutation run) | `scaled` doubles the factor of twice the pre-stress to 1e-9; `masked` keeping none gives a zero matrix | 1e-9; exact | met |
+| I1 (I section, clause a4) | FE `M` = 4.7468e4 against closed 5.877e4: error -19.2 percent | 1e-2 | MISSED (known) |
+
+I1 is recorded in the ignored test `ltb_i_section_known_miss`. The FE value is `M_0` of the section without warping
+(47364 times 1.0022): the Beam2 element has no warping degree of freedom, so the `pi^2 E C_w/(G J L^2)` term of the closed
+form cannot appear however the geometric stiffness is written. It is not a defect of the terms added here.
+
+### First-run misses (diagnosed; amendment 2 corrected the set-ups; the old functions stay ignored)
+
+- H3: the hand arithmetic forgot the `V_y phi theta_y / 2` term; measured 1.25 against a registered 2.5; corrected hand
+  value `V/4`.
+- N2: the solver refused the zero geometric stiffness of the base ("the iterated subspace lost rank at iteration 1");
+  corrected as N2'.
+- S3, S4: at `t/a` >= 0.2 the lowest base factor (4.630e6) is an in-plane (drilling) mode with `|u_z|` about 1e-16; the
+  plate mode is the second (4.7405e6). Old ratios 0.98021 (Shell4) and 0.96859 (Shell3) were of the wrong mode.
+
+Finding: this in-plane mode exists in the base library (it is in the pre-F-558 spectrum) and is not part of F-558. It is
+not a new defect of the terms; it is recorded here only because it hides the plate mode in a lowest-mode search.
+
+### Mutations (scratch copy, one at a time)
+
+| mutation | result | caught by |
+|---|---|---|
+| X1 drop the moment terms | caught | H4, R1, L1, L2, L4, L5 |
+| X2 moment terms times 2 | caught | H4, R1, L1, L2 |
+| X3 Wagner sign flipped | caught | H2 |
+| X4 `V_y` sign flipped | caught | H3, R1 |
+| X5 end-moment sign convention flipped | caught | H1, H2, H3, R1, L1, L2 |
+| X6 shell `t^2/8` (both files) | caught | S3, S4, S5 |
+| X7 shell term also on `theta_z` | caught | S3 |
+| X8 `scaled` does not scale the end forces | survived the registered checks (no registered check uses `scaled`) | gap; A3 added after the run, then caught |
+| X9 options ignored | caught | the L group, S3 to S5 |
+| X10 rotation term always on in the base shell path | caught | B0 (3 digests changed) |
+| X11 `masked` keeps the end forces | caught (A3) | A3 |
+
+A3 was added after the mutation run, with a limit derived from linearity of the matrix in the end forces (1e-9), not fitted
+to a measured value. X8 and X11 were run against it and fail it.
+
+### Decision
+
+Partial. Every check is met except the I-section clause (I1), which needs a warping degree of freedom that Beam2 does not
+have. The rectangle closed form (the registered acceptance) is met to 3.95e-4 at 16 elements. Defaults bit-identical.
+
+### Open questions
+
+- Q1 (warping): a 14-degree-of-freedom beam with a warping degree of freedom, to reach the I-section closed form.
+  Recommendation: a separate item.
+- Q2 (case-file key): expose the options in the case file, for example `[structural] geometric_terms = "full"`, default
+  unchanged. Recommendation: a separate item, since the case schema golden changes.
+- Q3 (Wagner coefficients): `beta_y`, `beta_z` are caller-supplied here; per-section values from the section properties.
+  Recommendation: a separate item with the warping element.
+
 ## For the lead: roadmap entries
 
-(To be filled after the run, in the addendum.)
+> F-558 status: partial. Note: Structural solver, advanced tier. PARTIAL by the standing rule (every registered check met
+> except the I-section clause, which needs a warping degree of freedom: FE -19.2 percent against the closed form, recorded
+> in ltb_i_section_known_miss). ADR 0508, 2026-11-14: opt-in `Prestress::with_beam_resultants` (moment, shear-force and
+> Wagner terms from the element end forces) and `Prestress::with_shell_rotation_terms` (t^2/12 on the shell rotations).
+> Rectangle lateral-torsional buckling 3.95e-4 (16 elements) and 5.2e-3 (8) of the closed form; thrust-moment interaction
+> 1.4e-3; frame invariance 2.5e-14 and 1.1e-16; end-force equilibrium 1.8e-16; thick plate (t/a 0.2) ratio of the
+> Mindlin closed form to 1.9e-4 (Shell4) and 9.8e-5 (Shell3). Defaults bit-identical (16 digests). Nine of ten registered mutations
+> caught; one gap (`scaled`) closed by A3.
+>
+> Follow-up proposed: warping degree of freedom for Beam2 (14-DOF element) and the I-section lateral-torsional buckling
+> closed form within 1 percent.
+> Follow-up proposed: case-file key `[structural] geometric_terms = "full"`, default unchanged.
+> Follow-up proposed: per-section Wagner coefficients from the section properties.
