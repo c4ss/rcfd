@@ -11471,7 +11471,7 @@ fixed by the item's registration ADR before any code.
     within 2 percent of a registered reference; a cantilever strip of shells in free vibration of small amplitude gives
     the linear first frequency within 1 percent and conserves energy within a registered limit over 100 periods.
   - note: Structural solver, advanced tier. Follow-up of F-578 (ADR 0490, 2026-11-14).
-- [ ] **F-586** The viscoelastic damped modes at each root's own frequency
+- [~] **F-586** The viscoelastic damped modes at each root's own frequency
   - depends on: F-582
   - acceptance: Every limit not stated here is registered in the ADR before the run. The damped modes of a viscoelastic
     material iterate the reference frequency of each root to its own Im lambda (a fixed point of lambda^2 M + K*(Im
@@ -11479,7 +11479,22 @@ fixed by the item's registration ADR before any code.
     root of the discrete chain with the complex modulus at that root's own frequency within 1e-8 relative, and differs
     from the frozen-modulus root of F-582 by a registered amount. A 3-D cantilever with unequal weights, full basis
     against truncated basis, registers the truncation error. Models without the material keep their bits.
-  - note: Structural solver, advanced tier. Follow-up of F-582 (ADR 0495, 2026-11-14).
+  - note: Structural solver, advanced tier. PARTIAL by the standing rule (three registered checks missed and diagnosed, none a
+    defect of the library; the acceptance checks met). ADR 0520, 2026-11-14. The damped modes iterate each of the lowest
+    roots of a viscoelastic material to its own frequency
+    (DampedOptions::viscoelastic_own_frequency(OwnFrequency::new(roots)), with viscoelastic_reference giving the
+    frequency of the storage basis and the start): on the F-582 basis the projected problem at w takes K_r(w) = K_rest +
+    sum (G'(w) P^G + K'(w) P^K) and H_r(w) = H_eta + sum (G''(w) P^G + K''(w) P^K), the update is w <- Im lambda of the
+    nearest root, converged at |dw| <= 1e-12 w, refused after 50 iterations; DampedModes::own_frequency records the
+    frozen root, the final frequency and the count. On rod A the converged first root equals the chain root at its own
+    frequency within 1.1e-13 (limit 1e-8; 6 iterations) and differs from the F-582 frozen root by 9.64e-6 (registered
+    9.6405e-6); roots 2 to 4 and rods B, C within 1.2e-13, independent of the basis size and of the start. The 3-D
+    cantilever with unequal weights registers the truncation error 1.50e-4 (basis 6 against basis 71; 1.50e-4 against
+    the dense full space too; equal weights 8.7e-14). Known misses, diagnosed: the full basis 71 against the dense full
+    space 1.15e-8 (limit 1e-9: the 72nd mode, which the modal analysis cannot give, carries the loss coupling of root
+    2), the same model with a point dashpot 6.9e-9, and a residual-vector pseudo-mode that needs 170 iterations (refused
+    at 50). Models without the option keep their bits (B1 5 digests, B0, baseline hashes unchanged); 10 of 10 mutations
+    caught. Follow-ups: pseudo-modes skipped in the iteration, a case-file key.
 - [~] **F-587** B-bar and F-bar Hex8 in the nonlinear driver (J2, creep, viscoelastic, geometric nonlinearity)
   - depends on: F-390, F-411, F-397
   - acceptance: Every limit not stated here is registered in the ADR before the run. The BBar formulation of F-390 taken

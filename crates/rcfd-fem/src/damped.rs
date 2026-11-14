@@ -29,6 +29,15 @@
 //! `omega_ref`; its loss stiffness `int B^T D'' B`, `D'' = 2 G'' I_dev + K'' 1 (x) 1` of the loss moduli, is projected on that
 //! basis and added to the loss stiffness `H` of the equation. Every root carries the moduli at `omega_ref`. Without the option
 //! the material is refused as before; the option on a model without the material is refused.
+//!
+//! ADR 0520 (F-586): with [`DampedOptions::viscoelastic_own_frequency`] as well, each of the lowest reported roots of that
+//! frozen solve is iterated to its own frequency: on the same basis (the storage modes at `omega_ref`) the projected problem
+//! at `w` takes `K_r(w) = K_rest + sum (G'(w) P^G + K'(w) P^K)` and `H_r(w) = H_eta + sum (G''(w) P^G + K''(w) P^K)`, where
+//! `P^G`, `P^K` are the projections of the stiffness of each viscoelastic material for unit shear and bulk moduli, `K_rest`
+//! that of the other materials and `H_eta` their constant loss factors; `C_r` (Rayleigh on the storage stiffness at
+//! `omega_ref`, dashpots) is kept. Start `w = omega_ref` (the frozen root), update `w <- Im lambda` of the root nearest the
+//! previous one, converged when `|dw| <= tolerance w`; not converged within the maximum count is refused. The reported
+//! roots are the converged ones, with [`DampedModes::own_frequency`] in the same order.
 
 use crate::assemble::{assemble_with, stiffness_with};
 use crate::constraint::{check_rigid_body_motions, prescribed_equations, reduce};
@@ -61,6 +70,53 @@ fn invalid(key: &'static str, reason: String) -> FemError {
     FemError::InvalidValue { key, reason }
 }
 
+/// The fixed point of each root of a viscoelastic material on its own frequency (ADR 0520 D1).
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
+pub struct OwnFrequency {
+    /// The number of the lowest reported roots of the frozen solve that are iterated (and reported).
+    pub roots: usize,
+    /// Converged when `|w_new - w| <= tolerance * w_new` (relative change of the frequency).
+    pub tolerance: f64,
+    /// The most solves after the frozen one; not converged by then is refused.
+    pub max_iterations: usize,
+}
+
+impl OwnFrequency {
+    /// The lowest `roots` roots, tolerance `1e-12`, at most 50 iterations.
+    pub fn new(roots: usize) -> OwnFrequency {
+        OwnFrequency {
+            roots,
+            tolerance: 1e-12,
+            max_iterations: 50,
+        }
+    }
+    /// With a relative tolerance on the frequency.
+    pub fn tolerance(mut self, tolerance: f64) -> OwnFrequency {
+        self.tolerance = tolerance;
+        self
+    }
+    /// With a maximum iteration count.
+    pub fn max_iterations(mut self, max_iterations: usize) -> OwnFrequency {
+        self.max_iterations = max_iterations;
+        self
+    }
+}
+
+/// The record of one root iterated to its own frequency (ADR 0520).
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
+pub struct OwnFrequencyRoot {
+    /// The root of the frozen solve at the reference frequency it started from.
+    pub frozen: C64,
+    /// The circular frequency, rad/s, at which the reported root was solved.
+    pub omega: f64,
+    /// The solves after the frozen one.
+    pub iterations: usize,
+    /// The last relative change of the frequency, `|Im lambda - omega| / Im lambda` (0 when equal).
+    pub change: f64,
+}
+
 /// Options of [`damped_modes`].
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
@@ -79,6 +135,8 @@ pub struct DampedOptions {
     pub reference_omega: Option<f64>,
     /// The temperature, K, of a viscoelastic material with a time-temperature shift (ADR 0495; default none).
     pub reference_temperature: Option<f64>,
+    /// Each root iterated to its own frequency (ADR 0520; default none: every root at the reference frequency).
+    pub own_frequency: Option<OwnFrequency>,
 }
 
 impl DampedOptions {
@@ -96,6 +154,7 @@ impl DampedOptions {
             residual_vectors: false,
             reference_omega: None,
             reference_temperature: None,
+            own_frequency: None,
         }
     }
     /// With the viscoelastic material of the model taken at the circular frequency `omega` (rad/s) and, for a shifted
@@ -103,6 +162,12 @@ impl DampedOptions {
     pub fn viscoelastic_reference(mut self, omega: f64, temperature: Option<f64>) -> DampedOptions {
         self.reference_omega = Some(omega);
         self.reference_temperature = temperature;
+        self
+    }
+    /// With each of the lowest roots of a viscoelastic material iterated to its own frequency, on the basis of the storage
+    /// moduli at the reference frequency (ADR 0520; needs [`DampedOptions::viscoelastic_reference`]).
+    pub fn viscoelastic_own_frequency(mut self, own: OwnFrequency) -> DampedOptions {
+        self.own_frequency = Some(own);
         self
     }
     /// With Rayleigh damping `a M + b K`.
@@ -184,6 +249,9 @@ pub struct DampedModes {
     pub defects: Vec<Defect>,
     /// Plain statements on the result, for example the non-oscillating roots.
     pub notes: Vec<String>,
+    /// With [`DampedOptions::viscoelastic_own_frequency`], one record per reported mode in the same order (ADR 0520); `roots`
+    /// and `defects` are then those of the frozen solve at the reference frequency. Empty otherwise.
+    pub own_frequency: Vec<OwnFrequencyRoot>,
     dofs: DofMap,
 }
 
@@ -318,6 +386,78 @@ pub(crate) fn m_orthonormalise(mass: &CsrMatrix, r: &mut [f64], basis: &[&[f64]]
     true
 }
 
+/// The reported mode of the root `lam` with Ritz vector `x` (ADR 0450 D3.4), `None` for a root that is not reported.
+#[allow(clippy::too_many_arguments)]
+fn report(
+    lam: C64,
+    x: &[C64],
+    residual: f64,
+    phi: &[Vec<f64>],
+    n: usize,
+    mr: &[f64],
+    m: usize,
+    rvs: usize,
+) -> Option<DampedMode> {
+    let r = lam.abs();
+    let oscillating = lam.im > REAL_TOLERANCE * r;
+    let real = lam.im.abs() <= REAL_TOLERANCE * r;
+    if !oscillating && !real {
+        return None;
+    }
+    let eigenvalue = if oscillating { lam } else { C64::from_real(lam.re) };
+    let mut shape = vec![C64::ZERO; n];
+    for (j, p) in phi.iter().enumerate() {
+        for (s, &v) in shape.iter_mut().zip(p) {
+            *s += x[j].scale(v);
+        }
+    }
+    let ra = eigenvalue.abs();
+    let residual_share = if rvs == 0 { 0.0 } else { coordinate_share(mr, m, rvs, x) };
+    Some(DampedMode {
+        eigenvalue,
+        decay_rate: -eigenvalue.re,
+        damped_omega: eigenvalue.im,
+        frequency: eigenvalue.im / (2.0 * std::f64::consts::PI),
+        damping_ratio: if ra > 0.0 { -eigenvalue.re / ra } else { 0.0 },
+        oscillating,
+        shape,
+        residual,
+        residual_share,
+        pseudo: residual_share > PSEUDO_SHARE,
+    })
+}
+
+fn by_frequency(p: &DampedMode, q: &DampedMode) -> std::cmp::Ordering {
+    p.damped_omega
+        .total_cmp(&q.damped_omega)
+        .then(p.eigenvalue.abs().total_cmp(&q.eigenvalue.abs()))
+}
+
+/// The own-frequency options checked (ADR 0520 D1).
+fn check_own_frequency(options: &DampedOptions) -> Result<()> {
+    let Some(own) = &options.own_frequency else {
+        return Ok(());
+    };
+    let bad = |reason: String| Err(invalid("own frequency", reason));
+    if options.reference_omega.is_none() {
+        return bad(
+            "the own-frequency iteration needs a reference frequency (DampedOptions::viscoelastic_reference: the \
+             frequency of the storage basis and the start, ADR 0520)"
+                .to_string(),
+        );
+    }
+    if own.roots == 0 {
+        return bad("at least one root must be iterated".to_string());
+    }
+    if !(own.tolerance.is_finite() && own.tolerance > 0.0) {
+        return bad(format!("tolerance {:e} (must be finite and > 0)", own.tolerance));
+    }
+    if own.max_iterations == 0 {
+        return bad("at least one iteration must be allowed".to_string());
+    }
+    Ok(())
+}
+
 /// `2 G I_dev` in Voigt form with engineering shear strain (the shear part of an isotropic stiffness of shear modulus `g`).
 fn shear_matrix(g: f64) -> Matrix6 {
     let mut d = [[0.0; 6]; 6];
@@ -410,7 +550,9 @@ fn viscoelastic_reference(model: &SolidModel, options: &DampedOptions) -> Result
 /// viscoelastic material is taken at the reference frequency of the options (ADR 0495).
 pub fn damped_modes(model: &SolidModel, options: &DampedOptions) -> Result<DampedModes> {
     model.validate()?;
+    check_own_frequency(options)?;
     let visco = viscoelastic_reference(model, options)?;
+    let original = model;
     let model = match &visco {
         Some(v) => &v.storage,
         None => model,
@@ -573,6 +715,10 @@ pub fn damped_modes(model: &SolidModel, options: &DampedOptions) -> Result<Dampe
     } else {
         None
     };
+    let own = match (&visco, &options.own_frequency) {
+        (Some(v), Some(own)) => Some(OwnSetup::new(original, model, v, phi, threads, hr.clone(), *own)?),
+        _ => None,
+    };
     if let Some(v) = &visco {
         let mut h = hr.unwrap_or_else(|| vec![0.0; m * m]);
         let which = model.material_indices()?;
@@ -602,44 +748,105 @@ pub fn damped_modes(model: &SolidModel, options: &DampedOptions) -> Result<Dampe
     let n = k.n;
     let mut modes = Vec::new();
     for (idx, &lam) in q.values.iter().enumerate() {
-        let r = lam.abs();
-        let oscillating = lam.im > REAL_TOLERANCE * r;
-        let real = lam.im.abs() <= REAL_TOLERANCE * r;
-        if !oscillating && !real {
-            continue;
+        if let Some(mode) = report(lam, &q.vectors[idx], q.residuals[idx], phi, n, &mr, m, rvs.len()) {
+            modes.push(mode);
         }
-        let eigenvalue = if oscillating { lam } else { C64::from_real(lam.re) };
-        let x = &q.vectors[idx];
-        let mut shape = vec![C64::ZERO; n];
-        for (j, p) in phi.iter().enumerate() {
-            for (s, &v) in shape.iter_mut().zip(p) {
-                *s += x[j].scale(v);
+    }
+    modes.sort_by(by_frequency);
+    let mut own_records = Vec::new();
+    let mut own_notes = Vec::new();
+    if let (Some(setup), Some(omega_ref)) = (&own, options.reference_omega) {
+        let solve_at = |w: f64| -> Result<Vec<DampedMode>> {
+            let (kw, hw) = setup.at(w, options.reference_temperature)?;
+            let q =
+                quadratic_eigen_with(&mr, &cr, &kw, Some(&hw), m, &GeneralEigenOptions::default()).map_err(|e| {
+                    FemError::Solver {
+                        solver: "quadratic_eigen",
+                        reason: e.to_string(),
+                    }
+                })?;
+            Ok(q.values
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, &lam)| report(lam, &q.vectors[idx], q.residuals[idx], phi, n, &mr, m, rvs.len()))
+                .collect())
+        };
+        let count = setup.own.roots.min(modes.len());
+        if count < setup.own.roots {
+            own_notes.push(format!(
+                "{} roots asked for the own-frequency iteration, {count} reported by the frozen solve",
+                setup.own.roots
+            ));
+        }
+        let mut done = Vec::with_capacity(count);
+        for (j, start) in modes.iter().take(count).enumerate() {
+            let mut cur = start.clone();
+            let mut w = omega_ref;
+            let mut k = 0;
+            loop {
+                let wn = cur.eigenvalue.im.max(0.0);
+                let change = if wn == w {
+                    0.0
+                } else if wn > 0.0 {
+                    (wn - w).abs() / wn
+                } else {
+                    f64::INFINITY
+                };
+                if wn == w || (wn - w).abs() <= setup.own.tolerance * wn {
+                    done.push((
+                        cur,
+                        OwnFrequencyRoot {
+                            frozen: start.eigenvalue,
+                            omega: w,
+                            iterations: k,
+                            change,
+                        },
+                    ));
+                    break;
+                }
+                if k == setup.own.max_iterations {
+                    return Err(FemError::Solver {
+                        solver: "viscoelastic own frequency",
+                        reason: format!(
+                            "root {j} (frozen {:e} {:+e} i) not converged in {k} iterations: last relative change of the \
+                             frequency {change:e} above the tolerance {:e} (ADR 0520)",
+                            start.eigenvalue.re, start.eigenvalue.im, setup.own.tolerance
+                        ),
+                    });
+                }
+                let prev = cur.eigenvalue;
+                let Some(next) = solve_at(wn)?
+                    .into_iter()
+                    .min_by(|a, b| (a.eigenvalue - prev).abs().total_cmp(&(b.eigenvalue - prev).abs()))
+                else {
+                    return Err(FemError::Solver {
+                        solver: "viscoelastic own frequency",
+                        reason: format!("root {j}: no reported root at {wn:e} rad/s (ADR 0520)"),
+                    });
+                };
+                cur = next;
+                w = wn;
+                k += 1;
             }
         }
-        let ra = eigenvalue.abs();
-        let residual_share = if rvs.is_empty() {
-            0.0
-        } else {
-            coordinate_share(&mr, m, rvs.len(), x)
-        };
-        modes.push(DampedMode {
-            eigenvalue,
-            decay_rate: -eigenvalue.re,
-            damped_omega: eigenvalue.im,
-            frequency: eigenvalue.im / (2.0 * std::f64::consts::PI),
-            damping_ratio: if ra > 0.0 { -eigenvalue.re / ra } else { 0.0 },
-            oscillating,
-            shape,
-            residual: q.residuals[idx],
-            residual_share,
-            pseudo: residual_share > PSEUDO_SHARE,
-        });
+        done.sort_by(|(p, _), (q, _)| by_frequency(p, q));
+        let most = done.iter().map(|(_, r)| r.iterations).max().unwrap_or(0);
+        own_notes.push(format!(
+            "{count} roots iterated to their own frequency on the storage basis at {omega_ref:e} rad/s, at most {most} \
+             iterations (ADR 0520)"
+        ));
+        for a in 0..done.len() {
+            for b in a + 1..done.len() {
+                let (za, zb) = (done[a].0.eigenvalue, done[b].0.eigenvalue);
+                if (za - zb).abs() <= 1e-9 * za.abs().max(zb.abs()) {
+                    own_notes.push(format!("roots {a} and {b} converged to the same root (ADR 0520)"));
+                }
+            }
+        }
+        let (m2, r2): (Vec<DampedMode>, Vec<OwnFrequencyRoot>) = done.into_iter().unzip();
+        modes = m2;
+        own_records = r2;
     }
-    modes.sort_by(|p, q| {
-        p.damped_omega
-            .total_cmp(&q.damped_omega)
-            .then(p.eigenvalue.abs().total_cmp(&q.eigenvalue.abs()))
-    });
     let oscillating = modes.iter().filter(|d| d.oscillating).count();
     let non_oscillating = modes.len() - oscillating;
     let pseudo_modes = modes.iter().filter(|d| d.pseudo).count();
@@ -676,6 +883,7 @@ pub fn damped_modes(model: &SolidModel, options: &DampedOptions) -> Result<Dampe
             "{pseudo_modes} roots flagged as pseudo-modes of the residual vectors (share above {PSEUDO_SHARE})"
         ));
     }
+    notes.extend(own_notes);
     Ok(DampedModes {
         modes,
         roots: q.values,
@@ -687,6 +895,84 @@ pub fn damped_modes(model: &SolidModel, options: &DampedOptions) -> Result<Dampe
         pseudo_modes,
         defects: q.defects,
         notes,
+        own_frequency: own_records,
         dofs,
     })
+}
+
+/// A viscoelastic material of the model with the projections `P^G`, `P^K` of its stiffness for unit shear and bulk moduli.
+type ViscoPart<'a> = (&'a Material, Vec<f64>, Vec<f64>);
+
+/// The projected pieces of the own-frequency iteration (ADR 0520 D1): the viscoelastic materials; `K_rest` of the other
+/// materials; `H_eta` of their constant loss factors.
+struct OwnSetup<'a> {
+    visco: Vec<ViscoPart<'a>>,
+    k_rest: Option<Vec<f64>>,
+    h_eta: Option<Vec<f64>>,
+    m: usize,
+    own: OwnFrequency,
+}
+
+impl<'a> OwnSetup<'a> {
+    fn new(
+        original: &'a SolidModel,
+        storage: &SolidModel,
+        v: &ViscoReference,
+        phi: &[Vec<f64>],
+        threads: Option<usize>,
+        h_eta: Option<Vec<f64>>,
+        own: OwnFrequency,
+    ) -> Result<OwnSetup<'a>> {
+        let which = storage.material_indices()?;
+        let dofs = storage.dof_map();
+        let part = |keep: &(dyn Fn(usize) -> bool + Sync), d: Option<Matrix6>| -> Result<Vec<f64>> {
+            let km = assemble_with(storage, threads, |ctx| {
+                if !keep(which[ctx.element]) {
+                    let size: usize = ctx.nodes.iter().map(|&a| dofs.components(a)).sum();
+                    return Ok(crate::element::ElementMatrix::zeros(size));
+                }
+                let d = match d {
+                    Some(d) => d,
+                    None => ctx.material.elasticity_matrix()?,
+                };
+                element_for(ctx.kind).stiffness(ctx.coords, &d)
+            })?;
+            Ok(project(&km, phi))
+        };
+        let mut visco = Vec::new();
+        for (mi, loss) in v.loss.iter().enumerate() {
+            if loss.is_some() {
+                let pg = part(&|i| i == mi, Some(shear_matrix(1.0)))?;
+                let pk = part(&|i| i == mi, Some(bulk_matrix(1.0)))?;
+                visco.push((&original.materials()[mi].1, pg, pk));
+            }
+        }
+        let k_rest = if v.loss.iter().any(|l| l.is_none()) {
+            Some(part(&|i| v.loss[i].is_none(), None)?)
+        } else {
+            None
+        };
+        Ok(OwnSetup {
+            visco,
+            k_rest,
+            h_eta,
+            m: phi.len(),
+            own,
+        })
+    }
+
+    /// `K_r(w)` and `H_r(w)`.
+    fn at(&self, w: f64, temperature: Option<f64>) -> Result<(Vec<f64>, Vec<f64>)> {
+        let mm = self.m * self.m;
+        let mut kw = self.k_rest.clone().unwrap_or_else(|| vec![0.0; mm]);
+        let mut hw = self.h_eta.clone().unwrap_or_else(|| vec![0.0; mm]);
+        for (material, pg, pk) in &self.visco {
+            let c = crate::mat_visco::complex_moduli(material, w, temperature)?;
+            for i in 0..mm {
+                kw[i] += c.shear.re * pg[i] + c.bulk.re * pk[i];
+                hw[i] += c.shear.im * pg[i] + c.bulk.im * pk[i];
+            }
+        }
+        Ok((kw, hw))
+    }
 }
