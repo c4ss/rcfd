@@ -397,3 +397,24 @@ max(|a_3/a_4|, |a_2/a_4|^(1/2), |a_1/a_4|^(1/3), |a_0/(2 a_4)|^(1/4))` (every ro
 for O, so the step of the `1e6`-step scan on `[-2 lam_max, 2 lam_max]` is about `0.05 rad/s`, far below the root spacing (over
 `300 rad/s`, arithmetic 2). Everything else of O1 and T1 (the limits, the speeds, the bisection to `1e-14`) is unchanged.
 
+## Amendment 2 (2026-11-14, written after the registered run of `sa_rotor.rs` and `sa_solid_rotor.rs` and before any run of the copy below)
+
+The registered run (`f416-scratch/sa_rotor_run1.log`, `sa_solid_rotor_run1.log`, commit 71091f70) met every check except **L1
+on R**: of the 80 whirl modes of R at each speed, 3 (at `2 w_1R`), 2 (at `10 w_1R`) and 3 (at `30 w_1R`) have a direction
+different from the sense of the orbit at the station of largest translation: `omega = 2.938e5` (Backward, sense forward),
+`2.973e5` (Forward, sense backward), `7.449e5` (Backward, sense forward) rad/s at `2 w_1R`, and the like at the other speeds
+(`2.868e5`, `3.046e5`; `2.701e5`, `3.234e5`, `7.140e5`). J, O and U (17 runs) met L1. The limit (equality of the labels) stays.
+A diagnostic on a scratch copy (`f416-scratch/diag_l1`, not a registered check) printed for every mode of R at `2 w_1R` the
+translational over rotational kinetic energy (diagonal of `M`) and the senses of the translation and tilt orbits at every
+station: the mismatched modes are **translation-free** modes of the 20-element pinned shaft (energy ratio `3.7e-28` and
+`4.4e-28`: `u_x, u_y` are rounding, about `1e-14` of the rotations), in which the orbit at "the station of largest translation"
+is the orbit of rounding noise; their tilt orbits `(theta_y, -theta_x)` turn in the sense of the label at every station. So the
+label is right and the reference of L1 is undefined for a mode without translation: a defect of the check, found by its run. The
+miss is kept, per rule 2: the test as run is renamed `l1_direction_is_the_sense_of_the_orbit_known_miss` and ignored with the
+measured numbers in the attribute. It continues in a copy `l1b_direction_is_the_sense_of_the_orbit_after_amendment_2`, the same
+runs and the same equality, with the reference defined for every mode: the sense of the translation orbit at the station of
+largest `|X|^2 + |Y|^2` when the mode's translational kinetic energy (the `u_x, u_y` rows and columns of `M`) is at least `1e-6`
+of `x^H M x`, otherwise the sense of the tilt orbit `(theta_y, -theta_x)` at the station of largest `|theta_x|^2 + |theta_y|^2`
+(`sgn Im(theta_y conj(-theta_x))`). By the decision rule the item is at best **partial** (a check met only after an amendment
+made after its run).
+
