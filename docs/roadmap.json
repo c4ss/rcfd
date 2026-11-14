@@ -3708,9 +3708,9 @@
       "F-388",
       "F-397"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The modules, material variants, point context, state layout, element kind, layup property, section-stiffness hook and the two driver extension points of ADR 0310 section 2 exist; every test of the basic and intermediate tiers (the sb_ and si_ files) compiles and passes unedited, and a registered set of models (patch test, cantilever, bar modes, the elastica of F-397, the free vibration of F-398, a Shell4 plate) gives displacements, stresses, frequencies and histories with the same bits as before the change; with an empty contribution list and no step hook the Newton driver takes the same iterations with the same residuals bit for bit; the default point context (no temperature, no time increment, global axes) reproduces the isotropic stress and tangent bit for bit; each new material variant, the element kind Shell3 and the layup property are refused by every solve with an error naming the variant and the set, never ignored; the complex type satisfies (a b) conj(b) = a |b|^2 and a/a = 1 within 1e-15 on a registered sample and prints and parses losslessly; the baseline hashes are unchanged.",
-    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0311; the registration is written by the implementation agent before any code."
+    "note": "F-408 scaffold of the advanced tier built (ADR 0440, 2026-11-14): 31 module stubs naming their packages, six material variants with validating constructors, point context and state layout, Shell3 and the layup refused by every solve, the section-stiffness hook of the shell, the contribution list and step-control hook of the Newton driver, and the complex type C64; all 57 bit digests of the earlier tiers equal main's and the baseline hashes pass; partial because D6 and R2 to R4 were met only after set-up amendments made after their runs and mutation MU4 was caught by B7 but not by H1."
   },
   {
     "id": "F-409",

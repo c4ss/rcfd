@@ -8035,7 +8035,7 @@ fixed by the item's registration ADR before any code.
     checks. STATUS recorded PARTIAL by the lead: the registered check G3 missed (a defect of its set-up, 8.92e-3 against
     1e-12) and passed only as G3b after amendment 1, which is not blind to the scratch model that explained the miss;
     done is the maintainer's call.
-- [ ] **F-408** Scaffold of the advanced tier: module layout, material variants with a point context and a state layout, extension points of the Newton driver
+- [~] **F-408** Scaffold of the advanced tier: module layout, material variants with a point context and a state layout, extension points of the Newton driver
   - depends on: F-372, F-388, F-397
   - acceptance: Every limit not stated here is registered in the ADR before the run. The modules, material variants,
     point context, state layout, element kind, layup property, section-stiffness hook and the two driver extension
@@ -8048,8 +8048,12 @@ fixed by the item's registration ADR before any code.
     layup property are refused by every solve with an error naming the variant and the set, never ignored; the complex
     type satisfies (a b) conj(b) = a |b|^2 and a/a = 1 within 1e-15 on a registered sample and prints and parses
     losslessly; the baseline hashes are unchanged.
-  - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0311; the registration is
-    written by the implementation agent before any code.
+  - note: F-408 scaffold of the advanced tier built (ADR 0440, 2026-11-14): 31 module stubs naming their packages, six
+    material variants with validating constructors, point context and state layout, Shell3 and the layup refused by
+    every solve, the section-stiffness hook of the shell, the contribution list and step-control hook of the Newton
+    driver, and the complex type C64; all 57 bit digests of the earlier tiers equal main's and the baseline hashes pass;
+    partial because D6 and R2 to R4 were met only after set-up amendments made after their runs and mutation MU4 was
+    caught by B7 but not by H1.
 - [ ] **F-409** Orthotropic elasticity with material axes, orthotropic expansion, and temperature-dependent properties from tables
   - depends on: F-408, F-372, F-374, F-376, F-380
   - acceptance: Every limit not stated here is registered in the ADR before the run. Orthotropy: with isotropic
