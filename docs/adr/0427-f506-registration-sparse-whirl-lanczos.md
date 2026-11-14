@@ -283,3 +283,27 @@ a shift other than 0 (frequencies far above the lowest); the sector state stabil
 large sectors (they call the dense solvers); threads (the Lanczos is sequential; the factor is the sequential skyline); the
 envelope factor's memory grows with the bandwidth, so a part of 20 000 unknowns with a wide envelope (a compact 3D block) costs
 far more than the ring of LP; no case-file or CLI switch for the option.
+
+## Amendment 1 (2026-11-14, after the registered run of the fast tests, before any run of the corrected control)
+
+The registered run of the four fast tests (log `f506-scratch/run1.log`) met every check of `e1_e2_n2_r2_cube`,
+`e3_e4_e5_e6_r2_sector` and `a2_m1_m2_m3_m4_medium_part`, and U1 and R1 of `u1_r1_n1_algebraic`, but **N1 was not as
+expected**: one run on `K = diag(1, 1, 4, 4, ..., 100, 100)`, `M = I`, `G = 0` returned `1, 1, 2, 2, 3, 3` (deviation 0 against
+the dense solver, expected `> 0.1`). Diagnosis (a development print of `beta_j` on a scratch copy, not a registered run): the
+premise of N1 was wrong. In exact arithmetic the Krylov space has dimension 20 (two per distinct frequency) and breaks down at
+step 20; in floating point the components of the later Lanczos vectors along the high frequencies (eigenvalues `1/j` of `W` down
+to 0.1) are small, their rounding is large relative to them, and at step 20 `beta_20 = 9.6e-4 max beta` (not `~1e-16`): the run
+did not break down, continued into the complement and found the second copies by rounding, up to step 40 (the whole space). So a
+single run is not blind to multiple frequencies when the spectrum is spread; it is blind when the copies are exact and the space
+is reached without amplification.
+
+The record: `u1_r1_n1_algebraic` becomes the ignored record `u1_r1_n1_algebraic_known_miss` (unchanged, its limit intact). The
+corrected control (registered now, run once):
+
+| # | Control | Expected |
+|---|---|---|
+| N1b | `gyroscopic_eigen_sparse_with(max_runs = 1)` on `K = M = I`, `G = 0`, `n = 20`, `count = 2` (one frequency 1 of multiplicity 20: `W [a; b] = [-b; a]` exactly, `W^2 = -I`, the Krylov space is `span{v, W v}` and breaks down at step 2 with `beta_2` at rounding) | refused (`FemError::Solver`, fewer than `count` pairs converged); with the default options both frequencies `1` within `1e-12` |
+
+The corrected test `u1_r1_n1b_algebraic` holds U1 and R1 unchanged (the same code and limits; deterministic, so their values are
+those of the record, compared in the addendum) and N1b in place of N1. The decision rule is unchanged; by it the item is at most
+**partial** (a control met only after an amendment made after its run).
