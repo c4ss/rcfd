@@ -6008,9 +6008,9 @@
       "F-570",
       "F-425"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. A NeoHookean spinning bar (the bar of ADR 0479 with a NeoHookean material of the same small-strain moduli) over ten turns, linear momentum within 1e-10, angular momentum within 1e-6, energy within 1e-6 relative; on an isotropic elastic model the step equals the F-570 step within 1e-12.",
-    "note": "Structural solver, advanced tier. Follow-up of F-570 (ADR 0514, 2026-11-14)."
+    "note": "Structural solver, advanced tier. PARTIAL by the standing rule (a library defect at the start of a neo-Hookean integrator was found by the registered run and corrected before the five affected tests ran, ADR 0523 amendment 2; F-425 has not landed, so the neo-Hookean energy is the step's own; done by the ADR's registered rule). ADR 0523, 2026-11-14: nl_transient gains AlgorithmicStress { Auto, DiscreteGradient, Average } (NlTransientOptions::algorithmic_stress) for the energy-momentum step; DiscreteGradient is the discrete gradient of Gonzalez, S_alg = S(E_m) + (nu/dE:dE) dE with the midpoint branch when |dE| <= 1e-12 or nu is at rounding (64 eps of the term magnitudes), and takes a compressible neo-Hookean material (mu/2 (J^-2/3 I1 - 3) + kappa/2 (J - 1)^2, evaluated without cancellation at small strain; Mooney-Rivlin refused); Auto (default) is the F-570 step unchanged, including its refusal of hyperelastic materials. NeoHookean spinning bar of ADR 0479 over ten turns: linear momentum 4.1e-13 (1e-10), angular momentum 7.5e-13 (1e-6), energy 2.1e-13 (1e-6); the discrete gradient of an isotropic elastic model equals the F-570 step within 9.4e-13 per step on the bar and 9.7e-14 on a large-strain cube (1e-12). Large-strain neo-Hookean cube: energy 2.8e-9 against 4.7e-3 with the F-570 average. F-570 bits unchanged (B0), defaults bit-identical (baseline_hashes). Ten of ten mutations caught (the acceptance bar alone does not catch dropping the correction; the cube does). No case-file key."
   },
   {
     "id": "F-608",
