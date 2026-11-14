@@ -267,3 +267,97 @@ they were run once in run 1 (`f514-scratch/run1.log`) and all met.
 Disclosure: `cargo test -p rcfd-fem` of run 1 stopped at the failing binary (26 of 57 test binaries run); the full crate was run
 once more with `--no-fail-fast` (`f514-scratch/fem_all2.log`) to run the other 31 binaries for B2. The failing copy failed the
 same in that run (deterministic); no other binary was run twice by choice.
+
+## Addendum 1: results (2026-11-13)
+
+Code: `crates/rcfd-fem/src/model.rs` (`Load::LineLoad`, `Load::line_load`, the checks of `add_load`; new lines 353-362, 426-432,
+788-803), `beam.rs` (`line_load_vector`, `element_line_load`, the element load in `section_forces`; new lines 386-450, 597-609,
+module and doc text 15-18, 24, 558-559), `loads.rs` (the `LineLoad` arm, the beam rule of the gravity arm, `add_line_load`,
+`add_body_load_with`; new lines 10-12, 111-119, 133-151, 283-312, 317-326). New test `crates/rcfd-fem/tests/si_beam_loads.rs` (4
+tests, 0.01 s in release); `si_beam.rs`: the retired N2 row as an ignored record, its `_after_landed` copy (run 1, now an ignored
+record by amendment 1) and the `_after_landed_amended` copy. The registered run of `si_beam_loads` was made once, on the test
+commit, release profile, `--test-threads=1` (`f514-scratch/run1.log`); the crate's other tests in `f514-scratch/fem_all.log` and
+`fem_all2.log` (see amendment 1), the amended copy in `f514-scratch/run2_amended.log`.
+
+| id | check | limit | measured | met |
+| --- | --- | --- | --- | --- |
+| L1 | one element, tip `v` against `q L^4 / (8 E I_z) + q L^2 / (2 kappa_y G A)` | `1e-10` | `6.9e-14` | yes |
+| L2 | tip `w` (x-z plane) | `1e-10` | `6.3e-14` | yes |
+| L3 | tip `theta_z`, `theta_y`, `u`; `abs(theta_x)` | `1e-10` | `7.8e-14`, `7.1e-14`, `7.1e-14`; `2.3e-16` | yes |
+| L4 | root / tip section forces with the element load | `1e-10` | `2.4e-14` / `2.4e-14` | yes |
+| L5 | reaction force / moment | `1e-10` | `1.7e-14` / `2.4e-14` | yes |
+| L6 | `line_load_vector` against the Gauss integral of the shape functions: seeded (`Phi = 0.024, 0.016`) / stubby (`Phi = 6.1, 4.2`) | `1e-13` | `3.9e-16` / `2.6e-16` | yes |
+| G1 | gravity, `abs(sum R + W) / abs(W)`: (i) space frame, (ii) pinned-pinned 20 elements, (iii) box and beam | `1e-12` | `3.4e-13`, `1.9e-13`, `7.9e-16` | yes |
+| G2 | (i) reaction moment; (ii) each end `-W / 2` | `1e-12` | `3.3e-13`; `8.8e-14`, `1.0e-13` | yes |
+| G3 | gravity load vector against `line_load(rho A g)` | `1e-15` | `0` (bit for bit) | yes |
+| P1 | midspan, `n = 2, 4, 10, 20, 64`, worst of the two planes | `1e-10` | `7.7e-16`, `2.6e-15`, `6.4e-14`, `1.1e-12`, `1.1e-12` | yes |
+| P2 | every node, `n = 1, 2, 3, 4, 7, 10, 20, 64`, worst deflection or rotation per `n` | `1e-10` | `0`, `9.6e-16`, `1.6e-15`, `2.9e-15`, `9.7e-15`, `6.4e-14`, `1.1e-12`, `1.1e-12` | yes |
+| P3 | section forces / moments at every element end, worst over `n` | `1e-10` | `1.8e-12` / `1.1e-12` (n = 64) | yes |
+| P4 | end reactions, worst over `n` | `1e-10` | `9.1e-13` (n = 64) | yes |
+| B1 | `si_scaffold_bits` unedited | pass | pass (2 tests) | yes |
+| B2 | every existing `rcfd-fem` test, every F-391 test | pass | 57 binaries: 324 passed, 1 failed (the run-1 copy of the retired row, amendment 1), 67 ignored; every F-391 test of `si_beam.rs` passed unedited; the amended copy passes | the copy only after amendment 1 |
+| B3 | `baseline_hashes` (`rcfd-api`) | pass | 3 passed, 1 ignored (as before) | yes |
+| B4 | box entries of the mixed model bit for bit those of the box alone | exact | 12 of 12 nodes, all bits equal | yes |
+| N1 | lumped load misses | `> 0.1` | `0.331` | yes |
+| N2 | centrifugal, nodal body force, temperature on a beam refused naming `SOLID_ROUTINES` | exact | all three as registered | yes |
+| N3 | unknown set, non-finite vector, set with Hex8 elements | exact | `UnknownSet`, `force per length`, `line load` naming element 0 | yes |
+| N4 | without the shear term | `> 1e-3` | L: `7.97e-3`, `5.42e-3`; P1: `1.20e-2`, `3.99e-3` | yes |
+| copy | `si_beam` copy of the retired N2 gravity row: `abs(R + F + W) / abs(W)` | `1e-12` | run 1 `6.25` (defective reference, amendment 1); amended `2.0e-13` | **only after amendment 1** |
+
+The prototype estimates held to their order (rcfd at `n = 64`: `1.1e-12` against the prototype's worst `1.3e-11`; the sparse
+direct solve rounds differently from the dense one of the script).
+
+Mutations (scratch copy `f514-scratch/mut` from `git archive` of the amended-test commit, `f514-scratch/mutate.py`, log
+`f514-scratch/mutations.log`, `si_beam_loads` and `si_beam` per mutation): every one caught.
+
+| id | mutation | caught by |
+| --- | --- | --- |
+| MU1 | moments of the consistent load dropped | L1 `0.331`, L2, L3, L6 `0.133`, P1, P2 |
+| MU2 | moment at node 1 with the wrong sign | L1 `0.661`, L3 to L6, G2, P1 to P4 |
+| MU3 | `L^2 / 8` for `L^2 / 12` | L1 `0.165`, L2, L3, L6, P1, P2 |
+| MU4 | `q x e_1` for `e_1 x q` | L1 `0.661`, L2, L3, L6, P1, P2 |
+| MU5 | gravity without the area | G1 `82.3`, G2, G3, the amended `si_beam` copy |
+| MU6 | section forces without the element load | L4 `0.5`, P3 |
+| MU7 | `add_load` accepts a set with a Hex8 element | N3 |
+
+MU5 was run twice: the first run stopped after the failing `si_beam` binary, so `si_beam_loads` did not run; `--no-fail-fast`
+was added to the script and MU5 run again (the only repeat).
+
+Other checks: `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --all-targets --release -- -D warnings` clean. No
+hash table, golden file or `baseline_hashes.rs` edited; no existing test edited except the retired row (one `#[ignore]` line)
+and the run-1 copy added by this item (one `#[ignore]` line, amendment 1).
+
+**Not run:** the whole workspace suite (the lead's gate); `rcfd-post` tests (no file of it touched, and it does not match on
+`Load`).
+
+**Deviations:** (1) amendment 1, after run 1 (the defective reference of the retired row's copy). (2) The registration's
+parenthetical estimate of the stubby element's shear parameters in L6 ("about 25 and 35") was wrong; they are `6.1` and `4.2`
+(`12 E I / (kappa G A L^2)` with the one-element section at `L = 0.05`). The check and its limit are unchanged; it still tests
+the `Phi`-independence at a shear parameter of order one, where the interdependent functions differ most from the Hermite ones.
+(3) The pinned-pinned `q = (0, -1000, 600) N/m` was read in local axes (as the one-element `q_l`), which is what the registered
+closed forms in `q_y`, `q_z` with `I_z`, `I_y` and the shear-share estimates use; the orientation `(0, 0, 1)` makes local y global
+z.
+
+**Decision by the registered rule: partial.** Every clause of the acceptance (L1, L2, G1, P1, P2) and B1, B3, B4 met at the first
+run, with margins above 50 on the 1e-10 checks and about 3 on G1 (i) at 1e-12; every stronger check and negative control as
+stated; every mutation caught. But one registered check, the gravity row of the retired row's copy (part of B2, "every F-391 test
+passes, the retired row by its copy"), was met only after amendment 1, written after its run, and the rule makes that partial.
+The cause is a test defect (the reference left out a load the base model carries), diagnosed exactly (`|F| / |W| = 6.254`); the
+library was not changed between the runs.
+
+### Remaining questions
+
+1. **Status.** Options: (a) partial as the rule gives (no follow-up work: the defect was in a test and is fixed); (b) the lead
+   reclassifies to done because the amended check concerns the test set-up only. Recommendation: (a) as the rule reads, with the
+   note that no library change followed the miss.
+2. **Centrifugal and other body loads on beams** (L1). Options: (a) a follow-up with the linearly varying line load and the
+   rotary-inertia moments; (b) fold into the item that puts beams on the rotating path. Recommendation: (b): a centrifugal load
+   on a beam is used only there.
+3. **Varying and local-axis line loads** (L2). Options: (a) a small follow-up (a linear `q` by Gauss on the same shape functions,
+   nodally exact by arithmetic 2 as well); (b) leave. Recommendation: (a) when a case needs it.
+
+## For the lead: roadmap entries
+
+F-514: proposed status **partial**. Note:
+
+> Structural solver, intermediate tier. ADR 0422, 2026-11-13: Load::LineLoad (uniform force per length in global axes on an element set of Beam2 elements) and gravity on beams (q = rho A g) with the consistent load of the interdependent Timoshenko shape functions, derived to be q L (1/2, L/12, 1/2, -L/12) per plane independent of Phi (beam::line_load_vector: forces q L/2, moments +-(L^2/12) e_1 x q); beam::section_forces subtracts the element load. Nodal exactness at any element count derived (Tong's argument: the shape functions solve the homogeneous equations). Met at the first run: one-element cantilever tip deflection q L^4/(8 E I) + q L^2/(2 kappa G A) within 6.9e-14 in both planes, seeded orientation; gravity reactions rho A L g within 3.4e-13 (space frame, pinned beam, a solid block with a separate beam); pinned-pinned midspan 5 q L^4/(384 E I) + q L^2/(8 kappa G A) and every node within 1.1e-12 for n = 1 to 64 elements; section forces at every element end within 1.8e-12; solid-only bits unchanged (si_scaffold_bits, baseline_hashes, the solid entries of a mixed model bit for bit). Seven mutations caught. Partial by the rule: the si_beam copy of the retired gravity-refusal row had a defective reference (it left out the base model's tip force) and was met only after amendment 1. Centrifugal, nodal body force and thermal loads on beams are still refused.
