@@ -302,3 +302,108 @@ build or a default bit changes and cannot be restored without changing a default
 4. Taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation): the harmonic option reuses
    `rcfd_fem::solve::DirectFactor` (one enum names the factor everywhere) and refuses its minimum-degree value; the complex
    factor reuses `ComplexSkylineError`.
+
+## Addendum 1: results (2026-11-14)
+
+Registered runs at 7f36dcb5, release profile, each run once: `sa_supernodal_complex.rs` (log `f594-scratch/run_linalg.log`),
+`sa_supernodal_modes.rs` and `sa_f594_bits.rs` (`run_fem.log`), H1 alone through `f594-scratch/heavy.ps1` (`run_h1.log`,
+`run_h1_memory.log`; free memory at the start 16.49e9 bytes). The bit record `sa_f594_bits.rs` was run at 0186cf62 (base
+624909b9 plus this ADR) plus the file (`bits_base_run.log`), its 22 constants filled in and committed at b0dadb37 before any
+library line; 7f36dcb5 changed only its `cargo fmt` layout (the same values). No probe or development run was made before the
+registered runs. No limit was changed and no amendment was needed.
+
+### Checks
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| L1 (c4) | `< 1e-12`; `<= 1e-11` | (a) residual 7.659e-16, against the envelope 2.090e-15; (b) 1.255e-15, 2.015e-15; 5 510 supernodes, largest front 469, 13 fronts split | yes |
+| L2 | `==`; imaginary parts 0 | 591 826 values of L, D and the solution equal to the real factor's; every imaginary part 0 | yes |
+| L3 (c11) | bit for bit; `> 0` | order, L, D, x equal for 1 and 8 threads; 13 fronts split | yes |
+| L4 | as stated | (a) row 0 at position 1, pivot 0; (b) row 46 at position 0, threshold = scale = 4; (c) NonFinite (3, 4); (d) Unsymmetric (1, 2); (e) BadOrdering; (f) Malformed | yes |
+| L5 (c2, c3) | `<= 1e-9`; Sturm equal; `<= 1e-9` | (a) 6.125e-14, Sturm 5 = 5, 12 iterations; (b) 6.192e-14, Sturm 3 = 3 | yes |
+| E1 (c2, c6) | `<= 1e-9`; residuals `<= 1e-10`; Sturm | 1.472e-15; largest residual 4.563e-11; Sturm 6 = 6; 23 iterations each; 0.73 s against the envelope's 0.69 s | yes |
+| E2 (c3, c7) | `<= 1e-9`; 2 factors | 1.779e-15 (239.61515575162, double) | yes |
+| E3 (c4, c8) | `<= 1e-8` each | (a) 1.932e-13; (b) 1.086e-14; (c) 8.705e-15; 0.083 s per frequency against the envelope's 0.32 s | yes |
+| E4 | as stated | (a) refused at omega_1 = 3 396.878 rad/s, key "frequency", "a resonance without damping", pivot modulus 1.77e-3 at scale 1.71e10; (b) 1.001 omega_1 accepted; (c) `SparseMinimumDegree` refused, key "solver" | yes |
+| E5 (c5, c9) | `<= 1e-10` (three); factor and name; `<= 1e-12` | displacements 4.082e-15, reference translation 2.857e-15, rotation 1.894e-15 (4 326 reduced unknowns); Supernodal / Envelope, "sparse-ldlt-supernodal"; residual 2.345e-14 | yes |
+| E6 (c2, c5) | `<= 1e-9` | 2.310e-15 | yes |
+| E7 (c11) | bit for bit | modal frequencies and modes, buckling factors and modes, harmonic re and im, transformation-path displacements and reactions equal for 1 and 8 threads | yes |
+| E8 | as stated | refinement refused (`Solver`); hinge `SingularStiffness` at node 13 component 0 | yes |
+| H1 (c10) | completes; finite, positive, ascending; residuals `<= 1e-10`; Sturm; record | 104 544 unknowns; `modal_analysis` 77.7 s (process 81.1 s), 22 iterations, peak working set 2.945e9 B; frequencies 537.05 (double), 729.96, 1 282.81, 1 420.87 (double) Hz; largest residual 6.284e-11; Sturm 6 = 6; nnz(K_FF) 7 960 014, nnz(L) by level structures 110 872 668 (0.89 GB of values), by coordinates 92 953 458 (0.838 of it) | yes |
+| B (c12) | equal; pass; pass | 22 digests equal to base; see "Other checks run" | yes |
+| N1 | not bit-equal (both) | false, false | holds |
+| N2 | not bit-equal | false | holds |
+| N3 | not bit-equal | false | holds |
+| N4 | not bit-equal | false | holds |
+
+H1 against the estimates: 2.9 GB (estimate about 3 GB), 78 s (estimate 2 to 6 minutes; the solves ran faster than the
+memory-bound guess), nnz(L) 1.11e8 (estimate 1.2e8). The coordinate dissection would store 16 percent fewer entries
+(remaining question 5).
+
+### Mutations (copy `f594-scratch/mut/tree` of 7f36dcb5, own target `target-f594-mut`, `f594-scratch/mutate.py`, each alone; log `mutations.log`)
+
+| Id | Caught by | Registered | Result |
+| --- | --- | --- | --- |
+| M1 | N1 (bit-equal to the minimum degree's) | N1 | caught |
+| M2 | L5, E1, E2, E6, E7 (the Sturm count of an indefinite matrix refused) | E1 and L5 | caught |
+| M3 | L1 (residual), L3 | L1 | caught |
+| M4 | L1 (residual) | L1 | caught |
+| M5 | L4 (b) only; `sa_supernodal_modes` passed | L4 (b) and E4 (a) | **caught by L4 (b), not by E4 (a)** |
+| M6 | L3 (values) | L3 | caught |
+| M7 | L1, L5 | L1 | caught |
+| M8 | N2 | N2 | caught |
+| M9 | N3 | N3 | caught |
+| M10 | B | B (G1) | caught |
+| M11 | B | B (G7 or G8) | caught |
+
+M5 diagnosed after the run: at the undamped resonance of S the refused pivot (modulus 1.77e-3 at scale 1.71e10, relative
+1.0e-13) is below the rounding threshold `(w + 1) eps s` as well as below `tau s`, so removing `tau` leaves E4 (a)'s refusal in
+place. E4 (a) shows that the refusal exists, not that the `tau` term makes it; L4 (b) is the check that isolates `tau`. The
+registration should have named L4 (b) alone, or added a frequency whose pivot lies between the two thresholds.
+
+### Other checks run
+
+`cargo test --release -p rcfd-linalg` (17 binaries, 115 passed, 0 failed, 6 ignored; `run_linalg_all.log`) and `cargo test
+--release -p rcfd-fem` (174 binaries, 777 passed, 0 failed, 204 ignored; `run_fem_all.log`), `sa_nd_bits.rs` and
+`sa_sparse_bits.rs` among them. `cargo test -p rcfd-api --release --test baseline_hashes`: 3 passed, 1 ignored
+(`run_baseline.log`). `cargo test -p rcfd-cli --release --test docs_site`: 2 passed. `cargo fmt -p rcfd-linalg --check`,
+`cargo fmt -p rcfd-fem --check`: clean. `cargo clippy --release -p rcfd-linalg -p rcfd-fem --all-targets -- -D warnings`:
+clean.
+
+Shared solver files changed: `crates/rcfd-linalg/src/sparse_chol.rs` (the supernodal section made generic, the complex
+factor added, `permuted_lower` split into a generic part), `crates/rcfd-linalg/src/eigen.rs` (one variant and one `Factor`
+arm in each of five places), `crates/rcfd-linalg/src/cskyline.rs` (`validate` made `pub(crate)`),
+`crates/rcfd-fem/src/harmonic_direct.rs` (the option, the order in `new`, the factor choice in `solve`),
+`crates/rcfd-fem/src/mpc.rs` (the refusal removed, the arm, the report's factor, `supernodal`), `crates/rcfd-fem/src/solve.rs`
+(one doc comment). Test file edited: the `#[ignore]` attribute on `f3_refusals` in `sa_supernodal_solve.rs` (finding 4).
+
+### Not run
+
+Nothing registered was left out.
+
+### Decision by the registered rule
+
+**Partial**: every check met its limit on its registered run (H1 included) and every negative control held, but mutation M5
+was caught only by L4 (b), not also by E4 (a) as registered (diagnosed above). Every clause of the acceptance was met.
+
+### Remaining questions
+
+1. M5. Options: (a) accept L4 (b) as the check of the `tau` term and the item as done; (b) a follow-up check at a frequency
+   whose pivot lies between the rounding and the `tau` thresholds. Recommendation: (a); the maintainer decides.
+2. Case-file key (open question 1). Recommendation: one key `solver.factor = "envelope" | "supernodal"` read by every
+   analysis, after the maintainer approves the schema golden change.
+3. The `#[ignore]` on ADR 0503's `f3_refusals` (open question 2). Recommendation: accept it (the precedent of ADR 0448).
+4. Default above a size (open question 3): changes default results; not taken, open.
+5. The coordinate dissection in the eigensolvers (16 percent less fill on the 1e5 cube). Options: (a) a points option of
+   `SubspaceOptions` and `BucklingEigenOptions` filled by `rcfd-fem`; (b) leave the graph order. Recommendation: (a), as a
+   small follow-up when larger modal models need it.
+
+### For the lead: roadmap entries
+
+Proposed status of F-594: **partial** (done if the maintainer accepts M5 as caught by L4 (b)).
+
+> Structural solver, advanced tier. Follow-up of F-529 (ADR 0503). ADR 0509, 2026-11-14: rcfd_linalg::eigen::Factorisation::Supernodal (the supernodal L D L^T after nested dissection by level structures in the subspace and buckling eigensolvers, so in modal_analysis and buckling::factors on the elimination and the transformation path), rcfd_linalg::sparse_chol::ComplexSupernodalLdlt (the same multifrontal kernel made generic over f64 and C64, complex symmetric without conjugation or pivoting; for a real matrix the real factor's values), DirectHarmonicOptions::factor (DirectFactor::SupernodalNestedDissection, the order by the node coordinates computed once per solver), and StaticSolver::SupernodalDirect on the transformation path. Clamped Hex8 cube of 4 752 unknowns: modal frequencies 1.5e-15 and buckling factors 1.8e-15 from the envelope's (limit 1e-9); harmonic response 1.9e-13 at the damped resonance, 1.1e-14 undamped, 8.7e-15 with Rayleigh damping (limit 1e-8), about 4 times faster than the envelope per frequency; with a rigid set the transformation-path static solve 4.1e-15 from the envelope's (limit 1e-10) and its modes 2.3e-15. Clamped cube of 104 544 unknowns: modal analysis of 6 modes in 78 s at a peak working set of 2.9 GB. Results bit-identical for 1 and 8 threads; 22 digests of the default paths equal to base; baseline_hashes passes. ADR 0503's F3a (the transformation-path refusal) kept as an ignored record. Partial by the registered rule only because mutation M5 (the tau term of the complex pivot test removed) was caught by L4 (b) but not also by E4 (a), whose resonance pivot is below the rounding threshold too. Done is the maintainer's call.
+
+Follow-up item (optional), title "Coordinate nested dissection in the eigensolvers", deps F-594, acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. The subspace and buckling eigensolvers take optional point coordinates for the supernodal factor's nested dissection and rcfd-fem modal and buckling pass the node coordinates of the free unknowns: on the clamped cube of 104 544 unknowns nnz(L) at most 0.85 of the level-structure order's (both recorded) and the frequencies within 1e-9 of the level-structure run; results bit-identical for 1 and 8 threads; the default solver's results keep their bits.
