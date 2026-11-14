@@ -530,6 +530,7 @@ fn shell_plate(mat: Material) -> (SolidModel, Vec<Prescribed>) {
 
 /// The copy of `sa_ortho::r1_r2_paths` after ADR 0457 (D6): E3, E8, E9, E10 solve.
 #[test]
+#[ignore = "record of ADR 0457: ADR 0459 (F-542) opened Integrator::new and buckling::factors to Orthotropic and Tabulated, retiring rows E6, E7; continued in r1_r2_paths_after_f542 of sa_ortho_rotating.rs (ADR 0291 pattern, maintainer standing decision)"]
 fn r1_r2_paths_after_f537() {
     let mut c = Checks::new();
     let steel = Material::isotropic_elastic(2.0e11, 0.3, 7850.0, 0.0).unwrap();
@@ -617,6 +618,7 @@ fn r1_r2_paths_after_f537() {
 }
 
 #[test]
+#[ignore = "record of ADR 0457: ADR 0459 (F-542) opened buckling::factors, Integrator::new and RotatingPart::new to Orthotropic and Tabulated, retiring their rows; continued in r3_paths_not_opened_after_f542 of sa_ortho_rotating.rs (ADR 0291 pattern, maintainer standing decision)"]
 fn r3_paths_not_opened() {
     let mut c = Checks::new();
     let steel = Material::isotropic_elastic(2.0e11, 0.3, 7850.0, 0.0).unwrap();

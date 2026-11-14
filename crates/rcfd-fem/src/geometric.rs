@@ -188,8 +188,9 @@ pub fn geometric_stiffness(model: &SolidModel, prestress: &Prestress, threads: O
     assemble_geometric(model, prestress, threads)
 }
 
-/// The assembly of [`geometric_stiffness`] after its entry check (ADR 0457 D2: the pre-stressed modes make their own).
-fn assemble_geometric(model: &SolidModel, prestress: &Prestress, threads: Option<usize>) -> Result<CsrMatrix> {
+/// The assembly of [`geometric_stiffness`] after its entry check (ADR 0457 D2: the pre-stressed modes make their own; ADR
+/// 0459 D1: the rotating part and the buckling factors too).
+pub(crate) fn assemble_geometric(model: &SolidModel, prestress: &Prestress, threads: Option<usize>) -> Result<CsrMatrix> {
     prestress.check_fits(model)?;
     assemble_with(model, threads, |ctx| {
         element_for(ctx.kind).geometric_stiffness(ctx.coords, prestress.of_element(ctx.element))

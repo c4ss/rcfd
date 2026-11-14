@@ -451,3 +451,46 @@ pub fn check_model(model: &SolidModel) -> Result<()> {
     }
     Ok(())
 }
+
+/// Refuses a model with a cyclic constraint and a material of either per-point variant (ADR 0457 D3, ADR 0459 D3: the cyclic
+/// rows rotate translations; a material with its own axes is not opened with them, also with cylindrical axes about the
+/// constraint's axis), naming the variant, its set and the constraint. A model without either is accepted.
+pub(crate) fn refuse_with_cyclic(model: &SolidModel) -> Result<()> {
+    let Some(j) = model
+        .constraints()
+        .iter()
+        .position(|c| matches!(c, crate::model::Constraint::Cyclic { .. }))
+    else {
+        return Ok(());
+    };
+    match model
+        .materials()
+        .iter()
+        .enumerate()
+        .find(|(_, (_, m))| is_point_material(m))
+    {
+        Some((i, (set, m))) => Err(FemError::NotYetSupported {
+            item: "material",
+            variant: m.name(),
+            location: format!("material {i}, element set '{set}', with the cyclic constraint {j}"),
+            package: FOLLOW_UP,
+        }),
+        None => Ok(()),
+    }
+}
+
+/// The material with its thermal expansion set to zero (ADR 0459 D2): an isotropic or orthotropic material with the expansion
+/// 0, a table with its base so and its `expansion*` columns removed; any other material unchanged.
+pub(crate) fn without_expansion(material: &Material) -> Material {
+    let mut out = material.clone();
+    match &mut out {
+        Material::IsotropicElastic { expansion, .. } => *expansion = 0.0,
+        Material::Orthotropic { expansion, .. } => *expansion = [0.0; 3],
+        Material::Tabulated { base, columns, .. } => {
+            **base = without_expansion(base);
+            columns.retain(|(name, _)| !name.starts_with("expansion"));
+        }
+        _ => {}
+    }
+    out
+}
