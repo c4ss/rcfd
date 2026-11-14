@@ -338,3 +338,19 @@ Negative controls:
    with translation-only cyclic rows. Recommended and taken (as ADR 0426 open question 2 for beams).
 3. The body force on a shell evaluated at the mid-surface points of the projected facet (D2), so that a warped facet's load acts
    where its stiffness acts (the rigid offsets of ADR 0432 arithmetic 7). Recommended and taken.
+
+## Amendment 1 (2026-11-14, written before any run of a check)
+
+Found on writing the tests, before any of them was run:
+
+1. **R2, set-up.** The base model of `si_shell`'s retired test (`cantilever_model`) carries a tip force of `(0, 0, 1) N` at each
+   of its two tip nodes; the retired gravity row adds gravity to it. The copy keeps that model, so the balance is `|R + rho t A g
+   + F| / (rho t A |g|)` with `F = (0, 0, 2) N` (`A = 0.1 m^2`, `t = 0.01 m`). Limit unchanged (`1e-8`).
+2. **Parameters not stated above, fixed now:** G4's shell plate is `[0, 1]^2` at `z = 2`, 2 x 2 elements, `t = 0.02`, steel
+   `nu = 0.3`, its nodes after the box's; the centrifugal load of G4 is about `z` through `(0.3, 0.2, 0)` at `omega = 40`. K1's
+   `u_z = -theta_root x` row is relative to `theta_root L` (`L = 1`). The H2 block and plate share the material (steel, `nu =
+   0.3`); the pressure acts on the element set of the plate. N2's strip has `nu = 0`, the box `nu = 0.3`. N4's beam is two Beam2
+   elements from the origin along `x` (`L = 1`, orientation `(0, 1, 0)`), clamped at the origin, `omega = 10` about `z`. The S3
+   models have the Shell4 element as element 2 (after the two Hex8 elements), thickness `0.01`.
+
+No limit changes.

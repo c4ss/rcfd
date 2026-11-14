@@ -10,7 +10,8 @@
 //! [`crate::thermal`]), then the per-node forces ([`NodalForceAt`]). On Beam2 elements a uniform line load
 //! ([`Load::LineLoad`]) and gravity (`q = rho A g`) give the consistent forces and moments of
 //! [`crate::beam::line_load_vector`] (ADR 0422). On Shell4 elements a uniform pressure along the element normals
-//! ([`Load::ShellPressure`]) gives the consistent forces and moments of [`crate::shell::pressure_load_vector`] (ADR 0432).
+//! ([`Load::ShellPressure`]) gives the consistent forces and moments of [`crate::shell::pressure_load_vector`] (ADR 0432),
+//! and gravity and the centrifugal load give those of [`crate::shell::body_load_vector`] (`t int N_i b dA`, ADR 0435).
 //!
 //! Face integrals use the face functions of Tri3, Quad4, Tri6 and the 8-node face of Hex20 ([`face_shape_functions`]) in
 //! the local face orders of ADR 0271 and ADR 0292 and the face rules of [`face_rule`] (the 8-node arms: ADR 0383); body integrals use the element's mass rule (ADR 0276 arithmetic 2: exact for
@@ -152,22 +153,38 @@ pub fn nodal_load_vector(model: &SolidModel, extra: &[NodalForceAt]) -> Result<V
                     let ra = rho[e] * section.area();
                     Ok([ra * g[0], ra * g[1], ra * g[2]])
                 };
+                // ADR 0435 D2: a Shell4 element takes the body force rho g over its thickness.
+                let shell = |e: usize, _: Vec3| -> Result<Vec3> { Ok([rho[e] * g[0], rho[e] * g[1], rho[e] * g[2]]) };
                 add_body_load_with(
                     &mut f,
                     &dofs,
                     mesh,
                     |e, _, _| Ok([rho[e] * g[0], rho[e] * g[1], rho[e] * g[2]]),
                     Some(&beam),
+                    Some(&shell),
                 )?;
             }
             Load::Centrifugal { axis, origin, omega } => {
                 let rho = densities(model, &mut density)?;
                 let (axis, origin, w2) = (*axis, *origin, omega * omega);
-                add_body_load(&mut f, &dofs, mesh, |e, ip, _| {
-                    let r = perpendicular(ip.geometry.x, axis, origin);
+                // ADR 0435 D2: a Shell4 element takes the body force rho omega^2 r_perp over its thickness.
+                let shell = |e: usize, x: Vec3| -> Result<Vec3> {
+                    let r = perpendicular(x, axis, origin);
                     let s = rho[e] * w2;
                     Ok([s * r[0], s * r[1], s * r[2]])
-                })?;
+                };
+                add_body_load_with(
+                    &mut f,
+                    &dofs,
+                    mesh,
+                    |e, ip, _| {
+                        let r = perpendicular(ip.geometry.x, axis, origin);
+                        let s = rho[e] * w2;
+                        Ok([s * r[0], s * r[1], s * r[2]])
+                    },
+                    None,
+                    Some(&shell),
+                )?;
             }
             Load::BodyForceNodal { values } => {
                 add_body_load(&mut f, &dofs, mesh, |_, ip, nodes| {
@@ -293,7 +310,7 @@ fn add_body_load<B>(f: &mut [f64], dofs: &DofMap, mesh: &SolidMesh, b: B) -> Res
 where
     B: Fn(usize, &IntegrationPoint, &[usize]) -> Result<Vec3>,
 {
-    add_body_load_with(f, dofs, mesh, b, None)
+    add_body_load_with(f, dofs, mesh, b, None, None)
 }
 
 /// The uniform line load of a beam element as its consistent nodal forces and moments (ADR 0422 D3).
@@ -326,14 +343,40 @@ fn add_shell_pressure(f: &mut [f64], dofs: &DofMap, mesh: &SolidMesh, e: usize, 
     Ok(())
 }
 
-/// [`add_body_load`] with an optional rule for Beam2 elements: the uniform line load the element carries (ADR 0422 D3).
-/// Without it, or for every other element, the element's consistent body load as before.
+/// The body load of a shell element as its consistent nodal forces and moments (ADR 0435 D2).
+fn add_shell_body_load(
+    f: &mut [f64],
+    dofs: &DofMap,
+    mesh: &SolidMesh,
+    e: usize,
+    rule: &dyn Fn(usize, Vec3) -> Result<Vec3>,
+) -> Result<()> {
+    let nodes = mesh.element_nodes(e);
+    let coords: Vec<Vec3> = nodes.iter().map(|&n| mesh.nodes()[n]).collect();
+    let fe = crate::shell::thickness_or_error(mesh, e)
+        .and_then(|t| crate::shell::body_load_vector(&coords, t, |x| rule(e, x)))
+        .map_err(|source| FemError::Element {
+            element: e,
+            source: Box::new(source),
+        })?;
+    for (a, &node) in nodes.iter().enumerate() {
+        add_force(f, dofs, node, &[fe[6 * a], fe[6 * a + 1], fe[6 * a + 2]])?;
+        add_moment(f, dofs, node, &[fe[6 * a + 3], fe[6 * a + 4], fe[6 * a + 5]])?;
+    }
+    Ok(())
+}
+
+/// [`add_body_load`] with an optional rule for Beam2 elements: the uniform line load the element carries (ADR 0422 D3),
+/// and an optional rule for Shell4 elements: the body force per unit volume of the element at a point, integrated over the
+/// thickness by [`crate::shell::body_load_vector`] (ADR 0435 D2). Without them, or for every other element, the element's
+/// consistent body load as before.
 fn add_body_load_with<B>(
     f: &mut [f64],
     dofs: &DofMap,
     mesh: &SolidMesh,
     b: B,
     beam: Option<&dyn Fn(usize) -> Result<Vec3>>,
+    shell: Option<&dyn Fn(usize, Vec3) -> Result<Vec3>>,
 ) -> Result<()>
 where
     B: Fn(usize, &IntegrationPoint, &[usize]) -> Result<Vec3>,
@@ -346,6 +389,12 @@ where
                     source: Box::new(source),
                 })?;
                 add_line_load(f, dofs, mesh, e, q)?;
+                continue;
+            }
+        }
+        if let Some(rule) = shell {
+            if mesh.element_kind(e) == crate::mesh::ElementKind::Shell4 {
+                add_shell_body_load(f, dofs, mesh, e, rule)?;
                 continue;
             }
         }

@@ -12,7 +12,8 @@
 //!
 //! Rotational unknowns (ADR 0426): the rigid field `t0 + w x (x - x_c)` has the rotation `w` at every point, so at a
 //! rotational unknown the scaled fields take their rotation; a six-unknown node of a rigid set adds the rows
-//! `theta_a - w = 0`, which hold identically on the rigid fields as the translation rows do.
+//! `theta_a - w = 0`, which hold identically on the rigid fields as the translation rows do. The rule is per node and
+//! covers the six-unknown nodes of Shell4 elements as well (ADR 0435 D3).
 
 use crate::constraint::{prescribed_equations, Prescribed};
 use crate::error::{FemError, Result, SetKind};

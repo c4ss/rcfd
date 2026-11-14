@@ -763,6 +763,7 @@ fn cantilever_model() -> SolidModel {
 }
 
 #[test]
+#[ignore = "record of ADR 0432 before ADR 0435 (F-522, shells on the transformation and body loads) retired the N2 nodal spring and gravity rows; superseded by the s1_n2_n3_refusals_after_landed copy below (maintainer standing decision, 2026-11-13)"]
 fn s1_n2_n3_refusals() {
     let mut c = Checks::new();
     // S1: a shell on four nodes of a Hex8 box.
@@ -829,6 +830,148 @@ fn s1_n2_n3_refusals() {
     let ok = matches!(&r, Err(FemError::Element { source, .. })
         if matches!(source.as_ref(), FemError::NotYetSupported { package, .. } if *package == shell::SOLID_ROUTINES));
     c.holds("N2 gravity on a shell", ok, &format!("{r:?}"));
+    // N3: invalid data.
+    let (nodes, el) = grid(1.0, 1.0, 1, 1);
+    let mut mesh = SolidMesh::new(nodes).unwrap();
+    mesh.add_block(ElementKind::Shell4, el[0].to_vec()).unwrap();
+    mesh.add_element_set("all", vec![0]).unwrap();
+    let m = model_of(mesh, material(0.3, RHO));
+    let r = solve_static(&m, &StaticOptions::default());
+    c.holds(
+        "N3 Shell4 block without property",
+        matches!(&r, Err(FemError::InvalidValue { key: "property", .. })),
+        &format!("{r:?}"),
+    );
+    let hex = hex_box([0.0; 3], [2.0, 1.0, 1.0], [2, 1, 1]).unwrap();
+    let mut m = SolidModel::new(hex);
+    let r = m.add_load(Load::shell_pressure("all", 1.0));
+    c.holds(
+        "N3 shell pressure on Hex8 elements",
+        matches!(
+            &r,
+            Err(FemError::InvalidValue {
+                key: "shell pressure",
+                ..
+            })
+        ),
+        &format!("{r:?}"),
+    );
+    let dart = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.3, 0.3, 0.0], [0.0, 1.0, 0.0]];
+    let m = model_of(shell_mesh(dart, &[[0, 1, 2, 3]], 0.01), material(0.3, RHO));
+    let r = solve_static(&m, &StaticOptions::default());
+    c.holds(
+        "N3 non-convex facet",
+        matches!(&r, Err(FemError::InvertedElement { element: 0, .. })),
+        &format!("{r:?}"),
+    );
+    c.finish();
+}
+
+/// The copy of `s1_n2_n3_refusals` after ADR 0435 (F-522): the N2 nodal spring row (R1) and gravity row (R2) are taken,
+/// a nodal body-force field is still refused (R3); every other row as registered by ADR 0432.
+#[test]
+fn s1_n2_n3_refusals_after_landed() {
+    let mut c = Checks::new();
+    // S1: a shell on four nodes of a Hex8 box.
+    let mut mesh = hex_box([0.0; 3], [2.0, 1.0, 1.0], [2, 1, 1]).unwrap();
+    let at = [[2.0, 0.0, 0.0], [2.0, 1.0, 0.0], [2.0, 1.0, 1.0], [2.0, 0.0, 1.0]];
+    let conn: Vec<usize> = at
+        .iter()
+        .map(|p| mesh.nodes().iter().position(|q| q == p).unwrap())
+        .collect();
+    let first = conn[0];
+    mesh.add_block(ElementKind::Shell4, conn).unwrap();
+    mesh.set_block_property(1, BlockProperty::shell(0.01).unwrap()).unwrap();
+    mesh.add_element_set("shell", vec![2]).unwrap();
+    let mut m = SolidModel::new(mesh);
+    m.add_material("all", material(0.3, RHO)).unwrap();
+    m.add_material("shell", material(0.3, RHO)).unwrap();
+    for comp in 0..3 {
+        m.add_constraint(Constraint::displacement("xmin", comp, 0.0)).unwrap();
+    }
+    let node_text = format!("node {first} ");
+    let shared = |r: Result<(), FemError>| -> (bool, String) {
+        match &r {
+            Err(e @ FemError::Element { element: 2, source }) => {
+                let msg = e.to_string();
+                (
+                    matches!(source.as_ref(), FemError::InvalidValue { key: "node", .. }) && msg.contains(&node_text),
+                    msg,
+                )
+            }
+            other => (false, format!("{other:?}")),
+        }
+    };
+    let (ok, msg) = shared(solve_static(&m, &StaticOptions::default()).map(|_| ()));
+    c.holds("S1 solve_static", ok, &msg);
+    let (ok, msg) = shared(modal_analysis(&m, &ModalOptions::new(2)).map(|_| ()));
+    c.holds("S1 modal_analysis", ok, &msg);
+    let (ok, msg) = shared(stiffness(&m).map(|_| ()));
+    c.holds("S1 stiffness", ok, &msg);
+    // N2: a valid shell model on the paths that do not take shells.
+    let base = cantilever_model();
+    c.holds(
+        "N2 the base model solves",
+        solve_static(&base, &StaticOptions::default()).is_ok(),
+        "",
+    );
+    // R1 (ADR 0435): the nodal spring (the transformation) is taken; root reactions, spring force and tip forces balance.
+    let mut m = base.clone();
+    m.add_support(ElasticSupport::nodal_spring("tip", 2, 1e6)).unwrap();
+    let s = rcfd_fem::mpc::solve_static_mpc(&m, &[], &[], &[], &StaticOptions::default()).unwrap();
+    let dofs = m.dof_map();
+    let reactions = s.result.reactions().unwrap();
+    let rz: f64 = [0usize, 5]
+        .iter()
+        .map(|&n| reactions[dofs.equation(n, 2).unwrap()])
+        .sum();
+    let sz: f64 = [4usize, 9]
+        .iter()
+        .map(|&n| s.support_forces[dofs.equation(n, 2).unwrap()])
+        .sum();
+    let fz = 2.0;
+    c.at_most(
+        "R1 nodal spring (transformation): |sum R_z + S_z + F_z| / |F_z|",
+        (rz + sz + fz).abs() / fz,
+        1e-10,
+    );
+    let r = rcfd_fem::nonlinear::initial_states(&base);
+    c.holds("N2 nonlinear initial states", follow_up(&r), &format!("{r:?}"));
+    let amg = StaticOptions::with_solver(StaticSolver::PreconditionedCg {
+        preconditioner: CgPreconditioner::SmoothedAggregation(ElasticAmgSettings::default()),
+        tolerance: 1e-10,
+        max_iterations: 100,
+    });
+    let r = solve_static(&base, &amg);
+    c.holds("N2 smoothed-aggregation CG", follow_up(&r), &format!("{r:?}"));
+    let r = base.check_supported();
+    c.holds("N2 check_supported (the other paths)", follow_up(&r), &format!("{r:?}"));
+    // R2 (ADR 0435, amendment 1): gravity on a shell is taken; the reactions balance gravity and the base's tip forces.
+    let g = [0.0, 0.0, -9.81];
+    let mut m = base.clone();
+    m.add_load(Load::gravity(g)).unwrap();
+    let r = solve_static(&m, &StaticOptions::default()).unwrap();
+    let dofs = m.dof_map();
+    let reactions = r.reactions().unwrap();
+    let rta = RHO * 0.01 * 1.0 * 0.1;
+    let mut sum = [rta * g[0], rta * g[1], rta * g[2] + 2.0];
+    for n in [0usize, 5] {
+        for (k, sk) in sum.iter_mut().enumerate() {
+            *sk += reactions[dofs.equation(n, k).unwrap()];
+        }
+    }
+    c.at_most(
+        "R2 gravity on a shell: |R + rho t A g + F| / (rho t A |g|)",
+        norm(sum) / (rta * norm(g)),
+        1e-8,
+    );
+    // R3 (ADR 0435): a nodal body-force field on a shell is still refused by the solid-element routines.
+    let mut m = base.clone();
+    m.add_load(Load::body_force_nodal(vec![[0.0, 0.0, -1.0]; 10])).unwrap();
+    let r = solve_static(&m, &StaticOptions::default());
+    let ok = matches!(&r, Err(FemError::Element { source, .. })
+        if matches!(source.as_ref(), FemError::NotYetSupported { package, .. } if *package == shell::SOLID_ROUTINES));
+    c.holds("R3 nodal body force on a shell", ok, &format!("{r:?}"));
     // N3: invalid data.
     let (nodes, el) = grid(1.0, 1.0, 1, 1);
     let mut mesh = SolidMesh::new(nodes).unwrap();
