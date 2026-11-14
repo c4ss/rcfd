@@ -17,7 +17,10 @@
 //!
 //! Joints ([`beam_to_solid`], [`shell_to_solid`]): a node with six unknowns follows the least-squares rigid motion of a set
 //! of solid nodes (unit weights; ADR 0456 arithmetic 4), with the rows in solved form; for a set on one line (the column
-//! of a shell node) the rotation about the line stays free.
+//! of a shell node) the rotation about the line stays free. [`beam_to_solid_with`] and [`shell_to_solid_with`] (ADR 0460,
+//! F-543) couple to the faces instead: by the L2 projection of the face field onto the reference motions
+//! ([`JointCoupling::Consistent`]: the consistent nodal forces of a linear traction; a shell edge through its interpolation)
+//! or rigidly ([`JointCoupling::Rigid`]).
 
 use crate::error::{FemError, Result, SetKind};
 use crate::loads::face_shape_functions;
@@ -1046,4 +1049,341 @@ pub fn shell_to_solid(model: &SolidModel, shell_nodes: &str, surface: &str, tole
         out.extend(coupling(model, s, &column)?);
     }
     Ok(out)
+}
+
+// ------------------------------------------------------------------------------------------------------------ consistent joints
+
+/// How a joint couples its reference nodes to the faces of a solid (ADR 0460 D1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum JointCoupling {
+    /// The face field projected in L2 onto the reference motions (`min int |u_h - C y|^2 dA`): the solid nodes receive the
+    /// consistent nodal forces of a traction in the space of the reference motions, a linear traction for a beam node
+    /// (ADR 0460 arithmetic 2).
+    Consistent,
+    /// Every face node follows the reference motion at its own position (ADR 0460 arithmetic 3); holds the face's Poisson
+    /// contraction when `nu > 0`.
+    Rigid,
+}
+
+/// The reference motion at a point: the reference nodes (indices into the reference list) with their interpolation weights,
+/// and the foot of the fibre through the point.
+type Frame = (Vec<(usize, f64)>, Vec3);
+
+fn check_reference(model: &SolidModel, node: usize) -> Result<()> {
+    let n_nodes = model.mesh().nodes().len();
+    if node >= n_nodes {
+        return Err(FemError::MissingNode {
+            role: "coupling",
+            node,
+            n_nodes,
+        });
+    }
+    let comps = model.dof_map().components(node);
+    if comps != 6 {
+        return Err(tie_error(format!(
+            "coupling node {node} has {comps} unknowns: a joint couples a beam or shell node (six unknowns)"
+        )));
+    }
+    Ok(())
+}
+
+/// The integration points of a face: position, face functions, weight times `|x_u x x_v|` (ADR 0460 arithmetic 4).
+fn face_points(face: &Face) -> Result<Vec<(Vec3, Vec<f64>, f64)>> {
+    let mut out = Vec::with_capacity(16);
+    for (&s, &ws) in G4_X.iter().zip(&G4_W) {
+        for (&r, &wr) in G4_X.iter().zip(&G4_W) {
+            let (uv, w) = if face.is_triangle() {
+                ([s * (1.0 - r), s * r], ws * wr * s)
+            } else {
+                ([2.0 * s - 1.0, 2.0 * r - 1.0], 4.0 * ws * wr)
+            };
+            let (x, xu, xv, n) = face.eval(uv)?;
+            out.push((x, n, w * norm(cross(xu, xv))));
+        }
+    }
+    Ok(out)
+}
+
+/// One integration point of a joint: its face, the face functions, the weight, the frame weights and the fibre offset.
+type JointPoint<'a> = (&'a Face, Vec<f64>, f64, Vec<(usize, f64)>, Vec3);
+
+/// The rows of a joint between the reference nodes `refs` (six unknowns each) and the faces `faces`, the reference motion
+/// at a point given by `frame` (ADR 0460 arithmetic 2 and 3), in solved form.
+fn joint_rows(
+    model: &SolidModel,
+    refs: &[usize],
+    faces: &[Face],
+    frame: &dyn Fn(Vec3) -> Frame,
+    coupling: JointCoupling,
+) -> Result<Vec<Constraint>> {
+    let dofs = model.dof_map();
+    let mesh = model.mesh();
+    let face_nodes: Vec<usize> = faces
+        .iter()
+        .flat_map(|f| f.nodes.iter().copied())
+        .collect::<BTreeSet<usize>>()
+        .into_iter()
+        .collect();
+    if face_nodes.is_empty() {
+        return Err(tie_error("joint: the surface set has no face".to_string()));
+    }
+    if let Some(&b) = refs.iter().find(|b| face_nodes.contains(b)) {
+        return Err(tie_error(format!("joint: reference node {b} is a node of the face")));
+    }
+    let need = |node: usize, c: usize| -> Result<()> {
+        if dofs.equation(node, c).is_none() {
+            return Err(FemError::MissingComponent {
+                role: "coupling",
+                node,
+                component: c,
+                available: dofs.components(node),
+            });
+        }
+        Ok(())
+    };
+    let mut out = Vec::new();
+    if coupling == JointCoupling::Rigid {
+        for &i in &face_nodes {
+            let x = mesh.nodes()[i];
+            let (w, foot) = frame(x);
+            let r = sub(x, foot);
+            for c in 0..3 {
+                need(i, c)?;
+                let (j, k) = ((c + 1) % 3, (c + 2) % 3);
+                let mut terms = vec![LinearTerm::new(i, c, 1.0)];
+                for &(q, l) in &w {
+                    if l == 0.0 {
+                        continue;
+                    }
+                    terms.push(LinearTerm::new(refs[q], c, -l));
+                    if r[k] != 0.0 {
+                        terms.push(LinearTerm::new(refs[q], 3 + j, -l * r[k]));
+                    }
+                    if r[j] != 0.0 {
+                        terms.push(LinearTerm::new(refs[q], 3 + k, l * r[j]));
+                    }
+                }
+                out.push(Constraint::linear(terms, 0.0));
+            }
+        }
+        return Ok(out);
+    }
+    // Consistent: A = int C^T C dA, G_i = int N_i C^T dA in the scaled unknowns y = (t, ell theta) per reference node.
+    let index: BTreeMap<usize, usize> = face_nodes.iter().enumerate().map(|(k, &a)| (a, k)).collect();
+    let mut points: Vec<JointPoint> = Vec::new();
+    for f in faces {
+        for (x, n, w) in face_points(f)? {
+            let (fw, foot) = frame(x);
+            points.push((f, n, w, fw, sub(x, foot)));
+        }
+    }
+    let (s2, sw) = points
+        .iter()
+        .fold((0.0, 0.0), |(a, b), p| (a + p.2 * dot(p.4, p.4), b + p.2));
+    let ell = if s2 > 0.0 && sw > 0.0 { (s2 / sw).sqrt() } else { 1.0 };
+    let nd = 6 * refs.len();
+    let mut a = vec![0.0f64; nd * nd];
+    let mut g = vec![0.0f64; face_nodes.len() * nd * 3]; // g[(i nd + q) 3 + c]
+    for (f, n, w, fw, r) in &points {
+        // C (3 x nd): for each (q, l), l [I, -[r/ell]x] in the columns 6q..6q+6; column theta_c is -[r/ell]x e_c.
+        let rs = [r[0] / ell, r[1] / ell, r[2] / ell];
+        let x = [[0.0, -rs[2], rs[1]], [rs[2], 0.0, -rs[0]], [-rs[1], rs[0], 0.0]];
+        let mut cols: Vec<(usize, [f64; 3])> = Vec::with_capacity(12);
+        for &(q, l) in fw {
+            if l == 0.0 {
+                continue;
+            }
+            for c in 0..3 {
+                let mut e = [0.0; 3];
+                e[c] = l;
+                cols.push((6 * q + c, e));
+                cols.push((6 * q + 3 + c, [-l * x[0][c], -l * x[1][c], -l * x[2][c]]));
+            }
+        }
+        for &(p, cp) in &cols {
+            for &(q, cq) in &cols {
+                a[p * nd + q] += w * dot(cp, cq);
+            }
+        }
+        for (k, &node) in f.nodes.iter().enumerate() {
+            let i = index[&node];
+            let wn = w * n[k];
+            for &(q, cq) in &cols {
+                for c in 0..3 {
+                    g[(i * nd + q) * 3 + c] += wn * cq[c];
+                }
+            }
+        }
+    }
+    let eig = rcfd_linalg::eigen::symmetric_eigen(&a, nd).map_err(|e| FemError::Solver {
+        solver: "symmetric_eigen",
+        reason: e.to_string(),
+    })?;
+    let lmax = eig.values[nd - 1];
+    let mut pinv = vec![0.0f64; nd * nd];
+    let mut null: Vec<Vec<f64>> = Vec::new();
+    for k in 0..nd {
+        let v = &eig.vectors[k];
+        if eig.values[k] <= COUPLING_NULL_TOLERANCE * lmax {
+            null.push(v[..nd].to_vec());
+        } else {
+            for p in 0..nd {
+                for q in 0..nd {
+                    pinv[p * nd + q] += v[p] * v[q] / eig.values[k];
+                }
+            }
+        }
+    }
+    if null.len() > refs.len() {
+        return Err(tie_error(format!(
+            "joint of nodes {refs:?}: the face leaves {} reference motions undetermined (at most one per node)",
+            null.len()
+        )));
+    }
+    // Free components by complete pivoting on the null basis (Gauss-Jordan): null[s][free[t]] = delta_st afterwards.
+    let m = null.len();
+    let mut free: Vec<usize> = Vec::with_capacity(m);
+    for s in 0..m {
+        let (mut best, mut col, mut row) = (-1.0f64, s, 0usize);
+        for (c, v) in null.iter().enumerate().skip(s) {
+            for (p, &e) in v.iter().enumerate() {
+                if !free.contains(&p) && e.abs() > best {
+                    (best, col, row) = (e.abs(), c, p);
+                }
+            }
+        }
+        null.swap(s, col);
+        let piv = null[s][row];
+        for e in null[s].iter_mut() {
+            *e /= piv;
+        }
+        let pivot_col = null[s].clone();
+        for (c, v) in null.iter_mut().enumerate() {
+            if c != s {
+                let f = v[row];
+                if f != 0.0 {
+                    for p in 0..nd {
+                        v[p] -= f * pivot_col[p];
+                    }
+                }
+            }
+        }
+        free.push(row);
+    }
+    let scale = |k: usize| if k % 6 < 3 { 1.0 } else { ell };
+    for d in 0..nd {
+        if free.contains(&d) {
+            continue;
+        }
+        // y_d = H_d . b + sum_s K_ds y_free[s], K_ds = null[s][d], H_d = pinv_d - sum_s K_ds pinv_free[s].
+        let kd: Vec<f64> = (0..m).map(|s| null[s][d]).collect();
+        let mut h = pinv[d * nd..(d + 1) * nd].to_vec();
+        for (s, &f) in free.iter().enumerate() {
+            for q in 0..nd {
+                h[q] -= kd[s] * pinv[f * nd + q];
+            }
+        }
+        let mut terms = vec![LinearTerm::new(refs[d / 6], d % 6, 1.0)];
+        for (s, &f) in free.iter().enumerate() {
+            let coef = kd[s] * scale(f) / scale(d);
+            if coef.abs() > 1e-14 {
+                terms.push(LinearTerm::new(refs[f / 6], f % 6, -coef));
+            }
+        }
+        for (i, &node) in face_nodes.iter().enumerate() {
+            for c in 0..3 {
+                let coef: f64 = (0..nd).map(|q| h[q] * g[(i * nd + q) * 3 + c]).sum::<f64>() / scale(d);
+                if coef.abs() > 1e-14 {
+                    need(node, c)?;
+                    terms.push(LinearTerm::new(node, c, -coef));
+                }
+            }
+        }
+        out.push(Constraint::linear(terms, 0.0));
+    }
+    Ok(out)
+}
+
+/// A beam node continuing a solid, coupled to the faces of the surface set by `coupling` (ADR 0460 D1): the reference
+/// motion at a face point `x` is `u_b + theta_b x (x - x_b)`.
+pub fn beam_to_solid_with(
+    model: &SolidModel,
+    beam_node: usize,
+    surface: &str,
+    coupling: JointCoupling,
+) -> Result<Vec<Constraint>> {
+    check_reference(model, beam_node)?;
+    let faces = faces_of(model.mesh(), surface, &|x| x)?;
+    let xb = model.mesh().nodes()[beam_node];
+    joint_rows(model, &[beam_node], &faces, &|_| (vec![(0, 1.0)], xb), coupling)
+}
+
+/// The edge of the shell nodes of the node set `shell_nodes` (the segments of the Shell4 and Shell3 element edges with both
+/// nodes in the set) continuing a solid, coupled to the faces of the surface set by `coupling` (ADR 0460 D1): the reference
+/// motion at a face point `x` with its foot `p` on the nearest segment `(k, l)` is the edge interpolation
+/// `sum_j L_j (u_j + theta_j x (x - p))`. Every face node takes part; the drilling rotations left undetermined by the face
+/// stay free.
+pub fn shell_to_solid_with(
+    model: &SolidModel,
+    shell_nodes: &str,
+    surface: &str,
+    coupling: JointCoupling,
+) -> Result<Vec<Constraint>> {
+    let mesh = model.mesh();
+    let set = mesh.node_set(shell_nodes).ok_or_else(|| FemError::UnknownSet {
+        kind: SetKind::Node,
+        name: shell_nodes.to_string(),
+    })?;
+    let refs: Vec<usize> = set.iter().copied().collect::<BTreeSet<usize>>().into_iter().collect();
+    for &r in &refs {
+        check_reference(model, r)?;
+    }
+    let local: BTreeMap<usize, usize> = refs.iter().enumerate().map(|(k, &a)| (a, k)).collect();
+    let mut segments: BTreeSet<(usize, usize)> = BTreeSet::new();
+    for e in 0..mesh.n_elements() {
+        if !matches!(
+            mesh.element_kind(e),
+            crate::mesh::ElementKind::Shell4 | crate::mesh::ElementKind::Shell3
+        ) {
+            continue;
+        }
+        let en = mesh.element_nodes(e);
+        for k in 0..en.len() {
+            let (p, q) = (en[k], en[(k + 1) % en.len()]);
+            if let (Some(&a), Some(&b)) = (local.get(&p), local.get(&q)) {
+                segments.insert((a.min(b), a.max(b)));
+            }
+        }
+    }
+    if segments.is_empty() {
+        return Err(tie_error(format!(
+            "shell edge '{shell_nodes}': no shell element edge with both nodes in the set"
+        )));
+    }
+    for (k, &r) in refs.iter().enumerate() {
+        if !segments.iter().any(|&(a, b)| a == k || b == k) {
+            return Err(tie_error(format!(
+                "shell edge '{shell_nodes}': node {r} is on no edge segment of the set"
+            )));
+        }
+    }
+    let segments: Vec<(usize, usize)> = segments.into_iter().collect();
+    let xr: Vec<Vec3> = refs.iter().map(|&r| mesh.nodes()[r]).collect();
+    let frame = |x: Vec3| -> Frame {
+        let mut best = (f64::INFINITY, 0usize, 0.0f64, [0.0; 3]);
+        for (s, &(a, b)) in segments.iter().enumerate() {
+            let d = sub(xr[b], xr[a]);
+            let lam = (dot(sub(x, xr[a]), d) / dot(d, d)).clamp(0.0, 1.0);
+            let p = [xr[a][0] + lam * d[0], xr[a][1] + lam * d[1], xr[a][2] + lam * d[2]];
+            let dist = distance(x, p);
+            if dist < best.0 {
+                best = (dist, s, lam, p);
+            }
+        }
+        let (a, b) = segments[best.1];
+        (vec![(a, 1.0 - best.2), (b, best.2)], best.3)
+    };
+    let faces = faces_of(mesh, surface, &|x| x)?;
+    joint_rows(model, &refs, &faces, &frame, coupling)
 }
