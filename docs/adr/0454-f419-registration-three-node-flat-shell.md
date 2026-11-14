@@ -366,3 +366,19 @@ Negative controls and observation:
 3. The free-plate clause read on the frequencies as written, on the 4 x 4 thick plate (arithmetic 16), with FR2 and FR3 beside it.
 4. The checkerboard mesh of the cylinder (arithmetic 13).
 5. Shell3 in the shell output of `rcfd-post` as `VTK_TRIANGLE` cells (D2).
+
+## Amendment 1 (2026-11-14, written after the registered run of commit 39af6a49, before any corrected run)
+
+1. **PO1 missed in the registered run** (`f419-scratch/run1-post.log`). Measured: on the mixed model the cell arrays of
+   `shell_fields` equal `shell::stresses` bit for bit (met); `solid_vtu_string` then refused with `InvalidValue { path:
+   "cell_type", reason: "block 1: cell type 5 is not 3, 9, 10, 12, 24 or 25" }`, so the cell types were not measured and the
+   Shell3-only model was not reached. Diagnosis: a defect of the implementation, not of the set-up: D2 mapped Shell3 to
+   `VTK_TRIANGLE` in `rcfd-post`, but the writer `rcfd_io::vtk::fe_vtu_string` accepts only the cell types of
+   `vtk_cell_nodes`, which has no triangle (not read before the registration; `rcfd-io` was not in "What was read"). The test
+   stays as the ignored record `po1_shell3_in_the_shell_output_known_miss` with its limits intact.
+2. **Correction:** `rcfd-io/src/vtk.rs` gets `pub const VTK_TRIANGLE: u8 = 5` (the linear triangle of the VTK file format, three
+   nodes) in `vtk_cell_nodes` and in the refusal message; `rcfd-post` uses it instead of its local constant. Every other cell type
+   and every byte written for them is unchanged (the match only gains an arm). The corrected test
+   `po1b_shell3_in_the_shell_output` is the same test with the same limits; it is run once after this amendment is committed.
+   Added to B2: the `rcfd-io` tests pass. By the decision rule PO1 can now only be met after an amendment made after its run, so
+   the item is **partial** whatever the corrected run gives.

@@ -66,7 +66,8 @@ fn strip(mixed: bool) -> (SolidModel, Vec<Prescribed>, Vec<NodalForceAt>) {
 }
 
 #[test]
-fn po1_shell3_in_the_shell_output() {
+#[ignore = "record of the registered run of ADR 0454 (commit 39af6a49): the cell arrays met on the mixed model (bit for bit); solid_vtu_string refused cell type 5 (rcfd_io::vtk had no triangle); corrected by amendment 1 as po1b_shell3_in_the_shell_output"]
+fn po1_shell3_in_the_shell_output_known_miss() {
     let mut missed = Vec::new();
     for mixed in [true, false] {
         let (m, pres, forces) = strip(mixed);
