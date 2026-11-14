@@ -955,6 +955,7 @@ fn pending_refusal_cases_after_beam() -> Vec<(
 }
 
 #[test]
+#[ignore = "record of ADR 0417 before ADR 0432 (F-392, Shell4) retired the shell::PENDING and Shell4.pending rows; superseded by the x1_the_scaffold_exists_after_shell_landed copy below (maintainer standing decision, 2026-11-13)"]
 fn x1_the_scaffold_exists_after_beam_landed() {
     assert_eq!(rcfd_fem::hex20::PENDING, None);
     assert_eq!(rcfd_fem::hex8x::PENDING, Some("ADR 0293"));
@@ -971,6 +972,7 @@ fn x1_the_scaffold_exists_after_beam_landed() {
 }
 
 #[test]
+#[ignore = "record of ADR 0417 before ADR 0432 (F-392, Shell4) retired the Shell4 row (refusals naming ADR 0295); superseded by the x3_placeholder_elements_refuse_after_shell_landed copy below (maintainer standing decision, 2026-11-13)"]
 fn x3_placeholder_elements_refuse_after_beam_landed() {
     let d = steel().elasticity_matrix().unwrap();
     for (kind, package) in [
@@ -1010,6 +1012,7 @@ fn x3_placeholder_elements_refuse_after_beam_landed() {
 }
 
 #[test]
+#[ignore = "record of ADR 0417 before ADR 0432 (F-392, Shell4) retired the R3 row; superseded by the r1_to_r9_static_solve_refuses_each_new_variant_after_shell_landed copy below (maintainer standing decision, 2026-11-13)"]
 fn r1_to_r9_static_solve_refuses_each_new_variant_after_beam_landed() {
     let cases = pending_refusal_cases_after_beam();
     assert_eq!(cases.len(), 3);
@@ -1026,12 +1029,142 @@ fn r1_to_r9_static_solve_refuses_each_new_variant_after_beam_landed() {
 }
 
 #[test]
+#[ignore = "record of ADR 0417 before ADR 0432 (F-392, Shell4) retired the R3 row; superseded by the r10_refused_on_every_static_path_after_shell_landed copy below (maintainer standing decision, 2026-11-13)"]
 fn r10_refused_on_every_static_path_after_beam_landed() {
     let cg = StaticOptions::with_solver(StaticSolver::ConjugateGradient {
         tolerance: 1e-10,
         max_iterations: 10_000,
     });
     for (name, model, item, variant, location, package) in pending_refusal_cases_after_beam() {
+        expect_refusal(
+            &format!("{name} cg"),
+            solve_static_with(&model, &[], &[], &cg),
+            item,
+            variant,
+            &location,
+            package,
+        );
+        let extra = [Prescribed::new(0, 0, 0.0)];
+        expect_refusal(
+            &format!("{name} threads 8"),
+            solve_static_with(&model, &extra, &[], &StaticOptions::default().threads(8)),
+            item,
+            variant,
+            &location,
+            package,
+        );
+        expect_refusal(
+            &format!("{name} report"),
+            solve_static_report(&model, &[], &[], &StaticOptions::default()),
+            item,
+            variant,
+            &location,
+            package,
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------------------------------------------- copies
+// Copies of X1, X3, R1 to R9 and R10 after ADR 0432 (F-392, Shell4): shell::PENDING and Shell4.pending are None, the
+// solid-element routines of Shell4 refuse naming shell::SOLID_ROUTINES, and the R3 model (a shell on nodes of the Hex8 box,
+// without a Shell property) is refused by the shell model checks (si_shell.rs S1, N3), so its row is retired. Every other row
+// as registered.
+
+/// The packages that have landed after ADR 0432 (Shell4): R3 is retired as well.
+const LANDED_AFTER_SHELL: [&str; 8] = ["R1", "R2", "R3", "R5", "R6", "R7", "R8", "R9"];
+
+fn pending_refusal_cases_after_shell() -> Vec<(
+    &'static str,
+    SolidModel,
+    &'static str,
+    &'static str,
+    String,
+    &'static str,
+)> {
+    refusal_cases()
+        .into_iter()
+        .filter(|c| !LANDED_AFTER_SHELL.contains(&c.0))
+        .collect()
+}
+
+#[test]
+fn x1_the_scaffold_exists_after_shell_landed() {
+    assert_eq!(rcfd_fem::hex20::PENDING, None);
+    assert_eq!(rcfd_fem::hex8x::PENDING, Some("ADR 0293"));
+    assert_eq!(rcfd_fem::beam::PENDING, None);
+    assert_eq!(rcfd_fem::shell::PENDING, None);
+    assert_eq!(rcfd_fem::mpc::PENDING, None);
+    assert_eq!(rcfd_fem::cyclic::PENDING, None);
+    assert_eq!(ElementKind::Hex20.nodes_per_element(), 20);
+    assert_eq!(ElementKind::Hex20.pending(), None);
+    assert_eq!(ElementKind::Beam2.pending(), None);
+    assert_eq!(ElementKind::Shell4.pending(), None);
+    assert!(ElementKind::Hex20.is_solid() && !ElementKind::Beam2.is_solid() && !ElementKind::Shell4.is_solid());
+    assert_eq!(SolidFormulation::BBar.pending(), Some("ADR 0293"));
+}
+
+#[test]
+fn x3_placeholder_elements_refuse_after_shell_landed() {
+    let d = steel().elasticity_matrix().unwrap();
+    for (kind, package) in [
+        (ElementKind::Beam2, rcfd_fem::beam::SOLID_ROUTINES),
+        (ElementKind::Shell4, rcfd_fem::shell::SOLID_ROUTINES),
+    ] {
+        let el = element_for(kind);
+        let n = kind.nodes_per_element();
+        let coords: Vec<Vec3> = (0..n).map(|a| [a as f64, (a * a) as f64, 1.0]).collect();
+        let u = vec![0.0; 3 * n];
+        let name = kind.name();
+        expect_refusal(
+            "stiffness",
+            el.stiffness(&coords, &d),
+            "element kind",
+            name,
+            "element routines",
+            package,
+        );
+        expect_refusal(
+            "integration_points",
+            el.integration_points(&coords, quadrature::gauss_2()),
+            "element kind",
+            name,
+            "element routines",
+            package,
+        );
+        expect_refusal(
+            "strain_at",
+            el.strain_at(&coords, &u, [0.0; 3]),
+            "element kind",
+            name,
+            "element routines",
+            package,
+        );
+    }
+}
+
+#[test]
+fn r1_to_r9_static_solve_refuses_each_new_variant_after_shell_landed() {
+    let cases = pending_refusal_cases_after_shell();
+    assert_eq!(cases.len(), 2);
+    for (name, model, item, variant, location, package) in cases {
+        expect_refusal(
+            name,
+            solve_static(&model, &StaticOptions::default()),
+            item,
+            variant,
+            &location,
+            package,
+        );
+    }
+}
+
+#[test]
+fn r10_refused_on_every_static_path_after_shell_landed() {
+    let cg = StaticOptions::with_solver(StaticSolver::ConjugateGradient {
+        tolerance: 1e-10,
+        max_iterations: 10_000,
+    });
+    for (name, model, item, variant, location, package) in pending_refusal_cases_after_shell() {
         expect_refusal(
             &format!("{name} cg"),
             solve_static_with(&model, &[], &[], &cg),

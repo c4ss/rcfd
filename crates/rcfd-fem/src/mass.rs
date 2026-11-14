@@ -62,11 +62,15 @@ pub fn consistent(model: &SolidModel) -> Result<CsrMatrix> {
 }
 
 /// The consistent mass matrix with `threads` workers (`None`: the available parallelism); bit-identical for any value. A
-/// Beam2 element gives [`crate::beam::element_mass`] (ADR 0417 D6).
+/// Beam2 element gives [`crate::beam::element_mass`] (ADR 0417 D6), a Shell4 element [`crate::shell::element_mass`] (ADR
+/// 0432 D6).
 pub fn consistent_with(model: &SolidModel, threads: Option<usize>) -> Result<CsrMatrix> {
     assemble_with(model, threads, |ctx| {
         if ctx.kind == crate::mesh::ElementKind::Beam2 {
             return crate::beam::model_element_mass(model.mesh(), ctx.element, ctx.coords, ctx.material);
+        }
+        if ctx.kind == crate::mesh::ElementKind::Shell4 {
+            return crate::shell::model_element_mass(model.mesh(), ctx.element, ctx.coords, ctx.material);
         }
         element_mass(element_for(ctx.kind), ctx.coords, ctx.material.density())
     })

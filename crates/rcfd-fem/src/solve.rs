@@ -175,8 +175,9 @@ pub fn solve_static_report(
     options: &StaticOptions,
 ) -> Result<(SolidResult, SolveReport)> {
     model.validate()?;
-    // ADR 0417 D4: the elimination path takes beams; the transformation path refuses them (its own check).
-    model.check_supported_with_beams()?;
+    // ADR 0417 D4, ADR 0432 D3: the elimination path takes beams and shells; the transformation path takes beams and
+    // refuses shells (its own check).
+    model.check_supported_with_structures()?;
     if options.refinement > 0 {
         check_refinement(model, options)?;
     }
@@ -190,18 +191,24 @@ pub fn solve_static_report(
         ..
     } = &options.solver
     {
-        // ADR 0417 D4: the rigid-body modes of the multigrid are those of three-unknown nodes.
+        // ADR 0417 D4, ADR 0432 D3: the rigid-body modes of the multigrid are those of three-unknown nodes.
+        use crate::mesh::ElementKind::{Beam2, Shell4};
         if let Some(b) = model
             .mesh()
             .blocks()
             .iter()
-            .position(|b| b.kind() == crate::mesh::ElementKind::Beam2)
+            .position(|b| matches!(b.kind(), Beam2 | Shell4))
         {
+            let kind = model.mesh().blocks()[b].kind();
             return Err(FemError::NotYetSupported {
                 item: "element kind",
-                variant: "Beam2",
+                variant: kind.name(),
                 location: format!("block {b}, solver cg-amg-rbm"),
-                package: crate::beam::FOLLOW_UP,
+                package: if kind == Beam2 {
+                    crate::beam::FOLLOW_UP
+                } else {
+                    crate::shell::FOLLOW_UP
+                },
             });
         }
     }

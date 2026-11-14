@@ -35,19 +35,16 @@ impl DofMap {
     }
 
     /// The numbering a mesh needs: three translations per node, and six unknowns (the translations, then the small
-    /// rotations about x, y, z) at each node of a Beam2 element (ADR 0417 D1). A mesh without a Beam2 block gets
-    /// `DofMap::uniform(n, 3)`.
+    /// rotations about x, y, z) at each node of a Beam2 element (ADR 0417 D1) or of a Shell4 element (ADR 0432 D1). A mesh
+    /// without a Beam2 or Shell4 block gets `DofMap::uniform(n, 3)`.
     pub fn for_mesh(mesh: &SolidMesh) -> DofMap {
-        if mesh
-            .blocks()
-            .iter()
-            .all(|b| b.kind() != crate::mesh::ElementKind::Beam2)
-        {
+        use crate::mesh::ElementKind::{Beam2, Shell4};
+        if mesh.blocks().iter().all(|b| !matches!(b.kind(), Beam2 | Shell4)) {
             return DofMap::uniform(mesh.nodes().len(), 3);
         }
         let mut counts = vec![3; mesh.nodes().len()];
         for e in 0..mesh.n_elements() {
-            if mesh.element_kind(e) == crate::mesh::ElementKind::Beam2 {
+            if matches!(mesh.element_kind(e), Beam2 | Shell4) {
                 for &n in mesh.element_nodes(e) {
                     counts[n] = 6;
                 }
@@ -360,6 +357,16 @@ pub enum Load {
         /// Force per unit length on each element.
         force: Vec3,
     },
+    /// A uniform pressure, Pa, on every element of an element set of Shell4 elements, along each element's normal `e_3`
+    /// (positive pushes the surface towards `+e_3`; ADR 0432 D5). Its nodal loads are the consistent loads of
+    /// [`crate::shell::pressure_load_vector`].
+    #[non_exhaustive]
+    ShellPressure {
+        /// Element set name.
+        set: String,
+        /// Pressure on each element.
+        pressure: f64,
+    },
     /// A uniform traction on a surface set, Pa.
     #[non_exhaustive]
     Traction {
@@ -428,6 +435,13 @@ impl Load {
         Load::LineLoad {
             set: set.to_string(),
             force,
+        }
+    }
+    /// A uniform pressure along the element normals on every element of an element set of Shell4 elements (ADR 0432).
+    pub fn shell_pressure(set: &str, pressure: f64) -> Load {
+        Load::ShellPressure {
+            set: set.to_string(),
+            pressure,
         }
     }
     /// A uniform traction on a surface set.
@@ -683,21 +697,30 @@ impl SolidModel {
     }
 
     /// Refuses an element kind or a solid formulation whose work package has not landed, naming it and its block (ADR
-    /// 0291 D6), and a Beam2 block, which only the paths of ADR 0417 D4 take, naming [`crate::beam::FOLLOW_UP`]. A model of
-    /// the basic kinds with the default formulation passes.
+    /// 0291 D6), a Beam2 block, which only the paths of ADR 0417 D4 take, naming [`crate::beam::FOLLOW_UP`], and a Shell4
+    /// block, which only the paths of ADR 0432 D3 take, naming [`crate::shell::FOLLOW_UP`]. A model of the basic kinds with
+    /// the default formulation passes.
     pub fn check_elements_supported(&self) -> Result<()> {
-        self.check_elements(false)
+        self.check_elements(false, false)
     }
 
     /// As [`SolidModel::check_elements_supported`] for a path that takes beams (ADR 0417 D4): a Beam2 block passes, and the
     /// model's beams are checked by [`crate::beam::check_beam_model`] (a Beam property on every Beam2 block, no node shared
-    /// with a solid element, a frame for every beam element).
+    /// with a solid element, a frame for every beam element). A Shell4 block is refused.
     pub fn check_elements_supported_with_beams(&self) -> Result<()> {
-        self.check_elements(true)?;
+        self.check_elements(true, false)?;
         crate::beam::check_beam_model(self)
     }
 
-    fn check_elements(&self, beams: bool) -> Result<()> {
+    /// As [`SolidModel::check_elements_supported_with_beams`] for a path that also takes shells (ADR 0432 D3): a Shell4
+    /// block passes, and the model's shells are checked by [`crate::shell::check_shell_model`].
+    pub fn check_elements_supported_with_structures(&self) -> Result<()> {
+        self.check_elements(true, true)?;
+        crate::beam::check_beam_model(self)?;
+        crate::shell::check_shell_model(self)
+    }
+
+    fn check_elements(&self, beams: bool, shells: bool) -> Result<()> {
         for (b, block) in self.mesh.blocks().iter().enumerate() {
             if let Some(package) = block.kind().pending() {
                 return Err(FemError::NotYetSupported {
@@ -725,6 +748,15 @@ impl SolidModel {
                     package: crate::beam::FOLLOW_UP,
                 });
             }
+            // ADR 0432 D3: a path that does not take shells refuses them.
+            if !shells && block.kind() == crate::mesh::ElementKind::Shell4 {
+                return Err(FemError::NotYetSupported {
+                    item: "element kind",
+                    variant: block.kind().name(),
+                    location: format!("block {b}"),
+                    package: crate::shell::FOLLOW_UP,
+                });
+            }
         }
         Ok(())
     }
@@ -740,6 +772,12 @@ impl SolidModel {
     /// As [`SolidModel::check_supported`] for a path that takes beams (ADR 0417 D4).
     pub fn check_supported_with_beams(&self) -> Result<()> {
         self.check_elements_supported_with_beams()?;
+        self.check_supports()
+    }
+
+    /// As [`SolidModel::check_supported`] for a path that takes beams and shells (ADR 0432 D3).
+    pub fn check_supported_with_structures(&self) -> Result<()> {
+        self.check_elements_supported_with_structures()?;
         self.check_supports()
     }
 
@@ -795,6 +833,22 @@ impl SolidModel {
                             key: "line load",
                             reason: format!(
                                 "element {e} of the set '{set}' is a {} element: a line load acts on Beam2 elements",
+                                kind.name()
+                            ),
+                        });
+                    }
+                }
+            }
+            Load::ShellPressure { set, pressure } => {
+                self.need_set(SetKind::Element, set)?;
+                finite("pressure", *pressure)?;
+                for &e in self.mesh.element_set(set).expect("checked") {
+                    let kind = self.mesh.element_kind(e);
+                    if kind != crate::mesh::ElementKind::Shell4 {
+                        return Err(FemError::InvalidValue {
+                            key: "shell pressure",
+                            reason: format!(
+                                "element {e} of the set '{set}' is a {} element: a shell pressure acts on Shell4 elements",
                                 kind.name()
                             ),
                         });
