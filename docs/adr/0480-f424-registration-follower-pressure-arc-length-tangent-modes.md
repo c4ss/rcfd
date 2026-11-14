@@ -411,3 +411,103 @@ run once, with a fast test on the same code path.
    quadratic convergence.
 4. **The two-bar truss of solid bars.** Taken: bipyramidal Tet4 bars (D6, arithmetic 5), the only solid bars found for which
    the closed form is the FE solution; a prismatic bar would test the end conditions, not the continuation.
+
+## Addendum 1 (2026-11-14): results
+
+Runs: `sa_follower` and `sa_arclength` once each at commit 70b552a2 (`--release -- --nocapture --test-threads 1`;
+`f424-scratch/run1-follower.log`, `run1-arclength.log`). N1 was recorded at the base 4c422025 (`n1-base.log`) before any
+library code and passed at 70b552a2. Then the whole `rcfd-fem` suite in release (611 passed, 0 failed, 145 ignored; it runs
+the two registered files a second time, both passed), `baseline_hashes` of `rcfd-api` (3 passed, 1 ignored), `docs_site` of
+`rcfd-cli` (2 passed). No limit was changed after a run.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| S1 Hex8, Hex20, Tet4, Tet10 | `<= 1e-6` | `2.43e-10, 3.55e-10, 1.45e-10, 1.29e-10` | yes |
+| S2 ring, reduced `K_p` asymmetry | `<= 1e-11` | `3.41e-16` | yes |
+| S3 the S1 elements | `>= 1e-3` | `2.0, 1.98, 2.0, 2.0` | yes |
+| S4 follower at `u = 0` against the dead pressure | equal bits | equal on the four elements and the ring | yes |
+| R1 steps 7 to 20 (`lambda >= 1.2`) and the last | `<= 1e-2` | `8.44e-3` falling to `6.71e-3` | yes |
+| R1b steps 1 to 6 | recorded | `9.84e-3 .. 8.63e-3` | recorded |
+| R2 follower; dead | `<= 1e-3` | `6.3e-7 .. 7.3e-7`; `6.5e-7 .. 8.6e-7` | yes |
+| R3 dead, last step | `<= 2e-2`; `>= 0.3` | `1.021e-2`; `0.398` (final stretch 1.384) | yes |
+| R4 follower final stretch | `>= 1.5` | `1.50717` | yes |
+| B1 with the load stiffness | `<= 2e-2` | `3.45e-3` (`p_cr = 3.0104 E I/R^3`) | yes |
+| B2 without | `<= 3e-2` | `1.64e-2` (`3.9345 E I/R^3`) | yes |
+| B3 correlation with `cos 2 theta` | `>= 0.99` | `1.0, 1.0` | yes |
+| A1 | `<= 1e-6` | `1.61e-13` | yes |
+| A2 | stop at `w >= 2.2 h` within 400 | stopped, 88 points, `w_last = 2.2086 h` | yes |
+| A3 | `<= 5e-3` | `6.19e-4` | yes |
+| A4 | `<= 1e-10` | `8.5e-15` | yes |
+| A5 negative pivots 0, 1, 0 | holds | holds (264 iterations, 0 halvings, `c = 4.47e-3`) | yes |
+| A6 load control to `1.2 P_max` | `Err`, largest in `[0.97, 1.0] P_max` | `Err(Solver)`, largest `0.9975 P_max` | yes |
+| A7 | `<= 5e-3` | `3.04e-4` | yes |
+| M1 modes 1, 2 at `eps = 1e-3` | `<= 1e-2` | `2.83e-5, 2.22e-5` | yes |
+| M1b tension increments | recorded | `5.27e-4, 7.68e-4` | recorded |
+| M2 at `eps = 1e-5` | `<= 1e-4` | `2.7e-8, 8.8e-8` | yes |
+| M3 `0.2 omega_0` (`omega_0 = 255.7545` rad/s), modes 1 to 4 | `<= 1e-4` | `1.22e-5, 1.17e-5, 6.4e-6, 6.4e-6` | yes |
+| M4 `0.5 omega_0`, modes 1 to 4 | recorded | `7.5e-5, 6.0e-5, 4.0e-5, 4.0e-5` | recorded |
+| M4 `1 omega_0` | recorded | `2.85e-4, 1.55e-4, 1.58e-4, 1.55e-4` | recorded |
+| M4 `2 omega_0` | recorded | `1.02e-3, 2.96e-4, 6.21e-4, 5.84e-4` | recorded |
+| M5 without the centrifugal follower | `>= 1e-3` | `1.96e-2` | yes |
+| M6 `tangent_modes` at `u = 0` against `modal_analysis` | `<= 1e-8` | `0, 0` | yes |
+| N1 default bits | exact | the 9 digests equal | yes |
+| N2 `baseline_hashes` | pass | pass | yes |
+| X1 the `_after_f424` copy | pass | pass; the earlier record ignored | yes |
+
+M1 came out about thirty times under the estimate of arithmetic 7 (`9e-4`). This is recorded and not diagnosed further; the
+limit is met by more than two decades.
+
+### Mutations (scratch copy of 70b552a2 by `git archive`, one at a time, `f424-scratch/mutate.py`, `mutations.log`)
+
+| Id | Caught by |
+|---|---|
+| MU1 `K_p` sign | S1 (all four, `2.0`), B1 (`0.89`); the ring test also fails at step 1 (singular tangent) |
+| MU2 second term of `K_p` dropped | S1 (`0.87 .. 1.06`); B1 not caught |
+| MU3 `f_p` on the reference face | S1 (`1.0`), R1 (steps 9 to 20), R2 (every step, `3.1e-2` and up), R4 |
+| MU4 contribution adds `+f_p` | the ring test: the Newton driver fails at step 1 (singular tangent), R1 to R4 not reached |
+| MU5 the root of the smaller dot product | the truss test: `trace` fails at point 1 after 5 halvings, A1 to A7 not reached |
+| MU6 `u` by `du_r` only | the truss test: `trace` fails at point 1 (not converged in 20 iterations), A4 not reached |
+| MU7 centrifugal tangent sign | M3 (`1.97e-2, 1.90e-2, 5.2e-4, 5.3e-4`) |
+| MU8 linear `K` in `tangent_modes` | M1 (`5.5e-2, 2.9e-2`), M2 (`6.0e-4, 3.1e-4`), M3 (the eigensolver refuses the indefinite matrix) |
+| MU9 `factors_with` ignores `extra` | B1 (`0.311`) |
+
+Nine of nine caught. MU4, MU5 and MU6 are caught by an error of the solve inside the registered test before the named check is
+evaluated (the test fails). MU2 is caught by S1 alone where S1 and B1 were planned.
+
+### Deviations
+
+- After the runs, `cargo clippy -p rcfd-fem --all-targets -- -D warnings` refused `if !(disc >= 0.0)` in `arclength.rs`
+  (`neg_cmp_op_on_partial_ord`). Commit 5576cd9e writes it `if disc.is_nan() || disc < 0.0`, which takes the same branch for
+  every value, NaN included. Clippy is clean after it; fmt was clean before and after. The registered tests were not run again
+  after this edit (each registered run is made once); the library compiles under clippy at that commit.
+- None other.
+
+### Not run
+
+- The whole workspace suite (the brief). No case-file key was added (b5; open question 1). No unsymmetric factor of the load
+  stiffness and no arc-length load direction from the contributions (see the limits above).
+
+### Decision
+
+**done** by the registered rule: every check met, every planned mutation caught, fmt and clippy clean, N1 and N2 unchanged.
+
+### Remaining questions (recommendations for the lead)
+
+- **Q1** (case-file key): as registered, `follower_pressure = { surface, pressure }` and `continuation = { arc_length,
+  max_points, stop_displacement }`, recommended and not added.
+- **Q2** (MU4 to MU6 caught by an error, not by the named check): options (a) accept, since a failed solve fails the test;
+  (b) add checks that evaluate the path up to the failure. Recommendation (a).
+
+## For the lead: roadmap entries
+
+Proposed status of F-424: **done**. Note:
+
+> Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. ADR 0480, 2026-11-14 (registration of stub ADR 0327): rcfd_fem::follower (stub of ADR 0440 filled, PENDING None): FollowerPressure on a surface set of solid faces, the force on the current face and its load stiffness (the full matrix for checks, the symmetric part in the driver), a Contribution of the Newton driver; CentrifugalFollower (the deformation-dependent centrifugal load); buckling with the load stiffness (buckling::factors_with); tangent_modes about a converged nonlinear state. rcfd_fem::arclength (filled, PENDING None): trace with the spherical constraint of Crisfield as a per-iteration load-factor control of the driver's own attempt (no second Newton loop), with halving and doubling back of the arc length. Load stiffness against central differences 1.3e-10 .. 3.6e-10 (limit 1e-6). Ring (t/R 0.02, nu 0) to the stretch 1.507: thin law within 8.4e-3 for lambda >= 1.2 (limit 1e-2; the thick-ring ODE within 7.3e-7), dead pressure off by lambda (+0.398). Ring buckling 3.0104 E I/R^3 with the load stiffness (limit 2 percent), 3.9345 without (limit 3 percent). Two-bar truss of bipyramidal Tet4 bars to w = 2.2086 h in 88 points: closed form within 1.6e-13 P_max (limit 1e-6), limit load within 6.2e-4 (limit 5e-3), negative pivots 0, 1, 0; load control fails at 0.9975 P_max. Tangent modes: stretched beam within 2.8e-5 of F-395 (limit 1e-2), 8.8e-8 at the small stretch (limit 1e-4); rotating beam at 0.2 w_0 within 1.2e-5 of F-396 (limit 1e-4), recorded 1.0e-3 at 2 w_0. Nine of nine mutations caught; default bits and baseline hashes unchanged. Done by the registered rule.
+
+Follow-ups (title, deps, acceptance), for the lead to number or drop:
+
+> (new item, number for the lead) Arc-length with a follower reference load and an unsymmetric factor of the load stiffness (deps F-424). Every limit not stated here is registered in the ADR before the run. The load direction of the arc-length iteration includes the derivative of the contributions with the load factor, so that a reference load made only of follower pressure is traced; a ring under follower internal pressure traced by arc-length reproduces the load-controlled path of ADR 0480 within 1e-6 at the common load factors; an unsymmetric factor of the tangent gives quadratic convergence on a free-edged follower load (registered rate), and the symmetric path keeps its bits.
+
+> (new item, number for the lead) Follower pressure on shells (deps F-424). Every limit not stated here is registered in the ADR before the run. ShellPressure gains a follower form on the current mid-surface with its load stiffness, against central differences within 1e-6 on Shell4 and Shell3; a thin cylinder of shells under follower internal pressure follows p = E t (lambda^2 - 1)/(2 R) within 1 percent to the stretch 1.5; the dead ShellPressure keeps its bits.
+
+> (case-file key, for the lead) follower_pressure = { surface, pressure } with the nonlinear static study, and continuation = { arc_length, max_points, stop_displacement } for arclength::trace (ADR 0480 open question 1); not added.
