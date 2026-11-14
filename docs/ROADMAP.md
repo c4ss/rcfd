@@ -11367,7 +11367,7 @@ fixed by the item's registration ADR before any code.
     from the frozen-modulus root of F-582 by a registered amount. A 3-D cantilever with unequal weights, full basis
     against truncated basis, registers the truncation error. Models without the material keep their bits.
   - note: Structural solver, advanced tier. Follow-up of F-582 (ADR 0495, 2026-11-14).
-- [ ] **F-587** B-bar and F-bar Hex8 in the nonlinear driver (J2, creep, viscoelastic, geometric nonlinearity)
+- [~] **F-587** B-bar and F-bar Hex8 in the nonlinear driver (J2, creep, viscoelastic, geometric nonlinearity)
   - depends on: F-390, F-411, F-397
   - acceptance: Every limit not stated here is registered in the ADR before the run. The BBar formulation of F-390 taken
     by the nonlinear driver: at small strain the strain Bbar u at the points and the tangent sum w Bbar^T C_t Bbar, with
@@ -11375,7 +11375,13 @@ fixed by the item's registration ADR before any code.
     differences within 1e-6; the F-390 patch test within 1e-10 through the driver; the J2 thick cylinder in plane strain
     and the creep cylinder of ADR 0489 point-wise within limits registered there, full integration the registered
     locking control; the Full results of ADR 0404, 0475, 0485 and 0489 bit-identical.
-  - note: Structural solver, intermediate tier. Follow-up of F-390 (ADR 0493, 2026-11-14).
+  - note: Structural solver, intermediate tier. Follow-up of F-390 (ADR 0493, 2026-11-14). Partial (ADR 0506,
+    2026-11-12/14): BBar taken by the nonlinear driver as a variational F-bar on the total Lagrangian kinematics
+    (element mean of det F); tangent at rest equal to the B-bar stiffness to 4e-16, central differences to 1e-8 (SVK,
+    J2, creep, viscoelastic), patch tests to 5e-15, J2 cylinder at nu 0.499 within 1.1e-2 (Full 1.8 to 2.2), creep
+    cylinder within 1.6e-2 at 20 t* (Full 0.36); Incompatible refused; defaults bit-identical. Missed: the registered
+    growth bound C4 (6.0e-3 against 2e-3 from 5 t* to 20 t*), diagnosed as finite-strain drift against the small-strain
+    closed form.
 - [ ] **F-588** The Hex8 formulations on the remaining linear paths (temperature load, per-point materials, geometric stiffness, damped and direct harmonic solves, patch recovery)
   - depends on: F-390
   - acceptance: Every limit not stated here is registered in the ADR before the run. The refusals of ADR 0493 D5 lifted
