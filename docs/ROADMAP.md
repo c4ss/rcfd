@@ -10966,7 +10966,7 @@ fixed by the item's registration ADR before any code.
     manufactured solution of F-378 (Hex20 and Tet10 at n = 8, 16 and a finer heavy record where feasible) abs(theta - 1)
     on each mesh is at most max(abs(theta - 1) on the previous mesh, 1e-2); the results of F-432 keep their bits.
   - note: Structural solver, advanced tier. Follow-up of F-432 (ADR 0478, 2026-11-14).
-- [ ] **F-569** Static correction vectors for the split modes of a sector index
+- [~] **F-569** Static correction vectors for the split modes of a sector index
   - depends on: F-555
   - acceptance: Every limit not stated here is registered in the ADR before the run. The basis of
     RotatingSector::split_modes optionally adds the static correction vectors K_eff^-1 G phi_i of the F-396 harmonic
@@ -10974,7 +10974,21 @@ fixed by the item's registration ADR before any code.
     of ADR 0411 with 4 harmonic modes per index at 0.4 and 0.8 omega_ref the lowest split frequency of every index
     equals RotatingSector::whirl_modes within 1e-5, and eta agrees with the measured error within 10 percent where it
     exceeds 1e-9; without the option every result bit-identical.
-  - note: Structural solver, advanced tier. Follow-up of F-555 (ADR 0481, 2026-11-14).
+  - note: Structural solver, advanced tier (plan ADR 0310). PARTIAL. Size S. ADR 0482, 2026-11-14:
+    RotatingOptions::split_correction (off by default) adds to the basis of RotatingSector::split_modes and
+    split_campbell the static correction vectors K_b^-1 C_r q_i of the F-396 harmonic modes of each index (reduced
+    coordinates, M-orthonormalised by the shared m_orthonormalise of ADR 0464 and 0474, dependent vectors dropped by its
+    1e-8 rule) and reports for every split mode at a stable speed the first-order Ritz error eta from the split mode
+    alone (complement-projected correction equation, MINRES preconditioned by K_b^-1). On the disc sector of ADR 0411
+    with 4 modes per index at 0.4 and 0.8 omega_ref the lowest split frequency of every index equals
+    RotatingSector::whirl_modes within 1.4e-7 (without the option 4.7e-6 to 8.9e-5) and the worst matched error falls
+    from 3.5e-3 to 4.5e-5; with 41 modes the corrections complete the space and the split frequencies equal the
+    whole-sector solve within 2.1e-13. Missed: eta agrees with the measured error within 10 percent only on k = 0
+    (err/eta up to 2.62 on k = 1 to 3), because the corrected basis is not invariant and the first-order estimate
+    neglects its coupling with the other Ritz vectors (ADR 0481's eta from the exact mode overestimates by about the
+    inverse factor). Without the option bit-identical (6 plus 13 digests). Five of seven mutations caught; the two that
+    change only the value of eta are seen only by the missed check. Follow-up for a second-order Ritz error. Follow-up
+    F-575.
 - [ ] **F-570** Energy-momentum conserving step (Simo and Tarnow) for nonlinear transient dynamics
   - depends on: F-423
   - acceptance: Every limit not stated here is registered in the ADR before the run. The spinning bar of ADR 0479 over
@@ -11007,3 +11021,12 @@ fixed by the item's registration ADR before any code.
     naming the ANDES membrane of ADR 0466; on the twisted strip of ADR 0473 the check fires at 15 and 30 degrees of
     twist and not on the flat strip; without the option every result and message bit-identical.
   - note: Structural solver, advanced tier. Optional, low priority. Follow-up of F-556 (ADR 0483, 2026-11-14).
+- [ ] **F-575** Second-order Ritz error of the corrected sector split modes
+  - depends on: F-569
+  - acceptance: Every limit not stated here is registered in the ADR before the run. RotatingSector::split_modes with
+    split_correction reports beside the eta of ADR 0482 the Ritz error of the Schur-complemented projected problem (the
+    coupling of the complement with every basis vector: one complement solve per basis vector and one more dense
+    quadratic solve); on the disc sector of ADR 0411 with 4 harmonic modes per index at 0.4 and 0.8 omega_ref it agrees
+    with the measured error of every matched mode within 10 percent where it exceeds 1e-9, and the results of ADR 0482
+    keep their bits.
+  - note: Structural solver, advanced tier. Follow-up of F-569 (ADR 0482, 2026-11-14).
