@@ -122,3 +122,54 @@ which shows the faces and the measure can see MU4.
 1. "Relative" read as relative to the largest nodal load magnitude of the reference (definition above): taken; a per-node ratio
    is undefined at nodes with zero load and meaningless where one component is zero.
 2. A new test file rather than an edit of `sb_deck_loads.rs` (existing tests are not edited): taken.
+
+## Addendum 1: results (2026-11-14)
+
+The registered run: commit of the test file (after the registration commit 97e97162), once, release, `cargo test -p rcfd-post
+--release --test sb_deck_loads_np -- --nocapture --test-threads=1` (log `w49i-work/f523-scratch/run1.log`): 1 test passed.
+Afterwards only `rustfmt` was applied to the test file (line wrapping, no change of any number or limit). No library file was
+changed (test-only, as expected).
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| B1 trapezoid, deck vs `Load::pressure`, node by node | <= 1e-14 | 0 (bit-identical) | yes |
+| B2 warped, same | <= 1e-14 | 0 (bit-identical) | yes |
+| B3 strip of two trapezoids (shared nodes), same | <= 1e-14 | 0 (bit-identical) | yes |
+| D1 trapezoid, lumped vs `Load::pressure` | > 1e-2 | 1.0000e-1 (estimate 0.100) | yes |
+| D2 warped, lumped | > 1e-2 | 4.1712e-2 (estimate 0.0417) | yes |
+| D3 strip, lumped | > 1e-2 | 1.0000e-1 (estimate about 0.1) | yes |
+| R1 trapezoid `abs(F_n - F_d)/S_d`; `abs(M_n - M_d)/(S_d L_d)` | each <= 1e-12 | 0; 1.58e-16 | yes |
+
+Mutations (scratch copy `w49i-work/f523-scratch/tree` from `git archive` of the test commit, own target directory; logs
+`base.log`, `mu4.log`, `mu1.log`; the unmutated copy passed first; each mutation applied alone):
+
+| Id | Mutation | Caught by |
+| --- | --- | --- |
+| MU4 | `face_pressure_load` returns the lumped `-p A/4` at each corner | B1 (1.0e-1), B2 (4.17e-2), B3 (1.0e-1), and R1's moment (7.86e-2) |
+| MU1 | `+p` instead of `-p` | B1, B2, B3 (each 2.0), R1 force (2.0) and moment (0.157) |
+
+Both mutations are caught by every one of B1 to B3. `cargo fmt -p rcfd-post --check`: clean after rustfmt of the new file.
+`cargo clippy -p rcfd-post --all-targets -- -D warnings`: clean. Only the new test file was run (release); no existing line was
+changed, so no existing test and no baseline-hash run is owed; the whole workspace suite was not run (the lead's gate).
+
+Deviations: none. B1 to B3 are bit-identical, as expected from the shared arithmetic; the limits were not touched.
+
+**Decision by the registered rule: done.** Every check met on its single run, both mutations caught by B1, B2 and B3, no
+amendment, no library change.
+
+### Remaining questions
+
+1. The comparison is against `Load::pressure` of the same crate (same `face_rule`, `face_shape_functions`), so a common error
+   would not show; D1 to D3 and ADR 0436 D3 are the independent support. Options: (a) leave; (b) add a closed-form check of
+   `int N_a dA` on the trapezoid (a polynomial, exact by hand). Recommendation: (a), the face is covered by ADR 0436's derivation
+   and the lumped control.
+
+## For the lead: roadmap entries
+
+Proposed status of F-523: **done**.
+
+> ADR 0441, 2026-11-14: deck_pressure_loads equals Load::pressure node by node (bit-identical, 0 against the limit 1e-14 relative to the largest nodal load) on a planar trapezoidal Hex8 face, on an asymmetric warped face (corner (1.3, 1, 1.01), not symmetric about a diagonal) and on a strip of two trapezoids sharing nodes; the lumped load -p A/4 differs from the consistent one by 1.0e-1, 4.2e-2 and 1.0e-1 on the same faces, so the faces discriminate; resultant of the trapezoid against deck_force_moment 1.6e-16. The lumped-load mutation (MU4 of ADR 0436) is caught by all three checks and by the moment of the resultant check; the sign mutation too. Test-only (crates/rcfd-post/tests/sb_deck_loads_np.rs), no library change.
+
+Note for F-384: its note may add "its MU4 is now caught by ADR 0441 (F-523)":
+
+> ADR 0441, 2026-11-14: the lumped-load mutation of F-384 (ADR 0436 MU4) not caught on parallelogram faces is caught by F-523's node-by-node comparison on trapezoidal and warped faces; F-384 stays partial by its own rule (the N2 amendment).

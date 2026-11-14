@@ -66,10 +66,7 @@ fn moved(divisions: [usize; 3], moves: &[(Vec3, Vec3)]) -> SolidMesh {
 fn trapezoid() -> SolidMesh {
     moved(
         [1, 1, 1],
-        &[
-            ([0.0, 1.0, 1.0], [0.25, 1.0, 1.0]),
-            ([1.0, 1.0, 1.0], [0.75, 1.0, 1.0]),
-        ],
+        &[([0.0, 1.0, 1.0], [0.25, 1.0, 1.0]), ([1.0, 1.0, 1.0], [0.75, 1.0, 1.0])],
     )
 }
 
@@ -146,7 +143,11 @@ fn run(name: &str, mesh: &SolidMesh, b_id: &str, d_id: &str, c: &mut Checks) -> 
     let (shell, deck, forces) = deck_side(mesh);
     let f_ref = reference_loads(mesh);
     let f_deck = deck_loads(mesh, &forces);
-    println!("{name}: {} nodal forces, {} quads", forces.len(), shell.surface.quads.len());
+    println!(
+        "{name}: {} nodal forces, {} quads",
+        forces.len(),
+        shell.surface.quads.len()
+    );
     c.at_most(
         &format!("{b_id} {name} deck vs Load::pressure node by node"),
         node_by_node(&f_deck, &f_ref),
