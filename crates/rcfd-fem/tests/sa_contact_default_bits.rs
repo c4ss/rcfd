@@ -114,9 +114,12 @@ fn b0_default_bits() {
     m.add_material("lower.all", steel()).unwrap();
     m.add_material("upper.all", steel()).unwrap();
     for p in ["lower", "upper"] {
-        m.add_constraint(Constraint::displacement(&format!("{p}.xmin"), 0, 0.0)).unwrap();
-        m.add_constraint(Constraint::displacement(&format!("{p}.ymin"), 1, 0.0)).unwrap();
-        m.add_constraint(Constraint::displacement(&format!("{p}.zmin"), 2, 0.0)).unwrap();
+        m.add_constraint(Constraint::displacement(&format!("{p}.xmin"), 0, 0.0))
+            .unwrap();
+        m.add_constraint(Constraint::displacement(&format!("{p}.ymin"), 1, 0.0))
+            .unwrap();
+        m.add_constraint(Constraint::displacement(&format!("{p}.zmin"), 2, 0.0))
+            .unwrap();
     }
     m.add_load(Load::pressure("upper.zmax", 1.0e8)).unwrap();
     let r = solve_static(&m, &StaticOptions::default()).unwrap();
