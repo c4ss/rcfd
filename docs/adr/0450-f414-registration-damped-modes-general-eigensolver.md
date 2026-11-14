@@ -405,3 +405,7 @@ Follow-up item, proposed id the next free number, title "Damped modes: residual 
 impedance", deps F-414:
 
 > Every limit not stated here is registered in the ADR before the run. damped_modes gains static residual vectors (K^-1 times the damper influence vectors, orthogonalised against the undamped modes) as an option. Fixed-free bar with a tip dashpot c = 0.9 A sqrt(E rho): the first three roots (c0/L)(-atanh(c/(A sqrt(E rho))) + i (2 j - 1) pi/2) within 2 percent on 20 modes with the residual vector, against a registered error without it; at c = 2 A sqrt(E rho) the real root -(c0/L) atanh(A sqrt(E rho)/c) within 1 percent on 20 modes; without the option every result is bit-identical to F-414's.
+
+## Lead note, 2026-11-14
+
+F-413 (ADR 0449) and F-414 (ADR 0450) were merged together. Their scaffold copies `x1_modules_and_pending_after_fatigue` and `x1_modules_and_pending_after_f414` are merged into one test, `x1_modules_and_pending_after_f413_f414`. That test marks fatigue, damped and eigen_general as landed. Neither single copy was ever on main. The check is the same X1 row set with both items landed, and no limit changed.

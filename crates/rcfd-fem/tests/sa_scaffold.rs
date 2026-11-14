@@ -1172,7 +1172,7 @@ fn x1_modules_and_pending() {
 
 // X1 after ADR 0448 (F-412) and ADR 0447 (F-431): harmonic_direct, cskyline and sparse_chol have landed.
 #[test]
-#[ignore = "record of ADR 0448 and ADR 0447: ADR 0450 (F-414) landed damped and eigen_general (PENDING None), retiring their rows; continued in x1_modules_and_pending_after_f414 (ADR 0291 pattern, maintainer standing decision)"]
+#[ignore = "record of ADR 0448 and ADR 0447: ADR 0450 (F-414) landed damped and eigen_general and ADR 0449 (F-413) landed fatigue (PENDING None), retiring their rows; continued in x1_modules_and_pending_after_f413_f414 (ADR 0291 pattern, maintainer standing decision)"]
 fn x1_modules_and_pending_after_landed() {
     use rcfd_fem as f;
     let fem: [(&str, Option<&str>, &str); 24] = [
@@ -1216,9 +1216,9 @@ fn x1_modules_and_pending_after_landed() {
     c.finish();
 }
 
-// X1 after ADR 0450 (F-414): damped and eigen_general have landed as well.
+// X1 after ADR 0450 (F-414) and ADR 0449 (F-413): damped, eigen_general and fatigue have landed as well.
 #[test]
-fn x1_modules_and_pending_after_f414() {
+fn x1_modules_and_pending_after_f413_f414() {
     use rcfd_fem as f;
     let fem: [(&str, Option<&str>, &str); 24] = [
         ("mat_ortho", f::mat_ortho::PENDING, "ADR 0312 (F-409)"),
@@ -1226,7 +1226,7 @@ fn x1_modules_and_pending_after_f414() {
         ("mat_visco", f::mat_visco::PENDING, "ADR 0313 (F-410)"),
         ("mat_creep", f::mat_creep::PENDING, "ADR 0314 (F-411)"),
         ("harmonic_direct", f::harmonic_direct::PENDING, "landed"),
-        ("fatigue", f::fatigue::PENDING, "ADR 0316 (F-413)"),
+        ("fatigue", f::fatigue::PENDING, "landed"),
         ("damped", f::damped::PENDING, "landed"),
         ("gyro", f::gyro::PENDING, "ADR 0318 (F-415)"),
         ("rotor", f::rotor::PENDING, "ADR 0319 (F-416)"),
@@ -1253,7 +1253,7 @@ fn x1_modules_and_pending_after_f414() {
     ];
     let mut c = Checks::new();
     for (name, got, expect) in fem.iter().chain(&linalg) {
-        // ADR 0448, ADR 0447, ADR 0450: a landed module has PENDING None
+        // ADR 0448, ADR 0447, ADR 0450, ADR 0449: a landed module has PENDING None
         let want = if *expect == "landed" { None } else { Some(*expect) };
         c.holds(&format!("X1 {name}"), *got == want, &format!("{got:?}"));
     }

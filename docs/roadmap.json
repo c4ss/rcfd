@@ -3776,9 +3776,9 @@
       "F-376",
       "F-399"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. Curves and corrections reproduce N = (sigma_a/sigma_f)^(1/b)/2, sigma_a/(1 - sigma_m/sigma_u) (Goodman), sigma_a/(1 - (sigma_m/sigma_u)^2) (Gerber) and Soderberg within 1e-12; a mean stress at or above the strength is refused. Harmonic amplitude: for a normal and a shear component 90 degrees out of phase the von Mises amplitude equals the closed-form maximum over the phase within 1e-10. Cantilever with a static and a harmonic tip force: the largest damage lies on the root surface and the life there equals the hand value from 6 P L/(b h^2) within the registered factor that a 2 percent stress error allows. Plate with a small circular hole (radius/width 0.05) under remote harmonic tension: stress amplitude at the hole edge within 3 percent of 3 sigma (Kirsch) and the life the Basquin life of that stress. Counting: n cycles of constant amplitude give n cycles of that range; a large cycle carrying m small ripples gives 1 and m; a periodic history started at its maximum closes with no residual; a history and its mirror image give the same counts; two load blocks give n1/N1 + n2/N2 within 1e-12. Narrow band: the damage rate nu0 (sqrt(2) s)^m Gamma(1 + m/2)/C within 1e-12 as a function, and the counted damage of a synthesised narrow-band history (registered seed, 1e5 cycles) within 5 percent of it.",
-    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0316; the registration is written by the implementation agent before any code."
+    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. ADR 0449, 2026-11-14: rcfd_fem::fatigue (stub of ADR 0440 filled, PENDING None) with Basquin, power and log-log table curves with an endurance limit, Goodman, Gerber and Soderberg corrections (a mean at or above the strength refused, no compressive credit by default), the closed-form von Mises amplitude of a harmonic tensor maximised over the phase, the largest principal amplitude, the signed von Mises mean, fields of life, damage rate and safety factor, four-point rainflow with a periodic form, Miner with compensated summation, and the narrow-band rate with a Stirling Gamma. Every registered check was met in one run: curves and corrections within 0 to 7e-14 of the closed forms; harmonic amplitude 90 degrees out of phase exact; Hex20 cantilever (L/h = 10, support of beam theory): largest damage at the root top surface, life 0.9527 of the hand value from 6 P L/(b h^2) (registered factor [0.7675, 1.3084] for 2 percent), stresses 0.37 percent off; quarter plate with a hole r/W = 0.05 (576 Hex20, harmonic through DirectHarmonic): hole-edge amplitude +1.23 percent of 3 sigma, the largest damage there and its life the Basquin life of that stress; counting checks exact (constant amplitude, ripples, no residual, negation and reversal invariant, two blocks within 0); narrow band within 2e-15 as a function and -0.82 percent for a synthesised history of 131 154 cycles; 12 of 12 mutations caught. Follow-ups F-533 (case file and CLI), F-534 (rainflow residue error, Gerber message)."
   },
   {
     "id": "F-414",
@@ -5169,5 +5169,28 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. damped_modes gains static residual vectors (K^-1 times the damper influence vectors, orthogonalised against the undamped modes) as an option. Fixed-free bar with a tip dashpot c = 0.9 A sqrt(E rho): the first three roots (c0/L)(-atanh(c/(A sqrt(E rho))) + i (2 j - 1) pi/2) within 2 percent on 20 modes with the residual vector, against a registered error without it; at c = 2 A sqrt(E rho) the real root -(c0/L) atanh(A sqrt(E rho)/c) within 1 percent on 20 modes; without the option every result is bit-identical to F-414's.",
     "note": "Structural solver, advanced tier. Follow-up of F-414 (ADR 0450, 2026-11-14)."
+  },
+  {
+    "id": "F-533",
+    "title": "Fatigue block in the solid case file: life, damage rate and safety-factor fields",
+    "phase": 9,
+    "deps": [
+      "F-413",
+      "F-386"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. A solid case with a harmonic step and a fatigue block (curve, mean-stress correction, equivalent stress, design life) writes the fields of life, damage rate and safety factor at the nodes; on the plate with a hole of ADR 0449 the written fields equal the library's within 1e-12, a case without a fatigue block gives bit-identical outputs, and a mean at or above the strength is refused with the point and the case path.",
+    "note": "Structural solver, advanced tier. Follow-up of F-413 (ADR 0449, 2026-11-14). Adds a case-file block: schema question for the maintainer."
+  },
+  {
+    "id": "F-534",
+    "title": "Fatigue: rainflow residue error and Gerber compressive-mean message",
+    "phase": 9,
+    "deps": [
+      "F-413"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. rainflow_periodic returns an internal error when the residue of the closed sequence is longer than three points, and a mutation that closes loops with a strict inequality is then caught by the constant-amplitude check; the Gerber refusal of a compressive mean at or beyond the strength says so in modulus; all checks of ADR 0449 still pass unedited.",
+    "note": "Structural solver, advanced tier. Follow-up of F-413 (ADR 0449, 2026-11-14). Size S."
   }
 ]

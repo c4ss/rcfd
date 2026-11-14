@@ -8132,7 +8132,7 @@ fixed by the item's registration ADR before any code.
     1.3e-11. Partial: the stress check S1 missed (2.0e-2: HarmonicResponse::stress omits the loss part;
     DirectHarmonic::stress added, 7.2e-6) and refusal R8 was met only after a set-up amendment. Eleven mutations caught.
     Follow-up F-528.
-- [ ] **F-413** High-cycle fatigue: stress-life curves, mean-stress corrections, harmonic and counted histories, linear damage
+- [x] **F-413** High-cycle fatigue: stress-life curves, mean-stress corrections, harmonic and counted histories, linear damage
   - depends on: F-408, F-376, F-399
   - acceptance: Every limit not stated here is registered in the ADR before the run. Curves and corrections reproduce N
     = (sigma_a/sigma_f)^(1/b)/2, sigma_a/(1 - sigma_m/sigma_u) (Goodman), sigma_a/(1 - (sigma_m/sigma_u)^2) (Gerber) and
@@ -8147,8 +8147,20 @@ fixed by the item's registration ADR before any code.
     load blocks give n1/N1 + n2/N2 within 1e-12. Narrow band: the damage rate nu0 (sqrt(2) s)^m Gamma(1 + m/2)/C within
     1e-12 as a function, and the counted damage of a synthesised narrow-band history (registered seed, 1e5 cycles)
     within 5 percent of it.
-  - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0316; the registration is
-    written by the implementation agent before any code.
+  - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. ADR 0449, 2026-11-14: rcfd_fem::fatigue
+    (stub of ADR 0440 filled, PENDING None) with Basquin, power and log-log table curves with an endurance limit,
+    Goodman, Gerber and Soderberg corrections (a mean at or above the strength refused, no compressive credit by
+    default), the closed-form von Mises amplitude of a harmonic tensor maximised over the phase, the largest principal
+    amplitude, the signed von Mises mean, fields of life, damage rate and safety factor, four-point rainflow with a
+    periodic form, Miner with compensated summation, and the narrow-band rate with a Stirling Gamma. Every registered
+    check was met in one run: curves and corrections within 0 to 7e-14 of the closed forms; harmonic amplitude 90
+    degrees out of phase exact; Hex20 cantilever (L/h = 10, support of beam theory): largest damage at the root top
+    surface, life 0.9527 of the hand value from 6 P L/(b h^2) (registered factor [0.7675, 1.3084] for 2 percent),
+    stresses 0.37 percent off; quarter plate with a hole r/W = 0.05 (576 Hex20, harmonic through DirectHarmonic):
+    hole-edge amplitude +1.23 percent of 3 sigma, the largest damage there and its life the Basquin life of that stress;
+    counting checks exact (constant amplitude, ripples, no residual, negation and reversal invariant, two blocks within
+    0); narrow band within 2e-15 as a function and -0.82 percent for a synthesised history of 131 154 cycles; 12 of 12
+    mutations caught. Follow-ups F-533 (case file and CLI), F-534 (rainflow residue error, Gerber message).
 - [x] **F-414** Damped and complex modes: a dense eigensolver for general real matrices and the quadratic eigenproblem on a modal subspace
   - depends on: F-408, F-382, F-383
   - acceptance: Every limit not stated here is registered in the ADR before the run. rcfd-linalg: the companion matrix
@@ -10284,3 +10296,19 @@ fixed by the item's registration ADR before any code.
     2 A sqrt(E rho) the real root -(c0/L) atanh(A sqrt(E rho)/c) within 1 percent on 20 modes; without the option every
     result is bit-identical to F-414's.
   - note: Structural solver, advanced tier. Follow-up of F-414 (ADR 0450, 2026-11-14).
+- [ ] **F-533** Fatigue block in the solid case file: life, damage rate and safety-factor fields
+  - depends on: F-413, F-386
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A solid case with a harmonic step
+    and a fatigue block (curve, mean-stress correction, equivalent stress, design life) writes the fields of life,
+    damage rate and safety factor at the nodes; on the plate with a hole of ADR 0449 the written fields equal the
+    library's within 1e-12, a case without a fatigue block gives bit-identical outputs, and a mean at or above the
+    strength is refused with the point and the case path.
+  - note: Structural solver, advanced tier. Follow-up of F-413 (ADR 0449, 2026-11-14). Adds a case-file block: schema
+    question for the maintainer.
+- [ ] **F-534** Fatigue: rainflow residue error and Gerber compressive-mean message
+  - depends on: F-413
+  - acceptance: Every limit not stated here is registered in the ADR before the run. rainflow_periodic returns an
+    internal error when the residue of the closed sequence is longer than three points, and a mutation that closes loops
+    with a strict inequality is then caught by the constant-amplitude check; the Gerber refusal of a compressive mean at
+    or beyond the strength says so in modulus; all checks of ADR 0449 still pass unedited.
+  - note: Structural solver, advanced tier. Follow-up of F-413 (ADR 0449, 2026-11-14). Size S.
