@@ -224,3 +224,14 @@ only after an amendment made after its run; **todo** if the factorisation or the
 - Non-zero static prescribed values; a table for non-isotropic materials; a frequency-dependent dashpot.
 - No pivoting: an undamped or lightly damped system with a near-zero leading minor away from a resonance is refused rather than
   pivoted. One factorisation per frequency: a sweep of a large model costs one factor per point (recorded, not optimised).
+
+## Amendment 1 (2026-11-14, before any run of any check)
+
+Written and committed after the registration and the library code, before any test was compiled or run. Set-up defect in S1
+found while writing the test: the stress of a Hex8 element of the bar is constant along the element (the section moves
+uniformly, so `eps_xx = (u_1 - u_0)/h`), and the integration points lie `h/(2 sqrt 3)` from the element centre. Against the
+closed form at the points themselves the error is first order, `|sigma'| h/(2 sqrt 3)`, about `0.785 x 3.6e-3 F/A` at the
+tip, 2.0e-3 of `max |sigma| = 1.414 F/A`, above the registered 1e-3; the registered estimate (1e-5) was that of the element
+centre. Corrected S1: each integration point's `sigma_xx` against `F cos(k* x_c)/(A cos(k* L))` at the centre `x_c` of its
+element (`x_c = h (floor(x/h) + 1/2)`), `max_p |s_h - s|/max |s| <= 1e-3` (limit unchanged); estimate: the central difference
+`(k h)^2/24` (4e-6) plus the nodal error of H1 (2.3e-6), about 1e-5. No other check changes.
