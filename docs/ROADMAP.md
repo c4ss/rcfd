@@ -11561,7 +11561,10 @@ fixed by the item's registration ADR before any code.
     unchanged). Missed: ES3b control (Full also recovers the bending box, 3.45e-13) and mutation MU12 (estimate sampling
     with the compatible strain) not caught by any check; RF3 set-up amended once (Amendment 2). Follow-ups (numbers left
     to the lead): a discriminating test of the estimate sampling; equal-weight viscoelastic Incompatible, only if a
-    model needs it. Follow-up F-614.
+    model needs it. Follow-up F-614 (ADR 0530, 2026-11-14) adds the discriminating test of estimate::element_samples for
+    an opted Hex8: MU12 is now caught (BBar), and the ES3b miss is explained (the Incompatible enhanced strain is zero
+    at the centroid sample). F-588 stays partial for the record of its own run (ES3b missed, RF3 amended once); the open
+    item is closed.
 - [x] **F-589** First and fourth spectral moments of a random stress component for broadband fatigue
   - depends on: F-417, F-566
   - acceptance: Every limit not stated here is registered in the ADR before the run. RandomStress carries the
@@ -11930,12 +11933,20 @@ fixed by the item's registration ADR before any code.
     and a free thermal expansion of an unconstrained elastic cube under a temperature step equals alpha dT within 1e-12.
     Models without a temperature keep their bits.
   - note: Structural solver, advanced tier. Optional. Follow-up of F-592 (ADR 0526, 2026-11-14).
-- [ ] **F-614** A non-equilibrium quadratic displacement test for the error-estimate samples of an opted Hex8
+- [x] **F-614** A non-equilibrium quadratic displacement test for the error-estimate samples of an opted Hex8
   - depends on: F-588
   - acceptance: Every limit not stated here is registered in the ADR before the run. A non-equilibrium quadratic
     displacement test for estimate::element_samples with an opted Hex8 (BBar and Incompatible), which catches the
     mutation MU12 of ADR 0525 (sampling with the compatible strain).
-  - note: Structural solver, intermediate tier. Low priority. Follow-up of F-588 (ADR 0525, 2026-11-14); closes F-588.
+  - note: F-614 DONE. ADR 0530, 2026-11-14: a non-equilibrium quadratic displacement field (dilatation 8e-3 x - 4e-3 y +
+    6e-3 z, Navier residual |b|/E 1.4e-2) on the distorted 4 x 3 x 3 patch box gives the recovered nodal stress of an
+    opted Hex8 against an independent computation (own gradients, own B-bar mean, own normal equations): BBar 4.5e-16
+    and 3.7e-4 away from the compatible-strain expectation (limits 1e-10 and 1e-5), Incompatible equal to the compatible
+    one to 4.5e-16 (its enhanced strain is zero at the centroid sample, which is why no field can separate it there),
+    Full control 4.5e-16. Mutation MU12 of ADR 0525 (sampling with the compatible strain) is caught by E1 and E3; MU13
+    and an unweighted-mean mutation too; the Incompatible-only form of MU12 is an equivalent mutant. Test only, no
+    library change; defaults and baseline hashes untouched. (The first run stopped in the test's own set-up before any
+    check ran; set-up fixed, no limit changed.)
 - [ ] **F-615** The supernodal factorisation in the linear contact driver
   - depends on: F-427, F-594
   - acceptance: Every limit not stated here is registered in the ADR before the run. contact::linear_solve with an
