@@ -248,3 +248,60 @@ Planned mutations (a `git archive` copy of the tip with its own `CARGO_TARGET_DI
 - Large deformation, plasticity, and centrifugal loading of the hub (the fit's loss of pressure with speed).
 - The fan's real bore and shaft dimensions, which the repository does not have.
 - No case-file key (b4).
+
+## Amendment 1 (2026-11-14): the `n = 32` solve failed; a defect of `project`; the fix, its bit record and the corrected heavy run
+
+Written after the registered runs of the three fast tests, of A1 and of the heavy record, before any library code and before
+the corrected run. Nothing above is changed.
+
+**What happened.** The heavy record `f604_edge_convergence_and_bore_cell_rule_heavy` was run once, alone. Its `n = 4, 8, 16`
+solves converged. The `n = 32` solve (33829 nodes, 101k unknowns, peak working set 3.9 GB) stopped after 1769 s with "load step 1
+of 1, augmentation 0: the active set cycled 4 times in one Newton solve (more than 3) at Newton iteration 9; nodes switching:
+[28549, 29092]". These are two bore nodes on the symmetry planes, `theta = 0` at `z = 1.71875` and `theta = 90` degrees at
+`z = 1.75`. The test stays the ignored record of that failure; its numbers are in addendum 1.
+
+**Diagnostic probes (disclosed).** All are uncommitted files in `f604-scratch`, run from `crates/rcfd-fem/tests` and deleted
+afterwards.
+
+- P4 (`probe_f604b.rs`, `n = 16`): the local coordinates of every bore node on its face at the converged state. The plane nodes
+  are at `xi = -1` and `+1` exactly, and every node is at `eta` from `0.885` to `0.934`: inside its face, `0.07` or more from
+  every other edge. So the axial offset of D3 works as designed.
+- P5 (`probe_f604b.rs`, `n = 32`, `max_cycles` raised to 20 only to watch): a `Contribution` that adds nothing evaluates a
+  second contact set at every Newton iterate (augmentation 0, so its multipliers are the solver's). After iterate 1, 49 bore
+  nodes were inactive, and after iterate 3 none. At iterate 4 node 28549 had gap `-9.0e-8`, `xi = -1`, `eta = 0.8716`. At
+  iterate 5 it had **no candidate face** (gap `None`) although nothing had moved it off its face. At iterate 6 it was back, with
+  the penetration `4.7e-5` and a force 500 times its own: the active set cycles.
+- P6 (`probe_f604c.rs`): the closest-point Newton of `project` (its arithmetic copied into the probe), applied at the converged
+  states of `n = 4, 8, 16` to every bore node and its face. Every projection converged to `abs(dxi) <= 1e-14`. But the smallest
+  step after the second iteration, which is the rounding floor of the iteration, was up to `3.2e-15`, `8.3e-15` and
+  `9.9e-15`: it grows as the faces shrink.
+
+**The cause: a defect of `contact.rs`.** `project` accepts the closest point only after a step `abs(dxi) <= 1e-14`, an
+absolute tolerance in the face's parameters. The rounding floor of that step is about `ulp(abs(x))/(half the face's size)`. At
+`abs(x) ~ 2` and a half-size of `0.0156` (`n = 32`) that is `4.4e-16/0.0156 = 2.8e-14`, above the tolerance. The steps then
+wander at the rounding level for the 30 iterations, and the projection returns `None` ("not converged"). The node loses
+contact for one iterate, and the solve cycles. The defect is not specific to this test. It hits any face smaller than about 40
+ulps of its coordinates over `1e-14`: a face below about 2 percent of its distance from the origin, for example the 0.2 mm bore
+cells of a 3 mm shaft at coordinates of 20 mm.
+
+**The fix (D7, `contact.rs` `project` only).** When the 30 iterations end without a step `<= 1e-14`, the closest point is
+accepted if the last step is `<= 1e-10`. The `|xi| <= 1 + 1e-2` test and everything after it are unchanged. Justification: the
+gap is stationary in `xi` at the closest point, so an error `delta` in `xi` changes the gap by `O(delta^2 h)`, and `1e-10` is
+far below anything the checks see. A step of `1e-10` after 30 Newton iterations on a bilinear face happens only at the rounding
+floor, which is `1e-10` for a face of `1e-5` of its coordinates. **Bits:** a projection that converged before converges at the
+same iteration, with the same bits. Only a projection that returned `None` for the iteration count can change, and then it
+returns the point instead. No default path calls contact, and there is no case-file key.
+
+**New checks (limits fixed now).**
+
+| id | quantity | limit | estimate |
+|---|---|---|---|
+| B1 | the default-bits record: FNV-1a digests of the displacement, node forces, pressures, gaps and Newton residuals of three contact solves (ADR 0507 B1's two blocks pressed; ADR 0513's ADR 0507 fit; this ADR's hub at `n = 4`), recorded by the new file `tests/sa_contact_project_f604_default_bits.rs` on the unchanged library and written in before the fix | equal after the fix | P6: none of these projections is at the floor |
+| PJ1 | a small face far from the origin: two unit-cell blocks of side `s = 1e-3` at `(10, 10, 10)`, the upper one offset by `0.3 s` in `x` and `y` and overlapping by `1e-3 s`; `ContactSet::evaluate` at `u = 0`: every contactor node has a candidate, and its gap against `-1e-3 s` | found; `<= 1e-9` relative | the floor `ulp(10)/(s/2) = 3.6e-12`, above `1e-14`: on the base the projection is predicted to fail (recorded, run once before the fix) |
+| A1-H | the corrected heavy record `f604_edge_convergence_and_bore_cell_rule_heavy_a1`: the same model, checks and limits as the original (A1f, E1 to E4, R), run once after the fix, alone | as registered | n/a |
+
+The fast tests are run again after the fix, as regression, not as new registered runs. Their numbers must be the same, because
+no projection of `n <= 16` is at the floor (P6).
+
+**Mutation ML3**: the fix reverted. Expected to be caught by PJ1. The decision rule adds B1 and PJ1 to the list for done and
+counts A1-H in place of the original heavy record.
