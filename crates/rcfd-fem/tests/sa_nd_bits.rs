@@ -145,7 +145,7 @@ fn digests() -> Vec<(&'static str, u64)> {
     out.push(("D3 order", digest_usize(f.order().iter().copied())));
     out.push((
         "D3 parent",
-        digest_usize(f.parent().iter().map(|p| p.map_or(usize::MAX, |v| v))),
+        digest_usize(f.parent().iter().map(|p| p.unwrap_or(usize::MAX))),
     ));
     let mut vals = Vec::new();
     let mut rows = Vec::new();
