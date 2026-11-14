@@ -29,6 +29,7 @@ use crate::element::{element_for, ElementState};
 use crate::error::{FemError, Result};
 use crate::mass::consistent_with;
 use crate::material::PointContext;
+use crate::mesh::ElementKind;
 use crate::model::{Load, SolidModel};
 use crate::nonlinear::{self, Contribution, NewtonOptions};
 use crate::solve::PIVOT_TOLERANCE;
@@ -458,7 +459,8 @@ impl Integrator {
             return Err(invalid("time step", format!("{dt:e} (must be finite and > 0)")));
         }
         model.validate()?;
-        model.check_supported_nonlinear()?;
+        // ADR 0522 D4: Shell4 and Shell3 take the corotated element of ADR 0490 with the consistent shell mass (D2).
+        model.check_supported_nonlinear_shells()?;
         if crate::mpc::uses_transformation(model) {
             return Err(invalid(
                 "nl_transient",
@@ -982,8 +984,13 @@ impl Integrator {
                 .iter()
                 .map(|&q| s.u[q])
                 .collect();
-            let el = element_for(mesh.element_kind(e));
             let material = &model.materials()[materials[e]].1;
+            // ADR 0522 D4: a shell element takes the energy of the corotated element.
+            if matches!(mesh.element_kind(e), ElementKind::Shell4 | ElementKind::Shell3) {
+                w += crate::shell_corot::model_strain_energy(mesh, e, &coords, material, &ue)?;
+                continue;
+            }
+            let el = element_for(mesh.element_kind(e));
             // ADR 0506 D3: an opted Hex8 takes the strain of its formulation (the F-bar strain of a BBar block).
             let opted = match crate::hex8x::opted(mesh, e) {
                 Some(f) => Some(nonlinear::hex8_strains(f, &coords, &ue)?),

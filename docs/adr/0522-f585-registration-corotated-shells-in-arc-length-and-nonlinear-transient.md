@@ -317,3 +317,17 @@ each run once by this work, as the registered runs.
 3. **The rotary inertia at large rotation**. Options: (a) the registered constant-mass form (D2); (b) a follow-up with `omega =
    T(theta) theta_dot` and its gyroscopic terms. Taken (a) on the maintainer's standing instruction of 2026-11-11 (take the
    recommendation): the acceptance asks for a registered form and a small-amplitude vibration.
+
+## Amendment 1 (2026-11-14): the test layout; written after the code compiled, before any run of a registered check
+
+No limit and no parameter changes.
+
+1. The registered roof run (`a1_a2_h0_hinged_roof_through_the_limit_point`: Shell4 `16 x 16`, Hex20 `16 x 16 x 2` and
+   `8 x 8 x 2`, the records Shell4 `8 x 8` and Shell3 `16 x 16`) and the registered 100-period run
+   (`f1_e1_strip_free_vibration_100_periods`) are ignored heavy records from the start (their cost estimates, arithmetic 7, are
+   at or beyond two minutes on the shared machine), each run once by this work with `--ignored`.
+2. The fast roof test named in the mutation table (`a2_fast_roof_shell4_and_hex20`) is the trace of D5 on the Shell4 `8 x 8`
+   quarter (the A1c mesh) and the Hex20 `4 x 4 x 2` quarter with the check A2 on each (the same rule and limits), their limit
+   loads recorded. A2 is applied in the registered run to every one of its five traces.
+3. The companion F1/E1-4 also checks F1c and EZ on its strip (the same limits); F1/E1-3 checks EZ on the Shell3 strip.
+4. In the roof run every trace prints its points `(w, P)`, so the path through the limit point is on record.

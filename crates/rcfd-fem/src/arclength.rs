@@ -217,7 +217,8 @@ pub fn trace(
     stop: &mut dyn FnMut(&PathPoint) -> bool,
 ) -> Result<ArcLengthPath> {
     model.validate()?;
-    model.check_supported_nonlinear()?;
+    // ADR 0522 D4: Shell4 and Shell3 take the corotated element of ADR 0490.
+    model.check_supported_nonlinear_shells()?;
     crate::nonlinear::check_driver_model(model)?;
     options.check()?;
     let dofs = model.dof_map();
