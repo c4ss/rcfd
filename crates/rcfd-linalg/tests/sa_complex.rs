@@ -50,6 +50,8 @@ fn sample() -> Vec<(C64, C64)> {
     out
 }
 
+// `a / a` is the registered Z1 measure (ADR 0440), not a mistake.
+#[allow(clippy::eq_op)]
 fn measures(conj: bool) -> (f64, f64) {
     let (mut worst_id, mut worst_div) = (0.0f64, 0.0f64);
     for (a, b) in sample() {

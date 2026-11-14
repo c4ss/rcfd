@@ -457,3 +457,82 @@ y = z = 0) belongs to the middle node plane, shared by both elements, so its row
 exists (`unwrap` of `None`). R2b, R3b (8 of 8 each) and R4b were met in that run. Corrected as D6c: `i` is the smallest free
 equation whose pattern row does not hold every free equation, `j` the smallest free equation not in that row (asserted off the
 pattern); the limit (1e-10) is unchanged. `d6b_off_pattern_contribution` stays as an ignored record.
+
+## Addendum 1: results (2026-11-14)
+
+Each registered run once, release profile. `sa_scaffold.rs` run 1 at commit 144c2d4a, run 2 (D6b, R2b to R4b) at 0907226f, run 3
+(D6c) at 82fbc154; `sa_scaffold_bits.rs` and `sa_complex.rs` once at 144c2d4a.
+
+| Id | Result | Limit | Met |
+| --- | --- | --- | --- |
+| B1 to B8 | all 57 digests equal main's (P, C, B, K digests also equal ADR 0291's) | equal | yes |
+| D1 | E and H: `u`, reactions, every `LoadStep` field bit-equal | bits equal | yes |
+| D2 | identity hook: bit-equal; `converged` 2 of 2, `failed` 1 of 1 | bits, counts | yes |
+| D3 | load factors [0.5, 1.0] both; `u`, residuals, energies bit-equal | bits equal | yes |
+| D4 | both hooks refused, key "step control" | as stated | yes |
+| D5 | iterations [4] and [4]; `u`, reactions, residuals, energies bit-equal | bits equal | yes |
+| D6 | run 1: measure 0 but the pair (3, 35) on the pattern (set-up failed); D6b: set-up stopped; D6c: pair (6, 10) off the pattern, 1.39e-16 | 1e-10 | after amendments 2 and 3 |
+| D7, D8 | as stated; exact | as stated | yes |
+| M1 to M4 | as stated; state sizes 0, 0, 0, 18, 7, 13, 0; layouts 80 and 48 elements of 8 and 4 points, 0 values; 12 of 12 refusals | as stated | yes |
+| P1, P2 | bit-equal; 5 of 5 refused | as stated | yes |
+| K1 | as stated | as stated | yes |
+| R1 | 60 of 60 | as stated | yes |
+| R2, R3, R4 | run 1 stopped in the R2 set-up; R2b 8 of 8, R3b 8 of 8, R4b as stated | as stated | after amendment 2 |
+| H1 | bit-equal on both facets | bits equal | yes (but see MU4) |
+| H2 | 4.4e-16, 6.7e-16 | 1e-12 | yes |
+| H3 | 6.0e-17 | 1e-14 | yes |
+| X1 | 27 of 27 pending constants (31 modules compile) | as stated | yes |
+| Z1 | 3.4e-16 (product), 5.9e-17 (division) | 1e-15 | yes |
+| Z2 | 598 of 598 lossless, NaN parses to NaN | 100 % | yes |
+| Z3 | as stated | as stated | yes |
+| N1, N2 | digest differs; some entry differs | as stated | yes |
+| N3 | C 10 of 10 `Ok`; plate E1, E3, E4, E9, E10 `Ok`, E5, E6 refused naming Shell4, E2 `Ok` | as amended (amendment 1, before the run) | yes |
+| N4 | 2.0 | above 1e-3 | yes |
+| S1 | 124 suites of rcfd-fem, rcfd-linalg, rcfd-post: 757 passed, 0 failed, 122 ignored; the `s[bi]_` diff empty | 0 failed, no file edited | yes |
+| S2 | `cargo check --workspace --all-targets` no error (after the library code and again at the end) | no error | yes |
+| G1 | `baseline_hashes`: 3 passed, 0 failed, 1 ignored; the file unchanged | passes | yes |
+
+**Mutations** (on a `git archive` copy, own target directory, each alone, once): MU1 caught by R1, MU2 by R3b, MU3 by R2b and
+X1, MU5 by D5, MU6 by D5 (the solve failed), MU7 by D3, MU8 by D2, MU9 by Z2, MU10 by Z1, MU11 by P2, MU12 by M3, MU13 by B5,
+MU14 by H2 (0.5). **MU4** was caught by B7 (nine S digests differ) but **survived H1**: H1 compares `element_stiffness` with
+`element_stiffness_section`, and since D6 routes both through `homogeneous_section`, a change inside it moves both sides. H1 is
+a check of the wiring, not of the section's values; B7 is the check of the values.
+
+**Deviations.** Amendment 1 (N3 rows of the shell twins, H3's measure) was made before any run. Amendments 2 and 3 were made
+after runs whose set-ups were defective (D6's pair on the pattern, then a full row; R2's Shell3 model given a shell pressure). The
+records stay as ignored tests (`d5_to_d8_contributions`, `r1_to_r4_n3_refusals`, `d6b_off_pattern_contribution`). One unregistered
+test (`extra_contribution_called_once_per_iterate`) was added and passed; it is not a registered check. Clippy (`-D warnings`) found `eq_op` on the registered `a / a` of Z1 in `sa_complex.rs`; an `#[allow(clippy::eq_op)]` with a comment was added to the measure function after the run (no change to what it computes, the test not re-run for a result).
+
+**Not run.** Nothing registered was left unrun.
+
+**Decision: partial.** By the decision rule: D6, R2, R3 and R4 are met only after amendments made after their runs, and MU4
+survived one of its two registered checks (H1). Every other check, control and mutation is met on its first run, and no bit of the
+earlier tiers changed (B1 to B8, G1).
+
+### Remaining questions
+
+1. **H1's sensitivity to the section values.** Options: (a) add a check comparing `homogeneous_section(material, t)` against the
+   written `E t / (1 - nu^2)` and `E t^3 / (12 (1 - nu^2))` entries; (b) leave it to B7. Recommendation: (a), in the first package
+   that touches the section (ADR 0331), since B7 only guards the Shell4 plate. Taken on the maintainer's standing instruction of
+   2026-11-11 (take the recommendation): recorded for ADR 0331.
+2. **Arc-length.** Options: (a) a per-iteration load-factor hook in the Newton driver; (b) `arclength::trace` on the public
+   driver pieces, as taken in open point 2. Recommendation: (b); revisit only if ADR 0327 needs the driver's halving. Taken on the
+   maintainer's standing instruction of 2026-11-11 (take the recommendation).
+3. **Where the loss factor lives.** Options: (a) a field of the elastic variants; (b) a per-set setting of the harmonic solve.
+   Recommendation: (b), so the elastic variants and their bits stay as they are; ADR 0315 decides. Taken on the maintainer's
+   standing instruction of 2026-11-11 (take the recommendation).
+4. **Per-point material call in the elements.** Options: (a) move every element to the per-point `stress` call in ADR 0312;
+   (b) keep one matrix per element for isotropic blocks and call per point only for non-constant materials. Recommendation: (b),
+   which keeps the earlier tiers bit-identical without a re-record. Taken on the maintainer's standing instruction of 2026-11-11
+   (take the recommendation).
+5. **`StateLayout` per element or per block.** Options: (a) per element (as built, matches `ElementState`); (b) one array per
+   block as ADR 0310 words it. Recommendation: (a); ADR 0310's wording to be read as a layout, not a storage rule. Taken on the
+   maintainer's standing instruction of 2026-11-11 (take the recommendation).
+6. **`Constraint::Tie` and the cyclic matching rule.** Recommendation: added by ADR 0329 as already planned, not by a follow-up of
+   this item. Taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation).
+
+### For the lead: roadmap entries
+
+Proposed status of F-408: **partial**.
+
+> F-408 scaffold of the advanced tier built (ADR 0440, 2026-11-14): 31 module stubs naming their packages, six material variants with validating constructors, point context and state layout, Shell3 and the layup refused by every solve, the section-stiffness hook of the shell, the contribution list and step-control hook of the Newton driver, and the complex type C64; all 57 bit digests of the earlier tiers equal main's and the baseline hashes pass; partial because D6 and R2 to R4 were met only after set-up amendments made after their runs and mutation MU4 was caught by B7 but not by H1.
