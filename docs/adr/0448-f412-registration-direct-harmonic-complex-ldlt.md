@@ -260,3 +260,97 @@ The registered run (commit 163e2fff plus the X1 records of D3, log `f412-scratch
   - SW1 is repeated unchanged as `sw1_sweep_bit_equal` (met in the registered run; kept live).
 
 By the decision rule the item is **partial** (S1 missed in its registered run; R8 met only after this amendment).
+
+## Addendum 1: results (2026-11-14)
+
+Registered run: commit 163e2fff with the X1 records of D3 (logs `f412-scratch/run_linalg.log`, `run_fem.log`), release
+profile, once. Corrected run of amendment 2: commit 14ea27de plus the amended tests (log `run_fem_amend2.log`), once. A
+confirmation run after rustfmt and one clippy fix in the test chain helper (`a = a - b` written `a -= b`, the same C64
+operation) passed every non-ignored test of `sa_cskyline`, `sa_harmonic_direct` and `sa_scaffold` (log `confirm.log`); it is
+not a registered run.
+
+### Checks
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| L1 random complex symmetric dominant, order 200 (2240 stored), residual | `<= 1e-12` | 4.06e-16 | yes |
+| L2 real Laplacian 6^3 against `SkylineLdlt`; `max |Im x|` | `<= 1e-13`; 0 | 0 (bit-equal, same order); 0 | yes |
+| L3 `[[i,1],[1,-i]]`, `[[1,0,1],[0,2i,0],[1,0,1]]` refused at the equation | rows 1, 2 named | `Pivot` row 1 and row 2, pivot 0, threshold 8.9e-16 and 1.3e-15 | yes |
+| L3n control residual | `<= 1e-10` | 0 | yes |
+| L3t `min_relative_pivot` 0.2 refused, 0.05 accepted | as stated | as stated | yes |
+| L4 non-finite, Hermitian, unsorted refused | as stated | `NonFinite` (0, 1), `Unsymmetric` (0, 1), `Malformed` | yes |
+| L5 two factorisations bit-equal | 0 bits | 0 | yes |
+| H1a..c amplitude error at 0.5, 1.0, 1.5 `w1` | `<= 5e-3` | 2.29e-6, 3.88e-5, 2.06e-4 | yes |
+| H1d..f phase error / `|arg X|` | `<= 5e-3` | 4.23e-6, 1.03e-3, 1.87e-6 (1.09e-7, 1.61e-3, 5.8e-6 rad) | yes |
+| H1g..i complex error | `<= 5e-3` | 2.29e-6, 1.61e-3, 2.06e-4 | yes |
+| H2 every bar response against the 1-D chain (11 cases) | `<= 1e-8` | 5.6e-14 to 1.31e-11 | yes |
+| H3 Rayleigh direct against F-399 with all 162 modes, 5 frequencies | `<= 1e-8` | 1.45e-11, 2.60e-10, 6.0e-12, 2.9e-12, 1.12e-12 | yes |
+| H4a..c tip dashpot `0.1 A sqrt(E rho)` | `<= 5e-3` | 2.28e-6, 2.52e-4, 2.05e-4 | yes |
+| H5a..e matched dashpot amplitude, 0.5, 1.0, 1.5, 2.5, 3.0 `w1` | `<= 5e-3` | 1.15e-6, 3.2e-10, 1.03e-4, 3.44e-4, 2.3e-7 | yes |
+| H6 base motion `1/cos(kL)` at 0.5 `w1` | `<= 5e-3` | 3.15e-6 | yes |
+| H7 constant table against `Constant` | `<= 1e-12` | 0, 0, 0 | yes |
+| H7b table midpoint against `1.5 E` | `<= 1e-10` | 9.2e-14 | yes |
+| H8 undamped resonance refused with the frequency | refused, key, `{w:e}` | refused: `omega 7.936818423772328e3 rad/s (1.263e3 Hz)`, relative pivot 7.9e-15 | yes |
+| H8n control at 1.001 `w_1` | accepted | accepted (tip 1.27e-6 m) | yes |
+| H9 threads 1 and 8 (H1, H3, H4, H6) | 0 bits | 0 | yes |
+| S1 stress (amendment 1) | `<= 1e-3` | **1.99958e-2** | **no** (known miss) |
+| SW1 sweep bit-equal | 0 bits | 0 | yes |
+| R1 to R7, R9 to R11 | as stated | as stated | yes |
+| R8 non-zero prescribed value | key `"constraint"` | refused by the conflict check instead (set-up defect) | **no** (record) |
+| R8b (amendment 2) | key `"constraint"`, `prescribed value` | as stated | yes, after amendment |
+| S1b (amendment 2) | `<= 1e-3` | 7.17e-6 | yes, new check |
+| S1c (amendment 2) | equal | equal | yes, new check |
+| X1 after landed; X1 record | passes; ignored | passes; the record fails only on the two retired rows | yes |
+
+### Mutations (scratch copy `w49i-work/f412-scratch/mut` of commit 28cdeadd, `mutate.py`, logs `mut_M*.log`)
+
+| Id | Change | Caught by (missed checks) |
+|---|---|---|
+| M1 | update sum conjugates `l_jk` | L1, H1, H2, H3, H4, H5, S1b |
+| M2 | pivot test removed | L3, L3t, H8 |
+| M3 | diagonal step multiplies by `d` | L1, L2, L3n, H1, H2, H3, H4, H5, H6, S1b |
+| M4 | loss term `K (1 - i eta)` | H1 (phase, complex), H2, H7, H7b, S1b |
+| M5 | dashpot term `i c` without `w` | H2, H4, H5 |
+| M6 | base right-hand side `+ A_FP G` | H2 (H6 cannot see it: the sign of the free response flips, the amplitude does not) |
+| M7 | Rayleigh term times `w^2` | H3 |
+| M8 | table takes the lower point | H7b |
+| M9 | resonance threshold 0 | H8 |
+| M10 | loss factor on the mass too | H1b, H2, H7b, S1b |
+| M11 (amendment 2) | stress coefficient conjugated | S1b |
+
+Every mutation is caught by a registered check (M6 by H2 only).
+
+### Deviations and what was not run
+
+- S1 missed (diagnosed above, amendment 2); R8 met only after amendment 2. Every other check met in its single run.
+- Not run: the whole workspace suite (the lead's gate); `baseline_hashes` (no file of rcfd-fv or rcfd-api, no shared solver
+  file touched: the two filled files were stubs). Run: `sa_cskyline`, `sa_harmonic_direct`, `sa_scaffold` (release);
+  `cargo fmt -p rcfd-linalg --check`, `cargo fmt -p rcfd-fem --check`, `cargo clippy -p rcfd-linalg -p rcfd-fem --all-targets
+  -- -D warnings`: clean.
+- Default bits: nothing existing changed; the only edits outside the new code are the two `PENDING` constants and the X1
+  record and copy in `sa_scaffold.rs`.
+
+### Decision by the registered rule
+
+**partial**: S1 missed in its registered run (the stress of `HarmonicResponse::stress` lacks the loss part; fixed by
+`DirectHarmonic::stress`, S1b met), and R8 was met only after amendment 2. Every acceptance clause a1 to a11 is met; every
+mutation caught.
+
+### Remaining questions
+
+1. The stress of a damped direct solve: keep `HarmonicResponse::stress` elastic (documented) and `DirectHarmonic::stress` with
+   the complex modulus (as built), or (b) make `HarmonicResponse` carry the coefficients. Recommendation: as built; (b) changes
+   an F-399 type.
+2. Transformation path and pre-stress (not covered): one follow-up item. Recommendation: F-412b below.
+3. Merge: the F-431 branch also retires a row of X1 in `sa_scaffold.rs`; the two `_after_landed` copies must be combined into
+   one (both rows `landed`). Recommendation: the lead keeps one copy with every landed row.
+
+### For the lead: roadmap entries
+
+Proposed status of F-412: **partial**. Note:
+
+> ADR 0448, 2026-11-14: rcfd_linalg::cskyline, complex symmetric envelope L D L^T after reverse Cuthill-McKee without pivoting (ComplexCsr, ComplexSkylineLdlt; pivot refused at |d| <= max((w+1) eps s, tau s) with the equation; a real matrix gives SkylineLdlt's bits); rcfd_fem::harmonic_direct, DirectHarmonic with loss factors per material (constant or a table of storage modulus and loss factor against frequency), Rayleigh, ground and two-node dashpots, base motion at prescribed equations, response, sweep and stress with the complex modulus; an undamped solve with a relative pivot <= 1e-8 refused as a resonance with the frequency. Random complex order 200 residual 4.1e-16 (limit 1e-12); real Laplacian bit-equal to the real factor; zero pivots refused at rows 1 and 2. Bar of 80 Hex8, loss factor 0.02: tip response within 2.3e-6, 1.6e-3, 2.1e-4 (amplitude and phase, limit 5e-3) at 0.5, 1.0, 1.5 f1 (k* complex in the roadmap's E* A k); Rayleigh direct against F-399 with all 162 modes within 2.6e-10 (limit 1e-8); tip dashpot within 2.5e-4, matched dashpot |sin kL| amplitude within 3.4e-4 at five frequencies; base motion 1/cos(kL) within 3.2e-6; constant table bit-equal to the constant loss factor; undamped resonance refused with omega; bit-identical for 1 and 8 threads; every bar response equal to the 1-D chain within 1.3e-11. Partial: the stress check S1 missed (2.0e-2: HarmonicResponse::stress omits the loss part; DirectHarmonic::stress added, 7.2e-6) and refusal R8 was met only after a set-up amendment. Eleven mutations caught. Follow-up F-412b.
+
+Follow-up item F-412b, "Direct harmonic solve on the transformation path and with pre-stress", deps F-412, F-491:
+
+> Every limit not stated here is registered in the ADR before the run. The direct harmonic solve of ADR 0448 takes linear constraints, rigid sets and elastic supports through the transformation u = T q (complex right-hand side T^T F, response T q) and a pre-stress as the added stiffness K_sigma: a bar on a nodal spring at the tip equals the 1-D chain with that spring within 1e-8; a model with a rigid set equals the same model with the set's nodes merged within 1e-8; with a pre-stress the undamped direct solve equals the F-399 mode superposition with the pre-stressed basis and all modes within 1e-8; defaults bit-identical.
