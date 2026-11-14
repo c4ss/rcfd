@@ -281,3 +281,95 @@ the stresses. Correction: the run helper records no stress for a material withou
 state it does what it did), and S3e runs in a test of its own, `s3e_amended_constant_table_on_the_energy_momentum_step`, with
 the set-up, measure and limit registered above unchanged. The old test stays as an ignored record of the registered run of
 V2T, NC2, RT1 and S3i (their numbers are those of `run1.log`, not re-run); the corrected test runs S3e once.
+
+## Addendum 1: results (2026-11-14)
+
+Registered run: commit 3026c9a9 (`cargo test -p rcfd-fem --release --test sa_temp_history -- --nocapture --test-threads=1`, log
+`f592-scratch/run1.log`); S3e after amendment 1 at commit f0a1266d (log `f592-scratch/run2.log`). Each check ran once. The bit
+record B0 was printed on the unchanged base f168d994 (`f592-scratch/b0-base.log`) and written into the test at commit 2223226d,
+before any library code.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| S2 relaxation under a temperature step against the closed form, driver, 101 step ends x 8 points | `<= 1e-10` | `5.551e-16` (probe `2.8e-16`) | yes |
+| S2c set-up | 808 values, no halving | 808, 0 | yes |
+| NC1 constant `T_1` against the step closed form | `>= 1e-3` | `2.293e-2` (probe `2.293e-2`) | yes |
+| S4 ramp error, 100 steps | `<= 7e-3` | `3.488e-3` (probe `3.488e-3`; `1.748e-3` at 200) | yes |
+| S4o observed order 100 -> 200 | in `[0.9, 1.1]` | `0.9961` | yes |
+| S3d driver, constant table against the constant temperature | bits | equal (101 step ends) | yes |
+| S3i integrator, constant table against the constant temperature, 800 steps | bits | equal (values and bytes) | yes |
+| S3e energy-momentum step, constant table, 30 steps (amendment 1) | bits | equal (values and bytes) | yes |
+| V2T temperature step against the restart at `T_2`, 800 steps, no halving | bits | equal (values and bytes), halvings 0 and 0 | yes |
+| NC2 the step run against the constant `T_1` | `>= 1e-2` | `0.2544` | yes |
+| RT1 displacements, shifted rod with stiffness damping at `T_1` against unshifted `a_1 tau` | `<= 1e-10` | `0` | yes |
+| RT1 committed stresses | `<= 1e-10` | `0` | yes |
+| NT4 shifted rod with stiffness damping, no temperature | key `"temperature"` | element 0, key `"temperature"` | yes |
+| RF3 six refusals | each key `"temperature"` | all six; the run beyond the table leaves the time at `0` | yes |
+| N1 B0, 12 digests of f168d994 | equal | equal | yes |
+| N5 the crate's tests (`cargo test -p rcfd-fem --release`, 205 test binaries) | pass | 889 passed, 0 failed, 252 ignored (`f592-scratch/fem-all.log`) | yes |
+| N4 `baseline_hashes` | pass | 3 passed, 1 ignored | yes |
+
+RT1 is exactly zero for the reason V1T of ADR 0499 was: the two reduced-time ratios round to the same bits for the three
+branches, and the damping matrices are equal (arithmetic 1). NC2 (`0.25`) shows that the step reaches the integrator.
+
+Other runs: `cargo clippy -p rcfd-fem --all-targets --release -- -D warnings`: clean; `cargo fmt -p rcfd-fem --check`: clean;
+`cargo test -p rcfd-cli --release --test docs_site`: 2 passed. Not run: the workspace test suite (the lead's gate).
+
+Shared solver files changed (line ranges at the tip against 2223226d): `nonlinear.rs` 890-902 (`tangent` forwards to the new
+`tangent_at`), 1901-1903 and 1914 (`TimeSteppingOptions::temperature_history`, its default), 1932-1946 (its builder and the
+refusal with `temperature`), 2055-2060 (doc of `solve_in_time_with`), 2086-2098 (the coverage check), 2110-2113 (the context at
+the end of the attempt); `nl_transient.rs` 20-23 (module doc), 49 (`Cow`), 93-95, 113, 143-147 (the option, its default and
+builder), 331-336 (the stored history, Rayleigh coefficients and `c_temperature`), 539-544 (the refusal with `temperature`),
+607-622 (`K_0` at the temperature), 642-644 (stored), 673-683 (coverage), 708-745 (`temperature_at`, `damping_at`,
+`damping_force`), 793, 803-804 (`start`), 1044-1048, 1057-1058 (`substep`), 1110 (`strain_energy`); `nl_transient/emc.rs`
+300-304, 315, 359 (the temperature and damping at the end of the sub-step). No edit of the files of F-604, F-588 or F-584.
+
+**Mutations** (`f592-scratch/mutate.py` on a git-archive copy of f0a1266d with its own target directory, log `mutations.log`;
+MU0, the copy without a mutation, passes 4 of 4 tests with the ignored record included):
+
+| Id | Caught by |
+|---|---|
+| MU1 the driver at the step-start temperature | S2 (`7.234e-4`, probe `7.234e-4`); S4 not (`3.523e-3`: the left-endpoint rule is also first order; a deviation from the registered expectation "S2, S4") |
+| MU2 the sub-step of the integrator at the step-start temperature | V2T (first differing step 400) |
+| MU3 `K_0` at the default context | V2T, RT1, NC2 (refused by `Integrator::new`: the test panics at the first set-up) |
+| MU4 the table of the driver ignored after `t = 0` | S2 (`2.293e-2`), S4 (`0.170`), S4o (`0`) |
+| MU5 the start of the integrator without the table | V2T (refused at start), RF3 (the run-beyond case panics at its start) |
+| MU6 the table of the integrator ignored in the sub-steps | V2T (step 400), NC2 (`0`) |
+| MU7 the coverage check of the driver removed | RF3 (panic of `LoadTable::value` in the driver) |
+| MU8 the run-coverage check of the integrator removed | RF3 (panic of `LoadTable::value` in the integrator) |
+| E1 damping never re-formed (equivalent) | not caught, as registered |
+| E2 `K_0` at the reference temperature (equivalent) | not caught, as registered |
+
+Every planned mutation MU1 to MU8 was caught; E1 and E2 were not, as arithmetic 1 predicts.
+
+**Deviations.** (1) Amendment 1 (the S3e set-up). (2) MU1 is caught by S2 only, not also by S4 as registered. (3) The registered
+"refused" outcomes of MU3 and MU5 show as a panic at an `unwrap` of the set-up (the test stops there) rather than a printed
+MISSED line. (4) A section of `docs/reference-data.md` gives the closed forms and probe numbers of arithmetic 2 to 5.
+
+**Decision by the registered rule: done.** Every check of the table is met, MU1 to MU8 are each caught, fmt and clippy are
+clean, and B0, the default-bits files and the baseline hashes are unchanged.
+
+### Remaining questions
+
+1. **Case-file key.** Options: (a) none yet; (b) `temperature = number | [[t, T], ...]` in the quasi-static time study and the
+   nonlinear transient study of ADR 0499 open question 3. Recommendation: (b), when the case file is opened to the nonlinear
+   studies.
+2. **A temperature-dependent damping tangent.** No model the integrator accepts has one (arithmetic 1), so the re-forming of
+   D4 is exercised only as code (E1 equivalent). Options: (a) leave; (b) a check when a tabulated base reaches the nonlinear
+   paths (it needs a temperature field). Recommendation: (a) now, (b) with the temperature field follow-up.
+3. **A nodal temperature field** against time (thermal coupling of the fan blade). Options: (a) uniform only; (b) a field, with
+   a thermal strain. Recommendation: (b) as a follow-up when the fan-blade thermal case needs it.
+
+## For the lead: roadmap entries
+
+Proposed status of F-592: **done**. Proposed note:
+
+> Structural solver, advanced tier. Optional. Follow-up of F-576. DONE. ADR 0526, 2026-11-14: the quasi-static driver and the nonlinear transient integrator take a uniform temperature against time (TimeSteppingOptions::temperature_history, NlTransientOptions::temperature_history: a transient::LoadTable taken at the end time of every attempt or sub-step, halved or not; refused together with the constant temperature of ADR 0499 and outside the run); the reduced time is the right-endpoint sum of dt/a_T(T(t_end)); the Rayleigh stiffness part of the integrator's damping takes its tangent at the temperature (nonlinear::tangent_at; a shifted viscoelastic material with stiffness damping is no longer refused when a temperature is given; re-formed when the history's temperature changes). Met: a relaxation under a temperature step 383 -> 393 K on the driver within 5.6e-16 of the closed form with xi = min(t, t_s)/a_1 + max(t - t_s, 0)/a_2 (the constant 383 K differs by 2.3e-2); a ramp first order (3.5e-3 at 100 steps, order 0.996); the integrator under a temperature step bit-equal to the run restarted at the second temperature (the constant first temperature differs by 0.25); the shifted rod with stiffness damping at T equal to the unshifted rod with a_T tau (0); a constant table gives the bits of ADR 0499 on the driver, the integrator and the energy-momentum step; default bits (12 digests) and baseline hashes unchanged; eight mutations caught (two registered equivalents not). No case-file key (recommended: temperature as a number or a table in the nonlinear studies).
+
+Note for F-576 (to append to its note):
+
+> A temperature history and the Rayleigh stiffness tangent at the temperature on both paths: F-592 (ADR 0526, 2026-11-14); a constant table gives the bits of this item.
+
+Follow-up (optional, not added). Title: "A nodal temperature field against time on the nonlinear paths, with thermal strain". Deps: F-592. Acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. The quasi-static driver and the nonlinear transient integrator take a nodal temperature field against time (a table of fields, the step-end value) with the thermal strain of the material's expansion; a uniform field gives the bits of ADR 0526 without expansion, and a free thermal expansion of an unconstrained elastic cube under a temperature step equals alpha dT within 1e-12. Models without a temperature keep their bits.
