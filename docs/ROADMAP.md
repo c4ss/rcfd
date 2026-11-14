@@ -6958,7 +6958,10 @@ fixed by the item's registration ADR before any code.
     corrector at dt 1e-3 both forcings also have positive pressure modes up to 1.9, so the one-step spectrum does not
     separate the setting that stops from the first-order forcing that runs. ADR 0421 (2026-11-13, F-501): the stop at
     step 34 of the bounded form with one corrector at dt 1e-3 comes from the start field (the inflow profile through the
-    body); from a projected start without flow through the cylinder it runs 200 steps (max abs(u) 2.208).
+    body); from a projected start without flow through the cylinder it runs 200 steps (max abs(u) 2.208). ADR 0425
+    (2026-11-14, F-515): the refusal is lifted for a start projected onto the fluid region
+    (PimpleSolver::project_immersed_start); from it the bounded form and the unbounded form with weights up to 2 run 200
+    steps with one corrector at dt 1e-3.
 - [ ] **F-364** Second-order immersed forcing: one constructor with bounded weights
   - depends on: F-355
   - acceptance: `build_second_order` builds the bounded form of ADR 0254, the refusal of the unbounded form is removed,
@@ -9878,17 +9881,35 @@ fixed by the item's registration ADR before any code.
     by the rule: the si_beam copy of the retired gravity-refusal row had a defective reference (it left out the base
     model's tip force) and was met only after amendment 1. Centrifugal, nodal body force and thermal loads on beams are
     still refused.
-- [ ] **F-515** Immersed start projection: an opt-in start field without flow through the body
+- [x] **F-515** Immersed start projection: an opt-in start field without flow through the body
   - depends on: F-501
   - acceptance: An opt-in projection of the start velocity onto the fluid region of the immersed bodies (ADR 0421 D1:
     solid cells zero, fluid-solid faces closed, discrete divergence at most 1e-10 of the flux scale, the start face flux
     passed to the solver) is added with the defaults bit-identical (baseline_hashes unchanged); with it DFG 2D-2 on M2
     with build_second_order_bounded and one PISO corrector at dt 1e-3 runs 200 steps (ADR 0421: max abs(u) 2.208 at step
     200), and the refusal of the bounded form with one corrector of ADR 0374 is revisited for a projected start.
-  - note: From ADR 0421 questions 1 and 2, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+  - note: DONE (ADR 0425, 2026-11-14), in the library. From ADR 0421 questions 1 and 2, recommendation taken on the
+    maintainer's standing instruction of 2026-11-11. rcfd_fv::immersed_start::project_start projects a start velocity
+    onto the fluid region of the immersed bodies (ADR 0421 D1: solid cells zero, fluid-solid faces closed, a discrete
+    Helmholtz projection by Jacobi-preconditioned CG with the open boundary faces read from the fixed-pressure
+    condition; divergence 1.8e-13 of the flux scale on DFG M2, bit-equal to the F-501 test projection on M1 and M2), and
+    PimpleSolver::project_immersed_start (opt-in) puts the solver at it with the projected face flux. With it DFG 2D-2
+    on M2 with build_second_order_bounded and one PISO corrector at dt 1e-3 runs 200 steps with the default checks on
+    (max abs(u) 2.2080217 at step 200; ADR 0421 2.20802). The refusal of ADR 0374 (a reversed flux face with one
+    corrector) is lifted for a projected start only and kept unchanged by default; the unbounded form with weights up to
+    2 also runs 200 steps from the projected start (it stops at step 126 from the ADR 0249 start). Defaults
+    bit-identical (baseline_hashes, the F-363 fingerprints and refusal tests unchanged). Eight mutations caught. Not
+    done (needs the maintainer): a case-file key, which changes the schema golden.
 - [ ] **F-516** Beam output: refusal of a result with the model's count of unknowns in another layout
   - depends on: F-512
   - acceptance: Every limit not stated here is registered in the ADR before the run. rcfd_post::solid_output refuses a
     result of a beam model whose DofMap has the model's number of unknowns but another count at some node, with a
     message naming that node and both counts; the N2b test of ADR 0423 passes unedited; the mutation removing the DofMap
     equality check is caught by a check registered before its run.
+- [ ] **F-517** Case-file key for the immersed start projection
+  - depends on: F-515
+  - acceptance: A case-file key asks for the immersed start projection of ADR 0425
+    (PimpleSolver::project_immersed_start) and is carried through restart so that a restarted projected run is not
+    refused; with the key absent every case gives the bytes it gave before (baseline_hashes and the case hash tables
+    unchanged); the schema golden change is approved by the maintainer.
+  - note: From ADR 0425 questions 2 and 3; needs the maintainer's approval of the schema golden change.
