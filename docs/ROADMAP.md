@@ -10810,7 +10810,7 @@ fixed by the item's registration ADR before any code.
     within 1e-10 on the block, the ring and the radial beam of ADR 0472, and the difference between F-396's reported
     rest eigenvalues and those quotients is reported per mode; no default result changes.
   - note: Structural solver, advanced tier. Follow-up of F-415 (ADR 0472, 2026-11-14).
-- [ ] **F-555** Split Campbell table of a cyclic sector on the modal subspace
+- [~] **F-555** Split Campbell table of a cyclic sector on the modal subspace
   - depends on: F-415, F-544
   - acceptance: Every limit not stated here is registered in the ADR before the run. The gyroscopic problem of ADR 0472
     on the harmonic modes of each index of a cyclic sector (a cos/sin basis and the doubled Coriolis matrix of ADR 0411
@@ -10818,7 +10818,19 @@ fixed by the item's registration ADR before any code.
     those of RotatingSector::whirl_modes within 1e-6 for the modes whose coupling stays inside the basis; the refusal of
     ADR 0472 is lifted only for sectors whose material axes pass the check of ADR 0462; without the option every result
     bit-identical.
-  - note: Structural solver, advanced tier. Follow-up of F-415 (ADR 0472, 2026-11-14).
+  - note: Structural solver, advanced tier (plan ADR 0310). PARTIAL. Size S. ADR 0481, 2026-11-14:
+    RotatingSector::split_modes and split_campbell in rcfd_fem::gyro: the gyroscopic problem of ADR 0472 on the F-396
+    harmonic modes of each index (cos/sin basis, K_eff, M and the Coriolis matrix doubled for a pair), solved by the
+    quadratic solver of ADR 0450 and tracked per index by the tracker of ADR 0411, with growth, stability, whirl number
+    and wave sense; opt-in by RotatingOptions::coriolis, without it the F-396 sector results bit for bit; sectors exist
+    only for material axes passing ADR 0462. A mode counts as inside the basis when the first-order Ritz error eta =
+    |e^H Q e|/(omega |s^H Q' s|) of the whole-sector whirl mode is below 1e-7 (eta matches the measured error within 3
+    percent). On the disc sector of ADR 0411 with 41 modes per index at 0.4 and 0.8 omega_ref, 223 to 233 of 246 modes
+    are inside and equal RotatingSector::whirl_modes within 8.3e-8 (isotropic) and 9.9e-8 (orthotropic, cylindrical
+    axes); with 4 or 12 modes per index none is inside (errors 8e-4 to 5e-3). Other axes refused; non-cyclic split
+    results and defaults bit-identical (13 digests). Six of seven mutations caught; removing the axes check of
+    RotatingSector::new is not caught because RotatingPart::new and the transformation check it again. Follow-up for
+    static correction vectors.
 - [ ] **F-556** Diagnosis of the Shell3 rest stiffness of a twisted strip against Hex20
   - depends on: F-420
   - acceptance: Every limit not stated here is registered in the ADR before the run. The 4.05 percent excess of the
