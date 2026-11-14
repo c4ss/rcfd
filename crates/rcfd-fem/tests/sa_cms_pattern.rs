@@ -695,8 +695,8 @@ fn below(full: &[f64], half: f64) -> Vec<usize> {
     (0..full.len()).filter(|&k| full[k] < half).collect()
 }
 
-/// LF (b3), predicted miss: each frequency of the assembly below the bound within 1e-3 of F's. Registered run
-/// (cargo test --release -p rcfd-fem --test sa_cms_pattern -- --ignored): see the addendum of ADR 0511.
+/// LF (b3), predicted miss: each frequency of the assembly below the bound within 1e-3 of F's. Missed at its registered run:
+/// largest 5.032e-3 at omega 15026.7 rad/s (3.472e-3 at 14830.3 and 4.052e-3 at the axial 8179.0 also above); the limit is kept.
 #[test]
 #[ignore = "known miss of ADR 0511 LF (predicted by its arithmetic item 2): the frequency errors of the modes near the bound are 3.5e-3 to 5.0e-3"]
 fn lf_each_frequency_below_the_bound_within_1e3_known_miss() {
@@ -791,6 +791,8 @@ fn off_resonance_points(half: f64, full: &[f64]) -> Vec<f64> {
 }
 
 /// OFF1 (b2), predicted miss: the off-resonance response to half the lowest omitted fixed-interface frequency within 1 percent.
+/// Missed at its registered run: largest 1.041e-1 at omega 15778.29 (72 points, omega_half 16785.42), first point above 1e-2 at
+/// 6882.02; the limit is kept.
 #[test]
 #[ignore = "known miss of ADR 0511 OFF1 (predicted by its arithmetic item 3): the response near the modes 3.5e-3 to 5e-3 high is off by about 0.1"]
 fn off1_off_resonance_to_half_the_lowest_omitted_known_miss() {
