@@ -254,3 +254,99 @@ before its run), in the running copy `th1_th3_n3_n5_free_plate_after_amendment2`
 | id | clause | check | limit | estimate |
 | --- | --- | --- | --- | --- |
 | TH3d | (stronger, diagnosis of TH3a) | plates P and Q: `max |theta_i . e_Z - omega| / (alpha dT)` over the nodes that are not nodes of element 0 (node 0's element, where the mode carries `theta_z` from 0 to `omega`); the values at the other three nodes of element 0 are printed, not checked | `1e-12` | the mode has `theta_z = omega` outside element 0; its spread into the membrane field is held by stiffnesses `1e3` times the drilling one: `~2e-13` |
+
+## Addendum 1: results (2026-11-14)
+
+Code: `crates/rcfd-fem/src/shell.rs` (D1: `body_load_vector_at`, `body_load_vector` delegating to it; D2: `thermal_load_vector`;
+`stresses` subtracts the centre thermal strain when the model has a temperature field; module doc), `loads.rs` (D1: the shell
+rule takes the shape-function values, type `ShellRule`; the `BodyForceNodal` arm passes a shell rule; `add_moment` made
+`pub(crate)`; module doc), `thermal.rs` (D2: the Shell4 branch of `add_thermal_load`; module doc). New tests
+`crates/rcfd-fem/tests/si_shell_thermal.rs` (4 running tests, 3 ignored records, 0.01 s in release) and
+`si_shell_thermal_bits.rs` (B1, its digests printed by the file on the base before any library code, commit `487b820d`); in
+`si_shell.rs` the retired `s1_n2_n3_refusals_after_landed` got its `#[ignore]` line and the copy
+`s1_n2_n3_refusals_f525_after_landed` was added (R3 replaced by R4). Registered run once on commit `ab36fef0`, release,
+`--test-threads=1` (`f525-scratch/run1.log`); TH3c on `a2b9e46f` (`run2.log`); TH3d on `ed160d56` (`run3.log`).
+
+| id | check | limit | measured | met |
+| --- | --- | --- | --- | --- |
+| BF1 | nodal forces against `t sum M_ij b_j`; nodal moments | `1e-12` | `1.9e-16`; `4.1e-18` | yes |
+| BF2 | uniform field against gravity, warped mesh | `1e-13` | `7.3e-17` | yes |
+| TH1 | membrane strain against `alpha dT (1, 1, 0)`, P; Q | `1e-12` | `8.5e-15`; `7.6e-15` | yes |
+| TH2 | membrane forces, P; Q | `1e-12` | `2.6e-15`; `2.8e-15` | yes |
+| TH2 | surface stresses, P; Q | `1e-12` | `2.6e-15`; `3.7e-14` | yes |
+| TH3a | in-plane displacement against the free expansion, P; Q | `1e-12` | `2.1e-10`; `1.3e-10` | **no** (known miss) |
+| TH3a | P out-of-plane displacement | `1e-12` | `0` | yes |
+| TH3a | P rotations | `1e-12` | `3.0e-10` | **no** (known miss) |
+| TH3b | Q out-of-plane displacement; rotations | `1e-8` | `1.6e-12`; `1.6e-10` | yes |
+| TH3c | (amendment 1) in-plane displacement less a fitted rigid rotation, P; Q | `1e-12` | `3.6e-15`; `3.6e-15` | yes |
+| TH3c | (amendment 1) `theta . e_Z - omega` over all nodes, P; Q | `1e-12` | `2.4e-10`; `1.4e-10` | set-up defective (node 0 held), amendment 2 |
+| TH3d | (amendment 2) the same over the nodes not of element 0, P; Q | `1e-12` | `1.8e-11`; `1.1e-11` | **no** (known miss) |
+| TH4 | rectangle, linear `dT`: forces against the closed form; the rest | `1e-12` | `2.0e-16`; `0` | yes |
+| TH5 | warped, non-uniform: resultant; moment | `1e-12` | `4.6e-16`; `1.6e-16` | yes |
+| B1 | four solid load-vector digests against the base | exact | all four equal | yes |
+| B2 | `baseline_hashes`; `sa_scaffold_bits`, `si_scaffold_bits`, `sb_thermal_bits`, `sb_loads`, `sb_thermal`, `sb_recover`, `si_shell`, `si_shell_transformation`, `si_shell_rotating_disc`, `si_beam_loads`, `si_scaffold`, `sa_scaffold` | exact | all pass (`f525-scratch/b2-fem.log`, `b2-api.log`) | yes |
+| B3 | mixed model: solid entries the Hex8-only bits; shell entries the shell-only bits | exact | both bitwise | yes |
+| R0 | the ignore line and the copy | exact | as registered | yes |
+| R4 | nodal body force on the cantilever, reaction balance | `1e-8` | `2.1e-11` | yes |
+| N1 | temperature on a beam | exact | `NotYetSupported { beam::SOLID_ROUTINES }` | yes |
+| N2 | temperature on a Layup shell | exact | `Element { InvalidValue { key: "property" } }` | yes |
+| N3 | `IntegrationPointField` of a shell model | exact | `NotYetSupported { shell::SOLID_ROUTINES }` | yes |
+| N4 | `T = T_ref`: zero load and zero displacement | exact | all zero | yes |
+| N5 | `A eps` without the thermal strain | `> 0.5` | `1.0` | yes |
+
+Diagnosis of the misses (amendments 1 and 2): the solve is backward stable (residual `1.1e-15` and `2.9e-15` of `|f|`, the same
+order as that of the exact free expansion); the error of TH3a is a rigid in-plane rotation of the translations (TH3c, `3.6e-15`
+after removing it) excited by rounding in the soft mode held only by the drilling penalty (`DRILLING_FACTOR = 1e-3`) at the
+clamped node; `theta_z` follows it away from element 0 only to `1.8e-11` of `alpha dT` (TH3d), so the mode spreads further than
+amendment 2 estimated. The displacement error is `omega ~ 1.4e-13` rad; it carries no strain and no stress (TH1, TH2), the
+quantities of the acceptance. Arithmetic 5 of the registration missed this mode; the limits stay.
+
+### Mutations (scratch copy `f525-scratch/tree`, scripts `mut.py`, `mut.sh`, logs `MU*.log`, diffs `MU*.diff`)
+
+| id | mutation | caught by |
+| --- | --- | --- |
+| MU1 | no shell rule for `BodyForceNodal` | BF1 (refused), B3 |
+| MU2 | nodes reversed in the shell interpolation | BF1 (`2.2e-2`) |
+| MU3 | thickness left out of the thermal load | TH1, TH2, TH3c, TH4 (`99`) |
+| MU4 | `(1, 1, 0)` replaced by `(1, 0, 0)` | TH1, TH2, TH3b, TH3c, TH4 |
+| MU5 | `stresses` without the thermal strain | TH2 (`1.0`) |
+| MU6 | `T^T` left out of the thermal load | TH1, TH2, TH3b, TH3c, TH5 |
+| MU7 | Gauss-point temperature from the first node | TH4 (`0.31`) |
+| MU8 | thermal strain sign flipped in `stresses` | TH2 (`2.0`) |
+| MU9 | solid nodal-field interpolation summed in reverse | B1 (the Tet10 field digest; the Hex8 digest unchanged) |
+| MU10 | offsets left out of the thermal load's transformation | TH5 (`5.0e-6`) |
+
+10 of 10 caught. `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --all-targets --release -- -D warnings` clean.
+Not run: the whole workspace suite (the lead's gate) and the rcfd-fem test files not listed in B2.
+
+### Deviations
+
+- The commit hash quoted in amendment 2 was mistyped and corrected (to `a2b9e46f`) in the test commit `ed160d56`, before the
+  run of TH3d.
+- The running test `th1_th3_n3_n5_free_plate_met_rows` keeps every met row with its registered limit and prints the missed TH3a
+  and TH3d rows (the copy pattern of amendment 1); its numbers are those of the registered runs (deterministic).
+
+### Decision by the registered rule
+
+**partial**: registered checks missed (three rows of TH3a, and TH3d), and TH3c and TH3d were added by amendments after the
+first run. Every clause of the acceptance was met: a2 by BF1 (`1.9e-16`), a3 by TH1 (`8.5e-15`), a4 by TH2 (`3.7e-14`), a5 by
+B1, B2 and B3; every mutation caught.
+
+### Remaining questions
+
+1. The free-expansion displacement of a shell plate held at one node carries a rigid in-plane rotation of `~1e-13` rad from
+   rounding. Options: (a) accept it (no strain, no stress; a model held at more than one node has no such soft mode); (b) a
+   follow-up on the drilling factor's effect on the conditioning of the in-plane rotation. Recommendation: (a), and (b) only if
+   a case needs displacements to 1e-12.
+2. A temperature gradient through the thickness (L1). Options: (a) a follow-up adding a gradient field (a new load variant, a
+   schema question); (b) leave it. Recommendation: (a) when a housing model needs it.
+
+## For the lead: roadmap entries
+
+Proposed status of F-525: **partial**. Note:
+
+> Structural solver, intermediate tier. ADR 0445, 2026-11-12: nodal body-force fields and thermal loads on Shell4. Load::BodyForceNodal on a shell takes the consistent load t int N_i b dA of the interpolated field (shell::body_load_vector_at); Load::Temperature on a shell takes the membrane thermal load of eps_th = alpha dT (1, 1, 0), uniform through the thickness (shell::thermal_load_vector), and shell::stresses subtracts the thermal strain. Met: consistent loads within 1.9e-16 (limit 1e-12); a free plate held at one node (flat and inclined) has the membrane strain alpha dT within 8.5e-15 and zero stress within 3.7e-14 (limit 1e-12); a linear temperature on a rectangle gives the closed-form loads within 2e-16, warped self-equilibrium within 5e-16; models without shells give their former bits (four digests, baseline_hashes, the scaffold bit records). Partial: the free-expansion displacement carries a rounding rigid in-plane rotation of 2.1e-10 alpha dT L (limit 1e-12, known miss; the soft drilling mode at the clamped node, no strain or stress). Ten mutations, all caught. Layup thermal loads and a through-thickness gradient not taken.
+
+Follow-up item (optional), title "Through-thickness temperature gradient on Shell4", deps F-525:
+
+> Every limit not stated here is registered in the ADR before the run. A nodal temperature gradient through the thickness on a Shell4 model gives the curvature thermal load int B_b^T D_b kappa_th dA with kappa_th = alpha dT_grad; a free plate under a uniform gradient takes the curvature alpha dT_grad and zero moment within 1e-12; a model without a gradient gives the bits it gave before.
