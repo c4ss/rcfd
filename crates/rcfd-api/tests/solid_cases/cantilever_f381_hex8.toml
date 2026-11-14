@@ -1,0 +1,34 @@
+# F-526 (ADR 0443): the fast cantilever of F-381 (ADR 0282 arithmetic 5): Hex8 box [0, 8] x [0, 1.5] x [0, 1.5] m,
+# divisions [32, 6, 6], xmin clamped, tip traction (0, 0, -1e6) Pa on xmax, E = 2e11 Pa, nu = 0.3.
+title = "F-381 fast cantilever, Hex8 32 x 6 x 6"
+
+[mesh]
+source = "generator"
+generator = "box"
+element = "hex8"
+lengths = [8.0, 1.5, 1.5]
+divisions = [32, 6, 6]
+
+[materials.steel]
+element_set = "all"
+youngs_modulus = 2.0e11
+poisson_ratio = 0.3
+
+[constraints.clamp]
+set = "xmin"
+components = ["x", "y", "z"]
+
+[loads.tip]
+kind = "traction"
+set = "xmax"
+traction = [0.0, 0.0, -1.0e6]
+
+[analysis]
+type = "static"
+
+[solver]
+method = "direct"
+
+[output]
+vtu = "cantilever_f381_hex8.vtu"
+report = "cantilever_f381_hex8.json"
