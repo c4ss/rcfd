@@ -8584,17 +8584,19 @@ fixed by the item's registration ADR before any code.
     of a step with a settled active set show an order >= 1.8; an active set that cycles beyond the registered count is
     an error with the nodes.
   - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. ADR 0507, 2026-11-14: frictionless
-    node-to-surface contact (contact.rs) on bilinear Hex8 target faces or a rigid plane: closest-point projection with
-    the exact gap gradient and second derivative, a per-node augmented Lagrangian force max(0, lambda - eps A g) with
-    Uzawa updates until every active gap is within the tolerance, a linear-body Newton driver (sparse L D L^T, eps G G^T
-    on a refused pivot) and the total Lagrangian driver through nonlinear::solve_from, located errors for active-set
-    cycling and exhausted augmentations. Met: bar on a rigid stop (1.1e-11); stacked blocks pressed and pulled apart
-    (1.2e-10, no tensile multiplier); Hertz sphere on a rigid plane at a/R = 0.1 (radius 3.0e-4, peak 7.6e-4, approach
-    6.1e-4, 13 nodes); interference-fit pressure (8.0e-3) and Lame hoop stress (3.6e-3); tangent against central
-    differences (2.3e-10); the cycling error names the nodes; nine of nine mutations caught; default bits unchanged.
-    PARTIAL. Missing: uniform shaft stress in the fit (7.0e-3 against 1e-6, a through-thickness variation not yet
-    explained) and the residual order of the total Lagrangian punch (least 0.17 against 1.8, the ADR 0404 measure on
-    solves of three to five iterations); both recorded as known misses. No case-file key.
+    node-to-surface contact (contact.rs) on bilinear Hex8 target faces or a rigid plane. It uses closest-point
+    projection with the exact gap gradient and second derivative, a per-node augmented Lagrangian force max(0, lambda -
+    eps A g) with Uzawa updates until every active gap is within the tolerance, a linear-body Newton driver (sparse L D
+    L^T, eps G G^T on a refused pivot) and the total Lagrangian driver through nonlinear::solve_from, and gives located
+    errors for active-set cycling and exhausted augmentations. Met: bar on a rigid stop (1.1e-11); stacked blocks
+    pressed and pulled apart (1.2e-10, no tensile multiplier); Hertz sphere on a rigid plane at a/R = 0.1 (radius
+    3.0e-4, peak 7.6e-4, approach 6.1e-4, 13 nodes); interference-fit pressure (8.0e-3) and Lame hoop stress (3.6e-3);
+    tangent against central differences (2.3e-10); the cycling error names the nodes. Nine of nine mutations caught;
+    default bits unchanged. Missing: uniform shaft stress in the fit (7.0e-3 against 1e-6, a through-thickness variation
+    not yet explained) and the residual order of the total Lagrangian punch (least 0.17 against 1.8, the ADR 0404
+    measure on solves of three to five iterations). Both are recorded as known misses. No case-file key. Amendments 2
+    and 3 were committed before their corrected runs (no limit changed). Follow-ups F-599, F-600, F-601. Open
+    (maintainer): a [[contact]] case-file table.
 - [x] **F-428** Laminated shell: layup stiffness, ply stresses and failure indices
   - depends on: F-409, F-392
   - acceptance: Every limit not stated here is registered in the ADR before the run. One isotropic ply gives the bits of
@@ -11037,7 +11039,7 @@ fixed by the item's registration ADR before any code.
     (t/a 0.2) ratio of the Mindlin closed form to 1.9e-4 (Shell4) and 9.8e-5 (Shell3). Defaults bit-identical (16
     digests). Nine of ten registered mutations caught; one gap (`scaled`) closed by A3. Follow-up F-598. Open
     (maintainer): the case-file key [structural] geometric_terms = "full".
-- [ ] **F-559** Craig-Bampton residual vectors of given load patterns and a harmonic acceptance at resonances
+- [~] **F-559** Craig-Bampton residual vectors of given load patterns and a harmonic acceptance at resonances
   - depends on: F-552
   - acceptance: Every limit not stated here is registered in the ADR before the run. The reduction of ADR 0474 takes
     residual vectors of load patterns given by the caller (each M-orthogonalised against the kept modes and the vectors
@@ -11047,7 +11049,23 @@ fixed by the item's registration ADR before any code.
     the full model's, the first eight frequencies strictly lowered by the residual vectors, a point at the axial
     resonance within the error 4 delta / eta of its frequency error, and a pattern per load component reproducing the
     statics of each component within 1e-10; without the option every result bit-identical to ADR 0474's.
-  - note: Structural solver, advanced tier. Follow-up of F-552 (ADR 0474, 2026-11-14).
+  - note: Structural solver, advanced tier. Follow-up of F-552 (ADR 0474, 2026-11-14). PARTIAL. ADR 0511, 2026-11-14:
+    CmsOptions::load_pattern gives vectors over a part's mesh equations, each adding its static residual vector K_ii^-1
+    p_i, M-orthonormalised twice against the kept modes and the vectors before it (dropped when in their span; zero and
+    repeated patterns add nothing), after the vector of the model's load when that is asked; ReducedPart::reduce_load
+    reduces any load vector to the part, Assembly::load_from and Assembly::harmonic_with_load apply it. Off by default
+    and bit-identical when off (10 digests of the ADR 0474 option paths at 6c4ba2d9, the 11 of ADR 0474 D2, harmonic
+    equal to harmonic_with_load of its own load). A pattern per corner-force component reproduces the statics of each
+    component within 3.3e-12 (bar) and 9.5e-14 (small model, dense and subspace paths) against 2.9e-2 without; the first
+    eight frequencies are lowered by at least 2.2e-8 (against the cutoff alone and against the ADR 0474 option); the
+    response at the axial resonance (8179 rad/s) is off by 0.353 against the bound 4 delta / eta = 0.81 (delta 4.05e-3);
+    orthogonality 4e-16. Two clauses missed as predicted: each frequency below half the lowest omitted fixed-interface
+    frequency within 1e-3 (5.0e-3 at 15027 rad/s; three of ten above) and the response within 1 percent off resonance up
+    to that bound (0.104 at 15778 rad/s; 1 percent holds to 6882 rad/s, 3.2e-3 to 4000); static residual vectors of the
+    load do not change the interface accuracy near the bound. Eleven mutations all caught. Follow-up: a restated
+    harmonic clause and an interface enrichment. Open (maintainer): restate the off-resonance and frequency clauses as
+    the bands that hold (to 4000 rad/s within 1 percent; frequencies below 9500 rad/s other than the axial one within
+    1e-3), or keep them and take F-603. Follow-up F-603 (optional).
 - [ ] **F-560** Convergence order of the Newton driver with plasticity: a reading for an active-set change
   - depends on: F-422
   - acceptance: Every limit not stated here is registered in the ADR before the run. On the sphere and beam solves of
@@ -11057,13 +11075,21 @@ fixed by the item's registration ADR before any code.
     registered), gives an order >= 1.8 or the bound on every increment, and the continuum tangent (mutation MU1 of ADR
     0475) fails it.
   - note: Structural solver, advanced tier. Follow-up of F-422 (ADR 0475, 2026-11-14).
-- [ ] **F-561** Thick sphere with J2 on a refined octant: residual hoop stress after unloading
+- [~] **F-561** Thick sphere with J2 on a refined octant: residual hoop stress after unloading
   - depends on: F-422
   - acceptance: Every limit not stated here is registered in the ADR before the run. The partly plastic sphere of ADR
     0475 on a 4 x 4-per-face cubed-sphere octant with 8 radial Hex20 layers: the residual hoop stress at the bore after
     unloading from p(1.25 a) within 2 percent of sigma_y - (12/7) p, the elastic Lame hoop stress of the same mesh at
     every point of the inner layer within 1 percent, and S1, S2 of ADR 0475 still within 1 percent.
-  - note: Structural solver, advanced tier. Follow-up of F-422 (ADR 0475, 2026-11-14).
+  - note: Structural solver, advanced tier. Follow-up of F-422 (ADR 0475). ADR 0512, 2026-11-14: PARTIAL by the
+    registered rule. The octant of ADR 0475 on 4 x 4 cells per face with 8 radial Hex20 layers (a test-side cubed-sphere
+    generator, crates/rcfd-fem/tests/sa_j2_f561.rs; no library change, the closed form sigma_y - (12/7) p1 is exact for
+    b/a = 2 and was derived by hand in the registration): S1 8.0e-5 and S2 1.0e-3 (limit 1e-2), C1 0 wrong, controls N1
+    to N4 and 7 mutations met. Residual hoop stress at the bore missed (-0.611919 sigma_y against -0.628903, 2.70e-2 >
+    2e-2; the 2 x 2 octant 2.63e-2) and the elastic Lame hoop stress at every point of the inner layer missed (largest
+    1.162e-2 > 1e-2): ignored *_known_miss tests, limits intact. Diagnosed: refining the angles does not change them,
+    the error is the radial resolution of 8 Hex20 layers; diagnostic with 16 layers: residual 4.5e-3, elastic largest
+    9.3e-3. Follow-up F-602.
 - [~] **F-562** Damped massless unknowns of a rotor solved as first-order unknowns
   - depends on: F-416
   - acceptance: Every limit not stated here is registered in the ADR before the run. A bearing pedestal with stiffness
@@ -11146,15 +11172,15 @@ fixed by the item's registration ADR before any code.
     within 1e-6; a field with coherence exp(-|x_a - x_b|/L) on a plate tends to the uncorrelated result as L goes to 0
     and to the fully correlated one as L grows, each within 1e-8 at the registered limits.
   - note: Structural solver, advanced tier. ADR 0510, 2026-11-14: rcfd_fem::random gains CrossSpectrum (a table
-    G_ab(f_k) with real and imaginary parts, or spectra with a Coherence), Coherence (constant real, table, or
-    function of the frequency), check_cross_matrix (Hermitian to 1e-12 of the largest diagonal and positive semi-
-    definite to 1e-12 of the trace by a complex Cholesky, refusal names the frequency), exponential_coherence,
-    spectral_response_cross and Excitation::cross (stress included). Convention G_ab = E[conj(F_a) F_b]; a real
-    constant coherence is routed to spectral_response, so F-417 is reproduced bit for bit (also by the general loop,
-    switched on with SpectralOptions::real_route(false)). Pure delay on one mode within 1.2e-7 of the closed form
-    (1e-6), a two-mode delay with the sign of the phase tested within 1.2e-7; exponential coherence on a Hex8 plate: 0
-    against the uncorrelated result at L = d_min/40 and 3.3e-11 against the fully correlated at L = 1e10 plate sides
-    (1e-8). Mutations all caught (one equivalent). No case-file key.
+    G_ab(f_k) with real and imaginary parts, or spectra with a Coherence), Coherence (constant real, table, or function
+    of the frequency), check_cross_matrix (Hermitian to 1e-12 of the largest diagonal and positive semi-definite to
+    1e-12 of the trace by a complex Cholesky, refusal names the frequency), exponential_coherence,
+    spectral_response_cross and Excitation::cross (stress included). Convention G_ab = E[conj(F_a) F_b]; a real constant
+    coherence is routed to spectral_response, so F-417 is reproduced bit for bit (also by the general loop, switched on
+    with SpectralOptions::real_route(false)). Pure delay on one mode within 1.2e-7 of the closed form (1e-6), a two-mode
+    delay with the sign of the phase tested within 1.2e-7; exponential coherence on a Hex8 plate: 0 against the
+    uncorrelated result at L = d_min/40 and 3.3e-11 against the fully correlated at L = 1e10 plate sides (1e-8).
+    Mutations all caught (one equivalent). No case-file key.
 - [ ] **F-568** Error indicator per unit volume and the effectivity criterion near one
   - depends on: F-432
   - acceptance: Every limit not stated here is registered in the ADR before the run. EnergyError gives the density
@@ -11581,3 +11607,52 @@ fixed by the item's registration ADR before any code.
     + (pi^2 E C_w)/(G J L^2))^(1/2) within 1 percent at 16 elements (the clause of F-558 missed without warping); every
     result without the option bit-identical.
   - note: Structural solver, advanced tier. Follow-up of F-558 (ADR 0508, 2026-11-14).
+- [x] **F-599** Interference fit through-thickness variation of the contact pressure (re-register I3 of ADR 0507)
+  - depends on: F-427
+  - acceptance: Every limit not stated here is registered in the ADR before the run. Find why the one-layer
+    ring-on-shaft fit of ADR 0507 has node pressures of 0.9955 and 1.0045 of the mean at the bottom and top, then
+    re-register I3. Fan relevance: hub-shaft press-fit stresses.
+  - note: Structural solver, advanced tier. Follow-up of F-427 (ADR 0507, 2026-11-14). ADR 0513, 2026-11-14. The 0.9955
+    and 1.0045 node pressures of the one-layer ring-on-shaft fit of ADR 0507 are a discretisation error of the ring made
+    visible by the u_z = 0 bottom constraint; contact.rs has no defect. The 8 linear cells through b - a miss Lame's
+    constant strain sum near the bore (1.41 of it at the bore node, O(h)), so the plane-stress thickness change varies
+    (-9.13e-6 against -7.5e-6 at the bore); its gradient, with the bottom held, tilts the bore and loads its top harder.
+    Without Poisson or in plane strain the pressures are uniform to 1e-11 and the shaft to 1e-12. The top/bottom split
+    falls with the radial cell (8.9e-3, 3.8e-3, 1.4e-3 at 8, 16, 32 cells), is linear in d, nearly vanishes with u_z
+    free (1.9e-4) and grows with layers through the thickness. The reference of ADR 0507's I3 was also wrong: the shaft
+    carries mean (1 - d/a) cos(Delta/2) = 0.9978 of the mean node pressure. I3 re-registered: in plane strain the shaft
+    is uniform within 1e-6 (1.05e-12), the pressure is within 3.6e-3 of E d (b^2 - a^2)/(2 a b^2 (1 - nu^2)) and the
+    hoop stress within 3.7e-3; ADR 0507's plane-stress set-up with the corrected reference is within 1e-2 (5.4e-3). The
+    original I3 stays an ignored record. Three of three required mutations caught. No library change, no case-file key.
+- [ ] **F-600** A contact Newton order measure for short solves
+  - depends on: F-427
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A contact Newton order measure for
+    short solves (r_{k+1}/r_k^2 bounded, or started near the solution), registered for the total Lagrangian contact
+    punch of ADR 0507 T2.
+  - note: Structural solver, advanced tier. Follow-up of F-427 (ADR 0507, 2026-11-14).
+- [ ] **F-601** Contact search and targets: bucket search, rigid cylinder and sphere targets, Hex20 and Tet faces
+  - depends on: F-427
+  - acceptance: Every limit not stated here is registered in the ADR before the run. Contact search and targets: a
+    bucket search in place of the all-faces loop, rigid cylinder and sphere targets, and Hex20 and Tet faces (the limits
+    of ADR 0507).
+  - note: Structural solver, advanced tier. Optional. Follow-up of F-427 (ADR 0507, 2026-11-14).
+- [ ] **F-602** Thick sphere with J2 on a 16-layer octant: residual hoop stress after unloading
+  - depends on: F-561
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The partly plastic sphere of ADR
+    0475 on a 4 x 4-per-face cubed-sphere octant with 16 radial Hex20 layers: the residual hoop stress at the bore after
+    unloading from p(1.25 a) within 2 percent of sigma_y - (12/7) p, the elastic Lame hoop stress at every integration
+    point of the inner layer within 1 percent of the local value, S1 and S2 within 1 percent, with the 8-layer misses of
+    ADR 0512 kept as a negative control.
+  - note: Structural solver, advanced tier. Follow-up of F-561 (ADR 0512, 2026-11-14); the 16-layer diagnostic of ADR
+    0512 (residual 4.5e-3, elastic largest 9.3e-3) was unregistered.
+- [ ] **F-603** Craig-Bampton interface enrichment for frequency accuracy near half the lowest omitted fixed-interface frequency
+  - depends on: F-559
+  - acceptance: Every limit not stated here is registered in the ADR before the run. An option of the reduction of ADR
+    0474 adds to each part vectors that enrich the interface (the residual flexibility of the constraint modes, or
+    Krylov vectors of the stiffness-mass pair started from the constraint modes), each M-orthogonalised against the kept
+    modes and the vectors before it. The bar of ADR 0469 with the corner load and the cutoff of ADR 0474: each frequency
+    of the assembly below half the lowest omitted fixed-interface frequency within 1e-3 of the full model's, the
+    harmonic response within 1 percent of the full model at every point farther than 2 eta from a frequency of the full
+    model up to that bound, the frequencies strictly lowered against the cutoff alone, and the statics of the corner
+    load exact within 1e-10; without the option every result bit-identical to ADR 0511's.
+  - note: Structural solver, advanced tier. Optional. Follow-up of F-559 (ADR 0511, 2026-11-14).
