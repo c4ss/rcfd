@@ -228,3 +228,77 @@ Not taken (it would change default results):
 4. Whether the angle split should become the default pressure of Shell3: options (a) keep the opt-in; (b) make it the default
    (changes every Shell3 pressure result and the B1 digests, needs the maintainer). Recommendation (a), with the documentation
    pointing curved open shells to the opt-in.
+
+## Addendum 1: results (2026-11-14)
+
+The registered run is commit c21a1b30 (`f540-scratch/run1.log`), made once; `cargo fmt` then changed the layout of F-540 lines
+only (commit eab05403), and the two test files passed again after it (`after-fmt.log`). B2 and B3 ran on eab05403. No amendment
+was written.
+
+| id | limit | measured | met |
+| --- | --- | --- | --- |
+| A1 | `1e-2` | `3.0118e-4` (`u_r / ref` in `0.9996988186 .. 0.9996988189`) | yes |
+| DE1 | `1e-7` | `1.69e-10` | yes |
+| DE2 | `1e-7` | `4.17e-11` | yes |
+| CY2 | `1e-7` each | other diagonal `8.20e-11`, checkerboard `9.95e-11`, herringbone `7.73e-11` | yes |
+| CY3 | `1e-7` | `3.66e-11` | yes |
+| CY4 | `1e-2` | `6.7535e-3` (`0.9932465296 .. 1.0042112348`) | yes |
+| P1 | `1e-5` each | A1 `4.5e-10`, `6.3e-10`; CY4 `1.6e-9`, `1.1e-9` | yes |
+| NC1 | `1e-8` each | `5.4e-11`, `4.0e-11` (`0.9027895620 .. 1.0950504406`) | yes |
+| NC2 | `> 5e-2` | `1.025e-1` | yes |
+| LD1 | `1e-12`; `|m| = 0` | `6.2e-17`; `0` | yes |
+| LD2 | `1e-12` each | right isosceles `0`; equilateral `1.3e-16` | yes |
+| LD3 | `1e-10` | `4.4e-16` (centre deflection `2.213958359079e-4` both) | yes |
+| LD4 | exact | 918 of 918 entries equal bit for bit | yes |
+| N1 | exact | Hex8 `shell pressure`, NaN `pressure`, unknown set `UnknownSet`; Shell3 set taken | yes |
+| B1 | exact | 8 of 8 digests equal the base | yes |
+| B2 | pass | 24 binaries (`sa_*` except the two new ones, `si_shell*`), 0 failed; the `rcfd-fem` lib tests 7 passed (`b2.log`, `b2-lib.log`) | yes |
+| B3 | pass | baseline_hashes 3 passed, 1 ignored (the existing record) | yes |
+
+Mutations (archive copy of eab05403, `f540-scratch/mutate.py`, `mutlogs/`), each caught:
+
+| id | caught by |
+| --- | --- |
+| MU1 | A1, DE1, DE2, CY2, CY3, CY4, P1, LD2 |
+| MU2 | A1, DE1, DE2, CY2, CY3, CY4, P1, LD2 |
+| MU3 | A1, DE1, DE2, CY2, CY3, CY4, P1 |
+| MU4 | N1 (all three refusals) |
+| MU5 | A1, DE1, DE2, CY2, CY3, CY4, P1, LD1, LD2, LD3 |
+| MU6 | B1, NC1, NC2 |
+| MU7 | CY3, LD4 |
+
+fmt (`cargo fmt -p rcfd-fem --check`) and clippy (`cargo clippy -p rcfd-fem --all-targets --release -- -D warnings`): clean.
+Deviations: none. Not run: the whole workspace suite (the lead's gate). Files changed in the solver (shared with F-542):
+`loads.rs` (module documentation, the new `nodal_load_vector` arm, the flag of `add_shell_pressure`), `model.rs` (the variant,
+the builder, the pattern of the `ShellPressure` arm of `add_load`), `shell3.rs` (one new function).
+
+**Decision: done**, by the rule: every registered check met on the one run, every mutation caught, no amendment.
+
+What the diagnosis says about the acceptance, for the record: the O1 error is the triangle's consistent `A / 3` split on a
+curved mesh, acting on the soft open-end mode; it is not reachable by a work-consistent load (the exact-surface Galerkin load
+misses by the same `9.7e-2`); the opt-in angle-weighted split reaches it with the polygon's error `1 - cos(pi / 128) =
+3.0e-4` at every node.
+
+Remaining questions (options, recommendation):
+
+1. The default pressure of Shell3 (open question 4): (a) keep the consistent split as the default and the angle split opt-in;
+   (b) make the angle split the default (changes Shell3 pressure results and the B1 digests). Recommend (a).
+2. Irregular curved triangulations (L2, CY4 `6.8e-3`): (a) leave as a limit; (b) a follow-up that measures the split on an
+   unstructured mesh of a curved shell (a sphere octant against `p R^2 (1 - nu) / (2 E t)`). Recommend (b), low priority.
+3. The sensitivity of open shells to uneven nodal loads (L4): (a) note in the shell documentation; (b) nothing. Recommend (a).
+
+## For the lead: roadmap entries
+
+Proposed status of F-540: **done**.
+
+> F-540 (ADR 0461, 2026-11-14): diagnosis of the one-diagonal cylinder O1 of ADR 0454: the triangle's consistent `p A / 3` split makes each node's share of the facet forces depend on the diagonal, leaving a tangential free-edge load (`tan(dth/2)/3`) and uneven corner shares that the soft open-end ovalisation amplifies (error first order in dz, larger for thinner shells); not the stiffness (radial nodal loads exact to 8e-10), not membrane locking, and not curable by a work-consistent load (the exact-surface Galerkin load misses by the same 9.7e-2). Opt-in `Load::shell_pressure_angle_weighted`: each Shell3 force `p A e_3` shared by the interior angles (a rectangle gets A/4 per corner for either diagonal); O1 within 3.0e-4 of `p R^2/(E t)` at every node (the polygon's `1 - cos(pi/128)`, to 1.7e-10, on every diagonal pattern and with Shell4 cells), an irregular warped mesh 6.8e-3 (default 1.0e-1); defaults bit-identical; seven mutations caught.
+
+Note for F-419 (remaining question 3 answered):
+
+> F-419 (ADR 0454, 2026-11-14): Shell3, a three-node flat shell for triangulated surfaces: CST membrane, Reissner-Mindlin bending, MITC3 shear with the Lyly-Stenberg-Vihinen stabilisation (alpha 0.1, longest edge), Shell4's drilling penalty, consistent mass with rotary inertia; pressure, gravity, centrifugal, nodal body force and thermal loads, centroid stresses, VTK_TRIANGLE output. Patch tests to 1e-13, SS plate 0.998 and 0.997 of Navier at t/a 0.01 and 0.001 (plain MITC3 locks at 0.899), cantilever 0.99986, pinched ring 0.9991, cylinder within 1.8e-3, free plates six zero modes; models without Shell3 bit-identical. Partial: the .vtu check met only after amendment 1 added the triangle cell to rcfd_io::vtk. The one-diagonal cylinder O1 is diagnosed and met by the opt-in angle-weighted pressure of F-540 (ADR 0461).
+
+Follow-up item (optional, low priority):
+
+- **Angle-weighted shell pressure on unstructured curved meshes** (deps F-540):
+
+> Every limit not stated here is registered in the ADR before the run. A sphere octant triangulated without structure under internal pressure with `Load::shell_pressure_angle_weighted`: the radial displacement within 2 % of `p R^2 (1 - nu)/(2 E t)` at every node, and the error measured on two refinements.
