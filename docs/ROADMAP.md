@@ -10498,23 +10498,25 @@ fixed by the item's registration ADR before any code.
     unknowns is solved with the relative residual below 1e-10 in less than 8 GB, time and memory recorded; a refusal
     names an equation whose elimination position differs from its index; the static solve reports which factor it built;
     factor and solution bit-identical for 1 and 8 threads; the default solver's results keep their bits.
-  - note: Structural solver, advanced tier. Follow-up of F-431 (ADR 0447). ADR 0503, 2026-11-14:
-    rcfd_linalg::sparse_chol::nested_dissection_order (level structures from a pseudo-peripheral vertex, the level of
-    least |S| / (|below| |above|) as the separator, minimum-degree leaves of at most 16) and
-    nested_dissection_order_with_points (the median plane of the longest axis, the smaller one-sided boundary as the
-    separator), SparseOrdering::NestedDissection, and SupernodalLdlt (fundamental supernodes, multifrontal extend-add,
-    partial factorisation in panels of 32 with the later-column update split over the rayon pool in a fixed summation
-    order); rcfd_fem::solve::StaticSolver::SupernodalDirect ("sparse-ldlt-supernodal", nested dissection by the node
-    coordinates, refused on the transformation path and with refinement) and SolveReport::factor (DirectFactor, returned
-    by the function that built the factor). 7-point 30^3: nnz(L) 3 360 870 against minimum degree's 5 659 458 (0.594,
-    limit 0.6), relative residual 1.2e-15 (limit 1e-12). Clamped Hex8 cube of 304 842 unknowns: solved in 81 s with
-    relative residual 2.2e-12 (limit 1e-10) at a peak working set of 5.04 GB (limit 8 GB), nnz(L) 421 295 142 (3.37 GB;
-    minimum degree needed 848 257 887). A refusal names equation 137 at elimination position 270; the static report
-    names the factor built (supernodal, envelope, minimum degree, none for CG); factor and solution bit-identical for 1
-    and 8 threads (grid and solid); 17 digests of the default and existing sparse paths equal to base; baseline_hashes
-    and every rcfd-linalg and rcfd-fem test pass. Partial by the registered rule only because mutation M11 (the
-    single-child condition of the supernode test dropped) survived; diagnosed as equivalent (the merged supernode stores
-    no extra entry and the extend-add never reaches the merged column). Done is the maintainer's call.
+  - note: Structural solver, advanced tier. Follow-up of F-431 (ADR 0447). PARTIAL by the registered rule (mutation M11,
+    the single-child supernode condition, survived; diagnosed equivalent; every acceptance check met; done if the
+    maintainer accepts M11). ADR 0503, 2026-11-14: rcfd_linalg::sparse_chol::nested_dissection_order (level structures
+    from a pseudo-peripheral vertex, the level of least |S| / (|below| |above|) as the separator, minimum-degree leaves
+    of at most 16) and nested_dissection_order_with_points (the median plane of the longest axis, the smaller one-sided
+    boundary as the separator), SparseOrdering::NestedDissection, and SupernodalLdlt (fundamental supernodes,
+    multifrontal extend-add, partial factorisation in panels of 32 with the later-column update split over the rayon
+    pool in a fixed summation order); rcfd_fem::solve::StaticSolver::SupernodalDirect ("sparse-ldlt-supernodal", nested
+    dissection by the node coordinates, refused on the transformation path and with refinement) and SolveReport::factor
+    (DirectFactor, returned by the function that built the factor). 7-point 30^3: nnz(L) 3 360 870 against minimum
+    degree's 5 659 458 (0.594, limit 0.6), relative residual 1.2e-15 (limit 1e-12). Clamped Hex8 cube of 304 842
+    unknowns: solved in 81 s with relative residual 2.2e-12 (limit 1e-10) at a peak working set of 5.04 GB (limit 8 GB),
+    nnz(L) 421 295 142 (3.37 GB; minimum degree needed 848 257 887). A refusal names equation 137 at elimination
+    position 270; the static report names the factor built (supernodal, envelope, minimum degree, none for CG); factor
+    and solution bit-identical for 1 and 8 threads (grid and solid); 17 digests of the default and existing sparse paths
+    equal to base; baseline_hashes and every rcfd-linalg and rcfd-fem test pass. Partial by the registered rule only
+    because mutation M11 (the single-child condition of the supernode test dropped) survived; diagnosed as equivalent
+    (the merged supernode stores no extra entry and the extend-add never reaches the merged column). Done is the
+    maintainer's call. Follow-up F-594.
 - [~] **F-530** Stability of the non-iterated PISO step at large diffusion numbers
   - depends on: F-421
   - acceptance: Every limit not stated here is registered in the ADR before the run. The divergence of the PISO step
@@ -11048,17 +11050,16 @@ fixed by the item's registration ADR before any code.
   - acceptance: Every limit not stated here is registered in the ADR before the run. A bearing pedestal with stiffness
     and damping in series and no mass gives the whirl of the same model with a pedestal mass of 1e-9 of the disc's
     within 1e-6; models without such unknowns bit-identical.
-  - note: Structural solver, advanced tier. Follow-up of F-416 (ADR 0476, 2026-11-14). PARTIAL. F-562 (ADR 0504,
-    2026-11-14): rcfd_fem::rotor::RotorModel::whirl_first_order keeps the damped massless unknowns of a rotor (a
-    pedestal as a ground bearing on a massless station) as displacement-only states, a generalized problem of size 2
-    n_m + n_0; it agrees with the closed-form cubic of the massless-pedestal Jeffcott model to 7e-16 and satisfies the
-    original quadratic on all unknowns to 1e-16, a gyroscopic anisotropic cross-coupled model included. Against the
-    1e-9 pedestal-mass model the roots differ by 1.8e-8 and 3.2e-7 (exact references: the quartic and a bordered
-    Newton polish), the truncation of that model (linear in the mass), inside the acceptance's 1e-6; against the
-    existing whirl on the 1e-9 model 3.7e-7 on the gyroscopic model and 2.0e-6 on the Jeffcott model (the existing
-    solver's loss of accuracy on a mass of 2e-8). Registered tighter limits A2 (1e-8), B1r (1e-7), the second half of
-    N3 and A3 (1e-6) recorded as ignored known-miss tests; whirl itself still refuses a massless damped unknown;
-    models without them bit-identical, baseline_hashes unchanged. No case-file key.
+  - note: Structural solver, advanced tier. PARTIAL. F-562 (ADR 0504, 2026-11-14): RotorModel::whirl_first_order keeps
+    the damped massless unknowns of a rotor (a pedestal as a ground bearing on a massless station) as displacement-only
+    states, a generalized problem of size 2 n_m + n_0; it agrees with the closed-form cubic of the massless-pedestal
+    Jeffcott model to 7e-16 and satisfies the original quadratic on all unknowns to 1e-16, a gyroscopic anisotropic
+    cross-coupled model included. Against the 1e-9 pedestal-mass model the roots differ by 1.8e-8 and 3.2e-7 (exact
+    references: the quartic and a bordered Newton polish), the truncation of that model (linear in the mass), inside the
+    acceptance's 1e-6; against the existing whirl on the 1e-9 model 3.7e-7 on the gyroscopic model and 2.0e-6 on the
+    Jeffcott model (the existing solver's loss of accuracy on a mass of 2e-8). Registered tighter limits A2 (1e-8), B1r
+    (1e-7), the second half of N3 and A3 (1e-6) recorded as ignored known-miss tests; whirl itself still refuses a
+    massless damped unknown; models without them bit-identical, baseline_hashes unchanged.
 - [x] **F-563** Speed-dependent bearing coefficients in whirl, Campbell and response
   - depends on: F-416
   - acceptance: Every limit not stated here is registered in the ADR before the run. A table constant in speed gives the
@@ -11474,3 +11475,12 @@ fixed by the item's registration ADR before any code.
     docs/structural-solver.md describe the keys.
   - note: Structural solver, basic tier. Follow-up of F-387 (ADR 0500, 2026-11-14). NEEDS THE USER for the case-file
     keys (centrifugal load, mesh source fan_blade) before the case-file half; the library builder half can go first.
+- [ ] **F-594** Supernodal L D L^T in the modal, buckling and harmonic solves and on the transformation path
+  - depends on: F-529
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The supernodal factor after nested
+    dissection is selectable in the subspace and buckling eigensolvers, the direct harmonic solve and the transformation
+    path: on the clamped Hex8 cube of 4 752 unknowns the modal frequencies and buckling factors agree with the
+    envelope's within 1e-9 and the harmonic response within 1e-8; a model with a rigid set solved on the transformation
+    path equals the envelope solve within 1e-10; a modal analysis of a clamped cube of about 1e5 unknowns completes with
+    time and memory recorded; results bit-identical for 1 and 8 threads; the default solver's results keep their bits.
+  - note: Structural solver, advanced tier. Follow-up of F-529 (ADR 0503, 2026-11-14).
