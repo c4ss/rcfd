@@ -182,7 +182,8 @@ pub fn stiffness(model: &SolidModel) -> Result<CsrMatrix> {
 /// any value. Each element gives `element_for(kind).stiffness(coords, D)` with the elasticity matrix of its material. An
 /// element kind or a formulation whose package has not landed is refused (ADR 0291 D6), never assembled as another. A Beam2
 /// element gives [`crate::beam::element_stiffness`] with its block's section and orientation (ADR 0417 D6) and a Shell4
-/// element [`crate::shell::element_stiffness`] with its block's thickness (ADR 0432 D6), after the checks of
+/// element [`crate::shell::element_stiffness`] with its block's thickness (ADR 0432 D6), a Shell3 element
+/// [`crate::shell3::element_stiffness`] (ADR 0454 D2), after the checks of
 /// [`SolidModel::check_elements_supported_with_structures`].
 pub fn stiffness_with(model: &SolidModel, threads: Option<usize>) -> Result<CsrMatrix> {
     model.check_elements_supported_with_structures()?;
@@ -213,6 +214,9 @@ fn assemble_stiffness(
         }
         if ctx.kind == ElementKind::Shell4 {
             return crate::shell::model_element_stiffness(model.mesh(), ctx.element, ctx.coords, ctx.material);
+        }
+        if ctx.kind == ElementKind::Shell3 {
+            return crate::shell3::model_element_stiffness(model.mesh(), ctx.element, ctx.coords, ctx.material);
         }
         if let Some(points) = points {
             if crate::mat_ortho::is_point_material(ctx.material) {

@@ -111,10 +111,16 @@ pub(crate) fn add_thermal_load(
         let coords: Vec<Vec3> = nodes.iter().map(|&n| mesh.nodes()[n]).collect();
         let dte: Vec<f64> = nodes.iter().map(|&n| delta[n]).collect();
         let material = &model.materials()[materials[e]].1;
-        if mesh.element_kind(e) == ElementKind::Shell4 {
-            // ADR 0445 D2: the membrane thermal load of a shell, forces and moments at its nodes.
-            let fe = crate::shell::thickness_or_error(mesh, e)
-                .and_then(|t| crate::shell::thermal_load_vector(&coords, t, material, &dte))
+        if matches!(mesh.element_kind(e), ElementKind::Shell4 | ElementKind::Shell3) {
+            // ADR 0445 D2, ADR 0454 D2: the membrane thermal load of a shell, forces and moments at its nodes.
+            let fe: Vec<f64> = crate::shell::thickness_or_error(mesh, e)
+                .and_then(|t| {
+                    if mesh.element_kind(e) == ElementKind::Shell3 {
+                        crate::shell3::thermal_load_vector(&coords, t, material, &dte).map(|v| v.to_vec())
+                    } else {
+                        crate::shell::thermal_load_vector(&coords, t, material, &dte).map(|v| v.to_vec())
+                    }
+                })
                 .map_err(|source| FemError::Element {
                     element: e,
                     source: Box::new(source),

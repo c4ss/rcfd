@@ -1092,6 +1092,15 @@ impl SolidModel {
                     package: crate::shell::FOLLOW_UP,
                 });
             }
+            // ADR 0454 D3: and Shell3 as Shell4.
+            if !shells && block.kind() == crate::mesh::ElementKind::Shell3 {
+                return Err(FemError::NotYetSupported {
+                    item: "element kind",
+                    variant: block.kind().name(),
+                    location: format!("block {b}"),
+                    package: crate::shell3::FOLLOW_UP,
+                });
+            }
         }
         // ADR 0440 D5: a material variant whose package has not landed is refused naming it and its set.
         for (i, (set, m)) in self.materials.iter().enumerate() {
@@ -1206,11 +1215,14 @@ impl SolidModel {
                 finite("pressure", *pressure)?;
                 for &e in self.mesh.element_set(set).expect("checked") {
                     let kind = self.mesh.element_kind(e);
-                    if kind != crate::mesh::ElementKind::Shell4 {
+                    if !matches!(
+                        kind,
+                        crate::mesh::ElementKind::Shell4 | crate::mesh::ElementKind::Shell3
+                    ) {
                         return Err(FemError::InvalidValue {
                             key: "shell pressure",
                             reason: format!(
-                                "element {e} of the set '{set}' is a {} element: a shell pressure acts on Shell4 elements",
+                                "element {e} of the set '{set}' is a {} element: a shell pressure acts on Shell4 and Shell3 elements",
                                 kind.name()
                             ),
                         });
