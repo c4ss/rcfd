@@ -23,6 +23,11 @@
 //! internal force `B_NL(F_{n+1/2})^T (S_n + S_{n+1})/2`, which conserves the energy and the linear and angular momenta of an
 //! isotropic St. Venant-Kirchhoff solid up to the Newton residual. The default [`StepKind::Method`] is the step above,
 //! unchanged.
+//!
+//! Shell4 and Shell3 (ADR 0522, F-585) take the corotated element of [`crate::shell_corot`] (ADR 0490) with the constant
+//! consistent shell mass on the additive unknowns: the translations exactly, the rotations with the rotary inertia of the rate
+//! of the rotation vector (`rho t^3/12`, isotropic; exact at small rotation, no gyroscopic terms). Their strain energy is the
+//! potential of the corotated element; [`Integrator::momentum`] gives the translational momenta only.
 
 use crate::constraint::{prescribed_equations, reduce};
 use crate::element::{element_for, ElementState};
