@@ -392,3 +392,12 @@ here.
 
 The library gains one diagnostic field after the run, `StepReport::residual` (the final relative residual of the step's last
 sub-step), used by the scratch diagnosis; no computed value changes.
+
+## Amendment 2 (2026-11-14, written after the mutation runs and before the run of the added check)
+
+Mutation MU6 (`in_residual_reference` ignored) was caught by no active check (`f423-scratch/mutations.log`): every active
+model has prescribed equations, whose reactions enter the driver's reference `|f_int + g|` over all equations, so only a free
+body needs the flag, and the one free body (S0c to S2c) is a known miss. **S3** (added, limit fixed now): the axial oscillator
+mesh of D5 without any constraint (a free Hex8), started undeformed with the uniform velocity `(0.3, 0.2, 0.1) m/s` plus `10
+m/s` along `x` at the four nodes of `x = L`, Newmark, `dt = T_lin/200`, 50 steps: every step converges (`Ok`) and `max |P_n -
+P_0| / |P_0| <= 1e-11` (arithmetic 3: rounding only, about 50 steps; the `1e-11` class of b5). Run once, then MU6 again.
