@@ -37,7 +37,7 @@ use crate::mesh::SolidFormulation;
 use crate::model::{Load, Material, SolidModel, SolidResult, SolverStats};
 use crate::solve::PIVOT_TOLERANCE;
 use rcfd_core::vec3::Vec3;
-use rcfd_linalg::skyline::{SkylineError, SkylineLdlt};
+use rcfd_linalg::skyline::{PivotRule, SkylineError, SkylineLdlt, SkylineOptions};
 use rcfd_linalg::CsrMatrix;
 use std::sync::Mutex;
 
@@ -471,7 +471,7 @@ impl NewtonOptions {
         self
     }
 
-    fn check(&self) -> Result<()> {
+    pub(crate) fn check(&self) -> Result<()> {
         if self.steps == 0 {
             return Err(FemError::InvalidValue {
                 key: "steps",
@@ -732,7 +732,7 @@ struct Problem<'a> {
 }
 
 impl Problem<'_> {
-    /// One attempt from the committed `(u_c, lc, states_c)` to the load factor `lt` (ADR 0404 D5 step 4).
+    /// [`Problem::attempt_with`] without a load-factor control.
     fn attempt(
         &self,
         u_c: &[f64],
@@ -740,7 +740,21 @@ impl Problem<'_> {
         lt: f64,
         states_c: &[ElementState],
     ) -> std::result::Result<Attempt, Failure> {
+        self.attempt_with(u_c, lc, lt, states_c, None)
+    }
+
+    /// One attempt from the committed `(u_c, lc, states_c)` to the load factor `lt` (ADR 0404 D5 step 4). With a control
+    /// (ADR 0480 D4) the load factor starts at `lt` and changes at every iteration by the control's correction.
+    fn attempt_with(
+        &self,
+        u_c: &[f64],
+        lc: f64,
+        lt: f64,
+        states_c: &[ElementState],
+        mut control: Option<&mut dyn LoadFactorControl>,
+    ) -> std::result::Result<Attempt, Failure> {
         let o = self.options;
+        let mut lt = lt;
         let mut u = u_c.to_vec();
         let mut residuals = Vec::new();
         let mut energies = Vec::new();
@@ -792,15 +806,32 @@ impl Problem<'_> {
                 .map(|&(eq, v)| (eq, if k == 0 { (lt - lc) * v } else { 0.0 }))
                 .collect();
             let sys = reduce(&kt, &rfull, &increment).map_err(|e| Failure::Other(e.to_string()))?;
-            let du = if sys.free().is_empty() {
-                Vec::new()
-            } else {
-                factor_solve(&sys.matrix, &sys.rhs, sys.free(), &dofs)?
+            // ADR 0480 D4: with a control the correction carries the change of the load factor.
+            let mut rhs_control = None;
+            let du = match control.as_deref_mut() {
+                None => {
+                    if sys.free().is_empty() {
+                        Vec::new()
+                    } else {
+                        factor_solve(&sys.matrix, &sys.rhs, sys.free(), &dofs)?
+                    }
+                }
+                Some(c) => {
+                    let (du, rhs, dl) = controlled_correction(&sys, &self.f, k, &dofs, c)?;
+                    lt += dl;
+                    rhs_control = Some(rhs);
+                    du
+                }
             };
             if du.iter().any(|v| !v.is_finite()) {
                 return Err(Failure::Other(format!("non-finite correction at iteration {k}")));
             }
-            let e = du.iter().zip(&sys.rhs).map(|(a, b)| a * b).sum::<f64>().abs();
+            let e = du
+                .iter()
+                .zip(rhs_control.as_deref().unwrap_or(&sys.rhs))
+                .map(|(a, b)| a * b)
+                .sum::<f64>()
+                .abs();
             if k == 0 {
                 e_first = e;
             }
@@ -849,6 +880,123 @@ fn factor_solve(
         }
     }
     Ok(ldlt.solve(b))
+}
+
+/// A correction of the load factor at every iteration of an attempt (ADR 0480 D4: arc-length): given the solutions of
+/// `K_T du_r = R` and `K_T du_f = f` on the free equations (in the order of the reduced system) and the number of negative
+/// pivots of `K_T`, the change `d lambda` of the load factor; the correction of the iteration is `du_r + d lambda du_f`. An
+/// error ends the attempt as failed.
+pub(crate) trait LoadFactorControl {
+    /// The change of the load factor at iteration `k` (0: from the committed state).
+    fn correct(
+        &mut self,
+        k: usize,
+        du_residual: &[f64],
+        du_load: &[f64],
+        negative_pivots: usize,
+    ) -> std::result::Result<f64, String>;
+}
+
+/// The controlled correction (ADR 0480 D4): the reduced tangent factored as indefinite (a pivot `|d| <= PIVOT_TOLERANCE
+/// |a_ii|` refused), `du_r`, `du_f`, the control's `d lambda`; returns `du_r + d lambda du_f`, its right-hand side `R + d
+/// lambda f` (for the energy) and `d lambda`.
+fn controlled_correction(
+    sys: &crate::constraint::ReducedSystem,
+    f: &[f64],
+    k: usize,
+    dofs: &crate::model::DofMap,
+    control: &mut dyn LoadFactorControl,
+) -> std::result::Result<(Vec<f64>, Vec<f64>, f64), Failure> {
+    let free = sys.free();
+    if free.is_empty() {
+        return Err(Failure::Other("no free equation".to_string()));
+    }
+    let a = &sys.matrix;
+    let diag = a.diag();
+    let at = |row: usize| {
+        let (n, c) = dofs.node_component(free[row]).expect("free equation exists");
+        format!("node {n} component {c}")
+    };
+    let options = SkylineOptions {
+        pivots: PivotRule::NonZero,
+        ..SkylineOptions::default()
+    };
+    let ldlt = SkylineLdlt::factor_with(a, &options).map_err(|e| match e {
+        SkylineError::Pivot { row, pivot, .. } => Failure::Other(format!(
+            "singular tangent: pivot {pivot:e} at {} (diagonal {:e})",
+            at(row),
+            diag[row]
+        )),
+        other => Failure::Other(format!("tangent factorisation: {other}")),
+    })?;
+    for (&row, &d) in ldlt.order().iter().zip(ldlt.pivots()) {
+        if d.is_nan() || d.abs() <= PIVOT_TOLERANCE * diag[row].abs() {
+            return Err(Failure::Other(format!(
+                "singular tangent: pivot {d:e} at {} (diagonal {:e})",
+                at(row),
+                diag[row]
+            )));
+        }
+    }
+    let ff: Vec<f64> = free.iter().map(|&q| f[q]).collect();
+    let du_r = ldlt.solve(&sys.rhs);
+    let du_f = ldlt.solve(&ff);
+    let dl = control
+        .correct(k, &du_r, &du_f, ldlt.inertia().0)
+        .map_err(Failure::Other)?;
+    let du = du_r.iter().zip(&du_f).map(|(a, b)| a + dl * b).collect();
+    let rhs = sys.rhs.iter().zip(&ff).map(|(a, b)| a + dl * b).collect();
+    Ok((du, rhs, dl))
+}
+
+/// One converged attempt of [`controlled_attempt`]: the displacement, the trial states (to be committed), the residuals and
+/// the energies of the iterations.
+pub(crate) struct ControlledAttempt {
+    pub(crate) u: Vec<f64>,
+    pub(crate) states: Vec<ElementState>,
+    pub(crate) residuals: Vec<f64>,
+    pub(crate) energies: Vec<f64>,
+}
+
+/// One attempt of the driver with a load-factor control (ADR 0480 D4) from the committed `(u_c, lambda_c, states_c)`: the
+/// load `lambda f`, the prescribed equations `fixed` (held at `lambda` times their values), the contributions at the current
+/// load factor, the iteration and the criteria of `options`. The load factor starts at `lambda_c`; the control follows it.
+/// A failure is described.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn controlled_attempt(
+    model: &SolidModel,
+    f: &[f64],
+    fixed: &[(usize, f64)],
+    options: &NewtonOptions,
+    contributions: &[&dyn Contribution],
+    u_c: &[f64],
+    lambda_c: f64,
+    states_c: &[ElementState],
+    control: &mut dyn LoadFactorControl,
+) -> std::result::Result<ControlledAttempt, String> {
+    let n = f.len();
+    let mut is_fixed = vec![false; n];
+    for &(eq, _) in fixed {
+        is_fixed[eq] = true;
+    }
+    let problem = Problem {
+        model,
+        f: f.to_vec(),
+        fixed: fixed.to_vec(),
+        free: (0..n).filter(|&i| !is_fixed[i]).collect(),
+        options,
+        contributions,
+    };
+    match problem.attempt_with(u_c, lambda_c, lambda_c, states_c, Some(control)) {
+        Ok(a) => Ok(ControlledAttempt {
+            u: a.u,
+            states: a.states,
+            residuals: a.residuals,
+            energies: a.energies,
+        }),
+        Err(Failure::Inverted(e)) => Err(e.to_string()),
+        Err(Failure::Other(cause)) => Err(cause),
+    }
 }
 
 /// The nonlinear static solve (ADR 0404 D5): total Lagrangian solids, the model's dead loads and `forces` times the load
