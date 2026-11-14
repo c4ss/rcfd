@@ -193,3 +193,10 @@ only after an amendment made after its run. **todo**: R1 or one of W1 to W4 miss
   edge gives large rows and a dense eigen-decomposition of `A`. No limit on fill is registered.
 - The shell drilling rotation stays free at the joint (held by the shell drilling penalty), as ADR 0456.
 - No joint stiffness or offset beyond the face geometry; a reference node off the face acts as a rigid lever (N3).
+
+## Amendment 1 (2026-11-14, before any run of the checks)
+
+W3's count "21 of 21" is an arithmetic slip of the registration: the `xmax` face of the J2 plate (Hex20 `[4,2,1]`, two Quad8
+faces) has 13 nodes (6 corners, 4 mid-edge nodes along `y` at `z = +/-0.01`, 3 mid-edge nodes along `z` at `y = 0, 0.05,
+0.1`; ADR 0456: three columns of three nodes and the four mid-edge nodes). Corrected before any run: W3 requires a non-zero
+force on every node of the face, 13 of 13. No limit changes.
