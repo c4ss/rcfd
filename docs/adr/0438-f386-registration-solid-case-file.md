@@ -315,3 +315,34 @@ All in `crates/rcfd-api/tests/sb_solid_case.rs` (the file named by ADR 0287), wi
 4. Tables are processed in name order (the order of the JSON object of the parsed TOML), stated in the format document; a user
    who needs a given order of loads names them accordingly. The order does not change the result of a linear solve except in
    rounding of the load sum.
+
+## Amendment 1 (2026-11-14, after the registered run, before the corrected run): A14's loop stopped at its first failure
+
+The registered run (log `f386-scratch/run1.log`, run once) ran every test. All checks of A1 to A13, K1 to K3 and N1 to N4 were
+met. `a14_a7_cg_preconditioners_from_files` panicked at its first row: the file run with `preconditioner = "block_jacobi"`
+returned the diagnostic `solver cg-block-jacobi: not converged in 5063 iterations and 3 restart(s) (true residual 1.528e-7,
+target 2.635e-8 = 1e-10 relative)`, i.e. a relative residual of 5.8e-10 against the limit 1e-10. That is a miss of A14 for block
+Jacobi (the solve stopped by the restart cap of ADR 0282 D5 at the attainable true residual of a 5063-iteration CG; diagnosis
+in the addendum). The set-up was defective: a failed solve aborted the loop, so the five other preconditioners of A14 and the
+iterative A7 row after the loop were not run.
+
+Second finding, from the registered A7 rows of the static cantilever (met, 4.9e-15 and 2.2e-15 against 1e-12, but not
+bit-identical as expected): the test's library model applies the traction `-C_P / (C_H * C_H)`, which is
+`-99999.99999999999` (`-0x1.869ffffffffffp+16`, because `0.1 * 0.1 = 0.010000000000000002`), while the file gives `-1.0e5`
+(`-0x1.86a0000000000p+16`): the two models differ by one ulp in the load, so the reference of the bit expectation was not "the
+same model". Checked by the disclosed python line `-1000.0/(0.1*0.1)`; no library code run for it. The registered A7 result
+stands as measured (met).
+
+Corrections, written and committed before their run:
+
+- The registered test stays as an ignored record (`#[ignore]`, citing this amendment). Its block-Jacobi row becomes
+  `a14_block_jacobi_known_miss` (ignored), with the limit 1e-10 intact and the measured 5.8e-10 (not converged) recorded.
+- `a14c_a7c_cg_preconditioners_from_files`: the rows `ic0`, `ic_fill`, `amg`, `amg_quadratic`, `amg_quadratic_smoothed` of
+  A14 with the registered limits (relative residual <= 1e-10, against the direct solve <= 1e-7), a failed solve recorded as a
+  miss of its row instead of a panic; then A7 for `cantilever_tet10_amg.toml` (limit 1e-12) against a library model whose
+  traction is the file's `-1.0e5`; bits recorded, expected identical.
+- `a7b_cantilever_tet10_bits_with_the_same_traction` (new check A7b): `cantilever_tet10.toml` against the library model with
+  the traction `-1.0e5`: displacement and reactions bit-identical (`to_bits` of every value), and the A7 measure <= 1e-12.
+
+By the registered rule the item is partial whatever the corrected run gives (A14 missed for block Jacobi; A14 for the other
+preconditioners is met, if it is, only after this amendment).
