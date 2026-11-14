@@ -428,7 +428,12 @@ fn advance(it: &mut NlIntegrator, model: &SolidModel, at: &PointContext, steps: 
         let r = it.step().unwrap();
         run.halvings = run.halvings.max(r.halvings);
         let st = it.state().unwrap();
-        run.s.push(committed_sxx(material, &st.states, at));
+        // ADR 0526 amendment 1: no stress for a material without state (S3e).
+        if material.state_size() == 0 {
+            run.s.push(Vec::new());
+        } else {
+            run.s.push(committed_sxx(material, &st.states, at));
+        }
         let mut v = st.u.clone();
         v.extend_from_slice(&st.v);
         v.extend_from_slice(&st.a);
@@ -467,7 +472,10 @@ fn at_temperature(t: f64) -> PointContext {
     PointContext::new().with_temperature(t).unwrap()
 }
 
+/// The registered run of V2T, NC2, RT1 and S3i (`f592-scratch/run1.log`); its S3e set-up panicked (ADR 0526 amendment 1),
+/// S3e is run by `s3e_amended_constant_table_on_the_energy_momentum_step`.
 #[test]
+#[ignore = "record of the registered run (ADR 0526 amendment 1): V2T, NC2, RT1, S3i met; the S3e set-up was defective"]
 fn v2t_nc2_rt1_s3i_s3e_the_nonlinear_transient_integrator() {
     let mut c = Checks::new();
     let r = rod_modes();
@@ -670,6 +678,52 @@ fn nt4_rf3_refusals() {
         "RF3 run beyond the table refused before any step",
         ok && before.to_bits() == after.to_bits(),
         &format!("{d}; time {before:e} -> {after:e}"),
+    );
+    c.finish();
+}
+
+/// S3e (ADR 0526 amendment 1): the energy-momentum step of an elastic bar with damping, a constant table against the
+/// constant temperature.
+#[test]
+fn s3e_amended_constant_table_on_the_energy_momentum_step() {
+    let mut c = Checks::new();
+    // S3e: the energy-momentum step of an elastic bar with damping.
+    let mesh = hex_box([0.0; 3], [1.0, 0.2, 0.2], [3, 1, 1]).unwrap();
+    let mut bar = SolidModel::new(mesh);
+    bar.add_material("all", Material::isotropic_elastic(2.0e11, 0.3, 7850.0, 0.0).unwrap())
+        .unwrap();
+    bar.add_constraint(Constraint::displacement("xmin", 0, 0.0)).unwrap();
+    bar.add_constraint(Constraint::displacement("ymin", 1, 0.0)).unwrap();
+    bar.add_constraint(Constraint::displacement("zmin", 2, 0.0)).unwrap();
+    let n = bar.dof_map().n_equations();
+    let mut vb = vec![0.0; n];
+    for &nd in bar.mesh().node_set("xmax").unwrap() {
+        vb[bar.dof_map().equation(nd, 0).unwrap()] = 40.0;
+    }
+    let jd = Rayleigh {
+        mass: 20.0,
+        stiffness: 2.0e-8,
+    };
+    let eo = NlTransientOptions::new(2e-6).damping(jd).energy_momentum();
+    let bar_rod = Rod { lambda: 0.0, v0: vb };
+    let ek = vibrate(
+        &bar,
+        &eo.clone().temperature(T1),
+        &bar_rod,
+        &PointContext::default(),
+        30,
+    );
+    let et = vibrate(
+        &bar,
+        &eo.temperature_history(LoadTable::constant(T1, 0.0, 1.0).unwrap()),
+        &bar_rod,
+        &PointContext::default(),
+        30,
+    );
+    c.holds(
+        "S3e constant table on the energy-momentum step gives the bits of the constant temperature",
+        ek.bits == et.bits && ek.bytes == et.bytes,
+        &format!("{} steps", ek.bits.len()),
     );
     c.finish();
 }
