@@ -217,8 +217,9 @@ oscillating around the `1/r^3` field), not the closed form and not the material.
 Every planned mutation was caught.
 
 **Other runs.** `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean (one unused
-field of the test reader removed after the run, commit 980b7e98; no behaviour changed). Full `cargo test -p rcfd-fem --release`,
-the rcfd-api `baseline_hashes` test and the docs-site test: see the lead's report.
+field of the test reader removed after the run, commit 980b7e98; no behaviour changed). Full `cargo test -p rcfd-fem --release`
+(176 test binaries, all `0 failed`), the rcfd-api `baseline_hashes` test (3 passed, 1 ignored) and the rcfd-cli `docs_site` test
+(2 passed) pass.
 
 **Decision by the registered rule: partial.** S1, S2, C1, F1, M1 and N1 to N4 are met, R1 and E1 are diagnosed misses recorded as
 `*_known_miss` tests with the limits intact; all mutations caught; the library and the baselines unchanged.
