@@ -258,3 +258,128 @@ miss is predicted) and run once with `--ignored`; the number is recorded in the 
 - The cutoff is one frequency for every part. The bound of b2 and b3 is the clause's, not a property the method guarantees.
 - Everything not covered by ADRs 0469 and 0474 stays not covered (free-interface methods, damping other than a uniform loss factor
   in the assembly, pre-stress, cyclic constraints, non-zero constraint values, reduced parts in an ordinary model: F-553).
+
+## Addendum 1: results (2026-11-14)
+
+Commits on `f559-work` from 6c4ba2d9: d4b69ee2 (this registration, alone), c7ed28a8 (the D4 digests printed at 6c4ba2d9 by
+`sa_cms_pattern_default_bits.rs`, before any library line), then the options in `cms.rs` with the checks `tests/sa_cms_pattern.rs`
+(the registered run), then `cargo fmt` of the F-559 lines (layout only). Each registered check was run once, release profile
+(`cargo test --release -p rcfd-fem --test sa_cms_pattern -- --test-threads 1`, log `f559-scratch/run1.log`; the two ignored
+known misses once with `--ignored`, log `run1-ignored.log`). No amendment was made.
+
+Library lines changed: `crates/rcfd-fem/src/cms.rs` only: `CmsOptions::load_patterns` with the builders `load_pattern` and
+`load_patterns`, the validation and the pattern vectors in `reduce` (the vector loop generalised from one candidate to a list;
+the first candidate sees the same basis and operations as before), `ReducedPart::reduce_load`, `Assembly::load_from`,
+`Assembly::harmonic_with_load` (`harmonic` calls it with its own load). `damped.rs` and every shared solver file untouched.
+
+| Id | Clause | Limit | Measured | Met |
+|---|---|---|---|---|
+| D4 | b7 | `==` | 10 of 10 digests of 6c4ba2d9 equal after the change; the 11 digests of ADR 0474 D2 also equal | yes |
+| D5 | b7 | `==` | `load_patterns(vec![])` equal, same bytes, for `m = 5` and the ADR 0474 option | yes |
+| HW1 | b7 | bits | equal at 0, 1000, 5000 | yes |
+| P1 | b1 | counts 3, 3, 1, 0 | 3, 3, 1, 0 (the zero pattern gives the part equal to that without) | yes |
+| P2 | b1 | `<= 1e-10` | `M_qR` 1.2e-16 (option) and 9.9e-17 (alone); `M_RR - I` 3.3e-16 and 4.4e-16 | yes |
+| P3 | b1 | `<= 1e-8` | 6.3e-15 | yes |
+| X4 | b1 | refused | one entry short and long: `FieldLength`; NaN, +inf, -inf: `InvalidValue` key `load_patterns` | yes |
+| ST-P | b6 | `<= 1e-10` | 3.3e-12, 4.4e-13, 1.5e-12 (components x, y, z) | yes |
+| ST-P2 | b6 | `<= 1e-10` | 3.3e-12, 4.4e-13, 1.5e-12 | yes |
+| ST-P3 | b6 | `<= 1e-10` | 3.3e-12, 4.4e-13, 1.5e-12 | yes |
+| ST-P4 | b6 | `<= 1e-10` | S: 9.5e-14 and 5.8e-14 (`xmax`, gravity and traction, both `m`), 2.4e-14 and 3.3e-14 (`mid`, `m = 0`), 1.5e-14 and 1.3e-14 (`mid`, `m = 5`) | yes |
+| ST-P5 | b6 | `<= 1e-10` | 9.5e-14, 5.8e-14 (subspace path) | yes |
+| NC-P | b6 control | `>= 1e-6` | bar 2.9e-2, 2.5e-3, 1.8e-3; S `mid` `m = 5` gravity 4.3e-3, traction 1.7e-5 | yes |
+| HW2 | b6 | `<= 1e-13` | 0 (B and S: bit-equal to `load()`) | yes |
+| LF | b3 | `<= 1e-3`; count 10 | **5.03e-3** (15026.7 rad/s); count 10 | **no** (predicted); count yes |
+| LF2 | b3 band | `<= 1e-3` | 3.33e-4 | yes |
+| SL1 | b4 | `< -1e-14` each | the least lowering -2.22e-8 (f1), -2.50e-8 (f2), then -2.8e-6 to -2.0e-5 | yes |
+| SL2 | b4 | `< -1e-14` each | -2.16e-8 (f1), -2.49e-8 (f2), -2.7e-6, -3.1e-6, -4.8e-6, -1.3e-6, -8.1e-6 (f7), -1.1e-6 | yes |
+| SL3 | b4 | `>= -1e-9` | 1.03e-6 (f1) | yes |
+| NC-S | b4 control | not `< -1e-14` | 0 | yes |
+| OFF1 | b2 | `<= 1e-2`, at least 60 points | **0.104** at 15778.3 rad/s (72 points; first above 1e-2 at 6882.0) | **no** (predicted); points yes |
+| OFF2 | b2 band | `<= 1e-2` | 3.19e-3 (19 points below 4000 rad/s) | yes |
+| AX1 | b5 | `error <= 4 abs(delta) / eta` | error 0.353 at 8179.0 rad/s (#7, closed form 8124.5), `delta` 4.052e-3, bound 0.810 (ratio 0.436) | yes |
+| AX2 | b5 record | `<= 2 abs(delta) / eta` | ratio 0.871 against 0.405 (met) | yes (record) |
+| AX3 | b5 control | `delta >= 1e-3`; error `>= 1e-1` | cutoff alone: 4.07e-3; 0.354 | yes |
+| FP | design | exact | header 2, equal and bits, `reduce_load` bit-equal after reading; a part of ADR 0474 unchanged | yes |
+| TH | design | bits | threads 1 and 4 bit-identical (`K_r`, `M_r`, load, `Psi`, `Phi`, `R`, `reduce_load`) | yes |
+| SP3 | design | limits | 0, 0; 1.3e-15; 1.25e-6 | yes |
+
+Records: the first off-resonance point above 1e-2 is 6882.0 rad/s with the patterns and with the ADR 0474 option (largest
+0.104 and 0.106), 4699.9 with the cutoff alone (0.124); the frequency errors `delta` below the bound with the patterns
+1.03e-6, 1.30e-6, 1.75e-4, 2.14e-4, 3.33e-4, 6.73e-5, 4.05e-3 (axial), 6.0e-5, 3.47e-3, 5.03e-3, equal to the probe to three
+digits; `|K_qR|` over the largest `K_r` entry 4.9e-16; the library gives the statics 2 to 7 times lower than the probe's
+Ritz form (the library writes the exact zeros of `K_bR`).
+
+Mutations (scratch copy `f559-scratch/mut`, a git archive of the final tree, script `mutate.py`, logs `mutlogs/mut-MU*.log`):
+
+| Id | Caught by |
+|---|---|
+| MU1 | P1 (four vectors, the duplicate kept twice), P2 (`M_RR - I` 0.52), P3, SP3, ST-P |
+| MU2 | ST-P, ST-P2, ST-P3, ST-P4, ST-P5, HW2 (1.0 and 0.42) |
+| MU3 | P1, P3, SL2, ST-P, ST-P4 |
+| MU4 | P1 (patterns alone: 0), ST-P2, ST-P4, ST-P5 |
+| MU5 | P1 (zero and duplicate kept), P2, SP3, ST-P, ST-P4 |
+| MU6 | ST-P, ST-P2, ST-P3, ST-P4, ST-P5 |
+| MU7 | SL1, SL2 (with the coupling zero all eight frequencies equal those of the cutoff alone, change 0: the strictness check that ADR 0474's MU5 needed) |
+| MU8 | X4 |
+| MU9 | X4 |
+| MU10 | ST-P, ST-P2, ST-P3 |
+| MU11 | NC-S (and SL1, SL2 become vacuous) |
+
+Every mutation was caught by at least one registered check, each by the checks it was expected to be caught by.
+
+`cargo fmt -p rcfd-fem --check`: clean. `cargo clippy -p rcfd-fem --all-targets -- -D warnings`: clean. `cargo test -p rcfd-fem --release`: every test binary passed (789 passed, 0 failed, 613 ignored by the summed result lines of 178 binaries, doc-tests included; log `fem-all.log`). `cargo test -p rcfd-api --release --test baseline_hashes` (3 passed, 1 ignored) and `cargo test -p rcfd-cli --release --test docs_site` (2 passed) run.
+
+Not run: the workspace test suite (the lead's gate).
+
+### Deviations
+
+1. **LF (b3) and OFF1 (b2) missed, as predicted** (arithmetic items 2 and 3, which also predicted the numbers: 5.0e-3 and 0.104).
+   Diagnosis with the measured numbers: the residual vectors of three patterns do what they are for (statics of each component
+   exact to 3e-12, every one of the first eight frequencies lowered by at least 2.2e-8, the axial resonance within the bound), but
+   they lower the frequency errors of the modes near the bound by only 1 to 2 percent (5.11e-3 to 5.03e-3 at 15026.7 rad/s). The
+   error of a fixed-interface reduction at a mode comes from the omitted fixed-interface modes and the shape of the mode at the
+   interface, not from the load's static correction, so a static residual vector of the load gives little there. The first
+   off-resonance point above 1 percent is 6882 rad/s, the response error at the nearest poles `2 eta` away is about `delta / (2.2
+   eta)`: 0.1 for `delta` 5e-3, as derived. The probes of ADR 0474 (cutoffs 2e4 to 8e4 rad/s) found no cutoff that gives `delta`
+   near 1e-3 at the modes near half the lowest omitted frequency, so the cure is not more modes. A different enrichment of the
+   interface is what is left (the constraint modes' own residual flexibility, Krylov vectors of the stiffness-mass pair); this
+   reading of the cause is not tested here, the numbers above are.
+2. The registered statics (7.7e-12, 3.1e-12, 5.3e-12 in the probe's Ritz form) came out lower in the library (3.3e-12, 4.4e-13,
+   1.5e-12), as in ADR 0474.
+
+### Decision
+
+**partial** by the registered rule: LF (clause b3) and OFF1 (clause b2) missed at their registered run (predicted, diagnosed
+above) and kept as the ignored tests `lf_each_frequency_below_the_bound_within_1e3_known_miss` and
+`off1_off_resonance_to_half_the_lowest_omitted_known_miss` with their limits intact. Clauses b1, b4, b5, b6 and b7 are met, every
+mutation was caught, and no amendment was made.
+
+### Remaining questions
+
+1. The off-resonance and frequency clauses (b2, b3). Options: (a) restate them for this reduction as "within 1 percent off
+   resonance up to 4000 rad/s (the band that holds, 3.2e-3 measured) and the frequencies below 9500 rad/s other than the axial one
+   within 1e-3 (3.3e-4)", with the bound at the highest frequency that the kept fixed-interface modes carry; (b) keep them and ask
+   for a reduction whose interface accuracy improves near the bound (a follow-up: residual flexibility of the constraint modes,
+   or Krylov enrichment of the stiffness-mass pair at the interface); (c) restate them with the error of the clause b5,
+   `max(1e-2, 4 abs(delta) / eta)` at every point, which the reduction meets near resonances and not off them. Recommendation: (a)
+   now, (b) only if a product use case needs 1e-3 frequencies up to half the lowest omitted fixed-interface frequency.
+2. A case-file key. None is added. Proposal: `"substructure": {"parts": [{"model": ..., "interface": ..., "cutoff": ...,
+   "load_patterns": ["load name", ...]}]}` where a pattern is named by an entry of the part's `loads` list applied alone (the
+   single-load vector then comes from `SolidModel::loads`, a shared file, so it needs a separate item). Recommendation: wait
+   for F-553 (reduced parts in an ordinary model), which needs the key anyway, and add the pattern list there.
+3. Harmonic (complex) load patterns and frequency-dependent patterns (the aerodynamic load pattern of a blade rotates with the
+   forcing order): a pattern is a real vector here, and the residual vector of a complex pattern is a pair of real vectors, which the
+   caller can give as two patterns. Recommendation: no change; document the two-pattern form in the topic documentation if the
+   fan blade case needs it.
+4. Pattern vectors across parts: each part takes its own patterns (a pattern is a vector over that part's mesh equations). A
+   pattern given as one vector over an assembled model would need the mapping of F-553. Recommendation: with F-553.
+
+### For the lead: roadmap entries
+
+Proposed status of F-559: **partial**. New note:
+
+> Structural solver, advanced tier. Follow-up of F-552 (ADR 0474, 2026-11-14). PARTIAL. ADR 0511, 2026-11-14: CmsOptions::load_pattern gives vectors over a part's mesh equations, each adding its static residual vector K_ii^-1 p_i, M-orthonormalised twice against the kept modes and the vectors before it (dropped when in their span; zero and repeated patterns add nothing), after the vector of the model's load when that is asked; ReducedPart::reduce_load reduces any load vector to the part, Assembly::load_from and Assembly::harmonic_with_load apply it. Off by default and bit-identical when off (10 digests of the ADR 0474 option paths at 6c4ba2d9, the 11 of ADR 0474 D2, harmonic equal to harmonic_with_load of its own load). A pattern per corner-force component reproduces the statics of each component within 3.3e-12 (bar) and 9.5e-14 (small model, dense and subspace paths) against 2.9e-2 without; the first eight frequencies are lowered by at least 2.2e-8 (against the cutoff alone and against the ADR 0474 option); the response at the axial resonance (8179 rad/s) is off by 0.353 against the bound 4 delta / eta = 0.81 (delta 4.05e-3); orthogonality 4e-16. Two clauses missed as predicted: each frequency below half the lowest omitted fixed-interface frequency within 1e-3 (5.0e-3 at 15027 rad/s; three of ten above) and the response within 1 percent off resonance up to that bound (0.104 at 15778 rad/s; 1 percent holds to 6882 rad/s, 3.2e-3 to 4000); static residual vectors of the load do not change the interface accuracy near the bound. Eleven mutations all caught. Follow-up: a restated harmonic clause and an interface enrichment.
+
+Follow-up item (number left to the lead), only if the lead wants the reading above taken further. Title: "Craig-Bampton interface enrichment for frequency accuracy near half the lowest omitted fixed-interface frequency", deps F-559.
+
+> Every limit not stated here is registered in the ADR before the run. An option of the reduction of ADR 0474 adds to each part vectors that enrich the interface (the residual flexibility of the constraint modes, or Krylov vectors of the stiffness-mass pair started from the constraint modes), each M-orthogonalised against the kept modes and the vectors before it. The bar of ADR 0469 with the corner load and the cutoff of ADR 0474: each frequency of the assembly below half the lowest omitted fixed-interface frequency within 1e-3 of the full model's, the harmonic response within 1 percent of the full model at every point farther than 2 eta from a frequency of the full model up to that bound, the frequencies strictly lowered against the cutoff alone, and the statics of the corner load exact within 1e-10; without the option every result bit-identical to ADR 0511's.
