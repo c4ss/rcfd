@@ -327,6 +327,38 @@ pub struct RotorResponse {
     pub orbits: Vec<Orbit>,
 }
 
+/// A peak of the unbalance response over the spin (ADR 0501 D2).
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
+pub struct ResponsePeak {
+    /// The spin of the peak, rad/s.
+    pub speed: f64,
+    /// The orbit semi-major axis of the station at the peak, m.
+    pub amplitude: f64,
+    /// The sense of the orbit at the peak.
+    pub direction: Whirl,
+}
+
+/// A crossing of a Campbell track with an engine-order line, refined on the frozen problem (ADR 0501 D3).
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
+pub struct RotorCrossing {
+    /// The track in the table of [`RotorModel::campbell`].
+    pub track: usize,
+    /// The engine order.
+    pub order: u32,
+    /// The spin, rad/s.
+    pub speed: f64,
+    /// The frequency `order speed / (2 pi)`, Hz.
+    pub frequency: f64,
+    /// The whirl frequency of the mode at the crossing, rad/s.
+    pub omega: f64,
+    /// The direction of that mode.
+    pub direction: Whirl,
+    /// `|omega - order speed| / speed`: how far the mode is from the line (0 at a speed of the table that is exactly on it).
+    pub residual: f64,
+}
+
 fn finite_nonneg(v: f64) -> bool {
     v.is_finite() && v >= 0.0
 }
@@ -1089,6 +1121,183 @@ impl RotorModel {
             growth,
             speeds: per,
         })
+    }
+
+    /// The peaks of the unbalance response of the station `node` over the spin `[lo, hi]` (ADR 0501 D2): the amplitude is the
+    /// semi-major axis of the orbit from [`unbalance_response`](Self::unbalance_response), sampled at `samples + 1` equally
+    /// spaced spins; every interior sample larger than its left and not smaller than its right neighbour brackets a peak, which
+    /// is refined by golden-section search to `4 eps` relative width. A maximum at an end of the interval is not reported and
+    /// unimodality inside a bracket is assumed. Refuses `lo`, `hi` not finite or `0 < lo < hi` violated (`"range"`),
+    /// `samples < 3` (`"samples"`), a station that does not exist (`"node"`), and whatever `unbalance_response` refuses.
+    pub fn unbalance_peaks(
+        &self,
+        node: usize,
+        unbalances: &[Unbalance],
+        lo: f64,
+        hi: f64,
+        samples: usize,
+    ) -> Result<Vec<ResponsePeak>> {
+        if !(lo.is_finite() && hi.is_finite() && lo > 0.0 && lo < hi) {
+            return Err(invalid(
+                "range",
+                format!("[{lo}, {hi}] is not a finite range with 0 < lo < hi"),
+            ));
+        }
+        if samples < 3 {
+            return Err(invalid("samples", "at least three intervals are needed".to_string()));
+        }
+        self.check_node(node)?;
+        let eval = |w: f64| -> Result<(f64, Whirl)> {
+            let r = self.unbalance_response(w, unbalances)?;
+            let o = r.orbits[node];
+            Ok((o.major, o.direction))
+        };
+        let grid: Vec<f64> = (0..=samples)
+            .map(|i| {
+                if i == samples {
+                    hi
+                } else {
+                    lo + (hi - lo) * i as f64 / samples as f64
+                }
+            })
+            .collect();
+        let amp: Vec<f64> = grid.iter().map(|&w| eval(w).map(|v| v.0)).collect::<Result<_>>()?;
+        let gr = 0.5 * (5.0_f64.sqrt() - 1.0);
+        let mut out = Vec::new();
+        for i in 1..samples {
+            if !(amp[i] > amp[i - 1] && amp[i] >= amp[i + 1]) {
+                continue;
+            }
+            let (mut a, mut b) = (grid[i - 1], grid[i + 1]);
+            let mut c = b - gr * (b - a);
+            let mut d = a + gr * (b - a);
+            let mut fc = eval(c)?.0;
+            let mut fd = eval(d)?.0;
+            for _ in 0..200 {
+                if b - a <= 4.0 * f64::EPSILON * b {
+                    break;
+                }
+                if fc > fd {
+                    b = d;
+                    d = c;
+                    fd = fc;
+                    c = b - gr * (b - a);
+                    fc = eval(c)?.0;
+                } else {
+                    a = c;
+                    c = d;
+                    fc = fd;
+                    d = a + gr * (b - a);
+                    fd = eval(d)?.0;
+                }
+            }
+            let speed = 0.5 * (a + b);
+            let (amplitude, direction) = eval(speed)?;
+            out.push(ResponsePeak {
+                speed,
+                amplitude,
+                direction,
+            });
+        }
+        Ok(out)
+    }
+
+    /// The crossings of the Campbell tracks over `speeds` with the engine-order line `omega = order Omega`, each refined by
+    /// bisection on the frozen problem (ADR 0501 D3). The tracks are those of [`campbell`](Self::campbell); on every interval
+    /// with a sign change of `omega - order Omega`, [`whirl`](Self::whirl) is solved at the midpoint and the mode taken is the one
+    /// nearest to the straight line through the two end values, among the modes of the direction the track has at the ends.
+    /// The result carries the frequency and direction of that mode and `residual = |omega - order Omega| / Omega`. Sorted by
+    /// speed, then track. Refuses `order = 0` (`"order"`) and whatever `campbell` refuses.
+    pub fn campbell_crossings(&self, speeds: &[f64], order: u32) -> Result<Vec<RotorCrossing>> {
+        if order == 0 {
+            return Err(invalid("order", "the engine order must be at least 1".to_string()));
+        }
+        let table = self.campbell(speeds)?.campbell;
+        let k = f64::from(order);
+        let n = speeds.len();
+        let mut out = Vec::new();
+        for t in 0..table.table.tracks.len() {
+            let om = table.omegas(t);
+            let dirs = &table.directions[t];
+            let g = |j: usize| om[j].map(|w| w - k * speeds[j]);
+            for j in 0..n {
+                if let Some(0.0) = g(j) {
+                    out.push(self.crossing_at(
+                        t,
+                        order,
+                        speeds[j],
+                        om[j].unwrap_or(0.0),
+                        dirs[j].unwrap_or(Whirl::Neutral),
+                    ));
+                }
+                if j + 1 == n {
+                    continue;
+                }
+                let (Some(ga), Some(gb)) = (g(j), g(j + 1)) else {
+                    continue;
+                };
+                if !((ga < 0.0 && gb > 0.0) || (ga > 0.0 && gb < 0.0)) {
+                    continue;
+                }
+                let (wa, wb) = (om[j].unwrap_or(0.0), om[j + 1].unwrap_or(0.0));
+                let mut a = speeds[j];
+                let mut b = speeds[j + 1];
+                let (a0, b0) = (a, b);
+                let wanted: Vec<Whirl> = [dirs[j], dirs[j + 1]].into_iter().flatten().collect();
+                let pick = |x: f64| -> Result<(f64, Whirl)> {
+                    let line = wa + (wb - wa) * (x - a0) / (b0 - a0);
+                    let r = self.whirl(x)?;
+                    let best = |only: bool| {
+                        r.modes
+                            .iter()
+                            .filter(|m| !only || wanted.contains(&m.direction))
+                            .min_by(|p, q| (p.omega - line).abs().total_cmp(&(q.omega - line).abs()))
+                            .map(|m| (m.omega, m.direction))
+                    };
+                    best(true)
+                        .or_else(|| best(false))
+                        .ok_or_else(|| invalid("range", format!("no whirl mode at {x} rad/s")))
+                };
+                for _ in 0..200 {
+                    if b - a <= 4.0 * f64::EPSILON * b {
+                        break;
+                    }
+                    let mid = 0.5 * (a + b);
+                    let hm = pick(mid)?.0 - k * mid;
+                    if hm == 0.0 {
+                        a = mid;
+                        b = mid;
+                        break;
+                    }
+                    if (hm < 0.0) == (ga < 0.0) {
+                        a = mid;
+                    } else {
+                        b = mid;
+                    }
+                }
+                let root = 0.5 * (a + b);
+                let (w, d) = pick(root)?;
+                out.push(self.crossing_at(t, order, root, w, d));
+            }
+        }
+        out.sort_by(|p, q| p.speed.total_cmp(&q.speed).then(p.track.cmp(&q.track)));
+        Ok(out)
+    }
+
+    fn crossing_at(&self, track: usize, order: u32, speed: f64, omega: f64, direction: Whirl) -> RotorCrossing {
+        RotorCrossing {
+            track,
+            order,
+            speed,
+            frequency: f64::from(order) * speed / (2.0 * PI),
+            omega,
+            direction,
+            residual: if speed > 0.0 {
+                (omega - f64::from(order) * speed).abs() / speed
+            } else {
+                omega.abs()
+            },
+        }
     }
 }
 
