@@ -9886,7 +9886,7 @@ fixed by the item's registration ADR before any code.
     frequencies bit for bit and the Euler-Bernoulli cantilever's five lowest within 2.2e-3 (limit 5e-3); counts 6, 2, 1,
     6, 0 on models known by hand, rigid fields in the beam's null space to 3.7e-19. Seven of eight mutations caught; the
     eighth (the beam check left out of the transformation entry) is not observable because assembly repeats the check:
-    partial by the rule.
+    partial by the rule. MU7 caught by ADR 0429 (F-518), 2026-11-14.
 - [~] **F-514** Distributed and body loads on beams
   - depends on: F-391
   - acceptance: Every limit not stated here is registered in the ADR before the run. Uniform line load q on a
@@ -9938,12 +9938,19 @@ fixed by the item's registration ADR before any code.
     refused; with the key absent every case gives the bytes it gave before (baseline_hashes and the case hash tables
     unchanged); the schema golden change is approved by the maintainer.
   - note: From ADR 0425 questions 2 and 3; needs the maintainer's approval of the schema golden change.
-- [ ] **F-518** Beams on the transformation: a check that observes the entry refusal before the transformation is built
+- [x] **F-518** Beams on the transformation: a check that observes the entry refusal before the transformation is built
   - depends on: F-513
   - acceptance: Every limit not stated here is registered in the ADR before the run. A model with a beam node shared
     with a solid and a contradictory linear constraint is refused with BeamSolidNode naming the node, not with the
     contradiction, on solve_static_mpc and modal_analysis_mpc; the mutation that leaves the beam check out of the
     transformation entry is caught.
+  - note: Structural solver, intermediate tier. ADR 0429, 2026-11-14: a model with a beam node shared with a solid and a
+    contradictory linear constraint is refused with BeamSolidNode naming the node, not with the contradiction, on
+    solve_static_mpc (set of two rows u = 0 and u = 1e-3) and on modal_analysis_mpc (the same rows, which would give the
+    zero-values refusal, and a cancelling row); controls without the shared node give the contradiction, the zero-values
+    refusal and the cancel-to-zero error; the error fields equal those of check_beam_model; the mutation that leaves the
+    beam check out of the transformation entry (ADR 0426 MU7) and three variants (out of either entry, moved after the
+    transformation) are all caught. Library unchanged.
 - [ ] **F-519** Sparse whirl state solver above the loss of stiffness
   - depends on: F-506, F-505
   - acceptance: Every limit not stated here is registered in the ADR before the run. Above the loss of stiffness, the
