@@ -371,6 +371,7 @@ impl Contribution for SelfCopy<'_> {
 }
 
 #[test]
+#[ignore = "record of the registered run of ADR 0440 (commit 144c2d4a): D5, D7, D8, N2 met; D6 set-up defective (equations 3 and 35 are on the pattern, the off-pattern path not exercised; measure 0); corrected by amendment 2 as d6b_off_pattern_contribution"]
 fn d5_to_d8_contributions() {
     let mut c = Checks::new();
     // D5: the copy contribution doubles E.
@@ -947,6 +948,7 @@ fn entries(
 }
 
 #[test]
+#[ignore = "record of the registered run of ADR 0440 (commit 144c2d4a): N3 and R1 (60 of 60) met; stopped before R2 to R4 (the Shell3 model was given a shell pressure, refused by add_load); corrected by amendment 2 as r2b_to_r4b_refusals"]
 fn r1_to_r4_n3_refusals() {
     let mut c = Checks::new();
     // N3 for C, and its prestress for E7, E8.
@@ -1198,4 +1200,132 @@ fn extra_contribution_called_once_per_iterate() {
     let iterations: usize = r.steps.iter().map(|s| s.residuals.len()).sum();
     // Called once per evaluated iterate and once for the reactions.
     assert_eq!(cell.get(), iterations + 1, "calls of the contribution");
+}
+
+// ------------------------------------------------------------------------------------------------- amendment 2
+
+/// A contribution adding zeros at `(a, b)` and `(b, a)`.
+struct ZerosAt {
+    a: usize,
+    b: usize,
+}
+
+impl Contribution for ZerosAt {
+    fn name(&self) -> &str {
+        "zeros off the pattern"
+    }
+    fn add(&self, _u: &[f64], _l: f64, _f: &mut [f64], t: &mut Vec<(usize, usize, f64)>) -> rcfd_fem::Result<()> {
+        t.push((self.a, self.b, 0.0));
+        t.push((self.b, self.a, 0.0));
+        Ok(())
+    }
+}
+
+/// D6b (amendment 2): the smallest free equation `i` and the smallest free `j` not in row `i` of the pattern.
+#[test]
+fn d6b_off_pattern_contribution() {
+    let mut c = Checks::new();
+    let bar = stretch_bar(E_MOD);
+    let reference = solve(&bar, &[], &[], &NewtonOptions::new(1)).unwrap();
+    let k0 = stiffness(&bar).unwrap();
+    let dofs = bar.dof_map();
+    let mut fixed = vec![false; dofs.n_equations()];
+    for (set, comp) in [("xmin", 0), ("ymin", 1), ("zmin", 2)] {
+        for &n in bar.mesh().node_set(set).unwrap() {
+            fixed[dofs.equation(n, comp).unwrap()] = true;
+        }
+    }
+    let i = (0..fixed.len()).find(|&q| !fixed[q]).unwrap();
+    let row = &k0.col[k0.row_ptr[i]..k0.row_ptr[i + 1]];
+    let j = (0..fixed.len()).find(|&q| !fixed[q] && !row.contains(&q)).unwrap();
+    let off = !row.contains(&j);
+    c.holds(
+        "D6b the pair is off the pattern",
+        off,
+        &format!("equations {i} and {j}"),
+    );
+    let z = ZerosAt { a: i, b: j };
+    let r = solve_with(
+        &bar,
+        &[],
+        &[],
+        &NewtonOptions::new(1),
+        DriverExtensions {
+            contributions: vec![&z],
+            step_control: None,
+        },
+    )
+    .unwrap();
+    let (a, b) = (r.result.displacement_values(), reference.result.displacement_values());
+    let dev =
+        a.iter().zip(b).map(|(x, y)| (x - y).abs()).fold(0.0, f64::max) / b.iter().map(|y| y.abs()).fold(0.0, f64::max);
+    println!("D6b: bit-equal {}", bits(a) == bits(b));
+    c.at_most("D6b off-pattern zeros: max |u - u_ref| / max |u_ref|", dev, 1e-10);
+    c.finish();
+}
+
+/// The Shell3 model of R2 without a load (amendment 2).
+fn shell3_model_unloaded() -> (SolidModel, Vec<Prescribed>) {
+    let (nodes, quads, pres) = plate_grid();
+    let conn: Vec<usize> = quads
+        .iter()
+        .flat_map(|q| [q[0], q[1], q[2], q[0], q[2], q[3]])
+        .collect();
+    let nn = nodes.len();
+    let ne = conn.len() / 3;
+    let mut mesh = SolidMesh::new(nodes).unwrap();
+    mesh.add_block(ElementKind::Shell3, conn).unwrap();
+    mesh.set_block_property(0, BlockProperty::shell(0.01).unwrap()).unwrap();
+    mesh.add_element_set("all", (0..ne).collect()).unwrap();
+    mesh.add_node_set("all", (0..nn).collect()).unwrap();
+    let mut m = SolidModel::new(mesh);
+    m.add_material("all", steel(0.3)).unwrap();
+    (m, pres)
+}
+
+/// R2b to R4b (amendment 2).
+#[test]
+fn r2b_to_r4b_refusals() {
+    let mut c = Checks::new();
+    let (tri, tpres) = shell3_model_unloaded();
+    for (entry, r) in entries(&tri, &tpres, None, true) {
+        c.holds(
+            &format!("R2b Shell3 {entry}"),
+            not_yet(&r, "element kind", "Shell3", "block 0", "ADR 0322 (F-419)"),
+            &format!("{:?}", r.err()),
+        );
+    }
+    let plies = vec![
+        Ply::new(iso(), 0.005, 0.0).unwrap(),
+        Ply::new(iso(), 0.005, PI / 2.0).unwrap(),
+    ];
+    let layup = BlockProperty::layup(plies.clone()).unwrap();
+    let (lam, lpres) = shell_model(ElementKind::Shell4, layup.clone());
+    for (entry, r) in entries(&lam, &lpres, None, true) {
+        c.holds(
+            &format!("R3b Layup {entry}"),
+            not_yet(&r, "shell property", "Layup", "block 0", "ADR 0331 (F-428)"),
+            &format!("{:?}", r.err()),
+        );
+    }
+    let r4a = section_of(&layup, &iso());
+    let r4b = rcfd_fem::laminate::section_stiffness(&plies);
+    c.holds(
+        "R4b section_of(Layup), laminate::section_stiffness",
+        not_yet(
+            &r4a,
+            "shell property",
+            "Layup",
+            "the section stiffness",
+            "ADR 0331 (F-428)",
+        ) && not_yet(
+            &r4b,
+            "shell property",
+            "Layup",
+            "the section stiffness",
+            "ADR 0331 (F-428)",
+        ),
+        &format!("{:?} / {:?}", r4a.err(), r4b.err()),
+    );
+    c.finish();
 }
