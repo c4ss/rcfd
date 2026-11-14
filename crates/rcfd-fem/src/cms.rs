@@ -973,7 +973,9 @@ impl ReducedPart {
         }
         let n_residual = if v2 { sizes[3] } else { 0 };
         if v2 && n_residual == 0 {
-            return Err(bad(format!("a '{FILE_HEADER_2}' file has at least one residual vector")));
+            return Err(bad(format!(
+                "a '{FILE_HEADER_2}' file has at least one residual vector"
+            )));
         }
         let nodes = to_ints("nodes", section("nodes")?)?;
         let components = to_ints("components", section("components")?)?;
