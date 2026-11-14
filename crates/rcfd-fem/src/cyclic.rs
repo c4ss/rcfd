@@ -88,6 +88,8 @@ pub struct CyclicBoundary {
     pairs: Vec<(usize, usize)>,
     length: f64,
     tolerance: f64,
+    axis_nodes: Vec<usize>,
+    interpolated: Vec<(usize, Vec<(usize, f64)>)>,
 }
 
 impl CyclicBoundary {
@@ -123,6 +125,19 @@ impl CyclicBoundary {
     pub fn tolerance(&self) -> f64 {
         self.tolerance
     }
+    /// The nodes on the axis (on both boundaries; ADR 0456 D4), ascending; empty without the option.
+    pub fn axis_nodes(&self) -> &[usize] {
+        &self.axis_nodes
+    }
+    /// The interpolated high nodes with their weights over low nodes (ADR 0456 D4), ascending in the high node; empty
+    /// without the option (then [`CyclicBoundary::pairs`] holds the match).
+    pub fn interpolated(&self) -> &[(usize, Vec<(usize, f64)>)] {
+        &self.interpolated
+    }
+    /// Whether the boundary uses an extension of ADR 0456.
+    pub fn is_extended(&self) -> bool {
+        !self.axis_nodes.is_empty() || !self.interpolated.is_empty()
+    }
 }
 
 /// The index of the one cyclic constraint of a model; none or more than one is refused.
@@ -154,6 +169,7 @@ pub fn boundary(model: &SolidModel, constraint: usize) -> Result<CyclicBoundary>
         axis,
         origin,
         sectors,
+        options,
     }) = model.constraints().get(constraint)
     else {
         return Err(cyclic_error(format!(
@@ -169,7 +185,12 @@ pub fn boundary(model: &SolidModel, constraint: usize) -> Result<CyclicBoundary>
     let mesh = model.mesh();
     let lows = mesh.surface_set_nodes(low)?;
     let highs = mesh.surface_set_nodes(high)?;
-    if let Some(&p) = lows.iter().find(|p| highs.binary_search(p).is_ok()) {
+    let both: Vec<usize> = lows
+        .iter()
+        .copied()
+        .filter(|p| highs.binary_search(p).is_ok())
+        .collect();
+    if let (Some(&p), false) = (both.first(), options.axis_nodes) {
         return Err(cyclic_error(format!(
             "node {p} is on both boundaries '{low}' and '{high}' (a node on the axis or a set given twice)"
         )));
@@ -190,15 +211,56 @@ pub fn boundary(model: &SolidModel, constraint: usize) -> Result<CyclicBoundary>
         )));
     }
     let tolerance = MATCH_TOLERANCE * length;
+    // ADR 0456 D4: the nodes on both boundaries must lie on the axis.
+    for &p in &both {
+        let d = [x[p][0] - origin[0], x[p][1] - origin[1], x[p][2] - origin[2]];
+        let along = d[0] * n[0] + d[1] * n[1] + d[2] * n[2];
+        let off =
+            ((d[0] - along * n[0]).powi(2) + (d[1] - along * n[1]).powi(2) + (d[2] - along * n[2]).powi(2)).sqrt();
+        if off > tolerance {
+            return Err(cyclic_error(format!(
+                "node {p} is on both boundaries '{low}' and '{high}' but {off:e} from the axis (tolerance {tolerance:e})"
+            )));
+        }
+    }
+    let axis_nodes = both;
+    if let Some(interp) = options.interpolation {
+        // ADR 0456 D4: each high node follows the low faces rotated into the high position.
+        let rotation = rotation_matrix(n, 2.0 * PI / *sectors as f64);
+        let o = *origin;
+        let map = |p: Vec3| rotate_point(&rotation, o, p);
+        let exclude: std::collections::BTreeSet<usize> = axis_nodes.iter().copied().collect();
+        let w = crate::tie::weights(mesh, high, low, &map, &interp, &Default::default(), &exclude)?;
+        let interpolated = w.rows.into_iter().filter(|r| r.1 == 0).map(|r| (r.0, r.2)).collect();
+        return Ok(CyclicBoundary {
+            constraint,
+            sectors: *sectors,
+            axis: n,
+            origin: *origin,
+            rotation,
+            pairs: Vec::new(),
+            length,
+            tolerance,
+            axis_nodes,
+            interpolated,
+        });
+    }
     let window = tolerance;
     let accept = |d: f64| d <= tolerance;
     let rotation = rotation_matrix(n, 2.0 * PI / *sectors as f64);
     // The high nodes sorted by their first coordinate, for a window search.
-    let mut sorted: Vec<(f64, usize)> = highs.iter().map(|&h| (x[h][0], h)).collect();
+    let mut sorted: Vec<(f64, usize)> = highs
+        .iter()
+        .filter(|h| axis_nodes.binary_search(h).is_err())
+        .map(|&h| (x[h][0], h))
+        .collect();
     sorted.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
     let mut partner_of_high: Vec<Option<usize>> = vec![None; x.len()];
     let mut pairs = Vec::with_capacity(lows.len());
     for &l in &lows {
+        if axis_nodes.binary_search(&l).is_ok() {
+            continue;
+        }
         let y = rotate_point(&rotation, *origin, x[l]);
         let start = sorted.partition_point(|e| e.0 < y[0] - window);
         let mut best: Option<(usize, f64)> = None;
@@ -233,7 +295,10 @@ pub fn boundary(model: &SolidModel, constraint: usize) -> Result<CyclicBoundary>
         partner_of_high[found] = Some(l);
         pairs.push((l, found));
     }
-    if let Some(&h) = highs.iter().find(|&&h| partner_of_high[h].is_none()) {
+    if let Some(&h) = highs
+        .iter()
+        .find(|&&h| partner_of_high[h].is_none() && axis_nodes.binary_search(&h).is_err())
+    {
         return Err(cyclic_error(format!(
             "high node {h} at {:?} of '{high}' is the image of no node of the low boundary '{low}' (tolerance {tolerance:e})",
             x[h]
@@ -248,6 +313,8 @@ pub fn boundary(model: &SolidModel, constraint: usize) -> Result<CyclicBoundary>
         pairs,
         length,
         tolerance,
+        axis_nodes,
+        interpolated: Vec::new(),
     })
 }
 
@@ -641,6 +708,11 @@ impl FullRotor {
 pub fn full_rotor(model: &SolidModel) -> Result<FullRotor> {
     let ci = the_cyclic_constraint(model)?;
     let bd = boundary(model, ci)?;
+    if bd.is_extended() {
+        return Err(cyclic_error(format!(
+            "constraint {ci}: the full rotor of a boundary with nodes on the axis or interpolated nodes is not built (ADR              0456 D4)"
+        )));
+    }
     let mesh = model.mesh();
     for (b, block) in mesh.blocks().iter().enumerate() {
         if !block.kind().is_solid() {

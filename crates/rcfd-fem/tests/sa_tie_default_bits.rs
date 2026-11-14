@@ -54,7 +54,8 @@ fn ring() -> SolidModel {
     for c in 0..3 {
         m.add_constraint(Constraint::displacement("spoke", c, 0.0)).unwrap();
     }
-    m.add_constraint(Constraint::cyclic("ymin", "ymax", AXIS, [0.0; 3], N)).unwrap();
+    m.add_constraint(Constraint::cyclic("ymin", "ymax", AXIS, [0.0; 3], N))
+        .unwrap();
     m
 }
 
@@ -76,7 +77,8 @@ fn disc() -> SolidModel {
     m.add_constraint(Constraint::displacement("mid", 2, 0.0)).unwrap();
     m.add_constraint(Constraint::displacement("pin", 1, 0.0)).unwrap();
     m.add_load(Load::centrifugal(AXIS, [0.0; 3], 100.0)).unwrap();
-    m.add_constraint(Constraint::cyclic("ymin", "ymax", AXIS, [0.0; 3], N)).unwrap();
+    m.add_constraint(Constraint::cyclic("ymin", "ymax", AXIS, [0.0; 3], N))
+        .unwrap();
     m
 }
 
@@ -112,7 +114,10 @@ fn b1_default_bits() {
         fnv(bd.pairs().iter().flat_map(|&(l, h)| [l as u64, h as u64])),
     ));
     let t0 = transformation(&r, &[]).unwrap();
-    words.push(("ring T k0".into(), fnv(bits(&t0.t().val).chain(t0.t().col.iter().map(|&c| c as u64)))));
+    words.push((
+        "ring T k0".into(),
+        fnv(bits(&t0.t().val).chain(t0.t().col.iter().map(|&c| c as u64))),
+    ));
     for k in [1usize, 6] {
         let t = harmonic_transformation(&r, &[], k).unwrap();
         words.push((
@@ -145,7 +150,8 @@ fn b1_default_bits() {
     let mut both = SolidModel::new(r.mesh().clone());
     both.add_material("all", Material::isotropic_elastic(2e11, 0.0, 7850.0, 0.0).unwrap())
         .unwrap();
-    both.add_constraint(Constraint::cyclic("ymin", "ymin", AXIS, [0.0; 3], N)).unwrap();
+    both.add_constraint(Constraint::cyclic("ymin", "ymin", AXIS, [0.0; 3], N))
+        .unwrap();
     let text = match boundary(&both, 0) {
         Err(e @ FemError::InvalidValue { .. }) => e.to_string(),
         other => panic!("expected a refusal, got {other:?}"),
