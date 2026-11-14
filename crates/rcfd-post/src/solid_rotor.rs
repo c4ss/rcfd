@@ -120,7 +120,7 @@ pub fn rigid_from_flexible(model: &RotorModel) -> Result<rotordyn::Rotor> {
             rho * (s.section.i_y() + s.section.i_z()) * l,
         ));
     }
-    if !(mass > 0.0) {
+    if mass.is_nan() || mass <= 0.0 {
         return Err(invalid("rotor", "the rotor has no mass".to_string()));
     }
     let zc = first / mass;

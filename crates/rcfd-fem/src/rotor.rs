@@ -662,7 +662,7 @@ impl RotorModel {
         let sense = sense_matrix(&mats);
         let mut found: Vec<(f64, Vec<C64>)> = Vec::new();
         for (k, &m) in mu.iter().enumerate() {
-            if !(m > 0.0) {
+            if m.is_nan() || m <= 0.0 {
                 continue;
             }
             // z = L^-T y
@@ -1130,7 +1130,8 @@ impl RealLu {
         let mut piv = (0..n).collect::<Vec<_>>();
         for k in 0..n {
             let p = (k..n).max_by(|&i, &j| a[i * n + k].abs().total_cmp(&a[j * n + k].abs()))?;
-            if !(a[p * n + k].abs() > f64::EPSILON * scale * n as f64) {
+            let pv = a[p * n + k].abs();
+            if pv.is_nan() || pv <= f64::EPSILON * scale * n as f64 {
                 return None;
             }
             if p != k {
@@ -1175,7 +1176,8 @@ impl RealLu {
 fn complex_solve(mut a: Vec<C64>, n: usize, mut b: Vec<C64>) -> Option<Vec<C64>> {
     for k in 0..n {
         let p = (k..n).max_by(|&i, &j| a[i * n + k].abs().total_cmp(&a[j * n + k].abs()))?;
-        if !(a[p * n + k].abs() > 0.0) {
+        let piv = a[p * n + k].abs();
+        if piv.is_nan() || piv <= 0.0 {
             return None;
         }
         if p != k {
