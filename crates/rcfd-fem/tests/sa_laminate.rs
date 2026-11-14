@@ -903,6 +903,7 @@ fn ms1_layup_mass() {
 // ------------------------------------------------------------------------------------------------ RX2
 
 #[test]
+#[ignore = "record: ADR 0502 (F-591) takes gravity and the buckling of a layup, retiring its two rows; continued in rx2_paths_that_refuse_a_layup_after_f591 (ADR 0291 pattern, maintainer standing decision)"]
 fn rx2_paths_that_refuse_a_layup() {
     let mut c = Checks::new();
     let plies = plies_of(&ortho(), &[0.0, 90.0], 0.002);
@@ -942,6 +943,50 @@ fn rx2_paths_that_refuse_a_layup() {
     let r = solve(&n, &[], &[], &NewtonOptions::new(1));
     c.holds(
         "RX2 nonlinear::solve of a layup",
+        refused_with(&r, laminate::FOLLOW_UP),
+        &format!("{:?}", r.as_ref().err()),
+    );
+    c.finish();
+}
+
+/// RX2 after ADR 0502 (F-591, its D9 and RX4): gravity on the layup solves, the buckling chain of the layup is taken, and
+/// `nonlinear::solve` still refuses it naming the laminate's follow-up.
+#[test]
+fn rx2_paths_that_refuse_a_layup_after_f591() {
+    let mut c = Checks::new();
+    let plies = plies_of(&ortho(), &[0.0, 90.0], 0.002);
+    let (nodes, el) = grid(1.0, 0.2, 4, 1);
+    let base = || {
+        let mut m = shell_model(
+            nodes.clone(),
+            &el,
+            BlockProperty::layup(plies.clone()).unwrap(),
+            steel(),
+        );
+        for comp in 0..6 {
+            m.add_constraint(Constraint::displacement("origin", comp, 0.0)).unwrap();
+        }
+        m
+    };
+    let mut g = base();
+    g.add_load(Load::gravity([0.0, 0.0, -9.81])).unwrap();
+    let r = solve_static(&g, &StaticOptions::default());
+    c.holds("RX4 gravity on a layup solves", r.is_ok(), &format!("{:?}", r.err()));
+    let mut b = base();
+    b.add_load(Load::nodal_force("all", [-1.0, 0.0, 0.0])).unwrap();
+    let r = solve_static(&b, &StaticOptions::default())
+        .and_then(|s| prestress_from_static(&b, &s))
+        .and_then(|p| factors(&b, &p, &BucklingOptions::new(1)));
+    c.holds(
+        "RX4 buckling of a layup taken",
+        r.is_ok(),
+        &format!("{:?}", r.as_ref().err()),
+    );
+    let mut n = base();
+    n.add_load(Load::shell_pressure("all", 10.0)).unwrap();
+    let r = solve(&n, &[], &[], &NewtonOptions::new(1));
+    c.holds(
+        "RX4 nonlinear::solve of a layup still refused",
         refused_with(&r, laminate::FOLLOW_UP),
         &format!("{:?}", r.as_ref().err()),
     );
