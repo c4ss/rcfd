@@ -374,3 +374,89 @@ state value at any element: `state_size` is 0 for both materials), the same stat
 other path unchanged. The five tests are then run once (run 2, `f607-scratch/run2.log`); the four that passed are not rerun.
 No limit is changed. Under the decision rule this is a deviation (a registered run that did not reach the checks); it is
 reported in the addendum.
+
+## Addendum 1: results (2026-11-14)
+
+Runs: point checks P1 to P6 (the library as later committed in `1347dbf2`; `f607-scratch/run1_unit.log`,
+`run1_unit_serial.log`, amendment 1); the registered run of the model checks (commit `1347dbf2`, `run1.log`: F1h, I1, I1r,
+I2 measured, the five neo-Hookean tests stopped at `start`, amendment 2); the corrected run of those five (commit `7d930a82`,
+`run2.log`). B0 recorded on the base 615ad811 (commit `598bdbb9`, `b0-base.log`) before any library line. The full
+`cargo test -p rcfd-fem --release` afterwards (`fem_all.log`, exit 0) ran `sa_dg` once more as part of the suite; it is not a
+registered run and its numbers are not used.
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| A0 | SVK steady solve converged; NH integrator built; 1000 of 1000 steps, no halving, largest final residual `9.70e-8` | `Ok` | met (run 2) |
+| A1 | `4.145e-13` | `<= 1e-10` | met |
+| A2 | `7.521e-13` | `<= 1e-6` | met |
+| A3 | `2.112e-13` | `<= 1e-6` | met |
+| I1 | `9.392e-13` (1000 of 1000 steps of both) | `<= 1e-12` | met (run 1), margin 6 percent |
+| I1r (record) | `2.288e-13` | record | - |
+| I2 | `9.699e-14` (500 of 500 steps) | `<= 1e-12` | met (run 1) |
+| K0 | 500 of 500 steps, no halving, largest final residual `9.85e-11` | `Ok` | met (run 2) |
+| K1 | `2.832e-9` | `<= 1e-7` | met |
+| K2 | `dP = 2.139e-13`, `dJ = 3.998e-13` | `<= 1e-10`, `<= 1e-8` | met |
+| N1h | `4.748e-3` (500 steps converged) | `>= 1e-4` | met |
+| P1 | `7.86e-17` (correction branch at 800 of 800 pairs) | `<= 1e-12` | met |
+| P2 | `4.85e-16` | `<= 1e-12` | met |
+| P3a, P3b | bit for bit, midpoint branch | exact | met |
+| P3c | `1.19` | `<= 5` | met |
+| P4 | `1.70e-8` | `<= 1e-6` | met |
+| P5 | `1.20e-5` | `<= 1e-4` | met |
+| P6 | `1.38e-9` | `<= 1e-6` | met |
+| R1h | equal state bytes | exact | met (run 2) |
+| T1h | equal state bytes | exact | met (run 2) |
+| F1h | Mooney-Rivlin refused (`"nl_transient"`, ADR 0523); NH with `Method` refused (`NotYetSupported`, ADR 0328); NH with `Auto` refused; NH with `DiscreteGradient` accepted; NH in a BBar block refused (ADR 0514) | all | met (run 1) |
+| B1 | the three B0 digests of 615ad811; `sa_emc_default_bits`, `sa_nl_transient_default_bits`, `sa_emc`, `sa_nl_transient` pass (in `fem_all.log`) | exact; pass | met |
+| B2 | `baseline_hashes`: 3 passed, 1 ignored | pass | met |
+
+Also: `cargo test -p rcfd-cli --release --test docs_site` exit 0; `cargo fmt -p rcfd-fem --check` and `cargo clippy -p
+rcfd-fem --release --all-targets -- -D warnings` clean.
+
+**Mutations** (`f607-scratch/mutations.log`, a git-archive copy of `7d930a82` with its own target; the point tests and
+`sa_dg` run for each): MU1 caught (K1 `2.39e-3`, P1); MU2 (P1, P3c, I2 `0.355`, A0 and I1: the first step does not converge);
+MU3 (A2 `0.364`, A3 `0.637`, K1 `4.2e-2`, K2 `7.4e-2`, I1); MU4 (K1 `3.0e-4`, P1); MU5 (K1 `2.39e-3`, P1); MU6 (K1 `3.4e-2`);
+MU7 (P6, P3c; `sa_dg` passed, as registered: the step conserves the energy of `W` whatever `S` is); MU8 (P4; A0: the tangent
+not positive definite); MU9 (F1h: Mooney-Rivlin accepted); MU10 (recorded, not required) caught too (I1 `1.79e-12`, P3c).
+
+**Diagnosis worth recording.** (i) MU1 and MU5 are not caught by the acceptance's own bar (A1 to A3 pass without the
+correction): the neo-Hookean bar's strain changes per step are tiny (arithmetic 4), so its midpoint stress conserves the energy
+to the residual anyway; the large-strain cube (K1, N1h) is what shows that the correction matters (`2.8e-9` against `2.4e-3`
+without it). (ii) I1 measured `9.4e-13` against the estimate `~1e-15` of arithmetic 5: the estimate missed that `u` grows to
+about `5 m` (the translation `0.5 m/s` over `10 s`), whose ulp `8.9e-16 m` is `2.5e-14` of the step increment (`~0.036 m`),
+and that each Newton update rounds at that ulp: some tens of ulps over the iterations of a step, rounding of the stored
+displacement rather than a difference of the two stresses (the cube, `|u| ~ 1 m`, gives `9.7e-14`; the whole runs of I1r
+differ by `2.3e-13` of `|u|`). This is a reading, not a measured decomposition. Met, with little margin; MU10 shows that the
+rounding test of D3 is what keeps it under the limit.
+
+**Deviations.** (1) Amendment 1, after the library code and the point checks, before the model checks: the neo-Hookean
+material only on request, so that F1ec of ADR 0514 (an existing test) keeps passing. (2) Amendment 2: the registered run did
+not reach the five neo-Hookean tests (a library defect in `start`, diagnosed and fixed in the library only); those five were
+run once after the fix. (3) The point tests were run twice (the first output interleaved; deterministic, same numbers).
+(4) F-425 has not landed: the neo-Hookean energy is this step's own (open question 1).
+
+**Decision: done** by the registered rule (every check met, MU1 to MU9 caught, fmt and clippy clean, B1 and B2 unchanged).
+**Proposed status: partial**, for two reasons the lead's standing practice treats as partial (as for F-570): a correction
+after a registered run (amendment 2), and the dependency F-425 not landed (the energy is a step-local form until F-425
+chooses its own; the decision rule names this case).
+
+Remaining questions (none changes a default):
+
+1. F-425 and the energy: options (a) F-425 adopts D2's form and evaluation (then `dg.rs` calls `mat_hyper`), (b) F-425
+   chooses another volumetric function and this step switches to it, rerunning `sa_dg.rs`. Recommendation (a) for the
+   neo-Hookean form (the decoupled form with `(J - 1)^2` has the small-strain moduli of the acceptance), recorded for F-425's
+   registration.
+2. Case-file key: recommendation as open question 2 above.
+3. Mooney-Rivlin: recommendation, accept it through D3 once F-425 gives its energy.
+4. The citations of open question 4: to be checked by the maintainer.
+5. The `Auto` default refuses the neo-Hookean material (amendment 1): options (a) keep, (b) make `Auto` take the discrete
+   gradient for a hyperelastic material once the maintainer allows F1ec of ADR 0514 to be updated. Recommendation (b) after
+   F-425 lands, (a) until then.
+
+## For the lead: roadmap entries
+
+Proposed status of F-607: partial (done by the registered rule; see the decision above).
+
+> Structural solver, advanced tier. PARTIAL by the standing rule (a library defect at the start of a neo-Hookean integrator was found by the registered run and corrected before the five affected tests ran, ADR 0523 amendment 2; F-425 has not landed, so the neo-Hookean energy is the step's own; done by the ADR's registered rule). ADR 0523, 2026-11-14: nl_transient gains AlgorithmicStress { Auto, DiscreteGradient, Average } (NlTransientOptions::algorithmic_stress) for the energy-momentum step; DiscreteGradient is the discrete gradient of Gonzalez, S_alg = S(E_m) + (nu/dE:dE) dE with the midpoint branch when |dE| <= 1e-12 or nu is at rounding (64 eps of the term magnitudes), and takes a compressible neo-Hookean material (mu/2 (J^-2/3 I1 - 3) + kappa/2 (J - 1)^2, evaluated without cancellation at small strain; Mooney-Rivlin refused); Auto (default) is the F-570 step unchanged, including its refusal of hyperelastic materials. NeoHookean spinning bar of ADR 0479 over ten turns: linear momentum 4.1e-13 (1e-10), angular momentum 7.5e-13 (1e-6), energy 2.1e-13 (1e-6); the discrete gradient of an isotropic elastic model equals the F-570 step within 9.4e-13 per step on the bar and 9.7e-14 on a large-strain cube (1e-12). Large-strain neo-Hookean cube: energy 2.8e-9 against 4.7e-3 with the F-570 average. F-570 bits unchanged (B0), defaults bit-identical (baseline_hashes). Ten of ten mutations caught (the acceptance bar alone does not catch dropping the correction; the cube does). No case-file key.
+
+> Follow-up: energy-momentum step with F-425's hyperelastic materials. Deps F-607, F-425. Acceptance: Every limit not stated here is registered in the ADR before the run. With F-425's neo-Hookean and Mooney-Rivlin energies in the discrete gradient of ADR 0523, the neo-Hookean spinning bar over ten turns keeps linear momentum within 1e-10, angular momentum within 1e-6 and energy within 1e-6 relative, and the large-strain neo-Hookean and Mooney-Rivlin cubes of ADR 0523 over 500 steps keep energy within 1e-7 relative; the step-local energy of ADR 0523 is removed or equals F-425's within 1e-12 at a point.

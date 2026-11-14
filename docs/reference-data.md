@@ -2080,3 +2080,15 @@ Every modulus, relaxation time, load and shift constant is an input of a check.
 | Creep of the standard solid under a stress ramp `sigma = s' t`: `eps = s' (t/E_inf - (1/E_inf - 1/E_0) tau_c (1 - e^{-t/tau_c}))`, `tau_c = tau E_0/E_inf` | derived | ADR 0499 arithmetic 3 (ii) |
 | Relative residual of one Newton correction of the homogeneous stretch of one Hex8 under a load ramp (the halving set-up): `2.130e-2` for the step `[0, 1] s`, `1.000e-2` and `6.318e-3` for its halves | computed | ADR 0499 arithmetic 4 (`probe_h1.py`) |
 | A uniform temperature `T` with a shift `a_T` equals the reference temperature with every relaxation time `a_T tau_i` (the reduced time `dxi = dt/a_T`) | derived | ADR 0499 arithmetic 5; ADR 0485 arithmetic 4 |
+
+## F-607 the discrete gradient of Gonzalez in the energy-momentum step (ADR 0523)
+
+No source was read for F-607. The papers below are cited from memory for the method and the energy (volumes, pages and years
+as recalled, not checked; ADR 0523 open question 4). Every formula used is derived in ADR 0523 (the discrete gradient, D2, D3)
+and checked by a plain numpy probe (`f607-scratch/probe_dg.py`, `probe_branch.py` and their logs), no rcfd code.
+
+| Item | Status | Source |
+|---|---|---|
+| Discrete gradient of a stored energy of `C`: `S_alg = S(E_m) + (nu/(dE:dE)) dE`, `nu = W(E_{n+1}) - W(E_n) - S(E_m):dE`, `E_m = (E_n + E_{n+1})/2`; `S_alg : dE = W(E_{n+1}) - W(E_n)` exactly, `S_alg = S(E_m) + O(|dE|^2)`; for St. Venant-Kirchhoff `nu = 0` and `S_alg = (S_n + S_{n+1})/2` | derived, cited | ADR 0523 (the discrete gradient); O. Gonzalez, J. Nonlinear Sci. 6 (1996) 449-467; O. Gonzalez, Comput. Methods Appl. Mech. Engrg. 190 (2000) 1763-1783: NOT read, from memory |
+| Compressible neo-Hookean `W = (mu/2)(J^{-2/3} I_1 - 3) + (kappa/2)(J - 1)^2`, `S = mu J^{-2/3} (2 dev E) C^{-1} + kappa (J - 1) J C^{-1}`, the tangent `2 dS/dC`; small-strain moduli `mu`, `kappa`; the cancellation-free form `I_1 - 3 J^{2/3} = 2q - 2t^2 - 8 det E + 3g^2 + g^3`, `g = J^{2/3} - 1` | derived, cited | ADR 0523 D2; J. C. Simo and R. L. Taylor, Comput. Methods Appl. Mech. Engrg. 85 (1991) 273-310; G. A. Holzapfel, Nonlinear Solid Mechanics, Wiley, 2000, chapter 6: NOT read, from memory; the form is F-607's own until F-425 (ADR 0328) chooses its energy |
+| Measured: neo-Hookean spinning bar over ten turns `dP = 4.1e-13`, `dJ = 7.5e-13`, `dE = 2.1e-13`; large-strain neo-Hookean cube (500 steps) `dE = 2.8e-9` with the discrete gradient against `4.7e-3` with the average; the discrete gradient of the isotropic material equals the F-570 step within `9.4e-13` (bar) and `9.7e-14` (cube) per step | computed | ADR 0523 addendum 1 |
