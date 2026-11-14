@@ -8598,7 +8598,8 @@ fixed by the item's registration ADR before any code.
     committed before their corrected runs (no limit changed). Follow-ups F-599, F-600, F-601. Open (maintainer): a
     [[contact]] case-file table. The I3 miss is explained in ADR 0513 (F-599): a ring discretisation error shown by the
     bottom constraint, and a reference that should have been mean (1 - d/a) cos(Delta/2); I3 re-registered there and met
-    (plane strain, 1.05e-12).
+    (plane strain, 1.05e-12). Follow-up F-600 done (ADR 0519, 2026-11-14): the order of the T2 punch is read as the
+    bound r_{k+1} <= max(10 r_k^2, 1e-12) per Newton solve, met; T2 of ADR 0507 stays an ignored record.
 - [x] **F-428** Laminated shell: layup stiffness, ply stresses and failure indices
   - depends on: F-409, F-392
   - acceptance: Every limit not stated here is registered in the ADR before the run. One isotropic ply gives the bits of
@@ -11664,12 +11665,24 @@ fixed by the item's registration ADR before any code.
     hoop stress within 3.7e-3; ADR 0507's plane-stress set-up with the corrected reference is within 1e-2 (5.4e-3). The
     original I3 stays an ignored record. Three of three required mutations caught. No library change, no case-file key.
     Follow-up F-604.
-- [ ] **F-600** A contact Newton order measure for short solves
+- [x] **F-600** A contact Newton order measure for short solves
   - depends on: F-427
   - acceptance: Every limit not stated here is registered in the ADR before the run. A contact Newton order measure for
     short solves (r_{k+1}/r_k^2 bounded, or started near the solution), registered for the total Lagrangian contact
     punch of ADR 0507 T2.
-  - note: Structural solver, advanced tier. Follow-up of F-427 (ADR 0507, 2026-11-14).
+  - note: Structural solver, advanced tier. Follow-up of F-427 (ADR 0507, 2026-11-14). ADR 0519, 2026-11-14: the reading
+    Q(C, F) of ADR 0515 applied to the contact solves of the total Lagrangian punch of ADR 0507 T2 (NewtonSolve
+    residuals and active sets, no library change): every pair of consecutive residuals r_k, r_{k+1} of one Newton solve
+    with k >= 1 whose correction did not change the set of active contactor nodes satisfies r_{k+1} <= max(C r_k^2, F),
+    C = 10, F = 1e-12 (the rounding of the residual peaks at 9e-14); the Uzawa augmentation starts a new series (pairs
+    with k = 0 and across augmentations are not read), with an informative pair in every load step. Met on T2 and three
+    variants (4 steps, double pressure, an initial penetration that changes the set): no violation in 61 read pairs,
+    largest r_{k+1}/r_k^2 2.6 (T2) and 4.4 over the four; the contact tangent without its curvature part violates it on
+    all four (ratios 7.6e7 .. 8.8e8), with its stiffness term halved no solve converges; C = 1 and F = 0 fail on T2. The
+    ADR 0404 order on T2 stays near 1 (0.98 .. 1.16); the reading is a bound, not an order. T2's active set never
+    changes, so the exemption is exercised only by the penetration variant, where it is not needed. The total Lagrangian
+    path stops with a singular tangent when some contactor nodes start lifted (initial gap > 0), not diagnosed.
+    Mutations 4 of 4 caught. No library change, no case-file key. Follow-up F-608 (optional).
 - [ ] **F-601** Contact search and targets: bucket search, rigid cylinder and sphere targets, Hex20 and Tet faces
   - depends on: F-427
   - acceptance: Every limit not stated here is registered in the ADR before the run. Contact search and targets: a
@@ -11728,3 +11741,9 @@ fixed by the item's registration ADR before any code.
     1e-10, angular momentum within 1e-6, energy within 1e-6 relative; on an isotropic elastic model the step equals the
     F-570 step within 1e-12.
   - note: Structural solver, advanced tier. Follow-up of F-570 (ADR 0514, 2026-11-14).
+- [ ] **F-608** Total Lagrangian contact with a lifted contactor: convexified tangent on a refused pivot
+  - depends on: F-427, F-600
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The total Lagrangian contact driver
+    of ADR 0507 converges the punch of T2 with an initial gap of +3e-4 at the four nodes with x > 1.0, and the reading
+    Q(10, 1e-12) of ADR 0519 holds on it (limits registered).
+  - note: Structural solver, advanced tier. Optional. Follow-up of F-600 (ADR 0519, 2026-11-14).
