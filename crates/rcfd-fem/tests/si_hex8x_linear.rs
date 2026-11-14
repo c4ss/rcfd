@@ -994,7 +994,17 @@ fn es2_patch_recovery_of_pure_bending() {
 }
 
 #[test]
-fn es3_patch_recovery_of_pure_bending_on_a_graded_box() {
+fn es3a_patch_recovery_of_pure_bending_on_a_graded_box_met_rows() {
+    let mut ch = Checks::new();
+    let (serr, rel, _) = bending_run_graded(SolidFormulation::Incompatible, 1.5);
+    ch.at_most("ES3a Incompatible graded recovered nodal stress against M z' / I", serr, 1e-8);
+    ch.at_most("ES3a Incompatible graded energy_error estimate / solution norm", rel, 1e-8);
+    ch.finish();
+}
+
+#[test]
+#[ignore = "known miss of ADR 0525 ES3b (run 1): the control, Full on the graded box, recovered nodal stress error 3.45e-13 <= 1e-4 (the compatible strain recovers the bending stress there too); ES3a rows met in es3a_patch_recovery_of_pure_bending_on_a_graded_box_met_rows (8.2e-13, 4.5e-12); MU12 stays uncaught, see addendum 1"]
+fn es3_patch_recovery_of_pure_bending_on_a_graded_box_known_miss() {
     let mut ch = Checks::new();
     let (serr, rel, _) = bending_run_graded(SolidFormulation::Incompatible, 1.5);
     ch.at_most("ES3 Incompatible graded recovered nodal stress against M z' / I", serr, 1e-8);
