@@ -10990,12 +10990,19 @@ fixed by the item's registration ADR before any code.
     and damping in series and no mass gives the whirl of the same model with a pedestal mass of 1e-9 of the disc's
     within 1e-6; models without such unknowns bit-identical.
   - note: Structural solver, advanced tier. Follow-up of F-416 (ADR 0476, 2026-11-14).
-- [ ] **F-563** Speed-dependent bearing coefficients in whirl, Campbell and response
+- [x] **F-563** Speed-dependent bearing coefficients in whirl, Campbell and response
   - depends on: F-416
   - acceptance: Every limit not stated here is registered in the ADR before the run. A table constant in speed gives the
     bits of the constant bearing; a linear table gives the closed-form Jeffcott critical speed of the speed-dependent
     stiffness within 1e-6.
-  - note: Structural solver, advanced tier. Follow-up of F-416 (ADR 0476, 2026-11-14).
+  - note: Structural solver, advanced tier. Follow-up of F-416 (ADR 0476, 2026-11-14). DONE. F-563 (ADR 0498, 2026-11-14):
+    rcfd_fem::rotor::SpeedBearing (piecewise-linear table k(Omega), c(Omega), clamped outside the table),
+    RotorModel::add_speed_bearing, matrices_at and critical_speeds_over (self-consistent critical speed by bracketed
+    bisection of crit_j(Omega) - Omega); whirl, Campbell, harmonic and unbalance response evaluate the bearing at
+    their spin. A constant table equals the constant bearing bit for bit (1, 2 and 3 knots, cross-coupled and
+    symmetric models); the linear-table critical speed equals the closed form to 0 (parallel quadratic model) and
+    4.4e-16 (series cubic model), limit 1e-6; whirl, Campbell and unbalance response against closed forms 4.4e-16,
+    limit 1e-9; defaults bit-identical; 9 mutations caught. No case-file key.
 - [ ] **F-564** Damped critical speeds as unbalance-response peaks and checked Campbell crossings
   - depends on: F-416
   - acceptance: Every limit not stated here is registered in the ADR before the run. On the damped Jeffcott rotor the
