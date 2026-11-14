@@ -106,7 +106,7 @@ fn beam_model(n: usize, l: f64, section: &BeamSection, axis: usize) -> SolidMode
     let conn: Vec<usize> = (0..n).flat_map(|i| [i, i + 1]).collect();
     mesh.add_block(ElementKind::Beam2, conn).unwrap();
     let orient = if axis == 0 { [0.0, 1.0, 0.0] } else { [0.0, 0.0, 1.0] };
-    mesh.set_block_property(0, BlockProperty::beam(section.clone(), orient).unwrap())
+    mesh.set_block_property(0, BlockProperty::beam(*section, orient).unwrap())
         .unwrap();
     mesh.add_element_set("all", (0..n).collect()).unwrap();
     mesh.add_node_set("x0", vec![0]).unwrap();
@@ -336,11 +336,9 @@ fn h1_to_h4_r1_element_checks() {
         // u_1 = omega x (L, 0, 0), theta = omega at both nodes.
         let u1 = [0.0, om[2] * l, -om[1] * l];
         let mut d = [0.0; 12];
-        for k in 0..3 {
-            d[6 + k] = u1[k];
-            d[3 + k] = om[k];
-            d[9 + k] = om[k];
-        }
+        d[6..9].copy_from_slice(&u1);
+        d[3..6].copy_from_slice(&om);
+        d[9..12].copy_from_slice(&om);
         let kd = k.matvec(&d);
         let wf = [
             om[1] * fv[2] - om[2] * fv[1],
@@ -819,11 +817,9 @@ fn a2_h1_to_h4_r1_element_checks() {
         om[axis] = 1.0;
         let u1 = [0.0, om[2] * l, -om[1] * l];
         let mut d = [0.0; 12];
-        for k in 0..3 {
-            d[6 + k] = u1[k];
-            d[3 + k] = om[k];
-            d[9 + k] = om[k];
-        }
+        d[6..9].copy_from_slice(&u1);
+        d[3..6].copy_from_slice(&om);
+        d[9..12].copy_from_slice(&om);
         let kd = k.matvec(&d);
         let wf = [
             om[1] * fv[2] - om[2] * fv[1],

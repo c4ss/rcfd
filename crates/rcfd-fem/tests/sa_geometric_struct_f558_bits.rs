@@ -151,7 +151,7 @@ fn all_digests() -> Vec<(String, u64)> {
             ElementKind::Beam2,
             vec![0, 1],
             coords.to_vec(),
-            BlockProperty::beam(s.clone(), [0.3, 0.2, 1.0]).unwrap(),
+            BlockProperty::beam(s, [0.3, 0.2, 1.0]).unwrap(),
         );
         let ke = element_geometric_stiffness(&mesh, 0, &coords, &mat, &[sigma]).unwrap();
         out.push((format!("beam element {k}"), digest(ke.values().iter().copied())));
