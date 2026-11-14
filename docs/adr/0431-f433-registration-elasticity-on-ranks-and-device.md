@@ -263,3 +263,84 @@ mutation set-up, not of the check. It is replaced, before any mutation run, by *
 `g * p / (n + 1)` (chunk boundaries at `k (n + 1) / p`, which for these `n` fall inside a node, for example 19 873 = 3 * 6 624
 + 1 for P = 2 on the cube), ignoring nodes. Must be caught by R8 or by the build's own split refusal (which then fails R4 to
 R6 with "is split"). M3 as registered is not run; nothing else changes.
+
+## Addendum 1: results (2026-11-14)
+
+Runs, each made once, in release, on the code of commit 074edbfc: `cargo test -p rcfd-api --release --test
+sa_solid_parallel -- --test-threads=1` (default build, no device backend); `cargo test -p rcfd-api --release --features cuda
+--test sa_solid_device -- --test-threads=1` and the same with `--ignored` for D1 (RTX 5080 found by `probe()`); the D3/D4
+record in the `--features cuda` build with `RCFD_GPU_DISABLE=1`. Logs in `w49i-work/f433-scratch`.
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| R1 cube (39 744 unknowns), block Jacobi, 1 rank vs F-381 | bits | 276 = 276 iterations, 0 restarts both; displacements, reactions, residual (8.560e-11) bit-equal | yes |
+| R2 Tet10 cantilever (4 704 unknowns), block Jacobi, 1 rank | bits | 581 = 581 iterations, 1 restart both; all bit-equal | yes |
+| R3 cube, IC(0), 1 rank | bits | 94 = 94 iterations, shift 0 both; all bit-equal | yes |
+| R4 cube, block Jacobi, P = 2 / 4 / 8: difference; residual; iteration ratio | 1e-8; 1e-10; 2 | 7.9e-15 / 5.6e-15 / 1.9e-14; 8.57e-11 / 8.56e-11 / 8.54e-11; 276 of 276 = 1.000 at every P | yes |
+| R5 Tet10, block Jacobi, P = 2 / 4 / 8 | same | 1.4e-13 / 6.3e-14 / 2.1e-13; 6.6e-11 / 9.5e-11 / 6.8e-11; 583, 581, 582 of 581 (1.0034, 1.0000, 1.0017) | yes |
+| R6 cube, rank-local IC(0), P = 2 / 4 / 8 | same | 1.2e-11 / 1.1e-11 / 1.4e-11; 9.5e-11 / 9.0e-11 / 7.8e-11; 122, 132, 143 of 94 (1.298, 1.404, 1.521) | yes |
+| R6 Tet10, rank-local IC(0), P = 2 / 4 / 8 | same | 2.7e-13 / 4.5e-13 / 4.4e-13; 8.4e-11 / 6.9e-11 / 8.8e-11; 190, 202, 219 of 180 (1.056, 1.122, 1.217) | yes |
+| R7 repeats (R4, R5 at 2, 4, 8; R6 at 8) | bits | all bit-identical | yes |
+| R8 node split, every run of R4 to R6 | exact | no node split; counts sum; owned equations equal per rank (19 872 / 9 936 / 4 968; 2 352 / 1 176 / 588) | yes |
+| R9 failing rank 1 of 4 | Err naming rank 1, "injected failure"; <= 10 s | 0.015 s; "4 of 4 rank(s) failed: ... rank 1: communication error on rank 1 with peer 2 (tag 1): injected failure at send 200" | yes |
+| R10 stalling rank 2 of 4, time-out 0.5 s | Err "no message within"; <= 10 s | 3.015 s; ranks 0, 1, 3 "no message within 500ms" from peer 2, rank 2 "peer has terminated" | yes |
+| R11 scaling, cube block Jacobi, solve seconds P = 1 / 2 / 4 / 8 | recorded | 0.167 / 0.142 / 0.127 / 0.116 s (serial assembly 0.107 s) | recorded |
+| D1 cube 46^3 (304 842 unknowns), `auto` | `cuda`; 1e-9; 1e-10 | backend cuda ("auto: cuda, 304842 unknowns"); difference 2.1e-13; residuals 9.44e-11 (device) / 9.53e-11 (cpu); 559 iterations both; device 0.596 s, cpu 4.504 s (16 threads), assembly 0.78 s | yes |
+| D1f cube 12^3, `cuda` vs `cpu` | 1e-9 | Jacobi 4.5e-14 (146 iterations both, 0.022 s / 0.030 s); Chebyshev 4.5e-15 (54 both) | yes |
+| D2 `auto` below the threshold | cpu, reason, bits | backend cpu, "auto: cpu, 6084 unknowns is below the threshold 100000", bit-equal to cpu | yes |
+| D3 `cuda` without a device | located Err | "solver cg-device: linear_solver.device = "cuda" but no device is usable: built without feature cuda (rebuild with --features cuda)"; with `RCFD_GPU_DISABLE=1`: "... disabled by RCFD_GPU_DISABLE=1" | yes |
+| D4 `auto` without a device | cpu, reason, bits | backend cpu, "auto: falling back to cpu, built without feature cuda ..." (and "... disabled by RCFD_GPU_DISABLE=1"), bit-equal to cpu | yes |
+| D5 device clauses not run | reported | the device was usable; every device clause ran | n/a |
+| B1 no file of rcfd-fem, rcfd-linalg, rcfd-dist, rcfd-gpu, rcfd-fv changed; `sb_pcg` fast tests; `rcfd-dist` tests | pass | the diff touches only `crates/rcfd-api` (Cargo.toml two lines, lib.rs one line, the new module, two new tests), `Cargo.lock` and this ADR; sb_pcg 13 passed (4 ignored as before); rcfd-dist 12 passed | yes |
+| B2 `baseline_hashes` | pass | 3 passed, 1 ignored (as before) | yes |
+| B3 `workspace_graph` (rcfd-cli) | pass | 4 passed | yes |
+| N1 split assignment | refused naming the node | "node 1 is split: component 0 on rank 0, component 2 on rank 1" | yes |
+| N2 P = 2 at 1e-4 | > 1e-8 | 6.1e-6 | yes |
+| N3 cpu at 1e-4 vs cuda at 1e-10 | > 1e-9 | 5.2e-6 | yes |
+| N4 fault aimed at rank 9 of 4 | bits of the clean run | bit-equal | yes |
+
+Mutations (scratch `git archive` copy of commit 93bee490, its own target directory, the test files run once per mutant;
+M8 and the second half of M9 with `--features cuda`):
+
+| Mutation | Failed checks | Expected | Caught |
+|---|---|---|---|
+| M1 local norm for the target | R4, R5, both R6, N4 (rank solves end in errors at P >= 4) | R4 or R5 or R6 | yes |
+| M2 no ghost exchange | R4, R5, both R6 (difference 0.9, residual up to 8) | R4, R5 | yes |
+| M3' chunks at `g p / (n + 1)` (amendment 1) | R4, R5, R6, R9, R10, N1, N2, N4 (all refused "node ... is split") | R8 or the split refusal | yes |
+| M4 split check removed | N1 | N1 | yes |
+| M5 time-out ignored | R10 (Ok after 3.07 s: the stalled rank resumed within the 60 s default) | R10 | yes |
+| M6 only rank 0's status kept | R9 (text lacks "injected failure") | R9 or R10 | yes |
+| M7 point Jacobi for block Jacobi | R1 (280 against 276 iterations), R2 (624 against 581) | R1, R2 | yes |
+| M8 threshold ignored | D2 (backend cuda) | D2 | yes |
+| M9 `cuda` silently downgraded | D3 (default build); D1f (`--features cuda`: backend cpu) | D3 | yes |
+| M10 correction added twice | R2 (the Tet10 runs restart once), R5 | R1 or R2 or R3 | yes |
+
+Deviations. (1) Mutation M3 was replaced by M3' in amendment 1 before any mutation run, because M3 is an equivalent mutant
+on these sizes (arithmetic in the amendment); M3 itself was not run. (2) D1 was registered as an ignored heavy record from
+the estimate of arithmetic 5 (500 to 1500 iterations, possibly over two minutes); it took 559 iterations and 7.0 s in all.
+It stays ignored as registered; un-ignoring it is remaining question 1. (3) The Tet10 cantilever has 4 704 free unknowns
+(estimate 4.5e3). (4) Arithmetic 4 estimated a rank-local IC(0) ratio of 1.1 to 1.7 at P = 8 on the cube: measured 1.52.
+No limit, test or parameter was changed after a run.
+
+`cargo fmt -p rcfd-api --check` clean; `cargo clippy -p rcfd-api --all-targets --release -- -D warnings` clean, also with
+`--features cuda`. Not run: the workspace suite (the lead's gate) and the other rcfd-api tests (no existing line of
+rcfd-api changed except one `pub mod` line and two dependency lines).
+
+**Decision by the registered rule: done.** Every registered check met on its single run, N1 to N4 as stated, every
+mutation caught; the only amendment (M3 to M3') was written before any mutation run and changes no check or limit; the
+device clauses ran on a usable device.
+
+### Remaining questions
+
+1. D1 runs in 7 s, not minutes. Options: (a) leave it ignored as registered; (b) a follow-up un-ignores it (it still needs
+   `--features cuda` and skips without a device). Recommendation: (b), at the lead's convenience.
+2. Case-file keys for the rank and device solves of a solid (A5 (c) of ADR 0310). Options: (a) not now; (b) a follow-up
+   item with keys for the solid solver's ranks and device, which changes the schema golden. Recommendation: (a) until a fan
+   case needs it; the numbers above (8 ranks 1.4x faster than one at 4e4 unknowns; the device 7.6x faster than 16 CPU
+   threads at 3e5) favour the device for large models.
+
+## For the lead: roadmap entries
+
+F-433: proposed status **done**. Note:
+
+> Structural solver, advanced tier (plan ADR 0310). ADR 0431, 2026-11-14: rcfd_api::solid_parallel (rcfd-api gains rcfd-dist and rcfd-fem as dependencies, decision A5 (a); library only). solve_static_ranks: the reduced stiffness split by nodes (recursive coordinate bisection of node points, all unknowns of a node on one rank, a split assignment refused naming the node) into DistCsr rows keeping the global entry order, solved on in-process ranks by the distributed CG of rcfd-dist in the outer loop of F-381 (true residual, refinement restarts), with the node block Jacobi of F-381 or a rank-local IC(0) (additive Schwarz without overlap). One rank has the bits of F-381 (cube of 39 744 unknowns: 276 block-Jacobi and 94 IC(0) iterations; Tet10 cantilever of 4 704 unknowns: 581 with one restart), displacements, reactions and residual bit-equal. On 2, 4, 8 ranks: within 1.9e-14 (block Jacobi) and 1.4e-11 (IC(0)) of the serial solution at residual below 1e-10, iterations 1.00 (block Jacobi) and up to 1.52 (rank-local IC(0), cube, 8 ranks) times those of one rank; repeated runs bit-identical; a failing rank ends the solve in 0.015 s and a stalled rank in 3.0 s (time-out 0.5 s) with errors naming rank, peer and tag; scaling recorded (0.167, 0.142, 0.127, 0.116 s for 1, 2, 4, 8 ranks). solve_static_device: rcfd_gpu::resolve with its threshold of 1e5 unknowns; on an RTX 5080 the device Jacobi CG equals the CPU one within 2.1e-13 on a cube of 304 842 unknowns (559 iterations both, 0.60 s against 4.50 s on 16 threads); Chebyshev within 4.5e-15 on 6 084; auto below the threshold runs on the CPU bit-equal; without a device cuda is a located error and auto falls back with the reason recorded. Ten mutations caught. Default solver and baseline hashes unchanged.
