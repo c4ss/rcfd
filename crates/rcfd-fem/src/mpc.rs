@@ -1588,6 +1588,8 @@ fn zero_values_only(what: String, v: f64) -> FemError {
 /// whose constraints and supports hold every motion is solved at zero shift, a free motion moves it.
 pub fn modal_analysis_mpc(model: &SolidModel, extra: &[Prescribed], options: &ModalOptions) -> Result<MpcModes> {
     model.validate()?;
+    // ADR 0531 amendment 2: the coordinate order is refused on the transformation path.
+    crate::modal::check_coordinate_order(options.coordinate_order, options.factorisation, true)?;
     check_transformation_model(model)?;
     let dofs = model.dof_map();
     for &(eq, v) in &prescribed_equations(model, extra)? {

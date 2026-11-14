@@ -15,7 +15,9 @@
 use crate::matrix::CsrMatrix;
 use crate::skyline::{PivotRule, SkylineError, SkylineLdlt, SkylineOptions, SkylineOrdering};
 // ADR 0447 (F-431): the sparse L D L^T as the alternative factorisation.
-use crate::sparse_chol::{SparseLdlt, SparseOptions, SparseOrdering, SupernodalLdlt};
+use crate::sparse_chol::{
+    nested_dissection_order_with_points, SparseLdlt, SparseOptions, SparseOrdering, SupernodalLdlt,
+};
 use std::fmt;
 
 /// Cap on the number of Jacobi sweeps (ADR 0283 D1).
@@ -502,8 +504,42 @@ impl Factor {
     }
 }
 
-/// The factor of `a` by the chosen factorisation with the pivot rule and symmetry tolerance of `opts`.
-fn factor_by(a: &CsrMatrix, opts: &SkylineOptions, factorisation: Factorisation) -> Result<Factor, SkylineError> {
+/// The points the supernodal factor orders by (ADR 0531 D1): `None` unless the factorisation is
+/// [`Factorisation::Supernodal`] and points are given; given points must be one finite point per unknown.
+fn checked_points(
+    points: Option<&[[f64; 3]]>,
+    factorisation: Factorisation,
+    n: usize,
+) -> Result<Option<&[[f64; 3]]>, EigenError> {
+    let p = match (factorisation, points) {
+        (Factorisation::Supernodal, Some(p)) => p,
+        _ => return Ok(None),
+    };
+    if p.len() != n {
+        return Err(EigenError::DimensionMismatch {
+            what: format!("{} points for {n} unknowns", p.len()),
+        });
+    }
+    for (row, x) in p.iter().enumerate() {
+        if let Some(col) = x.iter().position(|v| !v.is_finite()) {
+            return Err(EigenError::NonFinite {
+                matrix: "points",
+                row,
+                col,
+            });
+        }
+    }
+    Ok(Some(p))
+}
+
+/// The factor of `a` by the chosen factorisation with the pivot rule and symmetry tolerance of `opts`; the supernodal factor
+/// orders by the coordinates `points` of the unknowns when given (ADR 0531 D1), by level structures otherwise.
+fn factor_by(
+    a: &CsrMatrix,
+    opts: &SkylineOptions,
+    factorisation: Factorisation,
+    points: Option<&[[f64; 3]]>,
+) -> Result<Factor, SkylineError> {
     match factorisation {
         Factorisation::Envelope => SkylineLdlt::factor_with(a, opts).map(Factor::Envelope),
         Factorisation::Sparse => SparseLdlt::factor_with(
@@ -518,7 +554,10 @@ fn factor_by(a: &CsrMatrix, opts: &SkylineOptions, factorisation: Factorisation)
         Factorisation::Supernodal => SupernodalLdlt::factor_with(
             a,
             &SparseOptions {
-                ordering: SparseOrdering::NestedDissection,
+                ordering: match points {
+                    None => SparseOrdering::NestedDissection,
+                    Some(p) => SparseOrdering::Given(nested_dissection_order_with_points(a, p)),
+                },
                 pivots: opts.pivots,
                 symmetry_tolerance: opts.symmetry_tolerance,
             },
@@ -570,6 +609,10 @@ pub struct SubspaceOptions {
     pub start: Option<Vec<Vec<f64>>>,
     /// The factorisation of `K + sigma M` and of the Sturm counts (default [`Factorisation::Envelope`]; ADR 0447).
     pub factorisation: Factorisation,
+    /// The coordinates of each unknown (`points[i]` of row `i` of `K`) for the nested dissection of
+    /// [`Factorisation::Supernodal`] (ADR 0503 D1b, ADR 0531); `None` (the default): level structures. The other
+    /// factorisations do not read them.
+    pub points: Option<Vec<[f64; 3]>>,
 }
 
 impl Default for SubspaceOptions {
@@ -583,6 +626,7 @@ impl Default for SubspaceOptions {
             ordering: SkylineOrdering::Rcm,
             start: None,
             factorisation: Factorisation::Envelope,
+            points: None,
         }
     }
 }
@@ -692,6 +736,7 @@ fn count_unchecked(
     s: f64,
     ordering: &SkylineOrdering,
     factorisation: Factorisation,
+    points: Option<&[[f64; 3]]>,
 ) -> Result<usize, EigenError> {
     let a = combine(k, m, -s);
     let opts = SkylineOptions {
@@ -699,7 +744,7 @@ fn count_unchecked(
         pivots: PivotRule::NonZero,
         symmetry_tolerance: SYMMETRY_TOLERANCE,
     };
-    match factor_by(&a, &opts, factorisation) {
+    match factor_by(&a, &opts, factorisation, points) {
         Ok(f) => Ok(f.negatives()),
         Err(source) => Err(EigenError::CountFailed { shift: s, source }),
     }
@@ -709,7 +754,7 @@ fn count_unchecked(
 /// (Sylvester's law of inertia, ADR 0283 D8). A refused factorisation (`s` numerically at an eigenvalue) is an error.
 pub fn count_below(k: &CsrMatrix, m: &CsrMatrix, s: f64, ordering: &SkylineOrdering) -> Result<usize, EigenError> {
     validate_pair(k, m)?;
-    count_unchecked(k, m, s, ordering, Factorisation::Envelope)
+    count_unchecked(k, m, s, ordering, Factorisation::Envelope, None)
 }
 
 fn factor_shifted(
@@ -718,6 +763,7 @@ fn factor_shifted(
     shift: Shift,
     ordering: &SkylineOrdering,
     factorisation: Factorisation,
+    points: Option<&[[f64; 3]]>,
 ) -> Result<(Factor, CsrMatrix, f64), EigenError> {
     let opts = SkylineOptions {
         ordering: ordering.clone(),
@@ -727,7 +773,7 @@ fn factor_shifted(
     match shift {
         Shift::Value(s) => {
             let a = combine(k, m, s);
-            match factor_by(&a, &opts, factorisation) {
+            match factor_by(&a, &opts, factorisation, points) {
                 Ok(f) => Ok((f, a, s)),
                 Err(source) => Err(EigenError::ShiftNotPositiveDefinite { shift: s, source }),
             }
@@ -740,7 +786,7 @@ fn factor_shifted(
             let mut last = None;
             for &s in &candidates {
                 let a = combine(k, m, s);
-                match factor_by(&a, &opts, factorisation) {
+                match factor_by(&a, &opts, factorisation, points) {
                     Ok(f) => {
                         let ad = a.diag();
                         let mut worst: Option<(usize, f64)> = None;
@@ -848,7 +894,8 @@ pub fn lowest_eigenpairs(
             cols
         }
     };
-    let (fac, a, sigma) = factor_shifted(k, m, opts.shift, &opts.ordering, opts.factorisation)?;
+    let points = checked_points(opts.points.as_deref(), opts.factorisation, n)?;
+    let (fac, a, sigma) = factor_shifted(k, m, opts.shift, &opts.ordering, opts.factorisation, points)?;
     // ADR 0354 D2: the norms of the backward error, computed only when it is asked for.
     let scale = match opts.residual_test {
         ResidualTest::Relative => None,
@@ -933,7 +980,7 @@ pub fn lowest_eigenpairs(
             let mut fail = None;
             for f in [0.5, 0.25, 0.75] {
                 let s = mu[mp - 1] + f * (mu[mp] - mu[mp - 1]) - sigma;
-                match count_unchecked(k, m, s, &opts.ordering, opts.factorisation) {
+                match count_unchecked(k, m, s, &opts.ordering, opts.factorisation, points) {
                     Ok(c) => {
                         counted = Some((s, c));
                         break;
@@ -1001,6 +1048,10 @@ pub struct BucklingEigenOptions {
     pub start: Option<Vec<Vec<f64>>>,
     /// The factorisation of `K` and of the Sturm counts (default [`Factorisation::Envelope`]; ADR 0447).
     pub factorisation: Factorisation,
+    /// The coordinates of each unknown (`points[i]` of row `i` of `K`) for the nested dissection of
+    /// [`Factorisation::Supernodal`] (ADR 0503 D1b, ADR 0531); `None` (the default): level structures. The other
+    /// factorisations do not read them.
+    pub points: Option<Vec<[f64; 3]>>,
 }
 
 impl Default for BucklingEigenOptions {
@@ -1013,6 +1064,7 @@ impl Default for BucklingEigenOptions {
             ordering: SkylineOrdering::Rcm,
             start: None,
             factorisation: Factorisation::Envelope,
+            points: None,
         }
     }
 }
@@ -1043,6 +1095,7 @@ fn buckling_count(
     s: f64,
     ordering: &SkylineOrdering,
     factorisation: Factorisation,
+    points: Option<&[[f64; 3]]>,
 ) -> Result<usize, EigenError> {
     let a = combine(k, kg, s);
     let opts = SkylineOptions {
@@ -1050,7 +1103,7 @@ fn buckling_count(
         pivots: PivotRule::NonZero,
         symmetry_tolerance: SYMMETRY_TOLERANCE,
     };
-    match factor_by(&a, &opts, factorisation) {
+    match factor_by(&a, &opts, factorisation, points) {
         Ok(f) => Ok(f.negatives()),
         Err(source) => Err(EigenError::CountFailed { shift: s, source }),
     }
@@ -1126,7 +1179,8 @@ pub fn lowest_buckling_factors(
         pivots: PivotRule::Positive,
         symmetry_tolerance: SYMMETRY_TOLERANCE,
     };
-    let fac = factor_by(k, &fopts, opts.factorisation)
+    let points = checked_points(opts.points.as_deref(), opts.factorisation, n)?;
+    let fac = factor_by(k, &fopts, opts.factorisation, points)
         .map_err(|source| EigenError::ShiftNotPositiveDefinite { shift: 0.0, source })?;
     let scale = match opts.residual_test {
         ResidualTest::Relative => None,
@@ -1229,7 +1283,7 @@ pub fn lowest_buckling_factors(
         let mut counted = None;
         let mut fail = None;
         for &s in &candidates {
-            match buckling_count(k, kg, s, &opts.ordering, opts.factorisation) {
+            match buckling_count(k, kg, s, &opts.ordering, opts.factorisation, points) {
                 Ok(c) => {
                     counted = Some((s, c));
                     break;
@@ -1272,4 +1326,57 @@ pub fn lowest_buckling_factors(
         tolerance: opts.tolerance,
         residuals: last_res,
     })
+}
+
+/// ADR 0531 check U1: the order of the supernodal factor that the eigensolvers build.
+#[cfg(test)]
+mod f595 {
+    use super::*;
+    use crate::sparse_chol::nested_dissection_order;
+
+    /// The 7-point Laplacian on `m^3` and the points `(i, j, k)` of its unknowns.
+    fn lap7(m: usize) -> (CsrMatrix, Vec<[f64; 3]>) {
+        let id = |i: usize, j: usize, k: usize| i + m * j + m * m * k;
+        let mut t = Vec::new();
+        let mut p = vec![[0.0; 3]; m * m * m];
+        for k in 0..m {
+            for j in 0..m {
+                for i in 0..m {
+                    let r = id(i, j, k);
+                    p[r] = [i as f64, j as f64, k as f64];
+                    t.push((r, r, 6.0));
+                    for (ok, q) in [
+                        (i > 0, r.wrapping_sub(1)),
+                        (i + 1 < m, r + 1),
+                        (j > 0, r.wrapping_sub(m)),
+                        (j + 1 < m, r + m),
+                        (k > 0, r.wrapping_sub(m * m)),
+                        (k + 1 < m, r + m * m),
+                    ] {
+                        if ok {
+                            t.push((r, q, -1.0));
+                        }
+                    }
+                }
+            }
+        }
+        (CsrMatrix::from_triplets(m * m * m, t), p)
+    }
+
+    #[test]
+    fn u1_the_supernodal_factor_orders_by_the_given_points() {
+        let (a, p) = lap7(10);
+        let opts = SkylineOptions {
+            ordering: SkylineOrdering::Rcm,
+            pivots: PivotRule::Positive,
+            symmetry_tolerance: SYMMETRY_TOLERANCE,
+        };
+        let with = factor_by(&a, &opts, Factorisation::Supernodal, Some(&p)).unwrap();
+        let without = factor_by(&a, &opts, Factorisation::Supernodal, None).unwrap();
+        let by_points = nested_dissection_order_with_points(&a, &p);
+        let by_levels = nested_dissection_order(&a);
+        assert_eq!(with.order(), &by_points[..], "U1 with points");
+        assert_eq!(without.order(), &by_levels[..], "U1 without points");
+        assert_ne!(by_points, by_levels, "U1 the two orders differ");
+    }
 }
