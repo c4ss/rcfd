@@ -1767,6 +1767,19 @@ F-396 solver path (`RotatingPart::modes`, `campbell`).
 | Second-order shift of a gyroscopically coupled mode `omega ~ w_i (1 - 1/2 sum_j G_ij^2/(w_j^2 - w_i^2))` | derived | perturbation of the quadratic problem in modal coordinates (ADR 0472 arithmetic 4) |
 | Lag shift of the radial beam by the axial modes `Delta omega = -2 Omega^2 S omega_lag`, `S = 1.4772e-8 s^2` (L = 1 m, 0.05 m square steel); flap shift by torsion `-9.5e-8` at `0.2 w_0` | computed | Euler-Bernoulli cantilever (`beta_1 L = 1.875104068711961`, root of `cos x cosh x = -1`) and fixed-free rod modes, quadrature (ADR 0472 arithmetic 4) |
 
+## F-555 the split Campbell table of a cyclic sector on the modal subspace (ADR 0481)
+
+No source was read for F-555; every item is cited from memory and derived in ADR 0481 (D1, D5). The references of the checks are
+the whole-sector whirl solve of ADR 0411 (`RotatingSector::whirl_modes`) and the F-396 sector paths (`RotatingSector::modes`,
+`campbell`).
+
+| Item | Status | Source |
+|---|---|---|
+| A full-rotor matrix commuting with the sector shift enters index `k` as `T_k^T blockdiag(A_s, A_s) T_k`; for the Coriolis matrix the doubled `blockdiag(C_s, C_s)` | derived | ADR 0407 D1, ADR 0411 D5 |
+| Projection on expanded harmonic modes with doubled matrices equals the reduced projection: `x^T A_2 y = q^T T_k^T A_2 T_k q'` | derived | ADR 0481 D1 |
+| Ritz error of a gyroscopic mode on a subspace, first order: `eta = |e^H Q(omega) e| / (omega |s^H (2 omega M - i G) s|)`, `s` the M-projection of the exact mode, `e = phi - s`, `s^H Q s = e^H Q e` exactly | derived | the Rayleigh functional of the Hermitian family `Q(w) = K - w^2 M + i w G`; P. Lancaster, Lambda-Matrices and Vibrating Systems (Pergamon 1966), K. P. Hadeler, Arch. Rational Mech. Anal. 27 (1968) 306, B. N. Parlett, The Symmetric Eigenvalue Problem (Prentice-Hall 1980): NOT read, from memory (ADR 0481 D5) |
+| Leading order of `eta` in modal coordinates: `sum_out 2 Omega^2 |C_ja|^2/(w_j^2 - omega^2)` | derived | ADR 0481 D5, ADR 0472 arithmetic 4 |
+
 ## F-416 a flexible rotor on bearings in the stationary frame (ADR 0476)
 
 No source was read for F-416; every item is cited from memory and derived in ADR 0476 (set-ups and arithmetic 1 to 5; numpy

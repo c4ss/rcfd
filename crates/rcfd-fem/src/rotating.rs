@@ -992,7 +992,7 @@ pub fn subspace_mac(m: &CsrMatrix, v: &[Vec<f64>], w: &[Vec<f64>]) -> f64 {
     s / dv.min(dw) as f64
 }
 
-fn check_harmonics(harmonics: &[usize], sectors: usize) -> Result<()> {
+pub(crate) fn check_harmonics(harmonics: &[usize], sectors: usize) -> Result<()> {
     if harmonics.is_empty() {
         return Err(FemError::InvalidValue {
             key: "harmonics",
