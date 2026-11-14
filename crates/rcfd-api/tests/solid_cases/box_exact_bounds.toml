@@ -1,0 +1,51 @@
+# F-526 (ADR 0443): the fast cantilever of F-381 (ADR 0282 arithmetic 5): Hex8 box [0, 8] x [0, 1.5] x [0, 1.5] m,
+# divisions [32, 6, 6], xmin clamped, tip traction (0, 0, -1e6) Pa on xmax, E = 2e11 Pa, nu = 0.3.
+title = "F-526 box bounds equal to node coordinates (Hex8 32 x 6 x 6 of F-381)"
+
+[mesh]
+source = "generator"
+generator = "box"
+element = "hex8"
+lengths = [8.0, 1.5, 1.5]
+divisions = [32, 6, 6]
+
+# Bounds equal to node coordinates exactly (ADR 0443 Q1 to Q4); the node (8, 0, 0.75) is on xmax and ymin.
+[node_sets.corner_hi]
+box_min = [7.8, -0.1, 0.7]
+box_max = [8.0, 0.0, 0.75]
+
+[node_sets.face_hi]
+box_min = [7.8, -1.0, -1.0]
+box_max = [8.0, 2.0, 2.0]
+
+[node_sets.corner_lo]
+box_min = [8.0, 0.0, 0.75]
+box_max = [8.2, 0.1, 0.8]
+
+[node_sets.point]
+box_min = [8.0, 0.0, 0.75]
+box_max = [8.0, 0.0, 0.75]
+
+[materials.steel]
+element_set = "all"
+youngs_modulus = 2.0e11
+poisson_ratio = 0.3
+
+[constraints.clamp]
+set = "xmin"
+components = ["x", "y", "z"]
+
+[loads.tip]
+kind = "traction"
+set = "xmax"
+traction = [0.0, 0.0, -1.0e6]
+
+[analysis]
+type = "static"
+
+[solver]
+method = "direct"
+
+[output]
+vtu = "box_exact_bounds.vtu"
+report = "box_exact_bounds.json"
