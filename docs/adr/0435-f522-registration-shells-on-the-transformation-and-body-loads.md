@@ -354,3 +354,111 @@ Found on writing the tests, before any of them was run:
    models have the Shell4 element as element 2 (after the two Hex8 elements), thickness `0.01`.
 
 No limit changes.
+
+## Addendum 1: results (2026-11-14)
+
+Code: `crates/rcfd-fem/src/mpc.rs` (D1: `check_transformation_model` calls `check_supported_with_structures`; the cyclic refusal
+names Shell4 and `shell::FOLLOW_UP` for a shell model without beams; module doc), `shell.rs` (D2: `body_load_vector`;
+`thickness_or_error` made `pub(crate)`; module doc), `loads.rs` (D2: the shell rule of `add_body_load_with`, `add_shell_body_load`,
+gravity and centrifugal pass it; module doc), comments only in `solve.rs`, `modal.rs`, `free_motions.rs`. New test
+`crates/rcfd-fem/tests/si_shell_transformation.rs` (7 tests, 0.02 s in release); in `si_shell.rs` the retired
+`s1_n2_n3_refusals` got its `#[ignore]` line and the copy `s1_n2_n3_refusals_after_landed` was added. The registered run was
+made once, on the test commit `65909437` (with amendment 1), release profile, `--test-threads=1` (`f522-scratch/run1.log`).
+
+| id | check | limit | measured | met |
+| --- | --- | --- | --- | --- |
+| G1 | gravity resultant; moment | `1e-12` | `3.6e-16`; `1.5e-16` | yes |
+| G2 | nodal forces against the consistent closed form; nodal moments | `1e-12` | `1.3e-16`; `2.2e-17` | yes |
+| G3 | reactions against `-rho t A g` | `1e-12` | `2.8e-16` | yes |
+| G3m | reaction moments | `1e-12` | `2.8e-16` | yes |
+| G4 | box entries with a shell, gravity / centrifugal | exact | bit for bit (81 entries each) | yes |
+| G5 | warped facet (warp `3.92e-2`): gravity resultant, moment; centrifugal resultant, moment | `1e-12` | `3.7e-16`, `3.0e-16`; `2.8e-16`, `7.6e-17` | yes |
+| H1 | rigid set on the edge, node 0 clamped, against the clamped plate (translations, rotations) | `1e-10` | 0, 0 (bit-equal) | yes |
+| H1b | reference point at a node | `1e-10` | 0, 0 | yes |
+| H2 | joined to a fixed Hex8 block | `1e-10` | 0, 0 | yes |
+| H2m | four frequencies (42.45, 104.57, 291.76, 357.05 Hz) | `1e-8` | 0 each | yes |
+| H3 | tip nodes move rigidly (translations, rotations) | `1e-12` | 0, 0 | yes |
+| H3r | root reactions balance the reference force; moments | `1e-10` | `1.4e-13`; `5.4e-14` | yes |
+| K1 | `k theta = M` (nodes 0, 5); spring forces; rigid rotation `theta_y`, `u_z` | `1e-10` | `2.5e-13`, `2.6e-13`; `2.5e-13`, `2.6e-13`; `2.4e-12`, `1.7e-12` | yes |
+| K2 | `k theta_root = M` (nodes 0, 5); tip rotation; tip deflection | `1e-10` | `2.4e-12`, `2.4e-12`; `1.1e-12`; `1.5e-12` | yes |
+| Z1 to Z6 | counts | 6, 1, 0, 1, 6, 0, 0 | 6, 1, 0, 1, 6, 0, 0 | yes |
+| Z7 | `K X c` of the free fields | `1e-12` | `2.0e-16` | yes |
+| C1 | spinning strip, `u_x` at every node against the 1D bar | `1e-10` | `5.4e-15` | yes |
+| C1b | nodal loads against the rectangle closed form | `1e-12` | `2.1e-16` | yes |
+| C2 | centrifugal resultant on the patch in space | `1e-12` | `3.8e-17` | yes |
+| S3 | shared shell node refused before the transformation (static A, modal A, modal B) | exact | `element 2: key 'node': node 2 ...` on all three | yes |
+| S3c | controls: "contradicts", "takes zero values only", "cancel to zero" | exact | as registered | yes |
+| R1 | spring row copy: `sum R_z + S_z + F_z` | `1e-10` | `3.1e-13` | yes |
+| R2 | gravity row copy: `R + rho t A g + F` | `1e-8` | `3.9e-11` (estimate `~1e-10`) | yes |
+| R3 | nodal body force on a shell refused naming `SOLID_ROUTINES` | exact | as registered | yes |
+| B1 | `si_scaffold_bits` unedited | pass | pass | yes |
+| B2 | every `rcfd-fem` test | pass | 373 passed, 0 failed, 77 ignored over all test binaries and doc-tests (`f522-scratch/b2_fem.log`) | yes |
+| B3 | `baseline_hashes` | pass | 3 passed, 1 ignored (as before) | yes |
+| N1 | consistent against quarter split | `> 1e-3` | `3.7e-2` (estimate `3.75e-2`) | yes |
+| N2 | cyclic with a shell refused | exact | `NotYetSupported { Cyclic, "constraint 0, a model with Shell4", shell::FOLLOW_UP }` on both | yes |
+| N3 | `check_supported`; nonlinear states; preconditioned CG | exact | as registered | yes |
+| N4 | centrifugal on a beam | exact | `Element { 0, NotYetSupported { beam::SOLID_ROUTINES } }` | yes |
+
+Mutations (scratch copy `f522-scratch/mut` from `git archive` of `65909437`, `f522-scratch/mutate.py`, logs
+`f522-scratch/MU*.log` and `mutations.log`, one at a time, each run once). Each run used `cargo test --test
+si_shell_transformation --test si_shell`, which stops after the first failing binary: when `si_shell` failed, the new test file
+was not run, so for MU1, MU3 and MU6 the catching check is a row of the `si_shell` copy rather than the one named in the
+registration. Every mutation was caught by a registered check:
+
+| id | mutation | caught by |
+| --- | --- | --- |
+| MU1 | gravity shell rule left out | R2 (the gravity solve refuses through the solid routines; `si_shell_transformation` not reached) |
+| MU2 | quarter split | G2 (`3.7e-2`), N1, G1 moment, G3m, G5, C1, C1b |
+| MU3 | thickness left out | R2 (`99`; `si_shell_transformation` not reached) |
+| MU4 | vertex centroid at every Gauss point | C1 (`3.9e-3`), C1b, C2 (`1.8e-4`), G5 |
+| MU5 | `omega` for `omega^2` | C1, C1b, C2, G5 (`0.98`) |
+| MU6 | entry back to `check_supported_with_beams` | R1 (the spring model refused; `si_shell_transformation` not reached) |
+| MU7 | Shell4 cyclic refusal removed | N2 (a cyclic boundary error instead) |
+| MU8 | rigid-set rotation rows left out | H1 (the solve refuses: the edge is a mechanism) |
+| MU9 | entry check removed from `solve_static_mpc` | S3 static (the contradiction instead) |
+| MU10 | entry check removed from `modal_analysis_mpc` | S3 modal A and B |
+| MU11 | offset moments of body loads dropped | G5 centrifugal moment (`8.7e-4`, estimate `8.7e-4`) |
+
+Other checks: `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --all-targets --release -- -D warnings` clean
+(both run before the test commit). No hash table, golden file or `baseline_hashes.rs` edited; no existing test edited except the
+one retired test (its `#[ignore]` line). Shared solver files changed: `mpc.rs`, `loads.rs`, and comments in `solve.rs`,
+`modal.rs`, `free_motions.rs`.
+
+**Not run:** the whole workspace suite (the lead's gate); the `rcfd-post` tests (crate not touched; its shell test uses the
+elimination path, which is unchanged).
+
+**Deviations:** amendment 1 (R2 includes the base model's tip forces; parameters of G4, K1, H2, N2, N4, S3 stated) was written
+and committed before any run. No limit changed. The mutation runs stopped at the first failing test binary (above): the
+catchers named in the registration, G1 to G3 (MU1, MU3) and H1, K1 (MU6), were not observed on those mutants, but a registered
+check caught each one.
+
+**Decision by the registered rule: done.** Every check of the acceptance met (G3 margin above 1e3, H1 and H2 bit-equal, K1 and
+K2 margins above 40), the stronger checks and the controls as stated, every mutation caught by a registered check, no amendment
+after a run.
+
+### Remaining questions
+
+1. **The rotating plane-stress disc** (L5): options (a) a follow-up with a registered discretisation estimate (a prototype of
+   the faceted annulus); (b) none, since C1 and C2 are exact checks of the same load. Recommendation: (a), small, when a disc or
+   blade model needs it.
+2. **Shells on the other transformation users** (L1: transient, harmonic, buckling, geometric, rotating, cyclic): one item per
+   path with its package. Recommendation: with the shell-blade work (geometric stiffness first).
+3. **Nodal body-force fields and thermal loads on shells** (L2): options (a) a follow-up giving Shell4 the consistent load of a
+   nodal field and a membrane thermal load; (b) leave them refused. Recommendation: (a) when a housing model needs a temperature
+   field.
+
+## For the lead: roadmap entries
+
+F-522: proposed status **done**. Note:
+
+> Structural solver, intermediate tier. ADR 0435, 2026-11-12: shells on the transformation path and body loads on shells. solve_static_mpc and modal_analysis_mpc take Shell4 models (check_supported_with_structures at the entry: a shell node shared with a solid stays refused, observed before the transformation is built; a shell model with a cyclic constraint refused naming a follow-up of ADR 0432); rigid sets tie the six unknowns of shell nodes, nodal springs, linear constraints and prescribed values act on shell rotations, free_rigid_motions counts shell nodes. Gravity and the centrifugal load on Shell4 by shell::body_load_vector (t int N_i b dA at the projected mid-surface, offset moments on warped facets). Met: gravity resultant and the consistent loads of the bilinear translations within 3.6e-16, reactions rho t A g within 2.8e-16 (limit 1e-12); a plate held by a rigid set on an edge (one edge node clamped, or the set over the face of a fixed Hex8 block) equals the clamped plate bit for bit, frequencies too; k_theta theta = M within 2.5e-13 and in series with the plate 2.4e-12 (limit 1e-10); counts 6, 1, 0, 1, 6, 0, 0; spinning strip equals the 1D bar within 5.4e-15, centrifugal resultant and warped-facet moments within 3e-16. Solid and beam bits unchanged (si_scaffold_bits, baseline_hashes, every rcfd-fem test). Eleven mutations, all caught.
+
+Follow-up items (proposed):
+
+- "Rotating plane-stress disc of Shell4 facets against the closed form", deps F-522.
+
+> Every limit not stated here is registered in the ADR before the run. A flat annular disc of Shell4 elements spinning about its axis has the radial displacement and the hoop and radial membrane stresses of the plane-stress rotating disc within limits registered from a discretisation estimate; the error decreases at the registered order under two mesh refinements.
+
+- "Nodal body-force fields and thermal loads on Shell4", deps F-522.
+
+> Every limit not stated here is registered in the ADR before the run. Load::BodyForceNodal on a shell model gives the consistent loads t int N_i b dA of the interpolated field within 1e-12; a uniform temperature change on a free shell plate gives the membrane strain alpha dT and zero stress within 1e-12; a model without shells gives the bits it gave before.
