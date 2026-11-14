@@ -11103,7 +11103,7 @@ fixed by the item's registration ADR before any code.
     naming the ANDES membrane of ADR 0466; on the twisted strip of ADR 0473 the check fires at 15 and 30 degrees of
     twist and not on the flat strip; without the option every result and message bit-identical.
   - note: Structural solver, advanced tier. Optional, low priority. Follow-up of F-556 (ADR 0483, 2026-11-14).
-- [ ] **F-575** Second-order Ritz error of the corrected sector split modes
+- [x] **F-575** Second-order Ritz error of the corrected sector split modes
   - depends on: F-569
   - acceptance: Every limit not stated here is registered in the ADR before the run. RotatingSector::split_modes with
     split_correction reports beside the eta of ADR 0482 the Ritz error of the Schur-complemented projected problem (the
@@ -11111,7 +11111,16 @@ fixed by the item's registration ADR before any code.
     quadratic solve); on the disc sector of ADR 0411 with 4 harmonic modes per index at 0.4 and 0.8 omega_ref it agrees
     with the measured error of every matched mode within 10 percent where it exceeds 1e-9, and the results of ADR 0482
     keep their bits.
-  - note: Structural solver, advanced tier. Follow-up of F-569 (ADR 0482, 2026-11-14).
+  - note: Structural solver, advanced tier (plan ADR 0310). DONE. Size S. ADR 0492, 2026-11-14:
+    RotatingSector::split_modes with split_correction reports beside the first-order eta of ADR 0482 the field
+    schur_eta, the Ritz error |theta/theta' - 1| of the projected problem condensed by the complement and frozen at
+    the Ritz value (one MINRES complement solve per basis vector, then one dense quadratic solve per split mode with
+    K_VV - Re E and the skew part of E folded into the gyroscopic matrix); not computed by split_campbell. On the disc
+    sector of ADR 0411 with 4 harmonic modes per index at 0.4 and 0.8 omega_ref it agrees with the measured error of
+    all 34 matched modes above 1e-9 within 3.4e-4 (the eta of ADR 0482 within a factor 2.62), and with an independent
+    dense computation within 3.3e-7; with 41 modes per index it is 0. The results of ADR 0481 and 0482 and every
+    default keep their bits (6 new digests plus 19). All eight mutations caught, including the counterparts of the
+    uncaught MU3 and MU4 of ADR 0482. Cost: up to 13 times the split_modes time on the pair indices.
 - [ ] **F-576** Quasi-static viscoelastic time stepping on the Newton driver, with a temperature in the nonlinear transient integrator
   - depends on: F-410
   - acceptance: Every limit not stated here is registered in the ADR before the run. A time-stepping driver over

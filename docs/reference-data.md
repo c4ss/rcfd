@@ -1807,6 +1807,18 @@ the whole-sector whirl solve of ADR 0411 (`RotatingSector::whirl_modes`) and the
 | MINRES with a positive definite preconditioner | from memory | C. C. Paige, M. A. Saunders, SIAM J. Numer. Anal. 12 (1975) 617: NOT read; the recurrence written out in `gyro.rs` |
 | On a basis that is not invariant under `K^-1 M` (modes plus correction vectors) the first-order estimate from the Ritz vector falls below the measured error, and ADR 0481's `eta` from the exact mode above it, by up to a factor 2.6 each (DS B4); the ratio of the squared error to their product lies in `[0.898, 1.001]` over the 34 matched modes with `eta > 1e-9` (an observation, not derived) | measured | ADR 0482 addendum 1 (diagnostic `f569-scratch/diag1.log`) |
 
+## F-575 the second-order Ritz error of the corrected sector split modes (ADR 0492)
+
+No source was read for F-575; every item is cited from memory and derived in ADR 0492 (D1 to D3). The references of the checks are
+the whole-sector whirl solve of ADR 0411 (`RotatingSector::whirl_modes`) and a test-side dense computation of the same condensed
+problem (bordered Gaussian elimination instead of MINRES).
+
+| Item | Status | Source |
+|---|---|---|
+| Exact condensation of the projected problem by the complement: `S(w) = Q_VV(w) - Q_VW(w) Q_WW(w)^-1 Q_WV(w)`, `S_ij = v_i^T Q (v_j + x_j)` with the complement solve `(I - P)^T Q (I - P) x_j = -(I - P)^T Q v_j`; an exact mode satisfies `S(omega) y = 0` | derived | block elimination (Schur complement), textbook linear algebra, e.g. G. H. Golub, C. F. Van Loan, Matrix Computations: NOT read, from memory (ADR 0492 D1) |
+| `S` frozen at the Ritz value `theta`, the skew part of `E` folded into the gyroscopic matrix at `l = theta`: the estimate `|theta/theta' - 1|` differs from the measured error by a relative amount of the order of the error times `2 theta^2/(w_c^2 - theta^2) + O(1)` | derived | ADR 0492 D3; eigenvalue-dependent condensation in dynamic substructuring, R. J. Guyan, AIAA J. 3 (1965) 380 for the static limit: NOT read, from memory |
+| On DS B4 (modes plus static correction vectors) at 0.4 and 0.8 `omega_ref` the estimate matches the measured error of the 34 matched modes above 1e-9 within 3.4e-4 (ADR 0482's first-order `eta` within a factor 2.62) | measured | ADR 0492 addendum 1 (`f575-scratch/run1.log`) |
+
 ## F-416 a flexible rotor on bearings in the stationary frame (ADR 0476)
 
 No source was read for F-416; every item is cited from memory and derived in ADR 0476 (set-ups and arithmetic 1 to 5; numpy
