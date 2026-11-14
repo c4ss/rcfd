@@ -409,3 +409,116 @@ Negative controls:
    ShellOptions::default().shear(TransverseShear::FullIntegration))`, `f = loads::nodal_load_vector`, the prescribed equations of
    the model by `constraint::prescribed_equations`, `constraint::reduce`, and `SkylineLdlt::factor` / `solve` of `rcfd-linalg`.
    No limit changes.
+
+## Addendum 1: results (2026-11-14)
+
+Code: `crates/rcfd-fem/src/shell.rs` (the element, D2, D4, D7), `model.rs` (`DofMap::for_mesh`, `Load::ShellPressure`, the
+`_with_structures` checks and the Shell4 refusal of the other paths), `assemble.rs` and `mass.rs` (dispatch, D6), `loads.rs`
+(`add_shell_pressure`), `solve.rs` and `modal.rs` (the entry checks, the multigrid refusal naming Shell4); new tests
+`crates/rcfd-fem/tests/si_shell.rs` (11 tests, 0.08 s in release) and `crates/rcfd-post/tests/si_shell_output.rs` (the
+`rcfd-post` row of N2); the retired rows of `si_scaffold.rs` as ignored records with `_after_shell_landed` copies. The registered
+run was made once (`f392-scratch/run1.log`, `run1-post.log`) on the test commit `e4550e7e`, release profile, `--test-threads=1`.
+After it `cargo fmt -p rcfd-fem` reformatted `shell.rs` and `si_shell.rs` (layout only, commit `1ad466d6`); `si_shell` and
+`si_scaffold` were run again on that commit to confirm they pass (not a registered run).
+
+| id | check | limit | measured | met |
+| --- | --- | --- | --- | --- |
+| D1 | unknown counts: solid-only, shell-only, Hex8 box with a separate shell | exact | uniform 3; 54 = 6 x 9; 60 = 3 x 12 + 24 | yes |
+| B1 | `si_scaffold_bits` unedited | pass | pass | yes |
+| B2 | every existing `rcfd-fem` and `rcfd-post` test | pass | `rcfd-fem`: 356 passed, 0 failed, 75 ignored (the four retired rows among them); `rcfd-post`: 274 passed, 0 failed, 30 ignored | yes |
+| B3 | `baseline_hashes` (`rcfd-api`) | pass | 3 passed, 1 ignored (as before) | yes |
+| PT1 | membrane patch, interior unknowns | `1e-8` | `7.4e-14` | yes |
+| PT2 | membrane patch, `N`; `m`, `Q` | `1e-8` | `6.4e-16`; `5.5e-16` | yes |
+| PT3 | bending patch, interior unknowns | `1e-8` | `1.0e-13` | yes |
+| PT4 | bending patch, `m`; `Q`, `N` | `1e-8` | `2.3e-14`; `1.6e-12` | yes |
+| SS1 | SS plate t/a = 0.01 against Navier | `1e-2` | `7.46e-4` (ratio `0.9992544947`) | yes |
+| SS2 | SS plate t/a = 0.001 | `1.5e-2` | `1.26e-3` (ratio `0.9987399470`) | yes |
+| SS3 | full-integration control t/a = 0.001 | `< 0.2` | `1.770e-3` | yes |
+| SS4 | Navier coefficient `|c - 0.004062|` | `5e-7` | `3.53e-7` (`c = 0.004062352661`) | yes |
+| CT1 | cantilever tip | `5e-3` | `1.05e-3` | yes |
+| CT2 | mid-span top / bottom stress | `2e-2` | `1.2e-10` / `1.2e-10` | yes |
+| RG1 | pinched ring diameter change | `2e-2` | `1.41e-3` | yes |
+| CY1 | cylinder `u_r`, every node | `5e-3` | `3.01e-4` | yes |
+| FQ1 | (1,1) | `1e-2` | `3.94e-3` | yes |
+| FQ2 | (1,2), (2,1); (2,2) | `3e-2` | `1.48e-2`, `1.48e-2`; `1.59e-2` | yes |
+| FR1 | free plate `max |f_1..6| / f_7`; `f_7 > 0` | `1e-4` | `2.5e-6`; `41.127 Hz` | yes |
+| FR2 | warped free plate; `f_7` against the prototype | `1e-4`; `1e-5` | `1.3e-6`; `1.3e-12` | yes |
+| FR3 | Sturm count below `lambda_7 / 4` | `6` | `6` | yes |
+| W1 | warp `0.054` refused on static, modal, stiffness naming element 1, the ratio and the limit | exact | `element 1: key 'warp': ... = 5.4022e-2 above the limit 0.05` (all three) | yes |
+| W2 | warp `0.0445` solves | pass | pass | yes |
+| S1 | shell on Hex8 nodes refused naming the node | exact | `element 2: key 'node': node 2 of the shell element 2 is also a node of the solid element 1 ...` (all three) | yes |
+| N2 | spring (transformation), nonlinear states, multigrid, `check_supported`, gravity, `rcfd-post` output | exact | `NotYetSupported { Shell4, shell::FOLLOW_UP }` (locations `block 0`, `block 0, solver cg-amg-rbm`); gravity `Element { 0, NotYetSupported { SOLID_ROUTINES } }`; `rcfd-post`: `node 0 has 6 components; the solid output writes 3` | yes |
+| N3 | no property; shell pressure on Hex8; non-convex facet | exact | `property`; `shell pressure`; `InvertedElement { element: 0, local_node: 2 }` | yes |
+| K1 | rigid motions, warped / flat in space; symmetry | `1e-12`; exact | `3.6e-16` / `4.0e-16`; bit for bit | yes |
+| M1 | mass, centre, inertia | `1e-12` | `5.6e-16`, `3.4e-16`, `3.3e-16` | yes |
+| P1 | SS plate 0.01, 0.001, control against the prototype | `1e-5` | `2.6e-11`, `6.1e-10`, `5.1e-12` | yes |
+| P2 | cantilever tip, stress | `1e-5` | `5.7e-11`, `1.7e-11` | yes |
+| P3 | ring | `1e-5` | `1.8e-10` | yes |
+| P4 | cylinder against `cos(pi/128)` | `1e-6` | `1.1e-10` | yes |
+| P5 | four frequencies | `1e-5` | `3.8e-10`, `7.5e-11`, `1.2e-11`, `7.0e-12` | yes |
+| P6 | free plate `f_7`, `f_8` | `1e-5` | `2.4e-12`, `4.5e-13` | yes |
+| N1 | `alpha = 0`: Sturm count below `lambda_7 / 4` | `> 6` | `87` (= 6 + 81, as estimated) | yes |
+| N4 | element not locked, control locked | `> 0.98`, `< 0.2` | `0.998740`, `1.770e-3` | yes |
+
+Mutations (scratch copy `f392-scratch/mut` from `git archive` of `1ad466d6`, `f392-scratch/mutate.py`, logs
+`f392-scratch/MU*.log` and `mutations.log`, one at a time, each run once): every one caught.
+
+| id | mutation | caught by |
+| --- | --- | --- |
+| MU1 | full-integration shear as the default | SS2 (`0.998`), SS1, CT1, CT2, RG1, FQ1, FQ2, P1 to P6, FR2 |
+| MU2 | tying points of `gamma_xi`, `gamma_eta` exchanged | the same as MU1 (the element locks), FR1 (`0.76`) |
+| MU3 | `DRILLING_FACTOR = 0` | FR1 (the modal solve refuses: Sturm count 87, 11 found), W2, N2 base, PT1/PT3 (singular stiffness), CT1 |
+| MU4 | drilling penalty without `omega` | PT1 (`0.53`), K1 (`1.9e-4`, `2.5e-5`), FR2 (`0.41`) |
+| MU5 | rigid offsets removed | K1 warped (`4.5e-2`), FR2 (`0.64`) |
+| MU6 | `beta_y = +theta_x` in the bending rows | PT3 (`5.6e-3`), SS1, SS2 (`0.43`), FQ1, FQ2, P1, P5, P6, FR2 |
+| MU7 | rotary inertia halved | M1 (`1.2e-4`), P5, P6, FR2 |
+| MU8 | three unknowns at shell nodes | D1 (27, 48 unknowns), and the assemblies of every other test fail |
+| MU9 | shell-solid node check removed | S1 (all three: an element-matrix size error instead) |
+| MU10 | warp check removed | W1 (all three solve) |
+| MU11 | pressure along `-e_3` | SS1, SS2 (`2.0`), CY1 (`2.0`), P1, P4, N4 |
+| MU12 | `SHEAR_FACTOR = 1` | P1 (`8.7e-5`), P2, P3, P5, P6, FR2 |
+| MU13 | the other paths accept shells | N2 (spring, nonlinear states, `check_supported`) |
+
+Other checks: `cargo fmt -p rcfd-fem --check` and `cargo fmt -p rcfd-post --check` clean (after the layout-only reformat
+above); `cargo clippy -p rcfd-fem -p rcfd-post --all-targets --release -- -D warnings` clean. No hash table, golden file or
+`baseline_hashes.rs` edited; no existing test edited except the four retired rows (one `#[ignore]` line each).
+
+**Not run:** the whole workspace suite (the lead's gate).
+
+**Deviations:** none in the limits; amendment 1 (N1 by a Sturm count, the SS3 solve) was written and committed before any run.
+MU3 confirmed the reason of amendment 1: with no drilling stiffness `lowest_eigenpairs` refuses the free plate with a Sturm
+count of 87.
+
+**Decision by the registered rule: done.** Every clause of the acceptance met (margins: patch tests above 1e4, SS1 13, SS2 12,
+SS3 113, CT1 4.8, CT2 above 1e8, RG1 14, CY1 17, FQ1 2.5, FQ2 1.9 at (2,2), FR1 40), the stronger checks and the controls as
+stated, every mutation caught, no amendment after a run.
+
+### Remaining questions
+
+1. **Shell output** (L1): Shell4 as `VTK_QUAD` cells with rotations, reactions and the resultants of `shell::stresses` as cell
+   data in `rcfd_post::solid_output`. Options: (a) a follow-up item as F-512 was for beams; (b) leave it to the Studio work.
+   Recommendation: (a), small.
+2. **Shells on the other paths and loads** (L2): rigid sets and supports on shell nodes (the transformation), gravity and the
+   other body loads (`rho t g` through the consistent load of the bilinear translations, as `pressure_load_vector`). Options: (a)
+   one follow-up for the transformation and the body loads, the other paths with the packages that need them (F-420, F-426); (b)
+   leave until a case needs them. Recommendation: (a); a housing model needs gravity and bolted supports.
+3. **The drilling factor** (arithmetic 5): `1e-3` is a registered choice; no check here is sensitive to it (the free plate needs
+   it only to be non-zero). Options: (a) keep; (b) a study of in-plane bending of a facet against `alpha` with an Allman-type
+   membrane as a reference. Recommendation: (a) until in-plane bending of a coarse facet mesh matters (thin blades meshed as
+   surfaces bend out of plane).
+
+## For the lead: roadmap entries
+
+F-392: proposed status **done**. Note:
+
+> Structural solver, intermediate tier. ADR 0432, 2026-11-14: Shell4, the four-node flat-facet shell with six unknowns per node: bilinear membrane, Reissner-Mindlin bending with the MITC4 assumed transverse shear strain (tied at the edge mid-points, derived), a drilling penalty alpha G t (theta_z - omega)^2 with alpha = 1e-3 tying the drilling rotation to the membrane rotation, rigid offsets from warped nodes to the mean plane (warp ratio above 0.05 refused naming the element), consistent mass with rotary inertia rho t^3/12, Load::ShellPressure on element sets along the element normal, shell::stresses (resultants and top/bottom surface stresses at the element centres). DofMap gives six unknowns to shell nodes; shells are taken by the static and modal elimination paths and refused elsewhere (naming a follow-up of ADR 0432), a shell node shared with a solid is refused naming the node; rcfd-post refuses a shell result naming the node. Met: membrane and bending patch tests on a distorted mesh in space 7.4e-14 and 1.0e-13 (limit 1e-8); simply supported plate 16 x 16 within 7.5e-4 (t/a = 0.01) and 1.26e-3 (t/a = 0.001) of Navier (c = 0.004062352661 recomputed), the fully integrated control at 1.8e-3 of Navier; cantilever strip tip 1.05e-3, mid-span surface stress 1.2e-10; pinched ring 1.41e-3 of (pi/4 - 2/pi) P R^3/(E I); cylinder u_r 3.0e-4 of p R^2/(E t) (the inscribed polygon's cos(pi/128) within 1.1e-10); plate frequencies 0.39, 1.48 and 1.59 percent; free plate six zeros at 2.5e-6 of f_7 (Sturm count 6; 87 without the drilling stiffness); every quantity within 6.1e-10 of an independent numpy prototype of the same element. Thirteen mutations, all caught. si_scaffold_bits and baseline_hashes unchanged.
+
+Follow-up items (proposed):
+
+- "Shell results in the solid output: VTK quad cells, rotations and the resultants as cell data", deps F-392, F-512.
+
+> Every limit not stated here is registered in the ADR before the run. rcfd_post::solid_output writes a model with Shell4 elements: displacement and rotation point arrays, reaction forces and moments, Shell4 as VTK quad cells and the membrane forces, moments, shear forces and top and bottom surface stresses of rcfd_fem::shell::stresses as cell data; a model without shells writes the bytes it wrote before; the arrays read back equal the result within 1e-15.
+
+- "Shells on the transformation path and body loads on shells: rigid sets and supports on shell nodes, gravity and centrifugal loads", deps F-392, F-513.
+
+> Every limit not stated here is registered in the ADR before the run. Gravity on a shell model gives reactions rho t A g within 1e-12 and the consistent nodal loads of the bilinear translations; a shell plate held by a rigid set on an edge has the deflection of the clamped plate within 1e-10; a nodal spring on a shell rotation gives k_theta theta = M within 1e-10; the free rigid motions count takes shell nodes; a model without shells gives the bits it gave before.
