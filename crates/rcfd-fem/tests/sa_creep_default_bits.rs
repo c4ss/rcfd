@@ -23,7 +23,24 @@ use rcfd_fem::transient::{LoadHistory, LoadTable};
 use rcfd_fem::{Constraint, ElementKind, Load, Material, SolidModel};
 
 /// Digests of 81960c8d in the order of the run, from the base run (`f411-scratch/b0-base.log`).
-const EXPECTED: Option<[(&str, u64); 15]> = None;
+const EXPECTED: Option<[(&str, u64); 16]> = Some([
+    ("bar Hex8 solve", 0x3068_3d9e_fc11_14e6),
+    ("J2 bar solve", 0x99d2_f5c8_533d_d701),
+    ("solve_from spring", 0xec52_5c00_3c51_fc5f),
+    ("nl_transient elastic bar", 0x1a31_f1fa_d00e_072f),
+    ("nl_transient elastic bar bytes", 0x1dd3_6d7c_a8f0_e581),
+    ("nl_transient J2 bar", 0x4046_477e_938c_99fc),
+    ("nl_transient J2 bar bytes", 0x1ca5_ba0c_c2df_395b),
+    ("Tet10 internal_force and tangent", 0x8653_0056_38c5_90ab),
+    ("Material::stress isotropic and J2", 0x96e6_e09c_d9f5_f686),
+    ("solve_static cantilever", 0x5e15_cfdb_66cf_3400),
+    ("modal cantilever", 0x4a1d_50ba_93f6_3357),
+    ("J2 refusal solve_static", 0x6c52_fc78_1c39_0ecd),
+    ("solve_from_at viscoelastic cube", 0x6c32_2a03_8300_c787),
+    ("nl_transient viscoelastic bar", 0x26c6_982e_4256_27a0),
+    ("nl_transient viscoelastic bar bytes", 0xb201_9859_e520_3464),
+    ("Hex20 J2 element force and tangent", 0xc160_3d65_ed61_8c92),
+]);
 
 /// FNV-1a 64 over the little-endian bytes of the bits of each value.
 fn digest(v: &[f64]) -> u64 {
