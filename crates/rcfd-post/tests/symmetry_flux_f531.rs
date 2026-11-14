@@ -427,12 +427,15 @@ const H: f64 = 0.02;
 const RHO: f64 = 1000.0;
 const WALL: &str = "xmin";
 
-fn settings(nu: f64, corrected: bool, n_outer: usize) -> PimpleSettings {
-    let mut s = if n_outer > 1 {
+/// `n_outer > 1`: `PimpleSettings::pimple(nu, n_outer)` (relaxed, one corrector; the registered Q4), or with `piso_outer`
+/// the `piso` settings with `n_outer` outer iterations (ADR 0455 amendment 1).
+fn settings(nu: f64, corrected: bool, n_outer: usize, piso_outer: bool) -> PimpleSettings {
+    let mut s = if n_outer > 1 && !piso_outer {
         PimpleSettings::pimple(nu, n_outer)
     } else {
         PimpleSettings::piso(nu)
     };
+    s.n_outer = n_outer;
     s.convection = ConvScheme::Central;
     for c in [&mut s.momentum_solver, &mut s.pressure_solver] {
         c.tol_abs = 1e-16;
@@ -472,6 +475,8 @@ struct ChannelCase {
     /// `PimpleSettings::component_diagonal`.
     corrected: bool,
     n_outer: usize,
+    /// The outer iterations on the `piso` settings (ADR 0455 amendment 1) instead of `PimpleSettings::pimple`.
+    piso_outer: bool,
 }
 
 impl ChannelCase {
@@ -487,6 +492,7 @@ impl ChannelCase {
             z_sym: true,
             corrected: false,
             n_outer: 1,
+            piso_outer: false,
         }
     }
     fn nu(&self) -> f64 {
@@ -507,7 +513,7 @@ fn channel_run(case: &ChannelCase, n: usize) -> ModeHistory {
         flow(
             &mesh0,
             mesh0.points().to_vec(),
-            settings(nu, case.corrected, case.n_outer),
+            settings(nu, case.corrected, case.n_outer, case.piso_outer),
             &["ymin", "ymax"],
             if case.z_sym { &["zmin", "zmax"] } else { &[] },
         ),
@@ -655,7 +661,7 @@ fn q_channel_between_symmetry_planes_corrected_and_the_default_excess() {
 }
 
 #[test]
-#[cfg_attr(debug_assertions, ignore = "run in release")]
+#[ignore = "registered record with a defective set-up (ADR 0455 amendment 1): the relaxed pimple constructor; Q4c is the corrected run"]
 fn q4_default_excess_with_ten_outer_iterations() {
     let mut c = Checks::new();
     let qd = ChannelCase {
@@ -675,6 +681,27 @@ fn q4_default_excess_with_ten_outer_iterations() {
 }
 
 #[test]
+#[cfg_attr(debug_assertions, ignore = "run in release")]
+fn q4c_default_excess_with_ten_piso_outer_iterations() {
+    let mut c = Checks::new();
+    let qd = ChannelCase {
+        n_outer: 10,
+        piso_outer: true,
+        ..ChannelCase::qf()
+    };
+    let qz = ChannelCase { z_sym: false, ..qd };
+    let d = channel_z(&mut c, "QD10c N 100", &qd, 100);
+    let z = channel_z(&mut c, "QZ10c N 100", &qz, 100);
+    let dm = model_zdt(&qd, 100, lambda_one_cell(&qd)).sub(model_zdt(&qd, 100, 0.0));
+    if let (Some(d), Some(z)) = (d, z) {
+        let dz = d.sub(z);
+        println!("Q4c Delta Z {dz:?}, model {dm:?}");
+        c.at_most("Q4c Re Delta Z/Re Delta Z_model - 1", (dz.0 / dm.0 - 1.0).abs(), 5e-2);
+    }
+    c.finish();
+}
+
+#[test]
 #[ignore = "heavy record (ADR 0455 WS, about 200 s): run once with --ignored"]
 fn ws_womersley_5_between_symmetry_planes_corrected_record() {
     let mut c = Checks::new();
@@ -688,6 +715,7 @@ fn ws_womersley_5_between_symmetry_planes_corrected_record() {
         z_sym: true,
         corrected: true,
         n_outer: 1,
+        piso_outer: false,
     };
     let zf = impedance_formula(&case, 0.0);
     println!("WS formula {zf:?}");
