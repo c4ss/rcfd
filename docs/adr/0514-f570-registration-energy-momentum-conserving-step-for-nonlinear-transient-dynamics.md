@@ -317,3 +317,15 @@ table except two clauses of F1e; nothing else was rerun.
    (refused; all). Run once. The registered test stays as an ignored record.
 2. **TP** took about two minutes of the run (six runs of ten turns): it becomes an ignored heavy record with the numbers of the
    registered run in its reason; S0e to S3e cover the same code path.
+
+## Amendment 2 (2026-11-14, written after the mutation runs and before the run of the added check)
+
+Mutation MU4 (`f_m = f(t_{n+1})`) was caught by no check (`f570-scratch/mutations.log`): the only loaded models (bar B of
+L1e, the pendulum) have loads constant in time, for which the average of the end values is the end value. **L2e** (added,
+limit fixed now): bar B of L1e (the same mesh, mode, step `T_1/40`, 80 steps, undamped) with the A5 pattern times `1e-6` on the
+ramp table `(0, 0), (10 T_1, 1)`, against `transient::Integrator` Newmark average acceleration: `max |du|_inf / max |u_lin|_inf
+<= 1e-9` (arithmetic 4: the trapezoidal rule written at the midpoint takes the average of the end loads, so the two agree to
+the geometric nonlinearity `1.2e-14`; with MU4 the load leads by half a step, an error of order `h dF/dt` against `F`, about
+`1e-1` here). Run once, then MU4 again against it. MU8 (the geometric part of the tangent) was not caught, as the registration
+allowed: the iteration converges without it at this rotation per step (a slower but still convergent tangent); it is not in the
+decision rule.

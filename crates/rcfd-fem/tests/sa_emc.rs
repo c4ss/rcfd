@@ -738,3 +738,52 @@ fn f1ec_refusals() {
     );
     c.finish();
 }
+
+// ------------------------------------------------------------------------------------------- amendment 2 (ADR 0514)
+
+#[test]
+fn l2e_ramp_load_against_f398() {
+    let mesh = hex_box([0.0; 3], [1.0, 0.1, 0.1], [20, 1, 1]).unwrap();
+    let mut model = SolidModel::new(mesh);
+    model
+        .add_material("all", Material::isotropic_elastic(2.0e11, 0.0, 7850.0, 0.0).unwrap())
+        .unwrap();
+    model.add_constraint(Constraint::displacement("all", 1, 0.0)).unwrap();
+    model.add_constraint(Constraint::displacement("all", 2, 0.0)).unwrap();
+    model.add_constraint(Constraint::displacement("xmin", 0, 0.0)).unwrap();
+    let modal = modal_analysis(&model, &ModalOptions::new(2)).unwrap();
+    let phi = modal.modes[0].clone();
+    let mass = consistent(&model).unwrap();
+    let k = rcfd_fem::assemble::stiffness(&model).unwrap();
+    let omega = (dot(&phi, &mv(&k, &phi)) / dot(&phi, &mv(&mass, &phi))).sqrt();
+    let period = 2.0 * PI / omega;
+    let dt = period / 40.0;
+    let pattern: Vec<f64> = mv(&mass, &phi).iter().map(|x| 1e-6 * x).collect();
+    let loads = [LoadHistory::new(
+        pattern,
+        LoadTable::new(vec![(0.0, 0.0), (10.0 * period, 1.0)]).unwrap(),
+    )];
+    let zero = vec![0.0; phi.len()];
+    let mut lin = Integrator::new(
+        &model,
+        &loads,
+        &TransientOptions::new(dt).method(Method::average_acceleration()),
+    )
+    .unwrap();
+    lin.start(0.0, &zero, &zero).unwrap();
+    let mut nl = NlIntegrator::new(&model, &loads, &NlTransientOptions::new(dt).energy_momentum()).unwrap();
+    nl.start(0.0, &zero, &zero).unwrap();
+    let (mut num, mut den) = (0.0f64, 0.0f64);
+    for _ in 0..80 {
+        lin.step().unwrap();
+        nl.step().unwrap();
+        let ul = lin.displacement().unwrap();
+        let un = nl.displacement().unwrap();
+        let d: Vec<f64> = ul.iter().zip(&un).map(|(a, b)| a - b).collect();
+        worst(&mut num, inf_norm(&d), "difference");
+        worst(&mut den, inf_norm(&ul), "linear");
+    }
+    let mut c = Checks::new();
+    c.at_most("L2e ramp load max |du|/max |u_lin|", num / den, 1e-9);
+    c.finish();
+}
