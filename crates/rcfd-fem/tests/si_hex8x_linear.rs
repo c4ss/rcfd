@@ -26,7 +26,8 @@ use rcfd_fem::quadrature;
 use rcfd_fem::recover::IntegrationPointField;
 use rcfd_fem::solve::{solve_static, solve_static_with, StaticOptions};
 use rcfd_fem::{
-    BlockProperty, Constraint, ElementKind, FemError, Load, Material, SolidFormulation, SolidMesh, SolidModel, SolidResult,
+    BlockProperty, Constraint, ElementKind, FemError, Load, Material, SolidFormulation, SolidMesh, SolidModel,
+    SolidResult,
 };
 use rcfd_linalg::eigen::ResidualTest;
 use std::collections::BTreeSet;
@@ -340,7 +341,13 @@ fn th1_to_th3_free_thermal_expansion_of_the_distorted_patch() {
     let mut ch = Checks::new();
     let alpha_dt = 1.2e-5 * 60.0;
     // N-TH: the default Full element on the same harness (estimate 1e-13).
-    let (s, u) = free_expansion(SolidFormulation::Full, steel(0.3), 353.0, E_MOD * alpha_dt, Some(alpha_dt));
+    let (s, u) = free_expansion(
+        SolidFormulation::Full,
+        steel(0.3),
+        353.0,
+        E_MOD * alpha_dt,
+        Some(alpha_dt),
+    );
     ch.at_most("N-TH Full nu 0.3 stress / (E alpha dT)", s, 1e-13);
     ch.at_most("N-TH Full nu 0.3 displacement error", u, 1e-13);
     for f in FORMS {
@@ -348,7 +355,11 @@ fn th1_to_th3_free_thermal_expansion_of_the_distorted_patch() {
         for nu in [0.3, 0.4999] {
             let (s, u) = free_expansion(f, steel(nu), 353.0, E_MOD * alpha_dt, Some(alpha_dt));
             ch.at_most(&format!("TH1 {name} nu {nu} stress / (E alpha dT)"), s, 1e-10);
-            ch.at_most(&format!("TH1 {name} nu {nu} |u - alpha dT (x - x_A)| / (alpha dT L)"), u, 1e-10);
+            ch.at_most(
+                &format!("TH1 {name} nu {nu} |u - alpha dT (x - x_A)| / (alpha dT L)"),
+                u,
+                1e-10,
+            );
         }
         // TH2: material O, the full thermal strain tensor in the rotated axes.
         let o = material_o([2.0e-6, 3.0e-5, 4.0e-5], MaterialAxes::Fixed(rotation()));
@@ -556,7 +567,7 @@ fn th4a_th4b_element_identities_with_a_non_uniform_temperature() {
             } else {
                 test_modes(&coords).into_iter().map(|(b, _, w)| (b, w)).collect()
             };
-            let mut lhs = vec![0.0; 24];
+            let mut lhs = [0.0; 24];
             for (q, (b, w)) in bs.iter().enumerate() {
                 let s = field.stress()[field.points_of(e).start + q];
                 for c in 0..24 {
@@ -588,7 +599,11 @@ fn th4a_th4b_element_identities_with_a_non_uniform_temperature() {
             1e-9,
         );
         if f == SolidFormulation::Incompatible {
-            ch.at_most("TH4b Incompatible |sum w G^T sigma| / sum w |G^T sigma|", worst(id2), 1e-9);
+            ch.at_most(
+                "TH4b Incompatible |sum w G^T sigma| / sum w |G^T sigma|",
+                worst(id2),
+                1e-9,
+            );
         }
     }
     ch.finish();
@@ -648,7 +663,11 @@ fn po1_po2_po3_orthotropic_patch_stress_and_element_algebra() {
             .iter()
             .zip(k2.values())
             .all(|(a, b)| a.to_bits() == b.to_bits());
-        ch.holds(&format!("PO3 {name} element_stiffness_at([D; 8]) bit-equal element_stiffness"), same, "");
+        ch.holds(
+            &format!("PO3 {name} element_stiffness_at([D; 8]) bit-equal element_stiffness"),
+            same,
+            "",
+        );
         let ds: Vec<Matrix6> = (0..8)
             .map(|q| std::array::from_fn(|i| std::array::from_fn(|j| d[i][j] * (1.0 + 0.05 * q as f64))))
             .collect();
@@ -656,7 +675,11 @@ fn po1_po2_po3_orthotropic_patch_stress_and_element_algebra() {
         let kv = k.values();
         let kmax = max_abs(kv);
         let sym = worst((0..24).flat_map(|i| (0..24).map(move |j| (kv[i * 24 + j] - kv[j * 24 + i]).abs())));
-        ch.at_most(&format!("PO3 {name} D_q scaled: max |K - K^T| / max |K|"), sym / kmax, 1e-13);
+        ch.at_most(
+            &format!("PO3 {name} D_q scaled: max |K - K^T| / max |K|"),
+            sym / kmax,
+            1e-13,
+        );
         let rig = worst(
             rigid_motions(&coords)
                 .iter()
@@ -723,10 +746,7 @@ fn point_data(model: &SolidModel, material: &Material, coords: &[Vec3]) -> (Vec<
 
 fn pp1_run(ch: &mut Checks, tag: &str, f: SolidFormulation, material: Material, temps: Option<Vec<f64>>, mech: bool) {
     let coords = distorted_element();
-    let mut m = model_with(
-        with_formulation(element_mesh(&coords), f),
-        material.clone(),
-    );
+    let mut m = model_with(with_formulation(element_mesh(&coords), f), material.clone());
     if let Some(t) = &temps {
         m.add_load(Load::temperature(t.clone(), 293.0)).unwrap();
     }
@@ -785,22 +805,27 @@ fn pp1a_pp1b_one_distorted_element_with_point_materials() {
 fn k_diff(f: SolidFormulation) -> f64 {
     let coords = distorted_element();
     let d1 = dmat(0.3);
-    let o = material_o([0.0; 3], MaterialAxes::Fixed([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]));
+    let o = material_o(
+        [0.0; 3],
+        MaterialAxes::Fixed([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]),
+    );
     let d2 = d_o(&o);
     let sum: Matrix6 = std::array::from_fn(|i| std::array::from_fn(|j| d1[i][j] + d2[i][j]));
     let k12 = element_stiffness(f, &coords, &sum).unwrap();
     let k1 = element_stiffness(f, &coords, &d1).unwrap();
     let k2 = element_stiffness(f, &coords, &d2).unwrap();
     let kmax = max_abs(k12.values());
-    worst(
-        (0..576).map(|i| (k12.values()[i] - k1.values()[i] - k2.values()[i]).abs()),
-    ) / kmax
+    worst((0..576).map(|i| (k12.values()[i] - k1.values()[i] - k2.values()[i]).abs())) / kmax
 }
 
 #[test]
 fn lin1_n_lin_additivity_of_the_stiffness_in_d() {
     let mut ch = Checks::new();
-    ch.at_most("LIN1 BBar max |K(D1 + D2) - K(D1) - K(D2)| / max |K|", k_diff(SolidFormulation::BBar), 1e-13);
+    ch.at_most(
+        "LIN1 BBar max |K(D1 + D2) - K(D1) - K(D2)| / max |K|",
+        k_diff(SolidFormulation::BBar),
+        1e-13,
+    );
     ch.above(
         "N-LIN Incompatible max |K(D1 + D2) - K(D1) - K(D2)| / max |K|",
         k_diff(SolidFormulation::Incompatible),
@@ -835,8 +860,16 @@ fn strip_buckling(f: SolidFormulation, nu: f64) -> f64 {
 fn gb1_gb2_n_gb_o_gb_euler_buckling_of_the_one_layer_strip() {
     let mut ch = Checks::new();
     let inc = SolidFormulation::Incompatible;
-    ch.at_most("GB1 Incompatible nu 0 |lambda P / P_cr - 1|", (strip_buckling(inc, 0.0) - 1.0).abs(), 0.01);
-    ch.at_most("GB2 Incompatible nu 0.3 |lambda P / P_cr - 1|", (strip_buckling(inc, 0.3) - 1.0).abs(), 0.02);
+    ch.at_most(
+        "GB1 Incompatible nu 0 |lambda P / P_cr - 1|",
+        (strip_buckling(inc, 0.0) - 1.0).abs(),
+        0.01,
+    );
+    ch.at_most(
+        "GB2 Incompatible nu 0.3 |lambda P / P_cr - 1|",
+        (strip_buckling(inc, 0.3) - 1.0).abs(),
+        0.02,
+    );
     for nu in [0.0, 0.3] {
         ch.above(
             &format!("N-GB Full nu {nu} lambda P / P_cr (shear locking control)"),
@@ -865,7 +898,9 @@ fn sa1_strain_at_against_point_strains() {
         let smax = max_abs(&flat6(&reference));
         let err = worst(quadrature::gauss_2().points().iter().enumerate().flat_map(|(q, &xi)| {
             let s = strain_at(f, &coords, &d, &u, xi).unwrap();
-            (0..6).map(|r| (s[r] - reference[q][r]).abs() / smax).collect::<Vec<_>>()
+            (0..6)
+                .map(|r| (s[r] - reference[q][r]).abs() / smax)
+                .collect::<Vec<_>>()
         }));
         ch.at_most(&format!("SA1 {} strain_at against point_strains", f.name()), err, 1e-12);
     }
@@ -896,7 +931,11 @@ fn es1_patch_recovery_of_the_linear_field() {
             }
         }
         ch.holds(&format!("ES1 {} every interior node recovered", f.name()), present, "");
-        ch.at_most(&format!("ES1 {} recovered nodal stress against D eps", f.name()), worst(errs), 1e-10);
+        ch.at_most(
+            &format!("ES1 {} recovered nodal stress against D eps", f.name()),
+            worst(errs),
+            1e-10,
+        );
         ch.at_most(
             &format!("ES1 {} energy_error estimate / solution norm", f.name()),
             ee.estimate() / ee.solution_norm(),
@@ -937,7 +976,11 @@ fn bending_run_graded(f: SolidFormulation, p: f64) -> (f64, f64, f64) {
     let (l, h, mom): (f64, f64, f64) = (2.0, 0.1, 10.0);
     let i = h.powi(4) / 12.0;
     let base = hex_box([0.0; 3], [l, h, h], [8, 2, 2]).unwrap();
-    let nodes: Vec<Vec3> = base.nodes().iter().map(|x| [l * (x[0] / l).powf(p), x[1], x[2]]).collect();
+    let nodes: Vec<Vec3> = base
+        .nodes()
+        .iter()
+        .map(|x| [l * (x[0] / l).powf(p), x[1], x[2]])
+        .collect();
     let mut mesh = with_formulation(rebuild(&base, nodes), f);
     let centre = node_at(&mesh, [0.0, 0.5 * h, 0.5 * h]);
     let top = node_at(&mesh, [0.0, 0.5 * h, h]);
@@ -945,8 +988,10 @@ fn bending_run_graded(f: SolidFormulation, p: f64) -> (f64, f64, f64) {
     mesh.add_node_set("root_top", vec![top]).unwrap();
     let mut m = model_with(mesh, steel(0.3));
     m.add_constraint(Constraint::displacement("xmin", 0, 0.0)).unwrap();
-    m.add_constraint(Constraint::displacement("root_centre", 1, 0.0)).unwrap();
-    m.add_constraint(Constraint::displacement("root_centre", 2, 0.0)).unwrap();
+    m.add_constraint(Constraint::displacement("root_centre", 1, 0.0))
+        .unwrap();
+    m.add_constraint(Constraint::displacement("root_centre", 2, 0.0))
+        .unwrap();
     m.add_constraint(Constraint::displacement("root_top", 1, 0.0)).unwrap();
     let grid = [0.0, 0.5 * h, h];
     let sigma = |z: f64| mom * (z - 0.5 * h) / i;
@@ -960,7 +1005,14 @@ fn bending_run_graded(f: SolidFormulation, p: f64) -> (f64, f64, f64) {
             let x = mesh.nodes()[n];
             let ky = grid.iter().position(|g| (g - x[1]).abs() < 1e-12).unwrap();
             let kz = grid.iter().position(|g| (g - x[2]).abs() < 1e-12).unwrap();
-            NodalForceAt::new(n, [hat_integral(&grid, ky, &one) * hat_integral(&grid, kz, &sigma), 0.0, 0.0])
+            NodalForceAt::new(
+                n,
+                [
+                    hat_integral(&grid, ky, &one) * hat_integral(&grid, kz, &sigma),
+                    0.0,
+                    0.0,
+                ],
+            )
         })
         .collect();
     let res = solve_static_with(&m, &[], &forces, &StaticOptions::default()).unwrap();
@@ -997,8 +1049,16 @@ fn es2_patch_recovery_of_pure_bending() {
 fn es3a_patch_recovery_of_pure_bending_on_a_graded_box_met_rows() {
     let mut ch = Checks::new();
     let (serr, rel, _) = bending_run_graded(SolidFormulation::Incompatible, 1.5);
-    ch.at_most("ES3a Incompatible graded recovered nodal stress against M z' / I", serr, 1e-8);
-    ch.at_most("ES3a Incompatible graded energy_error estimate / solution norm", rel, 1e-8);
+    ch.at_most(
+        "ES3a Incompatible graded recovered nodal stress against M z' / I",
+        serr,
+        1e-8,
+    );
+    ch.at_most(
+        "ES3a Incompatible graded energy_error estimate / solution norm",
+        rel,
+        1e-8,
+    );
     ch.finish();
 }
 
@@ -1007,11 +1067,23 @@ fn es3a_patch_recovery_of_pure_bending_on_a_graded_box_met_rows() {
 fn es3_patch_recovery_of_pure_bending_on_a_graded_box_known_miss() {
     let mut ch = Checks::new();
     let (serr, rel, _) = bending_run_graded(SolidFormulation::Incompatible, 1.5);
-    ch.at_most("ES3 Incompatible graded recovered nodal stress against M z' / I", serr, 1e-8);
-    ch.at_most("ES3 Incompatible graded energy_error estimate / solution norm", rel, 1e-8);
+    ch.at_most(
+        "ES3 Incompatible graded recovered nodal stress against M z' / I",
+        serr,
+        1e-8,
+    );
+    ch.at_most(
+        "ES3 Incompatible graded energy_error estimate / solution norm",
+        rel,
+        1e-8,
+    );
     let (serr, rel, _) = bending_run_graded(SolidFormulation::Full, 1.5);
     println!("ES3 control Full graded: recovered stress error {serr:.4e}, estimate / norm {rel:.4e}");
-    ch.above("ES3 control Full graded recovered stress error (compatible strain)", serr, 1e-4);
+    ch.above(
+        "ES3 control Full graded recovered stress error (compatible strain)",
+        serr,
+        1e-4,
+    );
     ch.finish();
 }
 
@@ -1061,7 +1133,9 @@ fn lambda_sq(re: f64, im: f64) -> (f64, f64) {
 }
 
 fn omega0_sq(f: SolidFormulation) -> Vec<f64> {
-    modal_analysis(&strip_model(f, false, steel(0.3)), &modal()).unwrap().eigenvalues
+    modal_analysis(&strip_model(f, false, steel(0.3)), &modal())
+        .unwrap()
+        .eigenvalues
 }
 
 #[test]
@@ -1074,7 +1148,11 @@ fn dm1_loss_factor_damped_modes() {
             .loss_factor("b", LossFactor::Constant(0.02));
         let d: DampedModes = damped_modes(&m, &opts).unwrap();
         let w2 = modal_analysis(&m, &modal()).unwrap().eigenvalues;
-        ch.holds(&format!("DM1 {} four modes", f.name()), d.modes.len() >= 4, &format!("{}", d.modes.len()));
+        ch.holds(
+            &format!("DM1 {} four modes", f.name()),
+            d.modes.len() >= 4,
+            &format!("{}", d.modes.len()),
+        );
         let mut eta_err = Vec::new();
         let mut w_err = Vec::new();
         for (mode, w2) in d.modes.iter().zip(&w2).take(4) {
@@ -1083,7 +1161,11 @@ fn dm1_loss_factor_damped_modes() {
             w_err.push((-re / w2 - 1.0).abs());
         }
         ch.at_most(&format!("DM1 {} |eta_mode / 0.02 - 1|", f.name()), worst(eta_err), 1e-6);
-        ch.at_most(&format!("DM1 {} |(-Re lambda^2) / omega^2 - 1|", f.name()), worst(w_err), 1e-6);
+        ch.at_most(
+            &format!("DM1 {} |(-Re lambda^2) / omega^2 - 1|", f.name()),
+            worst(w_err),
+            1e-6,
+        );
     }
     ch.finish();
 }
@@ -1098,7 +1180,11 @@ fn dm2a_dm2b_dm2c_viscoelastic_damped_modes_of_bbar() {
     let eq = visco(0.2, 0.2, 1.0e-2);
     let c = complex_moduli(&eq, 100.0, None).unwrap().shear;
     let c = (c.re / g0(), c.im / g0());
-    let d = damped_modes(&strip_model(f, false, eq.clone()), &vopts(DampedOptions::with_modal(modal()))).unwrap();
+    let d = damped_modes(
+        &strip_model(f, false, eq.clone()),
+        &vopts(DampedOptions::with_modal(modal())),
+    )
+    .unwrap();
     let (mut e1, mut e2) = (Vec::new(), Vec::new());
     for (mode, w2) in d.modes.iter().zip(&w2).take(4) {
         let (re, im) = lambda_sq(mode.eigenvalue.re, mode.eigenvalue.im);
@@ -1124,7 +1210,11 @@ fn dm2a_dm2b_dm2c_viscoelastic_damped_modes_of_bbar() {
         let (qr, qi) = ((lr * dr + li * di) / den, (li * dr - lr * di) / den);
         e3.push(((qr - 1.0).powi(2) + qi * qi).sqrt());
     }
-    ch.holds("DM2b BBar four own-frequency roots", e3.len() == 4, &format!("{}", e3.len()));
+    ch.holds(
+        "DM2b BBar four own-frequency roots",
+        e3.len() == 4,
+        &format!("{}", e3.len()),
+    );
     ch.at_most("DM2b BBar |lambda^2 / (-omega_0^2 c(omega_own)) - 1|", worst(e3), 1e-6);
     // DM2c: unequal weights, the bounds.
     let un = visco(0.03, 0.01, 1.0e-2);
@@ -1141,7 +1231,13 @@ fn dm2a_dm2b_dm2c_viscoelastic_damped_modes_of_bbar() {
         let ratio = -re / w2;
         let ok_eta = eta >= eta_g.min(eta_k) - slack && eta <= eta_g.max(eta_k) + slack;
         let ok_w = ratio >= re_g.min(re_k) - slack && ratio <= re_g.max(re_k) + slack;
-        println!("DM2c mode: eta {eta:.6e} in [{:.6e}, {:.6e}], ratio {ratio:.9} in [{:.9}, {:.9}]", eta_g.min(eta_k), eta_g.max(eta_k), re_g.min(re_k), re_g.max(re_k));
+        println!(
+            "DM2c mode: eta {eta:.6e} in [{:.6e}, {:.6e}], ratio {ratio:.9} in [{:.9}, {:.9}]",
+            eta_g.min(eta_k),
+            eta_g.max(eta_k),
+            re_g.min(re_k),
+            re_g.max(re_k)
+        );
         inside &= ok_eta && ok_w;
     }
     ch.holds("DM2c BBar unequal weights within the bounds", inside, "");
@@ -1152,14 +1248,11 @@ fn response_error(u_h: &rcfd_fem::harmonic::HarmonicResponse, eta: f64, u_s: &[f
     // u_h (1 + i eta) against the real u_s.
     assert_eq!(u_h.re.len(), u_s.len());
     let umax = max_abs(u_s);
-    worst(
-        (0..u_s.len())
-            .map(|i| {
-                let re = u_h.re[i] - eta * u_h.im[i] - u_s[i];
-                let im = u_h.im[i] + eta * u_h.re[i];
-                (re * re + im * im).sqrt() / umax
-            }),
-    )
+    worst((0..u_s.len()).map(|i| {
+        let re = u_h.re[i] - eta * u_h.im[i] - u_s[i];
+        let im = u_h.im[i] + eta * u_h.re[i];
+        (re * re + im * im).sqrt() / umax
+    }))
 }
 
 #[test]
@@ -1189,8 +1282,19 @@ fn dh1_dh2_direct_harmonic_with_loss_factors() {
                 .flat_map(|(a, b)| (0..6).map(move |k| (a[k] - b[k]).abs() / smax)),
         );
         let im = worst(st.im.iter().flat_map(|a| (0..6).map(move |k| a[k].abs() / smax)));
-        ch.at_most(&format!("DH2 {} real part of the response stress against the static stress", f.name()), re, 1e-6);
-        ch.at_most(&format!("DH2 {} imaginary part of the response stress", f.name()), im, 1e-6);
+        ch.at_most(
+            &format!(
+                "DH2 {} real part of the response stress against the static stress",
+                f.name()
+            ),
+            re,
+            1e-6,
+        );
+        ch.at_most(
+            &format!("DH2 {} imaginary part of the response stress", f.name()),
+            im,
+            1e-6,
+        );
     }
     ch.finish();
 }
@@ -1222,13 +1326,10 @@ fn dh3a_dh3b_dh3c_viscoelastic_static_limit_of_bbar() {
             let st = d.stress(&m, &r).unwrap();
             let field = IntegrationPointField::compute(&sm, us).unwrap();
             let smax = max_abs(&flat6(field.stress()));
-            let err = worst(
-                st.re
-                    .iter()
-                    .zip(&st.im)
-                    .zip(field.stress())
-                    .flat_map(|((re, im), s)| (0..6).map(move |k| ((re[k] - s[k]).powi(2) + im[k].powi(2)).sqrt() / smax)),
-            );
+            let err =
+                worst(st.re.iter().zip(&st.im).zip(field.stress()).flat_map(|((re, im), s)| {
+                    (0..6).map(move |k| ((re[k] - s[k]).powi(2) + im[k].powi(2)).sqrt() / smax)
+                }));
             ch.at_most("DH3c BBar response stress against the relaxed static stress", err, 1e-5);
         }
     }
@@ -1260,7 +1361,8 @@ fn cantilever(f: SolidFormulation) -> SolidModel {
     for c in 0..3 {
         m.add_constraint(Constraint::displacement("xmin", c, 0.0)).unwrap();
     }
-    m.add_load(Load::traction("xmax", [0.0, 0.0, -1000.0 / (C_H * C_H)])).unwrap();
+    m.add_load(Load::traction("xmax", [0.0, 0.0, -1000.0 / (C_H * C_H)]))
+        .unwrap();
     m
 }
 
@@ -1305,16 +1407,31 @@ fn rf_rows(estimate_on_box: bool) {
     for f in FORMS {
         let name = f.name();
         let m = strip_model(f, false, visco(0.03, 0.01, 1.0e-2));
-        let r1 = damped_modes(&m, &DampedOptions::with_modal(modal()).viscoelastic_reference(100.0, None));
+        let r1 = damped_modes(
+            &m,
+            &DampedOptions::with_modal(modal()).viscoelastic_reference(100.0, None),
+        );
         let r2 = DirectHarmonic::new(&m, &DirectHarmonicOptions::new());
         if f == SolidFormulation::Incompatible {
             let (ok, msg) = is_formulation_refusal(r1, f);
             ch.holds(&format!("RF2 {name} viscoelastic damped_modes refused"), ok, &msg);
             let (ok, msg) = is_formulation_refusal(r2, f);
-            ch.holds(&format!("RF2 {name} viscoelastic DirectHarmonic::new refused"), ok, &msg);
+            ch.holds(
+                &format!("RF2 {name} viscoelastic DirectHarmonic::new refused"),
+                ok,
+                &msg,
+            );
         } else {
-            ch.holds(&format!("RF2 {name} viscoelastic damped_modes taken"), r1.is_ok(), &format!("{:?}", r1.err()));
-            ch.holds(&format!("RF2 {name} viscoelastic DirectHarmonic::new taken"), r2.is_ok(), &format!("{:?}", r2.err()));
+            ch.holds(
+                &format!("RF2 {name} viscoelastic damped_modes taken"),
+                r1.is_ok(),
+                &format!("{:?}", r1.err()),
+            );
+            ch.holds(
+                &format!("RF2 {name} viscoelastic DirectHarmonic::new taken"),
+                r2.is_ok(),
+                &format!("{:?}", r2.err()),
+            );
         }
     }
 
@@ -1328,7 +1445,10 @@ fn rf_rows(estimate_on_box: bool) {
         let mesh = with_formulation(hex_box([0.0; 3], [1.0, 0.25, 0.25], [4, 1, 1]).unwrap(), f);
         let mut o = model_with(
             mesh,
-            material_o([0.0; 3], MaterialAxes::Fixed([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])),
+            material_o(
+                [0.0; 3],
+                MaterialAxes::Fixed([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]),
+            ),
         );
         for c in 0..3 {
             o.add_constraint(Constraint::displacement("xmin", c, 0.0)).unwrap();
@@ -1345,11 +1465,19 @@ fn rf_rows(estimate_on_box: bool) {
             },
             {
                 let r = nodal_load_vector(&t, &[]);
-                ("nodal_load_vector with a temperature", r.is_ok(), format!("{:?}", r.err()))
+                (
+                    "nodal_load_vector with a temperature",
+                    r.is_ok(),
+                    format!("{:?}", r.err()),
+                )
             },
             {
                 let r = IntegrationPointField::compute(&t, &vec![0.0; n]);
-                ("IntegrationPointField with a temperature", r.is_ok(), format!("{:?}", r.err()))
+                (
+                    "IntegrationPointField with a temperature",
+                    r.is_ok(),
+                    format!("{:?}", r.err()),
+                )
             },
             {
                 let r = solve_static(&o, &StaticOptions::default());
@@ -1398,7 +1526,11 @@ fn rf_rows(estimate_on_box: bool) {
         ] {
             // ADR 0506 D7: the nonlinear rows of BBar are taken; Incompatible keeps the refusal with the key.
             if f == SolidFormulation::BBar {
-                ch.holds(&format!("RF3 {name} {path} taken (ADR 0506)"), r.is_ok(), &format!("{r:?}"));
+                ch.holds(
+                    &format!("RF3 {name} {path} taken (ADR 0506)"),
+                    r.is_ok(),
+                    &format!("{r:?}"),
+                );
             } else {
                 let ok = matches!(&r, Err(FemError::InvalidValue { key: "nonlinear", .. }));
                 ch.holds(&format!("RF3 {name} {path} refused"), ok, &format!("{r:?}"));

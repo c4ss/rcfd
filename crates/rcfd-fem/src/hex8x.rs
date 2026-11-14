@@ -105,6 +105,9 @@ pub(crate) fn element_stiffness_for(
     }
 }
 
+/// The elasticity matrices and the optional thermal strains of [`element_data`].
+pub(crate) type ElementData = (Vec<Matrix6>, Option<Vec<[f64; 6]>>);
+
 /// The elasticity matrices and, with a temperature, the thermal strains at the eight points of the stiffness rule of a Hex8
 /// element (ADR 0525 D1). A per-point material (orthotropic, tabulated) takes the context of `points`; every other material its
 /// constant matrix and the thermal strain of the interpolated temperature change `dte` (nodal `T - T_ref` of the element).
@@ -114,7 +117,7 @@ pub(crate) fn element_data(
     element: usize,
     coords: &[Vec3],
     dte: Option<&[f64]>,
-) -> Result<(Vec<Matrix6>, Option<Vec<[f64; 6]>>)> {
+) -> Result<ElementData> {
     let pts = points(coords)?;
     let mut ds = Vec::with_capacity(pts.len());
     let mut eths = dte.map(|_| Vec::with_capacity(pts.len()));
@@ -597,7 +600,13 @@ pub fn point_strains_at(
 /// The strain at any point `xi` of the reference cube of a Hex8 with a formulation, constant elasticity `d`, no thermal strain
 /// (ADR 0525 D1, the patch recovery): `Full` `Element::strain_at`, `BBar` the B-bar matrix at `xi` (element means of the rule,
 /// the point's own gradients), `Incompatible` `B(xi) u + B_alpha(xi) alpha` with the modes of the rule.
-pub fn strain_at(formulation: SolidFormulation, coords: &[Vec3], d: &Matrix6, u: &[f64], xi: [f64; 3]) -> Result<[f64; 6]> {
+pub fn strain_at(
+    formulation: SolidFormulation,
+    coords: &[Vec3],
+    d: &Matrix6,
+    u: &[f64],
+    xi: [f64; 3],
+) -> Result<[f64; 6]> {
     check_u(u)?;
     check_coords(coords)?;
     match formulation {

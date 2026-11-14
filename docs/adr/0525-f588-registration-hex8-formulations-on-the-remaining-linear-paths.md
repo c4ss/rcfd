@@ -306,8 +306,102 @@ uncaught). MU12 is re-run against `si_hex8x_linear` with ES3 present; the other 
 
 ## Addendum 1: results
 
-(to be written after the registered run)
+Run 1 (registered run, log `f588-scratch/run1.log`) and the amended re-runs, 2026-11-14. All limits are those registered above
+and in Amendments 1 to 3. Every check met except where marked.
+
+| check | limit | measured | met |
+| --- | --- | --- | --- |
+| N-TH (Full, stress / displacement) | 1e-13 | 1.7e-14 / 1.4e-14 | yes |
+| TH1 BBar nu 0.3 | stress-free 1e-10 | 1.3e-14 | yes |
+| TH1 BBar nu 0.4999 (stress / displacement) | 1e-10 | 2.3e-11 / 3.9e-11 | yes |
+| TH1 Incompatible (nu 0.3; nu 0.4999 stress / displacement) | 1e-10 | 2.2e-14; 7.4e-11 / 7.4e-12 | yes |
+| TH2 BBar / Incompatible | 1e-10 | 3.5e-15 / 7.3e-16 | yes |
+| TH3 (two values) | 1e-10 | 7.3e-15, 7.0e-15 | yes |
+| TH4a (BBar / Incompatible), TH4b | registered | 6.2e-16, 6.3e-16; 3.3e-16 | yes |
+| PO1, PO2 | 1e-10 | at most 1.7e-14 | yes |
+| PO3 | bit-equal, symmetry, rigid motions | bit-equal; 1.4e-16; 2.8e-16 | yes |
+| PP1a, PP1b (u error, four values) | registered | 1.3e-14, 4.1e-15, 1.4e-15, 3.5e-15; field strains bit-equal | yes |
+| LIN1 BBar | registered | 1.6e-16 | yes |
+| N-LIN Incompatible (control, > 1e-3) | > 1e-3 | 7.6e-3 | yes |
+| GB1 (Euler strip, Incompatible) | 1e-2 | 5.13e-4 | yes |
+| GB2 | registered | 3.06e-3 | yes |
+| N-GB Full (control) | outside | 1.498, 1.542 | yes |
+| O-GB BBar (observation) | none | 1.074, 0.826 | observation |
+| SA1 | bit equality | 0 | yes |
+| ES1 | registered | 1.0e-15, 1.4e-15 | yes |
+| ES2 (after Amendment 1) stress / estimate | 1e-8 | 1.76e-12 / 6.8e-12 | yes |
+| N-ES Full (control) | outside | stress 6.4e-13, estimate / norm 0.84 | see below |
+| DM1 | registered | about 1e-12 | yes |
+| DM2a, DM2b | registered | about 3e-12, 1.0e-11 | yes |
+| DM2c (bounds) | within bounds | mode at the shear bound; eta 1.5228e-2, ratio 0.985 | yes |
+| DH1 (BBar / Incompatible) | registered | 3.0e-7 / 5.9e-7 | yes |
+| DH2 real / imaginary | registered | 3.5e-7, 6.7e-7 / 6.9e-9, 1.3e-8 | yes |
+| DH3a, DH3b, DH3c | registered | 2.5e-7, 4.3e-7, 7.4e-12 | yes |
+| RF1, RF2 | message names variant and follow-up | met | yes |
+| RF3 (estimate row) | refusal | first set-up defective; amended (Amendment 2), then met | met after amendment |
+| ES3a (graded 1.5 power mesh) | 1e-8 | 8.2e-13 stress, 4.5e-12 estimate | yes |
+| ES3b control (Full, > 1e-4) | > 1e-4 | 3.45e-13 | MISSED |
+| B1 (`si_hex8x_linear_bits`, 18 digests), `si_hex8x`, `si_fbar` | bit-identical | pass | yes |
+
+N-ES: the Full box recovers the stress to 6.4e-13 as well, so the compatible element does not show the parasitic shear in the
+least-squares nodal stress on this box; ES3b missed for the same reason (3.45e-13 against `> 1e-4`). Both are recorded:
+ES3b as the ignored test `es3_..._known_miss` with its limit intact.
+
+### Deviations
+
+- Amendment 1 (ES2 supports), Amendment 2 (RF3 on a box with interior nodes, the strip has none), Amendment 3 (ES3 added). Each
+  was written and committed before the run it concerns. The RF3 row was run once with the defective set-up (missed), then
+  amended; under the decision rule that is a check met only after an amendment written after its run.
+- The expected-catch lists of the planned mutations were partly wrong (MU1, MU6, MU10, MU11 map to other checks); every
+  mutation but MU12 is caught by some registered check.
+- `rf1_rf2_rf3_refusals_after_f587` in `si_fbar.rs` is ignored as a record (ADR 0493 D5 and ADR 0506 refusals lifted here), and
+  the first RF3 test is ignored as a record of the defective set-up.
+
+### Mutations (scratch copy, own target, `f588-scratch/mutations.log`)
+
+| id | caught by |
+| --- | --- |
+| MU1 | TH4a |
+| MU2 | TH4a |
+| MU3 | TH4a |
+| MU4 | PP1 |
+| MU5 | PP1, TH4a |
+| MU6 | PP1 |
+| MU7 | GB1, GB2 |
+| MU8 | DM1 |
+| MU9 | DM2 |
+| MU10 | DH3 |
+| MU11 | DH1, DH2 |
+| MU12 | NOT CAUGHT (no check failed, including ES3) |
+| MU13 | SA1 |
+| MU14 | RF |
+| MU15 | B1 (`si_hex8x_linear_bits` and `si_hex8x_bits`) |
+
+MU12 (the estimate sampling with the compatible strain for an opted element) is not caught: on the axis-aligned bending boxes
+the compatible strain recovers the same nodal stress, because the parasitic shear cancels in the symmetric least-squares fit.
+That is a gap in the registered checks, not a defect found in the code.
+
+### Not run
+
+The whole workspace suite (the lead runs the gate). No baseline or golden file was touched.
+
+### Decision (by the rule above): partial
+
+Reasons: MU12 not caught; ES3b missed (known miss); the RF3 row met only after Amendment 2. Everything else in the acceptance is
+met: thermal expansion stress-free (1.3e-14 to 7.4e-11 against 1e-10), orthotropic patch, Euler buckling within registered limits,
+damped modes and direct harmonic with the formulations' stiffness, Incompatible viscoelastic refused, patch recovery with the
+formulations' strain, defaults bit-identical.
+
+### Open questions (recommendations, not taken)
+
+1. A check that discriminates `element_samples`: a non-equilibrium quadratic displacement field on a distorted element, where the
+   compatible and the formulation strain differ at the points. Recommendation: add it (small, one test); then MU12 is caught and
+   the item can close.
+2. L2, equal-weight viscoelastic `Incompatible`: leave refused until a model needs it.
+3. L3, the consistent enhanced-gradient term in the geometric stiffness: not needed while GB1 holds at 5e-4.
 
 ## For the lead: roadmap entries
 
-(to be written after the registered run)
+> F-588 PARTIAL. ADR 0525, 2026-11-14: the refusals of ADR 0493 D5 lifted in rcfd_fem::hex8x (element_stiffness_at, element_thermal_load, internal_modes_at, point_strains_at, strain_at) and its callers: free thermal expansion of the distorted F-374 patch stress-free to 1e-10 for BBar and Incompatible (7.4e-11 worst at nu 0.4999), orthotropic and per-point patches to 1.7e-14, Euler buckling of a one-layer Incompatible strip within 5.1e-4 (Full control 1.5), damped modes and direct harmonic solve with the formulations' stiffness (loss factors to 1.0e-11; viscoelastic BBar by bounds and the static limit), Incompatible with a viscoelastic material refused, patch recovery with the formulations' strain (ES2 1.8e-12). Defaults bit-identical (18 new digests, baseline_hashes unchanged). Missed: ES3b control (Full also recovers the bending box, 3.45e-13) and mutation MU12 (estimate sampling with the compatible strain) not caught by any check; RF3 set-up amended once (Amendment 2). Follow-ups (numbers left to the lead): a discriminating test of the estimate sampling; equal-weight viscoelastic Incompatible, only if a model needs it.
+
+> Proposed follow-up (structural, low, number to be assigned by the lead): a non-equilibrium quadratic displacement test for `estimate::element_samples` with an opted Hex8; closes F-588.
