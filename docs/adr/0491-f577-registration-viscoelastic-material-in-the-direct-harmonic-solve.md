@@ -365,7 +365,7 @@ Proposed status of F-577: **done**. Proposed note:
 
 Follow-up 1. Title: "The viscoelastic material in the damped modes at a fixed frequency". Deps: F-577. Acceptance:
 
-> Every limit not stated here is registered in the ADR before the run. The damped modes take a viscoelastic material at a reference frequency given in the options: the undamped basis from the storage shear and bulk moduli at that frequency and the loss stiffness of their loss moduli projected on it. On the 40-element rod of ADR 0491 (rod A) with the reference frequency at its first resonance, the first damped root equals the root of the discrete chain with the complex modulus at that frequency within 1e-8 relative, and its loss factor 2 |Re lambda|/Im lambda equals E''/E' at that frequency within 1e-3 relative. Models without the material keep their bits.
+> Every limit not stated here is registered in the ADR before the run. The damped modes take a viscoelastic material at a reference frequency given in the options: the undamped basis from the storage shear and bulk moduli at that frequency and the loss stiffness of their loss moduli projected on it. On the 40-element rod of ADR 0491 (rod A) with the reference frequency at its first resonance, the first damped root equals the root of the discrete chain with the complex modulus at that frequency within 1e-8 relative, and its loss factor 2 |Re lambda|/Im lambda equals E''/E' at that frequency within 1e-2 relative (first order in the loss). Models without the material keep their bits.
 
 Follow-up 2. Title: "The harmonic stress of a viscoelastic material in the direct harmonic solve". Deps: F-577. Acceptance:
 
