@@ -260,6 +260,7 @@ fn cube_history(
 // ------------------------------------------------------------------------------------------------- R1, R1m, R2, N3
 
 #[test]
+#[ignore = "record of the registered run of ADR 0485 (commit bf383d20): R1, R1m, R2 met; N3 set-up defective (the bits moved by one unit in the last place through the Newton correction of rounding size); corrected by amendment 1 as r1_r1m_r2_relaxation and n3b_no_time_no_relaxation"]
 fn r1_r1m_r2_n3_relaxation() {
     let mut c = Checks::new();
     let eps0 = 1e-3;
@@ -362,6 +363,116 @@ fn r1_r1m_r2_n3_relaxation() {
             first[0], last[0]
         ),
     );
+    c.finish();
+}
+
+#[test]
+fn r1_r1m_r2_relaxation() {
+    let mut c = Checks::new();
+    let eps0 = 1e-3;
+    // R1: one Hex8, the strain step, 100 increments of 0.02 s.
+    let model = cube(three());
+    let mut worst: f64 = 0.0;
+    let mut count = 0;
+    cube_history(
+        &model,
+        |_| eps0,
+        100,
+        0.02,
+        &tight(),
+        ctx,
+        |t, u, states, _| {
+            let e = exx(&model, u);
+            let want = e * relaxation(&W3, &TAU3, t);
+            for s in stresses(&model, u, &states[0]) {
+                worst = worst.max((s[0] - want).abs() / (E0 * e));
+                count += 1;
+            }
+        },
+    );
+    c.holds("R1 set-up", count == 101 * 8, &format!("{count} point values"));
+    c.at_most("R1 relaxation of one element, three branches", worst, 1e-10);
+
+    // R1m: the material point.
+    let m = three();
+    let mut state = vec![0.0; m.state_size()];
+    let strain = uniaxial(eps0, NU);
+    let mut worst: f64 = 0.0;
+    for k in 0..=100 {
+        let (t, h) = if k == 0 { (0.0, 0.0) } else { (k as f64 * 0.02, 0.02) };
+        let up = mat_visco::update(&m, &strain, &state, &ctx(t, h)).unwrap();
+        state = up.state;
+        worst = worst.max((up.stress[0] - eps0 * relaxation(&W3, &TAU3, t)).abs() / (E0 * eps0));
+    }
+    c.at_most("R1m relaxation at the material point", worst, 1e-10);
+
+    // R2: unequal weights, an arbitrary strain step.
+    let m = unequal();
+    let terms = unequal_terms();
+    let g0 = E0 / (2.0 * (1.0 + NU));
+    let k0 = E0 / (3.0 * (1.0 - 2.0 * NU));
+    let eps = [1e-3, -2e-4, 3e-4, 5e-4, -1e-4, 2e-4];
+    let tr = eps[0] + eps[1] + eps[2];
+    let mut state = vec![0.0; m.state_size()];
+    let mut worst: f64 = 0.0;
+    let mut scale: f64 = 0.0;
+    for k in 0..=100 {
+        let (t, h) = if k == 0 { (0.0, 0.0) } else { (k as f64 * 0.05, 0.05) };
+        let up = mat_visco::update(&m, &eps, &state, &ctx(t, h)).unwrap();
+        state = up.state;
+        let gt = g0
+            * (1.0 - terms.iter().map(|x| x.0).sum::<f64>()
+                + terms.iter().map(|x| x.0 * (-t / x.2).exp()).sum::<f64>());
+        let kt = k0
+            * (1.0 - terms.iter().map(|x| x.1).sum::<f64>()
+                + terms.iter().map(|x| x.1 * (-t / x.2).exp()).sum::<f64>());
+        let mut want = [0.0; 6];
+        for i in 0..3 {
+            want[i] = 2.0 * gt * (eps[i] - tr / 3.0) + kt * tr;
+        }
+        for i in 3..6 {
+            want[i] = gt * eps[i];
+        }
+        if k == 0 {
+            scale = want.iter().fold(0.0, |a: f64, b| a.max(b.abs()));
+        }
+        for i in 0..6 {
+            worst = worst.max((up.stress[i] - want[i]).abs());
+        }
+    }
+    c.at_most("R2 unequal weights, strain step", worst / scale, 1e-10);
+
+    c.finish();
+}
+
+#[test]
+fn n3b_no_time_no_relaxation() {
+    let mut c = Checks::new();
+    let eps0 = 1e-3;
+    let model = cube(three());
+    // N3: through solve_from (the default context, no time) the stress does not relax.
+    let n = model.dof_map().n_equations();
+    let mut u = vec![0.0; n];
+    let pres = pull(&model, eps0, &mut u);
+    let load = vec![0.0; n];
+    let mut states = initial_states(&model).unwrap();
+    let mut first = Vec::new();
+    let mut worst: f64 = 0.0;
+    for k in 0..6 {
+        let eq = solve_from(&model, &pres, &load, &u, &states, &tight(), &[]).unwrap();
+        u = eq.u;
+        states = eq.states;
+        let s: Vec<f64> = stresses(&model, &u, &states[0]).iter().map(|s| s[0]).collect();
+        if k == 0 {
+            first = s;
+        } else {
+            for (a, b) in s.iter().zip(&first) {
+                worst = worst.max((a - b).abs() / b);
+            }
+        }
+    }
+    // ADR 0485 amendment 1: the relative change, not the bits (the Newton correction of rounding size moves the strain).
+    c.at_most("N3b no time, no relaxation", worst, 1e-12);
     c.finish();
 }
 
@@ -614,6 +725,7 @@ fn arrhenius_formula(t: f64) -> f64 {
 }
 
 #[test]
+#[ignore = "record of the registered run of ADR 0485 (commit bf383d20): S1 set-up defective (the stress helper evaluates at the default context, refused for the shifted material without a temperature); S1m and S2 not run; corrected by amendment 1 as s1b_s1m_s2_time_temperature_shift"]
 fn s1_s1m_s2_time_temperature_shift() {
     let mut c = Checks::new();
     let eps0 = 1e-3;
@@ -639,6 +751,82 @@ fn s1_s1m_s2_time_temperature_shift() {
         },
     );
     c.at_most("S1 shifted relaxation of one element, WLF", worst, 1e-10);
+
+    // S1m: the material point, WLF and Arrhenius, uneven steps.
+    for (name, shift, temp, a) in [
+        ("WLF", wlf(), T_REF + 10.0, wlf_formula(T_REF + 10.0)),
+        ("Arrhenius", arrhenius(), T_REF + 20.0, arrhenius_formula(T_REF + 20.0)),
+    ] {
+        let m = equal(&W3, &TAU3, NU, Some(shift));
+        let strain = uniaxial(eps0, NU);
+        let mut state = vec![0.0; m.state_size()];
+        let mut t = 0.0;
+        let mut worst: f64 = 0.0;
+        for k in 0..=200 {
+            let h = if k == 0 {
+                0.0
+            } else {
+                0.013 * a * (1.0 + 0.5 * (k as f64).sin())
+            };
+            t += h;
+            let p = ctx(t, h).with_temperature(temp).unwrap();
+            let up = mat_visco::update(&m, &strain, &state, &p).unwrap();
+            state = up.state;
+            worst = worst.max((up.stress[0] - eps0 * relaxation(&W3, &TAU3, t / a)).abs() / (E0 * eps0));
+        }
+        c.at_most(
+            &format!("S1m shifted relaxation at the material point, {name}"),
+            worst,
+            1e-10,
+        );
+    }
+
+    // S2: the shift factor against the formulas.
+    let mut worst: f64 = 0.0;
+    for d in [-20.0, -5.0, 0.0, 10.0, 40.0] {
+        let t = T_REF + d;
+        worst = worst.max((shift_factor(&wlf(), t).unwrap() / wlf_formula(t) - 1.0).abs());
+        worst = worst.max((shift_factor(&arrhenius(), t).unwrap() / arrhenius_formula(t) - 1.0).abs());
+    }
+    c.at_most("S2 shift factor, WLF and Arrhenius", worst, 1e-13);
+    c.finish();
+}
+
+#[test]
+fn s1b_s1m_s2_time_temperature_shift() {
+    let mut c = Checks::new();
+    let eps0 = 1e-3;
+    let temp = T_REF + 10.0;
+    let a = wlf_formula(temp);
+    println!("S1 a_T = {a:.9e}");
+    // S1: one Hex8 at T, WLF.
+    let model = cube(equal(&W3, &TAU3, NU, Some(wlf())));
+    let mut worst: f64 = 0.0;
+    cube_history(
+        &model,
+        |_| eps0,
+        100,
+        0.02 * a,
+        &tight(),
+        |t, h| ctx(t, h).with_temperature(temp).unwrap(),
+        |t, u, states, _| {
+            let e = exx(&model, u);
+            let want = e * relaxation(&W3, &TAU3, t / a);
+            // ADR 0485 amendment 1: the committed stress of each point by Material::stress at the committed strain with
+            // the temperature in the point context and no time increment.
+            let material = &model.materials()[0].1;
+            let at = PointContext::new().with_temperature(temp).unwrap();
+            let values = states[0].values();
+            let per = material.state_size();
+            for q in 0..values.len() / per {
+                let st = &values[q * per..(q + 1) * per];
+                let strain = [st[0], st[1], st[2], st[3], st[4], st[5]];
+                let (s, _) = material.stress(&strain, &at, st).unwrap();
+                worst = worst.max((s[0] - want).abs() / (E0 * e));
+            }
+        },
+    );
+    c.at_most("S1b shifted relaxation of one element, WLF", worst, 1e-10);
 
     // S1m: the material point, WLF and Arrhenius, uneven steps.
     for (name, shift, temp, a) in [
