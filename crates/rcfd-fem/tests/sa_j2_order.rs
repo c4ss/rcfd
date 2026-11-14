@@ -246,7 +246,7 @@ fn read(steps: &[LoadStep], c: f64, f: f64, exempt: bool) -> Reading {
                 let ratio = if a > 0.0 { b / (a * a) } else { f64::INFINITY };
                 out.max_ratio = out.max_ratio.max(ratio);
             }
-            if !(b <= (c * a * a).max(f)) {
+            if b.is_nan() || b > (c * a * a).max(f) {
                 out.violations += 1;
             }
         }
