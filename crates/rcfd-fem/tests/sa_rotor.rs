@@ -746,7 +746,8 @@ fn orbit_sense(md: &RotorWhirlMode) -> Whirl {
 }
 
 #[test]
-fn l1_direction_is_the_sense_of_the_orbit() {
+#[ignore = "known miss of ADR 0476 (amendment 2): L1 on R, 3, 2 and 3 of 80 modes at 2, 10, 30 w_1R (translation-free modes at 2.7e5 to 7.4e5 rad/s, translation orbit at rounding level); J, O, U met; continued in l1b_direction_is_the_sense_of_the_orbit_after_amendment_2"]
+fn l1_direction_is_the_sense_of_the_orbit_known_miss() {
     let mut c = Checks::new();
     let (_, wn, _) = jeffcott_constants();
     let w1 = rayleigh(1, 0.0, 1.0);
@@ -774,6 +775,87 @@ fn l1_direction_is_the_sense_of_the_orbit() {
             .collect();
         c.holds(
             &format!("L1 {name}: {} modes", w.modes.len()),
+            bad.is_empty(),
+            &format!("mismatches {bad:?}"),
+        );
+    }
+    c.finish();
+}
+
+/// The reference of amendment 2: the translation orbit at the station of largest translation when the translational kinetic
+/// energy is at least 1e-6 of `x^H M x`, otherwise the tilt orbit `(theta_y, -theta_x)` at the station of largest tilt.
+fn orbit_sense_amended(md: &RotorWhirlMode, m: &[f64], n: usize) -> Whirl {
+    let x: Vec<C64> = md.shape.iter().flatten().copied().collect();
+    let (mut total, mut trans) = (0.0, 0.0);
+    for i in 0..n {
+        for j in 0..n {
+            let v = (x[i].conj() * x[j]).re * m[i * n + j];
+            total += v;
+            if i % 4 < 2 && j % 4 < 2 {
+                trans += v;
+            }
+        }
+    }
+    let sign = |s: f64| {
+        if s > 0.0 {
+            Whirl::Forward
+        } else if s < 0.0 {
+            Whirl::Backward
+        } else {
+            Whirl::Neutral
+        }
+    };
+    if trans >= 1e-6 * total {
+        return orbit_sense(md);
+    }
+    let mut best = (0usize, -1.0);
+    for (i, u) in md.shape.iter().enumerate() {
+        let a = u[2].norm_sqr() + u[3].norm_sqr();
+        if a > best.1 {
+            best = (i, a);
+        }
+    }
+    let u = md.shape[best.0];
+    sign((u[3] * (-u[2]).conj()).im)
+}
+
+#[test]
+fn l1b_direction_is_the_sense_of_the_orbit_after_amendment_2() {
+    let mut c = Checks::new();
+    let (_, wn, _) = jeffcott_constants();
+    let w1 = rayleigh(1, 0.0, 1.0);
+    let wr = w_ref();
+    let j = jeffcott(0.0, 2);
+    let r = rotor_r();
+    let o = rotor_o();
+    let u = rotor_u();
+    let mut runs: Vec<(String, &RotorModel, rcfd_fem::rotor::RotorWhirl)> =
+        vec![("J w_n".into(), &j, j.whirl(wn).unwrap())];
+    for f in [2.0, 10.0, 30.0] {
+        runs.push((format!("R {f} w_1R"), &r, r.whirl(f * w1).unwrap()));
+    }
+    for f in [0.5, 1.0, 2.0] {
+        runs.push((format!("O {f} w_ref"), &o, o.whirl(f * wr).unwrap()));
+    }
+    for (k, s) in u_speeds().into_iter().enumerate() {
+        runs.push((format!("U j = {k}"), &u, u.whirl(s).unwrap()));
+    }
+    for (name, model, w) in &runs {
+        let mats = model.matrices();
+        let mut tilt = 0;
+        let bad: Vec<(f64, Whirl, Whirl)> = w
+            .modes
+            .iter()
+            .filter_map(|md| {
+                let s = orbit_sense_amended(md, &mats.m, mats.n);
+                if s != orbit_sense(md) {
+                    tilt += 1;
+                }
+                (md.direction != s).then_some((md.omega, md.direction, s))
+            })
+            .collect();
+        c.holds(
+            &format!("L1b {name}: {} modes ({tilt} judged by the tilt orbit)", w.modes.len()),
             bad.is_empty(),
             &format!("mismatches {bad:?}"),
         );
