@@ -667,7 +667,7 @@ fn outer_settings() -> PimpleSettings {
 /// refused if `rho_c >= 1` or `C > 80`.
 fn cycles_for(ch: &Channel, n: usize, s: &PimpleSettings) -> Result<(usize, f64), String> {
     let rho = b4(ch, n, s.clone());
-    if !(rho < 1.0) {
+    if rho.is_nan() || rho >= 1.0 {
         return Err(format!("B4 estimate {rho} >= 1"));
     }
     let c = (2.0 + (1e-7f64.ln() / (n as f64 * rho.ln())).ceil()).max(3.0) as usize;
@@ -678,7 +678,7 @@ fn cycles_for(ch: &Channel, n: usize, s: &PimpleSettings) -> Result<(usize, f64)
 }
 
 fn bounded_first(run: &Run, steps: usize) -> bool {
-    run.broke.as_ref().is_none_or(|(k, _)| *k > steps)
+    !matches!(run.broke, Some((k, _)) if k <= steps)
 }
 
 #[test]

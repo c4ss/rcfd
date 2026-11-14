@@ -304,3 +304,136 @@ added: **MU6** (test) `n_outer = 8` replaced by `1` in the settings of QFo and A
 **Decision**: the registered rule applies; DG1, DG3 (growth), QF2 (periodic), A2 (`N = 25`), A3 (imaginary) and AP (imaginary)
 missed on their registered runs, so the item is **partial** whatever the corrected runs give. A1 (the boundedness of the removal at
 `D = 25` and `100` over 3 periods) was met on the registered run.
+
+## Addendum 1: results (2026-11-14)
+
+Commits on `f530-piso-stability`: `53765c27` (this registration), `ae8fa02f` (the registered tests), `c7b3a7cd` (amendment 1),
+`13314def` (amendment 1's tests, the registered tests renamed `*_known_miss`), and the last commit (two clippy rewrites of
+amendment 1's test code without change of behaviour, the topic documentation, this addendum). Every run in release
+(`CARGO_TARGET_DIR=f530-scratch/target`); logs in `w49i-work/f530-scratch`. **No library line changed** (N1), so the defaults are
+bit-identical by construction; `baseline_hashes` was therefore not required and not run.
+
+### Results
+
+Registered checks (each run made once, on `ae8fa02f`):
+
+| Check | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| DG0 FC default, `D = 25.1` and `100.5` | not bounded | not bounded at step 5 and step 4 | yes |
+| DG1 B4 default, `D = 25.1` | `3.5` to `6.5` | `9.232` | **no** (`dg_diagnosis_known_miss`) |
+| DG2 B4 default, `D = 2.51` / `5.03` | `< 1` / `>= 1` | `0.962` / `2.036` | yes |
+| DG3 growth against B4 | within 25 % | `0.553` (`4.13` against `9.23`) | **no** (defective set-up, amendment 1) |
+| DG3 alternation | every dot `< 0` | all 5 negative | yes |
+| DG4 B4 with the option, `D = 25.1` / `100.5` | `< 1` | `0.956` / `0.985` | yes |
+| A1 option bounded over 3 periods, `D = 100.5, 50.3, 25.1` | bounded | bounded; max `|u|` `1.493, 1.499, 1.498 V0` | yes |
+| A2 periodic, `N = 25, 50, 100` | `<= 1e-6` | `1.005e-6` (refused), `1.43e-7`, `4.2e-9` | **no** at `N = 25` |
+| A3 against `Z_dt`, `N = 50`, `100` | `3e-2` each part | real `1.65e-2`, `9.5e-3`; imaginary `1.428e-1`, `3.083e-2` | **no** (imaginary) |
+| A4, A6, O, NC1 | | not formed (`N = 25` refused) | **not run** |
+| A5 default `N = 1000, 2000`, `R_d` against the formula | bounded, periodic, `3e-2` | bounded; `1.2e-12`, `1.0e-10`; `+4.68e-3`, `-1.39e-3` | yes |
+| NC2 no alternation, option `N = 100` | longest run `< 5` | 1 | holds |
+| QF1 FQ default | not bounded; B4 `>= 1` | not bounded at step 7; `5.010` | yes |
+| QF2 FQ option | bounded; B4 `< 1`; periodic; `5e-2` | bounded; `0.952`; change `3.89e-3` (refused) | **no** (periodic) |
+| AP piston, option, `2 Z_100 - Z_50` | bounded, periodic; `3e-2` each part | yes; real `+9.2e-4`, imaginary `+6.53e-2` | **no** (imaginary) |
+| N1 no library line | empty | empty | yes |
+| N2 tests: new file only | | only `crates/rcfd-post/tests/piso_diffusion_f530.rs` added; `sa_aerodamp.rs` untouched | yes |
+
+Checks of amendment 1 (each run once, on `13314def`):
+
+| Check | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| QFc FQ option, cycle rule (B4 `0.952`, 23 periods) | bounded; periodic `<= 1e-6` | bounded; `1.9e-13` (Z printed: `3.025 - 0.562 i` against the model `3.374 + 0.510 i`) | yes (after amendment) |
+| QFo FQ option, 8 outer (B4 `0.731`, 6 periods) | bounded; periodic; `5e-2` of `Z_dt` | bounded; `1.8e-13`; `1.66e-2`, `2.55e-2` | yes (after amendment) |
+| DG3c twin-run radius against B4 (200 iterations) | within 10 %; sign `<= -0.5` | `9.130` against `9.399` (`2.9e-2`); sign `-1.000` | yes (after amendment) |
+| A1o bounded over 3 periods and over `C`, `D = 100.5, 50.3, 25.1` (`C = 10, 5, 3`; B4 `0.920, 0.852, 0.731`) | bounded | bounded; max `|u|` `1.490, 1.493, 1.496 V0` | yes (after amendment) |
+| A2o periodic | `<= 1e-6` | `4.5e-12`, `1.8e-12`, `5.6e-11` | yes (after amendment) |
+| A3o against `Z_dt`, `N = 25, 50, 100` | `3e-2` each part | real `+5.28e-3`, `+5.53e-3`, `+5.66e-3`; imaginary `-4.61e-3`, `-9.4e-4`, `-2.5e-4` | yes (after amendment) |
+| A4o `R_c` against the formula | `3e-2` each part | `+6.06e-3`, `+3.82e-3` | yes (after amendment) |
+| A6o `abs(R_c - R_d)/abs(R_d)` | `<= 1e-2` | `2.31e-3` (A5's runs made again: the same `Z` to every printed digit) | yes (after amendment) |
+| Oo order, real / imaginary | `0.8` to `1.25` | `0.833` / `1.109` | yes (after amendment) |
+| NC1o `N = 25` against the formula | must miss | `+9.25e-2`, `-3.54e-1` | holds |
+| APo piston, option, 8 outer, `N = 50, 100` (`D = 50.3, 25.1`) | bounded, periodic; `3e-2` each part | yes; real `+4.65e-3`, imaginary `+3.21e-3` | yes (after amendment) |
+
+Also run: `model_matches_the_registered_arithmetic` (the test's model against the registration's arithmetic; passes), `cargo fmt
+-p rcfd-post --check` (clean), `cargo clippy -p rcfd-post --all-targets -- -D warnings` (clean after two rewrites: `!(rho < 1.0)`
+to `rho.is_nan() || rho >= 1.0`, and `is_none_or`, above the MSRV, to `matches!`; the fast tests passed again after them),
+`cargo test -p rcfd-cli --release --test docs_site` (2 passed; `docs/dynamic-mesh.md` changed).
+
+### Mutations
+
+Applied one at a time to a `git archive` copy of `13314def` by `f530-scratch/mutate.py` (exact replacement, one occurrence
+asserted), the fast tests run in release in `f530-scratch/target-mut`, the file restored and compared after each
+(`run_mutations.sh`, `mutations_summary.log`, `MU1.log` to `MU6.log`). A first pass applied none (a syntax error in the script
+left every run unmutated; all passed, an unmutated control) and was repeated with the script corrected.
+
+| Mutation | Caught by |
+| --- | --- |
+| MU1 the option's cell velocity with `rAU` | QFc (not bounded at step 4), QFo (step 1) |
+| MU2 `rAtU = rAU` | QFc and QFo (the cycle rule's B4 `5.01`, `3.9e5`) |
+| MU3 `s = i w` in the model | `model_matches_the_registered_arithmetic`, QFo (`1.44e-1`, `5.85e-1`) |
+| MU4 force on `xmax` | QFo (both parts `1.0`) |
+| MU5 inflow `q0 w cos(w t_n)` | QFo (imaginary `1.28`) |
+| MU6 `n_outer = 1` | QFo (`1.03e-1`, `2.10`) |
+
+Every mutation was caught, by the fast tests alone.
+
+### Deviations and what was not run
+
+* Four unregistered diagnoses (amendment 1) between the registered runs and the corrected ones; `n_outer = 8` came from one of
+  them (not derived; disclosed in amendment 1).
+* A4, A6, O and NC1 of the registration were not formed (the `N = 25` level was refused as not periodic). The values amendment 1
+  computes from the logged `N = 50, 100` impedances are not registered measurements.
+* The registration's "documentation" paragraph is met by a bullet in `docs/dynamic-mesh.md` (the page that holds the F-299 limit);
+  `docs/cosimulation-protocol.md` links there and was not changed.
+* The low-frequency case of ADR 0446 (`D = 100` to `400`) and other cell counts were not run. The cost of the option with 8 outer
+  iterations is about 13 times that of the plain step (FC `N = 100`: 98 s against 14 s for 300 steps), not limited.
+* No refusal (c2') was built.
+
+### Decision
+
+The registered rule: DG1, DG3 (growth), QF2 (periodicity), A2 at `N = 25`, A3 (imaginary) and AP (imaginary) missed on their
+registered runs, and A4, A6 and O were not formed. The checks of c2b were met only after amendment 1, made after the registered
+runs. **Proposed status: partial.** What holds:
+
+* The divergence is located (c1): it is the corrector instability of ADR 0214. It alternates in sign every step, the solver's own
+  step-map radius is `9.13` against B4's `9.40` at `D = 25`, and the onset by B4 lies between `D = 2.5` and `3.0`. More correctors
+  lower it, the Rhie-Chow time term and the grading play no part, and its rate depends on the cells across at a given `D`.
+* The opt-in consistent correctors remove it: bounded over 3 periods at `D = 25` and `100` on the registered run (A1).
+* The step with the option alone does not converge the pressure within a step at such `D`: a second property of the non-iterated
+  step. With outer iterations the same channel matches the impedance as the stable runs do, but only after amendment 1.
+* Defaults are bit-identical (no library change), and every mutation was caught.
+
+### Remaining questions
+
+1. **A default for large diffusion numbers.** Options: (a) make the consistent correctors, with outer iterations, the default
+   above some estimate; (b) keep the defaults and document (done here); (c) refuse by default. (a) and (c) change default results:
+   not taken, open for the maintainer. Recommendation: (b) now, with question 2.
+2. **An opt-in refusal naming the diffusion number** (the acceptance's other branch). The B4 estimate in Raise mode already stops
+   the default at step 1, but its message does not name `nu dt/dy^2`. Options: (a) a follow-up item adding an opt-in refusal at
+   step 1 whose message names the largest cell diffusion number and the estimate; (b) nothing. Recommendation: (a) (follow-up
+   below).
+3. **The outer-iteration count.** `n_outer = 8` is a measured, not derived, value. Options: (a) a follow-up item that sets the
+   count by a criterion (the outer pressure change, or a derived contraction); (b) leave it to the case. Recommendation: (a)
+   (follow-up below).
+4. **F-421's registered W1 and LF levels.** Options: (a) note in F-421 that its channel runs at `D = 25` and `50` with the option
+   and 8 outer iterations (APo: within `4.6e-3`, `3.2e-3` after the extrapolation); (b) a new F-421 run. Recommendation: (a)
+   (note text below; taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation)).
+
+### For the lead: roadmap entries
+
+F-530, proposed status **partial**, note:
+
+> Numerics. PARTIAL (ADR 0451, 2026-11-14; registered before the code, amendment 1 after the registered runs). Located: the divergence of ADR 0446 is the corrector instability of ADR 0214 (the first corrector over-corrects a pressure error by about the cross-gap diffusion number, the second does not remove the Rhie-Chow part left in the cell velocity): on the fixed-mesh channel driven by an oscillating inflow (120 x 40 cells, Womersley 1) the default step alternates in sign every step, the twin-run radius of the step map is 9.13 per step at nu dt/dy^2 = 25 against the ADR 0073 estimate 9.40, the estimate crosses one between 2.5 and 3.0 and is 5.0 at 16 cells across at the same number; more correctors lower it, the Rhie-Chow time term and the grading play no part. Removed by the opt-in consistent correctors of ADR 0214: bounded over 3 periods at nu dt/dy^2 = 25, 50 and 100. Found: with one outer iteration the step does not converge the pressure at such numbers (each corrector removes a few percent of a smooth pressure error), and the impedance's imaginary part is 14 percent low at 50 and 3 percent low at 25 (also with 8 correctors); with the consistent correctors and 8 outer iterations (no relaxation) every level matches the discrete implicit-Euler impedance within 0.6 percent, the extrapolation the oscillating-channel impedance within 0.61 and 0.38 percent and the stable default runs within 0.23 percent; the moving piston of F-421 the same (0.46, 0.32 percent). Partial: the registered estimate of the rate (16 cells) and growth measurement missed, the option alone missed the impedance and one periodicity tolerance (a slowly decaying numerical mode, 0.95 to 0.99 per step), and the match was met only after the amendment, with 8 outer iterations taken from a diagnosis. No library line changed (defaults bit-identical); six mutations caught; docs/dynamic-mesh.md. Open: ADR 0451 Q1 to Q3. Follow-ups F-NEW-a (opt-in refusal naming the diffusion number), F-NEW-b (outer-iteration criterion).
+
+F-421, the note gains one sentence at its end (the full new note):
+
+> Structural solver, advanced tier (plan ADR 0310). PARTIAL (ADR 0446, 2026-11-14; registered before the code, amendments 1 to 3 after registered runs). rcfd_post::solid_aerodamp: drive_mode moves the wall of a cosim::Fluid in a mode shape through an InterfaceMap (q = q0 sin(w t)) and records the generalised force by the transposed map; Harmonic::fit (least squares of mean, sine and cosine), periodic_response (every cycle fitted; refused with the cycle-to-cycle change of the first harmonic above a tolerance), added mass Q_p/(w^2 q0), damping -Q_q/(w q0), impedance, work per cycle pi q0 Q_q, damping ratio -W/(2 pi w^2 q0^2 m). Synthetic history: in-phase and quadrature parts to 4.8e-16, work per cycle against pi q0 Q_q to 4.0e-16, a decaying history refused naming the change (after amendment 1: the test's parse of the message). F-401's open column at T/100: added mass 0.997698 rho_f A L_f (limit 2 percent), damping ratio 3.14582e-2 against the registered tan(w dt)/2 + 1e-4 (the step's lag; viscous part 8.8e-7). Plane channel (h = 0.02 m, L_f = 100 h), the roadmap's impedance A i w rho L_f/(1 - tanh(kappa)/kappa) verified by derivation (12 mu L_f/h^2 is the limit per unit piston area): after the Richardson extrapolation in the time step, real and imaginary parts within 8.3e-3 and 1.6e-3 at Womersley 5, 3.2e-3 and 7.3e-3 at Womersley 1, the low-frequency limit within 9.8e-3; but only after amendments: the registered Womersley-5 run missed the real part by 8.5e-2 (the Symmetry planes of the one-cell 2D reduction add dissipation, about 7 percent; corrected with zero-gradient planes), and the registered Womersley-1 and low-frequency runs diverged (the PISO step is unstable above nu dt/dy^2 of about 3.5, also on a fixed mesh; corrected with fewer cells across and more steps). Bar on the open column: damping ratio 1.756e-2 (ratio 0.5) and 2.896e-2 (ratio 4) by this method, 1.777e-2 and 2.889e-2 from the decay of F-401's coupled run (agreement 1.2e-2, 2.5e-3): the lag of the pairing. Partial: the W5 miss, the amendments, and the order companion of the Womersley-1 imaginary part (0.68, limit 0.8). Seven mutations caught. No line of rcfd-fv or rcfd-api changed. Open: ADR 0446 Q1 to Q3. Follow-ups F-530 (PISO stability at large diffusion numbers), F-531 (Symmetry viscous flux). F-530 (ADR 0451, 2026-11-14): the divergence is the corrector instability of ADR 0214; with the consistent correctors and 8 outer iterations the Womersley-1 piston channel of this item (40 cells across) runs at nu dt/dy^2 = 25 and 50 and matches the impedance within 0.46 and 0.32 percent after the extrapolation.
+
+Follow-up items:
+
+* F-NEW-a, "Opt-in refusal of the PISO step at the pressure-lag onset, naming the diffusion number", deps F-530, acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. An opt-in setting makes the PISO/PIMPLE step refuse at step 1, through the divergence guard and with the state left as it was, when the pressure-lag estimate of ADR 0073 for the step's settings is at least one, with a message naming the largest cell diffusion number nu dt/dx^2, the estimate and the remedies (consistent correctors with outer iterations, a smaller step); the fixed-mesh channel of ADR 0451 is refused at nu dt/dy^2 = 25 and 100 and runs at 2.5; the default results of every existing case stay bit-identical.
+
+* F-NEW-b, "Outer-iteration criterion for the consistent-corrector step at large diffusion numbers", deps F-530, acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. The number of outer iterations of the transient step with consistent correctors is set by a registered criterion (a derived contraction of the pressure error, or a tolerance on the change of the pressure between outer iterations) instead of a fixed count, so that the fixed-mesh channel of ADR 0451 at nu dt/dy^2 = 25, 50 and 100 matches the discrete implicit-Euler impedance within 1 percent at every level and its extrapolation the oscillating-channel impedance within 3 percent, with the outer iterations used per step recorded; the default results of every existing case stay bit-identical.

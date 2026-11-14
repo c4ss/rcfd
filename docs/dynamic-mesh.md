@@ -52,6 +52,16 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   `PimpleSettings::moving_mesh_lag` (ADR 0223 E0: the check, the adaptive corrector count and `lag_preflight_moving`, the pre-run
   estimate of the next moving step); the case path does not use it yet (the adaptive count and SV301 still exclude dynamic meshes,
   ADR 0223 Q2).
+* The same limit in a plane channel (F-530, ADR 0451): the oscillating channel of F-421 (40 cells across the gap) diverges with
+  the default PISO step above `nu dt/dy^2` of about 3 (the ADR 0073 estimate crosses one between 2.5 and 3.0; 9.4 per step at
+  25), on a fixed mesh with an inflow as with the moving piston. The rate depends on the number of cells across, not on the
+  diffusion number alone (5.0 per step with 16 cells at the same number). The consistent correctors keep the step bounded at
+  `nu dt/dy^2` of 25 to 100. With only one outer iteration, though, the step does not converge the pressure at such numbers:
+  each corrector removes a few per cent of a smooth pressure error, and the response loses inertia (the imaginary part of the
+  channel impedance is 14 percent low at 50 and 3 percent low at 25, also with 8 correctors). With outer iterations (8, two
+  correctors, no relaxation) the same runs match the discrete model within 0.6 percent and the extrapolated impedance within
+  0.6 percent. At large diffusion numbers use the consistent correctors with outer iterations, and run enough periods for a
+  slowly decaying numerical mode (the ADR 0073 estimate with the option is 0.95 to 0.99 per step with one outer iteration, 0.73 to 0.92 with eight).
 * The streamwise velocity in the cell next to an accelerating piston lags by about 3e-4 of the piston speed (registered limit
   1e-6 missed, cause not proven).
 * The cyclic-face lag of PISO that earlier needed 10 outer iterations no longer reproduces (test `g4b`, moving-vs-fixed mesh
