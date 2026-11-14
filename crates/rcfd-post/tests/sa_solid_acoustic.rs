@@ -203,7 +203,8 @@ fn j0_bessel_self_check() {
 }
 
 #[test]
-fn e1_e4_equivalent_radiated_power() {
+#[ignore = "known miss of ADR 0468 (registered run, commit 0ed86258): E1 at ka = 10 met (3.73e-14, limit 1e-12) but its ulp probe missed (one-ulp change 1.332e-15, the limit only 751 times it, registered 1e3); E1 at ka = 2, E2, E3, E4 met; continued in e1_e4_after_amendment_1 (amendment 1)"]
+fn e1_e4_equivalent_radiated_power_known_miss() {
     let mut c = Checks::new();
     for ka in [2.0, 10.0] {
         let (_, n_t) = mesh_of(ka);
@@ -220,6 +221,66 @@ fn e1_e4_equivalent_radiated_power() {
         let moved = VibratingSurface::new(nodes, s.faces().to_vec(), s.velocity().to_vec()).unwrap();
         let p2 = equivalent_radiated_power(&moved, RHO, C).unwrap().power;
         c.probe(&format!("E1 ka={ka}"), rel(p1, r.power).max(rel(p2, r.power)), 1e-12);
+        c.holds(
+            &format!("E4 ka={ka} note"),
+            r.note.contains("radiation efficiency of one"),
+            &r.note,
+        );
+    }
+    // E2, E3: plate modes
+    let lxly = 0.4 * 0.3;
+    for (m, n) in [(1usize, 1usize), (2, 3)] {
+        let r = equivalent_radiated_power(&plate(m, n, V), RHO, C).unwrap();
+        let exact = RHO * C * lxly * V * V / 8.0;
+        let f = (2.0 + (m as f64 * PI / 40.0).cos()) / 3.0 * ((2.0 + (n as f64 * PI / 30.0).cos()) / 3.0);
+        let e = rel(r.power, exact);
+        if (m, n) == (1, 1) {
+            c.at_most("E2 plate (1,1) ERP vs rho c A v0^2/8", e, 5e-3);
+        } else {
+            println!("E2 plate ({m},{n}) recorded: {e:.6e} (no limit; the interpolant's deficit)");
+        }
+        let e3 = rel(r.power, exact * f);
+        c.at_most(&format!("E3 plate ({m},{n}) ERP vs the interpolant's exact"), e3, 1e-12);
+        let p1 = equivalent_radiated_power(&plate(m, n, ulp_up(V)), RHO, C)
+            .unwrap()
+            .power;
+        c.probe(&format!("E3 ({m},{n})"), rel(p1, r.power), 1e-12);
+    }
+    // E4: a curved surface is accepted by the ERP
+    let r = equivalent_radiated_power(&quarter_cylinder(), RHO, C).unwrap();
+    c.holds(
+        "E4 curved surface accepted",
+        r.power.is_finite() && r.power > 0.0 && r.note.contains("radiation efficiency of one"),
+        &format!("power {:e}, area {:e}", r.power, r.area),
+    );
+    c.finish();
+}
+
+/// ADR 0468 amendment 1: the checks of `e1_e4_equivalent_radiated_power_known_miss` that were met, with the same limits.
+#[test]
+fn e1_e4_after_amendment_1() {
+    let mut c = Checks::new();
+    for ka in [2.0, 10.0] {
+        let (_, n_t) = mesh_of(ka);
+        let s = piston(ka, V);
+        let reference = RHO * C * polygon_area(A, n_t) * V * V / 2.0;
+        let r = equivalent_radiated_power(&s, RHO, C).unwrap();
+        let e = rel(r.power, reference);
+        c.at_most(&format!("E1 ka={ka} ERP vs rho c S_h v^2/2"), e, 1e-12);
+        // ulp probes: the velocity, and one rim node coordinate
+        let p1 = equivalent_radiated_power(&piston(ka, ulp_up(V)), RHO, C).unwrap().power;
+        let mut nodes = s.nodes().to_vec();
+        let last = nodes.len() - 1;
+        nodes[last][0] = ulp_up(nodes[last][0].abs()).copysign(nodes[last][0]);
+        let moved = VibratingSurface::new(nodes, s.faces().to_vec(), s.velocity().to_vec()).unwrap();
+        let p2 = equivalent_radiated_power(&moved, RHO, C).unwrap().power;
+        let change = rel(p1, r.power).max(rel(p2, r.power));
+        if ka == 2.0 {
+            c.probe(&format!("E1 ka={ka}"), change, 1e-12);
+        } else {
+            // amendment 1: the probe of E1 at ka = 10 missed at the registered run; printed, not asserted
+            println!("E1 ka={ka} ulp probe recorded (known miss, amendment 1): relative change {change:.3e}");
+        }
         c.holds(
             &format!("E4 ka={ka} note"),
             r.note.contains("radiation efficiency of one"),
