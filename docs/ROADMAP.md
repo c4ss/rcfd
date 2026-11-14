@@ -8598,21 +8598,21 @@ fixed by the item's registration ADR before any code.
     tenth of the elements with the largest indicator contains the elements at the hole edge. Boundary and corner nodes
     take the patch of the nearest interior node by the registered rule; the result is bit-identical for 1 and 8 threads;
     a patch with too few points is reported, not solved.
-  - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size S. ADR 0478, 2026-11-14: rcfd_fem::estimate
-    (stub of ADR 0440 filled, PENDING None): superconvergent patch recovery (sampling at the centroid of Hex8 and Tet4,
-    the 2 x 2 x 2 points of Hex20 and the four points of Tet10; a complete linear or quadratic fit around every interior
-    corner node by Householder QR; every other node takes the mean of the fits of the nearest solved centres, ties
-    within 1e-9), the energy-norm estimate of Zienkiewicz and Zhu with element indicators, a ranking and the relative
-    estimate; short patches (too few points or rank deficient) reported, not solved; structural kinds, a temperature
-    field and a material interface in a patch refused; bit-identical for 1 and 8 threads. A linear field is exact within
-    1e-14 (limit 1e-10). Manufactured solution of F-378, case D, n = 4, 8, 16: effectivity Hex8 1.180, 1.073, 1.025;
-    Tet10 1.091, 1.005, 0.992; Hex20 1.337 (MISSED at n = 4), 1.028, 0.994; distance from 1 non-increasing except Tet10
-    from 8 to 16 (0.0051 to 0.0083 as theta crosses 1: MISSED); Hex8 recovered L2 order 1.81 (limit 1.7), raw 1.00
-    (limit 0.9). Plate with a hole (the ADR 0449 plate with two layers): recovered peak +1.41 percent of 3 sigma (limit
-    2), nodal average of F-376 +1.23 percent on the same mesh; the tenth of largest indicator holds 18 of the 48
-    hole-edge elements (MISSED: the graded mesh makes them small). Seven of eight mutations caught (removing the rank
-    test survives, as registered). Partial by the registered rule; the misses are kept as known-miss records with their
-    limits.
+  - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). PARTIAL. Size S. ADR 0478, 2026-11-14:
+    rcfd_fem::estimate (stub of ADR 0440 filled, PENDING None): superconvergent patch recovery (sampling at the centroid
+    of Hex8 and Tet4, the 2 x 2 x 2 points of Hex20 and the four points of Tet10; a complete linear or quadratic fit
+    around every interior corner node by Householder QR; every other node takes the mean of the fits of the nearest
+    solved centres, ties within 1e-9), the energy-norm estimate of Zienkiewicz and Zhu with element indicators, a
+    ranking and the relative estimate; short patches (too few points or rank deficient) reported, not solved; structural
+    kinds, a temperature field and a material interface in a patch refused; bit-identical for 1 and 8 threads. A linear
+    field is exact within 1e-14 (limit 1e-10). Manufactured solution of F-378, case D, n = 4, 8, 16: effectivity Hex8
+    1.180, 1.073, 1.025; Tet10 1.091, 1.005, 0.992; Hex20 1.337 (MISSED at n = 4), 1.028, 0.994; distance from 1
+    non-increasing except Tet10 from 8 to 16 (0.0051 to 0.0083 as theta crosses 1: MISSED); Hex8 recovered L2 order 1.81
+    (limit 1.7), raw 1.00 (limit 0.9). Plate with a hole (the ADR 0449 plate with two layers): recovered peak +1.41
+    percent of 3 sigma (limit 2), nodal average of F-376 +1.23 percent on the same mesh; the tenth of largest indicator
+    holds 18 of the 48 hole-edge elements (MISSED: the graded mesh makes them small). Seven of eight mutations caught
+    (removing the rank test survives, as registered). Partial by the registered rule; the misses are kept as known-miss
+    records with their limits. Follow-up F-568.
 - [x] **F-433** Elasticity solves on the ranks of rcfd-dist and on the CUDA device
   - depends on: F-016, F-101, F-374, F-381
   - acceptance: Every limit not stated here is registered in the ADR before the run. Ranks: with one rank the iteration
@@ -10914,3 +10914,11 @@ fixed by the item's registration ADR before any code.
     within 1e-6; a field with coherence exp(-|x_a - x_b|/L) on a plate tends to the uncorrelated result as L goes to 0
     and to the fully correlated one as L grows, each within 1e-8 at the registered limits.
   - note: Structural solver, advanced tier. Follow-up of F-417 (ADR 0477, 2026-11-14).
+- [ ] **F-568** Error indicator per unit volume and the effectivity criterion near one
+  - depends on: F-432
+  - acceptance: Every limit not stated here is registered in the ADR before the run. EnergyError gives the density
+    eta_e/|K|^{1/2} beside eta_e, the absolute values keeping their bits; on the two-layer plate with a hole of ADR 0478
+    the tenth of the elements with the largest density contains every element with a face on the hole; on the
+    manufactured solution of F-378 (Hex20 and Tet10 at n = 8, 16 and a finer heavy record where feasible) abs(theta - 1)
+    on each mesh is at most max(abs(theta - 1) on the previous mesh, 1e-2); the results of F-432 keep their bits.
+  - note: Structural solver, advanced tier. Follow-up of F-432 (ADR 0478, 2026-11-14).
