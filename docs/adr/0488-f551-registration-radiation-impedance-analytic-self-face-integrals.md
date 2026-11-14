@@ -235,3 +235,81 @@ the same set-ups, limits and the bounds of NC3. The three original tests stay as
 `#[ignore]` with the reason, nothing else edited). The corrected run is made once on the library of 0546e941 (unchanged), then
 MU7 is run once against the corrected file on the scratch copy. Per the decision rule F-551 cannot be **done** (a mutation not
 caught by a registered check; checks met after an amendment made after their run).
+
+## Addendum 1: results (2026-11-14)
+
+Commits: fd35fc68 (registration, alone), b3950d33 (the DB1 bit record, constants printed at fb7c5d94 before any library line),
+0546e941 (library and checks), 0f790e6a (amendment 1), ad2e18c7 (the three NaN-blind tests kept as ignored records, the
+NaN-propagating copy), 2d649cc0 (`cargo fmt`, layout only; module docs; `docs/acoustics.md` and `docs/reference-data.md`).
+The registered run (`cargo test --release -p rcfd-post --test sa_radiation_impedance -- --test-threads=1 --nocapture`, commit
+0546e941, log `f551-scratch/run_checks.log`) was made once; the corrected run of amendment 1 (`--test
+sa_radiation_impedance_amend1`, commit ad2e18c7, the library unchanged, log `run_amend1.log`) once. After the layout-only
+`cargo fmt` the same tests printed every number again unchanged (`run_after_fmt.log`). Release profile throughout. Every
+measured number equals its estimate of `estimate.py` or `estimate2.py` to the digits printed there.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| A1 square centre, corner, mid-edge; right triangle at the right angle (largest rel) | `<= 1e-13` | 4.4e-16 | yes |
+| A2 outside point vs Gauss 24 x 24; general quadrilateral vs Duffy 40 x 40 | `<= 1e-11` | 4.2e-15 | yes |
+| A3 reversed orientation; collapsed triangle (bits) | `<= 1e-13`; bits | 0; equal | yes |
+| G1 disk potential vs `4 a E(r/a)` at the ring nodes (`4 x 64`; `16 x 100`) | `<= 5e-3` | 8.0e-4 .. 2.69e-3 (rim); 3.3e-4 .. 1.17e-3 | yes |
+| S1 centre pressure vs `rho c V (1 - e^{-i k a})`, `k a = 0.1, 0.5, 2, 10` | `<= 5e-3` | 8.0e-4, 8.1e-4, 9.5e-4, 1.72e-3 | yes |
+| S2 non-uniform velocity: surface pressure with the Taylor step vs the F-418 pressure at `h = a/100` | `<= 1e-3` | 6.9e-5, 5.9e-5 | yes |
+| Z1 resistance vs `1 - J1(2ka)/(ka)` (`rho c pi a^2`), `k a = 0.1, 0.5, 2, 10` | `<= 1e-2` each | 3.21e-3, 3.14e-3, 2.17e-3, 5.5e-4 | yes |
+| Z2 reactance vs `H1(2ka)/(ka)`, the same | `<= 1e-2` each | 2.31e-3, 2.20e-3, 5.6e-5, 2.73e-3 | yes |
+| Z3 `Re Z` vs `2 W/V^2` of F-418's `power` | `<= 1e-6` | 1.4e-14, 3.6e-15, 3.1e-15, 8.0e-14 | yes |
+| M1 `k a = 0.1` added mass vs `8 rho a^3/3` | `<= 2e-2` | 4.97e-3 (of which 2.66e-3 the physics at `k a = 0.1`) | yes |
+| H1 `k a = 2` faces reversed | `<= 1e-10` | 9.5e-15 | yes |
+| NC1 `disk(a, 2, 16)` reactance at `k a = 0.1` | must be `> 1e-2` | 3.77e-2 | as registered |
+| NC2 naive collocation reactance, `k a = 0.1`, 2 | must be `> 1e-2` | 1.80e-2, 4.98e-2 | as registered |
+| NC3 S2 without the Taylor step (smallest) | must be `> 5e-3` | 1.19e-2 | as registered |
+| N1 refusals | holds | 18 of 18, no panic | yes |
+| T1 `k a = 10` impedance wall time | printed | 6.6 s | (record) |
+| DB1 four digests of the existing results | `==` | 4 of 4 | yes |
+| DB2 `sa_solid_acoustic` (11, 1 ignored known miss), `sa_solid_acoustic_default_bits` (1), unedited | pass | pass | yes |
+
+Mutations (scratch copy `f551-scratch/copy` of the tree of 0546e941, own target `target-copy`, `mutate.py`, logs `MU*.log`):
+
+| Id | Caught by |
+|---|---|
+| MU1 analytic term dropped | S1, S2, Z2, M1 |
+| MU2 sign of `d` | A1, A2, G1, S1, S2, Z2, M1 |
+| MU3 `ln(A-/A+)` | A1, A2, G1, S1, S2, Z2, M1 |
+| MU4 subtraction `- V(x)/R` left out | S1, S2, Z2, M1 |
+| MU5 `s(0) = 0` | Z3 (alone, as registered) |
+| MU6 factor 1/2 dropped | Z1, Z2, Z3, M1 |
+| MU7 `d = 0` guard removed | **not caught** by the registered tests (NaN dropped by `f64::max`; amendment 1); caught by the corrected copy (`MU7_amend1.log`): A1, A3, G1, S1, S2, NC3 |
+| MU8 velocity of the first node | S2 (alone, as registered) |
+
+Run besides: `cargo test -p rcfd-post --release` (59 test binaries, all ok; at 0546e941, the library code unchanged since,
+log `run_post_all.log`); `cargo test -p rcfd-api --release --test baseline_hashes` and `cargo test -p rcfd-cli --release
+--test docs_site` (log `run_gates.log`: 3 passed, 1 ignored as before; 2 passed); `cargo fmt -p rcfd-post --check` clean;
+`cargo clippy -p rcfd-post --all-targets --release -- -D warnings` clean. Not run: the whole workspace (the lead runs the
+gate). In the library only `crates/rcfd-post/src/solid_acoustic.rs` changed (module docs, lines 12 to 16; new code from line
+798 on); no shared solver file.
+
+Deviations: (1) MU7 not caught by a registered check (amendment 1; a test defect, the library unchanged). (2) The first launch
+of `estimate.py` with `python -I` stopped at the numpy import (disclosed in the registration).
+
+**Decision by the registered rule: partial.** Every check and every negative control met at the registered run, and every
+clause of the acceptance met (a1 by S1, S2, G1 and A1 to A3; a2 by Z1 and Z2, largest 3.2e-3 against 1e-2; a3 by Z3,
+8.0e-14 against 1e-6; a4 by M1, 5.0e-3 against 2e-2), but one registered mutation (MU7) was not caught by the registered
+tests, and the corrected checks were met only after an amendment made after their run.
+
+Remaining questions:
+1. NaN in the aggregation of test errors. Options: (a) leave it to each item; (b) a shared NaN-propagating helper in the test
+   support of each crate; (c) a registration rule that every aggregated check also requires finite values. Recommendation:
+   (c) for later registrations (no shared code needed); the corrected copy here does both.
+2. Several velocity fields (a mutual radiation impedance matrix; the added mass and radiation damping of structural modes).
+   Options: a follow-up item (below); or leave out. Recommendation: the optional follow-up, only if a light-fluid modal
+   correction is wanted for the fan.
+
+### For the lead: roadmap entries
+
+F-551, status proposed **partial**, new note:
+
+> ADR 0488, 2026-11-14: rcfd-post solid_acoustic: BaffledPlane::surface_pressure and surface_pressures (the Rayleigh integral on the plane, the singular part 1/R integrated analytically over each face by the in-plane edge sum polygon_inverse_distance, the velocity at the point subtracted and the bounded rest by the quadrature points of F-418), radiation_impedance (complex power, Z = 2 Pi/<|V_n|^2>, Z/(rho c S), added mass Im Z/omega), quadrature_points; all additive, the existing results bit-identical (four digests). Baffled piston on the meshes of ADR 0468 (4 rings x 64 rim segments, 16 x 100 at k a = 10; faces of a tenth of a wavelength or finer): resistance within 3.2e-3, 3.1e-3, 2.2e-3, 5.5e-4 and reactance within 2.3e-3, 2.2e-3, 5.6e-5, 2.7e-3 of rho c pi a^2 (1 - J1(2ka)/(ka) + i H1(2ka)/(ka)) at k a = 0.1, 0.5, 2, 10 (the inscribed polygon dominates); resistance equal to the F-418 power to 8.0e-14; added mass at k a = 0.1 within 5.0e-3 of 8 rho a^3/3; analytic face integrals equal to closed forms to 4.4e-16; disk potential within 2.7e-3 of 4 a E(r/a); centre pressure within 1.7e-3 of rho c V (1 - e^{-i k a}); a non-uniform velocity continuous with the F-418 field pressure to 6.9e-5; negative controls (coarse mesh 3.8e-2, naive collocation 1.8e-2 and 5.0e-2) as registered. Partial because one of eight mutations (the guard of an edge through the point, giving NaN) was not caught by the registered tests (their largest-error aggregation dropped NaN); caught after amendment 1 by a NaN-propagating copy. Not covered: unbaffled or curved radiators, a mutual impedance matrix of several velocity fields, feedback of the added mass into the structure.
+
+Follow-up item (proposed, optional), title "Mutual radiation impedance matrix of a baffled plane and the light-fluid added mass and damping of structural modes", deps F-551:
+
+> Every limit not stated here is registered in the ADR before the run. The radiation impedance matrix Z_mn = (1/2) int P[V_m] conj(V_n) dS of several velocity fields of a baffled plane by the surface pressure of F-551, symmetric within a registered tolerance, its diagonal equal to the impedance of F-551 within 1e-10; for two small baffled pistons the mutual term equal to (i omega rho/(2 pi)) S1 S2 e^{-i k d}/d within 1 percent at k d = 1 and 3; the modal added mass and radiation damping of the first modes of a baffled clamped plate reported, and the shift of its first frequency in a light fluid compared with the first-order estimate from the added mass within a registered limit.
