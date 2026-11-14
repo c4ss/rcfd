@@ -237,7 +237,7 @@ The decision is partial by the registered rule whatever TH3c gives (a registered
 
 ## Amendment 2 (2026-11-14, written and committed after the run of TH3c, before the corrected run)
 
-The run of TH3c (`f525-scratch/run2.log`, commit `0d1d3d1c` of the copy test) met its first row (the in-plane displacements less a
+The run of TH3c (`f525-scratch/run2.log`, commit `a2b9e46f` of the copy test) met its first row (the in-plane displacements less a
 fitted rigid rotation: `3.6e-15` on P and Q, limit `1e-12`) and missed its second row (`2.35e-10` on P, `1.40e-10` on Q). The
 second row's set-up is defective: its maximum runs over node 0, whose `theta_z` is held at zero by the support, so it measures
 `|0 - omega| = |omega|` (the printed `omega / (alpha dT)` is `2.3528e-10` on P and `-1.4010e-10` on Q, equal to the missed
