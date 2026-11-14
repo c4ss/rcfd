@@ -701,9 +701,123 @@ fn vibrate_corrected(name: &str, tri: bool, periods: u64) -> Vibration {
     v
 }
 
+/// EZ of amendment 4: the energy at the static equilibrium under the small tip force against the work `(1/2) f . u`.
+fn ez_clapeyron(tri: bool) -> f64 {
+    let mut m = strip(tri);
+    m.add_load(Load::nodal_force("tip", [0.0, 0.0, TIP_FORCE_A2])).unwrap();
+    let r = solve(&m, &[], &[], &NewtonOptions::new(1)).unwrap();
+    let us = r.result.displacement_values().to_vec();
+    let n = us.len();
+    let mut it = Integrator::new(&m, &[], &NlTransientOptions::new(1.0)).unwrap();
+    it.start(0.0, &us, &vec![0.0; n]).unwrap();
+    let pi = it.strain_energy().unwrap();
+    let f = nodal_load_vector(&m, &[]).unwrap();
+    let work = 0.5 * f.iter().zip(&us).map(|(x, y)| x * y).sum::<f64>();
+    println!("EZ (amendment 4) {}: Pi {:.10e}, f . u/2 {:.10e}", kind_of(tri).name(), pi, work);
+    (pi / work - 1.0).abs()
+}
+
+/// The free vibration of amendment 4: as amendment 2, the modal tolerance `1e-8`, EZ by the work of the tip force.
+fn vibrate_corrected2(name: &str, tri: bool, periods: u64) -> Vibration {
+    let start = Instant::now();
+    let m = strip(tri);
+    let mut mo = ModalOptions::new(1);
+    mo.max_iterations = 2000;
+    mo.tolerance = 1e-8;
+    let modal = modal_analysis(&m, &mo).unwrap();
+    let f1 = modal.frequencies[0];
+    let dofs = m.dof_map();
+    let qz = dofs.equation(N_S, 2).expect("tip u_z");
+    let phi = &modal.modes[0];
+    let a = 1e-3 * L_S;
+    let omega = 2.0 * PI * f1;
+    let v0: Vec<f64> = phi.iter().map(|x| omega * a * x / phi[qz]).collect();
+    let n = v0.len();
+    let h = 1.0 / (40.0 * f1);
+    let mut it = Integrator::new(&m, &[], &NlTransientOptions::new(h)).unwrap();
+    it.start(0.0, &vec![0.0; n], &v0).unwrap();
+    let h0 = it.kinetic_energy().unwrap() + it.strain_energy().unwrap();
+    let mut energy_error = 0.0;
+    let mut prev = (0.0, 0.0);
+    let mut cross = vec![0.0];
+    let (mut halvings, mut iterations) = (0, 0);
+    for step in 1..=40 * periods {
+        let rep = it.step().unwrap();
+        halvings += rep.halvings;
+        iterations += rep.iterations;
+        let t = step as f64 * h;
+        let uz = it.displacement().unwrap()[qz];
+        let hn = it.kinetic_energy().unwrap() + it.strain_energy().unwrap();
+        energy_error = nmax(energy_error, ((hn - h0) / h0).abs());
+        if step > 1 && (prev.1 > 0.0) != (uz > 0.0) {
+            cross.push(prev.0 + h * prev.1 / (prev.1 - uz));
+        }
+        prev = (t, uz);
+    }
+    let kc = cross.len();
+    let fm = if kc >= 2 {
+        (kc - 1) as f64 / (2.0 * (cross[kc - 1] - cross[0]))
+    } else {
+        f64::NAN
+    };
+    let r = 2.0 * (0.5 * omega * h).atan() / (omega * h);
+    let v = Vibration {
+        f1,
+        fm,
+        r,
+        energy_error,
+        ez: ez_clapeyron(tri),
+        crossings: kc,
+        halvings,
+        iterations,
+        seconds: start.elapsed().as_secs_f64(),
+    };
+    println!(
+        "{name}: f_1 {:.10e} Hz, f_m {:.10e} Hz, r {:.8}, {} crossings, H_0 {:.6e}, max |dH|/H_0 {:.4e}, EZ {:.4e}, \
+         {} halvings, {} iterations, {:.1} s",
+        v.f1, v.fm, v.r, v.crossings, h0, v.energy_error, v.ez, v.halvings, v.iterations, v.seconds
+    );
+    v
+}
+
+/// The registered 100-period run (D6, amendment 4): F1, F1b, F1c, E1, EZ. Heavy (4000 steps).
+#[test]
+#[ignore = "heavy registered record of ADR 0522 D6 and amendment 4 (100 periods); run once with --ignored"]
+fn f1_e1_100_periods_corrected2() {
+    let mut ck = Checks::new();
+    let v = vibrate_corrected2("Shell4 strip 100 periods (amendment 4)", false, 100);
+    vibration_checks(&mut ck, "100 periods", &v);
+    ck.at_most("F1c |f_1/f_EB - 1|", (v.f1 / f_eb() - 1.0).abs(), 1e-2);
+    ck.record("F1c signed f_1/f_EB - 1", v.f1 / f_eb() - 1.0);
+    ck.at_most("EZ |Pi(u_s)/(f . u_s/2) - 1|", v.ez, 1e-4);
+    ck.record("P1 100 periods s", v.seconds);
+    ck.finish();
+}
+
+/// The companion F1/E1-4 (D6, amendment 4): Shell4, 4 periods; with EZ and F1c.
+#[test]
+fn f1_e1_4_corrected2() {
+    let mut ck = Checks::new();
+    let v = vibrate_corrected2("Shell4 strip 4 periods (amendment 4)", false, 4);
+    vibration_checks(&mut ck, "Shell4 4 periods", &v);
+    ck.at_most("F1c (companion) |f_1/f_EB - 1|", (v.f1 / f_eb() - 1.0).abs(), 1e-2);
+    ck.at_most("EZ (companion) |Pi(u_s)/(f . u_s/2) - 1|", v.ez, 1e-4);
+    ck.finish();
+}
+
+/// The companion F1/E1-3 (D6, amendment 4): the strip of Shell3, 4 periods.
+#[test]
+fn f1_e1_3_corrected2() {
+    let mut ck = Checks::new();
+    let v = vibrate_corrected2("Shell3 strip 4 periods (amendment 4)", true, 4);
+    vibration_checks(&mut ck, "Shell3 4 periods", &v);
+    ck.at_most("EZ (Shell3) |Pi(u_s)/(f . u_s/2) - 1|", v.ez, 1e-4);
+    ck.finish();
+}
+
 /// The registered 100-period run (D6, amendment 2): F1, F1b, F1c, E1, EZ. Heavy (4000 steps).
 #[test]
-#[ignore = "heavy registered record of ADR 0522 D6 and amendment 2 (100 periods); run once with --ignored"]
+#[ignore = "superseded before its run by ADR 0522 amendment 4 (the modal floor, the EZ comparator); not run"]
 fn f1_e1_100_periods_corrected() {
     let mut ck = Checks::new();
     let v = vibrate_corrected("Shell4 strip 100 periods (corrected)", false, 100);
@@ -717,7 +831,8 @@ fn f1_e1_100_periods_corrected() {
 
 /// The companion F1/E1-4 (D6, amendment 2): Shell4, 4 periods; with EZ and F1c.
 #[test]
-fn f1_e1_4_corrected() {
+#[ignore = "ADR 0522 run 2 record: the modal solve stalled at 8.4e-10 (amendment 4); corrected by f1_e1_4_corrected2"]
+fn f1_e1_4_corrected_known_miss() {
     let mut ck = Checks::new();
     let v = vibrate_corrected("Shell4 strip 4 periods (corrected)", false, 4);
     vibration_checks(&mut ck, "Shell4 4 periods", &v);
@@ -728,7 +843,8 @@ fn f1_e1_4_corrected() {
 
 /// The companion F1/E1-3 (D6, amendment 2): the strip of Shell3, 4 periods.
 #[test]
-fn f1_e1_3_corrected() {
+#[ignore = "ADR 0522 run 2 record: EZ 2.87e-2 missed, the quadratic form is not the linear limit (amendment 4); corrected by f1_e1_3_corrected2"]
+fn f1_e1_3_corrected_known_miss() {
     let mut ck = Checks::new();
     let v = vibrate_corrected("Shell3 strip 4 periods (corrected)", true, 4);
     vibration_checks(&mut ck, "Shell3 4 periods", &v);

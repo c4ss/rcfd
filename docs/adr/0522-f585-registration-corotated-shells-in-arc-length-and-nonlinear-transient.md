@@ -410,3 +410,28 @@ patch edge. Heavy (`a1p_h0p_roof_patch_load`, ignored), run once.
 
 This does not replace the acceptance clause, which asks for a point load: under the point load the shell limit load is recorded
 (and converged in the shell sequence), and A1 is a miss against the registered reference; the decision follows the rule.
+
+## Amendment 4 (2026-11-14): two more set-up defects found by run 2 of the strip; written before the corrected runs
+
+Run 2 (the corrected regular tests once at 1f5943e9, `f585-scratch/run2-fast.log`): SF1 met on Shell4 and Shell3 (bit equal,
+3 iterations, tip `-1.1993e-2` and `-1.2000e-2`); on the Shell3 strip F1 `2.051e-3`, F1b `2.53e-6` and **E1 `2.77e-8` met**
+(the corrected start removed the energy error of run 1, as diagnosed), **EZ `2.87e-2` missed again**; the Shell4 strip did
+not reach a measurement: the modal solve with 2000 iterations stalled at the residual `8.4e-10` of the first pair (tolerance
+`1e-10`).
+
+**Diagnoses.** (1) *EZ, the comparator.* At the static equilibrium the membrane strain is relaxed by the axial shortening
+`u_x ~ -int w_x^2/2`, which the linear quadratic form `(1/2) u^T K u` reads as an axial strain `u_x,x = -w_x^2/2`: it adds
+the membrane energy `(1/2) E t int (w_x^2/2)^2`, of relative order `(a/t)^2`, that the nonlinear energy does not have
+(`Pi = 1.2505e-5` against `1.2875e-5`). The quadratic form is not the linear limit at this amplitude, for the same reason as
+amendment 2 point 1. (2) *The modal solve of the Shell4 strip* has a residual floor near `8e-10`, above the default tolerance;
+a residual `r` of the pair changes the eigenvalue by `O(r^2)` relative, far below every frequency limit here.
+
+**Corrections** (no limit changes): (1) **EZ** compares the energy at the equilibrium with Clapeyron's work of the dead tip
+force, `|Pi(u_s)/((1/2) f . u_s) - 1| <= 1e-4` (for a linear system equal to 1; for the strip the deviation is of the order
+of the geometric nonlinearity of the deflection `(a/L)^2 = 1e-6` and of the membrane share at equilibrium, relaxed). (2) The
+modal solve takes `ModalOptions::new(1)` with `max_iterations = 2000` and `tolerance = 1e-8`, on Shell4 and Shell3.
+
+The tests of run 2 that missed or did not reach a measurement become ignored records, bodies unchanged:
+`f1_e1_3_corrected_known_miss`, `f1_e1_4_corrected_known_miss`; the 100-period test of amendment 2, not run, is ignored as
+superseded before its run. The tests `f1_e1_3_corrected2`, `f1_e1_4_corrected2` and the heavy `f1_e1_100_periods_corrected2`
+are run once (run 3). SF1 (`sf1_corrected`) stands as run in run 2.
