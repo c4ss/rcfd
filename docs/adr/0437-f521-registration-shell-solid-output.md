@@ -209,3 +209,15 @@ change of F-521). Recorded values, copied into `b1b_no_shell_bytes_unchanged`:
 | frame no reactions | `0xde67d0587843b447` | 2231 |
 
 No limit, check or design text above is changed.
+
+## Amendment 1: the set-up of N6, 2026-11-14 (written after the first run of `si_shell_output_vtk.rs`, before the corrected run of N6)
+
+The first run of the layout test met N3, N4 and N5 and then failed at N6: a result with `DofMap::uniform(9, 3)` has 27
+unknowns, the model 63, so the length test refuses it with the length text and never reaches the node-count test that N6 is
+meant to cover (the same mistake as ADR 0423 Amendment 1, made here in the registration by not counting the unknowns of the
+second fixture). Corrected set-up N6b: the result `DofMap::from_counts([6, 6, 6, 6, 6, 6, 6, 6, 6, 3, 3, 3])` (12 nodes, 63
+unknowns), expected: both entry points refused with the same text containing `the result numbers 12 nodes and the model 11`.
+The limit (exact) is unchanged. The registered N6 stays in the file as an ignored record (`n3_to_n7_layout_refusals`, one ignore
+line); the corrected test `n3_to_n7_layout_refusals_amended` re-runs N3, N4, N5, N7 (met in the first run, repeated unchanged
+because they sit in the same test) and N6b. By the decision rule the item is **partial** whatever N6b gives: a check was met only
+after an amendment made after its run.
