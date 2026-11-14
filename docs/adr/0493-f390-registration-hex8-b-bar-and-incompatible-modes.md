@@ -365,6 +365,117 @@ R4 and R4b models solve on the four static paths of R10, the modal analysis and 
    also met, a weaker control).
 3. The paths of D5 refuse the formulations (taken) rather than taking them unverified; each is a follow-up when needed.
 
-## Addendum 1: results
+## Addendum 1: results (2026-11-14)
 
-(to be written after the run)
+The registered run is commit b10dfe26 (library 74b97d03, the checks and the scaffold step b10dfe26), `f390-scratch/run1.log`,
+the three files `si_hex8x`, `si_hex8x_bits`, `si_scaffold`, made once. Before it, B1 had been run once on the uncommitted
+library code identical to 74b97d03 (`b1-run.log`, pass); its only earlier run is the base recording (`b1-base.log`, commit
+1744a1f2). After the run, `cargo fmt -p rcfd-fem` changed the layout of the F-390 lines only (3f2013f4); the three files passed
+again with identical printed numbers (`after-fmt.log`). No amendment was written; no limit was changed.
+
+Deviations, disclosed: (1) the content of B1 (D7) was adjusted while it was recorded on the base, before any library code:
+`stiffness()` refuses the orthotropic material (the static solve's solution is recorded instead) and the one-layer cantilever has
+no interior node for the patch recovery (the energy-norm estimate is recorded on the clamped 8 x 2 x 2 box instead); 26 digests.
+(2) One setup defect was corrected before the registered run, while the test file was being compiled and before it was ever run:
+the end couple of RS2 bends the tip downwards, so the tip check compares `-mean u_z` with `M L^2 / (2 E I)` (the prototype printed
+`-1.000000000`, arithmetic 5).
+
+| id | limit | measured | met |
+| --- | --- | --- | --- |
+| PT1 | `1e-10` | BBar `5.2e-16`, Incompatible `4.4e-16` | yes |
+| PT2 | `1e-10` | `nu = 0.3`: `5.2e-16`, `4.4e-16`; `nu = 0.4999`: `8.2e-14`, `4.8e-15` | yes |
+| RS1 | `1e-10` | largest `1.3e-14` (Incompatible, `nu = 0.4999`); `3.3e-15` to `4.1e-15` at `nu = 0.3` | yes |
+| EV1 | 6; `> 1e-6` | both formulations 6 zeros (`|lambda_6| / lambda_max <= 1.4e-16`); `lambda_7 / lambda_max` `5.128e-2` (AR 1), `6.655e-4` (AR 10), `6.667e-6` (AR 100) | yes |
+| EV2 | 6; `> 1e-6` | 6; `4.459e-2` (BBar), `4.455e-2` (Incompatible) | yes |
+| EV3 | `1e-13`; `1e-11` | symmetry `<= 3.0e-16`; rigid motions `<= 6.4e-16` | yes |
+| C1 | `0.01` | `8.74e-4` (`delta / delta_T = 0.999126`) | yes |
+| C2 | `0.03` | `1.06e-3` (`0.998938`) | yes |
+| C3 | `< 0.8` | `0.666500` (`nu = 0`), `0.649891` (`nu = 0.3`) | yes |
+| C4 | `0.02` | `7.32e-4` (`0.999268`) | yes |
+| C4b | `< 0.8` | `0.092856` | yes |
+| T1 | `0.01` | `1.721e-3` | yes |
+| T2 | `< 0.9` | `0.224875` | yes |
+| RS2 | `1e-8`; `1e-8` | stress `1.7e-11` (`nu = 0`), `2.7e-12` (`nu = 0.3`); tip `1.7e-11`, `2.9e-12` | yes |
+| RS3 | `1e-9`; `1e-9` | `4.8e-12`; `9.5e-13` | yes |
+| X1 | `1e-11`; `1e-9` | `2.6e-16`; `1.3e-12` | yes |
+| D1 | exact | bit for bit (single element, both; 1 and 8 threads, both) | yes |
+| D2 | exact | bit for bit (C2 both, PT1 BBar) | yes |
+| RF1 | exact | refused on Tet4, Tet10, Hex20 with "a Hex8 formulation"; Full on Tet4 taken | yes |
+| RF2 | exact | temperature: `solve_static`, `nodal_load_vector`, `IntegrationPointField::compute` refused ("block 0, load 1 (a temperature load)"); orthotropic refused ("the per-point material Orthotropic of element 0") | yes |
+| RF3 | exact | geometric stiffness, damped modes, direct harmonic, patch recovery refused naming the path; `nonlinear::internal_force`, `tangent` refused with key `"nonlinear"` | yes |
+| RF4 | exact | modal taken: BBar `18.48`, `18.53` Hz; Incompatible `20.36`, `20.43` Hz | yes |
+| B1 | exact | 26 digests equal the base; explicit `Full` equal to the default | yes |
+| B2 | pass | `cargo test -p rcfd-fem --release` (3f2013f4): 686 passed, 0 failed, 174 ignored (`b2-fem.log`); the four scaffold tests of D8 ignored as records, `x1_the_scaffold_exists_after_f390` and `r4_formulations_taken_after_f390` pass | yes |
+| B3 | pass | `baseline_hashes`: 3 passed, 1 ignored (`b3.log`) | yes |
+
+Negative controls: N1 `3.75e-3` (`> 1e-6`); C3, C4b, T2 above; N3 `0.289` (`nu = 0`), `0.233` (`nu = 0.3`) (`> 0.1`); N4 `0.544`
+(`> 0.1`). Observations: O1 full clamp `0.999126`, `0.993516`; O2 BBar `0.932530`, `1.211744`, `0.099448`; O3 Incompatible on T1's
+mesh `2.75e-3`; O4 `lambda_7 / lambda_max` at `nu = 0.4999` `2.22e-5`, `3.32e-7`, `3.33e-9` (six zeros each). Every measured
+number agrees with the numpy prototype of arithmetic 5 and 6 to its printed digits.
+
+Mutations (archive copy of 3f2013f4 with its own target, `f390-scratch/mutate.py`, `mutlogs/`), each caught:
+
+| id | caught by |
+| --- | --- |
+| MU1 | PT1, PT2, RS1, X1 |
+| MU2 | PT1, PT2, RS1, X1 |
+| MU3 | T1 |
+| MU4 | T1 |
+| MU5 | RS2, RS3 (D2 does not see it: it compares the field with `point_strains`, which carries the mutation; registered as a catcher by mistake) |
+| MU6 | C1, C2, C4, RS2, RS3, X1 (EV1 does not see it: `K_au r = 0` for a rigid motion, so the wrong sign keeps six zeros) |
+| MU7 | C1, C2, C4, T1, D1, RS2 |
+| MU8 | RS2, RS3, D2 |
+| MU9 | RF2 |
+| MU10 | RF1 |
+| MU11 | B1, ADR 0291's `si_scaffold_bits` B1 to B4, C3, T2 (run with `--no-fail-fast`, `MU11-nofailfast.log`; `sb_static`, `sb_closed_forms`, `sb_recover`, `sb_elements` pass with B-bar in place of the default) |
+| MU12 | RF3 |
+
+fmt (`cargo fmt -p rcfd-fem --check`) and clippy (`cargo clippy -p rcfd-fem --all-targets --release -- -D warnings`): clean.
+`rcfd-cli`'s `docs_site` test (for `docs/reference-data.md`): 2 passed (`docs-site.log`). Not run: the whole workspace suite (the lead's
+gate).
+
+Shared solver files changed (`git diff aa0e4d5b`, all in `crates/rcfd-fem/src`): `mesh.rs` (one guarded arm in
+`set_block_property`), `assemble.rs` (the `check_model` call and the dispatch in `assemble_stiffness`), `recover.rs` (the
+`check_model` call and the strains of an opted element in `compute_with`), `thermal.rs`, `geometric.rs`, `damped.rs`,
+`harmonic_direct.rs`, `estimate.rs` (one refusal call each); `hex8x.rs` is this package's module.
+
+**Decision: done**, by the rule: every registered check met in the single run, every negative control as stated, all twelve
+mutations caught by registered checks (two predicted catchers did not see their mutation, disclosed above; each mutation was
+caught by others), no amendment. The acceptance's clauses: two opt-in formulations with the default bit for bit (B1 to B3); the
+F-374 patch on two distortions within `8.2e-14` (PT1, PT2); six zero eigenvalues, the seventh at least `6.7e-6` of the largest at
+aspect ratios 1, 10, 100 (EV1); the one-layer cantilever within `8.7e-4` (`nu = 0`) and `1.1e-3` (`nu = 0.3`), full integration
+`0.667` (C1 to C3); L/h = 100 at aspect ratio 5 within `7.3e-4` (C4); the cylinder at `nu = 0.4999` with B-bar within `1.7e-3`
+on the 8 x 16 mesh where full integration gives `0.225` (T1, T2); the recovered stress on the patch equal to `D eps` within
+`1.3e-14` and the condensed modes recovered for the stress (RS1 to RS3).
+
+Remaining questions (options, recommendation):
+
+1. B-bar for the nonlinear driver (F-580 needs it): (a) a follow-up giving the small-strain driver (J2, creep, viscoelastic) the
+   `Bbar` strain and the tangent `sum w Bbar^T C_t Bbar`, and the total Lagrangian driver F-bar; (b) fold it into F-425 (which
+   asks for a mean-dilatation element for hyperelasticity). Recommend (a), deps F-390, F-411, F-397, with F-425 building on it.
+2. The refused linear paths (D5: temperature, per-point materials, geometric stiffness, damped and direct harmonic, patch
+   recovery): (a) one follow-up lifting them with registered checks; (b) leave them refused until a model needs them. Recommend
+   (a) at a low priority, the temperature load first (thermal stress in a nearly incompressible part).
+3. The default formulation stays `Full` (changing it would change every Hex8 result and the hash tables; the maintainer's call).
+
+## For the lead: roadmap entries
+
+Proposed status of F-390: **done**.
+
+> Structural solver, intermediate tier (plan ADR 0290, 2026-11-12). Size M. Stub ADR 0293. ADR 0493, 2026-11-14: two opt-in Hex8 formulations through `BlockProperty::solid(SolidFormulation::BBar | Incompatible)` (refused on other kinds), filled in rcfd_fem::hex8x (element_stiffness, point_strains, internal_modes) and dispatched by assemble_stiffness and IntegrationPointField: the mean-dilatation B-bar (Hughes) and nine incompatible modes (Wilson et al.) with the Taylor, Beresford and Wilson correction (Jacobian at the centre, det J0/det J), condensed and recovered for the stress. Met: the F-374 patch on two distortions within 8.2e-14 (Wilson's uncorrected element 3.7e-3, the control); six zero eigenvalues, the seventh 5.1e-2, 6.7e-4, 6.7e-6 of the largest at aspect ratios 1, 10, 100; the one-layer cantilever L/h = 20 at 0.99913 (nu = 0) and 0.99894 (nu = 0.3) of the closed form, full integration 0.667 (control); L/h = 100 at aspect ratio 5 0.99927; Lame cylinder nu = 0.4999 on 8 x 16 with B-bar within 1.7e-3, full integration 0.225 (control); recovered stress on the patch within 1.3e-14 of D eps, pure bending exact to 1.7e-11 with the recovered modes (0.29 without). Static, modal and every recovery take them; temperature loads, per-point materials, the geometric stiffness, damped and direct harmonic solves, the patch recovery and the nonlinear driver refuse them. Defaults bit-identical (26 digests), baseline_hashes unchanged; twelve mutations caught.
+
+Follow-up 1:
+
+> Title: B-bar and F-bar Hex8 in the nonlinear driver (J2, creep, viscoelastic, geometric nonlinearity). Deps: F-390, F-411, F-397.
+
+> Every limit not stated here is registered in the ADR before the run. The BBar formulation of F-390 taken by the nonlinear driver: at small strain the strain Bbar u at the points and the tangent sum w Bbar^T C_t Bbar, with geometric nonlinearity the F-bar deformation gradient (det F_0 / det F)^(1/3) F; the tangent against central differences within 1e-6; the F-390 patch test within 1e-10 through the driver; the J2 thick cylinder in plane strain and the creep cylinder of ADR 0489 point-wise within limits registered there, full integration the registered locking control; the Full results of ADR 0404, 0475, 0485 and 0489 bit-identical.
+
+Follow-up 2:
+
+> Title: the Hex8 formulations on the remaining linear paths (temperature load, per-point materials, geometric stiffness, damped and direct harmonic solves, patch recovery). Deps: F-390.
+
+> Every limit not stated here is registered in the ADR before the run. The refusals of ADR 0493 D5 lifted with consistent arithmetic: the free thermal expansion of the distorted F-374 patch stress-free within 1e-10 with both formulations; an orthotropic patch within 1e-10; Euler buckling of a one-layer Incompatible strip within registered limits; the damped modes and the direct harmonic solve with the formulations' stiffness (the viscoelastic shear and bulk split refused for Incompatible, whose condensed stiffness is not linear in D); the patch recovery with the formulations' strain; defaults bit-identical.
+
+Note for F-425 (to append):
+
+> ADR 0493 (2026-11-14): the mean-dilatation B-bar Hex8 exists for the linear paths (BlockProperty::solid(SolidFormulation::BBar)); the nonlinear driver refuses it; its F-bar form for finite strain is proposed as follow-up 1 of ADR 0493.
