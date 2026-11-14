@@ -510,6 +510,30 @@ equals the closed form (`0.526`, `0.888`) to `1.4e-15`, against `5e-14` for an e
 Limits: the split uses the hard-walled, medium-at-rest axial wavenumbers; one duct and two (three) sections were run; the
 single-section residual needs a second section.
 
+## Radiated sound of a vibrating structure (F-418, ADR 0468; library only)
+
+`rcfd_post::solid_acoustic` turns the harmonic velocity of a structural surface into radiated sound, with no acoustic field
+solve and no reaction of the air on the structure. Amplitudes are complex peak amplitudes (`x(t) = Re(X e^{i omega t})`, as
+`rcfd_fem::harmonic::HarmonicResponse`); powers are time-averaged.
+
+- `VibratingSurface`: Tri3 and Quad4 faces with nodal complex velocity vectors; `from_response(model, set, &response)` takes a
+  surface set of a `SolidModel` and a harmonic response of mode superposition (ADR 0391) or the direct solve (ADR 0315) and
+  sets `V = i omega U`. Quadratic faces are refused.
+- `equivalent_radiated_power`: `(rho c/2) int |V . n|^2 dS` for any surface. It assumes a radiation efficiency of one (the
+  report says so) and over-predicts below coincidence and for radiators small against the wavelength; it is the only figure
+  for a fan frame or housing.
+- `BaffledPlane`: a plane radiator in an infinite rigid baffle (refused, with its deviation, if a node is farther than
+  `plane_tolerance` (1e-6) of the diameter from the mean plane). `pressure` by the Rayleigh integral with near-field face
+  splitting, `far_field` and `directivity`, `power` by the double sum with the smooth kernel `sin(k R)/R` (cost `O(P^2)` in the
+  quadrature points), `power_from_far_field` over `acoustics::sphere_quadrature` as a cross-check.
+- `power_level_db` re 1e-12 W, `PowerSpectrum` with `third_octave_bands` (the band numbering of the metrics above) and
+  `erp_spectrum` over a sweep of responses.
+
+Checked against the baffled-piston closed forms (on-axis pressure, directivity, `W/ERP = 1 - J1(2 k a)/(k a)`, the
+low-frequency monopole and a baffled monopole pair): see ADR 0468 for the limits and the measured errors (largest 1.6e-3, from
+the inscribed polygon of the disk mesh). Not covered: the radiation reactance, unbaffled or curved radiators by an integral
+method, any boundary-element or field solve.
+
 ## Reference: code locations, input format and command line
 
 ### Modules and entry points
@@ -528,6 +552,7 @@ single-section residual needs a second section.
 | Acoustic wave solver (linear, medium at rest) | `crates/rcfd-fv/src/acoustic_wave.rs` (`AcousticWaveSolver`, `Medium`, `WaveBc`, `WaveSponge`, `WaveSpongeForm`) |
 | Duct modes, modal decomposition, axial split, `rcfd-duct-modes` export | `crates/rcfd-post/src/duct_modes.rs` (`ModeBasis`, `axial_wavenumber`, `HarmonicDft`, `decompose_section`, `split_axial`, `fit_axial`, `ModalExport`) |
 | Wave solver driven by a sampled surface series | `crates/rcfd-post/src/wave_drive.rs` (`SurfaceDrive`, `DuctFrame`, `DriveOptions`, `HarmonicModes`; returning waves: `SurfaceDrive::from_sections`, `SplitDrive`, `SurfaceDrive::entering_residual`) |
+| Radiated sound of a vibrating structure (ERP, Rayleigh integral of a baffled plane, power bands) | `crates/rcfd-post/src/solid_acoustic.rs` (`VibratingSurface`, `equivalent_radiated_power`, `BaffledPlane`, `RayleighOptions`, `PowerSpectrum`, `erp_spectrum`, `power_level_db`) |
 
 ### Surface-series input (`rcfd-surface-series` v1)
 

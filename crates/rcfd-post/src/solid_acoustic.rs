@@ -173,7 +173,7 @@ impl VibratingSurface {
         let s = VibratingSurface { nodes, faces, velocity };
         for f in 0..s.faces.len() {
             let a: f64 = s.face_points(f, 2, (-1.0, 1.0, -1.0, 1.0)).iter().map(|p| p.w).sum();
-            if !(a > 0.0) {
+            if a.is_nan() || a <= 0.0 {
                 return err(format!("face {f}: zero area"));
             }
         }
@@ -414,7 +414,10 @@ impl PowerSpectrum {
                 freq[i]
             ));
         }
-        if let Some(i) = freq.windows(2).position(|w| !(w[1] > w[0])) {
+        if let Some(i) = freq
+            .windows(2)
+            .position(|w| w[1].partial_cmp(&w[0]) != Some(std::cmp::Ordering::Greater))
+        {
             return err(format!("line {}: frequencies must be strictly increasing", i + 1));
         }
         if let Some(i) = power.iter().position(|w| !(w.is_finite() && *w >= 0.0)) {
@@ -599,7 +602,7 @@ impl BaffledPlane {
             }
         }
         let len = vec3::norm(sum_a);
-        if !(len >= 0.5 * area) {
+        if len.is_nan() || len < 0.5 * area {
             return err(format!(
                 "Rayleigh integral: the faces are not consistently oriented (|sum of area vectors| {len:e} for an area {area:e})"
             ));
@@ -667,7 +670,7 @@ impl BaffledPlane {
             return err("field point not finite".into());
         }
         let h = vec3::dot(vec3::sub(x, self.origin), self.normal);
-        if !(h > self.options.plane_tolerance * self.diameter) {
+        if h.is_nan() || h <= self.options.plane_tolerance * self.diameter {
             return err(format!(
                 "Rayleigh integral: field point {x:?} is not in front of the plane (height {h:e} m)"
             ));

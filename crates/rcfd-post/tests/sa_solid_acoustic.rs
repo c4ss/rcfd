@@ -562,6 +562,7 @@ fn parse_deviation(msg: &str) -> Option<f64> {
 }
 
 #[test]
+#[allow(clippy::vec_init_then_push)]
 fn n1_n2_refusals() {
     let mut c = Checks::new();
     let s = piston(2.0, V);
