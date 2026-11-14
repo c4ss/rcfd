@@ -236,8 +236,11 @@ fn flat_numbers(d: &DampedModes) -> Vec<f64> {
 
 /// Printed at main 69cb996a (amendment 1 of ADR 0467, before the corrected run): `flat_numbers` of the same two set-ups.
 const ON_NUMBERS: [(&str, u64); 2] = [
-    ("bar c = 0.9 Z, 20 modes, residual vectors, no notes", 0),
-    ("bar c = 2 Z, 20 modes, residual vectors, no notes", 0),
+    (
+        "bar c = 0.9 Z, 20 modes, residual vectors, no notes",
+        0x48cdc32681bdc2b6,
+    ),
+    ("bar c = 2 Z, 20 modes, residual vectors, no notes", 0x071eba2edeb3906a),
 ];
 
 #[test]
