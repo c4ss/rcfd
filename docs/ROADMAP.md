@@ -11058,7 +11058,8 @@ fixed by the item's registration ADR before any code.
     neglects its coupling with the other Ritz vectors (ADR 0481's eta from the exact mode overestimates by about the
     inverse factor). Without the option bit-identical (6 plus 13 digests). Five of seven mutations caught; the two that
     change only the value of eta are seen only by the missed check. Follow-up for a second-order Ritz error. Follow-up
-    F-575.
+    F-575. The second-order Ritz error that clause a4 needed is reported by F-575 (ADR 0492, 2026-11-14): schur_eta
+    within 3.4e-4 of the measured error.
 - [ ] **F-570** Energy-momentum conserving step (Simo and Tarnow) for nonlinear transient dynamics
   - depends on: F-423
   - acceptance: Every limit not stated here is registered in the ADR before the run. The spinning bar of ADR 0479 over
@@ -11113,14 +11114,14 @@ fixed by the item's registration ADR before any code.
     keep their bits.
   - note: Structural solver, advanced tier (plan ADR 0310). DONE. Size S. ADR 0492, 2026-11-14:
     RotatingSector::split_modes with split_correction reports beside the first-order eta of ADR 0482 the field
-    schur_eta, the Ritz error |theta/theta' - 1| of the projected problem condensed by the complement and frozen at
-    the Ritz value (one MINRES complement solve per basis vector, then one dense quadratic solve per split mode with
-    K_VV - Re E and the skew part of E folded into the gyroscopic matrix); not computed by split_campbell. On the disc
-    sector of ADR 0411 with 4 harmonic modes per index at 0.4 and 0.8 omega_ref it agrees with the measured error of
-    all 34 matched modes above 1e-9 within 3.4e-4 (the eta of ADR 0482 within a factor 2.62), and with an independent
-    dense computation within 3.3e-7; with 41 modes per index it is 0. The results of ADR 0481 and 0482 and every
-    default keep their bits (6 new digests plus 19). All eight mutations caught, including the counterparts of the
-    uncaught MU3 and MU4 of ADR 0482. Cost: up to 13 times the split_modes time on the pair indices.
+    schur_eta, the Ritz error |theta/theta' - 1| of the projected problem condensed by the complement and frozen at the
+    Ritz value (one MINRES complement solve per basis vector, then one dense quadratic solve per split mode with K_VV -
+    Re E and the skew part of E folded into the gyroscopic matrix); not computed by split_campbell. On the disc sector
+    of ADR 0411 with 4 harmonic modes per index at 0.4 and 0.8 omega_ref it agrees with the measured error of all 34
+    matched modes above 1e-9 within 3.4e-4 (the eta of ADR 0482 within a factor 2.62), and with an independent dense
+    computation within 3.3e-7; with 41 modes per index it is 0. The results of ADR 0481 and 0482 and every default keep
+    their bits (6 new digests plus 19). All eight mutations caught, including the counterparts of the uncaught MU3 and
+    MU4 of ADR 0482. Cost: up to 13 times the split_modes time on the pair indices. Optional follow-up F-584.
 - [ ] **F-576** Quasi-static viscoelastic time stepping on the Newton driver, with a temperature in the nonlinear transient integrator
   - depends on: F-410
   - acceptance: Every limit not stated here is registered in the ADR before the run. A time-stepping driver over
@@ -11209,3 +11210,12 @@ fixed by the item's registration ADR before any code.
     equal weights it equals the stress of the LossFactor::Table route within 1e-12. Models without the material keep
     their bits.
   - note: Structural solver, advanced tier. Follow-up of F-577 (ADR 0491, 2026-11-14). Needed for blade fatigue.
+- [ ] **F-584** Corrected frequency and cheaper second-order Ritz error of the sector split modes
+  - depends on: F-575
+  - acceptance: Every limit not stated here is registered in the ADR before the run. RotatingSector::split_modes
+    optionally reports the corrected frequency theta' of the Schur-complemented problem of ADR 0492, and computes
+    schur_eta with one complement solve per split mode and a second-order perturbation sum over the other Ritz vectors;
+    on the disc sector of ADR 0411 with 4 harmonic modes per index at 0.4 and 0.8 omega_ref it agrees with the schur_eta
+    of ADR 0492 within 1 percent where it exceeds 1e-9, theta' equals RotatingSector::whirl_modes within 1e-7 for every
+    matched mode, and the results of ADR 0492 keep their bits.
+  - note: Structural solver, advanced tier. Optional. Follow-up of F-575 (ADR 0492, 2026-11-14).
