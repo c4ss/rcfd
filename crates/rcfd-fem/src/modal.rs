@@ -165,7 +165,7 @@ pub(crate) fn check_coordinate_order(
     let reason = if factorisation != Factorisation::Supernodal {
         format!("the coordinate order is an order of the supernodal factor, not of {factorisation:?} (ADR 0531)")
     } else if transformation {
-        "the coordinate order is not offered on the transformation path (linear constraints, rigid sets, cyclic          constraints, elastic supports), whose reduced unknowns are not all of one node (ADR 0531)"
+        "the coordinate order is not offered on the transformation path (linear constraints, rigid sets, cyclic constraints, elastic supports), whose reduced unknowns are not all of one node (ADR 0531)"
             .to_string()
     } else {
         return Ok(());
