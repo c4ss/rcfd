@@ -337,3 +337,112 @@ build or a default bit changes and cannot be restored without changing a default
 3. Taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation): the supernodal factor reuses
    `SparseOptions`, `PivotRule` and `SkylineError` (one refusal type for the three direct factors); the factor kind is reported
    by a new `SolveReport` field rather than by the solver name.
+
+## Addendum 1: results (2026-11-14)
+
+Registered runs at 93f3f582, release profile, each run once: `sa_supernodal.rs` (log `f529-scratch/run_sa_supernodal.log`),
+`sa_supernodal_solve.rs` and `sa_nd_bits.rs` (`run_fem.log`), H1 alone through `f529-scratch/heavy.ps1` (`run_h1.log`,
+`run_h1_memory.log`; free memory at the start 10.26e9 bytes). The bit record `sa_nd_bits.rs` was run at 2b01d96a (base 98e767f5 plus
+this ADR) plus the file (`bits_base_run.log`), its constants filled in and committed at 3927ed17 before any library line; d46f5891
+changed only the clippy form of one closure in it (`map_or(usize::MAX, |v| v)` to `unwrap_or(usize::MAX)`, the same values).
+No limit was changed and no amendment was needed.
+
+Disclosed: before the registered runs one throwaway development probe (not committed, copy
+`f529-scratch/dev_f529_tmp.rs`) compared the supernodal and up-looking solves on four small grids (5-point 5^2 and 13^2,
+7-point 6^3 and 9^3, diagonals 4.5 and 6.5) with the three orderings: differences at most 2.7e-15, equal counts. No
+registered matrix was used and nothing was changed after it.
+
+### Checks
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| T1 (c2, c4) | `<= 0.6` | nnz(L) nested dissection 3 360 870, minimum degree 5 659 458: 0.5939 (probe 0.5938); ordering 0.04 s | yes |
+| T1r | record | 30^3 geometric ND 6 180 043 (1.09 of minimum degree); 5-point 100 x 100: level-structure ND 172 416, geometric 257 050, minimum degree 185 035 | record |
+| T2 (c3, c5) | `< 1e-12` | 1.185e-15; factor 0.29 s (up-looking with the same order 0.73 s), 18 629 supernodes, largest front 1 059, 51 fronts split | yes |
+| T3 | equal, equal; `<= 1e-11` | 3 360 870 = 3 360 870 = 3 360 870; 1.048e-14 | yes |
+| T4 | `< 1e-12` | 2.761e-15 | yes |
+| T5 (c9) | as stated | (a) row 137 at elimination position 270, pivot -2.31, message "row 137 (elimination position 270)"; (b) row 137, position 262; (c) up-looking row 137, position 270 | yes |
+| T6 | 10, 95, 190 | 10, 95, 190 | yes |
+| T7 (c11) | bit for bit; `> 0` | order, L (591 826 values), D, x equal; 13 fronts split | yes |
+| T8 | as stated | NotSquare, NonFinite (3, 4), Unsymmetric (1, 2), BadOrdering | yes |
+| T9 | permutations; `< 1e-12` | all 15 cases; largest residual 8.4e-14 (tridiagonal 500) | yes |
+| T10 | bit for bit | equal | yes |
+| F1 (c10) | as stated; `<= 1e-10`; `<= 1e-12` | factors Supernodal / Envelope / SparseMinimumDegree / None, name "sparse-ldlt-supernodal"; 7.147e-15; 1.168e-13 (0.45 s against the envelope's 0.30 s) | yes |
+| F2 (c11) | bit for bit | equal | yes |
+| F3 | as stated | transformation path `InvalidValue(solver)`; refinement refused; hinge `SingularStiffness` at node 13 component 0 | yes |
+| H1 (c6, c7, c8) | residual `<= 1e-10`; peak working set `< 8.0e9` B | residual 2.224e-12; peak working set 5.044e9 B; `solve_static_report` 80.8 s (process 87.3 s with the symbolic recount); nnz(L) 421 295 142 (3.37 GB of values; probe 420 635 271), nnz(K) 23 648 904 | yes |
+| B (c12) | equal; pass; pass | 17 digests equal to base; see "Other checks run" | yes |
+| N1 | `> 0.6` | 23 516 129 / 5 659 458 = 4.155 | holds |
+| N2 | some differ | 3 224 040 of 3 360 870 values differ | holds |
+| N3 | row = position = 137 | 137, 137 | holds |
+| N4 | not bit-equal | not equal | holds |
+
+H1 against ADR 0447: minimum degree needed 848 257 887 entries (13.6 GB predicted, not run); nested dissection by the node
+coordinates halves the fill (0.497) and the supernodal factor solves the cube in 81 s at 5.0 GB peak, inside the estimate of
+5.5 to 6.5 GB and 2 to 15 minutes.
+
+### Mutations (copy `f529-scratch/mut/tree` of 93f3f582, own target `target-f529-mut`, `f529-scratch/mutate.py`, each alone; log `mutations.log`)
+
+| Id | Caught by | Registered | Result |
+| --- | --- | --- | --- |
+| M1 | T1 (ratio 1), T5 (position equals row) | T1 | caught |
+| M2 | T1 (ratio 2.36), T7 (no front large enough to split) | T1 | caught |
+| M3 | T2, T4, T5, T6, T9 | T2 | caught |
+| M4 | T2 and others | T2 | caught |
+| M5 | T5 (row) | T5 | caught |
+| M6 | T7 (values of column 774) | T7 | caught |
+| M7 | F1 (`factor`) | F1 | caught |
+| M8 | F3 (the transformation path solved) | F3 | caught |
+| M9 | B (D2, D3 digests) | B | caught |
+| M10 | T6 | T6 | caught |
+| M11 | nothing | T2 or T3 | **survived** |
+| M12 | T2, T4, T9 | T2 | caught |
+
+M11 is an equivalent mutation, diagnosed after the run: when `parent(j) = j + 1` and `count(j) = count(j + 1) + 1`, the
+structure of column `j` is `{j + 1}` plus that of `j + 1`, so merging `j` into the supernode of `j + 1` stores no extra entry
+even when `j + 1` has other children. Their update matrices have rows `>= j + 1` only, so the extend-add (D3 step 1) never
+touches column `j`. The single-child condition belongs to the definition of a fundamental supernode, not to the correctness of
+the multifrontal method, so no check can tell the two partitions apart by value. The registration should have planned a
+mutation that changes the result (for example one that also drops `count(j) = count(j + 1) + 1`).
+
+### Other checks run
+
+`cargo test --release -p rcfd-linalg` (all binaries, `run_linalg_all.log`) and `cargo test --release -p rcfd-fem` (160 binaries,
+726 tests, `run_fem_all.log`): all pass, 0 failed; `sa_sparse_bits.rs` (B1 to B6 of ADR 0447) among them.
+`cargo test -p rcfd-api --release --test baseline_hashes`: 3 passed, 1 ignored (`run_baseline.log`).
+`cargo test -p rcfd-cli --release --test docs_site`: 2 passed. `cargo fmt -p rcfd-linalg --check`, `cargo fmt -p rcfd-fem
+--check`: clean. `cargo clippy --release -p rcfd-linalg -p rcfd-fem --all-targets -- -D warnings`: clean. Shared solver files
+changed: `crates/rcfd-fem/src/solve.rs` (the new variant, `DirectFactor`, the `factor` field, the four direct arms and
+`supernodal_direct`) and `crates/rcfd-fem/src/mpc.rs` (one refusal, one field of the report literal).
+
+### Not run
+
+Nothing registered was left out. The modal, buckling and harmonic solves do not use the supernodal factor (a limit of the
+registration, not a check).
+
+### Decision by the registered rule
+
+**Partial**: every check met its limit on its registered run (H1 included) and every negative control held, but mutation M11
+survived (equivalent, diagnosed above). Every clause of the acceptance was met.
+
+### Remaining questions
+
+1. M11. Options: (a) accept it as equivalent and the item as done; (b) a follow-up registration with a mutation that changes
+   values (for example dropping the count condition as well). Recommendation: (a); the maintainer decides.
+2. Case-file key (open question 1 of the registration). Recommendation: `solver.method = "sparse_nd"` selecting
+   `SupernodalDirect`, after the maintainer approves the schema golden change.
+3. Default above a size (open question 2): changes default results; not taken, open.
+4. The supernodal factor in the modal, buckling and harmonic solves and on the transformation path. Recommendation: a
+   follow-up item (below); the heavy cube shows it is about 1.5 times slower than the envelope on 4 752 unknowns but the only
+   direct factor that fits at 3e5.
+
+### For the lead: roadmap entries
+
+Proposed status of F-529: **partial** (done if the maintainer accepts M11 as equivalent).
+
+> Structural solver, advanced tier. Follow-up of F-431 (ADR 0447). ADR 0503, 2026-11-14: rcfd_linalg::sparse_chol::nested_dissection_order (level structures from a pseudo-peripheral vertex, the level of least |S| / (|below| |above|) as the separator, minimum-degree leaves of at most 16) and nested_dissection_order_with_points (the median plane of the longest axis, the smaller one-sided boundary as the separator), SparseOrdering::NestedDissection, and SupernodalLdlt (fundamental supernodes, multifrontal extend-add, partial factorisation in panels of 32 with the later-column update split over the rayon pool in a fixed summation order); rcfd_fem::solve::StaticSolver::SupernodalDirect ("sparse-ldlt-supernodal", nested dissection by the node coordinates, refused on the transformation path and with refinement) and SolveReport::factor (DirectFactor, returned by the function that built the factor). 7-point 30^3: nnz(L) 3 360 870 against minimum degree's 5 659 458 (0.594, limit 0.6), relative residual 1.2e-15 (limit 1e-12). Clamped Hex8 cube of 304 842 unknowns: solved in 81 s with relative residual 2.2e-12 (limit 1e-10) at a peak working set of 5.04 GB (limit 8 GB), nnz(L) 421 295 142 (3.37 GB; minimum degree needed 848 257 887). A refusal names equation 137 at elimination position 270; the static report names the factor built (supernodal, envelope, minimum degree, none for CG); factor and solution bit-identical for 1 and 8 threads (grid and solid); 17 digests of the default and existing sparse paths equal to base; baseline_hashes and every rcfd-linalg and rcfd-fem test pass. Partial by the registered rule only because mutation M11 (the single-child condition of the supernode test dropped) survived; diagnosed as equivalent (the merged supernode stores no extra entry and the extend-add never reaches the merged column). Done is the maintainer's call.
+
+Follow-up item, title "Supernodal L D L^T in the modal, buckling and harmonic solves and on the transformation path", deps
+F-529, acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. The supernodal factor after nested dissection is selectable in the subspace and buckling eigensolvers, the direct harmonic solve and the transformation path: on the clamped Hex8 cube of 4 752 unknowns the modal frequencies and buckling factors agree with the envelope's within 1e-9 and the harmonic response within 1e-8; a model with a rigid set solved on the transformation path equals the envelope solve within 1e-10; a modal analysis of a clamped cube of about 1e5 unknowns completes with time and memory recorded; results bit-identical for 1 and 8 threads; the default solver's results keep their bits.
