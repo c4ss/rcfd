@@ -234,3 +234,19 @@ amendment made after its run. **todo**: the module does not build or the piston 
 - Faces of 3 and 4 nodes only; the quadratic faces of Tri6 and Quad8 are refused (not interpolated with their own functions).
 - Near-field points closer than the subdivision resolves (`max_depth`) lose accuracy; points on the plane are refused.
 - The references are closed forms derived here; no measured radiation data.
+
+## Amendment 1 (2026-11-14, written after the registered run of commit 0ed86258 and before any corrected run)
+
+The registered run (`cargo test --release -p rcfd-post --test sa_solid_acoustic -- --test-threads=1`, log
+`f418-scratch/run_checks.log`) met every limit, but test `e1_e4_equivalent_radiated_power` failed on the ulp-probe condition of
+**E1 at `k a = 10`**: E1 itself 3.73e-14 (limit 1e-12, met), the one-ulp change 1.332e-15, so the limit is 751 times the change,
+not the registered 1e3. Diagnosis: the registration expected a one-ulp change of 2.2e-16 to 4.4e-16 (relative condition 1 or 2),
+but at `k a = 10` the ERP is a sequential sum of 14400 rounded terms; moving a rim node by one ulp reshuffles the rounding of that
+sum, and the change measured is that rounding noise (about 6 ulp), not the condition of the formula. The same noise explains E1
+at 3.7e-14 against the numpy estimate 4.4e-16 (pairwise against sequential summation). This is a miss of E1 as registered (the
+probe is part of the check): the test stays as `e1_e4_equivalent_radiated_power_known_miss` (ignored, limits and probe rule
+intact, the numbers in its reason). Nothing is re-tuned: no corrected E1 at `k a = 10` is introduced.
+
+So that the checks that were met stay in the default suite, a copy `e1_e4_after_amendment_1` runs the same set-ups with the same
+limits and the same probe rule for E1 at `k a = 2`, E2, E3 and E4, and prints (does not assert) the probe of E1 at `k a = 10`.
+Per the decision rule F-418 cannot be **done**.
