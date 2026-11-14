@@ -2032,6 +2032,7 @@ fn x1_modules_and_pending_after_f415_f420_f422_f416_f417_f432() {
 
 // X1 after ADR 0479 (F-423): nl_transient has landed as well.
 #[test]
+#[ignore = "record: ADR 0485 (F-410) landed mat_visco (PENDING None), retiring its row; continued in x1_modules_and_pending_after_f415_f420_f422_f416_f417_f432_f423_after_f410 (ADR 0291 pattern, maintainer standing decision)"]
 fn x1_modules_and_pending_after_f415_f420_f422_f416_f417_f432_f423() {
     use rcfd_fem as f;
     let fem: [(&str, Option<&str>, &str); 24] = [
@@ -2279,6 +2280,7 @@ fn landed_f409(name: &str) -> bool {
 
 // M1 to M4 after ADR 0475 (F-422): J2 has landed as well (ADR 0475 D1, D2).
 #[test]
+#[ignore = "record of ADR 0475: ADR 0485 (F-410) landed Viscoelastic (pending None, the Prony update of ADR 0485 D1), retiring its M1, M3 and M4 rows; continued in m1_to_m4_after_f410 (ADR 0291 pattern, maintainer standing decision)"]
 fn m1_to_m4_after_f422() {
     let mut c = Checks::new();
     // M1.
@@ -2492,6 +2494,302 @@ fn m1_to_m4_after_f422() {
             rcfd_fem::mat_j2::FOLLOW_UP,
         ) && st.as_ref().is_ok_and(|(s, _)| bits(s) == bits(&want)),
         &format!("{:?} / {:?}", em.as_ref().err(), st.as_ref().err()),
+    );
+    c.finish();
+}
+
+// X1 after ADR 0485 (F-410): mat_visco has landed as well.
+#[test]
+fn x1_modules_and_pending_after_f415_f420_f422_f416_f417_f432_f423_after_f410() {
+    use rcfd_fem as f;
+    let fem: [(&str, Option<&str>, &str); 24] = [
+        ("mat_ortho", f::mat_ortho::PENDING, "landed"),
+        ("mat_table", f::mat_table::PENDING, "landed"),
+        ("mat_visco", f::mat_visco::PENDING, "landed"),
+        ("mat_creep", f::mat_creep::PENDING, "ADR 0314 (F-411)"),
+        ("harmonic_direct", f::harmonic_direct::PENDING, "landed"),
+        ("fatigue", f::fatigue::PENDING, "landed"),
+        ("damped", f::damped::PENDING, "landed"),
+        ("gyro", f::gyro::PENDING, "landed"),
+        ("rotor", f::rotor::PENDING, "landed"),
+        ("random", f::random::PENDING, "landed"),
+        ("shell3", f::shell3::PENDING, "landed"),
+        ("geometric_struct", f::geometric_struct::PENDING, "landed"),
+        ("mat_j2", f::mat_j2::PENDING, "landed"),
+        ("nl_transient", f::nl_transient::PENDING, "landed"),
+        ("follower", f::follower::PENDING, "ADR 0327 (F-424)"),
+        ("arclength", f::arclength::PENDING, "ADR 0327 (F-424)"),
+        ("mat_hyper", f::mat_hyper::PENDING, "ADR 0328 (F-425)"),
+        ("nonlinear_md", f::nonlinear_md::PENDING, "ADR 0328 (F-425)"),
+        ("tie", f::tie::PENDING, "landed"),
+        ("contact", f::contact::PENDING, "ADR 0330 (F-427)"),
+        ("laminate", f::laminate::PENDING, "ADR 0331 (F-428)"),
+        ("fracture", f::fracture::PENDING, "ADR 0332 (F-429)"),
+        ("cms", f::cms::PENDING, "landed"),
+        ("estimate", f::estimate::PENDING, "landed"),
+    ];
+    let linalg: [(&str, Option<&str>, &str); 3] = [
+        ("cskyline", rcfd_linalg::cskyline::PENDING, "landed"),
+        ("eigen_general", rcfd_linalg::eigen_general::PENDING, "landed"),
+        ("sparse_chol", rcfd_linalg::sparse_chol::PENDING, "landed"),
+    ];
+    let mut c = Checks::new();
+    for (name, got, expect) in fem.iter().chain(&linalg) {
+        // ADR 0448, ADR 0447, ADR 0450, ADR 0449, ADR 0452, ADR 0456, ADR 0469, ADR 0472, ADR 0473, ADR 0475, ADR 0476, ADR 0477, ADR 0478, ADR 0479, ADR 0485: a landed module has PENDING None
+        let want = if *expect == "landed" { None } else { Some(*expect) };
+        c.holds(&format!("X1 {name}"), *got == want, &format!("{got:?}"));
+    }
+    let _ = rcfd_linalg::complex::C64::ONE;
+    c.finish();
+}
+
+// M1 to M4 after ADR 0485 (F-410): Viscoelastic has landed as well (ADR 0485 D1, D2).
+#[test]
+fn m1_to_m4_after_f410() {
+    let mut c = Checks::new();
+    // M1.
+    for (m, name, package) in pending_variants() {
+        // ADR 0452: Orthotropic and Tabulated have landed.
+        // ADR 0485: Viscoelastic has landed.
+        let want = if landed_f409(name) || name == "J2" || name == "Viscoelastic" {
+            None
+        } else {
+            Some(package)
+        };
+        c.holds(
+            &format!("M1 {name}"),
+            m.name() == name && m.pending() == want,
+            &format!("{} {:?}", m.name(), m.pending()),
+        );
+    }
+    c.holds(
+        "M1 IsotropicElastic",
+        iso().name() == "IsotropicElastic" && iso().pending().is_none(),
+        "",
+    );
+    // M2: refused data.
+    let r3 = rot([1.0, 2.0, 3.0], 0.3);
+    let mut scaled = r3;
+    scaled[0][0] *= 1.001;
+    let mut left = r3;
+    left[2] = [-left[2][0], -left[2][1], -left[2][2]];
+    let fixed = || MaterialAxes::fixed(r3).unwrap();
+    let refused: Vec<(&str, bool)> = vec![
+        (
+            "orthotropic E_2 = 0",
+            Material::orthotropic([1e11, 0.0, 1e10], [0.3; 3], [5e9; 3], 1600.0, [0.0; 3], fixed()).is_err(),
+        ),
+        (
+            "orthotropic nu NaN",
+            Material::orthotropic(
+                [1e11, 1e10, 1e10],
+                [0.3, f64::NAN, 0.3],
+                [5e9; 3],
+                1600.0,
+                [0.0; 3],
+                fixed(),
+            )
+            .is_err(),
+        ),
+        ("axes scaled", MaterialAxes::fixed(scaled).is_err()),
+        ("axes left-handed", MaterialAxes::fixed(left).is_err()),
+        (
+            "cylindrical zero axis",
+            MaterialAxes::cylindrical([0.0; 3], [0.0; 3]).is_err(),
+        ),
+        ("per-element empty", MaterialAxes::per_element(Vec::new()).is_err()),
+        (
+            "tabulated one temperature",
+            Material::tabulated(iso(), vec![293.0], vec![("e".into(), vec![2e11])]).is_err(),
+        ),
+        (
+            "tabulated decreasing",
+            Material::tabulated(iso(), vec![373.0, 293.0], vec![("e".into(), vec![2e11, 1.9e11])]).is_err(),
+        ),
+        (
+            "tabulated short column",
+            Material::tabulated(iso(), vec![293.0, 373.0], vec![("e".into(), vec![2e11])]).is_err(),
+        ),
+        (
+            "tabulated J2 base",
+            Material::tabulated(
+                Material::j2(iso(), 2.5e8, 0.0, 0.0).unwrap(),
+                vec![293.0, 373.0],
+                vec![("e".into(), vec![2e11, 1.9e11])],
+            )
+            .is_err(),
+        ),
+        (
+            "Prony weights sum 1.5",
+            Material::viscoelastic(
+                iso(),
+                vec![
+                    PronyTerm::new(0.8, 0.0, 1.0).unwrap(),
+                    PronyTerm::new(0.7, 0.0, 2.0).unwrap(),
+                ],
+                None,
+            )
+            .is_err(),
+        ),
+        ("Prony tau 0", PronyTerm::new(0.1, 0.1, 0.0).is_err()),
+        ("creep n = 0", Material::creep(iso(), 1e-30, 0.0, 0.0).is_err()),
+        ("creep m = -1", Material::creep(iso(), 1e-30, 4.0, -1.0).is_err()),
+        ("J2 orthotropic base", Material::j2(ortho(), 2.5e8, 0.0, 0.0).is_err()),
+        ("J2 yield 0", Material::j2(iso(), 0.0, 0.0, 0.0).is_err()),
+        ("J2 kinematic -1", Material::j2(iso(), 2.5e8, 0.0, -1.0).is_err()),
+        (
+            "neo-Hookean kappa 0",
+            HyperelasticEnergy::neo_hookean(1e6, 0.0).is_err(),
+        ),
+        (
+            "Mooney-Rivlin c10 = c01 = 0",
+            HyperelasticEnergy::mooney_rivlin(0.0, 0.0, 1e9).is_err(),
+        ),
+        ("ply thickness 0", Ply::new(iso(), 0.0, 0.0).is_err()),
+        ("empty layup", BlockProperty::layup(Vec::new()).is_err()),
+    ];
+    for (name, ok) in refused {
+        c.holds(&format!("M2 {name} refused"), ok, "");
+    }
+    // M3: state sizes and the layout.
+    let sizes: Vec<(String, usize, usize)> = std::iter::once(("IsotropicElastic".to_string(), iso().state_size(), 0))
+        .chain(pending_variants().into_iter().map(|(m, name, _)| {
+            let expect = match name {
+                // ADR 0485 D1: the strain of the last step and the internal stress of each of the three terms.
+                "Viscoelastic" => 24,
+                "Creep" => 7,
+                "J2" => 13,
+                _ => 0,
+            };
+            (name.to_string(), m.state_size(), expect)
+        }))
+        .collect();
+    for (name, got, expect) in sizes {
+        c.holds(
+            &format!("M3 state size {name}"),
+            got == expect,
+            &format!("{got} (registered {expect})"),
+        );
+    }
+    let cm = cantilever_with(iso());
+    let pm = {
+        let mesh = upgrade_to_tet10(&tet_box([0.1, -0.2, 0.3], [1.2, 1.0, 0.8], [2, 2, 2]).unwrap())
+            .unwrap()
+            .0;
+        let mut m = SolidModel::new(mesh);
+        m.add_material("all", iso()).unwrap();
+        m
+    };
+    for (name, model, points) in [("C", &cm, 8), ("P-Tet10", &pm, 4)] {
+        let layout = StateLayout::of(model).unwrap();
+        let n = model.mesh().n_elements();
+        let ok = (0..n).all(|e| layout.points(e) == points && layout.values_per_point(e) == 0)
+            && layout.total() == 0
+            && layout.empty_states() == initial_states(model).unwrap();
+        c.holds(&format!("M3 layout {name}"), ok, &format!("{n} elements"));
+    }
+    // M4: the constitutive call of each pending variant.
+    for (m, name, package) in pending_variants()
+        .into_iter()
+        .filter(|(_, n, _)| !landed_f409(n) && *n != "J2" && *n != "Viscoelastic")
+    {
+        let r1 = m.elasticity_matrix();
+        let state = vec![0.0; m.state_size()];
+        let r2 = m.stress(&[1e-4; 6], &PointContext::default(), &state);
+        c.holds(
+            &format!("M4 {name}"),
+            not_yet(&r1, "material", name, "the constitutive call", package)
+                && not_yet(&r2, "material", name, "the constitutive call", package),
+            &format!("{:?} / {:?}", r1.err(), r2.err()),
+        );
+    }
+    // M4 for the variants of ADR 0452 (D9 of its registration).
+    let eps = [1e-4; 6];
+    let o = ortho();
+    let r = rot([0.0, 0.0, 1.0], 0.5);
+    let d = rcfd_fem::mat_ortho::rotate_elasticity(
+        &rcfd_fem::mat_ortho::material_elasticity([1.4e11, 1.0e10, 1.0e10], [0.3, 0.3, 0.45], [5.0e9, 5.0e9, 3.5e9]),
+        &r,
+    );
+    let em = o.elasticity_matrix();
+    let st = o.stress(&eps, &PointContext::default(), &[]);
+    let want = rcfd_fem::material::apply(&d, &eps);
+    c.holds(
+        "M4 Orthotropic (Fixed axes)",
+        em.as_ref().is_ok_and(|m| bits(&m.concat()) == bits(&d.concat()))
+            && st.as_ref().is_ok_and(|(s, _)| bits(s) == bits(&want)),
+        &format!("{:?} / {:?}", em.as_ref().err(), st.as_ref().err()),
+    );
+    let t = Material::tabulated(iso(), vec![293.0, 373.0], vec![("e".to_string(), vec![2.0e11, 1.9e11])]).unwrap();
+    let em = t.elasticity_matrix();
+    let st0 = t.stress(&eps, &PointContext::default(), &[]);
+    let st1 = t.stress(&eps, &PointContext::default().with_temperature(300.0).unwrap(), &[]);
+    let e300 = 2.0e11 + (1.9e11 - 2.0e11) * ((300.0 - 293.0) / (373.0 - 293.0));
+    let d300 = isotropic_elasticity(e300, iso().poisson_ratio());
+    c.holds(
+        "M4 Tabulated",
+        not_yet(
+            &em,
+            "material",
+            "Tabulated",
+            "the element-constant elasticity matrix",
+            rcfd_fem::mat_ortho::FOLLOW_UP,
+        ) && matches!(&st0, Err(FemError::InvalidValue { key: "temperature", .. }))
+            && st1
+                .as_ref()
+                .is_ok_and(|(_, m)| bits(&m.concat()) == bits(&d300.concat())),
+        &format!(
+            "{:?} / {:?} / {:?}",
+            em.as_ref().err(),
+            st0.as_ref().err(),
+            st1.as_ref().err()
+        ),
+    );
+    // M4 for J2 (ADR 0475 D2): no element-constant matrix; the return map in the elastic range gives the base's bits.
+    let j = Material::j2(iso(), 2.5e8, 1e9, 5e8).unwrap();
+    let em = j.elasticity_matrix();
+    let st = j.stress(&eps, &PointContext::default(), &[0.0; 13]);
+    let want = rcfd_fem::material::apply(&iso().elasticity_matrix().unwrap(), &eps);
+    c.holds(
+        "M4 J2",
+        not_yet(
+            &em,
+            "material",
+            "J2",
+            "the element-constant elasticity matrix",
+            rcfd_fem::mat_j2::FOLLOW_UP,
+        ) && st.as_ref().is_ok_and(|(s, _)| bits(s) == bits(&want)),
+        &format!("{:?} / {:?}", em.as_ref().err(), st.as_ref().err()),
+    );
+    // M4 for Viscoelastic (ADR 0485 D2): no element-constant matrix; the scaffold's material has a WLF shift, so the call
+    // needs a temperature; at the reference temperature without a time increment it answers.
+    let (v, _, _) = pending_variants()
+        .into_iter()
+        .find(|(_, n, _)| *n == "Viscoelastic")
+        .expect("the viscoelastic variant");
+    let em = v.elasticity_matrix();
+    let st0 = v.stress(&eps, &PointContext::default(), &[0.0; 24]);
+    let st1 = v.stress(
+        &eps,
+        &PointContext::default().with_temperature(300.0).unwrap(),
+        &[0.0; 24],
+    );
+    c.holds(
+        "M4 Viscoelastic",
+        not_yet(
+            &em,
+            "material",
+            "Viscoelastic",
+            "the element-constant elasticity matrix",
+            rcfd_fem::mat_visco::FOLLOW_UP,
+        ) && matches!(&st0, Err(FemError::InvalidValue { key: "temperature", .. }))
+            && st1.is_ok(),
+        &format!(
+            "{:?} / {:?} / {:?}",
+            em.as_ref().err(),
+            st0.as_ref().err(),
+            st1.as_ref().err()
+        ),
     );
     c.finish();
 }
