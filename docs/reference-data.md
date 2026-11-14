@@ -1903,3 +1903,18 @@ integrated in plain Python (`f424-scratch/ring_ode.py`) and a probe of the solid
 | Two-bar truss of Green-Lagrange bars with SVK stress, exact at any depth: `P = E A (h - w)(2 h w - w^2)/L0^3`, limit points `w = h (1 -+ 1/sqrt 3)`, `P_max = 2 E A h^3/(3 sqrt 3 L0^3)` | derived | ADR 0480 arithmetic 4; M. A. Crisfield, Non-linear Finite Element Analysis of Solids and Structures, vol. 1, Wiley 1991, chapter 1: NOT read, from memory |
 | Bipyramidal Tet4 bar: the homogeneous state is an exact FE equilibrium with effective area `A = s^2/3`; probe residuals `2.1e-12 .. 7.2e-12 P_max` at `w/h = 0.05, 0.4226, 1, 1.5, 2.2` | derived, computed | ADR 0480 arithmetic 5; `f424-scratch/zz_probe_f424.rs`, `probe.log` |
 | Spherical arc-length constraint `|Du|^2 + c Dlambda^2 = Ds^2`, the quadratic for the load-factor correction, the root closer in angle to the previous increment | cited | M. A. Crisfield, "A fast incremental/iterative solution procedure that handles snap-through", Comput. Struct. 13 (1981) 55; E. Riks, "An incremental approach to the solution of snapping and buckling problems", Int. J. Solids Struct. 15 (1979) 529: NOT read, from memory (ADR 0480 D4) |
+
+## F-556 the Shell3 rest stiffness of the twisted strip against Hex20 (ADR 0483)
+
+No source was read for F-556; the papers below are cited from memory for the names. The torsion of a pretwisted strip is
+derived in ADR 0483 (arithmetic 2); the reference of every comparison is the Hex20 strip of ADR 0473 run by the existing
+solver, and the base numbers come from the F-420 run log.
+
+| Item | Status | Source |
+|---|---|---|
+| Torsional stiffness of a pretwisted thin strip `G c t^3/3 + E t c^5 theta'^2/180` (the fibre strain `theta' phi' s^2`, free mean) | derived | ADR 0483 arithmetic 2; A. Rosen, "Structural and dynamic behavior of pretwisted rods and beams", Appl. Mech. Rev. 44 (1991) 483: NOT read, from memory |
+| The base rest frequencies of the third track: Hex20 442.797470 Hz, Shell4 445.161813 Hz, Shell3 460.730207 Hz | computed | ADR 0473 E1/E2 run log (`f420-scratch/run_e1.txt`); reproduced to 8.3e-10 (C1) |
+| Constant-strain triangle: parasitic in-plane shear when the strain varies across the element (in-plane bending) | cited | C. A. Felippa, "A study of optimal membrane triangles with drilling freedoms", Comput. Methods Appl. Mech. Engrg. 192 (2003) 2125: NOT read, from memory (as F-539) |
+| ANDES optimal membrane triangle, Allman's triangle | cited | Felippa 2003, op. cit.; D. J. Allman, Comput. Struct. 19 (1984) 1: NOT read, from memory (implemented by ADR 0466) |
+| MITC3 transverse shear, the stabilisation `t^2/(t^2 + alpha h^2)` | cited | P. S. Lee and K. J. Bathe, Comput. Struct. 82 (2004) 945; M. Lyly, R. Stenberg and T. Vihinen, Comput. Mech. 13 (1993) 92: NOT read, from memory (implemented by ADR 0454) |
+| Measured: the CST membrane-energy excess `e_m = 9.16e-2` at 12 x 36 on the coupled torsion field, `O(h^2)` (ratios 0.257, 0.264 per halving); the ANDES Shell3 within 3.3e-4 of Hex20 at rest and 2.98e-3 over the Campbell table | computed | ADR 0483 addenda 1 and 2 |
