@@ -145,3 +145,64 @@ the bits of run 1, they are not re-run to pick a result). MU5 is expected to be 
 The decision rule is unchanged, with LC-f5, LC-f20 and NC2 in place of LC-u5, LC-u20 and LC-e20; because the three
 displacement/creep-strain checks missed, the best status reachable is **partial** unless the lead rules the amendment a
 set-up correction only: it is reported as partial either way.
+
+## Addendum 1: results (2026-11-14)
+
+Run 2, test `f597_c4_prime_and_the_force_witness_control` (single registered run, 33 s in release; C1' to C4', SC repeat the
+bits of run 1):
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| C1' | `<= 1e-2` | `5.41e-3` | met |
+| C2' | `<= 2e-2` | `9.48e-3` | met |
+| C3' | `<= 2e-2` | `9.58e-3` | met |
+| C4' | `<= 2e-3` | `1.063e-4` | met |
+| SC | `<= 2e-3` | `9.65e-4` | met |
+| NC1 (run 1) | `<= 1e-2` | `3.8e-5` | met |
+| NC2 | `<= 1e-2` | `7.60e-3` | met (margin only 1.3) |
+| LC-f5 | `>= 1e-2` | `3.35e-2` | met |
+| LC-f20 | `>= 3e-2` | `1.268e-1` | met |
+| LC-u5, LC-u20, LC-e20 (run 1) | `>= 3e-2`, `3e-2`, `5e-2` | `1.13e-3`, `4.14e-3`, `4.16e-3` | **missed** (ignored record) |
+
+Both clauses of the acceptance are met by the corrected tests: C4 re-registered at `p/10` (alternative B), and a locking
+control that solves with Full and sees the difference from a BBar solve. Nothing in the library was changed (no default bit
+can differ), no case-file key, no golden.
+
+Mutations (scratch copy `w49i-work/f597-scratch/copy`, own target dir), run once each on `f597_c4_prime_and_the_force_witness_control`:
+
+| Id | Result | Caught by |
+|---|---|---|
+| MU5 (`is_fbar` returns false, so the driver solves a BBar block with Full) | C1' to C4' met (`5.4e-3`, `9.9e-3`, `1.13e-2`, `1.4e-3`), LC-f5 and LC-f20 `0` | LC-f5, LC-f20: caught; C2' and C4' do not catch, as ADR 0506 found |
+| MU-R (the `BBar` arm of `evaluate_formulation`, used by the recovery, evaluates Full) | C1' `1.26e-2`, C2' `0.103`, C3' `0.363`, C4' `0.259` | C1' to C4' caught; LC-f unchanged (its force does not use that arm) |
+
+Note MU5 as planned in the table above was first applied to the `evaluate_formulation` arm, which is the recovery path only;
+that run is MU-R. The solve dispatch is `is_fbar` (nonlinear.rs 609 to 611); MU5 was re-run on it. Both are reported.
+
+### Deviations
+
+- Run 1's displacement and creep-strain witnesses missed (diagnosis in amendment 1: the locking is a pressure oscillation, the
+  displacement of the Full solve differs from the BBar solve by only `1e-3` to `4e-3`). The corrected witness was registered
+  before its run. The miss is recorded as an ignored test with the limits intact.
+- NC2 passes with a margin of only 1.3; it was an estimate by analogy (`4e-5` at the displacement level), and the force
+  difference at `t = 0` is `7.6e-3` because the Full element's volumetric stress differs slightly even for `nu = 0.3`.
+- The `LC-f` limits were unprobed estimates; they were met with margins 3.4 and 4.2.
+
+### Decision (by the rule)
+
+**partial.** Every check of the corrected set is met and MU5 is caught, but three registered limits of run 1 (LC-u5, LC-u20,
+LC-e20) were missed and are recorded, and the rule says a missed limit means partial. If the lead reads amendment 1 as a
+set-up correction (the witness was defective, not the element), `done` is defensible; I report partial.
+
+### Open questions
+
+1. Status partial or done (see Decision). Recommendation: done is defensible but partial is what the rules prescribe; take partial and
+   close F-597 as done through a roadmap note that cites the amendment.
+2. A finite-strain reference for C4 at `p` (alternative A) is not provided; C4 at `p` stays a known miss of ADR 0506.
+   Recommendation: leave it, the drift is understood and bounded at `p/10`; a large-strain closed form for a compressible
+   elastic-creep cylinder is not available.
+
+## For the lead: roadmap entries
+
+> F-597 (partial, ADR 0528, 2026-11-14): C4 of ADR 0506 re-registered at p/10 (alternative B): the BBar creep cylinder at p/10 gives C1' 5.4e-3, C2' 9.5e-3, C3' 9.6e-3 (limits 1e-2, 2e-2, 2e-2) and the growth C4' 1.06e-4 against the unchanged bound 2e-3, largest creep strain 9.7e-4. Locking control that solves with Full and recovers with the BBar-solved field: the Full element's force at the BBar solution differs from the BBar force by 3.4e-2 at 5 t* and 0.127 at 20 t* (limits 1e-2, 3e-2), zero when the solve itself is Full (mutation MU5 caught by it; C2 does not see it, the stress of a Full solve recovered with BBar is within 1.1e-2 of the stationary field). The displacement and creep-strain witnesses of run 1 missed (1.1e-3 to 4.2e-3 against 3e-2 and 5e-2) because the locking is a pressure oscillation: ignored record f597_run1_known_miss_displacement_and_creep_strain_witnesses. Test only, defaults untouched. No finite-strain reference; C4 at p stays the known miss of ADR 0506.
+
+> F-587 (note): the growth bound C4 is met at p/10 (1.06e-4 against 2e-3) by ADR 0528, 2026-11-14; at p it stays missed.
