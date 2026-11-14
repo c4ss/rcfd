@@ -11541,7 +11541,8 @@ fixed by the item's registration ADR before any code.
     where Full gives 0.36). Incompatible stays refused in the nonlinear driver. The registered growth bound C4 (2e-3
     between 5 t* and 20 t*) is missed at 6.0e-3, diagnosed as the total Lagrangian finite-strain drift of the bore
     against the small-strain closed form (1.1e-4 at p/10). Defaults bit-identical (11 digests). Follow-ups F-596, F-597.
-    Open (maintainer): the block property formulation = "bbar" as a case-file key covering the nonlinear paths.
+    Open (maintainer): the block property formulation = "bbar" as a case-file key covering the nonlinear paths. F-587
+    (note): the growth bound C4 is met at p/10 (1.06e-4 against 2e-3) by ADR 0528, 2026-11-14; at p it stays missed.
 - [~] **F-588** The Hex8 formulations on the remaining linear paths (temperature load, per-point materials, geometric stiffness, damped and direct harmonic solves, patch recovery)
   - depends on: F-390
   - acceptance: Every limit not stated here is registered in the ADR before the run. The refusals of ADR 0493 D5 lifted
@@ -11718,7 +11719,15 @@ fixed by the item's registration ADR before any code.
     that allows for finite strain, or C4 re-registered at a p/E small enough that the total Lagrangian drift stays below
     the bound (the diagnostic gives 1.1e-4 at p/10); and a locking control on the creep cylinder that solves with Full
     and recovers with BBar, the combination the mutation MU5 showed C2 does not see.
-  - note: Structural solver, advanced tier. PARTIAL (ADR 0528, 2026-11-14): C4 of ADR 0506 re-registered at p/10: the BBar creep cylinder gives C1' 5.4e-3, C2' 9.5e-3, C3' 9.6e-3 and the growth C4' 1.06e-4 against the unchanged bound 2e-3 (largest creep strain 9.7e-4). Locking control that solves with Full: the Full element's force at the BBar solution differs from the BBar force by 3.4e-2 at 5 t* and 0.127 at 20 t* (limits 1e-2, 3e-2), zero when the solve itself is Full (mutation MU5 caught by it; C2 does not see it). The displacement and creep-strain witnesses of run 1 missed (1.1e-3 to 4.2e-3 against 3e-2 and 5e-2): the locking is a pressure oscillation, ignored record f597_run1_known_miss_displacement_and_creep_strain_witnesses. Test only, defaults untouched. No finite-strain reference; C4 at p stays the known miss of ADR 0506. Follow-up of F-587 (ADR 0506, 2026-11-14).
+  - note: F-597 (partial, ADR 0528, 2026-11-14): C4 of ADR 0506 re-registered at p/10 (alternative B): the BBar creep
+    cylinder at p/10 gives C1' 5.4e-3, C2' 9.5e-3, C3' 9.6e-3 (limits 1e-2, 2e-2, 2e-2) and the growth C4' 1.06e-4
+    against the unchanged bound 2e-3, largest creep strain 9.7e-4. Locking control that solves with Full and recovers
+    with the BBar-solved field: the Full element's force at the BBar solution differs from the BBar force by 3.4e-2 at 5
+    t* and 0.127 at 20 t* (limits 1e-2, 3e-2), zero when the solve itself is Full (mutation MU5 caught by it; C2 does
+    not see it, the stress of a Full solve recovered with BBar is within 1.1e-2 of the stationary field). The
+    displacement and creep-strain witnesses of run 1 missed (1.1e-3 to 4.2e-3 against 3e-2 and 5e-2) because the locking
+    is a pressure oscillation: ignored record f597_run1_known_miss_displacement_and_creep_strain_witnesses. Test only,
+    defaults untouched. No finite-strain reference; C4 at p stays the known miss of ADR 0506.
 - [ ] **F-598** Warping degree of freedom for Beam2 (14-DOF element) and the I-section lateral-torsional buckling
   - depends on: F-558
   - acceptance: Every limit not stated here is registered in the ADR before the run. A warping degree of freedom for
@@ -11864,14 +11873,13 @@ fixed by the item's registration ADR before any code.
     B of ADR 0520 RV1 with residual vectors and a ground dashpot converges every physical root within the default 50
     iterations, with the same physical roots as the iteration without that restriction within 1e-12 relative. Models
     without the option keep their bits.
-  - note: Structural solver, advanced tier. Follow-up of F-586 (ADR 0520, 2026-11-14). DONE. ADR 0529, 2026-11-14:
-    OwnFrequency::skip_pseudo(true) (opt-in, default off; OwnFrequencyRoot::skipped) leaves the roots flagged pseudo
-    in the frozen solve (ADR 0467) at the reference frequency, reported as the frozen solve gave them with 0
-    iterations, and says so in the notes. Rod B of ADR 0520 RV1 (residual vectors, ground dashpot, 3 roots) converges
-    its two physical roots in 7 and 6 iterations within the default 50, and they equal the roots of the unrestricted
-    iteration (max_iterations 1000, where the pseudo-mode takes 170) bit for bit (limit 1e-12). Without the option the
-    bits are unchanged (6 digests recorded on the base before the code, baseline hashes unchanged); 8 of 8 mutations
-    caught. No case-file key.
+  - note: Status for F-609: done (ADR 0529, 2026-11-14). OwnFrequency::skip_pseudo(true) (opt-in, default off;
+    OwnFrequencyRoot::skipped) leaves the roots flagged pseudo in the frozen solve (ADR 0467) at the reference
+    frequency, reports them as the frozen solve gave them, with 0 iterations, and says so in the notes. Rod B of ADR
+    0520 RV1 (residual vectors, ground dashpot, 3 roots) converges its two physical roots in 7 and 6 iterations within
+    the default 50, and they equal the roots of the unrestricted iteration (max_iterations 1000, where the pseudo-mode
+    takes 170) bit for bit (limit 1e-12). Without the option the bits are unchanged (6 digests recorded on the base
+    before the code, baseline hashes unchanged); 8 of 8 mutations caught. No case-file key.
 - [ ] **F-610** Hinged cylindrical roof limit load against a published reference
   - depends on: F-585
   - acceptance: Every limit not stated here is registered in the ADR before the run. The tabulated limit load of the
