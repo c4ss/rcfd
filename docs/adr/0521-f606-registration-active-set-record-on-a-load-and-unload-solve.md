@@ -134,3 +134,63 @@ update. Only S4 is run, at two step counts; the bar U4 with a reversal is not (n
 through a contribution that observes `u`; the call sequence is relied on as in A0. The 16-step run has rounding chatter at
 iteration 0 of the increments that start on the yield surface; it is counted as the definition of ADR 0515 D1 prescribes
 (bitwise), and the 2-step run supplies the decrease between corrections. No case-file key is added.
+
+## Addendum 1: results (2026-11-14)
+
+Commits: registration `752d0e43`; test `3a9108bd` (`crates/rcfd-fem/tests/sa_j2_unload.rs`, 2 tests). No library change: the
+record of ADR 0515 is read as it is, so no default-bits test is needed and `nonlinear.rs` is untouched. The registered run was
+made once, on `3a9108bd`; the mutations on a scratch copy of the same tree (`f606-scratch/mut`, own target dir, script
+`mutate.py`).
+
+| check | limit | measured | met |
+|---|---|---|---|
+| F1 residuals finite | all | all, S4a and S4b | yes |
+| A0 alignment | no halving, calls = iterations + 1, load factors equal | 71 calls for 70 iterations (S4a), 15 for 14 (S4b), no halving, load factors equal | yes |
+| A1 record = independent count | 0 mismatches of 84 | 0 of 70 (S4a), 0 of 14 (S4b); vectors as long as the residuals | yes |
+| A2 record of the flag = independent flag | 0 mismatches | 0 of 70, 0 of 14; `set_changed[0]` false everywhere | yes |
+| A3 alpha-increase set = state-difference set | 0 mismatches | 0, 0 | yes |
+| A4 chained states = result states (bits) | equal | equal, both | yes |
+| A5 not a proxy | last yielded 0, points with `alpha > 0` more than 0 | 0 and 648, both | yes |
+| D1 a smaller count than the one before | S4a: some iteration; S4b: between two corrections | S4a increment 9: `[189, 0, 0, 0, 0]`; S4b increment 2: `[195, 88, 4, 3, 0, 0, 0, 0]` (88 to 4 to 3) | yes |
+| D2 decrease and set change | S4a: increments with decrease, with set change, independent decrease all > 0; S4b: strictly decreasing over 3 iterations | S4a 1, 4, 1; S4b 195, 88, 4, 3, 0 | yes |
+| B1 opt-in on the contribution path | digests equal, iterates equal, vectors empty / filled | `0xa257e66efa0a5269` both; equal; empty / filled | yes |
+
+Independent count and record agree in every iteration; in the 16-step run the only iteration-to-iteration decrease is the
+unloading increment 9 (`189 -> 0`, the 189 being the rounding chatter at the yield surface described in the probe), and in the
+2-step run the decrease is real overshoot: 88 points yield at the first correction of the unloading increment, 4 at the second,
+3 at the third, none at the fourth.
+
+Mutations (scratch copy, each run against `sa_j2_unload.rs` and `sa_j2_order.rs`):
+
+| mutation | caught by |
+|---|---|
+| MR4 trial compared with the previous trial | **caught** by A1 (1 mismatch of 70 in S4a, 4 of 14 in S4b) and A2 (2 of 70, 1 of 14); `sa_j2_order.rs` does not see it (all its checks pass), as ADR 0515 found |
+| MR1 `set_changed` always false | A2 (6 of 70, 7 of 14) and D2 (no increment with a set change); in `sa_j2_order.rs` D1, Q2, Q1 S3, Q3 |
+| MR2 `set_changed` true for `k >= 1` | A2 (48 of 70, 5 of 14); in `sa_j2_order.rs` Q2 and N3 |
+| MR5 count of points with `alpha > 0` | A1 (35 of 70, 8 of 14), A2, A5 (last yielded 648), D1, D2 |
+
+Gates (2026-11-14, release, worktree `f606`): `cargo test -p rcfd-fem --release` all 194 test binaries ok, none failed; `cargo test -p rcfd-api --release --test baseline_hashes` 3 passed (unchanged); `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean; `cargo fmt -p rcfd-fem --check` clean; `cargo test -p rcfd-cli --release --test docs_site` 2 passed.
+
+**Deviations.** (1) The solves S4a and S4b were chosen by the probe before the registration (disclosed). (2) The bar U4 with a
+reversal was not run (no reversal exists there). (3) The decrease of the 16-step run starts from a count that is rounding
+chatter of points at the yield surface; the real overshoot is in the 2-step run.
+
+**Decision by the registered rule: done.** Every check is met, MR4, MR1, MR2 and MR5 are each caught, the gates pass.
+
+### Remaining questions
+
+1. **The chatter at iteration 0.** A point sitting on the yield surface after convergence re-evaluates at the committed
+   displacement with `dg` of rounding size, so the bitwise definition of ADR 0515 D1 counts it as yielded at iteration 0 of the
+   next increment (189 points in increment 9 of S4a, 69 and 130 in increments 7 and 8). Options: (a) keep the definition (the
+   record is of the states; the independent count agrees); (b) a follow-up that defines the set by `dg > 0` above a tolerance.
+   Recommendation: (a); a tolerance would change the record's meaning and no check needs it.
+2. **The bar U4 with a reversal.** Needs a driver contribution or a displacement history; S4 covers the clause. Recommendation:
+   leave it.
+
+## For the lead: roadmap entries
+
+Proposed status of F-606: **done**. Proposed note:
+
+> ADR 0521, 2026-11-14: the opt-in active-set record of the Newton driver (ADR 0515) checked against a count made independently from the states on the load and unload sphere S4 of ADR 0475, with 16 steps and with 2 steps: the iterates are captured by a recording driver contribution, the trial states come from the public `element_trial_state` and the committed states are chained from `initial_states`; the recorded yielded count and the set-changed flag equal the independent ones in every iteration (0 mismatches of 70 and of 14), the chained states equal the result bits, the record is bit-neutral on the contribution path. The count falls within an increment: 189 to 0 at the first unloading increment of the 16-step run (rounding chatter of points on the yield surface), and 195, 88, 4, 3, 0 in the 2-step run (real overshoot of the corrections). The mutation of ADR 0515 MR4 (trial compared with the previous trial) is caught by the equality of the count and of the flag (1 and 2 mismatches of 70, 4 and 1 of 14), as are the flag always false, the flag always true and the count of points with alpha > 0. No library change; no case-file key. The bar U4 with a reversal was not run (it has no reversal); F-560 can be marked done since its uncaught MR4 is caught here.
+
+Proposed note change for F-560: status partial to **done**, appending: "MR4 caught by F-606 (ADR 0521, 2026-11-14)." The lead decides whether the rule of ADR 0515 (every mutation caught) is read as met by this follow-up.
