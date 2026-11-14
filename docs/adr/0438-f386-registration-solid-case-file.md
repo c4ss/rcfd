@@ -467,3 +467,7 @@ Follow-up item (number by the lead): title "Iterative solve of a solid case file
 F-386, F-381. Acceptance:
 
 > Every limit not stated here is registered in the ADR before the run. A solid case file of the F-381 Hex8 cantilever (or of a model whose load is not small against its internal nodal forces, the ratio stated in the registration) run with method = cg and each preconditioner key reaches the relative residual 1e-10 and agrees with the direct file run within 1e-7; the residual floor eps ||K|| ||u|| / ||b|| of that model and of the ADR 0438 Tet10 cantilever is computed and printed; a node-set box whose upper bound equals a node coordinate exactly selects that node.
+
+### Lead note, 2026-11-14
+
+The tests A1 and A7b both ran `cantilever_tet10.toml` into the same output folder, and the test runner runs them in parallel, so A1 could read a `.vtu` that A7b was rewriting (seen as an intermittent A1 failure after the merge of F-408). The helper `out_dir` now writes under a folder per test thread. No check, limit or model changed.

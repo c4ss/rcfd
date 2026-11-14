@@ -77,7 +77,12 @@ fn cases() -> PathBuf {
 }
 
 fn out_dir(tag: &str) -> PathBuf {
-    let d = Path::new(env!("CARGO_TARGET_TMPDIR")).join("sb_solid_case").join(tag);
+    // One folder per test thread: two tests run the same case file in parallel (lead fix, ADR 0438 note).
+    let thread = std::thread::current().name().unwrap_or("main").replace("::", "_");
+    let d = Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join("sb_solid_case")
+        .join(thread)
+        .join(tag);
     std::fs::create_dir_all(&d).unwrap();
     d
 }
