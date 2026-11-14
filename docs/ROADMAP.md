@@ -11844,14 +11844,21 @@ fixed by the item's registration ADR before any code.
     of ADR 0507 converges the punch of T2 with an initial gap of +3e-4 at the four nodes with x > 1.0, and the reading
     Q(10, 1e-12) of ADR 0519 holds on it (limits registered).
   - note: Structural solver, advanced tier. Optional. Follow-up of F-600 (ADR 0519, 2026-11-14).
-- [ ] **F-609** Pseudo-modes in the viscoelastic own-frequency iteration
+- [x] **F-609** Pseudo-modes in the viscoelastic own-frequency iteration
   - depends on: F-586
   - acceptance: Every limit not stated here is registered in the ADR before the run. The own-frequency iteration of the
     damped modes leaves the roots flagged pseudo (ADR 0467) at the reference frequency and says so in the notes; the rod
     B of ADR 0520 RV1 with residual vectors and a ground dashpot converges every physical root within the default 50
     iterations, with the same physical roots as the iteration without that restriction within 1e-12 relative. Models
     without the option keep their bits.
-  - note: Structural solver, advanced tier. Follow-up of F-586 (ADR 0520, 2026-11-14).
+  - note: Structural solver, advanced tier. Follow-up of F-586 (ADR 0520, 2026-11-14). DONE. ADR 0529, 2026-11-14:
+    OwnFrequency::skip_pseudo(true) (opt-in, default off; OwnFrequencyRoot::skipped) leaves the roots flagged pseudo
+    in the frozen solve (ADR 0467) at the reference frequency, reported as the frozen solve gave them with 0
+    iterations, and says so in the notes. Rod B of ADR 0520 RV1 (residual vectors, ground dashpot, 3 roots) converges
+    its two physical roots in 7 and 6 iterations within the default 50, and they equal the roots of the unrestricted
+    iteration (max_iterations 1000, where the pseudo-mode takes 170) bit for bit (limit 1e-12). Without the option the
+    bits are unchanged (6 digests recorded on the base before the code, baseline hashes unchanged); 8 of 8 mutations
+    caught. No case-file key.
 - [ ] **F-610** Hinged cylindrical roof limit load against a published reference
   - depends on: F-585
   - acceptance: Every limit not stated here is registered in the ADR before the run. The tabulated limit load of the
