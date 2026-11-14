@@ -1750,3 +1750,19 @@ by the existing solver paths (`solve_static`, `ModalBasis::all_modes`, `modal_an
 | Fixed-interface reduction `T_cb = [[I, 0], [Psi, Phi]]`, `K_r = diag(K_hat, Lambda)`, `M_r` with `M_hat = M_bb + M_bi Psi + Psi^T M_ib + Psi^T M_ii Psi`, `M_bq = (M_bi + Psi^T M_ii) Phi` | derived | Rayleigh-Ritz projection on `T_cb`, ADR 0469 design; R. R. Craig and M. C. C. Bampton, AIAA J. 6 (1968) 1313: NOT read, from memory |
 | Reduced frequencies bound the full ones from above; nested bases give non-increasing eigenvalues; every fixed-interface mode kept gives every frequency exactly; rigid motions of a free part carried by the constraint modes | derived | min-max principle; congruence by a square nonsingular `T_cb`; `K_q r = 0` gives `r_i = Psi r_b` (ADR 0469 design) |
 | Truncation estimate of the bar (16 x 2 x 2 Hex8, two halves, five modes each): first three frequency errors 2.8e-6, 2.8e-6, 3.4e-4, axial 0.10; harmonic error above 1e-2 from 1894 rad/s, 0.85 at the axial resonance | computed | numpy 1-D family chains fitted to the full model's first frequency per family, `f430-scratch/est/estimate.py`, `band.py` (ADR 0469 arithmetic 2, 3); measured 4.5e-6, 5.5e-6, 5.6e-4, 0.0999; 1978 rad/s and 0.94 |
+## F-415 the Coriolis term on the modal subspace: split Campbell table and stability (ADR 0472)
+
+No source was read for F-415; every item is cited from memory and derived in ADR 0472 (set-ups and arithmetic 1 to 6; numpy checks
+`f415-scratch/pm_probe.py`, `lag_estimate.py`, `flap_estimate.py`). The references of the checks are closed forms and the existing
+F-396 solver path (`RotatingPart::modes`, `campbell`).
+
+| Item | Status | Source |
+|---|---|---|
+| Free vibration in the rotating frame `M u_tt + 2 Omega C u_t + K_eff u = 0`, `C` skew | derived | the relative acceleration `2 Omega a x u_t` in the kinetic energy (ADR 0411 D1, ADR 0472 D1) |
+| Spectrum of a gyroscopic problem symmetric about both axes; a root off the imaginary axis implies one with positive real part | derived | `det(lambda^2 M + lambda G + K)` invariant under `lambda -> -lambda` for `G^T = -G`; L. Meirovitch, Methods of Analytical Dynamics (1970): NOT read |
+| Point mass on isotropic springs in the rotating frame: `|w0 - Omega|`, `w0 + Omega` | derived | `z = x + i y`: `s^2 + 2 Omega s - (w0^2 - Omega^2) = 0` (ADR 0411 set-up PM) |
+| Point mass on unequal springs: unstable exactly for `(w_x^2 - Omega^2)(w_y^2 - Omega^2) < 0`, growth `sqrt(mu+)` of `mu^2 + (w_x^2 + w_y^2 + 2 Omega^2) mu + (w_x^2 - Omega^2)(w_y^2 - Omega^2) = 0` | derived | the characteristic polynomial (ADR 0472 set-up PMA); G. Genta, Dynamics of Rotating Systems (2005), for the name only: NOT read |
+| Thin ring spinning about its axis: travelling waves of in-plane mode `n` split by `4 n Omega/(n^2 + 1)` in the rotating frame (whirl numbers `+/- 2 n/(n^2 + 1)`) | derived | inextensional kinetic energy in the rotating frame, Lagrange's equations (ADR 0472 set-up R); G. H. Bryan, Proc. Camb. Phil. Soc. 7 (1890) 101: NOT read |
+| Inextensional ring frequency `w_n^2 = (E I/(rho A R^4)) n^2 (n^2 - 1)^2/(n^2 + 1)` | from memory | classical thin-ring result, used only for the speed scale and the foundation (set-up check `w3/w2` within 5 percent) |
+| Second-order shift of a gyroscopically coupled mode `omega ~ w_i (1 - 1/2 sum_j G_ij^2/(w_j^2 - w_i^2))` | derived | perturbation of the quadratic problem in modal coordinates (ADR 0472 arithmetic 4) |
+| Lag shift of the radial beam by the axial modes `Delta omega = -2 Omega^2 S omega_lag`, `S = 1.4772e-8 s^2` (L = 1 m, 0.05 m square steel); flap shift by torsion `-9.5e-8` at `0.2 w_0` | computed | Euler-Bernoulli cantilever (`beta_1 L = 1.875104068711961`, root of `cos x cosh x = -1`) and fixed-free rod modes, quadrature (ADR 0472 arithmetic 4) |

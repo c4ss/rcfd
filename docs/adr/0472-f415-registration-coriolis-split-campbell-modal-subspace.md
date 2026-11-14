@@ -328,3 +328,96 @@ relative to `||K||`), not of the reduced quadratic solve; arithmetic 6 of the re
 numbers in the attribute; their other checks, unchanged in code and limits, continue in copies without the Z1 call
 (`g_r1_r2_n1_n2_x1_ring_after_z1_miss`, `g_b1_l1_l2_l3_n3_x2_beam_after_z1_miss`), and Z1 of R and F stays with its limit in
 the ignored record. By the decision rule the item is **partial**.
+
+## Addendum 1: results (2026-11-14)
+
+Registered run: `f415-scratch/sa_gyro_run1.log` (commit ba74cf7f); copies after amendment 1: `sa_gyro_run2.log` (commit
+010690fd), release profile. B2 digests recorded at main 4abff5fe (commit 56b0f562) before any library line.
+
+| Id | Check | Limit | Measured | Met |
+|---|---|---|---|---|
+| G1 | skew defect of `G`: CB, R, F | `<= 1e-13` | 0, 0, 0 | yes |
+| G2 | `|x^T G x| / (|x|^T |G| |x|)`: CB, R, F | `<= 1e-12` | 4.9e-17, 2.8e-18, 2.7e-17 | yes |
+| G3 | raw skew defect of `C_r`: CB, R, F | `<= 1e-11` | 1.1e-16, 7.9e-16, 1.0e-15 | yes |
+| B1 | option off: split table = F-396 table by bits (CB with a loss speed, F); `split_modes` frequencies | identical | identical | yes |
+| B2 | default digests of 4abff5fe; `baseline_hashes`; `cargo test -p rcfd-fem --release` | `==`; pass | 8 of 8 equal; pass (3 passed, 1 ignored); pass (544 passed, 0 failed, 118 ignored); `docs_site` pass | yes |
+| Z1 | rest frequencies against F-396: CB / R / F | `<= 1e-10` | 1.04e-13 / **4.57e-10** / **1.03e-10** | CB yes; **R, F missed** (amendment 1) |
+| P1 | PM, seven speeds, `|w0 - Omega|`, `w0 + Omega` | `<= 1e-10` | 1.4e-15 | yes |
+| P2 | PM stable; forward `kappa = +1` lower, backward `-1` upper | each | holds | yes |
+| P3 | CB against PM | `<= 1e-3` | 2.7e-12 | yes |
+| P4 | CB basis Speed / Rest with a loss at 1.2, 1.5 `w0`; stable | each | holds | yes |
+| R1 | ring split against `4 n Omega/(n^2 + 1)`: `n = 2`, `n = 3` | `<= 2e-2` | 5.1e-4, 1.5e-3 | yes |
+| R2 | ring lower forward, upper backward | each | holds (`kappa` 0.7996, 0.5991 against 0.8, 0.6) | yes |
+| L1 | flap against F-396 | `<= 1e-6` | 9.3e-8 (arithmetic 4: 9.5e-8) | yes |
+| L2 | lag shift against the estimate | `<= 0.2` | 9.6e-3 (`Delta = -1.9654e-2`, estimate `-1.9845e-2` rad/s; `-7.66e-5` relative) | yes |
+| L3 | `S` against 1.4772e-8; axial mode in the basis | `<= 1e-3`; holds | 1.4e-5; holds | yes |
+| T1 | CB tracks: MAC, no exchange, `w0 -/+ Omega`, crossing | each | smallest MAC `1 - 4.4e-16`; shares kept; 3.3e-13; backward crosses torsion (-732 to +108 rad/s) | yes |
+| U1 | CBA: one unstable speed at `1.2 w0`, growth | one; `<= 1e-8` | one (1200 rad/s, 239.998 1/s); 2.0e-13 | yes |
+| U2 | PMA growth; stable at 0.5, 1.8 `w0` | `<= 1e-10` | 6.7e-16; holds | yes |
+| C1 | CBA CSV | each | holds | yes |
+| X1 | refusals (`cyclic` twice, `speed` twice, `speeds`, `matrix`, `mass`) | each | holds | yes |
+| X2 | F threads 1 and 4 | identical | identical | yes |
+| E1 | scaffold copy `x1_modules_and_pending_after_f415` | pass | pass | yes |
+| N1 | ring without the option, split over `1.6 Omega` | `< 1e-3` | 1.2e-10 | as expected |
+| N2 | ring split against `2 Omega` | `> 0.1` | 0.200 | as expected |
+| N3 | beam with 6 modes, `|Delta/Delta_est|` | `< 0.1` | 7.7e-7 | as expected |
+| N4 | CB at 1.2, 1.5 `w0`: F-396 loss, split stable | each | holds | as expected |
+
+Records: the ring at rest `w_2 = 199.525` rad/s (closed form without the foundation 195.49), `w3/w2 = 2.778`, `Omega_R = 19.9525`
+rad/s; the beam `Omega_F = 51.1509` rad/s; the asymmetry of `K_r`, `M_r` before symmetrisation 2.0e-13 (CB), 1.7e-12 (R), 1.1e-13
+(F); every root residual `<= 1.5e-14`. The diagnostic of amendment 1 (`diag_z1`, scratch copy): the split frequencies against the
+square roots of the Rayleigh quotients of the F-396 vectors within 1.7e-12 (R) and 3.4e-11 (F).
+
+### Mutations (scratch copy `f415-scratch/copy`, logs `MU1.log` to `MU8.log`)
+
+| Id | Mutation | Caught by |
+|---|---|---|
+| MU1 | `G = Omega C` | P1, P2, P3, P4, N4, R1, L2, T1, U1, U2, C1 |
+| MU2 | sign of `G` reversed | P2, R2 (T1 does not see it: the frequencies are unchanged) |
+| MU3 | no rest basis | P3 and P4, U1 (the loss speeds fail: the tests stop) |
+| MU4 | unstable at every loss | P4, N4, U1, C1 |
+| MU5 | option off through the reduced solve with `G = 0` | B1 (CB and F) |
+| MU6 | tracker on the real parts | T1 (smallest MAC 0.71) |
+| MU7 | growth over the oscillating roots only | U1, U2, C1 |
+| MU8 | the time scale not undone | Z1 (CB), P1, P3, R1, L1, L2, N3, T1, U1, U2 |
+
+Every mutation was caught by a registered check.
+
+### Deviations
+
+- Z1 missed on R and F (amendment 1): the tests as run are ignored records `*_known_miss`; copies without Z1 pass.
+- X1: the sector of R used for the cyclic refusal is clamped at its inner face (`xmin`) so that `RotatingPart::new` (a static
+  pre-stress solve) can be made on it; the refusal is the registered one.
+- `cargo fmt` changed the layout of `sa_gyro_default_bits.rs` and `sa_gyro.rs` after their runs (layout only); one clippy fix in
+  `gyro.rs` (`!(d > 0.0)` written `d.is_nan() || d <= 0.0`, the same predicate).
+
+### Decision
+
+**Partial** by the rule: Z1 (clause c4, "with it at zero speed the frequencies equal those of F-396 within 1e-10") missed on two
+of three models, with the cause diagnosed (the reference eigenvalues' own accuracy, not the gyroscopic solve). Every other clause
+met; every mutation caught.
+
+### Remaining questions
+
+1. Z1. Options: (a) accept the known miss with the limit kept; (b) a follow-up that compares the zero-speed split frequencies with
+   the Rayleigh quotients of the F-396 vectors (3.4e-11 measured), no default change; (c) a final Rayleigh-quotient update of
+   F-396's eigenvalues, which changes F-396's default bits and so needs the maintainer. Recommendation: (a) with the follow-up (b).
+2. Case-file key (not added). Recommendation: the existing option as `[rotating] coriolis = true` with `campbell = "split"` to
+   select `split_campbell`, in the solid case file of F-435; the maintainer's call.
+3. Cyclic sectors on the modal subspace (D6). Recommendation: the follow-up below.
+
+### For the lead: roadmap entries
+
+Proposed status of F-415: **partial**. New note:
+
+> Structural solver, advanced tier (plan ADR 0310). PARTIAL. Size M. ADR 0472, 2026-11-14: rcfd_fem::gyro (gyro::PENDING = None): the gyroscopic matrix G = 2 Omega C (skew bit for bit), the gyroscopic problem projected on the F-396 modes at the speed (on the rest modes at a loss of stiffness) and solved by the quadratic eigensolver of ADR 0450, split modes with growth, whirl number and direction, the split Campbell table tracked by the complex-line tracker of ADR 0411 with the stability per speed and the unstable speeds; opt-in by RotatingOptions::coriolis, without it the F-396 table bit for bit; cyclic models refused. G skew 0 and x^T G x 2.8e-18 of its absolute sum; mass on springs 1.4e-15, the stiff block 2.7e-12 of it (also above w0, gyroscopically stable); thin ring split 5.1e-4 (n = 2) and 1.5e-3 (n = 3) of 4 n Omega/(n^2 + 1); radial beam flap 9.3e-8 of F-396, lag shift 0.96 percent from the second-order estimate; tracks through a crossing with MAC 1 - 4e-16; anisotropic supports reported unstable at 1.2 w0 with the growth within 2e-13; eight of eight mutations caught. Zero-speed frequencies against F-396 within 1e-13 on the block but missed on the ring (4.6e-10) and the beam (1.0e-10) against 1e-10: the F-396 rest eigenvalues differ from their own vectors' Rayleigh quotients by up to 9e-10, and the split solve agrees with those quotients within 3.4e-11. Follow-ups for the zero-speed comparison and for cyclic sectors.
+
+Follow-up items (numbers left to the lead):
+
+Title: "Zero-speed split frequencies against the Rayleigh quotients of the F-396 basis", deps F-415.
+
+> Every limit not stated here is registered in the ADR before the run. At zero speed with the Coriolis option the split frequencies of ADR 0472 equal the square roots of the Rayleigh quotients of the F-396 rest modes within 1e-10 on the block, the ring and the radial beam of ADR 0472, and the difference between F-396's reported rest eigenvalues and those quotients is reported per mode; no default result changes.
+
+Title: "Split Campbell table of a cyclic sector on the modal subspace", deps F-415, F-544.
+
+> Every limit not stated here is registered in the ADR before the run. The gyroscopic problem of ADR 0472 on the harmonic modes of each index of a cyclic sector (a cos/sin basis and the doubled Coriolis matrix of ADR 0411 D5): on the disc sector of ADR 0411 at 0.4 and 0.8 of its reference speed the split frequencies of every index equal those of RotatingSector::whirl_modes within 1e-6 for the modes whose coupling stays inside the basis; the refusal of ADR 0472 is lifted only for sectors whose material axes pass the check of ADR 0462; without the option every result bit-identical.
