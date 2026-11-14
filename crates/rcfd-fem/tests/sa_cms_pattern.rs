@@ -348,7 +348,11 @@ fn d5_hw1_defaults() {
         let b = asm.harmonic_with_load(w, LOSS, asm.load()).unwrap();
         same &= same_bits(&a.0, &b.0) && same_bits(&a.1, &b.1);
     }
-    c.holds("HW1 harmonic_with_load(own load) equals harmonic in bits at 0, 1000, 5000", same, "");
+    c.holds(
+        "HW1 harmonic_with_load(own load) equals harmonic in bits at 0, 1000, 5000",
+        same,
+        "",
+    );
     c.finish();
 }
 
@@ -374,16 +378,13 @@ fn p_vectors_of_the_patterns() {
     let bm = part_b_model();
     let pats = patterns_b();
     let with_option = reduce(&bm, "xmin", &option_b()).unwrap();
-    let patterns_only = reduce(
-        &bm,
-        "xmin",
-        &cutoff_only().load_patterns(pats.clone()),
-    )
-    .unwrap();
+    let patterns_only = reduce(&bm, "xmin", &cutoff_only().load_patterns(pats.clone())).unwrap();
     let twice = reduce(
         &bm,
         "xmin",
-        &cutoff_only().load_pattern(pats[0].clone()).load_pattern(pats[0].clone()),
+        &cutoff_only()
+            .load_pattern(pats[0].clone())
+            .load_pattern(pats[0].clone()),
     )
     .unwrap();
     let zero = reduce(
@@ -430,8 +431,13 @@ fn p_vectors_of_the_patterns() {
         }
         c.le(&format!("P2 {name}: largest |M_qR|"), mq, 1e-10);
         c.le(&format!("P2 {name}: largest |M_RR - I|"), mrr, 1e-10);
-        let kq = (0..nm).fold(0.0f64, |m, q| (0..np).fold(m, |m, j| m.max(p.stiffness()[(nb + q) * nr + o + j].abs())));
-        println!("record {name}: |K_qR| over the largest K_r entry {:.3e}", kq / max_abs(p.stiffness()));
+        let kq = (0..nm).fold(0.0f64, |m, q| {
+            (0..np).fold(m, |m, j| m.max(p.stiffness()[(nb + q) * nr + o + j].abs()))
+        });
+        println!(
+            "record {name}: |K_qR| over the largest K_r entry {:.3e}",
+            kq / max_abs(p.stiffness())
+        );
     }
     // P3: each vector recomputed from the pattern's static response and the earlier vectors.
     {
@@ -486,7 +492,11 @@ fn p_vectors_of_the_patterns() {
         c.le("SP3 M_r asymmetry", cms::relative_asymmetry(p.mass(), n), 1e-13);
         c.le("SP3 asymmetry before symmetrisation", p.asymmetry(), 1e-10);
         let e = symmetric_eigen(p.mass(), n).unwrap();
-        c.ge("SP3 lambda_min(M_r)/lambda_max(M_r)", e.values[0] / e.values[n - 1], 1e-12);
+        c.ge(
+            "SP3 lambda_min(M_r)/lambda_max(M_r)",
+            e.values[0] / e.values[n - 1],
+            1e-12,
+        );
         let four = reduce(&bm, "xmin", &option_b().threads(4)).unwrap();
         let (l1, l4) = (
             p.reduce_load(&bm, &pats[1]).unwrap(),
@@ -499,7 +509,11 @@ fn p_vectors_of_the_patterns() {
             && same_bits(p.phi(), four.phi())
             && same_bits(p.residual(), four.residual())
             && same_bits(&l1, &l4);
-        c.holds("TH threads 1 and 4: K_r, M_r, load, Psi, Phi, R, reduce_load bit-identical", same, "");
+        c.holds(
+            "TH threads 1 and 4: K_r, M_r, load, Psi, Phi, R, reduce_load bit-identical",
+            same,
+            "",
+        );
     }
     c.finish();
 }
@@ -519,7 +533,13 @@ fn x4_refusals() {
         let r = reduce(&bm, "xmin", &cutoff_only().load_pattern(p));
         c.holds(
             &format!("X4 {name} refused"),
-            matches!(r, Err(FemError::FieldLength { key: "load pattern", .. })),
+            matches!(
+                r,
+                Err(FemError::FieldLength {
+                    key: "load pattern",
+                    ..
+                })
+            ),
             &format!("{:?}", r.err()),
         );
     }
@@ -529,7 +549,13 @@ fn x4_refusals() {
         let r = reduce(&bm, "xmin", &cutoff_only().load_pattern(p));
         c.holds(
             &format!("X4 {name} refused"),
-            matches!(r, Err(FemError::InvalidValue { key: "load_patterns", .. })),
+            matches!(
+                r,
+                Err(FemError::InvalidValue {
+                    key: "load_patterns",
+                    ..
+                })
+            ),
             &format!("{:?}", r.err()),
         );
     }
@@ -549,17 +575,28 @@ fn st_p_statics_of_each_component() {
     let cases: [(&str, Assembly); 3] = [
         ("ST-P the option and the patterns", asm_patterns()),
         ("ST-P2 the patterns alone", assembly_of(&cutoff_only(), &patterns_only)),
-        ("ST-P3 m = 5 and the patterns", assembly_of(&CmsOptions::new(5).threads(1), &m5_patterns)),
+        (
+            "ST-P3 m = 5 and the patterns",
+            assembly_of(&CmsOptions::new(5).threads(1), &m5_patterns),
+        ),
     ];
     for (name, asm) in &cases {
         for (comp, p) in pats.iter().enumerate() {
-            c.le(&format!("{name}, component {comp}"), bar.component_statics(asm, comp, p), 1e-10);
+            c.le(
+                &format!("{name}, component {comp}"),
+                bar.component_statics(asm, comp, p),
+                1e-10,
+            );
         }
     }
     // NC-P: the ADR 0474 option has the vector of the total load only.
     let nc = asm_0474();
     for (comp, p) in pats.iter().enumerate() {
-        c.ge(&format!("NC-P the ADR 0474 option, component {comp}"), bar.component_statics(&nc, comp, p), 1e-6);
+        c.ge(
+            &format!("NC-P the ADR 0474 option, component {comp}"),
+            bar.component_statics(&nc, comp, p),
+            1e-6,
+        );
     }
     // HW2: reduce_load of the model's own load vector is load().
     let bm = part_b_model();
@@ -567,13 +604,21 @@ fn st_p_statics_of_each_component() {
     let own = nodal_load_vector(&bm, &[]).unwrap();
     let rl = b.reduce_load(&bm, &own).unwrap();
     let d = rl.iter().zip(b.load()).fold(0.0f64, |m, (x, y)| m.max((x - y).abs()));
-    c.le("HW2 B: reduce_load(own load) against load()", d / max_abs(b.load()), 1e-13);
+    c.le(
+        "HW2 B: reduce_load(own load) against load()",
+        d / max_abs(b.load()),
+        1e-13,
+    );
     let s = small_with(true, true);
     let sp = reduce(&s, "mid", &CmsOptions::new(5).residual_vectors(true).threads(1)).unwrap();
     let own = nodal_load_vector(&s, &[]).unwrap();
     let rl = sp.reduce_load(&s, &own).unwrap();
     let d = rl.iter().zip(sp.load()).fold(0.0f64, |m, (x, y)| m.max((x - y).abs()));
-    c.le("HW2 S: reduce_load(own load) against load()", d / max_abs(sp.load()), 1e-13);
+    c.le(
+        "HW2 S: reduce_load(own load) against load()",
+        d / max_abs(sp.load()),
+        1e-13,
+    );
     c.finish();
 }
 
@@ -583,7 +628,9 @@ fn s_statics(p: ReducedPart, s: &SolidModel, loaded: &SolidModel, pattern: &[f64
     let uf = solve_static(loaded, &StaticOptions::default()).unwrap();
     let uf = finite("S statics", uf.displacement_values()).to_vec();
     let asm = Assembly::new(vec![p]).unwrap();
-    let load = asm.load_from(&[asm.parts()[0].reduce_load(s, pattern).unwrap()]).unwrap();
+    let load = asm
+        .load_from(&[asm.parts()[0].reduce_load(s, pattern).unwrap()])
+        .unwrap();
     let (x, _) = asm.harmonic_with_load(0.0, 0.0, &load).unwrap();
     finite("S assembly statics", &x);
     let u = asm.parts()[0].expand(s, &x).unwrap();
@@ -601,7 +648,10 @@ fn st_p4_p5_small_model() {
     let pg = nodal_load_vector(&gravity, &[]).unwrap();
     for iface in ["xmax", "mid"] {
         for m in [0usize, 5] {
-            let o = CmsOptions::new(m).load_pattern(pg.clone()).load_pattern(pt.clone()).threads(1);
+            let o = CmsOptions::new(m)
+                .load_pattern(pg.clone())
+                .load_pattern(pt.clone())
+                .threads(1);
             for (name, loaded, pat) in [("gravity", &gravity, &pg), ("traction", &traction, &pt)] {
                 let p = reduce(&s, iface, &o).unwrap();
                 c.le(
@@ -661,7 +711,10 @@ fn lf_each_frequency_below_the_bound_within_1e3_known_miss() {
         println!("  omega_F {:.1}: delta {d:.3e}", full[k]);
         worst = worst.max(d.abs());
     }
-    println!("LF: omega_half {half:.2}, {} frequencies below, largest |delta| {worst:.3e}", idx.len());
+    println!(
+        "LF: omega_half {half:.2}, {} frequencies below, largest |delta| {worst:.3e}",
+        idx.len()
+    );
     let mut c = Checks::new();
     c.le("LF largest |omega_R / omega_F - 1| below the bound", worst, 1e-3);
     c.finish();
@@ -693,12 +746,23 @@ fn lf2_sl_frequencies() {
     let mut least_0474 = f64::NEG_INFINITY;
     for k in 0..8 {
         let (a, b) = (w_with[k] / w_cut[k] - 1.0, w_with[k] / w_0474[k] - 1.0);
-        println!("  f{}: with patterns over cutoff only {a:.3e}, over the ADR 0474 option {b:.3e}", k + 1);
+        println!(
+            "  f{}: with patterns over cutoff only {a:.3e}, over the ADR 0474 option {b:.3e}",
+            k + 1
+        );
         least_cut = least_cut.max(a);
         least_0474 = least_0474.max(b);
     }
-    c.lt("SL1 largest change of the first eight against the cutoff alone", least_cut, -1e-14);
-    c.lt("SL2 largest change of the first eight against the ADR 0474 option", least_0474, -1e-14);
+    c.lt(
+        "SL1 largest change of the first eight against the cutoff alone",
+        least_cut,
+        -1e-14,
+    );
+    c.lt(
+        "SL2 largest change of the first eight against the ADR 0474 option",
+        least_0474,
+        -1e-14,
+    );
     let mut lowest = f64::INFINITY;
     for &k in &idx {
         lowest = lowest.min(w_with[k] / full[k] - 1.0);
@@ -773,11 +837,19 @@ fn off2_band() {
     let e = bar.harmonic_errors(&asm, &ws);
     let big = e.iter().fold(0.0f64, |m, x| m.max(*x));
     let mut c = Checks::new();
-    c.holds("OFF1 point count: at least 60 off-resonance points", all.len() >= 60, &format!("{}", all.len()));
+    c.holds(
+        "OFF1 point count: at least 60 off-resonance points",
+        all.len() >= 60,
+        &format!("{}", all.len()),
+    );
     c.holds("OFF2 band has points", ws.len() >= 10, &format!("{}", ws.len()));
     c.le("OFF2 off-resonance points below 4000 rad/s", big, 1e-2);
     // Records: the whole curve of the three reductions, and the first point above 1e-2.
-    for (name, a) in [("patterns", &asm), ("ADR 0474 option", &asm_0474()), ("cutoff only", &asm_cutoff())] {
+    for (name, a) in [
+        ("patterns", &asm),
+        ("ADR 0474 option", &asm_0474()),
+        ("cutoff only", &asm_cutoff()),
+    ] {
         let ew = bar.harmonic_errors(a, &all);
         let first = all
             .iter()
@@ -802,7 +874,11 @@ fn ax_axial_resonance() {
     let k = (0..full.len())
         .min_by(|&a, &b| (full[a] - axial).abs().partial_cmp(&(full[b] - axial).abs()).unwrap())
         .unwrap();
-    println!("axial closed form {axial:.1}; the nearest frequency of F is #{} = {:.1}", k + 1, full[k]);
+    println!(
+        "axial closed form {axial:.1}; the nearest frequency of F is #{} = {:.1}",
+        k + 1,
+        full[k]
+    );
     let mut c = Checks::new();
     c.holds(
         "AX the nearest frequency of F within 2 percent of the closed form",
@@ -821,8 +897,16 @@ fn ax_axial_resonance() {
         2.0 * delta.abs() / LOSS,
         4.0 * delta.abs() / LOSS
     );
-    c.le("AX1 error against 4|delta|/eta (error over the bound)", e / (4.0 * delta.abs() / LOSS), 1.0);
-    c.le("AX2 record: error against 2|delta|/eta (error over the bound)", e / (2.0 * delta.abs() / LOSS), 1.0);
+    c.le(
+        "AX1 error against 4|delta|/eta (error over the bound)",
+        e / (4.0 * delta.abs() / LOSS),
+        1.0,
+    );
+    c.le(
+        "AX2 record: error against 2|delta|/eta (error over the bound)",
+        e / (2.0 * delta.abs() / LOSS),
+        1.0,
+    );
     let (e0, d0) = point(&asm_cutoff());
     println!("AX3 cutoff alone: error {e0:.3e}, delta {d0:.3e}");
     c.ge("AX3 the cutoff-only axial delta", d0.abs(), 1e-3);

@@ -611,11 +611,7 @@ pub fn reduce(model: &SolidModel, interface: &str, options: &CmsOptions) -> Resu
     let mut residual_cols: Vec<Vec<f64>> = Vec::new();
     for mut r in candidates {
         let mut y = vec![0.0; ni];
-        let basis: Vec<&[f64]> = phi_cols
-            .iter()
-            .chain(residual_cols.iter())
-            .map(Vec::as_slice)
-            .collect();
+        let basis: Vec<&[f64]> = phi_cols.iter().chain(residual_cols.iter()).map(Vec::as_slice).collect();
         if crate::damped::m_orthonormalise(&mii, &mut r, &basis, &mut y) {
             residual_cols.push(r);
         }
