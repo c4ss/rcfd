@@ -9970,9 +9970,19 @@ fixed by the item's registration ADR before any code.
     refusal and the cancel-to-zero error; the error fields equal those of check_beam_model; the mutation that leaves the
     beam check out of the transformation entry (ADR 0426 MU7) and three variants (out of either entry, moved after the
     transformation) are all caught. Library unchanged.
-- [ ] **F-519** Sparse whirl state solver above the loss of stiffness
+- [~] **F-519** Sparse whirl state solver above the loss of stiffness
   - depends on: F-506, F-505
   - acceptance: Every limit not stated here is registered in the ADR before the run. Above the loss of stiffness, the
     whirl state of a part above the dense cap by a shift-invert Arnoldi process on the state matrix of ADR 0416 with a
     sparse factor of K_eff - sigma M at a registered shift; on the cube of ADR 0416 and the disc sector of ADR 0420 the
     eigenvalues equal the dense state solver's within 1e-9 relative and the stability flags agree.
+  - note: ADR 0428, 2026-11-14: sparse whirl state solver (isotropic shift-invert Arnoldi on (C^2 + sigma)^-1, one
+    skyline factor with K_eff - sigma M blocks); eigenvalues against the dense state solver within 1.6e-10 on the cube
+    and 4.4e-12 on the disc sector, flags equal; the 2112-unknown ring above the cap matches the dense sector union to
+    3.3e-13; Q1 of the cube missed (8.5e-8 against 1e-8, far elastic mode vectors, diagnosed); 8 of 8 mutations caught.
+- [ ] **F-520** Accurate far-mode vectors of the sparse whirl state solver
+  - depends on: F-519
+  - acceptance: Every limit not stated here is registered in the ADR before the run. Each mode returned by the sparse
+    whirl state solver of ADR 0428 is refined by inverse iteration at its own eigenvalue, so that on the cube of ADR
+    0416 at both registered shifts with count 6 every stored mode residual is at most 1e-8, while the eigenvalues still
+    equal the dense state solver's within 1e-9 relative and the stability flags agree.
