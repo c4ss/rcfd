@@ -8320,15 +8320,15 @@ fixed by the item's registration ADR before any code.
     of the first four modes as a shell equals that of the solid model of F-396 (Hex20) within 2 percent at the
     registered speeds. Models of solid elements only keep their bits.
   - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). F-420 (ADR 0473, 2026-11-14): geometric
-    stiffness of Beam2 (axial force, shear-flexible interpolation, torsion term), Shell4 and Shell3 (membrane
-    resultants on the translations), spin-softening mass with the section and shell rotary terms, consistent
-    centrifugal load on beams with the section moment, structural pre-stress from a static result, through buckling,
-    pre-stressed modes and the rotating part. Engesser 3.4e-4 and 2.2e-5, taut beam 2.6e-4, flap-lag 9.7e-8
-    (slender) and 2.6e-9 against 1 - f_rot (F-396 beam), slope 4.9e-4 of the Rayleigh quotient, plates 3.3e-3
-    (Shell4) and 4.8e-3 (Shell3), strips 5.1e-3, twisted strip Shell4 against Hex20 5.9e-3, element checks to 2e-15;
-    solid-only models bit-identical. Partial: E2 (Shell3 twisted strip, 4 percent supplementary limit) missed at
-    4.05e-2 on the first torsion track, already at rest (the Shell3 rest stiffness, not the stress stiffening),
-    recorded as e2_twisted_strip_shell3_known_miss.
+    stiffness of Beam2 (axial force, shear-flexible interpolation, torsion term), Shell4 and Shell3 (membrane resultants
+    on the translations), spin-softening mass with the section and shell rotary terms, consistent centrifugal load on
+    beams with the section moment, structural pre-stress from a static result, through buckling, pre-stressed modes and
+    the rotating part. Engesser 3.4e-4 and 2.2e-5, taut beam 2.6e-4, flap-lag 9.7e-8 (slender) and 2.6e-9 against 1 -
+    f_rot (F-396 beam), slope 4.9e-4 of the Rayleigh quotient, plates 3.3e-3 (Shell4) and 4.8e-3 (Shell3), strips
+    5.1e-3, twisted strip Shell4 against Hex20 5.9e-3, element checks to 2e-15; solid-only models bit-identical.
+    Partial: E2 (Shell3 twisted strip, 4 percent supplementary limit) missed at 4.05e-2 on the first torsion track,
+    already at rest (the Shell3 rest stiffness, not the stress stiffening), recorded as
+    e2_twisted_strip_shell3_known_miss. Follow-ups F-556, F-557, F-558.
 - [~] **F-421** Aerodynamic damping and added mass of a mode by prescribed motion of the wall (energy method)
   - depends on: F-408, F-362, F-383, F-400, F-401
   - acceptance: Every limit not stated here is registered in the ADR before the run. Force harmonics: for a synthetic
@@ -10749,3 +10749,27 @@ fixed by the item's registration ADR before any code.
     ADR 0472 is lifted only for sectors whose material axes pass the check of ADR 0462; without the option every result
     bit-identical.
   - note: Structural solver, advanced tier. Follow-up of F-415 (ADR 0472, 2026-11-14).
+- [ ] **F-556** Diagnosis of the Shell3 rest stiffness of a twisted strip against Hex20
+  - depends on: F-420
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The 4.05 percent excess of the
+    Shell3 rest frequency of the third mode of the twisted strip of ADR 0473 over Hex20 (Shell4 0.53 percent) is located
+    in the Shell3 membrane-bending coupling on warped triangles (CST or ANDES membrane, MITC3 shear) by registered
+    element and mesh variations against the Hex20 strip, before any change to Shell3; any fix is opt-in and the default
+    Shell3 results stay bit-identical.
+  - note: Structural solver, advanced tier. Follow-up of F-420 (ADR 0473, 2026-11-14).
+- [ ] **F-557** Pre-stress of a static result on a model with both solid and structural elements
+  - depends on: F-420
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The refusal RF1 of ADR 0473 is
+    lifted: the geometric stiffness of a static result on a model with solid, beam and shell elements is assembled from
+    each element's stress; a solid block carrying a beam or a shell strip in tension has the tension frequencies of ADR
+    0473 within 1 percent, and the buckling load of a shell plate stiffened by a solid rib equals that of the same model
+    in solid elements within 3 percent; models without mixed elements keep their bits.
+  - note: Structural solver, advanced tier. Follow-up of F-420 (ADR 0473, 2026-11-14).
+- [ ] **F-558** Moment, shear and Wagner terms of the beam geometric stiffness and the t^2/12 rotation terms of the shells
+  - depends on: F-420
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The beam's geometric stiffness
+    gains the bending-moment, shear-force and Wagner terms and the shells' the t^2/12 rotation terms, opt-in: the
+    lateral-torsional buckling moment of a simply supported I or rectangular beam under uniform moment equals the closed
+    form (pi/L) sqrt(E I_z G J) (1 + (pi^2 E C_w)/(G J L^2))^(1/2) within 1 percent at 16 elements; without the option
+    every result of ADR 0473 bit-identical.
+  - note: Structural solver, advanced tier. Follow-up of F-420 (ADR 0473, 2026-11-14).
