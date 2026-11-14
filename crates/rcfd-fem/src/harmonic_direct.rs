@@ -35,6 +35,11 @@ use crate::model::{DofMap, Material, SolidModel};
 use crate::recover::IntegrationPointField;
 use rcfd_linalg::complex::C64;
 use rcfd_linalg::cskyline::{ComplexCsr, ComplexSkylineError, ComplexSkylineLdlt, ComplexSkylineOptions};
+// ADR 0509 (F-594): the complex supernodal factor after nested dissection by the node coordinates.
+use crate::solve::DirectFactor;
+use rcfd_linalg::sparse_chol::{
+    nested_dissection_order_with_points, ComplexSupernodalLdlt, ComplexSupernodalOptions, SparseOrdering,
+};
 use rcfd_linalg::CsrMatrix;
 use std::collections::BTreeMap;
 use std::f64::consts::PI;
@@ -219,6 +224,10 @@ pub struct DirectHarmonicOptions {
     /// The temperature, K, of a viscoelastic material with a time-temperature shift (ADR 0491; default none). Read only
     /// by a viscoelastic material.
     pub temperature: Option<f64>,
+    /// The factor of each frequency (ADR 0509 D4): [`DirectFactor::Envelope`] (the default, ADR 0448) or
+    /// [`DirectFactor::SupernodalNestedDissection`] (the complex supernodal factor after nested dissection of the node
+    /// coordinates, the order computed once); the minimum-degree factor is refused.
+    pub factor: DirectFactor,
 }
 
 impl Default for DirectHarmonicOptions {
@@ -230,6 +239,7 @@ impl Default for DirectHarmonicOptions {
             threads: None,
             resonance_pivot: RESONANCE_PIVOT,
             temperature: None,
+            factor: DirectFactor::Envelope,
         }
     }
 }
@@ -275,6 +285,12 @@ impl DirectHarmonicOptions {
         self.temperature = Some(temperature);
         self
     }
+
+    /// The factor of each frequency (ADR 0509 D4).
+    pub fn factor(mut self, factor: DirectFactor) -> DirectHarmonicOptions {
+        self.factor = factor;
+        self
+    }
 }
 
 // ----------------------------------------------------------------------------------------------------------- solver
@@ -304,6 +320,8 @@ pub struct DirectHarmonic {
     rows_free: Vec<Vec<Entry>>,
     rows_fixed: Vec<Vec<Entry>>,
     resonance_pivot: f64,
+    /// The elimination order of the supernodal factor (ADR 0509 D4); `None`: the envelope.
+    order: Option<Vec<usize>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -486,6 +504,19 @@ impl DirectHarmonic {
             ));
         }
         finite_nonneg("damping", "resonance pivot threshold", options.resonance_pivot)?;
+        // ADR 0509 D4: the envelope or the supernodal factor.
+        if !matches!(
+            options.factor,
+            DirectFactor::Envelope | DirectFactor::SupernodalNestedDissection
+        ) {
+            return Err(invalid(
+                "solver",
+                format!(
+                    "factor {:?}: the direct harmonic solve takes the envelope or the supernodal factor (ADR 0509)",
+                    options.factor
+                ),
+            ));
+        }
         let rayleigh = options.rayleigh.unwrap_or((0.0, 0.0));
         finite_nonneg("damping", "Rayleigh mass coefficient", rayleigh.0)?;
         finite_nonneg("damping", "Rayleigh stiffness coefficient", rayleigh.1)?;
@@ -661,6 +692,32 @@ impl DirectHarmonic {
             rows_free.push(f_part);
             rows_fixed.push(x_part);
         }
+        // ADR 0509 D4: the nested dissection of the free-free pattern by the coordinates of each free equation's node
+        let order = if options.factor == DirectFactor::SupernodalNestedDissection {
+            let nf = free.len();
+            let mut row_ptr = Vec::with_capacity(nf + 1);
+            row_ptr.push(0usize);
+            let mut col = Vec::new();
+            for row in &rows_free {
+                col.extend(row.iter().map(|e| reduced[e.col]));
+                row_ptr.push(col.len());
+            }
+            let pattern = CsrMatrix {
+                n: nf,
+                ncols: nf,
+                row_ptr,
+                val: vec![1.0; col.len()],
+                col,
+            };
+            let nodes = model.mesh().nodes();
+            let points: Vec<[f64; 3]> = free
+                .iter()
+                .map(|&e| nodes[dofs.node_component(e).expect("free equation exists").0])
+                .collect();
+            Some(nested_dissection_order_with_points(&pattern, &points))
+        } else {
+            None
+        };
         Ok(DirectHarmonic {
             dofs,
             n,
@@ -674,6 +731,7 @@ impl DirectHarmonic {
             rows_free,
             rows_fixed,
             resonance_pivot: options.resonance_pivot,
+            order,
         })
     }
 
@@ -918,7 +976,7 @@ impl DirectHarmonic {
             min_relative_pivot: if damped { 0.0 } else { self.resonance_pivot },
             ..ComplexSkylineOptions::default()
         };
-        let ldlt = ComplexSkylineLdlt::factor_with(&a, &opts).map_err(|e| match e {
+        let refusal = |e: ComplexSkylineError| match e {
             ComplexSkylineError::Pivot {
                 row,
                 pivot,
@@ -947,8 +1005,21 @@ impl DirectHarmonic {
                 )
             }
             other => invalid("frequency", format!("omega {omega:e} rad/s: {other}")),
-        })?;
-        let x = ldlt.solve(&rhs);
+        };
+        let x = match &self.order {
+            None => ComplexSkylineLdlt::factor_with(&a, &opts).map_err(refusal)?.solve(&rhs),
+            // ADR 0509 D4: the supernodal factor in the order of `new`, the same pivot rule
+            Some(order) => {
+                let sopts = ComplexSupernodalOptions {
+                    ordering: SparseOrdering::Given(order.clone()),
+                    symmetry_tolerance: opts.symmetry_tolerance,
+                    min_relative_pivot: opts.min_relative_pivot,
+                };
+                ComplexSupernodalLdlt::factor_with(&a, &sopts)
+                    .map_err(refusal)?
+                    .solve(&rhs)
+            }
+        };
         let mut re: Vec<f64> = g.iter().map(|z| z.re).collect();
         let mut im: Vec<f64> = g.iter().map(|z| z.im).collect();
         for (&e, z) in self.free.iter().zip(&x) {

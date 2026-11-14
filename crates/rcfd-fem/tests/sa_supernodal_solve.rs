@@ -109,6 +109,7 @@ fn f2_bit_identical_for_1_and_8_threads() {
 }
 
 #[test]
+#[ignore = "record of the registered run of ADR 0503: F3a, F3b and F3c met; F3a (SupernodalDirect refused on the transformation path) superseded by ADR 0509 (F-594), which takes the supernodal factor there; F3b and F3c repeated as E8 in sa_supernodal_modes.rs"]
 fn f3_refusals() {
     let mut m = model_s();
     m.add_constraint(Constraint::rigid_set("xmax", [1.0, 0.5, 0.5]))

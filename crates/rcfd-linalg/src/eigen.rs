@@ -15,7 +15,7 @@
 use crate::matrix::CsrMatrix;
 use crate::skyline::{PivotRule, SkylineError, SkylineLdlt, SkylineOptions, SkylineOrdering};
 // ADR 0447 (F-431): the sparse L D L^T as the alternative factorisation.
-use crate::sparse_chol::{SparseLdlt, SparseOptions, SparseOrdering};
+use crate::sparse_chol::{SparseLdlt, SparseOptions, SparseOrdering, SupernodalLdlt};
 use std::fmt;
 
 /// Cap on the number of Jacobi sweeps (ADR 0283 D1).
@@ -459,12 +459,16 @@ pub enum Factorisation {
     Envelope,
     /// The sparse `L D L^T` after approximate minimum degree of ADR 0447 (the options' `ordering` is not used).
     Sparse,
+    /// The supernodal multifrontal `L D L^T` after nested dissection by level structures of ADR 0503 (ADR 0509 D3; the
+    /// options' `ordering` is not used).
+    Supernodal,
 }
 
 /// A factor of either kind (ADR 0447 D5).
 enum Factor {
     Envelope(SkylineLdlt),
     Sparse(SparseLdlt),
+    Supernodal(SupernodalLdlt),
 }
 
 impl Factor {
@@ -472,24 +476,28 @@ impl Factor {
         match self {
             Factor::Envelope(f) => f.solve(b),
             Factor::Sparse(f) => f.solve(b),
+            Factor::Supernodal(f) => f.solve(b),
         }
     }
     fn pivots(&self) -> &[f64] {
         match self {
             Factor::Envelope(f) => f.pivots(),
             Factor::Sparse(f) => f.pivots(),
+            Factor::Supernodal(f) => f.pivots(),
         }
     }
     fn order(&self) -> &[usize] {
         match self {
             Factor::Envelope(f) => f.order(),
             Factor::Sparse(f) => f.order(),
+            Factor::Supernodal(f) => f.order(),
         }
     }
     fn negatives(&self) -> usize {
         match self {
             Factor::Envelope(f) => f.inertia().0,
             Factor::Sparse(f) => f.inertia().0,
+            Factor::Supernodal(f) => f.inertia().0,
         }
     }
 }
@@ -507,6 +515,15 @@ fn factor_by(a: &CsrMatrix, opts: &SkylineOptions, factorisation: Factorisation)
             },
         )
         .map(Factor::Sparse),
+        Factorisation::Supernodal => SupernodalLdlt::factor_with(
+            a,
+            &SparseOptions {
+                ordering: SparseOrdering::NestedDissection,
+                pivots: opts.pivots,
+                symmetry_tolerance: opts.symmetry_tolerance,
+            },
+        )
+        .map(Factor::Supernodal),
     }
 }
 

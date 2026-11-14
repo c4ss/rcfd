@@ -57,7 +57,8 @@ pub enum StaticSolver {
     /// transformation path, the cyclic solve or with refinement.
     SparseDirect,
     /// Supernodal multifrontal `L D L^T` after nested dissection of the free equations' node coordinates (ADR 0503), with
-    /// the pivot checks of `Direct`. Not on the transformation path, the cyclic solve or with refinement.
+    /// the pivot checks of `Direct`; on the transformation path after nested dissection of the graph of `T^T K T` (ADR
+    /// 0509 D5). Not in the cyclic solve or with refinement.
     SupernodalDirect,
 }
 
