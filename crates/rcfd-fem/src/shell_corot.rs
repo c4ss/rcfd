@@ -426,6 +426,28 @@ fn corotated(mesh: &SolidMesh, element: usize, coords: &[Vec3], material: &Mater
 
 /// The internal force and, if asked, the tangent (dense, row-major) of a corotated element at `ue`.
 fn evaluate(c: &Corotated, ue: &[f64], want_tangent: bool) -> Result<(Vec<f64>, Option<Vec<f64>>)> {
+    match evaluate_in(c, ue, if want_tangent { Want::Tangent } else { Want::Force })? {
+        Evaluated::Derivatives(f, k) => Ok((f, k)),
+        Evaluated::Energy(_) => unreachable!("derivatives asked"),
+    }
+}
+
+/// What [`evaluate_in`] forms.
+#[derive(Clone, Copy, PartialEq)]
+enum Want {
+    Force,
+    Tangent,
+    /// The energy only (ADR 0522 D4): every value with the derivative dimension zero.
+    Energy,
+}
+
+enum Evaluated {
+    Derivatives(Vec<f64>, Option<Vec<f64>>),
+    Energy(f64),
+}
+
+fn evaluate_in(c: &Corotated, ue: &[f64], want: Want) -> Result<Evaluated> {
+    let want_tangent = want == Want::Tangent;
     let nn = c.reference.len();
     let m = 6 * nn;
     if ue.len() != m {
@@ -441,7 +463,20 @@ fn evaluate(c: &Corotated, ue: &[f64], want_tangent: bool) -> Result<(Vec<f64>, 
             reason: format!("element unknown {i} is not finite"),
         });
     }
-    let q: Vec<Hd> = ue.iter().enumerate().map(|(i, &v)| Hd::variable(m, v, i)).collect();
+    // ADR 0522 D4: the energy alone carries no derivatives (the value parts are the same arithmetic).
+    let energy_only = want == Want::Energy;
+    let nd = if energy_only { 0 } else { m };
+    let q: Vec<Hd> = ue
+        .iter()
+        .enumerate()
+        .map(|(i, &v)| {
+            if energy_only {
+                Hd::constant(0, v)
+            } else {
+                Hd::variable(m, v, i)
+            }
+        })
+        .collect();
     // The nodal rotations and the displacements `w_a = u_a + (R_a - I) r_a` of the projected points (D2 step 1).
     let mut w: Vec<V3> = Vec::with_capacity(nn);
     let mut rot: Vec<M3> = Vec::with_capacity(nn);
@@ -491,7 +526,7 @@ fn evaluate(c: &Corotated, ue: &[f64], want_tangent: bool) -> Result<(Vec<f64>, 
     let e1 = v_unit(&v_sub(&edge, &v_scale(&e3, &along)), "first edge")?;
     let e2 = v_cross(&e3, &e1);
     let frame = [e1, e2, e3];
-    let mut centre: Vec<Hd> = (0..3).map(|_| Hd::constant(m, 0.0)).collect();
+    let mut centre: Vec<Hd> = (0..3).map(|_| Hd::constant(nd, 0.0)).collect();
     for pa in &p {
         for k in 0..3 {
             centre[k].axpy(1.0 / nn as f64, &pa[k]);
@@ -513,7 +548,7 @@ fn evaluate(c: &Corotated, ue: &[f64], want_tangent: bool) -> Result<(Vec<f64>, 
             .map(|jj| {
                 let col: Vec<Hd> = (0..3)
                     .map(|i| {
-                        let mut x = Hd::constant(m, 0.0);
+                        let mut x = Hd::constant(nd, 0.0);
                         for l in 0..3 {
                             x.axpy(c.axes0[jj][l], &r[i][l]);
                         }
@@ -535,16 +570,19 @@ fn evaluate(c: &Corotated, ue: &[f64], want_tangent: bool) -> Result<(Vec<f64>, 
     let s: Vec<f64> = (0..m)
         .map(|i| (0..m).map(|j| c.k_rest[i * m + j] * d[j].v).sum())
         .collect();
-    let mut acc = Hd::constant(m, 0.0);
+    let mut acc = Hd::constant(nd, 0.0);
     for (si, di) in s.iter().zip(&d) {
         acc.axpy(*si, di);
     }
+    // ADR 0522 D4: `Pi = (1/2) s . d + Pi_m`, the membrane part summed separately.
+    let bending = acc.v;
+    let mut membrane_energy = 0.0;
     if let Some((a, points)) = &c.membrane {
         for pt in points {
             // ADR 0490 amendment 2: the Green strain from the displacement gradients `h_X = sum N_a,X w_a` (the reference
             // tangents are `e_1`, `e_2` of the facet), without forming `g . g - 1`.
-            let mut hx: Vec<Hd> = (0..3).map(|_| Hd::constant(m, 0.0)).collect();
-            let mut hy: Vec<Hd> = (0..3).map(|_| Hd::constant(m, 0.0)).collect();
+            let mut hx: Vec<Hd> = (0..3).map(|_| Hd::constant(nd, 0.0)).collect();
+            let mut hy: Vec<Hd> = (0..3).map(|_| Hd::constant(nd, 0.0)).collect();
             for (b, wb) in w_rel.iter().enumerate() {
                 for k in 0..3 {
                     hx[k].axpy(pt.nx[b], &wb[k]);
@@ -554,7 +592,7 @@ fn evaluate(c: &Corotated, ue: &[f64], want_tangent: bool) -> Result<(Vec<f64>, 
             let hx: V3 = hx.try_into().expect("three components");
             let hy: V3 = hy.try_into().expect("three components");
             let along = |e: &Vec3, h: &V3| {
-                let mut x = Hd::constant(m, 0.0);
+                let mut x = Hd::constant(nd, 0.0);
                 for k in 0..3 {
                     x.axpy(e[k], &h[k]);
                 }
@@ -567,19 +605,26 @@ fn evaluate(c: &Corotated, ue: &[f64], want_tangent: bool) -> Result<(Vec<f64>, 
                 along(e1, &hy).add(&along(e2, &hx)).add(&v_dot(&hx, &hy)),
             ];
             for r in 0..3 {
-                let mut ae = Hd::constant(m, 0.0);
+                let mut ae = Hd::constant(nd, 0.0);
                 for (cs, es) in a[r].iter().zip(&eps) {
                     ae.axpy(*cs, es);
                 }
-                acc.axpy(0.5 * pt.weight, &eps[r].mul(&ae));
+                if energy_only {
+                    membrane_energy += 0.5 * pt.weight * (eps[r].v * ae.v);
+                } else {
+                    acc.axpy(0.5 * pt.weight, &eps[r].mul(&ae));
+                }
             }
         }
     }
     // The membrane energy enters `acc` as an energy: its gradient and Hessian are those of `Pi_m`; the first part of `acc`
     // is `sum s_i d_i`, whose gradient is `J^T s` and whose Hessian is `sum s_i Hess d_i`.
+    if energy_only {
+        return Ok(Evaluated::Energy(0.5 * bending + membrane_energy));
+    }
     let force = acc.g.clone();
     if !want_tangent {
-        return Ok((force, None));
+        return Ok(Evaluated::Derivatives(force, None));
     }
     let mut k = vec![0.0; m * m];
     // J^T K_r J on the upper triangle.
@@ -606,7 +651,7 @@ fn evaluate(c: &Corotated, ue: &[f64], want_tangent: bool) -> Result<(Vec<f64>, 
             idx += 1;
         }
     }
-    Ok((force, Some(k)))
+    Ok(Evaluated::Derivatives(force, Some(k)))
 }
 
 fn locate(element: usize) -> impl Fn(FemError) -> FemError {
@@ -646,6 +691,22 @@ pub fn model_internal_force(
 ) -> Result<Vec<f64>> {
     let c = corotated(mesh, element, coords, material)?;
     Ok(evaluate(&c, ue, false)?.0)
+}
+
+/// The strain energy `Pi = (1/2) d^T K_r d + Pi_m` (ADR 0490 D2 step 4) of the shell element `element` of a mesh at the
+/// element unknowns `ue` (as [`model_force_and_tangent`]), the potential whose gradient is the internal force (ADR 0522 D4).
+pub fn model_strain_energy(
+    mesh: &SolidMesh,
+    element: usize,
+    coords: &[Vec3],
+    material: &Material,
+    ue: &[f64],
+) -> Result<f64> {
+    let c = corotated(mesh, element, coords, material)?;
+    match evaluate_in(&c, ue, Want::Energy)? {
+        Evaluated::Energy(e) => Ok(e),
+        Evaluated::Derivatives(..) => unreachable!("energy asked"),
+    }
 }
 
 /// The internal force and the tangent of the shell element `element` of `model` at the element unknowns `ue`; errors are

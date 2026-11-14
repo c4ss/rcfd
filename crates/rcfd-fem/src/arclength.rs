@@ -12,6 +12,9 @@
 //! >= 1` the increment so far). A failed attempt halves `Ds`; after a converged point `Ds` doubles back towards the given
 //! length. The load direction is that of the dead loads: a contribution's dependence on the load factor is in the residual,
 //! not in `du_f`.
+//!
+//! Shell4 and Shell3 take the corotated element of ADR 0490 (ADR 0522, F-585), their rotation unknowns corrected
+//! additively as every other unknown.
 
 use crate::constraint::{check_rigid_body_motions, prescribed_equations, Prescribed};
 use crate::element::ElementState;
@@ -217,7 +220,8 @@ pub fn trace(
     stop: &mut dyn FnMut(&PathPoint) -> bool,
 ) -> Result<ArcLengthPath> {
     model.validate()?;
-    model.check_supported_nonlinear()?;
+    // ADR 0522 D4: Shell4 and Shell3 take the corotated element of ADR 0490.
+    model.check_supported_nonlinear_shells()?;
     crate::nonlinear::check_driver_model(model)?;
     options.check()?;
     let dofs = model.dof_map();

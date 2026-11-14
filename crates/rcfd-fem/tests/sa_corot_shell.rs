@@ -771,6 +771,7 @@ fn is_shell4_refusal(r: &rcfd_fem::Result<impl Sized>) -> (bool, String) {
 }
 
 #[test]
+#[ignore = "superseded by ADR 0522 (F-585): arclength::trace, nl_transient::Integrator::new and solve_from take shells; ADR 0490 R1 record"]
 fn r1_refusals_kept() {
     let mut ck = Checks::new();
     let m = roll_strip(false, Membrane::Default, true, 1.0);
@@ -804,5 +805,53 @@ fn r1_refusals_kept() {
     };
     let ok = matches!(&r, Err(FemError::InvalidValue { key: "nonlinear", .. }));
     ck.holds("R1 solve refuses a Shell4 block with the J2 material", ok, &d);
+    ck.finish();
+}
+
+/// ADR 0522 X1: `r1_refusals_kept` after F-585: the arc length, the nonlinear transient integrator and `solve_from` take the
+/// Shell4 strip (no `NotYetSupported`); `solve` still refuses a Shell4 block with the J2 material (key `"nonlinear"`).
+#[test]
+fn r1_refusals_kept_after_f585() {
+    let mut ck = Checks::new();
+    let m = roll_strip(false, Membrane::Default, true, 1.0);
+    let mut stop = |_: &PathPoint| true;
+    let not_refused = |r: &rcfd_fem::Result<()>| -> (bool, String) {
+        match r {
+            Ok(()) => (true, "Ok".to_string()),
+            Err(e) => (!matches!(e, FemError::NotYetSupported { .. }), format!("{e:?}")),
+        }
+    };
+    let (ok, d) = not_refused(&trace(&m, &[], &[], &ArcLengthOptions::new(0.1), &[], &mut stop).map(|_| ()));
+    ck.holds("X1 arclength::trace takes Shell4", ok, &d);
+    let (ok, d) = not_refused(&Integrator::new(&m, &[], &NlTransientOptions::new(1e-3)).map(|_| ()));
+    ck.holds("X1 nl_transient::Integrator::new takes Shell4", ok, &d);
+    let n = m.dof_map().n_equations();
+    let states = initial_states(&m).unwrap();
+    let (ok, d) = not_refused(
+        &solve_from(
+            &m,
+            &[],
+            &vec![0.0; n],
+            &vec![0.0; n],
+            &states,
+            &NewtonOptions::new(1),
+            &[],
+        )
+        .map(|_| ()),
+    );
+    ck.holds("X1 solve_from takes Shell4", ok, &d);
+    let mut j2 = SolidModel::new(m.mesh().clone());
+    j2.add_material("all", Material::j2(steel(0.3), 2.5e8, 1.0e9, 0.0).unwrap())
+        .unwrap();
+    for c in 0..6 {
+        j2.add_constraint(Constraint::displacement("root", c, 0.0)).unwrap();
+    }
+    let r = solve(&j2, &[], &[], &NewtonOptions::new(1));
+    let d = match &r {
+        Ok(_) => "Ok".to_string(),
+        Err(e) => format!("{e:?}"),
+    };
+    let ok = matches!(&r, Err(FemError::InvalidValue { key: "nonlinear", .. }));
+    ck.holds("X1 solve refuses a Shell4 block with the J2 material", ok, &d);
     ck.finish();
 }

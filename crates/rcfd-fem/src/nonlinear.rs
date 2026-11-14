@@ -1812,7 +1812,8 @@ pub fn solve_from_at(
     context: &PointContext,
 ) -> Result<Equilibrium> {
     model.validate()?;
-    model.check_supported_nonlinear()?;
+    // ADR 0522 D4: Shell4 and Shell3 take the corotated element of ADR 0490.
+    model.check_supported_nonlinear_shells()?;
     check_driver_model(model)?;
     options.check()?;
     check_fields(model, start, states)?;
