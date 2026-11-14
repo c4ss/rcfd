@@ -151,6 +151,86 @@ pub fn broadband_damage_rate_curve(m0: f64, m1: f64, m2: f64, m4: f64, curve: &S
     broadband_damage_rate(m0, m1, m2, m4, m, c)
 }
 
+// ------------------------------------------------------------------------------------------------ Benasciutti-Tovo
+
+const BT: &str = "benasciutti-tovo";
+
+/// The bandwidth parameters `alpha1 = m1/sqrt(m0 m2)`, `alpha2 = m2/sqrt(m0 m4)` and the weight `b` of the
+/// Benasciutti-Tovo rate (ADR 0524).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BenasciuttiTovo {
+    /// `m1/sqrt(m0 m2)`.
+    pub alpha1: f64,
+    /// `m2/sqrt(m0 m4)`.
+    pub alpha2: f64,
+    /// The weight of the narrow-band damage.
+    pub b: f64,
+}
+
+/// The coefficients of the Benasciutti-Tovo rate from the moments `m0, m1, m2, m4` (Hz). `b` is the fitted expression of
+/// Benasciutti and Tovo, Int. J. Fatigue 27 (2005), recalled from memory and unverified (ADR 0524 Q1); it is `0` for
+/// `alpha2 = 1` (the rate does not depend on it there).
+pub fn benasciutti_tovo_coefficients(m0: f64, m1: f64, m2: f64, m4: f64) -> Result<BenasciuttiTovo> {
+    positive(BT, "moment m0", m0)?;
+    positive(BT, "moment m2", m2)?;
+    positive(BT, "moment m4", m4)?;
+    if !(m1.is_finite() && m1 >= 0.0) {
+        return Err(invalid(BT, format!("moment m1 {m1:e} must be finite and >= 0")));
+    }
+    let a1 = m1 / (m0 * m2).sqrt();
+    let a2 = m2 / (m0 * m4).sqrt();
+    for (name, a) in [("alpha1", a1), ("alpha2", a2)] {
+        if !a.is_finite() || a > 1.0 + 1e-12 {
+            return Err(invalid(
+                BT,
+                format!("{name} = {a:e} exceeds 1 (moments m0 {m0:e}, m1 {m1:e}, m2 {m2:e}, m4 {m4:e})"),
+            ));
+        }
+    }
+    if (a2 - 1.0).abs() < 1e-12 {
+        return Ok(BenasciuttiTovo {
+            alpha1: a1,
+            alpha2: a2,
+            b: 0.0,
+        });
+    }
+    let d = a1 - a2;
+    let b = d * (1.112 * (1.0 + a1 * a2 - (a1 + a2)) * (2.11 * a2).exp() + d) / ((a2 - 1.0) * (a2 - 1.0));
+    if !b.is_finite() || !(-1e-12..=1.0 + 1e-12).contains(&b) {
+        return Err(invalid(
+            BT,
+            format!("weight b = {b:e} outside [0, 1] (alpha1 {a1:e}, alpha2 {a2:e})"),
+        ));
+    }
+    Ok(BenasciuttiTovo {
+        alpha1: a1,
+        alpha2: a2,
+        b,
+    })
+}
+
+/// The Benasciutti-Tovo damage rate (1/s) on the curve `N = c S^-m`: `[b + (1 - b) alpha2^(m-1)] D_NB` with the narrow-band
+/// rate `D_NB` of [`narrow_band_damage_rate`] at the zero up-crossing rate `sqrt(m2/m0)` (ADR 0524). The refusals are those of
+/// [`benasciutti_tovo_coefficients`] and of a non-positive `m` or `c`.
+pub fn benasciutti_tovo_damage_rate(m0: f64, m1: f64, m2: f64, m4: f64, m: f64, c: f64) -> Result<f64> {
+    positive(BT, "exponent m", m)?;
+    positive(BT, "constant c", c)?;
+    let k = benasciutti_tovo_coefficients(m0, m1, m2, m4)?;
+    let nb = narrow_band_damage_rate((m2 / m0).sqrt(), m0.sqrt(), m, c)?;
+    Ok((k.b + (1.0 - k.b) * k.alpha2.powf(m - 1.0)) * nb)
+}
+
+/// [`benasciutti_tovo_damage_rate`] on the power law of a curve; a table or an endurance limit is refused.
+pub fn benasciutti_tovo_damage_rate_curve(m0: f64, m1: f64, m2: f64, m4: f64, curve: &SnCurve) -> Result<f64> {
+    let (m, c) = curve.power_law().ok_or_else(|| {
+        invalid(
+            BT,
+            "the curve must be a power law without an endurance limit (Basquin or power)".to_string(),
+        )
+    })?;
+    benasciutti_tovo_damage_rate(m0, m1, m2, m4, m, c)
+}
+
 // ------------------------------------------------------------------------------------------------------------- curves
 
 #[derive(Debug, Clone, PartialEq)]

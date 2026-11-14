@@ -1652,6 +1652,7 @@ used (`sigma_f = 900` MPa, `b = -0.09`, `sigma_u = 600` MPa, `sigma_y = 400` MPa
 | Kirsch: hoop stress `3 sigma_0` at the edge of a circular hole, 90 degrees from remote tension | from memory | Kirsch, Z. VDI 42 (1898) 797-807; Timoshenko and Goodier, Theory of Elasticity: NOT read; measured 1.0123 on the quarter plate of ADR 0449 (`r/W = 0.05`) |
 | Finite-width factor of a hole, `K_tn = 3 - 3.14 (d/W) + 3.667 (d/W)^2 - 1.527 (d/W)^3` (gross 3.023 at `d/W = 0.1`) | from memory | Peterson's Stress Concentration Factors after Howland (1930): NOT read; used only for the estimate of K1 in ADR 0449, not for a limit |
 | Cantilever root stress `6 P L/(b h^2)` | derived | Euler-Bernoulli beam; the support of beam theory of ADR 0433 D2 |
+| Benasciutti-Tovo broadband damage rate `[b + (1 - b) alpha2^(m-1)] D_NB`, `alpha1 = m1/sqrt(m0 m2)`, `alpha2 = m2/sqrt(m0 m4)`, `b = (alpha1 - alpha2) [1.112 (1 + alpha1 alpha2 - (alpha1 + alpha2)) exp(2.11 alpha2) + (alpha1 - alpha2)]/(alpha2 - 1)^2`, `D_NB` at the up-crossing rate `sqrt(m2/m0)` (ADR 0524) | from memory, **fitted `b` unverified** | Benasciutti and Tovo, Int. J. Fatigue 27 (2005) 867-877: NOT read; the simpler `b = (alpha1 - alpha2)/(1 - alpha1)` (other paper) is not used; corroborated by BT/Dirlik = 0.99948 on the two-mode case of ADR 0497 |
 
 ## F-409 orthotropic elasticity, material axes, orthotropic expansion, temperature tables (ADR 0452)
 

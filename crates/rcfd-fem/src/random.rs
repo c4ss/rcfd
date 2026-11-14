@@ -249,6 +249,12 @@ impl Moments {
         crate::fatigue::broadband_damage_rate(self.m0, self.m1, self.m2, self.m4, m, c)
     }
 
+    /// The Benasciutti-Tovo damage rate on the curve `N = c S^-m` from `m0, m1, m2, m4` as they are (ADR 0524), by
+    /// [`crate::fatigue::benasciutti_tovo_damage_rate`].
+    pub fn benasciutti_tovo_damage_rate(&self, m: f64, c: f64) -> Result<f64> {
+        crate::fatigue::benasciutti_tovo_damage_rate(self.m0, self.m1, self.m2, self.m4, m, c)
+    }
+
     /// The narrow-band damage rate on the curve `N = c S^-m` from `m0, m2` as they are, by
     /// [`crate::fatigue::narrow_band_damage_rate`].
     pub fn narrow_band_damage_rate(&self, m: f64, c: f64) -> Result<f64> {
