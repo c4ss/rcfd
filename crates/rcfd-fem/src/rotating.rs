@@ -41,6 +41,9 @@
 //! ADR 0459 (F-542): a part of the orthotropic or the tabulated material of ADR 0452 (solid elements) takes the per-point
 //! stiffness, the stiffness of a table at the model's temperature field, also in the static solve of the pre-stress at 1
 //! rad/s, which has no thermal strain; a sector or a cyclic constraint with either material is refused.
+//!
+//! ADR 0462 (F-544): a sector or a cyclic constraint with either material is taken when every material with its own axes has
+//! cylindrical axes about the cyclic axis and origin ([`crate::mat_ortho::check_cyclic_axes`]); other axes stay refused.
 
 use crate::assemble::{assemble_with, point_stiffness};
 use crate::constraint::{check_rigid_body_motions, prescribed_equations, reduce};
@@ -493,9 +496,10 @@ fn check_frame(axis: Vec3, origin: Vec3) -> Result<()> {
 
 fn check_model(model: &SolidModel) -> Result<()> {
     model.validate()?;
-    // ADR 0459 D1, D3: solid elements, also of the orthotropic and the tabulated material; not with a cyclic constraint.
+    // ADR 0459 D1: solid elements, also of the orthotropic and the tabulated material; ADR 0462 D2: with a cyclic constraint
+    // only with cylindrical axes about its axis and origin.
     model.check_supported_solids_with_materials()?;
-    crate::mat_ortho::refuse_with_cyclic(model)?;
+    crate::mat_ortho::check_cyclic_axes(model)?;
     if crate::mpc::uses_transformation(model) {
         return crate::mpc::refuse_nonzero_values(model, "a rotating modal analysis");
     }
@@ -996,8 +1000,8 @@ impl<'a> RotatingSector<'a> {
     /// [`RotatingPart::new`] of the sector (one static solve of the centrifugal load at 1 rad/s under the index-0 rows).
     /// Refuses a model without exactly one cyclic constraint and whatever [`RotatingPart::new`] refuses.
     pub fn new(model: &'a SolidModel, options: &RotatingOptions) -> Result<RotatingSector<'a>> {
-        // ADR 0459 D3: a sector of the orthotropic or the tabulated material is refused before its frame.
-        crate::mat_ortho::refuse_with_cyclic(model)?;
+        // ADR 0459 D3, ADR 0462 D2: a sector of either material with other axes is refused before its frame.
+        crate::mat_ortho::check_cyclic_axes(model)?;
         let (sectors, axis, origin) = Self::frame(model)?;
         let part = RotatingPart::new(model, axis, origin, options)?;
         Ok(RotatingSector {
@@ -1014,7 +1018,7 @@ impl<'a> RotatingSector<'a> {
         prestress: Prestress,
         options: &RotatingOptions,
     ) -> Result<RotatingSector<'a>> {
-        crate::mat_ortho::refuse_with_cyclic(model)?;
+        crate::mat_ortho::check_cyclic_axes(model)?;
         let (sectors, axis, origin) = Self::frame(model)?;
         let part = RotatingPart::with_unit_prestress(model, axis, origin, prestress, options)?;
         Ok(RotatingSector {

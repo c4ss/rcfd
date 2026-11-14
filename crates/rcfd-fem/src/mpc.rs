@@ -1203,26 +1203,9 @@ pub fn add_supports(k: &mut CsrMatrix, model: &SolidModel) -> Result<()> {
 fn check_transformation_model(model: &SolidModel) -> Result<()> {
     // ADR 0457 D2: also the orthotropic and the tabulated material on solid elements (ADR 0452 D6).
     model.check_supported_with_materials()?;
-    // ADR 0457 D3: the cyclic rows rotate translations; a material with its own axes is not opened with them.
-    if let Some(j) = model
-        .constraints()
-        .iter()
-        .position(|c| matches!(c, Constraint::Cyclic { .. }))
-    {
-        if let Some((i, (set, m))) = model
-            .materials()
-            .iter()
-            .enumerate()
-            .find(|(_, (_, m))| crate::mat_ortho::is_point_material(m))
-        {
-            return Err(FemError::NotYetSupported {
-                item: "material",
-                variant: m.name(),
-                location: format!("material {i}, element set '{set}', with the cyclic constraint {j}"),
-                package: crate::mat_ortho::FOLLOW_UP,
-            });
-        }
-    }
+    // ADR 0457 D3, ADR 0462 D2: the cyclic rows rotate translations; a material with its own axes is taken with them only
+    // with cylindrical axes about the constraint's axis and origin.
+    crate::mat_ortho::check_cyclic_axes(model)?;
     let has = |kind: crate::mesh::ElementKind| model.mesh().blocks().iter().any(|b| b.kind() == kind);
     let refusal = if has(crate::mesh::ElementKind::Beam2) {
         Some(("Beam2", crate::beam::FOLLOW_UP))

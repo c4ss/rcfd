@@ -454,7 +454,8 @@ pub fn check_model(model: &SolidModel) -> Result<()> {
 
 /// Refuses a model with a cyclic constraint and a material of either per-point variant (ADR 0457 D3, ADR 0459 D3: the cyclic
 /// rows rotate translations; a material with its own axes is not opened with them, also with cylindrical axes about the
-/// constraint's axis), naming the variant, its set and the constraint. A model without either is accepted.
+/// constraint's axis), naming the variant, its set and the constraint. A model without either is accepted. ADR 0462 D6: the
+/// check of buckling and the transient integrator; the cyclic paths take [`check_cyclic_axes`].
 pub(crate) fn refuse_with_cyclic(model: &SolidModel) -> Result<()> {
     let Some(j) = model
         .constraints()
@@ -477,6 +478,75 @@ pub(crate) fn refuse_with_cyclic(model: &SolidModel) -> Result<()> {
         }),
         None => Ok(()),
     }
+}
+
+/// The tolerance of the coincidence of cylindrical material axes with a cyclic constraint's axis (ADR 0462 D1): the sine of
+/// the angle between the two axes, and the distance of the material origin from the cyclic line relative to the largest
+/// distance of a mesh node from that line.
+pub const CYCLIC_AXES_TOLERANCE: f64 = 1e-10;
+
+/// Whether the axes rule `rule` is cylindrical about the line through `origin` along the unit `n` (either sense), within
+/// [`CYCLIC_AXES_TOLERANCE`] of the length `scale` (ADR 0462 D1).
+fn coaxial(rule: &MaterialAxes, origin: Vec3, n: Vec3, scale: f64) -> bool {
+    let MaterialAxes::Cylindrical { origin: o, axis } = rule else {
+        return false;
+    };
+    let len = (axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]).sqrt();
+    let m = [axis[0] / len, axis[1] / len, axis[2] / len];
+    let cross = [
+        n[1] * m[2] - n[2] * m[1],
+        n[2] * m[0] - n[0] * m[2],
+        n[0] * m[1] - n[1] * m[0],
+    ];
+    let sine = (cross[0] * cross[0] + cross[1] * cross[1] + cross[2] * cross[2]).sqrt();
+    let d = [o[0] - origin[0], o[1] - origin[1], o[2] - origin[2]];
+    let along = d[0] * n[0] + d[1] * n[1] + d[2] * n[2];
+    let p = [d[0] - along * n[0], d[1] - along * n[1], d[2] - along * n[2]];
+    let off = (p[0] * p[0] + p[1] * p[1] + p[2] * p[2]).sqrt();
+    sine <= CYCLIC_AXES_TOLERANCE && off <= CYCLIC_AXES_TOLERANCE * scale
+}
+
+/// The check of the cyclic paths that take the per-point variants (ADR 0462 D1, D2): a model without a cyclic constraint or
+/// without either variant is accepted; otherwise every material of either variant with its own axes (an orthotropic one,
+/// a table on an orthotropic base) must have cylindrical axes about the axis and origin of every cyclic constraint, which
+/// makes the material the same in every sector. The first that has not is refused with the error of
+/// [`refuse_with_cyclic`], naming the variant, its set and the constraint.
+pub(crate) fn check_cyclic_axes(model: &SolidModel) -> Result<()> {
+    if !uses_point_materials(model) {
+        return Ok(());
+    }
+    for (j, c) in model.constraints().iter().enumerate() {
+        let crate::model::Constraint::Cyclic { axis, origin, .. } = c else {
+            continue;
+        };
+        let len = (axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]).sqrt();
+        let n = [axis[0] / len, axis[1] / len, axis[2] / len];
+        let scale = model
+            .mesh()
+            .nodes()
+            .iter()
+            .map(|x| {
+                let d = [x[0] - origin[0], x[1] - origin[1], x[2] - origin[2]];
+                let along = d[0] * n[0] + d[1] * n[1] + d[2] * n[2];
+                let p = [d[0] - along * n[0], d[1] - along * n[1], d[2] - along * n[2]];
+                (p[0] * p[0] + p[1] * p[1] + p[2] * p[2]).sqrt()
+            })
+            .fold(0.0, f64::max);
+        for (i, (set, m)) in model.materials().iter().enumerate() {
+            let Some(rule) = axes_rule(m) else {
+                continue;
+            };
+            if !(len > 0.0 && len.is_finite() && coaxial(rule, *origin, n, scale)) {
+                return Err(FemError::NotYetSupported {
+                    item: "material",
+                    variant: m.name(),
+                    location: format!("material {i}, element set '{set}', with the cyclic constraint {j}"),
+                    package: FOLLOW_UP,
+                });
+            }
+        }
+    }
+    Ok(())
 }
 
 /// The material with its thermal expansion set to zero (ADR 0459 D2): an isotropic or orthotropic material with the expansion

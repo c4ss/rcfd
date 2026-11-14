@@ -97,7 +97,13 @@ fn all_digests() -> Vec<(String, u64)> {
     let fb = nodal_load_vector(&ms, &[]).unwrap();
     for k in [0, 1, 6] {
         let sin = if k == 1 { fb.clone() } else { vec![0.0; fb.len()] };
-        let r = solve_static_harmonic(&s, &[], &HarmonicLoad::new(k, fa.clone(), sin), &StaticOptions::default()).unwrap();
+        let r = solve_static_harmonic(
+            &s,
+            &[],
+            &HarmonicLoad::new(k, fa.clone(), sin),
+            &StaticOptions::default(),
+        )
+        .unwrap();
         out.push((
             format!("sector static harmonic {k}"),
             digest(r.cos.iter().chain(&r.sin).copied()),
@@ -105,7 +111,10 @@ fn all_digests() -> Vec<(String, u64)> {
     }
     // The modal analysis and the static solve of the sector on the transformation.
     let mr = modal_analysis_with(&s, &[], &opts(3)).unwrap();
-    out.push(("sector modal_analysis_with eigenvalues".into(), digest(mr.eigenvalues.iter().copied())));
+    out.push((
+        "sector modal_analysis_with eigenvalues".into(),
+        digest(mr.eigenvalues.iter().copied()),
+    ));
     let mut mt = s.clone();
     mt.add_load(Load::centrifugal(AXIS, [0.0; 3], 300.0)).unwrap();
     let t: Vec<f64> = mt
