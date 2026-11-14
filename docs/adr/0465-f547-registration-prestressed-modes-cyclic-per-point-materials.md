@@ -243,3 +243,11 @@ is refused (R1) and the test, if run, prints the refusal and returns.
 - The pre-stress must repeat in every sector for the sector to describe the full rotor (D3); `prestressed_modes` cannot test
   that for a caller's pre-stress (a pre-stress is data), and this is not checked.
 - Buckling and the transient integrator with a cyclic constraint keep refusing both variants (D5).
+
+## Amendment 1 (2026-11-14, before any run of a check)
+
+A defect of the set-up of NC0 found while writing its test, before any check was run: on the base (main a52a5291, after ADR
+0462) the static solve of the sector D with `ORTHO(Fixed(I))` under a centrifugal load is refused on the transformation
+(ADR 0462 R1, `solve_static (centrifugal)`), so the pre-stress `CEN` of D7 and NC0 cannot be formed for that sector. NC0
+takes the uniform pre-stress `UNI` of D8 on the sector and on its full rotor instead (a stress that repeats in every sector,
+D3). Its quantity and expectation are unchanged. No other check is changed.
