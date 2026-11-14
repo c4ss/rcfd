@@ -10041,13 +10041,25 @@ fixed by the item's registration ADR before any code.
     cells and the membrane forces, moments, shear forces and top and bottom surface stresses of
     rcfd_fem::shell::stresses as cell data; a model without shells writes the bytes it wrote before; the arrays read
     back equal the result within 1e-15.
-- [ ] **F-522** Shells on the transformation path and body loads on shells: rigid sets and supports on shell nodes, gravity and centrifugal loads
+- [x] **F-522** Shells on the transformation path and body loads on shells: rigid sets and supports on shell nodes, gravity and centrifugal loads
   - depends on: F-392, F-513
   - acceptance: Every limit not stated here is registered in the ADR before the run. Gravity on a shell model gives
     reactions rho t A g within 1e-12 and the consistent nodal loads of the bilinear translations; a shell plate held by
     a rigid set on an edge has the deflection of the clamped plate within 1e-10; a nodal spring on a shell rotation
     gives k_theta theta = M within 1e-10; the free rigid motions count takes shell nodes; a model without shells gives
     the bits it gave before.
+  - note: Structural solver, intermediate tier. ADR 0435, 2026-11-14: shells on the transformation path and body loads
+    on shells. solve_static_mpc and modal_analysis_mpc take Shell4 models (check_supported_with_structures at the entry:
+    a shell node shared with a solid stays refused, observed before the transformation is built; a shell model with a
+    cyclic constraint refused naming a follow-up of ADR 0432); rigid sets tie the six unknowns of shell nodes, nodal
+    springs, linear constraints and prescribed values act on shell rotations, free_rigid_motions counts shell nodes.
+    Gravity and the centrifugal load on Shell4 by shell::body_load_vector (t int N_i b dA at the projected mid-surface,
+    offset moments on warped facets). Met: gravity resultant and the consistent loads of the bilinear translations
+    within 3.6e-16, reactions rho t A g within 2.8e-16 (limit 1e-12); a plate held by a rigid set on an edge (one edge
+    node clamped, or the set over the face of a fixed Hex8 block) equals the clamped plate bit for bit, frequencies too;
+    k_theta theta = M within 2.5e-13 and in series with the plate 2.4e-12 (limit 1e-10); counts 6, 1, 0, 1, 6, 0, 0;
+    spinning strip equals the 1D bar within 5.4e-15, centrifugal resultant and warped-facet moments within 3e-16. Solid
+    and beam bits unchanged (si_scaffold_bits, baseline_hashes, every rcfd-fem test). Eleven mutations, all caught.
 - [ ] **F-523** Deck pressure loads on non-parallelogram faces
   - depends on: F-384
   - acceptance: Every limit not stated here is registered in the ADR before the run. On a trapezoidal and on a warped
@@ -10055,3 +10067,15 @@ fixed by the item's registration ADR before any code.
     and the lumped-load mutation is caught.
   - note: Priority P3. Size S. Area: structural. Opened by ADR 0436: the consistent load of deck_pressure_loads is
     checked only on parallelogram faces, where lumping is exact (mutation not caught).
+- [ ] **F-524** Rotating plane-stress disc of Shell4 facets against the closed form
+  - depends on: F-522
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A flat annular disc of Shell4
+    elements spinning about its axis has the radial displacement and the hoop and radial membrane stresses of the
+    plane-stress rotating disc within limits registered from a discretisation estimate; the error decreases at the
+    registered order under two mesh refinements.
+- [ ] **F-525** Nodal body-force fields and thermal loads on Shell4
+  - depends on: F-522
+  - acceptance: Every limit not stated here is registered in the ADR before the run. Load::BodyForceNodal on a shell
+    model gives the consistent loads t int N_i b dA of the interpolated field within 1e-12; a uniform temperature change
+    on a free shell plate gives the membrane strain alpha dT and zero stress within 1e-12; a model without shells gives
+    the bits it gave before.
