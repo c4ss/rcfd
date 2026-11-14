@@ -21,8 +21,11 @@
 //! differences with the step, `s' = (s(t + dt) - s(t - dt))/(2 dt)`, `s'' = (s(t + dt) - 2 s(t) + s(t - dt))/dt^2` (second
 //! order), so a motion table covers one step beyond each end of the run. A model without these features runs the lines of
 //! ADR 0389 unchanged.
+//!
+//! ADR 0459 (F-542): the orthotropic and the tabulated material of ADR 0452 on solid elements, both paths, through the
+//! per-point stiffness (a table at the model's temperature field); not with a cyclic constraint.
 
-use crate::assemble::stiffness_with;
+use crate::assemble::point_stiffness;
 use crate::constraint::{prescribed_equations, reduce, Prescribed};
 use crate::error::{FemError, Result};
 use crate::loads::nodal_load_vector;
@@ -492,7 +495,9 @@ impl Integrator {
     ) -> Result<Integrator> {
         check_time_step(options.time_step)?;
         model.validate()?;
-        model.check_supported()?;
+        // ADR 0459 D1, D3: solid elements, also of the orthotropic and the tabulated material; not with a cyclic constraint.
+        model.check_supported_solids_with_materials()?;
+        crate::mat_ortho::refuse_with_cyclic(model)?;
         let parameters = options.method.parameters()?;
         let damping = options.damping.unwrap_or(Rayleigh {
             mass: 0.0,
@@ -578,7 +583,7 @@ impl Integrator {
         }
         let n = tr.n_mesh();
         let nn = tr.n_unknowns();
-        let mut k = stiffness_with(model, options.threads)?;
+        let mut k = point_stiffness(model, options.threads)?;
         add_supports(&mut k, model)?;
         let m = consistent_with(model, options.threads)?;
         let zero = vec![0.0; nn];
@@ -646,7 +651,9 @@ impl Integrator {
     fn eliminated(model: &SolidModel, loads: &[LoadHistory], options: &TransientOptions) -> Result<Integrator> {
         check_time_step(options.time_step)?;
         model.validate()?;
-        model.check_supported()?;
+        // ADR 0459 D1, D3, as on the transformation.
+        model.check_supported_solids_with_materials()?;
+        crate::mat_ortho::refuse_with_cyclic(model)?;
         let dofs = model.dof_map();
         let fixed = prescribed_equations(model, &[])?;
         if let Some(&(eq, v)) = fixed.iter().find(|&&(_, v)| v != 0.0) {
@@ -659,7 +666,7 @@ impl Integrator {
                 ),
             });
         }
-        let k = stiffness_with(model, options.threads)?;
+        let k = point_stiffness(model, options.threads)?;
         let m = consistent_with(model, options.threads)?;
         let zero = vec![0.0; k.n];
         let kr = reduce(&k, &zero, &fixed)?;

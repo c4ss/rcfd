@@ -37,12 +37,16 @@
 //! sqrt(sigma))` (diagonal blocks `K_eff - sigma M`), the eigenvalues nearest the shift with ADR 0416's flag on them
 //! ([`RotatingPart::whirl_state_sparse`], [`RotatingSector::whirl_state_sparse`], [`gyroscopic_state_eigen_sparse`]);
 //! opt-in by calling them.
+//!
+//! ADR 0459 (F-542): a part of the orthotropic or the tabulated material of ADR 0452 (solid elements) takes the per-point
+//! stiffness, the stiffness of a table at the model's temperature field, also in the static solve of the pre-stress at 1
+//! rad/s, which has no thermal strain; a sector or a cyclic constraint with either material is refused.
 
-use crate::assemble::{assemble_with, stiffness_with};
+use crate::assemble::{assemble_with, point_stiffness};
 use crate::constraint::{check_rigid_body_motions, prescribed_equations, reduce};
 use crate::element::{element_for, ElementMatrix};
 use crate::error::{FemError, Result};
-use crate::geometric::{geometric_stiffness, Prestress};
+use crate::geometric::{assemble_geometric, Prestress};
 use crate::mass::{consistent_with, element_mass};
 use crate::modal::{modal_analysis, ModalOptions, ModalResult};
 use crate::model::{Load, SolidModel};
@@ -228,11 +232,18 @@ pub struct RotatingPart<'a> {
     axis: Vec3,
 }
 
-/// A copy of `model` whose only load is the centrifugal load at 1 rad/s.
+/// A copy of `model` whose only load is the centrifugal load at 1 rad/s. With an orthotropic or tabulated material (ADR 0459
+/// D2) the copy also has the model's temperature field, for the stiffness of a table, and every material without its thermal
+/// expansion: the pre-stress has no thermal strain.
 fn unit_centrifugal_model(model: &SolidModel, axis: Vec3, origin: Vec3) -> Result<SolidModel> {
     let mut copy = SolidModel::new(model.mesh().clone());
+    let points = crate::mat_ortho::uses_point_materials(model);
     for (set, material) in model.materials() {
-        copy.add_material(set, material.clone())?;
+        if points {
+            copy.add_material(set, crate::mat_ortho::without_expansion(material))?;
+        } else {
+            copy.add_material(set, material.clone())?;
+        }
     }
     for c in model.constraints() {
         copy.add_constraint(c.clone())?;
@@ -241,6 +252,11 @@ fn unit_centrifugal_model(model: &SolidModel, axis: Vec3, origin: Vec3) -> Resul
         copy.add_support(s.clone())?;
     }
     copy.add_load(Load::centrifugal(axis, origin, 1.0))?;
+    if points {
+        if let Some((nodal, reference)) = crate::thermal::temperature_field(model)? {
+            copy.add_load(Load::temperature(nodal.to_vec(), reference))?;
+        }
+    }
     Ok(copy)
 }
 
@@ -274,7 +290,8 @@ impl<'a> RotatingPart<'a> {
         check_model(model)?;
         prestress.check_fits(model)?;
         let threads = options.modal.threads;
-        let mut k = stiffness_with(model, threads)?;
+        // ADR 0459 D1: the per-point stiffness (the orthotropic and the tabulated material at each point).
+        let mut k = point_stiffness(model, threads)?;
         let path = if crate::mpc::uses_transformation(model) {
             crate::mpc::add_supports(&mut k, model)?;
             Path::Transformation(Box::new(crate::mpc::transformation(model, &[])?))
@@ -283,7 +300,7 @@ impl<'a> RotatingPart<'a> {
                 fixed: prescribed_equations(model, &[])?,
             }
         };
-        let kg1 = geometric_stiffness(model, &prestress, threads)?;
+        let kg1 = assemble_geometric(model, &prestress, threads)?;
         let m = consistent_with(model, threads)?;
         let m_perp = spin_softening_mass(model, axis, threads)?;
         Ok(RotatingPart {
@@ -476,7 +493,9 @@ fn check_frame(axis: Vec3, origin: Vec3) -> Result<()> {
 
 fn check_model(model: &SolidModel) -> Result<()> {
     model.validate()?;
-    model.check_supported()?;
+    // ADR 0459 D1, D3: solid elements, also of the orthotropic and the tabulated material; not with a cyclic constraint.
+    model.check_supported_solids_with_materials()?;
+    crate::mat_ortho::refuse_with_cyclic(model)?;
     if crate::mpc::uses_transformation(model) {
         return crate::mpc::refuse_nonzero_values(model, "a rotating modal analysis");
     }
@@ -977,6 +996,8 @@ impl<'a> RotatingSector<'a> {
     /// [`RotatingPart::new`] of the sector (one static solve of the centrifugal load at 1 rad/s under the index-0 rows).
     /// Refuses a model without exactly one cyclic constraint and whatever [`RotatingPart::new`] refuses.
     pub fn new(model: &'a SolidModel, options: &RotatingOptions) -> Result<RotatingSector<'a>> {
+        // ADR 0459 D3: a sector of the orthotropic or the tabulated material is refused before its frame.
+        crate::mat_ortho::refuse_with_cyclic(model)?;
         let (sectors, axis, origin) = Self::frame(model)?;
         let part = RotatingPart::new(model, axis, origin, options)?;
         Ok(RotatingSector {
@@ -993,6 +1014,7 @@ impl<'a> RotatingSector<'a> {
         prestress: Prestress,
         options: &RotatingOptions,
     ) -> Result<RotatingSector<'a>> {
+        crate::mat_ortho::refuse_with_cyclic(model)?;
         let (sectors, axis, origin) = Self::frame(model)?;
         let part = RotatingPart::with_unit_prestress(model, axis, origin, prestress, options)?;
         Ok(RotatingSector {

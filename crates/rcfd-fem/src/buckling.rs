@@ -9,11 +9,14 @@
 //! [`rcfd_linalg::eigen::lowest_buckling_factors`], verified by its Sturm count of `K + s K_sigma`. A pre-stress with no
 //! direction of compression gives no factor, and the result says below which value there is none
 //! ([`BucklingResult::exhausted`]).
+//!
+//! ADR 0459 (F-542): the orthotropic and the tabulated material of ADR 0452 on solid elements, both paths, through the
+//! per-point stiffness (a table at the model's temperature field); not with a cyclic constraint.
 
-use crate::assemble::stiffness_with;
+use crate::assemble::point_stiffness;
 use crate::constraint::{check_rigid_body_motions, prescribed_equations, reduce};
 use crate::error::{FemError, Result};
-use crate::geometric::{geometric_stiffness, Prestress};
+use crate::geometric::{assemble_geometric, Prestress};
 use crate::model::{DofMap, SolidModel};
 use rcfd_linalg::eigen::{lowest_buckling_factors, BucklingEigenOptions, Factorisation, ResidualTest, SturmCheck};
 
@@ -116,7 +119,10 @@ impl BucklingResult {
 /// joined by a hinge line, is refused with `FemError::Solver` naming the unknown of the failing pivot.
 pub fn factors(model: &SolidModel, prestress: &Prestress, options: &BucklingOptions) -> Result<BucklingResult> {
     model.validate()?;
-    model.check_supported()?;
+    // ADR 0459 D1, D3: solid elements, also of the orthotropic and the tabulated material (the per-point stiffness); not
+    // with a cyclic constraint.
+    model.check_supported_solids_with_materials()?;
+    crate::mat_ortho::refuse_with_cyclic(model)?;
     if crate::mpc::uses_transformation(model) {
         return factors_on_transformation(model, prestress, options);
     }
@@ -132,8 +138,8 @@ pub fn factors(model: &SolidModel, prestress: &Prestress, options: &BucklingOpti
         });
     }
     check_rigid_body_motions(model, &fixed)?;
-    let kg = geometric_stiffness(model, prestress, options.threads)?;
-    let k = stiffness_with(model, options.threads)?;
+    let kg = assemble_geometric(model, prestress, options.threads)?;
+    let k = point_stiffness(model, options.threads)?;
     let zero = vec![0.0; k.n];
     let kr = reduce(&k, &zero, &fixed)?;
     let gr = reduce(&kg, &zero, &fixed)?;
@@ -216,9 +222,9 @@ fn factors_on_transformation(
     let dofs = model.dof_map();
     let tr = crate::mpc::transformation(model, &[])?;
     let n = tr.n_mesh();
-    let mut k = stiffness_with(model, options.threads)?;
+    let mut k = point_stiffness(model, options.threads)?;
     crate::mpc::add_supports(&mut k, model)?;
-    let kg = geometric_stiffness(model, prestress, options.threads)?;
+    let kg = assemble_geometric(model, prestress, options.threads)?;
     let zero = vec![0.0; tr.n_unknowns()];
     let (kr, _) = tr.reduce(&k, &zero)?;
     let (gr, _) = tr.reduce(&kg, &zero)?;
