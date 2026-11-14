@@ -31,6 +31,12 @@
 //! ADR 0427 (F-506): the lowest whirl modes of a large part by a shift-invert Lanczos process on the state form of ADR 0411
 //! with a sparse factor of `K_eff` ([`gyroscopic_eigen_sparse`]), without the dense cap; opt-in by
 //! [`RotatingOptions::whirl_solver`] (default [`WhirlSolver::Dense`], the solver of ADR 0411).
+//!
+//! ADR 0428 (F-519): the whirl state above the loss of stiffness of a large part or sector index by an isotropic shift-invert
+//! Arnoldi process on `(C^2 + sigma)^-1` of the state matrix, one indefinite skyline factor of the real form of `Q(i
+//! sqrt(sigma))` (diagonal blocks `K_eff - sigma M`), the eigenvalues nearest the shift with ADR 0416's flag on them
+//! ([`RotatingPart::whirl_state_sparse`], [`RotatingSector::whirl_state_sparse`], [`gyroscopic_state_eigen_sparse`]);
+//! opt-in by calling them.
 
 use crate::assemble::{assemble_with, stiffness_with};
 use crate::constraint::{check_rigid_body_motions, prescribed_equations, reduce};
@@ -60,6 +66,7 @@ pub use whirl::{
     gyroscopic_state_eigen_dense, DenseStateWhirl, Stability, StateWhirl, StateWhirlMode, WhirlStability,
     STABILITY_TOLERANCE,
 };
+pub use whirl::{gyroscopic_state_eigen_sparse, SparseStateEigen, SparseStateOptions, SparseStateWhirl};
 pub use whirl::{CyclicWhirlStability, HarmonicStateWhirl};
 
 fn unit_axis(axis: Vec3) -> Result<Vec3> {
