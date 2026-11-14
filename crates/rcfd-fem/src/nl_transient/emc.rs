@@ -7,7 +7,10 @@
 //! (D1). For the isotropic St. Venant-Kirchhoff solid `u_{n+1} - u_n` dotted with `f_alg` is the change of the strain
 //! energy, `sum_a f_alg,a = 0` and `sum_a x_m,a x f_alg,a = 0`: energy and momenta change only by the residual (ADR 0514).
 //! Newton's iteration with the symmetric tangent `(2/h^2) M + C/h + sum_q w_q [B_m^T (D/2) B_m + G^T (S_alg/2) G]` (D2).
+//! The neo-Hookean material and the discrete gradient of Gonzalez for `S_alg` (ADR 0523, [`super::dg`]) are chosen by
+//! [`super::AlgorithmicStress`]; the isotropic material with `Auto` is the average above, unchanged.
 
+use super::dg::{self, AlgorithmicStress};
 use super::{factor, invalid, Advanced, Integrator};
 use crate::assemble::{assemble_with, element_dofs};
 use crate::constraint::reduce;
@@ -93,8 +96,33 @@ fn inverted(det: f64, q: usize, which: &str, element: &dyn Element) -> Option<Fe
     }
 }
 
+/// The algorithmic stress and the material tangent of one point: the F-570 average for the isotropic material with `Auto`
+/// or `Average` (ADR 0514 D1, the same operations), the discrete gradient or the average of ADR 0523 D3, D4 otherwise.
+fn algorithmic_stress(
+    material: &Material,
+    e0: &[f64; 6],
+    e1: &[f64; 6],
+    context: &PointContext,
+    mode: AlgorithmicStress,
+) -> Result<([f64; 6], crate::material::Matrix6)> {
+    if let Material::Hyperelastic { energy, .. } = material {
+        return dg::hyperelastic_stress(&dg::NeoHookean::of(energy)?, e0, e1, mode);
+    }
+    if mode == AlgorithmicStress::DiscreteGradient {
+        return dg::elastic_discrete_gradient(material, context, e0, e1);
+    }
+    let (s0, _) = material.stress(e0, context, &[])?;
+    let (s1, d) = material.stress(e1, context, &[])?;
+    let mut sa = [0.0; 6];
+    for m in 0..6 {
+        sa[m] = 0.5 * (s0[m] + s1[m]);
+    }
+    Ok((sa, d))
+}
+
 /// The algorithmic force of one element from `u0` (start of the step) to `u1`, and with `want_tangent` its symmetric
 /// tangent with respect to `u1` (D2).
+#[allow(clippy::too_many_arguments)]
 fn element_step(
     element: &dyn Element,
     coords: &[Vec3],
@@ -102,6 +130,7 @@ fn element_step(
     u0: &[f64],
     u1: &[f64],
     context: &PointContext,
+    mode: AlgorithmicStress,
     want_tangent: bool,
 ) -> Result<(Vec<f64>, Option<ElementMatrix>)> {
     let size = 3 * element.n_nodes();
@@ -136,12 +165,7 @@ fn element_step(
         if let Some(e) = inverted(det3(&fm), q, "midpoint", element) {
             return Err(e);
         }
-        let (s0, _) = material.stress(&green_lagrange(&h0), context, &[])?;
-        let (s1, d) = material.stress(&green_lagrange(&h1), context, &[])?;
-        let mut sa = [0.0; 6];
-        for m in 0..6 {
-            sa[m] = 0.5 * (s0[m] + s1[m]);
-        }
+        let (sa, d) = algorithmic_stress(material, &green_lagrange(&h0), &green_lagrange(&h1), context, mode)?;
         let b = b_nonlinear(grad, &fm);
         for (c, fc) in force.iter_mut().enumerate() {
             let mut v = 0.0;
@@ -189,6 +213,7 @@ fn force_and_tangent(
     u1: &[f64],
     threads: Option<usize>,
     context: &PointContext,
+    mode: AlgorithmicStress,
 ) -> Result<(Vec<f64>, rcfd_linalg::CsrMatrix)> {
     let dofs = model.dof_map();
     let mesh = model.mesh();
@@ -198,7 +223,7 @@ fn force_and_tangent(
         let ue0: Vec<f64> = d.iter().map(|&q| u0[q]).collect();
         let ue1: Vec<f64> = d.iter().map(|&q| u1[q]).collect();
         let el = element_for(ctx.kind);
-        let (f, k) = element_step(el, ctx.coords, ctx.material, &ue0, &ue1, context, true).map_err(|source| {
+        let (f, k) = element_step(el, ctx.coords, ctx.material, &ue0, &ue1, context, mode, true).map_err(|source| {
             FemError::Element {
                 element: ctx.element,
                 source: Box::new(source),
@@ -215,6 +240,33 @@ fn force_and_tangent(
         }
     }
     Ok((out, k))
+}
+
+/// The internal force `sum_q w B_NL(F)^T S(E)` of a model with a neo-Hookean material at `u` (ADR 0523 D5): the element
+/// routine with `u_0 = u_1`, whose algorithmic stress is `S(E)` (the midpoint branch at `dE = 0`), in element order.
+pub(super) fn internal_force(model: &SolidModel, u: &[f64], context: &PointContext) -> Result<Vec<f64>> {
+    let dofs = model.dof_map();
+    let mesh = model.mesh();
+    let materials = model.material_indices()?;
+    let mut out = vec![0.0; u.len()];
+    for e in 0..mesh.n_elements() {
+        let nodes = mesh.element_nodes(e);
+        let coords: Vec<Vec3> = nodes.iter().map(|&nd| mesh.nodes()[nd]).collect();
+        let d = element_dofs(&dofs, nodes);
+        let ue: Vec<f64> = d.iter().map(|&q| u[q]).collect();
+        let el = element_for(mesh.element_kind(e));
+        let material = &model.materials()[materials[e]].1;
+        let (f, _) = element_step(el, &coords, material, &ue, &ue, context, AlgorithmicStress::Auto, false).map_err(
+            |source| FemError::Element {
+                element: e,
+                source: Box::new(source),
+            },
+        )?;
+        for (&q, v) in d.iter().zip(&f) {
+            out[q] += v;
+        }
+    }
+    Ok(out)
 }
 
 fn norm(v: impl Iterator<Item = f64>) -> f64 {
@@ -252,7 +304,7 @@ pub(super) fn substep(
     let mut u1 = u.to_vec();
     let (mut e_first, mut e_last) = (0.0, 0.0);
     for k in 0..=options.max_iterations {
-        let (fa, ka) = force_and_tangent(&it.model, u, &u1, options.threads, &context)?;
+        let (fa, ka) = force_and_tangent(&it.model, u, &u1, options.threads, &context, it.stress)?;
         let w: Vec<f64> = (0..n).map(|i| u1[i] - u[i] - h * v[i]).collect();
         let mut inertia = super::matvec(&it.m, &w);
         for x in inertia.iter_mut() {
@@ -278,7 +330,11 @@ pub(super) fn substep(
         if k >= 1 && r <= options.residual_tolerance && e_last <= options.energy_tolerance * e_first {
             let v1: Vec<f64> = (0..n).map(|i| 2.0 * (u1[i] - u[i]) / h - v[i]).collect();
             let a1: Vec<f64> = (0..n).map(|i| (v1[i] - v[i]) / h).collect();
-            let fint = nonlinear::internal_force_at(&it.model, &u1, states, &context)?;
+            let fint = if it.hyper {
+                internal_force(&it.model, &u1, &context)?
+            } else {
+                nonlinear::internal_force_at(&it.model, &u1, states, &context)?
+            };
             return Ok(Advanced {
                 iterations: k,
                 residual: r,

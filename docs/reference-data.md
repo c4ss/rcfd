@@ -2096,3 +2096,14 @@ the published limit load is an open question of ADR 0522). The references of the
 | Trapezoidal (average-acceleration) period factor `2 atan(omega h/2)/(omega h)`, `0.997945` at 40 steps per period | derived | ADR 0522 arithmetic 3 |
 | Euler-Bernoulli cantilever `f_1 = beta_1^2/(2 pi L^2) sqrt(E I/(rho A))`, `beta_1 = 1.875104068711961`; strip `L = 12`, `b = 1`, `t = 0.1`, `E = 1.2e6`, `rho = 1`: `0.122886` Hz | derived | ADR 0522 arithmetic 6 |
 | Measured: Shell4 strip `f_1 = 0.122940` Hz (`+4.3e-4` of Euler-Bernoulli); 100 periods at a tip amplitude `1e-3 L`: frequency `-2.05e-3` of `f_1` (the period factor within `8e-8`), energy within `2.8e-8` | computed | ADR 0522 addendum 1 |
+## F-607 the discrete gradient of Gonzalez in the energy-momentum step (ADR 0523)
+
+No source was read for F-607. The papers below are cited from memory for the method and the energy (volumes, pages and years
+as recalled, not checked; ADR 0523 open question 4). Every formula used is derived in ADR 0523 (the discrete gradient, D2, D3)
+and checked by a plain numpy probe (`f607-scratch/probe_dg.py`, `probe_branch.py` and their logs), no rcfd code.
+
+| Item | Status | Source |
+|---|---|---|
+| Discrete gradient of a stored energy of `C`: `S_alg = S(E_m) + (nu/(dE:dE)) dE`, `nu = W(E_{n+1}) - W(E_n) - S(E_m):dE`, `E_m = (E_n + E_{n+1})/2`; `S_alg : dE = W(E_{n+1}) - W(E_n)` exactly, `S_alg = S(E_m) + O(|dE|^2)`; for St. Venant-Kirchhoff `nu = 0` and `S_alg = (S_n + S_{n+1})/2` | derived, cited | ADR 0523 (the discrete gradient); O. Gonzalez, J. Nonlinear Sci. 6 (1996) 449-467; O. Gonzalez, Comput. Methods Appl. Mech. Engrg. 190 (2000) 1763-1783: NOT read, from memory |
+| Compressible neo-Hookean `W = (mu/2)(J^{-2/3} I_1 - 3) + (kappa/2)(J - 1)^2`, `S = mu J^{-2/3} (2 dev E) C^{-1} + kappa (J - 1) J C^{-1}`, the tangent `2 dS/dC`; small-strain moduli `mu`, `kappa`; the cancellation-free form `I_1 - 3 J^{2/3} = 2q - 2t^2 - 8 det E + 3g^2 + g^3`, `g = J^{2/3} - 1` | derived, cited | ADR 0523 D2; J. C. Simo and R. L. Taylor, Comput. Methods Appl. Mech. Engrg. 85 (1991) 273-310; G. A. Holzapfel, Nonlinear Solid Mechanics, Wiley, 2000, chapter 6: NOT read, from memory; the form is F-607's own until F-425 (ADR 0328) chooses its energy |
+| Measured: neo-Hookean spinning bar over ten turns `dP = 4.1e-13`, `dJ = 7.5e-13`, `dE = 2.1e-13`; large-strain neo-Hookean cube (500 steps) `dE = 2.8e-9` with the discrete gradient against `4.7e-3` with the average; the discrete gradient of the isotropic material equals the F-570 step within `9.4e-13` (bar) and `9.7e-14` (cube) per step | computed | ADR 0523 addendum 1 |
