@@ -68,3 +68,58 @@ caught, or a check is met only after an amendment made after its run. **todo** i
 
 No wiring into a case, CLI or API. The internal error uses `InvalidValue` with key `"rainflow"` because `FemError` has no
 internal-error variant (adding one is out of scope). The guard is untested by a direct input because none exists.
+
+## Addendum 1: results (2026-11-14)
+
+All checks were run once, after the code commit, release profile (`cargo test -p rcfd-fem --release --test sa_fatigue_f534`
+and `--test sa_fatigue`). Code: `crates/rcfd-fem/src/fatigue.rs` (guard in `rainflow_periodic`, message in
+`equivalent_amplitude`), tests in the new file `crates/rcfd-fem/tests/sa_fatigue_f534.rs`.
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| P1 `[S, -S] x n`, n = 1, 7, 1000 | exact | Ok, n cycles of 2S, mean 0, residue empty | yes |
+| P2 sine of 50 periods and 200 random periodic histories | all Ok, empty residue | as stated | yes |
+| P3 existing `sa_fatigue` (9 tests, unedited) | pass | 9 passed | yes |
+| G1 Gerber with credit at `-sigma_u`, `-1.1 sigma_u` | key, "in modulus", "at or above the strength" | message `mean stress -6e8 at or above the strength 6e8 in modulus (Gerber, with compressive credit): no equivalent amplitude` | yes |
+| G2 positive means unchanged | exact present text, no "in modulus" | as stated for Goodman, Gerber, Soderberg | yes |
+| G3 negative control | accepted | Goodman, Soderberg with credit at `-sigma_u`, `-sigma_y`; Gerber at `-0.999 sigma_u` | yes |
+
+### Mutations
+
+Run in the worktree on `fatigue.rs` and restored with `git checkout` after each (not on a separate copy; the log is
+`w49i-work/f534-scratch/mut.log`).
+
+| Id | Caught by |
+|---|---|
+| M5b (`<` in `four_point`) | P1 (error with a residue of 15 points) and the existing Q1 of ADR 0449, which now fails where in ADR 0449 it survived M5 |
+| M13 (guard `>= 3`) | P1 (rerun on the F-534 test alone to see it), existing Q1 and B2 |
+| M14 (guard removed) | nothing, as registered (unreachable code; equivalent mutant) |
+| M15 ("in modulus" dropped) | G1 |
+| M16 ("in modulus" for positive means) | G2 |
+
+### Deviations and what was not run
+
+- No registered set-up was changed. The registered catcher P2 of M5b and M13 was not individually observed (P1 failed first in
+  the same test function, which stops at the first assertion).
+- The mutations were run in the worktree, not on a copy.
+- Not run: the whole workspace suite (the lead's gate); `baseline_hashes` (no shared solver file touched). `cargo fmt -p rcfd-fem
+  --check` clean; `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean.
+- Wording: the registration says the new message contains "at or above the strength in modulus"; the text is "at or above the
+  strength S in modulus", which keeps the C3 substring "at or above the strength".
+
+### Decision by the registered rule
+
+**done**: every check was met in its single run without an amendment, and M5b, M13, M15 and M16 were each caught (M14 not caught,
+as registered). The clauses of the acceptance (guard, M5-type mutation caught by the constant-amplitude check, Gerber message in
+modulus, ADR 0449 checks unedited) are all met.
+
+### Remaining questions
+
+1. `FemError` has no internal-error variant, so the guard uses `InvalidValue` with key `"rainflow"`. Options: (a) keep; (b) add a
+   variant. Recommendation (a): adding a variant touches a shared `#[non_exhaustive]` enum for one unreachable guard.
+
+### For the lead: roadmap entries
+
+Proposed status for F-534: done.
+
+> ADR 0453, 2026-11-14: rainflow_periodic returns an internal error (InvalidValue, key "rainflow") when the residue of the closed sequence has more than three points, and the mutation that closes loops with a strict inequality is now caught by the constant-amplitude check (error for n = 7 and 1000; it escaped that check in ADR 0449); the Gerber refusal of a compressive mean at or beyond the strength says "in modulus" while every positive-mean message is byte-identical; all 9 tests of ADR 0449 pass unedited; mutations of the guard threshold and of both message forms caught; the guard itself is unreachable by design (equivalent mutant recorded).
