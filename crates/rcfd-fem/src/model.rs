@@ -725,6 +725,16 @@ pub enum Load {
         /// Pressure on each element.
         pressure: f64,
     },
+    /// The uniform pressure of [`Load::ShellPressure`] with each Shell3 element's force `p A e_3` shared among its nodes in
+    /// proportion to the interior angles (ADR 0461; [`crate::shell3::pressure_load_vector_angle_weighted`]); Shell4 elements
+    /// take their consistent load as in [`Load::ShellPressure`]. Opt-in, for curved facet meshes.
+    #[non_exhaustive]
+    ShellPressureAngleWeighted {
+        /// Element set name.
+        set: String,
+        /// Pressure on each element.
+        pressure: f64,
+    },
     /// A uniform traction on a surface set, Pa.
     #[non_exhaustive]
     Traction {
@@ -798,6 +808,13 @@ impl Load {
     /// A uniform pressure along the element normals on every element of an element set of Shell4 elements (ADR 0432).
     pub fn shell_pressure(set: &str, pressure: f64) -> Load {
         Load::ShellPressure {
+            set: set.to_string(),
+            pressure,
+        }
+    }
+    /// The uniform shell pressure with the angle-weighted split of each Shell3 element's force (ADR 0461).
+    pub fn shell_pressure_angle_weighted(set: &str, pressure: f64) -> Load {
+        Load::ShellPressureAngleWeighted {
             set: set.to_string(),
             pressure,
         }
@@ -1270,7 +1287,7 @@ impl SolidModel {
                     }
                 }
             }
-            Load::ShellPressure { set, pressure } => {
+            Load::ShellPressure { set, pressure } | Load::ShellPressureAngleWeighted { set, pressure } => {
                 self.need_set(SetKind::Element, set)?;
                 finite("pressure", *pressure)?;
                 for &e in self.mesh.element_set(set).expect("checked") {

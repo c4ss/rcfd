@@ -541,6 +541,26 @@ pub fn pressure_load_vector(coords: &[Vec3], p: f64) -> Result<[f64; 18]> {
     Ok(to_global_vector(&f, &fl))
 }
 
+/// The nodal load (global axes, the element's unknown order) of a uniform pressure `p` along `e_3` split by the interior
+/// angles: `p A theta_i / (theta_0 + theta_1 + theta_2) e_3` at node `i`, no moments (ADR 0461 D1). The element's force `p A
+/// e_3` is that of [`pressure_load_vector`]; only its share among the nodes differs, so that a rectangle cut along either
+/// diagonal gives `A / 4` to each of its four corners (ADR 0461 design 1).
+pub fn pressure_load_vector_angle_weighted(coords: &[Vec3], p: f64) -> Result<[f64; 18]> {
+    let f = facet(coords)?;
+    let mut theta = [0.0; 3];
+    for (i, th) in theta.iter_mut().enumerate() {
+        let (a, b, c) = (f.local[i], f.local[(i + 1) % 3], f.local[(i + 2) % 3]);
+        let (u, v) = ([b[0] - a[0], b[1] - a[1]], [c[0] - a[0], c[1] - a[1]]);
+        *th = (u[0] * v[1] - u[1] * v[0]).abs().atan2(u[0] * v[0] + u[1] * v[1]);
+    }
+    let sum = theta[0] + theta[1] + theta[2];
+    let mut fl = [0.0; 18];
+    for i in 0..3 {
+        fl[6 * i + 2] = p * f.area * theta[i] / sum;
+    }
+    Ok(to_global_vector(&f, &fl))
+}
+
 /// The consistent nodal load of a body force per unit volume over the thickness, `F_i = t int N_i b dA` by the mid-edge rule
 /// (exact for a `b` linear in `x`), the body force given by the shape values at the point and the point (ADR 0454
 /// arithmetic 7). The moments are zero.
