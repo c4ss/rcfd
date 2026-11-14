@@ -319,3 +319,89 @@ else changes; `general_eigen` keeps D1.6.
 The registered results of G1 to E1 stand as run (before this amendment). Mutation MU10 (defect report disabled) is run again on
 the amended code. By the decision rule this amendment adds a check and corrects an unregistered output; it does not re-run a
 registered check to change its result.
+
+## Addendum 1: results (2026-11-14)
+
+Registered runs: `cargo test --release -p rcfd-linalg --test sa_eigen_general` and `cargo test --release -p rcfd-fem --test
+sa_damped` on the content of commit 3d11c904 (logs `f414-scratch/run_linalg.log`, `run_fem.log`), each made once. The Q4 run of
+amendment 1 on 094fe9fe (`run_q4_linalg.log`, `run_q4_fem.log`).
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| G1 companion roots | 1e-10 | 1.8e-15 | yes |
+| G1b companion residuals | 1e-10 | 2.7e-16 | yes |
+| G2 random order 50, residuals | 1e-10 | 8.5e-16 (96 iterations) | yes |
+| G2b 50 values, exact conjugate pairs, no defect | exact | 50 values, 46 complex, pairs exact, 0 defects | yes |
+| G3 symmetric order 40 against Jacobi; `max|Im|` | 1e-10 each | 4.0e-15; 0 | yes |
+| G4a `J_4(2)`: values; one defect of 4 | 1e-6 | 0; one group of 4 | yes |
+| G4b `Q J_2(1.5) Q^T`: values; defect; mean | 1e-6 | 3.1e-9; the two indices; 1.3e-15 | yes |
+| G4c `Q J_3(-0.5) Q^T`: one defect of 3; mean | 1e-6 | one group of 3; 0 (individual values 2.6e-6, recorded) | yes |
+| G4d `diag(1, 1, 2)`, `I`: no defect, exact | exact | no defect, exact | yes |
+| G5 cap 3 | error | `NotConverged`, 3 iterations, rows 0 to 49 | yes |
+| G6 cyclic permutation of order 6 | 1e-10 | 1.2e-15 (21 iterations) | yes |
+| G7 NaN, size | error | `NonFinite { A, 2, 1 }`, `DimensionMismatch` | yes |
+| Q1 oscillator `zeta` 0.05, 0.5, 0.95 | 1e-12 | 0, 0, 1.5e-16 | yes |
+| Q1b `zeta = 1`: roots; one defect of 2 | 1e-6 | 3.0e-16; one group of 2 | yes |
+| Q2 skew coupling (i), (ii) | 1e-12 | 6.9e-16, 1.2e-16 | yes |
+| S2 against `gyroscopic_state_eigen_dense` (i), (ii) | 1e-12 | 1.2e-15, 6.4e-16 | yes |
+| Q3 indefinite `M` | error | `MassNotPositiveDefinite { row 1, pivot -3 }` | yes |
+| R1 Rayleigh ratios | 1e-8 | 3.5e-14 | yes |
+| R2 reported once; shapes `x^H M x` | exact; 1e-10 | 12 reported, all oscillating, `Im > 0`; 8.9e-16 | yes |
+| B1 `c = Z/2`, `j = 1, 2, 3` | 2e-2 | 1.45e-3, 1.37e-3, 1.21e-3 (estimate 1.7e-3) | yes |
+| B2 `c = 2 Z` (corrected form), `j = 0` real, `j = 1, 2, 3` | 2e-2 | 5.9e-3, 5.9e-3, 6.1e-3, 6.3e-3 (estimate 6.7e-3) | yes |
+| B2b real roots flagged and said; none at `Z/2` | exact | 2 real roots (the continuum one and the fast truncation root), ratio 1, note present; 0 at `Z/2` | yes |
+| B3 error of `lambda_1` on 10, 20, 40 modes | decreasing | 6.6e-3, 3.2e-3, 1.45e-3 (estimate 6.8e-3, 3.4e-3, 1.7e-3) | yes |
+| L1 loss factor 0.04: 12 roots; error | 1e-10 | 12; 3.8e-13 | yes |
+| T1 threads 1 and 4 | bits | identical (7152 words) | yes |
+| N1 table, unknown set, negative dashpot, transformation path | error | four `InvalidValue`, each naming the cause | yes |
+| X1 `x1_modules_and_pending_after_f414` | pass | pass (the former test kept as an ignored record) | yes |
+| E1 rcfd-linalg (all tests), rcfd-fem `sa_harmonic_direct`, `sa_scaffold`, `si_rotating_whirl_state` | pass | all pass | yes |
+| Q4a undamped `w = 1e2` to `1e5`: no defect (amendment 1) | none | none | yes |
+| Q4b R1 cantilever: no defect (amendment 1) | none | none, no note | yes |
+| Q4c `zeta = 1`, `w = 3`, `3000` (amendment 1) | 1e-6 | one group of 2 each; 3.0e-16, 1.5e-16 | yes |
+| Q4d both test files on the amended code (amendment 1) | pass | pass; every printed number of G1 to T1 equal to the registered run | yes |
+
+Mutations (scratch copy `f414-scratch/copy`, script `tools/mutate.py`, logs `MU*.log`): MU1 caught by G6 (`NotConverged`);
+MU2 by G1, G1b, G2 (4.5e-8, 5.5e-9, 1.3e-7); MU3 by G1b, G2 (2.3e-2, 2.4e-2), G4a, G4c, Q1b; MU4 by G1b (0.29); MU5 by Q1, Q1b;
+MU6 by B1 (0.18), B2, B2b; MU7 by R2, L1, B2, B2b; MU8 by L1 (4.0e-2); MU9 by R1 (0.25); MU10 by G4a to G4c, Q1b, and on the
+amended code also by Q4c. Not registered: MU11 (the gap of amendment 1 put back to an absolute 1e12) caught by Q4a. **Ten of ten
+registered mutations caught.**
+
+Deviations. (1) D1.5: a 2 x 2 block of the back-substitution is solved by Gaussian elimination with partial pivoting, and a
+pivot (not the determinant) below `eps ||T||_F` is replaced: the "divisor" of D1.5 in a dimensionally consistent form. (2) Three
+clippy findings were fixed after the registered run (a late `let`, and two `*x = *x * p` written as `*x *= p`; `MulAssign` is
+`*self = *self * o`): bit-identical, confirmed by a run whose printed output equals the registered one line for line
+(`confirm_*.log`). (3) Amendment 1, above: a design flaw of the defect report of D2, found by a diagnostic after the registered
+runs (not by a registered check), corrected with the new check Q4. (4) `harmonic_direct.rs` gains a `pub(crate)` accessor of
+`Dashpot` (lines 152 to 156; additive). (5) At `c = 2 Z` two real roots are reported: the continuum root `j = 0` and a fast
+root of the truncation (`s ~ -(2c/Z) N`, as estimated); B2 takes the one of smallest modulus, as registered.
+
+Not run: the whole workspace (the lead's gate); `baseline_hashes` (no file of rcfd-fv or rcfd-api changed; no default path
+changed). `cargo fmt --check` and `cargo clippy --all-targets -D warnings` on rcfd-linalg and rcfd-fem: clean.
+`rcfd-cli --test docs_site`: pass (docs/reference-data.md gained the F-414 rows).
+
+**Decision by the registered rule: done.** Every registered check G1 to E1 was met at its registered run, every registered
+mutation was caught, and no check was met only after an amendment made after its run (Q4 was registered by amendment 1 before
+its run and met at it). Disclosed for the maintainer's judgement: amendment 1 corrects an output (the quadratic defect report)
+that no registered check covered. If that is read like ADR 0284 amendment 2, the status would be partial until it is accepted.
+
+Remaining questions:
+
+1. Move the whirl state solver (ADR 0416) onto `general_eigen`? Options: (a) leave it (two Francis implementations, the whirl
+   bits unchanged); (b) move it (one implementation; the whirl results change in the last bits, so the stored whirl values need
+   the maintainer). Recommendation: (a) now, (b) when F-415/F-416 touch that code anyway.
+2. The defect report uses right vectors only (a heuristic). Add left vectors and eigenvalue condition numbers? Options: (a)
+   leave; (b) a follow-up. Recommendation: (a) until a user needs condition numbers.
+3. Boundary dampers near the impedance converge slowly on undamped modes (`1/|1 - tanh^2|`). Options: (a) document; (b)
+   residual (static correction) vectors. Recommendation: (b), as the follow-up below.
+
+### For the lead: roadmap entries
+
+F-414, proposed status **done**:
+
+> Structural solver, advanced tier (plan ADR 0310). ADR 0450, 2026-11-14: rcfd_linalg::eigen_general: general_eigen of a dense real matrix by balancing (powers of 2), Householder Hessenberg reduction, Francis double-shift QR with exceptional shifts (cap 30 n iterations, NotConverged otherwise), real 2 x 2 blocks split, eigenvectors by back-substitution, and a defect report (numerically parallel vectors) for Jordan blocks; quadratic_eigen of (lambda^2 M + lambda C + K + i H) x = 0 by the Cholesky factor of M and the state matrix (a complex stiffness through the real embedding). rcfd_fem::damped::damped_modes on m undamped modes with Rayleigh damping, F-412's dashpots and constant loss factors; each conjugate pair reported once, real roots reported as non-oscillating, damping ratio -Re/|lambda|. Companion roots within 1.8e-15 (limit 1e-10); order 50 residuals 8.5e-16 (1e-10); symmetric order 40 equals the Jacobi values of F-382 within 4.0e-15 (1e-10); Jordan blocks J_2 and J_3 under similarity returned with their defect report, mean within 1.3e-15 (1e-6); the cap is an error; the cyclic permutation of order 6 needs the exceptional shifts; oscillator within 1.5e-16 (1e-12), critical damping reported as a defect; Rayleigh ratios on a Hex8 cantilever within 3.5e-14 (1e-8); skew coupling within 6.9e-16 (1e-12) and equal to the whirl solver of F-505 within 1.2e-15; bar with a tip dashpot c = Z/2 (Z = A sqrt(E rho)) on 40 modes: first three roots within 1.45e-3 (2 percent). The draft's clause for c > Z was wrong: the roots are (c0/L)(-atanh(Z/c) + i j pi), one real and the rest oscillating at the fixed-fixed frequencies; registered in that form, at c = 2 Z within 6.3e-3 with the real roots reported as non-oscillating. Constant loss factor 0.04 within 3.8e-13 of i w sqrt(1 + i eta); bit-identical for 1 and 4 threads; ten of ten mutations caught. Amendment 1 corrected the defect report of the quadratic problem (a gap relative to the roots; check Q4) after a diagnostic found it unit-dependent. The transformation path (linear constraints, rigid sets, supports) and frequency-dependent moduli are refused.
+
+Follow-up item, proposed id the next free number, title "Damped modes: residual vectors for boundary dampers near the
+impedance", deps F-414:
+
+> Every limit not stated here is registered in the ADR before the run. damped_modes gains static residual vectors (K^-1 times the damper influence vectors, orthogonalised against the undamped modes) as an option. Fixed-free bar with a tip dashpot c = 0.9 A sqrt(E rho): the first three roots (c0/L)(-atanh(c/(A sqrt(E rho))) + i (2 j - 1) pi/2) within 2 percent on 20 modes with the residual vector, against a registered error without it; at c = 2 A sqrt(E rho) the real root -(c0/L) atanh(A sqrt(E rho)/c) within 1 percent on 20 modes; without the option every result is bit-identical to F-414's.
