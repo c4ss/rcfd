@@ -11006,14 +11006,13 @@ fixed by the item's registration ADR before any code.
   - acceptance: Every limit not stated here is registered in the ADR before the run. A table constant in speed gives the
     bits of the constant bearing; a linear table gives the closed-form Jeffcott critical speed of the speed-dependent
     stiffness within 1e-6.
-  - note: Structural solver, advanced tier. Follow-up of F-416 (ADR 0476, 2026-11-14). DONE. F-563 (ADR 0498, 2026-11-14):
-    rcfd_fem::rotor::SpeedBearing (piecewise-linear table k(Omega), c(Omega), clamped outside the table),
-    RotorModel::add_speed_bearing, matrices_at and critical_speeds_over (self-consistent critical speed by bracketed
-    bisection of crit_j(Omega) - Omega); whirl, Campbell, harmonic and unbalance response evaluate the bearing at
-    their spin. A constant table equals the constant bearing bit for bit (1, 2 and 3 knots, cross-coupled and
-    symmetric models); the linear-table critical speed equals the closed form to 0 (parallel quadratic model) and
-    4.4e-16 (series cubic model), limit 1e-6; whirl, Campbell and unbalance response against closed forms 4.4e-16,
-    limit 1e-9; defaults bit-identical; 9 mutations caught. No case-file key.
+  - note: Structural solver, advanced tier. Follow-up of F-416. ADR 0498, 2026-11-14: rcfd_fem::rotor::SpeedBearing
+    (piecewise-linear table k(Omega), c(Omega), clamped outside) and RotorModel::add_speed_bearing, matrices_at,
+    critical_speeds_over (self-consistent critical speed by bracketed bisection of crit_j(Omega) - Omega); whirl,
+    Campbell, harmonic and unbalance response evaluate the bearing at their spin. A constant table equals the constant
+    bearing bit for bit (X and Y, 1, 2, 3 knots); linear-table critical speed against the closed form 0 (parallel
+    quadratic model) and 4.4e-16 (series cubic model), limit 1e-6; whirl, Campbell and unbalance response against closed
+    forms 4.4e-16, limit 1e-9; defaults bit-identical; 9 mutations caught. No case-file key.
 - [ ] **F-564** Damped critical speeds as unbalance-response peaks and checked Campbell crossings
   - depends on: F-416
   - acceptance: Every limit not stated here is registered in the ADR before the run. On the damped Jeffcott rotor the
@@ -11029,25 +11028,27 @@ fixed by the item's registration ADR before any code.
     non-increasing frequency list and a correlation that is not positive semi-definite are refused with the key and the
     entry.
   - note: Structural solver, advanced tier. Follow-up of F-417 (ADR 0477, 2026-11-14).
-- [x] **F-566** Broadband fatigue of a random stress from its spectral moments
+- [~] **F-566** Broadband fatigue of a random stress from its spectral moments
   - depends on: F-417, F-413
   - acceptance: Every limit not stated here is registered in the ADR before the run. The broadband damage rate (formula
     registered from a cited source) reduces to the narrow-band rate of F-413 within 1 percent for a one-mode response at
     zeta = 0.01; for a two-mode response with well separated modes the counted damage of a synthesised Gaussian history
     (registered seed, 1e5 cycles, rainflow of F-413) lies within 10 percent of the broadband rate and the narrow-band
     rate is above it; the moments m0, m1, m2, m4 of RandomSolver feed it unchanged; a non-positive m0 or m2 is refused.
-  - note: ADR 0497, 2026-11-14: rcfd_fem::fatigue gains the broadband damage rate of a Gaussian stationary stress from
+  - note: Structural solver, advanced tier. PARTIAL by the standing rule (C2 and C6 met only after amendment 1, written
+    after run 1 built the bar with all 40 modes; mutation M10, the gamma > 1 refusal, uncaught; proposed done by the
+    ADR). ADR 0497, 2026-11-14: rcfd_fem::fatigue gains the broadband damage rate of a Gaussian stationary stress from
     its spectral moments m0, m1, m2, m4 (Dirlik's density of the cycle amplitude, T. Dirlik, PhD thesis, University of
     Warwick, 1985, cited from memory): dirlik_coefficients, DirlikCoefficients (density, amplitude_moment),
-    broadband_damage_rate(m0, m1, m2, m4, m, c) and broadband_damage_rate_curve on the power law of an SnCurve,
-    refusing a non-positive or non-finite m0, m2 or m4, a negative m1, m2^2 > m0 m4, a coefficient out of range, a
-    table curve or an endurance limit; random::Moments::broadband_damage_rate and narrow_band_damage_rate pass the
-    moments of RandomSolver and spectral_response unchanged (bit equal to the free functions). One mode at zeta =
-    0.01: broadband over narrow band 0.99340 (m = 3), 0.99301 (m = 5), 0.70 percent from 1 against the 1 percent
-    limit; two modes at 50 and 150 Hz (zeta = 0.02) with a synthesised Gaussian history (seed 20261114, 2.1e5 closed
-    cycles, rainflow_periodic and miner of F-413): the counted rate is 6.2 percent above the broadband rate, the
-    narrow-band rate 19.6 percent above it and 12.6 percent above the counted rate. Limits: Gaussian zero-mean stress,
-    power-law curve, no case-file key, RandomStress does not carry the moments m1 and m4.
+    broadband_damage_rate(m0, m1, m2, m4, m, c) and broadband_damage_rate_curve on the power law of an SnCurve, refusing
+    a non-positive or non-finite m0, m2 or m4, a negative m1, m2^2 > m0 m4, a coefficient out of range, a table curve or
+    an endurance limit; random::Moments::broadband_damage_rate and narrow_band_damage_rate pass the moments of
+    RandomSolver and spectral_response unchanged (bit equal to the free functions). One mode at zeta = 0.01: broadband
+    over narrow band 0.99340 (m = 3), 0.99301 (m = 5), 0.70 percent from 1 against the 1 percent limit; two modes at 50
+    and 150 Hz (zeta = 0.02) with a synthesised Gaussian history (seed 20261114, 2.1e5 closed cycles, rainflow_periodic
+    and miner of F-413): the counted rate is 6.2 percent above the broadband rate, the narrow-band rate 19.6 percent
+    above it and 12.6 percent above the counted rate. Limits: Gaussian zero-mean stress, power-law curve, no case-file
+    key, RandomStress does not carry the moments m1 and m4. Follow-ups F-589, F-590.
 - [ ] **F-567** Complex cross-spectral matrices and frequency-dependent coherence of random loads
   - depends on: F-417
   - acceptance: Every limit not stated here is registered in the ADR before the run. A cross-spectral table G_ab(f) with
@@ -11329,3 +11330,20 @@ fixed by the item's registration ADR before any code.
     shear and bulk split refused for Incompatible, whose condensed stiffness is not linear in D); the patch recovery
     with the formulations' strain; defaults bit-identical.
   - note: Structural solver, intermediate tier. Low priority. Follow-up of F-390 (ADR 0493, 2026-11-14).
+- [ ] **F-589** First and fourth spectral moments of a random stress component for broadband fatigue
+  - depends on: F-417, F-566
+  - acceptance: Every limit not stated here is registered in the ADR before the run. RandomStress carries the
+    covariances C_1 and C_4 (weighted by f and f^4) beside C_0 and C_2, the existing fields bit-identical; for a
+    uniaxial stress the moments m0, m1, m2, m4 of a component equal those of the output channel scaled by the square of
+    the stress per unit displacement within 1e-10; the broadband rate of F-566 fed from a stress component equals the
+    scaled channel rate within 1e-10; a von Mises equivalent is refused for the broadband rate with the reason (it is
+    not Gaussian).
+  - note: Structural solver, advanced tier. Follow-up of F-566 (ADR 0497, 2026-11-14).
+- [ ] **F-590** Benasciutti-Tovo broadband damage rate as a second method
+  - depends on: F-566
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The rate (formula registered from a
+    cited source) reduces to the narrow-band rate of F-413 within 1 percent for a one-mode response at zeta = 0.01 and
+    agrees with the Dirlik rate of F-566 within a limit registered from the one-mode and two-mode cases of ADR 0497; the
+    counted damage of the synthesised history of ADR 0497 lies within 10 percent of it; a non-positive m0 or m2 is
+    refused.
+  - note: Structural solver, advanced tier. Optional. Follow-up of F-566 (ADR 0497, 2026-11-14).
