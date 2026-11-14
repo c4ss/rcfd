@@ -508,3 +508,106 @@ Corrections, registered before their run (no limit changes):
 Records and copies: `i1_to_i4_..._a2` and `s1_..._a2` stay as ignored records with their bodies unchanged; the copies
 `i1_to_i4_..._a3` and `s1_..._a3` (bodies identical) are the corrected runs, each made once. The other tests run again only in
 the crate's suite on the corrected driver; their numbers are reported from that run.
+
+## Addendum 1 (2026-11-14): results, decision
+
+Runs: the registered run at 8ca0d696 (`f427-scratch/run1-sa_contact.log`), the corrected runs of amendment 2 at 043ee2ea
+(`run2-a2.log`) and of amendment 3 at bf5fb1e1 (`run3-a3.log`), the heavy H once alone at f7ce92ab (`run4-heavy.log`, 315 s,
+three Newton solves of 6, 2 and 2 iterations), the crate's suite at 686f84db (`run5-suite.log`, exit 0) and `sa_contact` with
+its prints on the same head (`run6-sa.log`). The numbers below are from the last run of each check; where an earlier run of a
+passing check gave other numbers both are given.
+
+| check | limit | measured | met |
+|---|---|---|---|
+| P1 end displacement / g | `<= 1e-8` | `1.11e-11` (run 1: `1.107e-11`) | yes |
+| P1 stop force / F_max | `<= 1e-8` | `5.54e-12` (run 1: `5.91e-12`) | yes |
+| P1 support reaction / F_max (amendment 1) | `<= 1e-8` | `5.52e-12` (run 1: `5.53e-12`) | yes |
+| P1 contact from step 4 | holds | 4 steps | yes |
+| P2 penetration / L | `< 1e-8` | `1.10e-13` | yes |
+| B1 stress / p, node pressure / p, reaction / p | `<= 1e-8` | `2.09e-15`, `2.43e-14`, `4.47e-16` (run 1: `1.69e-13`, `3.79e-11`, `5.96e-16`) | yes |
+| S1 multipliers >= 0; pressed stress, pressure; touching; apart zero, gap, stress (`_a3`) | `0`, `1e-8` x 5 | `0`, `1.16e-10`, `1.16e-10`, `4.86e-12`, `0`, `1.73e-15`, `2.15e-15` | yes |
+| H1 contact radius | `<= 5e-2` | `3.03e-4` | yes |
+| H2 peak pressure | `<= 5e-2` | `7.57e-4` | yes |
+| H3 approach | `<= 3e-2` | `6.13e-4` | yes |
+| H4 nodes on y = 0 in contact | `>= 10` | 13 | yes |
+| H5 penetration | `<= 1e-8` | `2.44e-11` | yes |
+| H0 Navier, traction, resultant | `1e-5`, `1e-5`, `1e-4` | `2.91e-7`, `2.47e-9`, `4.25e-9` | yes |
+| HF radius, peak, approach | `0.15`, `0.20`, `0.10` | `5.59e-3`, `4.88e-4`, `1.19e-3` | yes |
+| I1 every node, mean (`_a3`) | `<= 2e-2` | `7.96e-3`, `3.42e-3` | yes |
+| I2 hoop stress against Lame (`_a3`) | `<= 2e-2` | `3.62e-3` | yes |
+| **I3 shaft uniform stress** (`_a3`) | `<= 1e-6` | **`7.02e-3`** | **no (known miss)** |
+| I4 penetration (`_a3`) | `<= 1e-9` | `2.33e-10` | yes |
+| T1 warped, T1r plane | `<= 1e-6` | `2.30e-10` (run 1: `2.95e-10`), `5.21e-11` | yes |
+| **T2 order of every qualifying solve** (`_a2`) | `>= 1.8` | **least `0.171`** of `[1.48, 0.191, 0.249, 1.57, 0.171]` | **no (known miss)** |
+| C1, C1t, C2 | hold | iteration 5, nodes `[4, 9, 14, 19]`; C2 names the four end nodes | yes |
+| R1, R2 (`_a2`) | refused | as registered; R2 names `xmax` | yes |
+| X1 | holds | `PENDING` is `None` | yes |
+| NP, NH, NI, NT, NC | as registered | `7.14e-6 L`, `6.04e-2`, `0.260`, `0.737`, converges | yes |
+| B0 | unchanged | the five base digests and the count | yes |
+| B1h | passes | 3 passed, 1 ignored | yes |
+
+The known misses, both diagnosed and recorded as ignored `*_known_miss` tests with their numbers:
+
+- **I3**: the shaft's stress is not uniform to rounding. The node pressures are `0.9955` of the mean on the ring's bottom
+  nodes (`z = 0`) and `1.0045` on its top nodes (`z = T`) at every angle, and `sigma_xx` in the shaft ranges from `-7.545e7` to
+  `-7.473e7`: a variation through the thickness, not around the ring (around it the pressure varies by `2.4e-4` only). The top ring
+  nodes slide `3.2e-5` m along the shaft's faces (`eta = 0.99936`), from the Poisson mismatch of the hoop-tensioned ring and the
+  compressed shaft with the bottom held by `u_z = 0`. The cause of the 0.9 percent difference is not identified: the slide's
+  share of a face, `3e-4`, is too small to explain it. The registered estimate "exact up to rounding" assumed a state without
+  through-thickness variation. I1, I2 and I4 met in the same run.
+- **T2**: amendment 3's diagnosis. The measure of ADR 0404 (a4) on the last three residuals above `1e-12` mixes pre-asymptotic
+  residuals (`1.0, 0.65, 2.97e-4`) with residuals at the rounding floor (`1e-12` to `2e-12`) in solves of three to five
+  iterations. `r_{k+1}/r_k^2` stays bounded (`1.7`, `0.44`), so the rate is quadratic.
+
+Mutations (a `git archive` copy of 686f84db per mutation, with its own `CARGO_TARGET_DIR`, running the non-ignored tests of
+`sa_contact.rs`): all nine caught.
+
+| id | caught by |
+|---|---|
+| MU1 curvature part dropped | T1 |
+| MU2 no Uzawa update | P1/P2, B1, C2, S1 (`_a3`), HF |
+| MU3 no `max(0, .)` | P1, NP, C1, S1, HF |
+| MU4 `>` for `>=` | B1 |
+| MU5 face-centre `N_a` | B1, S1, T1 |
+| MU6 half-face areas | B1, S1, HF |
+| MU7 cycle detection off | C1 |
+| MU8 `- g P^T A^-1 P` dropped | T1 |
+| MU9 normal reversed | B1, S1 |
+
+The expected catches that did not happen belong to tests that are now ignored as known misses (I1/I3 for MU5, MU6, MU9; T2 for
+MU1).
+
+Gates: `cargo test -p rcfd-fem --release` passes (exit 0); `cargo clippy -p rcfd-fem --all-targets -- -D warnings` is clean;
+`cargo fmt -p rcfd-fem` applied; `cargo test -p rcfd-cli --release --test docs_site` passes (2 tests).
+
+**Decision by the rule: partial.** B0 and B1h unchanged, and the module landed with P1, P2, B1, S1, T1 and C1 met. I3 and T2
+missed, were diagnosed and are recorded as `i1_to_i4_..._a3_known_miss` and `t2_..._a2_known_miss`.
+
+Deviations from the registration, all in the three amendments: P1's reaction (amendment 1); the inside slack `1e-2`, the
+`eps G G^T` iteration on a refused pivot, the run's reference floor and R2's test (amendment 2); the acceptance on `|g|` at
+active nodes, the gap from differences, and `|K u|` and `|f_c|` in the linear reference (amendment 3). No limit was changed.
+
+Remaining questions, with recommendations:
+
+1. **I3**: find the through-thickness variation. Recommendation: run the same fit with two element layers and with `u_z` free
+   on both bodies, to see whether the variation follows the `z0` constraint or the one-layer Hex8; then re-register I3 or its
+   estimate.
+2. **T2's measure**: an order measure for short contact solves. Recommendation: `r_{k+1}/r_k^2` bounded over the kept
+   residuals, or the order of a solve started near the solution, registered in a new ADR; the ADR 0404 measure stays for ADR
+   0404.
+3. **A case-file key**: the `[[contact]]` table of open question 4. Recommendation: as stated there, in its own item.
+4. **The total Lagrangian body's reference**: amendment 3's reference change applies to the linear body only (the gap from
+   differences applies to both). Recommendation: give `ContactSet` `in_residual_reference` (ADR 0479 D2) when a total
+   Lagrangian interference case is registered.
+
+## For the lead: roadmap entries
+
+> F-427 status partial. Note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. ADR 0507, 2026-11-14: frictionless node-to-surface contact (contact.rs) on bilinear Hex8 target faces or a rigid plane. It uses closest-point projection with the exact gap gradient and second derivative, a per-node augmented Lagrangian force max(0, lambda - eps A g) with Uzawa updates until every active gap is within the tolerance, a linear-body Newton driver (sparse L D L^T, eps G G^T on a refused pivot) and the total Lagrangian driver through nonlinear::solve_from, and gives located errors for active-set cycling and exhausted augmentations. Met: bar on a rigid stop (1.1e-11); stacked blocks pressed and pulled apart (1.2e-10, no tensile multiplier); Hertz sphere on a rigid plane at a/R = 0.1 (radius 3.0e-4, peak 7.6e-4, approach 6.1e-4, 13 nodes); interference-fit pressure (8.0e-3) and Lame hoop stress (3.6e-3); tangent against central differences (2.3e-10); the cycling error names the nodes. Nine of nine mutations caught; default bits unchanged. Missing: uniform shaft stress in the fit (7.0e-3 against 1e-6, a through-thickness variation not yet explained) and the residual order of the total Lagrangian punch (least 0.17 against 1.8, the ADR 0404 measure on solves of three to five iterations). Both are recorded as known misses. No case-file key.
+
+> Follow-up (new item): F-427 interference-fit through-thickness variation. Find why the one-layer ring-on-shaft fit of ADR 0507 has node pressures of 0.9955 and 1.0045 of the mean at the bottom and top, then re-register I3. Fan relevance: hub-shaft press-fit stresses.
+
+> Follow-up (new item): a contact Newton order measure for short solves (r_{k+1}/r_k^2 bounded, or started near the solution), registered for the total Lagrangian contact punch of ADR 0507 T2.
+
+> Follow-up (new item): a case-file `[[contact]]` table (contactor, target surface or plane, penalty, tolerance, initial gaps) for the static nonlinear case, writing node pressures and gaps (ADR 0507 open question 4).
+
+> Follow-up (new item): contact search and targets: a bucket search in place of the all-faces loop, rigid cylinder and sphere targets, and Hex20 and Tet faces (ADR 0507 limits).
