@@ -255,3 +255,93 @@ indices or speeds than asked). **todo**: the module does not build or the DS run
 - Stationary-frame frequencies (ADR 0419) are not attached to the split table; the CSV of a family is ADR 0472's.
 - No damping, no case-file key, no CLI output. The whole part with cyclic rows stays refused by `RotatingPart::split_*`.
 - One disc geometry (and its orthotropic variant); the 120 mm fan sector is not run here.
+
+## Addendum 1: results (2026-11-14)
+
+Registered run: `f555-scratch/sa_gyro_sector_run1.log` (commit 2236a4c7, release, made once). B2 digests recorded at main
+4c422025 (commit 671ee4ae) before any library line. Code: `crates/rcfd-fem/src/gyro.rs` (the sector types and methods at the end
+of the file; `RotatingPart::split_at` now calls the factored `project_and_solve` and `split_mode_of`, the same operations in the
+same order, shown by B2); `crates/rcfd-fem/src/rotating.rs` line 995 (`check_harmonics` made `pub(crate)`, nothing else). Tests:
+`crates/rcfd-fem/tests/sa_gyro_sector.rs` (6 tests, 5.7 s together), `sa_gyro_sector_default_bits.rs`.
+
+`omega_ref = 1655.3226` rad/s (DS), `omega_ref,o = 1361.2920` rad/s (DSO).
+
+| Id | Check | Limit | Measured | Met |
+|---|---|---|---|---|
+| S1 | DS, inside modes against `whirl_modes`: B41 at 0.4 / 0.8 `omega_ref` (232 of 246 / 223 of 246 reference modes inside) | MAC `>= 0.99`, distinct; `<= 1e-6` | holds; 8.28e-8 / 7.54e-8 | yes |
+| S1 | the same on B4 and B12 | as above | **no** mode inside (24 and 72 reference modes per speed, every `eta > 1e-7`): vacuous | yes (vacuously) |
+| S2 | DSO B41 at 0.4 / 0.8 `omega_ref,o` (233 / 219 of 246 inside) | as S1 | holds; 9.88e-8 / 9.54e-8 | yes |
+| V1 | B41: at least one inside mode per index and speed (DS, DSO) | `>= 1` | smallest 35 (DSO, `k = 3`, 0.8) | yes |
+| K1 | basis `Speed`, no loss, stable, `m_b x multiplicity` split modes, no real roots (every run) | each | holds | yes |
+| G3 | raw skew defect of the projected doubled `C` | `<= 1e-11` | 1.47e-15 | yes |
+| C1 | sector split Campbell (B4): families `1 2 2 1`, tracks `4 8 8 4`, stored frequencies by bits, distinct, stable | each | holds; smallest stored MAC 0.674 (record) | yes |
+| L1 | DSS at `10 omega_ref` (16553 rad/s): rest basis exactly at the F-396 losses, finite roots, at least one loss | each | all four indices lose stiffness (3, 6, 6, 3 negative), basis `Rest`; roots finite (indices 0 to 2 reported unstable, growth 1713 to 2384 1/s; index 3 stable) | yes |
+| B1 | option off: `split_modes` = `modes(k, 0.4 omega_ref)` by bits; `split_campbell` = `campbell` by bits | identical | identical | yes |
+| B2 | 13 digests of 4c422025; `baseline_hashes`; `cargo test -p rcfd-fem --release` | `==`; pass | 13 of 13 equal; pass (3 passed, 1 ignored); pass (610 passed, 0 failed, 145 ignored) | yes |
+| A1 | DSF, DSL refused by `RotatingSector::new` (`NotYetSupported`, `material`); `RotatingPart::split_modes` of DS `"cyclic"` | each | holds | yes |
+| X1 | refusals `harmonic`, `speed` twice, `harmonics`, `speeds` | each | holds | yes |
+| N1 | option off against the reference, `k = 1`, 0.8 `omega_ref` | `> 1e-3` | 0.211 | as expected |
+| N2 | B4 at 0.8 `omega_ref`: excluded modes; worst excluded error | `>= 1`; `> 1e-6` | 24; 3.54e-3 | as expected |
+
+Records: the rule's estimate against the measured error, over every reference mode with `1e-10 <= eta <= 1e-3`: `err/eta` in
+`[0.968, 1.013]` (all bases and both materials), so `eta` predicts the truncation error to within 3 percent. Excluded modes on B41
+reach 1.99e-6 (DS) and 1.42e-4 (DSO), so the rule is needed even on a near-complete basis. Inside modes: whirl numbers within
+2.2e-5 of the reference's, wave senses within 1.3e-15. `K_r`, `M_r` asymmetry `<= 1.5e-14`. Zero speed with the option against
+F-396 at rest (B4): 1.39e-13. On B4 and B12 the worst truncation error of the split frequencies is 8.1e-4 and 1.2e-3 at 0.4
+`omega_ref`, 3.5e-3 and 4.7e-3 at 0.8: the Coriolis coupling of this disc spreads over the whole spectrum of an index.
+
+### Mutations (scratch copy `f555-scratch/mut` of 07ff0ad8, script `f555-scratch/mutate.py`, logs `mut_MU*.log`)
+
+| Id | Mutation | Caught by |
+|---|---|---|
+| MU1 | `blockdiag(C, 0)` for a pair | S1, S2 (pair indices: MAC and up to 4.8e-2) |
+| MU2 | the speed of the reduced solve halved | S1, S2 (every index, up to 4.9e-2) |
+| MU3 | sine parts of a pair's basis zeroed | B1 (pair indices); S1, S2 and C1 stop (reduced mass not positive definite, `"mass"`) |
+| MU4 | option off through the reduced solve with `G = 0` | B1 (every index) |
+| MU5 | no rest basis at a loss | L1 (error `"no rest basis"`) |
+| MU6 | `check_cyclic_axes` removed from `RotatingSector::new` | **not caught** |
+| MU7 | `K_r` from `operator(0)` | S1, S2 (up to 9.4e-2) |
+
+MU6 survives because the constructor's check is one of three guards on that path: `RotatingSector::new` builds its part with
+`RotatingPart::new`, whose `check_model` (rotating.rs) calls `check_cyclic_axes` again, and the pre-stress solve on the
+transformation reaches the same call in `mpc::check_transformation_model`. Two diagnostics that are not registered checks: MU6b
+(the constructor's call and `check_model`'s removed) also survives, and MU6c (those two and the one in `mpc.rs` removed) is caught
+by A1 (DSF and DSL then both build). The registered mutation does not change the behaviour, and the registration was wrong to
+expect A1 to catch it (D3 named only the constructors).
+
+### Deviations and what was not run
+
+- `cargo fmt` changed the layout of `gyro.rs` and `sa_gyro_sector.rs` after the registered run (commit 07ff0ad8, layout only).
+- C1's "distinct modes" was checked as distinct stored frequency bits per family and speed.
+- `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --all-targets --release -- -D warnings` clean; `cargo test -p
+  rcfd-cli --release --test docs_site` pass. The whole workspace suite was not run (the lead's gate).
+
+### Decision
+
+**Partial** by the registered rule: every check met at its run and N1 and N2 as expected, but MU6 was not caught by a registered
+check (it is an equivalent mutant: the behaviour is guarded twice more). Every clause of the acceptance holds. On the disc sector at
+0.4 and 0.8 `omega_ref`, every index's split frequencies equal `whirl_modes` within 9.9e-8 for every mode the registered rule
+puts inside the basis (on B41; on B4 and B12 no mode qualifies). Sectors with other axes are refused, and without the option the
+results are bit-identical. If the lead reads MU6 as equivalent (MU6c shows that A1 sees the path), the item otherwise meets the
+rule for done.
+
+### Remaining questions
+
+1. MU6. Options: (a) keep partial; (b) accept MU6 as an equivalent mutant on the evidence of MU6c and mark done. Recommendation:
+   (b), which is the lead's call; users see the same result either way.
+2. Small bases. With 4 or 12 harmonic modes per index the split frequencies of this disc are off by 1e-3 to 5e-3, and the rule
+   (validated to 3 percent) reports this per mode. Options: (a) leave the basis to the user with the rule as a post-check; (b) a
+   follow-up that adds the static correction vectors `K_eff^-1 G phi_i` of each index to the basis and reports `eta` with every
+   split mode. Recommendation: (b); the 120 mm fan sector will have far more unknowns than modes.
+3. Case-file key (not added). Recommendation: the existing `[rotating] coriolis = true` with `campbell = "split"`, which on a
+   cyclic model selects `RotatingSector::split_campbell` over `harmonics`; the maintainer's call.
+
+### For the lead: roadmap entries
+
+Proposed status of F-555: **partial** (done if MU6 is accepted as equivalent). New note:
+
+> Structural solver, advanced tier (plan ADR 0310). PARTIAL. Size S. ADR 0481, 2026-11-14: RotatingSector::split_modes and split_campbell in rcfd_fem::gyro: the gyroscopic problem of ADR 0472 on the F-396 harmonic modes of each index (cos/sin basis, K_eff, M and the Coriolis matrix doubled for a pair), solved by the quadratic solver of ADR 0450 and tracked per index by the tracker of ADR 0411, with growth, stability, whirl number and wave sense; opt-in by RotatingOptions::coriolis, without it the F-396 sector results bit for bit; sectors exist only for material axes passing ADR 0462. A mode counts as inside the basis when the first-order Ritz error eta = |e^H Q e|/(omega |s^H Q' s|) of the whole-sector whirl mode is below 1e-7 (eta matches the measured error within 3 percent). On the disc sector of ADR 0411 with 41 modes per index at 0.4 and 0.8 omega_ref, 223 to 233 of 246 modes are inside and equal RotatingSector::whirl_modes within 8.3e-8 (isotropic) and 9.9e-8 (orthotropic, cylindrical axes); with 4 or 12 modes per index none is inside (errors 8e-4 to 5e-3). Other axes refused; non-cyclic split results and defaults bit-identical (13 digests). Six of seven mutations caught; removing the axes check of RotatingSector::new is not caught because RotatingPart::new and the transformation check it again. Follow-up for static correction vectors.
+
+Follow-up (number left to the lead): title "Static correction vectors for the split modes of a sector index", deps F-555.
+
+> Every limit not stated here is registered in the ADR before the run. The basis of RotatingSector::split_modes optionally adds the static correction vectors K_eff^-1 G phi_i of the F-396 harmonic modes of each index and reports the first-order Ritz error eta of ADR 0481 for every split mode; on the disc sector of ADR 0411 with 4 harmonic modes per index at 0.4 and 0.8 omega_ref the lowest split frequency of every index equals RotatingSector::whirl_modes within 1e-5, and eta agrees with the measured error within 10 percent where it exceeds 1e-9; without the option every result bit-identical.
