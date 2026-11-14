@@ -909,6 +909,17 @@ impl SolidModel {
     pub fn materials(&self) -> &[(String, Material)] {
         &self.materials
     }
+    /// The model with every viscoelastic material replaced by its elastic base (ADR 0494 D1): the base stress of the
+    /// harmonic stress of a viscoelastic material.
+    pub(crate) fn with_viscoelastic_bases(&self) -> SolidModel {
+        let mut m = self.clone();
+        for (_, material) in m.materials.iter_mut() {
+            if let Material::Viscoelastic { base, .. } = material {
+                *material = (**base).clone();
+            }
+        }
+        m
+    }
     /// The constraints, in the order added.
     pub fn constraints(&self) -> &[Constraint] {
         &self.constraints

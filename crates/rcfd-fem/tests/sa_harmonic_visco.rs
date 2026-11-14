@@ -618,15 +618,7 @@ fn dm1_nc2_rf_refusals() {
     );
     c.holds("RF (v) J2 with a viscoelastic material", ok, &msg);
 
-    // RF (vi): the harmonic stress
-    let solver = DirectHarmonic::new(&model, &DirectHarmonicOptions::new()).unwrap();
-    let r = solver.response(&tip_load(&model, 0), rod.wc).unwrap();
-    let (ok, msg) = not_yet(
-        solver.stress(&model, &r),
-        "Viscoelastic",
-        "the harmonic stress",
-        mat_visco::FOLLOW_UP,
-    );
-    c.holds("RF (vi) harmonic stress", ok, &msg);
+    // RF (vi): the refusal of the harmonic stress of ADR 0491 D2 is lifted by F-583 (ADR 0494 D3); the stress of a
+    // viscoelastic response is checked in sa_harmonic_visco_stress.rs (S1A to S1C).
     c.finish();
 }

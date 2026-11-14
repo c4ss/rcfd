@@ -143,10 +143,7 @@ fn n1_default_bits_of_the_stress_of_the_base() {
         &DirectHarmonicOptions::new().loss_factor("all", LossFactor::Table(table.clone())),
     )
     .unwrap();
-    got.push((
-        "stress bar table",
-        digest(&flat(&m, &s, &s.sweep(&load, &ws).unwrap())),
-    ));
+    got.push(("stress bar table", digest(&flat(&m, &s, &s.sweep(&load, &ws).unwrap()))));
 
     let m2 = two_material_bar();
     let o = DirectHarmonicOptions::new()
