@@ -294,3 +294,10 @@ ignored record. By the decision rule C3 and C4 count as met only after an amendm
 
 J1 and J2 missed in the same run (J1 `2.25e-2` against `1e-2`, J2 `2.36e-2` against `2e-2`); they become ignored
 `*_known_miss` records with the limits intact (diagnosis in addendum 1).
+
+## Amendment 2 (2026-11-14, after the run of `c3b_c4b_rod_on_the_axis` of commit d394fa73, before any corrected run)
+
+The corrected test stopped again before any check: at tolerance `1e-8` and 600 iterations the residuals of the first pair
+stayed at `1.21e-8`, `1.23e-8` (the second pair `3.0e-10`), the same as at 400 iterations: a floor of the residual, not slow
+convergence. Correction: `c3c_c4c_rod_on_the_axis`, C3 and C4 unchanged with the modal tolerance `1e-6` (rod and beam; a residual
+of `1e-6` changes the frequency by far less than the 1 percent of C3); `c3b_c4b_rod_on_the_axis` stays as an ignored record.

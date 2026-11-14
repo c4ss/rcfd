@@ -1017,6 +1017,7 @@ fn harmonic_or_static(m: &SolidModel, k: usize) {
 
 // Amendment 1: C3 and C4 with the modal tolerance 1e-8 and 600 iterations.
 #[test]
+#[ignore = "record of the run of ADR 0456 amendment 1 (commit d394fa73): set-up stopped, the residual of the first pair stays at 1.2e-8 above the tolerance 1e-8; corrected by amendment 2 as c3c_c4c_rod_on_the_axis"]
 fn c3b_c4b_rod_on_the_axis() {
     let mut c = Checks::new();
     let m = rod();
@@ -1024,6 +1025,69 @@ fn c3b_c4b_rod_on_the_axis() {
     o.max_iterations = 600;
     let h = modal_analysis_harmonic(&m, &[], 1, &o).unwrap();
     let mut ob = ModalOptions::new(2).tolerance(1e-8);
+    ob.max_iterations = 600;
+    let beam = mpc::modal_analysis_mpc(&rod_beam(), &[], &ob).unwrap();
+    let (fr, fb) = (
+        h.values[0].sqrt() / (2.0 * PI),
+        beam.result.eigenvalues[0].sqrt() / (2.0 * PI),
+    );
+    println!(
+        "C3: rod k = 1 f {fr:.8} Hz (values {:?}, residuals {:?}), beam f {fb:.8} Hz (values {:?})",
+        h.values, h.residuals, beam.result.eigenvalues
+    );
+    println!("C3 signed: {:+.4e}", fr / fb - 1.0);
+    c.le("C3 bending frequency", rel(fr, fb), 0.01);
+    let dofs = m.dof_map();
+    let n = dofs.n_equations();
+    let axis = axis_nodes_of(m.mesh());
+    let t2 = harmonic_transformation(&m, &[], 2).unwrap();
+    let all: Vec<usize> = axis
+        .iter()
+        .flat_map(|&p| [0, 1, 2].map(|k| dofs.equation(p, k).unwrap()))
+        .flat_map(|e| [e, n + e])
+        .collect();
+    c.holds(
+        "C4 k = 2 axis nodes held",
+        empty_rows(&t2, &all),
+        &format!("{} axis nodes", axis.len()),
+    );
+    let t1 = harmonic_transformation(&m, &[], 1).unwrap();
+    let axial: Vec<usize> = axis
+        .iter()
+        .map(|&p| dofs.equation(p, 2).unwrap())
+        .flat_map(|e| [e, n + e])
+        .collect();
+    let free_count_ok = axis.iter().filter(|&&p| m.mesh().nodes()[p][2] > 0.0).all(|&p| {
+        let inplane = [0, 1].map(|k| dofs.equation(p, k).unwrap());
+        inplane
+            .iter()
+            .flat_map(|&e| [e, n + e])
+            .filter(|i| t1.independent().binary_search(i).is_ok())
+            .count()
+            == 2
+    });
+    c.holds(
+        "C4b k = 1 axial held",
+        empty_rows(&t1, &axial),
+        "axial unknowns of the axis nodes",
+    );
+    c.holds(
+        "C4b k = 1 two in-plane free",
+        free_count_ok,
+        "two of four in-plane unknowns per free axis node",
+    );
+    c.finish();
+}
+
+// Amendment 2: C3 and C4 with the modal tolerance 1e-6.
+#[test]
+fn c3c_c4c_rod_on_the_axis() {
+    let mut c = Checks::new();
+    let m = rod();
+    let mut o = ModalOptions::new(2).tolerance(1e-6);
+    o.max_iterations = 600;
+    let h = modal_analysis_harmonic(&m, &[], 1, &o).unwrap();
+    let mut ob = ModalOptions::new(2).tolerance(1e-6);
     ob.max_iterations = 600;
     let beam = mpc::modal_analysis_mpc(&rod_beam(), &[], &ob).unwrap();
     let (fr, fb) = (
