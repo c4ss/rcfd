@@ -194,6 +194,21 @@ Printed records, no limit: per level the estimate, the diffusion number, the tim
 * No case key and no change of the `rcfd-api` `kind` of a transient divergence (it would report `non_finite`); both are open
   questions in the addendum.
 
+## Amendment 1 (2026-11-14, after the registered runs of the checks and of MU1 to MU10, before any run of L3b)
+
+The registered mutation MU6 (the empty-direction filter dropped) was **not caught** by any registered check: L3 uses `cavity_2d`,
+whose depth equals the cell width, so the largest face area of a cell is the same with and without the filter. (Also, the
+registered table of L3 gave `dt = 0.1`, `nu = 1e-3` and `D = 25.6`; these are inconsistent, `nu dt n^2 = 0.0256`. The test uses the
+registered `nu` and `dt` and the limit is against `nu dt n^2`, as registered; the 25.6 was an arithmetic slip.) The first six
+mutations were run once; MU6 is left in the record as uncaught by L3.
+
+New check **L3b** (library test, added now, before it is run): a 2D box with a thin depth: `box_mesh([8, 8, 1], [1, 1, 0.01])`,
+`zmin` and `zmax` set to `PatchKind::Empty` through `MeshTopology` and `Mesh::from_topology`, `nu = 1e-3`, `dt = 0.1`:
+`max_cell_diffusion(dt)` against `nu dt / (1/8)^2 = 6.4e-3`, relative difference `<= 1e-9`. Estimate: with the filter `h = V / (dx
+dz) = 1/8`; without it `h = dz = 0.01` and the number is 156 times larger. MU6 is to be run again with L3b (expected caught by L3b
+only). By the decision rule as registered, a check that is met only after an amendment made after a run gives **partial**; the
+addendum reports that and says what the amendment changed.
+
 ## Addendum 1: results
 
 (to be written after the registered runs)

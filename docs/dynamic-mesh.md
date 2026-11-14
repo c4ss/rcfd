@@ -70,6 +70,13 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   within 0.61 percent, at a mean of 8.1, 11.1 and 14.4 outer iterations per step. Some steps reach the cap, though (10 of 250 at
   100 and at 50). At an extreme of the pressure history the step's own pressure change is nearly zero (diagnosed at 50: 4e-4 of
   its largest value), and the criterion is met only near the cap (49 iterations). So keep a cap. There is no case key yet.
+* Refusal at the onset (F-535, ADR 0471): the opt-in `PimpleSettings::lag_onset_refusal = Some(20)` makes the first step the
+  solver takes refuse, through the divergence guard and before any field is touched, when the ADR 0073 estimate of that step
+  (20 power iterations on a copy of the solver) is at least one. The message names the largest cell diffusion number
+  `nu dt/dx^2` (`PimpleSolver::max_cell_diffusion`), the estimate and the remedies (the consistent correctors with 8 outer
+  iterations, a smaller step). On the channel above it refuses at `nu dt/dy^2` of 100, 50, 25, 5 and 3 (estimates 25.9, 16.2,
+  9.2, 2.0, 1.2) and runs at 2.5 (0.96), bit for bit as without the option. The estimate depends on the iteration count (at 2.5
+  it is 0.96 with 20 iterations and 1.0003 with 200), and later steps are not examined. There is no case key yet.
 * The streamwise velocity in the cell next to an accelerating piston lags by about 3e-4 of the piston speed (registered limit
   1e-6 missed, cause not proven).
 * The cyclic-face lag of PISO that earlier needed 10 outer iterations no longer reproduces (test `g4b`, moving-vs-fixed mesh
