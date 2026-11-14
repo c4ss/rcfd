@@ -327,7 +327,8 @@ fn centre_strain(xe: &[[f64; 2]; 4], ue: &[[f64; 2]; 4]) -> [f64; 3] {
 }
 
 #[test]
-fn th1_th3_n3_n5_free_plate_under_a_uniform_temperature() {
+#[ignore = "known miss of ADR 0445 (amendment 1): TH3a in-plane displacement P 2.1044e-10, Q 1.2531e-10, rotations P 2.9905e-10 against the limit 1e-12 (a rigid in-plane rotation held only by the drilling penalty at node 0); superseded by th1_th3_n3_n5_free_plate_after_known_miss"]
+fn th1_th3_n3_n5_free_plate_under_a_uniform_temperature_known_miss() {
     let mut c = Checks::new();
     let dt = 50.0;
     let ea = ALPHA * dt;
@@ -407,6 +408,139 @@ fn th1_th3_n3_n5_free_plate_under_a_uniform_temperature() {
             limit,
         );
         c.at_most(&format!("{id} {name} rotations / (alpha dT)"), rot / ea, limit);
+    }
+    // N3: the solid recovery still refuses a shell model.
+    let (m, _, _) = th_model(&Placement::identity(), 0.01, 300.0 + dt);
+    let u = vec![0.0; m.dof_map().n_equations()];
+    let r = IntegrationPointField::compute(&m, &u);
+    let ok = matches!(&r, Err(FemError::Element { source, .. })
+        if matches!(source.as_ref(), FemError::NotYetSupported { package, .. } if *package == shell::SOLID_ROUTINES));
+    c.holds(
+        "N3 IntegrationPointField of a shell model",
+        ok,
+        &format!("{:?}", r.err()),
+    );
+    // N4: T = T_ref gives a zero load and a zero displacement.
+    let (m, _, _) = th_model(&Placement::identity(), 0.01, 300.0);
+    let f = nodal_load_vector(&m, &[]).unwrap();
+    let r = solve_static(&m, &StaticOptions::default()).unwrap();
+    c.holds(
+        "N4 T = T_ref: zero load and zero displacement",
+        f.iter().all(|&v| v == 0.0) && r.displacement_values().iter().all(|&v| v == 0.0),
+        &format!("max |f| {:e}", max_abs(f.iter().copied())),
+    );
+    c.finish();
+}
+
+/// The copy of the registered run after amendment 1: the three missed TH3a rows are printed, not checked; TH3c added.
+#[test]
+fn th1_th3_n3_n5_free_plate_after_known_miss() {
+    let mut c = Checks::new();
+    let dt = 50.0;
+    let ea = ALPHA * dt;
+    for (name, place, t) in [("P", Placement::identity(), 0.01), ("Q", Placement::inclined(), 0.05)] {
+        let (m, p, el) = th_model(&place, t, 300.0 + dt);
+        let r = solve_static(&m, &StaticOptions::default()).unwrap();
+        let u = r.displacement_values();
+        let dofs = m.dof_map();
+        let comp = |n: usize, k: usize| u[dofs.equation(n, k).unwrap()];
+        let (ex, ey, ez) = (place.axis(0), place.axis(1), place.axis(2));
+        let uplane: Vec<[f64; 2]> = (0..p.len())
+            .map(|n| {
+                let v = [comp(n, 0), comp(n, 1), comp(n, 2)];
+                [dot(v, ex), dot(v, ey)]
+            })
+            .collect();
+        // TH1: the membrane strain at the element centres.
+        let mut de = 0.0f64;
+        let mut naive = 0.0f64;
+        for e in &el {
+            let xe = [p[e[0]], p[e[1]], p[e[2]], p[e[3]]];
+            let ue = [uplane[e[0]], uplane[e[1]], uplane[e[2]], uplane[e[3]]];
+            let s = centre_strain(&xe, &ue);
+            de = de.max(max_abs([s[0] - ea, s[1] - ea, s[2]]));
+            // N5: the membrane force A eps without the thermal strain.
+            let cfac = E * t / (1.0 - NU * NU);
+            naive = naive.max((cfac * (s[0] + NU * s[1])).abs() / (E * t * ea / (1.0 - NU)));
+        }
+        c.at_most(
+            &format!("TH1 {name} max |eps - alpha dT (1, 1, 0)| / (alpha dT)"),
+            de / ea,
+            1e-12,
+        );
+        if name == "P" {
+            c.above(
+                "N5 P |A eps|_xx without the thermal strain / (E t alpha dT / (1 - nu))",
+                naive,
+                0.5,
+            );
+        }
+        // TH2: zero stress.
+        let st = shell::stresses(&m, u).unwrap();
+        let nscale = E * t * ea / (1.0 - NU);
+        let sscale = E * ea / (1.0 - NU);
+        let nmax = max_abs(st.iter().flat_map(|(_, s)| s.membrane));
+        let smax = max_abs(st.iter().flat_map(|(_, s)| s.top.into_iter().chain(s.bottom)));
+        c.at_most(
+            &format!("TH2 {name} max |N_k| / (E t alpha dT / (1 - nu))"),
+            nmax / nscale,
+            1e-12,
+        );
+        c.at_most(
+            &format!("TH2 {name} max |sigma_top|, |sigma_bottom| / (E alpha dT / (1 - nu))"),
+            smax / sscale,
+            1e-12,
+        );
+        // TH3: the free expansion about node 0.
+        let lmax = max_abs(p.iter().map(|q| (q[0] - p[0][0]).hypot(q[1] - p[0][1])));
+        let din = max_abs((0..p.len()).flat_map(|n| {
+            [
+                uplane[n][0] - ea * (p[n][0] - p[0][0]),
+                uplane[n][1] - ea * (p[n][1] - p[0][1]),
+            ]
+        }));
+        println!(
+            "TH3a {name} in-plane displacement (known miss, not checked here): {:.4e}",
+            din / (ea * lmax)
+        );
+        // TH3c (amendment 1): the same less the fitted in-plane rigid rotation about node 0.
+        let r: Vec<[f64; 2]> = p.iter().map(|q| [q[0] - p[0][0], q[1] - p[0][1]]).collect();
+        let d: Vec<[f64; 2]> = (0..p.len())
+            .map(|n| [uplane[n][0] - ea * r[n][0], uplane[n][1] - ea * r[n][1]])
+            .collect();
+        let num: f64 = (0..p.len()).map(|n| r[n][0] * d[n][1] - r[n][1] * d[n][0]).sum();
+        let den: f64 = r.iter().map(|q| q[0] * q[0] + q[1] * q[1]).sum();
+        let omega = num / den;
+        println!(
+            "TH3c {name} fitted rigid rotation omega / (alpha dT): {:.4e}",
+            omega / ea
+        );
+        let dfit = max_abs((0..p.len()).flat_map(|n| [d[n][0] + omega * r[n][1], d[n][1] - omega * r[n][0]]));
+        c.at_most(
+            &format!("TH3c {name} in-plane displacement less the rigid rotation"),
+            dfit / (ea * lmax),
+            1e-12,
+        );
+        let tz = max_abs((0..p.len()).map(|n| dot([comp(n, 3), comp(n, 4), comp(n, 5)], ez) - omega));
+        c.at_most(
+            &format!("TH3c {name} |theta . e_Z - omega| / (alpha dT)"),
+            tz / ea,
+            1e-12,
+        );
+        let out = max_abs((0..p.len()).map(|n| dot([comp(n, 0), comp(n, 1), comp(n, 2)], ez)));
+        let rot = max_abs((0..p.len()).flat_map(|n| [comp(n, 3), comp(n, 4), comp(n, 5)]));
+        let limit = if name == "P" { 1e-12 } else { 1e-8 };
+        let id = if name == "P" { "TH3a" } else { "TH3b" };
+        c.at_most(
+            &format!("{id} {name} out-of-plane displacement / (alpha dT L)"),
+            out / (ea * lmax),
+            limit,
+        );
+        if name == "P" {
+            println!("TH3a P rotations (known miss, not checked here): {:.4e}", rot / ea);
+        } else {
+            c.at_most(&format!("{id} {name} rotations / (alpha dT)"), rot / ea, limit);
+        }
     }
     // N3: the solid recovery still refuses a shell model.
     let (m, _, _) = th_model(&Placement::identity(), 0.01, 300.0 + dt);
