@@ -190,3 +190,88 @@ Corrections, written and committed before their run:
   the passing record is one test.
 
 By the registered rule the item is partial whatever the corrected run gives (a negative control met only after an amendment).
+
+## Addendum 1: results (2026-11-14)
+
+Runs (release, `--test-threads=1`, each made once): run 1, the registered test file (`f526-scratch/run1.log`: 2 of 3 tests
+passed, the third failed in its N3 part, amendment 1); run 2, the corrected `q1_to_q4_n3b_...` (`run2.log`, passed). Existing
+tests after the code (S2): `sb_solid_case` 8 passed, 4 ignored as before; `case_hashes_w48u` 1; `physics_schema` 11; `rules_w19c`
+8 (1 ignored as before): all passed, none edited. No `src` file changed, so `baseline_hashes`, `rcfd-cli` and `rcfd-mcp` were not
+run (the registered condition).
+
+| Check | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| P1 file model: nodes, `xmin` nodes, values; z load sum against `-2.25e6` | 1617, 49, 4851; `<= 1e-9` | 1617, 49, 4851; 2.2e-16; direct run residual 6.5e-12 | yes |
+| P2 floor `phi` of the F-381 Hex8 model | `<= 5e-11` | 2.17e-11 (`\|\|K\|\|_inf` 3.70e11, `\|\|u\|\|_2` 9.09e-2, `\|\|b\|\|_2` 3.44e5) | yes |
+| P3 `R` of the F-381 Hex8 model | `>= 4.4e-6` | 1.02e-5 | yes |
+| P4 block_jacobi relative residual (iterations) | `<= 1e-10` | 9.64e-11 (156) | yes |
+| P4 ic0 | `<= 1e-10` | 9.54e-11 (85) | yes |
+| P4 ic_fill | `<= 1e-10` | 5.39e-11 (58) | yes |
+| P4 amg | `<= 1e-10` | 3.24e-11 (15) | yes |
+| P4 amg_quadratic | `<= 1e-10` | 3.24e-11 (15) | yes |
+| P4 amg_quadratic_smoothed | `<= 1e-10` | 2.28e-11 (12) | yes |
+| P5 the same six against the direct run | `<= 1e-7` | 3.2e-13, 3.3e-13, 2.4e-13, 5.8e-13, 5.8e-13, 1.2e-12 | yes |
+| P6 floor of the ADR 0438 Tet10 model (`\|\|K\|\|_inf` 1.78e11, `\|\|u\|\|_2` 3.53e-2, `\|\|b\|\|_2` 263.5, `R` 4.18e-8) | `6e-11 <= phi <= 6e-9` | 5.31e-9 (nine times the ADR 0438 stall of 6e-10; inside the interval, near its upper edge) | yes |
+| P7 `R_hex8 / R_tet10` | `>= 100` | 245 | yes |
+| Q1 `corner_hi` (all three upper bounds equal the coordinates) | exactly 1 node, bitwise `(8, 0, 0.75)` | 1 node `[8.0, 0.0, 0.75]` | yes |
+| Q2 `face_hi` equals `xmax` | equal, 49 nodes | equal, 49 | yes |
+| Q3 `corner_lo` | exactly that node | 1 node | yes |
+| Q4 `point` (degenerate box) | exactly that node | 1 node | yes |
+| Q5 node sets of the 9 case files (16 sets) against an independent inclusive filter | equal indices, non-empty | all 16 equal, each non-empty | yes |
+| S1 `git diff 79012f86 --stat -- crates` | new test file and new case files only | 3 files added (the test and two `.toml`), no `src` file, no existing file | yes |
+| S2 existing tests | pass | as listed above | yes |
+| N1 comparison sees `nu + 1e-10` | above 0, below 1e-6 | 1.2e-11 | as expected |
+| N2 Tet10 `amg_quadratic` at 1e-10 | error `not converged` | `not converged in 54 iterations and 3 restart(s) (true residual 1.5e-7, target 2.6e-8)` | as expected |
+| N3 bound 1e-9 below the coordinate | selects none of the 49 nodes | the set-up panicked: the library refused the model (no node in the box); corrected N3b below | set-up defective |
+| N3b (amendment 1) the same file | refused with path `node_sets.face_hi.box_min`, a line and `selects no node` | refused, line 18, message as stated | yes, after amendment |
+
+Estimates against measurements: `||K||_inf` of the Hex8 model was 3.70e11 against the `2 E a = 1.0e11` of the estimate (a factor
+3.7 higher: the row sum of absolute values of a Hex8 stiffness row is larger than `2 E a`), `||u||_2` 0.091 against 0.107,
+`||b||_2` 3.44e5 against 3.2e5; the floor 2.2e-11 is inside the registered 7e-12 to 3e-11. The Tet10 floor 5.3e-9 is above the
+estimate 3.5e-9 (`||K||_inf` 1.78e11 against 1.0e11). Each floor lies above the residual attained (Hex8: direct 6.5e-12 against
+floor 2.2e-11, CG 2.3e-11 to 9.6e-11 which is 1 to 4.4 times the floor; Tet10: stall 6e-10 against floor 5.3e-9), so the CG
+residuals on the Hex8 model sit at or just above the floor, and the floor orders the two models and sizes the effect without
+predicting the stall to better than a factor 10.
+
+### Mutations (scratch copy `f526-scratch/tree` from `git archive` of the committed tests, script `mut.sh`, logs `MU*.log`, diffs `MU*.diff`)
+
+| Id | Mutation | Caught by |
+| --- | --- | --- |
+| MU4 | upper bound exclusive (`p[c] < hi[c]`) | `q1_to_q4_n3b` (the model is refused: every box with an upper bound equal to a coordinate is empty) and Q5 (the new `box_exact_bounds.toml` is refused) |
+| MU4b | lower bound exclusive (`p[c] > lo[c]`) | `q1_to_q4_n3b` and Q5 (the same refusal of `corner_lo` and `point`) |
+| MU11 | `tolerance` key ignored (1e-6) | P4 for all six keys (residuals 1.8e-7 to 7.7e-7) and N2 (the Tet10 run converged) |
+
+All three caught. The registered remark "Q5 on the ADR 0438 files must still pass under MU4" was not shown separately: under MU4 the
+refusal of the new file ends Q5 before it compares the other files (their bounds extend 1e-9 beyond the point, and ADR 0438's
+MU4 left their tests passing).
+
+### Deviations
+
+- Amendment 1: N3's set-up (a box that selects nothing gives no set to compare with `xmax`); the library's refusal is the
+  stronger fact and became N3b. The old test is an ignored record.
+- No library change was needed or made (the rule was already inclusive and documented); (c7) and (c8) are shown by tests.
+- `cargo fmt -p rcfd-api --check` clean; `cargo clippy -p rcfd-api --all-targets --release -- -D warnings` clean.
+- Not run: `baseline_hashes`, `rcfd-cli`, `rcfd-mcp` tests (no `src` or doc file changed); the Tet10 model at 1e-10 converging
+  (a registered non-convergence, N2).
+
+### Decision by the registered rule
+
+**Partial.** Every check of the acceptance is met on the registered run (six preconditioners reach 1e-10 on the F-381 Hex8 file
+with agreement within 1.2e-12, both floors computed and printed, the exact box bounds select their node, all three mutations
+caught), but the rule says an amendment after a run makes the item partial: N3 (a negative control) was met only after
+amendment 1. No registered limit of a P, Q or S check was missed.
+
+### Remaining questions
+
+1. Status. Options: (a) accept partial by the literal rule; (b) treat the amendment as a control's defect only and mark done.
+   Recommendation: (a) by the rule; the lead may set done, since no acceptance clause is open.
+2. The Tet10 file cantilever still cannot reach 1e-10 (floor 5.3e-9). Options: (a) leave it documented (N2, ADR 0438); (b) a
+   backward-error statistic relative to `|| |K| |u| || + ||b||` in the solver's report, so that the stall is not read as a
+   failure (ADR 0282 remaining question); (c) a Tet10 model with a distributed load. Recommendation: (b), a separate item.
+3. `docs/solid-case-file.md` could note that a CG tolerance below `eps ||K|| ||u|| / ||b||` cannot be reached; not edited here.
+
+## For the lead: roadmap entries
+
+F-526: proposed status **partial**. Note:
+
+> ADR 0443, 2026-11-14: tests only, no library change. The F-381 Hex8 cantilever as a solid case file (box 8 x 1.5 x 1.5 m, 32 x 6 x 6, 4704 unknowns), run with method = cg and each of the six preconditioner keys, reaches the relative residual 1e-10 (9.6e-11 block_jacobi, 9.5e-11 ic0, 5.4e-11 ic_fill, 3.2e-11 amg and amg_quadratic, 2.3e-11 amg_quadratic_smoothed; 156, 85, 58, 15, 15, 12 iterations) and agrees with the direct file run within 1.2e-12 (limit 1e-7). The floor eps ||K||_inf ||u||_2 / ||b||_2 is 2.2e-11 for that model (ratio R = ||b|| / (||K|| ||u||) 1.0e-5) and 5.3e-9 for the ADR 0438 Tet10 cantilever (R 4.2e-8, 245 times smaller), above its measured stall 6e-10, and that model still stops with "not converged" at 1e-10. Node-set boxes whose upper bound, lower bound or both equal a node coordinate exactly select that node (the rule was already inclusive; no library change); the node sets of the nine solid case files equal an independent inclusive filter. Mutations: exclusive upper bound (ADR 0438 MU4), exclusive lower bound and an ignored tolerance key all caught. One negative control (N3) was met only after an amendment, so partial by the registered rule.
