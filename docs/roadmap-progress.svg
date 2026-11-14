@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 176" width="720" role="img" aria-labelledby="t d">
   <title id="t">Roadmap progress</title>
-  <desc id="d">204 of 450 roadmap items are done, 166 are partly done and 80 are not started.</desc>
+  <desc id="d">204 of 452 roadmap items are done, 167 are partly done and 81 are not started.</desc>
   <style>
     :root { --ink:#1f2328; --mute:#59636e; --done:#1a7f4b; --part:#d4a72c; --todo:#d0d7de; --bg:#ffffff; }
     @media (prefers-color-scheme: dark) {
@@ -23,16 +23,16 @@
     <clipPath id="r"><rect x="24" y="78" width="672" height="44" rx="6"/></clipPath>
   </defs>
   <text x="24" y="40" class="big">45% done</text>
-  <text x="220" y="40" class="sub">204 of 450 roadmap items finished, 166 more under way</text>
+  <text x="220" y="40" class="sub">204 of 452 roadmap items finished, 167 more under way</text>
   <g clip-path="url(#r)">
-    <rect x="24" y="78" width="304.6" height="44" fill="var(--done)"/>
-    <rect x="328.6" y="78" width="247.9" height="44" fill="url(#h)"/>
-    <rect x="576.5" y="78" width="119.5" height="44" fill="var(--todo)"/>
+    <rect x="24" y="78" width="303.3" height="44" fill="var(--done)"/>
+    <rect x="327.3" y="78" width="248.3" height="44" fill="url(#h)"/>
+    <rect x="575.6" y="78" width="120.4" height="44" fill="var(--todo)"/>
   </g>
   <text x="24" y="148" class="lab">Done</text>
   <text x="24" y="166" class="num">204</text>
-  <text x="328.6" y="148" class="lab">Partly done</text>
-  <text x="328.6" y="166" class="num">166</text>
+  <text x="327.3" y="148" class="lab">Partly done</text>
+  <text x="327.3" y="166" class="num">167</text>
   <text x="696" y="148" class="lab" text-anchor="end">Not started</text>
-  <text x="696" y="166" class="num" text-anchor="end">80</text>
+  <text x="696" y="166" class="num" text-anchor="end">81</text>
 </svg>

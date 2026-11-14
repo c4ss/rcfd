@@ -10434,7 +10434,9 @@ fixed by the item's registration ADR before any code.
     caught; Mu7 (buckling's entry check opened) is equivalent, stiffness_with refuses after it. Files modal.rs,
     geometric.rs, mpc.rs, assemble.rs, model.rs; tests sa_ortho_modal.rs, sa_ortho_modal_default_bits.rs; sa_ortho
     r1_r2_paths recorded and copied. Partial by the rule: the equivalent mutant Mu7 (buckling entry check opened;
-    refused identically next) not caught. Follow-up F-542.
+    refused identically next) not caught. Follow-up F-542. Follow-up F-542 (ADR 0459, 2026-11-14) opened the rotating
+    modes, the buckling factors and the transient integrator to both variants; question 3 (cyclic with cylindrical axes)
+    stays refused by name; the equivalent mutant Mu7 no longer exists.
 - [ ] **F-538** The averaged component diagonal in the relaxed PIMPLE loop
   - depends on: F-531
   - acceptance: Every limit not stated here is registered in the ADR before the run. The channel of ADR 0455 QF with
@@ -10460,7 +10462,7 @@ fixed by the item's registration ADR before any code.
     Shell4 checks repeated on triangles.
   - note: Structural solver, advanced tier. Follow-up of F-419 (ADR 0454, 2026-11-14). nonlinear, transient, buckling,
     cyclic, multigrid take Shell3 when they take Shell4 Also depends on the Shell4 follow-ups of ADR 0432.
-- [ ] **F-542** Orthotropic and tabulated materials on the rotating, buckling and transient paths
+- [~] **F-542** Orthotropic and tabulated materials on the rotating, buckling and transient paths
   - depends on: F-537
   - acceptance: Every limit not stated here is registered in the ADR before the run. The rotating modes (stress
     stiffening, spin softening), the buckling factors and the transient integrator take the orthotropic and tabulated
@@ -10469,8 +10471,22 @@ fixed by the item's registration ADR before any code.
     orthotropic material give the results of the isotropic material within 1e-12 on stocky models; a cyclic constraint
     with cylindrical axes about its own axis is opened or refused by name; the paths still not opened refuse the
     variants by name; default paths bit-identical.
-  - note: Structural solver, advanced tier. Follow-up of F-537 (ADR 0457, 2026-11-14). Rotating modes first (fan blades
-    in glass-filled plastic).
+  - note: Structural solver, advanced tier. ADR 0459, 2026-11-14: the orthotropic and tabulated materials of ADR 0452 on
+    the rotating modes (stress stiffening, spin softening; whirl analyses of a part), the buckling factors and the
+    transient integrator (both paths), through the per-point stiffness; the pre-stress at 1 rad/s of a rotating part
+    takes a table's stiffness at the model's temperature field and no thermal strain; a cyclic constraint with either
+    material (also cylindrical axes about its own axis, F-537 question 3) is refused by name on every path, as are
+    nonlinear, harmonic with the static correction, direct harmonic, damped modes, beams and shells. Orthotropic Hex20
+    blade with cylindrical axes (E2 = E1/10, G = E1/20, hub ratio 1, Omega up to twice the lag frequency): lag and flap
+    within 7.6e-4 of a rotating Timoshenko beam, stiffening coefficients within 1.1e-3, first-order Southwell within
+    1.0e-2; the blade turned by 0.7 rad unchanged to 1e-10. Orthotropic column 4.05e-4 above Engesser. Isotropic
+    constants in an orthotropic material: rotating and buckling within 6.8e-14 (both paths), transient on the
+    transformation within 3.4e-13; missed on the transient Hex20 block (9.25e-12 against 1e-12, a one-ulp change of the
+    isotropic constants moves that set-up by 9e-12; known miss). A tabulated material at a uniform temperature gives the
+    bits of the isotropic material on every path. Default paths bit-identical (20 digests of main 2504fd62). Seven of
+    seven mutations caught; ADR 0457's equivalent mutant is gone. Files rotating.rs, buckling.rs, transient.rs,
+    geometric.rs, mat_ortho.rs; tests sa_ortho_rotating.rs, sa_ortho_rotating_default_bits.rs; sa_ortho_modal
+    r1_r2_paths_after_f537 and r3_paths_not_opened recorded and copied. Follow-ups F-544, F-545.
 - [x] **F-543** Joint couplings with consistent face weights
   - depends on: F-426
   - acceptance: Every limit not stated here is registered in the ADR before the run. The beam-to-solid and
@@ -10489,3 +10505,20 @@ fixed by the item's registration ADR before any code.
     (limit 0.1 percent), shell rigid face 5.6e-4; the six rigid motions exact to 1.6e-13; the dual nodal forces equal
     hex20::traction_field_loads of the uniform and linear tractions to 2.6e-15 on both faces, every face node loaded.
     Seven mutations caught. Not covered: nu > 0, curved faces, dense rows over long edges.
+- [ ] **F-544** Cyclic symmetry with cylindrical material axes
+  - depends on: F-542
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The cyclic harmonic modal analysis,
+    the static harmonic solve and the rotating sector (modes and whirl) take the orthotropic and tabulated materials of
+    ADR 0452 when every material with its own axes has cylindrical axes about the cyclic constraint's axis and origin;
+    other axes stay refused by name; the harmonics of a sector match the full rotor of the same material within
+    registered limits; isotropic constants in an orthotropic material give the isotropic results within 1e-12 on stocky
+    models; default paths bit-identical.
+  - note: Structural solver, advanced tier. Follow-up of F-542 (ADR 0459, 2026-11-14); F-537 question 3. Fan rotor
+    sectors in orthotropic plastic.
+- [ ] **F-545** Transient isotropic equivalence with a probed limit
+  - depends on: F-542
+  - acceptance: Every limit not stated here is registered in the ADR before the run, after a rounding probe of each
+    set-up (a one-ulp change of the isotropic constants) made and disclosed before the registration. The transient
+    integrator with isotropic constants in an orthotropic material matches the isotropic material on a Hex20 and a Hex8
+    model on both paths within limits derived from the probe; default paths bit-identical.
+  - note: Structural solver, advanced tier. Follow-up of F-542 (ADR 0459, 2026-11-14): the TR2 miss. Size S.
