@@ -356,3 +356,27 @@ than about two minutes in release is an ignored heavy record run once, with a fa
    reference, activation } } }` read into `Material::viscoelastic`, offered with the nonlinear transient study only.
 2. **No time on the static driver.** Refused (D4), taken: a silent instantaneous response is worse than a refusal.
 3. **The state layout.** `6 (N + 1)` values (D1), taken: the exact update needs the strain of the last step.
+
+## Amendment 1 (2026-11-14, written after the registered run of commit bf383d20 and before any corrected run)
+
+The registered run (`cargo test -p rcfd-fem --release --test sa_visco -- --nocapture --test-threads=1`, log
+`f410-scratch/run1.log`) found two defective set-ups. Their measured values are kept as recorded; the tests of that run stay as
+ignored records (`r1_r1m_r2_n3_relaxation`, `s1_s1m_s2_time_temperature_shift`).
+
+1. **N3.** The registered pass was "the `S_xx` at the end equals the stress of the step bit for bit". Measured: `2.0009999999999995e6`
+   after the step, `2.0009999999999998e6` after five increments (one unit in the last place). The defect is in the measure, not
+   in the time: each later attempt of `solve_from` makes one Newton correction of rounding size, which moves the strain by
+   rounding, and at `dt = 0` the update is the instantaneous elastic response to that change. The control is meant to show that
+   the stress does not relax without a time. **N3b** (corrected set-up): the same run; measure `max over the five increments
+   |S_xx - S_xx,step| / S_xx,step` at every point, limit `1e-12` (rounding of the correction; one increment of `dt = 0.02 s` with
+   time would relax it by `0.3 (1 - e^{-2}) = 0.26` through the first branch). The checks R1, R1m and R2 of the same test function
+   were met in that run (`4.654286e-16`, `1.746230e-16`, `2.753180e-16`); their code is copied unchanged into
+   `r1_r1m_r2_relaxation` (deterministic: the copy reproduces the recorded numbers; ADR 0291 pattern).
+2. **S1.** The run stopped before any measure: the helper that reads the stresses of the element
+   (`nonlinear::element_second_piola_kirchhoff`) evaluates at the default point context, which the shifted material refuses
+   without a temperature (key `"temperature"`, as registered in D1). S1m and S2, in the same test function after S1, were not
+   run. **S1b** (corrected set-up, limit unchanged): the committed stress of each point read by `Material::stress` at the
+   committed strain of the point (the first six state values) with the committed state and the point context with the
+   temperature `T` and no time increment (the instantaneous response from the committed state at the same strain, which is the
+   committed stress, D1); measure and limit as S1, `|S_xx - E_xx E(t/a_T)| / (E_0 E_xx) <= 1e-10`. S1m and S2 as registered.
+   Test `s1b_s1m_s2_time_temperature_shift`. Run once.
