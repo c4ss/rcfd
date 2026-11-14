@@ -10,7 +10,7 @@ Parents: [ADR 0405](0405-f494-registration-immersed-multistep-linearisation.md) 
 D2, Arnoldi D3, the channel D4; the products PB, PF; the one-step spectra X3, X4; its question Q2, from which F-501 was made),
 [ADR 0392](0392-f482-registration-immersed-step-linearisation.md) (F-482: the state vector, the one-step map, the Hessenberg QR),
 [ADR 0374](0374-f363-registration-immersed-flux-with-one-piso-corrector.md) (F-363: the set-up R; B with one corrector stops at
-step 34), [ADR 0249](0249-f346-registration-immersed-unsteady-force.md) (the start field of DFG 2D-2: the inflow profile in
+step 34), [ADR 0249](0249-f346-registration-immersed-force-in-unsteady-flow.md) (the start field of DFG 2D-2: the inflow profile in
 every cell, through the body, and a blob of `v`), [ADR 0234](0234-f309-registration-immersed-face-flux-at-the-surface-crossing.md)
 (the face flux of the second-order forms at the fluid-solid faces). Roadmap item F-501 (deps F-494). Branch
 `f501-immersed-early-modes`, worktree `w49i-work/f501`, scratch `w49i-work/f501-scratch`.
