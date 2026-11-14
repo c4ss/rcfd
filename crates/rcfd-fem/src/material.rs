@@ -341,6 +341,13 @@ impl Material {
                 location: "the element-constant elasticity matrix".to_string(),
                 package: crate::mat_ortho::FOLLOW_UP,
             }),
+            // ADR 0475 D2: J2 has no element-constant matrix; only the nonlinear static solve takes it.
+            Material::J2 { .. } => Err(FemError::NotYetSupported {
+                item: "material",
+                variant: self.name(),
+                location: "the element-constant elasticity matrix".to_string(),
+                package: crate::mat_j2::FOLLOW_UP,
+            }),
             _ => Err(self.not_yet("the constitutive call")),
         }
     }
@@ -385,7 +392,8 @@ impl Material {
 
     /// The constitutive call: stress and tangent for a strain (Voigt, engineering shear) at a point with its state
     /// (`state_size()` values). For linear elasticity the stress is `D eps` and the tangent `D`; the isotropic material
-    /// does not read the point context. A variant whose package has not landed is refused naming it.
+    /// does not read the point context. For J2 the return map of [`crate::mat_j2::return_map`] from the committed state
+    /// `state` (ADR 0475 D2). A variant whose package has not landed is refused naming it.
     pub fn stress(&self, strain: &[f64; 6], point: &PointContext, state: &[f64]) -> Result<([f64; 6], Matrix6)> {
         let _ = point;
         if self.pending().is_some() {
@@ -397,6 +405,11 @@ impl Material {
                 expected: self.state_size(),
                 found: state.len(),
             });
+        }
+        if let Material::J2 { .. } = self {
+            // ADR 0475 D2: the return map from the committed state (the state itself is not changed here).
+            let u = crate::mat_j2::update(self, strain, state)?;
+            return Ok((u.stress, u.tangent));
         }
         let d = match self {
             // ADR 0452 D3: the two per-point variants read the point.

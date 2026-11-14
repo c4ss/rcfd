@@ -1080,21 +1080,21 @@ impl SolidModel {
     /// block, which only the paths of ADR 0432 D3 take, naming [`crate::shell::FOLLOW_UP`]. A model of the basic kinds with
     /// the default formulation passes.
     pub fn check_elements_supported(&self) -> Result<()> {
-        self.check_elements(false, false, false)
+        self.check_elements(false, false, false, false)
     }
 
     /// As [`SolidModel::check_elements_supported`] for a path that takes beams (ADR 0417 D4): a Beam2 block passes, and the
     /// model's beams are checked by [`crate::beam::check_beam_model`] (a Beam property on every Beam2 block, no node shared
     /// with a solid element, a frame for every beam element). A Shell4 block is refused.
     pub fn check_elements_supported_with_beams(&self) -> Result<()> {
-        self.check_elements(true, false, false)?;
+        self.check_elements(true, false, false, false)?;
         crate::beam::check_beam_model(self)
     }
 
     /// As [`SolidModel::check_elements_supported_with_beams`] for a path that also takes shells (ADR 0432 D3): a Shell4
     /// block passes, and the model's shells are checked by [`crate::shell::check_shell_model`].
     pub fn check_elements_supported_with_structures(&self) -> Result<()> {
-        self.check_elements(true, true, false)?;
+        self.check_elements(true, true, false, false)?;
         crate::beam::check_beam_model(self)?;
         crate::shell::check_shell_model(self)
     }
@@ -1102,13 +1102,25 @@ impl SolidModel {
     /// As [`SolidModel::check_elements_supported_with_structures`] for the static solve, which also takes the orthotropic
     /// and the tabulated material on solid elements (ADR 0452 D6), then [`crate::mat_ortho::check_model`].
     pub fn check_elements_supported_with_materials(&self) -> Result<()> {
-        self.check_elements(true, true, true)?;
+        self.check_elements(true, true, true, false)?;
         crate::beam::check_beam_model(self)?;
         crate::shell::check_shell_model(self)?;
         crate::mat_ortho::check_model(self)
     }
 
-    fn check_elements(&self, beams: bool, shells: bool, point_materials: bool) -> Result<()> {
+    /// As [`SolidModel::check_elements_supported`] for the nonlinear static solve, which also takes the J2 material
+    /// (ADR 0475 D2).
+    pub(crate) fn check_elements_supported_nonlinear(&self) -> Result<()> {
+        self.check_elements(false, false, false, true)
+    }
+
+    /// [`SolidModel::check_elements_supported_nonlinear`], then the supports (ADR 0475 D2).
+    pub(crate) fn check_supported_nonlinear(&self) -> Result<()> {
+        self.check_elements_supported_nonlinear()?;
+        self.check_supports()
+    }
+
+    fn check_elements(&self, beams: bool, shells: bool, point_materials: bool, history: bool) -> Result<()> {
         for (b, block) in self.mesh.blocks().iter().enumerate() {
             if let Some(package) = block.kind().pending() {
                 return Err(FemError::NotYetSupported {
@@ -1176,6 +1188,15 @@ impl SolidModel {
                     package,
                 });
             }
+            // ADR 0475 D2: a path that does not take a material with history refuses J2.
+            if !history && matches!(m, Material::J2 { .. }) {
+                return Err(FemError::NotYetSupported {
+                    item: "material",
+                    variant: m.name(),
+                    location: format!("material {i}, element set '{set}'"),
+                    package: crate::mat_j2::FOLLOW_UP,
+                });
+            }
             // ADR 0452 D6: a path that does not take the per-point materials refuses them.
             if !point_materials && crate::mat_ortho::is_point_material(m) {
                 return Err(FemError::NotYetSupported {
@@ -1219,7 +1240,7 @@ impl SolidModel {
     /// As [`SolidModel::check_elements_supported`] (solid elements only) for a path that also takes the orthotropic and the
     /// tabulated material (ADR 0457 D2: the pre-stressed modes, a uniform pre-stress), then [`crate::mat_ortho::check_model`].
     pub(crate) fn check_elements_solids_with_materials(&self) -> Result<()> {
-        self.check_elements(false, false, true)?;
+        self.check_elements(false, false, true, false)?;
         crate::mat_ortho::check_model(self)
     }
 
