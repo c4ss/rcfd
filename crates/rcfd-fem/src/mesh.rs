@@ -362,6 +362,8 @@ pub enum BlockProperty {
     Shell {
         /// Thickness, m.
         thickness: f64,
+        /// The membrane of a Shell3 block (ADR 0466); a Shell4 block takes only the default.
+        membrane: crate::shell3::Shell3Membrane,
     },
     /// A laminated shell block: its plies from the bottom (`-e_3` side) to the top (ADR 0440 D5). Refused by every solve
     /// until [`crate::laminate`] lands (ADR 0331, F-428).
@@ -420,8 +422,12 @@ impl BlockProperty {
     }
     /// A shell block; refuses a thickness that is not positive and finite.
     pub fn shell(thickness: f64) -> Result<BlockProperty> {
+        BlockProperty::shell_with_membrane(thickness, crate::shell3::Shell3Membrane::ConstantStrain)
+    }
+    /// A shell block with a membrane for Shell3 (ADR 0466); refuses a non-positive or non-finite thickness.
+    pub fn shell_with_membrane(thickness: f64, membrane: crate::shell3::Shell3Membrane) -> Result<BlockProperty> {
         positive("thickness", thickness)?;
-        Ok(BlockProperty::Shell { thickness })
+        Ok(BlockProperty::Shell { thickness, membrane })
     }
     /// A laminated shell block; refuses an empty list of plies.
     pub fn layup(plies: Vec<Ply>) -> Result<BlockProperty> {
@@ -608,10 +614,14 @@ impl SolidMesh {
         let (fits, operation) = match &property {
             BlockProperty::Solid { .. } => (b.kind.is_solid(), "the property Solid"),
             BlockProperty::Beam { .. } => (b.kind == ElementKind::Beam2, "the property Beam"),
-            BlockProperty::Shell { .. } => (
-                matches!(b.kind, ElementKind::Shell4 | ElementKind::Shell3),
-                "the property Shell",
-            ),
+            BlockProperty::Shell { membrane, .. } => match membrane {
+                // ADR 0466 D2: a drilling membrane is a Shell3 choice.
+                crate::shell3::Shell3Membrane::ConstantStrain => (
+                    matches!(b.kind, ElementKind::Shell4 | ElementKind::Shell3),
+                    "the property Shell",
+                ),
+                _ => (b.kind == ElementKind::Shell3, "a Shell3 membrane"),
+            },
             BlockProperty::Layup { .. } => (
                 matches!(b.kind, ElementKind::Shell4 | ElementKind::Shell3),
                 "the property Layup",
