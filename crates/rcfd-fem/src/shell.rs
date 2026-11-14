@@ -14,8 +14,10 @@
 //! resultants and surface stresses at the element centres.
 //!
 //! The solid-element routines of the [`Element`] trait do not apply: [`element`] is a placeholder that refuses naming
-//! [`SOLID_ROUTINES`], so nodal body-force fields, thermal loads and stress recovery refuse a shell (ADR 0432 D7). Gravity
-//! and the centrifugal load take the consistent load [`body_load_vector`] instead (ADR 0435 D2). The assembly calls
+//! [`SOLID_ROUTINES`], so the solid stress recovery refuses a shell (ADR 0432 D7). Gravity and the centrifugal load take the
+//! consistent load [`body_load_vector`] instead (ADR 0435 D2), a nodal body-force field that of [`body_load_vector_at`] and
+//! a nodal temperature field the membrane thermal load [`thermal_load_vector`] (uniform through the thickness; ADR 0445),
+//! whose thermal strain [`stresses`] subtracts. The assembly calls
 //! [`model_element_stiffness`] and [`model_element_mass`] for Shell4 (D6).
 
 use crate::assemble::element_dofs;
@@ -683,6 +685,15 @@ pub fn body_load_vector<B>(coords: &[Vec3], thickness: f64, b: B) -> Result<[f64
 where
     B: Fn(Vec3) -> Result<Vec3>,
 {
+    body_load_vector_at(coords, thickness, |_, x| b(x))
+}
+
+/// [`body_load_vector`] with a body force given by the values of the facet's four shape functions at the point and the
+/// point (ADR 0445 D1): a nodal field `b = sum_j N_j b_j` gives the consistent load `t int N_i b dA` of the interpolated field.
+pub fn body_load_vector_at<B>(coords: &[Vec3], thickness: f64, b: B) -> Result<[f64; 24]>
+where
+    B: Fn(&[f64; 4], Vec3) -> Result<Vec3>,
+{
     let f = facet(coords)?;
     let e3 = f.axes[2];
     let mut p = [[0.0; 3]; 4];
@@ -701,7 +712,7 @@ where
                     x[k] += q.n[i] * p[i][k];
                 }
             }
-            let bx = b(x)?;
+            let bx = b(&q.n, x)?;
             for i in 0..4 {
                 let s = thickness * q.n[i] * q.det;
                 for k in 0..3 {
@@ -714,6 +725,62 @@ where
     for i in 0..4 {
         for a in 0..3 {
             fl[6 * i + a] = dot(f.axes[a], force[i]);
+        }
+    }
+    let t = transformation(&f);
+    let mut out = [0.0; 24];
+    for (j, o) in out.iter_mut().enumerate() {
+        *o = (0..24).map(|i| t[i * 24 + j] * fl[i]).sum();
+    }
+    Ok(out)
+}
+
+/// The consistent nodal load (forces and moments, global axes, the element's unknown order) of the membrane thermal strain
+/// `eps_th = alpha dT (1, 1, 0)` in local axes, uniform through the thickness, of the temperature changes `delta_t_nodal`
+/// (`T_i - T_ref` of the four nodes, interpolated by the facet's functions): `sum_gp det B_m^T A eps_th` at the 2 x 2 points
+/// of the stiffness, `A` the membrane stiffness of the homogeneous section, carried to the nodes by `T^T` (ADR 0445 D2).
+/// Refuses other than four temperatures and a material without a finite expansion coefficient.
+pub fn thermal_load_vector(
+    coords: &[Vec3],
+    thickness: f64,
+    material: &Material,
+    delta_t_nodal: &[f64],
+) -> Result<[f64; 24]> {
+    if delta_t_nodal.len() != 4 {
+        return Err(FemError::FieldLength {
+            key: "temperature",
+            expected: 4,
+            found: delta_t_nodal.len(),
+        });
+    }
+    let alpha = material.expansion();
+    if !alpha.is_finite() {
+        return Err(FemError::InvalidValue {
+            key: "expansion",
+            reason: format!(
+                "a {} material has no single expansion coefficient for a shell thermal load",
+                material.name()
+            ),
+        });
+    }
+    let f = facet(coords)?;
+    let a = homogeneous_section(material, thickness).membrane;
+    let mut fl = [0.0; 24];
+    for &xi in &GAUSS {
+        for &eta in &GAUSS {
+            let q = point(&f.local, xi, eta);
+            let dt: f64 = (0..4).map(|i| q.n[i] * delta_t_nodal[i]).sum();
+            let e = alpha * dt;
+            let eps = [e, e, 0.0];
+            let s = [
+                a[0][0] * eps[0] + a[0][1] * eps[1] + a[0][2] * eps[2],
+                a[1][0] * eps[0] + a[1][1] * eps[1] + a[1][2] * eps[2],
+                a[2][0] * eps[0] + a[2][1] * eps[1] + a[2][2] * eps[2],
+            ];
+            let bm = membrane_rows(&q);
+            for (c, fc) in fl.iter_mut().enumerate() {
+                *fc += q.det * (bm[0][c] * s[0] + bm[1][c] * s[1] + bm[2][c] * s[2]);
+            }
         }
     }
     let t = transformation(&f);
@@ -855,7 +922,8 @@ pub struct ShellStresses {
 }
 
 /// The resultants and surface stresses of every shell element of a model for a displacement vector (one value per unknown
-/// of `model.dof_map()`), as (element, stresses) in element order.
+/// of `model.dof_map()`), as (element, stresses) in element order. With a temperature field the membrane forces are those of
+/// the elastic strain `eps - alpha dT_c (1, 1, 0)`, `dT_c` at the centre (ADR 0445 D2).
 pub fn stresses(model: &SolidModel, displacement: &[f64]) -> Result<Vec<(usize, ShellStresses)>> {
     let dofs = model.dof_map();
     if displacement.len() != dofs.n_equations() {
@@ -867,6 +935,7 @@ pub fn stresses(model: &SolidModel, displacement: &[f64]) -> Result<Vec<(usize, 
     }
     let mesh = model.mesh();
     let materials = model.material_indices()?;
+    let temperature = crate::thermal::temperature_field(model)?;
     let mut out = Vec::new();
     for e in 0..mesh.n_elements() {
         if mesh.element_kind(e) != ElementKind::Shell4 {
@@ -903,7 +972,19 @@ pub fn stresses(model: &SolidModel, displacement: &[f64]) -> Result<Vec<(usize, 
             }
             s
         };
-        let eps = strain(&membrane_rows(&p));
+        let mut eps = strain(&membrane_rows(&p));
+        if let Some((nodal, reference)) = temperature {
+            // ADR 0445 D2: the membrane thermal strain at the centre, uniform through the thickness.
+            let dt: f64 = mesh
+                .element_nodes(e)
+                .iter()
+                .zip(&p.n)
+                .map(|(&n, &na)| na * (nodal[n] - reference))
+                .sum();
+            let th = material.expansion() * dt;
+            eps[0] -= th;
+            eps[1] -= th;
+        }
         let kappa = strain(&bending_rows(&p));
         let mul = |d: &[[f64; 3]; 3], v: [f64; 3]| -> [f64; 3] {
             [

@@ -31,9 +31,11 @@ fn digest(v: &[f64]) -> u64 {
 fn mesh_of(kind: ElementKind) -> SolidMesh {
     match kind {
         ElementKind::Hex8 => hex_box([0.0; 3], [2.0, 1.0, 1.0], [2, 1, 1]).unwrap(),
-        _ => upgrade_to_tet10(&tet_box([0.0; 3], [2.0, 1.0, 1.0], [2, 1, 1]).unwrap())
-            .unwrap()
-            .0,
+        _ => {
+            upgrade_to_tet10(&tet_box([0.0; 3], [2.0, 1.0, 1.0], [2, 1, 1]).unwrap())
+                .unwrap()
+                .0
+        }
     }
 }
 
@@ -58,7 +60,8 @@ fn fields(kind: ElementKind) -> u64 {
 fn body(kind: ElementKind) -> u64 {
     let mut m = model_of(mesh_of(kind));
     m.add_load(Load::gravity([0.5, -1.5, -9.81])).unwrap();
-    m.add_load(Load::centrifugal([0.0, 0.3, 1.0], [0.4, 0.2, 0.0], 120.0)).unwrap();
+    m.add_load(Load::centrifugal([0.0, 0.3, 1.0], [0.4, 0.2, 0.0], 120.0))
+        .unwrap();
     digest(&nodal_load_vector(&m, &[]).unwrap())
 }
 

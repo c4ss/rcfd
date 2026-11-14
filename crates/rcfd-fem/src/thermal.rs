@@ -4,12 +4,13 @@
 //! of a nodal temperature field ([`crate::Load::Temperature`]), interpolated with each element's own functions from the
 //! nodal differences `T_b - T_ref`. Its equivalent nodal load `f = int B^T D eps_th dV` is taken at the points of each
 //! element's stiffness rule, the points at which `recover` evaluates the stress `sigma = D (eps - eps_th)`, so the recovered
-//! stress is in discrete equilibrium with the loads (ADR 0281 arithmetic 2). A model has at most one temperature field; a
-//! second one is refused. Every sum is sequential in a fixed order (elements, points, nodes): no dependence on threads.
+//! stress is in discrete equilibrium with the loads (ADR 0281 arithmetic 2). A Shell4 element takes the membrane thermal
+//! load of [`crate::shell::thermal_load_vector`], uniform through the thickness (ADR 0445 D2). A model has at most one
+//! temperature field; a second one is refused. Every sum is sequential in a fixed order (elements, points, nodes): no dependence on threads.
 
 use crate::element::{b_matrix, element_for};
 use crate::error::{FemError, Result};
-use crate::loads::add_force;
+use crate::loads::{add_force, add_moment};
 use crate::material::apply;
 use crate::mesh::ElementKind;
 use crate::model::{DofMap, Load, Material, SolidModel};
@@ -95,6 +96,20 @@ pub(crate) fn add_thermal_load(
         let coords: Vec<Vec3> = nodes.iter().map(|&n| mesh.nodes()[n]).collect();
         let dte: Vec<f64> = nodes.iter().map(|&n| delta[n]).collect();
         let material = &model.materials()[materials[e]].1;
+        if mesh.element_kind(e) == ElementKind::Shell4 {
+            // ADR 0445 D2: the membrane thermal load of a shell, forces and moments at its nodes.
+            let fe = crate::shell::thickness_or_error(mesh, e)
+                .and_then(|t| crate::shell::thermal_load_vector(&coords, t, material, &dte))
+                .map_err(|source| FemError::Element {
+                    element: e,
+                    source: Box::new(source),
+                })?;
+            for (a, &node) in nodes.iter().enumerate() {
+                add_force(f, dofs, node, &[fe[6 * a], fe[6 * a + 1], fe[6 * a + 2]])?;
+                add_moment(f, dofs, node, &[fe[6 * a + 3], fe[6 * a + 4], fe[6 * a + 5]])?;
+            }
+            continue;
+        }
         let fe = element_thermal_load(mesh.element_kind(e), &coords, material, &dte).map_err(|source| {
             FemError::Element {
                 element: e,
