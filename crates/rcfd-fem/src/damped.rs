@@ -19,6 +19,9 @@
 //! ADR 0467 (F-548): each mode reports `residual_share`, the M-weighted share of its shape in the residual-vector coordinates
 //! (0 without residual vectors), and `pseudo` when it exceeds `PSEUDO_SHARE`; the flagged roots are those of the strongly
 //! damped coordinates the vectors add, not of the continuum.
+//!
+//! ADR 0491 (F-577): the viscoelastic material, whose complex modulus depends on the frequency, is refused (through
+//! [`SolidModel::check_supported`], naming [`crate::mat_visco::FOLLOW_UP`]); the direct harmonic solve takes it.
 
 use crate::assemble::{assemble_with, stiffness_with};
 use crate::constraint::{check_rigid_body_motions, prescribed_equations, reduce};
