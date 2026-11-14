@@ -363,3 +363,142 @@ addendum and did not carry it into D3: the estimate was wrong, the limit stands.
 over 25 steps). The function `qf1_vs_fast_matching_run_against_the_model` keeps QF1 (met) and loses VS: it is moved, with its
 limit, into the known-miss test. The viscous estimate `delta_visc = 0` of F1 is not changed; the companion FP measures whether the
 frequency notices.
+
+## Addendum 1: results (2026-11-14)
+
+Runs, each once, release profile, `CARGO_BUILD_JOBS=4`, logs in `w49i-work/f401-scratch`: the fast tests of commit `ab78f8cc`
+(`run1_fast.log`, 0.9 s: the registered run of every fast check); H1c of amendment 1 on commit `4d96e7b0` (`run2_h1c.log`);
+the three heavy records on `4d96e7b0` (`cargo test -p rcfd-post --release --test si_fsi_piston -- --ignored r05_ r4_`,
+`run3_heavy.log`, 49.6 s for the seven ten-period runs); the known miss VS with its diagnosis (`run4_vs.log`); then the file
+as it stands, to check that it passes (`run5_file.log`: 8 passed, 5 ignored: the three heavy records, the H1 record, the VS
+known miss). The heavy records take about 50 s together; they stay ignored as registered, the fast tests cover their path.
+
+### Checks
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| A0 | registration first | `ad1eb41a` precedes every code commit | yes |
+| I1 (matching, 1001 steps each) | converged to `1e-6`, cap 10 | every step converged in 3 iterations (mean 3.000) in `RA05`, `RL05`, `RA4`, `RL4` | yes |
+| I2 (`RA4n`, `RA05n`, Aitken) | cap 20 | all converged; largest 12, mean 7.81 (ratio 4); largest 10, mean 6.43 (ratio 0.5) | yes |
+| I2b (`RL4n`, least squares) | cap 10 | all converged; largest 7, mean 5.32 (4 iterations: 2 steps, 5: 681, 6: 317, 7: 1); the estimate `<= 6` exceeded once, the cap met | yes |
+| F1 after the estimate (`delta_dt` `+1.5655e-4`, `-1.0553e-3`; `delta_visc = 0`) | `<= 2e-2` | `2.61e-7` (ratio 0.5, both methods), `4.08e-7` (ratio 4, both) | yes |
+| F1 raw `abs(Omega_m/omega - 1)` | `<= 2e-2` | `1.563e-4` (0.5), `1.0557e-3` (4) | yes |
+| EN (ten periods) | `<= 1e-4` | matching `7.1e-10`, `8.6e-10` (0.5, Aitken, LS), `2.14e-8`, `2.21e-8` (4); 3:2 `4.89e-6` (`RA4n`), `7.06e-7` (`RL4n`), `3.65e-6` (`RA05n`) | yes |
+| LC (loose, ratio 4) | `10 U` by step 10; growth `>= 5` | step 3 (signal `-10.5 U`); `13.83` per step | yes |
+| M2 | `< 2e-3` | `8.164e-4` (`RA4n`/`RA4`), `8.164e-4` (`RL4n`/`RL4`), `3.111e-4` (`RA05n`/`RA05`); the 3:2 frequency is the lower | yes |
+| FS1 (solid fails) | located; both restored | `solid`, iteration 1, "key 'load table': table 0 covers [0e0, 3.111e-4], the run needs [3.111e-4, 4.149e-4]"; fluid and solid bit-equal | yes |
+| FS2 (fluid fails) | located; both restored; the repeated step equals the unfailed run | `fluid`, iteration 2, the injected message; both bit-equal; the repeated step 3 bit-equal to the unfailed run's (step record, fluid and solid) | yes |
+| G1 (matching) | `<= 1e-6` | `2.56e-10` (0.5), `8.30e-10` (4) | yes |
+| G2 (last period over the second) | `<= 10` | matching `0.392` (0.5), `0.233` (4); 3:2 `0.438` (4, both methods), `0.580` (0.5) | yes |
+| G3 (3:2) | `<= 1e-2` | `8.77e-4` (4), `5.89e-4` (0.5) | yes |
+| FP | `<= 2.5e-4` | `2.61e-7` (0.5), `4.08e-7` (4) | yes |
+| ED | `<= 2e-2` | `2.15e-5` (0.5; `E_1001/E_1 = 0.10722`), `8.52e-5` (4; `0.026602`) | yes |
+| S0 | `<= 1e-9`; zero; `<= 1e-15`; bits | `6.0e-12`; zero; `0` (matching), `2.2e-16` (3:2); bit for bit | yes |
+| M0 | `<= 1e-14` | `0` | yes |
+| MC (3:2, last step; row sums) | `<= 1e-12` | resultant `<= 5.8e-16`, work `<= 1.8e-16`; row sums `2.2e-16` | yes |
+| TR (record) | record | `max abs(q_yz)/max abs(q_x)` `9.25e-3` (4), `8.26e-3` (0.5) | record |
+| QF1 | cap 10; `1e-3`; `1e-6`; `1e-6` | 3 iterations every step; `1.74e-5 U`; `2.05e-8`, `2.09e-8`; `8.3e-10` | yes |
+| QF2 | caps 20, 10; MC; `1e-2` | Aitken largest 10 (mean 8.1), least squares largest 7 (5.9); `<= 3.9e-16`; `8.77e-4` | yes |
+| **VS** | `<= 1e-6 U` | **`8.28e-5 U`** (`vs_viscosity_times_100_known_miss`); diagnosis: `7.53e-6 U` for `nu = 1e-3`: proportional to the change of `nu` (`8.28e-5/7.53e-6 = 11.0` for a change 11 times larger) | **no** |
+| H1 as registered | `<= 1e-15 m`, bits | wall, outlet, weight (`0`), transverse: met; the half-length point `1.22e-15 m` (below the coordinate's resolution, amendment 1) | **no** (record `h1_nc2_the_channel_motion`) |
+| H1c (amendment 1) | `<= 1e-15`; bits | weight `0` off `1/2` at 9 points; moved `x` bit for bit | yes, after the amendment |
+| H2 | refusals | all eight refused with a message naming the cause | yes |
+| NC1 | `>= 5e-4` | `7.01e-4` | holds |
+| NC2 | no point moves | holds | holds |
+
+What the numbers say:
+
+* **The flow is the discrete model of the pairing.** The measured frequency equals the model of D2 (Newmark bar with the force
+  `-m_a (u_{n+1} - 2 u_n + u_{n-1})/dt^2`) to `2.6e-7` and `4.1e-7`, and its energy decay to `2e-5` and `9e-5` of itself; the
+  model without the lag is `7.0e-4` away (NC1). So the whole departure from the root (`1.6e-4`, `1.1e-3`) is the time
+  discretisation and the lag of one step of the flow pairing, and the plug's added mass with the corrected wall pressure is
+  exact to the precision of these runs (ADR 0252's conclusion, here with a structural solver).
+* **The added-mass instability of F-400's per-face mock does not occur with the real column.** The non-uniform part of the force
+  stays at `1e-9` of the force on the matching wall and decays over the run on the 3:2 wall (G2 below 0.6), as D6 predicted:
+  the local flow's added mass is small against the bar's local mass. The roadmap note's check is G1 to G3.
+* **The 3:2 wall costs iterations, not accuracy.** Aitken needs 6 to 12 iterations per step on it, the least-squares update 4 to
+  7, against 3 on the matching wall; the frequency change `8.16e-4` at ratio 4 is ADR 0414's `8.18e-4` of the piston mock on
+  the same face and map to `2e-6`, so the real column adds nothing measurable to it.
+* **The fluid takes the energy**: the solid keeps `0.107` (ratio 0.5) and `0.027` (ratio 4) of its energy over ten periods; the
+  fluid's work on the interface accounts for the loss to `5e-6` of the amplitude at worst (3:2, Aitken).
+
+### Diagnosis of VS
+
+D3 claimed that the discrete flow carries the plug with no viscous effect. The difference of the tip motion between `nu = 1e-2`
+and `1e-4` over 25 steps is `8.28e-5 U`, and between `1e-3` and `1e-4` it is `7.53e-6 U`: proportional to `nu`, as a viscous
+term must be. Its cause is the one ADR 0252 found (H2, H4) for this step: the PISO predictor's wall cell does not move with the
+wall before the pressure correction, so the viscous term acts through the predicted velocity and the pressure, and the
+non-iterated step keeps a part of it. At the registered `nu = 1e-4` the same proportion gives about `8e-7 U` over 25 steps, which
+is why FP (`4e-7` in frequency) does not see it. The registered viscous estimate `delta_visc = 0` is therefore wrong in kind but
+below the resolution of every frequency check made here.
+
+### Mutations (copy of commit `4d96e7b0` from `git archive` in `f401-scratch/copy`, own target directory, `mutate.py`, logs `MU1.log` to `MU6.log`)
+
+| Mutation | Caught by |
+|---|---|
+| MU1 the weight 1 everywhere | H1c (outlet, weight, half length), as expected |
+| MU2 lines matched by `y` only | H1c (wall points, weight), as expected |
+| MU3 `-d_x` | H1c, QF1 (signal `3.0 U` off the model, energy), S0 (wall position), as expected |
+| MU4 the `y` component as the axial one | H1c, NC2, QF1, QF2, LC, FS2, as expected |
+| MU5 `FlowWall::restore` leaves the geometry (in the copy's `rcfd-fv`) | FS1, FS2, QF1, QF2 (no step converges), as expected |
+| MU6 `coupled_step` returns the error without restoring (in the copy's `rcfd-fv`) | FS2 (the solid had advanced in iteration 2), as expected; FS1 does not see it: in iteration 1 the solid refuses before changing anything and the fluid has not been advanced (equivalent there) |
+
+Every mutation was caught.
+
+### Existing tests, formatting, lints
+
+* S1: `cargo test -p rcfd-post --release --test si_solid_dynamic --test si_solid_dynamic_bilinear --test
+  si_solid_dynamic_nonmatching`: 13 passed (5 ignored), 3, 3.
+* `cargo fmt -p rcfd-post --check`: clean. `cargo clippy -p rcfd-post --all-targets --release -- -D warnings`: clean.
+* The baseline hashes were not run: no line of `rcfd-fv`, `rcfd-fem`, `rcfd-api` or any other shared solver file changed (the
+  library change is the new content of `rcfd-post/src/solid_fsi.rs`, a module declared empty by ADR 0291 and called by nothing
+  in the library).
+
+### Deviations
+
+* Amendment 1 after the first run: H1's half-length part replaced by H1c (defective limit); VS moved into a known-miss test.
+* S0's "the wall points at `U` in `x` within `1e-15 U`" was implemented as two parts, decided while writing the test and before
+  its run: the map of the initial interface displacement equals `U e_x` within `1e-15 U` at every wall point, and each fluid wall
+  point lies bit for bit at its reference plus that mapped displacement (the coordinate `4 + 0.001` cannot hold `U` to
+  `1e-15 U`, the reason of amendment 1 (a)).
+* The fast tests run in 0.9 s and the heavy records in 50 s, far below what I had expected; the heavy records stay ignored as
+  registered.
+* `docs/cosimulation-protocol.md`: the limits section says that a structural solver has been connected, with the numbers above.
+
+### What was not run
+
+* The whole workspace suite (the lead's gate); `cosim_f139`, `cosim_f361`, `cosim_f362` (no line of `rcfd-fv` changed).
+* A study in `dt`, in the cells or in the channel length; a bending wall; the radial-basis map in this coupled run.
+
+### Decision by the registered rule
+
+**Partial.** Every clause of the acceptance is met (A: I1, I2, I2b, F1, EN, LC, M2, FS1, FS2, G1 to G3), the controls hold (LC,
+NC1, NC2) and every mutation was caught; but the companion VS missed (diagnosed: the viscous splitting of the PISO step,
+proportional to `nu`), and the helper's check H1 was met only after amendment 1 (a defective limit below the resolution of the
+coordinate). By the rule either makes the item partial.
+
+### Remaining questions
+
+1. **The viscous estimate.** Options: (a) register, in a later item, `delta_visc` from the measured proportional splitting (a
+   short run at two viscosities, as the VS diagnosis) and check that the frequency follows it; (b) remove the splitting with
+   outer PIMPLE iterations in `FlowWall` (ADR 0252 K4c, K5c saw no frequency change from them); (c) leave it: its effect on the
+   frequency is below `1e-6` at the viscosity of this case. Recommendation: (c), with the sentence of the note; (a) when a
+   viscous (no-slip) wall is coupled.
+2. **Transverse interface motion** (TR: `9e-3` of the axial motion on the 3:2 wall) is not followed by `ChannelMotion`. Options:
+   (a) use the general smoothing with slip classes as the motion for walls that bend; (b) a transverse motion tangential to the
+   side walls in the helper. Recommendation: (a), when a bending wall is coupled (the advanced tier); nothing now.
+3. **Aitken on non-matching interfaces** takes about twice the iterations of the least-squares update (6 to 12 against 4 to 7).
+   Options: (a) recommend the least-squares update for non-matching walls in `docs/cosimulation-protocol.md`; (b) nothing.
+   Recommendation: (a); written as a sentence in that file's limits section by this item.
+
+### For the lead: roadmap entries
+
+F-401, proposed status **partial**, note:
+
+> Structural solver, intermediate tier (plan ADR 0290). PARTIAL (ADR 0434, 2026-11-12; registered before the code, amendment 1 after the first run). The elastic bar of F-400 (DynamicSolid, Hex8 20 x 4 x 4, nu = 0, clamped, L_s = 4 m) closes a channel of incompressible fluid (FlowWall, moving-mesh PISO with the prescribed wall gradient of F-351, slip side walls, open end, L_f = 32 m), coupled by coupled_step at mass ratios rho_f L_f/(rho_s L_s) of 0.5 and 4 from the static release of a tip traction (solid and fluid start consistent, at rest); rcfd_post::solid_fsi::ChannelMotion moves the channel mesh with the axial interface displacement. Over 1001 steps at T/100: Aitken and the least-squares update converge to 1e-6 in 3 iterations every step on the matching wall and in 4 to 12 on a 3:2 wall (bilinear projection of F-504 on a 4 x 4 face); the first coupled frequency is the root of k L tan(k L) = rho_s L_s/(rho_f L_f) to 1.6e-4 (0.5) and 1.1e-3 (4), and the discrete model of the pairing (the Newmark bar with the plug force of the flow step, one step of lag: the registered time-step estimate) to 4e-7 (limit 2 percent after the estimate); over ten periods the fluid's work on the interface equals the change of the solid's energy to 5e-6 of its amplitude (limit 1e-4); the loose coupling at ratio 4 grows by 13.8 per step; the 3:2 wall changes the frequency by 8.2e-4 (4) and 3.1e-4 (0.5) (limit 2e-3; ADR 0414's piston mock gave 8.18e-4); a failing solid (load table) or fluid (mesh motion) stops the step naming it, both sides bit-equal to the start of the step. The non-uniform part of the interface force (ADR 0410 Q3) stays at 1e-9 of the force on the matching wall and decays over the run on the 3:2 wall (at most 8.8e-4): with a real column its slopes are far below 1, so the growth seen with F-400's per-face mock does not occur. Partial: the registered viscous estimate 0 is wrong in kind (the PISO step's viscous splitting moves the tip by 8.3e-5 U at nu x 100, proportional to nu; a known miss, below 1e-6 in frequency at the case's viscosity), and the helper check H1 was met only after amendment 1 (a limit below the coordinate's resolution). Six mutations caught. No line of rcfd-fv or rcfd-api changed. Open: ADR 0434 Q1 to Q3.
+
+F-400, sentence to append to its note:
+
+> The added-mass growth of the per-face mock (amendment 1) does not occur with the flow solver: in F-401 (ADR 0434, 2026-11-12) the non-uniform part of the interface force stays at rounding on the matching wall and decays on the 3:2 wall, its slopes being those of the local flow, far below 1.
+
+No follow-up item is proposed (the questions are recorded for the advanced tier).

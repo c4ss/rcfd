@@ -32,8 +32,8 @@ Two participants and a coupler:
   A solid with mass is `rcfd_post::solid_dynamic::DynamicSolid` (ADR 0410): the same interface, `advance` the transient
   integrator of `rcfd_fem::transient` (Newmark or generalised-alpha, on either path) over one or more sub-steps with the
   nodal forces held (`Integrator::run_with_force`), `checkpoint` and `restore` of the integrator's state and the held
-  forces bit for bit, and `elements` for the map builders. It is checked against mock fluids only (an added mass on a
-  piston wall, a spring); with Newmark's method a converged coupled step is the implicit step of the coupled system. A
+  forces bit for bit, and `elements` for the map builders. It is checked against mock fluids (an added mass on a piston
+  wall, a spring) and against the flow (F-401, ADR 0434, under "Limits and gaps"); with Newmark's method a converged coupled step is the implicit step of the coupled system. A
   fluid whose added mass acts per face excites interface patterns that are not uniform, with slopes of the fixed-point
   map of several hundred on that bar; components of the force below the convergence test are then loosely coupled and
   grow from step to step (ADR 0410 amendment 1). On a non-matching interface the transpose of the map loads the solid
@@ -343,8 +343,21 @@ The test file `crates/rcfd-fv/tests/cosim_f139.rs` holds the complete set-up.
   list of numbers); a structure is hosted by a program; a call that outlasts the time-out counts as a lost connection; a
   participant process that died is not restarted.
 * One wall and two participants. No simultaneous update of several participants.
-* The structure in the repository is a mock: lumped nodes on springs, one direction of motion, an explicit integrator.
-  No structural solver has been connected.
+* The structural solver of the repository (`DynamicSolid`, ADR 0410) has been connected to the flow (F-401, ADR 0434): the
+  elastic bar closing a channel of incompressible fluid, `FlowWall` with the prescribed wall gradient, coupled by
+  `coupled_step` at mass ratios 0.5 and 4 from a static release. Aitken's factor and the least-squares update converge to
+  `1e-6` in 3 iterations per step on the matching wall; on a 3:2 wall with the bilinear projection the least-squares update
+  needs 4 to 7 and Aitken's factor 5 to 12, so the least-squares update is the better choice for a non-matching wall; the first
+  coupled frequency is the discrete model of the pairing (the Newmark bar with the plug force
+  `-m_a (u_{n+1} - 2 u_n + u_{n-1})/dt^2`, a lag of one step) to `4e-7`, and the root of `k L tan(k L) = rho_s L_s/(rho_f
+  L_f)` to `1.1e-3` at `T/100`; the fluid's work on the interface is the change of the solid's energy to `5e-6` of it over
+  ten periods; the loose coupling grows by about 14 per step at ratio 4. Against a real column the patterns of the force that
+  are not uniform have slopes far below 1 (their added mass is that of the local flow, about `rho_f W/pi` per area, not the
+  column's), so they stay at rounding on the matching wall (`1e-9` of the force) and decay with the motion on the 3:2 wall
+  (at most `9e-4`), unlike the per-face mock of ADR 0410 amendment 1. The fluid mesh of that case follows the axial component of the interface only (`rcfd_post::solid_fsi::ChannelMotion`,
+  a straight channel); the coupled pair damps the motion through the lag of the flow step (the energy falls to 0.027 of its
+  value in ten periods at ratio 4). The earlier mock structures (`SprungWall`, `StaticSolid`) remain for the protocol's own
+  tests.
 * Mapping by given weights or by the builders of ADR 0263 (brute-force nearest-element search, dense radial-basis
   rows): no sparse or partitioned radial basis for large meshes, no rotational degrees of freedom of shells or beams, no
   mortar or mass-matrix map; the map is built once on the reference configurations.
