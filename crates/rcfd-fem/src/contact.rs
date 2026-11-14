@@ -27,6 +27,7 @@ use crate::mesh::{ElementKind, FaceRef};
 use crate::model::{Constraint, DofMap, SolidModel, SolidResult, SolverStats};
 use crate::nonlinear::{add_triplets, initial_states, solve_from, Contribution, NewtonOptions};
 use rcfd_core::vec3::{cross, dot, norm, sub, Vec3};
+use rcfd_linalg::skyline::SkylineError;
 use rcfd_linalg::sparse_chol::SparseLdlt;
 use rcfd_linalg::CsrMatrix;
 use std::cell::RefCell;
@@ -215,6 +216,9 @@ pub struct NewtonSolve {
     pub active_sets: Vec<Vec<usize>>,
     /// The largest penetration at the converged state, m.
     pub penetration: f64,
+    /// Iterations taken with the contact matrix without its curvature part because the exact tangent failed the pivot
+    /// test (linear body, ADR 0507 amendment 2); 0 for the total Lagrangian body.
+    pub convex_iterations: usize,
 }
 
 /// One load step of the driver.
@@ -403,7 +407,8 @@ fn project(xs: Vec3, x: &[Vec3; 4]) -> Option<([f64; 2], f64, Vec3, Vec<f64>, Ve
     if !converged {
         return None;
     }
-    let tol = 1.0 + 1e-8;
+    // ADR 0507 amendment 2: the bilinear face extended by one percent of its half-width beyond its edges.
+    let tol = 1.0 + 1e-2;
     if xi[0].abs() > tol || xi[1].abs() > tol {
         return None;
     }
@@ -762,8 +767,15 @@ impl ContactSet {
         Ok(out)
     }
 
-    /// The force and the triplets at `u` without recording the active set.
-    fn force_and_tangent(&self, all: &[Vec<Eval>], force: &mut [f64], tangent: Option<&mut Vec<(usize, usize, f64)>>) {
+    /// The force and the triplets of the state `all` without recording the active set; without `curvature` the matrix is
+    /// `eps G G^T` only (ADR 0507 amendment 2).
+    fn force_and_tangent(
+        &self,
+        all: &[Vec<Eval>],
+        force: &mut [f64],
+        tangent: Option<&mut Vec<(usize, usize, f64)>>,
+        curvature: bool,
+    ) {
         let mut trip = tangent;
         for (p, ev) in self.pairs.iter().zip(all) {
             for (i, e) in ev.iter().enumerate() {
@@ -788,7 +800,7 @@ impl ContactSet {
                     for r in 0..m {
                         for s in 0..m {
                             let mut v = eps * kn.grad[r] * kn.grad[s];
-                            if let Some(h) = &kn.hess {
+                            if let (true, Some(h)) = (curvature, &kn.hess) {
                                 v -= e.force * h[m * r + s];
                             }
                             if v != 0.0 {
@@ -853,7 +865,7 @@ impl Contribution for ContactSet {
     ) -> Result<()> {
         let all = self.evaluate_all(u)?;
         self.record(&all)?;
-        self.force_and_tangent(&all, force, Some(tangent));
+        self.force_and_tangent(&all, force, Some(tangent), true);
         Ok(())
     }
 }
@@ -863,11 +875,25 @@ fn norm2(v: impl Iterator<Item = f64>) -> f64 {
 }
 
 struct Solved {
+    reference: f64,
+    convex: usize,
     u: Vec<f64>,
     residuals: Vec<f64>,
     energies: Vec<f64>,
     states: Option<Vec<ElementState>>,
     internal: Vec<f64>,
+}
+
+/// Factors `a` into `cache` unless the cached matrix has the same bits.
+fn factor_cached(a: &CsrMatrix, cache: &mut Option<(CsrMatrix, SparseLdlt)>) -> std::result::Result<(), SkylineError> {
+    let same = cache.as_ref().is_some_and(|(c, _)| {
+        c.row_ptr == a.row_ptr && c.col == a.col && c.val.iter().zip(&a.val).all(|(x, y)| x.to_bits() == y.to_bits())
+    });
+    if !same {
+        let l = SparseLdlt::factor(a)?;
+        *cache = Some((a.clone(), l));
+    }
+    Ok(())
 }
 
 /// Newton for the linear body (ADR 0507 D3): `K u + f_c(u) + f_extra(u) = f` on the free equations, the criteria of ADR
@@ -882,6 +908,7 @@ fn linear_solve(
     extra: &[&dyn Contribution],
     o: &NewtonOptions,
     cache: &mut Option<(CsrMatrix, SparseLdlt)>,
+    floor: f64,
 ) -> Result<Solved> {
     let n = k.n;
     let mut is_fixed = vec![false; n];
@@ -897,11 +924,13 @@ fn linear_solve(
     let mut u = start.to_vec();
     let (mut residuals, mut energies) = (Vec::new(), Vec::new());
     let (mut e_first, mut e_last) = (0.0, 0.0);
+    let mut convex = 0;
     for it in 0..=o.max_iterations {
         let mut fint = vec![0.0; n];
         k.matvec(&u, &mut fint);
         let internal = fint.clone();
         let mut trip = Vec::new();
+        let mut trip_x = Vec::new();
         let mut fc = vec![0.0; n];
         set.add(&u, 1.0, &mut fc, &mut trip)?;
         for (a, b) in fint.iter_mut().zip(&fc) {
@@ -909,7 +938,7 @@ fn linear_solve(
         }
         for c in extra {
             let mut fx = vec![0.0; n];
-            c.add(&u, 1.0, &mut fx, &mut trip)
+            c.add(&u, 1.0, &mut fx, &mut trip_x)
                 .map_err(|e| fail(format!("contribution '{}': {e}", c.name())))?;
             for (a, b) in fint.iter_mut().zip(&fx) {
                 *a += b;
@@ -917,7 +946,10 @@ fn linear_solve(
         }
         let rfull: Vec<f64> = f.iter().zip(&fint).map(|(a, b)| a - b).collect();
         let rn = norm2(free.iter().map(|&i| rfull[i]));
-        let reference = norm2(free.iter().map(|&i| f[i])).max(norm2(fint.iter().copied()));
+        // ADR 0507 amendment 2: the reference is at least the largest of the run's earlier converged solves.
+        let reference = norm2(free.iter().map(|&i| f[i]))
+            .max(norm2(fint.iter().copied()))
+            .max(floor);
         let r = if reference > 0.0 { rn / reference } else { rn };
         if !r.is_finite() {
             return Err(fail(format!("non-finite residual at Newton iteration {it}")));
@@ -925,6 +957,8 @@ fn linear_solve(
         residuals.push(r);
         if it >= 1 && r <= o.residual_tolerance && e_last <= o.energy_tolerance * e_first {
             return Ok(Solved {
+                reference,
+                convex,
                 u,
                 residuals,
                 energies,
@@ -939,26 +973,35 @@ fn linear_solve(
                 if e_first > 0.0 { e_last / e_first } else { e_last }
             )));
         }
-        let mut kt = k.clone();
-        add_triplets(&mut kt, &trip);
-        let sys = reduce(&kt, &rfull, &zero)?;
+        let build = |contact: &[(usize, usize, f64)]| {
+            let mut kt = k.clone();
+            add_triplets(&mut kt, contact);
+            add_triplets(&mut kt, &trip_x);
+            reduce(&kt, &rfull, &zero)
+        };
+        let sys = build(&trip)?;
         let du = if sys.free().is_empty() {
             Vec::new()
         } else {
-            let same = cache.as_ref().is_some_and(|(a, _)| {
-                a.row_ptr == sys.matrix.row_ptr
-                    && a.col == sys.matrix.col
-                    && a.val
-                        .iter()
-                        .zip(&sys.matrix.val)
-                        .all(|(x, y)| x.to_bits() == y.to_bits())
-            });
-            if !same {
-                let l = SparseLdlt::factor(&sys.matrix)
-                    .map_err(|e| fail(format!("tangent factorisation at Newton iteration {it}: {e}")))?;
-                *cache = Some((sys.matrix.clone(), l));
+            match factor_cached(&sys.matrix, cache) {
+                Ok(()) => {}
+                Err(SkylineError::Pivot { .. }) => {
+                    // ADR 0507 amendment 2: the exact tangent is indefinite; this iteration takes eps G G^T.
+                    let all = set.evaluate_all(&u)?;
+                    let mut scratch = vec![0.0; n];
+                    let mut tc = Vec::new();
+                    set.force_and_tangent(&all, &mut scratch, Some(&mut tc), false);
+                    let convex_sys = build(&tc)?;
+                    factor_cached(&convex_sys.matrix, cache).map_err(|e| {
+                        fail(format!(
+                            "tangent factorisation at Newton iteration {it} (without the curvature part): {e}"
+                        ))
+                    })?;
+                    convex += 1;
+                }
+                Err(e) => return Err(fail(format!("tangent factorisation at Newton iteration {it}: {e}"))),
             }
-            cache.as_ref().expect("just set").1.solve(&sys.rhs)
+            cache.as_ref().expect("factored").1.solve(&sys.rhs)
         };
         if du.iter().any(|v| !v.is_finite()) {
             return Err(fail(format!("non-finite correction at Newton iteration {it}")));
@@ -1034,6 +1077,7 @@ pub fn solve_with(
         crate::nonlinear::StateLayout::of(model)?.empty_states()
     };
     let mut cache = None;
+    let mut run_reference = 0.0f64;
     let mut u = vec![0.0; n];
     let ns = options.steps;
     let mut steps = Vec::with_capacity(ns);
@@ -1060,6 +1104,8 @@ pub fn solve_with(
                 let mut list: Vec<&dyn Contribution> = vec![&set];
                 list.extend_from_slice(extra);
                 solve_from(model, &pres_step, &fstep, &u, &states, &options.newton, &list).map(|e| Solved {
+                    reference: 0.0,
+                    convex: 0,
                     u: e.u,
                     residuals: e.residuals,
                     energies: e.energies,
@@ -1076,6 +1122,7 @@ pub fn solve_with(
                     extra,
                     &options.newton,
                     &mut cache,
+                    run_reference,
                 )
             };
             let out = match out {
@@ -1096,6 +1143,7 @@ pub fn solve_with(
                     });
                 }
             };
+            run_reference = run_reference.max(out.reference);
             iterations += out.residuals.len() - 1;
             last_residual = *out.residuals.last().expect("one residual at least");
             u = out.u;
@@ -1118,6 +1166,7 @@ pub fn solve_with(
                 energies: out.energies,
                 active_sets: set.active_sets(),
                 penetration,
+                convex_iterations: out.convex,
             });
             let accepted = options.max_augmentations == 0 || over.is_empty();
             if accepted {
@@ -1127,7 +1176,7 @@ pub fn solve_with(
                 {
                     // Reactions at the accepted state with the forces of that solve (before the update).
                     let mut total = out.internal;
-                    set.force_and_tangent(&all, &mut total, None);
+                    set.force_and_tangent(&all, &mut total, None, true);
                     for c in extra {
                         let mut fx = vec![0.0; n];
                         let mut t = Vec::new();
