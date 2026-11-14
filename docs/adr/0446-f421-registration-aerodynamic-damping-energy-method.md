@@ -326,3 +326,18 @@ No line of `rcfd-fv`, `rcfd-fem`, `rcfd-api` or any shared solver file changes; 
    modal mass of the coupled mode plus the measured added mass (D7).
 3. The low-frequency limit is checked by a harmonic run at `Wo = 0.25` with the same machinery rather than a steady run.
 4. The channel length `100 h` from the estimate of the end effects (D3).
+
+## Amendment 1 (2026-11-14, written after the registered run of the fast tests of commit 8100655a and before the corrected run)
+
+**What the registered run showed** (log `f421-scratch/run1_fast.log`, made once, `cargo test -p rcfd-post --release --test
+sa_aerodamp -- --test-threads=1`, 17.8 s): every fast check met except one part of P1: "the number in the message parsed back"
+reported "no number after ' is '". The heavy records were not run yet; this amendment does not touch them.
+
+**P1's parse is defective by construction.** The library's message is "... the force history is not periodic: the
+cycle-to-cycle change of the first harmonic between cycles 2 and 3 is 1.0635801708007963e-2 (tolerance 1e-6)"; the test took
+the text after the **first** " is ", which is "not periodic: ...", so it read the word "not" and never reached the number. The
+refusal itself and its wording were met (P1 refused: met; accepted at tolerance 1 with the change equal to the test's own within
+`1.9e-14`: met). Correction (the set-up of the check only, the limit `1e-12` relative unchanged): **P1c** takes the text after
+the **last** " is ". The registered test `p1_non_periodic_history_refused_with_the_change` stays as an ignored record (attribute
+only); `p1c_non_periodic_history_refused_with_the_change` repeats it with the corrected parse. P1 counts as met only after this
+amendment.
