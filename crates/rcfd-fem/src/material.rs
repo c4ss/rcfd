@@ -325,11 +325,48 @@ pub(crate) fn positive_material(key: &'static str, v: f64) -> Result<()> {
 }
 
 impl Material {
-    /// The elasticity matrix of a linear elastic material. A variant whose package has not landed is refused naming it.
+    /// The elasticity matrix of a linear elastic material. A variant whose package has not landed is refused naming it. An
+    /// orthotropic material with `Fixed` axes gives its global matrix (ADR 0452 D3); the other cases of `Orthotropic` and
+    /// `Tabulated` vary by point and are refused naming [`crate::mat_ortho::FOLLOW_UP`].
     pub fn elasticity_matrix(&self) -> Result<Matrix6> {
         match self {
             Material::IsotropicElastic { e, nu, .. } => Ok(isotropic_elasticity(*e, *nu)),
+            Material::Orthotropic {
+                axes: MaterialAxes::Fixed(_),
+                ..
+            } => self.elasticity_at(&PointContext::default()),
+            Material::Orthotropic { .. } | Material::Tabulated { .. } => Err(FemError::NotYetSupported {
+                item: "material",
+                variant: self.name(),
+                location: "the element-constant elasticity matrix".to_string(),
+                package: crate::mat_ortho::FOLLOW_UP,
+            }),
             _ => Err(self.not_yet("the constitutive call")),
+        }
+    }
+
+    /// The elasticity matrix at a point (ADR 0452 D3): isotropic `isotropic_elasticity(e, nu)`; orthotropic the material
+    /// stiffness rotated to the point's axes (`point.axes`, else the `Fixed` triad; cylindrical and per-element axes without
+    /// `point.axes` are refused, key `"axes"`); tabulated the base's at `point.temperature` (refused without one, key
+    /// `"temperature"`, and outside the table). Other variants as [`Material::elasticity_matrix`].
+    pub fn elasticity_at(&self, point: &PointContext) -> Result<Matrix6> {
+        match self {
+            Material::Orthotropic { e, nu, g, axes, .. } => {
+                crate::mat_ortho::orthotropic_elasticity(*e, *nu, *g, axes, point)
+            }
+            Material::Tabulated { base, .. } => {
+                let t = point.temperature.ok_or_else(crate::mat_ortho::needs_temperature)?;
+                match crate::mat_table::constants_at(self, t)? {
+                    crate::mat_table::Constants::Isotropic(e, nu) => Ok(isotropic_elasticity(e, nu)),
+                    crate::mat_table::Constants::Orthotropic(e, nu, g) => match base.as_ref() {
+                        Material::Orthotropic { axes, .. } => {
+                            crate::mat_ortho::orthotropic_elasticity(e, nu, g, axes, point)
+                        }
+                        _ => unreachable!("orthotropic constants come from an orthotropic base"),
+                    },
+                }
+            }
+            _ => self.elasticity_matrix(),
         }
     }
 
@@ -361,7 +398,11 @@ impl Material {
                 found: state.len(),
             });
         }
-        let d = self.elasticity_matrix()?;
+        let d = match self {
+            // ADR 0452 D3: the two per-point variants read the point.
+            Material::Orthotropic { .. } | Material::Tabulated { .. } => self.elasticity_at(point)?,
+            _ => self.elasticity_matrix()?,
+        };
         Ok((apply(&d, strain), d))
     }
 

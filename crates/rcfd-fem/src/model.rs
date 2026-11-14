@@ -255,7 +255,8 @@ impl Material {
     }
 
     /// An orthotropic material (ADR 0440 D2): refuses a modulus that is not positive and finite, a non-finite ratio or
-    /// expansion, a negative or non-finite density. The positive definiteness of the compliance is checked by ADR 0312.
+    /// expansion, a negative or non-finite density, and (ADR 0452 F2) constants whose compliance is not positive definite,
+    /// naming the ratio ([`crate::mat_ortho::check_positive_definite`]).
     pub fn orthotropic(
         e: [f64; 3],
         nu: [f64; 3],
@@ -277,6 +278,7 @@ impl Material {
             finite_material("expansion", v)?;
         }
         density_ok(density)?;
+        crate::mat_ortho::check_positive_definite(e, nu, g)?;
         Ok(Material::Orthotropic {
             e,
             nu,
@@ -1014,26 +1016,35 @@ impl SolidModel {
     /// block, which only the paths of ADR 0432 D3 take, naming [`crate::shell::FOLLOW_UP`]. A model of the basic kinds with
     /// the default formulation passes.
     pub fn check_elements_supported(&self) -> Result<()> {
-        self.check_elements(false, false)
+        self.check_elements(false, false, false)
     }
 
     /// As [`SolidModel::check_elements_supported`] for a path that takes beams (ADR 0417 D4): a Beam2 block passes, and the
     /// model's beams are checked by [`crate::beam::check_beam_model`] (a Beam property on every Beam2 block, no node shared
     /// with a solid element, a frame for every beam element). A Shell4 block is refused.
     pub fn check_elements_supported_with_beams(&self) -> Result<()> {
-        self.check_elements(true, false)?;
+        self.check_elements(true, false, false)?;
         crate::beam::check_beam_model(self)
     }
 
     /// As [`SolidModel::check_elements_supported_with_beams`] for a path that also takes shells (ADR 0432 D3): a Shell4
     /// block passes, and the model's shells are checked by [`crate::shell::check_shell_model`].
     pub fn check_elements_supported_with_structures(&self) -> Result<()> {
-        self.check_elements(true, true)?;
+        self.check_elements(true, true, false)?;
         crate::beam::check_beam_model(self)?;
         crate::shell::check_shell_model(self)
     }
 
-    fn check_elements(&self, beams: bool, shells: bool) -> Result<()> {
+    /// As [`SolidModel::check_elements_supported_with_structures`] for the static solve, which also takes the orthotropic
+    /// and the tabulated material on solid elements (ADR 0452 D6), then [`crate::mat_ortho::check_model`].
+    pub fn check_elements_supported_with_materials(&self) -> Result<()> {
+        self.check_elements(true, true, true)?;
+        crate::beam::check_beam_model(self)?;
+        crate::shell::check_shell_model(self)?;
+        crate::mat_ortho::check_model(self)
+    }
+
+    fn check_elements(&self, beams: bool, shells: bool, point_materials: bool) -> Result<()> {
         for (b, block) in self.mesh.blocks().iter().enumerate() {
             if let Some(package) = block.kind().pending() {
                 return Err(FemError::NotYetSupported {
@@ -1092,6 +1103,15 @@ impl SolidModel {
                     package,
                 });
             }
+            // ADR 0452 D6: a path that does not take the per-point materials refuses them.
+            if !point_materials && crate::mat_ortho::is_point_material(m) {
+                return Err(FemError::NotYetSupported {
+                    item: "material",
+                    variant: m.name(),
+                    location: format!("material {i}, element set '{set}'"),
+                    package: crate::mat_ortho::FOLLOW_UP,
+                });
+            }
         }
         Ok(())
     }
@@ -1113,6 +1133,13 @@ impl SolidModel {
     /// As [`SolidModel::check_supported`] for a path that takes beams and shells (ADR 0432 D3).
     pub fn check_supported_with_structures(&self) -> Result<()> {
         self.check_elements_supported_with_structures()?;
+        self.check_supports()
+    }
+
+    /// As [`SolidModel::check_supported_with_structures`] for the static solve, which also takes the orthotropic and the
+    /// tabulated material on solid elements (ADR 0452 D6).
+    pub fn check_supported_with_materials(&self) -> Result<()> {
+        self.check_elements_supported_with_materials()?;
         self.check_supports()
     }
 
