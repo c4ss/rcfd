@@ -171,9 +171,8 @@ fn element_data(model: &SolidModel, r: &NonlinearResult, e: usize) -> (Vec<Vec3>
     (coords, d.iter().map(|&q| u[q]).collect())
 }
 
-/// One integration point: element, reference radius, von Mises stress, hoop stress, equivalent plastic strain.
+/// One integration point: reference radius, von Mises stress, hoop stress, equivalent plastic strain.
 struct Point {
-    element: usize,
     r: f64,
     eq: f64,
     hoop: f64,
@@ -207,7 +206,6 @@ fn sphere_points(model: &SolidModel, r: &NonlinearResult, elements: usize) -> Ve
                 + (s[2] - mean).powi(2)
                 + 2.0 * (s[3] * s[3] + s[4] * s[4] + s[5] * s[5]);
             out.push(Point {
-                element: e,
                 r: rad,
                 eq: (1.5 * dev2).sqrt(),
                 hoop: 0.5 * (tr - srr),
