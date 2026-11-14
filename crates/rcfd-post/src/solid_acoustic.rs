@@ -792,3 +792,243 @@ impl BaffledPlane {
         Ok(s / (4.0 * rho * c))
     }
 }
+
+// ------------------------------------------------------------------------------------------------------------ surface pressure
+
+/// One edge of a plane polygon for the analytic integral of `1/R`: start, end, unit tangent, outward in-plane normal.
+#[derive(Debug, Clone, Copy)]
+struct Edge {
+    a: Vec3,
+    b: Vec3,
+    t: Vec3,
+    m: Vec3,
+}
+
+/// The edges of the plane polygon `p` (cyclic), edges of zero length dropped; `None` when the polygon has no area.
+fn polygon_edges(p: &[Vec3]) -> Option<Vec<Edge>> {
+    let mut nf = [0.0; 3];
+    for i in 0..p.len() {
+        nf = vec3::add(nf, vec3::cross(p[i], p[(i + 1) % p.len()]));
+    }
+    let len = vec3::norm(nf);
+    if !(len.is_finite() && len > 0.0) {
+        return None;
+    }
+    let nf = vec3::scale(nf, 1.0 / len);
+    let mut out = Vec::with_capacity(p.len());
+    for i in 0..p.len() {
+        let (a, b) = (p[i], p[(i + 1) % p.len()]);
+        let l = vec3::norm(vec3::sub(b, a));
+        if l > 0.0 {
+            let t = vec3::scale(vec3::sub(b, a), 1.0 / l);
+            out.push(Edge {
+                a,
+                b,
+                t,
+                m: vec3::cross(t, nf),
+            });
+        }
+    }
+    Some(out)
+}
+
+/// `int dS/R` over the polygon of `edges` for a point `x` in its plane: the sum over the edges of `d ln((R+ + s+)/(R- + s-))`
+/// (ADR 0488 derivation 2), `R + s` taken as `d^2/(R - s)` for `s < 0`; an edge on a line through `x` contributes 0.
+fn edges_inverse_distance(edges: &[Edge], x: Vec3) -> f64 {
+    let mut total = 0.0;
+    for e in edges {
+        let pa = vec3::sub(e.a, x);
+        let d = vec3::dot(pa, e.m);
+        if d == 0.0 {
+            continue;
+        }
+        let sm = vec3::dot(pa, e.t);
+        let sp = vec3::dot(vec3::sub(e.b, x), e.t);
+        let plus = |s: f64| {
+            let r = d.hypot(s);
+            if s >= 0.0 {
+                r + s
+            } else {
+                d * d / (r - s)
+            }
+        };
+        total += d * (plus(sp) / plus(sm)).ln();
+    }
+    total
+}
+
+/// The integral of `1/R` over the plane polygon `polygon` (vertices in cyclic order, either orientation) for the point `x`,
+/// taken in the polygon's plane (its distance from the plane is ignored): the in-plane edge sum of ADR 0488 (the analytic
+/// self-face integral of the singular part of the Rayleigh kernel). Refuses fewer than 3 vertices, values not finite and a
+/// polygon of zero area.
+pub fn polygon_inverse_distance(polygon: &[Vec3], x: Vec3) -> Res<f64> {
+    if polygon.len() < 3 {
+        return err(format!("polygon of {} vertices (3 or more needed)", polygon.len()));
+    }
+    if polygon
+        .iter()
+        .chain(std::iter::once(&x))
+        .any(|p| p.iter().any(|c| !c.is_finite()))
+    {
+        return err("polygon vertex or point not finite".into());
+    }
+    let Some(edges) = polygon_edges(polygon) else {
+        return err("polygon of zero area".into());
+    };
+    Ok(edges_inverse_distance(&edges, x))
+}
+
+/// The radiation impedance of a baffled plane (ADR 0488): the complex power `Pi = (1/2) int P conj(V_n) dS` and
+/// `Z = 2 Pi/<|V_n|^2>` (for a rigid piston the force over the velocity).
+#[derive(Debug, Clone, PartialEq)]
+pub struct RadiationImpedance {
+    /// `Pi = (1/2) int_S P conj(V_n) dS`, W; the real part is the radiated power, the imaginary part the reactive power.
+    pub complex_power: Phasor,
+    /// The area `S` (sum of the quadrature weights), m^2.
+    pub area: f64,
+    /// `<|V_n|^2> = (1/S) int |V_n|^2 dS`, m^2/s^2.
+    pub mean_square_velocity: f64,
+    /// `Z = 2 Pi/<|V_n|^2>`, N s/m.
+    pub impedance: Phasor,
+    /// `Z/(rho c S)`.
+    pub normalised: Phasor,
+    /// The added mass `Im Z/omega`, kg.
+    pub added_mass: f64,
+}
+
+impl BaffledPlane {
+    /// The quadrature points `(position, weight, normal velocity)` of the plane (Gauss order `options.order` on each face).
+    pub fn quadrature_points(&self) -> &[(Vec3, f64, Phasor)] {
+        &self.points
+    }
+
+    fn face_edges(&self) -> Vec<Vec<Edge>> {
+        self.surface
+            .faces
+            .iter()
+            .map(|f| {
+                let p: Vec<Vec3> = f.iter().map(|&i| self.surface.nodes[i]).collect();
+                polygon_edges(&p).unwrap_or_default()
+            })
+            .collect()
+    }
+
+    fn potential_at(edges: &[Vec<Edge>], x: Vec3) -> f64 {
+        edges.iter().map(|e| edges_inverse_distance(e, x)).sum()
+    }
+
+    /// The point of face `face` at the parameters `(u, v)` in `[-1, 1]^2` of the bilinear map, with its normal velocity.
+    fn face_point(&self, face: usize, u: f64, v: f64) -> Res<(Vec3, Phasor)> {
+        if face >= self.surface.faces.len() {
+            return err(format!(
+                "face {face} out of range ({} faces)",
+                self.surface.faces.len()
+            ));
+        }
+        if !((-1.0..=1.0).contains(&u) && (-1.0..=1.0).contains(&v)) {
+            return err(format!("face parameters ({u}, {v}) outside [-1, 1]^2"));
+        }
+        let c = corners(&self.surface.faces[face]);
+        let (nn, _, _) = shape(u, v);
+        let mut x = [0.0; 3];
+        let mut vel = [Phasor::default(); 3];
+        for a in 0..4 {
+            vec3::axpy(&mut x, nn[a], self.surface.nodes[c[a]]);
+            let va = self.surface.velocity[c[a]];
+            for i in 0..3 {
+                vel[i].re += nn[a] * va[i].re;
+                vel[i].im += nn[a] * va[i].im;
+            }
+        }
+        Ok((x, vdot(&vel, self.normal)))
+    }
+
+    /// `int_S dS/R` at the point of face `face` at `(u, v)`: the analytic in-plane integral over every face.
+    pub fn inverse_distance_potential(&self, face: usize, u: f64, v: f64) -> Res<f64> {
+        let (x, _) = self.face_point(face, u, v)?;
+        Ok(BaffledPlane::potential_at(&self.face_edges(), x))
+    }
+
+    /// The Rayleigh sum of ADR 0488 derivation 1 at the point `x` of the plane with normal velocity `vx`, before the factor
+    /// `i omega rho/(2 pi)`: `vx sum_f I_f(x) + sum_j w_j (V_j cos(k R_j) - vx)/R_j - i sum_j w_j V_j sin(k R_j)/R_j`.
+    fn surface_sum(&self, edges: &[Vec<Edge>], x: Vec3, vx: Phasor, k: f64) -> Phasor {
+        let pot = BaffledPlane::potential_at(edges, x);
+        let mut cr = Phasor::default();
+        let mut si = Phasor::default();
+        for &(y, w, vj) in &self.points {
+            let r = vec3::norm(vec3::sub(x, y));
+            if r > 0.0 {
+                let (sn, cs) = (k * r).sin_cos();
+                cr.re += w * (vj.re * cs - vx.re) / r;
+                cr.im += w * (vj.im * cs - vx.im) / r;
+                si.re += w * vj.re * (sn / r);
+                si.im += w * vj.im * (sn / r);
+            } else {
+                si.re += w * vj.re * k;
+                si.im += w * vj.im * k;
+            }
+        }
+        // (vx pot + cr) - i si
+        Phasor::new(vx.re * pot + cr.re + si.im, vx.im * pot + cr.im - si.re)
+    }
+
+    fn times_i_omega_rho(s: Phasor, rho: f64, omega: f64) -> Phasor {
+        let a = omega * rho / (2.0 * PI);
+        Phasor::new(-a * s.im, a * s.re)
+    }
+
+    /// The surface pressure at the point of face `face` at `(u, v)` by the Rayleigh integral, the singular part `1/R`
+    /// integrated analytically over each face and the rest by the quadrature points (ADR 0488).
+    pub fn surface_pressure(&self, face: usize, u: f64, v: f64, rho: f64, c: f64, omega: f64) -> Res<Phasor> {
+        BaffledPlane::check_medium(rho, c, omega)?;
+        let (x, vx) = self.face_point(face, u, v)?;
+        let s = self.surface_sum(&self.face_edges(), x, vx, omega / c);
+        Ok(BaffledPlane::times_i_omega_rho(s, rho, omega))
+    }
+
+    /// The surface pressure at every quadrature point (in the order of [`BaffledPlane::quadrature_points`]).
+    pub fn surface_pressures(&self, rho: f64, c: f64, omega: f64) -> Res<Vec<Phasor>> {
+        BaffledPlane::check_medium(rho, c, omega)?;
+        let edges = self.face_edges();
+        let k = omega / c;
+        Ok(self
+            .points
+            .iter()
+            .map(|&(x, _, vx)| BaffledPlane::times_i_omega_rho(self.surface_sum(&edges, x, vx, k), rho, omega))
+            .collect())
+    }
+
+    /// The radiation impedance `Z = 2 Pi/<|V_n|^2>`, `Pi = (1/2) sum_i w_i P_i conj(V_i)` over the quadrature points with the
+    /// surface pressures; refused for a surface at rest.
+    pub fn radiation_impedance(&self, rho: f64, c: f64, omega: f64) -> Res<RadiationImpedance> {
+        let p = self.surface_pressures(rho, c, omega)?;
+        let mut pi = Phasor::default();
+        let mut area = 0.0;
+        let mut ms = 0.0;
+        for (&(_, w, v), pp) in self.points.iter().zip(&p) {
+            // P conj(V)
+            pi.re += w * (pp.re * v.re + pp.im * v.im);
+            pi.im += w * (pp.im * v.re - pp.re * v.im);
+            area += w;
+            ms += w * v.norm_sqr();
+        }
+        let complex_power = Phasor::new(pi.re / 2.0, pi.im / 2.0);
+        let mean_square_velocity = ms / area;
+        if mean_square_velocity.is_nan() || mean_square_velocity <= 0.0 {
+            return err("radiation impedance: the surface is at rest (zero mean-square normal velocity)".into());
+        }
+        let impedance = Phasor::new(
+            2.0 * complex_power.re / mean_square_velocity,
+            2.0 * complex_power.im / mean_square_velocity,
+        );
+        let z0 = rho * c * area;
+        Ok(RadiationImpedance {
+            complex_power,
+            area,
+            mean_square_velocity,
+            impedance,
+            normalised: Phasor::new(impedance.re / z0, impedance.im / z0),
+            added_mass: impedance.im / omega,
+        })
+    }
+}
