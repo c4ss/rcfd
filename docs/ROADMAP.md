@@ -11326,7 +11326,9 @@ fixed by the item's registration ADR before any code.
     K against the run at T_ref with every relaxation time scaled by a_T: displacements and stresses equal (0, a rounding
     coincidence; the unscaled run differs by 1.47); an elastic model with a temperature keeps its bits; default bits (13
     digests) and baseline hashes unchanged; eight mutations caught. Case-file key not added (recommended: a quasi-static
-    time study and a temperature in the nonlinear transient study). Follow-up F-592 (optional).
+    time study and a temperature in the nonlinear transient study). Follow-up F-592 (optional). A temperature history
+    and the Rayleigh stiffness tangent at the temperature on both paths: F-592 (ADR 0526, 2026-11-14); a constant table
+    gives the bits of this item.
 - [x] **F-577** The viscoelastic material in the direct harmonic solve and the damped modes
   - depends on: F-410, F-412, F-414
   - acceptance: Every limit not stated here is registered in the ADR before the run. The direct harmonic solve takes a
@@ -11617,28 +11619,29 @@ fixed by the item's registration ADR before any code.
     refuse a layup. Default bits unchanged (23 new digests and ADR 0496's 11), baseline hashes unchanged; ten of ten
     mutations caught. No case-file key (open question). Open: the corotated Newton path for a layup (follow-up, not yet
     numbered) and the [[layup]] case-file key (maintainer).
-- [x] **F-592** A temperature history on the quasi-static driver and the nonlinear transient integrator
+- [~] **F-592** A temperature history on the quasi-static driver and the nonlinear transient integrator
   - depends on: F-576
   - acceptance: Every limit not stated here is registered in the ADR before the run. The quasi-static driver and the
     nonlinear transient integrator take a uniform temperature against time (a piecewise linear table, the step-end
     value) and the Rayleigh stiffness tangent at that temperature. A relaxation under a temperature step equals the
     closed form with the reduced time of the two temperatures within 1e-10; a constant table gives the bits of ADR 0499.
     Models without a temperature keep their bits.
-  - note: Structural solver, advanced tier. Optional. Follow-up of F-576. DONE. ADR 0526, 2026-11-14: the quasi-static
-    driver and the nonlinear transient integrator take a uniform temperature against time
-    (TimeSteppingOptions::temperature_history, NlTransientOptions::temperature_history: a transient::LoadTable taken
-    at the end time of every attempt or sub-step, halved or not; refused together with the constant temperature of ADR
-    0499 and outside the run); the reduced time is the right-endpoint sum of dt/a_T(T(t_end)); the Rayleigh stiffness
-    part of the integrator's damping takes its tangent at the temperature (nonlinear::tangent_at; a shifted
-    viscoelastic material with stiffness damping is no longer refused when a temperature is given; re-formed when the
-    history's temperature changes). Met: a relaxation under a temperature step 383 -> 393 K on the driver within
-    5.6e-16 of the closed form with xi = min(t, t_s)/a_1 + max(t - t_s, 0)/a_2 (the constant 383 K differs by 2.3e-2);
-    a ramp first order (3.5e-3 at 100 steps, order 0.996); the integrator under a temperature step bit-equal to the
-    run restarted at the second temperature (the constant first temperature differs by 0.25); the shifted rod with
-    stiffness damping at T equal to the unshifted rod with a_T tau (0); a constant table gives the bits of ADR 0499 on
-    the driver, the integrator and the energy-momentum step; default bits (12 digests) and baseline hashes unchanged;
-    eight mutations caught (two registered equivalents not). No case-file key (recommended: temperature as a number or
-    a table in the nonlinear studies).
+  - note: Structural solver, advanced tier. Optional. Follow-up of F-576. PARTIAL by the standing rule (S3e met only
+    after amendment 1, written after the registered run; MU1 caught by S2 only, not by S4 as registered); done by the
+    ADR rule, the maintainer's call. ADR 0526, 2026-11-14: the quasi-static driver and the nonlinear transient
+    integrator take a uniform temperature against time (TimeSteppingOptions::temperature_history,
+    NlTransientOptions::temperature_history: a transient::LoadTable taken at the end time of every attempt or sub-step,
+    halved or not; refused together with the constant temperature of ADR 0499 and outside the run); the reduced time is
+    the right-endpoint sum of dt/a_T(T(t_end)); the Rayleigh stiffness part of the integrator's damping takes its
+    tangent at the temperature (nonlinear::tangent_at; a shifted viscoelastic material with stiffness damping is no
+    longer refused when a temperature is given; re-formed when the history's temperature changes). Met: a relaxation
+    under a temperature step 383 -> 393 K on the driver within 5.6e-16 of the closed form with xi = min(t, t_s)/a_1 +
+    max(t - t_s, 0)/a_2 (the constant 383 K differs by 2.3e-2); a ramp first order (3.5e-3 at 100 steps, order 0.996);
+    the integrator under a temperature step bit-equal to the run restarted at the second temperature (the constant first
+    temperature differs by 0.25); the shifted rod with stiffness damping at T equal to the unshifted rod with a_T tau
+    (0); a constant table gives the bits of ADR 0499 on the driver, the integrator and the energy-momentum step; default
+    bits (12 digests) and baseline hashes unchanged; eight mutations caught (two registered equivalents not). No
+    case-file key (recommended: temperature as a number or a table in the nonlinear studies). Follow-up F-613.
 - [~] **F-593** Fan blade in the solid case file and a library blade mesher
   - depends on: F-387, F-386
   - acceptance: Every limit not stated here is registered in the ADR before the run. rcfd_fem::builders gains the
@@ -11876,3 +11879,11 @@ fixed by the item's registration ADR before any code.
     per index at 0.4 and 0.8 omega_ref the resulting schur_eta agrees with that of ADR 0492 within 1 percent where it
     exceeds 1e-9, the cost stays below half of the dense path, and the results of ADR 0527 keep their bits.
   - note: Structural solver, advanced tier. Optional. Follow-up of F-584 (ADR 0527, 2026-11-14).
+- [ ] **F-613** A nodal temperature field against time on the nonlinear paths, with thermal strain
+  - depends on: F-592
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The quasi-static driver and the
+    nonlinear transient integrator take a nodal temperature field against time (a table of fields, the step-end value)
+    with the thermal strain of the material's expansion; a uniform field gives the bits of ADR 0526 without expansion,
+    and a free thermal expansion of an unconstrained elastic cube under a temperature step equals alpha dT within 1e-12.
+    Models without a temperature keep their bits.
+  - note: Structural solver, advanced tier. Optional. Follow-up of F-592 (ADR 0526, 2026-11-14).
