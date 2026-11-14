@@ -167,3 +167,26 @@ by the time of the run, they are run.)
 
 1. The model is the F-381 Hex8 cantilever (the roadmap's first choice), not a new one.
 2. The floor uses the infinity norm of the full unreduced `K` (arithmetic 2); the 2-norm is not computed.
+
+## Amendment 1 (2026-11-14, after the registered run, before the corrected run): N3's set-up asked the library for a refused model
+
+The registered run (`f526-scratch/run1.log`, run once) ran all three tests. `p1_to_p7_n1_n2_iterative_f381_and_floors` and
+`q5_s_existing_case_files_selection_equals_an_independent_inclusive_filter` passed; every P check, N1, N2 and Q5 was met (numbers
+in the addendum). `q1_to_q4_n3_box_bounds_equal_to_coordinates` printed Q1, Q2, Q3 and Q4 as met, then panicked in the N3 part,
+at the `unwrap` of `SolidCase::build` on the file with `box_max[0] = 7.999999999`: the library refused the model with the
+diagnostic `node_sets.face_hi.box_min`, line 18, "the box of node set 'face_hi' selects no node". That is the library's
+registered behaviour (ADR 0438 D2, N4): the box `[7.8, 7.999999999]` in x holds no node (the nearest planes are `x = 7.75` and
+`x = 8`), so there is no node set to compare with `xmax`. N3's measure ("selects none of the 49 nodes") was stated for a set
+that exists; it is met, and by the stronger fact that the model is refused. The set-up was defective: it did not allow the
+refusal.
+
+Corrections, written and committed before their run:
+
+- `q1_to_q4_n3_box_bounds_equal_to_coordinates` stays as an ignored record (`#[ignore]`, citing this amendment).
+- `q1_to_q4_n3b_box_bounds_equal_to_coordinates` repeats Q1 to Q4 unchanged (the limits as registered) and replaces the N3 part
+  by N3b: the file with `box_max[0] = 7.999999999` must be refused by `build` with a diagnostic whose path is
+  `node_sets.face_hi.box_min` and whose message contains `selects no node`, and no `xmax` node is selected by any set of it
+  (there is no set). The Q results of the registered run stand as measured (met); the corrected test repeats them only so that
+  the passing record is one test.
+
+By the registered rule the item is partial whatever the corrected run gives (a negative control met only after an amendment).
