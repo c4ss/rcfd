@@ -271,3 +271,70 @@ registered and its result is recorded, and a mutation that does change the order
 the real sum exchanged (`for b { for a { ... } }`), expected to be caught by B3 and B1 to B5 only where the sum is not
 order-insensitive (B3 at least). The decision rule counts M7' as the order mutation and M7 as an equivalent mutant (reported, not
 counted as a miss if the run confirms it leaves every bit unchanged).
+
+## Addendum 1: results (2026-11-14)
+
+Each registered run was made once, in release, on the branch (`sa_random_cross.rs`, `sa_random_cross_default_bits.rs`); nothing was
+tuned and no limit changed. Every aggregated error is asserted finite.
+
+| id | measured | limit | met |
+|---|---|---|---|
+| H1 | refused: `at 1.5e2 Hz: not Hermitian, entries (0, 1) ...` | refused with frequency and pair | yes |
+| H2 | 1.1 refused (2e2 Hz); 1 accepted; 1+1e-13 accepted; 1+1e-10 refused (2e2 Hz, pivot -1.96e-10) | as registered | yes |
+| H3 | negative diagonal, imaginary diagonal, NaN, non-increasing frequencies (entry 1), wrong shape refused; all-zero accepted | as registered | yes |
+| H4 | refused naming 306.58 Hz | in (300, 310) | yes |
+| H5 | rank-2 three-pattern table accepted | accepted | yes |
+| B1, B2, B3, B4 | bits equal, groups 1 and 3 (constant coherence; real constant table, routed; general loop with the constant and with a table outside the band; real `G_ab` table from flat spectra) | 0 ulp | yes |
+| B5 | 40128 words (densities, moments, stress covariances) equal | 0 ulp | yes |
+| B6 | the nine digests recorded at 6c4ba2d9 are unchanged after the library change; `baseline_hashes` passes | equal | yes |
+| D1 | `1.189e-7` (1/8), `5.79e-8` (3/8) | 1e-6 | yes |
+| D2 | `1.146e-7`, `1.133e-7` | 1e-6 | yes |
+| D3 | `1.230e-7` | 1e-6 | yes |
+| D4 | `1.116e-7`, `1.091e-7` | 1e-6 | yes |
+| D5 | `0` and `0` (bits) | 1e-13 | yes |
+| D6 | `9.8e-16`, `1.19e-15` | 1e-12 | yes |
+| F1, F2 | `1.145e-7`, `1.145e-7` | 1e-6 | yes |
+| E1 | `0` | 1e-15 | yes |
+| C1 / C3 | mean square `0`, von Mises `0` (`L = d_min/40`) | 1e-8 | yes |
+| C2 / C3 | mean square `3.35e-11`, von Mises `1.63e-10` (`L = 1e10` side) | 1e-8 | yes |
+| C4 | `L = 1e-6` side: `0`; `L = 1e6` side: `3.350e-7` (recorded); `1e8` side: `3.350e-9`; ratio `99.99999` | 1e-8; ratio in [90, 110] | yes |
+| C5 | accepted at all five lengths | accepted | yes |
+| N1 | `2.17e-2`, `3.17e-2` | >= 1e-2 | holds |
+| N2 | `1.08e-2`, `1.59e-2` | >= 5e-3 | holds |
+| N3 | `1.49` (against uncorrelated), `0.653` (against fully correlated) | >= 1e-3 | holds |
+| N4 | `0.841` | >= 0.1 | holds |
+
+The plate (D7): uncorrelated `m_0 = 1.453e-9`, fully correlated `1.0415e-8`. The error at the lead's suggested lengths: `L = 1e-6` side
+`0`, `L = 1e6` side `3.35e-7`, above 1e-8 as expected for a first-order effect (`d_max/L = 7e-7`), which is why the registered
+limit length is `1e10` side; at `1e10` side the cancellation factor is 0.48 (`3.35e-11/7e-11`), below 1.
+
+Existing tests: `cargo test -p rcfd-fem --release` 786 passed, 0 failed, 205 ignored (177 binaries); `cargo test -p rcfd-api --release
+--test baseline_hashes` ok (3 passed, 1 ignored); `cargo test -p rcfd-cli --release --test docs_site` ok; `cargo clippy -p rcfd-fem
+--all-targets -- -D warnings` clean; `cargo fmt -p rcfd-fem --check` clean.
+
+Mutations (scratch copy `f567-scratch/mut`, own target dir, each run once on the two new test files):
+
+| id | caught by |
+|---|---|
+| M1 imaginary sign flipped | D4 (`2.17e-2`, `3.17e-2`); D5 does not catch it (the flip is applied on both sides of the exchange) |
+| M2 imaginary term dropped | D4 (`1.08e-2`, `1.59e-2`) |
+| M3 Hermitian check removed | H1 |
+| M4 PSD shift removed | H2 (rank-one and 1+1e-13 refused) and the D3 table |
+| M5 PSD checked at the first frequency only | H2 / H1 (test `h1_to_h5`) |
+| M6 route ignoring a varying real part | F2 (`4.02e-2`) |
+| M7 merged accumulators (as registered) | not caught: every test passes, the equivalent mutant of Amendment 1 (`s - 0.0 x = s` exactly) |
+| M7' loops over `a`, `b` exchanged | B3 and B4 at group 3 (bits) |
+| M8 `exp(-d^2/L)` | E1 (`0.966`), C1, C3 |
+| M9 nearest-neighbour interpolation | D3 (`3.68e-4`), F2 (`4.02e-2`) |
+
+**Decision by the registered rule: done.** Every limit met at the first run, every negative control holds, every mutation but the
+equivalent M7 is caught (M7' catches the order change), and the gates pass. Not run: a case-file key (brief), a base-acceleration
+cross-spectrum, a named wall-pressure coherence model, a continuous (not nodal) check of a function coherence.
+
+Open questions (recommendations as in the registration): the case-file key (recommend none until the fan workflow asks for it);
+linear interpolation of `G_ab` (recommend keeping it and documenting `2 pi tau h << 1`); a named Corcos-type coherence model (recommend a
+later item once a fan inflow spectrum is available).
+
+## For the lead: roadmap entries
+
+> F-567 proposed status done. Structural solver, advanced tier. ADR 0510, 2026-11-14: rcfd_fem::random gains CrossSpectrum (a table G_ab(f_k) with real and imaginary parts, or spectra with a Coherence), Coherence (constant real, table, or function of the frequency), check_cross_matrix (Hermitian to 1e-12 of the largest diagonal and positive semi-definite to 1e-12 of the trace by a complex Cholesky, refusal names the frequency), exponential_coherence, spectral_response_cross and Excitation::cross (stress included). Convention G_ab = E[conj(F_a) F_b]; a real constant coherence is routed to spectral_response, so F-417 is reproduced bit for bit (also by the general loop, switched on with SpectralOptions::real_route(false)). Pure delay on one mode within 1.2e-7 of the closed form (1e-6), a two-mode delay with the sign of the phase tested within 1.2e-7; exponential coherence on a Hex8 plate: 0 against the uncorrelated result at L = d_min/40 and 3.3e-11 against the fully correlated at L = 1e10 plate sides (1e-8). Mutations all caught (one equivalent). No case-file key.
