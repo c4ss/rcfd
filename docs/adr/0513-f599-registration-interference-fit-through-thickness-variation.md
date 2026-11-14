@@ -181,3 +181,89 @@ Planned mutations (a `git archive` copy of the tip, its own `CARGO_TARGET_DIR`, 
 - A real hub-shaft fit of the 120 mm fan is a finite-length hub on a longer shaft, neither plane stress nor plane strain; the
   end effects (the edge pressure peaks of a press fit) need a mesh refined at the hub's faces and are not checked here.
 - No case-file key (b2).
+
+## Addendum 1: results (2026-11-14)
+
+The registration was committed alone (2fa3d8ee); the test file `crates/rcfd-fem/tests/sa_contact_fit_f599.rs` (b541a012) was
+run once in release (`cargo test -p rcfd-fem --release --test sa_contact_fit_f599`, 7 tests, 13 s); adda693c is a type alias
+in that file after the run, for clippy (no number changes). No library file was changed: `contact.rs` and every other source
+file are as at the base d41012db.
+
+| check | limit | measured | met |
+|---|---|---|---|
+| DG1 bottom-row mean, top-row mean (p/mean) | `[0.9950, 0.9960]`, `[1.0040, 1.0050]` | `0.995572`, `1.004428` | yes |
+| DG2 `nu = 0`: node pressures, shaft against D1's reference | `<= 1e-6`, `<= 1e-6` | `1.07e-11`, `1.25e-12` | yes |
+| DG3 splits at `nr = 8, 16, 32`; decreasing; `s_32`; orders | decreasing, `<= 2e-3`, `>= 1.0` | `8.895e-3`, `3.843e-3`, `1.356e-3`; orders `1.211`, `1.503` | yes |
+| DG4 `abs(s(1e-4)/s(1e-3) - 1)` | `<= 0.1` | `3.80e-2` (`s(1e-4) = 8.558e-3`) | yes |
+| DG5 `u_z` free: `abs(s)` | `<= 1e-3` | `1.93e-4` | yes |
+| DG6 two layers, bottom held: `s` | `>= 5e-3` | `1.680e-2` | yes |
+| DG7 two layers, mid-plane held: `abs(p_top/p_bottom - 1)` | `<= 1e-6` | `1.50e-11` | yes |
+| **I3pe** plane strain: shaft against `-p_s`, `-2 nu p_s`, 0 (all six components) | `<= 1e-6` | **`1.05e-12`** | yes |
+| I3pe-n plane strain: node pressures against the mean | `<= 1e-6` | `6.34e-12` | yes |
+| I1pe mean and every node against `p_pe = 8.241758e7` | `<= 2e-2` each | `3.58e-3`, `3.58e-3` (mean `8.271273e7`) | yes |
+| I2pe ring hoop against Lame | `<= 2e-2` | `3.73e-3` | yes |
+| I4pe penetration | `<= 1e-9` | `2.67e-10` | yes |
+| I3ps plane stress (ADR 0507's set-up): shaft against D1's reference | `<= 1e-2` | `5.41e-3` | yes |
+| I3ps-r around the bottom row, the top row | `<= 1e-3` | `1.47e-4`, `1.40e-4` | yes |
+| NI3 I3pe with ADR 0507's reference `-mean` | `>= 1e-3` | `2.20e-3` | as expected |
+| NPS I3pe's measure on the plane-stress set-up | `> 1e-6` | `5.41e-3` | as expected |
+
+I3ps measured `5.41e-3` against the probe's `4.83e-3` because the probe's measure had the in-plane components only and the
+test's has all six (the plane-stress shaft carries `sigma_zz` up to `5.4e-3` of the mean, P0). The probe's other numbers are
+reproduced to the printed digits.
+
+Mutations (a `git archive` copy of b541a012 in `f599-scratch/mut` with its own `CARGO_TARGET_DIR`, the new test file run per
+mutation by `f599-scratch/mutate.sh`, logs `MT1.log` to `ML3.log`):
+
+| id | mutation | caught by |
+|---|---|---|
+| MT1 | I3pe's set-up without the `z = t` constraint | I3pe (`0.605`, from `-2 nu p_s` in `zz`), I3pe-n (`4.53e-3`), I1pe (`8.7e-2`) |
+| ML1 | no Uzawa update | every test: the solve fails ("augmentation 1: not converged in 30 iterations", energy ratio `0.89`) |
+| ML2 | unnormalised normal | every test: the solve fails (gap tolerance not met after 20 augmentations, gap `1.88e-6`) |
+| ML3 | curvature sign flipped | DG5 (the active set cycled 4 times, a located error); the other six tests met (registered as not required) |
+
+Gates: `cargo test -p rcfd-fem --release` passes (exit 0; 823 passed, 0 failed, 223 ignored over 184 test binaries, the new file
+included); `cargo test -p rcfd-api --release --test baseline_hashes` passes (3 passed, 1 ignored); `cargo clippy -p rcfd-fem
+--all-targets -- -D warnings` is clean (after adda693c); `cargo fmt -p rcfd-fem --check` is clean; `cargo test -p rcfd-cli
+--release --test docs_site` passes (2 tests).
+
+### The diagnosis
+
+The 0.9955 and 1.0045 of ADR 0507 are a **discretisation error of the ring, made visible by the `u_z = 0` bottom constraint;
+they do not come from a defect of the contact code**. The ring's 8 linear cells through `b - a` do not reproduce Lame's constant
+strain sum `eps_r + eps_theta` near the bore (`1.41` of the exact at the bore node, `O(h)`). In plane stress the thickness change
+`w(r) = -nu/(1 - nu) (eps_r + eps_theta) t` then varies (`-9.13e-6` at the bore against `-7.5e-6`). Its `r`-gradient drives a
+transverse shear which, with the bottom held, is relieved by a `z`-linear radial displacement of the bore (top `7.3697e-4`,
+bottom `7.3739e-4`), and contact pushes the lagging top harder. Evidence: without Poisson (DG2) or with the thickness held
+(I3pe) the pressures are uniform to `1e-11` and the shaft to `1e-12`; the split falls with the radial cell at orders 1.2 and 1.5
+(DG3), is linear in `d` (DG4: the geometric slide is not the cause), nearly vanishes with `u_z` free (DG5), and does not fall
+with layers through the thickness (DG6). The node-to-surface asymmetry, the consistent node areas and the node-pressure
+recovery are exact for the uniform state (DG2, I3pe).
+
+**The I3 expectation was also wrong in its reference.** A node pressure is a force over the ring's chord area at `a - d`, which
+the shaft carries over its polygon side, so the shaft's uniform stress is `mean (1 - d/a) cos(Delta/2) = 0.997797 mean`, not
+`mean` (NI3: `2.20e-3`). No correct code could have met ADR 0507's I3 (`1e-6`, "exact up to rounding") in its set-up. Its
+original stays the ignored record `i1_to_i4_interference_fit_ring_on_a_solid_shaft_a3_known_miss` in `sa_contact.rs` (not
+edited). I3 is re-registered as I3pe (plane strain, D1's reference, `1e-6`, met at `1.05e-12`) with I3ps (ADR 0507's
+plane-stress set-up, D1's reference, `1e-2`, met at `5.41e-3`).
+
+Deviations: none from the registration. Not run: nothing registered was skipped.
+
+**Decision by the rule: done.** Every check met, both negative controls as expected, MT1, ML1 and ML2 caught, ML3 recorded,
+no library change, and the gates as listed.
+
+Remaining questions, with recommendations:
+
+1. **Plane-stress press fits in practice.** The one-layer ring needs fine radial cells at the bore for a pressure that is
+   uniform through the thickness (split `1.4e-3` at 32 cells). Options: (a) a bore-cell rule in the fan documentation; (b)
+   incompatible-mode or quadratic ring elements; (c) leave as is. Recommendation: (a), through the follow-up below; (b) belongs
+   to the element roadmap.
+2. **A finite hub on a longer shaft** (the fan's real case, with edge pressure peaks). Recommendation: the follow-up below.
+
+## For the lead: roadmap entries
+
+> F-599 status done. Note: Structural solver, advanced tier. Follow-up of F-427 (ADR 0507, 2026-11-14). ADR 0513, 2026-11-14. The 0.9955 and 1.0045 node pressures of the one-layer ring-on-shaft fit of ADR 0507 are a discretisation error of the ring made visible by the u_z = 0 bottom constraint; contact.rs has no defect. The 8 linear cells through b - a miss Lame's constant strain sum near the bore (1.41 of it at the bore node, O(h)), so the plane-stress thickness change varies (-9.13e-6 against -7.5e-6 at the bore); its gradient, with the bottom held, tilts the bore and loads its top harder. Without Poisson or in plane strain the pressures are uniform to 1e-11 and the shaft to 1e-12. The top/bottom split falls with the radial cell (8.9e-3, 3.8e-3, 1.4e-3 at 8, 16, 32 cells), is linear in d, nearly vanishes with u_z free (1.9e-4) and grows with layers through the thickness. The reference of ADR 0507's I3 was also wrong: the shaft carries mean (1 - d/a) cos(Delta/2) = 0.9978 of the mean node pressure. I3 re-registered: in plane strain the shaft is uniform within 1e-6 (1.05e-12), the pressure is within 3.6e-3 of E d (b^2 - a^2)/(2 a b^2 (1 - nu^2)) and the hoop stress within 3.7e-3; ADR 0507's plane-stress set-up with the corrected reference is within 1e-2 (5.4e-3). The original I3 stays an ignored record. Three of three required mutations caught. No library change, no case-file key.
+
+> F-427 note: append "The I3 miss is explained in ADR 0513 (F-599): a ring discretisation error shown by the bottom constraint, and a reference that should have been mean (1 - d/a) cos(Delta/2); I3 re-registered there and met (plane strain, 1.05e-12)." and replace "(7.0e-3 against 1e-6, a through-thickness variation not yet explained)" with "(7.0e-3 against 1e-6, explained and re-registered by F-599)".
+
+> Follow-up (proposed, not added): press fit of a finite hub on a longer shaft (deps F-599). Every limit not stated here is registered in the ADR before the run. A hub of length L on a shaft that extends beyond both of its faces, same material, radial interference d, frictionless: the contact pressure at mid-length against the plane-strain closed form within 2 percent for L >= 4 (b - a), the edge pressure peak located at the hub faces and converging under refinement of the bore cells, and a bore-cell rule for the 120 mm fan hub stated from the run. Fan relevance: hub-shaft press-fit stresses.
