@@ -130,7 +130,7 @@ None taken beforehand.
 ## Addendum 1: results (2026-11-14)
 
 Registered run: `f602_registered_run`, made once (155.4 s in release on the shared machine; log
-`f602-scratch/registered_run.log`) from the committed test file (commit 36ce8d8f's parent state: the file before the split
+`f602-scratch/registered_run.log`) from the committed test file (commit 622f9ec2, the file before the split
 below). It took more than two minutes, so after the run the test was marked `#[ignore]` as a heavy record and a fast test
 `f602_fast_rows` (M1, E1 and N5: mesh and the elastic solve, 2 s) was added with the registered limits; no limit or reading
 changed. The library is unchanged (no file under `crates/rcfd-fem/src` edited), so no default-bits record was needed.
