@@ -10339,7 +10339,8 @@ fixed by the item's registration ADR before any code.
     missed the impedance and one periodicity tolerance (a slowly decaying numerical mode, 0.95 to 0.99 per step), and
     the match was met only after the amendment, with 8 outer iterations taken from a diagnosis. No library line changed
     (defaults bit-identical); six mutations caught; docs/dynamic-mesh.md. Open: ADR 0451 Q1 to Q3. Follow-ups F-535
-    (opt-in refusal naming the diffusion number), F-536 (outer-iteration criterion).
+    (opt-in refusal naming the diffusion number), F-536 (outer-iteration criterion; ADR 0458, partial: the criterion
+    meets the impedance at every level, some steps at the extremes of the pressure reach the cap).
 - [~] **F-531** Viscous flux of the Symmetry condition for flow tangential to the plane
   - depends on: F-421
   - acceptance: Every limit not stated here is registered in the ADR before the run. Stokes' second problem (a wall
@@ -10414,7 +10415,7 @@ fixed by the item's registration ADR before any code.
     step); the fixed-mesh channel of ADR 0451 is refused at nu dt/dy^2 = 25 and 100 and runs at 2.5; the default results
     of every existing case stay bit-identical.
   - note: Numerics. Follow-up of F-530 (ADR 0451, 2026-11-14).
-- [ ] **F-536** Outer-iteration criterion for the consistent-corrector step at large diffusion numbers
+- [~] **F-536** Outer-iteration criterion for the consistent-corrector step at large diffusion numbers
   - depends on: F-530
   - acceptance: Every limit not stated here is registered in the ADR before the run. The number of outer iterations of
     the transient step with consistent correctors is set by a registered criterion (a derived contraction of the
@@ -10422,7 +10423,20 @@ fixed by the item's registration ADR before any code.
     that the fixed-mesh channel of ADR 0451 at nu dt/dy^2 = 25, 50 and 100 matches the discrete implicit-Euler impedance
     within 1 percent at every level and its extrapolation the oscillating-channel impedance within 3 percent, with the
     outer iterations used per step recorded; the default results of every existing case stay bit-identical.
-  - note: Numerics. Follow-up of F-530 (ADR 0451, 2026-11-14).
+  - note: Numerics. PARTIAL (ADR 0458, 2026-11-14; registered before the code, no amendment). The PIMPLE loop had no
+    outer-convergence tolerance; added the opt-in PimpleSettings::outer_pressure_tolerance (n_outer becomes the cap;
+    after outer iteration k the ratio of its largest pressure change to that of the step's first iteration is formed,
+    and once it is at most tol one final unrelaxed iteration is run; derived from a linear contraction, leaving r tol of
+    the non-iterated step's error) and PimpleSolver::outer_record (step, outer iterations used, met, ratio). On the
+    fixed-mesh channel of ADR 0451 with the consistent correctors, tol 1e-3 and a cap of 50: every level at nu dt/dy^2 =
+    100, 50 and 25 is bounded and periodic and matches the discrete implicit-Euler impedance within 5.7e-3 (real) and
+    2.8e-3 (imaginary), the extrapolation the oscillating-channel impedance within 6.1e-3 and 3.8e-3; mean outer
+    iterations per step 14.4, 11.1 and 8.1 (1.80, 1.38 and 1.02 times the fixed 8 of ADR 0451). Partial: K1 missed, 10
+    of 250 steps at 100 and at 50 reached the cap, diagnosed: at the extremes of the pressure history the step's own
+    pressure change, the criterion's scale, is nearly zero (4.4e-4 of its largest value), so the criterion is met only
+    at iteration 49. Defaults bit-identical (opt-in only; baseline_hashes and the rcfd-fv suite pass); seven mutations
+    caught; no case key (schema golden); docs/dynamic-mesh.md. Open: ADR 0458 Q1 to Q4. Follow-up F-550 (a scale that
+    does not vanish).
 - [~] **F-537** Orthotropic and tabulated materials on the modal, prestressed-modal and transformation paths
   - depends on: F-409
   - acceptance: Every limit not stated here is registered in the ADR before the run. Modal analysis, prestressed modes
@@ -10631,3 +10645,15 @@ fixed by the item's registration ADR before any code.
     membrane patch of ADR 0454 within 1e-8, the 8 x 2 in-plane cantilever strip of ADR 0466 on quadrilaterals within 2 %
     of beam theory, defaults bit-identical.
   - note: Structural solver, advanced tier. Follow-up of F-539 (ADR 0466, 2026-11-14): the PT5 mixed-mesh miss.
+- [ ] **F-550** A non-vanishing scale for the outer-iteration criterion
+  - depends on: F-536
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The opt-in outer-iteration
+    criterion of ADR 0458 gets a scale that does not vanish at the extremes of the pressure history (for example the
+    largest first-iteration pressure change of recent steps, or an absolute floor tied to the linear solvers'
+    tolerances), derived in the ADR, and the pressure-lag estimate of a step with the criterion uses the count the step
+    used; on the fixed-mesh channel of ADR 0451 at nu dt/dy^2 = 25, 50 and 100 every step meets the criterion before the
+    cap, every level matches the discrete implicit-Euler impedance within 1 percent and the extrapolation the
+    oscillating-channel impedance within 3 percent, with the outer iterations per step recorded and no more in total
+    than with the scale of ADR 0458; the default results of every existing case stay bit-identical.
+  - note: Numerics. Follow-up of F-536 (ADR 0458, 2026-11-14): the K1 miss at the pressure extremes. A case key for the
+    criterion needs the maintainer's schema approval.
