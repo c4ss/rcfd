@@ -16,7 +16,7 @@ use crate::constraint::{check_rigid_body_motions, prescribed_equations, reduce, 
 use crate::error::{FemError, Result};
 use crate::mass::consistent_with;
 use crate::model::{DofMap, SolidModel};
-use rcfd_linalg::eigen::{lowest_eigenpairs, ResidualTest, Shift, SturmCheck, SubspaceOptions};
+use rcfd_linalg::eigen::{lowest_eigenpairs, Factorisation, ResidualTest, Shift, SturmCheck, SubspaceOptions};
 
 /// Options of a modal analysis.
 #[derive(Debug, Clone, PartialEq)]
@@ -37,6 +37,8 @@ pub struct ModalOptions {
     pub subspace_size: Option<usize>,
     /// Worker threads of the assembly (`None`: the available parallelism); the result does not depend on it.
     pub threads: Option<usize>,
+    /// The factorisation of the eigensolver (default [`Factorisation::Envelope`]; ADR 0447).
+    pub factorisation: Factorisation,
 }
 
 impl ModalOptions {
@@ -51,6 +53,7 @@ impl ModalOptions {
             max_iterations: d.max_iterations,
             subspace_size: None,
             threads: None,
+            factorisation: d.factorisation,
         }
     }
     /// The same options with a given shift.
@@ -73,6 +76,11 @@ impl ModalOptions {
     /// The same options with a thread count for the assembly.
     pub fn threads(mut self, threads: usize) -> ModalOptions {
         self.threads = Some(threads);
+        self
+    }
+    /// The same options with a factorisation of the eigensolver (ADR 0447).
+    pub fn factorisation(mut self, factorisation: Factorisation) -> ModalOptions {
+        self.factorisation = factorisation;
         self
     }
 }
@@ -204,6 +212,7 @@ pub fn modal_analysis_with(model: &SolidModel, extra: &[Prescribed], options: &M
         residual_test: options.residual_test,
         max_iterations: options.max_iterations,
         subspace_size: options.subspace_size,
+        factorisation: options.factorisation,
         ..SubspaceOptions::default()
     };
     let eig = lowest_eigenpairs(&kr.matrix, &mr.matrix, options.modes, &opts).map_err(|e| FemError::Solver {

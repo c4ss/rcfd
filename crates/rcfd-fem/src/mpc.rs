@@ -1126,6 +1126,14 @@ pub fn solve_static_mpc(
 ) -> Result<MpcSolution> {
     model.validate()?;
     check_transformation_model(model)?;
+    // ADR 0447 D5: the sparse L D L^T is not taken on the transformation path (it would otherwise fall to the envelope).
+    if let StaticSolver::SparseDirect = options.solver {
+        return Err(FemError::InvalidValue {
+            key: "solver",
+            reason: "the sparse L D L^T (ADR 0447) is not available on the transformation path (ADR 0296): use Direct or                      ConjugateGradient"
+                .into(),
+        });
+    }
     if let StaticSolver::PreconditionedCg { .. } = options.solver {
         return Err(FemError::InvalidValue {
             key: "solver",
@@ -1460,6 +1468,7 @@ pub fn modal_analysis_mpc(model: &SolidModel, extra: &[Prescribed], options: &Mo
         residual_test: options.residual_test,
         max_iterations: options.max_iterations,
         subspace_size: options.subspace_size,
+        factorisation: options.factorisation,
         ..SubspaceOptions::default()
     };
     let eig = lowest_eigenpairs(&kr, &mr, options.modes, &opts).map_err(|e| FemError::Solver {

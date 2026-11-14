@@ -14,6 +14,8 @@
 
 use crate::matrix::CsrMatrix;
 use crate::skyline::{PivotRule, SkylineError, SkylineLdlt, SkylineOptions, SkylineOrdering};
+// ADR 0447 (F-431): the sparse L D L^T as the alternative factorisation.
+use crate::sparse_chol::{SparseLdlt, SparseOptions, SparseOrdering};
 use std::fmt;
 
 /// Cap on the number of Jacobi sweeps (ADR 0283 D1).
@@ -449,6 +451,65 @@ pub fn generalized_eigen_dense(k: &[f64], m: &[f64], n: usize) -> Result<DenseEi
     generalized_unchecked(&symmetrised(k, n), &symmetrised(m, n), n)
 }
 
+/// The direct factorisation of the eigensolvers (ADR 0447 D5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Factorisation {
+    /// The envelope `L D L^T` of ADR 0274 in the options' `ordering` (the default).
+    #[default]
+    Envelope,
+    /// The sparse `L D L^T` after approximate minimum degree of ADR 0447 (the options' `ordering` is not used).
+    Sparse,
+}
+
+/// A factor of either kind (ADR 0447 D5).
+enum Factor {
+    Envelope(SkylineLdlt),
+    Sparse(SparseLdlt),
+}
+
+impl Factor {
+    fn solve(&self, b: &[f64]) -> Vec<f64> {
+        match self {
+            Factor::Envelope(f) => f.solve(b),
+            Factor::Sparse(f) => f.solve(b),
+        }
+    }
+    fn pivots(&self) -> &[f64] {
+        match self {
+            Factor::Envelope(f) => f.pivots(),
+            Factor::Sparse(f) => f.pivots(),
+        }
+    }
+    fn order(&self) -> &[usize] {
+        match self {
+            Factor::Envelope(f) => f.order(),
+            Factor::Sparse(f) => f.order(),
+        }
+    }
+    fn negatives(&self) -> usize {
+        match self {
+            Factor::Envelope(f) => f.inertia().0,
+            Factor::Sparse(f) => f.inertia().0,
+        }
+    }
+}
+
+/// The factor of `a` by the chosen factorisation with the pivot rule and symmetry tolerance of `opts`.
+fn factor_by(a: &CsrMatrix, opts: &SkylineOptions, factorisation: Factorisation) -> Result<Factor, SkylineError> {
+    match factorisation {
+        Factorisation::Envelope => SkylineLdlt::factor_with(a, opts).map(Factor::Envelope),
+        Factorisation::Sparse => SparseLdlt::factor_with(
+            a,
+            &SparseOptions {
+                ordering: SparseOrdering::MinimumDegree,
+                pivots: opts.pivots,
+                symmetry_tolerance: opts.symmetry_tolerance,
+            },
+        )
+        .map(Factor::Sparse),
+    }
+}
+
 /// Shift `sigma` of the factorised matrix `K + sigma M` (ADR 0283 D3).
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum Shift {
@@ -490,6 +551,8 @@ pub struct SubspaceOptions {
     pub ordering: SkylineOrdering,
     /// Start vectors (q columns of length n) instead of the default ones.
     pub start: Option<Vec<Vec<f64>>>,
+    /// The factorisation of `K + sigma M` and of the Sturm counts (default [`Factorisation::Envelope`]; ADR 0447).
+    pub factorisation: Factorisation,
 }
 
 impl Default for SubspaceOptions {
@@ -502,6 +565,7 @@ impl Default for SubspaceOptions {
             subspace_size: None,
             ordering: SkylineOrdering::Rcm,
             start: None,
+            factorisation: Factorisation::Envelope,
         }
     }
 }
@@ -605,15 +669,21 @@ fn combine(k: &CsrMatrix, m: &CsrMatrix, s: f64) -> CsrMatrix {
     CsrMatrix::from_triplets(k.n, t)
 }
 
-fn count_unchecked(k: &CsrMatrix, m: &CsrMatrix, s: f64, ordering: &SkylineOrdering) -> Result<usize, EigenError> {
+fn count_unchecked(
+    k: &CsrMatrix,
+    m: &CsrMatrix,
+    s: f64,
+    ordering: &SkylineOrdering,
+    factorisation: Factorisation,
+) -> Result<usize, EigenError> {
     let a = combine(k, m, -s);
     let opts = SkylineOptions {
         ordering: ordering.clone(),
         pivots: PivotRule::NonZero,
         symmetry_tolerance: SYMMETRY_TOLERANCE,
     };
-    match SkylineLdlt::factor_with(&a, &opts) {
-        Ok(f) => Ok(f.inertia().0),
+    match factor_by(&a, &opts, factorisation) {
+        Ok(f) => Ok(f.negatives()),
         Err(source) => Err(EigenError::CountFailed { shift: s, source }),
     }
 }
@@ -622,7 +692,7 @@ fn count_unchecked(k: &CsrMatrix, m: &CsrMatrix, s: f64, ordering: &SkylineOrder
 /// (Sylvester's law of inertia, ADR 0283 D8). A refused factorisation (`s` numerically at an eigenvalue) is an error.
 pub fn count_below(k: &CsrMatrix, m: &CsrMatrix, s: f64, ordering: &SkylineOrdering) -> Result<usize, EigenError> {
     validate_pair(k, m)?;
-    count_unchecked(k, m, s, ordering)
+    count_unchecked(k, m, s, ordering, Factorisation::Envelope)
 }
 
 fn factor_shifted(
@@ -630,7 +700,8 @@ fn factor_shifted(
     m: &CsrMatrix,
     shift: Shift,
     ordering: &SkylineOrdering,
-) -> Result<(SkylineLdlt, CsrMatrix, f64), EigenError> {
+    factorisation: Factorisation,
+) -> Result<(Factor, CsrMatrix, f64), EigenError> {
     let opts = SkylineOptions {
         ordering: ordering.clone(),
         pivots: PivotRule::Positive,
@@ -639,7 +710,7 @@ fn factor_shifted(
     match shift {
         Shift::Value(s) => {
             let a = combine(k, m, s);
-            match SkylineLdlt::factor_with(&a, &opts) {
+            match factor_by(&a, &opts, factorisation) {
                 Ok(f) => Ok((f, a, s)),
                 Err(source) => Err(EigenError::ShiftNotPositiveDefinite { shift: s, source }),
             }
@@ -652,7 +723,7 @@ fn factor_shifted(
             let mut last = None;
             for &s in &candidates {
                 let a = combine(k, m, s);
-                match SkylineLdlt::factor_with(&a, &opts) {
+                match factor_by(&a, &opts, factorisation) {
                     Ok(f) => {
                         let ad = a.diag();
                         let mut worst: Option<(usize, f64)> = None;
@@ -760,7 +831,7 @@ pub fn lowest_eigenpairs(
             cols
         }
     };
-    let (fac, a, sigma) = factor_shifted(k, m, opts.shift, &opts.ordering)?;
+    let (fac, a, sigma) = factor_shifted(k, m, opts.shift, &opts.ordering, opts.factorisation)?;
     // ADR 0354 D2: the norms of the backward error, computed only when it is asked for.
     let scale = match opts.residual_test {
         ResidualTest::Relative => None,
@@ -845,7 +916,7 @@ pub fn lowest_eigenpairs(
             let mut fail = None;
             for f in [0.5, 0.25, 0.75] {
                 let s = mu[mp - 1] + f * (mu[mp] - mu[mp - 1]) - sigma;
-                match count_unchecked(k, m, s, &opts.ordering) {
+                match count_unchecked(k, m, s, &opts.ordering, opts.factorisation) {
                     Ok(c) => {
                         counted = Some((s, c));
                         break;
@@ -911,6 +982,8 @@ pub struct BucklingEigenOptions {
     pub ordering: SkylineOrdering,
     /// Start vectors (q columns of length n) instead of the default pseudo-random ones.
     pub start: Option<Vec<Vec<f64>>>,
+    /// The factorisation of `K` and of the Sturm counts (default [`Factorisation::Envelope`]; ADR 0447).
+    pub factorisation: Factorisation,
 }
 
 impl Default for BucklingEigenOptions {
@@ -922,6 +995,7 @@ impl Default for BucklingEigenOptions {
             subspace_size: None,
             ordering: SkylineOrdering::Rcm,
             start: None,
+            factorisation: Factorisation::Envelope,
         }
     }
 }
@@ -946,15 +1020,21 @@ pub struct BucklingEigen {
     pub exhausted: Option<f64>,
 }
 
-fn buckling_count(k: &CsrMatrix, kg: &CsrMatrix, s: f64, ordering: &SkylineOrdering) -> Result<usize, EigenError> {
+fn buckling_count(
+    k: &CsrMatrix,
+    kg: &CsrMatrix,
+    s: f64,
+    ordering: &SkylineOrdering,
+    factorisation: Factorisation,
+) -> Result<usize, EigenError> {
     let a = combine(k, kg, s);
     let opts = SkylineOptions {
         ordering: ordering.clone(),
         pivots: PivotRule::NonZero,
         symmetry_tolerance: SYMMETRY_TOLERANCE,
     };
-    match SkylineLdlt::factor_with(&a, &opts) {
-        Ok(f) => Ok(f.inertia().0),
+    match factor_by(&a, &opts, factorisation) {
+        Ok(f) => Ok(f.negatives()),
         Err(source) => Err(EigenError::CountFailed { shift: s, source }),
     }
 }
@@ -1029,7 +1109,7 @@ pub fn lowest_buckling_factors(
         pivots: PivotRule::Positive,
         symmetry_tolerance: SYMMETRY_TOLERANCE,
     };
-    let fac = SkylineLdlt::factor_with(k, &fopts)
+    let fac = factor_by(k, &fopts, opts.factorisation)
         .map_err(|source| EigenError::ShiftNotPositiveDefinite { shift: 0.0, source })?;
     let scale = match opts.residual_test {
         ResidualTest::Relative => None,
@@ -1132,7 +1212,7 @@ pub fn lowest_buckling_factors(
         let mut counted = None;
         let mut fail = None;
         for &s in &candidates {
-            match buckling_count(k, kg, s, &opts.ordering) {
+            match buckling_count(k, kg, s, &opts.ordering, opts.factorisation) {
                 Ok(c) => {
                     counted = Some((s, c));
                     break;

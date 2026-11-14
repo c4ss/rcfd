@@ -426,6 +426,7 @@ impl<'a> RotatingPart<'a> {
             residual_test: opts.residual_test,
             max_iterations: opts.max_iterations,
             subspace_size: opts.subspace_size,
+            factorisation: opts.factorisation,
             ..SubspaceOptions::default()
         };
         let eig = lowest_eigenpairs(&kr, &mr, opts.modes, &sub).map_err(|e| FemError::Solver {
@@ -1115,6 +1116,7 @@ impl<'a> RotatingSector<'a> {
             residual_test: options.residual_test,
             max_iterations: options.max_iterations,
             subspace_size: options.subspace_size,
+            factorisation: options.factorisation,
             ..SubspaceOptions::default()
         };
         let eig = lowest_eigenpairs(&kr, &mr, count, &sub).map_err(|e| FemError::Solver {

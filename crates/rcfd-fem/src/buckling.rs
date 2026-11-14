@@ -15,7 +15,7 @@ use crate::constraint::{check_rigid_body_motions, prescribed_equations, reduce};
 use crate::error::{FemError, Result};
 use crate::geometric::{geometric_stiffness, Prestress};
 use crate::model::{DofMap, SolidModel};
-use rcfd_linalg::eigen::{lowest_buckling_factors, BucklingEigenOptions, ResidualTest, SturmCheck};
+use rcfd_linalg::eigen::{lowest_buckling_factors, BucklingEigenOptions, Factorisation, ResidualTest, SturmCheck};
 
 /// Options of [`factors`].
 #[derive(Debug, Clone, PartialEq)]
@@ -33,6 +33,8 @@ pub struct BucklingOptions {
     pub subspace_size: Option<usize>,
     /// Worker threads of the assembly (`None`: the available parallelism); the result does not depend on it.
     pub threads: Option<usize>,
+    /// The factorisation of the eigensolver (default [`Factorisation::Envelope`]; ADR 0447).
+    pub factorisation: Factorisation,
 }
 
 impl BucklingOptions {
@@ -45,6 +47,7 @@ impl BucklingOptions {
             max_iterations: 200,
             subspace_size: None,
             threads: None,
+            factorisation: Factorisation::Envelope,
         }
     }
     /// The same options with a residual tolerance.
@@ -65,6 +68,11 @@ impl BucklingOptions {
     /// The same options with a thread count for the assembly.
     pub fn threads(mut self, threads: usize) -> BucklingOptions {
         self.threads = Some(threads);
+        self
+    }
+    /// The same options with a factorisation of the eigensolver (ADR 0447).
+    pub fn factorisation(mut self, factorisation: Factorisation) -> BucklingOptions {
+        self.factorisation = factorisation;
         self
     }
 }
@@ -156,6 +164,7 @@ pub fn factors(model: &SolidModel, prestress: &Prestress, options: &BucklingOpti
         residual_test: options.residual_test,
         max_iterations: options.max_iterations,
         subspace_size: options.subspace_size,
+        factorisation: options.factorisation,
         ..BucklingEigenOptions::default()
     };
     let eig =
@@ -192,6 +201,7 @@ fn eigen_options(options: &BucklingOptions) -> BucklingEigenOptions {
         residual_test: options.residual_test,
         max_iterations: options.max_iterations,
         subspace_size: options.subspace_size,
+        factorisation: options.factorisation,
         ..BucklingEigenOptions::default()
     }
 }
