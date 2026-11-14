@@ -49,6 +49,8 @@ Most task steps live in the reference pages below for now.
   library-only.
 * [Mesh quality](mesh-quality.md): check a mesh, read its quality report and edit the mesh.
 * [Dynamic meshes](dynamic-mesh.md): moving meshes and rigid-body dynamics (partial).
+* [Structural solver](structural-solver.md): the finite-element solver for solid parts, its scope, and the fan-blade
+  demonstration with its limits (library and solid case file only; not validated against a measured blade).
 * [Co-simulation protocol](cosimulation-protocol.md): exchanging wall displacement and force with a structural solver
   (library interface).
 * [Particles](particles.md): one-way coupled Lagrangian particle tracking (partial).
