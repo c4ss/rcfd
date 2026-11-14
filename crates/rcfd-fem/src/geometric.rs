@@ -86,15 +86,18 @@ pub fn element_geometric_stiffness<E: Element + ?Sized>(
 pub struct Prestress {
     offsets: Vec<usize>,
     stress: Vec<[f64; 6]>,
+    /// ADR 0508 (F-558, opt-in): per element the twelve local end forces of a Beam2 element (zeros for other kinds).
+    beam_forces: Option<Vec<[f64; 12]>>,
+    /// ADR 0508: the Wagner coefficients `(beta_y, beta_z)` of the beam elements.
+    beam_wagner: [f64; 2],
+    /// ADR 0508 (opt-in): the `t^2/12` rotation terms of the shell elements.
+    shell_rotation: bool,
 }
 
 impl Prestress {
     /// The stress of an integration-point field.
     pub fn from_field(field: &IntegrationPointField) -> Prestress {
-        Prestress {
-            offsets: field.offsets().to_vec(),
-            stress: field.stress().to_vec(),
-        }
+        Prestress::from_parts(field.offsets().to_vec(), field.stress().to_vec())
     }
 
     /// The stress of a static result of `model` (`D (eps - eps_th)` at the points of the stiffness rules). A model with a
@@ -122,16 +125,19 @@ impl Prestress {
             offsets.push(offsets[e] + n);
         }
         let total = *offsets.last().expect("one offset at least");
-        Ok(Prestress {
-            offsets,
-            stress: vec![stress; total],
-        })
+        Ok(Prestress::from_parts(offsets, vec![stress; total]))
     }
 
     /// A pre-stress of the given point offsets and stresses (ADR 0473 D4), checked against a model by
     /// [`Prestress::check_fits`] where it is used.
     pub(crate) fn from_parts(offsets: Vec<usize>, stress: Vec<[f64; 6]>) -> Prestress {
-        Prestress { offsets, stress }
+        Prestress {
+            offsets,
+            stress,
+            beam_forces: None,
+            beam_wagner: [0.0; 2],
+            shell_rotation: false,
+        }
     }
 
     /// The pre-stress times `factor`.
@@ -139,7 +145,54 @@ impl Prestress {
         Prestress {
             offsets: self.offsets.clone(),
             stress: self.stress.iter().map(|s| s.map(|v| factor * v)).collect(),
+            beam_forces: self
+                .beam_forces
+                .as_ref()
+                .map(|f| f.iter().map(|r| r.map(|v| factor * v)).collect()),
+            beam_wagner: self.beam_wagner,
+            shell_rotation: self.shell_rotation,
         }
+    }
+
+    /// The same pre-stress with the moment, shear-force and Wagner terms of the beam geometric stiffness (ADR 0508 D3, D4,
+    /// F-558): the local end forces of every Beam2 element for the displacement `displacement` (one value per unknown of
+    /// `model.dof_map()`, the static result the pre-stress comes from) and the Wagner coefficients `wagner = (beta_y, beta_z)`
+    /// of the beam sections (zero for sections with two axes of symmetry). Opt-in: a pre-stress without it has the geometric
+    /// stiffness of ADR 0473.
+    pub fn with_beam_resultants(
+        &self,
+        model: &SolidModel,
+        displacement: &[f64],
+        wagner: [f64; 2],
+    ) -> Result<Prestress> {
+        let forces = crate::geometric_struct::beam_end_forces(model, displacement)?;
+        let mut out = self.clone();
+        out.beam_forces = Some(forces);
+        out.beam_wagner = wagner;
+        Ok(out)
+    }
+
+    /// The same pre-stress with the `t^2/12` rotation terms of the Shell4 and Shell3 geometric stiffness (ADR 0508 D2, F-558).
+    /// Opt-in.
+    pub fn with_shell_rotation_terms(&self) -> Prestress {
+        let mut out = self.clone();
+        out.shell_rotation = true;
+        out
+    }
+
+    /// Whether an option of ADR 0508 is set.
+    pub fn has_structural_options(&self) -> bool {
+        self.beam_forces.is_some() || self.shell_rotation
+    }
+
+    /// The local end forces and the Wagner coefficients of a Beam2 element `e` when the beam terms are set (ADR 0508).
+    pub fn beam_terms(&self, e: usize) -> Option<(&[f64; 12], [f64; 2])> {
+        self.beam_forces.as_ref().map(|f| (&f[e], self.beam_wagner))
+    }
+
+    /// Whether the `t^2/12` rotation terms of the shells are set (ADR 0508).
+    pub fn shell_rotation_terms(&self) -> bool {
+        self.shell_rotation
     }
 
     /// The same pre-stress with the stresses of every element `e` for which `keep(e)` is false set to zero (ADR 0486 D2): the
@@ -153,9 +206,21 @@ impl Prestress {
                 }
             }
         }
+        let beam_forces = self.beam_forces.as_ref().map(|f| {
+            let mut f = f.clone();
+            for (e, r) in f.iter_mut().enumerate() {
+                if !keep(e) {
+                    *r = [0.0; 12];
+                }
+            }
+            f
+        });
         Prestress {
             offsets: self.offsets.clone(),
             stress,
+            beam_forces,
+            beam_wagner: self.beam_wagner,
+            shell_rotation: self.shell_rotation,
         }
     }
 
@@ -231,6 +296,16 @@ pub(crate) fn assemble_geometric(
     assemble_with(model, threads, |ctx| {
         // ADR 0473 D6: a Beam2, Shell4 or Shell3 element takes the structural geometric stiffness.
         if crate::geometric_struct::is_structural(ctx.kind) {
+            if prestress.has_structural_options() {
+                // ADR 0508: the opt-in terms.
+                return crate::geometric_struct::element_geometric_stiffness_with(
+                    model.mesh(),
+                    ctx.element,
+                    ctx.coords,
+                    ctx.material,
+                    prestress,
+                );
+            }
             return crate::geometric_struct::element_geometric_stiffness(
                 model.mesh(),
                 ctx.element,

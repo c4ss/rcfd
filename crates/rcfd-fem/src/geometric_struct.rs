@@ -248,6 +248,79 @@ pub fn element_geometric_stiffness(
     }
 }
 
+/// The local end forces of every Beam2 element (zeros for the other kinds) of the displacement `displacement` (ADR 0508 D3):
+/// `K_loc u_loc` per element ([`crate::beam::local_end_forces`]).
+pub fn beam_end_forces(model: &SolidModel, displacement: &[f64]) -> Result<Vec<[f64; 12]>> {
+    let mesh = model.mesh();
+    let dofs = model.dof_map();
+    if displacement.len() != dofs.n_equations() {
+        return Err(FemError::FieldLength {
+            key: "displacement",
+            expected: dofs.n_equations(),
+            found: displacement.len(),
+        });
+    }
+    let materials = model.material_indices()?;
+    let mut out = vec![[0.0; 12]; mesh.n_elements()];
+    for (e, o) in out.iter_mut().enumerate() {
+        if mesh.element_kind(e) != ElementKind::Beam2 {
+            continue;
+        }
+        let located = |source: FemError| FemError::Element {
+            element: e,
+            source: Box::new(source),
+        };
+        let nodes = mesh.element_nodes(e);
+        let (section, v) = beam_property_or_error(mesh, e).map_err(located)?;
+        let coords: Vec<Vec3> = nodes.iter().map(|&n| mesh.nodes()[n]).collect();
+        let ue: Vec<f64> = element_dofs(&dofs, nodes).iter().map(|&q| displacement[q]).collect();
+        let material = &model.materials()[materials[e]].1;
+        *o = crate::beam::local_end_forces(&coords, &section, v, material, &ue).map_err(located)?;
+    }
+    Ok(out)
+}
+
+/// [`element_geometric_stiffness`] with the opt-in terms of `prestress` (ADR 0508): the base matrix plus, for a Beam2 element,
+/// the moment, shear-force and Wagner terms of its end forces ([`crate::beam::element_resultant_geometric_stiffness`]), for a
+/// Shell4 or Shell3 element the `t^2/12` rotation terms. An option that is not set adds nothing (the base matrix itself).
+pub fn element_geometric_stiffness_with(
+    mesh: &SolidMesh,
+    element: usize,
+    coords: &[Vec3],
+    material: &Material,
+    prestress: &Prestress,
+) -> Result<ElementMatrix> {
+    let stress = prestress.of_element(element);
+    let mut k = element_geometric_stiffness(mesh, element, coords, material, stress)?;
+    let s = one_point(stress)?;
+    let extra = match mesh.element_kind(element) {
+        ElementKind::Beam2 => match prestress.beam_terms(element) {
+            Some((forces, wagner)) => {
+                let (section, v) = beam_property_or_error(mesh, element)?;
+                Some(crate::beam::element_resultant_geometric_stiffness(
+                    coords, &section, v, material, forces, wagner,
+                )?)
+            }
+            None => None,
+        },
+        ElementKind::Shell4 if prestress.shell_rotation_terms() => {
+            let t = crate::shell::membrane_thickness(mesh, element)?;
+            Some(crate::shell::element_rotation_geometric_stiffness(coords, t, s)?)
+        }
+        ElementKind::Shell3 if prestress.shell_rotation_terms() => {
+            let t = crate::shell::thickness_or_error(mesh, element)?;
+            Some(crate::shell3::element_rotation_geometric_stiffness(coords, t, s)?)
+        }
+        _ => None,
+    };
+    if let Some(x) = extra {
+        for (a, b) in k.values_mut().iter_mut().zip(x.values()) {
+            *a += b;
+        }
+    }
+    Ok(k)
+}
+
 /// The spin-softening mass of a Beam2, Shell4 or Shell3 element for a rotation about the unit `axis` (ADR 0473 D3). Another
 /// kind is refused (`InvalidValue`, key `"element kind"`).
 pub fn element_spin_softening_mass(
