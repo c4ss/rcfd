@@ -24,21 +24,30 @@ impl Checks {
     }
     fn le(&mut self, id: &str, value: f64, limit: f64) {
         let ok = value <= limit;
-        println!("{id}: {value:.4e} (limit {limit:.0e}) {}", if ok { "met" } else { "MISSED" });
+        println!(
+            "{id}: {value:.4e} (limit {limit:.0e}) {}",
+            if ok { "met" } else { "MISSED" }
+        );
         if !ok {
             self.failed.push(format!("{id}: {value:e} > {limit:e}"));
         }
     }
     fn lt(&mut self, id: &str, value: f64, limit: f64) {
         let ok = value < limit;
-        println!("{id}: {value:.4e} (expected < {limit:.0e}) {}", if ok { "as expected" } else { "NOT AS EXPECTED" });
+        println!(
+            "{id}: {value:.4e} (expected < {limit:.0e}) {}",
+            if ok { "as expected" } else { "NOT AS EXPECTED" }
+        );
         if !ok {
             self.failed.push(format!("{id}: {value:e} >= {limit:e}"));
         }
     }
     fn gt(&mut self, id: &str, value: f64, limit: f64) {
         let ok = value > limit;
-        println!("{id}: {value:.4e} (expected > {limit:.0e}) {}", if ok { "as expected" } else { "NOT AS EXPECTED" });
+        println!(
+            "{id}: {value:.4e} (expected > {limit:.0e}) {}",
+            if ok { "as expected" } else { "NOT AS EXPECTED" }
+        );
         if !ok {
             self.failed.push(format!("{id}: {value:e} <= {limit:e}"));
         }
@@ -141,7 +150,10 @@ fn g_checks(ck: &mut Checks, what: &str, model: &SolidModel, omega: f64, s: &Spl
     }
     ck.le(&format!("G2 {what} |x^T G x| / |x|^T|G||x|"), worst, 1e-12);
     ck.le(&format!("G3 {what} raw skew defect of C_r"), s.skew_defect, 1e-11);
-    println!("  {what}: asymmetry of K_r, M_r before symmetrisation {:.3e}", s.asymmetry);
+    println!(
+        "  {what}: asymmetry of K_r, M_r before symmetrisation {:.3e}",
+        s.asymmetry
+    );
 }
 
 /// Z1: the split modes at rest against F-396's.
@@ -203,7 +215,12 @@ fn pm_matrices(omega: f64, ky: f64) -> ([f64; 4], [f64; 4], [f64; 4]) {
     let m = 7.85;
     let mm = [m, 0.0, 0.0, m];
     let c = [0.0, -m, m, 0.0];
-    let k = [m * (W0 * W0 - omega * omega), 0.0, 0.0, m * (ky * W0 * W0 - omega * omega)];
+    let k = [
+        m * (W0 * W0 - omega * omega),
+        0.0,
+        0.0,
+        m * (ky * W0 * W0 - omega * omega),
+    ];
     (mm, c, k)
 }
 
@@ -233,7 +250,10 @@ fn p1_p2_u2_x1_point_mass() {
         let mut want = [(W0 - om).abs(), W0 + om];
         want.sort_by(f64::total_cmp);
         let e = if got.len() == 2 {
-            got.iter().zip(&want).map(|(g, w)| (g - w).abs() / W0).fold(0.0, f64::max)
+            got.iter()
+                .zip(&want)
+                .map(|(g, w)| (g - w).abs() / W0)
+                .fold(0.0, f64::max)
         } else {
             f64::INFINITY
         };
@@ -252,7 +272,11 @@ fn p1_p2_u2_x1_point_mass() {
     }
     ck.le("P1 PM max |omega - {|w0 - Omega|, w0 + Omega}| / w0", p1, 1e-10);
     ck.holds("P2 PM stable at every speed", stable, "Stability::Stable");
-    ck.holds("P2 PM directions below w0", p2, "lower forward kappa = +1, upper backward kappa = -1");
+    ck.holds(
+        "P2 PM directions below w0",
+        p2,
+        "lower forward kappa = +1, upper backward kappa = -1",
+    );
     // U2
     for f in [0.5, 1.2, 1.8] {
         let om = f * W0;
@@ -261,10 +285,18 @@ fn p1_p2_u2_x1_point_mass() {
         match (pma_growth(om), d.stability) {
             (Some(g), Stability::Unstable { growth }) => {
                 println!("  PMA {f}: growth {growth:.10e}, closed form {g:.10e}");
-                ck.le(&format!("U2 PMA {f} w0 growth relative"), (growth / g - 1.0).abs(), 1e-10);
+                ck.le(
+                    &format!("U2 PMA {f} w0 growth relative"),
+                    (growth / g - 1.0).abs(),
+                    1e-10,
+                );
             }
             (None, Stability::Stable) => ck.holds(&format!("U2 PMA {f} w0"), true, "stable"),
-            (want, got) => ck.holds(&format!("U2 PMA {f} w0"), false, &format!("closed form {want:?}, got {got:?}")),
+            (want, got) => ck.holds(
+                &format!("U2 PMA {f} w0"),
+                false,
+                &format!("closed form {want:?}, got {got:?}"),
+            ),
         }
     }
     // X1 (dense)
@@ -344,7 +376,11 @@ fn g_z1_b1_p3_p4_n4_t1_x1_cube() {
     ck.holds(
         "B1 CB split_modes without the option = modes",
         so.modes.len() == fo.frequencies.len()
-            && so.modes.iter().zip(&fo.frequencies).all(|(a, b)| a.frequency.to_bits() == b.to_bits()),
+            && so
+                .modes
+                .iter()
+                .zip(&fo.frequencies)
+                .all(|(a, b)| a.frequency.to_bits() == b.to_bits()),
         "frequencies by bits",
     );
     // P3, P4, N4
@@ -363,7 +399,11 @@ fn g_z1_b1_p3_p4_n4_t1_x1_cube() {
         got.sort_by(f64::total_cmp);
         let mut want = [(W0 - om).abs(), W0 + om];
         want.sort_by(f64::total_cmp);
-        let e = got.iter().zip(&want).map(|(g, w)| (g / w - 1.0).abs()).fold(0.0, f64::max);
+        let e = got
+            .iter()
+            .zip(&want)
+            .map(|(g, w)| (g / w - 1.0).abs())
+            .fold(0.0, f64::max);
         p3 = p3.max(e);
         let want_basis = if f < 1.0 { Basis::Speed } else { Basis::Rest };
         p4 &= s.basis == Some(want_basis) && (s.loss.is_some() == (f > 1.0));
@@ -381,7 +421,11 @@ fn g_z1_b1_p3_p4_n4_t1_x1_cube() {
     }
     ck.holds("P3 CB translation pair shares >= 1 - 1e-8", p3_share, "two modes");
     ck.le("P3 CB max |omega_CB/omega_PM - 1|", p3, 1e-3);
-    ck.holds("P4 CB basis Speed below w0, Rest with a loss above; stable", p4, "each speed");
+    ck.holds(
+        "P4 CB basis Speed below w0, Rest with a loss above; stable",
+        p4,
+        "each speed",
+    );
     ck.holds("N4 CB at 1.2, 1.5 w0: F-396 loss, split stable", n4, "each");
     // T1
     let sc = on.split_campbell(&speeds).unwrap();
@@ -396,7 +440,11 @@ fn g_z1_b1_p3_p4_n4_t1_x1_cube() {
             }
         }
     }
-    ck.holds("T1 CB every track has a mode and a MAC at every speed > 0", all_there, &format!("{} tracks", tr.len()));
+    ck.holds(
+        "T1 CB every track has a mode and a MAC at every speed > 0",
+        all_there,
+        &format!("{} tracks", tr.len()),
+    );
     ck.le("T1 CB 1 - smallest stored MAC (MAC >= 0.9)", 1.0 - min_mac, 0.1);
     let n = m.n;
     let share_of = |line: &Vec<f64>| translation_share(&cb, m, &line[..n], &line[n..]);
@@ -422,7 +470,11 @@ fn g_z1_b1_p3_p4_n4_t1_x1_cube() {
                 follow = follow.max((om(bwd, j) - (W0 + w)).abs() / W0);
             }
         }
-        ck.holds("T1 CB translation tracks keep their shapes (no exchange)", keep, "share >= 1 - 1e-8 at every speed");
+        ck.holds(
+            "T1 CB translation tracks keep their shapes (no exchange)",
+            keep,
+            "share >= 1 - 1e-8 at every speed",
+        );
         ck.le("T1 CB tracks against w0 -/+ Omega, / w0", follow, 1e-8);
         let tor = (0..tr.len()).find(|t| !trans.contains(t)).unwrap();
         let first = om(bwd, 0) - om(tor, 0);
@@ -438,8 +490,16 @@ fn g_z1_b1_p3_p4_n4_t1_x1_cube() {
         );
     }
     // X1 (part)
-    ck.holds("X1 split_modes(-1)", key_of(on.split_modes(-1.0).unwrap_err()) == "speed", "\"speed\"");
-    ck.holds("X1 split_modes(NaN)", key_of(on.split_modes(f64::NAN).unwrap_err()) == "speed", "\"speed\"");
+    ck.holds(
+        "X1 split_modes(-1)",
+        key_of(on.split_modes(-1.0).unwrap_err()) == "speed",
+        "\"speed\"",
+    );
+    ck.holds(
+        "X1 split_modes(NaN)",
+        key_of(on.split_modes(f64::NAN).unwrap_err()) == "speed",
+        "\"speed\"",
+    );
     ck.holds(
         "X1 split_campbell decreasing",
         key_of(on.split_campbell(&[2.0, 1.0]).unwrap_err()) == "speeds",
@@ -463,7 +523,11 @@ fn u1_c1_anisotropic_cube() {
         &format!("{un:?}"),
     );
     if let (Some(&(_, g)), Some(want)) = (un.first(), pma_growth(1.2 * W0)) {
-        ck.le("U1 CBA growth against sqrt(mu+), relative", (g / want - 1.0).abs(), 1e-8);
+        ck.le(
+            "U1 CBA growth against sqrt(mu+), relative",
+            (g / want - 1.0).abs(),
+            1e-8,
+        );
     }
     let csv = sc.to_csv();
     let rows: Vec<&str> = csv.lines().collect();
@@ -472,12 +536,18 @@ fn u1_c1_anisotropic_cube() {
         if r == 3 {
             let last = row.rsplit(',').next().unwrap_or("");
             c1 &= row.contains(",unstable,")
-                && un.first().is_some_and(|u| last.parse::<f64>().map(f64::to_bits) == Ok(u.1.to_bits()));
+                && un
+                    .first()
+                    .is_some_and(|u| last.parse::<f64>().map(f64::to_bits) == Ok(u.1.to_bits()));
         } else {
             c1 &= row.ends_with(",stable,0");
         }
     }
-    ck.holds("C1 CBA CSV rows, stability and growth columns", c1, &format!("{} rows", rows.len()));
+    ck.holds(
+        "C1 CBA CSV rows, stability and growth columns",
+        c1,
+        &format!("{} rows", rows.len()),
+    );
     ck.finish();
 }
 
@@ -509,7 +579,8 @@ fn ring_sector(clamped: bool) -> SolidModel {
             m.add_constraint(Constraint::displacement("xmin", c, 0.0)).unwrap();
         }
     }
-    m.add_constraint(Constraint::cyclic("ymin", "ymax", AXIS, ORIGIN, NS)).unwrap();
+    m.add_constraint(Constraint::cyclic("ymin", "ymax", AXIS, ORIGIN, NS))
+        .unwrap();
     m
 }
 
@@ -535,7 +606,11 @@ fn ring() -> SolidModel {
 
 fn ring_options(coriolis: bool) -> RotatingOptions {
     RotatingOptions::new(9)
-        .modal(ModalOptions::new(9).tolerance(1e-10).residual_test(ResidualTest::Backward))
+        .modal(
+            ModalOptions::new(9)
+                .tolerance(1e-10)
+                .residual_test(ResidualTest::Backward),
+        )
         .coriolis(coriolis)
 }
 
@@ -560,56 +635,96 @@ fn g_z1_r1_r2_n1_n2_x1_ring_known_miss() {
     let m = on.mass();
     let rest = modes_of(on.modes(0.0).unwrap());
     let w: Vec<f64> = rest.eigenvalues.iter().map(|l| l.sqrt()).collect();
-    println!("  R: {} nodes, {} equations; rest omegas {w:?}", r.mesh().nodes().len(), m.n);
+    println!(
+        "  R: {} nodes, {} equations; rest omegas {w:?}",
+        r.mesh().nodes().len(),
+        m.n
+    );
     ck.le("R set-up n = 2 pair degenerate", (w[4] / w[3] - 1.0).abs(), 1e-6);
     ck.le("R set-up n = 3 pair degenerate", (w[6] / w[5] - 1.0).abs(), 1e-6);
     let w2 = 0.5 * (w[3] + w[4]);
     let w3 = 0.5 * (w[5] + w[6]);
     let ratio = ring_closed_form(3.0) / ring_closed_form(2.0);
     ck.le("R set-up w3/w2 against 2.828", ((w3 / w2) / ratio - 1.0).abs(), 5e-2);
-    println!("  R: w2 = {w2:.6} (closed form {:.6}), w3/w2 = {:.5}", ring_closed_form(2.0), w3 / w2);
+    println!(
+        "  R: w2 = {w2:.6} (closed form {:.6}), w3/w2 = {:.5}",
+        ring_closed_form(2.0),
+        w3 / w2
+    );
     let om = 0.1 * w2;
     let s = on.split_modes(om).unwrap();
     g_checks(&mut ck, "R", &r, om, &s);
     z1(&mut ck, "R", &on);
-    println!("  R at Omega = {om:.6}: basis {:?}, {:?}, omegas {:?}", s.basis, s.stability,
-        s.modes.iter().map(|x| x.omega).collect::<Vec<_>>());
+    println!(
+        "  R at Omega = {om:.6}: basis {:?}, {:?}, omegas {:?}",
+        s.basis,
+        s.stability,
+        s.modes.iter().map(|x| x.omega).collect::<Vec<_>>()
+    );
     let soff = off.split_modes(om).unwrap();
     for (n, i) in [(2.0_f64, 3usize), (3.0, 5)] {
         let p = [&rest.modes[i], &rest.modes[i + 1]];
         let pick = |res: &SplitModes| -> Vec<SplitMode> {
-            res.modes.iter().filter(|x| pair_share(m, &p, x) >= 0.9).cloned().collect()
+            res.modes
+                .iter()
+                .filter(|x| pair_share(m, &p, x) >= 0.9)
+                .cloned()
+                .collect()
         };
         let g = 4.0 * n * om / (n * n + 1.0);
         let pair = pick(&s);
-        ck.holds(&format!("R1 n = {n} two modes in the rest pair's span"), pair.len() == 2, &format!("{}", pair.len()));
+        ck.holds(
+            &format!("R1 n = {n} two modes in the rest pair's span"),
+            pair.len() == 2,
+            &format!("{}", pair.len()),
+        );
         if pair.len() == 2 {
-            let (lo, hi) = if pair[0].omega < pair[1].omega { (&pair[0], &pair[1]) } else { (&pair[1], &pair[0]) };
+            let (lo, hi) = if pair[0].omega < pair[1].omega {
+                (&pair[0], &pair[1])
+            } else {
+                (&pair[1], &pair[0])
+            };
             let split = hi.omega - lo.omega;
             println!(
                 "  R n = {n}: {:.8} / {:.8}, split {split:.8}, 4 n Omega/(n^2 + 1) = {g:.8}, kappa {:.6} / {:.6} (2n/(n^2+1) = {:.6})",
                 lo.omega, hi.omega, lo.whirl, hi.whirl, 2.0 * n / (n * n + 1.0)
             );
-            ck.le(&format!("R1 n = {n} |split / (4 n Omega/(n^2 + 1)) - 1|"), (split / g - 1.0).abs(), 2e-2);
+            ck.le(
+                &format!("R1 n = {n} |split / (4 n Omega/(n^2 + 1)) - 1|"),
+                (split / g - 1.0).abs(),
+                2e-2,
+            );
             ck.holds(
                 &format!("R2 n = {n} lower forward, upper backward"),
                 lo.direction == Whirl::Forward && hi.direction == Whirl::Backward,
                 &format!("{:?} / {:?}", lo.direction, hi.direction),
             );
             if n == 2.0 {
-                ck.gt("N2 |split/(2 Omega) - 1| (rigid-frame value)", (split / (2.0 * om) - 1.0).abs(), 0.1);
+                ck.gt(
+                    "N2 |split/(2 Omega) - 1| (rigid-frame value)",
+                    (split / (2.0 * om) - 1.0).abs(),
+                    0.1,
+                );
             }
         }
         if n == 2.0 {
             let poff = pick(&soff);
-            let d = if poff.len() == 2 { (poff[1].omega - poff[0].omega).abs() } else { f64::INFINITY };
+            let d = if poff.len() == 2 {
+                (poff[1].omega - poff[0].omega).abs()
+            } else {
+                f64::INFINITY
+            };
             ck.lt("N1 without the option: n = 2 split / (1.6 Omega)", d / g, 1e-3);
         }
     }
     // X1: the sector of R with its cyclic constraint (clamped at the inner face so that the part can be made)
     let sec = ring_sector(true);
     let ps = RotatingPart::new(&sec, AXIS, ORIGIN, &RotatingOptions::new(2).coriolis(true)).unwrap();
-    ck.holds("X1 sector refused", key_of(ps.split_modes(om).unwrap_err()) == "cyclic", "\"cyclic\"");
+    ck.holds(
+        "X1 sector refused",
+        key_of(ps.split_modes(om).unwrap_err()) == "cyclic",
+        "\"cyclic\"",
+    );
     ck.holds(
         "X1 sector split_campbell refused",
         key_of(ps.split_campbell(&[0.0, om]).unwrap_err()) == "cyclic",
@@ -628,55 +743,95 @@ fn g_r1_r2_n1_n2_x1_ring_after_z1_miss() {
     let m = on.mass();
     let rest = modes_of(on.modes(0.0).unwrap());
     let w: Vec<f64> = rest.eigenvalues.iter().map(|l| l.sqrt()).collect();
-    println!("  R: {} nodes, {} equations; rest omegas {w:?}", r.mesh().nodes().len(), m.n);
+    println!(
+        "  R: {} nodes, {} equations; rest omegas {w:?}",
+        r.mesh().nodes().len(),
+        m.n
+    );
     ck.le("R set-up n = 2 pair degenerate", (w[4] / w[3] - 1.0).abs(), 1e-6);
     ck.le("R set-up n = 3 pair degenerate", (w[6] / w[5] - 1.0).abs(), 1e-6);
     let w2 = 0.5 * (w[3] + w[4]);
     let w3 = 0.5 * (w[5] + w[6]);
     let ratio = ring_closed_form(3.0) / ring_closed_form(2.0);
     ck.le("R set-up w3/w2 against 2.828", ((w3 / w2) / ratio - 1.0).abs(), 5e-2);
-    println!("  R: w2 = {w2:.6} (closed form {:.6}), w3/w2 = {:.5}", ring_closed_form(2.0), w3 / w2);
+    println!(
+        "  R: w2 = {w2:.6} (closed form {:.6}), w3/w2 = {:.5}",
+        ring_closed_form(2.0),
+        w3 / w2
+    );
     let om = 0.1 * w2;
     let s = on.split_modes(om).unwrap();
     g_checks(&mut ck, "R", &r, om, &s);
-    println!("  R at Omega = {om:.6}: basis {:?}, {:?}, omegas {:?}", s.basis, s.stability,
-        s.modes.iter().map(|x| x.omega).collect::<Vec<_>>());
+    println!(
+        "  R at Omega = {om:.6}: basis {:?}, {:?}, omegas {:?}",
+        s.basis,
+        s.stability,
+        s.modes.iter().map(|x| x.omega).collect::<Vec<_>>()
+    );
     let soff = off.split_modes(om).unwrap();
     for (n, i) in [(2.0_f64, 3usize), (3.0, 5)] {
         let p = [&rest.modes[i], &rest.modes[i + 1]];
         let pick = |res: &SplitModes| -> Vec<SplitMode> {
-            res.modes.iter().filter(|x| pair_share(m, &p, x) >= 0.9).cloned().collect()
+            res.modes
+                .iter()
+                .filter(|x| pair_share(m, &p, x) >= 0.9)
+                .cloned()
+                .collect()
         };
         let g = 4.0 * n * om / (n * n + 1.0);
         let pair = pick(&s);
-        ck.holds(&format!("R1 n = {n} two modes in the rest pair's span"), pair.len() == 2, &format!("{}", pair.len()));
+        ck.holds(
+            &format!("R1 n = {n} two modes in the rest pair's span"),
+            pair.len() == 2,
+            &format!("{}", pair.len()),
+        );
         if pair.len() == 2 {
-            let (lo, hi) = if pair[0].omega < pair[1].omega { (&pair[0], &pair[1]) } else { (&pair[1], &pair[0]) };
+            let (lo, hi) = if pair[0].omega < pair[1].omega {
+                (&pair[0], &pair[1])
+            } else {
+                (&pair[1], &pair[0])
+            };
             let split = hi.omega - lo.omega;
             println!(
                 "  R n = {n}: {:.8} / {:.8}, split {split:.8}, 4 n Omega/(n^2 + 1) = {g:.8}, kappa {:.6} / {:.6} (2n/(n^2+1) = {:.6})",
                 lo.omega, hi.omega, lo.whirl, hi.whirl, 2.0 * n / (n * n + 1.0)
             );
-            ck.le(&format!("R1 n = {n} |split / (4 n Omega/(n^2 + 1)) - 1|"), (split / g - 1.0).abs(), 2e-2);
+            ck.le(
+                &format!("R1 n = {n} |split / (4 n Omega/(n^2 + 1)) - 1|"),
+                (split / g - 1.0).abs(),
+                2e-2,
+            );
             ck.holds(
                 &format!("R2 n = {n} lower forward, upper backward"),
                 lo.direction == Whirl::Forward && hi.direction == Whirl::Backward,
                 &format!("{:?} / {:?}", lo.direction, hi.direction),
             );
             if n == 2.0 {
-                ck.gt("N2 |split/(2 Omega) - 1| (rigid-frame value)", (split / (2.0 * om) - 1.0).abs(), 0.1);
+                ck.gt(
+                    "N2 |split/(2 Omega) - 1| (rigid-frame value)",
+                    (split / (2.0 * om) - 1.0).abs(),
+                    0.1,
+                );
             }
         }
         if n == 2.0 {
             let poff = pick(&soff);
-            let d = if poff.len() == 2 { (poff[1].omega - poff[0].omega).abs() } else { f64::INFINITY };
+            let d = if poff.len() == 2 {
+                (poff[1].omega - poff[0].omega).abs()
+            } else {
+                f64::INFINITY
+            };
             ck.lt("N1 without the option: n = 2 split / (1.6 Omega)", d / g, 1e-3);
         }
     }
     // X1: the sector of R with its cyclic constraint (clamped at the inner face so that the part can be made)
     let sec = ring_sector(true);
     let ps = RotatingPart::new(&sec, AXIS, ORIGIN, &RotatingOptions::new(2).coriolis(true)).unwrap();
-    ck.holds("X1 sector refused", key_of(ps.split_modes(om).unwrap_err()) == "cyclic", "\"cyclic\"");
+    ck.holds(
+        "X1 sector refused",
+        key_of(ps.split_modes(om).unwrap_err()) == "cyclic",
+        "\"cyclic\"",
+    );
     ck.holds(
         "X1 sector split_campbell refused",
         key_of(ps.split_campbell(&[0.0, om]).unwrap_err()) == "cyclic",
@@ -701,7 +856,9 @@ fn beam() -> SolidModel {
 }
 
 fn beam_options(modes: usize, threads: Option<usize>) -> RotatingOptions {
-    let mut mo = ModalOptions::new(modes).residual_test(ResidualTest::Backward).tolerance(1e-12);
+    let mut mo = ModalOptions::new(modes)
+        .residual_test(ResidualTest::Backward)
+        .tolerance(1e-12);
     if let Some(t) = threads {
         mo = mo.threads(t);
     }
@@ -818,7 +975,11 @@ fn g_z1_b1_l1_l2_l3_n3_x2_beam_known_miss() {
         delta / lf,
         est / lf
     );
-    ck.le("L1 |omega_flap,split / omega_flap,F396 - 1|", (fs / ff - 1.0).abs(), 1e-6);
+    ck.le(
+        "L1 |omega_flap,split / omega_flap,F396 - 1|",
+        (fs / ff - 1.0).abs(),
+        1e-6,
+    );
     ck.le("L2 |Delta / Delta_est - 1|", (delta / est - 1.0).abs(), 0.2);
     // N3
     let six = RotatingPart::new(&f, AXIS, ORIGIN, &beam_options(6, None)).unwrap();
@@ -826,7 +987,11 @@ fn g_z1_b1_l1_l2_l3_n3_x2_beam_known_miss() {
     let s6 = six.split_modes(om).unwrap();
     let (_, l6) = flap_lag_f396(&f, m, &r6);
     let (_, l6s) = flap_lag_split(&f, m, &s6);
-    ck.lt("N3 six modes (no axial mode): |Delta / Delta_est|", ((l6s - l6) / est).abs(), 0.1);
+    ck.lt(
+        "N3 six modes (no axial mode): |Delta / Delta_est|",
+        ((l6s - l6) / est).abs(),
+        0.1,
+    );
     // X2
     let t1 = RotatingPart::new(&f, AXIS, ORIGIN, &beam_options(14, Some(1))).unwrap();
     let t4 = RotatingPart::new(&f, AXIS, ORIGIN, &beam_options(14, Some(4))).unwrap();
@@ -876,7 +1041,11 @@ fn g_b1_l1_l2_l3_n3_x2_beam_after_z1_miss() {
         delta / lf,
         est / lf
     );
-    ck.le("L1 |omega_flap,split / omega_flap,F396 - 1|", (fs / ff - 1.0).abs(), 1e-6);
+    ck.le(
+        "L1 |omega_flap,split / omega_flap,F396 - 1|",
+        (fs / ff - 1.0).abs(),
+        1e-6,
+    );
     ck.le("L2 |Delta / Delta_est - 1|", (delta / est - 1.0).abs(), 0.2);
     // N3
     let six = RotatingPart::new(&f, AXIS, ORIGIN, &beam_options(6, None)).unwrap();
@@ -884,7 +1053,11 @@ fn g_b1_l1_l2_l3_n3_x2_beam_after_z1_miss() {
     let s6 = six.split_modes(om).unwrap();
     let (_, l6) = flap_lag_f396(&f, m, &r6);
     let (_, l6s) = flap_lag_split(&f, m, &s6);
-    ck.lt("N3 six modes (no axial mode): |Delta / Delta_est|", ((l6s - l6) / est).abs(), 0.1);
+    ck.lt(
+        "N3 six modes (no axial mode): |Delta / Delta_est|",
+        ((l6s - l6) / est).abs(),
+        0.1,
+    );
     // X2
     let t1 = RotatingPart::new(&f, AXIS, ORIGIN, &beam_options(14, Some(1))).unwrap();
     let t4 = RotatingPart::new(&f, AXIS, ORIGIN, &beam_options(14, Some(4))).unwrap();

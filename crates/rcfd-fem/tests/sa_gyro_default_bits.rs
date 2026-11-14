@@ -81,9 +81,7 @@ fn digests() -> [u64; 8] {
     }
     let cba = cube(2.25);
     let pa = RotatingPart::new(&cba, AXIS, ORIGIN, &RotatingOptions::new(3).coriolis(true)).unwrap();
-    let st = pa
-        .whirl_stability(&[0.0, 0.5 * W0, 1.2 * W0, 1.8 * W0])
-        .unwrap();
+    let st = pa.whirl_stability(&[0.0, 0.5 * W0, 1.2 * W0, 1.8 * W0]).unwrap();
     let growth: Vec<u64> = st
         .results
         .iter()
@@ -156,7 +154,10 @@ fn b2_default_rotating_paths_unchanged() {
     ];
     let mut bad = Vec::new();
     for ((n, g), b) in names.iter().zip(got).zip(BASE) {
-        println!("B2 {n}: 0x{g:016x} (base 0x{b:016x}) {}", if g == b { "equal" } else { "DIFFERS" });
+        println!(
+            "B2 {n}: 0x{g:016x} (base 0x{b:016x}) {}",
+            if g == b { "equal" } else { "DIFFERS" }
+        );
         if g != b {
             bad.push(*n);
         }

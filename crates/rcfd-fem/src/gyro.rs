@@ -130,8 +130,11 @@ pub fn split_modes_dense(m: &[f64], c: &[f64], omega: f64, k: &[f64], n: usize) 
     let mut kmax: f64 = 0.0;
     for i in 0..n {
         let d = ms[i * n + i];
-        if !(d > 0.0) {
-            return Err(invalid("mass", format!("diagonal {i} of M is {d:e}: not positive definite")));
+        if d.is_nan() || d <= 0.0 {
+            return Err(invalid(
+                "mass",
+                format!("diagonal {i} of M is {d:e}: not positive definite"),
+            ));
         }
         kmax = kmax.max(ks[i * n + i].abs() / d);
     }
@@ -322,7 +325,11 @@ impl SplitCampbell {
 }
 
 fn check_not_cyclic(model: &SolidModel) -> Result<()> {
-    if model.constraints().iter().any(|c| matches!(c, Constraint::Cyclic { .. })) {
+    if model
+        .constraints()
+        .iter()
+        .any(|c| matches!(c, Constraint::Cyclic { .. }))
+    {
         return Err(invalid(
             "cyclic",
             "the split modes on the modal subspace take no cyclic constraint (ADR 0472 D6); a sector's whirl modes with the \
