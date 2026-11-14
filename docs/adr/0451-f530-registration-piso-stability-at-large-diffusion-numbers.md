@@ -212,3 +212,95 @@ If N1 has to fail (a library edit becomes necessary under an amendment), N1 is r
 * No change to the default numerics; the onset of the default stays (documented, not removed).
 * The moving piston (AP) is a record; F-421's registered W1 and LF results are not revisited.
 * The `Symmetry` dissipation of ADR 0446 amendment 3 (F-531) is not addressed; the set-ups avoid `Symmetry`.
+
+## Amendment 1 (2026-11-14, written after the registered runs QF, DG, A and AP on commit ae8fa02f and four unregistered diagnoses, before any corrected run)
+
+**What the registered runs showed** (each made once, `cargo test -p rcfd-post --release --test piso_diffusion_f530 <name> --
+[--ignored] --nocapture`; logs `f530-scratch/run1_fast.log`, `run2_dg.log`, `run3_a.log`, `run4_ap.log`):
+
+* **QF**: QF1 met (the default not bounded at step 7, B4 `5.010`); QF2 bounded (max `|u|` `1.444 V0`), B4 with the option `0.952`
+  (met), but **not periodic**: the change between cycles 1 and 2 is `3.89e-3` (limit `1e-6`; missed, no impedance).
+* **DG**: DG0 met (default not bounded at step 5 at `D = 25.1`, step 4 at `D = 100.5`); **DG1 missed** (B4 `9.232`, limit `3.5` to
+  `6.5`); **DG3 missed** in its growth part (geometric mean of the 5 ratios `4.13` against B4 `9.23`: `0.553`, limit `0.25`), its
+  sign part met (every dot negative: the step's growth alternates); DG2 met (`0.962` at `D = 2.51`, `2.036` at `D = 5.03`); DG4
+  met (`0.956` at `D = 25.1`, `0.985` at `D = 100.5`). Records: 3 correctors `5.187`, 4 correctors `3.794`, no Rhie-Chow time
+  term `9.232`; `D = 3.0, 3.5, 4.0`: `1.172, 1.388, 1.603`.
+* **A**: A1 met at every level (bounded over 3 periods at `D = 100.5, 50.3, 25.1`, max `|u|` `1.493, 1.499, 1.498 V0`); A2 met at
+  `N = 50` (`1.43e-7`) and `100` (`4.2e-9`), **missed at `N = 25`** (`1.005e-6`, limit `1e-6`), so A4, A6, O and NC1 were not
+  formed; **A3 missed** in the imaginary part (`N = 50`: `-1.428e-1`, `N = 100`: `-3.083e-2`; the real parts `1.65e-2` and
+  `9.5e-3` met); NC2 held (longest run of negative dots 1); A5 met (`R_d` `+4.68e-3`, `-1.39e-3`). From the logged `N = 50, 100`
+  values (not a registered measurement): `R_c` would be `+2.5e-3`, `+6.6e-2` against the formula, `|R_c - R_d|/|R_d| = 2.5e-2`.
+* **AP**: bounded and periodic at `N = 50, 100` (the registered W1 level of ADR 0446 runs with the option); `2 Z_100 - Z_50`
+  real `+9.2e-4` (met), **imaginary `+6.53e-2` (missed)**.
+
+**Unregistered diagnoses** (temporary tests, removed again; the code is kept in `f530-scratch/piso_with_diag.rs` and
+`piso_with_diag2-4.rs`, logs `diag1.log` to `diag4.log`):
+
+1. B4 with 20, 60, 200 power iterations: `9.232, 9.357, 9.399` on FC, `5.010, 5.004, 5.003` on FQ (16 cells across, the same
+   `D`), `8.95, 9.00, 9.06` on FC with uniform `x` cells; the largest entries in the wall rows. The radius depends on the number
+   of cells across, not on `D` alone: ADR 0214's 16-cell value was not a valid estimate for 40 cells (**DG1's estimate was
+   wrong; the miss stays**). The run's ratios `e_n/e_{n-1}` over the whole run: FC `0.64, 0.81, 1.47, 3.27, 3.78, 3.95, 4.03, ...,
+   4.52, 5.43` and then the non-linear blow-up; uniform `x` reaches `8.1` to `8.3`. The 5 steps after `100 V0` (step 7) are not a
+   converged power iteration of the step map: **DG3's growth part was a defective set-up** (corrected as DG3c below).
+2. The option with 2, 3, 4, 8 correctors at `N = 50`: imaginary part against `Z_dt` `-14.3, -14.0, -13.7, -12.7 %`, B4 `0.975,
+   0.965, 0.956, 0.919`; at `N = 100` `-3.08` to `-2.59 %`.
+3. At `N = 50` with the option: without the Rhie-Chow time term unchanged (`-14.28 %`); uniform `x` `-13.99 %`; the channel at
+   `200 h` gives per length `Z(200 h) - Z(100 h)` `-14.0 %` and ends `2 Z(100 h) - Z(200 h)` of `0.5 %` of `Z`: the loss is in the
+   developed flow, not at the ends.
+4. At `N = 50` with the option: 32 correctors, one outer iteration: `+1.22e-2`, `-9.04e-2` (B4 `0.726`, 98 s); **2 correctors and 8
+   outer iterations** (no relaxation, `alpha = 1`): `+5.53e-3`, `-9.4e-4` (B4 `0.852`, 63 s).
+
+**The location (c1), as now understood.** (i) The divergence is the corrector instability H-RC of ADR 0214: it alternates every
+step (DG3 sign), B4 exceeds 1 above an onset between `D = 2.5` and `3.0` (DG2 and the records; the runs of ADR 0446 were stable at
+`D = 3` for their length), more correctors only lower it (`9.23, 5.19, 3.79` for 2, 3, 4), the Rhie-Chow time term and the
+grading play no part, and the consistent correctors of ADR 0214 F0 remove it at every `D` tried (DG4, A1, AP). Its rate grows
+with the cells across at a given `D`. (ii) **A second property of the non-iterated step**, found by A3: at large `D` the step
+does not converge the pressure-velocity coupling within the step. With the option each corrector removes only a few per cent of
+a smooth pressure error (B4 `0.92` to `0.98` with 2 to 8 correctors), because a corrector does not re-solve the momentum
+equation, and the pressure that the step applies lags. That costs the response its inertia (imaginary part `-14 %` at `D = 50`,
+`-3 %` at `D = 25`, falling faster than `dt`). Outer iterations, which re-solve momentum with the corrected pressure, remove it
+(diagnosis 4). The registered "removal" is therefore only half met by the option alone: bounded, but not matching the impedance
+at `D >= 25`.
+
+**Corrected and added checks (the limits of the registered checks unchanged; the registered tests stay as ignored records under
+`*_known_miss` names):** `qf_fast_channel_default_diverges_consistent_bounded` becomes `..._known_miss` (ignored);
+`dg_diagnosis_record`, `a_removal_and_stable_reference_record` and `ap_piston_consistent_record` become `dg_diagnosis_known_miss`,
+`a_removal_and_stable_reference_known_miss`, `ap_piston_consistent_known_miss` (names only).
+
+* **The cycle rule** (periodicity of a run with a slow numerical mode): with `rho_c` the B4 estimate (20 iterations) of the run's
+  settings at its `N`, the run has `C = max(3, 2 + ceil(ln(1e-7)/(N ln rho_c)))` periods (a mode of relative size one decays to
+  `1e-7` between the last two cycles: margin 10 on the tolerance `1e-6`); refused if `rho_c >= 1` or `C > 80`. Boundedness is
+  checked over every period, and "bounded over the first 3 periods" is the acceptance's clause. Estimate: QF's change `3.9e-3`
+  after one period at `rho_c^16 = 0.455`.
+* **QFc** (fast; replaces QF as the fast test of the option's path): FQ with the option, `N = 16`, `C` by the rule: bounded,
+  periodic `<= 1e-6`; the impedance printed (its accuracy is A3's miss; no limit). QF1 is repeated in it unchanged.
+* **QFo** (fast; the outer iterations): FQ with the option and `n_outer = 8` (2 correctors, no relaxation), `N = 16`, `C` by the
+  rule: bounded, periodic `<= 1e-6`, real and imaginary parts within `5e-2` of `Z_dt` (QF2's limit; diagnosis 4 measured
+  `+5.5e-3`, `-9e-4` on FC at `N = 50`; FQ's ends at `20 h` are of order 1 %).
+* **DG3c** (the corrected growth measurement): ADR 0214's twin-run power iteration TW on the solver itself, FC default at `N =
+  100`: base state `S` after `n_b = 2` steps; `K = 60` iterations; the direction `d_0` the xorshift field of ADR 0214 (seed
+  `0x2545F4914F6CDD1D`, values in `[-0.5, 0.5)`) in the cell pressure and the `x`, `y` velocity, zero in the face flux; iteration
+  `k`: the state `S + eps d_k` (the velocity and its old level, the pressure, the flux and its old level perturbed alike; `eps` such
+  that the perturbation has `1e-7` of the norm of `S`) stepped once with the inflow of step 3, the base step from `S` subtracted,
+  `T d_k` the difference over `eps`; norm `|d|^2 = sum_c V_c (|d_u|^2/V0^2 + d_p^2/P^2)`, `P = max_c |p_c(S)|`; `|rho_TW| =
+  exp(mean ln(|T d_k|/|d_k|))` and the sign `mean sign(<T d_k, d_k>)` over `k = 30 .. 59`. Limits: `|rho_TW|` within 10 % of the
+  B4 estimate with 200 iterations of the same step (ADR 0214: within 4.4 % on its meshes); sign `<= -0.5`.
+* **Ao** (the removal with outer iterations): FC with the option and `n_outer = 8` (2 correctors, `alpha_u = alpha_p = 1`), `N =
+  25, 50, 100`, `C` by the rule. **Disclosure**: `n_outer = 8` is the value of diagnosis 4, made at `N = 50` after the registered
+  runs; it is not derived, and the `N = 50` level is not an independent test of it. Checks with the registered limits: A1o
+  bounded over the first 3 periods and over all `C`; A2o periodic `<= 1e-6`; A3o each level within `3e-2` of `Z_dt` (real and
+  imaginary); A4o `R_c = 2 Z_100 - Z_50` within `3e-2` of the formula; A6o `|R_c - R_d|/|R_d| <= 1e-2`, with `R_d` from the
+  default `N = 1000, 2000` runs of A5 made again in the same test (deterministic; their `Z` must equal A5's logged values, which
+  the addendum compares); Oo the order from the three levels, `0.8` to `1.25` per part; NC1o the `N = 25` level against the
+  formula must miss `3e-2`. Estimates: D2 (`R_c` `+2.6e-4`, `+3.5e-3`; per level the model exactly) plus diagnosis 4 (`+5.5e-3`,
+  `-9e-4` at `N = 50`): A3o, A4o `<= 1e-2`; A6o `2.1e-3` plus the ends' difference.
+* **APo** (record): the piston of AP with the settings of Ao, `N = 50, 100`, `C` by the rule: bounded and periodic, `2 Z_100 -
+  Z_50` within `3e-2` of the formula each part. ALE with outer iterations is the path of `step_ale_with_walls`; if it refuses, the
+  refusal is recorded.
+
+**Mutations**: unchanged (MU1 to MU5), run against the corrected tests (QFc, QFo, Ao); a mutation of the outer-iteration count is
+added: **MU6** (test) `n_outer = 8` replaced by `1` in the settings of QFo and Ao; expected: caught by QFo and A3o.
+
+**Decision**: the registered rule applies; DG1, DG3 (growth), QF2 (periodic), A2 (`N = 25`), A3 (imaginary) and AP (imaginary)
+missed on their registered runs, so the item is **partial** whatever the corrected runs give. A1 (the boundedness of the removal at
+`D = 25` and `100` over 3 periods) was met on the registered run.
