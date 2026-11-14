@@ -10,8 +10,14 @@
 //! positive frequency); each real root is reported once, non-oscillating, with `Im` set to 0. Damping ratio `-Re lambda /
 //! |lambda|`. The elimination path of the modal analysis only (no linear constraints, rigid sets or supports). The assembly
 //! takes the thread count; the dense algebra is sequential, so the result is bit-identical for any.
+//!
+//! ADR 0464 (F-532): with [`DampedOptions::residual_vectors`] the basis gains one static residual vector per dashpot,
+//! `K^-1 f_i` of its influence vector `f_i`, M-orthogonalised (classical Gram-Schmidt, twice) against the undamped modes and
+//! the vectors kept before it, and M-normalised; a vector whose M-norm falls to `RESIDUAL_DROP` of its own is dropped. Off
+//! (the default) the computation is that of ADR 0450, operation for operation.
 
 use crate::assemble::{assemble_with, stiffness_with};
+use crate::constraint::{check_rigid_body_motions, prescribed_equations, reduce};
 use crate::element::element_for;
 use crate::error::{FemError, Result};
 use crate::harmonic_direct::{Dashpot, LossFactor};
@@ -20,6 +26,7 @@ use crate::modal::{modal_analysis, ModalOptions};
 use crate::model::{DofMap, SolidModel};
 use rcfd_linalg::complex::C64;
 use rcfd_linalg::eigen_general::{quadratic_eigen_with, Defect, GeneralEigenOptions};
+use rcfd_linalg::sparse_chol::SparseLdlt;
 use rcfd_linalg::CsrMatrix;
 
 /// The work package that fills this module; `None` once it has landed.
@@ -27,6 +34,9 @@ pub const PENDING: Option<&'static str> = None;
 
 /// `|Im lambda| <= REAL_TOLERANCE |lambda|` is a real (non-oscillating) root (ADR 0450 D3.4).
 pub const REAL_TOLERANCE: f64 = 1e-6;
+
+/// A residual vector whose M-norm after the orthogonalisation is at most `RESIDUAL_DROP` times its own is dropped (ADR 0464).
+pub const RESIDUAL_DROP: f64 = 1e-8;
 
 fn invalid(key: &'static str, reason: String) -> FemError {
     FemError::InvalidValue { key, reason }
@@ -44,6 +54,8 @@ pub struct DampedOptions {
     pub dashpots: Vec<Dashpot>,
     /// Constant loss factors per element set (the set of a material of the model).
     pub loss_factors: Vec<(String, LossFactor)>,
+    /// Static residual vectors of the dashpots in the basis (ADR 0464; default off).
+    pub residual_vectors: bool,
 }
 
 impl DampedOptions {
@@ -58,6 +70,7 @@ impl DampedOptions {
             rayleigh: None,
             dashpots: Vec::new(),
             loss_factors: Vec::new(),
+            residual_vectors: false,
         }
     }
     /// With Rayleigh damping `a M + b K`.
@@ -73,6 +86,12 @@ impl DampedOptions {
     /// With a constant loss factor on the material of an element set (a [`LossFactor::Table`] is refused).
     pub fn loss_factor(mut self, set: &str, loss: LossFactor) -> DampedOptions {
         self.loss_factors.push((set.to_string(), loss));
+        self
+    }
+    /// With (or without) the static residual vectors `K^-1 f_i` of the dashpots' influence vectors, M-orthogonalised
+    /// against the undamped modes, in the basis (ADR 0464).
+    pub fn residual_vectors(mut self, on: bool) -> DampedOptions {
+        self.residual_vectors = on;
         self
     }
     /// With a thread count for the assembly.
@@ -114,8 +133,10 @@ pub struct DampedModes {
     pub roots: Vec<C64>,
     /// The undamped circular frequencies of the basis, rad/s.
     pub omegas: Vec<f64>,
-    /// The basis size `m`.
+    /// The basis size: `m` modes plus the residual vectors.
     pub basis: usize,
+    /// The static residual vectors in the basis (M-orthonormal, on the model's `DofMap`; empty without the option).
+    pub residual_vectors: Vec<Vec<f64>>,
     /// Reported oscillating roots.
     pub oscillating: usize,
     /// Reported real (non-oscillating) roots.
@@ -156,6 +177,76 @@ fn project(a: &CsrMatrix, phi: &[Vec<f64>]) -> Vec<f64> {
         }
     }
     out
+}
+
+/// `sqrt(x^T M x)`, with `y` as work space.
+fn m_norm(mass: &CsrMatrix, x: &[f64], y: &mut [f64]) -> f64 {
+    mass.matvec(x, y);
+    x.iter().zip(y.iter()).map(|(a, b)| a * b).sum::<f64>().sqrt()
+}
+
+/// The static residual vectors of the dashpots (ADR 0464 D1): `r_i = K^-1 f_i`, M-orthogonalised twice against the modes
+/// and the vectors kept, M-normalised; the count of dropped vectors.
+fn residual_vectors(
+    k: &CsrMatrix,
+    mass: &CsrMatrix,
+    fixed: &[(usize, f64)],
+    phi: &[Vec<f64>],
+    pots: &[(usize, Option<usize>, f64)],
+) -> Result<(Vec<Vec<f64>>, usize)> {
+    let n = k.n;
+    let zero = vec![0.0; n];
+    let kr = reduce(k, &zero, fixed)?;
+    let ldlt = SparseLdlt::factor(&kr.matrix).map_err(|e| FemError::Solver {
+        solver: "sparse_ldlt",
+        reason: e.to_string(),
+    })?;
+    let free = kr.free();
+    let mut kept: Vec<Vec<f64>> = Vec::new();
+    let mut dropped = 0;
+    let mut y = vec![0.0; n];
+    for &(ea, eb, _) in pots {
+        let mut f = vec![0.0; free.len()];
+        if let Ok(i) = free.binary_search(&ea) {
+            f[i] += 1.0;
+        }
+        if let Some(Ok(j)) = eb.map(|e| free.binary_search(&e)) {
+            f[j] -= 1.0;
+        }
+        let rf = ldlt.solve(&f);
+        let mut r = vec![0.0; n];
+        for (&eq, &v) in free.iter().zip(&rf) {
+            r[eq] = v;
+        }
+        let own = m_norm(mass, &r, &mut y);
+        if own == 0.0 || !own.is_finite() {
+            dropped += 1;
+            continue;
+        }
+        for _pass in 0..2 {
+            mass.matvec(&r, &mut y);
+            let coefs: Vec<f64> = phi
+                .iter()
+                .chain(kept.iter())
+                .map(|p| p.iter().zip(&y).map(|(a, b)| a * b).sum())
+                .collect();
+            for (p, a) in phi.iter().chain(kept.iter()).zip(coefs) {
+                for (ri, pi) in r.iter_mut().zip(p) {
+                    *ri -= a * pi;
+                }
+            }
+        }
+        let after = m_norm(mass, &r, &mut y);
+        if after <= RESIDUAL_DROP * own {
+            dropped += 1;
+            continue;
+        }
+        for v in r.iter_mut() {
+            *v /= after;
+        }
+        kept.push(r);
+    }
+    Ok((kept, dropped))
 }
 
 /// The damped modes of a model with Rayleigh damping, dashpots and constant loss factors, on its lowest undamped modes.
@@ -228,13 +319,44 @@ pub fn damped_modes(model: &SolidModel, options: &DampedOptions) -> Result<Dampe
         };
         pots.push((ea, eb, c));
     }
+    // ADR 0464: the residual vectors need a nonsingular stiffness.
+    let residual = options.residual_vectors && !pots.is_empty();
+    let fixed = if residual {
+        let fixed = prescribed_equations(model, &[])?;
+        match check_rigid_body_motions(model, &fixed) {
+            Ok(()) => {}
+            Err(FemError::RigidBodyMotionFree { .. }) => {
+                return Err(invalid(
+                    "residual vectors",
+                    "the static residual vectors need a model without free rigid-body motion (K^-1 of the dashpot \
+                     influence vectors, ADR 0464)"
+                        .to_string(),
+                ))
+            }
+            Err(e) => return Err(e),
+        }
+        fixed
+    } else {
+        Vec::new()
+    };
 
     let modal = modal_analysis(model, &options.modal)?;
-    let phi = &modal.modes;
-    let m = phi.len();
     let threads = options.modal.threads;
     let k = stiffness_with(model, threads)?;
     let mass = consistent_with(model, threads)?;
+    let (rvs, dropped) = if residual {
+        residual_vectors(&k, &mass, &fixed, &modal.modes, &pots)?
+    } else {
+        (Vec::new(), 0)
+    };
+    let augmented: Vec<Vec<f64>>;
+    let phi: &[Vec<f64>] = if rvs.is_empty() {
+        &modal.modes
+    } else {
+        augmented = modal.modes.iter().chain(rvs.iter()).cloned().collect();
+        &augmented
+    };
+    let m = phi.len();
     let kr = project(&k, phi);
     let mr = project(&mass, phi);
     let mut cr = vec![0.0; m * m];
@@ -322,6 +444,19 @@ pub fn damped_modes(model: &SolidModel, options: &DampedOptions) -> Result<Dampe
     let oscillating = modes.iter().filter(|d| d.oscillating).count();
     let non_oscillating = modes.len() - oscillating;
     let mut notes = Vec::new();
+    if !rvs.is_empty() {
+        notes.push(format!(
+            "{} static residual vectors added to {} modes (ADR 0464)",
+            rvs.len(),
+            modal.modes.len()
+        ));
+    }
+    if dropped > 0 {
+        notes.push(format!(
+            "{dropped} residual vectors dropped: already in the span of the basis (M-norm after the orthogonalisation at most \
+             {RESIDUAL_DROP:e} of its own)"
+        ));
+    }
     if non_oscillating > 0 {
         notes.push(format!(
             "{non_oscillating} real roots: non-oscillating (overdamped) motion, damping ratio 1 for a negative real root"
@@ -341,6 +476,7 @@ pub fn damped_modes(model: &SolidModel, options: &DampedOptions) -> Result<Dampe
         roots: q.values,
         omegas: modal.eigenvalues.iter().map(|l| l.max(0.0).sqrt()).collect(),
         basis: m,
+        residual_vectors: rvs,
         oscillating,
         non_oscillating,
         defects: q.defects,
