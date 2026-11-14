@@ -339,3 +339,25 @@ a time:
 4. **Citations.** The two Gonzalez papers, Simo and Taylor 1991 and Holzapfel 2000 are cited from memory, NOT read; the volumes
    and pages are as recalled and not checked. Recommendation: the maintainer checks them against a library copy; nothing in the
    design depends on them (D2, D3 are derived here).
+
+## Amendment 1 (2026-11-14, written after the library code and the run of the point checks P1 to P6, before any run of the model checks)
+
+Nothing of the model checks (A, I, K, N, R, T, F, B) has been run. The point checks P1 to P6 (unit tests of `dg.rs`, which do
+not depend on this amendment) ran once (`f607-scratch/run1_unit.log`; the interleaved output of the parallel test threads hid
+the P6 line, so the same deterministic tests were run a second time with one thread, `run1_unit_serial.log`, the same
+numbers; disclosed).
+
+1. **The neo-Hookean material is accepted only on request (D4, D5 corrected).** While writing D5 the existing test F1ec of ADR
+   0514 amendment 1 (`sa_emc.rs`, `f1ec_refusals`) was read: it requires `Integrator::new` with the energy-momentum step and
+   the default options to refuse a neo-Hookean model. With D4 as registered (`Auto` takes the discrete gradient for the
+   neo-Hookean material) that existing test would fail, and existing tests are not edited. Corrected design: `Auto` (the
+   default) is the F-570 step in every respect, including its refusal of the neo-Hookean material (the `NotYetSupported` of
+   ADR 0328, unchanged); the neo-Hookean material is accepted, through the surrogate of D5, only with
+   `AlgorithmicStress::DiscreteGradient` (the discrete gradient) or `AlgorithmicStress::Average` (the negative control). Every
+   neo-Hookean run of D7 (the bar of A0 to A3 and R1h, the cube of K0 to K2 and T1h) uses `DiscreteGradient`; N1h uses
+   `Average`; I1 and I2 compare `DiscreteGradient` with `Auto` as registered. Added to F1h (limit of the same kind, all): the
+   neo-Hookean bar model with the energy-momentum step and `Auto` refused (any error), and accepted with `DiscreteGradient`.
+   The decision rule is unchanged.
+2. **The estimate of P3c (arithmetic 2) was misreckoned**, the limit is not changed: with `|E|` about `2.1` times the scale,
+   the measured `6.3 .. 10.6 |dE|^2` at the base `0.1` is `1.3 .. 2.2 |dE|^2/|E|` and `370 .. 1354 |dE|^2` at `1e-3` is `0.8 ..
+   2.8 |dE|^2/|E|` (not `0.4 .. 1.4`); the registered limit `5` stays. P3c ran before this amendment: `1.19`.
