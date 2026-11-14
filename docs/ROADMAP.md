@@ -11527,7 +11527,7 @@ fixed by the item's registration ADR before any code.
     between 5 t* and 20 t*) is missed at 6.0e-3, diagnosed as the total Lagrangian finite-strain drift of the bore
     against the small-strain closed form (1.1e-4 at p/10). Defaults bit-identical (11 digests). Follow-ups F-596, F-597.
     Open (maintainer): the block property formulation = "bbar" as a case-file key covering the nonlinear paths.
-- [ ] **F-588** The Hex8 formulations on the remaining linear paths (temperature load, per-point materials, geometric stiffness, damped and direct harmonic solves, patch recovery)
+- [~] **F-588** The Hex8 formulations on the remaining linear paths (temperature load, per-point materials, geometric stiffness, damped and direct harmonic solves, patch recovery)
   - depends on: F-390
   - acceptance: Every limit not stated here is registered in the ADR before the run. The refusals of ADR 0493 D5 lifted
     with consistent arithmetic: the free thermal expansion of the distorted F-374 patch stress-free within 1e-10 with
@@ -11535,7 +11535,7 @@ fixed by the item's registration ADR before any code.
     registered limits; the damped modes and the direct harmonic solve with the formulations' stiffness (the viscoelastic
     shear and bulk split refused for Incompatible, whose condensed stiffness is not linear in D); the patch recovery
     with the formulations' strain; defaults bit-identical.
-  - note: Structural solver, intermediate tier. Low priority. Follow-up of F-390 (ADR 0493, 2026-11-14).
+  - note: Structural solver, intermediate tier. PARTIAL. ADR 0525, 2026-11-14: the refusals of ADR 0493 D5 lifted in rcfd_fem::hex8x and its callers: free thermal expansion of the distorted F-374 patch stress-free to 1e-10 for BBar and Incompatible (7.4e-11 worst at nu 0.4999), orthotropic and per-point patches to 1.7e-14, Euler buckling of a one-layer Incompatible strip within 5.1e-4 (Full control 1.5), damped modes and direct harmonic solve with the formulations' stiffness (loss factors to 1.0e-11; viscoelastic BBar by bounds and the static limit), Incompatible with a viscoelastic material refused, patch recovery with the formulations' strain (1.8e-12). Defaults bit-identical (18 new digests). Missed: the ES3b control (Full also recovers the bending box, 3.45e-13) and mutation MU12 (estimate sampling with the compatible strain) is caught by no check; the RF3 set-up was amended once. Open: a discriminating test of estimate::element_samples for an opted Hex8.
 - [x] **F-589** First and fourth spectral moments of a random stress component for broadband fatigue
   - depends on: F-417, F-566
   - acceptance: Every limit not stated here is registered in the ADR before the run. RandomStress carries the
