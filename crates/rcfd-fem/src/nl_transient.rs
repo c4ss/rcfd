@@ -22,14 +22,15 @@
 //! The energy-momentum step ([`StepKind::EnergyMomentum`], ADR 0514, Simo and Tarnow) is opt-in: the midpoint step with the
 //! internal force `B_NL(F_{n+1/2})^T (S_n + S_{n+1})/2`, which conserves the energy and the linear and angular momenta of an
 //! isotropic St. Venant-Kirchhoff solid up to the Newton residual. The default [`StepKind::Method`] is the step above,
-//! unchanged.
+//! unchanged. With the energy-momentum step a neo-Hookean material is taken and its algorithmic stress is the discrete
+//! gradient of Gonzalez ([`AlgorithmicStress`], ADR 0523), which conserves the energy of any stored energy.
 
 use crate::constraint::{prescribed_equations, reduce};
 use crate::element::{element_for, ElementState};
 use crate::error::{FemError, Result};
 use crate::mass::consistent_with;
 use crate::material::PointContext;
-use crate::model::{Load, SolidModel};
+use crate::model::{Load, Material, SolidModel};
 use crate::nonlinear::{self, Contribution, NewtonOptions};
 use crate::solve::PIVOT_TOLERANCE;
 use crate::transient::{LoadHistory, LoadTable, Method, Rayleigh};
@@ -47,7 +48,10 @@ const MAGIC: &[u8; 8] = b"RCFDNLT1";
 /// The magic of a state of the energy-momentum step (ADR 0514 D5).
 const MAGIC_EMC: &[u8; 8] = b"RCFDNLE1";
 
+mod dg;
 mod emc;
+
+pub use dg::AlgorithmicStress;
 
 /// The step of the nonlinear integrator (ADR 0514 D3).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -78,6 +82,9 @@ pub struct NlTransientOptions {
     pub temperature: Option<f64>,
     /// The step (ADR 0514 D3; default [`StepKind::Method`]).
     pub step: StepKind,
+    /// The algorithmic stress of the energy-momentum step (ADR 0523 D4; default [`AlgorithmicStress::Auto`]); not read by
+    /// the `Method` step.
+    pub stress: AlgorithmicStress,
 }
 
 impl NlTransientOptions {
@@ -91,6 +98,7 @@ impl NlTransientOptions {
             newton: NewtonOptions::new(1),
             temperature: None,
             step: StepKind::Method,
+            stress: AlgorithmicStress::Auto,
         }
     }
     /// The same options with a method.
@@ -126,6 +134,11 @@ impl NlTransientOptions {
     /// The same options with a step kind (ADR 0514 D3).
     pub fn step_kind(mut self, step: StepKind) -> NlTransientOptions {
         self.step = step;
+        self
+    }
+    /// The same options with an algorithmic stress of the energy-momentum step (ADR 0523 D4).
+    pub fn algorithmic_stress(mut self, stress: AlgorithmicStress) -> NlTransientOptions {
+        self.stress = stress;
         self
     }
 }
@@ -297,6 +310,10 @@ pub struct Integrator {
     history: bool,
     temperature: Option<f64>,
     step: StepKind,
+    /// The algorithmic stress of the energy-momentum step (ADR 0523 D4).
+    stress: AlgorithmicStress,
+    /// A model with a neo-Hookean material in the energy-momentum step (ADR 0523 D5).
+    hyper: bool,
     state: Option<NlTransientState>,
 }
 
@@ -457,6 +474,17 @@ impl Integrator {
         if !(dt.is_finite() && dt > 0.0) {
             return Err(invalid("time step", format!("{dt:e} (must be finite and > 0)")));
         }
+        // ADR 0523 D5 and amendment 1: a neo-Hookean model of the energy-momentum step with a stress other than `Auto` is
+        // checked and given its mass and K_0 through the isotropic surrogate of its small-strain moduli, then holds its own
+        // materials (with `Auto` it is refused as before).
+        if options.step == StepKind::EnergyMomentum && options.stress != AlgorithmicStress::Auto {
+            if let Some(surrogate) = dg::surrogate(model)? {
+                let mut it = Integrator::new(&surrogate, loads, options)?;
+                it.model = model.clone();
+                it.hyper = true;
+                return Ok(it);
+            }
+        }
         model.validate()?;
         model.check_supported_nonlinear()?;
         if crate::mpc::uses_transformation(model) {
@@ -566,6 +594,8 @@ impl Integrator {
             history,
             temperature: options.temperature,
             step: options.step,
+            stress: options.stress,
+            hyper: false,
             state: None,
         })
     }
@@ -660,6 +690,8 @@ impl Integrator {
         self.check_coverage(t0, t0)?;
         let states = nonlinear::initial_states(&self.model)?;
         let fint = match self.temperature {
+            // ADR 0523 D5: the neo-Hookean internal force of the energy-momentum step.
+            _ if self.hyper => emc::internal_force(&self.model, u0, &PointContext::default())?,
             None => nonlinear::internal_force(&self.model, u0, &states)?,
             // ADR 0499 D3: the start at the temperature (a shifted material needs it).
             Some(t) => {
@@ -956,8 +988,8 @@ impl Integrator {
     }
 
     /// The strain energy `sum_q w_q S . E/2` at the points of the stiffness rule (the St. Venant-Kirchhoff potential of an
-    /// elastic material; `E` the F-bar strain for a BBar Hex8, ADR 0506 D3); refused for a material with history (key
-    /// `"strain energy"`).
+    /// elastic material; `E` the F-bar strain for a BBar Hex8, ADR 0506 D3; the neo-Hookean energy of a hyperelastic
+    /// material in the energy-momentum step, ADR 0523 D5); refused for a material with history (key `"strain energy"`).
     pub fn strain_energy(&self) -> Result<f64> {
         let s = self.current()?;
         if self.history {
@@ -1001,6 +1033,11 @@ impl Integrator {
                         nonlinear::green_lagrange(&h)
                     }
                 };
+                // ADR 0523 D5: the neo-Hookean energy of the energy-momentum step.
+                if let Material::Hyperelastic { energy, .. } = material {
+                    w += ip.weight * dg::energy(energy, &strain)?;
+                    continue;
+                }
                 let (stress, _) = material.stress(&strain, &context, &[])?;
                 w += ip.weight * 0.5 * dot(&stress, &strain);
             }
