@@ -287,9 +287,13 @@ struct Run {
 }
 
 fn channel_run(ch: &Channel, n: usize, cycles: usize, consistent: bool) -> Run {
+    channel_run_with(ch, n, cycles, settings(consistent))
+}
+
+fn channel_run_with(ch: &Channel, n: usize, cycles: usize, s: PimpleSettings) -> Run {
     let t0 = std::time::Instant::now();
     let dt = 1.0 / n as f64;
-    let mut fl = solver(ch.mesh(), settings(consistent));
+    let mut fl = solver(ch.mesh(), s);
     let mut prev = fl.u.values.clone();
     let mut prev_d: Option<Vec<f64>> = None;
     let mut run = Run {
@@ -369,7 +373,8 @@ fn order(a: f64, b: f64, cc: f64) -> f64 {
 // ---- QF: the fast test ----------------------------------------------------------------------------------------------------
 
 #[test]
-fn qf_fast_channel_default_diverges_consistent_bounded() {
+#[ignore]
+fn qf_fast_channel_default_diverges_consistent_bounded_known_miss() {
     let mut c = Checks::new();
     let n = 16;
     println!("FQ: D {:.4}", FQ.diffusion_number(n));
@@ -399,7 +404,7 @@ fn qf_fast_channel_default_diverges_consistent_bounded() {
 
 #[test]
 #[ignore]
-fn dg_diagnosis_record() {
+fn dg_diagnosis_known_miss() {
     let mut c = Checks::new();
     for n in [100usize, 25] {
         let r = channel_run(&FC, n, 3, false);
@@ -482,7 +487,7 @@ fn dg_diagnosis_record() {
 
 #[test]
 #[ignore]
-fn a_removal_and_stable_reference_record() {
+fn a_removal_and_stable_reference_known_miss() {
     let mut c = Checks::new();
     let zf = impedance_formula(FC.lf);
     println!("FC: formula Z {zf:?}");
@@ -574,10 +579,14 @@ fn a_removal_and_stable_reference_record() {
 // ---- AP: the piston of ADR 0446 with the consistent correctors (record) -------------------------------------------------------
 
 fn piston_run(n: usize) -> Result<Cx, String> {
+    piston_run_with(n, settings(true), 3)
+}
+
+fn piston_run_with(n: usize, s: PimpleSettings, cycles: usize) -> Result<Cx, String> {
     let mesh0 = FC.mesh();
     let motion = ChannelMotion::new(&mesh0, INFLOW, 0, FC.lf, 1e-9)?;
     let mut fluid = FlowWall::new(
-        solver(mesh0.clone(), settings(true)),
+        solver(mesh0.clone(), s),
         INFLOW,
         &mesh0,
         RHO,
@@ -592,7 +601,7 @@ fn piston_run(n: usize) -> Result<Cx, String> {
         amplitude: q0(),
         omega: OMEGA,
         steps_per_cycle: n,
-        cycles: 3,
+        cycles,
     };
     let h = drive_mode(&mut fluid, &map, &motion)?;
     let r = h.response(TOL_PERIODIC)?;
@@ -603,7 +612,7 @@ fn piston_run(n: usize) -> Result<Cx, String> {
 
 #[test]
 #[ignore]
-fn ap_piston_consistent_record() {
+fn ap_piston_consistent_known_miss() {
     let mut c = Checks::new();
     let zf = impedance_formula(FC.lf);
     let mut z = Vec::new();
@@ -643,4 +652,273 @@ fn model_matches_the_registered_arithmetic() {
         (re - 2.588e-4).abs() < 1e-6 && (im - 3.481e-3).abs() < 1e-6,
         "{re} {im}"
     );
+}
+
+// ---- amendment 1 of ADR 0451: the cycle rule, QFc, QFo, DG3c, Ao, APo ------------------------------------------------------
+
+/// The option with outer iterations (amendment 1: `n_outer = 8`, 2 correctors, no relaxation).
+fn outer_settings() -> PimpleSettings {
+    let mut s = settings(true);
+    s.n_outer = 8;
+    s
+}
+
+/// The cycle rule of amendment 1: `C = max(3, 2 + ceil(ln(1e-7)/(N ln rho_c)))`, `rho_c` the B4 estimate of the settings at `N`;
+/// refused if `rho_c >= 1` or `C > 80`.
+fn cycles_for(ch: &Channel, n: usize, s: &PimpleSettings) -> Result<(usize, f64), String> {
+    let rho = b4(ch, n, s.clone());
+    if !(rho < 1.0) {
+        return Err(format!("B4 estimate {rho} >= 1"));
+    }
+    let c = (2.0 + (1e-7f64.ln() / (n as f64 * rho.ln())).ceil()).max(3.0) as usize;
+    if c > 80 {
+        return Err(format!("{c} periods (> 80) for B4 {rho}"));
+    }
+    Ok((c, rho))
+}
+
+fn bounded_first(run: &Run, steps: usize) -> bool {
+    run.broke.as_ref().is_none_or(|(k, _)| *k > steps)
+}
+
+#[test]
+fn qfc_fast_channel_consistent_periodic() {
+    let mut c = Checks::new();
+    let n = 16;
+    let d = channel_run(&FQ, n, 2, false);
+    c.holds("QF1 default not bounded within 2 periods", !d.bounded, "not bounded");
+    c.at_least("QF1 B4 default abs(rho)", b4(&FQ, n, settings(false)), 1.0);
+    match cycles_for(&FQ, n, &settings(true)) {
+        Ok((cy, rho)) => {
+            println!("QFc: B4 {rho:.5}, {cy} periods");
+            let r = channel_run(&FQ, n, cy, true);
+            c.holds("QFc bounded", r.bounded, &format!("bounded ({:?})", r.broke));
+            if let Some(z) = impedance(&mut c, "QFc", &r, n) {
+                println!(
+                    "QFc: Z {z:?}, model {:?} (printed, no limit)",
+                    model_zdt(n, FQ.ny, FQ.lf)
+                );
+            }
+        }
+        Err(m) => c.holds("QFc cycle rule", false, &m),
+    }
+    c.finish();
+}
+
+#[test]
+fn qfo_fast_channel_outer_iterations() {
+    let mut c = Checks::new();
+    let n = 16;
+    match cycles_for(&FQ, n, &outer_settings()) {
+        Ok((cy, rho)) => {
+            println!("QFo: B4 {rho:.5}, {cy} periods");
+            let r = channel_run_with(&FQ, n, cy, outer_settings());
+            c.holds("QFo bounded", r.bounded, &format!("bounded ({:?})", r.broke));
+            if let Some(z) = impedance(&mut c, "QFo", &r, n) {
+                let m = model_zdt(n, FQ.ny, FQ.lf);
+                let (re, im) = rel_parts(z, m);
+                println!("QFo: Z {z:?}, model {m:?}");
+                c.at_most("QFo real part against Z_dt", re.abs(), 5e-2);
+                c.at_most("QFo imaginary part against Z_dt", im.abs(), 5e-2);
+            }
+        }
+        Err(m) => c.holds("QFo cycle rule", false, &m),
+    }
+    c.finish();
+}
+
+/// `sum_c V_c (|d_u|^2/V0^2 + d_p^2/P^2)` of a state difference.
+fn tw_norm(vol: &[f64], du: &[Vec3], dp: &[f64], p_scale: f64) -> f64 {
+    (0..vol.len())
+        .map(|i| vol[i] * (vec3::dot(du[i], du[i]) / (v0() * v0()) + dp[i] * dp[i] / (p_scale * p_scale)))
+        .sum::<f64>()
+        .sqrt()
+}
+
+#[test]
+#[ignore]
+fn dg3c_twin_run_radius_record() {
+    let mut c = Checks::new();
+    let n = 100;
+    let dt = 1.0 / n as f64;
+    let mut fl = solver(FC.mesh(), settings(false));
+    for k in 1..=2 {
+        step(&mut fl, k, dt);
+    }
+    let base = fl.snapshot();
+    let vol = fl.geom.mesh.cell_volumes().to_vec();
+    let p_scale = base.p.iter().fold(0.0f64, |a, &b| a.max(b.abs()));
+    // the base step from S
+    step(&mut fl, 3, dt);
+    let s1 = fl.snapshot();
+    // d_0: the xorshift field in p and the x, y velocity, zero in the flux
+    let mut seed: u64 = 0x2545F4914F6CDD1D;
+    let mut next = || {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        (seed >> 11) as f64 / (1u64 << 53) as f64 - 0.5
+    };
+    let nc = vol.len();
+    let mut du: Vec<Vec3> = (0..nc).map(|_| [next() * v0(), next() * v0(), 0.0]).collect();
+    let mut dp: Vec<f64> = (0..nc).map(|_| next() * p_scale).collect();
+    let mut dphi = vec![0.0; base.phi.len()];
+    let s_norm = tw_norm(&vol, &base.u, &base.p, p_scale);
+    let (mut logs, mut signs) = (Vec::new(), Vec::new());
+    for k in 0..60 {
+        let dn = tw_norm(&vol, &du, &dp, p_scale);
+        let eps = 1e-7 * s_norm / dn;
+        let mut st = base.clone();
+        for i in 0..nc {
+            for j in 0..3 {
+                st.u[i][j] += eps * du[i][j];
+            }
+            st.p[i] += eps * dp[i];
+        }
+        for j in 0..3 {
+            for i in 0..nc {
+                st.hist_u[j].old[i] += eps * du[i][j];
+            }
+        }
+        for (f, d) in dphi.iter().enumerate() {
+            st.phi[f] += eps * d;
+            st.phi_hist.old[f] += eps * d;
+        }
+        fl.restore(&st).unwrap();
+        fl.diverged = None;
+        step(&mut fl, 3, dt);
+        let s2 = fl.snapshot();
+        let tu: Vec<Vec3> = (0..nc)
+            .map(|i| vec3::scale(vec3::sub(s2.u[i], s1.u[i]), 1.0 / eps))
+            .collect();
+        let tp: Vec<f64> = (0..nc).map(|i| (s2.p[i] - s1.p[i]) / eps).collect();
+        let tphi: Vec<f64> = (0..dphi.len()).map(|f| (s2.phi[f] - s1.phi[f]) / eps).collect();
+        let tn = tw_norm(&vol, &tu, &tp, p_scale);
+        let inner: f64 = (0..nc)
+            .map(|i| vol[i] * (vec3::dot(tu[i], du[i]) / (v0() * v0()) + tp[i] * dp[i] / (p_scale * p_scale)))
+            .sum();
+        if k >= 30 {
+            logs.push((tn / dn).ln());
+            signs.push(inner.signum());
+        }
+        du = tu;
+        dp = tp;
+        dphi = tphi;
+    }
+    let rho_tw = (logs.iter().sum::<f64>() / logs.len() as f64).exp();
+    let sign = signs.iter().sum::<f64>() / signs.len() as f64;
+    let mut s = settings(false);
+    s.pressure_lag_check = Some(LagCheck {
+        iterations: 200,
+        ..LagCheck::new(0, LagAction::Warn)
+    });
+    let mut f2 = solver(FC.mesh(), s);
+    step(&mut f2, 1, dt);
+    let b = f2.lag_estimates[0].rho.abs();
+    println!("DG3c: |rho_TW| {rho_tw:.5}, sign {sign:+.3}, B4 (200 iterations) {b:.5}");
+    c.at_most("DG3c |rho_TW| against B4 (relative)", (rho_tw / b - 1.0).abs(), 0.10);
+    c.at_most("DG3c sign", sign, -0.5);
+    c.finish();
+}
+
+#[test]
+#[ignore]
+fn ao_removal_with_outer_iterations_record() {
+    let mut c = Checks::new();
+    let zf = impedance_formula(FC.lf);
+    let mut z = std::collections::BTreeMap::new();
+    for n in [25usize, 50, 100] {
+        match cycles_for(&FC, n, &outer_settings()) {
+            Ok((cy, rho)) => {
+                let r = channel_run_with(&FC, n, cy, outer_settings());
+                println!(
+                    "Ao N {n} (D {:.3}): B4 {rho:.5}, {cy} periods, broke {:?}, max |u|/V0 {:.4} ({:.1} s)",
+                    FC.diffusion_number(n),
+                    r.broke,
+                    r.umax.iter().fold(0.0f64, |a, &b| a.max(b)) / v0(),
+                    r.seconds
+                );
+                c.holds(
+                    &format!("A1o N {n} bounded over 3 periods"),
+                    bounded_first(&r, 3 * n),
+                    "bounded",
+                );
+                c.holds(&format!("A1o N {n} bounded over {cy} periods"), r.bounded, "bounded");
+                if let Some(zz) = impedance(&mut c, &format!("A2o N {n}"), &r, n) {
+                    let m = model_zdt(n, FC.ny, FC.lf);
+                    let (re, im) = rel_parts(zz, m);
+                    println!("A3o N {n}: Z {zz:?}, model {m:?}: real {re:+.4e}, imaginary {im:+.4e}");
+                    c.at_most(&format!("A3o N {n} real part against Z_dt"), re.abs(), 3e-2);
+                    c.at_most(&format!("A3o N {n} imaginary part against Z_dt"), im.abs(), 3e-2);
+                    if n == 25 {
+                        let (fr, fi) = rel_parts(zz, zf);
+                        println!("NC1o N 25 against the formula: real {fr:+.3e}, imaginary {fi:+.3e}");
+                        c.holds("NC1o (must miss 3e-2)", fr.abs() > 3e-2 || fi.abs() > 3e-2, "misses");
+                    }
+                    z.insert(n, zz);
+                }
+            }
+            Err(m) => c.holds(&format!("Ao N {n} cycle rule"), false, &m),
+        }
+    }
+    let rc = match (z.get(&25), z.get(&50), z.get(&100)) {
+        (Some(&z1), Some(&z2), Some(&z4)) => {
+            let rc = z4.scale(2.0).sub(z2);
+            let (re, im) = rel_parts(rc, zf);
+            println!("A4o: R_c {rc:?}: real {re:+.4e}, imaginary {im:+.4e}");
+            c.at_most("A4o R_c real part against the formula", re.abs(), 3e-2);
+            c.at_most("A4o R_c imaginary part against the formula", im.abs(), 3e-2);
+            for (id, p) in [
+                ("Oo real", order(z1.0, z2.0, z4.0)),
+                ("Oo imaginary", order(z1.1, z2.1, z4.1)),
+            ] {
+                c.at_least(id, p, 0.8);
+                c.at_most(&format!("{id} (upper)"), p, 1.25);
+            }
+            Some(rc)
+        }
+        _ => {
+            c.holds("A4o", false, "a level refused");
+            None
+        }
+    };
+    let mut zd = Vec::new();
+    for n in [1000usize, 2000] {
+        let r = channel_run(&FC, n, 3, false);
+        let zz = impedance(&mut c, &format!("A5 again N {n}"), &r, n);
+        println!("A5 again N {n}: Z {zz:?} ({:.1} s)", r.seconds);
+        zd.push(zz);
+    }
+    match (rc, &zd[..]) {
+        (Some(rc), [Some(z1), Some(z2)]) => {
+            let rd = z2.scale(2.0).sub(*z1);
+            println!("A6o: R_d {rd:?}");
+            c.at_most("A6o |R_c - R_d|/|R_d|", rc.sub(rd).abs() / rd.abs(), 1e-2);
+        }
+        _ => c.holds("A6o", false, "a level refused"),
+    }
+    c.finish();
+}
+
+#[test]
+#[ignore]
+fn apo_piston_outer_iterations_record() {
+    let mut c = Checks::new();
+    let zf = impedance_formula(FC.lf);
+    let mut z = Vec::new();
+    for n in [50usize, 100] {
+        let t0 = std::time::Instant::now();
+        let r = cycles_for(&FC, n, &outer_settings()).and_then(|(cy, _)| piston_run_with(n, outer_settings(), cy));
+        println!("APo N {n}: {r:?} ({:.1} s)", t0.elapsed().as_secs_f64());
+        c.holds(&format!("APo N {n} bounded and periodic"), r.is_ok(), &format!("{r:?}"));
+        z.push(r.ok());
+    }
+    if let [Some(z2), Some(z4)] = z[..] {
+        let ext = z4.scale(2.0).sub(z2);
+        let (re, im) = rel_parts(ext, zf);
+        println!("APo: 2 Z_100 - Z_50 = {ext:?}: real {re:+.4e}, imaginary {im:+.4e}");
+        c.at_most("APo real part against the formula", re.abs(), 3e-2);
+        c.at_most("APo imaginary part against the formula", im.abs(), 3e-2);
+    }
+    c.finish();
 }
