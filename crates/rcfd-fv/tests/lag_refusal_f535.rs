@@ -166,3 +166,24 @@ fn l4_fractional_step_is_not_refused() {
     assert!(a.diverged.as_ref().is_none_or(|d| d.quantity != "lag onset"));
     assert!(same(&a.u.values, &b.u.values) && same_s(&a.p.values, &b.p.values) && same_s(&a.phi, &b.phi));
 }
+
+#[test]
+fn l3b_diffusion_number_of_a_thin_2d_box_leaves_out_the_empty_planes() {
+    use rcfd_mesh::PatchKind;
+    let m = box_mesh([8, 8, 1], [1.0, 1.0, 0.01], [Grading::Uniform; 3]).unwrap();
+    let mut topo = m.topology().clone();
+    for p in topo.patches.iter_mut() {
+        if p.name == "zmin" || p.name == "zmax" {
+            p.kind = PatchKind::Empty;
+        }
+    }
+    let geom = Arc::new(FvGeometry::new(Arc::new(rcfd_mesh::Mesh::from_topology(topo).unwrap())).unwrap());
+    assert_eq!(geom.active, [true, true, false]);
+    let u = VectorField::uniform("U", &geom, vec3::ZERO);
+    let p = ScalarField::uniform("p", &geom, 0.0);
+    let fl = PimpleSolver::new(geom, u, p, PimpleSettings::piso(1e-3));
+    let (d, _) = fl.max_cell_diffusion(0.1);
+    let expect = 1e-3 * 0.1 * 64.0;
+    println!("L3b: {d:e} against {expect:e}");
+    assert!((d / expect - 1.0).abs() <= 1e-9);
+}
