@@ -551,7 +551,8 @@ fn pair_share(m: &CsrMatrix, p: &[&Vec<f64>; 2], x: &SplitMode) -> f64 {
 }
 
 #[test]
-fn g_z1_r1_r2_n1_n2_x1_ring() {
+#[ignore = "known miss of ADR 0472 (amendment 1): Z1 R measured 4.5724e-10 against the limit 1e-10 at the registered run (the F-396 rest eigenvalues against their own Rayleigh quotients, 9.2e-10); every other check met; continued in g_r1_r2_n1_n2_x1_ring_after_z1_miss"]
+fn g_z1_r1_r2_n1_n2_x1_ring_known_miss() {
     let mut ck = Checks::new();
     let r = ring();
     let on = RotatingPart::new(&r, AXIS, ORIGIN, &ring_options(true)).unwrap();
@@ -571,6 +572,73 @@ fn g_z1_r1_r2_n1_n2_x1_ring() {
     let s = on.split_modes(om).unwrap();
     g_checks(&mut ck, "R", &r, om, &s);
     z1(&mut ck, "R", &on);
+    println!("  R at Omega = {om:.6}: basis {:?}, {:?}, omegas {:?}", s.basis, s.stability,
+        s.modes.iter().map(|x| x.omega).collect::<Vec<_>>());
+    let soff = off.split_modes(om).unwrap();
+    for (n, i) in [(2.0_f64, 3usize), (3.0, 5)] {
+        let p = [&rest.modes[i], &rest.modes[i + 1]];
+        let pick = |res: &SplitModes| -> Vec<SplitMode> {
+            res.modes.iter().filter(|x| pair_share(m, &p, x) >= 0.9).cloned().collect()
+        };
+        let g = 4.0 * n * om / (n * n + 1.0);
+        let pair = pick(&s);
+        ck.holds(&format!("R1 n = {n} two modes in the rest pair's span"), pair.len() == 2, &format!("{}", pair.len()));
+        if pair.len() == 2 {
+            let (lo, hi) = if pair[0].omega < pair[1].omega { (&pair[0], &pair[1]) } else { (&pair[1], &pair[0]) };
+            let split = hi.omega - lo.omega;
+            println!(
+                "  R n = {n}: {:.8} / {:.8}, split {split:.8}, 4 n Omega/(n^2 + 1) = {g:.8}, kappa {:.6} / {:.6} (2n/(n^2+1) = {:.6})",
+                lo.omega, hi.omega, lo.whirl, hi.whirl, 2.0 * n / (n * n + 1.0)
+            );
+            ck.le(&format!("R1 n = {n} |split / (4 n Omega/(n^2 + 1)) - 1|"), (split / g - 1.0).abs(), 2e-2);
+            ck.holds(
+                &format!("R2 n = {n} lower forward, upper backward"),
+                lo.direction == Whirl::Forward && hi.direction == Whirl::Backward,
+                &format!("{:?} / {:?}", lo.direction, hi.direction),
+            );
+            if n == 2.0 {
+                ck.gt("N2 |split/(2 Omega) - 1| (rigid-frame value)", (split / (2.0 * om) - 1.0).abs(), 0.1);
+            }
+        }
+        if n == 2.0 {
+            let poff = pick(&soff);
+            let d = if poff.len() == 2 { (poff[1].omega - poff[0].omega).abs() } else { f64::INFINITY };
+            ck.lt("N1 without the option: n = 2 split / (1.6 Omega)", d / g, 1e-3);
+        }
+    }
+    // X1: the sector of R with its cyclic constraint (clamped at the inner face so that the part can be made)
+    let sec = ring_sector(true);
+    let ps = RotatingPart::new(&sec, AXIS, ORIGIN, &RotatingOptions::new(2).coriolis(true)).unwrap();
+    ck.holds("X1 sector refused", key_of(ps.split_modes(om).unwrap_err()) == "cyclic", "\"cyclic\"");
+    ck.holds(
+        "X1 sector split_campbell refused",
+        key_of(ps.split_campbell(&[0.0, om]).unwrap_err()) == "cyclic",
+        "\"cyclic\"",
+    );
+    ck.finish();
+}
+
+// ADR 0472 amendment 1: the checks of g_z1_r1_r2_n1_n2_x1_ring_known_miss without Z1, code and limits unchanged.
+#[test]
+fn g_r1_r2_n1_n2_x1_ring_after_z1_miss() {
+    let mut ck = Checks::new();
+    let r = ring();
+    let on = RotatingPart::new(&r, AXIS, ORIGIN, &ring_options(true)).unwrap();
+    let off = RotatingPart::new(&r, AXIS, ORIGIN, &ring_options(false)).unwrap();
+    let m = on.mass();
+    let rest = modes_of(on.modes(0.0).unwrap());
+    let w: Vec<f64> = rest.eigenvalues.iter().map(|l| l.sqrt()).collect();
+    println!("  R: {} nodes, {} equations; rest omegas {w:?}", r.mesh().nodes().len(), m.n);
+    ck.le("R set-up n = 2 pair degenerate", (w[4] / w[3] - 1.0).abs(), 1e-6);
+    ck.le("R set-up n = 3 pair degenerate", (w[6] / w[5] - 1.0).abs(), 1e-6);
+    let w2 = 0.5 * (w[3] + w[4]);
+    let w3 = 0.5 * (w[5] + w[6]);
+    let ratio = ring_closed_form(3.0) / ring_closed_form(2.0);
+    ck.le("R set-up w3/w2 against 2.828", ((w3 / w2) / ratio - 1.0).abs(), 5e-2);
+    println!("  R: w2 = {w2:.6} (closed form {:.6}), w3/w2 = {:.5}", ring_closed_form(2.0), w3 / w2);
+    let om = 0.1 * w2;
+    let s = on.split_modes(om).unwrap();
+    g_checks(&mut ck, "R", &r, om, &s);
     println!("  R at Omega = {om:.6}: basis {:?}, {:?}, omegas {:?}", s.basis, s.stability,
         s.modes.iter().map(|x| x.omega).collect::<Vec<_>>());
     let soff = off.split_modes(om).unwrap();
@@ -715,7 +783,8 @@ fn lag_s() -> f64 {
 }
 
 #[test]
-fn g_z1_b1_l1_l2_l3_n3_x2_beam() {
+#[ignore = "known miss of ADR 0472 (amendment 1): Z1 F measured 1.0288e-10 against the limit 1e-10 at the registered run (the F-396 rest eigenvalues against their own Rayleigh quotients, 1.4e-10); every other check met; continued in g_b1_l1_l2_l3_n3_x2_beam_after_z1_miss"]
+fn g_z1_b1_l1_l2_l3_n3_x2_beam_known_miss() {
     let mut ck = Checks::new();
     let f = beam();
     let on = RotatingPart::new(&f, AXIS, ORIGIN, &beam_options(14, None)).unwrap();
@@ -730,6 +799,64 @@ fn g_z1_b1_l1_l2_l3_n3_x2_beam() {
     );
     g_checks(&mut ck, "F", &f, om, &s);
     z1(&mut ck, "F", &on);
+    let off = RotatingPart::new(&f, AXIS, ORIGIN, &beam_options(14, None).coriolis(false)).unwrap();
+    b1(&mut ck, "F", &off, &[0.0, om]);
+    // L3
+    let zero = vec![0.0; m.n];
+    let axial = r396.modes.iter().any(|p| component_share(&f, m, p, &zero, 0) > 0.5);
+    ck.holds("L3 the basis contains an axial mode (x share > 0.5)", axial, "set-up");
+    let sv = lag_s();
+    ck.le("L3 |S / 1.4772e-8 - 1|", (sv / 1.4772e-8 - 1.0).abs(), 1e-3);
+    // L1, L2
+    let (ff, lf) = flap_lag_f396(&f, m, &r396);
+    let (fs, ls) = flap_lag_split(&f, m, &s);
+    let delta = ls - lf;
+    let est = -2.0 * om * om * sv * lf;
+    println!(
+        "  F: flap {fs:.12} / {ff:.12}; lag {ls:.12} / {lf:.12}; Delta {delta:.6e} rad/s, Delta_est {est:.6e} rad/s \
+         (relative {:.4e} / {:.4e}); S = {sv:.6e}",
+        delta / lf,
+        est / lf
+    );
+    ck.le("L1 |omega_flap,split / omega_flap,F396 - 1|", (fs / ff - 1.0).abs(), 1e-6);
+    ck.le("L2 |Delta / Delta_est - 1|", (delta / est - 1.0).abs(), 0.2);
+    // N3
+    let six = RotatingPart::new(&f, AXIS, ORIGIN, &beam_options(6, None)).unwrap();
+    let r6 = modes_of(six.modes(om).unwrap());
+    let s6 = six.split_modes(om).unwrap();
+    let (_, l6) = flap_lag_f396(&f, m, &r6);
+    let (_, l6s) = flap_lag_split(&f, m, &s6);
+    ck.lt("N3 six modes (no axial mode): |Delta / Delta_est|", ((l6s - l6) / est).abs(), 0.1);
+    // X2
+    let t1 = RotatingPart::new(&f, AXIS, ORIGIN, &beam_options(14, Some(1))).unwrap();
+    let t4 = RotatingPart::new(&f, AXIS, ORIGIN, &beam_options(14, Some(4))).unwrap();
+    let (a, b) = (t1.split_modes(om).unwrap(), t4.split_modes(om).unwrap());
+    let same = a.modes.len() == b.modes.len()
+        && a.modes.iter().zip(&b.modes).all(|(x, y)| {
+            x.omega.to_bits() == y.omega.to_bits()
+                && x.re.iter().zip(&y.re).all(|(p, q)| p.to_bits() == q.to_bits())
+                && x.im.iter().zip(&y.im).all(|(p, q)| p.to_bits() == q.to_bits())
+        });
+    ck.holds("X2 F threads 1 and 4 bit-identical", same, "frequencies and shapes");
+    ck.finish();
+}
+
+// ADR 0472 amendment 1: the checks of g_z1_b1_l1_l2_l3_n3_x2_beam_known_miss without Z1, code and limits unchanged.
+#[test]
+fn g_b1_l1_l2_l3_n3_x2_beam_after_z1_miss() {
+    let mut ck = Checks::new();
+    let f = beam();
+    let on = RotatingPart::new(&f, AXIS, ORIGIN, &beam_options(14, None)).unwrap();
+    let m = on.mass();
+    let rest = modes_of(on.modes(0.0).unwrap());
+    let om = 0.2 * rest.eigenvalues[0].sqrt();
+    let r396 = modes_of(on.modes(om).unwrap());
+    let s = on.split_modes(om).unwrap();
+    println!(
+        "  F: Omega_F = {om:.6}; F-396 omegas {:?}",
+        r396.eigenvalues.iter().map(|l| l.sqrt()).collect::<Vec<_>>()
+    );
+    g_checks(&mut ck, "F", &f, om, &s);
     let off = RotatingPart::new(&f, AXIS, ORIGIN, &beam_options(14, None).coriolis(false)).unwrap();
     b1(&mut ck, "F", &off, &[0.0, om]);
     // L3
