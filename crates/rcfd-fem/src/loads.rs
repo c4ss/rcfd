@@ -14,7 +14,10 @@
 //! ([`Load::ShellPressure`]) gives the consistent forces and moments of [`crate::shell::pressure_load_vector`] (ADR 0432),
 //! and gravity and the centrifugal load give those of [`crate::shell::body_load_vector`] (`t int N_i b dA`, ADR 0435), a
 //! nodal body-force field that of the interpolated field and a nodal temperature field the membrane thermal load of
-//! [`crate::shell::thermal_load_vector`] (ADR 0445). Shell3 elements take the same loads from [`crate::shell3`] (ADR 0454);
+//! [`crate::shell::thermal_load_vector`] (ADR 0445). A Shell4 element of a Layup block (ADR 0502 D1) takes gravity and the
+//! centrifugal load as `m0 int N_i b dA` with the moment of the first mass moment `m1 int N_i (e_3 x b) dA`
+//! ([`crate::shell::layup_body_load_vector_at`]) and the nodal body-force field over its total thickness; one isotropic ply
+//! the call of its `Shell` twin. Shell3 elements take the same loads from [`crate::shell3`] (ADR 0454);
 //! [`Load::ShellPressureAngleWeighted`] shares each Shell3 element's pressure force by its angles (ADR 0461).
 //!
 //! Face integrals use the face functions of Tri3, Quad4, Tri6 and the 8-node face of Hex20 ([`face_shape_functions`]) in
@@ -166,17 +169,16 @@ pub fn nodal_load_vector(model: &SolidModel, extra: &[NodalForceAt]) -> Result<V
                     let ra = rho[e] * section.area();
                     Ok(BeamBody::Uniform([ra * g[0], ra * g[1], ra * g[2]]))
                 };
-                // ADR 0435 D2: a Shell4 element takes the body force rho g over its thickness.
-                let shell = |e: usize, _: &[f64], _: Vec3| -> Result<Vec3> {
-                    Ok([rho[e] * g[0], rho[e] * g[1], rho[e] * g[2]])
-                };
+                // ADR 0435 D2: a Shell4 element takes the body force rho g over its thickness; ADR 0502 D1: the rule of a
+                // density, so that a layup takes its own mass moments.
+                let shell = |r: f64, _: &[f64], _: Vec3| -> Result<Vec3> { Ok([r * g[0], r * g[1], r * g[2]]) };
                 add_body_load_with(
                     &mut f,
                     &dofs,
                     mesh,
                     |e, _, _| Ok([rho[e] * g[0], rho[e] * g[1], rho[e] * g[2]]),
                     Some(&beam),
-                    Some(&shell),
+                    Some(ShellBody::PerMass(&shell, rho)),
                 )?;
             }
             Load::Centrifugal { axis, origin, omega } => {
@@ -198,10 +200,11 @@ pub fn nodal_load_vector(model: &SolidModel, extra: &[NodalForceAt]) -> Result<V
                     crate::beam::centrifugal_load_vector(&coords, &section, v, material, axis, origin, w2)
                         .map(BeamBody::Vector)
                 };
-                // ADR 0435 D2: a Shell4 element takes the body force rho omega^2 r_perp over its thickness.
-                let shell = |e: usize, _: &[f64], x: Vec3| -> Result<Vec3> {
+                // ADR 0435 D2: a Shell4 element takes the body force rho omega^2 r_perp over its thickness; ADR 0502 D1:
+                // the rule of a density.
+                let shell = |density: f64, _: &[f64], x: Vec3| -> Result<Vec3> {
                     let r = perpendicular(x, axis, origin);
-                    let s = rho[e] * w2;
+                    let s = density * w2;
                     Ok([s * r[0], s * r[1], s * r[2]])
                 };
                 add_body_load_with(
@@ -214,7 +217,7 @@ pub fn nodal_load_vector(model: &SolidModel, extra: &[NodalForceAt]) -> Result<V
                         Ok([s * r[0], s * r[1], s * r[2]])
                     },
                     Some(&beam),
-                    Some(&shell),
+                    Some(ShellBody::PerMass(&shell, rho)),
                 )?;
             }
             Load::BodyForceNodal { values } => {
@@ -242,7 +245,7 @@ pub fn nodal_load_vector(model: &SolidModel, extra: &[NodalForceAt]) -> Result<V
                         Ok(b)
                     },
                     None,
-                    Some(&shell),
+                    Some(ShellBody::PerVolume(&shell)),
                 )?;
             }
             Load::Temperature { nodal, reference } => {
@@ -426,22 +429,68 @@ fn add_beam_vector(f: &mut [f64], dofs: &DofMap, mesh: &SolidMesh, e: usize, fe:
 /// the point (ADR 0435 D2, ADR 0445 D1).
 type ShellRule<'a> = dyn Fn(usize, &[f64], Vec3) -> Result<Vec3> + 'a;
 
-/// The body load of a shell element as its consistent nodal forces and moments (ADR 0435 D2).
-fn add_shell_body_load(f: &mut [f64], dofs: &DofMap, mesh: &SolidMesh, e: usize, rule: &ShellRule) -> Result<()> {
+/// The body force per unit volume of a density `rho` at a point of a shell element, from the values of the facet's shape
+/// functions there and the point (gravity, the centrifugal load; ADR 0502 D1).
+type ShellMassRule<'a> = dyn Fn(f64, &[f64], Vec3) -> Result<Vec3> + 'a;
+
+/// The body load of a shell element (ADR 0502 D1): a force per unit volume (the nodal body-force field), or a force per unit
+/// volume proportional to the density, with the density of each element's block material.
+enum ShellBody<'a> {
+    PerVolume(&'a ShellRule<'a>),
+    PerMass(&'a ShellMassRule<'a>, &'a [f64]),
+}
+
+/// The consistent nodal vector of the body load of shell element `e` (ADR 0435 D2): a `Shell` block (and Shell3) over its
+/// thickness as before; a Shell4 element of a Layup block (ADR 0502 D1) of one isotropic ply the call of its `Shell` twin with
+/// the ply's thickness and density, any other layup the per-volume force over the total thickness and the density-proportional
+/// one by [`crate::shell::layup_body_load_vector_at`] with the laminate's `m0`, `m1` and the acceleration (the rule at density 1).
+fn shell_body_vector(mesh: &SolidMesh, e: usize, coords: &[Vec3], body: &ShellBody) -> Result<Vec<f64>> {
+    if mesh.element_kind(e) == crate::mesh::ElementKind::Shell4 {
+        if let Some(crate::mesh::BlockProperty::Layup { plies }) = mesh.blocks()[mesh.block_of(e)].property() {
+            if let Some((ply, t)) = crate::laminate::single_isotropic(plies) {
+                let density = ply.density();
+                return match body {
+                    ShellBody::PerVolume(rule) => crate::shell::body_load_vector_at(coords, t, |n, x| rule(e, n, x)),
+                    ShellBody::PerMass(rule, _) => {
+                        crate::shell::body_load_vector_at(coords, t, |n, x| rule(density, n, x))
+                    }
+                }
+                .map(|v| v.to_vec());
+            }
+            let l = crate::laminate::laminate(plies)?;
+            return match body {
+                ShellBody::PerVolume(rule) => {
+                    crate::shell::body_load_vector_at(coords, l.thickness, |n, x| rule(e, n, x))
+                }
+                ShellBody::PerMass(rule, _) => {
+                    crate::shell::layup_body_load_vector_at(coords, l.mass[0], l.mass[1], |n, x| rule(1.0, n, x))
+                }
+            }
+            .map(|v| v.to_vec());
+        }
+    }
+    let t = crate::shell::thickness_or_error(mesh, e)?;
+    let at = |n: &[f64], x: Vec3| -> Result<Vec3> {
+        match body {
+            ShellBody::PerVolume(rule) => rule(e, n, x),
+            ShellBody::PerMass(rule, rho) => rule(rho[e], n, x),
+        }
+    };
+    if mesh.element_kind(e) == crate::mesh::ElementKind::Shell3 {
+        crate::shell3::body_load_vector_at(coords, t, |n, x| at(n, x)).map(|v| v.to_vec())
+    } else {
+        crate::shell::body_load_vector_at(coords, t, |n, x| at(n, x)).map(|v| v.to_vec())
+    }
+}
+
+/// The body load of a shell element as its consistent nodal forces and moments (ADR 0435 D2, ADR 0502 D1).
+fn add_shell_body_load(f: &mut [f64], dofs: &DofMap, mesh: &SolidMesh, e: usize, body: &ShellBody) -> Result<()> {
     let nodes = mesh.element_nodes(e);
     let coords: Vec<Vec3> = nodes.iter().map(|&n| mesh.nodes()[n]).collect();
-    let fe: Vec<f64> = crate::shell::thickness_or_error(mesh, e)
-        .and_then(|t| {
-            if mesh.element_kind(e) == crate::mesh::ElementKind::Shell3 {
-                crate::shell3::body_load_vector_at(&coords, t, |n, x| rule(e, n, x)).map(|v| v.to_vec())
-            } else {
-                crate::shell::body_load_vector_at(&coords, t, |n, x| rule(e, n, x)).map(|v| v.to_vec())
-            }
-        })
-        .map_err(|source| FemError::Element {
-            element: e,
-            source: Box::new(source),
-        })?;
+    let fe: Vec<f64> = shell_body_vector(mesh, e, &coords, body).map_err(|source| FemError::Element {
+        element: e,
+        source: Box::new(source),
+    })?;
     for (a, &node) in nodes.iter().enumerate() {
         add_force(f, dofs, node, &[fe[6 * a], fe[6 * a + 1], fe[6 * a + 2]])?;
         add_moment(f, dofs, node, &[fe[6 * a + 3], fe[6 * a + 4], fe[6 * a + 5]])?;
@@ -452,15 +501,15 @@ fn add_shell_body_load(f: &mut [f64], dofs: &DofMap, mesh: &SolidMesh, e: usize,
 /// [`add_body_load`] with an optional rule for Beam2 elements: the uniform line load the element carries (ADR 0422 D3),
 /// and an optional rule for Shell4 elements: the body force per unit volume of the element at a point (from the values of
 /// the facet's shape functions there and the point; ADR 0445 D1), integrated over the
-/// thickness by [`crate::shell::body_load_vector`] (ADR 0435 D2). Without them, or for every other element, the element's
-/// consistent body load as before.
+/// thickness by [`crate::shell::body_load_vector`] (ADR 0435 D2), or that of a density (ADR 0502 D1, [`ShellBody`]). Without
+/// them, or for every other element, the element's consistent body load as before.
 fn add_body_load_with<B>(
     f: &mut [f64],
     dofs: &DofMap,
     mesh: &SolidMesh,
     b: B,
     beam: Option<&dyn Fn(usize) -> Result<BeamBody>>,
-    shell: Option<&ShellRule<'_>>,
+    shell: Option<ShellBody<'_>>,
 ) -> Result<()>
 where
     B: Fn(usize, &IntegrationPoint, &[usize]) -> Result<Vec3>,
@@ -479,7 +528,7 @@ where
                 continue;
             }
         }
-        if let Some(rule) = shell {
+        if let Some(rule) = &shell {
             if matches!(
                 mesh.element_kind(e),
                 crate::mesh::ElementKind::Shell4 | crate::mesh::ElementKind::Shell3

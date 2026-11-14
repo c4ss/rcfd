@@ -742,6 +742,88 @@ pub fn element_spin_softening_mass(coords: &[Vec3], thickness: f64, density: f64
     ))
 }
 
+/// The 24 x 24 spin-softening mass in local axes of a layup with the mass moments `m0`, `m1`, `m2` (ADR 0496 D5) for the unit
+/// axis `a` in local components (ADR 0502 D3): the kinetic energy of the motion perpendicular to the axis of `u + z W theta`,
+/// `W theta = theta x e_3`: `m0 P` on the translations, `m2 R` on the rotations ([`rotary_softening_factor`]) and `m1 P W`
+/// between the translations and the rotations (and its transpose); the drilling rotation takes no term.
+pub fn local_spin_softening_mass_layup(f: &Facet, m0: f64, m1: f64, m2: f64, a: Vec3) -> ElementMatrix {
+    let r = rotary_softening_factor(a);
+    let mut pm = [[0.0; 3]; 3];
+    for (c, row) in pm.iter_mut().enumerate() {
+        for (d, v) in row.iter_mut().enumerate() {
+            *v = if c == d { 1.0 } else { 0.0 } - a[c] * a[d];
+        }
+    }
+    // (P W)[c] = (-P[c][1], P[c][0], 0).
+    let pw: [[f64; 3]; 3] = [
+        [-pm[0][1], pm[0][0], 0.0],
+        [-pm[1][1], pm[1][0], 0.0],
+        [-pm[2][1], pm[2][0], 0.0],
+    ];
+    let mut m = ElementMatrix::zeros(24);
+    let v = m.values_mut();
+    for &xi in &GAUSS {
+        for &eta in &GAUSS {
+            let p = point(&f.local, xi, eta);
+            for i in 0..4 {
+                for j in 0..4 {
+                    let s = p.det * p.n[i] * p.n[j];
+                    for c in 0..3 {
+                        for d in 0..3 {
+                            v[(6 * i + c) * 24 + 6 * j + d] += m0 * s * pm[c][d];
+                            v[(6 * i + 3 + c) * 24 + 6 * j + 3 + d] += m2 * s * r[c][d];
+                            v[(6 * i + c) * 24 + 6 * j + 3 + d] += m1 * s * pw[c][d];
+                            v[(6 * i + 3 + c) * 24 + 6 * j + d] += m1 * s * pw[d][c];
+                        }
+                    }
+                }
+            }
+        }
+    }
+    symmetrise(&mut m);
+    m
+}
+
+/// The global spin-softening mass of a layup shell element for a rotation about the unit `axis` (ADR 0502 D3).
+pub fn element_spin_softening_mass_layup(
+    coords: &[Vec3],
+    m0: f64,
+    m1: f64,
+    m2: f64,
+    axis: Vec3,
+) -> Result<ElementMatrix> {
+    let f = facet(coords)?;
+    let al = [dot(f.axes[0], axis), dot(f.axes[1], axis), dot(f.axes[2], axis)];
+    Ok(to_global(
+        &local_spin_softening_mass_layup(&f, m0, m1, m2, al),
+        &transformation(&f),
+    ))
+}
+
+/// The spin-softening mass of a shell element of a model (ADR 0473 D3, ADR 0502 D3): a Shell4 element of a Layup block takes,
+/// for one isotropic ply, [`element_spin_softening_mass`] of the ply's thickness and density (the call of its `Shell` twin)
+/// and otherwise [`element_spin_softening_mass_layup`] of the laminate's mass moments; any other element
+/// [`element_spin_softening_mass`] of the block's thickness and `material`'s density as before.
+pub(crate) fn model_spin_softening_mass(
+    mesh: &SolidMesh,
+    element: usize,
+    coords: &[Vec3],
+    material: &Material,
+    axis: Vec3,
+) -> Result<ElementMatrix> {
+    if let Some(BlockProperty::Layup { plies }) = mesh.blocks()[mesh.block_of(element)].property() {
+        if mesh.element_kind(element) == ElementKind::Shell4 {
+            if let Some((ply_material, t)) = crate::laminate::single_isotropic(plies) {
+                return element_spin_softening_mass(coords, t, ply_material.density(), axis);
+            }
+            let l = crate::laminate::laminate(plies)?;
+            return element_spin_softening_mass_layup(coords, l.mass[0], l.mass[1], l.mass[2], axis);
+        }
+    }
+    let t = thickness_or_error(mesh, element)?;
+    element_spin_softening_mass(coords, t, material.density(), axis)
+}
+
 fn symmetrise(a: &mut ElementMatrix) {
     let n = a.size();
     let v = a.values_mut();
@@ -925,6 +1007,59 @@ where
         for a in 0..3 {
             fl[6 * i + a] = dot(f.axes[a], force[i]);
         }
+    }
+    let t = transformation(&f);
+    let mut out = [0.0; 24];
+    for (j, o) in out.iter_mut().enumerate() {
+        *o = (0..24).map(|i| t[i * 24 + j] * fl[i]).sum();
+    }
+    Ok(out)
+}
+
+/// The consistent nodal load (forces and moments, global axes, the element's unknown order) of a density-proportional body
+/// force on a layup (ADR 0502 D1): `b(N, x)` the acceleration (global components, m/s^2) at the mid-surface point `x` of the
+/// projected facet, `m0 = sum rho_k t_k` and `m1 = sum rho_k t_k zbar_k` the mass moments; per node the force `m0 int N_i b
+/// dA` and the moment of the first mass moment `m1 int N_i (e_3 x b) dA` (local `(-b_2, b_1, 0)` on `(theta_x, theta_y,
+/// theta_z)`), by the 2 x 2 rule, carried to the nodes by `T^T`.
+pub fn layup_body_load_vector_at<B>(coords: &[Vec3], m0: f64, m1: f64, b: B) -> Result<[f64; 24]>
+where
+    B: Fn(&[f64; 4], Vec3) -> Result<Vec3>,
+{
+    let f = facet(coords)?;
+    let e3 = f.axes[2];
+    let mut p = [[0.0; 3]; 4];
+    for i in 0..4 {
+        for k in 0..3 {
+            p[i][k] = coords[i][k] - f.offsets[i] * e3[k];
+        }
+    }
+    let mut acc = [[0.0; 3]; 4];
+    for &xi in &GAUSS {
+        for &eta in &GAUSS {
+            let q = point(&f.local, xi, eta);
+            let mut x = [0.0; 3];
+            for i in 0..4 {
+                for k in 0..3 {
+                    x[k] += q.n[i] * p[i][k];
+                }
+            }
+            let bx = b(&q.n, x)?;
+            for i in 0..4 {
+                let s = q.n[i] * q.det;
+                for k in 0..3 {
+                    acc[i][k] += s * bx[k];
+                }
+            }
+        }
+    }
+    let mut fl = [0.0; 24];
+    for i in 0..4 {
+        let bl = [dot(f.axes[0], acc[i]), dot(f.axes[1], acc[i]), dot(f.axes[2], acc[i])];
+        for a in 0..3 {
+            fl[6 * i + a] = m0 * bl[a];
+        }
+        fl[6 * i + 3] = -m1 * bl[1];
+        fl[6 * i + 4] = m1 * bl[0];
     }
     let t = transformation(&f);
     let mut out = [0.0; 24];
@@ -1126,6 +1261,21 @@ pub(crate) fn thickness_or_error(mesh: &SolidMesh, element: usize) -> Result<f64
             mesh.element_kind(element).name()
         ),
     })
+}
+
+/// The thickness that carries the membrane resultant of a shell element's pre-stress, `N = t sigma` (ADR 0502 D2): a Shell4
+/// element of a Layup block the total thickness of its plies (one isotropic ply: its thickness), any other element
+/// [`thickness_or_error`] as before.
+pub(crate) fn membrane_thickness(mesh: &SolidMesh, element: usize) -> Result<f64> {
+    if let Some(BlockProperty::Layup { plies }) = mesh.blocks()[mesh.block_of(element)].property() {
+        if mesh.element_kind(element) == ElementKind::Shell4 {
+            if let Some((_, t)) = crate::laminate::single_isotropic(plies) {
+                return Ok(t);
+            }
+            return Ok(crate::laminate::laminate(plies)?.thickness);
+        }
+    }
+    thickness_or_error(mesh, element)
 }
 
 /// The facet of an element of a model, its refusals naming the element (ADR 0432 D4).

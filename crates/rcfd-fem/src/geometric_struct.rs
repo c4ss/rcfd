@@ -22,6 +22,9 @@
 //! ([`prestress_from_static`], ADR 0486, F-557, which lifts the refusal RF1 of ADR 0473); the parts are joined by the linear
 //! constraints of [`crate::tie`].
 //!
+//! A Shell4 element of a Layup block (ADR 0502 D2, D3) takes the same pre-stress and geometric stiffness with its total
+//! thickness (`shell::membrane_thickness`) and the spin-softening mass of its mass moments.
+//!
 //! The centrifugal load on a beam is [`crate::beam::centrifugal_load_vector`] (D5). The trait method
 //! [`crate::element::Element::geometric_stiffness`] of the placeholders of Beam2, Shell4 and Shell3 still refuses: the
 //! assembly calls this module for them.
@@ -189,7 +192,8 @@ pub fn prestress_from_displacement(model: &SolidModel, displacement: &[f64]) -> 
                 ]
             }
             ElementKind::Shell4 | ElementKind::Shell3 => {
-                let t = crate::shell::thickness_or_error(mesh, e).map_err(located)?;
+                // ADR 0502 D2: a layup's resultant over its total thickness.
+                let t = crate::shell::membrane_thickness(mesh, e).map_err(located)?;
                 let st = shells[e].as_ref().expect("a shell element has its stresses");
                 shell_stress(&st.axes, t, st.membrane)
             }
@@ -230,7 +234,7 @@ pub fn element_geometric_stiffness(
             crate::beam::element_geometric_stiffness(coords, &section, v, material, s)
         }
         ElementKind::Shell4 => {
-            let t = crate::shell::thickness_or_error(mesh, element)?;
+            let t = crate::shell::membrane_thickness(mesh, element)?;
             crate::shell::element_geometric_stiffness(coords, t, s)
         }
         ElementKind::Shell3 => {
@@ -258,10 +262,7 @@ pub fn element_spin_softening_mass(
             let (section, v) = beam_property_or_error(mesh, element)?;
             crate::beam::element_spin_softening_mass(coords, &section, v, material, axis)
         }
-        ElementKind::Shell4 => {
-            let t = crate::shell::thickness_or_error(mesh, element)?;
-            crate::shell::element_spin_softening_mass(coords, t, material.density(), axis)
-        }
+        ElementKind::Shell4 => crate::shell::model_spin_softening_mass(mesh, element, coords, material, axis),
         ElementKind::Shell3 => {
             let t = crate::shell::thickness_or_error(mesh, element)?;
             crate::shell3::element_spin_softening_mass(coords, t, material.density(), axis)

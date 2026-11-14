@@ -368,8 +368,9 @@ pub enum BlockProperty {
         shell4_membrane: crate::shell::Shell4Membrane,
     },
     /// A laminated shell block: its plies from the bottom (`-e_3` side) to the top (ADR 0440 D5). Taken by a Shell4 block
-    /// through [`crate::laminate`] (ADR 0496, F-428): stiffness, mass, shell pressure, temperature and stresses; the paths
-    /// that need one thickness refuse it naming [`crate::laminate::FOLLOW_UP`]; a Shell3 block refuses it.
+    /// through [`crate::laminate`] (ADR 0496, F-428): stiffness, mass, shell pressure, temperature and stresses; gravity, the
+    /// centrifugal load, the nodal body force, the pre-stress, the geometric stiffness and the spin-softening mass (ADR 0502,
+    /// F-591); the corotated Newton path refuses it naming [`crate::laminate::FOLLOW_UP`]; a Shell3 block refuses it.
     #[non_exhaustive]
     Layup {
         /// The plies, bottom first.

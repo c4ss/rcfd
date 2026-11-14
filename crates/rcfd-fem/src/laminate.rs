@@ -10,6 +10,11 @@
 //! that it gives the bits of a `Shell` block of that material and thickness (ADR 0496 D3). [`ply_stresses_at`] and
 //! [`layup_response`] give the strains and stresses at the bottom and top of each ply in its material axes, and
 //! [`failure_index`] the maximum-stress, maximum-strain, Tsai-Hill and Tsai-Wu indices with their reserve factors (D6).
+//!
+//! ADR 0502 (F-591): a layup also takes the body loads (gravity and the centrifugal load with the mass moments `m0`, `m1`;
+//! the nodal body force over the total thickness), the pre-stress and geometric stiffness of its membrane resultants
+//! (buckling, pre-stressed modes) and the spin-softening mass of its mass moments (the rotating part); one isotropic ply
+//! takes the calls of its `Shell` twin on each. The corotated Newton path still refuses a layup naming [`FOLLOW_UP`].
 
 use crate::error::{FemError, Result};
 use crate::mesh::{BlockProperty, ElementKind, Ply};
