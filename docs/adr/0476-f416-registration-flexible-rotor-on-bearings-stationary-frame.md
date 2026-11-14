@@ -386,3 +386,14 @@ made after its run. **todo**: the module does not build or the Z, J, R, O and K 
 - Dense algebra: the model is meant for shafts of up to a few hundred unknowns (the solver is `O(n^3)` on `2 n`).
 - Massless unknowns with damping are refused (D3), not solved as first-order unknowns.
 - No case-file key, no CLI or post-processing output beyond the CSV of the Campbell table.
+
+## Amendment 1 (2026-11-14, written before any run of any check of F-416)
+
+While writing the test of O1, before it or any other check was run: the scan range of the quartic's roots in set-up O,
+`[-2 lam_max, 2 lam_max]` with `lam_max` the **Cauchy** bound `1 + max_i |a_i/a_4|`, is defective. The constant term over the
+leading one is `(k11 k22 - k12^2)/(m I_t)`, of order `4e13` for O, so the scan step would be about `8e7 rad/s` and would step over
+every root (they lie between `7e2` and `1e4 rad/s`). The corrected set-up, fixed now: `lam_max` is **Fujiwara's** bound `2
+max(|a_3/a_4|, |a_2/a_4|^(1/2), |a_1/a_4|^(1/3), |a_0/(2 a_4)|^(1/4))` (every root has `|lam| <= lam_max`), of order `1e4 rad/s`
+for O, so the step of the `1e6`-step scan on `[-2 lam_max, 2 lam_max]` is about `0.05 rad/s`, far below the root spacing (over
+`300 rad/s`, arithmetic 2). Everything else of O1 and T1 (the limits, the speeds, the bisection to `1e-14`) is unchanged.
+
