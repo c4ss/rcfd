@@ -8481,7 +8481,7 @@ fixed by the item's registration ADR before any code.
     that reaches the boundary are refused.
   - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0332; the registration is
     written by the implementation agent before any code.
-- [ ] **F-430** Substructuring: static condensation and fixed-interface component mode synthesis (Craig-Bampton)
+- [~] **F-430** Substructuring: static condensation and fixed-interface component mode synthesis (Craig-Bampton)
   - depends on: F-408, F-382, F-383, F-393
   - acceptance: Every limit not stated here is registered in the ADR before the run. Statics: the condensed model gives
     the retained displacements and, after recovery, the interior ones and the stresses of the full model within 1e-10.
@@ -8492,8 +8492,18 @@ fixed by the item's registration ADR before any code.
     below 1e-6 of the seventh. Harmonic response of the assembly equals the full model within 1 percent up to half the
     lowest omitted fixed-interface frequency. A reduced part written to its file and read back gives the same bits. An
     interface set with no nodes and a mode count above the interior size are refused.
-  - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0333; the registration is
-    written by the implementation agent before any code.
+  - note: Structural solver, advanced tier (plan ADR 0310). PARTIAL. Size M. ADR 0469, 2026-11-14: rcfd_fem::cms
+    (cms::PENDING = None): static condensation (Guyan) and the fixed-interface reduction (Craig-Bampton) on the
+    transformation of ADR 0296, reduced parts assembled at interfaces matched by position (Assembly: dense
+    eigen-solution, harmonic response with a loss factor), recovery of interior displacements and stresses, a text part
+    file with the bits of every float. Statics within 4.6e-14 (retained, interior, stresses), every fixed-interface mode
+    kept within 1.7e-12 of all 108 frequencies, the bar of two parts with five modes 4.5e-6, 5.5e-6, 5.6e-4 above the
+    full model and non-increasing with the modes, reduced matrices exactly symmetric and the mass positive definite, a
+    free part's rigid frequencies 1.05e-7 of the seventh, the file round trip bit-exact, the refusals; harmonic within
+    2.3e-3 up to 1000 rad/s but H1 (1 percent up to half the lowest omitted fixed-interface frequency) missed,
+    predicted: 0.997 at 8241 rad/s, no axial mode kept and no residual flexibility of the interior load (above 1e-2 from
+    0.12 of that frequency); follow-ups for residual vectors with modes by cutoff, and for reduced parts in an ordinary
+    model. Follow-ups F-552, F-553.
 - [~] **F-431** Sparse L D L^T with a fill-reducing ordering, and its use by the static, buckling and modal solves
   - depends on: F-408, F-373, F-374, F-382, F-402
   - acceptance: Every limit not stated here is registered in the ADR before the run. Five-point grid 100 x 100 and
@@ -10688,3 +10698,19 @@ fixed by the item's registration ADR before any code.
     to the power of F-418 within 1e-6; the low-frequency reactance giving the added mass 8 rho a^3/3 within 2 percent at
     k a = 0.1.
   - note: Structural solver, advanced tier. Follow-up of F-418 (ADR 0468, 2026-11-14).
+- [ ] **F-552** Craig-Bampton with residual vectors of the interior loads and kept modes chosen by a cutoff frequency
+  - depends on: F-430
+  - acceptance: Every limit not stated here is registered in the ADR before the run. An option of the reduction of ADR
+    0469 adds to each part the static residual vectors of its interior loads (M-orthogonalised against the kept modes)
+    and keeps every fixed-interface mode below a given cutoff. The bar of ADR 0469 with the corner load: the harmonic
+    response within 1 percent of the full model up to half the lowest omitted fixed-interface frequency (the H1 set-up),
+    and the statics of an interior load exact within 1e-10; without the option every result bit-identical to ADR 0469's.
+  - note: Structural solver, advanced tier. Follow-up of F-430 (ADR 0469, 2026-11-14).
+- [ ] **F-553** Reduced parts as superelements in an ordinary model
+  - depends on: F-430
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A reduced part of ADR 0469 is added
+    to a SolidModel on its interface nodes and solved with the model's ordinary elements in the static solve, the modal
+    analysis and the direct harmonic solve. A bar of a reduced half and an ordinary half equals the full model within
+    1e-10 in statics and its first three frequencies are within 0.1 percent and not below the full model's; beams and
+    shells as interface nodes covered; without a reduced part every result bit-identical.
+  - note: Structural solver, advanced tier. Follow-up of F-430 (ADR 0469, 2026-11-14).
