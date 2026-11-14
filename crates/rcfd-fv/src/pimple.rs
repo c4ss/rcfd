@@ -167,6 +167,12 @@ pub struct PimpleSettings {
     /// `PimpleSolver::outer_record`. A negative or NaN tolerance is never met. The pressure-lag estimate keeps `n_outer` outer
     /// passes. Default `None`: exactly `n_outer` outer iterations (bit-identical).
     pub outer_pressure_tolerance: Option<f64>,
+    /// F-535 (ADR 0471 D1): refuse the first step the solver takes, through the divergence guard and before any field is
+    /// touched, when the pressure-lag estimate of ADR 0073 for the step's settings (`lag_preflight` with this many power
+    /// iterations, at least 2) is at least one. The message names the largest cell diffusion number `nu dt/dx^2`
+    /// (`PimpleSolver::max_cell_diffusion`), the estimate and the remedies. Not applied on a moving mesh or to the fractional
+    /// step. Default `None` (bit-identical).
+    pub lag_onset_refusal: Option<usize>,
 }
 
 /// The outer iterations of one step with `PimpleSettings::outer_pressure_tolerance` (F-536, ADR 0458 C2).
@@ -853,6 +859,8 @@ pub struct Divergence {
     pub value: f64,
     /// The Courant limit that applied.
     pub limit: f64,
+    /// The largest cell diffusion number `nu dt/dx^2` of the refused step (F-535, ADR 0471 D2); `NaN` for every other trip.
+    pub diffusion: f64,
     /// The record returned for the tripping step and for every later `step` call.
     pub info: StepInfo,
 }
@@ -903,6 +911,12 @@ impl Divergence {
                 "PIMPLE consistent correctors (ADR 0214) are not defined with the {}: the run is stopped at step \
                  {}{outer}{located}",
                 self.stage, self.step
+            );
+        } else if self.quantity == "lag onset" {
+            // F-535 (ADR 0471 D4)
+            return format!(
+                "PIMPLE pressure-lag onset refusal (opt-in, ADR 0471): the largest cell diffusion number nu dt/dx^2 of the step                  is {:.3}{at}, and the estimated amplification of the lagged pressure error (ADR 0073) is {:.3} per step (>= 1),                  so the step would diverge; the run is stopped at step {} before any work and the state is as it was: use the                  consistent correctors with outer iterations (solver.consistent_correctors.enabled with solver.n_outer >= 8,                  ADR 0214, ADR 0451) or a smaller solver.dt",
+                self.diffusion, self.value, self.step
             );
         } else if self.quantity == "lag amplification" {
             return format!(
@@ -972,6 +986,7 @@ impl PimpleSettings {
             fractional_step_consistent: false,
             pressure_ic_fallback: false,
             outer_pressure_tolerance: None,
+            lag_onset_refusal: None,
         }
     }
 
@@ -1312,6 +1327,50 @@ impl PimpleSolver {
         }
     }
 
+    /// The largest cell diffusion number `nu dt/dx^2` and its cell (F-535, ADR 0471 D3): per cell the length `h = V / max |S_f|`
+    /// over its faces (leaving out the faces normal to an empty direction, so the depth of a 2D mesh is not a length) and the
+    /// viscosity of the solver, or the largest `nu_face` over the cell's faces when that is set.
+    pub fn max_cell_diffusion(&self, dt: f64) -> (f64, usize) {
+        let g = &self.geom;
+        let mesh = &g.mesh;
+        let n = g.n_cells();
+        let (vol, sf, own) = (mesh.cell_volumes(), mesh.face_area_vectors(), mesh.owner());
+        let nei = mesh.neighbour();
+        let mut amax = vec![0.0f64; n];
+        let mut nu_c = vec![self.settings.nu; n];
+        if self.nu_face.is_some() {
+            nu_c.iter_mut().for_each(|v| *v = 0.0);
+        }
+        for f in 0..sf.len() {
+            let a = vec3::norm(sf[f]);
+            let empty_normal = (0..3).any(|k| !g.active[k] && sf[f][k].abs() > 0.99 * a);
+            let cells = if f < g.n_internal {
+                vec![own[f], nei[f]]
+            } else {
+                vec![own[f]]
+            };
+            for c in cells {
+                if !empty_normal {
+                    amax[c] = amax[c].max(a);
+                }
+                if let Some(nf) = &self.nu_face {
+                    nu_c[c] = nu_c[c].max(nf[f]);
+                }
+            }
+        }
+        let mut best = (0.0f64, 0usize);
+        for c in 0..n {
+            if amax[c] > 0.0 {
+                let h = vol[c] / amax[c];
+                let d = nu_c[c] * dt / (h * h);
+                if d > best.0 {
+                    best = (d, c);
+                }
+            }
+        }
+        best
+    }
+
     /// Pre-run estimate of the pressure-lag amplification (ADR 0156 D7, the setup rule SV301): a copy of the solver takes the
     /// next step (the second one from the start under BDF2, whose first step is implicit Euler) with the ADR 0073 check at that
     /// step, `iterations` power iterations and the configured `n_correctors`, without the adaptive control. The solver itself is
@@ -1337,6 +1396,8 @@ impl PimpleSolver {
             s.nu_face = Some(nu.to_vec());
         }
         s.settings.corrector_control = None;
+        // F-535 (ADR 0471 D2): the trial copy does not refuse itself
+        s.settings.lag_onset_refusal = None;
         let euler_first =
             matches!(s.settings.time_scheme, TimeScheme::Bdf2 | TimeScheme::Bdf2Bounded) && s.hist_u[0].older.is_none();
         let at = s.step_no + if euler_first { 2 } else { 1 };
@@ -1436,6 +1497,7 @@ impl PimpleSolver {
             cell,
             value,
             limit,
+            diffusion: f64::NAN,
             info,
         });
         info
@@ -1548,6 +1610,30 @@ impl PimpleSolver {
         }
         if self.settings.fractional.is_some() && self.ale.is_none() {
             return self.step_fractional(dt);
+        }
+        if let Some(its) = self.settings.lag_onset_refusal {
+            if self.step_no == 0 {
+                // F-535 (ADR 0471 D2): the estimate for the step's settings on a copy, before any field is touched
+                if let Some(w) = self.lag_preflight(dt, its.max(2)) {
+                    if w.rho >= 1.0 {
+                        let (d, cell) = self.max_cell_diffusion(dt);
+                        self.step_no += 1;
+                        let info = self.trip(
+                            dt,
+                            None,
+                            "pressure-lag onset",
+                            "lag onset",
+                            Some(cell),
+                            w.rho,
+                            (0.0, 0.0, 0),
+                        );
+                        if let Some(div) = self.diverged.as_mut() {
+                            div.diffusion = d;
+                        }
+                        return info;
+                    }
+                }
+            }
         }
         let g = self.geom.clone();
         let mesh = &g.mesh;
