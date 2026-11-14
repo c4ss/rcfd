@@ -369,7 +369,9 @@ fn record_checks(c: &mut Checks, id: &str, run: &Run) -> f64 {
     );
     let total: usize = r.iter().map(|e| e.used).sum();
     let mean = total as f64 / r.len().max(1) as f64;
-    let (lo, hi) = r.iter().fold((usize::MAX, 0), |(a, b), e| (a.min(e.used), b.max(e.used)));
+    let (lo, hi) = r
+        .iter()
+        .fold((usize::MAX, 0), |(a, b), e| (a.min(e.used), b.max(e.used)));
     println!(
         "{id}: outer iterations per step mean {mean:.3}, min {lo}, max {hi}, total {total} (the fixed 8: {}), {:.1} s",
         8 * run.steps,

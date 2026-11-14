@@ -39,7 +39,8 @@ fn run(mut fl: PimpleSolver, driven: bool) -> PimpleSolver {
         if driven {
             let g = fl.geom.clone();
             let v = (PI * k as f64 * DT).sin();
-            fl.u.set_bc(&g, "xmin", Box::new(FixedValue::vector([v, 0.0, 0.0]))).unwrap();
+            fl.u.set_bc(&g, "xmin", Box::new(FixedValue::vector([v, 0.0, 0.0])))
+                .unwrap();
         }
         fl.step(DT);
         assert!(fl.diverged.is_none(), "step {k} stopped");
