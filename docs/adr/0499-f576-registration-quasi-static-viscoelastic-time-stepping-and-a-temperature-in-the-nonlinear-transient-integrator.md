@@ -264,3 +264,109 @@ heavy record run once, with a fast test on the same code path.
 3. **Case-file key.** Not added (b2). Recommendation for the lead: a study `quasi_static_time = { times = [...], loads = [{ set,
    table }], motions = [{ set, component, value, table }], temperature }` read into `solve_in_time_with`, and a `temperature` key
    in the nonlinear transient study, offered when the maintainer opens the case file to the nonlinear studies.
+
+## Addendum 1: results (2026-11-14)
+
+Registered run: commit cc431390 (`cargo test -p rcfd-fem --release --test sa_qs_visco -- --nocapture --test-threads=1`, log
+`f576-scratch/run1.log`). Each check ran once; no amendment. The bit record B0 was printed on the unchanged base 39e7ef84
+(`f576-scratch/b0-base.log`) and written into the test at commit 35aa5823, before any library code (3c1f3d65).
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| R1t relaxation of one element by one call, motion history, 101 step ends x 8 points | `<= 1e-10` | `4.654e-16` | yes |
+| C1t creep by one call, load history, 20 steps per `tau` | `<= 1e-3` | `1.209e-5` (`3.031e-6` at 40) | yes |
+| C2t observed order | `>= 1.9` | `1.996` | yes |
+| Q2 driver against the loop of `solve_from_at`, R1t and C1t, 20 steps | bits | equal, equal | yes |
+| R3 strain ramp through a motion history | `<= 1e-7` | `4.650e-9` (probe `4.650e-9`) | yes |
+| C3 creep under a load ramp, 20 steps per `tau` | `<= 1e-3` | `5.017e-5` (`1.278e-5` at 40) | yes |
+| C4 observed order | `>= 1.9` | `1.973` | yes |
+| H1 halving with a load history: 1 halving, 2 sub-steps; bits of the explicit `[0.5, 1]` (no halving there) | exact | 1, 2; equal | yes |
+| H2 refused with `max_halvings = 0` | refused | `creep time stepping`, "step 1 of 1 ... not converged in 1 iterations (relative residual 2.1302652789489396e-2 ...)" (probe `2.130265e-2`) | yes |
+| S1d shifted relaxation by the driver with a temperature | `<= 1e-10` | `4.654e-16` | yes |
+| V1T displacements, run at `T` against `T_ref` with `a_T tau` | `<= 1e-10` | `0` | yes |
+| V1T committed stresses | `<= 1e-10` | `0` | yes |
+| NT1 the run at `T_ref` without scaling differs | `>= 1e-2` | `1.468` | yes |
+| NT2 shifted rod without a temperature refused at start | key `"temperature"` | element 0, key `"temperature"` | yes |
+| NT3 a NaN temperature (`Integrator::new`, `solve_in_time_with`) | key `"temperature"` | both | yes |
+| B2 elastic rod with a temperature, 100 steps | bits | equal (values and bytes) | yes |
+| RF2 six refusals of the histories | each with its key | all (`load pattern` x2, `load history`, `motion history` x3) | yes |
+| N1 B0, 13 digests of 39e7ef84 | equal | equal | yes |
+| N5 default-bits files of F-410, F-411, F-423, `sa_creep.rs`, `sa_visco.rs` | pass | pass | yes |
+| N4 `baseline_hashes` | pass | 3 passed, 1 ignored | yes |
+
+V1T is exactly zero: with `a_T = 1.475132967e-3` the two reduced-time ratios `(h/a_T)/tau_i` and `h/(a_T tau_i)` round to the
+same bits for the three branches (a python sample of random `h`, `tau` gives equal bits in 68 percent of the cases, so about
+one chance in three for all three branches). That is a rounding coincidence, not a defect of the measure: NT1 (`1.47`) and MU6
+(`1.19`) show that the check reacts to a wrong temperature.
+
+Other runs: `cargo test -p rcfd-fem --release` (every test binary of the crate): 704 passed, 0 failed, 180 ignored
+(`f576-scratch/fem-all.log`); `cargo test -p rcfd-cli --release --test docs_site`: 2 passed; `cargo clippy -p rcfd-fem
+--all-targets --release -- -D warnings`: clean; `cargo fmt -p rcfd-fem --check`: clean. Not run: the workspace test suite (the
+lead's gate).
+
+Shared solver files changed (line ranges at the tip against 35aa5823): `nonlinear.rs` 35-38 (module doc), 50 and 54 (imports),
+459-469 (`internal_force` forwards to the new `internal_force_at`), 486-495 (its element call through `evaluate` at the
+context), 1458-1490 (`TimeSteppingOptions::temperature` and its check), 1551-1839 (`TimeLoading`, `solve_in_time` as
+`solve_in_time_with` without histories, `solve_in_time_with`, `Histories`); `nl_transient.rs` 17-20 (module doc), 56-57, 69,
+92-96 (the option and its builder), 247, 427-429, 512 (the stored and checked temperature), 601-607 (`start`), 839-842
+(`substep`), 891-894 (`strain_energy`). No edit of `thermal.rs`, `geometric.rs`, `damped.rs`, `harmonic_direct.rs`,
+`estimate.rs`, `mesh.rs`, `assemble.rs`, `recover.rs`, `model.rs` or `material.rs`.
+
+**What was reused** (b1). The driver `solve_in_time` of ADR 0489 D5 is generalised in place. Its time stepping, halving,
+creep-increment limit, located creep error and error text are kept line for line; the histories only form the load vector, the
+prescribed list and the start of each attempt, and without histories these are the borrowed inputs of before. The Prony
+update and the shift of ADR 0485 and the integrator of ADR 0479 are unchanged. The types `LoadTable`, `LoadHistory` and
+`MotionHistory` of the linear transient path are reused for the histories.
+
+**Mutations** (`f576-scratch/mutate.py` on a git-archive copy of cc431390 with its own target directory, log
+`mutations.log`; MU0, the copy without a mutation, passes 6 of 6):
+
+| Id | Caught by |
+|---|---|
+| MU1 load history at the start of the sub-step | C3 (`1.0`), C4 (`0`), H1 (no halving), H2 (accepted) |
+| MU2 motion history at the start of the sub-step | R3 (`8.8e-3`) |
+| MU3 histories ignored at `t = 0` | R1t (NaN: no stress at the step, caught by the finite requirement), C1t (`1.2e-2`), C2t (`0.97`), Q2, S1d (NaN) |
+| MU4 motion values not written into the start | R1t, R3, S1d (refused by `solve_from_at`, key `"displacement"`) |
+| MU5 sub-step context without the temperature | V1T (refused at the first step, key `"temperature"`) |
+| MU6 the reference temperature in the sub-step | V1T (`1.19`, `1.76`), NT1 (`0`) |
+| MU7 the driver's temperature dropped | S1d (refused, key `"temperature"`) |
+| MU8 load at the step target in a halved sub-step | H1 (5 halvings, 32 sub-steps) |
+
+Every planned mutation was caught.
+
+**Deviations.** (1) B0 set-up: the viscoelastic cube runs of the record use the residual criterion alone (`tol_e = 1`, ADR 0485
+arithmetic 6), which D6 did not state; the first print on the base stopped on the default criterion and was rerun with it,
+before any library code. (2) A section of `docs/reference-data.md` gives the closed forms of arithmetic 3 to 5. Nothing else
+deviates from the registration.
+
+**Decision by the registered rule: done.** Every check of the table is met on the first run, every planned mutation is caught,
+fmt and clippy are clean, and B0, the default-bits files and the baseline hashes are unchanged.
+
+### Remaining questions
+
+1. **Case-file key.** Options: (a) none yet; (b) a quasi-static time study `{ times, loads = [{ set, table }], motions = [{
+   set, component, value, table }], temperature }` over `solve_in_time_with`, and `temperature` in the nonlinear transient
+   study. Recommendation: (b), when the maintainer opens the case file to the nonlinear studies.
+2. **Solver name of the driver's error.** It is still `"creep time stepping"` (ADR 0489 H2 reads it), now also for a
+   viscoelastic or elastic model. Options: (a) keep; (b) rename to `"time stepping"` with a records-and-copies change of the
+   H2 test of ADR 0489. Recommendation: (a) until a case-file key exposes it, then (b).
+3. **Temperature history and field.** Options: (a) uniform and constant (this item); (b) a temperature table against time on
+   the driver and the integrator, then a nodal field. Recommendation: (b) as a follow-up when the fan-blade thermal case needs
+   it.
+4. **Rayleigh stiffness damping with a shifted material.** The damping tangent is taken at the default context and refuses
+   the shifted material. Options: (a) leave the refusal; (b) take that tangent at the integrator's temperature.
+   Recommendation: (b), small, inside the temperature follow-up.
+
+## For the lead: roadmap entries
+
+Proposed status of F-576: **done**. Proposed note:
+
+> ADR 0499, 2026-11-14: nonlinear::solve_in_time_with generalises the quasi-static time-stepping driver of ADR 0489 (solve_in_time, now its form without histories) with load and displacement histories against time (TimeLoading of transient::LoadHistory and MotionHistory, piecewise linear factors taken at the end of every attempt, halved or not), with the halvings of ADR 0404, and a uniform temperature (TimeSteppingOptions::temperature); the nonlinear transient integrator takes a uniform temperature (NlTransientOptions::temperature) in the point context of every step, at its start and in its strain energy; nonlinear::internal_force_at. Met: ADR 0485 R1 by one call within 4.7e-16, C1 within 1.21e-5 at 20 steps per tau with order 1.996, bit-equal to the loop of solve_from_at; a strain ramp within 4.7e-9 and creep under a load ramp within 5.0e-5 (order 1.97); a step halved once under a load history, bit-equal to the explicit half steps; S1b by the driver at a temperature within 4.7e-16; a free vibration of the viscoelastic rod at T = T_ref + 10 K against the run at T_ref with every relaxation time scaled by a_T: displacements and stresses equal (0, a rounding coincidence; the unscaled run differs by 1.47); an elastic model with a temperature keeps its bits; default bits (13 digests) and baseline hashes unchanged; eight mutations caught. Case-file key not added (recommended: a quasi-static time study and a temperature in the nonlinear transient study).
+
+Note for F-411 (to append to its note):
+
+> The driver solve_in_time takes load and displacement histories and a uniform temperature as solve_in_time_with (ADR 0499, 2026-11-14); with none it gives the bits of ADR 0489.
+
+Follow-up (optional). Title: "A temperature history on the quasi-static driver and the nonlinear transient integrator". Deps: F-576. Acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. The quasi-static driver and the nonlinear transient integrator take a uniform temperature against time (a piecewise linear table, the step-end value) and the Rayleigh stiffness tangent at that temperature. A relaxation under a temperature step equals the closed form with the reduced time of the two temperatures within 1e-10; a constant table gives the bits of ADR 0499. Models without a temperature keep their bits.

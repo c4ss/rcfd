@@ -2052,3 +2052,16 @@ Shell4 and Shell3 of the repository.
 | Total Lagrangian Green-strain membrane of the bilinear / linear interpolation; with `nu = 0` the thin ring `p = E t (lambda^2 - 1)/(2 R)`, with the facet polygon `1/cos(pi/N)` | derived | ADR 0490 D0, arithmetic 6; ADR 0487 arithmetic 6 |
 | End-moment cantilever: circular arc of radius `E I/M`, tip `(rho sin phi, rho (1 - cos phi))`, `phi = M L/(E I)`, full circle at `M = 2 pi E I/L`; the facet chain `e = phi sin(phi/2)/3072` (16 elements), largest `1.18e-3` | derived | ADR 0490 D5, arithmetic 5; parameters `L = 12, b = 1, t = 0.1, E = 1.2e6` after K. Y. Sze, X. H. Liu and S. H. Lo, Finite Elem. Anal. Des. 40 (2004) 1551: NOT read, from memory (only the parameters) |
 | Measured: roll-up tip error `1.1868e-3` (Shell4, Shell3, Shell4 ANDES), the tip back at the root within `5e-15 L`, tip rotation within `7e-15`; cylinder `+5.357e-4` (Shell4), `+5.395e-4` (Shell3) to the stretch 1.51 | computed | ADR 0490 addendum 1 |
+
+## F-576 quasi-static viscoelastic time stepping with histories, a temperature in the nonlinear transient integrator (ADR 0499)
+
+No source was read for F-576. The closed forms below are derived in ADR 0499 (arithmetic 3 to 6) from the hereditary law of
+ADR 0485 and checked by a plain python prototype of the uniaxial law (`f576-scratch/probe.py`, `probe_h1.py`), no rcfd code.
+Every modulus, relaxation time, load and shift constant is an input of a check.
+
+| Item | Status | Source |
+|---|---|---|
+| Stress of a strain ramp `a = r t` on the total Lagrangian cube, `E_xx = a + a^2/2`: `S_xx = E_0 (r G_1 + r^2 G_2)`, `G_1 = w_inf t + sum w_i tau_i (1 - e^{-t/tau_i})`, `G_2 = w_inf t^2/2 + sum w_i tau_i (t - tau_i (1 - e^{-t/tau_i}))`; the error of the update at most `0.6 E_0 r^2 dt^2/8` | derived | ADR 0499 arithmetic 3 (i) |
+| Creep of the standard solid under a stress ramp `sigma = s' t`: `eps = s' (t/E_inf - (1/E_inf - 1/E_0) tau_c (1 - e^{-t/tau_c}))`, `tau_c = tau E_0/E_inf` | derived | ADR 0499 arithmetic 3 (ii) |
+| Relative residual of one Newton correction of the homogeneous stretch of one Hex8 under a load ramp (the halving set-up): `2.130e-2` for the step `[0, 1] s`, `1.000e-2` and `6.318e-3` for its halves | computed | ADR 0499 arithmetic 4 (`probe_h1.py`) |
+| A uniform temperature `T` with a shift `a_T` equals the reference temperature with every relaxation time `a_T tau_i` (the reduced time `dxi = dt/a_T`) | derived | ADR 0499 arithmetic 5; ADR 0485 arithmetic 4 |
