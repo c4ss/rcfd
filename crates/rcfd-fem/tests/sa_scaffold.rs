@@ -1223,6 +1223,7 @@ impl Contribution for ZerosAt {
 
 /// D6b (amendment 2): the smallest free equation `i` and the smallest free `j` not in row `i` of the pattern.
 #[test]
+#[ignore = "record of the run of ADR 0440 D6b (commit 0907226f): set-up stopped, the smallest free equation has a full pattern row (no j); corrected by amendment 3 as d6c_off_pattern_contribution"]
 fn d6b_off_pattern_contribution() {
     let mut c = Checks::new();
     let bar = stretch_bar(E_MOD);
@@ -1327,5 +1328,52 @@ fn r2b_to_r4b_refusals() {
         ),
         &format!("{:?} / {:?}", r4a.err(), r4b.err()),
     );
+    c.finish();
+}
+
+/// D6c (amendment 3): `i` the smallest free equation whose pattern row does not hold every free equation, `j` the smallest
+/// free equation not in that row.
+#[test]
+fn d6c_off_pattern_contribution() {
+    let mut c = Checks::new();
+    let bar = stretch_bar(E_MOD);
+    let reference = solve(&bar, &[], &[], &NewtonOptions::new(1)).unwrap();
+    let k0 = stiffness(&bar).unwrap();
+    let dofs = bar.dof_map();
+    let mut fixed = vec![false; dofs.n_equations()];
+    for (set, comp) in [("xmin", 0), ("ymin", 1), ("zmin", 2)] {
+        for &n in bar.mesh().node_set(set).unwrap() {
+            fixed[dofs.equation(n, comp).unwrap()] = true;
+        }
+    }
+    let row = |i: usize| &k0.col[k0.row_ptr[i]..k0.row_ptr[i + 1]];
+    let free: Vec<usize> = (0..fixed.len()).filter(|&q| !fixed[q]).collect();
+    let i = *free
+        .iter()
+        .find(|&&q| free.iter().any(|f| !row(q).contains(f)))
+        .unwrap();
+    let j = *free.iter().find(|&&q| !row(i).contains(&q)).unwrap();
+    c.holds(
+        "D6c the pair is off the pattern",
+        !row(i).contains(&j),
+        &format!("equations {i} and {j}"),
+    );
+    let z = ZerosAt { a: i, b: j };
+    let r = solve_with(
+        &bar,
+        &[],
+        &[],
+        &NewtonOptions::new(1),
+        DriverExtensions {
+            contributions: vec![&z],
+            step_control: None,
+        },
+    )
+    .unwrap();
+    let (a, b) = (r.result.displacement_values(), reference.result.displacement_values());
+    let dev =
+        a.iter().zip(b).map(|(x, y)| (x - y).abs()).fold(0.0, f64::max) / b.iter().map(|y| y.abs()).fold(0.0, f64::max);
+    println!("D6c: bit-equal {}", bits(a) == bits(b));
+    c.at_most("D6c off-pattern zeros: max |u - u_ref| / max |u_ref|", dev, 1e-10);
     c.finish();
 }
