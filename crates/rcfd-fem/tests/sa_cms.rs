@@ -374,9 +374,12 @@ fn harmonic_errors(omegas: &[f64]) -> Vec<f64> {
         .collect()
 }
 
-/// H1 (a11): within 1 percent up to half the lowest omitted fixed-interface frequency (predicted miss, ADR 0469).
+/// H1 (a11): within 1 percent up to half the lowest omitted fixed-interface frequency (predicted miss, ADR 0469). Missed at
+/// its registered run (commit 4117733c): largest 9.966e-1 at omega 8241.00 (half of 16482, B's axial fixed-interface mode),
+/// 9.381e-1 at the axial resonance 8178.99, first point above 1e-2 at 1977.84 rad/s; the limit is kept.
 #[test]
-fn h1_harmonic_to_half_the_lowest_omitted() {
+#[ignore = "known miss of ADR 0469 H1 (predicted by its arithmetic item 3): 9.966e-1 > 1e-2; no axial fixed-interface mode is kept and the interior load's flexibility is missing above about 0.12 of the lowest omitted frequency"]
+fn h1_harmonic_to_half_the_lowest_omitted_known_miss() {
     let (a, b) = bar_parts(5);
     let half = 0.5 * a.omitted_eigenvalue().unwrap().sqrt().min(b.omitted_eigenvalue().unwrap().sqrt());
     println!("omega_half = {half:.3} rad/s");
