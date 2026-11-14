@@ -209,6 +209,115 @@ dz) = 1/8`; without it `h = dz = 0.01` and the number is 156 times larger. MU6 i
 only). By the decision rule as registered, a check that is met only after an amendment made after a run gives **partial**; the
 addendum reports that and says what the amendment changed.
 
-## Addendum 1: results
+## Addendum 1: results (2026-11-14)
 
-(to be written after the registered runs)
+Commits on `f535-work`: `b2442863` (this registration), `0b74cb0e` (the library change and the registered tests; every registered
+run was made on it, with `cargo fmt` applied to the test files before the commit, layout only), `02cf6974` (amendment 1 and the
+dynamic-mesh page), `9e60fd05` (L3b), and the last commit (this addendum and the roadmap entries). Release profile throughout
+(`CARGO_TARGET_DIR=w49i-work/target-f535`, `target-f535b`, `f535-scratch/target-mut`); logs in `w49i-work/f535-scratch`
+(`run1_post.log`, `fv_suite.log`, `fv_subset.log`, `post_subset.log`, `baseline_hashes.log`, `clippy.log`, `docs_site.log`,
+`mutlogs/`). Each registered run was made once. One amendment (L3b) was made after the runs, for the surviving mutation MU6.
+
+**The library change** (`crates/rcfd-fv/src/pimple.rs`, all opt-in, 86 lines added, none removed): `PimpleSettings::lag_onset_refusal:
+Option<usize>` (`None` in `piso`), `Divergence::diffusion` (`NaN` in `trip`, set by the refusal), the `"lag onset"` branch of
+`Divergence::message`, `PimpleSolver::max_cell_diffusion`, the clearing of the option in the trial copy of `preflight_run`, and
+the gate at the start of `step_with` (after the F0 and immersed refusals and the fractional return, before `self.geom.clone()`).
+With `None` the gate is one `Option` test.
+
+### Results
+
+| Check | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| R1 FC refused at step 1 as `lag onset`, `N = 100, 50, 25` | value `>= 1` | `9.2322`, `16.1584`, `25.9376` | yes |
+| R2 `N = 838, 500` (`D = 3.00, 5.03`) | refused, `>= 1` | `1.1722`, `2.0356` | yes |
+| R3 against the Warn estimate, `N = 100, 50, 25` | `<= 1e-12` | `0` each | yes |
+| R4 state as it was (fields, time, history, records), three further calls | exact | exact at every level | yes |
+| R5 diffusion number against `nu dt/dy^2` | `<= 1e-9` | `2.55e-14` at each level | yes |
+| R6 message substrings (8 per level) | all present | 24 of 24 | yes |
+| R7 estimate at `D = 2.51` | `< 1` | `0.96178` | yes |
+| R8 20 steps at `D = 2.51`: no trip, `max abs(u)` | `<= 10 V0` | none; `1.439 V0` | yes |
+| R9 bit for bit equal to the run without the option, every step | exact | equal | yes |
+| R10 a later step with `D = 100` not refused by the option | not `lag onset` | not refused | yes |
+| R11 remedies (consistent, `n_outer = 8`), `N = 100, 50, 25`, 4 steps | no trip | no trip | yes |
+| R12 no option: step taken at `N = 100` | no trip, `u` moved | both | yes |
+| L1 FQ refused, fields as before, `diffusion` | `>= 1`; exact; `1e-9` | `5.0100`; exact; `25.1327` (`nu dt/dy^2` to 1e-9) | yes |
+| L2 FQ `N = 400`, 5 steps equal to the run without the option | exact | equal, no trip | yes |
+| L3 `cavity_2d(16, 1)` diffusion number | `1e-9` | `2.5600000000000008e-2` against `2.56e-2` | yes |
+| L3b thin 2D box (amendment 1) | `1e-9` | `6.4e-3` against `6.4e-3` | yes |
+| L4 fractional step not refused, equal to the run without the option | exact | equal | yes |
+| L5 default is `None` | none | none | yes |
+| N1 `baseline_hashes` | passes | 3 passed, 1 ignored | yes |
+| N2 `rcfd-fv` suite, release | passes | see "What was not run" | **partly** |
+| N2 subset (`w34b_lag`, `piso_thin_gap_f299`, `consistent_correctors_f301`, `consistent_defaults_f301`, `outer_criterion_f536`, `lag_refusal_f535`) and `rcfd-post` `piso_diffusion_f530`, `piso_outer_criterion_f536` | pass | fv: 12, 6, 6, 3, 18, 3 passed (0 failed, 9 ignored records); post: 3 + 3 passed (0 failed, 8 ignored records) | yes |
+| N3 tests: new files only | adds only | two files added, none edited | yes |
+
+Clippy `-D warnings` on `rcfd-fv` and `rcfd-post` (all targets): clean. `cargo fmt -p rcfd-fv -p rcfd-post --check`: clean.
+`cargo test -p rcfd-cli --release --test docs_site`: 2 passed (the page `docs/dynamic-mesh.md` was changed).
+
+Records (no limit): the refusal call takes about `0.85 s` on FC (one trial step with 20 power iterations).
+
+**Deviations.** (i) L3's registered `dt` and `nu` were inconsistent with the quoted `D = 25.6` (amendment 1); the test uses the
+registered values against `nu dt n^2`. (ii) `cargo fmt` was applied to the test files after the registered runs and before their
+commit; layout only, the runs were not repeated. (iii) L3b was added after the runs (amendment 1).
+
+### Mutations
+
+Applied one at a time to a `git archive` copy of `0b74cb0e` by `f535-scratch/mutate.py` (exact replacement, one occurrence
+asserted); both new test files were run in release in `f535-scratch/target-mut`; logs `mutlogs/MU1.log` to `MU10.log`.
+
+| Mutation | Caught by |
+| --- | --- |
+| MU1 threshold never reached | L1; R1, R2 |
+| MU2 threshold always reached | L2; R7, R8, R9, R11 |
+| MU3 state touched before the trip | L1; R1 (R4) |
+| MU4 `time += dt` in the refusal | L1; R1 (R4) |
+| MU5 `V / min S` as the length | L1; R1 (R5) |
+| **MU6 empty-direction filter dropped** | **not caught by the registered checks** (L3's cavity has depth equal to the cell width, so the largest face is the same with and without the filter); **caught by L3b** (amendment 1, `mutlogs/MU6_amend1.log`) |
+| MU7 the diffusion number replaced by the estimate in the message | L1; R1 (R5, R6) |
+| MU8 the option not cleared in the trial copy | every refusal test: stack overflow in both files |
+| MU9 refusal tried at every step | R10 only (the fv tests take no second step) |
+| MU10 `iterations = 2` | R1, R2 (the estimate at 2 iterations is below one at these levels, so nothing is refused) |
+
+### Reading
+
+* The estimate depends on the power-iteration count. At `D = 2.51` it is `0.962` with 20 iterations and `1.0003` with 200 (probe
+  before the registration; the slowly growing mode sits in cell 4743, not the thin-gap mode). So "runs at 2.5" holds for the
+  registered 20 iterations with a margin of 0.038; with 200 iterations the same step would be refused. The estimate is a
+  diagnostic of the linearised map, not a stability bound.
+* The refusal is a statement about the first step's settings. A solver started at a safe step that later raises `dt` is not
+  refused (R10).
+* Under BDF2 the estimate is that of the second step of the trial copy; the refusal is still at the first call.
+* `rcfd-api` turns a transient trip into a `kind` by `quantity`; `"lag onset"` falls under `non_finite` there. Not changed (the
+  option is not reachable from a case file, and the change would touch the event JSON).
+
+### What was not run
+
+The complete `cargo test -p rcfd-fv --release` was started (log `fv_suite.log`). At the time of writing 65 of about 187 test
+binaries had run, with 448 passed, 0 failed and 159 ignored; it was then held up by a heavy existing test of
+`immersed_piso_stop_f355`. The remaining binaries were not completed by this agent; the lead's gate covers the whole suite. The
+registered N2 is therefore partly run, with the subset above as the tests that cover the changed lines.
+
+### Decision by the registered rule
+
+R1 to R12, L1 to L5, L3b, N1 and N3 are met on their registered runs, and the acceptance clauses c1 to c6 hold with the estimate
+at 20 iterations. By the letter of the rule the status is **partial**, for two reasons: MU6 survived the registered checks and
+was caught only by a check added by amendment after the runs (L3b), and N2 was not completed. No limit was missed or changed, and
+no default result changed. Recommendation: accept as done once the lead's gate has run the whole `rcfd-fv` suite, because both
+reasons concern the evidence, not a missed limit.
+
+### Open questions (each with a recommendation)
+
+* Q1. Expose the option in the case file (`solver.lag_onset_refusal`)? Options: (a) no key, Rust API only; (b) a key with
+  `hash_omit_default` (boolean, count fixed at 20), which still changes the schema golden, the CLI help and the MCP list, so it
+  needs the maintainer's approval of the golden edit. Recommendation: (b) after that approval, because a case-file user meets the
+  divergence and needs the message. The maintainer decides; the Rust API option is enough for this item.
+* Q2. Report `"lag onset"` in the `rcfd-api` divergence event as `lag_amplification` with limit 1 (a few lines in `sim.rs`)?
+  Recommendation: yes, together with Q1.
+* Q3. The estimate depends on the iteration count (0.962 at 20, 1.0003 at 200 at `D = 2.51`): keep 20 or raise it?
+  Recommendation: keep 20 (ADR 0073's default, what ADR 0451 measured) and keep the sensitivity on record.
+* Q4. Refuse at later steps as well (when `dt` or the viscosity changes)? Recommendation: no; the pre-run setup rule SV301
+  (`lag_preflight`) and the adaptive control `corrector_control` cover the run.
+
+## For the lead: roadmap entries
+
+> F-535 status: partial. Note: Numerics. PARTIAL (ADR 0471, 2026-11-14; registered before the code, amendment 1 after the registered runs). The opt-in PimpleSettings::lag_onset_refusal = Some(n) makes the first PISO/PIMPLE step refuse, through the divergence guard and before any field is touched, when the ADR 0073 estimate for the step's settings (n power iterations on a copy of the solver) is at least one; the message names the largest cell diffusion number nu dt/dx^2 (PimpleSolver::max_cell_diffusion), the estimate and the remedies. The fixed-mesh channel of ADR 0451 is refused at nu dt/dy^2 = 100, 50, 25, 5.03 and 3.00 (estimates 25.9, 16.2, 9.23, 2.04, 1.17), with the state bit for bit as it was, and runs at 2.51 (estimate 0.962, 20 steps bit for bit equal to the run without the option); the consistent correctors with 8 outer iterations pass. Defaults bit-identical (baseline_hashes passes; one Option test on the default path). Ten mutations: nine caught by the registered checks, the empty-direction filter only by a check added by amendment (L3b). Partial because of that amendment and because the complete rcfd-fv suite was not finished by the agent. Limits: the estimate depends on the iteration count (0.962 at 20, 1.0003 at 200 iterations at 2.51); first step only; not on moving meshes or the fractional step; no case key. Open: ADR 0471 Q1 to Q4.
