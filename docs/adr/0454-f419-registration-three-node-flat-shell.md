@@ -435,7 +435,7 @@ Mutations (scratch copy of 4f9fd6fb, `f419-scratch/mutlogs`), each caught:
 | id | caught by |
 | --- | --- |
 | MU1 | SS2, P1 (and P2 to P6) |
-| MU2 | PT3, PT4, PT6, SS1, SS2, CT1, CT2, RG1, CY1, FQ1, P1 to P5; ISO1 not (the mutant is isotropic in its own way) |
+| MU2 | PT3, PT4, PT6, SS1, SS2, CT1, CT2, RG1, CY1, FQ1, P1 to P5; ISO1 not: both relabellings are cyclic and keep the direction `i -> j` of every edge, so the one-sided tying is invariant under them |
 | MU3 | SE1 (9 zeros), AN2, N2 (singular stiffness); FR1 and FR3 not reached: the modal solve refused (a cluster fills the subspace) |
 | MU4 | PT1, PT5, SE2 |
 | MU5 | PT3, PT4, PT6, SS1 to SS3, CT1, CT2, RG1, FQ1, ISO1, SE1, N4, P1 to P6 |
