@@ -18,6 +18,8 @@ cuda = ["rcfd-fv/cuda", "rcfd-gpu/cuda"]
 
 [dependencies]
 rcfd-core.workspace = true
+rcfd-dist.workspace = true
+rcfd-fem.workspace = true
 rcfd-fv.workspace = true
 rcfd-gpu.workspace = true
 rcfd-io.workspace = true

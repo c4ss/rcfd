@@ -39,6 +39,7 @@ pub mod scalars;
 pub mod schema;
 pub mod service;
 pub mod sim;
+pub mod solid_parallel;
 pub mod sources;
 pub mod stats;
 pub mod study;

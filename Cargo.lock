@@ -2613,6 +2613,8 @@ name = "rcfd-api"
 version = "0.1.0"
 dependencies = [
  "rcfd-core",
+ "rcfd-dist",
+ "rcfd-fem",
  "rcfd-fv",
  "rcfd-gpu",
  "rcfd-io",
