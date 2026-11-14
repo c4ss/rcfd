@@ -172,7 +172,10 @@ pub fn update(material: &Material, strain: &[f64; 6], state: &[f64]) -> Result<U
         ),
         other => Err(FemError::InvalidValue {
             key: "material",
-            reason: format!("a {} material: the return map of ADR 0475 takes a J2 material", other.name()),
+            reason: format!(
+                "a {} material: the return map of ADR 0475 takes a J2 material",
+                other.name()
+            ),
         }),
     }
 }

@@ -2008,7 +2008,11 @@ fn m1_to_m4_after_f422() {
     // M1.
     for (m, name, package) in pending_variants() {
         // ADR 0452: Orthotropic and Tabulated have landed.
-        let want = if landed_f409(name) || name == "J2" { None } else { Some(package) };
+        let want = if landed_f409(name) || name == "J2" {
+            None
+        } else {
+            Some(package)
+        };
         c.holds(
             &format!("M1 {name}"),
             m.name() == name && m.pending() == want,

@@ -728,8 +728,7 @@ impl Problem<'_> {
         for k in 0..=o.max_iterations {
             // The trial states: a material with history updates them, always from the committed states (ADR 0475 D3);
             // the linear material has none (D5).
-            let (mut fint, mut kt, trial) =
-                force_and_tangent(self.model, &u, states_c, o.threads).map_err(classify)?;
+            let (mut fint, mut kt, trial) = force_and_tangent(self.model, &u, states_c, o.threads).map_err(classify)?;
             if !self.contributions.is_empty() {
                 contribute(self.contributions, &u, lt, &mut fint, Some(&mut kt)).map_err(Failure::Other)?;
             }

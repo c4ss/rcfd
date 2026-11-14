@@ -229,9 +229,7 @@ fn t2_element_tangent_central_differences() {
             let u: Vec<f64> = (0..n).map(|_| rng.sym(scale)).collect();
             let trial = element_trial_state(el, &x, &mat, &u, &st).unwrap();
             let yielded = (0..np)
-                .filter(|&q| {
-                    trial.values()[q * 13..(q + 1) * 13] != st.values()[q * 13..(q + 1) * 13]
-                })
+                .filter(|&q| trial.values()[q * 13..(q + 1) * 13] != st.values()[q * 13..(q + 1) * 13])
                 .count();
             c.holds(
                 &format!("T2 {} {branch}: set-up (points yielded)", kind.name()),
@@ -423,11 +421,20 @@ fn u4_n2_model_bar() {
     for steps in [1, 100] {
         let r = solve(&m, &[], &[], &NewtonOptions::new(steps)).unwrap();
         let (x, ue) = element_data(&m, &r, 0);
-        let s = element_second_piola_kirchhoff(element_for(ElementKind::Hex8), &x, &m.materials()[0].1, &ue, &r.states[0])
-            .unwrap();
+        let s = element_second_piola_kirchhoff(
+            element_for(ElementKind::Hex8),
+            &x,
+            &m.materials()[0].1,
+            &ue,
+            &r.states[0],
+        )
+        .unwrap();
         let worst = s.iter().map(|p| (p[0] - want).abs() / want).fold(0.0, f64::max);
         let lateral = max_abs(s.iter().flat_map(|p| p[1..].to_vec())) / want;
-        println!("  U4 {steps} steps: S_xx {:.12e}, closed {want:.12e}, lateral {lateral:.3e}", s[0][0]);
+        println!(
+            "  U4 {steps} steps: S_xx {:.12e}, closed {want:.12e}, lateral {lateral:.3e}",
+            s[0][0]
+        );
         c.at_most(
             &format!("U4 {steps} steps: max |S_xx - closed(E_xx)| / closed"),
             worst,
@@ -533,7 +540,9 @@ fn sphere(mat: Material, p: Option<f64>) -> SolidModel {
     }
     mesh.add_surface_set(
         "bore",
-        (0..ELEMENTS_PER_LAYER).map(|e| FaceRef { element: e, face: 0 }).collect(),
+        (0..ELEMENTS_PER_LAYER)
+            .map(|e| FaceRef { element: e, face: 0 })
+            .collect(),
     )
     .unwrap();
     let mesh = upgrade_to_hex20_mapped(&mesh, |p| {
@@ -624,7 +633,11 @@ fn o1(c: &mut Checks, name: &str, steps: &[LoadStep]) {
             }
         }
     }
-    c.at_least(&format!("O1 {name}: least order over {} increments", steps.len()), least, 1.8);
+    c.at_least(
+        &format!("O1 {name}: least order over {} increments", steps.len()),
+        least,
+        1.8,
+    );
     c.holds(
         &format!("O1 {name}: increments with fewer than three residuals above 1e-12"),
         short == 0,
@@ -676,7 +689,11 @@ fn s1_to_s3_c1_o1_sphere_loading() {
     let p = 0.98 * 2.0 * 2.0f64.ln() * SY;
     let model = sphere(mat.clone(), Some(p));
     let r = solve(&model, &[], &[], &NewtonOptions::new(20));
-    c.holds("S3 the solve at 0.98 p_lim converges", r.is_ok(), &format!("{:?}", r.as_ref().err()));
+    c.holds(
+        "S3 the solve at 0.98 p_lim converges",
+        r.is_ok(),
+        &format!("{:?}", r.as_ref().err()),
+    );
     if let Ok(r) = r {
         let pts = sphere_points(&model, &r);
         let elastic: Vec<&Point> = pts.iter().filter(|q| q.alpha == 0.0).collect();
@@ -954,10 +971,26 @@ fn r1_n3_refusals() {
     };
     for (name, r, key) in [
         ("yield_stress 0", Material::j2(base(), 0.0, 0.0, 0.0), "yield_stress"),
-        ("yield_stress -2e8", Material::j2(base(), -2e8, 0.0, 0.0), "yield_stress"),
-        ("yield_stress NaN", Material::j2(base(), f64::NAN, 0.0, 0.0), "yield_stress"),
-        ("isotropic -1e9 (softening)", Material::j2(base(), SY, -1e9, 0.0), "isotropic"),
-        ("kinematic -1e9 (softening)", Material::j2(base(), SY, 0.0, -1e9), "kinematic"),
+        (
+            "yield_stress -2e8",
+            Material::j2(base(), -2e8, 0.0, 0.0),
+            "yield_stress",
+        ),
+        (
+            "yield_stress NaN",
+            Material::j2(base(), f64::NAN, 0.0, 0.0),
+            "yield_stress",
+        ),
+        (
+            "isotropic -1e9 (softening)",
+            Material::j2(base(), SY, -1e9, 0.0),
+            "isotropic",
+        ),
+        (
+            "kinematic -1e9 (softening)",
+            Material::j2(base(), SY, 0.0, -1e9),
+            "kinematic",
+        ),
     ] {
         let got = key_of(r);
         c.holds(
@@ -1158,7 +1191,11 @@ fn s1_to_s3_c1_sphere_loading_met_rows() {
         );
     }
     let r = sphere_s3();
-    c.holds("S3 the solve at 0.98 p_lim converges", r.is_ok(), &format!("{:?}", r.as_ref().err()));
+    c.holds(
+        "S3 the solve at 0.98 p_lim converges",
+        r.is_ok(),
+        &format!("{:?}", r.as_ref().err()),
+    );
     c.finish();
 }
 
