@@ -159,3 +159,205 @@ pub(crate) fn add_thermal_load(
     }
     Ok(())
 }
+
+/// A nodal temperature field against time (ADR 0534 D1): a reference temperature (the stress-free temperature, K) and points
+/// `(t_k, field_k)`, each field one temperature in K per node of the mesh, the times strictly increasing. Every node is
+/// interpolated in time by the rule of [`crate::transient::LoadTable::value`] (the point value at a point time, `v_i + s (v_j -
+/// v_i)` between), so a uniform field has at every time the bits of the table of its values. Taken by the quasi-static driver
+/// ([`crate::nonlinear::TimeSteppingOptions::temperature_field`]) and the nonlinear transient integrator
+/// ([`crate::nl_transient::NlTransientOptions::temperature_field`]) at the end time of every attempt or sub-step, with the
+/// multiplicative thermal stretch `F_th = (1 + alpha (T - T_ref)) I` of the material's expansion (ADR 0534 arithmetic 1).
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct TemperatureFieldHistory {
+    reference: f64,
+    points: Vec<(f64, Vec<f64>)>,
+}
+
+fn field_error(reason: String) -> FemError {
+    FemError::InvalidValue {
+        key: "temperature",
+        reason,
+    }
+}
+
+impl TemperatureFieldHistory {
+    /// A field history; refuses (key `"temperature"`) fewer than two points, times that are not finite and strictly
+    /// increasing, fields of zero or unequal length, a value or a reference that is not finite.
+    pub fn new(reference: f64, points: Vec<(f64, Vec<f64>)>) -> Result<TemperatureFieldHistory> {
+        if !reference.is_finite() {
+            return Err(field_error(format!(
+                "the reference temperature {reference:e} is not finite"
+            )));
+        }
+        if points.len() < 2 {
+            return Err(field_error(format!(
+                "a temperature field history of {} points (at least 2)",
+                points.len()
+            )));
+        }
+        let n = points[0].1.len();
+        if n == 0 {
+            return Err(field_error("a temperature field of no node".to_string()));
+        }
+        for (i, (t, field)) in points.iter().enumerate() {
+            if !t.is_finite() {
+                return Err(field_error(format!("time {t:e} of point {i} is not finite")));
+            }
+            if i > 0 && *t <= points[i - 1].0 {
+                return Err(field_error(format!(
+                    "time {t:e} of point {i} does not follow {:e}",
+                    points[i - 1].0
+                )));
+            }
+            if field.len() != n {
+                return Err(field_error(format!(
+                    "the field of point {i} has {} values, the first has {n}",
+                    field.len()
+                )));
+            }
+            if let Some(b) = field.iter().position(|v| !v.is_finite()) {
+                return Err(field_error(format!(
+                    "the value {:e} at node {b} of point {i} is not finite",
+                    field[b]
+                )));
+            }
+        }
+        Ok(TemperatureFieldHistory { reference, points })
+    }
+
+    /// One field held over `[t_start, t_end]`.
+    pub fn constant(reference: f64, field: Vec<f64>, t_start: f64, t_end: f64) -> Result<TemperatureFieldHistory> {
+        TemperatureFieldHistory::new(reference, vec![(t_start, field.clone()), (t_end, field)])
+    }
+
+    /// The reference temperature, K.
+    pub fn reference(&self) -> f64 {
+        self.reference
+    }
+
+    /// The points `(time, field)`.
+    pub fn points(&self) -> &[(f64, Vec<f64>)] {
+        &self.points
+    }
+
+    /// The number of nodes of every field.
+    pub fn n_nodes(&self) -> usize {
+        self.points[0].1.len()
+    }
+
+    /// The first and last time.
+    pub fn range(&self) -> (f64, f64) {
+        (self.points[0].0, self.points[self.points.len() - 1].0)
+    }
+
+    /// Whether the history covers `[t_a, t_b]` (exact comparison).
+    pub fn covers(&self, t_a: f64, t_b: f64) -> bool {
+        let (lo, hi) = self.range();
+        lo <= t_a && t_b <= hi
+    }
+
+    /// The nodal temperatures at `t`, `None` outside the history; each node by the rule of `LoadTable::value`.
+    pub fn value(&self, t: f64) -> Option<Vec<f64>> {
+        let (lo, hi) = self.range();
+        if !(lo <= t && t <= hi) {
+            return None;
+        }
+        let j = self.points.partition_point(|(ti, _)| *ti < t);
+        let (tj, fj) = &self.points[j];
+        if *tj == t || j == 0 {
+            return Some(fj.clone());
+        }
+        let (ti, fi) = &self.points[j - 1];
+        let s = (t - ti) / (tj - ti);
+        Some(fi.iter().zip(fj).map(|(vi, vj)| vi + s * (vj - vi)).collect())
+    }
+}
+
+/// The nodal temperatures of a field at the time of one attempt (ADR 0534 D2): the values, the reference and whether the
+/// thermal strain acts (off for the damping tangent of the integrator, D5).
+#[derive(Debug, Clone)]
+pub(crate) struct FieldAt {
+    pub nodal: Vec<f64>,
+    pub reference: f64,
+    pub expansion: bool,
+}
+
+impl FieldAt {
+    /// The history's value at `t` (the history covers `t`).
+    pub fn of(history: &TemperatureFieldHistory, t: f64, expansion: bool) -> FieldAt {
+        FieldAt {
+            nodal: history.value(t).expect("temperature field coverage checked"),
+            reference: history.reference(),
+            expansion,
+        }
+    }
+}
+
+/// The point temperature `T_q = sum_b N_b T_b` and change `dT_q = sum_b N_b (T_b - T_ref)` of an element (ADR 0534
+/// arithmetic 2); an element whose nodal values have the same bits `T_0` gives `(T_0, T_0 - T_ref)`, the exact interpolant.
+pub(crate) fn point_temperature(n: &[f64], nodal: &[f64], reference: f64) -> (f64, f64) {
+    let t0 = nodal[0];
+    if nodal.iter().all(|t| t.to_bits() == t0.to_bits()) {
+        return (t0, t0 - reference);
+    }
+    let t = n.iter().zip(nodal).map(|(nb, tb)| nb * tb).sum();
+    let dt = n.iter().zip(nodal).map(|(nb, tb)| nb * (tb - reference)).sum();
+    (t, dt)
+}
+
+/// The models a temperature field is offered to (ADR 0534 D4): solids of the `Full` formulation with a material of one
+/// finite expansion coefficient; a field of one value per node with `1 + alpha (T_b - T_ref) > 0` at every node of every
+/// element at every time of the history. Refused: a field of another length (`FieldLength`, key `"temperature"`), a shell
+/// block and a block of another formulation (key `"temperature"`), a material without a single finite coefficient (key
+/// `"expansion"`), a non-positive thermal stretch at a node (key `"temperature"`).
+pub(crate) fn check_field_model(model: &SolidModel, history: &TemperatureFieldHistory) -> Result<()> {
+    let mesh = model.mesh();
+    if history.n_nodes() != mesh.nodes().len() {
+        return Err(FemError::FieldLength {
+            key: "temperature",
+            expected: mesh.nodes().len(),
+            found: history.n_nodes(),
+        });
+    }
+    for (b, block) in mesh.blocks().iter().enumerate() {
+        if matches!(block.kind(), ElementKind::Shell4 | ElementKind::Shell3) {
+            return Err(field_error(format!(
+                "block {b} ({}): a temperature field is offered to solid elements only (ADR 0534 D4)",
+                block.kind().name()
+            )));
+        }
+        if block.formulation() != crate::mesh::SolidFormulation::Full {
+            return Err(field_error(format!(
+                "block {b} ({} {}): a temperature field is offered to the Full formulation only (ADR 0534 D4)",
+                block.kind().name(),
+                block.formulation().name()
+            )));
+        }
+    }
+    let materials = model.material_indices()?;
+    for e in 0..mesh.n_elements() {
+        let material = &model.materials()[materials[e]].1;
+        let alpha = material.expansion();
+        if !alpha.is_finite() {
+            return Err(FemError::InvalidValue {
+                key: "expansion",
+                reason: format!(
+                    "element {e}: the {} material has no single finite expansion coefficient (ADR 0534 D4)",
+                    material.name()
+                ),
+            });
+        }
+        for (t, field) in history.points() {
+            for &node in mesh.element_nodes(e) {
+                let theta = 1.0 + alpha * (field[node] - history.reference());
+                if theta.is_nan() || theta <= 0.0 {
+                    return Err(field_error(format!(
+                        "node {node} at {t:e} s: the thermal stretch 1 + alpha dT = {theta:e} is not positive (ADR 0534 D4)"
+                    )));
+                }
+            }
+        }
+    }
+    Ok(())
+}

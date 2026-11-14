@@ -54,6 +54,7 @@ use crate::material::{Matrix6, PointContext};
 use crate::mesh::{ElementKind, SolidFormulation};
 use crate::model::{Load, Material, SolidModel, SolidResult, SolverStats};
 use crate::solve::PIVOT_TOLERANCE;
+use crate::thermal::{FieldAt, TemperatureFieldHistory};
 use crate::transient::{LoadHistory, LoadTable, MotionHistory};
 use rcfd_core::vec3::Vec3;
 use rcfd_linalg::skyline::{PivotRule, SkylineError, SkylineLdlt, SkylineOptions};
@@ -139,6 +140,40 @@ fn evaluate<E: Element + ?Sized>(
     want_tangent: bool,
     context: &PointContext,
 ) -> Result<Evaluation> {
+    evaluate_with(
+        element,
+        coords,
+        material,
+        displacement,
+        state,
+        want_tangent,
+        context,
+        None,
+    )
+}
+
+/// The nodal temperatures of one element in its node order, the reference and whether the thermal strain acts (ADR 0534 D2).
+#[derive(Debug, Clone, Copy)]
+struct ElementTemperatures<'a> {
+    nodal: &'a [f64],
+    reference: f64,
+    expansion: bool,
+}
+
+/// [`evaluate`] with an optional nodal temperature field of the element (ADR 0534 D2): without one the operations of the
+/// base; with one every point takes the context with its temperature and, when the expansion acts, the multiplicative
+/// thermal stretch of [`thermal_point_update`].
+#[allow(clippy::too_many_arguments)]
+fn evaluate_with<E: Element + ?Sized>(
+    element: &E,
+    coords: &[Vec3],
+    material: &Material,
+    displacement: &[f64],
+    state: &ElementState,
+    want_tangent: bool,
+    context: &PointContext,
+    thermal: Option<ElementTemperatures<'_>>,
+) -> Result<Evaluation> {
     let size = 3 * element.n_nodes();
     if displacement.len() != size {
         return Err(FemError::FieldLength {
@@ -187,7 +222,18 @@ fn evaluate<E: Element + ?Sized>(
         }
         let strain = green_lagrange(&h);
         let committed = &state.values()[q * ns..(q + 1) * ns];
-        let (s, d) = point_update(material, &strain, committed, context, &mut new_state)?;
+        let (s, d) = match thermal {
+            None => point_update(material, &strain, committed, context, &mut new_state)?,
+            Some(th) => thermal_point_update(
+                material,
+                &strain,
+                committed,
+                context,
+                &ip.geometry.n,
+                th,
+                &mut new_state,
+            )?,
+        };
         let b = b_nonlinear(grad, &f);
         for (c, fc) in force.iter_mut().enumerate() {
             let mut v = 0.0;
@@ -264,6 +310,46 @@ fn point_update(
         }
         _ => material.stress(strain, context, committed)?,
     })
+}
+
+/// The material at one point with a nodal temperature field (ADR 0534 arithmetic 1 and 2): the point context with the
+/// temperature `T_q = sum_b N_b T_b`; with the expansion acting and `a = alpha dT_q` not zero the multiplicative thermal
+/// stretch `theta = 1 + a`: the material at `E_e = (E - (a + a^2/2) I)/theta^2` gives `S_e`, `D_e`, and the point gives `S =
+/// theta S_e`, `D = D_e/theta`. A point with `theta <= 0` is refused (key `"temperature"`).
+fn thermal_point_update(
+    material: &Material,
+    strain: &[f64; 6],
+    committed: &[f64],
+    context: &PointContext,
+    n: &[f64],
+    thermal: ElementTemperatures<'_>,
+    new_state: &mut Vec<f64>,
+) -> Result<([f64; 6], Matrix6)> {
+    let (t_q, dt_q) = crate::thermal::point_temperature(n, thermal.nodal, thermal.reference);
+    let mut at = context.clone();
+    at.temperature = Some(t_q);
+    let a = if thermal.expansion {
+        material.expansion() * dt_q
+    } else {
+        0.0
+    };
+    if a == 0.0 {
+        return point_update(material, strain, committed, &at, new_state);
+    }
+    let theta = 1.0 + a;
+    if theta.is_nan() || theta <= 0.0 {
+        return Err(FemError::InvalidValue {
+            key: "temperature",
+            reason: format!("the thermal stretch 1 + alpha dT = {theta:e} at a point is not positive (ADR 0534 D2)"),
+        });
+    }
+    let e_th = a * (1.0 + 0.5 * a);
+    let t2 = theta * theta;
+    let elastic: [f64; 6] = std::array::from_fn(|i| (strain[i] - if i < 3 { e_th } else { 0.0 }) / t2);
+    let (s_e, d_e) = point_update(material, &elastic, committed, &at, new_state)?;
+    let s = s_e.map(|v| theta * v);
+    let d = d_e.map(|row| row.map(|v| v / theta));
+    Ok((s, d))
 }
 
 /// The unknowns of a Hex8.
@@ -844,12 +930,81 @@ pub fn internal_force_at(
     states: &[ElementState],
     context: &PointContext,
 ) -> Result<Vec<f64>> {
+    internal_force_field(model, u, states, context, None)
+}
+
+/// [`internal_force_at`] with a nodal temperature field and its thermal strain (ADR 0534 D2): `temperatures` one value per
+/// node, K, `reference` the stress-free temperature. Refused: the models of ADR 0534 D4 (a shell or BBar block, a material
+/// without a single expansion coefficient, a field of another length, a non-positive thermal stretch).
+pub fn internal_force_with_field(
+    model: &SolidModel,
+    u: &[f64],
+    states: &[ElementState],
+    context: &PointContext,
+    temperatures: &[f64],
+    reference: f64,
+) -> Result<Vec<f64>> {
+    let field = checked_field(model, temperatures, reference)?;
+    internal_force_field(model, u, states, context, Some(&field))
+}
+
+/// [`tangent_at`] with a nodal temperature field and its thermal strain (ADR 0534 D2), refused as
+/// [`internal_force_with_field`].
+pub fn tangent_with_field(
+    model: &SolidModel,
+    u: &[f64],
+    states: &[ElementState],
+    threads: Option<usize>,
+    context: &PointContext,
+    temperatures: &[f64],
+    reference: f64,
+) -> Result<CsrMatrix> {
+    let field = checked_field(model, temperatures, reference)?;
+    Ok(force_and_tangent(model, u, states, threads, context, Some(&field))?.1)
+}
+
+/// One nodal field checked against the model (ADR 0534 D4), with the expansion acting.
+fn checked_field(model: &SolidModel, temperatures: &[f64], reference: f64) -> Result<FieldAt> {
+    let history = TemperatureFieldHistory::constant(reference, temperatures.to_vec(), 0.0, 1.0)?;
+    crate::thermal::check_field_model(model, &history)?;
+    Ok(FieldAt {
+        nodal: temperatures.to_vec(),
+        reference,
+        expansion: true,
+    })
+}
+
+/// The element slice of a nodal field.
+fn element_field<'a>(
+    field: Option<&FieldAt>,
+    nodes: &[usize],
+    buffer: &'a mut Vec<f64>,
+) -> Option<ElementTemperatures<'a>> {
+    let field = field?;
+    buffer.clear();
+    buffer.extend(nodes.iter().map(|&n| field.nodal[n]));
+    Some(ElementTemperatures {
+        nodal: buffer.as_slice(),
+        reference: field.reference,
+        expansion: field.expansion,
+    })
+}
+
+/// The assembled internal force at a context with an optional nodal field (ADR 0534 D2).
+pub(crate) fn internal_force_field(
+    model: &SolidModel,
+    u: &[f64],
+    states: &[ElementState],
+    context: &PointContext,
+    field: Option<&FieldAt>,
+) -> Result<Vec<f64>> {
     check_model(model)?;
     check_fields(model, u, states)?;
     let materials = model.material_indices()?;
     let mesh = model.mesh();
     let dofs = model.dof_map();
     let mut out = vec![0.0; u.len()];
+    let mut buffer = Vec::new();
     for e in 0..mesh.n_elements() {
         let nodes = mesh.element_nodes(e);
         let coords: Vec<Vec3> = nodes.iter().map(|&n| mesh.nodes()[n]).collect();
@@ -862,7 +1017,7 @@ pub fn internal_force_at(
         } else if is_fbar(model, e) {
             evaluate_fbar(&coords, material, &ue, &states[e], false, context).map(|ev| ev.force)
         } else {
-            evaluate(
+            evaluate_with(
                 crate::element::element_for(kind),
                 &coords,
                 material,
@@ -870,6 +1025,7 @@ pub fn internal_force_at(
                 &states[e],
                 false,
                 context,
+                element_field(field, nodes, &mut buffer),
             )
             .map(|ev| ev.force)
         }
@@ -899,7 +1055,19 @@ pub fn tangent_at(
     threads: Option<usize>,
     context: &PointContext,
 ) -> Result<CsrMatrix> {
-    Ok(force_and_tangent(model, u, states, threads, context)?.1)
+    Ok(force_and_tangent(model, u, states, threads, context, None)?.1)
+}
+
+/// [`tangent_at`] with an optional nodal field (ADR 0534 D5: the damping tangent at the field's temperatures).
+pub(crate) fn tangent_field(
+    model: &SolidModel,
+    u: &[f64],
+    states: &[ElementState],
+    threads: Option<usize>,
+    context: &PointContext,
+    field: Option<&FieldAt>,
+) -> Result<CsrMatrix> {
+    Ok(force_and_tangent(model, u, states, threads, context, field)?.1)
 }
 
 /// The internal force and the tangent in one pass: element matrices by [`assemble_with`], element forces stored per element
@@ -911,6 +1079,7 @@ fn force_and_tangent(
     states: &[ElementState],
     threads: Option<usize>,
     context: &PointContext,
+    field: Option<&FieldAt>,
 ) -> Result<(Vec<f64>, CsrMatrix, Vec<ElementState>)> {
     check_model(model)?;
     check_fields(model, u, states)?;
@@ -935,7 +1104,18 @@ fn force_and_tangent(
             evaluate_fbar(ctx.coords, ctx.material, &ue, &states[ctx.element], true, context)?
         } else {
             let el = crate::element::element_for(ctx.kind);
-            evaluate(el, ctx.coords, ctx.material, &ue, &states[ctx.element], true, context)?
+            let mut buffer = Vec::new();
+            let thermal = element_field(field, ctx.nodes, &mut buffer);
+            evaluate_with(
+                el,
+                ctx.coords,
+                ctx.material,
+                &ue,
+                &states[ctx.element],
+                true,
+                context,
+                thermal,
+            )?
         };
         *forces[ctx.element].lock().expect("element force slot") = ev.force;
         *trial[ctx.element].lock().expect("element state slot") = ev.state;
@@ -1293,6 +1473,8 @@ struct Problem<'a> {
     contributions: &'a [&'a dyn Contribution],
     /// The point context of every evaluation (ADR 0485 D3); the default for the static driver.
     context: PointContext,
+    /// A nodal temperature field of the attempt (ADR 0534 D2); `None` for every path without one.
+    field: Option<&'a FieldAt>,
 }
 
 impl Problem<'_> {
@@ -1326,11 +1508,22 @@ impl Problem<'_> {
         let mut previous_set: Option<Vec<bool>> = None;
         let (mut e_first, mut e_last) = (0.0, 0.0);
         let dofs = self.model.dof_map();
+        // ADR 0534 amendment 1: with a field whose expansion acts, the thermal force f_int(0) at the empty states enters the
+        // reference of the residual.
+        let thermal_reference = match self.field {
+            Some(field) if field.expansion => {
+                let empty = initial_states(self.model).map_err(classify)?;
+                let f0 = internal_force_field(self.model, &vec![0.0; u.len()], &empty, &self.context, Some(field))
+                    .map_err(classify)?;
+                norm(self.free.iter().map(|&i| f0[i]))
+            }
+            _ => 0.0,
+        };
         for k in 0..=o.max_iterations {
             // The trial states: a material with history updates them, always from the committed states (ADR 0475 D3);
             // the linear material has none (D5).
             let (mut fint, mut kt, trial) =
-                force_and_tangent(self.model, &u, states_c, o.threads, &self.context).map_err(classify)?;
+                force_and_tangent(self.model, &u, states_c, o.threads, &self.context, self.field).map_err(classify)?;
             // ADR 0479 D2: the internal force without the contributions is kept for the converged iterate, and a
             // contribution may extend the reference of the residual.
             let mut elastic = None;
@@ -1345,6 +1538,9 @@ impl Problem<'_> {
             let mut reference = norm(self.free.iter().map(|&i| lt * self.f[i])).max(norm(fint.iter().copied()));
             if extra_reference > 0.0 {
                 reference = reference.max(extra_reference);
+            }
+            if thermal_reference > 0.0 {
+                reference = reference.max(thermal_reference);
             }
             let r = if reference > 0.0 { rn / reference } else { rn };
             if !r.is_finite() {
@@ -1564,6 +1760,7 @@ pub(crate) fn controlled_attempt(
         contributions,
         // ADR 0485 D3: the arc-length step of ADR 0480 is static, at the default point context.
         context: PointContext::default(),
+        field: None,
     };
     match problem.attempt_with(u_c, lambda_c, lambda_c, states_c, Some(control)) {
         Ok(a) => Ok(ControlledAttempt {
@@ -1655,6 +1852,7 @@ pub fn solve_with(
         options,
         contributions: &contributions,
         context: PointContext::default(),
+        field: None,
     };
     let mut u = vec![0.0; n];
     let mut lambda = 0.0;
@@ -1823,6 +2021,33 @@ pub fn solve_from_at(
     contributions: &[&dyn Contribution],
     context: &PointContext,
 ) -> Result<Equilibrium> {
+    solve_from_field(
+        model,
+        prescribed,
+        load,
+        start,
+        states,
+        options,
+        contributions,
+        context,
+        None,
+    )
+}
+
+/// [`solve_from_at`] with an optional nodal temperature field of the attempt and its thermal strain (ADR 0534 D2; the
+/// model is checked against the field by the caller).
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn solve_from_field(
+    model: &SolidModel,
+    prescribed: &[Prescribed],
+    load: &[f64],
+    start: &[f64],
+    states: &[ElementState],
+    options: &NewtonOptions,
+    contributions: &[&dyn Contribution],
+    context: &PointContext,
+    field: Option<&FieldAt>,
+) -> Result<Equilibrium> {
     model.validate()?;
     // ADR 0522 D4: Shell4 and Shell3 take the corotated element of ADR 0490.
     model.check_supported_nonlinear_shells()?;
@@ -1868,6 +2093,7 @@ pub fn solve_from_at(
         options,
         contributions,
         context: context.clone(),
+        field,
     };
     match problem.attempt(start, 1.0, 1.0, states) {
         Ok(a) => Ok(Equilibrium {
@@ -1901,6 +2127,9 @@ pub struct TimeSteppingOptions {
     /// A uniform temperature against time, K (ADR 0526 D2): a piecewise linear table taken at the end time of every attempt
     /// (`None`: none; refused together with `temperature`).
     pub temperature_history: Option<LoadTable>,
+    /// A nodal temperature field against time with the thermal strain of the materials' expansion (ADR 0534 D3): taken at the
+    /// end time of every attempt (`None`: none; refused together with `temperature` or `temperature_history`).
+    pub temperature_field: Option<TemperatureFieldHistory>,
 }
 
 impl TimeSteppingOptions {
@@ -1912,6 +2141,7 @@ impl TimeSteppingOptions {
             max_halvings: 5,
             temperature: None,
             temperature_history: None,
+            temperature_field: None,
         }
     }
     /// With the Newton options of each attempt.
@@ -1934,6 +2164,12 @@ impl TimeSteppingOptions {
         self.temperature_history = Some(table);
         self
     }
+    /// With a nodal temperature field against time and its thermal strain (ADR 0534 D3), taken at the end time of every
+    /// attempt.
+    pub fn temperature_field(mut self, field: TemperatureFieldHistory) -> TimeSteppingOptions {
+        self.temperature_field = Some(field);
+        self
+    }
     fn check(&self) -> Result<()> {
         if let Some(t) = self.temperature {
             PointContext::new().with_temperature(t)?;
@@ -1942,6 +2178,14 @@ impl TimeSteppingOptions {
             return Err(FemError::InvalidValue {
                 key: "temperature",
                 reason: "a constant temperature and a temperature history together (ADR 0526 D1)".to_string(),
+            });
+        }
+        if self.temperature_field.is_some() && (self.temperature.is_some() || self.temperature_history.is_some()) {
+            return Err(FemError::InvalidValue {
+                key: "temperature",
+                reason:
+                    "a temperature field together with a constant temperature or a temperature history (ADR 0534 D3)"
+                        .to_string(),
             });
         }
         if self.max_creep_increment.is_nan() || self.max_creep_increment <= 0.0 {
@@ -2054,10 +2298,12 @@ pub fn solve_in_time(
 /// values of the model and `prescribed` (constant) and of each motion, `value s_j(t1)` (written into the start of the
 /// attempt). With `options.temperature` every point context carries that uniform temperature (D2); with
 /// `options.temperature_history` the table's value at the attempt's end time `t1` (ADR 0526 D2: the material relaxes over
-/// the attempt at that temperature). Refused before any attempt: a load pattern of the wrong length or with a non-finite
+/// the attempt at that temperature); with `options.temperature_field` the nodal field's value at `t1` and its thermal strain
+/// (ADR 0534 D3). Refused before any attempt: a load pattern of the wrong length or with a non-finite
 /// value (key `"load pattern"`), a table that does not cover `[0, t_last]` (keys `"load history"`, `"motion history"`,
 /// `"temperature"`), a motion of an equation already prescribed by the model, by `prescribed` or by an earlier motion (key
-/// `"motion history"`), a temperature together with a temperature history (key `"temperature"`).
+/// `"motion history"`), a temperature together with a temperature history (key `"temperature"`), a temperature field not
+/// covering `[0, t_last]` or together with either, and the models of ADR 0534 D4.
 pub fn solve_in_time_with(
     model: &SolidModel,
     prescribed: &[Prescribed],
@@ -2096,6 +2342,19 @@ pub fn solve_in_time_with(
             });
         }
     }
+    // ADR 0534 D3, D4: the field covers the run and the model takes it.
+    if let Some(field) = &options.temperature_field {
+        if !field.covers(0.0, t_last) {
+            let (lo, hi) = field.range();
+            return Err(FemError::InvalidValue {
+                key: "temperature",
+                reason: format!("the temperature field covers [{lo:e}, {hi:e}] s, not [0, {t_last:e}] s (ADR 0534 D3)"),
+            });
+        }
+        crate::thermal::check_field_model(model, field)?;
+    }
+    // ADR 0534 D3: the field at the end time of an attempt, with the thermal strain.
+    let field_at = |t: f64| options.temperature_field.as_ref().map(|f| FieldAt::of(f, t, true));
     let mut u = vec![0.0; n];
     for &(eq, v) in &fixed {
         u[eq] = v;
@@ -2120,7 +2379,8 @@ pub fn solve_in_time_with(
     let at0 = context(0.0, 0.0)?;
     let eq = {
         let (f, p, s) = histories.at(0.0, &load, prescribed, &u);
-        solve_from_at(model, &p, &f, &s, &start, &options.newton, &[], &at0)?
+        let field = field_at(0.0);
+        solve_from_field(model, &p, &f, &s, &start, &options.newton, &[], &at0, field.as_ref())?
     };
     let mut steps = vec![TimeStep {
         time: 0.0,
@@ -2145,7 +2405,8 @@ pub fn solve_in_time_with(
             let ctx = context(t1, t1 - t)?;
             let attempt = {
                 let (f, p, s) = histories.at(t1, &load, prescribed, &u);
-                solve_from_at(model, &p, &f, &s, &states, &options.newton, &[], &ctx)
+                let field = field_at(t1);
+                solve_from_field(model, &p, &f, &s, &states, &options.newton, &[], &ctx, field.as_ref())
             };
             let failure = match attempt {
                 Ok(eq) => {

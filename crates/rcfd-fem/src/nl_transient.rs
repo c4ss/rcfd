@@ -20,7 +20,10 @@
 //! one no temperature is given. A uniform temperature against time ([`NlTransientOptions::temperature_history`], ADR 0526
 //! D3) is a piecewise linear table taken at the end time of every sub-step (and at the start, and at the time of the state
 //! for the strain energy); the stiffness part of the Rayleigh damping then takes its tangent at that temperature (ADR 0526
-//! D4; with the constant temperature at that one).
+//! D4; with the constant temperature at that one). A nodal temperature field against time
+//! ([`NlTransientOptions::temperature_field`], ADR 0534 D5) is taken at the same times with the thermal strain of the
+//! materials' expansion (the multiplicative stretch of [`crate::thermal::TemperatureFieldHistory`]); the damping tangent is
+//! then taken at the field's temperatures without the thermal strain.
 //!
 //! The energy-momentum step ([`StepKind::EnergyMomentum`], ADR 0514, Simo and Tarnow) is opt-in: the midpoint step with the
 //! internal force `B_NL(F_{n+1/2})^T (S_n + S_{n+1})/2`, which conserves the energy and the linear and angular momenta of an
@@ -42,6 +45,7 @@ use crate::mesh::ElementKind;
 use crate::model::{Load, Material, SolidModel};
 use crate::nonlinear::{self, Contribution, NewtonOptions};
 use crate::solve::PIVOT_TOLERANCE;
+use crate::thermal::{FieldAt, TemperatureFieldHistory};
 use crate::transient::{LoadHistory, LoadTable, Method, Rayleigh};
 use rcfd_core::vec3::Vec3;
 use rcfd_linalg::skyline::{SkylineError, SkylineLdlt};
@@ -93,6 +97,10 @@ pub struct NlTransientOptions {
     /// A uniform temperature against time, K (ADR 0526 D3): a piecewise linear table taken at the end time of every
     /// sub-step (`None`: none; refused together with `temperature`).
     pub temperature_history: Option<LoadTable>,
+    /// A nodal temperature field against time with the thermal strain of the materials' expansion (ADR 0534 D5): taken at
+    /// the end time of every sub-step (`None`: none; refused together with `temperature` or `temperature_history`, with the
+    /// energy-momentum step and with the models of ADR 0534 D4).
+    pub temperature_field: Option<TemperatureFieldHistory>,
     /// The step (ADR 0514 D3; default [`StepKind::Method`]).
     pub step: StepKind,
     /// The algorithmic stress of the energy-momentum step (ADR 0523 D4; default [`AlgorithmicStress::Auto`]); not read by
@@ -111,6 +119,7 @@ impl NlTransientOptions {
             newton: NewtonOptions::new(1),
             temperature: None,
             temperature_history: None,
+            temperature_field: None,
             step: StepKind::Method,
             stress: AlgorithmicStress::Auto,
         }
@@ -143,6 +152,12 @@ impl NlTransientOptions {
     /// The same options with a uniform temperature against time, K (ADR 0526 D3), taken at the end time of every sub-step.
     pub fn temperature_history(mut self, table: LoadTable) -> NlTransientOptions {
         self.temperature_history = Some(table);
+        self
+    }
+    /// The same options with a nodal temperature field against time and its thermal strain (ADR 0534 D5), taken at the end
+    /// time of every sub-step.
+    pub fn temperature_field(mut self, field: TemperatureFieldHistory) -> NlTransientOptions {
+        self.temperature_field = Some(field);
         self
     }
     /// The same options with the energy-momentum step (ADR 0514 D3).
@@ -334,6 +349,10 @@ pub struct Integrator {
     damping: Rayleigh,
     /// The temperature at which `c` was formed (ADR 0526 D4).
     c_temperature: Option<f64>,
+    /// The nodal temperature field against time (ADR 0534 D5).
+    temperature_field: Option<TemperatureFieldHistory>,
+    /// The nodal temperatures at which `c` was formed with a field (ADR 0534 D5).
+    c_field: Option<Vec<f64>>,
     step: StepKind,
     /// The algorithmic stress of the energy-momentum step (ADR 0523 D4).
     stress: AlgorithmicStress,
@@ -542,6 +561,24 @@ impl Integrator {
                 "a constant temperature and a temperature history together (ADR 0526 D1)".to_string(),
             ));
         }
+        // ADR 0534 D4, D5: the field alone, on the Method step, and a model that takes it.
+        if let Some(field) = &options.temperature_field {
+            if options.temperature.is_some() || options.temperature_history.is_some() {
+                return Err(invalid(
+                    "temperature",
+                    "a temperature field together with a constant temperature or a temperature history (ADR 0534 D5)"
+                        .to_string(),
+                ));
+            }
+            if options.step == StepKind::EnergyMomentum {
+                return Err(invalid(
+                    "temperature",
+                    "a temperature field on the energy-momentum step: the midpoint step has no thermal strain (ADR 0534 D4)"
+                        .to_string(),
+                ));
+            }
+            crate::thermal::check_field_model(model, field)?;
+        }
         let parameters = options.method.parameters()?;
         if parameters[2] <= 0.0 {
             return Err(invalid(
@@ -609,8 +646,21 @@ impl Integrator {
             Some(table) => Some(table.points()[0].1),
             None => options.temperature,
         };
+        // ADR 0534 D5: with a field, K_0 at its first values without the thermal strain.
+        let c_field = options
+            .temperature_field
+            .as_ref()
+            .map(|f| FieldAt::of(f, f.range().0, false));
         let c = if damping.mass != 0.0 || damping.stiffness != 0.0 {
             let k0 = match c_temperature {
+                _ if c_field.is_some() => nonlinear::tangent_field(
+                    model,
+                    &vec![0.0; n],
+                    &initial,
+                    threads,
+                    &PointContext::default(),
+                    c_field.as_ref(),
+                )?,
                 None => nonlinear::tangent(model, &vec![0.0; n], &initial, threads)?,
                 Some(t) => nonlinear::tangent_at(
                     model,
@@ -642,6 +692,8 @@ impl Integrator {
             temperature_history: options.temperature_history.clone(),
             damping,
             c_temperature,
+            temperature_field: options.temperature_field.clone(),
+            c_field: c_field.map(|f| f.nodal),
             step: options.step,
             stress: options.stress,
             hyper: false,
@@ -670,6 +722,17 @@ impl Integrator {
     }
 
     fn check_coverage(&self, t_a: f64, t_b: f64) -> Result<()> {
+        if let Some(field) = &self.temperature_field {
+            if !field.covers(t_a, t_b) {
+                let (lo, hi) = field.range();
+                return Err(invalid(
+                    "temperature",
+                    format!(
+                        "the temperature field covers [{lo:e}, {hi:e}], the run needs [{t_a:e}, {t_b:e}] (ADR 0534 D5)"
+                    ),
+                ));
+            }
+        }
         if let Some(table) = &self.temperature_history {
             if !table.covers(t_a, t_b) {
                 let (lo, hi) = table.range();
@@ -722,6 +785,33 @@ impl Integrator {
         let Some(c) = &self.c else {
             return Ok(None);
         };
+        // ADR 0534 D5: with a field, re-formed at nodal temperatures other than those of the stored matrix.
+        if let Some(field) = &self.temperature_field {
+            if self.damping.stiffness == 0.0 {
+                return Ok(Some(Cow::Borrowed(c)));
+            }
+            let at = FieldAt::of(field, t, false);
+            let stored = self.c_field.as_deref().expect("formed at the field");
+            if at.nodal.iter().zip(stored).all(|(a, b)| a.to_bits() == b.to_bits()) {
+                return Ok(Some(Cow::Borrowed(c)));
+            }
+            let n = self.m.n;
+            let initial = nonlinear::initial_states(&self.model)?;
+            let k0 = nonlinear::tangent_field(
+                &self.model,
+                &vec![0.0; n],
+                &initial,
+                self.newton.threads,
+                &PointContext::default(),
+                Some(&at),
+            )?;
+            return Ok(Some(Cow::Owned(combine(
+                self.damping.mass,
+                &self.m,
+                self.damping.stiffness,
+                &k0,
+            ))));
+        }
         if self.temperature_history.is_none() || self.damping.stiffness == 0.0 || self.hyper {
             return Ok(Some(Cow::Borrowed(c)));
         }
@@ -793,6 +883,11 @@ impl Integrator {
         let fint = match self.temperature_at(t0) {
             // ADR 0523 D5: the neo-Hookean internal force of the energy-momentum step.
             _ if self.hyper => emc::internal_force(&self.model, u0, &PointContext::default())?,
+            // ADR 0534 D5: the start at the field with its thermal strain.
+            _ if self.temperature_field.is_some() => {
+                let field = FieldAt::of(self.temperature_field.as_ref().expect("checked"), t0, true);
+                nonlinear::internal_force_field(&self.model, u0, &states, &PointContext::default(), Some(&field))?
+            }
             None => nonlinear::internal_force(&self.model, u0, &states)?,
             // ADR 0499 D3: the start at the temperature (a shifted material needs it).
             Some(t) => {
@@ -1058,7 +1153,19 @@ impl Integrator {
         if let Some(t) = self.temperature_at(t_b) {
             context = context.with_temperature(t)?;
         }
-        let eq = nonlinear::solve_from_at(&self.model, &[], &load, u, states, &self.newton, &list, &context)?;
+        // ADR 0534 D5: the nodal field at the sub-step's end with its thermal strain.
+        let field = self.temperature_field.as_ref().map(|f| FieldAt::of(f, t_b, true));
+        let eq = nonlinear::solve_from_field(
+            &self.model,
+            &[],
+            &load,
+            u,
+            states,
+            &self.newton,
+            &list,
+            &context,
+            field.as_ref(),
+        )?;
         let (a1, v1) = kin.of(&eq.u);
         Ok(Advanced {
             iterations: eq.residuals.len() - 1,
@@ -1101,6 +1208,12 @@ impl Integrator {
             return Err(invalid(
                 "strain energy",
                 "a material with history has no strain energy potential (ADR 0479 D3)".to_string(),
+            ));
+        }
+        if self.temperature_field.is_some() {
+            return Err(invalid(
+                "strain energy",
+                "the strain energy with a temperature field is not offered (ADR 0534 D4)".to_string(),
             ));
         }
         let model = &self.model;
