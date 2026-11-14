@@ -11089,7 +11089,8 @@ fixed by the item's registration ADR before any code.
     of the last three residuals stays 1.27 .. 1.44 and does not exist in 4 to 5 increments of each P1 solve, so the
     reading is a bound, not an order. Not caught: the mutation that compares the trial with the previous trial instead
     of the committed state (equivalent in monotonic loading); follow-up F-NEW. The reading is general; F-600 can reuse
-    it with the contact status as the set. Follow-up F-606.
+    it with the contact status as the set. Follow-up F-606. MR4 caught by F-606 (ADR 0521, 2026-11-14); done is the
+    maintainer's call.
 - [~] **F-561** Thick sphere with J2 on a refined octant: residual hoop stress after unloading
   - depends on: F-422
   - acceptance: Every limit not stated here is registered in the ADR before the run. The partly plastic sphere of ADR
@@ -11745,7 +11746,7 @@ fixed by the item's registration ADR before any code.
     bits and the baseline hashes are unchanged; the schema golden is updated with the maintainer's approval.
   - note: Structural solver, advanced tier. Follow-up of F-589 (ADR 0516, 2026-11-14). NEEDS THE USER: a case-file key
     and schema golden change.
-- [ ] **F-606** Active-set record of the Newton driver on a load and unload solve
+- [x] **F-606** Active-set record of the Newton driver on a load and unload solve
   - depends on: F-560
   - acceptance: Every limit not stated here is registered in the ADR before the run. On a J2 solve in which integration
     points leave the yielded set during an increment (the load and unload sphere S4 of ADR 0475 or the bar of ADR 0475
@@ -11753,7 +11754,18 @@ fixed by the item's registration ADR before any code.
     differs from the committed state counted independently from the states, some iteration of some increment records a
     smaller count than the one before it, and the mutation of ADR 0515 MR4 (trial compared with the previous trial) is
     caught.
-  - note: Structural solver, advanced tier. Follow-up of F-560 (ADR 0515, 2026-11-14).
+  - note: ADR 0521, 2026-11-14: the opt-in active-set record of the Newton driver (ADR 0515) checked against a count
+    made independently from the states on the load and unload sphere S4 of ADR 0475, with 16 steps and with 2 steps: the
+    iterates are captured by a recording driver contribution, the trial states come from the public
+    `element_trial_state` and the committed states are chained from `initial_states`; the recorded yielded count and the
+    set-changed flag equal the independent ones in every iteration (0 mismatches of 70 and of 14), the chained states
+    equal the result bits, the record is bit-neutral on the contribution path. The count falls within an increment: 189
+    to 0 at the first unloading increment of the 16-step run (rounding chatter of points on the yield surface), and 195,
+    88, 4, 3, 0 in the 2-step run (real overshoot of the corrections). The mutation of ADR 0515 MR4 (trial compared with
+    the previous trial) is caught by the equality of the count and of the flag (1 and 2 mismatches of 70, 4 and 1 of
+    14), as are the flag always false, the flag always true and the count of points with alpha > 0. No library change;
+    no case-file key. The bar U4 with a reversal was not run (it has no reversal); F-560 can be marked done since its
+    uncaught MR4 is caught here.
 - [ ] **F-607** Energy-momentum step for hyperelastic materials (the discrete gradient of Gonzalez)
   - depends on: F-570, F-425
   - acceptance: Every limit not stated here is registered in the ADR before the run. A NeoHookean spinning bar (the bar
