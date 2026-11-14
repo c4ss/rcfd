@@ -52,21 +52,30 @@ impl Checks {
     }
     fn at_most(&mut self, name: &str, value: f64, limit: f64) {
         let ok = value.is_finite() && value <= limit;
-        println!("{name}: {value:.4e} (limit <= {limit:e}) {}", if ok { "met" } else { "MISSED" });
+        println!(
+            "{name}: {value:.4e} (limit <= {limit:e}) {}",
+            if ok { "met" } else { "MISSED" }
+        );
         if !ok {
             self.0.push(format!("{name} = {value:e} > {limit:e}"));
         }
     }
     fn below(&mut self, name: &str, value: f64, limit: f64) {
         let ok = value.is_finite() && value < limit;
-        println!("{name}: {value:.4e} (limit < {limit:e}) {}", if ok { "met" } else { "MISSED" });
+        println!(
+            "{name}: {value:.4e} (limit < {limit:e}) {}",
+            if ok { "met" } else { "MISSED" }
+        );
         if !ok {
             self.0.push(format!("{name} = {value:e} >= {limit:e}"));
         }
     }
     fn at_least(&mut self, name: &str, value: f64, limit: f64) {
         let ok = value.is_finite() && value >= limit;
-        println!("{name}: {value:.4e} (limit >= {limit:e}) {}", if ok { "met" } else { "MISSED" });
+        println!(
+            "{name}: {value:.4e} (limit >= {limit:e}) {}",
+            if ok { "met" } else { "MISSED" }
+        );
         if !ok {
             self.0.push(format!("{name} = {value:e} < {limit:e}"));
         }
@@ -110,6 +119,9 @@ fn blade_volume_and_mean_chord(f: &AxialFan) -> (f64, f64) {
 struct BladeMeshInfo {
     positive: usize,
     negative: usize,
+    // ADR 0500 amendment 1: the sign of the volume times the parity sign of the Kuhn order.
+    parity_plus: usize,
+    parity_minus: usize,
     min_over_mean: f64,
     hub_faces: usize,
     tip_faces: usize,
@@ -148,13 +160,15 @@ fn blade_tet4(f: &AxialFan, div: [usize; 3]) -> (SolidMesh, BladeMeshInfo) {
         }
     }
     const PERMS: [[usize; 3]; 6] = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
+    const ODD: [bool; 6] = [false, true, true, false, false, true];
     let mut conn = Vec::new();
     let (mut positive, mut negative) = (0, 0);
+    let (mut parity_plus, mut parity_minus) = (0, 0);
     let mut vols = Vec::new();
     for j in 0..ns {
         for i in 0..nc {
             for k in 0..nt {
-                for p in PERMS {
+                for (p, odd) in PERMS.into_iter().zip(ODD) {
                     let mut c = [i, k, j];
                     let mut v = [idx[j][i][k]; 4];
                     for s in 0..3 {
@@ -165,6 +179,11 @@ fn blade_tet4(f: &AxialFan, div: [usize; 3]) -> (SolidMesh, BladeMeshInfo) {
                         continue;
                     }
                     let vol = signed_volume(v.map(|n| nodes[n]));
+                    if (vol > 0.0) != odd {
+                        parity_plus += 1;
+                    } else {
+                        parity_minus += 1;
+                    }
                     if vol > 0.0 {
                         positive += 1;
                     } else {
@@ -205,6 +224,8 @@ fn blade_tet4(f: &AxialFan, div: [usize; 3]) -> (SolidMesh, BladeMeshInfo) {
     let info = BladeMeshInfo {
         positive,
         negative,
+        parity_plus,
+        parity_minus,
         min_over_mean: min / mean,
         hub_faces: hub.len(),
         tip_faces: tip.len(),
@@ -461,7 +482,11 @@ fn run_blade(name: &str, mesh: SolidMesh) -> BladeRun {
     // Modes at rest.
     let r = modal_analysis(&base, &modal_options(4)).unwrap();
     print_modes(name, &base, &r);
-    let max_residual = r.residuals.iter().copied().fold(0.0, |a: f64, b| if b.is_finite() { a.max(b) } else { f64::INFINITY });
+    let max_residual = r
+        .residuals
+        .iter()
+        .copied()
+        .fold(0.0, |a: f64, b| if b.is_finite() { a.max(b) } else { f64::INFINITY });
     BladeRun {
         elements,
         e_r,
@@ -482,13 +507,31 @@ fn check_identities(ch: &mut Checks, name: &str, prefix: &str, b: &BladeRun) {
     ch.at_most(&format!("{prefix}E1 {name} e_E pressure"), b.e_e_pressure, 1e-8);
 }
 
-fn check_setup(ch: &mut Checks, name: &str, div: [usize; 3], info: &BladeMeshInfo, mesh: &SolidMesh, v_b: f64, s1: f64) {
+fn check_setup(
+    ch: &mut Checks,
+    name: &str,
+    div: [usize; 3],
+    info: &BladeMeshInfo,
+    mesh: &SolidMesh,
+    v_b: f64,
+    s1: f64,
+    amended: bool,
+) {
     let [nc, nt, ns] = div;
-    ch.holds(
-        &format!("S0 {name} one orientation sign"),
-        info.positive == 0 || info.negative == 0,
-        &format!("{} positive, {} negative", info.positive, info.negative),
-    );
+    if amended {
+        // ADR 0500 amendment 1.
+        ch.holds(
+            &format!("S0 {name} one orientation sign after the parity of the Kuhn order"),
+            info.parity_plus == 0 || info.parity_minus == 0,
+            &format!("{} plus, {} minus", info.parity_plus, info.parity_minus),
+        );
+    } else {
+        ch.holds(
+            &format!("S0 {name} one orientation sign"),
+            info.positive == 0 || info.negative == 0,
+            &format!("{} positive, {} negative", info.positive, info.negative),
+        );
+    }
     ch.holds(
         &format!("S0 {name} no degenerate tetrahedron"),
         info.min_over_mean > 0.0 && info.min_over_mean.is_finite(),
@@ -515,16 +558,31 @@ fn check_setup(ch: &mut Checks, name: &str, div: [usize; 3], info: &BladeMeshInf
     );
 }
 
+/// The first registered run; its S0 was defective (ADR 0500 amendment 1). Kept as the ignored record.
 #[test]
+#[ignore = "superseded by ADR 0500 amendment 1 (defective S0); record of the first registered run"]
 fn s_routes_and_m1_m2() {
+    routes(false);
+}
+
+/// The corrected test of ADR 0500 amendment 1: the same computation with S0 read after the parity of the Kuhn order.
+#[test]
+fn s_routes_and_m1_m2_amended() {
+    routes(true);
+}
+
+fn routes(amended: bool) {
     let mut ch = Checks::new();
     let f = fan();
     let (v_b, c_m) = blade_volume_and_mean_chord(&f);
-    println!("blade: span {:.6e} m, mean chord {c_m:.6e} m, V_b {v_b:.6e} m^3", f.r_tip - f.r_hub);
+    println!(
+        "blade: span {:.6e} m, mean chord {c_m:.6e} m, V_b {v_b:.6e} m^3",
+        f.r_tip - f.r_hub
+    );
     let (m1_4, i1) = blade_tet4(&f, M1);
     let (m2_4, i2) = blade_tet4(&f, M2);
-    check_setup(&mut ch, "M1", M1, &i1, &m1_4, v_b, 2e-2);
-    check_setup(&mut ch, "M2", M2, &i2, &m2_4, v_b, 5e-3);
+    check_setup(&mut ch, "M1", M1, &i1, &m1_4, v_b, 2e-2, amended);
+    check_setup(&mut ch, "M2", M2, &i2, &m2_4, v_b, 5e-3, amended);
     let m1 = tet10(&m1_4);
     let m2 = tet10(&m2_4);
     ch.holds("S0 Tet10 accepted by add_block", true, "M1 and M2 lifted");
@@ -543,7 +601,11 @@ fn s_routes_and_m1_m2() {
         "C1 d_tip pressure: M1 {:.6e} m ({} elements), M2 {:.6e} m ({} elements)",
         b1.d_tip_pressure, b1.elements, b2.d_tip_pressure, b2.elements
     );
-    ch.below("C1 |d_tip(M2)/d_tip(M1) - 1| pressure", (b2.d_tip_pressure / b1.d_tip_pressure - 1.0).abs(), 0.05);
+    ch.below(
+        "C1 |d_tip(M2)/d_tip(M1) - 1| pressure",
+        (b2.d_tip_pressure / b1.d_tip_pressure - 1.0).abs(),
+        0.05,
+    );
     println!(
         "C1b d_tip centrifugal: M1 {:.6e} m, M2 {:.6e} m",
         b1.d_tip_centrifugal, b2.d_tip_centrifugal
@@ -563,7 +625,10 @@ fn s_routes_and_m1_m2() {
     let rc = solve_static(&mc, &static_options()).unwrap();
     let want = s1.map(|x| -RHO * omega() * omega() * x);
     let nc1 = rel_vec(reaction_sum(&mc, &rc), want);
-    println!("NC1 (V = {v1:.6e}): shifted axis, 1 mm / r_c = {:.4e}", 1e-3 * v1 / norm(s1));
+    println!(
+        "NC1 (V = {v1:.6e}): shifted axis, 1 mm / r_c = {:.4e}",
+        1e-3 * v1 / norm(s1)
+    );
     ch.at_least("NC1 e_R with the axis shifted by 1 mm", nc1, 1e-2);
     // NC2, NC3: the pressure case against the suction faces; the energy of a scaled field.
     let mp = with_load(&base1, Load::pressure("pressure", PRESSURE));
@@ -605,7 +670,11 @@ fn s_routes_and_m1_m2() {
     // NC4: M1 in Tet4 (no lift).
     let r4 = modal_analysis(&clamped(m1_4, "hub"), &modal_options(4)).unwrap();
     println!("NC4 Tet4 M1 f_1 = {:.6} Hz", r4.frequencies[0]);
-    ch.at_least("NC4 |f_1(Tet4 M1)/f_1(M2) - 1|", (r4.frequencies[0] / b2.f1 - 1.0).abs(), 0.10);
+    ch.at_least(
+        "NC4 |f_1(Tet4 M1)/f_1(M2) - 1|",
+        (r4.frequencies[0] / b2.f1 - 1.0).abs(),
+        0.10,
+    );
     ch.finish();
 }
 
@@ -657,7 +726,11 @@ fn run_plate(div: [usize; 3]) -> (Option<usize>, f64, Vec<f64>) {
 fn pl_flat_plate() {
     let mut ch = Checks::new();
     let (fb, f_eb, fr) = run_plate([16, 12, 2]);
-    ch.holds("PL0 the first bending mode is mode 1", fb == Some(0), &format!("{fb:?}"));
+    ch.holds(
+        "PL0 the first bending mode is mode 1",
+        fb == Some(0),
+        &format!("{fb:?}"),
+    );
     let f_b = fb.map_or(f64::NAN, |i| fr[i]);
     let lo = 0.99 * f_eb;
     let hi = 1.01 * f_eb / (1.0 - NU * NU).sqrt();
