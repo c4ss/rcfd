@@ -329,3 +329,72 @@ the geometric nonlinearity `1.2e-14`; with MU4 the load leads by half a step, an
 `1e-1` here). Run once, then MU4 again against it. MU8 (the geometric part of the tangent) was not caught, as the registration
 allowed: the iteration converges without it at this rotation per step (a slower but still convergent tangent); it is not in the
 decision rule.
+
+## Addendum 1: results (2026-11-14)
+
+Runs: registered (commit `100d0d05`, `f570-scratch/run1.log`), amendment 1 (commit `601ffed5`, `run2.log`, F1ec only),
+amendment 2 (commit `438afe4b`, `run3.log`, L2e only). Each set-up ran once. B0 recorded on the base d41012db (commit
+`439b0264`, `b0-base.log`) before any library line.
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| S0e | steady solve converged; 1000 of 1000 steps, no halving, largest final residual `9.98e-8` | `Ok` | met |
+| S1e | `1.812e-13` | `<= 1e-10` | met |
+| S2e | `6.623e-13` | `<= 1e-6` | met |
+| S3e | `1.584e-13` | `<= 1e-6` | met |
+| TP (record) | residual tolerance, energy criterion off (`dP`, `dJ`, `dE`): `1e-1`: `2.96e-13`, `4.51e-8`, `1.089e-6` (energy limit not met); `1e-2`: `2.23e-13`, `3.82e-9`, `1.04e-7`; `1e-3`: `2.21e-13`, `4.16e-9`, `9.40e-9`; `1e-4` and `1e-5`: `2.26e-13`, `6.86e-13`, `1.01e-13`; `1e-6`: `2.45e-13`, `4.93e-13`, `1.37e-13`; all 1000 steps, no halving | record | the loosest tolerance meeting all three is `1e-2`; ignored heavy record (amendment 1) |
+| N1e | `8.800e-6` (Newmark, 600 steps) | `>= 1e-6` | met |
+| N2e | `3.897e-6` | `>= 1e-6` | met |
+| L1e | undamped `7.64e-14`, damped `6.30e-14` | `<= 1e-9` | met |
+| L2e | `2.40e-14` | `<= 1e-9` | met (amendment 2) |
+| P1e | 2 crossings, `T_FE = 1.933740 s`, `2.096e-4` | `<= 1e-2` | met |
+| P2e | `1.23e-14` (largest final residual `9.88e-8`) | `<= 1e-6` | met |
+| D1e | `1.70e-14` | `<= 1e-6` | met |
+| D2e | `0.586` | `>= 1e-2` | met |
+| R1e | equal state bytes | exact | met |
+| R2e | round trip, magic `RCFDNLE1`, kind read back, both cross-kind restores refused (`"state"`) | exact; all | met |
+| T1e | equal state bytes | exact | met |
+| H1e | `FemError::Solver { solver: "nl_transient" }`, "after 5 halvings", state unchanged | holds | met |
+| F1e | J2, BBar, contribution refused with `"nl_transient"` and `ADR 0514`; NeoHookean and orthotropic refused upstream with `NotYetSupported` | all with the key | set-up defective (amendment 1), ignored record |
+| F1ec | J2 and viscoelastic with `"nl_transient"` and `ADR 0514`; NeoHookean, orthotropic refused; BBar and contribution with the key; state unchanged | all | met |
+| B1 | the four digests of d41012db; `sa_nl_transient_default_bits.rs`, `sa_nl_transient.rs` pass | exact; pass | met |
+| B2 | `baseline_hashes`: 3 passed, 1 ignored | pass | met |
+
+Also: `cargo test -p rcfd-fem --release` exit 0 (commit `601ffed5`; `sa_emc` 9 passed, 2 ignored); `cargo test -p rcfd-cli
+--release --test docs_site` exit 0; `cargo fmt -p rcfd-fem --check` and `cargo clippy -p rcfd-fem --release --all-targets -- -D
+warnings` clean (on the tree with L2e).
+
+**Mutations** (`f570-scratch/mutations.log`, `mut_MU4_l2e.log`, a git-archive copy with its own target): MU1 caught (S0e: the
+first step does not converge; L1e, P1e, P2e, D1e, R1e, T1e); MU2 (S0e stops at step 593; S2e `0.36`, S3e `0.64`, P2e, D1e); MU3
+(L1e, S0e, S2e, S3e, P1e, P2e, D1e); MU4 caught by no registered check (constant loads only) and by L2e of amendment 2
+(`1.25e-2`); MU5 (L1e damped, D1e); MU6 (R2e both refusals); MU7 (F1ec J2 and viscoelastic accepted); MU8 not caught (allowed,
+not in the rule).
+
+**Deviations.** Library and tests in one commit (`100d0d05`); F1e's expectation for two materials was wrong (amendment 1); TP
+made an ignored record after its run (amendment 1, about two minutes); L2e added after the mutation runs (amendment 2), before
+its run. The conservation is at rounding (`1e-13`) with the residual tolerance `1e-7`: the symmetric tangent's residual does
+almost no work on `Delta u`, so the limits of the acceptance are three to six decades above the measures.
+
+**Decision: done** by the registered rule: every check met (F1e by its corrected F1ec), MU1 to MU7 caught (MU4 only by the check
+added in amendment 2), fmt and clippy clean, B1 and B2 unchanged. If the lead reads the rule as the registered checks only,
+MU4 makes it partial.
+
+Remaining questions (each with options and a recommendation; none changes a default):
+
+1. Case-file key: options (a) `step = "energy_momentum"` under the nonlinear transient study, (b) a separate study kind.
+   Recommendation (a), as in the open questions above.
+2. Orthotropic and tabulated SVK materials: they are refused today by `check_supported_nonlinear` for the whole nonlinear
+   transient integrator, not only by this step. Recommendation: accept them here once the nonlinear driver takes them.
+3. Hyperelastic materials: recommendation, the discrete-gradient follow-up below.
+4. The exact (unsymmetric) tangent: the probe shows it converges in fewer iterations but, stopped at a loose tolerance, leaves a
+   residual that does work (`dE = 4.9e-4` at `1e-2`); recommendation: keep the symmetric tangent.
+
+## For the lead: roadmap entries
+
+Proposed status of F-570: done.
+
+> Structural solver, advanced tier. ADR 0514, 2026-11-14: nl_transient gains StepKind::EnergyMomentum (NlTransientOptions::energy_momentum), the Simo-Tarnow midpoint step with the internal force B_NL(F_mid)^T (S_n + S_{n+1})/2 and the velocity 2 du/h - v_n, solved by Newton with a symmetric tangent; isotropic St. Venant-Kirchhoff solids of the Full formulation only (other materials, F-bar blocks and driver contributions refused naming ADR 0514); loads averaged over the step, Rayleigh damping, halving, save/restore (state magic RCFDNLE1) and threads as the Method step. Spinning bar of ADR 0479 over ten turns (residual tolerance 1e-7): linear momentum 1.8e-13 (1e-10), angular momentum 6.6e-13 (1e-6), energy 1.6e-13 (1e-6); the trapezoidal step on the same bar drifts 8.8e-6 in energy by step 600. Tolerance probe: the three limits hold down to the residual tolerance 1e-2. Linear limit equals F-398 within 7.6e-14, pendulum energy within 1.2e-14, damped energy balance within 1.7e-14. Default step bit-identical (B0, baseline_hashes). Seven of eight mutations caught (one by a check added after the mutation run). No case-file key.
+
+> Follow-up: energy-momentum step for hyperelastic materials (the discrete gradient of Gonzalez). Deps F-570, F-425. Acceptance: Every limit not stated here is registered in the ADR before the run. A NeoHookean spinning bar (the bar of ADR 0479 with a NeoHookean material of the same small-strain moduli) over ten turns, linear momentum within 1e-10, angular momentum within 1e-6, energy within 1e-6 relative; on an isotropic elastic model the step equals the F-570 step within 1e-12.
+
+> Follow-up: case-file key for the nonlinear transient study and its energy-momentum step (step = "energy_momentum" under a nonlinear transient study). Deps F-570. Acceptance: Every limit not stated here is registered in the ADR before the run. A case with the key reproduces the bits of the API run of the spinning bar of ADR 0514 over 50 steps; a case without the key keeps its output hashes.
