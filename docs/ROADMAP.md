@@ -11030,13 +11030,25 @@ fixed by the item's registration ADR before any code.
     the load-controlled path of ADR 0480 within 1e-6 at the common load factors; an unsymmetric factor of the tangent
     gives quadratic convergence on a free-edged follower load (registered rate), and the symmetric path keeps its bits.
   - note: Structural solver, advanced tier. Follow-up of F-424 (ADR 0480, 2026-11-14).
-- [ ] **F-573** Follower pressure on shells
+- [~] **F-573** Follower pressure on shells
   - depends on: F-424
   - acceptance: Every limit not stated here is registered in the ADR before the run. ShellPressure gains a follower form
     on the current mid-surface with its load stiffness, against central differences within 1e-6 on Shell4 and Shell3; a
     thin cylinder of shells under follower internal pressure follows p = E t (lambda^2 - 1)/(2 R) within 1 percent to
     the stretch 1.5; the dead ShellPressure keeps its bits.
-  - note: Structural solver, advanced tier. Follow-up of F-424 (ADR 0480, 2026-11-14).
+  - note: Structural solver, advanced tier. Follow-up of F-424 (ADR 0480, 2026-11-14). PARTIAL. ADR 0487, 2026-11-14:
+    FollowerPressure::on_shells, the follower form of the shell pressure on the current mid-surface of Shell4 and Shell3
+    elements (f_a = +p int N_a (x_u x x_v) on the translations, no moments), with its full load stiffness, by the face
+    arithmetic of ADR 0480 with the pressure negated; a Contribution of the Newton driver, also accepted by
+    follower::buckling_factors. Load stiffness against central differences 1.8e-10 .. 2.5e-10 on a Shell4 and a Shell3
+    element and patch (limit 1e-6); at zero displacement equal to the dead ShellPressure within 5e-16 on flat elements,
+    the resultant within 2.4e-16 on a warped Shell4. Cylinder of 64 facets at the prescribed stretch 1.5: the radial
+    resultant p N lambda R L sin(2 pi/N) within 2.2e-15, the dead load off by lambda. Ring buckling of Shell4 with the
+    shell load stiffness 3.0099 E I/R^3 (3 E I/R^3, limit 2 percent), 4.0147 without (4 E I/R^3, limit 3 percent). The
+    cylinder clause (the thin law to the stretch 1.5 by the Newton driver) not met: the nonlinear driver takes no shells
+    (no geometrically nonlinear shell in the crate), recorded as a predicted known miss; follow-up proposed. Dead
+    ShellPressure and default bits unchanged (10 digests), baseline hashes unchanged; six of six mutations caught. Two
+    set-up defects of run 1 corrected by amendment.
 - [ ] **F-574** Warning for the constant-strain Shell3 membrane on warped meshes
   - depends on: F-556
   - acceptance: Every limit not stated here is registered in the ADR before the run. An opt-in model check reports

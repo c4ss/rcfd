@@ -10,6 +10,9 @@
 //!   `-f` and the symmetric part `-(K_p + K_p^T)/2`: exact when the antisymmetric part, a term on the edges of the loaded
 //!   surface, couples only held unknowns (a closed surface, or edges on symmetry planes with the normal component and the
 //!   out-of-plane component held); elsewhere the iteration converges at a reduced rate to the same solution.
+//! * [`FollowerPressure::on_shells`] (ADR 0487, F-573): the follower form of the shell pressure on the current mid-surface of
+//!   Shell4 and Shell3 elements, `f_a = +p int N_a (x_u x x_v) du dv` on the translations, with the same load stiffness; the
+//!   Newton driver does not take shells yet (ADR 0487 D0), the linear buckling path does.
 //! * [`CentrifugalFollower`] (D2): the part `Omega^2 M_perp u` of the centrifugal load on the deformed position, with its
 //!   load stiffness `-Omega^2 M_perp` (the spin softening of [`crate::rotating`]) for the model's `Load::Centrifugal`.
 //! * [`buckling_factors`] (D3): `(K + mu (K_sigma - K_p,sym)) x = 0` by the path of [`crate::buckling::factors`].
@@ -23,6 +26,7 @@ use crate::error::{FemError, Result, SetKind};
 use crate::geometric::Prestress;
 use crate::loads::{face_rule, face_shape_functions};
 use crate::mass::consistent_with;
+use crate::mesh::ElementKind;
 use crate::modal::{ModalOptions, ModalResult};
 use crate::model::{Load, SolidModel};
 use crate::nonlinear::{add_triplets, Contribution};
@@ -48,6 +52,8 @@ pub struct FollowerPressure {
     pressure: f64,
     faces: Vec<Face>,
     n: usize,
+    /// The faces are Shell4 or Shell3 elements (ADR 0487 D1): the face routines receive the pressure negated.
+    shell: bool,
 }
 
 impl FollowerPressure {
@@ -102,7 +108,79 @@ impl FollowerPressure {
             pressure,
             faces,
             n: dofs.n_equations(),
+            shell: false,
         })
+    }
+
+    /// The pressure `pressure` on the current mid-surface of the elements of the element set `set` of `model`, each a Shell4
+    /// or a Shell3 (ADR 0487 D1): the follower form of [`Load::ShellPressure`], positive pushing the surface towards `+e_3`
+    /// (the right-hand normal of the node order, as the dead load). On the interpolated current mid-surface `x = sum N_a (X_a
+    /// + u_a)` the forces are `f_a = +p int N_a (x_u x x_v) du dv` on the translations, no moments; the load stiffness the
+    /// same derivative as for solid faces. Another element kind is refused (key `"follower pressure"`), a non-finite pressure
+    /// (key `"pressure"`).
+    ///
+    /// The Newton driver of [`crate::nonlinear`] does not take shell models (it has no geometrically nonlinear shell;
+    /// ADR 0487 D0), so on shells the [`Contribution`] waits for a driver that takes them; [`FollowerPressure::force`],
+    /// [`FollowerPressure::load_stiffness`] and [`buckling_factors`] (the linear buckling path takes shells) serve now.
+    pub fn on_shells(model: &SolidModel, set: &str, pressure: f64) -> Result<FollowerPressure> {
+        if !pressure.is_finite() {
+            return Err(FemError::InvalidValue {
+                key: "pressure",
+                reason: format!("{pressure:e} is not finite"),
+            });
+        }
+        let mesh = model.mesh();
+        let dofs = model.dof_map();
+        let elements = mesh.element_set(set).ok_or_else(|| FemError::UnknownSet {
+            kind: SetKind::Element,
+            name: set.to_string(),
+        })?;
+        let mut faces = Vec::with_capacity(elements.len());
+        for &e in elements {
+            let kind = mesh.element_kind(e);
+            if !matches!(kind, ElementKind::Shell4 | ElementKind::Shell3) {
+                return Err(FemError::InvalidValue {
+                    key: "follower pressure",
+                    reason: format!(
+                        "element {e} of the set '{set}' is a {} element; a follower shell pressure takes Shell4 and Shell3                          elements (ADR 0487 D1)",
+                        kind.name()
+                    ),
+                });
+            }
+            let nodes = mesh.element_nodes(e);
+            let mut eqs = Vec::with_capacity(3 * nodes.len());
+            for &node in nodes {
+                for c in 0..3 {
+                    eqs.push(dofs.equation(node, c).ok_or(FemError::MissingComponent {
+                        role: "follower pressure",
+                        node,
+                        component: c,
+                        available: dofs.components(node),
+                    })?);
+                }
+            }
+            faces.push(Face {
+                eqs,
+                x0: nodes.iter().map(|&n| mesh.nodes()[n]).collect(),
+            });
+        }
+        Ok(FollowerPressure {
+            name: format!("follower pressure on the shells of '{set}'"),
+            pressure,
+            faces,
+            n: dofs.n_equations(),
+            shell: true,
+        })
+    }
+
+    /// The pressure the face routines receive at the load factor: the solid faces' `-p` convention gives `+p` on shells
+    /// when it is negated (exact in floating point).
+    fn face_pressure(&self, load_factor: f64) -> f64 {
+        if self.shell {
+            -(load_factor * self.pressure)
+        } else {
+            load_factor * self.pressure
+        }
     }
 
     /// The pressure at load factor 1.
@@ -201,7 +279,7 @@ impl FollowerPressure {
     /// The load vector `f(u)` at the load factor (one value per equation of the model's `DofMap`).
     pub fn force(&self, u: &[f64], load_factor: f64) -> Result<Vec<f64>> {
         self.check(u)?;
-        let p = load_factor * self.pressure;
+        let p = self.face_pressure(load_factor);
         let mut f = vec![0.0; self.n];
         for face in &self.faces {
             let x = Self::positions(face, u);
@@ -219,7 +297,7 @@ impl FollowerPressure {
     /// triplets in equations, face by face.
     pub fn load_stiffness(&self, u: &[f64], load_factor: f64) -> Result<Vec<(usize, usize, f64)>> {
         self.check(u)?;
-        let p = load_factor * self.pressure;
+        let p = self.face_pressure(load_factor);
         let mut out = Vec::new();
         for face in &self.faces {
             let x = Self::positions(face, u);
@@ -236,7 +314,7 @@ impl FollowerPressure {
 
     /// The triplets of `-(K_p + K_p^T)/2` face by face (the tangent of the contribution).
     fn symmetric_negative(&self, u: &[f64], load_factor: f64, out: &mut Vec<(usize, usize, f64)>) -> Result<()> {
-        let p = load_factor * self.pressure;
+        let p = self.face_pressure(load_factor);
         for face in &self.faces {
             let x = Self::positions(face, u);
             let k = Self::face_stiffness(&x, p)?;
