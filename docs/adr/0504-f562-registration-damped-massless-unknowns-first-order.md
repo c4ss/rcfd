@@ -277,3 +277,28 @@ mutation survives. **Todo** if the library change breaks B1 or B2 (it is then re
 3. **A tighter reference for the 1e-9 model** (a solver that does not form `L^-1 K L^-T` for a nearly singular `M`, for example
    the generalized form of D2 with a tiny mass in the second block): out of scope, a follow-up only if the acceptance as worded
    is to be met against the existing solver.
+
+## Amendment 1 (2026-11-14, after the first run of the registered checks, before the corrected runs)
+
+The first run (test `sa_rotor_massless.rs`, library as in the commit that follows) gave:
+
+* A1, A4, C1, C2, B3, B4, B2r, N1, N2, N3 (first half), X1 and the bits of the no-massless models met.
+* **Missed with their limits intact, to be kept as ignored `*_known_miss` tests** (not amended): A2 (limit `1e-8`, measured
+  `1.7672e-8`), B1r (limit `1e-7`, measured `3.2130e-7`, `3.2136e-7`, `3.2175e-7` at 0, 300, 900 rad/s), N3 second half (the
+  same number as A2), A3 (limit `1e-6`, measured `2.0194e-6`, as expected from the probe).
+* **Two defective set-ups, corrected here, the old forms kept as ignored records:**
+  1. A3 asserted the count `16` for the roots of `A_mu`; `A_mu` has six unknowns with mass (two disc translations and four
+     pedestal translations), so `12` roots (a counting slip in the test, the registration text above says `2 (n_m + n_0)`).
+     The error number of A3 does not depend on it. The corrected count is `12`.
+  2. P1 (limit `1e-10`, the polished roots against the quartic): the reference formed the small tilt root as
+     `(-c_p + sqrt(c_p^2 - 4 mu_p k_p)) / (2 mu_p)`, which cancels (`c_p^2 = 4e6`, `4 mu_p k_p = 0.16`; the root `-1000.00001`
+     comes out as `-1000.0000088`). The first run measured `1.1561e-9`, all of it on the two tilt roots; the other six roots
+     agreed to `1.4e-15`. The corrected reference uses `2 k_p / (-c_p - sqrt(...))` for that root; the limit stays `1e-10`;
+     the corrected test is `p1b_...`; the first form is kept as the ignored `p1_..._defective_tilt_reference`.
+
+Diagnosis of the misses (a diagnostic run, not a registered check, disclosed): B1r at `mu = 1e-9, 1e-10, 1e-11` gives
+`3.2136e-7, 3.2136e-8, 3.2136e-9`: linear in `mu`, so the error is the truncation of the 1e-9 pedestal-mass model itself (on the
+real root `-10109`, relative shift `mu_p |s|/c_p`-like, larger than the `5e-10` I estimated from the complex mode), not an error
+of the first-order solver. The registered estimates of A2 and B1r were taken from the complex mode alone and were too small;
+the limits are not changed. Both numbers are inside the acceptance's own `1e-6`; the decision rule below still counts them as
+misses, so the status is partial unless the lead reads the acceptance's `1e-6` as the binding limit (stated in the addendum).
