@@ -162,7 +162,9 @@ fn add_field(m: &mut SolidModel, field: Field) {
 }
 
 fn opts(n: usize) -> ModalOptions {
-    ModalOptions::new(n).residual_test(ResidualTest::Backward).tolerance(1e-12)
+    ModalOptions::new(n)
+        .residual_test(ResidualTest::Backward)
+        .tolerance(1e-12)
 }
 
 fn max_rel(a: &[f64], b: &[f64]) -> f64 {
@@ -304,10 +306,14 @@ fn c2_n3_isotropic_constants() {
     let o = opts(6);
     let b_iso = block(iso.clone(), Field::None);
     let f_iso = modal_analysis(&b_iso, &o).unwrap().frequencies;
-    let p_iso = prestressed_modes(&b_iso, &uniform(&b_iso, S_XX), &o).unwrap().frequencies;
+    let p_iso = prestressed_modes(&b_iso, &uniform(&b_iso, S_XX), &o)
+        .unwrap()
+        .frequencies;
     let t_iso = tr_block(iso.clone(), Field::None, true, true);
     let ft_iso = modal_analysis(&t_iso, &o).unwrap().frequencies;
-    let pt_iso = prestressed_modes(&t_iso, &uniform(&t_iso, S_XX), &o).unwrap().frequencies;
+    let pt_iso = prestressed_modes(&t_iso, &uniform(&t_iso, S_XX), &o)
+        .unwrap()
+        .frequencies;
     for (r, tag) in [(I3, "axes I"), (rot([1.0, 2.0, 3.0], 0.5), "axes rot((1, 2, 3), 0.5)")] {
         let b = block(iso_o(r, 1.0), Field::None);
         c.at_most(
@@ -317,7 +323,10 @@ fn c2_n3_isotropic_constants() {
         );
         c.at_most(
             &format!("C2p pre-stressed, {tag}"),
-            max_rel(&prestressed_modes(&b, &uniform(&b, S_XX), &o).unwrap().frequencies, &p_iso),
+            max_rel(
+                &prestressed_modes(&b, &uniform(&b, S_XX), &o).unwrap().frequencies,
+                &p_iso,
+            ),
             1e-12,
         );
         let t = tr_block(iso_o(r, 1.0), Field::None, true, true);
@@ -328,7 +337,10 @@ fn c2_n3_isotropic_constants() {
         );
         c.at_most(
             &format!("C2tp transformation pre-stressed, {tag}"),
-            max_rel(&prestressed_modes(&t, &uniform(&t, S_XX), &o).unwrap().frequencies, &pt_iso),
+            max_rel(
+                &prestressed_modes(&t, &uniform(&t, S_XX), &o).unwrap().frequencies,
+                &pt_iso,
+            ),
             1e-12,
         );
     }
@@ -420,7 +432,11 @@ fn p1_n2_tabulated_temperature() {
     let ti = tr_block(iso_e(e443), Field::None, true, true);
     let pt = prestressed_modes(&t, &uniform(&t, S_XX), &o).unwrap().frequencies;
     let pti = prestressed_modes(&ti, &uniform(&ti, S_XX), &o).unwrap().frequencies;
-    c.at_most("P1t transformation pre-stressed against ISO at E(443)", max_rel(&pt, &pti), 1e-12);
+    c.at_most(
+        "P1t transformation pre-stressed against ISO at E(443)",
+        max_rel(&pt, &pti),
+        1e-12,
+    );
     let b293 = block(iso_e(e293), Field::None);
     let p293 = prestressed_modes(&b293, &uniform(&b293, S_XX), &o).unwrap().frequencies;
     c.above("N2 against ISO at E(T_ref)", max_rel(&p, &p293), 1e-3);
@@ -439,14 +455,18 @@ fn t1_t3_transformation_against_elimination() {
     let fl = modal_analysis(&lin, &o).unwrap().frequencies;
     let fe = modal_analysis(&eli, &o).unwrap().frequencies;
     println!("T1: frequencies {fl:?}");
-    c.at_most("T1 modal, linear constraints against elimination", max_rel(&fl, &fe), 1e-10);
+    c.at_most(
+        "T1 modal, linear constraints against elimination",
+        max_rel(&fl, &fe),
+        1e-10,
+    );
     let tip = lin.mesh().node_set("tip").unwrap().to_vec();
     let forces: Vec<NodalForceAt> = tip.iter().map(|&n| NodalForceAt::new(n, [0.0, 0.0, -1.0e4])).collect();
     let sl = solve_static_mpc(&lin, &[], &forces, &[], &StaticOptions::default()).unwrap();
     let se = solve_static_with(&eli, &[], &forces, &StaticOptions::default()).unwrap();
     let (a, b) = (sl.result.displacement_values(), se.displacement_values());
-    let dev = a.iter().zip(b).map(|(x, y)| (x - y).abs()).fold(0.0, f64::max)
-        / b.iter().map(|y| y.abs()).fold(0.0, f64::max);
+    let dev =
+        a.iter().zip(b).map(|(x, y)| (x - y).abs()).fold(0.0, f64::max) / b.iter().map(|y| y.abs()).fold(0.0, f64::max);
     c.at_most("T3 static, linear constraints against elimination", dev, 1e-10);
     c.finish();
 }
@@ -623,10 +643,7 @@ fn r3_paths_not_opened() {
                 "Integrator::new",
                 Integrator::new(&m, &[], &TransientOptions::new(1e-4)).map(|_| ()),
             ),
-            (
-                "damped_modes",
-                damped_modes(&m, &DampedOptions::new(2)).map(|_| ()),
-            ),
+            ("damped_modes", damped_modes(&m, &DampedOptions::new(2)).map(|_| ())),
             (
                 "RotatingPart::new",
                 RotatingPart::new(&m, [1.0, 0.0, 0.0], [0.0; 3], &RotatingOptions::new(2)).map(|_| ()),

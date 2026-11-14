@@ -47,7 +47,9 @@ fn steel() -> Material {
 }
 
 fn opts(n: usize) -> ModalOptions {
-    ModalOptions::new(n).residual_test(ResidualTest::Backward).tolerance(1e-12)
+    ModalOptions::new(n)
+        .residual_test(ResidualTest::Backward)
+        .tolerance(1e-12)
 }
 
 fn modal_digests(tag: &str, r: &ModalResult, out: &mut Vec<(String, u64)>) {
@@ -128,19 +130,30 @@ fn all_digests() -> Vec<(String, u64)> {
     let m = hex20_cantilever(false);
     modal_digests("hex20 modal", &modal_analysis(&m, &opts(4)).unwrap(), &mut out);
     let mt = hex20_cantilever(true);
-    modal_digests("hex20 modal temperature", &modal_analysis(&mt, &opts(4)).unwrap(), &mut out);
+    modal_digests(
+        "hex20 modal temperature",
+        &modal_analysis(&mt, &opts(4)).unwrap(),
+        &mut out,
+    );
     // Pre-stressed modes on the elimination path from a static result (axial tension at the tip).
     let mut ms = hex20_cantilever(false);
     ms.add_load(Load::nodal_force("xmax", [2.0e4, 0.0, 0.0])).unwrap();
     let res = solve_static(&ms, &StaticOptions::default()).unwrap();
     let pre = Prestress::from_static(&ms, &res).unwrap();
     out.push(("hex20 prestress".into(), digest(pre.stress().iter().flatten().copied())));
-    modal_digests("hex20 prestressed", &prestressed_modes(&ms, &pre, &opts(4)).unwrap(), &mut out);
+    modal_digests(
+        "hex20 prestressed",
+        &prestressed_modes(&ms, &pre, &opts(4)).unwrap(),
+        &mut out,
+    );
     let kg = geometric_stiffness(&ms, &pre, None).unwrap();
     out.push(("hex20 geometric stiffness".into(), digest(kg.val.iter().copied())));
     // Buckling of the cantilever under a uniform compression.
     let comp = Prestress::uniform(&m, [-1.0e6, 0.0, 0.0, 0.0, 0.0, 0.0]).unwrap();
-    out.push(("hex20 uniform prestress".into(), digest(comp.stress().iter().flatten().copied())));
+    out.push((
+        "hex20 uniform prestress".into(),
+        digest(comp.stress().iter().flatten().copied()),
+    ));
     let b = factors(&m, &comp, &BucklingOptions::new(2)).unwrap();
     out.push(("hex20 buckling".into(), digest(b.factors.iter().copied())));
     // The transformation path: modal, static, pre-stressed.
@@ -149,12 +162,23 @@ fn all_digests() -> Vec<(String, u64)> {
     let tip = t.mesh().node_set("tip").unwrap()[0];
     let forces = [NodalForceAt::new(tip, [0.0, 0.0, -500.0])];
     let st = solve_static_with(&t, &[], &forces, &StaticOptions::default()).unwrap();
-    out.push(("hex8 mpc static".into(), digest(st.displacement_values().iter().copied())));
+    out.push((
+        "hex8 mpc static".into(),
+        digest(st.displacement_values().iter().copied()),
+    ));
     let tpre = Prestress::uniform(&t, [5.0e6, 0.0, 0.0, 0.0, 0.0, 0.0]).unwrap();
-    modal_digests("hex8 mpc prestressed", &prestressed_modes(&t, &tpre, &opts(3)).unwrap(), &mut out);
+    modal_digests(
+        "hex8 mpc prestressed",
+        &prestressed_modes(&t, &tpre, &opts(3)).unwrap(),
+        &mut out,
+    );
     // Shell4 modal.
     let (s, pres) = shell_plate();
-    modal_digests("shell4 modal", &modal_analysis_with(&s, &pres, &opts(3)).unwrap(), &mut out);
+    modal_digests(
+        "shell4 modal",
+        &modal_analysis_with(&s, &pres, &opts(3)).unwrap(),
+        &mut out,
+    );
     out
 }
 
