@@ -14,6 +14,8 @@ use crate::model::DofMap;
 use crate::model::{SolidModel, SolidResult, SolverStats};
 use rcfd_linalg::precond::{BlockJacobi, IcBreakdown, IcOptions, IncompleteCholesky, PrecondError};
 use rcfd_linalg::skyline::{SkylineError, SkylineLdlt};
+// ADR 0447 (F-431): the sparse L D L^T after approximate minimum degree.
+use rcfd_linalg::sparse_chol::SparseLdlt;
 use rcfd_linalg::vecops::norm2;
 use rcfd_linalg::{cg, CsrMatrix, Jacobi, Preconditioner, SolveControl};
 // ADR 0357 (F-460): fill levels and the node-wise ordering of the incomplete Cholesky.
@@ -50,6 +52,9 @@ pub enum StaticSolver {
         /// Iteration cap (summed over restarts).
         max_iterations: usize,
     },
+    /// Sparse `L D L^T` after approximate minimum degree (ADR 0447), with the pivot checks of `Direct`. Not on the
+    /// transformation path, the cyclic solve or with refinement.
+    SparseDirect,
 }
 
 /// The preconditioner of [`StaticSolver::PreconditionedCg`] (ADR 0282).
@@ -238,6 +243,7 @@ pub fn solve_static_report(
                 )
             }
             StaticSolver::Direct => (direct(&sys.matrix, &sys.rhs, sys.free(), &dofs)?, 0),
+            StaticSolver::SparseDirect => (sparse_direct(&sys.matrix, &sys.rhs, sys.free(), &dofs)?, 0),
             StaticSolver::ConjugateGradient {
                 tolerance,
                 max_iterations,
@@ -273,6 +279,7 @@ pub fn solve_static_report(
 fn solver_name(s: &StaticSolver) -> &'static str {
     match s {
         StaticSolver::Direct => "skyline-ldlt",
+        StaticSolver::SparseDirect => SPARSE_NAME,
         StaticSolver::ConjugateGradient { .. } => "cg-jacobi",
         StaticSolver::PreconditionedCg {
             preconditioner: CgPreconditioner::BlockJacobi,
@@ -568,6 +575,42 @@ fn direct_factor(a: &CsrMatrix, free: &[usize], dofs: &crate::model::DofMap) -> 
         }
     }
     Ok(ldlt)
+}
+
+/// The solver name of [`StaticSolver::SparseDirect`] (ADR 0447).
+pub const SPARSE_NAME: &str = "sparse-ldlt";
+
+/// The sparse `L D L^T` solve with the pivot checks of [`direct_factor`] (ADR 0447 D5).
+fn sparse_direct(a: &CsrMatrix, b: &[f64], free: &[usize], dofs: &DofMap) -> Result<Vec<f64>> {
+    let diag = a.diag();
+    let at = |reduced: usize| dofs.node_component(free[reduced]).expect("free equation exists");
+    let ldlt = SparseLdlt::factor(a).map_err(|e| match e {
+        SkylineError::Pivot { row, pivot, .. } => {
+            let (node, component) = at(row);
+            FemError::SingularStiffness {
+                node,
+                component,
+                pivot,
+                diagonal: diag[row],
+            }
+        }
+        other => FemError::Solver {
+            solver: SPARSE_NAME,
+            reason: other.to_string(),
+        },
+    })?;
+    for (&row, &d) in ldlt.order().iter().zip(ldlt.pivots()) {
+        if d <= PIVOT_TOLERANCE * diag[row] {
+            let (node, component) = at(row);
+            return Err(FemError::SingularStiffness {
+                node,
+                component,
+                pivot: d,
+                diagonal: diag[row],
+            });
+        }
+    }
+    Ok(ldlt.solve(b))
 }
 
 fn conjugate_gradient(a: &CsrMatrix, b: &[f64], tolerance: f64, max_iterations: usize) -> Result<(Vec<f64>, usize)> {

@@ -211,7 +211,7 @@ fn entry(a: &CsrMatrix, r: usize, c: usize) -> Option<f64> {
     a.col[s..e].binary_search(&c).ok().map(|k| a.val[s + k])
 }
 
-fn validate(a: &CsrMatrix, delta: f64) -> Result<(), SkylineError> {
+pub(crate) fn validate(a: &CsrMatrix, delta: f64) -> Result<(), SkylineError> {
     if a.ncols != a.n {
         return Err(SkylineError::NotSquare {
             rows: a.n,
@@ -251,7 +251,7 @@ fn validate(a: &CsrMatrix, delta: f64) -> Result<(), SkylineError> {
     Ok(())
 }
 
-fn check_permutation(order: &[usize], n: usize) -> Result<(), SkylineError> {
+pub(crate) fn check_permutation(order: &[usize], n: usize) -> Result<(), SkylineError> {
     if order.len() != n {
         return Err(SkylineError::BadOrdering {
             reason: format!("length {} for {n} unknowns", order.len()),

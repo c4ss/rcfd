@@ -265,6 +265,7 @@ pub fn prestressed_modes(model: &SolidModel, prestress: &Prestress, options: &Mo
         residual_test: options.residual_test,
         max_iterations: options.max_iterations,
         subspace_size: options.subspace_size,
+        factorisation: options.factorisation,
         ..SubspaceOptions::default()
     };
     let eig = lowest_eigenpairs(&kr.matrix, &mr.matrix, options.modes, &opts).map_err(|e| FemError::Solver {
@@ -335,6 +336,7 @@ fn prestressed_modes_on_transformation(
         residual_test: options.residual_test,
         max_iterations: options.max_iterations,
         subspace_size: options.subspace_size,
+        factorisation: options.factorisation,
         ..SubspaceOptions::default()
     };
     let eig = lowest_eigenpairs(&ar, &mr, options.modes, &opts).map_err(|e| FemError::Solver {

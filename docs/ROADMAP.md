@@ -8384,7 +8384,7 @@ fixed by the item's registration ADR before any code.
     interface set with no nodes and a mode count above the interior size are refused.
   - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0333; the registration is
     written by the implementation agent before any code.
-- [ ] **F-431** Sparse L D L^T with a fill-reducing ordering, and its use by the static, buckling and modal solves
+- [~] **F-431** Sparse L D L^T with a fill-reducing ordering, and its use by the static, buckling and modal solves
   - depends on: F-408, F-373, F-374, F-382, F-402
   - acceptance: Every limit not stated here is registered in the ADR before the run. Five-point grid 100 x 100 and
     seven-point grid 30^3: residual below 1e-12 relative, and on the 30^3 grid at most half the factor entries of the
@@ -8395,8 +8395,23 @@ fixed by the item's registration ADR before any code.
     when positive definiteness was requested. Factor and solution are bit-identical for 1 and 8 threads. Heavy record: a
     clamped cube of about 3e5 unknowns is solved, time and memory recorded beside the envelope's estimate. The default
     solver's results keep their bits.
-  - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0334; the registration is
-    written by the implementation agent before any code.
+  - note: Structural solver, advanced tier (plan ADR 0310). ADR 0447, 2026-11-14: rcfd_linalg::sparse_chol (approximate
+    minimum degree on the quotient graph with element absorption, mass elimination and supervariables; elimination tree
+    and column counts from the row subtrees; up-looking L D L^T with the envelope solver's pivot test and refusals,
+    inertia, solve and solve_many; factor_count from the pattern), rcfd_linalg::eigen::Factorisation (Envelope default,
+    Sparse) in the subspace and buckling eigensolvers, rcfd_fem::solve::StaticSolver::SparseDirect ("sparse-ldlt",
+    refused on the transformation path and with refinement) and the factorisation choice of ModalOptions and
+    BucklingOptions. 5-point 100 x 100 and 7-point 30^3: relative residuals 5.4e-15 and 2.9e-15 (limit 1e-12); 30^3
+    nnz(L) 5 659 458 against the RCM envelope 13 546 161 (0.418, limit 0.5); clamped Hex8 cube of 4 752 unknowns: static
+    solution within 2.7e-14 of the envelope solve (limit 1e-10), modal frequencies within 9.3e-15 and buckling factors
+    within 1.6e-14 (limit 1e-9); inertia of the tridiagonal (2, -1) n = 200 at three shifts equal to the closed form
+    (10, 95, 190); a non-positive-definite matrix refused with its equation; factor and solution bit-identical for 1 and
+    8 threads; 14 digests of the default static, modal, buckling and eigen paths equal to main; every rcfd-linalg and
+    rcfd-fem test passes. Heavy cube of 304 842 unknowns: nnz(L) 848 257 887 (13.6 GB predicted) against the envelope's
+    3.25e9 entries (26 GB, about 4 700 s); not solved for memory. Partial by the registered rule: A4 (closed form) and
+    A5 (a shift where every diagonal is zero) met only after amendment 1, H1 not run, mutations MU6 (row equal to
+    position in the test matrix), MU7 (solver name from the option) and MU9 (equivalent) survived. Done is the
+    maintainer's call. Follow-up F-529.
 - [ ] **F-432** Stress recovery by element patches and an energy-norm error estimate
   - depends on: F-408, F-376, F-378
   - acceptance: Every limit not stated here is registered in the ADR before the run. A linear displacement field gives
@@ -10194,3 +10209,12 @@ fixed by the item's registration ADR before any code.
     nodes merged within 1e-8; with a pre-stress the undamped direct solve equals the F-399 mode superposition with the
     pre-stressed basis and all modes within 1e-8; defaults bit-identical.
   - note: Structural solver, advanced tier. Follow-up of F-412 (ADR 0448, 2026-11-14; named F-412b there).
+- [ ] **F-529** Nested dissection and supernodal L D L^T for the sparse direct solver; heavy record of 3e5 unknowns
+  - depends on: F-431
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A nested-dissection ordering and a
+    supernodal numeric factorisation in rcfd_linalg::sparse_chol: on the 7-point 30^3 grid the factor entries at most
+    0.6 of minimum degree's (both recorded) and the residual below 1e-12 relative; the clamped Hex8 cube of 304 842
+    unknowns is solved with the relative residual below 1e-10 in less than 8 GB, time and memory recorded; a refusal
+    names an equation whose elimination position differs from its index; the static solve reports which factor it built;
+    factor and solution bit-identical for 1 and 8 threads; the default solver's results keep their bits.
+  - note: Structural solver, advanced tier. Follow-up of F-431 (ADR 0447, 2026-11-14).

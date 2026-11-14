@@ -1128,7 +1128,7 @@ fn h1_to_h3_section_hook() {
 // ------------------------------------------------------------------------------------------------- X1
 
 #[test]
-#[ignore = "record of ADR 0440: ADR 0448 (F-412) landed harmonic_direct and cskyline (PENDING None), retiring their two rows; continued in x1_modules_and_pending_after_landed (ADR 0291 pattern, maintainer standing decision)"]
+#[ignore = "record of ADR 0440: ADR 0448 (F-412) landed harmonic_direct and cskyline and ADR 0447 (F-431) landed sparse_chol (PENDING None), retiring their rows; continued in x1_modules_and_pending_after_landed (ADR 0291 pattern, maintainer standing decision)"]
 fn x1_modules_and_pending() {
     use rcfd_fem as f;
     let fem: [(&str, Option<&str>, &str); 24] = [
@@ -1170,7 +1170,7 @@ fn x1_modules_and_pending() {
     c.finish();
 }
 
-// X1 after ADR 0448 (F-412): harmonic_direct and cskyline have landed.
+// X1 after ADR 0448 (F-412) and ADR 0447 (F-431): harmonic_direct, cskyline and sparse_chol have landed.
 #[test]
 fn x1_modules_and_pending_after_landed() {
     use rcfd_fem as f;
@@ -1203,11 +1203,11 @@ fn x1_modules_and_pending_after_landed() {
     let linalg: [(&str, Option<&str>, &str); 3] = [
         ("cskyline", rcfd_linalg::cskyline::PENDING, "landed"),
         ("eigen_general", rcfd_linalg::eigen_general::PENDING, "ADR 0317 (F-414)"),
-        ("sparse_chol", rcfd_linalg::sparse_chol::PENDING, "ADR 0334 (F-431)"),
+        ("sparse_chol", rcfd_linalg::sparse_chol::PENDING, "landed"),
     ];
     let mut c = Checks::new();
     for (name, got, expect) in fem.iter().chain(&linalg) {
-        // ADR 0448: a landed module has PENDING None
+        // ADR 0448, ADR 0447: a landed module has PENDING None
         let want = if *expect == "landed" { None } else { Some(*expect) };
         c.holds(&format!("X1 {name}"), *got == want, &format!("{got:?}"));
     }

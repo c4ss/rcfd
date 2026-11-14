@@ -423,6 +423,7 @@ pub fn modal_analysis_harmonic(
         residual_test: options.residual_test,
         max_iterations: options.max_iterations,
         subspace_size: options.subspace_size,
+        factorisation: options.factorisation,
         ..SubspaceOptions::default()
     };
     let eig = lowest_eigenpairs(&kr, &mr, count, &opts).map_err(|e| FemError::Solver {
