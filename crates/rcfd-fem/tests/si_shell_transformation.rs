@@ -1000,6 +1000,7 @@ fn s3_n2_to_n4_refusals() {
 // S3, S3c, N2 to N4 after ADR 0473 (F-420, check D1): N4, the centrifugal load on a beam, now solves and the root
 // reactions balance the centrifugal force; every other row as before.
 #[test]
+#[ignore = "record of ADR 0473 (F-420) before ADR 0490 (F-578) let nonlinear::initial_states take shells (row N3 nonlinear initial states); continued in s3_n2_to_n4_refusals_after_f420_after_f578 (ADR 0291 pattern, maintainer standing decision)"]
 fn s3_n2_to_n4_refusals_after_f420() {
     let mut c = Checks::new();
     // S3, S3c: the entry refusal before the transformation is built (arithmetic 8).
@@ -1131,6 +1132,179 @@ fn s3_n2_to_n4_refusals_after_f420() {
     c.holds("N3 check_supported (the other paths)", follow_up(&r), &format!("{r:?}"));
     let r = rcfd_fem::nonlinear::initial_states(&h1).map(|_| ());
     c.holds("N3 nonlinear initial states", follow_up(&r), &format!("{r:?}"));
+    let pcg = StaticOptions::with_solver(StaticSolver::PreconditionedCg {
+        preconditioner: CgPreconditioner::BlockJacobi,
+        tolerance: 1e-10,
+        max_iterations: 100,
+    });
+    let r = solve_static(&h1, &pcg).map(|_| ());
+    c.holds(
+        "N3 preconditioned CG on the transformation",
+        matches!(&r, Err(FemError::InvalidValue { key: "solver", .. })),
+        &format!("{r:?}"),
+    );
+    // N4: centrifugal on a beam model, unchanged.
+    let mut mesh = SolidMesh::new(vec![[0.0; 3], [0.5, 0.0, 0.0], [1.0, 0.0, 0.0]]).unwrap();
+    mesh.add_block(ElementKind::Beam2, vec![0, 1, 1, 2]).unwrap();
+    let section = BeamSection::new(0.012, 3e-6, 5e-6, 4e-6, 0.85, 0.75).unwrap();
+    mesh.set_block_property(0, BlockProperty::beam(section, [0.0, 1.0, 0.0]).unwrap())
+        .unwrap();
+    mesh.add_element_set("all", vec![0, 1]).unwrap();
+    mesh.add_node_set("root", vec![0]).unwrap();
+    let mut bm = model_of(mesh, mat(0.3));
+    clamp(&mut bm, "root");
+    bm.add_load(Load::centrifugal([0.0, 0.0, 1.0], [0.0; 3], 10.0)).unwrap();
+    // ADR 0473 (check D1): the centrifugal load on a beam is taken; the root reactions balance rho A Omega^2 L x_mid e_x.
+    let r = solve_static(&bm, &StaticOptions::default()).unwrap();
+    let start = r.dofs().equation(0, 0).unwrap();
+    let rf = &r.reactions().unwrap()[start..start + 3];
+    let fc = RHO * 0.012 * 10.0 * 10.0 * 1.0 * 0.5;
+    c.at_most(
+        "N4 centrifugal on a beam (ADR 0473 check D1): |R + F_c| / |F_c|",
+        norm([rf[0] + fc, rf[1], rf[2]]) / fc,
+        1e-12,
+    );
+    c.finish();
+}
+
+/// The copy of `s3_n2_to_n4_refusals_after_f420` after ADR 0490 (F-578): the row "N3 nonlinear initial states" now expects the states (the Newton
+/// driver takes shells); every other row unchanged.
+#[test]
+fn s3_n2_to_n4_refusals_after_f420_after_f578() {
+    let mut c = Checks::new();
+    // S3, S3c: the entry refusal before the transformation is built (arithmetic 8).
+    let hex = hex_box([0.0; 3], [2.0, 1.0, 1.0], [2, 1, 1]).unwrap();
+    let at = [[2.0, 0.0, 0.0], [2.0, 1.0, 0.0], [2.0, 1.0, 1.0], [2.0, 0.0, 1.0]];
+    let build = |shared: bool| -> (SolidModel, usize) {
+        let mut nodes = hex.nodes().to_vec();
+        let conn: Vec<usize> = if shared {
+            at.iter().map(|p| nodes.iter().position(|q| q == p).unwrap()).collect()
+        } else {
+            let n0 = nodes.len();
+            nodes.extend(at.iter().map(|p| [3.0, p[1], p[2]]));
+            (n0..n0 + 4).collect()
+        };
+        let mut mesh = SolidMesh::new(nodes).unwrap();
+        mesh.add_block(ElementKind::Hex8, hex.blocks()[0].connectivity().to_vec())
+            .unwrap();
+        mesh.add_block(ElementKind::Shell4, conn.clone()).unwrap();
+        mesh.set_block_property(1, BlockProperty::shell(0.01).unwrap()).unwrap();
+        mesh.add_element_set("solid", vec![0, 1]).unwrap();
+        mesh.add_element_set("shell", vec![2]).unwrap();
+        mesh.add_node_set("xmin", hex.node_set("xmin").unwrap().to_vec())
+            .unwrap();
+        let mut m = SolidModel::new(mesh);
+        m.add_material("solid", mat(0.3)).unwrap();
+        m.add_material("shell", mat(0.3)).unwrap();
+        for comp in 0..3 {
+            m.add_constraint(Constraint::displacement("xmin", comp, 0.0)).unwrap();
+        }
+        (m, conn[0])
+    };
+    let set_a = |m: &mut SolidModel, node: usize| {
+        m.add_constraint(Constraint::linear(vec![LinearTerm::new(node, 0, 1.0)], 0.0))
+            .unwrap();
+        m.add_constraint(Constraint::linear(vec![LinearTerm::new(node, 0, 1.0)], 1e-3))
+            .unwrap();
+    };
+    let set_b = |m: &mut SolidModel, node: usize| {
+        m.add_constraint(Constraint::linear(
+            vec![LinearTerm::new(node, 0, 1.0), LinearTerm::new(node, 0, -1.0)],
+            0.0,
+        ))
+        .unwrap();
+    };
+    let (shared, first) = build(true);
+    let names = |r: &Result<(), FemError>| -> (bool, String) {
+        match r {
+            Err(e @ FemError::Element { element: 2, source }) => (
+                matches!(source.as_ref(), FemError::InvalidValue { key: "node", .. })
+                    && e.to_string().contains(&format!("node {first} ")),
+                e.to_string(),
+            ),
+            other => (false, format!("{other:?}")),
+        }
+    };
+    let mut a = shared.clone();
+    set_a(&mut a, first);
+    let mut bm = shared.clone();
+    set_b(&mut bm, first);
+    let r = solve_static_mpc(&a, &[], &[], &[], &StaticOptions::default()).map(|_| ());
+    let (ok, msg) = names(&r);
+    c.holds("S3 solve_static_mpc, set A", ok, &msg);
+    let r = modal_analysis_mpc(&a, &[], &ModalOptions::new(2)).map(|_| ());
+    let (ok, msg) = names(&r);
+    c.holds("S3 modal_analysis_mpc, set A", ok, &msg);
+    let r = modal_analysis_mpc(&bm, &[], &ModalOptions::new(2)).map(|_| ());
+    let (ok, msg) = names(&r);
+    c.holds("S3 modal_analysis_mpc, set B", ok, &msg);
+    let (control, cfirst) = build(false);
+    let says = |r: &Result<(), FemError>, text: &str| -> (bool, String) {
+        match r {
+            Err(e @ FemError::InvalidValue { key: "constraint", .. }) => (e.to_string().contains(text), e.to_string()),
+            other => (false, format!("{other:?}")),
+        }
+    };
+    let mut a = control.clone();
+    set_a(&mut a, cfirst);
+    let mut bm = control.clone();
+    set_b(&mut bm, cfirst);
+    let r = solve_static_mpc(&a, &[], &[], &[], &StaticOptions::default()).map(|_| ());
+    let (ok, msg) = says(&r, "contradicts");
+    c.holds("S3c solve_static_mpc, set A", ok, &msg);
+    let r = modal_analysis_mpc(&a, &[], &ModalOptions::new(2)).map(|_| ());
+    let (ok, msg) = says(&r, "takes zero values only");
+    c.holds("S3c modal_analysis_mpc, set A", ok, &msg);
+    let r = modal_analysis_mpc(&bm, &[], &ModalOptions::new(2)).map(|_| ());
+    let (ok, msg) = says(&r, "cancel to zero");
+    c.holds("S3c modal_analysis_mpc, set B", ok, &msg);
+    // N2: a shell model with a cyclic constraint.
+    let hb = hex_box([0.0, 1.0, 0.0], [1.0, 1.0, 1.0], [1, 1, 1]).unwrap();
+    let nh = hb.nodes().len();
+    let (sn, se) = grid(1.0, KB, 4, 1);
+    let mut nodes = hb.nodes().to_vec();
+    nodes.extend_from_slice(&sn);
+    let mut mesh = SolidMesh::new(nodes).unwrap();
+    mesh.add_block(ElementKind::Hex8, hb.blocks()[0].connectivity().to_vec())
+        .unwrap();
+    let conn: Vec<usize> = se.iter().flatten().map(|&k| nh + k).collect();
+    mesh.add_block(ElementKind::Shell4, conn).unwrap();
+    mesh.set_block_property(1, BlockProperty::shell(KT).unwrap()).unwrap();
+    mesh.add_element_set("solid", vec![0]).unwrap();
+    mesh.add_element_set("shell", (1..5).collect()).unwrap();
+    for name in BOX_FACES {
+        mesh.add_node_set(name, hb.node_set(name).unwrap().to_vec()).unwrap();
+        mesh.add_surface_set(name, hb.surface_set(name).unwrap().to_vec())
+            .unwrap();
+    }
+    let mut m = SolidModel::new(mesh);
+    m.add_material("solid", mat(0.3)).unwrap();
+    m.add_material("shell", mat(0.0)).unwrap();
+    m.add_constraint(Constraint::cyclic("ymin", "ymax", [0.0, 0.0, 1.0], [0.0; 3], 4))
+        .unwrap();
+    let cyclic = |r: &Result<(), FemError>| matches!(r, Err(FemError::NotYetSupported { variant: "Cyclic", package, .. }) if *package == shell::FOLLOW_UP);
+    let rs = solve_static(&m, &StaticOptions::default()).map(|_| ());
+    c.holds("N2 cyclic with a shell: solve_static", cyclic(&rs), &format!("{rs:?}"));
+    let rm = modal_analysis(&m, &ModalOptions::new(2)).map(|_| ());
+    c.holds(
+        "N2 cyclic with a shell: modal_analysis",
+        cyclic(&rm),
+        &format!("{rm:?}"),
+    );
+    // N3: the H1 model on paths that do not take shells.
+    let mut h1 = plate(true);
+    h1.add_constraint(Constraint::rigid_set("edge", [0.0, 0.5, 0.0]))
+        .unwrap();
+    clamp(&mut h1, "corner");
+    let follow_up = |r: &Result<(), FemError>| matches!(r, Err(FemError::NotYetSupported { variant: "Shell4", package, .. }) if *package == shell::FOLLOW_UP);
+    let r = h1.check_supported();
+    c.holds("N3 check_supported (the other paths)", follow_up(&r), &format!("{r:?}"));
+    let r = rcfd_fem::nonlinear::initial_states(&h1).map(|_| ());
+    c.holds(
+        "N3 nonlinear initial states (taken, ADR 0490 D3)",
+        r.is_ok(),
+        &format!("{r:?}"),
+    );
     let pcg = StaticOptions::with_solver(StaticSolver::PreconditionedCg {
         preconditioner: CgPreconditioner::BlockJacobi,
         tolerance: 1e-10,

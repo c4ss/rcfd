@@ -406,3 +406,12 @@ decision: an ignored record and a continued twin), the test receives `#[ignore]`
 test `r2b_to_r4b_refusals_after_f578` in the same file repeats it with row E5 expecting no `NotYetSupported` (every other row
 unchanged: E6 still refuses Shell3, R3b the layup on every path including E5, R4b). The whole-crate run is then made with
 `--no-fail-fast`. No limit changes.
+
+## Amendment 4 (2026-11-14): three more existing tests superseded by design; written before their corrected run
+
+The whole-crate run with `--no-fail-fast` (`fem-suite2.log`: 664 passed, 3 failed, 172 ignored) failed one row in each of
+`sa_shell3::s1_n2_n3_refusals`, `si_shell::s1_n2_n3_refusals_f525_after_landed` and
+`si_shell_transformation::s3_n2_to_n4_refusals_after_f420`: the row "N2 (N3) nonlinear initial states" asserts that
+`nonlinear::initial_states` refuses a shell model, which D3 changes (the driver needs the states of a shell model; a shell gets
+the empty state). As in amendment 3: each test becomes an ignored record with its body unchanged, and a copy `<name>_after_f578`
+in the same file expects `Ok` in that row, every other row unchanged. No limit changes. Every other test of the crate passed.
