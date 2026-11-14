@@ -1961,6 +1961,18 @@ constant of the checks is an input (decision A1 of ADR 0310).
 | Complex modulus `G*(omega) = G_0 (g_inf + sum g_i i omega tau_i/(1 + i omega tau_i))`, `E* = 9 K* G*/(3 K* + G*)`; dissipation per cycle and volume `pi eps0^2 E''` | derived | steady state of the hereditary law, ADR 0485 arithmetic 2 |
 | Logarithmic decrement of a mode of the standard solid, `delta = pi eta/(1 - (omega/2)(dE'/d omega)/E')` to first order in the loss (`pi E''/E'` without the dispersion term); at `omega tau = 1`, `w = 2/21`: `eta = 0.05`, `delta/(pi eta) - 1 = 2.56e-2` (first order), `2.525e-2` (exact root) | derived, computed | ADR 0485 arithmetic 3; root of `s^2 + lambda (w_inf + w s tau/(1 + s tau)) = 0` by Newton (probe and test) |
 | Time-temperature shift: WLF `log10 a_T = -c1 (T - T_ref)/(c2 + T - T_ref)`, Arrhenius `ln a_T = (E_a/R)(1/T - 1/T_ref)`, `R = 8.314462618 J/(mol K)` (CODATA 2018, exact); the "universal" WLF constants `c1 = 17.44`, `c2 = 51.6 K` used as inputs only | cited | M. L. Williams, R. F. Landel and J. D. Ferry, J. Am. Chem. Soc. 77 (1955) 3701; Ferry (1980), chapter 11 (the chapter number not checked): NOT read, from memory; the CODATA 2018 value of `R` from memory |
+## F-577 the viscoelastic material in the direct harmonic solve (ADR 0491)
+
+No source was read for F-577. Every formula used is derived in ADR 0491 (arithmetic 1 to 9) or re-used from ADR 0485 and ADR
+0448; the references of the checks are closed forms and the 1-D chain of linear elements solved in the test. The material
+constants are inputs (the values of ADR 0485 V1), not data.
+
+| Item | Status | Source |
+|---|---|---|
+| Steady harmonic stress of the isotropic viscoelastic solid `sigma* = 2 G* dev eps* + K* tr eps* 1`, so the element stiffness is `(G*/G_0) K^G + (K*/K_0) K^K` with `K^G`, `K^K` the stiffness of `2 G_0 I_dev` and `K_0 1 (x) 1` (exact, the stiffness being linear in the elasticity matrix); for equal weights `E*/E_0` times the base stiffness | derived | the correspondence principle of linear viscoelasticity, from the steady state of the hereditary law (ADR 0485 arithmetic 2, ADR 0491 arithmetic 1); textbook statement (Tschoegl 1989, Ferry 1980): NOT read, from memory |
+| Clamped rod with an end force `F`: `u(L) = F tan(kL)/(A Mod* k)`, `k = omega sqrt(rho/Mod*)`; the rod with the lateral motion held is in uniaxial strain, modulus `K* + 4 G*/3` (`= E*` for `nu = 0` and equal weights), the shear rod `G*` | derived | ADR 0491 arithmetic 2 |
+| Discretisation error of the linear element with consistent mass near the first resonance, `2 (kh)^2/(24 eta)` at the peak (`kh = (pi/2)/n`); `2.47e-3` (rod A), `2.65e-3` (B), `1.60e-3` (C) at 40 elements, second order | derived, computed | ADR 0491 arithmetic 4; probe `f577-scratch/probe.py` (numpy, no rcfd code), reproduced by the test |
+
 ## F-573 follower pressure on shells (ADR 0487)
 
 No source was read for F-573. Every formula used is derived in ADR 0487 (arithmetic 1 to 8) or re-used from ADR 0480 (cited

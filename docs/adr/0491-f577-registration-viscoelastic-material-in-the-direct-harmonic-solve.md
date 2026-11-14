@@ -269,3 +269,104 @@ Every aggregated error is required finite (a NaN anywhere is a miss). Files: `cr
    a closed form.
 3. **The 1e-6 of the acceptance** is out of reach at 40 elements (arithmetic 4); the registered discretisation limit `4e-3` is
    used, as the acceptance allows, with the order and the chain checks.
+
+## Addendum 1: results (2026-11-14)
+
+Registered run: commit 6a5a05d9 (`cargo test -p rcfd-fem --release --test sa_harmonic_visco -- --nocapture
+--test-threads=1`, log `f577-scratch/run1.log`). Each check ran once; no set-up was corrected and no limit was changed. The bit
+record B0 was printed on the unchanged base e90c2350 (`b0-base.log`) and written into the test at commit 714376ac, before any
+library code. Commit 4979df79 after the run is a type alias (clippy), layout only.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| HA rod A (`M* = E*`), closed form at 40 Hex8, max of 10 frequencies | `<= 4e-3` (registered discretisation limit) | `2.472e-3` (at `omega_c`; `4.2e-4` at `0.9 omega_c`) | yes |
+| HAo observed order 40 to 80 | `>= 1.9` | `2.001` | yes |
+| HAd against the discrete chain, 40 and 80 | `<= 1e-9` | `1.35e-11` | yes |
+| HB rod B (unequal weights, `K* + 4 G*/3`) | `<= 4e-3` | `2.646e-3` | yes |
+| HBo | `>= 1.9` | `2.001` | yes |
+| HBd | `<= 1e-9` | `1.08e-11` | yes |
+| HC shear rod (`G*`) | `<= 4e-3` | `1.601e-3` | yes |
+| HCo | `>= 1.9` | `2.000` | yes |
+| HCd | `<= 1e-9` | `9.30e-12` | yes |
+| HD two materials against the chain | `<= 1e-9` | `2.08e-12` | yes |
+| E1 equal weights against the `LossFactor::Table` route at the table points | `<= 1e-12` | `1.41e-13` (0 at six of the ten points) | yes |
+| DM1 damped modes refuse the material | refused as stated | `NotYetSupported`, `Viscoelastic`, `mat_visco::FOLLOW_UP` | yes |
+| Z1 zero frequency, `F L/(A M_inf)` | `<= 1e-11` | `1.74e-14` | yes |
+| T1 WLF shift at 383 K against `tau a_T` (`a_T = 1.475133e-3`) | `<= 1e-12` | `1.70e-15` | yes |
+| C0 no terms against the base | `<= 1e-12` | `0` | yes |
+| P1 threads 1 and 4 | bits | equal | yes |
+| NC1 rods B, C with the one-part route | `>= 1e-2` | `1.76e-1`, `4.53e-2` | yes |
+| NC2 table of unequal weights refused | key `"terms"` | refused | yes |
+| RF (i) to (vi) | as stated | all six as stated | yes |
+| N1 B0, 11 digests of e90c2350 | equal | equal | yes |
+| N2 `baseline_hashes` | pass | pass (3 passed, 1 ignored) | yes |
+| N3 `cargo test -p rcfd-fem --release` (every test binary of the crate, with the doc tests) | pass | 663 passed, 0 failed, 166 ignored | yes |
+
+The NC1 numbers differ from the probe's (`1.54e-1`, `4.72e-2`) because the test divides by the wrong chain's response and the
+probe by the right one; both are far above the limit.
+
+E1 is not zero at four of the ten points (`1.4e-13` at the largest): the table route multiplies by `(s, s eta)` with `eta =
+E''/E'`, the viscoelastic route by `E*/E`, which differ by rounding. MU4 (below) shows the estimate of arithmetic 5 for a
+two-part route: the shear and bulk parts assembled apart and summed give `1.1e-12` against the table, above the limit; the
+one-part route for equal weights is what keeps E1 at `1e-13`.
+
+**Mutations** (`f577-scratch/mutate.py` on a git-archive copy of 6a5a05d9 with its own target directory, log
+`mutations.log`; MU0, the copy without a mutation, passes 4 of 4):
+
+| Id | Caught by |
+|---|---|
+| MU1 shear and bulk coefficients swapped | HB (`0.30`), HBo, HBd, HC (`2.56`), HCo, HCd, HD, Z1 (`2.7e-2`) |
+| MU2 `2 G_0` on the shear diagonal | HC (`1.27`), HCo, HCd |
+| MU3 `complex_moduli` at `omega/(2 pi)` | E1 (`2.42`), HA, HAo, HAd, HB, HBo, HBd, HC, HCo, HCd, HD; not T1 (as expected) |
+| MU4 the equal-weight test inverted | HB (`0.50`), HBd, HC (`0.13`), HCd, HD, Z1, NC1 (`3e-13`, the route now equals the wrong one), and E1 (`1.11e-12`, the two-part route for equal weights) |
+| MU5 the loss part dropped | E1 (`2.32`), HA, HB, HC and their chain and order checks, HD |
+| MU6 the J2 refusal removed | RF (v) (J2 refused later, by its element-constant matrix, without the set in the message) |
+| MU7 the temperature not passed to the coefficients | T1 (the response refused at the first frequency: the shifted material needs a temperature) |
+
+Every planned mutation was caught.
+
+**Deviations.** None in the checks. The B0 file has eleven digests (D6 lists the J2 refusal with a table, which repeats the
+refusal message of J2 alone, as expected). Not run: the whole workspace test suite (the lead's gate).
+
+**Shared solver files changed.** `harmonic_direct.rs`: module doc; `DirectHarmonicOptions::temperature` (field, default
+`None`, builder); `Damping::Viscoelastic`, `ViscoPart`, `shear_matrix`, `bulk_matrix`, `check_viscoelastic_model`,
+`viscoelastic_parts` (new, private); in `DirectHarmonic::new` the model check and the matrices branch on a viscoelastic
+material, the old code unchanged inside the `else` (re-indented), and a loss factor on a viscoelastic set refused;
+`coefficients` gains the viscoelastic arm; `stress` refuses a viscoelastic part. `mat_visco.rs`: module doc, `harmonic_base`
+(new, `pub(crate)`). `damped.rs`: module doc only. `material.rs` and `model.rs`: not touched.
+
+Other runs: `cargo test -p rcfd-cli --release --test docs_site`: 2 passed; `cargo clippy -p rcfd-fem --all-targets --release --
+-D warnings`: clean (after 4979df79); `cargo fmt -p rcfd-fem --check`: clean.
+
+**Decision by the registered rule: done.** Every check of the table is met, HA, HB and HC at the registered discretisation
+limit `4e-3`, as the acceptance allows (the acceptance's `1e-6` is out of reach at 40 elements: the dispersion of the linear
+element with consistent mass, `2.47e-3` at the peak of rod A, second order, and the solver equals the discrete chain within
+`1.4e-11`). Every planned mutation is caught, fmt and clippy are clean, and B0 and the baseline hashes are unchanged.
+
+### Remaining questions
+
+1. **The damped modes.** They refuse the material (reading (a4)). Options: (a) leave it so; (b) take it at a fixed frequency
+   `omega_ref` given in the options: the undamped basis of the storage moduli at `omega_ref` and a projected loss stiffness of
+   the parts; (c) iterate each root to its own frequency (a nonlinear eigenproblem). Recommendation: (b), follow-up 1; (c)
+   later if the fan's plastic blade needs the damping of more than one mode accurately.
+2. **The harmonic stress.** Refused. Options: (a) leave it so; (b) the split stress `(G*/G_0) dev sigma_0 + (K*/K_0) vol
+   sigma_0` per point from the elastic stress of the base. Recommendation: (b), follow-up 2 (fatigue of a plastic blade needs
+   the stress amplitude).
+3. **Case-file key.** Not added (ADR 0485 open question 1). Recommendation: when the maintainer opens the case file to the
+   viscoelastic material, offer it to the harmonic study with a `temperature` key.
+4. **Rayleigh `beta K` with a viscoelastic material** takes the instantaneous base stiffness. Options: (a) leave it and say so
+   (done, module doc); (b) refuse `beta` with a viscoelastic material. Recommendation: (a).
+
+## For the lead: roadmap entries
+
+Proposed status of F-577: **done**. Proposed note:
+
+> ADR 0491, 2026-11-14: the direct harmonic solve (harmonic_direct.rs) takes a viscoelastic material directly, by mat_visco::complex_moduli at each frequency: with equal weights one part, the base stiffness times E*(omega)/E; with unequal weights two parts, the stiffness of 2 G_0 I_dev times G*/G_0 and that of K_0 1 (x) 1 times K*/K_0 (exact: the stiffness is linear in the elasticity matrix). DirectHarmonicOptions::temperature serves a shifted material. A loss factor on its set and the harmonic stress are refused; the Rayleigh term takes its instantaneous stiffness. The damped modes refuse the material (NotYetSupported, mat_visco::FOLLOW_UP). Met: the tip response of a clamped 40-element Hex8 rod of the standard solid at 10 frequencies from 0.9 to 1.1 of its first resonance against the closed form of the rod with the complex modulus within 2.47e-3 (E*, nu = 0, equal weights), 2.65e-3 (unequal weights, K* + 4 G*/3) and 1.60e-3 (shear rod, G*), against the registered discretisation limit 4e-3 (1e-6 is out of reach at 40 elements: the dispersion of the linear element, observed order 2.00); every response against the discrete chain within 1.4e-11; two materials within 2.1e-12; equal weights against the LossFactor::Table route at the table points within 1.4e-13; zero frequency, shift and no-term checks within 1.7e-14, 1.7e-15 and 0; threads bit-identical; seven mutations caught; default bits (11 digests) and baseline hashes unchanged.
+
+Follow-up 1. Title: "The viscoelastic material in the damped modes at a fixed frequency". Deps: F-577. Acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. The damped modes take a viscoelastic material at a reference frequency given in the options: the undamped basis from the storage shear and bulk moduli at that frequency and the loss stiffness of their loss moduli projected on it. On the 40-element rod of ADR 0491 (rod A) with the reference frequency at its first resonance, the first damped root equals the root of the discrete chain with the complex modulus at that frequency within 1e-8 relative, and its loss factor 2 |Re lambda|/Im lambda equals E''/E' at that frequency within 1e-3 relative. Models without the material keep their bits.
+
+Follow-up 2. Title: "The harmonic stress of a viscoelastic material in the direct harmonic solve". Deps: F-577. Acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. DirectHarmonic::stress of a response with a viscoelastic material returns (G*/G_0) dev sigma_0 + (K*/K_0) vol sigma_0 at each integration point, sigma_0 the elastic stress of the base. On the rods A, B and C of ADR 0491 at 40 elements the axial (or shear) stress at the integration points equals the modulus times the strain of the discrete chain within 1e-9 relative; for equal weights it equals the stress of the LossFactor::Table route within 1e-12. Models without the material keep their bits.
