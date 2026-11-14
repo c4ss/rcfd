@@ -11462,7 +11462,7 @@ fixed by the item's registration ADR before any code.
     of ADR 0492 within 1 percent where it exceeds 1e-9, theta' equals RotatingSector::whirl_modes within 1e-7 for every
     matched mode, and the results of ADR 0492 keep their bits.
   - note: Structural solver, advanced tier. Optional. Follow-up of F-575 (ADR 0492, 2026-11-14).
-- [ ] **F-585** Corotated shells in the arc-length continuation and the nonlinear transient
+- [~] **F-585** Corotated shells in the arc-length continuation and the nonlinear transient
   - depends on: F-578
   - acceptance: Every limit not stated here is registered in the ADR before the run. arclength::trace, solve_from and
     the nonlinear transient integrator take Shell4 and Shell3 with the corotated element of ADR 0490 (the transient with
@@ -11470,7 +11470,21 @@ fixed by the item's registration ADR before any code.
     bit-identical; a shallow cylindrical shell panel under a point load followed through its limit point by arc length
     within 2 percent of a registered reference; a cantilever strip of shells in free vibration of small amplitude gives
     the linear first frequency within 1 percent and conserves energy within a registered limit over 100 periods.
-  - note: Structural solver, advanced tier. Follow-up of F-578 (ADR 0490, 2026-11-14).
+  - note: Structural solver, advanced tier. Follow-up of F-578 (ADR 0490). PARTIAL. ADR 0522, 2026-11-14:
+    arclength::trace, solve_from and the nonlinear transient integrator take Shell4 and Shell3 with the corotated
+    element of ADR 0490 (the refusal replaced by the shell-taking check; additive rotation-vector increments; the
+    constant consistent shell mass with the rotary inertia rho t^3/12 of the rotation-vector rate, isotropic, exact at
+    small rotation; the shell strain energy from the corotated potential); the energy-momentum step, solve_in_time and
+    buckling_factors still refuse shells. Free vibration of a 16-element Shell4 cantilever strip at a tip amplitude 1e-3
+    L over 100 periods by the trapezoidal rule: frequency within 2.05e-3 of the linear modal frequency (limit 1 percent;
+    the trapezoidal period factor accounts for it within 8e-8), energy conserved within 2.8e-8 (limit 1e-5); the same on
+    Shell3 over 4 periods; solve_from equals solve bit for bit on shells. Hinged cylindrical roof (R 2540, edges 508,
+    0.1 rad, t 12.7) under a central point load traced through its limit point by arc length (Shell4 16 x 16 quarter,
+    limit load 2222 N, converged to 5e-4 against 8 x 8 and Shell3), but 2.5 percent above the registered Hex20 solid
+    reference (limit 2 percent; 2.6 percent under a patch load): the solid sequence does not converge (probably its
+    mid-line hinge, a singular line support), so the roof clause lacks a valid reference; recorded as known misses.
+    Default bits unchanged (6 digests), baseline hashes unchanged; six of six expected mutations caught. Four set-up
+    amendments, records kept.
 - [ ] **F-586** The viscoelastic damped modes at each root's own frequency
   - depends on: F-582
   - acceptance: Every limit not stated here is registered in the ADR before the run. The damped modes of a viscoelastic
