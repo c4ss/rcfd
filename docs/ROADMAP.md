@@ -7453,7 +7453,9 @@ fixed by the item's registration ADR before any code.
     1e-3, the F-237 deck error). Uniform TEMP free expansion within 9.5e-14 (limit 1e-6). PARTIAL: the warped-face
     negative control was symmetric (centroid formula exact) and met only after amendment 1 with an asymmetric face
     (2.0e-4); the mutation that lumps the face load is not caught, because it is exact on parallelogram faces. Tet,
-    Tet10 and Hex20 surfaces refused.
+    Tet10 and Hex20 surfaces refused. ADR 0441, 2026-11-14: the lumped-load mutation of F-384 (ADR 0436 MU4) not caught
+    on parallelogram faces is caught by F-523's node-by-node comparison on trapezoidal and warped faces; F-384 stays
+    partial by its own rule (the N2 amendment).
 - [~] **F-385** One-way coupling 2: fluid face forces in process, and a static solid as a co-simulation participant
   - depends on: F-374, F-377, F-139
   - acceptance: Every limit not stated here is registered in the ADR before the run. Fluid face forces on a wall are
@@ -10072,13 +10074,18 @@ fixed by the item's registration ADR before any code.
     k_theta theta = M within 2.5e-13 and in series with the plate 2.4e-12 (limit 1e-10); counts 6, 1, 0, 1, 6, 0, 0;
     spinning strip equals the 1D bar within 5.4e-15, centrifugal resultant and warped-facet moments within 3e-16. Solid
     and beam bits unchanged (si_scaffold_bits, baseline_hashes, every rcfd-fem test). Eleven mutations, all caught.
-- [ ] **F-523** Deck pressure loads on non-parallelogram faces
+- [x] **F-523** Deck pressure loads on non-parallelogram faces
   - depends on: F-384
   - acceptance: Every limit not stated here is registered in the ADR before the run. On a trapezoidal and on a warped
     Hex8 face the nodal loads of deck_pressure_loads equal those of Load::pressure node by node within 1e-14 relative,
     and the lumped-load mutation is caught.
-  - note: Priority P3. Size S. Area: structural. Opened by ADR 0436: the consistent load of deck_pressure_loads is
-    checked only on parallelogram faces, where lumping is exact (mutation not caught).
+  - note: ADR 0441, 2026-11-14: deck_pressure_loads equals Load::pressure node by node (bit-identical, 0 against the
+    limit 1e-14 relative to the largest nodal load) on a planar trapezoidal Hex8 face, on an asymmetric warped face
+    (corner (1.3, 1, 1.01), not symmetric about a diagonal) and on a strip of two trapezoids sharing nodes; the lumped
+    load -p A/4 differs from the consistent one by 1.0e-1, 4.2e-2 and 1.0e-1 on the same faces, so the faces
+    discriminate; resultant of the trapezoid against deck_force_moment 1.6e-16. The lumped-load mutation (MU4 of ADR
+    0436) is caught by all three checks and by the moment of the resultant check; the sign mutation too. Test-only
+    (crates/rcfd-post/tests/sb_deck_loads_np.rs), no library change.
 - [x] **F-524** Rotating plane-stress disc of Shell4 facets against the closed form
   - depends on: F-522
   - acceptance: Every limit not stated here is registered in the ADR before the run. A flat annular disc of Shell4
