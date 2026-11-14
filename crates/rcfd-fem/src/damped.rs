@@ -15,6 +15,10 @@
 //! `K^-1 f_i` of its influence vector `f_i`, M-orthogonalised (classical Gram-Schmidt, twice) against the undamped modes and
 //! the vectors kept before it, and M-normalised; a vector whose M-norm falls to `RESIDUAL_DROP` of its own is dropped. Off
 //! (the default) the computation is that of ADR 0450, operation for operation.
+//!
+//! ADR 0467 (F-548): each mode reports `residual_share`, the M-weighted share of its shape in the residual-vector coordinates
+//! (0 without residual vectors), and `pseudo` when it exceeds `PSEUDO_SHARE`; the flagged roots are those of the strongly
+//! damped coordinates the vectors add, not of the continuum.
 
 use crate::assemble::{assemble_with, stiffness_with};
 use crate::constraint::{check_rigid_body_motions, prescribed_equations, reduce};
@@ -34,6 +38,10 @@ pub const PENDING: Option<&'static str> = None;
 
 /// `|Im lambda| <= REAL_TOLERANCE |lambda|` is a real (non-oscillating) root (ADR 0450 D3.4).
 pub const REAL_TOLERANCE: f64 = 1e-6;
+
+/// A root whose shape carries a share above `PSEUDO_SHARE` in the residual-vector coordinates is flagged as a pseudo-mode of
+/// the truncation (ADR 0467).
+pub const PSEUDO_SHARE: f64 = 0.1;
 
 /// A residual vector whose M-norm after the orthogonalisation is at most `RESIDUAL_DROP` times its own is dropped (ADR 0464).
 pub const RESIDUAL_DROP: f64 = 1e-8;
@@ -121,6 +129,11 @@ pub struct DampedMode {
     pub shape: Vec<C64>,
     /// The backward residual of the projected quadratic problem.
     pub residual: f64,
+    /// The M-weighted share of the shape carried by the residual-vector coordinates of the basis, in `[0, 1]`
+    /// (exactly 0 without residual vectors; ADR 0467).
+    pub residual_share: f64,
+    /// Whether `residual_share > PSEUDO_SHARE`: a pseudo-mode of the truncation, not a root of the continuum (ADR 0467).
+    pub pseudo: bool,
 }
 
 /// The damped modes of a model (ADR 0450 D3).
@@ -141,6 +154,8 @@ pub struct DampedModes {
     pub oscillating: usize,
     /// Reported real (non-oscillating) roots.
     pub non_oscillating: usize,
+    /// Reported roots flagged as pseudo-modes (ADR 0467).
+    pub pseudo_modes: usize,
     /// Defective groups of `roots` (indices into `roots`).
     pub defects: Vec<Defect>,
     /// Plain statements on the result, for example the non-oscillating roots.
@@ -183,6 +198,27 @@ fn project(a: &CsrMatrix, phi: &[Vec<f64>]) -> Vec<f64> {
 fn m_norm(mass: &CsrMatrix, x: &[f64], y: &mut [f64]) -> f64 {
     mass.matvec(x, y);
     x.iter().zip(y.iter()).map(|(a, b)| a * b).sum::<f64>().sqrt()
+}
+
+/// The M-weighted share of the Ritz vector `x` (coordinates on the basis, projected mass `mr` of order `m`) carried by the
+/// last `r` coordinates: `x_R^H (M_r)_RR x_R / x^H M_r x` (ADR 0467).
+fn coordinate_share(mr: &[f64], m: usize, r: usize, x: &[C64]) -> f64 {
+    let quad = |lo: usize| -> f64 {
+        let mut s = 0.0;
+        for i in lo..m {
+            for j in lo..m {
+                let (a, b) = (x[i], x[j]);
+                s += mr[i * m + j] * (a.re * b.re + a.im * b.im);
+            }
+        }
+        s
+    };
+    let whole = quad(0);
+    if whole > 0.0 {
+        quad(m - r) / whole
+    } else {
+        0.0
+    }
 }
 
 /// The static residual vectors of the dashpots (ADR 0464 D1): `r_i = K^-1 f_i`, M-orthogonalised twice against the modes
@@ -425,6 +461,11 @@ pub fn damped_modes(model: &SolidModel, options: &DampedOptions) -> Result<Dampe
             }
         }
         let ra = eigenvalue.abs();
+        let residual_share = if rvs.is_empty() {
+            0.0
+        } else {
+            coordinate_share(&mr, m, rvs.len(), x)
+        };
         modes.push(DampedMode {
             eigenvalue,
             decay_rate: -eigenvalue.re,
@@ -434,6 +475,8 @@ pub fn damped_modes(model: &SolidModel, options: &DampedOptions) -> Result<Dampe
             oscillating,
             shape,
             residual: q.residuals[idx],
+            residual_share,
+            pseudo: residual_share > PSEUDO_SHARE,
         });
     }
     modes.sort_by(|p, q| {
@@ -443,6 +486,7 @@ pub fn damped_modes(model: &SolidModel, options: &DampedOptions) -> Result<Dampe
     });
     let oscillating = modes.iter().filter(|d| d.oscillating).count();
     let non_oscillating = modes.len() - oscillating;
+    let pseudo_modes = modes.iter().filter(|d| d.pseudo).count();
     let mut notes = Vec::new();
     if !rvs.is_empty() {
         notes.push(format!(
@@ -471,6 +515,11 @@ pub fn damped_modes(model: &SolidModel, options: &DampedOptions) -> Result<Dampe
             q.defects.len()
         ));
     }
+    if pseudo_modes > 0 {
+        notes.push(format!(
+            "{pseudo_modes} roots flagged as pseudo-modes of the residual vectors (share above {PSEUDO_SHARE})"
+        ));
+    }
     Ok(DampedModes {
         modes,
         roots: q.values,
@@ -479,6 +528,7 @@ pub fn damped_modes(model: &SolidModel, options: &DampedOptions) -> Result<Dampe
         residual_vectors: rvs,
         oscillating,
         non_oscillating,
+        pseudo_modes,
         defects: q.defects,
         notes,
         dofs,
