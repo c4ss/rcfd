@@ -2067,3 +2067,16 @@ of the patch test.
 | Pure bending of a rectangular brick with incompatible modes exact for any `nu` (`u_x = -kappa x z'`, `u_y = -nu kappa y' z'`, `u_z = (kappa/2)(x^2 + nu (z'^2 - y'^2))` in the element space) | derived | ADR 0493 arithmetic 3; measured `1.7e-11` (stress), `2.9e-12` (tip) on a one-layer strip |
 | Parasitic shear of the fully integrated trilinear element in bending, energy ratio `(l/h)^2 / (2 (1 + nu))`, deflection about `2/3` at `l = h`, `nu = 0` | derived | ADR 0493 arithmetic 4; measured `0.6665` (20 x 1 x 1, L/h = 20) |
 | One-layer cantilever L/h = 20 with incompatible modes `0.99913` (`nu = 0`), `0.99894` (`nu = 0.3`) of `P L^3/(3EI)(1 + 3EI/(kappa G A L^2))`; L/h = 100 at aspect ratio 5 `0.99927`; nearly incompressible Lame cylinder (`nu = 0.4999`, 8 x 16) B-bar bore `u_r` within `1.7e-3`, full integration `0.225` | computed | ADR 0493 addendum 1 (C1 to C4, T1, T2), equal to the prototype to the printed digits |
+
+## F-576 quasi-static viscoelastic time stepping with histories, a temperature in the nonlinear transient integrator (ADR 0499)
+
+No source was read for F-576. The closed forms below are derived in ADR 0499 (arithmetic 3 to 6) from the hereditary law of
+ADR 0485 and checked by a plain python prototype of the uniaxial law (`f576-scratch/probe.py`, `probe_h1.py`), no rcfd code.
+Every modulus, relaxation time, load and shift constant is an input of a check.
+
+| Item | Status | Source |
+|---|---|---|
+| Stress of a strain ramp `a = r t` on the total Lagrangian cube, `E_xx = a + a^2/2`: `S_xx = E_0 (r G_1 + r^2 G_2)`, `G_1 = w_inf t + sum w_i tau_i (1 - e^{-t/tau_i})`, `G_2 = w_inf t^2/2 + sum w_i tau_i (t - tau_i (1 - e^{-t/tau_i}))`; the error of the update at most `0.6 E_0 r^2 dt^2/8` | derived | ADR 0499 arithmetic 3 (i) |
+| Creep of the standard solid under a stress ramp `sigma = s' t`: `eps = s' (t/E_inf - (1/E_inf - 1/E_0) tau_c (1 - e^{-t/tau_c}))`, `tau_c = tau E_0/E_inf` | derived | ADR 0499 arithmetic 3 (ii) |
+| Relative residual of one Newton correction of the homogeneous stretch of one Hex8 under a load ramp (the halving set-up): `2.130e-2` for the step `[0, 1] s`, `1.000e-2` and `6.318e-3` for its halves | computed | ADR 0499 arithmetic 4 (`probe_h1.py`) |
+| A uniform temperature `T` with a shift `a_T` equals the reference temperature with every relaxation time `a_T tau_i` (the reduced time `dxi = dt/a_T`) | derived | ADR 0499 arithmetic 5; ADR 0485 arithmetic 4 |

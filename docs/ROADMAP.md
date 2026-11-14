@@ -11171,7 +11171,7 @@ fixed by the item's registration ADR before any code.
     computation within 3.3e-7; with 41 modes per index it is 0. The results of ADR 0481 and 0482 and every default keep
     their bits (6 new digests plus 19). All eight mutations caught, including the counterparts of the uncaught MU3 and
     MU4 of ADR 0482. Cost: up to 13 times the split_modes time on the pair indices. Optional follow-up F-584.
-- [ ] **F-576** Quasi-static viscoelastic time stepping on the Newton driver, with a temperature in the nonlinear transient integrator
+- [x] **F-576** Quasi-static viscoelastic time stepping on the Newton driver, with a temperature in the nonlinear transient integrator
   - depends on: F-410
   - acceptance: Every limit not stated here is registered in the ADR before the run. A time-stepping driver over
     nonlinear::solve_from_at with the halvings of ADR 0404 takes prescribed displacements and loads against time. It
@@ -11179,7 +11179,20 @@ fixed by the item's registration ADR before any code.
     caller. A uniform temperature given to the nonlinear transient integrator reproduces S1b of ADR 0485 in a free
     vibration run against the run at the reference temperature with all relaxation times scaled by a_T, within 1e-10
     relative. Models without the viscoelastic material keep their bits.
-  - note: Structural solver, advanced tier. Follow-up of F-410 (ADR 0485, 2026-11-14).
+  - note: Structural solver, advanced tier. DONE. ADR 0499, 2026-11-14: nonlinear::solve_in_time_with generalises the
+    quasi-static time-stepping driver of ADR 0489 (solve_in_time, now its form without histories) with load and
+    displacement histories against time (TimeLoading of transient::LoadHistory and MotionHistory, piecewise linear factors
+    taken at the end of every attempt, halved or not), with the halvings of ADR 0404, and a uniform temperature
+    (TimeSteppingOptions::temperature); the nonlinear transient integrator takes a uniform temperature
+    (NlTransientOptions::temperature) in the point context of every step, at its start and in its strain energy;
+    nonlinear::internal_force_at. Met: ADR 0485 R1 by one call within 4.7e-16, C1 within 1.21e-5 at 20 steps per tau with
+    order 1.996, bit-equal to the loop of solve_from_at; a strain ramp within 4.7e-9 and creep under a load ramp within
+    5.0e-5 (order 1.97); a step halved once under a load history, bit-equal to the explicit half steps; S1b by the driver
+    at a temperature within 4.7e-16; a free vibration of the viscoelastic rod at T = T_ref + 10 K against the run at T_ref
+    with every relaxation time scaled by a_T: displacements and stresses equal (0, a rounding coincidence; the unscaled
+    run differs by 1.47); an elastic model with a temperature keeps its bits; default bits (13 digests) and baseline
+    hashes unchanged; eight mutations caught. Case-file key not added (recommended: a quasi-static time study and a
+    temperature in the nonlinear transient study).
 - [x] **F-577** The viscoelastic material in the direct harmonic solve and the damped modes
   - depends on: F-410, F-412, F-414
   - acceptance: Every limit not stated here is registered in the ADR before the run. The direct harmonic solve takes a

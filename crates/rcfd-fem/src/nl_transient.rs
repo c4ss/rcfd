@@ -14,7 +14,10 @@
 //! max_halvings` (D4); after the last level the error names the step and its times. The state ([`NlTransientState`]: time,
 //! step, `u`, `v`, `a`, the internal force and the material states) is saved and restored bit for bit. Each attempt is made
 //! at the point context of its sub-step, its end time and length ([`nonlinear::solve_from_at`], ADR 0485 D5), so that the
-//! viscoelastic material of [`crate::mat_visco`] relaxes over the step; no temperature is given.
+//! viscoelastic material of [`crate::mat_visco`] relaxes over the step. A uniform temperature
+//! ([`NlTransientOptions::temperature`], ADR 0499 D3) enters that context, the start and the strain energy, and so reaches the
+//! materials that read it (the time-temperature shift of the viscoelastic material, the base of a tabulated material); without
+//! one no temperature is given.
 
 use crate::constraint::{prescribed_equations, reduce};
 use crate::element::{element_for, ElementState};
@@ -50,6 +53,8 @@ pub struct NlTransientOptions {
     /// The Newton options of each step: iterations, tolerances, threads; `max_halvings` are the halvings of the time step
     /// (ADR 0479 D4); `steps` is not used.
     pub newton: NewtonOptions,
+    /// A uniform temperature of every point, K (ADR 0499 D3; `None`: no temperature in the point context).
+    pub temperature: Option<f64>,
 }
 
 impl NlTransientOptions {
@@ -61,6 +66,7 @@ impl NlTransientOptions {
             time_step,
             damping: None,
             newton: NewtonOptions::new(1),
+            temperature: None,
         }
     }
     /// The same options with a method.
@@ -81,6 +87,11 @@ impl NlTransientOptions {
     /// The same options with a thread count for the assembly.
     pub fn threads(mut self, threads: usize) -> NlTransientOptions {
         self.newton = self.newton.threads(threads);
+        self
+    }
+    /// The same options with a uniform temperature of every point, K (ADR 0499 D3).
+    pub fn temperature(mut self, temperature: f64) -> NlTransientOptions {
+        self.temperature = Some(temperature);
         self
     }
 }
@@ -233,6 +244,7 @@ pub struct Integrator {
     newton: NewtonOptions,
     layout: Vec<usize>,
     history: bool,
+    temperature: Option<f64>,
     state: Option<NlTransientState>,
 }
 
@@ -412,6 +424,9 @@ impl Integrator {
             ));
         }
         nonlinear::check_driver_model(model)?;
+        if let Some(t) = options.temperature {
+            PointContext::new().with_temperature(t)?;
+        }
         let parameters = options.method.parameters()?;
         if parameters[2] <= 0.0 {
             return Err(invalid(
@@ -494,6 +509,7 @@ impl Integrator {
             newton: options.newton.clone(),
             layout,
             history,
+            temperature: options.temperature,
             state: None,
         })
     }
@@ -582,7 +598,13 @@ impl Integrator {
         }
         self.check_coverage(t0, t0)?;
         let states = nonlinear::initial_states(&self.model)?;
-        let fint = nonlinear::internal_force(&self.model, u0, &states)?;
+        let fint = match self.temperature {
+            None => nonlinear::internal_force(&self.model, u0, &states)?,
+            // ADR 0499 D3: the start at the temperature (a shifted material needs it).
+            Some(t) => {
+                nonlinear::internal_force_at(&self.model, u0, &states, &PointContext::new().with_temperature(t)?)?
+            }
+        };
         let f = self.load(t0);
         let cv = self.damping_force(v0);
         let rhs: Vec<f64> = (0..n).map(|i| f[i] - cv[i] - fint[i]).collect();
@@ -814,7 +836,10 @@ impl Integrator {
         list.push(&inertia);
         list.extend_from_slice(contributions);
         // ADR 0485 D5: the point context of the sub-step (its end time and length), read by the viscoelastic material only.
-        let context = PointContext::new().with_time(t_b, h)?;
+        let mut context = PointContext::new().with_time(t_b, h)?;
+        if let Some(t) = self.temperature {
+            context = context.with_temperature(t)?;
+        }
         let eq = nonlinear::solve_from_at(&self.model, &[], &load, u, states, &self.newton, &list, &context)?;
         let (a1, v1) = kin.of(&eq.u);
         Ok(Advanced {
@@ -863,7 +888,10 @@ impl Integrator {
         let mesh = model.mesh();
         let dofs = model.dof_map();
         let materials = model.material_indices()?;
-        let context = PointContext::default();
+        let context = match self.temperature {
+            None => PointContext::default(),
+            Some(t) => PointContext::new().with_temperature(t)?,
+        };
         let mut w = 0.0;
         for e in 0..mesh.n_elements() {
             let nodes = mesh.element_nodes(e);
