@@ -7429,7 +7429,7 @@ fixed by the item's registration ADR before any code.
     (2026-11-12): the slender-model tolerance of amendment 1 is answered by
     ModalOptions::new(m).tolerance(1e-12).residual_test(ResidualTest::Backward), which converges for the 40 x 2 x 2
     Tet10 cantilever in 7 iterations with the same frequencies.
-- [ ] **F-384** One-way coupling 1: loads of the F-237 deck applied to the solid surface
+- [~] **F-384** One-way coupling 1: loads of the F-237 deck applied to the solid surface
   - depends on: F-371, F-377, F-380, F-237
   - acceptance: Every limit not stated here is registered in the ADR before the run. A surface set of a solid mesh is
     turned into the shell surface that the F-237 export writes onto, and a deck read back (PLOAD4, TEMP) is applied to
@@ -7440,12 +7440,20 @@ fixed by the item's registration ADR before any code.
     percent of Lame's solution; with a pressure varying along the axis and around the circumference the solid's
     reactions equal the fluid's integrated force within 0.1 percent (the F-237 limit); TEMP of a uniform temperature
     gives the free expansion alpha dT r within 1e-6.
-  - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size M. Stub ADR 0285; the registration is written
-    by the implementation agent before any code. ADR 0278 (2026-11-12) added the rcfd-fem dependency of rcfd-post and
-    the stub module rcfd_post::solid_loads; the solid result's VTK output is rcfd_post::solid_output::write_solid_vtu.
-    ADR 0281 (2026-11-12): the TEMP values of the deck map to Load::temperature(nodal, reference) with one value per
-    solid node (a model takes one temperature field; a second is refused); the expansion coefficient comes from
-    Material::isotropic_elastic.
+  - note: ADR 0436, 2026-11-14: rcfd_post::solid_loads: shell_from_surface_set turns a surface set of 4-node solid faces
+    into the F-237 ShellSurface (same nodes, outward normal toward the fluid, plane or z-cylinder parameter rectangles);
+    deck_pressure_loads applies uniform PLOAD4 cards as consistent nodal loads on the matched faces (for
+    solve_static_with); deck_temperature_load maps TEMP to Load::temperature with one value per solid node; grids
+    matched by coordinates within a stated absolute tolerance (1e-9 m in the checks), a grid, element, corner-varying
+    card or inward-pointing card refused by its id. Resultant force and moment of the nodal loads equal
+    deck_force_moment within 2.9e-16 (plane and two tubes; limit 1e-12). Lame tube b/a = 2, plane strain, the uniform
+    wall pressure of the F-237 fluid mesh exported, written, parsed and applied to a graded Hex8 tube 128 x 32: bore u_r
+    within 3.2e-4 (limit 1 percent), hoop stress 5.6e-3 (limit 2 percent); plane-stress control 3.1 percent. Varying
+    pressure on a 64 x 4 x 20 tube under the whole fluid wall: reactions equal the fluid force within 1.55e-4 S (limit
+    1e-3, the F-237 deck error). Uniform TEMP free expansion within 9.5e-14 (limit 1e-6). PARTIAL: the warped-face
+    negative control was symmetric (centroid formula exact) and met only after amendment 1 with an asymmetric face
+    (2.0e-4); the mutation that lumps the face load is not caught, because it is exact on parallelogram faces. Tet,
+    Tet10 and Hex20 surfaces refused.
 - [~] **F-385** One-way coupling 2: fluid face forces in process, and a static solid as a co-simulation participant
   - depends on: F-374, F-377, F-139
   - acceptance: Every limit not stated here is registered in the ADR before the run. Fluid face forces on a wall are
@@ -10040,3 +10048,10 @@ fixed by the item's registration ADR before any code.
     a rigid set on an edge has the deflection of the clamped plate within 1e-10; a nodal spring on a shell rotation
     gives k_theta theta = M within 1e-10; the free rigid motions count takes shell nodes; a model without shells gives
     the bits it gave before.
+- [ ] **F-523** Deck pressure loads on non-parallelogram faces
+  - depends on: F-384
+  - acceptance: Every limit not stated here is registered in the ADR before the run. On a trapezoidal and on a warped
+    Hex8 face the nodal loads of deck_pressure_loads equal those of Load::pressure node by node within 1e-14 relative,
+    and the lumped-load mutation is caught.
+  - note: Priority P3. Size S. Area: structural. Opened by ADR 0436: the consistent load of deck_pressure_loads is
+    checked only on parallelogram faces, where lumping is exact (mutation not caught).
