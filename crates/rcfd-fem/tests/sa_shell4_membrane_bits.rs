@@ -164,12 +164,20 @@ fn b1_default_shell4_and_the_andes_shell3_give_their_former_bits() {
     got.push(("ANDES Shell3 loads", digest(&nodal_load_vector(&a, &[]).unwrap())));
     let r = solve_static(&a, &StaticOptions::default()).unwrap();
     got.push(("ANDES Shell3 solution", digest(r.displacement_values())));
-    got.push(("ANDES Shell3 stresses", digest(&stresses_flat(&a, r.displacement_values()))));
+    got.push((
+        "ANDES Shell3 stresses",
+        digest(&stresses_flat(&a, r.displacement_values())),
+    ));
     let mx = plate(&[0, 5, 10, 11], Shell3Membrane::AndesOpt);
     let msg = format!("{:?}", solve_static(&mx, &StaticOptions::default()).err());
     println!("B1 refusal: {msg}");
     got.push(("ANDES Shell3 next to Shell4 refusal", digest_bytes(msg.bytes())));
-    let x: [Vec3; 4] = [[0.3, -0.2, 0.5], [1.4, 0.0, 0.52], [1.2, 0.75, 0.47], [0.4, 0.85, 0.515]];
+    let x: [Vec3; 4] = [
+        [0.3, -0.2, 0.5],
+        [1.4, 0.0, 0.52],
+        [1.2, 0.75, 0.47],
+        [0.4, 0.85, 0.515],
+    ];
     let mat = steel();
     got.push((
         "element stiffness",

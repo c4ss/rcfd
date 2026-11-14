@@ -436,7 +436,10 @@ impl BlockProperty {
         })
     }
     /// A shell block with a membrane for Shell4 (ADR 0470); refuses a non-positive or non-finite thickness.
-    pub fn shell4_with_membrane(thickness: f64, shell4_membrane: crate::shell::Shell4Membrane) -> Result<BlockProperty> {
+    pub fn shell4_with_membrane(
+        thickness: f64,
+        shell4_membrane: crate::shell::Shell4Membrane,
+    ) -> Result<BlockProperty> {
         positive("thickness", thickness)?;
         Ok(BlockProperty::Shell {
             thickness,

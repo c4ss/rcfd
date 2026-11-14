@@ -888,7 +888,8 @@ pub fn thermal_load_vector_with(
         }
         Shell4Membrane::AndesOpt => {
             for tri in ANDES_TRIANGLES {
-                let (_, b, ar) = crate::shell3::andes_membrane(&[f.local[tri[0]], f.local[tri[1]], f.local[tri[2]]], &a);
+                let (_, b, ar) =
+                    crate::shell3::andes_membrane(&[f.local[tri[0]], f.local[tri[1]], f.local[tri[2]]], &a);
                 let e = alpha * (delta_t_nodal[tri[0]] + delta_t_nodal[tri[1]] + delta_t_nodal[tri[2]]) / 3.0;
                 let s = [
                     a[0][0] * e + a[0][1] * e,

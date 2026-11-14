@@ -516,11 +516,16 @@ fn be_pure_bending_of_a_rectangle_is_exact() {
         for nu in [0.0, 0.3] {
             let mat = material(nu, RHO);
             let (x0, y0) = (0.2, 0.1);
-            let x: Vec<Vec3> = vec![[x0, y0, 0.0], [x0 + a, y0, 0.0], [x0 + a, y0 + b, 0.0], [x0, y0 + b, 0.0]];
+            let x: Vec<Vec3> = vec![
+                [x0, y0, 0.0],
+                [x0 + a, y0, 0.0],
+                [x0 + a, y0 + b, 0.0],
+                [x0, y0 + b, 0.0],
+            ];
             let k = shell::element_stiffness_with(&x, t, &mat, &opts(QUAD)).unwrap();
             for along_x in [true, false] {
                 let kb = 1e-3;
-                let mut d = vec![0.0; 24];
+                let mut d = [0.0; 24];
                 for (i, p) in x.iter().enumerate() {
                     let (px, py) = (p[0], p[1]);
                     let f = if along_x {
@@ -604,7 +609,12 @@ fn zero_count(k: &[f64], n: usize) -> (usize, f64) {
 
 /// The warped element of ADR 0470 arithmetic 3.
 fn element_in_space() -> Vec<Vec3> {
-    vec![[0.3, -0.2, 0.5], [1.4, 0.0, 0.52], [1.2, 0.75, 0.47], [0.4, 0.85, 0.515]]
+    vec![
+        [0.3, -0.2, 0.5],
+        [1.4, 0.0, 0.52],
+        [1.2, 0.75, 0.47],
+        [0.4, 0.85, 0.515],
+    ]
 }
 
 #[test]
@@ -701,11 +711,7 @@ fn se_iso_d_single_element_and_fr_free_plate() {
     }
     let (zeros, l7) = zero_count(&dense, n);
     println!("FR1 lambda_7 / lambda_max = {l7:.3e}");
-    c.holds(
-        "FR1 free plate: six zero eigenvalues",
-        zeros == 6,
-        &format!("{zeros}"),
-    );
+    c.holds("FR1 free plate: six zero eigenvalues", zeros == 6, &format!("{zeros}"));
     c.finish();
 }
 
