@@ -10821,13 +10821,20 @@ fixed by the item's registration ADR before any code.
     1e-10 in statics and its first three frequencies are within 0.1 percent and not below the full model's; beams and
     shells as interface nodes covered; without a reduced part every result bit-identical.
   - note: Structural solver, advanced tier. Follow-up of F-430 (ADR 0469, 2026-11-14).
-- [ ] **F-554** Zero-speed split frequencies against the Rayleigh quotients of the F-396 basis
+- [x] **F-554** Zero-speed split frequencies against the Rayleigh quotients of the F-396 basis
   - depends on: F-415
   - acceptance: Every limit not stated here is registered in the ADR before the run. At zero speed with the Coriolis
     option the split frequencies of ADR 0472 equal the square roots of the Rayleigh quotients of the F-396 rest modes
     within 1e-10 on the block, the ring and the radial beam of ADR 0472, and the difference between F-396's reported
     rest eigenvalues and those quotients is reported per mode; no default result changes.
-  - note: Structural solver, advanced tier. Follow-up of F-415 (ADR 0472, 2026-11-14).
+  - note: Structural solver, advanced tier. Follow-up of F-415 (ADR 0472, 2026-11-14). ADR 0484, 2026-11-14:
+    RotatingPart::rest_quotients (rcfd_fem::gyro::RestQuotient, read-only, refuses cyclic models) reports per rest
+    mode F-396's eigenvalue, the Rayleigh quotient of its own vector with the operator at rest and the mass, and their
+    relative difference; at zero speed with the Coriolis option the split frequencies equal the square roots of those
+    quotients within 6.7e-16 (block), 8.7e-13 (ring) and 3.4e-11 (radial beam, the degenerate flap/lag pair), against
+    1e-10; F-396's reported eigenvalues differ from the quotients by up to 2.1e-13, 9.2e-10 and 1.4e-10, the cause of
+    the F-415 Z1 misses (old comparison 4.6e-10 on the ring); six of six mutations caught; no default result changes,
+    F-396 eigenvalues and modes bit-identical.
 - [~] **F-555** Split Campbell table of a cyclic sector on the modal subspace
   - depends on: F-415, F-544
   - acceptance: Every limit not stated here is registered in the ADR before the run. The gyroscopic problem of ADR 0472
