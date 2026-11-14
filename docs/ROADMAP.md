@@ -8571,7 +8571,7 @@ fixed by the item's registration ADR before any code.
     an error with the nodes.
   - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0330; the registration is
     written by the implementation agent before any code.
-- [ ] **F-428** Laminated shell: layup stiffness, ply stresses and failure indices
+- [x] **F-428** Laminated shell: layup stiffness, ply stresses and failure indices
   - depends on: F-409, F-392
   - acceptance: Every limit not stated here is registered in the ADR before the run. One isotropic ply gives the bits of
     the Shell4 of F-392. Layup stiffness: a symmetric layup has no coupling (|B| <= 1e-12 |A| t); [0/90]s has A11 = A22
@@ -8583,8 +8583,25 @@ fixed by the item's registration ADR before any code.
     degrees: ply stresses sigma c^2, sigma s^2 and -sigma s c within 1e-10, Tsai-Hill failure stress (c^4/X^2 + (1/S^2 -
     1/X^2) s^2 c^2 + s^4/Y^2)^(-1/2) within 1e-10, and Tsai-Wu equal to the tensile and compressive strengths on the
     axes within 1e-12. A layup with a non-positive thickness or an unknown material is refused with the ply.
-  - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0331; the registration is
-    written by the implementation agent before any code.
+  - note: Structural solver, advanced tier. ADR 0496, 2026-11-14: laminated Shell4 (laminate.rs). BlockProperty::Layup
+    on Shell4 blocks: plies of IsotropicElastic or Orthotropic material, thickness and angle from the element's first
+    axis; classical lamination theory A, B, D, transverse shear H with the factor 5/6, drilling (A66/t, t), thermal
+    resultants of a temperature uniform through the thickness (consistent membrane and bending thermal load), mass
+    moments m0, m1, m2 with the translation-rotation coupling; shell::stresses gives the layup resultants with the
+    thermal part subtracted and the outer-ply surface stresses; laminate::layup_response the centre strain, curvature
+    and ply strains and stresses at the bottom and top of each ply in material axes; laminate::failure_index the
+    maximum-stress, maximum-strain, Tsai-Hill and Tsai-Wu (f12* = -1/2 default) indices with reserve factors. One
+    isotropic ply is routed to the homogeneous section, mass, thermal load and stresses: stiffness, mass, loads, static
+    solve, stresses and frequencies equal the Shell twin bit for bit. Met: symmetric layups |B| <= 5.9e-17 |A| t;
+    [0/90]s A11 = A22 = t (Q11 + Q22)/2 within 1.1e-16; quasi-isotropic identities within 2.8e-16; SS [0/90]s plate, 16
+    x 16, t/a = 0.01, sinusoidal load, within 1.58e-3 of Navier, its (1,1) frequency within 3.9e-3; heated unsymmetric
+    [0/90] strip curvature within 1.5e-10 of the hand-solved closed form 24 Delta (alpha2 - alpha1) dT/(t ((Q11 - Q22)^2
+    + 16 Delta)) with resultants below 2.1e-9 of the thermal ones; off-axis coupon at 15 to 60 degrees: ply stresses
+    within 5.7e-14, Tsai-Hill failure stress within 7.5e-14; Tsai-Wu on the axes equal to the five strengths (error 0);
+    non-positive thickness, NaN angle and non-ply materials refused naming the ply (and the block from a model). Shell3,
+    the corotated Newton path, buckling and pre-stress, gravity, centrifugal and nodal body forces refuse a layup naming
+    a follow-up of ADR 0496. Default bits unchanged (11 digests), baseline hashes unchanged; thirteen of thirteen
+    mutations caught. No case-file key (open question). Follow-up: layups under body loads and pre-stress.
 - [ ] **F-429** Fracture parameters: J-integral by the domain form, stress intensity factor, crack-growth life
   - depends on: F-408, F-374, F-376, F-389
   - acceptance: Every limit not stated here is registered in the ADR before the run. Centre crack of half-length a in a

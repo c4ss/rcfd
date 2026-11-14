@@ -1572,6 +1572,7 @@ fn r2b_to_r4b_refusals_after_f419() {
 
 /// R2b to R4b after ADR 0490 (F-578): as after F-419, with row E5 of R2c taking Shell3 (the corotated shell).
 #[test]
+#[ignore = "record: ADR 0496 (F-428) landed the laminate (a Layup block taken by Shell4), retiring its R3b and R4b rows; continued in r2b_to_r4b_refusals_after_f428 (ADR 0291 pattern, maintainer standing decision)"]
 fn r2b_to_r4b_refusals_after_f578() {
     let mut c = Checks::new();
     let (tri, tpres) = shell3_model_unloaded();
@@ -2222,6 +2223,7 @@ fn x1_modules_and_pending_after_f415_f420_f422_f416_f417_f432_f423_f424_f410() {
 
 // X1 after ADR 0489 (F-411): mat_creep has landed as well.
 #[test]
+#[ignore = "record: ADR 0496 (F-428) landed laminate (PENDING None), retiring its row; continued in x1_modules_and_pending_after_f415_f420_f422_f416_f417_f432_f423_f424_f410_f411_f428 (ADR 0291 pattern, maintainer standing decision)"]
 fn x1_modules_and_pending_after_f415_f420_f422_f416_f417_f432_f423_f424_f410_f411() {
     use rcfd_fem as f;
     let fem: [(&str, Option<&str>, &str); 24] = [
@@ -3208,5 +3210,106 @@ fn m1_to_m4_after_f411() {
         ) && st.as_ref().is_ok_and(|(s, _)| bits(s) == bits(&want)),
         &format!("{:?} / {:?}", em.as_ref().err(), st.as_ref().err()),
     );
+    c.finish();
+}
+
+/// R2b to R4b after ADR 0496 (F-428): as after F-578, with R3c and R4c for the landed laminate (ADR 0496 D10).
+#[test]
+fn r2b_to_r4b_refusals_after_f428() {
+    let mut c = Checks::new();
+    let (tri, tpres) = shell3_model_unloaded();
+    // ADR 0454 D3: Shell3 is taken where Shell4 is; ADR 0490 D3: E5 (nonlinear::solve) takes it, E6 refuses it naming
+    // its follow-up.
+    for (entry, r) in entries(&tri, &tpres, None, true) {
+        let refused = entry.starts_with("E6");
+        let ok = if refused {
+            not_yet(&r, "element kind", "Shell3", "block 0", rcfd_fem::shell3::FOLLOW_UP)
+        } else {
+            !matches!(&r, Err(FemError::NotYetSupported { .. }))
+        };
+        c.holds(&format!("R2c Shell3 {entry}"), ok, &format!("{:?}", r.err()));
+    }
+    let plies = vec![
+        Ply::new(iso(), 0.005, 0.0).unwrap(),
+        Ply::new(iso(), 0.005, PI / 2.0).unwrap(),
+    ];
+    let layup = BlockProperty::layup(plies.clone()).unwrap();
+    let (lam, lpres) = shell_model(ElementKind::Shell4, layup.clone());
+    let (twin, twin_pres) = shell_model(ElementKind::Shell4, BlockProperty::shell(0.01).unwrap());
+    // R3c (ADR 0496 D10): E5 refuses the layup naming the laminate's follow-up; every other entry gives the twin's outcome.
+    let twin_results = entries(&twin, &twin_pres, None, true);
+    for ((entry, r), (_, rt)) in entries(&lam, &lpres, None, true).into_iter().zip(twin_results) {
+        let ok = if entry.starts_with("E5") {
+            matches!(&r, Err(FemError::NotYetSupported { variant: "Layup", package, .. }) if *package == rcfd_fem::laminate::FOLLOW_UP)
+        } else {
+            match (&r, &rt) {
+                (Ok(()), Ok(())) => true,
+                (
+                    Err(FemError::NotYetSupported { package: a, .. }),
+                    Err(FemError::NotYetSupported { package: b, .. }),
+                ) => a == b,
+                (Err(a), Err(b)) => std::mem::discriminant(a) == std::mem::discriminant(b),
+                _ => false,
+            }
+        };
+        c.holds(
+            &format!("R3c Layup {entry}"),
+            ok,
+            &format!("{:?} / twin {:?}", r.err(), rt.err()),
+        );
+    }
+    // R4c.
+    let r4a = section_of(&layup, &iso());
+    let r4b = rcfd_fem::laminate::section_stiffness(&plies);
+    c.holds(
+        "R4c section_of(Layup) == laminate::section_stiffness, both Ok",
+        matches!((&r4a, &r4b), (Ok(a), Ok(b)) if a == b),
+        &format!("{:?} / {:?}", r4a.as_ref().err(), r4b.as_ref().err()),
+    );
+    c.finish();
+}
+
+// X1 after ADR 0496 (F-428): laminate has landed as well.
+#[test]
+fn x1_modules_and_pending_after_f415_f420_f422_f416_f417_f432_f423_f424_f410_f411_f428() {
+    use rcfd_fem as f;
+    let fem: [(&str, Option<&str>, &str); 24] = [
+        ("mat_ortho", f::mat_ortho::PENDING, "landed"),
+        ("mat_table", f::mat_table::PENDING, "landed"),
+        ("mat_visco", f::mat_visco::PENDING, "landed"),
+        ("mat_creep", f::mat_creep::PENDING, "landed"),
+        ("harmonic_direct", f::harmonic_direct::PENDING, "landed"),
+        ("fatigue", f::fatigue::PENDING, "landed"),
+        ("damped", f::damped::PENDING, "landed"),
+        ("gyro", f::gyro::PENDING, "landed"),
+        ("rotor", f::rotor::PENDING, "landed"),
+        ("random", f::random::PENDING, "landed"),
+        ("shell3", f::shell3::PENDING, "landed"),
+        ("geometric_struct", f::geometric_struct::PENDING, "landed"),
+        ("mat_j2", f::mat_j2::PENDING, "landed"),
+        ("nl_transient", f::nl_transient::PENDING, "landed"),
+        ("follower", f::follower::PENDING, "landed"),
+        ("arclength", f::arclength::PENDING, "landed"),
+        ("mat_hyper", f::mat_hyper::PENDING, "ADR 0328 (F-425)"),
+        ("nonlinear_md", f::nonlinear_md::PENDING, "ADR 0328 (F-425)"),
+        ("tie", f::tie::PENDING, "landed"),
+        ("contact", f::contact::PENDING, "ADR 0330 (F-427)"),
+        ("laminate", f::laminate::PENDING, "landed"),
+        ("fracture", f::fracture::PENDING, "ADR 0332 (F-429)"),
+        ("cms", f::cms::PENDING, "landed"),
+        ("estimate", f::estimate::PENDING, "landed"),
+    ];
+    let linalg: [(&str, Option<&str>, &str); 3] = [
+        ("cskyline", rcfd_linalg::cskyline::PENDING, "landed"),
+        ("eigen_general", rcfd_linalg::eigen_general::PENDING, "landed"),
+        ("sparse_chol", rcfd_linalg::sparse_chol::PENDING, "landed"),
+    ];
+    let mut c = Checks::new();
+    for (name, got, expect) in fem.iter().chain(&linalg) {
+        // ADR 0448, ADR 0447, ADR 0450, ADR 0449, ADR 0452, ADR 0456, ADR 0469, ADR 0472, ADR 0473, ADR 0475, ADR 0476, ADR 0477, ADR 0478, ADR 0479, ADR 0480, ADR 0485, ADR 0489, ADR 0496: a landed module has PENDING None
+        let want = if *expect == "landed" { None } else { Some(*expect) };
+        c.holds(&format!("X1 {name}"), *got == want, &format!("{got:?}"));
+    }
+    let _ = rcfd_linalg::complex::C64::ONE;
     c.finish();
 }

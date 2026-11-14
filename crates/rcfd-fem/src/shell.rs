@@ -629,6 +629,34 @@ pub fn local_mass(f: &Facet, thickness: f64, density: f64) -> ElementMatrix {
     m
 }
 
+/// The 24 x 24 consistent mass in local axes of a layup with the mass moments `m0 = int rho dz`, `m1 = int rho z dz`, `m2 = int
+/// rho z^2 dz` (ADR 0496 D5): `m0` on the translations, `m2` on the rotations, and the coupling of `u = u0 + z beta` (`beta_x =
+/// theta_y`, `beta_y = -theta_x`): `+m1` between `u_x` and `theta_y`, `-m1` between `u_y` and `theta_x`.
+pub fn local_mass_layup(f: &Facet, m0: f64, m1: f64, m2: f64) -> ElementMatrix {
+    let mut m = ElementMatrix::zeros(24);
+    let v = m.values_mut();
+    for &xi in &GAUSS {
+        for &eta in &GAUSS {
+            let p = point(&f.local, xi, eta);
+            for i in 0..4 {
+                for j in 0..4 {
+                    let s = p.det * p.n[i] * p.n[j];
+                    for c in 0..3 {
+                        v[(6 * i + c) * 24 + 6 * j + c] += m0 * s;
+                        v[(6 * i + 3 + c) * 24 + 6 * j + 3 + c] += m2 * s;
+                    }
+                    v[(6 * i) * 24 + 6 * j + 4] += m1 * s;
+                    v[(6 * i + 4) * 24 + 6 * j] += m1 * s;
+                    v[(6 * i + 1) * 24 + 6 * j + 3] -= m1 * s;
+                    v[(6 * i + 3) * 24 + 6 * j + 1] -= m1 * s;
+                }
+            }
+        }
+    }
+    symmetrise(&mut m);
+    m
+}
+
 /// The 24 x 24 geometric stiffness in local axes of the membrane resultant `n` (N/m, the facet's in-plane axes; ADR 0473 D2):
 /// `K[(a, i), (b, i)] = int grad N_a . n grad N_b dA` for `i = u, v, w`, the bilinear functions, 2 x 2 Gauss on the projected
 /// facet; the rotations take no term.
@@ -999,6 +1027,73 @@ pub fn thermal_load_vector_with(
     Ok(out)
 }
 
+/// The consistent nodal load of a temperature uniform through the thickness of a layup (ADR 0496 D4): at the 2 x 2 points
+/// `dT = sum N_i dT_i`, `sum_gp det (B_m^T N_th dT + B_b^T M_th dT)` with the laminate's thermal resultants per kelvin, carried
+/// to the nodes by `T^T` (the bilinear membrane).
+pub fn layup_thermal_load_vector(
+    coords: &[Vec3],
+    laminate: &crate::laminate::Laminate,
+    delta_t_nodal: &[f64],
+) -> Result<[f64; 24]> {
+    if delta_t_nodal.len() != 4 {
+        return Err(FemError::FieldLength {
+            key: "temperature",
+            expected: 4,
+            found: delta_t_nodal.len(),
+        });
+    }
+    let f = facet(coords)?;
+    let mut fl = [0.0; 24];
+    for &xi in &GAUSS {
+        for &eta in &GAUSS {
+            let q = point(&f.local, xi, eta);
+            let dt: f64 = (0..4).map(|i| q.n[i] * delta_t_nodal[i]).sum();
+            let n = [laminate.n_th[0] * dt, laminate.n_th[1] * dt, laminate.n_th[2] * dt];
+            let m = [laminate.m_th[0] * dt, laminate.m_th[1] * dt, laminate.m_th[2] * dt];
+            let bm = membrane_rows(&q);
+            let bb = bending_rows(&q);
+            for (c, fc) in fl.iter_mut().enumerate() {
+                *fc += q.det
+                    * (bm[0][c] * n[0]
+                        + bm[1][c] * n[1]
+                        + bm[2][c] * n[2]
+                        + bb[0][c] * m[0]
+                        + bb[1][c] * m[1]
+                        + bb[2][c] * m[2]);
+            }
+        }
+    }
+    let t = transformation(&f);
+    let mut out = [0.0; 24];
+    for (j, o) in out.iter_mut().enumerate() {
+        *o = (0..24).map(|i| t[i * 24 + j] * fl[i]).sum();
+    }
+    Ok(out)
+}
+
+/// The thermal load of a Shell4 element of a model (ADR 0496 D4): a `Shell` block gives [`thermal_load_vector_with`] of its
+/// thickness, the element's material and membrane, as before; a layup of one isotropic ply the same with the ply's material
+/// and thickness; any other layup [`layup_thermal_load_vector`].
+pub(crate) fn model_thermal_load_vector(
+    mesh: &SolidMesh,
+    element: usize,
+    coords: &[Vec3],
+    material: &Material,
+    delta_t_nodal: &[f64],
+) -> Result<Vec<f64>> {
+    if let Some(BlockProperty::Layup { plies }) = mesh.blocks()[mesh.block_of(element)].property() {
+        if let Some((ply_material, t)) = crate::laminate::single_isotropic(plies) {
+            return thermal_load_vector_with(coords, t, ply_material, delta_t_nodal, Shell4Membrane::Bilinear)
+                .map(|v| v.to_vec());
+        }
+        let l = crate::laminate::laminate(plies)?;
+        return layup_thermal_load_vector(coords, &l, delta_t_nodal).map(|v| v.to_vec());
+    }
+    let t = thickness_or_error(mesh, element)?;
+    let membrane = model_membrane(mesh, element);
+    thermal_load_vector_with(coords, t, material, delta_t_nodal, membrane).map(|v| v.to_vec())
+}
+
 /// The thickness of the block of a shell element, if it is a Shell4 or Shell3 element (ADR 0454 D2) of a block with a Shell
 /// property.
 pub fn shell_thickness(mesh: &SolidMesh, element: usize) -> Option<f64> {
@@ -1012,6 +1107,17 @@ pub fn shell_thickness(mesh: &SolidMesh, element: usize) -> Option<f64> {
 }
 
 pub(crate) fn thickness_or_error(mesh: &SolidMesh, element: usize) -> Result<f64> {
+    // ADR 0496 D7: a path that needs one thickness and does not take a layup refuses it naming the follow-up.
+    if let Some(BlockProperty::Layup { .. }) = mesh.blocks()[mesh.block_of(element)].property() {
+        if matches!(mesh.element_kind(element), ElementKind::Shell4 | ElementKind::Shell3) {
+            return Err(FemError::NotYetSupported {
+                item: "shell property",
+                variant: "Layup",
+                location: format!("element {element}"),
+                package: crate::laminate::FOLLOW_UP,
+            });
+        }
+    }
     shell_thickness(mesh, element).ok_or_else(|| FemError::InvalidValue {
         key: "property",
         reason: format!(
@@ -1049,6 +1155,25 @@ pub fn check_shell_model(model: &SolidModel) -> Result<()> {
     for (b, block) in mesh.blocks().iter().enumerate() {
         if matches!(block.kind(), ElementKind::Shell4 | ElementKind::Shell3) {
             any = true;
+            // ADR 0496 D7: a Shell4 block takes a layup (its plies checked); a Shell3 block refuses it.
+            if let Some(BlockProperty::Layup { plies }) = block.property() {
+                if block.kind() == ElementKind::Shell3 {
+                    return Err(FemError::NotYetSupported {
+                        item: "shell property",
+                        variant: "Layup",
+                        location: format!("block {b} (Shell3)"),
+                        package: crate::laminate::FOLLOW_UP,
+                    });
+                }
+                crate::laminate::check_plies(plies).map_err(|e| match e {
+                    FemError::InvalidValue { key, reason } => FemError::InvalidValue {
+                        key,
+                        reason: format!("block {b}, {reason}"),
+                    },
+                    other => other,
+                })?;
+                continue;
+            }
             if !matches!(block.property(), Some(BlockProperty::Shell { .. })) {
                 return Err(FemError::InvalidValue {
                     key: "property",
@@ -1132,6 +1257,20 @@ pub(crate) fn model_element_mass(
     coords: &[Vec3],
     material: &Material,
 ) -> Result<ElementMatrix> {
+    // ADR 0496 D3, D5: the mass of a layup; one isotropic ply takes the homogeneous mass of its material.
+    if let Some(BlockProperty::Layup { plies }) = mesh.blocks()[mesh.block_of(element)].property() {
+        if mesh.element_kind(element) == ElementKind::Shell4 {
+            if let Some((ply_material, t)) = crate::laminate::single_isotropic(plies) {
+                return element_mass(coords, t, ply_material);
+            }
+            let l = crate::laminate::laminate(plies)?;
+            let f = facet(coords)?;
+            return Ok(to_global(
+                &local_mass_layup(&f, l.mass[0], l.mass[1], l.mass[2]),
+                &transformation(&f),
+            ));
+        }
+    }
     let t = thickness_or_error(mesh, element)?;
     element_mass(coords, t, material)
 }
@@ -1182,7 +1321,18 @@ pub fn stresses(model: &SolidModel, displacement: &[f64]) -> Result<Vec<(usize, 
             element: e,
             source: Box::new(source),
         };
-        let t = thickness_or_error(mesh, e).map_err(located)?;
+        // ADR 0496 D3, D7: a layup of one isotropic ply takes the homogeneous recovery with its ply's material and thickness,
+        // any other layup its resultants.
+        let (t, ply_material) = match mesh.blocks()[mesh.block_of(e)].property() {
+            Some(BlockProperty::Layup { plies }) => match crate::laminate::single_isotropic(plies) {
+                Some((m, t)) => (t, Some(m)),
+                None => {
+                    out.push((e, layup_stresses(model, displacement, e, plies, temperature)?));
+                    continue;
+                }
+            },
+            _ => (thickness_or_error(mesh, e).map_err(located)?, None),
+        };
         let f = model_facet(mesh, e)?;
         let ue: Vec<f64> = element_dofs(&dofs, mesh.element_nodes(e))
             .iter()
@@ -1197,7 +1347,7 @@ pub fn stresses(model: &SolidModel, displacement: &[f64]) -> Result<Vec<(usize, 
         }
         let tr = transformation(&f);
         let ul: Vec<f64> = (0..24).map(|i| (0..24).map(|j| tr[i * 24 + j] * ue[j]).sum()).collect();
-        let material = &model.materials()[materials[e]].1;
+        let material = ply_material.unwrap_or(&model.materials()[materials[e]].1);
         let section = model_section(mesh, e, material).map_err(located)?;
         let dm = section.membrane;
         let db = section.bending;
@@ -1275,6 +1425,162 @@ pub fn stresses(model: &SolidModel, displacement: &[f64]) -> Result<Vec<(usize, 
         ));
     }
     Ok(out)
+}
+
+/// Facet, membrane strain, curvature, transverse shear strain and temperature change at an element centre (ADR 0496 D6).
+type LayupCentre = (Facet, [f64; 3], [f64; 3], [f64; 2], f64);
+
+/// Element, membrane strain, curvature and temperature change at its centre (ADR 0496 D6).
+pub(crate) type CentreStrain = (usize, [f64; 3], [f64; 3], f64);
+
+/// The centre values of Shell4 element `e` (bilinear membrane): its facet, the membrane strain, the curvature, the assumed
+/// transverse shear strain and the temperature change at the centre (ADR 0496 D6).
+fn layup_centre(
+    model: &SolidModel,
+    displacement: &[f64],
+    e: usize,
+    temperature: Option<(&[f64], f64)>,
+) -> Result<LayupCentre> {
+    let mesh = model.mesh();
+    let f = model_facet(mesh, e)?;
+    let ue: Vec<f64> = element_dofs(&model.dof_map(), mesh.element_nodes(e))
+        .iter()
+        .map(|&q| displacement[q])
+        .collect();
+    if ue.len() != 24 {
+        return Err(FemError::Element {
+            element: e,
+            source: Box::new(FemError::FieldLength {
+                key: "element unknowns",
+                expected: 24,
+                found: ue.len(),
+            }),
+        });
+    }
+    let tr = transformation(&f);
+    let ul: Vec<f64> = (0..24).map(|i| (0..24).map(|j| tr[i * 24 + j] * ue[j]).sum()).collect();
+    let p = point(&f.local, 0.0, 0.0);
+    let strain = |b: &[[f64; 24]; 3]| -> [f64; 3] {
+        let mut s = [0.0; 3];
+        for (r, row) in b.iter().enumerate() {
+            s[r] = row.iter().zip(&ul).map(|(a, x)| a * x).sum();
+        }
+        s
+    };
+    let eps = strain(&membrane_rows(&p));
+    let kappa = strain(&bending_rows(&p));
+    let tying = tying_rows(&f.local);
+    let sr = shear_rows(&p, 0.0, 0.0, TransverseShear::AssumedStrain, &tying);
+    let g0 = sr[0].iter().zip(&ul).map(|(a, x)| a * x).sum::<f64>();
+    let g1 = sr[1].iter().zip(&ul).map(|(a, x)| a * x).sum::<f64>();
+    let dt = match temperature {
+        Some((nodal, reference)) => mesh
+            .element_nodes(e)
+            .iter()
+            .zip(&p.n)
+            .map(|(&n, &na)| na * (nodal[n] - reference))
+            .sum(),
+        None => 0.0,
+    };
+    Ok((f, eps, kappa, [g0, g1], dt))
+}
+
+/// The membrane strain, curvature and centre temperature change of every Shell4 element of a Layup block (ADR 0496 D6), in
+/// element order.
+pub(crate) fn centre_strains(model: &SolidModel, displacement: &[f64]) -> Result<Vec<CentreStrain>> {
+    let dofs = model.dof_map();
+    if displacement.len() != dofs.n_equations() {
+        return Err(FemError::FieldLength {
+            key: "displacement",
+            expected: dofs.n_equations(),
+            found: displacement.len(),
+        });
+    }
+    let mesh = model.mesh();
+    let temperature = crate::thermal::temperature_field(model)?;
+    let mut out = Vec::new();
+    for e in 0..mesh.n_elements() {
+        if mesh.element_kind(e) != ElementKind::Shell4 {
+            continue;
+        }
+        if !matches!(
+            mesh.blocks()[mesh.block_of(e)].property(),
+            Some(BlockProperty::Layup { .. })
+        ) {
+            continue;
+        }
+        let (_, eps, kappa, _, dt) = layup_centre(model, displacement, e, temperature)?;
+        out.push((e, eps, kappa, dt));
+    }
+    Ok(out)
+}
+
+/// The resultants of Shell4 element `e` of a layup (not one isotropic ply) at its centre (ADR 0496 D2, D7): `N = A eps + B
+/// kappa - N_th dT`, `M = B eps + D kappa - M_th dT`, `Q = H gamma`; `top` and `bottom` the element-axes stresses of the
+/// outer plies at `z = +-t/2`, `Qbar (eps + z kappa - alphabar dT)`.
+fn layup_stresses(
+    model: &SolidModel,
+    displacement: &[f64],
+    e: usize,
+    plies: &[crate::mesh::Ply],
+    temperature: Option<(&[f64], f64)>,
+) -> Result<ShellStresses> {
+    let located = |source: FemError| FemError::Element {
+        element: e,
+        source: Box::new(source),
+    };
+    let l = crate::laminate::laminate(plies).map_err(located)?;
+    let (f, eps, kappa, gamma, dt) = layup_centre(model, displacement, e, temperature)?;
+    let mut membrane = [0.0; 3];
+    let mut bending = [0.0; 3];
+    for k in 0..3 {
+        membrane[k] = l.a[k][0] * eps[0]
+            + l.a[k][1] * eps[1]
+            + l.a[k][2] * eps[2]
+            + l.b[k][0] * kappa[0]
+            + l.b[k][1] * kappa[1]
+            + l.b[k][2] * kappa[2]
+            - l.n_th[k] * dt;
+        bending[k] = l.b[0][k] * eps[0]
+            + l.b[1][k] * eps[1]
+            + l.b[2][k] * eps[2]
+            + l.d[k][0] * kappa[0]
+            + l.d[k][1] * kappa[1]
+            + l.d[k][2] * kappa[2]
+            - l.m_th[k] * dt;
+    }
+    let h = l.h;
+    let shear = [
+        h[0][0] * gamma[0] + h[0][1] * gamma[1],
+        h[1][0] * gamma[0] + h[1][1] * gamma[1],
+    ];
+    let face = |k: usize, z: f64| -> Result<[f64; 3]> {
+        let ply = &plies[k];
+        let pc = crate::laminate::ply_constants(ply, k)?;
+        let qb = crate::laminate::rotated_stiffness(&pc.q, ply.angle);
+        let ab = crate::laminate::rotated_expansion(pc.alpha, ply.angle);
+        let m = [
+            eps[0] + z * kappa[0] - ab[0] * dt,
+            eps[1] + z * kappa[1] - ab[1] * dt,
+            eps[2] + z * kappa[2] - ab[2] * dt,
+        ];
+        Ok([
+            qb[0][0] * m[0] + qb[0][1] * m[1] + qb[0][2] * m[2],
+            qb[1][0] * m[0] + qb[1][1] * m[1] + qb[1][2] * m[2],
+            qb[2][0] * m[0] + qb[2][1] * m[1] + qb[2][2] * m[2],
+        ])
+    };
+    let n = plies.len();
+    let top = face(n - 1, l.z[n]).map_err(located)?;
+    let bottom = face(0, l.z[0]).map_err(located)?;
+    Ok(ShellStresses {
+        axes: f.axes,
+        membrane,
+        bending,
+        shear,
+        top,
+        bottom,
+    })
 }
 
 /// The stresses of Shell3 element `e` (ADR 0454 arithmetic 8).

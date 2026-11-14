@@ -669,6 +669,17 @@ pub fn element_force_and_tangent(model: &SolidModel, element: usize, ue: &[f64])
 pub(crate) fn check_model(model: &SolidModel) -> Result<()> {
     crate::shell::check_shell_model(model)?;
     let mesh = model.mesh();
+    // ADR 0496 D7: the corotated shell does not take a layup.
+    for (b, block) in mesh.blocks().iter().enumerate() {
+        if let Some(crate::mesh::BlockProperty::Layup { .. }) = block.property() {
+            return Err(FemError::NotYetSupported {
+                item: "shell property",
+                variant: "Layup",
+                location: format!("block {b}"),
+                package: crate::laminate::FOLLOW_UP,
+            });
+        }
+    }
     let materials = model.material_indices()?;
     for e in 0..mesh.n_elements() {
         let kind = mesh.element_kind(e);

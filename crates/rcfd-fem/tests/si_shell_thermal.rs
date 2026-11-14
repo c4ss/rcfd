@@ -936,6 +936,7 @@ fn fields_of(m: &mut SolidModel) {
 }
 
 #[test]
+#[ignore = "record: ADR 0496 (F-428) takes the temperature on a Layup shell, retiring row N2; continued in b3_n1_n2_mixed_model_bits_and_refusals_after_f428 (ADR 0291 pattern, maintainer standing decision)"]
 fn b3_n1_n2_mixed_model_bits_and_refusals() {
     let mut c = Checks::new();
     let hex = hex_box([0.0; 3], [2.0, 1.0, 1.0], [2, 1, 1]).unwrap();
@@ -1019,5 +1020,99 @@ fn b3_n1_n2_mixed_model_bits_and_refusals() {
     let ok = matches!(&r, Err(FemError::Element { source, .. })
         if matches!(source.as_ref(), FemError::InvalidValue { key: "property", .. }));
     c.holds("N2 temperature on a Layup shell", ok, &format!("{:?}", r.err()));
+    c.finish();
+}
+
+/// B3, N1 and N2 after ADR 0496 (F-428): row N2 becomes N2b (ADR 0496 D10).
+#[test]
+fn b3_n1_n2_mixed_model_bits_and_refusals_after_f428() {
+    let mut c = Checks::new();
+    let hex = hex_box([0.0; 3], [2.0, 1.0, 1.0], [2, 1, 1]).unwrap();
+    let ns = hex.nodes().len();
+    let (p, el) = bf_plane();
+    let plate: Vec<Vec3> = p.iter().map(|q| [q[0], q[1], 5.0]).collect();
+    let mut nodes = hex.nodes().to_vec();
+    nodes.extend_from_slice(&plate);
+    let mut mesh = SolidMesh::new(nodes).unwrap();
+    mesh.add_block(ElementKind::Hex8, hex.blocks()[0].connectivity().to_vec())
+        .unwrap();
+    let ne_s = hex.n_elements();
+    let conn: Vec<usize> = el.iter().flatten().map(|&k| k + ns).collect();
+    mesh.add_block(ElementKind::Shell4, conn).unwrap();
+    mesh.set_block_property(1, BlockProperty::shell(0.02).unwrap()).unwrap();
+    mesh.add_element_set("solid", (0..ne_s).collect()).unwrap();
+    mesh.add_element_set("shell", (ne_s..ne_s + el.len()).collect())
+        .unwrap();
+    let mut mixed = SolidModel::new(mesh);
+    mixed.add_material("solid", material(RHO)).unwrap();
+    mixed.add_material("shell", material(RHO)).unwrap();
+    fields_of(&mut mixed);
+    let mut solid = model_of(hex, material(RHO));
+    fields_of(&mut solid);
+    let mut shell_only = model_of(shell_mesh(plate, &el, 0.02), material(RHO));
+    fields_of(&mut shell_only);
+    let fm = nodal_load_vector(&mixed, &[]).unwrap();
+    let fs = nodal_load_vector(&solid, &[]).unwrap();
+    let fh = nodal_load_vector(&shell_only, &[]).unwrap();
+    let (dm, ds, dh) = (mixed.dof_map(), solid.dof_map(), shell_only.dof_map());
+    let mut same = true;
+    for n in 0..ns {
+        for k in 0..3 {
+            same &= fm[dm.equation(n, k).unwrap()].to_bits() == fs[ds.equation(n, k).unwrap()].to_bits();
+        }
+    }
+    c.holds(
+        "B3 solid nodes of the mixed model: the bits of the Hex8-only model",
+        same,
+        "",
+    );
+    let mut same = true;
+    for n in 0..p.len() {
+        for k in 0..6 {
+            same &= fm[dm.equation(ns + n, k).unwrap()].to_bits() == fh[dh.equation(n, k).unwrap()].to_bits();
+        }
+    }
+    c.holds(
+        "B3 shell nodes of the mixed model: the bits of the shell-only model",
+        same,
+        "",
+    );
+    // N1: temperature on a beam.
+    let mut mesh = SolidMesh::new(vec![[0.0; 3], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0]]).unwrap();
+    mesh.add_block(ElementKind::Beam2, vec![0, 1, 1, 2]).unwrap();
+    let section = BeamSection::new(0.012, 3.0e-6, 5.0e-6, 4.0e-6, 0.85, 0.75).unwrap();
+    mesh.set_block_property(0, BlockProperty::beam(section, [0.0, 0.0, 1.0]).unwrap())
+        .unwrap();
+    mesh.add_element_set("all", vec![0, 1]).unwrap();
+    mesh.add_node_set("root", vec![0]).unwrap();
+    let mut m = model_of(mesh, material(RHO));
+    for comp in 0..6 {
+        m.add_constraint(Constraint::displacement("root", comp, 0.0)).unwrap();
+    }
+    m.add_load(Load::temperature(vec![350.0, 360.0, 370.0], 300.0)).unwrap();
+    let r = solve_static(&m, &StaticOptions::default());
+    let ok = matches!(&r, Err(FemError::Element { source, .. })
+        if matches!(source.as_ref(), FemError::NotYetSupported { package, .. } if *package == rcfd_fem::beam::SOLID_ROUTINES));
+    c.holds("N1 temperature on a beam", ok, &format!("{:?}", r.err()));
+    // N2b (ADR 0496 D10): the temperature on a one-ply isotropic Layup shell gives the load vector of its Shell twin.
+    let (p, el) = bf_plane();
+    let x: Vec<Vec3> = p.iter().map(|q| [q[0], q[1], 0.0]).collect();
+    let n = x.len();
+    let mut twin = model_of(shell_mesh(x.clone(), &el, 0.01), material(RHO));
+    twin.add_load(Load::temperature(vec![350.0; n], 300.0)).unwrap();
+    let mut mesh = shell_mesh(x, &el, 0.01);
+    let ply = Ply::new(material(RHO), 0.01, 0.0).unwrap();
+    mesh.set_block_property(0, BlockProperty::layup(vec![ply]).unwrap())
+        .unwrap();
+    let mut m = model_of(mesh, material(RHO));
+    m.add_load(Load::temperature(vec![350.0; n], 300.0)).unwrap();
+    let r = nodal_load_vector(&m, &[]);
+    let rt = nodal_load_vector(&twin, &[]);
+    let ok = matches!((&r, &rt), (Ok(a), Ok(b)) if a.iter().map(|v| v.to_bits()).eq(b.iter().map(|v| v.to_bits())));
+    c.holds(
+        "N2b temperature on a one-ply Layup shell: the Shell twin's bits",
+        ok,
+        &format!("{:?}", r.as_ref().err()),
+    );
     c.finish();
 }
