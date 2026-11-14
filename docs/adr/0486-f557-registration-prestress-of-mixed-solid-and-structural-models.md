@@ -258,3 +258,19 @@ Negative controls:
 - **Q2. A public `Prestress::masked`.** Options: (a) add it (additive, it lets a caller isolate a part's stiffening; used by N2,
   N3); (b) build the masked pre-stress inside the tests from a field. Taken (a).
 - **Q3. A case-file key.** None added (ADR 0473 Q1).
+
+## Amendment 1 (2026-11-14, after the registered run of commit 26da9acf, before any corrected run)
+
+The registered run (`f557-scratch/run1.log`) met A1, T1, T2, T2b, M1 to M3, T3, T3u, T3m and N1 to N3; the hub test
+`h1_h3_n4_hub_with_a_shell_blade_rotating` stopped before any comparison: `RotatingPart::campbell` of the mixed model refused
+at 240 rad/s with `Solver { lowest_eigenpairs: "Sturm count: 7 eigenvalues below 6.82e7, but 6 were found" }`. Diagnosis
+(scratch test `f557-scratch/mut/crates/rcfd-fem/tests/diag_h.rs`, log `f557-scratch/diag_h.log`; disclosed: it printed the
+frequencies of both models at the four speeds with 6 and with 10 modes): the sixth and seventh modes of the mixed model cross
+near 240 rad/s (1313.27 and 1313.37 Hz there; 1283.8 and 1297.0 Hz at rest), so the registered count of six modes cuts through
+a pair and the subspace iteration loses one of them; with ten modes every speed solves and the first five frequencies equal
+those of the six-mode solves to `1e-9`. The arithmetic-7 estimates of ADR 0473 quoted in arithmetic 3 are in rad/s and the
+measured ones in Hz (`1F` 36.9 Hz = 232 rad/s); the spectrum is as estimated.
+
+Corrected set-up: the same models, speeds, tracks (1 to 4), checks and limits, with **8 modes** computed (the cut between the
+eighth mode, about 1597 Hz, and the ninth, about 2021 Hz, far from any crossing in the speed range). The registered test stays
+as an ignored record; the corrected test is `h1_h3_n4_hub_with_a_shell_blade_rotating_8_modes`. No limit changes.
