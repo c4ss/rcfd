@@ -304,3 +304,89 @@ corrected tests are added.
 The corrected tests `s1s_s3s_k1_corrected` and `c2_cylinder_corrected` re-execute the checks of run 1 that were met (S1s, S3s,
 K1 force; C2a, C2b Shell4, C2c, C2d) with the same deterministic inputs as regression guards: their registered measurements are
 those of run 1. Each corrected test is run once.
+
+## Addendum 1 (2026-11-14): results
+
+Runs: run 1, `sa_shell_follower` once at 5a3ce1f7 (`--release -- --include-ignored --nocapture --test-threads 1`,
+`f573-scratch/run1.log`); after amendment 1 (8027d0db), run 2, the two corrected tests once at 8586a41e
+(`f573-scratch/run2-corrected.log`). N1 was recorded at the base fb7c5d94 (`n1-base.log`) before any library code and passed
+at 8586a41e in the whole-crate run. Then the whole `rcfd-fem` suite in release (`fem-suite.log`), `baseline_hashes` of
+`rcfd-api` (`baseline.log`) and `docs_site` of `rcfd-cli` (`docs_site.log`): `rcfd-fem` 636 passed, 0 failed, 159 ignored (it runs the registered files a second time, both passed); `baseline_hashes` 3 passed, 1 ignored; `docs_site` 2 passed. No limit was changed after a run.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| S1s Shell4 element, Shell3 element, Shell4 patch, Shell3 patch | `<= 1e-6` | `2.50e-10, 1.79e-10, 1.88e-10, 1.99e-10` | yes |
+| S3s the two elements | `>= 1e-3` | `1.94, 2.00` | yes |
+| S4s flat Shell4, flat Shell3 | `<= 1e-10` | `1.9e-16, 5.0e-16` | yes |
+| W1 warped Shell4 resultant | `<= 1e-10` | `2.4e-16` | yes |
+| W1 nodal difference | recorded | `2.30e-2` of `max |f_dead|` | recorded |
+| K1 force `-f`, both elements | bits | equal | yes |
+| K1 tangent (run 1) | bits | differs at the rotational entries by the sign of zero (amendment 1) | missed, a test defect; record `s1s_s3s_k1_load_stiffness_against_central_differences_known_miss` |
+| K1' tangent with `x + 0.0` (run 2) | bits | equal | yes |
+| C2a Shell4, Shell3 | `<= 1e-11` | `2.2e-15, 2.2e-15` | yes |
+| C2b Shell4 | `<= 1e-11` | `1.1e-15` | yes |
+| C2b Shell3 (run 1) | `<= 1e-11` | `8.19e-3` (the end rings, amendment 1) | missed, a set-up defect; record `c2_cylinder_at_a_prescribed_stretch_known_miss` |
+| C2b' Shell3 interior rings; `|sum f . e_theta|` (run 2) | `<= 1e-11` each | `1.05e-15`; `4.2e-15` | yes |
+| C2c Shell4, Shell3 | `<= 1e-11` | `2.9e-15, 3.6e-15` | yes |
+| C2d Shell4, Shell3 | `>= 0.49` | `0.5000, 0.5000` | yes |
+| C1 cylinder by the Newton driver | `<= 1e-2` each, last `>= 1.5` | not reached: `NotYetSupported { item: "element kind", variant: "Shell4", package: "a follow-up of ADR 0432" }` at the first call | **missed, as predicted (D0)**; ignored `c1_cylinder_follower_internal_pressure_known_miss` |
+| C1r the refusal, Shell4 and Shell3 strips | holds | holds (`Shell4`, `Shell3`) | yes |
+| S2s reduced `K_p` asymmetry | `<= 1e-11` | `4.3e-16` | yes |
+| B1s Shell4 with the load stiffness | `<= 2e-2` | `3.31e-3` (`p_cr = 3.00993 E I/R^3`) | yes |
+| B2s Shell4 without | `<= 3e-2` | `3.68e-3` (`4.01471 E I/R^3`) | yes |
+| B3s correlation with `cos 2 theta` | `>= 0.99` | `1.0000, 1.0000` | yes |
+| B4s Shell3 with; without | recorded | `+2.76e-3`; `+3.13e-3` (correlations 1.0000) | recorded |
+| N1 default bits | exact | the 10 digests equal | yes |
+| N2 `baseline_hashes` | pass | pass (3 passed, 1 ignored) | yes |
+
+### Mutations (scratch copy of 8586a41e by `git archive`, one at a time, `f573-scratch/mutate.py`, `mutations.log`)
+
+| Id | Caught by |
+|---|---|
+| MU1 the shell faces with the solid sign | S4s (`2.0`), W1, C2a (`2.0`), C2c, C2d, B1s (`1.009`); not S1s (force and stiffness flip together) |
+| MU2 the stiffness keeps the solid sign | S1s (`2.0`, all four), B1s (`1.009`) |
+| MU3 the equations of the rotations | S4s, W1, C2a to C2d, S2s, B1s (`0.338`); not S1s (consistent) |
+| MU4 the force on the reference positions | S1s (`1.0`, all four), C2a (`0.333`), C2c, C2d |
+| MU5 the Shell3 elements skipped | S1s and S3s Shell3 (NaN), S4s Shell3 (`1.0`), C2a to C2d Shell3 |
+| MU6 `buckling_factors` ignores its pressures | B1s (`0.338`) |
+
+Six of six caught, each by a check it was planned for.
+
+### Deviations
+
+- Amendment 1: two registered expectations were wrong. The K1 tangent reference made `-0.0` at the rotational entries, and
+  for C2b on Shell3 the end rings of the triangulation carry a tangential force, so arithmetic 6 was wrong for that mesh. The
+  run 1 tests are kept as ignored records, and the corrected checks met. The corrected tests re-execute the met checks of
+  run 1 with the same inputs and gave the same numbers.
+- None other.
+
+### Not run
+
+- C1 could not run (D0): there is no geometrically nonlinear shell. The whole workspace suite was not run (the brief).
+
+### Decision
+
+**partial** by the registered rule. N1 and N2 are unchanged, and S1s, S4s, K1 (corrected) and C2a to C2d met. C1 missed as
+predicted by D0 (recorded as an ignored `*_known_miss`, with C1r met), and the two set-up defects of run 1 are diagnosed and
+recorded as `*_known_miss` records. Every other check met, six of six mutations were caught, and fmt and clippy are clean.
+Clauses (a1) and (a3) of the acceptance are met. Clause (a2) is not met, because the crate has no nonlinear shell.
+
+### Remaining questions (recommendations for the lead)
+
+- **Q1** (the cylinder clause): options (a) mark F-573 partial and add a follow-up for geometrically nonlinear shells that
+  carries the cylinder clause; (b) mark F-573 done and move the clause to that follow-up. Recommendation (a): the clause is
+  part of the acceptance and was not met.
+- **Q2** (a `Load` variant or a case-file key for the follower shell pressure): not added (open question 1 taken as (a)).
+  Recommendation: decide together with the case-file key of ADR 0480 Q1, after the nonlinear shell exists.
+- **Q3** (warped facets): the follower and the dead load agree in resultant but differ by `2.3e-2` in the nodal distribution on
+  the registered warped element. Recommendation: accept (the follower is the consistent load of the bilinear surface).
+
+## For the lead: roadmap entries
+
+Proposed status of F-573: **partial**. Note:
+
+> Structural solver, advanced tier. Follow-up of F-424 (ADR 0480, 2026-11-14). PARTIAL. ADR 0487, 2026-11-14: FollowerPressure::on_shells, the follower form of the shell pressure on the current mid-surface of Shell4 and Shell3 elements (f_a = +p int N_a (x_u x x_v) on the translations, no moments), with its full load stiffness, by the face arithmetic of ADR 0480 with the pressure negated; a Contribution of the Newton driver, also accepted by follower::buckling_factors. Load stiffness against central differences 1.8e-10 .. 2.5e-10 on a Shell4 and a Shell3 element and patch (limit 1e-6); at zero displacement equal to the dead ShellPressure within 5e-16 on flat elements, the resultant within 2.4e-16 on a warped Shell4. Cylinder of 64 facets at the prescribed stretch 1.5: the radial resultant p N lambda R L sin(2 pi/N) within 2.2e-15, the dead load off by lambda. Ring buckling of Shell4 with the shell load stiffness 3.0099 E I/R^3 (3 E I/R^3, limit 2 percent), 4.0147 without (4 E I/R^3, limit 3 percent). The cylinder clause (the thin law to the stretch 1.5 by the Newton driver) not met: the nonlinear driver takes no shells (no geometrically nonlinear shell in the crate), recorded as a predicted known miss; follow-up proposed. Dead ShellPressure and default bits unchanged (10 digests), baseline hashes unchanged; six of six mutations caught. Two set-up defects of run 1 corrected by amendment.
+
+Follow-up (title, deps, acceptance), for the lead to number or drop:
+
+> (new item, number for the lead) Geometrically nonlinear shells in the Newton driver (deps F-573). Every limit not stated here is registered in the ADR before the run. Shell4 and Shell3 gain an internal force and a consistent tangent at finite displacements and rotations (a corotational facet formulation, its rotation update registered), taken by nonlinear::solve and solve_with with every default bit-identical; the tangent against central differences of the internal force within 1e-6; a cantilever strip of shells under a tip moment rolls up to a full circle within 1 percent of the closed-form tip position; a thin cylinder of shells under the follower internal pressure of ADR 0487 follows p = E t (lambda^2 - 1)/(2 R) within 1 percent to the stretch 1.5 (the clause of F-573).

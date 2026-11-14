@@ -1918,3 +1918,15 @@ solver, and the base numbers come from the F-420 run log.
 | ANDES optimal membrane triangle, Allman's triangle | cited | Felippa 2003, op. cit.; D. J. Allman, Comput. Struct. 19 (1984) 1: NOT read, from memory (implemented by ADR 0466) |
 | MITC3 transverse shear, the stabilisation `t^2/(t^2 + alpha h^2)` | cited | P. S. Lee and K. J. Bathe, Comput. Struct. 82 (2004) 945; M. Lyly, R. Stenberg and T. Vihinen, Comput. Mech. 13 (1993) 92: NOT read, from memory (implemented by ADR 0454) |
 | Measured: the CST membrane-energy excess `e_m = 9.16e-2` at 12 x 36 on the coupled torsion field, `O(h^2)` (ratios 0.257, 0.264 per halving); the ANDES Shell3 within 3.3e-4 of Hex20 at rest and 2.98e-3 over the Campbell table | computed | ADR 0483 addenda 1 and 2 |
+
+## F-573 follower pressure on shells (ADR 0487)
+
+No source was read for F-573. Every formula used is derived in ADR 0487 (arithmetic 1 to 8) or re-used from ADR 0480 (cited
+there from memory, NOT read); the references of the checks are closed forms and the dead `ShellPressure` of the repository.
+
+| Item | Status | Source |
+|---|---|---|
+| Follower shell pressure on the interpolated current mid-surface `f_a = +p int N_a (x_u x x_v) du dv` (translations, no moments) and its load stiffness `K_(ai)(bj) = p int N_a [N_b,u (e_j x x_v) + N_b,v (x_u x e_j)]_i`; the solid face arithmetic of ADR 0480 with the pressure negated | derived | virtual work of the pressure on the current surface, ADR 0487 arithmetic 1 and 2 (the linearisation as in ADR 0480 arithmetic 1) |
+| Vector area of a bilinear quad `(1/2)(x_2 - x_0) x (x_3 - x_1)`, equal to that of its projected facet: the resultants of the follower and the dead shell pressure agree on a warped Shell4 | derived | ADR 0487 arithmetic 5 |
+| Cylinder of `N` facets at the stretch `lambda`: `sum f . e_r = p N lambda R L sin(2 pi/N)` (follower), `p N R L sin(2 pi/N)` (dead); the hoop tension `p lambda R cos(pi/N)` and, with an SVK membrane of `nu = 0`, `p = E t (lambda^2 - 1)/(2 R cos(pi/N))` | derived | node balance of the facet polygon, ADR 0487 arithmetic 6 |
+| Ring buckling of shells under external pressure: `3 E I/R^3` with the load stiffness (hydrostatic), `4 E I/R^3` without (fixed-direction forces), `n = 2` | derived | ADR 0480 arithmetic 3 re-used (ADR 0487 arithmetic 7) |
