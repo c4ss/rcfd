@@ -322,20 +322,27 @@ fn e0_to_e6_estimate_samples_of_an_opted_hex8_on_a_quadratic_field() {
     let mu = E_MOD / (2.0 * (1.0 + NU));
     let g: [f64; 3] = [8e-3, -4e-3, 6e-3];
     let b_norm = (lambda + 2.0 * mu) * (g[0] * g[0] + g[1] * g[1] + g[2] * g[2]).sqrt();
-    ch.above("E0 |b| / E (the field is not an equilibrium solution)", b_norm / E_MOD, 1e-3);
+    ch.above(
+        "E0 |b| / E (the field is not an equilibrium solution)",
+        b_norm / E_MOD,
+        1e-3,
+    );
 
     let full_mesh = mesh_with(SolidFormulation::Full);
     let comp = expected_nodal(&full_mesh, &d, false);
     let bbar = expected_nodal(&full_mesh, &d, true);
     assert_eq!(comp.len(), 12);
-    let smax = worst(
-        (0..full_mesh.n_elements()).flat_map(|e| centroid_sample(&full_mesh, &d, e, false).1.map(f64::abs)),
-    );
+    let smax =
+        worst((0..full_mesh.n_elements()).flat_map(|e| centroid_sample(&full_mesh, &d, e, false).1.map(f64::abs)));
     println!("smax = {smax:.4e}");
 
     // E2, E2b: the margin between the two independent expectations.
     let margin = compare(&bbar, &comp, smax);
-    ch.at_least("E2 BBar against compatible expectation, largest over nodes", worst(margin.clone()), 1e-5);
+    ch.at_least(
+        "E2 BBar against compatible expectation, largest over nodes",
+        worst(margin.clone()),
+        1e-5,
+    );
     ch.at_least("E2b the same, smallest over nodes", least(margin), 1e-6);
 
     // E1, E3: BBar.
