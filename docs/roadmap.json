@@ -5750,7 +5750,7 @@
     ],
     "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. RotatingSector::split_modes optionally reports the corrected frequency theta' of the Schur-complemented problem of ADR 0492, and computes schur_eta with one complement solve per split mode and a second-order perturbation sum over the other Ritz vectors; on the disc sector of ADR 0411 with 4 harmonic modes per index at 0.4 and 0.8 omega_ref it agrees with the schur_eta of ADR 0492 within 1 percent where it exceeds 1e-9, theta' equals RotatingSector::whirl_modes within 1e-7 for every matched mode, and the results of ADR 0492 keep their bits.",
-    "note": "Structural solver, advanced tier (plan ADR 0310). Optional. PARTIAL. ADR 0527, 2026-11-14: opt-in RotatingOptions::corrected_frequency reports per split mode the corrected frequency theta' beside schur_eta (on the default path the root of the dense condensed solve of ADR 0492), and RotatingOptions::split_schur(SplitSchur::Perturbation) computes schur_eta with one complement solve per split mode (the column E y) and the second-order Rayleigh-Schroedinger sum over the other eigenpairs of the linearised projected pencil (the other split modes and the mirrors of all), theta' = theta + delta_1 + delta_2. Met: theta' of the ADR 0492 path equals RotatingSector::whirl_modes within 1.1e-8 for all 48 matched modes of the disc sector (limit 1e-7); the perturbation value equals an independent dense computation of the same sum within 1.1e-7 and costs 0.14 of the dense path; the results of ADR 0492 (and 0481, 0482) and every default keep their bits (4 new digests plus 25); all ten mutations caught. Missed (predicted at registration, kept as known misses): the perturbation schur_eta agrees with that of ADR 0492 only within 0.38 (16 of 34 within 1 percent) and its theta' is within 7.2e-7 of whirl_modes (43 of 48 within 1e-7): the poor Ritz pairs of the corrected basis make the series ratio delta_2/delta_1 reach 0.62, so the second-order truncation leaves about its square. Follow-up proposed in ADR 0527."
+    "note": "Structural solver, advanced tier (plan ADR 0310). PARTIAL. ADR 0527, 2026-11-14: opt-in RotatingOptions::corrected_frequency reports per split mode the corrected frequency theta' beside schur_eta (on the default path the root of the dense condensed solve of ADR 0492), and RotatingOptions::split_schur(SplitSchur::Perturbation) computes schur_eta with one complement solve per split mode (the column E y) and the second-order Rayleigh-Schroedinger sum over the other eigenpairs of the linearised projected pencil (the other split modes and the mirrors of all), theta' = theta + delta_1 + delta_2. Met: theta' of the ADR 0492 path equals RotatingSector::whirl_modes within 1.1e-8 for all 48 matched modes of the disc sector (limit 1e-7); the perturbation value equals an independent dense computation of the same sum within 1.1e-7 and costs 0.14 of the dense path; the results of ADR 0492 (and 0481, 0482) and every default keep their bits (4 new digests plus 25); all ten mutations caught. Missed (predicted at registration, kept as known misses): the perturbation schur_eta agrees with that of ADR 0492 only within 0.38 (16 of 34 within 1 percent) and its theta' is within 7.2e-7 of whirl_modes (43 of 48 within 1e-7): the poor Ritz pairs of the corrected basis make the series ratio delta_2/delta_1 reach 0.62, so the second-order truncation leaves about its square. Follow-up proposed in ADR 0527. Follow-up F-612."
   },
   {
     "id": "F-585",
@@ -6057,5 +6057,16 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. With F-425's neo-Hookean and Mooney-Rivlin energies in the discrete gradient of ADR 0523, the neo-Hookean spinning bar over ten turns keeps linear momentum within 1e-10, angular momentum within 1e-6 and energy within 1e-6 relative, and the large-strain neo-Hookean and Mooney-Rivlin cubes of ADR 0523 over 500 steps keep energy within 1e-7 relative; the step-local energy of ADR 0523 is removed or equals F-425's within 1e-12 at a point.",
     "note": "Structural solver, advanced tier. Follow-up of F-607 (ADR 0523, 2026-11-14)."
+  },
+  {
+    "id": "F-612",
+    "title": "Accuracy indicator and fallback of the perturbation Schur Ritz error of the sector split modes",
+    "phase": 9,
+    "deps": [
+      "F-584"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. With SplitSchur::Perturbation each split mode reports the ratio delta_2/delta_1 of ADR 0527 and falls back to the dense computation of ADR 0492 where it exceeds a threshold registered from the records of ADR 0527; on the disc sector of ADR 0411 with 4 harmonic modes per index at 0.4 and 0.8 omega_ref the resulting schur_eta agrees with that of ADR 0492 within 1 percent where it exceeds 1e-9, the cost stays below half of the dense path, and the results of ADR 0527 keep their bits.",
+    "note": "Structural solver, advanced tier. Optional. Follow-up of F-584 (ADR 0527, 2026-11-14)."
   }
 ]
