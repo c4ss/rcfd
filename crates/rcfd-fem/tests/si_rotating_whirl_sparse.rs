@@ -205,7 +205,8 @@ fn key_of(e: FemError) -> &'static str {
 }
 
 #[test]
-fn u1_r1_n1_algebraic() {
+#[ignore = "record of the registered run (ADR 0427 amendment 1): N1 not as expected, its premise wrong"]
+fn u1_r1_n1_algebraic_known_miss() {
     let mut ch = Checks::new();
     let mut u1: f64 = 0.0;
     let mut q1: f64 = 0.0;
@@ -296,6 +297,86 @@ fn u1_r1_n1_algebraic() {
         .fold(0.0f64, f64::max);
     println!("N1 companion: with the restarts {:?} ({} runs), deviation {dev:.2e}", full.omegas, full.runs);
     ch.le("U1 double frequencies with the restarts", dev, 1e-9);
+    ch.finish();
+}
+
+#[test]
+fn u1_r1_n1b_algebraic() {
+    let mut ch = Checks::new();
+    let mut u1: f64 = 0.0;
+    let mut q1: f64 = 0.0;
+    for (n, count) in [(1, 1), (2, 2), (5, 5), (12, 12), (30, 8)] {
+        let (k, m, g) = random_problem(n, 17 + n as u64);
+        let d = gyroscopic_eigen_dense(&k, &m, &g, n).unwrap();
+        let s = gyroscopic_eigen_sparse(&csr(&k, n), &csr(&m, n), &csr(&g, n), count).unwrap();
+        let dev = s
+            .omegas
+            .iter()
+            .zip(&d.omegas)
+            .map(|(a, b)| (a / b - 1.0).abs())
+            .fold(0.0f64, f64::max);
+        println!(
+            "U1 n = {n}: {} runs, {} steps, deviation {dev:.2e}, residuals {:?}",
+            s.runs, s.steps, s.residuals
+        );
+        u1 = u1.max(dev);
+        q1 = s.residuals.iter().fold(q1, |a, &x| a.max(x));
+    }
+    ch.le("U1 sparse against dense on random matrices", u1, 1e-9);
+    ch.le("Q1 random matrices residual", q1, 1e-9);
+    // R1.
+    let (k, m, g) = random_problem(5, 3);
+    let (kc, mc, gc) = (csr(&k, 5), csr(&m, 5), csr(&g, 5));
+    let (k6, _, _) = random_problem(6, 3);
+    let k6 = csr(&k6, 6);
+    ch.holds(
+        "R1 size",
+        key_of(gyroscopic_eigen_sparse(&kc, &k6, &gc, 2).unwrap_err()) == "matrix",
+        "refused with \"matrix\"",
+    );
+    ch.holds(
+        "R1 count 0",
+        key_of(gyroscopic_eigen_sparse(&kc, &mc, &gc, 0).unwrap_err()) == "modes",
+        "refused with \"modes\"",
+    );
+    ch.holds(
+        "R1 count n + 1",
+        key_of(gyroscopic_eigen_sparse(&kc, &mc, &gc, 6).unwrap_err()) == "modes",
+        "refused with \"modes\"",
+    );
+    let mut kneg = k.clone();
+    kneg[0] = -kneg[0];
+    ch.holds(
+        "R1 indefinite K",
+        key_of(gyroscopic_eigen_sparse(&csr(&kneg, 5), &mc, &gc, 2).unwrap_err()) == "stiffness",
+        "refused with \"stiffness\"",
+    );
+    let mut mneg = m.clone();
+    mneg[0] = -mneg[0];
+    ch.holds(
+        "R1 indefinite M",
+        key_of(gyroscopic_eigen_sparse(&kc, &csr(&mneg, 5), &gc, 2).unwrap_err()) == "mass",
+        "refused with \"mass\"",
+    );
+    // N1b (amendment 1): one run on a frequency of multiplicity 20.
+    let n = 20;
+    let mut id = vec![0.0; n * n];
+    for i in 0..n {
+        id[i * n + i] = 1.0;
+    }
+    let zero = vec![0.0; n * n];
+    let (ic, zc) = (csr(&id, n), csr(&zero, n));
+    let one = gyroscopic_eigen_sparse_with(&ic, &ic, &zc, 2, &LanczosOptions::default().max_runs(1));
+    println!("N1b: one run {one:?}");
+    ch.holds(
+        "N1b one run on a frequency of multiplicity 20",
+        matches!(one, Err(FemError::Solver { .. })),
+        "refused with FemError::Solver",
+    );
+    let full = gyroscopic_eigen_sparse(&ic, &ic, &zc, 2).unwrap();
+    println!("N1b companion: with the restarts {:?} ({} runs)", full.omegas, full.runs);
+    let dev = full.omegas.iter().map(|w| (w - 1.0).abs()).fold(0.0f64, f64::max);
+    ch.le("N1b companion with the restarts", dev, 1e-12);
     ch.finish();
 }
 
