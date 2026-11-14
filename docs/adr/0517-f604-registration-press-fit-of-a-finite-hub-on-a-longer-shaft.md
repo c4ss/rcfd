@@ -305,3 +305,150 @@ no projection of `n <= 16` is at the floor (P6).
 
 **Mutation ML3**: the fix reverted. Expected to be caught by PJ1. The decision rule adds B1 and PJ1 to the list for done and
 counts A1-H in place of the original heavy record.
+
+## Addendum 1: results (2026-11-14)
+
+Commits after the registration (7150739e):
+
+- the tests (671d6947);
+- amendment 1 (8028545c);
+- B1 and PJ1 recorded on the unchanged library (afbd6f3a, `f604-scratch/b1-base.log`);
+- the fix in `contact.rs` `project` (45ce5ef4, lines 384, 404-405 and 410-414: a `last_step` and the acceptance at the rounding
+  floor);
+- the corrected heavy test A1-H, with the outcomes written into the two records' ignore reasons (bd923dee);
+- a clippy form of PJ1's test (c56c9977).
+
+Every registered run was made once, in release:
+
+- the three fast tests (`run-fast.log`, 148 s);
+- A1 (`run-a1.log`);
+- the first heavy record (`run-heavy.log`, 1769 s), which failed at `n = 32`;
+- B1 and PJ1, on the base and after the fix;
+- A1-H, alone (`run-heavy-a1.log`, 1507 s). Its `n = 32` solve took 1336 s, with 2 augmentations of 5 and 2 Newton
+  iterations. The first heavy run's peak working set at `n = 32` was 3.9 GB.
+
+The fast tests were run again after the fix as regression (`regress.log`). Every reading is the same to the printed digits,
+and B1 shows the bits are the same at `n = 4`. A1-H's readings at `n = 4, 8, 16` equal the first heavy run's.
+
+All values are over `p_0 = 7.5e7` Pa unless stated.
+
+| check | limit | measured | met |
+|---|---|---|---|
+| A1 `abs(p_mid/p_pe - 1)`, `n = 8` (the clause as written) | `<= 2e-2` | **`8.57e-2`** | **no** (predicted by D1; ignored record `f604_a1_plane_strain_closed_form_known_miss`) |
+| A1f `abs(p_mid/p_0 - 1)`, `n = 4, 8, 16, 32` | `<= 2e-2` | `1.13e-2`, `4.76e-3`, `2.78e-3`, `2.11e-3` | yes |
+| L8 `L = 8`: `abs(p_mid/p_0 - 1)`; `abs(B_0.25(L 8)/B_0.25(L 4) - 1)` | `<= 2e-2`; `<= 5e-3` | `3.40e-3`; `7.07e-4` | yes |
+| NA1 `abs(p_mid/p_pe - 1)`, `n = 8` (negative control) | `>= 5e-2` | `8.57e-2` | as expected |
+| CPE `u_z = 0` everywhere: against `p_pe`; against `p_0` | `<= 2e-2`; `>= 5e-2` | `7.57e-3`; `9.06e-2` | yes |
+| CNU `nu = 0`: `abs(p_mid/p_0 - 1)` | `<= 2e-2` | `4.42e-3` | yes |
+| S1 `e = 3 a` against `2 a`: `p_mid`, `B_0.25` | `<= 1e-3` each | `3.8e-7`, `6.5e-6` | yes |
+| E1 the face row has the largest row resultant and holds the largest node pressure (every mesh and set-up) | holds | holds in all 10 solves | yes |
+| E2 `P_f(2n)/P_f(n)` for `n = 4, 8, 16` | in `[1.08, 1.25]` | `1.1245`, `1.1480`, `1.1595` (`P_f` = 1.4415, 1.6210, 1.8609, 2.1576) | yes |
+| E2 `abs(log2(P_f(32)/P_f(16)) - 0.226)` | `<= 0.05` | `1.25e-2` (local exponents 0.169, 0.199, 0.2135) | yes |
+| E3 `B_0.25` (1.21213, 1.17540, 1.16128, 1.15666): decreasing differences; orders; `abs(D_3)/B(32)` | as registered; `>= 0.5`; `<= 1e-2` | holds; `1.38`, `1.61`; `3.99e-3` | yes |
+| E3 `B_0.5` (1.09248, 1.07132, 1.06293, 1.06204): the same | as registered | holds; `1.33`, `3.25`; `8.33e-4` | yes |
+| E3f `n = 4` to `8`: `B_0.25`, `B_0.5` | `<= 5e-2` | `3.03e-2`, `1.94e-2` | yes |
+| E4 `abs(q_s(32)/q_s(16) - 1)`, `s = 0.25`, `0.5` | `<= 1e-2` | `1.74e-3`, `9.76e-4` | yes |
+| R a rule `n* <= 16` exists | holds | **`n* = 8`** | yes |
+| B1 the three digests after the fix | equal | equal (`0xf5619b600e920c5f`, `0x639fc374b3a9e917`, `0x5f0b23785337e56e`) | yes |
+| PJ1 small face far from the origin: found, gap | found; `<= 1e-9` | on the base 2 of 4 nodes not found (`None`), as predicted; after the fix all 4 found, `7.48e-10` (the rounding of the placement `10 - 1e-6`) | yes |
+
+Mutations: a `git archive` copy of c56c9977 in `f604-scratch/mut`, with `CARGO_TARGET_DIR` `target-f604-mut`, the script
+`f604-scratch/mutate.sh`, and logs `MT1.log` to `ML3.log`.
+
+| id | mutation | caught by |
+|---|---|---|
+| MT1 | bore at `a - 2 d` | A1f (`1.02`, `1.01`), CPE, CNU; the extension test's solve cycled |
+| MT2 | `p_mid` read at the face | A1f (`0.21`, `0.18`), CPE, CNU, L8 |
+| MT3 | matching planes (no axial offset) | the `L = 8` solve stalls at the relative residual `4.0e-5`: P2 again, with the fix in place, so P2's stall is the face switching of D3, not the rounding floor; recorded, as registered |
+| ML1 | no Uzawa update | every fast test: the solves fail ("augmentation 1: not converged in 30 iterations", residual floor near `1e-12`) |
+| ML2 | unnormalised normal | every fast test: "the gap tolerance 1e-9 ... not met after 20 augmentations" |
+| ML3 | the fix reverted | PJ1 (2 of 4 nodes not found); B1 equal, as it must be |
+
+Gates:
+
+- `cargo test -p rcfd-fem --release` passes (exit 0; 839 passed, 0 failed, 233 ignored over 189 test binaries).
+- `cargo test -p rcfd-api --release --test baseline_hashes` passes (3 passed, 1 ignored).
+- `cargo clippy -p rcfd-fem --all-targets -- -D warnings` is clean.
+- `cargo fmt -p rcfd-fem --check` is clean.
+- `cargo test -p rcfd-cli --release --test docs_site` passes (run with this addendum in place).
+
+### Findings
+
+**Mid-length.** A frictionless hub with free faces on a longer shaft is at the `sigma_zz = 0` pressure `p_0` at mid-length,
+not at the plane-strain `p_pe`. At `L = 4 (b - a)` the measured pressure is within `2.1e-3` of `p_0` (`n = 32`) and equals
+`0.912 p_pe`. At `L = 8 (b - a)` it is within `3.4e-3` of `p_0`. Holding `u_z = 0` everywhere (CPE) brings `p_pe` back within
+`7.6e-3`, and with `nu = 0` the two coincide (CNU). So the 8.6 percent of A1 is physics, not the code: **clause (a1) names the
+wrong closed form.**
+
+**The edge peak.** It is at the hub's faces on every mesh (E1). The pressure falls from mid-length to a minimum about
+`0.5 (b - a)` from the face (the row there is at `0.956 p_0` at `n = 32`) and then rises to the face. **The peak value diverges.** The face row's
+resultant grows by 1.124, 1.148 and 1.160 per halving of the bore cell. That approaches the `2^0.226 = 1.170` of the Williams
+exponent `lambda = 0.774` (D2), for a 90-degree elastic corner pressed frictionless on a half-space of the same material. Any
+reported peak is therefore a property of the mesh. **What converges** is the resultant over a band at the face:
+`B_0.25 = 1.1567 p_0` and `B_0.5 = 1.0620 p_0` at `n = 32`, with orders 1.4 to 3.2 and last changes of `4.0e-3` and `8.3e-4`.
+Extrapolating with the observed order 1.61 gives `B_0.25 = 1.1544 p_0` for the mean over the last quarter of `b - a`. The
+fixed-distance row values settle to `1.7e-3` (E4).
+
+**The bore-cell rule (R, from the run): 8 cells through `b - a` at the bore** (`h = (b - a)/8`). The cells are radial in the
+hub and in the shaft's surface layer, the same size axially within `0.5 (b - a)` of each face, with `Delta <= 6` degrees in
+`theta`. With this rule:
+
+- The edge-band resultants are within `1.6e-2` (`B_0.25`) and `8.7e-3` (`B_0.5`) of the `n = 32` values, and within `1.8e-2`
+  of the extrapolated `B_0.25`.
+- The mid-length pressure is within `2.7e-3` of `n = 32` and within `4.8e-3` of `p_0`.
+
+Four cells are not enough: `B_0.25` is `4.8e-2` off. Sixteen cells bring `B_0.25` within `4.0e-3` of `n = 32`, so use 16 when
+the edge band must be within 1 percent.
+
+The rule was run at `b/a = 2` (`b - a = a`) and is stated in `b - a`. For `b/a` far from 2 it is an extrapolation, and the
+smaller of `a` and `b - a` is the safer unit.
+
+**For the 120 mm fan the dimensions are nominal and partly missing.** `ComputerFan` gives the hub cup: radius 21.5 mm and
+length 24 mm, so `L >= 4 (b - a)` holds for any boss thinner than 6 mm. It gives no shaft radius and no bore. As an
+illustration only, assume a shaft of radius `a = 1.5 mm` and a boss of `b = 3 mm`; these values are not from the repository.
+The rule then asks for bore cells of `0.19 mm` within `0.75 mm` of each hub face. The sharp-edged peak there is not a design
+number. The band resultant is: `1.15 p_0` over the last `0.375 mm`.
+
+**`contact.rs`.** The `n = 32` failure exposed a defect that is not specific to this test (amendment 1). The absolute `1e-14`
+step tolerance in `project` lies below the rounding floor of faces smaller than about 2 percent of their coordinates. Such a
+node drops out of contact for an iterate, and the active set cycles. The fix accepts the last step at the floor (`<= 1e-10`).
+B1 shows the bits are unchanged where projections converged before, and PJ1 shows that the small face is found. Without the fix,
+probe P5 ran its 30 Newton iterations and did not converge (`f604-scratch/probe7.log`: "not converged in 30 iterations
+(relative residual 9.8e-1)", 5875 s).
+
+**Deviations from the registration.** The only one is amendment 1 (the projection fix, B1, PJ1, A1-H), which was written and
+committed before its code and its run. The probe file `f604-scratch/probe_f604.rs` is the first version of the probe. Its later
+edits (row resultants, the axial offset, the residual prints) were made in the copy under `tests/` and are described in D5. The
+logs `probe1.log` to `probe5.log` hold every number. **Not run:** nothing registered was skipped.
+
+**Decision by the rule: partial.** Everything registered is met except A1, clause (a1) as written: `8.57e-2` against `2e-2`.
+D1 predicted this before the run, and it is diagnosed: the plane-strain closed form does not describe a frictionless hub with
+free faces, while `p_0` does, within `2.1e-3`. Done would need the acceptance changed to the `sigma_zz = 0` closed form, which
+is the maintainer's decision (question 1).
+
+### Remaining questions, with recommendations
+
+1. **Clause (a1)'s closed form.** Options:
+   - (a) Change the acceptance to "against the free-ended (`sigma_zz = 0`) closed form `E d (b^2 - a^2)/(2 a b^2)` within 2
+     percent". This run meets that at `2.1e-3`, and F-604 would be done.
+   - (b) Keep plane strain, which no correct code can meet for this set-up.
+   - (c) Add an axially restrained variant.
+
+   Recommendation: (a). CPE already shows that the plane-strain value is reproduced when the physics is plane strain.
+2. **The fan's bore and shaft dimensions** are not in the repository. Options: (a) add a shaft radius and a boss to
+   `ComputerFan` from a measured fan; (b) keep the rule dimensionless. Recommendation: (b) now, (a) when a fan is measured. This
+   question is not taken here, because it needs data the repository does not have.
+3. **The projection fix in `contact.rs`** is a library change the brief did not expect. Options: (a) keep it (B1, PJ1); (b) make
+   the floor relative to the face size. Recommendation: (a). It is the smallest change that keeps every converged bit, and the
+   fan's real bore cells (0.2 mm at 20 mm) need it.
+4. **Speed.** The contact driver factorises with the simple-column `SparseLdlt`, which takes about 3 minutes per factorisation
+   at 101k unknowns. Recommendation: a follow-up that lets `contact::linear_solve` use the supernodal factorisation of ADR
+   0503/0509 (opt-in, with the default bits kept).
+
+## For the lead: roadmap entries
+
+> F-604 status partial. Note: Structural solver, advanced tier. Follow-up of F-599 (ADR 0513, 2026-11-14). ADR 0517, 2026-11-14. Model: a frictionless hub of length L on a shaft that runs 2a past each face, same material, b = 2a, d = 1e-3 a, an eighth of the fit in Hex8 with 6-degree sectors. The shaft's node planes are offset by 0.05 of a cell, so every bore node lies inside one shaft face. At mid-length the pressure matches the free-ended (sigma_zz = 0) closed form E d (b^2 - a^2)/(2 a b^2), within 2.1e-3 at L = 4 (b - a) and 3.4e-3 at L = 8 (b - a), and not the plane-strain one. The acceptance's plane-strain clause therefore misses at 8.6e-2 against 2e-2, as derived before the run: each body's axial resultant is zero, so sigma_zz = 0 in the far field. With u_z = 0 everywhere the plane-strain value comes back within 7.6e-3. The edge pressure peak is at the hub faces on every mesh and diverges as the Williams exponent 0.774 of a 90-degree corner on a half-space predicts: the face row grows by 1.124, 1.148 and 1.160 per halving, toward 1.170. The band resultants converge: the last quarter of b - a gives 1.157 p_0, with orders 1.4 to 1.6 and a last change of 4.0e-3. Bore-cell rule from the run: 8 cells through b - a at the bore, the same cell axially within 0.5 (b - a) of each face, and at most 6 degrees. That puts the edge bands within 1.6e-2 and the mid-length within 2.7e-3 of 32 cells; use 16 cells for 1 percent. The fan's shaft and bore dimensions are not in the repository; as a nominal illustration, a 1.5 mm shaft needs 0.19 mm bore cells. A 32-cell run exposed a projection tolerance in contact.rs that lies below the rounding floor of small faces. It is fixed: the closest point is accepted at a last step of at most 1e-10. Three digests show the bits unchanged where projections converged before, and a small face far from the origin is now found. All six mutations were caught or recorded as registered. No case-file key.
+
+> Follow-up (proposed, not added): the press-fit acceptance against the free-ended closed form (deps F-604). Every limit not stated here is registered in the ADR before the run. Re-state F-604's clause (a1) against E d (b^2 - a^2)/(2 a b^2) (sigma_zz = 0), and keep plane strain for an axially restrained fit; the existing run of ADR 0517 is the evidence. Fan relevance: hub-shaft press-fit stresses.
+
+> Follow-up (proposed, not added): the supernodal factorisation in the linear contact driver (deps F-427, F-594). Every limit not stated here is registered in the ADR before the run. contact::linear_solve with an opt-in supernodal L D L^T: the ADR 0517 hub fit at 32 cells through b - a in under a third of the present time, every reading within 1e-10 of the present driver, and without the option every result bit-identical. Fan relevance: hub-shaft press-fit stresses at fan scale.
