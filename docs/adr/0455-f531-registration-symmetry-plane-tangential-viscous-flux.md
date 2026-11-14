@@ -270,3 +270,137 @@ two correctors, `alpha_u = alpha_p = 1`), QD10c and QZ10c at `N = 100`, `Re Delt
 QD with ten outer iterations, `3.3961`; the zero-gradient run with ten outer iterations not known): within `3e-2`. The registered
 test `q4_default_excess_with_ten_outer_iterations` stays as an ignored record (attribute only); `q4c_default_excess_with_ten_piso_outer_iterations`
 is the corrected run. Q4 counts as met only after this amendment, if met.
+
+## Addendum 1: results (2026-11-14)
+
+Runs, each once, release profile, `CARGO_BUILD_JOBS=4`, logs in `w49i-work/f531-scratch`: on commit `8c64b9be` S1
+(`run1_s1.log`, 22.5 s), S0 (`run2_s0.log`, 9.4 s), Q (`run3_q.log`, 2.5 s), Q4 (`run4_q4.log`, 5.1 s); after amendment 1, on
+`9db8d675`, Q4c (`run5_q4c.log`, 7.8 s); on `b85059cf` V (`run6_vs.log`, 1.0 s) and the heavy record WS (`run7_ws.log`, 197 s);
+the unregistered diagnosis of Q4c (`diag1_length.log`, code `zz_f531_diag.rs`, model `channel_step_model.py`); the mutations
+(`MU*.log`, `mutations_summary.log`).
+
+### Checks
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| A0 | registration first | `50be33e0` precedes every code commit | yes |
+| S1a | `<= 1e-6` each | `1.34e-11`, `1.29e-11` against model IE | yes |
+| S1b | `<= 3e-3` each | real `+1.002e-3`, imaginary `-5.51e-4` (`Z_ext = 2554.067 + 4256.634 i` against `2551.510 + 4258.981 i`) | yes |
+| S1c | `<= 1e-3` each; `<= 1e-6` | `+2.485e-4`, `-1.386e-4`; `1.24e-11` at both levels | yes |
+| S1d | `<= 1e-3`; `<= 1e-3 rad` | amplitude `1.11743` against `abs(tanh(k H)) = 1.11747` (`3.6e-5`); phase `1.71e-4 rad` | yes |
+| S0a | `<= 1e-6` each | `7.7e-15`, `1.8e-14` against model AV | yes |
+| S0b (NC1) | `>= 0.1` each | real `+0.3214`, imaginary `-0.5142` | holds |
+| S0c | `<= 1e-6`; `>= 0.25` | `1.2e-14`; real `+0.2986` at `n_y = 40` (`+0.3214` extrapolated at 20): the default's error does not fall with the mesh | yes |
+| Q1 | `<= 1e-3` each | `N = 50`: `3.1e-5`, `4.0e-4`; `N = 100`: `1.1e-5`, `1.1e-4` | yes |
+| Q2 | `<= 0.2` each | real `-1.64e-2`, imaginary `-3.94e-2` | yes |
+| Q3 | `<= 0.15` | `Delta Z = 0.36077 - 0.01364 i` against `0.39152 - 0.01714 i`: `-7.86e-2` | yes |
+| Q4 as registered | `<= 5e-2` | `-1.005` (the relaxed `pimple` constructor; amendment 1) | **no** (record `q4_default_excess_with_ten_outer_iterations`) |
+| Q4c (amendment 1) | `<= 5e-2` | `Delta Z = 0.36061 - 0.01492 i`: `-7.90e-2` | **no** (`q4c_default_excess_with_ten_piso_outer_iterations_known_miss`) |
+| Q5 | `<= 1e-6` | every channel level `<= 3.0e-14` (QS, QD, QZ, NC2, Q4, Q4c), WS `<= 1.8e-11`; the Stokes runs `<= 3.0e-8` (corrected), `<= 1.3e-14` (default) | yes |
+| NC2 | `<= 1e-12` | `1.3e-14` | holds |
+| W1 | `<= 3e-2` each | real `+8.291e-3`, imaginary `-1.582e-3` (`Z_ext = 0.94449 + 5.69156 i`) | yes |
+| W2 | `<= 2e-3` each | `1.3e-6`, `2.4e-6` | yes |
+| V0 | `<= 1e-3` | `8.28164e-5 U`: `2.0e-4` | yes |
+| V1 | `<= 1e-6` | **`1.0e-10 U`** (default `8.28e-5 U`) | yes |
+| V2 | record | `1.6e-11 U` (`nu = 1e-3` against `1e-4`); corrected against default at `nu = 1e-4`: `8.4e-7 U` | recorded |
+
+### What the numbers say
+
+* **(c3) Explained.** The `Symmetry` coefficients give the tangential momentum zero flux through the plane; the extra dissipation
+  is the averaged diagonal of the PISO correctors (D1). The default Stokes step is the two-corrector averaged model to `2e-14`
+  (S0a, S0c), and the corrected step is implicit Euler to `1e-11` (S1a, S1c): the mechanism is located to round-off. In a
+  transient run the effect can be large: next to a `Symmetry` plane one Stokes depth from the wall the impedance is `+32 %` (real)
+  and `-51 %` (imaginary) off, and the error does not fall with the mesh (`+0.30` at 40 cells).
+* **(c3) Removed (opt-in) and documented.** `PimpleSettings::component_diagonal = true` (case key `solver.component_diagonal =
+  "corrected"`, existing since ADR 0069 F3 / ADR 0074 W1) removes it: QS equals the zero-gradient planes to `1e-5` (Q1), WS
+  equals W5c to `2.4e-6` (W2) and meets W5's registered limits (W1), which the registered W5 run of ADR 0446 missed with `8.55e-2`.
+  No library line was changed; the default stays averaged (the maintainer's open decision, `component-diagonal-default.md`,
+  updated with these numbers).
+* **(c1, c2) The closed forms.** Stokes' layer within `2.5e-4` (impedance) and `3.6e-5`, `1.7e-4 rad` (wall shear amplitude and
+  phase) at 40 cells after the extrapolation in the step; the channel between two `Symmetry` planes within `1.6e-2`, `3.9e-2` (QF's
+  short channel) and `8.3e-3`, `1.6e-3` (W5's set-up).
+* **(c4) VS.** With the corrected diagonal F-401's VS deviation is `1.0e-10 U` against the limit `1e-6 U` (default `8.28e-5 U`):
+  the averaged diagonal next to the four `Symmetry` side walls is the whole of VS's miss; ADR 0252's end-wall splitting is not
+  visible at this size. D1's order estimate `4.5e-5 U` was within a factor 2.
+* **Q4 and Q4c: D1's fixed point is not the step.** D1 claimed that the outer iterations reach the infinite-corrector fixed point
+  `a_P u_k = H_k - V (grad p)_k`. They do not: with `alpha_u = 1` every outer iteration restarts from the predictor (solved with
+  the component's own diagonal), so the converged outer loop is the **two-corrector** map with a converged pressure. Unregistered
+  diagnosis (`diag1_length.log`): the shortfall of `Delta Z` is per length, not at the ends (per `20 h`: `0.36199` at 8 cells,
+  `-7.5 %`; `0.33539` at 16 cells and `N = 200`, `-15.9 %`; the ends of the Symmetry and zero-gradient runs are equal, `0.0303`
+  and `0.0315`), and an exact linear model of the two-corrector averaged step of the developed channel (flux fixed in each
+  corrector; `channel_step_model.py`) gives `0.36351 - 0.01387 i` (8 cells) and `0.33584 - 0.00561 i` (16 cells): the measured
+  per-length parts to `0.4 %` and `0.13 %`. So Q3's `-7.9 %` and Q4c's `-7.9 %` are the two-corrector map against D1's idealised
+  fixed point, which over-estimates the sink by `7 %` at `nu dt/dy^2 = 1` and `16 %` at `2`. The ADR 0446 percentages (`+13 %`,
+  `+7 %`) are reproduced by the step itself (QD; ADR 0446 W5). Q4c stays a miss (limit intact); the cause is a wrong estimate in
+  D1, not a second mechanism in the solver.
+* **Relaxed PIMPLE (the registered Q4).** With `PimpleSettings::pimple(nu, 10)` (`alpha_u = 0.8`, `alpha_p = 0.5`, one
+  corrector) the excess is `Delta Z = -0.0021 - 0.0007 i`: essentially none. Not explained (a 0-D version of the relaxed fixed
+  point predicts a larger sink, amendment 1); a remaining question.
+
+### Mutations (scratch copy `f531-scratch/copy`, `mutate.py`; each run against S1, S0 and Q, then reverted)
+
+| Id | Mutation | Caught by |
+|---|---|---|
+| MU1 | the corrected split without `(a_P - a_k) u_k` | S1a (`0.43`), S1b to S1d, Q1 (`0.11`): yes |
+| MU2 | `diag_k[(k + 1) % 3]` | S1: a panic (index out of bounds: the inactive `z` component of the 2-D column has no diagonal); not caught numerically by Q1, since in the channel `a_y = a_x` and the swap changes nothing for `u_x`: yes, by the panic only |
+| MU3 | `Symmetry` tangential `a` times `0.99` | S1a (`0.12`), S1b, S1c, S0a (`2.6e-3`), Q1 (`3.8e-3`): yes |
+| MU4 | `coth` in the closed form | S1b (`0.25`), S1c, S1d (phase `0.49 rad`); also S0b, S0c: yes |
+| MU5 | model AV with one corrector | S0a (`3.6e-2`), S0c: yes |
+
+### Deviations
+
+* Q4 was run with the relaxed `pimple` constructor (amendment 1); Q4c is the corrected run (missed).
+* Arithmetic slips of the registration text, not affecting any limit: D2 says `abs(tanh(k H))` "differs from 1 by 0.3"; it is
+  `1.117` (by 0.12). The Stokes periodicity estimate "of order `1e-10`" was `3e-8` with the corrected diagonal (`1e-14` with the
+  default; the limit `1e-6` was met). Q2's imaginary estimate `+6.3e-2` had the wrong sign (measured `-3.9e-2`; ADR 0446 reported
+  QF's imaginary error as a magnitude).
+* The mutations were built with the worktree's target directory. The copy's mutated `rcfd-fv` replaced the shared artifact, and
+  the first run of the files afterwards (`run8_files.log`) linked the reverted MU3 and failed with MU3's numbers. Touching the two
+  unchanged worktree sources forced a rebuild, and the files then pass as they stand (`run8b_files.log`: 3 passed, 3 ignored; 1
+  passed). Every registered run was made before the mutations, on clean builds.
+* W2 compares magnitudes (`abs(e_WS) - e_W5c`): ADR 0446's addendum gives W5c's errors as magnitudes; the WS signs are `+`, `-`.
+* The Q4c diagnosis used unregistered runs (the 16-cell level first at `N = 100` diverged, `nu dt/dy^2 = 4.0`, above ADR 0451's
+  limit, and was repeated at `N = 200`).
+
+### Not run
+
+* The rcfd-fv test suite and `baseline_hashes`: no line of `rcfd-fv`, `rcfd-api` or any other library was changed (two new test
+  files in `rcfd-post`, an ADR, a topic page).
+* An inclined `Symmetry` plane, `SlipWall`, `Directed`, the steady and variable-density kernels (Limits).
+
+### Decision by the registered rule
+
+**Partial.** Every clause of the acceptance is met on its registered run (c1: S1a to S1d; c2: Q1, Q2, W1, W2; c3: S0a to S0c,
+Q3, the removal by the opt-in option and the documentation; c4: V0, V1), but the registered check Q4 missed on a defective set-up
+and its corrected run Q4c missed (a known miss with the limit intact, diagnosed as a wrong estimate of D1).
+
+### Remaining questions
+
+1. **The default of the transient kernel.** F-531 adds transient evidence to the open decision of `component-diagonal-default.md`
+   (options 1 keep `averaged`, 2 make `corrected` the default and re-register `packed_bed`, 3 keep it and warn). Not taken here: it
+   changes default results and a registered hash. Recommendation: option 2 for the transient `piso`/`pimple` kernel at least (an
+   O(1) error next to `Symmetry` planes that grows under refinement, and F-401's VS and ADR 0446's W5 miss are instances of it);
+   failing that, option 3.
+2. **The relaxed PIMPLE loop shows no excess** (the registered Q4). Options: (a) a follow-up item that models the relaxed
+   two-level loop exactly (as `channel_step_model.py` does for PISO) and explains it; (b) nothing, since `corrected` removes the
+   question. Recommendation: (a), small; it says whether `alpha_u < 1` hides the defect in other PIMPLE results.
+3. **D1's fixed-point estimate** is superseded by the two-corrector model; nothing to decide (recorded so that later estimates
+   use the step's own map).
+
+### For the lead: roadmap entries
+
+Proposed status of F-531: **partial**. Note:
+
+> Numerics. PARTIAL (ADR 0455, 2026-11-12; registered before the code, amendment 1 after a registered run). The Symmetry condition's own coefficients give the tangential momentum exactly zero flux through an axis-aligned plane; the extra dissipation found by ADR 0446 is the averaged component diagonal of the PISO correctors (HbyA_k = H_k/a_P; the plane loads only the normal component's diagonal), located to round-off: Stokes' second problem with a Symmetry plane one Stokes depth from the wall matches the exact two-corrector averaged step to 2e-14 and is +32 percent (real) and -51 percent (imaginary) off the closed form rho sqrt(i w nu) tanh(k H), not falling with the mesh. Removed by the existing opt-in PimpleSettings::component_diagonal (solver.component_diagonal = "corrected"): the Stokes step is implicit Euler to 1e-11 and the extrapolated impedance and wall shear are within 2.5e-4 of the closed form at 40 cells; ADR 0446's channel between two Symmetry planes equals the zero-gradient planes to 1e-5 (QF) and 2.4e-6 (W5 set-up, within 8.3e-3 and 1.6e-3 of the formula, where the registered W5 run of ADR 0446 missed with 8.55e-2); F-401's VS drops from 8.28e-5 U to 1.0e-10 U (limit 1e-6 U). Default unchanged (documented in component-diagonal-default.md). Partial: Q4 (the default's excess with ten outer iterations against the infinite-corrector sink 4 nu/(3 h^2)) missed on a defective set-up (the relaxed pimple constructor, amendment 1) and its corrected run by 7.9e-2 (limit 5e-2), diagnosed: the converged step is the two-corrector map, which an exact model reproduces to 0.4 percent. Five mutations caught (one only by a panic). No library line changed. Open: ADR 0455 Q1, Q2.
+
+F-401 (note addition):
+
+> ADR 0455 (F-531, 2026-11-12): the VS miss is the averaged component diagonal of the PISO correctors next to the four Symmetry side walls; with PimpleSettings::component_diagonal = true VS is 1.0e-10 U (limit 1e-6 U).
+
+F-421 (note addition):
+
+> ADR 0455 (F-531, 2026-11-12): the Symmetry-plane dissipation of amendment 3 is the averaged component diagonal of the PISO correctors; with the opt-in corrected diagonal the registered W5 set-up (Symmetry planes) gives 8.3e-3 and 1.6e-3 against the formula, equal to W5c to 2.4e-6.
+
+Follow-up item F-NEW, "The averaged component diagonal in the relaxed PIMPLE loop", deps F-531, acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. The channel of ADR 0455 QF with Symmetry planes under PimpleSettings::pimple (alpha_u 0.8, alpha_p 0.5, one corrector, 10 outer iterations), whose excess over the zero-gradient planes was -0.0021 against the averaged two-corrector PISO step's 0.36, is explained by an exact linear model of the relaxed step that reproduces the measured impedance of both runs within registered limits; the dependence on alpha_u is stated.
