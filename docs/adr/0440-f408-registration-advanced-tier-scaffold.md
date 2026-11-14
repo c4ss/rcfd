@@ -449,3 +449,11 @@ The single registered run of `sa_scaffold.rs` (commit 144c2d4a) showed two set-u
    not re-run.
 
 By the decision rule, D6, R2, R3 and R4 are met (if they are) only after an amendment made after their run.
+
+## Amendment 3 (2026-11-14, written and committed after the run of D6b, before the corrected run)
+
+The run of D6b (commit 0907226f) stopped in its set-up: the smallest free equation (3, the x component of the node at x = 0.5,
+y = z = 0) belongs to the middle node plane, shared by both elements, so its row of the pattern holds every equation and no `j`
+exists (`unwrap` of `None`). R2b, R3b (8 of 8 each) and R4b were met in that run. Corrected as D6c: `i` is the smallest free
+equation whose pattern row does not hold every free equation, `j` the smallest free equation not in that row (asserted off the
+pattern); the limit (1e-10) is unchanged. `d6b_off_pattern_contribution` stays as an ignored record.
