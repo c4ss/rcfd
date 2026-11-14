@@ -335,11 +335,14 @@ fn faces_of(mesh: &SolidMesh, set: &str, map: &dyn Fn(Vec3) -> Vec3) -> Result<V
 
 // ------------------------------------------------------------------------------------------------------------ weights
 
+/// One row of a tie: slave node, component, terms `(node, coefficient)` of `u_s = sum c u` on that component.
+pub(crate) type WeightRow = (usize, usize, Vec<(usize, f64)>);
+
 /// The weights of a tie: per slave node and component, the terms `(node, coefficient)` of `u_s = sum c u`, plus the report
 /// fields.
 pub(crate) struct Weights {
     /// (slave node, component, terms over (node, component-free) unknowns).
-    pub(crate) rows: Vec<(usize, usize, Vec<(usize, f64)>)>,
+    pub(crate) rows: Vec<WeightRow>,
     pub(crate) projections: Vec<Projection>,
     pub(crate) skipped: Vec<(usize, usize)>,
     pub(crate) tolerance: f64,
