@@ -98,7 +98,8 @@ impl Prestress {
     }
 
     /// The stress of a static result of `model` (`D (eps - eps_th)` at the points of the stiffness rules). A model with a
-    /// Beam2, Shell4 or Shell3 element takes [`crate::geometric_struct::prestress_from_static`] (ADR 0473 D4).
+    /// Beam2, Shell4 or Shell3 element takes [`crate::geometric_struct::prestress_from_static`] (ADR 0473 D4), also with solid
+    /// elements beside them (ADR 0486 D1).
     pub fn from_static(model: &SolidModel, result: &SolidResult) -> Result<Prestress> {
         if crate::geometric_struct::has_structures(model) {
             return crate::geometric_struct::prestress_from_static(model, result);
@@ -138,6 +139,23 @@ impl Prestress {
         Prestress {
             offsets: self.offsets.clone(),
             stress: self.stress.iter().map(|s| s.map(|v| factor * v)).collect(),
+        }
+    }
+
+    /// The same pre-stress with the stresses of every element `e` for which `keep(e)` is false set to zero (ADR 0486 D2): the
+    /// stress of one part of a model alone.
+    pub fn masked<F: Fn(usize) -> bool>(&self, keep: F) -> Prestress {
+        let mut stress = self.stress.clone();
+        for e in 0..self.offsets.len().saturating_sub(1) {
+            if !keep(e) {
+                for s in &mut stress[self.offsets[e]..self.offsets[e + 1]] {
+                    *s = [0.0; 6];
+                }
+            }
+        }
+        Prestress {
+            offsets: self.offsets.clone(),
+            stress,
         }
     }
 
