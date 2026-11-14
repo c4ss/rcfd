@@ -11811,7 +11811,7 @@ fixed by the item's registration ADR before any code.
     elastic model equals the F-570 step within 9.4e-13 per step on the bar and 9.7e-14 on a large-strain cube (1e-12).
     Large-strain neo-Hookean cube: energy 2.8e-9 against 4.7e-3 with the F-570 average. F-570 bits unchanged (B0),
     defaults bit-identical (baseline_hashes). Ten of ten mutations caught (the acceptance bar alone does not catch
-    dropping the correction; the cube does). No case-file key.
+    dropping the correction; the cube does). No case-file key. Follow-up F-611.
 - [ ] **F-608** Total Lagrangian contact with a lifted contactor: convexified tangent on a refused pivot
   - depends on: F-427, F-600
   - acceptance: Every limit not stated here is registered in the ADR before the run. The total Lagrangian contact driver
@@ -11834,3 +11834,11 @@ fixed by the item's registration ADR before any code.
     it; the Hex20 sequence of ADR 0522 kept as a record of the singular hinge.
   - note: Structural solver, advanced tier. Follow-up of F-585 (ADR 0522, 2026-11-14). Needs the paper's tabulated
     value.
+- [ ] **F-611** Energy-momentum step with F-425's hyperelastic materials
+  - depends on: F-607, F-425
+  - acceptance: Every limit not stated here is registered in the ADR before the run. With F-425's neo-Hookean and
+    Mooney-Rivlin energies in the discrete gradient of ADR 0523, the neo-Hookean spinning bar over ten turns keeps
+    linear momentum within 1e-10, angular momentum within 1e-6 and energy within 1e-6 relative, and the large-strain
+    neo-Hookean and Mooney-Rivlin cubes of ADR 0523 over 500 steps keep energy within 1e-7 relative; the step-local
+    energy of ADR 0523 is removed or equals F-425's within 1e-12 at a point.
+  - note: Structural solver, advanced tier. Follow-up of F-607 (ADR 0523, 2026-11-14).
