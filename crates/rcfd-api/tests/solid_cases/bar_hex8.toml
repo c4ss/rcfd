@@ -1,0 +1,34 @@
+# F-386 (ADR 0438): the fixed-free bar of ADR 0284 from a file (L = 1 m, b = 0.1 m, nu = 0), Hex8 32 x 1 x 1, four modes.
+title = "fixed-free bar, Hex8 32 x 1 x 1"
+
+[mesh]
+source = "generator"
+generator = "box"
+element = "hex8"
+lengths = [1.0, 0.1, 0.1]
+divisions = [32, 1, 1]
+
+[materials.steel]
+youngs_modulus = 2.0e11
+poisson_ratio = 0.0
+density = 7850.0
+
+[constraints.xmin]
+set = "xmin"
+components = ["x"]
+
+[constraints.ymin]
+set = "ymin"
+components = ["y"]
+
+[constraints.zmin]
+set = "zmin"
+components = ["z"]
+
+[analysis]
+type = "modal"
+modes = 4
+
+[output]
+vtu = "bar_hex8.vtu"
+report = "bar_hex8.json"

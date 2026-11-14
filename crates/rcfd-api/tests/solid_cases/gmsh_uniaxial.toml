@@ -1,0 +1,41 @@
+# F-386 (ADR 0438 arithmetic 1): uniaxial tension of the Gmsh tetrahedral box [0, 2] x [0, 1] x [0, 1] of rcfd-io's samples:
+# traction 1 MPa on outlet (x = 2), u_x = 0 on inlet (x = 0), u_y = u_z = 0 at (0, 0, 0), u_z = 0 at (0, 1, 0).
+title = "uniaxial tension of a Gmsh tetrahedral box"
+
+[mesh]
+source = "file"
+file = "../../../rcfd-io/tests/data/tet_v4.1_ascii.msh"
+
+[node_sets.corner_a]
+box_min = [-1e-9, -1e-9, -1e-9]
+box_max = [1e-9, 1e-9, 1e-9]
+
+[node_sets.corner_b]
+box_min = [-1e-9, 0.999999999, -1e-9]
+box_max = [1e-9, 1.000000001, 1e-9]
+
+[materials.steel]
+youngs_modulus = "200 GPa"
+poisson_ratio = 0.3
+density = "7850 kg/m^3"
+
+[constraints.corner_a]
+set = "corner_a"
+components = ["y", "z"]
+
+[constraints.corner_b]
+set = "corner_b"
+components = ["z"]
+
+[constraints.inlet]
+set = "inlet"
+components = ["x"]
+
+[loads.pull]
+kind = "traction"
+set = "outlet"
+traction = ["1 MPa", 0.0, 0.0]
+
+[output]
+vtu = "gmsh_uniaxial.vtu"
+report = "gmsh_uniaxial.json"

@@ -1,0 +1,54 @@
+# F-386 (ADR 0438): the cantilever of ADR 0433 (L = 2 m, h = 0.1 m, P = 1000 N) from a file, Tet10 40 x 2 x 2, with the
+# support of beam theory (ADR 0433 D2): u_x = 0 on xmin, u_z = 0 at (0, 0, h/2) and (0, h, h/2), u_y = 0 at (0, 0, h/2).
+title = "cantilever L/h = 20, Tet10 40 x 2 x 2, CG with aggregation multigrid (quadratic)"
+
+[mesh]
+source = "generator"
+generator = "box"
+element = "tet10"
+lengths = [2.0, 0.1, 0.1]
+divisions = [40, 2, 2]
+
+[node_sets.root_n0]
+box_min = [-1e-9, -1e-9, 0.049999999]
+box_max = [1e-9, 1e-9, 0.050000001]
+
+[node_sets.root_n1]
+box_min = [-1e-9, 0.099999999, 0.049999999]
+box_max = [1e-9, 0.100000001, 0.050000001]
+
+[materials.steel]
+element_set = "all"
+youngs_modulus = 2.0e11
+poisson_ratio = 0.3
+density = 7850.0
+
+[constraints.root_n0]
+set = "root_n0"
+components = ["y", "z"]
+
+[constraints.root_n1]
+set = "root_n1"
+components = ["z"]
+
+[constraints.root_x]
+set = "xmin"
+components = ["x"]
+
+[loads.tip]
+kind = "traction"
+set = "xmax"
+traction = [0.0, 0.0, -1.0e5]
+
+[analysis]
+type = "static"
+
+[solver]
+method = "cg"
+preconditioner = "amg_quadratic"
+tolerance = 1e-10
+max_iterations = 20000
+
+[output]
+vtu = "cantilever_tet10_amg.vtu"
+report = "cantilever_tet10_amg.json"
