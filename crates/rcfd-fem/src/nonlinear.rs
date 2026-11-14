@@ -18,6 +18,9 @@
 //!   tangent: contact, follower loads) and a [`StepControl`] hook that sets the target of each attempt; with neither, it is
 //!   [`solve`] and executes the operations of ADR 0404. [`StateLayout`] is the per-element layout of the material states
 //!   (ADR 0440 D3).
+//! * History (ADR 0475 D3): a material with history (J2, [`crate::mat_j2`]) gives the trial state of each point from the
+//!   committed state of the attempt with its stress; the attempt keeps the trial states of its latest evaluation and the
+//!   driver commits them on convergence ([`element_trial_state`] gives them for one element).
 
 use crate::assemble::{assemble_with, element_dofs};
 use crate::constraint::{check_rigid_body_motions, prescribed_equations, reduce, Prescribed};
@@ -45,6 +48,8 @@ struct Evaluation {
     force: Vec<f64>,
     tangent: Option<ElementMatrix>,
     stress: Vec<[f64; 6]>,
+    /// The new state values of a material with history (ADR 0475 D3), empty otherwise.
+    state: Vec<f64>,
 }
 
 /// The displacement gradient `H = F - I`, `H_iJ = sum_a u_ai g_aJ`.
@@ -140,6 +145,7 @@ fn evaluate<E: Element + ?Sized>(
         None
     };
     let mut stress = Vec::with_capacity(rule.len());
+    let mut new_state = Vec::new();
     let mut db = vec![0.0; 6 * size];
     for (q, ip) in element.integration_points(coords, rule)?.iter().enumerate() {
         let grad = &ip.geometry.grad;
@@ -156,7 +162,16 @@ fn evaluate<E: Element + ?Sized>(
             });
         }
         let strain = green_lagrange(&h);
-        let (s, d) = material.stress(&strain, &context, &state.values()[q * ns..(q + 1) * ns])?;
+        let committed = &state.values()[q * ns..(q + 1) * ns];
+        let (s, d) = match material {
+            // ADR 0475 D3: the return map from the committed state gives the trial state of the point.
+            Material::J2 { .. } => {
+                let u = crate::mat_j2::update(material, &strain, committed)?;
+                new_state.extend_from_slice(&u.state);
+                (u.stress, u.tangent)
+            }
+            _ => material.stress(&strain, &context, committed)?,
+        };
         let b = b_nonlinear(grad, &f);
         for (c, fc) in force.iter_mut().enumerate() {
             let mut v = 0.0;
@@ -199,6 +214,7 @@ fn evaluate<E: Element + ?Sized>(
         force,
         tangent: k,
         stress,
+        state: new_state,
     })
 }
 
@@ -249,10 +265,24 @@ pub fn element_force_and_tangent<E: Element + ?Sized>(
     Ok((ev.force, ev.tangent.expect("tangent requested")))
 }
 
+/// The trial state of an element at `displacement` from the committed `state` (ADR 0475 D3): for a material with
+/// history (J2) the state after the return map at every point of the stiffness rule; for the others the empty state.
+pub fn element_trial_state<E: Element + ?Sized>(
+    element: &E,
+    coords: &[Vec3],
+    material: &Material,
+    displacement: &[f64],
+    state: &ElementState,
+) -> Result<ElementState> {
+    Ok(ElementState::new(
+        evaluate(element, coords, material, displacement, state, false)?.state,
+    ))
+}
+
 /// The refusals of ADR 0404 D5 step 1 that concern the model: a block that is not a solid of the `Full` formulation, the
 /// transformation path and a temperature load (key `"nonlinear"`).
 fn check_model(model: &SolidModel) -> Result<()> {
-    model.check_elements_supported()?;
+    model.check_elements_supported_nonlinear()?;
     for (b, block) in model.mesh().blocks().iter().enumerate() {
         if !block.kind().is_solid() || block.formulation() != SolidFormulation::Full {
             return Err(FemError::InvalidValue {
@@ -290,7 +320,7 @@ fn check_driver_model(model: &SolidModel) -> Result<()> {
 
 /// The empty states of every element of `model` (`state_size()` values per point of the stiffness rule, zero).
 pub fn initial_states(model: &SolidModel) -> Result<Vec<ElementState>> {
-    model.check_elements_supported()?;
+    model.check_elements_supported_nonlinear()?;
     let materials = model.material_indices()?;
     let mesh = model.mesh();
     Ok((0..mesh.n_elements())
@@ -357,26 +387,29 @@ pub fn tangent(model: &SolidModel, u: &[f64], states: &[ElementState], threads: 
 }
 
 /// The internal force and the tangent in one pass: element matrices by [`assemble_with`], element forces stored per element
-/// and added in element order.
+/// and added in element order; with them the trial states of the elements (ADR 0475 D3, empty for a material without
+/// history).
 fn force_and_tangent(
     model: &SolidModel,
     u: &[f64],
     states: &[ElementState],
     threads: Option<usize>,
-) -> Result<(Vec<f64>, CsrMatrix)> {
+) -> Result<(Vec<f64>, CsrMatrix, Vec<ElementState>)> {
     check_model(model)?;
     check_fields(model, u, states)?;
     let dofs = model.dof_map();
     let mesh = model.mesh();
     let ne = mesh.n_elements();
     let forces: Vec<Mutex<Vec<f64>>> = (0..ne).map(|_| Mutex::new(Vec::new())).collect();
+    let trial: Vec<Mutex<Vec<f64>>> = (0..ne).map(|_| Mutex::new(Vec::new())).collect();
     let k = assemble_with(model, threads, |ctx| {
         let d = element_dofs(&dofs, ctx.nodes);
         let ue: Vec<f64> = d.iter().map(|&q| u[q]).collect();
         let el = crate::element::element_for(ctx.kind);
-        let (f, ke) = element_force_and_tangent(el, ctx.coords, ctx.material, &ue, &states[ctx.element])?;
-        *forces[ctx.element].lock().expect("element force slot") = f;
-        Ok(ke)
+        let ev = evaluate(el, ctx.coords, ctx.material, &ue, &states[ctx.element], true)?;
+        *forces[ctx.element].lock().expect("element force slot") = ev.force;
+        *trial[ctx.element].lock().expect("element state slot") = ev.state;
+        Ok(ev.tangent.expect("tangent requested"))
     })?;
     let mut out = vec![0.0; u.len()];
     for (e, slot) in forces.into_iter().enumerate() {
@@ -386,7 +419,11 @@ fn force_and_tangent(
             out[q] += v;
         }
     }
-    Ok((out, k))
+    let trial = trial
+        .into_iter()
+        .map(|slot| ElementState::new(slot.into_inner().expect("element state slot")))
+        .collect();
+    Ok((out, k, trial))
 }
 
 /// Options of the Newton driver (ADR 0404 D5).
@@ -684,14 +721,14 @@ impl Problem<'_> {
     ) -> std::result::Result<Attempt, Failure> {
         let o = self.options;
         let mut u = u_c.to_vec();
-        // The trial states: a material with history updates them; the linear material has none (D5).
-        let trial = states_c.to_vec();
         let mut residuals = Vec::new();
         let mut energies = Vec::new();
         let (mut e_first, mut e_last) = (0.0, 0.0);
         let dofs = self.model.dof_map();
         for k in 0..=o.max_iterations {
-            let (mut fint, mut kt) = force_and_tangent(self.model, &u, states_c, o.threads).map_err(classify)?;
+            // The trial states: a material with history updates them, always from the committed states (ADR 0475 D3);
+            // the linear material has none (D5).
+            let (mut fint, mut kt, trial) = force_and_tangent(self.model, &u, states_c, o.threads).map_err(classify)?;
             if !self.contributions.is_empty() {
                 contribute(self.contributions, &u, lt, &mut fint, Some(&mut kt)).map_err(Failure::Other)?;
             }
@@ -812,7 +849,7 @@ pub fn solve_with(
         mut step_control,
     } = extensions;
     model.validate()?;
-    model.check_supported()?;
+    model.check_supported_nonlinear()?;
     check_driver_model(model)?;
     options.check()?;
     let dofs = model.dof_map();

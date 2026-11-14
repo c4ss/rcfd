@@ -1798,3 +1798,17 @@ is the full model computed by the existing solver paths (`solve_static`, `modal_
 | Keeping the fixed-interface modes up to about 1.5 to 2 times the top frequency of interest (rule of thumb; ADR 0474 takes 4 times) | cited | Craig and Kurdila (2006): NOT read, from memory; no number taken |
 | Response error at a resonance `2 abs(delta) / eta` for a relative frequency error `delta` and a loss factor `eta` | derived | `1 / (omega^2 (1 + 2 delta)(1 + i eta) - omega^2)` against `1 / (i eta omega^2)` (ADR 0474 summary); measured 1.77e-2 at 2921 rad/s for `delta` 1.77e-4 |
 | Probe numbers of the bar (cutoff 32964 rad/s, A 5 and B 9 modes, the vector of B): H1 largest 0.494 at 15107 rad/s; to 2000 rad/s 5.4e-4; statics 7.5e-12 | computed | `f552-scratch/probe` on the API of 4abff5fe (ADR 0474 arithmetic 2); measured 0.494, 5.39e-4, 1.5e-12 |
+## F-422 J2 plasticity with isotropic and kinematic hardening, radial return and consistent tangent (ADR 0475)
+
+No source was read for F-422; the books are cited from memory for the names and the published form. Every formula used is
+derived in ADR 0475 (arithmetic 1 to 6) and checked by a plain numpy prototype (`f422-scratch/probe.py`): the tangent against
+central differences, the uniaxial bar, the closed forms of the sphere and the beam.
+
+| Item | Status | Source |
+|---|---|---|
+| Radial return for von Mises plasticity with linear isotropic and kinematic hardening, `dg = f / (2 mu + (2/3)(H_iso + H_kin))` (exact for linear hardening) | derived | consistency of the yield condition after the step, ADR 0475 arithmetic 1; J. C. Simo and R. L. Taylor, Comput. Meth. Appl. Mech. Engng 48 (1985) 101; J. C. Simo and T. J. R. Hughes, Computational Inelasticity, Springer, 1998, chapter 3; E. A. de Souza Neto, D. Peric and D. R. J. Owen, Computational Methods for Plasticity, Wiley, 2008: NOT read, from memory |
+| Consistent tangent `C = kappa 1 (x) 1 + 2 mu theta I_dev - 2 mu theta_bar n (x) n`, `theta = 1 - 2 mu dg/|xi_tr|`, `theta_bar = 1/(1 + H/(3 mu)) - (1 - theta)` | derived | linearisation of the return map, ADR 0475 arithmetic 2; prototype against central differences `1.2e-11 .. 6.9e-10`; same books: NOT read |
+| Bilinear uniaxial response `sigma_y + (E H/(E + H))(eps - sigma_y/E)`, `H = H_iso + H_kin`; re-yield at `-sigma_max` (isotropic) and `sigma_max - 2 sigma_y` (kinematic) | derived | uniaxial reduction of the yield condition, ADR 0475 arithmetic 2 |
+| Partly plastic thick sphere: `p = 2 sigma_y ln(c/a) + (2 sigma_y/3)(1 - c^3/b^3)`, limit `2 sigma_y ln(b/a)`, elastic shell `sigma_theta - sigma_r = sigma_y (c/r)^3`; `b/a = 2`: `p(1.25 a) = 0.950193 sigma_y`, `p(1.5 a) = 1.196347 sigma_y` | derived | equilibrium, Tresca = von Mises under spherical symmetry, Lame shell, ADR 0475 arithmetic 3; R. Hill, The Mathematical Theory of Plasticity, Oxford, 1950, chapter 5: NOT read, from memory |
+| Residual hoop stress at the bore after elastic unloading from `p(1.25 a)`, `b/a = 2`: `sigma_y - (12/7) p = -0.628903 sigma_y` (elastic unloading for `p < (7/6) sigma_y`) | derived | superposition of the Lame field of `-p`, ADR 0475 arithmetic 4 |
+| Elastic-perfectly plastic rectangle in pure bending, `M/M_y = 1.5 - 0.5 (kappa_y/kappa)^2` | derived | uniaxial fibres, elastic core `y_e = (h/2) kappa_y/kappa`, ADR 0475 arithmetic 5 |
