@@ -11068,7 +11068,9 @@ fixed by the item's registration ADR before any code.
     load do not change the interface accuracy near the bound. Eleven mutations all caught. Follow-up: a restated
     harmonic clause and an interface enrichment. Open (maintainer): restate the off-resonance and frequency clauses as
     the bands that hold (to 4000 rad/s within 1 percent; frequencies below 9500 rad/s other than the axial one within
-    1e-3), or keep them and take F-603. Follow-up F-603 (optional).
+    1e-3), or keep them and take F-603. Follow-up F-603 (optional). The two clauses missed by ADR 0511 (frequencies
+    within 1e-3 and the off-resonance response within 1 percent up to half the lowest omitted fixed-interface frequency)
+    hold on the same bar when the interface enrichment of F-603 (ADR 0532, 2026-11-14) is added to the residual vectors.
 - [~] **F-560** Convergence order of the Newton driver with plasticity: a reading for an active-set change
   - depends on: F-422
   - acceptance: Every limit not stated here is registered in the ADR before the run. On the sphere and beam solves of
@@ -11807,7 +11809,7 @@ fixed by the item's registration ADR before any code.
     each. Negative controls: the 8-layer misses of ADR 0512 reproduced (-0.611919 sigma_y, 2.70e-2 and 1.16e-2), the n =
     2 octant at 16 layers (elastic largest 2.89e-2), N2 to N4; 8 mutations caught. The registered run (155 s) is an
     ignored heavy record, the elastic rows run in a 2 s test.
-- [ ] **F-603** Craig-Bampton interface enrichment for frequency accuracy near half the lowest omitted fixed-interface frequency
+- [x] **F-603** Craig-Bampton interface enrichment for frequency accuracy near half the lowest omitted fixed-interface frequency
   - depends on: F-559
   - acceptance: Every limit not stated here is registered in the ADR before the run. An option of the reduction of ADR
     0474 adds to each part vectors that enrich the interface (the residual flexibility of the constraint modes, or
@@ -11817,7 +11819,19 @@ fixed by the item's registration ADR before any code.
     harmonic response within 1 percent of the full model at every point farther than 2 eta from a frequency of the full
     model up to that bound, the frequencies strictly lowered against the cutoff alone, and the statics of the corner
     load exact within 1e-10; without the option every result bit-identical to ADR 0511's.
-  - note: Structural solver, advanced tier. Optional. Follow-up of F-559 (ADR 0511, 2026-11-14).
+  - note: Structural solver, advanced tier. Optional. Follow-up of F-559 (ADR 0511, 2026-11-14). DONE (ADR 0532,
+    2026-11-14). CmsOptions::interface_enrichment(p) adds to each part p Krylov blocks of (K_ii, M_ii) started from the
+    constraint modes: block 1 is K_ii^-1 (M_ib + M_ii Psi), which after the M-orthogonalisation against the kept modes
+    is the residual flexibility of the omitted fixed-interface modes applied to the inertia load of the constraint
+    modes; each later block is K_ii^-1 M_ii of the vectors kept before; each vector M-orthonormalised twice against the
+    kept modes and every vector before it (dropped below 1e-8), stored as residual vectors (part file version 2
+    unchanged). Off by default and bit-identical when off (12 digests of the ADR 0511 paths at 291a210c). The bar of ADR
+    0469 with the corner load, the cutoff 32964 rad/s and the load's residual vector: the ten frequencies below half the
+    lowest omitted fixed-interface frequency (16785 rad/s) within 2.9e-6 with one block (27 vectors per part) and
+    1.3e-10 with two, against 5.1e-3 without; the response at the 72 off-resonance points within 1.1e-3 and 2.9e-5,
+    against 0.106 without; every one of the ten lowered by at least 1.05e-6 against the cutoff alone; statics of the
+    corner load 1.5e-12. The enrichment without the load's residual vector keeps the frequencies but misses the response
+    (6.6e-2), so the two are used together. Eleven mutations all caught.
 - [~] **F-604** Press fit of a finite hub on a longer shaft: edge pressure peaks and a bore-cell rule for the fan hub
   - depends on: F-599
   - acceptance: Every limit not stated here is registered in the ADR before the run. A hub of length L on a shaft that
