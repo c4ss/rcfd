@@ -236,6 +236,19 @@ impl Moments {
     pub fn peak_rate(&self) -> Option<f64> {
         (self.m2 > 0.0).then(|| (self.m4 / self.m2).sqrt())
     }
+
+    /// The broadband (Dirlik) damage rate on the curve `N = c S^-m` from `m0, m1, m2, m4` as they are (ADR 0497), by
+    /// [`crate::fatigue::broadband_damage_rate`].
+    pub fn broadband_damage_rate(&self, m: f64, c: f64) -> Result<f64> {
+        crate::fatigue::broadband_damage_rate(self.m0, self.m1, self.m2, self.m4, m, c)
+    }
+
+    /// The narrow-band damage rate on the curve `N = c S^-m` from `m0, m2` as they are, by
+    /// [`crate::fatigue::narrow_band_damage_rate`].
+    pub fn narrow_band_damage_rate(&self, m: f64, c: f64) -> Result<f64> {
+        let (rms, nu0) = spectral_rate(self.m0, self.m2)?;
+        crate::fatigue::narrow_band_damage_rate(nu0, rms, m, c)
+    }
 }
 
 /// What an output channel measures.

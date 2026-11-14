@@ -27,6 +27,130 @@ fn invalid(key: &'static str, reason: String) -> FemError {
     FemError::InvalidValue { key, reason }
 }
 
+// -------------------------------------------------------------------------------------------------------------- broadband
+
+const BROADBAND: &str = "broadband";
+
+/// The coefficients of Dirlik's density of the normalised amplitude `Z = a/sqrt(m0)` of a Gaussian stationary process,
+/// `p(Z) = D1/Q exp(-Z/Q) + D2 Z/R^2 exp(-Z^2/(2 R^2)) + D3 Z exp(-Z^2/2)` (ADR 0497; T. Dirlik, PhD thesis, University of
+/// Warwick, 1985, cited from memory).
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
+pub struct DirlikCoefficients {
+    /// The mean frequency `x_m = (m1/m0) sqrt(m2/m4)`.
+    pub x_m: f64,
+    /// The irregularity factor `gamma = m2/sqrt(m0 m4)`.
+    pub gamma: f64,
+    /// The weight of the exponential term.
+    pub d1: f64,
+    /// The weight of the first Rayleigh term.
+    pub d2: f64,
+    /// The weight of the Rayleigh term of scale 1.
+    pub d3: f64,
+    /// The scale `R` of the first Rayleigh term (only `R^2` enters the density).
+    pub r: f64,
+    /// The scale `Q` of the exponential term.
+    pub q: f64,
+}
+
+impl DirlikCoefficients {
+    /// The moment `E[Z^m]` of the density: `D1 Q^m Gamma(1 + m) + (sqrt 2)^m Gamma(1 + m/2) (D2 |R|^m + D3)`.
+    pub fn amplitude_moment(&self, m: f64) -> Result<f64> {
+        positive(BROADBAND, "exponent m", m)?;
+        Ok(self.d1 * self.q.powf(m) * gamma(1.0 + m)?
+            + std::f64::consts::SQRT_2.powf(m) * gamma(1.0 + 0.5 * m)? * (self.d2 * self.r.abs().powf(m) + self.d3))
+    }
+
+    /// The density `p(Z)` at `z >= 0`.
+    pub fn density(&self, z: f64) -> f64 {
+        self.d1 / self.q * (-z / self.q).exp()
+            + self.d2 * z / (self.r * self.r) * (-0.5 * z * z / (self.r * self.r)).exp()
+            + self.d3 * z * (-0.5 * z * z).exp()
+    }
+}
+
+/// The coefficients of Dirlik's density from the one-sided spectral moments `m_k = int f^k G(f) df` (Hz), `k = 0, 1, 2, 4`.
+/// Refused (key `"broadband"`): `m0`, `m2`, `m4` not finite and positive, `m1` not finite and non-negative, `gamma > 1`
+/// (`m2^2 > m0 m4`), a coefficient out of range (`D1 <= 0`, `D2 < 0`, `D3 < 0`, `Q <= 0`, `R >= 1`) or not finite.
+pub fn dirlik_coefficients(m0: f64, m1: f64, m2: f64, m4: f64) -> Result<DirlikCoefficients> {
+    positive(BROADBAND, "moment m0", m0)?;
+    positive(BROADBAND, "moment m2", m2)?;
+    positive(BROADBAND, "moment m4", m4)?;
+    if !(m1.is_finite() && m1 >= 0.0) {
+        return Err(invalid(BROADBAND, format!("moment m1 {m1:e} must be finite and >= 0")));
+    }
+    let x_m = m1 / m0 * (m2 / m4).sqrt();
+    let g = m2 / (m0 * m4).sqrt();
+    if !(g <= 1.0 + 1e-12) {
+        return Err(invalid(
+            BROADBAND,
+            format!("gamma = m2/sqrt(m0 m4) = {g:e} exceeds 1 (m2^2 > m0 m4)"),
+        ));
+    }
+    let d1 = 2.0 * (x_m - g * g) / (1.0 + g * g);
+    let den = 1.0 - g - d1 + d1 * d1;
+    let r = (g - x_m - d1 * d1) / den;
+    let d2 = den / (1.0 - r);
+    let d3 = 1.0 - d1 - d2;
+    let q = 1.25 * (g - d3 - d2 * r) / d1;
+    let bad = |name: &str, v: f64| {
+        invalid(
+            BROADBAND,
+            format!("Dirlik coefficient {name} = {v:e} out of range (x_m {x_m:e}, gamma {g:e})"),
+        )
+    };
+    for (name, v) in [("D1", d1), ("D2", d2), ("D3", d3), ("R", r), ("Q", q)] {
+        if !v.is_finite() {
+            return Err(bad(name, v));
+        }
+    }
+    if d1 <= 0.0 {
+        return Err(bad("D1", d1));
+    }
+    if d2 < 0.0 {
+        return Err(bad("D2", d2));
+    }
+    if d3 < 0.0 {
+        return Err(bad("D3", d3));
+    }
+    if q <= 0.0 {
+        return Err(bad("Q", q));
+    }
+    if r >= 1.0 {
+        return Err(bad("R", r));
+    }
+    Ok(DirlikCoefficients {
+        x_m,
+        gamma: g,
+        d1,
+        d2,
+        d3,
+        r,
+        q,
+    })
+}
+
+/// The broadband damage rate (1/s) of a Gaussian stationary zero-mean stress with the one-sided spectral moments `m0, m1, m2,
+/// m4` (Hz) on the curve `N = c S^-m`: `sqrt(m4/m2) m0^(m/2) E[Z^m]/c` with Dirlik's density (ADR 0497). The moments feed it
+/// as given; the refusals are those of [`dirlik_coefficients`] and of a non-positive `m` or `c`.
+pub fn broadband_damage_rate(m0: f64, m1: f64, m2: f64, m4: f64, m: f64, c: f64) -> Result<f64> {
+    positive(BROADBAND, "exponent m", m)?;
+    positive(BROADBAND, "constant c", c)?;
+    let k = dirlik_coefficients(m0, m1, m2, m4)?;
+    Ok((m4 / m2).sqrt() * m0.powf(0.5 * m) * k.amplitude_moment(m)? / c)
+}
+
+/// [`broadband_damage_rate`] on the power law of a curve; a table or an endurance limit is refused.
+pub fn broadband_damage_rate_curve(m0: f64, m1: f64, m2: f64, m4: f64, curve: &SnCurve) -> Result<f64> {
+    let (m, c) = curve.power_law().ok_or_else(|| {
+        invalid(
+            BROADBAND,
+            "the curve must be a power law without an endurance limit (Basquin or power)".to_string(),
+        )
+    })?;
+    broadband_damage_rate(m0, m1, m2, m4, m, c)
+}
+
 // ------------------------------------------------------------------------------------------------------------- curves
 
 #[derive(Debug, Clone, PartialEq)]
