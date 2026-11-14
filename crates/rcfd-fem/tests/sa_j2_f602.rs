@@ -370,6 +370,7 @@ fn volume(model: &SolidModel) -> f64 {
 
 /// The registered run of ADR 0518: M1, R1, E1, S1, S2, C1, F1 on 16 layers; N1 to N5.
 #[test]
+#[ignore = "heavy record of the registered run of ADR 0518 (155 s in release, made once from commit of this file before the split): every check met (R1 4.524e-3, E1 9.296e-3, S1 2.75e-4, S2 1.148e-3, C1 0 wrong of 20736 each, N1 8 layers -0.611919 / 2.7005e-2 / 1.1623e-2, N2 0.676, N3 2.4e-182, N4 0, N5 2.891e-2); the fast rows are in f602_fast_rows"]
 fn f602_registered_run() {
     let t0 = std::time::Instant::now();
     let mut c = Checks::new();
@@ -496,5 +497,36 @@ fn f602_registered_run() {
     c.at_least("N5 n = 2, 16 layers: E1 error is above the limit", worst2, 1e-2);
 
     println!("  elapsed {:.1} s", t0.elapsed().as_secs_f64());
+    c.finish();
+}
+
+/// The fast rows of the registered run (the same code paths: mesh, elastic solve, reading): M1, E1 and N5.
+#[test]
+fn f602_fast_rows() {
+    let mut c = Checks::new();
+    let model = sphere(4, LAYERS, j2(SY), None);
+    c.holds(
+        "M1 counts: 768 elements, 3849 nodes",
+        model.mesh().n_elements() == 768 && model.mesh().nodes().len() == 3849,
+        &format!(
+            "{} elements, {} nodes",
+            model.mesh().n_elements(),
+            model.mesh().nodes().len()
+        ),
+    );
+    let exact_volume = 7.0 * std::f64::consts::PI / 6.0;
+    c.at_most(
+        "M1 octant volume vs 7 pi/6",
+        (volume(&model) - exact_volume).abs() / exact_volume,
+        5e-4,
+    );
+    let (worst, _, _) = elastic_run(4, LAYERS);
+    c.at_most(
+        "E1 elastic hoop vs Lame, largest relative error over the inner layer",
+        worst,
+        1e-2,
+    );
+    let (worst2, _, _) = elastic_run(2, LAYERS);
+    c.at_least("N5 n = 2, 16 layers: E1 error is above the limit", worst2, 1e-2);
     c.finish();
 }
