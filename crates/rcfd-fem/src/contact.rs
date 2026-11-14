@@ -1058,9 +1058,9 @@ pub fn solve(
 /// The contact solve (ADR 0507 D3): load control `lambda = k/n` of the model's loads, `forces` and the prescribed values
 /// (the model's and `prescribed`), per step Newton solves with the contact set and `extra` (after the contact set; they are
 /// called with the load factor 1 of the step's load, as by [`solve_from`]) and Uzawa updates of the multipliers until the
-/// largest penetration and active gap are within `options.penetration_tolerance` (D2, amendment 3). Errors: the cycle error of D6, the augmentations
-/// exhausted (naming the nodes above the tolerance), a failed Newton solve (located by step and augmentation), and with
-/// [`Kinematics::TotalLagrangian`] a non-zero model displacement constraint.
+/// largest penetration and active gap are within `options.penetration_tolerance` (D2, amendment 3). Errors: the cycle
+/// error of D6, the augmentations exhausted (naming the nodes above the tolerance), a failed Newton solve (located by step
+/// and augmentation), and with [`Kinematics::TotalLagrangian`] a non-zero model displacement constraint.
 pub fn solve_with(
     model: &SolidModel,
     prescribed: &[Prescribed],
@@ -1228,8 +1228,8 @@ pub fn solve_with(
                 return Err(FemError::Solver {
                     solver: SOLVER_NAME,
                     reason: format!(
-                        "{label}: the gap tolerance {:e} (penetration, or gap at an active node) not met after {} augmentations; nodes and |gap|: \
-                         {over:?}",
+                        "{label}: the gap tolerance {:e} (penetration, or gap at an active node) not met after {} \
+                         augmentations; nodes and |gap|: {over:?}",
                         options.penetration_tolerance, options.max_augmentations
                     ),
                 });
