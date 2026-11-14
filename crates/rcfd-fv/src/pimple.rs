@@ -159,6 +159,27 @@ pub struct PimpleSettings {
     /// solve); each repeat is recorded in `PimpleSolver::pressure_fallbacks`. Acts only on a non-finite pressure, so a run
     /// whose solves are finite is unchanged. Default `false` (bit-identical).
     pub pressure_ic_fallback: bool,
+    /// F-536 (ADR 0458 C1): end the outer loop of a step by a criterion, with `n_outer` as the cap. After outer iteration `k` the
+    /// ratio `c_k = max |p_k - p_(k-1)| / max |p_1 - p^n|` (the pressure change of the iteration over that of the step's first
+    /// one, `p^n` the pressure at the start of the step) is formed; once `c_k <= tol`, iteration `k + 1` is run as the final one
+    /// (unrelaxed, the checks of the final iteration on its matrices) and the loop ends after it. For a linear contraction `r`
+    /// per outer iteration this leaves `r tol` of the error of the non-iterated step. Every step is recorded in
+    /// `PimpleSolver::outer_record`. A negative or NaN tolerance is never met. The pressure-lag estimate keeps `n_outer` outer
+    /// passes. Default `None`: exactly `n_outer` outer iterations (bit-identical).
+    pub outer_pressure_tolerance: Option<f64>,
+}
+
+/// The outer iterations of one step with `PimpleSettings::outer_pressure_tolerance` (F-536, ADR 0458 C2).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct OuterRecord {
+    /// Step number (1-based).
+    pub step: usize,
+    /// Outer iterations run.
+    pub used: usize,
+    /// Whether the criterion ended the loop before the cap `n_outer`.
+    pub met: bool,
+    /// The last ratio `c_k` formed (NaN when none was formed).
+    pub ratio: f64,
 }
 
 /// Every flag of the consistent (SIMPLEC-type) pressure correctors in one value (ADR 0258 V1). `enabled` asks for the correctors
@@ -950,6 +971,7 @@ impl PimpleSettings {
             rhie_chow_step_consistent: false,
             fractional_step_consistent: false,
             pressure_ic_fallback: false,
+            outer_pressure_tolerance: None,
         }
     }
 
@@ -1164,6 +1186,9 @@ pub struct PimpleSolver {
     /// Set by [`PimpleSolver::project_immersed_start`] (F-515, ADR 0425 D3): the start was projected onto the fluid region of
     /// the immersed bodies, and the refusal of ADR 0374 D2 is lifted. Cleared by `reinitialise`. `false` from `new`.
     start_projected: bool,
+    /// The outer iterations of every completed step with `PimpleSettings::outer_pressure_tolerance` (F-536, ADR 0458 C2); empty
+    /// while it is `None`.
+    pub outer_record: Vec<OuterRecord>,
 }
 
 /// One pressure solve of a step, as captured by [`PimpleSolver::pressure_capture`] (F-466, ADR 0363 D1). With
@@ -1245,6 +1270,7 @@ impl PimpleSolver {
             lag_fluid: None,
             lag_mode: None,
             start_projected: false,
+            outer_record: Vec::new(),
         }
     }
 
@@ -1282,6 +1308,7 @@ impl PimpleSolver {
             lag_fluid: self.lag_fluid,
             lag_mode: None,
             start_projected: self.start_projected,
+            outer_record: Vec::new(),
         }
     }
 
@@ -1588,9 +1615,15 @@ impl PimpleSolver {
         // largest pressure change of the last corrector of the final outer iteration (the growth monitor; adaptive only)
         let mut cc_change = 0.0f64;
         let mut n_corr_final = s.n_correctors;
+        // F-536 (ADR 0458 C1): the outer-iteration criterion (only with `outer_pressure_tolerance`)
+        let mut final_next = false;
+        let mut outer_used = 0usize;
+        let mut outer_ratio = f64::NAN;
+        let mut outer_first = 0.0f64;
         for outer in 0..s.n_outer {
-            let last = outer + 1 == s.n_outer;
+            let last = outer + 1 == s.n_outer || final_next;
             let (alpha_u, alpha_p) = if last { (1.0, 1.0) } else { (s.alpha_u, s.alpha_p) };
+            let p_outer_start = s.outer_pressure_tolerance.map(|_| self.p.values.clone());
             if let Some(h) = hook.as_mut() {
                 let up = h(&self.u, &self.phi);
                 self.source_force = up.source_force;
@@ -2159,6 +2192,25 @@ impl PimpleSolver {
                     self.p.values[c] = p_old[c] + a * (p_new[c] - p_old[c]);
                 }
             }
+            outer_used = outer + 1;
+            if last {
+                break;
+            }
+            if let (Some(tol), Some(p0)) = (s.outer_pressure_tolerance, &p_outer_start) {
+                // ADR 0458 C1: c_k = max |p_k - p_(k-1)| / max |p_1 - p^n|; met: the next iteration is the final one
+                let change = (0..n).fold(0.0f64, |m, c| m.max((self.p.values[c] - p0[c]).abs()));
+                if outer == 0 {
+                    outer_first = change;
+                }
+                outer_ratio = if outer_first > 0.0 {
+                    change / outer_first
+                } else if change == 0.0 {
+                    0.0
+                } else {
+                    f64::INFINITY
+                };
+                final_next = outer_ratio <= tol;
+            }
         }
 
         // ---- finish the step ------------------------------------------------
@@ -2216,6 +2268,15 @@ impl PimpleSolver {
         }
         self.phi_hist.push(self.phi.clone(), dt);
         self.time += dt;
+        if s.outer_pressure_tolerance.is_some() {
+            // ADR 0458 C2: the outer iterations of the step
+            self.outer_record.push(OuterRecord {
+                step: self.step_no,
+                used: outer_used,
+                met: final_next,
+                ratio: outer_ratio,
+            });
+        }
         let cont = divergence(&g, &self.phi).iter().fold(0.0f64, |a, &b| a.max(b.abs()));
         let area_scale = sf.iter().map(|s| vec3::norm(*s)).fold(0.0, f64::max);
         let info = StepInfo {
