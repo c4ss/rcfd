@@ -29,6 +29,7 @@ fn strip() -> SolidModel {
 }
 
 #[test]
+#[ignore = "record of the refusal of a shell result before ADR 0437 (F-521) wrote it; superseded by n2_shell_result_refused_by_the_solid_output_after_landed in si_shell_output_vtk.rs"]
 fn n2_shell_result_refused_by_the_solid_output() {
     let m = strip();
     let mut pres = Vec::new();
