@@ -21,6 +21,8 @@ use rcfd_linalg::skyline::{PivotRule, SkylineLdlt, SkylineOptions, SkylineOrderi
 use rcfd_linalg::CsrMatrix;
 use std::f64::consts::PI;
 
+mod refine;
+
 const TOLERANCE: f64 = 1e-12;
 const BREAKDOWN: f64 = 1e-13;
 const SEED: u64 = 0x5eed_0519;
@@ -35,6 +37,9 @@ pub struct SparseStateOptions {
     pub count: usize,
     /// A Ritz pair is converged when its residual estimate carried to `s` is at most `tolerance` relative (default 1e-12).
     pub tolerance: f64,
+    /// Refine every returned mode by inverse iteration on `Q(s)` at its own eigenvalue (ADR 0442, F-520; default `false`).
+    /// The eigenvalues, the flag and the run are not changed by it, only the mode vectors and their residuals.
+    pub refine: bool,
 }
 
 impl SparseStateOptions {
@@ -44,11 +49,17 @@ impl SparseStateOptions {
             shift,
             count,
             tolerance: TOLERANCE,
+            refine: false,
         }
     }
     /// The same options with another convergence tolerance.
     pub fn tolerance(mut self, tolerance: f64) -> SparseStateOptions {
         self.tolerance = tolerance;
+        self
+    }
+    /// The same options with the refinement of the mode vectors of ADR 0442 on or off.
+    pub fn refine(mut self, on: bool) -> SparseStateOptions {
+        self.refine = on;
         self
     }
 }
@@ -395,9 +406,14 @@ fn normalise(m: &CsrMatrix, re: &mut [f64], im: &mut [f64]) {
 
 /// `||Q(s) phi|| / (||K phi|| + |s|^2 ||M phi|| + |s| ||G phi||)`.
 fn residual(op: &Op, s: [f64; 2], re: &[f64], im: &[f64]) -> f64 {
-    let (kr, ki) = (matvec(op.k, re), matvec(op.k, im));
-    let (mr, mi) = (matvec(op.m, re), matvec(op.m, im));
-    let (gr, gi) = (matvec(&op.g, re), matvec(&op.g, im));
+    residual_of(op.k, op.m, &op.g, s, re, im)
+}
+
+/// The residual of [`residual`] for the matrices `k`, `m` and the skew `g`.
+fn residual_of(k: &CsrMatrix, m: &CsrMatrix, g: &CsrMatrix, s: [f64; 2], re: &[f64], im: &[f64]) -> f64 {
+    let (kr, ki) = (matvec(k, re), matvec(k, im));
+    let (mr, mi) = (matvec(m, re), matvec(m, im));
+    let (gr, gi) = (matvec(g, re), matvec(g, im));
     let s2 = cmul(s, s);
     let mut num = 0.0;
     for i in 0..re.len() {
@@ -537,6 +553,9 @@ fn solve(k: &CsrMatrix, m: &CsrMatrix, g: &CsrMatrix, scale: f64, opts: &SparseS
     }
     if eigenvalues.iter().any(|s| !(s[0].is_finite() && s[1].is_finite())) {
         return Err(not_converged("a non-finite eigenvalue".to_string()));
+    }
+    if opts.refine {
+        refine::refine(k, m, &op.g, &mut modes)?;
     }
     eigenvalues.sort_by(|p, q| p[1].total_cmp(&q[1]).then(p[0].total_cmp(&q[0])));
     modes.sort_by(|p, q| p.0[1].total_cmp(&q.0[1]).then(p.0[0].total_cmp(&q.0[0])));
