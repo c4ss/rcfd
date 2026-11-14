@@ -434,7 +434,7 @@ fn nc1_fast_channel_loose_tolerance_misses() {
 
 #[test]
 #[ignore]
-fn fck_channel_outer_criterion_record() {
+fn fck_channel_outer_criterion_known_miss() {
     let mut c = Checks::new();
     let zf = impedance_formula(FC.lf);
     let mut z = std::collections::BTreeMap::new();
