@@ -88,6 +88,110 @@ impl Bearing {
     }
 }
 
+/// A bearing whose coefficients are a table in the spin (ADR 0498 D1): knots `speeds` (finite, `>= 0`, strictly increasing)
+/// with one [`Bearing`] per knot, interpolated linearly in the spin, entry by entry, and held at the end values outside
+/// `[speeds[0], speeds[last]]` (clamped). A one-knot table is a constant bearing.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SpeedBearing {
+    speeds: Vec<f64>,
+    bearings: Vec<Bearing>,
+}
+
+impl SpeedBearing {
+    /// A table (key `"speed_bearing"`: empty, lengths differ, speeds not finite or `< 0` or not strictly increasing, a
+    /// non-finite entry).
+    pub fn new(speeds: Vec<f64>, bearings: Vec<Bearing>) -> Result<SpeedBearing> {
+        if speeds.is_empty() || speeds.len() != bearings.len() {
+            return Err(invalid(
+                "speed_bearing",
+                format!(
+                    "a table needs one bearing per knot and at least one knot (got {} speeds, {} bearings)",
+                    speeds.len(),
+                    bearings.len()
+                ),
+            ));
+        }
+        for (i, s) in speeds.iter().enumerate() {
+            if !(s.is_finite() && *s >= 0.0) || (i > 0 && *s <= speeds[i - 1]) {
+                return Err(invalid(
+                    "speed_bearing",
+                    format!("knot {i} at {s} rad/s is not finite, >= 0 and above the previous knot"),
+                ));
+            }
+        }
+        if bearings
+            .iter()
+            .any(|b| b.k.iter().chain(b.c.iter()).flatten().any(|v| !v.is_finite()))
+        {
+            return Err(invalid("speed_bearing", "a table entry is not finite".to_string()));
+        }
+        Ok(SpeedBearing { speeds, bearings })
+    }
+
+    /// A constant bearing as a one-knot table.
+    pub fn constant(bearing: Bearing) -> SpeedBearing {
+        SpeedBearing {
+            speeds: vec![0.0],
+            bearings: vec![bearing],
+        }
+    }
+
+    /// The knots, rad/s.
+    pub fn speeds(&self) -> &[f64] {
+        &self.speeds
+    }
+
+    /// The bearings at the knots.
+    pub fn bearings(&self) -> &[Bearing] {
+        &self.bearings
+    }
+
+    /// Whether `speed` lies inside `[speeds[0], speeds[last]]` (outside it the table is clamped).
+    pub fn covers(&self, speed: f64) -> bool {
+        speed >= self.speeds[0] && speed <= self.speeds[self.speeds.len() - 1]
+    }
+
+    /// The bearing at `speed` (ADR 0498 D1): a knot gives the stored bearing unchanged, identical neighbours give the first,
+    /// otherwise linear interpolation; outside the table the end bearing.
+    pub fn at(&self, speed: f64) -> Bearing {
+        let n = self.speeds.len();
+        if speed.is_nan() || speed <= self.speeds[0] {
+            return self.bearings[0];
+        }
+        if speed >= self.speeds[n - 1] {
+            return self.bearings[n - 1];
+        }
+        let i = self.speeds.partition_point(|&s| s <= speed) - 1;
+        if speed == self.speeds[i] {
+            return self.bearings[i];
+        }
+        let (a, b) = (&self.bearings[i], &self.bearings[i + 1]);
+        let same = |p: &[[f64; 2]; 2], q: &[[f64; 2]; 2]| {
+            p.iter()
+                .flatten()
+                .zip(q.iter().flatten())
+                .all(|(u, v)| u.to_bits() == v.to_bits())
+        };
+        if same(&a.k, &b.k) && same(&a.c, &b.c) {
+            return *a;
+        }
+        let t = (speed - self.speeds[i]) / (self.speeds[i + 1] - self.speeds[i]);
+        let lerp = |p: &[[f64; 2]; 2], q: &[[f64; 2]; 2]| {
+            let mut o = [[0.0; 2]; 2];
+            for r in 0..2 {
+                for c in 0..2 {
+                    o[r][c] = p[r][c] + t * (q[r][c] - p[r][c]);
+                }
+            }
+            o
+        };
+        Bearing {
+            k: lerp(&a.k, &b.k),
+            c: lerp(&a.c, &b.c),
+        }
+    }
+}
+
 /// A point unbalance: `amount = m e` (kg m) at the angle `angle` (rad) from the `x` axis at `t = 0`, at a station.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Unbalance {
@@ -117,6 +221,7 @@ pub struct RotorModel {
     shafts: Vec<ShaftElement>,
     discs: Vec<(usize, Disc)>,
     bearings: Vec<(usize, Bearing)>,
+    speed_bearings: Vec<(usize, SpeedBearing)>,
     fixed: Vec<bool>,
 }
 
@@ -253,6 +358,7 @@ impl RotorModel {
             shafts: Vec::new(),
             discs: Vec::new(),
             bearings: Vec::new(),
+            speed_bearings: Vec::new(),
             fixed: vec![false; 4 * n],
         })
     }
@@ -353,6 +459,19 @@ impl RotorModel {
         Ok(())
     }
 
+    /// The speed-dependent bearings (ADR 0498).
+    pub fn speed_bearings(&self) -> &[(usize, SpeedBearing)] {
+        &self.speed_bearings
+    }
+
+    /// A speed-dependent bearing at a station (ADR 0498 D2; key `"node"` for a station out of range). Its coefficients are
+    /// taken from the table at the spin of every whirl, Campbell, harmonic and unbalance evaluation.
+    pub fn add_speed_bearing(&mut self, node: usize, table: SpeedBearing) -> Result<()> {
+        self.check_node(node)?;
+        self.speed_bearings.push((node, table));
+        Ok(())
+    }
+
     /// A pin: `u_x = u_y = 0` at the station.
     pub fn pin(&mut self, node: usize) -> Result<()> {
         self.check_node(node)?;
@@ -371,7 +490,15 @@ impl RotorModel {
     }
 
     /// The dense matrices on all station unknowns (ADR 0476 D1, D2).
+    ///
+    /// With speed-dependent bearings these are the matrices at spin 0 ([`matrices_at`](Self::matrices_at)).
     pub fn matrices(&self) -> RotorMatrices {
+        self.matrices_at(0.0)
+    }
+
+    /// The dense matrices at the spin `spin`, rad/s: the speed-dependent bearings are evaluated there (ADR 0498 D2). Without
+    /// speed bearings this is [`matrices`](Self::matrices) for every `spin`.
+    pub fn matrices_at(&self, spin: f64) -> RotorMatrices {
         let n = 4 * self.z.len();
         let mut m = vec![0.0; n * n];
         let mut k = vec![0.0; n * n];
@@ -413,7 +540,7 @@ impl RotorModel {
             g[(o + 2) * n + o + 3] += d.polar;
             g[(o + 3) * n + o + 2] -= d.polar;
         }
-        for (node, br) in &self.bearings {
+        let mut add_bearing = |node: usize, br: &Bearing| {
             let o = 4 * node;
             for a in 0..2 {
                 for b in 0..2 {
@@ -421,6 +548,12 @@ impl RotorModel {
                     c[(o + a) * n + o + b] += br.c[a][b];
                 }
             }
+        };
+        for (node, br) in &self.bearings {
+            add_bearing(*node, br);
+        }
+        for (node, table) in &self.speed_bearings {
+            add_bearing(*node, &table.at(spin));
         }
         RotorMatrices {
             n,
@@ -441,7 +574,7 @@ impl RotorModel {
     /// (`"mass"`).
     pub fn whirl(&self, omega: f64) -> Result<RotorWhirl> {
         check_spin(omega)?;
-        let mats = self.matrices();
+        let mats = self.matrices_at(omega);
         let free = self.free();
         let sense = sense_matrix(&mats);
         self.whirl_with(omega, &mats, &free, &sense)
@@ -583,7 +716,10 @@ impl RotorModel {
     /// The undamped critical speeds, ascending, each with its direction (ADR 0476 D6). Refuses a stiffness that is not
     /// symmetric (`"cross_coupling"`) or not positive definite (`"stiffness"`).
     pub fn critical_speeds(&self) -> Result<Vec<CriticalSpeed>> {
-        let mats = self.matrices();
+        self.critical_speeds_with(&self.matrices())
+    }
+
+    fn critical_speeds_with(&self, mats: &RotorMatrices) -> Result<Vec<CriticalSpeed>> {
         let free = self.free();
         let nf = free.len();
         if nf == 0 {
@@ -659,7 +795,7 @@ impl RotorModel {
             }
         }
         let (mu, y) = hermitian_jacobi(&a, na)?;
-        let sense = sense_matrix(&mats);
+        let sense = sense_matrix(mats);
         let mut found: Vec<(f64, Vec<C64>)> = Vec::new();
         for (k, &m) in mu.iter().enumerate() {
             if m.is_nan() || m <= 0.0 {
@@ -706,6 +842,87 @@ impl RotorModel {
         Ok(out)
     }
 
+    /// The self-consistent synchronous critical speeds of a model with speed-dependent bearings in `[lo, hi]` (ADR 0498 D3):
+    /// the roots of `crit_j(Omega) - Omega`, `crit_j` the `j`-th undamped critical speed of the model frozen at the spin
+    /// `Omega` ([`critical_speeds`](Self::critical_speeds) on [`matrices_at`](Self::matrices_at)). The interval is sampled at
+    /// `samples + 1` equally spaced speeds and every sign change of a rank is refined by bisection to the last bit; the roots
+    /// are returned by speed ascending, each with the whirl number and shape of the frozen problem at the root. A root where
+    /// `crit_j - Omega` touches zero without changing sign is not found. Refuses `lo`, `hi` that are not finite with `0 <= lo
+    /// < hi` (`"range"`), `samples = 0` (`"samples"`), and whatever the frozen problem refuses (a cross-coupled table:
+    /// `"cross_coupling"`).
+    pub fn critical_speeds_over(&self, lo: f64, hi: f64, samples: usize) -> Result<Vec<CriticalSpeed>> {
+        if !(lo.is_finite() && hi.is_finite() && lo >= 0.0 && lo < hi) {
+            return Err(invalid(
+                "range",
+                format!("[{lo}, {hi}] is not a finite range with 0 <= lo < hi"),
+            ));
+        }
+        if samples == 0 {
+            return Err(invalid("samples", "at least one interval is needed".to_string()));
+        }
+        let frozen = |w: f64| self.critical_speeds_with(&self.matrices_at(w));
+        let grid: Vec<f64> = (0..=samples)
+            .map(|i| {
+                if i == samples {
+                    hi
+                } else {
+                    lo + (hi - lo) * i as f64 / samples as f64
+                }
+            })
+            .collect();
+        let vals: Vec<Vec<CriticalSpeed>> = grid.iter().map(|&w| frozen(w)).collect::<Result<_>>()?;
+        let mut out: Vec<CriticalSpeed> = Vec::new();
+        for i in 0..samples {
+            let nj = vals[i].len().min(vals[i + 1].len());
+            for j in 0..nj {
+                let h0 = vals[i][j].speed - grid[i];
+                let h1 = vals[i + 1][j].speed - grid[i + 1];
+                if h0 == 0.0 {
+                    out.push(vals[i][j].clone());
+                } else if h0 * h1 < 0.0 {
+                    let (mut a, mut b) = (grid[i], grid[i + 1]);
+                    for _ in 0..200 {
+                        if b - a <= 4.0 * f64::EPSILON * b {
+                            break;
+                        }
+                        let mid = 0.5 * (a + b);
+                        let hm = match frozen(mid)?.get(j) {
+                            Some(c) => c.speed - mid,
+                            None => {
+                                return Err(invalid(
+                                    "range",
+                                    format!("the number of critical speeds changes inside [{a}, {b}] rad/s"),
+                                ))
+                            }
+                        };
+                        if hm == 0.0 {
+                            a = mid;
+                            b = mid;
+                            break;
+                        }
+                        if (hm < 0.0) == (h0 < 0.0) {
+                            a = mid;
+                        } else {
+                            b = mid;
+                        }
+                    }
+                    let root = 0.5 * (a + b);
+                    let mut c = frozen(root)?
+                        .get(j)
+                        .cloned()
+                        .ok_or_else(|| invalid("range", "a critical speed vanished at the root".to_string()))?;
+                    c.speed = root;
+                    out.push(c);
+                }
+                if i + 1 == samples && h1 == 0.0 && h0 != 0.0 && j < vals[i + 1].len() {
+                    out.push(vals[i + 1][j].clone());
+                }
+            }
+        }
+        out.sort_by(|a, b| a.speed.total_cmp(&b.speed).then(b.whirl.total_cmp(&a.whirl)));
+        Ok(out)
+    }
+
     /// The steady response at the spin `spin` to station loads `[F_x, F_y, M_x, M_y]` at the frequency `omega > 0` (ADR 0476
     /// D8). A load on a fixed unknown is taken by the support. Refuses a negative speed (`"speed"`), a frequency that is not
     /// positive and finite (`"frequency"`), a non-finite load (`"load"`) and a singular dynamic stiffness (`"singular"`).
@@ -717,7 +934,7 @@ impl RotorModel {
                 format!("{omega} rad/s is not a positive finite frequency"),
             ));
         }
-        let mats = self.matrices();
+        let mats = self.matrices_at(spin);
         let free = self.free();
         let nf = free.len();
         let nt = mats.n;
@@ -807,7 +1024,11 @@ impl RotorModel {
         let mut results = Vec::with_capacity(ns);
         let mut entries = Vec::with_capacity(ns);
         for &w in speeds {
-            let r = self.whirl_with(w, &mats, &free, &sense)?;
+            let r = if self.speed_bearings.is_empty() {
+                self.whirl_with(w, &mats, &free, &sense)?
+            } else {
+                self.whirl_with(w, &self.matrices_at(w), &free, &sense)?
+            };
             let modes: Vec<WhirlMode> = r
                 .modes
                 .iter()
