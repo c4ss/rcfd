@@ -126,3 +126,77 @@ library is never edited. A mutation not caught is reported.
 ## Open questions
 
 None taken beforehand.
+
+## Addendum 1: results (2026-11-14)
+
+Registered run: `f602_registered_run`, made once (155.4 s in release on the shared machine; log
+`f602-scratch/registered_run.log`) from the committed test file (commit 36ce8d8f's parent state: the file before the split
+below). It took more than two minutes, so after the run the test was marked `#[ignore]` as a heavy record and a fast test
+`f602_fast_rows` (M1, E1 and N5: mesh and the elastic solve, 2 s) was added with the registered limits; no limit or reading
+changed. The library is unchanged (no file under `crates/rcfd-fem/src` edited), so no default-bits record was needed.
+The disclosed earlier unregistered run of this configuration (ADR 0512 diagnostic) and the registered run agree to the
+digits quoted there (residual error 4.52e-3, elastic largest 9.30e-3).
+
+| Id | Check | Limit | Measured | Met |
+|---|---|---|---|---|
+| M1 | 768 elements, 3849 nodes; volume vs `7 pi/6` | exact; `5e-4` | exact; `9.92e-5` | yes |
+| R1 | residual hoop stress at the bore vs `-0.628903 sigma_y` | `2e-2` | `-0.626058 sigma_y`, `4.524e-3` | yes (4.4 times margin) |
+| E1 | elastic hoop vs Lame, largest relative error over the 1296 points of the inner layer | `1e-2` | `9.296e-3` (mean `2.439e-3`) | **yes, thin: 7.0 percent margin** |
+| S1 | `c = 1.25 a` | `1e-2` | `2.752e-4` | yes |
+| S2 | `c = 1.5 a` | `1e-2` | `1.148e-3` | yes |
+| C1 | points wrong at S1, S2 | 0 | 0 of 20736 each | yes |
+| F1 | every aggregate finite, the solves `Ok` | all | all | yes |
+| N1 | 8 layers: bore residual vs ADR 0512; R1 error above `2e-2`; E1 above `1e-2` | `2e-5`; above; above | `-0.611919` (diff `3.7e-7`); `2.7005e-2`; `1.1623e-2` | yes |
+| N2 | gap of the residual to `sigma_y - p1` | `>= 0.5` | `0.676` | yes |
+| N3 | elastic material through the Ramp, largest hoop after unloading | `1e-6 sigma_y` | `2.4e-182` | yes |
+| N4 | alpha after unloading vs after loading, inner layer | `1e-12` | `0` (bit equal) | yes |
+| N5 | `n = 2`, 16 layers, E1 error above `1e-2` | above | `2.891e-2` | yes |
+
+Recorded without a limit: the 16 ramp increments; the loaded fit at the bore `0.055722 sigma_y` against `sigma_y - p1 =
+0.049807`; the elastic fit at the bore `0.717281 p1` against `5/7 = 0.714286` (8 layers: `0.7248`); largest pointwise error of
+the unloaded hoop against the closed residual field `5.858e-3 sigma_y` (8 layers `1.159e-2`); largest alpha of the inner
+layer `1.284e-3`. One structural row was added to the registered run beyond the table (the inner layer holds 1296 points,
+met), it is the count of arithmetic 1.
+
+**Reading of the thin E1 margin.** The largest error `9.296e-3` is a pointwise maximum over 1296 points of a field whose
+scatter at 4 x 4 per face is angular (the 2 x 2 octant gives `2.891e-2` at the same 16 layers, N5) and radial (8 layers
+`1.162e-2`); the pass is real under the registered reading but 7 percent from the limit, so it is not evidence for a margin
+at other loads or meshes. The R1 pass has a 4.4 times margin.
+
+**Mutations** (`f602-scratch/mutate.py`, git-archive copy of the committed state with its own target directory, log
+`mutations.log`, the registered test each time; MT0 reproduces a clean pass):
+
+| Id | Caught by |
+|---|---|
+| MT1 `10/7` | R1 (`7.52e-1`) |
+| MT2 hoop = `sigma_rr` | R1 (`1.002`), N2 (`4.8e-2`), E1 (`2.39`), N1 |
+| MT3 fit at `r = 1.03125` | R1 (`1.67e-1`), N1 (`8.9e-2`); not N2 (the estimate in the table was wrong, harmless) |
+| MT4 loading only | R1 (`1.089`), N2, N3 (`0.673`), N1 |
+| MT5 alpha not updated | S1 (`4.06e-2`), S2 (`9.07e-2`), C1 (4320 and 9504 wrong); not R1 |
+| MT6 committed states kept | R1 (`1.0`), N2, S1, S2, C1, N1 |
+| MT7 yield `1.05 sigma_y` | R1 (`8.39e-2`), S1 (`2.13e-2`), S2 (`2.98e-2`), C1 (432 wrong at S2), N1 |
+| MT8 item at 8 layers | M1, R1 (`2.7005e-2`), E1 (`1.1623e-2`): the item's own checks fail at 8 layers, the controls of N1 stay met |
+
+Every planned mutation was caught.
+
+**Other runs.** `cargo fmt -p rcfd-fem` makes no change; `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean;
+`cargo test -p rcfd-fem --release` (188 result lines, all `0 failed`); `cargo test -p rcfd-api --release --test
+baseline_hashes` (3 passed, 1 ignored); `cargo test -p rcfd-cli --release --test docs_site` (2 passed). The whole-workspace
+suite was not run (the lead's gate).
+
+**Decision by the registered rule: done.** R1, E1, S1, S2, C1, F1, M1 met, N1 to N5 as expected, every mutation caught, fmt,
+clippy, the fem suite, the baseline hashes and docs-site passing; library and baselines unchanged. The E1 margin is thin
+(7 percent) and is reported as such.
+
+**Open questions.**
+1. The thin E1 margin. Options: (a) accept as registered; (b) a follow-up on a convergence study in the layer count and `n`
+   (for example 24 layers) to show the maximum falls monotonically. Recommendation: (a); (b) only if a later item relies on
+   this mesh.
+2. The run exceeds two minutes (155 s) and is an ignored record with a 2 s fast test of the elastic part; the load-unload
+   path of R1 is covered in the fast suite by `sa_j2_f561.rs` at 8 layers. Recommendation: keep as is.
+
+## For the lead: roadmap entries
+
+Status proposed for F-602: done.
+
+> ADR 0518, 2026-11-14: DONE by the registered rule. The octant of ADR 0475 on 4 x 4 cells per face with 16 radial Hex20 layers (test-side cubed-sphere generator, crates/rcfd-fem/tests/sa_j2_f602.rs; no library change): residual hoop stress at the bore after unloading from p(1.25 a) -0.626058 sigma_y against sigma_y - (12/7) p1 = -0.628903 (error 4.52e-3, limit 2e-2); elastic Lame hoop stress at every one of the 1296 points of the inner layer, largest error 9.30e-3 (limit 1e-2, a 7 percent margin); S1 2.8e-4 and S2 1.1e-3 (limit 1e-2), C1 0 wrong of 20736 each. Negative controls: the 8-layer misses of ADR 0512 reproduced (-0.611919 sigma_y, 2.70e-2 and 1.16e-2), the n = 2 octant at 16 layers (elastic largest 2.89e-2), N2 to N4; 8 mutations caught. The registered run (155 s) is an ignored heavy record, the elastic rows run in a 2 s test.
