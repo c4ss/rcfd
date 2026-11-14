@@ -282,3 +282,11 @@ Negative controls:
    the rigid set is a rigid body (arithmetic 1), and a pin is available as linear rows. Recommended and taken.
 2. A beam model with a cyclic constraint is refused on the transformation path (D2) rather than solved with translations-only
    cyclic rows: recommended (the rows would be wrong for rotations at a boundary node) and taken.
+
+## Amendment 1 (2026-11-14, written before any run of a check)
+
+Found on reading the test before its first run: `solve_static` and `modal_analysis` run `check_supported_with_beams` (and so
+`check_beam_model`) before they dispatch to the transformation, so S2 as registered does not reach the entry check of D2, and
+MU7 (the beam check left out of that entry check) could not be caught by it. S2 also calls `mpc::solve_static_mpc` and
+`mpc::modal_analysis_mpc` directly on the same model, expecting the same `BeamSolidNode` naming the shared node (exact). No limit
+changes; MU7 is expected to be caught by these two rows.

@@ -919,6 +919,7 @@ fn n2_n3_other_paths_and_invalid_data_after_landed() {
 /// N2, N3 after ADR 0422 (F-514), amendment 1: the gravity row now solves and the reactions balance the weight and the
 /// base model's tip force; every other row as registered by ADR 0417.
 #[test]
+#[ignore = "record of ADR 0422 amendment 1 before ADR 0426 (F-513, beams on the transformation) retired the N2 nodal spring row; superseded by the n2_n3_other_paths_and_invalid_data_after_transformation_landed copy (maintainer standing decision, 2026-11-13)"]
 fn n2_n3_other_paths_and_invalid_data_after_landed_amended() {
     let mut c = Checks::new();
     // N2: the clamped one-element model on the paths that do not take beams.
@@ -927,6 +928,92 @@ fn n2_n3_other_paths_and_invalid_data_after_landed_amended() {
     m.add_support(ElasticSupport::nodal_spring("tip", 0, 1e6)).unwrap();
     let r = solve_static(&m, &StaticOptions::default());
     c.holds("N2 nodal spring (transformation)", follow_up(&r), &format!("{r:?}"));
+    let r = rcfd_fem::nonlinear::initial_states(&base);
+    c.holds("N2 nonlinear initial states", follow_up(&r), &format!("{r:?}"));
+    let amg = StaticOptions::with_solver(StaticSolver::PreconditionedCg {
+        preconditioner: CgPreconditioner::SmoothedAggregation(ElasticAmgSettings::default()),
+        tolerance: 1e-10,
+        max_iterations: 100,
+    });
+    let r = solve_static(&base, &amg);
+    c.holds("N2 smoothed-aggregation CG", follow_up(&r), &format!("{r:?}"));
+    // ADR 0422: gravity on a beam is taken; the reactions balance the weight rho A L g (limit of G1, 1e-12).
+    let mut m = base.clone();
+    let g = [0.0, 0.0, -9.81];
+    m.add_load(Load::gravity(g)).unwrap();
+    let r = solve_static(&m, &StaticOptions::default()).unwrap();
+    let w = scale(RHO * section1().area() * L1, g);
+    let (rf, _) = reaction6(&r, 0);
+    c.at_most(
+        "N2 gravity on a beam (ADR 0422 amendment 1): |R + F + rho A L g| / |W|",
+        norm(add(add(rf, f_tip), w)) / norm(w),
+        1e-12,
+    );
+    // The centrifugal load on a beam still refuses through the solid-element routines.
+    let mut m = base.clone();
+    m.add_load(Load::centrifugal([0.0, 0.0, 1.0], [0.0; 3], 100.0)).unwrap();
+    let r = solve_static(&m, &StaticOptions::default());
+    let ok = matches!(&r, Err(FemError::Element { source, .. })
+        if matches!(source.as_ref(), FemError::NotYetSupported { package, .. } if *package == beam::SOLID_ROUTINES));
+    c.holds("N2 centrifugal on a beam", ok, &format!("{r:?}"));
+    // N3: invalid data.
+    let (x0, x1, _) = seeded();
+    let mut mesh = SolidMesh::new(vec![x0, x1]).unwrap();
+    mesh.add_block(ElementKind::Beam2, vec![0, 1]).unwrap();
+    mesh.add_element_set("all", vec![0]).unwrap();
+    mesh.add_node_set("root", vec![0]).unwrap();
+    let mut m = SolidModel::new(mesh);
+    m.add_material("all", mat1()).unwrap();
+    clamp_root(&mut m);
+    let r = solve_static(&m, &StaticOptions::default());
+    c.holds(
+        "N3 Beam2 block without property",
+        matches!(&r, Err(FemError::InvalidValue { key: "property", .. })),
+        &format!("{r:?}"),
+    );
+    let mut m = beam_model(vec![x0, x1], &[[0, 1]], section1(), scale(-2.0, ax[0]), mat1());
+    clamp_root(&mut m);
+    let r = solve_static(&m, &StaticOptions::default());
+    let ok = matches!(&r, Err(FemError::Element { element: 0, source })
+        if matches!(source.as_ref(), FemError::InvalidValue { key: "orientation", .. }));
+    c.holds("N3 orientation parallel to the axis", ok, &format!("{r:?}"));
+    let hex = hex_box([0.0; 3], [2.0, 1.0, 1.0], [2, 1, 1]).unwrap();
+    let mut m = SolidModel::new(hex);
+    let r = m.add_load(Load::nodal_moment("xmax", [1.0, 0.0, 0.0]));
+    c.holds(
+        "N3 nodal moment on a three-unknown node",
+        matches!(
+            &r,
+            Err(FemError::ComponentOutOfRange {
+                component: 3,
+                available: 3,
+                ..
+            })
+        ),
+        &format!("{r:?}"),
+    );
+    c.finish();
+}
+
+/// N2, N3 after ADR 0426 (F-513, check R1): the nodal spring row now solves on the transformation and the root reaction
+/// forces, the spring force and the tip force balance; every other row as in the ADR 0422 amendment 1 copy.
+#[test]
+fn n2_n3_other_paths_and_invalid_data_after_transformation_landed() {
+    let mut c = Checks::new();
+    // N2: the clamped one-element model on the paths that do not take beams.
+    let (base, ax, f_tip, _) = one_element();
+    // ADR 0426 (R1): the nodal spring takes the transformation; the reactions, the spring force and the tip force balance.
+    let mut m = base.clone();
+    m.add_support(ElasticSupport::nodal_spring("tip", 0, 1e6)).unwrap();
+    let s = rcfd_fem::mpc::solve_static_mpc(&m, &[], &[], &[], &StaticOptions::default()).unwrap();
+    let (rf, _) = reaction6(&s.result, 0);
+    let e = m.dof_map().equation(1, 0).unwrap();
+    let spring = [s.support_forces[e], s.support_forces[e + 1], s.support_forces[e + 2]];
+    c.at_most(
+        "R1 nodal spring (transformation, ADR 0426): |sum R + S + F| / |F|",
+        norm(add(add(rf, spring), f_tip)) / norm(f_tip),
+        1e-10,
+    );
     let r = rcfd_fem::nonlinear::initial_states(&base);
     c.holds("N2 nonlinear initial states", follow_up(&r), &format!("{r:?}"));
     let amg = StaticOptions::with_solver(StaticSolver::PreconditionedCg {
