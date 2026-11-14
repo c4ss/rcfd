@@ -163,18 +163,17 @@ fn all_digests() -> Vec<(String, u64)> {
     .unwrap();
     speed_digests("hex20 rotating no stiffening 150", soft.modes(150.0).unwrap(), &mut out);
     // Dense whirl modes of the cantilever.
-    let whirl = RotatingPart::new(
-        &m,
-        AXIS,
-        ORIGIN,
-        &RotatingOptions::new(3).modal(opts(3)).coriolis(true),
-    )
-    .unwrap();
+    let whirl = RotatingPart::new(&m, AXIS, ORIGIN, &RotatingOptions::new(3).modal(opts(3)).coriolis(true)).unwrap();
     let w = whirl.whirl_modes(150.0).unwrap();
     let wm = w.modes().expect("whirl modes at 150 rad/s");
     out.push((
         "hex20 whirl 150".into(),
-        digest(wm.modes.iter().flat_map(|x| [x.omega, x.whirl]).chain(wm.modes.iter().flat_map(|x| x.re.clone()))),
+        digest(
+            wm.modes
+                .iter()
+                .flat_map(|x| [x.omega, x.whirl])
+                .chain(wm.modes.iter().flat_map(|x| x.re.clone())),
+        ),
     ));
     // Rotating modes on the transformation path.
     let t = hex8_transformation();
@@ -185,7 +184,10 @@ fn all_digests() -> Vec<(String, u64)> {
     let sec = RotatingSector::new(&s, &RotatingOptions::new(3).modal(opts(3))).unwrap();
     match sec.modes(1, 200.0).unwrap() {
         HarmonicSpeedModes::Modes(h) => {
-            out.push(("sector rotating 1 200 eigenvalues".into(), digest(h.eigenvalues.iter().copied())));
+            out.push((
+                "sector rotating 1 200 eigenvalues".into(),
+                digest(h.eigenvalues.iter().copied()),
+            ));
         }
         HarmonicSpeedModes::LossOfStiffness(l) => panic!("sector: unexpected loss of stiffness {l:?}"),
     }
@@ -201,7 +203,10 @@ fn all_digests() -> Vec<(String, u64)> {
     let tpre = Prestress::uniform(&t, [-1.0e6, 0.0, 0.0, 0.0, 0.0, 0.0]).unwrap();
     let bt = factors(&t, &tpre, &BucklingOptions::new(2)).unwrap();
     out.push(("hex8 mpc buckling factors".into(), digest(bt.factors.iter().copied())));
-    out.push(("hex8 mpc buckling modes".into(), digest(bt.modes.iter().flatten().copied())));
+    out.push((
+        "hex8 mpc buckling modes".into(),
+        digest(bt.modes.iter().flatten().copied()),
+    ));
     // The transient integrator on both paths.
     run_transient(&c, &mut out, "hex20");
     run_transient(&t, &mut out, "hex8 mpc");

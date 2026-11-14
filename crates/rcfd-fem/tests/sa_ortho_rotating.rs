@@ -424,7 +424,10 @@ fn rb1_to_rb4_nb1_to_nb4_rotating_blade() {
             );
             if i == 1 {
                 c.at_most(
-                    &format!("RB3 {} S at {w} rad/s against the closed form {}", names[k], Q_CLOSED[k]),
+                    &format!(
+                        "RB3 {} S at {w} rad/s against the closed form {}",
+                        names[k], Q_CLOSED[k]
+                    ),
                     (s / Q_CLOSED[k] - 1.0).abs(),
                     2e-2,
                 );
@@ -500,7 +503,10 @@ fn rb1_to_rb4_nb1_nb2_nb3b_nb4_amended() {
             );
             if i == 1 {
                 c.at_most(
-                    &format!("RB3 {} S at {w} rad/s against the closed form {}", names[k], Q_CLOSED[k]),
+                    &format!(
+                        "RB3 {} S at {w} rad/s against the closed form {}",
+                        names[k], Q_CLOSED[k]
+                    ),
                     (s / Q_CLOSED[k] - 1.0).abs(),
                     2e-2,
                 );
@@ -590,7 +596,10 @@ fn rc2_rc2t_w1_isotropic_constants_rotating() {
     let whirl = |m: &SolidModel| -> Vec<f64> {
         let p = RotatingPart::new(m, AXIS_Z, O_B, &rot_opts(3).coriolis(true)).unwrap();
         let r = p.whirl_modes(w).unwrap();
-        r.modes().expect("whirl modes").modes[..3].iter().map(|x| x.omega).collect()
+        r.modes().expect("whirl modes").modes[..3]
+            .iter()
+            .map(|x| x.omega)
+            .collect()
     };
     let wi = whirl(&b_iso);
     let wo = whirl(&block(iso_o(rot([1.0, 2.0, 3.0], 0.5)), Field::None));
@@ -621,7 +630,10 @@ fn rq1_rp1_nr1_rotating_per_point() {
             let w = 0.5 * modes_of(part.modes(0.0).unwrap()).eigenvalues[0].sqrt();
             let r = modes_of(part.modes(w).unwrap());
             let p = prestressed_modes(&m, &part.unit_prestress().scaled(w * w), &o).unwrap();
-            println!("RQ1 {tag} {path}: Omega = {w:.8} rad/s, frequencies {:?}", r.frequencies);
+            println!(
+                "RQ1 {tag} {path}: Omega = {w:.8} rad/s, frequencies {:?}",
+                r.frequencies
+            );
             c.at_most(
                 &format!("RQ1 {tag} {path}"),
                 max_rel(&r.eigenvalues, &p.eigenvalues),
@@ -641,9 +653,17 @@ fn rq1_rp1_nr1_rotating_per_point() {
         let b = block(mat, Field::Uniform);
         let p = RotatingPart::new(&b, AXIS_Z, O_B, &rot_opts(6)).unwrap();
         let f = modes_of(p.modes(w).unwrap()).frequencies;
-        c.at_most(&format!("RP1 {tag} frequencies against ISO at E(443)"), max_rel(&f, &fi), 1e-12);
+        c.at_most(
+            &format!("RP1 {tag} frequencies against ISO at E(443)"),
+            max_rel(&f, &fi),
+            1e-12,
+        );
         let s: Vec<f64> = p.unit_prestress().stress().iter().flatten().copied().collect();
-        c.at_most(&format!("RP1 {tag} unit pre-stress against ISO at E(443)"), dev(&s, &si), 1e-12);
+        c.at_most(
+            &format!("RP1 {tag} unit pre-stress against ISO at E(443)"),
+            dev(&s, &si),
+            1e-12,
+        );
         if tag == "TAB_A" {
             unit_a = s;
         }
@@ -667,7 +687,11 @@ fn rq1_rp1_nr1_rotating_per_point() {
         .flatten()
         .copied()
         .collect();
-    c.above("NR1 thermal stress included against the unit pre-stress", dev(&st, &unit_a), 1.0);
+    c.above(
+        "NR1 thermal stress included against the unit pre-stress",
+        dev(&st, &unit_a),
+        1.0,
+    );
     c.finish();
 }
 
@@ -716,7 +740,11 @@ fn bk1_nb5_orthotropic_column() {
     }
     let n5 = column(rot(AXIS_Z, PI / 2.0));
     let r5 = factors(&n5, &uniform(&n5, -1.0e6), &BucklingOptions::new(1)).unwrap();
-    c.below("NB5 axes turned by 90 degrees: factor 1 over lambda_E", r5.factors[0] / LAMBDA_E, 0.5);
+    c.below(
+        "NB5 axes turned by 90 degrees: factor 1 over lambda_E",
+        r5.factors[0] / LAMBDA_E,
+        0.5,
+    );
     c.finish();
 }
 
@@ -762,7 +790,10 @@ fn bk2_bk3_bk4_buckling() {
     let f_iso = buckling_factors(&block(iso_e(E_ISO), Field::None));
     let ft_iso = buckling_factors(&tr_block(iso_e(E_ISO), Field::None, true, true));
     println!("BK2: factors {f_iso:?}; transformation {ft_iso:?}");
-    for (r, tag) in [(I3, "Fixed(I)"), (rot([1.0, 2.0, 3.0], 0.5), "Fixed(rot((1, 2, 3), 0.5))")] {
+    for (r, tag) in [
+        (I3, "Fixed(I)"),
+        (rot([1.0, 2.0, 3.0], 0.5), "Fixed(rot((1, 2, 3), 0.5))"),
+    ] {
         c.at_most(
             &format!("BK2 {tag}"),
             max_rel(&buckling_factors(&block(iso_o(r), Field::None)), &f_iso),
@@ -862,7 +893,10 @@ fn tr1_tr2_tr3_transient_known_miss() {
     }
     let (u_iso, v_iso) = transient_run(&block(iso_e(E_ISO), Field::None), "xmax");
     let (ut_iso, vt_iso) = transient_run(&tr_block(iso_e(E_ISO), Field::None, true, true), "tip");
-    for (r, tag) in [(I3, "Fixed(I)"), (rot([1.0, 2.0, 3.0], 0.5), "Fixed(rot((1, 2, 3), 0.5))")] {
+    for (r, tag) in [
+        (I3, "Fixed(I)"),
+        (rot([1.0, 2.0, 3.0], 0.5), "Fixed(rot((1, 2, 3), 0.5))"),
+    ] {
         let (u, v) = transient_run(&block(iso_o(r), Field::None), "xmax");
         c.at_most(&format!("TR2 {tag} BLK displacement"), dev(&u, &u_iso), 1e-12);
         c.at_most(&format!("TR2 {tag} BLK velocity"), dev(&v, &v_iso), 1e-12);
@@ -899,7 +933,10 @@ fn tr1_tr2t_tr3_after_known_miss() {
         );
     }
     let (ut_iso, vt_iso) = transient_run(&tr_block(iso_e(E_ISO), Field::None, true, true), "tip");
-    for (r, tag) in [(I3, "Fixed(I)"), (rot([1.0, 2.0, 3.0], 0.5), "Fixed(rot((1, 2, 3), 0.5))")] {
+    for (r, tag) in [
+        (I3, "Fixed(I)"),
+        (rot([1.0, 2.0, 3.0], 0.5), "Fixed(rot((1, 2, 3), 0.5))"),
+    ] {
         let (u, v) = transient_run(&tr_block(iso_o(r), Field::None, true, true), "tip");
         c.at_most(&format!("TR2 {tag} TRB displacement"), dev(&u, &ut_iso), 1e-12);
         c.at_most(&format!("TR2 {tag} TRB velocity"), dev(&v, &vt_iso), 1e-12);
