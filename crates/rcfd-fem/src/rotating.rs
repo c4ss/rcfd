@@ -44,6 +44,10 @@
 //!
 //! ADR 0462 (F-544): a sector or a cyclic constraint with either material is taken when every material with its own axes has
 //! cylindrical axes about the cyclic axis and origin ([`crate::mat_ortho::check_cyclic_axes`]); other axes stay refused.
+//!
+//! ADR 0472 (F-415): the Coriolis term on the modal subspace of the F-396 modes, solved by the quadratic eigensolver of ADR
+//! 0450, with the split Campbell table and the stability flag, is [`RotatingPart::split_modes`] and
+//! [`RotatingPart::split_campbell`] in [`crate::gyro`]; nothing here is changed by it.
 
 use crate::assemble::{assemble_with, point_stiffness};
 use crate::constraint::{check_rigid_body_motions, prescribed_equations, reduce};
@@ -74,6 +78,7 @@ pub use whirl::{
     STABILITY_TOLERANCE,
 };
 pub use whirl::{gyroscopic_state_eigen_sparse, SparseStateEigen, SparseStateOptions, SparseStateWhirl};
+pub(crate) use whirl::{track_whirl, Entry};
 pub use whirl::{CyclicWhirlStability, HarmonicStateWhirl};
 
 fn unit_axis(axis: Vec3) -> Result<Vec3> {
@@ -336,6 +341,16 @@ impl<'a> RotatingPart<'a> {
         &self.kg1
     }
 
+    /// The model of the part (ADR 0472).
+    pub(crate) fn model(&self) -> &'a SolidModel {
+        self.model
+    }
+
+    /// The options of the part (ADR 0472).
+    pub(crate) fn options(&self) -> &RotatingOptions {
+        &self.options
+    }
+
     /// `K + Omega^2 (s K_sigma,1 - c M_perp)` on the stiffness pattern, `s` and `c` 1 or 0 by the options; on the
     /// transformation path `K` includes the supports.
     pub fn operator(&self, omega: f64) -> CsrMatrix {
@@ -521,7 +536,7 @@ fn check_model(model: &SolidModel) -> Result<()> {
     }
 }
 
-fn check_speeds(speeds: &[f64]) -> Result<()> {
+pub(crate) fn check_speeds(speeds: &[f64]) -> Result<()> {
     if speeds.is_empty() {
         return Err(FemError::InvalidValue {
             key: "speeds",

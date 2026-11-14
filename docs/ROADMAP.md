@@ -8208,7 +8208,7 @@ fixed by the item's registration ADR before any code.
     transformation path (linear constraints, rigid sets, supports) and frequency-dependent moduli are refused. Done by
     the registered rule; amendment 1 (post-run, covering an output no registered check had) is disclosed for the
     maintainer's acceptance. Follow-up F-532.
-- [ ] **F-415** Coriolis term of a rotating part: gyroscopic matrix in the rotating frame and the Campbell table with split modes
+- [~] **F-415** Coriolis term of a rotating part: gyroscopic matrix in the rotating frame and the Campbell table with split modes
   - depends on: F-414, F-396
   - acceptance: Every limit not stated here is registered in the ADR before the run. G is skew within 1e-13 of its norm
     and x^T G x = 0 within 1e-12. Without the option the table has the bits of F-396; with it at zero speed the
@@ -8220,8 +8220,19 @@ fixed by the item's registration ADR before any code.
     registered second-order estimate within 20 percent of that estimate. Crossings of split modes are tracked without
     exchange (modal assurance on the complex shapes above 0.9). A speed at which an eigenvalue has a positive real part
     is reported as unstable with the speed.
-  - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0318; the registration is
-    written by the implementation agent before any code.
+  - note: Structural solver, advanced tier (plan ADR 0310). PARTIAL. Size M. ADR 0472, 2026-11-14: rcfd_fem::gyro
+    (gyro::PENDING = None): the gyroscopic matrix G = 2 Omega C (skew bit for bit), the gyroscopic problem projected on
+    the F-396 modes at the speed (on the rest modes at a loss of stiffness) and solved by the quadratic eigensolver of
+    ADR 0450, split modes with growth, whirl number and direction, the split Campbell table tracked by the complex-line
+    tracker of ADR 0411 with the stability per speed and the unstable speeds; opt-in by RotatingOptions::coriolis,
+    without it the F-396 table bit for bit; cyclic models refused. G skew 0 and x^T G x 2.8e-18 of its absolute sum;
+    mass on springs 1.4e-15, the stiff block 2.7e-12 of it (also above w0, gyroscopically stable); thin ring split
+    5.1e-4 (n = 2) and 1.5e-3 (n = 3) of 4 n Omega/(n^2 + 1); radial beam flap 9.3e-8 of F-396, lag shift 0.96 percent
+    from the second-order estimate; tracks through a crossing with MAC 1 - 4e-16; anisotropic supports reported unstable
+    at 1.2 w0 with the growth within 2e-13; eight of eight mutations caught. Zero-speed frequencies against F-396 within
+    1e-13 on the block but missed on the ring (4.6e-10) and the beam (1.0e-10) against 1e-10: the F-396 rest eigenvalues
+    differ from their own vectors' Rayleigh quotients by up to 9e-10, and the split solve agrees with those quotients
+    within 3.4e-11. Follow-ups for the zero-speed comparison and for cyclic sectors. Stub ADR 0318.
 - [ ] **F-416** Flexible rotor on bearings in the stationary frame: whirl, critical speeds, unbalance response, joined to the rigid-rotor model
   - depends on: F-414, F-391, F-393
   - acceptance: Every limit not stated here is registered in the ADR before the run. At zero speed the frequencies equal

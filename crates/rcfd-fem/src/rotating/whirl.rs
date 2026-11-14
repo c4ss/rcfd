@@ -1090,7 +1090,7 @@ fn stationary_column(harmonic: usize, fam: &WhirlCampbell) -> Vec<Vec<Option<f64
 // ------------------------------------------------------------------------------------------------------------------------
 // D4: tracking and the table.
 
-enum Entry {
+pub(crate) enum Entry {
     Modes(WhirlModes),
     Loss(LossOfStiffness),
 }
@@ -1152,7 +1152,7 @@ impl Tracks {
     }
 }
 
-fn track_whirl(speeds: &[f64], entries: &[Entry], m: &CsrMatrix) -> WhirlCampbell {
+pub(crate) fn track_whirl(speeds: &[f64], entries: &[Entry], m: &CsrMatrix) -> WhirlCampbell {
     let mut tk = Tracks {
         ns: speeds.len(),
         tracks: Vec::new(),
