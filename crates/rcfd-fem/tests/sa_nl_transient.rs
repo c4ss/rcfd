@@ -179,7 +179,11 @@ fn l1_l1b_n1_load_factor_against_f398() {
     let runs: [(&str, Method, bool); 3] = [
         ("Newmark", Method::average_acceleration(), false),
         ("Newmark damped", Method::average_acceleration(), true),
-        ("generalised-alpha 0.8 damped", Method::GeneralisedAlpha { rho_inf: 0.8 }, true),
+        (
+            "generalised-alpha 0.8 damped",
+            Method::GeneralisedAlpha { rho_inf: 0.8 },
+            true,
+        ),
     ];
     for (name, method, damped) in runs {
         let (hn, hl) = bar_b_histories(&b, 1e-6, method, damped);
@@ -386,7 +390,11 @@ fn s0_s1_s2_free_spinning_bar() {
     };
     let steady = solve_with(&model, &prescribed, &[], &NewtonOptions::new(1), ext);
     let mut c = Checks::new();
-    c.holds("S0 steady spin solve", steady.is_ok(), &format!("{:?}", steady.as_ref().err()));
+    c.holds(
+        "S0 steady spin solve",
+        steady.is_ok(),
+        &format!("{:?}", steady.as_ref().err()),
+    );
     let u0 = steady.unwrap().result.displacement_values().to_vec();
     let mut v0 = vec![0.0; n];
     for (i, p) in nodes.iter().enumerate() {
@@ -503,10 +511,23 @@ fn a0_a1_g1_large_axial_oscillation_known_miss() {
     let mut c = Checks::new();
     c.at_least("A0 downward crossings of lambda = 1", n as f64, 5.0);
     c.holds("A0 the four end nodes equal at every step", same, "bits");
-    c.at_most("A1 period |T_FE/T_lin - 1.04074|/1.04074", (t_fe / t_lin() - ratio).abs() / ratio, 5e-3);
-    let mut ga = axial_integrator(&model, Method::GeneralisedAlpha { rho_inf: 1.0 }, dt, NewtonOptions::new(1));
+    c.at_most(
+        "A1 period |T_FE/T_lin - 1.04074|/1.04074",
+        (t_fe / t_lin() - ratio).abs() / ratio,
+        5e-3,
+    );
+    let mut ga = axial_integrator(
+        &model,
+        Method::GeneralisedAlpha { rho_inf: 1.0 },
+        dt,
+        NewtonOptions::new(1),
+    );
     let hg = nl_history(&mut ga, steps);
-    c.at_most("G1 generalised-alpha rho_inf = 1 against Newmark, axial", max_rel_diff(&hg, &hist), 1e-10);
+    c.at_most(
+        "G1 generalised-alpha rho_inf = 1 against Newmark, axial",
+        max_rel_diff(&hg, &hist),
+        1e-10,
+    );
     c.finish();
 }
 
@@ -546,7 +567,10 @@ fn same_state(a: &NlTransientState, b: &NlTransientState) -> bool {
         && bits(&a.a) == bits(&b.a)
         && bits(&a.internal_force) == bits(&b.internal_force)
         && a.states.len() == b.states.len()
-        && a.states.iter().zip(&b.states).all(|(x, y)| bits(x.values()) == bits(y.values()))
+        && a.states
+            .iter()
+            .zip(&b.states)
+            .all(|(x, y)| bits(x.values()) == bits(y.values()))
 }
 
 #[test]
@@ -555,7 +579,12 @@ fn h1_h2_halvings_and_the_error_with_the_time() {
     let dt = t_lin() / 200.0;
     let mut c = Checks::new();
     // H1: one correction is never confirmed by the energy criterion.
-    let mut it = axial_integrator(&model, Method::average_acceleration(), dt, NewtonOptions::new(1).max_iterations(1));
+    let mut it = axial_integrator(
+        &model,
+        Method::average_acceleration(),
+        dt,
+        NewtonOptions::new(1).max_iterations(1),
+    );
     let before = it.state().unwrap().to_bytes();
     match it.step() {
         Ok(r) => c.holds("H1 the step is refused", false, &format!("accepted: {r:?}")),
@@ -602,7 +631,8 @@ fn j2_model(cells: usize) -> SolidModel {
     let mesh = hex_box([0.0; 3], [1.0, 0.1, 0.1], [cells, 1, 1]).unwrap();
     let mut m = SolidModel::new(mesh);
     let base = Material::isotropic_elastic(E_STEEL, 0.3, RHO, 0.0).unwrap();
-    m.add_material("all", Material::j2(base, 2.0e8, 2.0e9, 1.0e9).unwrap()).unwrap();
+    m.add_material("all", Material::j2(base, 2.0e8, 2.0e9, 1.0e9).unwrap())
+        .unwrap();
     m.add_constraint(Constraint::displacement("all", 1, 0.0)).unwrap();
     m.add_constraint(Constraint::displacement("all", 2, 0.0)).unwrap();
     m.add_constraint(Constraint::displacement("xmin", 0, 0.0)).unwrap();
@@ -701,7 +731,11 @@ fn r0_r1_r2_g2_j2_bar_save_and_restore() {
     let mut ga = j2_integrator(&model, Method::GeneralisedAlpha { rho_inf: 1.0 });
     let hn = nl_history(&mut nm, 60);
     let hg = nl_history(&mut ga, 60);
-    c.at_most("G2 generalised-alpha rho_inf = 1 against Newmark, J2 bar", max_rel_diff(&hg, &hn), 1e-10);
+    c.at_most(
+        "G2 generalised-alpha rho_inf = 1 against Newmark, J2 bar",
+        max_rel_diff(&hg, &hn),
+        1e-10,
+    );
     c.finish();
 }
 
@@ -711,7 +745,10 @@ fn r0_r1_r2_g2_j2_bar_save_and_restore() {
 fn f1_refusals() {
     let mut c = Checks::new();
     let axial = axial_model();
-    let (ok, d) = refused_with(NlIntegrator::new(&axial, &[], &NlTransientOptions::new(0.0)), "time step");
+    let (ok, d) = refused_with(
+        NlIntegrator::new(&axial, &[], &NlTransientOptions::new(0.0)),
+        "time step",
+    );
     c.holds("F1 zero time step", ok, &d);
     let (ok, d) = refused_with(
         NlIntegrator::new(
@@ -727,14 +764,23 @@ fn f1_refusals() {
     linear
         .add_constraint(Constraint::linear(vec![LinearTerm::new(node, 0, 1.0)], 0.0))
         .unwrap();
-    let (ok, d) = refused_with(NlIntegrator::new(&linear, &[], &NlTransientOptions::new(1e-6)), "nl_transient");
+    let (ok, d) = refused_with(
+        NlIntegrator::new(&linear, &[], &NlTransientOptions::new(1e-6)),
+        "nl_transient",
+    );
     c.holds("F1 linear constraint (transformation path)", ok, &d);
     let mut moved = axial_model();
     moved.add_constraint(Constraint::displacement("xmax", 0, 1e-3)).unwrap();
-    let (ok, d) = refused_with(NlIntegrator::new(&moved, &[], &NlTransientOptions::new(1e-6)), "constraint");
+    let (ok, d) = refused_with(
+        NlIntegrator::new(&moved, &[], &NlTransientOptions::new(1e-6)),
+        "constraint",
+    );
     c.holds("F1 non-zero prescribed value", ok, &d);
     let short = LoadHistory::new(vec![0.0; 3], LoadTable::constant(1.0, 0.0, 1.0).unwrap());
-    let (ok, d) = refused_with(NlIntegrator::new(&axial, &[short], &NlTransientOptions::new(1e-6)), "load pattern");
+    let (ok, d) = refused_with(
+        NlIntegrator::new(&axial, &[short], &NlTransientOptions::new(1e-6)),
+        "load pattern",
+    );
     c.holds("F1 load pattern of the wrong length", ok, &d);
     let model = pendulum_model();
     let loads = [LoadHistory::model_loads(&model, LoadTable::constant(1.0, 0.0, 0.01).unwrap()).unwrap()];
@@ -751,7 +797,10 @@ fn f1_refusals() {
     let mut it = NlIntegrator::new(&j2, &[], &NlTransientOptions::new(J2_DT)).unwrap();
     let n = j2.dof_map().n_equations();
     let mut u0 = vec![0.0; n];
-    u0[j2.dof_map().equation(j2.mesh().node_set("xmax").unwrap()[0], 0).unwrap()] = 1e-4;
+    u0[j2
+        .dof_map()
+        .equation(j2.mesh().node_set("xmax").unwrap()[0], 0)
+        .unwrap()] = 1e-4;
     let (ok, d) = refused_with(it.start(0.0, &u0, &vec![0.0; n]), "initial state");
     c.holds("F1 J2 model from a non-zero displacement", ok, &d);
     let it = j2_integrator(&j2, Method::average_acceleration());
@@ -878,7 +927,11 @@ fn s0c_s1c_s2c_free_spinning_bar_known_miss() {
     };
     let steady = solve_with(&model, &prescribed, &[], &NewtonOptions::new(1), ext);
     let mut c = Checks::new();
-    c.holds("S0c steady spin solve", steady.is_ok(), &format!("{:?}", steady.as_ref().err()));
+    c.holds(
+        "S0c steady spin solve",
+        steady.is_ok(),
+        &format!("{:?}", steady.as_ref().err()),
+    );
     let u0 = steady.unwrap().result.displacement_values().to_vec();
     let mut v0 = vec![0.0; n];
     for (i, p) in nodes.iter().enumerate() {
@@ -967,9 +1020,22 @@ fn a0b_a1_g1_large_axial_oscillation() {
     let mut c = Checks::new();
     c.at_least("A0 downward crossings of lambda = 1", n as f64, 5.0);
     c.at_most("A0b spread of the four end nodes / 0.2 L", spread, 1e-11);
-    c.at_most("A1 period |T_FE/T_lin - 1.04074|/1.04074", (t_fe / t_lin() - ratio).abs() / ratio, 5e-3);
-    let mut ga = axial_integrator(&model, Method::GeneralisedAlpha { rho_inf: 1.0 }, dt, NewtonOptions::new(1));
+    c.at_most(
+        "A1 period |T_FE/T_lin - 1.04074|/1.04074",
+        (t_fe / t_lin() - ratio).abs() / ratio,
+        5e-3,
+    );
+    let mut ga = axial_integrator(
+        &model,
+        Method::GeneralisedAlpha { rho_inf: 1.0 },
+        dt,
+        NewtonOptions::new(1),
+    );
     let hg = nl_history(&mut ga, steps);
-    c.at_most("G1 generalised-alpha rho_inf = 1 against Newmark, axial", max_rel_diff(&hg, &hist), 1e-10);
+    c.at_most(
+        "G1 generalised-alpha rho_inf = 1 against Newmark, axial",
+        max_rel_diff(&hg, &hist),
+        1e-10,
+    );
     c.finish();
 }

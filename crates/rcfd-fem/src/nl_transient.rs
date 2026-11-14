@@ -177,7 +177,9 @@ impl NlTransientState {
             }
             let len = word(at) as u128;
             if (at as u128) + 1 + len > words as u128 {
-                return Err(state_error(format!("element {e}: {len} values beyond the end of the byte string")));
+                return Err(state_error(format!(
+                    "element {e}: {len} values beyond the end of the byte string"
+                )));
             }
             let len = len as usize;
             states.push(ElementState::new(vec_at(at + 1, len)));
@@ -322,7 +324,13 @@ impl Contribution for Inertia<'_> {
         "inertia"
     }
 
-    fn add(&self, u: &[f64], _load_factor: f64, force: &mut [f64], tangent: &mut Vec<(usize, usize, f64)>) -> Result<()> {
+    fn add(
+        &self,
+        u: &[f64],
+        _load_factor: f64,
+        force: &mut [f64],
+        tangent: &mut Vec<(usize, usize, f64)>,
+    ) -> Result<()> {
         let [am, af, beta, gamma] = self.kin.parameters;
         let h = self.kin.h;
         let (a1, v1) = self.kin.of(u);
@@ -396,7 +404,9 @@ impl Integrator {
         if let Some(i) = model.loads().iter().position(|l| matches!(l, Load::Temperature { .. })) {
             return Err(invalid(
                 "nl_transient",
-                format!("load {i}: a temperature load is not offered by the nonlinear transient integrator (ADR 0479 D6)"),
+                format!(
+                    "load {i}: a temperature load is not offered by the nonlinear transient integrator (ADR 0479 D6)"
+                ),
             ));
         }
         nonlinear::check_driver_model(model)?;
@@ -550,7 +560,10 @@ impl Integrator {
                 });
             }
             if let Some(e) = x.iter().position(|v| !v.is_finite()) {
-                return Err(invalid("initial state", format!("{key} {:e} at equation {e} is not finite", x[e])));
+                return Err(invalid(
+                    "initial state",
+                    format!("{key} {:e} at equation {e} is not finite", x[e]),
+                ));
             }
             if let Some(&(eq, _)) = self.fixed.iter().find(|&&(eq, _)| x[eq] != 0.0) {
                 return Err(invalid(
@@ -621,7 +634,11 @@ impl Integrator {
             }
         }
         if state.states.len() != self.layout.len()
-            || state.states.iter().zip(&self.layout).any(|(s, &k)| s.values().len() != k)
+            || state
+                .states
+                .iter()
+                .zip(&self.layout)
+                .any(|(s, &k)| s.values().len() != k)
         {
             return Err(state_error(format!(
                 "material states of {} elements that do not match the model's layout ({} elements)",
@@ -715,7 +732,11 @@ impl Integrator {
             let mut failed = false;
             for k in 0..parts {
                 let t_a = t_n + k as f64 * h;
-                let t_b = if k + 1 == parts { t_end } else { t_n + (k + 1) as f64 * h };
+                let t_b = if k + 1 == parts {
+                    t_end
+                } else {
+                    t_n + (k + 1) as f64 * h
+                };
                 match self.substep(h, t_a, t_b, &u, &v, &a, &fint, &states, contributions) {
                     Ok(x) => {
                         u = x.u;
@@ -843,7 +864,10 @@ impl Integrator {
         for e in 0..mesh.n_elements() {
             let nodes = mesh.element_nodes(e);
             let coords: Vec<Vec3> = nodes.iter().map(|&nd| mesh.nodes()[nd]).collect();
-            let ue: Vec<f64> = crate::assemble::element_dofs(&dofs, nodes).iter().map(|&q| s.u[q]).collect();
+            let ue: Vec<f64> = crate::assemble::element_dofs(&dofs, nodes)
+                .iter()
+                .map(|&q| s.u[q])
+                .collect();
             let el = element_for(mesh.element_kind(e));
             let material = &model.materials()[materials[e]].1;
             for ip in el.integration_points(&coords, el.stiffness_rule())? {
