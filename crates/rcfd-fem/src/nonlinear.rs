@@ -21,6 +21,10 @@
 //! * History (ADR 0475 D3): a material with history (J2, [`crate::mat_j2`]) gives the trial state of each point from the
 //!   committed state of the attempt with its stress; the attempt keeps the trial states of its latest evaluation and the
 //!   driver commits them on convergence ([`element_trial_state`] gives them for one element).
+//! * One attempt from a given state (ADR 0479 D2): [`solve_from`] runs the attempt of [`solve_with`] once, from a start
+//!   displacement and committed states, with a full load vector and contributions; the nonlinear transient step of
+//!   [`crate::nl_transient`] calls it with its inertia contribution. A contribution may ask to enter the reference of the
+//!   relative residual ([`Contribution::in_residual_reference`]); by default the reference is that of ADR 0404.
 
 use crate::assemble::{assemble_with, element_dofs};
 use crate::constraint::{check_rigid_body_motions, prescribed_equations, reduce, Prescribed};
@@ -53,7 +57,7 @@ struct Evaluation {
 }
 
 /// The displacement gradient `H = F - I`, `H_iJ = sum_a u_ai g_aJ`.
-fn displacement_gradient(grad: &[[f64; 3]], u: &[f64]) -> [[f64; 3]; 3] {
+pub(crate) fn displacement_gradient(grad: &[[f64; 3]], u: &[f64]) -> [[f64; 3]; 3] {
     let mut h = [[0.0; 3]; 3];
     for (a, g) in grad.iter().enumerate() {
         for (i, row) in h.iter_mut().enumerate() {
@@ -82,7 +86,7 @@ fn det3(f: &[[f64; 3]; 3]) -> f64 {
 
 /// The Green-Lagrange strain `(F^T F - I) / 2 = (H + H^T + H^T H) / 2` in Voigt order with engineering shear, from `H`
 /// without forming `F^T F - I` (ADR 0404 amendment 1: the rounding is relative to `H`, not to 1).
-fn green_lagrange(h: &[[f64; 3]; 3]) -> [f64; 6] {
+pub(crate) fn green_lagrange(h: &[[f64; 3]; 3]) -> [f64; 6] {
     let e = |i: usize, j: usize| h[i][j] + h[j][i] + h[0][i] * h[0][j] + h[1][i] * h[1][j] + h[2][i] * h[2][j];
     [0.5 * e(0, 0), 0.5 * e(1, 1), 0.5 * e(2, 2), e(0, 1), e(1, 2), e(2, 0)]
 }
@@ -298,7 +302,7 @@ fn check_model(model: &SolidModel) -> Result<()> {
     Ok(())
 }
 
-fn check_driver_model(model: &SolidModel) -> Result<()> {
+pub(crate) fn check_driver_model(model: &SolidModel) -> Result<()> {
     check_model(model)?;
     if crate::mpc::uses_transformation(model) {
         return Err(FemError::InvalidValue {
@@ -544,6 +548,8 @@ struct Attempt {
     states: Vec<ElementState>,
     residuals: Vec<f64>,
     energies: Vec<f64>,
+    /// The internal force of the converged iterate, without the contributions (ADR 0479 D2).
+    fint: Vec<f64>,
 }
 
 fn norm(v: impl Iterator<Item = f64>) -> f64 {
@@ -561,6 +567,12 @@ pub trait Contribution {
     /// equations. Triplets off the tangent's pattern extend it.
     fn add(&self, u: &[f64], load_factor: f64, force: &mut [f64], tangent: &mut Vec<(usize, usize, f64)>)
         -> Result<()>;
+    /// Whether the reference of the driver's relative residual is also at least the norm of this contribution's force and
+    /// of the internal force without the contributions (ADR 0479 D2: an inertia force that balances the internal force of
+    /// a free body). `false` (the default) keeps the reference of ADR 0404.
+    fn in_residual_reference(&self) -> bool {
+        false
+    }
 }
 
 /// The step-control hook of the Newton driver (ADR 0440 D7): it sets the load factor each attempt aims at and is told the
@@ -619,19 +631,28 @@ pub fn add_triplets(a: &mut CsrMatrix, triplets: &[(usize, usize, f64)]) {
     *a = CsrMatrix::from_triplets(n, all);
 }
 
-/// The contributions at `u` and `load_factor`: the force added to `fint` and the triplets to `k` (if given).
+/// The contributions at `u` and `load_factor`: the force added to `fint` and the triplets to `k` (if given). Returns the
+/// extra reference of the relative residual (ADR 0479 D2): if a contribution is in the reference, the largest of the norm
+/// of `fint` on entry and of the forces of those contributions, else 0.
 fn contribute(
     contributions: &[&dyn Contribution],
     u: &[f64],
     load_factor: f64,
     fint: &mut [f64],
     k: Option<&mut CsrMatrix>,
-) -> std::result::Result<(), String> {
+) -> std::result::Result<f64, String> {
     let mut triplets = Vec::new();
+    let mut reference = 0.0f64;
+    if contributions.iter().any(|c| c.in_residual_reference()) {
+        reference = norm(fint.iter().copied());
+    }
     for c in contributions {
         let mut force = vec![0.0; u.len()];
         c.add(u, load_factor, &mut force, &mut triplets)
             .map_err(|e| format!("contribution '{}': {e}", c.name()))?;
+        if c.in_residual_reference() {
+            reference = reference.max(norm(force.iter().copied()));
+        }
         for (a, b) in fint.iter_mut().zip(&force) {
             *a += b;
         }
@@ -639,7 +660,7 @@ fn contribute(
     if let Some(k) = k {
         add_triplets(k, &triplets);
     }
-    Ok(())
+    Ok(reference)
 }
 
 /// The per-element layout of the material states of a model (ADR 0440 D3): per element the number of points of its
@@ -729,12 +750,21 @@ impl Problem<'_> {
             // The trial states: a material with history updates them, always from the committed states (ADR 0475 D3);
             // the linear material has none (D5).
             let (mut fint, mut kt, trial) = force_and_tangent(self.model, &u, states_c, o.threads).map_err(classify)?;
+            // ADR 0479 D2: the internal force without the contributions is kept for the converged iterate, and a
+            // contribution may extend the reference of the residual.
+            let mut elastic = None;
+            let mut extra_reference = 0.0;
             if !self.contributions.is_empty() {
-                contribute(self.contributions, &u, lt, &mut fint, Some(&mut kt)).map_err(Failure::Other)?;
+                elastic = Some(fint.clone());
+                extra_reference =
+                    contribute(self.contributions, &u, lt, &mut fint, Some(&mut kt)).map_err(Failure::Other)?;
             }
             let rfull: Vec<f64> = self.f.iter().zip(&fint).map(|(fi, gi)| lt * fi - gi).collect();
             let rn = norm(self.free.iter().map(|&i| rfull[i]));
-            let reference = norm(self.free.iter().map(|&i| lt * self.f[i])).max(norm(fint.iter().copied()));
+            let mut reference = norm(self.free.iter().map(|&i| lt * self.f[i])).max(norm(fint.iter().copied()));
+            if extra_reference > 0.0 {
+                reference = reference.max(extra_reference);
+            }
             let r = if reference > 0.0 { rn / reference } else { rn };
             if !r.is_finite() {
                 return Err(Failure::Other(format!("non-finite residual at iteration {k}")));
@@ -746,6 +776,7 @@ impl Problem<'_> {
                     states: trial,
                     residuals,
                     energies,
+                    fint: elastic.unwrap_or(fint),
                 });
             }
             if k == o.max_iterations {
@@ -974,4 +1005,97 @@ pub fn solve_with(
         steps: records,
         states,
     })
+}
+
+/// The outcome of [`solve_from`]: the converged displacement, the trial states of the converged iterate (to be committed by
+/// the caller), the internal force there without the contributions, and the residuals and energies of the iterations.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Equilibrium {
+    /// The displacement, one value per equation.
+    pub u: Vec<f64>,
+    /// The element states of the converged iterate, from the committed states given.
+    pub states: Vec<ElementState>,
+    /// The internal force at `u` with those states, without the contributions.
+    pub internal_force: Vec<f64>,
+    /// The relative residuals of the iterations, the last one at convergence.
+    pub residuals: Vec<f64>,
+    /// The energies of the corrections.
+    pub energies: Vec<f64>,
+}
+
+/// One attempt of the Newton driver (ADR 0479 D2): `f_int(u) + sum of the contributions(u) = load` on the free equations,
+/// from the displacement `start` and the committed element `states`, the model's prescribed equations and `prescribed`
+/// held at their values (load factor 1 from 1: `start` must carry them). The iteration is the attempt of [`solve_with`]
+/// (ADR 0404 D5 step 4) with its convergence criteria and options (`options.steps` and `options.max_halvings` are not
+/// used: one attempt, no halving). The prescribed equations need not remove the rigid-body motions (a contribution such as
+/// an inertia term may make the tangent regular); a singular tangent is refused by the pivot test. A failed attempt gives
+/// the located inversion (`FemError::Element`, key `"deformation gradient"`) or `FemError::Solver { solver: "newton" }`
+/// with the cause.
+pub fn solve_from(
+    model: &SolidModel,
+    prescribed: &[Prescribed],
+    load: &[f64],
+    start: &[f64],
+    states: &[ElementState],
+    options: &NewtonOptions,
+    contributions: &[&dyn Contribution],
+) -> Result<Equilibrium> {
+    model.validate()?;
+    model.check_supported_nonlinear()?;
+    check_driver_model(model)?;
+    options.check()?;
+    check_fields(model, start, states)?;
+    let n = model.dof_map().n_equations();
+    if load.len() != n {
+        return Err(FemError::FieldLength {
+            key: "load vector",
+            expected: n,
+            found: load.len(),
+        });
+    }
+    for (key, x) in [("load vector", load), ("displacement", start)] {
+        if let Some(i) = x.iter().position(|v| !v.is_finite()) {
+            return Err(FemError::InvalidValue {
+                key,
+                reason: format!("value {:e} at equation {i} is not finite", x[i]),
+            });
+        }
+    }
+    let fixed = prescribed_equations(model, prescribed)?;
+    if let Some(&(eq, v)) = fixed.iter().find(|&&(eq, v)| start[eq].to_bits() != v.to_bits()) {
+        return Err(FemError::InvalidValue {
+            key: "displacement",
+            reason: format!(
+                "the start has {:e} at the prescribed equation {eq} (prescribed {v:e}): it must carry the prescribed values",
+                start[eq]
+            ),
+        });
+    }
+    let mut is_fixed = vec![false; n];
+    for &(eq, _) in &fixed {
+        is_fixed[eq] = true;
+    }
+    let free: Vec<usize> = (0..n).filter(|&i| !is_fixed[i]).collect();
+    let problem = Problem {
+        model,
+        f: load.to_vec(),
+        fixed,
+        free,
+        options,
+        contributions,
+    };
+    match problem.attempt(start, 1.0, 1.0, states) {
+        Ok(a) => Ok(Equilibrium {
+            u: a.u,
+            states: a.states,
+            internal_force: a.fint,
+            residuals: a.residuals,
+            energies: a.energies,
+        }),
+        Err(Failure::Inverted(e)) => Err(e),
+        Err(Failure::Other(cause)) => Err(FemError::Solver {
+            solver: "newton",
+            reason: cause,
+        }),
+    }
 }
