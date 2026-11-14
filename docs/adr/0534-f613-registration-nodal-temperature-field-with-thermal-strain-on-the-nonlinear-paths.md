@@ -333,3 +333,126 @@ nothing otherwise. Without a field, and with a field without expansion (D5's dam
 attempt is unchanged: UB1, UB2 and B1 are not affected. No limit, check, set-up or mutation of the registration changes. One
 mutation is added: MU13, the thermal reference left out, expected to be caught by FE1 (the attempt of the held step does not
 converge: the run is refused).
+
+## Addendum 1: results (2026-11-14)
+
+Registered run: commit af90373f (the library code with amendment 1, the checks), `cargo test -p rcfd-fem --release --test
+sa_temp_field -- --nocapture --test-threads=1`, log `f613-scratch/run1.log`; each check ran once. The bit record B1 was printed
+on the unchanged base 679081a1 (`f613-scratch/b1-base.log`) and written into the test at commit fcc8e75c, before any library
+code. One check missed (FE1c); the test that held it was then split (commit e8635e97): the registered function is kept as the
+ignored record `fe1c_the_step_without_halving_known_miss` with its limit intact, and a companion test with the same set-up runs
+the checks of that function that were met (FE1, FE1s, FE2, HB1, HB1u) and prints FE1c without asserting its halving clause
+(`f613-scratch/run2.log`; deterministic, the same numbers as `run1.log`).
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| FE1 free expansion under the temperature step, `|u - alpha dT X|/L` | `<= 1e-12` | `3.469e-18` | yes |
+| FE1s internal forces `/(E a L^2)` | `<= 1e-10` | `7.250e-17` | yes |
+| FE1c set-up: `u = 0` at `t = 0`, 4 entries, no halving | exact, no halving | `u(0) = 0`, 4 entries; **step 1 halved twice** (4 sub-steps, 12 corrections) | **no** (known miss) |
+| FE2 ramp, the step-end rule | `<= 1e-12` | `3.469e-18` | yes |
+| HB1 held cube, face force against `-E/(1 - 2 nu) (theta^2 - 1)/(2 theta)` (`-4.975247524752e9 Pa`) | `<= 1e-10` | `7.667e-16` | yes |
+| HB1u held cube `max |u|/(a L)` | `<= 1e-12` | `3.745e-16` | yes |
+| TG1 tangent with a field against the central difference | `<= 1e-6` | `4.245e-11` | yes |
+| LIN-h Hex8 against the linear thermal solve | `<= 1e-4` | `5.421e-7` | yes |
+| LINo-h `e(A)/e(A/2)` | `[1.8, 2.2]` | `2.000` | yes |
+| LIN-t Tet10 against the linear thermal solve | `<= 1e-4` | `1.159e-6` | yes |
+| LINo-t | `[1.8, 2.2]` | `2.000` | yes |
+| UB1 uniform field without expansion, driver, bits of ADR 0526 S2 | bits | equal (101 step ends) | yes |
+| NCU the same field with `alpha = 1e-5` | `>= 1e-3` | `0.2701` | yes |
+| UB2 uniform field without expansion, integrator, bits of ADR 0526 V2T run A | bits | equal (800 steps, values and bytes; halvings 0, 0) | yes |
+| FEi integrator at the thermal equilibrium, 50 steps | `<= 1e-12` | `2.672e-18` | yes |
+| V3T non-uniform field step against the restart, 40 steps | bits, no halving | equal (values and bytes), halvings 0 and 0 | yes |
+| NC3 the step run against the constant `F1` | `>= 1e-2` | `0.3139` | yes |
+| RF4 seventeen refusals | each with its key | all seventeen; the run beyond the field leaves the time at 0 | yes |
+| N1 B1, 12 digests of 679081a1 | equal | equal | yes |
+| N5 `cargo test -p rcfd-fem --release` (every default-bits file and the tests of the crate) | pass | 926 passed, 0 failed, 262 ignored over 216 test binaries and doc-test sets (`f613-scratch/fem-all.log`) | yes |
+| N4 `baseline_hashes` | pass | 3 passed, 1 ignored | yes |
+
+Other runs: `cargo clippy -p rcfd-fem --all-targets --release -- -D warnings`: clean; `cargo fmt -p rcfd-fem --check`: clean;
+`cargo test -p rcfd-cli --release --test docs_site`: 2 passed. Not run: the workspace test suite (the lead's gate).
+
+**Diagnosis of FE1c** (a scratch probe on the tip, not a registered run; disclosed): the attempt of the full step from `u = 0`
+to the field `T_ref + 100 K` (`a = 1e-2`) without halving is refused by the pivot test of the reduced tangent (pivot `-2.17e10`
+at node 5 component 2, diagonal `4.49e10`). At `u = 0` the heated, not yet expanded cube carries the hydrostatic compression `S
+= -4.98e9 Pa` (HB1's closed form); its geometric stiffness `S : delta^2 E` is negative along the near-rigid rotations of the
+3-2-1-held body (an infinitesimal rotation `W` changes `E` at second order by `W^T W/2`), and at `|S|/E = 2.5e-2` it outweighs
+the material stiffness of the support-restrained rotations. The driver halves the sub-step (the field is linear in time between
+the table's points, so the halved sub-steps take intermediate temperatures, the step-end rule of D3) and the quarter steps
+converge; the result is the free expansion to `3.5e-18`. The miss is the start of Newton at the prestressed reference, not the
+thermal strain: the multiplicative split, the interpolation and the step-end rule are each met by their own checks. A thermal
+predictor (start the attempt at `u_c` plus the free expansion increment of the field) would remove it; it is proposed as a
+follow-up, not tuned here. The same probe showed that the default energy tolerance `1e-10` cannot be met at a held step of a
+stress-free body (the energy ratio is rounding, `0.75`): the checks use `tight()` of ADR 0499 (energy tolerance 1), as
+registered.
+
+**Mutations** (`f613-scratch/mutate.py`, a git-archive copy of e8635e97 per mutation, target `target-f613-mut`, log
+`mutations.log`; MU0, the copy without a mutation, passes 7 of 7 with the record ignored):
+
+| Id | Caught by |
+|---|---|
+| MU1 additive Green-Lagrange | FE1 (`4.951e-5`, probe `4.951e-5`), FE2 (`4.951e-5`), HB1 (`4.98e-3`), FEi (`7.40e-5`) |
+| MU2 `S = S_e` | HB1 (`9.901e-3`, probe `9.90e-3`), TG1 (`5.69e-3`) |
+| MU3 `D = D_e` | TG1 (`5.70e-3`) |
+| MU4 element-mean temperature | LIN-h (`0.837`), LIN-t (`0.630`), LINo (`1.000` both) |
+| MU5 driver at the step-start field | UB1 (first differing step end 51); the FE1 run refused (its first step at `T_ref`, then the whole jump at once, not converged after the halvings; FE2 not reached) |
+| MU6 integrator at the step-start field | V3T (first differing step 20), UB2 (step 400) |
+| MU7 reference ignored | FE1 (run refused), FEi (`4.24e-2`), LIN-h (`2.9e3`), LIN-t (`1.3e3`), LINo (`0.5`) |
+| MU8 the uniform-element shortcut removed | UB1 (step end 1), UB2 (step 0): not equivalent |
+| MU9 driver coverage check removed | RF4 (the run is accepted and fails in the solver instead of the refusal) |
+| MU10 field length check removed | RF4 (an index panic in `thermal.rs`) |
+| MU11 integrator run coverage removed | RF4 (the `expect` of `FieldAt::of` panics) |
+| MU12 integrator sub-step without the field | FEi (`1.52e-2`), NC3 (`0`), UB2 (the shifted material refused without a temperature) |
+| MU13 thermal reference left out (amendment 1) | FE1 (run refused: not converged), FEi and LIN (runs refused) |
+| E1 `K_0` with the thermal strain (equivalent) | not caught, as registered |
+
+Every counted mutation MU1 to MU7 and MU9 to MU13 was caught; MU8 was caught too; E1 was not, as registered.
+
+**Deviations.** (1) Amendment 1 (the residual reference with a field), written and committed before any run. (2) FE1c missed:
+the registered function became the ignored record `fe1c_the_step_without_halving_known_miss`, and a companion test runs its met
+checks. (3) MU5 was caught by UB1 and by the refusal of the FE1 run, not by the FE2 measure as registered (FE2 is not reached
+once the FE1 run fails in the same function). (4) The refused outcomes of MU5, MU7, MU12, MU13 show as a panic at an `unwrap` of
+the set-up rather than a printed MISSED line.
+
+**Decision by the registered rule: partial.** B1, the default-bits files and the baseline hashes are unchanged, FE1, UB1 and
+UB2 are met, every counted mutation is caught, fmt and clippy are clean; FE1c is missed and recorded as a `*_known_miss` test
+with its diagnosis. Every clause of the acceptance (a1 to a5) is met; the miss is a registered set-up clause (no halving of the
+step) beyond the acceptance.
+
+### Remaining questions
+
+1. **A thermal predictor for the start of an attempt** (FE1c). Options: (a) leave: the driver halves and converges; (b) start
+   each attempt with a field at `u_c + delta u_th`, the free expansion increment of the field change, opt-in. Recommendation:
+   (b) as a follow-up, with FE1c as its check.
+2. **The damping tangent with a field** (D5, E1). Taken without the thermal strain; no run distinguishes the two. Options: (a)
+   leave; (b) the tangent at the thermally strained state. Recommendation: (a).
+3. **The strain energy with a field** (refused). Options: (a) refused; (b) `sum_q w_q theta^3 W_e(E_e)` of the multiplicative
+   split. Recommendation: (b) when a dynamic thermal case needs an energy check.
+4. **Shells, the F-bar Hex8, the energy-momentum step** with a field (refused). Recommendation: follow-ups when a case needs
+   them; the F-bar Hex8 first (the same point evaluation at `E_bar`).
+5. **Case-file key.** Not added. Recommendation: `temperature_field = { reference, times, fields }` (or a file reference) in the
+   quasi-static time study and the nonlinear transient study, when the case file is opened to the nonlinear studies.
+
+Shared solver files changed (line ranges at e8635e97 against 679081a1): `nonlinear.rs` 57 (import), 142-175 (`evaluate`
+forwards to `evaluate_with`), 225-236 (the point call with a field), 315-354 (`thermal_point_update`), 932-999
+(`internal_force_with_field`, `tangent_with_field`, `checked_field`, `element_field`, `internal_force_field`), 1007, 1020, 1028
+(the element field in the assembled force), 1058-1070 (`tangent_field`), 1082, 1107-1118 (the field in `force_and_tangent`),
+1476-1477 (`Problem::field`), 1511-1521 and 1542-1544 (amendment 1), 1526, 1763, 1855, 2096 (the field passed), 2023-2049
+(`solve_from_field`), 2130-2132, 2144, 2167-2172, 2183-2190 (`TimeSteppingOptions::temperature_field`), 2301-2306 (doc),
+2345-2357, 2382-2383, 2408-2409 (the driver); `nl_transient.rs` 23-26 (doc), 48 (import), 100-103, 122, 157-162 (the option),
+352-355 (stored), 564-581 (refusals), 649-663 (`K_0` at the field), 695-696, 725-735 (coverage), 788-814 (`damping_at`),
+886-890 (`start`), 1156-1168 (`substep`), 1213-1218 (`strain_energy`); `thermal.rs` 162-363 (new: `TemperatureFieldHistory`,
+`FieldAt`, `point_temperature`, `check_field_model`). No edit of the files of F-595, F-603 or F-615; `lib.rs` not edited.
+
+## For the lead: roadmap entries
+
+Proposed status of F-613: **partial**. Proposed note:
+
+> Structural solver, advanced tier. Optional. Follow-up of F-592. PARTIAL. ADR 0534, 2026-11-14: the quasi-static driver and the nonlinear transient integrator take a nodal temperature field against time (thermal::TemperatureFieldHistory: a reference temperature and nodal fields at times, each node by the rule of LoadTable::value; TimeSteppingOptions::temperature_field, NlTransientOptions::temperature_field, taken at the end time of every attempt or sub-step) with the multiplicative thermal stretch F_th = (1 + alpha dT) I (E_e = (E - E_th)/theta^2, S = theta S_e, D = D_e/theta), the point temperature by the element's shape functions (exact for a uniform element), the damping tangent at the field without thermal strain, the thermal force in the residual reference; refused with shells, BBar blocks, the energy-momentum step and for the strain energy. Met: free expansion of a 3-2-1 cube under a step of 100 K at alpha = 1e-4 equal to alpha dT X within 3.5e-18 (the additive Green-Lagrange form would miss by 5e-5); the held cube's stress -E/(1 - 2 nu)(theta^2 - 1)/(2 theta) within 7.7e-16; the consistent tangent (4.2e-11); the small-strain limit against the linear thermal path on Hex8 and Tet10 (5.4e-7, 1.2e-6, order 2.000); a uniform field without expansion gives the bits of ADR 0526 on the driver and the integrator; the integrator at the thermal equilibrium (2.7e-18) and under a non-uniform field step bit-equal to a restart; default bits (12 digests) and baseline hashes unchanged; 13 mutations caught. Known miss: the full step from u = 0 halves twice (indefinite tangent at the prestressed start, FE1c); follow-up proposed (a thermal predictor). No case-file key.
+
+Note for F-592 (to append to its note):
+
+> A nodal temperature field with thermal strain on both paths: F-613 (ADR 0534, 2026-11-14); a uniform field without expansion gives the bits of this item.
+
+Follow-up (optional, not added). Title: "A thermal predictor for the attempts of the nonlinear paths with a temperature field". Deps: F-613. Acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. With an opt-in thermal predictor each attempt with a temperature field starts at the committed displacement plus the free thermal expansion increment of the field's change; the free expansion of ADR 0534 FE1 (a step of alpha dT = 1e-2 from u = 0) converges without halving and equals alpha dT within 1e-12, and runs without the predictor keep the bits of ADR 0534.
