@@ -257,3 +257,99 @@ eigenvalues are not improved by the refinement (no Rayleigh quotient), so the re
 Clusters wider than `r_c = 1e-9` and narrower than the separation of three solves (`~1e-9 .. 1e-8` relative to the eigenvalue
 error) are not specially treated. Eigenvalue multiplicities that ADR 0428 does not return (a second copy not found by its Krylov
 space) cannot be refined into existence.
+
+## Addendum 1: results (2026-11-14)
+
+**Code.** New: `crates/rcfd-fem/src/rotating/whirl/state/arnoldi/refine.rs` (the band LU with partial pivoting, the clusters,
+the inverse iteration, the unit test K2) and `crates/rcfd-fem/tests/si_rotating_whirl_state_refine.rs` (three tests; set-ups
+and helpers copied from `si_rotating_whirl_state_sparse.rs`). Edited: `rotating/whirl/state/arnoldi.rs` (the field `refine`,
+default `false`, and the builder `.refine(on)`; `mod refine;`; `residual` now a wrapper over `residual_of` with the same
+operations; one `if opts.refine` call after the modes are formed). No other file of `rcfd-fem` is touched; no new crate, no
+`unsafe`, no hash table or golden edited.
+
+**Runs.** Commit `ca2059ac`, release. K2 (`rotating::whirl::state::arnoldi::refine::tests::k2a_k2b_clusters`) was first run
+inside `cargo test --lib rotating::whirl::state` without `--nocapture` (passed, nothing printed), then once more with
+`--nocapture` for its numbers (`f520-scratch/run_k2.log`; deterministic, the same code). The integration file once
+(`f520-scratch/run1.log`). B2: the F-519 file (`b2_f519_suite.log`) and its ignored record once with `--ignored`
+(`b2_known_miss.log`). R2: `r2_lib.log`, `r2_post.log`.
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| A1 registration first | holds | `2e9325cd` alone before any code | yes |
+| **Q1R** cube residuals, refined (14 solves, 84 modes) | `<= 1e-8` | **2.24e-10** (the divergence 99.589 of CBA 1.1 at `sigma_b`; the far elastic modes `<= 8.0e-13`) | yes |
+| E1R eigenvalues against the dense state solver | `<= 1e-9` | 1.59e-10 (as ADR 0428 E1, by B1) | yes |
+| F1R flags | equal, each; as AN3 | equal; as AN3 | yes |
+| B1 bitwise equality but for the modes (cube, N3C, PM, RND) | equal, each | equal in every solve | yes |
+| B2 F-519 tests unedited | pass; record prints 8.466e-8 | 4 passed, 1 ignored; the record prints `Q1 cube residuals: 8.466e-8` and fails as recorded | yes |
+| K1 own vector (84 modes, 3 far per solve) | `<= 1e-8`; `>= 3` far | 3.3e-16; 3 far in each of the 14 solves | yes |
+| W1R whirl numbers (84 modes) | `<= 1e-6` | 1.5e-12 | yes |
+| K2a exact doubles (4) | `<= 1e-8`; `<= 1e-6` | residual 1.4e-15; `|phi_a^H M phi_b|` 1.1e-16 | yes |
+| K2b near pairs (smallest relative distance 2.8e-4) | `<= 1e-8`; `<= 1e-6` | 1.8e-15; 1.1e-33 | yes |
+| K3 N3C clusters | `<= 1e-8`; `<= 1 - 1e-3`; `>= 1` cluster | 6.5e-13; `|cos|` 4.1e-17; 4 clusters (the divergence double and the elastic double at each shift) | yes |
+| Q2 PM and RND residuals, refined | `<= 1e-8` | 1.8e-15 | yes |
+| R2 the two test files, the `rotating::whirl::state` unit tests; `cargo check -p rcfd-post --tests` | pass | pass (3 + 4 + 4 tests; check clean) | yes |
+| N1R unrefined cube residuals | `> 1e-8` | 8.466e-8 | as expected |
+| N2R far modes against the neighbours' dense vectors (6 pairs) | `1 - |cos| > 1e-3` | 1.0 (smallest over the 6) | as expected |
+
+**Mutations** (`f520-scratch/mutate.py` on the `git archive` copy `f520-scratch/mut` of `ca2059ac`, each run once,
+`mut_1..6.log`, summary `mutations_run.log`): 6 of 6 caught.
+
+| # | Mutation | Caught by |
+|---|---|---|
+| 1 | refinement skipped | Q1R (8.466e-8) |
+| 2 | cluster Gram-Schmidt removed | K2a (`|phi_a^H M phi_b|` 1.0) |
+| 3 | factor at `-rho` | Q1R (1.0), K1 (1.0), W1R (2.0), Q2 (1.0), K2a (residual), N2R (0, not as expected) |
+| 4 | `s G` dropped from `Q(rho)` | Q1R (0.93), K1 (0.66), W1R (0.82), Q2 (0.93), K2a (residual 0.55) |
+| 5 | Gram-Schmidt coefficient without conjugate | K2a (`|phi_a^H M phi_b|` 1.0) |
+| 6 | refinement forced on | B2 (the record prints 2.236e-10 and passes), N1R (2.2e-10, not as expected) |
+
+`cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean (both before the run; one
+`type` alias for clippy's complex-type lint and the rustfmt layout were applied before commit `ca2059ac`). `baseline_hashes` was
+not run: the only shared-path edit is in the F-519 solver, which no case file, CLI or hash-table path calls, and with
+`refine(false)` its bytes are unchanged (B2).
+
+### Deviations
+
+- B2's registered text says "the five tests ... that are not ignored"; the file has five tests of which four are not ignored
+  and one is the record. All four pass and the record behaves as recorded; the wording was wrong, not the limit.
+- The registration expected ADR 0428's unrefined copies in N3C to be nearly parallel (an information print, not asserted):
+  they were not (`|cos|` 1.3e-3 and 1.2e-3 for the divergence doubles, 0.72 and 0.22 for the elastic doubles). On the cube the
+  Gram-Schmidt is therefore not what keeps them independent; K2a (the same start vector) is where it is exercised. So mutations
+  1 and 2 were not caught by K3 as planned; they were caught by Q1R and K2a, both registered.
+- Q1R measured 2.24e-10, slightly above the estimate `<= 2e-10`: the floor of D1 was derived for elastic modes (`||K phi|| ~
+  |rho|^2 ||M phi||`); for the divergence the denominator is smaller relative to `|(2 rho M + G) phi|`. Within the limit by 45x.
+- The RND problems' returned modes are all imaginary at their shift (printed), so a non-imaginary complex `rho` is exercised
+  only by K2 (the quartet `+/- 0.646 + 0.135 i`), a real `rho` by PMA and the CBA divergences.
+- K2 was run twice (see Runs); nothing was changed between the runs.
+
+### What was not run
+
+The workspace suite (house rules); `baseline_hashes` (reason above); the disc sector, its full rotor and the ring MP with
+`refine(true)` (limits); no timing check.
+
+### Decision
+
+**done**, by the decision rule: A1 to R2 met, N1R and N2R as expected, 6 of 6 mutations caught by registered checks, no
+amendment. Every refined mode residual on the cube is at most 2.24e-10 (the far elastic modes at most 8.0e-13, against
+8.466e-8 unrefined); the eigenvalues and flags are bitwise those of ADR 0428 (E1 1.59e-10, flags as AN3).
+
+### Remaining questions
+
+1. **Default.** Should `refine` become the default of `SparseStateOptions`? Options: (a) keep opt-in; (b) default on (changes
+   the default mode vectors of F-519; no hash table or golden is affected). Recommendation: (b) once the maintainer agrees,
+   since the refined vectors are the accurate ones and the cost is one band factor per mode; until then (a), as the house rule
+   on defaults requires. Not taken: it changes a default result.
+2. **Large parts.** The band LU on the ring MP (2112 unknowns) is not measured. Options: measure it in the item that routes
+   `WhirlSolver::Auto` to the sparse state solver; add a check now. Recommendation: measure it there.
+
+## For the lead: roadmap entries
+
+**F-520**, proposed status: done.
+
+> ADR 0442, 2026-11-14: opt-in refinement (SparseStateOptions::refine) of every sparse whirl state mode by three inverse iterations on Q(s) at its own eigenvalue, with a complex band LU with partial pivoting on the RCM order and M-Gram-Schmidt within clusters of eigenvalues equal to 1e-9; on the cube at both shifts with count 6 every mode residual at most 2.2e-10 (far elastic modes 8.0e-13, against 8.5e-8 unrefined), eigenvalues and flags bitwise those of ADR 0428 (1.6e-10 against the dense solver, flags equal); exact doubles kept apart; 6 of 6 mutations caught.
+
+**F-519**, status unchanged (partial); new note:
+
+> ADR 0428, 2026-11-14: sparse whirl state solver (isotropic shift-invert Arnoldi on (C^2 + sigma)^-1, one skyline factor with K_eff - sigma M blocks); eigenvalues against the dense state solver within 1.6e-10 on the cube and 4.4e-12 on the disc sector, flags equal; the 2112-unknown ring above the cap matches the dense sector union to 3.3e-13; Q1 of the cube missed (8.5e-8 against 1e-8, far elastic mode vectors, diagnosed); 8 of 8 mutations caught. The far-mode vectors are refined by the opt-in option of F-520 (ADR 0442, 2026-11-14).
+
+No follow-up items.
