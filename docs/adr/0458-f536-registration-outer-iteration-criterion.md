@@ -187,3 +187,144 @@ the 8-outer Ao runs (`8 x steps`), the observed order of the three levels per pa
 * The B4 estimate and `lag_preflight` of a step with the criterion use the cap's count of outer iterations (C2).
 * No case key (a schema golden change); not the default.
 * The stable default runs (ADR 0451 A5, A6) are not repeated: `|R_c - R_d|` is not part of F-536's acceptance.
+
+## Addendum 1: results (2026-11-14)
+
+Commits on `f536-work`: `07137375` (this registration), `8c1d5366` (the library change and the registered tests; every
+registered run was made on it), `67e46750` (FCk renamed `fck_channel_outer_criterion_known_miss`, the name only), `4e66b082`
+(`cargo fmt` of the test lines, layout only), and the last commit (the topic documentation, this addendum). Every run in release
+(`CARGO_TARGET_DIR=f536-scratch/target`); logs in `w49i-work/f536-scratch` (`run1_fv_e.log`, `run2_fast.log`, `run3_fck.log`,
+`diag1.log`, `mutlogs/`, `clippy.log`, `baseline_hashes.log`, `fv_suite.log`, `docs_site.log`). No amendment was made.
+
+**The library change** (`crates/rcfd-fv/src/pimple.rs`, all opt-in): `PimpleSettings::outer_pressure_tolerance` (default `None`
+in `piso`), `OuterRecord`, `PimpleSolver::outer_record` (empty in `new` and `scratch`), and in the outer loop of `step_with`
+`last = outer + 1 == s.n_outer || final_next`, a copy of the pressure at the start of an outer iteration only with `Some`, the
+`break` after the final iteration and the ratio `c_k` (only with `Some`), and the record pushed at the end of a completed step
+(only with `Some`). With `None`, `final_next` stays `false` and the loop is the old one.
+
+### Results
+
+| Check | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| K1 every step met before the cap, `N = 25, 50, 100` | every step `met`, `used < 50` | 10 of 250 steps at `N = 25` and 10 of 250 at `N = 50` used 50 (the criterion met at iteration 49, `c_49 = 9.7e-4`); `N = 100` every step (max 33) | **no** (`fck_channel_outer_criterion_known_miss`) |
+| A1k bounded, `D = 100.5, 50.3, 25.1` (`C = 10, 5, 3`) | bounded | bounded; max `|u|` `1.490, 1.493, 1.496 V0` | yes |
+| A2k periodic | `<= 1e-6` | `4.5e-12`, `2.7e-12`, `3.0e-10` | yes |
+| A3k against `Z_dt`, `N = 25, 50, 100` | `1e-2` each part | real `+5.28e-3`, `+5.53e-3`, `+5.66e-3`; imaginary `-2.77e-3`, `-8.9e-4`, `-2.5e-4` | yes |
+| A4k `R_c` against the formula | `3e-2` each part | real `+6.06e-3`, imaginary `+3.77e-3` | yes |
+| K2 one record per step | every step | 250, 250, 300 records, numbered | yes |
+| K3 mean count, `N = 50`, `100` | `5` to `20` | `11.08`, `8.12` | yes |
+| QFk FQ, `N = 16`, `C = 6` (B4 of the fixed 8 `0.731`) | bounded; periodic; `5e-2`; met before the cap; a record per step | bounded; `5.8e-14`; real `+1.67e-2`, imaginary `-1.46e-2`; every step (13 to 23, mean 14.4); 96 records | yes |
+| E1 never met: bitwise the fixed 6 | equal; `used = 6`, `met = false` | equal; yes | yes |
+| E2 no record without the criterion | empty | empty | yes |
+| E3 at rest | `used = 2`, `met` | `2`, `met`, ratio `0` | yes |
+| E4 driven, `Some(1e-2)`, cap 30 | met, `used < 30`, ratio `<= 1e-2` | `used` 3 to 4, ratio `1.4e-4` to `1.7e-3` | yes |
+| N1 `baseline_hashes` | passes | 3 passed, 1 ignored | yes |
+| N2 `rcfd-fv` suite, release | passes | 187 test binaries: 1047 passed, 0 failed, 523 ignored | yes |
+| N3 tests: new files only | adds only | `crates/rcfd-fv/tests/outer_criterion_f536.rs`, `crates/rcfd-post/tests/piso_outer_criterion_f536.rs` added; no test edited | yes |
+| NC1 FQ, `tol = 0.5` | must miss `5e-2` | 4 outer iterations every step; imaginary `-1.87e-1` | holds |
+| NC2 `N = 25` against the formula | must miss `1e-2` | `+9.25e-2`, `-3.53e-1` | holds |
+
+Records (no limit). Outer iterations per step (mean / min / max) and the total against the fixed 8:
+
+* `N = 25`: `14.36 / 11 / 50`; 3590 against 2000 (1.80 times); 148 s.
+* `N = 50`: `11.08 / 8 / 50`; 2769 against 2000 (1.38 times); 96 s.
+* `N = 100`: `8.12 / 7 / 33`; 2436 against 2400 (1.02 times); 86 s (ADR 0451's 8-outer run of the same level took 98 s).
+
+Order of the three levels: real `0.832`, imaginary `1.101` (ADR 0451 Ao: `0.833`, `1.109`). `R_c` against Ao's (`+6.06e-3`,
+`+3.82e-3`): the real part is the same, the imaginary part `5e-4` lower. The `N = 25` level is closer to `Z_dt` than with the
+fixed 8 (imaginary `-2.77e-3` against `-4.61e-3`), which supports C1's reading that part of the fixed-8 error there was iteration
+error.
+
+### Diagnosis of the K1 miss (unregistered, made after the registered run; the run is not repeated)
+
+A temporary ignored test ran FC at `N = 50` with K for 5 periods (removed again; the code is kept in
+`f536-scratch/piso_with_diag1.rs`, log `diag1.log`). For the steps with at least 20 outer iterations it printed the record, the
+force and the step's own pressure change `max |p^{n+1} - p^n|`.
+
+The capped steps are exactly steps 23 and 48 of every period of 50: two per period, 10 in all, at the extremes of the pressure
+history. There the step's pressure change is `4.4e-4` of its largest value in the period, against `8.2e-3` two steps later (where
+9 outer iterations suffice). The scale `|p_1 - p^n|` of C1 is about that step change, so at an extreme of the pressure it is
+nearly zero, and the criterion asks for an absolute change about 20 times smaller than two steps later. It is met at iteration 49
+(`c_49 = 9.7e-4`), just within the cap, so `met` is recorded `true` and `used = 50`.
+
+The registration rejected a scale relative to `|p|` because it vanishes twice a period, and chose `|p_1 - p^n|` to avoid that.
+But that scale also vanishes twice a period, a quarter period away, and C1 did not see this. The cost is work, not accuracy:
+the capped steps take 500 of the 3590 outer iterations at `N = 25`, and every level is within `5.7e-3` of `Z_dt`. Remedy (not
+built here; follow-up below): a scale that does not vanish within a period, for example the largest first-iteration change of the
+recent steps, or an absolute floor tied to the linear solvers' tolerance.
+
+### Mutations
+
+Applied one at a time to a `git archive` copy of `8c1d5366` by `f536-scratch/mutate.py` (exact replacement, one occurrence
+asserted). The fast tests of both new files were run in release in `f536-scratch/target-mut`, and the files were restored and
+checked equal (md5 against the archive) after each. Logs: `mutlogs/MU1.log` to `MU7.log`, `mut_run.log`.
+
+| Mutation | Caught by |
+| --- | --- |
+| MU1 `|| final_next` dropped | E3, E4, QFk, NC1 (every step at the cap) |
+| MU2 `c_k` against `p^n` | E4, QFk, NC1 (never met) |
+| MU3 no final iteration after the criterion | E3 only (`used = 1`); QFk, NC1 and E4 pass, as expected (one iteration less) |
+| MU4 tolerance times 100 | E4 (ratio), QFk (imaginary `5.72e-2`) |
+| MU5 record not pushed | E1, E3, E4, QFk |
+| MU6 `break` after the final iteration dropped | E3, E4, QFk, NC1 |
+| MU7 `s = i w` in the model | `model_matches_the_registered_arithmetic`, QFk (`1.44e-1`, `5.81e-1`) |
+
+Every mutation was caught by the fast tests.
+
+### fmt, clippy, documentation
+
+* `cargo fmt -p rcfd-fv --check` and `-p rcfd-post --check`: clean after the layout commit `4e66b082` (two test lines; the
+  library lines were already clean).
+* `cargo clippy -p rcfd-fv -p rcfd-post --all-targets -- -D warnings`: clean.
+* `docs/dynamic-mesh.md` gains one bullet; `cargo test -p rcfd-cli --release --test docs_site`: 2 passed.
+
+### Deviations and what was not run
+
+* One unregistered diagnosis after the registered heavy run (above). No amendment, no corrected run.
+* E3 and E4 use the default PISO settings of E1, not the consistent correctors. The registration names "the same channel" and
+  states no corrector option; this was fixed before the first run.
+* ADR 0451's A5/A6 (the stable default runs), the moving piston (APo) and the low-frequency case were not run (registered
+  limits).
+* There is no case key (it would change the schema golden), and the criterion is not the default. The B4 estimate of a step
+  with the criterion uses the cap's count (C2).
+
+### Decision
+
+By the registered rule, K1 missed on its registered run: 10 steps each at `N = 25` and `N = 50` reached the cap. **Proposed
+status: partial.** What holds:
+
+* The outer count is set by the registered criterion (c1). The criterion ends the loop before the cap on 730 of 750 FC steps and
+  on every FQ step. The 20 steps it does not end are exactly at the extremes of the pressure history (diagnosed).
+* Every level matches the discrete implicit-Euler impedance within 1 percent: at most `5.66e-3` (real) and `2.77e-3` (imaginary)
+  (c2). The extrapolation matches the formula within `6.06e-3` and `3.77e-3`, against the 3 percent limit (c3).
+* The outer iterations of every step are recorded (`PimpleSolver::outer_record`, c4).
+* Defaults are bit-identical: the change is opt-in only, `baseline_hashes` passes and the `rcfd-fv` suite passes (1047 tests) (c5).
+* Every mutation was caught.
+
+### Remaining questions
+
+1. **A case key** (`solver.outer_tolerance` or similar). Options: (a) add it with `hash_omit_default`, which changes the schema
+   golden and so needs the maintainer's approval; (b) leave the setting library-only. Recommendation: (a), after question 3's
+   follow-up, so that the key's meaning does not change twice. Open (golden).
+2. **As the default** for the consistent-corrector step. It would change default results: open for the maintainer.
+   Recommendation: no (keep it opt-in).
+3. **The scale of the criterion.** Options: (a) a follow-up item with a scale that does not vanish within a period (the largest
+   first-iteration change of the last steps, or an absolute floor), registered and checked on the same channel; (b) leave it and
+   document that a cap is needed (done in `docs/dynamic-mesh.md`). Recommendation: (a) (follow-up below).
+4. **The B4 estimate with the criterion** runs `n_outer` (the cap) outer passes. Options: (a) run the count the step used;
+   (b) leave it as documented. Recommendation: (a), in the scope of question 3's follow-up; taken on the maintainer's standing
+   instruction of 2026-11-11 (take the recommendation).
+
+### For the lead: roadmap entries
+
+F-536, proposed status **partial**, note:
+
+> Numerics. PARTIAL (ADR 0458, 2026-11-14; registered before the code, no amendment). The PIMPLE loop had no outer-convergence tolerance; added the opt-in PimpleSettings::outer_pressure_tolerance (n_outer becomes the cap; after outer iteration k the ratio of its largest pressure change to that of the step's first iteration is formed, and once it is at most tol one final unrelaxed iteration is run; derived from a linear contraction, leaving r tol of the non-iterated step's error) and PimpleSolver::outer_record (step, outer iterations used, met, ratio). On the fixed-mesh channel of ADR 0451 with the consistent correctors, tol 1e-3 and a cap of 50: every level at nu dt/dy^2 = 100, 50 and 25 is bounded and periodic and matches the discrete implicit-Euler impedance within 5.7e-3 (real) and 2.8e-3 (imaginary), the extrapolation the oscillating-channel impedance within 6.1e-3 and 3.8e-3; mean outer iterations per step 14.4, 11.1 and 8.1 (1.80, 1.38 and 1.02 times the fixed 8 of ADR 0451). Partial: K1 missed, 10 of 250 steps at 100 and at 50 reached the cap, diagnosed: at the extremes of the pressure history the step's own pressure change, the criterion's scale, is nearly zero (4.4e-4 of its largest value), so the criterion is met only at iteration 49. Defaults bit-identical (opt-in only; baseline_hashes and the rcfd-fv suite pass); seven mutations caught; no case key (schema golden); docs/dynamic-mesh.md. Open: ADR 0458 Q1 to Q4. Follow-up F-NEW (a scale that does not vanish).
+
+F-530, the note's last sentence becomes:
+
+> Follow-ups F-535 (opt-in refusal naming the diffusion number), F-536 (outer-iteration criterion; ADR 0458, partial: the criterion meets the impedance at every level, some steps at the extremes of the pressure reach the cap).
+
+Follow-up item F-NEW, "A non-vanishing scale for the outer-iteration criterion", deps F-536, acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. The opt-in outer-iteration criterion of ADR 0458 gets a scale that does not vanish at the extremes of the pressure history (for example the largest first-iteration pressure change of recent steps, or an absolute floor tied to the linear solvers' tolerances), derived in the ADR, and the pressure-lag estimate of a step with the criterion uses the count the step used; on the fixed-mesh channel of ADR 0451 at nu dt/dy^2 = 25, 50 and 100 every step meets the criterion before the cap, every level matches the discrete implicit-Euler impedance within 1 percent and the extrapolation the oscillating-channel impedance within 3 percent, with the outer iterations per step recorded and no more in total than with the scale of ADR 0458; the default results of every existing case stay bit-identical.

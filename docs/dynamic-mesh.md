@@ -62,6 +62,14 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   correctors, no relaxation) the same runs match the discrete model within 0.6 percent and the extrapolated impedance within
   0.6 percent. At large diffusion numbers use the consistent correctors with outer iterations, and run enough periods for a
   slowly decaying numerical mode (the ADR 0073 estimate with the option is 0.95 to 0.99 per step with one outer iteration, 0.73 to 0.92 with eight).
+* The outer count by a criterion (F-536, ADR 0458): the opt-in `PimpleSettings::outer_pressure_tolerance = Some(tol)` makes
+  `n_outer` a cap. After each outer iteration the largest pressure change of the iteration is compared with that of the step's
+  first one; once the ratio is at most `tol`, one more (final, unrelaxed) iteration is run and the step ends.
+  `PimpleSolver::outer_record` holds the count of every step. On the channel above with `tol = 1e-3` and a cap of 50, every
+  level (`nu dt/dy^2` of 25, 50 and 100) matches the discrete model within 0.57 percent and the extrapolation the impedance
+  within 0.61 percent, at a mean of 8.1, 11.1 and 14.4 outer iterations per step. Some steps reach the cap, though (10 of 250 at
+  100 and at 50). At an extreme of the pressure history the step's own pressure change is nearly zero (diagnosed at 50: 4e-4 of
+  its largest value), and the criterion is met only near the cap (49 iterations). So keep a cap. There is no case key yet.
 * The streamwise velocity in the cell next to an accelerating piston lags by about 3e-4 of the piston speed (registered limit
   1e-6 missed, cause not proven).
 * The cyclic-face lag of PISO that earlier needed 10 outer iterations no longer reproduces (test `g4b`, moving-vs-fixed mesh
