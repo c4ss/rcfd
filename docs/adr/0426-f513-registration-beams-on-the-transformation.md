@@ -290,3 +290,93 @@ Found on reading the test before its first run: `solve_static` and `modal_analys
 MU7 (the beam check left out of that entry check) could not be caught by it. S2 also calls `mpc::solve_static_mpc` and
 `mpc::modal_analysis_mpc` directly on the same model, expecting the same `BeamSolidNode` naming the shared node (exact). No limit
 changes; MU7 is expected to be caught by these two rows.
+
+## Addendum 1: results (2026-11-14)
+
+Code: `crates/rcfd-fem/src/mpc.rs` (D1: the rows `theta_c - w_c = 0` at a six-unknown node of a rigid set in `transformation`;
+D2: `check_transformation_model`, called by `solve_static_mpc` and `modal_analysis_mpc` in place of `check_supported`; module
+doc), `free_motions.rs` (D3: rotation values in `field_at` and `rigid_field`, the rigid-set rotation rows, the refusal of
+rotational unknowns removed). New test `crates/rcfd-fem/tests/si_beam_transformation.rs` (5 tests, 0.01 s in release); in
+`si_beam.rs` the retired copy `n2_n3_other_paths_and_invalid_data_after_landed_amended` got its `#[ignore]` line and the copy
+`n2_n3_other_paths_and_invalid_data_after_transformation_landed` was added. The registered run was made once, on the test
+commit (with amendment 1), release profile, `--test-threads=1` (`f513-scratch/run1.log`).
+
+| id | check | limit | measured | met |
+| --- | --- | --- | --- | --- |
+| J1 | joined tip translation / rotation against beam + block compliance | `1e-8` | `3.6e-14` / `3.9e-14` | yes |
+| J2 | block nodes; reference translation; reference rotation | `1e-8` | `4.3e-14`; `4.2e-14`; `4.2e-14` | yes |
+| J3 | reference point at the corner: tip translation / rotation | `1e-8` | `3.7e-14` / `3.6e-14` | yes |
+| J4 | reaction forces / moments balance | `1e-10` | `2.6e-14` / `4.5e-14` | yes |
+| K1 | `k theta = M`; spring force | `1e-10` | `1.9e-15`; `1.9e-15` | yes |
+| K2 | `k theta_root = M`; tip rotation; tip deflection | `1e-10` | `2.1e-15`; `1.3e-15`; `1.6e-15` | yes |
+| L1 | Linear clamp against the elimination path (translations, rotations) | `1e-12` | 0, 0 (bit-equal) | yes |
+| L2 | guided tip deflection; constraint moment | `1e-10` | `6.7e-16`; `3.6e-16` | yes |
+| L3 | tip deflection; constraint moment | `1e-10` | `2.2e-16`; `1.7e-15` | yes |
+| M1 | six frequencies held against clamped | `1e-8` | 0 each (bit-equal, as arithmetic 6 predicted) | yes |
+| M2 | five frequencies against Euler-Bernoulli | `5e-3` | `8.0e-5, 3.2e-4, 5.5e-4, 2.2e-3, 1.3e-3` (estimates up to `1.5e-3`; z n = 2 at `2.2e-3` is above its estimate, inside the limit) | yes |
+| M3 | `rigid_free`; count | false; 0 | false; 0 | yes |
+| Z1 to Z5 | counts | 6, 2, 1, 6, 0 | 6, 2, 1, 6, 0 | yes |
+| Z6 | `K X c` of the free fields | `1e-12` | `3.7e-19` | yes |
+| S2 | BeamSolidNode on the transformation path (four entry points) | exact | node 2 named by all four | yes |
+| R1 | si_beam copy: reactions + spring + tip force | `1e-10` | `6.5e-14` | yes |
+| B1 | `si_scaffold_bits` unedited | pass | pass | yes |
+| B2 | every `rcfd-fem` test | pass | 59 test binaries: 334 passed, 0 failed, 69 ignored (`f513-scratch/b2_fem.log`) | yes |
+| B3 | `baseline_hashes` | pass | 3 passed, 1 ignored (as before) | yes |
+| N1 | tip against the cantilever alone | `> 0.1` | `0.376` (estimate 0.41) | yes |
+| N3 | Cyclic with a beam refused | exact | `NotYetSupported { variant: "Cyclic", package: beam::FOLLOW_UP }` on both | yes |
+| N4 | nonlinear states; preconditioned CG | exact | as registered | yes |
+
+Mutations (scratch copy `f513-scratch/mut` from `git archive` of the test commit, `f513-scratch/mutate.py`, log
+`f513-scratch/mutations.log`, one at a time, each run once):
+
+| id | mutation | caught by |
+| --- | --- | --- |
+| MU1 | rotation rows left out | J1 (the joined solve refuses: singular), M1 (`1.0`), M2, M3 |
+| MU2 | `theta + w` | J1 (`0.14`), J2, J4 |
+| MU3 | `w_{c+1}` | J1 (`0.11`), J2, J4 |
+| MU4 | rotation fields read as 0 | Z2 (3), Z3 (3), Z4 (3), Z6 (`1.6e-2`) |
+| MU5 | rigid-set rotation row with `+ w_ref` | Z4 (3) |
+| MU6 | rotation value `l` | Z4 (3), Z6 (`1.2e-2`) |
+| MU7 | `check_beam_model` not called on the transformation entry | **not caught**: all four S2 rows still met |
+| MU8 | Cyclic refusal removed | N3 (a cyclic boundary error instead) |
+
+Diagnosis of MU7: `assemble::stiffness_with` calls `check_elements_supported_with_beams` itself (ADR 0417 D6), so a beam node
+shared with a solid is refused with the same `BeamSolidNode` when the transformation path assembles `K`, whatever its entry check
+does. The mutant changes only where the error is raised (after the transformation is built, before any solve), which no
+registered check observes; amendment 1 expected the direct calls to catch it and they do not. The refusal itself (b2) is held
+twice; the entry check of D2 is redundant for it, not wrong.
+
+Other checks: `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --all-targets --release -- -D warnings` clean.
+No hash table, golden file or `baseline_hashes.rs` edited; no existing test edited except the one retired copy (its `#[ignore]`
+line). Shared solver files changed: `mpc.rs` and `free_motions.rs` only (nothing under `rotating/`).
+
+**Not run:** the whole workspace suite (the gate of the lead); the `rcfd-post` tests (crate not touched; its transformation-path
+tests are solid-only, covered by D5 and B1 to B3).
+
+**Deviations:** amendment 1 (S2 on the entry functions) was written before any run. No limit changed.
+
+**Decision by the registered rule: partial.** Every check of the acceptance and every stronger check met with wide margins,
+but MU7 was not caught by a registered check (the rule: "a mutation not caught").
+
+### Remaining questions
+
+1. **MU7 (the redundant entry check).** Options: (a) keep both checks as defence in depth (the refusal is observed either way);
+   (b) a follow-up check that tells the two apart, e.g. a model whose transformation fails (a contradictory row) and that has a
+   shared beam node, expecting `BeamSolidNode` first; (c) drop the beam check from the entry and rely on assembly.
+   Recommendation: (b), a small follow-up check; the behaviour is right today.
+2. **Pinned beam-solid joints** (limit L2): (a) a `RigidSet` option for translations only; (b) leave it to linear rows.
+   Recommendation: (b) until a user model needs it.
+3. **Beams on the other transformation users** (transient, harmonic, buckling, geometric, rotating, cyclic): one item per path
+   with the package that needs it. Recommendation: as the rotor items reach them.
+
+## For the lead: roadmap entries
+
+F-513: proposed status **partial**. Note:
+
+> Structural solver, intermediate tier. ADR 0426, 2026-11-12: beams on the transformation path. A six-unknown node of a rigid set turns with it (rows theta - w = 0 in mpc::transformation); solve_static_mpc and modal_analysis_mpc take beam models (BeamSolidNode for a node shared directly kept; a beam model with a cyclic constraint refused naming a follow-up of ADR 0417); nodal springs, linear constraints and prescribed values act on rotations; free_rigid_motions counts with rotational unknowns (the rigid fields carry their rotation). Solid-only bits unchanged (si_scaffold_bits, baseline_hashes, every rcfd-fem test). Met: cantilever joined to a Hex8 block by a rigid set on its face, tip = cantilever closed form + the rigid face motion of an independent solid-only solve within 3.9e-14 (limit 1e-8; the block's share 38 percent); k_theta theta = M within 1.9e-15 (limit 1e-10), spring in series with the beam 2.1e-15; rotations as linear constraints bit-equal to prescribed ones, guided and prescribed-rotation tips within 1.7e-15; a beam held by a rigid set on a fixed block has the clamped beam's six frequencies bit for bit and the Euler-Bernoulli cantilever's five lowest within 2.2e-3 (limit 5e-3); counts 6, 2, 1, 6, 0 on models known by hand, rigid fields in the beam's null space to 3.7e-19. Seven of eight mutations caught; the eighth (the beam check left out of the transformation entry) is not observable because assembly repeats the check: partial by the rule.
+
+Follow-up item (proposed):
+
+- "Beams on the transformation: a check that observes the entry refusal before the transformation is built", deps F-513.
+
+> Every limit not stated here is registered in the ADR before the run. A model with a beam node shared with a solid and a contradictory linear constraint is refused with BeamSolidNode naming the node, not with the contradiction, on solve_static_mpc and modal_analysis_mpc; the mutation that leaves the beam check out of the transformation entry is caught.
