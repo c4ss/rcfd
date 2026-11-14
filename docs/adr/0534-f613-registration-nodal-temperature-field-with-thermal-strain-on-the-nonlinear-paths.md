@@ -316,3 +316,20 @@ recorded):
 4. **Case-file key.** Not added (b7). Recommendation for the lead: `temperature_field = { reference, times, fields }` (or a file
    reference) in the quasi-static time study and the nonlinear transient study, when the case file is opened to the nonlinear
    studies.
+
+## Amendment 1 (2026-11-14, before any run of the checks): the residual reference of an attempt with a field
+
+Found while writing the checks, before any of them was run (the test file compiled, nothing executed). The relative residual
+of the Newton attempt (ADR 0404 D5) is `|R_F| / max(|lambda f_F|, |f_int|)`. A model whose only loading is the thermal strain
+and whose support is statically determinate (FE1, FE2, FEi, LIN) has no external load and, at equilibrium, no reaction: the
+assembled internal force tends to zero on every equation together with the residual, so the ratio stays of order one and the
+attempt cannot meet any tolerance (at a held step of FE1 both are rounding). The design is completed, not the limits: with a
+field whose expansion acts, the attempt (D2) also puts in the reference the norm over the free equations of the thermal force
+`f_th = f_int(u = 0)` at the attempt's field, the empty states and the attempt's point context (the analogue of the load
+vector `f_th` of the linear path of ADR 0281, which enters its reference as a load): `reference = max(|lambda f_F|, |f_int|,
+|f_th,F|)`, with `|f_th,F|` used only when positive. It costs one assembly of the internal force per attempt with a field and
+nothing otherwise. Without a field, and with a field without expansion (D5's damping tangent; a material of `alpha = 0`:
+`f_th = 0` at the empty states and `u = 0` for every material the field is offered to, so the reference is not changed), the
+attempt is unchanged: UB1, UB2 and B1 are not affected. No limit, check, set-up or mutation of the registration changes. One
+mutation is added: MU13, the thermal reference left out, expected to be caught by FE1 (the attempt of the held step does not
+converge: the run is refused).
