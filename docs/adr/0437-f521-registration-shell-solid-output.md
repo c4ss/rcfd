@@ -200,4 +200,12 @@ caught only by a check added after its run):
 
 ## Addendum 0: procedure B0 (the bytes before)
 
-(to be written after the single run of B0 on the library of `af0fd223`)
+Run once on the library of `af0fd223` (`cargo test -p rcfd-post --release --test si_shell_output_bytes`, before any library
+change of F-521). Recorded values, copied into `b1b_no_shell_bytes_unchanged`:
+
+| fixture | FNV-1a 64 | length (bytes) |
+| --- | --- | --- |
+| frame reactions | `0x34ff07d075a2933a` | 2637 |
+| frame no reactions | `0xde67d0587843b447` | 2231 |
+
+No limit, check or design text above is changed.
