@@ -251,3 +251,91 @@ A defect of the set-up of NC0 found while writing its test, before any check was
 (ADR 0462 R1, `solve_static (centrifugal)`), so the pre-stress `CEN` of D7 and NC0 cannot be formed for that sector. NC0
 takes the uniform pre-stress `UNI` of D8 on the sector and on its full rotor instead (a stress that repeats in every sector,
 D3). Its quantity and expectation are unchanged. No other check is changed.
+
+## Addendum 1: results (2026-11-14)
+
+Runs, release profile, each made once: NC0 at commit 451b0a02 (the tests and amendment 1 committed, the library of main
+a52a5291 unchanged; `--ignored --exact nc0_base_gap_record`, log `f547-scratch/run-nc0-base.log`); then the library change
+committed (8fa755e8, rustfmt applied before the commit) and `sa_ortho_cyclic_prestress_default_bits` (log
+`f547-scratch/run-b1.log`) and `sa_ortho_cyclic_prestress` (4 tests, `--test-threads=2`, log
+`f547-scratch/run-checks.log`). Amendment 1 was written and committed before any run. Then the existing tests that cover
+the changed lines or the per-point paths: the `rcfd-fem` lib tests and `sa_ortho_cyclic_default_bits`,
+`sa_ortho_modal_default_bits`, `sa_ortho_rotating_default_bits`, `sa_ortho_default_bits`, `sa_ortho_cyclic`,
+`sa_ortho_modal`, `sa_ortho_rotating`, `sa_ortho`, `sa_scaffold`, `sa_scaffold_bits`, `si_geometric`, `si_prestress_mpc`,
+`si_harmonic_correction`: 14 result blocks, 67 passed, 0 failed, 21 ignored (log `f547-scratch/run-covering.log`).
+
+| Check | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| P1 `ORTHO_C`, `CEN` at 680 rad/s: count; frequencies; separation; expanded residual; pre-stress of copy 0 | equal; `<= 1e-8`; `<= 1e-6`; `<= 1e-7`; `<= 1e-8` | 3 = 3; 1.07e-14; 2.2e-15; 2.96e-13; 4.64e-15 | yes |
+| P1t `TAB_O` with its field, `CEN` | as P1 | 3 = 3; 4.20e-14; 3.0e-15; 2.59e-13; 6.15e-15 | yes |
+| P2 `ORTHO_C`, `UNI`: count; frequencies; separation; expanded residual | equal; `<= 1e-8`; `<= 1e-6`; `<= 1e-7` | 3 = 3; 3.13e-14; 3.55e-15; 3.23e-13 | yes |
+| A1 axis `(0, 0, -1)`; origin `(0, 0, 0.3)` | equal as numbers | equal; equal | yes |
+| A2 axis `(0, 1e-11, 1)` | solves | solves | yes |
+| R1 six materials with other axes | refused as stated | 6 of 6 | yes |
+| R2 TRB (no cyclic constraint) with `ORTHO(Fixed(I))` and `TAB_F` | solves | 2 of 2 | yes |
+| B1 15 digests of main a52a5291; existing covering tests | `==`; pass | 15 of 15; 67 passed, 0 failed | yes |
+| NC0 (base) `ORTHO(Fixed(I))` sector accepted; smallest expanded residual on the full rotor as written | accepted; `> 1e-2` | accepted; 0.910 (0.997, 0.993, 0.910) | as expected |
+| NC1 pre-stressed against unstressed, largest over `C` | `> 1e-2` | 0.173 | as expected |
+| NC2 expanded residual on `K` alone, largest over `C` | `> 1e-2` | 0.413 | as expected |
+
+Reading. The index-0 pre-stressed modes of a sector of the orthotropic disc with cylindrical axes about the cyclic axis
+(253.1, 313.1 and 1250.5 Hz under the centrifugal pre-stress at 680 rad/s, against 215.8, 285.9 and 1188.3 Hz at rest) are
+the harmonic-0 modes of the full rotor of the same material and pre-stress to 1.1e-14 in frequency, and each expanded sector
+mode satisfies the full rotor's `(K + K_sigma) x = lambda M x` to 3e-13; the same holds with a table and a temperature field
+over the radius and the height (4.2e-14) and with a uniform pre-stress (3.1e-14). The harmonic-0 modes of the full rotor
+separate from the other indices to 4e-15 (the projection on the repeating fields), so the pairing is unambiguous. The full
+rotor's centrifugal stress in copy 0 equals the sector's to 6e-15. On the base, a sector with global fixed axes was solved
+without a word, and its modes leave a residual of 91 to 100 percent on the full rotor with the material as written (NC0):
+those are the silently wrong results that the new refusal stops. The pre-stress moves the compared frequencies by up to 17
+percent (NC1), and the residual check without the geometric stiffness fails by 41 percent (NC2): the checks see the
+pre-stress.
+
+### Mutations (scratch copy `f547-scratch/mut` of commit 8fa755e8, script `f547-scratch/mutate.py`, `sa_ortho_cyclic_prestress` per mutation, logs `f547-scratch/mut_Mu*.log`)
+
+| Mutation | Caught by |
+| --- | --- |
+| Mu1 the call of `check_cyclic_axes` removed | R1 (6 of 6 rows solve) |
+| Mu2 `refuse_with_cyclic` in its place | P1, P2 (the sector refused), A1 (the `ORTHO_C` sector refused) |
+| Mu3 the geometric stiffness left out on the transformation | P1, P1t, P2 (frequencies 0.15, 0.15, 0.074; residuals 0.31, 0.32, 0.13); NC1, NC2 not as expected |
+| Mu4 the geometric stiffness scaled by `1 + 1e-4` | P1, P1t, P2 (frequencies 1.4e-5, 1.4e-5, 7.1e-6; residuals 3.1e-5, 3.2e-5, 1.2e-5) |
+
+Four of four caught.
+
+### Deviations and what was not run
+
+- Amendment 1 (NC0 takes `UNI`), written and committed before any run; it changes no check of the decision rule.
+- `cargo fmt -p rcfd-fem` reformatted the `BASE` table of the B1 file after its base run (layout only; committed with the
+  library change). B1 ran with that file and matched.
+- Not run: the whole workspace (the lead's gate); `baseline_hashes` of `rcfd-api` (no `rcfd-fv` or `rcfd-api` source changed);
+  the `docs_site` test (no documentation page changed). `cargo fmt -p rcfd-fem --check` and `cargo clippy -p rcfd-fem
+  --all-targets -- -D warnings` pass (logs `f547-scratch/fmt.log`, `clippy.log`).
+
+### Decision by the registered rule
+
+**Done**: every registered check (P1, P1t, P2, A1, A2, R1, R2, B1) was met in its single registered run, NC0 to NC2 came out
+as expected, the only amendment was made before any run, and every mutation was caught.
+
+### Remaining questions
+
+1. **The behaviour change (a point for the maintainer).** A sector with a cyclic constraint and an orthotropic or tabulated
+   material whose axes are not cylindrical about the cyclic axis was accepted by `prestressed_modes` before F-547 and is now
+   refused by name. This changes the results only of models that were silently wrong (NC0: residual 0.91 or more on the rotor
+   as written); isotropic models, models without a cyclic constraint and coaxial axes keep their bits (B1), and no case file
+   uses the variants. Options: (a) keep the refusal, as on every other cyclic path since ADR 0462; (b) accept such models with
+   a warning. Recommendation (a), taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation); the
+   maintainer may want to confirm it.
+2. **A caller's pre-stress that does not repeat in every sector** (limits): `prestressed_modes` cannot tell. Options: (a)
+   leave it to the caller, as documented; (b) a check of the pre-stress against the sector's own static solve. Recommendation
+   (a): a pre-stress is data, and the centrifugal case is covered by `RotatingSector`.
+3. Buckling and the transient integrator with a cyclic constraint and coaxial axes (ADR 0462 remaining question 1) are
+   unchanged; recommendation (b) of that ADR stands.
+
+## For the lead: roadmap entries
+
+Proposed status of F-547: **done**.
+
+> Structural solver, advanced tier. ADR 0465, 2026-11-14: the pre-stressed modes on the transformation refuse a cyclic constraint with an orthotropic or tabulated material by name unless every material with its own axes has cylindrical axes about the cyclic axis and origin (mat_ortho::check_cyclic_axes, as on the other cyclic paths since ADR 0462); this closes a gap since ADR 0457: on the base a sector with fixed axes was solved silently and its modes leave a residual of 91 percent or more on the full rotor as written, so the refusal changes only results that were wrong (a point for the maintainer). With coaxial axes the index-0 pre-stressed modes of a sector (disc of 12 sectors, E_r/E_theta = 14) equal the harmonic-0 modes of the full rotor of the same material and pre-stress: centrifugal pre-stress at 680 rad/s 1.1e-14, with a table and a temperature field 4.2e-14, uniform pre-stress 3.1e-14; expanded residuals on the full rotor 3e-13; the harmonic-0 modes separate from the other indices to 4e-15. Six other axes refused by name; models without a cyclic constraint unaffected. Default paths bit-identical (15 digests of main a52a5291). Four of four mutations caught. File geometric.rs; tests sa_ortho_cyclic_prestress.rs, sa_ortho_cyclic_prestress_default_bits.rs.
+
+Note of F-544 (sentence to append):
+
+> Follow-up F-547 (ADR 0465, 2026-11-14) closed remaining question 2: the pre-stressed modes on the transformation take the same check_cyclic_axes test, with a sector-against-full-rotor check of the index-0 pre-stressed modes.
