@@ -218,7 +218,9 @@ pub(crate) fn add_on_pattern(k: &CsrMatrix, kg: &CsrMatrix) -> CsrMatrix {
 /// A model with linear constraints, rigid sets or elastic supports is solved on the transformation `x = T q` (ADR 0398):
 /// `T^T (K_ext + K_sigma) T q = omega^2 T^T M T q`, `K_ext` with the supports, zero constraint values only, the default
 /// shift `Shift::Auto` (ADR 0384), each mode expanded, `x = T q`; a negative eigenvalue (beyond the buckling load) is
-/// refused (`FemError::Solver`).
+/// refused (`FemError::Solver`). A cyclic constraint with an orthotropic or tabulated material is taken only when every
+/// material with its own axes has cylindrical axes about the cyclic axis and origin; other axes are refused by name
+/// ([`crate::mat_ortho::check_cyclic_axes`], ADR 0465).
 pub fn prestressed_modes(model: &SolidModel, prestress: &Prestress, options: &ModalOptions) -> Result<ModalResult> {
     model.validate()?;
     // ADR 0457 D2: solid elements, also of the orthotropic and the tabulated material (the per-point stiffness).
@@ -309,6 +311,9 @@ fn prestressed_modes_on_transformation(
     prestress: &Prestress,
     options: &ModalOptions,
 ) -> Result<ModalResult> {
+    // ADR 0465 D1: a material with its own axes is taken with a cyclic constraint only with cylindrical axes about the
+    // constraint's axis and origin (ADR 0462 D1), as on the other paths of the transformation.
+    crate::mat_ortho::check_cyclic_axes(model)?;
     crate::mpc::refuse_nonzero_values(model, "a pre-stressed modal analysis")?;
     let dofs = model.dof_map();
     let tr = crate::mpc::transformation(model, &[])?;
