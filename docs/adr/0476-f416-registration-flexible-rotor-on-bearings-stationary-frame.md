@@ -418,3 +418,99 @@ of `x^H M x`, otherwise the sense of the tilt orbit `(theta_y, -theta_x)` at the
 (`sgn Im(theta_y conj(-theta_x))`). By the decision rule the item is at best **partial** (a check met only after an amendment
 made after its run).
 
+
+## Addendum 1: results (2026-11-14)
+
+Registered runs: `cargo test -p rcfd-fem --release --test sa_rotor` and `cargo test -p rcfd-post --release --test
+sa_solid_rotor` at commit 71091f70 (logs `f416-scratch/sa_rotor_run1.log`, `sa_solid_rotor_run1.log`), each made once; the
+copy of amendment 2 at c6029b1c (`sa_rotor_run2.log`).
+
+| Check | Measured | Limit | |
+|---|---|---|---|
+| Z1 zero speed against F-391 (Z-a, Z-b) | 4.39e-12, 1.06e-11 | 1e-10 | met |
+| Z2 stable, residuals | 2.0e-16, 4.8e-16 | as registered | met |
+| J1 critical speed `sqrt(k/m)`, labels | 7.8e-15, Forward and Backward | 1e-3 | met |
+| J2 unbalance amplitude at r = 0.5, 1, 2 | 9.8e-15, 0, 1.6e-15 | 1e-3 | met |
+| J3 | as registered | | met |
+| X1 stable at 0.98, unstable at 1.02 of the threshold | each | | met |
+| X2 threshold `c w_n` | 2.0e-7 | 1e-2 | met |
+| X3 growth `1.4e-16 w_n` off the closed form, growing mode Forward | each | | met |
+| K1 forward critical speeds against rotordyn | 7.5e-9 | 1e-6 | met |
+| K2 response at 0.5, 1, 2 `w_c1` | 2.2e-8, 1.4e-7, 2.6e-8 | 1e-6 | met |
+| K3 natural frequencies, directions | 6.2e-9, each | 1e-6 | met |
+| K4 backward 425.5285, 743.1412 | 3.5e-6, 1.6e-6 | 1e-4 | met |
+| R1 Rayleigh shaft, 12 whirl speeds | max 7.9e-6 | 5e-3 | met |
+| R2 whirl numbers | `+-1.000000000000` | as registered | met |
+| O1 overhung disc, four whirl speeds | max 1.1e-14 | 5e-3 | met |
+| T1 tracking (smallest MAC `1 - 3.4e-3`), directions constant | 1.25e-14 | as registered | met |
+| A1 anisotropic split `sqrt(kx/m)`, `sqrt(ky/m)` | 6.7e-6, 1.5e-5 | 1e-3 | met |
+| A2 Neutral, `kappa = 0` | each | | met |
+| U1 unstable exactly at j = 0..4 (growth 9.96, 8.09, 6.00, 3.82, 1.68), stable at j = 5..8, CSV | each | | met |
+| U2 | as registered | | met |
+| G1 skew of `G` | 0 | | met |
+| X0 refusals (11 keys) | each | | met |
+| S1 round trip | 0 | 1e-12 | met |
+| S2 mass, `I_t`, `I_p`, centre | 2.2e-16, 8.9e-16, 8.9e-16, 8.1e-19 | 1e-12, 1e-15 | met |
+| S3 refusals (inertia, centre, eta, bearing) | each | | met |
+| L1 direction is the sense of the orbit | J, O, U met; **R missed** (3, 2, 3 of 80 modes) | equality | **missed** (amendment 2) |
+| L1b (copy after amendment 2) | J, O, U, R met (3, 2, 3 modes judged by the tilt orbit) | equality | met |
+| B1, B2 default bits | equal to the record of 28fa70a7 | equality | met |
+| N1 | 0.167 | > 0.1 | as expected |
+| N2 steel | 2.74e-5 | > 1e-6 | as expected |
+| N3, N4 | each (N4 3.7e-16) | | as expected |
+
+Also run: `cargo test -p rcfd-fem --release` (567 passed, 0 failed, 126 ignored), `w46c_rotordyn` (12 passed),
+`baseline_hashes` (3 passed, 1 ignored), `docs_site` (2 passed), `cargo fmt -p rcfd-fem -p rcfd-post --check`, `cargo clippy
+-p rcfd-fem -p rcfd-post --all-targets -- -D warnings` clean.
+
+Mutations (scratch copy `f416-scratch/copy`, script `mutate.py`, log `mutations.log`): every one caught.
+
+| Id | Caught by |
+|---|---|
+| MU1 | K1, K2, K3, K4, O1, R1, T1, U1 (R2 not: the whirl numbers keep `+-1`, only the frequencies move) |
+| MU2 | R1 |
+| MU3 | K1, K2, K3, K4, O1, T1, U1 |
+| MU4 | X3, U1, U2 |
+| MU5 | J1, A1, A2, K1, K3, K4, N4, O1, T1, U1, U2, X1, X2, X3 |
+| MU6 | X3, U2, K3, O1, R1, T1, Z1 |
+| MU7 | L1b, K1, K3, K4, O1, R1, T1, U2, X3 (R2 not) |
+| MU8 | Z1, R1, O1, K3, T1, X3 |
+| MU9 | J3 (K2 not: its load comes from `rotordyn::unbalance_load`, not from the mutated `unbalance_response`) |
+| MU10 | J1, N3 |
+
+Deviations: amendment 1 (before any run) and amendment 2 (after the run of L1); clippy's `neg_cmp_op_on_partial_ord` answered
+by writing `!(x > 0.0)` as `x.is_nan() || x <= 0.0` (the same predicate, 46eb57e6); `cargo fmt` layout. Nothing else differs from
+the registration. Default bits: no existing path changed (B1, B2; `beam.rs` only makes `plane_stiffness` and `plane_mass`
+`pub(crate)`).
+
+**Decision: partial** (L1 met only after an amendment made after its run).
+
+Remaining questions (each taken on the standing instruction of 2026-11-11 unless the maintainer says otherwise):
+
+1. The reference of L1. Options: (a) keep amendment 2 (translation orbit when the translational energy is at least `1e-6` of
+   the total, otherwise the tilt orbit); (b) the mass-weighted whirl number of D5 itself as the reference (circular: it is what
+   is checked); (c) drop translation-free modes from L1. Recommendation: (a), taken.
+2. A case-file key. Options: (a) none until a case needs it; (b) a `[rotor]` section (stations, shafts by section and material
+   name, discs, bearings, speeds) producing the Campbell CSV; (c) a `[rotor]` key on the rigid-rotor input of ADR 0120.
+   Recommendation: (b), the maintainer's call; not added.
+3. Follow-ups, below.
+
+## For the lead: roadmap entries
+
+> F-416 status partial. Note: F-416 (ADR 0476, 2026-11-14): rcfd_fem::rotor (F-391 shaft with the gyroscopic matrix, discs,
+> cross-coupled bearings; whirl by the quadratic solver of ADR 0450, forward and backward by the mass-weighted sense of the
+> orbit, undamped critical speeds, stability, unbalance and harmonic response, Campbell table) and rcfd_post::solid_rotor (the
+> join with rotordyn, discs from a solid part). Zero speed against F-391 1.06e-11, sqrt(k/m) 7.8e-15, unbalance amplitude
+> 9.8e-15, cross-coupling threshold 2.0e-7, stiff-shaft limit against rotordyn 7.5e-9 (critical speeds) and 1.4e-7
+> (response), Rayleigh shaft 7.9e-6, overhung disc 1.1e-14, anisotropic split 1.5e-5; defaults bit-identical. Partial: L1
+> (labels against the orbit sense) missed on translation-free modes of the 20-element shaft, where the translation orbit is
+> rounding; recorded as l1_direction_is_the_sense_of_the_orbit_known_miss, met with the tilt orbit after amendment 2.
+> Follow-up: damped massless unknowns (bearing housings with damping and no mass) solved as first-order unknowns instead of
+> refused (D3). Deps F-416. Acceptance: a bearing pedestal with stiffness and damping in series and no mass gives the whirl
+> of the same model with a pedestal mass of 1e-9 of the disc's within 1e-6; models without such unknowns bit-identical.
+> Follow-up: speed-dependent bearing coefficients (tables k(Omega), c(Omega) given as inputs) in whirl, Campbell and
+> response. Deps F-416. Acceptance: a table constant in speed gives the bits of the constant bearing; a linear table gives
+> the closed-form Jeffcott critical speed of the speed-dependent stiffness within 1e-6.
+> Follow-up: damped critical speeds as peaks of the unbalance response and Campbell crossings checked. Deps F-416.
+> Acceptance: on the damped Jeffcott rotor the response peak equals w_n / sqrt(1 - 2 zeta^2) within 1e-6 and the crossing
+> of the forward track with engine order 1 equals the undamped critical speed within 1e-6 at zeta = 0.

@@ -1767,6 +1767,26 @@ F-396 solver path (`RotatingPart::modes`, `campbell`).
 | Second-order shift of a gyroscopically coupled mode `omega ~ w_i (1 - 1/2 sum_j G_ij^2/(w_j^2 - w_i^2))` | derived | perturbation of the quadratic problem in modal coordinates (ADR 0472 arithmetic 4) |
 | Lag shift of the radial beam by the axial modes `Delta omega = -2 Omega^2 S omega_lag`, `S = 1.4772e-8 s^2` (L = 1 m, 0.05 m square steel); flap shift by torsion `-9.5e-8` at `0.2 w_0` | computed | Euler-Bernoulli cantilever (`beta_1 L = 1.875104068711961`, root of `cos x cosh x = -1`) and fixed-free rod modes, quadrature (ADR 0472 arithmetic 4) |
 
+## F-416 a flexible rotor on bearings in the stationary frame (ADR 0476)
+
+No source was read for F-416; every item is cited from memory and derived in ADR 0476 (set-ups and arithmetic 1 to 5; numpy
+checks `f416-scratch/py/estimates.py`, `r_set.py`, `j_set.py`, `o_set.py`, `a_set.py`, `k_set.py`, `u_set.py`; the zero-speed
+probe `f416-scratch/probe`). The references of the checks are closed forms, the F-391 beam model (`modal_analysis`) and the
+rigid rotor of ADR 0120 (`rotordyn`).
+
+| Item | Status | Source |
+|---|---|---|
+| Gyroscopic moments of a spinning section `m_x = rho I_p Omega theta_y,t`, `m_y = -rho I_p Omega theta_x,t`; the element matrix `G = [[0, P], [-P, 0]]`, `P = int rho I_p N_psi^T N_psi` | derived | the rate of the angular momentum `rho I_p Omega (theta_y, -theta_x, 1)` (ADR 0476 D2); H. D. Nelson, J. M. McVaugh, J. Eng. Ind. 98 (1976) 593 and M. Lalanne, G. Ferraris, Rotordynamics Prediction in Engineering (1998), for the names only: NOT read |
+| Forward and backward by the sense of the orbit: `Im(X conj Y) > 0` forward; the mass-weighted whirl number in `[-1, 1]` | derived | the averaged `x y_t - y x_t` (ADR 0476 D5) |
+| Undamped critical speeds `K z = Omega^2 (M - i G) z`, `M - i G` Hermitian | derived | the synchronous root `lambda = i Omega` (ADR 0476 D6) |
+| Jeffcott rotor: critical speed `sqrt(k/m)`, unbalance amplitude `e r^2/sqrt((1 - r^2)^2 + (2 zeta r)^2)` | derived | `m w_tt + c w_t + k w = m e Omega^2 e^{i Omega t}` in `w = x + i y`; G. Genta, Dynamics of Rotating Systems (2005), for the name only: NOT read |
+| Timoshenko shaft under a central load: `k_s = 1/(L^3/(48 E I) + L/(4 kappa G A))` | derived | bending and shear compliance of a simply supported beam (ADR 0476 set-up J) |
+| Cross-coupled stiffness on a damped disc: threshold `k_c = c w_n` exactly | derived | `m s^2 + c s + k - i k_c = 0` at `s = i w` (ADR 0476 set-up X); D. W. Childs, Turbomachinery Rotordynamics (1993), for the name only: NOT read |
+| Spinning Rayleigh beam on pins: `E I k^4 - rho A w^2 - rho I k^2 w^2 +/- 2 rho I k^2 Omega w = 0`, `k = n pi/L` | derived | `E I w'''' + rho A w_tt - rho I w_tt'' + i rho I_p Omega w_t'' = 0` (ADR 0476 set-up R) |
+| Overhung disc on a cantilever, the two-unknown model: `det [[k11 - m lam^2, k12], [k12, k22 - I_t lam^2 + I_p Omega lam]] = 0` with the Timoshenko tip flexibility `a11 = L^3/(3 E I) + L/(kappa G A)`, `a12 = L^2/(2 E I)`, `a22 = L/(E I)` | derived | ADR 0476 set-up O; M. I. Friswell et al., Dynamics of Rotating Machines (2010), for the name only: NOT read |
+| Fujiwara's bound on polynomial roots `2 max |a_{n-k}/a_n|^{1/k}` (with `|a_0/(2 a_n)|^{1/n}`) | from memory | used only for the scan range of the quartic's roots (ADR 0476 amendment 1) |
+| Cyclic Jacobi rotation `t = sgn(tau)/(|tau| + sqrt(1 + tau^2))` and its Hermitian form by a phase | from memory | G. H. Golub, C. F. Van Loan, Matrix Computations: NOT read; checked through the closed forms of the checks |
+
 ## F-420 stress stiffening of beams and shells (ADR 0473)
 
 No source was read for F-420; the books and the paper below are cited from memory for the names and the published form. Every
