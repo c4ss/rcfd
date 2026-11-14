@@ -8057,7 +8057,7 @@ fixed by the item's registration ADR before any code.
     driver, and the complex type C64; all 57 bit digests of the earlier tiers equal main's and the baseline hashes pass;
     partial because D6 and R2 to R4 were met only after set-up amendments made after their runs and mutation MU4 was
     caught by B7 but not by H1.
-- [ ] **F-409** Orthotropic elasticity with material axes, orthotropic expansion, and temperature-dependent properties from tables
+- [x] **F-409** Orthotropic elasticity with material axes, orthotropic expansion, and temperature-dependent properties from tables
   - depends on: F-408, F-372, F-374, F-376, F-380
   - acceptance: Every limit not stated here is registered in the ADR before the run. Orthotropy: with isotropic
     constants the elasticity matrix equals the isotropic one within 1e-13 relative; constants that are not positive
@@ -8073,8 +8073,19 @@ fixed by the item's registration ADR before any code.
     under an end force by F L ln(E1/E0)/(A (E1 - E0)) within 0.1 percent with 20 elements; with alpha = a0 + a1 T the
     free expansion is a0 (T - Tref) + a1 (T^2 - Tref^2)/2 within 1e-10; a constant table gives the bits of the constant
     material; a temperature outside a table is refused with the element and the temperature.
-  - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0312; the registration is
-    written by the implementation agent before any code.
+  - note: Structural solver, advanced tier (plan ADR 0310). ADR 0452, 2026-11-14: orthotropic elasticity from nine
+    constants (not positive definite refused naming nu_12, nu_13, nu_23 or the determinant) with fixed, cylindrical or
+    per-element material axes evaluated at every integration point, orthotropic expansion, and properties from
+    temperature tables (piecewise linear, nothing extrapolated, the thermal strain the integral of alpha from the
+    reference) on the linear static solve of solid elements with the recovery; every other path, beams and shells refuse
+    both variants by name (a follow-up of ADR 0452). Isotropic constants 6.4e-16; off-axis strain and shear-extension
+    ratio at 15 to 60 degrees to 1.4e-14; rotation of model and axes 4.4e-16; orthotropic Hex20 cantilever (L/h = 20, E2
+    = E1/10) 0.19 percent; free heating and full restraint 2e-15; polar-orthotropic tube (k = 2, bore hoop 34 p/15
+    derived) 7.8e-4 on 16 x 8 Hex20; bar with a linear modulus 1.13e-4 with 20 elements; alpha = a0 + a1 T 1.8e-15;
+    constant tables give the bits of the constant material; a temperature outside a table refused with the element and
+    the temperature. Default paths bit-identical (14 digests of main 0ca10e83). Ten mutations caught. Files
+    mat_ortho.rs, mat_table.rs, tests sa_ortho.rs, sa_mat_table.rs, sa_ortho_default_bits.rs; scaffold rows recorded and
+    copied in sa_scaffold.rs. Follow-up F-537.
 - [ ] **F-410** Linear viscoelasticity: Prony series in time, complex modulus in frequency, time-temperature shift
   - depends on: F-408, F-397, F-398
   - acceptance: Every limit not stated here is registered in the ADR before the run. Relaxation of one element after a
@@ -8308,7 +8319,10 @@ fixed by the item's registration ADR before any code.
     the decay of F-401's coupled run (agreement 1.2e-2, 2.5e-3): the lag of the pairing. Partial: the W5 miss, the
     amendments, and the order companion of the Womersley-1 imaginary part (0.68, limit 0.8). Seven mutations caught. No
     line of rcfd-fv or rcfd-api changed. Open: ADR 0446 Q1 to Q3. Follow-ups F-530 (PISO stability at large diffusion
-    numbers), F-531 (Symmetry viscous flux).
+    numbers), F-531 (Symmetry viscous flux). F-530 (ADR 0451, 2026-11-14): the divergence is the corrector instability
+    of ADR 0214; with the consistent correctors and 8 outer iterations the Womersley-1 piston channel of this item (40
+    cells across) runs at nu dt/dy^2 = 25 and 50 and matches the impedance within 0.46 and 0.32 percent after the
+    extrapolation.
 - [ ] **F-422** J2 plasticity with isotropic and kinematic hardening: radial return and consistent tangent
   - depends on: F-408, F-389, F-397
   - acceptance: Every limit not stated here is registered in the ADR before the run. The tangent agrees with central
@@ -10271,14 +10285,31 @@ fixed by the item's registration ADR before any code.
     names an equation whose elimination position differs from its index; the static solve reports which factor it built;
     factor and solution bit-identical for 1 and 8 threads; the default solver's results keep their bits.
   - note: Structural solver, advanced tier. Follow-up of F-431 (ADR 0447, 2026-11-14).
-- [ ] **F-530** Stability of the non-iterated PISO step at large diffusion numbers
+- [~] **F-530** Stability of the non-iterated PISO step at large diffusion numbers
   - depends on: F-421
   - acceptance: Every limit not stated here is registered in the ADR before the run. The divergence of the PISO step
     above nu dt/dy^2 of about 3.5 found by ADR 0446 (a plane channel driven by an oscillating inflow on a fixed mesh) is
     located in the step and either removed, so that the same channel at nu dt/dy^2 = 25 and 100 stays bounded over 3
     periods and matches the oscillating-channel impedance as the stable runs do, or refused by the step with a message
     naming the diffusion number; the default results of every existing case stay bit-identical.
-  - note: Numerics. Found by F-421 (ADR 0446, 2026-11-14).
+  - note: Numerics. PARTIAL (ADR 0451, 2026-11-14; registered before the code, amendment 1 after the registered runs).
+    Located: the divergence of ADR 0446 is the corrector instability of ADR 0214 (the first corrector over-corrects a
+    pressure error by about the cross-gap diffusion number, the second does not remove the Rhie-Chow part left in the
+    cell velocity): on the fixed-mesh channel driven by an oscillating inflow (120 x 40 cells, Womersley 1) the default
+    step alternates in sign every step, the twin-run radius of the step map is 9.13 per step at nu dt/dy^2 = 25 against
+    the ADR 0073 estimate 9.40, the estimate crosses one between 2.5 and 3.0 and is 5.0 at 16 cells across at the same
+    number; more correctors lower it, the Rhie-Chow time term and the grading play no part. Removed by the opt-in
+    consistent correctors of ADR 0214: bounded over 3 periods at nu dt/dy^2 = 25, 50 and 100. Found: with one outer
+    iteration the step does not converge the pressure at such numbers (each corrector removes a few percent of a smooth
+    pressure error), and the impedance's imaginary part is 14 percent low at 50 and 3 percent low at 25 (also with 8
+    correctors); with the consistent correctors and 8 outer iterations (no relaxation) every level matches the discrete
+    implicit-Euler impedance within 0.6 percent, the extrapolation the oscillating-channel impedance within 0.61 and
+    0.38 percent and the stable default runs within 0.23 percent; the moving piston of F-421 the same (0.46, 0.32
+    percent). Partial: the registered estimate of the rate (16 cells) and growth measurement missed, the option alone
+    missed the impedance and one periodicity tolerance (a slowly decaying numerical mode, 0.95 to 0.99 per step), and
+    the match was met only after the amendment, with 8 outer iterations taken from a diagnosis. No library line changed
+    (defaults bit-identical); six mutations caught; docs/dynamic-mesh.md. Open: ADR 0451 Q1 to Q3. Follow-ups F-535
+    (opt-in refusal naming the diffusion number), F-536 (outer-iteration criterion).
 - [ ] **F-531** Viscous flux of the Symmetry condition for flow tangential to the plane
   - depends on: F-421
   - acceptance: Every limit not stated here is registered in the ADR before the run. Stokes' second problem (a wall
@@ -10317,3 +10348,30 @@ fixed by the item's registration ADR before any code.
     0449); the Gerber refusal of a compressive mean at or beyond the strength says "in modulus" while every
     positive-mean message is byte-identical; all 9 tests of ADR 0449 pass unedited; mutations of the guard threshold and
     of both message forms caught; the guard itself is unreachable by design (equivalent mutant recorded).
+- [ ] **F-535** Opt-in refusal of the PISO step at the pressure-lag onset, naming the diffusion number
+  - depends on: F-530
+  - acceptance: Every limit not stated here is registered in the ADR before the run. An opt-in setting makes the
+    PISO/PIMPLE step refuse at step 1, through the divergence guard and with the state left as it was, when the
+    pressure-lag estimate of ADR 0073 for the step's settings is at least one, with a message naming the largest cell
+    diffusion number nu dt/dx^2, the estimate and the remedies (consistent correctors with outer iterations, a smaller
+    step); the fixed-mesh channel of ADR 0451 is refused at nu dt/dy^2 = 25 and 100 and runs at 2.5; the default results
+    of every existing case stay bit-identical.
+  - note: Numerics. Follow-up of F-530 (ADR 0451, 2026-11-14).
+- [ ] **F-536** Outer-iteration criterion for the consistent-corrector step at large diffusion numbers
+  - depends on: F-530
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The number of outer iterations of
+    the transient step with consistent correctors is set by a registered criterion (a derived contraction of the
+    pressure error, or a tolerance on the change of the pressure between outer iterations) instead of a fixed count, so
+    that the fixed-mesh channel of ADR 0451 at nu dt/dy^2 = 25, 50 and 100 matches the discrete implicit-Euler impedance
+    within 1 percent at every level and its extrapolation the oscillating-channel impedance within 3 percent, with the
+    outer iterations used per step recorded; the default results of every existing case stay bit-identical.
+  - note: Numerics. Follow-up of F-530 (ADR 0451, 2026-11-14).
+- [ ] **F-537** Orthotropic and tabulated materials on the modal, prestressed-modal and transformation paths
+  - depends on: F-409
+  - acceptance: Every limit not stated here is registered in the ADR before the run. Modal analysis, prestressed modes
+    and the transformation path (linear constraints, elastic supports) take the orthotropic and tabulated materials of
+    ADR 0452 through the per-point stiffness; the first bending frequencies of an orthotropic Hex20 cantilever match the
+    beam values with E1 within 1 percent; isotropic constants in an orthotropic material give the frequencies of the
+    isotropic material within 1e-12; the paths still not opened refuse the variants by name; default paths
+    bit-identical.
+  - note: Structural solver, advanced tier. Follow-up of F-409 (ADR 0452, 2026-11-14).

@@ -6,7 +6,6 @@
 //! (default) or by CG with Jacobi, and the reactions `K u - f`. A pivot `d_i <= 1e-10 a_ii` of the direct solve is refused
 //! as a singular stiffness (a mechanism the constraint check cannot see; ADR 0275 arithmetic 4).
 
-use crate::assemble::stiffness_with;
 use crate::constraint::{check_rigid_body_motions, prescribed_equations, reactions, reduce, Prescribed};
 use crate::error::{FemError, Result};
 use crate::loads::{nodal_load_vector, NodalForceAt};
@@ -181,8 +180,8 @@ pub fn solve_static_report(
 ) -> Result<(SolidResult, SolveReport)> {
     model.validate()?;
     // ADR 0417 D4, ADR 0432 D3, ADR 0435 D1: the elimination path and the transformation path take beams and shells (the
-    // transformation has its own check).
-    model.check_supported_with_structures()?;
+    // transformation has its own check). ADR 0452 D6: the elimination path also takes the per-point materials.
+    model.check_supported_with_materials()?;
     if options.refinement > 0 {
         check_refinement(model, options)?;
     }
@@ -222,7 +221,7 @@ pub fn solve_static_report(
     let f = nodal_load_vector(model, forces)?;
     let fixed = prescribed_equations(model, prescribed)?;
     check_rigid_body_motions(model, &fixed)?;
-    let k = stiffness_with(model, options.threads)?;
+    let k = crate::assemble::stiffness_with_materials(model, options.threads)?;
     let sys = reduce(&k, &f, &fixed)?;
     let nf = sys.free().len();
     let mut report = SolveReport {

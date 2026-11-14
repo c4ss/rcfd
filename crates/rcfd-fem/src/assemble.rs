@@ -187,6 +187,27 @@ pub fn stiffness(model: &SolidModel) -> Result<CsrMatrix> {
 /// [`SolidModel::check_elements_supported_with_structures`].
 pub fn stiffness_with(model: &SolidModel, threads: Option<usize>) -> Result<CsrMatrix> {
     model.check_elements_supported_with_structures()?;
+    assemble_stiffness(model, threads, None)
+}
+
+/// As [`stiffness_with`] for the static solve (ADR 0452 D6): the checks of
+/// [`SolidModel::check_elements_supported_with_materials`], and an element of the orthotropic or tabulated material takes
+/// [`crate::mat_ortho::element_stiffness`] with the elasticity at each integration point.
+pub(crate) fn stiffness_with_materials(model: &SolidModel, threads: Option<usize>) -> Result<CsrMatrix> {
+    model.check_elements_supported_with_materials()?;
+    if crate::mat_ortho::uses_point_materials(model) {
+        let points = crate::mat_ortho::MaterialPoints::new(model)?;
+        assemble_stiffness(model, threads, Some(&points))
+    } else {
+        assemble_stiffness(model, threads, None)
+    }
+}
+
+fn assemble_stiffness(
+    model: &SolidModel,
+    threads: Option<usize>,
+    points: Option<&crate::mat_ortho::MaterialPoints>,
+) -> Result<CsrMatrix> {
     assemble_with(model, threads, |ctx| {
         if ctx.kind == ElementKind::Beam2 {
             return crate::beam::model_element_stiffness(model.mesh(), ctx.element, ctx.coords, ctx.material);
@@ -196,6 +217,11 @@ pub fn stiffness_with(model: &SolidModel, threads: Option<usize>) -> Result<CsrM
         }
         if ctx.kind == ElementKind::Shell3 {
             return crate::shell3::model_element_stiffness(model.mesh(), ctx.element, ctx.coords, ctx.material);
+        }
+        if let Some(points) = points {
+            if crate::mat_ortho::is_point_material(ctx.material) {
+                return crate::mat_ortho::element_stiffness(points, ctx);
+            }
         }
         let d = ctx.material.elasticity_matrix()?;
         element_for(ctx.kind).stiffness(ctx.coords, &d)
