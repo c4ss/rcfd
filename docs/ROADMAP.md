@@ -10034,12 +10034,22 @@ fixed by the item's registration ADR before any code.
     skyline factor with K_eff - sigma M blocks); eigenvalues against the dense state solver within 1.6e-10 on the cube
     and 4.4e-12 on the disc sector, flags equal; the 2112-unknown ring above the cap matches the dense sector union to
     3.3e-13; Q1 of the cube missed (8.5e-8 against 1e-8, far elastic mode vectors, diagnosed); 8 of 8 mutations caught.
-- [ ] **F-520** Accurate far-mode vectors of the sparse whirl state solver
+    ADR 0428, 2026-11-14: sparse whirl state solver (isotropic shift-invert Arnoldi on (C^2 + sigma)^-1, one skyline
+    factor with K_eff - sigma M blocks); eigenvalues against the dense state solver within 1.6e-10 on the cube and
+    4.4e-12 on the disc sector, flags equal; the 2112-unknown ring above the cap matches the dense sector union to
+    3.3e-13; Q1 of the cube missed (8.5e-8 against 1e-8, far elastic mode vectors, diagnosed); 8 of 8 mutations caught.
+    The far-mode vectors are refined by the opt-in option of F-520 (ADR 0442, 2026-11-14).
+- [x] **F-520** Accurate far-mode vectors of the sparse whirl state solver
   - depends on: F-519
   - acceptance: Every limit not stated here is registered in the ADR before the run. Each mode returned by the sparse
     whirl state solver of ADR 0428 is refined by inverse iteration at its own eigenvalue, so that on the cube of ADR
     0416 at both registered shifts with count 6 every stored mode residual is at most 1e-8, while the eigenvalues still
     equal the dense state solver's within 1e-9 relative and the stability flags agree.
+  - note: ADR 0442, 2026-11-14: opt-in refinement (SparseStateOptions::refine) of every sparse whirl state mode by three
+    inverse iterations on Q(s) at its own eigenvalue, with a complex band LU with partial pivoting on the RCM order and
+    M-Gram-Schmidt within clusters of eigenvalues equal to 1e-9; on the cube at both shifts with count 6 every mode
+    residual at most 2.2e-10 (far elastic modes 8.0e-13, against 8.5e-8 unrefined), eigenvalues and flags bitwise those
+    of ADR 0428 (1.6e-10 against the dense solver, flags equal); exact doubles kept apart; 6 of 6 mutations caught.
 - [~] **F-521** Shell results in the solid output: VTK quad cells, rotations and the resultants as cell data
   - depends on: F-392, F-512
   - acceptance: Every limit not stated here is registered in the ADR before the run. rcfd_post::solid_output writes a
