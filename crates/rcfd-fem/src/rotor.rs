@@ -25,7 +25,7 @@ use crate::mesh::BeamSection;
 use crate::model::Material;
 use crate::rotating::{check_speeds, track_whirl, Entry, Stability, Whirl, WhirlMode, WhirlModes, STABILITY_TOLERANCE};
 pub use rcfd_linalg::complex::C64;
-use rcfd_linalg::eigen_general::{quadratic_eigen_with, GeneralEigenError, GeneralEigenOptions};
+use rcfd_linalg::eigen_general::{general_eigen_with, quadratic_eigen_with, GeneralEigenError, GeneralEigenOptions};
 use rcfd_linalg::CsrMatrix;
 use std::f64::consts::PI;
 
@@ -612,7 +612,33 @@ impl RotorModel {
         self.whirl_with(omega, &mats, &free, &sense)
     }
 
+    /// The whirl modes at the spin `omega` with the massless damped unknowns of the model solved as first-order unknowns
+    /// (ADR 0504 D1, D2). A model without such an unknown (an unknown whose mass row and column are zero but which carries
+    /// damping or gyroscopic terms) gives exactly the bytes of [`whirl`](Self::whirl); with them the problem is the
+    /// generalized one of size `2 n_m + n_0` (the massless unknowns keep a displacement state and no velocity state), so
+    /// `RotorWhirl::roots` holds that many roots. Refuses a negative or non-finite speed (`"speed"`), an unknown that is
+    /// partly massless or a model with no mass at all (`"mass"`), a singular damping block of the massless unknowns
+    /// (`"damping"`) and the refusals of `whirl` otherwise.
+    pub fn whirl_first_order(&self, omega: f64) -> Result<RotorWhirl> {
+        check_spin(omega)?;
+        let mats = self.matrices_at(omega);
+        let free = self.free();
+        let sense = sense_matrix(&mats);
+        self.whirl_core(omega, &mats, &free, &sense, true)
+    }
+
     fn whirl_with(&self, omega: f64, mats: &RotorMatrices, free: &[usize], sense: &[f64]) -> Result<RotorWhirl> {
+        self.whirl_core(omega, mats, free, sense, false)
+    }
+
+    fn whirl_core(
+        &self,
+        omega: f64,
+        mats: &RotorMatrices,
+        free: &[usize],
+        sense: &[f64],
+        first_order: bool,
+    ) -> Result<RotorWhirl> {
         let nf = free.len();
         if nf == 0 {
             return Err(invalid("stiffness", "every unknown is fixed".to_string()));
@@ -652,6 +678,15 @@ impl RotorModel {
         let ma = pick(&mf);
         let da: Vec<f64> = pick(&cf).iter().zip(pick(&gf)).map(|(c, g)| c + omega * g).collect();
         let ka = &cond.k;
+        if first_order {
+            let massless: Vec<bool> = (0..na)
+                .map(|i| (0..na).all(|j| ma[i * na + j] == 0.0 && ma[j * na + i] == 0.0))
+                .collect();
+            if massless.iter().any(|&b| b) {
+                let (roots, vectors, residuals) = first_order_eigen(&ma, &da, ka, na, &massless)?;
+                return Ok(self.assemble(omega, mats, free, sense, &cond, na, roots, &vectors, &residuals));
+            }
+        }
         let mut kmax: f64 = 0.0;
         let mut dmax: f64 = 0.0;
         for i in 0..na {
@@ -684,6 +719,25 @@ impl RotorModel {
                 },
             })?;
         let roots: Vec<C64> = q.values.iter().map(|mu| mu.scale(tau)).collect();
+        Ok(self.assemble(omega, mats, free, sense, &cond, na, roots, &q.vectors, &q.residuals))
+    }
+
+    /// The modes, the clusters, the stability flag from the roots `roots` and their vectors on the kept unknowns (the common
+    /// tail of `whirl` and `whirl_first_order`).
+    #[allow(clippy::too_many_arguments)]
+    fn assemble(
+        &self,
+        omega: f64,
+        mats: &RotorMatrices,
+        free: &[usize],
+        sense: &[f64],
+        cond: &Condensation,
+        na: usize,
+        roots: Vec<C64>,
+        vectors: &[Vec<C64>],
+        residuals: &[f64],
+    ) -> RotorWhirl {
+        let nt = mats.n;
         let mut picked: Vec<(C64, Vec<C64>, f64)> = Vec::new();
         let mut real_roots = Vec::new();
         for (idx, lam) in roots.iter().enumerate() {
@@ -694,8 +748,8 @@ impl RotorModel {
             if lam.im <= 0.0 {
                 continue;
             }
-            let xf = cond.expand(&q.vectors[idx]);
-            picked.push((*lam, to_full(&xf, free, nt), q.residuals[idx]));
+            let xf = cond.expand(&vectors[idx]);
+            picked.push((*lam, to_full(&xf, free, nt), residuals[idx]));
         }
         picked.sort_by(|a, b| a.0.im.total_cmp(&b.0.im).then(a.0.re.total_cmp(&b.0.re)));
         // D5: resolve degenerate clusters into circular orbits.
@@ -734,7 +788,7 @@ impl RotorModel {
         } else {
             Stability::Stable
         };
-        Ok(RotorWhirl {
+        RotorWhirl {
             speed: omega,
             modes,
             roots,
@@ -742,7 +796,7 @@ impl RotorModel {
             stability,
             unknowns: na,
             free_vectors,
-        })
+        }
     }
 
     /// The undamped critical speeds, ascending, each with its direction (ADR 0476 D6). Refuses a stiffness that is not
@@ -1547,6 +1601,155 @@ impl Condensation {
     }
 }
 
+/// The roots and vectors of `(lambda^2 M + lambda D + K) x = 0` when the unknowns flagged in `massless` have a zero row and
+/// column of `M` (ADR 0504 D2). The massless unknowns keep a displacement state only: with the states `(q_m, v_m, q_0)` the
+/// problem is `A x = lambda B x`, `B = [[I, 0, 0], [0, M_mm, D_m0], [0, 0, D_00]]`, `A = [[0, I, 0], [-K_mm, -D_mm, -K_m0],
+/// [-K_0m, -D_0m, -K_00]]`, of size `2 n_m + n_0`, solved as the standard problem of `B^-1 A / tau`. Returns the roots, the
+/// vectors on the `na` unknowns (`x^H M x = 1`, the entry of largest modulus real and positive) and the relative residuals of
+/// the first-order problem. Refuses `"mass"` (no unknown with mass, a nonpositive mass diagonal) and `"damping"` (singular
+/// `D_00`).
+fn first_order_eigen(
+    m: &[f64],
+    d: &[f64],
+    k: &[f64],
+    na: usize,
+    massless: &[bool],
+) -> Result<(Vec<C64>, Vec<Vec<C64>>, Vec<f64>)> {
+    let mi: Vec<usize> = (0..na).filter(|&i| !massless[i]).collect();
+    let zi: Vec<usize> = (0..na).filter(|&i| massless[i]).collect();
+    let (nm, n0) = (mi.len(), zi.len());
+    if nm == 0 {
+        return Err(invalid(
+            "mass",
+            "no unknown has mass (the whirl of a model without inertia has no modes)".to_string(),
+        ));
+    }
+    for &i in &mi {
+        let v = m[i * na + i];
+        if v.is_nan() || v <= 0.0 {
+            return Err(invalid(
+                "mass",
+                format!("unknown {i} has no mass but a nonzero row of the mass matrix (a partly massless unknown is not taken)"),
+            ));
+        }
+    }
+    let blk = |a: &[f64], r: &[usize], c: &[usize]| -> Vec<f64> {
+        let mut o = vec![0.0; r.len() * c.len()];
+        for (i, &p) in r.iter().enumerate() {
+            for (j, &q) in c.iter().enumerate() {
+                o[i * c.len() + j] = a[p * na + q];
+            }
+        }
+        o
+    };
+    let mmm = blk(m, &mi, &mi);
+    let (dmm, dm0, d0m, d00) = (blk(d, &mi, &mi), blk(d, &mi, &zi), blk(d, &zi, &mi), blk(d, &zi, &zi));
+    let (kmm, km0, k0m, k00) = (blk(k, &mi, &mi), blk(k, &mi, &zi), blk(k, &zi, &mi), blk(k, &zi, &zi));
+    let mut tau_k: f64 = 0.0;
+    let mut tau_d: f64 = 0.0;
+    for i in 0..nm {
+        tau_k = tau_k.max(kmm[i * nm + i].abs() / mmm[i * nm + i]);
+        tau_d = tau_d.max((0..nm).map(|j| dmm[i * nm + j].abs()).sum::<f64>() / mmm[i * nm + i]);
+    }
+    let mut tau_z: f64 = 0.0;
+    for i in 0..n0 {
+        let dd = d00[i * n0 + i].abs();
+        if dd > 0.0 {
+            tau_z = tau_z.max(k00[i * n0 + i].abs() / dd);
+        }
+    }
+    let mut tau = tau_k.sqrt() + tau_d + tau_z;
+    if !(tau > 0.0 && tau.is_finite()) {
+        tau = 1.0;
+    }
+    let lu0 = RealLu::new(d00, n0).ok_or_else(|| {
+        invalid(
+            "damping",
+            "the damping block of the massless unknowns is singular (a massless unknown that no damper holds)"
+                .to_string(),
+        )
+    })?;
+    let lum = RealLu::new(mmm, nm)
+        .ok_or_else(|| invalid("mass", "the mass of the unknowns with mass is singular".to_string()))?;
+    let big = 2 * nm + n0;
+    let mut a = vec![0.0; big * big];
+    for i in 0..nm {
+        a[i * big + nm + i] = 1.0;
+        for j in 0..nm {
+            a[(nm + i) * big + j] = -kmm[i * nm + j];
+            a[(nm + i) * big + nm + j] = -dmm[i * nm + j];
+        }
+        for j in 0..n0 {
+            a[(nm + i) * big + 2 * nm + j] = -km0[i * n0 + j];
+        }
+    }
+    for i in 0..n0 {
+        for j in 0..nm {
+            a[(2 * nm + i) * big + j] = -k0m[i * nm + j];
+            a[(2 * nm + i) * big + nm + j] = -d0m[i * nm + j];
+        }
+        for j in 0..n0 {
+            a[(2 * nm + i) * big + 2 * nm + j] = -k00[i * n0 + j];
+        }
+    }
+    // S = B^-1 A / tau by the block solves of B (last block with D_00, middle block with M_mm).
+    let mut sm = vec![0.0; big * big];
+    for col in 0..big {
+        let a1: Vec<f64> = (0..nm).map(|i| a[i * big + col]).collect();
+        let a2: Vec<f64> = (0..nm).map(|i| a[(nm + i) * big + col]).collect();
+        let a3: Vec<f64> = (0..n0).map(|i| a[(2 * nm + i) * big + col]).collect();
+        let y3 = lu0.solve(&a3);
+        let rhs: Vec<f64> = (0..nm)
+            .map(|i| a2[i] - (0..n0).map(|j| dm0[i * n0 + j] * y3[j]).sum::<f64>())
+            .collect();
+        let y2 = lum.solve(&rhs);
+        for i in 0..nm {
+            sm[i * big + col] = a1[i] / tau;
+            sm[(nm + i) * big + col] = y2[i] / tau;
+        }
+        for i in 0..n0 {
+            sm[(2 * nm + i) * big + col] = y3[i] / tau;
+        }
+    }
+    let g = general_eigen_with(&sm, big, &GeneralEigenOptions::default()).map_err(|e| FemError::Solver {
+        solver: "general_eigen",
+        reason: e.to_string(),
+    })?;
+    let roots: Vec<C64> = g.values.iter().map(|mu| mu.scale(tau)).collect();
+    let mut vectors = Vec::with_capacity(big);
+    for x in &g.vectors {
+        let mut xa = vec![C64::ZERO; na];
+        for (i, &p) in mi.iter().enumerate() {
+            xa[p] = x[i];
+        }
+        for (j, &p) in zi.iter().enumerate() {
+            xa[p] = x[2 * nm + j];
+        }
+        let mut kmx = 0;
+        for i in 0..na {
+            if xa[i].abs() > xa[kmx].abs() {
+                kmx = i;
+            }
+        }
+        let top = xa[kmx];
+        if top.abs() > 0.0 {
+            let phase = top.conj().scale(1.0 / top.abs());
+            for v in xa.iter_mut() {
+                *v = *v * phase;
+            }
+            let xmx = form(&xa, m, &xa, na).re;
+            if xmx > 0.0 {
+                let f = 1.0 / xmx.sqrt();
+                for v in xa.iter_mut() {
+                    *v = v.scale(f);
+                }
+            }
+        }
+        vectors.push(xa);
+    }
+    Ok((roots, vectors, g.residuals))
+}
+
 /// Dense real LU with partial pivoting.
 struct RealLu {
     n: usize,
@@ -1812,4 +2015,60 @@ fn hermitian_jacobi(a: &[C64], n: usize) -> Result<(Vec<f64>, Vec<C64>)> {
         }
     }
     Ok(((0..n).map(|i| a[i * n + i].re).collect(), v))
+}
+
+#[cfg(test)]
+mod first_order_tests {
+    use super::*;
+
+    /// ADR 0504 U1: the dense first-order routine on a 4-unknown system with one massless unknown and every coupling block
+    /// nonzero; the pairs satisfy the quadratic on the original unknowns.
+    #[test]
+    fn u1_dense_first_order_routine() {
+        let na = 4;
+        let m = vec![
+            2.0, 0.3, 0.0, 0.0, //
+            0.3, 3.0, 0.0, 0.0, //
+            0.0, 0.0, 1.5, 0.0, //
+            0.0, 0.0, 0.0, 0.0,
+        ];
+        let d = vec![
+            0.4, 0.1, 0.0, 0.2, //
+            0.1, 0.5, 0.1, -0.1, //
+            0.0, 0.2, 0.3, 0.05, //
+            0.15, -0.05, 0.1, 0.6,
+        ];
+        let k = vec![
+            50.0, 5.0, 0.0, 8.0, //
+            5.0, 70.0, 3.0, -2.0, //
+            0.0, 4.0, 60.0, 6.0, //
+            7.0, -1.0, 5.0, 40.0,
+        ];
+        let massless = [false, false, false, true];
+        let (roots, vectors, residuals) = first_order_eigen(&m, &d, &k, na, &massless).unwrap();
+        assert_eq!(roots.len(), 2 * 3 + 1);
+        assert_eq!(vectors.len(), 7);
+        let norm = |a: &[f64]| a.iter().map(|v| v * v).sum::<f64>().sqrt();
+        let mut worst: f64 = 0.0;
+        for ((lam, x), res) in roots.iter().zip(&vectors).zip(&residuals) {
+            assert!(res.is_finite() && *res < 1e-10, "residual {res}");
+            let mut r2 = 0.0;
+            for i in 0..na {
+                let mut s = C64::ZERO;
+                for j in 0..na {
+                    let q = *lam * *lam * C64::new(m[i * na + j], 0.0)
+                        + *lam * C64::new(d[i * na + j], 0.0)
+                        + C64::new(k[i * na + j], 0.0);
+                    s += q * x[j];
+                }
+                r2 += s.norm_sqr();
+            }
+            let xn = x.iter().map(|v| v.norm_sqr()).sum::<f64>().sqrt();
+            let scale = (lam.abs().powi(2) * norm(&m) + lam.abs() * norm(&d) + norm(&k)) * xn;
+            worst = worst.max(r2.sqrt() / scale);
+        }
+        assert!(worst.is_finite(), "U1 residual not finite");
+        println!("U1 worst residual {worst:e}");
+        assert!(worst <= 1e-10, "U1 residual {worst}");
+    }
 }
