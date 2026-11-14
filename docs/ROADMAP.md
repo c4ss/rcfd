@@ -10494,7 +10494,9 @@ fixed by the item's registration ADR before any code.
     bits of the isotropic material on every path. Default paths bit-identical (20 digests of main 2504fd62). Seven of
     seven mutations caught; ADR 0457's equivalent mutant is gone. Files rotating.rs, buckling.rs, transient.rs,
     geometric.rs, mat_ortho.rs; tests sa_ortho_rotating.rs, sa_ortho_rotating_default_bits.rs; sa_ortho_modal
-    r1_r2_paths_after_f537 and r3_paths_not_opened recorded and copied. Follow-ups F-544, F-545.
+    r1_r2_paths_after_f537 and r3_paths_not_opened recorded and copied. Follow-ups F-544, F-545. F-545 (ADR 0463,
+    2026-11-14) met the transient isotropic equivalence within one-ulp-probed limits (H20E 9.25e-12 against 5e-11): the
+    TR2 miss was a limit below the set-up's rounding; done is the maintainer's call.
 - [x] **F-543** Joint couplings with consistent face weights
   - depends on: F-426
   - acceptance: Every limit not stated here is registered in the ADR before the run. The beam-to-solid and
@@ -10523,13 +10525,22 @@ fixed by the item's registration ADR before any code.
     models; default paths bit-identical.
   - note: Structural solver, advanced tier. Follow-up of F-542 (ADR 0459, 2026-11-14); F-537 question 3. Fan rotor
     sectors in orthotropic plastic.
-- [ ] **F-545** Transient isotropic equivalence with a probed limit
+- [x] **F-545** Transient isotropic equivalence with a probed limit
   - depends on: F-542
   - acceptance: Every limit not stated here is registered in the ADR before the run, after a rounding probe of each
     set-up (a one-ulp change of the isotropic constants) made and disclosed before the registration. The transient
     integrator with isotropic constants in an orthotropic material matches the isotropic material on a Hex20 and a Hex8
     model on both paths within limits derived from the probe; default paths bit-identical.
-  - note: Structural solver, advanced tier. Follow-up of F-542 (ADR 0459, 2026-11-14): the TR2 miss. Size S.
+  - note: ADR 0463, 2026-11-14: the transient integrator with isotropic constants in an orthotropic material (Fixed(I),
+    a general rotation, cylindrical axes) equals the isotropic material on Hex20 and Hex8 models on both paths
+    (elimination and transformation) within limits taken from a one-ulp probe disclosed before the registration (limit =
+    4 x the largest of six probe values of the set-up, rounded up: Hex20 elimination 5e-11, Hex20 transformation 2e-12,
+    Hex8 elimination 6e-13, Hex8 transformation 2e-12); measured at most 9.25e-12, 7.8e-13, 1.2e-13 and 3.9e-13
+    respectively (the 9.25e-12 is the ADR 0459 TR2 number that missed 1e-12; the set-up's own one-ulp spread is
+    1.1e-11). A relative change of 1e-6 in E is seen at 1e-7 to 3e-6. Three of three isotropy-visible mutations caught
+    (transposed Bond product, shear factor, Poisson sign); a swapped shear order and an inverse axes rotation are
+    equivalent under isotropy and not seen, as registered. Test-only: no library line changed; default paths
+    bit-identical. Test sa_transient_iso_equiv.rs.
 - [ ] **F-546** Angle-weighted shell pressure on unstructured curved meshes
   - depends on: F-540
   - acceptance: Every limit not stated here is registered in the ADR before the run. A sphere octant triangulated
