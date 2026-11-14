@@ -1039,3 +1039,44 @@ fn a0b_a1_g1_large_axial_oscillation() {
     );
     c.finish();
 }
+
+// ------------------------------------------------------------------------------------------- amendment 2 (ADR 0479)
+
+#[test]
+fn s3_free_body_momentum() {
+    let mesh = hex_box([0.0; 3], [1.0, 0.1, 0.1], [1, 1, 1]).unwrap();
+    let mut model = SolidModel::new(mesh);
+    model
+        .add_material("all", Material::isotropic_elastic(E_STEEL, 0.0, RHO, 0.0).unwrap())
+        .unwrap();
+    let dofs = model.dof_map();
+    let n = dofs.n_equations();
+    let mut v0 = vec![0.0; n];
+    for i in 0..model.mesh().nodes().len() {
+        for (comp, w) in [0.3, 0.2, 0.1].iter().enumerate() {
+            v0[dofs.equation(i, comp).unwrap()] = *w;
+        }
+    }
+    for &i in model.mesh().node_set("xmax").unwrap() {
+        v0[dofs.equation(i, 0).unwrap()] += 10.0;
+    }
+    let mut it = NlIntegrator::new(&model, &[], &NlTransientOptions::new(t_lin() / 200.0)).unwrap();
+    it.start(0.0, &vec![0.0; n], &v0).unwrap();
+    let (p0, _) = it.momentum().unwrap();
+    let mut c = Checks::new();
+    let mut dp = 0.0f64;
+    let mut ok = true;
+    for k in 0..50 {
+        if let Err(e) = it.step() {
+            c.holds("S3 every step converges", false, &format!("step {}: {e}", k + 1));
+            ok = false;
+            break;
+        }
+        dp = dp.max(norm3(sub3(it.momentum().unwrap().0, p0)));
+    }
+    if ok {
+        c.holds("S3 every step converges", true, "50 steps");
+    }
+    c.at_most("S3 free body max |P - P_0|/|P_0|", dp / norm3(p0), 1e-11);
+    c.finish();
+}
