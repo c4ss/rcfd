@@ -64,7 +64,9 @@ fn digests() -> Vec<u64> {
         let s = HarmonicSolver::new(
             &m,
             ModalBasis::from_result(&res).unwrap(),
-            &HarmonicOptions::new(ModalDamping::Ratio(0.02)).static_correction(corr).threads(1),
+            &HarmonicOptions::new(ModalDamping::Ratio(0.02))
+                .static_correction(corr)
+                .threads(1),
         )
         .unwrap();
         for w in [0.0, 500.0, 2.0 * std::f64::consts::PI * 91.0] {
@@ -73,11 +75,17 @@ fn digests() -> Vec<u64> {
             out.push(fnv(bits(&r.im)));
         }
         let sweep = s.sweep(&load, &[100.0, 700.0, 3000.0]).unwrap();
-        out.push(fnv(sweep.iter().flat_map(|r| bits(&r.re).chain(bits(&r.im)).collect::<Vec<_>>())));
+        out.push(fnv(sweep
+            .iter()
+            .flat_map(|r| bits(&r.re).chain(bits(&r.im)).collect::<Vec<_>>())));
         let q = s.modal_amplitudes(&load, 600.0).unwrap();
         out.push(fnv(q.iter().flat_map(|&(a, b)| [a.to_bits(), b.to_bits()])));
         let st = s.response(&load, 600.0).unwrap().stress(&m).unwrap();
-        out.push(fnv(st.re.iter().chain(&st.im).flat_map(|x| bits(x).collect::<Vec<_>>())));
+        out.push(fnv(st
+            .re
+            .iter()
+            .chain(&st.im)
+            .flat_map(|x| bits(x).collect::<Vec<_>>())));
     }
     let p = participation(&m, &ModalBasis::from_result(&res).unwrap(), [0.0, 1.0, 0.0], Some(1)).unwrap();
     out.push(fnv(bits(&p.factors).chain([p.total_mass.to_bits()])));

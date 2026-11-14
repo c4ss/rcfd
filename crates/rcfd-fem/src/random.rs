@@ -101,7 +101,11 @@ impl Spectrum {
         let log = interpolation == Interpolation::LogLog;
         for (i, (&f, &g)) in frequencies.iter().zip(&values).enumerate() {
             if !f.is_finite() || f < 0.0 || (log && f <= 0.0) {
-                let need = if log { "finite and positive (log-log)" } else { "finite and >= 0" };
+                let need = if log {
+                    "finite and positive (log-log)"
+                } else {
+                    "finite and >= 0"
+                };
                 return Err(invalid(SPECTRUM, format!("entry {i}: frequency {f:e} must be {need}")));
             }
             if i > 0 && f <= frequencies[i - 1] {
@@ -359,17 +363,26 @@ pub fn frequency_grid(
 fn check_correlation(rho: &[Vec<f64>], n: usize) -> Result<()> {
     const KEY: &str = "correlation";
     if rho.len() != n || rho.iter().any(|row| row.len() != n) {
-        return Err(invalid(KEY, format!("the correlation must be {n} x {n} (one row per pattern)")));
+        return Err(invalid(
+            KEY,
+            format!("the correlation must be {n} x {n} (one row per pattern)"),
+        ));
     }
     for a in 0..n {
         if rho[a][a] != 1.0 {
-            return Err(invalid(KEY, format!("diagonal entry {a} is {:e}, must be 1", rho[a][a])));
+            return Err(invalid(
+                KEY,
+                format!("diagonal entry {a} is {:e}, must be 1", rho[a][a]),
+            ));
         }
         for b in 0..n {
             if !rho[a][b].is_finite() || rho[a][b] != rho[b][a] {
                 return Err(invalid(
                     KEY,
-                    format!("entries ({a}, {b}) {:e} and ({b}, {a}) {:e}: must be finite and symmetric", rho[a][b], rho[b][a]),
+                    format!(
+                        "entries ({a}, {b}) {:e} and ({b}, {a}) {:e}: must be finite and symmetric",
+                        rho[a][b], rho[b][a]
+                    ),
                 ));
             }
         }
@@ -380,7 +393,7 @@ fn check_correlation(rho: &[Vec<f64>], n: usize) -> Result<()> {
         for k in 0..j {
             d -= l[j][k] * l[j][k];
         }
-        if !(d > 0.0) {
+        if d.is_nan() || d <= 0.0 {
             return Err(invalid(
                 KEY,
                 format!("not positive semi-definite: Cholesky pivot {j} of rho + {CORRELATION_TOLERANCE:e} I is {d:e}"),
@@ -425,12 +438,19 @@ impl ModalChannels {
     ) -> Result<ModalChannels> {
         let nm = eigenvalues.len();
         if damping.len() != nm {
-            return Err(invalid(RANDOM, format!("{nm} eigenvalues and {} damping terms", damping.len())));
+            return Err(invalid(
+                RANDOM,
+                format!("{nm} eigenvalues and {} damping terms", damping.len()),
+            ));
         }
         if gains.is_empty() || gains.len() != residuals.len() {
             return Err(invalid(
                 RANDOM,
-                format!("{} gain patterns and {} residual patterns (at least one)", gains.len(), residuals.len()),
+                format!(
+                    "{} gain patterns and {} residual patterns (at least one)",
+                    gains.len(),
+                    residuals.len()
+                ),
             ));
         }
         let no = gains[0].len();
@@ -444,12 +464,18 @@ impl ModalChannels {
             }
             let v: Vec<f64> = g.iter().flatten().copied().collect();
             if v.iter().chain(s).any(|x| !x.is_finite()) {
-                return Err(invalid(RANDOM, format!("pattern {a}: a gain or residual is not finite")));
+                return Err(invalid(
+                    RANDOM,
+                    format!("pattern {a}: a gain or residual is not finite"),
+                ));
             }
             flat.push(v);
         }
         if eigenvalues.iter().chain(&damping).any(|x| !x.is_finite()) {
-            return Err(invalid(RANDOM, "an eigenvalue or damping term is not finite".to_string()));
+            return Err(invalid(
+                RANDOM,
+                "an eigenvalue or damping term is not finite".to_string(),
+            ));
         }
         Ok(ModalChannels {
             eigenvalues,
@@ -579,17 +605,26 @@ pub fn spectral_response(
             check_correlation(c, np)?;
             c.to_vec()
         }
-        None => (0..np).map(|a| (0..np).map(|b| if a == b { 1.0 } else { 0.0 }).collect()).collect(),
+        None => (0..np)
+            .map(|a| (0..np).map(|b| if a == b { 1.0 } else { 0.0 }).collect())
+            .collect(),
     };
     let no = channels.n_outputs;
     let g = options.group;
     if g == 0 || no % g != 0 {
-        return Err(invalid(RANDOM, format!("group size {g} does not divide the {no} outputs")));
+        return Err(invalid(
+            RANDOM,
+            format!("group size {g} does not divide the {no} outputs"),
+        ));
     }
     let (nodes, weights) = frequency_grid(spectra, &channels.eigenvalues, &channels.damping, options.refinement)?;
     let nm = channels.n_modes();
     let ng = no / g;
-    let mut psd = if options.keep_psd { vec![Vec::with_capacity(nodes.len()); no] } else { Vec::new() };
+    let mut psd = if options.keep_psd {
+        vec![Vec::with_capacity(nodes.len()); no]
+    } else {
+        Vec::new()
+    };
     let mut moments = vec![Moments::default(); no];
     let mut cov = vec![vec![0.0; g * g]; ng];
     let mut cov2 = vec![vec![0.0; g * g]; ng];
@@ -633,7 +668,11 @@ pub fn spectral_response(
         let gv: Vec<f64> = spectra.iter().map(|s| s.value(f)).collect();
         for a in 0..np {
             for b in 0..np {
-                gab[a][b] = if a == b { gv[a] } else { rho[a][b] * (gv[a] * gv[b]).sqrt() };
+                gab[a][b] = if a == b {
+                    gv[a]
+                } else {
+                    rho[a][b] * (gv[a] * gv[b]).sqrt()
+                };
             }
         }
         let cross = |i: usize, j: usize| -> f64 {
@@ -776,7 +815,11 @@ impl Excitation {
         if patterns.is_empty() || patterns.len() != spectra.len() {
             return Err(invalid(
                 RANDOM,
-                format!("{} patterns and {} spectra (at least one)", patterns.len(), spectra.len()),
+                format!(
+                    "{} patterns and {} spectra (at least one)",
+                    patterns.len(),
+                    spectra.len()
+                ),
             ));
         }
         if let Some(c) = &correlation {
@@ -951,7 +994,13 @@ impl RandomSolver {
             .collect();
         let residuals: Vec<Vec<f64>> = residual
             .iter()
-            .map(|x| request.equations.iter().map(|&e| x.as_ref().map_or(0.0, |x| x[e])).collect())
+            .map(|x| {
+                request
+                    .equations
+                    .iter()
+                    .map(|&e| x.as_ref().map_or(0.0, |x| x[e]))
+                    .collect()
+            })
             .collect();
         let mut channels = ModalChannels::new(eigenvalues.clone(), damping.clone(), gains, residuals)?;
         if let Some(r) = &absolute {

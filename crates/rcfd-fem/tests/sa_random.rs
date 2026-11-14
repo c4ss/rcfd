@@ -102,7 +102,13 @@ fn stiffness() -> f64 {
 fn one_mode(base: bool) -> ModalChannels {
     let w = omega_n();
     let gain = if base { -1.0 } else { 1.0 / MASS };
-    let ch = ModalChannels::new(vec![w * w], vec![2.0 * ZETA * w], vec![vec![vec![gain]]], vec![vec![0.0]]).unwrap();
+    let ch = ModalChannels::new(
+        vec![w * w],
+        vec![2.0 * ZETA * w],
+        vec![vec![vec![gain]]],
+        vec![vec![0.0]],
+    )
+    .unwrap();
     if base {
         ch.with_absolute(vec![1.0]).unwrap()
     } else {
@@ -111,7 +117,13 @@ fn one_mode(base: bool) -> ModalChannels {
 }
 
 fn run(ch: &ModalChannels, spectra: &[Spectrum], q: Quantity, refinement: usize) -> rcfd_fem::random::ChannelResponse {
-    spectral_response(ch, spectra, None, &SpectralOptions::default().quantity(q).refinement(refinement)).unwrap()
+    spectral_response(
+        ch,
+        spectra,
+        None,
+        &SpectralOptions::default().quantity(q).refinement(refinement),
+    )
+    .unwrap()
 }
 
 #[test]
@@ -139,12 +151,24 @@ fn s1_to_s4_one_mode_force_and_base() {
         eb.push(rel(b.moments[0].m0, exact_b));
         if r == 1 {
             let m = f.moments[0];
-            c.at_most("S1 force m0 against (pi/2) f_n Q G/k^2", rel(m.m0, PI / 2.0 * FN * q * G / (k * k)), 5e-3);
+            c.at_most(
+                "S1 force m0 against (pi/2) f_n Q G/k^2",
+                rel(m.m0, PI / 2.0 * FN * q * G / (k * k)),
+                5e-3,
+            );
             c.at_most("S1x force m0 against G f_n I_0(10)/k^2", ef[0], 1e-6);
             let bm = b.moments[0].m0;
-            c.at_most("S2 base m0 against (pi/2) f_n Q G", rel(bm, PI / 2.0 * FN * q * G), 5e-3);
+            c.at_most(
+                "S2 base m0 against (pi/2) f_n Q G",
+                rel(bm, PI / 2.0 * FN * q * G),
+                5e-3,
+            );
             c.at_most("S2x base m0 against G f_n (I_0 + 4 zeta^2 I_2)", eb[0], 1e-6);
-            c.above("N1 base m0 against the force form G f_n I_0(10)", rel(bm, G * FN * I0), 1e-3);
+            c.above(
+                "N1 base m0 against the force form G f_n I_0(10)",
+                rel(bm, G * FN * I0),
+                1e-3,
+            );
             let nu0 = m.zero_crossing_rate().unwrap();
             c.at_most("S4 nu_0/f_n - 1", rel(nu0, FN), 1e-2);
             c.at_most("S4x nu_0 against f_n sqrt(I_2/I_0)", rel(nu0, FN * NU0_RATIO), 1e-6);
@@ -167,7 +191,11 @@ fn s1_to_s4_one_mode_force_and_base() {
         println!("S3 {name} errors e_1, e_2, e_4: {:e}, {:e}, {:e}", e[0], e[1], e[2]);
         c.holds(&format!("S3 {name} e_1 > e_2 > e_4"), e[0] > e[1] && e[1] > e[2], "");
         for (k, o) in [(1, (e[0] / e[1]).log2()), (2, (e[1] / e[2]).log2())] {
-            c.holds(&format!("S3 {name} observed order {k} (>= 4)"), o >= 4.0, &format!("{o:.4}"));
+            c.holds(
+                &format!("S3 {name} observed order {k} (>= 4)"),
+                o >= 4.0,
+                &format!("{o:.4}"),
+            );
         }
     }
     c.finish();
@@ -188,7 +216,13 @@ fn s5_two_well_separated_modes() {
     )
     .unwrap();
     let single = |f: f64, u: f64| {
-        let ch = ModalChannels::new(vec![w(f).powi(2)], vec![2.0 * ZETA * w(f)], vec![vec![vec![u]]], vec![vec![0.0]]).unwrap();
+        let ch = ModalChannels::new(
+            vec![w(f).powi(2)],
+            vec![2.0 * ZETA * w(f)],
+            vec![vec![vec![u]]],
+            vec![vec![0.0]],
+        )
+        .unwrap();
         run(&ch, &spec, Quantity::Displacement, 1).moments[0].m0
     };
     let m = run(&two, &spec, Quantity::Displacement, 1).moments[0].m0;
@@ -197,9 +231,17 @@ fn s5_two_well_separated_modes() {
     let sum = closed(f1, u1) + closed(f2, u2);
     println!("S5 m0 {m:.15e}, closed sum {sum:.15e} (registered 4.031441804149936e-07)");
     c.at_most("S5 m0 against C_1 + C_2", rel(m, sum), 1e-2);
-    c.at_most("S5x m0 against the exact 4.035601798182644e-07", rel(m, 4.035601798182644e-07), 1e-6);
+    c.at_most(
+        "S5x m0 against the exact 4.035601798182644e-07",
+        rel(m, 4.035601798182644e-07),
+        1e-6,
+    );
     let r = m / (single(f1, u1) + single(f2, u2)) - 1.0;
-    c.holds("N2 cross term resolved: ratio - 1 in [5e-4, 2e-3]", (5e-4..=2e-3).contains(&r), &format!("{r:.6e}"));
+    c.holds(
+        "N2 cross term resolved: ratio - 1 in [5e-4, 2e-3]",
+        (5e-4..=2e-3).contains(&r),
+        &format!("{r:.6e}"),
+    );
     c.finish();
 }
 
@@ -207,21 +249,47 @@ fn s5_two_well_separated_modes() {
 fn s6_band_limited_and_q1_q2_spectra() {
     let mut c = Checks::new();
     let w = 2.0 * PI * FN;
-    let ch = ModalChannels::new(vec![w * w], vec![2.0 * ZETA * w], vec![vec![vec![w * w]]], vec![vec![0.0]]).unwrap();
+    let ch = ModalChannels::new(
+        vec![w * w],
+        vec![2.0 * ZETA * w],
+        vec![vec![vec![w * w]]],
+        vec![vec![0.0]],
+    )
+    .unwrap();
     let lin = Spectrum::new(vec![30.0, 40.0, 55.0, 75.0], vec![0.0, 1.0, 1.0, 0.5]).unwrap();
     let ll = Spectrum::log_log(vec![20.0, 45.0, 60.0, 100.0], vec![1.0, 4.0, 4.0, 0.5]).unwrap();
     let ml = run(&ch, std::slice::from_ref(&lin), Quantity::Displacement, 1).moments[0].m0;
     let mll = run(&ch, std::slice::from_ref(&ll), Quantity::Displacement, 1).moments[0].m0;
     println!("S6 linear m0 {ml:.15e}, log-log m0 {mll:.15e}");
-    c.at_most("S6 band-limited linear against 1886.2401793570568", rel(ml, 1886.2401793570568), 1e-6);
-    c.at_most("S6b band-limited log-log against 7584.40095699183", rel(mll, 7584.40095699183), 1e-6);
+    c.at_most(
+        "S6 band-limited linear against 1886.2401793570568",
+        rel(ml, 1886.2401793570568),
+        1e-6,
+    );
+    c.at_most(
+        "S6b band-limited log-log against 7584.40095699183",
+        rel(mll, 7584.40095699183),
+        1e-6,
+    );
     c.at_most("Q1 mean_square linear against 35", rel(lin.mean_square(), 35.0), 1e-12);
-    c.at_most("Q1 mean_square log-log against 180.92544802681783", rel(ll.mean_square(), 180.92544802681783), 1e-12);
+    c.at_most(
+        "Q1 mean_square log-log against 180.92544802681783",
+        rel(ll.mean_square(), 180.92544802681783),
+        1e-12,
+    );
     let pass = ModalChannels::new(vec![], vec![], vec![vec![vec![]]], vec![vec![1.0]]).unwrap();
     let pl = run(&pass, std::slice::from_ref(&lin), Quantity::Displacement, 1).moments[0].m0;
     let pll = run(&pass, std::slice::from_ref(&ll), Quantity::Displacement, 1).moments[0].m0;
-    c.at_most("Q2 pass-through linear against mean_square", rel(pl, lin.mean_square()), 1e-13);
-    c.at_most("Q2 pass-through log-log against mean_square", rel(pll, ll.mean_square()), 1e-5);
+    c.at_most(
+        "Q2 pass-through linear against mean_square",
+        rel(pl, lin.mean_square()),
+        1e-13,
+    );
+    c.at_most(
+        "Q2 pass-through log-log against mean_square",
+        rel(pll, ll.mean_square()),
+        1e-5,
+    );
     c.finish();
 }
 
@@ -241,7 +309,13 @@ fn bar(nu: f64) -> SolidModel {
 /// The x equations of the four tip nodes and the tip pattern (0.25 N each).
 fn tip(m: &SolidModel) -> (Vec<usize>, Vec<f64>) {
     let dofs = m.dof_map();
-    let eqs: Vec<usize> = m.mesh().node_set("xmax").unwrap().iter().map(|&p| dofs.equation(p, 0).unwrap()).collect();
+    let eqs: Vec<usize> = m
+        .mesh()
+        .node_set("xmax")
+        .unwrap()
+        .iter()
+        .map(|&p| dofs.equation(p, 0).unwrap())
+        .collect();
     let mut f = vec![0.0; dofs.n_equations()];
     for &e in &eqs {
         f[e] = 0.25;
@@ -305,12 +379,24 @@ fn s7_uniaxial_von_mises_and_q4() {
             bi[i][j] = s * s;
         }
     }
-    c.at_most("S7x pure shear: 3 s^2", rel(von_mises_mean_square(&shear), 3.0 * s * s), 1e-12);
-    c.at_most("S7x equal biaxial correlated: s^2", rel(von_mises_mean_square(&bi), s * s), 1e-12);
+    c.at_most(
+        "S7x pure shear: 3 s^2",
+        rel(von_mises_mean_square(&shear), 3.0 * s * s),
+        1e-12,
+    );
+    c.at_most(
+        "S7x equal biaxial correlated: s^2",
+        rel(von_mises_mean_square(&bi), s * s),
+        1e-12,
+    );
     for k in [1, 2] {
         let mut u = [[0.0; 6]; 6];
         u[k][k] = s * s;
-        c.at_most(&format!("S7x uniaxial component {k}"), rel(von_mises_mean_square(&u), s * s), 1e-12);
+        c.at_most(
+            &format!("S7x uniaxial component {k}"),
+            rel(von_mises_mean_square(&u), s * s),
+            1e-12,
+        );
     }
     let vs: [[f64; 6]; 5] = [
         [1.0, 2.0, 3.0, 0.5, -0.25, 0.75],
@@ -321,7 +407,11 @@ fn s7_uniaxial_von_mises_and_q4() {
     ];
     for (k, v) in vs.iter().enumerate() {
         let cv: [[f64; 6]; 6] = std::array::from_fn(|i| std::array::from_fn(|j| v[i] * v[j]));
-        c.at_most(&format!("S7x C = v v^T, vector {k}"), rel(von_mises_mean_square(&cv), von_mises(v).powi(2)), 1e-12);
+        c.at_most(
+            &format!("S7x C = v v^T, vector {k}"),
+            rel(von_mises_mean_square(&cv), von_mises(v).powi(2)),
+            1e-12,
+        );
     }
     c.finish();
 }
@@ -348,11 +438,19 @@ fn m1_to_m3_bar_model_path() {
     // M1.
     let p: f64 = phi.iter().zip(&f).map(|(a, b)| a * b).sum();
     let r = solver
-        .response(&m, &Excitation::force(f.clone(), spec.clone()), &RandomRequest::new(vec![eqs[0]]).stress(true))
+        .response(
+            &m,
+            &Excitation::force(f.clone(), spec.clone()),
+            &RandomRequest::new(vec![eqs[0]]).stress(true),
+        )
         .unwrap();
     let want = f1 * (phi[eqs[0]] * p).powi(2) * I0 / (l1 * l1);
     println!("M1 f_1 {f1:.6} Hz, m0 {:.15e}, formula {want:.15e}", r.moments[0].m0);
-    c.at_most("M1 tip m0 against G f_1 (phi_L p)^2 I_0/lambda^2", rel(r.moments[0].m0, want), 1e-5);
+    c.at_most(
+        "M1 tip m0 against G f_1 (phi_L p)^2 I_0/lambda^2",
+        rel(r.moments[0].m0, want),
+        1e-5,
+    );
     let zero = IntegrationPointField::compute(&m, &vec![0.0; phi.len()]).unwrap();
     let sp = IntegrationPointField::compute(&m, &phi).unwrap();
     let st = r.stress.as_ref().unwrap();
@@ -375,13 +473,24 @@ fn m1_to_m3_bar_model_path() {
         .unwrap();
     let z2 = 4.0 * ZETA * ZETA;
     let form = 10.0 * (1.0 - a).powi(2) + a * (2.0 - a) * I0 + (z2 * a * (2.0 - a) - 2.0 * a * (1.0 - a)) * I2;
-    println!("M2 a {a:.12}, m0/(G f_1) {:.15e}, formula {form:.15e}", rb.moments[0].m0 / f1);
-    c.at_most("M2 tip absolute acceleration against the formula", rel(rb.moments[0].m0 / f1, form), 1e-5);
+    println!(
+        "M2 a {a:.12}, m0/(G f_1) {:.15e}, formula {form:.15e}",
+        rb.moments[0].m0 / f1
+    );
+    c.at_most(
+        "M2 tip absolute acceleration against the formula",
+        rel(rb.moments[0].m0 / f1, form),
+        1e-5,
+    );
     c.at_most("M2a a/(4/pi) - 1", rel(a, 4.0 / PI), 1e-3);
     // M3: every mode, static correction on.
     let all = RandomSolver::new(&m, ModalBasis::all_modes(&m, Some(1)).unwrap(), &opts(true)).unwrap();
     let rbase = all
-        .response(&m, &Excitation::base([1.0, 0.0, 0.0], spec.clone()).unwrap(), &RandomRequest::new(eqs.clone()))
+        .response(
+            &m,
+            &Excitation::base([1.0, 0.0, 0.0], spec.clone()).unwrap(),
+            &RandomRequest::new(eqs.clone()),
+        )
         .unwrap();
     let mass = consistent(&m).unwrap();
     let rx = rigid_motions(&m, [0.0; 3])[0].clone();
@@ -391,11 +500,17 @@ fn m1_to_m3_bar_model_path() {
     for (e, _) in prescribed_equations(&m, &[]).unwrap() {
         load[e] = 0.0;
     }
-    let rforce = all.response(&m, &Excitation::force(load, spec), &RandomRequest::new(eqs.clone())).unwrap();
+    let rforce = all
+        .response(&m, &Excitation::force(load, spec), &RandomRequest::new(eqs.clone()))
+        .unwrap();
     let worst = (0..eqs.len())
         .map(|o| rel(rbase.moments[o].m0, rforce.moments[o].m0))
         .fold(0.0, f64::max);
-    c.at_most("M3 base relative displacement against the force path with -M r", worst, 1e-12);
+    c.at_most(
+        "M3 base relative displacement against the force path with -M r",
+        worst,
+        1e-12,
+    );
     c.finish();
 }
 
@@ -428,7 +543,12 @@ fn cantilever() -> (SolidModel, Vec<f64>, Vec<f64>, Vec<usize>) {
 
 fn disp_metric(a: &RandomResponse, b: &[f64]) -> f64 {
     let scale = b.iter().copied().fold(0.0, f64::max);
-    a.moments.iter().zip(b).map(|(x, y)| (x.m0 - y).abs()).fold(0.0, f64::max) / scale
+    a.moments
+        .iter()
+        .zip(b)
+        .map(|(x, y)| (x.m0 - y).abs())
+        .fold(0.0, f64::max)
+        / scale
 }
 
 fn stress_metric(a: &RandomStress, b: &[[[f64; 6]; 6]]) -> f64 {
@@ -474,7 +594,12 @@ fn s8_s9_correlated_patterns_and_q5() {
         let both = solver
             .response(
                 &m,
-                &Excitation::forces(vec![p1.clone(), p2.clone()], vec![g.clone(), g.clone()], Some(one.clone())).unwrap(),
+                &Excitation::forces(
+                    vec![p1.clone(), p2.clone()],
+                    vec![g.clone(), g.clone()],
+                    Some(one.clone()),
+                )
+                .unwrap(),
                 &req,
             )
             .unwrap();
@@ -483,24 +608,40 @@ fn s8_s9_correlated_patterns_and_q5() {
             .unwrap();
         let (name, lim) = if corr { ("S8s", 1e-11) } else { ("S8", 1e-12) };
         println!("{name}: {} nodes", both.frequencies.len());
-        c.at_most(&format!("{name} displacement, rho = 1 against P_1 + P_2"), disp_metric(&both, &m0s(&summed)), lim);
+        c.at_most(
+            &format!("{name} displacement, rho = 1 against P_1 + P_2"),
+            disp_metric(&both, &m0s(&summed)),
+            lim,
+        );
         c.at_most(
             &format!("{name} stress, rho = 1 against P_1 + P_2"),
-            stress_metric(both.stress.as_ref().unwrap(), &summed.stress.as_ref().unwrap().covariance),
+            stress_metric(
+                both.stress.as_ref().unwrap(),
+                &summed.stress.as_ref().unwrap().covariance,
+            ),
             lim,
         );
         if !corr {
             let b4 = solver
                 .response(
                     &m,
-                    &Excitation::forces(vec![p1.clone(), p2.clone()], vec![g.clone(), g4.clone()], Some(one.clone())).unwrap(),
+                    &Excitation::forces(
+                        vec![p1.clone(), p2.clone()],
+                        vec![g.clone(), g4.clone()],
+                        Some(one.clone()),
+                    )
+                    .unwrap(),
                     &req,
                 )
                 .unwrap();
             let s2 = solver
                 .response(&m, &Excitation::force(add(&p1, &p2, 2.0), g.clone()), &req)
                 .unwrap();
-            c.at_most("S8b displacement, G_2 = 4 G against P_1 + 2 P_2", disp_metric(&b4, &m0s(&s2)), 1e-12);
+            c.at_most(
+                "S8b displacement, G_2 = 4 G against P_1 + 2 P_2",
+                disp_metric(&b4, &m0s(&s2)),
+                1e-12,
+            );
             c.at_most(
                 "S8b stress, G_2 = 4 G against P_1 + 2 P_2",
                 stress_metric(b4.stress.as_ref().unwrap(), &s2.stress.as_ref().unwrap().covariance),
@@ -514,10 +655,18 @@ fn s8_s9_correlated_patterns_and_q5() {
                     &req,
                 )
                 .unwrap();
-            let r1 = solver.response(&m, &Excitation::force(p1.clone(), g.clone()), &req).unwrap();
-            let r2 = solver.response(&m, &Excitation::force(p2.clone(), g.clone()), &req).unwrap();
+            let r1 = solver
+                .response(&m, &Excitation::force(p1.clone(), g.clone()), &req)
+                .unwrap();
+            let r2 = solver
+                .response(&m, &Excitation::force(p2.clone(), g.clone()), &req)
+                .unwrap();
             let sum: Vec<f64> = m0s(&r1).iter().zip(m0s(&r2)).map(|(a, b)| a + b).collect();
-            c.at_most("S9 displacement, rho = I against m0(P_1) + m0(P_2)", disp_metric(&unc, &sum), 1e-12);
+            c.at_most(
+                "S9 displacement, rho = I against m0(P_1) + m0(P_2)",
+                disp_metric(&unc, &sum),
+                1e-12,
+            );
             let s1 = &r1.stress.as_ref().unwrap().covariance;
             let s2 = &r2.stress.as_ref().unwrap().covariance;
             let ssum: Vec<[[f64; 6]; 6]> = s1
@@ -525,12 +674,23 @@ fn s8_s9_correlated_patterns_and_q5() {
                 .zip(s2)
                 .map(|(a, b)| std::array::from_fn(|i| std::array::from_fn(|j| a[i][j] + b[i][j])))
                 .collect();
-            c.at_most("S9 stress, rho = I against C_0(P_1) + C_0(P_2)", stress_metric(unc.stress.as_ref().unwrap(), &ssum), 1e-12);
+            c.at_most(
+                "S9 stress, rho = I against C_0(P_1) + C_0(P_2)",
+                stress_metric(unc.stress.as_ref().unwrap(), &ssum),
+                1e-12,
+            );
             // N3: the tip u_y of node a (output 1).
-            c.above("N3 rho = I against the summed pattern, tip u_y", rel(unc.moments[1].m0, summed.moments[1].m0), 0.1);
+            c.above(
+                "N3 rho = I against the summed pattern, tip u_y",
+                rel(unc.moments[1].m0, summed.moments[1].m0),
+                0.1,
+            );
             // Q5: against the F-399 response at the same nodes.
             let omegas: Vec<f64> = r1.frequencies.iter().map(|f| 2.0 * PI * f).collect();
-            let sweep = solver.harmonic().sweep(&HarmonicLoad::real(p1.clone()).unwrap(), &omegas).unwrap();
+            let sweep = solver
+                .harmonic()
+                .sweep(&HarmonicLoad::real(p1.clone()).unwrap(), &omegas)
+                .unwrap();
             let mut worst: f64 = 0.0;
             for (o, &e) in eqs.iter().enumerate().take(3) {
                 let direct: f64 = sweep
@@ -552,7 +712,11 @@ fn s8_s9_correlated_patterns_and_q5() {
 #[test]
 fn r1_to_r3_refusals() {
     let mut c = Checks::new();
-    let (ok, d) = refused_with(Spectrum::new(vec![10.0, 20.0, 30.0], vec![1.0, -1.0, 1.0]), "spectrum", &["entry 1", "-1"]);
+    let (ok, d) = refused_with(
+        Spectrum::new(vec![10.0, 20.0, 30.0], vec![1.0, -1.0, 1.0]),
+        "spectrum",
+        &["entry 1", "-1"],
+    );
     c.holds("R1 negative value", ok, &d);
     for fs in [vec![10.0, 20.0, 20.0], vec![10.0, 30.0, 20.0]] {
         let (ok, d) = refused_with(Spectrum::new(fs.clone(), vec![1.0; 3]), "spectrum", &["entry 2"]);
@@ -560,12 +724,36 @@ fn r1_to_r3_refusals() {
     }
     let cases: Vec<(&str, rcfd_fem::Result<Spectrum>, &[&str])> = vec![
         ("one entry", Spectrum::new(vec![10.0], vec![1.0]), &[]),
-        ("lengths 3 and 2", Spectrum::new(vec![10.0, 20.0, 30.0], vec![1.0, 1.0]), &[]),
-        ("NaN frequency", Spectrum::new(vec![10.0, f64::NAN], vec![1.0, 1.0]), &["entry 1"]),
-        ("negative frequency", Spectrum::new(vec![-1.0, 10.0], vec![1.0, 1.0]), &["entry 0"]),
-        ("NaN value", Spectrum::new(vec![10.0, 20.0], vec![1.0, f64::NAN]), &["entry 1"]),
-        ("log-log zero value", Spectrum::log_log(vec![10.0, 20.0], vec![1.0, 0.0]), &["entry 1"]),
-        ("log-log frequency 0", Spectrum::log_log(vec![0.0, 20.0], vec![1.0, 1.0]), &["entry 0"]),
+        (
+            "lengths 3 and 2",
+            Spectrum::new(vec![10.0, 20.0, 30.0], vec![1.0, 1.0]),
+            &[],
+        ),
+        (
+            "NaN frequency",
+            Spectrum::new(vec![10.0, f64::NAN], vec![1.0, 1.0]),
+            &["entry 1"],
+        ),
+        (
+            "negative frequency",
+            Spectrum::new(vec![-1.0, 10.0], vec![1.0, 1.0]),
+            &["entry 0"],
+        ),
+        (
+            "NaN value",
+            Spectrum::new(vec![10.0, 20.0], vec![1.0, f64::NAN]),
+            &["entry 1"],
+        ),
+        (
+            "log-log zero value",
+            Spectrum::log_log(vec![10.0, 20.0], vec![1.0, 0.0]),
+            &["entry 1"],
+        ),
+        (
+            "log-log frequency 0",
+            Spectrum::log_log(vec![0.0, 20.0], vec![1.0, 1.0]),
+            &["entry 0"],
+        ),
     ];
     for (name, r, contains) in cases {
         let (ok, d) = refused_with(r, "spectrum", contains);
@@ -590,7 +778,12 @@ fn r1_to_r3_refusals() {
     let w = 2.0 * PI * 50.0;
     let undamped = ModalChannels::new(vec![w * w], vec![0.0], vec![vec![vec![1.0]]], vec![vec![0.0]]).unwrap();
     let (ok, d) = refused_with(
-        spectral_response(&undamped, &[Spectrum::flat(0.0, 500.0, 1.0).unwrap()], None, &SpectralOptions::default()),
+        spectral_response(
+            &undamped,
+            &[Spectrum::flat(0.0, 500.0, 1.0).unwrap()],
+            None,
+            &SpectralOptions::default(),
+        ),
         "random",
         &["mode 0"],
     );
@@ -602,17 +795,29 @@ fn r1_to_r3_refusals() {
     let fb = ModalBasis::all_modes(&free, Some(1)).unwrap();
     let fs = RandomSolver::new(&free, fb, &opts(false)).unwrap();
     let base = Excitation::base([0.0, 0.0, 1.0], g.clone()).unwrap();
-    let (ok, d) = refused_with(fs.response(&free, &base, &RandomRequest::new(vec![0])), "base excitation", &[]);
+    let (ok, d) = refused_with(
+        fs.response(&free, &base, &RandomRequest::new(vec![0])),
+        "base excitation",
+        &[],
+    );
     c.holds("R3 base excitation of a free body", ok, &d);
     let mut clamped = free.clone();
     for k in 0..3 {
-        clamped.add_constraint(Constraint::displacement("xmin", k, 0.0)).unwrap();
+        clamped
+            .add_constraint(Constraint::displacement("xmin", k, 0.0))
+            .unwrap();
     }
     let cb = ModalBasis::all_modes(&clamped, Some(1)).unwrap();
     let mut sprung = clamped.clone();
-    sprung.add_support(ElasticSupport::nodal_spring("xmax", 0, 1e6)).unwrap();
+    sprung
+        .add_support(ElasticSupport::nodal_spring("xmax", 0, 1e6))
+        .unwrap();
     let ss = RandomSolver::new(&sprung, cb, &opts(false)).unwrap();
-    let (ok, d) = refused_with(ss.response(&sprung, &base, &RandomRequest::new(vec![0])), "base excitation", &[]);
+    let (ok, d) = refused_with(
+        ss.response(&sprung, &base, &RandomRequest::new(vec![0])),
+        "base excitation",
+        &[],
+    );
     c.holds("R3 base excitation with an elastic support", ok, &d);
     c.finish();
 }
