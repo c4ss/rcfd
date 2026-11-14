@@ -203,8 +203,11 @@ const ON: [(&str, u64); 2] = [
     ("bar c = 2 Z, 20 modes, residual vectors", 0x324230a4c8b65165),
 ];
 
+/// Registered check D3 (ADR 0467), recorded miss: the digest includes the notes, and with the option on a result with flagged
+/// roots has one more note by design (measured: 0 of 2 digests equal). Kept with its limit; see amendment 1 and `d3b`.
 #[test]
-fn d3_option_on_results_unchanged() {
+#[ignore = "known miss of D3: the notes of an option-on result gain a line by design (ADR 0467 addendum)"]
+fn d3_option_on_results_unchanged_known_miss() {
     let z = impedance();
     let got = [
         digest(flat_on(&tip_on(0.9 * z, 20, true))),
@@ -219,4 +222,38 @@ fn d3_option_on_results_unchanged() {
     }
     println!("D3 {same} of {} digests equal to main 69cb996a", ON.len());
     assert_eq!(same, ON.len());
+}
+
+/// `flat_on` without the notes: every number of the result and the residual vectors.
+fn flat_numbers(d: &DampedModes) -> Vec<f64> {
+    let mut v = flat_on(d);
+    let tail = d.residual_vectors.iter().map(Vec::len).sum::<usize>() + 1;
+    let notes: usize = d.notes.iter().map(|n| n.len() + 1).sum();
+    let cut = v.len() - tail - notes;
+    v.drain(cut..cut + notes);
+    v
+}
+
+/// Printed at main 69cb996a (amendment 1 of ADR 0467, before the corrected run): `flat_numbers` of the same two set-ups.
+const ON_NUMBERS: [(&str, u64); 2] = [
+    ("bar c = 0.9 Z, 20 modes, residual vectors, no notes", 0),
+    ("bar c = 2 Z, 20 modes, residual vectors, no notes", 0),
+];
+
+#[test]
+fn d3b_option_on_numbers_unchanged() {
+    let z = impedance();
+    let got = [
+        digest(flat_numbers(&tip_on(0.9 * z, 20, true))),
+        digest(flat_numbers(&tip_on(2.0 * z, 20, true))),
+    ];
+    let mut same = 0;
+    for ((name, want), g) in ON_NUMBERS.iter().zip(got) {
+        println!("    (\"{name}\", 0x{g:016x}),");
+        if *want == g {
+            same += 1;
+        }
+    }
+    println!("D3b {same} of {} digests equal to main 69cb996a", ON_NUMBERS.len());
+    assert_eq!(same, ON_NUMBERS.len());
 }

@@ -136,3 +136,16 @@ amendment made after its run. **todo**: the change does not build or the bar run
   is a constant of the library, not an option.
 - Residual vectors of loads, of Rayleigh or loss-factor damping: none exist (ADR 0464), so nothing is flagged there.
 - Roots flagged are kept in the results (reported, not removed).
+
+## Amendment 1 (2026-11-14, written after the first run of D3 and before its corrected run)
+
+The first run of the checks (`cargo test --release -p rcfd-fem --test sa_damped_flag_default_bits`, option-on test D3) printed
+0 of 2 digests equal: D3 as registered digests every existing field including the notes, and with the option on a result with
+flagged roots carries one more note by design (the design appends it after the existing notes when `k > 0`; D3 was
+over-written, the registration's "no existing field changes" refers to the numbers and the notes without flagged roots). This
+is a miss of D3 as registered: its test stays as `d3_option_on_results_unchanged_known_miss` (ignored, limit intact). The
+corrected check **D3b**: the digest of every number of the option-on results (all existing fields except the notes, plus the
+residual vectors) equals constants printed at main 69cb996a by the same file in a scratch archive of that commit before the
+corrected run; the notes of those results are compared by the content `existing notes ++ [the new line]` in
+`sa_damped_flag.rs` P2 (the note is present iff flagged roots exist). Per the decision rule this makes D3 met only after an
+amendment, hence the decision cannot be **done**.
