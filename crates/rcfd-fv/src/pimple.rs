@@ -1161,6 +1161,9 @@ pub struct PimpleSolver {
     pub lag_fluid: Option<LagFluid>,
     /// When `Some`, the check of the step keeps the mode of its last estimate here (ADR 0388 D2, for `lag_trial_mode`).
     lag_mode: Option<Vec<f64>>,
+    /// Set by [`PimpleSolver::project_immersed_start`] (F-515, ADR 0425 D3): the start was projected onto the fluid region of
+    /// the immersed bodies, and the refusal of ADR 0374 D2 is lifted. Cleared by `reinitialise`. `false` from `new`.
+    start_projected: bool,
 }
 
 /// One pressure solve of a step, as captured by [`PimpleSolver::pressure_capture`] (F-466, ADR 0363 D1). With
@@ -1241,6 +1244,7 @@ impl PimpleSolver {
             immersed_lag: false,
             lag_fluid: None,
             lag_mode: None,
+            start_projected: false,
         }
     }
 
@@ -1277,6 +1281,7 @@ impl PimpleSolver {
             immersed_lag: self.immersed_lag,
             lag_fluid: self.lag_fluid,
             lag_mode: None,
+            start_projected: self.start_projected,
         }
     }
 
@@ -1861,7 +1866,8 @@ impl PimpleSolver {
                 n_corr_final = n_corr;
             }
             // ADR 0374 D2: a flux face that returns the fluid velocity reversed is refused with a single PISO corrector
-            if n_corr == 1 && s.n_outer == 1 {
+            // (F-515, ADR 0425 D3: not for a start projected onto the fluid region)
+            if n_corr == 1 && s.n_outer == 1 && !self.start_projected {
                 if let Some((c, w)) = self.immersed.as_ref().and_then(|ib| ib.single_corrector_face()) {
                     let res = (res_u, res_p, p_iters);
                     return self.trip(
@@ -2933,7 +2939,41 @@ impl PimpleSolver {
         self.diverged = None;
         self.correctors.reset_schedule();
         self.ale_bdf2 = None;
+        self.start_projected = false;
         Ok(())
+    }
+
+    /// Opt-in (F-515, ADR 0425 D2): project the start velocity onto the fluid region of the immersed forcing
+    /// ([`crate::immersed_start::project_start`]: the solid cells at rest, the fluid-solid faces closed, the face flux
+    /// divergence-free) and start afresh from it with [`reinitialise`](Self::reinitialise), passing the projected face flux;
+    /// the pressure and the time are kept. With a projected start the refusal of a reversed flux face with a single PISO
+    /// corrector (ADR 0374 D2) is lifted (ADR 0421: the stop it guards against comes from a start with flow through the body).
+    /// Fails without a forcing, after the first step, or when the projection fails.
+    pub fn project_immersed_start(&mut self) -> rcfd_core::Result<crate::immersed_start::StartProjection> {
+        let ib = self.immersed.as_ref().ok_or_else(|| rcfd_core::Error::InvalidValue {
+            path: "immersed start projection".into(),
+            reason: "the solver has no immersed forcing".into(),
+        })?;
+        if self.step_no != 0 {
+            return Err(rcfd_core::Error::InvalidValue {
+                path: "immersed start projection".into(),
+                reason: format!(
+                    "the solver has taken {} steps: project the start before the first step",
+                    self.step_no
+                ),
+            });
+        }
+        let st = crate::immersed_start::project_start(&self.geom, &self.u, &self.p, ib)?;
+        let p = self.p.values.clone();
+        self.reinitialise(st.u, p, Some(st.phi), self.time)?;
+        self.start_projected = true;
+        Ok(st.report)
+    }
+
+    /// True when the start was projected by [`project_immersed_start`](Self::project_immersed_start) and the solver has not
+    /// been reinitialised since (ADR 0425 D3).
+    pub fn start_projected(&self) -> bool {
+        self.start_projected
     }
 }
 
