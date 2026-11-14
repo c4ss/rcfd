@@ -431,3 +431,21 @@ Two set-up defects of the registration, found while writing the test file and be
    ratio is undefined at zero entries). The limit 1e-14 stays.
 
 Nothing else changes.
+
+## Amendment 2 (2026-11-14, written and committed after the first run of `sa_scaffold.rs`, before the corrected runs)
+
+The single registered run of `sa_scaffold.rs` (commit 144c2d4a) showed two set-up defects; nothing in the library is changed:
+
+1. **D6.** The pair "first and last free equation" of the bar (equations 3 and 35) is on the tangent's pattern (the two-element
+   bar couples them), so D6 added zeros in place and did not exercise the off-pattern path: the set-up assertion "the pair is off
+   the pattern" failed (the measure itself was 0, met, but on the wrong path). Corrected as D6b: the pair is the smallest free
+   equation `i` and the smallest free equation `j` not in row `i` of the stiffness pattern (asserted off the pattern before the
+   solve); the limit (1e-10) is unchanged. The test `d5_to_d8_contributions` stays as an ignored record; D5, D7, D8 and N2 were
+   met in it and are not re-run.
+2. **R2.** The Shell3 model of R2 was built with the plate's `Load::shell_pressure`, which `add_load` refuses for a Shell3 element
+   (a shell pressure acts on Shell4, ADR 0432), so the test function stopped before R2, R3 and R4 ran. Corrected as R2b to R4b:
+   the Shell3 model (and only it) has no load; everything else as registered. The test `r1_to_r4_n3_refusals` stays as an
+   ignored record; R1 (60 of 60) and N3 (C: 10 of 10; the plate: E1, E3, E4, E9, E10 `Ok`, E2 recorded) were met in it and are
+   not re-run.
+
+By the decision rule, D6, R2, R3 and R4 are met (if they are) only after an amendment made after their run.
