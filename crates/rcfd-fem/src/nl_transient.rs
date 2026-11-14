@@ -18,6 +18,11 @@
 //! ([`NlTransientOptions::temperature`], ADR 0499 D3) enters that context, the start and the strain energy, and so reaches the
 //! materials that read it (the time-temperature shift of the viscoelastic material, the base of a tabulated material); without
 //! one no temperature is given.
+//!
+//! The energy-momentum step ([`StepKind::EnergyMomentum`], ADR 0514, Simo and Tarnow) is opt-in: the midpoint step with the
+//! internal force `B_NL(F_{n+1/2})^T (S_n + S_{n+1})/2`, which conserves the energy and the linear and angular momenta of an
+//! isotropic St. Venant-Kirchhoff solid up to the Newton residual. The default [`StepKind::Method`] is the step above,
+//! unchanged.
 
 use crate::constraint::{prescribed_equations, reduce};
 use crate::element::{element_for, ElementState};
@@ -39,6 +44,22 @@ pub const PENDING: Option<&'static str> = None;
 pub const SOLVER_NAME: &str = "nl_transient";
 
 const MAGIC: &[u8; 8] = b"RCFDNLT1";
+/// The magic of a state of the energy-momentum step (ADR 0514 D5).
+const MAGIC_EMC: &[u8; 8] = b"RCFDNLE1";
+
+mod emc;
+
+/// The step of the nonlinear integrator (ADR 0514 D3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
+pub enum StepKind {
+    /// The Newmark or generalised-alpha step of the method (ADR 0479 D1), the default.
+    #[default]
+    Method,
+    /// The energy-momentum conserving midpoint step of Simo and Tarnow (ADR 0514 D1): isotropic elastic solids of the
+    /// `Full` formulation only; the method's parameters are not used by the step.
+    EnergyMomentum,
+}
 
 /// Options of the nonlinear integrator.
 #[derive(Debug, Clone, PartialEq)]
@@ -55,6 +76,8 @@ pub struct NlTransientOptions {
     pub newton: NewtonOptions,
     /// A uniform temperature of every point, K (ADR 0499 D3; `None`: no temperature in the point context).
     pub temperature: Option<f64>,
+    /// The step (ADR 0514 D3; default [`StepKind::Method`]).
+    pub step: StepKind,
 }
 
 impl NlTransientOptions {
@@ -67,6 +90,7 @@ impl NlTransientOptions {
             damping: None,
             newton: NewtonOptions::new(1),
             temperature: None,
+            step: StepKind::Method,
         }
     }
     /// The same options with a method.
@@ -94,6 +118,16 @@ impl NlTransientOptions {
         self.temperature = Some(temperature);
         self
     }
+    /// The same options with the energy-momentum step (ADR 0514 D3).
+    pub fn energy_momentum(mut self) -> NlTransientOptions {
+        self.step = StepKind::EnergyMomentum;
+        self
+    }
+    /// The same options with a step kind (ADR 0514 D3).
+    pub fn step_kind(mut self, step: StepKind) -> NlTransientOptions {
+        self.step = step;
+        self
+    }
 }
 
 /// The state of the nonlinear integrator (full vectors: one value per equation of the model's `DofMap`).
@@ -115,6 +149,7 @@ pub struct NlTransientState {
     pub states: Vec<ElementState>,
     dt: f64,
     parameters: [f64; 4],
+    kind: StepKind,
 }
 
 fn state_error(reason: String) -> FemError {
@@ -127,13 +162,22 @@ impl NlTransientState {
         self.dt
     }
 
+    /// The step the state was made with (ADR 0514 D5).
+    pub fn step_kind(&self) -> StepKind {
+        self.kind
+    }
+
     /// The bytes of the state (ADR 0479 D3): magic `RCFDNLT1`, little-endian `u64` length, step and element count, the
     /// `f64` bits of `t0`, `dt`, the four parameters `(alpha_m, alpha_f, beta, gamma)`, `u`, `v`, `a`, the internal force,
-    /// then per element its value count (`u64`) and its values.
+    /// then per element its value count (`u64`) and its values. A state of the energy-momentum step has the magic
+    /// `RCFDNLE1` and the same layout (ADR 0514 D5).
     pub fn to_bytes(&self) -> Vec<u8> {
         let n = self.u.len();
         let mut b = Vec::with_capacity(8 * (10 + 4 * n));
-        b.extend_from_slice(MAGIC);
+        b.extend_from_slice(match self.kind {
+            StepKind::Method => MAGIC,
+            StepKind::EnergyMomentum => MAGIC_EMC,
+        });
         b.extend_from_slice(&(n as u64).to_le_bytes());
         b.extend_from_slice(&self.step.to_le_bytes());
         b.extend_from_slice(&(self.states.len() as u64).to_le_bytes());
@@ -158,11 +202,17 @@ impl NlTransientState {
 
     /// The state from [`NlTransientState::to_bytes`]; refuses a wrong magic and a wrong or inconsistent length.
     pub fn from_bytes(bytes: &[u8]) -> Result<NlTransientState> {
-        if bytes.len() < 32 || &bytes[..8] != MAGIC || bytes.len() % 8 != 0 {
+        if bytes.len() < 32 || (&bytes[..8] != MAGIC && &bytes[..8] != MAGIC_EMC) || bytes.len() % 8 != 0 {
             return Err(state_error(
-                "not a saved nonlinear transient state (magic RCFDNLT1 missing or a truncated byte string)".to_string(),
+                "not a saved nonlinear transient state (magic RCFDNLT1 or RCFDNLE1 missing or a truncated byte string)"
+                    .to_string(),
             ));
         }
+        let kind = if &bytes[..8] == MAGIC_EMC {
+            StepKind::EnergyMomentum
+        } else {
+            StepKind::Method
+        };
         let words = bytes.len() / 8;
         let word = |i: usize| -> u64 {
             let mut w = [0u8; 8];
@@ -215,6 +265,7 @@ impl NlTransientState {
             a: vec_at(10 + 2 * n, n),
             internal_force: vec_at(10 + 3 * n, n),
             states,
+            kind,
         })
     }
 }
@@ -245,6 +296,7 @@ pub struct Integrator {
     layout: Vec<usize>,
     history: bool,
     temperature: Option<f64>,
+    step: StepKind,
     state: Option<NlTransientState>,
 }
 
@@ -424,6 +476,9 @@ impl Integrator {
             ));
         }
         nonlinear::check_driver_model(model)?;
+        if options.step == StepKind::EnergyMomentum {
+            emc::check_model(model)?;
+        }
         if let Some(t) = options.temperature {
             PointContext::new().with_temperature(t)?;
         }
@@ -510,6 +565,7 @@ impl Integrator {
             layout,
             history,
             temperature: options.temperature,
+            step: options.step,
             state: None,
         })
     }
@@ -522,6 +578,11 @@ impl Integrator {
     /// The time step.
     pub fn time_step(&self) -> f64 {
         self.dt
+    }
+
+    /// The step kind (ADR 0514 D3).
+    pub fn step_kind(&self) -> StepKind {
+        self.step
     }
 
     /// The consistent mass matrix (all equations).
@@ -626,6 +687,7 @@ impl Integrator {
             states,
             dt: self.dt,
             parameters: self.parameters,
+            kind: self.step,
         });
         Ok(())
     }
@@ -690,6 +752,12 @@ impl Integrator {
         if !state.t0.is_finite() {
             return Err(state_error(format!("start time {:e} is not finite", state.t0)));
         }
+        if state.kind != self.step {
+            return Err(state_error(format!(
+                "state of the step {:?} for an integrator of the step {:?} (ADR 0514 D5)",
+                state.kind, self.step
+            )));
+        }
         self.state = Some(state);
         Ok(())
     }
@@ -727,6 +795,16 @@ impl Integrator {
             let s = self.current()?;
             (s.t0, s.step)
         };
+        if self.step == StepKind::EnergyMomentum && !contributions.is_empty() {
+            return Err(invalid(
+                "nl_transient",
+                format!(
+                    "{} driver contributions: the energy-momentum step has no midpoint form of a contribution ({})",
+                    contributions.len(),
+                    emc::ADR
+                ),
+            ));
+        }
         self.check_coverage(self.time_of(t0, n), self.time_of(t0, n + steps))?;
         let mut reports = Vec::with_capacity(steps as usize);
         for _ in 0..steps {
@@ -819,6 +897,9 @@ impl Integrator {
         states: &[ElementState],
         contributions: &[&dyn Contribution],
     ) -> Result<Advanced> {
+        if self.step == StepKind::EnergyMomentum {
+            return emc::substep(self, h, t_a, t_b, u, v, states);
+        }
         let [_, af, _, _] = self.parameters;
         let f0 = self.load(t_a);
         let f1 = self.load(t_b);
