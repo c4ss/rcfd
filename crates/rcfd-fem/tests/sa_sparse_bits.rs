@@ -13,7 +13,9 @@ use rcfd_fem::geometric::Prestress;
 use rcfd_fem::modal::{modal_analysis, ModalOptions};
 use rcfd_fem::solve::{solve_static, StaticOptions};
 use rcfd_fem::{Constraint, Load, Material, SolidModel};
-use rcfd_linalg::eigen::{count_below, lowest_buckling_factors, lowest_eigenpairs, BucklingEigenOptions, SubspaceOptions};
+use rcfd_linalg::eigen::{
+    count_below, lowest_buckling_factors, lowest_eigenpairs, BucklingEigenOptions, SubspaceOptions,
+};
 use rcfd_linalg::skyline::SkylineOrdering;
 use rcfd_linalg::CsrMatrix;
 
@@ -93,10 +95,7 @@ fn digests() -> Vec<(&'static str, u64)> {
     out.push(("B2 modal eigenvalues", digest(md.eigenvalues.iter().copied())));
     out.push(("B2 modal frequencies", digest(md.frequencies.iter().copied())));
     out.push(("B2 modal modes", digest(md.modes.iter().flatten().copied())));
-    out.push((
-        "B2 modal iterations, shift",
-        digest([md.iterations as f64, md.shift]),
-    ));
+    out.push(("B2 modal iterations, shift", digest([md.iterations as f64, md.shift])));
     // B3
     let p = Prestress::uniform(&s, [-1.0e8, 0.0, 0.0, 0.0, 0.0, 0.0]).unwrap();
     let bk = factors(&s, &p, &BucklingOptions::new(2)).unwrap();

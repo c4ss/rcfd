@@ -1130,8 +1130,10 @@ pub fn solve_static_mpc(
     if let StaticSolver::SparseDirect = options.solver {
         return Err(FemError::InvalidValue {
             key: "solver",
-            reason: "the sparse L D L^T (ADR 0447) is not available on the transformation path (ADR 0296): use Direct or                      ConjugateGradient"
-                .into(),
+            reason:
+                "the sparse L D L^T (ADR 0447) is not available on the transformation path (ADR 0296): use Direct or \
+                     ConjugateGradient"
+                    .into(),
         });
     }
     if let StaticSolver::PreconditionedCg { .. } = options.solver {

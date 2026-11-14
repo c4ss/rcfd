@@ -1202,7 +1202,11 @@ fn x1_modules_and_pending_after_landed() {
     ];
     let linalg: [(&str, Option<&str>, Option<&str>); 3] = [
         ("cskyline", rcfd_linalg::cskyline::PENDING, Some("ADR 0315 (F-412)")),
-        ("eigen_general", rcfd_linalg::eigen_general::PENDING, Some("ADR 0317 (F-414)")),
+        (
+            "eigen_general",
+            rcfd_linalg::eigen_general::PENDING,
+            Some("ADR 0317 (F-414)"),
+        ),
         ("sparse_chol", rcfd_linalg::sparse_chol::PENDING, None),
     ];
     let mut c = Checks::new();

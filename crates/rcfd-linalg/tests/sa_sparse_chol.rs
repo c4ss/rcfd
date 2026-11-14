@@ -183,7 +183,10 @@ fn a2_a3_seven_point_30_residual_and_fill() {
     // N1: the natural order fills more than half the envelope (the check can fail).
     let natural: Vec<usize> = (0..a.n).collect();
     let nat = factor_count(&a, &natural);
-    println!("N1: natural order nnz(L) = {nat}, ratio {:.4} (must be > 0.5)", nat as f64 / env as f64);
+    println!(
+        "N1: natural order nnz(L) = {nat}, ratio {:.4} (must be > 0.5)",
+        nat as f64 / env as f64
+    );
     assert!(2 * nat > env, "N1");
 }
 
@@ -251,7 +254,10 @@ fn a6_not_positive_definite_is_reported_with_the_equation() {
         other => panic!("A6a: expected Pivot, got {other:?}"),
     }
     let msg = e.to_string();
-    assert!(msg.contains("row 137") && msg.contains("not positive definite"), "A6a message");
+    assert!(
+        msg.contains("row 137") && msg.contains("not positive definite"),
+        "A6a message"
+    );
     // A6b
     let k = tridiag_shifted(200, shifts(200)[0]);
     let e = SparseLdlt::factor(&k).unwrap_err();

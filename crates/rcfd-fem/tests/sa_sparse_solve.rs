@@ -118,7 +118,11 @@ fn s4_bit_identical_for_1_and_8_threads() {
     let r1 = solve_static(&s, &sparse().threads(1)).unwrap();
     let r8 = solve_static(&s, &sparse().threads(8)).unwrap();
     assert_eq!(bits(r1.displacement_values()), bits(r8.displacement_values()), "S4 u");
-    assert_eq!(bits(r1.reactions().unwrap()), bits(r8.reactions().unwrap()), "S4 reactions");
+    assert_eq!(
+        bits(r1.reactions().unwrap()),
+        bits(r8.reactions().unwrap()),
+        "S4 reactions"
+    );
     println!("S4: displacements and reactions bit-identical for 1 and 8 threads");
 }
 
@@ -164,7 +168,8 @@ fn s5_hinge_mechanism_is_refused() {
 #[test]
 fn s6_refused_on_the_transformation_path_and_with_refinement() {
     let mut m = model_s();
-    m.add_constraint(Constraint::rigid_set("xmax", [1.0, 0.5, 0.5])).unwrap();
+    m.add_constraint(Constraint::rigid_set("xmax", [1.0, 0.5, 0.5]))
+        .unwrap();
     match solve_static(&m, &sparse()) {
         Err(e @ FemError::InvalidValue { key: "solver", .. }) => println!("S6a: {e}"),
         other => panic!("S6a: expected InvalidValue(solver), got {other:?}"),
@@ -264,7 +269,8 @@ fn h1_heavy_clamped_cube_solved() {
     let nnz = factor_count(&k, &minimum_degree_order(&k));
     let bytes = 8 * (2 * nnz + (k.n + 1) + 3 * k.n);
     println!(
-        "H1: {} unknowns, solver {}, solve_static {secs:.1} s, relative residual {:.3e} (limit 1e-10), nnz(L) {nnz},          factor storage {bytes} bytes ({:.2} GB)",
+        "H1: {} unknowns, solver {}, solve_static {secs:.1} s, relative residual {:.3e} (limit 1e-10), nnz(L) {nnz}, \
+         factor storage {bytes} bytes ({:.2} GB)",
         st.unknowns(),
         st.solver(),
         st.relative_residual(),
