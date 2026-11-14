@@ -213,3 +213,24 @@ operations of `body_load_vector` as they were (covered by `si_shell_transformati
    shell model with a temperature could be solved before, so no former result changes.
 3. A `Layup` block under a temperature is refused by the thickness check, as gravity is (N2), rather than with a laminate
    package name.
+
+## Amendment 1 (2026-11-14, written and committed after the registered run, before the run of TH3c)
+
+The registered run (`f525-scratch/run1.log`, test commit `ab36fef0`) missed three rows of TH3a: the in-plane displacement of
+plate P `2.1e-10` and of plate Q `1.3e-10` against `alpha dT (X - X_0)`, and the rotations of plate P `3.0e-10` of `alpha dT`
+(limit `1e-12` each). TH1 (the strain, `8.5e-15`) and TH2 (the stress, `2.6e-15`) were met in the same solves, so the error
+carries no strain: it is a rigid motion. Diagnosis (not a change of limit): the in-plane rigid rotation about node 0 is held only
+by `theta_z` of node 0 through the drilling penalty of its one element, `alpha_d G t A_e = 1e-3 * 7.7e10 * 0.01 * 0.17 ~ 1.3e5`
+N m, against membrane stiffnesses `E t ~ 2e9` N/m; arithmetic 5 counted the drilling only in the in-plane condition and missed
+that this soft rotation is the one the rounding of the membrane solve excites. Out-of-plane rows of TH3a for P are exact zeros as
+estimated. The missed rows stay as registered: the test of the run becomes the ignored record
+`th1_th3_n3_n5_free_plate_under_a_uniform_temperature_known_miss` (limits intact, measured numbers in its ignore text), and a
+running copy `th1_th3_n3_n5_free_plate_after_known_miss` keeps every met row with its limit and leaves out the three missed rows.
+
+Added check (registered now, before its run), to confirm the diagnosis:
+
+| id | clause | check | limit | estimate |
+| --- | --- | --- | --- | --- |
+| TH3c | (stronger, diagnosis of TH3a) | plates P and Q: the in-plane displacements minus `alpha dT (X - X_0)` minus the in-plane rigid rotation `omega e_Z x (X - X_0)` fitted by least squares (`omega = sum (r_i x d_i)_Z / sum |r_i|^2`), relative to `alpha dT max |X - X_0|`; and `max |theta_i . e_Z - omega| / (alpha dT)` | `1e-12` each | if the diagnosis holds, the rounding of the strain field: `~1e-14` |
+
+The decision is partial by the registered rule whatever TH3c gives (a registered check missed).
