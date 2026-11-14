@@ -339,3 +339,91 @@ Negative controls:
   (log-log); the linear form is the one whose integral is exact and the acceptance's flat spectra are the same in both.
 - Q3. Output quantities under base excitation: relative displacement and velocity, absolute acceleration (the quantities a
   specification and a stress check use).
+
+## Addendum 1 (2026-11-14): results
+
+Each registered run was made once, on commit 100d4449 (`cargo test -p rcfd-fem --release --test sa_random -- --nocapture
+--test-threads 1`, log `f417-scratch/run1.log`); the commit after it (3a042264) is `cargo fmt` of the F-417 files and one clippy
+fix (`!(d > 0.0)` written `d.is_nan() || d <= 0.0`, the same test), and the full release suite ran on it. The record B1b was
+written and run on the base 57808e24 before any library line (commit ef95afda).
+
+| Id | Clause | Limit | Measured | Met |
+|---|---|---|---|---|
+| S1 | a1 | `<= 5e-3` | `8.706e-6` | yes |
+| S1x | supp. | `<= 1e-6` | `1.145e-7` | yes |
+| S2 | a2 | `<= 5e-3` | `1.587e-3` | yes |
+| S2x | a2 | `<= 1e-6` | `1.145e-7` | yes |
+| S3 | a3 | decreasing, orders `>= 4` | force and base: `e = 1.145e-7, 1.398e-9, 2.049e-11`, orders `6.36`, `6.09` | yes |
+| S4 | a4 | `<= 1e-2` | `1.278e-3` (`nu_0 = 49.9361` Hz) | yes |
+| S4x | supp. | `<= 1e-6` | `7.6e-10` | yes |
+| S5 | a5 | `<= 1e-2` | `1.032e-3` | yes |
+| S5x | supp. | `<= 1e-6` | `1.056e-7` | yes |
+| S6 | a6 | `<= 1e-6` | `1.097e-7` | yes |
+| S6b | supp. | `<= 1e-6` | `1.083e-7` | yes |
+| S7 | a7 | `<= 1e-10` | force `0`, base `0` | yes |
+| S7x | supp. | `<= 1e-12` | `0` to `2.2e-16` | yes |
+| S8 | a8 | `<= 1e-12` | displacement `1.5e-18`, stress `1.06e-15` | yes |
+| S8s | supp. | `<= 1e-11` | displacement `3.9e-16`, stress `4.94e-12` | yes |
+| S8b | supp. | `<= 1e-12` | `1.7e-16`, `6.5e-16` | yes |
+| S9 | a9 | `<= 1e-12` | `1.7e-15`, `3.9e-15` | yes |
+| R1 | a10 | holds | "entry 1: value -1e0 is negative or not finite" | yes |
+| R2 | a11 | holds | both refused naming entry 2 | yes |
+| R3 | supp. | each | all 15 refused with their key | yes |
+| M1 | supp. | `<= 1e-5` | tip `1.145e-7`, stress `5.7e-8` (`f_1 = 1261.967` Hz) | yes |
+| M2 | supp. | `<= 1e-5` | `1.125e-7` | yes |
+| M2a | supp. | `<= 1e-3` | `1.285e-4` (`a = 1.273403`) | yes |
+| M3 | supp. | `<= 1e-12` | `0` | yes |
+| Q1 | supp. | `<= 1e-12` | `0`, `1.1e-16` | yes |
+| Q2 | supp. | `<= 1e-13`, `<= 1e-5` | `2.2e-16`, `1.248e-6` | yes |
+| Q3 | supp. | `<= 1e-6` | `m1 1.14e-7`, `m2 1.13e-7`, `m4 8.9e-8`, velocity `1.13e-7`, acceleration `8.9e-8` | yes |
+| Q4 | supp. | bits; `<= 1e-10` | equal; `0` | yes |
+| Q5 | supp. | `<= 1e-11` | `2.2e-16` | yes |
+| B1b | b2 | equal | all 22 digests equal | yes |
+| X1 | b4 | holds | `x1_modules_and_pending_after_f417` passes | yes |
+
+Negative controls: N1 `1.596e-3 > 1e-3`; N2 `1.036e-3` in `[5e-4, 2e-3]`; N3 `0.4997 > 0.1`; N4 `0.4286 > 0.1` (the
+`nu/(1 - nu)` of the estimate). All as expected.
+
+Mutations (scratch copy `f417-scratch/mut`, `mutate.py`, log `mutations.log`), each caught by the registered check: MU1 (no mode
+scale) by S1x, S2x, S6 and 19 others; MU2 (`c` for `c omega`) by S1 and 24 others; MU3 (no square root) by S8b only; MU4
+(`+ C_12`) by S7x (and N4); MU5 (no absolute term) by S2, S2x, M2, S3; MU6 (`<` for `<=`) by R2 only; MU7 (velocity by
+`omega^2`) by Q3 only; MU8 (weights exchanged) by S1x and 21 others; MU9 (residual dropped) by Q5 only. 9 of 9 caught.
+
+Other runs: `cargo test -p rcfd-fem --release` (all targets, on 3a042264): 563 passed, 0 failed, 125 ignored (the record of D8
+among them); `cargo test -p rcfd-api --release --test baseline_hashes`: 3 passed; `cargo test -p rcfd-cli --release --test
+docs_site`: 2 passed; `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean. The
+whole workspace suite was not run (the lead's gate).
+
+Deviations: S8s stress `4.94e-12` is 25 times the probe's estimate `2e-13` (the probe normalised by the largest amplitude of the
+vector, S8s per point by the largest diagonal there, which is smaller near the free end); within its limit, recorded. The only
+shared file touched is `crates/rcfd-fem/src/harmonic.rs`: lines 735 to 742 added (the method of D7), no existing line changed.
+`sa_random_default_bits.rs` was reformatted by `cargo fmt` after its record commit (layout only, the digests unchanged and
+passing).
+
+**Decision (rule above): done.** Every acceptance clause (a1 to a11) and every supplementary check met in one run, every negative
+control as expected, 9 of 9 mutations caught, the existing tests of `rcfd-fem` and the baseline hashes passing, fmt and clippy
+clean.
+
+Remaining questions:
+
+- Q1 (case-file key): open for the maintainer, recommendation in the registration (`analysis = "random"` with spectrum tables,
+  random loads, an optional correlation and the four outputs); a follow-up below.
+- Q4 (new): broadband fatigue of the random stress (Dirlik or similar on the moments of the von Mises equivalent): options (a) a
+  follow-up item using `Moments` and `RandomStress::von_mises_rate`, (b) leave the narrow-band rate of F-413 as the only estimate;
+  recommended (a), below. The Dirlik formula needs a cited source the repository does not have.
+- Q5 (new): complex cross-spectra (quad-spectra) and frequency-dependent coherence for partially coherent pressure loads:
+  recommended as a follow-up once a broadband load of the fan exists.
+
+## For the lead: roadmap entries
+
+Proposed status of F-417: **done**. Note:
+
+> ADR 0477, 2026-11-14: rcfd_fem::random (stub of ADR 0440 filled, PENDING None): Spectrum tables (linear or log-log, refused with the entry for a negative value or a non-increasing frequency), ModalChannels and spectral_response on a grid of steps of a quarter of the local scale (the distance to the nearest half-power peak, or the frequency) with 3-point Gauss-Legendre, several patterns with a constant real correlation, moments m0, m1, m2, m4 with the zero-crossing rate by fatigue::spectral_rate, and RandomSolver on the F-399 HarmonicSolver (new method modal_decomposition) for force patterns and a base acceleration (relative displacement and velocity, absolute acceleration), with the stress covariance per integration point and the root-mean-square von Mises stress sqrt(tr(A C)). Every registered check was met in one run: one mode 8.7e-6 (force) and 1.59e-3 (base; the exact integral (pi/2) f_n G (Q + 1/Q) is 1.6e-3 above) from (pi/2) f_n Q G, 1.1e-7 from the exact finite-band integrals, observed orders 6.4 and 6.1 under refinement; zero-crossing rate 1.28e-3 below f_n (finite band); two modes 1.03e-3 above the sum (the CQC cross term); band-limited linear and log-log tables 1.1e-7 from the registered integrals; uniaxial rms von Mises equal to the rms stress exactly on an axial Hex8 rod (force and base); fully correlated patterns equal the summed pattern within 1.1e-15 (4.9e-12 with the static correction), uncorrelated ones add within 3.9e-15; the one-mode rod through the model path within 1.2e-7 of the closed forms; 9 of 9 mutations caught; default bits unchanged. Follow-ups proposed: case file and CLI, broadband fatigue, complex cross-spectra.
+
+Follow-ups (numbers given by the lead):
+
+> Title: random response in the case file and the CLI. Deps: F-417, F-533. Acceptance: Every limit not stated here is registered in the ADR before the run. A case with analysis = "random", a spectrum table, a force load set or a base direction and a modal damping ratio gives the root-mean-square displacement, stress, von Mises stress and zero-crossing rate of the library call on the same model bit for bit; a case without the new keys keeps its bits and the baseline hashes are unchanged; a negative spectrum value, a non-increasing frequency list and a correlation that is not positive semi-definite are refused with the key and the entry.
+
+> Title: broadband fatigue of a random stress from its spectral moments. Deps: F-417, F-413. Acceptance: Every limit not stated here is registered in the ADR before the run. The broadband damage rate (formula registered from a cited source) reduces to the narrow-band rate of F-413 within 1 percent for a one-mode response at zeta = 0.01; for a two-mode response with well separated modes the counted damage of a synthesised Gaussian history (registered seed, 1e5 cycles, rainflow of F-413) lies within 10 percent of the broadband rate and the narrow-band rate is above it; the moments m0, m1, m2, m4 of RandomSolver feed it unchanged; a non-positive m0 or m2 is refused.
+
+> Title: complex cross-spectral matrices and frequency-dependent coherence of random loads. Deps: F-417. Acceptance: Every limit not stated here is registered in the ADR before the run. A cross-spectral table G_ab(f) with real and imaginary parts, Hermitian and positive semi-definite at every table frequency (refused otherwise with the frequency), reproduces the constant real correlation of F-417 bit for bit when its imaginary part is zero; two patterns with a pure delay tau (G_12 = G e^{-i 2 pi f tau}) on a one-mode system give the closed-form mean square within 1e-6; a field with coherence exp(-|x_a - x_b|/L) on a plate tends to the uncorrelated result as L goes to 0 and to the fully correlated one as L grows, each within 1e-8 at the registered limits.
