@@ -11484,7 +11484,7 @@ fixed by the item's registration ADR before any code.
     centrifugal load (axis, origin, speed) and mesh source fan_blade (fan, blade, divisions), proposed in the ADR open
     questions; the file-versus-library bit test and the solid-case-file.md keys follow with them. NEEDS THE USER for the
     case-file keys ([mesh] generator = "fan_blade", [loads.x] kind = "centrifugal"; proposal in ADR 0505).
-- [ ] **F-594** Supernodal L D L^T in the modal, buckling and harmonic solves and on the transformation path
+- [~] **F-594** Supernodal L D L^T in the modal, buckling and harmonic solves and on the transformation path
   - depends on: F-529
   - acceptance: Every limit not stated here is registered in the ADR before the run. The supernodal factor after nested
     dissection is selectable in the subspace and buckling eigensolvers, the direct harmonic solve and the transformation
@@ -11492,4 +11492,18 @@ fixed by the item's registration ADR before any code.
     envelope's within 1e-9 and the harmonic response within 1e-8; a model with a rigid set solved on the transformation
     path equals the envelope solve within 1e-10; a modal analysis of a clamped cube of about 1e5 unknowns completes with
     time and memory recorded; results bit-identical for 1 and 8 threads; the default solver's results keep their bits.
-  - note: Structural solver, advanced tier. Follow-up of F-529 (ADR 0503, 2026-11-14).
+  - note: Structural solver, advanced tier. Follow-up of F-529 (ADR 0503). PARTIAL by the registered rule (mutation M5,
+    the tau term of the complex pivot test, caught by L4 (b) but not also by E4 (a); every acceptance check met; done if
+    the maintainer accepts M5). ADR 0509, 2026-11-14: rcfd_linalg::eigen::Factorisation::Supernodal (the supernodal L D
+    L^T after nested dissection by level structures in the subspace and buckling eigensolvers, so in modal_analysis and
+    buckling::factors on the elimination and the transformation path), rcfd_linalg::sparse_chol::ComplexSupernodalLdlt
+    (the same multifrontal kernel made generic over f64 and C64, complex symmetric without conjugation or pivoting; for
+    a real matrix the real factor's values), DirectHarmonicOptions::factor (DirectFactor::SupernodalNestedDissection,
+    the order by the node coordinates computed once per solver), and StaticSolver::SupernodalDirect on the
+    transformation path. Clamped Hex8 cube of 4 752 unknowns: modal frequencies 1.5e-15 and buckling factors 1.8e-15
+    from the envelope's (limit 1e-9); harmonic response 1.9e-13 at the damped resonance, 1.1e-14 undamped, 8.7e-15 with
+    Rayleigh damping (limit 1e-8), about 4 times faster than the envelope per frequency; with a rigid set the
+    transformation-path static solve 4.1e-15 from the envelope's (limit 1e-10) and its modes 2.3e-15. Clamped cube of
+    104 544 unknowns: modal analysis of 6 modes in 78 s at a peak working set of 2.9 GB. Results bit-identical for 1 and
+    8 threads; 22 digests of the default paths equal to base; baseline_hashes passes. ADR 0503's F3a (the
+    transformation-path refusal) kept as an ignored record.
