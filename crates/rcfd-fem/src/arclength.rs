@@ -162,7 +162,7 @@ impl LoadFactorControl for Spherical {
         let a2 = 2.0 * (dot(du_f, &b) + c * self.dl);
         let a3 = dot(&b, &b) + c * self.dl * self.dl - self.ds * self.ds;
         let disc = a2 * a2 - 4.0 * a1 * a3;
-        if !(disc >= 0.0) {
+        if disc.is_nan() || disc < 0.0 {
             return Err(format!(
                 "the arc-length constraint has no real root at iteration {k} (discriminant {disc:e})"
             ));
