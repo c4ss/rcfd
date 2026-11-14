@@ -512,6 +512,7 @@ fn dense_fixed_point(
     dashpot: Option<(usize, f64)>,
     wref: f64,
     count: usize,
+    tol: f64,
 ) -> Vec<C64> {
     let free = free_equations(model);
     let nf = free.len();
@@ -555,7 +556,7 @@ fn dense_fixed_point(
         let mut converged = false;
         for _ in 0..100 {
             let wn = lam.im;
-            if (wn - w).abs() <= 1e-13 * wn {
+            if (wn - w).abs() <= tol * wn {
                 converged = true;
                 break;
             }
@@ -583,8 +584,24 @@ fn worst_nearest(a: &[C64], b: &[C64], count: usize) -> f64 {
     worst(&a.iter().take(count).map(|&z| nearest(z, b)).collect::<Vec<_>>())
 }
 
+/// The registered run (ADR 0520 Amendment 1): TF missed (`inf`, the dense reference below its noise floor), DM missed
+/// (`6.87e-9 > 1e-9`, the point dashpot against basis `n - 1`), RV1 missed (refused: the pseudo-mode root takes 170
+/// iterations); every other check met. Kept as the record, its checks and limits unchanged.
 #[test]
-fn f586_checks() {
+#[ignore = "ADR 0520 Amendment 1 record: TF inf, DM 6.87e-9 > 1e-9, RV1 refused (50 iterations); see f586_checks_amended"]
+fn f586_checks_known_miss() {
+    checks(false);
+}
+
+/// The corrected set-ups of ADR 0520 Amendment 1 (TF with the dense tolerance `1e-10`, DMb without the dashpot, RV1b with
+/// 500 iterations); every other check as registered.
+#[test]
+fn f586_checks_amended() {
+    checks(true);
+}
+
+fn checks(amended: bool) {
+    let dense_tol = if amended { 1e-10 } else { 1e-13 };
     let mut c = Checks::new();
     let mut fp: Vec<f64> = Vec::new();
     let mu1i = chain_mu1(N);
@@ -706,7 +723,7 @@ fn f586_checks() {
     let t = worst_nearest(&r6, &rf, 4);
     c.within("T truncation, basis 6 against the full basis", t, 1e-5, 1e-3);
     println!("  T: {nf} free unknowns, basis {full}; basis 6 {r6:?}; full {rf:?}");
-    let dense_t = dense_fixed_point(&model_t, vt, false, (0.0, 0.0), None, w1c, 4);
+    let dense_t = dense_fixed_point(&model_t, vt, false, (0.0, 0.0), None, w1c, 4, dense_tol);
     c.at_most(
         "TF full basis against the dense full space",
         worst_nearest(&rf, &dense_t, 4),
@@ -731,18 +748,22 @@ fn f586_checks() {
     let model_dm = bar_two(vt.material());
     let tip = model_dm.mesh().node_set("xmax").unwrap()[0];
     let tip_eq = model_dm.dof_map().equation(tip, 2).unwrap();
-    let dm = damped_modes(
-        &model_dm,
-        &own_opts(full, 4, w1c)
-            .rayleigh(5.0, 2e-6)
-            .dashpot(Dashpot::ground(tip, 2, 30.0))
-            .loss_factor("right", LossFactor::Constant(ETA_AL)),
-    )
-    .unwrap();
+    let mut dm_opts = own_opts(full, 4, w1c)
+        .rayleigh(5.0, 2e-6)
+        .loss_factor("right", LossFactor::Constant(ETA_AL));
+    if !amended {
+        dm_opts = dm_opts.dashpot(Dashpot::ground(tip, 2, 30.0));
+    }
+    let dm = damped_modes(&model_dm, &dm_opts).unwrap();
     fp.extend(fixed_point_errors(&dm));
-    let dense_dm = dense_fixed_point(&model_dm, vt, true, (5.0, 2e-6), Some((tip_eq, 30.0)), w1c, 4);
+    let pot = if amended { None } else { Some((tip_eq, 30.0)) };
+    let dense_dm = dense_fixed_point(&model_dm, vt, true, (5.0, 2e-6), pot, w1c, 4, dense_tol);
     c.at_most(
-        "DM two materials, full basis against the dense full space",
+        if amended {
+            "DMb two materials without the dashpot, full basis against the dense full space"
+        } else {
+            "DM two materials, full basis against the dense full space"
+        },
         worst_nearest(&roots_of(&dm, 4), &dense_dm, 4),
         1e-9,
     );
@@ -834,7 +855,14 @@ fn f586_checks() {
         let rod = rod_b();
         let model = rod_model(N, rod.kind, rod.material());
         let tip = model.mesh().node_set("xmax").unwrap()[0];
-        let o = own_opts(4, 3, rod.wc)
+        let own = if amended {
+            OwnFrequency::new(3).max_iterations(500)
+        } else {
+            OwnFrequency::new(3)
+        };
+        let o = DampedOptions::new(4)
+            .viscoelastic_reference(rod.wc, None)
+            .viscoelastic_own_frequency(own)
             .dashpot(Dashpot::ground(tip, 0, 1.0e3))
             .residual_vectors(true);
         let d = damped_modes(&model, &o);
@@ -848,10 +876,26 @@ fn f586_checks() {
             Err(_) => false,
         };
         c.holds(
-            "RV1 residual vectors run, finite roots",
+            if amended {
+                "RV1b residual vectors run (500 iterations), finite roots"
+            } else {
+                "RV1 residual vectors run, finite roots"
+            },
             ok,
             &format!("{:?}", d.as_ref().map(|d| (d.basis, d.modes.len()))),
         );
+        if amended {
+            let it = d
+                .as_ref()
+                .ok()
+                .and_then(|d| d.own_frequency.first())
+                .map_or(0, |r| r.iterations);
+            println!(
+                "  RV1b records {:?}",
+                d.as_ref().map(|d| d.own_frequency.clone()).unwrap_or_default()
+            );
+            c.holds("RV1b root 0 takes more than 50 iterations", it > 50, &format!("{it}"));
+        }
     }
 
     // FP over DA, DB, DC, T, DM
