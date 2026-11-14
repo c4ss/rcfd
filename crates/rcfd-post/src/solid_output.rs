@@ -25,9 +25,9 @@
 
 use rcfd_core::{Error, Result};
 use rcfd_fem::beam::section_forces;
-use rcfd_fem::shell::stresses as shell_stresses;
 use rcfd_fem::mesh::ElementKind;
 use rcfd_fem::recover::{nodal_average, principal, von_mises, IntegrationPointField};
+use rcfd_fem::shell::stresses as shell_stresses;
 use rcfd_fem::{FemError, SolidModel, SolidResult};
 use rcfd_io::vtk::{
     fe_vtu_string, FeArray, FeCellBlock, VTK_HEXAHEDRON, VTK_LINE, VTK_QUAD, VTK_QUADRATIC_HEXAHEDRON,

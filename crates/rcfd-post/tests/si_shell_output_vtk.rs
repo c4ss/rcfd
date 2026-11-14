@@ -8,7 +8,8 @@ use rcfd_fem::loads::NodalForceAt;
 use rcfd_fem::shell::stresses;
 use rcfd_fem::solve::{solve_static, solve_static_with, StaticOptions};
 use rcfd_fem::{
-    beam, BeamSection, BlockProperty, Constraint, DofMap, ElementKind, Load, Material, SolidMesh, SolidModel, SolidResult,
+    beam, BeamSection, BlockProperty, Constraint, DofMap, ElementKind, Load, Material, SolidMesh, SolidModel,
+    SolidResult,
 };
 use rcfd_post::solid_output::{shell_fields, solid_vtu_string, write_solid_vtu};
 
@@ -165,11 +166,7 @@ fn strip_point(i: usize, j: usize) -> Vec3 {
     let ea = [2.0 / 3.0, 1.0 / 3.0, 2.0 / 3.0];
     let eb = [-2.0 / 3.0, 2.0 / 3.0, 1.0 / 3.0];
     let (a, b) = (0.25 * i as f64, 0.1 * j as f64);
-    [
-        a * ea[0] + b * eb[0],
-        a * ea[1] + b * eb[1],
-        a * ea[2] + b * eb[2],
-    ]
+    [a * ea[0] + b * eb[0], a * ea[1] + b * eb[1], a * ea[2] + b * eb[2]]
 }
 
 /// Fixture S (`mixed = false`) or X (`mixed = true`) of the registration. `property = false` leaves the Shell4 block without
@@ -415,7 +412,11 @@ fn s1_to_s6_shell_strip_written_and_read_back() {
         write_solid_vtu(&path, &model, r).unwrap();
         let bytes = std::fs::read(&path).unwrap();
         let _ = std::fs::remove_file(&path);
-        c.holds(&format!("S6 {tag} file equals string"), bytes == xml.as_bytes(), "equal");
+        c.holds(
+            &format!("S6 {tag} file equals string"),
+            bytes == xml.as_bytes(),
+            "equal",
+        );
         // S4b
         if tag == "S" {
             let top = rd.cell("stress_top");
@@ -469,7 +470,10 @@ fn x1_beam_first_mixed_model() {
     let sf = beam::section_forces(&model, res.displacement_values()).unwrap();
     assert_eq!(sf.len(), 1);
     assert_eq!(sf[0].0, 0);
-    for (name, row) in [("section_force_start", sf[0].1.start), ("section_force_end", sf[0].1.end)] {
+    for (name, row) in [
+        ("section_force_start", sf[0].1.start),
+        ("section_force_end", sf[0].1.end),
+    ] {
         let read = rd.cell(name);
         let (e, nan) = read_error(&read[..6], &row);
         c.at_most(&format!("X1 {name} read back"), e, 1e-15);
@@ -487,7 +491,9 @@ fn x1_beam_first_mixed_model() {
     c.at_most("X1 rotation read back", e, 1e-15);
     c.holds(
         "X1 rotation NaN at nodes 10 and 12 only",
-        nan && [10usize, 12].iter().all(|&k| w[3 * k..3 * k + 3].iter().all(|x| x.is_nan()))
+        nan && [10usize, 12]
+            .iter()
+            .all(|&k| w[3 * k..3 * k + 3].iter().all(|x| x.is_nan()))
             && (0..13)
                 .filter(|k| ![10, 12].contains(k))
                 .all(|k| w[3 * k..3 * k + 3].iter().all(|x| x.is_finite())),
@@ -501,7 +507,13 @@ fn x1_beam_first_mixed_model() {
     c.holds("X1 reaction moment NaN positions", nan, "nodes 10, 12");
     c.holds(
         "X1 point names",
-        rd.point_names == owned(&[("displacement", 3), ("rotation", 3), ("reaction", 3), ("reaction_moment", 3)]),
+        rd.point_names
+            == owned(&[
+                ("displacement", 3),
+                ("rotation", 3),
+                ("reaction", 3),
+                ("reaction_moment", 3),
+            ]),
         &format!("{:?}", rd.point_names),
     );
     c.finish();
@@ -543,7 +555,10 @@ fn n1_solid_and_shell_blocks_refused() {
     let r = SolidResult::new(model.dof_map(), vec![0.0; model.dof_map().n_equations()]).unwrap();
     let e = refusal(&model, &r);
     println!("N1: {e}");
-    assert!(e.contains("Tet4") && e.contains("Shell4") && e.contains("ADR 0437"), "{e}");
+    assert!(
+        e.contains("Tet4") && e.contains("Shell4") && e.contains("ADR 0437"),
+        "{e}"
+    );
 }
 
 #[test]
@@ -579,7 +594,10 @@ fn n3_to_n7_layout_refusals() {
     );
     let e = refusal(&m, &result_with(&[3, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6]));
     println!("N5: {e}");
-    assert!(e.contains("node 0 has 3 unknowns in the result and 6 in the model"), "{e}");
+    assert!(
+        e.contains("node 0 has 3 unknowns in the result and 6 in the model"),
+        "{e}"
+    );
     let e = refusal(&m, &SolidResult::new(DofMap::uniform(9, 3), vec![0.0; 27]).unwrap());
     println!("N6: {e}");
     assert!(e.contains("the result numbers 9 nodes and the model 11"), "{e}");
@@ -587,7 +605,6 @@ fn n3_to_n7_layout_refusals() {
     assert!(solid_vtu_string(&m, &own).is_ok());
     assert!(shell_fields(&m, &own).is_ok());
 }
-
 
 #[test]
 fn n3_to_n7_layout_refusals_amended() {
@@ -604,7 +621,10 @@ fn n3_to_n7_layout_refusals_amended() {
     );
     let e = refusal(&m, &result_with(&[3, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6]));
     println!("N5: {e}");
-    assert!(e.contains("node 0 has 3 unknowns in the result and 6 in the model"), "{e}");
+    assert!(
+        e.contains("node 0 has 3 unknowns in the result and 6 in the model"),
+        "{e}"
+    );
     // N6b (amendment 1): 12 nodes and 63 unknowns, so that the length test passes and the node count decides.
     let e = refusal(&m, &result_with(&[6, 6, 6, 6, 6, 6, 6, 6, 6, 3, 3, 3]));
     println!("N6b: {e}");
