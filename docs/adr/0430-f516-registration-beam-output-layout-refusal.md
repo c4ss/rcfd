@@ -106,3 +106,60 @@ A mutation is caught if at least one listed check fails under it, not caught if 
 
 1. Wording of the node-count refusal (step 2) and that only the first differing node is named: taken on the maintainer's
    standing instruction of 2026-11-11 (take the recommendation).
+
+## Addendum 1: results, 2026-11-14
+
+Code: `crates/rcfd-post/src/solid_output.rs`, `beam_fields` (lines 198 to 232 of the new file: the length refusal kept, then the
+node-count refusal and the first-differing-node refusal of D1); new test file `crates/rcfd-post/tests/si_beam_layout.rs`
+(C1 to C5). `si_beam_output.rs` is not edited (git blob `30790d28` at the base and at the tip). No shared solver file changed
+(`rcfd-fem` untouched), so `baseline_hashes` was not run. Runs: `cargo test -p rcfd-post --release --test si_beam_layout
+--test si_beam_output --test si_beam_output_bytes --test sb_solid_output --test si_scaffold_output`; each registered check was
+run once on the final code (the first compile of the new test file ran the same tests before two cosmetic fixes, below).
+
+| id | check | limit | measured | met |
+| --- | --- | --- | --- | --- |
+| C1 | N2b layout: message names node 3, counts 3 and 6, `displacement`, no `expected 27` | exact | `node 3 has 3 unknowns in the result and 6 in the model; ...` | yes |
+| C2 | layout `[3, 6, 6, 6, 6]` names node 0 | exact | `node 0 has 3 unknowns in the result and 6 in the model` | yes |
+| C3 | the model's own layout accepted by both entry points | exact | both `Ok` | yes |
+| C4 | 9 nodes, 27 unknowns: node counts named | exact | `the result numbers 9 nodes and the model 5` | yes |
+| C5 | wrong length keeps `length 15, expected 27`, no layout text | exact | as stated | yes |
+| C6 | `si_beam_output` (A1 to A6, N1, N2, N2b, N3) passes, file unedited | pass; blob equal | 3 passed; blob equal | yes |
+| C7 | `si_beam_output_bytes` (B0, B1), `sb_solid_output`, `si_scaffold_output` | pass | 2, 2, 4 passed... see note | yes |
+
+Note on C7: `si_beam_output_bytes` 2 passed, `sb_solid_output` 2 passed, `si_scaffold_output` 4 passed as printed in the run (the
+runner prints one line per binary; all `ok`, 0 failed).
+
+Mutations (scratch git-archive copy `f516-scratch/mut` of the committed tip, one at a time, each run once):
+
+| id | mutation | caught by |
+| --- | --- | --- |
+| MU7 | layout check removed | C1 and C2 failed; N2b of ADR 0423 also failed (run separately) |
+| MU8 | last differing node named | C1 and C2 failed |
+| MU9 | counts swapped | C1 and C2 failed |
+| MU10 | loop starts at node 1 | C2 failed |
+| MU11 | node-count refusal removed | C4 failed |
+
+Deviations:
+
+- The first compile of the new test file produced a warning (an unused constant copied from the fixture), the message of the
+  refusal had a run of spaces from a lost string continuation, and `cargo fmt` reformatted two assertions. All three were fixed
+  before the committed code; the checks are substring tests that the unfixed message also satisfied, and no limit was changed.
+- MU7 was run with `cargo test` on both test binaries; the runner stops after the first failing binary, so N2b was run as a
+  separate command for MU7 only (it failed as ADR 0423 expects of the checked code).
+- fmt: `cargo fmt -p rcfd-post --check` clean after `cargo fmt -p rcfd-post`. clippy: `cargo clippy -p rcfd-post --all-targets
+  -- -D warnings` clean (run before the final fmt, which changed only whitespace in the test file).
+
+Not run: the whole workspace (the lead's gate); `baseline_hashes` (no shared solver file touched).
+
+**Decision by the registered rule: done.** C1 to C7 met, MU7 to MU11 caught by checks registered before their run, no
+amendment after a run.
+
+### Remaining questions
+
+1. Name all differing nodes instead of the first (L2)? Options: (a) leave; (b) list up to a few. Recommendation: (a).
+
+## For the lead: roadmap entries
+
+F-516: proposed status **done**. Note:
+
+> Structural solver, intermediate tier. ADR 0430, 2026-11-14: rcfd_post::solid_output beam path refuses a result with the model's number of unknowns in another layout with a message naming the first differing node and both counts (node 3 has 3 unknowns in the result and 6 in the model), a result with another number of nodes with both node counts, and keeps the former length text for a wrong number of unknowns; the N2b test of ADR 0423 passes unedited; the mutation removing the layout check (and four more) is caught by checks registered before their run; output of models without beams byte-identical (B1 unedited).
