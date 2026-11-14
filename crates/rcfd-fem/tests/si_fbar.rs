@@ -1302,6 +1302,7 @@ fn is_formulation_refusal<T>(r: rcfd_fem::Result<T>, f: SolidFormulation) -> (bo
 }
 
 #[test]
+#[ignore = "record of the refusals of ADR 0493 D5 and ADR 0506 after F-587; lifted by ADR 0525 (F-588), replaced by rf1_rf2_rf3_refusals_after_f588"]
 fn rf1_rf2_rf3_refusals_after_f587() {
     let mut ch = Checks::new();
     // RF1: the formulations are a Hex8 choice.

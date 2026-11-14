@@ -59,8 +59,6 @@ impl IntegrationPointField {
             });
         }
         let materials = model.material_indices()?;
-        // ADR 0493 D5: the refusals of a model with a Hex8 formulation (none for a model without one).
-        crate::hex8x::check_model(model)?;
         let mesh = model.mesh();
         let ne = mesh.n_elements();
         let mut field = IntegrationPointField {
@@ -106,8 +104,9 @@ impl IntegrationPointField {
             // ADR 0493 D3: the strains of a Hex8 element of a BBar or Incompatible block.
             let opted = match crate::hex8x::opted(mesh, e) {
                 Some(f) => {
-                    let d = material.elasticity_matrix().map_err(located)?;
-                    Some(crate::hex8x::point_strains(f, &coords, &d, &ue).map_err(located)?)
+                    let (ds, eths) = crate::hex8x::element_data(material, points.as_ref(), e, &coords, dte.as_deref())
+                        .map_err(located)?;
+                    Some(crate::hex8x::point_strains_at(f, &coords, &ds, eths.as_deref(), &ue).map_err(located)?)
                 }
                 None => None,
             };

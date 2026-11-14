@@ -532,8 +532,6 @@ fn prepare(model: &SolidModel, displacement: &[f64]) -> Result<Prepared> {
             found: displacement.len(),
         });
     }
-    // ADR 0493 D5: the patch recovery does not take the Hex8 formulations.
-    crate::hex8x::refuse_formulations(model, "the patch recovery")?;
     let mesh = model.mesh();
     for (block, b) in mesh.blocks().iter().enumerate() {
         if sampling_rule(b.kind()).is_none() {
@@ -583,7 +581,11 @@ fn element_samples(model: &SolidModel, prepared: &Prepared, displacement: &[f64]
     };
     for &xi in rule.points() {
         let p = element.point(&coords, xi)?;
-        let eps = element.strain_at(&coords, &ue, xi)?;
+        // ADR 0525 D1: a Hex8 element of a BBar or Incompatible block takes the formulation's strain.
+        let eps = match crate::hex8x::opted(mesh, e) {
+            Some(f) => crate::hex8x::strain_at(f, &coords, &d, &ue, xi)?,
+            None => element.strain_at(&coords, &ue, xi)?,
+        };
         s.positions.push(p.x);
         s.stress.push(apply6(&d, &eps));
     }
@@ -831,7 +833,10 @@ pub fn energy_error(
         let rule = estimate_rule(kind).expect("checked");
         let (mut err, mut sol) = (0.0, 0.0);
         for ip in element.integration_points(&coords, rule).map_err(located)? {
-            let eps = element.strain_at(&coords, &ue, ip.geometry.xi).map_err(located)?;
+            let eps = match crate::hex8x::opted(mesh, e) {
+                Some(f) => crate::hex8x::strain_at(f, &coords, &d, &ue, ip.geometry.xi).map_err(located)?,
+                None => element.strain_at(&coords, &ue, ip.geometry.xi).map_err(located)?,
+            };
             let sh = apply6(&d, &eps);
             let star = recovery.interpolate(nodes, &ip.geometry.n);
             let diff: [f64; 6] = std::array::from_fn(|k| star[k] - sh[k]);

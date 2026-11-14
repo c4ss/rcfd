@@ -214,8 +214,6 @@ fn assemble_stiffness(
     threads: Option<usize>,
     points: Option<&crate::mat_ortho::MaterialPoints>,
 ) -> Result<CsrMatrix> {
-    // ADR 0493 D5: the refusals of a model with a Hex8 formulation (none for a model without one).
-    crate::hex8x::check_model(model)?;
     assemble_with(model, threads, |ctx| {
         if ctx.kind == ElementKind::Beam2 {
             return crate::beam::model_element_stiffness(model.mesh(), ctx.element, ctx.coords, ctx.material);
@@ -228,8 +226,9 @@ fn assemble_stiffness(
         }
         // ADR 0493 D3: a Hex8 element of a BBar or Incompatible block.
         if let Some(f) = crate::hex8x::opted(model.mesh(), ctx.element) {
-            let d = ctx.material.elasticity_matrix()?;
-            return crate::hex8x::element_stiffness(f, ctx.coords, &d);
+            // ADR 0525 D1: the elasticity of each point (a per-point material takes its context).
+            let (ds, _) = crate::hex8x::element_data(ctx.material, points, ctx.element, ctx.coords, None)?;
+            return crate::hex8x::element_stiffness_at(f, ctx.coords, &ds);
         }
         if let Some(points) = points {
             if crate::mat_ortho::is_point_material(ctx.material) {

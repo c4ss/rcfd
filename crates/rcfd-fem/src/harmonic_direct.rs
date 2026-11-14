@@ -26,7 +26,6 @@
 
 use crate::assemble::{assemble_with, stiffness_with};
 use crate::constraint::prescribed_equations;
-use crate::element::element_for;
 use crate::error::{FemError, Result};
 use crate::harmonic::{HarmonicLoad, HarmonicResponse, HarmonicStress};
 use crate::mass::consistent_with;
@@ -443,7 +442,7 @@ fn viscoelastic_parts(
                     Some(d) => d,
                     None => ctx.material.elasticity_matrix()?,
                 };
-                element_for(ctx.kind).stiffness(ctx.coords, &d)
+                crate::hex8x::element_stiffness_for(model.mesh(), ctx.element, ctx.kind, ctx.coords, &d)
             })?;
             total = match total {
                 None => Some(km.clone()),
@@ -476,8 +475,8 @@ impl DirectHarmonic {
     /// prescribed displacements, not on the transformation path) and checks the options.
     pub fn new(model: &SolidModel, options: &DirectHarmonicOptions) -> Result<DirectHarmonic> {
         model.validate()?;
-        // ADR 0493 D5: the direct harmonic solve does not take the Hex8 formulations.
-        crate::hex8x::refuse_formulations(model, "the direct harmonic solve")?;
+        // ADR 0525 D2: the direct solve takes the formulations; Incompatible with a viscoelastic material is refused.
+        crate::hex8x::refuse_incompatible_viscoelastic(model, "the direct harmonic solve")?;
         let visco = model.materials().iter().any(|(_, m)| is_viscoelastic(m));
         if visco {
             check_viscoelastic_model(model)?;
@@ -585,7 +584,7 @@ impl DirectHarmonic {
                             return Ok(crate::element::ElementMatrix::zeros(size));
                         }
                         let d = ctx.material.elasticity_matrix()?;
-                        element_for(ctx.kind).stiffness(ctx.coords, &d)
+                        crate::hex8x::element_stiffness_for(model.mesh(), ctx.element, ctx.kind, ctx.coords, &d)
                     })?;
                     parts.push((km.val, dm.clone()));
                 }

@@ -41,7 +41,6 @@
 
 use crate::assemble::{assemble_with, stiffness_with};
 use crate::constraint::{check_rigid_body_motions, prescribed_equations, reduce};
-use crate::element::element_for;
 use crate::error::{FemError, Result};
 use crate::harmonic_direct::{Dashpot, LossFactor};
 use crate::mass::consistent_with;
@@ -558,8 +557,8 @@ pub fn damped_modes(model: &SolidModel, options: &DampedOptions) -> Result<Dampe
         None => model,
     };
     model.check_supported()?;
-    // ADR 0493 D5: the damped modes do not take the Hex8 formulations.
-    crate::hex8x::refuse_formulations(model, "the damped modes")?;
+    // ADR 0525 D2: the damped modes take the formulations; Incompatible with a viscoelastic material is refused.
+    crate::hex8x::refuse_incompatible_viscoelastic(original, "the damped modes")?;
     if crate::mpc::uses_transformation(model) {
         return Err(invalid(
             "constraint",
@@ -703,7 +702,7 @@ pub fn damped_modes(model: &SolidModel, options: &DampedOptions) -> Result<Dampe
                         return Ok(crate::element::ElementMatrix::zeros(size));
                     }
                     let d = ctx.material.elasticity_matrix()?;
-                    element_for(ctx.kind).stiffness(ctx.coords, &d)
+                    crate::hex8x::element_stiffness_for(model.mesh(), ctx.element, ctx.kind, ctx.coords, &d)
                 })?;
                 let p = project(&km, phi);
                 for i in 0..m * m {
@@ -729,7 +728,7 @@ pub fn damped_modes(model: &SolidModel, options: &DampedOptions) -> Result<Dampe
                     let size: usize = ctx.nodes.iter().map(|&a| dofs.components(a)).sum();
                     return Ok(crate::element::ElementMatrix::zeros(size));
                 }
-                element_for(ctx.kind).stiffness(ctx.coords, &d)
+                crate::hex8x::element_stiffness_for(model.mesh(), ctx.element, ctx.kind, ctx.coords, &d)
             })?;
             let p = project(&km, phi);
             for i in 0..m * m {
@@ -935,7 +934,7 @@ impl<'a> OwnSetup<'a> {
                     Some(d) => d,
                     None => ctx.material.elasticity_matrix()?,
                 };
-                element_for(ctx.kind).stiffness(ctx.coords, &d)
+                crate::hex8x::element_stiffness_for(storage.mesh(), ctx.element, ctx.kind, ctx.coords, &d)
             })?;
             Ok(project(&km, phi))
         };
