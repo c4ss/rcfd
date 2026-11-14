@@ -8584,17 +8584,19 @@ fixed by the item's registration ADR before any code.
     of a step with a settled active set show an order >= 1.8; an active set that cycles beyond the registered count is
     an error with the nodes.
   - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. ADR 0507, 2026-11-14: frictionless
-    node-to-surface contact (contact.rs) on bilinear Hex8 target faces or a rigid plane: closest-point projection with
-    the exact gap gradient and second derivative, a per-node augmented Lagrangian force max(0, lambda - eps A g) with
-    Uzawa updates until every active gap is within the tolerance, a linear-body Newton driver (sparse L D L^T, eps G G^T
-    on a refused pivot) and the total Lagrangian driver through nonlinear::solve_from, located errors for active-set
-    cycling and exhausted augmentations. Met: bar on a rigid stop (1.1e-11); stacked blocks pressed and pulled apart
-    (1.2e-10, no tensile multiplier); Hertz sphere on a rigid plane at a/R = 0.1 (radius 3.0e-4, peak 7.6e-4, approach
-    6.1e-4, 13 nodes); interference-fit pressure (8.0e-3) and Lame hoop stress (3.6e-3); tangent against central
-    differences (2.3e-10); the cycling error names the nodes; nine of nine mutations caught; default bits unchanged.
-    PARTIAL. Missing: uniform shaft stress in the fit (7.0e-3 against 1e-6, a through-thickness variation not yet
-    explained) and the residual order of the total Lagrangian punch (least 0.17 against 1.8, the ADR 0404 measure on
-    solves of three to five iterations); both recorded as known misses. No case-file key.
+    node-to-surface contact (contact.rs) on bilinear Hex8 target faces or a rigid plane. It uses closest-point
+    projection with the exact gap gradient and second derivative, a per-node augmented Lagrangian force max(0, lambda -
+    eps A g) with Uzawa updates until every active gap is within the tolerance, a linear-body Newton driver (sparse L D
+    L^T, eps G G^T on a refused pivot) and the total Lagrangian driver through nonlinear::solve_from, and gives located
+    errors for active-set cycling and exhausted augmentations. Met: bar on a rigid stop (1.1e-11); stacked blocks
+    pressed and pulled apart (1.2e-10, no tensile multiplier); Hertz sphere on a rigid plane at a/R = 0.1 (radius
+    3.0e-4, peak 7.6e-4, approach 6.1e-4, 13 nodes); interference-fit pressure (8.0e-3) and Lame hoop stress (3.6e-3);
+    tangent against central differences (2.3e-10); the cycling error names the nodes. Nine of nine mutations caught;
+    default bits unchanged. Missing: uniform shaft stress in the fit (7.0e-3 against 1e-6, a through-thickness variation
+    not yet explained) and the residual order of the total Lagrangian punch (least 0.17 against 1.8, the ADR 0404
+    measure on solves of three to five iterations). Both are recorded as known misses. No case-file key. Amendments 2
+    and 3 were committed before their corrected runs (no limit changed). Follow-ups F-599, F-600, F-601. Open
+    (maintainer): a [[contact]] case-file table.
 - [x] **F-428** Laminated shell: layup stiffness, ply stresses and failure indices
   - depends on: F-409, F-392
   - acceptance: Every limit not stated here is registered in the ADR before the run. One isotropic ply gives the bits of
@@ -11146,15 +11148,15 @@ fixed by the item's registration ADR before any code.
     within 1e-6; a field with coherence exp(-|x_a - x_b|/L) on a plate tends to the uncorrelated result as L goes to 0
     and to the fully correlated one as L grows, each within 1e-8 at the registered limits.
   - note: Structural solver, advanced tier. ADR 0510, 2026-11-14: rcfd_fem::random gains CrossSpectrum (a table
-    G_ab(f_k) with real and imaginary parts, or spectra with a Coherence), Coherence (constant real, table, or
-    function of the frequency), check_cross_matrix (Hermitian to 1e-12 of the largest diagonal and positive semi-
-    definite to 1e-12 of the trace by a complex Cholesky, refusal names the frequency), exponential_coherence,
-    spectral_response_cross and Excitation::cross (stress included). Convention G_ab = E[conj(F_a) F_b]; a real
-    constant coherence is routed to spectral_response, so F-417 is reproduced bit for bit (also by the general loop,
-    switched on with SpectralOptions::real_route(false)). Pure delay on one mode within 1.2e-7 of the closed form
-    (1e-6), a two-mode delay with the sign of the phase tested within 1.2e-7; exponential coherence on a Hex8 plate: 0
-    against the uncorrelated result at L = d_min/40 and 3.3e-11 against the fully correlated at L = 1e10 plate sides
-    (1e-8). Mutations all caught (one equivalent). No case-file key.
+    G_ab(f_k) with real and imaginary parts, or spectra with a Coherence), Coherence (constant real, table, or function
+    of the frequency), check_cross_matrix (Hermitian to 1e-12 of the largest diagonal and positive semi-definite to
+    1e-12 of the trace by a complex Cholesky, refusal names the frequency), exponential_coherence,
+    spectral_response_cross and Excitation::cross (stress included). Convention G_ab = E[conj(F_a) F_b]; a real constant
+    coherence is routed to spectral_response, so F-417 is reproduced bit for bit (also by the general loop, switched on
+    with SpectralOptions::real_route(false)). Pure delay on one mode within 1.2e-7 of the closed form (1e-6), a two-mode
+    delay with the sign of the phase tested within 1.2e-7; exponential coherence on a Hex8 plate: 0 against the
+    uncorrelated result at L = d_min/40 and 3.3e-11 against the fully correlated at L = 1e10 plate sides (1e-8).
+    Mutations all caught (one equivalent). No case-file key.
 - [ ] **F-568** Error indicator per unit volume and the effectivity criterion near one
   - depends on: F-432
   - acceptance: Every limit not stated here is registered in the ADR before the run. EnergyError gives the density
@@ -11581,3 +11583,21 @@ fixed by the item's registration ADR before any code.
     + (pi^2 E C_w)/(G J L^2))^(1/2) within 1 percent at 16 elements (the clause of F-558 missed without warping); every
     result without the option bit-identical.
   - note: Structural solver, advanced tier. Follow-up of F-558 (ADR 0508, 2026-11-14).
+- [ ] **F-599** Interference fit through-thickness variation of the contact pressure (re-register I3 of ADR 0507)
+  - depends on: F-427
+  - acceptance: Every limit not stated here is registered in the ADR before the run. Find why the one-layer
+    ring-on-shaft fit of ADR 0507 has node pressures of 0.9955 and 1.0045 of the mean at the bottom and top, then
+    re-register I3. Fan relevance: hub-shaft press-fit stresses.
+  - note: Structural solver, advanced tier. Follow-up of F-427 (ADR 0507, 2026-11-14).
+- [ ] **F-600** A contact Newton order measure for short solves
+  - depends on: F-427
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A contact Newton order measure for
+    short solves (r_{k+1}/r_k^2 bounded, or started near the solution), registered for the total Lagrangian contact
+    punch of ADR 0507 T2.
+  - note: Structural solver, advanced tier. Follow-up of F-427 (ADR 0507, 2026-11-14).
+- [ ] **F-601** Contact search and targets: bucket search, rigid cylinder and sphere targets, Hex20 and Tet faces
+  - depends on: F-427
+  - acceptance: Every limit not stated here is registered in the ADR before the run. Contact search and targets: a
+    bucket search in place of the all-faces loop, rigid cylinder and sphere targets, and Hex20 and Tet faces (the limits
+    of ADR 0507).
+  - note: Structural solver, advanced tier. Optional. Follow-up of F-427 (ADR 0507, 2026-11-14).
