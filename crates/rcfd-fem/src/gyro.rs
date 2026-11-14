@@ -25,6 +25,10 @@
 //! correction vectors `K_b^-1 C_r q_i` of its harmonic modes (reduced coordinates, `M_r`-orthonormalised by the rule of ADR 0464,
 //! dependent ones dropped), and every split mode reports the first-order Ritz error `eta` of ADR 0481 D5, computed from the
 //! split mode alone by the projected correction equation on the complement of the basis (MINRES, preconditioned by `K_b^-1`).
+//!
+//! ADR 0492 (F-575): beside it, [`RotatingSector::split_modes`] reports `schur_eta`, the Ritz error of the Schur-complemented
+//! projected problem `Q_VV(l) - Q_VW Q_WW(theta)^-1 Q_WV` frozen at the Ritz value (the coupling of the complement with every
+//! basis vector: one complement solve per basis vector, then one dense quadratic solve per split mode).
 
 use crate::cyclic::{doubled_matrix, HarmonicModes};
 use crate::damped::{m_orthonormalise, REAL_TOLERANCE};
@@ -446,6 +450,25 @@ fn project_and_solve(
     c: &CsrMatrix,
     omega: f64,
 ) -> Result<(DenseSplit, f64, f64)> {
+    let (d, asymmetry, skew_defect, _) = project_and_solve_with(phi, keff, mass, c, omega)?;
+    Ok((d, asymmetry, skew_defect))
+}
+
+/// The symmetrised projected matrices `K_VV`, `M_VV`, `C_VV` (row-major) of [`project_and_solve_with`] (ADR 0492 D2).
+struct Projected {
+    k: Vec<f64>,
+    m: Vec<f64>,
+    c: Vec<f64>,
+}
+
+/// [`project_and_solve`] that also returns the symmetrised projected matrices (the same operations in the same order).
+fn project_and_solve_with(
+    phi: &[Vec<f64>],
+    keff: &CsrMatrix,
+    mass: &CsrMatrix,
+    c: &CsrMatrix,
+    omega: f64,
+) -> Result<(DenseSplit, f64, f64, Projected)> {
     let m = phi.len();
     let kr = project(keff, phi);
     let mr = project(mass, phi);
@@ -463,7 +486,7 @@ fn project_and_solve(
         }
     }
     let d = split_modes_dense(&ms, &cs, omega, &ks, m)?;
-    Ok((d, asymmetry, skew_defect))
+    Ok((d, asymmetry, skew_defect, Projected { k: ks, m: ms, c: cs }))
 }
 
 /// The split mode of a reduced root on the basis `phi`: the shape `Phi q` (ADR 0472 D4).
@@ -700,6 +723,10 @@ pub struct HarmonicSplitModes {
     /// Per split mode, the first-order Ritz error `eta` (ADR 0482 D2): `None` without the option, at an unstable speed or when
     /// its solve did not converge.
     pub eta: Vec<Option<f64>>,
+    /// Per split mode, the Ritz error of the Schur-complemented projected problem `|theta/theta' - 1|` (ADR 0492 D2): `Some`
+    /// where `eta` is computed by [`RotatingSector::split_modes`] (not by `split_campbell`), `None` otherwise or when one of
+    /// its solves failed; `Some(0)` when the basis spans the index.
+    pub schur_eta: Vec<Option<f64>>,
 }
 
 /// The split Campbell table of a sector (ADR 0481 D2): one [`SplitCampbell`] per harmonic index.
@@ -784,7 +811,7 @@ impl<'a> RotatingSector<'a> {
             return self.sector_split_without(harmonic, omega);
         }
         let c = self.part().coriolis()?;
-        self.sector_split_at(harmonic, omega, &c)
+        self.sector_split_at(harmonic, omega, &c, true)
     }
 
     fn sector_split_without(&self, harmonic: usize, omega: f64) -> Result<HarmonicSplitModes> {
@@ -839,10 +866,12 @@ impl<'a> RotatingSector<'a> {
             corrections: 0,
             dropped_corrections: 0,
             eta: vec![None; count],
+            schur_eta: vec![None; count],
         })
     }
 
-    fn sector_split_at(&self, harmonic: usize, omega: f64, c: &CsrMatrix) -> Result<HarmonicSplitModes> {
+    /// `schur`: whether the Ritz error of the Schur-complemented problem is computed (ADR 0492 D2; not in `split_campbell`).
+    fn sector_split_at(&self, harmonic: usize, omega: f64, c: &CsrMatrix, schur: bool) -> Result<HarmonicSplitModes> {
         let (basis, loss, h) = match self.modes(harmonic, omega)? {
             HarmonicSpeedModes::Modes(h) => (Basis::Speed, None, h),
             HarmonicSpeedModes::LossOfStiffness(l) => match self.modes(harmonic, 0.0)? {
@@ -866,8 +895,8 @@ impl<'a> RotatingSector<'a> {
             None
         };
         let keff = part.operator(omega);
-        let (d, asymmetry, skew_defect) = if multiplicity == 2 {
-            project_and_solve(
+        let (d, asymmetry, skew_defect, projected) = if multiplicity == 2 {
+            project_and_solve_with(
                 &phi,
                 &doubled_matrix(&keff),
                 &doubled_matrix(part.mass()),
@@ -875,17 +904,17 @@ impl<'a> RotatingSector<'a> {
                 omega,
             )?
         } else {
-            project_and_solve(&phi, &keff, part.mass(), c, omega)?
+            project_and_solve_with(&phi, &keff, part.mass(), c, omega)?
         };
         let modes: Vec<SplitMode> = d.modes.iter().map(|dm| split_mode_of(&phi, dm)).collect();
         let waves = modes
             .iter()
             .map(|sm| (multiplicity == 2).then(|| wave_sense(part.mass(), &sm.re, &sm.im)))
             .collect();
-        let (corrections, dropped_corrections, eta) = match &correction {
-            None => (0, 0, vec![None; modes.len()]),
+        let (corrections, dropped_corrections, eta, schur_eta) = match &correction {
+            None => (0, 0, vec![None; modes.len()], vec![None; modes.len()]),
             Some(cb) => {
-                let eta = if d.stability == Stability::Stable {
+                let (eta, schur_eta) = if d.stability == Stability::Stable {
                     let rest = match basis {
                         Basis::Speed => None,
                         Basis::Rest => {
@@ -899,14 +928,24 @@ impl<'a> RotatingSector<'a> {
                         }
                     };
                     let kq = rest.as_ref().unwrap_or(&h.reduced_stiffness);
-                    d.modes
+                    let eta: Vec<Option<f64>> = d
+                        .modes
                         .iter()
                         .map(|dm| ritz_error(cb, kq, &h.reduced_mass, omega, dm))
-                        .collect()
+                        .collect();
+                    let schur_eta = if schur {
+                        d.modes
+                            .iter()
+                            .map(|dm| schur_error(cb, kq, &h.reduced_mass, omega, dm, &projected))
+                            .collect()
+                    } else {
+                        vec![None; modes.len()]
+                    };
+                    (eta, schur_eta)
                 } else {
-                    vec![None; modes.len()]
+                    (vec![None; modes.len()], vec![None; modes.len()])
                 };
-                (cb.kept(), cb.dropped, eta)
+                (cb.kept(), cb.dropped, eta, schur_eta)
             }
         };
         Ok(HarmonicSplitModes {
@@ -928,6 +967,7 @@ impl<'a> RotatingSector<'a> {
             corrections,
             dropped_corrections,
             eta,
+            schur_eta,
         })
     }
 
@@ -980,7 +1020,7 @@ impl<'a> RotatingSector<'a> {
             let mut results = Vec::with_capacity(ns);
             let mut entries = Vec::with_capacity(ns);
             for &w in speeds {
-                let s = self.sector_split_at(k, w, &c)?;
+                let s = self.sector_split_at(k, w, &c, false)?;
                 let modes: Vec<WhirlMode> = s
                     .modes
                     .modes
@@ -1336,4 +1376,134 @@ fn minres(
         }
     }
     None
+}
+
+// ------------------------------------------------------------------------------------------------------------------------
+// ADR 0492 (F-575): the Ritz error of the Schur-complemented projected problem.
+
+/// The real form of `Q(theta) u` (ADR 0482 D2): `(A u_r - theta g C u_i, A u_i + theta g C u_r)`, `A = K - theta^2 M`; `t` three
+/// scratch vectors of the half length.
+#[allow(clippy::too_many_arguments)]
+fn shifted_apply(
+    k: &CsrMatrix,
+    m: &CsrMatrix,
+    c: &CsrMatrix,
+    theta: f64,
+    g: f64,
+    u: &[f64],
+    out: &mut [f64],
+    t: &mut [Vec<f64>; 3],
+) {
+    let nq = k.n;
+    let (ur, ui) = u.split_at(nq);
+    let (or, oi) = out.split_at_mut(nq);
+    let [tk, tm, tc] = t;
+    k.matvec(ur, tk);
+    m.matvec(ur, tm);
+    c.matvec(ui, tc);
+    for e in 0..nq {
+        or[e] = tk[e] - theta * theta * tm[e] - theta * g * tc[e];
+    }
+    k.matvec(ui, tk);
+    m.matvec(ui, tm);
+    c.matvec(ur, tc);
+    for e in 0..nq {
+        oi[e] = tk[e] - theta * theta * tm[e] + theta * g * tc[e];
+    }
+}
+
+/// ADR 0492 D2: the Ritz error `|theta/theta' - 1|` of the split mode `dm` (coordinates on `cb.v`), `theta'` the root near
+/// `theta` of the projected problem condensed by the complement and frozen at `theta`: for each basis vector `v_j` the
+/// complement solve `(I - P)^T Q(theta) (I - P) x_j = -(I - P)^T Q(theta) v_j` (the MINRES of ADR 0482 D2), `E_ij = -v_i^T
+/// Q(theta) x_j`, then the dense quadratic problem with `K_VV - sym(Re E)` and `C_VV - skew(Im E)/(2 speed theta)` on the
+/// projected matrices `p`; `theta'` the root of largest overlap with `dm`. `Some(0)` when the basis spans the index; `None` when a
+/// solve failed or the value is not finite.
+fn schur_error(
+    cb: &CorrectionBasis,
+    kq: &CsrMatrix,
+    mr: &CsrMatrix,
+    speed: f64,
+    dm: &DenseSplitMode,
+    p: &Projected,
+) -> Option<f64> {
+    let nq = kq.n;
+    let nb = cb.v.len();
+    if nb >= nq {
+        return Some(0.0);
+    }
+    let theta = dm.omega;
+    let g = 2.0 * speed;
+    let mut scratch = [vec![0.0; nq], vec![0.0; nq], vec![0.0; nq]];
+    let mut op_scratch = [vec![0.0; nq], vec![0.0; nq], vec![0.0; nq]];
+    let mut work = vec![0.0; 2 * nq];
+    let mut op = |u: &[f64], out: &mut [f64]| {
+        work.copy_from_slice(u);
+        cb.project(&mut work[..nq]);
+        cb.project(&mut work[nq..]);
+        shifted_apply(kq, mr, &cb.cr, theta, g, &work, out, &mut op_scratch);
+        cb.project_dual(&mut out[..nq]);
+        cb.project_dual(&mut out[nq..]);
+    };
+    let mut prec = |x: &[f64], out: &mut [f64]| {
+        for half in 0..2 {
+            let mut h = x[half * nq..(half + 1) * nq].to_vec();
+            cb.project_dual(&mut h);
+            let mut z = cb.ldlt.solve(&h);
+            cb.project(&mut z);
+            out[half * nq..(half + 1) * nq].copy_from_slice(&z);
+        }
+    };
+    let maxit = (4 * nq + 20).min(RITZ_ITERATIONS);
+    let mut er = vec![0.0; nb * nb];
+    let mut ei = vec![0.0; nb * nb];
+    let mut u = vec![0.0; 2 * nq];
+    let mut qx = vec![0.0; 2 * nq];
+    for j in 0..nb {
+        u[..nq].copy_from_slice(&cb.v[j]);
+        u[nq..].fill(0.0);
+        shifted_apply(kq, mr, &cb.cr, theta, g, &u, &mut qx, &mut scratch);
+        let mut b: Vec<f64> = qx.iter().map(|x| -x).collect();
+        cb.project_dual(&mut b[..nq]);
+        cb.project_dual(&mut b[nq..]);
+        let mut x = minres(&mut op, &mut prec, &b, RITZ_TOLERANCE, maxit)?;
+        cb.project(&mut x[..nq]);
+        cb.project(&mut x[nq..]);
+        shifted_apply(kq, mr, &cb.cr, theta, g, &x, &mut qx, &mut scratch);
+        for (i, vi) in cb.v.iter().enumerate() {
+            er[i * nb + j] = -dot(vi, &qx[..nq]);
+            ei[i * nb + j] = -dot(vi, &qx[nq..]);
+        }
+    }
+    let mut k2 = p.k.clone();
+    let mut c2 = p.c.clone();
+    for i in 0..nb {
+        for j in 0..nb {
+            k2[i * nb + j] -= 0.5 * (er[i * nb + j] + er[j * nb + i]);
+            if speed > 0.0 {
+                c2[i * nb + j] -= 0.5 * (ei[i * nb + j] - ei[j * nb + i]) / (g * theta);
+            }
+        }
+    }
+    let corrected = split_modes_dense(&p.m, &c2, speed, &k2, nb).ok()?;
+    let mut best: Option<(f64, f64)> = None;
+    for cm in &corrected.modes {
+        // y^H M y' with y = dm.q, y' = cm.q.
+        let mut re = 0.0;
+        let mut im = 0.0;
+        for i in 0..nb {
+            let (yr, yi) = (dm.q[i].re, dm.q[i].im);
+            for j in 0..nb {
+                let mij = p.m[i * nb + j];
+                re += mij * (yr * cm.q[j].re + yi * cm.q[j].im);
+                im += mij * (yr * cm.q[j].im - yi * cm.q[j].re);
+            }
+        }
+        let overlap = re * re + im * im;
+        if best.is_none_or(|(_, o)| overlap > o) {
+            best = Some((cm.omega, overlap));
+        }
+    }
+    let (theta_c, _) = best?;
+    let v = (theta / theta_c - 1.0).abs();
+    v.is_finite().then_some(v)
 }
