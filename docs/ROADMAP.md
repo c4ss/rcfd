@@ -9824,12 +9824,22 @@ fixed by the item's registration ADR before any code.
     is gyroscopically stabilised, and the union of the sector's 504 eigenvalues equals the full rotor's within 6.7e-14
     relative, with the flags agreeing per index and for the rotor; Sylvester counts agree, expanded residuals 4.7e-14,
     eight mutations caught.
-- [ ] **F-512** Beam results in the solid output: rotations as point data and VTK line cells
+- [~] **F-512** Beam results in the solid output: rotations as point data and VTK line cells
   - depends on: F-391, F-377
   - acceptance: Every limit not stated here is registered in the ADR before the run. rcfd_post::solid_output writes a
     model with Beam2 elements: displacement and rotation point arrays, reaction forces and moments, Beam2 as VTK line
     cells and the section forces as cell data; a model without beams writes the bytes it wrote before; the arrays read
     back equal the result within 1e-15.
+  - note: Structural solver, intermediate tier. ADR 0423, 2026-11-13: rcfd_post::solid_output writes a model whose
+    blocks are all Beam2 through beam_fields: point arrays displacement (3), rotation (3, NaN at a node with three
+    unknowns), reaction and reaction_moment (3 each, when the result carries reactions; moment NaN at three-unknown
+    nodes); every element a VTK_LINE cell (type 3) in element order; cell arrays section_force_start and
+    section_force_end (6 each, N, V_y, V_z, T, M_y, M_z in local axes, from beam::section_forces). A model without Beam2
+    runs the former code: the six F-377 fixtures (Hex8, Tet4, Tet10, with and without reactions) give the FNV-1a hashes
+    and lengths recorded at the base 3cf27f63. Read back: every array equal to the result (error 0, limit 1e-15). A
+    model mixing Beam2 with other kinds is refused naming ADR 0423. Partial: of seven mutations MU7 (the DofMap equality
+    check removed) was not caught by the registered checks (the registered wrong-numbering result had another length);
+    caught by check N2b added after the run.
 - [ ] **F-513** Beams on the transformation path: rigid sets joining a beam to a solid, supports and linear constraints on rotations
   - depends on: F-391, F-393
   - acceptance: Every limit not stated here is registered in the ADR before the run. A cantilever beam joined to a solid
@@ -9864,3 +9874,9 @@ fixed by the item's registration ADR before any code.
     with build_second_order_bounded and one PISO corrector at dt 1e-3 runs 200 steps (ADR 0421: max abs(u) 2.208 at step
     200), and the refusal of the bounded form with one corrector of ADR 0374 is revisited for a projected start.
   - note: From ADR 0421 questions 1 and 2, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+- [ ] **F-516** Beam output: refusal of a result with the model's count of unknowns in another layout
+  - depends on: F-512
+  - acceptance: Every limit not stated here is registered in the ADR before the run. rcfd_post::solid_output refuses a
+    result of a beam model whose DofMap has the model's number of unknowns but another count at some node, with a
+    message naming that node and both counts; the N2b test of ADR 0423 passes unedited; the mutation removing the DofMap
+    equality check is caught by a check registered before its run.
