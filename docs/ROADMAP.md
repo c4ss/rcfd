@@ -10305,10 +10305,15 @@ fixed by the item's registration ADR before any code.
     strength is refused with the point and the case path.
   - note: Structural solver, advanced tier. Follow-up of F-413 (ADR 0449, 2026-11-14). Adds a case-file block: schema
     question for the maintainer.
-- [ ] **F-534** Fatigue: rainflow residue error and Gerber compressive-mean message
+- [x] **F-534** Fatigue: rainflow residue error and Gerber compressive-mean message
   - depends on: F-413
   - acceptance: Every limit not stated here is registered in the ADR before the run. rainflow_periodic returns an
     internal error when the residue of the closed sequence is longer than three points, and a mutation that closes loops
     with a strict inequality is then caught by the constant-amplitude check; the Gerber refusal of a compressive mean at
     or beyond the strength says so in modulus; all checks of ADR 0449 still pass unedited.
-  - note: Structural solver, advanced tier. Follow-up of F-413 (ADR 0449, 2026-11-14). Size S.
+  - note: ADR 0453, 2026-11-14: rainflow_periodic returns an internal error (InvalidValue, key "rainflow") when the
+    residue of the closed sequence has more than three points, and the mutation that closes loops with a strict
+    inequality is now caught by the constant-amplitude check (error for n = 7 and 1000; it escaped that check in ADR
+    0449); the Gerber refusal of a compressive mean at or beyond the strength says "in modulus" while every
+    positive-mean message is byte-identical; all 9 tests of ADR 0449 pass unedited; mutations of the guard threshold and
+    of both message forms caught; the guard itself is unreachable by design (equivalent mutant recorded).
