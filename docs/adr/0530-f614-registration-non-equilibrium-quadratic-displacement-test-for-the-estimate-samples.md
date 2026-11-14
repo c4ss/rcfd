@@ -139,3 +139,68 @@ the compatible strain).
 ## Open questions
 
 None before the run.
+
+## Addendum 1: results
+
+Run of `crates/rcfd-fem/tests/si_hex8x_estimate.rs` (one test, `e0_to_e6_estimate_samples_of_an_opted_hex8_on_a_quadratic_field`),
+2026-11-14. Limits are those registered above; no amendment was written. Every check met. `smax = 3.1559e9` Pa.
+
+| check | limit | measured | met |
+| --- | --- | --- | --- |
+| E0 `|b| / E` | `> 1e-3` | 1.4499e-2 | yes |
+| E2 BBar expectation against compatible expectation, largest over the 12 nodes | `>= 1e-5` | 3.6720e-4 | yes |
+| E2b the same, smallest | `>= 1e-6` | 1.8330e-5 | yes |
+| E1 BBar library nodal stress against the B-bar expectation | `<= 1e-10` | 4.5329e-16 | yes |
+| E3 BBar library against the compatible expectation | `>= 1e-5` | 3.6720e-4 | yes |
+| E4 Incompatible library against the compatible expectation | `<= 1e-10` | 4.5329e-16 | yes |
+| E4b Incompatible library against the B-bar expectation | `>= 1e-5` | 3.6720e-4 | yes |
+| E5 Full library against the compatible expectation | `<= 1e-10` | 4.5329e-16 | yes |
+| E6 Full solution norm | `> 0`, finite | 4.3362e3 | yes |
+| E6 BBar `|estimate - estimate_Full| / norm_Full` | `> 1e-6` | 9.0503e-4 | yes |
+| E6 Incompatible, the same | `> 1e-6` | 4.6519e-5 | yes |
+| B1 no file under `crates/*/src`, no hash table or golden file changed | none | none (the branch adds the ADR, one test file and the roadmap entries) | yes |
+| B2 `cargo test -p rcfd-fem --release` (138 test binaries ok, none failed), `rcfd-api` `baseline_hashes` (3 passed, 1 ignored record), `docs_site` (2 passed), clippy `-D warnings`, `cargo fmt -p rcfd-fem --check` | pass | pass | yes |
+
+The prototype numbers of the registration (`3.67e-4` largest, `1.83e-5` smallest) are reproduced by the Rust independent
+expectation to the printed digits (E2, E2b), so the numpy prototype and the test agree on the field, the mesh and the B-bar
+arithmetic.
+
+### Mutations (scratch copy `f614-scratch/mut`, own target `target-f614-mut`, logs `mut-*.log`)
+
+| id | result |
+| --- | --- |
+| MU12 (`element_samples` compatible strain for an opted Hex8) | CAUGHT: E1 missed at 3.6720e-4 (limit 1e-10) and E3 missed at 4.5329e-16 (limit `>= 1e-5`) |
+| MU12i (compatible strain for an `Incompatible` block only) | not caught, as registered (equivalent mutant: the test passes unchanged; finding 3) |
+| MU13 (`hex8x::strain_at` of BBar without the mean-dilatation correction) | CAUGHT: E1 (3.6720e-4), E3 (4.5e-16), E6 BBar (0 against `> 1e-6`) |
+| MU16 (unweighted mean of the gradients in `hex8x::mean_gradients`; this also changes the BBar stiffness, which the test does not use) | CAUGHT: E1 missed at 7.9560e-4 |
+
+### Deviations
+
+- The first compile of the test failed on an ambiguous float type, and its first run stopped in the test's own set-up (the
+  mesh copy did not carry the element set `all` that `SolidModel::add_material` needs; an `unwrap` panicked) after printing
+  E0, E2 and E2b, which do not use the library. The set-up was corrected (the element sets are copied, as `rebuild` of
+  `si_hex8x_linear.rs` does) and the test run again; no limit, field or mesh was changed, and no check that compares the
+  library had run before the correction. Recorded for completeness; it is not a missed check.
+- The `Incompatible` rows are positive checks (finding 3), not discriminating ones, as registered.
+
+### Decision (by the rule above): done
+
+E0 to E6 and B1, B2 met; MU12 and MU13 caught; MU12i is the registered equivalent mutant; no amendment after a run. The
+finding that explains the ES3b miss of ADR 0525 is recorded: with the centroid rule of Hex8 the enhanced strain is zero at the
+sample, so no field can separate `Incompatible` from the compatible strain at `element_samples`.
+
+### Not run
+
+The whole workspace suite (the lead runs the gate). No baseline or golden file was touched.
+
+### Open questions (recommendations, not taken)
+
+1. Should the patch recovery sample Hex8 at more than the centroid (for example `gauss_2`) so the estimate sees the enhanced
+   strain? That would change the default recovered stresses of every Hex8 model, so it is listed and not taken.
+   Recommendation: no, unless a model shows the centroid fit is too coarse.
+
+## For the lead: roadmap entries
+
+> F-614 DONE. ADR 0530, 2026-11-14: a non-equilibrium quadratic displacement field (dilatation 8e-3 x - 4e-3 y + 6e-3 z, Navier residual |b|/E 1.4e-2) on the distorted 4 x 3 x 3 patch box gives the recovered nodal stress of an opted Hex8 against an independent computation (own gradients, own B-bar mean, own normal equations): BBar 4.5e-16 and 3.7e-4 away from the compatible-strain expectation (limits 1e-10 and 1e-5), Incompatible equal to the compatible one to 4.5e-16 (its enhanced strain is zero at the centroid sample, which is why no field can separate it there), Full control 4.5e-16. Mutation MU12 of ADR 0525 (sampling with the compatible strain) is caught by E1 and E3; MU13 and an unweighted-mean mutation too; the Incompatible-only form of MU12 is an equivalent mutant. Test only, no library change; defaults and baseline hashes untouched.
+
+> Proposed line for F-588's note, replacing its "Open:" sentence: Follow-up F-614 (ADR 0530, 2026-11-14) adds the discriminating test of estimate::element_samples for an opted Hex8: MU12 is now caught (BBar), and the ES3b miss is explained (the Incompatible enhanced strain is zero at the centroid sample). F-588 stays partial for the record of its own run (ES3b missed, RF3 amended once); the open item is closed.
