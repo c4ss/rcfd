@@ -11038,13 +11038,21 @@ fixed by the item's registration ADR before any code.
     registered), gives an order >= 1.8 or the bound on every increment, and the continuum tangent (mutation MU1 of ADR
     0475) fails it.
   - note: Structural solver, advanced tier. Follow-up of F-422 (ADR 0475, 2026-11-14).
-- [ ] **F-561** Thick sphere with J2 on a refined octant: residual hoop stress after unloading
+- [~] **F-561** Thick sphere with J2 on a refined octant: residual hoop stress after unloading
   - depends on: F-422
   - acceptance: Every limit not stated here is registered in the ADR before the run. The partly plastic sphere of ADR
     0475 on a 4 x 4-per-face cubed-sphere octant with 8 radial Hex20 layers: the residual hoop stress at the bore after
     unloading from p(1.25 a) within 2 percent of sigma_y - (12/7) p, the elastic Lame hoop stress of the same mesh at
     every point of the inner layer within 1 percent, and S1, S2 of ADR 0475 still within 1 percent.
-  - note: Structural solver, advanced tier. Follow-up of F-422 (ADR 0475, 2026-11-14).
+  - note: Structural solver, advanced tier. Follow-up of F-422 (ADR 0475, 2026-11-14). PARTIAL by the registered rule.
+    ADR 0512, 2026-11-14: the octant of ADR 0475 on 4 x 4 cells per face with 8 radial Hex20 layers (a test-side
+    cubed-sphere generator in crates/rcfd-fem/tests/sa_j2_f561.rs; no library change; the closed form sigma_y - (12/7)
+    p1 is exact for b/a = 2, derived in the registration): S1 8.0e-5 and S2 1.0e-3 (limit 1e-2), C1 0 wrong, controls
+    N1 to N4 and all 7 mutations met. Residual hoop stress at the bore missed (-0.611919 sigma_y against -0.628903,
+    2.70e-2 > 2e-2; the 2 x 2 octant 2.63e-2) and the elastic Lame hoop stress at every point of the inner layer
+    missed (largest 1.162e-2 > 1e-2): ignored *_known_miss tests, limits intact. Diagnosed: refining the angles does
+    not change them, the error is the radial resolution of 8 Hex20 layers; diagnostic with 16 layers: residual error
+    4.5e-3, elastic largest 9.3e-3.
 - [~] **F-562** Damped massless unknowns of a rotor solved as first-order unknowns
   - depends on: F-416
   - acceptance: Every limit not stated here is registered in the ADR before the run. A bearing pedestal with stiffness
