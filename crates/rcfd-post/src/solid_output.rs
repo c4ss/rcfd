@@ -7,8 +7,16 @@
 //! The stresses come from `rcfd_fem::recover` (ADR 0277); a node of no element gets NaN in the nodal stress arrays. The node
 //! orders of Tet4, Hex8 and Tet10 are VTK's (ADR 0278 D2, from the public VTK class documentation); the writer still maps
 //! through [`vtk_from_fem`] so that a kind with a different order is mapped in one place.
+//!
+//! A model with Beam2 blocks (F-512, ADR 0423) is written by [`beam_fields`]: point arrays `displacement` (3), `rotation`
+//! (3, the small rotations about x, y, z; NaN at a node with three unknowns), and, when the result carries reactions,
+//! `reaction` (3) and `reaction_moment` (3, NaN at a node with three unknowns); every element a `VTK_LINE` cell; cell arrays
+//! `section_force_start` and `section_force_end` (6 each: `N, V_y, V_z, T, M_y, M_z` in the element's local axes, from
+//! `rcfd_fem::beam::section_forces`). A model mixing Beam2 with other kinds is refused. A model without Beam2 is written as
+//! before, bit for bit.
 
 use rcfd_core::{Error, Result};
+use rcfd_fem::beam::section_forces;
 use rcfd_fem::mesh::ElementKind;
 use rcfd_fem::recover::{nodal_average, principal, von_mises, IntegrationPointField};
 use rcfd_fem::{FemError, SolidModel, SolidResult};
@@ -141,8 +149,159 @@ pub fn solid_fields(model: &SolidModel, result: &SolidResult) -> Result<SolidFie
     })
 }
 
-/// The `.vtu` text of a solid result (see the module documentation for the arrays).
+/// The arrays written for the result of a model with Beam2 elements, flat and row-major (ADR 0423 D2).
+#[derive(Debug, Clone, PartialEq)]
+pub struct BeamFields {
+    /// 3 per node: the translations.
+    pub displacement: Vec<f64>,
+    /// 3 per node: the small rotations about x, y, z (NaN at a node with three unknowns).
+    pub rotation: Vec<f64>,
+    /// 3 per node, when the result carries reactions: the reaction forces.
+    pub reaction: Option<Vec<f64>>,
+    /// 3 per node, when the result carries reactions: the reaction moments (NaN at a node with three unknowns).
+    pub reaction_moment: Option<Vec<f64>>,
+    /// 6 per element: the section forces `N, V_y, V_z, T, M_y, M_z` in local axes just after node 0.
+    pub section_force_start: Vec<f64>,
+    /// 6 per element: the same just before node 1.
+    pub section_force_end: Vec<f64>,
+}
+
+fn has_beam(model: &SolidModel) -> bool {
+    model.mesh().blocks().iter().any(|b| b.kind() == ElementKind::Beam2)
+}
+
+/// The arrays of the result of a beam model. Refuses a model without Beam2 or with a block of another kind (named), and a
+/// result whose numbering of the unknowns is not the model's (`displacement` named).
+pub fn beam_fields(model: &SolidModel, result: &SolidResult) -> Result<BeamFields> {
+    let mesh = model.mesh();
+    if !has_beam(model) {
+        return Err(Error::InvalidValue {
+            path: "element kind".into(),
+            reason: "the model has no Beam2 block; use solid_fields".into(),
+        });
+    }
+    if let Some((b, block)) = mesh
+        .blocks()
+        .iter()
+        .enumerate()
+        .find(|(_, b)| b.kind() != ElementKind::Beam2)
+    {
+        return Err(Error::InvalidValue {
+            path: "element kind".into(),
+            reason: format!(
+                "block {b} is {} in a model with Beam2 blocks; the output of a model mixing Beam2 with other kinds is \
+                 a follow-up of ADR 0423",
+                block.kind().name()
+            ),
+        });
+    }
+    let dofs = model.dof_map();
+    if *result.dofs() != dofs || result.displacement_values().len() != dofs.n_equations() {
+        return Err(length_error(
+            "displacement",
+            dofs.n_equations(),
+            result.displacement_values().len(),
+        ));
+    }
+    let n = mesh.nodes().len();
+    let mut displacement = Vec::with_capacity(3 * n);
+    let mut rotation = Vec::with_capacity(3 * n);
+    for node in 0..n {
+        let u = result.displacement(node);
+        displacement.extend_from_slice(&u[0..3]);
+        if u.len() == 6 {
+            rotation.extend_from_slice(&u[3..6]);
+        } else {
+            rotation.extend_from_slice(&[f64::NAN; 3]);
+        }
+    }
+    let (reaction, reaction_moment) = match result.reactions() {
+        None => (None, None),
+        Some(r) => {
+            let mut f = Vec::with_capacity(3 * n);
+            let mut m = Vec::with_capacity(3 * n);
+            for node in 0..n {
+                let start = dofs.equation(node, 0).expect("a node has at least 3 components");
+                f.extend_from_slice(&r[start..start + 3]);
+                if dofs.components(node) == 6 {
+                    m.extend_from_slice(&r[start + 3..start + 6]);
+                } else {
+                    m.extend_from_slice(&[f64::NAN; 3]);
+                }
+            }
+            (Some(f), Some(m))
+        }
+    };
+    let sf = section_forces(model, result.displacement_values())?;
+    let mut section_force_start = Vec::with_capacity(6 * sf.len());
+    let mut section_force_end = Vec::with_capacity(6 * sf.len());
+    for (_, s) in &sf {
+        section_force_start.extend_from_slice(&s.start);
+        section_force_end.extend_from_slice(&s.end);
+    }
+    Ok(BeamFields {
+        displacement,
+        rotation,
+        reaction,
+        reaction_moment,
+        section_force_start,
+        section_force_end,
+    })
+}
+
+/// The connectivity of every block in VTK order, with its cell type.
+fn vtk_connectivity(model: &SolidModel) -> Result<Vec<(u8, Vec<usize>)>> {
+    let mesh = model.mesh();
+    let mut conns: Vec<(u8, Vec<usize>)> = Vec::with_capacity(mesh.blocks().len());
+    for block in mesh.blocks() {
+        let (ty, perm) = vtk_from_fem(block.kind())?;
+        let npe = block.kind().nodes_per_element();
+        let mut c = Vec::with_capacity(block.connectivity().len());
+        for element in block.connectivity().chunks(npe) {
+            c.extend(perm.iter().map(|&a| element[a]));
+        }
+        conns.push((ty, c));
+    }
+    Ok(conns)
+}
+
+/// The `.vtu` text of the result of a beam model (ADR 0423 D3).
+fn beam_vtu_string(model: &SolidModel, result: &SolidResult) -> Result<String> {
+    let f = beam_fields(model, result)?;
+    let conns = vtk_connectivity(model)?;
+    let blocks: Vec<FeCellBlock> = conns
+        .iter()
+        .map(|(ty, c)| FeCellBlock {
+            cell_type: *ty,
+            connectivity: c,
+        })
+        .collect();
+    let arr = |name, components, values| FeArray {
+        name,
+        components,
+        values,
+    };
+    let mut point = vec![
+        arr("displacement", 3, &f.displacement[..]),
+        arr("rotation", 3, &f.rotation[..]),
+    ];
+    if let (Some(r), Some(m)) = (&f.reaction, &f.reaction_moment) {
+        point.push(arr("reaction", 3, &r[..]));
+        point.push(arr("reaction_moment", 3, &m[..]));
+    }
+    let cell = [
+        arr("section_force_start", 6, &f.section_force_start[..]),
+        arr("section_force_end", 6, &f.section_force_end[..]),
+    ];
+    fe_vtu_string(model.mesh().nodes(), &blocks, &point, &cell)
+}
+
+/// The `.vtu` text of a solid result (see the module documentation for the arrays). A model with Beam2 blocks is written by
+/// the beam arrays (ADR 0423); a model without is written as before.
 pub fn solid_vtu_string(model: &SolidModel, result: &SolidResult) -> Result<String> {
+    if has_beam(model) {
+        return beam_vtu_string(model, result);
+    }
     let f = solid_fields(model, result)?;
     let mesh = model.mesh();
     let mut conns: Vec<(u8, Vec<usize>)> = Vec::with_capacity(mesh.blocks().len());
