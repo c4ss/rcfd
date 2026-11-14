@@ -465,3 +465,46 @@ bodies unchanged; the copies `i1_to_i4_..._a2`, `s1_..._a2`, `t2_..._a2` (bodies
 `r1_r2_refusals_a2` (R2 corrected) are the corrected runs, each made once. The tests that passed are not re-run to select a
 result; they run again only as part of the crate's suite, on the corrected driver, and their numbers are reported from that
 suite run in the addendum next to the numbers of the registered run.
+
+## Amendment 3 (2026-11-14): two driver defects and one arithmetic defect found by the corrected runs of 043ee2ea; written after those runs and before any further run
+
+The corrected runs of amendment 2 at 043ee2ea (`f427-scratch/run2-a2.log`) met R1 and R2 (`r1_r2_refusals_a2`; R2 refused
+naming `xmax`) and S1's multiplier, apart-gap (`1.10e-13`) and apart-stress (`3.38e-15`) checks, and missed or stopped:
+
+- **S1 pressed and touching**: stress and node pressure `2.50e-3` of `E d/8` (limit `1e-8`), touching pressure `3.13e-4` of
+  `E d` (limit `1e-8`). Diagnosis (a scratch test, not committed): the multipliers carried from the loaded steps leave the
+  contact nodes active with a positive gap (`6.25e-7` m) at the unloading steps; the acceptance of D2 tests the penetration
+  `max(0, -g)` only, so a state with `lambda > 0` and `g > 0` (complementarity violated) is accepted after one augmentation.
+- **I (fit)**: `not converged in 30 iterations (relative residual 2.29e-8, energy ratio 1.24e-26)`. Diagnosis (a temporary
+  print in the driver, removed): `r` falls `1, 2.5e-2, 1.8e-7` and then stays at `2.0e-8` to `2.5e-8` with the energy at
+  `1e-18`, 128 nodes active, one iteration of amendment 2's `eps G G^T`. Two causes, each alone enough: (i) the reference
+  `max(|lambda f_F|, |f_int + f_c|)` is that of a self-equilibrated body: `f = 0` and `f_int + f_c` is the small reaction
+  (`5.2e4 N`), while the contact forces are `|f_c| = 4.2e6 N`; (ii) the gap is formed from positions `x = X + u` of size 1 m, so
+  its rounding is `1.1e-16 m` and the contact force's `eps_s A_s x 1.1e-16 = 7.85e11 x 1.1e-16 = 8.6e-5 N` per node, `1e-3 N`
+  over 128 nodes, the measured residual norm. With (i) corrected alone the floor would be `1e-3 / 4.2e6 = 2.4e-10`, above the
+  tolerance `1e-10`.
+- **T2 (punch, total Lagrangian)**: five qualifying solves, orders `[1.48, 0.191, 0.249, 1.57, 0.171]`, least `0.171` (limit
+  `>= 1.8`), missed. Diagnosis: the last kept residual of every solve is at the rounding floor (`5.8e-13` to `2.1e-12`, just
+  above or below the cut `1e-12`) and the first kept residual of the first solves is before the asymptotic range (`1.0, 0.65,
+  2.97e-4, 1.53e-7`: order `0.98` on the first three even without the floor); the quadratic rate is visible in the ratios
+  `r_{k+1} / r_k^2` (`2.97e-4 -> 1.53e-7`: `1.7e-0`; `6.06e-6 -> 1.60e-11`: `0.44`). The registered measure does not separate
+  these; no correction is made to it. **T2 is a known miss**: `t2_..._a2` becomes `t2_..._a2_known_miss` (ignored, these
+  numbers in its ignore text) and is not run again.
+
+Corrections, registered before their run (no limit changes):
+
+1. **D2, the acceptance of an augmentation**: a solve is accepted when every active node has `|g| <= penetration_tolerance`
+   (a penetrating node is always active, so this contains the penetration test). Otherwise the multipliers are updated as before.
+   The error after `max_augmentations` names the nodes with their `|g|` ("the gap tolerance ... not met after N augmentations").
+   `NewtonSolve::penetration` is unchanged.
+2. **D1, the arithmetic of the gap**: the same gap, formed from differences: on a face `g = n . sum_a N_a(xi) ((X_s - X_a) +
+   (u_s - u_a))` (as `sum_a N_a = 1`), on a plane `g = n . (X_s - p) + n . u_s`. Its rounding is then of the order of the
+   machine epsilon times a face size (here `0.05 m`) instead of times the coordinates; the projection, the normal and the
+   derivatives are unchanged. Both bodies.
+3. **D3, the linear body, the reference of the relative residual**: also at least `|K u|` and `|f_c|`, both over every
+   equation (the pattern of ADR 0479 D2 for a contribution in the reference): `max(|lambda f_F|, |K u + f_c + f_extra|, |K u|,
+   |f_c|, r_run)`. The total Lagrangian body is unchanged.
+
+Records and copies: `i1_to_i4_..._a2` and `s1_..._a2` stay as ignored records with their bodies unchanged; the copies
+`i1_to_i4_..._a3` and `s1_..._a3` (bodies identical) are the corrected runs, each made once. The other tests run again only in
+the crate's suite on the corrected driver; their numbers are reported from that run.
