@@ -11617,15 +11617,28 @@ fixed by the item's registration ADR before any code.
     refuse a layup. Default bits unchanged (23 new digests and ADR 0496's 11), baseline hashes unchanged; ten of ten
     mutations caught. No case-file key (open question). Open: the corotated Newton path for a layup (follow-up, not yet
     numbered) and the [[layup]] case-file key (maintainer).
-- [ ] **F-592** A temperature history on the quasi-static driver and the nonlinear transient integrator
+- [x] **F-592** A temperature history on the quasi-static driver and the nonlinear transient integrator
   - depends on: F-576
   - acceptance: Every limit not stated here is registered in the ADR before the run. The quasi-static driver and the
     nonlinear transient integrator take a uniform temperature against time (a piecewise linear table, the step-end
     value) and the Rayleigh stiffness tangent at that temperature. A relaxation under a temperature step equals the
     closed form with the reduced time of the two temperatures within 1e-10; a constant table gives the bits of ADR 0499.
     Models without a temperature keep their bits.
-  - note: Structural solver, advanced tier. Optional. Follow-up of F-576 (ADR 0499, 2026-11-14); includes the Rayleigh
-    stiffness tangent at the temperature (still refused for a shifted material).
+  - note: Structural solver, advanced tier. Optional. Follow-up of F-576. DONE. ADR 0526, 2026-11-14: the quasi-static
+    driver and the nonlinear transient integrator take a uniform temperature against time
+    (TimeSteppingOptions::temperature_history, NlTransientOptions::temperature_history: a transient::LoadTable taken
+    at the end time of every attempt or sub-step, halved or not; refused together with the constant temperature of ADR
+    0499 and outside the run); the reduced time is the right-endpoint sum of dt/a_T(T(t_end)); the Rayleigh stiffness
+    part of the integrator's damping takes its tangent at the temperature (nonlinear::tangent_at; a shifted
+    viscoelastic material with stiffness damping is no longer refused when a temperature is given; re-formed when the
+    history's temperature changes). Met: a relaxation under a temperature step 383 -> 393 K on the driver within
+    5.6e-16 of the closed form with xi = min(t, t_s)/a_1 + max(t - t_s, 0)/a_2 (the constant 383 K differs by 2.3e-2);
+    a ramp first order (3.5e-3 at 100 steps, order 0.996); the integrator under a temperature step bit-equal to the
+    run restarted at the second temperature (the constant first temperature differs by 0.25); the shifted rod with
+    stiffness damping at T equal to the unshifted rod with a_T tau (0); a constant table gives the bits of ADR 0499 on
+    the driver, the integrator and the energy-momentum step; default bits (12 digests) and baseline hashes unchanged;
+    eight mutations caught (two registered equivalents not). No case-file key (recommended: temperature as a number or
+    a table in the nonlinear studies).
 - [~] **F-593** Fan blade in the solid case file and a library blade mesher
   - depends on: F-387, F-386
   - acceptance: Every limit not stated here is registered in the ADR before the run. rcfd_fem::builders gains the

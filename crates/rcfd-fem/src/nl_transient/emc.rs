@@ -297,9 +297,11 @@ pub(super) fn substep(
     let f1 = it.load(t_b);
     let fm: Vec<f64> = (0..n).map(|i| 0.5 * (f0[i] + f1[i])).collect();
     let mut context = PointContext::new().with_time(t_b, h)?;
-    if let Some(t) = it.temperature {
+    // ADR 0526 D3, D4: the temperature and the damping at the sub-step's end.
+    if let Some(t) = it.temperature_at(t_b) {
         context = context.with_temperature(t)?;
     }
+    let damping = it.damping_at(t_b)?;
     let ci = 2.0 / (h * h);
     let mut u1 = u.to_vec();
     let (mut e_first, mut e_last) = (0.0, 0.0);
@@ -310,7 +312,7 @@ pub(super) fn substep(
         for x in inertia.iter_mut() {
             *x *= ci;
         }
-        if let Some(c) = &it.c {
+        if let Some(c) = damping.as_deref() {
             let du: Vec<f64> = (0..n).map(|i| (u1[i] - u[i]) / h).collect();
             for (x, y) in inertia.iter_mut().zip(super::matvec(c, &du)) {
                 *x += y;
@@ -354,7 +356,7 @@ pub(super) fn substep(
             )));
         }
         let mut kt = super::combine(ci, &it.m, 1.0, &ka);
-        if let Some(c) = &it.c {
+        if let Some(c) = damping.as_deref() {
             kt = super::combine(1.0, &kt, 1.0 / h, c);
         }
         let rhs: Vec<f64> = r_full.iter().map(|x| -x).collect();
