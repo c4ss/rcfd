@@ -477,3 +477,120 @@ next test of the file, `b3_n1_n2_mixed_model_bits_and_refusals` (found when the 
 record and copy of D10 apply to that test: `#[ignore = "record: ..."]` on `b3_n1_n2_mixed_model_bits_and_refusals`, and the copy
 `b3_n1_n2_mixed_model_bits_and_refusals_after_f428` with N2 replaced by N2b (as registered), every other row unchanged.
 `th4_th5_consistent_thermal_loads` is not touched. No limit changes.
+
+## Addendum 1 (2026-11-14): results
+
+Run once on the committed state 60d15dbc (library and `sa_laminate.rs`) with `cargo test -p rcfd-fem --release --test
+sa_laminate -- --test-threads=1` (`f428-scratch/run1.log`). The D10 copies were run on cf00669f (`run-copies.log`), and B0 on
+every library commit. Release profile throughout.
+
+| check | limit | measured | met |
+|---|---|---|---|
+| BT1 section of one steel ply (0 and 0.3 rad) == `homogeneous_section` | bits | equal | yes |
+| BT2 stiffness (3600 values), mass (3600), load vector (96) of the warped plate, one-ply layup against the Shell twin | bits | equal | yes |
+| BT3 static displacement and reactions (192), `shell::stresses` (135), four frequencies | bits | equal | yes |
+| BT4 BT2 and BT3 with the layup's block material aluminium | bits | equal | yes |
+| BT5 general sums of one isotropic ply: `A`, `D`, `H`; `B` | `1e-14`; `B == 0` | `5.4e-17`, `0`, `0`; `B == 0` | yes |
+| L1 `max|B| / (max|A| t)`: `[0/90]s`, `[0/60/-60]s`, `[0/45/-45/90]s`, unequal `[30/-45/0]s` | `1e-12` | `1.5e-17`, `5.9e-17`, `4.2e-18`, `5.8e-17` | yes |
+| L2 `[0/90]s` `A11`, `A22` against `t (Q11 + Q22)/2` | `1e-12` | `1.1e-16`, `1.1e-16` | yes |
+| L3 quasi-isotropic identities (largest of the eight) | `1e-12` | `2.8e-16` | yes |
+| L4 `[0/90]s` `D11, D22, D12, D66` against the hand forms | `1e-13` | `3.3e-16` largest | yes |
+| PL1 SS `[0/90]s` plate, 16 x 16, `t/a = 0.01`, sinusoidal load, against Navier | `1e-2` | `1.58e-3` (ratio `0.9984228`) | yes |
+| PL2 (1,1) frequency against the closed form (`18.800 Hz`) | `1e-2` | `3.93e-3` (`18.874 Hz`) | yes |
+| ST1 strip `kappa_x`, `-kappa_y` against the closed form (`0.28324646 1/m`) | `5e-3` | `1.5e-10`, `2.2e-11` | yes |
+| ST2 strip `max|N| / |N_th dT|`, `max|M| / |M_th dT|` | `1e-8` | `8.1e-13`, `2.1e-9` | yes |
+| ST3 the same at `1e-8`; `kappa_xy`; `eps_x`, `eps_y`; `gamma_xy` | `1e-8` | `1.5e-10`; `2.6e-10`; `2.4e-11`, `3.2e-12`; `2.1e-12` | yes |
+| CP1 coupon ply stresses against `sigma (c^2, s^2, -s c)` at 15, 30, 45, 60 deg | `1e-10` | `2.7e-14`, `4.2e-14`, `3.7e-14`, `5.7e-14` | yes |
+| CP2 Tsai-Hill failure stress against the closed form (126.84, 95.77, 76.82, 66.56 MPa) | `1e-10` | `2.8e-14`, `5.3e-14`, `4.6e-14`, `7.5e-14` | yes |
+| TW1 Tsai-Wu on the axes against `X_t, X_c, Y_t, Y_c, S, S` | `1e-12` | `0` each | yes |
+| TW2 the same with `f12_star = 0`, `0.3` | `1e-12` | `0` each | yes |
+| FC1 maximum stress (six) and maximum strain (two) on the axes | `1e-12` | `0` each | yes |
+| RF1 thickness `0`, `-1e-3`, `NaN` in ply 1 refused naming `ply 1` | refused | refused | yes |
+| RF2 J2, Tabulated, Hyperelastic, Creep, Viscoelastic ply 2 refused naming `ply 2` and the variant | refused | refused | yes |
+| RF3 `solve_static` refuses naming `block 0, ply 1` and `block 0, ply 0` (J2) | refused | refused | yes |
+| RF4 NaN angle, empty list (property and section), strengths `0` and `-1`, `f12_star = +-1` | refused | refused | yes |
+| MS1 total mass; centre offset `m1/m0` over `t` | `1e-12` | `2.2e-16`; `2.7e-17` | yes |
+| RX1 R3c (E1 to E10 against the Shell twin: E5 refuses naming the follow-up of ADR 0496, E6 refuses both naming that of ADR 0432), R4c | as D10 | as D10 | yes |
+| RX2 gravity, buckling, `nonlinear::solve` of a layup refused naming `laminate::FOLLOW_UP` | refused | refused | yes |
+| X1 `laminate::PENDING` is `None` | holds | holds | yes |
+| N2b one-ply Layup temperature load == the Shell twin's | bits | equal | yes |
+
+Negative controls: N1 `0.107` (> `1e-3`); N2 `0.183` and `3.0e-2` (> `1e-3`); N3 `0.134` (> `5e-2`); N4 `1.6e-12` (<= `1e-8`);
+N5 `0.20` to `0.30` (> `0.1`); N6 accepted; B0 the base digests unchanged (11 of 11); B1 `baseline_hashes` passes unchanged.
+
+### Mutations (scratch copy of cf00669f by `git archive`, one at a time, `f428-scratch/mutate.py`, `mutations.log`, `mut-MU*.log`)
+
+| id | caught by |
+|---|---|
+| MU1 rotation sign | CP1 (all four angles) |
+| MU2 `B` with `-zbar` | ST1, ST3, N4 |
+| MU3 `D` without `t^3/12` | BT5, L4, PL1, PL2, ST1, ST3 |
+| MU4 route removed | BT1, BT2/BT3, BT4 (stiffness, static, stresses, frequencies) |
+| MU5 thermal load without `M_th` | ST1, ST2, ST3, N4 |
+| MU6 layup stresses without the thermal resultants | ST2 |
+| MU7 Tsai-Wu `F1` reversed | TW1, TW2 |
+| MU8 Tsai-Hill without the interaction term | CP2 (all four angles) |
+| MU9 non-positive thickness accepted | RF1, RF3 |
+| MU10 `Q22 = E2` | L2, L4, BT5, ST1, ST3 |
+| MU11 `m0` from ply 0 | MS1 |
+| MU12 mass coupling sign | MS1 (centre offset) |
+| MU13 homogeneous fallback in `thickness_or_error` | RX2 (gravity, buckling) |
+
+All thirteen were caught. N4 also caught MU2 and MU5: with equal expansions the two plies still have different `Qbar alphabar`, so
+`M_th` is not zero and the zero curvature depends on `B` and `M_th` agreeing.
+
+### Other runs
+
+- `cargo test -p rcfd-fem --release` (the whole crate, on cf00669f): 702 passed, 0 failed, 183 ignored.
+- `cargo test -p rcfd-api --release --test baseline_hashes`: passes unchanged.
+- `cargo test -p rcfd-cli --release --test docs_site`: passes.
+- `cargo fmt -p rcfd-fem -- --check`: clean.
+- `cargo clippy -p rcfd-fem --all-targets --release -- -D warnings`: clean after commit 9746f1b6. That commit adds two type
+  aliases for clippy's `type_complexity` and changes no arithmetic; the four test files were re-run and pass.
+
+### Deviations
+
+- Amendment 1: D10 named the wrong test of `si_shell_thermal.rs`. The name was corrected before the copy was run, so no
+  misnamed copy was ever run and no limit changed.
+- Shared solver files changed (D8):
+  - `shell.rs`: `thickness_or_error`, `check_shell_model`, `model_element_mass`, `stresses`, and new functions.
+  - `thermal.rs`: the Shell4 branch of `add_thermal_load` now calls `shell::model_thermal_load_vector`. For a `Shell` block
+    that function makes the same call as before.
+  - `shell_corot.rs`: `check_model`.
+  - `mesh.rs`: a doc comment only.
+
+  B0 and `baseline_hashes` are unchanged.
+- PL1 measured `1.58e-3`, inside the "below `2e-3`" estimate of arithmetic 3. PL2 measured `3.9e-3`, the same as ADR 0432 FQ1.
+
+### Not run
+
+The workspace test suite (the lead's gate). No case-file runs, because there is no case-file key (b4).
+
+### Decision
+
+**done** by the registered rule. Every check was met, every negative control behaved as expected, all thirteen mutations were
+caught, B0 and B1 are unchanged, and fmt and clippy are clean. Note for the lead: the only amendment corrected the name of a
+superseded test before its first run, so no check was met only after an amendment.
+
+### Remaining questions (recommendations for the lead)
+
+1. **Case-file key** (not taken, because it touches the schema golden). Options:
+   - (a) `layup = [{ material, thickness, angle_deg }]` inside a shell block, with `[[ply_strength]]` keyed by material name;
+   - (b) a separate `[[layup]]` table, referenced by name from the shell block.
+
+   Recommendation: (b). Several blocks can then share one layup, and the failure output can name it.
+2. **Centrifugal and gravity loads on a layup** (refused for now). Recommendation: make this the first follow-up, because
+   the fan blade needs it.
+3. **Global fibre direction.** The ply angle is measured from each element's `e_1`. Options: keep it so, or add a reference
+   direction projected onto each facet. Recommendation: add the reference direction, because a moulded blade's fibre
+   orientation follows the flow.
+
+## For the lead: roadmap entries
+
+Proposed status of F-428: **done**. The new note:
+
+> Structural solver, advanced tier. ADR 0496, 2026-11-14: laminated Shell4 (laminate.rs). BlockProperty::Layup on Shell4 blocks: plies of IsotropicElastic or Orthotropic material, thickness and angle from the element's first axis; classical lamination theory A, B, D, transverse shear H with the factor 5/6, drilling (A66/t, t), thermal resultants of a temperature uniform through the thickness (consistent membrane and bending thermal load), mass moments m0, m1, m2 with the translation-rotation coupling; shell::stresses gives the layup resultants with the thermal part subtracted and the outer-ply surface stresses; laminate::layup_response the centre strain, curvature and ply strains and stresses at the bottom and top of each ply in material axes; laminate::failure_index the maximum-stress, maximum-strain, Tsai-Hill and Tsai-Wu (f12* = -1/2 default) indices with reserve factors. One isotropic ply is routed to the homogeneous section, mass, thermal load and stresses: stiffness, mass, loads, static solve, stresses and frequencies equal the Shell twin bit for bit. Met: symmetric layups |B| <= 5.9e-17 |A| t; [0/90]s A11 = A22 = t (Q11 + Q22)/2 within 1.1e-16; quasi-isotropic identities within 2.8e-16; SS [0/90]s plate, 16 x 16, t/a = 0.01, sinusoidal load, within 1.58e-3 of Navier, its (1,1) frequency within 3.9e-3; heated unsymmetric [0/90] strip curvature within 1.5e-10 of the hand-solved closed form 24 Delta (alpha2 - alpha1) dT/(t ((Q11 - Q22)^2 + 16 Delta)) with resultants below 2.1e-9 of the thermal ones; off-axis coupon at 15 to 60 degrees: ply stresses within 5.7e-14, Tsai-Hill failure stress within 7.5e-14; Tsai-Wu on the axes equal to the five strengths (error 0); non-positive thickness, NaN angle and non-ply materials refused naming the ply (and the block from a model). Shell3, the corotated Newton path, buckling and pre-stress, gravity, centrifugal and nodal body forces refuse a layup naming a follow-up of ADR 0496. Default bits unchanged (11 digests), baseline hashes unchanged; thirteen of thirteen mutations caught. No case-file key (open question). Follow-up: layups under body loads and pre-stress.
+
+Proposed follow-up item (the lead assigns its number):
+
+> Laminated Shell4 under body loads and pre-stress (gravity, centrifugal, nodal body force, buckling and spin softening of a layup). Deps: F-428, F-420. Acceptance: Every limit not stated here is registered in the ADR before the run. Gravity and the centrifugal load on a Layup block take the consistent load int N_i (sum rho_k t_k) b dA and the moment of the first mass moment; a one-ply isotropic layup gives the bits of its Shell twin for every such load; a rotating [0/90]s strip clamped on the axis has the radial membrane force rho_m Omega^2 (L^2 - r^2)/2 within 1e-8 and the flap frequency of the spinning strip within 2 percent of the Southwell form with the layup's D11; the buckling load of a simply supported [0/90]s plate under uniaxial compression is pi^2 (D11 + 2 (D12 + 2 D66) + D22)/a^2 within 2 percent with 16 x 16 elements.
