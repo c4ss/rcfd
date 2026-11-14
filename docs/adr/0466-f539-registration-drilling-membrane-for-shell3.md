@@ -317,3 +317,101 @@ CT, PT, BE, SE, ISO, FR, TH, ST, D, RF, P, N and O are one test file `crates/rcf
 3. Mixed meshes with a drilling membrane next to a linear edge refused (taken; arithmetic 8) rather than solved with a wrong
    constant-strain state.
 4. The clamp holds `theta_z` (arithmetic 6; F-419's cantilever does the same).
+
+## Addendum 1: results (2026-11-14)
+
+The registered run is commit 7801e0ea (`f539-scratch/run1.log`), made once. Cargo stopped after the failing binary, so B1 ran
+separately on the same commit (`run1-b1.log`). Disclosed: B1 had also been run once during development, after the library
+compiled and before the checks file was written (the same test, the same result). After the run, PT5's miss was recorded as
+rule 2 asks (commit 0c676472). The registered test is kept as the ignored record
+`pt_patch_tests_with_the_drilling_membranes_known_miss` with PT5's limit intact, and `pt_patch_tests_kept` runs the same
+checks with PT5 printed only (`run2-pt-kept.log`, identical numbers). In the same commit `cargo fmt` changed the layout of
+F-539 lines only; the two test files passed again after it (`after-fmt.log`). B2 and B3 ran on 0c676472. No amendment was
+written.
+
+| id | limit | measured | met |
+| --- | --- | --- | --- |
+| CT1 | `2e-2` | `3.525e-3` (`u_y / delta = 0.9964751240`) | yes |
+| CT2 | `2e-2` | `3.525e-3` (`0.9964751240`) | yes |
+| CT3 | `2e-2` | `3.061e-3` (`0.9969394138`) | yes |
+| CT4 | `2e-2` | `2.729e-3` (`0.9972707469`) | yes |
+| PT1 | `1e-8` | `8.5e-15` | yes |
+| PT2 | `1e-8` | `1.5e-15`; m and Q `5.8e-16` | yes |
+| PT3 | `1e-8` | `1.1e-15` | yes |
+| PT4 | `1e-8` | `1.3e-14`; Q and N `8.9e-13` | yes |
+| PT5 | `1e-8` | **`2.0776e-1`** (predicted, arithmetic 8; analogue `2.05e-1`) | **no** (`*_known_miss`) |
+| PT6 | `1e-8` | `1.1e-15` | yes |
+| PT7 | `1e-8` each | membrane `3.9e-15`, bending `7.5e-16` | yes |
+| BE1 | `1e-10` | `3.7e-14` | yes |
+| SE1 | `6`, `>= 1e-7`; Allman `6` | 6, `3.741e-6` (t = 0.01); 6, `3.694e-4` (t = 0.1); Allman 6 and 6 (`lambda_7` `3.77e-6`, `1.50e-4`) | yes |
+| SE2 | `1e-12`; exact | `2.8e-16`, `3.2e-16`; symmetric bit for bit | yes |
+| ISO1 | `1e-12` | `1.0e-15` largest | yes |
+| FR1 | `6` | 6 | yes |
+| FR2 | `1e-5` each | `2.0e-15`, `5.2e-14` (`f_7 = 395.4141399498 Hz`) | yes |
+| TH1 | `1e-8`; `1e-8` | `1.9e-14`; `2.7e-15` | yes |
+| TH2 | `1e-8`; `1e-8` | `2.3e-13`; `2.0e-15` | yes |
+| ST1 | `1e-12` | `1.8e-16` | yes |
+| D1 | exact | ANDES and Allman bit for bit | yes |
+| RF1 | exact | ANDES next to Shell4 refused (element 3, naming element 0, nodes 1 and 5); ANDES next to the constant-strain Shell3 refused; blocks meeting at one node solve | yes |
+| RF2 | exact | `UnsupportedKind { block: 0, kind: "Shell4", operation: "a Shell3 membrane" }`; constant strain on Shell4 taken; `thickness` refused | yes |
+| B1 | exact | 15 of 15 digests equal the base | yes |
+| B2 | pass | the whole `rcfd-fem` suite, release: 99 test binaries, 0 failed (`b2-fem.log`) | yes |
+| B3 | pass | baseline_hashes 3 passed, 1 ignored (the existing record) | yes |
+| P1 | `1e-5` each | largest `7.1e-11` (N1); CT1 `7.6e-12` | yes |
+| N1 | `< 0.9` | `0.5428975996` | yes |
+| N2 | `< 0.98` | `0.9156777414` | yes |
+| N3 | `7` | 7 and 7 | yes |
+| N4 | `7` | 7 | yes |
+| O1 | printed | `2.0776e-1` | observation |
+| O2 | printed | `1.0338429412` | observation |
+| O3 | printed | `1.0511895148` | observation |
+
+Mutations (archive copy of 0c676472, `f539-scratch/mutate.py`, `mutlogs/`), each caught:
+
+| id | caught by |
+| --- | --- |
+| MU1 | CT1 to CT4, BE1, P1 |
+| MU2 | CT1 to CT4, BE1, P1 |
+| MU3 | CT1 to CT4, BE1, P1 |
+| MU4 | CT1 to CT4, BE1, P1 |
+| MU5 | CT1 to CT4, D1, TH1, TH2, P1 (with N2) |
+| MU6 | ST1 |
+| MU7 | TH1, TH2 |
+| MU8 | RF1 (both refusals) |
+| MU9 | RF2 |
+| MU10 | B1, N1, P1, and the existing `sa_shell3` (PT5, CY1, FR, N1, P4) |
+| MU11 | CT1 to CT4, BE1, ST1, P1 (with N2); not PT7 or TH2 as registered: a reversed excess is still exact for the patch and free-expansion states, where every edge excess is zero |
+| MU12 | SE1 (Allman, 7 zeros), P1 (N2); TH2 panicked on the singular solve |
+
+fmt (`cargo fmt -p rcfd-fem --check`) and clippy (`cargo clippy -p rcfd-fem --all-targets --release -- -D warnings`): clean.
+`rcfd-cli`'s `docs_site` test (for `docs/reference-data.md`): 2 passed. Not run: the whole workspace suite (the lead's gate).
+Shared solver files changed (`git diff d0439898`): `mesh.rs` (the `membrane` field of `BlockProperty::Shell`, `shell` delegating
+to the new `shell_with_membrane`, the Shell arm of `set_block_property`), `shell.rs` (two patterns gain `..`, one line in
+`check_shell_model`, one in `shell3_stresses`), `thermal.rs` (the Shell3 thermal call), `shell3.rs` (the membranes).
+
+**Decision: partial**, by the rule, because PT5 missed. PT5 is F-419's mixed Shell3 + Shell4 membrane patch, run with the new
+membrane. The registration predicted the miss and diagnosed its cause (arithmetic 8: a linear-edge neighbour does not cancel
+the drilling edge moments `alpha_b t l^2 sigma_nn / 12`). The model refuses such meshes (RF1). Every other check was met and
+every mutation caught. The acceptance's bending clause is met: the 8 x 2 strip is within `3.5e-3` of beam theory.
+
+Remaining questions (options, recommendation):
+
+1. Mixed meshes (PT5, L3): (a) keep the refusal; (b) a follow-up: a Shell4 drilling membrane with the same edge field (a
+   quadrilateral free-formulation or ANDES membrane), so that ANDES Shell3 and the new Shell4 can share edges; (c) an interface
+   treatment that drops the excess on mixed edges (not patch-test exact either). Recommend (a) now and (b) as a follow-up.
+2. The default membrane of Shell3: (a) keep the constant-strain default and ANDES opt-in; (b) make ANDES the default (changes
+   every Shell3 result and the B1 digests; needs the maintainer). Recommend (a).
+3. Allman's membrane as a model option (N2: `0.916` on 8 x 2): (a) keep it for comparison; (b) keep it only in `Shell3Options`.
+   Recommend (a), documented as stiff.
+
+## For the lead: roadmap entries
+
+Proposed status of F-539: **partial**.
+
+> Structural solver, advanced tier. Follow-up of F-419 (ADR 0454, 2026-11-14). F-539 (ADR 0466, 2026-11-14): opt-in drilling membranes for Shell3 through `BlockProperty::shell_with_membrane`. The ANDES optimal membrane: basic stiffness of a constant stress on Allman's edge field with alpha_b 3/2, higher-order stiffness of the deviatoric corner rotations with beta_0 (1 - 4 nu^2)/2 and the OPT betas, recalled and verified by exact pure bending of rectangle pairs to 3.7e-14. Allman's 1984 triangle: its equal-rotation zero mode suppressed by Shell3's drilling penalty; ANDES needs no penalty. Consistent thermal load and centroid stresses. Cantilever strip 8 x 2 in in-plane bending: 0.99648 of Timoshenko beam theory on either diagonal (0.99694 alternating, end couple 0.99727; CST 0.543, Allman 0.916). Patch tests on Shell3 meshes to 1e-14; six zero modes per element and per free plate; default Shell3 and Shell4 bit-identical; twelve mutations caught. Partial: the mixed Shell3 + Shell4 membrane patch misses (2.1e-1, predicted: a linear edge does not balance the drilling edge moments), so the model refuses such meshes, naming the element.
+
+Follow-up item:
+
+- **Drilling membrane for Shell4 matching the ANDES edge** (deps F-539, F-392):
+
+> Every limit not stated here is registered in the ADR before the run. An opt-in Shell4 membrane with the vertex-rotation edge field of ADR 0466, so that ANDES Shell3 and Shell4 may share edges: the mixed Shell3 + Shell4 membrane patch of ADR 0454 within 1e-8, the 8 x 2 in-plane cantilever strip of ADR 0466 on quadrilaterals within 2 % of beam theory, defaults bit-identical.
