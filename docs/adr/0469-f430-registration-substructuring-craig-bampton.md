@@ -272,3 +272,118 @@ whose nodes are all fixed (no boundary unknown), is refused by `reduce`; (iii) a
 `UnknownSet`. **MU9** becomes: the refusal of an interface without a free unknown removed (expected caught by X1 (ii)). No
 limit changes. This amendment precedes the first run of every check, so it does not by itself make any check "met only after
 an amendment made after its run".
+
+## Addendum 1: results (2026-11-14)
+
+Commits on `f430-work`: a1b606bb (this registration, alone), f5e5f08d (D1 digests printed at main 13b387a2 by
+`sa_cms_default_bits.rs`, before any library line), 05899fd9 (amendment 1, before any run), 4117733c (`rcfd_fem::cms`, the
+checks `tests/sa_cms.rs`, the scaffold row), then the registered runs, 973bb1d4 (H1 kept as a known miss), e8542b28 (`cargo fmt`
+of the three files, no content change). Each registered check was run once, release profile (`cargo test --release -p rcfd-fem
+--test sa_cms`, logs `f430-scratch/run1-fast.log` and `run1-bar-harmonic.log`; `--test sa_cms_default_bits`; `--test
+sa_scaffold`). No shared solver file was changed (the only library file is `cms.rs`, the stub of this module; nothing else calls
+it), so `baseline_hashes` was not required and not run; the workspace suite is the lead's gate and was not run.
+
+| Id | Clause | Limit | Measured | Met |
+|---|---|---|---|---|
+| ST1 | a1 | `<= 1e-10` | 3.27e-14 | yes |
+| ST2 | a2 | `<= 1e-10` | 1.70e-14 | yes |
+| ST3 | a3 | `<= 1e-10` | 2.46e-14 | yes |
+| ST4 | a1-a3 (`mid`) | `<= 1e-10` each | 1.52e-14, 4.31e-14, 4.61e-14 | yes |
+| AM1 | a4 | `<= 1e-8` | 1.72e-12 (108 of 108 frequencies) | yes |
+| AM2 | a4 | `<= 1e-8` | 1.41e-12 (108 of 108) | yes |
+| B1 | a5 | `<= 1e-3` | 4.53e-6, 5.46e-6, 5.56e-4 | yes |
+| B2 | a6 | `>= -1e-10` | the same, all positive | yes |
+| B3 | a7 | rise `<= 1e-9`; `err(5) < err(0)/10` | largest rises 4.6e-13, 1.2e-13, 1.4e-13; err(0) 2.65e-2, 2.69e-2, 0.331 to err(5) 4.53e-6, 5.46e-6, 5.56e-4 | yes |
+| S1 | a8 | `<= 1e-13` | 0 (A, B, S, R; K_r and M_r) | yes |
+| S2 | a8 | `<= 1e-10` | 5.1e-16, 1.3e-15, 2.9e-16, 6.6e-16 | yes |
+| P1 | a9 | `>= 1e-12` | 1.11e-3, 3.82e-6, 2.71e-3, 1.79e-4 | yes |
+| R1 | a10 | `<= 1e-6`, `lambda_7 > 0` | 1.05e-7, `lambda_7` = 3.18e9 | yes |
+| H1 | a11 | `<= 1e-2` | **9.97e-1** at 8241.0 rad/s (`omega_half` = 8241.002); 9.38e-1 at the axial resonance 8179.0; first point above 1e-2 at 1977.8 | **no** (predicted) |
+| H2 | a11 (band) | `<= 1e-2` | 2.27e-3 | yes |
+| F1 | a12 | exact | A and R: every float bit-equal, integers equal, the file written again byte-identical | yes |
+| F2 | a12 | refused | half file and header 2 refused, both parts | yes |
+| X1 | a13 | refused | (i) `EmptySet`; (ii) `xmin` of S refused (no free unknown); (iii) `UnknownSet` | yes |
+| X2 | a14 | refused / taken | `m = 82` refused, `m = 81` taken (`n_i` = 81) | yes |
+| C1 | design | `<= 1e-9` | 7.0e-14 (eigenvalues), 4.2e-13 (frequencies) | yes |
+| T1 | design | bits | bit-identical | yes |
+| D1 | defaults | `==` | 6 of 6 digests equal | yes |
+| E1 | scaffold | pass | `x1_modules_and_pending_after_f430` passes, `cms::PENDING == None`; 9 passed, 12 ignored records | yes |
+
+Records: R' (part B free, five modes) 5.43e-7 (estimate up to 7e-7); the bar at `m = 5`, errors of frequencies 4 to 8:
+6.57e-4, 9.67e-4, 5.51e-4, **9.99e-2** (the axial mode, estimate 0.102), 5.37e-4; the sequences `err_k(m)`: `m = 1` 8.65e-5,
+2.69e-2, 8.05e-3; `m = 2, 3` 8.65e-5, 9.79e-5, 8.05e-3; `m = 4` 4.53e-6, 9.79e-5, 5.56e-4 (the order of the one-dimensional
+estimate exactly; constant when the added mode is of another family, to 5e-13); the H1 curve is printed by the ignored test.
+
+Mutations (scratch copy `f430-scratch/mut`, script `mutate.py`, logs `mut-MU1.log`, `mut-rest.log`), all caught:
+
+| Id | Caught by |
+|---|---|
+| MU1 | ST2, ST3, ST4, AM1, AM2, B1, B3, R1, H2 |
+| MU2 | P1 (all four parts); AM1, B1, C1, R1 fail through the eigen-solution's refusal of the indefinite `M_r` |
+| MU3 | AM1, AM2, B1, B2 (f3 below the full model), B3, H2 |
+| MU4 | B1, B3, C1, H2 |
+| MU5 | ST2, ST3, ST4 |
+| MU6 | ST1, ST2, ST3, ST4, H2 |
+| MU7 | F1 (the read refuses the decimal floats) |
+| MU8 | X2 (and AM1, S1, which take `m = n_i`) |
+| MU9 | X1 (ii) |
+| MU10 | B1, H2 (the assembly refuses two unknowns of one part on one assembly unknown) |
+| MU11 | H2 |
+| MU12 | S2, S1 (and AM1, B1, C1, R1 through the eigen-solution's symmetry check) |
+
+`cargo fmt -p rcfd-fem --check`: clean after e8542b28. `cargo clippy -p rcfd-fem --all-targets -- -D warnings`: clean. `cargo test --release -p rcfd-cli --test docs_site` (docs added): 2 passed.
+
+### Deviations
+
+1. Amendment 1, before any run: the mesh refuses an empty node set, so X1 (i) checks that refusal; MU9 retargeted. No limit
+   changed.
+2. **H1 missed, as predicted by arithmetic item 3.** Diagnosis, with the measured numbers: (a) with five modes each, neither
+   part keeps an axial fixed-interface mode (B's first axial one, 16482 rad/s, is its sixth and the lowest omitted of both
+   parts), so the assembly's axial frequency is 9.99 percent high (record above) while the full model's axial resonance, 8179
+   rad/s, lies inside the range (for a bar cut in half the assembly's axial frequency is about half of B's axial
+   fixed-interface frequency, so it sits at the top of the range whatever the section); near it the response error is of
+   order one (0.94). (b) Off resonance the error grows smoothly with frequency, 2.2e-3 at 989 rad/s to 1.1e-2 at 1978: the load
+   is inside B, and the reduction carries the interior flexibility of an interior load only through the kept modes (no
+   residual vector), which is the 3.9e-2 the estimate showed without any axial load. The rule "within 1 percent up to half the
+   lowest omitted fixed-interface frequency" is therefore not a property of the fixed-interface reduction with interior loads;
+   on this bar 1 percent holds up to about 0.12 of that frequency (H2, met at 1000 rad/s with 2.27e-3). The test is kept as
+   `h1_harmonic_to_half_the_lowest_omitted_known_miss` (ignored, limit intact).
+3. MU2, MU7, MU10 and MU12 are caught in part through refusals of the library (the eigen-solution refuses an indefinite or
+   non-symmetric mass; the reader refuses decimal floats; the assembly refuses a double match): the tests of the expected
+   checks fail, and for MU2 and MU12 a printed limit (P1, S2) is missed as well.
+4. `cargo fmt` reformatted `sa_cms_default_bits.rs` after its constants were committed (layout only).
+
+Not run: the workspace test suite (the lead's gate), `baseline_hashes` (no rcfd-fv or rcfd-api file touched).
+
+### Decision
+
+**partial** by the registered rule: H1 (clause a11) missed at its registered run (predicted, diagnosed above). Every other
+check met at its registered run, every mutation caught, the one amendment made before any run.
+
+### Remaining questions
+
+1. The harmonic clause. Options: (a) keep it and meet it by a follow-up that adds residual (static correction) vectors of the
+   interior loads to each part and a choice of the kept modes by a cutoff frequency (every fixed-interface mode below a
+   multiple of the top frequency of interest, so that no family is left with none); (b) restate the clause as "within 1 percent
+   up to 0.1 of the lowest omitted fixed-interface frequency" for this method. Recommendation: (a), a follow-up item; the
+   present reduction is the published Craig-Bampton method and its measured band is recorded.
+2. Assembling a reduced part with ordinary elements of a model (the housing with a rotor of ADR 0333). Options: (a) a follow-up
+   that adds a reduced part to a `SolidModel` as a superelement on the interface nodes; (b) leave assemblies of reduced parts
+   only. Recommendation: (a), a follow-up item.
+3. Beams and shells pass the entry checks but no check covers them. Recommendation: cover them in the follow-up of question 2.
+
+### For the lead: roadmap entries
+
+Proposed status of F-430: **partial**. New note:
+
+> Structural solver, advanced tier (plan ADR 0310). Size M. ADR 0469, 2026-11-14: rcfd_fem::cms (cms::PENDING = None): static condensation (Guyan) and the fixed-interface reduction (Craig-Bampton) on the transformation of ADR 0296, reduced parts assembled at interfaces matched by position (Assembly: dense eigen-solution, harmonic response with a loss factor), recovery of interior displacements and stresses, a text part file with the bits of every float. Statics within 4.6e-14 (retained, interior, stresses), every fixed-interface mode kept within 1.7e-12 of all 108 frequencies, the bar of two parts with five modes 4.5e-6, 5.5e-6, 5.6e-4 above the full model and non-increasing with the modes, reduced matrices exactly symmetric and the mass positive definite, a free part's rigid frequencies 1.05e-7 of the seventh, the file round trip bit-exact, the refusals; harmonic within 2.3e-3 up to 1000 rad/s but H1 (1 percent up to half the lowest omitted fixed-interface frequency) missed, predicted: 0.997 at 8241 rad/s, no axial mode kept and no residual flexibility of the interior load (above 1e-2 from 0.12 of that frequency); follow-ups for residual vectors with modes by cutoff, and for reduced parts in an ordinary model.
+
+Follow-up items (numbers left to the lead):
+
+Title: "Craig-Bampton with residual vectors of the interior loads and kept modes chosen by a cutoff frequency", deps F-430.
+
+> Every limit not stated here is registered in the ADR before the run. An option of the reduction of ADR 0469 adds to each part the static residual vectors of its interior loads (M-orthogonalised against the kept modes) and keeps every fixed-interface mode below a given cutoff. The bar of ADR 0469 with the corner load: the harmonic response within 1 percent of the full model up to half the lowest omitted fixed-interface frequency (the H1 set-up), and the statics of an interior load exact within 1e-10; without the option every result bit-identical to ADR 0469's.
+
+Title: "Reduced parts as superelements in an ordinary model", deps F-430.
+
+> Every limit not stated here is registered in the ADR before the run. A reduced part of ADR 0469 is added to a SolidModel on its interface nodes and solved with the model's ordinary elements in the static solve, the modal analysis and the direct harmonic solve. A bar of a reduced half and an ordinary half equals the full model within 1e-10 in statics and its first three frequencies are within 0.1 percent and not below the full model's; beams and shells as interface nodes covered; without a reduced part every result bit-identical.
