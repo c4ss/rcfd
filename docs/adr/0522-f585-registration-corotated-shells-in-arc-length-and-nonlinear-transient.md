@@ -435,3 +435,114 @@ The tests of run 2 that missed or did not reach a measurement become ignored rec
 `f1_e1_3_corrected_known_miss`, `f1_e1_4_corrected_known_miss`; the 100-period test of amendment 2, not run, is ignored as
 superseded before its run. The tests `f1_e1_3_corrected2`, `f1_e1_4_corrected2` and the heavy `f1_e1_100_periods_corrected2`
 are run once (run 3). SF1 (`sf1_corrected`) stands as run in run 2.
+
+## Addendum 1 (2026-11-14): results
+
+Runs (release, `--nocapture --test-threads 1`, logs in `f585-scratch`): N1 recorded at the base b6d3fb1c (`n1-base.log`)
+before any library code and passing at every later commit (`x1-n1.log`, the crate run); run 1 of the fast tests at 0273f25f
+(`run1-fast.log`); the registered roof run at 7884d878 (`run1-roof.log`); after amendment 2, run 2 at 1f5943e9
+(`run2-fast.log`); after amendment 4, run 3 of the companions at d401b3a8 (`run3-fast.log`); the patch-load roof run of
+amendment 3 and the 100-period run of amendment 4, once each, at d401b3a8 (`run3-heavy.log`); X1 (`x1-n1.log`); the whole
+`rcfd-fem` suite with `--no-fail-fast` (`fem-suite.log`: 863 passed, 0 failed, 247 ignored); `baseline_hashes` of `rcfd-api` and `docs_site` of `rcfd-cli`
+(`api-cli.log`). No limit was changed after a run; four amendments corrected set-ups before their corrected runs, each
+superseded test kept as an ignored record with its body unchanged.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| A1 roof, point load, Shell4 `16` against Hex20 `16 x 16 x 2` | `<= 2e-2` | `2.53e-2` (`2222.4` N against `P_ref = 2167.5` N) | **missed**; record `a1_a2_h0_..._known_miss` |
+| A2 roof, 5 traces of the registered run, 4 of the patch run, 2 of the fast test | holds | holds on all: stopped by the rule after 205 to 211 points, no halving, a negative pivot after the limit on each | yes |
+| H0 Hex20 `8` against `16` | `<= 2e-2` | `7.85e-3` | yes (but see the diagnosis) |
+| A1c Shell4 `8`, A3 Shell3 `16` (records) | recorded | `2223.6` N (`1.0259 P_ref`), `2221.3` N (`1.0248 P_ref`) | recorded |
+| A1p roof, patch load (amendment 3) | `<= 2e-2` | `2.61e-2` (`2243.5` N against `2186.4` N) | **missed**; record `a1p_h0p_roof_patch_load_known_miss` |
+| H0p Hex20 `8` against `16`, patch | `<= 2e-2` | `7.89e-3` | yes |
+| fast roof (records) | recorded | Shell4 `8` `2223.6` N, Hex20 `4 x 4 x 2` `2213.9` N | recorded |
+| F1 100 periods (amendment 4) | `<= 1e-2` | `2.049e-3` (`f_1 = 0.122940` Hz, `f_m = 0.122689` Hz, 200 crossings) | yes |
+| F1b 100 periods | `<= 1e-3` | `7.97e-8` | yes |
+| F1c `f_1/f_EB` | `<= 1e-2` | `4.29e-4` | yes |
+| E1 100 periods | `<= 1e-5` | `2.82e-8` | yes |
+| EZ (amendment 4, Clapeyron) | `<= 1e-4` | `5.13e-7` | yes |
+| F1/E1-4 (amendment 4) | as F1, F1b, E1; F1c, EZ | `2.05e-3`, `2.53e-6`, `2.77e-8`; `4.29e-4`, `5.13e-7` | yes |
+| F1/E1-3 Shell3 (amendment 4) | as F1, F1b, E1; EZ | `2.05e-3`, `2.53e-6`, `2.77e-8`; `5.14e-7` | yes |
+| run 1: F1/E1-3 E1, EZ | `<= 1e-5`, `<= 1e-4` | `4.71e-4`, `2.52e-2` | missed, set-up (amendment 2; record) |
+| run 2: F1/E1-3 EZ | `<= 1e-4` | `2.87e-2` | missed, set-up (amendment 4; record) |
+| run 1 and 2: F1/E1-4; run 1: SF1 | | no measurement (modal floor; one Newton attempt) | records |
+| SF1 (amendment 2) | holds | Shell4 and Shell3 bit equal, one step, no halving, 3 iterations | yes |
+| R2 | holds | the energy-momentum step (key `"nl_transient"`) and `solve_in_time` (`NotYetSupported` Shell4) refuse | yes |
+| X1 | holds | `r1_refusals_kept` ignored, body unchanged; `r1_refusals_kept_after_f585` passes (three paths take the strip, J2 refused) | yes |
+| N1 | exact | the 6 digests equal | yes |
+| N2 `baseline_hashes` | pass | 3 passed, 1 ignored (`docs_site` of `rcfd-cli`: 2 passed) | yes |
+| P1 wall times | recorded | Shell4 `16` roof `19` s, Hex20 `16` `232` s (`312` s patch), Hex20 `8` `26` s, Shell3 `16` `13` s; 100 periods `63` s (11988 iterations, 3 per step) | recorded |
+
+### Diagnosis of the roof miss
+
+The shell is converged: Shell4 `8` and `16` within `5.4e-4`, Shell3 `16` within `5.0e-4` of Shell4 `16` (point load), and
+the corotated element meets every other check. The registered reference is not: the Hex20 limit load falls with each
+refinement, `2213.9, 2184.5, 2167.5` N at `n = 4, 8, 16` (point load), differences `29.4` and `17.0`, a ratio `1.7` where a
+converging second-order solution gives `4`; the patch load of amendment 3 shows the same fall (`2203.6, 2186.4`, difference
+`17.3`), so the point-load singularity that amendment 3 named is **not** the cause, and that diagnosis was wrong. The remaining
+singular feature of the solid model, common to both loads, is the hinge: the mid-thickness line of nodes pinned in a
+three-dimensional continuum is a line support, under which the displacement of an elastic solid is unbounded (logarithmic), so
+the solid's local compliance at the hinge grows with every refinement and the panel softens with it. H0 compared two meshes
+and could not detect a slowly divergent sequence; the registration's assumption of second-order convergence (D5) was wrong.
+With the observed ratio the solid at `n = infinity` would lie further below the shell. The roof clause therefore lacks a valid
+reference: it is not shown that the shell is wrong, nor that it is within 2 percent of the physical limit load. A valid
+reference needs the published value (open question 1) or a solid hinge without a singularity (for instance a rigid hinge
+plate, which the nonlinear driver does not offer: the transformation path is refused). Not verified here: the hinge hypothesis
+itself (no run was made to test it).
+
+### Mutations (scratch copy of d401b3a8 by `git archive`, one at a time, `f585-scratch/mutate.py`, `mutations.log`, `mut-MU*.log`)
+
+| Id | Caught by |
+|---|---|
+| MU1 bending energy with the factor 1 | E1 (`1.0`), EZ (`1.0`) on Shell4 and Shell3 |
+| MU2 shell energy at zero displacement | E1, EZ (`1.0`) |
+| MU3 `Integrator::new` refuses shells | X1 copy (the run stops at the first failing binary) |
+| MU4 `trace` refuses shells | X1 copy (as MU3) |
+| MU5 mass times `1.01` | F1b `4.94e-3` (F1 not, as planned) |
+| MU6 arc-length root reversed | the fast roof test (the trace fails) |
+| MU7 membrane energy left out | not caught (as registered: not expected) |
+
+Six of the six mutations expected to be caught were caught; MU7 was not, as registered.
+
+### Deviations
+
+- Four amendments corrected set-ups before their corrected runs: the start of the strip from the unrelaxed linear mode
+  (amendment 2; the arithmetic missed the factor `(L/t)^2`), the modal options (amendments 2 and 4), the SF1 load (amendment 2),
+  the EZ comparator (amendment 4) and the roof load (amendment 3, whose diagnosis turned out wrong). Every superseded test is an
+  ignored record with its body unchanged.
+- One existing test was superseded by design (X1, `sa_corot_shell::r1_refusals_kept`), with an `_after_f585` copy; it is an
+  edit of an existing test file and needs the lead's confirmation.
+- After the runs, two edits without effect on any result: a doc paragraph of `arclength.rs` (a clippy `doc_lazy_continuation`)
+  and `!(a < 0.0)` written as `a.is_nan() || a >= 0.0` in the vertex rule of the test (clippy); the regular tests and N1 rerun
+  as a regression (`regression.log`, all pass). fmt and clippy (`-D warnings`, all targets) clean.
+- `rcfd-api` and `rcfd-cli` were not edited. The roadmap files are updated in the last commit as the brief asks.
+
+### Decision
+
+**partial** by the registered rule: N1 and N2 unchanged, SF1 met, the vibration met (F1 `2.05e-3`, E1 `2.8e-8` over 100
+periods); the roof missed A1 (`2.53e-2`) and, after amendment 3, A1p (`2.61e-2`), recorded as known misses with the diagnosis
+above. Clauses: (a1) met (the three paths take Shell4 and Shell3: SF1, X1, the transient on both elements, the arc length on
+both); (a2) met (the constant consistent shell mass with the rotary inertia of the rotation-vector rate, D2); (a3) met (N1,
+N2); (a4) not met (the path is followed through the limit point, A2, but not shown within 2 percent of a valid reference);
+(a5) met; (a6) met.
+
+### Remaining questions (recommendations for the lead)
+
+- **Q1** (the roof reference): options (a) obtain the tabulated limit load of Sze, Liu and Lo (2004) for `t = 12.7` and
+  register it in a follow-up; (b) a solid reference with a non-singular hinge (needs constraints in the nonlinear driver);
+  (c) accept the converged shell sequence as the reference. Recommendation (a): it is the independent reference the acceptance
+  intends; (c) is not independent.
+- **Q2** (X1): accept the ignored record and its copy (the ADR 0291 pattern). Recommendation: accept.
+- **Q3** (a case-file key): a follow-up with the CLI; left open (schema golden).
+- **Q4** (the rotary inertia at large rotation): keep the registered form; a follow-up with `omega = T(theta) theta_dot` only
+  if large-rotation dynamics of shells are needed.
+
+## For the lead: roadmap entries
+
+Proposed status of F-585: **partial**. Note:
+
+> Structural solver, advanced tier. Follow-up of F-578 (ADR 0490). PARTIAL. ADR 0522, 2026-11-14: arclength::trace, solve_from and the nonlinear transient integrator take Shell4 and Shell3 with the corotated element of ADR 0490 (the refusal replaced by the shell-taking check; additive rotation-vector increments; the constant consistent shell mass with the rotary inertia rho t^3/12 of the rotation-vector rate, isotropic, exact at small rotation; the shell strain energy from the corotated potential); the energy-momentum step, solve_in_time and buckling_factors still refuse shells. Free vibration of a 16-element Shell4 cantilever strip at a tip amplitude 1e-3 L over 100 periods by the trapezoidal rule: frequency within 2.05e-3 of the linear modal frequency (limit 1 percent; the trapezoidal period factor accounts for it within 8e-8), energy conserved within 2.8e-8 (limit 1e-5); the same on Shell3 over 4 periods; solve_from equals solve bit for bit on shells. Hinged cylindrical roof (R 2540, edges 508, 0.1 rad, t 12.7) under a central point load traced through its limit point by arc length (Shell4 16 x 16 quarter, limit load 2222 N, converged to 5e-4 against 8 x 8 and Shell3), but 2.5 percent above the registered Hex20 solid reference (limit 2 percent; 2.6 percent under a patch load): the solid sequence does not converge (probably its mid-line hinge, a singular line support), so the roof clause lacks a valid reference; recorded as known misses. Default bits unchanged (6 digests), baseline hashes unchanged; six of six expected mutations caught. Four set-up amendments, records kept.
+
+Follow-up (title, deps, acceptance), for the lead to number or drop:
+
+> (new item, number for the lead) Hinged cylindrical roof limit load against a published reference (deps F-585). Every limit not stated here is registered in the ADR before the run. The tabulated limit load of the hinged cylindrical roof of Sze, Liu and Lo (2004) for t = 12.7 recorded in docs/reference-data.md from the paper; the Shell4 and Shell3 quarter models of ADR 0522 traced through the limit point by arc length within 2 percent of it; the Hex20 sequence of ADR 0522 kept as a record of the singular hinge.

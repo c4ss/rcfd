@@ -11,8 +11,10 @@
 //! whose new increment is closer in angle to the reference (at `k = 0` the previous converged increment: the predictor; at `k
 //! >= 1` the increment so far). A failed attempt halves `Ds`; after a converged point `Ds` doubles back towards the given
 //! length. The load direction is that of the dead loads: a contribution's dependence on the load factor is in the residual,
-//! not in `du_f`. Shell4 and Shell3 take the corotated element of ADR 0490 (ADR 0522, F-585), their rotation unknowns
-//! corrected additively as every other unknown.
+//! not in `du_f`.
+//!
+//! Shell4 and Shell3 take the corotated element of ADR 0490 (ADR 0522, F-585), their rotation unknowns corrected
+//! additively as every other unknown.
 
 use crate::constraint::{check_rigid_body_motions, prescribed_equations, Prescribed};
 use crate::element::ElementState;

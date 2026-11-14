@@ -193,7 +193,7 @@ fn vertex(p: [(f64, f64); 3]) -> Option<(f64, f64)> {
     let d01 = (y1 - y0) / (x1 - x0);
     let d12 = (y2 - y1) / (x2 - x1);
     let a = (d12 - d01) / (x2 - x0);
-    if !(a < 0.0) {
+    if a.is_nan() || a >= 0.0 {
         return None;
     }
     let b = d01 - a * (x0 + x1);
