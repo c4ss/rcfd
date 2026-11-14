@@ -498,13 +498,19 @@ pub fn element_stiffness_with(
     options: &ShellOptions,
 ) -> Result<ElementMatrix> {
     let f = facet(coords)?;
-    Ok(to_global(&local_stiffness(&f, thickness, material, options), &transformation(&f)))
+    Ok(to_global(
+        &local_stiffness(&f, thickness, material, options),
+        &transformation(&f),
+    ))
 }
 
 /// The global consistent mass of a shell element.
 pub fn element_mass(coords: &[Vec3], thickness: f64, material: &Material) -> Result<ElementMatrix> {
     let f = facet(coords)?;
-    Ok(to_global(&local_mass(&f, thickness, material.density()), &transformation(&f)))
+    Ok(to_global(
+        &local_mass(&f, thickness, material.density()),
+        &transformation(&f),
+    ))
 }
 
 /// The consistent nodal load (forces and moments, global axes, the element's unknown order) of a uniform pressure `p`

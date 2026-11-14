@@ -84,7 +84,8 @@ fn shell_mesh(nodes: Vec<Vec3>, elements: &[[usize; 4]], thickness: f64) -> Soli
     let mut mesh = SolidMesh::new(nodes).unwrap();
     let conn: Vec<usize> = elements.iter().flatten().copied().collect();
     mesh.add_block(ElementKind::Shell4, conn).unwrap();
-    mesh.set_block_property(0, BlockProperty::shell(thickness).unwrap()).unwrap();
+    mesh.set_block_property(0, BlockProperty::shell(thickness).unwrap())
+        .unwrap();
     mesh.add_element_set("all", (0..elements.len()).collect()).unwrap();
     mesh.add_node_set("all", (0..n).collect()).unwrap();
     mesh
@@ -183,14 +184,20 @@ fn d1_unknown_counts() {
     let mut nodes = mixed.nodes().to_vec();
     nodes.extend_from_slice(&[[5.0, 0.0, 0.0], [6.0, 0.0, 0.0], [6.0, 1.0, 0.0], [5.0, 1.0, 0.0]]);
     let mut m2 = SolidMesh::new(nodes).unwrap();
-    m2.add_block(ElementKind::Hex8, mixed.blocks()[0].connectivity().to_vec()).unwrap();
-    m2.add_block(ElementKind::Shell4, vec![ns, ns + 1, ns + 2, ns + 3]).unwrap();
+    m2.add_block(ElementKind::Hex8, mixed.blocks()[0].connectivity().to_vec())
+        .unwrap();
+    m2.add_block(ElementKind::Shell4, vec![ns, ns + 1, ns + 2, ns + 3])
+        .unwrap();
     mixed = m2;
     let d = DofMap::for_mesh(&mixed);
     let ok = (0..ns).all(|n| d.components(n) == 3)
         && (ns..ns + 4).all(|n| d.components(n) == 6)
         && d.n_equations() == 3 * ns + 24;
-    c.holds("D1 Hex8 box and a separate shell", ok, &format!("{} unknowns", d.n_equations()));
+    c.holds(
+        "D1 Hex8 box and a separate shell",
+        ok,
+        &format!("{} unknowns", d.n_equations()),
+    );
     c.finish();
 }
 
@@ -403,14 +410,25 @@ fn ss_simply_supported_plate_and_locking_control() {
         let x = ratio(r.displacement(centre)[2], t);
         ss[i] = x;
         println!("{id} t/a = {t}: w_c / w_Navier = {x:.10}");
-        c.at_most(&format!("{id} SS plate t/a = {t} against Navier"), (x - 1.0).abs(), limit);
-        c.at_most(&format!("P1 SS plate t/a = {t} against the prototype"), rel(x, proto), 1e-5);
+        c.at_most(
+            &format!("{id} SS plate t/a = {t} against Navier"),
+            (x - 1.0).abs(),
+            limit,
+        );
+        c.at_most(
+            &format!("P1 SS plate t/a = {t} against the prototype"),
+            rel(x, proto),
+            1e-5,
+        );
     }
     // SS3: the fully integrated shear control at t/a = 0.001 (amendment 1, item 2).
     let t = 0.001;
     let (m, pres, centre) = ss_plate(t, RHO);
     let opts = ShellOptions::default().shear(TransverseShear::FullIntegration);
-    let k = assemble_with(&m, None, |ctx| shell::element_stiffness_with(ctx.coords, t, ctx.material, &opts)).unwrap();
+    let k = assemble_with(&m, None, |ctx| {
+        shell::element_stiffness_with(ctx.coords, t, ctx.material, &opts)
+    })
+    .unwrap();
     let f = nodal_load_vector(&m, &[]).unwrap();
     let fixed = prescribed_equations(&m, &pres).unwrap();
     let sys = reduce(&k, &f, &fixed).unwrap();
@@ -456,10 +474,21 @@ fn ct_cantilever_strip() {
     let st = shell::stresses(&m, r.displacement_values()).unwrap();
     let (e, s) = st[7];
     let mid = 6.0 * p * l / 2.0 / (b * t * t);
-    println!("CT2 element {e}: top {:.8e}, bottom {:.8e}, 6M/(b t^2) = {mid:.8e}", s.top[0], s.bottom[0]);
+    println!(
+        "CT2 element {e}: top {:.8e}, bottom {:.8e}, 6M/(b t^2) = {mid:.8e}",
+        s.top[0], s.bottom[0]
+    );
     c.at_most("CT2 mid-span top stress against -6M/(b t^2)", rel(s.top[0], -mid), 2e-2);
-    c.at_most("CT2 mid-span bottom stress against +6M/(b t^2)", rel(s.bottom[0], mid), 2e-2);
-    c.at_most("P2 mid-span stress against the prototype", rel(s.top[0] / -mid, 0.9999999999), 1e-5);
+    c.at_most(
+        "CT2 mid-span bottom stress against +6M/(b t^2)",
+        rel(s.bottom[0], mid),
+        2e-2,
+    );
+    c.at_most(
+        "P2 mid-span stress against the prototype",
+        rel(s.top[0] / -mid, 0.9999999999),
+        1e-5,
+    );
     c.finish();
 }
 
@@ -477,7 +506,9 @@ fn rg_pinched_ring() {
             nodes.push([r0 * ph.cos(), r0 * ph.sin(), z]);
         }
     }
-    let el: Vec<[usize; 4]> = (0..nq).map(|i| [idx(i, 0), idx(i + 1, 0), idx(i + 1, 1), idx(i, 1)]).collect();
+    let el: Vec<[usize; 4]> = (0..nq)
+        .map(|i| [idx(i, 0), idx(i + 1, 0), idx(i + 1, 1), idx(i, 1)])
+        .collect();
     let m = model_of(shell_mesh(nodes.clone(), &el, t), material(0.0, RHO));
     let mut pres = Vec::new();
     for k in 0..nodes.len() {
@@ -564,7 +595,9 @@ fn fq_simply_supported_plate_frequencies() {
     let mut c = Checks::new();
     let t = 0.01;
     let (m, pres, _) = ss_plate(t, RHO);
-    let opts = ModalOptions::new(4).tolerance(1e-12).residual_test(ResidualTest::Backward);
+    let opts = ModalOptions::new(4)
+        .tolerance(1e-12)
+        .residual_test(ResidualTest::Backward);
     let r = modal_analysis_with(&m, &pres, &opts).unwrap();
     let d = E * t * t * t / (12.0 * (1.0 - 0.09));
     let w = |mn: f64| PI * PI * mn * (d / (RHO * t)).sqrt();
@@ -576,7 +609,11 @@ fn fq_simply_supported_plate_frequencies() {
     c.at_most("FQ2 (2,2)", rel(omega[3], w(8.0)), 3e-2);
     let proto = [48.1756947203, 121.7454596068, 121.7454596145, 194.998287129];
     for (i, pf) in proto.iter().enumerate() {
-        c.at_most(&format!("P5 frequency {} against the prototype", i + 1), rel(r.frequencies[i], *pf), 1e-5);
+        c.at_most(
+            &format!("P5 frequency {} against the prototype", i + 1),
+            rel(r.frequencies[i], *pf),
+            1e-5,
+        );
     }
     c.finish();
 }
@@ -594,7 +631,9 @@ fn free_plate(warp: f64) -> SolidModel {
 #[test]
 fn fr_free_plate_six_zero_frequencies() {
     let mut c = Checks::new();
-    let opts = ModalOptions::new(8).tolerance(1e-12).residual_test(ResidualTest::Backward);
+    let opts = ModalOptions::new(8)
+        .tolerance(1e-12)
+        .residual_test(ResidualTest::Backward);
     let m = free_plate(0.0);
     let r = modal_analysis(&m, &opts).unwrap();
     println!("FR1 frequencies {:?} Hz", r.frequencies);
@@ -611,7 +650,10 @@ fn fr_free_plate_six_zero_frequencies() {
     let n6 = count_below(&k, &mm, lambda7 / 4.0, &SkylineOrdering::Rcm).unwrap();
     c.holds("FR3 Sturm count below lambda_7 / 4 is 6", n6 == 6, &format!("{n6}"));
     let opts0 = ShellOptions::default().drilling(0.0);
-    let k0 = assemble_with(&m, None, |ctx| shell::element_stiffness_with(ctx.coords, 0.01, ctx.material, &opts0)).unwrap();
+    let k0 = assemble_with(&m, None, |ctx| {
+        shell::element_stiffness_with(ctx.coords, 0.01, ctx.material, &opts0)
+    })
+    .unwrap();
     let n0 = count_below(&k0, &mm, lambda7 / 4.0, &SkylineOrdering::Rcm).unwrap();
     println!("N1 Sturm count with alpha = 0: {n0}");
     c.above("N1 alpha = 0: more than six zeros", n0 as f64, 6.0);
@@ -692,7 +734,11 @@ fn w_warped_facet_refused_with_the_element() {
     c.holds(
         "W2 warp within the limit solves",
         ok.is_ok(),
-        &format!("ratio {:.4e}: {:?}", warp_ratio([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.18], [0.0, 1.0, 0.0]]), ok.as_ref().err()),
+        &format!(
+            "ratio {:.4e}: {:?}",
+            warp_ratio([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.18], [0.0, 1.0, 0.0]]),
+            ok.as_ref().err()
+        ),
     );
     c.finish();
 }
@@ -800,7 +846,13 @@ fn s1_n2_n3_refusals() {
     let r = m.add_load(Load::shell_pressure("all", 1.0));
     c.holds(
         "N3 shell pressure on Hex8 elements",
-        matches!(&r, Err(FemError::InvalidValue { key: "shell pressure", .. })),
+        matches!(
+            &r,
+            Err(FemError::InvalidValue {
+                key: "shell pressure",
+                ..
+            })
+        ),
         &format!("{r:?}"),
     );
     let dart = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.3, 0.3, 0.0], [0.0, 1.0, 0.0]];
@@ -826,7 +878,10 @@ fn k1_m1_rigid_motions_and_mass() {
         [origin[0] + r[0], origin[1] + r[1], origin[2] + r[2]]
     };
     let warped = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.18], [0.0, 1.0, 0.0]];
-    let flat: Vec<Vec3> = [[0.0, 0.0], [0.6, 0.05], [0.55, 0.45], [-0.05, 0.4]].iter().map(|&p| place(p)).collect();
+    let flat: Vec<Vec3> = [[0.0, 0.0], [0.6, 0.05], [0.55, 0.45], [-0.05, 0.4]]
+        .iter()
+        .map(|&p| place(p))
+        .collect();
     let mat = material(0.3, RHO);
     for (name, x) in [("warped", warped), ("flat in space", flat)] {
         let k = shell::element_stiffness(&x, 0.01, &mat).unwrap();
@@ -855,14 +910,21 @@ fn k1_m1_rigid_motions_and_mass() {
     }
     // M1: one flat element [0, 0.6] x [0, 0.4] placed by Q.
     let (t, w, h) = (0.01, 0.6, 0.4);
-    let nodes: Vec<Vec3> = [[0.0, 0.0], [w, 0.0], [w, h], [0.0, h]].iter().map(|&p| place(p)).collect();
+    let nodes: Vec<Vec3> = [[0.0, 0.0], [w, 0.0], [w, h], [0.0, h]]
+        .iter()
+        .map(|&p| place(p))
+        .collect();
     let m = model_of(shell_mesh(nodes, &[[0, 1, 2, 3]], t), mat);
     let mp = mass_properties(&m, &consistent(&m).unwrap()).unwrap();
     let area = w * h;
     let mass = RHO * t * area;
     c.at_most("M1 mass", rel(mp.mass, mass), 1e-12);
     let centre = place([w / 2.0, h / 2.0]);
-    let dc = norm([mp.centre[0] - centre[0], mp.centre[1] - centre[1], mp.centre[2] - centre[2]]);
+    let dc = norm([
+        mp.centre[0] - centre[0],
+        mp.centre[1] - centre[1],
+        mp.centre[2] - centre[2],
+    ]);
     let diag = (w * w + h * h).sqrt();
     c.at_most("M1 centre", dc / diag, 1e-12);
     let (ix, iy) = (w * h * h * h / 12.0, h * w * w * w / 12.0);
