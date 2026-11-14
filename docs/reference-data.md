@@ -1750,3 +1750,17 @@ by the existing solver paths (`solve_static`, `ModalBasis::all_modes`, `modal_an
 | Fixed-interface reduction `T_cb = [[I, 0], [Psi, Phi]]`, `K_r = diag(K_hat, Lambda)`, `M_r` with `M_hat = M_bb + M_bi Psi + Psi^T M_ib + Psi^T M_ii Psi`, `M_bq = (M_bi + Psi^T M_ii) Phi` | derived | Rayleigh-Ritz projection on `T_cb`, ADR 0469 design; R. R. Craig and M. C. C. Bampton, AIAA J. 6 (1968) 1313: NOT read, from memory |
 | Reduced frequencies bound the full ones from above; nested bases give non-increasing eigenvalues; every fixed-interface mode kept gives every frequency exactly; rigid motions of a free part carried by the constraint modes | derived | min-max principle; congruence by a square nonsingular `T_cb`; `K_q r = 0` gives `r_i = Psi r_b` (ADR 0469 design) |
 | Truncation estimate of the bar (16 x 2 x 2 Hex8, two halves, five modes each): first three frequency errors 2.8e-6, 2.8e-6, 3.4e-4, axial 0.10; harmonic error above 1e-2 from 1894 rad/s, 0.85 at the axial resonance | computed | numpy 1-D family chains fitted to the full model's first frequency per family, `f430-scratch/est/estimate.py`, `band.py` (ADR 0469 arithmetic 2, 3); measured 4.5e-6, 5.5e-6, 5.6e-4, 0.0999; 1978 rad/s and 0.94 |
+
+## F-552 residual vectors of the interior load and kept modes by a cutoff (ADR 0474)
+
+No source was read for F-552; the texts below are cited from memory for the names and the published form only. Every formula
+used is derived in ADR 0474 (the modal expansion of `K_ii^{-1} f_i` and the Rayleigh-Ritz method); the reference of every check
+is the full model computed by the existing solver paths (`solve_static`, `modal_analysis`, `DirectHarmonic`).
+
+| Item | Status | Source |
+|---|---|---|
+| Residual flexibility of the interior load `r = K_ii^{-1} f_i - Phi Phi^T M_ii K_ii^{-1} f_i = sum_{k > m} phi_k phi_k^T f_i / omega_k^2`, M- and K-orthogonal to the kept modes; with `[Psi, Phi, R]` the static solution of an interior load lies in the trial space (exact statics) | derived | ADR 0474 design; R. R. Craig and A. J. Kurdila, Fundamentals of Structural Dynamics (2006); S. Rubin, AIAA J. 13 (1975) 995; R. H. MacNeal, Computers and Structures 1 (1971) 581: NOT read, from memory |
+| M-orthonormalisation by classical Gram-Schmidt made twice, drop below `1e-8` of the M-norm | shared | ADR 0464 D1 (`damped::m_orthonormalise`); B. N. Parlett, The Symmetric Eigenvalue Problem ("twice is enough"): NOT read, from memory |
+| Keeping the fixed-interface modes up to about 1.5 to 2 times the top frequency of interest (rule of thumb; ADR 0474 takes 4 times) | cited | Craig and Kurdila (2006): NOT read, from memory; no number taken |
+| Response error at a resonance `2 abs(delta) / eta` for a relative frequency error `delta` and a loss factor `eta` | derived | `1 / (omega^2 (1 + 2 delta)(1 + i eta) - omega^2)` against `1 / (i eta omega^2)` (ADR 0474 summary); measured 1.77e-2 at 2921 rad/s for `delta` 1.77e-4 |
+| Probe numbers of the bar (cutoff 32964 rad/s, A 5 and B 9 modes, the vector of B): H1 largest 0.494 at 15107 rad/s; to 2000 rad/s 5.4e-4; statics 7.5e-12 | computed | `f552-scratch/probe` on the API of 4abff5fe (ADR 0474 arithmetic 2); measured 0.494, 5.39e-4, 1.5e-12 |

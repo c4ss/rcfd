@@ -264,3 +264,116 @@ to miss (arithmetic items 2 to 4); if they do, the item is partial by this rule,
   guarantees (the diagnosis above).
 - Everything not covered by ADR 0469 stays not covered (free-interface methods, damping other than a uniform loss factor in the
   assembly, pre-stress, cyclic constraints, non-zero constraint values, reduced parts in an ordinary model: F-553).
+
+## Addendum 1: results (2026-11-14)
+
+Commits on `f552-work` from 4abff5fe: 0270649e (this registration, alone), a22284dc (the D2 digests printed at 4abff5fe by
+`sa_cms_residual_default_bits.rs`, before any library line), 7204c96d (the options in `cms.rs`, the shared
+`damped::m_orthonormalise`, the checks `tests/sa_cms_residual.rs`; then the registered run), fbccfae9 (H1R and H1R5 kept as
+known misses, limits intact; `cargo fmt` of the F-552 lines, layout only). Each registered check was run once, release profile
+(`cargo test --release -p rcfd-fem --test sa_cms_residual -- --test-threads 1`, log `f552-scratch/run1.log`; D2 with the
+existing tests of `cms` and `damped`, log `run-d2-existing.log`). No amendment was made.
+
+Library lines changed: `crates/rcfd-fem/src/cms.rs` (the module of ADR 0469: options, `modes_below`, the residual vector, its
+blocks, accessors, `expand`, the file version 2, the `Assembly` map) and `crates/rcfd-fem/src/damped.rs` lines 254 to 297 (the
+Gram-Schmidt loop of `residual_vectors` moved without change of operations into `m_orthonormalise`; D2 and the existing
+`sa_damped_residual*` tests confirm the bits).
+
+| Id | Clause | Limit | Measured | Met |
+|---|---|---|---|---|
+| D2 | a5 | `==` | 11 of 11 digests equal (and ADR 0469 D1 6 of 6) | yes |
+| D3 | a5 | `==` | A with the vectors equal to A without, same bytes; explicit off equal to `new(5)` | yes |
+| O1 | a1 | count 1; `<= 1e-10` | 1 and 1; `M_qR` 6.7e-17, 9.4e-17; `M_RR - 1` 1.1e-16, 3.3e-16 | yes |
+| O2 | a1 | `<= 1e-8` | 5.2e-12, 3.5e-12 | yes |
+| CO1 | a2 | exact | A 5 of 5, B 9 of 9; eigenvalues and omitted (33570.8, 50095.4 rad/s) equal in bits | yes |
+| C2 | a2 | `<= 1e-9` | cutoff 3e4: 3 modes on both paths, 7.0e-14; 6e4: 7 modes, 7.0e-14 | yes |
+| X3 | a2 | refused | 0, -1, NaN, inf, and a mode count with a cutoff, refused (key `cutoff`) | yes |
+| ST5 | a4 | `<= 1e-10` | 1.52e-12 | yes |
+| ST6 | a4 | `<= 1e-10` | 1.51e-12 | yes |
+| ST7 | a4 | `<= 1e-10` | 5.7e-14, 5.7e-14, 3.2e-14, 1.3e-14 | yes |
+| NC1 | a4 (control) | `>= 1e-6` | 1.39e-3 (bar), 5.04e-3 (S `mid`) | yes |
+| H1R | a3 | `<= 1e-2` | **0.494** at 15106.9 rad/s (`omega_half` 16785.4); first above 1e-2 at the resonance 2921.4 (1.77e-2) | **no** (predicted) |
+| H1R5 | a3 | `<= 1e-2` | **1.038** at 8241.0 (`omega_half` 8241.0); 0.935 at the axial resonance 8179.0; first above 1e-2 at 2801.9 | **no** (predicted) |
+| HB1 | a3 (band) | `<= 1e-2` | 5.39e-4 | yes |
+| HB2 | a3 (band) | `<= 1e-2` | 1.66e-3 (1.12e-2 without, record) | yes |
+| HR | a1, a3 | `<= 0.5` | 0.175 (cutoff), 0.240 (`m = 5`) | yes |
+| RB | a1 | `>= -1e-9`; `<= 1e-9` | smallest 1.05e-6; largest -5.1e-11 | yes |
+| SP2 | a1 | `<= 1e-13`; `<= 1e-10`; `>= 1e-12` | 0, 0; 1.3e-15; 1.37e-6 | yes |
+| F3 | format | exact / refused | header 2, bits and `==`, byte-identical, half file and header 1 refused | yes |
+| F4 | format | exact | header 1 | yes |
+| RV3 | a1 (drop) | exact | dropped; part equal | yes |
+| T2 | design | bits | bit-identical | yes |
+
+Records: `|K_qR|` over the largest `K_r` entry 2.2e-16 (cutoff) and 1.0e-15 (`m = 5`); `K_RR` 3.98e10 and 1.24e9 (the
+vector's Rayleigh frequency about 2.0e5 and 3.5e4 rad/s); to 2800 rad/s the option 4.19e-3, the cutoff alone 4.56e-3; the first
+eight frequencies with / without the vector (relative to F): 1.053e-6, 1.326e-6, 1.773e-4 / 1.774e-4, 2.167e-4, 3.376e-4,
+6.853e-5 / 6.856e-5, 4.060e-3 / 4.072e-3 (axial), 6.107e-5. Every measured number equals the probe of the registration to
+three digits except the statics (1.5e-12 against the probe's 7.5e-12: the library writes the exact zeros of `K_bR`, the probe
+formed `V^T K V` by full products).
+
+Mutations (scratch copy `f552-scratch/mut`, a git archive of fbccfae9, script `mutate.py`, logs `mutlogs/mut-MU*.log`,
+summary `mutate.log`):
+
+| Id | Caught by |
+|---|---|
+| MU1 | O1, O2, RV3 |
+| MU2 | ST5, ST6, ST7, HB2, HR |
+| MU3 | ST5, ST6, ST7, HB2, HR |
+| MU4 | CO1, HB1, HR |
+| MU5 | **not caught** (HB1 5.39e-4 to 5.62e-4, HR 0.175 and 0.240 to 0.175 and 0.242, RB largest -5.1e-11 to 0: every limit met) |
+| MU6 | RV3 |
+| MU7 | F3 (the reader refuses the file) |
+| MU8 | ST5, HB1, RB (index out of range in `Assembly::new`) |
+| MU9 | D2 (the digest of the ADR 0464 residual path) |
+| MU10 | X3 |
+
+`cargo fmt -p rcfd-fem --check`: clean. `cargo clippy -p rcfd-fem --all-targets -- -D warnings`: clean. `cargo test -p rcfd-fem
+--release`: every test binary passed (547 passed, 0 failed, 117 ignored; log `fem-all.log`). `cargo test -p rcfd-api --release
+--test baseline_hashes` (run because `damped.rs` changed) and `cargo test -p rcfd-cli --release --test docs_site`: 3 passed, 1 ignored; 2 passed.
+
+### Deviations
+
+1. **H1R and H1R5 missed, as predicted** (arithmetic items 2 and 3). Diagnosis with the measured numbers: the residual vector
+   does what it is for (statics exact, 1.5e-12; the band to 1000 rad/s 5.7 and 4.2 times better; at `m = 5` 1 percent now
+   holds to 2802 rad/s instead of 1978), but at a resonance of F the response error is `2 |delta| / eta`. At 2921.4 rad/s
+   `delta` = 1.77e-4 gives the measured 1.77e-2; near `omega_half` the modes at 14830 and 15027 rad/s have `delta` 3.5e-3 and
+   5.1e-3, giving 0.28 and 0.44 at their resonances. One percent at `eta = 0.02` needs `|delta| <= 1e-4` at every resonance
+   below half the lowest omitted fixed-interface frequency; the fixed-interface reduction gives a `delta` of order 1e-3 near
+   that bound whatever the cutoff (probe 1, 2e4 to 8e4 rad/s). The clause is not a property of the method at this loss factor.
+2. **MU5 not caught.** With the mass coupling `M_bR` set to zero, the response changes by about `omega^2 / omega_R^2` (the
+   vector's Rayleigh frequency `omega_R` is about 2.0e5 rad/s, so at most 1e-4 in the 2000 rad/s band), and most of the
+   vector's small effect on the frequencies goes away, which brings them back to the cutoff-alone values. RB bounds them from
+   one side only, so it is met. The registration expected RB, HB1 or HR to catch it; none does. Checks that would: the
+   frequencies with the vector strictly below those without (the seventh falls by 3e-3 relative with the coupling), or a
+   harmonic point at the axial resonance. Both are proposed for the follow-up below and were not added after the run.
+
+Not run: the workspace test suite (the lead's gate).
+
+### Decision
+
+**partial** by the registered rule: H1R and H1R5 (clause a3) missed at their registered run (predicted, diagnosed above), and
+MU5 not caught by a registered check. Every other check met at its registered run, no amendment.
+
+### Remaining questions
+
+1. The harmonic clause a3. Options: (a) restate it as "within 1 percent off resonance up to half the lowest omitted
+   fixed-interface frequency, and each resonance frequency within 1e-3", which this reduction can be held to; (b) keep it and
+   ask for a reduction that converges faster near the bound (a follow-up, for example Krylov enrichment of the interior load);
+   (c) state it with the loss factor, within `max(1e-2, 4 |delta| / eta)`. Recommendation: (a) in the follow-up below, and (b)
+   only if a product use case needs resonance accuracy of 1e-4 from a reduced model.
+2. Per-load residual vectors. Options: (a) one vector per `Load` entry of the part's model (needs a crate-internal single-load
+   vector in `model.rs` or `loads.rs`, shared files); (b) load patterns given by the caller in `CmsOptions`; (c) keep the
+   vector of the total load. Taken now on the maintainer's standing instruction of 2026-11-11 (take the recommendation): (c).
+   Recommendation for the future: (b) in the follow-up below (no shared file, covers harmonic loads unlike the static load).
+3. MU5. Recommendation: the follow-up registers the strict decrease of the frequencies with the vector and a point at the
+   axial resonance, which catch it.
+
+### For the lead: roadmap entries
+
+Proposed status of F-552: **partial**. New note:
+
+> Structural solver, advanced tier. Follow-up of F-430 (ADR 0469). ADR 0474, 2026-11-14: options of rcfd_fem::cms, off by default and bit-identical when off (11 digests of 4abff5fe): CmsOptions::cutoff keeps every fixed-interface mode below a frequency (dense and subspace paths, counts and eigenvalues equal in bits to the full eigen-solution), CmsOptions::residual_vectors adds the static residual vector of each part's interior load, M-orthonormalised twice against the kept modes by the ADR 0464 routine now shared from damped.rs (orthogonality 1e-16, dropped when every mode is kept); part file version 2 only with residual vectors, version 1 files unchanged. Statics of an interior load exact within 1.5e-12 (bar) and 5.7e-14 (small model) against 1.4e-3 and 5.0e-3 without; the harmonic error to 2000 rad/s 5.4e-4, and 4 to 6 times lower to 1000 rad/s than without. H1 (1 percent up to half the lowest omitted frequency) missed as predicted: 0.494 at 15107 rad/s with the cutoff 32964 rad/s, 1.04 at 8241 with five modes; at a resonance the error is 2 delta / eta and the reduced frequencies near that bound are 3e-3 to 5e-3 high, so 1 percent at loss factor 0.02 needs frequency errors of 1e-4. One mutation (the boundary-to-vector mass coupling set to zero) not caught. Follow-up for given load patterns and a restated harmonic clause.
+
+Follow-up item (number left to the lead). Title: "Craig-Bampton residual vectors of given load patterns and a harmonic acceptance at resonances", deps F-552.
+
+> Every limit not stated here is registered in the ADR before the run. The reduction of ADR 0474 takes residual vectors of load patterns given by the caller (each M-orthogonalised against the kept modes and the vectors before it). The bar of ADR 0469 with the corner load and the cutoff of ADR 0474: the harmonic response within 1 percent of the full model off resonance (every point farther than 2 eta from a frequency of the full model) up to half the lowest omitted fixed-interface frequency, each frequency of the assembly below that bound within 1e-3 of the full model's, the first eight frequencies strictly lowered by the residual vectors, a point at the axial resonance within the error 4 delta / eta of its frequency error, and a pattern per load component reproducing the statics of each component within 1e-10; without the option every result bit-identical to ADR 0474's.
