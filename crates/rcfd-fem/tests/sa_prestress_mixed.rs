@@ -791,6 +791,7 @@ fn freq(t: &CampbellTable, k: usize, j: usize) -> f64 {
 }
 
 #[test]
+#[ignore = "set-up defect of ADR 0486 (six modes cut through a crossing pair at 240 rad/s), recorded in amendment 1; corrected as h1_h3_n4_hub_with_a_shell_blade_rotating_8_modes"]
 fn h1_h3_n4_hub_with_a_shell_blade_rotating() {
     let mut c = Checks::new();
     let shell = shell_grid(R1, -CHORD / 2.0, SPAN, CHORD, 36, 12, TB, false);
@@ -825,6 +826,58 @@ fn h1_h3_n4_hub_with_a_shell_blade_rotating() {
     h3(&mut c, "mixed", &tm);
     h3(&mut c, "solid", &ts);
     let off = table(&mm, false);
+    let d = (freq(&off, 0, 3) / freq(&ts, 0, 3) - 1.0).abs();
+    c.above("N4 no stress stiffening, track 1 at 360 rad/s", d, 5e-2);
+    c.finish();
+}
+
+/// The Campbell table with `n` modes (ADR 0486 amendment 1).
+fn table_n(m: &SolidModel, stiffening: bool, n: usize) -> CampbellTable {
+    let o = RotatingOptions::new(n)
+        .modal(opts(n, 1e-10))
+        .stress_stiffening(stiffening);
+    RotatingPart::new(m, AXIS, ORIGIN, &o)
+        .unwrap()
+        .campbell(&SPEEDS)
+        .unwrap()
+}
+
+/// H1 to H3 and N4 with 8 modes (ADR 0486 amendment 1): the registered test with only the mode count changed.
+#[test]
+fn h1_h3_n4_hub_with_a_shell_blade_rotating_8_modes() {
+    let mut c = Checks::new();
+    let shell = shell_grid(R1, -CHORD / 2.0, SPAN, CHORD, 36, 12, TB, false);
+    let solid = upgrade_to_hex20(&hex_box([R1, -CHORD / 2.0, -TB / 2.0], [SPAN, CHORD, TB], [36, 12, 1]).unwrap())
+        .unwrap()
+        .0;
+    let mm = hub_model(&shell, true);
+    let ms = hub_model(&solid, false);
+    let tm = table_n(&mm, true, 8);
+    let ts = table_n(&ms, true, 8);
+    print_table("mixed", &tm);
+    print_table("solid", &ts);
+    let mut worst: f64 = 0.0;
+    for k in 0..4 {
+        for j in 0..SPEEDS.len() {
+            let d = (freq(&tm, k, j) / freq(&ts, k, j) - 1.0).abs();
+            let d = if d.is_nan() { f64::INFINITY } else { d };
+            println!("H1 track {k} speed {}: {d:.4e}", SPEEDS[j]);
+            worst = worst.max(d);
+        }
+    }
+    c.at_most("H1 max |omega_mixed/omega_solid - 1|", worst, 2e-2);
+    let inc = |t: &CampbellTable| freq(t, 0, 3).powi(2) - freq(t, 0, 0).powi(2);
+    let (im, is) = (inc(&tm), inc(&ts));
+    println!("H2 increments (Hz^2) mixed {im:.8e}, solid {is:.8e}");
+    let d = (im / is - 1.0).abs();
+    c.at_most(
+        "H2 stiffening increment of track 1",
+        if d.is_nan() { f64::INFINITY } else { d },
+        3e-2,
+    );
+    h3(&mut c, "mixed", &tm);
+    h3(&mut c, "solid", &ts);
+    let off = table_n(&mm, false, 8);
     let d = (freq(&off, 0, 3) / freq(&ts, 0, 3) - 1.0).abs();
     c.above("N4 no stress stiffening, track 1 at 360 rad/s", d, 5e-2);
     c.finish();
