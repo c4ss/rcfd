@@ -182,3 +182,78 @@ sides of the range.
 ## Open questions listed, not taken
 
 - Q1. Verification of the fitted `b` against the publication (a paper the repository does not have).
+
+## Addendum 1: results
+
+Registered runs made once (`cargo test -p rcfd-fem --release --test sa_benasciutti_tovo -- --nocapture`), on the code commit 6d9325c4.
+Two clippy and fmt forms were fixed before the run record (missing docs of three fields, two unused helper methods of the test
+copy); no limit or number changed.
+
+| Id | Quantity | Limit | Measured | Met |
+|---|---|---|---|---|
+| C1 | S, `zeta = 0.01`, `m = 3`: BT over narrow band, `\|.. - 1\|` | `<= 1e-2` | `1.6458e-2` (ratio `0.983542133`) | **NO** (ignored `c1_..._m3_known_miss`) |
+| C1b | the same, `m = 5` | `<= 1e-2` | `3.1058e-2` (ratio `0.968942097`) | **NO** (ignored `c1b_..._m5_known_miss`) |
+| C1x | ratio against `0.9835421337160092` | rel `<= 1e-5` | `2.5e-10` | yes |
+| C1z | `zeta = 0.001`, `m = 3` | `<= 1e-2` | `2.14e-3` | yes |
+| C2 | S, `m = 3`, BT over Dirlik | `<= 5e-2` | `9.92e-3` | yes |
+| C2b | T, `m = 3` | `<= 5e-2` | `5.24e-4` | yes |
+| C2c | S, `m = 5` | `<= 1e-1` | `2.42e-2` | yes |
+| C2d | T, `m = 5` | `<= 1e-1` | `7.06e-2` | yes |
+| C2x | T: `b` against `0.6484016641667036`; BT/Dirlik against `0.9994764275532475` | rel `<= 1e-5` | `4.6e-9`; `6.0e-11` | yes |
+| C3 | T: counted rate over BT rate, `\|.. - 1\|` (seed 20261114) | `<= 1e-1` | `6.27e-2` (counted `9.527921724e-8`, BT `8.966105345e-8`) | yes |
+| C3b | closed cycles | `>= 1e5` | `212925` | yes |
+| C3c | counted rate against ADR 0497 | rel `<= 1e-6` | `3.2e-11` | yes |
+| C4, C4b | all refusals (`m0`, `m2`, `Moments::default()`, `m4`, `m1`, `alpha1`, `alpha2`, both `b` out of range, `m`, `c`, table, endurance) with key and the quantity named | all | all (messages printed) | yes |
+| C5 | amplitude `k^m`; frequency `s` | `<= 1e-12` | `3.3e-16`; `0` | yes |
+| C6, C6b | `alpha2 = 1` gives narrow band, finite; `b = 1` and `b = 0` limits | `<= 1e-12` | `0` for all | yes |
+| C7 | method bit-equal to the free function and the curve form on S and T | equal bits | equal | yes |
+| B1 | existing tests unchanged; diff additions only; `baseline_hashes` | equal | see gates below | yes |
+
+Deviations: none from the registered set-up. The probe estimates held: the expected miss of C1 and C1b came out at `1.6458e-2` and
+`3.1058e-2` (estimates `1.65e-2`, `3.1e-2`).
+
+Diagnosis of the miss (not repaired): BT combines `D_NB` and `alpha2^(m-1) D_NB` with the weight `b = 0.854` on S; with
+`alpha2 = 0.942` the rainflow-bound term `0.942^2 = 0.887` (m = 3) pulls the rate `1.6` percent below `D_NB` although the spectrum
+is one narrow peak (the flat band `[0, 500]` Hz adds a broadband tail to the response, `alpha2 < 1`). The Dirlik rate is also
+below the narrow band by `0.66` percent for the same set-up, and BT is `0.99` of Dirlik. The 1 percent of the acceptance is met by
+BT only for smaller damping (C1z, `zeta = 0.001`: `0.21` percent; the probe gave `0.5` percent at `zeta = 0.005`: crossing 1 percent
+near `zeta = 0.0055`). So the clause "reduces to the narrow-band rate within 1 percent at `zeta = 0.01`" is not met by this formula
+on this band. It is not tuned (no other `b`, no peak-rate `D_NB`, no other band was run).
+
+Mutations (scratch copy `f590-scratch/mut`, own target dir, one at a time, whole `sa_benasciutti_tovo` file):
+
+| Id | Mutation | Caught by |
+|---|---|---|
+| M1 | `alpha2^m` | C1x, C2x, C2b, C2d, C3, C6b |
+| M2 | `b = (alpha1 - alpha2)/(1 - alpha1)` | the tests c1x_c1z_c2x, c2, c3, c5_c6_c7 |
+| M3 | peak rate in `D_NB` | c1x_c1z_c2x, c2, c3, c5_c6_c7 |
+| M4 | `exp(2.11 alpha1)` | c1x_c1z_c2x, c2 |
+| M5 | `1.112 -> 1.0` | c1x_c1z_c2x, c2 |
+| M6 | `alpha1 = m1/sqrt(m0 m4)` | c1x_c1z_c2x, c2, c3, c5_c6_c7 |
+| M7 | `b` clamped | c4_refusals (the `b` ranges) |
+| M8 | method passes `m2` as `m1` | c1x_c1z_c2x, c2, c3, c5_c6_c7 |
+| M9 | `alpha2 = 1` branch removed | c5_c6_c7 (C6: the 0/0 gives a refusal or NaN) |
+| M10 | `m2` refusal weakened to `m2 < 0` | **not caught**: `m2 = 0` gives `alpha1 = inf`, which the `alpha1` refusal rejects with a message that contains `m2` among the moments; equivalent at the message level, as M10 of ADR 0497. Recorded, not repaired. |
+| M11 | `alpha1 > 1` refusal removed | c4_refusals (`alpha1 > 1` accepted, rate `3.76`) |
+
+Gates: `cargo test -p rcfd-fem --release`: 866 passed, 0 failed, 240 ignored (199 test binaries ok); `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean; `cargo test -p rcfd-api --release --test baseline_hashes`: 3 passed, 1 ignored; `cargo test -p rcfd-cli --release --test docs_site`: 2 passed.
+
+Decision by the registered rule: **partial**: C1 and C1b missed (recorded as ignored known-miss tests with the limits intact), every
+other check met, M10 survived as a message-level equivalent, the other ten mutations caught.
+
+Open questions (options and recommendation):
+
+- Q1. The fitted `b` is recalled and unverified. Option: verify against the 2005 paper. Recommended: yes, before F-590 is called done;
+  the agreement with Dirlik (`5.2e-4` on T) corroborates the recalled form but cannot separate it from a close variant.
+- Q4. The acceptance clause "within 1 percent at `zeta = 0.01`" is not met by BT on the band of S (1.65 percent). Options: (a) change
+  the acceptance to 2 percent at `zeta = 0.01` and 1 percent at `zeta <= 0.005`; (b) keep it and leave the item partial; (c) a
+  different band for S (a parameter change to be registered before a new run). Recommended: (a), a registered amendment by the lead.
+- Q2, Q3 as above (case-file key and selector with F-605).
+
+## For the lead: roadmap entries
+
+Proposed status of F-590: **partial**. Note:
+
+> ADR 0524, 2026-11-14: rcfd_fem::fatigue gains the Benasciutti-Tovo broadband damage rate of a Gaussian stationary stress from m0, m1, m2, m4 (D. Benasciutti and R. Tovo, Int. J. Fatigue 27 (2005), cited from memory, the fitted weight b unverified): benasciutti_tovo_coefficients, BenasciuttiTovo, benasciutti_tovo_damage_rate and benasciutti_tovo_damage_rate_curve, and Moments::benasciutti_tovo_damage_rate; no existing item changed. PARTIAL by the standing rule: the one-mode reduction to the narrow-band rate at zeta = 0.01 is missed (1.646e-2 for m = 3, 3.106e-2 for m = 5 against 1e-2; ignored known-miss tests); it holds at zeta = 0.001 (2.1e-3). Met: BT over Dirlik 9.9e-3 (S) and 5.2e-4 (T) for m = 3 (limit 5e-2), 2.4e-2 and 7.1e-2 for m = 5 (limit 1e-1); counted damage of the ADR 0497 history (seed 20261114, 212925 cycles) within 6.27e-2 of the BT rate (limit 1e-1); refusals of non-positive m0, m2, m4, m1 < 0, alpha1 or alpha2 above 1, a weight b outside [0, 1], m, c and table or endurance curves; scaling and limits b = 0 and b = 1; ten of eleven mutations caught (M10 equivalent at message level). Limits: Gaussian zero-mean, power law without endurance limit, no case-file key (the value benasciutti-tovo to join the pending method key of F-605).
+
+> Follow-up (no new item proposed): verify the fitted weight b of Benasciutti and Tovo 2005 against the publication; amend the F-590 acceptance to 2 percent at zeta = 0.01 (1 percent at zeta <= 0.005), then the item is done.
