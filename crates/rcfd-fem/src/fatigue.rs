@@ -277,10 +277,21 @@ impl MeanStressCorrection {
             return Ok(sa);
         };
         let refuse = || {
-            invalid(
-                MEAN,
-                format!("mean stress {sm:e} at or above the strength {strength:e} ({name}): no equivalent amplitude"),
-            )
+            if sm < 0.0 {
+                invalid(
+                    MEAN,
+                    format!(
+                        "mean stress {sm:e} at or above the strength {strength:e} in modulus ({name}, with compressive credit): no equivalent amplitude"
+                    ),
+                )
+            } else {
+                invalid(
+                    MEAN,
+                    format!(
+                        "mean stress {sm:e} at or above the strength {strength:e} ({name}): no equivalent amplitude"
+                    ),
+                )
+            }
         };
         if sm >= strength {
             return Err(refuse());
@@ -737,6 +748,15 @@ pub fn rainflow_periodic(history: &[f64]) -> Result<Counts> {
     }
     let mut counts = four_point(&rot);
     let res = std::mem::take(&mut counts.residue);
+    if res.len() > 3 {
+        return Err(invalid(
+            "rainflow",
+            format!(
+                "internal error: the residue of the closed sequence has {} points, more than the three of [M, v, M] (ADR 0453)",
+                res.len()
+            ),
+        ));
+    }
     // the residue of a closed sequence started at a global extreme is [M, v, M] (ADR 0449, closed forms (i))
     for pair in res.windows(3).step_by(2) {
         counts.cycles.push(Cycle {
