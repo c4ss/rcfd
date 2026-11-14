@@ -1601,6 +1601,9 @@ impl Condensation {
     }
 }
 
+/// Roots, vectors on the kept unknowns and residuals of [`first_order_eigen`].
+type FirstOrderEigen = (Vec<C64>, Vec<Vec<C64>>, Vec<f64>);
+
 /// The roots and vectors of `(lambda^2 M + lambda D + K) x = 0` when the unknowns flagged in `massless` have a zero row and
 /// column of `M` (ADR 0504 D2). The massless unknowns keep a displacement state only: with the states `(q_m, v_m, q_0)` the
 /// problem is `A x = lambda B x`, `B = [[I, 0, 0], [0, M_mm, D_m0], [0, 0, D_00]]`, `A = [[0, I, 0], [-K_mm, -D_mm, -K_m0],
@@ -1608,13 +1611,7 @@ impl Condensation {
 /// vectors on the `na` unknowns (`x^H M x = 1`, the entry of largest modulus real and positive) and the relative residuals of
 /// the first-order problem. Refuses `"mass"` (no unknown with mass, a nonpositive mass diagonal) and `"damping"` (singular
 /// `D_00`).
-fn first_order_eigen(
-    m: &[f64],
-    d: &[f64],
-    k: &[f64],
-    na: usize,
-    massless: &[bool],
-) -> Result<(Vec<C64>, Vec<Vec<C64>>, Vec<f64>)> {
+fn first_order_eigen(m: &[f64], d: &[f64], k: &[f64], na: usize, massless: &[bool]) -> Result<FirstOrderEigen> {
     let mi: Vec<usize> = (0..na).filter(|&i| !massless[i]).collect();
     let zi: Vec<usize> = (0..na).filter(|&i| massless[i]).collect();
     let (nm, n0) = (mi.len(), zi.len());
@@ -1735,7 +1732,7 @@ fn first_order_eigen(
         if top.abs() > 0.0 {
             let phase = top.conj().scale(1.0 / top.abs());
             for v in xa.iter_mut() {
-                *v = *v * phase;
+                *v *= phase;
             }
             let xmx = form(&xa, m, &xa, na).re;
             if xmx > 0.0 {

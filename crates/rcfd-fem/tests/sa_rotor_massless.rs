@@ -190,7 +190,7 @@ fn newton_poly(c: &[f64], start: C64) -> C64 {
     for _ in 0..60 {
         let (p, d) = eval(c, s);
         let step = p / d;
-        s = s - step;
+        s -= step;
         if step.abs() <= 1e-15 * s.abs() {
             break;
         }
