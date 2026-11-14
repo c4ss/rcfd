@@ -365,3 +365,27 @@ test that fails by design, it is handled the same way by an amendment written be
 Not taken (open, for the maintainer): **the case-file key** (b4; it changes the case schema and its golden). Proposal, as ADR
 0496 open question 1 (b): a `[[layup]]` table referenced by name from a shell block; gravity, `[[centrifugal]]` and the rotating
 analysis then take the block as they take a `Shell` block, with no new key of their own. Recommendation: that form.
+
+## Amendment 1 (2026-11-14): the speed of BB3 and of the B0 rotating parts is above the loss of stiffness; written after the run of `sa_laminate_body.rs` and before the corrected run
+
+The registered run (`f591-scratch/run1.log`) printed `BB3 frequencies at 100 rad/s [NaN]` for both models: at `100 rad/s` both
+the one-ply layup and its twin report `SpeedModes::LossOfStiffness`, which the test turned into a NaN marker, so that row of BB3
+compared two equal markers and was vacuous (the other nine rows of BB1 to BB3 compared real values and are unaffected). By hand:
+the warped plate's first rest frequency is about `3.516/L^2 sqrt(D/(rho t)) = 53 rad/s` (`D = 18315 N m`, `rho t = 78.5
+kg/m^2`), so `100 rad/s` is about twice it; the speed was chosen without that estimate. The same marker sits in the two digests
+"Shell4 rotating part" and "Shell3 rotating part" of B0 (`sa_laminate_body_default_bits.rs`): their pre-stress, `K_sigma,1` and
+`M_perp` parts are real, their frequency part is the marker.
+
+Corrections (nothing above is changed; no limit changes):
+
+- `bb1_bb2_bb3_one_isotropic_ply_bits` gets `#[ignore = "record: ..."]` (the attribute only) and continues as
+  `bb1_bb2_bb3_one_isotropic_ply_bits_after_amendment_1`: the same rows, with the BB3 frequency row replaced by (i) the loss of
+  stiffness at `100 rad/s` (its speed and negative count, bits) and (ii) the frequencies and the four modes of `modes(10 rad/s)`
+  (about `0.2` of the first rest frequency), bits equal, and (iii) a check that (ii) is `SpeedModes::Modes` with four finite
+  frequencies (the row is not vacuous).
+- **B0b**: a new file `sa_laminate_body_default_bits_b.rs` with the same plates as B0 and the same rotating parts, digesting (i)
+  and (ii) above for the Shell4 and Shell3 plates (a `Shell` block). It uses only API of the base; its digests are taken by
+  running it once on a `git archive` copy of 6ee966ca (the base 70348e9f with the registration and B0, no library line of
+  F-591; `f591-scratch/b0b-base/`, its own target directory), written into the file, and then it is run on this branch. B0 stays
+  as it is.
+- The decision rule reads B0 as "B0 and B0b".
