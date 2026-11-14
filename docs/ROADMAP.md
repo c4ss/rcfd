@@ -11922,14 +11922,29 @@ fixed by the item's registration ADR before any code.
     per index at 0.4 and 0.8 omega_ref the resulting schur_eta agrees with that of ADR 0492 within 1 percent where it
     exceeds 1e-9, the cost stays below half of the dense path, and the results of ADR 0527 keep their bits.
   - note: Structural solver, advanced tier. Optional. Follow-up of F-584 (ADR 0527, 2026-11-14).
-- [ ] **F-613** A nodal temperature field against time on the nonlinear paths, with thermal strain
+- [~] **F-613** A nodal temperature field against time on the nonlinear paths, with thermal strain
   - depends on: F-592
   - acceptance: Every limit not stated here is registered in the ADR before the run. The quasi-static driver and the
     nonlinear transient integrator take a nodal temperature field against time (a table of fields, the step-end value)
     with the thermal strain of the material's expansion; a uniform field gives the bits of ADR 0526 without expansion,
     and a free thermal expansion of an unconstrained elastic cube under a temperature step equals alpha dT within 1e-12.
     Models without a temperature keep their bits.
-  - note: Structural solver, advanced tier. Optional. Follow-up of F-592 (ADR 0526, 2026-11-14).
+  - note: Structural solver, advanced tier. Optional. Follow-up of F-592. PARTIAL. ADR 0534, 2026-11-14: the
+    quasi-static driver and the nonlinear transient integrator take a nodal temperature field against time
+    (thermal::TemperatureFieldHistory: a reference temperature and nodal fields at times, each node by the rule of
+    LoadTable::value; TimeSteppingOptions::temperature_field, NlTransientOptions::temperature_field, taken at the end
+    time of every attempt or sub-step) with the multiplicative thermal stretch F_th = (1 + alpha dT) I (E_e = (E -
+    E_th)/theta^2, S = theta S_e, D = D_e/theta), the point temperature by the element's shape functions (exact for a
+    uniform element), the damping tangent at the field without thermal strain, the thermal force in the residual
+    reference; refused with shells, BBar blocks, the energy-momentum step and for the strain energy. Met: free expansion
+    of a 3-2-1 cube under a step of 100 K at alpha = 1e-4 equal to alpha dT X within 3.5e-18 (the additive
+    Green-Lagrange form would miss by 5e-5); the held cube's stress -E/(1 - 2 nu)(theta^2 - 1)/(2 theta) within 7.7e-16;
+    the consistent tangent (4.2e-11); the small-strain limit against the linear thermal path on Hex8 and Tet10 (5.4e-7,
+    1.2e-6, order 2.000); a uniform field without expansion gives the bits of ADR 0526 on the driver and the integrator;
+    the integrator at the thermal equilibrium (2.7e-18) and under a non-uniform field step bit-equal to a restart;
+    default bits (12 digests) and baseline hashes unchanged; 13 mutations caught. Known miss: the full step from u = 0
+    halves twice (indefinite tangent at the prestressed start, FE1c); follow-up proposed (a thermal predictor). No
+    case-file key.
 - [ ] **F-614** A non-equilibrium quadratic displacement test for the error-estimate samples of an opted Hex8
   - depends on: F-588
   - acceptance: Every limit not stated here is registered in the ADR before the run. A non-equilibrium quadratic
