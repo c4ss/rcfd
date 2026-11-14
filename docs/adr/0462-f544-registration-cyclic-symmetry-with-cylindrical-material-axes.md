@@ -313,3 +313,119 @@ Relative frequencies `|f_a/f_b - 1|` (`f = sqrt(lambda)`); displacements `max |u
   (D2). A temperature field that is not the same in every sector (a harmonic field) is not provided.
 - No library helper expands a nodal field to the full rotor (D4). The extended boundaries of ADR 0456 (axis nodes,
   interpolated nodes) are not part of the checks (`full_rotor` refuses them).
+
+## Addendum 1: results (2026-11-14)
+
+Registered runs at commit 5daba55b (library code and tests committed before any run, rustfmt applied before the commit),
+release profile, each file run once: `sa_ortho_cyclic_default_bits` (log `f544-scratch/run-b1.log`), `sa_ortho_cyclic` (log
+`f544-scratch/run-sa_ortho_cyclic.log`, 7 tests, `--test-threads=2`) and `sa_ortho_rotating` with the copy of D7 (log
+`f544-scratch/run-r4.log`). No amendment was made. Then the existing tests that cover the changed lines (the `rcfd-fem`
+lib tests and 49 test files: every file reaching the cyclic paths, the rotating part and sector, the transformation path of
+`check_transformation_model` or the per-point materials, among them `si_cyclic*`, `si_rotating*`, `si_mpc`, `si_modal_mpc`,
+`si_prestress_mpc`, `si_transient_mpc`, `sa_tie*`, `sa_joint*`, `sa_shell3`, `sa_ortho`, `sa_ortho_modal*`, `sa_mat_table`,
+`sa_scaffold*`, `sa_ortho_default_bits`, `sa_ortho_rotating_default_bits`): 50 result blocks, 312 passed, 0 failed, 76
+ignored (log `f544-scratch/run-fem-covering.log`).
+
+| Check | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| F1 `ORTHO_C`, D: count; frequencies; pair splits; expanded residual | equal; `<= 1e-8`; `<= 1e-8`; `<= 1e-7` | 33 = 33; 3.62e-14; 3.47e-14; 1.77e-11 | yes |
+| F1t `TAB_O` with its field, the same | as F1 | 31 = 31; 6.45e-14; 3.96e-14; 9.94e-13 | yes |
+| F2 `ORTHO_C`, D, `k = 0 .. 6`: `e_u` | `<= 1e-8` | 6.20e-14 (largest, `k = 2`) | yes |
+| F2t `TAB_O` with its field | `<= 1e-8` | 1.34e-13 (largest, `k = 0`) | yes |
+| F3 `ORTHO_C` rotating sector at 0, 0.5, 0.9 `omega_ref` (`omega_ref` = 1355.887 rad/s): count; frequencies; Rayleigh quotients | equal; `<= 1e-8`; `<= 1e-8` | 33 = 33 at each speed; 3.62e-14, 2.50e-14, 6.0e-15; 5.43e-14, 7.91e-14, 2.07e-14 | yes |
+| F3t `TAB_O` with its field (`omega_ref` = 1309.344 rad/s) | as F3 | 31 = 31 at each speed; 6.45e-14, 3.42e-14, 6.02e-14; 5.12e-14, 7.35e-14, 1.30e-13 | yes |
+| W1 `ORTHO_C`, DS whirl at 0.4, 0.8 `omega_ref` (1361.292 rad/s): count; frequencies | equal; `<= 1e-8` | 252 = 252 at both; 5.82e-14, 5.88e-14 | yes |
+| I1 SR modal harmonic, `ISO_C` against `ISO` | `<= 1e-12` | 4.0e-15 | yes |
+| I2 SR static harmonic | `<= 1e-12` | 5.7e-15 | yes |
+| I3 SR rotating sector at 0.5 `omega_ref` | `<= 1e-12` | 2.9e-15 | yes |
+| I4 SR6 sector whirl at 0.4 `omega_ref` | `<= 1e-12` | 1.75e-14 | yes |
+| T1 `TAB_U` against `ISO(E(443))`: modal; static; rotating; unit pre-stress; whirl | `<= 1e-12` each | 0; 0; 0; 0; 0 | yes |
+| S3 `TAB_OA`, `k = 0` with the thermal load against `solve_static` (max `|u|` 2.41e-3 m) | `<= 1e-10` | 0 | yes |
+| A1 axis `(0, 0, -1)`; origin `(0, 0, 0.3)`: modal and static at `k = 1` | equal as numbers | equal; equal | yes |
+| A2 axis `(0, 1e-11, 1)` solves | solves | solves | yes |
+| R1 six materials, nine entries | refused as stated | 54 of 54 | yes |
+| R2 buckling and the integrator with `ORTHO_C` | refused as stated | 2 of 2 | yes |
+| R3 a temperature field without a table, `ISO` and `ORTHO_C` | refused, key `"loads"` | 2 of 2 | yes |
+| R4 `r3_paths_not_opened_after_f544` | as stated | 31 of 31 rows | yes |
+| B1 23 digests of main ea76abd8 | `==` | 23 of 23 | yes |
+| NC1 full rotor with `Fixed(I)` against the sector of `ORTHO_C` | `> 1e-2` | 0.985 | as expected |
+| NC2 full rotor with the axes through `(0.05, 0, 0)` | `> 1e-4` | 2.33e-2 | as expected |
+| NC3 static full rotor with `Fixed(I)` at `k = 1` | `> 1e-2` | 0.789 | as expected |
+
+Reading. A sector of the orthotropic material with cylindrical axes about the cyclic axis gives the spectrum of the full
+rotor of the same material to 3.6e-14 (33 eigenvalues below the cut-off, every harmonic index), its static harmonic
+solutions to 6.2e-14, its rotating modes up to 0.9 of the lowest frequency to 7.9e-14 and its whirl frequencies (252 of
+them) to 5.9e-14: the same discrete problem, as D1 derives, at the rounding measured for the isotropic disc by ADRs 0386,
+0395, 0407 and 0411. A tabulated material on the same axes, with a temperature field that varies over the radius and the
+height, does the same (1.3e-13 at most). Read the same sector as global fixed axes, and the full rotor differs by 98 percent
+in frequency and 79 percent in displacement (NC1, NC3); move the axes 0.05 off the cyclic axis and it differs by 2.3 percent
+(NC2): the coincidence test refuses what would otherwise be a different rotor. On the stocky ring the isotropic constants in
+cylindrical axes reproduce the isotropic results to at most 1.8e-14 on the four paths, as the probe predicted (2.2e-14 per
+ulp); a uniform table gives the bits of the isotropic material at `E(443)`. The thermal load of a table's expansion given
+in the cosine part at `k = 0` gives the bits of the static solve with the field (S3), so taking the field as the state and not
+the load (D2) loses nothing at `k = 0`.
+
+### Mutations (scratch copy `f544-scratch/mut` of commit 5daba55b, script `f544-scratch/mutate.py`, `sa_ortho_cyclic` and the copy R4 per mutation, logs `f544-scratch/mut_Mu*.log`)
+
+| Mutation | Caught by |
+| --- | --- |
+| Mu1 `check_cyclic_axes` returns `Ok` | R1 (54 rows: the sector solves or fails later), R4 (the `Fixed(I)` cyclic rows) |
+| Mu2 the origin ignored | R1 (the nine rows of the origin `(0.05, 0, 0)`) |
+| Mu3 the direction ignored | R1 (the 18 rows of the tilts `(0, 0.1, 1)` and `(0, 1e-9, 1)`) |
+| Mu4 the origin by its full distance | A1 (the origin `(0, 0, 0.3)` refused) |
+| Mu5 the direction with its sign | A1 (the axis `(0, 0, -1)` refused) |
+| Mu6 the thermal load added to the cosine part | S3 (1.0 against 1e-10: the thermal displacement doubled) |
+| Mu7 a temperature field accepted without a table | R3 (both rows) |
+| Mu8 `stiffness_with` at `k > 0` for a per-point material | F1, F3 (the rest modes refused), I1, A1, R4 (the sector's `modal_analysis_harmonic`) |
+
+Eight of eight caught.
+
+### Deviations and what was not run
+
+- None in the registered runs: every check ran once at 5daba55b and was met; no amendment.
+- Under-specified in D8 and fixed in the code before the run, recorded here: the interior target of the sine-part nodal
+  force on SR is on the top face `z = 0.25` (D has `z = 0.1`, its top face), at radius 0.75.
+- The probe of arithmetic 2 was a temporary test file, deleted before the registration commit; its source and logs are in
+  the scratch folder.
+- Not run: the whole workspace (the lead's gate); `baseline_hashes` of `rcfd-api` (no `rcfd-fv` or `rcfd-api` source changed;
+  the default paths of `rcfd-fem` are covered by B1 and the bit records of ADRs 0452, 0457 and 0459, which pass); the
+  `docs_site` test (no documentation page changed). `cargo fmt -p rcfd-fem --check` and `cargo clippy -p rcfd-fem
+  --all-targets -- -D warnings` pass (logs `f544-scratch/fmt.log`, `clippy.log`).
+
+### Decision by the registered rule
+
+**Done**: every registered check (F1 to F3t, W1, I1 to I4, T1, S3, A1, A2, R1 to R4, B1) was met in its single registered
+run, NC1 to NC3 came out as expected, no check needed an amendment, and every mutation was caught. Clause (a4) holds with a
+45-fold margin on the stocky ring chosen from the probe. On the thin disc D a one-ulp change moves the same quantities by
+2.2e-13, which is why the ring was chosen (arithmetic 2); the disc carries the sector-against-full-rotor checks.
+
+### Remaining questions
+
+1. Buckling and the transient integrator with a cyclic constraint and coaxial cylindrical axes stay refused (D6). Options: (a)
+   open them through `check_cyclic_axes` with a sector-against-full-rotor check of their own (index 0 only: the buckling
+   factors and the transient of a load that repeats in every sector); (b) leave them refused. Recommendation (b) until a fan
+   case needs them: the fan rotor is analysed by its harmonics and its rotating modes, both opened.
+2. `prestressed_modes` on the transformation accepts a cyclic constraint with either variant and any axes (finding 5, a gap
+   since ADR 0457). Options: (a) a small follow-up adds `check_cyclic_axes` there (other axes refused by name, coaxial axes
+   kept with a sector-against-full-rotor check of the pre-stressed modes); (b) leave it. Recommendation (a): today a sector
+   with `Fixed` axes gives pre-stressed modes of no actual rotor, without a warning.
+3. `PerElement` axes on a sector (D1). Options: (a) accept them as the triads of sector 0 with the copies rotated, the full
+   rotor's caller rotating them; (b) keep refusing. Recommendation (b): the reading is ambiguous and no current case needs it.
+
+## For the lead: roadmap entries
+
+Proposed status of F-544: **done**.
+
+> Structural solver, advanced tier. ADR 0462, 2026-11-14: the cyclic harmonic modal analysis, the static harmonic solve and the rotating sector (modes and whirl), with the index-0 paths on the transformation, take the orthotropic and tabulated materials of ADR 0452 when every material with its own axes has cylindrical axes about the cyclic constraint's axis and origin (either sense, within 1e-10; derived: such axes make the material the same in every sector); Fixed, PerElement and other cylindrical axes are refused by name on each of these paths (54 rows), and buckling and the transient integrator keep refusing a cyclic constraint with either variant; a table's temperature field on the static harmonic solve gives its stiffness, not a thermal load. Sector against full rotor (disc of 12 sectors, E_r/E_theta = 14): harmonics 3.6e-14 (33 eigenvalues), static harmonic solutions 6.2e-14, rotating modes up to 0.9 of the lowest frequency 7.9e-14, whirl frequencies 5.9e-14 (252); with a table and a temperature field over radius and height 1.3e-13; the same sector read as fixed axes differs by 98 percent. Isotropic constants in cylindrical axes on a stocky ring (chosen by a one-ulp probe, 2.2e-14 per ulp; the thin disc moves 2.2e-13 per ulp): modal, static, rotating and whirl within 1.8e-14; a uniform table gives the bits of the isotropic material. Default paths bit-identical (23 digests of main ea76abd8). Eight of eight mutations caught. Files mat_ortho.rs, cyclic.rs, rotating.rs, mpc.rs; tests sa_ortho_cyclic.rs, sa_ortho_cyclic_default_bits.rs; sa_ortho_rotating r3_paths_not_opened_after_f542 recorded and copied.
+
+Note of F-542 (sentence to append):
+
+> Follow-up F-544 (ADR 0462, 2026-11-14) opened the cyclic harmonic paths and the rotating sector to cylindrical axes about the cyclic axis (remaining question 1); buckling and the transient integrator with a cyclic constraint stay refused.
+
+Note of F-537 (sentence to append):
+
+> Question 3 answered by F-544 (ADR 0462, 2026-11-14): a cyclic constraint with cylindrical axes about its own axis is taken by the cyclic harmonic paths and the rotating sector; other axes stay refused by name.
+
+Follow-up item (id by the lead), title "Pre-stressed modes with a cyclic constraint and per-point materials", deps F-544:
+
+> Every limit not stated here is registered in the ADR before the run. The pre-stressed modes on the transformation refuse a cyclic constraint with an orthotropic or tabulated material by name unless every material with its own axes has cylindrical axes about the cyclic axis and origin; with such axes the index-0 pre-stressed modes of a sector match the full rotor of the same material and pre-stress within registered limits; default paths bit-identical.
