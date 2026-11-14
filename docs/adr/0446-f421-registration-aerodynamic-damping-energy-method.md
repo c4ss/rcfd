@@ -388,3 +388,32 @@ against `-3.6e-3` at `N = 400`). The time-step extrapolation works (orders 0.96,
 `+4.8e-3` (D4). The remaining candidate is D3's end effect (the piston's scraper corners and the entrance from the plug), which
 D3 estimated below `1.5e-2` by an order-of-magnitude argument: wrong by a factor of about 5 for the real part at `Wo = 5`, where
 the real part is only a sixth of the impedance. An unregistered diagnosis at `L_f = 200 h` (`N = 400`) is reported in the addendum.
+
+## Amendment 3 (2026-11-14, written after amendment 2 and two unregistered diagnoses of W5's miss, before any corrected run)
+
+**Diagnosis 1 (length).** One unregistered run of W5's set-up at `N = 400` with the channel twice as long (`L_f = 200 h`, 240
+cells, `Expansion(21)`, log `f421-scratch/diag_length.log`): `Z = 2.20061 + 11.35023 i` against `1.10128 + 5.67472 i` at `100 h`.
+The end part `2 Z(100 h) - Z(200 h) = 0.0020 - 0.0008 i` is 0.2 % of the real part: D3's end effect is small, as estimated, and
+not the cause. The part per length, `Z(200 h) - Z(100 h) = 1.0993 + 5.6755 i`, is still `+6.9 %` (real) above the model of D4 at
+`N = 400` (`1.0283 + 5.6802 i`): the developed flow itself dissipates too much.
+
+**Diagnosis 2 (the 2D reduction).** Unregistered runs of the fast channel QF at `N = 100` (code kept in
+`f421-scratch/diag_qf_test.rs`): real part `3.3926` as QF; with `n_outer = 3` or `10` (PIMPLE iterations) `3.3961`; without the
+Rhie-Chow transient correction `3.3927`; with the **default zero-gradient** condition on the `z` planes instead of `Symmetry`
+`3.0318`, against the model's `3.0041` (`+0.9 %`, of the size of the ends at `20 h`). The imaginary part is unaffected (`1.079`
+against `1.084` and `1.093`). So the `Symmetry` condition on the two planes of the one-cell-deep reduction adds a dissipation of
+about `+13 %` of the real part on QF (8 cells across) and about `+7 %` on W5 (40 cells); it is not neutral in this solver, which
+D6 assumed it is (not located in `rcfd-fv`, which this item does not edit). It is a defect of the set-up: the planes are meant to
+remove the third direction, and the zero-gradient condition does that here (the problem has no `z` velocity; the faces of the
+planes move in their own plane and sweep no volume).
+
+Remark for the lead: F-401's VS miss (ADR 0434, a viscous effect proportional to `nu` on a plug that should have none) had
+`Symmetry` side walls; this diagnosis suggests a cause there too (not tested here).
+
+**Correction.** Every corrected channel run uses the default zero-gradient condition on `zmin` and `zmax` (no condition set),
+everything else as D6 and amendment 2: **W5c** (`n_y = 40`, `N = 100, 200, 400`, `C = 6`, the registered levels; NC1 and NC2
+repeated on it), **W1c** and **LFc** (amendment 2's levels and cells). The limits are unchanged. Estimates (model of D4 plus the
+ends measured above, 0.2 % at `Wo = 5`): W5c real `+5.0e-3 + 2e-3`, imaginary `-1.4e-3`; W1c `-7.5e-3`, `-5.7e-3`; LFc `-1.37e-2`
+(each with the ends, not measured at `Wo = 1` and `0.25`, below 1 % by diagnosis 1's size). `w5_womersley_5_known_miss` stays with
+the registered set-up (amendment 2). QF keeps its registered set-up (`Symmetry`; met, a test of the code path, not of the
+dissipation). W5 counts as a miss of the registered run; W5c, W1c and LFc, if met, count as met only after amendments 2 and 3.
