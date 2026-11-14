@@ -302,3 +302,77 @@ real root `-10109`, relative shift `mu_p |s|/c_p`-like, larger than the `5e-10` 
 of the first-order solver. The registered estimates of A2 and B1r were taken from the complex mode alone and were too small;
 the limits are not changed. Both numbers are inside the acceptance's own `1e-6`; the decision rule below still counts them as
 misses, so the status is partial unless the lead reads the acceptance's `1e-6` as the binding limit (stated in the addendum).
+
+## Addendum 1: results
+
+Written 2026-11-14 after the runs. Code: `rcfd_fem::rotor::RotorModel::whirl_first_order` (one new public method) and the private
+`first_order_eigen`, `assemble`, `whirl_core` in `crates/rcfd-fem/src/rotor.rs`: `whirl_with` now calls `whirl_core(.., false)`
+and the tail of the old body moved to `assemble` with no change of arithmetic (B1 and the existing rotor tests are the
+evidence). Tests: `crates/rcfd-fem/tests/sa_rotor_massless.rs` (12 tests, 7 run by default, 5 ignored records),
+`sa_rotor_massless_default_bits.rs` (digests recorded at b7bffcac in a commit before any library change), and the unit test
+`rotor::first_order_tests::u1_dense_first_order_routine`. Each registered run was made once; the numbers of the misses were
+read again by running the ignored records once (same numbers). Probe before the registration: disclosed above.
+
+| id | check | limit | measured | met |
+|---|---|---|---|---|
+| B1 | 9 digests of `whirl` (two-disc rotor, pedestal without damper, Jeffcott with damper, the refusal text) at b7bffcac, unchanged; `whirl_first_order` of the three no-massless models equals `whirl` in 7 cases | `==` | equal | met |
+| B2 | whole `cargo test -p rcfd-fem --release` (154 test results ok, 0 failed), `baseline_hashes` (3 passed, 1 ignored), `docs_site` (2 passed) | pass | pass | met |
+| A1 | A, roots against the cubic, spin 0 and 500 | `<= 1e-10`, count 8 | `7.0e-16`, 8 | met |
+| A2 | A, roots against the quartic of the 1e-9 model | `<= 1e-8` | `1.7672e-8` (real root `-1696.9`) | **missed**, `a2_..._known_miss` |
+| A3 | A, roots against `whirl` of the 1e-9 model (acceptance as worded) | `<= 1e-6` | `2.0194e-6`; spurious ratio `5.9e7` | **missed** (as the probe predicted), `a3_..._known_miss` |
+| A4 | A, 2 modes, `omega`, `growth`, damping ratio against the cubic; one forward and one backward | `<= 1e-10` | `7.0e-16`, 1 + 1 | met |
+| P1 | polish reproduces the quartic (first run) | `<= 1e-10` | `1.1561e-9` (reference cancellation) | defective set-up, amendment 1, record `p1_..._defective_tilt_reference` |
+| P1b | the same with the stable tilt root | `<= 1e-10` | `1.8e-15` | met |
+| B1r | B, roots against the polished 1e-9 model, 0, 300, 900 rad/s | `<= 1e-7` | `3.2131e-7`, `3.2136e-7`, `3.2175e-7` (real root `-10109`; linear in `mu`: `3.2e-8` at 1e-10, `3.2e-9` at 1e-11) | **missed**, `b1r_..._known_miss` |
+| B2r | B, roots against `whirl` of the 1e-9 model (acceptance as worded) | `<= 1e-6` | `3.70e-7`, `3.48e-7`, `3.22e-7` | met |
+| B3 | B, mode count 8 against 8, equal senses | all equal | equal at the three speeds | met |
+| B4 | B, `1 - MAC` of the mode shapes | `<= 1e-6` | `6.8e-13`, `7.1e-13`, `6.0e-14` | met |
+| C1 | residual of every mode in the original unknowns, A (2 speeds) and B (3 speeds) | `<= 1e-10` | `2.2e-17` (A), `8.2e-17` (B) | met |
+| C2 | first-order residual of every mode | `<= 1e-10` | `2.3e-18` (A), `1.7e-18` (B) | met |
+| U1 | dense routine, 4 unknowns with all coupling blocks, 7 roots | `<= 1e-10`, count 7 | `5.1e-16`, 7 | met |
+| N1 | undamped pedestal against the damped cubic | `>= 1e-2` | `6.09e-2` | met |
+| N2 | `c_p` + 0.1 percent against the nominal cubic | `>= 1e-5` | `6.17e-5` | met |
+| N3 | mass ratio 1e-5 against the first-order roots / 1e-9 against them | `> 1e-6` / `<= 1e-8` | `1.77e-4` / `1.7672e-8` | first half met, second half **missed** (same number as A2), `n3_..._known_miss` |
+| X1 | `speed` (negative, NaN), `damping` (R1), `mass` (R2), `whirl` on A still `mass` | keys | all as registered | met |
+
+Mutations (scratch copy `f562-scratch/mut`, its own `CARGO_TARGET_DIR`; cargo stops at the first failing test binary, so only
+the first catcher is listed): MU1 (sign of `K_mm`), MU2 (`K_m0` dropped), MU4 (`D_m0` dropped), MU5 (no `tau`): caught by U1;
+MU3 (`D_00` transposed): caught by `b_tests_against_the_1e9_model` and B2r; MU6 (massless indices reversed): caught by A1/A4/C1
+and B; MU7 (singular-`D_00` refusal removed): caught by X1; MU8 (first-order path always taken): caught by the bits test. All
+eight caught. MU9 (the spurious-root modulus test of the matching helper) was not run: it is a test helper guarded by the
+finiteness assertion; declared untested.
+
+**What the numbers say.** The formulation is right to rounding: against the closed form of the massless model (A1, A4) it
+agrees to `7e-16`, and its eigenpairs satisfy the original quadratic on all unknowns including the condensed and massless ones
+to `1e-16` (C1). Against the 1e-9 model, the first-order roots differ by the truncation of the 1e-9 model itself, `1.8e-8` in A
+and `3.2e-7` in B, linear in the pedestal mass (diagnosed; the registered estimates `5e-10` and `1e-9` took the complex mode
+only and were too small, a registration error, limits not changed). Both are inside the acceptance's own `1e-6`. Against the
+roots of the existing `whirl` on the 1e-9 model: B meets `1e-6` (`3.7e-7`), A misses it (`2.0e-6`) because the existing
+solver's Cholesky form loses accuracy on a mass of `2e-8` (the degenerate partner of the pair is off by `2e-6`; the exact
+references show the formulation is not at fault).
+
+**Decision by the registered rule: partial.** A2, B1r, the second half of N3 and A3 are missed with their limits intact; the
+acceptance's `1e-6` is met against the exact references (A: `1.8e-8`, B: `3.2e-7`) and against the existing solver for B, and
+missed against the existing solver for A. If the lead reads the acceptance clause as "within 1e-6 of the exact 1e-9 model", it
+is met and the status can be done (the registered tighter limits were estimates, not the acceptance). Defaults are
+bit-identical (B1, B2, `baseline_hashes`).
+
+Not run: `campbell`, harmonic and unbalance responses, critical speeds with massless damped unknowns (not part of the method,
+see Limits); an unstable pedestal case; a case-file key (none added).
+
+Open questions with recommendations (the registration's three stay; additions):
+
+4. **Status.** Recommendation: partial as registered, with the note below stating that the acceptance's 1e-6 against the exact
+   1e-9 model is met; the lead may mark done.
+5. **Improve the existing solver on a nearly singular `M`** so that `whirl` of the 1e-9 model reaches `1e-6` on A (scaling of
+   the Cholesky congruence by the diagonal of `K`): out of scope, it changes `whirl` and its bits; a follow-up only if wanted.
+6. **Responses and Campbell with massless damped unknowns.** Recommendation: `harmonic_response` already solves the dynamic
+   stiffness and needs only a check; `campbell` needs the first-order path in the tracker; a follow-up if a model asks.
+
+## For the lead: roadmap entries
+
+Proposed status: partial.
+
+> Structural solver, advanced tier. PARTIAL. F-562 (ADR 0504, 2026-11-14): RotorModel::whirl_first_order keeps the damped massless unknowns of a rotor (a pedestal as a ground bearing on a massless station) as displacement-only states, a generalized problem of size 2 n_m + n_0; it agrees with the closed-form cubic of the massless-pedestal Jeffcott model to 7e-16 and satisfies the original quadratic on all unknowns to 1e-16, a gyroscopic anisotropic cross-coupled model included. Against the 1e-9 pedestal-mass model the roots differ by 1.8e-8 and 3.2e-7 (exact references: the quartic and a bordered Newton polish), the truncation of that model (linear in the mass), inside the acceptance's 1e-6; against the existing whirl on the 1e-9 model 3.7e-7 on the gyroscopic model and 2.0e-6 on the Jeffcott model (the existing solver's loss of accuracy on a mass of 2e-8). Registered tighter limits A2 (1e-8), B1r (1e-7), the second half of N3 and A3 (1e-6) recorded as ignored known-miss tests; whirl itself still refuses a massless damped unknown; models without them bit-identical, baseline_hashes unchanged.
+
+> Follow-up (none proposed as a new item): campbell and critical speeds with massless damped unknowns, only if a model asks.
