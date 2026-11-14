@@ -8601,7 +8601,8 @@ fixed by the item's registration ADR before any code.
     non-positive thickness, NaN angle and non-ply materials refused naming the ply (and the block from a model). Shell3,
     the corotated Newton path, buckling and pre-stress, gravity, centrifugal and nodal body forces refuse a layup naming
     a follow-up of ADR 0496. Default bits unchanged (11 digests), baseline hashes unchanged; thirteen of thirteen
-    mutations caught. No case-file key (open question). Follow-up: layups under body loads and pre-stress.
+    mutations caught. No case-file key (open question). Follow-up: layups under body loads and pre-stress. Follow-up
+    F-591.
 - [ ] **F-429** Fracture parameters: J-integral by the domain form, stress intensity factor, crack-growth life
   - depends on: F-408, F-374, F-376, F-389
   - acceptance: Every limit not stated here is registered in the ADR before the run. Centre crack of half-length a in a
@@ -11364,3 +11365,13 @@ fixed by the item's registration ADR before any code.
     counted damage of the synthesised history of ADR 0497 lies within 10 percent of it; a non-positive m0 or m2 is
     refused.
   - note: Structural solver, advanced tier. Optional. Follow-up of F-566 (ADR 0497, 2026-11-14).
+- [ ] **F-591** Laminated Shell4 under body loads and pre-stress (gravity, centrifugal, nodal body force, buckling and spin softening of a layup)
+  - depends on: F-428, F-420
+  - acceptance: Every limit not stated here is registered in the ADR before the run. Gravity and the centrifugal load on
+    a Layup block take the consistent load int N_i (sum rho_k t_k) b dA and the moment of the first mass moment; a
+    one-ply isotropic layup gives the bits of its Shell twin for every such load; a rotating [0/90]s strip clamped on
+    the axis has the radial membrane force rho_m Omega^2 (L^2 - r^2)/2 within 1e-8 and the flap frequency of the
+    spinning strip within 2 percent of the Southwell form with the layup's D11; the buckling load of a simply supported
+    [0/90]s plate under uniaxial compression is pi^2 (D11 + 2 (D12 + 2 D66) + D22)/a^2 within 2 percent with 16 x 16
+    elements.
+  - note: Structural solver, advanced tier. Follow-up of F-428 (ADR 0496, 2026-11-14).
