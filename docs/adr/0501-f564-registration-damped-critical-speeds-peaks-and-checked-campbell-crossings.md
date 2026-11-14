@@ -199,3 +199,67 @@ with the number). **Todo** if the library change breaks B1 or B2 (it is then rev
    ever asked.
 3. **Half-power damping estimate.** The inverse problem (estimating `zeta` from the peak width) is not part of F-564;
    recommendation: a follow-up only if a measured response is to be compared.
+
+## Addendum 1: results
+
+Written 2026-11-14 after the runs. Code: `rcfd_fem::rotor::{ResponsePeak, RotorCrossing}`, `RotorModel::{unbalance_peaks,
+campbell_crossings}` (two new public methods, nothing existing changed). Tests `crates/rcfd-fem/tests/sa_rotor_peaks.rs` and
+`sa_rotor_peaks_default_bits.rs` (B1 digests recorded at 059d2cb6 in a commit before any library change, passing unchanged
+after it). Each registered run was made once. No probe was run before the registration.
+
+| id | check | limit | measured | met |
+|---|---|---|---|---|
+| B1 | 9 digests of model G outputs at the base | `==` | equal | met |
+| B2 | whole `cargo test -p rcfd-fem --release` (152 test binaries, 0 failed), `baseline_hashes` (3 passed, 1 ignored), `docs_site` (2 passed) | pass | pass | met |
+| P1 | Q peak speed, zeta 0.05 to 0.3, against `w_n/sqrt(1 - 2 zeta^2)` | `<= 1e-6` | `4.4e-9` | met |
+| P2 | peak amplitude against `e/(2 zeta sqrt(1 - zeta^2))` | `<= 1e-6` | `4.4e-16` | met |
+| P3 | one forward peak per window, four zeta | count 1 | 1 each | met |
+| P4 | peak speed at unbalance angle 0.7 | `<= 1e-6` | `1.6e-9` | met |
+| P5 | constant-force peak against `w_n sqrt(1 - 2 zeta^2)`, zeta 0.1, 0.3 | `<= 1e-6` | `4.8e-9` | met |
+| N1 | constant-force closed form differs from the unbalance peak | `> 1e-3` | `5.0e-3` (zeta 0.05) to `1.8e-1` | met |
+| N2 | `w_n` differs from the peak | `> 1e-3` | `2.5e-3` (zeta 0.05) to `9.4e-2` | met |
+| N3 | zeta 0.8: no peak | count 0 | 0 | met |
+| K1 | Q zeta 0: two crossings equal `w_n` (closed form) and `critical_speeds()[0]` | `<= 1e-6` | `2.2e-16` both | met |
+| K2 | Q zeta 0.1, 0.3: crossings against `w_n sqrt(1 - zeta^2)`; differ from `w_n` and from the peak | `<= 1e-6`; `> 1e-3` | `4.4e-16`; `>= 5.0e-3`, `>= 1.5e-2` | met |
+| K3 | G: two forward crossings against the two forward critical speeds (224.318233767, 773.425670398 rad/s) | count equal; `<= 1e-6` | `6.3e-14` | met |
+| K3i | interpolated crossings of the existing `WhirlCampbell::crossings(1)`, same grid | recorded | `2.3e-9`, `1.5e-7` | recorded (smaller than the estimate `1e-4` to `1e-3`: the 41-point grid is fine enough) |
+| K4 | residual `|omega - order Omega|/Omega` of every crossing | `<= 1e-9` | `2.7e-16` (Jeffcott), `3.4e-13` (G, orders 1 and 2) | met |
+| K5 | G order 2: three forward crossings, each below the order 1 crossing of its track | `<= 1e-9`; below | residual `3.4e-13`; 112.13, 377.04, 697.41 rad/s | met |
+| X1 | 8 refusals with their keys | each | refused | met |
+
+Physics: the wording of the acceptance matches the solver's excitation. The peak speed of the unbalance response is `w_n /
+sqrt(1 - 2 zeta^2)` (found to 4.4e-9 at the worst zeta, 0.05), the constant-force response peaks at `w_n sqrt(1 - 2 zeta^2)` (P5,
+4.8e-9), the damped crossing is at `w_n sqrt(1 - zeta^2)` (K2); the three are separated by 5e-3 to 1.4e-1 in the four zeta of
+the run. The peak speed error `4.4e-9` is the `sqrt(eps)` limit of the golden-section search, as estimated (`<= 1e-8`).
+
+Mutations (scratch copy `f564-scratch/mut`, own target dir `target-f564-mut`; script `f564-scratch/mutate.py`):
+
+| id | caught by |
+|---|---|
+| MU1 grid maximum, no refinement | P1, P2, P4 |
+| MU2 golden section keeps the left interval | P1, P2, P4, N1 (zeta 0.05) |
+| MU3 interpolated crossing, no bisection | K4 (gyroscopic) only: K3 is met by the interpolated crossing too (K3i errors 2.3e-9 and 1.5e-7 are below 1e-6), as the registration allowed |
+| MU4 bisection stopped after 3 halvings | K1, K2, K3, K4 |
+| MU5 order fixed at 1 in `g` | K4 (gyroscopic), K5 |
+| MU6 amplitude from the minor axis | survived, declared equivalent (isotropic Q: the orbit is circular, minor = major) |
+| MU7 bisection half chosen wrongly | K1, K2, K3, K4 |
+| MU8 force without the factor `spin^2` | P1, P2, P4, N1 |
+
+Deviations: K3i estimate wrong by two to four orders (an estimate, not a limit); recorded above. MU6 is the declared
+equivalent mutant; it also means the major-axis choice is untested on an anisotropic rotor (stated under limits, not run).
+
+Not run: no anisotropic or multi-mass peak check against a closed form (none registered); no speed-dependent bearing combined
+with the peak finder; no CLI or case-file path.
+
+Gates: `cargo test -p rcfd-fem --release` all passed; `baseline_hashes` passed; `docs_site` passed; `cargo clippy -p rcfd-fem
+--all-targets -- -D warnings` clean; `cargo fmt -p rcfd-fem --check` clean.
+
+Decision by the rule: **done** (every limit met, every non-equivalent mutation caught, B1 bit-equal).
+
+Open questions (recommendations as in the registration): case-file key (wait for a rotor case input, then `[rotor.response]`
+and `[rotor.campbell] orders`, both off by default); peak method (grid plus golden section taken; a derivative root only if a
+tighter limit than 1e-8 is asked); damping estimate from the half-power width (follow-up only for measured data).
+
+## For the lead: roadmap entries
+
+> F-564 (proposed status done): Structural solver, advanced tier. Follow-up of F-416 (ADR 0476, 2026-11-14). DONE. F-564 (ADR 0501, 2026-11-14): rcfd_fem::rotor::RotorModel::unbalance_peaks (peaks of the unbalance response over the spin, grid plus golden-section search) and campbell_crossings (Campbell crossings with an engine order refined by bisection on the frozen whirl problem, each with its residual). On the damped Jeffcott rotor the response peak equals w_n / sqrt(1 - 2 zeta^2) to 4.4e-9 and its amplitude e / (2 zeta sqrt(1 - zeta^2)) to 4.4e-16 (limit 1e-6; the wording of the acceptance matches the unbalance excitation, the constant-force peak at w_n sqrt(1 - 2 zeta^2) is confirmed to 4.8e-9); the crossing of the tracks with engine order 1 equals the undamped critical speed to 2.2e-16 at zeta = 0 and w_n sqrt(1 - zeta^2) to 4.4e-16 at zeta > 0; on a gyroscopic rotor the forward crossings equal critical_speeds() to 6.3e-14 with residuals below 3.4e-13; defaults bit-identical; 7 of 8 mutations caught, the eighth declared equivalent. No case-file key.
