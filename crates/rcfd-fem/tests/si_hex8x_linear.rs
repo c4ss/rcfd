@@ -928,9 +928,17 @@ fn hat_integral(zs: &[f64], k: usize, sigma: &dyn Fn(f64) -> f64) -> f64 {
 /// compatible with the exact field (ADR 0525 amendment 1): `u_x` on the root face, `u_y`, `u_z` at the root centre, `u_y` at the
 /// root node `(y, z) = (h/2, h)`.
 fn bending_run(f: SolidFormulation) -> (f64, f64, f64) {
+    bending_run_graded(f, 1.0)
+}
+
+/// [`bending_run`] on the box whose nodes are mapped `x -> L (x / L)^p` (axis-aligned elements of unequal length; `p = 1` is
+/// the uniform box of ES2).
+fn bending_run_graded(f: SolidFormulation, p: f64) -> (f64, f64, f64) {
     let (l, h, mom): (f64, f64, f64) = (2.0, 0.1, 10.0);
     let i = h.powi(4) / 12.0;
-    let mut mesh = with_formulation(hex_box([0.0; 3], [l, h, h], [8, 2, 2]).unwrap(), f);
+    let base = hex_box([0.0; 3], [l, h, h], [8, 2, 2]).unwrap();
+    let nodes: Vec<Vec3> = base.nodes().iter().map(|x| [l * (x[0] / l).powf(p), x[1], x[2]]).collect();
+    let mut mesh = with_formulation(rebuild(&base, nodes), f);
     let centre = node_at(&mesh, [0.0, 0.5 * h, 0.5 * h]);
     let top = node_at(&mesh, [0.0, 0.5 * h, h]);
     mesh.add_node_set("root_centre", vec![centre]).unwrap();
@@ -982,6 +990,18 @@ fn es2_patch_recovery_of_pure_bending() {
     ch.at_most("ES2 Incompatible energy_error estimate / solution norm", rel, 1e-8);
     let (serr, rel, _) = bending_run(SolidFormulation::Full);
     println!("N-ES Full (observation): recovered stress error {serr:.4e}, estimate / norm {rel:.4e}");
+    ch.finish();
+}
+
+#[test]
+fn es3_patch_recovery_of_pure_bending_on_a_graded_box() {
+    let mut ch = Checks::new();
+    let (serr, rel, _) = bending_run_graded(SolidFormulation::Incompatible, 1.5);
+    ch.at_most("ES3 Incompatible graded recovered nodal stress against M z' / I", serr, 1e-8);
+    ch.at_most("ES3 Incompatible graded energy_error estimate / solution norm", rel, 1e-8);
+    let (serr, rel, _) = bending_run_graded(SolidFormulation::Full, 1.5);
+    println!("ES3 control Full graded: recovered stress error {serr:.4e}, estimate / norm {rel:.4e}");
+    ch.above("ES3 control Full graded recovered stress error (compatible strain)", serr, 1e-4);
     ch.finish();
 }
 

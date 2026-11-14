@@ -288,6 +288,22 @@ a defective set-up and is corrected, not counted as met. The old test stays as a
 change that `estimate::recover` is called on a box `1 x 0.5 x 0.5` of `4 x 2 x 2` elements with the formulation and a zero
 displacement (the sole row changed; the criterion is "returns Ok", unchanged).
 
+## Amendment 3 (2026-11-14, written and committed before the first run of ES3)
+
+Mutation MU12 (`estimate::element_samples` uses the compatible `element.strain_at` for an opted element) ran on the scratch copy
+(`f588-scratch/mutations.log`) and was NOT caught by any registered check: `failed []`. Diagnosis from run 1: the negative control
+N-ES (the same ES2 box with the default `Full` element) gives a recovered nodal stress error of `6.4e-13`, i.e. on the uniform box
+the compatible strain recovers the linear bending stress as well, because the parasitic shear `k (x - x_c)` of the compatible
+element at the 2 x 2 x 2 points is antisymmetric within each element and cancels in the least-squares fit over the symmetric patch
+(the energy estimate does see it, `0.84`, but it goes through `energy_error`'s own strain call, not `element_samples`). The
+registered ES2 therefore cannot discriminate MU12; this is a miss of the mutation, recorded as such (the decision rule gives
+`partial`), and one added check is registered here before it is run: ES3, the ES2 box with the nodes mapped `x -> L (x / L)^1.5`
+(axis-aligned elements of unequal length, so the incompatible element still represents bending exactly and the stress is still
+`M z' / I`), same loads and supports. Limits: ES3a Incompatible recovered nodal stress `<= 1e-8` and `energy_error` estimate over
+solution norm `<= 1e-8` (as ES2); ES3b control, `Full` on the same box, recovered nodal stress error `> 1e-4` (the control must
+show that the compatible strain is not enough there; if it does not exceed, ES3 does not discriminate MU12 and MU12 stays
+uncaught). MU12 is re-run against `si_hex8x_linear` with ES3 present; the other mutations are not re-run (their catches stand).
+
 ## Addendum 1: results
 
 (to be written after the registered run)

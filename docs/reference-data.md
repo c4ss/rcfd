@@ -2107,3 +2107,17 @@ and checked by a plain numpy probe (`f607-scratch/probe_dg.py`, `probe_branch.py
 | Discrete gradient of a stored energy of `C`: `S_alg = S(E_m) + (nu/(dE:dE)) dE`, `nu = W(E_{n+1}) - W(E_n) - S(E_m):dE`, `E_m = (E_n + E_{n+1})/2`; `S_alg : dE = W(E_{n+1}) - W(E_n)` exactly, `S_alg = S(E_m) + O(|dE|^2)`; for St. Venant-Kirchhoff `nu = 0` and `S_alg = (S_n + S_{n+1})/2` | derived, cited | ADR 0523 (the discrete gradient); O. Gonzalez, J. Nonlinear Sci. 6 (1996) 449-467; O. Gonzalez, Comput. Methods Appl. Mech. Engrg. 190 (2000) 1763-1783: NOT read, from memory |
 | Compressible neo-Hookean `W = (mu/2)(J^{-2/3} I_1 - 3) + (kappa/2)(J - 1)^2`, `S = mu J^{-2/3} (2 dev E) C^{-1} + kappa (J - 1) J C^{-1}`, the tangent `2 dS/dC`; small-strain moduli `mu`, `kappa`; the cancellation-free form `I_1 - 3 J^{2/3} = 2q - 2t^2 - 8 det E + 3g^2 + g^3`, `g = J^{2/3} - 1` | derived, cited | ADR 0523 D2; J. C. Simo and R. L. Taylor, Comput. Methods Appl. Mech. Engrg. 85 (1991) 273-310; G. A. Holzapfel, Nonlinear Solid Mechanics, Wiley, 2000, chapter 6: NOT read, from memory; the form is F-607's own until F-425 (ADR 0328) chooses its energy |
 | Measured: neo-Hookean spinning bar over ten turns `dP = 4.1e-13`, `dJ = 7.5e-13`, `dE = 2.1e-13`; large-strain neo-Hookean cube (500 steps) `dE = 2.8e-9` with the discrete gradient against `4.7e-3` with the average; the discrete gradient of the isotropic material equals the F-570 step within `9.4e-13` (bar) and `9.7e-14` (cube) per step | computed | ADR 0523 addendum 1 |
+
+## F-588 the Hex8 formulations on the remaining linear paths (ADR 0525)
+
+No source was read for F-588. The methods are those of F-390 (ADR 0493: the mean-dilatation B-bar of Hughes and the incompatible
+modes of Wilson, Taylor, Doherty and Ghaboussi with the correction of Taylor, Beresford and Wilson, cited there from memory); the
+extensions (the thermal load, per-point elasticity, the condensed load of the modes) are derived in ADR 0525 arithmetic 1 to 4 and
+checked by plain numpy probes (`f588-scratch/est588.py`, `est588b.py`), no rcfd code.
+
+| Item | Status | Source |
+|---|---|---|
+| Thermal load of the formulations: `f = sum_q w_q Bbar_q^T D_q eps_th,q` (B-bar); `f = f_u - K_ua K_aa^{-1} f_a`, `f_a = sum_q w_q G_q^T D_q eps_th,q`, modes `alpha = K_aa^{-1} (f_a - K_au u)` (incompatible); the free expansion `u = eps_th (x - x_A)` gives `alpha = 0` and zero stress for a constant `eps_th` | derived | ADR 0525 arithmetic 1 |
+| The stiffness of the incompatible element is not additive in `D` (`max |K(D1 + D2) - K(D1) - K(D2)| / max |K|` `1.0e-2` in the prototype, `7.6e-3` measured); that of the B-bar element is (`1.6e-16`) | computed | ADR 0525 arithmetic 4, N-LIN, LIN1 |
+| Euler's buckling load of the clamped-free column `P_cr = pi^2 E I / (4 L^2)`; the strip `L = 2`, `h = 0.1` (`I = h^4/12`), `E = 2e11`: `P_cr = 1.0281e6` N (not a measured value, a closed form) | derived | Euler's column (textbook closed form, not read) |
+| Measured: one-layer strip `20 x 1 x 1`, `lambda P / P_cr` `0.99949` (Incompatible, `nu = 0`), `1.00306` (`nu = 0.3`), `1.498`, `1.542` (Full), `1.074`, `0.826` (B-bar) | computed | ADR 0525 addendum 1 |
