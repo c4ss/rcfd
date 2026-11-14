@@ -9,7 +9,8 @@
 //! functions) and the thermal load `int B^T D eps_th dV` of a nodal temperature field ([`Load::Temperature`], ADR 0281,
 //! [`crate::thermal`]), then the per-node forces ([`NodalForceAt`]). On Beam2 elements a uniform line load
 //! ([`Load::LineLoad`]) and gravity (`q = rho A g`) give the consistent forces and moments of
-//! [`crate::beam::line_load_vector`] (ADR 0422). On Shell4 elements a uniform pressure along the element normals
+//! [`crate::beam::line_load_vector`] (ADR 0422), and the centrifugal load the consistent forces and moments of
+//! [`crate::beam::centrifugal_load_vector`] (ADR 0473). On Shell4 elements a uniform pressure along the element normals
 //! ([`Load::ShellPressure`]) gives the consistent forces and moments of [`crate::shell::pressure_load_vector`] (ADR 0432),
 //! and gravity and the centrifugal load give those of [`crate::shell::body_load_vector`] (`t int N_i b dA`, ADR 0435), a
 //! nodal body-force field that of the interpolated field and a nodal temperature field the membrane thermal load of
@@ -154,7 +155,7 @@ pub fn nodal_load_vector(model: &SolidModel, extra: &[NodalForceAt]) -> Result<V
                 let rho = densities(model, &mut density)?;
                 let g = *acceleration;
                 // ADR 0422 D3: a Beam2 element takes the line load rho A g; every other element as before.
-                let beam = |e: usize| -> Result<Vec3> {
+                let beam = |e: usize| -> Result<BeamBody> {
                     let (section, _) = crate::beam::beam_property(mesh, e).ok_or_else(|| FemError::InvalidValue {
                         key: "property",
                         reason: format!(
@@ -163,7 +164,7 @@ pub fn nodal_load_vector(model: &SolidModel, extra: &[NodalForceAt]) -> Result<V
                         ),
                     })?;
                     let ra = rho[e] * section.area();
-                    Ok([ra * g[0], ra * g[1], ra * g[2]])
+                    Ok(BeamBody::Uniform([ra * g[0], ra * g[1], ra * g[2]]))
                 };
                 // ADR 0435 D2: a Shell4 element takes the body force rho g over its thickness.
                 let shell = |e: usize, _: &[f64], _: Vec3| -> Result<Vec3> {
@@ -181,6 +182,22 @@ pub fn nodal_load_vector(model: &SolidModel, extra: &[NodalForceAt]) -> Result<V
             Load::Centrifugal { axis, origin, omega } => {
                 let rho = densities(model, &mut density)?;
                 let (axis, origin, w2) = (*axis, *origin, omega * omega);
+                // ADR 0473 D5: a Beam2 element takes the consistent load of its linear force per unit length and its section's
+                // moment.
+                let materials = model.material_indices()?;
+                let beam = |e: usize| -> Result<BeamBody> {
+                    let (section, v) = crate::beam::beam_property(mesh, e).ok_or_else(|| FemError::InvalidValue {
+                        key: "property",
+                        reason: format!(
+                            "block {} (Beam2) has no Beam property: a beam needs its section and orientation",
+                            mesh.block_of(e)
+                        ),
+                    })?;
+                    let coords: Vec<Vec3> = mesh.element_nodes(e).iter().map(|&n| mesh.nodes()[n]).collect();
+                    let material = &model.materials()[materials[e]].1;
+                    crate::beam::centrifugal_load_vector(&coords, &section, v, material, axis, origin, w2)
+                        .map(BeamBody::Vector)
+                };
                 // ADR 0435 D2: a Shell4 element takes the body force rho omega^2 r_perp over its thickness.
                 let shell = |e: usize, _: &[f64], x: Vec3| -> Result<Vec3> {
                     let r = perpendicular(x, axis, origin);
@@ -196,7 +213,7 @@ pub fn nodal_load_vector(model: &SolidModel, extra: &[NodalForceAt]) -> Result<V
                         let s = rho[e] * w2;
                         Ok([s * r[0], s * r[1], s * r[2]])
                     },
-                    None,
+                    Some(&beam),
                     Some(&shell),
                 )?;
             }
@@ -389,6 +406,22 @@ fn add_shell_pressure(
     Ok(())
 }
 
+/// The body load of a Beam2 element: a uniform force per unit length (ADR 0422 D3) or its consistent nodal vector, forces and
+/// moments per node in the element's unknown order (the centrifugal load, ADR 0473 D5).
+enum BeamBody {
+    Uniform(Vec3),
+    Vector([f64; 12]),
+}
+
+/// The consistent nodal vector of a beam element added node by node, force then moment (as [`add_line_load`]).
+fn add_beam_vector(f: &mut [f64], dofs: &DofMap, mesh: &SolidMesh, e: usize, fe: &[f64; 12]) -> Result<()> {
+    for (a, &node) in mesh.element_nodes(e).iter().enumerate() {
+        add_force(f, dofs, node, &[fe[6 * a], fe[6 * a + 1], fe[6 * a + 2]])?;
+        add_moment(f, dofs, node, &[fe[6 * a + 3], fe[6 * a + 4], fe[6 * a + 5]])?;
+    }
+    Ok(())
+}
+
 /// The body force per unit volume of shell element `e` at a point, from the values of the facet's shape functions there and
 /// the point (ADR 0435 D2, ADR 0445 D1).
 type ShellRule<'a> = dyn Fn(usize, &[f64], Vec3) -> Result<Vec3> + 'a;
@@ -426,7 +459,7 @@ fn add_body_load_with<B>(
     dofs: &DofMap,
     mesh: &SolidMesh,
     b: B,
-    beam: Option<&dyn Fn(usize) -> Result<Vec3>>,
+    beam: Option<&dyn Fn(usize) -> Result<BeamBody>>,
     shell: Option<&ShellRule<'_>>,
 ) -> Result<()>
 where
@@ -435,11 +468,14 @@ where
     for e in 0..mesh.n_elements() {
         if let Some(rule) = beam {
             if mesh.element_kind(e) == crate::mesh::ElementKind::Beam2 {
-                let q = rule(e).map_err(|source| FemError::Element {
+                let body = rule(e).map_err(|source| FemError::Element {
                     element: e,
                     source: Box::new(source),
                 })?;
-                add_line_load(f, dofs, mesh, e, q)?;
+                match body {
+                    BeamBody::Uniform(q) => add_line_load(f, dofs, mesh, e, q)?,
+                    BeamBody::Vector(fe) => add_beam_vector(f, dofs, mesh, e, &fe)?,
+                }
                 continue;
             }
         }

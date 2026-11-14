@@ -629,6 +629,91 @@ pub fn local_mass(f: &Facet, thickness: f64, density: f64) -> ElementMatrix {
     m
 }
 
+/// The 24 x 24 geometric stiffness in local axes of the membrane resultant `n` (N/m, the facet's in-plane axes; ADR 0473 D2):
+/// `K[(a, i), (b, i)] = int grad N_a . n grad N_b dA` for `i = u, v, w`, the bilinear functions, 2 x 2 Gauss on the projected
+/// facet; the rotations take no term.
+pub fn local_geometric_stiffness(f: &Facet, n: [[f64; 2]; 2]) -> ElementMatrix {
+    let mut k = ElementMatrix::zeros(24);
+    let v = k.values_mut();
+    for &xi in &GAUSS {
+        for &eta in &GAUSS {
+            let p = point(&f.local, xi, eta);
+            for a in 0..4 {
+                let ga = [p.nx[a], p.ny[a]];
+                for b in 0..4 {
+                    let gb = [p.nx[b], p.ny[b]];
+                    let s = p.det
+                        * (ga[0] * (n[0][0] * gb[0] + n[0][1] * gb[1]) + ga[1] * (n[1][0] * gb[0] + n[1][1] * gb[1]));
+                    for c in 0..3 {
+                        v[(6 * a + c) * 24 + 6 * b + c] += s;
+                    }
+                }
+            }
+        }
+    }
+    symmetrise(&mut k);
+    k
+}
+
+/// The global geometric stiffness of a shell element for the stress `stress` (global Voigt, tensor shear) of its one
+/// pre-stress point: the membrane resultant `t (Lambda S Lambda^T)_{alpha beta}` (ADR 0473 D2, D4). A non-finite stress is
+/// refused (key `"stress"`).
+pub fn element_geometric_stiffness(coords: &[Vec3], thickness: f64, stress: &[f64; 6]) -> Result<ElementMatrix> {
+    let f = facet(coords)?;
+    let n = crate::geometric_struct::membrane_resultant(&f.axes, thickness, stress)?;
+    Ok(to_global(&local_geometric_stiffness(&f, n), &transformation(&f)))
+}
+
+/// The 3 x 3 rotational factor `R` of the spin softening of a shell in local axes for the unit axis `a` in local components:
+/// `theta^T R theta = |theta x e_3|^2 - (a . (theta x e_3))^2` (ADR 0473 D3).
+pub(crate) fn rotary_softening_factor(a: Vec3) -> [[f64; 3]; 3] {
+    [
+        [1.0 - a[1] * a[1], a[0] * a[1], 0.0],
+        [a[0] * a[1], 1.0 - a[0] * a[0], 0.0],
+        [0.0, 0.0, 0.0],
+    ]
+}
+
+/// The 24 x 24 spin-softening mass in local axes for the unit axis `a` in local components (ADR 0473 D3): the kinetic energy of
+/// the motion perpendicular to the axis of `u + zeta theta x e_3`, `m_ab (delta_ij - a_i a_j)` on the translations and `m^r_ab
+/// R` on the rotations with the scalars of [`local_mass`]; the drilling rotation takes no term.
+pub fn local_spin_softening_mass(f: &Facet, thickness: f64, density: f64, a: Vec3) -> ElementMatrix {
+    let t = thickness;
+    let (mt, mr) = (density * t, density * t * t * t / 12.0);
+    let r = rotary_softening_factor(a);
+    let mut m = ElementMatrix::zeros(24);
+    let v = m.values_mut();
+    for &xi in &GAUSS {
+        for &eta in &GAUSS {
+            let p = point(&f.local, xi, eta);
+            for i in 0..4 {
+                for j in 0..4 {
+                    let s = p.det * p.n[i] * p.n[j];
+                    for c in 0..3 {
+                        for d in 0..3 {
+                            let pt = if c == d { 1.0 } else { 0.0 } - a[c] * a[d];
+                            v[(6 * i + c) * 24 + 6 * j + d] += mt * s * pt;
+                            v[(6 * i + 3 + c) * 24 + 6 * j + 3 + d] += mr * s * r[c][d];
+                        }
+                    }
+                }
+            }
+        }
+    }
+    symmetrise(&mut m);
+    m
+}
+
+/// The global spin-softening mass of a shell element for a rotation about the unit `axis` (ADR 0473 D3).
+pub fn element_spin_softening_mass(coords: &[Vec3], thickness: f64, density: f64, axis: Vec3) -> Result<ElementMatrix> {
+    let f = facet(coords)?;
+    let al = [dot(f.axes[0], axis), dot(f.axes[1], axis), dot(f.axes[2], axis)];
+    Ok(to_global(
+        &local_spin_softening_mass(&f, thickness, density, al),
+        &transformation(&f),
+    ))
+}
+
 fn symmetrise(a: &mut ElementMatrix) {
     let n = a.size();
     let v = a.values_mut();

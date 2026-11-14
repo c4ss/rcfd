@@ -14,8 +14,12 @@
 //! The solid-element routines of the [`Element`] trait (an isoparametric volume map, a 6 x 6 elasticity matrix) do not apply:
 //! [`element`] is a placeholder that refuses naming [`SOLID_ROUTINES`], so the solid body loads, the thermal load and stress
 //! recovery refuse a beam. The assembly calls [`element_stiffness`] and [`element_mass`] for Beam2 (ADR 0417 D6). Uniform
-//! line loads and gravity on beams have the consistent load [`line_load_vector`] (ADR 0422); the centrifugal load, a nodal
-//! body force and the thermal load still refuse.
+//! line loads and gravity on beams have the consistent load [`line_load_vector`] (ADR 0422), the centrifugal load that of
+//! [`centrifugal_load_vector`] (ADR 0473); a nodal body force and the thermal load still refuse.
+//!
+//! ADR 0473 (F-420): the geometric stiffness of the axial force ([`local_geometric_stiffness`], with the deflection functions
+//! of the interdependent element and Wagner's torsion term), the element-average axial force ([`axial_force`]) and the
+//! spin-softening mass of the section's kinematics ([`local_spin_softening_mass`]).
 
 use crate::assemble::element_dofs;
 use crate::element::{Element, ElementMatrix, Pending};
@@ -381,6 +385,290 @@ fn frame_of(coords: &[Vec3], orientation: Vec3) -> Result<BeamFrame> {
         });
     }
     frame(coords[0], coords[1], orientation)
+}
+
+// ------------------------------------------------------------------------------------- stress stiffening (ADR 0473)
+
+/// The slopes `d'(xi)` of the deflection functions of a plane at `xi`, for the end unknowns `(d_0, psi_0, d_1, psi_1)`.
+fn plane_slopes(c: &[[f64; 4]; 4], l: f64, xi: f64) -> [f64; 4] {
+    let dd = [0.0, 1.0 / l, 2.0 * xi / l, 3.0 * xi * xi / l];
+    let scale = [1.0, l, 1.0, l];
+    let mut s = [0.0; 4];
+    for q in 0..4 {
+        for j in 0..4 {
+            s[q] += dd[j] * c[j][q] * scale[q];
+        }
+    }
+    s
+}
+
+/// The geometric stiffness of one bending plane, `N int d'^T d' dx` with the deflection functions of the plane (ADR 0473 D1),
+/// by four-point Gauss (exact, degree 4).
+fn plane_geometric(n: f64, ei: f64, ks: f64, l: f64) -> [[f64; 4]; 4] {
+    let phi = 12.0 * ei / (ks * l * l);
+    let c = plane_shape_coefficients(phi);
+    let mut m = [[0.0; 4]; 4];
+    for (x, w) in GAUSS4_X.iter().zip(GAUSS4_W) {
+        let xi = 0.5 * (x + 1.0);
+        let wl = 0.5 * w * l;
+        let s = plane_slopes(&c, l, xi);
+        for i in 0..4 {
+            for j in i..4 {
+                m[i][j] += wl * n * s[i] * s[j];
+            }
+        }
+    }
+    for i in 0..4 {
+        for j in 0..i {
+            m[i][j] = m[j][i];
+        }
+    }
+    m
+}
+
+/// The 12 x 12 geometric stiffness in local axes of the axial force `axial_force` (N, positive in tension; ADR 0473 D1 and
+/// arithmetic 1): `N int (u'^2 + v'^2 + w'^2) dx + N (I_y + I_z)/A int theta_x'^2 dx`, the lateral terms with the deflection
+/// functions of each bending plane (interdependent, with its shear parameter), the axial and torsion terms with the linear
+/// functions. The bending rotations take no term.
+pub fn local_geometric_stiffness(
+    length: f64,
+    section: &BeamSection,
+    material: &Material,
+    axial_force: f64,
+) -> ElementMatrix {
+    let (e, g) = moduli(material);
+    let l = length;
+    let a = section.area();
+    let mut k = ElementMatrix::zeros(12);
+    let na = axial_force / l;
+    place_pair(&mut k, 0, [[na, -na], [-na, na]]);
+    let nt = axial_force * (section.i_y() + section.i_z()) / (a * l);
+    place_pair(&mut k, 3, [[nt, -nt], [-nt, nt]]);
+    let pxy = plane_geometric(axial_force, e * section.i_z(), section.shear_y() * g * a, l);
+    place_plane(&mut k, &pxy, 1, 5, 1.0);
+    let pxz = plane_geometric(axial_force, e * section.i_y(), section.shear_z() * g * a, l);
+    place_plane(&mut k, &pxz, 2, 4, -1.0);
+    k
+}
+
+fn check_stress(stress: &[f64; 6]) -> Result<()> {
+    if stress.iter().any(|v| !v.is_finite()) {
+        return Err(FemError::InvalidValue {
+            key: "stress",
+            reason: format!("the stress {stress:?} of a Beam2 element is not finite"),
+        });
+    }
+    Ok(())
+}
+
+/// `e . S e` for the Voigt stress `s` (tensor shear).
+fn normal_stress(s: &[f64; 6], e: Vec3) -> f64 {
+    let t = [[s[0], s[3], s[5]], [s[3], s[1], s[4]], [s[5], s[4], s[2]]];
+    let mut v = 0.0;
+    for i in 0..3 {
+        for j in 0..3 {
+            v += e[i] * t[i][j] * e[j];
+        }
+    }
+    v
+}
+
+/// The global geometric stiffness of a beam element for the stress `stress` (global Voigt, tensor shear) of its one pre-stress
+/// point: the axial force `N = A e_1 . S e_1` (ADR 0473 D1, D4); the other components are not read. A non-finite stress is
+/// refused (key `"stress"`).
+pub fn element_geometric_stiffness(
+    coords: &[Vec3],
+    section: &BeamSection,
+    orientation: Vec3,
+    material: &Material,
+    stress: &[f64; 6],
+) -> Result<ElementMatrix> {
+    check_stress(stress)?;
+    let f = frame_of(coords, orientation)?;
+    let n = section.area() * normal_stress(stress, f.axes[0]);
+    Ok(to_global(
+        &local_geometric_stiffness(f.length, section, material, n),
+        &f.axes,
+    ))
+}
+
+/// The element-average axial force `E A e_1 . (u_1 - u_0)/L` of a beam element for its twelve global unknowns `ue` (ADR 0473
+/// D4; exact for a bar under any axial load with its consistent nodal load).
+pub fn axial_force(
+    coords: &[Vec3],
+    section: &BeamSection,
+    orientation: Vec3,
+    material: &Material,
+    ue: &[f64],
+) -> Result<f64> {
+    if ue.len() != 12 {
+        return Err(FemError::FieldLength {
+            key: "element unknowns",
+            expected: 12,
+            found: ue.len(),
+        });
+    }
+    let f = frame_of(coords, orientation)?;
+    let e1 = f.axes[0];
+    let du: f64 = (0..3).map(|k| e1[k] * (ue[6 + k] - ue[k])).sum();
+    Ok(material.youngs_modulus() * section.area() * du / f.length)
+}
+
+/// The rows over the twelve local unknowns of the fields `(u_1, u_2, u_3, theta_1, theta_2, theta_3)` at `xi` (ADR 0473 D3): the
+/// axial and torsion fields linear, the lateral fields and the bending rotations the functions of each plane with the signs of
+/// [`local_stiffness`].
+fn field_rows(length: f64, section: &BeamSection, material: &Material, xi: f64) -> [[f64; 12]; 6] {
+    let (e, g) = moduli(material);
+    let a = section.area();
+    let l = length;
+    let phi_xy = 12.0 * e * section.i_z() / (section.shear_y() * g * a * l * l);
+    let phi_xz = 12.0 * e * section.i_y() / (section.shear_z() * g * a * l * l);
+    let (nd_xy, np_xy) = plane_functions(&plane_shape_coefficients(phi_xy), phi_xy, l, xi);
+    let (nd_xz, np_xz) = plane_functions(&plane_shape_coefficients(phi_xz), phi_xz, l, xi);
+    let mut r = [[0.0; 12]; 6];
+    r[0][0] = 1.0 - xi;
+    r[0][6] = xi;
+    r[3][3] = 1.0 - xi;
+    r[3][9] = xi;
+    let (ixy, sxy) = ([1, 5, 7, 11], [1.0, 1.0, 1.0, 1.0]);
+    let (ixz, sxz) = ([2, 4, 8, 10], [1.0, -1.0, 1.0, -1.0]);
+    for q in 0..4 {
+        r[1][ixy[q]] = sxy[q] * nd_xy[q];
+        r[5][ixy[q]] = sxy[q] * np_xy[q];
+        r[2][ixz[q]] = sxz[q] * nd_xz[q];
+        // theta_y = -psi of the x-z plane.
+        r[4][ixz[q]] = -sxz[q] * np_xz[q];
+    }
+    r
+}
+
+/// The 12 x 12 spin-softening mass in local axes for the unit axis `a` in local components (ADR 0473 D3, arithmetic 4): the
+/// consistent mass minus `int (rho A (a . u_c)^2 + rho I_z (theta . (e_2 x a))^2 + rho I_y (theta . (e_3 x a))^2) dx`, the kinetic
+/// energy of the motion along the axis of the section `u_c + theta x s`.
+pub fn local_spin_softening_mass(length: f64, section: &BeamSection, material: &Material, a: Vec3) -> ElementMatrix {
+    let mut m = local_mass(length, section, material);
+    let rho = material.density();
+    let (ma, mz, my) = (rho * section.area(), rho * section.i_z(), rho * section.i_y());
+    let v = m.values_mut();
+    for (x, w) in GAUSS4_X.iter().zip(GAUSS4_W) {
+        let xi = 0.5 * (x + 1.0);
+        let wl = 0.5 * w * length;
+        let r = field_rows(length, section, material, xi);
+        let mut ra = [0.0; 12];
+        let mut rb = [0.0; 12];
+        let mut rc = [0.0; 12];
+        for q in 0..12 {
+            ra[q] = a[0] * r[0][q] + a[1] * r[1][q] + a[2] * r[2][q];
+            rb[q] = a[2] * r[3][q] - a[0] * r[5][q];
+            rc[q] = a[0] * r[4][q] - a[1] * r[3][q];
+        }
+        for i in 0..12 {
+            for j in 0..12 {
+                v[i * 12 + j] -= wl * (ma * ra[i] * ra[j] + mz * rb[i] * rb[j] + my * rc[i] * rc[j]);
+            }
+        }
+    }
+    m
+}
+
+/// The global spin-softening mass of a beam element for a rotation about `axis` (any non-zero length; ADR 0473 D3).
+pub fn element_spin_softening_mass(
+    coords: &[Vec3],
+    section: &BeamSection,
+    orientation: Vec3,
+    material: &Material,
+    axis: Vec3,
+) -> Result<ElementMatrix> {
+    let f = frame_of(coords, orientation)?;
+    let a = unit_or_error(axis)?;
+    let al = [
+        (0..3).map(|k| f.axes[0][k] * a[k]).sum(),
+        (0..3).map(|k| f.axes[1][k] * a[k]).sum(),
+        (0..3).map(|k| f.axes[2][k] * a[k]).sum(),
+    ];
+    Ok(to_global(
+        &local_spin_softening_mass(f.length, section, material, al),
+        &f.axes,
+    ))
+}
+
+fn unit_or_error(axis: Vec3) -> Result<Vec3> {
+    let n = norm(axis);
+    if !(n.is_finite() && n > 0.0) {
+        return Err(FemError::InvalidValue {
+            key: "axis",
+            reason: format!("{axis:?} is not a finite non-zero direction"),
+        });
+    }
+    Ok([axis[0] / n, axis[1] / n, axis[2] / n])
+}
+
+/// The consistent nodal load (forces and moments, global axes, the element's unknown order) of the centrifugal load of a
+/// rotation about `axis` through `origin` at `omega2 = Omega^2` on a beam element (ADR 0473 D5, arithmetic 5): the force per
+/// unit length `rho A Omega^2 P (x - p)`, linear along the element, with the deflection functions of each plane and the linear
+/// axial functions, and the section's distributed moment `-rho Omega^2 (a_2 I_z (e_2 x a) + a_3 I_y (e_3 x a))` with the
+/// rotation functions; four-point Gauss (exact).
+pub fn centrifugal_load_vector(
+    coords: &[Vec3],
+    section: &BeamSection,
+    orientation: Vec3,
+    material: &Material,
+    axis: Vec3,
+    origin: Vec3,
+    omega2: f64,
+) -> Result<[f64; 12]> {
+    let f = frame_of(coords, orientation)?;
+    let a = unit_or_error(axis)?;
+    let rho = material.density();
+    let ax = f.axes;
+    let loc = |g: Vec3| -> Vec3 {
+        [
+            (0..3).map(|k| ax[0][k] * g[k]).sum(),
+            (0..3).map(|k| ax[1][k] * g[k]).sum(),
+            (0..3).map(|k| ax[2][k] * g[k]).sum(),
+        ]
+    };
+    let al = loc(a);
+    // The section's moment per unit length, local components: e_2 x a = (a_3, 0, -a_1), e_3 x a = (-a_2, a_1, 0).
+    let (iz, iy) = (section.i_z(), section.i_y());
+    let ml = [
+        -rho * omega2 * (al[1] * iz * al[2] - al[2] * iy * al[1]),
+        -rho * omega2 * (al[2] * iy * al[0]),
+        -rho * omega2 * (-al[1] * iz * al[0]),
+    ];
+    let mut fl = [0.0; 12];
+    for (x, w) in GAUSS4_X.iter().zip(GAUSS4_W) {
+        let xi = 0.5 * (x + 1.0);
+        let wl = 0.5 * w * f.length;
+        let mut p = [0.0; 3];
+        for k in 0..3 {
+            p[k] = (1.0 - xi) * coords[0][k] + xi * coords[1][k] - origin[k];
+        }
+        let s = p[0] * a[0] + p[1] * a[1] + p[2] * a[2];
+        let b = [
+            rho * section.area() * omega2 * (p[0] - s * a[0]),
+            rho * section.area() * omega2 * (p[1] - s * a[1]),
+            rho * section.area() * omega2 * (p[2] - s * a[2]),
+        ];
+        let ql = loc(b);
+        let r = field_rows(f.length, section, material, xi);
+        for (q, fq) in fl.iter_mut().enumerate() {
+            *fq += wl
+                * (r[0][q] * ql[0]
+                    + r[1][q] * ql[1]
+                    + r[2][q] * ql[2]
+                    + r[3][q] * ml[0]
+                    + r[4][q] * ml[1]
+                    + r[5][q] * ml[2]);
+        }
+    }
+    let mut out = [0.0; 12];
+    for blk in 0..4 {
+        for c in 0..3 {
+            out[3 * blk + c] = (0..3).map(|k| ax[k][c] * fl[3 * blk + k]).sum();
+        }
+    }
+    Ok(out)
 }
 
 /// The consistent nodal load of a uniform force per unit length `q` (global axes) on a beam element from `coords[0]` to

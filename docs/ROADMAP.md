@@ -8307,7 +8307,7 @@ fixed by the item's registration ADR before any code.
     Partial: the .vtu check met only after amendment 1 added the triangle cell to rcfd_io::vtk. The one-diagonal
     cylinder O1 is diagnosed and met by the opt-in angle-weighted pressure of F-540 (ADR 0461). Follow-ups F-539, F-540
     (done, ADR 0461), F-541.
-- [ ] **F-420** Stress stiffening of beams and shells: buckling, pre-stressed modes and the Campbell table of a shell blade
+- [~] **F-420** Stress stiffening of beams and shells: buckling, pre-stressed modes and the Campbell table of a shell blade
   - depends on: F-419, F-391, F-392, F-395, F-396
   - acceptance: Every limit not stated here is registered in the ADR before the run. Beam: Euler loads pi^2 E I/L^2
     (pinned) and pi^2 E I/(4 L^2) (clamped-free) with the registered shear correction within 0.1 percent at 8 elements;
@@ -8319,8 +8319,16 @@ fixed by the item's registration ADR before any code.
     flat plate strip twisted by 30 degrees, thickness/chord 0.02, clamped at the root and rotating: the Campbell table
     of the first four modes as a shell equals that of the solid model of F-396 (Hex20) within 2 percent at the
     registered speeds. Models of solid elements only keep their bits.
-  - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0323; the registration is
-    written by the implementation agent before any code.
+  - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). F-420 (ADR 0473, 2026-11-14): geometric
+    stiffness of Beam2 (axial force, shear-flexible interpolation, torsion term), Shell4 and Shell3 (membrane
+    resultants on the translations), spin-softening mass with the section and shell rotary terms, consistent
+    centrifugal load on beams with the section moment, structural pre-stress from a static result, through buckling,
+    pre-stressed modes and the rotating part. Engesser 3.4e-4 and 2.2e-5, taut beam 2.6e-4, flap-lag 9.7e-8
+    (slender) and 2.6e-9 against 1 - f_rot (F-396 beam), slope 4.9e-4 of the Rayleigh quotient, plates 3.3e-3
+    (Shell4) and 4.8e-3 (Shell3), strips 5.1e-3, twisted strip Shell4 against Hex20 5.9e-3, element checks to 2e-15;
+    solid-only models bit-identical. Partial: E2 (Shell3 twisted strip, 4 percent supplementary limit) missed at
+    4.05e-2 on the first torsion track, already at rest (the Shell3 rest stiffness, not the stress stiffening),
+    recorded as e2_twisted_strip_shell3_known_miss.
 - [~] **F-421** Aerodynamic damping and added mass of a mode by prescribed motion of the wall (energy method)
   - depends on: F-408, F-362, F-383, F-400, F-401
   - acceptance: Every limit not stated here is registered in the ADR before the run. Force harmonics: for a synthetic
