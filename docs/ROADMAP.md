@@ -11465,7 +11465,7 @@ fixed by the item's registration ADR before any code.
     Models without a temperature keep their bits.
   - note: Structural solver, advanced tier. Optional. Follow-up of F-576 (ADR 0499, 2026-11-14); includes the Rayleigh
     stiffness tangent at the temperature (still refused for a shifted material).
-- [ ] **F-593** Fan blade in the solid case file and a library blade mesher
+- [~] **F-593** Fan blade in the solid case file and a library blade mesher
   - depends on: F-387, F-386
   - acceptance: Every limit not stated here is registered in the ADR before the run. rcfd_fem::builders gains the
     structured Tet10 blade mesh of ADR 0500 D1 for an AxialFan with given divisions, with the sets hub, tip, pressure
@@ -11473,8 +11473,17 @@ fixed by the item's registration ADR before any code.
     ComputerFan or its defaults, the blade index and the divisions); the F-387 blade run from a file gives the bits of
     the library run, the existing solid-case and schema tests pass unedited, and docs/solid-case-file.md and
     docs/structural-solver.md describe the keys.
-  - note: Structural solver, basic tier. Follow-up of F-387 (ADR 0500, 2026-11-14). NEEDS THE USER for the case-file
-    keys (centrifugal load, mesh source fan_blade) before the case-file half; the library builder half can go first.
+  - note: Structural solver, basic tier. Follow-up of F-387 (ADR 0500, 2026-11-14). Library half done in ADR 0505,
+    2026-11-14: rcfd_fem::builders has fan_blade_tet4, fan_blade_tet10 and computer_fan_blade_tet10 (the structured
+    Tet10 blade mesh of ADR 0500 D1 for an AxialFan, or blade k of a ComputerFan, with the node sets all, hub, tip and
+    the surface sets hub, tip, pressure and suction; zero divisions, n_c below 2, an invalid blade and a blade index out
+    of range refused). At the F-387 divisions the meshes, the sets and the F-387 results (reactions, mean tip
+    displacements, first frequency) equal the test's construction bit for bit; the four surface sets are disjoint and
+    cover the boundary exactly (472 and 1720 faces; vector area sum 3e-16 of the total area); identities 1e-11 and
+    1e-10. Seven mutations caught. Section in docs/structural-solver.md. NEEDS THE USER for the case-file half:
+    centrifugal load (axis, origin, speed) and mesh source fan_blade (fan, blade, divisions), proposed in the ADR open
+    questions; the file-versus-library bit test and the solid-case-file.md keys follow with them. NEEDS THE USER for the
+    case-file keys ([mesh] generator = "fan_blade", [loads.x] kind = "centrifugal"; proposal in ADR 0505).
 - [ ] **F-594** Supernodal L D L^T in the modal, buckling and harmonic solves and on the transformation path
   - depends on: F-529
   - acceptance: Every limit not stated here is registered in the ADR before the run. The supernodal factor after nested
