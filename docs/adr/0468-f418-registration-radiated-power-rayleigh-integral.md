@@ -250,3 +250,86 @@ intact, the numbers in its reason). Nothing is re-tuned: no corrected E1 at `k a
 So that the checks that were met stay in the default suite, a copy `e1_e4_after_amendment_1` runs the same set-ups with the same
 limits and the same probe rule for E1 at `k a = 2`, E2, E3 and E4, and prints (does not assert) the probe of E1 at `k a = 10`.
 Per the decision rule F-418 cannot be **done**.
+
+## Addendum 1: results (2026-11-14)
+
+Commits: dd10b406 (registration, alone), e8312b1e (the DB1 bit record, constants printed at main 9aab52ae before any library
+line), 0ed86258 (library and checks), 5fdba0de (amendment 1), 539fe9da (the known-miss
+record and its continuation), b679ee55 (clippy: four negated float comparisons rewritten with the same NaN semantics, an `allow`
+of `vec_init_then_push` on the refusal test; docs). The registered run (`cargo test --release -p rcfd-post --test
+sa_solid_acoustic -- --test-threads=1`, commit 0ed86258, log `f418-scratch/run_checks.log`) was made once; after the clippy
+change the same command printed every number of that run again unchanged (log `run_after_lint.log`). Release profile
+throughout. The `k a = 10` power (14400 points) takes 0.85 s.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| J0 J1 integral vs series; probe | `<= 1e-12` | 2.9e-16; change 4.0e-16 | yes |
+| E1 `k a = 2` ERP vs `rho c S_h v^2/2`; probe | `<= 1e-12` | 1.1e-15; change 2.2e-16 | yes |
+| E1 `k a = 10` ERP; probe (limit >= 1e3 x change) | `<= 1e-12`; 1e3 | 3.73e-14; change 1.332e-15, ratio **751** | **no** (probe; amendment 1) |
+| E2 plate (1,1) vs `rho c A v0^2/8` | `<= 5e-3` | 2.852e-3 (estimate 2.85e-3); (2,3) recorded 2.04e-2 | yes |
+| E3 plate (1,1), (2,3) vs the interpolant's exact; probe | `<= 1e-12` | 2.3e-15, 1.3e-14; change 2.2e-16, 4.4e-16 | yes |
+| E4 curved surface accepted; note "radiation efficiency of one" | holds | quarter cylinder 6.38e-6 W; note present | yes |
+| P1 on-axis `abs(P)` vs `2 rho c V abs(sin)`, `k a = 2`, `10` | `<= 1e-2` | 1.60e-3, 6.54e-4 | yes |
+| P2 complex on-axis `P` | `<= 1e-2` | 1.60e-3, 1.33e-3 | yes |
+| D1 directivity vs `abs(2 J1(u)/u)` (of the on-axis value) | `<= 1e-2` | 5.67e-4, 3.20e-4 | yes |
+| W1 `W/ERP` vs `1 - J1(2ka)/(ka)`, `k a = 0.5, 2, 10` (0.1) | `<= 1e-2` | 1.54e-3, 5.67e-4, 1.06e-4 (1.60e-3) | yes |
+| W2 `k a = 0.1` vs `rho c k^2 (S v)^2/(4 pi)` | `<= 2e-2` | 4.87e-3 | yes |
+| W3 baffled monopole pair and dipole, `k d = 1, 3` | `<= 5e-3` | 3.5e-4 .. 4.9e-4 | yes |
+| S1 far-field power (sphere 48 x 96) vs double sum | `<= 1e-9` | 3.1e-14, 3.4e-14 | yes |
+| L1 `1e-12 W` gives 0 dB; probe | `<= 1e-12` | 0 exactly; change 9.6e-16 | yes |
+| L2 100 dB, zero `None`, refusals | `<= 1e-12`; holds | 0; holds | yes |
+| B1 sum of bands vs narrow-band total; probe | `<= 1e-10` | 2.2e-16; change 4.4e-16 | yes |
+| B2 band = its lines (bits); tone in band 0; layout as acoustics (bits) | exact | 28 bands; holds; holds | yes |
+| N1 lifted `1e-3 a` refused with deviation in `[0.9, 1] delta`; `1e-9 a` accepted; cylinder refused | holds | deviation 9.79e-5 m for `delta` 1e-4 m (0.979); holds | yes |
+| N2 14 refusals | holds | 14 of 14 | yes |
+| X1 ERP of `from_response` (direct solve) vs bilinear mass formula; probe | `<= 1e-12` | 5.4e-15; change 2.2e-16 | yes |
+| X2 `V = i omega U`; Quad8 refused naming 8 nodes; unknown set; `erp_spectrum` bits | exact | holds | yes |
+| H1 faces reversed; probe | `<= 1e-12` | 3.3e-15; change 4.4e-16 | yes |
+| Z1 `PENDING == None` | holds | holds | yes |
+| DB1 four digests of the acoustics paths | `==` | 4 of 4 | yes |
+| DB2 `acoustics_metrics` (8), `fwh` (8), `fwh_impermeable` (14, 2 ignored), `noise_proxies` (4) unedited | pass | pass | yes |
+
+Mutations (scratch copy `f418-scratch/copy` of the tree of 539fe9da, `mutate.py`, logs `MU*.log`), each caught:
+
+| Id | Caught by |
+|---|---|
+| MU1 `1/(4 pi)` | P1, P2 |
+| MU2 `e^{+i k R}` | P2 (alone, as registered: the magnitude is unchanged) |
+| MU3 ERP without 1/2 | E1, E2, E3, W1, X1 |
+| MU4 kernel `sin(kR)/(kR)` | W1 (`k a = 0.5, 2, 10`), W3, S1; not W2: at `k a = 0.1` with `a = 0.1 m`, `k = 1` and dropping `k` changes nothing (a coincidence of the set-up) |
+| MU5 diagonal `s(0) = 0` | S1, W3; W1 and W2 not (the diagonal is a `1/P` share of the sum: 2.2e-3 at `k a = 0.1`, within 1e-2) |
+| MU6 planarity test removed | N1 |
+| MU7 `band_index + 1` | B1, B2 |
+| MU8 velocity of the first node | E3, X1 |
+| MU9 `V = U` | X1, X2 |
+
+Nine of nine caught; MU4 and MU5 by other checks than all of those expected (the registration's rule asks for one).
+
+Deviations: (1) E1 at `k a = 10` missed its ulp-probe condition (amendment 1; diagnosed as the rounding noise of a sequential
+sum of 14400 terms reshuffled by the one-ulp move, not the condition of the formula). (2) The estimate of E1 was 4.4e-16 (numpy
+pairwise sums) against 3.7e-14 measured (sequential sums). (3) The clippy rewrite after the run (semantics unchanged, numbers
+reproduced). Not run: the whole workspace, `baseline_hashes` (no rcfd-fv, rcfd-api or shared solver file changed; only
+`crates/rcfd-post/src/solid_acoustic.rs`, a stub before), `sa_scaffold.rs` (no row covers this module; not edited). Run besides:
+`cargo test --release -p rcfd-cli --test docs_site` (2 passed); `cargo fmt -p rcfd-post --check` clean; `cargo clippy -p
+rcfd-post --all-targets -- -D warnings` clean.
+
+**Decision by the registered rule: partial.** Every limit was met at the registered run and every mutation was caught, but E1 at
+`k a = 10` missed the ulp-probe condition that the registration made part of the check.
+
+Remaining questions:
+1. The probe rule for long sums. Options: (a) keep the rule (limit >= 1e3 x one-ulp change) and accept that a 1e-12 limit on a
+   sum of 1e4 terms can miss it; (b) register such limits at 1e-11 for sums above about 1e3 terms in later items; (c) use
+   compensated (Kahan) summation in the ERP. Recommendation: (b) for later registrations; the library stays as it is.
+2. Radiation reactance and surface pressure (the `H1` term, the singular `cos(kR)/R` kernel by analytic self-face integrals).
+   Options: a follow-up item; or leave out. Recommendation: a follow-up item (below), needed for added-mass and coupled
+   light-fluid estimates.
+
+### For the lead: roadmap entries
+
+F-418, status proposed **partial**, new note:
+
+> ADR 0468, 2026-11-14: rcfd-post solid_acoustic: VibratingSurface (Tri3/Quad4 faces, nodal complex velocity; from_response of a HarmonicResponse of ADR 0391 or 0315, V = i omega U), equivalent_radiated_power (any surface, report notes the radiation efficiency of one), BaffledPlane (refuses a surface off its mean plane by more than 1e-6 of its diameter, stating the deviation; pressure by the Rayleigh integral with near-field splitting, far field, directivity, power by the sin(kR)/R double sum, far-field power over acoustics::sphere_quadrature), power_level_db re 1e-12 W, PowerSpectrum third-octave bands, erp_spectrum. Baffled piston, faces of a tenth of a wavelength or finer: ERP of a rigid piston 1.1e-15 and 3.7e-14 from rho c S v^2/2; plate mode (1,1) 2.85e-3 from rho c A v0^2/8 (the bilinear interpolant's exact value to 2.3e-15); on-axis pressure 1.6e-3 and 6.5e-4 (k a = 2, 10); directivity 5.7e-4 and 3.2e-4 of the on-axis value; W/ERP against 1 - J1(2ka)/(ka) 1.5e-3, 5.7e-4, 1.1e-4 (k a = 0.5, 2, 10); k a = 0.1 power 4.9e-3 from rho c k^2 (S v)^2/(4 pi); baffled monopole pair and dipole 4.9e-4; far-field power equal to the double sum to 3.4e-14; 1e-12 W gives 0 dB exactly; band sums equal the total to 2.2e-16; the closed forms (including the impedance with J1 and H1) verified by independent quadrature. Partial because E1 at k a = 10 met its 1e-12 limit but not the registered one-ulp probe condition (limit 751, not 1000, times the one-ulp change: the rounding of a 14400-term sum); nine of nine mutations caught. Not covered: radiation reactance, unbaffled or curved radiators by an integral method.
+
+Follow-up item (proposed), title "Radiation reactance and surface pressure of a baffled plane: analytic self-face integrals of the Rayleigh kernel", deps F-418:
+
+> Every limit not stated here is registered in the ADR before the run. The surface pressure of a baffled plane by the Rayleigh integral with the singular part 1/R integrated analytically over each face; the radiation impedance of a baffled circular piston equal to rho c S (1 - J1(2 k a)/(k a) + i H1(2 k a)/(k a)) within 1 percent in resistance and reactance at k a = 0.1, 0.5, 2 and 10 with faces of a tenth of a wavelength; the resistance equal to the power of F-418 within 1e-6; the low-frequency reactance giving the added mass 8 rho a^3/3 within 2 percent at k a = 0.1.
