@@ -281,6 +281,9 @@ fn fit_model(s: Setup) -> Fit {
     }
 }
 
+/// The contactor nodes of a row with their pressures over the mean.
+type Row = Vec<(usize, f64)>;
+
 struct Solved {
     fit: Fit,
     r: ContactResult,
@@ -308,7 +311,7 @@ impl Solved {
         self.fit.model.mesh().nodes()[node][2]
     }
     /// The node pressures over the mean of the bottom row (`z = 0`) and of the top row (`z = T`), by node.
-    fn rows(&self) -> (Vec<(usize, f64)>, Vec<(usize, f64)>) {
+    fn rows(&self) -> (Row, Row) {
         let (mut bot, mut top) = (Vec::new(), Vec::new());
         for n in &self.r.nodes {
             let z = self.z(n.node);
