@@ -14,13 +14,14 @@ use rcfd_fem::geometric::{geometric_stiffness, Prestress};
 use rcfd_fem::harmonic_direct::{DirectHarmonic, DirectHarmonicOptions};
 use rcfd_fem::hex8x::{element_stiffness, internal_modes, point_strains};
 use rcfd_fem::loads::{nodal_load_vector, NodalForceAt};
-use rcfd_fem::material::{Matrix6, MaterialAxes};
+use rcfd_fem::material::{MaterialAxes, Matrix6};
 use rcfd_fem::modal::{modal_analysis, ModalOptions};
 use rcfd_fem::quadrature;
 use rcfd_fem::recover::IntegrationPointField;
 use rcfd_fem::solve::{solve_static, solve_static_with, StaticOptions};
 use rcfd_fem::{
-    BlockProperty, Constraint, ElementKind, FemError, Load, Material, SolidFormulation, SolidMesh, SolidModel, SolidResult,
+    BlockProperty, Constraint, ElementKind, FemError, Load, Material, SolidFormulation, SolidMesh, SolidModel,
+    SolidResult,
 };
 use rcfd_linalg::eigen::symmetric_eigen;
 use std::collections::BTreeSet;
@@ -39,21 +40,30 @@ impl Checks {
     }
     fn at_most(&mut self, name: &str, value: f64, limit: f64) {
         let ok = value.is_finite() && value <= limit;
-        println!("{name}: {value:.4e} (limit <= {limit:e}) {}", if ok { "met" } else { "MISSED" });
+        println!(
+            "{name}: {value:.4e} (limit <= {limit:e}) {}",
+            if ok { "met" } else { "MISSED" }
+        );
         if !ok {
             self.0.push(format!("{name} = {value:e} > {limit:e}"));
         }
     }
     fn below(&mut self, name: &str, value: f64, limit: f64) {
         let ok = value.is_finite() && value < limit;
-        println!("{name}: {value:.6} (limit < {limit:e}) {}", if ok { "met" } else { "MISSED" });
+        println!(
+            "{name}: {value:.6} (limit < {limit:e}) {}",
+            if ok { "met" } else { "MISSED" }
+        );
         if !ok {
             self.0.push(format!("{name} = {value:e} >= {limit:e}"));
         }
     }
     fn above(&mut self, name: &str, value: f64, limit: f64) {
         let ok = value.is_finite() && value > limit;
-        println!("{name}: {value:.4e} (limit > {limit:e}) {}", if ok { "met" } else { "MISSED" });
+        println!(
+            "{name}: {value:.4e} (limit > {limit:e}) {}",
+            if ok { "met" } else { "MISSED" }
+        );
         if !ok {
             self.0.push(format!("{name} = {value:e} <= {limit:e}"));
         }
@@ -290,7 +300,9 @@ fn pt1_pt2_rs1_patch_tests_and_recovered_stress() {
 /// Dense solve of `a x = b` by Gauss elimination with partial pivoting (`a` n x n row-major).
 fn dense_solve(mut a: Vec<f64>, mut b: Vec<f64>, n: usize) -> Vec<f64> {
     for c in 0..n {
-        let p = (c..n).max_by(|&i, &j| a[i * n + c].abs().total_cmp(&a[j * n + c].abs())).unwrap();
+        let p = (c..n)
+            .max_by(|&i, &j| a[i * n + c].abs().total_cmp(&a[j * n + c].abs()))
+            .unwrap();
         if p != c {
             for j in 0..n {
                 a.swap(c * n + j, p * n + j);
@@ -389,7 +401,9 @@ fn test_incompatible(coords: &[Vec3], d: &Matrix6, corrected: bool) -> (Vec<f64>
 }
 
 fn test_alpha(kua: &[f64], kaa: &[f64], u: &[f64]) -> Vec<f64> {
-    let rhs: Vec<f64> = (0..9).map(|a| -(0..24).map(|i| kua[i * 9 + a] * u[i]).sum::<f64>()).collect();
+    let rhs: Vec<f64> = (0..9)
+        .map(|a| -(0..24).map(|i| kua[i * 9 + a] * u[i]).sum::<f64>())
+        .collect();
     dense_solve(kaa.to_vec(), rhs, 9)
 }
 
@@ -456,7 +470,10 @@ fn n1_uncorrected_modes_fail_the_patch_and_x1_the_element_agrees() {
         for (c, &j) in free.iter().enumerate() {
             a[r * nf + c] = dense[i * n + j];
         }
-        rhs[r] = -(0..n).filter(|&j| fixed[j]).map(|j| dense[i * n + j] * u[j]).sum::<f64>();
+        rhs[r] = -(0..n)
+            .filter(|&j| fixed[j])
+            .map(|j| dense[i * n + j] * u[j])
+            .sum::<f64>();
     }
     let x = dense_solve(a, rhs, nf);
     for (r, &i) in free.iter().enumerate() {
@@ -477,7 +494,11 @@ fn n1_uncorrected_modes_fail_the_patch_and_x1_the_element_agrees() {
         let scale = max_abs(kl.values());
         xs.push(max_abs(&kt.iter().zip(kl.values()).map(|(a, b)| a - b).collect::<Vec<_>>()) / scale);
     }
-    ch.at_most("X1 test element against element_stiffness(Incompatible), relative", worst(xs), 1e-11);
+    ch.at_most(
+        "X1 test element against element_stiffness(Incompatible), relative",
+        worst(xs),
+        1e-11,
+    );
     ch.finish();
 }
 
@@ -495,7 +516,11 @@ fn rigid_motions(coords: &[Vec3]) -> Vec<Vec<f64>> {
     for w in [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]] {
         let mut r = vec![0.0; 24];
         for (a, x) in coords.iter().enumerate() {
-            let v = [w[1] * x[2] - w[2] * x[1], w[2] * x[0] - w[0] * x[2], w[0] * x[1] - w[1] * x[0]];
+            let v = [
+                w[1] * x[2] - w[2] * x[1],
+                w[2] * x[0] - w[0] * x[2],
+                w[0] * x[1] - w[1] * x[0],
+            ];
             r[3 * a..3 * a + 3].copy_from_slice(&v);
         }
         out.push(r);
@@ -505,7 +530,11 @@ fn rigid_motions(coords: &[Vec3]) -> Vec<Vec<f64>> {
 
 fn eigen_checks(ch: &mut Checks, tag: &str, coords: &[Vec3], nu: f64, record_only: bool) {
     let d = dmat(nu);
-    for f in [SolidFormulation::Full, SolidFormulation::BBar, SolidFormulation::Incompatible] {
+    for f in [
+        SolidFormulation::Full,
+        SolidFormulation::BBar,
+        SolidFormulation::Incompatible,
+    ] {
         let k = element_stiffness(f, coords, &d).unwrap();
         let ev = symmetric_eigen(k.values(), 24).unwrap();
         let lmax = ev.values[23];
@@ -526,8 +555,16 @@ fn eigen_checks(ch: &mut Checks, tag: &str, coords: &[Vec3], nu: f64, record_onl
         let kmax = max_abs(kv);
         let sym = worst((0..24).flat_map(|i| (0..24).map(move |j| (kv[i * 24 + j] - kv[j * 24 + i]).abs())));
         ch.at_most(&format!("EV3 {tag} {name} max |K - K^T| / max |K|"), sym / kmax, 1e-13);
-        let rig = worst(rigid_motions(coords).iter().map(|r| max_abs(&k.matvec(r)) / (kmax * max_abs(r))));
-        ch.at_most(&format!("EV3 {tag} {name} rigid motions |K r| / (max |K| max |r|)"), rig, 1e-11);
+        let rig = worst(
+            rigid_motions(coords)
+                .iter()
+                .map(|r| max_abs(&k.matvec(r)) / (kmax * max_abs(r))),
+        );
+        ch.at_most(
+            &format!("EV3 {tag} {name} rigid motions |K r| / (max |K| max |r|)"),
+            rig,
+            1e-11,
+        );
     }
 }
 
@@ -574,14 +611,17 @@ fn cantilever(length: f64, nu: f64, f: SolidFormulation, support: Support) -> So
     m.add_constraint(Constraint::displacement("xmin", 0, 0.0)).unwrap();
     m.add_constraint(Constraint::displacement("xmin", 2, 0.0)).unwrap();
     match support {
-        Support::Beam => m.add_constraint(Constraint::displacement("root_corner", 1, 0.0)).unwrap(),
+        Support::Beam => m
+            .add_constraint(Constraint::displacement("root_corner", 1, 0.0))
+            .unwrap(),
         Support::Clamp => m.add_constraint(Constraint::displacement("xmin", 1, 0.0)).unwrap(),
     }
     m
 }
 
 fn tip_shear(mut m: SolidModel) -> SolidModel {
-    m.add_load(Load::traction("xmax", [0.0, 0.0, -C_P / (C_H * C_H)])).unwrap();
+    m.add_load(Load::traction("xmax", [0.0, 0.0, -C_P / (C_H * C_H)]))
+        .unwrap();
     m
 }
 
@@ -605,25 +645,49 @@ fn c1_to_c4b_cantilever_one_element_through_the_thickness() {
     let inc = SolidFormulation::Incompatible;
     let full = SolidFormulation::Full;
     let (_, r) = ratio(&tip_shear(cantilever(2.0, 0.0, inc, Support::Beam)), 2.0, 0.0);
-    ch.at_most("C1 Incompatible L/h 20 nu 0 |delta / delta_T - 1|", (r - 1.0).abs(), 0.01);
+    ch.at_most(
+        "C1 Incompatible L/h 20 nu 0 |delta / delta_T - 1|",
+        (r - 1.0).abs(),
+        0.01,
+    );
     let (_, r) = ratio(&tip_shear(cantilever(2.0, 0.3, inc, Support::Beam)), 2.0, 0.3);
-    ch.at_most("C2 Incompatible L/h 20 nu 0.3 |delta / delta_T - 1|", (r - 1.0).abs(), 0.03);
+    ch.at_most(
+        "C2 Incompatible L/h 20 nu 0.3 |delta / delta_T - 1|",
+        (r - 1.0).abs(),
+        0.03,
+    );
     for nu in [0.0, 0.3] {
         let (_, r) = ratio(&tip_shear(cantilever(2.0, nu, full, Support::Beam)), 2.0, nu);
-        ch.below(&format!("C3 Full L/h 20 nu {nu} delta / delta_T (locking control)"), r, 0.8);
+        ch.below(
+            &format!("C3 Full L/h 20 nu {nu} delta / delta_T (locking control)"),
+            r,
+            0.8,
+        );
     }
     let (_, r) = ratio(&tip_shear(cantilever(10.0, 0.3, inc, Support::Beam)), 10.0, 0.3);
-    ch.at_most("C4 Incompatible L/h 100 AR 5 nu 0.3 |delta / delta_T - 1|", (r - 1.0).abs(), 0.02);
+    ch.at_most(
+        "C4 Incompatible L/h 100 AR 5 nu 0.3 |delta / delta_T - 1|",
+        (r - 1.0).abs(),
+        0.02,
+    );
     let (_, r) = ratio(&tip_shear(cantilever(10.0, 0.3, full, Support::Beam)), 10.0, 0.3);
     ch.below("C4b Full L/h 100 AR 5 nu 0.3 delta / delta_T (control)", r, 0.8);
     // O1, O2: records.
     for nu in [0.0, 0.3] {
         let (_, r) = ratio(&tip_shear(cantilever(2.0, nu, inc, Support::Clamp)), 2.0, nu);
         println!("O1 Incompatible L/h 20 nu {nu} full clamp: delta / delta_T {r:.6}");
-        let (_, r) = ratio(&tip_shear(cantilever(2.0, nu, SolidFormulation::BBar, Support::Beam)), 2.0, nu);
+        let (_, r) = ratio(
+            &tip_shear(cantilever(2.0, nu, SolidFormulation::BBar, Support::Beam)),
+            2.0,
+            nu,
+        );
         println!("O2 BBar L/h 20 nu {nu}: delta / delta_T {r:.6}");
     }
-    let (_, r) = ratio(&tip_shear(cantilever(10.0, 0.3, SolidFormulation::BBar, Support::Beam)), 10.0, 0.3);
+    let (_, r) = ratio(
+        &tip_shear(cantilever(10.0, 0.3, SolidFormulation::BBar, Support::Beam)),
+        10.0,
+        0.3,
+    );
     println!("O2 BBar L/h 100 AR 5 nu 0.3: delta / delta_T {r:.6}");
     ch.finish();
 }
@@ -668,12 +732,24 @@ fn rs2_n3_pure_bending_stress_with_the_recovered_modes() {
                 errs_compatible.push(worst((0..6).map(|k| (sc[k] - exact[k]).abs() / smax)));
             }
         }
-        ch.at_most(&format!("RS2 nu {nu} recovered stress against M z' / I"), worst(errs), 1e-8);
+        ch.at_most(
+            &format!("RS2 nu {nu} recovered stress against M z' / I"),
+            worst(errs),
+            1e-8,
+        );
         let tip = mesh.node_set("xmax").unwrap();
         let w = tip.iter().map(|&n| res.displacement(n)[2]).sum::<f64>() / tip.len() as f64;
         let wt = m_end * l * l / (2.0 * E_MOD * i);
-        ch.at_most(&format!("RS2 nu {nu} |-mean tip u_z / (M L^2 / (2 E I)) - 1| (the tip moves down)"), (-w / wt - 1.0).abs(), 1e-8);
-        ch.above(&format!("N3 nu {nu} compatible strain only, stress error"), worst(errs_compatible), 0.1);
+        ch.at_most(
+            &format!("RS2 nu {nu} |-mean tip u_z / (M L^2 / (2 E I)) - 1| (the tip moves down)"),
+            (-w / wt - 1.0).abs(),
+            1e-8,
+        );
+        ch.above(
+            &format!("N3 nu {nu} compatible strain only, stress error"),
+            worst(errs_compatible),
+            0.1,
+        );
     }
     ch.finish();
 }
@@ -774,11 +850,22 @@ fn t1_t2_cylinder_nearly_incompressible() {
     let mut ch = Checks::new();
     let nu = 0.4999;
     let bb = cylinder_ratios(SolidFormulation::BBar, nu);
-    ch.at_most("T1 BBar k=2 nu 0.4999 bore max |u_r / u_Lame - 1|", worst(bb.iter().map(|r| (r - 1.0).abs())), 0.01);
+    ch.at_most(
+        "T1 BBar k=2 nu 0.4999 bore max |u_r / u_Lame - 1|",
+        worst(bb.iter().map(|r| (r - 1.0).abs())),
+        0.01,
+    );
     let fu = cylinder_ratios(SolidFormulation::Full, nu);
-    ch.below("T2 Full k=2 nu 0.4999 bore max u_r / u_Lame (control)", worst(fu.iter().copied()), 0.9);
+    ch.below(
+        "T2 Full k=2 nu 0.4999 bore max u_r / u_Lame (control)",
+        worst(fu.iter().copied()),
+        0.9,
+    );
     let ic = cylinder_ratios(SolidFormulation::Incompatible, nu);
-    println!("O3 Incompatible k=2 nu 0.4999 bore max |u_r / u_Lame - 1| {:.4e}", worst(ic.iter().map(|r| (r - 1.0).abs())));
+    println!(
+        "O3 Incompatible k=2 nu 0.4999 bore max |u_r / u_Lame - 1| {:.4e}",
+        worst(ic.iter().map(|r| (r - 1.0).abs()))
+    );
     ch.finish();
 }
 
@@ -804,7 +891,11 @@ fn d1_d2_rf4_dispatch_is_the_element() {
                 same &= k.val[p].to_bits() == ke.get(i, k.col[p]).to_bits();
             }
         }
-        ch.holds(&format!("D1 {name} single-element stiffness bit for bit"), same && k.val.len() == 576, "");
+        ch.holds(
+            &format!("D1 {name} single-element stiffness bit for bit"),
+            same && k.val.len() == 576,
+            "",
+        );
         // D1: threads.
         let c = tip_shear(cantilever(2.0, 0.3, f, Support::Beam));
         let k1 = stiffness_with(&c, Some(1)).unwrap();
@@ -826,7 +917,11 @@ fn d1_d2_rf4_dispatch_is_the_element() {
         // RF4: the modal analysis takes it.
         let modal = modal_analysis(&c, &ModalOptions::new(2)).unwrap();
         let ok = modal.frequencies.len() == 2 && modal.frequencies.iter().all(|f| f.is_finite() && *f > 0.0);
-        ch.holds(&format!("RF4 {name} modal analysis taken"), ok, &format!("{:?} Hz", modal.frequencies));
+        ch.holds(
+            &format!("RF4 {name} modal analysis taken"),
+            ok,
+            &format!("{:?} Hz", modal.frequencies),
+        );
     }
     // D2 for BBar on PT1.
     let (model, res, _, _) = patch_run(0.1, 11, 0.3, SolidFormulation::BBar);
@@ -834,7 +929,13 @@ fn d1_d2_rf4_dispatch_is_the_element() {
     let mesh = model.mesh();
     let mut same = true;
     for e in 0..mesh.n_elements() {
-        let s = point_strains(SolidFormulation::BBar, &element_coords(mesh, e), &d, &element_u(&res, mesh, e)).unwrap();
+        let s = point_strains(
+            SolidFormulation::BBar,
+            &element_coords(mesh, e),
+            &d,
+            &element_u(&res, mesh, e),
+        )
+        .unwrap();
         for (q, p) in field.points_of(e).enumerate() {
             same &= (0..6).all(|r| field.strain()[p][r].to_bits() == s[q][r].to_bits());
         }
@@ -873,7 +974,13 @@ fn rf1_rf2_rf3_refusals() {
         for f in FORMS {
             let mut m = mesh.clone();
             let r = m.set_block_property(0, BlockProperty::solid(f));
-            let ok = matches!(r, Err(FemError::UnsupportedKind { operation: "a Hex8 formulation", .. }));
+            let ok = matches!(
+                r,
+                Err(FemError::UnsupportedKind {
+                    operation: "a Hex8 formulation",
+                    ..
+                })
+            );
             ch.holds(&format!("RF1 {} on {name} refused", f.name()), ok, &format!("{r:?}"));
         }
     }
@@ -889,9 +996,18 @@ fn rf1_rf2_rf3_refusals() {
         t.add_load(Load::temperature(temps, 293.0)).unwrap();
         let n = t.dof_map().n_equations();
         for (path, (ok, msg)) in [
-            ("solve_static", is_formulation_refusal(solve_static(&t, &StaticOptions::default()), f)),
-            ("nodal_load_vector", is_formulation_refusal(nodal_load_vector(&t, &[]), f)),
-            ("IntegrationPointField", is_formulation_refusal(IntegrationPointField::compute(&t, &vec![0.0; n]), f)),
+            (
+                "solve_static",
+                is_formulation_refusal(solve_static(&t, &StaticOptions::default()), f),
+            ),
+            (
+                "nodal_load_vector",
+                is_formulation_refusal(nodal_load_vector(&t, &[]), f),
+            ),
+            (
+                "IntegrationPointField",
+                is_formulation_refusal(IntegrationPointField::compute(&t, &vec![0.0; n]), f),
+            ),
         ] {
             ch.holds(&format!("RF2 {name} temperature {path} refused"), ok, &msg);
         }
@@ -921,17 +1037,35 @@ fn rf1_rf2_rf3_refusals() {
         let pre = Prestress::uniform(&c, [1e6, 0.0, 0.0, 0.0, 0.0, 0.0]).unwrap();
         let u = vec![0.0; n];
         for (path, (ok, msg)) in [
-            ("geometric_stiffness", is_formulation_refusal(geometric_stiffness(&c, &pre, None), f)),
-            ("damped_modes", is_formulation_refusal(damped_modes(&c, &DampedOptions::new(2)), f)),
-            ("DirectHarmonic::new", is_formulation_refusal(DirectHarmonic::new(&c, &DirectHarmonicOptions::new()), f)),
-            ("estimate::recover", is_formulation_refusal(patch_recover(&c, &u, &PatchOptions::new()), f)),
+            (
+                "geometric_stiffness",
+                is_formulation_refusal(geometric_stiffness(&c, &pre, None), f),
+            ),
+            (
+                "damped_modes",
+                is_formulation_refusal(damped_modes(&c, &DampedOptions::new(2)), f),
+            ),
+            (
+                "DirectHarmonic::new",
+                is_formulation_refusal(DirectHarmonic::new(&c, &DirectHarmonicOptions::new()), f),
+            ),
+            (
+                "estimate::recover",
+                is_formulation_refusal(patch_recover(&c, &u, &PatchOptions::new()), f),
+            ),
         ] {
             ch.holds(&format!("RF3 {name} {path} refused"), ok, &msg);
         }
         let states = rcfd_fem::nonlinear::initial_states(&c).unwrap();
         for (path, r) in [
-            ("nonlinear::internal_force", rcfd_fem::nonlinear::internal_force(&c, &u, &states).map(|_| ())),
-            ("nonlinear::tangent", rcfd_fem::nonlinear::tangent(&c, &u, &states, None).map(|_| ())),
+            (
+                "nonlinear::internal_force",
+                rcfd_fem::nonlinear::internal_force(&c, &u, &states).map(|_| ()),
+            ),
+            (
+                "nonlinear::tangent",
+                rcfd_fem::nonlinear::tangent(&c, &u, &states, None).map(|_| ()),
+            ),
         ] {
             let ok = matches!(&r, Err(FemError::InvalidValue { key: "nonlinear", .. }));
             ch.holds(&format!("RF3 {name} {path} refused"), ok, &format!("{r:?}"));

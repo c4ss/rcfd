@@ -141,7 +141,11 @@ fn patch_mesh(tet: bool) -> SolidMesh {
 }
 
 fn linear_field(x: Vec3) -> Vec3 {
-    let a = [[1.0e-3, 0.3e-3, -0.2e-3], [0.5e-3, -0.7e-3, 0.4e-3], [0.1e-3, 0.6e-3, 0.9e-3]];
+    let a = [
+        [1.0e-3, 0.3e-3, -0.2e-3],
+        [0.5e-3, -0.7e-3, 0.4e-3],
+        [0.1e-3, 0.6e-3, 0.9e-3],
+    ];
     let mut u = [1e-3, -2e-3, 0.5e-3];
     for i in 0..3 {
         for j in 0..3 {
@@ -175,7 +179,8 @@ fn cantilever(explicit_full: bool, nu: f64) -> SolidModel {
     let mut m = with_material(mesh, steel(nu));
     m.add_constraint(Constraint::displacement("xmin", 0, 0.0)).unwrap();
     m.add_constraint(Constraint::displacement("xmin", 2, 0.0)).unwrap();
-    m.add_constraint(Constraint::displacement("root_corner", 1, 0.0)).unwrap();
+    m.add_constraint(Constraint::displacement("root_corner", 1, 0.0))
+        .unwrap();
     m.add_load(Load::traction("xmax", [0.0, 0.0, -1000.0 / 0.01])).unwrap();
     m
 }
@@ -261,7 +266,12 @@ fn b1_default_hex8_paths_give_their_former_bits() {
 
     // A temperature load and the modes.
     let mut t = clamped_box(steel(0.3));
-    let temps: Vec<f64> = t.mesh().nodes().iter().map(|x| 300.0 + 40.0 * x[0] - 25.0 * x[2]).collect();
+    let temps: Vec<f64> = t
+        .mesh()
+        .nodes()
+        .iter()
+        .map(|x| 300.0 + 40.0 * x[0] - 25.0 * x[2])
+        .collect();
     t.add_load(Load::temperature(temps, 293.0)).unwrap();
     static_digests(&mut got, "thermal", &t);
     let opts = ModalOptions::new(4)
@@ -295,12 +305,22 @@ fn b1_default_hex8_paths_give_their_former_bits() {
     got.push(("Tet10 patch stiffness".into(), digest(&stiffness(&t10).unwrap().val)));
 
     for (name, d) in &got {
-        println!("(\"{name}\", 0x{:04x}_{:04x}_{:04x}_{:04x}),", d >> 48, (d >> 32) & 0xffff, (d >> 16) & 0xffff, d & 0xffff);
+        println!(
+            "(\"{name}\", 0x{:04x}_{:04x}_{:04x}_{:04x}),",
+            d >> 48,
+            (d >> 32) & 0xffff,
+            (d >> 16) & 0xffff,
+            d & 0xffff
+        );
     }
     // The explicit Full gives the default's bits.
     for part in ["stiffness", "loads", "solution", "stress", "nodal stress"] {
         let a = got.iter().find(|(n, _)| n == &format!("cantilever {part}")).unwrap().1;
-        let b = got.iter().find(|(n, _)| n == &format!("cantilever explicit Full {part}")).unwrap().1;
+        let b = got
+            .iter()
+            .find(|(n, _)| n == &format!("cantilever explicit Full {part}"))
+            .unwrap()
+            .1;
         assert_eq!(a, b, "explicit Full {part}");
     }
     let expected = EXPECTED.expect("the digests of the base run");

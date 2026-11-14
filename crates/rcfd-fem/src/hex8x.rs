@@ -372,10 +372,7 @@ pub fn point_strains(formulation: SolidFormulation, coords: &[Vec3], d: &Matrix6
                 .map(|&xi| el.strain_at(coords, u, xi))
                 .collect()
         }
-        SolidFormulation::BBar => Ok(bbar_matrices(coords)?
-            .iter()
-            .map(|(b, _)| mul(b, SIZE, u))
-            .collect()),
+        SolidFormulation::BBar => Ok(bbar_matrices(coords)?.iter().map(|(b, _)| mul(b, SIZE, u)).collect()),
         SolidFormulation::Incompatible => {
             let m = modes(coords)?;
             let (_, kua, kaa) = mode_matrices(&m, d);

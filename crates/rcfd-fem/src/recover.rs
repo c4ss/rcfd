@@ -111,7 +111,12 @@ impl IntegrationPointField {
                 }
                 None => None,
             };
-            for (q, ip) in element.integration_points(&coords, rule).map_err(located)?.into_iter().enumerate() {
+            for (q, ip) in element
+                .integration_points(&coords, rule)
+                .map_err(located)?
+                .into_iter()
+                .enumerate()
+            {
                 let eps = match &opted {
                     Some(strains) => strains[q],
                     None => element.strain_at(&coords, &ue, ip.geometry.xi).map_err(located)?,
