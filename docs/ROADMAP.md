@@ -11018,7 +11018,7 @@ fixed by the item's registration ADR before any code.
     form (pi/L) sqrt(E I_z G J) (1 + (pi^2 E C_w)/(G J L^2))^(1/2) within 1 percent at 16 elements; without the option
     every result of ADR 0473 bit-identical.
   - note: Structural solver, advanced tier. Follow-up of F-420 (ADR 0473, 2026-11-14).
-- [ ] **F-559** Craig-Bampton residual vectors of given load patterns and a harmonic acceptance at resonances
+- [~] **F-559** Craig-Bampton residual vectors of given load patterns and a harmonic acceptance at resonances
   - depends on: F-552
   - acceptance: Every limit not stated here is registered in the ADR before the run. The reduction of ADR 0474 takes
     residual vectors of load patterns given by the caller (each M-orthogonalised against the kept modes and the vectors
@@ -11028,7 +11028,21 @@ fixed by the item's registration ADR before any code.
     the full model's, the first eight frequencies strictly lowered by the residual vectors, a point at the axial
     resonance within the error 4 delta / eta of its frequency error, and a pattern per load component reproducing the
     statics of each component within 1e-10; without the option every result bit-identical to ADR 0474's.
-  - note: Structural solver, advanced tier. Follow-up of F-552 (ADR 0474, 2026-11-14).
+  - note: Structural solver, advanced tier. Follow-up of F-552 (ADR 0474, 2026-11-14). PARTIAL. ADR 0511, 2026-11-14:
+    CmsOptions::load_pattern gives vectors over a part's mesh equations, each adding its static residual vector K_ii^-1
+    p_i, M-orthonormalised twice against the kept modes and the vectors before it (dropped when in their span; zero and
+    repeated patterns add nothing), after the vector of the model's load when that is asked; ReducedPart::reduce_load
+    reduces any load vector to the part, Assembly::load_from and Assembly::harmonic_with_load apply it. Off by default
+    and bit-identical when off (10 digests of the ADR 0474 option paths at 6c4ba2d9, the 11 of ADR 0474 D2, harmonic
+    equal to harmonic_with_load of its own load). A pattern per corner-force component reproduces the statics of each
+    component within 3.3e-12 (bar) and 9.5e-14 (small model, dense and subspace paths) against 2.9e-2 without; the first
+    eight frequencies are lowered by at least 2.2e-8 (against the cutoff alone and against the ADR 0474 option); the
+    response at the axial resonance (8179 rad/s) is off by 0.353 against the bound 4 delta / eta = 0.81 (delta 4.05e-3);
+    orthogonality 4e-16. Two clauses missed as predicted: each frequency below half the lowest omitted fixed-interface
+    frequency within 1e-3 (5.0e-3 at 15027 rad/s; three of ten above) and the response within 1 percent off resonance up
+    to that bound (0.104 at 15778 rad/s; 1 percent holds to 6882 rad/s, 3.2e-3 to 4000); static residual vectors of the
+    load do not change the interface accuracy near the bound. Eleven mutations all caught. Follow-up: a restated
+    harmonic clause and an interface enrichment.
 - [ ] **F-560** Convergence order of the Newton driver with plasticity: a reading for an active-set change
   - depends on: F-422
   - acceptance: Every limit not stated here is registered in the ADR before the run. On the sphere and beam solves of
