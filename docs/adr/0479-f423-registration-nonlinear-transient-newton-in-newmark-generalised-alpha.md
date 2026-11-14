@@ -357,3 +357,38 @@ take more than about two minutes in release is an ignored heavy record run once,
    a5) and the linear case ADR 0389's equation; the form with the internal force at the weighted displacement is the other
    published choice (midpoint-like at `rho_inf = 1`) and would not meet (a5).
 3. **The load factor of (a1)** read on F-398's own loaded case (A5), with L1b and N1 beside it: taken.
+
+## Amendment 1 (2026-11-14, written after the registered run of commit 409fbfe4 and before any corrected run)
+
+The registered run (`cargo test -p rcfd-fem --release --test sa_nl_transient`, log `f423-scratch/run1.log`) met L1, L1b, N1,
+A1, G1, G2, R0 to R2, H1, H2 and F1. Two set-ups were defective; nothing of their measures was read beyond what is written
+here.
+
+1. **P0 to P2, S0 to S2 and T1: the residual tolerance below the rounding floor.** The pendulum stopped at step 8 and the
+   spinning bar at step 1 with `FemError::Solver { solver: "nl_transient" }`: after 20 iterations the relative residual stood at
+   `1.354e-10` (pendulum) and `1.577e-10` (spin) with the energy ratio at `1.1e-27` and `2.7e-29`, i.e. Newton had converged to
+   the rounding floor and the residual criterion `1e-10` of the driver defaults could not be met. Arithmetic 5 underestimated
+   the floor. Diagnosis (a scratch test that ran the pendulum's first 40 steps with the residual tolerance `1e-6` and printed only
+   the final residual of each step, `f423-scratch/diag/zz_diag_f423.rs`, log `diag1.log`; no period, energy or momentum was
+   computed): the floor grows with the rotation, `1.2e-11` at step 2, `2.5e-10` at step 8, `9e-10 .. 1.75e-9` at steps 20 to 38
+   (rotation about `0.27 rad` at step 38), and is proportional to the modulus (`E = 2e7`: `2.5e-11` at step 40, 70 times lower).
+   It is the rounding of the internal force, whose terms scale with `E` and with `|H|` (at most 2 for a rotation by `pi`) and
+   cancel to the small elastic force. Extrapolated with `|H|`: at most about `1.75e-9 x 2/0.27 = 1.3e-8` for the half-turn of the
+   pendulum and a full turn of the spin.
+   **Corrected set-up (P0c to P2c, S0c to S2c, T1c):** the same models, steps, methods and measures, with the Newton residual
+   tolerance `1e-7` (a decade above the extrapolated floor; the energy criterion `1e-10` is kept, so each step still iterates to
+   the quadratic floor: the residual criterion only stops the iteration from being refused at the floor). Limits unchanged: P0
+   `>= 9`, P1 `<= 1e-2`, P2 `<= 1e-3`, S0 `Ok`, S1 `<= 1e-10`, S2 `<= 1e-6`, T1 exact. The steady spin solve (S0) keeps the
+   driver defaults (it converged in the registered run). The estimate of S1 changes: a residual floor `r` of the inertia scale
+   leaves a translational residual only through the rounding of `sum f_int`, so arithmetic 3 stands, but this is now the check
+   most at risk. Run once. The registered tests stay as ignored records.
+2. **A0, "the four end nodes equal (bits) at every step": missed.** The bits differ from step 43 on (the element sums run in
+   another order for each node); diagnosis (`f423-scratch/diag/zz_diag2_f423.rs`, log `diag2.log`, the spread only): the
+   largest spread of the four end displacements is `1.9e-14` of the initial `0.2 L`. A0 is recorded as a known miss (its limit,
+   bits, intact). **A0b** (corrected set-up check): the spread of the four end displacements at every step at most `1e-11` of
+   `0.2 L` (the class of a rounding accumulated over about `1e3` steps, b5). The other part of A0 (crossings `>= 5`, measured
+   6) and A1, G1 (met) are unaffected: the period of the one-unknown oscillator is measured on one end node, and a spread of
+   `1e-14` changes it by less than that.
+
+The library gains one diagnostic field after the run, `StepReport::residual` (the final relative residual of the step's last
+sub-step), used by the scratch diagnosis; no computed value changes.

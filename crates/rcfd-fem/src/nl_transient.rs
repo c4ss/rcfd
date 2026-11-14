@@ -205,12 +205,14 @@ impl NlTransientState {
 }
 
 /// What one converged step reports.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct StepReport {
     /// The halvings of the time step before the step converged (its sub-steps are `2^halvings`).
     pub halvings: usize,
     /// Newton corrections of all its sub-steps.
     pub iterations: usize,
+    /// The relative residual at convergence of its last sub-step.
+    pub residual: f64,
 }
 
 /// The time integrator of a nonlinear solid model (ADR 0479).
@@ -367,6 +369,7 @@ struct Advanced {
     fint: Vec<f64>,
     states: Vec<ElementState>,
     iterations: usize,
+    residual: f64,
 }
 
 impl Integrator {
@@ -708,6 +711,7 @@ impl Integrator {
             let mut fint = committed.internal_force.clone();
             let mut states = committed.states.clone();
             let mut iterations = 0;
+            let mut residual = 0.0;
             let mut failed = false;
             for k in 0..parts {
                 let t_a = t_n + k as f64 * h;
@@ -720,6 +724,7 @@ impl Integrator {
                         fint = x.fint;
                         states = x.states;
                         iterations += x.iterations;
+                        residual = x.residual;
                     }
                     Err(e) if retryable(&e) => {
                         last = e.to_string();
@@ -740,6 +745,7 @@ impl Integrator {
                 return Ok(StepReport {
                     halvings: level,
                     iterations,
+                    residual,
                 });
             }
         }
@@ -788,6 +794,7 @@ impl Integrator {
         let (a1, v1) = kin.of(&eq.u);
         Ok(Advanced {
             iterations: eq.residuals.len() - 1,
+            residual: *eq.residuals.last().expect("one residual at least"),
             u: eq.u,
             v: v1,
             a: a1,
