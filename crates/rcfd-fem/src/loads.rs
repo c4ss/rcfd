@@ -9,7 +9,8 @@
 //! functions) and the thermal load `int B^T D eps_th dV` of a nodal temperature field ([`Load::Temperature`], ADR 0281,
 //! [`crate::thermal`]), then the per-node forces ([`NodalForceAt`]). On Beam2 elements a uniform line load
 //! ([`Load::LineLoad`]) and gravity (`q = rho A g`) give the consistent forces and moments of
-//! [`crate::beam::line_load_vector`] (ADR 0422).
+//! [`crate::beam::line_load_vector`] (ADR 0422). On Shell4 elements a uniform pressure along the element normals
+//! ([`Load::ShellPressure`]) gives the consistent forces and moments of [`crate::shell::pressure_load_vector`] (ADR 0432).
 //!
 //! Face integrals use the face functions of Tri3, Quad4, Tri6 and the 8-node face of Hex20 ([`face_shape_functions`]) in
 //! the local face orders of ADR 0271 and ADR 0292 and the face rules of [`face_rule`] (the 8-node arms: ADR 0383); body integrals use the element's mass rule (ADR 0276 arithmetic 2: exact for
@@ -115,6 +116,15 @@ pub fn nodal_load_vector(model: &SolidModel, extra: &[NodalForceAt]) -> Result<V
                 })?;
                 for &e in elements {
                     add_line_load(&mut f, &dofs, mesh, e, *force)?;
+                }
+            }
+            Load::ShellPressure { set, pressure } => {
+                let elements = mesh.element_set(set).ok_or_else(|| FemError::UnknownSet {
+                    kind: crate::error::SetKind::Element,
+                    name: set.clone(),
+                })?;
+                for &e in elements {
+                    add_shell_pressure(&mut f, &dofs, mesh, e, *pressure)?;
                 }
             }
             Load::Traction { set, traction } => {
@@ -291,6 +301,21 @@ fn add_line_load(f: &mut [f64], dofs: &DofMap, mesh: &SolidMesh, e: usize, q: Ve
     let nodes = mesh.element_nodes(e);
     let coords: Vec<Vec3> = nodes.iter().map(|&n| mesh.nodes()[n]).collect();
     let fe = crate::beam::line_load_vector(&coords, q).map_err(|source| FemError::Element {
+        element: e,
+        source: Box::new(source),
+    })?;
+    for (a, &node) in nodes.iter().enumerate() {
+        add_force(f, dofs, node, &[fe[6 * a], fe[6 * a + 1], fe[6 * a + 2]])?;
+        add_moment(f, dofs, node, &[fe[6 * a + 3], fe[6 * a + 4], fe[6 * a + 5]])?;
+    }
+    Ok(())
+}
+
+/// The uniform pressure on a shell element as its consistent nodal forces and moments (ADR 0432 D5).
+fn add_shell_pressure(f: &mut [f64], dofs: &DofMap, mesh: &SolidMesh, e: usize, p: f64) -> Result<()> {
+    let nodes = mesh.element_nodes(e);
+    let coords: Vec<Vec3> = nodes.iter().map(|&n| mesh.nodes()[n]).collect();
+    let fe = crate::shell::pressure_load_vector(&coords, p).map_err(|source| FemError::Element {
         element: e,
         source: Box::new(source),
     })?;
