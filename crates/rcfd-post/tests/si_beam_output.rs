@@ -130,7 +130,10 @@ impl Checks {
 /// `max |read - expected| / max |expected|` over the finite expected entries, and whether the NaN entries match.
 fn read_error(read: &[f64], expected: &[f64]) -> (f64, bool) {
     assert_eq!(read.len(), expected.len(), "lengths");
-    let scale = expected.iter().filter(|x| x.is_finite()).fold(0.0f64, |m, x| m.max(x.abs()));
+    let scale = expected
+        .iter()
+        .filter(|x| x.is_finite())
+        .fold(0.0f64, |m, x| m.max(x.abs()));
     let mut err = 0.0f64;
     let mut nan_ok = true;
     for (r, e) in read.iter().zip(expected) {
@@ -191,7 +194,10 @@ fn frame_model() -> SolidModel {
 }
 
 /// The expected point arrays from the result's own accessors: (displacement, rotation, reaction, reaction moment).
-fn expected_points(r: &SolidResult) -> (Vec<f64>, Vec<f64>, Option<(Vec<f64>, Vec<f64>)>) {
+/// (displacement, rotation, (reaction, reaction moment) when present).
+type Expected = (Vec<f64>, Vec<f64>, Option<(Vec<f64>, Vec<f64>)>);
+
+fn expected_points(r: &SolidResult) -> Expected {
     let mut d = Vec::new();
     let mut w = Vec::new();
     for node in 0..N_NODES {
@@ -259,7 +265,11 @@ fn a1_to_a6_beam_frame_written_and_read_back() {
                 c.holds(&format!("A2 {tag} reaction finite"), nan, "no NaN");
                 let (e, nan) = read_error(&rd.point("reaction_moment"), m);
                 c.at_most(&format!("A2 {tag} reaction_moment read back"), e, 1e-15);
-                c.holds(&format!("A2 {tag} reaction_moment NaN at node 4 only"), nan, "NaN positions");
+                c.holds(
+                    &format!("A2 {tag} reaction_moment NaN at node 4 only"),
+                    nan,
+                    "NaN positions",
+                );
                 c.holds(
                     &format!("A2 {tag} root reaction moment nonzero"),
                     m[0..3].iter().any(|x| x.abs() > 0.0),
@@ -299,7 +309,12 @@ fn a1_to_a6_beam_frame_written_and_read_back() {
         c.at_most(&format!("A4 {tag} section_force_end read back"), e, 1e-15);
         // A5
         let want_points = if reac.is_some() {
-            owned(&[("displacement", 3), ("rotation", 3), ("reaction", 3), ("reaction_moment", 3)])
+            owned(&[
+                ("displacement", 3),
+                ("rotation", 3),
+                ("reaction", 3),
+                ("reaction_moment", 3),
+            ])
         } else {
             owned(&[("displacement", 3), ("rotation", 3)])
         };
