@@ -7,8 +7,11 @@
 
 use crate::error::{FemError, Result};
 use crate::mesh::{ElementKind, FaceRef, SolidMesh, TET_EDGES};
-use rcfd_core::vec3::Vec3;
+use rcfd_core::vec3::{cross, dot, sub, Vec3};
+use rcfd_mesh::fan::{AxialFan, Side};
+use rcfd_mesh::fan_design::ComputerFan;
 use std::collections::{BTreeSet, HashMap};
+use std::f64::consts::PI;
 
 /// Names of the six box faces, in the order x min, x max, y min, y max, z min, z max.
 pub const BOX_FACES: [&str; 6] = ["xmin", "xmax", "ymin", "ymax", "zmin", "zmax"];
@@ -263,4 +266,134 @@ pub fn upgrade_to_tet10(mesh: &SolidMesh) -> Result<(SolidMesh, Vec<MidEdgeNode>
         out.add_surface_set(name, mesh.surface_set(name).expect("listed").to_vec())?;
     }
     Ok((out, mids))
+}
+
+fn blade_error(key: &'static str, reason: impl Into<String>) -> FemError {
+    FemError::InvalidValue {
+        key,
+        reason: reason.into(),
+    }
+}
+
+/// The structured mesh of one fan blade in linear tetrahedra (ADR 0505, the construction of ADR 0500 D1).
+///
+/// `divisions = [n_c, n_t, n_s]` are the cells along the chord (cosine spaced, `n_c >= 2`), through the thickness and along
+/// the span. The point `(i, k, j)` lies on the cylinder of radius `r_hub + L j / n_s`, between the suction (`k = 0`) and the
+/// pressure (`k = n_t`) surface of [`AxialFan::surface_zs`]; the two surfaces meet at the closed leading and trailing
+/// edges, where the thickness nodes merge. Each grid cell is split into the six Kuhn tetrahedra, those with a repeated node
+/// are dropped, and each is oriented by its signed volume. Element count `6 (n_c - 1) n_t n_s`.
+///
+/// Sets: element set `all`; node sets `all`, `hub` (`r = r_hub`), `tip` (`r = r_tip`); surface sets (the boundary faces)
+/// `hub`, `tip`, `pressure` (the pressure side with the leading and trailing edges, caps excluded) and `suction` (every
+/// other boundary face). The four surface sets are disjoint and together are the whole boundary. Divisions with a zero,
+/// `n_c < 2`, or a fan that fails [`AxialFan::validate`] are refused.
+pub fn fan_blade_tet4(fan: &AxialFan, divisions: [usize; 3]) -> Result<SolidMesh> {
+    let [nc, nt, ns] = divisions;
+    if nc < 2 || nt == 0 || ns == 0 {
+        return Err(blade_error(
+            "divisions",
+            format!("[n_c, n_t, n_s] = {divisions:?} needs n_c >= 2, n_t >= 1 and n_s >= 1"),
+        ));
+    }
+    let problems = fan.validate();
+    if let Some(p) = problems.first() {
+        return Err(blade_error("fan", format!("the blade is not valid: {p:?}")));
+    }
+    let signed_volume = |p: [Vec3; 4]| dot(sub(p[1], p[0]), cross(sub(p[2], p[0]), sub(p[3], p[0]))) / 6.0;
+    // idx[j][i][k]; at i = 0 and i = nc the thickness nodes merge into the k = 0 node.
+    let mut nodes: Vec<Vec3> = Vec::new();
+    let mut node_j: Vec<usize> = Vec::new();
+    let mut node_press: Vec<bool> = Vec::new();
+    let mut idx = vec![vec![vec![0usize; nt + 1]; nc + 1]; ns + 1];
+    for (j, plane) in idx.iter_mut().enumerate() {
+        let r = fan.r_hub + (fan.r_tip - fan.r_hub) * j as f64 / ns as f64;
+        let st = fan.station_at(r);
+        for (i, column) in plane.iter_mut().enumerate() {
+            let x = 0.5 * (1.0 - (PI * i as f64 / nc as f64).cos());
+            let (zu, su) = fan.surface_zs(&st, x, Side::Suction);
+            let (zl, sl) = fan.surface_zs(&st, x, Side::Pressure);
+            let edge = i == 0 || i == nc;
+            for k in 0..=nt {
+                if edge && k > 0 {
+                    column[k] = column[0];
+                    continue;
+                }
+                let w = k as f64 / nt as f64;
+                let (z, s) = (zu + w * (zl - zu), su + w * (sl - su));
+                nodes.push([r * (s / r).cos(), r * (s / r).sin(), z]);
+                node_j.push(j);
+                node_press.push(edge || k == nt);
+                column[k] = nodes.len() - 1;
+            }
+        }
+    }
+    const PERMS: [[usize; 3]; 6] = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
+    let mut conn = Vec::new();
+    for j in 0..ns {
+        for i in 0..nc {
+            for k in 0..nt {
+                for p in PERMS {
+                    let mut c = [i, k, j];
+                    let mut v = [idx[j][i][k]; 4];
+                    for s in 0..3 {
+                        c[p[s]] += 1;
+                        v[s + 1] = idx[c[2]][c[0]][c[1]];
+                    }
+                    if (0..4).any(|a| (a + 1..4).any(|b| v[a] == v[b])) {
+                        continue;
+                    }
+                    if signed_volume(v.map(|n| nodes[n])) <= 0.0 {
+                        v.swap(1, 2);
+                    }
+                    conn.extend_from_slice(&v);
+                }
+            }
+        }
+    }
+    let nn = nodes.len();
+    let mut mesh = SolidMesh::new(nodes)?;
+    mesh.add_block(ElementKind::Tet4, conn)?;
+    let ne = mesh.n_elements();
+    mesh.add_element_set("all", (0..ne).collect())?;
+    mesh.add_node_set("all", (0..nn).collect())?;
+    mesh.add_node_set("hub", (0..nn).filter(|&n| node_j[n] == 0).collect())?;
+    mesh.add_node_set("tip", (0..nn).filter(|&n| node_j[n] == ns).collect())?;
+    let (mut hub, mut tip, mut press, mut suction) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    for (key, m) in mesh.face_incidence() {
+        if m.len() != 1 {
+            continue;
+        }
+        if key.iter().all(|&n| node_j[n] == 0) {
+            hub.push(m[0]);
+        } else if key.iter().all(|&n| node_j[n] == ns) {
+            tip.push(m[0]);
+        } else if key.iter().all(|&n| node_press[n]) {
+            press.push(m[0]);
+        } else {
+            suction.push(m[0]);
+        }
+    }
+    mesh.add_surface_set("hub", hub)?;
+    mesh.add_surface_set("tip", tip)?;
+    mesh.add_surface_set("pressure", press)?;
+    mesh.add_surface_set("suction", suction)?;
+    Ok(mesh)
+}
+
+/// [`fan_blade_tet4`] lifted to quadratic tetrahedra by [`upgrade_to_tet10`] (mid-edge nodes at the midpoints of the
+/// straight edges, not projected onto the curved blade). Same sets.
+pub fn fan_blade_tet10(fan: &AxialFan, divisions: [usize; 3]) -> Result<SolidMesh> {
+    Ok(upgrade_to_tet10(&fan_blade_tet4(fan, divisions)?)?.0)
+}
+
+/// Blade `blade` of a [`ComputerFan`] (with its per-blade deviation, `ComputerFan::axial_fan(blade, 0, 0)`) as the Tet10
+/// mesh of [`fan_blade_tet10`]. `blade >= cf.n_blades` is refused.
+pub fn computer_fan_blade_tet10(cf: &ComputerFan, blade: usize, divisions: [usize; 3]) -> Result<SolidMesh> {
+    if blade >= cf.n_blades {
+        return Err(blade_error(
+            "blade",
+            format!("blade {blade} does not exist in a fan of {} blades", cf.n_blades),
+        ));
+    }
+    fan_blade_tet10(&cf.axial_fan(blade, 0.0, 0.0), divisions)
 }
