@@ -415,3 +415,109 @@ The whole-crate run with `--no-fail-fast` (`fem-suite2.log`: 664 passed, 3 faile
 `nonlinear::initial_states` refuses a shell model, which D3 changes (the driver needs the states of a shell model; a shell gets
 the empty state). As in amendment 3: each test becomes an ignored record with its body unchanged, and a copy `<name>_after_f578`
 in the same file expects `Ok` in that row, every other row unchanged. No limit changes. Every other test of the crate passed.
+
+## Addendum 1 (2026-11-14): results
+
+Runs: run 1, `sa_corot_shell` once at c883de4e (`--release -- --nocapture --test-threads 1`, `f578-scratch/run1.log`). After
+amendment 2 (584b282a), run 2: the four corrected roll-up tests, once (`run2-corrected.log`). X1 once (`x1.log`). N1 was
+recorded at the base e90c2350 (`n1-base.log`) before any library code and passed in every later run. After amendments 3 and 4:
+the superseded tests and their copies (`superseded-run.log`); the whole `rcfd-fem` suite in release (`fem-suite2.log`,
+`--no-fail-fast`: before amendment 4, 664 passed, 3 failed, the three of amendment 4; after it the seven touched test files
+all pass); `sa_corot_shell` again at the corrected code as a regression (`regression.log`); `baseline_hashes` of `rcfd-api`
+(3 passed, 1 ignored) and `docs_site` of `rcfd-cli` (2 passed) (`api-cli.log`). No limit was changed after a run.
+
+| Id | Limit | Measured (run 1 / run 2; regression at the corrected code) | Met |
+|---|---|---|---|
+| T1, 6 configurations x 2 states | `<= 1e-6` each | largest `2.41e-10` (run 1); regression largest `2.00e-10` | yes |
+| T1r rotational block | recorded | `2.9e-11 .. 3.1e-10` | recorded |
+| S1 `K == K^T` bits, 12 states | holds | holds | yes |
+| L1 six elements | `<= 1e-10` each | `3.8e-16 .. 8.2e-16`; regression largest `5.8e-16` | yes |
+| L1f | `<= 1e-11` each | `2.1e-21 .. 3.0e-16`; regression largest `6.3e-17` | yes |
+| L2 two rigid motions, six elements | `<= 1e-11` each | `1.1e-16 .. 4.2e-16`; regression largest `4.0e-16` | yes |
+| RU4 (run 1) | `<= 1e-2`; last 1 | no measurement: the first increment stalled at the relative residual `1.02e-8` (amendment 2) | missed, a code defect; record `ru4_ru4b_..._known_miss` |
+| RU4, RU4b (run 2) | `<= 1e-2`; last 1; `<= 1e-6` | `e` largest `1.1868e-3` at `lambda = 0.65` (predicted `1.18e-3`); the tip at the root within `5.0e-15 L` at `lambda = 1`; tip rotation within `4.7e-15`; 40 increments, 6 iterations each | yes |
+| RU3, RU3b (run 1 / run 2) | as RU4 | run 1 stalled at `2.34e-8`; run 2 `1.1868e-3`, `6.6e-15` | run 1 missed (record), run 2 yes |
+| RU4a, RU4ab (run 1 / run 2) | as RU4 | run 1 stalled at `1.51e-8`; run 2 `1.1868e-3`, `5.2e-15` | run 1 missed (record), run 2 yes |
+| RU4f (run 1 / run 2) | `<= 1e-2`; out-of-plane `<= 1e-6` | run 1 stalled at `9.59e-9`; run 2 `1.1868e-3`, out-of-plane `4.2e-15` (37 increments, one halving; tip rotation `8.6e-14`, recorded) | run 1 missed (record), run 2 yes |
+| solve = recorder run (amendment 1) | holds | holds in the four runs | yes |
+| CY4 | `<= 1e-2` each; `>= 1.5` | `+5.3570e-4` at every step (predicted `1/cos(pi/96) - 1 = 5.36e-4`); last `lambda = 1.5098`; 4 iterations per step | yes |
+| CY3 | `<= 1e-2` each; `>= 1.5` | largest `5.3953e-4`; last `1.5098` | yes |
+| CY4a ANDES (record) | recorded | the step sequence failed at the load factor `0.597` (`p = 0.38 E t/R`): a negative pivot (`-4.1e5` against the diagonal `6.2e8`) after 5 halvings. The corotated linear membrane does not follow the law (D0); the cause of the negative pivot was not diagnosed | recorded |
+| X1 ADR 0487 C1 (ignored record, unchanged) | recorded | passes: `5.3570e-4` every step, last `1.5098` | recorded |
+| R1 four refusals | holds | holds (arc length, nonlinear transient, `solve_from`: `NotYetSupported` Shell4; J2 on a Shell4: key `"nonlinear"`) | yes |
+| N1 default bits | exact | the 9 digests equal | yes |
+| N2 `baseline_hashes` | pass | pass | yes |
+| P2 wall time (release) | recorded | RU4 `1.52 s`, RU3 `0.87 s`, RU4a `0.79 s`, RU4f `0.60 s`, CY4 `0.67 s`, CY3 `0.57 s` | recorded |
+
+### Mutations (scratch copy of 6734b73c by `git archive`, one at a time, `f578-scratch/mutate.py`, `mutations.log`, `mut-MU*.log`)
+
+| Id | Caught by |
+|---|---|
+| MU1 tangent without `sum s_i Hess d_i` | T1 (`2.7e-3` .. `1.6e-2`), RU4f (Newton fails at step 15) |
+| MU2 default membranes corotated linear | CY4 (`0.81`), CY3 (`0.88`), RU4f |
+| MU3 `phi = v` | RU4, RU3, RU4a (`e = 2.7e-2`), RU4b (`2.8e-2`) |
+| MU4 `Lambda_0` dropped | L1, L1f, L2, CY4, CY3, RU |
+| MU5 Rodrigues `b` sign | RU4, RU3, RU4a, RU4f (Newton fails at step 10); not L2 (planned) |
+| MU6 rigid link dropped | L1, L1f, L2 (warped Shell4 and its ANDES twin, `1e-2`) |
+| MU7 Taylor branch everywhere | L2 large rotation (`1.0e-8` .. `2.0e-8`), RU |
+| MU8 lower triangle empty | T1, S1, L1, RU, CY |
+| MU9 linear response | CY4, CY3 (`0.81`), L2 (`1.9`), RU |
+
+All nine mutations were caught, each by a check it was planned for. One planned catch did not happen: MU5 was caught by the
+roll-ups and not by L2.
+
+### Deviations
+
+- Amendment 2: the element formed positions in absolute coordinates. Their rounding (`eps |X|`, amplified by the membrane
+  stiffness) put a floor of `1e-8` under the relative residual, above the driver's tolerance, so the four roll-ups of run 1
+  could not converge. The fix is in the library: positions relative to the element, and the Green strain from displacement
+  gradients. The run-1 tests are kept as ignored records, and the corrected tests met with the predicted error. The checks of
+  run 1 that had met were rerun at the corrected code as a regression and met again.
+- Five existing tests assert refusals that the acceptance removes: ADR 0487 C1r (X2), `sa_scaffold::r2b_to_r4b_refusals_after_f419`
+  (amendment 3), and three shell-refusal tests whose `nonlinear::initial_states` row expected a refusal (amendment 4). Each
+  received `#[ignore]` with its reason and an unchanged body. The last four are continued by `*_after_f578` copies in the same
+  file with only that row changed (the ADR 0291 pattern). These are edits of existing test files and need the lead's
+  confirmation.
+- `rcfd-api` and `rcfd-cli` were not edited.
+
+### Not run
+
+- The whole workspace suite (the lead's gate). The mutations ran `sa_corot_shell` only.
+
+### Decision
+
+**done** by the registered rule. Every check of the table met (the roll-ups after amendment 2, with the run-1 records kept),
+all nine mutations were caught, fmt and clippy are clean, N1 and N2 are unchanged, and X2 is as registered. Every clause of the
+acceptance is met:
+
+- (a1) Shell4 and Shell3 have an internal force and a consistent (exact, symmetric) tangent at finite displacements and
+  rotations, with the additive rotation-vector update registered (D1).
+- (a2) `nonlinear::solve` and `solve_with` take them, with every default bit-identical (N1, N2).
+- (a3) The tangent agrees with central differences within `2.4e-10`.
+- (a4) The strip rolls into a full circle within `1.19e-3` of the closed-form tip position (limit 1 percent).
+- (a5) The cylinder follows the thin law within `5.4e-4` to the stretch 1.51.
+
+If the lead counts the amendment of run 1 or the five superseded tests against **done**, the status is **partial**, with
+nothing missing in the acceptance.
+
+### Remaining questions (recommendations for the lead)
+
+- **Q1** (the five superseded tests): options (a) accept the ignored records and copies; (b) ask for another form.
+  Recommendation (a), the pattern the repository already uses (ADR 0291, ADR 0454).
+- **Q2** (the rotation singularity at `2 pi`): options (a) keep the additive update with the limit stated; (b) a follow-up
+  for a multiplicative or rescaled update. Recommendation (a): fan blades rotate far less than `2 pi`.
+- **Q3** (the drilling membranes at large membrane strain, CY4a): options (a) keep them corotated linear, with the limit
+  stated; (b) a follow-up for a Green-strain ANDES membrane. Recommendation (a): the default membranes cover large membrane
+  strain, and the ANDES membrane is opt-in.
+- **Q4** (arc length, the nonlinear transient and `solve_from` with shells): recommend the follow-up below, since fan-blade
+  dynamics need the transient.
+
+## For the lead: roadmap entries
+
+Proposed status of F-578: **done**. Note:
+
+> Structural solver, advanced tier. Follow-up of F-573 (ADR 0487, 2026-11-14). DONE. ADR 0490, 2026-11-14: Shell4 and Shell3 in the Newton driver as corotated facets (shell_corot.rs): additive total rotation vector with the Rodrigues map (registered; singular at 2 pi), the rigid offset link turned with the node, the element frame from the current projected points, deformational rotations by the logarithm; energy (1/2) d^T K_r d with the linear element (bending, MITC shear, drilling; the whole linear matrix for the ANDES and Allman membranes) plus a total Lagrangian Green-strain membrane for the default membranes; force and tangent as exact first and second derivatives (second-order forward differentiation), the tangent symmetric bit for bit. Taken by nonlinear::solve and solve_with; arc length, the nonlinear transient and solve_from still refuse shells. Tangent against central differences within 2.4e-10 (limit 1e-6); reduces to the linear element at rest within 8e-16, rigid motions force-free within 4e-16. Cantilever strip under a dead tip moment (L = 12, 16 elements) rolls into the full circle: tip within 1.19e-3 L of the closed-form arc (predicted 1.18e-3 from the chord geometry; limit 1 percent), back at the root within 5e-15 L, tip rotation within 7e-15, for Shell4, Shell3, the ANDES Shell4 and, without the planar holds, to 0.9 of the circle. Quarter cylinder under the follower internal pressure of ADR 0487 follows p = E t (lambda^2 - 1)/(2 R) within 5.4e-4 to the stretch 1.51 (Shell4 and Shell3; the facet factor 1/cos(pi/96)). Default bits unchanged (9 digests), baseline hashes unchanged; nine of nine mutations caught. A rounding floor of run 1 (absolute coordinates) fixed by amendment; five refusal tests superseded by design, kept as ignored records.
+
+Follow-up (title, deps, acceptance), for the lead to number or drop:
+
+> (new item, number for the lead) Corotated shells in the arc-length continuation and the nonlinear transient (deps F-578). Every limit not stated here is registered in the ADR before the run. arclength::trace, solve_from and the nonlinear transient integrator take Shell4 and Shell3 with the corotated element of ADR 0490 (the transient with the consistent shell mass and the rotary inertia of the rotation vector, in a registered form), every default bit-identical; a shallow cylindrical shell panel under a point load followed through its limit point by arc length within 2 percent of a registered reference; a cantilever strip of shells in free vibration of small amplitude gives the linear first frequency within 1 percent and conserves energy within a registered limit over 100 periods.
