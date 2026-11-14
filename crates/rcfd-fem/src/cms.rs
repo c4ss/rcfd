@@ -26,7 +26,9 @@ use crate::model::{Constraint, SolidModel};
 use crate::mpc::{add_supports, refuse_nonzero_values, transformation, Transformation};
 use rcfd_core::vec3::Vec3;
 use rcfd_linalg::complex::C64;
-use rcfd_linalg::eigen::{generalized_eigen_dense, lowest_eigenpairs, DenseEigen, ResidualTest, Shift, SubspaceOptions};
+use rcfd_linalg::eigen::{
+    generalized_eigen_dense, lowest_eigenpairs, DenseEigen, ResidualTest, Shift, SubspaceOptions,
+};
 use rcfd_linalg::skyline::SkylineLdlt;
 use rcfd_linalg::CsrMatrix;
 use std::path::Path;
@@ -705,7 +707,11 @@ impl ReducedPart {
         s.push_str(FILE_HEADER);
         s.push('\n');
         ints(&mut s, "sizes", &[self.n_mesh, self.n_q, self.modes]);
-        ints(&mut s, "nodes", &self.boundary.iter().map(|b| b.node).collect::<Vec<_>>());
+        ints(
+            &mut s,
+            "nodes",
+            &self.boundary.iter().map(|b| b.node).collect::<Vec<_>>(),
+        );
         ints(
             &mut s,
             "components",
@@ -740,7 +746,9 @@ impl ReducedPart {
             return Err(bad(format!("the first line is not '{FILE_HEADER}'")));
         }
         let mut section = |name: &str| -> Result<Vec<String>> {
-            let line = lines.next().ok_or_else(|| bad(format!("section '{name}' is missing")))?;
+            let line = lines
+                .next()
+                .ok_or_else(|| bad(format!("section '{name}' is missing")))?;
             let mut it = line.split(' ');
             if it.next() != Some(name) {
                 return Err(bad(format!("section '{name}' expected")));
@@ -751,13 +759,19 @@ impl ReducedPart {
                 .ok_or_else(|| bad(format!("section '{name}' has no count")))?;
             let v: Vec<String> = it.map(|s| s.to_string()).collect();
             if v.len() != count {
-                return Err(bad(format!("section '{name}' has {} values, {count} expected", v.len())));
+                return Err(bad(format!(
+                    "section '{name}' has {} values, {count} expected",
+                    v.len()
+                )));
             }
             Ok(v)
         };
         let to_ints = |name: &str, v: Vec<String>| -> Result<Vec<usize>> {
             v.iter()
-                .map(|s| s.parse::<usize>().map_err(|_| bad(format!("section '{name}': '{s}' is not an integer"))))
+                .map(|s| {
+                    s.parse::<usize>()
+                        .map_err(|_| bad(format!("section '{name}': '{s}' is not an integer")))
+                })
                 .collect()
         };
         let to_floats = |name: &str, v: Vec<String>| -> Result<Vec<f64>> {
@@ -891,9 +905,9 @@ impl Assembly {
         for (pi, p) in parts.iter().enumerate() {
             let mut map = Vec::with_capacity(p.n_reduced());
             for b in &p.boundary {
-                let found = unknowns.iter().position(|(x, c)| {
-                    *c == b.component && (0..3).all(|k| (x[k] - b.position[k]).abs() <= tol)
-                });
+                let found = unknowns
+                    .iter()
+                    .position(|(x, c)| *c == b.component && (0..3).all(|k| (x[k] - b.position[k]).abs() <= tol));
                 let g = match found {
                     Some(g) => {
                         if map.contains(&g) {

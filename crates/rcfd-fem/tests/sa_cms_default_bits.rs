@@ -117,7 +117,14 @@ const BASE: [u64; 6] = [
 #[test]
 fn d1_default_paths_unchanged() {
     let got = digests();
-    let names = ["static u", "static stress", "modal F", "all_modes S", "harmonic re", "harmonic im"];
+    let names = [
+        "static u",
+        "static stress",
+        "modal F",
+        "all_modes S",
+        "harmonic re",
+        "harmonic im",
+    ];
     let mut bad = Vec::new();
     for i in 0..6 {
         if got[i] != BASE[i] {

@@ -22,14 +22,20 @@ impl Checks {
     }
     fn le(&mut self, id: &str, measured: f64, limit: f64) {
         let ok = measured <= limit;
-        println!("{id}: {measured:.3e} (limit <= {limit:e}) {}", if ok { "met" } else { "MISSED" });
+        println!(
+            "{id}: {measured:.3e} (limit <= {limit:e}) {}",
+            if ok { "met" } else { "MISSED" }
+        );
         if !ok {
             self.failed.push(format!("{id}: {measured:e} > {limit:e}"));
         }
     }
     fn ge(&mut self, id: &str, measured: f64, limit: f64) {
         let ok = measured >= limit;
-        println!("{id}: {measured:.3e} (limit >= {limit:e}) {}", if ok { "met" } else { "MISSED" });
+        println!(
+            "{id}: {measured:.3e} (limit >= {limit:e}) {}",
+            if ok { "met" } else { "MISSED" }
+        );
         if !ok {
             self.failed.push(format!("{id}: {measured:e} < {limit:e}"));
         }
@@ -215,7 +221,11 @@ fn am_all_modes_reproduce_all_frequencies() {
             .iter()
             .zip(&reference)
             .fold(0.0f64, |m, (a, b)| m.max((a / b - 1.0).abs()));
-        println!("{id}: interior {ni}, omega_1 {:.6} omega_max {:.6e}", got[0], got[got.len() - 1]);
+        println!(
+            "{id}: interior {ni}, omega_1 {:.6} omega_max {:.6e}",
+            got[0],
+            got[got.len() - 1]
+        );
         c.le(&format!("{id} ({interface}) largest |f/f_full - 1|"), worst, 1e-8);
     }
     c.finish();
@@ -255,7 +265,11 @@ fn b_bar_of_two_parts() {
         for m in 0..5 {
             worst_rise = worst_rise.max(err[m + 1][k] - err[m][k]);
         }
-        c.le(&format!("B3 f{} largest rise err(m+1) - err(m)", k + 1), worst_rise, 1e-9);
+        c.le(
+            &format!("B3 f{} largest rise err(m+1) - err(m)", k + 1),
+            worst_rise,
+            1e-9,
+        );
         c.holds(
             &format!("B3 f{} err(5) < err(0)/10", k + 1),
             err[5][k] < err[0][k] / 10.0,
@@ -286,7 +300,11 @@ fn s_p_symmetry_and_positive_mass() {
         let sm = cms::relative_asymmetry(p.mass(), n);
         c.le(&format!("S1 {name} K_r asymmetry"), sk, 1e-13);
         c.le(&format!("S1 {name} M_r asymmetry"), sm, 1e-13);
-        c.le(&format!("S2 {name} asymmetry before symmetrisation"), p.asymmetry(), 1e-10);
+        c.le(
+            &format!("S2 {name} asymmetry before symmetrisation"),
+            p.asymmetry(),
+            1e-10,
+        );
         let e = symmetric_eigen(p.mass(), n).unwrap();
         let ratio = e.values[0] / e.values[n - 1];
         c.ge(&format!("P1 {name} lambda_min(M_r)/lambda_max(M_r)"), ratio, 1e-12);
@@ -347,7 +365,12 @@ fn harmonic_errors(omegas: &[f64]) -> Vec<f64> {
         let key = [p[0].to_bits(), p[1].to_bits(), p[2].to_bits()];
         let (part, node) = if p[0] <= 0.5 { (0, ia[&key]) } else { (1, ib[&key]) };
         for comp in 0..3 {
-            let eq_p = if part == 0 { ad.equation(node, comp) } else { bd.equation(node, comp) }.unwrap();
+            let eq_p = if part == 0 {
+                ad.equation(node, comp)
+            } else {
+                bd.equation(node, comp)
+            }
+            .unwrap();
             map.push((fd.equation(i, comp).unwrap(), part, eq_p));
         }
     }
@@ -381,7 +404,11 @@ fn harmonic_errors(omegas: &[f64]) -> Vec<f64> {
 #[ignore = "known miss of ADR 0469 H1 (predicted by its arithmetic item 3): 9.966e-1 > 1e-2; no axial fixed-interface mode is kept and the interior load's flexibility is missing above about 0.12 of the lowest omitted frequency"]
 fn h1_harmonic_to_half_the_lowest_omitted_known_miss() {
     let (a, b) = bar_parts(5);
-    let half = 0.5 * a.omitted_eigenvalue().unwrap().sqrt().min(b.omitted_eigenvalue().unwrap().sqrt());
+    let half = 0.5
+        * a.omitted_eigenvalue()
+            .unwrap()
+            .sqrt()
+            .min(b.omitted_eigenvalue().unwrap().sqrt());
     println!("omega_half = {half:.3} rad/s");
     let mut ws: Vec<f64> = (1..=50).map(|j| j as f64 * half / 50.0).collect();
     ws.extend(full_bar_omegas().into_iter().filter(|&w| w < half));
@@ -399,7 +426,10 @@ fn h1_harmonic_to_half_the_lowest_omitted_known_miss() {
         .filter(|(_, x)| **x > 1e-2)
         .map(|(w, _)| *w)
         .fold(f64::INFINITY, f64::min);
-    println!("H1: largest at omega {:.2}; first omega above 1e-2: {first:.2}", worst.1);
+    println!(
+        "H1: largest at omega {:.2}; first omega above 1e-2: {first:.2}",
+        worst.1
+    );
     let mut c = Checks::new();
     c.le("H1 largest relative error", worst.0, 1e-2);
     c.finish();
@@ -444,11 +474,10 @@ fn f_file_round_trip() {
             && same_bits(p.phi(), q.phi())
             && p.omitted_eigenvalue().map(f64::to_bits) == q.omitted_eigenvalue().map(f64::to_bits)
             && p.asymmetry().to_bits() == q.asymmetry().to_bits()
-            && p.boundary().iter().zip(q.boundary()).all(|(x, y)| {
-                x.node == y.node
-                    && x.component == y.component
-                    && same_bits(&x.position, &y.position)
-            });
+            && p.boundary()
+                .iter()
+                .zip(q.boundary())
+                .all(|(x, y)| x.node == y.node && x.component == y.component && same_bits(&x.position, &y.position));
         let ints = p.boundary().len() == q.boundary().len()
             && p.modes() == q.modes()
             && p.n_interior() == q.n_interior()
@@ -461,10 +490,18 @@ fn f_file_round_trip() {
         c.holds(&format!("F1 {name} file written again byte-identical"), same_file, "");
         let text = std::fs::read_to_string(&path).unwrap();
         let cut = ReducedPart::from_text(&text[..text.len() / 2]);
-        c.holds(&format!("F2 {name} half file refused"), cut.is_err(), &format!("{:?}", cut.err()));
+        c.holds(
+            &format!("F2 {name} half file refused"),
+            cut.is_err(),
+            &format!("{:?}", cut.err()),
+        );
         let other = text.replacen("rcfd-cms-part 1", "rcfd-cms-part 2", 1);
         let hdr = ReducedPart::from_text(&other);
-        c.holds(&format!("F2 {name} header 2 refused"), hdr.is_err(), &format!("{:?}", hdr.err()));
+        c.holds(
+            &format!("F2 {name} header 2 refused"),
+            hdr.is_err(),
+            &format!("{:?}", hdr.err()),
+        );
     }
     c.finish();
 }
@@ -518,7 +555,11 @@ fn c1_subspace_and_dense_paths_agree() {
     let p = reduce(&s, "xmax", &opts(5).dense_limit(0)).unwrap();
     let mut c = Checks::new();
     let mut worst = 0.0f64;
-    for (x, y) in d.fixed_interface_eigenvalues().iter().zip(p.fixed_interface_eigenvalues()) {
+    for (x, y) in d
+        .fixed_interface_eigenvalues()
+        .iter()
+        .zip(p.fixed_interface_eigenvalues())
+    {
         worst = worst.max((x / y - 1.0).abs());
     }
     worst = worst.max((d.omitted_eigenvalue().unwrap() / p.omitted_eigenvalue().unwrap() - 1.0).abs());
