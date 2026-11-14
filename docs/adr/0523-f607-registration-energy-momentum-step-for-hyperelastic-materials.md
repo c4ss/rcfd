@@ -361,3 +361,16 @@ numbers; disclosed).
 2. **The estimate of P3c (arithmetic 2) was misreckoned**, the limit is not changed: with `|E|` about `2.1` times the scale,
    the measured `6.3 .. 10.6 |dE|^2` at the base `0.1` is `1.3 .. 2.2 |dE|^2/|E|` and `370 .. 1354 |dE|^2` at `1e-3` is `0.8 ..
    2.8 |dE|^2/|E|` (not `0.4 .. 1.4`); the registered limit `5` stays. P3c ran before this amendment: `1.19`.
+
+## Amendment 2 (2026-11-14, written after the registered run of commit 1347dbf2 and before any corrected run)
+
+The registered run (`cargo test -p rcfd-fem --release --test sa_dg`, log `f607-scratch/run1.log`) met F1h, I1, I2 and recorded
+I1r; the five tests with a neo-Hookean model (A0 to A3, K0 to K2, N1h, R1h, T1h) panicked at `Integrator::start` with
+`NotYetSupported { variant: "Hyperelastic", package: "ADR 0328 (F-425)" }` before any step. **Diagnosis: a defect of the
+library, not of the set-up.** `start` builds the empty material states with `nonlinear::initial_states(&self.model)`, which
+refuses a pending material; D5 moved the checks, the mass and `K_0` to the surrogate but missed this call. **Correction**
+(library only, the tests unchanged): for a neo-Hookean integrator `start` takes the empty states of the surrogate's layout (no
+state value at any element: `state_size` is 0 for both materials), the same states `initial_states` gives the surrogate; every
+other path unchanged. The five tests are then run once (run 2, `f607-scratch/run2.log`); the four that passed are not rerun.
+No limit is changed. Under the decision rule this is a deviation (a registered run that did not reach the checks); it is
+reported in the addendum.
