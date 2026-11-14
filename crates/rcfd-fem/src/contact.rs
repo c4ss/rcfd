@@ -381,6 +381,7 @@ fn project(xs: Vec3, x: &[Vec3; 4]) -> Option<([f64; 2], f64, Vec3, Vec<f64>, Ve
     let x12 = comb(&twist, x);
     let mut xi = [0.0f64; 2];
     let mut converged = false;
+    let mut last_step = f64::INFINITY;
     for _ in 0..30 {
         let (n, d) = shape(xi);
         let p = comb(&n, x);
@@ -400,10 +401,16 @@ fn project(xs: Vec3, x: &[Vec3; 4]) -> Option<([f64; 2], f64, Vec3, Vec<f64>, Ve
         if !(xi[0].is_finite() && xi[1].is_finite()) || xi[0].abs() > 10.0 || xi[1].abs() > 10.0 {
             return None;
         }
-        if step[0].abs().max(step[1].abs()) <= 1e-14 {
+        last_step = step[0].abs().max(step[1].abs());
+        if last_step <= 1e-14 {
             converged = true;
             break;
         }
+    }
+    // ADR 0517 amendment 1: on a face small against its coordinates the steps stay at the rounding floor
+    // (about ulp(|x|) over the face's half-size) above 1e-14; a last step at most 1e-10 is that floor.
+    if !converged && last_step <= 1e-10 {
+        converged = true;
     }
     if !converged {
         return None;
