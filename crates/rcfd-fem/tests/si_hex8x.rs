@@ -962,6 +962,7 @@ fn is_formulation_refusal<T>(r: rcfd_fem::Result<T>, f: SolidFormulation) -> (bo
 }
 
 #[test]
+#[ignore = "record of ADR 0493 RF3: the nonlinear rows for BBar retired by ADR 0506; copy in si_fbar.rs"]
 fn rf1_rf2_rf3_refusals() {
     let mut ch = Checks::new();
     // RF1: the formulations are a Hex8 choice.

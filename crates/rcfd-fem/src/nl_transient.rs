@@ -875,7 +875,8 @@ impl Integrator {
     }
 
     /// The strain energy `sum_q w_q S . E/2` at the points of the stiffness rule (the St. Venant-Kirchhoff potential of an
-    /// elastic material); refused for a material with history (key `"strain energy"`).
+    /// elastic material; `E` the F-bar strain for a BBar Hex8, ADR 0506 D3); refused for a material with history (key
+    /// `"strain energy"`).
     pub fn strain_energy(&self) -> Result<f64> {
         let s = self.current()?;
         if self.history {
@@ -902,9 +903,23 @@ impl Integrator {
                 .collect();
             let el = element_for(mesh.element_kind(e));
             let material = &model.materials()[materials[e]].1;
-            for ip in el.integration_points(&coords, el.stiffness_rule())? {
-                let h = nonlinear::displacement_gradient(&ip.geometry.grad, &ue);
-                let strain = nonlinear::green_lagrange(&h);
+            // ADR 0506 D3: an opted Hex8 takes the strain of its formulation (the F-bar strain of a BBar block).
+            let opted = match crate::hex8x::opted(mesh, e) {
+                Some(f) => Some(nonlinear::hex8_strains(f, &coords, &ue)?),
+                None => None,
+            };
+            for (q, ip) in el
+                .integration_points(&coords, el.stiffness_rule())?
+                .into_iter()
+                .enumerate()
+            {
+                let strain = match &opted {
+                    Some(s) => s[q],
+                    None => {
+                        let h = nonlinear::displacement_gradient(&ip.geometry.grad, &ue);
+                        nonlinear::green_lagrange(&h)
+                    }
+                };
                 let (stress, _) = material.stress(&strain, &context, &[])?;
                 w += ip.weight * 0.5 * dot(&stress, &strain);
             }

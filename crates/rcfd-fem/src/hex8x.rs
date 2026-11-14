@@ -12,6 +12,9 @@
 //!   displacement, `alpha = -K_aa^{-1} K_au u`, the strain `B_q u + B_alpha,q alpha`.
 //!
 //! Only the linear-elastic paths take them (ADR 0493 D4); the paths of D5 refuse them naming [`FOLLOW_UP`].
+//! The nonlinear driver takes `BBar` as the variational F-bar element of ADR 0506 ([`crate::nonlinear`], the element mean of
+//! `det F` in place of the dilatation, the B-bar stiffness of this module at `u = 0`) and refuses `Incompatible` naming
+//! [`NONLINEAR_FOLLOW_UP`].
 
 use crate::element::{b_matrix, element_for, Element, ElementMatrix, Hex8, PointGeometry};
 use crate::error::{FemError, Result};
@@ -26,6 +29,9 @@ pub const PENDING: Option<&'static str> = None;
 
 /// The package named by the refusals of the paths that do not take the formulations (ADR 0493 D5).
 pub const FOLLOW_UP: &str = "a follow-up of ADR 0493";
+
+/// The package named by the nonlinear driver's refusal of the `Incompatible` formulation (ADR 0506 D2).
+pub const NONLINEAR_FOLLOW_UP: &str = "a follow-up of ADR 0506";
 
 const SIZE: usize = 24;
 const MODES: usize = 9;

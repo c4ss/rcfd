@@ -36,14 +36,21 @@
 //!   ([`TimeLoading`]: fixed patterns times piecewise linear factors, taken at the end time of every attempt, halved or not)
 //!   and a uniform temperature ([`TimeSteppingOptions::temperature`]); [`solve_in_time`] is it without histories.
 //!   [`internal_force_at`] is the assembled internal force at a point context.
+//! * The B-bar Hex8 (ADR 0506): a Hex8 of a block of the `BBar` formulation ([`crate::hex8x`]) takes the variational
+//!   F-bar element on the same kinematics, `F_bar = (J_bar / det F)^(1/3) F` with `J_bar` the element mean of `det F`, the
+//!   material at `E_bar = (F_bar^T F_bar - I)/2`, `f = sum_q w_q Bbar_NL^T S_bar` and its consistent, symmetric tangent
+//!   (ADR 0506 arithmetic 1 and 2); at `u = 0` its tangent is the B-bar stiffness of ADR 0493. Every driver takes it through
+//!   the assembly; [`hex8_force_and_tangent_at`], [`hex8_internal_force_at`], [`hex8_second_piola_kirchhoff`] and
+//!   [`hex8_strains`] give one element. The `Incompatible` formulation is refused (key `"nonlinear"`, naming
+//!   [`crate::hex8x::NONLINEAR_FOLLOW_UP`]).
 
 use crate::assemble::{assemble_with, element_dofs};
 use crate::constraint::{check_rigid_body_motions, prescribed_equations, reduce, Prescribed};
-use crate::element::{Element, ElementMatrix, ElementState};
+use crate::element::{Element, ElementMatrix, ElementState, Hex8};
 use crate::error::{FemError, Result};
 use crate::geometric::element_geometric_stiffness;
 use crate::loads::{nodal_load_vector, NodalForceAt};
-use crate::material::PointContext;
+use crate::material::{Matrix6, PointContext};
 use crate::mesh::{ElementKind, SolidFormulation};
 use crate::model::{Load, Material, SolidModel, SolidResult, SolverStats};
 use crate::solve::PIVOT_TOLERANCE;
@@ -180,27 +187,7 @@ fn evaluate<E: Element + ?Sized>(
         }
         let strain = green_lagrange(&h);
         let committed = &state.values()[q * ns..(q + 1) * ns];
-        let (s, d) = match material {
-            // ADR 0475 D3: the return map from the committed state gives the trial state of the point.
-            Material::J2 { .. } => {
-                let u = crate::mat_j2::update(material, &strain, committed)?;
-                new_state.extend_from_slice(&u.state);
-                (u.stress, u.tangent)
-            }
-            // ADR 0485 D3: the Prony update over the step of the point context gives the trial state of the point.
-            Material::Viscoelastic { .. } if ns > 0 => {
-                let u = crate::mat_visco::update(material, &strain, committed, context)?;
-                new_state.extend_from_slice(&u.state);
-                (u.stress, u.tangent)
-            }
-            // ADR 0489 D3: the creep return over the step of the point context gives the trial state of the point.
-            Material::Creep { .. } => {
-                let u = crate::mat_creep::update(material, &strain, committed, context)?;
-                new_state.extend_from_slice(&u.state);
-                (u.stress, u.tangent)
-            }
-            _ => material.stress(&strain, context, committed)?,
-        };
+        let (s, d) = point_update(material, &strain, committed, context, &mut new_state)?;
         let b = b_nonlinear(grad, &f);
         for (c, fc) in force.iter_mut().enumerate() {
             let mut v = 0.0;
@@ -245,6 +232,382 @@ fn evaluate<E: Element + ?Sized>(
         stress,
         state: new_state,
     })
+}
+
+/// The material at one point: the stress and the tangent at `strain` from the `committed` state, the trial state of a
+/// material with history appended to `new_state`.
+fn point_update(
+    material: &Material,
+    strain: &[f64; 6],
+    committed: &[f64],
+    context: &PointContext,
+    new_state: &mut Vec<f64>,
+) -> Result<([f64; 6], Matrix6)> {
+    Ok(match material {
+        // ADR 0475 D3: the return map from the committed state gives the trial state of the point.
+        Material::J2 { .. } => {
+            let u = crate::mat_j2::update(material, strain, committed)?;
+            new_state.extend_from_slice(&u.state);
+            (u.stress, u.tangent)
+        }
+        // ADR 0485 D3: the Prony update over the step of the point context gives the trial state of the point.
+        Material::Viscoelastic { .. } if material.state_size() > 0 => {
+            let u = crate::mat_visco::update(material, strain, committed, context)?;
+            new_state.extend_from_slice(&u.state);
+            (u.stress, u.tangent)
+        }
+        // ADR 0489 D3: the creep return over the step of the point context gives the trial state of the point.
+        Material::Creep { .. } => {
+            let u = crate::mat_creep::update(material, strain, committed, context)?;
+            new_state.extend_from_slice(&u.state);
+            (u.stress, u.tangent)
+        }
+        _ => material.stress(strain, context, committed)?,
+    })
+}
+
+/// The unknowns of a Hex8.
+const HEX8: usize = 24;
+
+/// One point of the F-bar Hex8 (ADR 0506 D1).
+struct FbarPoint {
+    weight: f64,
+    grad: Vec<[f64; 3]>,
+    f: [[f64; 3]; 3],
+    /// `d_a = F^{-T} g_a`, node-major.
+    d: [f64; HEX8],
+    /// `alpha^2 - 1`, `alpha = (J_bar / det F)^(1/3)`.
+    a2m1: f64,
+    /// The Green-Lagrange strain of `F` (Voigt, engineering shear).
+    e: [f64; 6],
+    /// The Green-Lagrange strain of `F_bar`.
+    ebar: [f64; 6],
+}
+
+/// The kinematics of the F-bar Hex8: the points and `dbar = sum_q omega_q d_q`, `omega_q = w_q det F_q / (V J_bar)`.
+struct FbarElement {
+    points: Vec<FbarPoint>,
+    omega: Vec<f64>,
+    dbar: [f64; HEX8],
+}
+
+/// `det(I + H) - 1 = tr H + i2(H) + det H`, without the subtraction (ADR 0506 D1).
+fn jacobian_minus_one(h: &[[f64; 3]; 3]) -> f64 {
+    let tr = h[0][0] + h[1][1] + h[2][2];
+    let mut tr2 = 0.0;
+    for (i, row) in h.iter().enumerate() {
+        for (j, v) in row.iter().enumerate() {
+            tr2 += v * h[j][i];
+        }
+    }
+    tr + 0.5 * (tr * tr - tr2) + det3(h)
+}
+
+fn check_hex8_fields(coords: &[Vec3], displacement: &[f64]) -> Result<()> {
+    if coords.len() != 8 {
+        return Err(FemError::FieldLength {
+            key: "coordinates",
+            expected: 8,
+            found: coords.len(),
+        });
+    }
+    if displacement.len() != HEX8 {
+        return Err(FemError::FieldLength {
+            key: "displacement",
+            expected: HEX8,
+            found: displacement.len(),
+        });
+    }
+    if let Some(i) = displacement.iter().position(|v| !v.is_finite()) {
+        return Err(FemError::InvalidValue {
+            key: "displacement",
+            reason: format!("element unknown {i} is not finite"),
+        });
+    }
+    Ok(())
+}
+
+/// The F-bar kinematics of a Hex8 at the points of its stiffness rule (ADR 0506 arithmetic 1, D1).
+fn fbar_kinematics(coords: &[Vec3], displacement: &[f64]) -> Result<FbarElement> {
+    check_hex8_fields(coords, displacement)?;
+    let ips = Hex8.integration_points(coords, Hex8.stiffness_rule())?;
+    let mut raw = Vec::with_capacity(ips.len());
+    for (q, ip) in ips.iter().enumerate() {
+        let grad = ip.geometry.grad.clone();
+        let h = displacement_gradient(&grad, displacement);
+        let f = deformation_gradient(&h);
+        let det_f = det3(&f);
+        if det_f.is_nan() || det_f <= 0.0 || det_f.is_infinite() {
+            return Err(FemError::InvalidValue {
+                key: INVERSION_KEY,
+                reason: format!("det F = {det_f:e} at point {q} of a Hex8 element (inverted)"),
+            });
+        }
+        // F^{-1} by the adjugate; d_a[i] = sum_j (F^{-1})_{ji} g_a[j].
+        let mut inv = [[0.0; 3]; 3];
+        for (r, row) in inv.iter_mut().enumerate() {
+            for (c, v) in row.iter_mut().enumerate() {
+                let (r1, r2) = ((c + 1) % 3, (c + 2) % 3);
+                let (c1, c2) = ((r + 1) % 3, (r + 2) % 3);
+                *v = (f[r1][c1] * f[r2][c2] - f[r1][c2] * f[r2][c1]) / det_f;
+            }
+        }
+        let mut d = [0.0; HEX8];
+        for (a, g) in grad.iter().enumerate() {
+            for i in 0..3 {
+                d[3 * a + i] = inv[0][i] * g[0] + inv[1][i] * g[1] + inv[2][i] * g[2];
+            }
+        }
+        raw.push((ip.weight, grad, h, f, jacobian_minus_one(&h), d));
+    }
+    let volume: f64 = raw.iter().map(|r| r.0).sum();
+    let jbar_m1 = raw.iter().map(|r| r.0 * r.4).sum::<f64>() / volume;
+    let ln_jbar = jbar_m1.ln_1p();
+    let jbar = 1.0 + jbar_m1;
+    let omega: Vec<f64> = raw.iter().map(|r| r.0 * (1.0 + r.4) / (volume * jbar)).collect();
+    let mut dbar = [0.0; HEX8];
+    for (o, r) in omega.iter().zip(&raw) {
+        for (b, d) in dbar.iter_mut().zip(&r.5) {
+            *b += o * d;
+        }
+    }
+    let points = raw
+        .into_iter()
+        .map(|(weight, grad, h, f, jm1, d)| {
+            let a2m1 = (2.0 * (ln_jbar - jm1.ln_1p()) / 3.0).exp_m1();
+            let e = green_lagrange(&h);
+            let ebar = std::array::from_fn(|i| e[i] + a2m1 * (e[i] + if i < 3 { 0.5 } else { 0.0 }));
+            FbarPoint {
+                weight,
+                grad,
+                f,
+                d,
+                a2m1,
+                e,
+                ebar,
+            }
+        })
+        .collect();
+    Ok(FbarElement { points, omega, dbar })
+}
+
+/// The F-bar Hex8 (ADR 0506 D1): the force `sum_q w_q Bbar_NL^T S_bar` and the tangent of arithmetic 2.
+fn evaluate_fbar(
+    coords: &[Vec3],
+    material: &Material,
+    displacement: &[f64],
+    state: &ElementState,
+    want_tangent: bool,
+    context: &PointContext,
+) -> Result<Evaluation> {
+    let kin = fbar_kinematics(coords, displacement)?;
+    let n = HEX8;
+    let ns = material.state_size();
+    let np = kin.points.len();
+    if state.values().len() != np * ns {
+        return Err(FemError::FieldLength {
+            key: "state",
+            expected: np * ns,
+            found: state.values().len(),
+        });
+    }
+    let mut force = vec![0.0; n];
+    let mut k = if want_tangent {
+        Some(ElementMatrix::zeros(n))
+    } else {
+        None
+    };
+    let mut stress = Vec::with_capacity(np);
+    let mut scaled = Vec::with_capacity(np);
+    let mut new_state = Vec::new();
+    // The coefficient of the mean part of M_q (arithmetic 2), summed over the points.
+    let mut mean_coefficient = 0.0;
+    let mut bbar = vec![0.0; 6 * n];
+    let mut db = vec![0.0; 6 * n];
+    for (q, p) in kin.points.iter().enumerate() {
+        let committed = &state.values()[q * ns..(q + 1) * ns];
+        let (s, dm) = point_update(material, &p.ebar, committed, context, &mut new_state)?;
+        let a2 = 1.0 + p.a2m1;
+        let c: [f64; 6] = std::array::from_fn(|i| if i < 3 { 1.0 + 2.0 * p.e[i] } else { 2.0 * p.e[i] });
+        let g: Vec<f64> = (0..n).map(|j| kin.dbar[j] - p.d[j]).collect();
+        let b = b_nonlinear(&p.grad, &p.f);
+        for r in 0..6 {
+            for j in 0..n {
+                bbar[r * n + j] = a2 * (b[r * n + j] + c[r] * g[j] / 3.0);
+            }
+        }
+        for (j, fj) in force.iter_mut().enumerate() {
+            let mut v = 0.0;
+            for (m, sm) in s.iter().enumerate() {
+                v += bbar[m * n + j] * sm;
+            }
+            *fj += p.weight * v;
+        }
+        if let Some(k) = k.as_mut() {
+            for r in 0..6 {
+                for j in 0..n {
+                    let mut v = 0.0;
+                    for (m, drm) in dm[r].iter().enumerate() {
+                        v += drm * bbar[m * n + j];
+                    }
+                    db[r * n + j] = v;
+                }
+            }
+            let s_b: Vec<f64> = (0..n).map(|j| (0..6).map(|m| b[m * n + j] * s[m]).sum()).collect();
+            let s_c: f64 = s.iter().zip(&c).map(|(a, b)| a * b).sum();
+            let w = p.weight;
+            let kv = k.values_mut();
+            for i in 0..n {
+                for j in 0..n {
+                    let mut v = 0.0;
+                    for m in 0..6 {
+                        v += bbar[m * n + i] * db[m * n + j];
+                    }
+                    // The second variation of E_bar without its geometric part and the mean part of M_q.
+                    let t_q = p.d[3 * (j / 3) + i % 3] * p.d[3 * (i / 3) + j % 3];
+                    let second = (2.0 / 3.0) * (s_b[i] * g[j] + g[i] * s_b[j])
+                        + (2.0 / 9.0) * s_c * g[i] * g[j]
+                        + (s_c / 3.0) * t_q;
+                    kv[i * n + j] += w * (v + a2 * second);
+                }
+            }
+            mean_coefficient += w * a2 * s_c / 3.0;
+        }
+        scaled.push(std::array::from_fn(|i| a2 * s[i]));
+        stress.push(s);
+    }
+    if let Some(k) = k.as_mut() {
+        // The mean part of M_q: sum_p omega_p (d_p d_p^T - T_p) - dbar dbar^T.
+        let kv = k.values_mut();
+        for i in 0..n {
+            for j in 0..n {
+                let mut m = -kin.dbar[i] * kin.dbar[j];
+                for (o, p) in kin.omega.iter().zip(&kin.points) {
+                    m += o * (p.d[i] * p.d[j] - p.d[3 * (j / 3) + i % 3] * p.d[3 * (i / 3) + j % 3]);
+                }
+                kv[i * n + j] += mean_coefficient * m;
+            }
+        }
+        let kg = element_geometric_stiffness(&Hex8, coords, &scaled)?;
+        for (v, gv) in kv.iter_mut().zip(kg.values()) {
+            *v += gv;
+        }
+    }
+    Ok(Evaluation {
+        force,
+        tangent: k,
+        stress,
+        state: new_state,
+    })
+}
+
+/// The refusal of the `Incompatible` formulation by the nonlinear driver (ADR 0506 D2).
+fn incompatible_refusal(location: String) -> FemError {
+    FemError::InvalidValue {
+        key: "nonlinear",
+        reason: format!(
+            "{location}: the nonlinear driver takes solid elements of the Full and BBar formulations (ADR 0506); the \
+             incompatible modes at finite strain are {}",
+            crate::hex8x::NONLINEAR_FOLLOW_UP
+        ),
+    }
+}
+
+/// One Hex8 of a formulation: `Full` [`evaluate`], `BBar` [`evaluate_fbar`], `Incompatible` refused.
+fn hex8_evaluate(
+    formulation: SolidFormulation,
+    coords: &[Vec3],
+    material: &Material,
+    displacement: &[f64],
+    state: &ElementState,
+    want_tangent: bool,
+    context: &PointContext,
+) -> Result<Evaluation> {
+    match formulation {
+        SolidFormulation::Full => evaluate(&Hex8, coords, material, displacement, state, want_tangent, context),
+        SolidFormulation::BBar => evaluate_fbar(coords, material, displacement, state, want_tangent, context),
+        other => Err(incompatible_refusal(format!(
+            "a Hex8 of the {} formulation",
+            other.name()
+        ))),
+    }
+}
+
+/// The internal force and the tangent of a Hex8 of a formulation at the point context `context` (ADR 0506 D5): `Full` is
+/// [`element_force_and_tangent_at`] with the Hex8 element, `BBar` the F-bar element of ADR 0506 D1; `Incompatible` is
+/// refused (key `"nonlinear"`).
+pub fn hex8_force_and_tangent_at(
+    formulation: SolidFormulation,
+    coords: &[Vec3],
+    material: &Material,
+    displacement: &[f64],
+    state: &ElementState,
+    context: &PointContext,
+) -> Result<(Vec<f64>, ElementMatrix)> {
+    let ev = hex8_evaluate(formulation, coords, material, displacement, state, true, context)?;
+    Ok((ev.force, ev.tangent.expect("tangent requested")))
+}
+
+/// The internal force of a Hex8 of a formulation at the point context `context` (ADR 0506 D5).
+pub fn hex8_internal_force_at(
+    formulation: SolidFormulation,
+    coords: &[Vec3],
+    material: &Material,
+    displacement: &[f64],
+    state: &ElementState,
+    context: &PointContext,
+) -> Result<Vec<f64>> {
+    Ok(hex8_evaluate(formulation, coords, material, displacement, state, false, context)?.force)
+}
+
+/// The second Piola-Kirchhoff stress at the points of the stiffness rule of a Hex8 of a formulation, at the default point
+/// context (ADR 0506 D5): for `BBar` the stress of the material at `E_bar`.
+pub fn hex8_second_piola_kirchhoff(
+    formulation: SolidFormulation,
+    coords: &[Vec3],
+    material: &Material,
+    displacement: &[f64],
+    state: &ElementState,
+) -> Result<Vec<[f64; 6]>> {
+    Ok(hex8_evaluate(
+        formulation,
+        coords,
+        material,
+        displacement,
+        state,
+        false,
+        &PointContext::default(),
+    )?
+    .stress)
+}
+
+/// The Green-Lagrange strain (Voigt, engineering shear) at the points of the stiffness rule of a Hex8 of a formulation
+/// (ADR 0506 D5): of `F` for `Full`, of `F_bar` for `BBar`; `Incompatible` refused.
+pub fn hex8_strains(formulation: SolidFormulation, coords: &[Vec3], displacement: &[f64]) -> Result<Vec<[f64; 6]>> {
+    match formulation {
+        SolidFormulation::Full => {
+            check_hex8_fields(coords, displacement)?;
+            Ok(Hex8
+                .integration_points(coords, Hex8.stiffness_rule())?
+                .iter()
+                .map(|ip| green_lagrange(&displacement_gradient(&ip.geometry.grad, displacement)))
+                .collect())
+        }
+        SolidFormulation::BBar => Ok(fbar_kinematics(coords, displacement)?
+            .points
+            .iter()
+            .map(|p| p.ebar)
+            .collect()),
+        other => Err(incompatible_refusal(format!(
+            "a Hex8 of the {} formulation",
+            other.name()
+        ))),
+    }
+}
+
+/// Whether element `e` of `model` is a Hex8 of the BBar formulation (ADR 0506 D2).
+fn is_fbar(model: &SolidModel, e: usize) -> bool {
+    crate::hex8x::opted(model.mesh(), e) == Some(SolidFormulation::BBar)
 }
 
 /// The second Piola-Kirchhoff stress (Voigt, tensor shear) at the points of the element's stiffness rule, in the rule's
@@ -378,6 +741,20 @@ fn check_model(model: &SolidModel) -> Result<()> {
             continue;
         }
         if !block.kind().is_solid() || block.formulation() != SolidFormulation::Full {
+            // ADR 0506 D2: a BBar block takes the F-bar Hex8; an Incompatible block is refused naming the follow-up.
+            if block.kind().is_solid() {
+                match block.formulation() {
+                    SolidFormulation::BBar => continue,
+                    SolidFormulation::Incompatible => {
+                        return Err(incompatible_refusal(format!(
+                            "block {b} ({} {})",
+                            block.kind().name(),
+                            block.formulation().name()
+                        )))
+                    }
+                    _ => {}
+                }
+            }
             return Err(FemError::InvalidValue {
                 key: "nonlinear",
                 reason: format!(
@@ -482,6 +859,8 @@ pub fn internal_force_at(
         let material = &model.materials()[materials[e]].1;
         let f = if is_shell(kind) {
             crate::shell_corot::model_internal_force(mesh, e, &coords, material, &ue)
+        } else if is_fbar(model, e) {
+            evaluate_fbar(&coords, material, &ue, &states[e], false, context).map(|ev| ev.force)
         } else {
             evaluate(
                 crate::element::element_for(kind),
@@ -540,6 +919,8 @@ fn force_and_tangent(
                 stress: Vec::new(),
                 state: Vec::new(),
             }
+        } else if is_fbar(model, ctx.element) {
+            evaluate_fbar(ctx.coords, ctx.material, &ue, &states[ctx.element], true, context)?
         } else {
             let el = crate::element::element_for(ctx.kind);
             evaluate(el, ctx.coords, ctx.material, &ue, &states[ctx.element], true, context)?
