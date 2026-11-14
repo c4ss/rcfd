@@ -5244,9 +5244,9 @@
     "deps": [
       "F-419"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. In-plane bending of a cantilever strip within 2 % of beam theory on a 8 x 2 mesh, patch tests kept.",
-    "note": "Structural solver, advanced tier. Follow-up of F-419 (ADR 0454, 2026-11-14). a drilling-unknown membrane"
+    "note": "Structural solver, advanced tier. Follow-up of F-419 (ADR 0454, 2026-11-14). F-539 (ADR 0466, 2026-11-14): opt-in drilling membranes for Shell3 through `BlockProperty::shell_with_membrane`. The ANDES optimal membrane: basic stiffness of a constant stress on Allman's edge field with alpha_b 3/2, higher-order stiffness of the deviatoric corner rotations with beta_0 (1 - 4 nu^2)/2 and the OPT betas, recalled and verified by exact pure bending of rectangle pairs to 3.7e-14. Allman's 1984 triangle: its equal-rotation zero mode suppressed by Shell3's drilling penalty; ANDES needs no penalty. Consistent thermal load and centroid stresses. Cantilever strip 8 x 2 in in-plane bending: 0.99648 of Timoshenko beam theory on either diagonal (0.99694 alternating, end couple 0.99727; CST 0.543, Allman 0.916). Patch tests on Shell3 meshes to 1e-14; six zero modes per element and per free plate; default Shell3 and Shell4 bit-identical; twelve mutations caught. Partial: the mixed Shell3 + Shell4 membrane patch misses (2.1e-1, predicted: a linear edge does not balance the drilling edge moments), so the model refuses such meshes, naming the element. Follow-up F-549."
   },
   {
     "id": "F-540",
@@ -5346,5 +5346,17 @@
     "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. Each DampedMode reports the M-weighted share of its shape carried by the residual-vector coordinates of the basis, and roots with a share above a registered threshold are flagged as pseudo-modes of the truncation. Bar of F-532 at c = 0.9 Z and 2 Z on 20 modes with the residual vectors: the target roots of F-532 are not flagged, every other real root is; without the option every result is bit-identical to F-532's.",
     "note": "Structural solver, advanced tier. Follow-up of F-532 (ADR 0464). ADR 0467, 2026-11-14: each DampedMode of damped_modes with the residual vectors reports residual_share, the M-weighted share of its shape carried by the residual-vector coordinates of the basis (0 without them), and pseudo = share > PSEUDO_SHARE (0.1, fixed from a one-dimensional chain estimate: physical roots at most 1.5e-2, pseudo-roots at least 0.18 to 0.40); DampedModes::pseudo_modes counts them and a note says so. Bar of F-532 at c = 0.9 Z and 2 Z on 20 modes: target roots not flagged (shares at most 1.7e-4), every other real root flagged (6 and 7 roots, shares 0.68 to 1.0); one oscillating pseudo-root each (0.399, 0.182) also flagged; share equals the one recomputed from shapes and residual vectors within 2.2e-15. Without the option the nine F-414/F-532 results are bit-identical (shares 0, no flag). Partial: the registered check D3 (option-on digests including notes) missed because an option-on result gains a note by design; the corrected D3b (numbers without notes) was met after amendment 1. Seven of seven mutations caught."
+  },
+  {
+    "id": "F-549",
+    "title": "Drilling membrane for Shell4 matching the ANDES edge",
+    "phase": 9,
+    "deps": [
+      "F-539",
+      "F-392"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. An opt-in Shell4 membrane with the vertex-rotation edge field of ADR 0466, so that ANDES Shell3 and Shell4 may share edges: the mixed Shell3 + Shell4 membrane patch of ADR 0454 within 1e-8, the 8 x 2 in-plane cantilever strip of ADR 0466 on quadrilaterals within 2 % of beam theory, defaults bit-identical.",
+    "note": "Structural solver, advanced tier. Follow-up of F-539 (ADR 0466, 2026-11-14): the PT5 mixed-mesh miss."
   }
 ]

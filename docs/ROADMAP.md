@@ -10460,11 +10460,21 @@ fixed by the item's registration ADR before any code.
     by an exact linear model of the relaxed step that reproduces the measured impedance of both runs within registered
     limits; the dependence on alpha_u is stated.
   - note: Numerics. Follow-up of F-531 (ADR 0455, 2026-11-14). Size S.
-- [ ] **F-539** Allman membrane for Shell3
+- [~] **F-539** Allman membrane for Shell3
   - depends on: F-419
   - acceptance: Every limit not stated here is registered in the ADR before the run. In-plane bending of a cantilever
     strip within 2 % of beam theory on a 8 x 2 mesh, patch tests kept.
-  - note: Structural solver, advanced tier. Follow-up of F-419 (ADR 0454, 2026-11-14). a drilling-unknown membrane
+  - note: Structural solver, advanced tier. Follow-up of F-419 (ADR 0454, 2026-11-14). F-539 (ADR 0466, 2026-11-14):
+    opt-in drilling membranes for Shell3 through `BlockProperty::shell_with_membrane`. The ANDES optimal membrane: basic
+    stiffness of a constant stress on Allman's edge field with alpha_b 3/2, higher-order stiffness of the deviatoric
+    corner rotations with beta_0 (1 - 4 nu^2)/2 and the OPT betas, recalled and verified by exact pure bending of
+    rectangle pairs to 3.7e-14. Allman's 1984 triangle: its equal-rotation zero mode suppressed by Shell3's drilling
+    penalty; ANDES needs no penalty. Consistent thermal load and centroid stresses. Cantilever strip 8 x 2 in in-plane
+    bending: 0.99648 of Timoshenko beam theory on either diagonal (0.99694 alternating, end couple 0.99727; CST 0.543,
+    Allman 0.916). Patch tests on Shell3 meshes to 1e-14; six zero modes per element and per free plate; default Shell3
+    and Shell4 bit-identical; twelve mutations caught. Partial: the mixed Shell3 + Shell4 membrane patch misses (2.1e-1,
+    predicted: a linear edge does not balance the drilling edge moments), so the model refuses such meshes, naming the
+    element. Follow-up F-549.
 - [x] **F-540** Consistent pressure on curved facet meshes
   - depends on: F-419
   - acceptance: Every limit not stated here is registered in the ADR before the run. The one-diagonal 32 x 16 cylinder
@@ -10614,3 +10624,10 @@ fixed by the item's registration ADR before any code.
     vectors within 2.2e-15. Without the option the nine F-414/F-532 results are bit-identical (shares 0, no flag).
     Partial: the registered check D3 (option-on digests including notes) missed because an option-on result gains a note
     by design; the corrected D3b (numbers without notes) was met after amendment 1. Seven of seven mutations caught.
+- [ ] **F-549** Drilling membrane for Shell4 matching the ANDES edge
+  - depends on: F-539, F-392
+  - acceptance: Every limit not stated here is registered in the ADR before the run. An opt-in Shell4 membrane with the
+    vertex-rotation edge field of ADR 0466, so that ANDES Shell3 and Shell4 may share edges: the mixed Shell3 + Shell4
+    membrane patch of ADR 0454 within 1e-8, the 8 x 2 in-plane cantilever strip of ADR 0466 on quadrilaterals within 2 %
+    of beam theory, defaults bit-identical.
+  - note: Structural solver, advanced tier. Follow-up of F-539 (ADR 0466, 2026-11-14): the PT5 mixed-mesh miss.
