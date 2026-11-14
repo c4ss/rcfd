@@ -11659,11 +11659,27 @@ fixed by the item's registration ADR before any code.
     model up to that bound, the frequencies strictly lowered against the cutoff alone, and the statics of the corner
     load exact within 1e-10; without the option every result bit-identical to ADR 0511's.
   - note: Structural solver, advanced tier. Optional. Follow-up of F-559 (ADR 0511, 2026-11-14).
-- [ ] **F-604** Press fit of a finite hub on a longer shaft: edge pressure peaks and a bore-cell rule for the fan hub
+- [~] **F-604** Press fit of a finite hub on a longer shaft: edge pressure peaks and a bore-cell rule for the fan hub
   - depends on: F-599
   - acceptance: Every limit not stated here is registered in the ADR before the run. A hub of length L on a shaft that
     extends beyond both of its faces, same material, radial interference d, frictionless: the contact pressure at
     mid-length against the plane-strain closed form within 2 percent for L >= 4 (b - a), the edge pressure peak located
     at the hub faces and converging under refinement of the bore cells, and a bore-cell rule for the 120 mm fan hub
     stated from the run. Fan relevance: hub-shaft press-fit stresses.
-  - note: Structural solver, advanced tier. Follow-up of F-599 (ADR 0513, 2026-11-14).
+  - note: Structural solver, advanced tier. Follow-up of F-599 (ADR 0513, 2026-11-14). ADR 0517, 2026-11-14. Model: a
+    frictionless hub of length L on a shaft that runs 2a past each face, same material, b = 2a, d = 1e-3 a, an eighth of
+    the fit in Hex8 with 6-degree sectors. The shaft's node planes are offset by 0.05 of a cell, so every bore node lies
+    inside one shaft face. At mid-length the pressure matches the free-ended (sigma_zz = 0) closed form E d (b^2 -
+    a^2)/(2 a b^2), within 2.1e-3 at L = 4 (b - a) and 3.4e-3 at L = 8 (b - a), and not the plane-strain one. The
+    acceptance's plane-strain clause therefore misses at 8.6e-2 against 2e-2, as derived before the run: each body's
+    axial resultant is zero, so sigma_zz = 0 in the far field. With u_z = 0 everywhere the plane-strain value comes back
+    within 7.6e-3. The edge pressure peak is at the hub faces on every mesh and diverges as the Williams exponent 0.774
+    of a 90-degree corner on a half-space predicts: the face row grows by 1.124, 1.148 and 1.160 per halving, toward
+    1.170. The band resultants converge: the last quarter of b - a gives 1.157 p_0, with orders 1.4 to 1.6 and a last
+    change of 4.0e-3. Bore-cell rule from the run: 8 cells through b - a at the bore, the same cell axially within 0.5
+    (b - a) of each face, and at most 6 degrees. That puts the edge bands within 1.6e-2 and the mid-length within 2.7e-3
+    of 32 cells; use 16 cells for 1 percent. The fan's shaft and bore dimensions are not in the repository; as a nominal
+    illustration, a 1.5 mm shaft needs 0.19 mm bore cells. A 32-cell run exposed a projection tolerance in contact.rs
+    that lies below the rounding floor of small faces. It is fixed: the closest point is accepted at a last step of at
+    most 1e-10. Three digests show the bits unchanged where projections converged before, and a small face far from the
+    origin is now found. All six mutations were caught or recorded as registered. No case-file key.
