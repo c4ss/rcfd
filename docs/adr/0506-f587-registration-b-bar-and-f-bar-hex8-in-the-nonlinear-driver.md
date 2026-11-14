@@ -415,3 +415,102 @@ diagnostic run registered here, without a limit: the same cylinder with `p / 10`
 every stress over `p` unchanged in small strain, every strain ten times smaller), the point-wise error over `p` printed at `5,
 7.5, ..., 20 t*` with the radius and angle of the worst point; expected, if the growth is the total Lagrangian geometry change
 against the small-strain closed form, a growth about ten times smaller.
+
+## Addendum 1: results (2026-11-14)
+
+Code in commit 669d264c (`nonlinear.rs`, `nl_transient.rs`, `hex8x.rs`, the new `tests/si_fbar.rs` and the ignore of the
+record `rf1_rf2_rf3_refusals` in `tests/si_hex8x.rs`, D7). Logs in `w49i-work/f587-scratch`: `run1-si_fbar.log` (the
+registered run), `run2-amend1.log` (PT5', PT6' of amendment 1), `run3-c4-diagnosis.log` (the diagnostic run of amendment 1),
+`s1-rcfd-fem.log`, `s2-baseline.log`, `s2-docs.log`, `s3-fmt.log`, `s3-clippy.log`, `mutations.log` and `mut-MU1.log` to
+`mut-MU9.log`.
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| SS1 | `2.65e-16` (patch), `3.92e-16` (box) | `<= 1e-13` | met |
+| SS2 | `7.58e-7`, `6.80e-5`, ratio `89.7` | `<= 1e-5`, `<= 1e-3`, `[30, 300]` | met |
+| SS3 | tangent `2.06e-6`, force `1.07e-5`; set-up 8 of 8 points plastic | `<= 1e-4` each | met |
+| T1 | (a) `2.53e-11`, (b) `1.10e-8`, (c) `9.72e-11` (8 of 8 plastic), (d) `8.77e-11` (8 of 8 creeping), (e) `3.14e-11` | `<= 1e-6` each | met |
+| T2 | `<= 2.4e-16` for (a) to (e) | `<= 1e-12` | met |
+| PT1 | `1.75e-16` | `<= 1e-10` | met |
+| PT2 | `1.75e-16` (`nu = 0.3`), `4.63e-15` (`nu = 0.4999`) | `<= 1e-10` each | met |
+| PT3 | `1.73e-16` | `<= 1e-10` | met |
+| PT4 | `1.75e-16`; every point yielded | `<= 1e-10` | met |
+| PT5 | run 1: the driver refused step 1 (set-up defect, amendment 1) | | not measured |
+| PT5' | `8.87e-12` (`t = 1`), `1.61e-12` (`t = 2`); creep strain `> 0` at every point | `<= 1e-10` each | met |
+| PT6 | run 1: not reached | | not measured |
+| PT6' | `1.73e-16`, `1.59e-16`, `6.12e-16` | `<= 1e-10` each | met |
+| PS1 | `1.63e-15` | `<= 1e-10` | met |
+| J1 | `6.02e-4` (`1.25 a`), `4.50e-4` (`1.5 a`); 20 steps, no halving, at most 5 iterations | `<= 1e-2` each | met |
+| J2 | `9.99e-3`, `1.107e-2` | `<= 2e-2` each | met |
+| J3 | `0`, `0` | `0` | met |
+| C1 | `5.37e-3` | `<= 1e-2` | met |
+| C2 | `9.54e-3` | `<= 2e-2` | met |
+| C3 | `1.556e-2` | `<= 2e-2` | met |
+| C4 | `6.02e-3` | `<= 2e-3` | **missed** (`c1_to_c4_cl_creep_cylinder_known_miss`) |
+| NT1 | `0.0` | `<= 1e-12` | met |
+| RF1 | the six refusals with key `"nonlinear"`, naming ADR 0506 and `NONLINEAR_FOLLOW_UP` | exact | met |
+| RF2 | `rf1_rf2_rf3_refusals_after_f587` passes | passes | met |
+| B0 | the 11 digests equal to the base's (after the code) | bit-equal | met |
+| S1 | `cargo test -p rcfd-fem --release`: 167 test binaries, 758 passed, 0 failed, 197 ignored | 0 failed | met |
+| S2 | `baseline_hashes` 3 passed (1 ignored, as on the base); `docs_site` 2 passed | pass | met |
+| S3 | `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean | clean | met |
+
+Reported without a limit: the creep cylinder's point-wise error at `10 t*` `9.75e-3` and at `15 t*` `1.15e-2`; at most
+`2.38e-4` of creep increment per step, no halving; the Full cylinder's J1 `1.11e-2` and `1.30e-2`.
+
+Negative controls: JL `1.84`, `2.21` (`>= 0.2`), as stated; CL `0.1025` at `5 t*` (`>= 5e-2`) and `0.364` at `20 t*`
+(`>= 0.2`), as stated; N3 `0.250`, `0.208` (`>= 1e-3`), as stated.
+
+### Mutations (scratch copy `f587-scratch/mut`, each run once against `si_fbar.rs`, the copy restored and compared after)
+
+| Id | Caught by (the registered checks that missed) | Planned catchers |
+|---|---|---|
+| MU1 | T1 (a) `1.0e-4`, (b) `1.6e-2`, (c) `2.7e-4`, (d) `5.3e-4`, (e) `1.4e-4`; PT5' `4.3e-9` | T1 (b, c): caught |
+| MU2 | T1 (a) to (e), (b) `2.0e-2`; PT5' `3.6e-9` | T1 (b, c): caught |
+| MU3 | PT1 `1.9e-4`, PT2 to PT4, PT5' `9.7e-2`, PT6' `1.8e-3`, SS1, SS2, SS3, T1 | PT1, PT2, SS1: caught |
+| MU4 | SS1 `6.3e-2`, `5.2e-2`; SS3 `0.18`; T1 (a) `5.8e-2`; PT5'; J1 to J3 | SS1, T1: caught |
+| MU5 | SS1 `0.250`, `0.208`; J1 `1.11e-2`, `1.30e-2`; J2 `2.76e-2`, `4.10e-2` | SS1, J2 caught; **C2 not** |
+| MU6 | T1 (b) `1.35e-3`, (c) `1.7e-6`, (d) `1.04e-6` | T1 (b): caught |
+| MU7 | SS2 `0.19`, `0.15`, ratio `0.75`; T1; PT5' `3.6e-9`; J1 to J3; C1 to C3 | T1, J2: caught |
+| MU8 | RF1 (all six taken), RF2 (`internal_force`, `tangent` taken) | RF1: caught |
+| MU9 | NT1 `3.1e-5` | NT1: caught |
+
+Every planned mutation is caught by a registered check. One planned catcher did not catch: C2 under MU5. The creep checks
+recover the stress with `hex8_second_piola_kirchhoff` of the formulation under test (BBar), from the solution's displacement
+and states. Under MU5 the solve runs with the Full element, and the F-bar recovery of the locked field (the element mean of
+`det F` in place of the point values) removes most of the point-wise pressure error that CL measures with the Full recovery.
+CL checks a Full solve with a Full recovery, so it does not cover this combination. The mutation is still caught by SS1, J1
+and J2: in the J2 cylinder the plastic state of each point follows the solve.
+
+### Deviations
+
+- **Amendment 1** (PT5 and PT6): the set-up of run 1 gave the driver no work (an equilibrium start of every step, the energy
+  criterion on rounding noise). PT5' and PT6' corrected it before any corrected run, with the limits unchanged, and both were
+  met in their single run. The run-1 test stays as the ignored record `pt1_to_pt6_ps1_the_patch_through_the_driver`.
+- **C4, known miss.** The growth of the point-wise error from `5 t*` to `20 t*` is `6.02e-3` against the limit `2e-3` (probe
+  `7.5e-6`). The diagnostic run of amendment 1 (`c4_diagnosis_tenth_pressure`) shows the cause. At `p` the worst point stays at
+  `r = 1.962 a` until `12.5 t*` and then moves to the bore (`r = 1.005 a`), where the equivalent creep strain reaches
+  `9.67e-3`. At `p / 10` (the same `t*`, every strain ten times smaller) the growth is `1.06e-4`, the worst point stays at
+  `r = 1.962 a` and the largest equivalent creep strain is `9.65e-4`. Strains ten times smaller cut the growth by a factor of
+  about 57. The growth is the bore's change of geometry under the total Lagrangian kinematics, measured against the
+  small-strain closed form. It is not locking: on the same mesh the Full element is at `0.364`. The probe was small strain and
+  so showed none of this; the limit of C4 was set from it and does not allow for the finite-strain drift at a creep strain
+  near `1e-2`.
+
+### Decision (by the rule)
+
+B0, S1 and every check of (a1) to (a4) are met (SS1 to SS3, T1, T2, PT1 to PT4, PT5', PT6', PS1). C4, a check of (a6), is
+missed, recorded as `c1_to_c4_cl_creep_cylinder_known_miss` with the limit intact, and diagnosed. The controls behave as stated
+and every planned mutation is caught. **Proposed status: partial.**
+
+## For the lead: roadmap entries
+
+> F-587 (partial, ADR 0506, 2026-11-12/14): the B-bar Hex8 in the nonlinear driver as a variational F-bar element on the total Lagrangian kinematics (element mean of det F; tangent at rest equal to the F-390 B-bar stiffness to 4e-16; consistent tangent to 1e-8 for SVK, J2, creep and viscoelastic; patch tests to 5e-15 at nu 0.4999; J2 cylinder at nu 0.499 within 1.1e-2 of the closed form where Full gives 1.8 to 2.2; creep cylinder point-wise within 1.6e-2 at 20 t* where Full gives 0.36). Incompatible stays refused in the nonlinear driver. The registered growth bound C4 (2e-3 between 5 t* and 20 t*) is missed at 6.0e-3, diagnosed as the total Lagrangian finite-strain drift of the bore against the small-strain closed form (1.1e-4 at p/10). Defaults bit-identical (11 digests).
+
+> F-580 (note, ADR 0506, 2026-11-12/14): creep on the B-bar Hex8 through the nonlinear driver is met point-wise at 5 t* (9.5e-3) and 20 t* (1.6e-2) against the stationary field; the growth bound between them is missed by the finite-strain drift (6.0e-3 against 2e-3). F-580 keeps its current status until the growth bound is measured on a reference that allows for finite strain, or is re-registered at a smaller p/E.
+
+> Follow-up (ADR 0506, 2026-11-12/14): the incompatible-modes Hex8 at finite strain (an enhanced assumed strain element with the internal modes condensed in the Newton loop); the nonlinear driver refuses it naming the follow-up of ADR 0506.
+
+> Follow-up (ADR 0506, 2026-11-12/14): a creep-cylinder reference for C4 that allows for finite strain, or C4 re-registered at a p/E small enough that the total Lagrangian drift stays below the bound (the diagnostic gives 1.1e-4 at p/10); and a locking control on the creep cylinder that solves with Full and recovers with BBar, the combination the mutation MU5 showed C2 does not see.
+
+> Follow-up (ADR 0506, 2026-11-12/14): the case-file key for the formulation of a nonlinear solid block, as the block property formulation = "bbar" of ADR 0493's open question, covering the nonlinear paths (open question 3).
