@@ -140,6 +140,7 @@ fn uniform(state: &mut u64) -> f64 {
 }
 
 #[test]
+#[ignore = "record of ADR 0475: ADR 0485 (F-410) landed Viscoelastic (pending None), retiring the digest of its pending refusal; continued in b0_default_bits_after_f410 (ADR 0291 pattern, maintainer standing decision)"]
 fn b0_default_bits() {
     let mut got: Vec<(&str, u64)> = Vec::new();
     for (name, kind) in [("bar Hex8", ElementKind::Hex8), ("bar Hex20", ElementKind::Hex20)] {
@@ -262,6 +263,122 @@ fn b0_default_bits() {
         println!("B0 {name}: {d:#018x}");
     }
     let expected = EXPECTED.expect("EXPECTED is written from the base run");
+    assert_eq!(got.len(), expected.len());
+    for ((name, d), (en, e)) in got.iter().zip(expected.iter()) {
+        assert_eq!(name, en);
+        assert_eq!(d, e, "B0 {name}: {d:#018x} against {e:#018x}");
+    }
+}
+
+// B0 after ADR 0485 (F-410): the ten digests that do not record the refusal of the pending Viscoelastic variant.
+#[test]
+fn b0_default_bits_after_f410() {
+    let mut got: Vec<(&str, u64)> = Vec::new();
+    for (name, kind) in [("bar Hex8", ElementKind::Hex8), ("bar Hex20", ElementKind::Hex20)] {
+        let m = bar(kind);
+        let r = solve(&m, &[], &[], &NewtonOptions::new(2)).unwrap();
+        got.push((name, digest(&flat(&r))));
+    }
+    let c = cantilever();
+    let r = solve(&c, &[], &[], &NewtonOptions::new(2)).unwrap();
+    got.push(("cantilever Hex20", digest(&flat(&r))));
+    // The halving path: the first attempt refused at its third call.
+    let m = bar(ElementKind::Hex8);
+    let fail = FailOnce {
+        calls: Cell::new(0),
+        fail_at: Some(3),
+    };
+    let ext = DriverExtensions {
+        contributions: vec![&fail],
+        step_control: None,
+    };
+    let r = solve_with(&m, &[], &[], &NewtonOptions::new(1), ext).unwrap();
+    println!(
+        "B0 halvings {:?}",
+        r.steps.iter().map(|s| s.halvings).collect::<Vec<_>>()
+    );
+    got.push(("solve_with halving", digest(&flat(&r))));
+    // Assembled force and tangent of a distorted Tet10 model.
+    let mut mesh = upgrade_to_tet10(&tet_box([0.0; 3], [1.0, 0.5, 0.4], [2, 1, 1]).unwrap())
+        .unwrap()
+        .0;
+    let mut seed = 0xF422_0475_u64;
+    let nodes: Vec<Vec3> = mesh
+        .nodes()
+        .iter()
+        .map(|p| {
+            let mut q = *p;
+            for v in q.iter_mut() {
+                *v += 0.02 * (2.0 * uniform(&mut seed) - 1.0);
+            }
+            q
+        })
+        .collect();
+    mesh = {
+        let mut m2 = rcfd_fem::SolidMesh::new(nodes).unwrap();
+        for b in mesh.blocks() {
+            m2.add_block(b.kind(), b.connectivity().to_vec()).unwrap();
+        }
+        let ne = m2.n_elements();
+        m2.add_element_set("all", (0..ne).collect()).unwrap();
+        m2
+    };
+    let mut t = SolidModel::new(mesh);
+    t.add_material("all", steel()).unwrap();
+    let n = t.dof_map().n_equations();
+    let u: Vec<f64> = (0..n).map(|_| 1e-3 * (2.0 * uniform(&mut seed) - 1.0)).collect();
+    let states = initial_states(&t).unwrap();
+    got.push((
+        "Tet10 internal_force",
+        digest(&internal_force(&t, &u, &states).unwrap()),
+    ));
+    got.push(("Tet10 tangent", digest(&tangent(&t, &u, &states, Some(3)).unwrap().val)));
+    // One distorted Hex8 element.
+    let x: Vec<Vec3> = [
+        [0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [1.0, 1.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 0.0, 1.0],
+        [1.0, 0.0, 1.0],
+        [1.0, 1.0, 1.0],
+        [0.0, 1.0, 1.0],
+    ]
+    .iter()
+    .map(|p| {
+        [
+            p[0] + 0.1 * uniform(&mut seed),
+            p[1] + 0.1 * uniform(&mut seed),
+            p[2] + 0.1 * uniform(&mut seed),
+        ]
+    })
+    .collect();
+    let ue: Vec<f64> = (0..24).map(|_| 2e-3 * (2.0 * uniform(&mut seed) - 1.0)).collect();
+    let el = element_for(ElementKind::Hex8);
+    let st = ElementState::empty();
+    got.push((
+        "Hex8 element_internal_force",
+        digest(&element_internal_force(el, &x, &steel(), &ue, &st).unwrap()),
+    ));
+    got.push((
+        "Hex8 element_tangent",
+        digest(element_tangent(el, &x, &steel(), &ue, &st).unwrap().values()),
+    ));
+    // The isotropic constitutive call.
+    let (s, d) = steel()
+        .stress(&[1e-3, -2e-4, 3e-4, 5e-4, -1e-4, 2e-4], &PointContext::default(), &[])
+        .unwrap();
+    let mut v = s.to_vec();
+    v.extend(d.iter().flatten());
+    got.push(("Material::stress isotropic", digest(&v)));
+    // The static solve.
+    let r = solve_static(&c, &StaticOptions::default()).unwrap();
+    got.push(("solve_static cantilever", digest(r.displacement_values())));
+    for (name, d) in &got {
+        println!("B0 {name}: {d:#018x}");
+    }
+    // ADR 0485 D9: the last digest recorded the refusal of the pending Viscoelastic variant, which F-410 lands.
+    let expected = &EXPECTED.expect("EXPECTED is written from the base run")[..10];
     assert_eq!(got.len(), expected.len());
     for ((name, d), (en, e)) in got.iter().zip(expected.iter()) {
         assert_eq!(name, en);

@@ -12,7 +12,9 @@
 //! alpha_f` is solved by one attempt of the Newton driver ([`nonlinear::solve_from`], no second loop) with the inertia as a
 //! driver contribution in the residual reference. A step that fails is taken in `2^l` equal sub-steps, `l = 1 ..
 //! max_halvings` (D4); after the last level the error names the step and its times. The state ([`NlTransientState`]: time,
-//! step, `u`, `v`, `a`, the internal force and the material states) is saved and restored bit for bit.
+//! step, `u`, `v`, `a`, the internal force and the material states) is saved and restored bit for bit. Each attempt is made
+//! at the point context of its sub-step, its end time and length ([`nonlinear::solve_from_at`], ADR 0485 D5), so that the
+//! viscoelastic material of [`crate::mat_visco`] relaxes over the step; no temperature is given.
 
 use crate::constraint::{prescribed_equations, reduce};
 use crate::element::{element_for, ElementState};
@@ -811,7 +813,9 @@ impl Integrator {
         let mut list: Vec<&dyn Contribution> = Vec::with_capacity(1 + contributions.len());
         list.push(&inertia);
         list.extend_from_slice(contributions);
-        let eq = nonlinear::solve_from(&self.model, &[], &load, u, states, &self.newton, &list)?;
+        // ADR 0485 D5: the point context of the sub-step (its end time and length), read by the viscoelastic material only.
+        let context = PointContext::new().with_time(t_b, h)?;
+        let eq = nonlinear::solve_from_at(&self.model, &[], &load, u, states, &self.newton, &list, &context)?;
         let (a1, v1) = kin.of(&eq.u);
         Ok(Advanced {
             iterations: eq.residuals.len() - 1,

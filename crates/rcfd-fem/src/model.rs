@@ -332,29 +332,24 @@ impl Material {
         })
     }
 
-    /// A viscoelastic material (ADR 0440 D2): refuses a base that is not isotropic or orthotropic, no term, and a sum of
-    /// shear or of bulk weights above 1.
+    /// A viscoelastic material (ADR 0440 D2, ADR 0485 D2): refuses a base that is not isotropic or orthotropic and a sum of
+    /// shear or of bulk weights of 1 or more (a long-term modulus that is not positive, ADR 0485 arithmetic 8). An empty
+    /// list of terms is a material without branches: its base.
     pub fn viscoelastic(
         base: Material,
         terms: Vec<PronyTerm>,
         shift: Option<TimeTemperatureShift>,
     ) -> Result<Material> {
         elastic_base(&base, false)?;
-        if terms.is_empty() {
-            return Err(FemError::InvalidValue {
-                key: "terms",
-                reason: "a Prony series needs at least one term".to_string(),
-            });
-        }
         for (key, sum) in [
             ("shear", terms.iter().map(|t| t.shear).sum::<f64>()),
             ("bulk", terms.iter().map(|t| t.bulk).sum::<f64>()),
         ] {
-            if sum > 1.0 {
+            if sum >= 1.0 {
                 return Err(FemError::InvalidMaterial {
                     key,
                     value: sum,
-                    reason: "the Prony weights must sum to at most 1",
+                    reason: "the Prony weights must sum to less than 1 (a positive long-term modulus)",
                 });
             }
         }
@@ -1109,7 +1104,8 @@ impl SolidModel {
     }
 
     /// As [`SolidModel::check_elements_supported`] for the nonlinear static solve, which also takes the J2 material
-    /// (ADR 0475 D2).
+    /// (ADR 0475 D2), and for the nonlinear driver at a point context, which also takes the viscoelastic material (ADR 0485
+    /// D2).
     pub(crate) fn check_elements_supported_nonlinear(&self) -> Result<()> {
         self.check_elements(false, false, false, true)
     }
@@ -1195,6 +1191,15 @@ impl SolidModel {
                     variant: m.name(),
                     location: format!("material {i}, element set '{set}'"),
                     package: crate::mat_j2::FOLLOW_UP,
+                });
+            }
+            // ADR 0485 D2: and the viscoelastic material.
+            if !history && matches!(m, Material::Viscoelastic { .. }) {
+                return Err(FemError::NotYetSupported {
+                    item: "material",
+                    variant: m.name(),
+                    location: format!("material {i}, element set '{set}'"),
+                    package: crate::mat_visco::FOLLOW_UP,
                 });
             }
             // ADR 0452 D6: a path that does not take the per-point materials refuses them.

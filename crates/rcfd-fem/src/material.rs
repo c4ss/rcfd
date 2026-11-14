@@ -197,7 +197,8 @@ pub struct PronyTerm {
 }
 
 impl PronyTerm {
-    /// A term; refuses a weight outside [0, 1] and a relaxation time that is not positive and finite.
+    /// A term; refuses a weight outside [0, 1], both weights 0 (a branch without modulus, key `"shear"`, ADR 0485
+    /// arithmetic 8) and a relaxation time that is not positive and finite.
     pub fn new(shear: f64, bulk: f64, tau: f64) -> Result<PronyTerm> {
         for (key, v) in [("shear", shear), ("bulk", bulk)] {
             if !(0.0..=1.0).contains(&v) {
@@ -207,6 +208,13 @@ impl PronyTerm {
                     reason: "a Prony weight must lie in [0, 1]",
                 });
             }
+        }
+        if shear == 0.0 && bulk == 0.0 {
+            return Err(FemError::InvalidMaterial {
+                key: "shear",
+                value: shear,
+                reason: "a Prony term needs a positive shear or bulk weight (a branch of zero modulus)",
+            });
         }
         positive_material("tau", tau)?;
         Ok(PronyTerm { shear, bulk, tau })
@@ -348,6 +356,13 @@ impl Material {
                 location: "the element-constant elasticity matrix".to_string(),
                 package: crate::mat_j2::FOLLOW_UP,
             }),
+            // ADR 0485 D2: nor has the viscoelastic material; only the nonlinear driver at a point context takes it.
+            Material::Viscoelastic { .. } => Err(FemError::NotYetSupported {
+                item: "material",
+                variant: self.name(),
+                location: "the element-constant elasticity matrix".to_string(),
+                package: crate::mat_visco::FOLLOW_UP,
+            }),
             _ => Err(self.not_yet("the constitutive call")),
         }
     }
@@ -393,7 +408,8 @@ impl Material {
     /// The constitutive call: stress and tangent for a strain (Voigt, engineering shear) at a point with its state
     /// (`state_size()` values). For linear elasticity the stress is `D eps` and the tangent `D`; the isotropic material
     /// does not read the point context. For J2 the return map of [`crate::mat_j2::return_map`] from the committed state
-    /// `state` (ADR 0475 D2). A variant whose package has not landed is refused naming it.
+    /// `state` (ADR 0475 D2); for the viscoelastic material the Prony update of [`crate::mat_visco::update`] from the
+    /// committed state over the step of `point` (ADR 0485 D2). A variant whose package has not landed is refused naming it.
     pub fn stress(&self, strain: &[f64; 6], point: &PointContext, state: &[f64]) -> Result<([f64; 6], Matrix6)> {
         let _ = point;
         if self.pending().is_some() {
@@ -409,6 +425,11 @@ impl Material {
         if let Material::J2 { .. } = self {
             // ADR 0475 D2: the return map from the committed state (the state itself is not changed here).
             let u = crate::mat_j2::update(self, strain, state)?;
+            return Ok((u.stress, u.tangent));
+        }
+        if let Material::Viscoelastic { .. } = self {
+            // ADR 0485 D2: the Prony update from the committed state over the step of the point context.
+            let u = crate::mat_visco::update(self, strain, state, point)?;
             return Ok((u.stress, u.tangent));
         }
         let d = match self {

@@ -23,7 +23,10 @@
 //!   driver commits them on convergence ([`element_trial_state`] gives them for one element).
 //! * One attempt from a given state (ADR 0479 D2): [`solve_from`] runs the attempt of [`solve_with`] once, from a start
 //!   displacement and committed states, with a full load vector and contributions; the nonlinear transient step of
-//!   [`crate::nl_transient`] calls it with its inertia contribution. A contribution may ask to enter the reference of the
+//!   [`crate::nl_transient`] calls it with its inertia contribution, at the point context of its step ([`solve_from_at`],
+//!   ADR 0485 D4: time, time increment and temperature for every point, read by the viscoelastic material of
+//!   [`crate::mat_visco`] only; [`solve_from`] is the default context). The static driver [`solve_with`] has no time and
+//!   refuses the viscoelastic material. A contribution may ask to enter the reference of the
 //!   relative residual ([`Contribution::in_residual_reference`]); by default the reference is that of ADR 0404.
 
 use crate::assemble::{assemble_with, element_dofs};
@@ -117,6 +120,7 @@ fn evaluate<E: Element + ?Sized>(
     displacement: &[f64],
     state: &ElementState,
     want_tangent: bool,
+    context: &PointContext,
 ) -> Result<Evaluation> {
     let size = 3 * element.n_nodes();
     if displacement.len() != size {
@@ -141,7 +145,6 @@ fn evaluate<E: Element + ?Sized>(
             found: state.values().len(),
         });
     }
-    let context = PointContext::default();
     let mut force = vec![0.0; size];
     let mut k = if want_tangent {
         Some(ElementMatrix::zeros(size))
@@ -174,7 +177,13 @@ fn evaluate<E: Element + ?Sized>(
                 new_state.extend_from_slice(&u.state);
                 (u.stress, u.tangent)
             }
-            _ => material.stress(&strain, &context, committed)?,
+            // ADR 0485 D3: the Prony update over the step of the point context gives the trial state of the point.
+            Material::Viscoelastic { .. } if ns > 0 => {
+                let u = crate::mat_visco::update(material, &strain, committed, context)?;
+                new_state.extend_from_slice(&u.state);
+                (u.stress, u.tangent)
+            }
+            _ => material.stress(&strain, context, committed)?,
         };
         let b = b_nonlinear(grad, &f);
         for (c, fc) in force.iter_mut().enumerate() {
@@ -231,7 +240,16 @@ pub fn element_second_piola_kirchhoff<E: Element + ?Sized>(
     displacement: &[f64],
     state: &ElementState,
 ) -> Result<Vec<[f64; 6]>> {
-    Ok(evaluate(element, coords, material, displacement, state, false)?.stress)
+    Ok(evaluate(
+        element,
+        coords,
+        material,
+        displacement,
+        state,
+        false,
+        &PointContext::default(),
+    )?
+    .stress)
 }
 
 /// The total Lagrangian internal force `sum_q w_q det J_q B_NL^T S` of an element (ADR 0404 D2).
@@ -242,7 +260,16 @@ pub fn element_internal_force<E: Element + ?Sized>(
     displacement: &[f64],
     state: &ElementState,
 ) -> Result<Vec<f64>> {
-    Ok(evaluate(element, coords, material, displacement, state, false)?.force)
+    Ok(evaluate(
+        element,
+        coords,
+        material,
+        displacement,
+        state,
+        false,
+        &PointContext::default(),
+    )?
+    .force)
 }
 
 /// The tangent `K_mat(F) + K_sigma(S)` of an element (ADR 0404 D2). Both triangles are computed.
@@ -253,7 +280,15 @@ pub fn element_tangent<E: Element + ?Sized>(
     displacement: &[f64],
     state: &ElementState,
 ) -> Result<ElementMatrix> {
-    let ev = evaluate(element, coords, material, displacement, state, true)?;
+    let ev = evaluate(
+        element,
+        coords,
+        material,
+        displacement,
+        state,
+        true,
+        &PointContext::default(),
+    )?;
     Ok(ev.tangent.expect("tangent requested"))
 }
 
@@ -265,12 +300,21 @@ pub fn element_force_and_tangent<E: Element + ?Sized>(
     displacement: &[f64],
     state: &ElementState,
 ) -> Result<(Vec<f64>, ElementMatrix)> {
-    let ev = evaluate(element, coords, material, displacement, state, true)?;
+    let ev = evaluate(
+        element,
+        coords,
+        material,
+        displacement,
+        state,
+        true,
+        &PointContext::default(),
+    )?;
     Ok((ev.force, ev.tangent.expect("tangent requested")))
 }
 
 /// The trial state of an element at `displacement` from the committed `state` (ADR 0475 D3): for a material with
-/// history (J2) the state after the return map at every point of the stiffness rule; for the others the empty state.
+/// history (J2; the viscoelastic material at the default point context, an increment of zero length, ADR 0485 D3) the state
+/// after the update at every point of the stiffness rule; for the others the empty state.
 pub fn element_trial_state<E: Element + ?Sized>(
     element: &E,
     coords: &[Vec3],
@@ -279,7 +323,16 @@ pub fn element_trial_state<E: Element + ?Sized>(
     state: &ElementState,
 ) -> Result<ElementState> {
     Ok(ElementState::new(
-        evaluate(element, coords, material, displacement, state, false)?.state,
+        evaluate(
+            element,
+            coords,
+            material,
+            displacement,
+            state,
+            false,
+            &PointContext::default(),
+        )?
+        .state,
     ))
 }
 
@@ -387,7 +440,7 @@ pub fn internal_force(model: &SolidModel, u: &[f64], states: &[ElementState]) ->
 /// The assembled tangent of `model` at `u` (ADR 0404 D4) on the pattern of the stiffness, with `threads` workers (`None`:
 /// the available parallelism); bit-identical for any value.
 pub fn tangent(model: &SolidModel, u: &[f64], states: &[ElementState], threads: Option<usize>) -> Result<CsrMatrix> {
-    Ok(force_and_tangent(model, u, states, threads)?.1)
+    Ok(force_and_tangent(model, u, states, threads, &PointContext::default())?.1)
 }
 
 /// The internal force and the tangent in one pass: element matrices by [`assemble_with`], element forces stored per element
@@ -398,6 +451,7 @@ fn force_and_tangent(
     u: &[f64],
     states: &[ElementState],
     threads: Option<usize>,
+    context: &PointContext,
 ) -> Result<(Vec<f64>, CsrMatrix, Vec<ElementState>)> {
     check_model(model)?;
     check_fields(model, u, states)?;
@@ -410,7 +464,7 @@ fn force_and_tangent(
         let d = element_dofs(&dofs, ctx.nodes);
         let ue: Vec<f64> = d.iter().map(|&q| u[q]).collect();
         let el = crate::element::element_for(ctx.kind);
-        let ev = evaluate(el, ctx.coords, ctx.material, &ue, &states[ctx.element], true)?;
+        let ev = evaluate(el, ctx.coords, ctx.material, &ue, &states[ctx.element], true, context)?;
         *forces[ctx.element].lock().expect("element force slot") = ev.force;
         *trial[ctx.element].lock().expect("element state slot") = ev.state;
         Ok(ev.tangent.expect("tangent requested"))
@@ -729,6 +783,8 @@ struct Problem<'a> {
     free: Vec<usize>,
     options: &'a NewtonOptions,
     contributions: &'a [&'a dyn Contribution],
+    /// The point context of every evaluation (ADR 0485 D3); the default for the static driver.
+    context: PointContext,
 }
 
 impl Problem<'_> {
@@ -763,7 +819,8 @@ impl Problem<'_> {
         for k in 0..=o.max_iterations {
             // The trial states: a material with history updates them, always from the committed states (ADR 0475 D3);
             // the linear material has none (D5).
-            let (mut fint, mut kt, trial) = force_and_tangent(self.model, &u, states_c, o.threads).map_err(classify)?;
+            let (mut fint, mut kt, trial) =
+                force_and_tangent(self.model, &u, states_c, o.threads, &self.context).map_err(classify)?;
             // ADR 0479 D2: the internal force without the contributions is kept for the converged iterate, and a
             // contribution may extend the reference of the residual.
             let mut elastic = None;
@@ -1030,6 +1087,20 @@ pub fn solve_with(
     model.validate()?;
     model.check_supported_nonlinear()?;
     check_driver_model(model)?;
+    // ADR 0485 D4: the static driver has no time; the viscoelastic material needs one.
+    if let Some((i, (set, m))) = model
+        .materials()
+        .iter()
+        .enumerate()
+        .find(|(_, (_, m))| matches!(m, Material::Viscoelastic { .. }) && m.state_size() > 0)
+    {
+        return Err(FemError::NotYetSupported {
+            item: "material",
+            variant: m.name(),
+            location: format!("material {i}, element set '{set}': the nonlinear static solve (no time)"),
+            package: crate::mat_visco::FOLLOW_UP,
+        });
+    }
     options.check()?;
     let dofs = model.dof_map();
     let n = dofs.n_equations();
@@ -1048,6 +1119,7 @@ pub fn solve_with(
         free,
         options,
         contributions: &contributions,
+        context: PointContext::default(),
     };
     let mut u = vec![0.0; n];
     let mut lambda = 0.0;
@@ -1188,6 +1260,32 @@ pub fn solve_from(
     options: &NewtonOptions,
     contributions: &[&dyn Contribution],
 ) -> Result<Equilibrium> {
+    solve_from_at(
+        model,
+        prescribed,
+        load,
+        start,
+        states,
+        options,
+        contributions,
+        &PointContext::default(),
+    )
+}
+
+/// [`solve_from`] at the point context `context` (ADR 0485 D4): every material evaluation of the attempt gets it (time,
+/// time increment and temperature of the step), so that the viscoelastic material of [`crate::mat_visco`] relaxes over the
+/// step; the other materials do not read the time. With the default context it is [`solve_from`].
+#[allow(clippy::too_many_arguments)]
+pub fn solve_from_at(
+    model: &SolidModel,
+    prescribed: &[Prescribed],
+    load: &[f64],
+    start: &[f64],
+    states: &[ElementState],
+    options: &NewtonOptions,
+    contributions: &[&dyn Contribution],
+    context: &PointContext,
+) -> Result<Equilibrium> {
     model.validate()?;
     model.check_supported_nonlinear()?;
     check_driver_model(model)?;
@@ -1231,6 +1329,7 @@ pub fn solve_from(
         free,
         options,
         contributions,
+        context: context.clone(),
     };
     match problem.attempt(start, 1.0, 1.0, states) {
         Ok(a) => Ok(Equilibrium {

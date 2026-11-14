@@ -8089,7 +8089,7 @@ fixed by the item's registration ADR before any code.
     mat_ortho.rs, mat_table.rs, tests sa_ortho.rs, sa_mat_table.rs, sa_ortho_default_bits.rs; scaffold rows recorded and
     copied in sa_scaffold.rs. Follow-up F-537. Follow-up F-537 (ADR 0457, 2026-11-14) opened the modal analysis, the
     pre-stressed modes and the transformation path to both variants.
-- [ ] **F-410** Linear viscoelasticity: Prony series in time, complex modulus in frequency, time-temperature shift
+- [x] **F-410** Linear viscoelasticity: Prony series in time, complex modulus in frequency, time-temperature shift
   - depends on: F-408, F-397, F-398
   - acceptance: Every limit not stated here is registered in the ADR before the run. Relaxation of one element after a
     strain step: sigma(t) = eps0 (E_inf + sum E_i exp(-t/tau_i)) within 1e-10 at every step end for three branches.
@@ -8102,8 +8102,24 @@ fixed by the item's registration ADR before any code.
     frequency: logarithmic decrement pi E''/E' within 3 percent. A material without branches gives the bits of the
     elastic one; the internal stresses are saved and restored bit for bit with the integrator state; a non-positive
     relaxation time or modulus is refused with the key.
-  - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0313; the registration is
-    written by the implementation agent before any code.
+  - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. ADR 0485, 2026-11-14 (registration of
+    stub ADR 0313): linear viscoelasticity in rcfd-fem (mat_visco.rs). The generalised Maxwell solid on an isotropic
+    base, with shear and bulk weights per Prony term and the recursive update of the internal stresses, exact for a
+    strain linear in the step, and its tangent. The state is 6 (N + 1) values per point: the strain of the last step and
+    one internal stress per term. The WLF and Arrhenius shifts act through the reduced time. complex_moduli gives the
+    shear, bulk and Young's complex moduli; modulus_table builds the storage and loss table of the direct harmonic
+    solve. The Newton driver takes a point context (nonlinear::solve_from_at); the nonlinear transient step passes its
+    time, with no new history store and no second loop. The material is refused by the static load-factor driver (no
+    time) and by every linear path, naming mat_visco::FOLLOW_UP. Met: relaxation of one element with three branches
+    within 4.7e-16 at every step end; creep of the standard solid within 1.2e-5 at 20 steps per tau with order 2.00;
+    complex modulus within 6e-16; dissipation per cycle within 2.5e-4 at 200 steps per cycle; shifted relaxation within
+    4.7e-16 (WLF and Arrhenius); free vibration of a 20-element bar with eta = 0.05, decrement within 2.50 percent of pi
+    E''/E' (the dispersion term of the standard solid; within 2.3e-4 of the exact root); no branches gives the elastic
+    bits; save and restore bit for bit with the internal stresses; non-positive relaxation time and moduli refused with
+    the key; default bits (12 digests) and baseline hashes unchanged; eight mutations caught. Two check set-ups were
+    corrected by amendment 1, and their records were kept. Case-file key not added (recommended: viscoelastic = { base,
+    terms, shift }, nonlinear transient study only). Follow-ups proposed in ADR 0485 (quasi-static time stepping; the
+    material in the direct harmonic solve and the damped modes).
 - [ ] **F-411** Creep: power law with time hardening, implicit integration with a consistent tangent
   - depends on: F-408, F-397
   - acceptance: Every limit not stated here is registered in the ADR before the run. The tangent agrees with central
