@@ -3816,7 +3816,7 @@
     ],
     "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. At zero speed the frequencies equal those of the beam model of F-391 within 1e-10. Disc on a light shaft between two bearings: critical speed sqrt(k/m) and unbalance amplitude e r^2/sqrt((1 - r^2)^2 + (2 zeta r)^2) within 1e-3 at r = 0.5, 1 and 2. In the stiff-shaft limit the critical speeds and the response equal rotordyn::critical_speeds and rotordyn::response for the same rotor within 1e-6. Uniform shaft on pins with rotary inertia, 20 elements: forward and backward whirl of modes 1 and 2 equal the roots of E I k^4 - rho A w^2 - rho I k^2 w^2 +/- 2 rho I k^2 Omega w = 0, k = n pi/L, within 0.5 percent at three speeds. Overhung disc on a massless cantilever shaft: the four whirl speeds equal the roots of the two-unknown closed form (derived in the registration) within 0.5 percent. Anisotropic bearings split the critical speed into sqrt(kx/m) and sqrt(ky/m) within 1e-3. A cross-coupled stiffness k_c on a damped disc is stable below c w_n and unstable above, the threshold within 1 percent. Forward and backward are labelled by the sense of the orbit; an unstable speed is reported, never dropped.",
-    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0319; the registration is written by the implementation agent before any code. F-416 (ADR 0476, 2026-11-14): rcfd_fem::rotor (F-391 shaft with the gyroscopic matrix, discs, cross-coupled bearings; whirl by the quadratic solver of ADR 0450, forward and backward by the mass-weighted sense of the orbit, undamped critical speeds, stability, unbalance and harmonic response, Campbell table) and rcfd_post::solid_rotor (the join with rotordyn, discs from a solid part). Zero speed against F-391 1.06e-11, sqrt(k/m) 7.8e-15, unbalance amplitude 9.8e-15, cross-coupling threshold 2.0e-7, stiff-shaft limit against rotordyn 7.5e-9 (critical speeds) and 1.4e-7 (response), Rayleigh shaft 7.9e-6, overhung disc 1.1e-14, anisotropic split 1.5e-5; defaults bit-identical. Partial: L1 (labels against the orbit sense) missed on translation-free modes of the 20-element shaft, where the translation orbit is rounding; recorded as l1_direction_is_the_sense_of_the_orbit_known_miss, met with the tilt orbit after amendment 2."
+    "note": "Structural solver, advanced tier. PARTIAL. F-416 (ADR 0476, 2026-11-14): rcfd_fem::rotor (F-391 shaft with the gyroscopic matrix, discs, cross-coupled bearings; whirl by the quadratic solver of ADR 0450, forward and backward by the mass-weighted sense of the orbit, undamped critical speeds, stability, unbalance and harmonic response, Campbell table) and rcfd_post::solid_rotor (the join with rotordyn, discs from a solid part). Zero speed against F-391 1.06e-11, sqrt(k/m) 7.8e-15, unbalance amplitude 9.8e-15, cross-coupling threshold 2.0e-7, stiff-shaft limit against rotordyn 7.5e-9 (critical speeds) and 1.4e-7 (response), Rayleigh shaft 7.9e-6, overhung disc 1.1e-14, anisotropic split 1.5e-5; defaults bit-identical. Partial: L1 (labels against the orbit sense) missed on translation-free modes of the 20-element shaft, where the translation orbit is rounding; recorded as l1_direction_is_the_sense_of_the_orbit_known_miss, met with the tilt orbit after amendment 2. Follow-ups F-562, F-563, F-564."
   },
   {
     "id": "F-417",
@@ -3828,7 +3828,7 @@
     ],
     "status": "done",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. One mode under a flat one-sided force spectrum G: mean-square displacement (pi/2) f_n Q G/k^2 with Q = 1/(2 zeta), and under a flat base acceleration spectrum the mean-square absolute acceleration (pi/2) f_n Q G (for Q well above 1; the exact integral is computed in the registration), both within 0.5 percent at zeta = 0.02 on the registered grid, observed convergence under grid refinement; zero-crossing rate f_n within 1 percent. Two well separated modes: the mean square is the sum within 1 percent. A band-limited spectrum equals the numerical integral registered beforehand within 1e-6. For a uniaxial stress state the root-mean-square von Mises stress equals the root-mean-square stress within 1e-10. Two fully correlated patterns equal one summed pattern within 1e-12; uncorrelated ones add in mean square. A spectrum with a negative value or a non-increasing frequency list is refused with the entry.",
-    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size S. ADR 0477, 2026-11-14: rcfd_fem::random (stub of ADR 0440 filled, PENDING None): Spectrum tables (linear or log-log, refused with the entry for a negative value or a non-increasing frequency), ModalChannels and spectral_response on a grid of steps of a quarter of the local scale (the distance to the nearest half-power peak, or the frequency) with 3-point Gauss-Legendre, several patterns with a constant real correlation, moments m0, m1, m2, m4 with the zero-crossing rate by fatigue::spectral_rate, and RandomSolver on the F-399 HarmonicSolver (new method modal_decomposition) for force patterns and a base acceleration (relative displacement and velocity, absolute acceleration), with the stress covariance per integration point and the root-mean-square von Mises stress sqrt(tr(A C)). Every registered check was met in one run: one mode 8.7e-6 (force) and 1.59e-3 (base; the exact integral (pi/2) f_n G (Q + 1/Q) is 1.6e-3 above) from (pi/2) f_n Q G, 1.1e-7 from the exact finite-band integrals, observed orders 6.4 and 6.1 under refinement; zero-crossing rate 1.28e-3 below f_n (finite band); two modes 1.03e-3 above the sum (the CQC cross term); band-limited linear and log-log tables 1.1e-7 from the registered integrals; uniaxial rms von Mises equal to the rms stress exactly on an axial Hex8 rod (force and base); fully correlated patterns equal the summed pattern within 1.1e-15 (4.9e-12 with the static correction), uncorrelated ones add within 3.9e-15; the one-mode rod through the model path within 1.2e-7 of the closed forms; 9 of 9 mutations caught; default bits unchanged. Follow-ups proposed: case file and CLI, broadband fatigue, complex cross-spectra."
+    "note": "Structural solver, advanced tier. DONE. ADR 0477, 2026-11-14: rcfd_fem::random (stub of ADR 0440 filled, PENDING None): Spectrum tables (linear or log-log, refused with the entry for a negative value or a non-increasing frequency), ModalChannels and spectral_response on a grid of steps of a quarter of the local scale (the distance to the nearest half-power peak, or the frequency) with 3-point Gauss-Legendre, several patterns with a constant real correlation, moments m0, m1, m2, m4 with the zero-crossing rate by fatigue::spectral_rate, and RandomSolver on the F-399 HarmonicSolver (new method modal_decomposition) for force patterns and a base acceleration (relative displacement and velocity, absolute acceleration), with the stress covariance per integration point and the root-mean-square von Mises stress sqrt(tr(A C)). Every registered check was met in one run: one mode 8.7e-6 (force) and 1.59e-3 (base; the exact integral (pi/2) f_n G (Q + 1/Q) is 1.6e-3 above) from (pi/2) f_n Q G, 1.1e-7 from the exact finite-band integrals, observed orders 6.4 and 6.1 under refinement; zero-crossing rate 1.28e-3 below f_n (finite band); two modes 1.03e-3 above the sum (the CQC cross term); band-limited linear and log-log tables 1.1e-7 from the registered integrals; uniaxial rms von Mises equal to the rms stress exactly on an axial Hex8 rod (force and base); fully correlated patterns equal the summed pattern within 1.1e-15 (4.9e-12 with the static correction), uncorrelated ones add within 3.9e-15; the one-mode rod through the model path within 1.2e-7 of the closed forms; 9 of 9 mutations caught; default bits unchanged. Follow-ups proposed: case file and CLI, broadband fatigue, complex cross-spectra. Follow-ups F-565, F-566, F-567."
   },
   {
     "id": "F-418",
@@ -3897,7 +3897,7 @@
     ],
     "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The tangent agrees with central differences within 1e-6 in the elastic and in the plastic branch. Uniaxial bar, bilinear: the stress follows sigma_y + (E H/(E + H)) (eps - sigma_y/E) within 1e-10 in one step and in 100; on reversal the bar yields again at -sigma_max with isotropic and at sigma_max - 2 sigma_y with kinematic hardening within 1e-10. Thick sphere b/a = 2, perfectly plastic, internal pressure: the pressure at plastic radius c equals 2 sigma_y ln(c/a) + (2 sigma_y/3)(1 - c^3/b^3) within 1 percent at c = 1.25 a and 1.5 a, the solve converges at 0.98 of the limit pressure 2 sigma_y ln(b/a), and the residual hoop stress at the bore after unloading equals the closed form within 2 percent. Beam of rectangular section in pure bending: M/M_y = 1.5 - 0.5 (kappa_y/kappa)^2 within 1 percent up to kappa = 5 kappa_y. The last three residuals of each step show an order >= 1.8; a halved step restores the state bit for bit; a non-positive yield stress and a softening curve are refused with the key.",
-    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). PARTIAL. Size M. ADR 0475, 2026-11-14 (registration of stub ADR 0325): J2 plasticity in rcfd-fem (mat_j2.rs): radial return with linear isotropic and kinematic hardening (closed-form dg) and its consistent tangent, 13 state values per point (plastic strain, back stress, equivalent plastic strain), on the Newton driver of ADR 0404 without a second loop (trial states from the committed states at every iteration, committed on convergence, dropped on a failed attempt; element_trial_state); J2 taken by nonlinear::solve only and refused by every other path naming mat_j2::FOLLOW_UP. Met: tangent against central differences 1.4e-10 .. 2.4e-9 plastic and 1.7e-11 .. 7.9e-11 elastic (limit 1e-6; the Hex20 elastic set-up corrected by amendment 1), uniaxial bilinear bar in one step and in 100 within 1e-15, re-yield at -sigma_max and sigma_max - 2 sigma_y within 1.2e-15, sphere b/a = 2 pressure at c = 1.25 a and 1.5 a within 7.8e-4 and 4.0e-4, converged at 0.98 p_lim, narrow beam in pure bending M/M_y within 2.4e-4 up to 5 kappa_y, halved step bit for bit, non-positive yield stress and softening refused with the key, default bits (11 digests) and baseline hashes unchanged; seven mutations caught. Missed (known misses, diagnosed): residual hoop stress at the bore 2.6 percent against 2 (point-wise hoop stress scatter of the 2 x 2 cubed-sphere octant, 1.4 percent already in the elastic field) and the order of the last three residuals 1.27 .. 1.44 against 1.8 (the reading of ADR 0404 includes the residual of the active-set change; the asymptotic step is quadratic and reaches the floor at once). Case-file key not added (recommended: j2 = { base, yield_stress, isotropic, kinematic }, nonlinear static study only). Follow-ups proposed in ADR 0475 (convergence-order reading for an active-set change; refined sphere octant)."
+    "note": "Structural solver, advanced tier. PARTIAL. ADR 0475, 2026-11-14 (registration of stub ADR 0325): J2 plasticity in rcfd-fem (mat_j2.rs): radial return with linear isotropic and kinematic hardening (closed-form dg) and its consistent tangent, 13 state values per point (plastic strain, back stress, equivalent plastic strain), on the Newton driver of ADR 0404 without a second loop (trial states from the committed states at every iteration, committed on convergence, dropped on a failed attempt; element_trial_state); J2 taken by nonlinear::solve only and refused by every other path naming mat_j2::FOLLOW_UP. Met: tangent against central differences 1.4e-10 .. 2.4e-9 plastic and 1.7e-11 .. 7.9e-11 elastic (limit 1e-6; the Hex20 elastic set-up corrected by amendment 1), uniaxial bilinear bar in one step and in 100 within 1e-15, re-yield at -sigma_max and sigma_max - 2 sigma_y within 1.2e-15, sphere b/a = 2 pressure at c = 1.25 a and 1.5 a within 7.8e-4 and 4.0e-4, converged at 0.98 p_lim, narrow beam in pure bending M/M_y within 2.4e-4 up to 5 kappa_y, halved step bit for bit, non-positive yield stress and softening refused with the key, default bits (11 digests) and baseline hashes unchanged; seven mutations caught. Missed (known misses, diagnosed): residual hoop stress at the bore 2.6 percent against 2 (point-wise hoop stress scatter of the 2 x 2 cubed-sphere octant, 1.4 percent already in the elastic field) and the order of the last three residuals 1.27 .. 1.44 against 1.8 (the reading of ADR 0404 includes the residual of the active-set change; the asymptotic step is quadratic and reaches the floor at once). Case-file key not added (recommended: j2 = { base, yield_stress, isotropic, kinematic }, nonlinear static study only). Follow-ups below. Follow-ups F-560, F-561."
   },
   {
     "id": "F-423",
@@ -5390,7 +5390,7 @@
     ],
     "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. An option of the reduction of ADR 0469 adds to each part the static residual vectors of its interior loads (M-orthogonalised against the kept modes) and keeps every fixed-interface mode below a given cutoff. The bar of ADR 0469 with the corner load: the harmonic response within 1 percent of the full model up to half the lowest omitted fixed-interface frequency (the H1 set-up), and the statics of an interior load exact within 1e-10; without the option every result bit-identical to ADR 0469's.",
-    "note": "Structural solver, advanced tier. Follow-up of F-430 (ADR 0469, 2026-11-14). PARTIAL. ADR 0474, 2026-11-14: options of rcfd_fem::cms, off by default and bit-identical when off (11 digests of 4abff5fe): CmsOptions::cutoff keeps every fixed-interface mode below a frequency (dense and subspace paths, counts and eigenvalues equal in bits to the full eigen-solution), CmsOptions::residual_vectors adds the static residual vector of each part's interior load, M-orthonormalised twice against the kept modes by the ADR 0464 routine now shared from damped.rs (orthogonality 1e-16, dropped when every mode is kept); part file version 2 only with residual vectors, version 1 files unchanged. Statics of an interior load exact within 1.5e-12 (bar) and 5.7e-14 (small model) against 1.4e-3 and 5.0e-3 without; the harmonic error to 2000 rad/s 5.4e-4, and 4 to 6 times lower to 1000 rad/s than without. H1 (1 percent up to half the lowest omitted frequency) missed as predicted: 0.494 at 15107 rad/s with the cutoff 32964 rad/s, 1.04 at 8241 with five modes; at a resonance the error is 2 delta / eta and the reduced frequencies near that bound are 3e-3 to 5e-3 high, so 1 percent at loss factor 0.02 needs frequency errors of 1e-4. One mutation (the boundary-to-vector mass coupling set to zero) not caught. Follow-up for given load patterns and a restated harmonic clause proposed in ADR 0474."
+    "note": "Structural solver, advanced tier. Follow-up of F-430 (ADR 0469). PARTIAL. ADR 0474, 2026-11-14: options of rcfd_fem::cms, off by default and bit-identical when off (11 digests of 4abff5fe): CmsOptions::cutoff keeps every fixed-interface mode below a frequency (dense and subspace paths, counts and eigenvalues equal in bits to the full eigen-solution), CmsOptions::residual_vectors adds the static residual vector of each part's interior load, M-orthonormalised twice against the kept modes by the ADR 0464 routine now shared from damped.rs (orthogonality 1e-16, dropped when every mode is kept); part file version 2 only with residual vectors, version 1 files unchanged. Statics of an interior load exact within 1.5e-12 (bar) and 5.7e-14 (small model) against 1.4e-3 and 5.0e-3 without; the harmonic error to 2000 rad/s 5.4e-4, and 4 to 6 times lower to 1000 rad/s than without. H1 (1 percent up to half the lowest omitted frequency) missed as predicted: 0.494 at 15107 rad/s with the cutoff 32964 rad/s, 1.04 at 8241 with five modes; at a resonance the error is 2 delta / eta and the reduced frequencies near that bound are 3e-3 to 5e-3 high, so 1 percent at loss factor 0.02 needs frequency errors of 1e-4. One mutation (the boundary-to-vector mass coupling set to zero) not caught. Follow-up for given load patterns and a restated harmonic clause. Follow-up F-559."
   },
   {
     "id": "F-553",
@@ -5458,5 +5458,106 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The beam's geometric stiffness gains the bending-moment, shear-force and Wagner terms and the shells' the t^2/12 rotation terms, opt-in: the lateral-torsional buckling moment of a simply supported I or rectangular beam under uniform moment equals the closed form (pi/L) sqrt(E I_z G J) (1 + (pi^2 E C_w)/(G J L^2))^(1/2) within 1 percent at 16 elements; without the option every result of ADR 0473 bit-identical.",
     "note": "Structural solver, advanced tier. Follow-up of F-420 (ADR 0473, 2026-11-14)."
+  },
+  {
+    "id": "F-559",
+    "title": "Craig-Bampton residual vectors of given load patterns and a harmonic acceptance at resonances",
+    "phase": 9,
+    "deps": [
+      "F-552"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The reduction of ADR 0474 takes residual vectors of load patterns given by the caller (each M-orthogonalised against the kept modes and the vectors before it). The bar of ADR 0469 with the corner load and the cutoff of ADR 0474: the harmonic response within 1 percent of the full model off resonance (every point farther than 2 eta from a frequency of the full model) up to half the lowest omitted fixed-interface frequency, each frequency of the assembly below that bound within 1e-3 of the full model's, the first eight frequencies strictly lowered by the residual vectors, a point at the axial resonance within the error 4 delta / eta of its frequency error, and a pattern per load component reproducing the statics of each component within 1e-10; without the option every result bit-identical to ADR 0474's.",
+    "note": "Structural solver, advanced tier. Follow-up of F-552 (ADR 0474, 2026-11-14)."
+  },
+  {
+    "id": "F-560",
+    "title": "Convergence order of the Newton driver with plasticity: a reading for an active-set change",
+    "phase": 9,
+    "deps": [
+      "F-422"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. On the sphere and beam solves of ADR 0475 (S1, S2, S3, P1), a reading of the convergence order fit for an active-set change, registered before the run (for example the order of the last three residuals counted from the first correction that does not change the set of yielded points, with a floor of 1e-14, or r_{k+1} <= C r_k^2 over the last two corrections with C registered), gives an order >= 1.8 or the bound on every increment, and the continuum tangent (mutation MU1 of ADR 0475) fails it.",
+    "note": "Structural solver, advanced tier. Follow-up of F-422 (ADR 0475, 2026-11-14)."
+  },
+  {
+    "id": "F-561",
+    "title": "Thick sphere with J2 on a refined octant: residual hoop stress after unloading",
+    "phase": 9,
+    "deps": [
+      "F-422"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The partly plastic sphere of ADR 0475 on a 4 x 4-per-face cubed-sphere octant with 8 radial Hex20 layers: the residual hoop stress at the bore after unloading from p(1.25 a) within 2 percent of sigma_y - (12/7) p, the elastic Lame hoop stress of the same mesh at every point of the inner layer within 1 percent, and S1, S2 of ADR 0475 still within 1 percent.",
+    "note": "Structural solver, advanced tier. Follow-up of F-422 (ADR 0475, 2026-11-14)."
+  },
+  {
+    "id": "F-562",
+    "title": "Damped massless unknowns of a rotor solved as first-order unknowns",
+    "phase": 9,
+    "deps": [
+      "F-416"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. A bearing pedestal with stiffness and damping in series and no mass gives the whirl of the same model with a pedestal mass of 1e-9 of the disc's within 1e-6; models without such unknowns bit-identical.",
+    "note": "Structural solver, advanced tier. Follow-up of F-416 (ADR 0476, 2026-11-14)."
+  },
+  {
+    "id": "F-563",
+    "title": "Speed-dependent bearing coefficients in whirl, Campbell and response",
+    "phase": 9,
+    "deps": [
+      "F-416"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. A table constant in speed gives the bits of the constant bearing; a linear table gives the closed-form Jeffcott critical speed of the speed-dependent stiffness within 1e-6.",
+    "note": "Structural solver, advanced tier. Follow-up of F-416 (ADR 0476, 2026-11-14)."
+  },
+  {
+    "id": "F-564",
+    "title": "Damped critical speeds as unbalance-response peaks and checked Campbell crossings",
+    "phase": 9,
+    "deps": [
+      "F-416"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. On the damped Jeffcott rotor the response peak equals w_n / sqrt(1 - 2 zeta^2) within 1e-6 and the crossing of the forward track with engine order 1 equals the undamped critical speed within 1e-6 at zeta = 0.",
+    "note": "Structural solver, advanced tier. Follow-up of F-416 (ADR 0476, 2026-11-14)."
+  },
+  {
+    "id": "F-565",
+    "title": "Random response in the case file and the CLI",
+    "phase": 9,
+    "deps": [
+      "F-417",
+      "F-533"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. A case with analysis = \"random\", a spectrum table, a force load set or a base direction and a modal damping ratio gives the root-mean-square displacement, stress, von Mises stress and zero-crossing rate of the library call on the same model bit for bit; a case without the new keys keeps its bits and the baseline hashes are unchanged; a negative spectrum value, a non-increasing frequency list and a correlation that is not positive semi-definite are refused with the key and the entry.",
+    "note": "Structural solver, advanced tier. Follow-up of F-417 (ADR 0477, 2026-11-14)."
+  },
+  {
+    "id": "F-566",
+    "title": "Broadband fatigue of a random stress from its spectral moments",
+    "phase": 9,
+    "deps": [
+      "F-417",
+      "F-413"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The broadband damage rate (formula registered from a cited source) reduces to the narrow-band rate of F-413 within 1 percent for a one-mode response at zeta = 0.01; for a two-mode response with well separated modes the counted damage of a synthesised Gaussian history (registered seed, 1e5 cycles, rainflow of F-413) lies within 10 percent of the broadband rate and the narrow-band rate is above it; the moments m0, m1, m2, m4 of RandomSolver feed it unchanged; a non-positive m0 or m2 is refused.",
+    "note": "Structural solver, advanced tier. Follow-up of F-417 (ADR 0477, 2026-11-14)."
+  },
+  {
+    "id": "F-567",
+    "title": "Complex cross-spectral matrices and frequency-dependent coherence of random loads",
+    "phase": 9,
+    "deps": [
+      "F-417"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. A cross-spectral table G_ab(f) with real and imaginary parts, Hermitian and positive semi-definite at every table frequency (refused otherwise with the frequency), reproduces the constant real correlation of F-417 bit for bit when its imaginary part is zero; two patterns with a pure delay tau (G_12 = G e^{-i 2 pi f tau}) on a one-mode system give the closed-form mean square within 1e-6; a field with coherence exp(-|x_a - x_b|/L) on a plate tends to the uncorrelated result as L goes to 0 and to the fully correlated one as L grows, each within 1e-8 at the registered limits.",
+    "note": "Structural solver, advanced tier. Follow-up of F-417 (ADR 0477, 2026-11-14)."
   }
 ]
