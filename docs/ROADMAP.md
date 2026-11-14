@@ -8341,7 +8341,7 @@ fixed by the item's registration ADR before any code.
     written by the implementation agent before any code. ADR 0277 (2026-11-12): recover::IntegrationPointField carries
     per element the positions, weights w det J, strain and stress of the stiffness rule's points (offsets,
     points_of(e)); recover::nodal_average is the averaged nodal stress to compare against.
-- [ ] **F-433** Elasticity solves on the ranks of rcfd-dist and on the CUDA device
+- [x] **F-433** Elasticity solves on the ranks of rcfd-dist and on the CUDA device
   - depends on: F-016, F-101, F-374, F-381
   - acceptance: Every limit not stated here is registered in the ADR before the run. Ranks: with one rank the iteration
     counts and the solution have the bits of the serial CG of F-381 with the same preconditioner; with 2, 4 and 8 ranks
@@ -8353,9 +8353,22 @@ fixed by the item's registration ADR before any code.
     `auto` below the threshold runs on the CPU; without a device `cuda` is a located error and `auto` falls back with
     the reason recorded, and the device clauses are reported as not run. The default solver's results and the baseline
     hashes are unchanged.
-  - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0336; the registration is
-    written by the implementation agent before any code. rcfd-api gains a dependency on rcfd-dist (decision A5 of ADR
-    0310).
+  - note: Structural solver, advanced tier (plan ADR 0310). ADR 0431, 2026-11-14: rcfd_api::solid_parallel (rcfd-api
+    gains rcfd-dist and rcfd-fem as dependencies, decision A5 (a); library only). solve_static_ranks: the reduced
+    stiffness split by nodes (recursive coordinate bisection of node points, all unknowns of a node on one rank, a split
+    assignment refused naming the node) into DistCsr rows keeping the global entry order, solved on in-process ranks by
+    the distributed CG of rcfd-dist in the outer loop of F-381 (true residual, refinement restarts), with the node block
+    Jacobi of F-381 or a rank-local IC(0) (additive Schwarz without overlap). One rank has the bits of F-381 (cube of 39
+    744 unknowns: 276 block-Jacobi and 94 IC(0) iterations; Tet10 cantilever of 4 704 unknowns: 581 with one restart),
+    displacements, reactions and residual bit-equal. On 2, 4, 8 ranks: within 1.9e-14 (block Jacobi) and 1.4e-11 (IC(0))
+    of the serial solution at residual below 1e-10, iterations 1.00 (block Jacobi) and up to 1.52 (rank-local IC(0),
+    cube, 8 ranks) times those of one rank; repeated runs bit-identical; a failing rank ends the solve in 0.015 s and a
+    stalled rank in 3.0 s (time-out 0.5 s) with errors naming rank, peer and tag; scaling recorded (0.167, 0.142, 0.127,
+    0.116 s for 1, 2, 4, 8 ranks). solve_static_device: rcfd_gpu::resolve with its threshold of 1e5 unknowns; on an RTX
+    5080 the device Jacobi CG equals the CPU one within 2.1e-13 on a cube of 304 842 unknowns (559 iterations both, 0.60
+    s against 4.50 s on 16 threads); Chebyshev within 4.5e-15 on 6 084; auto below the threshold runs on the CPU
+    bit-equal; without a device cuda is a located error and auto falls back with the reason recorded. Ten mutations
+    caught. Default solver and baseline hashes unchanged.
 - [ ] **F-434** Public coupled benchmark (the elastic flag behind a cylinder): structural tests CSM1 to CSM3 and the steady coupled case FSI1 (needs the maintainer: reference values)
   - depends on: F-423, F-385, F-397, F-401
   - acceptance: Every limit not stated here is registered in the ADR before the run. NEEDS THE MAINTAINER'S APPROVAL to
