@@ -278,3 +278,25 @@ the function body moves into a helper run with the registered variant, which exe
 
 DM (with the dashpot) and RV1 (50 iterations) stay missed in the record. The decision rule applies as registered: these misses
 are diagnosed and recorded, so at best **partial**. MU10 (Rayleigh at `w`) and MU8, MU9 are expected to be caught by DMb.
+
+## Amendment 2 (2026-11-14): the amended TF missed, diagnosed; no further correction
+
+The amended run (commit 57f8239f, `f586-scratch/run2-amended.log`, made once): DMb `5.51e-11` (met), RV1b runs with 170
+iterations of root 0 (met), every other check as in the registered run, and **TF missed again: `1.15e-8` against `1e-9`**.
+
+Diagnostic (disclosed; `f586-scratch/probe/src/bin/diag2.rs` to `diag4.rs`, logs `diag2.log` to `diag4.log`): per root the
+library's own-frequency roots with basis 70 and 71 against the dense full space are `2.2e-11, 1.15e-8, 7.2e-12, 1.9e-12`;
+the frozen F-582 solve shows the same (`1.9e-10, 1.145e-8, 2.5e-12, 3.2e-13`), so the iteration is not the cause. The
+full-space residual of the library's root 2 with basis 71 is `4.6e-3` (roots 1, 3, 4: `3e-12` to `2e-13`); the dense roots,
+with the balancing of `quadratic_eigen_with`, have residuals `1e-14`. The library's 71 undamped frequencies equal the lowest
+71 of the dense solve (all within `1e-8`; no mode skipped); the one left out, the 72nd at `361876 rad/s`, is `2.3e-4` above the
+71st and carries the loss coupling of root 2 (the stiff-direction bending of the non-square section). So basis `n - 1` is not
+the full space for this cantilever: the probe P2 (square section) had no such coupling to the top mode. The library is not at
+fault; the registered TF set-up (the most modes the modal analysis gives) cannot reach the full space. TF is recorded as a
+known miss and not corrected again (a full basis of `n` modes would need the modal analysis to give every mode, which it
+refuses by design, ADR 0450). The acceptance clause (a4) is met by T (`1.504e-4`, basis 6 against basis 71), and the record
+TT (basis 6 against the dense full space, `1.504e-4`) agrees with it to three digits.
+
+**Tests.** `f586_checks_known_miss` (registered variant) and `f586_checks_amended_known_miss` (amended variant) are ignored
+records; `f586_checks` runs the amended variant with TF printed as a record (no limit), so every met check is kept as a
+regression test. It is a re-run of met checks for the suite, not a registered run.
