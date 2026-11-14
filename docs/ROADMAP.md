@@ -8348,7 +8348,7 @@ fixed by the item's registration ADR before any code.
     extrapolation. ADR 0455 (F-531, 2026-11-14): the Symmetry-plane dissipation of amendment 3 is the averaged component
     diagonal of the PISO correctors; with the opt-in corrected diagonal the registered W5 set-up (Symmetry planes) gives
     8.3e-3 and 1.6e-3 against the formula, equal to W5c to 2.4e-6.
-- [ ] **F-422** J2 plasticity with isotropic and kinematic hardening: radial return and consistent tangent
+- [~] **F-422** J2 plasticity with isotropic and kinematic hardening: radial return and consistent tangent
   - depends on: F-408, F-389, F-397
   - acceptance: Every limit not stated here is registered in the ADR before the run. The tangent agrees with central
     differences within 1e-6 in the elastic and in the plastic branch. Uniaxial bar, bilinear: the stress follows sigma_y
@@ -8360,8 +8360,23 @@ fixed by the item's registration ADR before any code.
     rectangular section in pure bending: M/M_y = 1.5 - 0.5 (kappa_y/kappa)^2 within 1 percent up to kappa = 5 kappa_y.
     The last three residuals of each step show an order >= 1.8; a halved step restores the state bit for bit; a
     non-positive yield stress and a softening curve are refused with the key.
-  - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0325; the registration is
-    written by the implementation agent before any code.
+  - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). PARTIAL. Size M. ADR 0475, 2026-11-14
+    (registration of stub ADR 0325): J2 plasticity in rcfd-fem (mat_j2.rs): radial return with linear isotropic and
+    kinematic hardening (closed-form dg) and its consistent tangent, 13 state values per point (plastic strain, back
+    stress, equivalent plastic strain), on the Newton driver of ADR 0404 without a second loop (trial states from the
+    committed states at every iteration, committed on convergence, dropped on a failed attempt; element_trial_state); J2
+    taken by nonlinear::solve only and refused by every other path naming mat_j2::FOLLOW_UP. Met: tangent against
+    central differences 1.4e-10 .. 2.4e-9 plastic and 1.7e-11 .. 7.9e-11 elastic (limit 1e-6; the Hex20 elastic set-up
+    corrected by amendment 1), uniaxial bilinear bar in one step and in 100 within 1e-15, re-yield at -sigma_max and
+    sigma_max - 2 sigma_y within 1.2e-15, sphere b/a = 2 pressure at c = 1.25 a and 1.5 a within 7.8e-4 and 4.0e-4,
+    converged at 0.98 p_lim, narrow beam in pure bending M/M_y within 2.4e-4 up to 5 kappa_y, halved step bit for bit,
+    non-positive yield stress and softening refused with the key, default bits (11 digests) and baseline hashes
+    unchanged; seven mutations caught. Missed (known misses, diagnosed): residual hoop stress at the bore 2.6 percent
+    against 2 (point-wise hoop stress scatter of the 2 x 2 cubed-sphere octant, 1.4 percent already in the elastic
+    field) and the order of the last three residuals 1.27 .. 1.44 against 1.8 (the reading of ADR 0404 includes the
+    residual of the active-set change; the asymptotic step is quadratic and reaches the floor at once). Case-file key
+    not added (recommended: j2 = { base, yield_stress, isotropic, kinematic }, nonlinear static study only). Follow-ups
+    proposed in ADR 0475 (convergence-order reading for an active-set change; refined sphere octant).
 - [ ] **F-423** Nonlinear transient dynamics: Newton iteration inside the Newmark and generalised-alpha step
   - depends on: F-408, F-397, F-398
   - acceptance: Every limit not stated here is registered in the ADR before the run. At a load factor of 1e-6 the
