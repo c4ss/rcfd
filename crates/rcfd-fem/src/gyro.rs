@@ -350,6 +350,58 @@ fn check_not_cyclic(model: &SolidModel) -> Result<()> {
     Ok(())
 }
 
+/// One F-396 rest mode against the Rayleigh quotient of its own vector (ADR 0484, F-554).
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
+pub struct RestQuotient {
+    /// The position in F-396's rest modes (ascending).
+    pub index: usize,
+    /// F-396's reported rest eigenvalue `lambda_i`, rad^2/s^2.
+    pub eigenvalue: f64,
+    /// `phi_i^T K0 phi_i / phi_i^T M phi_i`, `K0` the operator at rest.
+    pub quotient: f64,
+    /// `quotient / eigenvalue - 1`, signed.
+    pub relative_difference: f64,
+}
+
+impl<'a> RotatingPart<'a> {
+    /// The Rayleigh quotient of every F-396 rest mode against its reported eigenvalue (ADR 0484 D2): at zero speed the split
+    /// frequencies of [`RotatingPart::split_modes`] equal the square roots of these quotients, not of the reported eigenvalues,
+    /// whose accuracy is that of the eigensolver's stopping test. Read-only; available with or without the Coriolis option.
+    /// Refuses a model with a cyclic constraint (`"cyclic"`).
+    pub fn rest_quotients(&self) -> Result<Vec<RestQuotient>> {
+        check_not_cyclic(self.model())?;
+        let r = match self.modes(0.0)? {
+            SpeedModes::Modes(r) => r,
+            SpeedModes::LossOfStiffness(l) => {
+                return Err(FemError::Solver {
+                    solver: "rest_quotients",
+                    reason: format!("no rest modes: {l:?}"),
+                })
+            }
+        };
+        let k = self.operator(0.0);
+        let m = self.mass();
+        let mut out = Vec::with_capacity(r.modes.len());
+        for (index, phi) in r.modes.iter().enumerate() {
+            let (mut kp, mut mp) = (vec![0.0; k.n], vec![0.0; m.n]);
+            k.matvec(phi, &mut kp);
+            m.matvec(phi, &mut mp);
+            let num: f64 = phi.iter().zip(&kp).map(|(a, b)| a * b).sum();
+            let den: f64 = phi.iter().zip(&mp).map(|(a, b)| a * b).sum();
+            let quotient = num / den;
+            let eigenvalue = r.eigenvalues[index];
+            out.push(RestQuotient {
+                index,
+                eigenvalue,
+                quotient,
+                relative_difference: quotient / eigenvalue - 1.0,
+            });
+        }
+        Ok(out)
+    }
+}
+
 /// `Phi^T A Phi`, row-major `m x m`, not symmetrised.
 fn project(a: &CsrMatrix, phi: &[Vec<f64>]) -> Vec<f64> {
     let m = phi.len();
