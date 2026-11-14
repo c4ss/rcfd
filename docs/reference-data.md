@@ -1873,3 +1873,18 @@ Kirsch's hole as recorded above (F-413).
 | Effectivity index `theta = eta/||u - u_h||_E`, asymptotic exactness when the recovered stress converges faster than the raw one | from memory | Ainsworth and Oden, A Posteriori Error Estimation in Finite Element Analysis, Wiley (2000), the chapter on recovery-based estimators: NOT read; measured in ADR 0478 (M1, M2) |
 | Optimal stress points: the centroid of the trilinear hexahedron, the 2 x 2 x 2 Gauss points of the quadratic hexahedron | from memory | Barlow, "Optimal stress locations in finite element models", Int. J. Numer. Meth. Engng 10 (1976) 243-251: NOT read; the 1-D argument of ADR 0478 arithmetic 3 |
 | One-dimensional effectivities of the rule (linear `1.080, 1.025, 1.007` and quadratic `0.854, 0.971, 0.995` at `n = 4, 8, 16`) | computed | numpy, `f432-scratch/probe_1d.py`, `probe_1d_quad.py` (ADR 0478 arithmetic 1, 2) |
+
+## F-556 the Shell3 rest stiffness of the twisted strip against Hex20 (ADR 0483)
+
+No source was read for F-556; the papers below are cited from memory for the names. The torsion of a pretwisted strip is
+derived in ADR 0483 (arithmetic 2); the reference of every comparison is the Hex20 strip of ADR 0473 run by the existing
+solver, and the base numbers come from the F-420 run log.
+
+| Item | Status | Source |
+|---|---|---|
+| Torsional stiffness of a pretwisted thin strip `G c t^3/3 + E t c^5 theta'^2/180` (the fibre strain `theta' phi' s^2`, free mean) | derived | ADR 0483 arithmetic 2; A. Rosen, "Structural and dynamic behavior of pretwisted rods and beams", Appl. Mech. Rev. 44 (1991) 483: NOT read, from memory |
+| The base rest frequencies of the third track: Hex20 442.797470 Hz, Shell4 445.161813 Hz, Shell3 460.730207 Hz | computed | ADR 0473 E1/E2 run log (`f420-scratch/run_e1.txt`); reproduced to 8.3e-10 (C1) |
+| Constant-strain triangle: parasitic in-plane shear when the strain varies across the element (in-plane bending) | cited | C. A. Felippa, "A study of optimal membrane triangles with drilling freedoms", Comput. Methods Appl. Mech. Engrg. 192 (2003) 2125: NOT read, from memory (as F-539) |
+| ANDES optimal membrane triangle, Allman's triangle | cited | Felippa 2003, op. cit.; D. J. Allman, Comput. Struct. 19 (1984) 1: NOT read, from memory (implemented by ADR 0466) |
+| MITC3 transverse shear, the stabilisation `t^2/(t^2 + alpha h^2)` | cited | P. S. Lee and K. J. Bathe, Comput. Struct. 82 (2004) 945; M. Lyly, R. Stenberg and T. Vihinen, Comput. Mech. 13 (1993) 92: NOT read, from memory (implemented by ADR 0454) |
+| Measured: the CST membrane-energy excess `e_m = 9.16e-2` at 12 x 36 on the coupled torsion field, `O(h^2)` (ratios 0.257, 0.264 per halving); the ANDES Shell3 within 3.3e-4 of Hex20 at rest and 2.98e-3 over the Campbell table | computed | ADR 0483 addenda 1 and 2 |
