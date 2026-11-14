@@ -11402,7 +11402,7 @@ fixed by the item's registration ADR before any code.
     counted damage of the synthesised history of ADR 0497 lies within 10 percent of it; a non-positive m0 or m2 is
     refused.
   - note: Structural solver, advanced tier. Optional. Follow-up of F-566 (ADR 0497, 2026-11-14).
-- [ ] **F-591** Laminated Shell4 under body loads and pre-stress (gravity, centrifugal, nodal body force, buckling and spin softening of a layup)
+- [~] **F-591** Laminated Shell4 under body loads and pre-stress (gravity, centrifugal, nodal body force, buckling and spin softening of a layup)
   - depends on: F-428, F-420
   - acceptance: Every limit not stated here is registered in the ADR before the run. Gravity and the centrifugal load on
     a Layup block take the consistent load int N_i (sum rho_k t_k) b dA and the moment of the first mass moment; a
@@ -11411,7 +11411,24 @@ fixed by the item's registration ADR before any code.
     spinning strip within 2 percent of the Southwell form with the layup's D11; the buckling load of a simply supported
     [0/90]s plate under uniaxial compression is pi^2 (D11 + 2 (D12 + 2 D66) + D22)/a^2 within 2 percent with 16 x 16
     elements.
-  - note: Structural solver, advanced tier. Follow-up of F-428 (ADR 0496, 2026-11-14).
+  - note: Structural solver, advanced tier. PARTIAL by the standing rule (the BB3 frequency check met only after
+    amendment 1, written after run 1 compared two NaN markers at 100 rad/s; every other check met, all ten mutations
+    caught, proposed done by the ADR). ADR 0502, 2026-11-14: laminated Shell4 under body loads and pre-stress. Gravity
+    and the centrifugal load on a Layup block give the consistent load m0 int N_i b dA (m0 = sum rho_k t_k, b the
+    mid-surface acceleration) with the moment of the first mass moment m1 int N_i (e_3 x b) dA
+    (shell::layup_body_load_vector_at); the nodal body-force field acts over the total thickness; the pre-stress and
+    geometric stiffness take the layup resultants over the total thickness (buckling, pre-stressed modes, rotating
+    parts); the layup spin-softening mass is m0 P, m2 R and the coupling m1 P W. One isotropic ply is routed to its
+    Shell twin's calls: load vectors, static solve, pre-stress, buckling factors and modes, K_sigma,1, M_perp and
+    rotating modes equal bit for bit. Met: gravity and centrifugal loads equal the consistent mass times the rigid
+    acceleration within 3.6e-16, the gravity moment m0 A (x_cm x g) within 1.1e-16; rotating [0/90]s strip clamped on
+    the axis: radial membrane force (column mean against m0 Omega^2 (L^2 - r_c^2 - h^2/12)/2) within 1.6e-14, flap
+    frequency within 9.2e-4 and 3.6e-3 of the Southwell form with D11 (cylindrical bending, S = 1.1933364 from the
+    rest-mode quotient) at 0.5 and 1 omega_0; SS [0/90]s square plate, 16 x 16, buckling load within 3.6e-3 of pi^2 (D11
+    + 2 (D12 + 2 D66) + D22)/a^2 (m = 1 critical, m = 2 within 1.8e-2). The corotated Newton path and Shell3 still
+    refuse a layup. Default bits unchanged (23 new digests and ADR 0496's 11), baseline hashes unchanged; ten of ten
+    mutations caught. No case-file key (open question). Open: the corotated Newton path for a layup (follow-up, not yet
+    numbered) and the [[layup]] case-file key (maintainer).
 - [ ] **F-592** A temperature history on the quasi-static driver and the nonlinear transient integrator
   - depends on: F-576
   - acceptance: Every limit not stated here is registered in the ADR before the run. The quasi-static driver and the
