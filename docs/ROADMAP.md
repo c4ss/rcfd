@@ -8120,7 +8120,7 @@ fixed by the item's registration ADR before any code.
     corrected by amendment 1, and their records were kept. Case-file key not added (recommended: viscoelastic = { base,
     terms, shift }, nonlinear transient study only). Follow-ups proposed in ADR 0485 (quasi-static time stepping; the
     material in the direct harmonic solve and the damped modes).
-- [ ] **F-411** Creep: power law with time hardening, implicit integration with a consistent tangent
+- [x] **F-411** Creep: power law with time hardening, implicit integration with a consistent tangent
   - depends on: F-408, F-397
   - acceptance: Every limit not stated here is registered in the ADR before the run. The tangent agrees with central
     differences within 1e-6. Uniaxial constant stress: creep strain A sigma^n t within 1e-8 for m = 0 and A sigma^n
@@ -8132,8 +8132,22 @@ fixed by the item's registration ADR before any code.
     rotation, n = 3: the tip creeps at the rate A times the integral of (rho Omega^2 (L^2 - r^2)/2)^n over the length
     within 0.5 percent (the stress is statically determinate). A step whose creep-strain increment exceeds the
     registered limit is halved; a non-converged local iteration is an error with the element.
-  - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size S. Stub ADR 0314; the registration is
-    written by the implementation agent before any code.
+  - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size S. ADR 0489, 2026-11-14 (registration of
+    stub ADR 0314): power-law creep with time hardening in rcfd-fem (mat_creep.rs). The von Mises form d eps_c/dt =
+    (3/2) A q^(n-1) t^m s on an isotropic base, integrated by backward Euler in the stress with the time exponent
+    integrated exactly over the step, a monotone local Newton (n >= 1, at most 50 iterations) and its consistent
+    tangent; the state is the 7 values of ADR 0440. The Newton driver takes it at a point context with no new history
+    store; nonlinear::solve_in_time is a minimal quasi-static time-stepping driver over solve_from_at (constant loads
+    and prescribed values, a limit of the creep-strain increment of a step, halving); a non-converged local iteration is
+    a located error with the element. The static load-factor driver and every linear path refuse the material, naming
+    mat_creep::FOLLOW_UP. Met: tangent against central differences within 1.3e-9 (material) and 8.7e-10 (Hex8, Hex20
+    elements); uniaxial constant stress within 5.8e-13 (m = 0) and 2.0e-13 (m = -0.5), one element within 4.5e-10;
+    relaxation within 1.7e-3 (n = 3) and 7.2e-4 (n = 5) at 800 steps, order 0.994; plane-strain cylinder b/a = 2, n = 4,
+    Lame within 3.6e-3 of p and the stationary field within 2.0e-3 of p after 5 t* on element means (point-wise
+    deviatoric part 9.7e-4; the point pressure of the fully integrated Hex20 drifts by volumetric locking, 3.2e-2,
+    reported); rotating radial bar, tip creep rate within 9.6e-4; a step above the increment limit halved, bit-equal to
+    the explicitly halved steps; a non-converged local iteration located with its element; default bits (16 digests) and
+    baseline hashes unchanged; nine mutations caught. Case-file key not added. Follow-ups proposed in ADR 0489.
 - [~] **F-412** Direct harmonic solve: complex symmetric factorisation, structural (hysteretic) damping, discrete dampers, base excitation
   - depends on: F-408, F-373, F-374, F-383, F-399
   - acceptance: Every limit not stated here is registered in the ADR before the run. rcfd-linalg: a random complex
