@@ -29,6 +29,11 @@
 //! ADR 0492 (F-575): beside it, [`RotatingSector::split_modes`] reports `schur_eta`, the Ritz error of the Schur-complemented
 //! projected problem `Q_VV(l) - Q_VW Q_WW(theta)^-1 Q_WV` frozen at the Ritz value (the coupling of the complement with every
 //! basis vector: one complement solve per basis vector, then one dense quadratic solve per split mode).
+//!
+//! ADR 0527 (F-584): opt-in, [`crate::rotating::RotatingOptions::corrected_frequency`] reports the corrected frequency
+//! `theta'` beside `schur_eta`, and [`crate::rotating::SplitSchur::Perturbation`] computes `schur_eta` with one complement solve
+//! per split mode (the column `E y`) and the second-order perturbation sum over the other Ritz pairs of the linearised
+//! projected pencil (the split modes and their mirrors) instead of the dense solve.
 
 use crate::cyclic::{doubled_matrix, HarmonicModes};
 use crate::damped::{m_orthonormalise, REAL_TOLERANCE};
@@ -36,7 +41,7 @@ use crate::error::{FemError, Result};
 use crate::model::{Constraint, SolidModel};
 use crate::rotating::{
     check_harmonics, check_speeds, coriolis_matrix, track_whirl, Entry, HarmonicSpeedModes, LossOfStiffness,
-    RotatingPart, RotatingSector, SpeedModes, Stability, Whirl, WhirlCampbell, WhirlMode, WhirlModes,
+    RotatingPart, RotatingSector, SpeedModes, SplitSchur, Stability, Whirl, WhirlCampbell, WhirlMode, WhirlModes,
     STABILITY_TOLERANCE,
 };
 use rcfd_core::vec3::Vec3;
@@ -727,6 +732,9 @@ pub struct HarmonicSplitModes {
     /// where `eta` is computed by [`RotatingSector::split_modes`] (not by `split_campbell`), `None` otherwise or when one of
     /// its solves failed; `Some(0)` when the basis spans the index.
     pub schur_eta: Vec<Option<f64>>,
+    /// Per split mode, the corrected frequency `theta'` of the condensed problem (ADR 0527 D2), rad/s: `Some` where
+    /// `schur_eta` is `Some` and [`crate::rotating::RotatingOptions::corrected_frequency`] is on, `None` otherwise.
+    pub corrected_frequency: Vec<Option<f64>>,
 }
 
 /// The split Campbell table of a sector (ADR 0481 D2): one [`SplitCampbell`] per harmonic index.
@@ -867,6 +875,7 @@ impl<'a> RotatingSector<'a> {
             dropped_corrections: 0,
             eta: vec![None; count],
             schur_eta: vec![None; count],
+            corrected_frequency: vec![None; count],
         })
     }
 
@@ -911,7 +920,7 @@ impl<'a> RotatingSector<'a> {
             .iter()
             .map(|sm| (multiplicity == 2).then(|| wave_sense(part.mass(), &sm.re, &sm.im)))
             .collect();
-        let (corrections, dropped_corrections, eta, schur_eta) = match &correction {
+        let (corrections, dropped_corrections, eta, schur) = match &correction {
             None => (0, 0, vec![None; modes.len()], vec![None; modes.len()]),
             Some(cb) => {
                 let (eta, schur_eta) = if d.stability == Stability::Stable {
@@ -934,10 +943,16 @@ impl<'a> RotatingSector<'a> {
                         .map(|dm| ritz_error(cb, kq, &h.reduced_mass, omega, dm))
                         .collect();
                     let schur_eta = if schur {
-                        d.modes
-                            .iter()
-                            .map(|dm| schur_error(cb, kq, &h.reduced_mass, omega, dm, &projected))
-                            .collect()
+                        match part.options().split_schur {
+                            SplitSchur::Perturbation => (0..d.modes.len())
+                                .map(|a| schur_perturbation(cb, kq, &h.reduced_mass, omega, &d, a, &projected))
+                                .collect(),
+                            SplitSchur::Dense => d
+                                .modes
+                                .iter()
+                                .map(|dm| schur_error(cb, kq, &h.reduced_mass, omega, dm, &projected))
+                                .collect(),
+                        }
                     } else {
                         vec![None; modes.len()]
                     };
@@ -947,6 +962,12 @@ impl<'a> RotatingSector<'a> {
                 };
                 (cb.kept(), cb.dropped, eta, schur_eta)
             }
+        };
+        let schur_eta: Vec<Option<f64>> = schur.iter().map(|x| x.map(|(v, _)| v)).collect();
+        let corrected_frequency: Vec<Option<f64>> = if part.options().corrected_frequency {
+            schur.iter().map(|x| x.map(|(_, t)| t)).collect()
+        } else {
+            vec![None; modes.len()]
         };
         Ok(HarmonicSplitModes {
             harmonic,
@@ -968,6 +989,7 @@ impl<'a> RotatingSector<'a> {
             dropped_corrections,
             eta,
             schur_eta,
+            corrected_frequency,
         })
     }
 
@@ -1417,7 +1439,7 @@ fn shifted_apply(
 /// complement solve `(I - P)^T Q(theta) (I - P) x_j = -(I - P)^T Q(theta) v_j` (the MINRES of ADR 0482 D2), `E_ij = -v_i^T
 /// Q(theta) x_j`, then the dense quadratic problem with `K_VV - sym(Re E)` and `C_VV - skew(Im E)/(2 speed theta)` on the
 /// projected matrices `p`; `theta'` the root of largest overlap with `dm`. `Some(0)` when the basis spans the index; `None` when a
-/// solve failed or the value is not finite.
+/// solve failed or the value is not finite. Returned with `theta'` (ADR 0527 D2; `theta` itself when the basis spans the index).
 fn schur_error(
     cb: &CorrectionBasis,
     kq: &CsrMatrix,
@@ -1425,11 +1447,11 @@ fn schur_error(
     speed: f64,
     dm: &DenseSplitMode,
     p: &Projected,
-) -> Option<f64> {
+) -> Option<(f64, f64)> {
     let nq = kq.n;
     let nb = cb.v.len();
     if nb >= nq {
-        return Some(0.0);
+        return Some((0.0, dm.omega));
     }
     let theta = dm.omega;
     let g = 2.0 * speed;
@@ -1509,5 +1531,119 @@ fn schur_error(
     }
     let (theta_c, _) = best?;
     let v = (theta / theta_c - 1.0).abs();
-    v.is_finite().then_some(v)
+    v.is_finite().then_some((v, theta_c))
+}
+
+// ------------------------------------------------------------------------------------------------------------------------
+// ADR 0527 (F-584): the second-order perturbation form of the Schur Ritz error.
+
+/// `s = y^H Q'(l) y = -2 l y^H M y - 4 speed y_r^T C y_i` on the projected matrices `p` (ADR 0527 D1); `sign = -1` takes the
+/// conjugate vector (the mirror pair).
+fn pencil_norm(p: &Projected, speed: f64, l: f64, y: &[C64], sign: f64) -> f64 {
+    let nb = y.len();
+    let mut mm = 0.0;
+    let mut gc = 0.0;
+    for i in 0..nb {
+        let (yr, yi) = (y[i].re, sign * y[i].im);
+        for j in 0..nb {
+            let (zr, zi) = (y[j].re, sign * y[j].im);
+            mm += p.m[i * nb + j] * (yr * zr + yi * zi);
+            gc += yr * p.c[i * nb + j] * zi;
+        }
+    }
+    -2.0 * l * mm - 4.0 * speed * gc
+}
+
+/// ADR 0527 D1: the Ritz error `|theta/theta' - 1|` and `theta' = theta + delta_1 + delta_2` of the split mode `a` of `d`
+/// (coordinates on `cb.v`, projected matrices `p`): one complement solve `(I - P)^T Q(theta) (I - P) x = -(I - P)^T Q(theta) V
+/// y_a` (the MINRES of ADR 0482 D2) gives the column `e = E y_a = -V^T Q(theta) x`; `delta_1 = y_a^H e / s_a`, `delta_2 = sum
+/// |y_b^H e|^2 / ((l_a - l_b) s_a s_b)` over the other eigenpairs of the linearised pencil (the other split modes and the
+/// mirrors `(-theta_b, conj y_b)` of all). `Some((0, theta))` when the basis spans the index; `None` when the solve failed, the
+/// projected problem has fewer split modes than basis vectors, or a value is not finite.
+fn schur_perturbation(
+    cb: &CorrectionBasis,
+    kq: &CsrMatrix,
+    mr: &CsrMatrix,
+    speed: f64,
+    d: &DenseSplit,
+    a: usize,
+    p: &Projected,
+) -> Option<(f64, f64)> {
+    let nq = kq.n;
+    let nb = cb.v.len();
+    let dm = &d.modes[a];
+    let theta = dm.omega;
+    if nb >= nq {
+        return Some((0.0, theta));
+    }
+    if d.modes.len() != nb {
+        return None;
+    }
+    let g = 2.0 * speed;
+    let mut scratch = [vec![0.0; nq], vec![0.0; nq], vec![0.0; nq]];
+    let mut op_scratch = [vec![0.0; nq], vec![0.0; nq], vec![0.0; nq]];
+    let mut work = vec![0.0; 2 * nq];
+    let op = |u: &[f64], out: &mut [f64]| {
+        work.copy_from_slice(u);
+        cb.project(&mut work[..nq]);
+        cb.project(&mut work[nq..]);
+        shifted_apply(kq, mr, &cb.cr, theta, g, &work, out, &mut op_scratch);
+        cb.project_dual(&mut out[..nq]);
+        cb.project_dual(&mut out[nq..]);
+    };
+    let prec = |x: &[f64], out: &mut [f64]| {
+        for half in 0..2 {
+            let mut h = x[half * nq..(half + 1) * nq].to_vec();
+            cb.project_dual(&mut h);
+            let mut z = cb.ldlt.solve(&h);
+            cb.project(&mut z);
+            out[half * nq..(half + 1) * nq].copy_from_slice(&z);
+        }
+    };
+    let maxit = (4 * nq + 20).min(RITZ_ITERATIONS);
+    let mut u = vec![0.0; 2 * nq];
+    for (vj, y) in cb.v.iter().zip(&dm.q) {
+        for e in 0..nq {
+            u[e] += vj[e] * y.re;
+            u[nq + e] += vj[e] * y.im;
+        }
+    }
+    let mut qx = vec![0.0; 2 * nq];
+    shifted_apply(kq, mr, &cb.cr, theta, g, &u, &mut qx, &mut scratch);
+    let mut b: Vec<f64> = qx.iter().map(|x| -x).collect();
+    cb.project_dual(&mut b[..nq]);
+    cb.project_dual(&mut b[nq..]);
+    let mut x = minres(op, prec, &b, RITZ_TOLERANCE, maxit)?;
+    cb.project(&mut x[..nq]);
+    cb.project(&mut x[nq..]);
+    shifted_apply(kq, mr, &cb.cr, theta, g, &x, &mut qx, &mut scratch);
+    let er: Vec<f64> = cb.v.iter().map(|vi| -dot(vi, &qx[..nq])).collect();
+    let ei: Vec<f64> = cb.v.iter().map(|vi| -dot(vi, &qx[nq..])).collect();
+    // y^H e for y = q (sign 1) or conj(q) (sign -1).
+    let coupling = |q: &[C64], sign: f64| -> (f64, f64) {
+        let mut re = 0.0;
+        let mut im = 0.0;
+        for i in 0..nb {
+            let (yr, yi) = (q[i].re, sign * q[i].im);
+            re += yr * er[i] + yi * ei[i];
+            im += yr * ei[i] - yi * er[i];
+        }
+        (re, im)
+    };
+    let sa = pencil_norm(p, speed, theta, &dm.q, 1.0);
+    let delta1 = coupling(&dm.q, 1.0).0 / sa;
+    let mut delta2 = 0.0;
+    for (b, mb) in d.modes.iter().enumerate() {
+        for (l, sign) in [(mb.omega, 1.0), (-mb.omega, -1.0)] {
+            if b == a && sign > 0.0 {
+                continue;
+            }
+            let sb = pencil_norm(p, speed, l, &mb.q, sign);
+            let (cr, ci) = coupling(&mb.q, sign);
+            delta2 += (cr * cr + ci * ci) / ((theta - l) * sa * sb);
+        }
+    }
+    let theta_c = theta + delta1 + delta2;
+    let v = (theta / theta_c - 1.0).abs();
+    (v.is_finite() && theta_c.is_finite()).then_some((v, theta_c))
 }

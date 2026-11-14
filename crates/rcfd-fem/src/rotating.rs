@@ -135,6 +135,17 @@ pub fn spin_softening_mass(model: &SolidModel, axis: Vec3, threads: Option<usize
     })
 }
 
+/// How [`RotatingSector::split_modes`] computes the Ritz error `schur_eta` of the corrected sector split modes (ADR 0527 D3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum SplitSchur {
+    /// The condensed problem frozen at the Ritz value, one complement solve per basis vector and one dense quadratic solve per
+    /// split mode (ADR 0492 D2; the default).
+    Dense,
+    /// One complement solve per split mode and the second-order perturbation sum over the other Ritz pairs (ADR 0527 D1).
+    Perturbation,
+}
+
 /// Options of a rotating modal analysis.
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
@@ -157,6 +168,11 @@ pub struct RotatingOptions {
     /// [`RotatingOptions::coriolis`] add the static correction vectors `K_eff^-1 C phi_i` of the harmonic modes of each index to
     /// the basis and report the Ritz error `eta` of every split mode (default false; ADR 0482). No effect elsewhere.
     pub split_correction: bool,
+    /// How `schur_eta` of the corrected sector split modes is computed (default [`SplitSchur::Dense`], ADR 0492; ADR 0527).
+    pub split_schur: SplitSchur,
+    /// Whether the corrected sector split modes report the corrected frequency `theta'` beside `schur_eta` (default false; ADR
+    /// 0527 D2).
+    pub corrected_frequency: bool,
 }
 
 impl RotatingOptions {
@@ -170,6 +186,8 @@ impl RotatingOptions {
             coriolis: false,
             whirl_solver: WhirlSolver::Dense,
             split_correction: false,
+            split_schur: SplitSchur::Dense,
+            corrected_frequency: false,
         }
     }
     /// The same options with other modal options.
@@ -200,6 +218,16 @@ impl RotatingOptions {
     /// The same options with the static correction vectors of the sector split modes switched on or off (ADR 0482).
     pub fn split_correction(mut self, on: bool) -> RotatingOptions {
         self.split_correction = on;
+        self
+    }
+    /// The same options with another computation of `schur_eta` of the corrected sector split modes (ADR 0527).
+    pub fn split_schur(mut self, how: SplitSchur) -> RotatingOptions {
+        self.split_schur = how;
+        self
+    }
+    /// The same options with the corrected frequency `theta'` of the corrected sector split modes reported or not (ADR 0527).
+    pub fn corrected_frequency(mut self, on: bool) -> RotatingOptions {
+        self.corrected_frequency = on;
         self
     }
 }
