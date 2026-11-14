@@ -1521,12 +1521,64 @@ fn r2b_to_r4b_refusals() {
 
 /// R2b to R4b after ADR 0454 (F-419): the R2b rows state the paths that take Shell3 (R2c); R3b and R4b unchanged.
 #[test]
+#[ignore = "record of ADR 0454 (F-419) before ADR 0490 (F-578) let nonlinear::solve take Shell3 (row E5 of R2c); continued in r2b_to_r4b_refusals_after_f578 (ADR 0291 pattern, maintainer standing decision)"]
 fn r2b_to_r4b_refusals_after_f419() {
     let mut c = Checks::new();
     let (tri, tpres) = shell3_model_unloaded();
     // ADR 0454 D3: Shell3 is taken where Shell4 is; E5 and E6 refuse it naming its follow-up.
     for (entry, r) in entries(&tri, &tpres, None, true) {
         let refused = entry.starts_with("E5") || entry.starts_with("E6");
+        let ok = if refused {
+            not_yet(&r, "element kind", "Shell3", "block 0", rcfd_fem::shell3::FOLLOW_UP)
+        } else {
+            !matches!(&r, Err(FemError::NotYetSupported { .. }))
+        };
+        c.holds(&format!("R2c Shell3 {entry}"), ok, &format!("{:?}", r.err()));
+    }
+    let plies = vec![
+        Ply::new(iso(), 0.005, 0.0).unwrap(),
+        Ply::new(iso(), 0.005, PI / 2.0).unwrap(),
+    ];
+    let layup = BlockProperty::layup(plies.clone()).unwrap();
+    let (lam, lpres) = shell_model(ElementKind::Shell4, layup.clone());
+    for (entry, r) in entries(&lam, &lpres, None, true) {
+        c.holds(
+            &format!("R3b Layup {entry}"),
+            not_yet(&r, "shell property", "Layup", "block 0", "ADR 0331 (F-428)"),
+            &format!("{:?}", r.err()),
+        );
+    }
+    let r4a = section_of(&layup, &iso());
+    let r4b = rcfd_fem::laminate::section_stiffness(&plies);
+    c.holds(
+        "R4b section_of(Layup), laminate::section_stiffness",
+        not_yet(
+            &r4a,
+            "shell property",
+            "Layup",
+            "the section stiffness",
+            "ADR 0331 (F-428)",
+        ) && not_yet(
+            &r4b,
+            "shell property",
+            "Layup",
+            "the section stiffness",
+            "ADR 0331 (F-428)",
+        ),
+        &format!("{:?} / {:?}", r4a.err(), r4b.err()),
+    );
+    c.finish();
+}
+
+/// R2b to R4b after ADR 0490 (F-578): as after F-419, with row E5 of R2c taking Shell3 (the corotated shell).
+#[test]
+fn r2b_to_r4b_refusals_after_f578() {
+    let mut c = Checks::new();
+    let (tri, tpres) = shell3_model_unloaded();
+    // ADR 0454 D3: Shell3 is taken where Shell4 is; ADR 0490 D3: E5 (nonlinear::solve) takes it, E6 refuses it naming
+    // its follow-up.
+    for (entry, r) in entries(&tri, &tpres, None, true) {
+        let refused = entry.starts_with("E6");
         let ok = if refused {
             not_yet(&r, "element kind", "Shell3", "block 0", rcfd_fem::shell3::FOLLOW_UP)
         } else {

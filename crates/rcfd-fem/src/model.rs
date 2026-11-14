@@ -1116,6 +1116,18 @@ impl SolidModel {
         self.check_supports()
     }
 
+    /// As [`SolidModel::check_elements_supported_nonlinear`] for the Newton driver, which also takes Shell4 and Shell3
+    /// (ADR 0490 D3).
+    pub(crate) fn check_elements_supported_nonlinear_shells(&self) -> Result<()> {
+        self.check_elements(false, true, false, true)
+    }
+
+    /// [`SolidModel::check_elements_supported_nonlinear_shells`], then the supports (ADR 0490 D3).
+    pub(crate) fn check_supported_nonlinear_shells(&self) -> Result<()> {
+        self.check_elements_supported_nonlinear_shells()?;
+        self.check_supports()
+    }
+
     fn check_elements(&self, beams: bool, shells: bool, point_materials: bool, history: bool) -> Result<()> {
         for (b, block) in self.mesh.blocks().iter().enumerate() {
             if let Some(package) = block.kind().pending() {

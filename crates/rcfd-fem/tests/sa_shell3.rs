@@ -916,6 +916,7 @@ fn cantilever_model() -> SolidModel {
 }
 
 #[test]
+#[ignore = "record of ADR 0454 before ADR 0490 (F-578) let nonlinear::initial_states take shells (row N2 nonlinear initial states); continued in s1_n2_n3_refusals_after_f578 (ADR 0291 pattern, maintainer standing decision)"]
 fn s1_n2_n3_refusals() {
     let mut c = Checks::new();
     // S1: a Shell3 element on three nodes of a Hex8 box.
@@ -972,6 +973,143 @@ fn s1_n2_n3_refusals() {
     );
     let r = rcfd_fem::nonlinear::initial_states(&base);
     c.holds("N2 nonlinear initial states", follow_up(&r), &format!("{r:?}"));
+    let amg = StaticOptions::with_solver(StaticSolver::PreconditionedCg {
+        preconditioner: CgPreconditioner::SmoothedAggregation(ElasticAmgSettings::default()),
+        tolerance: 1e-10,
+        max_iterations: 100,
+    });
+    let r = solve_static(&base, &amg);
+    c.holds("N2 smoothed-aggregation CG", follow_up(&r), &format!("{r:?}"));
+    let r = base.check_supported();
+    c.holds("N2 check_supported (the other paths)", follow_up(&r), &format!("{r:?}"));
+    // N2: a cyclic constraint on a model with a Hex8 box and a separate Shell3 element.
+    let hex = hex_box([0.0; 3], [1.0, 1.0, 1.0], [1, 1, 1]).unwrap();
+    let nh = hex.nodes().len();
+    let mut nodes = hex.nodes().to_vec();
+    nodes.extend_from_slice(&[[3.0, 0.0, 0.0], [4.0, 0.0, 0.0], [3.0, 1.0, 0.0]]);
+    let mut mesh = SolidMesh::new(nodes).unwrap();
+    mesh.add_block(ElementKind::Hex8, hex.blocks()[0].connectivity().to_vec())
+        .unwrap();
+    mesh.add_block(ElementKind::Shell3, vec![nh, nh + 1, nh + 2]).unwrap();
+    mesh.set_block_property(1, BlockProperty::shell(0.01).unwrap()).unwrap();
+    mesh.add_element_set("all", vec![0, 1]).unwrap();
+    for name in ["ymin", "ymax"] {
+        let faces = hex.surface_set(name).unwrap().to_vec();
+        mesh.add_surface_set(name, faces).unwrap();
+    }
+    let mut mc = model_of(mesh, material(0.3, RHO));
+    mc.add_constraint(Constraint::cyclic("ymin", "ymax", [0.0, 0.0, 1.0], [0.0; 3], 4))
+        .unwrap();
+    let r = rcfd_fem::mpc::solve_static_mpc(&mc, &[], &[], &[], &StaticOptions::default()).map(|_| ());
+    let ok = matches!(&r, Err(e @ FemError::NotYetSupported { variant: "Cyclic", package, .. }) if *package == shell3::FOLLOW_UP && e.to_string().contains("Shell3"));
+    c.holds(
+        "N2 cyclic constraint with Shell3 (solve_static_mpc)",
+        ok,
+        &format!("{r:?}"),
+    );
+    // N3: invalid data.
+    let (nodes, quads) = grid(1.0, 1.0, 1, 1);
+    let mut mesh = SolidMesh::new(nodes).unwrap();
+    mesh.add_block(
+        ElementKind::Shell3,
+        cut(quads[0], 0).iter().flatten().copied().collect(),
+    )
+    .unwrap();
+    mesh.add_element_set("all", vec![0, 1]).unwrap();
+    let m = model_of(mesh, material(0.3, RHO));
+    let r = solve_static(&m, &StaticOptions::default());
+    c.holds(
+        "N3 Shell3 block without property",
+        matches!(&r, Err(e @ FemError::InvalidValue { key: "property", .. }) if e.to_string().contains("Shell3")),
+        &format!("{r:?}"),
+    );
+    let hex = hex_box([0.0; 3], [2.0, 1.0, 1.0], [2, 1, 1]).unwrap();
+    let mut m = SolidModel::new(hex);
+    let r = m.add_load(Load::shell_pressure("all", 1.0));
+    c.holds(
+        "N3 shell pressure on Hex8 elements",
+        matches!(
+            &r,
+            Err(FemError::InvalidValue {
+                key: "shell pressure",
+                ..
+            })
+        ),
+        &format!("{r:?}"),
+    );
+    let mut m = cantilever_model();
+    let r = m.add_load(Load::shell_pressure("all", 1.0));
+    c.holds(
+        "N3 shell pressure on Shell3 elements taken",
+        r.is_ok(),
+        &format!("{r:?}"),
+    );
+    c.finish();
+}
+
+/// The copy of `s1_n2_n3_refusals` after ADR 0490 (F-578): the row "N2 nonlinear initial states" now expects the states (the Newton
+/// driver takes shells); every other row unchanged.
+#[test]
+fn s1_n2_n3_refusals_after_f578() {
+    let mut c = Checks::new();
+    // S1: a Shell3 element on three nodes of a Hex8 box.
+    let mut mesh = hex_box([0.0; 3], [2.0, 1.0, 1.0], [2, 1, 1]).unwrap();
+    let at = [[2.0, 0.0, 0.0], [2.0, 1.0, 0.0], [2.0, 1.0, 1.0]];
+    let conn: Vec<usize> = at
+        .iter()
+        .map(|p| mesh.nodes().iter().position(|q| q == p).unwrap())
+        .collect();
+    let first = conn[0];
+    mesh.add_block(ElementKind::Shell3, conn).unwrap();
+    mesh.set_block_property(1, BlockProperty::shell(0.01).unwrap()).unwrap();
+    mesh.add_element_set("shell", vec![2]).unwrap();
+    let mut m = SolidModel::new(mesh);
+    m.add_material("all", material(0.3, RHO)).unwrap();
+    m.add_material("shell", material(0.3, RHO)).unwrap();
+    for comp in 0..3 {
+        m.add_constraint(Constraint::displacement("xmin", comp, 0.0)).unwrap();
+    }
+    let node_text = format!("node {first} ");
+    let shared = |r: Result<(), FemError>| -> (bool, String) {
+        match &r {
+            Err(e @ FemError::Element { element: 2, source }) => {
+                let msg = e.to_string();
+                (
+                    matches!(source.as_ref(), FemError::InvalidValue { key: "node", .. }) && msg.contains(&node_text),
+                    msg,
+                )
+            }
+            other => (false, format!("{other:?}")),
+        }
+    };
+    let (ok, msg) = shared(solve_static(&m, &StaticOptions::default()).map(|_| ()));
+    c.holds("S1 solve_static", ok, &msg);
+    let (ok, msg) = shared(modal_analysis(&m, &ModalOptions::new(2)).map(|_| ()));
+    c.holds("S1 modal_analysis", ok, &msg);
+    let (ok, msg) = shared(stiffness(&m).map(|_| ()));
+    c.holds("S1 stiffness", ok, &msg);
+    // N2: a valid Shell3 model on the other paths.
+    let base = cantilever_model();
+    let r = solve_static(&base, &StaticOptions::default());
+    c.holds(
+        "N2 the base model solves",
+        r.is_ok(),
+        &format!("{:?}", r.as_ref().err()),
+    );
+    let mut ms = base.clone();
+    ms.add_support(ElasticSupport::nodal_spring("tip", 2, 1e6)).unwrap();
+    let r = rcfd_fem::mpc::solve_static_mpc(&ms, &[], &[], &[], &StaticOptions::default());
+    c.holds(
+        "N2 nodal spring (the transformation) taken",
+        r.is_ok(),
+        &format!("{:?}", r.as_ref().err()),
+    );
+    let r = rcfd_fem::nonlinear::initial_states(&base);
+    c.holds(
+        "N2 nonlinear initial states (taken, ADR 0490 D3)",
+        r.is_ok(),
+        &format!("{r:?}"),
+    );
     let amg = StaticOptions::with_solver(StaticSolver::PreconditionedCg {
         preconditioner: CgPreconditioner::SmoothedAggregation(ElasticAmgSettings::default()),
         tolerance: 1e-10,

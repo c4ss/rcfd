@@ -40,7 +40,7 @@ use crate::error::{FemError, Result};
 use crate::geometric::element_geometric_stiffness;
 use crate::loads::{nodal_load_vector, NodalForceAt};
 use crate::material::PointContext;
-use crate::mesh::SolidFormulation;
+use crate::mesh::{ElementKind, SolidFormulation};
 use crate::model::{Load, Material, SolidModel, SolidResult, SolverStats};
 use crate::solve::PIVOT_TOLERANCE;
 use rcfd_core::vec3::Vec3;
@@ -363,8 +363,14 @@ pub fn element_trial_state<E: Element + ?Sized>(
 /// The refusals of ADR 0404 D5 step 1 that concern the model: a block that is not a solid of the `Full` formulation, the
 /// transformation path and a temperature load (key `"nonlinear"`).
 fn check_model(model: &SolidModel) -> Result<()> {
-    model.check_elements_supported_nonlinear()?;
+    // ADR 0490 D3: Shell4 and Shell3 blocks take the corotated shell element.
+    model.check_elements_supported_nonlinear_shells()?;
+    let mut shells = false;
     for (b, block) in model.mesh().blocks().iter().enumerate() {
+        if is_shell(block.kind()) {
+            shells = true;
+            continue;
+        }
         if !block.kind().is_solid() || block.formulation() != SolidFormulation::Full {
             return Err(FemError::InvalidValue {
                 key: "nonlinear",
@@ -376,7 +382,15 @@ fn check_model(model: &SolidModel) -> Result<()> {
             });
         }
     }
+    if shells {
+        crate::shell_corot::check_model(model)?;
+    }
     Ok(())
+}
+
+/// A Shell4 or Shell3 element: evaluated by [`crate::shell_corot`] (ADR 0490 D3).
+fn is_shell(kind: ElementKind) -> bool {
+    matches!(kind, ElementKind::Shell4 | ElementKind::Shell3)
 }
 
 pub(crate) fn check_driver_model(model: &SolidModel) -> Result<()> {
@@ -401,7 +415,7 @@ pub(crate) fn check_driver_model(model: &SolidModel) -> Result<()> {
 
 /// The empty states of every element of `model` (`state_size()` values per point of the stiffness rule, zero).
 pub fn initial_states(model: &SolidModel) -> Result<Vec<ElementState>> {
-    model.check_elements_supported_nonlinear()?;
+    model.check_elements_supported_nonlinear_shells()?;
     let materials = model.material_indices()?;
     let mesh = model.mesh();
     Ok((0..mesh.n_elements())
@@ -447,13 +461,17 @@ pub fn internal_force(model: &SolidModel, u: &[f64], states: &[ElementState]) ->
         let coords: Vec<Vec3> = nodes.iter().map(|&n| mesh.nodes()[n]).collect();
         let d = element_dofs(&dofs, nodes);
         let ue: Vec<f64> = d.iter().map(|&q| u[q]).collect();
-        let el = crate::element::element_for(mesh.element_kind(e));
-        let f = element_internal_force(el, &coords, &model.materials()[materials[e]].1, &ue, &states[e]).map_err(
-            |source| FemError::Element {
-                element: e,
-                source: Box::new(source),
-            },
-        )?;
+        let kind = mesh.element_kind(e);
+        let material = &model.materials()[materials[e]].1;
+        let f = if is_shell(kind) {
+            crate::shell_corot::model_internal_force(mesh, e, &coords, material, &ue)
+        } else {
+            element_internal_force(crate::element::element_for(kind), &coords, material, &ue, &states[e])
+        }
+        .map_err(|source| FemError::Element {
+            element: e,
+            source: Box::new(source),
+        })?;
         for (&q, v) in d.iter().zip(&f) {
             out[q] += v;
         }
@@ -487,8 +505,19 @@ fn force_and_tangent(
     let k = assemble_with(model, threads, |ctx| {
         let d = element_dofs(&dofs, ctx.nodes);
         let ue: Vec<f64> = d.iter().map(|&q| u[q]).collect();
-        let el = crate::element::element_for(ctx.kind);
-        let ev = evaluate(el, ctx.coords, ctx.material, &ue, &states[ctx.element], true, context)?;
+        let ev = if is_shell(ctx.kind) {
+            let (force, k) =
+                crate::shell_corot::model_force_and_tangent(mesh, ctx.element, ctx.coords, ctx.material, &ue)?;
+            Evaluation {
+                force,
+                tangent: Some(k),
+                stress: Vec::new(),
+                state: Vec::new(),
+            }
+        } else {
+            let el = crate::element::element_for(ctx.kind);
+            evaluate(el, ctx.coords, ctx.material, &ue, &states[ctx.element], true, context)?
+        };
         *forces[ctx.element].lock().expect("element force slot") = ev.force;
         *trial[ctx.element].lock().expect("element state slot") = ev.state;
         Ok(ev.tangent.expect("tangent requested"))
@@ -1113,7 +1142,7 @@ pub fn solve_with(
         mut step_control,
     } = extensions;
     model.validate()?;
-    model.check_supported_nonlinear()?;
+    model.check_supported_nonlinear_shells()?;
     check_driver_model(model)?;
     // ADR 0485 D4: the static driver has no time; the viscoelastic material needs one.
     if let Some((i, (set, m))) = model
