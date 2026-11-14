@@ -250,3 +250,20 @@ Negative controls:
 2. `beam::section_forces` subtracts the element load (D4) rather than a new function: without it the section forces of a loaded
    beam are wrong, and no existing caller has a loaded beam (gravity on beams was refused). Taken.
 3. Gravity on a centroidal section gives no distributed moment (arithmetic 5); offsets are outside ADR 0417 L3. Taken.
+
+## Amendment 1 (2026-11-13, written after run 1 and before the corrected run)
+
+Run 1 of `si_beam.rs` `n2_n3_other_paths_and_invalid_data_after_landed` (the copy of the retired row, `f514-scratch/fem_all.log`)
+measured `|R + rho A L g| / |W| = 6.2545` against the limit `1e-12`. **Defective set-up, not a miss of the method:** the copy
+builds its model from `one_element()` of `si_beam.rs`, which already carries the tip force `F` (local `(1200, -2500, 3700) N`)
+and the tip moment of ADR 0417 arithmetic 6; the reference left out `F`. Check of the diagnosis: `|F| / |W| = 4623.3 / 739.3 =
+6.254`, the measured number. The corrected copy `n2_n3_other_paths_and_invalid_data_after_landed_amended` compares
+`|R + F + rho A L g| / |W|` with the **same limit `1e-12`**; every other row unchanged. The run-1 copy stays as an ignored record
+(`#[ignore]` naming this amendment). Expected: rounding of the reactions relative to `|F|` near `2e-14` (ADR 0417 C8), so about
+`1.4e-13` relative to `|W|`. By the decision rule this row is met, if it is, only after an amendment written after its run, so
+the item is **partial** whatever the corrected run gives. The gravity checks of `si_beam_loads.rs` (G1 to G3) are unaffected:
+they were run once in run 1 (`f514-scratch/run1.log`) and all met.
+
+Disclosure: `cargo test -p rcfd-fem` of run 1 stopped at the failing binary (26 of 57 test binaries run); the full crate was run
+once more with `--no-fail-fast` (`f514-scratch/fem_all2.log`) to run the other 31 binaries for B2. The failing copy failed the
+same in that run (deterministic); no other binary was run twice by choice.
