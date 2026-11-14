@@ -102,3 +102,46 @@ so C4' is the same measure at a smaller strain, not a loosened one; SC (the prem
 
 No finite-strain reference (alternative A): C4 at the strain of `p` stays a known miss of ADR 0506. No library change; no
 case-file key; defaults untouched. The estimates of LC-u and LC-e are unprobed, set by analogy to CL.
+
+## Amendment 1 (2026-11-14, written after run 1 and before any corrected run)
+
+Run 1 (test `f597_c1_to_c4_prime_and_the_full_solve_bbar_recovery_control`, single run, 28 s) gave:
+
+| Check | Measured | Limit | Result |
+|---|---|---|---|
+| C1' | `5.41e-3` | `<= 1e-2` | met |
+| C2' | `9.48e-3` | `<= 2e-2` | met |
+| C3' | `9.58e-3` | `<= 2e-2` | met |
+| C4' | `1.063e-4` | `<= 2e-3` | met (margin 19, the bits of the diagnostic of ADR 0506) |
+| SC | `9.65e-4` | `<= 2e-3` | met |
+| NC1 | `3.8e-5` | `<= 1e-2` | met |
+| LC-u5 | `1.13e-3` | `>= 3e-2` | **missed** |
+| LC-u20 | `4.14e-3` | `>= 3e-2` | **missed** |
+| LC-e20 | `4.16e-3` | `>= 5e-2` | **missed** |
+| LC-s (reported) | Full solve with BBar recovery `9.9e-3` (5 t*), `1.13e-2` (20 t*); with Full recovery `0.103`, `0.362` | | |
+
+The three LC limits are missed and stay as registered: the test is kept as the ignored record
+`f597_run1_known_miss_displacement_and_creep_strain_witnesses`. Diagnosis: the locking of the Full Hex8 on the creep cylinder is
+a pressure (volumetric stress) oscillation; the displacement and the creep strain of the Full solve differ from the BBar solve
+by only `1e-3` to `4e-3`. The estimate "of the order of the stress error" was wrong, and the witnesses LC-u and LC-e are not
+sensitive to what MU5 changes. Also the LC-s row confirms ADR 0506's finding: the BBar recovery of a Full solve (`1.1e-2`) is
+inside C2/C3's `2e-2`, so no stress measure can tell the MU5 combination from a BBar solve.
+
+The set-up of the control, not the limit, was defective (the wrong witness). A corrected witness, fixed here before its run, from
+the physics and without a probe: the recovery-free internal force. If `u_B` solves the F-bar equations, then
+`f_B = internal_force(BBar model, u_B, s_B)` is the external load; the same field and states through the Full element
+(`f_F = internal_force(Full model, u_B, s_B)`, `creep_run(FULL)` gives the Full model on the same mesh and dof map) differ
+by the volumetric stress the Full element cannot represent. When the solve is Full (MU5) both are the same element and
+`f_F = f_B` to the bits.
+
+| Id | Clause | Measure | Limit | Estimate |
+|---|---|---|---|---|
+| LC-f5 | 2 | `max |f_F - f_B| / max |f_B|` at `5 t*` | `>= 1e-2` | the stress difference is `0.10 q` (LC-s) at points, integrated against `B` the cancellation of an oscillating pressure leaves a fraction; `~1e-2` to `1e-1` believed, not probed |
+| LC-f20 | 2 | the same at `20 t*` | `>= 3e-2` | LC-s grows by 3.5 from `5 t*` to `20 t*` |
+| NC2 | 2 | the same at `t = 0` for the elastic start (`nu = 0.3`) | `<= 1e-2` | NC1 shows the elements agree to `4e-5` there |
+
+C1' to C4', SC and NC1 continue unchanged in the corrected test `f597_c4_prime_and_the_force_witness_control` (they repeat
+the bits of run 1, they are not re-run to pick a result). MU5 is expected to be caught by LC-f5 and LC-f20 (difference zero).
+The decision rule is unchanged, with LC-f5, LC-f20 and NC2 in place of LC-u5, LC-u20 and LC-e20; because the three
+displacement/creep-strain checks missed, the best status reachable is **partial** unless the lead rules the amendment a
+set-up correction only: it is reported as partial either way.
