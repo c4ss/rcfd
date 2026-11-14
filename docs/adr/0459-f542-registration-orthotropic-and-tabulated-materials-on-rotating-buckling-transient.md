@@ -360,3 +360,133 @@ the rounding sensitivity of the set-up itself (the step load excites the high He
 + c_K K` carry a change of `D` in the last bit to about 1e-11 of the response); the per-point path performs no operation the
 isotropic one does not (TR3 bit-equal). The registration took its estimate (1e-14) from the eigenvalue checks of ADR 0457,
 without a transient probe.
+
+## Addendum 1: results (2026-11-14)
+
+Registered runs at commit c911ca5c (library code and tests committed before any run), release profile, each file run once:
+`sa_ortho_rotating_default_bits` (log `f542-scratch/run-b1.log`), `sa_ortho_rotating` (log
+`f542-scratch/run-sa_ortho_rotating.log`); after amendment 1 (commit be16f7b6) the corrected test and the copy of the met
+rows of the known miss, once (log `f542-scratch/run-amended.log`). Then the existing tests that cover the changed lines (the
+`rcfd-fem` lib tests and 32 test files: `sa_damped`, `sa_ortho*`, `sa_scaffold*`, `sa_sparse*`, `sa_mat_table`,
+`si_buckling*`, `si_geometric`, `si_harmonic*`, `si_knife_edge_closed_form`, `si_nonlinear`, `si_prestress_mpc`,
+`si_rotating*`, `si_transient*`): 33 result blocks, 172 passed, 0 failed, 35 ignored (log `f542-scratch/run-fem-covering.log`).
+
+| Check | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| RB1 blade lag at 0, `Omega_a`, `Omega_b` against the Timoshenko reference | `<= 5e-3` | 7.62e-4, 6.09e-4, 3.25e-4 (`f` = 30.1400, 36.1393, 83.3504 Hz) | yes |
+| RB1 blade flap, the same | `<= 5e-3` | 2.75e-4, 2.83e-4, 4.57e-4 (`f` = 74.6342, 78.6940, 124.1237 Hz) | yes |
+| RB2 `S` lag at `Omega_a`, `Omega_b`; flap | `<= 1e-2` | 5.20e-4, 5.19e-4; 7.02e-4, 1.12e-3 | yes |
+| RB3 `S(Omega_a)` against the first-order Southwell closed form, lag; flap | `<= 2e-2` | 9.09e-3; 9.92e-3 | yes |
+| RB4 the turned blade (transformation) against the blade | `<= 1e-9` | 9.84e-11 | yes |
+| RC2 rotating block, `Fixed(I)`; `Fixed(rot)`; cylindrical | `<= 1e-12` | 4.5e-14; 6.4e-14; 5.1e-14 | yes |
+| RC2t the same on the transformation | `<= 1e-12` | 5.7e-15; 1.1e-14; 9.3e-15 | yes |
+| RQ1 rotating against the pre-stressed modes, `TAB` BLK, TRB; `CYL` BLK, TRB | `<= 1e-10` | 1.7e-14, 7.8e-16; 1.1e-14, 2.7e-15 | yes |
+| RP1 `TAB_U`, `TAB_A` against `ISO(E(443))`: frequencies; unit pre-stress | `<= 1e-12` | 0, 0; 0, 0 | yes |
+| RP1t `TAB_U` transformation | `<= 1e-12` | 0 | yes |
+| W1 dense whirl, `Fixed(rot)` against `ISO` | `<= 1e-9` | 1.97e-13 | yes |
+| BK1 column factors 1, 2 against Euler with `E_1` | `<= 1e-2` | 2.671e-3 both (`lambda` = 17.9434138) | yes |
+| BK1b the same against Engesser | `<= 3e-3` | 4.05e-4 | yes |
+| BK2 buckling block, `Fixed(I)`; `Fixed(rot)` | `<= 1e-12` | 6.3e-14; 6.8e-14 | yes |
+| BK2t the same on the transformation | `<= 1e-12` | 3.6e-15; 1.6e-14 | yes |
+| BK3 `TAB_U` against `ISO(E(443))`, BLK; TRB | `<= 1e-12` | 0; 0 | yes |
+| BK4 buckling against the static solve, `TAB` BLK, TRB; `CYL` BLK, TRB | `<= 1e-9` | 2.2e-16, 2.2e-16; 1.3e-15, 6.7e-16 | yes |
+| TR1 transient against the modal analysis, `TAB` BLK, TRB; `CYL` BLK, TRB | `<= 1e-8` | 9.1e-13, 9.5e-15; 3.0e-13, 1.9e-13 | yes |
+| TR2 BLK, `Fixed(I)`: displacement; velocity | `<= 1e-12` | 1.65e-12; 9.25e-12 | **no** (known miss) |
+| TR2 BLK, `Fixed(rot)`: displacement; velocity | `<= 1e-12` | 3.85e-12; 6.24e-12 | **no** (known miss) |
+| TR2 TRB, `Fixed(I)`; `Fixed(rot)` (displacement, velocity) | `<= 1e-12` | 1.1e-14, 3.4e-13; 1.5e-14, 2.3e-13 | yes |
+| TR3 `TAB_U` against `ISO(E(443))`, BLK and TRB | `<= 1e-12` | 0 (all four) | yes |
+| R1 (copy) E1, E2, E3, E6 to E10 solve; E4, E5 refused; R2 | as stated | 21 of 21 | yes |
+| R3 (copy with its rows) | as stated | 31 of 31 | yes |
+| B1 20 digests of main 2504fd62 | `==` | 20 of 20 | yes |
+| NB1 lag `f/f_ref` with `E_2` along the span | `< 0.5` | 0.318 | as expected |
+| NB2 lag `S` without spin softening | `> 0.3` | 0.602 | as expected |
+| NB3 flap `S` without stress stiffening at `Omega_b` | `> 0.5` | set-up defective (loss of stiffness), amendment 1 | not run |
+| NB3b (amendment 1) the same at `Omega_a` | `> 0.5` | 1.0003 (`S = -9.2e-4`) | as expected |
+| NB4 turned blade with `Fixed(I)` (run after amendment 1) | `> 1e-2` | 0.612 | as expected |
+| NB5 column with the axes turned 90 degrees | `< 0.5` | 0.0999 | as expected |
+| NR1 the thermal stress included against the unit pre-stress | `> 1` | 4.49e4 | as expected |
+
+Reading. The orthotropic blade with cylindrical axes follows the rotating Timoshenko beam within 7.6e-4 at rest and at both
+speeds, below the registered estimate (1.8e-3 flap, 9e-4 lag): two Hex20 across the section carry the shear of `kappa = 5/6`
+closely. The stiffening coefficients agree within 1.1e-3, so the centrifugal pre-stress of the orthotropic part, its geometric
+stiffness and its spin softening are those of the beam; the first-order Southwell closed form is 0.9 to 1.0 percent above
+them, as D9 predicted (Southwell's dependence on the speed and the shear). Recorded without a limit: at this slenderness the
+Euler-Bernoulli flap frequency with `E_1` is 1.2 percent high. Turning the whole blade by 0.7 rad changes nothing beyond 1e-10
+(RB4), while the same turn with fixed axes changes the frequencies by 61 percent (NB4): the per-point cylindrical axes act on
+the rotating path, the pre-stress solve included. The isotropic equivalence of the rotating and buckling paths and of the
+transient on the transformation block sits at rounding (at most 6.8e-14); the tabulated material at a uniform temperature
+gives the bits of the isotropic material at `E(443)` on every path, also with an expansion (RP1 `TAB_A`): the pre-stress at 1
+rad/s carries no thermal strain (NR1: with it the stress would differ by a factor 4.5e4). The orthotropic column buckles 4.05e-4
+above Engesser's value with `G_13`.
+
+TR2 on `BLK` missed: the step response of the Hex20 block after 25 steps differs by up to 9.25e-12 between the isotropic
+material and the isotropic constants in an orthotropic material. Diagnosis (amendment 1): a one-ulp change of `nu` or `E` of
+the isotropic material itself moves the same set-up by 5.1e-12 to 9.1e-12; the 1e-12 limit lies below the rounding sensitivity
+of that set-up, not of the per-point path (TR3, the tabulated material at a uniform temperature against the isotropic one, is
+bit-equal; TR1 matches the closed form of the trapezoidal rule to 9e-13). The limit stays; the test is the ignored record
+`tr1_tr2_tr3_transient_known_miss`.
+
+### Mutations (scratch copy `f542-scratch/mut` of commit be16f7b6, `sa_ortho_rotating` per mutation, logs `f542-scratch/mut_Mu*.log`)
+
+| Mutation | Caught by |
+| --- | --- |
+| Mu1 the unit model keeps the expansions | RP1 (`TAB_A`: the thermal pre-stress makes `K_eff` lose stiffness at `Omega_c`) |
+| Mu2 the unit model without the temperature field | RP1/RQ1 (`TAB` refused, key `temperature`), R3 (`RotatingPart::new` with `Tabulated`) |
+| Mu3 `K_sigma,1` left out for a per-point material | RB (loss of stiffness at `Omega_b`), RC2 and RC2t (0.18, 0.19), W1 (0.18), RQ1 (0.33) |
+| Mu4 `M_perp` left out for a per-point material | RB1 to RB3 lag (8.3e-2 to 0.60), RC2 and RC2t (5.0e-2, 5.4e-2) |
+| Mu5 buckling on the transformation without the supports | BK4 TRB (0.73, 9.8) |
+| Mu6 the integrator on the transformation without the supports | TR1 TRB (1.99, 1.8e-5) |
+| Mu7 `refuse_with_cyclic` returns `Ok` | R3 (buckling, integrator and `RotatingPart::with_unit_prestress` reach the cyclic geometry; `RotatingSector::with_unit_prestress` solves) |
+
+Seven of seven caught. ADR 0457's equivalent mutant Mu7 (the entry check of `buckling::factors`) no longer exists: the path is
+opened, and its entry check is now the only check of the variants there (R3 rows of `buckling::factors`).
+
+### Deviations and what was not run
+
+- Amendment 1: the NB3 set-up was defective (loss of stiffness); NB3b replaced it and NB4 ran after the amendment. RB1 to RB4,
+  NB1 and NB2 repeated in the corrected test gave the same values as the registered run.
+- TR2 missed on `BLK` (known miss, above). A probe after the run (disclosed in amendment 1) diagnosed it.
+- After the registered runs rustfmt changed line breaks in `geometric.rs` and the two new test files (commit 77c38687); the
+  tests were not run again for it except inside the covering run. `cargo fmt -p rcfd-fem --check` and `cargo clippy -p
+  rcfd-fem --all-targets -- -D warnings` pass.
+- Not run: the whole workspace (the lead's gate); `baseline_hashes` of `rcfd-api` (no `rcfd-fv` or `rcfd-api` source
+  changed; the default paths of `rcfd-fem` are covered by B1 and the ADR 0457 and ADR 0452 bit records, which pass); the
+  `docs_site` test (no documentation page changed).
+
+### Decision by the registered rule
+
+**Partial**: TR2 missed its limit on `BLK` (a registered check missed, kept as `*_known_miss` with the limit intact), and the
+negative control NB3 was evaluated only after an amendment. Every other check was met in its single registered run, and every
+mutation was caught. Clause (a3) is met on the rotating and the buckling paths and on the transient transformation block, and
+missed on the transient Hex20 block, where the limit is below the set-up's own rounding sensitivity.
+
+### Remaining questions
+
+1. F-537's question 3, a cyclic constraint with cylindrical axes about its own axis, stays refused by name (D3). Options: (a) a
+   follow-up opens the cyclic harmonic paths, the rotating sector and its whirl analyses when every material with its own axes
+   has cylindrical axes about the constraint's axis and origin, checked sector against full rotor; (b) keep the refusal.
+   Recommendation (a): fan blades are analysed on a sector.
+2. TR2, the known miss. Options: (a) keep F-542 partial and register the transient isotropic equivalence again in a follow-up
+   with a limit taken from a rounding probe of the set-up made before the run; (b) the maintainer accepts the miss as the
+   set-up's rounding and sets F-542 done; (c) leave it. Recommendation (a): a small, honest closure of clause (a3).
+3. The paths still refused (nonlinear, harmonic with the static correction, direct harmonic, damped modes, beams and shells).
+   Options: (a) follow-ups through `point_stiffness`; (b) leave them. Recommendation (a), damped modes and the harmonic static
+   correction first (the same assembly, the harmonic response of a fan blade).
+
+## For the lead: roadmap entries
+
+Proposed status of F-542: **partial** (TR2 known miss on the Hex20 block; NB3 amended).
+
+> ADR 0459, 2026-11-14: the orthotropic and tabulated materials of ADR 0452 on the rotating modes (stress stiffening, spin softening; whirl analyses of a part), the buckling factors and the transient integrator (both paths), through the per-point stiffness; the pre-stress at 1 rad/s of a rotating part takes a table's stiffness at the model's temperature field and no thermal strain; a cyclic constraint with either material (also cylindrical axes about its own axis, F-537 question 3) is refused by name on every path, as are nonlinear, harmonic with the static correction, direct harmonic, damped modes, beams and shells. Orthotropic Hex20 blade with cylindrical axes (E2 = E1/10, G = E1/20, hub ratio 1, Omega up to twice the lag frequency): lag and flap within 7.6e-4 of a rotating Timoshenko beam, stiffening coefficients within 1.1e-3, first-order Southwell within 1.0e-2; the blade turned by 0.7 rad unchanged to 1e-10. Orthotropic column 4.05e-4 above Engesser. Isotropic constants in an orthotropic material: rotating and buckling within 6.8e-14 (both paths), transient on the transformation within 3.4e-13; missed on the transient Hex20 block (9.25e-12 against 1e-12, a one-ulp change of the isotropic constants moves that set-up by 9e-12; known miss). A tabulated material at a uniform temperature gives the bits of the isotropic material on every path. Default paths bit-identical (20 digests of main 2504fd62). Seven of seven mutations caught; ADR 0457's equivalent mutant is gone. Files rotating.rs, buckling.rs, transient.rs, geometric.rs, mat_ortho.rs; tests sa_ortho_rotating.rs, sa_ortho_rotating_default_bits.rs; sa_ortho_modal r1_r2_paths_after_f537 and r3_paths_not_opened recorded and copied.
+
+Note of F-537 (sentence to append):
+
+> Follow-up F-542 (ADR 0459, 2026-11-14) opened the rotating modes, the buckling factors and the transient integrator to both variants; question 3 (cyclic with cylindrical axes) stays refused by name; the equivalent mutant Mu7 no longer exists.
+
+Follow-up item (id by the lead), title "Cyclic symmetry with cylindrical material axes", deps F-542:
+
+> Every limit not stated here is registered in the ADR before the run. The cyclic harmonic modal analysis, the static harmonic solve and the rotating sector (modes and whirl) take the orthotropic and tabulated materials of ADR 0452 when every material with its own axes has cylindrical axes about the cyclic constraint's axis and origin; other axes stay refused by name; the harmonics of a sector match the full rotor of the same material within registered limits; isotropic constants in an orthotropic material give the isotropic results within 1e-12 on stocky models; default paths bit-identical.
+
+Follow-up item (id by the lead), title "Transient isotropic equivalence with a probed limit", deps F-542:
+
+> Every limit not stated here is registered in the ADR before the run, after a rounding probe of each set-up (a one-ulp change of the isotropic constants) made and disclosed before the registration. The transient integrator with isotropic constants in an orthotropic material matches the isotropic material on a Hex20 and a Hex8 model on both paths within limits derived from the probe; default paths bit-identical.
