@@ -235,3 +235,28 @@ tip, 2.0e-3 of `max |sigma| = 1.414 F/A`, above the registered 1e-3; the registe
 centre. Corrected S1: each integration point's `sigma_xx` against `F cos(k* x_c)/(A cos(k* L))` at the centre `x_c` of its
 element (`x_c = h (floor(x/h) + 1/2)`), `max_p |s_h - s|/max |s| <= 1e-3` (limit unchanged); estimate: the central difference
 `(k h)^2/24` (4e-6) plus the nodal error of H1 (2.3e-6), about 1e-5. No other check changes.
+
+## Amendment 2 (2026-11-14, after the registered run, before any corrected run)
+
+The registered run (commit 163e2fff plus the X1 records of D3, log `f412-scratch/run_fem.log`) met every check except two:
+
+- **R8, set-up defect.** The model put `1e-3` on `xmax` component 1, which the bar already holds at 0 through the set `all`;
+  `prescribed_equations` refused the conflict ("prescribed twice with different values", not the key `"constraint"`), so the
+  path of a non-zero value was not reached. Corrected **R8b**: `bar_with(10)` with `Constraint::displacement("xmax", 0,
+  1e-3)` (no conflict), refused with key `"constraint"` and the text `prescribed value`. The record `r1_to_r11_refusals` is
+  ignored; `r1_to_r11_refusals_amended` repeats R1 to R7 and R9 to R11 unchanged (met in the registered run) with R8b.
+- **S1, a miss (not a set-up defect).** Measured 2.0e-2 against 1e-3. Diagnosis: `HarmonicResponse::stress` (F-399) gives
+  `D eps` with the elastic `D` of each part; with a loss factor the stress of the complex modulus is `s (1 + i eta) D eps`, so
+  the loss part `i eta D eps` is missing: the error is `|i eta/(1 + i eta)| = 0.019996` at every point (measured 1.99958e-2).
+  The limit stays: S1 is kept as the ignored `s1_sw1_stress_and_sweep_known_miss` (SW1 met in the same run).
+  **Fix:** `DirectHarmonic::stress(model, response)`: the stress of `HarmonicResponse::stress` times the coefficient
+  `s_m (1 + i eta_m)` of each element's material at the response's frequency (the same coefficients as the matrix).
+  `HarmonicResponse::stress` is not changed. New checks, registered here before their run:
+  - **S1b**: S1 (the amendment-1 comparison at element centres, the same bar, 0.5 `w1`) with `DirectHarmonic::stress`:
+    `<= 1e-3`; estimate about 1e-5 (the S1 estimate; the measured S1 error less the loss part).
+  - **S1c**: without a loss factor `DirectHarmonic::stress` equals `HarmonicResponse::stress` value for value (the
+    coefficient is exactly `1 + 0 i`): every component equal.
+  - **M11** (added mutation): the stress coefficient conjugated (`s (1 - i eta)`); catchers S1b.
+  - SW1 is repeated unchanged as `sw1_sweep_bit_equal` (met in the registered run; kept live).
+
+By the decision rule the item is **partial** (S1 missed in its registered run; R8 met only after this amendment).
