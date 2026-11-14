@@ -25,6 +25,11 @@
 //! `K_qR = Phi^T K_ii R`, `K_RR = R^T K_ii R` (the coupling with the constraint modes is zero exactly), `M_bR = M_bi R +
 //! Psi^T M_ii R`, `M_qR = Phi^T M_ii R`, `M_RR = R^T M_ii R`, and the load `R^T f_i`; with it the static solution of an
 //! interior load lies in the range of `T` and the reduced statics are exact.
+//!
+//! Load patterns of ADR 0511 (F-559): [`CmsOptions::load_pattern`] gives vectors over the part's mesh equations; each asks for
+//! its own residual vector `K_ii^{-1} p_i`, M-orthogonalised (twice) against the kept modes and the vectors before it (after
+//! the vector of the model's load when that is asked), and dropped when it lies in their span. [`ReducedPart::reduce_load`]
+//! reduces any load vector to the part's unknowns; [`Assembly::load_from`] and [`Assembly::harmonic_with_load`] use it.
 
 use crate::assemble::stiffness_with_materials;
 use crate::error::{FemError, Result, SetKind};
@@ -80,6 +85,9 @@ pub struct CmsOptions {
     pub residual_vectors: bool,
     /// Keep every fixed-interface mode with `omega_k < cutoff` (rad/s) instead of a mode count (ADR 0474; default `None`).
     pub cutoff: Option<f64>,
+    /// Load patterns given by the caller (ADR 0511): vectors over the part's mesh equations, each asking for its static residual
+    /// vector (default empty).
+    pub load_patterns: Vec<Vec<f64>>,
 }
 
 impl CmsOptions {
@@ -91,6 +99,7 @@ impl CmsOptions {
             dense_limit: DENSE_LIMIT,
             residual_vectors: false,
             cutoff: None,
+            load_patterns: Vec::new(),
         }
     }
     /// The same options with a thread count.
@@ -112,6 +121,17 @@ impl CmsOptions {
     /// then be 0.
     pub fn cutoff(mut self, omega: f64) -> CmsOptions {
         self.cutoff = Some(omega);
+        self
+    }
+    /// The same options with one more load pattern (ADR 0511): a vector over the part's mesh equations (the length of
+    /// [`crate::loads::nodal_load_vector`]), whose static residual vector is added after those before it.
+    pub fn load_pattern(mut self, pattern: Vec<f64>) -> CmsOptions {
+        self.load_patterns.push(pattern);
+        self
+    }
+    /// The same options with the list of load patterns replaced (ADR 0511).
+    pub fn load_patterns(mut self, patterns: Vec<Vec<f64>>) -> CmsOptions {
+        self.load_patterns = patterns;
         self
     }
 }
@@ -466,6 +486,21 @@ pub fn reduce(model: &SolidModel, interface: &str, options: &CmsOptions) -> Resu
     let (boundary, boundary_q) = boundary_unknowns(model, &tr, interface)?;
     let n_mesh = tr.n_mesh();
     let nn = tr.n_unknowns();
+    for (j, p) in options.load_patterns.iter().enumerate() {
+        if p.len() != n_mesh {
+            return Err(FemError::FieldLength {
+                key: "load pattern",
+                expected: n_mesh,
+                found: p.len(),
+            });
+        }
+        if let Some(e) = p.iter().position(|v| !v.is_finite()) {
+            return Err(invalid(
+                "load_patterns",
+                format!("load pattern {j} has a non-finite entry at equation {e}"),
+            ));
+        }
+    }
     let mut k = stiffness_with_materials(model, options.threads)?;
     add_supports(&mut k, model)?;
     let m = consistent_with(model, options.threads)?;
@@ -561,11 +596,22 @@ pub fn reduce(model: &SolidModel, interface: &str, options: &CmsOptions) -> Resu
         }
     }
     // The residual vector of the interior load (ADR 0474), M-orthonormalised against the kept modes.
-    let mut residual_cols: Vec<Vec<f64>> = Vec::new();
+    // ADR 0511: then those of the load patterns given, in the order given, each against the modes and the vectors before it.
+    let mut candidates: Vec<Vec<f64>> = Vec::new();
     if options.residual_vectors {
-        let mut r = static_interior.clone();
+        candidates.push(static_interior.clone());
+    }
+    for p in &options.load_patterns {
+        let mut padded = p.clone();
+        padded.resize(nn, 0.0);
+        let pq = tr.transpose_times(&padded);
+        let pi: Vec<f64> = interior_q.iter().map(|&q| pq[q]).collect();
+        candidates.push(fac.solve(&pi));
+    }
+    let mut residual_cols: Vec<Vec<f64>> = Vec::new();
+    for mut r in candidates {
         let mut y = vec![0.0; ni];
-        let basis: Vec<&[f64]> = phi_cols.iter().map(Vec::as_slice).collect();
+        let basis: Vec<&[f64]> = phi_cols.iter().chain(residual_cols.iter()).map(Vec::as_slice).collect();
         if crate::damped::m_orthonormalise(&mii, &mut r, &basis, &mut y) {
             residual_cols.push(r);
         }
@@ -821,6 +867,44 @@ impl ReducedPart {
             });
         }
         self.expand_with(model, ub, &self.static_interior)
+    }
+
+    /// The reduced load `[p_b + Psi^T p_i; Phi^T p_i; R^T p_i]` of a load vector `pattern` over the mesh equations of `model`
+    /// (ADR 0511); for the model's own load vector it is [`ReducedPart::load`]. Refuses a model that is not the part's, a
+    /// pattern of another length and a non-finite entry.
+    pub fn reduce_load(&self, model: &SolidModel, pattern: &[f64]) -> Result<Vec<f64>> {
+        let tr = self.transformation_of(model)?;
+        if pattern.len() != self.n_mesh {
+            return Err(FemError::FieldLength {
+                key: "load pattern",
+                expected: self.n_mesh,
+                found: pattern.len(),
+            });
+        }
+        if let Some(e) = pattern.iter().position(|v| !v.is_finite()) {
+            return Err(invalid(
+                "load_patterns",
+                format!("the load pattern has a non-finite entry at equation {e}"),
+            ));
+        }
+        let mut padded = pattern.to_vec();
+        padded.resize(tr.n_unknowns(), 0.0);
+        let pq = tr.transpose_times(&padded);
+        let nb = self.n_boundary();
+        let ni = self.n_interior();
+        let pb: Vec<f64> = self.boundary_q.iter().map(|&q| pq[q]).collect();
+        let pi: Vec<f64> = self.interior_q.iter().map(|&q| pq[q]).collect();
+        let psit_pi = at_b(&self.psi, &pi, ni, nb, 1);
+        let phit_pi = at_b(&self.phi, &pi, ni, self.modes, 1);
+        let mut load = pb;
+        for (a, v) in load.iter_mut().zip(&psit_pi) {
+            *a += v;
+        }
+        load.extend_from_slice(&phit_pi);
+        if self.n_residual > 0 {
+            load.extend(at_b(&self.residual, &pi, ni, self.n_residual, 1));
+        }
+        Ok(load)
     }
 
     /// The mesh displacements of reduced coordinates `(u_b, eta, rho)`: `u_i = Psi u_b + Phi eta + R rho`, then `x = T q`.
@@ -1199,6 +1283,46 @@ impl Assembly {
     /// The steady harmonic response `((1 + i eta) K - omega^2 M) X = F` of the assembly's load, as `(Re X, Im X)` (dense
     /// Gaussian elimination with partial pivoting). Refuses a non-finite or negative input and a singular matrix.
     pub fn harmonic(&self, omega: f64, loss: f64) -> Result<(Vec<f64>, Vec<f64>)> {
+        self.harmonic_with_load(omega, loss, &self.load)
+    }
+    /// The assembly load of one reduced load per part (ADR 0511; for example [`ReducedPart::reduce_load`] of a pattern): part
+    /// `p`'s entries go to its map; an empty vector adds nothing. Refuses a count of loads other than the parts' and a load of
+    /// the wrong length.
+    pub fn load_from(&self, part_loads: &[Vec<f64>]) -> Result<Vec<f64>> {
+        if part_loads.len() != self.parts.len() {
+            return Err(FemError::FieldLength {
+                key: "part loads",
+                expected: self.parts.len(),
+                found: part_loads.len(),
+            });
+        }
+        let mut load = vec![0.0; self.n];
+        for ((p, map), l) in self.parts.iter().zip(&self.maps).zip(part_loads) {
+            if l.is_empty() {
+                continue;
+            }
+            if l.len() != p.n_reduced() {
+                return Err(FemError::FieldLength {
+                    key: "part load",
+                    expected: p.n_reduced(),
+                    found: l.len(),
+                });
+            }
+            for (a, v) in l.iter().enumerate() {
+                load[map[a]] += v;
+            }
+        }
+        Ok(load)
+    }
+    /// [`Assembly::harmonic`] for the assembly load `load` (ADR 0511), `n_unknowns` entries.
+    pub fn harmonic_with_load(&self, omega: f64, loss: f64, load: &[f64]) -> Result<(Vec<f64>, Vec<f64>)> {
+        if load.len() != self.n {
+            return Err(FemError::FieldLength {
+                key: "assembly load",
+                expected: self.n,
+                found: load.len(),
+            });
+        }
         if !omega.is_finite() || omega < 0.0 || !loss.is_finite() || loss < 0.0 {
             return Err(invalid(
                 "harmonic",
@@ -1210,7 +1334,7 @@ impl Assembly {
         let mut a: Vec<C64> = (0..n * n)
             .map(|p| C64::new(self.stiffness[p] - w2 * self.mass[p], loss * self.stiffness[p]))
             .collect();
-        let mut b: Vec<C64> = self.load.iter().map(|&v| C64::from_real(v)).collect();
+        let mut b: Vec<C64> = load.iter().map(|&v| C64::from_real(v)).collect();
         let scale = a.iter().fold(0.0f64, |s, v| s.max(v.abs()));
         for col in 0..n {
             let mut piv = col;
