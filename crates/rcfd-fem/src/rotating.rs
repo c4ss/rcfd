@@ -27,6 +27,10 @@
 //!
 //! ADR 0420 (F-511): the same on a cyclic sector, per harmonic index on its real cos/sin problem, with the flag and the growth
 //! rate per index and the rotor's flag from them ([`RotatingSector::whirl_state`], [`RotatingSector::whirl_stability`]).
+//!
+//! ADR 0427 (F-506): the lowest whirl modes of a large part by a shift-invert Lanczos process on the state form of ADR 0411
+//! with a sparse factor of `K_eff` ([`gyroscopic_eigen_sparse`]), without the dense cap; opt-in by
+//! [`RotatingOptions::whirl_solver`] (default [`WhirlSolver::Dense`], the solver of ADR 0411).
 
 use crate::assemble::{assemble_with, stiffness_with};
 use crate::constraint::{check_rigid_body_motions, prescribed_equations, reduce};
@@ -51,6 +55,7 @@ pub use whirl::{
     DenseWhirl, HarmonicWhirlSpeedModes, Whirl, WhirlCampbell, WhirlMode, WhirlModes, WhirlSpeedModes,
     MAX_WHIRL_UNKNOWNS, WHIRL_TOLERANCE,
 };
+pub use whirl::{gyroscopic_eigen_sparse, gyroscopic_eigen_sparse_with, LanczosOptions, SparseWhirl, WhirlSolver};
 pub use whirl::{
     gyroscopic_state_eigen_dense, DenseStateWhirl, Stability, StateWhirl, StateWhirlMode, WhirlStability,
     STABILITY_TOLERANCE,
@@ -117,6 +122,8 @@ pub struct RotatingOptions {
     /// Whether the whirl analyses ([`RotatingPart::whirl_modes`] and the like) include the Coriolis matrix (default false;
     /// ADR 0411). [`RotatingPart::modes`] and [`RotatingPart::campbell`] never include it.
     pub coriolis: bool,
+    /// The eigensolver of the whirl analyses at speeds above zero (default [`WhirlSolver::Dense`], ADR 0411; ADR 0427).
+    pub whirl_solver: WhirlSolver,
 }
 
 impl RotatingOptions {
@@ -128,6 +135,7 @@ impl RotatingOptions {
             spin_softening: true,
             static_options: StaticOptions::default(),
             coriolis: false,
+            whirl_solver: WhirlSolver::Dense,
         }
     }
     /// The same options with other modal options.
@@ -148,6 +156,11 @@ impl RotatingOptions {
     /// The same options with the Coriolis matrix of the whirl analyses switched on or off (ADR 0411).
     pub fn coriolis(mut self, on: bool) -> RotatingOptions {
         self.coriolis = on;
+        self
+    }
+    /// The same options with another eigensolver of the whirl analyses (ADR 0427).
+    pub fn whirl_solver(mut self, solver: WhirlSolver) -> RotatingOptions {
+        self.whirl_solver = solver;
         self
     }
 }

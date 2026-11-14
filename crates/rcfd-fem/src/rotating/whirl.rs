@@ -38,6 +38,9 @@ pub use state::{
 };
 pub use state::{CyclicWhirlStability, HarmonicStateWhirl};
 
+mod sparse;
+pub use sparse::{gyroscopic_eigen_sparse, gyroscopic_eigen_sparse_with, LanczosOptions, SparseWhirl, WhirlSolver};
+
 /// `|kappa|` at or below which a mode has no whirl direction (ADR 0411 D3).
 pub const WHIRL_TOLERANCE: f64 = 1e-6;
 
@@ -139,7 +142,8 @@ pub struct WhirlMode {
 pub struct WhirlModes {
     /// The lowest modes, ascending.
     pub modes: Vec<WhirlMode>,
-    /// Every positive frequency of the reduced problem, ascending, rad/s (at rest only those of the returned modes).
+    /// Every positive frequency of the reduced problem, ascending, rad/s (at rest, and with the sparse solver of ADR 0427,
+    /// only those of the returned modes).
     pub frequencies_all: Vec<f64>,
     /// The number of reduced unknowns.
     pub unknowns: usize,
@@ -760,16 +764,32 @@ impl<'a> RotatingPart<'a> {
                 negative,
             }));
         }
-        check_size(nf)?;
-        let kd = dense_of(&kr);
-        let md = dense_of(&mr);
-        let cd = dense_of(&cr);
-        let gd: Vec<f64> = if self.options.coriolis {
-            cd.iter().map(|v| 2.0 * omega * v).collect()
+        let (pairs, all) = if self.options.whirl_solver.sparse_for(nf) {
+            let g_speed = if self.options.coriolis { omega } else { 0.0 };
+            let pairs = sparse::solve_reduced(&kr, &mr, &cr, g_speed, opts.modes)?;
+            let all = pairs.iter().map(|p| p.0).collect();
+            (pairs, all)
         } else {
-            vec![0.0; nf * nf]
+            check_size(nf)?;
+            let kd = dense_of(&kr);
+            let md = dense_of(&mr);
+            let cd = dense_of(&cr);
+            let gd: Vec<f64> = if self.options.coriolis {
+                cd.iter().map(|v| 2.0 * omega * v).collect()
+            } else {
+                vec![0.0; nf * nf]
+            };
+            let out = solve_dense(&kd, &md, &gd, nf, opts.modes)?;
+            let pairs: Vec<_> = out
+                .pairs
+                .into_iter()
+                .map(|(w, re, im, res)| {
+                    let kappa = whirl_number(&cd, &md, nf, &re, &im);
+                    (w, re, im, res, kappa)
+                })
+                .collect();
+            (pairs, out.all)
         };
-        let out = solve_dense(&kd, &md, &gd, nf, opts.modes)?;
         let expand = |q: &[f64]| -> Vec<f64> {
             match (&self.path, &free) {
                 (Path::Elimination { .. }, Some(free)) => {
@@ -783,27 +803,23 @@ impl<'a> RotatingPart<'a> {
                 _ => unreachable!("the elimination path has its free list"),
             }
         };
-        let modes = out
-            .pairs
+        let modes = pairs
             .iter()
-            .map(|(w, re, im, res)| {
-                let kappa = whirl_number(&cd, &md, nf, re, im);
-                WhirlMode {
-                    omega: *w,
-                    eigenvalue: w * w,
-                    frequency: w / (2.0 * PI),
-                    re: expand(re),
-                    im: expand(im),
-                    whirl: kappa,
-                    direction: Whirl::of(kappa),
-                    wave: None,
-                    residual: *res,
-                }
+            .map(|(w, re, im, res, kappa)| WhirlMode {
+                omega: *w,
+                eigenvalue: w * w,
+                frequency: w / (2.0 * PI),
+                re: expand(re),
+                im: expand(im),
+                whirl: *kappa,
+                direction: Whirl::of(*kappa),
+                wave: None,
+                residual: *res,
             })
             .collect();
         Ok(WhirlSpeedModes::Modes(WhirlModes {
             modes,
-            frequencies_all: out.all,
+            frequencies_all: all,
             unknowns: nf,
         }))
     }
@@ -936,23 +952,38 @@ impl<'a> RotatingSector<'a> {
                 loss: LossOfStiffness { speed: omega, negative },
             }));
         }
-        check_size(nq)?;
-        let kd = dense_of(&kr);
-        let md = dense_of(&mr);
-        let cd = dense_of(&cr);
-        let gd: Vec<f64> = if self.part.options.coriolis {
-            cd.iter().map(|v| 2.0 * omega * v).collect()
+        let (pairs, all) = if self.part.options.whirl_solver.sparse_for(nq) {
+            let g_speed = if self.part.options.coriolis { omega } else { 0.0 };
+            let pairs = sparse::solve_reduced(&kr, &mr, &cr, g_speed, count)?;
+            let all = pairs.iter().map(|p| p.0).collect();
+            (pairs, all)
         } else {
-            vec![0.0; nq * nq]
+            check_size(nq)?;
+            let kd = dense_of(&kr);
+            let md = dense_of(&mr);
+            let cd = dense_of(&cr);
+            let gd: Vec<f64> = if self.part.options.coriolis {
+                cd.iter().map(|v| 2.0 * omega * v).collect()
+            } else {
+                vec![0.0; nq * nq]
+            };
+            let out = solve_dense(&kd, &md, &gd, nq, count)?;
+            let pairs: Vec<_> = out
+                .pairs
+                .into_iter()
+                .map(|(w, re, im, res)| {
+                    let kappa = whirl_number(&cd, &md, nq, &re, &im);
+                    (w, re, im, res, kappa)
+                })
+                .collect();
+            (pairs, out.all)
         };
-        let out = solve_dense(&kd, &md, &gd, nq, count)?;
         let width = multiplicity * n;
         let m = &self.part.m;
-        let modes = out
-            .pairs
+        let modes = pairs
             .iter()
-            .map(|(w, re, im, res)| {
-                let kappa = whirl_number(&cd, &md, nq, re, im);
+            .map(|(w, re, im, res, kappa)| {
+                let kappa = *kappa;
                 let xr = tr.expand(re)[..width].to_vec();
                 let xi = tr.expand(im)[..width].to_vec();
                 let wave = if multiplicity == 2 {
@@ -987,7 +1018,7 @@ impl<'a> RotatingSector<'a> {
             multiplicity,
             modes: WhirlModes {
                 modes,
-                frequencies_all: out.all,
+                frequencies_all: all,
                 unknowns: nq,
             },
         })
