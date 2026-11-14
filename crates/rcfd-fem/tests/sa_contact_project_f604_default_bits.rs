@@ -631,7 +631,7 @@ fn pj1_small_face_far_from_the_origin() {
     for n in &nodes {
         let e = n.gap.map_or(f64::INFINITY, |g| (g / g0 - 1.0).abs());
         println!("PJ1 node {}: gap {:?}, relative error {e:.3e}", n.node, n.gap);
-        if !(e <= 1e-9) {
+        if !(e.is_finite() && e <= 1e-9) {
             missed.push((n.node, n.gap));
         }
     }
