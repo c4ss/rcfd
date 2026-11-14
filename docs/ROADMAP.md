@@ -10437,7 +10437,9 @@ fixed by the item's registration ADR before any code.
     r1_r2_paths recorded and copied. Partial by the rule: the equivalent mutant Mu7 (buckling entry check opened;
     refused identically next) not caught. Follow-up F-542. Follow-up F-542 (ADR 0459, 2026-11-14) opened the rotating
     modes, the buckling factors and the transient integrator to both variants; question 3 (cyclic with cylindrical axes)
-    stays refused by name; the equivalent mutant Mu7 no longer exists.
+    stays refused by name; the equivalent mutant Mu7 no longer exists. Question 3 answered by F-544 (ADR 0462,
+    2026-11-14): a cyclic constraint with cylindrical axes about its own axis is taken by the cyclic harmonic paths and
+    the rotating sector; other axes stay refused by name.
 - [ ] **F-538** The averaged component diagonal in the relaxed PIMPLE loop
   - depends on: F-531
   - acceptance: Every limit not stated here is registered in the ADR before the run. The channel of ADR 0455 QF with
@@ -10496,7 +10498,9 @@ fixed by the item's registration ADR before any code.
     geometric.rs, mat_ortho.rs; tests sa_ortho_rotating.rs, sa_ortho_rotating_default_bits.rs; sa_ortho_modal
     r1_r2_paths_after_f537 and r3_paths_not_opened recorded and copied. Follow-ups F-544, F-545. F-545 (ADR 0463,
     2026-11-14) met the transient isotropic equivalence within one-ulp-probed limits (H20E 9.25e-12 against 5e-11): the
-    TR2 miss was a limit below the set-up's rounding; done is the maintainer's call.
+    TR2 miss was a limit below the set-up's rounding; done is the maintainer's call. Follow-up F-544 (ADR 0462,
+    2026-11-14) opened the cyclic harmonic paths and the rotating sector to cylindrical axes about the cyclic axis
+    (remaining question 1); buckling and the transient integrator with a cyclic constraint stay refused.
 - [x] **F-543** Joint couplings with consistent face weights
   - depends on: F-426
   - acceptance: Every limit not stated here is registered in the ADR before the run. The beam-to-solid and
@@ -10515,7 +10519,7 @@ fixed by the item's registration ADR before any code.
     (limit 0.1 percent), shell rigid face 5.6e-4; the six rigid motions exact to 1.6e-13; the dual nodal forces equal
     hex20::traction_field_loads of the uniform and linear tractions to 2.6e-15 on both faces, every face node loaded.
     Seven mutations caught. Not covered: nu > 0, curved faces, dense rows over long edges.
-- [ ] **F-544** Cyclic symmetry with cylindrical material axes
+- [x] **F-544** Cyclic symmetry with cylindrical material axes
   - depends on: F-542
   - acceptance: Every limit not stated here is registered in the ADR before the run. The cyclic harmonic modal analysis,
     the static harmonic solve and the rotating sector (modes and whirl) take the orthotropic and tabulated materials of
@@ -10523,8 +10527,21 @@ fixed by the item's registration ADR before any code.
     other axes stay refused by name; the harmonics of a sector match the full rotor of the same material within
     registered limits; isotropic constants in an orthotropic material give the isotropic results within 1e-12 on stocky
     models; default paths bit-identical.
-  - note: Structural solver, advanced tier. Follow-up of F-542 (ADR 0459, 2026-11-14); F-537 question 3. Fan rotor
-    sectors in orthotropic plastic.
+  - note: Structural solver, advanced tier. ADR 0462, 2026-11-14: the cyclic harmonic modal analysis, the static
+    harmonic solve and the rotating sector (modes and whirl), with the index-0 paths on the transformation, take the
+    orthotropic and tabulated materials of ADR 0452 when every material with its own axes has cylindrical axes about the
+    cyclic constraint's axis and origin (either sense, within 1e-10; derived: such axes make the material the same in
+    every sector); Fixed, PerElement and other cylindrical axes are refused by name on each of these paths (54 rows),
+    and buckling and the transient integrator keep refusing a cyclic constraint with either variant; a table's
+    temperature field on the static harmonic solve gives its stiffness, not a thermal load. Sector against full rotor
+    (disc of 12 sectors, E_r/E_theta = 14): harmonics 3.6e-14 (33 eigenvalues), static harmonic solutions 6.2e-14,
+    rotating modes up to 0.9 of the lowest frequency 7.9e-14, whirl frequencies 5.9e-14 (252); with a table and a
+    temperature field over radius and height 1.3e-13; the same sector read as fixed axes differs by 98 percent.
+    Isotropic constants in cylindrical axes on a stocky ring (chosen by a one-ulp probe, 2.2e-14 per ulp; the thin disc
+    moves 2.2e-13 per ulp): modal, static, rotating and whirl within 1.8e-14; a uniform table gives the bits of the
+    isotropic material. Default paths bit-identical (23 digests of main ea76abd8). Eight of eight mutations caught.
+    Files mat_ortho.rs, cyclic.rs, rotating.rs, mpc.rs; tests sa_ortho_cyclic.rs, sa_ortho_cyclic_default_bits.rs;
+    sa_ortho_rotating r3_paths_not_opened_after_f542 recorded and copied. Follow-up F-547.
 - [x] **F-545** Transient isotropic equivalence with a probed limit
   - depends on: F-542
   - acceptance: Every limit not stated here is registered in the ADR before the run, after a rounding probe of each
@@ -10547,3 +10564,12 @@ fixed by the item's registration ADR before any code.
     without structure under internal pressure with `Load::shell_pressure_angle_weighted`: the radial displacement within
     2 % of `p R^2 (1 - nu)/(2 E t)` at every node, and the error measured on two refinements.
   - note: Structural solver, advanced tier. Optional, low priority. Follow-up of F-540 (ADR 0461, 2026-11-14).
+- [ ] **F-547** Pre-stressed modes with a cyclic constraint and per-point materials
+  - depends on: F-544
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The pre-stressed modes on the
+    transformation refuse a cyclic constraint with an orthotropic or tabulated material by name unless every material
+    with its own axes has cylindrical axes about the cyclic axis and origin; with such axes the index-0 pre-stressed
+    modes of a sector match the full rotor of the same material and pre-stress within registered limits; default paths
+    bit-identical.
+  - note: Structural solver, advanced tier. Follow-up of F-544 (ADR 0462, 2026-11-14): a gap since ADR 0457
+    (pre-stressed modes on the transformation accept a cyclic constraint with any per-point axes).
