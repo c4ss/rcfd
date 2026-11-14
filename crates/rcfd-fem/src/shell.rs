@@ -1427,6 +1427,12 @@ pub fn stresses(model: &SolidModel, displacement: &[f64]) -> Result<Vec<(usize, 
     Ok(out)
 }
 
+/// Facet, membrane strain, curvature, transverse shear strain and temperature change at an element centre (ADR 0496 D6).
+type LayupCentre = (Facet, [f64; 3], [f64; 3], [f64; 2], f64);
+
+/// Element, membrane strain, curvature and temperature change at its centre (ADR 0496 D6).
+pub(crate) type CentreStrain = (usize, [f64; 3], [f64; 3], f64);
+
 /// The centre values of Shell4 element `e` (bilinear membrane): its facet, the membrane strain, the curvature, the assumed
 /// transverse shear strain and the temperature change at the centre (ADR 0496 D6).
 fn layup_centre(
@@ -1434,7 +1440,7 @@ fn layup_centre(
     displacement: &[f64],
     e: usize,
     temperature: Option<(&[f64], f64)>,
-) -> Result<(Facet, [f64; 3], [f64; 3], [f64; 2], f64)> {
+) -> Result<LayupCentre> {
     let mesh = model.mesh();
     let f = model_facet(mesh, e)?;
     let ue: Vec<f64> = element_dofs(&model.dof_map(), mesh.element_nodes(e))
@@ -1481,10 +1487,7 @@ fn layup_centre(
 
 /// The membrane strain, curvature and centre temperature change of every Shell4 element of a Layup block (ADR 0496 D6), in
 /// element order.
-pub(crate) fn centre_strains(
-    model: &SolidModel,
-    displacement: &[f64],
-) -> Result<Vec<(usize, [f64; 3], [f64; 3], f64)>> {
+pub(crate) fn centre_strains(model: &SolidModel, displacement: &[f64]) -> Result<Vec<CentreStrain>> {
     let dofs = model.dof_map();
     if displacement.len() != dofs.n_equations() {
         return Err(FemError::FieldLength {
