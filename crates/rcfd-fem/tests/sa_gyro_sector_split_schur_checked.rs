@@ -672,7 +672,7 @@ fn j1_to_j5_j8_nj1_nj2_disc_sector_b4() {
             .schur_fallback
             .iter()
             .zip(&cs.checked.perturbation_ratio)
-            .all(|(&f, r)| f == r.is_none_or(|v| v > SPLIT_SCHUR_RATIO_LIMIT))
+            .all(|(&f, r)| f == r.map_or(true, |v| v > SPLIT_SCHUR_RATIO_LIMIT))
             && cs.checked.schur_fallback.len() == n;
         let none_fb = [&cs.default, &cs.dense, &cs.pert]
             .iter()

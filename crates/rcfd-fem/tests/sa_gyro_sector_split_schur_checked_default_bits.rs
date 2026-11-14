@@ -78,7 +78,6 @@ fn options(mb: usize, coriolis: bool, stiffening: bool, schur: SplitSchur) -> Ro
 }
 
 /// The words of one sector split result.
-
 fn words_of(s: &HarmonicSplitModes) -> Vec<u64> {
     let mut w = vec![s.harmonic as u64, s.multiplicity as u64];
     let m = &s.modes;

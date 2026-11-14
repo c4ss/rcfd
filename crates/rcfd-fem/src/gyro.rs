@@ -978,7 +978,7 @@ impl<'a> RotatingSector<'a> {
                                     let empty = est.is_some_and(|(v, _, r)| v == 0.0 && r.is_none());
                                     let fall = checked
                                         && !empty
-                                        && (est.is_none() || ratios[a].is_none_or(|r| r > SPLIT_SCHUR_RATIO_LIMIT));
+                                        && (est.is_none() || ratios[a].map_or(true, |r| r > SPLIT_SCHUR_RATIO_LIMIT));
                                     if fall {
                                         fallback[a] = true;
                                         out.push(schur_error(cb, kq, &h.reduced_mass, omega, &d.modes[a], &projected));
