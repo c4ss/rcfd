@@ -10808,22 +10808,23 @@ fixed by the item's registration ADR before any code.
     in resistance and reactance at k a = 0.1, 0.5, 2 and 10 with faces of a tenth of a wavelength; the resistance equal
     to the power of F-418 within 1e-6; the low-frequency reactance giving the added mass 8 rho a^3/3 within 2 percent at
     k a = 0.1.
-  - note: Structural solver, advanced tier. Follow-up of F-418 (ADR 0468, 2026-11-14). PARTIAL. ADR 0488, 2026-11-14:
-    rcfd-post solid_acoustic: BaffledPlane::surface_pressure and surface_pressures (the Rayleigh integral on the plane,
-    the singular part 1/R integrated analytically over each face by the in-plane edge sum polygon_inverse_distance, the
-    velocity at the point subtracted and the bounded rest by the quadrature points of F-418), radiation_impedance
-    (complex power, Z = 2 Pi/<|V_n|^2>, Z/(rho c S), added mass Im Z/omega), quadrature_points; all additive, the
-    existing results bit-identical (four digests). Baffled piston on the meshes of ADR 0468 (4 rings x 64 rim segments,
-    16 x 100 at k a = 10; faces of a tenth of a wavelength or finer): resistance within 3.2e-3, 3.1e-3, 2.2e-3, 5.5e-4
-    and reactance within 2.3e-3, 2.2e-3, 5.6e-5, 2.7e-3 of rho c pi a^2 (1 - J1(2ka)/(ka) + i H1(2ka)/(ka)) at k a =
-    0.1, 0.5, 2, 10 (the inscribed polygon dominates); resistance equal to the F-418 power to 8.0e-14; added mass at k a
-    = 0.1 within 5.0e-3 of 8 rho a^3/3; analytic face integrals equal to closed forms to 4.4e-16; disk potential within
-    2.7e-3 of 4 a E(r/a); centre pressure within 1.7e-3 of rho c V (1 - e^{-i k a}); a non-uniform velocity continuous
-    with the F-418 field pressure to 6.9e-5; negative controls (coarse mesh 3.8e-2, naive collocation 1.8e-2 and 5.0e-2)
-    as registered. Partial because one of eight mutations (the guard of an edge through the point, giving NaN) was not
-    caught by the registered tests (their largest-error aggregation dropped NaN); caught after amendment 1 by a
-    NaN-propagating copy. Not covered: unbaffled or curved radiators, a mutual impedance matrix of several velocity
-    fields, feedback of the added mass into the structure.
+  - note: Structural solver, advanced tier. PARTIAL. ADR 0488, 2026-11-14: rcfd-post solid_acoustic:
+    BaffledPlane::surface_pressure and surface_pressures (the Rayleigh integral on the plane, the singular part 1/R
+    integrated analytically over each face by the in-plane edge sum polygon_inverse_distance, the velocity at the point
+    subtracted and the bounded rest by the quadrature points of F-418), radiation_impedance (complex power, Z = 2
+    Pi/<|V_n|^2>, Z/(rho c S), added mass Im Z/omega), quadrature_points; all additive, the existing results
+    bit-identical (four digests). Baffled piston on the meshes of ADR 0468 (4 rings x 64 rim segments, 16 x 100 at k a =
+    10; faces of a tenth of a wavelength or finer): resistance within 3.2e-3, 3.1e-3, 2.2e-3, 5.5e-4 and reactance
+    within 2.3e-3, 2.2e-3, 5.6e-5, 2.7e-3 of rho c pi a^2 (1 - J1(2ka)/(ka) + i H1(2ka)/(ka)) at k a = 0.1, 0.5, 2, 10
+    (the inscribed polygon dominates); resistance equal to the F-418 power to 8.0e-14; added mass at k a = 0.1 within
+    5.0e-3 of 8 rho a^3/3; analytic face integrals equal to closed forms to 4.4e-16; disk potential within 2.7e-3 of 4 a
+    E(r/a); centre pressure within 1.7e-3 of rho c V (1 - e^{-i k a}); a non-uniform velocity continuous with the F-418
+    field pressure to 6.9e-5; negative controls (coarse mesh 3.8e-2, naive collocation 1.8e-2 and 5.0e-2) as registered.
+    Partial because one of eight mutations (the guard of an edge through the point, giving NaN) was not caught by the
+    registered tests (their largest-error aggregation dropped NaN); caught after amendment 1 by a NaN-propagating copy.
+    Not covered: unbaffled or curved radiators, a mutual impedance matrix of several velocity fields, feedback of the
+    added mass into the structure. Sources cited from memory, not re-read (Wilton et al. 1984, Kinsler, Morse and
+    Ingard, Pierce). Optional follow-up F-579.
 - [~] **F-552** Craig-Bampton with residual vectors of the interior loads and kept modes chosen by a cutoff frequency
   - depends on: F-430
   - acceptance: Every limit not stated here is registered in the ADR before the run. An option of the reduction of ADR
@@ -11063,7 +11064,7 @@ fixed by the item's registration ADR before any code.
     cylinder clause (the thin law to the stretch 1.5 by the Newton driver) not met: the nonlinear driver takes no shells
     (no geometrically nonlinear shell in the crate), recorded as a predicted known miss; follow-up proposed. Dead
     ShellPressure and default bits unchanged (10 digests), baseline hashes unchanged; six of six mutations caught. Two
-    set-up defects of run 1 corrected by amendment.
+    set-up defects of run 1 corrected by amendment. Follow-up F-578.
 - [ ] **F-574** Warning for the constant-strain Shell3 membrane on warped meshes
   - depends on: F-556
   - acceptance: Every limit not stated here is registered in the ADR before the run. An opt-in model check reports
@@ -11099,3 +11100,22 @@ fixed by the item's registration ADR before any code.
     route of ADR 0485 at the table points within 1e-12. The damped modes refuse the material or take it at a registered
     fixed frequency.
   - note: Structural solver, advanced tier. Follow-up of F-410 (ADR 0485, 2026-11-14).
+- [ ] **F-578** Geometrically nonlinear shells in the Newton driver
+  - depends on: F-573
+  - acceptance: Every limit not stated here is registered in the ADR before the run. Shell4 and Shell3 gain an internal
+    force and a consistent tangent at finite displacements and rotations (a corotational facet formulation, its rotation
+    update registered), taken by nonlinear::solve and solve_with with every default bit-identical; the tangent against
+    central differences of the internal force within 1e-6; a cantilever strip of shells under a tip moment rolls up to a
+    full circle within 1 percent of the closed-form tip position; a thin cylinder of shells under the follower internal
+    pressure of ADR 0487 follows p = E t (lambda^2 - 1)/(2 R) within 1 percent to the stretch 1.5 (the clause of F-573).
+  - note: Structural solver, advanced tier. Follow-up of F-573 (ADR 0487, 2026-11-14).
+- [ ] **F-579** Mutual radiation impedance matrix of a baffled plane and the light-fluid added mass and damping of structural modes
+  - depends on: F-551
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The radiation impedance matrix Z_mn
+    = (1/2) int P[V_m] conj(V_n) dS of several velocity fields of a baffled plane by the surface pressure of F-551,
+    symmetric within a registered tolerance, its diagonal equal to the impedance of F-551 within 1e-10; for two small
+    baffled pistons the mutual term equal to (i omega rho/(2 pi)) S1 S2 e^{-i k d}/d within 1 percent at k d = 1 and 3;
+    the modal added mass and radiation damping of the first modes of a baffled clamped plate reported, and the shift of
+    its first frequency in a light fluid compared with the first-order estimate from the added mass within a registered
+    limit.
+  - note: Structural solver, advanced tier. Optional. Follow-up of F-551 (ADR 0488, 2026-11-14).
