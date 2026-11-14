@@ -168,7 +168,7 @@ pub fn plane_shape_coefficients(phi: f64) -> [[f64; 4]; 4] {
 }
 
 /// The bending stiffness of one plane in `(d_0, psi_0, d_1, psi_1)` (ADR 0417 arithmetic 2).
-fn plane_stiffness(ei: f64, ks: f64, l: f64) -> [[f64; 4]; 4] {
+pub(crate) fn plane_stiffness(ei: f64, ks: f64, l: f64) -> [[f64; 4]; 4] {
     let phi = 12.0 * ei / (ks * l * l);
     let c = ei / ((1.0 + phi) * l * l * l);
     let (a, b) = ((4.0 + phi) * l * l, (2.0 - phi) * l * l);
@@ -214,7 +214,7 @@ fn plane_functions(c: &[[f64; 4]; 4], phi: f64, l: f64, xi: f64) -> ([f64; 4], [
 
 /// The consistent mass of one bending plane in `(d_0, psi_0, d_1, psi_1)`: `int (m_a N_d^T N_d + m_i N_psi^T N_psi) dx` by
 /// four-point Gauss (exact, degree 6).
-fn plane_mass(m_a: f64, m_i: f64, ei: f64, ks: f64, l: f64) -> [[f64; 4]; 4] {
+pub(crate) fn plane_mass(m_a: f64, m_i: f64, ei: f64, ks: f64, l: f64) -> [[f64; 4]; 4] {
     let phi = 12.0 * ei / (ks * l * l);
     let c = plane_shape_coefficients(phi);
     let mut m = [[0.0; 4]; 4];

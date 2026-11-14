@@ -8233,7 +8233,7 @@ fixed by the item's registration ADR before any code.
     1e-13 on the block but missed on the ring (4.6e-10) and the beam (1.0e-10) against 1e-10: the F-396 rest eigenvalues
     differ from their own vectors' Rayleigh quotients by up to 9e-10, and the split solve agrees with those quotients
     within 3.4e-11. Follow-ups for the zero-speed comparison and for cyclic sectors. Follow-ups F-554, F-555.
-- [ ] **F-416** Flexible rotor on bearings in the stationary frame: whirl, critical speeds, unbalance response, joined to the rigid-rotor model
+- [~] **F-416** Flexible rotor on bearings in the stationary frame: whirl, critical speeds, unbalance response, joined to the rigid-rotor model
   - depends on: F-414, F-391, F-393
   - acceptance: Every limit not stated here is registered in the ADR before the run. At zero speed the frequencies equal
     those of the beam model of F-391 within 1e-10. Disc on a light shaft between two bearings: critical speed sqrt(k/m)
@@ -8247,7 +8247,15 @@ fixed by the item's registration ADR before any code.
     w_n and unstable above, the threshold within 1 percent. Forward and backward are labelled by the sense of the orbit;
     an unstable speed is reported, never dropped.
   - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0319; the registration is
-    written by the implementation agent before any code.
+    written by the implementation agent before any code. F-416 (ADR 0476, 2026-11-14): rcfd_fem::rotor (F-391 shaft with
+    the gyroscopic matrix, discs, cross-coupled bearings; whirl by the quadratic solver of ADR 0450, forward and
+    backward by the mass-weighted sense of the orbit, undamped critical speeds, stability, unbalance and harmonic
+    response, Campbell table) and rcfd_post::solid_rotor (the join with rotordyn, discs from a solid part). Zero speed
+    against F-391 1.06e-11, sqrt(k/m) 7.8e-15, unbalance amplitude 9.8e-15, cross-coupling threshold 2.0e-7, stiff-shaft
+    limit against rotordyn 7.5e-9 (critical speeds) and 1.4e-7 (response), Rayleigh shaft 7.9e-6, overhung disc 1.1e-14,
+    anisotropic split 1.5e-5; defaults bit-identical. Partial: L1 (labels against the orbit sense) missed on
+    translation-free modes of the 20-element shaft, where the translation orbit is rounding; recorded as
+    l1_direction_is_the_sense_of_the_orbit_known_miss, met with the tilt orbit after amendment 2.
 - [ ] **F-417** Random vibration: response to force and base-acceleration spectra by modal superposition, root-mean-square stress
   - depends on: F-408, F-399
   - acceptance: Every limit not stated here is registered in the ADR before the run. One mode under a flat one-sided
