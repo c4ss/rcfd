@@ -1125,6 +1125,7 @@ fn sector_cyl() -> SolidModel {
 
 /// The copy of `sa_ortho_modal::r3_paths_not_opened` after ADR 0459 (D6), with the rows of its R3.
 #[test]
+#[ignore = "record of ADR 0459: ADR 0462 (F-544) opened the cyclic harmonic paths and the rotating sector to cylindrical axes about the cyclic axis, retiring the sector rows and the cantilever's cyclic::modal_analysis_harmonic row; continued in r3_paths_not_opened_after_f544 (ADR 0291 pattern, maintainer standing decision)"]
 fn r3_paths_not_opened_after_f542() {
     let mut c = Checks::new();
     let steel = Material::isotropic_elastic(2.0e11, 0.3, 7850.0, 0.0).unwrap();
@@ -1250,6 +1251,166 @@ fn r3_paths_not_opened_after_f542() {
     c.holds(
         "R3 sector: cyclic::modal_analysis_harmonic refused",
         refusal(&rh, "Orthotropic"),
+        &format!("{:?}", rh.err()),
+    );
+    // A tabulated material without a temperature field.
+    let nt = block(tab(), Field::None);
+    let iso_twin = block(iso_e(E_ISO), Field::None);
+    let rows: Vec<(&str, rcfd_fem::Result<()>)> = vec![
+        ("modal_analysis", modal_analysis(&nt, &ModalOptions::new(2)).map(|_| ())),
+        (
+            "RotatingPart::new",
+            RotatingPart::new(&nt, AXIS_Z, O_B, &RotatingOptions::new(2)).map(|_| ()),
+        ),
+        (
+            "buckling::factors",
+            factors(&nt, &uniform(&iso_twin, S_B), &BucklingOptions::new(1)).map(|_| ()),
+        ),
+        (
+            "Integrator::new",
+            Integrator::new(&nt, &[], &TransientOptions::new(1e-4)).map(|_| ()),
+        ),
+    ];
+    for (entry, r) in rows {
+        c.holds(
+            &format!("R3 Tabulated without a temperature field: {entry} refused (temperature)"),
+            matches!(&r, Err(FemError::InvalidValue { key: "temperature", .. })),
+            &format!("{:?}", r.as_ref().err()),
+        );
+    }
+    c.finish();
+}
+
+/// The copy of `r3_paths_not_opened_after_f542` after ADR 0462 (D7): the sector with cylindrical axes about its cyclic axis
+/// solves, and the cantilever without a cyclic constraint is refused by the cyclic count.
+#[test]
+fn r3_paths_not_opened_after_f544() {
+    let mut c = Checks::new();
+    let steel = Material::isotropic_elastic(2.0e11, 0.3, 7850.0, 0.0).unwrap();
+    let twin = cantilever_with(steel.clone(), false);
+    let prestress = Prestress::uniform(&twin, [-1e6, 0.0, 0.0, 0.0, 0.0, 0.0]).unwrap();
+    let table = Material::tabulated(steel, vec![200.0, 600.0], vec![("e".to_string(), vec![2.0e11, 1.8e11])]).unwrap();
+    for (mat, name) in [(ortho(fixed(I3)), "Orthotropic"), (table, "Tabulated")] {
+        let m = cantilever_with(mat, true);
+        let refused: Vec<(&str, rcfd_fem::Result<()>)> = vec![
+            ("stiffness", stiffness(&m).map(|_| ())),
+            (
+                "geometric_stiffness",
+                geometric_stiffness(&m, &prestress, None).map(|_| ()),
+            ),
+            (
+                "nonlinear::solve",
+                solve(&m, &[], &[], &NewtonOptions::new(1)).map(|_| ()),
+            ),
+            ("damped_modes", damped_modes(&m, &DampedOptions::new(2)).map(|_| ())),
+            (
+                "DirectHarmonic::new",
+                DirectHarmonic::new(&m, &DirectHarmonicOptions::new()).map(|_| ()),
+            ),
+        ];
+        for (entry, r) in refused {
+            c.holds(
+                &format!("R3 {name} {entry} refused"),
+                refusal(&r, name),
+                &format!("{:?}", r.err()),
+            );
+        }
+        // ADR 0462 D7: the material passes the entry check; the cantilever has no cyclic constraint.
+        let rh = modal_analysis_harmonic(&m, &[], 0, &ModalOptions::new(2)).map(|_| ());
+        c.holds(
+            &format!("R3 {name} cyclic::modal_analysis_harmonic refused (cyclic)"),
+            matches!(&rh, Err(FemError::InvalidValue { key: "cyclic", .. })),
+            &format!("{:?}", rh.as_ref().err()),
+        );
+        let solved: Vec<(&str, rcfd_fem::Result<()>)> = vec![
+            (
+                "buckling::factors",
+                factors(&m, &prestress, &BucklingOptions::new(1)).map(|_| ()),
+            ),
+            (
+                "Integrator::new",
+                Integrator::new(&m, &[], &TransientOptions::new(1e-4)).map(|_| ()),
+            ),
+            (
+                "RotatingPart::new",
+                RotatingPart::new(&m, [1.0, 0.0, 0.0], [0.0; 3], &RotatingOptions::new(2)).map(|_| ()),
+            ),
+        ];
+        for (entry, r) in solved {
+            c.holds(
+                &format!("R3 {name} {entry} solves"),
+                r.is_ok(),
+                &format!("{:?}", r.err()),
+            );
+        }
+    }
+    let (s, pres) = shell_plate(ortho(fixed(I3)));
+    let rs = modal_analysis_with(&s, &pres, &ModalOptions::new(2));
+    let ok = matches!(&rs, Err(FemError::NotYetSupported { item: "material", variant: "Orthotropic", location, package })
+        if location.starts_with("element 0") && location.contains("Shell4") && *package == FOLLOW_UP);
+    c.holds(
+        "R3 Shell4 modal with Orthotropic refused",
+        ok,
+        &format!("{:?}", rs.as_ref().err()),
+    );
+    // A cyclic constraint with the orthotropic material.
+    let mut cy = tr_block(ortho(fixed(I3)), Field::None, false, false);
+    cy.add_constraint(Constraint::cyclic("ymin", "ymax", [0.0, 0.0, 1.0], [0.0; 3], 4))
+        .unwrap();
+    let j = cy.constraints().len() - 1;
+    let zero = uniform(&cy, 0.0);
+    let rows: Vec<(&str, rcfd_fem::Result<()>)> = vec![
+        (
+            "modal_analysis_with",
+            modal_analysis_with(&cy, &[], &ModalOptions::new(2)).map(|_| ()),
+        ),
+        (
+            "buckling::factors",
+            factors(&cy, &uniform(&cy, -1e6), &BucklingOptions::new(1)).map(|_| ()),
+        ),
+        (
+            "Integrator::new",
+            Integrator::new(&cy, &[], &TransientOptions::new(1e-4)).map(|_| ()),
+        ),
+        (
+            "RotatingPart::new",
+            RotatingPart::new(&cy, AXIS_Z, [0.0; 3], &RotatingOptions::new(2)).map(|_| ()),
+        ),
+        (
+            "RotatingPart::with_unit_prestress",
+            RotatingPart::with_unit_prestress(&cy, AXIS_Z, [0.0; 3], zero, &RotatingOptions::new(2)).map(|_| ()),
+        ),
+    ];
+    for (entry, r) in rows {
+        c.holds(
+            &format!("R3 cyclic constraint with Orthotropic: {entry} refused"),
+            cyclic_refusal(&r, "Orthotropic", j),
+            &format!("{:?}", r.err()),
+        );
+    }
+    // The sector with cylindrical axes about the cyclic axis (F-537's question 3): opened by ADR 0462.
+    let sec = sector_cyl();
+    let rows: Vec<(&str, rcfd_fem::Result<()>)> = vec![
+        (
+            "RotatingSector::new",
+            RotatingSector::new(&sec, &RotatingOptions::new(2)).map(|_| ()),
+        ),
+        (
+            "RotatingSector::with_unit_prestress",
+            RotatingSector::with_unit_prestress(&sec, uniform(&sec, 0.0), &RotatingOptions::new(2)).map(|_| ()),
+        ),
+    ];
+    for (entry, r) in rows {
+        c.holds(
+            &format!("R3 sector with cylindrical axes about its axis: {entry} solves"),
+            r.is_ok(),
+            &format!("{:?}", r.err()),
+        );
+    }
+    let rh = modal_analysis_harmonic(&sec, &[], 1, &ModalOptions::new(2)).map(|_| ());
+    c.holds(
+        "R3 sector: cyclic::modal_analysis_harmonic solves",
+        rh.is_ok(),
         &format!("{:?}", rh.err()),
     );
     // A tabulated material without a temperature field.

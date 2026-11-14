@@ -15,8 +15,12 @@
 //! ADR 0395 (F-489): a static load of harmonic index `k` (a cosine and a sine part per sector) is solved on the sector by the
 //! same rows ([`solve_static_harmonic`]; [`FullRotor::expand_load`] and [`FullRotor::expand_field`] give the full load and
 //! the full solution), and a rigid set acts at `k > 0` with its six reference unknowns doubled (one block per part).
+//!
+//! ADR 0462 (F-544): the modal and the static harmonic paths take the orthotropic and the tabulated material of ADR 0452 when
+//! every material with its own axes has cylindrical axes about the cyclic axis and origin (the material is then the same in
+//! every sector); other axes are refused by name ([`crate::mat_ortho::check_cyclic_axes`]).
 
-use crate::assemble::stiffness_with;
+use crate::assemble::{point_stiffness, stiffness_with};
 use crate::constraint::Prescribed;
 use crate::error::{FemError, Result, SetKind};
 use crate::loads::NodalForceAt;
@@ -392,6 +396,29 @@ fn number_of_sectors(model: &SolidModel, ci: usize) -> usize {
     }
 }
 
+/// The entry check of the cyclic harmonic paths: for a model with the orthotropic or the tabulated material (ADR 0462 D2)
+/// the checks of a path that takes them on solid elements and [`crate::mat_ortho::check_cyclic_axes`], else
+/// [`SolidModel::check_supported`] as before. Returns whether the model has either material.
+fn check_cyclic_model(model: &SolidModel) -> Result<bool> {
+    if crate::mat_ortho::uses_point_materials(model) {
+        model.check_supported_solids_with_materials()?;
+        crate::mat_ortho::check_cyclic_axes(model)?;
+        Ok(true)
+    } else {
+        model.check_supported()?;
+        Ok(false)
+    }
+}
+
+/// The sector stiffness: the per-point stiffness for a model with either material (ADR 0462 D2), else [`stiffness_with`].
+fn cyclic_stiffness(model: &SolidModel, points: bool, threads: Option<usize>) -> Result<CsrMatrix> {
+    if points {
+        point_stiffness(model, threads)
+    } else {
+        stiffness_with(model, threads)
+    }
+}
+
 /// The modal analysis of harmonic index `harmonic` of a sector with one cyclic constraint (ADR 0386 D1): `options.modes`
 /// sector frequencies (a pair counted once), with the per-node prescribed values `extra` (all zero). `k = 0` runs
 /// [`mpc::modal_analysis_mpc`] (its rows are in the transformation); `0 < 2 k < N` the doubled real problem over the cosine and
@@ -405,7 +432,7 @@ pub fn modal_analysis_harmonic(
     options: &ModalOptions,
 ) -> Result<HarmonicModes> {
     model.validate()?;
-    model.check_supported()?;
+    let points = check_cyclic_model(model)?;
     let ci = the_cyclic_constraint(model)?;
     let sectors = number_of_sectors(model, ci);
     if 2 * harmonic > sectors {
@@ -452,7 +479,7 @@ pub fn modal_analysis_harmonic(
     }
     let tr = mpc::harmonic_transformation(model, extra, harmonic)?;
     let multiplicity = if 2 * harmonic < sectors { 2 } else { 1 };
-    let mut k = stiffness_with(model, options.threads)?;
+    let mut k = cyclic_stiffness(model, points, options.threads)?;
     mpc::add_supports(&mut k, model)?;
     let m = consistent_with(model, options.threads)?;
     let (k2, m2) = if multiplicity == 2 {
@@ -920,7 +947,9 @@ pub(crate) fn unknown_label(tr: &Transformation, model: &SolidModel, i: usize) -
 /// [`mpc::transformation`] (any prescribed values), `0 < 2 k < N` on the doubled problem over the cosine and sine parts and
 /// `2 k = N` on the single one ([`mpc::harmonic_transformation`], zero values only), rigid sets with their reference
 /// unknowns per part; the direct solver only. The full solution is [`FullRotor::expand_field`] of the result under the load
-/// [`FullRotor::expand_load`]. Refuses a harmonic above `N / 2`, a model with its own loads (give the parts as vectors), a
+/// [`FullRotor::expand_load`]. ADR 0462 D2: the temperature field of a model with a `Tabulated` material gives the table's
+/// stiffness and no thermal load (add [`crate::loads::nodal_load_vector`] of the model to the cosine part at `k = 0`).
+/// Refuses a harmonic above `N / 2`, a model with its own loads (give the parts as vectors), a
 /// part of the wrong length, a non-finite entry, a non-zero sine part at `k = 0` or `2 k = N`, a reference load on a
 /// constraint that is not a rigid set and a solver other than `Direct`.
 pub fn solve_static_harmonic(
@@ -930,7 +959,7 @@ pub fn solve_static_harmonic(
     options: &StaticOptions,
 ) -> Result<HarmonicStatic> {
     model.validate()?;
-    model.check_supported()?;
+    let points = check_cyclic_model(model)?;
     let ci = the_cyclic_constraint(model)?;
     let sectors = number_of_sectors(model, ci);
     let harmonic = load.harmonic;
@@ -949,13 +978,23 @@ pub fn solve_static_harmonic(
             reason: "a harmonic static solve takes the Direct solver only (ADR 0395)".into(),
         });
     }
-    if !model.loads().is_empty() {
+    // ADR 0462 D2: the temperature field of a model with a Tabulated material is the table's state, not a load.
+    let table = points
+        && model
+            .materials()
+            .iter()
+            .any(|(_, m)| matches!(m, crate::model::Material::Tabulated { .. }));
+    let own = model
+        .loads()
+        .iter()
+        .filter(|l| !(table && matches!(l, crate::model::Load::Temperature { .. })))
+        .count();
+    if own > 0 {
         return Err(FemError::InvalidValue {
             key: "loads",
             reason: format!(
-                "the model has {} loads of its own; a harmonic static solve takes its load as the cosine and sine \
-                 vectors (loads::nodal_load_vector of a model with the loads builds them)",
-                model.loads().len()
+                "the model has {own} loads of its own; a harmonic static solve takes its load as the cosine and sine \
+                 vectors (loads::nodal_load_vector of a model with the loads builds them)"
             ),
         });
     }
@@ -1033,7 +1072,7 @@ pub fn solve_static_harmonic(
             }
         }
     }
-    let mut k = stiffness_with(model, options.threads)?;
+    let mut k = cyclic_stiffness(model, points, options.threads)?;
     mpc::add_supports(&mut k, model)?;
     let k = if doubled { doubled_matrix(&k) } else { k };
     let (kr, fr) = tr.reduce(&k, &f)?;
