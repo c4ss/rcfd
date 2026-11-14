@@ -26,8 +26,9 @@ use crate::damped::REAL_TOLERANCE;
 use crate::error::{FemError, Result};
 use crate::model::{Constraint, SolidModel};
 use crate::rotating::{
-    check_harmonics, check_speeds, coriolis_matrix, track_whirl, Entry, HarmonicSpeedModes, LossOfStiffness, RotatingPart,
-    RotatingSector, SpeedModes, Stability, Whirl, WhirlCampbell, WhirlMode, WhirlModes, STABILITY_TOLERANCE,
+    check_harmonics, check_speeds, coriolis_matrix, track_whirl, Entry, HarmonicSpeedModes, LossOfStiffness,
+    RotatingPart, RotatingSector, SpeedModes, Stability, Whirl, WhirlCampbell, WhirlMode, WhirlModes,
+    STABILITY_TOLERANCE,
 };
 use rcfd_core::vec3::Vec3;
 use rcfd_linalg::complex::C64;
@@ -781,10 +782,7 @@ impl<'a> RotatingSector<'a> {
                 HarmonicSpeedModes::LossOfStiffness(l0) => {
                     return Err(FemError::Solver {
                         solver: "split_modes",
-                        reason: format!(
-                            "no rest basis of harmonic {harmonic} at {} rad/s: {l0:?}",
-                            l.loss.speed
-                        ),
+                        reason: format!("no rest basis of harmonic {harmonic} at {} rad/s: {l0:?}", l.loss.speed),
                     })
                 }
             },

@@ -299,7 +299,11 @@ fn compare(
             s.real_roots.len()
         ),
     );
-    ch.le(&format!("G3 {tag} k = {k} raw skew defect of C_r"), s.skew_defect, 1e-11);
+    ch.le(
+        &format!("G3 {tag} k = {k} raw skew defect of C_r"),
+        s.skew_defect,
+        1e-11,
+    );
     println!("record {tag} k = {k}: asymmetry of K_r, M_r {:.2e}", s.asymmetry);
     let gram: Vec<Vec<f64>> = phi
         .iter()
@@ -357,9 +361,16 @@ fn compare(
     ch.holds(
         &format!("S {tag} k = {k} matches"),
         mac_ok && distinct,
-        &format!("{inside} inside of {}: MAC >= 0.99 {mac_ok}, distinct {distinct}", reference.modes.len()),
+        &format!(
+            "{inside} inside of {}: MAC >= 0.99 {mac_ok}, distinct {distinct}",
+            reference.modes.len()
+        ),
     );
-    ch.le(&format!("S {tag} k = {k} max |theta/omega - 1| over the inside modes"), worst, 1e-6);
+    ch.le(
+        &format!("S {tag} k = {k} max |theta/omega - 1| over the inside modes"),
+        worst,
+        1e-6,
+    );
     if mb >= 41 {
         ch.holds(
             &format!("V1 {tag} k = {k}"),
@@ -379,7 +390,16 @@ fn sweep(model: &SolidModel, mb: usize, w_ref: f64, label: &str, ch: &mut Checks
             ..Run::default()
         };
         for k in 0..=N / 2 {
-            compare(&rs, mb, k, factor * w_ref, &format!("{label} {factor} omega_ref"), &c, ch, &mut run);
+            compare(
+                &rs,
+                mb,
+                k,
+                factor * w_ref,
+                &format!("{label} {factor} omega_ref"),
+                &c,
+                ch,
+                &mut run,
+            );
         }
         println!(
             "record {label} {factor} omega_ref: {} reference modes, {} inside (worst {:.2e}), {} excluded (worst {:.2e}); \
@@ -416,14 +436,25 @@ fn s1_k1_g3_v1_n1_n2_disc_sector() {
         run.excluded >= 1,
         &format!("{} excluded", run.excluded),
     );
-    ch.gt("N2 B4 0.8 omega_ref worst excluded |theta/omega - 1|", run.worst_excluded, 1e-6);
+    ch.gt(
+        "N2 B4 0.8 omega_ref worst excluded |theta/omega - 1|",
+        run.worst_excluded,
+        1e-6,
+    );
     // N1: option off against the reference with the option, index 1 at 0.8 omega_ref, B41.
     let on = RotatingSector::new(&model, &options(41, true)).unwrap();
     let off = RotatingSector::new(&model, &options(41, false)).unwrap();
     let w = 0.8 * w_ref;
     let mut fr: Vec<f64> = whirl_of(on.whirl_modes(1, w).unwrap(), "N1").frequencies_all;
     fr.sort_by(f64::total_cmp);
-    let mut fo: Vec<f64> = off.split_modes(1, w).unwrap().modes.modes.iter().map(|m| m.omega).collect();
+    let mut fo: Vec<f64> = off
+        .split_modes(1, w)
+        .unwrap()
+        .modes
+        .modes
+        .iter()
+        .map(|m| m.omega)
+        .collect();
     fo.sort_by(f64::total_cmp);
     let n1 = fr
         .iter()
@@ -431,7 +462,11 @@ fn s1_k1_g3_v1_n1_n2_disc_sector() {
         .take(8)
         .map(|(a, b)| (b / a - 1.0).abs())
         .fold(0.0f64, f64::max);
-    ch.gt("N1 option off against the reference, k = 1, 0.8 omega_ref, lowest 8", n1, 1e-3);
+    ch.gt(
+        "N1 option off against the reference, k = 1, 0.8 omega_ref, lowest 8",
+        n1,
+        1e-3,
+    );
     // Record: zero speed with the option against F-396 at rest (B4).
     let mut z: f64 = 0.0;
     for k in 0..=N / 2 {
@@ -470,7 +505,11 @@ fn c1_sector_split_campbell() {
     ch.holds(
         "C1 families",
         t.families.len() == 4 && t.multiplicities == [1, 2, 2, 1] && tracks == [4, 8, 8, 4] && t.coriolis,
-        &format!("{} families, multiplicities {:?}, tracks {tracks:?}", t.families.len(), t.multiplicities),
+        &format!(
+            "{} families, multiplicities {:?}, tracks {tracks:?}",
+            t.families.len(),
+            t.multiplicities
+        ),
     );
     let mut bits_ok = true;
     let mut distinct_ok = true;
@@ -499,10 +538,17 @@ fn c1_sector_split_campbell() {
             stable_ok &= fam.speeds[j].stability == Some(Stability::Stable);
         }
     }
-    ch.holds("C1 stored frequencies are split_modes frequencies by bits", bits_ok, "every track, every speed");
+    ch.holds(
+        "C1 stored frequencies are split_modes frequencies by bits",
+        bits_ok,
+        "every track, every speed",
+    );
     ch.holds("C1 distinct modes per speed", distinct_ok, "every family");
     ch.holds("C1 stable", stable_ok, "every family and speed");
-    println!("record C1 smallest stored MAC {mac_min:.6}; unstable {:?}", t.unstable());
+    println!(
+        "record C1 smallest stored MAC {mac_min:.6}; unstable {:?}",
+        t.unstable()
+    );
     ch.finish();
 }
 
@@ -530,10 +576,19 @@ fn l1_loss_of_stiffness_takes_the_rest_basis() {
         ch.holds(
             &format!("L1 k = {k}"),
             ok && finite,
-            &format!("F-396 loss {:?}, basis {:?}, finite roots {finite}, {:?}", f396.loss(), s.basis, s.stability),
+            &format!(
+                "F-396 loss {:?}, basis {:?}, finite roots {finite}, {:?}",
+                f396.loss(),
+                s.basis,
+                s.stability
+            ),
         );
     }
-    ch.holds("L1 at least one index loses stiffness", losses >= 1, &format!("{losses} indices"));
+    ch.holds(
+        "L1 at least one index loses stiffness",
+        losses >= 1,
+        &format!("{losses} indices"),
+    );
     ch.finish();
 }
 
@@ -568,7 +623,11 @@ fn b1_option_off_is_f396() {
             })
             && s.modes.stability.is_none()
             && s.modes.basis.is_none();
-        ch.holds(&format!("B1 split_modes off k = {k}"), ok, "bits of modes(k, 0.4 omega_ref)");
+        ch.holds(
+            &format!("B1 split_modes off k = {k}"),
+            ok,
+            "bits of modes(k, 0.4 omega_ref)",
+        );
     }
     let speeds: Vec<f64> = [0.0, 0.2, 0.4, 0.6, 0.8].iter().map(|f| f * w_ref).collect();
     let t = rs.split_campbell(&[0, 1, 2, 3], &speeds).unwrap();
@@ -578,7 +637,9 @@ fn b1_option_off_is_f396() {
         let (ta, tb) = (&a.campbell.table, &b.table);
         ok &= ta.losses == tb.losses && ta.tracks.len() == tb.tracks.len() && !a.coriolis;
         for (x, y) in ta.tracks.iter().zip(&tb.tracks) {
-            ok &= same_opt(&x.eigenvalues, &y.eigenvalues) && same_opt(&x.frequencies, &y.frequencies) && same_opt(&x.mac, &y.mac);
+            ok &= same_opt(&x.eigenvalues, &y.eigenvalues)
+                && same_opt(&x.frequencies, &y.frequencies)
+                && same_opt(&x.mac, &y.mac);
             ok &= x.modes.len() == y.modes.len()
                 && x.modes.iter().zip(&y.modes).all(|(p, q)| match (p, q) {
                     (Some(p), Some(q)) => same(p, q),
@@ -587,7 +648,11 @@ fn b1_option_off_is_f396() {
                 });
         }
     }
-    ch.holds("B1 split_campbell off", ok, "every family table equal by bits to campbell");
+    ch.holds(
+        "B1 split_campbell off",
+        ok,
+        "every family table equal by bits to campbell",
+    );
     ch.finish();
 }
 
