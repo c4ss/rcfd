@@ -39,6 +39,7 @@ pub mod scalars;
 pub mod schema;
 pub mod service;
 pub mod sim;
+pub mod solid_case;
 pub mod solid_parallel;
 pub mod sources;
 pub mod stats;
