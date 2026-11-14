@@ -32,6 +32,10 @@
 //!   the static driver refuses it; [`solve_in_time`] is a quasi-static time-stepping driver over [`solve_from_at`] with
 //!   constant loads, a limit of the creep-strain increment of a step and step halving; a non-converged local creep iteration
 //!   is a located error, as an inverted point.
+//! * Histories (ADR 0499): [`solve_in_time_with`] is that driver with load and displacement histories against time
+//!   ([`TimeLoading`]: fixed patterns times piecewise linear factors, taken at the end time of every attempt, halved or not)
+//!   and a uniform temperature ([`TimeSteppingOptions::temperature`]); [`solve_in_time`] is it without histories.
+//!   [`internal_force_at`] is the assembled internal force at a point context.
 
 use crate::assemble::{assemble_with, element_dofs};
 use crate::constraint::{check_rigid_body_motions, prescribed_equations, reduce, Prescribed};
@@ -43,9 +47,11 @@ use crate::material::PointContext;
 use crate::mesh::{ElementKind, SolidFormulation};
 use crate::model::{Load, Material, SolidModel, SolidResult, SolverStats};
 use crate::solve::PIVOT_TOLERANCE;
+use crate::transient::{LoadHistory, LoadTable, MotionHistory};
 use rcfd_core::vec3::Vec3;
 use rcfd_linalg::skyline::{PivotRule, SkylineError, SkylineLdlt, SkylineOptions};
 use rcfd_linalg::CsrMatrix;
+use std::borrow::Cow;
 use std::sync::Mutex;
 
 /// The key of the refusal of an inverted point (ADR 0404 D2).
@@ -450,6 +456,17 @@ fn check_fields(model: &SolidModel, u: &[f64], states: &[ElementState]) -> Resul
 /// The assembled internal force of `model` at the global displacement `u` with the element states (ADR 0404 D4), element
 /// by element in element order. An element's error is located (`FemError::Element`).
 pub fn internal_force(model: &SolidModel, u: &[f64], states: &[ElementState]) -> Result<Vec<f64>> {
+    internal_force_at(model, u, states, &PointContext::default())
+}
+
+/// [`internal_force`] at the point context `context` (ADR 0499 D4): every material evaluation gets its time, time increment
+/// and temperature. With the default context it is [`internal_force`].
+pub fn internal_force_at(
+    model: &SolidModel,
+    u: &[f64],
+    states: &[ElementState],
+    context: &PointContext,
+) -> Result<Vec<f64>> {
     check_model(model)?;
     check_fields(model, u, states)?;
     let materials = model.material_indices()?;
@@ -466,7 +483,16 @@ pub fn internal_force(model: &SolidModel, u: &[f64], states: &[ElementState]) ->
         let f = if is_shell(kind) {
             crate::shell_corot::model_internal_force(mesh, e, &coords, material, &ue)
         } else {
-            element_internal_force(crate::element::element_for(kind), &coords, material, &ue, &states[e])
+            evaluate(
+                crate::element::element_for(kind),
+                &coords,
+                material,
+                &ue,
+                &states[e],
+                false,
+                context,
+            )
+            .map(|ev| ev.force)
         }
         .map_err(|source| FemError::Element {
             element: e,
@@ -1429,6 +1455,8 @@ pub struct TimeSteppingOptions {
     pub max_creep_increment: f64,
     /// The halvings of one step before the step is refused.
     pub max_halvings: usize,
+    /// A uniform temperature of every point, K (ADR 0499 D2; `None`: no temperature in the point context).
+    pub temperature: Option<f64>,
 }
 
 impl TimeSteppingOptions {
@@ -1438,6 +1466,7 @@ impl TimeSteppingOptions {
             newton: NewtonOptions::new(1),
             max_creep_increment,
             max_halvings: 5,
+            temperature: None,
         }
     }
     /// With the Newton options of each attempt.
@@ -1450,7 +1479,15 @@ impl TimeSteppingOptions {
         self.max_halvings = halvings;
         self
     }
+    /// With a uniform temperature of every point, K (ADR 0499 D2).
+    pub fn temperature(mut self, temperature: f64) -> TimeSteppingOptions {
+        self.temperature = Some(temperature);
+        self
+    }
     fn check(&self) -> Result<()> {
+        if let Some(t) = self.temperature {
+            PointContext::new().with_temperature(t)?;
+        }
         if self.max_creep_increment.is_nan() || self.max_creep_increment <= 0.0 {
             return Err(FemError::InvalidValue {
                 key: "max_creep_increment",
@@ -1511,6 +1548,33 @@ fn creep_increment(creep: &[bool], old: &[ElementState], new: &[ElementState]) -
     worst
 }
 
+/// The load and displacement histories of [`solve_in_time_with`] (ADR 0499 D1): each a fixed pattern times a piecewise
+/// linear factor of time, taken at the end time of every attempt.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct TimeLoading {
+    /// Load histories: `pattern s(t)` (one value per equation) added to the model's dead loads, in list order.
+    pub loads: Vec<LoadHistory>,
+    /// Displacement histories: the listed node components prescribed to `value s(t)`.
+    pub motions: Vec<MotionHistory>,
+}
+
+impl TimeLoading {
+    /// No history.
+    pub fn new() -> TimeLoading {
+        TimeLoading::default()
+    }
+    /// With one more load history.
+    pub fn load(mut self, history: LoadHistory) -> TimeLoading {
+        self.loads.push(history);
+        self
+    }
+    /// With one more displacement history.
+    pub fn motion(mut self, history: MotionHistory) -> TimeLoading {
+        self.motions.push(history);
+        self
+    }
+}
+
 /// The quasi-static time-stepping driver (ADR 0489 D5): the model's dead loads and its prescribed displacements and
 /// `prescribed`, constant in time, applied at `t = 0` by one attempt of [`solve_from_at`] (the instantaneous response, the
 /// first entry), then the steps to the end times `times` (finite, strictly increasing, the first positive; key `"times"`),
@@ -1518,10 +1582,28 @@ fn creep_increment(creep: &[bool], old: &[ElementState], new: &[ElementState]) -
 /// whose largest equivalent creep-strain increment exceeds `options.max_creep_increment`, or whose attempt fails, is
 /// discarded and its length halved (kept to the end of the step); after `options.max_halvings` halvings of one step the error
 /// is `FemError::Solver { solver: "creep time stepping" }` naming the step. A non-converged local creep iteration is
-/// returned at once with its element (`FemError::Element`, key [`crate::mat_creep::ITERATION_KEY`]).
+/// returned at once with its element (`FemError::Element`, key [`crate::mat_creep::ITERATION_KEY`]). It is
+/// [`solve_in_time_with`] without histories.
 pub fn solve_in_time(
     model: &SolidModel,
     prescribed: &[Prescribed],
+    times: &[f64],
+    options: &TimeSteppingOptions,
+) -> Result<TimeHistory> {
+    solve_in_time_with(model, prescribed, &TimeLoading::default(), times, options)
+}
+
+/// [`solve_in_time`] with load and displacement histories (ADR 0499 D1): every attempt (the instantaneous one at `t = 0` and
+/// every sub-step, halved or not, to its end time `t1`) takes the load `f_dead + sum_j pattern_j s_j(t1)` and the prescribed
+/// values of the model and `prescribed` (constant) and of each motion, `value s_j(t1)` (written into the start of the
+/// attempt). With `options.temperature` every point context carries that uniform temperature (D2). Refused before any
+/// attempt: a load pattern of the wrong length or with a non-finite value (key `"load pattern"`), a table that does not
+/// cover `[0, t_last]` (keys `"load history"`, `"motion history"`), a motion of an equation already prescribed by the model,
+/// by `prescribed` or by an earlier motion (key `"motion history"`).
+pub fn solve_in_time_with(
+    model: &SolidModel,
+    prescribed: &[Prescribed],
+    loading: &TimeLoading,
     times: &[f64],
     options: &TimeSteppingOptions,
 ) -> Result<TimeHistory> {
@@ -1543,6 +1625,7 @@ pub fn solve_in_time(
     let n = model.dof_map().n_equations();
     let load = nodal_load_vector(model, &[])?;
     let fixed = prescribed_equations(model, prescribed)?;
+    let histories = Histories::new(model, &fixed, loading, times.last().copied().unwrap_or(0.0))?;
     let mut u = vec![0.0; n];
     for &(eq, v) in &fixed {
         u[eq] = v;
@@ -1552,9 +1635,19 @@ pub fn solve_in_time(
         .iter()
         .map(|&m| matches!(model.materials()[m].1, Material::Creep { .. }))
         .collect();
+    let context = |t: f64, h: f64| -> Result<PointContext> {
+        let c = PointContext::new().with_time(t, h)?;
+        match options.temperature {
+            None => Ok(c),
+            Some(temperature) => c.with_temperature(temperature),
+        }
+    };
     let start = initial_states(model)?;
-    let at0 = PointContext::new().with_time(0.0, 0.0)?;
-    let eq = solve_from_at(model, prescribed, &load, &u, &start, &options.newton, &[], &at0)?;
+    let at0 = context(0.0, 0.0)?;
+    let eq = {
+        let (f, p, s) = histories.at(0.0, &load, prescribed, &u);
+        solve_from_at(model, &p, &f, &s, &start, &options.newton, &[], &at0)?
+    };
     let mut steps = vec![TimeStep {
         time: 0.0,
         u: eq.u.clone(),
@@ -1575,8 +1668,12 @@ pub fn solve_in_time(
         let mut internal = Vec::new();
         while t < target {
             let t1 = if target - (t + h) <= 1e-12 * h { target } else { t + h };
-            let ctx = PointContext::new().with_time(t1, t1 - t)?;
-            let failure = match solve_from_at(model, prescribed, &load, &u, &states, &options.newton, &[], &ctx) {
+            let ctx = context(t1, t1 - t)?;
+            let attempt = {
+                let (f, p, s) = histories.at(t1, &load, prescribed, &u);
+                solve_from_at(model, &p, &f, &s, &states, &options.newton, &[], &ctx)
+            };
+            let failure = match attempt {
                 Ok(eq) => {
                     let inc = creep_increment(&creep, &states, &eq.states);
                     if inc <= options.max_creep_increment {
@@ -1622,4 +1719,121 @@ pub fn solve_in_time(
         });
     }
     Ok(TimeHistory { steps })
+}
+
+/// The inputs of one attempt of [`solve_in_time_with`]: the load vector, the prescribed list and the start displacement.
+type AttemptInputs<'b> = (Cow<'b, [f64]>, Cow<'b, [Prescribed]>, Cow<'b, [f64]>);
+
+/// The checked histories of [`solve_in_time_with`]: the load histories and the motions with their equations.
+struct Histories<'a> {
+    loads: &'a [LoadHistory],
+    motions: Vec<(Vec<(usize, Prescribed)>, &'a LoadTable)>,
+}
+
+impl<'a> Histories<'a> {
+    fn new(model: &SolidModel, fixed: &[(usize, f64)], loading: &'a TimeLoading, t_last: f64) -> Result<Histories<'a>> {
+        let dofs = model.dof_map();
+        let n = dofs.n_equations();
+        for (j, l) in loading.loads.iter().enumerate() {
+            if l.pattern.len() != n {
+                return Err(FemError::FieldLength {
+                    key: "load pattern",
+                    expected: n,
+                    found: l.pattern.len(),
+                });
+            }
+            if let Some(i) = l.pattern.iter().position(|x| !x.is_finite()) {
+                return Err(FemError::InvalidValue {
+                    key: "load pattern",
+                    reason: format!(
+                        "load history {j}: value {:e} at equation {i} is not finite",
+                        l.pattern[i]
+                    ),
+                });
+            }
+            if !l.table.covers(0.0, t_last) {
+                let (lo, hi) = l.table.range();
+                return Err(FemError::InvalidValue {
+                    key: "load history",
+                    reason: format!("load history {j}: the table covers [{lo:e}, {hi:e}] s, not [0, {t_last:e}] s"),
+                });
+            }
+        }
+        let mut taken = vec![false; n];
+        for &(eq, _) in fixed {
+            taken[eq] = true;
+        }
+        let mut motions = Vec::with_capacity(loading.motions.len());
+        for (j, m) in loading.motions.iter().enumerate() {
+            let motion_error = |reason: String| FemError::InvalidValue {
+                key: "motion history",
+                reason: format!("motion history {j}: {reason}"),
+            };
+            if !m.table.covers(0.0, t_last) {
+                let (lo, hi) = m.table.range();
+                return Err(motion_error(format!(
+                    "the table covers [{lo:e}, {hi:e}] s, not [0, {t_last:e}] s"
+                )));
+            }
+            let mut list = Vec::with_capacity(m.prescribed.len());
+            for p in &m.prescribed {
+                if !p.value.is_finite() {
+                    return Err(motion_error(format!(
+                        "the value {:e} at node {} is not finite",
+                        p.value, p.node
+                    )));
+                }
+                let eq = dofs.equation(p.node, p.component).ok_or_else(|| {
+                    motion_error(format!(
+                        "node {} component {} is not an equation of the model",
+                        p.node, p.component
+                    ))
+                })?;
+                if taken[eq] {
+                    return Err(motion_error(format!(
+                        "node {} component {} is already prescribed",
+                        p.node, p.component
+                    )));
+                }
+                taken[eq] = true;
+                list.push((eq, *p));
+            }
+            motions.push((list, &m.table));
+        }
+        Ok(Histories {
+            loads: &loading.loads,
+            motions,
+        })
+    }
+
+    /// The load vector, the prescribed list and the start displacement of an attempt to the time `t` from the committed
+    /// displacement `u`; without histories the inputs themselves (the operations of ADR 0489 D5).
+    fn at<'b>(&self, t: f64, load: &'b [f64], prescribed: &'b [Prescribed], u: &'b [f64]) -> AttemptInputs<'b> {
+        let f = if self.loads.is_empty() {
+            Cow::Borrowed(load)
+        } else {
+            let mut f = load.to_vec();
+            for l in self.loads {
+                let s = l.table.value(t).expect("load coverage checked");
+                for (fi, p) in f.iter_mut().zip(&l.pattern) {
+                    *fi += p * s;
+                }
+            }
+            Cow::Owned(f)
+        };
+        if self.motions.is_empty() {
+            return (f, Cow::Borrowed(prescribed), Cow::Borrowed(u));
+        }
+        let mut list = prescribed.to_vec();
+        let mut start = u.to_vec();
+        for (motion, table) in &self.motions {
+            let s = table.value(t).expect("motion coverage checked");
+            for &(eq, p) in motion {
+                let v = p.value * s;
+                list.push(Prescribed::new(p.node, p.component, v));
+                start[eq] = v;
+            }
+        }
+        (f, Cow::Owned(list), Cow::Owned(start))
+    }
 }
