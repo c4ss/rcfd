@@ -203,8 +203,8 @@ force on every node of the face, 13 of 13. No limit changes.
 
 ## Addendum 1: results (2026-11-14)
 
-Registered run: `sa_joint` and `sa_joint_default_bits` of commit c30fb0cf (release, one thread), log `f543-scratch/run1.log`,
-made once. Amendment 1 was written and committed (b976cc52) before that run and changed no limit.
+Registered run: `sa_joint` and `sa_joint_default_bits` of commit c30fb0cf (release, one thread; the branch commits were later rebuilt with identical trees, that commit is now 61914a96), log `f543-scratch/run1.log`,
+made once. Amendment 1 was written and committed (b976cc52, now 8618aee9) before that run and changed no limit.
 
 | ID | Limit | Measured | Met |
 |---|---|---|---|
@@ -229,7 +229,7 @@ Hex20 element through the plate thickness at `nu = 0` the plate's end section st
 traction, so both rows give the same solution (noted, not a check). The R1 residual of the J2 consistent rows (`1.6e-13`) is
 above the other couplings' because of the eigenvector noise of the threefold drilling null space; it is within the limit.
 
-### Mutations (scratch copy `f543-scratch/mut` of commit c30fb0cf, `sa_joint` per mutation, logs `f543-scratch/mut_Mu*.log`)
+### Mutations (scratch copy `f543-scratch/mut` of commit c30fb0cf (61914a96), `sa_joint` per mutation, logs `f543-scratch/mut_Mu*.log`)
 
 | ID | Mutation | Caught by |
 |---|---|---|
