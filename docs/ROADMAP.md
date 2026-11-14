@@ -10129,12 +10129,23 @@ fixed by the item's registration ADR before any code.
     7.3e-3, 1.9e-3; radial stress 4.4e-2, 1.2e-2, 3.0e-3; hoop stress 1.4e-2, 3.7e-3, 9.3e-4 (each of its own peak);
     observed orders 1.90 to 1.99 (limit 1.8); the element equals the prototype within 5.2e-10. Bending unknowns exactly
     zero, reactions 2e-12. Bore-held and chord controls as expected; six mutations caught.
-- [ ] **F-525** Nodal body-force fields and thermal loads on Shell4
+- [~] **F-525** Nodal body-force fields and thermal loads on Shell4
   - depends on: F-522
   - acceptance: Every limit not stated here is registered in the ADR before the run. Load::BodyForceNodal on a shell
     model gives the consistent loads t int N_i b dA of the interpolated field within 1e-12; a uniform temperature change
     on a free shell plate gives the membrane strain alpha dT and zero stress within 1e-12; a model without shells gives
     the bits it gave before.
+  - note: Structural solver, intermediate tier. ADR 0445, 2026-11-14: nodal body-force fields and thermal loads on
+    Shell4. Load::BodyForceNodal on a shell takes the consistent load t int N_i b dA of the interpolated field
+    (shell::body_load_vector_at); Load::Temperature on a shell takes the membrane thermal load of eps_th = alpha dT (1,
+    1, 0), uniform through the thickness (shell::thermal_load_vector), and shell::stresses subtracts the thermal strain.
+    Met: consistent loads within 1.9e-16 (limit 1e-12); a free plate held at one node (flat and inclined) has the
+    membrane strain alpha dT within 8.5e-15 and zero stress within 3.7e-14 (limit 1e-12); a linear temperature on a
+    rectangle gives the closed-form loads within 2e-16, warped self-equilibrium within 5e-16; models without shells give
+    their former bits (four digests, baseline_hashes, the scaffold bit records). Partial: the free-expansion
+    displacement carries a rounding rigid in-plane rotation of 2.1e-10 alpha dT L (limit 1e-12, known miss; the soft
+    drilling mode at the clamped node, no strain or stress). Ten mutations, all caught. Layup thermal loads and a
+    through-thickness gradient not taken.
 - [~] **F-526** Iterative solve of a solid case file to its tolerance, and the box bound
   - depends on: F-386, F-381
   - acceptance: Every limit not stated here is registered in the ADR before the run. A solid case file of the F-381 Hex8
@@ -10154,3 +10165,10 @@ fixed by the item's registration ADR before any code.
     of the nine solid case files equal an independent inclusive filter. Mutations: exclusive upper bound (ADR 0438 MU4),
     exclusive lower bound and an ignored tolerance key all caught. One negative control (N3) was met only after an
     amendment, so partial by the registered rule.
+- [ ] **F-527** Through-thickness temperature gradient on Shell4
+  - depends on: F-525
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A nodal temperature gradient
+    through the thickness on a Shell4 model gives the curvature thermal load int B_b^T D_b kappa_th dA with kappa_th =
+    alpha dT_grad; a free plate under a uniform gradient takes the curvature alpha dT_grad and zero moment within 1e-12;
+    a model without a gradient gives the bits it gave before.
+  - note: Structural solver. Follow-up of F-525 (ADR 0445, 2026-11-14); a new load variant, schema question if exposed.
