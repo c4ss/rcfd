@@ -82,8 +82,8 @@
   <text x="24" y="226" class="row">Structural solver</text>
   <g clip-path="url(#c6)">
     <rect x="262" y="215" width="112.1" height="14" fill="var(--done)"/>
-    <rect x="374.1" y="215" width="84.9" height="14" fill="url(#h)"/>
-    <rect x="459.0" y="215" width="163.0" height="14" fill="var(--todo)"/>
+    <rect x="374.1" y="215" width="88.3" height="14" fill="url(#h)"/>
+    <rect x="462.4" y="215" width="159.6" height="14" fill="var(--todo)"/>
   </g>
   <text x="636" y="226" class="num">33 of 106 done</text>
   <text x="24" y="256" class="row">Parallel and GPU</text>
