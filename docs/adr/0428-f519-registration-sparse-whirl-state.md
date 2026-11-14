@@ -417,3 +417,119 @@ numbers; compared with run 1 in the addendum) and prints Q1 of the cube without 
 clause c4 run in the suite. No corrected Q1 is registered: the library is not changed after the run, and a check restricted to
 the near-shift modes would be chosen after seeing their residuals. By the decision rule the item is **partial** (a registered
 check missed, its cause diagnosed).
+
+## Addendum 1: results (2026-11-14)
+
+**Code.** New: `crates/rcfd-fem/src/rotating/whirl/state/arnoldi.rs` (880 lines: `SparseStateOptions`, `SparseStateEigen`,
+`SparseStateWhirl`, `gyroscopic_state_eigen_sparse`, `RotatingPart::whirl_state_sparse`, `RotatingSector::whirl_state_sparse`,
+the development unit test of amendment 1) and `crates/rcfd-fem/tests/si_rotating_whirl_state_sparse.rs` (898 lines, five tests,
+one of them the ignored record). Additive edits: `rotating/whirl/state.rs` lines 25-26 (`mod arnoldi;`, `pub use`),
+`rotating/whirl.rs` line 39 (`pub use`), `rotating.rs` lines 34-39 (module comment) and 69 (`pub use`). No existing line is
+changed; no new crate, no `unsafe`.
+
+**Runs.** Run 1 (`f519-scratch/run1.log`, commit `136f93e4`, release, made once). The diagnostic print of amendment 2
+(`f519-scratch/diag1_residuals.log`, a scratch copy, not registered). Run 2 (`f519-scratch/run2.log`): the suite after amendment
+2; the amended cube copy printed the same numbers as run 1 (deterministic) and passes. Derived speeds: DS `omega_ref =
+1655.322604` rad/s, `Omega_T = 27843.75417335` (as ADR 0420); MP `omega_mp = 1552.223654`, `Omega_L,mp = 21744.60684744` rad/s
+(`14.0087 omega_mp`, index 1, both effects on), `Omega_T,mp = 27180.75855930`.
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| A1 registration first | holds | `4972d4af` alone before any code | yes |
+| A2 MP above the cap | each | 2112 unknowns, dense refused `"unknowns"`, 20 eigenvalues, loss `Some(2)`; sparse 0.48 s in 46 steps (dense sector union 1.79 s) | yes |
+| E1 cube, 14 solves | `<= 1e-9` | 1.59e-10 (largest at CBA 1.18, `sigma_b`, the divergence 59.77) | yes |
+| F1 cube flags | equal, each | equal and as ADR 0416 AN3 | yes |
+| L1 losses | equal; each | hold | yes |
+| W1 cube (84 modes compared) | `<= 1e-6` | 1.6e-11 | yes |
+| **Q1 cube** | `<= 1e-8` | **8.466e-8** | **no** |
+| I1 cube | `<= 1e-10` | 1.2e-16 | yes |
+| E2 DS, 8 solves | `<= 1e-9` | 4.35e-12 | yes |
+| F2 index and rotor flags | equal | equal | yes |
+| W1 DS (64 modes) | `<= 1e-6` | 6.0e-12 | yes |
+| E3 full DS | `<= 1e-9`; equal | 1.28e-13; flags equal | yes |
+| Q1 DS and full DS | `<= 1e-8` | 4.9e-11 | yes |
+| I1 DS | `<= 1e-10` | 7.9e-17 | yes |
+| M1 MP | `<= 1e-8` | 3.3e-13 | yes |
+| M2 MP flag | equal | equal (exercised: the union `Stable`) | yes |
+| Q1 MP | `<= 1e-8` | 2.5e-11 | yes |
+| I1 MP | `<= 1e-10` | 3.5e-17 | yes |
+| P1 PMI | `<= 1e-9`; `Stable` | 4.9e-15; `Stable` | yes |
+| P1 PMA | `<= 1e-9`; `Unstable` | 3.6e-15; `Unstable` (growth 99.5893) | yes |
+| U1b eigenvalues | `<= 1e-9` | 6.7e-15 | yes |
+| U1b flags | equal where exercised | exercised on 0 of 4 (every dense flag `Unstable` with its eigenvalue outside the reference set) | vacuous, recorded |
+| Q1 PM and RND | `<= 1e-8` | 9.9e-14 | yes |
+| I1 PM and RND | `<= 1e-10` | 1.5e-16 | yes |
+| R1 refusals | each its key | every key as registered | yes |
+| R2 `cargo test -p rcfd-fem --release`; `cargo check -p rcfd-post --tests` | pass | 349 passed, 0 failed, 72 ignored (`r2_fem_all.log`); check passes (`r3_post.log`) | yes |
+| N1 count 2 | refused | refused (`"2 Ritz values not converged in 1 Arnoldi steps (breakdown)"`) | as expected |
+| N1 count 1 | `+/- i` within 1e-12 | deviation 0 | as expected |
+| N2 | `> 1e-2` | 3.60 | as expected |
+| N3 | `Unstable`; `<= 1e-8`; `> 1e3` | `Unstable`; 9.7e-14; 1118.034 | as expected |
+
+**Mutations** (`f519-scratch/mutate.py` on the copy `f519-scratch/mut` at `7a93e1a3`, each run once, `mut_1..8.log`): 8 of 8
+caught.
+
+| # | Mutation | Caught by |
+|---|---|---|
+| 1 | `R` without `-sigma M` | E1, E2, E3, M1, P1, U1b, Q1, F1, N3 |
+| 2 | `-G f~ / c` dropped | E1, E2, E3, M1, M2, F1, F2, P1, U1b, Q1 |
+| 3 | `s^2 = 1/nu + sigma` | E1, E2, E3, M1, M2, F1, F2, P1, U1b, Q1, N3 |
+| 4 | only `rho` returned | A2, E1, E2, E3, M1, U1b (count and boundary), N1 count 1 |
+| 5 | sign of `G / c` in `Omega^` | E1, E2, E3, M1, F1, F2, P1, U1b, Q1 |
+| 6 | `phi = u - v / rho` | Q1 (~1), W1 (2.0) |
+| 7 | `TOL = 1e-2` | E1 (5.3e-6), E2 (2.1e-3), E3, M1 (4.6e-6), U1b, Q1 |
+| 8 | flag tolerance 0.1 | F1, N3, P1 (PMA flag) |
+
+`cargo fmt -p rcfd-fem --check` clean (after the layout-only commit `7a93e1a3`); `cargo clippy -p rcfd-fem --all-targets -- -D
+warnings` clean. `baseline_hashes` was not run: the shared files take only additive `mod` and `pub use` lines and the whole
+`rcfd-fem` suite passes (R2); no hash table or golden is touched.
+
+### Deviations
+
+- Amendment 1 (U1 to U1b) was made before any registered run, from a development test on other matrices.
+- Amendment 2 was made after run 1: Q1 of the cube missed; it is kept as the ignored record
+  `e1_f1_l1_w1_q1_i1_n2_n3_cube_known_miss` with its limit intact, and no corrected Q1 is registered.
+- U1b's flag part was vacuous (0 of 4 exercised); the flag comparison is exercised by F1, F2, E3, M2 and P1.
+- E1 measured 1.59e-10, above the registered estimate `<= 5e-11` but within its limit 1e-9 (the divergence 59.77 of CBA 1.18 at
+  `sigma_b` is the smallest `|s|` relative to the rounding of `K_eff`).
+- Mutations were caught by more checks than the plan listed (mutation 7 also by E1, E3, U1b and Q1). None was caught only by an
+  unregistered print.
+
+### What was not run
+
+The workspace test suite (by the house rules); `baseline_hashes` (reason above). No timing check is registered (the times are
+printed only). No restarted or pivoted variant exists to run.
+
+### Decision
+
+**partial**, by the decision rule: A2, E1, F1, E2, F2 and M1 (the clauses c2 to c5) are met, and one other check, Q1 of the
+cube, missed with its cause diagnosed (amendment 2; a `*_known_miss` record). The controls are as expected and every mutation was
+caught. The eigenvalues and flags the roadmap asks for meet 1e-9 on the cube and the disc sector; the defect is the mode vectors
+of eigenvalues far from the shift.
+
+### Remaining questions
+
+1. **Far-mode vectors** (Q1 of the cube). Options: (a) one step of inverse iteration on each returned Ritz vector at its own
+   eigenvalue `s_j` (a second factor per far group, accurate by D3's argument at that shift); (b) skip the smoothing step for
+   modes with `|nu_j| < 1e-3 max |nu|` and report the Ritz vector with its residual; (c) return only modes whose `|nu|` is within
+   a ratio of the dominant one and mark the others as eigenvalue-only. Recommendation: (a), as a small follow-up item with Q1 on
+   the cube registered again, since it keeps every returned mode within the limit; (c) is the fallback if the extra factors cost
+   too much.
+2. **Routing.** Should `WhirlSolver::Auto` route `whirl_state` to the sparse solver above the dense cap? Options: route now; keep
+   the call separate. Recommendation: keep it separate until the far-mode vectors are fixed; the routing is the maintainer's call.
+3. **Multiplicities and pivoting.** Deflated restarts for genuine double eigenvalues beyond `+/- s`, and Bunch-Kaufman pivoting
+   in the indefinite factor. Options: add now; defer. Recommendation: defer; no registered part needs them (a refused pivot moves
+   the shift).
+
+These are taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation): question 1 becomes the
+follow-up item below; questions 2 and 3 stay deferred.
+
+## For the lead: roadmap entries
+
+**F-519**, proposed status: partial.
+
+> ADR 0428, 2026-11-14: sparse whirl state solver (isotropic shift-invert Arnoldi on (C^2 + sigma)^-1, one skyline factor with K_eff - sigma M blocks); eigenvalues against the dense state solver within 1.6e-10 on the cube and 4.4e-12 on the disc sector, flags equal; the 2112-unknown ring above the cap matches the dense sector union to 3.3e-13; Q1 of the cube missed (8.5e-8 against 1e-8, far elastic mode vectors, diagnosed); 8 of 8 mutations caught.
+
+**Follow-up**: Accurate far-mode vectors of the sparse whirl state solver. Deps: F-519.
+
+> Every limit not stated here is registered in the ADR before the run. Each mode returned by the sparse whirl state solver of ADR 0428 is refined by inverse iteration at its own eigenvalue, so that on the cube of ADR 0416 at both registered shifts with count 6 every stored mode residual is at most 1e-8, while the eigenvalues still equal the dense state solver's within 1e-9 relative and the stability flags agree.
