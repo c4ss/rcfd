@@ -206,3 +206,89 @@ All errors required finite (a NaN or an infinity is a miss).
 2. **Common test module** (D2): the new tests share helpers through `tests/common/mod.rs`; the old file is not rewritten onto it
    (rule 2). Taken.
 3. **The pointwise limit for rod A against the table route** is the acceptance's `1e-12`; no looser limit is registered.
+
+## Addendum 1: results (2026-11-14)
+
+Registered run: commit 38323b46 (`cargo test -p rcfd-fem --release --test sa_harmonic_visco --test sa_harmonic_visco_stress --
+--nocapture --test-threads=1`), each check run once; no set-up was corrected and no limit was changed. B1 was printed on the
+unchanged base aa0e4d5b (`f583-scratch/b1-base.log`) and written into the test at commit b540a91b, before any library code.
+`cargo fmt -p rcfd-fem` before commit 38323b46 changed only the layout of the B1 file and of the new test (digests unchanged).
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| S1A rod A `sigma_xx` against `M* eps_chain`, pointwise, 320 points, ten frequencies | `<= 1e-9` | `3.41e-12` | yes |
+| S1B rod B (unequal weights) | `<= 1e-9` | `3.22e-12` | yes |
+| S1C rod C (shear, `sigma_xy`) | `<= 1e-9` | `2.09e-12` | yes |
+| S2 other components, rods A, B, C | `<= 1e-9` | `6.1e-15`, `1.44e-12`, `2.2e-14` | yes |
+| S3 points of an element (8 per element, inside, equal), rods A, B, C | `<= 1e-12` | `2.2e-13`, `2.5e-13`, `1.5e-13` | yes |
+| SE1 rod A against the `LossFactor::Table` route, all components, normalised | `<= 1e-12` | `1.50e-13` (0 at six of the ten frequencies) | yes |
+| SE2 the same, `xx` pointwise | `<= 1e-12` | `1.57e-13` | yes |
+| SF1 two materials, elastic half (loss 0.03) left | `<= 1e-9` | `4.03e-12` | yes |
+| SF2 viscoelastic left, elastic half right | `<= 1e-9` | `6.00e-12` | yes |
+| Z1 rod B at `omega = 0`, `max |sigma_xx A/F - 1|` | `<= 1e-10` | `3.42e-14` | yes |
+| T1 WLF shift at 383 K against `tau a_T` | `<= 1e-12` | `1.09e-14` | yes |
+| C0 no terms against the base | `<= 1e-12` | `0` | yes |
+| P1 threads 1 and 4 | bits equal | equal | yes |
+| NC1 one-part route, min over ten (B, C) | `>= 5e-3` | `3.436e-2`, `9.229e-3` | yes |
+| NC2 unscaled elastic stress, min over ten (B, C) | `>= 4e-2` | `6.166e-2`, `1.079e-1` | yes |
+| RF1 response of another size | refused, `FieldLength` `"displacement"` | as stated | yes |
+| RF2 another material list | refused, key `"model"` | as stated | yes |
+| N1 B1 (5 digests of aa0e4d5b) and B0 (11 digests of ADR 0491) | equal | equal | yes |
+| N2 `baseline_hashes` | pass | pass (3 passed, 1 ignored) | yes |
+| N3 `cargo test -p rcfd-fem --release` (all result lines, doc tests included) | pass | 683 passed, 0 failed, 170 ignored (146 result lines) | yes |
+
+The probes predicted `3.2e-12` (A, B), `2.1e-12` (C) for S1 and `1.5e-13` for the strain difference to the table route; the
+measured numbers agree. SE1 is not zero at four of the ten frequencies for the reason of ADR 0491 E1 (the two routes round
+`E*/E` and `(s, s eta)` differently).
+
+**Mutations** (`f583-scratch/mutate.py` on a git-archive copy of 38323b46 with its own target directory, log
+`f583-scratch/mutations.log`; MU0, the copy without a mutation, passes 4 of 4):
+
+| Id | Caught by |
+|---|---|
+| MU1 `cs` and `ck` swapped | S1B (`1.9e-2`), S1C (`8.1e-2`), S2 (`6.3e-2`), SF1, SF2, Z1 (`2.6e-2`), and NC2 for rod C (`3.4e-2` against its limit `4e-2`) |
+| MU2 volumetric term dropped | S1B (`0.63`), S2, SF1, SF2, Z1; S1C does not (no volumetric stress), as registered |
+| MU3 coefficient on the real part only | S1A (`5.0e-2`), S1B, S1C, S2, SE1 (`5.0e-2`), SE2, SF1, SF2 |
+| MU4 part index by the material index | SF2 (refused by the model check: the second material meets the bulk part); SF1 passes (the two indexings coincide when the elastic material comes first) |
+| MU5 `cs` on the volumetric part | S1B (`4.8e-2`), S2, SF1, SF2, Z1; S1C does not (no volumetric stress in shear) |
+| MU6 model with the viscoelastic material not replaced | every S, SE, SF and NC test (the recovery refuses the material) |
+| MU7 equal-weight material through the split | not caught: all four tests pass (informational, outside the decision rule) |
+
+MU1 to MU6 are each caught by at least one check. Two statements of the registered table were wrong about which checks catch
+a mutation, not about whether it is caught: MU4 (SF1 does not, SF2 does) and MU5 (S1C does not: the shear rod has no
+volumetric stress, so the error shows in S1B, SF1, SF2 and Z1). MU7 shows the split of an equal-weight material to be
+indistinguishable from the product at `1e-12` in these runs.
+
+**Deviations.** (1) The roadmap entry of F-583 does not exist on the base aa0e4d5b (it was added to main afterwards, at
+58c660b5), so there is no entry to update on this branch and none was added; the lead applies the note below. (2) The one
+registered edit of an existing test (D3): the RF (vi) assertion of `sa_harmonic_visco.rs` replaced by a comment; the file's
+other tests pass unchanged. (3) The mutation table named S1C for MU5 and SF1 for MU4 in error (above). Not run: the whole
+workspace suite (the lead's gate).
+
+**Shared solver files changed.** `harmonic_direct.rs`: module doc; `DirectHarmonic::stress` (the viscoelastic early return
+replaces the refusal of ADR 0491 D2; the path of the other models is unchanged); new private `stress_viscoelastic`. `model.rs`:
+new `pub(crate)` `SolidModel::with_viscoelastic_bases` (called by nothing else). Tests: new `tests/common/mod.rs`,
+`sa_harmonic_visco_stress.rs`, `sa_harmonic_visco_stress_default_bits.rs`; `sa_harmonic_visco.rs` (one comment in place of
+RF (vi)). `docs/reference-data.md`: the F-583 rows.
+
+Other runs: `cargo clippy -p rcfd-fem --all-targets --release -- -D warnings`: clean; `cargo fmt -p rcfd-fem --check`: clean;
+`cargo test -p rcfd-api --release --test baseline_hashes`: pass; `cargo test -p rcfd-cli --release --test docs_site`: 2 passed.
+
+**Decision by the registered rule: done.** Every check of the table is met, MU1 to MU6 are each caught, B0, B1 and the
+baseline hashes are unchanged, fmt and clippy are clean.
+
+### Remaining questions
+
+1. **Duplicated test helpers.** `sa_harmonic_visco.rs` keeps its own copies of the rods, the chain and `Checks`. Options: (a)
+   leave them (rule 2); (b) rewrite the old file onto `tests/common`. Recommendation: (a) now, (b) when the maintainer allows an
+   edit of an existing test file.
+2. **Shells and beams** (structural elements without points in `IntegrationPointField`) and orthotropic bases are not taken;
+   the isotropic solid base only. Recommendation: no item until a fatigue case needs it.
+3. **Fatigue use.** The stress amplitude per component is given; combining it into an equivalent stress for a blade fatigue
+   run is a separate item. Recommendation: open it when the fan plan calls for it.
+
+## For the lead: roadmap entries
+
+Proposed status of F-583: **done**. Proposed note:
+
+> ADR 0494, 2026-11-14: DirectHarmonic::stress (harmonic_direct.rs) of a response with a viscoelastic material returns (G*/G_0) dev sigma_0 + (K*/K_0) vol sigma_0 at each integration point, sigma_0 the elastic stress of the base (computed on the model with each viscoelastic material replaced by its base, SolidModel::with_viscoelastic_bases), and E*/E_0 times sigma_0 for equal weights; the refusal of ADR 0491 D2 is lifted. Met: on the rods A, B and C of ADR 0491 at 40 elements and ten frequencies, the axial (or shear) stress at all integration points equals the modulus times the strain of the discrete chain within 3.4e-12 (A), 3.2e-12 (B) and 2.1e-12 (C) pointwise against the limit 1e-9, the other components within 1.4e-12; for equal weights the stress equals that of the LossFactor::Table route within 1.5e-13 against 1e-12; two materials in either order within 6e-12; zero frequency, shift and no-term checks within 3.4e-14, 1.1e-14 and 0; threads bit-identical; mutations MU1 to MU6 caught; default bits (B1, 5 digests, and B0 of ADR 0491) and baseline hashes unchanged. The refusal assertion RF (vi) of sa_harmonic_visco.rs is replaced by a comment (ADR 0494 D3).
