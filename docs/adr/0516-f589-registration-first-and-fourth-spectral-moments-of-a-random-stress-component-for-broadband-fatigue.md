@@ -124,7 +124,7 @@ points (every point of the 40 elements, 8 Gauss points each) is the quantity com
 | A4 | a1 | cantilever of ADR 0510 (8 modes, static correction on, two correlated force patterns), all points, `k = 1, 4`: `C_ij^2/(C_ii C_jj)` for every pair of the six components with `C_ii C_jj > 0` is at most `1 + 1e-9`; diagonals `>= 0`; and for every component with `m_0 > 0`, `m_1^2/(m_0 m_2)` and `m_2^2/(m_0 m_4)` at most `1 + 1e-12` | as stated | `<= 1` |
 | X1 | D3 | `spectral_response_cross` with `real_route(false)` against `real_route(true)` on a constant real coherence of 3 patterns, 6 outputs, groups 3 and 6: Err of `first_covariance` and `fourth_covariance` | `<= 1e-12` | `0` |
 | X2 | D3 | nu = 0.3, `RandomSolver` with `Excitation::cross` of two tip patterns (0.25 N on the four tip nodes; 0.25 N on the first tip node) with equal flat spectra and the pure-delay coherence `gamma_12 = exp(-i 2 pi f tau)`, `tau = 1/(4 f_1)`: Err of `C_k` (`k = 0, 1, 2, 4`) against `s s^T m_k/phi_e^2` with `m_k` of the displacement channel of the same response; worst over points | `<= 1e-10` | `1e-13` |
-| X2b | D3 | the complex part is resolved: `max_p |C_1[p][0][0](tau = 1/(4 f_1)) / C_1[p][0][0](tau = 0) - 1|` | `> 1e-3` | `0.1 .. 1` |
+| X2b | D3 | the complex part is resolved: `max_p |a_p/b_p - 1|` with `a_p` the xx entry of `C_1` at point `p` for `tau = 1/(4 f_1)` and `b_p` the same for `tau = 0` | `> 1e-3` | `0.1 .. 1` |
 | V1 | a4 | `von_mises_broadband_damage_rate(p, 3, 1)` is `Err(InvalidValue { key: "broadband" })` whose text contains `von Mises` and `Gaussian`, at every point of the nu = 0 bar (where `rms_von_mises` equals `rms_xx` within 1e-10: a refusal not tied to the values) and of nu = 0.3 | all | by construction |
 | V1b | a4 | positive control: the xx component of the same points is accepted, finite and positive | all | by construction |
 | V2 | refusals | `moments` and `broadband_damage_rate` with a point `>= n` or a component `>= 6`; `combination_moments` with a NaN or infinite weight: refused, key `"random stress"`; an all-zero combination (zero `m_0`) refused by `Moments::broadband_damage_rate` with key `"broadband"` | all | by construction |
@@ -182,3 +182,97 @@ N1 and N2 are inside the tests; V1b is the positive control of V1.
 - Q2. Cross-spectral path: the covariances work there (D3), no refusal. Taken as recommended.
 - Q3. Rate of a non-Gaussian equivalent (von Mises, principal): refused here. Option: a later method that corrects for the
   non-Gaussian equivalent. Recommended: leave refused until a method is chosen and cited.
+
+## Addendum 1: results
+
+Registered runs made once on the commits of this branch: `cargo test -p rcfd-fem --release --test sa_random_stress_moments --
+--nocapture --test-threads=1` (6 tests, 0 failed, nothing re-run to pick a result) and `--test sa_random_stress_default_bits`. The bit
+record BASE (17 digests) was printed at d41012db before any library line and is the unchanged constant of the test. Every number below
+is printed by the tests.
+
+| Id | Quantity | Limit | Measured | Met |
+|---|---|---|---|---|
+| B1 | 17 digests of the existing fields (`RandomStress` `covariance`, `rate_covariance`, `positions`; `ChannelResponse` fields; the rates) | equal bits | equal (`b1_default_bits_of_the_existing_stress_and_channel_fields`); the three older default-bit tests (ADR 0477, 0497, 0510) also pass | yes |
+| B2 | group 1: `first_covariance`, `fourth_covariance` bit-equal `m1`, `m4`: real route, general loop, `spectral_response` | equal bits | equal | yes |
+| A1 | nu = 0, force, worst Err over 320 points of `C_k[0][0]` against `k_p^2 m_k` for `m0, m1, m2, m4` | `<= 1e-10` | `1.5e-15, 1.6e-15, 1.2e-15, 1.5e-15` | yes |
+| A1 | the same, base acceleration (relative displacement output) | `<= 1e-10` | `2.2e-15, 1.4e-15, 1.8e-15, 1.4e-15` | yes |
+| A1 | through `RandomStress::moments`, force; base | `<= 1e-10` | `1.6e-15`; `2.2e-15` | yes |
+| A1b | nu = 0.3, force, 6x6 matrix Err of `C_0, C_1, C_2, C_4` against the rank-one form | `<= 1e-10` | `1.3e-15, 2.2e-15, 1.5e-15, 1.9e-15` | yes |
+| A2 | nu = 0, `m = 3` and `m = 5`: worst Err of the stress rate against `|k_p|^m` times the channel rate | `<= 1e-10` | `2.1e-15`; `3.0e-15` | yes |
+| A3 | `C_1/C_0` against `f_1 I_1/I_0`; `C_4/C_0` against `f_1^4 I_4/I_0` (`f_1 = 1261.967247` Hz) | `<= 1e-6` each | `3.0e-10`; `2.6e-8` | yes |
+| A4 | cantilever, 8 modes, correlated forces, 512 points, 7680 pairs: max `C_ij^2/(C_ii C_jj)` for `C_1`; `C_4`; smallest diagonal; max `m_1^2/(m_0 m_2)`; max `m_2^2/(m_0 m_4)` | `<= 1 + 1e-9`; `<= 1 + 1e-9`; `>= 0`; `<= 1 + 1e-12`; `<= 1 + 1e-12` | `0.99969`; `0.99988`; `9.8e8` and `1.9e18` (positive); `0.9501`; `0.8038` | yes |
+| X1 | `real_route(false)` against `real_route(true)`, groups 3 and 6: `first_covariance`, `fourth_covariance`; real route against `spectral_response` | `<= 1e-12` | `0` (bit-equal), all six | yes |
+| X2 | nu = 0.3, `Excitation::cross`, pure delay `tau = 1/(4 f_1)`: matrix Err of `C_0, C_1, C_2, C_4` | `<= 1e-10` | `1.8e-15, 1.8e-15, 1.8e-15, 1.4e-15` | yes |
+| X2b | `max_p |C_1(tau)/C_1(0) - 1|` | `> 1e-3` | `0.321` | yes |
+| V1 | `von_mises_broadband_damage_rate` refused with key `"broadband"`, text contains `von Mises` and `Gaussian`, at all 320 points of nu = 0 (where `rms_von_mises` equals `rms_xx`, worst `|ratio - 1| = 0`) and of nu = 0.3 | all | all | yes |
+| V1b | the xx component accepted, finite and positive at all 320 points (nu = 0) | all | all | yes |
+| V2 | point `>= n`, component `>= 6`, NaN, `+inf`, `-inf` weights refused with key `"random stress"`; the all-zero combination (zero moments) refused by the broadband rate with key `"broadband"` (`m0`) | all | all | yes |
+| L1 | nu = 0.3, plane normal `(2,-1,2)/3`: `combination_moments` against `(w . s)^2 m_k/phi_e^2`, worst Err over 320 points and four moments | `<= 1e-10` | `1.9e-15` | yes |
+| N1 | A1 with the `k_p` of the next point | `> 1e-3` | `0.889` | as expected |
+| N2 | `|broadband/narrow-band - 1|` of the stress moments at point 0 | `>= 5e-3` | `1.117e-2` | yes |
+
+Every aggregate is passed through `worst()`, which returns NaN (and so fails) if any value is not finite; no `f64::max` over a NaN.
+
+Deviations: (1) the cantilever of A4 uses the pattern of ADR 0510 for `p1` (y force at the far top corner) and a different second
+pattern (`z` 1.0 and `y` 0.5 at the node `(1, 0, 0)`) so that the stress is multiaxial; the registration said only "two correlated
+force patterns". The set-up was fixed before the first run and not changed. (2) The estimates were conservative: A1 to A2
+came out at about `2e-15` against the estimated `1e-13`, and A3 `C_4` at `2.6e-8` against `2e-7`. (3) The cross-spectral loop of
+A1 and X2 is the same code as the real route's for the real loop, so X1 returns exactly zero (the planned estimate).
+
+Mutations (scratch copy `f589-scratch/mut`, own target dir `target-f589-mut`, one at a time, the two new test files run on each
+by `f589-scratch/mutate.py`, log `f589-scratch/mut.log`):
+
+| Id | Mutation | Caught by |
+|---|---|---|
+| M1 | real path `cov1` weighted `f^2` | A1 (all four rows of `C_1`, error 0.999), A1b, L1, A4 (`m_1^2/(m_0 m_2) = 1.5e6`), X1; the A2 rate then refuses the moments inside the test (a panic, so A3 and N1 did not print) |
+| M2 | real path `cov4` weighted `f^3` | A1, A1b, L1, A4, X1 |
+| M3 | complex loop `cov1` weighted `f^2` | X1 (`2.5e2`), X2 (`1.5e3`) |
+| M4 | complex loop `cov4` zeroed | X1 (1), X2 (1); A4 is not reached (it runs the real path, as noted in the registration table where it was named in error) |
+| M5 | no upper-triangle copy for the new matrices | A1b (`0.43`), L1, X2 (`0.43`). Not A4: it reads the lower triangle `C_ij`, which the mutation leaves at zero, so `C_ij^2 <= C_ii C_jj` holds trivially (a blind spot of A4, as registered it was expected to catch M5) |
+| M6 | `moments().m1` from `rate_covariance` | A1 (`RandomStress::moments`), A4 |
+| M7 | von Mises rate computed from von Mises moments | V1 (both states) |
+| M8 | `combination_moments` sums `w_i C_ii` | L1 (0.148) |
+| M9 | `cov2` weighted `w * (f * f) * s` | B1 (the bit record) |
+| M10 | `moments().m2` from `fourth_covariance` | A1 (`RandomStress::moments`), A4 |
+
+All ten caught. M5 was caught by A1b and X2 and not by A4 (a blind spot of A4, recorded here, not repaired).
+
+Not run: the workspace test suite (the lead runs the gate); a critical-plane search; a multi-pattern grid refinement.
+
+Gates on this branch (all run once, after the last code change): `cargo test -p rcfd-fem --release`: 823 passed, 0 failed, 224
+ignored; `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean; `cargo test -p
+rcfd-api --release --test baseline_hashes`: 3 passed, 1 ignored (unchanged, no edit of any hash table or golden file);
+`cargo test -p rcfd-cli --release --test docs_site`: 2 passed. The first `docs_site` run failed because the X2b row of the
+registration table contained the text `C_1[p][0][0](tau = 1/(4 f_1))`, which the docs-site renderer reads as a link; the
+wording of that table cell was changed (same quantity, same limit `> 1e-3`, written as `a_p/b_p`) and the test passed. No limit
+or check was changed.
+
+Decision by the registered rule: **done**. Every check B1, B2, A1 to A4, X1, X2, X2b, V1, V1b, V2, L1, N1, N2 met, every mutation
+caught (M5 not by A4, as recorded), the existing tests and the baseline hashes passing, fmt and clippy clean.
+
+Residual: (1) the uniaxial equality of a2 is checked on a one-mode basis, where stress is exactly proportional to the output
+displacement; with several modes the ratio is not constant and the clause has no meaning, so the multi-mode stress is checked
+only by A4 (positive semi-definiteness, Cauchy-Schwarz) and by the closed forms through the one-mode cases. (2) The von Mises
+refusal is unconditional (it does not look at the moments); a non-Gaussian rate for the equivalent stress is open (Q3).
+
+Open questions (options and recommendation):
+
+- Q1. Case-file key for the broadband fatigue output: none added. Options: (a) `[fatigue] method = "narrow-band" | "dirlik"`,
+  `stress = "xx" | ... | "normal:nx,ny,nz"`, outputs `damage_rate` and `life` per integration point; (b) leave it to the API.
+  Recommended: (a), with `stress = "von-mises"` refused with the reason of V1; it changes a case-file schema golden and needs the
+  maintainer's approval of the schema.
+- Q2. Cross-spectral path: works (X1, X2), taken as recommended.
+- Q3. A rate for a non-Gaussian equivalent stress (von Mises, principal stress). Options: a Gaussian-equivalent correction, a
+  Monte-Carlo history through the F-413 counter, or leave refused. Recommended: leave refused until a method is chosen and cited.
+- Q4. A critical-plane search over `combination_moments` (maximise the rate over plane normals). Recommended: a follow-up only if the
+  fan blade-root stress needs it (the dominant direction is usually the radial normal stress, a single component).
+
+## For the lead: roadmap entries
+
+Proposed status of F-589: **done**. Note:
+
+> ADR 0516, 2026-11-14: rcfd_fem::random RandomStress gains first_covariance (C_1, weighted by f) and fourth_covariance (C_4, weighted by f^4) beside covariance and rate_covariance, and ChannelResponse gains the same two matrices, from separate accumulators in spectral_response and spectral_response_cross (the real constant-coherence route and the complex loop; the existing fields are bit-identical, recorded in sa_random_stress_default_bits.rs at d41012db). New methods: RandomStress::moments(p, component), combination_moments(p, weights) for a linear combination such as a normal stress on a plane, broadband_damage_rate(p, component, m, c) and von_mises_broadband_damage_rate, which always refuses (key "broadband": the von Mises equivalent is not Gaussian). On the one-mode bar the moments m0, m1, m2, m4 of a component equal those of the output channel times the square of the stress per unit displacement within 2.2e-15 (nu = 0, force and base, 320 points; the 6x6 matrices of nu = 0.3 within 2.2e-15), the broadband rate of F-566 fed from a component equals the scaled channel rate within 3.0e-15 (m = 3 and 5), C_1/C_0 and C_4/C_0 equal the closed forms of ADR 0477 within 3.0e-10 and 2.6e-8, and a complex pure-delay cross-spectrum through RandomSolver agrees within 1.8e-15. Limits: Gaussian zero-mean stress, no critical-plane search, no case-file key.
+
+Follow-ups (numbers to be given by the lead):
+
+> Title: case-file key and output for the broadband fatigue life of a stress component. Deps: F-589, F-566. Acceptance: Every limit not stated here is registered in the ADR before the run. A [fatigue] section with method = "narrow-band" or "dirlik" and stress = a component or a plane normal reports the damage rate and the life 1/rate per integration point; stress = "von-mises" is refused with the reason of ADR 0516; a case without the section keeps its bits and the baseline hashes are unchanged; the schema golden is updated with the maintainer's approval.
