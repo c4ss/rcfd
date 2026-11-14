@@ -251,3 +251,15 @@ elastic supports) are refused by both new entry points. The device solves the re
 resident matrix across restarts); Chebyshev is checked only on the fast cube. Scaling is recorded, not asserted, on one
 machine shared with other building agents. No case-file keys, CLI, schema or MCP surface (A5 (a): library only), so no
 golden changes.
+
+## Amendment 1 (2026-11-14, written and committed before any mutation run)
+
+The registered checks R1 to R11, D1 to D4 and N1 to N4 have been run once (results in addendum 1). Before running the
+mutations I checked mutation M3 by arithmetic: the free-equation counts are 39 744 (cube) and 4 704 (Tet10 cantilever,
+measured in the R2 run), and 39 744 / P and 4 704 / P are multiples of 3 for P = 2, 4, 8 (19 872, 9 936, 4 968; 2 352, 1 176,
+588). Contiguous equal chunks of the free equations therefore end on node boundaries (each node's three free equations are
+consecutive), so M3 as registered splits no node on these models: it is an equivalent mutant for clause c6, a defect of the
+mutation set-up, not of the check. It is replaced, before any mutation run, by **M3'**: equations assigned by
+`g * p / (n + 1)` (chunk boundaries at `k (n + 1) / p`, which for these `n` fall inside a node, for example 19 873 = 3 * 6 624
++ 1 for P = 2 on the cube), ignoring nodes. Must be caught by R8 or by the build's own split refusal (which then fails R4 to
+R6 with "is split"). M3 as registered is not run; nothing else changes.
