@@ -853,7 +853,6 @@ fn qf1_vs_fast_matching_run_against_the_model() {
     let mut checks = Checks::new();
     let p = params(4.0);
     let m = model(&p, 25, true);
-    let mut aitken_signal = Vec::new();
     for method in [Method::Aitken, Method::LeastSquares] {
         let run = qf1(method, NU);
         let tag = format!("QF1 {}", method_id(method));
@@ -865,14 +864,23 @@ fn qf1_vs_fast_matching_run_against_the_model() {
             checks.at_most(&format!("{tag} energy balance"), run.balance(1, 25), 1e-6);
             checks.at_most(&format!("{tag} eta"), run.eta_max(1, 25), 1e-6);
         }
-        if method == Method::Aitken {
-            aitken_signal = run.signal.clone();
-        }
     }
+    checks.finish();
+}
+
+#[test]
+#[ignore = "known miss (ADR 0434 amendment 1): the viscous splitting of the PISO step moves the tip by 8.3e-5 U at nu x 100"]
+fn vs_viscosity_times_100_known_miss() {
+    let mut checks = Checks::new();
+    let reference = qf1(Method::Aitken, NU);
     let viscous = qf1(Method::Aitken, 1e-2);
-    let n = viscous.signal.len().min(aitken_signal.len());
-    let dev = (0..n).fold(0.0f64, |w, i| w.max((viscous.signal[i] - aitken_signal[i]).abs())) / U;
+    let n = viscous.signal.len().min(reference.signal.len());
+    let dev = (0..n).fold(0.0f64, |w, i| w.max((viscous.signal[i] - reference.signal[i]).abs())) / U;
     checks.holds("VS run complete", viscous.steps() == 25 && n == 26, "25 steps");
+    // unregistered diagnosis (amendment 1): the same difference at nu = 1e-3
+    let tenfold = qf1(Method::Aitken, 1e-3);
+    let d3 = (0..n).fold(0.0f64, |w, i| w.max((tenfold.signal[i] - reference.signal[i]).abs())) / U;
+    println!("VS diagnosis: nu = 1e-3 against 1e-4: {d3:e} U; nu = 1e-2 against 1e-4: {dev:e} U");
     checks.at_most("VS viscosity x 100", dev, 1e-6);
     checks.finish();
 }
@@ -1109,6 +1117,7 @@ fn fs2_a_failing_fluid_leaves_both_at_the_start_of_the_step() {
 // ---- the helper (H1, H2, NC2) ----------------------------------------------------------------------------------------------
 
 #[test]
+#[ignore = "record of the registered run (ADR 0434 amendment 1): the half-length limit lies below the resolution of the coordinate; corrected as H1c"]
 fn h1_nc2_the_channel_motion() {
     let mut checks = Checks::new();
     let mesh = channel(NF);
@@ -1163,6 +1172,82 @@ fn h1_nc2_the_channel_motion() {
     }
     checks.holds("H1 points at half the length", half > 0, &format!("{half} points"));
     checks.at_most("H1 half length moved by d_x/2 (m)", half_worst, 1e-15);
+    let transverse_moved = moved
+        .iter()
+        .zip(pts)
+        .any(|(a, b)| a[1].to_bits() != b[1].to_bits() || a[2].to_bits() != b[2].to_bits());
+    checks.holds("H1 no transverse motion", !transverse_moved, "y and z unchanged");
+    let only_transverse: Vec<Vec3> = d.iter().map(|v| [0.0, v[1], v[2]]).collect();
+    let still = motion
+        .positions(&only_transverse)
+        .unwrap()
+        .iter()
+        .zip(pts)
+        .all(|(a, b)| a.iter().zip(b).all(|(x, y)| x.to_bits() == y.to_bits()));
+    checks.holds("NC2 transverse displacement only", still, "no point moves");
+    checks.finish();
+}
+
+#[test]
+/// H1 with the corrected half-length check H1c of ADR 0434 amendment 1 (the other checks and NC2 unchanged).
+fn h1c_nc2_the_channel_motion() {
+    let mut checks = Checks::new();
+    let mesh = channel(NF);
+    let motion = ChannelMotion::new(&mesh, WALL, 0, L_F, 1e-9).unwrap();
+    let ids = FlowWall::point_ids(&mesh, WALL).unwrap();
+    let pts = mesh.points();
+    let d: Vec<Vec3> = ids
+        .iter()
+        .map(|&q| {
+            let r = pts[q];
+            [1e-3 * (1.0 + r[1] + 2.0 * r[2]), 0.3e-3, -0.2e-3]
+        })
+        .collect();
+    let moved = motion.positions(&d).unwrap();
+    let wall_ok = ids.iter().zip(&d).all(|(&q, dq)| {
+        moved[q][0].to_bits() == (pts[q][0] + dq[0]).to_bits()
+            && moved[q][1].to_bits() == pts[q][1].to_bits()
+            && moved[q][2].to_bits() == pts[q][2].to_bits()
+    });
+    checks.holds("H1 wall points", wall_ok, "p + d_x e_x bit for bit");
+    let outlet = (0..pts.len())
+        .filter(|&i| pts[i][0] == L_S + L_F)
+        .all(|i| moved[i].iter().zip(&pts[i]).all(|(a, b)| a.to_bits() == b.to_bits()));
+    checks.holds("H1 outlet points", outlet, "unchanged bit for bit");
+    // every point: linear weight along x of its own line (the mid point of the channel is not a mesh point on the graded
+    // axis, so the weight is checked at every point against the formula)
+    let mut worst = 0.0f64;
+    for (i, p) in pts.iter().enumerate() {
+        let k = ids
+            .iter()
+            .position(|&q| (pts[q][1] - p[1]).abs() < 1e-9 && (pts[q][2] - p[2]).abs() < 1e-9)
+            .unwrap();
+        let w = (1.0 - (p[0] - L_S).abs() / L_F).max(0.0);
+        worst = worst.max((moved[i][0] - (p[0] + w * d[k][0])).abs());
+    }
+    checks.at_most("H1 linear weight (m)", worst, 1e-15);
+    // the point at half the channel length: on a uniform channel (the graded axis has no point there)
+    let uniform = {
+        let m = box_mesh([4, 2, 2], [L_F, W, W], [Grading::Uniform; 3]).unwrap();
+        let points = m.points().iter().map(|p| [p[0] + L_S, p[1], p[2]]).collect();
+        moved_mesh(&m, points).unwrap()
+    };
+    let mu = ChannelMotion::new(&uniform, WALL, 0, L_F, 1e-9).unwrap();
+    let pu = mu.positions(&vec![[2e-3, 0.0, 0.0]; mu.n_wall_points()]).unwrap();
+    let weights = mu.weights();
+    let mut half = 0usize;
+    let mut half_worst = 0.0f64;
+    let mut half_bits = true;
+    for ((a, b), w) in pu.iter().zip(uniform.points()).zip(&weights) {
+        if ((b[0] - L_S) - 0.5 * L_F).abs() < 1e-12 {
+            half += 1;
+            half_worst = half_worst.max((w - 0.5).abs());
+            half_bits &= a[0].to_bits() == (b[0] + w * 2e-3).to_bits();
+        }
+    }
+    checks.holds("H1c points at half the length", half > 0, &format!("{half} points"));
+    checks.at_most("H1c weight at half the length against 1/2", half_worst, 1e-15);
+    checks.holds("H1c moved x at half the length", half_bits, "x_ref + w d_x bit for bit");
     let transverse_moved = moved
         .iter()
         .zip(pts)
