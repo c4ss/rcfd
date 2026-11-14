@@ -9809,7 +9809,7 @@ fixed by the item's registration ADR before any code.
     index (k = 0 or 2k = N) has an odd number of negative eigenvalues of K_eff is flagged unstable by
     RotatingSector::whirl_state with the full rotor's growth rate within 1e-8 relative.
   - note: From ADR 0416 question 1 and ADR 0420 question 1, recommendations taken on the maintainer's standing
-    instruction of 2026-11-11. ADR 0424, 2026-11-12: RotatingPart::with_nodal_springs adds nodal springs of any sign to
+    instruction of 2026-11-11. ADR 0424, 2026-11-13: RotatingPart::with_nodal_springs adds nodal springs of any sign to
     a rotating part after its pre-stress (opt-in; model supports stay positive). The cube on springs of ADR 0416 with
     its axial motion tied and a negative axial support has an odd count of negative eigenvalues of K_eff (1 below
     omega_0, 3 above) and is flagged unstable by whirl_state with the closed-form growth rate omega_a within 8.5e-12
