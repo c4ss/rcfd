@@ -902,3 +902,34 @@ fn a2_s3_s4_s5_n1_thick_plate_ratio_of_plate_modes() {
     }
     c.finish();
 }
+
+// ------------------------------------------------------------------------- added after the mutation run (gap of X8, see addendum)
+
+#[test]
+fn a3_scaled_and_masked_end_forces() {
+    use rcfd_fem::geometric::geometric_stiffness;
+    let mut c = Checks::new();
+    let s = rect_section();
+    let m_ref = 1000.0;
+    let m = beam_model(16, L, &s, 0);
+    let loaded = moment_loaded(&m, 0, m_ref, 0.0);
+    let r = solve_static(&loaded, &StaticOptions::default()).unwrap();
+    let pre = Prestress::from_static(&loaded, &r)
+        .unwrap()
+        .with_beam_resultants(&loaded, r.displacement_values(), [0.0; 2])
+        .unwrap();
+    let f1 = factors(&m, &pre, &BucklingOptions::new(2)).unwrap().factors[0];
+    let f2 = factors(&m, &pre.scaled(2.0), &BucklingOptions::new(2)).unwrap().factors[0];
+    println!("A3 factors {f1:.10e}, scaled by 2: {f2:.10e}");
+    c.at_most("A3 scaled: |2 f(2 pre)/f(pre) - 1|", (2.0 * f2 / f1 - 1.0).abs(), 1e-9);
+    let k0 = geometric_stiffness(&m, &pre, Some(1)).unwrap();
+    let kk = geometric_stiffness(&m, &pre.masked(|_| true), Some(1)).unwrap();
+    c.holds("A3 masked keeping all: the same bits", k0.val == kk.val, "bitwise");
+    let kn = geometric_stiffness(&m, &pre.masked(|_| false), Some(1)).unwrap();
+    c.holds(
+        "A3 masked keeping none: a zero matrix",
+        kn.val.iter().all(|&v| v == 0.0),
+        "exact",
+    );
+    c.finish();
+}
