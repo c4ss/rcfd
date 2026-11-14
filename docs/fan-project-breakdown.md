@@ -97,7 +97,7 @@ Status key: **exists** (done in the roadmap), **partial**, **missing**. Roadmap 
 | E2 | Rotor dynamics: shaft, bearings (stiffness, damping), critical speeds, response to imbalance and to blade-passing loads | missing |
 | E3 | Unsteady blade-load harmonics from C1 or C2 as the forcing | missing |
 | E4 | One-way load export to a structural model | partial (F-237) |
-| E5 | Blade and housing structural response, modal analysis, FSI | missing, deferred by decision (F-139, F-242) |
+| E5 | Blade and housing structural response, modal analysis, FSI | partial: one blade of the parametric fan as a clamped solid, static response to the centrifugal and a pressure load and the modes at rest, consistent and mesh-converged but not validated ([structural solver](structural-solver.md), F-387); housing and FSI missing (F-139, F-242) |
 
 ### F. Real-world degradation
 
