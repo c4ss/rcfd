@@ -234,3 +234,23 @@ Added check (registered now, before its run), to confirm the diagnosis:
 | TH3c | (stronger, diagnosis of TH3a) | plates P and Q: the in-plane displacements minus `alpha dT (X - X_0)` minus the in-plane rigid rotation `omega e_Z x (X - X_0)` fitted by least squares (`omega = sum (r_i x d_i)_Z / sum |r_i|^2`), relative to `alpha dT max |X - X_0|`; and `max |theta_i . e_Z - omega| / (alpha dT)` | `1e-12` each | if the diagnosis holds, the rounding of the strain field: `~1e-14` |
 
 The decision is partial by the registered rule whatever TH3c gives (a registered check missed).
+
+## Amendment 2 (2026-11-14, written and committed after the run of TH3c, before the corrected run)
+
+The run of TH3c (`f525-scratch/run2.log`, commit `0d1d3d1c` of the copy test) met its first row (the in-plane displacements less a
+fitted rigid rotation: `3.6e-15` on P and Q, limit `1e-12`) and missed its second row (`2.35e-10` on P, `1.40e-10` on Q). The
+second row's set-up is defective: its maximum runs over node 0, whose `theta_z` is held at zero by the support, so it measures
+`|0 - omega| = |omega|` (the printed `omega / (alpha dT)` is `2.3528e-10` on P and `-1.4010e-10` on Q, equal to the missed
+numbers). A diagnostic on a scratch copy (`f525-scratch/tree`, not a registered check) found the residual `|K u - f|` of the
+computed solution `9.3e-10` N on P and `1.0e-8` N on Q against `|f| = 8.6e5` and `3.6e6` N (`1.1e-15`, `2.9e-15` relative), the
+same order as the residual of the exact free expansion (`8.1e-10`, `4.1e-9` N): the solve is backward stable and the TH3a error is
+the forward error of a soft mode. The mode: translations and `theta_z` of every node rotating rigidly by `omega`, except
+`theta_z` of node 0, held at zero; its energy lives only in the drilling term of the elements at node 0, `~ alpha_d G t A_e / 16
+~ 8e3` N m, so a residual moment `~1e-9` N m gives `omega ~ 1.4e-13` rad, the measured `2.35e-10 alpha dT`.
+
+The test of that run stays as the ignored record `th1_th3_n3_n5_free_plate_after_known_miss`. Corrected row (registered now,
+before its run), in the running copy `th1_th3_n3_n5_free_plate_after_amendment2` (every other row of the copy unchanged):
+
+| id | clause | check | limit | estimate |
+| --- | --- | --- | --- | --- |
+| TH3d | (stronger, diagnosis of TH3a) | plates P and Q: `max |theta_i . e_Z - omega| / (alpha dT)` over the nodes that are not nodes of element 0 (node 0's element, where the mode carries `theta_z` from 0 to `omega`); the values at the other three nodes of element 0 are printed, not checked | `1e-12` | the mode has `theta_z = omega` outside element 0; its spread into the membrane field is held by stiffnesses `1e3` times the drilling one: `~2e-13` |
