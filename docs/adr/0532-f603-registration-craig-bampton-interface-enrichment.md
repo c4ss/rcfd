@@ -255,3 +255,119 @@ vectors: **ST-E3b / ST-E4b**, the same parts and options, the single-part assemb
 0)` with the model's load, `expand` of the coordinates, against `solve_static` of S, every equation; limit `<= 1e-10` each,
 estimate 1e-13 (the measure of ADR 0511 ST-P4: 1.3e-14 to 9.5e-14). Both forms are in the decision rule. MU3 and MU4 are also
 expected to be caught by ST-E3b if they break the M-orthonormality the expansion relies on; nothing else changes.
+
+## Addendum 1: results (2026-11-14)
+
+Commits on `f603-work` from 291a210c: a97a833d (this registration, alone), 02f0cef2 (the D6 digests printed at 291a210c by
+`sa_cms_enrich_default_bits.rs`, before any library line), e727b1b4 (Amendment 1, before any run), 6ce8d2a1 (the option in
+`cms.rs` and the checks `tests/sa_cms_enrich.rs`). Each registered check was run once, release profile (`cargo test --release -p
+rcfd-fem --test sa_cms_enrich --test sa_cms_enrich_default_bits -- --test-threads 1 --nocapture`, log `f603-scratch/run1.log`, 8.7
+s). No amendment was made after a run. No check missed, so there is no `*_known_miss` test.
+
+Library lines changed: `crates/rcfd-fem/src/cms.rs` only (the module comment, `CmsOptions::interface_blocks` with the builder
+`interface_enrichment`, the `reduce` doc line, and the enrichment block after the pattern vectors, guarded by
+`interface_blocks > 0`). `damped.rs` and every shared solver file untouched.
+
+| Id | Clause | Limit | Measured | Met |
+|---|---|---|---|---|
+| D6 | c6 | `==` | 12 of 12 digests of 291a210c equal; ADR 0511 D4 and ADR 0474 D2 pass in the crate run | yes |
+| D7 | c6 | `==` | `interface_enrichment(0)` equal for `m = 5`, C1 and the ADR 0511 option | yes |
+| E-P1 | c1 | exact | E1 A 27, B 28; E2 A 54, B 55; C0 with one block B 27, A 27 | yes |
+| E-P2 | c1 | `<= 1e-10` | `M_qR` 1.4e-16 to 2.7e-16; `M_RR - I` 1.1e-15 to 1.8e-15 | yes |
+| E-P3 | c1 | `<= 1e-8` | block 1 (E1) 5.4e-16; block 1 (E2) 3.6e-16; block 2 (E2) 5.1e-16 | yes |
+| NC-P3 | c1 control | `>= 1e-6` | 3.0e-2 | yes |
+| E-SP | design | limits | asymmetry after 0, 0; before 1.3e-15; `M_r` ratio 7.5e-7 (E1), 4.6e-7 (E2) | yes |
+| E-TH | design | bits | threads 1 and 4 bit-identical | yes |
+| E-FP | design | exact | header 2, equal in bits, 55 vectors | yes |
+| LF | c2 | `<= 1e-3`; count 10 | **E1 2.93e-6** (14830.3 rad/s), **E2 1.35e-10**; count 10 and 10, `omega_half` 16785.42 | yes |
+| NC-LF | c2 control | `>= 1e-3` | C1 5.11e-3 | yes |
+| OFF1 | c3 | `<= 1e-2`, at least 60 points | **E1 1.06e-3**, **E2 2.93e-5** (both at 16281.9 rad/s); 72 points | yes |
+| NC-OFF | c3 control | `>= 1e-2` | C1 0.106 (15778.3 rad/s) | yes |
+| SL1 | c4 | `< -1e-14` | E1 and E2 -1.05e-6 (f1; down to -5.09e-3 at f10) | yes |
+| SL2 | c4 | `< -1e-14` | E1 and E2 -1.05e-6 | yes |
+| SL3 | c4 | `>= -1e-9` | E1 -1.4e-12, E2 -3.7e-12 | yes |
+| NC-S | c4 control | not `< -1e-14` | 0 | yes |
+| ST-E | c5 | `<= 1e-10` | E1 1.5e-12, E2 1.5e-12 | yes |
+| ST-E2 | c5 | `<= 1e-10` | 3.3e-12, 4.4e-13, 1.5e-12 | yes |
+| ST-E3 | c5 | `<= 1e-10` | 4.3e-14 (mid), 3.3e-14 (xmax), 4.3e-14 (mid, `m = 0`) | yes |
+| ST-E3b | c5 | `<= 1e-10` | 1.3e-14 (mid), 5.7e-14 (xmax), 3.2e-14 (mid, `m = 0`) | yes |
+| ST-E4 / ST-E4b | c5 | `<= 1e-10` | 3.3e-14 / 5.7e-14 (subspace path, 55 vectors) | yes |
+| NC-ST | c5 control | `>= 1e-6` | E2c 1.29e-3 | yes |
+
+Records: E2c (no load vector) has its frequencies within 9.2e-11 but its off-resonance response off by 6.6e-2 at 13092.6 rad/s
+(first point above 1e-2 at 5203.5), as the probe predicted: the response needs both the static correction of the load and the
+interface enrichment. At the axial resonance 8179.0 rad/s the error is 1.1e-4 with E1 (`delta` 4.2e-7) and 8.6e-7 with E2. E2
+against E1 lowers the ten frequencies by 7e-13 to 2.9e-6. `|K_qR|` over the largest `K_r` entry is 2.7e-16 to 3.2e-16. Every
+number is within a few percent of the probe's.
+
+Mutations (scratch copy `f603-scratch/mut`, a git archive of 6ce8d2a1, script `mutate.py`, `CARGO_TARGET_DIR` `target-f603-mut`,
+logs `mutlogs/mut-MU*.log`, summary `mutate.log` and `mutate-mu10b.log`):
+
+| Id | Caught by |
+|---|---|
+| MU1 | E-P3 (3.5e-4, 7.7e-5) |
+| MU2 | E-P3 (1.2e-2, 1.0e-3), LF E1 (2.0e-3), OFF1 E1 (3.9e-2) |
+| MU3 | E-P3 (up to 0.60), LF (4.2e-3, 2.9e-3), OFF1 (8.7e-2, 6.1e-2) |
+| MU4 | E-P2 (`M_RR - I` 0.99), E-P3, E-SP (`M_r` ratio 1.1e-16) |
+| MU5 | E-P1 (E2: 27 and 28), E-P3 block 2 (0.63), E-FP |
+| MU6 | E-P1 (E2: 27 and 28), E-P3 block 2 (0.63), E-FP |
+| MU7 | LF (5.1e-3), OFF1 (0.10); not SL2 (deviation 2) |
+| MU8 | E-P1 (C0 with one block: 0 on A and B) |
+| MU9 | E-P1 (A: 0), LF (3.3e-3), OFF1 (6.5e-2) |
+| MU10 | D6 (1 of 12 equal), NC-P3, SL1, SL2, NC-LF, NC-OFF; not D7 (deviation 3) |
+| MU11 | NC-S |
+
+Every mutation was caught by at least one registered check.
+
+Other runs: `cargo test -p rcfd-fem --release`: every test binary passed (915 passed, 0 failed, by the summed result lines of
+211 binaries, doc-tests included; log `fem-all.log`). `cargo test -p rcfd-api --release --test baseline_hashes`: 3 passed, 1 ignored
+(log `baseline.log`). `cargo test -p rcfd-cli --release --test docs_site`: 2 passed (log `docs_site.log`). `cargo clippy -p
+rcfd-fem --all-targets -- -D warnings`: clean. `cargo fmt -p rcfd-fem --check`: clean. Not run: the workspace test suite (the
+lead's gate).
+
+### Deviations
+
+1. The mutation harness first ran the two test binaries with cargo's default fail-fast, so when `sa_cms_enrich` failed the D6
+   binary was not run. That matters only for MU10 (the mutation D6 is for): MU10 was run a second time with `--no-fail-fast` (log
+   `mutlogs/mut-MU10.log`, the first kept as `mut-MU10-first.log`, summary `mutate-mu10b.log`) and D6 caught it. No registered
+   check was re-run.
+2. MU7 (`M_bR = 0` for the enrichment vectors) was expected to be caught by SL2, LF and OFF1; LF and OFF1 caught it, SL2 did not
+   (the least lowering against the ADR 0474 option was -2.8e-10 under the mutation). The registration's reason was wrong: the
+   enrichment vectors are M-orthogonal to the load's vector but not K-orthogonal to it, and that vector keeps its `M_bR`, so the
+   mutated vectors still couple to the interface through `K_RR` and lower the frequencies a little. The catch by LF and OFF1 stands.
+3. MU10 was expected to be caught by D6 and D7; D6 caught it, D7 could not (both sides of its comparison carry the mutation). D7
+   checks only that `interface_enrichment(0)` is the same option as not asking; D6 is the check of the default path.
+4. E-P3 measured 5e-16 against the estimate 1e-10: the test's dense solve and the library's skyline solve agree far better than
+   the condition-number estimate.
+
+### Decision
+
+**done** by the registered rule: every check met at its registered run, every mutation caught by a registered check, no amendment
+after a run (Amendment 1 was written and committed before any run).
+
+### Remaining questions
+
+1. A case-file key. None is added. Options: (a) `"interface_enrichment": p` in the part entry of the substructure key that F-553
+   (reduced parts in an ordinary model) needs anyway, default 0; (b) a key now on its own. Recommendation: (a), with F-553.
+2. The default number of blocks. Options: (a) keep 0 (bit-identical defaults, the caller asks); (b) make 1 the default when a
+   cutoff is given, which changes default results of the cutoff path. Recommendation: (a); document that one block (the residual
+   flexibility of the constraint modes) gave 3e-6 frequencies and 1e-3 response to half the lowest omitted frequency on the bar,
+   two blocks 1e-10 and 3e-5, both with the load's residual vector.
+3. Large interfaces: the vectors grow as `nb` per block. Options: (a) leave it (the caller chooses `p`); (b) a follow-up with an
+   interface reduction (characteristic constraint modes) before the enrichment. Recommendation: (a) now, (b) only when a fan hub
+   or blade model with a large interface needs it.
+4. F-559 (ADR 0511, partial): its missed clauses b2 and b3 hold on the same bar with this option added. Options: (a) leave F-559
+   partial with its note pointing to F-603; (b) mark F-559 done through F-603. Recommendation: (a), since F-559's acceptance
+   was about the load patterns alone.
+
+### For the lead: roadmap entries
+
+Proposed status of F-603: **done**. New note:
+
+> Structural solver, advanced tier. Optional. Follow-up of F-559 (ADR 0511, 2026-11-14). DONE (ADR 0532, 2026-11-14). CmsOptions::interface_enrichment(p) adds to each part p Krylov blocks of (K_ii, M_ii) started from the constraint modes: block 1 is K_ii^-1 (M_ib + M_ii Psi), which after the M-orthogonalisation against the kept modes is the residual flexibility of the omitted fixed-interface modes applied to the inertia load of the constraint modes; each later block is K_ii^-1 M_ii of the vectors kept before; each vector M-orthonormalised twice against the kept modes and every vector before it (dropped below 1e-8), stored as residual vectors (part file version 2 unchanged). Off by default and bit-identical when off (12 digests of the ADR 0511 paths at 291a210c). The bar of ADR 0469 with the corner load, the cutoff 32964 rad/s and the load's residual vector: the ten frequencies below half the lowest omitted fixed-interface frequency (16785 rad/s) within 2.9e-6 with one block (27 vectors per part) and 1.3e-10 with two, against 5.1e-3 without; the response at the 72 off-resonance points within 1.1e-3 and 2.9e-5, against 0.106 without; every one of the ten lowered by at least 1.05e-6 against the cutoff alone; statics of the corner load 1.5e-12. The enrichment without the load's residual vector keeps the frequencies but misses the response (6.6e-2), so the two are used together. Eleven mutations all caught.
+
+Proposed addition at the end of the F-559 note (status unchanged, partial):
+
+> The two clauses missed by ADR 0511 (frequencies within 1e-3 and the off-resonance response within 1 percent up to half the lowest omitted fixed-interface frequency) hold on the same bar when the interface enrichment of F-603 (ADR 0532, 2026-11-14) is added to the residual vectors.
+
+No follow-up item is proposed (remaining question 3 only if a model with a large interface needs it).
