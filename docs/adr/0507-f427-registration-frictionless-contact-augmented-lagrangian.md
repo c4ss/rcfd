@@ -410,3 +410,11 @@ corrected run.
 4. **A case-file key** (b3): not added. Recommendation for later: a `[[contact]]` table with `contactor` (surface set), `target`
    (surface set or `plane = { point, normal }`), `penalty`, `tolerance`, optional `initial_gap` (per node set), read by the static
    nonlinear case, the result writing node pressures and gaps.
+
+## Amendment 1 (2026-11-14): the reaction of P1; written while writing the tests, before any run of a check
+
+P1 registered "the reaction at `xmin` against `-F` over `F_max`". That is wrong once the stop carries load: the equilibrium of
+the bar is `F - R + S = 0` with the stop's force `R` and the support's reaction `S`, so the closed form is `S = -(F - R) =
+-min(F, E A g/L)` (the reactions of the driver are `f_int + f_c - f` at the prescribed equations, summed over the `x` components
+of `xmin`). The corrected P1 quantity is `|S + min(F, E A g/L)| / F_max <= 1e-8`; the other two parts of P1 and every other
+check are unchanged. No check had been run.
