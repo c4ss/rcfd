@@ -382,3 +382,95 @@ Negative controls and observation:
    `po1b_shell3_in_the_shell_output` is the same test with the same limits; it is run once after this amendment is committed.
    Added to B2: the `rcfd-io` tests pass. By the decision rule PO1 can now only be met after an amendment made after its run, so
    the item is **partial** whatever the corrected run gives.
+
+## Addendum 1: results (2026-11-14)
+
+The registered run is commit 39af6a49 (`f419-scratch/run1.log`, `run1-post.log`); the corrected PO1 (`po1b`) ran once after
+amendment 1 (`run2-po1b.log`). Main b154dbe6 (F-409) was then merged in (commit 4f9fd6fb: Shell3 dispatched before the per-point
+materials in `assemble_stiffness`; the X1 record chain `after_f413_f414`, `after_f409` (ignored record), `after_f419`, whose copy
+now has mat_ortho and mat_table landed as well). B2 and B3 were run on the merged state. `cargo fmt` reformatted F-419 lines only
+after the run (commit 15075a33, layout only); sa_shell3, sa_shell3_bits, sa_scaffold and po1b passed again after it.
+
+| id | limit | measured | met |
+| --- | --- | --- | --- |
+| B1 | exact | 13 of 13 digests equal the base | yes |
+| B2 | pass | rcfd-fem 83 test binaries, 0 failed; rcfd-io + rcfd-post 67 binaries, 413 passed, 0 failed | yes |
+| B3 | pass | baseline_hashes 3 passed, 1 ignored (the existing record) | yes |
+| PT1 | `1e-8` | `1.72e-14`; stresses of 18 of 18 elements | yes |
+| PT2 | `1e-8` | `1.71e-15`; m and Q `2.68e-16` | yes |
+| PT3 | `1e-8` | `8.35e-15` | yes |
+| PT4 | `1e-8` | `4.25e-15`; Q and N `8.69e-13` | yes |
+| PT5 | `1e-8` | `9.34e-14`; N of every element `1.50e-15` | yes |
+| PT6 | `1e-8` | `4.39e-14`; m of every element `1.32e-14` | yes |
+| SS1 | `2e-2` | `1.84e-3` (ratio 0.9981577495) | yes |
+| SS2 | `3e-2` | `2.56e-3` (ratio 0.9974430087) | yes |
+| SS3 | `1e-2` | `3.35e-12`, `2.85e-12` | yes |
+| SS4 | `5e-7` | `3.53e-7` (c = 0.004062352661) | yes |
+| CT1 | `1e-2` | `1.40e-4` (ratio 0.9998605036) | yes |
+| CT2 | `2e-2` | `1.31e-6` (elements 14, 15, top and bottom) | yes |
+| RG1 | `3e-2` | `8.93e-4` (ratio 0.9991065415) | yes |
+| CY1 | `1e-2` | `1.76e-3` (range 0.9982414459 .. 1.0016208371) | yes |
+| FQ1 | `2e-2` | `1.71e-3` both diagonals (f1 48.0684613149 Hz) | yes |
+| FR1 | `1e-6`; `f_7 > 0` | `1.85e-7`; `f_7` 395.41 Hz | yes |
+| FR2 | `1e-4`; `f_7 > 0` | `2.23e-6`; `f_7` 40.82 Hz | yes |
+| FR3 | 6 | 6 and 6 | yes |
+| SE1 | 6; `>= 1e-7` | 6, `3.78e-6` (t = 0.01); 6, `7.06e-6` (t = 0.1) | yes |
+| SE2 | `1e-12`; exact | `2.10e-16`, `1.67e-16`; symmetric bit for bit | yes |
+| ISO1 | `1e-12` | `8.40e-16` largest | yes |
+| AN1, AN2, AN3 | exact; pass | refused naming element 1, 0.9000 deg and the limit; 1.1 deg solves; collinear refused (`geometry`) | yes |
+| S1, N2, N3 | exact | as registered (node 2 named; NotYetSupported naming Shell3 and `shell3::FOLLOW_UP`; property, shell pressure) | yes |
+| LD1 | `1e-12` | `2.31e-16`, `2.61e-16`, `2.05e-16` | yes |
+| LD2 | `1e-12` | `2.17e-16`; moments 0 | yes |
+| LD3 | `1e-8` | `5.63e-12`; `4.01e-15` | yes |
+| M1 | `1e-12` | `2.22e-16`, `1.03e-16`, `5.07e-16` | yes |
+| PO1 | exact | registered run missed (writer refused cell type 5); po1b after amendment 1: arrays bit-equal, types `[9, 5, 5]` and `[5, 5, 5, 5]` | after amendment |
+| P1 to P6 | `1e-5` | largest `2.24e-9` (N4), all others `<= 8.2e-11` | yes |
+| N1 | `> 6` | 31 | yes |
+| N4 | `< 0.95` | 0.8988341458 | yes |
+| N5 | `< 0.2` | `2.863e-3` | yes |
+| O1 | printed | 0.9027895620 .. 1.0950504406 | observation |
+
+Mutations (scratch copy of 4f9fd6fb, `f419-scratch/mutlogs`), each caught:
+
+| id | caught by |
+| --- | --- |
+| MU1 | SS2, P1 (and P2 to P6) |
+| MU2 | PT3, PT4, PT6, SS1, SS2, CT1, CT2, RG1, CY1, FQ1, P1 to P5; ISO1 not (the mutant is isotropic in its own way) |
+| MU3 | SE1 (9 zeros), AN2, N2 (singular stiffness); FR1 and FR3 not reached: the modal solve refused (a cluster fills the subspace) |
+| MU4 | PT1, PT5, SE2 |
+| MU5 | PT3, PT4, PT6, SS1 to SS3, CT1, CT2, RG1, FQ1, ISO1, SE1, N4, P1 to P6 |
+| MU6 | M1, P5, P6 |
+| MU7 | LD2, SS1, SS2, CY1, N4, P1, P4 |
+| MU8 | AN1 |
+| MU9 | N2 |
+| MU10 | P1 to P6 |
+| MU11 | PT1 to PT6 (stresses of 0 of 18), CT2 (no stress, panic), PO1 (po1b) |
+| MU12 | LD1 |
+| MU13 | LD3 |
+| MU14 | PO1 (po1b: the writer refuses 6 indices for cell type 9) |
+| MU15 | S1, N3 |
+
+Deviations: PO1 met only after amendment 1 (rule: partial). Not run: nothing registered was left out; the whole workspace suite is
+the lead's gate. fmt and clippy (`-p rcfd-fem -p rcfd-post -p rcfd-io --all-targets -D warnings`): clean after 15075a33.
+
+**Decision: partial**, by the rule: PO1 was met only after an amendment written after its run. Every other check is met and
+every mutation caught.
+
+Remaining questions (options, recommendation):
+
+1. The stabilisation `alpha = 0.1` (L1): (a) keep; (b) a study of `alpha` against SS2 and CY1 in a follow-up. Recommend (a).
+2. MU3 reached FR1 and FR3 only as a refused modal solve: (a) accept (the test fails either way); (b) a follow-up check with a
+   larger subspace that measures the extra zeros. Recommend (a); N1 already measures them (31).
+3. Curved-surface pressure (L4, O1): (a) leave as a limit; (b) a follow-up. Recommend (b).
+
+## For the lead: roadmap entries
+
+Proposed status of F-419: **partial**.
+
+> F-419 (ADR 0454, 2026-11-14): Shell3, a three-node flat shell for triangulated surfaces: CST membrane, Reissner-Mindlin bending, MITC3 shear with the Lyly-Stenberg-Vihinen stabilisation (alpha 0.1, longest edge), Shell4's drilling penalty, consistent mass with rotary inertia; pressure, gravity, centrifugal, nodal body force and thermal loads, centroid stresses, VTK_TRIANGLE output. Patch tests to 1e-13, SS plate 0.998 and 0.997 of Navier at t/a 0.01 and 0.001 (plain MITC3 locks at 0.899), cantilever 0.99986, pinched ring 0.9991, cylinder within 1.8e-3, free plates six zero modes; models without Shell3 bit-identical. Partial: the .vtu check met only after amendment 1 added the triangle cell to rcfd_io::vtk.
+
+Follow-up items:
+
+- **Allman membrane for Shell3** (deps F-419): a drilling-unknown membrane; acceptance: in-plane bending of a cantilever strip within 2 % of beam theory on a 8 x 2 mesh, patch tests kept.
+- **Consistent pressure on curved facet meshes** (deps F-419): acceptance: the one-diagonal 32 x 16 cylinder (O1) within 1 % of `p R^2/(E t)` at every node.
+- **Shell3 on the remaining paths** (deps F-419 and the Shell4 follow-ups of ADR 0432): nonlinear, transient, buckling, cyclic, multigrid take Shell3 when they take Shell4; acceptance: the N2 refusals replaced by the Shell4 checks repeated on triangles.
