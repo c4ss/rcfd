@@ -300,3 +300,16 @@ about two minutes in release is an ignored heavy record run once, with a fast te
 2. **Where J2 is refused.** Every path but the nonlinear static solve refuses it naming `mat_j2::FOLLOW_UP` (taken: a material
    with history on a linear path would silently be elastic).
 3. **The beam model.** Solid elements over the depth of a narrow section (D6), taken for (b2).
+
+## Amendment 1 (2026-11-14, written after the registered run of commit cb17790f and before any corrected run)
+
+The set-up of T2 for the Hex20 elastic branch was defective: the random nodal displacement of amplitude `2e-4` yielded 3 of
+the 27 points of the distorted Hex20 (its set-up check "points yielded" missed: `3 of 27`), so the branch was not elastic. The
+Hex20 gradients of a random nodal field are larger than those of Hex8 (mid-edge nodes at half the distance). The measured value
+of that run (`6.9e-11`) is kept as recorded, not counted for (a1).
+
+**T2b** (corrected set-up, limit unchanged): the distorted Hex20 of T2 drawn from its own stream `Rng::new(3)` (seed `0xF422_0475
++ 3`), the J2 material of T2 (`H_iso = 1.5e9`, `H_kin = 1e9`), zero committed state, random nodal displacement of amplitude
+`5e-5` (a quarter: the largest point strain of T2's draw scaled by four below the yield strain), set-up check: no point
+yielded; measure and limit as T2, `max |K - K_fd| / max |K| <= 1e-6`, `h = 1e-9`. The record of the run of cb17790f stays as the
+ignored test `t2_element_tangent_central_differences`; T2b is `t2b_hex20_elastic_tangent`. Run once.
