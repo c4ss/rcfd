@@ -8404,7 +8404,7 @@ fixed by the item's registration ADR before any code.
     residual of the active-set change; the asymptotic step is quadratic and reaches the floor at once). Case-file key
     not added (recommended: j2 = { base, yield_stress, isotropic, kinematic }, nonlinear static study only). Follow-ups
     proposed in ADR 0475 (convergence-order reading for an active-set change; refined sphere octant).
-- [ ] **F-423** Nonlinear transient dynamics: Newton iteration inside the Newmark and generalised-alpha step
+- [~] **F-423** Nonlinear transient dynamics: Newton iteration inside the Newmark and generalised-alpha step
   - depends on: F-408, F-397, F-398
   - acceptance: Every limit not stated here is registered in the ADR before the run. At a load factor of 1e-6 the
     history equals the linear one of F-398 within 1e-9 relative. A stiff slender bar pinned at one end and released from
@@ -8416,8 +8416,22 @@ fixed by the item's registration ADR before any code.
     the spectral radius 1 the generalised-alpha result equals Newmark within 1e-10. A run split by save and restore has
     the bits of the unsplit run, with a material state included. A step that does not converge after the registered
     halvings is an error with the time.
-  - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0326; the registration is
-    written by the implementation agent before any code.
+  - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). PARTIAL. Size M. ADR 0479, 2026-11-14
+    (registration of stub ADR 0326): nonlinear transient dynamics in rcfd-fem (nl_transient.rs): Newton inside the
+    Newmark and generalised-alpha (averaged internal force) step, on the Newton driver of ADR 0404 without a second loop
+    (inertia and damping as a driver contribution, solve_from), J2 states of F-422 carried, step halving (5 levels) and
+    an error with the time. Met: load factor 1e-6 against F-398 within 7.5e-14 (limit 1e-9), pendulum released from the
+    horizontal period 2.09e-4 and energy 2.76e-4 of its swing over five periods (Newton residual tolerance 1e-7 by
+    amendment 1, the 1e-10 default below the rounding floor), large axial oscillation period 8.64e-5 against the
+    energy-integral quadrature, rho_inf = 1 against Newmark 1.3e-13 and 1.6e-14 (J2 bar), split run with the J2 state
+    bit for bit (both methods), halving bit for bit and the error with the time, threads bit for bit, default bits (7
+    digests) and baseline hashes unchanged; seven of eight mutations caught. Missed (known misses, diagnosed): the free
+    spinning bar (Newmark stops at step 851 of 1000 by the nonlinear instability of the trapezoidal rule; linear
+    momentum at rounding up to the blow-up), the free Hex8 of amendment 2 (residual floor 1.17e-10 against 1e-10 at step
+    50), the bit equality of the four end nodes of the axial oscillator (spread 1.9e-14); the mutation dropping the
+    inertia from the residual reference is not caught. Case-file key not added (recommended: [study] kind = "transient"
+    with nonlinear = true). Follow-ups proposed in ADR 0479 (energy-momentum conserving step; residual floor of the
+    total Lagrangian internal force under large rotation and translation).
 - [ ] **F-424** Follower pressure, arc-length continuation, and modes about a nonlinear equilibrium
   - depends on: F-408, F-395, F-396, F-397
   - acceptance: Every limit not stated here is registered in the ADR before the run. Follower pressure: the load
