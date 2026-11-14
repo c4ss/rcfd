@@ -156,3 +156,68 @@ surprise, not as a failure.
 - The limits are sized to the set-up's own rounding sensitivity: they do not show that the per-point path is accurate to 1e-12
   on a stiff model; they show that it is as accurate as the isotropic path's own conditioning allows.
 - The tabulated material (TR3 of ADR 0459, bit-equal) and the cyclic paths are not re-checked here.
+
+## Addendum 1: results (2026-11-14)
+
+The registered run, made once: `cargo test -p rcfd-fem --release --test sa_transient_iso_equiv -- --nocapture` on commit d1230ce0
+(log `w49i-work/f545-scratch/run1.log`). Registration at commit 949d85ea; no limit, set-up or test was changed after the run.
+
+| Check | Limit | Measured (u; v) | Met |
+|---|---|---|---|
+| P0 probe and rule before the run | present | the probe table and rule above, committed before any test code | yes |
+| EQ-H20E `Fixed(I)` | `<= 5e-11` | 1.65e-12; 9.25e-12 | yes |
+| EQ-H20E `Fixed(rot)` | `<= 5e-11` | 3.85e-12; 6.24e-12 | yes |
+| EQ-H20E `Cylindrical` | `<= 5e-11` | 2.23e-12; 8.99e-12 | yes |
+| EQ-H20T `Fixed(I)`, `Fixed(rot)`, `Cylindrical` | `<= 2e-12` | 2.34e-13; 5.64e-13 / 3.41e-13; 2.52e-13 / 7.49e-14; 7.78e-13 | yes |
+| EQ-H8E `Fixed(I)`, `Fixed(rot)`, `Cylindrical` | `<= 6e-13` | 1.49e-14; 5.73e-14 / 6.14e-14; 1.21e-13 / 6.85e-14; 3.83e-14 | yes |
+| EQ-H8T `Fixed(I)`, `Fixed(rot)`, `Cylindrical` | `<= 2e-12` | 1.12e-14; 3.42e-13 / 1.48e-14; 2.29e-13 / 6.84e-15; 3.91e-13 | yes |
+| NC1 `E` x (1 + 1e-6), `u` | `> 100 L` | 1.19e-6 (H20E), 1.73e-6 (H20T), 3.14e-6 (H8E), 3.29e-7 (H8T) | yes |
+| NC2 `ISO` rerun | `== 0` | 0 on all four, `u` and `v` | yes |
+| B1 default paths | empty `src` diff, default bits pass | `git diff --stat 1043d8c6 -- crates/*/src` empty; `sa_ortho_rotating_default_bits` 1 passed | yes |
+
+The H20E `Fixed(I)` and `Fixed(rot)` numbers are those of ADR 0459 (1.65e-12, 9.25e-12, 3.85e-12, 6.24e-12): the run is
+deterministic and the set-up is the same, so the previously missed numbers are now inside a limit derived from the probe of the
+same set-up, as the probe of that ADR's amendment 1 anticipated. The largest ratio of a measured number to its limit is 0.19
+(H20E, 9.25e-12 against 5e-11); the largest ratio to the probe's largest value is 0.86 (H20E `Fixed(I)` velocity, 9.25e-12
+against 1.08e-11); the factor 4 was not tested near its edge.
+
+Mutations (library `mat_ortho.rs` on a scratch copy `w49i-work/f545-scratch/mut`, the test run once per mutant, logs
+`mut_Mu1.log` to `mut_Mu5.log`):
+
+| Mutant | Result | Caught by |
+|---|---|---|
+| Mu1 `rotate_elasticity` as `T C T^T` | 8 numbers missed (1.3e-2 to 1.7e1 against limits 6e-13 to 5e-11) | `Fixed(rot)` and `Cylindrical` on all four set-ups; `Fixed(I)` unaffected, as predicted |
+| Mu2 shear `c[3][3] = 2 g[0]` | 12 of 12 EQ rows missed (2e-3 to 7) | every material on every set-up |
+| Mu3 sign of `c[0][1]` | 12 of 12 EQ rows missed (4e-2 to 2e1) | every material on every set-up |
+| Mu4 shear order swapped | 0 missed, test passes | not caught: equivalent under isotropy, as registered |
+| Mu5 `strain_rotation` from `R^T` | 0 missed, test passes | not caught: equivalent under isotropy, as registered |
+
+Mu1 to Mu3 caught; Mu4 and Mu5 are the two registered predicted-equivalent mutants (excluded from the decision rule). That the
+isotropic equivalence cannot see a swapped shear order or an inverse rotation of the axes is a limit of the identity, not of the
+implementation; those are seen by the orthotropic checks of ADR 0452 and 0457 (TR1, Q1).
+
+fmt and clippy: `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean. Tests run:
+`sa_transient_iso_equiv`, `sa_ortho_rotating_default_bits`, both release. Not run: the rest of `sa_ortho_rotating` and the
+`si_transient*` tests, since no library line changed (empty `src` diff); the gate is the lead's.
+
+Deviations: none. Not covered: see "Limits of this item".
+
+Decision by the registered rule: **done**. Every EQ number within its probed limit, NC1, NC2, B1 as stated, Mu1 to Mu3 caught,
+nothing changed after the run.
+
+Remaining questions: (1) the ignored record `tr1_tr2_tr3_transient_known_miss` of ADR 0459 keeps its 1e-12 limit and stays a
+record; F-542's own status (partial) is the lead's to reconsider: its single miss (TR2 on the Hex20 block) is now met by a
+registered, probed limit in this item. Options: (a) mark F-542 done with a note pointing at this item; (b) keep it partial.
+Recommendation (a), since the miss was a defect of the registered limit, diagnosed and now re-registered, and no library line
+was involved. (2) The transient identity is checked for one step load and one integrator; other loads could be probed the same
+way if the maintainer wants a wider claim; recommendation: not now.
+
+### For the lead: roadmap entries
+
+Proposed status of F-545: **done**.
+
+> ADR 0463, 2026-11-14: the transient integrator with isotropic constants in an orthotropic material (Fixed(I), a general rotation, cylindrical axes) equals the isotropic material on Hex20 and Hex8 models on both paths (elimination and transformation) within limits taken from a one-ulp probe disclosed before the registration (limit = 4 x the largest of six probe values of the set-up, rounded up: Hex20 elimination 5e-11, Hex20 transformation 2e-12, Hex8 elimination 6e-13, Hex8 transformation 2e-12); measured at most 9.25e-12, 7.8e-13, 1.2e-13 and 3.9e-13 respectively (the 9.25e-12 is the ADR 0459 TR2 number that missed 1e-12; the set-up's own one-ulp spread is 1.1e-11). A relative change of 1e-6 in E is seen at 1e-7 to 3e-6. Three of three isotropy-visible mutations caught (transposed Bond product, shear factor, Poisson sign); a swapped shear order and an inverse axes rotation are equivalent under isotropy and not seen, as registered. Test-only: no library line changed; default paths bit-identical. Test sa_transient_iso_equiv.rs.
+
+Note for F-542 (if the lead takes option (a)):
+
+> ADR 0459, 2026-11-14, with ADR 0463: the one miss (TR2 on the Hex20 block, 9.25e-12 against 1e-12) is a defect of the registered limit, not of the path; the same numbers are inside the probed limit 5e-11 of ADR 0463 (a one-ulp change of the isotropic constants moves that set-up by 1.1e-11).
