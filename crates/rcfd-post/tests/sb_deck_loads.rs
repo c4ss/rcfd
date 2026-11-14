@@ -516,8 +516,10 @@ fn tube_temperature_free_expansion() {
     c.finish();
 }
 
-/// N2 (a warped face) and N5 (a Tri3 surface).
+/// N2 (a warped face) and N5 (a Tri3 surface). Ignored record (ADR 0436 amendment 1): the registered run measured N2's moment
+/// difference 1.14e-17 against `> 1e-6`, because the warp is symmetric about the face's diagonal; N5 met. Corrected by N2a.
 #[test]
+#[ignore = "ADR 0436 amendment 1: record of the registered run; N2's warp was symmetric (defective set-up), see n2a"]
 fn negative_controls_warped_and_triangles() {
     let mut c = Checks::new();
     let base = hex_box([0.0, 0.0, 1.0], [1.0, 1.0, 0.2], [1, 1, 1]).unwrap();
@@ -542,5 +544,30 @@ fn negative_controls_warped_and_triangles() {
     let tets = tet_box([0.0; 3], [1.0; 3], [2, 2, 2]).unwrap();
     let res = shell_from_surface_set(&tets, "zmin", SurfaceParam::Plane { axes: [0, 1] }).map(|s| s.solid_nodes.len());
     c.err_names("N5 Tri3 surface refused", res, &["face ", "of element ", "3 nodes"]);
+    c.finish();
+}
+
+/// N2a (ADR 0436 amendment 1): the warped face of the pre-registration arithmetic, corner `(1.3, 1, d)`, `d = 0.01`.
+#[test]
+fn n2a_warped_asymmetric_face() {
+    let mut c = Checks::new();
+    let base = hex_box([0.0, 0.0, 1.0], [1.0, 1.0, 0.2], [1, 1, 1]).unwrap();
+    let mut nodes = base.nodes().to_vec();
+    let k = nodes.iter().position(|x| dist(*x, [1.0, 1.0, 1.0]) < 1e-12).unwrap();
+    nodes[k] = [1.3, 1.0, 1.01];
+    let mut warped = SolidMesh::new(nodes).unwrap();
+    warped
+        .add_block(base.blocks()[0].kind(), base.blocks()[0].connectivity().to_vec())
+        .unwrap();
+    warped
+        .add_surface_set("zmin", base.surface_set("zmin").unwrap().to_vec())
+        .unwrap();
+    let shell = shell_from_surface_set(&warped, "zmin", SurfaceParam::Plane { axes: [0, 1] }).unwrap();
+    let deck = shell_deck(&shell.surface, &[P0], 1).unwrap();
+    let deck = Deck::parse(&deck.to_string_checked().unwrap()).unwrap();
+    let forces = deck_pressure_loads(&warped, "zmin", &deck, 1, TOL).unwrap();
+    let e = resultant_errors(&warped, &forces, &deck, 1, [0.5, 0.5, 1.0]);
+    c.at_most("N2a warped face |F_n - F_d|/S_d", e[0], 1e-12);
+    c.above("N2a warped face |M_n - M_d|/(S_d L_d)", e[1], 1e-6);
     c.finish();
 }
