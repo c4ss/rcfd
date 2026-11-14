@@ -1738,6 +1738,21 @@ No source was read for F-418; every item is cited from memory and derived in ADR
 | ERP `(rho c/2) int |V_n|^2 dS` (peak), `rho c int v_rms^2 dS` (RMS); plate mode `rho c A v0^2/8` | derived | definition (radiation efficiency one) |
 | J1 by `(1/pi) int_0^pi cos(t - x sin t) dt`, Struve `H1(x) = (2x/pi) int_0^1 sqrt(1 - t^2) sin(x t) dt` | from memory | integral representations, each checked against its power series (1e-15, 6e-15) |
 | Sound power reference 1e-12 W | common standard value | the power-level reference; third-octave numbering of ADR 0066 |
+
+## F-551 radiation reactance and surface pressure of a baffled plane (ADR 0488)
+
+No source was read for F-551; every item is cited from memory and derived in ADR 0488 (derivations 1 to 6; numpy checks
+`f551-scratch/estimate.py` and `estimate2.py`). The impedance closed form with J1 and H1 is the one verified in ADR 0468. No
+measured data.
+
+| Item | Status | Source |
+|---|---|---|
+| In-plane `int_polygon dS/R = sum_edges d ln((R+ + s+)/(R- + s-))` (signed distance `d` to the edge line, tangent coordinates `s-`, `s+`) | derived | polar integration about the point; the edge-sum form of D. R. Wilton, S. M. Rao, A. W. Glisson, D. H. Schaubert, O. M. Al-Bundak and C. M. Butler, IEEE Trans. Antennas Propag. AP-32 (1984) 276-281: NOT read |
+| Square of side `L`: centre `4 L ln(1 + sqrt 2)`, corner `2 L ln(1 + sqrt 2)`; rectangle `a x b` at a corner `a ln((b + sqrt(a^2+b^2))/a) + b ln((a + sqrt(a^2+b^2))/b)`; right triangle of legs `L` at the right angle `sqrt 2 L ln(1 + sqrt 2)` | derived | from the edge sum by hand; numpy and the A1 check to 4.4e-16 |
+| Potential of a uniform disk at an in-plane point, `int_disk dS/R = 4 a E(r/a)` | from memory | checked at `r = 0` (`2 pi a`) and `r = a` (`4 a`) by hand |
+| Added mass of a baffled piston `8 rho a^3/3` (low-frequency limit of `rho c S H1(2 k a)/(k a)/omega`) | derived | `H1(x) = 2 x^2/(3 pi) + O(x^4)`; Kinsler, Frey, Coppens and Sanders, and Morse and Ingard, chapter 7: NOT read |
+| Surface continuity `P(x + h n) = P(x) - i omega rho V_n h + O(h^2)` | derived | the Euler equation at the plane |
+
 ## F-430 substructuring: static condensation and the Craig-Bampton reduction (ADR 0469)
 
 No source was read for F-430; the two papers are cited from memory for the names and the published form. Every formula used is

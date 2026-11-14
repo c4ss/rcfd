@@ -10800,7 +10800,7 @@ fixed by the item's registration ADR before any code.
     than with the scale of ADR 0458; the default results of every existing case stay bit-identical.
   - note: Numerics. Follow-up of F-536 (ADR 0458, 2026-11-14): the K1 miss at the pressure extremes. A case key for the
     criterion needs the maintainer's schema approval.
-- [ ] **F-551** Radiation reactance and surface pressure of a baffled plane: analytic self-face integrals of the Rayleigh kernel
+- [~] **F-551** Radiation reactance and surface pressure of a baffled plane: analytic self-face integrals of the Rayleigh kernel
   - depends on: F-418
   - acceptance: Every limit not stated here is registered in the ADR before the run. The surface pressure of a baffled
     plane by the Rayleigh integral with the singular part 1/R integrated analytically over each face; the radiation
@@ -10808,7 +10808,22 @@ fixed by the item's registration ADR before any code.
     in resistance and reactance at k a = 0.1, 0.5, 2 and 10 with faces of a tenth of a wavelength; the resistance equal
     to the power of F-418 within 1e-6; the low-frequency reactance giving the added mass 8 rho a^3/3 within 2 percent at
     k a = 0.1.
-  - note: Structural solver, advanced tier. Follow-up of F-418 (ADR 0468, 2026-11-14).
+  - note: Structural solver, advanced tier. Follow-up of F-418 (ADR 0468, 2026-11-14). PARTIAL. ADR 0488, 2026-11-14:
+    rcfd-post solid_acoustic: BaffledPlane::surface_pressure and surface_pressures (the Rayleigh integral on the plane,
+    the singular part 1/R integrated analytically over each face by the in-plane edge sum polygon_inverse_distance, the
+    velocity at the point subtracted and the bounded rest by the quadrature points of F-418), radiation_impedance
+    (complex power, Z = 2 Pi/<|V_n|^2>, Z/(rho c S), added mass Im Z/omega), quadrature_points; all additive, the
+    existing results bit-identical (four digests). Baffled piston on the meshes of ADR 0468 (4 rings x 64 rim segments,
+    16 x 100 at k a = 10; faces of a tenth of a wavelength or finer): resistance within 3.2e-3, 3.1e-3, 2.2e-3, 5.5e-4
+    and reactance within 2.3e-3, 2.2e-3, 5.6e-5, 2.7e-3 of rho c pi a^2 (1 - J1(2ka)/(ka) + i H1(2ka)/(ka)) at k a =
+    0.1, 0.5, 2, 10 (the inscribed polygon dominates); resistance equal to the F-418 power to 8.0e-14; added mass at k a
+    = 0.1 within 5.0e-3 of 8 rho a^3/3; analytic face integrals equal to closed forms to 4.4e-16; disk potential within
+    2.7e-3 of 4 a E(r/a); centre pressure within 1.7e-3 of rho c V (1 - e^{-i k a}); a non-uniform velocity continuous
+    with the F-418 field pressure to 6.9e-5; negative controls (coarse mesh 3.8e-2, naive collocation 1.8e-2 and 5.0e-2)
+    as registered. Partial because one of eight mutations (the guard of an edge through the point, giving NaN) was not
+    caught by the registered tests (their largest-error aggregation dropped NaN); caught after amendment 1 by a
+    NaN-propagating copy. Not covered: unbaffled or curved radiators, a mutual impedance matrix of several velocity
+    fields, feedback of the added mass into the structure.
 - [~] **F-552** Craig-Bampton with residual vectors of the interior loads and kept modes chosen by a cutoff frequency
   - depends on: F-430
   - acceptance: Every limit not stated here is registered in the ADR before the run. An option of the reduction of ADR
