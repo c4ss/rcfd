@@ -10458,7 +10458,7 @@ fixed by the item's registration ADR before any code.
     nodes merged within 1e-8; with a pre-stress the undamped direct solve equals the F-399 mode superposition with the
     pre-stressed basis and all modes within 1e-8; defaults bit-identical.
   - note: Structural solver, advanced tier. Follow-up of F-412 (ADR 0448, 2026-11-14; named F-412b there).
-- [ ] **F-529** Nested dissection and supernodal L D L^T for the sparse direct solver; heavy record of 3e5 unknowns
+- [~] **F-529** Nested dissection and supernodal L D L^T for the sparse direct solver; heavy record of 3e5 unknowns
   - depends on: F-431
   - acceptance: Every limit not stated here is registered in the ADR before the run. A nested-dissection ordering and a
     supernodal numeric factorisation in rcfd_linalg::sparse_chol: on the 7-point 30^3 grid the factor entries at most
@@ -10466,7 +10466,23 @@ fixed by the item's registration ADR before any code.
     unknowns is solved with the relative residual below 1e-10 in less than 8 GB, time and memory recorded; a refusal
     names an equation whose elimination position differs from its index; the static solve reports which factor it built;
     factor and solution bit-identical for 1 and 8 threads; the default solver's results keep their bits.
-  - note: Structural solver, advanced tier. Follow-up of F-431 (ADR 0447, 2026-11-14).
+  - note: Structural solver, advanced tier. Follow-up of F-431 (ADR 0447). ADR 0503, 2026-11-14:
+    rcfd_linalg::sparse_chol::nested_dissection_order (level structures from a pseudo-peripheral vertex, the level of
+    least |S| / (|below| |above|) as the separator, minimum-degree leaves of at most 16) and
+    nested_dissection_order_with_points (the median plane of the longest axis, the smaller one-sided boundary as the
+    separator), SparseOrdering::NestedDissection, and SupernodalLdlt (fundamental supernodes, multifrontal extend-add,
+    partial factorisation in panels of 32 with the later-column update split over the rayon pool in a fixed summation
+    order); rcfd_fem::solve::StaticSolver::SupernodalDirect ("sparse-ldlt-supernodal", nested dissection by the node
+    coordinates, refused on the transformation path and with refinement) and SolveReport::factor (DirectFactor, returned
+    by the function that built the factor). 7-point 30^3: nnz(L) 3 360 870 against minimum degree's 5 659 458 (0.594,
+    limit 0.6), relative residual 1.2e-15 (limit 1e-12). Clamped Hex8 cube of 304 842 unknowns: solved in 81 s with
+    relative residual 2.2e-12 (limit 1e-10) at a peak working set of 5.04 GB (limit 8 GB), nnz(L) 421 295 142 (3.37 GB;
+    minimum degree needed 848 257 887). A refusal names equation 137 at elimination position 270; the static report
+    names the factor built (supernodal, envelope, minimum degree, none for CG); factor and solution bit-identical for 1
+    and 8 threads (grid and solid); 17 digests of the default and existing sparse paths equal to base; baseline_hashes
+    and every rcfd-linalg and rcfd-fem test pass. Partial by the registered rule only because mutation M11 (the
+    single-child condition of the supernode test dropped) survived; diagnosed as equivalent (the merged supernode stores
+    no extra entry and the extend-add never reaches the merged column). Done is the maintainer's call.
 - [~] **F-530** Stability of the non-iterated PISO step at large diffusion numbers
   - depends on: F-421
   - acceptance: Every limit not stated here is registered in the ADR before the run. The divergence of the PISO step
