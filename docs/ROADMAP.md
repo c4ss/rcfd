@@ -11068,7 +11068,7 @@ fixed by the item's registration ADR before any code.
     harmonic clause and an interface enrichment. Open (maintainer): restate the off-resonance and frequency clauses as
     the bands that hold (to 4000 rad/s within 1 percent; frequencies below 9500 rad/s other than the axial one within
     1e-3), or keep them and take F-603. Follow-up F-603 (optional).
-- [ ] **F-560** Convergence order of the Newton driver with plasticity: a reading for an active-set change
+- [~] **F-560** Convergence order of the Newton driver with plasticity: a reading for an active-set change
   - depends on: F-422
   - acceptance: Every limit not stated here is registered in the ADR before the run. On the sphere and beam solves of
     ADR 0475 (S1, S2, S3, P1), a reading of the convergence order fit for an active-set change, registered before the
@@ -11076,7 +11076,19 @@ fixed by the item's registration ADR before any code.
     set of yielded points, with a floor of 1e-14, or r_{k+1} <= C r_k^2 over the last two corrections with C
     registered), gives an order >= 1.8 or the bound on every increment, and the continuum tangent (mutation MU1 of ADR
     0475) fails it.
-  - note: Structural solver, advanced tier. Follow-up of F-422 (ADR 0475, 2026-11-14).
+  - note: Structural solver, advanced tier. Follow-up of F-422. PARTIAL (mutation MR4 uncaught: monotonic loading cannot
+    separate it; every registered check met). ADR 0515, 2026-11-14: reading Q(C, F) of the Newton convergence order for
+    an active-set change: every pair of consecutive residuals r_k, r_{k+1} (k >= 1) whose correction did not change the
+    set of yielded integration points satisfies r_{k+1} <= max(C r_k^2, F), C = 10, F = 1e-13 (the rounding of the
+    residual peaks at 1.45e-14), with an informative pair in every increment; opt-in record on the driver
+    (NewtonOptions::record_active_set, LoadStep::yielded and set_changed, 47 inserted lines in nonlinear.rs, results
+    bit-identical with it on or off). Met on S1, S2, S3 and the six P1 beams of ADR 0475: no violation in 265 read
+    pairs, least C 0.22 .. 3.32 (S1 0.97, S2 1.18, S3 1.96); the continuum tangent (MU1) violates it on all nine solves
+    (S3 does not converge); without the exemption of the set-change pairs S3 fails, with C = 1 S2 and S3 fail. The order
+    of the last three residuals stays 1.27 .. 1.44 and does not exist in 4 to 5 increments of each P1 solve, so the
+    reading is a bound, not an order. Not caught: the mutation that compares the trial with the previous trial instead
+    of the committed state (equivalent in monotonic loading); follow-up F-NEW. The reading is general; F-600 can reuse
+    it with the contact status as the set. Follow-up F-606.
 - [~] **F-561** Thick sphere with J2 on a refined octant: residual hoop stress after unloading
   - depends on: F-422
   - acceptance: Every limit not stated here is registered in the ADR before the run. The partly plastic sphere of ADR
@@ -11215,21 +11227,24 @@ fixed by the item's registration ADR before any code.
     change only the value of eta are seen only by the missed check. Follow-up for a second-order Ritz error. Follow-up
     F-575. The second-order Ritz error that clause a4 needed is reported by F-575 (ADR 0492, 2026-11-14): schur_eta
     within 3.4e-4 of the measured error.
-- [x] **F-570** Energy-momentum conserving step (Simo and Tarnow) for nonlinear transient dynamics
+- [~] **F-570** Energy-momentum conserving step (Simo and Tarnow) for nonlinear transient dynamics
   - depends on: F-423
   - acceptance: Every limit not stated here is registered in the ADR before the run. The spinning bar of ADR 0479 over
     ten turns, linear momentum within 1e-10, angular momentum within 1e-6, energy within 1e-6 relative.
-  - note: Structural solver, advanced tier. ADR 0514, 2026-11-14: nl_transient gains StepKind::EnergyMomentum
-    (NlTransientOptions::energy_momentum), the Simo-Tarnow midpoint step with the internal force B_NL(F_mid)^T (S_n +
-    S_{n+1})/2 and the velocity 2 du/h - v_n, solved by Newton with a symmetric tangent; isotropic St. Venant-Kirchhoff
-    solids of the Full formulation only (other materials, F-bar blocks and driver contributions refused naming ADR
-    0514); loads averaged over the step, Rayleigh damping, halving, save/restore (state magic RCFDNLE1) and threads as
-    the Method step. Spinning bar of ADR 0479 over ten turns (residual tolerance 1e-7): linear momentum 1.8e-13 (1e-10),
-    angular momentum 6.6e-13 (1e-6), energy 1.6e-13 (1e-6); the trapezoidal step on the same bar drifts 8.8e-6 in energy
-    by step 600. Tolerance probe: the three limits hold down to the residual tolerance 1e-2. Linear limit equals F-398
-    within 7.6e-14, pendulum energy within 1.2e-14, damped energy balance within 1.7e-14. Default step bit-identical
-    (B0, baseline_hashes). Seven of eight mutations caught (one by a check added after the mutation run). No case-file
-    key.
+  - note: Structural solver, advanced tier. PARTIAL by the standing rule (the refusal check F1e had a defective set-up
+    and was corrected as F1ec after the run; mutation MU4, the load not averaged over the step, was caught only by L2e,
+    added after the mutation run; all three acceptance limits met on the first run, proposed done by the ADR). ADR 0514,
+    2026-11-14: nl_transient gains StepKind::EnergyMomentum (NlTransientOptions::energy_momentum), the Simo-Tarnow
+    midpoint step with the internal force B_NL(F_mid)^T (S_n + S_{n+1})/2 and the velocity 2 du/h - v_n, solved by
+    Newton with a symmetric tangent; isotropic St. Venant-Kirchhoff solids of the Full formulation only (other
+    materials, F-bar blocks and driver contributions refused naming ADR 0514); loads averaged over the step, Rayleigh
+    damping, halving, save/restore (state magic RCFDNLE1) and threads as the Method step. Spinning bar of ADR 0479 over
+    ten turns (residual tolerance 1e-7): linear momentum 1.8e-13 (1e-10), angular momentum 6.6e-13 (1e-6), energy
+    1.6e-13 (1e-6); the trapezoidal step on the same bar drifts 8.8e-6 in energy by step 600. Tolerance probe: the three
+    limits hold down to the residual tolerance 1e-2. Linear limit equals F-398 within 7.6e-14, pendulum energy within
+    1.2e-14, damped energy balance within 1.7e-14. Default step bit-identical (B0, baseline_hashes). Seven of eight
+    mutations caught (one by a check added after the mutation run). No case-file key. Follow-up F-607. Open
+    (maintainer): the case-file key step = "energy_momentum" under a nonlinear transient study.
 - [ ] **F-571** Rounding floor of the total Lagrangian internal force under large rotation and translation
   - depends on: F-423, F-397
   - acceptance: Every limit not stated here is registered in the ADR before the run. S3 of ADR 0479 (free Hex8, 50
@@ -11697,3 +11712,19 @@ fixed by the item's registration ADR before any code.
     bits and the baseline hashes are unchanged; the schema golden is updated with the maintainer's approval.
   - note: Structural solver, advanced tier. Follow-up of F-589 (ADR 0516, 2026-11-14). NEEDS THE USER: a case-file key
     and schema golden change.
+- [ ] **F-606** Active-set record of the Newton driver on a load and unload solve
+  - depends on: F-560
+  - acceptance: Every limit not stated here is registered in the ADR before the run. On a J2 solve in which integration
+    points leave the yielded set during an increment (the load and unload sphere S4 of ADR 0475 or the bar of ADR 0475
+    U4 with a reversal), the recorded yielded count of every iteration equals the number of points whose trial state
+    differs from the committed state counted independently from the states, some iteration of some increment records a
+    smaller count than the one before it, and the mutation of ADR 0515 MR4 (trial compared with the previous trial) is
+    caught.
+  - note: Structural solver, advanced tier. Follow-up of F-560 (ADR 0515, 2026-11-14).
+- [ ] **F-607** Energy-momentum step for hyperelastic materials (the discrete gradient of Gonzalez)
+  - depends on: F-570, F-425
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A NeoHookean spinning bar (the bar
+    of ADR 0479 with a NeoHookean material of the same small-strain moduli) over ten turns, linear momentum within
+    1e-10, angular momentum within 1e-6, energy within 1e-6 relative; on an isotropic elastic model the step equals the
+    F-570 step within 1e-12.
+  - note: Structural solver, advanced tier. Follow-up of F-570 (ADR 0514, 2026-11-14).
