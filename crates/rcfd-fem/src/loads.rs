@@ -361,7 +361,14 @@ fn add_line_load(f: &mut [f64], dofs: &DofMap, mesh: &SolidMesh, e: usize, q: Ve
 
 /// The uniform pressure on a shell element as its consistent nodal forces and moments (ADR 0432 D5, ADR 0454 D2); with
 /// `angle_weighted` a Shell3 element takes the angle-weighted split of ADR 0461 instead.
-fn add_shell_pressure(f: &mut [f64], dofs: &DofMap, mesh: &SolidMesh, e: usize, p: f64, angle_weighted: bool) -> Result<()> {
+fn add_shell_pressure(
+    f: &mut [f64],
+    dofs: &DofMap,
+    mesh: &SolidMesh,
+    e: usize,
+    p: f64,
+    angle_weighted: bool,
+) -> Result<()> {
     let nodes = mesh.element_nodes(e);
     let coords: Vec<Vec3> = nodes.iter().map(|&n| mesh.nodes()[n]).collect();
     let fe: Vec<f64> = if mesh.element_kind(e) == crate::mesh::ElementKind::Shell3 && angle_weighted {

@@ -69,13 +69,15 @@ fn shell_model(nodes: Vec<Vec3>, tris: Vec<usize>, quads: Vec<usize>, t: f64) ->
     if !tris.is_empty() {
         count += tris.len() / 3;
         mesh.add_block(ElementKind::Shell3, tris).unwrap();
-        mesh.set_block_property(block, BlockProperty::shell(t).unwrap()).unwrap();
+        mesh.set_block_property(block, BlockProperty::shell(t).unwrap())
+            .unwrap();
         block += 1;
     }
     if !quads.is_empty() {
         count += quads.len() / 4;
         mesh.add_block(ElementKind::Shell4, quads).unwrap();
-        mesh.set_block_property(block, BlockProperty::shell(t).unwrap()).unwrap();
+        mesh.set_block_property(block, BlockProperty::shell(t).unwrap())
+            .unwrap();
     }
     mesh.add_element_set("all", (0..count).collect()).unwrap();
     mesh.add_node_set("all", (0..n).collect()).unwrap();
@@ -144,8 +146,9 @@ fn cylinder(nq: usize, nz: usize, kind: Kind, jitter: bool, load: fn(&str, f64) 
 }
 
 fn range(v: &[f64]) -> (f64, f64) {
-    v.iter()
-        .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), &x| (lo.min(x), hi.max(x)))
+    v.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), &x| {
+        (lo.min(x), hi.max(x))
+    })
 }
 
 /// `max |v / target - 1|`.
@@ -181,11 +184,19 @@ fn cy_angle_weighted_cylinder() {
     ];
     for (name, kind) in patterns {
         let (ur, _) = cylinder(32, 16, kind, false, aw);
-        c.at_most(&format!("CY2 {name}: max |u_r / ref / cos(pi/128) - 1|"), dev(&ur, c128), 1e-7);
+        c.at_most(
+            &format!("CY2 {name}: max |u_r / ref / cos(pi/128) - 1|"),
+            dev(&ur, c128),
+            1e-7,
+        );
     }
 
     let (ur, _) = cylinder(16, 8, &|i, _| if i % 4 == 0 { None } else { Some(0) }, false, aw);
-    c.at_most("CY3 mixed Shell3 + Shell4: max |u_r / ref / cos(pi/64) - 1|", dev(&ur, c64), 1e-7);
+    c.at_most(
+        "CY3 mixed Shell3 + Shell4: max |u_r / ref / cos(pi/64) - 1|",
+        dev(&ur, c64),
+        1e-7,
+    );
 
     let (ur, _) = cylinder(32, 16, &ONE, true, aw);
     let (lo, hi) = range(&ur);
@@ -232,7 +243,11 @@ fn ld_n1_angle_weighted_loads() {
         }
     }
     c.at_most("LD1 sum of the nodal forces against p A e_3, relative", err, 1e-12);
-    c.holds("LD1 nodal moments zero", moments == 0.0, &format!("max |m| = {moments:e}"));
+    c.holds(
+        "LD1 nodal moments zero",
+        moments == 0.0,
+        &format!("max |m| = {moments:e}"),
+    );
 
     // LD2: the right isosceles triangle and an equilateral triangle.
     let x = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
@@ -263,14 +278,24 @@ fn ld_n1_angle_weighted_loads() {
     let (_, fa) = cylinder(16, 8, &none, false, Load::shell_pressure_angle_weighted);
     let (_, fd) = cylinder(16, 8, &none, false, Load::shell_pressure);
     let same = fa.len() == fd.len() && fa.iter().zip(&fd).all(|(a, b)| a.to_bits() == b.to_bits());
-    c.holds("LD4 Shell4 load vector equal bit for bit", same, &format!("{} entries", fa.len()));
+    c.holds(
+        "LD4 Shell4 load vector equal bit for bit",
+        same,
+        &format!("{} entries", fa.len()),
+    );
 
     // N1: refusals.
     let mut m = SolidModel::new(hex_box([0.0; 3], [2.0, 1.0, 1.0], [2, 1, 1]).unwrap());
     let r = m.add_load(Load::shell_pressure_angle_weighted("all", 1.0));
     c.holds(
         "N1 on Hex8 elements refused",
-        matches!(&r, Err(FemError::InvalidValue { key: "shell pressure", .. })),
+        matches!(
+            &r,
+            Err(FemError::InvalidValue {
+                key: "shell pressure",
+                ..
+            })
+        ),
         &format!("{r:?}"),
     );
     let tri = shell_model(
@@ -337,13 +362,19 @@ fn ld3_simply_supported_plate_unchanged() {
     }
     let centre = idx(n / 2, n / 2);
     let mut w = Vec::new();
-    for load in [Load::shell_pressure("all", 1000.0), Load::shell_pressure_angle_weighted("all", 1000.0)] {
+    for load in [
+        Load::shell_pressure("all", 1000.0),
+        Load::shell_pressure_angle_weighted("all", 1000.0),
+    ] {
         let mut m = shell_model(nodes.clone(), tris.clone(), vec![], t);
         m.add_load(load).unwrap();
         let r = solve_static_with(&m, &pres, &[], &StaticOptions::default()).unwrap();
         w.push(r.displacement(centre)[2]);
     }
-    println!("LD3 centre deflection: default {:.12e}, angle-weighted {:.12e}", w[0], w[1]);
+    println!(
+        "LD3 centre deflection: default {:.12e}, angle-weighted {:.12e}",
+        w[0], w[1]
+    );
     c.at_most("LD3 |w_c(new) / w_c(default) - 1|", rel(w[1], w[0]), 1e-10);
     c.finish();
 }

@@ -66,13 +66,15 @@ fn cylinder(nq: usize, nz: usize, kind: &dyn Fn(usize, usize) -> Option<usize>) 
     if !tris.is_empty() {
         count += tris.len() / 3;
         mesh.add_block(ElementKind::Shell3, tris).unwrap();
-        mesh.set_block_property(block, BlockProperty::shell(t).unwrap()).unwrap();
+        mesh.set_block_property(block, BlockProperty::shell(t).unwrap())
+            .unwrap();
         block += 1;
     }
     if !quads.is_empty() {
         count += quads.len() / 4;
         mesh.add_block(ElementKind::Shell4, quads).unwrap();
-        mesh.set_block_property(block, BlockProperty::shell(t).unwrap()).unwrap();
+        mesh.set_block_property(block, BlockProperty::shell(t).unwrap())
+            .unwrap();
     }
     mesh.add_element_set("all", (0..count).collect()).unwrap();
     mesh.add_node_set("all", (0..n).collect()).unwrap();
