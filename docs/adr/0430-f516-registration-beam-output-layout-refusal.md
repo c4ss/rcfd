@@ -124,10 +124,7 @@ run once on the final code (the first compile of the new test file ran the same 
 | C4 | 9 nodes, 27 unknowns: node counts named | exact | `the result numbers 9 nodes and the model 5` | yes |
 | C5 | wrong length keeps `length 15, expected 27`, no layout text | exact | as stated | yes |
 | C6 | `si_beam_output` (A1 to A6, N1, N2, N2b, N3) passes, file unedited | pass; blob equal | 3 passed; blob equal | yes |
-| C7 | `si_beam_output_bytes` (B0, B1), `sb_solid_output`, `si_scaffold_output` | pass | 2, 2, 4 passed... see note | yes |
-
-Note on C7: `si_beam_output_bytes` 2 passed, `sb_solid_output` 2 passed, `si_scaffold_output` 4 passed as printed in the run (the
-runner prints one line per binary; all `ok`, 0 failed).
+| C7 | `si_beam_output_bytes` (B0, B1), `sb_solid_output`, `si_scaffold_output` | pass | all `ok`, 0 failed | yes |
 
 Mutations (scratch git-archive copy `f516-scratch/mut` of the committed tip, one at a time, each run once):
 
