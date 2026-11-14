@@ -47,6 +47,7 @@ fn invalid(key: &'static str, reason: String) -> FemError {
 
 const SPECTRUM: &str = "spectrum";
 const RANDOM: &str = "random";
+const STRESS: &str = "random stress";
 
 mod cross;
 pub use cross::{
@@ -624,6 +625,10 @@ pub struct ChannelResponse {
     pub covariance: Vec<Vec<f64>>,
     /// The covariance `C_2` weighted by `f^2`, row-major.
     pub rate_covariance: Vec<Vec<f64>>,
+    /// The covariance `C_1` weighted by `f`, row-major (ADR 0516).
+    pub first_covariance: Vec<Vec<f64>>,
+    /// The covariance `C_4` weighted by `f^4`, row-major (ADR 0516).
+    pub fourth_covariance: Vec<Vec<f64>>,
 }
 
 /// The response of modal channels to spectra `G_a` (one per pattern) with a correlation (`None`: uncorrelated), integrated
@@ -666,6 +671,8 @@ pub fn spectral_response(
     let mut moments = vec![Moments::default(); no];
     let mut cov = vec![vec![0.0; g * g]; ng];
     let mut cov2 = vec![vec![0.0; g * g]; ng];
+    let mut cov1 = vec![vec![0.0; g * g]; ng];
+    let mut cov4 = vec![vec![0.0; g * g]; ng];
     let mut h = vec![(0.0, 0.0); nm];
     let mut yr = vec![vec![0.0; no]; np];
     let mut yi = vec![vec![0.0; no]; np];
@@ -740,6 +747,8 @@ pub fn spectral_response(
                         let s = cross(k * g + i, k * g + j);
                         cov[k][i * g + j] += w * s;
                         cov2[k][i * g + j] += w * f * f * s;
+                        cov1[k][i * g + j] += w * f * s;
+                        cov4[k][i * g + j] += w * f * f * f * f * s;
                     }
                 }
             }
@@ -753,10 +762,19 @@ pub fn spectral_response(
                 }
             }
         }
+        for c in cov1.iter_mut().chain(cov4.iter_mut()) {
+            for i in 0..g {
+                for j in 0..i {
+                    c[i * g + j] = c[j * g + i];
+                }
+            }
+        }
     } else {
         for (k, m) in moments.iter().enumerate() {
             cov[k][0] = m.m0;
             cov2[k][0] = m.m2;
+            cov1[k][0] = m.m1;
+            cov4[k][0] = m.m4;
         }
     }
     Ok(ChannelResponse {
@@ -766,6 +784,8 @@ pub fn spectral_response(
         moments,
         covariance: cov,
         rate_covariance: cov2,
+        first_covariance: cov1,
+        fourth_covariance: cov4,
     })
 }
 
@@ -787,6 +807,10 @@ pub struct RandomStress {
     pub rate_covariance: Vec<[[f64; 6]; 6]>,
     /// The positions of the points.
     pub positions: Vec<Vec3>,
+    /// The covariance `C_1` weighted by `f` at each point (ADR 0516).
+    pub first_covariance: Vec<[[f64; 6]; 6]>,
+    /// The covariance `C_4` weighted by `f^4` at each point (ADR 0516).
+    pub fourth_covariance: Vec<[[f64; 6]; 6]>,
 }
 
 impl RandomStress {
@@ -804,6 +828,81 @@ impl RandomStress {
     pub fn von_mises_rate(&self, p: usize) -> Option<f64> {
         let q0 = von_mises_mean_square(&self.covariance[p]);
         (q0 > 0.0).then(|| (von_mises_mean_square(&self.rate_covariance[p]) / q0).max(0.0).sqrt())
+    }
+}
+
+impl RandomStress {
+    fn check_point(&self, p: usize) -> Result<()> {
+        if p >= self.covariance.len() {
+            return Err(invalid(
+                STRESS,
+                format!("point {p} (the stress has {} points)", self.covariance.len()),
+            ));
+        }
+        Ok(())
+    }
+
+    /// The spectral moments `m_0, m_1, m_2, m_4` of stress component `component` (Voigt xx, yy, zz, xy, yz, zx) at point `p`:
+    /// the diagonal entries of `C_0`, `C_1`, `C_2`, `C_4` (ADR 0516). A point or component out of range is refused.
+    pub fn moments(&self, p: usize, component: usize) -> Result<Moments> {
+        self.check_point(p)?;
+        if component >= 6 {
+            return Err(invalid(STRESS, format!("component {component} (the stress has 6)")));
+        }
+        Ok(Moments {
+            m0: self.covariance[p][component][component],
+            m1: self.first_covariance[p][component][component],
+            m2: self.rate_covariance[p][component][component],
+            m4: self.fourth_covariance[p][component][component],
+        })
+    }
+
+    /// The moments of the linear combination `w . sigma` at point `p`, `m_k = w^T C_k w` (ADR 0516): a Gaussian stress, as a
+    /// component is. Non-finite weights are refused.
+    pub fn combination_moments(&self, p: usize, weights: &[f64; 6]) -> Result<Moments> {
+        self.check_point(p)?;
+        if let Some(i) = weights.iter().position(|w| !w.is_finite()) {
+            return Err(invalid(
+                STRESS,
+                format!("combination weight {i} is {:e}, must be finite", weights[i]),
+            ));
+        }
+        let form = |c: &[[f64; 6]; 6]| -> f64 {
+            let mut s = 0.0;
+            for i in 0..6 {
+                for j in 0..6 {
+                    s += weights[i] * c[i][j] * weights[j];
+                }
+            }
+            s
+        };
+        Ok(Moments {
+            m0: form(&self.covariance[p]),
+            m1: form(&self.first_covariance[p]),
+            m2: form(&self.rate_covariance[p]),
+            m4: form(&self.fourth_covariance[p]),
+        })
+    }
+
+    /// The broadband damage rate of F-566 of stress component `component` at point `p` on the power law `N = c S^-m`: the
+    /// moments of [`RandomStress::moments`] fed to [`Moments::broadband_damage_rate`] unchanged (ADR 0516).
+    pub fn broadband_damage_rate(&self, p: usize, component: usize, m: f64, c: f64) -> Result<f64> {
+        self.moments(p, component)?.broadband_damage_rate(m, c)
+    }
+
+    /// The broadband damage rate of the von Mises equivalent stress: always refused (ADR 0516). The equivalent `sqrt(s^T A s)`
+    /// of a Gaussian stress is a non-negative square root of a quadratic form, not a Gaussian process, so the spectral moments
+    /// of its square do not give those of its amplitude and the Dirlik density of F-566, fitted to Gaussian processes, does
+    /// not apply. Use a component or [`RandomStress::combination_moments`].
+    pub fn von_mises_broadband_damage_rate(&self, p: usize, m: f64, c: f64) -> Result<f64> {
+        self.check_point(p)?;
+        let _ = (m, c);
+        Err(invalid(
+            "broadband",
+            format!(
+                "the von Mises equivalent stress at point {p} is not Gaussian (a non-negative square root of a quadratic form of the Gaussian stress), so the Dirlik density of the broadband rate does not apply; use a stress component or a linear combination of components"
+            ),
+        ))
     }
 }
 
@@ -1138,6 +1237,8 @@ impl RandomSolver {
                 covariance: s.covariance.iter().map(|c| to_6x6(c)).collect(),
                 rate_covariance: s.rate_covariance.iter().map(|c| to_6x6(c)).collect(),
                 positions: zero.positions().to_vec(),
+                first_covariance: s.first_covariance.iter().map(|c| to_6x6(c)).collect(),
+                fourth_covariance: s.fourth_covariance.iter().map(|c| to_6x6(c)).collect(),
             })
         } else {
             None
