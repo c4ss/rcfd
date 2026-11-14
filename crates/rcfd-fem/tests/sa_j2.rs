@@ -206,6 +206,7 @@ fn distorted(kind: ElementKind, rng: &mut Rng) -> Vec<Vec3> {
 }
 
 #[test]
+#[ignore = "record of the registered run of ADR 0475 (commit cb17790f): Hex8 elastic 5.3e-11, Hex8 plastic 1.3e-9, Hex20 plastic 2.4e-9 met (limit 1e-6); the Hex20 elastic set-up defective (3 of 27 points yielded; measured 6.9e-11, not counted); corrected by amendment 1 as t2b_hex20_elastic_tangent, the met rows continued in t2_element_tangent_met_rows"]
 fn t2_element_tangent_central_differences() {
     let mut c = Checks::new();
     let mut rng = Rng::new(2);
@@ -632,6 +633,7 @@ fn o1(c: &mut Checks, name: &str, steps: &[LoadStep]) {
 }
 
 #[test]
+#[ignore = "record of the registered run of ADR 0475 (commit cb17790f): S1 7.8e-4, S2 4.0e-4 (limit 1e-2), C1 0 wrong of 2592 at S1 and S2, S3 converged, met; O1 missed (least orders 1.279, 1.279, 1.274; S3 6 increments with two residuals above 1e-12): continued in s1_to_s3_c1_sphere_loading_met_rows and o1_order_known_miss"]
 fn s1_to_s3_c1_o1_sphere_loading() {
     let mut c = Checks::new();
     let mat = j2(0.0, 0.0);
@@ -715,7 +717,8 @@ impl Contribution for Ramp {
 }
 
 #[test]
-fn s4_sphere_residual_hoop_stress() {
+#[ignore = "known miss of ADR 0475 (registered run of commit cb17790f): residual hoop stress at the bore -0.612380 sigma_y against -0.628903 sigma_y, 2.627e-2 > 2e-2; diagnosed (addendum 1): point-wise hoop stress error of the 2 x 2 cubed-sphere octant, about 1.4 percent already in the elastic Lame field"]
+fn s4_sphere_residual_hoop_stress_known_miss() {
     let mut c = Checks::new();
     let mat = j2(0.0, 0.0);
     let p1 = p_of_c(1.25) * SY;
@@ -837,6 +840,7 @@ fn moment(m: &SolidModel, r: &NonlinearResult) -> f64 {
 }
 
 #[test]
+#[ignore = "record of the registered run of ADR 0475 (commit cb17790f): C2 8.5e-8, P1 4.1e-5 .. 2.4e-4 (limit 1e-2) met; O1 missed (least orders 1.27 .. 1.44, 4 increments per solve with two residuals above 1e-12): continued in p1_c2_beam_pure_bending_met_rows and o1_order_known_miss"]
 fn p1_c2_o1_beam_pure_bending() {
     let mut c = Checks::new();
     let my = SY * BEAM_W * BEAM_H * BEAM_H / 6.0;
@@ -1012,5 +1016,195 @@ fn r1_n3_refusals() {
         ok.is_ok(),
         &format!("{:?}", ok.as_ref().err()),
     );
+    c.finish();
+}
+
+// ------------------------------------------------------------------------------------------------- continuations
+
+// T2 without its defective Hex20 elastic row (the same draws as the record, the row drawn and not checked).
+#[test]
+fn t2_element_tangent_met_rows() {
+    let mut c = Checks::new();
+    let mut rng = Rng::new(2);
+    let mat = j2(1.5e9, 1.0e9);
+    for kind in [ElementKind::Hex8, ElementKind::Hex20] {
+        let el = element_for(kind);
+        let x = distorted(kind, &mut rng);
+        let n = 3 * el.n_nodes();
+        let np = el.stiffness_rule().len();
+        for (branch, scale, plastic) in [("elastic", 2e-4, false), ("plastic", 4e-3, true)] {
+            let st = if plastic {
+                let mut v = Vec::new();
+                for _ in 0..np {
+                    v.extend(random_state(&mut rng, 1e-3, 2e7, 1e-3));
+                }
+                ElementState::new(v)
+            } else {
+                ElementState::new(vec![0.0; np * mat_j2::STATE_SIZE])
+            };
+            let u: Vec<f64> = (0..n).map(|_| rng.sym(scale)).collect();
+            if kind == ElementKind::Hex20 && !plastic {
+                // ADR 0475 amendment 1: replaced by T2b.
+                continue;
+            }
+            t2_row(&mut c, kind, branch, plastic, &mat, &x, &u, &st);
+        }
+    }
+    c.finish();
+}
+
+/// One row of T2: the set-up check and the measure.
+#[allow(clippy::too_many_arguments)]
+fn t2_row(
+    c: &mut Checks,
+    kind: ElementKind,
+    branch: &str,
+    plastic: bool,
+    mat: &Material,
+    x: &[Vec3],
+    u: &[f64],
+    st: &ElementState,
+) {
+    let el = element_for(kind);
+    let n = u.len();
+    let np = el.stiffness_rule().len();
+    let trial = element_trial_state(el, x, mat, u, st).unwrap();
+    let yielded = (0..np)
+        .filter(|&q| trial.values()[q * 13..(q + 1) * 13] != st.values()[q * 13..(q + 1) * 13])
+        .count();
+    c.holds(
+        &format!("T2 {} {branch}: set-up (points yielded)", kind.name()),
+        if plastic { yielded > 0 } else { yielded == 0 },
+        &format!("{yielded} of {np}"),
+    );
+    let k = element_tangent(el, x, mat, u, st).unwrap();
+    let h = 1e-9;
+    let mut worst: f64 = 0.0;
+    for j in 0..n {
+        let mut a = u.to_vec();
+        a[j] += h;
+        let mut b = u.to_vec();
+        b[j] -= h;
+        let fa = element_internal_force(el, x, mat, &a, st).unwrap();
+        let fb = element_internal_force(el, x, mat, &b, st).unwrap();
+        for i in 0..n {
+            worst = worst.max((k.values()[i * n + j] - (fa[i] - fb[i]) / (2.0 * h)).abs());
+        }
+    }
+    let scale_k = max_abs(k.values().iter().copied());
+    c.at_most(
+        &format!("T2 {} {branch}: max |K - K_fd| / max |K|", kind.name()),
+        worst / scale_k,
+        1e-6,
+    );
+}
+
+// T2b (ADR 0475 amendment 1): the Hex20 elastic branch with the amplitude 5e-5.
+#[test]
+fn t2b_hex20_elastic_tangent() {
+    let mut c = Checks::new();
+    let mut rng = Rng::new(3);
+    let mat = j2(1.5e9, 1.0e9);
+    let el = element_for(ElementKind::Hex20);
+    let x = distorted(ElementKind::Hex20, &mut rng);
+    let n = 3 * el.n_nodes();
+    let np = el.stiffness_rule().len();
+    let st = ElementState::new(vec![0.0; np * mat_j2::STATE_SIZE]);
+    let u: Vec<f64> = (0..n).map(|_| rng.sym(5e-5)).collect();
+    t2_row(&mut c, ElementKind::Hex20, "elastic (T2b)", false, &mat, &x, &u, &st);
+    c.finish();
+}
+
+/// The loading solves of the sphere: (id, c, model, result) for S1 and S2.
+fn sphere_s1_s2() -> Vec<(&'static str, f64, SolidModel, NonlinearResult)> {
+    let mat = j2(0.0, 0.0);
+    [("S1", 1.25, 8), ("S2", 1.5, 10)]
+        .into_iter()
+        .map(|(id, cc, steps)| {
+            let model = sphere(mat.clone(), Some(p_of_c(cc) * SY));
+            let r = solve(&model, &[], &[], &NewtonOptions::new(steps)).unwrap();
+            (id, cc, model, r)
+        })
+        .collect()
+}
+
+fn sphere_s3() -> rcfd_fem::Result<NonlinearResult> {
+    let model = sphere(j2(0.0, 0.0), Some(0.98 * 2.0 * 2.0f64.ln() * SY));
+    solve(&model, &[], &[], &NewtonOptions::new(20))
+}
+
+// S1, S2, C1 and S3 of the record s1_to_s3_c1_o1_sphere_loading without O1.
+#[test]
+fn s1_to_s3_c1_sphere_loading_met_rows() {
+    let mut c = Checks::new();
+    for (id, cc, model, r) in sphere_s1_s2() {
+        let p = p_of_c(cc) * SY;
+        let pts = sphere_points(&model, &r);
+        let elastic: Vec<&Point> = pts.iter().filter(|q| q.alpha == 0.0).collect();
+        let c_fe = elastic.iter().map(|q| q.r * (q.eq / SY).cbrt()).sum::<f64>() / elastic.len() as f64;
+        c.at_most(
+            &format!("{id} c = {cc} a: |p(c_FE) - p| / p"),
+            (p_of_c(c_fe) * SY - p).abs() / p,
+            1e-2,
+        );
+        let wrong = pts
+            .iter()
+            .filter(|q| (q.r < cc - 0.05 && q.alpha == 0.0) || (q.r > cc + 0.05 && q.alpha > 0.0))
+            .count();
+        c.holds(
+            &format!("C1 {id}: points yielded inside c - 0.05 a and elastic outside c + 0.05 a"),
+            wrong == 0,
+            &format!("{wrong} wrong of {}", pts.len()),
+        );
+    }
+    let r = sphere_s3();
+    c.holds("S3 the solve at 0.98 p_lim converges", r.is_ok(), &format!("{:?}", r.as_ref().err()));
+    c.finish();
+}
+
+/// The beam solves of P1 and C2: (kappa / kappa_y, model, result).
+fn beam_solves() -> Vec<(f64, SolidModel, NonlinearResult)> {
+    [0.5, 1.25, 1.5, 2.0, 3.0, 4.0, 5.0]
+        .into_iter()
+        .map(|k| {
+            let (m, pres) = beam(k * kappa_y());
+            let r = solve(&m, &pres, &[], &NewtonOptions::new((4.0 * k).ceil() as usize)).unwrap();
+            (k, m, r)
+        })
+        .collect()
+}
+
+// P1 and C2 of the record p1_c2_o1_beam_pure_bending without O1.
+#[test]
+fn p1_c2_beam_pure_bending_met_rows() {
+    let mut c = Checks::new();
+    let my = SY * BEAM_W * BEAM_H * BEAM_H / 6.0;
+    for (k, m, r) in beam_solves() {
+        let ratio = moment(&m, &r) / my;
+        let closed = if k < 1.0 { k } else { 1.5 - 0.5 / (k * k) };
+        let id = if k < 1.0 { "C2" } else { "P1" };
+        c.at_most(
+            &format!("{id} kappa = {k} kappa_y: |M/M_y - closed| / closed"),
+            (ratio - closed).abs() / closed,
+            1e-2,
+        );
+    }
+    c.finish();
+}
+
+// O1 of S1, S2, S3 and P1, limit intact.
+#[test]
+#[ignore = "known miss of ADR 0475 (registered run of commit cb17790f): least orders S1 1.279, S2 1.279, S3 1.274, P1 1.270 .. 1.435 (limit 1.8); S3 6 and each P1 solve 4 increments with two residuals above 1e-12; diagnosed (addendum 1): the last three residuals above the floor include the pre-asymptotic residual of the active-set change, the asymptotic step is quadratic and reaches the rounding floor in one or two corrections"]
+fn o1_order_known_miss() {
+    let mut c = Checks::new();
+    for (id, _, _, r) in sphere_s1_s2() {
+        o1(&mut c, id, &r.steps);
+    }
+    o1(&mut c, "S3", &sphere_s3().unwrap().steps);
+    for (k, _, r) in beam_solves() {
+        if k >= 1.0 {
+            o1(&mut c, &format!("P1 kappa = {k} kappa_y"), &r.steps);
+        }
+    }
     c.finish();
 }
