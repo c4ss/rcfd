@@ -248,3 +248,97 @@ expected outcome is **partial** (G1, G2, G4 predicted missed).
   0492 D2 is not used in D1 (it changes the root at second order in `theta' - theta`, about 1e-5 of the shift here).
 - One disc geometry, one basis size with a non-empty complement; no fan sector.
 - No case-file key, no CLI output; `split_campbell` computes neither value.
+
+## Addendum 1: results (2026-11-14)
+
+Registered run: `f584-scratch/run1.log` (commit ad8c247d, release, made once, `--test-threads=1`); G11 and the earlier
+default-bits tests `f584-scratch/run1_g11.log` on the same commit. G11 digests recorded at f168d994 (commit a71861ee) before any
+library line. Code: `crates/rcfd-fem/src/rotating.rs` (the enum `SplitSchur`, the fields `split_schur` and
+`corrected_frequency` of `RotatingOptions` with their defaults and builders, nothing else) and `crates/rcfd-fem/src/gyro.rs`
+(the module comment; the field `HarmonicSplitModes::corrected_frequency`; in `sector_split_at` the choice of the path and the
+unpacking of `(schur_eta, theta')`; `schur_error` returns its root; the new section at the end: `pencil_norm`,
+`schur_perturbation`). Tests: `crates/rcfd-fem/tests/sa_gyro_sector_split_schur.rs` (5 tests, one of them the ignored known
+miss; about 4 s together), `sa_gyro_sector_split_schur_default_bits.rs`. After the run the test of G1, G2 and G4 was renamed
+`g1_g2_g4_acceptance_limits_known_miss` and ignored with the measured numbers (commit 326b3419); its limits are unchanged.
+
+`omega_ref = 1655.3226` rad/s.
+
+| Id | Check | Limit | Measured | Met |
+|---|---|---|---|---|
+| G1 | matches (MAC `>= 0.99`, distinct, stable), every index and speed | each | holds | yes |
+| G1 | `|perturbation/dense - 1|` where the dense `schur_eta > 1e-9`; count | `<= 0.01`; `>= 30` | **0.3835** (16 of 34 within 1e-2); 34 | **no** (predicted, D4) |
+| G2 | the same where the perturbation `schur_eta > 1e-9` | `<= 0.01` | **0.3835** (16 of 34) | **no** (predicted) |
+| G3 | dense run, `|theta'/omega - 1|`, 48 matched modes | `<= 1e-7` | 1.117e-8 | yes |
+| G4 | perturbation run, the same | `<= 1e-7` | **7.154e-7** (43 of 48 within 1e-7) | **no** (predicted) |
+| G5 | `theta'` and `schur_eta` consistent bit for bit, both runs, every split mode | each | holds (8 of 8 cases) | yes |
+| G6 | library D1 against the test-side dense D1 where the latter `> 1e-9`; count | `<= 1e-3`; `>= 30` | 1.102e-7; 34 | yes |
+| G7 | wall time, perturbation over dense, 8 B4 runs | `<= 0.5` | 0.136 (0.108 s against 0.792 s) | yes |
+| G8 | `None` without `corrected_frequency` (both paths), without `split_correction`, without `coriolis`; lengths | each | holds | yes |
+| G9 | B41: `schur_eta == Some(0)`, `theta' == theta` bit for bit | each | holds (both speeds, every index) | yes |
+| G10 | DSS at `10 omega_ref`: `None` exactly where `eta` is `None` | each | holds (all four indices unstable, every entry `None`; the "Some otherwise" half is vacuous, as in ADR 0492 F8) | yes |
+| G11 | 4 digests of f168d994; ADR 0481 (13), 0482 (6), 0492 (6) default bits and `sa_gyro_sector_schur`; `baseline_hashes`; `cargo test -p rcfd-fem --release` | `==`; pass | 4 of 4 equal; 13, 6, 6 equal; `sa_gyro_sector_schur` 4 passed; `baseline_hashes` 3 passed, 1 ignored; `rcfd-fem` 890 passed, 0 failed, 253 ignored | yes |
+| G12 | perturbation and dense runs against the default: every other field equal, the dense `schur_eta` equal | `==` | holds (8 of 8 cases) | yes |
+| N1 | first order alone, `max |eta_1/schur_eta - 1|` | `> 0.1` | 0.6185 | as expected |
+
+Records: the measured G1 ratio differs from the prediction `-(delta_2/delta_1)^2` of D4 by at most 0.094 (the prediction is the
+leading term of the remainder only); the Pade [0/1] value `delta_1/(1 - delta_2/delta_1)` (test-side) is within 0.0989 of the
+dense `schur_eta` on the scope of G1. The perturbation `schur_eta` of the unmatched split modes carries no `None`. Wall time of
+`split_modes` per index and speed is in `run1.log`.
+
+### Mutations (scratch copy `f584-scratch/mut` of 326b3419, own target folder, script `f584-scratch/mutate.py`, logs `mut_MP*.log`)
+
+| Id | Mutation | Caught by |
+|---|---|---|
+| MP1 | mirror terms dropped | G6 (0.151) |
+| MP2 | denominators `l_a - l_b` sign flipped | G6 (0.763) |
+| MP3 | `s_b` replaced by `s_a` | G6 (0.0271) |
+| MP4 | gyroscopic term removed from the complement solve | G6 (1.07e3) |
+| MP5 | complement projection removed from the solve | G6 (1.000) |
+| MP6 | `delta_2` omitted | G6 (0.381) |
+| MP7 | the perturbation path computing the dense estimate | G6 (0.622), G7 (1.02) |
+| MP8 | `theta'` reported as `theta` | G3 (4.50e-5), G5 |
+| MP9 | default `split_schur = Perturbation` | G12 (every case). G11 was not reached: cargo stops at the first failing test binary, and `sa_gyro_sector_split_schur` runs first |
+| MP10 | the term `b = a` not skipped | G6 (NaN, through the finite requirement) |
+
+All ten caught. The script's first pass stopped at MP5 on a wrong count of the projection calls it replaces (10, not 8): a
+defect of the script, not of the mutation; the count was corrected and MP5 to MP10 run once.
+
+### Deviations and what was not run
+
+- No amendment; no limit and no existing test changed. The registered run was made once.
+- `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --all-targets --release -- -D warnings` clean; `cargo test -p
+  rcfd-cli --release --test docs_site` 2 passed. The whole workspace suite was not run (the lead's gate).
+
+### Diagnosis of the miss
+
+As predicted in D4. The second-order sum is computed correctly (G6 against an independent dense computation: 1.1e-7), but the
+frozen condensed problem is far from second order on this basis: the poor Ritz pairs of the top half of the enlarged basis are
+shifted by `E` by up to 1.2 times their own frequency, so the series ratio `delta_2/delta_1` reaches 0.62 and the truncation
+leaves about `(delta_2/delta_1)^2` of the shift. No form built from the single column `E y_a` reaches 1 percent here (probe 2).
+The corrected frequency of the ADR 0492 path meets a4 (1.1e-8); that of the perturbation path does not (7.2e-7).
+
+### Decision
+
+**Partial** by the registered rule: G1, G2 and G4 missed (kept as `g1_g2_g4_acceptance_limits_known_miss` with their limits),
+every other check met, N1 as expected, all ten mutations caught. Clause by clause: a1 met (`corrected_frequency`, opt-in); a2 met
+as a computation (one complement solve per split mode, the second-order sum, verified against an independent computation, a
+factor 7 cheaper); a3 missed (0.38 against 0.01); a4 met for the root of ADR 0492, missed for the perturbation estimate; a5 met.
+
+### Remaining questions
+
+1. The cheaper estimate on this basis. Options: (a) keep `SplitSchur::Perturbation` as built, documented as a second-order
+   estimate that is reliable only where `delta_2/delta_1` is small; (b) a follow-up that reports `delta_2/delta_1` beside it (a
+   cheap indicator of its own accuracy) and falls back to the dense path above a registered threshold; (c) drop the option.
+   Recommendation: (b); kept as (a) here.
+2. Case-file key for `split_schur` and `corrected_frequency`: none added (as ADR 0492 question 3). Recommendation: none until a
+   fan-sector use asks for one.
+
+## For the lead: roadmap entries
+
+Proposed status of F-584: **partial**. New note:
+
+> Structural solver, advanced tier (plan ADR 0310). PARTIAL. ADR 0527, 2026-11-14: opt-in RotatingOptions::corrected_frequency reports per split mode the corrected frequency theta' beside schur_eta (on the default path the root of the dense condensed solve of ADR 0492), and RotatingOptions::split_schur(SplitSchur::Perturbation) computes schur_eta with one complement solve per split mode (the column E y) and the second-order Rayleigh-Schroedinger sum over the other eigenpairs of the linearised projected pencil (the other split modes and the mirrors of all), theta' = theta + delta_1 + delta_2. Met: theta' of the ADR 0492 path equals RotatingSector::whirl_modes within 1.1e-8 for all 48 matched modes of the disc sector (limit 1e-7); the perturbation value equals an independent dense computation of the same sum within 1.1e-7 and costs 0.14 of the dense path; the results of ADR 0492 (and 0481, 0482) and every default keep their bits (4 new digests plus 25); all ten mutations caught. Missed (predicted at registration, kept as known misses): the perturbation schur_eta agrees with that of ADR 0492 only within 0.38 (16 of 34 within 1 percent) and its theta' is within 7.2e-7 of whirl_modes (43 of 48 within 1e-7): the poor Ritz pairs of the corrected basis make the series ratio delta_2/delta_1 reach 0.62, so the second-order truncation leaves about its square. Follow-up proposed in ADR 0527.
+
+Follow-up (optional, number left to the lead): title "Accuracy indicator and fallback of the perturbation Schur Ritz error of the sector split modes", deps F-584.
+
+> Every limit not stated here is registered in the ADR before the run. With SplitSchur::Perturbation each split mode reports the ratio delta_2/delta_1 of ADR 0527 and falls back to the dense computation of ADR 0492 where it exceeds a threshold registered from the records of ADR 0527; on the disc sector of ADR 0411 with 4 harmonic modes per index at 0.4 and 0.8 omega_ref the resulting schur_eta agrees with that of ADR 0492 within 1 percent where it exceeds 1e-9, the cost stays below half of the dense path, and the results of ADR 0527 keep their bits.
