@@ -321,3 +321,13 @@ Negative controls:
   (b) keep (the 3-D section's full second variation; neither Engesser nor Haringx). Taken (a).
 - **Q3. The flap-lag identity.** The literal `1e-6` holds only where `f_rot < 1e-6`; taken: the literal check on a slender beam
   (R1) and the corrected identity on the F-396 beam (R4).
+
+## Amendment 1 (2026-11-14, written after the library code and before any run of the checks)
+
+One check added; nothing above is changed. The section moment of the beam's centrifugal load (arithmetic 5) is zero on the
+radial beam of R1 to R5, so no check above sees it. **U6** (supp.): the beam of U5 in general position, the resultant moment
+about the axis point `p` of its consistent nodal load, `sum_i ((x_i - p) x F_i + M_i)`, against the exact moment of the body
+force, `rho Omega^2 (A int (x_c - p) x P (x_c - p) dx + L m)` (Simpson's rule, exact for the quadratic integrand; `m` the section
+moment of arithmetic 5): max component difference over the largest component, limit `<= 1e-12`. The consistent load gives the
+exact resultant because a rigid rotation (`u_c = dtheta x (x_c - p)` linear, `theta = dtheta` constant) is in the element's
+fields. Mutation **MU9**: the sign of the section moment reversed; expected to be caught by U6.
