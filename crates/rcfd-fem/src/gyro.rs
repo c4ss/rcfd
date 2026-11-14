@@ -20,9 +20,14 @@
 //! and sine parts for a pair), and `K_eff`, `M` and the Coriolis matrix are doubled block-diagonally for a pair (ADR 0411 D5), so
 //! the cosine/sine coupling enters through the basis. A sector exists only for materials whose axes pass the check of ADR 0462;
 //! without the option the results are the F-396 sector results themselves.
+//!
+//! ADR 0482 (F-569): with [`crate::rotating::RotatingOptions::split_correction`] the basis of an index gains the static
+//! correction vectors `K_b^-1 C_r q_i` of its harmonic modes (reduced coordinates, `M_r`-orthonormalised by the rule of ADR 0464,
+//! dependent ones dropped), and every split mode reports the first-order Ritz error `eta` of ADR 0481 D5, computed from the
+//! split mode alone by the projected correction equation on the complement of the basis (MINRES, preconditioned by `K_b^-1`).
 
 use crate::cyclic::{doubled_matrix, HarmonicModes};
-use crate::damped::REAL_TOLERANCE;
+use crate::damped::{m_orthonormalise, REAL_TOLERANCE};
 use crate::error::{FemError, Result};
 use crate::model::{Constraint, SolidModel};
 use crate::rotating::{
@@ -33,6 +38,7 @@ use crate::rotating::{
 use rcfd_core::vec3::Vec3;
 use rcfd_linalg::complex::C64;
 use rcfd_linalg::eigen_general::{quadratic_eigen_with, GeneralEigenError, GeneralEigenOptions};
+use rcfd_linalg::sparse_chol::SparseLdlt;
 use rcfd_linalg::CsrMatrix;
 use std::f64::consts::PI;
 use std::fmt::Write as _;
@@ -635,6 +641,13 @@ pub struct HarmonicSplitModes {
     pub modes: SplitModes,
     /// Per split mode, the wave sense `tau` of ADR 0411 D5 for a pair (`None` for a single index).
     pub waves: Vec<Option<f64>>,
+    /// The static correction vectors kept in the basis (ADR 0482 D1; 0 without the option).
+    pub corrections: usize,
+    /// The correction vectors dropped as dependent (ADR 0482 D1 step 4; 0 without the option).
+    pub dropped_corrections: usize,
+    /// Per split mode, the first-order Ritz error `eta` (ADR 0482 D2): `None` without the option, at an unstable speed or when
+    /// its solve did not converge.
+    pub eta: Vec<Option<f64>>,
 }
 
 /// The split Campbell table of a sector (ADR 0481 D2): one [`SplitCampbell`] per harmonic index.
@@ -771,6 +784,9 @@ impl<'a> RotatingSector<'a> {
                 basis_size: count,
             },
             waves,
+            corrections: 0,
+            dropped_corrections: 0,
+            eta: vec![None; count],
         })
     }
 
@@ -788,8 +804,15 @@ impl<'a> RotatingSector<'a> {
             },
         };
         let multiplicity = h.multiplicity;
-        let phi = sector_basis(&h);
+        let mut phi = sector_basis(&h);
         let part = self.part();
+        let correction = if part.options().split_correction {
+            let cb = correction_basis(&h, &phi, c)?;
+            phi.extend(cb.expanded.iter().cloned());
+            Some(cb)
+        } else {
+            None
+        };
         let keff = part.operator(omega);
         let (d, asymmetry, skew_defect) = if multiplicity == 2 {
             project_and_solve(
@@ -807,6 +830,33 @@ impl<'a> RotatingSector<'a> {
             .iter()
             .map(|sm| (multiplicity == 2).then(|| wave_sense(part.mass(), &sm.re, &sm.im)))
             .collect();
+        let (corrections, dropped_corrections, eta) = match &correction {
+            None => (0, 0, vec![None; modes.len()]),
+            Some(cb) => {
+                let eta = if d.stability == Stability::Stable {
+                    let rest = match basis {
+                        Basis::Speed => None,
+                        Basis::Rest => {
+                            let k2 = if multiplicity == 2 {
+                                doubled_matrix(&keff)
+                            } else {
+                                keff.clone()
+                            };
+                            let zero = vec![0.0; h.transformation.n_unknowns()];
+                            Some(h.transformation.reduce(&k2, &zero)?.0)
+                        }
+                    };
+                    let kq = rest.as_ref().unwrap_or(&h.reduced_stiffness);
+                    d.modes
+                        .iter()
+                        .map(|dm| ritz_error(cb, kq, &h.reduced_mass, omega, dm))
+                        .collect()
+                } else {
+                    vec![None; modes.len()]
+                };
+                (cb.kept(), cb.dropped, eta)
+            }
+        };
         Ok(HarmonicSplitModes {
             harmonic,
             multiplicity,
@@ -823,6 +873,9 @@ impl<'a> RotatingSector<'a> {
                 basis_size: phi.len(),
             },
             waves,
+            corrections,
+            dropped_corrections,
+            eta,
         })
     }
 
@@ -945,4 +998,290 @@ impl<'a> RotatingSector<'a> {
             families,
         })
     }
+}
+
+// ------------------------------------------------------------------------------------------------------------------------
+// ADR 0482 (F-569): static correction vectors of a sector index and the Ritz error of every split mode.
+
+/// The relative tolerance of the MINRES solve of the Ritz error (ADR 0482 D2): the preconditioned residual estimate at most
+/// this times its start value.
+pub const RITZ_TOLERANCE: f64 = 1e-10;
+
+/// The cap of the MINRES iterations (ADR 0482 D2; the count is `min(4 n_q + 20, RITZ_ITERATIONS)`).
+const RITZ_ITERATIONS: usize = 2000;
+
+/// The enlarged basis of an index in reduced coordinates (ADR 0482 D1).
+struct CorrectionBasis {
+    /// The modes then the kept correction vectors, `M_r`-orthonormal (reduced coordinates).
+    v: Vec<Vec<f64>>,
+    /// `M_r v_j`.
+    mv: Vec<Vec<f64>>,
+    /// The number of modes `m`.
+    modes: usize,
+    /// The kept correction vectors expanded by `T_k` (the length of the expanded basis vectors).
+    expanded: Vec<Vec<f64>>,
+    /// The vectors dropped by the rule of ADR 0464.
+    dropped: usize,
+    /// `T_k^T C_2 T_k`.
+    cr: CsrMatrix,
+    /// The factor of the basis stiffness `K_b` (the preconditioner of D2).
+    ldlt: SparseLdlt,
+}
+
+fn dot(x: &[f64], y: &[f64]) -> f64 {
+    x.iter().zip(y).map(|(a, b)| a * b).sum()
+}
+
+impl CorrectionBasis {
+    fn kept(&self) -> usize {
+        self.v.len() - self.modes
+    }
+
+    /// `(I - P)^T x = x - M V V^T x` on one half.
+    fn project_dual(&self, x: &mut [f64]) {
+        for (vj, mj) in self.v.iter().zip(&self.mv) {
+            let a = dot(vj, x);
+            for (xi, mi) in x.iter_mut().zip(mj) {
+                *xi -= a * mi;
+            }
+        }
+    }
+
+    /// `(I - P) x = x - V V^T M x` on one half.
+    fn project(&self, x: &mut [f64]) {
+        for (vj, mj) in self.v.iter().zip(&self.mv) {
+            let a = dot(mj, x);
+            for (xi, vi) in x.iter_mut().zip(vj) {
+                *xi -= a * vi;
+            }
+        }
+    }
+}
+
+/// D1: the static correction vectors `K_b^-1 C_r q_a` of the modes of `h` (expanded basis `phi`), `M_r`-orthonormalised against
+/// the modes and the vectors kept before them by [`m_orthonormalise`] (dropped by its rule).
+fn correction_basis(h: &HarmonicModes, phi: &[Vec<f64>], c: &CsrMatrix) -> Result<CorrectionBasis> {
+    let tr = &h.transformation;
+    if tr.n_unknowns() != tr.n_mesh() {
+        return Err(invalid(
+            "constraint",
+            "the static correction vectors of the split modes take no rigid set in the sector (the expanded basis does not \
+             carry the reference unknowns; ADR 0482 D1)"
+                .to_string(),
+        ));
+    }
+    let ind = tr.independent();
+    let mut v: Vec<Vec<f64>> = phi.iter().map(|x| ind.iter().map(|&i| x[i]).collect()).collect();
+    let modes = v.len();
+    let c2 = if h.multiplicity == 2 {
+        doubled_matrix(c)
+    } else {
+        c.clone()
+    };
+    let zero = vec![0.0; tr.n_unknowns()];
+    let (cr, _) = tr.reduce(&c2, &zero)?;
+    let ldlt = SparseLdlt::factor(&h.reduced_stiffness).map_err(|e| FemError::Solver {
+        solver: "sparse_ldlt",
+        reason: e.to_string(),
+    })?;
+    let nq = cr.n;
+    let mut f = vec![0.0; nq];
+    let mut y = vec![0.0; nq];
+    let mut expanded = Vec::new();
+    let mut dropped = 0;
+    for a in 0..modes {
+        cr.matvec(&v[a], &mut f);
+        let mut z = ldlt.solve(&f);
+        let keep = {
+            let basis: Vec<&[f64]> = v.iter().map(Vec::as_slice).collect();
+            m_orthonormalise(&h.reduced_mass, &mut z, &basis, &mut y)
+        };
+        if keep {
+            expanded.push(tr.expand(&z));
+            v.push(z);
+        } else {
+            dropped += 1;
+        }
+    }
+    let mv = v
+        .iter()
+        .map(|x| {
+            let mut t = vec![0.0; nq];
+            h.reduced_mass.matvec(x, &mut t);
+            t
+        })
+        .collect();
+    Ok(CorrectionBasis {
+        v,
+        mv,
+        modes,
+        expanded,
+        dropped,
+        cr,
+        ldlt,
+    })
+}
+
+/// D2: the Ritz error `eta` of the split mode `dm` (coordinates on the basis `cb.v`) at the speed `speed`, `kq` the reduced
+/// `K_eff` at the speed, `mr` the reduced mass. `Some(0)` when the basis spans the index; `None` when the MINRES solve did not
+/// converge.
+fn ritz_error(cb: &CorrectionBasis, kq: &CsrMatrix, mr: &CsrMatrix, speed: f64, dm: &DenseSplitMode) -> Option<f64> {
+    let nq = kq.n;
+    if cb.v.len() >= nq {
+        return Some(0.0);
+    }
+    let theta = dm.omega;
+    let g = 2.0 * speed;
+    let mut pr = vec![0.0; nq];
+    let mut pi = vec![0.0; nq];
+    for (vj, x) in cb.v.iter().zip(&dm.q) {
+        for e in 0..nq {
+            pr[e] += vj[e] * x.re;
+            pi[e] += vj[e] * x.im;
+        }
+    }
+    let mut tk = vec![0.0; nq];
+    let mut tm = vec![0.0; nq];
+    let mut tc = vec![0.0; nq];
+    // The real form of Q(theta): (A u_r - theta g C u_i, A u_i + theta g C u_r), A = K - theta^2 M.
+    let mut qapply = |u: &[f64], out: &mut [f64]| {
+        let (ur, ui) = u.split_at(nq);
+        let (or, oi) = out.split_at_mut(nq);
+        kq.matvec(ur, &mut tk);
+        mr.matvec(ur, &mut tm);
+        cb.cr.matvec(ui, &mut tc);
+        for e in 0..nq {
+            or[e] = tk[e] - theta * theta * tm[e] - theta * g * tc[e];
+        }
+        kq.matvec(ui, &mut tk);
+        mr.matvec(ui, &mut tm);
+        cb.cr.matvec(ur, &mut tc);
+        for e in 0..nq {
+            oi[e] = tk[e] - theta * theta * tm[e] + theta * g * tc[e];
+        }
+    };
+    let psi: Vec<f64> = pr.iter().chain(&pi).copied().collect();
+    let mut r = vec![0.0; 2 * nq];
+    qapply(&psi, &mut r);
+    let mut b: Vec<f64> = r.iter().map(|x| -x).collect();
+    cb.project_dual(&mut b[..nq]);
+    cb.project_dual(&mut b[nq..]);
+    let mut work = vec![0.0; 2 * nq];
+    let op = |u: &[f64], out: &mut [f64]| {
+        work.copy_from_slice(u);
+        cb.project(&mut work[..nq]);
+        cb.project(&mut work[nq..]);
+        qapply(&work, out);
+        cb.project_dual(&mut out[..nq]);
+        cb.project_dual(&mut out[nq..]);
+    };
+    let prec = |x: &[f64], out: &mut [f64]| {
+        for half in 0..2 {
+            let mut h = x[half * nq..(half + 1) * nq].to_vec();
+            cb.project_dual(&mut h);
+            let mut z = cb.ldlt.solve(&h);
+            cb.project(&mut z);
+            out[half * nq..(half + 1) * nq].copy_from_slice(&z);
+        }
+    };
+    let maxit = (4 * nq + 20).min(RITZ_ITERATIONS);
+    let t = minres(op, prec, &b, RITZ_TOLERANCE, maxit)?;
+    let num = dot(&t, &b).abs();
+    let mut mp = vec![0.0; nq];
+    mr.matvec(&pr, &mut mp);
+    let mut quad_m = dot(&pr, &mp);
+    mr.matvec(&pi, &mut mp);
+    quad_m += dot(&pi, &mp);
+    cb.cr.matvec(&pi, &mut mp);
+    let gyro = g * dot(&pr, &mp);
+    let den = theta * (2.0 * theta * quad_m + 2.0 * gyro).abs();
+    let eta = num / den;
+    eta.is_finite().then_some(eta)
+}
+
+/// MINRES with a positive semi-definite preconditioner (Paige and Saunders 1975, from memory; ADR 0482 D2) for the symmetric
+/// `op`, from `x = 0`; `None` when the preconditioned residual estimate has not fallen to `tol` times its start in `maxit`
+/// iterations or the preconditioned inner product is negative or not finite.
+fn minres(
+    mut op: impl FnMut(&[f64], &mut [f64]),
+    mut prec: impl FnMut(&[f64], &mut [f64]),
+    b: &[f64],
+    tol: f64,
+    maxit: usize,
+) -> Option<Vec<f64>> {
+    let n = b.len();
+    let mut x = vec![0.0; n];
+    let mut r1 = b.to_vec();
+    let mut y = vec![0.0; n];
+    prec(&r1, &mut y);
+    let beta1_sq = dot(&r1, &y);
+    if !(beta1_sq >= 0.0 && beta1_sq.is_finite()) {
+        return None;
+    }
+    if beta1_sq == 0.0 {
+        return Some(x);
+    }
+    let beta1 = beta1_sq.sqrt();
+    let mut r2 = r1.clone();
+    let mut oldb = 0.0;
+    let mut beta = beta1;
+    let mut dbar = 0.0;
+    let mut epsln = 0.0;
+    let mut phibar = beta1;
+    let mut cs = -1.0;
+    let mut sn = 0.0;
+    let mut w = vec![0.0; n];
+    let mut w2 = vec![0.0; n];
+    let mut v = vec![0.0; n];
+    for itn in 1..=maxit {
+        let s = 1.0 / beta;
+        for (vi, yi) in v.iter_mut().zip(&y) {
+            *vi = s * yi;
+        }
+        op(&v, &mut y);
+        if itn >= 2 {
+            let f = beta / oldb;
+            for (yi, ri) in y.iter_mut().zip(&r1) {
+                *yi -= f * ri;
+            }
+        }
+        let alfa = dot(&v, &y);
+        let f = alfa / beta;
+        for (yi, ri) in y.iter_mut().zip(&r2) {
+            *yi -= f * ri;
+        }
+        std::mem::swap(&mut r1, &mut r2);
+        r2.copy_from_slice(&y);
+        prec(&r2, &mut y);
+        oldb = beta;
+        let beta_sq = dot(&r2, &y);
+        if !(beta_sq >= 0.0 && beta_sq.is_finite()) {
+            return None;
+        }
+        beta = beta_sq.sqrt();
+        let oldeps = epsln;
+        let delta = cs * dbar + sn * alfa;
+        let gbar = sn * dbar - cs * alfa;
+        epsln = sn * beta;
+        dbar = -cs * beta;
+        let gamma = gbar.hypot(beta).max(f64::EPSILON);
+        cs = gbar / gamma;
+        sn = beta / gamma;
+        let phi = cs * phibar;
+        phibar *= sn;
+        let denom = 1.0 / gamma;
+        for i in 0..n {
+            let w1 = w2[i];
+            w2[i] = w[i];
+            w[i] = (v[i] - oldeps * w1 - delta * w2[i]) * denom;
+            x[i] += phi * w[i];
+        }
+        if phibar <= tol * beta1 {
+            return Some(x);
+        }
+        if beta == 0.0 {
+            return None;
+        }
+    }
+    None
 }

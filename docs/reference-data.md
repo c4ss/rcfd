@@ -1780,6 +1780,18 @@ the whole-sector whirl solve of ADR 0411 (`RotatingSector::whirl_modes`) and the
 | Ritz error of a gyroscopic mode on a subspace, first order: `eta = |e^H Q(omega) e| / (omega |s^H (2 omega M - i G) s|)`, `s` the M-projection of the exact mode, `e = phi - s`, `s^H Q s = e^H Q e` exactly | derived | the Rayleigh functional of the Hermitian family `Q(w) = K - w^2 M + i w G`; P. Lancaster, Lambda-Matrices and Vibrating Systems (Pergamon 1966), K. P. Hadeler, Arch. Rational Mech. Anal. 27 (1968) 306, B. N. Parlett, The Symmetric Eigenvalue Problem (Prentice-Hall 1980): NOT read, from memory (ADR 0481 D5) |
 | Leading order of `eta` in modal coordinates: `sum_out 2 Omega^2 |C_ja|^2/(w_j^2 - omega^2)` | derived | ADR 0481 D5, ADR 0472 arithmetic 4 |
 
+## F-569 static correction vectors for the split modes of a sector index (ADR 0482)
+
+No source was read for F-569; every item is cited from memory and derived in ADR 0482 (D1, D2). The references of the checks are
+the whole-sector whirl solve of ADR 0411 (`RotatingSector::whirl_modes`) and the F-555 sector split path without the option.
+
+| Item | Status | Source |
+|---|---|---|
+| Static correction vector `K^-1 G phi_a` of a kept mode carries the leading (static) part of every out-of-basis error component `b_j = -i omega G_ja/(w_j^2 - omega^2)`; the rest is smaller by `omega^2/w_j^2` | derived | modal expansion of `K^-1` (ADR 0482 D1); J. M. Dickens, J. M. Nakagawa, M. J. Wittbrodt, Computers and Structures 62 (1997) 985 (modal truncation augmentation): NOT read, from memory |
+| Ritz error from the split mode alone: `eta = |t . b| / (theta |2 theta psi^H M psi + 2 psi_r^T G psi_i|)`, `t` the solution of the complement-projected correction equation `(I - P)^T Q(theta) (I - P) t = -(I - P)^T Q(theta) psi` | derived | Schur complement of the projected problem, first order (ADR 0482 D2, addendum); G. L. G. Sleijpen, H. A. van der Vorst, SIAM J. Matrix Anal. Appl. 17 (1996) 401 (correction equation): NOT read, from memory |
+| MINRES with a positive definite preconditioner | from memory | C. C. Paige, M. A. Saunders, SIAM J. Numer. Anal. 12 (1975) 617: NOT read; the recurrence written out in `gyro.rs` |
+| On a basis that is not invariant under `K^-1 M` (modes plus correction vectors) the first-order estimate from the Ritz vector falls below the measured error, and ADR 0481's `eta` from the exact mode above it, by up to a factor 2.6 each (DS B4); the ratio of the squared error to their product lies in `[0.898, 1.001]` over the 34 matched modes with `eta > 1e-9` (an observation, not derived) | measured | ADR 0482 addendum 1 (diagnostic `f569-scratch/diag1.log`) |
+
 ## F-416 a flexible rotor on bearings in the stationary frame (ADR 0476)
 
 No source was read for F-416; every item is cited from memory and derived in ADR 0476 (set-ups and arithmetic 1 to 5; numpy
