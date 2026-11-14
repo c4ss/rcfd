@@ -11219,7 +11219,7 @@ fixed by the item's registration ADR before any code.
     lambda equals E''/E' at that frequency within 1e-2 relative (first order in the loss). Models without the material
     keep their bits.
   - note: Structural solver, advanced tier. Follow-up of F-577 (ADR 0491, 2026-11-14).
-- [ ] **F-583** The harmonic stress of a viscoelastic material in the direct harmonic solve
+- [x] **F-583** The harmonic stress of a viscoelastic material in the direct harmonic solve
   - depends on: F-577
   - acceptance: Every limit not stated here is registered in the ADR before the run. DirectHarmonic::stress of a
     response with a viscoelastic material returns (G*/G_0) dev sigma_0 + (K*/K_0) vol sigma_0 at each integration point,
@@ -11227,7 +11227,18 @@ fixed by the item's registration ADR before any code.
     stress at the integration points equals the modulus times the strain of the discrete chain within 1e-9 relative; for
     equal weights it equals the stress of the LossFactor::Table route within 1e-12. Models without the material keep
     their bits.
-  - note: Structural solver, advanced tier. Follow-up of F-577 (ADR 0491, 2026-11-14). Needed for blade fatigue.
+  - note: Structural solver, advanced tier. DONE. ADR 0494, 2026-11-14: DirectHarmonic::stress (harmonic_direct.rs) of a
+    response with a viscoelastic material returns (G*/G_0) dev sigma_0 + (K*/K_0) vol sigma_0 at each integration point,
+    sigma_0 the elastic stress of the base (computed on the model with each viscoelastic material replaced by its base,
+    SolidModel::with_viscoelastic_bases), and E*/E_0 times sigma_0 for equal weights; the refusal of ADR 0491 D2 is
+    lifted. Met: on the rods A, B and C of ADR 0491 at 40 elements and ten frequencies, the axial (or shear) stress at
+    all integration points equals the modulus times the strain of the discrete chain within 3.4e-12 (A), 3.2e-12 (B) and
+    2.1e-12 (C) pointwise against the limit 1e-9, the other components within 1.4e-12; for equal weights the stress
+    equals that of the LossFactor::Table route within 1.5e-13 against 1e-12; two materials in either order within 6e-12;
+    zero frequency, shift and no-term checks within 3.4e-14, 1.1e-14 and 0; threads bit-identical; mutations MU1 to MU6
+    caught; default bits (B1, 5 digests, and B0 of ADR 0491) and baseline hashes unchanged. The refusal assertion RF
+    (vi) of sa_harmonic_visco.rs is replaced by a comment (ADR 0494 D3). Every registered check met on the first run;
+    MU7 (informational) not caught.
 - [ ] **F-584** Corrected frequency and cheaper second-order Ritz error of the sector split modes
   - depends on: F-575
   - acceptance: Every limit not stated here is registered in the ADR before the run. RotatingSector::split_modes
