@@ -836,6 +836,7 @@ fn p1_p2_point_context() {
 // ------------------------------------------------------------------------------------------------- K1
 
 #[test]
+#[ignore = "record of ADR 0440 before ADR 0454 (F-419) landed Shell3, retiring its pending row; continued in k1_shell3_kind_after_f419 (ADR 0291 pattern, maintainer standing decision)"]
 fn k1_shell3_kind() {
     let mut c = Checks::new();
     let k = ElementKind::Shell3;
@@ -846,6 +847,52 @@ fn k1_shell3_kind() {
             && k.corners() == 3
             && !k.is_solid()
             && k.pending() == Some("ADR 0322 (F-419)")
+            && k.edges() == [[0, 1], [1, 2], [2, 0]],
+        &format!(
+            "{} {} {} {:?} {:?}",
+            k.name(),
+            k.nodes_per_element(),
+            k.corners(),
+            k.pending(),
+            k.edges()
+        ),
+    );
+    let coords = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
+    let r = element_for(k).stiffness(&coords, &isotropic_elasticity(E_MOD, 0.3));
+    let ok = matches!(&r, Err(e) if e.to_string().contains("Shell3"));
+    c.holds("K1 placeholder refuses naming Shell3", ok, &format!("{:?}", r.err()));
+    let mut mesh = SolidMesh::new(vec![[0.0; 3], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0], [0.0, 1.0, 0.0]]).unwrap();
+    let built = mesh.add_block(k, vec![0, 1, 2, 0, 2, 3]).is_ok();
+    let shell = mesh.set_block_property(0, BlockProperty::shell(0.01).unwrap()).is_ok();
+    let layup = mesh
+        .set_block_property(
+            0,
+            BlockProperty::layup(vec![Ply::new(iso(), 0.01, 0.0).unwrap()]).unwrap(),
+        )
+        .is_ok();
+    let solid = mesh
+        .set_block_property(0, BlockProperty::solid(rcfd_fem::SolidFormulation::Full))
+        .is_err();
+    c.holds(
+        "K1 mesh",
+        built && shell && layup && solid,
+        &format!("built {built}, Shell {shell}, Layup {layup}, Solid refused {solid}"),
+    );
+    c.finish();
+}
+
+/// K1 after ADR 0454 (F-419): Shell3 has landed (no pending package); its placeholder still refuses naming Shell3.
+#[test]
+fn k1_shell3_kind_after_f419() {
+    let mut c = Checks::new();
+    let k = ElementKind::Shell3;
+    c.holds(
+        "K1 data",
+        k.name() == "Shell3"
+            && k.nodes_per_element() == 3
+            && k.corners() == 3
+            && !k.is_solid()
+            && k.pending().is_none()
             && k.edges() == [[0, 1], [1, 2], [2, 0]],
         &format!(
             "{} {} {} {:?} {:?}",
@@ -1218,6 +1265,7 @@ fn x1_modules_and_pending_after_landed() {
 
 // X1 after ADR 0450 (F-414) and ADR 0449 (F-413): damped, eigen_general and fatigue have landed as well.
 #[test]
+#[ignore = "record of ADR 0450 and ADR 0449: ADR 0454 (F-419) landed shell3 (PENDING None), retiring its row; continued in x1_modules_and_pending_after_f419 (ADR 0291 pattern, maintainer standing decision)"]
 fn x1_modules_and_pending_after_f413_f414() {
     use rcfd_fem as f;
     let fem: [(&str, Option<&str>, &str); 24] = [
@@ -1254,6 +1302,51 @@ fn x1_modules_and_pending_after_f413_f414() {
     let mut c = Checks::new();
     for (name, got, expect) in fem.iter().chain(&linalg) {
         // ADR 0448, ADR 0447, ADR 0450, ADR 0449: a landed module has PENDING None
+        let want = if *expect == "landed" { None } else { Some(*expect) };
+        c.holds(&format!("X1 {name}"), *got == want, &format!("{got:?}"));
+    }
+    let _ = rcfd_linalg::complex::C64::ONE;
+    c.finish();
+}
+
+// X1 after ADR 0454 (F-419): shell3 has landed as well.
+#[test]
+fn x1_modules_and_pending_after_f419() {
+    use rcfd_fem as f;
+    let fem: [(&str, Option<&str>, &str); 24] = [
+        ("mat_ortho", f::mat_ortho::PENDING, "ADR 0312 (F-409)"),
+        ("mat_table", f::mat_table::PENDING, "ADR 0312 (F-409)"),
+        ("mat_visco", f::mat_visco::PENDING, "ADR 0313 (F-410)"),
+        ("mat_creep", f::mat_creep::PENDING, "ADR 0314 (F-411)"),
+        ("harmonic_direct", f::harmonic_direct::PENDING, "landed"),
+        ("fatigue", f::fatigue::PENDING, "landed"),
+        ("damped", f::damped::PENDING, "landed"),
+        ("gyro", f::gyro::PENDING, "ADR 0318 (F-415)"),
+        ("rotor", f::rotor::PENDING, "ADR 0319 (F-416)"),
+        ("random", f::random::PENDING, "ADR 0320 (F-417)"),
+        ("shell3", f::shell3::PENDING, "landed"),
+        ("geometric_struct", f::geometric_struct::PENDING, "ADR 0323 (F-420)"),
+        ("mat_j2", f::mat_j2::PENDING, "ADR 0325 (F-422)"),
+        ("nl_transient", f::nl_transient::PENDING, "ADR 0326 (F-423)"),
+        ("follower", f::follower::PENDING, "ADR 0327 (F-424)"),
+        ("arclength", f::arclength::PENDING, "ADR 0327 (F-424)"),
+        ("mat_hyper", f::mat_hyper::PENDING, "ADR 0328 (F-425)"),
+        ("nonlinear_md", f::nonlinear_md::PENDING, "ADR 0328 (F-425)"),
+        ("tie", f::tie::PENDING, "ADR 0329 (F-426)"),
+        ("contact", f::contact::PENDING, "ADR 0330 (F-427)"),
+        ("laminate", f::laminate::PENDING, "ADR 0331 (F-428)"),
+        ("fracture", f::fracture::PENDING, "ADR 0332 (F-429)"),
+        ("cms", f::cms::PENDING, "ADR 0333 (F-430)"),
+        ("estimate", f::estimate::PENDING, "ADR 0335 (F-432)"),
+    ];
+    let linalg: [(&str, Option<&str>, &str); 3] = [
+        ("cskyline", rcfd_linalg::cskyline::PENDING, "landed"),
+        ("eigen_general", rcfd_linalg::eigen_general::PENDING, "landed"),
+        ("sparse_chol", rcfd_linalg::sparse_chol::PENDING, "landed"),
+    ];
+    let mut c = Checks::new();
+    for (name, got, expect) in fem.iter().chain(&linalg) {
+        // ADR 0448, ADR 0447, ADR 0450, ADR 0449, ADR 0454: a landed module has PENDING None
         let want = if *expect == "landed" { None } else { Some(*expect) };
         c.holds(&format!("X1 {name}"), *got == want, &format!("{got:?}"));
     }
@@ -1378,6 +1471,7 @@ fn shell3_model_unloaded() -> (SolidModel, Vec<Prescribed>) {
 
 /// R2b to R4b (amendment 2).
 #[test]
+#[ignore = "record of ADR 0440 amendment 2 before ADR 0454 (F-419) landed Shell3, retiring the R2b rows; continued in r2b_to_r4b_refusals_after_f419 (ADR 0291 pattern, maintainer standing decision)"]
 fn r2b_to_r4b_refusals() {
     let mut c = Checks::new();
     let (tri, tpres) = shell3_model_unloaded();
@@ -1387,6 +1481,56 @@ fn r2b_to_r4b_refusals() {
             not_yet(&r, "element kind", "Shell3", "block 0", "ADR 0322 (F-419)"),
             &format!("{:?}", r.err()),
         );
+    }
+    let plies = vec![
+        Ply::new(iso(), 0.005, 0.0).unwrap(),
+        Ply::new(iso(), 0.005, PI / 2.0).unwrap(),
+    ];
+    let layup = BlockProperty::layup(plies.clone()).unwrap();
+    let (lam, lpres) = shell_model(ElementKind::Shell4, layup.clone());
+    for (entry, r) in entries(&lam, &lpres, None, true) {
+        c.holds(
+            &format!("R3b Layup {entry}"),
+            not_yet(&r, "shell property", "Layup", "block 0", "ADR 0331 (F-428)"),
+            &format!("{:?}", r.err()),
+        );
+    }
+    let r4a = section_of(&layup, &iso());
+    let r4b = rcfd_fem::laminate::section_stiffness(&plies);
+    c.holds(
+        "R4b section_of(Layup), laminate::section_stiffness",
+        not_yet(
+            &r4a,
+            "shell property",
+            "Layup",
+            "the section stiffness",
+            "ADR 0331 (F-428)",
+        ) && not_yet(
+            &r4b,
+            "shell property",
+            "Layup",
+            "the section stiffness",
+            "ADR 0331 (F-428)",
+        ),
+        &format!("{:?} / {:?}", r4a.err(), r4b.err()),
+    );
+    c.finish();
+}
+
+/// R2b to R4b after ADR 0454 (F-419): the R2b rows state the paths that take Shell3 (R2c); R3b and R4b unchanged.
+#[test]
+fn r2b_to_r4b_refusals_after_f419() {
+    let mut c = Checks::new();
+    let (tri, tpres) = shell3_model_unloaded();
+    // ADR 0454 D3: Shell3 is taken where Shell4 is; E5 and E6 refuse it naming its follow-up.
+    for (entry, r) in entries(&tri, &tpres, None, true) {
+        let refused = entry.starts_with("E5") || entry.starts_with("E6");
+        let ok = if refused {
+            not_yet(&r, "element kind", "Shell3", "block 0", rcfd_fem::shell3::FOLLOW_UP)
+        } else {
+            !matches!(&r, Err(FemError::NotYetSupported { .. }))
+        };
+        c.holds(&format!("R2c Shell3 {entry}"), ok, &format!("{:?}", r.err()));
     }
     let plies = vec![
         Ply::new(iso(), 0.005, 0.0).unwrap(),

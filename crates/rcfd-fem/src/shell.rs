@@ -639,7 +639,7 @@ pub fn element_stiffness_section(
 }
 
 /// The section of a shell element of a model, from its block's property through [`section_of`].
-fn model_section(mesh: &SolidMesh, element: usize, material: &Material) -> Result<SectionStiffness> {
+pub(crate) fn model_section(mesh: &SolidMesh, element: usize, material: &Material) -> Result<SectionStiffness> {
     let property = mesh.blocks()[mesh.block_of(element)].property();
     match property {
         Some(p @ (BlockProperty::Shell { .. } | BlockProperty::Layup { .. })) => section_of(p, material),
@@ -791,9 +791,10 @@ pub fn thermal_load_vector(
     Ok(out)
 }
 
-/// The thickness of the block of a shell element, if it is a Shell4 element of a block with a Shell property.
+/// The thickness of the block of a shell element, if it is a Shell4 or Shell3 element (ADR 0454 D2) of a block with a Shell
+/// property.
 pub fn shell_thickness(mesh: &SolidMesh, element: usize) -> Option<f64> {
-    if mesh.element_kind(element) != ElementKind::Shell4 {
+    if !matches!(mesh.element_kind(element), ElementKind::Shell4 | ElementKind::Shell3) {
         return None;
     }
     match mesh.blocks()[mesh.block_of(element)].property() {
@@ -806,8 +807,9 @@ pub(crate) fn thickness_or_error(mesh: &SolidMesh, element: usize) -> Result<f64
     shell_thickness(mesh, element).ok_or_else(|| FemError::InvalidValue {
         key: "property",
         reason: format!(
-            "block {} (Shell4) has no Shell property: a shell needs its thickness",
-            mesh.block_of(element)
+            "block {} ({}) has no Shell property: a shell needs its thickness",
+            mesh.block_of(element),
+            mesh.element_kind(element).name()
         ),
     })
 }
@@ -830,18 +832,22 @@ fn model_facet(mesh: &SolidMesh, e: usize) -> Result<Facet> {
     })
 }
 
-/// The checks of a model with shells (ADR 0432 D4): every Shell4 block has a Shell property, no node of a shell element is
-/// a node of a solid element (the first in element and node order, named), every shell element has a valid facet.
+/// The checks of a model with shells (ADR 0432 D4, ADR 0454 D2): every Shell4 and Shell3 block has a Shell property, no
+/// node of a shell element is a node of a solid element (the first in element and node order, named), every shell element
+/// has a valid facet.
 pub fn check_shell_model(model: &SolidModel) -> Result<()> {
     let mesh = model.mesh();
     let mut any = false;
     for (b, block) in mesh.blocks().iter().enumerate() {
-        if block.kind() == ElementKind::Shell4 {
+        if matches!(block.kind(), ElementKind::Shell4 | ElementKind::Shell3) {
             any = true;
             if !matches!(block.property(), Some(BlockProperty::Shell { .. })) {
                 return Err(FemError::InvalidValue {
                     key: "property",
-                    reason: format!("block {b} (Shell4) has no Shell property: a shell needs its thickness"),
+                    reason: format!(
+                        "block {b} ({}) has no Shell property: a shell needs its thickness",
+                        block.kind().name()
+                    ),
                 });
             }
         }
@@ -860,7 +866,8 @@ pub fn check_shell_model(model: &SolidModel) -> Result<()> {
         }
     }
     for e in 0..mesh.n_elements() {
-        if mesh.element_kind(e) != ElementKind::Shell4 {
+        let kind = mesh.element_kind(e);
+        if !matches!(kind, ElementKind::Shell4 | ElementKind::Shell3) {
             continue;
         }
         for &n in mesh.element_nodes(e) {
@@ -877,7 +884,11 @@ pub fn check_shell_model(model: &SolidModel) -> Result<()> {
                 });
             }
         }
-        model_facet(mesh, e)?;
+        if kind == ElementKind::Shell3 {
+            crate::shell3::model_facet(mesh, e)?;
+        } else {
+            model_facet(mesh, e)?;
+        }
     }
     Ok(())
 }
@@ -923,7 +934,8 @@ pub struct ShellStresses {
 
 /// The resultants and surface stresses of every shell element of a model for a displacement vector (one value per unknown
 /// of `model.dof_map()`), as (element, stresses) in element order. With a temperature field the membrane forces are those of
-/// the elastic strain `eps - alpha dT_c (1, 1, 0)`, `dT_c` at the centre (ADR 0445 D2).
+/// the elastic strain `eps - alpha dT_c (1, 1, 0)`, `dT_c` at the centre (ADR 0445 D2). A Shell3 element gives those of
+/// ADR 0454 arithmetic 8, at its centroid.
 pub fn stresses(model: &SolidModel, displacement: &[f64]) -> Result<Vec<(usize, ShellStresses)>> {
     let dofs = model.dof_map();
     if displacement.len() != dofs.n_equations() {
@@ -938,6 +950,10 @@ pub fn stresses(model: &SolidModel, displacement: &[f64]) -> Result<Vec<(usize, 
     let temperature = crate::thermal::temperature_field(model)?;
     let mut out = Vec::new();
     for e in 0..mesh.n_elements() {
+        if mesh.element_kind(e) == ElementKind::Shell3 {
+            out.push((e, shell3_stresses(model, displacement, e, temperature)?));
+            continue;
+        }
         if mesh.element_kind(e) != ElementKind::Shell4 {
             continue;
         }
@@ -1034,4 +1050,42 @@ pub fn stresses(model: &SolidModel, displacement: &[f64]) -> Result<Vec<(usize, 
         ));
     }
     Ok(out)
+}
+
+/// The stresses of Shell3 element `e` (ADR 0454 arithmetic 8).
+fn shell3_stresses(
+    model: &SolidModel,
+    displacement: &[f64],
+    e: usize,
+    temperature: Option<(&[f64], f64)>,
+) -> Result<ShellStresses> {
+    let mesh = model.mesh();
+    let located = |source: FemError| FemError::Element {
+        element: e,
+        source: Box::new(source),
+    };
+    let t = thickness_or_error(mesh, e).map_err(located)?;
+    let f = crate::shell3::model_facet(mesh, e)?;
+    let ue: Vec<f64> = element_dofs(&model.dof_map(), mesh.element_nodes(e))
+        .iter()
+        .map(|&q| displacement[q])
+        .collect();
+    if ue.len() != 18 {
+        return Err(located(FemError::FieldLength {
+            key: "element unknowns",
+            expected: 18,
+            found: ue.len(),
+        }));
+    }
+    let materials = model.material_indices()?;
+    let material = &model.materials()[materials[e]].1;
+    let section = model_section(mesh, e, material).map_err(located)?;
+    let thermal = match temperature {
+        Some((nodal, reference)) => {
+            let dt: f64 = mesh.element_nodes(e).iter().map(|&n| nodal[n] - reference).sum::<f64>() / 3.0;
+            material.expansion() * dt
+        }
+        None => 0.0,
+    };
+    Ok(crate::shell3::element_stresses(&f, &ue, &section, t, thermal))
 }

@@ -197,12 +197,12 @@ pub fn solve_static_report(
     } = &options.solver
     {
         // ADR 0417 D4, ADR 0432 D3: the rigid-body modes of the multigrid are those of three-unknown nodes.
-        use crate::mesh::ElementKind::{Beam2, Shell4};
+        use crate::mesh::ElementKind::{Beam2, Shell3, Shell4};
         if let Some(b) = model
             .mesh()
             .blocks()
             .iter()
-            .position(|b| matches!(b.kind(), Beam2 | Shell4))
+            .position(|b| matches!(b.kind(), Beam2 | Shell4 | Shell3))
         {
             let kind = model.mesh().blocks()[b].kind();
             return Err(FemError::NotYetSupported {
@@ -211,8 +211,10 @@ pub fn solve_static_report(
                 location: format!("block {b}, solver cg-amg-rbm"),
                 package: if kind == Beam2 {
                     crate::beam::FOLLOW_UP
-                } else {
+                } else if kind == Shell4 {
                     crate::shell::FOLLOW_UP
+                } else {
+                    crate::shell3::FOLLOW_UP
                 },
             });
         }

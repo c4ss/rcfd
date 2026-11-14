@@ -1073,6 +1073,8 @@ fn check_transformation_model(model: &SolidModel) -> Result<()> {
         Some(("Beam2", crate::beam::FOLLOW_UP))
     } else if has(crate::mesh::ElementKind::Shell4) {
         Some(("Shell4", crate::shell::FOLLOW_UP))
+    } else if has(crate::mesh::ElementKind::Shell3) {
+        Some(("Shell3", crate::shell3::FOLLOW_UP))
     } else {
         None
     };

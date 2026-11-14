@@ -21,7 +21,8 @@
 //! element centre in the element's local axes, from `rcfd_fem::shell::stresses`: `membrane_force` (3), `moment` (3),
 //! `shear_force` (2), `stress_top` (3), `stress_bottom` (3) and `shell_axes` (9, `e_1, e_2, e_3`), NaN on a beam cell; when a
 //! Beam2 block is present also `section_force_start` and `section_force_end` (6 each), NaN on a shell cell. Blocks of other
-//! kinds are refused naming ADR 0437.
+//! kinds are refused naming ADR 0437. Shell3 blocks (F-419, ADR 0454 D2) are written the same way as `VTK_TRIANGLE` cells,
+//! their cell arrays at the centroid.
 
 use rcfd_core::{Error, Result};
 use rcfd_fem::beam::section_forces;
@@ -35,7 +36,10 @@ use rcfd_io::vtk::{
 };
 use std::path::Path;
 
+const IDENTITY_3: [usize; 3] = [0, 1, 2];
 const IDENTITY_4: [usize; 4] = [0, 1, 2, 3];
+/// The VTK cell type of a linear triangle (ADR 0454 D2).
+const VTK_TRIANGLE: u8 = 5;
 const IDENTITY_8: [usize; 8] = [0, 1, 2, 3, 4, 5, 6, 7];
 const IDENTITY_10: [usize; 10] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
 const IDENTITY_2: [usize; 2] = [0, 1];
@@ -52,6 +56,7 @@ pub fn vtk_from_fem(kind: ElementKind) -> Result<(u8, &'static [usize])> {
         ElementKind::Hex20 => Ok((VTK_QUADRATIC_HEXAHEDRON, &IDENTITY_20)),
         ElementKind::Beam2 => Ok((VTK_LINE, &IDENTITY_2)),
         ElementKind::Shell4 => Ok((VTK_QUAD, &IDENTITY_4)),
+        ElementKind::Shell3 => Ok((VTK_TRIANGLE, &IDENTITY_3)),
         other => Err(Error::InvalidValue {
             path: "element kind".into(),
             reason: format!("no VTK cell mapping for element kind {}", other.name()),
@@ -320,7 +325,11 @@ pub struct ShellFields {
 }
 
 fn has_shell(model: &SolidModel) -> bool {
-    model.mesh().blocks().iter().any(|b| b.kind() == ElementKind::Shell4)
+    model
+        .mesh()
+        .blocks()
+        .iter()
+        .any(|b| matches!(b.kind(), ElementKind::Shell4 | ElementKind::Shell3))
 }
 
 /// The arrays of the result of a shell model. Refuses a model without Shell4, a block of a kind other than Shell4 and Beam2
@@ -337,7 +346,7 @@ pub fn shell_fields(model: &SolidModel, result: &SolidResult) -> Result<ShellFie
         .blocks()
         .iter()
         .enumerate()
-        .find(|(_, b)| !matches!(b.kind(), ElementKind::Shell4 | ElementKind::Beam2))
+        .find(|(_, b)| !matches!(b.kind(), ElementKind::Shell4 | ElementKind::Shell3 | ElementKind::Beam2))
     {
         return Err(Error::InvalidValue {
             path: "element kind".into(),
