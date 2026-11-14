@@ -34,7 +34,7 @@ use crate::loads::{face_rule, face_shape_functions, nodal_load_vector, NodalForc
 use crate::mass::consistent_with;
 use crate::modal::{ModalOptions, ModalResult};
 use crate::model::{Constraint, ElasticSupport, SolidModel, SolidResult, SolverStats};
-use crate::solve::{SolveReport, StaticOptions, StaticSolver, PIVOT_TOLERANCE};
+use crate::solve::{DirectFactor, SolveReport, StaticOptions, StaticSolver, PIVOT_TOLERANCE};
 use rcfd_core::vec3::{cross, norm, Vec3};
 use rcfd_linalg::eigen::{lowest_eigenpairs, Shift, SubspaceOptions};
 use rcfd_linalg::skyline::{SkylineError, SkylineLdlt, SkylineOptions};
@@ -1276,6 +1276,15 @@ pub fn solve_static_mpc(
                     .into(),
         });
     }
+    // ADR 0503 D5: nor the supernodal L D L^T.
+    if let StaticSolver::SupernodalDirect = options.solver {
+        return Err(FemError::InvalidValue {
+            key: "solver",
+            reason: "the supernodal L D L^T (ADR 0503) is not available on the transformation path (ADR 0296): use \
+                     Direct or ConjugateGradient"
+                .into(),
+        });
+    }
     if let StaticSolver::PreconditionedCg { .. } = options.solver {
         return Err(FemError::InvalidValue {
             key: "solver",
@@ -1359,6 +1368,8 @@ pub fn solve_static_mpc(
         relative_residual,
         shift: None,
         breakdowns: Vec::new(),
+        // ADR 0503 D5: the direct solve of the transformation path builds the envelope factor.
+        factor: (nq > 0 && solver == "skyline-ldlt").then_some(DirectFactor::Envelope),
     };
     let result = SolidResult::new(dofs, u)?
         .with_reactions(reactions)?
