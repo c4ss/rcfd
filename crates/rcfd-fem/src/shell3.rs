@@ -169,7 +169,10 @@ pub fn facet(coords: &[Vec3]) -> Result<Facet3> {
         let p = local[i];
         let a = [local[(i + 1) % 3][0] - p[0], local[(i + 1) % 3][1] - p[1]];
         let b = [local[(i + 2) % 3][0] - p[0], local[(i + 2) % 3][1] - p[1]];
-        let angle = (a[0] * b[1] - a[1] * b[0]).abs().atan2(a[0] * b[0] + a[1] * b[1]).to_degrees();
+        let angle = (a[0] * b[1] - a[1] * b[0])
+            .abs()
+            .atan2(a[0] * b[0] + a[1] * b[1])
+            .to_degrees();
         min_angle = min_angle.min(angle);
         longest_edge = longest_edge.max((a[0] * a[0] + a[1] * a[1]).sqrt());
     }
@@ -354,7 +357,11 @@ fn add_b1t_c_b2(k: &mut [f64], b1: &[[f64; 18]; 3], c: &[[f64; 3]; 3], b2: &[[f6
 }
 
 fn transpose3(c: &[[f64; 3]; 3]) -> [[f64; 3]; 3] {
-    [[c[0][0], c[1][0], c[2][0]], [c[0][1], c[1][1], c[2][1]], [c[0][2], c[1][2], c[2][2]]]
+    [
+        [c[0][0], c[1][0], c[2][0]],
+        [c[0][1], c[1][1], c[2][1]],
+        [c[0][2], c[1][2], c[2][2]],
+    ]
 }
 
 /// The 18 x 18 local stiffness for a section (ADR 0454 arithmetic 2 to 5), unknowns `(u, v, w, theta_x, theta_y, theta_z)`

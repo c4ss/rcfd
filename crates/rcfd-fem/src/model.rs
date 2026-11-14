@@ -1215,7 +1215,10 @@ impl SolidModel {
                 finite("pressure", *pressure)?;
                 for &e in self.mesh.element_set(set).expect("checked") {
                     let kind = self.mesh.element_kind(e);
-                    if !matches!(kind, crate::mesh::ElementKind::Shell4 | crate::mesh::ElementKind::Shell3) {
+                    if !matches!(
+                        kind,
+                        crate::mesh::ElementKind::Shell4 | crate::mesh::ElementKind::Shell3
+                    ) {
                         return Err(FemError::InvalidValue {
                             key: "shell pressure",
                             reason: format!(

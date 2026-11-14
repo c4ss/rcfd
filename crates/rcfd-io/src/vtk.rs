@@ -486,7 +486,10 @@ pub fn fe_vtu_string(
         let npc = vtk_cell_nodes(block.cell_type).ok_or_else(|| {
             fe_invalid(
                 "cell_type",
-                format!("block {b}: cell type {} is not 3, 5, 9, 10, 12, 24 or 25", block.cell_type),
+                format!(
+                    "block {b}: cell type {} is not 3, 5, 9, 10, 12, 24 or 25",
+                    block.cell_type
+                ),
             )
         })?;
         if block.connectivity.is_empty() || block.connectivity.len() % npc != 0 {

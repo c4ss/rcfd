@@ -503,7 +503,11 @@ fn ct_cantilever_strip() {
         let top = tensor_in(s.top, ax, ax)[0];
         let bottom = tensor_in(s.bottom, ax, ax)[0];
         println!("CT2 element {e}: top {top:.8e}, bottom {bottom:.8e}, 6M/(b t^2) = {mid:.8e}");
-        c.at_most(&format!("CT2 element {e}: top sigma_xx against -6M/(b t^2)"), rel(top, -mid), 2e-2);
+        c.at_most(
+            &format!("CT2 element {e}: top sigma_xx against -6M/(b t^2)"),
+            rel(top, -mid),
+            2e-2,
+        );
         c.at_most(
             &format!("CT2 element {e}: bottom sigma_xx against +6M/(b t^2)"),
             rel(bottom, mid),
@@ -689,7 +693,11 @@ fn fr_free_plate_six_zero_frequencies() {
         let k = stiffness(&m).unwrap();
         let mm = consistent(&m).unwrap();
         let n6 = count_below(&k, &mm, lambda7 / 4.0, &SkylineOrdering::Rcm).unwrap();
-        c.holds(&format!("FR3 {id} Sturm count below lambda_7 / 4 is 6"), n6 == 6, &format!("{n6}"));
+        c.holds(
+            &format!("FR3 {id} Sturm count below lambda_7 / 4 is 6"),
+            n6 == 6,
+            &format!("{n6}"),
+        );
         if id == "FR1" {
             let o = Shell3Options::default().drilling(0.0);
             let k0 = assemble_with(&m, None, |ctx| {
@@ -770,7 +778,11 @@ fn se_iso_single_element() {
             ev[..6].iter().fold(0.0f64, |m, l| m.max(l.abs())) / lmax,
             ev[6] / lmax
         );
-        c.holds(&format!("SE1 t = {t}: six zero eigenvalues"), zeros == 6, &format!("{zeros}"));
+        c.holds(
+            &format!("SE1 t = {t}: six zero eigenvalues"),
+            zeros == 6,
+            &format!("{zeros}"),
+        );
         c.above(&format!("SE1 t = {t}: lambda_7 / lambda_max"), ev[6] / lmax, 1e-7);
         let kmax = max_abs(k.values());
         let mut worst = 0.0f64;
@@ -819,7 +831,13 @@ fn se_iso_single_element() {
 
 /// Two triangles: element 0 `(0, 0), (1, 0), (0, 1)`, element 1 `(1, 0), (2, 0), (1.5, h)`; nodes 0, 2, 3 held.
 fn angle_model(h: f64) -> (SolidModel, Vec<Prescribed>) {
-    let nodes = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [2.0, 0.0, 0.0], [1.5, h, 0.0]];
+    let nodes = vec![
+        [0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [2.0, 0.0, 0.0],
+        [1.5, h, 0.0],
+    ];
     let mut mesh = tri_mesh(nodes, &[[0, 1, 2], [1, 3, 4]], 0.01);
     mesh.add_node_set("tip", vec![4]).unwrap();
     let mut m = model_of(mesh, material(0.3, RHO));
@@ -939,7 +957,11 @@ fn s1_n2_n3_refusals() {
     // N2: a valid Shell3 model on the other paths.
     let base = cantilever_model();
     let r = solve_static(&base, &StaticOptions::default());
-    c.holds("N2 the base model solves", r.is_ok(), &format!("{:?}", r.as_ref().err()));
+    c.holds(
+        "N2 the base model solves",
+        r.is_ok(),
+        &format!("{:?}", r.as_ref().err()),
+    );
     let mut ms = base.clone();
     ms.add_support(ElasticSupport::nodal_spring("tip", 2, 1e6)).unwrap();
     let r = rcfd_fem::mpc::solve_static_mpc(&ms, &[], &[], &[], &StaticOptions::default());
@@ -979,12 +1001,19 @@ fn s1_n2_n3_refusals() {
         .unwrap();
     let r = rcfd_fem::mpc::solve_static_mpc(&mc, &[], &[], &[], &StaticOptions::default()).map(|_| ());
     let ok = matches!(&r, Err(e @ FemError::NotYetSupported { variant: "Cyclic", package, .. }) if *package == shell3::FOLLOW_UP && e.to_string().contains("Shell3"));
-    c.holds("N2 cyclic constraint with Shell3 (solve_static_mpc)", ok, &format!("{r:?}"));
+    c.holds(
+        "N2 cyclic constraint with Shell3 (solve_static_mpc)",
+        ok,
+        &format!("{r:?}"),
+    );
     // N3: invalid data.
     let (nodes, quads) = grid(1.0, 1.0, 1, 1);
     let mut mesh = SolidMesh::new(nodes).unwrap();
-    mesh.add_block(ElementKind::Shell3, cut(quads[0], 0).iter().flatten().copied().collect())
-        .unwrap();
+    mesh.add_block(
+        ElementKind::Shell3,
+        cut(quads[0], 0).iter().flatten().copied().collect(),
+    )
+    .unwrap();
     mesh.add_element_set("all", vec![0, 1]).unwrap();
     let m = model_of(mesh, material(0.3, RHO));
     let r = solve_static(&m, &StaticOptions::default());
@@ -998,12 +1027,22 @@ fn s1_n2_n3_refusals() {
     let r = m.add_load(Load::shell_pressure("all", 1.0));
     c.holds(
         "N3 shell pressure on Hex8 elements",
-        matches!(&r, Err(FemError::InvalidValue { key: "shell pressure", .. })),
+        matches!(
+            &r,
+            Err(FemError::InvalidValue {
+                key: "shell pressure",
+                ..
+            })
+        ),
         &format!("{r:?}"),
     );
     let mut m = cantilever_model();
     let r = m.add_load(Load::shell_pressure("all", 1.0));
-    c.holds("N3 shell pressure on Shell3 elements taken", r.is_ok(), &format!("{r:?}"));
+    c.holds(
+        "N3 shell pressure on Shell3 elements taken",
+        r.is_ok(),
+        &format!("{r:?}"),
+    );
     c.finish();
 }
 
@@ -1063,7 +1102,11 @@ fn ld_m1_loads_thermal_and_mass() {
         [d[0] - s * a[0], d[1] - s * a[1], d[2] - s * a[2]]
     };
     let cases: Vec<(&str, Load, Vec<Vec3>)> = vec![
-        ("gravity", Load::gravity(g), vec![[RHO * g[0], RHO * g[1], RHO * g[2]]; nodes.len()]),
+        (
+            "gravity",
+            Load::gravity(g),
+            vec![[RHO * g[0], RHO * g[1], RHO * g[2]]; nodes.len()],
+        ),
         (
             "centrifugal",
             Load::centrifugal(axis, origin, omega),
@@ -1096,7 +1139,11 @@ fn ld_m1_loads_thermal_and_mass() {
                 err = err.max(f[dofs.equation(n, 3 + k).unwrap()].abs());
             }
         }
-        c.at_most(&format!("LD1 {name}: nodal loads against the closed form"), err / big, 1e-12);
+        c.at_most(
+            &format!("LD1 {name}: nodal loads against the closed form"),
+            err / big,
+            1e-12,
+        );
     }
     // LD2: pressure.
     let p = 2500.0;
@@ -1114,7 +1161,11 @@ fn ld_m1_loads_thermal_and_mass() {
             moment = moment.max(f[dofs.equation(n, 3 + k).unwrap()].abs());
         }
     }
-    let err = norm([sum[0] - total * normal[0], sum[1] - total * normal[1], sum[2] - total * normal[2]]);
+    let err = norm([
+        sum[0] - total * normal[0],
+        sum[1] - total * normal[1],
+        sum[2] - total * normal[2],
+    ]);
     c.at_most("LD2 pressure: |sum F - p A n| / (p A)", err / total, 1e-12);
     c.at_most("LD2 pressure: nodal moments / (p A)", moment / total, 1e-12);
     // LD3: free thermal expansion of the flat plate held at node 0.
@@ -1134,10 +1185,18 @@ fn ld_m1_loads_thermal_and_mass() {
             scale = scale.max(ex[i].abs());
         }
     }
-    c.at_most("LD3 thermal: translations against alpha dT (x - x_0)", err / scale, 1e-8);
+    c.at_most(
+        "LD3 thermal: translations against alpha dT (x - x_0)",
+        err / scale,
+        1e-8,
+    );
     let st = shell::stresses(&m, r.displacement_values()).unwrap();
     let nmax = st.iter().fold(0.0f64, |a, (_, s)| a.max(max_abs(&s.membrane)));
-    c.at_most("LD3 thermal: membrane forces / (E alpha dT t)", nmax / (E * alpha * dt * t), 1e-8);
+    c.at_most(
+        "LD3 thermal: membrane forces / (E alpha dT t)",
+        nmax / (E * alpha * dt * t),
+        1e-8,
+    );
     // M1: one element in space.
     let tri = [[0.0, 0.0], [0.6, 0.1], [0.2, 0.4]];
     let origin = [0.3, -0.2, 0.5];
@@ -1148,11 +1207,19 @@ fn ld_m1_loads_thermal_and_mass() {
     let x: Vec<Vec3> = tri.iter().map(|&p| place(p)).collect();
     let m = model_of(tri_mesh(x, &[[0, 1, 2]], t), material(0.3, RHO));
     let mp = mass_properties(&m, &consistent(&m).unwrap()).unwrap();
-    let area = 0.5 * ((tri[1][0] - tri[0][0]) * (tri[2][1] - tri[0][1]) - (tri[2][0] - tri[0][0]) * (tri[1][1] - tri[0][1]));
+    let area =
+        0.5 * ((tri[1][0] - tri[0][0]) * (tri[2][1] - tri[0][1]) - (tri[2][0] - tri[0][0]) * (tri[1][1] - tri[0][1]));
     c.at_most("M1 mass", rel(mp.mass, RHO * t * area), 1e-12);
-    let cx = [(tri[0][0] + tri[1][0] + tri[2][0]) / 3.0, (tri[0][1] + tri[1][1] + tri[2][1]) / 3.0];
+    let cx = [
+        (tri[0][0] + tri[1][0] + tri[2][0]) / 3.0,
+        (tri[0][1] + tri[1][1] + tri[2][1]) / 3.0,
+    ];
     let centre = place(cx);
-    let dc = norm([mp.centre[0] - centre[0], mp.centre[1] - centre[1], mp.centre[2] - centre[2]]);
+    let dc = norm([
+        mp.centre[0] - centre[0],
+        mp.centre[1] - centre[1],
+        mp.centre[2] - centre[2],
+    ]);
     c.at_most("M1 centre", dc / 0.6, 1e-12);
     // Second moments about the centroid: A / 12 sum d_i d_i^T.
     let (mut sxx, mut syy, mut sxy) = (0.0, 0.0, 0.0);

@@ -70,7 +70,8 @@ fn shell4_plate() -> SolidModel {
     mesh.set_block_property(0, BlockProperty::shell(0.01).unwrap()).unwrap();
     mesh.add_element_set("all", (0..nx * ny).collect()).unwrap();
     mesh.add_node_set("all", (0..n).collect()).unwrap();
-    mesh.add_node_set("root", (0..=ny).map(|j| idx(0, j)).collect()).unwrap();
+    mesh.add_node_set("root", (0..=ny).map(|j| idx(0, j)).collect())
+        .unwrap();
     let mut m = SolidModel::new(mesh);
     m.add_material("all", steel()).unwrap();
     for comp in 0..6 {
@@ -90,7 +91,8 @@ fn shell4_plate() -> SolidModel {
 fn beam_cantilever() -> SolidModel {
     let nodes: Vec<[f64; 3]> = (0..5).map(|i| [0.25 * i as f64, 0.0, 0.0]).collect();
     let mut mesh = SolidMesh::new(nodes).unwrap();
-    mesh.add_block(ElementKind::Beam2, vec![0, 1, 1, 2, 2, 3, 3, 4]).unwrap();
+    mesh.add_block(ElementKind::Beam2, vec![0, 1, 1, 2, 2, 3, 3, 4])
+        .unwrap();
     let section = BeamSection::new(0.012, 3.0e-6, 5.0e-6, 4.0e-6, 0.85, 0.75).unwrap();
     mesh.set_block_property(0, BlockProperty::beam(section, [0.0, 0.0, 1.0]).unwrap())
         .unwrap();
