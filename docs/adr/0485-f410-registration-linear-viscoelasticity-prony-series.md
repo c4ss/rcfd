@@ -380,3 +380,108 @@ ignored records (`r1_r1m_r2_n3_relaxation`, `s1_s1m_s2_time_temperature_shift`).
    temperature `T` and no time increment (the instantaneous response from the committed state at the same strain, which is the
    committed stress, D1); measure and limit as S1, `|S_xx - E_xx E(t/a_T)| / (E_0 E_xx) <= 1e-10`. S1m and S2 as registered.
    Test `s1b_s1m_s2_time_temperature_shift`. Run once.
+
+## Addendum 1: results (2026-11-14)
+
+Registered run: commit bf383d20 (`cargo test -p rcfd-fem --release --test sa_visco -- --nocapture --test-threads=1`, log
+`f410-scratch/run1.log`). Each check ran once. The corrected run of amendment 1 was commit 255a0613 (log `run2.log`). The bit
+record B0 was printed on the unchanged base 2e0e3213 (`b0-base.log`) and written into the test at commit d4730b44, before any
+library code.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| R1 one Hex8, strain step, three branches, 101 step ends x 8 points | `<= 1e-10` | `4.65e-16` | yes |
+| R1m material point | `<= 1e-10` | `1.75e-16` | yes |
+| R2 unequal weights, strain step | `<= 1e-10` | `2.75e-16` | yes |
+| C1 creep of one element, 20 steps per `tau` | `<= 1e-3` | `1.209e-5` (`3.031e-6` at 40) | yes |
+| C2 observed order | `>= 1.9` | `1.996` | yes |
+| C1m, C2m material point | `<= 1e-3`, `>= 1.9` | `1.208e-5`, order `1.9999` | yes |
+| M1 `E'`, `E''`, 61 frequencies | `<= 1e-13` | `5.98e-16` | yes |
+| M2 shear and bulk, unequal weights | `<= 1e-13` | `3.88e-16` | yes |
+| M3 modulus table equals the complex modulus; refused for unequal weights | exact | equal; refused (key `"terms"`) | yes |
+| D1 dissipation, tenth cycle, material point, 200 steps per cycle | `<= 1e-2` | `2.505e-4` | yes |
+| D2 the same through one element | `<= 1e-2` | `2.505e-4` | yes |
+| S1 (registered set-up) | - | set-up defective, stopped before any measure (amendment 1) | not counted |
+| S1b one Hex8 at `T_ref + 10 K`, WLF (`a_T = 1.475133e-3`) | `<= 1e-10` | `4.65e-16` | yes |
+| S1m WLF, Arrhenius, uneven steps | `<= 1e-10` | `3.49e-16`, `2.33e-16` | yes |
+| S2 shift factor against the formulas | `<= 1e-13` | `1.64e-14` | yes |
+| V1 decrement against `pi E''/E'` (`eta = 0.05`) | `<= 3e-2` | `2.502e-2` (`delta = 0.161010`, `pi eta = 0.157080`) | yes |
+| V2 against the exact root (`0.161046`) | `<= 5e-3` | `2.25e-4` | yes |
+| B1 no branches: state size, `stress`, `solve_from_at`, `nl_transient` 100 steps | bits | 0; equal; equal; equal | yes |
+| H1 split run by save and restore | bits | equal (4848 values); states non-zero; bytes stable | yes |
+| RF1 ten refusals | each with its key | all (`tau` x3, `shear` x3, `bulk` x2, `e` x2) | yes |
+| T1 tangent against central differences | `<= 1e-6` | `1.15e-12` | yes |
+| N2 linear paths, `elasticity_matrix`, static driver, orthotropic base, no temperature, WLF pole | all | all | yes |
+| N3 (registered set-up) | bits | one unit in the last place (amendment 1) | set-up defective |
+| N3b relative change without time | `<= 1e-12` | `2.33e-16` | yes |
+| N1 B0, 12 digests of 2e0e3213 | equal | equal | yes |
+| N4 `baseline_hashes` | pass | pass (3 passed, 1 ignored) | yes |
+| X1 records and copies (`sa_scaffold.rs`, `sa_j2_default_bits.rs`) | pass | pass | yes |
+
+Other runs: `cargo test -p rcfd-fem --release` (all 128 test binaries of the crate): 629 passed, 0 failed, 157 ignored;
+`cargo test -p rcfd-cli --release --test docs_site`: 2 passed; `cargo clippy -p rcfd-fem --all-targets --release -- -D
+warnings`: clean; `cargo fmt -p rcfd-fem --check`: clean.
+
+Shared solver files changed: `nonlinear.rs` (module doc; `evaluate` takes the point context and has the viscoelastic arm;
+`force_and_tangent` and `Problem` carry the context; `solve_with` refuses the viscoelastic material; `solve_from` forwards to
+the new `solve_from_at`), `nl_transient.rs` (module doc; `substep` calls `solve_from_at` with the time of the sub-step),
+`material.rs` (the viscoelastic arms of `elasticity_matrix` and `stress`; `PronyTerm::new` refuses both weights 0), `model.rs`
+(`viscoelastic` accepts no terms and refuses a sum of 1; `check_elements` refuses the material where the history flag is off).
+Every other material takes the lines it took (B0, B1, the default-bits files of F-422 and F-423).
+
+**Mutations** (`f410-scratch/mutate.py` on a git-archive copy of 255a0613, log `mutations.log`; MU0, the copy without a
+mutation, passes 10 of 10):
+
+| Id | Caught by |
+|---|---|
+| MU1 `gamma_i = 1` | C1 (`2.9e-3`), C2 (order `1.003`), C1m, C2m, D1, D2 (`4.6e-2`), V1 (`4.1e-2`), V2 |
+| MU2 shift ignored | S1b (`0.52`), S1m (`0.52`, `0.19`) |
+| MU3 instantaneous tangent | T1 (`0.16`) |
+| MU4 committed strain not updated | R1, R1m, R2, N3b, S1b, S1m, D1, D2, C1 (the solve fails), V1 (the run fails); not H1 (as expected, the split and unsplit runs are equally wrong) |
+| MU5 no time in `nl_transient` | V1, V2 (no decay, `1.0`) |
+| MU6 `x^2` in the loss numerator | M1 (`0.60`), M2 (`0.57`) |
+| MU7 history flag ignored | N2 (the four linear paths take the material and fail later, in the element-constant matrix) |
+| MU8 shear and bulk weights swapped | R2 (`0.44`), T1 (`0.23`) |
+
+Every planned mutation was caught.
+
+**Deviations.** (1) The set-ups of N3 and S1 were defective: corrected by amendment 1 (N3b, S1b), and the records were kept.
+S1m and S2 ran first in the corrected run. R1, R1m and R2 were copied unchanged into `r1_r1m_r2_relaxation` (deterministic,
+same numbers). (2) The state layout is `6 (N + 1)` values, against `6 N` in ADR 0440 D3 (D1). An empty term list is accepted
+(ADR 0440 D2 refused it). (3) The X1 copy is named `x1_modules_and_pending_after_f415_f420_f422_f416_f417_f432_f423_after_f410`,
+as D9 says. (4) Citations: the chapter numbers of Simo and Hughes (chapter 10) and of Ferry (chapter 11), named in the
+registration from memory, were not checked. `docs/reference-data.md` says so. Not run: the whole workspace test suite (the
+lead's gate).
+
+**Decision by the registered rule: done.** Every check of the table is met, two of them through the corrected set-ups of
+amendment 1. Every planned mutation is caught, fmt and clippy are clean, and B0 and the baseline hashes are unchanged. The
+margin of V1 is small: 2.50 percent against 3. It is set by the dispersion term of the standard solid (arithmetic 3), which the
+acceptance's `pi E''/E'` leaves out; V2 against the exact root is met within `2.3e-4`.
+
+### Remaining questions
+
+1. **Case-file key.** Options: (a) none yet; (b) `viscoelastic = { base, terms = [{ shear, bulk, tau }], shift }` read into
+   `Material::viscoelastic`, offered with the nonlinear transient study only. Recommendation: (b), when the maintainer opens
+   the case file to the nonlinear studies.
+2. **Quasi-static time history.** The static driver has no time and refuses the material. A creep or relaxation analysis of
+   a blade is a loop of `solve_from_at` written by the caller. Options: (a) leave it so; (b) a time-stepping driver over
+   `solve_from_at` with halving (follow-up 1). Recommendation: (b).
+3. **The harmonic path.** `modulus_table` feeds `LossFactor::Table` for equal weights, linear between the table points.
+   Options: (a) leave it so; (b) the direct harmonic solve and the damped modes take the viscoelastic material, with its exact
+   complex shear and bulk moduli at each frequency (follow-up 2). Recommendation: (b), for the fan blade's frequency sweep.
+4. **Temperature in the nonlinear transient integrator.** A shifted material is refused there. Options: (a) a uniform
+   temperature in `NlTransientOptions`; (b) a temperature field per node. Recommendation: (a) inside follow-up 1.
+
+## For the lead: roadmap entries
+
+Proposed status of F-410: **done**. Proposed note:
+
+> ADR 0485, 2026-11-14 (registration of stub ADR 0313): linear viscoelasticity in rcfd-fem (mat_visco.rs). The generalised Maxwell solid on an isotropic base, with shear and bulk weights per Prony term and the recursive update of the internal stresses, exact for a strain linear in the step, and its tangent. The state is 6 (N + 1) values per point: the strain of the last step and one internal stress per term. The WLF and Arrhenius shifts act through the reduced time. complex_moduli gives the shear, bulk and Young's complex moduli; modulus_table builds the storage and loss table of the direct harmonic solve. The Newton driver takes a point context (nonlinear::solve_from_at); the nonlinear transient step passes its time, with no new history store and no second loop. The material is refused by the static load-factor driver (no time) and by every linear path, naming mat_visco::FOLLOW_UP. Met: relaxation of one element with three branches within 4.7e-16 at every step end; creep of the standard solid within 1.2e-5 at 20 steps per tau with order 2.00; complex modulus within 6e-16; dissipation per cycle within 2.5e-4 at 200 steps per cycle; shifted relaxation within 4.7e-16 (WLF and Arrhenius); free vibration of a 20-element bar with eta = 0.05, decrement within 2.50 percent of pi E''/E' (the dispersion term of the standard solid; within 2.3e-4 of the exact root); no branches gives the elastic bits; save and restore bit for bit with the internal stresses; non-positive relaxation time and moduli refused with the key; default bits (12 digests) and baseline hashes unchanged; eight mutations caught. Two check set-ups were corrected by amendment 1, and their records were kept. Case-file key not added (recommended: viscoelastic = { base, terms, shift }, nonlinear transient study only). Follow-ups below.
+
+Follow-up 1. Title: "Quasi-static viscoelastic time stepping on the Newton driver, with a temperature in the nonlinear transient integrator". Deps: F-410. Acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. A time-stepping driver over nonlinear::solve_from_at with the halvings of ADR 0404 takes prescribed displacements and loads against time. It reproduces the relaxation and creep checks of ADR 0485 (R1, C1, C2) with the same limits, without a loop in the caller. A uniform temperature given to the nonlinear transient integrator reproduces S1b of ADR 0485 in a free vibration run against the run at the reference temperature with all relaxation times scaled by a_T, within 1e-10 relative. Models without the viscoelastic material keep their bits.
+
+Follow-up 2. Title: "The viscoelastic material in the direct harmonic solve and the damped modes". Deps: F-410, F-412, F-414. Acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. The direct harmonic solve takes a viscoelastic material directly, with its complex shear and bulk moduli at each frequency (unequal weights included). The tip response of a clamped bar of the standard solid under a harmonic axial force at 10 frequencies around its first resonance equals the closed form of the rod with the complex modulus E*(omega) within 1e-6 relative at 40 elements, or within a registered discretisation limit. For equal weights the result equals the LossFactor::Table route of ADR 0485 at the table points within 1e-12. The damped modes refuse the material or take it at a registered fixed frequency.
