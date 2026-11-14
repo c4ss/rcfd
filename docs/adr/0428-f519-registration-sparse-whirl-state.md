@@ -395,3 +395,25 @@ the condition already registered for M2:
 
 Nothing else changes. The cube (arithmetic 2), DS (stable at `Omega_T`) and MP (M2 already conditional) are not affected; U1 as
 first written is not run.
+
+## Amendment 2 (2026-11-14, after the registered run 1, before any corrected run): Q1 of the cube missed
+
+Run 1 (`f519-scratch/run1.log`, the four tests, made once on commit `136f93e4`) met every check except **Q1 of the cube:
+8.466e-8 against 1e-8**. **Diagnosis** (a development print of the residual of every mode on a `git archive` copy,
+`f519-scratch/diag1_residuals.log`, not a registered run): every mode near the shift (the translation pair, the torsion and the
+divergence of the cube, at both shifts) has a residual `<= 8.1e-12`; the misses are the three far elastic modes near `1.07e5 ..
+1.10e5` rad/s, which `count = 6` brings into the returned set because the cube has only three groups near its shifts. At
+`sigma_a` (`sqrt(sigma_a) = 250` rad/s, 430 times below them) their residuals are `3e-9 .. 8.5e-8`; at `sigma_b` (`2700`
+rad/s) `5e-12 .. 6.7e-11`. The cause is in D3: the smoothing step multiplies an error component along an eigenvector of `nu_j`
+by `nu_j / nu`, which damps the components of a mode **near** the shift (the argument of D3) but, for a far mode (`|nu| ~
+8.5e-11` against `4.4e-5` for the dominant one), amplifies its contamination by the near-shift eigenvectors by up to `~5e5`; the
+three elastic modes are also a cluster within 1.1 % (their Ritz vectors are only accurate to `~tol / gap`). The eigenvalues of
+the same modes are accurate (E1 met, 1.6e-10); the mode vectors of far eigenvalues are the defect, and D3's estimate did not
+cover them.
+
+Record (rule 2): the test of run 1 becomes the ignored record `e1_f1_l1_w1_q1_i1_n2_n3_cube_known_miss`, unchanged, its limits
+intact. The copy `e1_f1_l1_w1_i1_n2_n3_cube_amended` carries E1, F1, L1, W1, I1, N2 and N3 unchanged (deterministic, the same
+numbers; compared with run 1 in the addendum) and prints Q1 of the cube without asserting it, so that the met checks of the
+clause c4 run in the suite. No corrected Q1 is registered: the library is not changed after the run, and a check restricted to
+the near-shift modes would be chosen after seeing their residuals. By the decision rule the item is **partial** (a registered
+check missed, its cause diagnosed).
