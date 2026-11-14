@@ -149,6 +149,11 @@ impl Dashpot {
             c,
         }
     }
+
+    /// `(node, other, component, c)`, for the damped modes of ADR 0450 (F-414).
+    pub(crate) fn parts(&self) -> (usize, Option<usize>, usize, f64) {
+        (self.node, self.other, self.component, self.c)
+    }
 }
 
 /// Harmonic displacements `G` of prescribed equations (the base motion), by node and component.
