@@ -932,6 +932,13 @@ impl SolidModel {
     pub fn supports(&self) -> &[ElasticSupport] {
         &self.supports
     }
+    /// A copy of the model with the material list replaced (ADR 0495 D2); the sets and the rest are those of this model.
+    pub(crate) fn with_materials(&self, materials: Vec<(String, Material)>) -> SolidModel {
+        let mut m = self.clone();
+        m.materials = materials;
+        m
+    }
+
     /// The numbering of the unknowns of this model.
     pub fn dof_map(&self) -> DofMap {
         DofMap::for_mesh(&self.mesh)

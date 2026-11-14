@@ -16,8 +16,8 @@
 //! with a shift needs a temperature. On the total Lagrangian driver the law acts on the Green-Lagrange strain and the second
 //! Piola-Kirchhoff stress (ADR 0485 Limits). The nonlinear driver at a point context ([`crate::nonlinear::solve_from_at`])
 //! and the nonlinear transient integrator take the material, and the direct harmonic solve takes it by its complex shear
-//! and bulk moduli at each frequency ([`crate::harmonic_direct`], ADR 0491); every other path refuses it naming
-//! [`FOLLOW_UP`].
+//! and bulk moduli at each frequency ([`crate::harmonic_direct`], ADR 0491); the damped modes take it at one reference
+//! frequency ([`crate::damped`], ADR 0495); every other path refuses it naming [`FOLLOW_UP`].
 
 use crate::error::{FemError, Result};
 use crate::harmonic_direct::ModulusTable;
