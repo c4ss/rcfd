@@ -28,6 +28,10 @@
 //!   [`crate::mat_visco`] only; [`solve_from`] is the default context). The static driver [`solve_with`] has no time and
 //!   refuses the viscoelastic material. A contribution may ask to enter the reference of the
 //!   relative residual ([`Contribution::in_residual_reference`]); by default the reference is that of ADR 0404.
+//! * Creep (ADR 0489): the creep material of [`crate::mat_creep`] gives its trial state as J2 and the viscoelastic material;
+//!   the static driver refuses it; [`solve_in_time`] is a quasi-static time-stepping driver over [`solve_from_at`] with
+//!   constant loads, a limit of the creep-strain increment of a step and step halving; a non-converged local creep iteration
+//!   is a located error, as an inverted point.
 
 use crate::assemble::{assemble_with, element_dofs};
 use crate::constraint::{check_rigid_body_motions, prescribed_equations, reduce, Prescribed};
@@ -183,6 +187,12 @@ fn evaluate<E: Element + ?Sized>(
                 new_state.extend_from_slice(&u.state);
                 (u.stress, u.tangent)
             }
+            // ADR 0489 D3: the creep return over the step of the point context gives the trial state of the point.
+            Material::Creep { .. } => {
+                let u = crate::mat_creep::update(material, &strain, committed, context)?;
+                new_state.extend_from_slice(&u.state);
+                (u.stress, u.tangent)
+            }
             _ => material.stress(&strain, context, committed)?,
         };
         let b = b_nonlinear(grad, &f);
@@ -309,6 +319,20 @@ pub fn element_force_and_tangent<E: Element + ?Sized>(
         true,
         &PointContext::default(),
     )?;
+    Ok((ev.force, ev.tangent.expect("tangent requested")))
+}
+
+/// [`element_force_and_tangent`] at the point context `context` (ADR 0489 D3): the material evaluations of the element get
+/// its time, time increment and temperature.
+pub fn element_force_and_tangent_at<E: Element + ?Sized>(
+    element: &E,
+    coords: &[Vec3],
+    material: &Material,
+    displacement: &[f64],
+    state: &ElementState,
+    context: &PointContext,
+) -> Result<(Vec<f64>, ElementMatrix)> {
+    let ev = evaluate(element, coords, material, displacement, state, true, context)?;
     Ok((ev.force, ev.tangent.expect("tangent requested")))
 }
 
@@ -588,8 +612,10 @@ enum Failure {
 }
 
 fn classify(e: FemError) -> Failure {
+    // ADR 0489 D4: a non-converged local creep iteration stays located, as an inverted point.
     let inverted = matches!(&e, FemError::Element { source, .. }
-        if matches!(source.as_ref(), FemError::InvalidValue { key, .. } if *key == INVERSION_KEY));
+        if matches!(source.as_ref(), FemError::InvalidValue { key, .. }
+            if *key == INVERSION_KEY || *key == crate::mat_creep::ITERATION_KEY));
     if inverted {
         Failure::Inverted(e)
     } else {
@@ -1103,6 +1129,20 @@ pub fn solve_with(
             package: crate::mat_visco::FOLLOW_UP,
         });
     }
+    // ADR 0489 D3: nor the creep material.
+    if let Some((i, (set, m))) = model
+        .materials()
+        .iter()
+        .enumerate()
+        .find(|(_, (_, m))| matches!(m, Material::Creep { .. }))
+    {
+        return Err(FemError::NotYetSupported {
+            item: "material",
+            variant: m.name(),
+            location: format!("material {i}, element set '{set}': the nonlinear static solve (no time)"),
+            package: crate::mat_creep::FOLLOW_UP,
+        });
+    }
     options.check()?;
     let dofs = model.dof_map();
     let n = dofs.n_equations();
@@ -1347,4 +1387,210 @@ pub fn solve_from_at(
             reason: cause,
         }),
     }
+}
+
+/// The options of [`solve_in_time`] (ADR 0489 D5): the Newton options of each attempt, the largest equivalent creep-strain
+/// increment of a step at any point of a creep material (`f64::INFINITY`: no limit), and the halvings of one step.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct TimeSteppingOptions {
+    /// The options of each attempt (`steps` and `max_halvings` are not used).
+    pub newton: NewtonOptions,
+    /// The largest equivalent creep-strain increment of a committed sub-step; positive (infinite: no limit).
+    pub max_creep_increment: f64,
+    /// The halvings of one step before the step is refused.
+    pub max_halvings: usize,
+}
+
+impl TimeSteppingOptions {
+    /// The limit `max_creep_increment`, the Newton defaults of [`NewtonOptions::new`] and 5 halvings.
+    pub fn new(max_creep_increment: f64) -> TimeSteppingOptions {
+        TimeSteppingOptions {
+            newton: NewtonOptions::new(1),
+            max_creep_increment,
+            max_halvings: 5,
+        }
+    }
+    /// With the Newton options of each attempt.
+    pub fn newton(mut self, newton: NewtonOptions) -> TimeSteppingOptions {
+        self.newton = newton;
+        self
+    }
+    /// With the halvings of one step.
+    pub fn max_halvings(mut self, halvings: usize) -> TimeSteppingOptions {
+        self.max_halvings = halvings;
+        self
+    }
+    fn check(&self) -> Result<()> {
+        if self.max_creep_increment.is_nan() || self.max_creep_increment <= 0.0 {
+            return Err(FemError::InvalidValue {
+                key: "max_creep_increment",
+                reason: format!("{:e} must be positive", self.max_creep_increment),
+            });
+        }
+        self.newton.check()
+    }
+}
+
+/// The committed solution at one step end of [`solve_in_time`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct TimeStep {
+    /// The time of the step end, s (0 for the instantaneous response).
+    pub time: f64,
+    /// The displacement, one value per equation.
+    pub u: Vec<f64>,
+    /// The committed element states.
+    pub states: Vec<ElementState>,
+    /// The internal force at `u` with those states.
+    pub internal_force: Vec<f64>,
+    /// The halvings of the step.
+    pub halvings: usize,
+    /// The committed sub-steps of the step.
+    pub substeps: usize,
+    /// The largest equivalent creep-strain increment among the committed sub-steps of the step.
+    pub max_creep_increment: f64,
+    /// The Newton corrections of the committed sub-steps.
+    pub iterations: usize,
+}
+
+/// The outcome of [`solve_in_time`]: the instantaneous response at `t = 0`, then one entry per step end.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TimeHistory {
+    /// The step ends in order.
+    pub steps: Vec<TimeStep>,
+}
+
+/// Whether an error is the located non-converged local creep iteration (ADR 0489 D4).
+fn is_creep_iteration(e: &FemError) -> bool {
+    matches!(e, FemError::Element { source, .. }
+        if matches!(source.as_ref(), FemError::InvalidValue { key, .. } if *key == crate::mat_creep::ITERATION_KEY))
+}
+
+/// The largest increment of the equivalent creep strain between two sets of element states, over the points of the elements
+/// marked in `creep`.
+fn creep_increment(creep: &[bool], old: &[ElementState], new: &[ElementState]) -> f64 {
+    let ns = crate::mat_creep::STATE_SIZE;
+    let mut worst = 0.0f64;
+    for ((&c, o), n) in creep.iter().zip(old).zip(new) {
+        if !c {
+            continue;
+        }
+        for (po, pn) in o.values().chunks(ns).zip(n.values().chunks(ns)) {
+            worst = worst.max(pn[ns - 1] - po[ns - 1]);
+        }
+    }
+    worst
+}
+
+/// The quasi-static time-stepping driver (ADR 0489 D5): the model's dead loads and its prescribed displacements and
+/// `prescribed`, constant in time, applied at `t = 0` by one attempt of [`solve_from_at`] (the instantaneous response, the
+/// first entry), then the steps to the end times `times` (finite, strictly increasing, the first positive; key `"times"`),
+/// each in sub-steps of one attempt of [`solve_from_at`] at the context of the sub-step's end time and length. A sub-step
+/// whose largest equivalent creep-strain increment exceeds `options.max_creep_increment`, or whose attempt fails, is
+/// discarded and its length halved (kept to the end of the step); after `options.max_halvings` halvings of one step the error
+/// is `FemError::Solver { solver: "creep time stepping" }` naming the step. A non-converged local creep iteration is
+/// returned at once with its element (`FemError::Element`, key [`crate::mat_creep::ITERATION_KEY`]).
+pub fn solve_in_time(
+    model: &SolidModel,
+    prescribed: &[Prescribed],
+    times: &[f64],
+    options: &TimeSteppingOptions,
+) -> Result<TimeHistory> {
+    model.validate()?;
+    model.check_supported_nonlinear()?;
+    check_driver_model(model)?;
+    options.check()?;
+    for (k, &t) in times.iter().enumerate() {
+        let previous = if k == 0 { 0.0 } else { times[k - 1] };
+        if !(t.is_finite() && t > previous) {
+            return Err(FemError::InvalidValue {
+                key: "times",
+                reason: format!(
+                    "time {k} is {t:e} s: the step ends must be finite, strictly increasing and the first positive"
+                ),
+            });
+        }
+    }
+    let n = model.dof_map().n_equations();
+    let load = nodal_load_vector(model, &[])?;
+    let fixed = prescribed_equations(model, prescribed)?;
+    let mut u = vec![0.0; n];
+    for &(eq, v) in &fixed {
+        u[eq] = v;
+    }
+    let materials = model.material_indices()?;
+    let creep: Vec<bool> = materials
+        .iter()
+        .map(|&m| matches!(model.materials()[m].1, Material::Creep { .. }))
+        .collect();
+    let start = initial_states(model)?;
+    let at0 = PointContext::new().with_time(0.0, 0.0)?;
+    let eq = solve_from_at(model, prescribed, &load, &u, &start, &options.newton, &[], &at0)?;
+    let mut steps = vec![TimeStep {
+        time: 0.0,
+        u: eq.u.clone(),
+        states: eq.states.clone(),
+        internal_force: eq.internal_force,
+        halvings: 0,
+        substeps: 1,
+        max_creep_increment: creep_increment(&creep, &start, &eq.states),
+        iterations: eq.residuals.len() - 1,
+    }];
+    let mut u = eq.u;
+    let mut states = eq.states;
+    let mut t = 0.0;
+    for (k, &target) in times.iter().enumerate() {
+        let mut h = target - t;
+        let (mut halvings, mut substeps, mut iterations) = (0, 0, 0);
+        let mut largest = 0.0f64;
+        let mut internal = Vec::new();
+        while t < target {
+            let t1 = if target - (t + h) <= 1e-12 * h { target } else { t + h };
+            let ctx = PointContext::new().with_time(t1, t1 - t)?;
+            let failure = match solve_from_at(model, prescribed, &load, &u, &states, &options.newton, &[], &ctx) {
+                Ok(eq) => {
+                    let inc = creep_increment(&creep, &states, &eq.states);
+                    if inc <= options.max_creep_increment {
+                        iterations += eq.residuals.len() - 1;
+                        substeps += 1;
+                        largest = largest.max(inc);
+                        u = eq.u;
+                        states = eq.states;
+                        internal = eq.internal_force;
+                        t = t1;
+                        continue;
+                    }
+                    format!(
+                        "the creep-strain increment {inc:e} exceeds the limit {:e}",
+                        options.max_creep_increment
+                    )
+                }
+                Err(e) if is_creep_iteration(&e) => return Err(e),
+                Err(e) => e.to_string(),
+            };
+            if halvings == options.max_halvings {
+                return Err(FemError::Solver {
+                    solver: "creep time stepping",
+                    reason: format!(
+                        "step {} of {} ([{t:e}, {target:e}] s, sub-step to {t1:e} s) after {halvings} halvings: {failure}",
+                        k + 1,
+                        times.len()
+                    ),
+                });
+            }
+            halvings += 1;
+            h *= 0.5;
+        }
+        steps.push(TimeStep {
+            time: target,
+            u: u.clone(),
+            states: states.clone(),
+            internal_force: internal,
+            halvings,
+            substeps,
+            max_creep_increment: largest,
+            iterations,
+        });
+    }
+    Ok(TimeHistory { steps })
 }

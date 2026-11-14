@@ -363,6 +363,13 @@ impl Material {
                 location: "the element-constant elasticity matrix".to_string(),
                 package: crate::mat_visco::FOLLOW_UP,
             }),
+            // ADR 0489 D2: nor has the creep material.
+            Material::Creep { .. } => Err(FemError::NotYetSupported {
+                item: "material",
+                variant: self.name(),
+                location: "the element-constant elasticity matrix".to_string(),
+                package: crate::mat_creep::FOLLOW_UP,
+            }),
             _ => Err(self.not_yet("the constitutive call")),
         }
     }
@@ -409,7 +416,9 @@ impl Material {
     /// (`state_size()` values). For linear elasticity the stress is `D eps` and the tangent `D`; the isotropic material
     /// does not read the point context. For J2 the return map of [`crate::mat_j2::return_map`] from the committed state
     /// `state` (ADR 0475 D2); for the viscoelastic material the Prony update of [`crate::mat_visco::update`] from the
-    /// committed state over the step of `point` (ADR 0485 D2). A variant whose package has not landed is refused naming it.
+    /// committed state over the step of `point` (ADR 0485 D2); for the creep material the return of
+    /// [`crate::mat_creep::update`] from the committed state over the step of `point` (ADR 0489 D2). A variant whose package
+    /// has not landed is refused naming it.
     pub fn stress(&self, strain: &[f64; 6], point: &PointContext, state: &[f64]) -> Result<([f64; 6], Matrix6)> {
         let _ = point;
         if self.pending().is_some() {
@@ -430,6 +439,11 @@ impl Material {
         if let Material::Viscoelastic { .. } = self {
             // ADR 0485 D2: the Prony update from the committed state over the step of the point context.
             let u = crate::mat_visco::update(self, strain, state, point)?;
+            return Ok((u.stress, u.tangent));
+        }
+        if let Material::Creep { .. } = self {
+            // ADR 0489 D2: the creep return from the committed state over the step of the point context.
+            let u = crate::mat_creep::update(self, strain, state, point)?;
             return Ok((u.stress, u.tangent));
         }
         let d = match self {
