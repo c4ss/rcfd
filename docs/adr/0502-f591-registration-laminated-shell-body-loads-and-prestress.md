@@ -389,3 +389,110 @@ Corrections (nothing above is changed; no limit changes):
   F-591; `f591-scratch/b0b-base/`, its own target directory), written into the file, and then it is run on this branch. B0 stays
   as it is.
 - The decision rule reads B0 as "B0 and B0b".
+
+## Addendum 1 (2026-11-14): results
+
+The registered checks were run once on the committed state 8cd63fff with `cargo test -p rcfd-fem --release --test
+sa_laminate_body -- --test-threads=1 --nocapture` (`f591-scratch/run1.log`). The corrected BB1 to BB3 copy of amendment 1 was
+run once on fede7c13 (`run2-amendment1.log`). B0 ran on every library commit. B0b took its digests on a `git archive` copy of
+6ee966ca (`b0b-base.log`) and then ran on the branch (`b0b-branch.log`). Release profile throughout.
+
+| check | limit | measured | met |
+|---|---|---|---|
+| BB1 gravity, centrifugal and body-force vectors (96 values each), static under all three (192): one steel ply in an aluminium block against the steel Shell twin | bits | equal | yes |
+| BB2 pre-stress (54), buckling factors and modes (194) | bits | equal | yes |
+| BB3 unit pre-stress (54), `K_sigma,1` (3600), `M_perp` (3600) | bits | equal | yes |
+| BB3 (amendment 1) loss of stiffness at 100 rad/s (speed 100, 1 negative); frequencies and modes at 10 rad/s (388 values; 8.533, 58.25, 65.70, 84.80 Hz) | bits; four finite frequencies | equal; yes | yes |
+| G1 gravity load against `M d_g` | `1e-12` | `1.7e-16` | yes |
+| G2 resultant force; moment against `m0 A (x_cm x g)` | `1e-12` | `1.7e-16`; `1.1e-16` | yes |
+| C1 centrifugal load against `M d_c` | `1e-12` | `3.6e-16` | yes |
+| C2 centrifugal resultant force | `1e-12` | `3.4e-16` | yes |
+| NB1 body-force resultant force; moment | `1e-12` | `1.5e-16`; `1.7e-16` | yes |
+| MF1 strip column mean of `N_xx` against `m0 Omega^2 (L^2 - r_c^2 - h^2/12)/2`, `Omega = omega_0 = 535.0652 rad/s` | `1e-8` | `1.6e-14` | yes |
+| MF2 root reaction against `-m0 W Omega^2 L^2/2` (`-80.1625 N`) | `1e-10` | `1.6e-14` | yes |
+| F0 rest flap 85.1069 Hz against `f_0 = 85.1583 Hz` (D11) | `1e-2` | `6.0e-4` | yes |
+| F1 flap at `0.5 omega_0`: 96.9441 Hz against Southwell 97.0331 Hz | `2e-2` | `9.2e-4` | yes |
+| F1 flap at `omega_0`: 125.6697 Hz against Southwell 126.1187 Hz | `2e-2` | `3.56e-3` | yes |
+| F2 slope 1.192252 against `S = 1.1933364` | `1e-2` | `9.1e-4` | yes |
+| SS1 `sum_k M_perp(e_k)` against `2 M` (drilling rotary entries zero) | `1e-12` | `0` | yes |
+| SS2 rigid-rotation energy against the integral | `1e-12` | `2.2e-16` | yes |
+| BK1 SS `[0/90]s` plate, 16 x 16: `N_cr = 19863.65` against `19793.18 N/m` | `2e-2` | `3.56e-3` | yes |
+| BK2 second factor `41455.7` against the `m = 2` load `40711.6 N/m` | `5e-2` | `1.83e-2` | yes |
+| BK3 first mode of one sign along `y = a/2` and `x = a/2` | holds | holds | yes |
+| RX3 `nonlinear::solve` of a layup refused naming `laminate::FOLLOW_UP` | refused | refused | yes |
+| RX4 the RX2 copy: gravity solves, buckling taken, `nonlinear::solve` refused | as stated | as stated | yes |
+
+Negative controls: NG `8.2e-5` (> `1e-6`); NF1 `0.325` (> `0.2`); NBK `0.157` (> `5e-2`); NS `1.3e-4` (> `1e-9`). B0 (19
+digests) and B0b (4 digests) match the base; B0' (ADR 0496's `sa_laminate_default_bits.rs`, 11 digests) is unchanged; B1
+`baseline_hashes` passes unchanged.
+
+The estimates of arithmetic 3 and 4 hold. F1 at `omega_0` is `3.56e-3` against the estimated `3.5e-3`; most of it (`3.0e-3`) is
+the Southwell linearisation itself, by the beam probe. BK1 is `3.56e-3`, close to ADR 0473 P1's `3.30e-3`.
+
+### Mutations (scratch copy of fede7c13 by `git archive`, one at a time; `f591-scratch/mutate.py`, `run_mutations.sh`, `mutations.log`, `mut-MU*.log`)
+
+| id | caught by |
+|---|---|
+| MU1 moment sign `-m1` | G1, G2 (moment), C1 |
+| MU2 `rho_block t` for `m0` | G1, G2, C1, C2, MF1, MF2, F1, F2 |
+| MU3 body-load route removed | BB1 (gravity, centrifugal, static), BB3 (pre-stress, `K_sigma,1`, modes) |
+| MU4 spin-softening coupling dropped | SS1, SS2 (NS then not as expected) |
+| MU5 coupling without the projection | SS1, SS2 |
+| MU6 first ply's thickness in the geometric stiffness | BK1, BK2, F1 (both speeds), F2 |
+| MU7 first ply's thickness for the nodal body force | NB1 |
+| MU8 block density in the centrifugal acceleration | G1, G2, C1, C2, MF1, MF2, F1 |
+| MU9 spin-softening route removed | BB3 (`M_perp`) |
+| MU10 homogeneous `m2` | SS1, SS2 |
+
+All ten mutations were caught. Under MU3 the bits of the pre-stress, `K_sigma,1` and the modes change as well, because the
+centrifugal load of the unit static solve enters them. BB1's body-force row and BB2 still match under MU3: for one ply the
+per-volume load and the end-load chain do not go through the mutated branch.
+
+### Other runs
+
+- `cargo test -p rcfd-fem --release` (the whole crate, on fede7c13): 710 passed, 0 failed, 185 ignored.
+- `cargo test -p rcfd-api --release --test baseline_hashes`: passes unchanged.
+- `cargo test -p rcfd-cli --release --test docs_site`: passes (2 passed).
+- `cargo fmt -p rcfd-fem -- --check`: clean. `cargo clippy -p rcfd-fem --all-targets --release -- -D warnings`: clean.
+
+### Deviations
+
+- Amendment 1: BB3's frequency row and the frequency part of B0's two rotating-part digests were at a speed above the loss of
+  stiffness, so they compared NaN markers. The corrected copy and B0b were written and committed before their runs, and both
+  were met. The old BB test stays as an ignored record (it passed, with that row vacuous).
+- D9: `rx2_paths_that_refuse_a_layup` became an ignored record, continued as `rx2_paths_that_refuse_a_layup_after_f591`. No
+  other existing test failed by design.
+- Shared solver files changed (D5):
+  - `loads.rs`: the shell hook of `add_body_load_with` (the new `ShellBody`, `shell_body_vector`, `add_shell_body_load`) and
+    the gravity, centrifugal and nodal-field closures, which do the same operations on the same values for a `Shell` block.
+  - `geometric_struct.rs`: three Shell4 lines and the module doc.
+  - `shell.rs`: new functions only (`layup_body_load_vector_at`, `local_spin_softening_mass_layup`,
+    `element_spin_softening_mass_layup`, `model_spin_softening_mass`, `membrane_thickness`).
+  - `mesh.rs` and `laminate.rs`: doc comments only.
+
+  B0, B0b and `baseline_hashes` are unchanged.
+
+### Not run
+
+The workspace test suite (the lead's gate). No case-file runs, because there is no case-file key (b4).
+
+### Decision
+
+**done** by the registered rule. Every check was met, every negative control behaved as expected, all ten mutations were
+caught, B0, B0b, B0' and B1 are unchanged, the crate's tests pass, and fmt and clippy are clean. Note for the lead: amendment 1
+corrected a vacuous row before its corrected run, and no limit changed.
+
+### Remaining questions (recommendations for the lead)
+
+1. **Case-file key** (not taken, because it touches the schema golden). Recommendation: the `[[layup]]` table of ADR 0496
+   question 1 (b). Gravity, `[[centrifugal]]` and the rotating analysis need no key of their own.
+2. **Through-thickness variation of the centrifugal acceleration** (Limits). Options: (a) leave it out, the acceptance's form;
+   (b) add the `m1 Omega^2 P n` force and the `m2` rotary term. Recommendation: (a). The term is of relative order `t/r`.
+3. **Corotated Newton path for a layup** (still refused). Recommendation: a follow-up for when large blade deflection is needed.
+   It needs a layup tangent in `shell_corot.rs`.
+
+## For the lead: roadmap entries
+
+Proposed status of F-591: **done**. The new note:
+
+> Structural solver, advanced tier. ADR 0502, 2026-11-14: laminated Shell4 under body loads and pre-stress. Gravity and the centrifugal load on a Layup block give the consistent load m0 int N_i b dA (m0 = sum rho_k t_k, b the mid-surface acceleration) with the moment of the first mass moment m1 int N_i (e_3 x b) dA (shell::layup_body_load_vector_at); the nodal body-force field acts over the total thickness; the pre-stress and geometric stiffness take the layup resultants over the total thickness (buckling, pre-stressed modes, rotating parts); the layup spin-softening mass is m0 P, m2 R and the coupling m1 P W. One isotropic ply is routed to its Shell twin's calls: load vectors, static solve, pre-stress, buckling factors and modes, K_sigma,1, M_perp and rotating modes equal bit for bit. Met: gravity and centrifugal loads equal the consistent mass times the rigid acceleration within 3.6e-16, the gravity moment m0 A (x_cm x g) within 1.1e-16; rotating [0/90]s strip clamped on the axis: radial membrane force (column mean against m0 Omega^2 (L^2 - r_c^2 - h^2/12)/2) within 1.6e-14, flap frequency within 9.2e-4 and 3.6e-3 of the Southwell form with D11 (cylindrical bending, S = 1.1933364 from the rest-mode quotient) at 0.5 and 1 omega_0; SS [0/90]s square plate, 16 x 16, buckling load within 3.6e-3 of pi^2 (D11 + 2 (D12 + 2 D66) + D22)/a^2 (m = 1 critical, m = 2 within 1.8e-2). The corotated Newton path and Shell3 still refuse a layup. Default bits unchanged (23 new digests and ADR 0496's 11), baseline hashes unchanged; ten of ten mutations caught. No case-file key (open question).
