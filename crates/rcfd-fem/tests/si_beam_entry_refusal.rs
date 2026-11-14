@@ -99,15 +99,31 @@ fn e1_to_e8_entry_refusal_before_the_transformation() {
     let (mb, shared_b, _) = model(true, true);
     assert_eq!(shared, shared_b);
     let r1 = stat(&ma);
-    c.holds("E1 solve_static_mpc, shared, set A", is_shared_node(&r1, shared), &format!("{r1:?}"));
+    c.holds(
+        "E1 solve_static_mpc, shared, set A",
+        is_shared_node(&r1, shared),
+        &format!("{r1:?}"),
+    );
     let r2 = modal(&ma);
-    c.holds("E2 modal_analysis_mpc, shared, set A", is_shared_node(&r2, shared), &format!("{r2:?}"));
+    c.holds(
+        "E2 modal_analysis_mpc, shared, set A",
+        is_shared_node(&r2, shared),
+        &format!("{r2:?}"),
+    );
     let r3 = modal(&mb);
-    c.holds("E3 modal_analysis_mpc, shared, set B", is_shared_node(&r3, shared), &format!("{r3:?}"));
+    c.holds(
+        "E3 modal_analysis_mpc, shared, set B",
+        is_shared_node(&r3, shared),
+        &format!("{r3:?}"),
+    );
     let (ca, _, _) = model(false, false);
     let (cb, _, _) = model(false, true);
     let r4 = stat(&ca);
-    c.holds("E4 solve_static_mpc, control, set A", is_constraint_error(&r4, "contradicts"), &format!("{r4:?}"));
+    c.holds(
+        "E4 solve_static_mpc, control, set A",
+        is_constraint_error(&r4, "contradicts"),
+        &format!("{r4:?}"),
+    );
     let r5 = modal(&ca);
     c.holds(
         "E5 modal_analysis_mpc, control, set A",
@@ -121,7 +137,11 @@ fn e1_to_e8_entry_refusal_before_the_transformation() {
         &format!("{r6:?}"),
     );
     let r7 = stat(&mb);
-    c.holds("E7 solve_static_mpc, shared, set B", is_shared_node(&r7, shared), &format!("{r7:?}"));
+    c.holds(
+        "E7 solve_static_mpc, shared, set B",
+        is_shared_node(&r7, shared),
+        &format!("{r7:?}"),
+    );
     let direct = beam::check_beam_model(&ma).map(|_| ());
     let fields = |r: &Result<(), FemError>| match r {
         Err(FemError::BeamSolidNode { node, beam, solid }) => Some((*node, *beam, *solid)),

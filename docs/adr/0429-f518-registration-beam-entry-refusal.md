@@ -117,3 +117,50 @@ shared-node geometry only (a beam end on a block node on a rigid-set face); `sol
 the check before the dispatch and are covered by S2 of ADR 0426, not here. The contradiction on the modal path cannot be
 reached (derivation above); the clause "not with the contradiction" is read there as "not with the error the constraint set
 produces".
+
+## Addendum 1: results (2026-11-14)
+
+Run once in release (`cargo test -p rcfd-fem --release --test si_beam_entry_refusal`), library unchanged.
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| E1 `solve_static_mpc`, shared, set A | BeamSolidNode naming the node | `BeamSolidNode { node: 2, beam: 2, solid: 1 }` | yes |
+| E2 `modal_analysis_mpc`, shared, set A | same | same error | yes |
+| E3 `modal_analysis_mpc`, shared, set B | same | same error | yes |
+| E4 static control, set A | "contradicts" | "constraint 5 (Linear) contradicts constraint 4 (Linear): ... 0 = 1e-3" | yes |
+| E5 modal control, set A | "takes zero values only" | "constraint 5 (Linear): value 1e-3; a modal analysis takes zero values only" | yes |
+| E6 modal control, set B | "cancel to zero" | "constraint 4 (Linear): its coefficients cancel to zero" | yes |
+| E7 static, shared, set B | BeamSolidNode naming the node | `BeamSolidNode { node: 2, beam: 2, solid: 1 }` | yes |
+| E8 error fields equal `check_beam_model` | equal | (2, 2, 1) both | yes |
+
+Mutations (scratch `git archive` copy of the test commit, one run each, results by check):
+
+| Mutation | Missed checks (caught by) | Expected | Caught |
+|---|---|---|---|
+| MU7 (beam check out of `check_transformation_model`) | E1, E2, E3, E7, E8 | E1, E2, E3, E7, E8 | yes |
+| MU7a (entry check out of `solve_static_mpc`) | E1, E7, E8 | E1, E7, E8 | yes |
+| MU7b (entry check out of `modal_analysis_mpc`) | E2, E3 | E2, E3 | yes |
+| MU7c (static entry check moved before `stiffness_with`) | E1, E7, E8 | E1, E7, E8 | yes |
+
+The controls E4 to E6 passed on every mutant, as they should (no shared node). Deviations: the log of the first MU7 run
+showed only the E8 line because of a filter error in my scratch script (the per-check status of E1 to E7 was not kept); the
+mutation was run a second time with the script fixed, same mutant and same test, and the table above is from that run (the
+first run also failed the test). No limit and no check was changed; the only edit after the test commit is rustfmt layout.
+`cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --all-targets --release -- -D warnings` clean. No shared
+solver file, hash table or golden file changed. Not run: the other `rcfd-fem` tests and the workspace suite (no library
+line changed).
+
+**Decision by the registered rule: done.** Every check met, every mutation caught by the checks named, no amendment.
+
+### Remaining questions
+
+1. On the modal path "contradictory" can only mean the refused non-zero value or a cancelling row (derivation): option (a)
+   leave as registered; (b) none. Recommendation: (a).
+
+## For the lead: roadmap entries
+
+F-518: proposed status **done**. Note:
+
+> Structural solver, intermediate tier. ADR 0429, 2026-11-14: a model with a beam node shared with a solid and a contradictory linear constraint is refused with BeamSolidNode naming the node, not with the contradiction, on solve_static_mpc (set of two rows u = 0 and u = 1e-3) and on modal_analysis_mpc (the same rows, which would give the zero-values refusal, and a cancelling row); controls without the shared node give the contradiction, the zero-values refusal and the cancel-to-zero error; the error fields equal those of check_beam_model; the mutation that leaves the beam check out of the transformation entry (ADR 0426 MU7) and three variants (out of either entry, moved after the transformation) are all caught. Library unchanged.
+
+F-513: its note may add "MU7 caught by ADR 0429, 2026-11-14".
