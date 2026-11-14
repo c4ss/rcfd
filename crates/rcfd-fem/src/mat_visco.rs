@@ -14,8 +14,10 @@
 //! material without branches (which gives the bits of its base). The time increment and the temperature come from the point
 //! context: no increment is an increment of zero length (the instantaneous response from the committed state); a material
 //! with a shift needs a temperature. On the total Lagrangian driver the law acts on the Green-Lagrange strain and the second
-//! Piola-Kirchhoff stress (ADR 0485 Limits). Only the nonlinear driver at a point context ([`crate::nonlinear::solve_from_at`])
-//! and the nonlinear transient integrator take the material; every other path refuses it naming [`FOLLOW_UP`].
+//! Piola-Kirchhoff stress (ADR 0485 Limits). The nonlinear driver at a point context ([`crate::nonlinear::solve_from_at`])
+//! and the nonlinear transient integrator take the material, and the direct harmonic solve takes it by its complex shear
+//! and bulk moduli at each frequency ([`crate::harmonic_direct`], ADR 0491); every other path refuses it naming
+//! [`FOLLOW_UP`].
 
 use crate::error::{FemError, Result};
 use crate::harmonic_direct::ModulusTable;
@@ -154,6 +156,17 @@ fn point_shift(shift: Option<&TimeTemperatureShift>, point: &PointContext) -> Re
             shift_factor(s, t)
         }
     }
+}
+
+/// The base of a viscoelastic material for the direct harmonic solve (ADR 0491 D1): `(E, nu, G_0, K_0, equal)`, `G_0` and
+/// `K_0` computed as in [`complex_moduli`], `equal` when every term has equal shear and bulk weights (or there is no term).
+/// The refusals of [`update`] for another material and an orthotropic base.
+pub(crate) fn harmonic_base(material: &Material) -> Result<(f64, f64, f64, f64, bool)> {
+    let p = parts(material)?;
+    let g0 = p.e / (2.0 * (1.0 + p.nu));
+    let k0 = p.e / (3.0 * (1.0 - 2.0 * p.nu));
+    let equal = p.terms.iter().all(|t| t.shear == t.bulk);
+    Ok((p.e, p.nu, g0, k0, equal))
 }
 
 /// The deviatoric (tensor shear) and the mean part of the base's elastic stress of a strain.

@@ -14,6 +14,14 @@
 //! (zero elsewhere). `A_FF` is factored by [`ComplexSkylineLdlt`] in reverse Cuthill-McKee order. When `A_FF` is real (no
 //! damping of any kind) a relative pivot `<= RESONANCE_PIVOT` is refused as a resonance without damping, with the frequency.
 //! The assembly takes the thread count; the factor and the solve are sequential, so the result is bit-identical for any.
+//!
+//! ADR 0491 (F-577): a [`Material::Viscoelastic`] material is taken directly, by its complex moduli at each frequency
+//! ([`crate::mat_visco::complex_moduli`]). With equal shear and bulk weights in every term it is one part, the base's
+//! stiffness times `E*(omega)/E`; otherwise two parts, the stiffness of `2 G_0 I_dev` times `G*(omega)/G_0` and that of
+//! `K_0 1 (x) 1` times `K*(omega)/K_0` (the stiffness is linear in the elasticity matrix, so this is exact). A shifted
+//! material takes [`DirectHarmonicOptions::temperature`]. The Rayleigh term `beta K` takes its instantaneous base
+//! stiffness; a loss factor on its set and the harmonic stress are refused. A model without the material takes the code of
+//! ADR 0448 as it was.
 
 use crate::assemble::{assemble_with, stiffness_with};
 use crate::constraint::prescribed_equations;
@@ -21,10 +29,12 @@ use crate::element::element_for;
 use crate::error::{FemError, Result};
 use crate::harmonic::{HarmonicLoad, HarmonicResponse, HarmonicStress};
 use crate::mass::consistent_with;
+use crate::material::{isotropic_elasticity, Matrix6};
 use crate::model::{DofMap, Material, SolidModel};
 use crate::recover::IntegrationPointField;
 use rcfd_linalg::complex::C64;
 use rcfd_linalg::cskyline::{ComplexCsr, ComplexSkylineError, ComplexSkylineLdlt, ComplexSkylineOptions};
+use rcfd_linalg::CsrMatrix;
 use std::collections::BTreeMap;
 use std::f64::consts::PI;
 
@@ -205,6 +215,9 @@ pub struct DirectHarmonicOptions {
     pub threads: Option<usize>,
     /// The relative pivot below which an undamped solve is refused as a resonance (default [`RESONANCE_PIVOT`]).
     pub resonance_pivot: f64,
+    /// The temperature, K, of a viscoelastic material with a time-temperature shift (ADR 0491; default none). Read only
+    /// by a viscoelastic material.
+    pub temperature: Option<f64>,
 }
 
 impl Default for DirectHarmonicOptions {
@@ -215,6 +228,7 @@ impl Default for DirectHarmonicOptions {
             dashpots: Vec::new(),
             threads: None,
             resonance_pivot: RESONANCE_PIVOT,
+            temperature: None,
         }
     }
 }
@@ -254,6 +268,12 @@ impl DirectHarmonicOptions {
         self.resonance_pivot = tau;
         self
     }
+
+    /// The temperature of a shifted viscoelastic material (ADR 0491).
+    pub fn temperature(mut self, temperature: f64) -> DirectHarmonicOptions {
+        self.temperature = Some(temperature);
+        self
+    }
 }
 
 // ----------------------------------------------------------------------------------------------------------- solver
@@ -290,6 +310,136 @@ enum Damping {
     None,
     Constant(f64),
     Table(ModulusTable, f64),
+    /// A part of a viscoelastic material (ADR 0491 D1): the coefficient is its complex modulus over `modulus`.
+    Viscoelastic {
+        material: Box<Material>,
+        part: ViscoPart,
+        temperature: Option<f64>,
+        modulus: f64,
+    },
+}
+
+/// The part of a viscoelastic material's stiffness (ADR 0491 D1).
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum ViscoPart {
+    /// Equal weights: the whole base stiffness, `E*/E`.
+    Whole,
+    /// The stiffness of `2 G_0 I_dev`, `G*/G_0`.
+    Shear,
+    /// The stiffness of `K_0 1 (x) 1`, `K*/K_0`.
+    Bulk,
+}
+
+/// `2 G_0 I_dev` in Voigt form with engineering shear strain.
+fn shear_matrix(g0: f64) -> Matrix6 {
+    let mut d = [[0.0; 6]; 6];
+    for (i, row) in d.iter_mut().enumerate().take(3) {
+        for (j, v) in row.iter_mut().enumerate().take(3) {
+            *v = 2.0 * g0 * (if i == j { 1.0 } else { 0.0 } - 1.0 / 3.0);
+        }
+    }
+    for (k, row) in d.iter_mut().enumerate().skip(3) {
+        row[k] = g0;
+    }
+    d
+}
+
+/// `K_0 1 (x) 1` in Voigt form.
+fn bulk_matrix(k0: f64) -> Matrix6 {
+    let mut d = [[0.0; 6]; 6];
+    for row in d.iter_mut().take(3) {
+        for v in row.iter_mut().take(3) {
+            *v = k0;
+        }
+    }
+    d
+}
+
+fn is_viscoelastic(m: &Material) -> bool {
+    matches!(m, Material::Viscoelastic { .. })
+}
+
+/// The model check of the viscoelastic route (ADR 0491 D1): the element checks with the history flag (which lets the
+/// viscoelastic material through) and the supports, then J2 refused as [`SolidModel::check_supported`] refuses it.
+fn check_viscoelastic_model(model: &SolidModel) -> Result<()> {
+    model.check_supported_nonlinear()?;
+    for (i, (set, m)) in model.materials().iter().enumerate() {
+        if matches!(m, Material::J2 { .. }) {
+            return Err(FemError::NotYetSupported {
+                item: "material",
+                variant: m.name(),
+                location: format!("material {i}, element set '{set}'"),
+                package: crate::mat_j2::FOLLOW_UP,
+            });
+        }
+    }
+    Ok(())
+}
+
+/// The stiffness parts of a model with a viscoelastic material (ADR 0491 D1): per material one part (two for a
+/// viscoelastic material with unequal weights), each assembled over the elements of its material, and the sum of the parts
+/// (the total stiffness on the mesh pattern).
+fn viscoelastic_parts(
+    model: &SolidModel,
+    damping: &[Damping],
+    options: &DirectHarmonicOptions,
+) -> Result<(CsrMatrix, Vec<(Vec<f64>, Damping)>)> {
+    let materials = model.materials();
+    let which = model.material_indices()?;
+    let dofs = model.dof_map();
+    let mut parts: Vec<(Vec<f64>, Damping)> = Vec::new();
+    let mut total: Option<CsrMatrix> = None;
+    for (m, (_, material)) in materials.iter().enumerate() {
+        let pieces: Vec<(Option<Matrix6>, Damping)> = if is_viscoelastic(material) {
+            let (e, nu, g0, k0, equal) = crate::mat_visco::harmonic_base(material)?;
+            // a missing or bad temperature is refused here, not at the first frequency
+            crate::mat_visco::complex_moduli(material, 0.0, options.temperature)?;
+            let part = |part: ViscoPart, modulus: f64| Damping::Viscoelastic {
+                material: Box::new(material.clone()),
+                part,
+                temperature: options.temperature,
+                modulus,
+            };
+            if equal {
+                vec![(Some(isotropic_elasticity(e, nu)), part(ViscoPart::Whole, e))]
+            } else {
+                vec![
+                    (Some(shear_matrix(g0)), part(ViscoPart::Shear, g0)),
+                    (Some(bulk_matrix(k0)), part(ViscoPart::Bulk, k0)),
+                ]
+            }
+        } else {
+            vec![(None, damping[m].clone())]
+        };
+        for (d, dm) in pieces {
+            let km = assemble_with(model, options.threads, |ctx| {
+                if which[ctx.element] != m {
+                    let size: usize = ctx.nodes.iter().map(|&a| dofs.components(a)).sum();
+                    return Ok(crate::element::ElementMatrix::zeros(size));
+                }
+                let d = match d {
+                    Some(d) => d,
+                    None => ctx.material.elasticity_matrix()?,
+                };
+                element_for(ctx.kind).stiffness(ctx.coords, &d)
+            })?;
+            total = match total {
+                None => Some(km.clone()),
+                Some(mut t) => {
+                    if t.col != km.col || t.row_ptr != km.row_ptr {
+                        return Err(invalid("pattern", "stiffness parts on different patterns".to_string()));
+                    }
+                    for (a, b) in t.val.iter_mut().zip(&km.val) {
+                        *a += b;
+                    }
+                    Some(t)
+                }
+            };
+            parts.push((km.val, dm));
+        }
+    }
+    let total = total.ok_or_else(|| invalid("material", "the model has no material".to_string()))?;
+    Ok((total, parts))
 }
 
 fn finite_nonneg(key: &'static str, what: &str, v: f64) -> Result<()> {
@@ -304,7 +454,12 @@ impl DirectHarmonic {
     /// prescribed displacements, not on the transformation path) and checks the options.
     pub fn new(model: &SolidModel, options: &DirectHarmonicOptions) -> Result<DirectHarmonic> {
         model.validate()?;
-        model.check_supported()?;
+        let visco = model.materials().iter().any(|(_, m)| is_viscoelastic(m));
+        if visco {
+            check_viscoelastic_model(model)?;
+        } else {
+            model.check_supported()?;
+        }
         if crate::mpc::uses_transformation(model) {
             return Err(invalid(
                 "constraint",
@@ -342,6 +497,15 @@ impl DirectHarmonic {
             if damping[m] != Damping::None {
                 return Err(invalid("loss factor", format!("element set '{set}' given twice")));
             }
+            if is_viscoelastic(&materials[m].1) {
+                return Err(invalid(
+                    "loss factor",
+                    format!(
+                        "element set '{set}' carries a viscoelastic material, whose damping is its complex modulus (ADR \
+                         0491): no loss factor is taken"
+                    ),
+                ));
+            }
             damping[m] = match loss {
                 LossFactor::Constant(eta) => {
                     finite_nonneg("loss factor", &format!("loss factor of set '{set}'"), *eta)?;
@@ -363,37 +527,45 @@ impl DirectHarmonic {
         }
 
         // matrices on the mesh pattern
-        let k_total_m = stiffness_with(model, options.threads)?;
-        let mass_m = consistent_with(model, options.threads)?;
-        let k_parts: Vec<(Vec<f64>, Damping)> = if materials.len() == 1 {
-            vec![(k_total_m.val.clone(), damping[0].clone())]
+        let (k_total_m, mass_m, k_parts, k_total) = if visco {
+            let (k_total_m, k_parts) = viscoelastic_parts(model, &damping, options)?;
+            let mass_m = consistent_with(model, options.threads)?;
+            let k_total = k_total_m.val.clone();
+            (k_total_m, mass_m, k_parts, k_total)
         } else {
-            let which = model.material_indices()?;
-            let dofs = model.dof_map();
-            let mut parts = Vec::with_capacity(materials.len());
-            for (m, dm) in damping.iter().enumerate() {
-                let km = assemble_with(model, options.threads, |ctx| {
-                    if which[ctx.element] != m {
-                        let size: usize = ctx.nodes.iter().map(|&a| dofs.components(a)).sum();
-                        return Ok(crate::element::ElementMatrix::zeros(size));
-                    }
-                    let d = ctx.material.elasticity_matrix()?;
-                    element_for(ctx.kind).stiffness(ctx.coords, &d)
-                })?;
-                parts.push((km.val, dm.clone()));
-            }
-            parts
-        };
-        let k_total = if materials.len() == 1 {
-            k_total_m.val.clone()
-        } else {
-            let mut s = vec![0.0; k_total_m.val.len()];
-            for (v, _) in &k_parts {
-                for (a, b) in s.iter_mut().zip(v) {
-                    *a += b;
+            let k_total_m = stiffness_with(model, options.threads)?;
+            let mass_m = consistent_with(model, options.threads)?;
+            let k_parts: Vec<(Vec<f64>, Damping)> = if materials.len() == 1 {
+                vec![(k_total_m.val.clone(), damping[0].clone())]
+            } else {
+                let which = model.material_indices()?;
+                let dofs = model.dof_map();
+                let mut parts = Vec::with_capacity(materials.len());
+                for (m, dm) in damping.iter().enumerate() {
+                    let km = assemble_with(model, options.threads, |ctx| {
+                        if which[ctx.element] != m {
+                            let size: usize = ctx.nodes.iter().map(|&a| dofs.components(a)).sum();
+                            return Ok(crate::element::ElementMatrix::zeros(size));
+                        }
+                        let d = ctx.material.elasticity_matrix()?;
+                        element_for(ctx.kind).stiffness(ctx.coords, &d)
+                    })?;
+                    parts.push((km.val, dm.clone()));
                 }
-            }
-            s
+                parts
+            };
+            let k_total = if materials.len() == 1 {
+                k_total_m.val.clone()
+            } else {
+                let mut s = vec![0.0; k_total_m.val.len()];
+                for (v, _) in &k_parts {
+                    for (a, b) in s.iter_mut().zip(v) {
+                        *a += b;
+                    }
+                }
+                s
+            };
+            (k_total_m, mass_m, k_parts, k_total)
         };
         if mass_m.col != k_total_m.col || mass_m.row_ptr != k_total_m.row_ptr {
             return Err(invalid(
@@ -517,6 +689,20 @@ impl DirectHarmonic {
                     let s = storage / e;
                     Ok(C64::new(s, s * eta))
                 }
+                Damping::Viscoelastic {
+                    material,
+                    part,
+                    temperature,
+                    modulus,
+                } => {
+                    let c = crate::mat_visco::complex_moduli(material, omega, *temperature)?;
+                    let z = match part {
+                        ViscoPart::Whole => c.young,
+                        ViscoPart::Shear => c.shear,
+                        ViscoPart::Bulk => c.bulk,
+                    };
+                    Ok(C64::new(z.re / modulus, z.im / modulus))
+                }
             })
             .collect()
     }
@@ -558,6 +744,19 @@ impl DirectHarmonic {
     /// [`HarmonicResponse::stress`] times the coefficient `s_m (1 + i eta_m)` of each element's material at the response's
     /// frequency, so that a loss factor gives the stress `E* eps` of the complex modulus (ADR 0448 amendment 2).
     pub fn stress(&self, model: &SolidModel, response: &HarmonicResponse) -> Result<HarmonicStress> {
+        // ADR 0491 D2: the recovery evaluates the material at the points, which the viscoelastic material refuses.
+        if self
+            .k_parts
+            .iter()
+            .any(|(_, d)| matches!(d, Damping::Viscoelastic { .. }))
+        {
+            return Err(FemError::NotYetSupported {
+                item: "material",
+                variant: "Viscoelastic",
+                location: "the harmonic stress".to_string(),
+                package: crate::mat_visco::FOLLOW_UP,
+            });
+        }
         let mut st = response.stress(model)?;
         let coef = self.coefficients(response.omega)?;
         let which: Vec<usize> = if self.k_parts.len() == 1 {
