@@ -8434,7 +8434,7 @@ fixed by the item's registration ADR before any code.
     J2 state and halving checks met; the free spinning bar (a3) missed by the nonlinear instability of the trapezoidal
     rule, recorded as a known miss. Mutation MU6 (driver ignoring in_residual_reference) not caught. Follow-ups F-570,
     F-571.
-- [ ] **F-424** Follower pressure, arc-length continuation, and modes about a nonlinear equilibrium
+- [x] **F-424** Follower pressure, arc-length continuation, and modes about a nonlinear equilibrium
   - depends on: F-408, F-395, F-396, F-397
   - acceptance: Every limit not stated here is registered in the ADR before the run. Follower pressure: the load
     stiffness agrees with central differences of the load within 1e-6. Thin ring (thickness/radius 0.02, nu = 0) under
@@ -8447,8 +8447,23 @@ fixed by the item's registration ADR before any code.
     state: a clamped-clamped beam stretched by an end displacement has the tension frequencies of F-395 within 1
     percent, and at a small stretch the tangent modes equal the linear pre-stressed modes within 1e-4; for the rotating
     radial beam at 0.2 w_0 they equal F-396 within 1e-4, and the difference at higher speed is recorded.
-  - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0327; the registration is
-    written by the implementation agent before any code.
+  - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). DONE. Size M. ADR 0480, 2026-11-14 (registration
+    of stub ADR 0327): rcfd_fem::follower (stub of ADR 0440 filled, PENDING None): FollowerPressure on a surface set of
+    solid faces, the force on the current face and its load stiffness (the full matrix for checks, the symmetric part in
+    the driver), a Contribution of the Newton driver; CentrifugalFollower (the deformation-dependent centrifugal load);
+    buckling with the load stiffness (buckling::factors_with); tangent_modes about a converged nonlinear state.
+    rcfd_fem::arclength (filled, PENDING None): trace with the spherical constraint of Crisfield as a per-iteration
+    load-factor control of the driver's own attempt (no second Newton loop), with halving and doubling back of the arc
+    length. Load stiffness against central differences 1.3e-10 .. 3.6e-10 (limit 1e-6). Ring (t/R 0.02, nu 0) to the
+    stretch 1.507: thin law within 8.4e-3 for lambda >= 1.2 (limit 1e-2; the thick-ring ODE within 7.3e-7), dead
+    pressure off by lambda (+0.398). Ring buckling 3.0104 E I/R^3 with the load stiffness (limit 2 percent), 3.9345
+    without (limit 3 percent). Two-bar truss of bipyramidal Tet4 bars to w = 2.2086 h in 88 points: closed form within
+    1.6e-13 P_max (limit 1e-6), limit load within 6.2e-4 (limit 5e-3), negative pivots 0, 1, 0; load control fails at
+    0.9975 P_max. Tangent modes: stretched beam within 2.8e-5 of F-395 (limit 1e-2), 8.8e-8 at the small stretch (limit
+    1e-4); rotating beam at 0.2 w_0 within 1.2e-5 of F-396 (limit 1e-4), recorded 1.0e-3 at 2 w_0. Nine of nine
+    mutations caught; default bits and baseline hashes unchanged. Done by the registered rule. The reference-data
+    entries were cited without re-reading the sources (the Hibbitt 1979 citation is to be checked). Follow-ups F-572,
+    F-573.
 - [ ] **F-425** Hyperelastic materials (neo-Hookean, Mooney-Rivlin) with a mean-dilatation element for near incompressibility
   - depends on: F-408, F-390, F-397
   - acceptance: Every limit not stated here is registered in the ADR before the run. The tangent agrees with central
@@ -10956,3 +10971,18 @@ fixed by the item's registration ADR before any code.
   - acceptance: Every limit not stated here is registered in the ADR before the run. S3 of ADR 0479 (free Hex8, 50
     steps) converges every step with the driver defaults, and MU6 of ADR 0479 is caught.
   - note: Structural solver, advanced tier. Follow-up of F-423 (ADR 0479, 2026-11-14).
+- [ ] **F-572** Arc-length with a follower reference load and an unsymmetric factor of the load stiffness
+  - depends on: F-424
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The load direction of the
+    arc-length iteration includes the derivative of the contributions with the load factor, so that a reference load
+    made only of follower pressure is traced; a ring under follower internal pressure traced by arc-length reproduces
+    the load-controlled path of ADR 0480 within 1e-6 at the common load factors; an unsymmetric factor of the tangent
+    gives quadratic convergence on a free-edged follower load (registered rate), and the symmetric path keeps its bits.
+  - note: Structural solver, advanced tier. Follow-up of F-424 (ADR 0480, 2026-11-14).
+- [ ] **F-573** Follower pressure on shells
+  - depends on: F-424
+  - acceptance: Every limit not stated here is registered in the ADR before the run. ShellPressure gains a follower form
+    on the current mid-surface with its load stiffness, against central differences within 1e-6 on Shell4 and Shell3; a
+    thin cylinder of shells under follower internal pressure follows p = E t (lambda^2 - 1)/(2 R) within 1 percent to
+    the stretch 1.5; the dead ShellPressure keeps its bits.
+  - note: Structural solver, advanced tier. Follow-up of F-424 (ADR 0480, 2026-11-14).

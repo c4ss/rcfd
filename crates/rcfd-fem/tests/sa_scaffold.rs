@@ -2032,7 +2032,7 @@ fn x1_modules_and_pending_after_f415_f420_f422_f416_f417_f432() {
 
 // X1 after ADR 0479 (F-423): nl_transient has landed as well.
 #[test]
-#[ignore = "record: ADR 0480 (F-424) landed follower (PENDING None), retiring its row; continued in x1_modules_and_pending_after_f415_f420_f422_f416_f417_f432_f423_f424 (ADR 0291 pattern, maintainer standing decision)"]
+#[ignore = "record: ADR 0480 (F-424) landed follower and arclength (PENDING None), retiring their rows; continued in x1_modules_and_pending_after_f415_f420_f422_f416_f417_f432_f423_f424 (ADR 0291 pattern, maintainer standing decision)"]
 fn x1_modules_and_pending_after_f415_f420_f422_f416_f417_f432_f423() {
     use rcfd_fem as f;
     let fem: [(&str, Option<&str>, &str); 24] = [
@@ -2096,7 +2096,7 @@ fn x1_modules_and_pending_after_f415_f420_f422_f416_f417_f432_f423_f424() {
         ("mat_j2", f::mat_j2::PENDING, "landed"),
         ("nl_transient", f::nl_transient::PENDING, "landed"),
         ("follower", f::follower::PENDING, "landed"),
-        ("arclength", f::arclength::PENDING, "ADR 0327 (F-424)"),
+        ("arclength", f::arclength::PENDING, "landed"),
         ("mat_hyper", f::mat_hyper::PENDING, "ADR 0328 (F-425)"),
         ("nonlinear_md", f::nonlinear_md::PENDING, "ADR 0328 (F-425)"),
         ("tie", f::tie::PENDING, "landed"),
