@@ -32,14 +32,12 @@ use rcfd_fem::shell::stresses as shell_stresses;
 use rcfd_fem::{FemError, SolidModel, SolidResult};
 use rcfd_io::vtk::{
     fe_vtu_string, FeArray, FeCellBlock, VTK_HEXAHEDRON, VTK_LINE, VTK_QUAD, VTK_QUADRATIC_HEXAHEDRON,
-    VTK_QUADRATIC_TETRA, VTK_TETRA,
+    VTK_QUADRATIC_TETRA, VTK_TETRA, VTK_TRIANGLE,
 };
 use std::path::Path;
 
 const IDENTITY_3: [usize; 3] = [0, 1, 2];
 const IDENTITY_4: [usize; 4] = [0, 1, 2, 3];
-/// The VTK cell type of a linear triangle (ADR 0454 D2).
-const VTK_TRIANGLE: u8 = 5;
 const IDENTITY_8: [usize; 8] = [0, 1, 2, 3, 4, 5, 6, 7];
 const IDENTITY_10: [usize; 10] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
 const IDENTITY_2: [usize; 2] = [0, 1];

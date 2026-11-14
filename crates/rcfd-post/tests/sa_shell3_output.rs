@@ -99,3 +99,38 @@ fn po1_shell3_in_the_shell_output_known_miss() {
     }
     assert!(missed.is_empty(), "missed: {missed:#?}");
 }
+
+/// PO1 corrected (ADR 0454 amendment 1): the same test and limits after `rcfd_io::vtk` gained the triangle.
+#[test]
+fn po1b_shell3_in_the_shell_output() {
+    let mut missed = Vec::new();
+    for mixed in [true, false] {
+        let (m, pres, forces) = strip(mixed);
+        let r = solve_static_with(&m, &pres, &forces, &StaticOptions::default()).unwrap();
+        let f = shell_fields(&m, &r).unwrap();
+        let st = stresses(&m, r.displacement_values()).unwrap();
+        let mut ok = st.len() == m.mesh().n_elements();
+        for (e, s) in &st {
+            ok &= bits(&f.membrane_force[3 * e..3 * e + 3]) == bits(&s.membrane)
+                && bits(&f.moment[3 * e..3 * e + 3]) == bits(&s.bending)
+                && bits(&f.shear_force[2 * e..2 * e + 2]) == bits(&s.shear)
+                && bits(&f.stress_top[3 * e..3 * e + 3]) == bits(&s.top)
+                && bits(&f.stress_bottom[3 * e..3 * e + 3]) == bits(&s.bottom);
+            for k in 0..3 {
+                ok &= bits(&f.shell_axes[9 * e + 3 * k..9 * e + 3 * k + 3]) == bits(&s.axes[k]);
+            }
+        }
+        println!("PO1 mixed {mixed}: cell arrays equal shell::stresses bit for bit: {ok}");
+        if !ok {
+            missed.push(format!("PO1 mixed {mixed}: cell arrays"));
+        }
+        let xml = solid_vtu_string(&m, &r).unwrap();
+        let ty = types(&xml);
+        let want = if mixed { vec![9, 5, 5] } else { vec![5, 5, 5, 5] };
+        println!("PO1 mixed {mixed}: cell types {ty:?} (expected {want:?})");
+        if ty != want {
+            missed.push(format!("PO1 mixed {mixed}: cell types {ty:?}"));
+        }
+    }
+    assert!(missed.is_empty(), "missed: {missed:#?}");
+}
