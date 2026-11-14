@@ -200,3 +200,84 @@ amendment made after its run. **todo**: the option does not build or B1, B2 or D
 - The transformation path (linear constraints, rigid sets, supports) stays refused, as in F-414; free-free models are refused
   with the option.
 - The option stays off by default: making it the default would change F-414's results (an open question, not taken).
+
+## Addendum 1: results (2026-11-14)
+
+Commits: 38f88246 (this registration, alone), c47ddba6 (the D1 file with the constants `BASE` printed by its single run at
+main 80ebbd1e before any library code; log `f532-scratch/d1-base.log`), d081fbbf (the option in `damped.rs` and the checks),
+46fa995d (two message texts and layout, below). Registered runs on the content of d081fbbf, each made once, release profile:
+`cargo test --release -p rcfd-fem --test sa_damped_residual`, `--test sa_damped_residual_default_bits`, `--test sa_damped`,
+`--test sa_scaffold` (logs `f532-scratch/run_*.log`).
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| B1 `c = 0.9 Z`, 20 modes + residual vectors, `j = 1, 2, 3` | `<= 2e-2` | 5.74e-5, 1.60e-4, **3.33e-4** (estimate 3.3e-4, the dispersion) | yes |
+| B1n the same without the option: each `> 2e-2`; largest in `[2.5e-2, 5.5e-2]` | band | 3.77e-2, 3.68e-2, 3.54e-2; **3.77e-2** (estimate 3.5e-2 to 3.8e-2 chain, 4.3e-2 first order) | yes |
+| B2 `c = 2 Z`, 20 modes + residual vectors, the real root | `<= 1e-2` | **2.69e-7** (estimate 2.7e-7) | yes |
+| B2n the same without the option | `[8e-3, 2e-2]` | 1.33e-2 (estimate 1.33e-2), above 1e-2: the option is needed for a4 | yes |
+| B2b `c = 2 Z` with the option: oscillating `j = 1, 2, 3`; real roots flagged and said | `<= 2e-2`; exact | 4.18e-5, 1.65e-4, 3.71e-4; 8 real roots, `Im = 0`, ratio 1, note present | yes |
+| D1 nine F-414 set-ups without the option against `BASE` of main 80ebbd1e | `==` | 9 of 9 | yes |
+| D2 option on without dashpots (Rayleigh; loss factor) | bits | identical (7291 words each), no vector | yes |
+| E1 `sa_damped` (7 tests), `sa_scaffold` (9, 11 ignored records) unedited | pass | pass | yes |
+| O1 4 vectors, basis 24; `max abs(phi^T M r)`; `max abs(r^T M r - delta)` | `<= 1e-10` each | 4, 24; 7.4e-17; 1.4e-15 | yes |
+| S1 tip compliance on the basis against `L/(E A)`; modes alone deficit `>= 5e-3` | `<= 1e-8`; `>= 5e-3` | 4.0e-14; 9.79e-3 (estimate 9.8e-3) | yes |
+| S2 two-node dashpots: 4 vectors; compliance against `(L - x_mid)/(E A)` | `<= 1e-8` | 4; 7.1e-15 (modes alone 2.93e-2 short, recorded) | yes |
+| H1 shapes `x^H M x = 1`; note | `<= 1e-10`; exact | 1.1e-15; note present | yes |
+| T1 1 and 4 threads with the option | bits | identical (70782 words) | yes |
+| N1 rigid-body motion refused; repeated dashpot dropped and said | error; exact | `InvalidValue` (key `residual vectors`, names the rigid-body motion); 1 kept, basis 21, note | yes |
+
+Also run (not registered): `sa_ortho_modal`, `sa_ortho_rotating` (they call `damped_modes` for refusals): pass.
+
+Mutations (scratch copy `f532-scratch/copy` of 46fa995d, script `mutate.py`, logs `MU*.log`, `mutations.log`):
+
+| Id | Mutation | Caught by |
+|---|---|---|
+| MU1 | no orthogonalisation against the modes | O1 (0.99); the roots unchanged, as expected (Rayleigh-Ritz does not depend on the basis of a span) |
+| MU2 | no M-normalisation | O1 (1.0) |
+| MU3 | the influence vector itself, no `K^-1` | S1 (3.3e-3), S2 (1.2e-2); B1 still met (a spike vector also enriches the span) |
+| MU4 | two-node vector `e_a + e_b` | S2 (2.6e-2) |
+| MU5 | only the first dashpot's vector | B1 (3.05e-2), B2 (1.05e-2), O1 (count), S1, S2 |
+| MU6 | the option ignored (vectors whenever dashpots) | D1 (2 of 9), B1n, B2n |
+| MU7 | shapes from the modes only | H1 (1.0) |
+| MU8 | Gram-Schmidt in the Euclidean inner product | the test functions of O1, B1/B2, S2 and N1 fail: the projected mass is refused by `quadratic_eigen` ("not positive definite", pivot 4.9e-16) before O1 prints its number. Caught by registered checks failing, though not by the O1 limit itself |
+
+**Eight of eight caught.**
+
+Deviations. (1) After the registered run two message texts (the refusal of N1 and the note on a dropped vector) were found to
+carry a run of blanks where a line continuation was meant (an editing slip); fixed in 46fa995d together with `cargo fmt` of
+the new test (layout only). N1 tests that the messages contain "rigid" and "dropped", true before and after. A confirmation run
+on 46fa995d (`confirm.log`) printed every line of `sa_damped_residual` identical to the registered run apart from those two
+texts, and D1 9 of 9. (2) With the option, the bar at `c = 0.9 Z` reports 6 real roots with `abs(s)` from 62 to 2600 (`abs(lambda)` 3.1e5 to
+1.3e7 1/s), and at `c = 2 Z` 8: the continuum root and 7 with `abs(s)` from 27 to 1750. They are roots of the strongly damped
+pseudo-modes of the residual vectors (the 1-D chain estimate had one, at `s = -275.6`; the 3-D bar has four vectors), have no
+continuum counterpart, lie far from every target root, and are counted in `non_oscillating`. See question 2.
+
+Not run: the whole workspace (the lead's gate); `baseline_hashes` (no file of rcfd-fv or rcfd-api changed; no default path
+changed). `cargo fmt -p rcfd-fem --check`: clean. `cargo clippy -p rcfd-fem --all-targets --release -- -D warnings`: clean.
+`cargo test --release -p rcfd-cli --test docs_site` (the new ADR is a page of the site): pass, 2 of 2.
+
+**Decision by the registered rule: done.** Every registered check was met at its registered run, every mutation was caught,
+and no check was met only after an amendment (there is none; deviation 1 changes no measured value).
+
+Remaining questions:
+
+1. Make the residual vectors the default when dashpots are present? Options: (a) keep the option off (F-414's bits kept);
+   (b) on by default (better roots near the impedance; F-414's results change in every set-up with a dashpot).
+   Recommendation: (a); not taken here, since it would change default results.
+2. The fast real roots of the pseudo-modes (deviation 2) are reported like physical ones. Options: (a) document (done here);
+   (b) report per root the share of its shape carried by the residual-vector coordinates and flag roots dominated by them.
+   Recommendation: (b), as the follow-up below.
+3. One vector per dashpot: many dashpots grow the dense problem as `O((2 (m + r))^3)`. Options: (a) leave; (b) compress the
+   influence block (a truncated singular value decomposition of `R` in the M inner product). Recommendation: (a) until a model
+   with many dampers needs it.
+
+### For the lead: roadmap entries
+
+F-532, proposed status **done**:
+
+> Structural solver, advanced tier. Follow-up of F-414 (ADR 0450). ADR 0464, 2026-11-14: DampedOptions::residual_vectors adds one static residual vector per dashpot to the modal basis of damped_modes: K^-1 of its influence vector (sparse LDL^T of the reduced stiffness), M-orthogonalised twice against the undamped modes and the vectors kept, M-normalised, dropped (and said) when already in the span; free-free models refused with the option; off by default. Fixed-free bar with a tip dashpot c = 0.9 Z (Z = A sqrt(E rho)) on 20 modes: the first three roots (c0/L)(-atanh(c/Z) + i (2j - 1) pi/2) within 3.3e-4 with the residual vectors (2 percent; what remains is the mesh dispersion, estimated 3.3e-4), against 3.5e-2 to 3.8e-2 without them (registered band 2.5e-2 to 5.5e-2, from the partial-fraction estimate). At c = 2 Z the real root -(c0/L) atanh(Z/c) within 2.7e-7 (1 percent; 1.33e-2 without). The closed forms were verified as written. Static compliance on the augmented basis equals L/(EA) within 4e-14 (tip dashpots) and (L - x)/(EA) within 7e-15 (dashpots between two nodes); vectors M-orthonormal to 1.4e-15. Without the option nine F-414 results are bit-identical to main 80ebbd1e; bit-identical for 1 and 4 threads. Eight of eight mutations caught. The pseudo-modes add fast overdamped real roots, reported as non-oscillating (|s| >= 27); follow-up proposed.
+
+Follow-up item, proposed id the next free number, title "Damped modes: flag the roots carried by the residual vectors", deps
+F-532:
+
+> Every limit not stated here is registered in the ADR before the run. Each DampedMode reports the M-weighted share of its shape carried by the residual-vector coordinates of the basis, and roots with a share above a registered threshold are flagged as pseudo-modes of the truncation. Bar of F-532 at c = 0.9 Z and 2 Z on 20 modes with the residual vectors: the target roots of F-532 are not flagged, every other real root is; without the option every result is bit-identical to F-532's.
