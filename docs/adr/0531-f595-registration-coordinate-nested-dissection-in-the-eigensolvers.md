@@ -231,3 +231,20 @@ build or a default bit changes and cannot be restored without changing a default
 3. Taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation): the refusals reuse `EigenError`'s
    `DimensionMismatch` and `NonFinite` and `FemError::InvalidValue` with key `"factorisation"`; the transformation path refuses
    the option instead of ignoring it.
+
+## Amendment 1 (2026-11-14, before any run of any check and before any library or test code except the bit record)
+
+Two defects of the set-up found on re-reading `split_levels` and `split_points` (`sparse_chol.rs` lines 760 to 850), corrected
+here before anything is run:
+
+1. **N3 on the tridiagonal is not a control.** On a path graph the level structure from a pseudo-peripheral end has single
+   vertices as levels, and the least `|L_l| / (below above)` is the middle level; the coordinate split takes the median vertex
+   and the smaller (tied: the `B`-side) boundary, the same middle vertex. Both dissections can give the same order, so the
+   results can be bit-equal without any defect. **N3 is moved** to the 7-point `10^3` Laplacian with `M = I`, its points `(i,
+   j, k)`: `lowest_eigenpairs(K, I, 5)` with `Supernodal` and its points must not be bit-equal (values or vectors) to the same
+   without points (U1 asserts that the two orders of this matrix differ). P1 and P2 stay on the tridiagonal (closed form).
+2. **M8 is not caught by E3.** E3 compares the `rcfd-fem` path with a direct call of the same (mutated) eigensolver, so a
+   mutation inside the eigensolver passes it. M8 (`factor_shifted` passes `None`) must fail **N3** (and N1, N2 by the same
+   effect); the "Must fail" entry of M8 is N3 alone.
+
+Nothing else changes.
