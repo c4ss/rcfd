@@ -303,3 +303,88 @@ record with its limit and the measured numbers, and the checks of the same test 
   `m1_m2_m5_tet10_heavy_known_miss`.
 
 `cargo fmt -p rcfd-fem` was applied after the runs (layout only).
+
+## Addendum 1 (2026-11-14): results
+
+Runs: the fast suite `cargo test -p rcfd-fem --release --test sa_estimate -- --nocapture --test-threads=1` once at commit
+674356db (`f432-scratch/run_fast.log`, 10 s); the two heavy records once (`--ignored heavy`, `run_heavy.log`, 756 s: Hex20 233 s,
+Tet10 at n = 16 519 s); the copies of amendment 1 and the whole `rcfd-fem` suite after it. D1 was recorded at the base (commit
+1fed9f7e) before any library code.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| L1 Hex8, Tet4, Tet10, Hex20: nodal stress | `<= 1e-10` | `9.7e-16, 1.5e-15, 1.0e-14, 4.0e-15` | yes |
+| L1 the same: estimate | `<= 1e-10` | `5.5e-16, 6.0e-16, 2.1e-15, 2.2e-15` | yes |
+| L2 Tet10, Hex20 quadratic field: nodal stress; estimate | `<= 1e-10` | `3.4e-15, 1.2e-15`; `2.0e-15, 2.0e-15` | yes |
+| M1 Hex8 `theta` at 4, 8, 16 | `[0.8, 1.2]` | `1.1804, 1.0725, 1.0246` | yes |
+| M1 Tet10 at 4, 8, 16 | `[0.8, 1.2]` | `1.0909, 1.0051, 0.9917` | yes |
+| M1 Hex20 at 4, 8, 16 | `[0.8, 1.2]` | `1.3369, 1.0278, 0.9939` | **no** (n = 4) |
+| M2 Hex8 `abs(theta - 1)` | non-increasing | `0.180, 0.072, 0.025` | yes |
+| M2 Tet10 | non-increasing | `0.0909, 0.00514, 0.00832` | **no** (8 to 16) |
+| M2 Hex20 | non-increasing | `0.337, 0.0278, 0.0061` | yes |
+| M3 Hex8 recovered L2 order 8 to 16 | `>= 1.7` | `1.8085` | yes |
+| M4 Hex8 raw L2 order 8 to 16 | `>= 0.9` | `0.9986` | yes |
+| M5 (record) recovered and raw L2 orders 8 to 16 | none | Tet10 `3.26` and `1.99`, Hex20 `3.52` and `2.00` | recorded |
+| F1 `theta` at n = 2, 4 | `(0.5, 2.0)` | Tet10 `2.0405, 1.0909`; Hex20 `2.7943, 1.3369` | **no** (n = 2) |
+| P1 recovered peak `sigma_xx` against `3 sigma_0` | `<= 2e-2` | `+1.4085e-2` at `(0, r, t)`; nodal average of F-376 on the same mesh `+1.2340e-2` | yes |
+| P2 hole-edge elements in the tenth | all 48 | 18 of 48 (ranks 38 to 937) | **no** |
+| B1 rule, bit for bit (Tet10 n = 4, Hex20 n = 4, plate) | holds | 0 wrong sources, 0 wrong values (386, 150, 0 tied nodes) | yes |
+| T1 1 and 8 threads (same three) | bit-equal | equal | yes |
+| S1 split node short, centre solved (26 points), source the centre | holds | holds | yes |
+| S2 Hex8 quadratic basis refused naming 8 short patches | holds | holds | yes |
+| S3 single-layer plate refused | holds | holds (0 interior corner nodes) | yes |
+| R1 four refusals | each | each | yes |
+| N1 lambda reversed, Hex8 n = 16: `theta` | `< 0.5` | `0.0771` | yes |
+| D1 six digests | equal | equal | yes |
+| X1 `estimate::PENDING` None | holds | holds | yes |
+
+Remarks. The Hex8 numbers follow the one-dimensional probe closely (`1.08, 1.025, 1.007` there); the recovered stress of the
+quadratic kinds converges at order 3.3 to 3.5 and the raw stress at 2.0, so the estimate is asymptotically exact on all three
+kinds and `theta` is within 0.9 percent of 1 at `n = 16`. The two M misses sit at the ends of the sequence: Hex20 on its coarsest
+mesh (each patch spans half the cube) and Tet10 where `theta` passes through 1 between 8 and 16, so "does not grow" compares
+two distances of `5e-3` and `8e-3` on opposite sides of 1. P1: the recovered peak is 0.17 percent above the nodal average, and
+about 0.8 percent of either is the finite width (ADR 0449); the hole-edge patch extrapolates from the first ring. P2 is the
+graded mesh (arithmetic 6): the hole-edge elements near 90 degrees rank 38 to 65, those near 45 and 0 degrees below 800, and the
+largest indicators sit on the coarse outer ring. An indicator per unit volume (`eta_e/|K|^{1/2}`) would weigh the small
+hole-edge elements up; it is a different indicator from the registered one and is proposed as a follow-up, not substituted.
+
+Mutations (scratch copy `f432-scratch/mut` at 674356db, the fast suite per mutation, `mutate.py`, logs `mut_MU*.log`; each
+compared against the baseline misses F1 at n = 2 and P2):
+
+| Id | Caught by |
+|---|---|
+| MU1 boundary corner nodes as centres | P1 (`1.5e5`), R1 (another interface node is named), S1, S2; not B1, which checks the rule against the centres returned and so moves with them (the registration expected B1) |
+| MU2 Hex8 sampled at `gauss_2` | S2 (8 points per element: no longer short) and the rule table; M3 survives (`1.8387`): in 3-D the boundary layer does not lower the order on these meshes, so arithmetic 3 overstated it |
+| MU3 `D` for `D^{-1}` | M1 Hex8 (`2.25, 2.06, 1.97`), F1 |
+| MU4 ties to the first centre | B1 (386 and 150 wrong sources) |
+| MU5 rank test removed | survived, as registered |
+| MU6 point count test removed | S1, S2 (reported "rank deficient" instead of "too few points") |
+| MU7 workers joined in reverse | T1, F1, M1 |
+| MU8 estimate integrated at `gauss_1` (Hex8) | M1 (`0.58, 0.45, 0.27`), M2 |
+
+After amendment 1: the copies `f1_tet10_hex20_fast_n4` and `p1_plate_with_a_hole` and the rest of `sa_estimate`, the whole
+`rcfd-fem` suite, `baseline_hashes` and the docs site test were run; fmt and clippy (`-D warnings`, all targets) on `rcfd-fem`
+are clean. Not run: the whole workspace (the lead's gate). No shared solver file was changed (only `estimate.rs`, the stub of
+ADR 0440).
+
+**Decision by the rule: partial.** Clauses a2 (Hex20 at n = 4), a3 (Tet10 from 8 to 16) and a7 missed, each diagnosed and kept
+as a known-miss record; a1, a4, a5, a6, a8, a9 and a10 met; the supplementary F1 missed at n = 2.
+
+Remaining questions (open):
+
+- **Q4. The indicator of a7.** Options: (a) keep the absolute `eta_e` of Zienkiewicz and Zhu (the clause stays missed on a
+  graded mesh); (b) add the density `eta_e/|K|^{1/2}` as a second ranking and register a7 on it in a follow-up; (c) reword a7
+  for a uniform mesh. Recommendation (b).
+- **Q5. M2 near `theta = 1`.** Options: (a) keep "does not grow" literally (it fails whenever `theta` crosses 1); (b) read it
+  as `abs(theta_next - 1) <= max(abs(theta_prev - 1), 1e-2)` in a follow-up. Recommendation (b), for the maintainer.
+- **Q1** (case-file block and output fields): as registered, recommended and not added.
+
+## For the lead: roadmap entries
+
+Proposed status of F-432: **partial**. Note:
+
+> Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size S. ADR 0478, 2026-11-14: rcfd_fem::estimate (stub of ADR 0440 filled, PENDING None): superconvergent patch recovery (sampling at the centroid of Hex8 and Tet4, the 2 x 2 x 2 points of Hex20 and the four points of Tet10; a complete linear or quadratic fit around every interior corner node by Householder QR; every other node takes the mean of the fits of the nearest solved centres, ties within 1e-9), the energy-norm estimate of Zienkiewicz and Zhu with element indicators, a ranking and the relative estimate; short patches (too few points or rank deficient) reported, not solved; structural kinds, a temperature field and a material interface in a patch refused; bit-identical for 1 and 8 threads. A linear field is exact within 1e-14 (limit 1e-10). Manufactured solution of F-378, case D, n = 4, 8, 16: effectivity Hex8 1.180, 1.073, 1.025; Tet10 1.091, 1.005, 0.992; Hex20 1.337 (MISSED at n = 4), 1.028, 0.994; distance from 1 non-increasing except Tet10 from 8 to 16 (0.0051 to 0.0083 as theta crosses 1: MISSED); Hex8 recovered L2 order 1.81 (limit 1.7), raw 1.00 (limit 0.9). Plate with a hole (the ADR 0449 plate with two layers): recovered peak +1.41 percent of 3 sigma (limit 2), nodal average of F-376 +1.23 percent on the same mesh; the tenth of largest indicator holds 18 of the 48 hole-edge elements (MISSED: the graded mesh makes them small). Seven of eight mutations caught (removing the rank test survives, as registered). Partial by the registered rule; the misses are kept as known-miss records with their limits.
+
+Follow-up (title, deps, acceptance):
+
+> (new item, number for the lead) Error indicator per unit volume and the effectivity criterion near one (deps F-432). Every limit not stated here is registered in the ADR before the run. EnergyError gives the density eta_e/|K|^{1/2} beside eta_e, the absolute values keeping their bits; on the two-layer plate with a hole of ADR 0478 the tenth of the elements with the largest density contains every element with a face on the hole; on the manufactured solution of F-378 (Hex20 and Tet10 at n = 8, 16 and a finer heavy record where feasible) abs(theta - 1) on each mesh is at most max(abs(theta - 1) on the previous mesh, 1e-2); the results of F-432 keep their bits.
