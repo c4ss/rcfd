@@ -3491,9 +3491,9 @@
     "deps": [
       "F-391"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. Membrane patch test and constant-curvature bending patch test on a distorted flat mesh within 1e-8. Simply supported square plate under uniform load, 16 x 16 elements, nu = 0.3: centre deflection within 1 percent of the Navier series (0.004062 q a^4/D, recomputed in the registration) at thickness/side 0.01 and within 1.5 percent at 0.001 (no shear locking), the fully integrated shear control being below 20 percent at 0.001. Cantilever strip, nu = 0: tip deflection P L^3/(3 E I) within 0.5 percent and surface stress 6 M/t^2 at mid-span within 2 percent. Curved: a ring strip of radius R pinched by two opposite forces, nu = 0, 32 elements per quarter: change of the loaded diameter (pi/4 - 2/pi) P R^3/(E I) within 2 percent; a cylinder under internal pressure with free ends: radial displacement p R^2/(E t) within 0.5 percent. Frequencies of the simply supported plate: omega_mn = pi^2 (m^2 + n^2)/a^2 sqrt(D/(rho t)) within 1 percent for (1,1) and 3 percent for (1,2) and (2,2). A free plate has six zero frequencies; a facet warped beyond the registered limit is refused with the element.",
-    "note": "Structural solver, intermediate tier (plan ADR 0290, 2026-11-12). Size M. Stub ADR 0295; the registration is written by the implementation agent before any code."
+    "note": "Structural solver, intermediate tier. ADR 0432, 2026-11-14: Shell4, the four-node flat-facet shell with six unknowns per node: bilinear membrane, Reissner-Mindlin bending with the MITC4 assumed transverse shear strain (tied at the edge mid-points, derived), a drilling penalty alpha G t (theta_z - omega)^2 with alpha = 1e-3 tying the drilling rotation to the membrane rotation, rigid offsets from warped nodes to the mean plane (warp ratio above 0.05 refused naming the element), consistent mass with rotary inertia rho t^3/12, Load::ShellPressure on element sets along the element normal, shell::stresses (resultants and top/bottom surface stresses at the element centres). DofMap gives six unknowns to shell nodes; shells are taken by the static and modal elimination paths and refused elsewhere (naming a follow-up of ADR 0432), a shell node shared with a solid is refused naming the node; rcfd-post refuses a shell result naming the node. Met: membrane and bending patch tests on a distorted mesh in space 7.4e-14 and 1.0e-13 (limit 1e-8); simply supported plate 16 x 16 within 7.5e-4 (t/a = 0.01) and 1.26e-3 (t/a = 0.001) of Navier (c = 0.004062352661 recomputed), the fully integrated control at 1.8e-3 of Navier; cantilever strip tip 1.05e-3, mid-span surface stress 1.2e-10; pinched ring 1.41e-3 of (pi/4 - 2/pi) P R^3/(E I); cylinder u_r 3.0e-4 of p R^2/(E t) (the inscribed polygon's cos(pi/128) within 1.1e-10); plate frequencies 0.39, 1.48 and 1.59 percent; free plate six zeros at 2.5e-6 of f_7 (Sturm count 6; 87 without the drilling stiffness); every quantity within 6.1e-10 of an independent numpy prototype of the same element. Thirteen mutations, all caught. si_scaffold_bits and baseline_hashes unchanged."
   },
   {
     "id": "F-393",
@@ -5033,5 +5033,27 @@
     ],
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. Each mode returned by the sparse whirl state solver of ADR 0428 is refined by inverse iteration at its own eigenvalue, so that on the cube of ADR 0416 at both registered shifts with count 6 every stored mode residual is at most 1e-8, while the eigenvalues still equal the dense state solver's within 1e-9 relative and the stability flags agree."
+  },
+  {
+    "id": "F-521",
+    "title": "Shell results in the solid output: VTK quad cells, rotations and the resultants as cell data",
+    "phase": 9,
+    "deps": [
+      "F-392",
+      "F-512"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. rcfd_post::solid_output writes a model with Shell4 elements: displacement and rotation point arrays, reaction forces and moments, Shell4 as VTK quad cells and the membrane forces, moments, shear forces and top and bottom surface stresses of rcfd_fem::shell::stresses as cell data; a model without shells writes the bytes it wrote before; the arrays read back equal the result within 1e-15."
+  },
+  {
+    "id": "F-522",
+    "title": "Shells on the transformation path and body loads on shells: rigid sets and supports on shell nodes, gravity and centrifugal loads",
+    "phase": 9,
+    "deps": [
+      "F-392",
+      "F-513"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. Gravity on a shell model gives reactions rho t A g within 1e-12 and the consistent nodal loads of the bilinear translations; a shell plate held by a rigid set on an edge has the deflection of the clamped plate within 1e-10; a nodal spring on a shell rotation gives k_theta theta = M within 1e-10; the free rigid motions count takes shell nodes; a model without shells gives the bits it gave before."
   }
 ]
