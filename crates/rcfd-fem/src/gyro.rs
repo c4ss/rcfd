@@ -735,7 +735,20 @@ pub struct HarmonicSplitModes {
     /// Per split mode, the corrected frequency `theta'` of the condensed problem (ADR 0527 D2), rad/s: `Some` where
     /// `schur_eta` is `Some` and [`crate::rotating::RotatingOptions::corrected_frequency`] is on, `None` otherwise.
     pub corrected_frequency: Vec<Option<f64>>,
+    /// Per split mode, the series ratio `|delta_2 / delta_1|` of the perturbation estimate of `schur_eta` (ADR 0535 D1): `Some`
+    /// with [`crate::rotating::SplitSchur::Perturbation`] and [`crate::rotating::SplitSchur::PerturbationChecked`] where the
+    /// estimate was computed with a non-empty complement and a defined ratio, `None` otherwise (always with `Dense`).
+    pub perturbation_ratio: Vec<Option<f64>>,
+    /// Per split mode, whether `schur_eta` (and `theta'`) is the dense computation of ADR 0492 because the perturbation ratio
+    /// exceeded [`SPLIT_SCHUR_RATIO_LIMIT`], was undefined or the estimate was refused (ADR 0535 D2); true only with
+    /// [`crate::rotating::SplitSchur::PerturbationChecked`].
+    pub schur_fallback: Vec<bool>,
 }
+
+/// The ratio `|delta_2 / delta_1|` above which [`crate::rotating::SplitSchur::PerturbationChecked`] falls back to the dense
+/// computation of ADR 0492 (ADR 0535 D1: the truncation miss of the second-order sum is about the square of the ratio, so 1
+/// percent is crossed at 0.1; 0.08 keeps the margin of the recorded excess).
+pub const SPLIT_SCHUR_RATIO_LIMIT: f64 = 0.08;
 
 /// The split Campbell table of a sector (ADR 0481 D2): one [`SplitCampbell`] per harmonic index.
 #[derive(Debug, Clone, PartialEq)]
@@ -876,6 +889,8 @@ impl<'a> RotatingSector<'a> {
             eta: vec![None; count],
             schur_eta: vec![None; count],
             corrected_frequency: vec![None; count],
+            perturbation_ratio: vec![None; count],
+            schur_fallback: vec![false; count],
         })
     }
 
@@ -920,10 +935,17 @@ impl<'a> RotatingSector<'a> {
             .iter()
             .map(|sm| (multiplicity == 2).then(|| wave_sense(part.mass(), &sm.re, &sm.im)))
             .collect();
-        let (corrections, dropped_corrections, eta, schur) = match &correction {
-            None => (0, 0, vec![None; modes.len()], vec![None; modes.len()]),
+        let (corrections, dropped_corrections, eta, schur, perturbation_ratio, schur_fallback) = match &correction {
+            None => (
+                0,
+                0,
+                vec![None; modes.len()],
+                vec![None; modes.len()],
+                vec![None; modes.len()],
+                vec![false; modes.len()],
+            ),
             Some(cb) => {
-                let (eta, schur_eta) = if d.stability == Stability::Stable {
+                let (eta, schur_eta, ratios, fallback) = if d.stability == Stability::Stable {
                     let rest = match basis {
                         Basis::Speed => None,
                         Basis::Rest => {
@@ -942,11 +964,30 @@ impl<'a> RotatingSector<'a> {
                         .iter()
                         .map(|dm| ritz_error(cb, kq, &h.reduced_mass, omega, dm))
                         .collect();
+                    let mut ratios = vec![None; modes.len()];
+                    let mut fallback = vec![false; modes.len()];
                     let schur_eta = if schur {
                         match part.options().split_schur {
-                            SplitSchur::Perturbation => (0..d.modes.len())
-                                .map(|a| schur_perturbation(cb, kq, &h.reduced_mass, omega, &d, a, &projected))
-                                .collect(),
+                            SplitSchur::Perturbation | SplitSchur::PerturbationChecked => {
+                                let checked = part.options().split_schur == SplitSchur::PerturbationChecked;
+                                let mut out = Vec::with_capacity(d.modes.len());
+                                for a in 0..d.modes.len() {
+                                    let est = schur_perturbation(cb, kq, &h.reduced_mass, omega, &d, a, &projected);
+                                    ratios[a] = est.and_then(|(_, _, r)| r);
+                                    // An empty complement gives `Some((0, theta, None))`: nothing to check.
+                                    let empty = est.is_some_and(|(v, _, r)| v == 0.0 && r.is_none());
+                                    let fall = checked
+                                        && !empty
+                                        && (est.is_none() || ratios[a].map_or(true, |r| r > SPLIT_SCHUR_RATIO_LIMIT));
+                                    if fall {
+                                        fallback[a] = true;
+                                        out.push(schur_error(cb, kq, &h.reduced_mass, omega, &d.modes[a], &projected));
+                                    } else {
+                                        out.push(est.map(|(v, t, _)| (v, t)));
+                                    }
+                                }
+                                out
+                            }
                             SplitSchur::Dense => d
                                 .modes
                                 .iter()
@@ -956,11 +997,16 @@ impl<'a> RotatingSector<'a> {
                     } else {
                         vec![None; modes.len()]
                     };
-                    (eta, schur_eta)
+                    (eta, schur_eta, ratios, fallback)
                 } else {
-                    (vec![None; modes.len()], vec![None; modes.len()])
+                    (
+                        vec![None; modes.len()],
+                        vec![None; modes.len()],
+                        vec![None; modes.len()],
+                        vec![false; modes.len()],
+                    )
                 };
-                (cb.kept(), cb.dropped, eta, schur_eta)
+                (cb.kept(), cb.dropped, eta, schur_eta, ratios, fallback)
             }
         };
         let schur_eta: Vec<Option<f64>> = schur.iter().map(|x| x.map(|(v, _)| v)).collect();
@@ -990,6 +1036,8 @@ impl<'a> RotatingSector<'a> {
             eta,
             schur_eta,
             corrected_frequency,
+            perturbation_ratio,
+            schur_fallback,
         })
     }
 
@@ -1559,7 +1607,8 @@ fn pencil_norm(p: &Projected, speed: f64, l: f64, y: &[C64], sign: f64) -> f64 {
 /// y_a` (the MINRES of ADR 0482 D2) gives the column `e = E y_a = -V^T Q(theta) x`; `delta_1 = y_a^H e / s_a`, `delta_2 = sum
 /// |y_b^H e|^2 / ((l_a - l_b) s_a s_b)` over the other eigenpairs of the linearised pencil (the other split modes and the
 /// mirrors `(-theta_b, conj y_b)` of all). `Some((0, theta))` when the basis spans the index; `None` when the solve failed, the
-/// projected problem has fewer split modes than basis vectors, or a value is not finite.
+/// projected problem has fewer split modes than basis vectors, or a value is not finite. The third entry is the series ratio
+/// `|delta_2 / delta_1|` of ADR 0535 D1 (`None` when the complement is empty or the ratio is undefined).
 fn schur_perturbation(
     cb: &CorrectionBasis,
     kq: &CsrMatrix,
@@ -1568,13 +1617,13 @@ fn schur_perturbation(
     d: &DenseSplit,
     a: usize,
     p: &Projected,
-) -> Option<(f64, f64)> {
+) -> Option<(f64, f64, Option<f64>)> {
     let nq = kq.n;
     let nb = cb.v.len();
     let dm = &d.modes[a];
     let theta = dm.omega;
     if nb >= nq {
-        return Some((0.0, theta));
+        return Some((0.0, theta, None));
     }
     if d.modes.len() != nb {
         return None;
@@ -1645,5 +1694,7 @@ fn schur_perturbation(
     }
     let theta_c = theta + delta1 + delta2;
     let v = (theta / theta_c - 1.0).abs();
-    (v.is_finite() && theta_c.is_finite()).then_some((v, theta_c))
+    // ADR 0535 D1: the series ratio, undefined where delta_1 is zero or the quotient is not finite.
+    let ratio = (delta2 / delta1).abs();
+    (v.is_finite() && theta_c.is_finite()).then_some((v, theta_c, ratio.is_finite().then_some(ratio)))
 }

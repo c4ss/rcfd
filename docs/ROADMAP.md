@@ -11942,14 +11942,24 @@ fixed by the item's registration ADR before any code.
     neo-Hookean and Mooney-Rivlin cubes of ADR 0523 over 500 steps keep energy within 1e-7 relative; the step-local
     energy of ADR 0523 is removed or equals F-425's within 1e-12 at a point.
   - note: Structural solver, advanced tier. Follow-up of F-607 (ADR 0523, 2026-11-14).
-- [ ] **F-612** Accuracy indicator and fallback of the perturbation Schur Ritz error of the sector split modes
+- [~] **F-612** Accuracy indicator and fallback of the perturbation Schur Ritz error of the sector split modes
   - depends on: F-584
   - acceptance: Every limit not stated here is registered in the ADR before the run. With SplitSchur::Perturbation each
     split mode reports the ratio delta_2/delta_1 of ADR 0527 and falls back to the dense computation of ADR 0492 where
     it exceeds a threshold registered from the records of ADR 0527; on the disc sector of ADR 0411 with 4 harmonic modes
     per index at 0.4 and 0.8 omega_ref the resulting schur_eta agrees with that of ADR 0492 within 1 percent where it
     exceeds 1e-9, the cost stays below half of the dense path, and the results of ADR 0527 keep their bits.
-  - note: Structural solver, advanced tier. Optional. Follow-up of F-584 (ADR 0527, 2026-11-14).
+  - note: Structural solver, advanced tier (plan ADR 0310). Optional. PARTIAL. ADR 0535, 2026-11-14: opt-in
+    SplitSchur::PerturbationChecked, and the new fields HarmonicSplitModes::perturbation_ratio (the series ratio
+    |delta_2/delta_1| of ADR 0527, also reported by SplitSchur::Perturbation, which keeps its bits) and schur_fallback;
+    a split mode whose ratio exceeds 0.08 (registered from the records of ADR 0527: the truncation miss is about the
+    square of the ratio, so 1 percent is crossed at 0.1), is undefined or whose estimate is refused takes the dense
+    computation of ADR 0492, bit for bit. Met: on the disc sector with 4 modes per index at 0.4 and 0.8 omega_ref the
+    checked schur_eta agrees with ADR 0492 within 6.3e-3 where it exceeds 1e-9 (34 modes; the unchecked estimate 0.38),
+    the ratio equals an independent dense computation within 2.4e-7, 20 of the 34 modes fall back, the results of ADR
+    0527 and every default keep their bits, all ten mutations caught. Missed (predicted at registration, kept as a known
+    miss): the cost is 0.83 of the dense path against the limit 0.5, because the modes that need the dense value (54 of
+    96) are most of the work of the doubled indices.
 - [ ] **F-613** A nodal temperature field against time on the nonlinear paths, with thermal strain
   - depends on: F-592
   - acceptance: Every limit not stated here is registered in the ADR before the run. The quasi-static driver and the
