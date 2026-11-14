@@ -199,7 +199,7 @@ pub fn periodic_response(
     }
     let (last, prev) = (cycles[n_cycles - 1], cycles[n_cycles - 2]);
     let change = (last.in_phase - prev.in_phase).hypot(last.quadrature - prev.quadrature) / last.amplitude();
-    if !(change <= tolerance) {
+    if change.is_nan() || change > tolerance {
         return Err(format!(
             "aerodynamic damping: the force history is not periodic: the cycle-to-cycle change of the first harmonic between cycles {} and {} is {change:e} (tolerance {tolerance:e})",
             n_cycles - 1,
