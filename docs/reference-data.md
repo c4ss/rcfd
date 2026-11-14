@@ -1847,3 +1847,16 @@ computed by plain-Python quadrature in `f417-scratch` (`refs.py`, `refs2.py`).
 | Two modes: CQC cross term `rho = 8 zeta^2 (1 + b) b^1.5/((1 - b^2)^2 + 4 zeta^2 b (1 + b)^2)` | derived | the same residues (ADR 0477); P. H. Wirsching, T. L. Paez and K. Ortiz, Random Vibrations: Theory and Practice (Wiley 1995): NOT read, from memory |
 | Zero up-crossing rate `sqrt(m_2/m_0)`, peak rate `sqrt(m_4/m_2)` | cited | S. O. Rice, Bell Syst. Tech. J. 23 (1944) 282 and 24 (1945) 46: NOT read, from memory (as F-413) |
 | Root-mean-square von Mises stress `sqrt(tr(A C))`, `A` the quadratic form of `sigma_vm^2`, `C` the stress covariance | derived | first principles (ADR 0477 D5); D. J. Segalman, C. W. G. Fulcher, G. M. Reese and R. V. Field, J. Vib. Acoust. 122 (2000) 42, for the definition: NOT read, from memory |
+## F-432 stress recovery by element patches and the energy-norm error estimate (ADR 0478)
+
+No source was read for F-432; every method is cited from memory and derived in ADR 0478 as a discrete least-squares fit and an
+energy integral. The checks use closed forms (polynomial fields), the manufactured solution of F-378 (true error known) and
+Kirsch's hole as recorded above (F-413).
+
+| Item | Status | Source |
+|---|---|---|
+| Superconvergent patch recovery: least-squares fit of a complete polynomial to the stresses at the sampling points of the elements around a vertex node, nodal values from the fit; boundary nodes from an interior patch | from memory | Zienkiewicz and Zhu, "The superconvergent patch recovery and a posteriori error estimates. Part 1: The recovery technique", Int. J. Numer. Meth. Engng 33 (1992) 1331-1364: NOT read; ADR 0478 D1 to D3 (the nearest-centre rule of D3 is this repository's) |
+| Error estimate `eta_e^2 = int (sigma* - sigma_h) . D^{-1} (sigma* - sigma_h) dV`, relative estimate `eta/(||u_h||^2 + eta^2)^{1/2}` | from memory | Zienkiewicz and Zhu, "A simple error estimator and adaptive procedure for practical engineering analysis", Int. J. Numer. Meth. Engng 24 (1987) 337-357; Part 2 of the 1992 paper, ibid. 1365-1382: NOT read; ADR 0478 D4 |
+| Effectivity index `theta = eta/||u - u_h||_E`, asymptotic exactness when the recovered stress converges faster than the raw one | from memory | Ainsworth and Oden, A Posteriori Error Estimation in Finite Element Analysis, Wiley (2000), the chapter on recovery-based estimators: NOT read; measured in ADR 0478 (M1, M2) |
+| Optimal stress points: the centroid of the trilinear hexahedron, the 2 x 2 x 2 Gauss points of the quadratic hexahedron | from memory | Barlow, "Optimal stress locations in finite element models", Int. J. Numer. Meth. Engng 10 (1976) 243-251: NOT read; the 1-D argument of ADR 0478 arithmetic 3 |
+| One-dimensional effectivities of the rule (linear `1.080, 1.025, 1.007` and quadratic `0.854, 0.971, 0.995` at `n = 4, 8, 16`) | computed | numpy, `f432-scratch/probe_1d.py`, `probe_1d_quad.py` (ADR 0478 arithmetic 1, 2) |
