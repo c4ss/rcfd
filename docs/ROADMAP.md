@@ -10984,12 +10984,22 @@ fixed by the item's registration ADR before any code.
     unloading from p(1.25 a) within 2 percent of sigma_y - (12/7) p, the elastic Lame hoop stress of the same mesh at
     every point of the inner layer within 1 percent, and S1, S2 of ADR 0475 still within 1 percent.
   - note: Structural solver, advanced tier. Follow-up of F-422 (ADR 0475, 2026-11-14).
-- [ ] **F-562** Damped massless unknowns of a rotor solved as first-order unknowns
+- [~] **F-562** Damped massless unknowns of a rotor solved as first-order unknowns
   - depends on: F-416
   - acceptance: Every limit not stated here is registered in the ADR before the run. A bearing pedestal with stiffness
     and damping in series and no mass gives the whirl of the same model with a pedestal mass of 1e-9 of the disc's
     within 1e-6; models without such unknowns bit-identical.
-  - note: Structural solver, advanced tier. Follow-up of F-416 (ADR 0476, 2026-11-14).
+  - note: Structural solver, advanced tier. Follow-up of F-416 (ADR 0476, 2026-11-14). PARTIAL. F-562 (ADR 0504,
+    2026-11-14): rcfd_fem::rotor::RotorModel::whirl_first_order keeps the damped massless unknowns of a rotor (a
+    pedestal as a ground bearing on a massless station) as displacement-only states, a generalized problem of size 2
+    n_m + n_0; it agrees with the closed-form cubic of the massless-pedestal Jeffcott model to 7e-16 and satisfies the
+    original quadratic on all unknowns to 1e-16, a gyroscopic anisotropic cross-coupled model included. Against the
+    1e-9 pedestal-mass model the roots differ by 1.8e-8 and 3.2e-7 (exact references: the quartic and a bordered
+    Newton polish), the truncation of that model (linear in the mass), inside the acceptance's 1e-6; against the
+    existing whirl on the 1e-9 model 3.7e-7 on the gyroscopic model and 2.0e-6 on the Jeffcott model (the existing
+    solver's loss of accuracy on a mass of 2e-8). Registered tighter limits A2 (1e-8), B1r (1e-7), the second half of
+    N3 and A3 (1e-6) recorded as ignored known-miss tests; whirl itself still refuses a massless damped unknown;
+    models without them bit-identical, baseline_hashes unchanged. No case-file key.
 - [x] **F-563** Speed-dependent bearing coefficients in whirl, Campbell and response
   - depends on: F-416
   - acceptance: Every limit not stated here is registered in the ADR before the run. A table constant in speed gives the
