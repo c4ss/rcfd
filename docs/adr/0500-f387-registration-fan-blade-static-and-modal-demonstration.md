@@ -279,3 +279,20 @@ Every aggregated error is required finite.
 
 Each taken item in the addendum is marked "taken on the maintainer's standing instruction of 2026-11-11 (take the
 recommendation)"; none of the two above is taken.
+
+## Amendment 1 (2026-11-14, written after the first registered run and before the corrected run): the set-up check S0
+
+The first registered run (`f387-scratch/run1.log`, test `s_routes_and_m1_m2`) missed the first part of S0: "every Tet4 of D1 of
+one sign before orientation" counted 528 positive and 528 negative tetrahedra on M1, 2208 and 2208 on M2. **The check was
+defective, not the mesh:** the six Kuhn tetrahedra of a cell are built by walking the three index directions in the six orders of
+`PERMS`, and an odd order (`[0, 2, 1]`, `[1, 0, 2]`, `[2, 1, 0]`) lists the same kind of tetrahedron with the opposite orientation
+(two vertices exchanged). `tet_box` corrects this by the parity flag of its `KUHN` table; D1 corrects it by the signed volume.
+"One sign" must therefore be read after the parity: the corrected S0 requires that the sign of every tetrahedron's volume times the
+parity sign of its order (`+1` even, `-1` odd) is the same for all tetrahedra of the mesh (an inverted cell would show as the other
+product). The second part of S0 (no degenerate tetrahedron, met: `min V_e / mean V_e` 8.5e-3 on M1, 1.1e-3 on M2) and every other
+check are unchanged.
+
+Every other check of that run was met (numbers in addendum 1). The old test stays as an ignored record (`#[ignore]`, named in the
+attribute as superseded by this amendment); the corrected test `s_routes_and_m1_m2_amended` repeats the same computation
+(deterministic: the same numbers are expected for every other check) with the corrected S0, and is the test the gate runs. No limit
+is changed.
