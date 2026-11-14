@@ -277,3 +277,30 @@ By D0 the outcome expected is **partial**: clause (a2) needs a geometrically non
 2. **The cylinder clause.** Taken: a predicted miss with a nonlinear-shell follow-up (D0; the brief b1).
 3. **Warped facets.** Taken: the follower loads the bilinear mid-surface, with no offset moments (arithmetic 5); the dead
    path is left as it is.
+
+## Amendment 1 (2026-11-14): two defects of the registered set-up, found by run 1; written before the corrected run
+
+Run 1 (`sa_shell_follower` once at 5a3ce1f7, `--release -- --include-ignored --nocapture --test-threads 1`,
+`f573-scratch/run1.log`) missed two checks whose registered expectation was wrong, not the code. Neither limit is changed; the
+two tests of run 1 that contain them become ignored records with their bodies unchanged and the suffix `_known_miss`
+(`s1s_s3s_k1_load_stiffness_against_central_differences_known_miss`, `c2_cylinder_at_a_prescribed_stretch_known_miss`), and
+corrected tests are added.
+
+1. **K1 tangent (both elements), "equal bits".** The contribution's triplets cover the translational equations only; the
+   test's reference `-0.5 (K_ij + K_ji)` is formed at every entry of the dense matrix, so at the rotational entries it is
+   `-0.0` while the dense sum of the triplets is `+0.0`: a sign of zero produced by the test, not a difference of the
+   operations. Correction K1': the same comparison with `x + 0.0` applied to both sides (which maps `-0.0` to `+0.0` and leaves
+   every other value unchanged), bits.
+2. **C2b Shell3 (`8.19e-3`, limit `1e-11`).** Arithmetic 6 claimed that every node's `f . e_theta` vanishes by symmetry. For
+   the Shell4 that holds; for the Shell3 mesh, each rectangle cut along the diagonal from its first to its third corner, a node
+   of an end ring `z = 0` is corner `a` (two triangles) of the rectangle on its `+theta` side and corner `b` (one triangle) of
+   the one on its `-theta` side (the top ring the reverse), so its two sides carry `2` and `1` thirds of `p A_tri n` with normals
+   at `+-pi/N`: a tangential force `p A_tri sin(pi/N)/3` at each end node, opposite at the two ends. Its size against `max |f|`
+   is about `sin(pi/64)/6 = 8.2e-3`, the measured value. Interior nodes have three triangles on each side and no tangential
+   force; the net moment about the axis vanishes (the two ends cancel; each triangle pair has its force through the axis).
+   Correction C2b' (Shell3): `max |f . e_theta|, |f . e_z|` over the nodes of the interior rings `0 < k < n_z`, over `max |f|`,
+   `<= 1e-11`; and `|sum_nodes f . e_theta| / max |f| <= 1e-11` (the moment about the axis over `R`; `320` terms).
+
+The corrected tests `s1s_s3s_k1_corrected` and `c2_cylinder_corrected` re-execute the checks of run 1 that were met (S1s, S3s,
+K1 force; C2a, C2b Shell4, C2c, C2d) with the same deterministic inputs as regression guards: their registered measurements are
+those of run 1. Each corrected test is run once.
