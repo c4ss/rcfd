@@ -468,5 +468,6 @@ pub fn element_for(kind: ElementKind) -> &'static dyn Element {
         ElementKind::Hex20 => crate::hex20::element(),
         ElementKind::Beam2 => crate::beam::element(),
         ElementKind::Shell4 => crate::shell::element(),
+        ElementKind::Shell3 => crate::shell3::element(),
     }
 }

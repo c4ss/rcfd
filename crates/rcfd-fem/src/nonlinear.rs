@@ -14,6 +14,10 @@
 //! * Driver (D5): [`solve`], load control of the model's dead loads with its prescribed displacements scaled by the same
 //!   factor, Newton with a residual and an energy criterion, step halving on a failed attempt and a located error when the
 //!   halvings are exhausted; element states committed per converged attempt and rolled back on a failed one.
+//! * Extension points (ADR 0440 D7): [`solve_with`] takes [`DriverExtensions`], a list of extra [`Contribution`]s (force and
+//!   tangent: contact, follower loads) and a [`StepControl`] hook that sets the target of each attempt; with neither, it is
+//!   [`solve`] and executes the operations of ADR 0404. [`StateLayout`] is the per-element layout of the material states
+//!   (ADR 0440 D3).
 
 use crate::assemble::{assemble_with, element_dofs};
 use crate::constraint::{check_rigid_body_motions, prescribed_equations, reduce, Prescribed};
@@ -509,6 +513,156 @@ fn norm(v: impl Iterator<Item = f64>) -> f64 {
     v.map(|x| x * x).sum::<f64>().sqrt()
 }
 
+/// An extra contribution to the Newton driver (ADR 0440 D7): a force added to the internal force and a tangent added to
+/// the tangent at every iteration. An external load that depends on the displacement (a follower pressure) enters with a
+/// minus sign; a contact force enters as it is.
+pub trait Contribution {
+    /// The name used in the driver's errors.
+    fn name(&self) -> &str;
+    /// Adds the contribution at the displacement `u` (one value per equation of the model's `DofMap`) and the attempt's
+    /// load factor: `force` (zero on entry, one value per equation) and the tangent as `(row, column, value)` triplets in
+    /// equations. Triplets off the tangent's pattern extend it.
+    fn add(&self, u: &[f64], load_factor: f64, force: &mut [f64], tangent: &mut Vec<(usize, usize, f64)>)
+        -> Result<()>;
+}
+
+/// The step-control hook of the Newton driver (ADR 0440 D7): it sets the load factor each attempt aims at and is told the
+/// outcome. Halving and the load steps stay the driver's.
+pub trait StepControl {
+    /// The name used in the driver's errors.
+    fn name(&self) -> &str;
+    /// The target of the next attempt from the committed load factor; `proposed` is the load-control target the driver
+    /// would take, `step` the user load step (1-based), `halvings` the halvings of that step so far. The value must lie in
+    /// `(committed, target of the user step]`.
+    fn load_factor(&mut self, committed: f64, proposed: f64, step: usize, halvings: usize) -> Result<f64>;
+    /// After a converged attempt.
+    fn converged(&mut self, increment: &LoadStep) {
+        let _ = increment;
+    }
+    /// After a failed attempt from `committed` to `attempted`.
+    fn failed(&mut self, committed: f64, attempted: f64) {
+        let _ = (committed, attempted);
+    }
+}
+
+/// The extension points given to [`solve_with`]; the default (no contribution, no hook) is [`solve`].
+#[derive(Default)]
+pub struct DriverExtensions<'a> {
+    /// Extra contributions, called in list order.
+    pub contributions: Vec<&'a dyn Contribution>,
+    /// The step-control hook.
+    pub step_control: Option<&'a mut dyn StepControl>,
+}
+
+/// Adds `triplets` to `a`: entries on the pattern in place, in triplet order; if any entry is off the pattern, the matrix
+/// is rebuilt on the union pattern by [`CsrMatrix::from_triplets`] of every entry (ADR 0440 D7).
+pub fn add_triplets(a: &mut CsrMatrix, triplets: &[(usize, usize, f64)]) {
+    let mut outside = Vec::new();
+    for &(r, c, v) in triplets {
+        let row = &a.col[a.row_ptr[r]..a.row_ptr[r + 1]];
+        match row.binary_search(&c) {
+            Ok(k) => {
+                let at = a.row_ptr[r] + k;
+                a.val[at] += v;
+            }
+            Err(_) => outside.push((r, c, v)),
+        }
+    }
+    if outside.is_empty() {
+        return;
+    }
+    let n = a.row_ptr.len() - 1;
+    let mut all = Vec::with_capacity(a.val.len() + outside.len());
+    for r in 0..n {
+        for k in a.row_ptr[r]..a.row_ptr[r + 1] {
+            all.push((r, a.col[k], a.val[k]));
+        }
+    }
+    all.extend(outside);
+    *a = CsrMatrix::from_triplets(n, all);
+}
+
+/// The contributions at `u` and `load_factor`: the force added to `fint` and the triplets to `k` (if given).
+fn contribute(
+    contributions: &[&dyn Contribution],
+    u: &[f64],
+    load_factor: f64,
+    fint: &mut [f64],
+    k: Option<&mut CsrMatrix>,
+) -> std::result::Result<(), String> {
+    let mut triplets = Vec::new();
+    for c in contributions {
+        let mut force = vec![0.0; u.len()];
+        c.add(u, load_factor, &mut force, &mut triplets)
+            .map_err(|e| format!("contribution '{}': {e}", c.name()))?;
+        for (a, b) in fint.iter_mut().zip(&force) {
+            *a += b;
+        }
+    }
+    if let Some(k) = k {
+        add_triplets(k, &triplets);
+    }
+    Ok(())
+}
+
+/// The per-element layout of the material states of a model (ADR 0440 D3): per element the number of points of its
+/// stiffness rule and the values per point (`Material::state_size`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StateLayout {
+    points: Vec<usize>,
+    per_point: Vec<usize>,
+    offsets: Vec<usize>,
+}
+
+impl StateLayout {
+    /// The layout of `model` (every element must have exactly one material; a pending variant is not refused: this is a
+    /// layout, not a solve).
+    pub fn of(model: &SolidModel) -> Result<StateLayout> {
+        let materials = model.material_indices()?;
+        let mesh = model.mesh();
+        let mut points = Vec::with_capacity(mesh.n_elements());
+        let mut per_point = Vec::with_capacity(mesh.n_elements());
+        let mut offsets = Vec::with_capacity(mesh.n_elements() + 1);
+        offsets.push(0);
+        for (e, &m) in materials.iter().enumerate() {
+            let n = crate::element::element_for(mesh.element_kind(e)).stiffness_rule().len();
+            let k = model.materials()[m].1.state_size();
+            points.push(n);
+            per_point.push(k);
+            offsets.push(offsets[e] + n * k);
+        }
+        Ok(StateLayout {
+            points,
+            per_point,
+            offsets,
+        })
+    }
+    /// Points of the stiffness rule of element `e`.
+    pub fn points(&self, e: usize) -> usize {
+        self.points[e]
+    }
+    /// State values per point of element `e`.
+    pub fn values_per_point(&self, e: usize) -> usize {
+        self.per_point[e]
+    }
+    /// The offset of element `e` in one array of all states (element-major, then point-major).
+    pub fn offset(&self, e: usize) -> usize {
+        self.offsets[e]
+    }
+    /// The number of state values of the model.
+    pub fn total(&self) -> usize {
+        *self.offsets.last().expect("one offset at least")
+    }
+    /// Zero states of every element.
+    pub fn empty_states(&self) -> Vec<ElementState> {
+        self.points
+            .iter()
+            .zip(&self.per_point)
+            .map(|(n, k)| ElementState::new(vec![0.0; n * k]))
+            .collect()
+    }
+}
+
 /// What the driver works with.
 struct Problem<'a> {
     model: &'a SolidModel,
@@ -516,6 +670,7 @@ struct Problem<'a> {
     fixed: Vec<(usize, f64)>,
     free: Vec<usize>,
     options: &'a NewtonOptions,
+    contributions: &'a [&'a dyn Contribution],
 }
 
 impl Problem<'_> {
@@ -536,7 +691,10 @@ impl Problem<'_> {
         let (mut e_first, mut e_last) = (0.0, 0.0);
         let dofs = self.model.dof_map();
         for k in 0..=o.max_iterations {
-            let (fint, kt) = force_and_tangent(self.model, &u, states_c, o.threads).map_err(classify)?;
+            let (mut fint, mut kt) = force_and_tangent(self.model, &u, states_c, o.threads).map_err(classify)?;
+            if !self.contributions.is_empty() {
+                contribute(self.contributions, &u, lt, &mut fint, Some(&mut kt)).map_err(Failure::Other)?;
+            }
             let rfull: Vec<f64> = self.f.iter().zip(&fint).map(|(fi, gi)| lt * fi - gi).collect();
             let rn = norm(self.free.iter().map(|&i| rfull[i]));
             let reference = norm(self.free.iter().map(|&i| lt * self.f[i])).max(norm(fint.iter().copied()));
@@ -636,6 +794,23 @@ pub fn solve(
     forces: &[NodalForceAt],
     options: &NewtonOptions,
 ) -> Result<NonlinearResult> {
+    solve_with(model, prescribed, forces, options, DriverExtensions::default())
+}
+
+/// [`solve`] with the extension points of ADR 0440 D7: the contributions are added to the internal force and the tangent
+/// at every iteration (and to the reactions), and the step-control hook sets the target of each attempt. With an empty list
+/// and no hook it is [`solve`].
+pub fn solve_with(
+    model: &SolidModel,
+    prescribed: &[Prescribed],
+    forces: &[NodalForceAt],
+    options: &NewtonOptions,
+    extensions: DriverExtensions<'_>,
+) -> Result<NonlinearResult> {
+    let DriverExtensions {
+        contributions,
+        mut step_control,
+    } = extensions;
     model.validate()?;
     model.check_supported()?;
     check_driver_model(model)?;
@@ -656,6 +831,7 @@ pub fn solve(
         fixed,
         free,
         options,
+        contributions: &contributions,
     };
     let mut u = vec![0.0; n];
     let mut lambda = 0.0;
@@ -669,10 +845,27 @@ pub fn solve(
         let mut dl = 1.0 / ns as f64;
         let mut halvings = 0;
         while lambda < target {
-            let lt = if target - (lambda + dl) <= 1e-12 * dl {
+            let proposed = if target - (lambda + dl) <= 1e-12 * dl {
                 target
             } else {
                 lambda + dl
+            };
+            let lt = match step_control.as_mut() {
+                None => proposed,
+                Some(hook) => {
+                    let v = hook.load_factor(lambda, proposed, step, halvings)?;
+                    if !(v > lambda && v <= target) {
+                        return Err(FemError::InvalidValue {
+                            key: "step control",
+                            reason: format!(
+                                "the hook '{}' gave the load factor {v:e} at load step {step}: it must lie in ({lambda:e}, \
+                                 {target:e}]",
+                                hook.name()
+                            ),
+                        });
+                    }
+                    v
+                }
             };
             match problem.attempt(&u, lambda, lt, &states) {
                 Ok(a) => {
@@ -688,8 +881,14 @@ pub fn solve(
                         energies: a.energies,
                         halvings,
                     });
+                    if let Some(hook) = step_control.as_mut() {
+                        hook.converged(records.last().expect("just pushed"));
+                    }
                 }
                 Err(failure) => {
+                    if let Some(hook) = step_control.as_mut() {
+                        hook.failed(lambda, lt);
+                    }
                     if halvings == options.max_halvings {
                         let at = format!(
                             "load step {step} of {ns} (load factor {lambda:e} to {lt:e}) after {halvings} halvings"
@@ -718,7 +917,13 @@ pub fn solve(
             }
         }
     }
-    let fint = internal_force(model, &u, &states)?;
+    let mut fint = internal_force(model, &u, &states)?;
+    if !contributions.is_empty() {
+        contribute(&contributions, &u, 1.0, &mut fint, None).map_err(|reason| FemError::Solver {
+            solver: "newton",
+            reason,
+        })?;
+    }
     let mut reactions = vec![0.0; n];
     for &(eq, _) in &problem.fixed {
         reactions[eq] = fint[eq] - problem.f[eq];

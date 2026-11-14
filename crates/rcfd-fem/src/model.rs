@@ -5,6 +5,9 @@
 //! constraints are plain data naming sets, readable from a file; there are no closures.
 
 use crate::error::{FemError, Result, SetKind};
+use crate::material::{
+    finite_material, positive_material, HyperelasticEnergy, MaterialAxes, PronyTerm, TimeTemperatureShift,
+};
 use crate::mesh::SolidMesh;
 use rcfd_core::vec3::Vec3;
 
@@ -35,16 +38,20 @@ impl DofMap {
     }
 
     /// The numbering a mesh needs: three translations per node, and six unknowns (the translations, then the small
-    /// rotations about x, y, z) at each node of a Beam2 element (ADR 0417 D1) or of a Shell4 element (ADR 0432 D1). A mesh
-    /// without a Beam2 or Shell4 block gets `DofMap::uniform(n, 3)`.
+    /// rotations about x, y, z) at each node of a Beam2 element (ADR 0417 D1), of a Shell4 element (ADR 0432 D1) or of a
+    /// Shell3 element (ADR 0440 D4). A mesh without a Beam2, Shell4 or Shell3 block gets `DofMap::uniform(n, 3)`.
     pub fn for_mesh(mesh: &SolidMesh) -> DofMap {
-        use crate::mesh::ElementKind::{Beam2, Shell4};
-        if mesh.blocks().iter().all(|b| !matches!(b.kind(), Beam2 | Shell4)) {
+        use crate::mesh::ElementKind::{Beam2, Shell3, Shell4};
+        if mesh
+            .blocks()
+            .iter()
+            .all(|b| !matches!(b.kind(), Beam2 | Shell4 | Shell3))
+        {
             return DofMap::uniform(mesh.nodes().len(), 3);
         }
         let mut counts = vec![3; mesh.nodes().len()];
         for e in 0..mesh.n_elements() {
-            if matches!(mesh.element_kind(e), Beam2 | Shell4) {
+            if matches!(mesh.element_kind(e), Beam2 | Shell4 | Shell3) {
                 for &n in mesh.element_nodes(e) {
                     counts[n] = 6;
                 }
@@ -83,7 +90,9 @@ impl DofMap {
     }
 }
 
-/// A material. Non-exhaustive: later tiers add variants (ADR 0311).
+/// A material. Non-exhaustive. The isotropic elastic material is the one of the earlier tiers; the advanced tier's variants
+/// (ADR 0310 section 2.3, declared by ADR 0440 D2) are plain data refused by every solve until their package lands
+/// ([`Material::pending`]).
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum Material {
@@ -99,6 +108,110 @@ pub enum Material {
         /// Linear expansion coefficient, 1/K.
         expansion: f64,
     },
+    /// Orthotropic linear elasticity in material axes (ADR 0312, F-409).
+    #[non_exhaustive]
+    Orthotropic {
+        /// `E_1, E_2, E_3`, Pa.
+        e: [f64; 3],
+        /// `nu_12, nu_13, nu_23`.
+        nu: [f64; 3],
+        /// `G_12, G_13, G_23`, Pa.
+        g: [f64; 3],
+        /// Density, kg/m^3.
+        density: f64,
+        /// Expansion coefficients along the material axes, 1/K.
+        expansion: [f64; 3],
+        /// The rule giving the material axes.
+        axes: MaterialAxes,
+    },
+    /// An elastic base with properties against temperature (ADR 0312, F-409): named columns over increasing temperatures.
+    #[non_exhaustive]
+    Tabulated {
+        /// The elastic base (isotropic or orthotropic).
+        base: Box<Material>,
+        /// Temperatures, K, strictly increasing.
+        temperatures: Vec<f64>,
+        /// `(property, values at the temperatures)`.
+        columns: Vec<(String, Vec<f64>)>,
+    },
+    /// Linear viscoelasticity: an elastic base relaxing by a Prony series (ADR 0313, F-410).
+    #[non_exhaustive]
+    Viscoelastic {
+        /// The instantaneous elastic base.
+        base: Box<Material>,
+        /// The Prony terms.
+        terms: Vec<PronyTerm>,
+        /// The time-temperature shift, if any.
+        shift: Option<TimeTemperatureShift>,
+    },
+    /// Power-law creep with time hardening, `d eps_c / dt = a sigma^n t^m`, on an elastic base (ADR 0314, F-411).
+    #[non_exhaustive]
+    Creep {
+        /// The elastic base.
+        base: Box<Material>,
+        /// `a`, 1/(s Pa^n s^m).
+        a: f64,
+        /// The stress exponent `n`.
+        n: f64,
+        /// The time exponent `m`.
+        m: f64,
+    },
+    /// J2 plasticity with linear isotropic and kinematic hardening on an isotropic base (ADR 0325, F-422).
+    #[non_exhaustive]
+    J2 {
+        /// The isotropic elastic base.
+        base: Box<Material>,
+        /// Initial yield stress, Pa.
+        yield_stress: f64,
+        /// Isotropic hardening modulus, Pa.
+        isotropic: f64,
+        /// Kinematic hardening modulus, Pa.
+        kinematic: f64,
+    },
+    /// A hyperelastic material (ADR 0328, F-425).
+    #[non_exhaustive]
+    Hyperelastic {
+        /// The strain energy.
+        energy: HyperelasticEnergy,
+        /// Density, kg/m^3.
+        density: f64,
+    },
+}
+
+fn elastic_base(base: &Material, isotropic_only: bool) -> Result<()> {
+    let ok = match base {
+        Material::IsotropicElastic { .. } => true,
+        Material::Orthotropic { .. } => !isotropic_only,
+        _ => false,
+    };
+    if ok {
+        Ok(())
+    } else {
+        Err(FemError::InvalidValue {
+            key: "base",
+            reason: format!(
+                "a {} base: the base must be {}",
+                base.name(),
+                if isotropic_only {
+                    "IsotropicElastic"
+                } else {
+                    "IsotropicElastic or Orthotropic"
+                }
+            ),
+        })
+    }
+}
+
+fn density_ok(density: f64) -> Result<()> {
+    if density >= 0.0 && density.is_finite() {
+        Ok(())
+    } else {
+        Err(FemError::InvalidMaterial {
+            key: "density",
+            value: density,
+            reason: "density must be non-negative and finite",
+        })
+    }
 }
 
 impl Material {
@@ -141,28 +254,228 @@ impl Material {
         })
     }
 
-    /// Young's modulus.
+    /// An orthotropic material (ADR 0440 D2): refuses a modulus that is not positive and finite, a non-finite ratio or
+    /// expansion, a negative or non-finite density. The positive definiteness of the compliance is checked by ADR 0312.
+    pub fn orthotropic(
+        e: [f64; 3],
+        nu: [f64; 3],
+        g: [f64; 3],
+        density: f64,
+        expansion: [f64; 3],
+        axes: MaterialAxes,
+    ) -> Result<Material> {
+        for (key, v) in [("e_1", e[0]), ("e_2", e[1]), ("e_3", e[2])] {
+            positive_material(key, v)?;
+        }
+        for (key, v) in [("g_12", g[0]), ("g_13", g[1]), ("g_23", g[2])] {
+            positive_material(key, v)?;
+        }
+        for (key, v) in [("nu_12", nu[0]), ("nu_13", nu[1]), ("nu_23", nu[2])] {
+            finite_material(key, v)?;
+        }
+        for v in expansion {
+            finite_material("expansion", v)?;
+        }
+        density_ok(density)?;
+        Ok(Material::Orthotropic {
+            e,
+            nu,
+            g,
+            density,
+            expansion,
+            axes,
+        })
+    }
+
+    /// An elastic base with property columns against temperature (ADR 0440 D2): refuses a base that is not isotropic or
+    /// orthotropic, fewer than two temperatures, temperatures not finite or not strictly increasing, no column, an empty
+    /// column name, a column of the wrong length or with a non-finite entry.
+    pub fn tabulated(base: Material, temperatures: Vec<f64>, columns: Vec<(String, Vec<f64>)>) -> Result<Material> {
+        elastic_base(&base, false)?;
+        let bad = |key: &'static str, reason: String| FemError::InvalidValue { key, reason };
+        if temperatures.len() < 2 {
+            return Err(bad(
+                "temperatures",
+                format!("{} temperatures: at least 2", temperatures.len()),
+            ));
+        }
+        if !temperatures.iter().all(|t| t.is_finite()) || temperatures.windows(2).any(|w| w[1] <= w[0]) {
+            return Err(bad(
+                "temperatures",
+                format!("{temperatures:?} must be finite and strictly increasing"),
+            ));
+        }
+        if columns.is_empty() {
+            return Err(bad("columns", "a table needs at least one property column".to_string()));
+        }
+        for (name, values) in &columns {
+            if name.is_empty() {
+                return Err(bad("columns", "a column has an empty property name".to_string()));
+            }
+            if values.len() != temperatures.len() {
+                return Err(FemError::FieldLength {
+                    key: "columns",
+                    expected: temperatures.len(),
+                    found: values.len(),
+                });
+            }
+            if !values.iter().all(|v| v.is_finite()) {
+                return Err(bad("columns", format!("column '{name}' has a non-finite value")));
+            }
+        }
+        Ok(Material::Tabulated {
+            base: Box::new(base),
+            temperatures,
+            columns,
+        })
+    }
+
+    /// A viscoelastic material (ADR 0440 D2): refuses a base that is not isotropic or orthotropic, no term, and a sum of
+    /// shear or of bulk weights above 1.
+    pub fn viscoelastic(
+        base: Material,
+        terms: Vec<PronyTerm>,
+        shift: Option<TimeTemperatureShift>,
+    ) -> Result<Material> {
+        elastic_base(&base, false)?;
+        if terms.is_empty() {
+            return Err(FemError::InvalidValue {
+                key: "terms",
+                reason: "a Prony series needs at least one term".to_string(),
+            });
+        }
+        for (key, sum) in [
+            ("shear", terms.iter().map(|t| t.shear).sum::<f64>()),
+            ("bulk", terms.iter().map(|t| t.bulk).sum::<f64>()),
+        ] {
+            if sum > 1.0 {
+                return Err(FemError::InvalidMaterial {
+                    key,
+                    value: sum,
+                    reason: "the Prony weights must sum to at most 1",
+                });
+            }
+        }
+        Ok(Material::Viscoelastic {
+            base: Box::new(base),
+            terms,
+            shift,
+        })
+    }
+
+    /// A creeping material (ADR 0440 D2): refuses a base that is not isotropic or orthotropic, `a` or `n` not positive
+    /// and finite, `m` not finite or `m <= -1`.
+    pub fn creep(base: Material, a: f64, n: f64, m: f64) -> Result<Material> {
+        elastic_base(&base, false)?;
+        positive_material("a", a)?;
+        positive_material("n", n)?;
+        if !(m > -1.0 && m.is_finite()) {
+            return Err(FemError::InvalidMaterial {
+                key: "m",
+                value: m,
+                reason: "the time exponent must be finite and above -1",
+            });
+        }
+        Ok(Material::Creep {
+            base: Box::new(base),
+            a,
+            n,
+            m,
+        })
+    }
+
+    /// A J2 plastic material (ADR 0440 D2): refuses a base that is not isotropic, a yield stress not positive and finite,
+    /// a hardening modulus negative or not finite.
+    pub fn j2(base: Material, yield_stress: f64, isotropic: f64, kinematic: f64) -> Result<Material> {
+        elastic_base(&base, true)?;
+        positive_material("yield_stress", yield_stress)?;
+        for (key, v) in [("isotropic", isotropic), ("kinematic", kinematic)] {
+            if !(v >= 0.0 && v.is_finite()) {
+                return Err(FemError::InvalidMaterial {
+                    key,
+                    value: v,
+                    reason: "a hardening modulus must be non-negative and finite",
+                });
+            }
+        }
+        Ok(Material::J2 {
+            base: Box::new(base),
+            yield_stress,
+            isotropic,
+            kinematic,
+        })
+    }
+
+    /// A hyperelastic material (ADR 0440 D2): the energy (validated by its constructor) and a non-negative density.
+    pub fn hyperelastic(energy: HyperelasticEnergy, density: f64) -> Result<Material> {
+        density_ok(density)?;
+        Ok(Material::Hyperelastic { energy, density })
+    }
+
+    /// Name of the variant.
+    pub fn name(&self) -> &'static str {
+        match self {
+            Material::IsotropicElastic { .. } => "IsotropicElastic",
+            Material::Orthotropic { .. } => "Orthotropic",
+            Material::Tabulated { .. } => "Tabulated",
+            Material::Viscoelastic { .. } => "Viscoelastic",
+            Material::Creep { .. } => "Creep",
+            Material::J2 { .. } => "J2",
+            Material::Hyperelastic { .. } => "Hyperelastic",
+        }
+    }
+
+    /// The work package that adds the variant, while it has not landed (`None` for the isotropic material; ADR 0440 D2).
+    pub fn pending(&self) -> Option<&'static str> {
+        match self {
+            Material::IsotropicElastic { .. } => None,
+            Material::Orthotropic { .. } => crate::mat_ortho::PENDING,
+            Material::Tabulated { .. } => crate::mat_table::PENDING,
+            Material::Viscoelastic { .. } => crate::mat_visco::PENDING,
+            Material::Creep { .. } => crate::mat_creep::PENDING,
+            Material::J2 { .. } => crate::mat_j2::PENDING,
+            Material::Hyperelastic { .. } => crate::mat_hyper::PENDING,
+        }
+    }
+
+    /// The elastic base of a wrapping variant (`Tabulated`, `Viscoelastic`, `Creep`, `J2`).
+    pub fn base(&self) -> Option<&Material> {
+        match self {
+            Material::Tabulated { base, .. }
+            | Material::Viscoelastic { base, .. }
+            | Material::Creep { base, .. }
+            | Material::J2 { base, .. } => Some(base),
+            _ => None,
+        }
+    }
+
+    /// Young's modulus (the base's for a wrapping variant; NaN for a variant without a single value).
     pub fn youngs_modulus(&self) -> f64 {
         match self {
             Material::IsotropicElastic { e, .. } => *e,
+            _ => self.base().map_or(f64::NAN, |b| b.youngs_modulus()),
         }
     }
-    /// Poisson ratio.
+    /// Poisson ratio (the base's for a wrapping variant; NaN for a variant without a single value).
     pub fn poisson_ratio(&self) -> f64 {
         match self {
             Material::IsotropicElastic { nu, .. } => *nu,
+            _ => self.base().map_or(f64::NAN, |b| b.poisson_ratio()),
         }
     }
     /// Density.
     pub fn density(&self) -> f64 {
         match self {
             Material::IsotropicElastic { density, .. } => *density,
+            Material::Orthotropic { density, .. } | Material::Hyperelastic { density, .. } => *density,
+            _ => self.base().map_or(f64::NAN, |b| b.density()),
         }
     }
-    /// Linear expansion coefficient.
+    /// Linear expansion coefficient (the base's for a wrapping variant; NaN for a variant without a single value).
     pub fn expansion(&self) -> f64 {
         match self {
             Material::IsotropicElastic { expansion, .. } => *expansion,
+            _ => self.base().map_or(f64::NAN, |b| b.expansion()),
         }
     }
 }
@@ -739,6 +1052,17 @@ impl SolidModel {
                     package,
                 });
             }
+            // ADR 0440 D5: a layup is refused on every path until its package lands.
+            if let Some(crate::mesh::BlockProperty::Layup { .. }) = block.property() {
+                if let Some(package) = crate::laminate::PENDING {
+                    return Err(FemError::NotYetSupported {
+                        item: "shell property",
+                        variant: "Layup",
+                        location: format!("block {b}"),
+                        package,
+                    });
+                }
+            }
             // ADR 0417 D4: a path that does not take beams refuses them.
             if !beams && block.kind() == crate::mesh::ElementKind::Beam2 {
                 return Err(FemError::NotYetSupported {
@@ -755,6 +1079,17 @@ impl SolidModel {
                     variant: block.kind().name(),
                     location: format!("block {b}"),
                     package: crate::shell::FOLLOW_UP,
+                });
+            }
+        }
+        // ADR 0440 D5: a material variant whose package has not landed is refused naming it and its set.
+        for (i, (set, m)) in self.materials.iter().enumerate() {
+            if let Some(package) = m.pending() {
+                return Err(FemError::NotYetSupported {
+                    item: "material",
+                    variant: m.name(),
+                    location: format!("material {i}, element set '{set}'"),
+                    package,
                 });
             }
         }

@@ -9,12 +9,16 @@
 pub mod amg;
 pub mod amg_elastic;
 pub mod backend;
+pub mod complex;
+pub mod cskyline;
 pub mod eigen;
+pub mod eigen_general;
 pub mod matrix;
 pub mod precond;
 pub mod reorder;
 pub mod skyline;
 pub mod solvers;
+pub mod sparse_chol;
 pub mod vecops;
 
 pub use amg::{Amg, AmgSettings};
