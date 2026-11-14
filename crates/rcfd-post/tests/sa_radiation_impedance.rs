@@ -176,6 +176,7 @@ fn rect_corner(a: f64, b: f64) -> f64 {
 }
 
 #[test]
+#[ignore = "ADR 0488 amendment 1: NaN-blind f64::max aggregation (MU7 not caught); continued in sa_radiation_impedance_amend1.rs"]
 fn a1_a3_analytic_polygon_integrals() {
     let mut c = Checks::new();
     let l = 0.37;
@@ -264,6 +265,7 @@ fn a1_a3_analytic_polygon_integrals() {
 // ------------------------------------------------------------------------------------------------------------ G1, S1, S2
 
 #[test]
+#[ignore = "ADR 0488 amendment 1: NaN-blind f64::max aggregation (MU7 not caught); continued in sa_radiation_impedance_amend1.rs"]
 fn g1_disk_potential() {
     let mut c = Checks::new();
     let mut worst: f64 = 0.0;
@@ -290,6 +292,7 @@ fn g1_disk_potential() {
 }
 
 #[test]
+#[ignore = "ADR 0488 amendment 1: NaN-blind f64::max aggregation (MU7 not caught); continued in sa_radiation_impedance_amend1.rs"]
 fn s1_s2_surface_pressure() {
     let mut c = Checks::new();
     let mut worst: f64 = 0.0;
