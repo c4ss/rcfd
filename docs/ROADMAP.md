@@ -10869,7 +10869,8 @@ fixed by the item's registration ADR before any code.
     recorded and unchanged (12 digests). Partial by the registered rule: the auxiliary checks C3 (AC/BD to 1e-8, 3.7e-8
     on modes 5 and 6 at the solver tolerance) and C7/N3 (closed form at twist 0, which neglects the root restraint,
     9.3e-2) missed and are recorded as known misses. Seven of eight mutations caught; the BD split mutation enters only
-    the known-miss C3. One optional follow-up proposed (a warning for the CST membrane on warped meshes).
+    the known-miss C3. One optional follow-up proposed (a warning for the CST membrane on warped meshes). Follow-up
+    F-574 (optional).
 - [ ] **F-557** Pre-stress of a static result on a model with both solid and structural elements
   - depends on: F-420
   - acceptance: Every limit not stated here is registered in the ADR before the run. The refusal RF1 of ADR 0473 is
@@ -10999,3 +11000,10 @@ fixed by the item's registration ADR before any code.
     thin cylinder of shells under follower internal pressure follows p = E t (lambda^2 - 1)/(2 R) within 1 percent to
     the stretch 1.5; the dead ShellPressure keeps its bits.
   - note: Structural solver, advanced tier. Follow-up of F-424 (ADR 0480, 2026-11-14).
+- [ ] **F-574** Warning for the constant-strain Shell3 membrane on warped meshes
+  - depends on: F-556
+  - acceptance: Every limit not stated here is registered in the ADR before the run. An opt-in model check reports
+    Shell3 blocks with the constant-strain membrane whose adjacent facets meet at angles above a registered threshold,
+    naming the ANDES membrane of ADR 0466; on the twisted strip of ADR 0473 the check fires at 15 and 30 degrees of
+    twist and not on the flat strip; without the option every result and message bit-identical.
+  - note: Structural solver, advanced tier. Optional, low priority. Follow-up of F-556 (ADR 0483, 2026-11-14).

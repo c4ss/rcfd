@@ -5435,7 +5435,7 @@
     ],
     "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The 4.05 percent excess of the Shell3 rest frequency of the third mode of the twisted strip of ADR 0473 over Hex20 (Shell4 0.53 percent) is located in the Shell3 membrane-bending coupling on warped triangles (CST or ANDES membrane, MITC3 shear) by registered element and mesh variations against the Hex20 strip, before any change to Shell3; any fix is opt-in and the default Shell3 results stay bit-identical.",
-    "note": "Structural solver, advanced tier. Follow-up of F-420 (ADR 0473, 2026-11-14). PARTIAL. ADR 0483, 2026-11-14: diagnosis, no library change. The 4.05 percent Shell3 excess on the twisted strip's first torsion (third mode, 460.730 against 442.797 Hz) is located in the constant-strain membrane acting through the membrane-bending coupling of the warped triangles: three quarters of the torsion energy is the fibre strain theta' phi' s^2 coupled by the pretwist (closed form G c t^3/3 + E t c^5 theta'^2/180), which the CST follows only with parasitic in-plane shear (9.2 percent membrane-energy excess at 12 x 36). Registered variations against Hex20: flat strip -2.0e-3; the excess scales with the membrane share over twist 15 deg and thickness 0.5 and 2 mm (0.93 to 1.04 of the prediction) and as h^2 (0.257, 0.264 per halving); MITC3 stabilisation and drilling factor below 2e-3; diagonals AC and BD congruent (torsion 4.7e-13), alternating 0.65 of AC. The existing opt-in ANDES membrane (ADR 0466) removes it: rest 3.3e-4, Campbell table within 2.98e-3 of Hex20 (E2 limit 4e-2). Default Shell3, ANDES Shell3, Shell4 and Hex20 strip bits recorded and unchanged (12 digests). Partial by the registered rule: the auxiliary checks C3 (AC/BD to 1e-8, 3.7e-8 on modes 5 and 6 at the solver tolerance) and C7/N3 (closed form at twist 0, which neglects the root restraint, 9.3e-2) missed and are recorded as known misses. Seven of eight mutations caught; the BD split mutation enters only the known-miss C3. One optional follow-up proposed (a warning for the CST membrane on warped meshes)."
+    "note": "Structural solver, advanced tier. Follow-up of F-420 (ADR 0473, 2026-11-14). PARTIAL. ADR 0483, 2026-11-14: diagnosis, no library change. The 4.05 percent Shell3 excess on the twisted strip's first torsion (third mode, 460.730 against 442.797 Hz) is located in the constant-strain membrane acting through the membrane-bending coupling of the warped triangles: three quarters of the torsion energy is the fibre strain theta' phi' s^2 coupled by the pretwist (closed form G c t^3/3 + E t c^5 theta'^2/180), which the CST follows only with parasitic in-plane shear (9.2 percent membrane-energy excess at 12 x 36). Registered variations against Hex20: flat strip -2.0e-3; the excess scales with the membrane share over twist 15 deg and thickness 0.5 and 2 mm (0.93 to 1.04 of the prediction) and as h^2 (0.257, 0.264 per halving); MITC3 stabilisation and drilling factor below 2e-3; diagonals AC and BD congruent (torsion 4.7e-13), alternating 0.65 of AC. The existing opt-in ANDES membrane (ADR 0466) removes it: rest 3.3e-4, Campbell table within 2.98e-3 of Hex20 (E2 limit 4e-2). Default Shell3, ANDES Shell3, Shell4 and Hex20 strip bits recorded and unchanged (12 digests). Partial by the registered rule: the auxiliary checks C3 (AC/BD to 1e-8, 3.7e-8 on modes 5 and 6 at the solver tolerance) and C7/N3 (closed form at twist 0, which neglects the root restraint, 9.3e-2) missed and are recorded as known misses. Seven of eight mutations caught; the BD split mutation enters only the known-miss C3. One optional follow-up proposed (a warning for the CST membrane on warped meshes). Follow-up F-574 (optional)."
   },
   {
     "id": "F-557",
@@ -5626,5 +5626,16 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. ShellPressure gains a follower form on the current mid-surface with its load stiffness, against central differences within 1e-6 on Shell4 and Shell3; a thin cylinder of shells under follower internal pressure follows p = E t (lambda^2 - 1)/(2 R) within 1 percent to the stretch 1.5; the dead ShellPressure keeps its bits.",
     "note": "Structural solver, advanced tier. Follow-up of F-424 (ADR 0480, 2026-11-14)."
+  },
+  {
+    "id": "F-574",
+    "title": "Warning for the constant-strain Shell3 membrane on warped meshes",
+    "phase": 9,
+    "deps": [
+      "F-556"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. An opt-in model check reports Shell3 blocks with the constant-strain membrane whose adjacent facets meet at angles above a registered threshold, naming the ANDES membrane of ADR 0466; on the twisted strip of ADR 0473 the check fires at 15 and 30 degrees of twist and not on the flat strip; without the option every result and message bit-identical.",
+    "note": "Structural solver, advanced tier. Optional, low priority. Follow-up of F-556 (ADR 0483, 2026-11-14)."
   }
 ]
