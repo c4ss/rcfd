@@ -11,7 +11,8 @@
 //!   the energy `t^2/(2 eps A)`, its exact force and tangent; Uzawa updates `lambda <- t` after each converged Newton solve
 //!   until the largest penetration and the largest gap at an active node are within the tolerance (amendment 3).
 //! * Driver (D3): [`solve`] and [`solve_with`], load control with the augmentation loop per step, a linear body
-//!   ([`Kinematics::Linear`], the stiffness of [`crate::assemble::stiffness`], Newton here with a sparse `L D L^T`) or the total
+//!   ([`Kinematics::Linear`], the stiffness of [`crate::assemble::stiffness`], Newton here with a sparse `L D L^T`, by
+//!   default after minimum degree, or the supernodal one of `ContactOptions::factor`, ADR 0533) or the total
 //!   Lagrangian body of [`crate::nonlinear::solve_from`] ([`Kinematics::TotalLagrangian`], the contact as its first
 //!   [`Contribution`]).
 //! * Cycling (D6): an active set that comes back after a change more than `max_cycles` times in one Newton solve is an error
