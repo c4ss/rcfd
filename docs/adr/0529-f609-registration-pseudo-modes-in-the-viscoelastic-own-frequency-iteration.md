@@ -136,3 +136,73 @@ check function budget: about 10 s in release.
 - Only the roots of the frozen solve are tested for the flag; the 3-D cantilevers and bases without residual vectors have no
   flagged root and are covered only by the equality PR.
 - No case-file key.
+
+## Addendum 1: results (2026-11-14)
+
+Code: `OwnFrequency::skip_pseudo(bool)` (field `skip_pseudo`, default `false`) and `OwnFrequencyRoot::skipped` in
+`crates/rcfd-fem/src/damped.rs` (about 40 lines, in the option structs and the own-frequency loop only), checks in
+`tests/sa_damped_visco_own_pseudo.rs`, record in `tests/sa_damped_visco_own_pseudo_default_bits.rs` (digests printed on the
+unchanged base 1f142196, `f609-scratch/n1-base.log`, committed before the library code). The checks were run once
+(`f609-scratch/run1.log`); no limit was changed, nothing was missed.
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| PF flags of the frozen roots | `[true, false, false]` | `[true, false, false]` | yes |
+| PA restricted run at 50, 3 finite modes | runs | runs, 3 modes | yes |
+| PB skipped record | exact, 1 skipped | 1 skipped, frozen bits, `omega_ref` bits, 0 iterations | yes |
+| PD physical roots | `1..=50` | `[7, 6]` | yes |
+| PS | `<= 15` | 7 | yes |
+| PE physical roots against the unrestricted run | `<= 1e-12`, counts equal | `0` (bit equal), counts equal | yes |
+| PG / NC1 unrestricted at 50 | refused | refused, root 0, last change `3.33e-5` | yes |
+| PH unrestricted pseudo-mode | iterations `[100, 300]` | 170 | yes |
+| NC2 / PH unrestricted root 0 against frozen | `>= 1e-3` | `5.75e-3` | yes |
+| PC notes | strings present / absent | present (below) / `ADR 0529` absent unrestricted | yes |
+| PN explicit false = default; default false | bits equal | equal; false | yes |
+| PR rods A, C skip on = off | bits equal | equal, note "no root flagged pseudo" | yes |
+| PT threads 1 and 4 | bits equal | equal | yes |
+| RF four refusals with the option | key `"own frequency"` | all four | yes |
+| N1 new default-bits record (6 digests) | equal | equal | yes |
+| N1b, N3 `cargo test -p rcfd-fem --release` | pass | all test binaries ok, 0 failed (`f609-scratch/fem.log`) | yes |
+| N2 baseline hashes (`--release`) | pass | 3 passed, 1 ignored | yes |
+
+The note written for the restricted run: "1 roots flagged pseudo (ADR 0467) left at the reference frequency
+2.3004337450535522e3 rad/s, not iterated (ADR 0529)". The restricted run's roots 1 and 2 take 7 and 6 iterations.
+
+Mutations (scratch copy `f609-scratch/mut`, own target dir `target-f609-mut`, logs `f609-scratch/MU*.log`), all caught:
+
+| Mutation | Caught by |
+|---|---|
+| MU1 option ignored | PA (refused at 50; the test stops at its unwrap) |
+| MU2 every root skipped | PB, PD, PE, PR |
+| MU3 decision inverted | PA (refused at 50) |
+| MU4 skipped root at its frozen `Im` | PB |
+| MU5 note not written | PC, PR |
+| MU6 skipping whatever the option | PH, NC2, PG, and the digest of N1 (`0x4a98...10e1` against `0x0b69...daa7`) |
+| MU7 `skipped` flag not set | PB, PD, PE |
+| MU8 skipped root reported as the last mode | PB |
+
+Deviations: PN is checked against the option left at its default, in the same test as a bit comparison of two runs, and N1
+against the base digests; the roadmap clause "the same physical roots within 1e-12" is met exactly (zero), as the design
+predicted. PE's matching key is `OwnFrequencyRoot::frozen`.
+
+Gate: `cargo fmt -p rcfd-fem --check` clean, `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean.
+
+Decision (rule above): **done**: every check met, 8 of 8 mutations caught, N1, N1b and the baseline hashes unchanged.
+
+### Decisions taken on the standing instruction of 2026-11-11
+
+- New opt-in option `OwnFrequency::skip_pseudo` rather than a behaviour change of the F-586 option: F-586's RV1 refusal and
+  the ignored known-miss records of ADR 0520 stay valid and untouched, and `max_iterations(1000)` without the option is the
+  registered "iteration without that restriction".
+
+### Open questions
+
+1. Make `skip_pseudo` the default of `OwnFrequency::new`. Options: (a) keep opt-in (now); (b) default on, which changes the
+   bits and the refusal of any caller with residual vectors and a viscoelastic material. Recommended (a) until a case-file key
+   exists; (b) needs the maintainer.
+2. A case-file key for the own-frequency option and the skip. Options: (a) none; (b) key in the case schema (a golden file and
+   hash tables change). Recommended (a) for now; (b) needs approval.
+
+## For the lead: roadmap entries
+
+> Status for F-609: done (ADR 0529, 2026-11-14). OwnFrequency::skip_pseudo(true) (opt-in, default off; OwnFrequencyRoot::skipped) leaves the roots flagged pseudo in the frozen solve (ADR 0467) at the reference frequency, reports them as the frozen solve gave them, with 0 iterations, and says so in the notes. Rod B of ADR 0520 RV1 (residual vectors, ground dashpot, 3 roots) converges its two physical roots in 7 and 6 iterations within the default 50, and they equal the roots of the unrestricted iteration (max_iterations 1000, where the pseudo-mode takes 170) bit for bit (limit 1e-12). Without the option the bits are unchanged (6 digests recorded on the base before the code, baseline hashes unchanged); 8 of 8 mutations caught. No case-file key.
