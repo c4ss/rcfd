@@ -631,6 +631,10 @@ struct ChannelCase {
     expansion: f64,
     wo: f64,
     cycles: usize,
+    /// `Symmetry` on the `z` planes (the registered set-up); `false`: the default zero gradient (ADR 0446 amendment 3).
+    z_sym: bool,
+    /// The three steps per period of the extrapolation (the last two extrapolated).
+    levels: [usize; 3],
 }
 
 impl ChannelCase {
@@ -642,6 +646,17 @@ impl ChannelCase {
             expansion: 21.0,
             wo,
             cycles,
+            z_sym: true,
+            levels: [100, 200, 400],
+        }
+    }
+    /// The corrected set-up of ADR 0446 amendments 2 and 3: `ny` cells across, the given levels, zero-gradient `z` planes.
+    fn corrected(wo: f64, cycles: usize, ny: usize, levels: [usize; 3]) -> Self {
+        ChannelCase {
+            ny,
+            z_sym: false,
+            levels,
+            ..ChannelCase::main(wo, cycles)
         }
     }
     fn nu(&self) -> f64 {
@@ -664,7 +679,7 @@ fn channel_run(case: &ChannelCase, n: usize) -> ModeHistory {
             mesh0.points().to_vec(),
             nu,
             &["ymin", "ymax"],
-            &["zmin", "zmax"],
+            if case.z_sym { &["zmin", "zmax"] } else { &[] },
         ),
         WALL,
         &mesh0,
@@ -724,11 +739,11 @@ fn response_of(c: &mut Checks, id: &str, h: &ModeHistory) -> Option<PeriodicResp
     }
 }
 
-/// The three runs of a channel case: `Z(100), Z(200), Z(400)` (`None` if refused), and the `N = 200` history.
+/// The three runs of a channel case at its levels (`None` if refused), and the history of the middle level.
 fn channel_levels(c: &mut Checks, tag: &str, case: &ChannelCase) -> (Vec<Option<Cx>>, ModeHistory) {
     let mut z = Vec::new();
     let mut h200 = None;
-    for n in [100, 200, 400] {
+    for n in case.levels {
         let t0 = std::time::Instant::now();
         let h = channel_run(case, n);
         let r = response_of(c, &format!("{tag} N {n}"), &h);
@@ -738,7 +753,7 @@ fn channel_levels(c: &mut Checks, tag: &str, case: &ChannelCase) -> (Vec<Option<
         });
         println!("{tag} N {n}: Z {zz:?} ({:.1} s)", t0.elapsed().as_secs_f64());
         z.push(zz);
-        if n == 200 {
+        if n == case.levels[1] {
             h200 = Some(h);
         }
     }
@@ -751,15 +766,20 @@ fn order(a: f64, b: f64, c: f64) -> f64 {
 
 /// W5 and W1 (and their companions): the extrapolated impedance against the formula.
 fn womersley_record(wo: f64, cycles: usize, id: &str) {
+    womersley_case(&ChannelCase::main(wo, cycles), id);
+}
+
+fn womersley_case(case: &ChannelCase, id: &str) {
     let mut c = Checks::new();
-    let case = ChannelCase::main(wo, cycles);
+    let case = *case;
+    let wo = case.wo;
     let zf = impedance_formula(&case);
     println!("{id}: Wo {wo}, nu {:e}, formula Z {zf:?}", case.nu());
     let (z, h200) = channel_levels(&mut c, id, &case);
     if let [Some(z1), Some(z2), Some(z4)] = z[..] {
         let ext = Cx(2.0 * z4.0 - z2.0, 2.0 * z4.1 - z2.1);
         println!("{id}: Z_ext {ext:?}");
-        for (n, zz) in [(100, z1), (200, z2), (400, z4)] {
+        for (n, zz) in case.levels.into_iter().zip([z1, z2, z4]) {
             println!(
                 "{id} N {n}: Re/Re_f - 1 {:e}, Im/Im_f - 1 {:e}",
                 zz.0 / zf.0 - 1.0,
@@ -776,7 +796,11 @@ fn womersley_record(wo: f64, cycles: usize, id: &str) {
             c.at_most(&format!("O {id} order {part}"), p, 1.2);
         }
         if wo == 5.0 {
-            c.at_least("NC1 |Re Z_200/Re Z - 1|", (z2.0 / zf.0 - 1.0).abs(), 5e-2);
+            c.at_least(
+                &format!("NC1 {id} |Re Z_200/Re Z - 1|"),
+                (z2.0 / zf.0 - 1.0).abs(),
+                5e-2,
+            );
         }
     } else {
         c.holds(id, false, "a run was refused");
@@ -791,16 +815,20 @@ fn womersley_record(wo: f64, cycles: usize, id: &str) {
             TOL_PERIODIC,
         );
         match refused {
-            Ok(r) => c.holds("NC2", false, &format!("accepted with change {:e}", r.cycle_change)),
-            Err(m) => c.holds("NC2", m.contains("not periodic"), &m),
+            Ok(r) => c.holds(
+                &format!("NC2 {id}"),
+                false,
+                &format!("accepted with change {:e}", r.cycle_change),
+            ),
+            Err(m) => c.holds(&format!("NC2 {id}"), m.contains("not periodic"), &m),
         }
     }
     c.finish();
 }
 
 #[test]
-#[ignore = "heavy record (ADR 0446 W5): run once with --ignored"]
-fn w5_womersley_5_record() {
+#[ignore = "known miss (ADR 0446 W5, amendment 2): the registered run, real part 8.5e-2 off (limit 3e-2)"]
+fn w5_womersley_5_known_miss() {
     womersley_record(5.0, 6, "W5");
 }
 
@@ -813,27 +841,49 @@ fn w1_womersley_1_record() {
 #[test]
 #[ignore = "heavy record (ADR 0446 LF): run once with --ignored"]
 fn lf_low_frequency_limit_record() {
+    lf_case(&ChannelCase::main(0.25, 3), "LF");
+}
+
+fn lf_case(case: &ChannelCase, id: &str) {
     let mut c = Checks::new();
-    let case = ChannelCase::main(0.25, 3);
+    let case = *case;
     let zf = impedance_formula(&case);
     let limit = 12.0 * RHO * case.nu() * case.lf * H * H / (H * H);
     println!(
-        "LF: Wo 0.25, nu {:e}, formula Z {zf:?}, 12 mu L_f A/h^2 {limit:e} (formula/limit - 1 {:e})",
+        "{id}: Wo 0.25, nu {:e}, formula Z {zf:?}, 12 mu L_f A/h^2 {limit:e} (formula/limit - 1 {:e})",
         case.nu(),
         zf.0 / limit - 1.0
     );
-    let (z, _) = channel_levels(&mut c, "LF", &case);
+    let (z, _) = channel_levels(&mut c, id, &case);
     if let [Some(z1), Some(z2), Some(z4)] = z[..] {
         let ext = 2.0 * z4.0 - z2.0;
-        println!("LF: Re Z_ext {ext:e}, Im Z_ext {:e}", 2.0 * z4.1 - z2.1);
-        c.at_most("LF real", (ext / limit - 1.0).abs(), 3e-2);
+        println!("{id}: Re Z_ext {ext:e}, Im Z_ext {:e}", 2.0 * z4.1 - z2.1);
+        c.at_most(&format!("{id} real"), (ext / limit - 1.0).abs(), 3e-2);
         let p = order(z1.0, z2.0, z4.0);
-        c.at_least("O LF order real", p, 0.8);
-        c.at_most("O LF order real", p, 1.2);
+        c.at_least(&format!("O {id} order real"), p, 0.8);
+        c.at_most(&format!("O {id} order real"), p, 1.2);
     } else {
-        c.holds("LF", false, "a run was refused");
+        c.holds(id, false, "a run was refused");
     }
     c.finish();
+}
+
+#[test]
+#[ignore = "corrected record (ADR 0446 amendments 2, 3): run once with --ignored"]
+fn w5c_womersley_5_record() {
+    womersley_case(&ChannelCase::corrected(5.0, 6, 40, [100, 200, 400]), "W5c");
+}
+
+#[test]
+#[ignore = "corrected record (ADR 0446 amendments 2, 3): run once with --ignored"]
+fn w1c_womersley_1_record() {
+    womersley_case(&ChannelCase::corrected(1.0, 3, 16, [200, 400, 800]), "W1c");
+}
+
+#[test]
+#[ignore = "corrected record (ADR 0446 amendments 2, 3): run once with --ignored"]
+fn lfc_low_frequency_limit_record() {
+    lf_case(&ChannelCase::corrected(0.25, 3, 12, [2000, 4000, 8000]), "LFc");
 }
 
 #[test]
@@ -846,6 +896,8 @@ fn qf_fast_channel() {
         expansion: 5.5,
         wo: 1.0,
         cycles: 3,
+        z_sym: true,
+        levels: [50, 100, 0],
     };
     let zf = impedance_formula(&case);
     let mut z = Vec::new();
