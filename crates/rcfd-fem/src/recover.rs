@@ -229,7 +229,7 @@ fn fit_basis(kind: ElementKind, xi: [f64; 3]) -> Vec<f64> {
         ElementKind::Tet10 => vec![1.0, x, y, z],
         ElementKind::Hex8 => vec![1.0, x, y, z, x * y, y * z, z * x, x * y * z],
         ElementKind::Hex20 => crate::hex20::fit_basis(xi),
-        ElementKind::Beam2 | ElementKind::Shell4 => Vec::new(),
+        ElementKind::Beam2 | ElementKind::Shell4 | ElementKind::Shell3 => Vec::new(),
     }
 }
 
@@ -299,7 +299,7 @@ pub fn extrapolation_matrix(kind: ElementKind) -> &'static [Vec<f64>] {
         ElementKind::Hex8 => &HEX8,
         ElementKind::Tet10 => &TET10,
         ElementKind::Hex20 => &HEX20,
-        ElementKind::Beam2 | ElementKind::Shell4 => return &[],
+        ElementKind::Beam2 | ElementKind::Shell4 | ElementKind::Shell3 => return &[],
     };
     cell.get_or_init(|| build_extrapolation(kind))
 }

@@ -29,6 +29,9 @@ pub enum ElementKind {
     Beam2,
     /// Four-node shell with six unknowns per node, nodes counter-clockwise. Filled by [`crate::shell`] (ADR 0295).
     Shell4,
+    /// Three-node shell with six unknowns per node, nodes counter-clockwise. Declared by ADR 0440; filled by
+    /// [`crate::shell3`] (ADR 0322, F-419).
+    Shell3,
 }
 
 const HEX_REF: [[f64; 3]; 8] = [
@@ -78,6 +81,7 @@ const HEX_FACES: [&[usize]; 6] = [
     &[3, 0, 4, 7],
 ];
 const QUAD_EDGES: [[usize; 2]; 4] = [[0, 1], [1, 2], [2, 3], [3, 0]];
+const TRI_EDGES: [[usize; 2]; 3] = [[0, 1], [1, 2], [2, 0]];
 const LINE_EDGES: [[usize; 2]; 1] = [[0, 1]];
 const TET4_FACES: [&[usize]; 4] = [&[0, 2, 1], &[0, 1, 3], &[1, 2, 3], &[0, 3, 2]];
 const TET10_FACES: [&[usize]; 4] = [
@@ -97,6 +101,7 @@ impl ElementKind {
             ElementKind::Hex20 => "Hex20",
             ElementKind::Beam2 => "Beam2",
             ElementKind::Shell4 => "Shell4",
+            ElementKind::Shell3 => "Shell3",
         }
     }
 
@@ -104,7 +109,7 @@ impl ElementKind {
     pub fn is_solid(self) -> bool {
         match self {
             ElementKind::Tet4 | ElementKind::Hex8 | ElementKind::Tet10 | ElementKind::Hex20 => true,
-            ElementKind::Beam2 | ElementKind::Shell4 => false,
+            ElementKind::Beam2 | ElementKind::Shell4 | ElementKind::Shell3 => false,
         }
     }
 
@@ -115,6 +120,7 @@ impl ElementKind {
             ElementKind::Hex20 => crate::hex20::PENDING,
             ElementKind::Beam2 => crate::beam::PENDING,
             ElementKind::Shell4 => crate::shell::PENDING,
+            ElementKind::Shell3 => crate::shell3::PENDING,
         }
     }
 
@@ -127,6 +133,7 @@ impl ElementKind {
             ElementKind::Hex20 => 20,
             ElementKind::Beam2 => 2,
             ElementKind::Shell4 => 4,
+            ElementKind::Shell3 => 3,
         }
     }
 
@@ -136,6 +143,7 @@ impl ElementKind {
             ElementKind::Tet4 | ElementKind::Tet10 | ElementKind::Shell4 => 4,
             ElementKind::Hex8 | ElementKind::Hex20 => 8,
             ElementKind::Beam2 => 2,
+            ElementKind::Shell3 => 3,
         }
     }
 
@@ -153,6 +161,7 @@ impl ElementKind {
             ElementKind::Hex20 => crate::hex20::faces(),
             ElementKind::Beam2 => crate::beam::faces(),
             ElementKind::Shell4 => crate::shell::faces(),
+            ElementKind::Shell3 => crate::shell3::faces(),
         }
     }
 
@@ -161,7 +170,7 @@ impl ElementKind {
         match self {
             ElementKind::Tet4 | ElementKind::Tet10 => 3,
             ElementKind::Hex8 | ElementKind::Hex20 => 4,
-            ElementKind::Beam2 | ElementKind::Shell4 => 0,
+            ElementKind::Beam2 | ElementKind::Shell4 | ElementKind::Shell3 => 0,
         }
     }
 
@@ -172,6 +181,7 @@ impl ElementKind {
             ElementKind::Hex8 | ElementKind::Hex20 => &HEX_EDGES,
             ElementKind::Beam2 => &LINE_EDGES,
             ElementKind::Shell4 => &QUAD_EDGES,
+            ElementKind::Shell3 => &TRI_EDGES,
         }
     }
 
@@ -184,6 +194,7 @@ impl ElementKind {
             ElementKind::Hex20 => crate::hex20::reference_nodes(),
             ElementKind::Beam2 => crate::beam::reference_nodes(),
             ElementKind::Shell4 => crate::shell::reference_nodes(),
+            ElementKind::Shell3 => crate::shell3::reference_nodes(),
         }
     }
 
@@ -222,6 +233,7 @@ impl ElementKind {
             ElementKind::Hex20 => crate::hex20::shape_gradients(xi),
             ElementKind::Beam2 => crate::beam::shape_gradients(xi),
             ElementKind::Shell4 => crate::shell::shape_gradients(xi),
+            ElementKind::Shell3 => crate::shell3::shape_gradients(xi),
         }
     }
 }
@@ -351,6 +363,44 @@ pub enum BlockProperty {
         /// Thickness, m.
         thickness: f64,
     },
+    /// A laminated shell block: its plies from the bottom (`-e_3` side) to the top (ADR 0440 D5). Refused by every solve
+    /// until [`crate::laminate`] lands (ADR 0331, F-428).
+    #[non_exhaustive]
+    Layup {
+        /// The plies, bottom first.
+        plies: Vec<Ply>,
+    },
+}
+
+/// One ply of a [`BlockProperty::Layup`]: its material, thickness and the angle of its first material axis from the
+/// element's first axis about the normal (ADR 0440 D5). Plain data.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct Ply {
+    /// The material of the ply.
+    pub material: crate::model::Material,
+    /// Thickness, m, positive.
+    pub thickness: f64,
+    /// Angle about the normal, rad.
+    pub angle: f64,
+}
+
+impl Ply {
+    /// A ply; refuses a thickness that is not positive and finite and a non-finite angle.
+    pub fn new(material: crate::model::Material, thickness: f64, angle: f64) -> Result<Ply> {
+        positive("thickness", thickness)?;
+        if !angle.is_finite() {
+            return Err(FemError::InvalidValue {
+                key: "angle",
+                reason: format!("{angle} must be finite"),
+            });
+        }
+        Ok(Ply {
+            material,
+            thickness,
+            angle,
+        })
+    }
 }
 
 impl BlockProperty {
@@ -373,12 +423,23 @@ impl BlockProperty {
         positive("thickness", thickness)?;
         Ok(BlockProperty::Shell { thickness })
     }
+    /// A laminated shell block; refuses an empty list of plies.
+    pub fn layup(plies: Vec<Ply>) -> Result<BlockProperty> {
+        if plies.is_empty() {
+            return Err(FemError::InvalidValue {
+                key: "plies",
+                reason: "a layup needs at least one ply".to_string(),
+            });
+        }
+        Ok(BlockProperty::Layup { plies })
+    }
     /// Name of the property.
     pub fn name(&self) -> &'static str {
         match self {
             BlockProperty::Solid { .. } => "Solid",
             BlockProperty::Beam { .. } => "Beam",
             BlockProperty::Shell { .. } => "Shell",
+            BlockProperty::Layup { .. } => "Layup",
         }
     }
 }
@@ -534,7 +595,8 @@ impl SolidMesh {
     }
 
     /// Sets the property of a block (ADR 0291 D3). Refuses a block that does not exist and a property that does not fit
-    /// the kind: `Solid` on a non-solid kind, `Beam` on any kind but Beam2, `Shell` on any kind but Shell4.
+    /// the kind: `Solid` on a non-solid kind, `Beam` on any kind but Beam2, `Shell` and `Layup` on any kind but Shell4 and
+    /// Shell3.
     pub fn set_block_property(&mut self, block: usize, property: BlockProperty) -> Result<()> {
         let n_blocks = self.blocks.len();
         let Some(b) = self.blocks.get_mut(block) else {
@@ -546,7 +608,14 @@ impl SolidMesh {
         let (fits, operation) = match &property {
             BlockProperty::Solid { .. } => (b.kind.is_solid(), "the property Solid"),
             BlockProperty::Beam { .. } => (b.kind == ElementKind::Beam2, "the property Beam"),
-            BlockProperty::Shell { .. } => (b.kind == ElementKind::Shell4, "the property Shell"),
+            BlockProperty::Shell { .. } => (
+                matches!(b.kind, ElementKind::Shell4 | ElementKind::Shell3),
+                "the property Shell",
+            ),
+            BlockProperty::Layup { .. } => (
+                matches!(b.kind, ElementKind::Shell4 | ElementKind::Shell3),
+                "the property Layup",
+            ),
         };
         if !fits {
             return Err(FemError::UnsupportedKind {
@@ -765,7 +834,7 @@ impl SolidMesh {
             }
             ElementKind::Hex20 => crate::hex20::volume(&|xi| self.jacobian_at(kind, conn, xi)),
             // A structural kind has no volume without its section or thickness: undefined until its package.
-            ElementKind::Beam2 | ElementKind::Shell4 => f64::NAN,
+            ElementKind::Beam2 | ElementKind::Shell4 | ElementKind::Shell3 => f64::NAN,
         }
     }
 

@@ -1,11 +1,14 @@
 //! Constitutive matrices and the constitutive call of the materials (ADR 0273 D5). Declared by ADR 0271; filled by ADR
 //! 0273.
+//! ADR 0440 (F-408) adds the point context, the sub-data of the advanced-tier material variants and the declared state
+//! layout.
 //!
 //! Voigt order xx, yy, zz, xy, yz, zx with engineering shear strains (ADR 0270 section 2.2), so the strain energy density
 //! is `eps^T D eps / 2`.
 
 use crate::error::{FemError, Result};
 use crate::model::Material;
+use rcfd_core::vec3::Vec3;
 
 /// A 6 x 6 matrix in Voigt order (row-major array of rows).
 pub type Matrix6 = [[f64; 6]; 6];
@@ -37,31 +40,320 @@ pub fn apply(d: &Matrix6, v: &[f64; 6]) -> [f64; 6] {
     s
 }
 
-/// What the constitutive call knows about the point it is evaluated at. Non-exhaustive and empty in the basic tier:
-/// ADR 0311 adds temperature, time increment and material axes, the default meaning "none, global axes".
+/// The tolerance of the orthonormality and handedness tests of a set of material axes (ADR 0440 D2): every entry of
+/// `R R^T - I` and `det R - 1` within it.
+pub const AXES_TOLERANCE: f64 = 1e-12;
+
+/// Material axes at a point: the rows are the three axes in global components.
+pub type Axes = [[f64; 3]; 3];
+
+/// Refuses axes that are not finite, orthonormal and right-handed within [`AXES_TOLERANCE`] (key `"axes"`).
+pub fn check_axes(axes: &Axes) -> Result<()> {
+    let bad = |reason: String| FemError::InvalidValue { key: "axes", reason };
+    if !axes.iter().flatten().all(|v| v.is_finite()) {
+        return Err(bad(format!("{axes:?} must be finite")));
+    }
+    for i in 0..3 {
+        for j in 0..3 {
+            let g: f64 = (0..3).map(|k| axes[i][k] * axes[j][k]).sum();
+            let target = if i == j { 1.0 } else { 0.0 };
+            if (g - target).abs() > AXES_TOLERANCE {
+                return Err(bad(format!("{axes:?} are not orthonormal: (R R^T)[{i}][{j}] = {g:e}")));
+            }
+        }
+    }
+    let [a, b, c] = axes;
+    let det =
+        a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0]) + a[2] * (b[0] * c[1] - b[1] * c[0]);
+    if (det - 1.0).abs() > AXES_TOLERANCE {
+        return Err(bad(format!("{axes:?} are not right-handed: det = {det:e}")));
+    }
+    Ok(())
+}
+
+/// What the constitutive call knows about the point it is evaluated at (ADR 0310 section 2.3, ADR 0440 D3): the
+/// temperature, the time and time increment, and the material axes. The default (every field `None`) means no
+/// temperature, no time increment and the global axes; strain and stress are always in global axes, the axes are for an
+/// anisotropic material to rotate into. The isotropic elastic material does not read the context.
 #[derive(Debug, Clone, Default, PartialEq)]
 #[non_exhaustive]
-pub struct PointContext {}
+pub struct PointContext {
+    /// Temperature at the point, K.
+    pub temperature: Option<f64>,
+    /// Time at the end of the increment, s.
+    pub time: Option<f64>,
+    /// Time increment, s, non-negative.
+    pub time_increment: Option<f64>,
+    /// The material axes at the point (rows in global components); `None`: the global axes.
+    pub axes: Option<Axes>,
+}
+
+impl PointContext {
+    /// The default context.
+    pub fn new() -> PointContext {
+        PointContext::default()
+    }
+    /// The same context with a temperature; refuses a non-finite value.
+    pub fn with_temperature(mut self, temperature: f64) -> Result<PointContext> {
+        if !temperature.is_finite() {
+            return Err(FemError::InvalidValue {
+                key: "temperature",
+                reason: format!("{temperature} must be finite"),
+            });
+        }
+        self.temperature = Some(temperature);
+        Ok(self)
+    }
+    /// The same context with the time and the time increment; refuses a non-finite time and an increment that is negative
+    /// or not finite.
+    pub fn with_time(mut self, time: f64, increment: f64) -> Result<PointContext> {
+        if !time.is_finite() {
+            return Err(FemError::InvalidValue {
+                key: "time",
+                reason: format!("{time} must be finite"),
+            });
+        }
+        if !(increment >= 0.0 && increment.is_finite()) {
+            return Err(FemError::InvalidValue {
+                key: "time_increment",
+                reason: format!("{increment} must be non-negative and finite"),
+            });
+        }
+        self.time = Some(time);
+        self.time_increment = Some(increment);
+        Ok(self)
+    }
+    /// The same context with material axes; refuses axes that fail [`check_axes`].
+    pub fn with_axes(mut self, axes: Axes) -> Result<PointContext> {
+        check_axes(&axes)?;
+        self.axes = Some(axes);
+        Ok(self)
+    }
+    /// Whether every field is `None`.
+    pub fn is_default(&self) -> bool {
+        *self == PointContext::default()
+    }
+}
+
+/// The rule that gives the material axes of an orthotropic material (ADR 0310 section 2.3). Plain data.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub enum MaterialAxes {
+    /// One triad for every point.
+    Fixed(Axes),
+    /// Cylindrical axes about a line: radial, tangential, axial.
+    #[non_exhaustive]
+    Cylindrical {
+        /// A point of the axis.
+        origin: Vec3,
+        /// The direction of the axis (non-zero).
+        axis: Vec3,
+    },
+    /// One triad per element of the material's element set, in the set's order.
+    PerElement(Vec<Axes>),
+}
+
+impl MaterialAxes {
+    /// One triad; refuses axes that fail [`check_axes`].
+    pub fn fixed(axes: Axes) -> Result<MaterialAxes> {
+        check_axes(&axes)?;
+        Ok(MaterialAxes::Fixed(axes))
+    }
+    /// Cylindrical axes; refuses a non-finite origin and a zero or non-finite axis.
+    pub fn cylindrical(origin: Vec3, axis: Vec3) -> Result<MaterialAxes> {
+        if !origin.iter().chain(&axis).all(|v| v.is_finite()) || axis.iter().all(|&v| v == 0.0) {
+            return Err(FemError::InvalidValue {
+                key: "axes",
+                reason: format!("origin {origin:?} and axis {axis:?} must be finite and the axis non-zero"),
+            });
+        }
+        Ok(MaterialAxes::Cylindrical { origin, axis })
+    }
+    /// One triad per element; refuses an empty list and any triad that fails [`check_axes`].
+    pub fn per_element(axes: Vec<Axes>) -> Result<MaterialAxes> {
+        if axes.is_empty() {
+            return Err(FemError::InvalidValue {
+                key: "axes",
+                reason: "a list of per-element axes needs at least one triad".to_string(),
+            });
+        }
+        for a in &axes {
+            check_axes(a)?;
+        }
+        Ok(MaterialAxes::PerElement(axes))
+    }
+}
+
+/// One term of a Prony series (ADR 0313): relative shear and bulk weights in [0, 1] and the relaxation time, s.
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
+pub struct PronyTerm {
+    /// Relative weight of the shear modulus.
+    pub shear: f64,
+    /// Relative weight of the bulk modulus.
+    pub bulk: f64,
+    /// Relaxation time, s, positive.
+    pub tau: f64,
+}
+
+impl PronyTerm {
+    /// A term; refuses a weight outside [0, 1] and a relaxation time that is not positive and finite.
+    pub fn new(shear: f64, bulk: f64, tau: f64) -> Result<PronyTerm> {
+        for (key, v) in [("shear", shear), ("bulk", bulk)] {
+            if !(0.0..=1.0).contains(&v) {
+                return Err(FemError::InvalidMaterial {
+                    key,
+                    value: v,
+                    reason: "a Prony weight must lie in [0, 1]",
+                });
+            }
+        }
+        positive_material("tau", tau)?;
+        Ok(PronyTerm { shear, bulk, tau })
+    }
+}
+
+/// A time-temperature shift (ADR 0313). Plain data.
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
+pub enum TimeTemperatureShift {
+    /// Williams-Landel-Ferry: `log10 a_T = -c1 (T - T_ref) / (c2 + T - T_ref)`.
+    #[non_exhaustive]
+    Wlf {
+        /// Reference temperature, K.
+        reference: f64,
+        /// `c1`.
+        c1: f64,
+        /// `c2`, K, positive.
+        c2: f64,
+    },
+    /// Arrhenius: `ln a_T = (activation / R) (1/T - 1/T_ref)`.
+    #[non_exhaustive]
+    Arrhenius {
+        /// Reference temperature, K.
+        reference: f64,
+        /// Activation energy, J/mol, positive.
+        activation: f64,
+    },
+}
+
+impl TimeTemperatureShift {
+    /// The WLF shift; refuses non-finite values and `c2 <= 0`.
+    pub fn wlf(reference: f64, c1: f64, c2: f64) -> Result<TimeTemperatureShift> {
+        finite_material("reference", reference)?;
+        finite_material("c1", c1)?;
+        positive_material("c2", c2)?;
+        Ok(TimeTemperatureShift::Wlf { reference, c1, c2 })
+    }
+    /// The Arrhenius shift; refuses a non-finite reference and an activation energy that is not positive and finite.
+    pub fn arrhenius(reference: f64, activation: f64) -> Result<TimeTemperatureShift> {
+        finite_material("reference", reference)?;
+        positive_material("activation", activation)?;
+        Ok(TimeTemperatureShift::Arrhenius { reference, activation })
+    }
+}
+
+/// The strain energy of a hyperelastic material (ADR 0328). Plain data.
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
+pub enum HyperelasticEnergy {
+    /// Neo-Hookean with shear modulus `mu` and bulk modulus `kappa`, Pa.
+    #[non_exhaustive]
+    NeoHookean {
+        /// `mu`.
+        mu: f64,
+        /// `kappa`.
+        kappa: f64,
+    },
+    /// Mooney-Rivlin with `c10`, `c01` and the bulk modulus `kappa`, Pa.
+    #[non_exhaustive]
+    MooneyRivlin {
+        /// `c10`.
+        c10: f64,
+        /// `c01`.
+        c01: f64,
+        /// `kappa`.
+        kappa: f64,
+    },
+}
+
+impl HyperelasticEnergy {
+    /// Neo-Hookean; refuses `mu` or `kappa` not positive and finite.
+    pub fn neo_hookean(mu: f64, kappa: f64) -> Result<HyperelasticEnergy> {
+        positive_material("mu", mu)?;
+        positive_material("kappa", kappa)?;
+        Ok(HyperelasticEnergy::NeoHookean { mu, kappa })
+    }
+    /// Mooney-Rivlin; refuses non-finite constants, `c10 + c01 <= 0` and `kappa` not positive and finite.
+    pub fn mooney_rivlin(c10: f64, c01: f64, kappa: f64) -> Result<HyperelasticEnergy> {
+        finite_material("c10", c10)?;
+        finite_material("c01", c01)?;
+        if c10 + c01 <= 0.0 {
+            return Err(FemError::InvalidMaterial {
+                key: "c10",
+                value: c10,
+                reason: "c10 + c01 must be positive",
+            });
+        }
+        positive_material("kappa", kappa)?;
+        Ok(HyperelasticEnergy::MooneyRivlin { c10, c01, kappa })
+    }
+}
+
+pub(crate) fn finite_material(key: &'static str, v: f64) -> Result<()> {
+    if v.is_finite() {
+        Ok(())
+    } else {
+        Err(FemError::InvalidMaterial {
+            key,
+            value: v,
+            reason: "must be finite",
+        })
+    }
+}
+
+pub(crate) fn positive_material(key: &'static str, v: f64) -> Result<()> {
+    if v > 0.0 && v.is_finite() {
+        Ok(())
+    } else {
+        Err(FemError::InvalidMaterial {
+            key,
+            value: v,
+            reason: "must be positive and finite",
+        })
+    }
+}
 
 impl Material {
-    /// The elasticity matrix of a linear elastic material.
+    /// The elasticity matrix of a linear elastic material. A variant whose package has not landed is refused naming it.
     pub fn elasticity_matrix(&self) -> Result<Matrix6> {
         match self {
             Material::IsotropicElastic { e, nu, .. } => Ok(isotropic_elasticity(*e, *nu)),
+            _ => Err(self.not_yet("the constitutive call")),
         }
     }
 
-    /// Number of state values per integration point (0 for elasticity).
+    /// Number of state values per integration point (ADR 0440 D3): 0 for the elastic and hyperelastic variants, the
+    /// base's for `Tabulated`, the declared layouts of [`crate::mat_visco`], [`crate::mat_creep`] and [`crate::mat_j2`].
     pub fn state_size(&self) -> usize {
         match self {
             Material::IsotropicElastic { .. } => 0,
+            Material::Orthotropic { .. } | Material::Hyperelastic { .. } => 0,
+            Material::Tabulated { base, .. } => base.state_size(),
+            Material::Viscoelastic { terms, .. } => crate::mat_visco::state_size(terms.len()),
+            Material::Creep { .. } => crate::mat_creep::STATE_SIZE,
+            Material::J2 { .. } => crate::mat_j2::STATE_SIZE,
         }
     }
 
     /// The constitutive call: stress and tangent for a strain (Voigt, engineering shear) at a point with its state
-    /// (`state_size()` values). For linear elasticity the stress is `D eps` and the tangent `D`.
+    /// (`state_size()` values). For linear elasticity the stress is `D eps` and the tangent `D`; the isotropic material
+    /// does not read the point context. A variant whose package has not landed is refused naming it.
     pub fn stress(&self, strain: &[f64; 6], point: &PointContext, state: &[f64]) -> Result<([f64; 6], Matrix6)> {
         let _ = point;
+        if self.pending().is_some() {
+            return Err(self.not_yet("the constitutive call"));
+        }
         if state.len() != self.state_size() {
             return Err(FemError::FieldLength {
                 key: "state",
@@ -71,5 +363,15 @@ impl Material {
         }
         let d = self.elasticity_matrix()?;
         Ok((apply(&d, strain), d))
+    }
+
+    /// The refusal of a variant whose package has not landed, at `location`.
+    fn not_yet(&self, location: &str) -> FemError {
+        FemError::NotYetSupported {
+            item: "material",
+            variant: self.name(),
+            location: location.to_string(),
+            package: self.pending().unwrap_or("its package"),
+        }
     }
 }

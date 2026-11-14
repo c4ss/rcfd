@@ -366,12 +366,110 @@ fn bending_rows(p: &Point) -> [[f64; 24]; 3] {
 /// The 24 x 24 stiffness in local axes at the projected nodes, unknowns `(u, v, w, theta_x, theta_y, theta_z)` node by node
 /// (ADR 0432 arithmetic 2 to 5).
 pub fn local_stiffness(f: &Facet, thickness: f64, material: &Material, options: &ShellOptions) -> ElementMatrix {
+    local_stiffness_section(f, &homogeneous_section(material, thickness), options)
+}
+
+/// The transverse shear stiffness of a section (ADR 0440 D6): `Q = H gamma`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
+pub enum ShearStiffness {
+    /// `H = h I` (a homogeneous or transversely isotropic section).
+    Isotropic(f64),
+    /// A general symmetric `H` (a laminate).
+    Matrix([[f64; 2]; 2]),
+}
+
+/// The stiffness of a shell section (ADR 0310 section 2.4 point 4, ADR 0440 D6): the resultants `N = A eps + B kappa`, `M
+/// = B eps + D kappa`, `Q = H gamma`, and the pair `(G, t)` of the drilling penalty `alpha G t`. The one function that
+/// gives it for a block is [`section_of`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
+pub struct SectionStiffness {
+    /// `A`, N/m.
+    pub membrane: [[f64; 3]; 3],
+    /// `B`, N; `None` for a section symmetric about its mid-plane.
+    pub coupling: Option<[[f64; 3]; 3]>,
+    /// `D`, N m.
+    pub bending: [[f64; 3]; 3],
+    /// `H`, N/m.
+    pub shear: ShearStiffness,
+    /// `(G, t)` of the drilling penalty.
+    pub drilling: [f64; 2],
+}
+
+impl SectionStiffness {
+    /// A section from its parts.
+    pub fn new(
+        membrane: [[f64; 3]; 3],
+        coupling: Option<[[f64; 3]; 3]>,
+        bending: [[f64; 3]; 3],
+        shear: ShearStiffness,
+        drilling: [f64; 2],
+    ) -> SectionStiffness {
+        SectionStiffness {
+            membrane,
+            coupling,
+            bending,
+            shear,
+            drilling,
+        }
+    }
+}
+
+/// The section of a homogeneous shell of thickness `t` (ADR 0432 arithmetic 2 to 5): `A = E t / (1 - nu^2) [...]`, `D` the
+/// same with `t^3 / 12`, no coupling, `H = kappa G t`, drilling `(G, t)`.
+pub fn homogeneous_section(material: &Material, thickness: f64) -> SectionStiffness {
     let (e, nu, g) = moduli(material);
     let t = thickness;
-    let dm = plane_matrix(e, nu, t);
-    let db = plane_matrix(e, nu, t * t * t / 12.0);
-    let ds = SHEAR_FACTOR * g * t;
-    let dr = options.drilling * g * t;
+    SectionStiffness {
+        membrane: plane_matrix(e, nu, t),
+        coupling: None,
+        bending: plane_matrix(e, nu, t * t * t / 12.0),
+        shear: ShearStiffness::Isotropic(SHEAR_FACTOR * g * t),
+        drilling: [g, t],
+    }
+}
+
+/// The section-stiffness hook (ADR 0440 D6): the section of a shell block from its property and material. `Shell {
+/// thickness }` gives [`homogeneous_section`]; `Layup` gives [`crate::laminate::section_stiffness`].
+pub fn section_of(property: &BlockProperty, material: &Material) -> Result<SectionStiffness> {
+    match property {
+        BlockProperty::Shell { thickness } => Ok(homogeneous_section(material, *thickness)),
+        BlockProperty::Layup { plies } => crate::laminate::section_stiffness(plies),
+        other => Err(FemError::InvalidValue {
+            key: "property",
+            reason: format!("a {} property has no shell section", other.name()),
+        }),
+    }
+}
+
+/// `K += w (B1^T C B2 + B2^T C^T B1)` for 3-row `B1`, `B2` over 24 unknowns (the membrane-bending coupling).
+fn add_coupling(k: &mut [f64], b1: &[[f64; 24]; 3], c: &[[f64; 3]; 3], b2: &[[f64; 24]; 3], w: f64) {
+    let mut cb2 = [[0.0; 24]; 3];
+    let mut ctb1 = [[0.0; 24]; 3];
+    for r in 0..3 {
+        for q in 0..24 {
+            cb2[r][q] = c[r][0] * b2[0][q] + c[r][1] * b2[1][q] + c[r][2] * b2[2][q];
+            ctb1[r][q] = c[0][r] * b1[0][q] + c[1][r] * b1[1][q] + c[2][r] * b1[2][q];
+        }
+    }
+    for i in 0..24 {
+        for j in 0..24 {
+            let mut v = 0.0;
+            for r in 0..3 {
+                v += b1[r][i] * cb2[r][j] + b2[r][i] * ctb1[r][j];
+            }
+            k[i * 24 + j] += w * v;
+        }
+    }
+}
+
+/// The 24 x 24 local stiffness for a given section (ADR 0440 D6). With no coupling and an isotropic shear it is the
+/// element of ADR 0432 with the operations of [`local_stiffness`].
+pub fn local_stiffness_section(f: &Facet, section: &SectionStiffness, options: &ShellOptions) -> ElementMatrix {
+    let dm = section.membrane;
+    let db = section.bending;
+    let dr = options.drilling * section.drilling[0] * section.drilling[1];
     let tying = tying_rows(&f.local);
     let mut k = ElementMatrix::zeros(24);
     let v = k.values_mut();
@@ -379,8 +477,13 @@ pub fn local_stiffness(f: &Facet, thickness: f64, material: &Material, options: 
         for &eta in &GAUSS {
             let p = point(&f.local, xi, eta);
             let w = p.det;
-            add_btdb3(v, &membrane_rows(&p), &dm, w);
-            add_btdb3(v, &bending_rows(&p), &db, w);
+            let bm = membrane_rows(&p);
+            let bb = bending_rows(&p);
+            add_btdb3(v, &bm, &dm, w);
+            add_btdb3(v, &bb, &db, w);
+            if let Some(c) = &section.coupling {
+                add_coupling(v, &bm, c, &bb, w);
+            }
             let s = shear_rows(&p, xi, eta, options.shear, &tying);
             let mut d = [0.0; 24];
             for i in 0..4 {
@@ -388,9 +491,24 @@ pub fn local_stiffness(f: &Facet, thickness: f64, material: &Material, options: 
                 d[6 * i + 1] -= 0.5 * p.nx[i];
                 d[6 * i] += 0.5 * p.ny[i];
             }
-            for i in 0..24 {
-                for j in 0..24 {
-                    v[i * 24 + j] += w * (ds * (s[0][i] * s[0][j] + s[1][i] * s[1][j]) + dr * d[i] * d[j]);
+            match section.shear {
+                ShearStiffness::Isotropic(ds) => {
+                    for i in 0..24 {
+                        for j in 0..24 {
+                            v[i * 24 + j] += w * (ds * (s[0][i] * s[0][j] + s[1][i] * s[1][j]) + dr * d[i] * d[j]);
+                        }
+                    }
+                }
+                ShearStiffness::Matrix(h) => {
+                    for i in 0..24 {
+                        for j in 0..24 {
+                            let q = h[0][0] * s[0][i] * s[0][j]
+                                + h[0][1] * s[0][i] * s[1][j]
+                                + h[1][0] * s[1][i] * s[0][j]
+                                + h[1][1] * s[1][i] * s[1][j];
+                            v[i * 24 + j] += w * (q + dr * d[i] * d[j]);
+                        }
+                    }
                 }
             }
         }
@@ -503,6 +621,28 @@ pub fn element_stiffness_with(
         &local_stiffness(&f, thickness, material, options),
         &transformation(&f),
     ))
+}
+
+/// The global stiffness for a given section (ADR 0440 D6).
+pub fn element_stiffness_section(
+    coords: &[Vec3],
+    section: &SectionStiffness,
+    options: &ShellOptions,
+) -> Result<ElementMatrix> {
+    let f = facet(coords)?;
+    Ok(to_global(
+        &local_stiffness_section(&f, section, options),
+        &transformation(&f),
+    ))
+}
+
+/// The section of a shell element of a model, from its block's property through [`section_of`].
+fn model_section(mesh: &SolidMesh, element: usize, material: &Material) -> Result<SectionStiffness> {
+    let property = mesh.blocks()[mesh.block_of(element)].property();
+    match property {
+        Some(p @ (BlockProperty::Shell { .. } | BlockProperty::Layup { .. })) => section_of(p, material),
+        _ => thickness_or_error(mesh, element).map(|t| homogeneous_section(material, t)),
+    }
 }
 
 /// The global consistent mass of a shell element.
@@ -682,8 +822,8 @@ pub(crate) fn model_element_stiffness(
     coords: &[Vec3],
     material: &Material,
 ) -> Result<ElementMatrix> {
-    let t = thickness_or_error(mesh, element)?;
-    element_stiffness(coords, t, material)
+    let section = model_section(mesh, element, material)?;
+    element_stiffness_section(coords, &section, &ShellOptions::default())
 }
 
 /// The consistent mass of a shell element of a model.
@@ -752,9 +892,9 @@ pub fn stresses(model: &SolidModel, displacement: &[f64]) -> Result<Vec<(usize, 
         let tr = transformation(&f);
         let ul: Vec<f64> = (0..24).map(|i| (0..24).map(|j| tr[i * 24 + j] * ue[j]).sum()).collect();
         let material = &model.materials()[materials[e]].1;
-        let (em, nu, g) = moduli(material);
-        let dm = plane_matrix(em, nu, t);
-        let db = plane_matrix(em, nu, t * t * t / 12.0);
+        let section = model_section(mesh, e, material).map_err(located)?;
+        let dm = section.membrane;
+        let db = section.bending;
         let p = point(&f.local, 0.0, 0.0);
         let strain = |b: &[[f64; 24]; 3]| -> [f64; 3] {
             let mut s = [0.0; 3];
@@ -772,15 +912,28 @@ pub fn stresses(model: &SolidModel, displacement: &[f64]) -> Result<Vec<(usize, 
                 d[2][0] * v[0] + d[2][1] * v[1] + d[2][2] * v[2],
             ]
         };
-        let membrane = mul(&dm, eps);
-        let bending = mul(&db, kappa);
+        let mut membrane = mul(&dm, eps);
+        let mut bending = mul(&db, kappa);
+        if let Some(c) = &section.coupling {
+            let ck = mul(c, kappa);
+            let cte = [
+                c[0][0] * eps[0] + c[1][0] * eps[1] + c[2][0] * eps[2],
+                c[0][1] * eps[0] + c[1][1] * eps[1] + c[2][1] * eps[2],
+                c[0][2] * eps[0] + c[1][2] * eps[1] + c[2][2] * eps[2],
+            ];
+            for k in 0..3 {
+                membrane[k] += ck[k];
+                bending[k] += cte[k];
+            }
+        }
         let tying = tying_rows(&f.local);
         let s = shear_rows(&p, 0.0, 0.0, TransverseShear::AssumedStrain, &tying);
-        let ds = SHEAR_FACTOR * g * t;
-        let shear = [
-            ds * s[0].iter().zip(&ul).map(|(a, x)| a * x).sum::<f64>(),
-            ds * s[1].iter().zip(&ul).map(|(a, x)| a * x).sum::<f64>(),
-        ];
+        let g0 = s[0].iter().zip(&ul).map(|(a, x)| a * x).sum::<f64>();
+        let g1 = s[1].iter().zip(&ul).map(|(a, x)| a * x).sum::<f64>();
+        let shear = match section.shear {
+            ShearStiffness::Isotropic(ds) => [ds * g0, ds * g1],
+            ShearStiffness::Matrix(h) => [h[0][0] * g0 + h[0][1] * g1, h[1][0] * g0 + h[1][1] * g1],
+        };
         let mut top = [0.0; 3];
         let mut bottom = [0.0; 3];
         for k in 0..3 {
