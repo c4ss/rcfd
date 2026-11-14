@@ -295,7 +295,10 @@ fn u1_r1_n1_algebraic_known_miss() {
         .zip(&dense.omegas)
         .map(|(a, b)| (a / b - 1.0).abs())
         .fold(0.0f64, f64::max);
-    println!("N1 companion: with the restarts {:?} ({} runs), deviation {dev:.2e}", full.omegas, full.runs);
+    println!(
+        "N1 companion: with the restarts {:?} ({} runs), deviation {dev:.2e}",
+        full.omegas, full.runs
+    );
     ch.le("U1 double frequencies with the restarts", dev, 1e-9);
     ch.finish();
 }
@@ -374,7 +377,10 @@ fn u1_r1_n1b_algebraic() {
         "refused with FemError::Solver",
     );
     let full = gyroscopic_eigen_sparse(&ic, &ic, &zc, 2).unwrap();
-    println!("N1b companion: with the restarts {:?} ({} runs)", full.omegas, full.runs);
+    println!(
+        "N1b companion: with the restarts {:?} ({} runs)",
+        full.omegas, full.runs
+    );
     let dev = full.omegas.iter().map(|w| (w - 1.0).abs()).fold(0.0f64, f64::max);
     ch.le("N1b companion with the restarts", dev, 1e-12);
     ch.finish();
@@ -428,7 +434,9 @@ fn e1_e2_n2_r2_cube() {
         &cb,
         AXIS,
         ORIGIN,
-        &RotatingOptions::new(3).coriolis(false).whirl_solver(WhirlSolver::Sparse),
+        &RotatingOptions::new(3)
+            .coriolis(false)
+            .whirl_solver(WhirlSolver::Sparse),
     )
     .unwrap();
     let w = 0.5 * W0;
@@ -446,7 +454,11 @@ fn e1_e2_n2_r2_cube() {
     let a = bits(&whirl_of(dense.whirl_modes(w).unwrap(), "R2"));
     let b = bits(&whirl_of(explicit.whirl_modes(w).unwrap(), "R2"));
     let c = bits(&whirl_of(auto.whirl_modes(w).unwrap(), "R2"));
-    ch.holds("R2 cube Dense", a == b, "the default part and whirl_solver(Dense) give the same bits");
+    ch.holds(
+        "R2 cube Dense",
+        a == b,
+        "the default part and whirl_solver(Dense) give the same bits",
+    );
     ch.holds("R2 cube Auto", a == c, "Auto below the cap gives the bits of Dense");
     ch.finish();
 }
@@ -570,7 +582,13 @@ fn e3_e4_e5_e6_r2_sector() {
     let e6s = freq_dev(&s, &d);
     q1 = q1.max(max_residual(&s));
     let fd_off = RotatingPart::new(&full, AXIS, ORIGIN, &ds_options(false)).unwrap();
-    let fs_off = RotatingPart::new(&full, AXIS, ORIGIN, &ds_options(false).whirl_solver(WhirlSolver::Sparse)).unwrap();
+    let fs_off = RotatingPart::new(
+        &full,
+        AXIS,
+        ORIGIN,
+        &ds_options(false).whirl_solver(WhirlSolver::Sparse),
+    )
+    .unwrap();
     let d = whirl_of(fd_off.whirl_modes(w).unwrap(), "E6 full");
     let s = whirl_of(fs_off.whirl_modes(w).unwrap(), "E6 full");
     println!(
@@ -589,7 +607,11 @@ fn e3_e4_e5_e6_r2_sector() {
     let a = bits(&harmonic_whirl(rd.whirl_modes(1, w).unwrap(), "R2"));
     let b = bits(&harmonic_whirl(explicit.whirl_modes(1, w).unwrap(), "R2"));
     let c = bits(&harmonic_whirl(auto.whirl_modes(1, w).unwrap(), "R2"));
-    ch.holds("R2 sector Dense", a == b, "the default sector and whirl_solver(Dense) give the same bits");
+    ch.holds(
+        "R2 sector Dense",
+        a == b,
+        "the default sector and whirl_solver(Dense) give the same bits",
+    );
     ch.holds("R2 sector Auto", a == c, "Auto below the cap gives the bits of Dense");
     ch.finish();
 }
@@ -658,7 +680,10 @@ fn a2_m1_m2_m3_m4_medium_part() {
     let dense = RotatingPart::new(&full, AXIS, ORIGIN, &ring_options(true, WhirlSolver::Dense)).unwrap();
     let rest = whirl_of(dense.whirl_modes(0.0).unwrap(), "MP rest");
     let w = 0.4 * rest.modes[0].omega;
-    println!("MP: {} reduced unknowns, omega_mp = {:.9e}, speed {w:.6e}", rest.unknowns, rest.modes[0].omega);
+    println!(
+        "MP: {} reduced unknowns, omega_mp = {:.9e}, speed {w:.6e}",
+        rest.unknowns, rest.modes[0].omega
+    );
     let refused = dense.whirl_modes(w).map(|_| ()).unwrap_err();
     let sparse = RotatingPart::new(&full, AXIS, ORIGIN, &ring_options(true, WhirlSolver::Sparse)).unwrap();
     let t = Instant::now();
@@ -677,9 +702,17 @@ fn a2_m1_m2_m3_m4_medium_part() {
     );
     let auto = RotatingPart::new(&full, AXIS, ORIGIN, &ring_options(true, WhirlSolver::Auto)).unwrap();
     let a = whirl_of(auto.whirl_modes(w).unwrap(), "M1");
-    ch.holds("M1 MP Auto", bits(&a) == bits(&s), "Auto above the cap gives the bits of Sparse");
+    ch.holds(
+        "M1 MP Auto",
+        bits(&a) == bits(&s),
+        "Auto above the cap gives the bits of Sparse",
+    );
     let (union, spectrum, valid) = sector_union(&sector, sectors, w);
-    ch.holds("M2 validity", valid, "every index's highest returned frequency at or above the union's 10th");
+    ch.holds(
+        "M2 validity",
+        valid,
+        "every index's highest returned frequency at or above the union's 10th",
+    );
     let (f, k, x) = union_devs(&s, &union, &spectrum);
     ch.le("M2 MP frequencies against the sector union", f, 1e-8);
     println!("M3 MP: {x} modes excluded (gap <= 1e-6)");
@@ -687,7 +720,11 @@ fn a2_m1_m2_m3_m4_medium_part() {
     let off = RotatingPart::new(&full, AXIS, ORIGIN, &ring_options(false, WhirlSolver::Sparse)).unwrap();
     let so = whirl_of(off.whirl_modes(w).unwrap(), "M4");
     println!("M4 MP off: {:?}", so.modes.iter().map(|x| x.omega).collect::<Vec<_>>());
-    ch.le("M4 MP Coriolis off against the subspace modes", subspace_dev(&so, &off, w), 1e-8);
+    ch.le(
+        "M4 MP Coriolis off against the subspace modes",
+        subspace_dev(&so, &off, w),
+        1e-8,
+    );
     ch.le("Q1 MP residual", max_residual(&s).max(max_residual(&so)), 1e-9);
     ch.finish();
 }
@@ -704,32 +741,50 @@ fn t1_t2_t3_large_part() {
     let rest = whirl_of(probe.whirl_modes(0.0).unwrap(), "LP rest");
     drop(probe);
     let w = 0.4 * rest.modes[0].omega;
-    println!("LP: {} reduced unknowns, omega_lp = {:.9e}, speed {w:.6e}", rest.unknowns, rest.modes[0].omega);
+    println!(
+        "LP: {} reduced unknowns, omega_lp = {:.9e}, speed {w:.6e}",
+        rest.unknowns, rest.modes[0].omega
+    );
     let t = Instant::now();
     let part = RotatingPart::new(&full, AXIS, ORIGIN, &ring_options(true, WhirlSolver::Sparse)).unwrap();
     let t_new = t.elapsed().as_secs_f64();
     let s = whirl_of(part.whirl_modes(w).unwrap(), "LP sparse");
     let total = t.elapsed().as_secs_f64();
-    println!("T1 LP: new {t_new:.2} s, whirl_modes {:.2} s, total {total:.2} s", total - t_new);
+    println!(
+        "T1 LP: new {t_new:.2} s, whirl_modes {:.2} s, total {total:.2} s",
+        total - t_new
+    );
     println!(
         "LP sparse: {:?} kappa {:?} residuals {:?}",
         s.modes.iter().map(|x| x.omega).collect::<Vec<_>>(),
         s.modes.iter().map(|x| x.whirl).collect::<Vec<_>>(),
         s.modes.iter().map(|x| x.residual).collect::<Vec<_>>()
     );
-    ch.holds("T1 LP unknowns", s.unknowns >= 20_000, &format!("{} >= 20 000", s.unknowns));
+    ch.holds(
+        "T1 LP unknowns",
+        s.unknowns >= 20_000,
+        &format!("{} >= 20 000", s.unknowns),
+    );
     ch.lt("T1 LP wall time of new + whirl_modes, s", total, 120.0);
     drop(part);
     ch.le("Q1 LP residual", max_residual(&s), 1e-9);
     let (union, spectrum, valid) = sector_union(&sector, sectors, w);
-    ch.holds("T2 validity", valid, "every index's highest returned frequency at or above the union's 10th");
+    ch.holds(
+        "T2 validity",
+        valid,
+        "every index's highest returned frequency at or above the union's 10th",
+    );
     let (f, k, x) = union_devs(&s, &union, &spectrum);
     ch.le("T2 LP frequencies against the sector union", f, 1e-8);
     println!("T2 LP whirl numbers against the sector union (recorded): {k:.3e}, {x} excluded");
     let off = RotatingPart::new(&full, AXIS, ORIGIN, &ring_options(false, WhirlSolver::Sparse)).unwrap();
     let so = whirl_of(off.whirl_modes(w).unwrap(), "T3");
     println!("T3 LP off: {:?}", so.modes.iter().map(|x| x.omega).collect::<Vec<_>>());
-    ch.le("T3 LP Coriolis off against the subspace modes", subspace_dev(&so, &off, w), 1e-8);
+    ch.le(
+        "T3 LP Coriolis off against the subspace modes",
+        subspace_dev(&so, &off, w),
+        1e-8,
+    );
     ch.le("Q1 LP Coriolis off residual", max_residual(&so), 1e-9);
     ch.finish();
 }

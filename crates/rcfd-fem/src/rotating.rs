@@ -55,12 +55,12 @@ pub use whirl::{
     DenseWhirl, HarmonicWhirlSpeedModes, Whirl, WhirlCampbell, WhirlMode, WhirlModes, WhirlSpeedModes,
     MAX_WHIRL_UNKNOWNS, WHIRL_TOLERANCE,
 };
+pub use whirl::{gyroscopic_eigen_sparse, gyroscopic_eigen_sparse_with, LanczosOptions, SparseWhirl, WhirlSolver};
 pub use whirl::{
     gyroscopic_state_eigen_dense, DenseStateWhirl, Stability, StateWhirl, StateWhirlMode, WhirlStability,
     STABILITY_TOLERANCE,
 };
 pub use whirl::{CyclicWhirlStability, HarmonicStateWhirl};
-pub use whirl::{gyroscopic_eigen_sparse, gyroscopic_eigen_sparse_with, LanczosOptions, SparseWhirl, WhirlSolver};
 
 fn unit_axis(axis: Vec3) -> Result<Vec3> {
     let len = norm(axis);

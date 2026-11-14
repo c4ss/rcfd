@@ -99,7 +99,10 @@ fn matrix_refused(reason: String) -> FemError {
 
 fn check_sparse(a: &CsrMatrix, n: usize, what: &str) -> Result<()> {
     if a.n != n || a.ncols != n {
-        return Err(matrix_refused(format!("{what} is {} x {}, not {n} x {n}", a.n, a.ncols)));
+        return Err(matrix_refused(format!(
+            "{what} is {} x {}, not {n} x {n}",
+            a.n, a.ncols
+        )));
     }
     if a.val.iter().any(|v| !v.is_finite()) {
         return Err(matrix_refused(format!("{what} has a non-finite entry")));
@@ -233,7 +236,7 @@ fn run(op: &Op, z: &[Vec<f64>], count: usize, tol: f64, index: usize) -> (Vec<Ri
         let beta = op.norm(&v);
         maxb = maxb.max(beta);
         let m = q.len();
-        let breakdown = !(beta > BREAKDOWN * maxb) || m >= avail;
+        let breakdown = beta.partial_cmp(&(BREAKDOWN * maxb)) != Some(std::cmp::Ordering::Greater) || m >= avail;
         let last = m >= max_steps;
         let due = m >= first_check && (m - first_check) % 8 == 0;
         if breakdown || last || due {
@@ -383,7 +386,14 @@ fn residual(op: &Op, omega: f64, re: &[f64], im: &[f64]) -> f64 {
 }
 
 /// The solve on validated matrices; `g` is applied as `scale (g - g^T)`.
-fn solve(k: &CsrMatrix, m: &CsrMatrix, g: &CsrMatrix, scale: f64, count: usize, opts: &LanczosOptions) -> Result<SparseWhirl> {
+fn solve(
+    k: &CsrMatrix,
+    m: &CsrMatrix,
+    g: &CsrMatrix,
+    scale: f64,
+    count: usize,
+    opts: &LanczosOptions,
+) -> Result<SparseWhirl> {
     let n = k.n;
     let fk = factor(k).ok_or_else(|| FemError::InvalidValue {
         key: "stiffness",
@@ -409,7 +419,10 @@ fn solve(k: &CsrMatrix, m: &CsrMatrix, g: &CsrMatrix, scale: f64, count: usize, 
     if pairs.len() < count {
         return Err(FemError::Solver {
             solver: "sparse_whirl",
-            reason: format!("{} of {count} whirl modes converged in {runs} runs ({steps} steps)", pairs.len()),
+            reason: format!(
+                "{} of {count} whirl modes converged in {runs} runs ({steps} steps)",
+                pairs.len()
+            ),
         });
     }
     if pairs.iter().any(|p| !p.0.is_finite()) {
@@ -525,7 +538,10 @@ mod tests {
     }
 
     fn csr(a: &[f64], n: usize) -> CsrMatrix {
-        let t = (0..n * n).filter(|&p| a[p] != 0.0).map(|p| (p / n, p % n, a[p])).collect();
+        let t = (0..n * n)
+            .filter(|&p| a[p] != 0.0)
+            .map(|p| (p / n, p % n, a[p]))
+            .collect();
         CsrMatrix::from_triplets(n, t)
     }
 
@@ -557,7 +573,12 @@ mod tests {
             let r = gyroscopic_eigen_sparse(&csr(&k, n), &csr(&m, n), &csr(&g, n), count).unwrap();
             for i in 0..count {
                 let e = (r.omegas[i] / d.omegas[i] - 1.0).abs();
-                assert!(e < 1e-10, "n {n} mode {i}: {} against {} ({e:e})", r.omegas[i], d.omegas[i]);
+                assert!(
+                    e < 1e-10,
+                    "n {n} mode {i}: {} against {} ({e:e})",
+                    r.omegas[i],
+                    d.omegas[i]
+                );
                 assert!(r.residuals[i] < 1e-10, "n {n} mode {i}: residual {:e}", r.residuals[i]);
             }
         }
