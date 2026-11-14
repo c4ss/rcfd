@@ -337,3 +337,29 @@ solver file changes; stated in the addendum).
 2. The map of the 3:2 interface: F-504's bilinear projection on a 4 x 4 face (D4), chosen from ADR 0412/0414's numbers.
 3. The channel length `L_f = 32 m` (8 `L_s`) so that the fluid is at most half as dense as the bar (D4, D6).
 4. The helper moves the mesh axially only (D5).
+
+## Amendment 1 (2026-11-14, written after the registered run of the fast tests of commit ab78f8cc and before the corrected run)
+
+**What the registered run showed** (log `f401-scratch/run1_fast.log`, made once, `cargo test -p rcfd-post --release --test
+si_fsi_piston`, 0.9 s): every fast check met except two. (a) H1, the point at half the channel length: `1.222e-15 m` against the
+limit `1e-15 m`. (b) VS: `8.28e-5 U` against `1e-6 U`. The heavy records were not run yet; this amendment does not touch them.
+
+**(a) H1 is defective by construction.** The checked quantity is `x_moved - x_ref - d_x/2` at `x_ref = L_s + L_f/2 = 20 m`; half
+the spacing of the doubles near 20 is `1.78e-15 m`, so the limit `1e-15 m` lies below the resolution of the coordinate and the
+check measures the rounding of `20 + 0.001`, not the weight (the other parts of H1, on the same points and on the graded
+channel, met with 0). Correction (the set-up of the check only, the limit unchanged as a number): **H1c**, on the same uniform
+channel, the weight of every point at half the length (`ChannelMotion::weights`) equals `1/2` within `1e-15` (dimensionless), and
+each such point's moved `x` is bit for bit `x_ref + w d_x` with that weight. Estimate: weight `0.5` exactly (`1 - 16/32`). The
+registered test `h1_nc2_the_channel_motion` stays as an ignored record (attribute only); `h1c_nc2_the_channel_motion` repeats
+its other checks and NC2 unchanged with H1c in place of the half-length check. H1 counts as met only after this amendment.
+
+**(b) VS is a miss, not a defect of the set-up; it stays a miss.** My D3 said the discrete flow carries the plug with no viscous
+effect. ADR 0252 had found the opposite for this flow step (H2: "the non-iterated step has a viscous splitting error", H4: "the
+viscous part of the force exists", up to `7.5e-6` of the force at its viscosity): in the PISO predictor the wall cell's velocity
+differs from the wall's, so the viscous term acts through the predictor and the pressure, in proportion to `nu`. I had read that
+addendum and did not carry it into D3: the estimate was wrong, the limit stands. The check becomes the ignored
+`vs_viscosity_times_100_known_miss` (limit intact), which also prints, as an unregistered diagnosis, the same difference for
+`nu = 1e-3` (if the effect is proportional to `nu`, about `7.5e-6 U`; at the registered `nu = 1e-4` it is then about `8e-7 U`
+over 25 steps). The function `qf1_vs_fast_matching_run_against_the_model` keeps QF1 (met) and loses VS: it is moved, with its
+limit, into the known-miss test. The viscous estimate `delta_visc = 0` of F1 is not changed; the companion FP measures whether the
+frequency notices.
