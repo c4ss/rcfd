@@ -11489,7 +11489,7 @@ fixed by the item's registration ADR before any code.
     the stress per unit displacement within 1e-10; the broadband rate of F-566 fed from a stress component equals the
     scaled channel rate within 1e-10; a von Mises equivalent is refused for the broadband rate with the reason (it is
     not Gaussian).
-  - note: Structural solver, advanced tier. Follow-up of F-566 (ADR 0497, 2026-11-14). ADR 0516, 2026-11-14: rcfd_fem::random
+  - note: Structural solver, advanced tier. Follow-up of F-566. DONE. ADR 0516, 2026-11-14: rcfd_fem::random
     RandomStress gains first_covariance (C_1, weighted by f) and fourth_covariance (C_4, weighted by f^4) beside
     covariance and rate_covariance, and ChannelResponse gains the same two matrices, from separate accumulators in
     spectral_response and spectral_response_cross (the real constant-coherence route and the complex loop; the existing
@@ -11501,7 +11501,7 @@ fixed by the item's registration ADR before any code.
     (nu = 0, force and base, 320 points; the 6x6 matrices of nu = 0.3 within 2.2e-15), the broadband rate of F-566 fed
     from a component equals the scaled channel rate within 3.0e-15 (m = 3 and 5), C_1/C_0 and C_4/C_0 equal the closed
     forms of ADR 0477 within 3.0e-10 and 2.6e-8, and a complex pure-delay cross-spectrum through RandomSolver agrees
-    within 1.8e-15. Limits: Gaussian zero-mean stress, no critical-plane search, no case-file key.
+    within 1.8e-15. Limits: Gaussian zero-mean stress, no critical-plane search, no case-file key. Follow-up F-605.
 - [ ] **F-590** Benasciutti-Tovo broadband damage rate as a second method
   - depends on: F-566
   - acceptance: Every limit not stated here is registered in the ADR before the run. The rate (formula registered from a
@@ -11679,3 +11679,11 @@ fixed by the item's registration ADR before any code.
     at the hub faces and converging under refinement of the bore cells, and a bore-cell rule for the 120 mm fan hub
     stated from the run. Fan relevance: hub-shaft press-fit stresses.
   - note: Structural solver, advanced tier. Follow-up of F-599 (ADR 0513, 2026-11-14).
+- [ ] **F-605** Case-file key and output for the broadband fatigue life of a stress component
+  - depends on: F-589, F-566
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A [fatigue] section with method =
+    "narrow-band" or "dirlik" and stress = a component or a plane normal reports the damage rate and the life 1/rate per
+    integration point; stress = "von-mises" is refused with the reason of ADR 0516; a case without the section keeps its
+    bits and the baseline hashes are unchanged; the schema golden is updated with the maintainer's approval.
+  - note: Structural solver, advanced tier. Follow-up of F-589 (ADR 0516, 2026-11-14). NEEDS THE USER: a case-file key
+    and schema golden change.
