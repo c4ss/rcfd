@@ -5424,7 +5424,7 @@
     ],
     "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The gyroscopic problem of ADR 0472 on the harmonic modes of each index of a cyclic sector (a cos/sin basis and the doubled Coriolis matrix of ADR 0411 D5): on the disc sector of ADR 0411 at 0.4 and 0.8 of its reference speed the split frequencies of every index equal those of RotatingSector::whirl_modes within 1e-6 for the modes whose coupling stays inside the basis; the refusal of ADR 0472 is lifted only for sectors whose material axes pass the check of ADR 0462; without the option every result bit-identical.",
-    "note": "Structural solver, advanced tier (plan ADR 0310). PARTIAL. Size S. ADR 0481, 2026-11-14: RotatingSector::split_modes and split_campbell in rcfd_fem::gyro: the gyroscopic problem of ADR 0472 on the F-396 harmonic modes of each index (cos/sin basis, K_eff, M and the Coriolis matrix doubled for a pair), solved by the quadratic solver of ADR 0450 and tracked per index by the tracker of ADR 0411, with growth, stability, whirl number and wave sense; opt-in by RotatingOptions::coriolis, without it the F-396 sector results bit for bit; sectors exist only for material axes passing ADR 0462. A mode counts as inside the basis when the first-order Ritz error eta = |e^H Q e|/(omega |s^H Q' s|) of the whole-sector whirl mode is below 1e-7 (eta matches the measured error within 3 percent). On the disc sector of ADR 0411 with 41 modes per index at 0.4 and 0.8 omega_ref, 223 to 233 of 246 modes are inside and equal RotatingSector::whirl_modes within 8.3e-8 (isotropic) and 9.9e-8 (orthotropic, cylindrical axes); with 4 or 12 modes per index none is inside (errors 8e-4 to 5e-3). Other axes refused; non-cyclic split results and defaults bit-identical (13 digests). Six of seven mutations caught; removing the axes check of RotatingSector::new is not caught because RotatingPart::new and the transformation check it again. Follow-up for static correction vectors."
+    "note": "Structural solver, advanced tier (plan ADR 0310). PARTIAL. Size S. ADR 0481, 2026-11-14: RotatingSector::split_modes and split_campbell in rcfd_fem::gyro: the gyroscopic problem of ADR 0472 on the F-396 harmonic modes of each index (cos/sin basis, K_eff, M and the Coriolis matrix doubled for a pair), solved by the quadratic solver of ADR 0450 and tracked per index by the tracker of ADR 0411, with growth, stability, whirl number and wave sense; opt-in by RotatingOptions::coriolis, without it the F-396 sector results bit for bit; sectors exist only for material axes passing ADR 0462. A mode counts as inside the basis when the first-order Ritz error eta = |e^H Q e|/(omega |s^H Q' s|) of the whole-sector whirl mode is below 1e-7 (eta matches the measured error within 3 percent). On the disc sector of ADR 0411 with 41 modes per index at 0.4 and 0.8 omega_ref, 223 to 233 of 246 modes are inside and equal RotatingSector::whirl_modes within 8.3e-8 (isotropic) and 9.9e-8 (orthotropic, cylindrical axes); with 4 or 12 modes per index none is inside (errors 8e-4 to 5e-3). Other axes refused; non-cyclic split results and defaults bit-identical (13 digests). Six of seven mutations caught; removing the axes check of RotatingSector::new is not caught because RotatingPart::new and the transformation check it again. Follow-up for static correction vectors. Follow-up F-569."
   },
   {
     "id": "F-556",
@@ -5570,5 +5570,16 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. EnergyError gives the density eta_e/|K|^{1/2} beside eta_e, the absolute values keeping their bits; on the two-layer plate with a hole of ADR 0478 the tenth of the elements with the largest density contains every element with a face on the hole; on the manufactured solution of F-378 (Hex20 and Tet10 at n = 8, 16 and a finer heavy record where feasible) abs(theta - 1) on each mesh is at most max(abs(theta - 1) on the previous mesh, 1e-2); the results of F-432 keep their bits.",
     "note": "Structural solver, advanced tier. Follow-up of F-432 (ADR 0478, 2026-11-14)."
+  },
+  {
+    "id": "F-569",
+    "title": "Static correction vectors for the split modes of a sector index",
+    "phase": 9,
+    "deps": [
+      "F-555"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The basis of RotatingSector::split_modes optionally adds the static correction vectors K_eff^-1 G phi_i of the F-396 harmonic modes of each index and reports the first-order Ritz error eta of ADR 0481 for every split mode; on the disc sector of ADR 0411 with 4 harmonic modes per index at 0.4 and 0.8 omega_ref the lowest split frequency of every index equals RotatingSector::whirl_modes within 1e-5, and eta agrees with the measured error within 10 percent where it exceeds 1e-9; without the option every result bit-identical.",
+    "note": "Structural solver, advanced tier. Follow-up of F-555 (ADR 0481, 2026-11-14)."
   }
 ]

@@ -10830,7 +10830,7 @@ fixed by the item's registration ADR before any code.
     axes); with 4 or 12 modes per index none is inside (errors 8e-4 to 5e-3). Other axes refused; non-cyclic split
     results and defaults bit-identical (13 digests). Six of seven mutations caught; removing the axes check of
     RotatingSector::new is not caught because RotatingPart::new and the transformation check it again. Follow-up for
-    static correction vectors.
+    static correction vectors. Follow-up F-569.
 - [ ] **F-556** Diagnosis of the Shell3 rest stiffness of a twisted strip against Hex20
   - depends on: F-420
   - acceptance: Every limit not stated here is registered in the ADR before the run. The 4.05 percent excess of the
@@ -10934,3 +10934,12 @@ fixed by the item's registration ADR before any code.
     manufactured solution of F-378 (Hex20 and Tet10 at n = 8, 16 and a finer heavy record where feasible) abs(theta - 1)
     on each mesh is at most max(abs(theta - 1) on the previous mesh, 1e-2); the results of F-432 keep their bits.
   - note: Structural solver, advanced tier. Follow-up of F-432 (ADR 0478, 2026-11-14).
+- [ ] **F-569** Static correction vectors for the split modes of a sector index
+  - depends on: F-555
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The basis of
+    RotatingSector::split_modes optionally adds the static correction vectors K_eff^-1 G phi_i of the F-396 harmonic
+    modes of each index and reports the first-order Ritz error eta of ADR 0481 for every split mode; on the disc sector
+    of ADR 0411 with 4 harmonic modes per index at 0.4 and 0.8 omega_ref the lowest split frequency of every index
+    equals RotatingSector::whirl_modes within 1e-5, and eta agrees with the measured error within 10 percent where it
+    exceeds 1e-9; without the option every result bit-identical.
+  - note: Structural solver, advanced tier. Follow-up of F-555 (ADR 0481, 2026-11-14).
