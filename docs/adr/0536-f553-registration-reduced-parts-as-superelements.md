@@ -265,3 +265,97 @@ made after its run. **todo**: the module does not build or the bar runs cannot b
 1. A case-file key for superelements: not added (it would change the case schema and its golden; F-603's agent recommended
    adding `interface_enrichment` together with this item's key). Left open for the maintainer; recommendation in the addendum.
 2. The attachment as a wrapper (`SuperelementModel`) and not a field of `SolidModel`: taken (no existing type or golden changes).
+
+## Addendum 1: results (2026-11-14)
+
+Commits on `f553-work`: 1b17befc (this registration, alone), a21ec80a (D1 digests printed at main 679081a1 by
+`sa_superelement_default_bits.rs`, before any library line), 5cda8f68 (`rcfd_fem::cms::superelement`, the one-line declaration
+and a doc paragraph in `cms.rs`, the checks `tests/sa_superelement.rs`; formatted before the run), then this addendum and the
+roadmap entry. Each registered check was run once, release profile (`cargo test --release -p rcfd-fem --test sa_superelement --
+--nocapture --test-threads=1`, log `f553-scratch/run1.log`); no amendment was made. No shared solver file changed behaviour (the
+only library lines are the new file and the declaration in `cms.rs`).
+
+| Id | Clause | Limit | Measured | Met |
+|---|---|---|---|---|
+| ST1 | c1, c2, c5 | `<= 1e-10` | 6.35e-13 (solid I, 248 unknowns) | yes |
+| ST2 | c1, c2, c5 | `<= 1e-10` | 4.06e-13 (solid II, 221) | yes |
+| ST3 | c8 | `<= 1e-10` | 2.35e-14 (beam I), 4.84e-14 (beam II) | yes |
+| ST4 | c8 | `<= 1e-8` | 8.54e-11 (shell I), 4.51e-11 (shell II); both also below 1e-10 (record) | yes |
+| MO1 | c3, c6, c7 | `[-1e-10, 1e-3]` | 4.47e-7, 5.92e-7, 9.73e-5 | yes |
+| MO2 | c3, c6, c7 | `[-1e-10, 1e-3]` | 4.08e-6, 4.87e-6, 4.59e-4 | yes |
+| MO3 | c8 | `[-1e-10, 1e-3]` | I 5.40e-7, 7.18e-7, 1.17e-4; II 4.50e-6, 5.38e-6, 4.83e-4 | yes |
+| MO4 | c8 | `[-1e-8, 1e-3]` | I 1.87e-8, 4.35e-6, 2.16e-5; II 2.14e-7, 2.83e-5, 9.43e-5 | yes |
+| NB1 | c3 | `err - err_two <= 1e-9` (shell 1e-8) | all eighteen negative, the largest -1.88e-8 (shell II f1) | yes |
+| AM1 | c3 | `<= 1e-8` | 9.13e-13 (I, `m` = 189), 3.06e-12 (II, `m` = 216) | yes |
+| C1 | c3 | `<= 1e-9` | 1.27e-10 (248 unknowns) | yes |
+| HA1 | c4 | `<= 1e-8` | 5.79e-12 (I), 1.09e-11 (II) | yes |
+| HA2 | c4 | `<= 1e-6` | 1.06e-10 (I), 1.75e-10 (II) at 476.681 rad/s | yes |
+| HB1 | c4 | `<= 1e-2` | 6.61e-5 (I), 7.02e-3 (II), both largest at 1000 rad/s | yes |
+| X1 | c1 | refused | refused (0 host nodes within 4.99e-10) | yes |
+| X2 | c8 | refused | refused (component 3 has no unknown on the solid host node) | yes |
+| X3 | c1 | refused | refused (host interface unknown fixed) | yes |
+| X4 | c1 | refused | refused (zero values only) | yes |
+| Z1 | c2 | `<= 1e-10` | 0 (bit-equal to `solve_static`) | yes |
+| T1 | design | bits | threads 1 and 4 bit-identical | yes |
+| D1 | c9 | `==` | 10 of 10 digests equal | yes |
+
+Records: the errors of all eight frequencies (log `run1.log`): solid I up to 3.3e-3 (f7, the axial mode), solid II 9.3e-2 (f7,
+axial: B, the free half, keeps no axial fixed-interface mode, as in ADR 0469); beam II 8.3e-2 (f8); shell II 7.0e-3 (f7). The
+errors of arrangements I and II add up to those of the two-part assembly for the first three frequencies of every family to
+about 1 percent (for example solid f1: 4.47e-7 + 4.08e-6 = 4.53e-6, the two-part error): the truncation errors of the two halves
+are nearly additive at this level. HB1 II is larger than HB1 I because the corner load is in the reduced part's interior and
+the part has no residual vector (the cause measured in ADR 0469 and treated by ADR 0474/0511).
+
+Mutations (scratch copy `f553-scratch/mut`, its own target, script `mutate.py`, logs `mutations.log`, `mut-MU*.log`), all caught:
+
+| Id | Caught by |
+|---|---|
+| MU1 | AM1, HA1, HA2, HB1, MO1 to MO4, NB1 |
+| MU2 | MO1 to MO4 ("not below"), C1, HA1, HA2, HB1; ST and AM1 through the solver's refusal of the singular `K` |
+| MU3 | ST1 to ST4 |
+| MU4 | X2; every other check through the attachment's refusal of two boundary unknowns on one host unknown |
+| MU5 | MO3, MO4, NB1 (beam, shell), ST3, ST4 |
+| MU6 | ST1 to ST4 |
+| MU7 | HA1, HA2, HB1 |
+| MU8 | HA1, HA2, HB1 |
+| MU9 | X1 |
+| MU10 | X2 |
+| MU11 | ST, MO, AM1, C1, HA, HB through the solvers' refusal of the singular combined matrices (no printed limit reached) |
+
+`cargo fmt -p rcfd-fem --check`: clean. `cargo clippy -p rcfd-fem --all-targets -- -D warnings`: clean. `cargo test -p
+rcfd-fem --release`: 216 test binaries, 928 passed, 0 failed, 262 ignored. `cargo test -p rcfd-api --release --test
+baseline_hashes`: 3 passed, 1 ignored (the hash table unchanged and not edited). `cargo test -p rcfd-cli --release --test
+docs_site`: 2 passed.
+
+### Deviations
+
+1. MU2, MU4 and MU11 are caught in part through refusals of the library (a singular combined matrix, a double attachment): the
+   tests of the expected checks fail; for MU11 no printed limit is reached because every solve refuses.
+2. The probe file of the arithmetic was run before the registration and removed (disclosed above); its two failed attempts are
+   logged.
+
+Not run: the workspace test suite (the lead's gate).
+
+### Decision
+
+**done** by the registered rule: every check met at its registered run, every mutation caught, no amendment.
+
+### Remaining questions
+
+1. Case-file key. Options: (a) add a `superelements` key (part file path, host interface) together with F-603's
+   `interface_enrichment` in one schema change with its golden re-recorded; (b) keep the library-only API. Recommendation: (a),
+   as one follow-up item, since it changes the schema golden and needs the maintainer's approval.
+2. Harmonic damping beyond loss factors (Rayleigh, dashpots, viscoelastic parts). Recommendation: a follow-up only when a case
+   needs it; the loss-factor form is the exact projection for a uniform loss.
+3. A solid part at shell or beam host nodes (the mixed interface) is accepted but not checked. Recommendation: check it in the
+   follow-up of question 1 (it needs a solid face matched to shell nodes, which position matching does not give on its own).
+
+### For the lead: roadmap entries
+
+Proposed status of F-553: **done**. New note:
+
+> Structural solver, advanced tier. Follow-up of F-430 (ADR 0469). ADR 0536, 2026-11-14: rcfd_fem::cms::superelement: SuperelementModel attaches reduced parts of ADR 0469 to an ordinary host model at the host nodes of their boundary positions (same component; rotations of beam and shell nodes joined, a component the host lacks refused), the part's generalised coordinates numbered after the host's independent unknowns; static solve (part interior by the exact static recovery), modal analysis (subspace iteration on the combined K, M) and direct harmonic solve with loss-factor damping per host and part. Bar of a reduced half and an ordinary half: statics within 6.4e-13 (beam 4.8e-14, shell 8.5e-11), first three frequencies 4.5e-7 to 4.6e-4 above the full model (beam 5.4e-7 to 4.8e-4, shell 1.9e-8 to 9.4e-5) and never above the two-part assembly's, every mode kept exact within 3.1e-12, harmonic within 1.1e-11 of DirectHarmonic with every mode kept and 7.0e-3 up to 1000 rad/s with five; defaults bit-identical (10 digests). No case-file key (with F-603's interface_enrichment, open).
+
+Proposed follow-up (number left to the lead), title "Case-file keys for superelements and interface enrichment", deps F-553, F-603:
+
+> Every limit not stated here is registered in the ADR before the run. A case file names reduced part files of ADR 0469 and the host node sets they attach to (key superelements) and the interface enrichment of ADR 0532 (key interface_enrichment); the bar of ADR 0536 run from a case file gives the library's results in bits; the schema golden re-recorded with the maintainer's approval; a case without the keys gives every result bit-identical.
