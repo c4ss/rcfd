@@ -75,6 +75,15 @@ pub enum FemError {
         /// The value of `det J` there.
         jacobian: f64,
     },
+    /// A slave node of a tie lies farther than the tolerance from every master face (ADR 0456 D5).
+    TieGap {
+        /// The slave node.
+        node: usize,
+        /// Its distance from the nearest master face, m.
+        distance: f64,
+        /// The tolerance, m.
+        tolerance: f64,
+    },
     /// A set name is empty.
     EmptySetName {
         /// Kind of set.
@@ -323,6 +332,14 @@ impl fmt::Display for FemError {
                 )
             }
             RepeatedNode { element, node } => write!(f, "element {element}: node {node} appears twice"),
+            TieGap {
+                node,
+                distance,
+                tolerance,
+            } => write!(
+                f,
+                "tie: slave node {node} is {distance:e} from the nearest master face (tolerance {tolerance:e})"
+            ),
             InvertedElement {
                 element,
                 local_node,

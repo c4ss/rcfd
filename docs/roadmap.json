@@ -3950,9 +3950,9 @@
       "F-393",
       "F-394"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. With matching meshes the tied model equals the merged one within 1e-10. Flat non-matching interfaces 2:3 and 3:5 under uniaxial stress: far-end displacement within 0.1 percent and interface stress within the registered 3 percent (a one-sided node-to-surface tie does not pass the patch test exactly), the error falling with an observed order >= 1 under refinement. A cantilever cut in two and tied 2:3 (Tet10 to Hex20): tip deflection within 1 percent of the closed form. The constraint forces of a tie have zero resultant and moment within 1e-10. A node farther from every face than the registered tolerance is refused with its id. Joints: a beam continuing a solid bar and a shell continuing a solid plate give the tip deflection of the one-piece cantilever within 1 and 2 percent. Cyclic: the ring sector of F-394 with a 2:3 boundary has its frequencies within 0.5 percent of the matching sector; a solid disc with nodes on the axis, spinning (index 0): centre stress (3 + nu) rho Omega^2 b^2/8 within 1 percent; a rod on the axis at index 1 has the bending frequency of the beam within 1 percent, and at index 2 its axis nodes are held.",
-    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0329; the registration is written by the implementation agent before any code."
+    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). ADR 0456, 2026-11-14: rcfd_fem::tie, node-to-surface ties (bucket grid, Gauss-Newton projection on Tri3/Quad4/Tri6/Quad8 faces, refusal FemError::TieGap with the node id above 0.05 of the mean master face size) and segment-integrated mortar ties (Sutherland-Hodgman clipping in the slave face plane, collapsed 4 x 4 Gauss, u_s = D^-1 M u_m per component with prescribed slave components moved to the right side), all as linear constraints of the transformation; assemble_parts; beam_to_solid and shell_to_solid least-squares rigid couplings in solved form; Constraint::cyclic_with with CyclicOptions (interpolated non-matching boundaries by either tie, nodes on the axis by the null space of their own harmonic rows). Met: matching meshes tied equal merged 4.1e-14; flat 2:3 and 3:5 interfaces under uniaxial stress with the mortar tie exact to 2.8e-12 (displacement) and 5.8e-10 (stress), the node-to-surface tie within 4e-11 of an independent numpy prototype (far-end error 2.9e-3 at 2:3 falling with order 1.014, local stress error 0.149 not falling: the roadmap's 3 percent and falling stress hold for the mortar tie only); cantilever Tet10 to Hex20 tied 2:3 within 5.8e-5 (mortar) and 8.4e-5 (NTS); tie constraint forces' resultant and moment 3.3e-13; ring sector with a 2:3 boundary within 3.9e-3 of the matching sector; spinning disc with axis nodes, centre stress field within 1.0e-3; rod on the axis at index 1 within 4.2e-3 of the Timoshenko beam (after an amendment of the modal tolerance), axis nodes held at index 2. Missed: beam continuing a solid bar 2.25 percent (limit 1), shell continuing a solid plate 2.36 percent (limit 2): the unit-weight couplings on Quad8 faces and the corner-column search are too flexible (a rigid face gives 9e-6); known-miss records. Eleven mutations caught. Default bits unchanged (B1, baseline_hashes). Follow-up: joint couplings with consistent face weights (number by the lead). Follow-up F-543."
   },
   {
     "id": "F-427",
@@ -5280,5 +5280,16 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The rotating modes (stress stiffening, spin softening), the buckling factors and the transient integrator take the orthotropic and tabulated materials of ADR 0452 through the per-point stiffness; the rotating modes of an orthotropic disc or blade with cylindrical axes match a closed form or a registered reference within registered limits; isotropic constants in an orthotropic material give the results of the isotropic material within 1e-12 on stocky models; a cyclic constraint with cylindrical axes about its own axis is opened or refused by name; the paths still not opened refuse the variants by name; default paths bit-identical.",
     "note": "Structural solver, advanced tier. Follow-up of F-537 (ADR 0457, 2026-11-14). Rotating modes first (fan blades in glass-filled plastic)."
+  },
+  {
+    "id": "F-543",
+    "title": "Joint couplings with consistent face weights",
+    "phase": 9,
+    "deps": [
+      "F-426"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The beam-to-solid and shell-to-solid couplings of ADR 0456 weighted by the consistent nodal areas of a linear traction on the solid face, a shell edge coupled to every node of the face through the edge interpolation, and a rigid-face option: the J1 and J2 set-ups of ADR 0456 give the tip deflection of the one-piece cantilever within 1 and 2 percent; a rigid face within 0.1 percent at nu = 0; the coupling exact for the six rigid motions within 1e-12; the known-miss records of ADR 0456 kept.",
+    "note": "Structural solver, advanced tier. Follow-up of F-426 (ADR 0456, 2026-11-14): the J1/J2 misses."
   }
 ]

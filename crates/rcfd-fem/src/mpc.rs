@@ -735,6 +735,141 @@ fn cyclic_rows(
             }
         }
     }
+    // ADR 0456 D4: the interpolated high nodes, `a_H - R (c sum w a_L - s sum w b_L) = 0` and the sine pair.
+    for (high, weights) in bd.interpolated() {
+        let high = *high;
+        for comp in 0..3 {
+            let origin = RowOrigin::Cyclic {
+                constraint,
+                node: high,
+                component: comp,
+            };
+            let h = eq(high, comp)?;
+            let mut terms = vec![(h, 1.0)];
+            let mut sine_terms = sine.map(|off| vec![(off + h, 1.0)]);
+            for &(low, w) in weights {
+                for (j, &rj) in r[comp].iter().enumerate() {
+                    if rj == 0.0 {
+                        continue;
+                    }
+                    let l = eq(low, j)?;
+                    if c != 0.0 {
+                        terms.push((l, -c * w * rj));
+                    }
+                    if let Some(off) = sine {
+                        if s != 0.0 {
+                            terms.push((off + l, s * w * rj));
+                        }
+                        let st = sine_terms.as_mut().expect("sine part");
+                        if s != 0.0 {
+                            st.push((l, -s * w * rj));
+                        }
+                        if c != 0.0 {
+                            st.push((off + l, -c * w * rj));
+                        }
+                    }
+                }
+            }
+            rows.push(Row {
+                origin,
+                terms,
+                value: 0.0,
+                designated: h,
+            });
+            if let (Some(off), Some(st)) = (sine, sine_terms) {
+                rows.push(Row {
+                    origin,
+                    terms: st,
+                    value: 0.0,
+                    designated: off + h,
+                });
+            }
+        }
+    }
+    // ADR 0456 D4 and arithmetic 5: a node on the axis, the null space of its own rows in solved form.
+    for &p in bd.axis_nodes() {
+        let m = if sine.is_some() { 6 } else { 3 };
+        // C = I - P, P the phase rotation: [[c R, -s R], [s R, c R]] (doubled) or c R.
+        let mut cm = vec![0.0f64; m * m];
+        for i in 0..m {
+            cm[i * m + i] = 1.0;
+        }
+        for i in 0..3 {
+            for j in 0..3 {
+                cm[i * m + j] -= c * r[i][j];
+                if m == 6 {
+                    cm[i * m + 3 + j] += s * r[i][j];
+                    cm[(3 + i) * m + j] -= s * r[i][j];
+                    cm[(3 + i) * m + 3 + j] -= c * r[i][j];
+                }
+            }
+        }
+        let mut ctc = vec![0.0f64; m * m];
+        for i in 0..m {
+            for j in 0..m {
+                ctc[i * m + j] = (0..m).map(|k| cm[k * m + i] * cm[k * m + j]).sum();
+            }
+        }
+        let eig = rcfd_linalg::eigen::symmetric_eigen(&ctc, m).map_err(|e| FemError::Solver {
+            solver: "symmetric_eigen",
+            reason: e.to_string(),
+        })?;
+        let lmax = eig.values[m - 1].max(f64::MIN_POSITIVE);
+        let mut basis: Vec<Vec<f64>> = (0..m)
+            .filter(|&k| eig.values[k] <= DEPENDENCE_TOLERANCE * lmax)
+            .map(|k| eig.vectors[k].clone())
+            .collect();
+        // Gauss-Jordan on the basis rows: pivot columns are the free unknowns.
+        let mut free: Vec<usize> = Vec::new();
+        for i in 0..basis.len() {
+            let piv = (0..m)
+                .filter(|q| !free.contains(q))
+                .max_by(|&a, &b| basis[i][a].abs().total_cmp(&basis[i][b].abs()))
+                .expect("a column");
+            let pv = basis[i][piv];
+            for v in basis[i].iter_mut() {
+                *v /= pv;
+            }
+            for k in 0..basis.len() {
+                if k != i {
+                    let f = basis[k][piv];
+                    if f != 0.0 {
+                        for q in 0..m {
+                            basis[k][q] -= f * basis[i][q];
+                        }
+                    }
+                }
+            }
+            free.push(piv);
+        }
+        let unknown = |q: usize| -> Result<usize> {
+            let e = eq(p, q % 3)?;
+            Ok(if q < 3 { e } else { sine.expect("sine part") + e })
+        };
+        for d in 0..m {
+            if free.contains(&d) {
+                continue;
+            }
+            let ud = unknown(d)?;
+            let mut terms = vec![(ud, 1.0)];
+            for (i, &f) in free.iter().enumerate() {
+                let v = basis[i][d];
+                if v.abs() > 1e-12 {
+                    terms.push((unknown(f)?, -v));
+                }
+            }
+            rows.push(Row {
+                origin: RowOrigin::Cyclic {
+                    constraint,
+                    node: p,
+                    component: d % 3,
+                },
+                terms,
+                value: 0.0,
+                designated: ud,
+            });
+        }
+    }
     Ok(rows)
 }
 

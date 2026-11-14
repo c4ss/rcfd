@@ -526,7 +526,38 @@ pub enum Constraint {
         origin: Vec3,
         /// Number of sectors of the full rotor, at least 2.
         sectors: usize,
+        /// The extensions of ADR 0456 (non-matching boundaries, nodes on the axis); the default is the matched boundary of
+        /// ADR 0386.
+        options: CyclicOptions,
     },
+}
+
+/// The opt-in extensions of a cyclic constraint (ADR 0456 D4). The default (no interpolation, no axis nodes) is the
+/// node-for-node match of ADR 0386.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[non_exhaustive]
+pub struct CyclicOptions {
+    /// Non-matching boundaries: each high node follows the low faces rotated by `2 pi / N` by the tie method and tolerance.
+    pub interpolation: Option<crate::tie::TieOptions>,
+    /// Nodes on both boundaries are accepted on the axis and constrained by the harmonic rule of ADR 0456 arithmetic 5.
+    pub axis_nodes: bool,
+}
+
+impl CyclicOptions {
+    /// The default options.
+    pub fn new() -> CyclicOptions {
+        CyclicOptions::default()
+    }
+    /// With the interpolation of non-matching boundaries.
+    pub fn interpolation(mut self, options: crate::tie::TieOptions) -> CyclicOptions {
+        self.interpolation = Some(options);
+        self
+    }
+    /// With nodes on the axis.
+    pub fn axis_nodes(mut self, on: bool) -> CyclicOptions {
+        self.axis_nodes = on;
+        self
+    }
 }
 
 /// One term `a u` of a [`Constraint::Linear`]: the coefficient of one component of one node.
@@ -574,12 +605,24 @@ impl Constraint {
     }
     /// The cyclic condition between two boundary surface sets of a sector.
     pub fn cyclic(low: &str, high: &str, axis: Vec3, origin: Vec3, sectors: usize) -> Constraint {
+        Constraint::cyclic_with(low, high, axis, origin, sectors, CyclicOptions::default())
+    }
+    /// The cyclic condition with the extensions of ADR 0456.
+    pub fn cyclic_with(
+        low: &str,
+        high: &str,
+        axis: Vec3,
+        origin: Vec3,
+        sectors: usize,
+        options: CyclicOptions,
+    ) -> Constraint {
         Constraint::Cyclic {
             low: low.to_string(),
             high: high.to_string(),
             axis,
             origin,
             sectors,
+            options,
         }
     }
     /// Name of the variant.
@@ -956,7 +999,11 @@ impl SolidModel {
                 axis,
                 origin,
                 sectors,
+                options,
             } => {
+                if let Some(t) = options.interpolation.and_then(|i| i.tolerance) {
+                    positive_finite("tolerance", t)?;
+                }
                 self.need_set(SetKind::Surface, low)?;
                 self.need_set(SetKind::Surface, high)?;
                 finite_vec("axis", *axis)?;
