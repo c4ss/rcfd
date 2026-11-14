@@ -142,11 +142,7 @@ fn b1_twisted_strip_defaults_keep_their_bits() {
     got.push(("Shell4 strip stiffness", digest(&stiffness(&s4).unwrap().val)));
     got.push(("Shell4 strip frequencies", digest(&freqs(&s4))));
     got.push(("Hex20 strip stiffness", digest(&stiffness(&strip_solid()).unwrap().val)));
-    let x: [Vec3; 3] = [
-        surface(0.1, -0.01).0,
-        surface(0.1, 0.004).0,
-        surface(0.11, 0.004).0,
-    ];
+    let x: [Vec3; 3] = [surface(0.1, -0.01).0, surface(0.1, 0.004).0, surface(0.11, 0.004).0];
     let mat = steel();
     got.push((
         "element stiffness",

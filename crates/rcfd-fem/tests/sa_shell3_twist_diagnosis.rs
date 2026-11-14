@@ -9,7 +9,7 @@ use rcfd_fem::builders::hex_box;
 use rcfd_fem::hex20::upgrade_to_hex20_mapped;
 use rcfd_fem::modal::{frequency, modal_analysis, ModalOptions, ModalResult};
 use rcfd_fem::rotating::{CampbellTable, RotatingOptions, RotatingPart};
-use rcfd_fem::shell::{self, homogeneous_section, SectionStiffness, ShearStiffness, ShellOptions, Shell4Membrane};
+use rcfd_fem::shell::{self, homogeneous_section, SectionStiffness, ShearStiffness, Shell4Membrane, ShellOptions};
 use rcfd_fem::shell3::{self, Shell3Membrane, Shell3Options};
 use rcfd_fem::{BlockProperty, Constraint, ElementKind, Material, SolidMesh, SolidModel};
 use rcfd_linalg::eigen::{lowest_eigenpairs, ResidualTest, Shift, SubspaceOptions};
@@ -25,14 +25,20 @@ impl Checks {
     }
     fn at_most(&mut self, name: &str, value: f64, limit: f64) {
         let ok = value <= limit;
-        println!("{name}: {value:.6e} (limit <= {limit:e}) {}", if ok { "met" } else { "MISSED" });
+        println!(
+            "{name}: {value:.6e} (limit <= {limit:e}) {}",
+            if ok { "met" } else { "MISSED" }
+        );
         if !ok {
             self.0.push(format!("{name}: {value:e} > {limit:e}"));
         }
     }
     fn at_least(&mut self, name: &str, value: f64, limit: f64) {
         let ok = value >= limit;
-        println!("{name}: {value:.6e} (limit >= {limit:e}) {}", if ok { "met" } else { "MISSED" });
+        println!(
+            "{name}: {value:.6e} (limit >= {limit:e}) {}",
+            if ok { "met" } else { "MISSED" }
+        );
         if !ok {
             self.0.push(format!("{name}: {value:e} < {limit:e}"));
         }
@@ -51,7 +57,10 @@ impl Checks {
 /// A registered prediction: printed with its outcome, not asserted (ADR 0483, the decision rule).
 fn predict(name: &str, value: f64, lo: f64, hi: f64) -> bool {
     let ok = value >= lo && value <= hi;
-    println!("{name}: {value:.6e} in [{lo:e}, {hi:e}] {}", if ok { "holds" } else { "does not hold" });
+    println!(
+        "{name}: {value:.6e} in [{lo:e}, {hi:e}] {}",
+        if ok { "holds" } else { "does not hold" }
+    );
     ok
 }
 
@@ -131,7 +140,12 @@ impl Geo {
         let mut v = Vec::new();
         for j in 0..self.nsp {
             for i in 0..self.nch {
-                let q = [self.idx(i, j), self.idx(i + 1, j), self.idx(i + 1, j + 1), self.idx(i, j + 1)];
+                let q = [
+                    self.idx(i, j),
+                    self.idx(i + 1, j),
+                    self.idx(i + 1, j + 1),
+                    self.idx(i, j + 1),
+                ];
                 v.push((i, j, q));
             }
         }
@@ -337,9 +351,13 @@ fn own_assembly(g: &Geo, o: &Shell3Options) -> Own {
         let ke = shell3::element_stiffness_with(&x, g.t, &mat, o).unwrap();
         let me = shell3::element_mass(&x, g.t, &mat).unwrap();
         for a in 0..18 {
-            let Some(ia) = free[6 * tri[a / 6] + a % 6] else { continue };
+            let Some(ia) = free[6 * tri[a / 6] + a % 6] else {
+                continue;
+            };
             for b in 0..18 {
-                let Some(ib) = free[6 * tri[b / 6] + b % 6] else { continue };
+                let Some(ib) = free[6 * tri[b / 6] + b % 6] else {
+                    continue;
+                };
                 kt.push((ia, ib, ke.values()[a * 18 + b]));
                 mt.push((ia, ib, me.values()[a * 18 + b]));
             }
@@ -368,9 +386,7 @@ fn own_assembly(g: &Geo, o: &Shell3Options) -> Own {
 fn own_run(name: &str, g: &Geo, o: &Shell3Options, c: &mut Checks) -> (Own, Torsion) {
     let own = own_assembly(g, o);
     let tips = [g.idx(0, g.nsp), g.idx(g.nch, g.nsp)];
-    let t = torsion_of(g, &own.freqs, |k, w| {
-        [0, 1, 2].map(|q| own.modes[k][6 * tips[w] + q])
-    });
+    let t = torsion_of(g, &own.freqs, |k, w| [0, 1, 2].map(|q| own.modes[k][6 * tips[w] + q]));
     let f: Vec<String> = own.freqs.iter().map(|v| format!("{v:.6}")).collect();
     println!(
         "{name}: Hz {}; torsion mode {} at {:.6} Hz, tau {:.6}",
@@ -473,7 +489,13 @@ fn d1_variation_matrix_base_twist_thickness_energy() {
     let s3alt = run("base Shell3 CST ALT", &alt, &shell_model(&alt, CST), false, &mut c);
     let s3a = run("base Shell3 ANDES AC", &BASE, &shell_model(&BASE, ANDES), false, &mut c);
     let s3a_alt = run("base Shell3 ANDES ALT", &alt, &shell_model(&alt, ANDES), false, &mut c);
-    let s3al = run("base Shell3 Allman AC", &BASE, &shell_model(&BASE, ALLMAN), false, &mut c);
+    let s3al = run(
+        "base Shell3 Allman AC",
+        &BASE,
+        &shell_model(&BASE, ALLMAN),
+        false,
+        &mut c,
+    );
     let fh = h20.torsion.f;
     let d = |r: &Run| r.torsion.f / fh - 1.0;
     for (n, r) in [
@@ -490,8 +512,16 @@ fn d1_variation_matrix_base_twist_thickness_energy() {
     }
     // C1, C1b, C2b
     c.at_most("C1 Hex20 torsion against 442.797470 Hz", rel(fh, 442.797470), 1e-7);
-    c.at_most("C1 Shell4 torsion against 445.161813 Hz", rel(s4.torsion.f, 445.161813), 1e-7);
-    c.at_most("C1 Shell3 torsion against 460.730207 Hz", rel(s3.torsion.f, 460.730207), 1e-7);
+    c.at_most(
+        "C1 Shell4 torsion against 445.161813 Hz",
+        rel(s4.torsion.f, 445.161813),
+        1e-7,
+    );
+    c.at_most(
+        "C1 Shell3 torsion against 460.730207 Hz",
+        rel(s3.torsion.f, 460.730207),
+        1e-7,
+    );
     c.at_most("C1b delta_3 against 4.0499e-2", (d(&s3) - 4.0499e-2).abs(), 1e-5);
     c.at_most("C1b delta_4 against 5.3396e-3", (d(&s4) - 5.3396e-3).abs(), 1e-5);
     c.holds(
@@ -500,7 +530,11 @@ fn d1_variation_matrix_base_twist_thickness_energy() {
         &format!("{} {} {}", h20.torsion.index, s4.torsion.index, s3.torsion.index),
     );
     // N1
-    c.at_most("N1 base Shell3 second-largest tau (expected < 0.5)", s3.torsion.second, 0.5);
+    c.at_most(
+        "N1 base Shell3 second-largest tau (expected < 0.5)",
+        s3.torsion.second,
+        0.5,
+    );
     // C3
     c.at_most(
         "C3 AC against BD, six frequencies",
@@ -510,7 +544,11 @@ fn d1_variation_matrix_base_twist_thickness_energy() {
     // ---- the own assembly
     let o = Shell3Options::default();
     let (own, ot) = own_run("OA base default", &BASE, &o, &mut c);
-    c.at_most("C4 OA default against the model", max_rel(&own.freqs, &s3.result.frequencies), 1e-8);
+    c.at_most(
+        "C4 OA default against the model",
+        max_rel(&own.freqs, &s3.result.frequencies),
+        1e-8,
+    );
     let (_, o_stab) = own_run("OA base stabilisation 0", &BASE, &o.stabilisation(0.0), &mut c);
     let (_, o_d4) = own_run("OA base drilling 1e-4", &BASE, &o.drilling(1e-4), &mut c);
     let (_, o_d2) = own_run("OA base drilling 1e-2", &BASE, &o.drilling(1e-2), &mut c);
@@ -520,7 +558,11 @@ fn d1_variation_matrix_base_twist_thickness_energy() {
     println!("OA base shifts: stabilisation 0 {sh_stab:.6e}, drilling 1e-4 {sh_d4:.6e}, drilling 1e-2 {sh_d2:.6e}");
     // ---- the energy partition
     let mut shares = Vec::new();
-    for (n, kind, r) in [("Shell3 CST", CST, &s3), ("Shell3 ANDES", ANDES, &s3a), ("Shell4", Q4, &s4)] {
+    for (n, kind, r) in [
+        ("Shell3 CST", CST, &s3),
+        ("Shell3 ANDES", ANDES, &s3a),
+        ("Shell4", Q4, &s4),
+    ] {
         let k = r.torsion.index;
         let (p, whole) = partition(&BASE, kind, &r.result, k);
         let sum: f64 = p.iter().sum();
@@ -532,7 +574,11 @@ fn d1_variation_matrix_base_twist_thickness_energy() {
             p[2] / whole,
             p[3] / whole
         );
-        c.at_most(&format!("C5 {n} sum of parts against the whole"), rel(sum, whole), 1e-11);
+        c.at_most(
+            &format!("C5 {n} sum of parts against the whole"),
+            rel(sum, whole),
+            1e-11,
+        );
         c.at_most(&format!("C5 {n} whole against lambda/2"), rel(whole, 0.5 * lam), 1e-8);
         let no_mem = p[1] + p[2] + p[3];
         let n2 = rel(no_mem, whole);
@@ -551,18 +597,42 @@ fn d1_variation_matrix_base_twist_thickness_energy() {
     ] {
         let rh = run(&format!("{label} Hex20"), &g, &solid_model(&g), true, &mut c);
         let r4 = run(&format!("{label} Shell4"), &g, &shell_model(&g, Q4), false, &mut c);
-        let r3 = run(&format!("{label} Shell3 CST AC"), &g, &shell_model(&g, CST), false, &mut c);
-        let r3a = run(&format!("{label} Shell3 ANDES AC"), &g, &shell_model(&g, ANDES), false, &mut c);
+        let r3 = run(
+            &format!("{label} Shell3 CST AC"),
+            &g,
+            &shell_model(&g, CST),
+            false,
+            &mut c,
+        );
+        let r3a = run(
+            &format!("{label} Shell3 ANDES AC"),
+            &g,
+            &shell_model(&g, ANDES),
+            false,
+            &mut c,
+        );
         let fh = rh.torsion.f;
-        let (d4, d3, d3a) = (r4.torsion.f / fh - 1.0, r3.torsion.f / fh - 1.0, r3a.torsion.f / fh - 1.0);
+        let (d4, d3, d3a) = (
+            r4.torsion.f / fh - 1.0,
+            r3.torsion.f / fh - 1.0,
+            r3a.torsion.f / fh - 1.0,
+        );
         println!("{label}: delta_4 {d4:.6e}, delta_3 CST {d3:.6e}, delta_3 ANDES {d3a:.6e}; Delta CST {:.6e}, Delta ANDES {:.6e}", d3 - d4, d3a - d4);
         let (cf, m) = closed_form(&g);
-        c.at_most(&format!("C7 {label} Hex20 against the closed form {cf:.3} Hz"), rel(fh, cf), 6e-2);
+        c.at_most(
+            &format!("C7 {label} Hex20 against the closed form {cf:.3} Hz"),
+            rel(fh, cf),
+            6e-2,
+        );
         groups.push((label, g, d3 - d4, d3a - d4, m));
         h20_t.push(fh);
     }
     let (cf, m_b) = closed_form(&BASE);
-    c.at_most(&format!("C7 base Hex20 against the closed form {cf:.3} Hz"), rel(fh, cf), 6e-2);
+    c.at_most(
+        &format!("C7 base Hex20 against the closed form {cf:.3} Hz"),
+        rel(fh, cf),
+        6e-2,
+    );
     // N3
     let ratio = fh / h20_t[0];
     let cf_ratio = closed_form(&BASE).0 / closed_form(&BASE.with(|g| g.twist = 0.0)).0;
@@ -588,7 +658,12 @@ fn d1_variation_matrix_base_twist_thickness_energy() {
     let p2 = predict("P2 ANDES |Delta|/Delta_b", delta_a.abs() / delta_b, 0.0, 0.25);
     let mut p3 = true;
     for (label, _, dl, _, m) in groups.iter().skip(1) {
-        p3 &= predict(&format!("P3 {label} Delta/(m e_m/2), m {m:.4}"), dl / (0.5 * m * e_m), 0.6, 1.4);
+        p3 &= predict(
+            &format!("P3 {label} Delta/(m e_m/2), m {m:.4}"),
+            dl / (0.5 * m * e_m),
+            0.6,
+            1.4,
+        );
     }
     let p5 = predict("P5 ALT Delta/Delta_b", delta_alt / delta_b, 0.5, 1.5);
     let p6 = predict("P6 OA stabilisation 0", sh_stab, 0.0, 5e-3)
@@ -616,19 +691,49 @@ fn d2_refinement() {
         g.nsp = 144;
     });
     let h24 = run("24 x 72 Hex20", &g24, &solid_model(&g24), true, &mut c);
-    c.at_most("C6 Hex20 24 x 72 against 12 x 36", rel(h24.torsion.f, h12.torsion.f), 5e-3);
+    c.at_most(
+        "C6 Hex20 24 x 72 against 12 x 36",
+        rel(h24.torsion.f, h12.torsion.f),
+        5e-3,
+    );
     let fr = h24.torsion.f;
     let mut deltas = Vec::new();
     for (label, g) in [("12 x 36", BASE), ("24 x 72", g24), ("48 x 144", g48)] {
         let r4 = run(&format!("{label} Shell4"), &g, &shell_model(&g, Q4), false, &mut c);
-        let r3 = run(&format!("{label} Shell3 CST AC"), &g, &shell_model(&g, CST), false, &mut c);
-        let r3a = run(&format!("{label} Shell3 ANDES AC"), &g, &shell_model(&g, ANDES), false, &mut c);
-        let (d4, d3, d3a) = (r4.torsion.f / fr - 1.0, r3.torsion.f / fr - 1.0, r3a.torsion.f / fr - 1.0);
+        let r3 = run(
+            &format!("{label} Shell3 CST AC"),
+            &g,
+            &shell_model(&g, CST),
+            false,
+            &mut c,
+        );
+        let r3a = run(
+            &format!("{label} Shell3 ANDES AC"),
+            &g,
+            &shell_model(&g, ANDES),
+            false,
+            &mut c,
+        );
+        let (d4, d3, d3a) = (
+            r4.torsion.f / fr - 1.0,
+            r3.torsion.f / fr - 1.0,
+            r3a.torsion.f / fr - 1.0,
+        );
         println!("{label} against Hex20 24 x 72: delta_4 {d4:.6e}, delta_3 CST {d3:.6e}, delta_3 ANDES {d3a:.6e}; Delta CST {:.6e}, Delta ANDES {:.6e}", d3 - d4, d3a - d4);
         deltas.push((d3 - d4, d3a - d4));
     }
-    let p4a = predict("P4 Delta(24 x 72)/Delta(12 x 36)", deltas[1].0 / deltas[0].0, 0.15, 0.40);
-    let p4b = predict("P4 Delta(48 x 144)/Delta(24 x 72)", deltas[2].0 / deltas[1].0, 0.15, 0.40);
+    let p4a = predict(
+        "P4 Delta(24 x 72)/Delta(12 x 36)",
+        deltas[1].0 / deltas[0].0,
+        0.15,
+        0.40,
+    );
+    let p4b = predict(
+        "P4 Delta(48 x 144)/Delta(24 x 72)",
+        deltas[2].0 / deltas[1].0,
+        0.15,
+        0.40,
+    );
     println!("H1 prediction P4 {}", p4a && p4b);
     c.finish();
 }
@@ -675,7 +780,11 @@ fn f1_andes_shell3_twisted_strip_campbell() {
             ok &= v > 0.9;
         }
     }
-    c.holds("F1 E3 ANDES Shell3", ok, &format!("losses {}, lowest MAC {low:.6}", shell.losses.len()));
+    c.holds(
+        "F1 E3 ANDES Shell3",
+        ok,
+        &format!("losses {}, lowest MAC {low:.6}", shell.losses.len()),
+    );
     c.finish();
 }
 
@@ -735,9 +844,7 @@ fn run_ft(name: &str, g: &Geo, m: &SolidModel, solid: bool, c: &mut Checks) -> R
 fn own_run_ft(name: &str, g: &Geo, o: &Shell3Options, c: &mut Checks) -> (Own, Torsion) {
     let own = own_assembly(g, o);
     let tips = [g.idx(0, g.nsp), g.idx(g.nch, g.nsp)];
-    let (t, taus) = first_torsion_of(g, &own.freqs, |k, w| {
-        [0, 1, 2].map(|q| own.modes[k][6 * tips[w] + q])
-    });
+    let (t, taus) = first_torsion_of(g, &own.freqs, |k, w| [0, 1, 2].map(|q| own.modes[k][6 * tips[w] + q]));
     report(name, &own.freqs, &t, &taus, c);
     (own, t)
 }
@@ -756,7 +863,13 @@ fn d1b_variation_matrix_first_torsion() {
     let s3alt = run_ft("base Shell3 CST ALT", &alt, &shell_model(&alt, CST), false, &mut c);
     let s3a = run_ft("base Shell3 ANDES AC", &BASE, &shell_model(&BASE, ANDES), false, &mut c);
     let s3a_alt = run_ft("base Shell3 ANDES ALT", &alt, &shell_model(&alt, ANDES), false, &mut c);
-    let s3al = run_ft("base Shell3 Allman AC", &BASE, &shell_model(&BASE, ALLMAN), false, &mut c);
+    let s3al = run_ft(
+        "base Shell3 Allman AC",
+        &BASE,
+        &shell_model(&BASE, ALLMAN),
+        false,
+        &mut c,
+    );
     let fh = h20.torsion.f;
     let d = |r: &Run| r.torsion.f / fh - 1.0;
     for (n, r) in [
@@ -772,8 +885,16 @@ fn d1b_variation_matrix_first_torsion() {
         println!("base delta {n}: {:.6e}", d(r));
     }
     c.at_most("C1 Hex20 torsion against 442.797470 Hz", rel(fh, 442.797470), 1e-7);
-    c.at_most("C1 Shell4 torsion against 445.161813 Hz", rel(s4.torsion.f, 445.161813), 1e-7);
-    c.at_most("C1 Shell3 torsion against 460.730207 Hz", rel(s3.torsion.f, 460.730207), 1e-7);
+    c.at_most(
+        "C1 Shell4 torsion against 445.161813 Hz",
+        rel(s4.torsion.f, 445.161813),
+        1e-7,
+    );
+    c.at_most(
+        "C1 Shell3 torsion against 460.730207 Hz",
+        rel(s3.torsion.f, 460.730207),
+        1e-7,
+    );
     c.at_most("C1b delta_3 against 4.0499e-2", (d(&s3) - 4.0499e-2).abs(), 1e-5);
     c.at_most("C1b delta_4 against 5.3396e-3", (d(&s4) - 5.3396e-3).abs(), 1e-5);
     c.holds(
@@ -789,7 +910,11 @@ fn d1b_variation_matrix_first_torsion() {
     // ---- the own assembly
     let o = Shell3Options::default();
     let (own, ot) = own_run_ft("OA base default", &BASE, &o, &mut c);
-    c.at_most("C4 OA default against the model", max_rel(&own.freqs, &s3.result.frequencies), 1e-8);
+    c.at_most(
+        "C4 OA default against the model",
+        max_rel(&own.freqs, &s3.result.frequencies),
+        1e-8,
+    );
     let (_, o_stab) = own_run_ft("OA base stabilisation 0", &BASE, &o.stabilisation(0.0), &mut c);
     let (_, o_d4) = own_run_ft("OA base drilling 1e-4", &BASE, &o.drilling(1e-4), &mut c);
     let (_, o_d2) = own_run_ft("OA base drilling 1e-2", &BASE, &o.drilling(1e-2), &mut c);
@@ -799,7 +924,11 @@ fn d1b_variation_matrix_first_torsion() {
     println!("OA base shifts: stabilisation 0 {sh_stab:.6e}, drilling 1e-4 {sh_d4:.6e}, drilling 1e-2 {sh_d2:.6e}");
     // ---- the energy partition
     let mut shares = Vec::new();
-    for (n, kind, r) in [("Shell3 CST", CST, &s3), ("Shell3 ANDES", ANDES, &s3a), ("Shell4", Q4, &s4)] {
+    for (n, kind, r) in [
+        ("Shell3 CST", CST, &s3),
+        ("Shell3 ANDES", ANDES, &s3a),
+        ("Shell4", Q4, &s4),
+    ] {
         let k = r.torsion.index;
         let (p, whole) = partition(&BASE, kind, &r.result, k);
         let sum: f64 = p.iter().sum();
@@ -811,10 +940,18 @@ fn d1b_variation_matrix_first_torsion() {
             p[2] / whole,
             p[3] / whole
         );
-        c.at_most(&format!("C5 {n} sum of parts against the whole"), rel(sum, whole), 1e-11);
+        c.at_most(
+            &format!("C5 {n} sum of parts against the whole"),
+            rel(sum, whole),
+            1e-11,
+        );
         c.at_most(&format!("C5 {n} whole against lambda/2"), rel(whole, 0.5 * lam), 1e-8);
         let n2 = rel(p[1] + p[2] + p[3], whole);
-        c.holds(&format!("N2 {n} without the membrane part"), n2 > 0.5, &format!("{n2:.6e}"));
+        c.holds(
+            &format!("N2 {n} without the membrane part"),
+            n2 > 0.5,
+            &format!("{n2:.6e}"),
+        );
         shares.push((p[0] / whole, p[3] / whole));
     }
     // ---- twist and thickness
@@ -828,10 +965,26 @@ fn d1b_variation_matrix_first_torsion() {
     ] {
         let rh = run_ft(&format!("{label} Hex20"), &g, &solid_model(&g), true, &mut c);
         let r4 = run_ft(&format!("{label} Shell4"), &g, &shell_model(&g, Q4), false, &mut c);
-        let r3 = run_ft(&format!("{label} Shell3 CST AC"), &g, &shell_model(&g, CST), false, &mut c);
-        let r3a = run_ft(&format!("{label} Shell3 ANDES AC"), &g, &shell_model(&g, ANDES), false, &mut c);
+        let r3 = run_ft(
+            &format!("{label} Shell3 CST AC"),
+            &g,
+            &shell_model(&g, CST),
+            false,
+            &mut c,
+        );
+        let r3a = run_ft(
+            &format!("{label} Shell3 ANDES AC"),
+            &g,
+            &shell_model(&g, ANDES),
+            false,
+            &mut c,
+        );
         let fh = rh.torsion.f;
-        let (d4, d3, d3a) = (r4.torsion.f / fh - 1.0, r3.torsion.f / fh - 1.0, r3a.torsion.f / fh - 1.0);
+        let (d4, d3, d3a) = (
+            r4.torsion.f / fh - 1.0,
+            r3.torsion.f / fh - 1.0,
+            r3a.torsion.f / fh - 1.0,
+        );
         println!(
             "{label}: delta_4 {d4:.6e}, delta_3 CST {d3:.6e}, delta_3 ANDES {d3a:.6e}; Delta CST {:.6e}, Delta ANDES {:.6e}",
             d3 - d4,
@@ -844,13 +997,21 @@ fn d1b_variation_matrix_first_torsion() {
                 rel(fh, cf)
             );
         } else {
-            c.at_most(&format!("C7 {label} Hex20 against the closed form {cf:.3} Hz"), rel(fh, cf), 6e-2);
+            c.at_most(
+                &format!("C7 {label} Hex20 against the closed form {cf:.3} Hz"),
+                rel(fh, cf),
+                6e-2,
+            );
         }
         groups.push((label, g, d3 - d4, d3a - d4, m));
         h20_t.push(fh);
     }
     let (cf, m_b) = closed_form(&BASE);
-    c.at_most(&format!("C7 base Hex20 against the closed form {cf:.3} Hz"), rel(fh, cf), 6e-2);
+    c.at_most(
+        &format!("C7 base Hex20 against the closed form {cf:.3} Hz"),
+        rel(fh, cf),
+        6e-2,
+    );
     let cf_ratio = cf / closed_form(&BASE.with(|g| g.twist = 0.0)).0;
     println!(
         "N3 (known miss, addendum 1; not asserted here) Hex20 twist 30/twist 0 {:.6} against the closed form {cf_ratio:.6}",
@@ -872,7 +1033,12 @@ fn d1b_variation_matrix_first_torsion() {
     let p2 = predict("P2 ANDES |Delta|/Delta_b", delta_a.abs() / delta_b, 0.0, 0.25);
     let mut p3 = true;
     for (label, _, dl, _, m) in groups.iter().skip(1) {
-        p3 &= predict(&format!("P3 {label} Delta/(m e_m/2), m {m:.4}"), dl / (0.5 * m * e_m), 0.6, 1.4);
+        p3 &= predict(
+            &format!("P3 {label} Delta/(m e_m/2), m {m:.4}"),
+            dl / (0.5 * m * e_m),
+            0.6,
+            1.4,
+        );
     }
     let p5 = predict("P5 ALT Delta/Delta_b", delta_alt / delta_b, 0.5, 1.5);
     let p6 = predict("P6 OA stabilisation 0", sh_stab, 0.0, 5e-3)
@@ -896,7 +1062,11 @@ fn c3_ac_bd_congruence_known_miss() {
     let bd = BASE.with(|g| g.split = Split::Bd);
     let a = modal_analysis(&shell_model(&BASE, CST), &opts()).unwrap();
     let b = modal_analysis(&shell_model(&bd, CST), &opts()).unwrap();
-    c.at_most("C3 AC against BD, six frequencies", max_rel(&a.frequencies, &b.frequencies), 1e-8);
+    c.at_most(
+        "C3 AC against BD, six frequencies",
+        max_rel(&a.frequencies, &b.frequencies),
+        1e-8,
+    );
     c.finish();
 }
 
