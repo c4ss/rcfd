@@ -374,3 +374,96 @@ Corrections, written and committed before their run:
   solve of that run.
 
 By the registered rule the item is partial (A14 missed; c9's iterative row met, if it is, only after this amendment).
+
+## Addendum 1: results (2026-11-14)
+
+Runs (release, `--test-threads=1`, each made once): run 1, the registered test file (`f386-scratch/run1.log`); run 2, the
+corrections of amendment 1 (`run2.log`: `a14c_a7c_cg_preconditioners_from_files`, `a7b_cantilever_tet10_bits_with_the_same_traction`);
+run 3, the correction of amendment 2 (`run3.log`: `a7d_iterative_file_run_bits`). Afterwards the whole file was run as the
+final state (`run4.log`: 8 passed, 4 ignored records). The ignored records `a14_block_jacobi_known_miss` and
+`a14_cg_rows_known_miss` were not run again: their numbers are those of runs 1 and 2.
+
+| Check | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| A1 `.vtu` equals `solid_vtu_string`; report fields; report values (bits) | as stated | equal (1 115 766 bytes); every D6 field; bits equal (max `|u|` 1.6051e-3 m, max von Mises 1.2205e7 Pa, `skyline-ldlt`, 6047 unknowns) | yes |
+| A2 reactions from the report: `R_z(n0) + R_z(n1)`, total z; total x, y | <= 1e-8 | 1.66e-10, 1.66e-10; 8.0e-11, 8.4e-12 | yes |
+| A3 unknown key (`materials.steel.youngs` line 21; `[flow]` line 53) | key and line | both, `unknown setting` | yes |
+| A4 missing set (constraint line 31, load line 40, material `element_set` line 21) | key and line | all three in one result, each naming `nowhere` and listing the sets | yes |
+| A5 wrong unit (`youngs_modulus = "200 m"` line 22; `traction.2 = "5 N"` line 41) | key and line | both, `dimension mismatch: expected m^-1 kg s^-2` | yes |
+| A6 wrong type (`divisions.1 = 2.5` line 10; `poisson_ratio = "abc"` line 23; `components = "x"` line 32) | key and line, type named | all three (`expected integer`, `cannot read number`, `expected a list`) | yes |
+| A7 cantilever Tet10 direct: displacement, reactions | <= 1e-12 | 4.9e-15, 2.2e-15 (not bit-identical: the test's library model had a traction one ulp off, amendment 1) | yes |
+| A7 bar eigenvalues, modes; Gmsh v4.1 and v2.2 displacement | <= 1e-12 | 0, 0; 0, 0 (bit-identical) | yes |
+| A7 iterative row (`cantilever_tet10_amg.toml`, tolerance 1e-10) | <= 1e-12 | not reached in run 1 (loop aborted); the solve failed in run 2 (residual floor) | no result |
+| A7b (amendment 1) cantilever with the file's traction: displacement, reactions | bit-identical, <= 1e-12 | bit-identical, 0 (6075 values each) | yes, after amendment |
+| A7d (amendment 2) `cantilever_tet10_amg_1e8.toml` | <= 1e-12 | 0, bit-identical | yes, after amendment |
+| A8 Tet10 `abs(delta / delta_T - 1)` | <= 0.01 | 5.29e-4 (ratio 1.000529, as ADR 0433) | yes |
+| A9 Hex8 | <= 0.05 | 3.21e-2 (ratio 0.967873, as ADR 0433) | yes |
+| A10 bar: axial modes; `f_1..3` vs exact; vs discrete; M-orthonormality | axial; <= 5e-3; <= 1e-9; <= 1e-9 | modes 0 to 3 axial; 1.004e-4, 9.038e-4, 2.512e-3; 2.2e-14, 3.3e-15, 0; 4.4e-16 | yes |
+| A11 Gmsh v4.1 ASCII uniaxial: displacement, stress | <= 1e-10 | 2.5e-14, 5.4e-14 | yes |
+| A12 Gmsh v2.2 binary | <= 1e-10 | 1.3e-14, 1.9e-14 | yes |
+| A13 solver keys (11 rows; two refusals with key and line) | as stated | all | yes |
+| A14 CG rows: relative residual; against direct | <= 1e-10; <= 1e-7 | every row not converged, true residual of `|b|`: block Jacobi 5.8e-10 (5063 iterations), ic0 5.7e-10 (1849), ic_fill 6.0e-10 (803), amg 6.0e-10 (71), amg_quadratic 5.7e-10 (54), amg_quadratic_smoothed 6.2e-10 (37) | **no** (known miss) |
+| K1 box node sets (cantilever, Gmsh corners) | one node at the point | yes, both Gmsh files | yes |
+| K2 Gmsh model: 351 nodes, 1139 Tet4, areas 1, 1, 8 | 1e-12 | yes (area errors <= 4e-15) | yes |
+| K3 modal `.vtu` and report frequencies | as stated | equal, arrays `mode_1..mode_4`, bits equal | yes |
+| N1 nu + 1e-10 seen by the comparison | > 0, < 1e-6 | 1.03e-10 | as expected |
+| N2 schemas separate | Err both | solid through flow: 12 diagnostics; cavity through solid: unknown keys | as expected |
+| N3 syntax error | line 3 | line 3 | as expected |
+| N4 empty box selection | key and line | `node_sets.root_n0.box_min`, line 13 | as expected |
+| S1 diff of `crates` | lib.rs one line, new files only | lib.rs 1 line; `solid_case.rs`, `sb_solid_case.rs`, 7 case files | yes |
+| S2 unedited tests | pass | `baseline_hashes` 3 (1 ignored as before), `case_hashes_w48u` 1, `w48v_case_hashes` (its one test is ignored, as before), `physics_schema` 11, `rules_w19c` 8 (1 ignored as before); `rcfd-cli` `cli` 8; `rcfd-mcp` `default_f1` 2, `tool_list_f275` 1, `project_list_f270` 7: all passed, none edited | yes |
+
+Unregistered diagnostic (amendment 2): `amg_quadratic` at tolerance 1e-8 converges in 30 iterations to 4.9e-9 and agrees with
+the direct solve within 3.5e-11; the solver keys map to working solves, only the 1e-10 target lies below this model's floor.
+
+### Mutations (scratch copy `f386-scratch/tree`, script `mutate.py`, logs `MU*.log`)
+
+| Id | Mutation | Caught by |
+| --- | --- | --- |
+| MU1 | `ordering` ignored | A13 |
+| MU2 | lines left `None` | A3 to A6, A13 |
+| MU3 | traction items `FORCE` | A5 (`"5 N"` accepted), A11 (`"1 MPa"` refused) |
+| MU4 | box exclusive on the upper bound | **not caught** (every box in the tests extends 1e-9 beyond its point) |
+| MU5 | `y` mapped to index 2 | A7 (every model), A8, A9, A10, A11 |
+| MU6 | reactions per constraint over all nodes | A2 |
+| MU7 | report frequencies as eigenvalues | K3 |
+| MU8 | Gmsh path against the working directory | A11 (file not found) |
+| MU9 | traction components 0 and 2 swapped | A7, A8, A9, A11, A12 |
+
+### Deviations
+
+- Amendments 1 and 2: the A14 loop aborted at its first failure; the library mirror of the cantilever carried a traction one ulp
+  off the file's; the 1e-10 tolerance of A14 and of the iterative A7 file is below the rounding floor of this model's residual
+  (5.7e-10 to 6.2e-10 of `|b|` for every preconditioner, 37 to 5063 iterations). The registration's estimate for A14 ("just below
+  1e-10") was wrong: it took F-381's Hex8 numbers without checking the ratio of the internal forces to the load.
+- MU5 was expected not to affect A7; it did (the library models are built independently of the reader).
+- The format document is `docs/solid-case-file.md` (the stub named `docs/structural-solver.md`, which does not exist); its
+  example is in a `text` fence so that `case_hashes_w48u` sees no new TOML block.
+- `cargo fmt -p rcfd-api --check` clean; `cargo clippy -p rcfd-api --all-targets --release -- -D warnings` clean.
+
+### Decision by the registered rule
+
+**Partial.** Every clause of the acceptance is met from files except that the iterative route was not shown to reach the
+registered 1e-10 on the file cantilever (A14 missed for all six preconditioners, diagnosed as a residual floor); the iterative
+row of c9 and the exact bit identity of the static cantilever were met only after amendments; MU4 was not caught.
+
+### Remaining questions
+
+1. A14's tolerance. Options: (a) a follow-up registers the check on a model whose load is not small against its internal nodal
+   forces (the F-381 Hex8 cantilever, or a distributed load); (b) state the iterative check relative to the floor `eps ||K|| ||u||
+   / ||b||`; (c) leave it. Recommendation: (a), with (b) printed beside it.
+2. MU4. Options: (a) a test with a box whose upper bound equals a node coordinate exactly; (b) leave. Recommendation: (a), in the
+   follow-up.
+3. A CLI subcommand and an MCP tool for the solid file (golden edits, ADR 0287 M3). Recommendation: a separate item once the
+   maintainer approves the golden change.
+
+## For the lead: roadmap entries
+
+F-386: proposed status **partial**. Note:
+
+> Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size M. ADR 0438, 2026-11-14 (registration of stub ADR 0287): rcfd_api::solid_case, a TOML solid case file with a schema of its own (rcfd_core settings, separate from the flow case schema): [mesh] generator box (hex8, tet4, tet10) or a Gmsh .msh through rcfd_io::gmsh and rcfd_fem::convert::from_mesh, [node_sets.<name>] by an inclusive box, [materials.<name>], [constraints.<name>], [loads.<name>] (traction, pressure, nodal_force, gravity), [analysis] static or modal, [solver] direct or cg with block_jacobi, ic0, ic_fill (default; fill_level, ordering natural or node_rcm), amg, amg_quadratic, amg_quadratic_smoothed mapped onto the CgPreconditioner choices of ADRs 0282, 0357, 0305, 0370, 0375, [output]; run_solid_case_file writes the .vtu (write_solid_vtu; modal_vtu_string with mode_k arrays) and a JSON report rcfd-solid-report/1 (displacement and stress extremes, reactions per constraint and total, frequencies, solver statistics); format in docs/solid-case-file.md. Unknown key, missing set, wrong unit and wrong type each give a diagnostic with the key and the line. File runs equal the same models built by library calls bit for bit (bar, Gmsh, iterative row; the static cantilever once the test's mirror used the file's traction, amendment 1, 4.9e-15 before). From files: Tet10 cantilever 5.29e-4 and Hex8 3.21e-2 of delta_T (limits 0.01, 0.05), reactions within 1.7e-10 of P, bar f_1..3 within 1.0e-4, 9.0e-4, 2.5e-3 (limit 5e-3) and the discrete form within 2.2e-14, Gmsh tetrahedral box (v4.1 ASCII and v2.2 binary) uniaxial within 2.5e-14 (limit 1e-10). Missed: every CG preconditioner stops at a true residual 5.7e-10 to 6.2e-10 of |b| on the Tet10 file cantilever against the registered 1e-10 (a rounding floor of the residual, 37 to 5063 iterations; amendment 2; at 1e-8 amg_quadratic agrees with the direct solve within 3.5e-11). No flow key, CLI help, MCP tool list, hash table or golden changed (baseline_hashes, case_hashes_w48u, w48v_case_hashes, physics_schema, rules_w19c, cli, default_f1, tool_list_f275, project_list_f270 pass unedited). Eight of nine mutations caught (the exclusive box bound not). No CLI subcommand or MCP tool (golden edits: the maintainer's step). Partial by the rule; follow-up item below.
+
+Follow-up item (number by the lead): title "Iterative solve of a solid case file to its tolerance, and the box bound", deps
+F-386, F-381. Acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. A solid case file of the F-381 Hex8 cantilever (or of a model whose load is not small against its internal nodal forces, the ratio stated in the registration) run with method = cg and each preconditioner key reaches the relative residual 1e-10 and agrees with the direct file run within 1e-7; the residual floor eps ||K|| ||u|| / ||b|| of that model and of the ADR 0438 Tet10 cantilever is computed and printed; a node-set box whose upper bound equals a node coordinate exactly selects that node.
