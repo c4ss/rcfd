@@ -147,3 +147,80 @@ The reading is a bound on residuals, not an order: it does not say `p >= 1.8`; t
 four solves (disclosed), not derived. The set flag is the set of points with a changed state; it does not see a change of the
 set that leaves the states equal. The diagnostic is not wired into the case file or the CLI. The solves are those of ADR 0475
 on the 2 x 2 octant and the 16-element beam only. F-600 (contact) is not done here; it can reuse D1 with its own flag.
+
+## Addendum 1: results (2026-11-14)
+
+Commits: registration `fd41a52b`; B0 record on the base `941aa3ff` (before any library code); library and tests `d79632e3`
+and `654147ab` (a clippy form of one comparison: `if b.is_nan() || b > ...` for `!(b <= ...)`, same meaning). Every registered
+run was made once, on `d79632e3`; N1 and the mutations on a scratch copy of the same files.
+
+Library change, `crates/rcfd-fem/src/nonlinear.rs`, insertions only (47 lines, no existing line changed): `NewtonOptions`
+field `record_active_set` (lines 963 to 965), its default and builder (978, 981 to 985), `LoadStep` fields `yielded` and
+`set_changed` (1038 to 1043), `Attempt` fields and the function `yielded_points` (1082 to 1084, 1089 to 1104), the locals and
+the guarded record in `attempt_with` (1313 to 1314, 1342 to 1348, 1355 to 1356), the two fields in the `LoadStep` literal of
+`solve_with` (1694 to 1695).
+
+| check | limit | measured | met |
+|---|---|---|---|
+| B0 default bits (5 solves) | digests printed on the base, equal after | equal (S1 `fa47eed38c0fdef8`, S2 `342556fa7f12f899`, S3 `54fdcd5cd089c65b`, P1 1.25 `1c361cb47319fc47`, P1 5 `88556e1fcea7bf0f`) | yes |
+| B1 opt-in, record off and on | digests of B0; vectors empty off, filled on | all ten equal; empty / filled | yes |
+| D1 diagnostic, nine solves | all | all; last `yielded` 648 of 648 (S1) and 1296 of 1296 (S2) plastic points | yes |
+| Q1 Q(10, 1e-13), nine solves | 0 violations, finite | 0 of 19, 23, 49 (S1, S2, S3) and 11, 14, 20, 31, 43, 55 (P1) read pairs | yes |
+| Q1 least C that would pass | (report) | S1 0.969, S2 1.181, S3 1.958, P1 0.220, 1.083, 1.473, 1.701, 1.561, 3.321 | n/a |
+| Q2 informative, with set changes | all | 0 uninformative increments; increments with a set change 3 of 8, 5 of 10, 12 of 20, 1 of 5, 2 of 6, 4 of 8, 8 of 12, 12 of 16, 16 of 20 | yes |
+| Q3 largest ratio | finite, `<= 10` | 3.3206 | yes |
+| N1 continuum tangent (MU1, scratch copy) | fails on all nine | fails on all nine: S1 128 of 147 pairs violate (least C `2.4e9`), S2 554 of 596 (`3.3e9`), P1 39 of 50, 132 of 151, 371 of 405, 885 of 948, 1390 of 1513, 1875 of 2069 (`2.2e9 .. 4.7e9`); S3 does not converge (load step 19, 5 halvings, residual `2.7e-9`) | yes |
+| N2 no exemption (consistent tangent) | fails on at least S3 | 3 pairs violate | yes |
+| N3 Q(1, 1e-13) | fails on S2 and S3 | S2 1 pair, S3 11 | yes |
+| N4 order of the last three above `1e-13` from the last set change (report) | none | least 1.279, 1.279, 1.274 (S1, S2, S3), 1.435, 1.415, 1.354, 1.332, 1.354, 1.361 (P1); undefined (fewer than three) in 0, 1, 0, 4, 4, 4, 5, 5, 5 increments | n/a |
+
+The acceptance is met by the second alternative of the item (the bound on every increment). The order of three residuals is not
+>= 1.8 under the counting tried (N4: it stays at 1.27 to 1.44, since the residuals before the asymptotic stretch are included,
+and it does not exist in 4 to 5 increments of each P1 solve); the reading does not claim it.
+
+Mutations (scratch copy `f560-scratch/mut`, own target dir):
+
+| mutation | caught by |
+|---|---|
+| MU1 | N1 (the control, passes there); Q1 S1 (128 of 147) and S2 (554 of 596), B1 digests; Q1 and D1 panic at S3 (no convergence) |
+| MR1 `set_changed` always false | D1 (all nine), Q2 (no set change), Q1 S3 (3 of 61 pairs) |
+| MR2 `set_changed` always true | Q2 (every increment uninformative) |
+| MR3 recording although off | B1 (vectors not empty, five solves) |
+| MR4 trial compared with the previous trial | **not caught** (all registered checks pass) |
+
+MR4 survives. Diagnosis: states are compared bitwise, and in these solves a point that yields at iteration `k - 1` or `k`
+differs from the other iterate's trial in some bit (the plastic strain follows `u`), so the mutated set is the union of two
+consecutive yielded sets; in monotonic loading no point leaves the set between iterations, and union and set coincide. A check
+that separates them needs a point that leaves the set during an increment (unloading; S4 of ADR 0475). Not added after the
+run (limits are not changed after a run); follow-up below.
+
+Gates (2026-11-14, release, worktree `f560`): `cargo test -p rcfd-fem --release` all test binaries ok (185 result lines, none
+failed), `cargo test -p rcfd-api --release --test baseline_hashes` 3 passed (unchanged), `cargo clippy -p rcfd-fem
+--all-targets -- -D warnings` clean, `cargo fmt -p rcfd-fem --check` clean, `cargo test -p rcfd-cli --release --test
+docs_site` 2 passed.
+
+**Deviations.** (1) The probe before registration (disclosed above) was run with the diagnostic in a scratch copy; the
+registered runs are separate. (2) The item's floor `1e-14` is not used: the measured rounding peak is `1.45e-14` (D1). (3) N1
+is an ignored test that passes only in the MU1 copy; on the real tangent it fails by design. (4) MR4 was not caught.
+
+**Decision by the registered rule: partial.** Every check is met, N1 included; one mutation (MR4) was not caught, and the rule
+requires every mutation to be caught for done.
+
+### Remaining questions
+
+1. **MR4 (a set that loses a point).** Options: (a) accept; (b) a follow-up check on a load and unload solve (S4 of ADR 0475
+   or the bar U4 with reversal) asserting `yielded[k]` against an independent count from the states, which separates the
+   union from the set. Recommendation: (b), follow-up 1 below.
+2. **F-600.** The reading Q(C, F) needs only residuals and a per-iteration changed flag; for contact the flag is the change of
+   the contact status set. Recommendation: F-600 registers the same form with its own `C` read off its solves.
+3. **The order itself.** Not attainable on these solves (N4); keep the bound as the reading of record for plasticity.
+
+## For the lead: roadmap entries
+
+Proposed status of F-560: **partial**. Proposed note:
+
+> ADR 0515, 2026-11-14: reading Q(C, F) of the Newton convergence order for an active-set change: every pair of consecutive residuals r_k, r_{k+1} (k >= 1) whose correction did not change the set of yielded integration points satisfies r_{k+1} <= max(C r_k^2, F), C = 10, F = 1e-13 (the rounding of the residual peaks at 1.45e-14), with an informative pair in every increment; opt-in record on the driver (NewtonOptions::record_active_set, LoadStep::yielded and set_changed, 47 inserted lines in nonlinear.rs, results bit-identical with it on or off). Met on S1, S2, S3 and the six P1 beams of ADR 0475: no violation in 265 read pairs, least C 0.22 .. 3.32 (S1 0.97, S2 1.18, S3 1.96); the continuum tangent (MU1) violates it on all nine solves (S3 does not converge); without the exemption of the set-change pairs S3 fails, with C = 1 S2 and S3 fail. The order of the last three residuals stays 1.27 .. 1.44 and does not exist in 4 to 5 increments of each P1 solve, so the reading is a bound, not an order. Not caught: the mutation that compares the trial with the previous trial instead of the committed state (equivalent in monotonic loading); follow-up F-NEW. The reading is general; F-600 can reuse it with the contact status as the set.
+
+Follow-up 1. Title: "Active-set record of the Newton driver on a load and unload solve". Deps: F-560. Acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. On a J2 solve in which integration points leave the yielded set during an increment (the load and unload sphere S4 of ADR 0475 or the bar of ADR 0475 U4 with a reversal), the recorded yielded count of every iteration equals the number of points whose trial state differs from the committed state counted independently from the states, some iteration of some increment records a smaller count than the one before it, and the mutation of ADR 0515 MR4 (trial compared with the previous trial) is caught.
