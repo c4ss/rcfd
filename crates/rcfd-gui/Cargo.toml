@@ -24,7 +24,7 @@ png.workspace = true
 eframe = { version = "0.36.2", default-features = false, features = ["glow", "default_fonts", "x11", "wayland"] }
 egui = "0.36.2"
 egui_dock = { version = "0.21.1", features = ["serde"] }
-egui_plot = "0.37.0"
+egui_plot = "0.38.0"
 rfd = "=0.15.4"
 
 [[bin]]
