@@ -216,3 +216,22 @@ piston runs cannot be made.
 - Cost `O(P^2 + P F)` (points `P`, faces `F`): 14400 points take seconds; large surfaces need a fast method.
 - The light-fluid limit only: the added mass is reported, not fed back into a structural solve.
 - References are closed forms (derived here or in ADR 0468); no measured data.
+
+## Amendment 1 (2026-11-14, written after the registered run of commit 0546e941 and the mutation runs, before any corrected run)
+
+The registered run (`cargo test --release -p rcfd-post --test sa_radiation_impedance -- --test-threads=1 --nocapture`, log
+`f551-scratch/run_checks.log`) met every limit and every negative control as registered. The mutation runs (`mutate.py`, logs
+`MU*.log`) caught MU1 to MU6 and MU8, but **MU7 (the `d = 0` guard removed) was not caught by a registered check**, although
+it turns the corner, mid-edge and right-angle values of A1, the triangle of A3, the node potentials of G1 and the centre
+pressures of S1 into NaN (printed in `MU7.log`). Diagnosis: a defect of the test set-up, not of the library. The tests take the
+largest error with `f64::max`, which drops a NaN operand, so `worst` stayed at the finite cases (A1 reported 2.2e-16, S1 0);
+A3 compared the bits of two NaNs as equal. Checks compared one by one (`value <= limit`) treat NaN as a miss and are not
+affected (Z1 to Z3, M1, H1, NC1, NC2, N1).
+
+Correction, registered now with the limits unchanged: a copy `crates/rcfd-post/tests/sa_radiation_impedance_amend1.rs` of the
+tests `a1_a3_analytic_polygon_integrals`, `g1_disk_potential` and `s1_s2_surface_pressure` in which the aggregation propagates
+NaN (a NaN is the largest error, so a miss) and every value must also be finite (A3's bit comparison requires a finite value);
+the same set-ups, limits and the bounds of NC3. The three original tests stay as ignored records (the attribute
+`#[ignore]` with the reason, nothing else edited). The corrected run is made once on the library of 0546e941 (unchanged), then
+MU7 is run once against the corrected file on the scratch copy. Per the decision rule F-551 cannot be **done** (a mutation not
+caught by a registered check; checks met after an amendment made after their run).
