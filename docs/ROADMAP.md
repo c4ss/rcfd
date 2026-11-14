@@ -11048,7 +11048,7 @@ fixed by the item's registration ADR before any code.
     resonance within the error 4 delta / eta of its frequency error, and a pattern per load component reproducing the
     statics of each component within 1e-10; without the option every result bit-identical to ADR 0474's.
   - note: Structural solver, advanced tier. Follow-up of F-552 (ADR 0474, 2026-11-14).
-- [ ] **F-560** Convergence order of the Newton driver with plasticity: a reading for an active-set change
+- [~] **F-560** Convergence order of the Newton driver with plasticity: a reading for an active-set change
   - depends on: F-422
   - acceptance: Every limit not stated here is registered in the ADR before the run. On the sphere and beam solves of
     ADR 0475 (S1, S2, S3, P1), a reading of the convergence order fit for an active-set change, registered before the
@@ -11056,7 +11056,18 @@ fixed by the item's registration ADR before any code.
     set of yielded points, with a floor of 1e-14, or r_{k+1} <= C r_k^2 over the last two corrections with C
     registered), gives an order >= 1.8 or the bound on every increment, and the continuum tangent (mutation MU1 of ADR
     0475) fails it.
-  - note: Structural solver, advanced tier. Follow-up of F-422 (ADR 0475, 2026-11-14).
+  - note: Structural solver, advanced tier. PARTIAL. ADR 0515, 2026-11-14: reading Q(C, F) of the Newton convergence
+    order for an active-set change: every pair of consecutive residuals r_k, r_{k+1} (k >= 1) whose correction did not
+    change the set of yielded integration points satisfies r_{k+1} <= max(C r_k^2, F), C = 10, F = 1e-13 (the rounding
+    of the residual peaks at 1.45e-14), with an informative pair in every increment; opt-in record on the driver
+    (NewtonOptions::record_active_set, LoadStep::yielded and set_changed, 47 inserted lines in nonlinear.rs, results
+    bit-identical with it on or off). Met on S1, S2, S3 and the six P1 beams of ADR 0475: no violation in 265 read
+    pairs, least C 0.22 .. 3.32 (S1 0.97, S2 1.18, S3 1.96); the continuum tangent (MU1) violates it on all nine solves
+    (S3 does not converge); without the exemption of the set-change pairs S3 fails, with C = 1 S2 and S3 fail. The order
+    of the last three residuals stays 1.27 .. 1.44 and does not exist in 4 to 5 increments of each P1 solve, so the
+    reading is a bound, not an order. Not caught: the mutation that compares the trial with the previous trial instead
+    of the committed state (equivalent in monotonic loading); follow-up F-NEW. The reading is general; F-600 can reuse
+    it with the contact status as the set. Follow-up of F-422 (ADR 0475, 2026-11-14).
 - [ ] **F-561** Thick sphere with J2 on a refined octant: residual hoop stress after unloading
   - depends on: F-422
   - acceptance: Every limit not stated here is registered in the ADR before the run. The partly plastic sphere of ADR
