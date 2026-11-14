@@ -1043,6 +1043,8 @@ pub(crate) fn controlled_attempt(
         free: (0..n).filter(|&i| !is_fixed[i]).collect(),
         options,
         contributions,
+        // ADR 0485 D3: the arc-length step of ADR 0480 is static, at the default point context.
+        context: PointContext::default(),
     };
     match problem.attempt_with(u_c, lambda_c, lambda_c, states_c, Some(control)) {
         Ok(a) => Ok(ControlledAttempt {
