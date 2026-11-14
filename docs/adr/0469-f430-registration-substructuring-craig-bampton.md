@@ -259,3 +259,16 @@ item 3); if it does, the item is partial by this rule, with the cause diagnosed 
 - Beams and shells pass the entry checks of the transformation (their rotational unknowns are boundary unknowns like the
   others) but no check here covers them.
 - The harmonic response of the assembly takes a uniform loss factor only.
+
+## Amendment 1 (2026-11-14, written before any run of the checks)
+
+While writing `sa_cms.rs`, before any check had run: the mesh refuses a node set with no members
+(`SolidMesh::add_node_set` returns `FemError::EmptySet`, `mesh.rs` `check_members`), so the first case of X1 as registered
+("S with a node set `none` of no nodes as interface") cannot be set up, and an interface set with no nodes can never reach
+the reduction; MU9 (the empty-interface refusal of `reduce` removed) could then be caught by no check. Corrected, before the
+run: **X1** = (i) `add_node_set("none", vec![])` on the mesh of S is refused with `EmptySet` (the refusal of a13 holds at the
+mesh, and the reduction keeps its own refusal of an empty set for a caller-built mesh path); (ii) the interface `xmin` of S,
+whose nodes are all fixed (no boundary unknown), is refused by `reduce`; (iii) an unknown set name is refused with
+`UnknownSet`. **MU9** becomes: the refusal of an interface without a free unknown removed (expected caught by X1 (ii)). No
+limit changes. This amendment precedes the first run of every check, so it does not by itself make any check "met only after
+an amendment made after its run".
