@@ -1695,3 +1695,18 @@ varied.
 | Rotating solid disc in plane stress, centre `(3 + nu) rho Omega^2 b^2 / 8`, field `sigma_r = (3 + nu) rho Omega^2 (b^2 - r^2)/8`, `sigma_theta = rho Omega^2 ((3 + nu) b^2 - (1 + 3 nu) r^2)/8` | derived, from memory | Timoshenko and Goodier, Theory of Elasticity: NOT read; equilibrium and compatibility checked, ADR 0456 arithmetic 6 |
 | Regular polygon section `A = (M/2) a^2 sin(2 pi/M)`, `I = A a^2 (2 + cos(2 pi/M))/12` | derived | ADR 0456 arithmetic 7 |
 | Timoshenko cantilever with `kappa = 10 (1 + nu)/(12 + 11 nu)` (rectangle), `6 (1 + nu)/(7 + 6 nu)` (circle) | from memory | Cowper 1966: NOT read |
+
+## F-539 drilling-unknown membranes for Shell3: ANDES OPT and Allman's triangle (ADR 0466)
+
+No source was read for F-539; every item is cited from memory. Allman's edge field and the basic stiffness are derived in ADR
+0466 (arithmetic 1, 4); the higher-order stiffness of the ANDES element and its parameters `alpha_b = 3/2`, `beta_0 = max((1 -
+4 nu^2)/2, 0.01)`, `beta_1 .. beta_9 = 1, 2, 1, 0, 1, -1, -1, -1, -2` are taken as recalled, once, and verified by the property
+they were designed for: exact in-plane pure bending of a rectangle cut into two triangles for any aspect ratio (check BE1,
+measured `3.7e-14`).
+
+| Item | Status | Source |
+|---|---|---|
+| Allman's triangle: the edge-normal displacement quadratic with the mid-edge excess `l (theta_j - theta_i)/8`; the spurious mode of equal vertex rotations | derived | D. J. Allman, Comput. Struct. 19 (1984) 1-8: NOT read; ADR 0466 arithmetic 1, 2 |
+| Basic stiffness of the free formulation: a constant stress lumped on the edge field with the excess times `alpha_b`, `K_b = A Bbar(alpha_b)^T A_m Bbar(alpha_b)` | derived | P. G. Bergan and C. A. Felippa, Comput. Methods Appl. Mech. Engrg. 50 (1985) 25-69: NOT read; ADR 0466 arithmetic 4 |
+| ANDES higher-order stiffness `(3/4) beta_0 A sum_mid Q^T T_e^T A_m T_e Q` on the deviatoric corner rotations, the natural-strain matrices `Q_1, Q_2, Q_3` of `beta_1 .. beta_9`; the OPT parameters | from memory | C. A. Felippa and C. Militello, Finite Elem. Anal. Des. 12 (1992) 189-201; C. A. Felippa, Comput. Methods Appl. Mech. Engrg. 192 (2003) 2125-2168: NOT read; verified by BE1 (the factor `A/3` in place of `3A/4` gives 0.861) |
+| Timoshenko cantilever tip `P L^3/(3 E I) + P L/(kappa G A)`, `kappa = 5/6`; end couple `M L^2/(2 E I)` | derived | beam theory; the clamped two-dimensional strip within `1.5e-4` of it by refinement (ADR 0466 arithmetic 6) |

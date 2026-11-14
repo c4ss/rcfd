@@ -16,10 +16,14 @@
 //! The solid-element routines of the [`Element`] trait do not apply: [`element`] is a placeholder that refuses naming
 //! [`SOLID_ROUTINES`]. The assembly, the mass, the loads, the thermal load and [`crate::shell::stresses`] call this module for
 //! Shell3 (ADR 0454 D2).
+//!
+//! A block may choose a drilling-unknown membrane in place of the constant-strain one ([`Shell3Membrane`], ADR 0466): the
+//! ANDES optimal membrane triangle or Allman's triangle, through [`crate::BlockProperty::shell_with_membrane`]. Opt-in; a
+//! model whose Shell3 blocks keep the default gives the former results bit for bit.
 
 use crate::element::{Element, ElementMatrix, Pending};
 use crate::error::{FemError, Result};
-use crate::mesh::{ElementKind, SolidMesh};
+use crate::mesh::{BlockProperty, ElementKind, SolidMesh};
 use crate::model::Material;
 use crate::shell::{
     homogeneous_section, SectionStiffness, ShearStiffness, ShellStresses, TransverseShear, DRILLING_FACTOR,
@@ -42,6 +46,39 @@ pub const MIN_ANGLE_DEGREES: f64 = 1.0;
 
 /// The factor `alpha` of the shear stabilisation `t^2 / (t^2 + alpha h^2)`, `h` the longest edge (ADR 0454 arithmetic 4).
 pub const SHEAR_STABILISATION: f64 = 0.1;
+
+/// The membrane of a Shell3 element (ADR 0466): the default constant-strain triangle with Shell4's drilling penalty, Allman's
+/// triangle with vertex rotations, or the ANDES optimal membrane triangle. Chosen per block by
+/// [`crate::BlockProperty::shell_with_membrane`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
+pub enum Shell3Membrane {
+    /// The constant-strain membrane with the drilling penalty tying `theta_z` to the membrane rotation (ADR 0454).
+    #[default]
+    ConstantStrain,
+    /// Allman's 1984 triangle: the edge-normal displacement quadratic, its mid-edge excess `l (theta_j - theta_i) / 8`, with
+    /// the drilling penalty suppressing the equal-rotation mode (ADR 0466 arithmetic 1, 2). Stiff in in-plane bending on
+    /// coarse meshes; kept for comparison.
+    Allman,
+    /// The ANDES optimal membrane (OPT): the basic stiffness of a constant stress on Allman's edge field scaled by
+    /// [`ANDES_ALPHA_B`] plus the higher-order stiffness of the deviatoric corner rotations (ADR 0466 arithmetic 4); no
+    /// drilling penalty. Exact in in-plane pure bending of rectangles cut into two triangles.
+    AndesOpt,
+}
+
+/// The factor `alpha_b` of the edge excess in the basic stiffness of the ANDES membrane (ADR 0466 arithmetic 4).
+pub const ANDES_ALPHA_B: f64 = 1.5;
+
+/// The parameters `beta_1 .. beta_9` of the higher-order stiffness of the ANDES membrane (ADR 0466 arithmetic 4).
+pub const ANDES_BETA: [f64; 9] = [1.0, 2.0, 1.0, 0.0, 1.0, -1.0, -1.0, -1.0, -2.0];
+
+/// The lower bound of `beta_0 = (1 - 4 nu^2) / 2` of the ANDES membrane (ADR 0466 arithmetic 4).
+pub const ANDES_BETA0_MIN: f64 = 0.01;
+
+/// The scale `beta_0 = max((1 - 4 nu^2) / 2, ANDES_BETA0_MIN)` of the higher-order stiffness of the ANDES membrane.
+pub fn andes_beta0(nu: f64) -> f64 {
+    (0.5 * (1.0 - 4.0 * nu * nu)).max(ANDES_BETA0_MIN)
+}
 
 static ELEMENT: Pending = Pending::new(ElementKind::Shell3, SOLID_ROUTINES);
 
@@ -76,6 +113,8 @@ pub struct Shell3Options {
     pub drilling: f64,
     /// The shear stabilisation factor `alpha`.
     pub stabilisation: f64,
+    /// The membrane (ADR 0466); the ANDES membrane does not use `drilling`.
+    pub membrane: Shell3Membrane,
 }
 
 impl Default for Shell3Options {
@@ -84,6 +123,7 @@ impl Default for Shell3Options {
             shear: TransverseShear::AssumedStrain,
             drilling: DRILLING_FACTOR,
             stabilisation: SHEAR_STABILISATION,
+            membrane: Shell3Membrane::ConstantStrain,
         }
     }
 }
@@ -102,6 +142,11 @@ impl Shell3Options {
     /// The same options with a shear stabilisation factor.
     pub fn stabilisation(mut self, stabilisation: f64) -> Shell3Options {
         self.stabilisation = stabilisation;
+        self
+    }
+    /// The same options with a membrane (ADR 0466).
+    pub fn membrane(mut self, membrane: Shell3Membrane) -> Shell3Options {
+        self.membrane = membrane;
         self
     }
 }
@@ -248,6 +293,128 @@ fn bending_rows(nx: &[f64; 3], ny: &[f64; 3]) -> [[f64; 18]; 3] {
     b
 }
 
+/// Allman's membrane strain rows `(eps_xx, eps_yy, gamma_xy)` and rotation row `omega = (v_X - u_Y) / 2` over the 18 local
+/// unknowns at the point of shape values `n` (ADR 0466 arithmetic 1): `u = sum N_i u_i + sum_e (N_i N_j / 2)(theta_j -
+/// theta_i)(d_Y, -d_X)`, `d = x_j - x_i` on edge `e` from node `i = e` to `j = e + 1`.
+fn allman_rows(f: &Facet3, nx: &[f64; 3], ny: &[f64; 3], n: &[f64; 3]) -> ([[f64; 18]; 3], [f64; 18]) {
+    let mut b = membrane_rows(nx, ny);
+    let mut om = [0.0; 18];
+    for i in 0..3 {
+        om[6 * i + 1] += 0.5 * nx[i];
+        om[6 * i] -= 0.5 * ny[i];
+    }
+    for e in 0..3 {
+        let (i, j) = (e, (e + 1) % 3);
+        let d = [f.local[j][0] - f.local[i][0], f.local[j][1] - f.local[i][1]];
+        let w = [0.5 * d[1], -0.5 * d[0]];
+        let gx = n[i] * nx[j] + n[j] * nx[i];
+        let gy = n[i] * ny[j] + n[j] * ny[i];
+        for (q, s) in [(j, 1.0), (i, -1.0)] {
+            let c = 6 * q + 5;
+            b[0][c] += s * w[0] * gx;
+            b[1][c] += s * w[1] * gy;
+            b[2][c] += s * (w[0] * gy + w[1] * gx);
+            om[c] += s * 0.5 * (w[1] * gx - w[0] * gy);
+        }
+    }
+    (b, om)
+}
+
+/// The mean over the element of Allman's strain rows with the rotation columns times `alpha` (ADR 0466 arithmetic 4: the
+/// boundary lumping of a constant stress with the edge excess times `alpha`).
+fn mean_rows(f: &Facet3, nx: &[f64; 3], ny: &[f64; 3], alpha: f64) -> [[f64; 18]; 3] {
+    let mut m = [[0.0; 18]; 3];
+    for e in 0..3 {
+        let (b, _) = allman_rows(f, nx, ny, &mid_edge_shapes(e));
+        for r in 0..3 {
+            for q in 0..18 {
+                m[r][q] += b[r][q] / 3.0;
+            }
+        }
+    }
+    for row in m.iter_mut() {
+        for i in 0..3 {
+            row[6 * i + 5] *= alpha;
+        }
+    }
+    m
+}
+
+/// The membrane rows of the strain at the centroid for a membrane: the constant-strain rows, Allman's mean rows, or the
+/// ANDES basic rows (ADR 0466 arithmetic 4: the higher-order strain of the ANDES membrane averages to zero).
+fn centroid_membrane_rows(f: &Facet3, nx: &[f64; 3], ny: &[f64; 3], membrane: Shell3Membrane) -> [[f64; 18]; 3] {
+    match membrane {
+        Shell3Membrane::ConstantStrain => membrane_rows(nx, ny),
+        Shell3Membrane::Allman => mean_rows(f, nx, ny, 1.0),
+        Shell3Membrane::AndesOpt => mean_rows(f, nx, ny, ANDES_ALPHA_B),
+    }
+}
+
+fn mul33(a: &[[f64; 3]; 3], b: &[[f64; 3]; 3]) -> [[f64; 3]; 3] {
+    let mut c = [[0.0; 3]; 3];
+    for i in 0..3 {
+        for j in 0..3 {
+            c[i][j] = a[i][0] * b[0][j] + a[i][1] * b[1][j] + a[i][2] * b[2][j];
+        }
+    }
+    c
+}
+
+/// `K += T^T K_theta T`, the higher-order stiffness of the ANDES membrane (ADR 0466 arithmetic 4): `T` the deviatoric corner
+/// rotations `theta_i - omega_0`, the natural strains along the sides `21, 32, 13` at the corners `Q_1, Q_2, Q_3` (cyclic),
+/// `K_theta = (3/4) beta_0 A sum Q_m^T E_nat Q_m` over the mid-sides, `E_nat = T_e^T A_m T_e`.
+fn add_andes_higher_order(k: &mut [f64], f: &Facet3, nx: &[f64; 3], ny: &[f64; 3], am: &[[f64; 3]; 3]) {
+    let a = f.area;
+    let beta0 = andes_beta0(am[0][1] / am[0][0]);
+    let mut t = [[0.0; 18]; 3];
+    for (i, row) in t.iter_mut().enumerate() {
+        for q in 0..3 {
+            row[6 * q + 1] -= 0.5 * nx[q];
+            row[6 * q] += 0.5 * ny[q];
+        }
+        row[6 * i + 5] += 1.0;
+    }
+    let mut l2 = [0.0; 3];
+    let mut to_side = [[0.0; 3]; 3];
+    for (r, (p, q)) in [(1usize, 0usize), (2, 1), (0, 2)].into_iter().enumerate() {
+        let d = [f.local[p][0] - f.local[q][0], f.local[p][1] - f.local[q][1]];
+        let s2 = d[0] * d[0] + d[1] * d[1];
+        l2[r] = s2;
+        to_side[r] = [d[0] * d[0] / s2, d[1] * d[1] / s2, d[0] * d[1] / s2];
+    }
+    let te = invert3(&to_side);
+    let enat = mul33(&transpose3(&te), &mul33(am, &te));
+    let b = ANDES_BETA;
+    let q_of = |m: [[usize; 3]; 3]| -> [[f64; 3]; 3] {
+        let mut q = [[0.0; 3]; 3];
+        for r in 0..3 {
+            for c in 0..3 {
+                q[r][c] = 2.0 * a / 3.0 * b[m[r][c]] / l2[r];
+            }
+        }
+        q
+    };
+    let q1 = q_of([[0, 1, 2], [3, 4, 5], [6, 7, 8]]);
+    let q2 = q_of([[8, 6, 7], [2, 0, 1], [5, 3, 4]]);
+    let q3 = q_of([[4, 5, 3], [7, 8, 6], [1, 2, 0]]);
+    let mut kt = [[0.0; 3]; 3];
+    for (x, y) in [(&q1, &q2), (&q2, &q3), (&q3, &q1)] {
+        let mut qm = [[0.0; 3]; 3];
+        for r in 0..3 {
+            for c in 0..3 {
+                qm[r][c] = 0.5 * (x[r][c] + y[r][c]);
+            }
+        }
+        let p = mul33(&transpose3(&qm), &mul33(&enat, &qm));
+        for r in 0..3 {
+            for c in 0..3 {
+                kt[r][c] += 0.75 * beta0 * a * p[r][c];
+            }
+        }
+    }
+    add_b1t_c_b2(k, &t, &kt, &t, 1.0);
+}
+
 /// The coefficients `(a_1, a_2, b)` of the assumed shear `gamma = (a_1 - b Y, a_2 + b X)` as rows over the 18 local unknowns:
 /// `gamma(m_e) . t_e = g_e`, `g_e = (w_j - w_i) / l_e + (beta_i + beta_j) / 2 . t_e` on each edge (ADR 0454 arithmetic 4).
 fn tying_coefficients(f: &Facet3) -> [[f64; 18]; 3] {
@@ -373,15 +540,37 @@ pub fn local_stiffness_section(f: &Facet3, section: &SectionStiffness, options: 
     let a = f.area;
     let mut k = ElementMatrix::zeros(18);
     let v = k.values_mut();
-    add_b1t_c_b2(v, &bm, &section.membrane, &bm, a);
+    // ADR 0466 D1: the membrane; the default is the constant-strain membrane as before.
+    let bc = match options.membrane {
+        Shell3Membrane::ConstantStrain => {
+            add_b1t_c_b2(v, &bm, &section.membrane, &bm, a);
+            bm
+        }
+        Shell3Membrane::Allman => {
+            for e in 0..3 {
+                let (b, _) = allman_rows(f, &nx, &ny, &mid_edge_shapes(e));
+                add_b1t_c_b2(v, &b, &section.membrane, &b, a / 3.0);
+            }
+            mean_rows(f, &nx, &ny, 1.0)
+        }
+        Shell3Membrane::AndesOpt => {
+            let b = mean_rows(f, &nx, &ny, ANDES_ALPHA_B);
+            add_b1t_c_b2(v, &b, &section.membrane, &b, a);
+            add_andes_higher_order(v, f, &nx, &ny, &section.membrane);
+            b
+        }
+    };
     add_b1t_c_b2(v, &bb, &section.bending, &bb, a);
     if let Some(c) = &section.coupling {
-        add_b1t_c_b2(v, &bm, c, &bb, a);
-        add_b1t_c_b2(v, &bb, &transpose3(c), &bm, a);
+        add_b1t_c_b2(v, &bc, c, &bb, a);
+        add_b1t_c_b2(v, &bb, &transpose3(c), &bc, a);
     }
     let coef = tying_coefficients(f);
     let h = stabilised_shear(f, section, options.stabilisation);
-    let dr = options.drilling * section.drilling[0] * section.drilling[1];
+    let dr = match options.membrane {
+        Shell3Membrane::AndesOpt => 0.0,
+        _ => options.drilling * section.drilling[0] * section.drilling[1],
+    };
     let w = a / 3.0;
     for e in 0..3 {
         let p = mid_edge_point(f, e);
@@ -392,6 +581,16 @@ pub fn local_stiffness_section(f: &Facet3, section: &SectionStiffness, options: 
             d[6 * i + 5] = n[i];
             d[6 * i + 1] -= 0.5 * nx[i];
             d[6 * i] += 0.5 * ny[i];
+        }
+        if options.membrane == Shell3Membrane::Allman {
+            // ADR 0466 arithmetic 2: the penalty on theta_z - omega of Allman's field.
+            let (_, om) = allman_rows(f, &nx, &ny, &n);
+            for q in 0..18 {
+                d[q] = -om[q];
+            }
+            for i in 0..3 {
+                d[6 * i + 5] += n[i];
+            }
         }
         for i in 0..18 {
             for j in 0..18 {
@@ -598,6 +797,25 @@ pub fn thermal_load_vector(
     material: &Material,
     delta_t_nodal: &[f64],
 ) -> Result<[f64; 18]> {
+    thermal_load_vector_with(
+        coords,
+        thickness,
+        material,
+        delta_t_nodal,
+        Shell3Membrane::ConstantStrain,
+    )
+}
+
+/// The consistent membrane thermal load for a membrane: `A B^T A_m alpha dT_mean (1, 1, 0)` with `B` the rows of
+/// [`thermal_load_vector`] for the constant-strain membrane and the mean (basic) rows for Allman's and the ANDES membrane, so
+/// that the free expansion is the discrete solution (ADR 0466 arithmetic 9).
+pub fn thermal_load_vector_with(
+    coords: &[Vec3],
+    thickness: f64,
+    material: &Material,
+    delta_t_nodal: &[f64],
+    membrane: Shell3Membrane,
+) -> Result<[f64; 18]> {
     if delta_t_nodal.len() != 3 {
         return Err(FemError::FieldLength {
             key: "temperature",
@@ -621,7 +839,7 @@ pub fn thermal_load_vector(
     let e = alpha * dt;
     let s = mul3(&a, [e, e, 0.0]);
     let (nx, ny) = derivatives(&f);
-    let bm = membrane_rows(&nx, &ny);
+    let bm = centroid_membrane_rows(&f, &nx, &ny, membrane);
     let mut fl = [0.0; 18];
     for (c, fc) in fl.iter_mut().enumerate() {
         *fc = f.area * (bm[0][c] * s[0] + bm[1][c] * s[1] + bm[2][c] * s[2]);
@@ -646,7 +864,73 @@ pub(crate) fn model_element_stiffness(
     material: &Material,
 ) -> Result<ElementMatrix> {
     let section = crate::shell::model_section(mesh, element, material)?;
-    element_stiffness_section(coords, &section, &Shell3Options::default())
+    let options = Shell3Options::default().membrane(model_membrane(mesh, element));
+    element_stiffness_section(coords, &section, &options)
+}
+
+/// The membrane of a Shell3 element of a model: its block's `Shell` property's membrane, the constant-strain membrane
+/// otherwise (ADR 0466 D2).
+pub(crate) fn model_membrane(mesh: &SolidMesh, element: usize) -> Shell3Membrane {
+    match mesh.blocks()[mesh.block_of(element)].property() {
+        Some(BlockProperty::Shell { membrane, .. }) if mesh.element_kind(element) == ElementKind::Shell3 => *membrane,
+        _ => Shell3Membrane::ConstantStrain,
+    }
+}
+
+/// Refuses an edge shared by shell elements of different membrane classes (linear edges: Shell4 and the constant-strain
+/// Shell3; Allman's; the ANDES membrane), naming the later element (ADR 0466 D3): a constant stress leaves the drilling
+/// moments `alpha t l^2 sigma_nn / 12` of a drilling membrane's edge unbalanced there (arithmetic 8). Does nothing for a
+/// model without a Shell3 block with a drilling membrane.
+pub(crate) fn check_membrane_edges(mesh: &SolidMesh) -> Result<()> {
+    let drilling = mesh.blocks().iter().any(|b| {
+        b.kind() == ElementKind::Shell3
+            && matches!(b.property(), Some(BlockProperty::Shell { membrane, .. }) if *membrane != Shell3Membrane::ConstantStrain)
+    });
+    if !drilling {
+        return Ok(());
+    }
+    let class_of = |e: usize| -> Option<&'static str> {
+        match mesh.element_kind(e) {
+            ElementKind::Shell4 => Some("a linear edge (Shell4)"),
+            ElementKind::Shell3 => Some(match model_membrane(mesh, e) {
+                Shell3Membrane::ConstantStrain => "a linear edge (the constant-strain Shell3)",
+                Shell3Membrane::Allman => "Allman's membrane",
+                Shell3Membrane::AndesOpt => "the ANDES membrane",
+            }),
+            _ => None,
+        }
+    };
+    let linear = |c: &str| c.starts_with("a linear edge");
+    let mut seen: std::collections::HashMap<(usize, usize), (usize, &'static str)> = std::collections::HashMap::new();
+    for e in 0..mesh.n_elements() {
+        let Some(class) = class_of(e) else { continue };
+        let nodes = mesh.element_nodes(e);
+        for a in 0..nodes.len() {
+            let (p, q) = (nodes[a], nodes[(a + 1) % nodes.len()]);
+            let key = (p.min(q), p.max(q));
+            match seen.get(&key) {
+                Some(&(other, oc)) if oc != class && !(linear(oc) && linear(class)) => {
+                    return Err(FemError::Element {
+                        element: e,
+                        source: Box::new(FemError::InvalidValue {
+                            key: "membrane",
+                            reason: format!(
+                                "element {e} ({class}) shares the edge of nodes {} and {} with element {other} ({oc}): a \
+                                 drilling membrane next to an element of another membrane fails the membrane patch test \
+                                 (ADR 0466 arithmetic 8)",
+                                key.0, key.1
+                            ),
+                        }),
+                    });
+                }
+                Some(_) => {}
+                None => {
+                    seen.insert(key, (e, class));
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 /// The consistent mass of a Shell3 element of a model.
@@ -661,13 +945,15 @@ pub(crate) fn model_element_mass(
 }
 
 /// The resultants and surface stresses of a Shell3 element at its centroid from its global unknowns (ADR 0454 arithmetic 8):
-/// `thermal` is the membrane thermal strain `alpha dT_mean` subtracted from `eps_xx` and `eps_yy`.
+/// `thermal` is the membrane thermal strain `alpha dT_mean` subtracted from `eps_xx` and `eps_yy`; the membrane strain is that
+/// of the centroid of the membrane (ADR 0466 D1).
 pub(crate) fn element_stresses(
     f: &Facet3,
     ue: &[f64],
     section: &SectionStiffness,
     thickness: f64,
     thermal: f64,
+    membrane: Shell3Membrane,
 ) -> ShellStresses {
     let tr = transformation(f);
     let ul: Vec<f64> = (0..18).map(|i| (0..18).map(|j| tr[i * 18 + j] * ue[j]).sum()).collect();
@@ -679,7 +965,7 @@ pub(crate) fn element_stresses(
         }
         s
     };
-    let mut eps = strain(&membrane_rows(&nx, &ny));
+    let mut eps = strain(&centroid_membrane_rows(f, &nx, &ny, membrane));
     eps[0] -= thermal;
     eps[1] -= thermal;
     let kappa = strain(&bending_rows(&nx, &ny));

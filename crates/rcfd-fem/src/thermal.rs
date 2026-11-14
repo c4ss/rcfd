@@ -116,7 +116,9 @@ pub(crate) fn add_thermal_load(
             let fe: Vec<f64> = crate::shell::thickness_or_error(mesh, e)
                 .and_then(|t| {
                     if mesh.element_kind(e) == ElementKind::Shell3 {
-                        crate::shell3::thermal_load_vector(&coords, t, material, &dte).map(|v| v.to_vec())
+                        let membrane = crate::shell3::model_membrane(mesh, e);
+                        crate::shell3::thermal_load_vector_with(&coords, t, material, &dte, membrane)
+                            .map(|v| v.to_vec())
                     } else {
                         crate::shell::thermal_load_vector(&coords, t, material, &dte).map(|v| v.to_vec())
                     }

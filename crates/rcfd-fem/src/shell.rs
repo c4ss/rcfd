@@ -436,7 +436,7 @@ pub fn homogeneous_section(material: &Material, thickness: f64) -> SectionStiffn
 /// thickness }` gives [`homogeneous_section`]; `Layup` gives [`crate::laminate::section_stiffness`].
 pub fn section_of(property: &BlockProperty, material: &Material) -> Result<SectionStiffness> {
     match property {
-        BlockProperty::Shell { thickness } => Ok(homogeneous_section(material, *thickness)),
+        BlockProperty::Shell { thickness, .. } => Ok(homogeneous_section(material, *thickness)),
         BlockProperty::Layup { plies } => crate::laminate::section_stiffness(plies),
         other => Err(FemError::InvalidValue {
             key: "property",
@@ -798,7 +798,7 @@ pub fn shell_thickness(mesh: &SolidMesh, element: usize) -> Option<f64> {
         return None;
     }
     match mesh.blocks()[mesh.block_of(element)].property() {
-        Some(BlockProperty::Shell { thickness }) => Some(*thickness),
+        Some(BlockProperty::Shell { thickness, .. }) => Some(*thickness),
         _ => None,
     }
 }
@@ -890,7 +890,8 @@ pub fn check_shell_model(model: &SolidModel) -> Result<()> {
             model_facet(mesh, e)?;
         }
     }
-    Ok(())
+    // ADR 0466 D3: no edge between shell elements of different membrane classes.
+    crate::shell3::check_membrane_edges(mesh)
 }
 
 /// The stiffness of a shell element of a model (its block's thickness, its material).
@@ -1087,5 +1088,6 @@ fn shell3_stresses(
         }
         None => 0.0,
     };
-    Ok(crate::shell3::element_stresses(&f, &ue, &section, t, thermal))
+    let membrane = crate::shell3::model_membrane(mesh, e);
+    Ok(crate::shell3::element_stresses(&f, &ue, &section, t, thermal, membrane))
 }
