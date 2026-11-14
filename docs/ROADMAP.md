@@ -11209,7 +11209,7 @@ fixed by the item's registration ADR before any code.
     their limits. Materials without the factor keep their bits.
   - note: Structural solver, advanced tier. Follow-up of F-411 (ADR 0489, 2026-11-14). Changes the data model:
     maintainer's call.
-- [ ] **F-582** The viscoelastic material in the damped modes at a fixed frequency
+- [~] **F-582** The viscoelastic material in the damped modes at a fixed frequency
   - depends on: F-577
   - acceptance: Every limit not stated here is registered in the ADR before the run. The damped modes take a
     viscoelastic material at a reference frequency given in the options: the undamped basis from the storage shear and
@@ -11218,7 +11218,23 @@ fixed by the item's registration ADR before any code.
     discrete chain with the complex modulus at that frequency within 1e-8 relative, and its loss factor 2 |Re lambda|/Im
     lambda equals E''/E' at that frequency within 1e-2 relative (first order in the loss). Models without the material
     keep their bits.
-  - note: Structural solver, advanced tier. Follow-up of F-577 (ADR 0491, 2026-11-14).
+  - note: Structural solver, advanced tier. PARTIAL by the standing rule (MU7 uncaught, proposed equivalent: the J2
+    refusal on the clone repeats the one in modal_analysis; every registered check met on the first run, proposed done
+    by the ADR). The damped modes take a viscoelastic material at a reference frequency given in the options
+    (DampedOptions::viscoelastic_reference(omega, temperature)): the undamped basis is the modal analysis of the model
+    with the material replaced by the elastic material of its storage shear and bulk moduli at that frequency, and the
+    loss stiffness of the loss moduli (D'' = 2 G'' I_dev + K'' 1 (x) 1) is projected on it and added to the loss
+    stiffness of the equation; the root carries the moduli at that one frequency. On the 40-element rod A at its first
+    resonance the first root equals the root of the discrete chain with E*(omega_ref) within 2.5e-14 (limit 1e-8, for 2,
+    6 and 39 modes alike: the loss stiffness of the rod is proportional to its storage stiffness), and its loss factor 2
+    |Re lambda|/Im lambda equals E''/E' within 6.2e-4 (limit 1e-2) and 2 tan(atan(eta)/2) within 7.8e-14; the
+    unequal-weight rod B and the shear rod C within 1.4e-14 and 1.2e-14, the 3-D cantilever against the elastic model
+    with the constant loss factor within 1.0e-13, a shifted material against tau a_T within 1.2e-16. A reference
+    frequency without the material, a loss factor on its set, a missing temperature and an orthotropic base are refused.
+    Models without the material keep their bits (5 digests, baseline hashes unchanged). Six of seven mutations caught,
+    the seventh (J2 check on the clone) is redundant with the one in modal_analysis. Follow-ups: per-mode reference
+    frequency (fixed-point on each root's own frequency), the truncated-basis error of a general 3-D model. Follow-up
+    F-586.
 - [x] **F-583** The harmonic stress of a viscoelastic material in the direct harmonic solve
   - depends on: F-577
   - acceptance: Every limit not stated here is registered in the ADR before the run. DirectHarmonic::stress of a
@@ -11257,3 +11273,12 @@ fixed by the item's registration ADR before any code.
     within 2 percent of a registered reference; a cantilever strip of shells in free vibration of small amplitude gives
     the linear first frequency within 1 percent and conserves energy within a registered limit over 100 periods.
   - note: Structural solver, advanced tier. Follow-up of F-578 (ADR 0490, 2026-11-14).
+- [ ] **F-586** The viscoelastic damped modes at each root's own frequency
+  - depends on: F-582
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The damped modes of a viscoelastic
+    material iterate the reference frequency of each root to its own Im lambda (a fixed point of lambda^2 M + K*(Im
+    lambda) x = 0 on the modal basis of the storage moduli). On the 40-element rod A the converged first root equals the
+    root of the discrete chain with the complex modulus at that root's own frequency within 1e-8 relative, and differs
+    from the frozen-modulus root of F-582 by a registered amount. A 3-D cantilever with unequal weights, full basis
+    against truncated basis, registers the truncation error. Models without the material keep their bits.
+  - note: Structural solver, advanced tier. Follow-up of F-582 (ADR 0495, 2026-11-14).
