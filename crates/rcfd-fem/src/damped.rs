@@ -38,6 +38,8 @@
 //! `omega_ref`, dashpots) is kept. Start `w = omega_ref` (the frozen root), update `w <- Im lambda` of the root nearest the
 //! previous one, converged when `|dw| <= tolerance w`; not converged within the maximum count is refused. The reported
 //! roots are the converged ones, with [`DampedModes::own_frequency`] in the same order.
+//! ADR 0529 (F-609): with `OwnFrequency::skip_pseudo(true)` the roots flagged `pseudo` (ADR 0467) in the frozen solve are not
+//! iterated: they are reported as the frozen solve gave them, at `omega_ref`, with `OwnFrequencyRoot::skipped` set.
 
 use crate::assemble::{assemble_with, stiffness_with};
 use crate::constraint::{check_rigid_body_motions, prescribed_equations, reduce};
@@ -80,6 +82,8 @@ pub struct OwnFrequency {
     pub tolerance: f64,
     /// The most solves after the frozen one; not converged by then is refused.
     pub max_iterations: usize,
+    /// Leave the roots flagged `pseudo` (ADR 0467) in the frozen solve at the reference frequency, not iterated (ADR 0529).
+    pub skip_pseudo: bool,
 }
 
 impl OwnFrequency {
@@ -89,7 +93,13 @@ impl OwnFrequency {
             roots,
             tolerance: 1e-12,
             max_iterations: 50,
+            skip_pseudo: false,
         }
+    }
+    /// With the roots flagged as pseudo-modes of the residual vectors left at the reference frequency (ADR 0529).
+    pub fn skip_pseudo(mut self, skip: bool) -> OwnFrequency {
+        self.skip_pseudo = skip;
+        self
     }
     /// With a relative tolerance on the frequency.
     pub fn tolerance(mut self, tolerance: f64) -> OwnFrequency {
@@ -115,6 +125,8 @@ pub struct OwnFrequencyRoot {
     pub iterations: usize,
     /// The last relative change of the frequency, `|Im lambda - omega| / Im lambda` (0 when equal).
     pub change: f64,
+    /// The root was flagged `pseudo` and left at the reference frequency, not iterated (ADR 0529).
+    pub skipped: bool,
 }
 
 /// Options of [`damped_modes`].
@@ -779,10 +791,25 @@ pub fn damped_modes(model: &SolidModel, options: &DampedOptions) -> Result<Dampe
             ));
         }
         let mut done = Vec::with_capacity(count);
+        let mut skipped = 0;
         for (j, start) in modes.iter().take(count).enumerate() {
             let mut cur = start.clone();
             let mut w = omega_ref;
             let mut k = 0;
+            if setup.own.skip_pseudo && start.pseudo {
+                skipped += 1;
+                done.push((
+                    cur,
+                    OwnFrequencyRoot {
+                        frozen: start.eigenvalue,
+                        omega: omega_ref,
+                        iterations: 0,
+                        change: 0.0,
+                        skipped: true,
+                    },
+                ));
+                continue;
+            }
             loop {
                 let wn = cur.eigenvalue.im.max(0.0);
                 let change = if wn == w {
@@ -800,6 +827,7 @@ pub fn damped_modes(model: &SolidModel, options: &DampedOptions) -> Result<Dampe
                             omega: w,
                             iterations: k,
                             change,
+                            skipped: false,
                         },
                     ));
                     break;
@@ -832,9 +860,20 @@ pub fn damped_modes(model: &SolidModel, options: &DampedOptions) -> Result<Dampe
         done.sort_by(|(p, _), (q, _)| by_frequency(p, q));
         let most = done.iter().map(|(_, r)| r.iterations).max().unwrap_or(0);
         own_notes.push(format!(
-            "{count} roots iterated to their own frequency on the storage basis at {omega_ref:e} rad/s, at most {most} \
-             iterations (ADR 0520)"
+            "{} roots iterated to their own frequency on the storage basis at {omega_ref:e} rad/s, at most {most} \
+             iterations (ADR 0520)",
+            count - skipped
         ));
+        if setup.own.skip_pseudo {
+            own_notes.push(if skipped > 0 {
+                format!(
+                    "{skipped} roots flagged pseudo (ADR 0467) left at the reference frequency {omega_ref:e} rad/s, not \
+                     iterated (ADR 0529)"
+                )
+            } else {
+                format!("no root flagged pseudo among the {count} iterated (ADR 0529)")
+            });
+        }
         for a in 0..done.len() {
             for b in a + 1..done.len() {
                 let (za, zb) = (done[a].0.eigenvalue, done[b].0.eigenvalue);
