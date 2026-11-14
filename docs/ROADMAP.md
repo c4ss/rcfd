@@ -10448,7 +10448,7 @@ fixed by the item's registration ADR before any code.
     0449); the Gerber refusal of a compressive mean at or beyond the strength says "in modulus" while every
     positive-mean message is byte-identical; all 9 tests of ADR 0449 pass unedited; mutations of the guard threshold and
     of both message forms caught; the guard itself is unreachable by design (equivalent mutant recorded).
-- [ ] **F-535** Opt-in refusal of the PISO step at the pressure-lag onset, naming the diffusion number
+- [~] **F-535** Opt-in refusal of the PISO step at the pressure-lag onset, naming the diffusion number
   - depends on: F-530
   - acceptance: Every limit not stated here is registered in the ADR before the run. An opt-in setting makes the
     PISO/PIMPLE step refuse at step 1, through the divergence guard and with the state left as it was, when the
@@ -10456,7 +10456,18 @@ fixed by the item's registration ADR before any code.
     diffusion number nu dt/dx^2, the estimate and the remedies (consistent correctors with outer iterations, a smaller
     step); the fixed-mesh channel of ADR 0451 is refused at nu dt/dy^2 = 25 and 100 and runs at 2.5; the default results
     of every existing case stay bit-identical.
-  - note: Numerics. Follow-up of F-530 (ADR 0451, 2026-11-14).
+  - note: Numerics. PARTIAL (ADR 0471, 2026-11-14; registered before the code, amendment 1 after the registered runs).
+    The opt-in PimpleSettings::lag_onset_refusal = Some(n) makes the first PISO/PIMPLE step refuse, through the
+    divergence guard and before any field is touched, when the ADR 0073 estimate for the step's settings (n power
+    iterations on a copy of the solver) is at least one; the message names the largest cell diffusion number nu dt/dx^2
+    (PimpleSolver::max_cell_diffusion), the estimate and the remedies. The fixed-mesh channel of ADR 0451 is refused at
+    nu dt/dy^2 = 100, 50, 25, 5.03 and 3.00 (estimates 25.9, 16.2, 9.23, 2.04, 1.17), with the state bit for bit as it
+    was, and runs at 2.51 (estimate 0.962, 20 steps bit for bit equal to the run without the option); the consistent
+    correctors with 8 outer iterations pass. Defaults bit-identical (baseline_hashes passes; one Option test on the
+    default path). Ten mutations: nine caught by the registered checks, the empty-direction filter only by a check added
+    by amendment (L3b). Partial because of that amendment and because the complete rcfd-fv suite was not finished by the
+    agent. Limits: the estimate depends on the iteration count (0.962 at 20, 1.0003 at 200 iterations at 2.51); first
+    step only; not on moving meshes or the fractional step; no case key. Open: ADR 0471 Q1 to Q4.
 - [~] **F-536** Outer-iteration criterion for the consistent-corrector step at large diffusion numbers
   - depends on: F-530
   - acceptance: Every limit not stated here is registered in the ADR before the run. The number of outer iterations of
