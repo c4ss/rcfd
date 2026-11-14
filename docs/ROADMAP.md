@@ -8421,7 +8421,9 @@ fixed by the item's registration ADR before any code.
     nodes held at index 2. Missed: beam continuing a solid bar 2.25 percent (limit 1), shell continuing a solid plate
     2.36 percent (limit 2): the unit-weight couplings on Quad8 faces and the corner-column search are too flexible (a
     rigid face gives 9e-6); known-miss records. Eleven mutations caught. Default bits unchanged (B1, baseline_hashes).
-    Follow-up: joint couplings with consistent face weights (number by the lead). Follow-up F-543.
+    Follow-up: joint couplings with consistent face weights (number by the lead). Follow-up F-543. F-543 (ADR 0460,
+    2026-11-14): the consistent and rigid joint couplings meet J1 (5.4e-6) and J2 (5.6e-4); the unit-weight couplings
+    and their known-miss records are kept unchanged.
 - [ ] **F-427** Frictionless contact: node-to-surface with an augmented Lagrangian, rigid and deformable targets, interference fits
   - depends on: F-426, F-397
   - acceptance: Every limit not stated here is registered in the ADR before the run. A bar pushed against a rigid stop
@@ -10469,7 +10471,7 @@ fixed by the item's registration ADR before any code.
     variants by name; default paths bit-identical.
   - note: Structural solver, advanced tier. Follow-up of F-537 (ADR 0457, 2026-11-14). Rotating modes first (fan blades
     in glass-filled plastic).
-- [ ] **F-543** Joint couplings with consistent face weights
+- [x] **F-543** Joint couplings with consistent face weights
   - depends on: F-426
   - acceptance: Every limit not stated here is registered in the ADR before the run. The beam-to-solid and
     shell-to-solid couplings of ADR 0456 weighted by the consistent nodal areas of a linear traction on the solid face,
@@ -10477,4 +10479,13 @@ fixed by the item's registration ADR before any code.
     J2 set-ups of ADR 0456 give the tip deflection of the one-piece cantilever within 1 and 2 percent; a rigid face
     within 0.1 percent at nu = 0; the coupling exact for the six rigid motions within 1e-12; the known-miss records of
     ADR 0456 kept.
-  - note: Structural solver, advanced tier. Follow-up of F-426 (ADR 0456, 2026-11-14): the J1/J2 misses.
+  - note: Structural solver, advanced tier. Follow-up of F-426 (ADR 0456, 2026-11-14): the J1/J2 misses. ADR 0460,
+    2026-11-14: tie::beam_to_solid_with and tie::shell_to_solid_with with JointCoupling::Consistent (the L2 projection
+    of the solid face field onto the reference motions, so the face receives the consistent nodal forces of a linear
+    traction; a shell edge coupled to every face node through its linear edge interpolation with the fibre offset,
+    drilling rotations left free by complete pivoting on the null space) and JointCoupling::Rigid; the unit-weight
+    couplings of ADR 0456 unchanged (bits B1) with their known-miss records kept. Met: beam continuing a solid bar
+    5.4e-6 (limit 1 percent), shell continuing a solid plate 5.6e-4 (limit 2 percent), rigid face 9.1e-6 at nu = 0
+    (limit 0.1 percent), shell rigid face 5.6e-4; the six rigid motions exact to 1.6e-13; the dual nodal forces equal
+    hex20::traction_field_loads of the uniform and linear tractions to 2.6e-15 on both faces, every face node loaded.
+    Seven mutations caught. Not covered: nu > 0, curved faces, dense rows over long edges.
