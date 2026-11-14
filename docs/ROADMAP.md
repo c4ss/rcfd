@@ -9800,7 +9800,7 @@ fixed by the item's registration ADR before any code.
     case file accepts the bilinear projection as a map method; a case without it gives the same bytes as before
     (baseline and case hashes unchanged), the schema golden is updated only with the maintainer's approval, and a case
     naming it builds the same rows as MapSettings::bilinear_projection bit for bit.
-- [ ] **F-510** Odd-index instability of a rotating part on the model path
+- [x] **F-510** Odd-index instability of a rotating part on the model path
   - depends on: F-505
   - acceptance: Every limit not stated here is registered in the ADR before the run. A rotating part whose K_eff has an
     odd number of negative eigenvalues (a cube on springs with a negative axial support, registered with its closed
@@ -9808,6 +9808,18 @@ fixed by the item's registration ADR before any code.
     the same part with an even number is flagged stable where the closed form says so. A cyclic sector whose single
     index (k = 0 or 2k = N) has an odd number of negative eigenvalues of K_eff is flagged unstable by
     RotatingSector::whirl_state with the full rotor's growth rate within 1e-8 relative.
+  - note: From ADR 0416 question 1 and ADR 0420 question 1, recommendations taken on the maintainer's standing
+    instruction of 2026-11-11. ADR 0424, 2026-11-12: RotatingPart::with_nodal_springs adds nodal springs of any sign to
+    a rotating part after its pre-stress (opt-in; model supports stay positive). The cube on springs of ADR 0416 with
+    its axial motion tied and a negative axial support has an odd count of negative eigenvalues of K_eff (1 below
+    omega_0, 3 above) and is flagged unstable by whirl_state with the closed-form growth rate omega_a within 8.5e-12
+    relative at 0 to 2 omega_0, its in-plane pair still gyroscopically stabilised at Omega -/+ omega_0 within 6.2e-12;
+    with a positive axial support the count is even (0, 2) and it is flagged stable with the closed-form frequencies
+    within 1.5e-11; the anisotropic cube in its band gives an odd count unstable at sigma within 2.5e-11 and an even
+    count unstable as its closed form says. On the disc sector with the stress stiffening off the torsion of index 0
+    loses first (1.456 omega_ref); at 2.513 omega_ref its count is 1 and RotatingSector::whirl_state flags it unstable
+    with the full rotor's growth rate (2782.65 1/s) within 1.4e-13, union of 504 eigenvalues within 1.1e-12; eight
+    mutations caught.
 - [x] **F-511** Whirl stability of a cyclic sector above the loss of stiffness
   - depends on: F-505
   - acceptance: Every limit not stated here is registered in the ADR before the run. RotatingSector solves each harmonic
