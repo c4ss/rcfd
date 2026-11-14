@@ -200,3 +200,80 @@ unknowns agrees and the layout does not. New check, registered now and run once 
 
 MU7 is then run once more against N2b. By the decision rule the item stays **partial** whatever N2b gives: MU7 was not caught by
 the registered checks, and N2b is a check added after the run.
+
+## Addendum 1: results, 2026-11-14
+
+Runs: `cargo test -p rcfd-post --release` (release profile; target directory in the scratch folder), the new files
+`si_beam_output.rs` (A1 to A6, N1 to N3, N2b) and `si_beam_output_bytes.rs` (B0, B1); the whole `rcfd-post` suite for B2 (37
+test binaries: 267 passed, 0 failed, 30 ignored, all pre-existing ignores). `rcfd-fem` was not touched (no file outside
+`crates/rcfd-post` and this ADR changed), so `baseline_hashes` was not run: no shared solver file changed.
+
+| id | check | limit | measured | met |
+| --- | --- | --- | --- | --- |
+| A1 | displacement / rotation read back (F and F'), NaN at node 4 | `1e-15`; NaN exact | 0 / 0; NaN exactly at node 4 | yes |
+| A2 | reaction / reaction_moment read back (F), NaN at node 4; absent for F' | `1e-15`; exact | 0 / 0; NaN at node 4; both absent for F' | yes |
+| A3 | 3 cells, types `3, 3, 3`, offsets `2, 4, 6`, connectivity `0 1 1 2 2 3` = element nodes; 5 points, node bits | exact | as stated | yes |
+| A4 | section_force_start / _end read back (F and F') | `1e-15` | 0 / 0 | yes |
+| A5 | array names and components (F, F') | exact | as registered | yes |
+| A6 | `beam_fields` bits; file equals string | exact | equal | yes |
+| B1 | six no-beam fixtures: FNV-1a 64 and length against B0 | exact | all six equal | yes |
+| B2 | `sb_solid_output.rs`, `si_scaffold_output.rs` (and the whole crate) unedited | pass | pass | yes |
+| N1 | Tet4 + Beam2 model refused naming Beam2 and ADR 0423 | exact | refused (`block 0 is Tet4 in a model with Beam2 blocks; ... a follow-up of ADR 0423`) | yes |
+| N2 | other `DofMap` (15 unknowns) refused naming displacement | exact | refused | yes |
+| N3 (amendment 1) | node 0 with six components on a Hex8 model | exact | `node 0 has 6 components; the solid output writes 3` | yes |
+| N2b (amendment 2) | 27 unknowns in another layout refused naming displacement | exact | refused | yes (added after the run) |
+
+The read-back errors are 0, not just below `1e-15`: `fe_vtu_string` prints with `{:?}`, which round-trips every `f64`.
+
+Mutations (scratch copy `f512-scratch/mut`, one at a time, `mutate.py`, log `mutations.log`):
+
+| id | mutation | caught by |
+| --- | --- | --- |
+| MU1 | rotation from components 0 to 2 | A1 (`1.12`), A6 |
+| MU2 | reaction_moment from components 0 to 2 | A2 (`1.08`), A6 |
+| MU3 | section_force_end from `.start` | A4 (`0.62`), A6 |
+| MU4 | rotation 0 instead of NaN at a three-unknown node | A1 (NaN positions), A6 |
+| MU5 | beam path for every model | B0/B1 (refused), N3, all four `sb_solid_output.rs` tests |
+| MU6 | line cells with the nodes reversed | A3 |
+| MU7 | `DofMap` equality check removed | **not caught by the registered checks** (N2's length differs, so the remaining length test refuses it); caught by N2b of amendment 2 (`unwrap_err` on an `Ok`) |
+
+Deviations:
+
+- Amendment 1 (N3 set-up) was found on reading `DofMap` before any run of N3: not a change after a run.
+- Amendment 2 (N2b) was written after MU7 survived.
+- The N1 test was run a second time after a cosmetic fix of the refusal text (a string continuation had left a run of spaces
+  in the message; the check, `contains("Beam2")` and `contains("ADR 0423")`, gave the same result both times). The first
+  `si_beam_output` run was also repeated once with a narrower output filter while reading the log; the tests are deterministic
+  and gave the same lines. No result was chosen between runs.
+- fmt (`cargo fmt -p rcfd-post --check`) and clippy (`cargo clippy -p rcfd-post --all-targets -- -D warnings`): clean after one
+  `type` alias in the test file (clippy `type_complexity`), made before the whole-crate run.
+
+Not run: the whole workspace (the lead's gate); `baseline_hashes` (no shared solver file touched); results of the other beam
+paths (L3).
+
+**Decision by the registered rule: partial.** Every clause of the acceptance met (A1 to A6, B1, B2), but MU7 was not caught by
+the registered checks; it is caught only by N2b, added after the run. The code under MU7 is a guard against a result of another
+model with the same number of unknowns; no acceptance clause depends on it.
+
+### Remaining questions
+
+1. **Close F-512 on N2b?** Options: (a) accept partial and close the gap by the follow-up below (N2b already in the tree, run
+   once and met); (b) keep F-512 partial with no follow-up. Recommendation: (a) — the follow-up is the existing N2b test plus a
+   clearer refusal text, which is a minute of work.
+2. **Refusal text for a layout mismatch.** It reads `length 27, expected 27` (the `FieldLength` error is reused). Options: (a)
+   a dedicated message naming the first node whose count differs; (b) leave. Recommendation: (a), with the follow-up.
+3. **Mixed beam and solid models (L1).** Options: (a) a follow-up writing the solid arrays for the solid blocks and the beam
+   arrays for the beam blocks (NaN elsewhere), once beam-solid joints exist (ADR 0417 L2); (b) leave. Recommendation: (a), after
+   the joint item.
+
+## For the lead: roadmap entries
+
+F-512: proposed status **partial**. Note:
+
+> Structural solver, intermediate tier. ADR 0423, 2026-11-13: rcfd_post::solid_output writes a model whose blocks are all Beam2 through beam_fields: point arrays displacement (3), rotation (3, NaN at a node with three unknowns), reaction and reaction_moment (3 each, when the result carries reactions; moment NaN at three-unknown nodes); every element a VTK_LINE cell (type 3) in element order; cell arrays section_force_start and section_force_end (6 each, N, V_y, V_z, T, M_y, M_z in local axes, from beam::section_forces). A model without Beam2 runs the former code: the six F-377 fixtures (Hex8, Tet4, Tet10, with and without reactions) give the FNV-1a hashes and lengths recorded at the base 3cf27f63. Read back: every array equal to the result (error 0, limit 1e-15). A model mixing Beam2 with other kinds is refused naming ADR 0423. Partial: of seven mutations MU7 (the DofMap equality check removed) was not caught by the registered checks (the registered wrong-numbering result had another length); caught by check N2b added after the run.
+
+Follow-up item:
+
+- "Beam output: refusal of a result with the model's count of unknowns in another layout", deps F-512.
+
+> Every limit not stated here is registered in the ADR before the run. rcfd_post::solid_output refuses a result of a beam model whose DofMap has the model's number of unknowns but another count at some node, with a message naming that node and both counts; the N2b test of ADR 0423 passes unedited; the mutation removing the DofMap equality check is caught by a check registered before its run.
