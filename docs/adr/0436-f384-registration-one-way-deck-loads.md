@@ -295,3 +295,95 @@ does not depend on the reference point because the forces agree). Run once.
 
 By the decision rule a negative control that did not behave as expected in the registered run is not "as expected"; whatever
 N2a gives, the proposal is **partial** (a check met only after an amendment made after its run).
+
+## Addendum 1: results (2026-11-14)
+
+The registered run: commit f779af3c, once, release, `cargo test -p rcfd-post --release --test sb_deck_loads -- --nocapture
+--test-threads=1` (log `w49i-work/f384-scratch/run1.log`): 4 tests passed, 1 failed (N2), 1.40 s. The corrected control N2a
+(amendment 1, commit bae5849d) was run once (log `run2_n2a.log`). Nothing else was re-run except the mutation runs on the
+scratch copy.
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| A1 plane `|F_n - F_d|/S_d`; `|M_n - M_d|/(S_d L_d)` | each `<= 1e-12` | 1.27e-16; 5.72e-17 | yes |
+| A1 tube U | each `<= 1e-12` | 2.93e-16; 2.08e-16 | yes |
+| A1 tube V | each `<= 1e-12` | 3.68e-17; 1.82e-16 | yes |
+| A1b plane; tube V `|F_n - F_d|/|F_d|` | each `<= 1e-12` | 1.27e-16; 1.69e-16 | yes |
+| A2 (a) grid moved `2 tol` | `Err` naming the grid | `deck grid 1 at [0.050000002, 0.0, 0.0] matches no solid node of surface set 'inner' within 1e-9 m` | yes |
+| A2 (b) grid moved `tol/2` | accepted | `Ok` (1344 nodal forces) | yes |
+| A2 (c) element matching no face | `Err` naming the element | `deck element 1: its grids match solid nodes [0, 320, 325, 1000], which are not the corners of a face ...` | yes |
+| A2 (d) `TEMP` grid moved `2 tol` | `Err` naming the grid | `deck grid 1 at [...] matches no solid node of the solid within 1e-9 m` | yes |
+| A2 (e) `TEMP` entry missing | `Err` naming the node | `solid node 0 has no TEMP value of set 5` | yes |
+| A2 (f) `TEMP` entry duplicated | `Err` naming the grid | `deck grid 1: solid node 0 already has a TEMP value of set 5` | yes |
+| A3 tube U bore `u_r` (plane strain) | `<= 1e-2` | 3.20e-4 | yes |
+| A4 tube U bore hoop stress | `<= 2e-2` | 5.59e-3 | yes |
+| A5 tube V `|F_R + F_fluid|/S` | `<= 1e-3` | 1.552e-4 (`F_R,x = -7846.975 N`, `F_fluid,x = 7852.580 N`, `S = 3.6122e4 N`) | yes |
+| A6 tube T `u_r/(alpha dT r)`; `u_z` | each `<= 1e-6` | 9.47e-14; 5.38e-14 | yes |
+| K1 shell of `inner` = `shell_tube(0.05, 0, 1, 64, 20)`; normals to the axis | as stated | 1344 nodes, 1280 quads, largest distance 0 m; all inward | yes |
+| K2 deck vs fluid force; moment; reactions' moment | `<= 1e-3`; `<= 5e-3`; `<= 5e-3` | 1.552e-4; 1.76e-15; 1.56e-15 | yes |
+| K3 nodal loads vs `Load::pressure` | `<= 1e-14` | 0 (bit-identical) | yes |
+| K4 element pressures equal `p0` | exact | 128 of 128 | yes |
+| K5 `TEMP` reversed and renumbered, bit-identical | exact | every node | yes |
+| K6 equilibrium `|F_R + F_n|/S` | `<= 1e-9` | 1.37e-15 | yes |
+| N1 plane stress against plane-strain Lame | `> 2e-2` | 3.12e-2 (estimate 3.15e-2) | yes |
+| N2 warped face (registered set-up): force; moment | `<= 1e-12`; `> 1e-6` | 7.96e-18; **1.14e-17** | **no** (defective set-up, amendment 1) |
+| N2a warped asymmetric face (amendment 1): force; moment | `<= 1e-12`; `> 1e-6` | 1.27e-16; 2.00e-4 (estimate 2.0e-4) | yes |
+| N3 flipped shell | `Err` naming an element | `deck element 1: its normal points into the solid (face 1 of element 0)` | yes |
+| N4 second temperature field | `Err` | `key 'temperature': a model has one temperature field; a second Load::Temperature was given` | yes |
+| N5 Tri3 surface; corner-varying `PLOAD4` | `Err` naming face and element; `Err` naming the element | `face 0 of element 0 in set 'zmin' has 3 nodes ...`; `deck element 1: corner-varying PLOAD4 pressures [1.0, 2.0, 3.0, 4.0] ...` | yes |
+| S1 `git diff 041d286f --stat -- crates` | the stub and the new test only | `crates/rcfd-post/src/solid_loads.rs`, `crates/rcfd-post/tests/sb_deck_loads.rs`, nothing else | yes |
+
+Against the estimates: A3 (3.2e-4) inside the estimated 2e-4 to 5e-4, A4 (5.6e-3) at the estimated 5.9e-3, A5 and K2 equal to
+F-237's 1.552e-4 to the printed digits (the same shell and mapping), N1 and N2a at their estimates. A1 and A6 are rounding, as
+derived.
+
+Mutations (scratch copy `w49i-work/f384-scratch/tree` from `git archive` of bae5849d, script `mutate.py`, own target directory,
+logs `BASE.log`, `MU1.log` to `MU6.log`; the unmutated copy passed first; each mutation applied alone and reverted):
+
+| Id | Mutation | Caught by |
+| --- | --- | --- |
+| MU1 | face load `+p` | A1 (plane 2.0, V 0.43), A1b, A3 (2.0), A4, A5 (0.43), K3, N2a |
+| MU2 | nearest node accepted whatever its distance | A2 (a), A2 (d) |
+| MU3 | temperature map by `grid id - 1` | K5 (index out of range: the renumbered ids, a panic in the test) |
+| MU4 | face load lumped `-p A/4` per corner | **not caught** |
+| MU5 | quads reversed in `shell_from_surface_set` | A1, A3, A5 (the orientation refusal fails every pressure test), K1 |
+| MU6 | `2 reference - T` stored | A6 (2.0), K5 |
+
+MU4 survived. Diagnosis: on a parallelogram face (every face of the A and K checks: hex box faces, chord rectangles of
+`annulus_3d`) `int N_a dS = A/4` exactly, so the lumped and the consistent loads coincide and K3 cannot see the difference; the
+registration's expectation that K3 catches it was wrong. The only non-parallelogram face, N2a's, has a lower limit only (its
+moment difference grew from 2.0e-4 to 2.3e-2 under MU4, still `> 1e-6`). A check that compares the nodal loads of a trapezoidal
+or warped face with `Load::pressure` (or with the exact `int N_a n dS`) would catch it; none was registered.
+
+`cargo fmt -p rcfd-post --check`: clean. `cargo clippy -p rcfd-post --all-targets -- -D warnings`: clean. Only the new test file
+was run (release); no existing line of any library was changed (the stub held one comment line), so no existing test covers a
+changed line and no baseline-hash run is owed. The whole workspace suite was not run (the lead's gate).
+
+**Decision by the registered rule: partial.** Every clause of the acceptance was met on the single registered run (A1 to A6), and
+every K check; but the negative control N2 did not behave as expected on its registered run (defective set-up, met only by the
+amended N2a after that run), and the mutation MU4 was not caught.
+
+### Remaining questions
+
+1. MU4 (lumped face loads) is invisible on parallelogram faces. Options: (a) a follow-up registered check on a trapezoidal and a
+   warped Hex8 face comparing `deck_pressure_loads` with `Load::pressure` node by node; (b) accept, since every face the F-237
+   parametrisations produce is a parallelogram. Recommendation: (a), small (one test, no library change).
+2. Faces of Tet4, Tet10 and Hex20 surfaces are refused (no 3-, 6- or 8-node shell in `deck_force_moment`). Options: (a) extend the
+   deck and `deck_force_moment` to `CTRIA3` and later quadratic shells; (b) leave the route to Hex8 surfaces until F-362 (general
+   mapping). Recommendation: (b); (a) changes F-237's summation and needs its own registration.
+3. The match tolerance is the caller's (absolute). Options: (a) keep it explicit; (b) a default relative to the bounding box.
+   Recommendation: (a); a default would be a new behaviour to register.
+
+## For the lead: roadmap entries
+
+Proposed status of F-384: **partial**.
+
+> ADR 0436, 2026-11-14: rcfd_post::solid_loads: shell_from_surface_set turns a surface set of 4-node solid faces into the F-237 ShellSurface (same nodes, outward normal toward the fluid, plane or z-cylinder parameter rectangles); deck_pressure_loads applies uniform PLOAD4 cards as consistent nodal loads on the matched faces (for solve_static_with); deck_temperature_load maps TEMP to Load::temperature with one value per solid node; grids matched by coordinates within a stated absolute tolerance (1e-9 m in the checks), a grid, element, corner-varying card or inward-pointing card refused by its id. Resultant force and moment of the nodal loads equal deck_force_moment within 2.9e-16 (plane and two tubes; limit 1e-12). Lame tube b/a = 2, plane strain, the uniform wall pressure of the F-237 fluid mesh exported, written, parsed and applied to a graded Hex8 tube 128 x 32: bore u_r within 3.2e-4 (limit 1 percent), hoop stress 5.6e-3 (limit 2 percent); plane-stress control 3.1 percent. Varying pressure on a 64 x 4 x 20 tube under the whole fluid wall: reactions equal the fluid force within 1.55e-4 S (limit 1e-3, the F-237 deck error). Uniform TEMP free expansion within 9.5e-14 (limit 1e-6). PARTIAL: the warped-face negative control was symmetric (centroid formula exact) and met only after amendment 1 with an asymmetric face (2.0e-4); the mutation that lumps the face load is not caught, because it is exact on parallelogram faces. Tet, Tet10 and Hex20 surfaces refused.
+
+Follow-up item (proposed; id at the lead's choice). Title: "Deck pressure loads on non-parallelogram faces". Deps: F-384.
+
+> Priority P3. Size S. Area: structural. Opened by ADR 0436: the consistent load of deck_pressure_loads is checked only on parallelogram faces, where lumping is exact (mutation not caught).
+
+Acceptance of the follow-up:
+
+> Every limit not stated here is registered in the ADR before the run. On a trapezoidal and on a warped Hex8 face the nodal loads of deck_pressure_loads equal those of Load::pressure node by node within 1e-14 relative, and the lumped-load mutation is caught.

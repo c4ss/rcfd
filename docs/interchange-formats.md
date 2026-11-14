@@ -175,6 +175,13 @@ bearing and mount loads of a rotor-dynamics response: two static load sets per h
 `rcfd_post::structural` maps wall pressure by conservative parameter-space overlap (x,y for planes, theta,z for cylinders
 with 2 pi periodicity) and temperature through `remap` followed by a linear nodal recovery.
 
+`rcfd_post::solid_loads` (ADR 0436) applies a deck to an `rcfd-fem` solid: `shell_from_surface_set` builds the shell the export
+writes onto from a surface set of 4-node faces (same nodes, outward normal of the solid = toward the fluid);
+`deck_pressure_loads` turns the uniform `PLOAD4` cards of a set into the consistent nodal loads of the matched faces (for
+`solve_static_with`); `deck_temperature_load` turns the `TEMP` cards into `Load::temperature` with one value per solid node.
+Grids are matched by coordinates within an absolute tolerance; a grid or element that matches nothing, a corner-varying
+`PLOAD4` and a card whose normal points into the solid are refused by their id.
+
 ## Where to go next
 
 - [Mesh import](mesh-import.md): reading external mesh files into a case.
