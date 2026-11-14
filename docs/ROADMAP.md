@@ -11543,14 +11543,26 @@ fixed by the item's registration ADR before any code.
     from a component equals the scaled channel rate within 3.0e-15 (m = 3 and 5), C_1/C_0 and C_4/C_0 equal the closed
     forms of ADR 0477 within 3.0e-10 and 2.6e-8, and a complex pure-delay cross-spectrum through RandomSolver agrees
     within 1.8e-15. Limits: Gaussian zero-mean stress, no critical-plane search, no case-file key. Follow-up F-605.
-- [ ] **F-590** Benasciutti-Tovo broadband damage rate as a second method
+- [~] **F-590** Benasciutti-Tovo broadband damage rate as a second method
   - depends on: F-566
   - acceptance: Every limit not stated here is registered in the ADR before the run. The rate (formula registered from a
     cited source) reduces to the narrow-band rate of F-413 within 1 percent for a one-mode response at zeta = 0.01 and
     agrees with the Dirlik rate of F-566 within a limit registered from the one-mode and two-mode cases of ADR 0497; the
     counted damage of the synthesised history of ADR 0497 lies within 10 percent of it; a non-positive m0 or m2 is
     refused.
-  - note: Structural solver, advanced tier. Optional. Follow-up of F-566 (ADR 0497, 2026-11-14).
+  - note: Structural solver, advanced tier. PARTIAL by the standing rule (the one-mode reduction to the narrow-band
+    rate at zeta = 0.01 missed: 1.646e-2 for m = 3, 3.106e-2 for m = 5 against 1e-2, ignored known-miss tests; every
+    other check met). ADR 0524, 2026-11-14: rcfd_fem::fatigue gains the Benasciutti-Tovo broadband damage rate of a
+    Gaussian stationary stress from m0, m1, m2, m4 (D. Benasciutti and R. Tovo, Int. J. Fatigue 27 (2005), cited from
+    memory, the fitted weight b unverified): benasciutti_tovo_coefficients, BenasciuttiTovo,
+    benasciutti_tovo_damage_rate and benasciutti_tovo_damage_rate_curve, and Moments::benasciutti_tovo_damage_rate; no
+    existing item changed. It holds at zeta = 0.001 (2.1e-3). BT over Dirlik 9.9e-3 (one mode) and 5.2e-4 (two modes)
+    for m = 3 (limit 5e-2), 2.4e-2 and 7.1e-2 for m = 5 (limit 1e-1); counted damage of the ADR 0497 history (seed
+    20261114, 212925 cycles) within 6.27e-2 of the BT rate (limit 1e-1); refusals of non-positive m0, m2, m4, m1 < 0,
+    alpha1 or alpha2 above 1, a weight b outside [0, 1], m, c and table or endurance curves; ten of eleven mutations
+    caught (M10 equivalent at message level). Limits: Gaussian zero-mean, power law without endurance limit, no case-
+    file key (the value benasciutti-tovo to join the pending method key of F-605). Open: verify the fitted b against
+    the publication; amend the acceptance to 2 percent at zeta = 0.01.
 - [~] **F-591** Laminated Shell4 under body loads and pre-stress (gravity, centrifugal, nodal body force, buckling and spin softening of a layup)
   - depends on: F-428, F-420
   - acceptance: Every limit not stated here is registered in the ADR before the run. Gravity and the centrifugal load on
