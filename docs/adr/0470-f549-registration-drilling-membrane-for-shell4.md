@@ -288,3 +288,87 @@ MP, QP, CQ, BE, SE, ISO, FR, TH, ST, D, RF, P, N and O are one test file `crates
 2. The opt-in through a separate `Shell4Membrane` field of the Shell property (taken) rather than `Shell3Membrane::AndesOpt` on a
    Shell4 block (would change the result of ADR 0466's existing RF2 test).
 3. Mixed edges between the ANDES Shell3 and the new Shell4 taken (b3); every other mixed drilling pairing refused as before.
+
+## Addendum 1: results (2026-11-14)
+
+The registered run is commit e0eb1032 (`f549-scratch/run1.log`, the two files `sa_shell4_membrane` and
+`sa_shell4_membrane_bits`), made once. B1 had not been run on any F-549 code before it; its only earlier run is the base
+recording (`b1-base.log`, commit f3816792). After the run, `cargo fmt` changed the layout of F-549 lines only, and clippy asked
+for one `vec!` in the test to become an array (`useless_vec`, BE1's unknown vector, no number changed); both files passed again
+after each change (`after-fmt.log`, `after-clippy.log`, identical numbers), committed as e76707b2. B2 and B3 ran on e0eb1032
+and e76707b2. No amendment was written.
+
+| id | limit | measured | met |
+| --- | --- | --- | --- |
+| MP1 | `1e-8` | `2.12e-14` (through `solve_static_with`, the model taken) | yes |
+| MP2 | `1e-8` | `1.1e-15`; m and Q `8.0e-16` | yes |
+| MP3 | `1e-8` | `1.8e-15` | yes |
+| MP4 | `1e-8` | `1.0e-14`; Q and N `9.5e-13` | yes |
+| QP1 | `1e-8` | `2.15e-14` | yes |
+| QP2 | `1e-8` | `2.9e-15` | yes |
+| CQ1 | `2e-2` | `4.209e-3` (`u_y / delta = 0.9957912994`) | yes |
+| CQ2 | `2e-2` | `3.237e-3` (`0.9967626398`) | yes |
+| BE1 | `1e-10` | `2.6e-14` | yes |
+| SE1 | `6`, `>= 1e-7` | 6, `1.738e-6` (t = 0.01); 6, `1.738e-4` (t = 0.1) | yes |
+| SE2 | `1e-11`; exact | `2.8e-16`, `1.5e-16`; symmetric bit for bit | yes |
+| ISO1 | `1e-11` | `3.7e-16` largest | yes |
+| FR1 | `6` | 6 (`lambda_7 / lambda_max = 2.73e-5`) | yes |
+| TH1 | `1e-8`; `1e-8` | `4.5e-14`; `2.0e-15` | yes |
+| ST1 | `1e-12` | `2.2e-16` | yes |
+| D1 | exact | bit for bit | yes |
+| RF1 | exact | (a) the mixed ANDES patch taken; (b) next to a default Shell4, (c) a constant-strain Shell3, (d) an Allman Shell3 refused naming element 0; (e) ADR 0466's mixed patch still refused | yes |
+| RF2 | exact | `UnsupportedKind { block: 0, kind: "Shell3", operation: "a Shell4 membrane" }`; taken on Shell4; `thickness` refused | yes |
+| B1 | exact | 17 of 17 digests equal the base | yes |
+| B2 | pass | the whole `rcfd-fem` suite, release: 105 test binaries and the doc-tests, 0 failed (`b2-fem-all.log`; the registered list `b2-fem.log`); `rcfd-post` `sa_shell3_output`, `si_shell_output`, `si_shell_output_bytes`, `si_shell_output_vtk` passed (`b2-post.log`) | yes |
+| B3 | pass | baseline_hashes 3 passed, 1 ignored (the existing record) | yes |
+| P1 | `1e-5` each | largest `4.6e-11` (N1); CQ1 `1.5e-11` | yes |
+| N1 | `< 0.9` | `0.8838414209` | yes |
+| N2 | `> 1e-2` | `2.0776e-1` (ADR 0466 PT5's number) | yes |
+| O1 | printed | `1.0331334731` | observation |
+| O2 | printed | `1.0470229102` | observation |
+| O3 | printed | ANDES Shell4 `0.9726063308`, bilinear `0.8502431650` | observation |
+
+Mutations (archive copy of e0eb1032, `f549-scratch/mutate.py`, `mutlogs/`), each caught:
+
+| id | caught by |
+| --- | --- |
+| MU1 | CQ1, CQ2, MP1, MP2, BE1, TH1, P1 |
+| MU2 | ISO1, P1 |
+| MU3 | CQ1, CQ2, MP1, MP2, BE1, ST1, P1 |
+| MU4 | P1, BE1 (the penalty is not zero on the pure bending field at the Gauss points) |
+| MU5 | CQ1, CQ2, MP1, MP2, BE1, TH1, P1 |
+| MU6 | D1, CQ1, CQ2, MP1, MP2, TH1, P1 |
+| MU7 | ST1 |
+| MU8 | TH1 |
+| MU9 | RF1 (a) (the MP1 solve refused), (b), (c) |
+| MU10 | RF1 (b), (c) |
+| MU11 | RF2 |
+| MU12 | B1 (both bit records), N1, N2, P1, and the existing `si_shell` (CY1, FR, N1, P4) |
+
+fmt (`cargo fmt -p rcfd-fem --check`) and clippy (`cargo clippy -p rcfd-fem --all-targets --release -- -D warnings`): clean
+after the change disclosed above. `rcfd-cli`'s `docs_site` test (for `docs/reference-data.md`): 2 passed (`docs-site.log`). Not run: the whole
+workspace suite (the lead's gate).
+Shared solver files changed (`git diff fc026814`): `mesh.rs` (the `shell4_membrane` field, `shell_with_membrane` filling it,
+the new `shell4_with_membrane`, one guarded arm in `set_block_property`), `shell.rs` (the enum, the options field, the ANDES
+branch of the stiffness, two helpers, `thermal_load_vector_with`, `model_membrane`, one match in `stresses`), `shell3.rs` (the
+helper `andes_membrane`, the Shell4 classes in `check_membrane_edges`), `thermal.rs` (the Shell4 thermal call).
+
+**Decision: done**, by the rule: every registered check met in the single run, every control as stated, all twelve mutations
+caught by registered checks, no amendment. The acceptance's clauses: the opt-in Shell4 membrane with the ANDES edge field
+(arithmetic 1), ANDES Shell3 and Shell4 share edges (RF1 (a)), the mixed membrane patch of ADR 0454 at `2.1e-14` against `1e-8`
+(MP1), the 8 x 2 strip on quadrilaterals within `4.2e-3` of beam theory against `2e-2` (CQ1), defaults bit-identical (B1 to B3).
+
+Remaining questions (options, recommendation):
+
+1. Allman's Shell3 next to Shell4 (L6): (a) keep it refused; (b) an `alpha = 1` quadrilateral of the same construction. Recommend
+   (a): Allman's membrane is kept for comparison only.
+2. The default Shell4 membrane: (a) keep the bilinear default; (b) make the ANDES quadrilateral the default (changes every Shell4
+   result and the hash tables; needs the maintainer). Recommend (a).
+3. The coupled (layup) section with the drilling membrane (L1, L3): (a) leave it unreachable; (b) a follow-up giving `Layup` a
+   membrane field with the basic rows in the coupling. Recommend (a) until a laminate needs in-plane bending accuracy.
+
+## For the lead: roadmap entries
+
+Proposed status of F-549: **done**.
+
+> Structural solver, advanced tier. Follow-up of F-539 (ADR 0466, 2026-11-14): the PT5 mixed-mesh miss. F-549 (ADR 0470, 2026-11-14): an opt-in drilling membrane for Shell4 through `BlockProperty::shell4_with_membrane(t, Shell4Membrane::AndesOpt)`: the mean of the two diagonal splits into ANDES OPT triangles (the Shell3 membrane of ADR 0466), no drilling penalty; every edge carries the ANDES edge field with weight one (derived), so ANDES Shell3 and Shell4 share edges, and the refusal of mixed drilling edges is lifted for that pairing only. Met: the mixed Shell3 + Shell4 membrane patch of ADR 0454 2.1e-14 (limit 1e-8; 2.1e-1 with the default Shell4), all-Shell4 patches 2.2e-14 and 2.9e-15; 8 x 2 in-plane cantilever strip on quadrilaterals 0.99579 of Timoshenko beam theory (end couple 0.99676; default bilinear 0.884); pure bending of rectangles exact to 2.6e-14; six zero modes per element and per free plate; consistent thermal load and centre stresses; within 4.6e-11 of a numpy prototype. Default Shell4, Shell3 and the ANDES Shell3 bit-identical (17 digests), baseline_hashes unchanged; twelve mutations caught.
