@@ -11215,11 +11215,21 @@ fixed by the item's registration ADR before any code.
     change only the value of eta are seen only by the missed check. Follow-up for a second-order Ritz error. Follow-up
     F-575. The second-order Ritz error that clause a4 needed is reported by F-575 (ADR 0492, 2026-11-14): schur_eta
     within 3.4e-4 of the measured error.
-- [ ] **F-570** Energy-momentum conserving step (Simo and Tarnow) for nonlinear transient dynamics
+- [x] **F-570** Energy-momentum conserving step (Simo and Tarnow) for nonlinear transient dynamics
   - depends on: F-423
   - acceptance: Every limit not stated here is registered in the ADR before the run. The spinning bar of ADR 0479 over
     ten turns, linear momentum within 1e-10, angular momentum within 1e-6, energy within 1e-6 relative.
-  - note: Structural solver, advanced tier. Follow-up of F-423 (ADR 0479, 2026-11-14).
+  - note: Structural solver, advanced tier. ADR 0514, 2026-11-14: nl_transient gains StepKind::EnergyMomentum
+    (NlTransientOptions::energy_momentum), the Simo-Tarnow midpoint step with the internal force B_NL(F_mid)^T (S_n +
+    S_{n+1})/2 and the velocity 2 du/h - v_n, solved by Newton with a symmetric tangent; isotropic St. Venant-Kirchhoff
+    solids of the Full formulation only (other materials, F-bar blocks and driver contributions refused naming ADR
+    0514); loads averaged over the step, Rayleigh damping, halving, save/restore (state magic RCFDNLE1) and threads as
+    the Method step. Spinning bar of ADR 0479 over ten turns (residual tolerance 1e-7): linear momentum 1.8e-13 (1e-10),
+    angular momentum 6.6e-13 (1e-6), energy 1.6e-13 (1e-6); the trapezoidal step on the same bar drifts 8.8e-6 in energy
+    by step 600. Tolerance probe: the three limits hold down to the residual tolerance 1e-2. Linear limit equals F-398
+    within 7.6e-14, pendulum energy within 1.2e-14, damped energy balance within 1.7e-14. Default step bit-identical
+    (B0, baseline_hashes). Seven of eight mutations caught (one by a check added after the mutation run). No case-file
+    key.
 - [ ] **F-571** Rounding floor of the total Lagrangian internal force under large rotation and translation
   - depends on: F-423, F-397
   - acceptance: Every limit not stated here is registered in the ADR before the run. S3 of ADR 0479 (free Hex8, 50
