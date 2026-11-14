@@ -8570,7 +8570,7 @@ fixed by the item's registration ADR before any code.
     Follow-up: joint couplings with consistent face weights (number by the lead). Follow-up F-543. F-543 (ADR 0460,
     2026-11-14): the consistent and rigid joint couplings meet J1 (5.4e-6) and J2 (5.6e-4); the unit-weight couplings
     and their known-miss records are kept unchanged.
-- [ ] **F-427** Frictionless contact: node-to-surface with an augmented Lagrangian, rigid and deformable targets, interference fits
+- [~] **F-427** Frictionless contact: node-to-surface with an augmented Lagrangian, rigid and deformable targets, interference fits
   - depends on: F-426, F-397
   - acceptance: Every limit not stated here is registered in the ADR before the run. A bar pushed against a rigid stop
     across a gap g: the piecewise-linear force-displacement closed form within 1e-8, the penetration after augmentation
@@ -8583,8 +8583,18 @@ fixed by the item's registration ADR before any code.
     percent. The contact tangent agrees with central differences within 1e-6 in a fixed active set; the last residuals
     of a step with a settled active set show an order >= 1.8; an active set that cycles beyond the registered count is
     an error with the nodes.
-  - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0330; the registration is
-    written by the implementation agent before any code.
+  - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. ADR 0507, 2026-11-14: frictionless
+    node-to-surface contact (contact.rs) on bilinear Hex8 target faces or a rigid plane: closest-point projection with
+    the exact gap gradient and second derivative, a per-node augmented Lagrangian force max(0, lambda - eps A g) with
+    Uzawa updates until every active gap is within the tolerance, a linear-body Newton driver (sparse L D L^T, eps G G^T
+    on a refused pivot) and the total Lagrangian driver through nonlinear::solve_from, located errors for active-set
+    cycling and exhausted augmentations. Met: bar on a rigid stop (1.1e-11); stacked blocks pressed and pulled apart
+    (1.2e-10, no tensile multiplier); Hertz sphere on a rigid plane at a/R = 0.1 (radius 3.0e-4, peak 7.6e-4, approach
+    6.1e-4, 13 nodes); interference-fit pressure (8.0e-3) and Lame hoop stress (3.6e-3); tangent against central
+    differences (2.3e-10); the cycling error names the nodes; nine of nine mutations caught; default bits unchanged.
+    PARTIAL. Missing: uniform shaft stress in the fit (7.0e-3 against 1e-6, a through-thickness variation not yet
+    explained) and the residual order of the total Lagrangian punch (least 0.17 against 1.8, the ADR 0404 measure on
+    solves of three to five iterations); both recorded as known misses. No case-file key.
 - [x] **F-428** Laminated shell: layup stiffness, ply stresses and failure indices
   - depends on: F-409, F-392
   - acceptance: Every limit not stated here is registered in the ADR before the run. One isotropic ply gives the bits of
