@@ -232,4 +232,64 @@ change breaks B1 or B2 (it is then reverted, nothing merged).
 
 ## Addendum 1: results
 
-(to be written after the runs)
+Written 2026-11-14 after the runs. Code: `rcfd_fem::rotor::SpeedBearing`, `RotorModel::{add_speed_bearing, speed_bearings,
+matrices_at, critical_speeds_over}`; `matrices()` is `matrices_at(0.0)`; `whirl`, `harmonic_response`, `unbalance_response` and
+`campbell` take the coefficients at their spin; `critical_speeds()` is a thin wrapper of a private `critical_speeds_with`.
+Tests `crates/rcfd-fem/tests/sa_rotor_speed.rs` and `sa_rotor_speed_default_bits.rs` (B1 digests recorded at 9386de34 in a
+commit before any library change, passing unchanged after it).
+
+| id | check | limit | measured | met |
+|---|---|---|---|---|
+| B1 | 12 digests of constant-bearing outputs of X and Y at the base | `==` | equal | met |
+| B2 | rest of `rcfd-fem` tests, `baseline_hashes` | pass | see "Gates" | see below |
+| T1 | constant 1-, 2-, 3-knot tables, X (whirl, campbell, CSV, harmonic, unbalance, matrices) and Y (also `critical_speeds`) | bit-equal | all six equal | met |
+| T2 | 3 distinct knots, whirl and unbalance at each knot against the constant bearing; between-knot control differs | bit-equal | equal; control differs | met |
+| T3 | `at(5)` = 2 I, 4 I; knots by bits; `covers` | `==` | exact | met |
+| T4 | `matrices()` = `matrices_at(0)` = constant bearing at 0 | `==` | equal | met |
+| L1 | Q critical speed, two roots | `<= 1e-6` | `0` (both roots equal the closed form 441.964496727 rad/s to the last bit) | met |
+| L2 | S (series, cubic) critical speed, two roots | `<= 1e-6` | `4.4e-16` (317.816123047 rad/s) | met |
+| L3 | undamped whirl at 200, 400, 600 | `<= 1e-9` | `1.1e-16` | met |
+| L4 | damped whirl root | `<= 1e-9` | `2.6e-16` | met |
+| L5 | Campbell, 11 speeds, 2 tracks | `<= 1e-9` | `4.4e-16` | met |
+| L6 | unbalance orbit radius at 0.5, 1, 2 `Omega_c`, forward | `<= 1e-9` | `2.2e-16` | met |
+| L7 | clamp below and above the table | bit-equal | equal | met |
+| C3 | constant model: `critical_speeds_over` against `critical_speeds()` (3 roots in range) | `<= 1e-12` | `0` | met |
+| N1 | constant-bearing closed form differs from the solver | `> 1e-2` | `5.83e-2` | met |
+| N2 | wrong-sign closed form differs | `> 1e-2` | `1.13e-1` (estimate said about 9 percent; the limit is met) | met |
+| X1 | 12 refusals with their keys | each | refused | met |
+
+The measured errors of L1 to L6 are at rounding because Q and S are exact for the F-391 element (tip and mid-span loads) and the
+table data are exactly linear.
+
+Mutations (scratch copy `f563-scratch/mut`, own target dir; script `f563-scratch/mutate.py`), each caught:
+
+| id | caught by |
+|---|---|
+| MU1 no interpolation | L1/L2, L3 to L5, L6, L7/T3, T2 |
+| MU2 `whirl` at spin 0 | L3 to L5, L7, T2 |
+| MU3 `campbell` one matrix set | L3 to L5 |
+| MU4 `harmonic_response` at spin 0 | L6, T2 |
+| MU5 extrapolation instead of clamp | L7 |
+| MU6 damping table not applied | L3 to L5, L6, L7, T2 |
+| MU7 no bisection | L1/L2, C3 |
+| MU8 `k` and `c` swapped | L1/L2, L3 to L5, L6, L7, T1, T2, X1 |
+| MU9 `matrices()` at 500 rad/s | T4 (in `l7_t3_t4_table_behaviour`) |
+
+Deviations: the registered text of C3 is verbose but the check run is the one described in its note. MU5 is caught by L7 and not
+by T3 (T3 has no point above the last knot); the registration listed both, the planned catch by T3 was wrong, the mutation is
+caught. MU2, MU4, MU6 are caught by more checks than listed. N2 estimate 9 percent against 11.3 percent measured (an estimate,
+not a limit).
+
+Gates: see the hand-back report (the lead runs the workspace gate).
+
+Decision by the rule: **done** (every limit met, every mutation caught, B1 and T1 bit-equal).
+
+Not covered (as registered): bearings sharing a station with one constant and one table bearing may differ in the last bit by
+the order of the sum; roots that touch without a sign change; `critical_speeds()` keeps spin-0 coefficients; no case-file key.
+
+Open questions (recommendations as in the registration): case-file key (D recommendation above, wait for a rotor case input);
+clamp against refuse (clamp taken, `covers` offered); linear against monotone cubic (linear taken).
+
+## For the lead: roadmap entries
+
+> F-563 (proposed status done): Structural solver, advanced tier. Follow-up of F-416. ADR 0498, 2026-11-14: rcfd_fem::rotor::SpeedBearing (piecewise-linear table k(Omega), c(Omega), clamped outside) and RotorModel::add_speed_bearing, matrices_at, critical_speeds_over (self-consistent critical speed by bracketed bisection of crit_j(Omega) - Omega); whirl, Campbell, harmonic and unbalance response evaluate the bearing at their spin. A constant table equals the constant bearing bit for bit (X and Y, 1, 2, 3 knots); linear-table critical speed against the closed form 0 (parallel quadratic model) and 4.4e-16 (series cubic model), limit 1e-6; whirl, Campbell and unbalance response against closed forms 4.4e-16, limit 1e-9; defaults bit-identical; 9 mutations caught. No case-file key.
