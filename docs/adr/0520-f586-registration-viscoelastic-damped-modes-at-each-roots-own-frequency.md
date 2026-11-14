@@ -300,3 +300,103 @@ TT (basis 6 against the dense full space, `1.504e-4`) agrees with it to three di
 **Tests.** `f586_checks_known_miss` (registered variant) and `f586_checks_amended_known_miss` (amended variant) are ignored
 records; `f586_checks` runs the amended variant with TF printed as a record (no limit), so every met check is kept as a
 regression test. It is a re-run of met checks for the suite, not a registered run.
+
+## Addendum 1: results (2026-11-14)
+
+Code: commit 07997bbe (library and checks) on the B1 record 7274bdb7 (run on the base 2f8c1d57 before any library code,
+`f586-scratch/b1-base.log`); records and suite 57f8239f, 05782412; module doc 2f64b72a. Files: `crates/rcfd-fem/src/damped.rs`
+(`OwnFrequency`, `OwnFrequencyRoot`, `DampedOptions::viscoelastic_own_frequency`, `DampedModes::own_frequency`, the
+reporting moved into `report` with the same operations, `OwnSetup`, the iteration), `mat_visco.rs` (module doc), tests
+`sa_damped_visco_own.rs` and `sa_damped_visco_own_default_bits.rs`. Runs: the registered run once (`run1.log`), the amended
+run once (`run2-amended.log`), the suite (`run3-suite.log`, a re-run of met checks, Amendment 2).
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| SU | 1e-9 | 2.31e-13 | yes |
+| SR | 1e-14 | 0 | yes |
+| DA (acceptance) | 1e-8 | 1.09e-13 | yes |
+| DAm | 1e-8 | 1.11e-13 | yes |
+| DD (acceptance, registered amount) | [9.5e-6, 9.8e-6] | 9.6405e-6 | yes |
+| DDr | 1e-4 | 1.11e-9 | yes |
+| DS | 1e-8 | 1.08e-13 | yes |
+| DH | 1e-8 | 1.42e-14 | yes |
+| DB, DC | 1e-8 | 1.01e-13, 1.17e-13 | yes |
+| FP | 1e-12 | 7.38e-13 | yes |
+| IT | [3, 15] | 6 | yes |
+| T (acceptance, truncation error) | [1e-5, 1e-3] | 1.504e-4 | yes |
+| TF (registered) | 1e-9 | inf (dense reference not converged) | **no** (Amendment 1) |
+| TF (amended) | 1e-9 | 1.15e-8 | **no** (Amendment 2: basis n-1 leaves out the 72nd mode) |
+| TT | record | 1.504e-4 | record |
+| TE | 1e-10 | 8.7e-14 | yes |
+| NC3 | T >= 1e4 TE | 1.5e-4 against 8.7e-14 | yes |
+| DM (registered) | 1e-9 | 6.87e-9 | **no** (point dashpot against basis n-1) |
+| DMb (amended) | 1e-9 | 5.51e-11 | yes |
+| DE | 1e-9 | 4.42e-13 | yes |
+| DF | 1e-12 | 0 | yes |
+| C0 | 1e-12; count <= 1 | 1.67e-14; 1 | yes |
+| P1 | bits equal | equal | yes |
+| RV1 (registered) | runs, finite | refused (pseudo-mode, 50 iterations) | **no** |
+| RV1b (amended) | finite; > 50 iterations | runs; 170 | yes |
+| NC1 | >= 1e-6 | 9.64e-6 | yes |
+| NC2 | >= 5e-8 | 2.41e-7 | yes |
+| RF (i) to (iv) | as stated | all as stated | yes |
+| N1 (B1, 5 digests) | equal | equal | yes |
+| N1b (B0, `sa_damped_visco`) | pass | pass | yes |
+| N2 `baseline_hashes` | pass | 3 passed, 1 ignored | yes |
+| N3 `cargo test -p rcfd-fem --release` | pass | all 189 test binaries ok | yes |
+
+Rod A: own first root `-49.462687 + 1979.781603 i` against the frozen `-49.463168 + 1979.762518 i`; iterations 6, 6, 6, 5 for
+roots 1 to 4 (rod B: 6, 6, 6, 5; rod C: 7, 7, 6, 6). The 3-D cantilever T: basis 6 first root `-42.2373 + 1240.5381 i`, full
+basis `-42.2337 + 1240.6626 i`. The suite takes about 10 s in release.
+
+Mutations (scratch copy `f586-scratch/mut`, own target dir, `f586-scratch/mutations.log`, run against the suite), every one
+caught:
+
+| Id | Caught by |
+|---|---|
+| MU1 frequency not updated | DA, DAm, DD, DDr, DS, DH, DB, DC, DMb, DE, IT, RV1b, RF (iii) |
+| MU2 `w/(2 pi)` | DA, DAm, DD, DDr, DS, DH, DB, DC, DMb, DE, RV1b |
+| MU3 `P^G`, `P^K` swapped | DA, DD, DS, DH, DB, DC, T, TE, NC3, DMb, DE, C0, RV1b |
+| MU4 viscoelastic loss dropped | DA, DD, DS, DH, DB, DC, DMb, DE, RV1b |
+| MU5 converged after one update | DA, IT, DD, DS, DH, DB, DC, DMb, FP, RV1b, RF (iii) |
+| MU6 first candidate, not the nearest | DH, DB, DC |
+| MU7 not converging not refused | RF (iii) |
+| MU8 `K_rest` dropped | DMb |
+| MU9 `H_eta` dropped | DMb |
+| MU10 Rayleigh at `w` | DMb |
+
+fmt: `cargo fmt -p rcfd-fem --check` clean; clippy: `cargo clippy -p rcfd-fem --all-targets --release -- -D warnings`
+clean; `cargo test -p rcfd-cli --release --test docs_site` 2 passed.
+
+Deviations: (1) TF, DM and RV1 missed in the registered run, TF again in the amended run (Amendments 1 and 2, with
+diagnoses); recorded as the ignored tests `f586_checks_known_miss` and `f586_checks_amended_known_miss`, limits intact. (2) The
+check function of the registered run was moved into a helper with a variant flag (same values for the registered variant)
+so that one copy serves the records and the suite. (3) The roadmap entry is updated in a separate last commit, as the brief
+asks. Not run: the whole-workspace suite (the lead's gate), the mesh and case hash tables.
+
+**Decision by the registered rule: partial.** B1, B0 and the baseline hashes are unchanged and the acceptance checks DA, DD
+and T are met, but TF, DM and RV1 missed and are recorded as known misses with diagnosed causes (none a defect of the
+library: TF and DM measure what the one left-out mode costs, RV1 is the registered refusal of a slowly contracting
+pseudo-mode). Every mutation is caught.
+
+Remaining questions (taken or open):
+
+1. A case-file key for the own-frequency iteration: open (the maintainer's call, as ADR 0495 question 2). Recommendation: one
+   key in the damped-modes block, `viscoelastic_own_frequency = { roots, tolerance = 1e-12, max_iterations = 50 }`, valid
+   only with the reference frequency key.
+2. Pseudo-modes of the residual vectors in the iteration (RV1): (a) iterate them like any root (now; slow, may be refused);
+   (b) skip roots flagged `pseudo` and report them at the reference frequency; (c) a relaxed or secant update. Recommended
+   (b) as a follow-up: a pseudo-mode is not a root of the continuum (ADR 0467) and its own frequency has no physical meaning.
+   Not taken here (it changes behaviour registered in this ADR).
+3. A full-space check of the library's own-frequency roots: the modal analysis gives at most `n - 1` modes, so the "full
+   basis" misses one mode, which can carry a loss coupling (TF) or a point dashpot (DM). Recommended: accept T (basis 6
+   against basis `n - 1`) with the record TT (against the dense full space, the same `1.504e-4`) as the acceptance's
+   measurement; a follow-up could let the damped modes take an explicit basis.
+4. A basis rebuilt per root (storage modes at each root's own frequency): not done; recommended only if a fan blade case shows
+   a truncation error at roots far from `omega_ref` that T does not cover.
+
+## For the lead: roadmap entries
+
+> Status for F-586: partial (ADR 0520, 2026-11-14). The damped modes iterate each of the lowest roots of a viscoelastic material to its own frequency (DampedOptions::viscoelastic_own_frequency(OwnFrequency::new(roots)), with viscoelastic_reference giving the frequency of the storage basis and the start): on the F-582 basis the projected problem at w takes K_r(w) = K_rest + sum (G'(w) P^G + K'(w) P^K) and H_r(w) = H_eta + sum (G''(w) P^G + K''(w) P^K), the update is w <- Im lambda of the nearest root, converged at |dw| <= 1e-12 w, refused after 50 iterations; DampedModes::own_frequency records the frozen root, the final frequency and the count. On rod A the converged first root equals the chain root at its own frequency within 1.1e-13 (limit 1e-8; 6 iterations) and differs from the F-582 frozen root by 9.64e-6 (registered 9.6405e-6); roots 2 to 4 and rods B, C within 1.2e-13, independent of the basis size and of the start. The 3-D cantilever with unequal weights registers the truncation error 1.50e-4 (basis 6 against basis 71; 1.50e-4 against the dense full space too; equal weights 8.7e-14). Known misses, diagnosed: the full basis 71 against the dense full space 1.15e-8 (limit 1e-9: the 72nd mode, which the modal analysis cannot give, carries the loss coupling of root 2), the same model with a point dashpot 6.9e-9, and a residual-vector pseudo-mode that needs 170 iterations (refused at 50). Models without the option keep their bits (B1 5 digests, B0, baseline hashes unchanged); 10 of 10 mutations caught. Follow-ups: pseudo-modes skipped in the iteration, a case-file key.
+
+> Follow-up item (proposed): "Pseudo-modes in the viscoelastic own-frequency iteration", deps F-586; acceptance: "Every limit not stated here is registered in the ADR before the run. The own-frequency iteration of the damped modes leaves the roots flagged pseudo (ADR 0467) at the reference frequency and says so in the notes; the rod B of ADR 0520 RV1 with residual vectors and a ground dashpot converges every physical root within the default 50 iterations, with the same physical roots as the iteration without that restriction within 1e-12 relative. Models without the option keep their bits."
