@@ -732,6 +732,14 @@ impl HarmonicSolver {
         let p = self.prepare(load)?;
         omegas.iter().map(|&w| self.evaluate(&p, w)).collect()
     }
+
+    /// The modal forces `phi_r^T f` of a real load (one value per equation) and, with the static correction, its residual
+    /// `x_s`: the response is `sum_r phi_r H_r(omega) phi_r^T f + x_s` (ADR 0477 D7, for the random response of
+    /// [`crate::random`]).
+    pub fn modal_decomposition(&self, load: &[f64]) -> Result<(Vec<f64>, Option<Vec<f64>>)> {
+        let p = self.prepare(&HarmonicLoad::real(load.to_vec())?)?;
+        Ok((p.modal_re, p.residual.map(|(re, _)| re)))
+    }
 }
 
 /// The factor of the reduced stiffness with the pivot rule of the static solve.

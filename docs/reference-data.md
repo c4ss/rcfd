@@ -1832,3 +1832,18 @@ central differences, the uniaxial bar, the closed forms of the sphere and the be
 | Partly plastic thick sphere: `p = 2 sigma_y ln(c/a) + (2 sigma_y/3)(1 - c^3/b^3)`, limit `2 sigma_y ln(b/a)`, elastic shell `sigma_theta - sigma_r = sigma_y (c/r)^3`; `b/a = 2`: `p(1.25 a) = 0.950193 sigma_y`, `p(1.5 a) = 1.196347 sigma_y` | derived | equilibrium, Tresca = von Mises under spherical symmetry, Lame shell, ADR 0475 arithmetic 3; R. Hill, The Mathematical Theory of Plasticity, Oxford, 1950, chapter 5: NOT read, from memory |
 | Residual hoop stress at the bore after elastic unloading from `p(1.25 a)`, `b/a = 2`: `sigma_y - (12/7) p = -0.628903 sigma_y` (elastic unloading for `p < (7/6) sigma_y`) | derived | superposition of the Lame field of `-p`, ADR 0475 arithmetic 4 |
 | Elastic-perfectly plastic rectangle in pure bending, `M/M_y = 1.5 - 0.5 (kappa_y/kappa)^2` | derived | uniaxial fibres, elastic core `y_e = (h/2) kappa_y/kappa`, ADR 0475 arithmetic 5 |
+## F-417 random vibration by modal superposition (ADR 0477)
+
+No source was read for F-417; the books and papers below are cited from memory for the names and the published forms. Every
+formula is derived in ADR 0477 (closed forms; arithmetic 1 to 6) and the references of the checks are closed forms or integrals
+computed by plain-Python quadrature in `f417-scratch` (`refs.py`, `refs2.py`).
+
+| Item | Status | Source |
+|---|---|---|
+| Output density `|Y|^2 G` of a linear system under a stationary input, cross-densities `S_ij = sum_ab G_ab Re(Y_ia conj Y_jb)` | cited | S. H. Crandall and W. D. Mark, Random Vibration in Mechanical Systems (Academic Press 1963); D. E. Newland, An Introduction to Random Vibrations, Spectral and Wavelet Analysis (3rd ed., Longman 1993), ch. 7: NOT read, from memory |
+| One mode under a flat force spectrum: `m_0 = (pi/2) f_n Q G/k^2`, `Q = 1/(2 zeta)`; `int_0^inf r^2/D dr = int_0^inf dr/D = pi/(4 zeta)`, `nu_0 = f_n` | derived | residues of `D = (r^2 + 2 s r + 1)(r^2 - 2 s r + 1)`, `s = sqrt(1 - zeta^2)`, and the substitution `r = 1/s` (ADR 0477); J. W. Miles, J. Aeronaut. Sci. 21 (1954) 753, for the name only: NOT read |
+| One mode under a flat base acceleration: absolute acceleration `m_0 = (pi/2) f_n G (Q + 1/Q)` | derived | the transmissibility `(1 + 2 i zeta r)/(1 - r^2 + 2 i zeta r)` (ADR 0477) |
+| Finite-band integrals at `zeta = 0.02`: `I_0(10) = 39.26957079652609`, `I_1 = 38.77258066850795`, `I_2 = 39.16923599186199`, `I_4 = 49.006230409610886`, `I_0 + 4 zeta^2 I_2 = 39.33224157411308` | computed | 4-point Gauss-Legendre on split intervals, `f417-scratch/refs.py`, `refs2.py` |
+| Two modes: CQC cross term `rho = 8 zeta^2 (1 + b) b^1.5/((1 - b^2)^2 + 4 zeta^2 b (1 + b)^2)` | derived | the same residues (ADR 0477); P. H. Wirsching, T. L. Paez and K. Ortiz, Random Vibrations: Theory and Practice (Wiley 1995): NOT read, from memory |
+| Zero up-crossing rate `sqrt(m_2/m_0)`, peak rate `sqrt(m_4/m_2)` | cited | S. O. Rice, Bell Syst. Tech. J. 23 (1944) 282 and 24 (1945) 46: NOT read, from memory (as F-413) |
+| Root-mean-square von Mises stress `sqrt(tr(A C))`, `A` the quadratic form of `sigma_vm^2`, `C` the stress covariance | derived | first principles (ADR 0477 D5); D. J. Segalman, C. W. G. Fulcher, G. M. Reese and R. V. Field, J. Vib. Acoust. 122 (2000) 42, for the definition: NOT read, from memory |
