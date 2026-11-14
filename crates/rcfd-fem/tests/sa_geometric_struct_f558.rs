@@ -164,6 +164,7 @@ fn ltb_factors(
 }
 
 #[test]
+#[ignore = "N2 was refused by the solver: record of the first run, amendment 2"]
 fn l1_to_l5_n2_rectangle_lateral_torsional_buckling() {
     let mut c = Checks::new();
     let s = rect_section();
@@ -243,6 +244,7 @@ fn local_vec(a: f64, b: f64) -> [f64; 12] {
 }
 
 #[test]
+#[ignore = "H3 hand values wrong: record of the first run, amendment 2"]
 fn h1_to_h4_r1_element_checks() {
     let mut c = Checks::new();
     let mat = steel();
@@ -635,6 +637,7 @@ fn mindlin_ratio(t: f64) -> f64 {
 }
 
 #[test]
+#[ignore = "S3 and S4 compared the lowest factors, an in-plane mode crosses: record of the first run, amendment 2"]
 fn s3_s4_s5_n1_thick_plate_ratio() {
     let mut c = Checks::new();
     for (name, cells, t, tri, limit) in [
@@ -681,5 +684,221 @@ fn ltb_i_section_known_miss() {
     let f = ltb_factors(&s, 16, l, 0, m_ref, 0.0, true).unwrap();
     println!("I1 factors {f:?}, M_FE {:.8e}, closed {want:.8e}", f[0] * m_ref);
     c.at_most("I1 |M/M_cr - 1|", (f[0] * m_ref / want - 1.0).abs(), 1e-2);
+    c.finish();
+}
+
+// ------------------------------------------------------------------------------------------ amendment 2 (corrected runs)
+
+#[test]
+fn a2_l1_to_l5_n2p_rectangle_lateral_torsional_buckling() {
+    let mut c = Checks::new();
+    let s = rect_section();
+    let m_ref = 1000.0;
+    let want = m_cr_rect();
+    println!(
+        "closed form M_cr = {want:.8e} (C_w = 0: {:.8e})",
+        m0_of(i_z(), rect_j(), L)
+    );
+    let mut at16 = f64::NAN;
+    for (name, n, limit) in [("L1 16 elements", 16, 1e-2), ("L2 8 elements", 8, 2e-2)] {
+        let f = ltb_factors(&s, n, L, 0, m_ref, 0.0, true).unwrap();
+        println!("{name}: factors {f:?}");
+        let m = f[0] * m_ref;
+        c.at_most(&format!("{name} |M/M_cr - 1|"), (m / want - 1.0).abs(), limit);
+        if n == 16 {
+            at16 = m;
+        }
+    }
+    let f = ltb_factors(&s, 16, L, 0, -m_ref, 0.0, true).unwrap();
+    c.at_most("L3 |f(+M)/f(-M) - 1|", (at16 / (f[0] * m_ref) - 1.0).abs(), 1e-8);
+    let f = ltb_factors(&s, 16, L, 0, 3.0 * m_ref, 0.0, true).unwrap();
+    c.at_most(
+        "L4 |M(3 M_ref)/M(M_ref) - 1|",
+        (f[0] * 3.0 * m_ref / at16 - 1.0).abs(),
+        1e-9,
+    );
+    let f = ltb_factors(&s, 16, L, 1, m_ref, 0.0, true).unwrap();
+    c.at_most("L5 |M(axis y)/M(axis x) - 1|", (f[0] * m_ref / at16 - 1.0).abs(), 1e-6);
+    // N2': the C1 loading without the option is the weak-axis Euler column.
+    let pz = PI * PI * E * i_z() / (L * L);
+    let m0 = m0_of(i_z(), rect_j(), L);
+    let p_ref = 0.3 * pz;
+    let base = ltb_factors(&s, 16, L, 0, m0, p_ref, false).unwrap();
+    let with = ltb_factors(&s, 16, L, 0, m0, p_ref, true).unwrap();
+    println!("N2' base factors {base:?}, with {with:?}");
+    c.at_most("N2' |lambda_base 0.3 - 1|", (base[0] * 0.3 - 1.0).abs(), 5e-3);
+    c.holds(
+        "N2' with the option the factor is below half of the base",
+        with[0] < 0.5 * base[0],
+        &format!("{:.6} against {:.6}", with[0], base[0]),
+    );
+    c.finish();
+}
+
+#[test]
+fn a2_h1_to_h4_r1_element_checks() {
+    let mut c = Checks::new();
+    let mat = steel();
+    let stiff = beam::rectangle_section(B, H, rect_j(), 1e9).unwrap();
+    let (l, mm) = (2.0, 7.0);
+    let mut f = [0.0; 12];
+    f[4] = -mm;
+    f[10] = mm;
+    let k = beam::local_moment_geometric_stiffness(l, &stiff, &mat, &f);
+    let hand = [((3, 7), 1.0), ((9, 7), -1.0), ((3, 1), -1.0), ((9, 1), 1.0)];
+    let mut worst: f64 = 0.0;
+    for ((i, j), s) in hand {
+        let want = s * mm / l;
+        worst = worst.max((k.get(i, j) - want).abs() / (mm / l));
+        worst = worst.max((k.get(j, i) - want).abs() / (mm / l));
+    }
+    c.at_most("H1 max |K - hand|/(M/L)", worst, 1e-7);
+    let (by, bz) = (0.7, -0.4);
+    let (my, mz) = (3.0, 2.0);
+    let mut f = [0.0; 12];
+    f[4] = -my;
+    f[10] = my;
+    f[5] = -mz;
+    f[11] = mz;
+    let k = beam::local_wagner_geometric_stiffness(l, &f, [by, bz]);
+    let bm = (by * my - bz * mz) / l;
+    let mut worst: f64 = 0.0;
+    for i in 0..12 {
+        for j in 0..12 {
+            let want = match (i, j) {
+                (3, 3) | (9, 9) => bm,
+                (3, 9) | (9, 3) => -bm,
+                _ => 0.0,
+            };
+            worst = worst.max((k.get(i, j) - want).abs());
+        }
+    }
+    c.at_most("H2 max |K - hand|", worst, 1e-12);
+    // H3 with the corrected hand values of amendment 2: +-V/4.
+    let vy = 5.0;
+    let mut f = [0.0; 12];
+    f[1] = -vy;
+    f[7] = vy;
+    let k = beam::local_shear_geometric_stiffness(l, &stiff, &mat, &f);
+    let mut worst: f64 = 0.0;
+    for ((i, j), s) in [((3, 8), 0.25), ((9, 8), 0.25), ((3, 2), -0.25), ((9, 2), -0.25)] {
+        println!("H3 K[{i}][{j}] = {:.10e}, hand {:.10e}", k.get(i, j), s * vy);
+        worst = worst.max((k.get(i, j) - s * vy).abs() / vy);
+    }
+    c.at_most("H3 max |K - hand|/V", worst, 1e-7);
+    let sec = rect_section();
+    let mut f = local_vec(3.0, 2.0);
+    f[1] = -1.5;
+    f[7] = 1.5;
+    f[3] = -0.5;
+    f[9] = 0.5;
+    let w = [0.7, -0.4];
+    let all = beam::local_resultant_geometric_stiffness(l, &sec, &mat, &f, w);
+    let p1 = beam::local_moment_geometric_stiffness(l, &sec, &mat, &f);
+    let p2 = beam::local_shear_geometric_stiffness(l, &sec, &mat, &f);
+    let p3 = beam::local_wagner_geometric_stiffness(l, &f, w);
+    let mut worst: f64 = 0.0;
+    let mut big: f64 = 0.0;
+    for i in 0..144 {
+        let sum = p1.values()[i] + p2.values()[i] + p3.values()[i];
+        worst = worst.max((all.values()[i] - sum).abs());
+        big = big.max(all.values()[i].abs());
+    }
+    c.at_most("H4 max |sum - parts|/max", worst / big, 1e-14);
+    let (n, vy, vz, l) = (5.0, 2.0, -3.0, 2.0);
+    let f = [-n, -vy, -vz, 0.0, 0.0, 0.0, n, vy, vz, 0.0, l * vz, -l * vy];
+    let mut k = beam::local_geometric_stiffness(l, &sec, &mat, n);
+    let part = beam::local_resultant_geometric_stiffness(l, &sec, &mat, &f, [0.0; 2]);
+    for (a, b) in k.values_mut().iter_mut().zip(part.values()) {
+        *a += b;
+    }
+    let fv = [n, vy, vz];
+    let mut worst: f64 = 0.0;
+    for axis in 0..3 {
+        let mut om = [0.0; 3];
+        om[axis] = 1.0;
+        let u1 = [0.0, om[2] * l, -om[1] * l];
+        let mut d = [0.0; 12];
+        for k in 0..3 {
+            d[6 + k] = u1[k];
+            d[3 + k] = om[k];
+            d[9 + k] = om[k];
+        }
+        let kd = k.matvec(&d);
+        let wf = [
+            om[1] * fv[2] - om[2] * fv[1],
+            om[2] * fv[0] - om[0] * fv[2],
+            om[0] * fv[1] - om[1] * fv[0],
+        ];
+        for k in 0..3 {
+            worst = worst.max((kd[6 + k] - wf[k]).abs()).max((kd[k] + wf[k]).abs());
+        }
+    }
+    c.at_most("R1 max |K_G rigid - omega x F|/max|F|", worst / 5.0, 1e-12);
+    c.finish();
+}
+
+/// The lowest factors of the model with and without the rotation terms of the plate mode (amendment 2): the lowest of the
+/// first four modes whose out-of-plane translation is at least `1e-6` of the largest component.
+fn plate_mode_ratio(cells: usize, t: f64, tri: bool) -> (f64, f64, usize, usize) {
+    let mut m = grid(cells, cells, t, tri);
+    m.add_constraint(Constraint::displacement("edges", 2, 0.0)).unwrap();
+    m.add_constraint(Constraint::displacement("x0", 0, 0.0)).unwrap();
+    m.add_constraint(Constraint::displacement("c00", 1, 0.0)).unwrap();
+    for (set, c) in [("x0", 3), ("xl", 3), ("y0", 4), ("yl", 4)] {
+        m.add_constraint(Constraint::displacement(set, c, 0.0)).unwrap();
+    }
+    let h = 1.0 / cells as f64;
+    let n_ref = 1000.0;
+    let mut loaded = m.clone();
+    loaded
+        .add_load(Load::nodal_force("xl_mid", [-n_ref * h, 0.0, 0.0]))
+        .unwrap();
+    loaded
+        .add_load(Load::nodal_force("xl_end", [-0.5 * n_ref * h, 0.0, 0.0]))
+        .unwrap();
+    let r = solve_static(&loaded, &StaticOptions::default()).unwrap();
+    let pre = Prestress::from_static(&loaded, &r).unwrap();
+    let dofs = m.dof_map();
+    let pick = |p: &Prestress| -> (f64, usize) {
+        let res = factors(&m, p, &BucklingOptions::new(4)).unwrap();
+        for (j, phi) in res.modes.iter().enumerate() {
+            let big = phi.iter().fold(0.0f64, |a, v| a.max(v.abs()));
+            let wmax = (0..phi.len())
+                .filter(|&e| dofs.node_component(e).unwrap().1 == 2)
+                .fold(0.0f64, |a, e| a.max(phi[e].abs()));
+            if wmax >= 1e-6 * big {
+                return (res.factors[j] * n_ref / E, j);
+            }
+        }
+        (f64::NAN, usize::MAX)
+    };
+    let (base, jb) = pick(&pre);
+    let (with, jw) = pick(&pre.with_shell_rotation_terms());
+    (base, with, jb, jw)
+}
+
+#[test]
+fn a2_s3_s4_s5_n1_thick_plate_ratio_of_plate_modes() {
+    let mut c = Checks::new();
+    for (name, cells, t, tri, limit) in [
+        ("S3 Shell4 16 x 16, t/a = 0.2", 16, 0.2, false, 5e-3),
+        ("S4 Shell3 16 x 16 x 2, t/a = 0.2", 16, 0.2, true, 1e-2),
+        ("S5 Shell4 16 x 16, t/a = 0.01", 16, 0.01, false, 5e-5),
+    ] {
+        let (base, with, jb, jw) = plate_mode_ratio(cells, t, tri);
+        let want = mindlin_ratio(t);
+        println!(
+            "{name}: plate mode index base {jb}, with {jw}; N_cr/E base {base:.6e}, with {with:.6e}, ratio {:.8}, closed {want:.8}",
+            with / base
+        );
+        let err = if t < 0.05 {
+            (with / base - want).abs()
+        } else {
+            (with / base / want - 1.0).abs()
+        };
+        c.at_most(&format!("{name} ratio error"), err, limit);
+        c.above(&format!("N1 {name} base minus with"), base - with, 0.0);
+    }
     c.finish();
 }
