@@ -17,6 +17,14 @@
 //!
 //! [`Assembly`] joins reduced parts at boundary unknowns of equal position and component; [`ReducedPart::write`] and
 //! [`ReducedPart::read`] store a part as text with the bits of every float.
+//!
+//! Options of ADR 0474 (F-552), both off by default (the reduction is then that of ADR 0469, bit for bit):
+//! [`CmsOptions::cutoff`] keeps every fixed-interface mode with `omega_k < omega_c`; [`CmsOptions::residual_vectors`] adds
+//! the static residual vector of the part's interior load, `K_ii^{-1} f_i` M-orthogonalised (twice, ADR 0464) against the
+//! kept modes and M-normalised, as a column `[0; R]` of the transformation: `T = [[I, 0, 0], [Psi, Phi, R]]`. Its blocks are
+//! `K_qR = Phi^T K_ii R`, `K_RR = R^T K_ii R` (the coupling with the constraint modes is zero exactly), `M_bR = M_bi R +
+//! Psi^T M_ii R`, `M_qR = Phi^T M_ii R`, `M_RR = R^T M_ii R`, and the load `R^T f_i`; with it the static solution of an
+//! interior load lies in the range of `T` and the reduced statics are exact.
 
 use crate::assemble::stiffness_with_materials;
 use crate::error::{FemError, Result, SetKind};
@@ -47,6 +55,13 @@ pub const MATCH_TOLERANCE: f64 = 1e-9;
 /// The first line of a part file.
 pub const FILE_HEADER: &str = "rcfd-cms-part 1";
 
+/// The first line of the file of a part with residual vectors (ADR 0474: four sizes and a section `residual`).
+pub const FILE_HEADER_2: &str = "rcfd-cms-part 2";
+
+/// The first number of fixed-interface pairs asked of the subspace solver to find the modes below a cutoff (doubled until
+/// one at or above it is found, ADR 0474).
+pub const CUTOFF_FIRST_PAIRS: usize = 8;
+
 fn invalid(key: &'static str, reason: String) -> FemError {
     FemError::InvalidValue { key, reason }
 }
@@ -61,6 +76,10 @@ pub struct CmsOptions {
     pub threads: Option<usize>,
     /// Interior size up to which the eigen-solution is dense ([`DENSE_LIMIT`]).
     pub dense_limit: usize,
+    /// Add the static residual vector of the part's interior load (ADR 0474; default `false`).
+    pub residual_vectors: bool,
+    /// Keep every fixed-interface mode with `omega_k < cutoff` (rad/s) instead of a mode count (ADR 0474; default `None`).
+    pub cutoff: Option<f64>,
 }
 
 impl CmsOptions {
@@ -70,6 +89,8 @@ impl CmsOptions {
             modes,
             threads: None,
             dense_limit: DENSE_LIMIT,
+            residual_vectors: false,
+            cutoff: None,
         }
     }
     /// The same options with a thread count.
@@ -80,6 +101,17 @@ impl CmsOptions {
     /// The same options with another dense limit.
     pub fn dense_limit(mut self, limit: usize) -> CmsOptions {
         self.dense_limit = limit;
+        self
+    }
+    /// The same options with (or without) the static residual vector of the interior load (ADR 0474).
+    pub fn residual_vectors(mut self, on: bool) -> CmsOptions {
+        self.residual_vectors = on;
+        self
+    }
+    /// The same options keeping every fixed-interface mode with `omega_k < omega` (rad/s; ADR 0474). The mode count must
+    /// then be 0.
+    pub fn cutoff(mut self, omega: f64) -> CmsOptions {
+        self.cutoff = Some(omega);
         self
     }
 }
@@ -96,7 +128,7 @@ pub struct BoundaryUnknown {
 }
 
 /// A part reduced to its interface (ADR 0469). Matrices are dense and row-major; the reduced unknowns are the boundary
-/// unknowns followed by the modal coordinates.
+/// unknowns followed by the modal coordinates and then the residual-vector coordinates (ADR 0474).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ReducedPart {
     boundary: Vec<BoundaryUnknown>,
@@ -114,6 +146,8 @@ pub struct ReducedPart {
     psi: Vec<f64>,
     phi: Vec<f64>,
     asymmetry: f64,
+    n_residual: usize,
+    residual: Vec<f64>,
 }
 
 /// Static condensation of `model` to the interface node set `interface` ([`reduce`] with no mode).
@@ -350,12 +384,84 @@ fn boundary_unknowns(
     Ok((out, qs))
 }
 
+/// The subspace options of the fixed-interface modes (ADR 0469).
+fn subspace_options() -> SubspaceOptions {
+    SubspaceOptions {
+        shift: Shift::Value(0.0),
+        tolerance: 1e-12,
+        residual_test: ResidualTest::Backward,
+        ..SubspaceOptions::default()
+    }
+}
+
+/// Every fixed-interface pair of the interior (dense).
+fn dense_interior(kii: &CsrMatrix, mii: &CsrMatrix, ni: usize) -> Result<DenseEigen> {
+    let ident: Vec<usize> = (0..ni).collect();
+    let dk = dense_block(kii, &ident, &ident, ni);
+    let dm = dense_block(mii, &ident, &ident, ni);
+    generalized_eigen_dense(&dk, &dm, ni).map_err(|e| FemError::Solver {
+        solver: "generalized_eigen_dense",
+        reason: format!("fixed-interface modes: {e}"),
+    })
+}
+
+/// Kept eigenvalues, kept vectors and the first omitted eigenvalue.
+type Modes = (Vec<f64>, Vec<Vec<f64>>, Option<f64>);
+
+/// The fixed-interface modes with eigenvalue below `c2` (ADR 0474): from the dense solution when `ni <= dense_limit`,
+/// otherwise from the subspace solver with [`CUTOFF_FIRST_PAIRS`] + 1 pairs, the count doubled until a pair at or above
+/// `c2` is found (the dense solution once `k + 1 >= ni`).
+fn modes_below(kii: &CsrMatrix, mii: &CsrMatrix, ni: usize, c2: f64, dense_limit: usize) -> Result<Modes> {
+    fn split(values: &[f64], vectors: &[Vec<f64>], c2: f64) -> Modes {
+        let k = values.iter().take_while(|&&l| l < c2).count();
+        (values[..k].to_vec(), vectors[..k].to_vec(), values.get(k).copied())
+    }
+    let mut k = CUTOFF_FIRST_PAIRS;
+    loop {
+        if ni <= dense_limit || k + 1 >= ni {
+            let e = dense_interior(kii, mii, ni)?;
+            return Ok(split(&e.values, &e.vectors, c2));
+        }
+        let e = lowest_eigenpairs(kii, mii, k + 1, &subspace_options()).map_err(|e| FemError::Solver {
+            solver: "lowest_eigenpairs",
+            reason: format!("fixed-interface modes: {e}"),
+        })?;
+        if e.values[k] >= c2 {
+            return Ok(split(&e.values, &e.vectors, c2));
+        }
+        k *= 2;
+    }
+}
+
 /// The reduction of `model` to the interface node set `interface` with `options.modes` fixed-interface modes (ADR 0469):
-/// static condensation for `modes = 0`, the Craig-Bampton reduction otherwise. Refuses an unknown or empty interface, an
-/// interface without a free unknown, `modes` above the interior size, an interior that the interface and the constraints
-/// do not hold, a non-zero constraint value and a cyclic constraint.
+/// static condensation for `modes = 0`, the Craig-Bampton reduction otherwise; with [`CmsOptions::cutoff`] the modes below
+/// it, with [`CmsOptions::residual_vectors`] the residual vector of the interior load (ADR 0474). Refuses an unknown or
+/// empty interface, an interface without a free unknown, `modes` above the interior size, an interior that the interface
+/// and the constraints do not hold, a non-zero constraint value, a cyclic constraint, a cutoff that is not finite and
+/// positive, and a cutoff with a mode count.
 pub fn reduce(model: &SolidModel, interface: &str, options: &CmsOptions) -> Result<ReducedPart> {
     check_model(model)?;
+    let cutoff2 = match options.cutoff {
+        None => None,
+        Some(w) => {
+            if !w.is_finite() || w <= 0.0 {
+                return Err(invalid(
+                    "cutoff",
+                    format!("the cutoff {w:e} rad/s must be finite and positive"),
+                ));
+            }
+            if options.modes != 0 {
+                return Err(invalid(
+                    "cutoff",
+                    format!(
+                        "{} fixed-interface modes and a cutoff {w:e} rad/s asked: give a mode count or a cutoff",
+                        options.modes
+                    ),
+                ));
+            }
+            Some(w * w)
+        }
+    };
     let tr = transformation(model, &[])?;
     let (boundary, boundary_q) = boundary_unknowns(model, &tr, interface)?;
     let n_mesh = tr.n_mesh();
@@ -434,37 +540,45 @@ pub fn reduce(model: &SolidModel, interface: &str, options: &CmsOptions) -> Resu
     let fi: Vec<f64> = interior_q.iter().map(|&q| fq[q]).collect();
     let static_interior = fac.solve(&fi);
     // Fixed-interface modes.
-    let (eigenvalues, phi_cols, omitted) = if ni <= options.dense_limit || nm + 1 >= ni {
-        let ident: Vec<usize> = (0..ni).collect();
-        let dk = dense_block(&kii, &ident, &ident, ni);
-        let dm = dense_block(&mii, &ident, &ident, ni);
-        let e: DenseEigen = generalized_eigen_dense(&dk, &dm, ni).map_err(|e| FemError::Solver {
-            solver: "generalized_eigen_dense",
-            reason: format!("fixed-interface modes: {e}"),
-        })?;
+    let (eigenvalues, phi_cols, omitted) = if let Some(c2) = cutoff2 {
+        modes_below(&kii, &mii, ni, c2, options.dense_limit)?
+    } else if ni <= options.dense_limit || nm + 1 >= ni {
+        let e = dense_interior(&kii, &mii, ni)?;
         let omitted = e.values.get(nm).copied();
         (e.values[..nm].to_vec(), e.vectors[..nm].to_vec(), omitted)
     } else {
-        let opts = SubspaceOptions {
-            shift: Shift::Value(0.0),
-            tolerance: 1e-12,
-            residual_test: ResidualTest::Backward,
-            ..SubspaceOptions::default()
-        };
-        let e = lowest_eigenpairs(&kii, &mii, nm + 1, &opts).map_err(|e| FemError::Solver {
+        let e = lowest_eigenpairs(&kii, &mii, nm + 1, &subspace_options()).map_err(|e| FemError::Solver {
             solver: "lowest_eigenpairs",
             reason: format!("fixed-interface modes: {e}"),
         })?;
         (e.values[..nm].to_vec(), e.vectors[..nm].to_vec(), Some(e.values[nm]))
     };
+    let nm = eigenvalues.len();
     let mut phi = vec![0.0; ni * nm];
     for (c, v) in phi_cols.iter().enumerate() {
         for r in 0..ni {
             phi[r * nm + c] = v[r];
         }
     }
+    // The residual vector of the interior load (ADR 0474), M-orthonormalised against the kept modes.
+    let mut residual_cols: Vec<Vec<f64>> = Vec::new();
+    if options.residual_vectors {
+        let mut r = static_interior.clone();
+        let mut y = vec![0.0; ni];
+        let basis: Vec<&[f64]> = phi_cols.iter().map(Vec::as_slice).collect();
+        if crate::damped::m_orthonormalise(&mii, &mut r, &basis, &mut y) {
+            residual_cols.push(r);
+        }
+    }
+    let np = residual_cols.len();
+    let mut residual = vec![0.0; ni * np];
+    for (c, v) in residual_cols.iter().enumerate() {
+        for r in 0..ni {
+            residual[r * np + c] = v[r];
+        }
+    }
     // Reduced matrices.
-    let nr = nb + nm;
+    let nr = nb + nm + np;
     let kbi_psi = a_b(&kbi, &psi, nb, ni, nb);
     let mut khat = kbb.clone();
     for (a, v) in khat.iter_mut().zip(&kbi_psi) {
@@ -502,6 +616,36 @@ pub fn reduce(model: &SolidModel, interface: &str, options: &CmsOptions) -> Resu
             mr[(nb + c) * nr + nb + d] = mqq[c * nm + d];
         }
     }
+    if np > 0 {
+        // K_qR = Phi^T K_ii R, K_RR = R^T K_ii R (K_bR = 0); M_bR = M_bi R + Psi^T M_ii R, M_qR, M_RR.
+        let kii_r = csr_dense(&kii, &residual, np);
+        let mii_r = csr_dense(&mii, &residual, np);
+        let mbi_r = a_b(&mbi, &residual, nb, ni, np);
+        let psit_mii_r = at_b(&psi, &mii_r, ni, nb, np);
+        let phit_kii_r = at_b(&phi, &kii_r, ni, nm, np);
+        let phit_mii_r = at_b(&phi, &mii_r, ni, nm, np);
+        let rt_kii_r = at_b(&residual, &kii_r, ni, np, np);
+        let rt_mii_r = at_b(&residual, &mii_r, ni, np, np);
+        let o = nb + nm;
+        for c in 0..np {
+            for i in 0..nb {
+                let v = mbi_r[i * np + c] + psit_mii_r[i * np + c];
+                mr[i * nr + o + c] = v;
+                mr[(o + c) * nr + i] = v;
+            }
+            for q in 0..nm {
+                let (k, m) = (phit_kii_r[q * np + c], phit_mii_r[q * np + c]);
+                kr[(nb + q) * nr + o + c] = k;
+                kr[(o + c) * nr + nb + q] = k;
+                mr[(nb + q) * nr + o + c] = m;
+                mr[(o + c) * nr + nb + q] = m;
+            }
+            for d in 0..np {
+                kr[(o + c) * nr + o + d] = rt_kii_r[c * np + d];
+                mr[(o + c) * nr + o + d] = rt_mii_r[c * np + d];
+            }
+        }
+    }
     let asymmetry = relative_asymmetry(&kr, nr).max(relative_asymmetry(&mr, nr));
     symmetrise(&mut kr, nr);
     symmetrise(&mut mr, nr);
@@ -513,6 +657,9 @@ pub fn reduce(model: &SolidModel, interface: &str, options: &CmsOptions) -> Resu
         *a += v;
     }
     load.extend_from_slice(&phit_fi);
+    if np > 0 {
+        load.extend(at_b(&residual, &fi, ni, np, 1));
+    }
     Ok(ReducedPart {
         boundary,
         boundary_q,
@@ -529,6 +676,8 @@ pub fn reduce(model: &SolidModel, interface: &str, options: &CmsOptions) -> Resu
         psi,
         phi,
         asymmetry,
+        n_residual: np,
+        residual,
     })
 }
 
@@ -549,9 +698,13 @@ impl ReducedPart {
     pub fn modes(&self) -> usize {
         self.modes
     }
-    /// Order of the reduced matrices, `n_b + m`.
+    /// Residual vectors kept `p` (ADR 0474; 0 without the option).
+    pub fn residual_vectors(&self) -> usize {
+        self.n_residual
+    }
+    /// Order of the reduced matrices, `n_b + m + p`.
     pub fn n_reduced(&self) -> usize {
-        self.boundary.len() + self.modes
+        self.boundary.len() + self.modes + self.n_residual
     }
     /// `K_r`, row-major.
     pub fn stiffness(&self) -> &[f64] {
@@ -584,6 +737,10 @@ impl ReducedPart {
     /// `Phi`, `n_i x m`, row-major.
     pub fn phi(&self) -> &[f64] {
         &self.phi
+    }
+    /// `R`, the M_ii-orthonormal residual vectors, `n_i x p`, row-major (ADR 0474).
+    pub fn residual(&self) -> &[f64] {
+        &self.residual
     }
     /// The relative asymmetry of `K_r` and `M_r` before their symmetrisation (the larger of the two).
     pub fn asymmetry(&self) -> f64 {
@@ -666,7 +823,7 @@ impl ReducedPart {
         self.expand_with(model, ub, &self.static_interior)
     }
 
-    /// The mesh displacements of reduced coordinates `(u_b, eta)`: `u_i = Psi u_b + Phi eta`, then `x = T q`.
+    /// The mesh displacements of reduced coordinates `(u_b, eta, rho)`: `u_i = Psi u_b + Phi eta + R rho`, then `x = T q`.
     pub fn expand(&self, model: &SolidModel, coordinates: &[f64]) -> Result<Vec<f64>> {
         if coordinates.len() != self.n_reduced() {
             return Err(FemError::FieldLength {
@@ -676,12 +833,21 @@ impl ReducedPart {
             });
         }
         let nb = self.n_boundary();
-        let phi_eta = a_b(&self.phi, &coordinates[nb..], self.n_interior(), self.modes, 1);
-        self.expand_with(model, &coordinates[..nb], &phi_eta)
+        let ni = self.n_interior();
+        let o = nb + self.modes;
+        let mut interior = a_b(&self.phi, &coordinates[nb..o], ni, self.modes, 1);
+        if self.n_residual > 0 {
+            let r_rho = a_b(&self.residual, &coordinates[o..], ni, self.n_residual, 1);
+            for (a, v) in interior.iter_mut().zip(&r_rho) {
+                *a += v;
+            }
+        }
+        self.expand_with(model, &coordinates[..nb], &interior)
     }
 
     /// The part as text (ADR 0469): header [`FILE_HEADER`], then one line per section, every float as the 16 hexadecimal
-    /// digits of its bits.
+    /// digits of its bits. A part with residual vectors (ADR 0474) has header [`FILE_HEADER_2`], four sizes (the fourth the
+    /// count of residual vectors) and a section `residual` after `phi`.
     pub fn to_text(&self) -> String {
         fn ints(out: &mut String, name: &str, v: &[usize]) {
             out.push_str(name);
@@ -703,10 +869,15 @@ impl ReducedPart {
             }
             out.push('\n');
         }
+        let v2 = self.n_residual > 0;
         let mut s = String::new();
-        s.push_str(FILE_HEADER);
+        s.push_str(if v2 { FILE_HEADER_2 } else { FILE_HEADER });
         s.push('\n');
-        ints(&mut s, "sizes", &[self.n_mesh, self.n_q, self.modes]);
+        if v2 {
+            ints(&mut s, "sizes", &[self.n_mesh, self.n_q, self.modes, self.n_residual]);
+        } else {
+            ints(&mut s, "sizes", &[self.n_mesh, self.n_q, self.modes]);
+        }
         ints(
             &mut s,
             "nodes",
@@ -732,19 +903,28 @@ impl ReducedPart {
         floats(&mut s, "omitted", &self.omitted.into_iter().collect::<Vec<_>>());
         floats(&mut s, "psi", &self.psi);
         floats(&mut s, "phi", &self.phi);
+        if v2 {
+            floats(&mut s, "residual", &self.residual);
+        }
         floats(&mut s, "asymmetry", &[self.asymmetry]);
         s.push_str("end\n");
         s
     }
 
-    /// The part from the text of [`ReducedPart::to_text`]; refuses another header, a missing, short or long section and a
-    /// malformed number.
+    /// The part from the text of [`ReducedPart::to_text`] (either header); refuses another header, a missing, short or long
+    /// section and a malformed number.
     pub fn from_text(text: &str) -> Result<ReducedPart> {
         let bad = |reason: String| invalid("part file", reason);
         let mut lines = text.split('\n');
-        if lines.next() != Some(FILE_HEADER) {
-            return Err(bad(format!("the first line is not '{FILE_HEADER}'")));
-        }
+        let v2 = match lines.next() {
+            Some(FILE_HEADER) => false,
+            Some(FILE_HEADER_2) => true,
+            _ => {
+                return Err(bad(format!(
+                    "the first line is neither '{FILE_HEADER}' nor '{FILE_HEADER_2}'"
+                )))
+            }
+        };
         let mut section = |name: &str| -> Result<Vec<String>> {
             let line = lines
                 .next()
@@ -787,8 +967,15 @@ impl ReducedPart {
                 .collect()
         };
         let sizes = to_ints("sizes", section("sizes")?)?;
-        if sizes.len() != 3 {
-            return Err(bad("section 'sizes' must have 3 values".into()));
+        let n_sizes = if v2 { 4 } else { 3 };
+        if sizes.len() != n_sizes {
+            return Err(bad(format!("section 'sizes' must have {n_sizes} values")));
+        }
+        let n_residual = if v2 { sizes[3] } else { 0 };
+        if v2 && n_residual == 0 {
+            return Err(bad(format!(
+                "a '{FILE_HEADER_2}' file has at least one residual vector"
+            )));
         }
         let nodes = to_ints("nodes", section("nodes")?)?;
         let components = to_ints("components", section("components")?)?;
@@ -803,6 +990,11 @@ impl ReducedPart {
         let omitted = to_floats("omitted", section("omitted")?)?;
         let psi = to_floats("psi", section("psi")?)?;
         let phi = to_floats("phi", section("phi")?)?;
+        let residual = if v2 {
+            to_floats("residual", section("residual")?)?
+        } else {
+            Vec::new()
+        };
         let asymmetry = to_floats("asymmetry", section("asymmetry")?)?;
         if lines.next() != Some("end") {
             return Err(bad("the line 'end' is missing".into()));
@@ -810,7 +1002,7 @@ impl ReducedPart {
         let (n_mesh, n_q, modes) = (sizes[0], sizes[1], sizes[2]);
         let nb = nodes.len();
         let ni = interior_q.len();
-        let nr = nb + modes;
+        let nr = nb + modes + n_residual;
         let consistent = components.len() == nb
             && positions.len() == 3 * nb
             && boundary_q.len() == nb
@@ -824,6 +1016,7 @@ impl ReducedPart {
             && omitted.len() <= 1
             && psi.len() == ni * nb
             && phi.len() == ni * modes
+            && residual.len() == ni * n_residual
             && asymmetry.len() == 1
             && boundary_q.iter().chain(&interior_q).all(|&q| q < n_q);
         if !consistent {
@@ -852,6 +1045,8 @@ impl ReducedPart {
             psi,
             phi,
             asymmetry: asymmetry[0],
+            n_residual,
+            residual,
         })
     }
 
@@ -869,8 +1064,8 @@ impl ReducedPart {
 }
 
 /// Reduced parts joined at their boundary unknowns (ADR 0469): the unknowns are the distinct boundary unknowns (matched by
-/// position within [`MATCH_TOLERANCE`] of the largest interface extent and by component), in the order met, then the modal
-/// coordinates of each part in order.
+/// position within [`MATCH_TOLERANCE`] of the largest interface extent and by component), in the order met, then the interior
+/// coordinates of each part in order (its modal coordinates, then its residual-vector coordinates, ADR 0474).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Assembly {
     parts: Vec<ReducedPart>,
@@ -934,7 +1129,7 @@ impl Assembly {
         let nbg = unknowns.len();
         let mut n = nbg;
         for (p, map) in parts.iter().zip(maps.iter_mut()) {
-            for _ in 0..p.modes {
+            for _ in p.n_boundary()..p.n_reduced() {
                 map.push(n);
                 n += 1;
             }

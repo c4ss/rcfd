@@ -254,35 +254,44 @@ fn residual_vectors(
         for (&eq, &v) in free.iter().zip(&rf) {
             r[eq] = v;
         }
-        let own = m_norm(mass, &r, &mut y);
-        if own == 0.0 || !own.is_finite() {
+        let basis: Vec<&[f64]> = phi.iter().chain(kept.iter()).map(Vec::as_slice).collect();
+        if m_orthonormalise(mass, &mut r, &basis, &mut y) {
+            kept.push(r);
+        } else {
             dropped += 1;
-            continue;
         }
-        for _pass in 0..2 {
-            mass.matvec(&r, &mut y);
-            let coefs: Vec<f64> = phi
-                .iter()
-                .chain(kept.iter())
-                .map(|p| p.iter().zip(&y).map(|(a, b)| a * b).sum())
-                .collect();
-            for (p, a) in phi.iter().chain(kept.iter()).zip(coefs) {
-                for (ri, pi) in r.iter_mut().zip(p) {
-                    *ri -= a * pi;
-                }
-            }
-        }
-        let after = m_norm(mass, &r, &mut y);
-        if after <= RESIDUAL_DROP * own {
-            dropped += 1;
-            continue;
-        }
-        for v in r.iter_mut() {
-            *v /= after;
-        }
-        kept.push(r);
     }
     Ok((kept, dropped))
+}
+
+/// `r` M-orthogonalised against `basis` (classical Gram-Schmidt in the inner product `x^T M y`, made twice) and
+/// M-normalised (ADR 0464 D1 step 3, shared with the residual vectors of ADR 0474). `false` (the vector dropped) when its
+/// M-norm before is zero or not finite, or after is at most [`RESIDUAL_DROP`] times before. `y` is work space of `r`'s size.
+pub(crate) fn m_orthonormalise(mass: &CsrMatrix, r: &mut [f64], basis: &[&[f64]], y: &mut [f64]) -> bool {
+    let own = m_norm(mass, r, y);
+    if own == 0.0 || !own.is_finite() {
+        return false;
+    }
+    for _pass in 0..2 {
+        mass.matvec(r, y);
+        let coefs: Vec<f64> = basis
+            .iter()
+            .map(|p| p.iter().zip(y.iter()).map(|(a, b)| a * b).sum())
+            .collect();
+        for (p, a) in basis.iter().zip(coefs) {
+            for (ri, pi) in r.iter_mut().zip(p.iter()) {
+                *ri -= a * pi;
+            }
+        }
+    }
+    let after = m_norm(mass, r, y);
+    if after <= RESIDUAL_DROP * own {
+        return false;
+    }
+    for v in r.iter_mut() {
+        *v /= after;
+    }
+    true
 }
 
 /// The damped modes of a model with Rayleigh damping, dashpots and constant loss factors, on its lowest undamped modes.

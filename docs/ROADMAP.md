@@ -10728,14 +10728,26 @@ fixed by the item's registration ADR before any code.
     to the power of F-418 within 1e-6; the low-frequency reactance giving the added mass 8 rho a^3/3 within 2 percent at
     k a = 0.1.
   - note: Structural solver, advanced tier. Follow-up of F-418 (ADR 0468, 2026-11-14).
-- [ ] **F-552** Craig-Bampton with residual vectors of the interior loads and kept modes chosen by a cutoff frequency
+- [~] **F-552** Craig-Bampton with residual vectors of the interior loads and kept modes chosen by a cutoff frequency
   - depends on: F-430
   - acceptance: Every limit not stated here is registered in the ADR before the run. An option of the reduction of ADR
     0469 adds to each part the static residual vectors of its interior loads (M-orthogonalised against the kept modes)
     and keeps every fixed-interface mode below a given cutoff. The bar of ADR 0469 with the corner load: the harmonic
     response within 1 percent of the full model up to half the lowest omitted fixed-interface frequency (the H1 set-up),
     and the statics of an interior load exact within 1e-10; without the option every result bit-identical to ADR 0469's.
-  - note: Structural solver, advanced tier. Follow-up of F-430 (ADR 0469, 2026-11-14).
+  - note: Structural solver, advanced tier. Follow-up of F-430 (ADR 0469, 2026-11-14). PARTIAL. ADR 0474, 2026-11-14: options
+    of rcfd_fem::cms, off by default and bit-identical when off (11 digests of 4abff5fe): CmsOptions::cutoff keeps every
+    fixed-interface mode below a frequency (dense and subspace paths, counts and eigenvalues equal in bits to the full
+    eigen-solution), CmsOptions::residual_vectors adds the static residual vector of each part's interior load,
+    M-orthonormalised twice against the kept modes by the ADR 0464 routine now shared from damped.rs (orthogonality
+    1e-16, dropped when every mode is kept); part file version 2 only with residual vectors, version 1 files unchanged.
+    Statics of an interior load exact within 1.5e-12 (bar) and 5.7e-14 (small model) against 1.4e-3 and 5.0e-3 without;
+    the harmonic error to 2000 rad/s 5.4e-4, and 4 to 6 times lower to 1000 rad/s than without. H1 (1 percent up to half
+    the lowest omitted frequency) missed as predicted: 0.494 at 15107 rad/s with the cutoff 32964 rad/s, 1.04 at 8241
+    with five modes; at a resonance the error is 2 delta / eta and the reduced frequencies near that bound are 3e-3 to
+    5e-3 high, so 1 percent at loss factor 0.02 needs frequency errors of 1e-4. One mutation (the boundary-to-vector
+    mass coupling set to zero) not caught. Follow-up for given load patterns and a restated harmonic clause proposed in
+    ADR 0474.
 - [ ] **F-553** Reduced parts as superelements in an ordinary model
   - depends on: F-430
   - acceptance: Every limit not stated here is registered in the ADR before the run. A reduced part of ADR 0469 is added
