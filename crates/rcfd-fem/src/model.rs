@@ -1105,7 +1105,7 @@ impl SolidModel {
 
     /// As [`SolidModel::check_elements_supported`] for the nonlinear static solve, which also takes the J2 material
     /// (ADR 0475 D2), and for the nonlinear driver at a point context, which also takes the viscoelastic material (ADR 0485
-    /// D2).
+    /// D2) and the creep material (ADR 0489 D2).
     pub(crate) fn check_elements_supported_nonlinear(&self) -> Result<()> {
         self.check_elements(false, false, false, true)
     }
@@ -1200,6 +1200,15 @@ impl SolidModel {
                     variant: m.name(),
                     location: format!("material {i}, element set '{set}'"),
                     package: crate::mat_visco::FOLLOW_UP,
+                });
+            }
+            // ADR 0489 D2: and the creep material.
+            if !history && matches!(m, Material::Creep { .. }) {
+                return Err(FemError::NotYetSupported {
+                    item: "material",
+                    variant: m.name(),
+                    location: format!("material {i}, element set '{set}'"),
+                    package: crate::mat_creep::FOLLOW_UP,
                 });
             }
             // ADR 0452 D6: a path that does not take the per-point materials refuses them.

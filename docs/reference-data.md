@@ -1984,3 +1984,19 @@ derived in ADR 0486 from first principles.
 | End spring `T c` of a block of length `c` in tension rotating rigidly about its hinge (`int sigma_xx dV = T c`, the virial of the block), and its Rayleigh increase `2 c T/(L (E I k^2 + T))` of `omega_n^2` | derived | ADR 0486 arithmetic 1 |
 | Overall against local buckling of a square plate with a central eccentric rib by the Rayleigh quotient of `sin(pi x/a) sin(pi y/a)` against the half-panel load `4 pi^2 D/b'^2` | derived | ADR 0486 arithmetic 2 |
 | Joints of structural to solid elements: the consistent face coupling of ADR 0460, the node-to-surface tie of ADR 0456 | shared | ADR 0456, ADR 0460 |
+
+## F-411 power-law creep with time hardening (ADR 0489)
+
+No source was read for F-411; the books below are cited from memory for the names and the published forms (the chapters,
+editions and page numbers were not checked). Every formula used is derived in ADR 0489 (arithmetic 1 to 7) and checked by plain
+numpy prototypes (`f411-scratch/probe_point.py`, `probe_extra.py`, `probe_cylinder.py`, `probe_bar.py` and their logs), no
+rcfd code. No polymer data is used: every creep constant, modulus and load of the checks is an input (decision A1 of ADR 0310).
+
+| Item | Status | Source |
+|---|---|---|
+| Von Mises form of the power law with time hardening, `d eps_c/dt = (3/2) A q^(n-1) t^m s`, uniaxial `A sigma^n t^m` (Norton for `m = 0`) | cited, derived | H. Kraus, Creep Analysis, Wiley, 1980; F. K. G. Odqvist, Mathematical Theory of Creep and Creep Rupture, Oxford, 1966; R. K. Penny and D. L. Marriott, Design for Creep, McGraw-Hill, 1971: NOT read, from memory |
+| Backward Euler radial return, local equation `q_tr - q - 3 G A tau q^n = 0`, `tau = int t^m dt` exact over the step; consistent tangent `K 1 (x) 1 + 2 G theta I_dev + 2 G (beta - theta) N (x) N` | derived | ADR 0489 arithmetic 1; the radial return of ADR 0475; J. C. Simo and T. J. R. Hughes, Computational Inelasticity, Springer, 1998 (viscoplasticity chapter, number not checked): NOT read, from memory; probe: tangent against central differences `<= 1.3e-9` |
+| Uniaxial constant stress `eps_c = A sigma^n t^(m+1)/(m+1)`; relaxation at fixed strain `sigma(t) = (sigma0^(1-n) + (n - 1) E A t)^(1/(1-n))` | derived | integrals of the uniaxial law, ADR 0489 arithmetic 2, 3; probe of the relaxation: `1.717e-3` (`n = 3`), `7.16e-4` (`n = 5`) at 800 steps to `10 t*`, order `0.994` |
+| Stationary creep of a thick cylinder in plane strain, `sigma_r = -p ((b/r)^(2/n) - 1)/((b/a)^(2/n) - 1)`, `sigma_theta = p ((2 - n)/n (b/r)^(2/n) + 1)/((b/a)^(2/n) - 1)` (Lame at `n = 1`) | derived | incompressible stationary flow, compatibility `v = C/r`, equilibrium, ADR 0489 arithmetic 6; the classical result as in Kraus (1980), J. T. Boyle and J. Spence, Stress Analysis for Creep, Butterworths, 1983, Penny and Marriott (1971): NOT read, from memory |
+| Redistribution time of the cylinder, estimate `t* = 1/(E A p^(n-1))`; registered `5 t*` | estimate, computed | ADR 0314 (stub); probe on 12 x 8 serendipity quadrilaterals (element means `1.2e-4` of `p` at `5 t*`; point values drift by volumetric locking, `3.0e-2`) |
+| Rotating radial bar, `sigma(r) = rho Omega^2 (L^2 - r^2)/2`, tip creep rate `A (rho Omega^2/2)^n int_0^L (L^2 - r^2)^n dr`, `int_0^L (L^2 - r^2)^3 dr = (16/35) L^7` | derived | statics of the bar, ADR 0489 arithmetic 7 |
