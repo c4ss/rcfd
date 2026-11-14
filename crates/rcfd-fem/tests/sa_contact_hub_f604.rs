@@ -538,7 +538,7 @@ fn f604_extension_and_long_hub() {
 /// A1, the acceptance's clause as written: the mid-length pressure against the plane-strain closed form within 2 percent.
 /// ADR 0517 D1 predicts the miss: a frictionless hub with free faces is in the `sigma_zz = 0` state at mid-length.
 #[test]
-#[ignore = "ADR 0517 A1: predicted known miss (the plane-strain closed form does not hold at mid-length, D1)"]
+#[ignore = "ADR 0517 A1: known miss, measured 8.57e-2 against 2e-2 (D1: the plane-strain closed form does not hold at mid-length)"]
 fn f604_a1_plane_strain_closed_form_known_miss() {
     let r = run(BASE);
     let mut c = Checks::new();
@@ -550,8 +550,86 @@ fn f604_a1_plane_strain_closed_form_known_miss() {
 /// The heavy record (ADR 0517 D6): `n = 4, 8, 16, 32` at `L = 4 (b - a)`: A1f on every mesh, E1, E2, E3, E4 and the
 /// bore-cell rule R.
 #[test]
-#[ignore = "heavy record (ADR 0517 D6): four meshes up to about 100k unknowns, about 25 minutes; run once, alone"]
+#[ignore = "ADR 0517 D6 heavy record: n = 4, 8, 16 ran; the n = 32 solve failed (active set cycled, the projection defect of amendment 1); superseded by A1-H"]
 fn f604_edge_convergence_and_bore_cell_rule_heavy() {
+    let rs: Vec<Read> = [4, 8, 16, 32].iter().map(|&n| run(Setup { n, ..BASE })).collect();
+    let mut c = Checks::new();
+    for r in &rs {
+        c.at_most(
+            &format!("A1f n = {}: |p_mid/p_0 - 1|", r.setup.n),
+            (r.p_mid - 1.0).abs(),
+            2e-2,
+        );
+        c.holds(&format!("E1 n = {}: the peak at the face", r.setup.n), r.peak_at_face);
+    }
+    // E2: the peak diverges as D2 predicts.
+    for i in 0..3 {
+        c.within(
+            &format!("E2 P_f({})/P_f({})", rs[i + 1].setup.n, rs[i].setup.n),
+            rs[i + 1].p_face / rs[i].p_face,
+            1.08,
+            1.25,
+        );
+    }
+    c.at_most(
+        "E2 |log2(P_f(32)/P_f(16)) - 0.226|",
+        ((rs[3].p_face / rs[2].p_face).log2() - 0.226).abs(),
+        0.05,
+    );
+    // E3: the band resultants converge.
+    for (name, get) in [
+        ("B_0.25", (|r: &Read| r.b025) as fn(&Read) -> f64),
+        ("B_0.5", |r: &Read| r.b05),
+    ] {
+        let b: Vec<f64> = rs.iter().map(get).collect();
+        let dd = [b[1] - b[0], b[2] - b[1], b[3] - b[2]];
+        println!("E3 {name}: {b:?}, differences {dd:?}");
+        c.holds(
+            &format!("E3 {name}: |D_3| < |D_2| < |D_1|"),
+            dd.iter().all(|x| x.is_finite()) && dd[2].abs() < dd[1].abs() && dd[1].abs() < dd[0].abs(),
+        );
+        c.at_least(&format!("E3 {name}: order 4-8-16"), (dd[0] / dd[1]).abs().log2(), 0.5);
+        c.at_least(&format!("E3 {name}: order 8-16-32"), (dd[1] / dd[2]).abs().log2(), 0.5);
+        c.at_most(&format!("E3 {name}: |D_3|/B(32)"), (dd[2] / b[3]).abs(), 1e-2);
+    }
+    // E4: the fixed-distance resultants change little.
+    c.at_most("E4 |q_0.25(32)/q_0.25(16) - 1|", rel(rs[3].q025, rs[2].q025), 1e-2);
+    c.at_most("E4 |q_0.5(32)/q_0.5(16) - 1|", rel(rs[3].q05, rs[2].q05), 1e-2);
+    // R: the bore-cell rule.
+    let f = &rs[3];
+    let mut rule = None;
+    for r in &rs[..3] {
+        let e = [
+            rel(r.b025, f.b025),
+            rel(r.b05, f.b05),
+            rel(r.p_mid, f.p_mid),
+            (r.p_mid - 1.0).abs(),
+        ];
+        let ok = e.iter().all(|x| x.is_finite()) && e[0] <= 2e-2 && e[1] <= 2e-2 && e[2] <= 1e-2 && e[3] <= 2e-2;
+        println!(
+            "R n = {}: B_0.25 {:.3e}, B_0.5 {:.3e}, p_mid {:.3e} against n = 32; p_mid {:.3e} against p_0: {}",
+            r.setup.n,
+            e[0],
+            e[1],
+            e[2],
+            e[3],
+            if ok { "meets" } else { "does not meet" }
+        );
+        if ok && rule.is_none() {
+            rule = Some(r.setup.n);
+        }
+    }
+    println!("R: the bore-cell rule n* = {rule:?} cells through b - a");
+    c.holds("R: a rule n* <= 16 exists", rule.is_some());
+    c.finish();
+}
+
+/// A1-H (ADR 0517 amendment 1): the heavy record run again after the fix of `project`, the same model, checks and limits:
+/// `n = 4, 8, 16, 32` at `L = 4 (b - a)`: A1f on every mesh, E1, E2, E3, E4 and the
+/// bore-cell rule R.
+#[test]
+#[ignore = "heavy record (ADR 0517 amendment 1, A1-H): four meshes up to about 100k unknowns, about 25 minutes; run once, alone"]
+fn f604_edge_convergence_and_bore_cell_rule_heavy_a1() {
     let rs: Vec<Read> = [4, 8, 16, 32].iter().map(|&n| run(Setup { n, ..BASE })).collect();
     let mut c = Checks::new();
     for r in &rs {
