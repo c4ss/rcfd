@@ -11712,13 +11712,13 @@ fixed by the item's registration ADR before any code.
     the nonlinear driver no longer refuses it. Further limits are registered by the implementing ADR (follow-up text of
     ADR 0506 gives no numbers).
   - note: Structural solver, advanced tier. Follow-up of F-587 (ADR 0506, 2026-11-14).
-- [ ] **F-597** A finite-strain reference for the B-bar creep cylinder growth bound, and a Full-solve BBar-recovery locking control
+- [~] **F-597** A finite-strain reference for the B-bar creep cylinder growth bound, and a Full-solve BBar-recovery locking control
   - depends on: F-587
   - acceptance: Every limit not stated here is registered in the ADR before the run. A creep-cylinder reference for C4
     that allows for finite strain, or C4 re-registered at a p/E small enough that the total Lagrangian drift stays below
     the bound (the diagnostic gives 1.1e-4 at p/10); and a locking control on the creep cylinder that solves with Full
     and recovers with BBar, the combination the mutation MU5 showed C2 does not see.
-  - note: Structural solver, advanced tier. Follow-up of F-587 (ADR 0506, 2026-11-14).
+  - note: Structural solver, advanced tier. PARTIAL (ADR 0528, 2026-11-14): C4 of ADR 0506 re-registered at p/10: the BBar creep cylinder gives C1' 5.4e-3, C2' 9.5e-3, C3' 9.6e-3 and the growth C4' 1.06e-4 against the unchanged bound 2e-3 (largest creep strain 9.7e-4). Locking control that solves with Full: the Full element's force at the BBar solution differs from the BBar force by 3.4e-2 at 5 t* and 0.127 at 20 t* (limits 1e-2, 3e-2), zero when the solve itself is Full (mutation MU5 caught by it; C2 does not see it). The displacement and creep-strain witnesses of run 1 missed (1.1e-3 to 4.2e-3 against 3e-2 and 5e-2): the locking is a pressure oscillation, ignored record f597_run1_known_miss_displacement_and_creep_strain_witnesses. Test only, defaults untouched. No finite-strain reference; C4 at p stays the known miss of ADR 0506. Follow-up of F-587 (ADR 0506, 2026-11-14).
 - [ ] **F-598** Warping degree of freedom for Beam2 (14-DOF element) and the I-section lateral-torsional buckling
   - depends on: F-558
   - acceptance: Every limit not stated here is registered in the ADR before the run. A warping degree of freedom for

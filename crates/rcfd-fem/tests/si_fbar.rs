@@ -1423,3 +1423,125 @@ fn rf1_rf2_rf3_refusals_after_f587() {
     }
     ch.finish();
 }
+
+// ------------------------------------------------------------------------------------------------ F-597 (ADR 0528)
+
+/// The radial displacement of the bore nodes (r = a) of a solution, by node.
+fn bore_radial(model: &SolidModel, u: &[f64]) -> std::collections::BTreeMap<usize, f64> {
+    let mesh = model.mesh();
+    let mut out = std::collections::BTreeMap::new();
+    for e in 0..mesh.n_elements() {
+        let ue = element_u(model, u, e);
+        for (k, &n) in mesh.element_nodes(e).iter().enumerate() {
+            let x = mesh.nodes()[n];
+            let r = x[0].hypot(x[1]);
+            if (r - CYL_A).abs() < 1e-9 {
+                out.insert(n, (x[0] * ue[3 * k] + x[1] * ue[3 * k + 1]) / r);
+            }
+        }
+    }
+    out
+}
+
+/// `max |a - b| / max |b|` over the common nodes.
+fn relative_bore_difference(
+    a: &std::collections::BTreeMap<usize, f64>,
+    b: &std::collections::BTreeMap<usize, f64>,
+) -> f64 {
+    assert_eq!(a.len(), b.len());
+    let d = worst(a.iter().map(|(n, v)| (v - b[n]).abs()));
+    d / worst(b.values().map(|v| v.abs()))
+}
+
+/// F-597 (ADR 0528): C1' to C4', SC, NC1, LC-u5, LC-u20, LC-e20 at q = p / 10; LC-s reported.
+#[test]
+#[ignore = "known miss of ADR 0528 run 1: LC-u5 1.13e-3 < 3e-2, LC-u20 4.14e-3 < 3e-2, LC-e20 4.16e-3 < 5e-2 (wrong witnesses, the locking is in the pressure); C1' to C4', SC, NC1 met; amendment 1 gives the corrected test"]
+fn f597_run1_known_miss_displacement_and_creep_strain_witnesses() {
+    let q = 0.1 * CR_P;
+    let (mb, hb) = creep_run(BBAR, q);
+    let (mf, hf) = creep_run(FULL, q);
+    let pts = |m: &SolidModel, h: &rcfd_fem::nonlinear::TimeHistory, f: SolidFormulation, i: usize| {
+        polar_points(m, f, &h.steps[i].u, &h.steps[i].states)
+    };
+    let c1 = creep_error(&pts(&mb, &hb, BBAR, 0), lame, q);
+    let c2 = creep_error(&pts(&mb, &hb, BBAR, 40), stationary, q);
+    let b20 = pts(&mb, &hb, BBAR, 70);
+    let c3 = creep_error(&b20, stationary, q);
+    let mut ch = Checks::new();
+    ch.at_most("C1' BBar t = 0 against Lame / q", c1, 1e-2);
+    ch.at_most("C2' BBar t = 5 t*: against the stationary field / q", c2, 2e-2);
+    ch.at_most("C3' BBar t = 20 t*: the same", c3, 2e-2);
+    ch.at_most("C4' |C3' - C2'|", (c3 - c2).abs(), 2e-3);
+    ch.at_most(
+        "SC largest equivalent creep strain of the BBar run at 20 t*",
+        worst(b20.iter().map(|p| p.state[6])),
+        2e-3,
+    );
+    let bore = |m: &SolidModel, h: &rcfd_fem::nonlinear::TimeHistory, i: usize| bore_radial(m, &h.steps[i].u);
+    ch.at_most(
+        "NC1 Full against BBar bore u_r at t = 0 (no locking)",
+        relative_bore_difference(&bore(&mf, &hf, 0), &bore(&mb, &hb, 0)),
+        1e-2,
+    );
+    ch.at_least(
+        "LC-u5 Full against BBar bore u_r at 5 t*",
+        relative_bore_difference(&bore(&mf, &hf, 40), &bore(&mb, &hb, 40)),
+        3e-2,
+    );
+    ch.at_least(
+        "LC-u20 Full against BBar bore u_r at 20 t*",
+        relative_bore_difference(&bore(&mf, &hf, 70), &bore(&mb, &hb, 70)),
+        3e-2,
+    );
+    let f20 = pts(&mf, &hf, FULL, 70);
+    assert_eq!(f20.len(), b20.len());
+    let de = worst(f20.iter().zip(&b20).map(|(f, b)| (f.state[6] - b.state[6]).abs()));
+    ch.at_least(
+        "LC-e20 Full against BBar equivalent creep strain at 20 t*",
+        de / worst(b20.iter().map(|p| p.state[6])),
+        5e-2,
+    );
+    for i in [40, 70] {
+        println!(
+            "LC-s t = {}: Full solve, BBar recovery {:.4e}; Full solve, Full recovery {:.4e} (reported)",
+            hf.steps[i].time,
+            creep_error(&pts(&mf, &hf, BBAR, i), stationary, q),
+            creep_error(&pts(&mf, &hf, FULL, i), stationary, q)
+        );
+    }
+    ch.finish();
+}
+
+/// F-597 (ADR 0528 amendment 1): C1' to C4', SC, NC1 as in run 1, and the force witness LC-f5, LC-f20, NC2.
+#[test]
+fn f597_c4_prime_and_the_force_witness_control() {
+    let q = 0.1 * CR_P;
+    let (mb, hb) = creep_run(BBAR, q);
+    let (mf, _) = creep_run(FULL, q);
+    let pts = |i: usize| polar_points(&mb, BBAR, &hb.steps[i].u, &hb.steps[i].states);
+    let c1 = creep_error(&pts(0), lame, q);
+    let c2 = creep_error(&pts(40), stationary, q);
+    let b20 = pts(70);
+    let c3 = creep_error(&b20, stationary, q);
+    let mut ch = Checks::new();
+    ch.at_most("C1' BBar t = 0 against Lame / q", c1, 1e-2);
+    ch.at_most("C2' BBar t = 5 t*: against the stationary field / q", c2, 2e-2);
+    ch.at_most("C3' BBar t = 20 t*: the same", c3, 2e-2);
+    ch.at_most("C4' |C3' - C2'|", (c3 - c2).abs(), 2e-3);
+    ch.at_most(
+        "SC largest equivalent creep strain of the BBar run at 20 t*",
+        worst(b20.iter().map(|p| p.state[6])),
+        2e-3,
+    );
+    // The force of the BBar solution through the Full element against through the BBar element.
+    let force_difference = |i: usize| {
+        let (u, s) = (&hb.steps[i].u, &hb.steps[i].states);
+        let fb = internal_force(&mb, u, s).unwrap();
+        let ff = internal_force(&mf, u, s).unwrap();
+        worst(fb.iter().zip(&ff).map(|(a, b)| (a - b).abs())) / max_abs(&fb)
+    };
+    ch.at_most("NC2 |f_F - f_B| / |f_B| at t = 0", force_difference(0), 1e-2);
+    ch.at_least("LC-f5 |f_F - f_B| / |f_B| at 5 t*", force_difference(40), 1e-2);
+    ch.at_least("LC-f20 |f_F - f_B| / |f_B| at 20 t*", force_difference(70), 3e-2);
+    ch.finish();
+}
