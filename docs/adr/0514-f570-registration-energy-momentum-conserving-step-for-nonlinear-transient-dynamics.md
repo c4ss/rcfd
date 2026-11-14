@@ -298,3 +298,22 @@ scratch copy, one at a time:
    of the step and of `strain_energy`, then accepts them (the derivation holds for any constant symmetric `D`).
 3. **Hyperelastic materials.** Recommendation: a follow-up with the discrete gradient `S_alg = S(E_m) + [(W_{n+1} - W_n - S(E_m)
    . dE) / (dE . dE)] dE` (Gonzalez, from memory), checked on a NeoHookean spinning bar.
+
+## Amendment 1 (2026-11-14, written after the registered run of commit 100d0d05 and before any corrected run)
+
+The registered run (`cargo test -p rcfd-fem --release --test sa_emc`, log `f570-scratch/run1.log`) met every check of the
+table except two clauses of F1e; nothing else was rerun.
+
+1. **F1e, NeoHookean and orthotropic: set-up defective.** Both models are refused by `Integrator::new`, but before the check of
+   D4: `SolidModel::check_supported_nonlinear` (ADR 0479 D3, unchanged) refuses them with `FemError::NotYetSupported`
+   ("material Hyperelastic ... is added by ADR 0328 (F-425)", "material Orthotropic ... is added by a follow-up of ADR 0452"),
+   so the expected key `"nl_transient"` with `ADR 0514` cannot appear: the registration assumed the nonlinear transient
+   integrator takes those materials, which it does not. The materials are refused, which is what D4 asks. **Corrected set-up
+   (F1ec):** the same models and calls; the J2 material, the BBar block and the contribution keep the registered expectation
+   (key `"nl_transient"`, reason with `ADR 0514`); the NeoHookean and the orthotropic material are required refused by
+   `Integrator::new` with the energy-momentum step (any error), and so is the Prony viscoelastic material
+   (`Material::viscoelastic` on the isotropic base with one term, a material that the integrator takes with the `Method` step)
+   with the key `"nl_transient"` and `ADR 0514` (the check of D4 reached by a second material). Limits unchanged in kind
+   (refused; all). Run once. The registered test stays as an ignored record.
+2. **TP** took about two minutes of the run (six runs of ten turns): it becomes an ignored heavy record with the numbers of the
+   registered run in its reason; S0e to S3e cover the same code path.

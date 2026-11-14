@@ -7,7 +7,7 @@
 use rcfd_fem::builders::hex_box;
 use rcfd_fem::constraint::Prescribed;
 use rcfd_fem::mass::consistent;
-use rcfd_fem::material::{HyperelasticEnergy, MaterialAxes};
+use rcfd_fem::material::{HyperelasticEnergy, MaterialAxes, PronyTerm};
 use rcfd_fem::modal::{modal_analysis, ModalOptions};
 use rcfd_fem::nl_transient::{Integrator as NlIntegrator, NlTransientOptions, NlTransientState, StepKind};
 use rcfd_fem::nonlinear::{solve_with, Contribution, DriverExtensions, NewtonOptions};
@@ -323,6 +323,7 @@ fn s0e_s1e_s2e_s3e_spinning_bar_ten_turns() {
 }
 
 #[test]
+#[ignore = "heavy record TP of ADR 0514 (amendment 1, run of commit 100d0d05, about two minutes): residual tolerance (energy criterion off) 1e-1: dP 2.964e-13, dJ 4.507e-8, dE 1.089e-6 (energy limit not met); 1e-2: 2.232e-13, 3.817e-9, 1.037e-7; 1e-3: 2.208e-13, 4.158e-9, 9.404e-9; 1e-4: 2.263e-13, 6.859e-13, 1.007e-13; 1e-5: the same as 1e-4; 1e-6: 2.454e-13, 4.934e-13, 1.371e-13; every run 1000 steps, no halving; S0e to S3e cover the same path"]
 fn tp_tolerance_probe_record() {
     let s = spin();
     for tol in [1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6] {
@@ -442,6 +443,7 @@ fn h1e_halvings_and_the_error() {
 }
 
 #[test]
+#[ignore = "record of the registered run of ADR 0514 (commit 100d0d05): set-up defective, the NeoHookean and the orthotropic material are refused before the check of D4 by check_supported_nonlinear (NotYetSupported, not the key nl_transient); corrected by amendment 1 in f1ec_refusals"]
 fn f1e_refusals() {
     let mut c = Checks::new();
     let o = emc_options(NewtonOptions::new(1));
@@ -672,5 +674,67 @@ fn l1e_linear_limit_against_f398() {
         }
         c.at_most(&format!("L1e {name} max |du|/max |u_lin|"), num / den, 1e-9);
     }
+    c.finish();
+}
+
+// ------------------------------------------------------------------------------------------- amendment 1 (ADR 0514)
+
+#[test]
+fn f1ec_refusals() {
+    let mut c = Checks::new();
+    let o = emc_options(NewtonOptions::new(1));
+    let with = |m: Material| {
+        let mut model = SolidModel::new(slender_mesh());
+        model.add_material("all", m).unwrap();
+        model
+    };
+    let base = || Material::isotropic_elastic(2.0e11, 0.3, RHO, 0.0).unwrap();
+    for (name, model) in [
+        ("J2", with(Material::j2(base(), 2.0e8, 2.0e9, 1.0e9).unwrap())),
+        (
+            "viscoelastic",
+            with(Material::viscoelastic(base(), vec![PronyTerm::new(0.5, 0.5, 1e-3).unwrap()], None).unwrap()),
+        ),
+    ] {
+        let (ok, d) = refused_with(NlIntegrator::new(&model, &[], &o), "nl_transient", "ADR 0514");
+        c.holds(&format!("F1ec {name} refused with ADR 0514"), ok, &d);
+    }
+    let hyper = with(Material::hyperelastic(HyperelasticEnergy::neo_hookean(1e6, 1e9).unwrap(), 1100.0).unwrap());
+    let ortho = with(
+        Material::orthotropic(
+            [1.4e11, 1.0e10, 1.0e10],
+            [0.3, 0.3, 0.45],
+            [5.0e9, 5.0e9, 3.5e9],
+            1600.0,
+            [0.0; 3],
+            MaterialAxes::cylindrical([0.0; 3], [0.0, 0.0, 1.0]).unwrap(),
+        )
+        .unwrap(),
+    );
+    for (name, model) in [("NeoHookean", hyper), ("orthotropic", ortho)] {
+        let r = NlIntegrator::new(&model, &[], &o);
+        let d = match &r {
+            Ok(_) => "accepted".to_string(),
+            Err(e) => e.to_string(),
+        };
+        c.holds(&format!("F1ec {name} refused"), r.is_err(), &d);
+    }
+    let mut mesh = slender_mesh();
+    mesh.set_block_property(0, BlockProperty::solid(SolidFormulation::BBar))
+        .unwrap();
+    let mut model = SolidModel::new(mesh);
+    model.add_material("all", soft()).unwrap();
+    let (ok, d) = refused_with(NlIntegrator::new(&model, &[], &o), "nl_transient", "ADR 0514");
+    c.holds("F1ec BBar Hex8 refused", ok, &d);
+    let s = spin();
+    let mut it = spin_integrator(&s, &emc_options(bar_newton()));
+    let before = it.state().unwrap().to_bytes();
+    let (ok, d) = refused_with(it.step_with(&[&Zero]), "nl_transient", "ADR 0514");
+    c.holds("F1ec a contribution refused", ok, &d);
+    c.holds(
+        "F1ec the state is unchanged by the refusal",
+        it.state().unwrap().to_bytes() == before,
+        "state bytes",
+    );
     c.finish();
 }
