@@ -8057,7 +8057,7 @@ fixed by the item's registration ADR before any code.
     driver, and the complex type C64; all 57 bit digests of the earlier tiers equal main's and the baseline hashes pass;
     partial because D6 and R2 to R4 were met only after set-up amendments made after their runs and mutation MU4 was
     caught by B7 but not by H1.
-- [ ] **F-409** Orthotropic elasticity with material axes, orthotropic expansion, and temperature-dependent properties from tables
+- [x] **F-409** Orthotropic elasticity with material axes, orthotropic expansion, and temperature-dependent properties from tables
   - depends on: F-408, F-372, F-374, F-376, F-380
   - acceptance: Every limit not stated here is registered in the ADR before the run. Orthotropy: with isotropic
     constants the elasticity matrix equals the isotropic one within 1e-13 relative; constants that are not positive
@@ -8073,8 +8073,19 @@ fixed by the item's registration ADR before any code.
     under an end force by F L ln(E1/E0)/(A (E1 - E0)) within 0.1 percent with 20 elements; with alpha = a0 + a1 T the
     free expansion is a0 (T - Tref) + a1 (T^2 - Tref^2)/2 within 1e-10; a constant table gives the bits of the constant
     material; a temperature outside a table is refused with the element and the temperature.
-  - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0312; the registration is
-    written by the implementation agent before any code.
+  - note: Structural solver, advanced tier (plan ADR 0310). ADR 0452, 2026-11-14: orthotropic elasticity from nine
+    constants (not positive definite refused naming nu_12, nu_13, nu_23 or the determinant) with fixed, cylindrical or
+    per-element material axes evaluated at every integration point, orthotropic expansion, and properties from
+    temperature tables (piecewise linear, nothing extrapolated, the thermal strain the integral of alpha from the
+    reference) on the linear static solve of solid elements with the recovery; every other path, beams and shells refuse
+    both variants by name (a follow-up of ADR 0452). Isotropic constants 6.4e-16; off-axis strain and shear-extension
+    ratio at 15 to 60 degrees to 1.4e-14; rotation of model and axes 4.4e-16; orthotropic Hex20 cantilever (L/h = 20, E2
+    = E1/10) 0.19 percent; free heating and full restraint 2e-15; polar-orthotropic tube (k = 2, bore hoop 34 p/15
+    derived) 7.8e-4 on 16 x 8 Hex20; bar with a linear modulus 1.13e-4 with 20 elements; alpha = a0 + a1 T 1.8e-15;
+    constant tables give the bits of the constant material; a temperature outside a table refused with the element and
+    the temperature. Default paths bit-identical (14 digests of main 0ca10e83). Ten mutations caught. Files
+    mat_ortho.rs, mat_table.rs, tests sa_ortho.rs, sa_mat_table.rs, sa_ortho_default_bits.rs; scaffold rows recorded and
+    copied in sa_scaffold.rs. Follow-up F-537.
 - [ ] **F-410** Linear viscoelasticity: Prony series in time, complex modulus in frequency, time-temperature shift
   - depends on: F-408, F-397, F-398
   - acceptance: Every limit not stated here is registered in the ADR before the run. Relaxation of one element after a
@@ -10355,3 +10366,12 @@ fixed by the item's registration ADR before any code.
     within 1 percent at every level and its extrapolation the oscillating-channel impedance within 3 percent, with the
     outer iterations used per step recorded; the default results of every existing case stay bit-identical.
   - note: Numerics. Follow-up of F-530 (ADR 0451, 2026-11-14).
+- [ ] **F-537** Orthotropic and tabulated materials on the modal, prestressed-modal and transformation paths
+  - depends on: F-409
+  - acceptance: Every limit not stated here is registered in the ADR before the run. Modal analysis, prestressed modes
+    and the transformation path (linear constraints, elastic supports) take the orthotropic and tabulated materials of
+    ADR 0452 through the per-point stiffness; the first bending frequencies of an orthotropic Hex20 cantilever match the
+    beam values with E1 within 1 percent; isotropic constants in an orthotropic material give the frequencies of the
+    isotropic material within 1e-12; the paths still not opened refuse the variants by name; default paths
+    bit-identical.
+  - note: Structural solver, advanced tier. Follow-up of F-409 (ADR 0452, 2026-11-14).

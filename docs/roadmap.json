@@ -3723,9 +3723,9 @@
       "F-376",
       "F-380"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. Orthotropy: with isotropic constants the elasticity matrix equals the isotropic one within 1e-13 relative; constants that are not positive definite are refused naming the constant. Off-axis tension of a block with the material axes turned by 15, 30, 45 and 60 degrees about z: axial strain sigma/E_x with 1/E_x = c^4/E1 + s^4/E2 + (1/G12 - 2 nu12/E1) s^2 c^2 and the shear-extension ratio from the rotated compliance within 1e-10; rotating the model and the axes together leaves the strain energy unchanged within 1e-12. Cantilever of slenderness 20 with E1 along the span and E2 = E1/10: tip deflection P L^3/(3 E1 I) + P L/(kappa G13 A) within 1 percent. Free heating gives the strains alpha_i dT in material axes with zero stress, full restraint the stress -D alpha dT, both within 1e-10. Cylindrical axes: a tube b/a = 2 with E_theta/E_r = 4 under internal pressure in plane stress has the bore hoop stress of the polar-orthotropic closed form (powers r^(k-1) and r^(-k-1), k = sqrt(E_theta/E_r), derived in the registration) within 1 percent. Tables: a bar whose temperature and so its modulus vary linearly from E0 to E1 along it stretches under an end force by F L ln(E1/E0)/(A (E1 - E0)) within 0.1 percent with 20 elements; with alpha = a0 + a1 T the free expansion is a0 (T - Tref) + a1 (T^2 - Tref^2)/2 within 1e-10; a constant table gives the bits of the constant material; a temperature outside a table is refused with the element and the temperature.",
-    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0312; the registration is written by the implementation agent before any code."
+    "note": "Structural solver, advanced tier (plan ADR 0310). ADR 0452, 2026-11-14: orthotropic elasticity from nine constants (not positive definite refused naming nu_12, nu_13, nu_23 or the determinant) with fixed, cylindrical or per-element material axes evaluated at every integration point, orthotropic expansion, and properties from temperature tables (piecewise linear, nothing extrapolated, the thermal strain the integral of alpha from the reference) on the linear static solve of solid elements with the recovery; every other path, beams and shells refuse both variants by name (a follow-up of ADR 0452). Isotropic constants 6.4e-16; off-axis strain and shear-extension ratio at 15 to 60 degrees to 1.4e-14; rotation of model and axes 4.4e-16; orthotropic Hex20 cantilever (L/h = 20, E2 = E1/10) 0.19 percent; free heating and full restraint 2e-15; polar-orthotropic tube (k = 2, bore hoop 34 p/15 derived) 7.8e-4 on 16 x 8 Hex20; bar with a linear modulus 1.13e-4 with 20 elements; alpha = a0 + a1 T 1.8e-15; constant tables give the bits of the constant material; a temperature outside a table refused with the element and the temperature. Default paths bit-identical (14 digests of main 0ca10e83). Ten mutations caught. Files mat_ortho.rs, mat_table.rs, tests sa_ortho.rs, sa_mat_table.rs, sa_ortho_default_bits.rs; scaffold rows recorded and copied in sa_scaffold.rs. Follow-up F-537."
   },
   {
     "id": "F-410",
@@ -5214,5 +5214,16 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The number of outer iterations of the transient step with consistent correctors is set by a registered criterion (a derived contraction of the pressure error, or a tolerance on the change of the pressure between outer iterations) instead of a fixed count, so that the fixed-mesh channel of ADR 0451 at nu dt/dy^2 = 25, 50 and 100 matches the discrete implicit-Euler impedance within 1 percent at every level and its extrapolation the oscillating-channel impedance within 3 percent, with the outer iterations used per step recorded; the default results of every existing case stay bit-identical.",
     "note": "Numerics. Follow-up of F-530 (ADR 0451, 2026-11-14)."
+  },
+  {
+    "id": "F-537",
+    "title": "Orthotropic and tabulated materials on the modal, prestressed-modal and transformation paths",
+    "phase": 9,
+    "deps": [
+      "F-409"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. Modal analysis, prestressed modes and the transformation path (linear constraints, elastic supports) take the orthotropic and tabulated materials of ADR 0452 through the per-point stiffness; the first bending frequencies of an orthotropic Hex20 cantilever match the beam values with E1 within 1 percent; isotropic constants in an orthotropic material give the frequencies of the isotropic material within 1e-12; the paths still not opened refuse the variants by name; default paths bit-identical.",
+    "note": "Structural solver, advanced tier. Follow-up of F-409 (ADR 0452, 2026-11-14)."
   }
 ]
