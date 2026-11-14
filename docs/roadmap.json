@@ -4986,8 +4986,9 @@
     "deps": [
       "F-512"
     ],
-    "status": "todo",
-    "acceptance": "Every limit not stated here is registered in the ADR before the run. rcfd_post::solid_output refuses a result of a beam model whose DofMap has the model's number of unknowns but another count at some node, with a message naming that node and both counts; the N2b test of ADR 0423 passes unedited; the mutation removing the DofMap equality check is caught by a check registered before its run."
+    "status": "done",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. rcfd_post::solid_output refuses a result of a beam model whose DofMap has the model's number of unknowns but another count at some node, with a message naming that node and both counts; the N2b test of ADR 0423 passes unedited; the mutation removing the DofMap equality check is caught by a check registered before its run.",
+    "note": "Structural solver, intermediate tier. ADR 0430, 2026-11-14: rcfd_post::solid_output beam path refuses a result with the model's number of unknowns in another layout with a message naming the first differing node and both counts (node 3 has 3 unknowns in the result and 6 in the model), a result with another number of nodes with both node counts, and keeps the former length text for a wrong number of unknowns; the N2b test of ADR 0423 passes unedited; the mutation removing the layout check (and four more) is caught by checks registered before their run; output of models without beams byte-identical (B1 unedited)."
   },
   {
     "id": "F-517",

@@ -9925,12 +9925,18 @@ fixed by the item's registration ADR before any code.
     2 also runs 200 steps from the projected start (it stops at step 126 from the ADR 0249 start). Defaults
     bit-identical (baseline_hashes, the F-363 fingerprints and refusal tests unchanged). Eight mutations caught. Not
     done (needs the maintainer): a case-file key, which changes the schema golden.
-- [ ] **F-516** Beam output: refusal of a result with the model's count of unknowns in another layout
+- [x] **F-516** Beam output: refusal of a result with the model's count of unknowns in another layout
   - depends on: F-512
   - acceptance: Every limit not stated here is registered in the ADR before the run. rcfd_post::solid_output refuses a
     result of a beam model whose DofMap has the model's number of unknowns but another count at some node, with a
     message naming that node and both counts; the N2b test of ADR 0423 passes unedited; the mutation removing the DofMap
     equality check is caught by a check registered before its run.
+  - note: Structural solver, intermediate tier. ADR 0430, 2026-11-14: rcfd_post::solid_output beam path refuses a result
+    with the model's number of unknowns in another layout with a message naming the first differing node and both counts
+    (node 3 has 3 unknowns in the result and 6 in the model), a result with another number of nodes with both node
+    counts, and keeps the former length text for a wrong number of unknowns; the N2b test of ADR 0423 passes unedited;
+    the mutation removing the layout check (and four more) is caught by checks registered before their run; output of
+    models without beams byte-identical (B1 unedited).
 - [ ] **F-517** Case-file key for the immersed start projection
   - depends on: F-515
   - acceptance: A case-file key asks for the immersed start projection of ADR 0425
