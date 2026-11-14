@@ -7599,7 +7599,7 @@ fixed by the item's registration ADR before any code.
     8-node face are retired (F-484). The two known misses are met under registered follow-up set-ups by F-485 (ADR
     0385): the cantilever with the support of beam theory at 0.04 percent and the bore hoop stress on 8 radial elements
     at 0.37 percent.
-- [ ] **F-390** Hex8 without locking: mean-dilatation (B-bar) and incompatible-mode formulations, opt-in per element block
+- [x] **F-390** Hex8 without locking: mean-dilatation (B-bar) and incompatible-mode formulations, opt-in per element block
   - depends on: F-388, F-372, F-374, F-376, F-379
   - acceptance: Every limit not stated here is registered in the ADR before the run. Two opt-in formulations of Hex8,
     default unchanged bit for bit. Both pass the patch test of F-374 on distorted meshes within 1e-10 and a single
@@ -7615,7 +7615,19 @@ fixed by the item's registration ADR before any code.
     written by the implementation agent before any code. ADR 0291 (2026-11-13): the formulation is
     ElementBlock::formulation() (set by SolidMesh::set_block_property with BlockProperty::solid); hex8x::PENDING gates
     it. The stiffness and the recovery do not delegate to hex8x: the package needs assemble.rs (stiffness_with) and
-    recover.rs in its file list.
+    recover.rs in its file list. ADR 0493, 2026-11-14: two opt-in Hex8 formulations through
+    `BlockProperty::solid(SolidFormulation::BBar | Incompatible)` (refused on other kinds), filled in rcfd_fem::hex8x
+    (element_stiffness, point_strains, internal_modes) and dispatched by assemble_stiffness and IntegrationPointField:
+    the mean-dilatation B-bar (Hughes) and nine incompatible modes (Wilson et al.) with the Taylor, Beresford and Wilson
+    correction (Jacobian at the centre, det J0/det J), condensed and recovered for the stress. Met: the F-374 patch on
+    two distortions within 8.2e-14 (Wilson's uncorrected element 3.7e-3, the control); six zero eigenvalues, the seventh
+    5.1e-2, 6.7e-4, 6.7e-6 of the largest at aspect ratios 1, 10, 100; the one-layer cantilever L/h = 20 at 0.99913 (nu
+    = 0) and 0.99894 (nu = 0.3) of the closed form, full integration 0.667 (control); L/h = 100 at aspect ratio 5
+    0.99927; Lame cylinder nu = 0.4999 on 8 x 16 with B-bar within 1.7e-3, full integration 0.225 (control); recovered
+    stress on the patch within 1.3e-14 of D eps, pure bending exact to 1.7e-11 with the recovered modes (0.29 without).
+    Static, modal and every recovery take them; temperature loads, per-point materials, the geometric stiffness, damped
+    and direct harmonic solves, the patch recovery and the nonlinear driver refuse them. Defaults bit-identical (26
+    digests), baseline_hashes unchanged; twelve mutations caught.
 - [x] **F-391** Six unknowns per node: rotations in the DofMap, nodal moments, and a two-node shear-flexible beam element
   - depends on: F-388, F-374, F-375, F-376, F-377, F-383
   - acceptance: Every limit not stated here is registered in the ADR before the run. Nodes carry three or six unknowns;

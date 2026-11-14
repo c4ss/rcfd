@@ -792,6 +792,7 @@ fn r11_modal_and_stiffness_refuse_after_landed() {
 
 /// R11 after ADR 0384: the modal analysis solves R8 (a spring) on the transformation; R4 is still refused.
 #[test]
+#[ignore = "record of ADR 0291 before ADR 0493 (F-390, Hex8 formulations) retired the R4 row; superseded by the r4_formulations_taken_after_f390 copy below (maintainer standing decision, 2026-11-14)"]
 fn r11_modal_and_stiffness_refuse_after_modal_landed() {
     let cases = refusal_cases();
     let get = |n: &str| cases.iter().find(|c| c.0 == n).unwrap();
@@ -1088,6 +1089,7 @@ fn pending_refusal_cases_after_shell() -> Vec<(
 }
 
 #[test]
+#[ignore = "record of ADR 0291 before ADR 0493 (F-390, Hex8 formulations) retired the hex8x::PENDING and BBar.pending rows; superseded by the x1_the_scaffold_exists_after_f390 copy below (maintainer standing decision, 2026-11-14)"]
 fn x1_the_scaffold_exists_after_shell_landed() {
     assert_eq!(rcfd_fem::hex20::PENDING, None);
     assert_eq!(rcfd_fem::hex8x::PENDING, Some("ADR 0293"));
@@ -1143,6 +1145,7 @@ fn x3_placeholder_elements_refuse_after_shell_landed() {
 }
 
 #[test]
+#[ignore = "record of ADR 0291 before ADR 0493 (F-390, Hex8 formulations) retired the R4 and R4b rows; no row stays valid, superseded by the r4_formulations_taken_after_f390 copy below (maintainer standing decision, 2026-11-14)"]
 fn r1_to_r9_static_solve_refuses_each_new_variant_after_shell_landed() {
     let cases = pending_refusal_cases_after_shell();
     assert_eq!(cases.len(), 2);
@@ -1159,6 +1162,7 @@ fn r1_to_r9_static_solve_refuses_each_new_variant_after_shell_landed() {
 }
 
 #[test]
+#[ignore = "record of ADR 0291 before ADR 0493 (F-390, Hex8 formulations) retired the R4 and R4b rows; no row stays valid, superseded by the r4_formulations_taken_after_f390 copy below (maintainer standing decision, 2026-11-14)"]
 fn r10_refused_on_every_static_path_after_shell_landed() {
     let cg = StaticOptions::with_solver(StaticSolver::ConjugateGradient {
         tolerance: 1e-10,
@@ -1190,5 +1194,52 @@ fn r10_refused_on_every_static_path_after_shell_landed() {
             &location,
             package,
         );
+    }
+}
+
+// ---------------------------------------------------------------------------------------------------------------- copies
+// Copies of X1 and of R4, R4b (R1 to R11) after ADR 0493 (F-390): hex8x::PENDING and the formulations' pending are None, and
+// the R4 and R4b models (the cantilever C with a BBar or an Incompatible block) are taken on every static path, by the modal
+// analysis and by the stiffness. Every other line as registered.
+
+#[test]
+fn x1_the_scaffold_exists_after_f390() {
+    assert_eq!(rcfd_fem::hex20::PENDING, None);
+    assert_eq!(rcfd_fem::hex8x::PENDING, None);
+    assert_eq!(rcfd_fem::beam::PENDING, None);
+    assert_eq!(rcfd_fem::shell::PENDING, None);
+    assert_eq!(rcfd_fem::mpc::PENDING, None);
+    assert_eq!(rcfd_fem::cyclic::PENDING, None);
+    assert_eq!(ElementKind::Hex20.nodes_per_element(), 20);
+    assert_eq!(ElementKind::Hex20.pending(), None);
+    assert_eq!(ElementKind::Beam2.pending(), None);
+    assert_eq!(ElementKind::Shell4.pending(), None);
+    assert!(ElementKind::Hex20.is_solid() && !ElementKind::Beam2.is_solid() && !ElementKind::Shell4.is_solid());
+    assert_eq!(SolidFormulation::BBar.pending(), None);
+    assert_eq!(SolidFormulation::Incompatible.pending(), None);
+}
+
+#[test]
+fn r4_formulations_taken_after_f390() {
+    let cg = StaticOptions::with_solver(StaticSolver::ConjugateGradient {
+        tolerance: 1e-10,
+        max_iterations: 10_000,
+    });
+    for f in [SolidFormulation::BBar, SolidFormulation::Incompatible] {
+        let model = cantilever_with_formulation(f);
+        let name = f.name();
+        assert!(solve_static(&model, &StaticOptions::default()).is_ok(), "{name} direct");
+        assert!(solve_static_with(&model, &[], &[], &cg).is_ok(), "{name} cg");
+        let extra = [Prescribed::new(0, 0, 0.0)];
+        assert!(
+            solve_static_with(&model, &extra, &[], &StaticOptions::default().threads(8)).is_ok(),
+            "{name} threads 8"
+        );
+        assert!(
+            solve_static_report(&model, &[], &[], &StaticOptions::default()).is_ok(),
+            "{name} report"
+        );
+        assert!(modal_analysis(&model, &ModalOptions::new(2)).is_ok(), "{name} modal");
+        assert!(stiffness(&model).is_ok(), "{name} stiffness");
     }
 }

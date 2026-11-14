@@ -458,6 +458,8 @@ impl DirectHarmonic {
     /// prescribed displacements, not on the transformation path) and checks the options.
     pub fn new(model: &SolidModel, options: &DirectHarmonicOptions) -> Result<DirectHarmonic> {
         model.validate()?;
+        // ADR 0493 D5: the direct harmonic solve does not take the Hex8 formulations.
+        crate::hex8x::refuse_formulations(model, "the direct harmonic solve")?;
         let visco = model.materials().iter().any(|(_, m)| is_viscoelastic(m));
         if visco {
             check_viscoelastic_model(model)?;

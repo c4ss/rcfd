@@ -630,6 +630,10 @@ impl SolidMesh {
             });
         };
         let (fits, operation) = match &property {
+            // ADR 0493 D2: a formulation other than Full is a Hex8 choice.
+            BlockProperty::Solid { formulation } if *formulation != SolidFormulation::Full => {
+                (b.kind == ElementKind::Hex8, "a Hex8 formulation")
+            }
             BlockProperty::Solid { .. } => (b.kind.is_solid(), "the property Solid"),
             BlockProperty::Beam { .. } => (b.kind == ElementKind::Beam2, "the property Beam"),
             // ADR 0470 D2: a Shell4 membrane other than the bilinear one is a Shell4 choice.
