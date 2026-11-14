@@ -80,7 +80,10 @@ pub fn integrate(temperatures: &[f64], values: &[f64], from: f64, to: f64) -> Re
     Ok(sign * sum)
 }
 
-fn parts(material: &Material) -> Option<(&Material, &[f64], &[(String, Vec<f64>)])> {
+/// The base, the temperatures and the columns of a table.
+type Parts<'a> = (&'a Material, &'a [f64], &'a [(String, Vec<f64>)]);
+
+fn parts(material: &Material) -> Option<Parts<'_>> {
     match material {
         Material::Tabulated {
             base,

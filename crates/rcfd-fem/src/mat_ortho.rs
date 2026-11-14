@@ -66,7 +66,7 @@ pub fn check_positive_definite(e: [f64; 3], nu: [f64; 3], g: [f64; 3]) -> Result
         ("nu_23", nu[2], e[1] / e[2]),
     ];
     for (key, v, bound) in minors {
-        if !(v * v < bound) {
+        if v.is_nan() || v * v >= bound {
             return Err(FemError::InvalidMaterial {
                 key,
                 value: v,
@@ -78,7 +78,7 @@ pub fn check_positive_definite(e: [f64; 3], nu: [f64; 3], g: [f64; 3]) -> Result
     let nu31 = nu[1] * e[2] / e[0];
     let nu32 = nu[2] * e[2] / e[1];
     let delta = 1.0 - nu[0] * nu21 - nu[1] * nu31 - nu[2] * nu32 - 2.0 * nu21 * nu32 * nu[1];
-    if !(delta > 0.0) {
+    if delta.is_nan() || delta <= 0.0 {
         return Err(FemError::InvalidMaterial {
             key: "nu_12, nu_13, nu_23",
             value: delta,
@@ -175,7 +175,7 @@ pub fn cylindrical_axes(origin: Vec3, axis: Vec3, x: Vec3) -> Result<Axes> {
     let r = [d[0] - along * e3[0], d[1] - along * e3[1], d[2] - along * e3[2]];
     let rn = (r[0] * r[0] + r[1] * r[1] + r[2] * r[2]).sqrt();
     let scale = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt().max(1.0);
-    if !(rn > 1e-12 * scale) {
+    if rn.is_nan() || rn <= 1e-12 * scale {
         return Err(FemError::InvalidValue {
             key: "axes",
             reason: format!("the point {x:?} is on the axis of the cylindrical material axes"),
