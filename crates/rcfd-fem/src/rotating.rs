@@ -100,6 +100,16 @@ pub fn spin_softening_mass(model: &SolidModel, axis: Vec3, threads: Option<usize
         }
     }
     assemble_with(model, threads, |ctx| {
+        // ADR 0473 D3: a Beam2, Shell4 or Shell3 element takes its own kinematics.
+        if crate::geometric_struct::is_structural(ctx.kind) {
+            return crate::geometric_struct::element_spin_softening_mass(
+                model.mesh(),
+                ctx.element,
+                ctx.coords,
+                ctx.material,
+                a,
+            );
+        }
         let m = element_mass(element_for(ctx.kind), ctx.coords, ctx.material.density())?;
         let size = m.size();
         let n = size / 3;
@@ -497,8 +507,8 @@ fn check_frame(axis: Vec3, origin: Vec3) -> Result<()> {
 fn check_model(model: &SolidModel) -> Result<()> {
     model.validate()?;
     // ADR 0459 D1: solid elements, also of the orthotropic and the tabulated material; ADR 0462 D2: with a cyclic constraint
-    // only with cylindrical axes about its axis and origin.
-    model.check_supported_solids_with_materials()?;
+    // only with cylindrical axes about its axis and origin. ADR 0473 D6: also beams and shells.
+    model.check_supported_with_materials()?;
     crate::mat_ortho::check_cyclic_axes(model)?;
     if crate::mpc::uses_transformation(model) {
         return crate::mpc::refuse_nonzero_values(model, "a rotating modal analysis");

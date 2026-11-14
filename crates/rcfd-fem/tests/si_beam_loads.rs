@@ -569,6 +569,7 @@ fn solid_routines<T: std::fmt::Debug>(r: &Result<T, FemError>) -> bool {
 }
 
 #[test]
+#[ignore = "record of ADR 0422: ADR 0473 (F-420) takes the centrifugal load on a beam, retiring its refusal row; continued in n2_n3_other_loads_and_invalid_line_loads_after_f420 (ADR 0291 pattern, maintainer standing decision)"]
 fn n2_n3_other_loads_and_invalid_line_loads() {
     let mut c = Checks::new();
     let (x0, e1, v) = seeded();
@@ -582,6 +583,73 @@ fn n2_n3_other_loads_and_invalid_line_loads() {
     m.add_load(Load::centrifugal([0.0, 0.0, 1.0], [0.0; 3], 100.0)).unwrap();
     let r = solve_static(&m, &StaticOptions::default());
     c.holds("N2 centrifugal on a beam", solid_routines(&r), &format!("{r:?}"));
+    let mut m = base();
+    m.add_load(Load::body_force_nodal(vec![[0.0, 0.0, -1.0e4]; 2])).unwrap();
+    let r = solve_static(&m, &StaticOptions::default());
+    c.holds("N2 nodal body force on a beam", solid_routines(&r), &format!("{r:?}"));
+    let mut m = base();
+    m.add_load(Load::temperature(vec![350.0, 360.0], 300.0)).unwrap();
+    let r = solve_static(&m, &StaticOptions::default());
+    c.holds("N2 temperature on a beam", solid_routines(&r), &format!("{r:?}"));
+    // N3: invalid line loads.
+    let mut m = base();
+    let r = m.add_load(Load::line_load("nope", [0.0, 1.0, 0.0]));
+    c.holds(
+        "N3 unknown element set",
+        matches!(
+            &r,
+            Err(FemError::UnknownSet {
+                kind: SetKind::Element,
+                ..
+            })
+        ),
+        &format!("{r:?}"),
+    );
+    let r = m.add_load(Load::line_load("all", [f64::NAN, 0.0, 0.0]));
+    c.holds(
+        "N3 non-finite line load",
+        matches!(
+            &r,
+            Err(FemError::InvalidValue {
+                key: "force per length",
+                ..
+            })
+        ),
+        &format!("{r:?}"),
+    );
+    let (mut mx, _, _) = mixed();
+    let r = mx.add_load(Load::line_load("all", [0.0, 1.0, 0.0]));
+    let ok =
+        matches!(&r, Err(e @ FemError::InvalidValue { key: "line load", .. }) if e.to_string().contains("element 0"));
+    c.holds("N3 line load on a set of Hex8 elements", ok, &format!("{r:?}"));
+    c.finish();
+}
+
+/// N2, N3 after ADR 0473 (F-420, check D1): the centrifugal load on a beam now solves and the root reactions balance the
+/// centrifugal force; every other row as before.
+#[test]
+fn n2_n3_other_loads_and_invalid_line_loads_after_f420() {
+    let mut c = Checks::new();
+    let (x0, e1, v) = seeded();
+    let x1 = add(x0, scale(L1, e1));
+    let base = || {
+        let mut m = beam_model(vec![x0, x1], &[[0, 1]], section1(), v, mat1());
+        clamp(&mut m, "root");
+        m
+    };
+    // ADR 0473 (check D1): the centrifugal load on a beam is taken; the root reactions balance rho A Omega^2 L P x_mid.
+    let mut m = base();
+    let omega = 100.0;
+    m.add_load(Load::centrifugal([0.0, 0.0, 1.0], [0.0; 3], omega)).unwrap();
+    let r = solve_static(&m, &StaticOptions::default()).unwrap();
+    let mid = scale(0.5, add(x0, x1));
+    let fc = scale(RHO * section1().area() * L1 * omega * omega, [mid[0], mid[1], 0.0]);
+    let (rf, _) = reaction6(&r, 0);
+    c.at_most(
+        "N2 centrifugal on a beam (ADR 0473 check D1): |R + F_c| / |F_c|",
+        norm(add(rf, fc)) / norm(fc),
+        1e-12,
+    );
     let mut m = base();
     m.add_load(Load::body_force_nodal(vec![[0.0, 0.0, -1.0e4]; 2])).unwrap();
     let r = solve_static(&m, &StaticOptions::default());

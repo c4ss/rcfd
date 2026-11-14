@@ -668,6 +668,65 @@ pub fn local_mass(f: &Facet3, thickness: f64, density: f64) -> ElementMatrix {
     m
 }
 
+/// The 18 x 18 geometric stiffness in local axes of the membrane resultant `n` (N/m, the facet's in-plane axes; ADR 0473 D2):
+/// `A grad N_a . n grad N_b` on `u, v, w` with the linear functions; the rotations take no term.
+pub fn local_geometric_stiffness(f: &Facet3, n: [[f64; 2]; 2]) -> ElementMatrix {
+    let (nx, ny) = derivatives(f);
+    let mut k = ElementMatrix::zeros(18);
+    let v = k.values_mut();
+    for a in 0..3 {
+        for b in 0..3 {
+            let s =
+                f.area * (nx[a] * (n[0][0] * nx[b] + n[0][1] * ny[b]) + ny[a] * (n[1][0] * nx[b] + n[1][1] * ny[b]));
+            for c in 0..3 {
+                v[(6 * a + c) * 18 + 6 * b + c] = s;
+            }
+        }
+    }
+    symmetrise(&mut k);
+    k
+}
+
+/// The global geometric stiffness of a Shell3 element for the stress of its one pre-stress point (ADR 0473 D2, D4).
+pub fn element_geometric_stiffness(coords: &[Vec3], thickness: f64, stress: &[f64; 6]) -> Result<ElementMatrix> {
+    let f = facet(coords)?;
+    let n = crate::geometric_struct::membrane_resultant(&f.axes, thickness, stress)?;
+    Ok(to_global(&local_geometric_stiffness(&f, n), &transformation(&f)))
+}
+
+/// The 18 x 18 spin-softening mass in local axes for the unit axis `a` in local components (ADR 0473 D3), with the scalars of
+/// [`local_mass`]; the drilling rotation takes no term.
+pub fn local_spin_softening_mass(f: &Facet3, thickness: f64, density: f64, a: Vec3) -> ElementMatrix {
+    let t = thickness;
+    let (mt, mr) = (density * t, density * t * t * t / 12.0);
+    let r = crate::shell::rotary_softening_factor(a);
+    let mut m = ElementMatrix::zeros(18);
+    let v = m.values_mut();
+    for i in 0..3 {
+        for j in 0..3 {
+            let s = f.area * if i == j { 2.0 } else { 1.0 } / 12.0;
+            for c in 0..3 {
+                for d in 0..3 {
+                    let pt = if c == d { 1.0 } else { 0.0 } - a[c] * a[d];
+                    v[(6 * i + c) * 18 + 6 * j + d] = mt * s * pt;
+                    v[(6 * i + 3 + c) * 18 + 6 * j + 3 + d] = mr * s * r[c][d];
+                }
+            }
+        }
+    }
+    m
+}
+
+/// The global spin-softening mass of a Shell3 element for a rotation about the unit `axis` (ADR 0473 D3).
+pub fn element_spin_softening_mass(coords: &[Vec3], thickness: f64, density: f64, axis: Vec3) -> Result<ElementMatrix> {
+    let f = facet(coords)?;
+    let al = [dot(f.axes[0], axis), dot(f.axes[1], axis), dot(f.axes[2], axis)];
+    Ok(to_global(
+        &local_spin_softening_mass(&f, thickness, density, al),
+        &transformation(&f),
+    ))
+}
+
 fn symmetrise(a: &mut ElementMatrix) {
     let n = a.size();
     let v = a.values_mut();

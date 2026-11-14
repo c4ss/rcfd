@@ -120,8 +120,8 @@ impl BucklingResult {
 pub fn factors(model: &SolidModel, prestress: &Prestress, options: &BucklingOptions) -> Result<BucklingResult> {
     model.validate()?;
     // ADR 0459 D1, D3: solid elements, also of the orthotropic and the tabulated material (the per-point stiffness); not
-    // with a cyclic constraint.
-    model.check_supported_solids_with_materials()?;
+    // with a cyclic constraint. ADR 0473 D6: also beams and shells.
+    model.check_supported_with_materials()?;
     crate::mat_ortho::refuse_with_cyclic(model)?;
     if crate::mpc::uses_transformation(model) {
         return factors_on_transformation(model, prestress, options);

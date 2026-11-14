@@ -97,17 +97,22 @@ impl Prestress {
         }
     }
 
-    /// The stress of a static result of `model` (`D (eps - eps_th)` at the points of the stiffness rules).
+    /// The stress of a static result of `model` (`D (eps - eps_th)` at the points of the stiffness rules). A model with a
+    /// Beam2, Shell4 or Shell3 element takes [`crate::geometric_struct::prestress_from_static`] (ADR 0473 D4).
     pub fn from_static(model: &SolidModel, result: &SolidResult) -> Result<Prestress> {
+        if crate::geometric_struct::has_structures(model) {
+            return crate::geometric_struct::prestress_from_static(model, result);
+        }
         Ok(Prestress::from_field(&IntegrationPointField::from_result(
             model, result,
         )?))
     }
 
-    /// The same stress at every point of every element of `model`.
+    /// The same stress at every point of every element of `model` (a Beam2, Shell4 or Shell3 element has one point; ADR 0473
+    /// D4).
     pub fn uniform(model: &SolidModel, stress: [f64; 6]) -> Result<Prestress> {
-        // ADR 0457 D2: also a model of the orthotropic or the tabulated material.
-        model.check_elements_solids_with_materials()?;
+        // ADR 0457 D2: also a model of the orthotropic or the tabulated material; ADR 0473 D4: also beams and shells.
+        model.check_elements_supported_with_materials()?;
         let mesh = model.mesh();
         let mut offsets = Vec::with_capacity(mesh.n_elements() + 1);
         offsets.push(0);
@@ -120,6 +125,12 @@ impl Prestress {
             offsets,
             stress: vec![stress; total],
         })
+    }
+
+    /// A pre-stress of the given point offsets and stresses (ADR 0473 D4), checked against a model by
+    /// [`Prestress::check_fits`] where it is used.
+    pub(crate) fn from_parts(offsets: Vec<usize>, stress: Vec<[f64; 6]>) -> Prestress {
+        Prestress { offsets, stress }
     }
 
     /// The pre-stress times `factor`.
@@ -184,7 +195,8 @@ impl Prestress {
 /// The assembled geometric stiffness of `model` for a pre-stress, on the pattern of the stiffness matrix (ADR 0390 D3),
 /// with `threads` workers (`None`: the available parallelism); bit-identical for any value.
 pub fn geometric_stiffness(model: &SolidModel, prestress: &Prestress, threads: Option<usize>) -> Result<CsrMatrix> {
-    model.check_elements_supported()?;
+    // ADR 0473 D6: also beams and shells.
+    model.check_elements_supported_with_structures()?;
     assemble_geometric(model, prestress, threads)
 }
 
@@ -197,6 +209,16 @@ pub(crate) fn assemble_geometric(
 ) -> Result<CsrMatrix> {
     prestress.check_fits(model)?;
     assemble_with(model, threads, |ctx| {
+        // ADR 0473 D6: a Beam2, Shell4 or Shell3 element takes the structural geometric stiffness.
+        if crate::geometric_struct::is_structural(ctx.kind) {
+            return crate::geometric_struct::element_geometric_stiffness(
+                model.mesh(),
+                ctx.element,
+                ctx.coords,
+                ctx.material,
+                prestress.of_element(ctx.element),
+            );
+        }
         element_for(ctx.kind).geometric_stiffness(ctx.coords, prestress.of_element(ctx.element))
     })
 }
@@ -223,8 +245,9 @@ pub(crate) fn add_on_pattern(k: &CsrMatrix, kg: &CsrMatrix) -> CsrMatrix {
 /// ([`crate::mat_ortho::check_cyclic_axes`], ADR 0465).
 pub fn prestressed_modes(model: &SolidModel, prestress: &Prestress, options: &ModalOptions) -> Result<ModalResult> {
     model.validate()?;
-    // ADR 0457 D2: solid elements, also of the orthotropic and the tabulated material (the per-point stiffness).
-    model.check_supported_solids_with_materials()?;
+    // ADR 0457 D2: solid elements, also of the orthotropic and the tabulated material (the per-point stiffness); ADR 0473 D6:
+    // also beams and shells.
+    model.check_supported_with_materials()?;
     if crate::mpc::uses_transformation(model) {
         return prestressed_modes_on_transformation(model, prestress, options);
     }
