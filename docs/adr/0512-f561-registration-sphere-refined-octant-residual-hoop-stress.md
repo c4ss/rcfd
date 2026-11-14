@@ -163,3 +163,80 @@ directory; the worktree's library is never edited. A mutation not caught is repo
 None taken beforehand. The two readings that matter are fixed above (pointwise relative error against the local Lame value;
 the S4 fit of ADR 0475 unchanged), on the item's own words and on ADR 0475; the alternatives appear in the addendum only as
 diagnostics without a limit.
+
+## Addendum 1: results (2026-11-14)
+
+Registered run: `f561_registered_run` (now an ignored record, test file commit 6744a782), made once, log
+`f561-scratch/registered_run.log`; the library is unchanged (no file under `crates/rcfd-fem/src` edited), so no default-bits
+record was needed.
+
+| Id | Check | Limit | Measured | Met |
+|---|---|---|---|---|
+| M1 | 384 elements, 2009 nodes; volume vs `7 pi/6` | exact; `5e-4` | exact; `9.92e-5` | yes |
+| R1 | residual hoop stress at the bore vs `sigma_y - (12/7) p1 = -0.628903 sigma_y` | `2e-2` | `-0.611919 sigma_y`, `2.7005e-2` | **no** (known miss) |
+| E1 | elastic hoop vs Lame, largest relative error over the 1296 points of the inner layer | `1e-2` | `1.1623e-2` (mean `6.96e-3`) | **no** (known miss) |
+| S1 | `c = 1.25 a` | `1e-2` | `7.97e-5` | yes |
+| S2 | `c = 1.5 a` | `1e-2` | `1.02e-3` | yes |
+| C1 | points wrong at S1, S2 | 0 | 0 of 10368 each | yes |
+| F1 | every aggregate finite, the solves `Ok` | all | all (`max_finite` panics on a NaN) | yes |
+| N1 | `n = 2`: bore residual vs ADR 0475 S4; R1 error above 2e-2; E1 error above 1e-2 | `2e-5`; above; above | `-0.612380` (diff `4.1e-7`); `2.627e-2`; `2.730e-2` | yes |
+| N2 | gap of the residual to `sigma_y - p1` | `>= 0.5` | `0.662` | yes |
+| N3 | elastic material through the Ramp, largest hoop after the unloading | `1e-6 sigma_y` | `2.5e-176` | yes |
+| N4 | alpha after unloading vs after loading, inner layer | `1e-12` | `0` (bit equal) | yes |
+
+Met rows continue in `f561_met_rows` (104 s in release); the two misses in `r1_residual_hoop_stress_known_miss` and
+`e1_elastic_lame_known_miss` (ignored, limits intact). Recorded diagnostics (no limit): the loaded fit at the bore `0.077015
+sigma_y` against `sigma_y - p1 = 0.049807`; the elastic fit at the bore `0.724774 p1` against `5/7 = 0.714286`; the largest
+pointwise error of the unloaded hoop against the closed residual field `1.159e-2 sigma_y`; largest alpha of the inner layer
+`1.221e-3` (strain scale of the arithmetic 3); 16 increments.
+
+**Diagnosis.** Refining the angular resolution from 2 x 2 to 4 x 4 per face did not move the misses (R1 `2.627e-2` to
+`2.700e-2`, E1's mean `9.6e-3` to `7.0e-3`, its largest `2.73e-2` to `1.16e-2`): at 8 radial layers the error is radial. The
+fit at the bore is `+1.5` percent high in the elastic field (`0.7248` against `0.7143`) and `+0.027 sigma_y` high in the loaded
+plastic field; the residual is their difference, `0.017 sigma_y` off. Diagnostic run `diag_radial_layers` (ignored, no limit,
+not a registered check): the same readings with 16 radial layers: n = 4: residual at the bore `-0.626058 sigma_y` (error
+`4.52e-3`), pointwise residual error `5.86e-3 sigma_y`, elastic largest `9.30e-3`, mean `2.44e-3`; n = 2: residual error
+`4.20e-3`, elastic largest `2.89e-2` (angular). So with 16 layers and 4 x 4 both clauses would be met by this reading (R1
+with a 4.4 times margin, E1 with 7 percent); with 8 layers neither is, by 1.35 and 1.16 times. The formula `sigma_y - (12/7)
+p` is exact (arithmetic 1), so the miss is the discretisation of the item's 8 radial Hex20 layers (three Gauss radii per layer
+oscillating around the `1/r^3` field), not the closed form and not the material.
+
+**Mutations** (`f561-scratch/mutate.py`, on a git-archive copy of commit 6744a782 with its own target directory, log
+`mutations.log`, the registered run each time; MT0 reproduces the two misses and nothing else):
+
+| Id | Caught by (beyond the two misses) |
+|---|---|
+| MT1 `10/7` | R1 (`7.12e-1`; the registration's "22 percent" divided by the wrong closed value) |
+| MT2 hoop = `sigma_rr` | R1 (`1.008`), N2 (`4.5e-2`), E1 (`2.37`), N1 (`6.2e-1`) |
+| MT3 fit at `r = 1.0625` | R1 (`3.20e-1`), N2 (`0.478`), N1 (`0.185`) |
+| MT4 loading only | R1 (`1.12`), N2, N3 (`0.66`), N1 |
+| MT5 alpha not updated | S1 (`4.07e-2`), S2 (`9.08e-2`), C1 (2160 and 4752 wrong); not R1 (its path stays elastic after the first yield step) |
+| MT6 committed states kept | R1 (`1.0`), N2, S1, S2, C1, N1 |
+| MT7 yield `1.05 sigma_y` | R1 (`1.05e-1`), S1 (`2.05e-2`), S2 (`3.09e-2`), N1 |
+
+Every planned mutation was caught.
+
+**Other runs.** `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean (one unused
+field of the test reader removed after the run, commit 980b7e98; no behaviour changed). Full `cargo test -p rcfd-fem --release`,
+the rcfd-api `baseline_hashes` test and the docs-site test: see the lead's report.
+
+**Decision by the registered rule: partial.** S1, S2, C1, F1, M1 and N1 to N4 are met, R1 and E1 are diagnosed misses recorded as
+`*_known_miss` tests with the limits intact; all mutations caught; the library and the baselines unchanged.
+
+**Open questions.**
+1. **The 8 radial layers of the item.** Options: (a) accept partial; (b) a follow-up on 4 x 4 per face with 16 radial layers
+   (measured here as a diagnostic: R1 `4.5e-3`, E1 `9.3e-3`), registered as its own item with the same limits.
+   Recommendation: (b), taking (a) for F-561 itself.
+2. **Reading of E1.** The pointwise error relative to the local Lame value is the strict reading. Relative to the bore value
+   `5 p1/7` the largest error would be about `1.0e-2` (estimated from the signed bins, not measured as a check): not offered as
+   a pass. Recommendation: keep the strict reading.
+
+## For the lead: roadmap entries
+
+Status proposed for F-561: partial.
+
+> ADR 0512, 2026-11-14: PARTIAL by the registered rule. The octant of ADR 0475 on 4 x 4 cells per face with 8 radial Hex20 layers (a test-side cubed-sphere generator, crates/rcfd-fem/tests/sa_j2_f561.rs; no library change, the closed form sigma_y - (12/7) p1 is exact for b/a = 2 and was derived by hand in the registration): S1 8.0e-5 and S2 1.0e-3 (limit 1e-2), C1 0 wrong, controls N1 to N4 and 7 mutations met. Residual hoop stress at the bore missed (-0.611919 sigma_y against -0.628903, 2.70e-2 > 2e-2; the 2 x 2 octant 2.63e-2) and the elastic Lame hoop stress at every point of the inner layer missed (largest 1.162e-2 > 1e-2): ignored *_known_miss tests, limits intact. Diagnosed: refining the angles does not change them, the error is the radial resolution of 8 Hex20 layers; diagnostic with 16 layers: residual 4.5e-3, elastic largest 9.3e-3.
+
+Follow-up (proposed, not added): Title: "Thick sphere with J2: residual hoop stress after unloading with 16 radial Hex20 layers". Deps: F-561. Acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. The partly plastic sphere of ADR 0475 on a 4 x 4-per-face cubed-sphere octant with 16 radial Hex20 layers: the residual hoop stress at the bore after unloading from p(1.25 a) within 2 percent of sigma_y - (12/7) p, the elastic Lame hoop stress at every integration point of the inner layer within 1 percent of the local value, S1 and S2 within 1 percent, with the 8-layer misses of ADR 0512 kept as a negative control.
