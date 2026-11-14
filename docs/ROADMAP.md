@@ -7923,7 +7923,10 @@ fixed by the item's registration ADR before any code.
     with F-400's per-face mock does not occur. Partial: the registered viscous estimate 0 is wrong in kind (the PISO
     step's viscous splitting moves the tip by 8.3e-5 U at nu x 100, proportional to nu; a known miss, below 1e-6 in
     frequency at the case's viscosity), and the helper check H1 was met only after amendment 1 (a limit below the
-    coordinate's resolution). Six mutations caught. No line of rcfd-fv or rcfd-api changed. Open: ADR 0434 Q1 to Q3.
+    coordinate's resolution). Six mutations caught. No line of rcfd-fv or rcfd-api changed. Open: ADR 0434 Q1 to Q3. ADR
+    0446 (F-421, 2026-11-14) found that Symmetry planes add a dissipation to a flow tangential to them in the PISO step
+    (+7 to +13 percent of the viscous impedance of an oscillating channel); this may be the cause of the VS miss of ADR
+    0434 (not tested). Re-check under F-531.
 - [~] **F-402** Aggregation multigrid for elasticity: rigid-body modes as near-null space, as a preconditioner of CG
   - depends on: F-026, F-381
   - acceptance: Every limit not stated here is registered in the ADR before the run. On every level the rigid-body modes
@@ -8242,7 +8245,7 @@ fixed by the item's registration ADR before any code.
     registered speeds. Models of solid elements only keep their bits.
   - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0323; the registration is
     written by the implementation agent before any code.
-- [ ] **F-421** Aerodynamic damping and added mass of a mode by prescribed motion of the wall (energy method)
+- [~] **F-421** Aerodynamic damping and added mass of a mode by prescribed motion of the wall (energy method)
   - depends on: F-408, F-362, F-383, F-400, F-401
   - acceptance: Every limit not stated here is registered in the ADR before the run. Force harmonics: for a synthetic
     force history with known in-phase and quadrature parts the extraction returns them within 1e-10, and the work per
@@ -8254,8 +8257,27 @@ fixed by the item's registration ADR before any code.
     and the low-frequency limit 12 mu L_f/h^2 within 3 percent. The damping ratio of the bar on the open column from
     this method and from the decay of the coupled run of F-401 are both recorded. A history that has not become periodic
     within the registered tolerance is refused with the cycle-to-cycle change.
-  - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0324; the registration is
-    written by the implementation agent before any code.
+  - note: Structural solver, advanced tier (plan ADR 0310). PARTIAL (ADR 0446, 2026-11-14; registered before the code,
+    amendments 1 to 3 after registered runs). rcfd_post::solid_aerodamp: drive_mode moves the wall of a cosim::Fluid in
+    a mode shape through an InterfaceMap (q = q0 sin(w t)) and records the generalised force by the transposed map;
+    Harmonic::fit (least squares of mean, sine and cosine), periodic_response (every cycle fitted; refused with the
+    cycle-to-cycle change of the first harmonic above a tolerance), added mass Q_p/(w^2 q0), damping -Q_q/(w q0),
+    impedance, work per cycle pi q0 Q_q, damping ratio -W/(2 pi w^2 q0^2 m). Synthetic history: in-phase and quadrature
+    parts to 4.8e-16, work per cycle against pi q0 Q_q to 4.0e-16, a decaying history refused naming the change (after
+    amendment 1: the test's parse of the message). F-401's open column at T/100: added mass 0.997698 rho_f A L_f (limit
+    2 percent), damping ratio 3.14582e-2 against the registered tan(w dt)/2 + 1e-4 (the step's lag; viscous part
+    8.8e-7). Plane channel (h = 0.02 m, L_f = 100 h), the roadmap's impedance A i w rho L_f/(1 - tanh(kappa)/kappa)
+    verified by derivation (12 mu L_f/h^2 is the limit per unit piston area): after the Richardson extrapolation in the
+    time step, real and imaginary parts within 8.3e-3 and 1.6e-3 at Womersley 5, 3.2e-3 and 7.3e-3 at Womersley 1, the
+    low-frequency limit within 9.8e-3; but only after amendments: the registered Womersley-5 run missed the real part by
+    8.5e-2 (the Symmetry planes of the one-cell 2D reduction add dissipation, about 7 percent; corrected with
+    zero-gradient planes), and the registered Womersley-1 and low-frequency runs diverged (the PISO step is unstable
+    above nu dt/dy^2 of about 3.5, also on a fixed mesh; corrected with fewer cells across and more steps). Bar on the
+    open column: damping ratio 1.756e-2 (ratio 0.5) and 2.896e-2 (ratio 4) by this method, 1.777e-2 and 2.889e-2 from
+    the decay of F-401's coupled run (agreement 1.2e-2, 2.5e-3): the lag of the pairing. Partial: the W5 miss, the
+    amendments, and the order companion of the Womersley-1 imaginary part (0.68, limit 0.8). Seven mutations caught. No
+    line of rcfd-fv or rcfd-api changed. Open: ADR 0446 Q1 to Q3. Follow-ups F-530 (PISO stability at large diffusion
+    numbers), F-531 (Symmetry viscous flux).
 - [ ] **F-422** J2 plasticity with isotropic and kinematic hardening: radial return and consistent tangent
   - depends on: F-408, F-389, F-397
   - acceptance: Every limit not stated here is registered in the ADR before the run. The tangent agrees with central
@@ -10218,3 +10240,19 @@ fixed by the item's registration ADR before any code.
     names an equation whose elimination position differs from its index; the static solve reports which factor it built;
     factor and solution bit-identical for 1 and 8 threads; the default solver's results keep their bits.
   - note: Structural solver, advanced tier. Follow-up of F-431 (ADR 0447, 2026-11-14).
+- [ ] **F-530** Stability of the non-iterated PISO step at large diffusion numbers
+  - depends on: F-421
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The divergence of the PISO step
+    above nu dt/dy^2 of about 3.5 found by ADR 0446 (a plane channel driven by an oscillating inflow on a fixed mesh) is
+    located in the step and either removed, so that the same channel at nu dt/dy^2 = 25 and 100 stays bounded over 3
+    periods and matches the oscillating-channel impedance as the stable runs do, or refused by the step with a message
+    naming the diffusion number; the default results of every existing case stay bit-identical.
+  - note: Numerics. Found by F-421 (ADR 0446, 2026-11-14).
+- [ ] **F-531** Viscous flux of the Symmetry condition for flow tangential to the plane
+  - depends on: F-421
+  - acceptance: Every limit not stated here is registered in the ADR before the run. Stokes' second problem (a wall
+    oscillating in its plane, the fluid bounded by a Symmetry plane at a registered distance) and the oscillating plane
+    channel of ADR 0446 between the two Symmetry planes of a one-cell reduction give the closed-form wall shear and
+    impedance within registered limits; the extra dissipation measured by ADR 0446 (+7 to +13 percent of the real part)
+    is explained and removed or documented; F-401's VS check is repeated with the result.
+  - note: Numerics. Found by F-421 (ADR 0446, 2026-11-14); may explain F-401's VS miss.
