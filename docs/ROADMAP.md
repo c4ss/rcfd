@@ -8280,8 +8280,9 @@ fixed by the item's registration ADR before any code.
     gravity, centrifugal, nodal body force and thermal loads, centroid stresses, VTK_TRIANGLE output. Patch tests to
     1e-13, SS plate 0.998 and 0.997 of Navier at t/a 0.01 and 0.001 (plain MITC3 locks at 0.899), cantilever 0.99986,
     pinched ring 0.9991, cylinder within 1.8e-3, free plates six zero modes; models without Shell3 bit-identical.
-    Partial: the .vtu check met only after amendment 1 added the triangle cell to rcfd_io::vtk. Follow-ups F-539, F-540,
-    F-541.
+    Partial: the .vtu check met only after amendment 1 added the triangle cell to rcfd_io::vtk. The one-diagonal
+    cylinder O1 is diagnosed and met by the opt-in angle-weighted pressure of F-540 (ADR 0461). Follow-ups F-539, F-540
+    (done, ADR 0461), F-541.
 - [ ] **F-420** Stress stiffening of beams and shells: buckling, pre-stressed modes and the Campbell table of a shell blade
   - depends on: F-419, F-391, F-392, F-395, F-396
   - acceptance: Every limit not stated here is registered in the ADR before the run. Beam: Euler loads pi^2 E I/L^2
@@ -10450,12 +10451,19 @@ fixed by the item's registration ADR before any code.
   - acceptance: Every limit not stated here is registered in the ADR before the run. In-plane bending of a cantilever
     strip within 2 % of beam theory on a 8 x 2 mesh, patch tests kept.
   - note: Structural solver, advanced tier. Follow-up of F-419 (ADR 0454, 2026-11-14). a drilling-unknown membrane
-- [ ] **F-540** Consistent pressure on curved facet meshes
+- [x] **F-540** Consistent pressure on curved facet meshes
   - depends on: F-419
   - acceptance: Every limit not stated here is registered in the ADR before the run. The one-diagonal 32 x 16 cylinder
     (O1) within 1 % of `p R^2/(E t)` at every node.
-  - note: Structural solver, advanced tier. Follow-up of F-419 (ADR 0454, 2026-11-14). acceptance: the one-diagonal 32 x
-    16 cylinder (O1) within 1 % of `p R^2/(E t)` at every node.
+  - note: F-540 (ADR 0461, 2026-11-14): diagnosis of the one-diagonal cylinder O1 of ADR 0454: the triangle's consistent
+    `p A / 3` split makes each node's share of the facet forces depend on the diagonal, leaving a tangential free-edge
+    load (`tan(dth/2)/3`) and uneven corner shares that the soft open-end ovalisation amplifies (error first order in
+    dz, larger for thinner shells); not the stiffness (radial nodal loads exact to 8e-10), not membrane locking, and not
+    curable by a work-consistent load (the exact-surface Galerkin load misses by the same 9.7e-2). Opt-in
+    `Load::shell_pressure_angle_weighted`: each Shell3 force `p A e_3` shared by the interior angles (a rectangle gets
+    A/4 per corner for either diagonal); O1 within 3.0e-4 of `p R^2/(E t)` at every node (the polygon's `1 -
+    cos(pi/128)`, to 1.7e-10, on every diagonal pattern and with Shell4 cells), an irregular warped mesh 6.8e-3 (default
+    1.0e-1); defaults bit-identical; seven mutations caught. Follow-up F-546 (optional).
 - [ ] **F-541** Shell3 on the remaining paths
   - depends on: F-419
   - acceptance: Every limit not stated here is registered in the ADR before the run. The N2 refusals replaced by the
@@ -10522,3 +10530,9 @@ fixed by the item's registration ADR before any code.
     integrator with isotropic constants in an orthotropic material matches the isotropic material on a Hex20 and a Hex8
     model on both paths within limits derived from the probe; default paths bit-identical.
   - note: Structural solver, advanced tier. Follow-up of F-542 (ADR 0459, 2026-11-14): the TR2 miss. Size S.
+- [ ] **F-546** Angle-weighted shell pressure on unstructured curved meshes
+  - depends on: F-540
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A sphere octant triangulated
+    without structure under internal pressure with `Load::shell_pressure_angle_weighted`: the radial displacement within
+    2 % of `p R^2 (1 - nu)/(2 E t)` at every node, and the error measured on two refinements.
+  - note: Structural solver, advanced tier. Optional, low priority. Follow-up of F-540 (ADR 0461, 2026-11-14).

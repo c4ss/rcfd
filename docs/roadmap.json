@@ -3854,7 +3854,7 @@
     ],
     "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. Membrane patch test and constant-curvature bending patch test on an irregular flat mesh, and on a mesh mixing Shell3 and Shell4, within 1e-8. Simply supported square plate under uniform load, 32 x 32 squares each cut in two, nu = 0.3: centre deflection within 2 percent of the Navier series at thickness/side 0.01 and within 3 percent at 0.001, and within 1 percent of each other for the two diagonal directions. Cantilever strip, nu = 0: tip deflection within 1 percent. Pinched ring strip, 32 elements per quarter: loaded diameter within 3 percent of (pi/4 - 2/pi) P R^3/(E I). Cylinder under internal pressure: radial displacement p R^2/(E t) within 1 percent. First frequency of the simply supported plate within 2 percent. A free plate has six zero frequencies below 1e-6 of the seventh; a single element has exactly six zero eigenvalues; a triangle with an angle below the registered limit is refused with the element.",
-    "note": "Structural solver, advanced tier (plan ADR 0310). F-419 (ADR 0454, 2026-11-14): Shell3, a three-node flat shell for triangulated surfaces: CST membrane, Reissner-Mindlin bending, MITC3 shear with the Lyly-Stenberg-Vihinen stabilisation (alpha 0.1, longest edge), Shell4's drilling penalty, consistent mass with rotary inertia; pressure, gravity, centrifugal, nodal body force and thermal loads, centroid stresses, VTK_TRIANGLE output. Patch tests to 1e-13, SS plate 0.998 and 0.997 of Navier at t/a 0.01 and 0.001 (plain MITC3 locks at 0.899), cantilever 0.99986, pinched ring 0.9991, cylinder within 1.8e-3, free plates six zero modes; models without Shell3 bit-identical. Partial: the .vtu check met only after amendment 1 added the triangle cell to rcfd_io::vtk. Follow-ups F-539, F-540, F-541."
+    "note": "Structural solver, advanced tier (plan ADR 0310). F-419 (ADR 0454, 2026-11-14): Shell3, a three-node flat shell for triangulated surfaces: CST membrane, Reissner-Mindlin bending, MITC3 shear with the Lyly-Stenberg-Vihinen stabilisation (alpha 0.1, longest edge), Shell4's drilling penalty, consistent mass with rotary inertia; pressure, gravity, centrifugal, nodal body force and thermal loads, centroid stresses, VTK_TRIANGLE output. Patch tests to 1e-13, SS plate 0.998 and 0.997 of Navier at t/a 0.01 and 0.001 (plain MITC3 locks at 0.899), cantilever 0.99986, pinched ring 0.9991, cylinder within 1.8e-3, free plates six zero modes; models without Shell3 bit-identical. Partial: the .vtu check met only after amendment 1 added the triangle cell to rcfd_io::vtk. The one-diagonal cylinder O1 is diagnosed and met by the opt-in angle-weighted pressure of F-540 (ADR 0461). Follow-ups F-539, F-540 (done, ADR 0461), F-541."
   },
   {
     "id": "F-420",
@@ -5255,9 +5255,9 @@
     "deps": [
       "F-419"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The one-diagonal 32 x 16 cylinder (O1) within 1 % of `p R^2/(E t)` at every node.",
-    "note": "Structural solver, advanced tier. Follow-up of F-419 (ADR 0454, 2026-11-14). acceptance: the one-diagonal 32 x 16 cylinder (O1) within 1 % of `p R^2/(E t)` at every node."
+    "note": "F-540 (ADR 0461, 2026-11-14): diagnosis of the one-diagonal cylinder O1 of ADR 0454: the triangle's consistent `p A / 3` split makes each node's share of the facet forces depend on the diagonal, leaving a tangential free-edge load (`tan(dth/2)/3`) and uneven corner shares that the soft open-end ovalisation amplifies (error first order in dz, larger for thinner shells); not the stiffness (radial nodal loads exact to 8e-10), not membrane locking, and not curable by a work-consistent load (the exact-surface Galerkin load misses by the same 9.7e-2). Opt-in `Load::shell_pressure_angle_weighted`: each Shell3 force `p A e_3` shared by the interior angles (a rectangle gets A/4 per corner for either diagonal); O1 within 3.0e-4 of `p R^2/(E t)` at every node (the polygon's `1 - cos(pi/128)`, to 1.7e-10, on every diagonal pattern and with Shell4 cells), an irregular warped mesh 6.8e-3 (default 1.0e-1); defaults bit-identical; seven mutations caught. Follow-up F-546 (optional)."
   },
   {
     "id": "F-541",
@@ -5313,5 +5313,16 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run, after a rounding probe of each set-up (a one-ulp change of the isotropic constants) made and disclosed before the registration. The transient integrator with isotropic constants in an orthotropic material matches the isotropic material on a Hex20 and a Hex8 model on both paths within limits derived from the probe; default paths bit-identical.",
     "note": "Structural solver, advanced tier. Follow-up of F-542 (ADR 0459, 2026-11-14): the TR2 miss. Size S."
+  },
+  {
+    "id": "F-546",
+    "title": "Angle-weighted shell pressure on unstructured curved meshes",
+    "phase": 9,
+    "deps": [
+      "F-540"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. A sphere octant triangulated without structure under internal pressure with `Load::shell_pressure_angle_weighted`: the radial displacement within 2 % of `p R^2 (1 - nu)/(2 E t)` at every node, and the error measured on two refinements.",
+    "note": "Structural solver, advanced tier. Optional, low priority. Follow-up of F-540 (ADR 0461, 2026-11-14)."
   }
 ]
