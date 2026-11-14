@@ -30,6 +30,13 @@
 //! its own residual vector `K_ii^{-1} p_i`, M-orthogonalised (twice) against the kept modes and the vectors before it (after
 //! the vector of the model's load when that is asked), and dropped when it lies in their span. [`ReducedPart::reduce_load`]
 //! reduces any load vector to the part's unknowns; [`Assembly::load_from`] and [`Assembly::harmonic_with_load`] use it.
+//!
+//! Interface enrichment of ADR 0532 (F-603): [`CmsOptions::interface_enrichment`] with `p` blocks adds, after the vectors
+//! above, the Krylov blocks of `(K_ii, M_ii)` started from the constraint modes: block 1 is `K_ii^{-1} (M_ib + M_ii Psi)` (one
+//! candidate per boundary unknown; after the M-orthogonalisation against the kept modes it is the residual flexibility of the
+//! omitted fixed-interface modes applied to the inertia load of the constraint modes), block `j + 1` is `K_ii^{-1} M_ii r` of
+//! the vectors kept in block `j`. Each candidate is M-orthonormalised (twice) against the kept modes and every vector before
+//! it and dropped when it lies in their span; the kept vectors are columns of `R`.
 
 use crate::assemble::stiffness_with_materials;
 use crate::error::{FemError, Result, SetKind};
@@ -88,6 +95,8 @@ pub struct CmsOptions {
     /// Load patterns given by the caller (ADR 0511): vectors over the part's mesh equations, each asking for its static residual
     /// vector (default empty).
     pub load_patterns: Vec<Vec<f64>>,
+    /// Krylov blocks of the interface enrichment (ADR 0532; default 0, none).
+    pub interface_blocks: usize,
 }
 
 impl CmsOptions {
@@ -100,6 +109,7 @@ impl CmsOptions {
             residual_vectors: false,
             cutoff: None,
             load_patterns: Vec::new(),
+            interface_blocks: 0,
         }
     }
     /// The same options with a thread count.
@@ -132,6 +142,13 @@ impl CmsOptions {
     /// The same options with the list of load patterns replaced (ADR 0511).
     pub fn load_patterns(mut self, patterns: Vec<Vec<f64>>) -> CmsOptions {
         self.load_patterns = patterns;
+        self
+    }
+    /// The same options with `blocks` Krylov blocks of interface enrichment (ADR 0532): block 1 from the inertia load of the
+    /// constraint modes `K_ii^{-1} (M_ib + M_ii Psi)`, each later block `K_ii^{-1} M_ii` of the vectors kept in the block
+    /// before; `0` adds none.
+    pub fn interface_enrichment(mut self, blocks: usize) -> CmsOptions {
+        self.interface_blocks = blocks;
         self
     }
 }
@@ -455,7 +472,8 @@ fn modes_below(kii: &CsrMatrix, mii: &CsrMatrix, ni: usize, c2: f64, dense_limit
 
 /// The reduction of `model` to the interface node set `interface` with `options.modes` fixed-interface modes (ADR 0469):
 /// static condensation for `modes = 0`, the Craig-Bampton reduction otherwise; with [`CmsOptions::cutoff`] the modes below
-/// it, with [`CmsOptions::residual_vectors`] the residual vector of the interior load (ADR 0474). Refuses an unknown or
+/// it, with [`CmsOptions::residual_vectors`] the residual vector of the interior load (ADR 0474), then the vectors of the
+/// load patterns (ADR 0511) and of the interface enrichment (ADR 0532). Refuses an unknown or
 /// empty interface, an interface without a free unknown, `modes` above the interior size, an interior that the interface
 /// and the constraints do not hold, a non-zero constraint value, a cyclic constraint, a cutoff that is not finite and
 /// positive, and a cutoff with a mode count.
@@ -614,6 +632,35 @@ pub fn reduce(model: &SolidModel, interface: &str, options: &CmsOptions) -> Resu
         let basis: Vec<&[f64]> = phi_cols.iter().chain(residual_cols.iter()).map(Vec::as_slice).collect();
         if crate::damped::m_orthonormalise(&mii, &mut r, &basis, &mut y) {
             residual_cols.push(r);
+        }
+    }
+    // ADR 0532: the Krylov blocks of the interface enrichment, each candidate against the modes and every vector before it.
+    if options.interface_blocks > 0 {
+        let mii_psi = csr_dense(&mii, &psi, nb);
+        let mut starts: Vec<Vec<f64>> = (0..nb)
+            .map(|j| (0..ni).map(|r| mib[r * nb + j] + mii_psi[r * nb + j]).collect())
+            .collect();
+        for _block in 0..options.interface_blocks {
+            let first = residual_cols.len();
+            for g in &starts {
+                let mut r = fac.solve(g);
+                let mut y = vec![0.0; ni];
+                let basis: Vec<&[f64]> = phi_cols.iter().chain(residual_cols.iter()).map(Vec::as_slice).collect();
+                if crate::damped::m_orthonormalise(&mii, &mut r, &basis, &mut y) {
+                    residual_cols.push(r);
+                }
+            }
+            if residual_cols.len() == first {
+                break;
+            }
+            starts = residual_cols[first..]
+                .iter()
+                .map(|r| {
+                    let mut y = vec![0.0; ni];
+                    mii.matvec(r, &mut y);
+                    y
+                })
+                .collect();
         }
     }
     let np = residual_cols.len();
