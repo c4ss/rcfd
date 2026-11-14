@@ -377,3 +377,21 @@ the Coriolis matrix off, a pair index with `G = 0`) is found only if rounding br
 100` vectors. No pivoting in the indefinite factor (Bunch-Kaufman): a refused pivot refuses the shift. Real shifts (`s_0` real,
 `Q(s_0)` unsymmetric) and `sigma <= 0` are not offered. No wave sense on the sector, no table over speeds, no case-file or CLI
 switch; `WhirlSolver::Auto` does not route `whirl_state` to the new solver.
+
+## Amendment 1 (2026-11-14, before any registered run; disclosed)
+
+After the library code was written and before any test of this file existed, one **development unit test** was run
+(`state::arnoldi::tests::development_against_dense`, random banded indefinite problems of orders 4, 9, 20, 40 with their own
+generator and shifts, not a registered set-up; it is in the code and runs with the unit tests, not a registered check). Its
+eigenvalues agreed with the dense state solver within 3.2e-13, but on three of its four problems the dense flag was `Unstable`
+and the sparse one `Stable`: the unstable eigenvalues of a random problem are not near its shift, so the sparse flag, which
+certifies only the returned set (reading of c4, c5; limits), cannot be required to equal the dense one there. The flag part of
+**U1** as registered ("flags equal" on RND, with no condition) therefore has no premise; it is corrected now, before its run, to
+the condition already registered for M2:
+
+| # | Clause | Check | Limit | Estimate behind it |
+|---|---|---|---|---|
+| U1b | D1, D2 | RND: the returned eigenvalues against `gyroscopic_state_eigen_dense` by the reading (unchanged); the flags equal **if** the dense eigenvalue of largest `Re s` is in the dense reference set (the first `2 p` by `|nu|`), otherwise recorded as not exercised (the count printed) | `<= 1e-9`; equal where exercised | `~1e-13` |
+
+Nothing else changes. The cube (arithmetic 2), DS (stable at `Omega_T`) and MP (M2 already conditional) are not affected; U1 as
+first written is not run.
