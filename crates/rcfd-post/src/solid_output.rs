@@ -196,12 +196,35 @@ pub fn beam_fields(model: &SolidModel, result: &SolidResult) -> Result<BeamField
         });
     }
     let dofs = model.dof_map();
-    if *result.dofs() != dofs || result.displacement_values().len() != dofs.n_equations() {
+    if result.displacement_values().len() != dofs.n_equations() {
         return Err(length_error(
             "displacement",
             dofs.n_equations(),
             result.displacement_values().len(),
         ));
+    }
+    // The model's number of unknowns in another layout (ADR 0430): name the first node and both counts.
+    let rd = result.dofs();
+    if rd.n_nodes() != dofs.n_nodes() {
+        return Err(Error::InvalidValue {
+            path: "displacement".into(),
+            reason: format!(
+                "the result numbers {} nodes and the model {}; the unknowns of the result are laid out for another model",
+                rd.n_nodes(),
+                dofs.n_nodes()
+            ),
+        });
+    }
+    if let Some(k) = (0..dofs.n_nodes()).find(|&k| rd.components(k) != dofs.components(k)) {
+        return Err(Error::InvalidValue {
+            path: "displacement".into(),
+            reason: format!(
+                "node {k} has {} unknowns in the result and {} in the model; the result has the model's number of unknowns ({}) in another layout",
+                rd.components(k),
+                dofs.components(k),
+                dofs.n_equations()
+            ),
+        });
     }
     let n = mesh.nodes().len();
     let mut displacement = Vec::with_capacity(3 * n);
