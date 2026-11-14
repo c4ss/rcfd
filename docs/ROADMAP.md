@@ -10910,25 +10910,27 @@ fixed by the item's registration ADR before any code.
     9.3e-2) missed and are recorded as known misses. Seven of eight mutations caught; the BD split mutation enters only
     the known-miss C3. One optional follow-up proposed (a warning for the CST membrane on warped meshes). Follow-up
     F-574 (optional).
-- [x] **F-557** Pre-stress of a static result on a model with both solid and structural elements
+- [~] **F-557** Pre-stress of a static result on a model with both solid and structural elements
   - depends on: F-420
   - acceptance: Every limit not stated here is registered in the ADR before the run. The refusal RF1 of ADR 0473 is
     lifted: the geometric stiffness of a static result on a model with solid, beam and shell elements is assembled from
     each element's stress; a solid block carrying a beam or a shell strip in tension has the tension frequencies of ADR
     0473 within 1 percent, and the buckling load of a shell plate stiffened by a solid rib equals that of the same model
     in solid elements within 3 percent; models without mixed elements keep their bits.
-  - note: Structural solver, advanced tier. Follow-up of F-420 (ADR 0473, 2026-11-14). ADR 0486, 2026-11-14: the refusal
-    RF1 of ADR 0473 is lifted. Prestress::from_static of a model with solid, beam and shell elements gives each solid
-    element the stress of IntegrationPointField at its rule points and each Beam2, Shell4 and Shell3 element its ADR
-    0473 point, both bit-equal to the parts computed alone, and the assembled K_sigma bit-equal to the parts' (M1 to
-    M3). Parts are joined by the linear-constraint joints of ADR 0456 and ADR 0460 (consistent coupling; shared nodes
-    stay refused). A Hex20 block carrying a beam in tension: n = 1, 2 at 2.4e-3 and 7.3e-4 of the taut-beam formula;
-    carrying a Shell4 strip 3.5e-3 and 6.1e-3 (Shell3 3.4e-3, 5.3e-3), limit 1e-2. A Shell4 plate stiffened by a Hex20
-    rib buckles at 7.9e-3 of the all-Hex20 model (limit 3e-2); masking the rib's pre-stress moves it by 0.38, the
-    shells' by 2.45. Rotating: a Hex20 hub with a Shell4 blade through the F-396 path matches the all-Hex20 Campbell
-    table within 2.3e-3 over four tracks and four speeds, stiffening increment 1.7e-3 (corrected set-up with 8 modes,
-    amendment 1). New Prestress::masked. Models without mixed elements bit-identical (22 digests,
-    sa_geometric_struct_bits, baseline_hashes). Four of six mutations caught; two proved equivalent.
+  - note: Structural solver, advanced tier. PARTIAL by the standing rule (the hub checks met only after amendment 1,
+    written after the registered run stopped; MU3 and MU6 uncaught, proposed equivalent; every registered limit met,
+    proposed done by the ADR). Follow-up of F-420 (ADR 0473, 2026-11-14). ADR 0486, 2026-11-14: the refusal RF1 of ADR
+    0473 is lifted. Prestress::from_static of a model with solid, beam and shell elements gives each solid element the
+    stress of IntegrationPointField at its rule points and each Beam2, Shell4 and Shell3 element its ADR 0473 point,
+    both bit-equal to the parts computed alone, and the assembled K_sigma bit-equal to the parts' (M1 to M3). Parts are
+    joined by the linear-constraint joints of ADR 0456 and ADR 0460 (consistent coupling; shared nodes stay refused). A
+    Hex20 block carrying a beam in tension: n = 1, 2 at 2.4e-3 and 7.3e-4 of the taut-beam formula; carrying a Shell4
+    strip 3.5e-3 and 6.1e-3 (Shell3 3.4e-3, 5.3e-3), limit 1e-2. A Shell4 plate stiffened by a Hex20 rib buckles at
+    7.9e-3 of the all-Hex20 model (limit 3e-2); masking the rib's pre-stress moves it by 0.38, the shells' by 2.45.
+    Rotating: a Hex20 hub with a Shell4 blade through the F-396 path matches the all-Hex20 Campbell table within 2.3e-3
+    over four tracks and four speeds, stiffening increment 1.7e-3 (corrected set-up with 8 modes, amendment 1). New
+    Prestress::masked. Models without mixed elements bit-identical (22 digests, sa_geometric_struct_bits,
+    baseline_hashes). Four of six mutations caught; two proved equivalent.
 - [ ] **F-558** Moment, shear and Wagner terms of the beam geometric stiffness and the t^2/12 rotation terms of the shells
   - depends on: F-420
   - acceptance: Every limit not stated here is registered in the ADR before the run. The beam's geometric stiffness
