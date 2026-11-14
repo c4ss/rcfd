@@ -528,11 +528,18 @@ solve and no reaction of the air on the structure. Amplitudes are complex peak a
   quadrature points), `power_from_far_field` over `acoustics::sphere_quadrature` as a cross-check.
 - `power_level_db` re 1e-12 W, `PowerSpectrum` with `third_octave_bands` (the band numbering of the metrics above) and
   `erp_spectrum` over a sweep of responses.
+- Surface pressure and radiation impedance (F-551, ADR 0488): `BaffledPlane::surface_pressure(face, u, v, ...)` and
+  `surface_pressures` evaluate the Rayleigh integral on the plane itself, the singular part `1/R` of the kernel integrated
+  analytically over each face (`polygon_inverse_distance`, the in-plane edge sum `d ln((R+ + s+)/(R- + s-))`) and the bounded
+  rest by the quadrature points; `radiation_impedance` gives the complex power `(1/2) int P conj(V_n) dS`, the impedance
+  `Z = 2 Pi/<|V_n|^2>` (for a rigid piston the force over the velocity), `Z/(rho c S)` and the added mass `Im Z/omega`. Its
+  resistance is F-418's `power` to rounding. Light fluid only: the added mass is reported, not fed back into the structure.
 
 Checked against the baffled-piston closed forms (on-axis pressure, directivity, `W/ERP = 1 - J1(2 k a)/(k a)`, the
 low-frequency monopole and a baffled monopole pair): see ADR 0468 for the limits and the measured errors (largest 1.6e-3, from
-the inscribed polygon of the disk mesh). Not covered: the radiation reactance, unbaffled or curved radiators by an integral
-method, any boundary-element or field solve.
+the inscribed polygon of the disk mesh). The piston impedance `rho c S (1 - J1(2 k a)/(k a) + i H1(2 k a)/(k a))` is met within
+3.2e-3 in resistance and 2.7e-3 in reactance at `k a = 0.1` to 10 and the added mass `8 rho a^3/3` within 5.0e-3 at `k a = 0.1`
+(ADR 0488). Not covered: unbaffled or curved radiators by an integral method, any boundary-element or field solve.
 
 ## Reference: code locations, input format and command line
 
@@ -552,7 +559,7 @@ method, any boundary-element or field solve.
 | Acoustic wave solver (linear, medium at rest) | `crates/rcfd-fv/src/acoustic_wave.rs` (`AcousticWaveSolver`, `Medium`, `WaveBc`, `WaveSponge`, `WaveSpongeForm`) |
 | Duct modes, modal decomposition, axial split, `rcfd-duct-modes` export | `crates/rcfd-post/src/duct_modes.rs` (`ModeBasis`, `axial_wavenumber`, `HarmonicDft`, `decompose_section`, `split_axial`, `fit_axial`, `ModalExport`) |
 | Wave solver driven by a sampled surface series | `crates/rcfd-post/src/wave_drive.rs` (`SurfaceDrive`, `DuctFrame`, `DriveOptions`, `HarmonicModes`; returning waves: `SurfaceDrive::from_sections`, `SplitDrive`, `SurfaceDrive::entering_residual`) |
-| Radiated sound of a vibrating structure (ERP, Rayleigh integral of a baffled plane, power bands) | `crates/rcfd-post/src/solid_acoustic.rs` (`VibratingSurface`, `equivalent_radiated_power`, `BaffledPlane`, `RayleighOptions`, `PowerSpectrum`, `erp_spectrum`, `power_level_db`) |
+| Radiated sound of a vibrating structure (ERP, Rayleigh integral of a baffled plane, power bands) | `crates/rcfd-post/src/solid_acoustic.rs` (`VibratingSurface`, `equivalent_radiated_power`, `BaffledPlane`, `RayleighOptions`, `PowerSpectrum`, `erp_spectrum`, `power_level_db`; ADR 0488: `polygon_inverse_distance`, `BaffledPlane::surface_pressure`, `radiation_impedance`, `RadiationImpedance`) |
 
 ### Surface-series input (`rcfd-surface-series` v1)
 

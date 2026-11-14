@@ -49,7 +49,13 @@ fn piston(n_r: usize, n_t: usize) -> VibratingSurface {
     }
     let vel = nodes
         .iter()
-        .map(|x| [Phasor::default(), Phasor::default(), Phasor::new(V * (1.0 + x[0] / A), 0.3 * V)])
+        .map(|x| {
+            [
+                Phasor::default(),
+                Phasor::default(),
+                Phasor::new(V * (1.0 + x[0] / A), 0.3 * V),
+            ]
+        })
         .collect();
     VibratingSurface::new(nodes, faces, vel).unwrap()
 }

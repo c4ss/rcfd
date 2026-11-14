@@ -9,8 +9,11 @@
 //!   int_S V_n e^{-i k R}/R dS`: pressure at field points, the far field `P ~ F e^{-i k r}/r`, the directivity, and the radiated
 //!   power `W = (rho c k/(4 pi)) int int Re(V_n(x) conj V_n(y)) sin(k R)/R dS dS` (the smooth real part of the kernel).
 //! - [`power_level_db`] re [`W_REF`] and [`PowerSpectrum`] with third-octave bands numbered as `crate::acoustics`.
+//! - The surface pressure on the plane ([`BaffledPlane::surface_pressure`], [`BaffledPlane::surface_pressures`]) with the
+//!   singular part `1/R` of the kernel integrated analytically over each face ([`polygon_inverse_distance`]), and the
+//!   radiation impedance with the added mass ([`BaffledPlane::radiation_impedance`], ADR 0488).
 //!
-//! Derivations and the checks: ADR 0468.
+//! Derivations and the checks: ADR 0468 and ADR 0488.
 
 use crate::acoustics::{band_index, third_octave_bands, Spectrum};
 use rcfd_core::vec3::{self, Vec3};
@@ -920,10 +923,7 @@ impl BaffledPlane {
     /// The point of face `face` at the parameters `(u, v)` in `[-1, 1]^2` of the bilinear map, with its normal velocity.
     fn face_point(&self, face: usize, u: f64, v: f64) -> Res<(Vec3, Phasor)> {
         if face >= self.surface.faces.len() {
-            return err(format!(
-                "face {face} out of range ({} faces)",
-                self.surface.faces.len()
-            ));
+            return err(format!("face {face} out of range ({} faces)", self.surface.faces.len()));
         }
         if !((-1.0..=1.0).contains(&u) && (-1.0..=1.0).contains(&v)) {
             return err(format!("face parameters ({u}, {v}) outside [-1, 1]^2"));

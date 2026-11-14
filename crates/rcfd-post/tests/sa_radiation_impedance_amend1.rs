@@ -168,8 +168,16 @@ fn a1_a3_analytic_polygon_integrals_after_amendment_1() {
     let ln = (1.0 + 2f64.sqrt()).ln();
     let tri: Vec<Vec3> = vec![[0.0, 0.0, 0.0], [l, 0.0, 0.0], [0.0, l, 0.0]];
     let cases = [
-        ("square centre", polygon_inverse_distance(&sq, [l / 2.0, l / 2.0, 0.0]).unwrap(), 4.0 * l * ln),
-        ("square corner", polygon_inverse_distance(&sq, [0.0, 0.0, 0.0]).unwrap(), 2.0 * l * ln),
+        (
+            "square centre",
+            polygon_inverse_distance(&sq, [l / 2.0, l / 2.0, 0.0]).unwrap(),
+            4.0 * l * ln,
+        ),
+        (
+            "square corner",
+            polygon_inverse_distance(&sq, [0.0, 0.0, 0.0]).unwrap(),
+            2.0 * l * ln,
+        ),
         (
             "square mid-edge",
             polygon_inverse_distance(&sq, [l / 2.0, 0.0, 0.0]).unwrap(),
@@ -224,7 +232,10 @@ fn a1_a3_analytic_polygon_integrals_after_amendment_1() {
         }
     }
     let vq = polygon_inverse_distance(&quad, xi).unwrap();
-    println!("A2 general quadrilateral: {vq:.16e} Duffy {sd:.16e} rel {:.3e}", rel(vq, sd));
+    println!(
+        "A2 general quadrilateral: {vq:.16e} Duffy {sd:.16e} rel {:.3e}",
+        rel(vq, sd)
+    );
     c.at_most("A2 largest rel vs quadrature", nmax(rel(vo, s), rel(vq, sd)), 1e-11);
 
     // A3: orientation and the collapsed triangle
@@ -252,7 +263,10 @@ fn a1_a3_analytic_polygon_integrals_after_amendment_1() {
 fn g1_disk_potential_after_amendment_1() {
     let mut c = Checks::new();
     let mut worst: f64 = 0.0;
-    for (n_r, n_t, js) in [(4usize, 64usize, vec![0usize, 1, 2, 3, 4]), (16, 100, vec![0, 4, 8, 12, 16])] {
+    for (n_r, n_t, js) in [
+        (4usize, 64usize, vec![0usize, 1, 2, 3, 4]),
+        (16, 100, vec![0, 4, 8, 12, 16]),
+    ] {
         let p = plane(n_r, n_t);
         for j in js {
             // the node on phi = 0 at ring j: face 0 corner (-1, -1) for the centre, else a quadrilateral or triangle corner
@@ -266,7 +280,10 @@ fn g1_disk_potential_after_amendment_1() {
             };
             let got = p.inverse_distance_potential(face, u, v).unwrap();
             let cf = 4.0 * A * ellip_e(j as f64 / n_r as f64);
-            println!("G1 {n_r} x {n_t} r = {j}/{n_r} a: {got:.12e} 4 a E {cf:.12e} rel {:.3e}", rel(got, cf));
+            println!(
+                "G1 {n_r} x {n_t} r = {j}/{n_r} a: {got:.12e} 4 a E {cf:.12e} rel {:.3e}",
+                rel(got, cf)
+            );
             worst = nmax(worst, rel(got, cf));
         }
     }
@@ -280,10 +297,15 @@ fn s1_s2_surface_pressure_after_amendment_1() {
     let mut worst: f64 = 0.0;
     for ka in [0.1, 0.5, 2.0, 10.0] {
         let (n_r, n_t) = mesh_of(ka);
-        let p = plane(n_r, n_t).surface_pressure(0, -1.0, -1.0, RHO, C, omega_of(ka)).unwrap();
+        let p = plane(n_r, n_t)
+            .surface_pressure(0, -1.0, -1.0, RHO, C, omega_of(ka))
+            .unwrap();
         let cf = Phasor::new(RHO * C * V * (1.0 - ka.cos()), RHO * C * V * ka.sin());
         let e = Phasor::new(p.re - cf.re, p.im - cf.im).abs() / cf.abs();
-        println!("S1 ka={ka}: P ({:.10e}, {:.10e}) closed ({:.10e}, {:.10e}) {e:.3e}", p.re, p.im, cf.re, cf.im);
+        println!(
+            "S1 ka={ka}: P ({:.10e}, {:.10e}) closed ({:.10e}, {:.10e}) {e:.3e}",
+            p.re, p.im, cf.re, cf.im
+        );
         worst = nmax(worst, e);
     }
     c.at_most("S1 centre pressure vs rho c V (1 - e^{-i k a})", worst, 5e-3);
@@ -309,7 +331,11 @@ fn s1_s2_surface_pressure_after_amendment_1() {
         worst = nmax(worst, e);
         worst_nc = nmin(worst_nc, e_nc);
     }
-    c.at_most("S2 surface pressure (non-uniform velocity) vs the F-418 pressure at h = a/100", worst, 1e-3);
+    c.at_most(
+        "S2 surface pressure (non-uniform velocity) vs the F-418 pressure at h = a/100",
+        worst,
+        1e-3,
+    );
     c.above("NC3 S2 without the Taylor step (smallest)", worst_nc, 5e-3);
     c.finish();
 }
