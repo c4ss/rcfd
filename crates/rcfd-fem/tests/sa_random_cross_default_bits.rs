@@ -78,7 +78,7 @@ fn digests() -> Vec<u64> {
         let (n, w) = frequency_grid(&sp, &eig, &damp, refinement).unwrap();
         out.push(fnv(bits(&n).chain(bits(&w))));
     }
-    let rho = vec![vec![1.0, 0.6, -0.3], vec![0.6, 1.0, 0.2], vec![-0.3, 0.2, 1.0]];
+    let rho = [vec![1.0, 0.6, -0.3], vec![0.6, 1.0, 0.2], vec![-0.3, 0.2, 1.0]];
     for corr in [None, Some(&rho[..])] {
         for group in [1, 3] {
             let r = spectral_response(&ch, &sp, corr, &SpectralOptions::default().group(group)).unwrap();

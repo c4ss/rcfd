@@ -48,6 +48,11 @@ fn invalid(key: &'static str, reason: String) -> FemError {
 const SPECTRUM: &str = "spectrum";
 const RANDOM: &str = "random";
 
+mod cross;
+pub use cross::{
+    check_cross_matrix, exponential_coherence, spectral_response_cross, Coherence, CrossSpectrum, CROSS_TOLERANCE,
+};
+
 // ------------------------------------------------------------------------------------------------------------ spectrum
 
 /// How a [`Spectrum`] varies between its entries.
@@ -303,7 +308,18 @@ pub fn frequency_grid(
             format!("{} eigenvalues and {} damping terms", eigenvalues.len(), damping.len()),
         ));
     }
-    let mut breaks: Vec<f64> = spectra.iter().flat_map(|s| s.frequencies.iter().copied()).collect();
+    let breaks: Vec<f64> = spectra.iter().flat_map(|s| s.frequencies.iter().copied()).collect();
+    grid_from_breaks(breaks, eigenvalues, damping, refinement)
+}
+
+/// The grid of [`frequency_grid`] from the break frequencies themselves (ADR 0510 D4: the cross-spectra of F-567 have breaks
+/// other than the spectra's).
+fn grid_from_breaks(
+    mut breaks: Vec<f64>,
+    eigenvalues: &[f64],
+    damping: &[f64],
+    refinement: usize,
+) -> Result<(Vec<f64>, Vec<f64>)> {
     breaks.sort_by(f64::total_cmp);
     breaks.dedup();
     let (lo, hi) = (breaks[0], breaks[breaks.len() - 1]);
@@ -547,6 +563,9 @@ pub struct SpectralOptions {
     pub refinement: usize,
     /// Whether the output densities at the nodes are kept (default true).
     pub keep_psd: bool,
+    /// Whether [`spectral_response_cross`] hands a real, constant coherence to [`spectral_response`] (default true, ADR 0510
+    /// D3); `false` runs the general loop, which has the same arithmetic order for a real coherence.
+    pub real_route: bool,
 }
 
 impl Default for SpectralOptions {
@@ -556,6 +575,7 @@ impl Default for SpectralOptions {
             group: 1,
             refinement: 1,
             keep_psd: true,
+            real_route: true,
         }
     }
 }
@@ -579,6 +599,11 @@ impl SpectralOptions {
     /// The same options keeping the densities or not.
     pub fn keep_psd(mut self, on: bool) -> SpectralOptions {
         self.keep_psd = on;
+        self
+    }
+    /// The same options with the routing of a real constant coherence to [`spectral_response`] on or off (ADR 0510 D3).
+    pub fn real_route(mut self, on: bool) -> SpectralOptions {
+        self.real_route = on;
         self
     }
 }
@@ -799,6 +824,10 @@ enum Kind {
         direction: Vec3,
         spectrum: Spectrum,
     },
+    Cross {
+        patterns: Vec<Vec<f64>>,
+        cross: CrossSpectrum,
+    },
 }
 
 /// The random input of a solid model (ADR 0477 D6).
@@ -844,6 +873,23 @@ impl Excitation {
                 spectra,
                 correlation,
             },
+        })
+    }
+
+    /// Several patterns with a complex cross-spectral matrix or a frequency-dependent coherence (ADR 0510 D2).
+    pub fn cross(patterns: Vec<Vec<f64>>, cross: CrossSpectrum) -> Result<Excitation> {
+        if patterns.is_empty() || patterns.len() != cross.n_patterns() {
+            return Err(invalid(
+                RANDOM,
+                format!(
+                    "{} patterns and a cross-spectrum of {} patterns (at least one)",
+                    patterns.len(),
+                    cross.n_patterns()
+                ),
+            ));
+        }
+        Ok(Excitation {
+            kind: Kind::Cross { patterns, cross },
         })
     }
 
@@ -924,6 +970,21 @@ pub struct RandomResponse {
     pub stress: Option<RandomStress>,
 }
 
+/// The spectral input of a response: the real spectra with their constant correlation (ADR 0477) or a cross-spectrum (ADR 0510).
+enum Input {
+    Real(Vec<Spectrum>, Option<Vec<Vec<f64>>>),
+    Cross(CrossSpectrum),
+}
+
+impl Input {
+    fn integrate(&self, channels: &ModalChannels, options: &SpectralOptions) -> Result<ChannelResponse> {
+        match self {
+            Input::Real(spectra, correlation) => spectral_response(channels, spectra, correlation.as_deref(), options),
+            Input::Cross(cross) => spectral_response_cross(channels, cross, options),
+        }
+    }
+}
+
 /// Random response of a solid model by mode superposition on the F-399 solver (ADR 0477 D6).
 #[derive(Debug, Clone)]
 pub struct RandomSolver {
@@ -965,24 +1026,36 @@ impl RandomSolver {
         if let Some(&e) = request.equations.iter().find(|&&e| e >= n) {
             return Err(invalid(RANDOM, format!("output equation {e} (the model has {n})")));
         }
-        let (patterns, spectra, correlation, absolute) = match &excitation.kind {
+        let check_len = |patterns: &[Vec<f64>]| -> Result<()> {
+            match patterns.iter().find(|p| p.len() != n) {
+                Some(p) => Err(FemError::FieldLength {
+                    key: "random load",
+                    expected: n,
+                    found: p.len(),
+                }),
+                None => Ok(()),
+            }
+        };
+        let (patterns, input, absolute) = match &excitation.kind {
             Kind::Forces {
                 patterns,
                 spectra,
                 correlation,
             } => {
-                if let Some(p) = patterns.iter().find(|p| p.len() != n) {
-                    return Err(FemError::FieldLength {
-                        key: "random load",
-                        expected: n,
-                        found: p.len(),
-                    });
-                }
-                (patterns.clone(), spectra.clone(), correlation.clone(), None)
+                check_len(patterns)?;
+                (
+                    patterns.clone(),
+                    Input::Real(spectra.clone(), correlation.clone()),
+                    None,
+                )
             }
             Kind::Base { direction, spectrum } => {
                 let (load, r) = self.base_load(model, *direction)?;
-                (vec![load], vec![spectrum.clone()], None, Some(r))
+                (vec![load], Input::Real(vec![spectrum.clone()], None), Some(r))
+            }
+            Kind::Cross { patterns, cross } => {
+                check_len(patterns)?;
+                (patterns.clone(), Input::Cross(cross.clone()), None)
             }
         };
         let mut modal = Vec::with_capacity(patterns.len());
@@ -1019,11 +1092,8 @@ impl RandomSolver {
         if let Some(r) = &absolute {
             channels = channels.with_absolute(request.equations.iter().map(|&e| r[e]).collect())?;
         }
-        let corr = correlation.as_deref();
-        let out = spectral_response(
+        let out = input.integrate(
             &channels,
-            &spectra,
-            corr,
             &SpectralOptions::default()
                 .quantity(request.quantity)
                 .refinement(request.refinement),
@@ -1057,10 +1127,8 @@ impl RandomSolver {
                 })
                 .collect::<Result<_>>()?;
             let ch = ModalChannels::new(eigenvalues, damping, gains, residuals)?;
-            let s = spectral_response(
+            let s = input.integrate(
                 &ch,
-                &spectra,
-                corr,
                 &SpectralOptions::default()
                     .group(6)
                     .refinement(request.refinement)
