@@ -364,6 +364,8 @@ pub enum BlockProperty {
         thickness: f64,
         /// The membrane of a Shell3 block (ADR 0466); a Shell4 block takes only the default.
         membrane: crate::shell3::Shell3Membrane,
+        /// The membrane of a Shell4 block (ADR 0470); a Shell3 block takes only the default.
+        shell4_membrane: crate::shell::Shell4Membrane,
     },
     /// A laminated shell block: its plies from the bottom (`-e_3` side) to the top (ADR 0440 D5). Refused by every solve
     /// until [`crate::laminate`] lands (ADR 0331, F-428).
@@ -427,7 +429,23 @@ impl BlockProperty {
     /// A shell block with a membrane for Shell3 (ADR 0466); refuses a non-positive or non-finite thickness.
     pub fn shell_with_membrane(thickness: f64, membrane: crate::shell3::Shell3Membrane) -> Result<BlockProperty> {
         positive("thickness", thickness)?;
-        Ok(BlockProperty::Shell { thickness, membrane })
+        Ok(BlockProperty::Shell {
+            thickness,
+            membrane,
+            shell4_membrane: crate::shell::Shell4Membrane::Bilinear,
+        })
+    }
+    /// A shell block with a membrane for Shell4 (ADR 0470); refuses a non-positive or non-finite thickness.
+    pub fn shell4_with_membrane(
+        thickness: f64,
+        shell4_membrane: crate::shell::Shell4Membrane,
+    ) -> Result<BlockProperty> {
+        positive("thickness", thickness)?;
+        Ok(BlockProperty::Shell {
+            thickness,
+            membrane: crate::shell3::Shell3Membrane::ConstantStrain,
+            shell4_membrane,
+        })
     }
     /// A laminated shell block; refuses an empty list of plies.
     pub fn layup(plies: Vec<Ply>) -> Result<BlockProperty> {
@@ -614,6 +632,15 @@ impl SolidMesh {
         let (fits, operation) = match &property {
             BlockProperty::Solid { .. } => (b.kind.is_solid(), "the property Solid"),
             BlockProperty::Beam { .. } => (b.kind == ElementKind::Beam2, "the property Beam"),
+            // ADR 0470 D2: a Shell4 membrane other than the bilinear one is a Shell4 choice.
+            BlockProperty::Shell {
+                membrane,
+                shell4_membrane,
+                ..
+            } if *shell4_membrane != crate::shell::Shell4Membrane::Bilinear => (
+                b.kind == ElementKind::Shell4 && *membrane == crate::shell3::Shell3Membrane::ConstantStrain,
+                "a Shell4 membrane",
+            ),
             BlockProperty::Shell { membrane, .. } => match membrane {
                 // ADR 0466 D2: a drilling membrane is a Shell3 choice.
                 crate::shell3::Shell3Membrane::ConstantStrain => (

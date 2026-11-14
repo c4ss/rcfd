@@ -19,6 +19,11 @@
 //! a nodal temperature field the membrane thermal load [`thermal_load_vector`] (uniform through the thickness; ADR 0445),
 //! whose thermal strain [`stresses`] subtracts. The assembly calls
 //! [`model_element_stiffness`] and [`model_element_mass`] for Shell4 (D6).
+//!
+//! A block may choose a drilling membrane in place of the bilinear one ([`Shell4Membrane`], ADR 0470): four overlapping ANDES
+//! optimal membrane triangles, whose edges are those of the ANDES Shell3 (ADR 0466), so that the two share edges. Opt-in
+//! through [`crate::BlockProperty::shell4_with_membrane`]; a model whose Shell4 blocks keep the default gives the former
+//! results bit for bit.
 
 use crate::assemble::element_dofs;
 use crate::element::{Element, ElementMatrix, Pending};
@@ -79,15 +84,37 @@ pub enum TransverseShear {
     FullIntegration,
 }
 
+/// The membrane of a Shell4 element (ADR 0470): the default bilinear membrane with the drilling penalty, or the ANDES
+/// membrane of four overlapping ANDES optimal triangles. Chosen per block by [`crate::BlockProperty::shell4_with_membrane`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
+pub enum Shell4Membrane {
+    /// The bilinear membrane with the drilling penalty tying `theta_z` to the membrane rotation (ADR 0432).
+    #[default]
+    Bilinear,
+    /// The mean of the two diagonal splits into ANDES optimal membrane triangles (the Shell3 membrane of ADR 0466 arithmetic
+    /// 4), no drilling penalty: every edge carries the ANDES edge field, so the element shares edges with the ANDES Shell3
+    /// (ADR 0470 arithmetic 1).
+    AndesOpt,
+}
+
+/// The two diagonal splits of a Shell4 facet into counter-clockwise triangles (ADR 0470 arithmetic 1).
+const ANDES_TRIANGLES: [[usize; 3]; 4] = [[0, 1, 2], [0, 2, 3], [0, 1, 3], [1, 2, 3]];
+
+/// The local membrane unknowns `(u, v, theta_z)` of a node.
+const MEMBRANE_UNKNOWNS: [usize; 3] = [0, 1, 5];
+
 /// Options of the element matrices. The default is the element; the other values exist for the controls of ADR 0432 and
-/// are not reachable from a model.
+/// are not reachable from a model, except the membrane (ADR 0470).
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[non_exhaustive]
 pub struct ShellOptions {
     /// The transverse shear.
     pub shear: TransverseShear,
-    /// The drilling factor `alpha`.
+    /// The drilling factor `alpha`; the ANDES membrane does not use it.
     pub drilling: f64,
+    /// The membrane (ADR 0470).
+    pub membrane: Shell4Membrane,
 }
 
 impl Default for ShellOptions {
@@ -95,6 +122,7 @@ impl Default for ShellOptions {
         ShellOptions {
             shear: TransverseShear::AssumedStrain,
             drilling: DRILLING_FACTOR,
+            membrane: Shell4Membrane::Bilinear,
         }
     }
 }
@@ -108,6 +136,11 @@ impl ShellOptions {
     /// The same options with a drilling factor.
     pub fn drilling(mut self, drilling: f64) -> ShellOptions {
         self.drilling = drilling;
+        self
+    }
+    /// The same options with a membrane (ADR 0470).
+    pub fn membrane(mut self, membrane: Shell4Membrane) -> ShellOptions {
+        self.membrane = membrane;
         self
     }
 }
@@ -471,7 +504,13 @@ fn add_coupling(k: &mut [f64], b1: &[[f64; 24]; 3], c: &[[f64; 3]; 3], b2: &[[f6
 pub fn local_stiffness_section(f: &Facet, section: &SectionStiffness, options: &ShellOptions) -> ElementMatrix {
     let dm = section.membrane;
     let db = section.bending;
-    let dr = options.drilling * section.drilling[0] * section.drilling[1];
+    // ADR 0470 D1: the ANDES membrane takes neither the bilinear membrane nor the drilling penalty.
+    let andes = options.membrane == Shell4Membrane::AndesOpt;
+    let dr = if andes {
+        0.0
+    } else {
+        options.drilling * section.drilling[0] * section.drilling[1]
+    };
     let tying = tying_rows(&f.local);
     let mut k = ElementMatrix::zeros(24);
     let v = k.values_mut();
@@ -481,7 +520,9 @@ pub fn local_stiffness_section(f: &Facet, section: &SectionStiffness, options: &
             let w = p.det;
             let bm = membrane_rows(&p);
             let bb = bending_rows(&p);
-            add_btdb3(v, &bm, &dm, w);
+            if !andes {
+                add_btdb3(v, &bm, &dm, w);
+            }
             add_btdb3(v, &bb, &db, w);
             if let Some(c) = &section.coupling {
                 add_coupling(v, &bm, c, &bb, w);
@@ -515,8 +556,53 @@ pub fn local_stiffness_section(f: &Facet, section: &SectionStiffness, options: &
             }
         }
     }
+    if andes {
+        add_andes_membrane(v, &f.local, &dm);
+    }
     symmetrise(&mut k);
     k
+}
+
+/// `K += (1/2) sum_T K_T` over the four triangles of the two diagonal splits, `K_T` the ANDES optimal membrane on the
+/// unknowns `(u, v, theta_z)` of its nodes (ADR 0470 arithmetic 1).
+fn add_andes_membrane(k: &mut [f64], local: &[[f64; 2]; 4], am: &[[f64; 3]; 3]) {
+    for tri in ANDES_TRIANGLES {
+        let (kt, _, _) = crate::shell3::andes_membrane(&[local[tri[0]], local[tri[1]], local[tri[2]]], am);
+        for a in 0..3 {
+            for c in 0..3 {
+                let p = 6 * tri[a] + MEMBRANE_UNKNOWNS[c];
+                for b in 0..3 {
+                    for d in 0..3 {
+                        k[p * 24 + 6 * tri[b] + MEMBRANE_UNKNOWNS[d]] += 0.5 * kt[(3 * a + c) * 9 + 3 * b + d];
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// The rows over the 24 local unknowns of the mean basic strain of the ANDES membrane, `sum_T (1/2) A_T Bbar_T / sum_T (1/2)
+/// A_T` (ADR 0470 arithmetic 8).
+fn andes_centre_rows(local: &[[f64; 2]; 4], am: &[[f64; 3]; 3]) -> [[f64; 24]; 3] {
+    let mut rows = [[0.0; 24]; 3];
+    let mut area = 0.0;
+    for tri in ANDES_TRIANGLES {
+        let (_, b, a) = crate::shell3::andes_membrane(&[local[tri[0]], local[tri[1]], local[tri[2]]], am);
+        area += 0.5 * a;
+        for (r, row) in rows.iter_mut().enumerate() {
+            for n in 0..3 {
+                for c in 0..3 {
+                    row[6 * tri[n] + MEMBRANE_UNKNOWNS[c]] += 0.5 * a * b[r][3 * n + c];
+                }
+            }
+        }
+    }
+    for row in rows.iter_mut() {
+        for x in row.iter_mut() {
+            *x /= area;
+        }
+    }
+    rows
 }
 
 /// The 24 x 24 consistent mass in local axes (ADR 0432 arithmetic 6).
@@ -746,6 +832,20 @@ pub fn thermal_load_vector(
     material: &Material,
     delta_t_nodal: &[f64],
 ) -> Result<[f64; 24]> {
+    thermal_load_vector_with(coords, thickness, material, delta_t_nodal, Shell4Membrane::Bilinear)
+}
+
+/// The consistent membrane thermal load for a membrane (ADR 0470 arithmetic 7): that of [`thermal_load_vector`] for the
+/// bilinear membrane; for the ANDES membrane `(1/2) sum_T A_T Bbar_T^T A eps_th` over the four triangles, `eps_th = alpha
+/// dT_T (1, 1, 0)` with `dT_T` the mean of the changes at the triangle's nodes, so that the free expansion is the discrete
+/// solution.
+pub fn thermal_load_vector_with(
+    coords: &[Vec3],
+    thickness: f64,
+    material: &Material,
+    delta_t_nodal: &[f64],
+    membrane: Shell4Membrane,
+) -> Result<[f64; 24]> {
     if delta_t_nodal.len() != 4 {
         return Err(FemError::FieldLength {
             key: "temperature",
@@ -766,20 +866,43 @@ pub fn thermal_load_vector(
     let f = facet(coords)?;
     let a = homogeneous_section(material, thickness).membrane;
     let mut fl = [0.0; 24];
-    for &xi in &GAUSS {
-        for &eta in &GAUSS {
-            let q = point(&f.local, xi, eta);
-            let dt: f64 = (0..4).map(|i| q.n[i] * delta_t_nodal[i]).sum();
-            let e = alpha * dt;
-            let eps = [e, e, 0.0];
-            let s = [
-                a[0][0] * eps[0] + a[0][1] * eps[1] + a[0][2] * eps[2],
-                a[1][0] * eps[0] + a[1][1] * eps[1] + a[1][2] * eps[2],
-                a[2][0] * eps[0] + a[2][1] * eps[1] + a[2][2] * eps[2],
-            ];
-            let bm = membrane_rows(&q);
-            for (c, fc) in fl.iter_mut().enumerate() {
-                *fc += q.det * (bm[0][c] * s[0] + bm[1][c] * s[1] + bm[2][c] * s[2]);
+    match membrane {
+        Shell4Membrane::Bilinear => {
+            for &xi in &GAUSS {
+                for &eta in &GAUSS {
+                    let q = point(&f.local, xi, eta);
+                    let dt: f64 = (0..4).map(|i| q.n[i] * delta_t_nodal[i]).sum();
+                    let e = alpha * dt;
+                    let eps = [e, e, 0.0];
+                    let s = [
+                        a[0][0] * eps[0] + a[0][1] * eps[1] + a[0][2] * eps[2],
+                        a[1][0] * eps[0] + a[1][1] * eps[1] + a[1][2] * eps[2],
+                        a[2][0] * eps[0] + a[2][1] * eps[1] + a[2][2] * eps[2],
+                    ];
+                    let bm = membrane_rows(&q);
+                    for (c, fc) in fl.iter_mut().enumerate() {
+                        *fc += q.det * (bm[0][c] * s[0] + bm[1][c] * s[1] + bm[2][c] * s[2]);
+                    }
+                }
+            }
+        }
+        Shell4Membrane::AndesOpt => {
+            for tri in ANDES_TRIANGLES {
+                let (_, b, ar) =
+                    crate::shell3::andes_membrane(&[f.local[tri[0]], f.local[tri[1]], f.local[tri[2]]], &a);
+                let e = alpha * (delta_t_nodal[tri[0]] + delta_t_nodal[tri[1]] + delta_t_nodal[tri[2]]) / 3.0;
+                let s = [
+                    a[0][0] * e + a[0][1] * e,
+                    a[1][0] * e + a[1][1] * e,
+                    a[2][0] * e + a[2][1] * e,
+                ];
+                for n in 0..3 {
+                    for c in 0..3 {
+                        let q = 3 * n + c;
+                        fl[6 * tri[n] + MEMBRANE_UNKNOWNS[c]] +=
+                            0.5 * ar * (b[0][q] * s[0] + b[1][q] * s[1] + b[2][q] * s[2]);
+                    }
+                }
             }
         }
     }
@@ -902,7 +1025,19 @@ pub(crate) fn model_element_stiffness(
     material: &Material,
 ) -> Result<ElementMatrix> {
     let section = model_section(mesh, element, material)?;
-    element_stiffness_section(coords, &section, &ShellOptions::default())
+    let options = ShellOptions::default().membrane(model_membrane(mesh, element));
+    element_stiffness_section(coords, &section, &options)
+}
+
+/// The membrane of a Shell4 element of a model: its block's `Shell` property's Shell4 membrane, the bilinear membrane
+/// otherwise (ADR 0470 D2).
+pub(crate) fn model_membrane(mesh: &SolidMesh, element: usize) -> Shell4Membrane {
+    match mesh.blocks()[mesh.block_of(element)].property() {
+        Some(BlockProperty::Shell { shell4_membrane, .. }) if mesh.element_kind(element) == ElementKind::Shell4 => {
+            *shell4_membrane
+        }
+        _ => Shell4Membrane::Bilinear,
+    }
 }
 
 /// The consistent mass of a shell element of a model.
@@ -989,7 +1124,11 @@ pub fn stresses(model: &SolidModel, displacement: &[f64]) -> Result<Vec<(usize, 
             }
             s
         };
-        let mut eps = strain(&membrane_rows(&p));
+        // ADR 0470 D1: the ANDES membrane reports its mean basic strain.
+        let mut eps = match model_membrane(mesh, e) {
+            Shell4Membrane::AndesOpt => strain(&andes_centre_rows(&f.local, &dm)),
+            Shell4Membrane::Bilinear => strain(&membrane_rows(&p)),
+        };
         if let Some((nodal, reference)) = temperature {
             // ADR 0445 D2: the membrane thermal strain at the centre, uniform through the thickness.
             let dt: f64 = mesh

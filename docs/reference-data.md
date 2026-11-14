@@ -1710,3 +1710,16 @@ measured `3.7e-14`).
 | Basic stiffness of the free formulation: a constant stress lumped on the edge field with the excess times `alpha_b`, `K_b = A Bbar(alpha_b)^T A_m Bbar(alpha_b)` | derived | P. G. Bergan and C. A. Felippa, Comput. Methods Appl. Mech. Engrg. 50 (1985) 25-69: NOT read; ADR 0466 arithmetic 4 |
 | ANDES higher-order stiffness `(3/4) beta_0 A sum_mid Q^T T_e^T A_m T_e Q` on the deviatoric corner rotations, the natural-strain matrices `Q_1, Q_2, Q_3` of `beta_1 .. beta_9`; the OPT parameters | from memory | C. A. Felippa and C. Militello, Finite Elem. Anal. Des. 12 (1992) 189-201; C. A. Felippa, Comput. Methods Appl. Mech. Engrg. 192 (2003) 2125-2168: NOT read; verified by BE1 (the factor `A/3` in place of `3A/4` gives 0.861) |
 | Timoshenko cantilever tip `P L^3/(3 E I) + P L/(kappa G A)`, `kappa = 5/6`; end couple `M L^2/(2 E I)` | derived | beam theory; the clamped two-dimensional strip within `1.5e-4` of it by refinement (ADR 0466 arithmetic 6) |
+
+## F-549 a drilling membrane for Shell4 matching the ANDES edge (ADR 0470)
+
+No source was read for F-549; every item is cited from memory. The element is the mean of the two diagonal splits of the
+quadrilateral into ANDES OPT triangles (the Shell3 membrane of ADR 0466, unchanged); that its edges carry the ANDES edge field
+with weight one, so that it shares edges with the ANDES Shell3 and passes the mixed membrane patch test, is derived in ADR 0470
+arithmetic 1 and measured by MP1 (`2.1e-14`). Nothing numerical is taken from the sources below.
+
+| Item | Status | Source |
+|---|---|---|
+| A quadrilateral with drilling rotations made of ANDES triangles | from memory | K. Alvin, H. M. de la Fuente, B. Haugen and C. A. Felippa, Finite Elem. Anal. Des. 12 (1992) 163-187; B. Haugen, PhD thesis, University of Colorado, 1994: NOT read |
+| A quadrilateral as the mean of its two diagonal splits (overlapping triangles) | from memory | the early membrane literature, not attributed: NOT read; ADR 0470 arithmetic 1 (edge field), 4 (pure bending exact) |
+| 8 x 2 in-plane cantilever strip on quadrilaterals: `u_y / delta = 0.9957912994` against the Timoshenko beam of the F-539 row above | derived | ADR 0470 arithmetic 5, check CQ1 |

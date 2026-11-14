@@ -120,7 +120,8 @@ pub(crate) fn add_thermal_load(
                         crate::shell3::thermal_load_vector_with(&coords, t, material, &dte, membrane)
                             .map(|v| v.to_vec())
                     } else {
-                        crate::shell::thermal_load_vector(&coords, t, material, &dte).map(|v| v.to_vec())
+                        let membrane = crate::shell::model_membrane(mesh, e);
+                        crate::shell::thermal_load_vector_with(&coords, t, material, &dte, membrane).map(|v| v.to_vec())
                     }
                 })
                 .map_err(|source| FemError::Element {

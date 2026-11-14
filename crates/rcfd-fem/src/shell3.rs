@@ -415,6 +415,45 @@ fn add_andes_higher_order(k: &mut [f64], f: &Facet3, nx: &[f64; 3], ny: &[f64; 3
     add_b1t_c_b2(k, &t, &kt, &t, 1.0);
 }
 
+/// The ANDES OPT membrane of a counter-clockwise triangle of local points `local` for the membrane matrix `am` (ADR 0470
+/// D1, the triangles of the Shell4 drilling membrane): the 9 x 9 stiffness on `(u, v, theta_z)` node by node (row-major), its
+/// basic rows `Bbar(alpha_b)` over the same unknowns, and its area. The arithmetic of the ANDES Shell3 membrane.
+pub(crate) fn andes_membrane(local: &[[f64; 2]; 3], am: &[[f64; 3]; 3]) -> ([f64; 81], [[f64; 9]; 3], f64) {
+    let area = 0.5
+        * ((local[1][0] - local[0][0]) * (local[2][1] - local[0][1])
+            - (local[2][0] - local[0][0]) * (local[1][1] - local[0][1]));
+    let f = Facet3 {
+        axes: [[0.0; 3]; 3],
+        centre: [0.0; 3],
+        local: *local,
+        area,
+        min_angle: 0.0,
+        longest_edge: 0.0,
+    };
+    let (nx, ny) = derivatives(&f);
+    let b = mean_rows(&f, &nx, &ny, ANDES_ALPHA_B);
+    let mut k = [0.0; 18 * 18];
+    add_b1t_c_b2(&mut k, &b, am, &b, area);
+    add_andes_higher_order(&mut k, &f, &nx, &ny, am);
+    const MEM: [usize; 3] = [0, 1, 5];
+    let mut out = [0.0; 81];
+    let mut rows = [[0.0; 9]; 3];
+    for a in 0..3 {
+        for c in 0..3 {
+            let p = 6 * a + MEM[c];
+            for r in 0..3 {
+                rows[r][3 * a + c] = b[r][p];
+            }
+            for q in 0..3 {
+                for d in 0..3 {
+                    out[(3 * a + c) * 9 + 3 * q + d] = k[p * 18 + 6 * q + MEM[d]];
+                }
+            }
+        }
+    }
+    (out, rows, area)
+}
+
 /// The coefficients `(a_1, a_2, b)` of the assumed shear `gamma = (a_1 - b Y, a_2 + b X)` as rows over the 18 local unknowns:
 /// `gamma(m_e) . t_e = g_e`, `g_e = (w_j - w_i) / l_e + (beta_i + beta_j) / 2 . t_e` on each edge (ADR 0454 arithmetic 4).
 fn tying_coefficients(f: &Facet3) -> [[f64; 18]; 3] {
@@ -879,19 +918,25 @@ pub(crate) fn model_membrane(mesh: &SolidMesh, element: usize) -> Shell3Membrane
 
 /// Refuses an edge shared by shell elements of different membrane classes (linear edges: Shell4 and the constant-strain
 /// Shell3; Allman's; the ANDES membrane), naming the later element (ADR 0466 D3): a constant stress leaves the drilling
-/// moments `alpha t l^2 sigma_nn / 12` of a drilling membrane's edge unbalanced there (arithmetic 8). Does nothing for a
-/// model without a Shell3 block with a drilling membrane.
+/// moments `alpha t l^2 sigma_nn / 12` of a drilling membrane's edge unbalanced there (arithmetic 8). A Shell4 with the ANDES
+/// membrane of ADR 0470 has the ANDES edge and shares edges with the ANDES Shell3. Does nothing for a model without a Shell3
+/// block with a drilling membrane or a Shell4 block with a membrane other than the bilinear one.
 pub(crate) fn check_membrane_edges(mesh: &SolidMesh) -> Result<()> {
     let drilling = mesh.blocks().iter().any(|b| {
-        b.kind() == ElementKind::Shell3
-            && matches!(b.property(), Some(BlockProperty::Shell { membrane, .. }) if *membrane != Shell3Membrane::ConstantStrain)
+        (b.kind() == ElementKind::Shell3
+            && matches!(b.property(), Some(BlockProperty::Shell { membrane, .. }) if *membrane != Shell3Membrane::ConstantStrain))
+            || (b.kind() == ElementKind::Shell4
+                && matches!(b.property(), Some(BlockProperty::Shell { shell4_membrane, .. }) if *shell4_membrane != crate::shell::Shell4Membrane::Bilinear))
     });
     if !drilling {
         return Ok(());
     }
     let class_of = |e: usize| -> Option<&'static str> {
         match mesh.element_kind(e) {
-            ElementKind::Shell4 => Some("a linear edge (Shell4)"),
+            ElementKind::Shell4 => Some(match crate::shell::model_membrane(mesh, e) {
+                crate::shell::Shell4Membrane::Bilinear => "a linear edge (Shell4)",
+                crate::shell::Shell4Membrane::AndesOpt => "the ANDES membrane",
+            }),
             ElementKind::Shell3 => Some(match model_membrane(mesh, e) {
                 Shell3Membrane::ConstantStrain => "a linear edge (the constant-strain Shell3)",
                 Shell3Membrane::Allman => "Allman's membrane",
