@@ -11319,14 +11319,30 @@ fixed by the item's registration ADR before any code.
   - acceptance: Every limit not stated here is registered in the ADR before the run. S3 of ADR 0479 (free Hex8, 50
     steps) converges every step with the driver defaults, and MU6 of ADR 0479 is caught.
   - note: Structural solver, advanced tier. Follow-up of F-423 (ADR 0479, 2026-11-14).
-- [ ] **F-572** Arc-length with a follower reference load and an unsymmetric factor of the load stiffness
+- [x] **F-572** Arc-length with a follower reference load and an unsymmetric factor of the load stiffness
   - depends on: F-424
   - acceptance: Every limit not stated here is registered in the ADR before the run. The load direction of the
     arc-length iteration includes the derivative of the contributions with the load factor, so that a reference load
     made only of follower pressure is traced; a ring under follower internal pressure traced by arc-length reproduces
     the load-controlled path of ADR 0480 within 1e-6 at the common load factors; an unsymmetric factor of the tangent
     gives quadratic convergence on a free-edged follower load (registered rate), and the symmetric path keeps its bits.
-  - note: Structural solver, advanced tier. Follow-up of F-424 (ADR 0480, 2026-11-14).
+  - note: Structural solver, advanced tier. Follow-up of F-424 (ADR 0480, 2026-11-14). DONE. ADR 0560, 2026-11-15:
+    Contribution gains two default methods, add_load_factor_derivative (FollowerPressure and CentrifugalFollower
+    implement it) and add_full (FollowerPressure: the full unsymmetric -K_p); ArcLengthOptions::contribution_load
+    (opt-in) takes the load direction f - sum dg/dlambda at the iterate, so a follower-only reference load is traced
+    (the zero-load refusal stays on the default route); NewtonOptions::unsymmetric (opt-in) factors the full tangent by
+    the new rcfd_linalg::skyline_lu::EnvelopeLu (envelope L D U without pivoting, positive pivots when the symmetric
+    part is positive definite) in the driver and in the arc-length correction, refused with the supernodal factor and
+    with the linear contact body (key solver). Ring of ADR 0480 under follower internal pressure only, traced by
+    arc-length to lambda 1 in 19 points: within 4.0e-13 of the R1 load-controlled path of ADR 0480 at the 18 common load
+    factors (limit 1e-6). Free-edged Hex20 cantilever plate under follower pressure (tip rotation about 1 rad):
+    unsymmetric factor Q = max r_(k+1)/r_k^2 = 1.03e3 (limit 1e4), 6 iterations per step; the symmetric path Q = 3.6e8
+    (control, >= 1e5); the same plate by arc-length with both options within 5.4e-12 of load control. Envelope LU
+    residual 8.3e-17, bit-equal to SkylineLdlt on symmetric input. Eight of eight mutations caught (MU6 to MU8 after an
+    amendment of the mutation harness, not of a check); default bits (new record N1 and the existing records) and
+    baseline hashes unchanged. Done by the registered rule. Amendment 1 corrected the mutation harness (stale
+    rcfd-linalg build), MU6 to MU8 re-run once; no check was met only after it (done; strict reading partial is the
+    maintainer's call). Follow-ups F-652 (case-file keys, NEEDS THE USER), F-653 (follower-load flutter).
 - [~] **F-573** Follower pressure on shells
   - depends on: F-424
   - acceptance: Every limit not stated here is registered in the ADR before the run. ShellPressure gains a follower form
@@ -12550,12 +12566,14 @@ fixed by the item's registration ADR before any code.
     models without shells keep their bits.
   - note: Structural solver, advanced tier. Follow-up of F-628 (ADR 0556, 2026-11-15).
 - [ ] **F-649** Arc-length continuation with a follower load direction
-  - depends on: F-622, F-424
+  - depends on: F-622, F-424, F-572
   - acceptance: Every limit not stated here is registered in the ADR before the run. The mean-dilatation Hex8 sphere of
     ADR 0541 under follower pressure traced by the arc-length step through its pressure maximum near l_a = 1.83, the
     maximum pressure within 1 percent of the closed form (mu/2)((1/l_b^4 + 4/l_b) - (1/l_a^4 + 4/l_a)) maximised over
     l_a, and every point after it on the descending branch within 1 percent; existing arc-length results bit-identical.
-  - note: Structural solver, advanced tier. Follow-up of F-622 (ADR 0557, 2026-11-15).
+  - note: Structural solver, advanced tier. Follow-up of F-622 (ADR 0557, 2026-11-15). F-572 (ADR 0560) added
+    ArcLengthOptions::contribution_load, the follower load direction in arclength::trace; this item keeps the sphere
+    trace check on top of it.
 - [ ] **F-650** Buckling eigensolver when the subspace holds fewer positive Ritz values than asked
   - depends on: F-642
   - acceptance: Every limit not stated here is registered in the ADR before the run. With the default BucklingOptions,
@@ -12572,3 +12590,17 @@ fixed by the item's registration ADR before any code.
     integrator at a uniform temperature T creeps, after the vibration has decayed, at the closed-form rate with A
     exp(-Q/(R T)) within 1 percent. Materials without the factor keep their bits.
   - note: Structural solver, advanced tier. Follow-up of F-581 (ADR 0558, 2026-11-15).
+- [ ] **F-652** Case-file keys for the follower load, continuation and unsymmetric tangent (NEEDS THE USER: schema golden)
+  - depends on: F-572
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A case with the keys reproduces the
+    API runs of ADR 0560 (the ring by arc-length and the plate with the unsymmetric factor) bit for bit; cases without
+    the keys keep their bits and the schema golden changes only by the new keys, with the maintainer's approval.
+  - note: Structural solver, advanced tier. Follow-up of F-572 (ADR 0560, 2026-11-15).
+- [ ] **F-653** Flutter of follower loads: the unsymmetric eigenproblem (Beck's column)
+  - depends on: F-572
+  - acceptance: Every limit not stated here is registered in the ADR before the run. tangent_modes and the buckling path
+    take the full (unsymmetric) load stiffness as an option and return complex eigenvalues; Beck's column (a cantilever
+    under a tangential follower tip force) has its flutter load 20.05 E I/L^2 within 1 percent (the coefficient to be
+    checked against a reference held in docs/reference-data.md before registration; cited from memory); the symmetric
+    paths keep their bits.
+  - note: Structural solver, advanced tier. Follow-up of F-572 (ADR 0560, 2026-11-15).
