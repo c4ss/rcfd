@@ -286,3 +286,13 @@ Remaining questions (the recommendations taken on the maintainer's standing inst
 2. F-425's note: add that its locking control is measured by F-622 (ADR 0557). The amendment of F-425's small-strain clause
    stays the maintainer's call (not taken).
 3. The arc-length step with a follower load direction (open question 2): recommend a follow-up.
+
+## For the lead: roadmap entries
+
+> F-622 proposed status: partial.
+
+> F-622 note: ADR 0557, 2026-11-15: PARTIAL. The Full Hex8 locking control of the inflated sphere of ADR 0541 (864 Hex8, neo-Hookean kappa/mu = 1e4) measured with a converging set-up, test only (no library code): displacement control to the inner stretch 1.10, Full converged, |p_FE - p_c| / p_c = 15.6 (limit >= 0.1; the 1D full-integration model within 1.3e-4), the mean-dilatation Hex8 4.1e-3 (limit 1e-2); pressure control at p_c(1.5) with the follower pressure and the Newton driver (not the arc-length step, which takes its load direction from dead loads only): Full reaches l_a = 1.0114 (extension ratio 2.3e-2, limit <= 0.1), mean-dilatation 1.4956 (8.8e-3, limit 2e-2). Diagnostic: the lowest eigenvalue of the Full tangent falls to zero at l_a = 1.1326 by extrapolation, the negative pivot of ADR 0541 at 1.133 (a spurious instability of the locked discrete model). Partial only because two registered mutations (MU1, MU2) named a dispatch the driver does not reach and were not caught; the corrected mutations at is_fbar, MU3 to MU5, were caught. Default bits and baseline hashes unchanged.
+
+> F-425 note addition: the Full Hex8 locking control is measured by F-622 (ADR 0557, 2026-11-15): 15.6 at l_a = 1.10 (the Full model has no stable state beyond l_a = 1.133 on this mesh).
+
+> Follow-up proposed: arc-length continuation with a follower load direction (an opt-in derivative of a contribution's force with respect to the load factor taken into the load direction of arclength::trace, defaults bit-identical). Deps F-622, F-424. Acceptance: Every limit not stated here is registered in the ADR before the run. The mean-dilatation Hex8 sphere of ADR 0541 under follower pressure traced by the arc-length step through its pressure maximum near l_a = 1.83, the maximum pressure within 1 percent of the closed form (mu/2)((1/l_b^4 + 4/l_b) - (1/l_a^4 + 4/l_a)) maximised over l_a, and every point after it on the descending branch within 1 percent; existing arc-length results bit-identical.
