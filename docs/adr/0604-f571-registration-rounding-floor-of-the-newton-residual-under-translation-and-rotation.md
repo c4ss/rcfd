@@ -341,6 +341,30 @@ for the maintainer in the addendum below; recommendation in Addendum 2.
    which found no event on them). The audit's 12 events of `sa_emc` `n1e_n2e_trapezoidal_negative_control` are on its
    `Method` (Newmark) run, which does use the driver.
 
+## Addendum 2: results of amendments 1 and 2 (2026-11-15)
+
+Tip of the run: `3e610a0e` (main a9efc22e merged; logs `f571-scratch/m1.log`, `m2-nt3.log`, `m3.log`, `clippy2.log`), each run
+once.
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| NC1b | accepted, 0 halvings, 20 iterations (= `max_iterations`), relative residual `1.392e-10`; recorded `rn` `4.46e-16 N`, bound `b` `4.29e-15 N` (recomputed in the test) | `Ok`, 0, `= 20`, `1e-10 < r <= 1e-7` | met |
+| FT1c | 0 halvings, 2 iterations, `1.25e-16`; first-step error `8.87e-10` | as ADR 0603 FT1 | met |
+| M1 | `cargo test -p rcfd-fem --release --no-fail-fast`: 1337 passed, 0 failed, 337 ignored (the "MISSED" lines in the log are printed by passing tests: records and negative controls that print their expected misses) | every failure reported | no failure |
+| M2 | ADR 0603 NT3 with `--ignored`: 4000 steps, 0 halvings, 11988 iterations, worst residual `6.13e-13`, F1 `2.049e-3`, F1b `7.98e-8`, F1c `7.95e-5`, E1 `2.84e-8`, EZ `5.14e-7` (51 s); FT2, DB1, DB2 pass in M1 | as ADR 0603 | met; the same numbers and iteration count as ADR 0603's addendum 1 |
+| M3 | `baseline_hashes` 3 passed, 1 ignored | pass | met |
+
+`cargo fmt -p rcfd-fem --check` and `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings` clean on the tip.
+ADR 0603's FT1, FT2 and NT3 therefore read as registered: they converge by the relative test, not at the bound. NC1's
+registered refusal no longer holds on the default path; its record is kept (amendment 1) and ADR 0603 has addendum 2 pointing
+here.
+
+**Open question for the maintainer: is ADR 0603's NC1 superseded?** Options: (a) yes. The default path accepts a step at a
+rounding floor (the purpose of F-571); NC1 stays an ignored record and NC1b is the active check. F-631's opt-in still
+matters: it converges such a step in 2 iterations instead of 20, at `1e-16` rather than at the floor. (b) No: F-571's bound
+becomes opt-in, so NC1 holds again. But then S3 of ADR 0479 would not converge with the driver defaults, and F-571's
+acceptance asks for exactly that. Recommendation: (a).
+
 ## For the lead: roadmap entries
 
 > Proposed status: done.
