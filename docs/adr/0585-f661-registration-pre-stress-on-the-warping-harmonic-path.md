@@ -268,3 +268,82 @@ post-run amendment. **todo**: H2+ or H2- missed with H2T of the same sign missed
 torque, default options: undamped at `0.5 sqrt(C3)`, with the loss factor `0.02` at `sqrt(C3)`, with Rayleigh `zeta = 0.02` at
 `sqrt(C3)`, and at `omega = 0`; and the undamped response at `0.5 sqrt(C3)` with the warping held at both ends. It runs unchanged
 after the change.
+
+## Addendum 1 (2026-11-15): results
+
+Written after the one registered run of `sa_beam_warping_f661.rs` (log `f661-scratch/run1.log`, code commit eebb2933), the B0
+runs (`b0_base2.log` on the base 054a7b74 with no library line changed, `after.log`) and the mutation runs (`mutations.log`,
+`mut_Z*.log`). The numbers are those the tests printed (release). No limit was changed, no amendment was written, and nothing
+was re-run to pick a result.
+
+### Results against the registered limits
+
+| id | measured | limit | verdict |
+|---|---|---|---|
+| B0 | 5 digests of the default `WarpingHarmonic` bit-identical to the base record; the ADR 0546, 0548 and 0574 bit records unchanged | equal | met |
+| P0 | the four responses with a zero pre-stress bit-equal to those without the option | equal | met |
+| H2+ (acceptance) | `2.32e-7` (search ended at step 2 by a resonance refusal, as D4 accounts) | `1e-3` | met |
+| H2- (acceptance, full beam beyond its weak-axis Euler load) | `7.20e-7` (likewise; no refusal of the indefinite matrix away from the resonance) | `1e-3` | met |
+| H2T+ / H2T- | `2.32e-7` / `7.20e-7` | `1e-3` | met |
+| H3+ | `7.1e-14` (the torsional mode is mode 2 of the pre-stressed modes, `87177.2159`) | `1e-8` | met |
+| H3- | `1.9e-12` | `1e-8` | met |
+| H8+ / H8- | `3.87e-6` / `1.15e-5` | `1e-4` | met |
+| H1+ / H1- | `3.55e-6` / `1.39e-8` | `3e-5` | met |
+| H5+ / H5- | `3.62e-5` / `3.61e-5` | `2e-4` | met |
+| H6+ / H6- | `1.23e-5` / `3.61e-5` | `2e-4` | met |
+| H6b+ / H6b- | `3.55e-6` / `1.80e-8` | `3e-5` | met |
+| H7+ / H7- | `0.776` / `0.565` | `> 0.3` | met |
+| HS | `4.89e-7` | `1e-5` | met |
+| HB- | `0` | `1e-10` | met |
+| R (3 refusals) | each with key `"warping"` | exact | met |
+
+Every measured value is within a factor of 1.1 of its arithmetic estimate. The resonance searches on the default pivot ended at
+step 2 by the refusal D4 predicted (an iterate within about `1e-8` of the eigenvalue). That refusal is far below the `1e-3`
+limit. The searches with `resonance_pivot(0.0)` (H3) ended by the step rule.
+
+### Mutations (scratch copy `f661-scratch/mut`, own target dir, one at a time)
+
+| mutation | result | caught by |
+|---|---|---|
+| Z1 `K_sigma` not added | caught | H1, H5, H6, H6b, H2, H2T, H3, H8 (both signs), HS |
+| Z2 `- K_sigma` | caught | as Z1 |
+| Z3 loss factor on `K + K_sigma` | caught | H5+-, H6b+- |
+| Z4 Rayleigh `beta K` only | caught | H6+-, H6b+- |
+| Z5 `2 K_sigma` | caught | as Z1 |
+| Z6 `check_for` skipped | caught | R (both RF10 cases) |
+| Z7 `K_sigma` not reduced | caught | a refusal (key `"pattern"`, a column out of range) in H1 to H6b and P0; H2, H2T, H3, H8, HS |
+
+Seven of seven caught. Z3 was also caught by H6b, which the registration did not predict.
+
+### Other runs
+
+`cargo test -p rcfd-fem --release` for the warping test binaries (`sa_beam_warping_f598`, `_f598_bits`, `_f626`, `_f626_bits`,
+`_f627`, `_f635`, `_f635_bits`, `_f643`, `_f661`, `_f661_bits`): all passed, the ignored records stay ignored. `cargo test -p
+rcfd-api --release --test baseline_hashes`: 3 passed, 1 ignored (unchanged). `cargo clippy -p rcfd-fem --release --all-targets
+-- -D warnings`: clean. `cargo fmt -p rcfd-fem --check`: clean. The whole rcfd-fem suite was not run (the lead runs the gate).
+
+### Decision
+
+**Done** by the registered rule: every registered check met in the one run, every mutation caught, no amendment. By clause:
+a1 is met (H7, P0 and mutations Z1 to Z5 show that `K + K_sigma` of the `from_static` pre-stress is the matrix solved); a2 is
+met for both signs on the full fork beam and on the torsion-only model; a3 is met (B0, P0).
+
+### Remaining questions
+
+- Q1 (the damping of `K_sigma`): (a) the loss factor on the elastic `K` only and the Rayleigh stiffness `K + K_sigma`, as taken
+  (the convention of ADR 0543 D5); (b) both on `K + K_sigma`; (c) both on `K`. Recommendation: (a).
+- Q2 (a pre-stress on `WarpingTransient`): recommendation, a separate item when a case needs it (proposed below).
+- Q3 (compression beyond the weak-axis Euler load): the harmonic solve takes an indefinite `K + K_sigma` without comment. Options:
+  (a) leave as is (the linear problem is defined, and the solve refuses only a near-singular pivot); (b) count the negative
+  pivots and report them on the solver (as a Sturm count) so a caller sees that the pre-stressed state is unstable. Recommendation:
+  (b) as a small follow-up, because a harmonic response about an unstable static state can be misread.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> Structural solver, advanced tier. Follow-up of F-635 (ADR 0574, 2026-11-15). DONE. ADR 0585, 2026-11-15: the direct harmonic solve with the warping unknown takes a pre-stress (`WarpingHarmonicOptions::prestress`, a `WarpingPrestress`, for example `from_static` of the warping static solve): A = (1 + i eta) K + K_sigma - omega^2 M + i omega (alpha M + beta (K + K_sigma)), with K_sigma the geometric stiffness of ADR 0546 `matrices`, real and undamped and in the Rayleigh stiffness (the convention of ADR 0543). RF8 and RF10 of ADR 0548 apply. Fork-supported I beam, torque at midspan, axial force N = +/-0.5 of the torsional buckling load (tension positive, as in the code): first torsional resonance 2.3e-7 (tension) and 7.2e-7 (compression, the full beam beyond its weak-axis Euler load, K + K_sigma indefinite) from sqrt((G J k^2 + N I_p/A k^2 + E C_w k^4)/(rho I_p)) at 16 elements (3.9e-6 and 1.2e-5 at 8), the same on the torsion-only model. The searched resonance matches the pre-stressed modes to 7e-14 and 2e-12. Responses are within 3.6e-5 of the continuous series with a loss factor, with Rayleigh damping, and undamped. Defaults bit-identical (5 digests, and a zero pre-stress gives the bits of no option). Seven of seven mutations caught. No pre-stress on the warping transient, no warping inertia, no case-file key.
+
+> Follow-up proposed: Pre-stress on the warping transient path. Deps F-661. Acceptance: Every limit not stated here is registered in the ADR before the run. WarpingTransient takes the pre-stress of the warping static solve (K + K_sigma); the midspan twist of the fork-supported I beam under a step torque and an axial force N = +/-0.5 of the torsional buckling load follows the continuous modal series with omega_m^2 = (G J k_m^2 + N I_p/A k_m^2 + E C_w k_m^4)/(rho I_p) within 1.5e-2 of the static twist over two periods at 16 elements; every result without the option bit-identical.
+
+> Follow-up proposed: Negative-pivot count of the pre-stressed warping harmonic solve. Deps F-661. Acceptance: Every limit not stated here is registered in the ADR before the run. WarpingHarmonic with a pre-stress reports the number of negative eigenvalues of K + K_sigma on the free equations (a Sturm count of the real factor at omega = 0); the fork-supported I beam under N = -0.5 of the torsional buckling load reports exactly the number of weak-axis bending modes beyond their Euler load (one), and 0 under N = +0.5; every result without the option bit-identical.
