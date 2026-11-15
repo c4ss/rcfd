@@ -670,8 +670,11 @@ fn a_b_beam2_cyclic_refused_for_its_own_reason() {
 
 // ----------------------------------------------------------------------------------------------- a2: rotating
 
+/// ADR 0593 amendment 1: the record of run 1 (missed: the rotating rows refused by the unit pre-stress copy, which lost the
+/// setting); body unchanged. The corrected run is `ro_rotating_part_amended`.
 #[test]
-fn ro_rotating_part() {
+#[ignore = "ADR 0593 amendment 1: run-1 record, a known miss (the rotating pre-stress copy refused the material)"]
+fn ro_rotating_part_known_miss() {
     let mut c = Checks::new();
     rotating_row(
         &mut c,
@@ -739,8 +742,11 @@ fn x_cy_q3_cyclic_paths() {
     c.finish();
 }
 
+/// ADR 0593 amendment 1: the record of run 1 (missed: the rotating rows refused by the unit pre-stress copy, which lost the
+/// setting); body unchanged. The corrected run is `x_rs_q4_rotating_sector_amended`.
 #[test]
-fn x_rs_q4_rotating_sector() {
+#[ignore = "ADR 0593 amendment 1: run-1 record, a known miss (the rotating pre-stress copy refused the material)"]
+fn x_rs_q4_rotating_sector_known_miss() {
     let mut c = Checks::new();
     let h = sector(Which::Hyper, ElementKind::Shell4, false);
     let t = sector(Which::Twin, ElementKind::Shell4, false);
@@ -793,8 +799,11 @@ fn x_mp_p3_mpc_transformation() {
 
 // ----------------------------------------------------------------------------------------------- controls
 
+/// ADR 0593 amendment 1: the record of run 1 (missed: the rotating rows refused by the unit pre-stress copy, which lost the
+/// setting); body unchanged. The corrected run is `c_perturbed_twin_is_seen_amended`.
 #[test]
-fn c_perturbed_twin_is_seen() {
+#[ignore = "ADR 0593 amendment 1: run-1 record, a known miss (the rotating pre-stress copy refused the material)"]
+fn c_perturbed_twin_is_seen_known_miss() {
     let mut c = Checks::new();
     cyclic_static(&mut c, "C-CY", ElementKind::Shell4, Which::Perturbed);
     rotating_row(
@@ -891,4 +900,24 @@ fn n2_setting_on_an_isotropic_model_changes_no_bit() {
     let ok = r.is_some_and(|(a, b)| bits_equal(&a.eigenvalues, &b.eigenvalues));
     c.holds("N2 rotating B", ok, "eigenvalue bits equal at Omega");
     c.finish();
+}
+
+// ----------------------------------------------------------------------------------------------- amendment 1: corrected runs
+
+/// ADR 0593 amendment 1: RO-B, RO-P4 after D5, the body of the run-1 record.
+#[test]
+fn ro_rotating_part_amended() {
+    ro_rotating_part_known_miss();
+}
+
+/// ADR 0593 amendment 1: X-RS-Q4 after D5, the body of the run-1 record.
+#[test]
+fn x_rs_q4_rotating_sector_amended() {
+    x_rs_q4_rotating_sector_known_miss();
+}
+
+/// ADR 0593 amendment 1: C-CY, C-RO, C-CM, C-MP after D5, the body of the run-1 record.
+#[test]
+fn c_perturbed_twin_is_seen_amended() {
+    c_perturbed_twin_is_seen_known_miss();
 }
