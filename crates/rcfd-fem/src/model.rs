@@ -754,6 +754,16 @@ pub enum Load {
         /// Pressure on each element.
         pressure: f64,
     },
+    /// The uniform pressure of [`Load::ShellPressure`] on a set of Shell3 elements as the curvature-scaled area-gradient load of
+    /// ADR 0567 ([`crate::shell3_curvature::pressure_load_curvature`]): exact for the uniform membrane state on irregular
+    /// triangulations of a sphere and on cylinders of rectangle cells. Opt-in, Shell3 only, for curved surfaces.
+    #[non_exhaustive]
+    ShellPressureCurvature {
+        /// Element set name.
+        set: String,
+        /// Pressure on each element.
+        pressure: f64,
+    },
     /// A uniform traction on a surface set, Pa.
     #[non_exhaustive]
     Traction {
@@ -834,6 +844,13 @@ impl Load {
     /// The uniform shell pressure with the angle-weighted split of each Shell3 element's force (ADR 0461).
     pub fn shell_pressure_angle_weighted(set: &str, pressure: f64) -> Load {
         Load::ShellPressureAngleWeighted {
+            set: set.to_string(),
+            pressure,
+        }
+    }
+    /// The uniform shell pressure as the curvature-scaled area-gradient load of ADR 0567 (Shell3 only).
+    pub fn shell_pressure_curvature(set: &str, pressure: f64) -> Load {
+        Load::ShellPressureCurvature {
             set: set.to_string(),
             pressure,
         }
@@ -1419,6 +1436,22 @@ impl SolidModel {
                             key: "shell pressure",
                             reason: format!(
                                 "element {e} of the set '{set}' is a {} element: a shell pressure acts on Shell4 and Shell3 elements",
+                                kind.name()
+                            ),
+                        });
+                    }
+                }
+            }
+            Load::ShellPressureCurvature { set, pressure } => {
+                self.need_set(SetKind::Element, set)?;
+                finite("pressure", *pressure)?;
+                for &e in self.mesh.element_set(set).expect("checked") {
+                    let kind = self.mesh.element_kind(e);
+                    if kind != crate::mesh::ElementKind::Shell3 {
+                        return Err(FemError::InvalidValue {
+                            key: "shell pressure",
+                            reason: format!(
+                                "element {e} of the set '{set}' is a {} element: the curvature shell pressure acts on Shell3 elements (ADR 0567)",
                                 kind.name()
                             ),
                         });
