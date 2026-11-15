@@ -263,3 +263,13 @@ Two negative controls were set up defectively; corrected here before any run, th
   corotated path refuses a Layup there (ADR 0496 D7, ADR 0502), so the gradient refusal is not reached on a layup. Corrected: for
   TH P with BIM and a gradient the expected result is a refusal (any `Err`; recorded as printed), and the gradient refusal row
   is the TH3 row alone (`InvalidValue { key: "nonlinear" }` naming the gradient), unchanged.
+
+## Amendment 2 (2026-11-15, written and committed after the registered run, before the corrected run of L1 and L2)
+
+The registered run (`f687-scratch/run1.log`, commit `3b64887d`, release, `--test-threads=1`) made every check except L1 and L2,
+whose tests did not reach their checks: the test helper `model` adds the node set `held` also when it is empty (L1 and L2 hold
+no node), and `SolidMesh::add_node_set` refuses an empty set (`EmptySet { kind: Node, name: "held" }`). A defect of the test
+set-up, not of the library. Corrected: the tests `l1_shell3_load_on_a_triangle_after_amendment2` and
+`l2_layup_load_on_a_rectangle_after_amendment2` build the same one-element models with a helper that adds no `held` set and
+no constraint; their checks, data and limits are those of L1 and L2 above, unchanged. The two registered tests stay as ignored
+records naming this amendment. Every other row of the registered run is recorded in the addendum as measured in that run.
