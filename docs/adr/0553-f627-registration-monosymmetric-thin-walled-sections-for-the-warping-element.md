@@ -312,3 +312,41 @@ Corrected **E2'** (limits fixed now, before any run):
 
 Mutations: Z1 and Z2 are now expected to be caught by A1, A2, N1 and E2' (b) or (a) depending on where the mutation is placed
 (in `wagner_about_shear_centre`: (b); in the element: (a)). The original E2 is not run (it was found false before any run).
+
+## Amendment 2 (2026-11-15): the eigensolver set-up of the A checks is defective; written after the first run of `sa_beam_warping_f627.rs` and before any corrected run
+
+The first run (log `w49i-work/f627-scratch/run1.log`, code commit 9031e35a) ran every test once. Six of the seven test functions
+finished, and every check in them met its limit (D1 to D3, C1, V1, S1, S2, W1, W2, E1, E2', E3, E4, R; numbers in addendum 1). The
+seventh, `a_n_lateral_torsional_buckling_of_the_monosymmetric_i` (A1 to A8, N1), stopped at its second solve. That was the
+`-M_ref` load case (flange 1 in compression) at 16 elements. `lowest_buckling_factors` refused it with `SturmMismatch`: "32
+eigenvalues below 5.397979218577e9, but 3 were found". So no A or N1 value was measured; only the `+M_ref` factor `53.9798` was
+printed before the stop.
+
+Cause, read from the message and the solver code (`rcfd-linalg` `eigen.rs`, `lowest_buckling_factors`) with no further run:
+
+- The bound `5.397979e9` is `1/(POSITIVE_CUT * tmax)` with `POSITIVE_CUT = 1e-8`, so `tmax = 1/53.98`. The largest `|theta|` of
+  the subspace is the negative factor `-53.98`, the mirror of the `+M_ref` case.
+- The spectrum of a monosymmetric beam is not symmetric in the sign of the load, unlike the doubly symmetric beams of ADR 0546
+  and 0548. For `-M_ref` the negative factors are smaller in magnitude than the positive ones, so they dominate the subspace
+  iteration.
+- The default subspace of `BucklingOptions::new(3)` is `q = 11`. It held exactly three positive Ritz values, so `mp = positive
+  = count`. The solver then takes its "exhausted" branch and counts at the far bound `1/cut`, where all 32 positive factors of the
+  model lie, instead of between the third and fourth factors. The counts differ and the solver refuses.
+
+This is a property of the registered eigensolver options on a load case with a sign-asymmetric spectrum, not of the element.
+The registered limit was unreachable with the registered set-up. Changing `rcfd-linalg` (a shared solver file) is out of scope;
+it is reported as a finding (Q3 below).
+
+Corrected **A1' to A8', N1'**: the same models, loads, comparisons and limits as A1 to A8 and N1 (unchanged), with
+`subspace_size = Some(40)` in the `BucklingOptions` of every LTB solve of the A test (`factors = 3` unchanged). The model has
+about 110 free unknowns. With either sign about half of a 40-vector subspace is positive, so `positive > count`, and the Sturm
+check is made between the third and fourth factors. Estimates unchanged. The first-run function stays as the ignored record
+`a_n_run1_known_miss`, with the refusal recorded in its comment. The checks of the six finished functions are not re-run in the
+corrected run (the corrected run is the A test alone). D3, which uses `+M_ref` only, is not affected.
+
+By the decision rule, a check met only after a post-run amendment makes the item **partial**.
+
+- **Q3 (new). The buckling eigensolver on sign-asymmetric spectra.** Options: (a) leave it, document that a load case whose
+  negative factors are smaller in magnitude needs a larger subspace; (b) in `lowest_buckling_factors`, when `positive ==
+  mp == count` and the subspace also holds negative Ritz values, enlarge the subspace or iterate on, instead of counting at
+  `1/cut`. Recommendation (b), as a separate item in `rcfd-linalg` with its own registration (it touches a shared solver).
