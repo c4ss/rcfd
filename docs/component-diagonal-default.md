@@ -178,3 +178,20 @@ and `symmetry_vs_f531.rs` (`PimpleSettings::component_diagonal` is the library f
 The default is unchanged (the maintainer's decision; options above). With the averaged diagonal a `Symmetry` plane acts on the
 tangential velocity of the adjacent cell like part of a no-slip wall, and in a transient run this part grows as the cells next to the
 plane get thinner.
+
+## Update 2026-11-15 (F-538, ADR 0613): the relaxed PIMPLE loop
+
+Under `PimpleSettings::pimple` (`alpha_u = 0.8`, `alpha_p = 0.5`, one corrector, 10 outer iterations) the channel of ADR 0455 QF
+showed almost no `Symmetry` excess (`-0.0021` against `0.36` for the PISO step). ADR 0613 explains this with an exact linear model
+of the relaxed step (`crates/rcfd-post/tests/relaxed_pimple_diagonal_f538.rs`): the defect is not removed but cancelled by
+accident. The relaxed iterations converge to the own-component equation with a sink `lambda/alpha_u` and an anti-sink through
+the neighbour links; the unrelaxed final iteration with one averaged corrector leaves the fraction
+
+`sigma(alpha_u) = r - (1/alpha_u - 1)(1/r - 1)`, `r = (1/dt + 12 nu/h^2)/(1/dt + 2 nu/dy^2 + c_x)`
+
+of the infinite-corrector sink, where `c_x` is the flow-direction Laplacian diagonal (it enters through the relaxation and `a_P`).
+`sigma` changes sign at `1/alpha_0 = 1 + r^2/(1 - r)`, measured `0.805` at QF's `N = 100`; at `N = 50` the same `alpha_u = 0.8`
+gives `sigma = -0.42` (the `Symmetry` channel's impedance per length 5.4 percent *below* the zero-gradient one). The model
+(each flow-direction column with its own `c_x`) reproduces every measured per-length excess (`alpha_u = 0.6` to `1.0`, `N = 50`
+and `100`) within `1e-5`. A relaxed transient result next to a `Symmetry` plane can therefore err in either direction; the
+opt-in corrected split removes the effect in the relaxed loop as well (to `4e-6` of the zero-gradient run).
