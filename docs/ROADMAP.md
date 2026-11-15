@@ -11503,7 +11503,7 @@ fixed by the item's registration ADR before any code.
     difference grows by 4.4e-3 at r = 1.05 as a pressure inside the F-bar element (reported). C4 at p of ADR 0506 stays
     its known miss against the small-strain closed form. Follow-ups F-636 (bore-zone witness), F-637 (F-bar pressure
     drift).
-- [ ] **F-581** Creep with a temperature factor and load histories on the time-stepping driver
+- [~] **F-581** Creep with a temperature factor and load histories on the time-stepping driver
   - depends on: F-411, F-410
   - acceptance: Every limit not stated here is registered in the ADR before the run. Material::Creep takes an optional
     Arrhenius factor exp(-Q/(R T)) with the temperature of the point context; at a uniform temperature the uniaxial
@@ -11511,8 +11511,23 @@ fixed by the item's registration ADR before any code.
     prescribed-displacement histories against time (linear between points) and a uniform temperature; with constant
     histories it gives the bits of ADR 0489. The relaxation and creep checks of ADR 0485 (R1, C1, C2) run on it with
     their limits. Materials without the factor keep their bits.
-  - note: Structural solver, advanced tier. Follow-up of F-411 (ADR 0489, 2026-11-14). Changes the data model:
-    maintainer's call.
+  - note: Structural solver, advanced tier. PARTIAL by the standing rule (every registered check met on its first run;
+    the planned mutation MU5, the check T > 0 removed from the factor, was not caught by the registered controls and is
+    caught only by NA2b of amendment 1, added after the run). ADR 0558, 2026-11-15: Material::Creep gains activation:
+    Option<f64> (None from Material::creep, bits unchanged), Material::creep_arrhenius(base, a, n, m, Q) and
+    mat_creep::arrhenius_factor: the rate A exp(-Q/(R T)) q^n t^m with the temperature of the point context held over
+    the step, read only when the step creeps, refused without a temperature (key temperature); solve_in_time_with
+    refuses a factor material without a temperature before any attempt. The load and displacement histories and the
+    uniform temperature on the driver are those of ADR 0499 (solve_in_time_with); with constant histories they give the
+    bits of solve_in_time (ADR 0489), also for a halved step and for the factor material. Met: uniaxial creep at T
+    within 5.8e-13 (material point) and 4.5e-10 (one Hex8 by the driver), m = -0.5 within 2.0e-13; a temperature step
+    700 -> 750 K by the temperature history within 1.1e-9; the ratio of the creep at 750 K and 700 K against f2/f1 =
+    9.88 within 1.3e-9; tangent with the factor within 4.8e-10; relaxation with the factor through a motion history
+    within 1.7e-3 at 800 steps; constant histories bit-equal in four set-ups; ADR 0485 R1, C1, C2 on the driver within
+    4.7e-16, 1.21e-5, order 1.996; default bits (10 digests), every rcfd-fem test and baseline hashes unchanged; seven
+    of eight mutations caught by the registered checks. Case-file key not added. Follow-up proposed in ADR 0558.
+    Follow-up F-651 (non-positive temperature control, nonlinear transient integrator). Case-file key (recommended creep
+    = { base, a, n, m, activation }) is the maintainer's call.
 - [~] **F-582** The viscoelastic material in the damped modes at a fixed frequency
   - depends on: F-577
   - acceptance: Every limit not stated here is registered in the ADR before the run. The damped modes take a
@@ -12405,12 +12420,19 @@ fixed by the item's registration ADR before any code.
     displacement within 2 % of `p R^2 (1 - nu)/(2 E t)` at every node at n = 16 and n = 32, the one-diagonal cylinder O1
     of ADR 0461 within 1 %, defaults bit-identical.
   - note: Structural solver, advanced tier. Follow-up of F-546 (ADR 0550, 2026-11-15).
-- [ ] **F-634** Shell documentation note on pressure-loaded thin curved shells on unstructured meshes
+- [x] **F-634** Shell documentation note on pressure-loaded thin curved shells on unstructured meshes
   - depends on: F-546
   - acceptance: Every limit not stated here is registered in the ADR before the run. The shell topic documentation
     states the `h^2/(R t)` mesh requirement measured in ADR 0550 and when to choose
     `Load::shell_pressure_angle_weighted`; docs_site test passes.
-  - note: Structural solver, advanced tier. Follow-up of F-546 (ADR 0550, 2026-11-15).
+  - note: Structural solver, advanced tier. DONE. `docs/structural-solver.md` has a new section "Shells under pressure
+    on curved meshes" stating what ADR 0550 measured: the error of a shell pressure load on an unstructured thin curved
+    mesh is `~ c h^2/(R t)` (bending response to the nodal unevenness of the load, not the stiffness), 2 % needs n = 128
+    at t/R = 0.01 on the sphere octant (errors 1.40e-1, 3.33e-2, 7.99e-3 at n = 32, 64, 128; default 1.01e-2 at n =
+    128), and `Load::shell_pressure_angle_weighted` is opt-in with measured gains of 0.62 to 0.79 (unstructured octant),
+    16 (structured geodesic grid) and 300 (one-diagonal cylinder of ADR 0461). Every quoted number checked against ADR
+    0550; docs_site passes; no code change. (ADR 0562; the registered link-deletion mutation was reasoned, not run; the
+    decision rule counts C1 to C5.)
 - [ ] **F-635** Warping unknown on the harmonic and transient paths
   - depends on: F-626
   - acceptance: Every limit not stated here is registered in the ADR before the run. The harmonic response of a
@@ -12463,13 +12485,25 @@ fixed by the item's registration ADR before any code.
     max_coarse 60 in at most twice the Shell3 P3b count, the other ADR 0552 counts not increased and the solid-only bits
     unchanged.
   - note: Structural solver, advanced tier. Follow-up of F-629 (ADR 0552, 2026-11-15).
-- [ ] **F-642** Buckling eigensolver on sign-asymmetric spectra
+- [x] **F-642** Buckling eigensolver on sign-asymmetric spectra
   - depends on: F-627
   - acceptance: Every limit not stated here is registered in the ADR before the run. With the default BucklingOptions,
     the lateral-torsional buckling factor of the ADR 0553 monosymmetric I under -M_ref is returned (not refused) and
     equals the factor of the ADR 0553 amended run within 1e-9; every result that the solver returned before is
     bit-identical.
-  - note: Structural solver, advanced tier. Follow-up of F-627 (ADR 0553, 2026-11-15).
+  - note: Structural solver, advanced tier. DONE. ADR 0559, 2026-11-15: rcfd-linalg lowest_buckling_factors counts again
+    just above the wanted set (K + s K_sigma at s = lambda_m (1 + delta), delta 1e-2, 1e-3, 1e-4) when the subspace
+    holds no positive Ritz value beyond the wanted ones and the count at the far bound 1/cut differs; it accepts when
+    the count equals the number found (Sylvester's law of inertia) and otherwise returns the same Sturm mismatch as
+    before. Only inputs that were refused can change. The ADR 0553 monosymmetric I under -M_ref with the default
+    BucklingOptions is returned: 178.684212800573 at 16 elements, 1.2e-15 from the ADR 0553 amended run (subspace 40),
+    factors 2 and 3 within 1.2e-12; 8 elements bit-equal to the subspace-24 run; Sturm record 3 of 3 at 1.01 lambda_3.
+    Diagonal pencil refused before now returned exactly; a hidden lower factor is still refused. Results that returned
+    before are bit-identical: a hash over nine cases (linalg pencils and warping beams, both signs) equal against
+    3378a508; rcfd-linalg, rcfd-fem, baseline_hashes and docs_site pass. Four of four mutations caught. Not covered: a
+    subspace with fewer positive Ritz values than asked still refuses (the ADR 0553 I at L = 1.5 under -M_ref, default
+    subspace). Follow-up: the buckling eigensolver when the subspace holds fewer positive Ritz values than asked.
+    Follow-up F-650 (fewer positive Ritz values than asked).
 - [ ] **F-643** Load height and non-uniform moment for monosymmetric warping beams
   - depends on: F-627
   - acceptance: Every limit not stated here is registered in the ADR before the run. The lateral-torsional buckling load
@@ -12522,3 +12556,19 @@ fixed by the item's registration ADR before any code.
     maximum pressure within 1 percent of the closed form (mu/2)((1/l_b^4 + 4/l_b) - (1/l_a^4 + 4/l_a)) maximised over
     l_a, and every point after it on the descending branch within 1 percent; existing arc-length results bit-identical.
   - note: Structural solver, advanced tier. Follow-up of F-622 (ADR 0557, 2026-11-15).
+- [ ] **F-650** Buckling eigensolver when the subspace holds fewer positive Ritz values than asked
+  - depends on: F-642
+  - acceptance: Every limit not stated here is registered in the ADR before the run. With the default BucklingOptions,
+    the lowest three lateral-torsional buckling factors of the ADR 0553 monosymmetric I at L = 1.5 under -M_ref are
+    returned and equal those of a subspace of 40 within 1e-9; every result that the solver returned before is
+    bit-identical.
+  - note: Structural solver, advanced tier. Follow-up of F-642 (ADR 0559, 2026-11-15).
+- [ ] **F-651** Arrhenius creep factor: non-positive temperature control and the nonlinear transient integrator
+  - depends on: F-581
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A creep material with the Arrhenius
+    factor is refused with the key temperature at every non-positive temperature, including T = -1e10 K, by a control
+    registered before its run, and mutation MU5 of ADR 0558 is caught by it; Integrator::new refuses a factor material
+    without a temperature option; a one-element bar of the factor material under a step load in the nonlinear transient
+    integrator at a uniform temperature T creeps, after the vibration has decayed, at the closed-form rate with A
+    exp(-Q/(R T)) within 1 percent. Materials without the factor keep their bits.
+  - note: Structural solver, advanced tier. Follow-up of F-581 (ADR 0558, 2026-11-15).
