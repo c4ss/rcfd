@@ -36,6 +36,26 @@ pub const RANK_TOLERANCE: f64 = 1e-10;
 /// `|kappa| h` below this value (h the stencil's root-mean-square distance) means the node has no curvature to scale by.
 pub const CURVATURE_TOLERANCE: f64 = 1e-8;
 
+/// A quadric fit whose relative residual is at most this value is taken as exact by [`CurvatureBoundary::Jet`] (ADR 0579
+/// design 1 step 2).
+pub const QUADRIC_RESIDUAL_TOLERANCE: f64 = 1e-9;
+
+/// The smallest number of stencil points of the quartic height jet (it has fourteen coefficients; ADR 0579 design 1).
+pub const JET_MIN_STENCIL: usize = 14;
+
+/// The curvature estimator at the nodes whose stencil is one-sided (boundary distance at most 1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
+pub enum CurvatureBoundary {
+    /// The implicit quadric of ADR 0567 at every node (the default).
+    #[default]
+    Quadric,
+    /// ADR 0579: at the nodes of boundary distance at most 1, the ADR 0567 quadric where its relative residual is at most
+    /// [`QUADRIC_RESIDUAL_TOLERANCE`] (the stencil lies on a quadric), else a quartic height jet fitted over the same stencil
+    /// in the frame of the angle-weighted normal. Third order at the boundary on smooth surfaces; exact where the quadric is.
+    Jet,
+}
+
 /// The curvature estimate at one node (ADR 0567 design 3).
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[non_exhaustive]
@@ -46,6 +66,8 @@ pub struct NodalCurvature {
     pub normal: Vec3,
     /// The number of rings of the stencil.
     pub rings: usize,
+    /// The estimate is the quartic height jet of [`CurvatureBoundary::Jet`] (ADR 0579), not the quadric.
+    pub jet: bool,
 }
 
 struct Topology {
@@ -311,7 +333,12 @@ fn estimates(nodes: &[Vec3], topo: &Topology) -> Result<Vec<NodalCurvature>> {
         }
         let nl = scale(grad, 1.0 / gn);
         let normal = add(add(scale(t1, nl[0]), scale(t2, nl[1])), scale(nz, nl[2]));
-        out.push(NodalCurvature { kappa, normal, rings });
+        out.push(NodalCurvature {
+            kappa,
+            normal,
+            rings,
+            jet: false,
+        });
     }
     Ok(out)
 }
@@ -329,6 +356,11 @@ pub fn curvature_estimates(nodes: &[Vec3], tris: &[[usize; 3]]) -> Result<Vec<(u
 pub fn pressure_load_curvature(nodes: &[Vec3], tris: &[[usize; 3]], p: f64) -> Result<Vec<(usize, Vec3)>> {
     let topo = topology(nodes, tris)?;
     let est = estimates(nodes, &topo)?;
+    Ok(assemble(nodes, &topo, &est, p))
+}
+
+/// The load of ADR 0567 design 1 from the estimates `est` (local node order).
+fn assemble(nodes: &[Vec3], topo: &Topology, est: &[NodalCurvature], p: f64) -> Vec<(usize, Vec3)> {
     let mut f = topo.area_gradient.clone();
     for &(a, b, c, e3) in &topo.boundary {
         let (xa, xb) = (nodes[topo.used[a]], nodes[topo.used[b]]);
@@ -346,10 +378,224 @@ pub fn pressure_load_curvature(nodes: &[Vec3], tris: &[[usize; 3]], p: f64) -> R
             f[q] = sub(f[q], scale(removed, 0.5 * len));
         }
     }
-    Ok(topo
-        .used
+    topo.used
         .iter()
         .enumerate()
         .map(|(l, &g)| (g, scale(f[l], p / (2.0 * est[l].kappa))))
-        .collect())
+        .collect()
+}
+
+/// The stencil of local node `i` (its `rings`-ring without `i`, ascending) and the frame of its angle-weighted normal, as in
+/// ADR 0567 design 3.
+fn stencil(topo: &Topology, i: usize, rings: usize) -> (Vec<usize>, [Vec3; 3]) {
+    let mut ring = BTreeSet::new();
+    ring.insert(i);
+    let mut front = vec![i];
+    for _ in 0..rings {
+        let mut next = Vec::new();
+        for &q in &front {
+            for &r in &topo.adj[q] {
+                if ring.insert(r) {
+                    next.push(r);
+                }
+            }
+        }
+        front = next;
+    }
+    ring.remove(&i);
+    let nz = topo.aw_normal[i];
+    let a0 = if nz[0].abs() < 0.9 {
+        [1.0, 0.0, 0.0]
+    } else {
+        [0.0, 1.0, 0.0]
+    };
+    let t1 = {
+        let c = cross(nz, a0);
+        scale(c, 1.0 / norm(c))
+    };
+    let t2 = cross(nz, t1);
+    (ring.into_iter().collect(), [t1, t2, nz])
+}
+
+/// Least squares `min |A c - b|` by Householder QR for `N` unknowns; `None` on the rank test of [`RANK_TOLERANCE`].
+fn least_squares_n<const N: usize>(mut a: Vec<[f64; N]>, mut b: Vec<f64>) -> Option<[f64; N]> {
+    let m = a.len();
+    if m < N {
+        return None;
+    }
+    let mut rdiag = [0.0; N];
+    for j in 0..N {
+        let s: f64 = (j..m).map(|i| a[i][j] * a[i][j]).sum::<f64>().sqrt();
+        if s == 0.0 {
+            continue;
+        }
+        let alpha = if a[j][j] > 0.0 { -s } else { s };
+        let mut v: Vec<f64> = (j..m).map(|i| a[i][j]).collect();
+        v[0] -= alpha;
+        let vv: f64 = v.iter().map(|x| x * x).sum();
+        if vv > 0.0 {
+            for col in j..N {
+                let w: f64 = (j..m).map(|i| v[i - j] * a[i][col]).sum::<f64>() * 2.0 / vv;
+                for i in j..m {
+                    a[i][col] -= w * v[i - j];
+                }
+            }
+            let w: f64 = (j..m).map(|i| v[i - j] * b[i]).sum::<f64>() * 2.0 / vv;
+            for i in j..m {
+                b[i] -= w * v[i - j];
+            }
+        }
+        rdiag[j] = a[j][j];
+    }
+    let big = rdiag.iter().fold(0.0f64, |acc, r| acc.max(r.abs()));
+    if big.is_nan() || big <= 0.0 || rdiag.iter().any(|r| r.abs() <= RANK_TOLERANCE * big) {
+        return None;
+    }
+    let mut c = [0.0; N];
+    for j in (0..N).rev() {
+        let mut s = b[j];
+        for l in (j + 1)..N {
+            s -= a[j][l] * c[l];
+        }
+        c[j] = s / a[j][j];
+    }
+    Some(c)
+}
+
+/// The stencil points of local node `i` in its frame, `(u, v, w)`.
+fn local_points(nodes: &[Vec3], topo: &Topology, i: usize, ring: &[usize], frame: [Vec3; 3]) -> Vec<Vec3> {
+    let xi = nodes[topo.used[i]];
+    ring.iter()
+        .map(|&q| {
+            let d = sub(nodes[topo.used[q]], xi);
+            [dot(d, frame[0]), dot(d, frame[1]), dot(d, frame[2])]
+        })
+        .collect()
+}
+
+/// The relative residual `|A c - b| / |b|` of the ADR 0567 quadric fit at local node `i` on its ADR 0567 stencil (ADR 0579
+/// design 1 step 1); infinite when the fit is refused.
+fn quadric_residual(nodes: &[Vec3], topo: &Topology, i: usize, rings: usize) -> f64 {
+    let (ring, frame) = stencil(topo, i, rings);
+    let pts = local_points(nodes, topo, i, &ring, frame);
+    let h = (pts.iter().map(|p| dot(*p, *p)).sum::<f64>() / pts.len() as f64).sqrt();
+    let rows: Vec<[f64; 8]> = pts
+        .iter()
+        .map(|p| {
+            let (s, r, q) = (p[0] / h, p[1] / h, p[2] / h);
+            [s * s, r * r, q * q, s * r, r * q, q * s, s, r]
+        })
+        .collect();
+    let rhs: Vec<f64> = pts.iter().map(|p| -p[2] / h).collect();
+    let Some(c) = least_squares_n::<8>(rows.clone(), rhs.clone()) else {
+        return f64::INFINITY;
+    };
+    let (mut res, mut bb) = (0.0, 0.0);
+    for (row, b) in rows.iter().zip(&rhs) {
+        let ax: f64 = row.iter().zip(&c).map(|(x, y)| x * y).sum();
+        res += (ax - b) * (ax - b);
+        bb += b * b;
+    }
+    (res / bb).sqrt()
+}
+
+/// The quartic height jet at local node `i` on its `rings`-ring (ADR 0579 design 1 step 3).
+fn jet_estimate(nodes: &[Vec3], topo: &Topology, i: usize, rings: usize) -> Result<NodalCurvature> {
+    let node = topo.used[i];
+    let (ring, frame) = stencil(topo, i, rings);
+    if ring.len() < JET_MIN_STENCIL {
+        return Err(FemError::InvalidValue {
+            key: "curvature",
+            reason: format!(
+                "node {node}: its {rings}-ring has {} points, fewer than the {JET_MIN_STENCIL} the quartic jet needs (ADR 0579 \
+                 design 1)",
+                ring.len()
+            ),
+        });
+    }
+    let pts = local_points(nodes, topo, i, &ring, frame);
+    let h = (pts.iter().map(|p| p[0] * p[0] + p[1] * p[1]).sum::<f64>() / pts.len() as f64).sqrt();
+    let rows: Vec<[f64; 14]> = pts
+        .iter()
+        .map(|p| {
+            let (s, r) = (p[0] / h, p[1] / h);
+            let mut row = [0.0; 14];
+            let mut col = 0;
+            for k in 1..=4i32 {
+                for a in (0..=k).rev() {
+                    row[col] = s.powi(a) * r.powi(k - a);
+                    col += 1;
+                }
+            }
+            row
+        })
+        .collect();
+    let rhs: Vec<f64> = pts.iter().map(|p| p[2] / h).collect();
+    let c = least_squares_n::<14>(rows, rhs).ok_or_else(|| FemError::InvalidValue {
+        key: "curvature",
+        reason: format!("node {node}: its {rings}-ring does not determine a quartic jet (ADR 0579 design 1)"),
+    })?;
+    let (wu, wv) = (c[0], c[1]);
+    let (wuu, wuv, wvv) = (2.0 * c[2] / h, c[3] / h, 2.0 * c[4] / h);
+    let g2 = 1.0 + wu * wu + wv * wv;
+    let gs = g2.sqrt();
+    let kappa = -((1.0 + wv * wv) * wuu - 2.0 * wu * wv * wuv + (1.0 + wu * wu) * wvv) / (2.0 * g2 * gs);
+    if !kappa.is_finite() || kappa.abs() * h < CURVATURE_TOLERANCE {
+        return Err(FemError::InvalidValue {
+            key: "curvature",
+            reason: format!(
+                "node {node}: mean curvature {kappa:e} on a stencil of size {h:e}: the curvature pressure needs a curved surface \
+                 (ADR 0579 design 1)"
+            ),
+        });
+    }
+    let [t1, t2, nz] = frame;
+    let normal = add(add(scale(t1, -wu / gs), scale(t2, -wv / gs)), scale(nz, 1.0 / gs));
+    Ok(NodalCurvature {
+        kappa,
+        normal,
+        rings,
+        jet: true,
+    })
+}
+
+/// The estimates of ADR 0567 with the boundary estimator `boundary` (ADR 0579 design 1).
+fn estimates_with(nodes: &[Vec3], topo: &Topology, boundary: CurvatureBoundary) -> Result<Vec<NodalCurvature>> {
+    let mut est = estimates(nodes, topo)?;
+    if boundary == CurvatureBoundary::Jet {
+        for (i, e) in est.iter_mut().enumerate() {
+            if topo.distance[i] > 1 {
+                continue;
+            }
+            if quadric_residual(nodes, topo, i, e.rings) > QUADRIC_RESIDUAL_TOLERANCE {
+                *e = jet_estimate(nodes, topo, i, e.rings)?;
+            }
+        }
+    }
+    Ok(est)
+}
+
+/// [`curvature_estimates`] with the boundary estimator `boundary` (ADR 0579); [`CurvatureBoundary::Quadric`] gives the same
+/// result.
+pub fn curvature_estimates_with(
+    nodes: &[Vec3],
+    tris: &[[usize; 3]],
+    boundary: CurvatureBoundary,
+) -> Result<Vec<(usize, NodalCurvature)>> {
+    let topo = topology(nodes, tris)?;
+    let est = estimates_with(nodes, &topo, boundary)?;
+    Ok(topo.used.iter().copied().zip(est).collect())
+}
+
+/// [`pressure_load_curvature`] with the boundary estimator `boundary` (ADR 0579); [`CurvatureBoundary::Quadric`] gives the
+/// same result.
+pub fn pressure_load_curvature_with(
+    nodes: &[Vec3],
+    tris: &[[usize; 3]],
+    p: f64,
+    boundary: CurvatureBoundary,
+) -> Result<Vec<(usize, Vec3)>> {
+    let topo = topology(nodes, tris)?;
+    let est = estimates_with(nodes, &topo, boundary)?;
+    Ok(assemble(nodes, &topo, &est, p))
 }

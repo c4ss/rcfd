@@ -772,6 +772,9 @@ pub enum Load {
         set: String,
         /// Pressure on each element.
         pressure: f64,
+        /// The curvature estimator at the boundary (ADR 0579); [`crate::shell3_curvature::CurvatureBoundary::Quadric`] is
+        /// the ADR 0567 load.
+        boundary: crate::shell3_curvature::CurvatureBoundary,
     },
     /// A uniform traction on a surface set, Pa.
     #[non_exhaustive]
@@ -862,6 +865,19 @@ impl Load {
         Load::ShellPressureCurvature {
             set: set.to_string(),
             pressure,
+            boundary: crate::shell3_curvature::CurvatureBoundary::Quadric,
+        }
+    }
+    /// The curvature shell pressure of ADR 0567 with the boundary curvature estimator `boundary` (ADR 0579; Shell3 only).
+    pub fn shell_pressure_curvature_with(
+        set: &str,
+        pressure: f64,
+        boundary: crate::shell3_curvature::CurvatureBoundary,
+    ) -> Load {
+        Load::ShellPressureCurvature {
+            set: set.to_string(),
+            pressure,
+            boundary,
         }
     }
     /// A uniform traction on a surface set.
@@ -1451,7 +1467,7 @@ impl SolidModel {
                     }
                 }
             }
-            Load::ShellPressureCurvature { set, pressure } => {
+            Load::ShellPressureCurvature { set, pressure, .. } => {
                 self.need_set(SetKind::Element, set)?;
                 finite("pressure", *pressure)?;
                 for &e in self.mesh.element_set(set).expect("checked") {
