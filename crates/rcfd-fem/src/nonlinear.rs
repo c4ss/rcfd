@@ -2380,6 +2380,8 @@ pub fn solve_in_time_with(
     let eq = {
         let (f, p, s) = histories.at(0.0, &load, prescribed, &u);
         let field = field_at(0.0);
+        // ADR 0539 D6: the attempt at t = 0 starts from the undeformed reference state.
+        let s = thermal_start(model, options, &p, &s, None, 0.0)?;
         solve_from_field(model, &p, &f, &s, &start, &options.newton, &[], &at0, field.as_ref())?
     };
     let mut steps = vec![TimeStep {
@@ -2406,6 +2408,8 @@ pub fn solve_in_time_with(
             let attempt = {
                 let (f, p, s) = histories.at(t1, &load, prescribed, &u);
                 let field = field_at(t1);
+                // ADR 0539 D6: from the committed time `t` to the end of the attempt.
+                let s = thermal_start(model, options, &p, &s, Some(t), t1)?;
                 solve_from_field(model, &p, &f, &s, &states, &options.newton, &[], &ctx, field.as_ref())
             };
             let failure = match attempt {
@@ -2454,6 +2458,28 @@ pub fn solve_in_time_with(
         });
     }
     Ok(TimeHistory { steps })
+}
+
+/// The start of an attempt (ADR 0539 D6): `start` itself, or with the thermal predictor of the field of the options on, `start`
+/// plus the free thermal expansion increment of the change of the field from the committed time `from` (`None`: the reference
+/// state, `T = T_ref` everywhere) to the end time `to` of the attempt.
+fn thermal_start<'b>(
+    model: &SolidModel,
+    options: &TimeSteppingOptions,
+    prescribed: &[Prescribed],
+    start: &'b [f64],
+    from: Option<f64>,
+    to: f64,
+) -> Result<Cow<'b, [f64]>> {
+    let Some(field) = options.temperature_field.as_ref().filter(|f| f.thermal_predictor()) else {
+        return Ok(Cow::Borrowed(start));
+    };
+    let new = field.value(to).expect("temperature field coverage checked");
+    let old = match from {
+        Some(t) => field.value(t).expect("temperature field coverage checked"),
+        None => vec![field.reference(); new.len()],
+    };
+    crate::thermal::free_expansion_start(model, prescribed, start, &old, &new, field.reference()).map(Cow::Owned)
 }
 
 /// The inputs of one attempt of [`solve_in_time_with`]: the load vector, the prescribed list and the start displacement.
