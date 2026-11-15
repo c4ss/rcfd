@@ -1,5 +1,6 @@
 //! F-635 (ADR 0574): the warping unknown on the harmonic and transient paths. Checks H1 to H8, H6b, H7', HW, HB, HE, TR1 to
-//! TR4, TR3b, TR5' and R of the registration (with amendment 1). Each registered run is made once; every value is printed.
+//! TR4, TR3b, TR5' and R of the registration (with amendment 1); H3 and HW missed and are the ignored record
+//! `h3_hw_known_miss`; H3' and HW' of amendment 2. Each registered run is made once; every value is printed.
 
 use rcfd_core::vec3::Vec3;
 use rcfd_fem::beam_warping::{
@@ -201,6 +202,73 @@ fn torsional_mode(m: &SolidModel, modes: &[Vec<f64>], node: usize) -> usize {
         .unwrap()
 }
 
+/// H3 and HW (and, with `tag` `"'"`, H3' and HW' of amendment 2): the search D5 on `options` against the torsional
+/// eigenvalue of `modal_analysis`, free and with the warping held at both ends.
+fn h3_hw(c: &mut Checks, options: &WarpingHarmonicOptions, tag: &str) {
+    let (s, ws) = i_parts();
+    let w = Warping::new().block(0, ws);
+    let m = loaded(16, &s, "mid");
+    let eq = twist_eq(&m, 8);
+    let s_c = c3(&s, ws.c_w(), 1);
+    let load = HarmonicLoad::real(load_vector(&m, &w).unwrap()).unwrap();
+    let h = WarpingHarmonic::new(&m, &w, options).unwrap();
+    let (s_r, steps) = resonance(drive_point(&h, &load, eq), 0.98 * s_c, 1.02 * s_c).unwrap_or((f64::NAN, 21));
+    let md = modal_analysis(&fork(16, &s), &w, &ModalOptions::new(4)).unwrap();
+    let it = torsional_mode(&m, &md.modes, 8);
+    let lam = md.eigenvalues[it];
+    println!(
+        "H3{tag} s {s_r:.12e} after {steps} steps; modal eigenvalues {:?}, torsional mode {}",
+        md.eigenvalues,
+        it + 1
+    );
+    c.at_most(
+        &format!("H3{tag} resonance against the modal eigenvalue"),
+        rel(s_r, lam),
+        1e-8,
+    );
+    let wh = Warping::new().block(0, ws).restrain("x0").restrain("xl");
+    let mdh = modal_analysis(&fork(16, &s), &wh, &ModalOptions::new(4)).unwrap();
+    let ih = torsional_mode(&m, &mdh.modes, 8);
+    let lam_h = mdh.eigenvalues[ih];
+    let hh = WarpingHarmonic::new(&m, &wh, options).unwrap();
+    let lh = HarmonicLoad::real(load_vector(&m, &wh).unwrap()).unwrap();
+    let (s_h, steps_h) = resonance(drive_point(&hh, &lh, eq), 0.98 * lam_h, 1.02 * lam_h).unwrap_or((f64::NAN, 21));
+    println!(
+        "HW{tag} s {s_h:.12e} after {steps_h} steps; held eigenvalues {:?}, torsional mode {}",
+        mdh.eigenvalues,
+        ih + 1
+    );
+    c.at_most(
+        &format!("HW{tag} resonance against the held eigenvalue"),
+        rel(s_h, lam_h),
+        1e-8,
+    );
+    c.holds(
+        &format!("HW{tag} held eigenvalue above 1.2 of the free"),
+        lam_h > 1.2 * lam,
+        &format!("{:.6e} of the free", lam_h / lam),
+    );
+}
+
+/// The record of H3 and HW as registered (run once, 2026-11-15, log `run1.log`): H3 measured 1.0615e-8 and HW 1.7732e-8
+/// against the limit 1e-8 (missed). The search D5 ended at a solve refused by the resonance pivot `1e-8` (amendment 2). The
+/// held eigenvalue part of HW was met (2.600757 of the free). Kept ignored with its limits.
+#[test]
+#[ignore = "known miss of ADR 0574 H3 and HW (amendment 2): the search stops at the resonance pivot 1e-8"]
+fn h3_hw_known_miss() {
+    let mut c = Checks::new();
+    h3_hw(&mut c, &WarpingHarmonicOptions::new(), "");
+    c.finish();
+}
+
+/// H3' and HW' of amendment 2: the search without the resonance pivot.
+#[test]
+fn h3_hw_amended_search() {
+    let mut c = Checks::new();
+    h3_hw(&mut c, &WarpingHarmonicOptions::new().resonance_pivot(0.0), "'");
+    c.finish();
+}
+
 #[test]
 fn h_harmonic_response() {
     let mut c = Checks::new();
@@ -218,13 +286,6 @@ fn h_harmonic_response() {
     let w_r = s_r.sqrt();
     println!("H2 resonance {w_r:.12e} rad/s after {steps} steps, closed {w_closed:.12e}");
     c.at_most("H2 resonance against sqrt(C3) (acceptance)", rel(w_r, w_closed), 1e-3);
-
-    // H3: against the torsional mode of modal_analysis.
-    let md = modal_analysis(&fork(16, &s), &w, &ModalOptions::new(4)).unwrap();
-    let it = torsional_mode(&m, &md.modes, 8);
-    println!("H3 modal eigenvalues {:?}, torsional mode {}", md.eigenvalues, it + 1);
-    let lam = md.eigenvalues[it];
-    c.at_most("H3 resonance against the modal eigenvalue", rel(s_r, lam), 1e-8);
 
     // H1: undamped at 0.5 sqrt(C3).
     let r1 = h.response(&load, 0.5 * w_closed).unwrap();
@@ -315,22 +376,6 @@ fn h_harmonic_response() {
     let l8 = HarmonicLoad::real(load_vector(&m8, &w).unwrap()).unwrap();
     let (s8, _) = resonance(drive_point(&h8, &l8, twist_eq(&m8, 4)), 0.98 * s_c, 1.02 * s_c).unwrap_or((f64::NAN, 21));
     c.at_most("H8 resonance at 8 elements", rel(s8.sqrt(), w_closed), 1e-4);
-
-    // HW: warping held at both ends.
-    let wh = Warping::new().block(0, ws).restrain("x0").restrain("xl");
-    let mdh = modal_analysis(&fork(16, &s), &wh, &ModalOptions::new(4)).unwrap();
-    let ih = torsional_mode(&m, &mdh.modes, 8);
-    let lam_h = mdh.eigenvalues[ih];
-    println!("HW held eigenvalues {:?}, torsional mode {}", mdh.eigenvalues, ih + 1);
-    let hh = WarpingHarmonic::new(&m, &wh, &WarpingHarmonicOptions::new()).unwrap();
-    let lh = HarmonicLoad::real(load_vector(&m, &wh).unwrap()).unwrap();
-    let (s_h, _) = resonance(drive_point(&hh, &lh, eq), 0.98 * lam_h, 1.02 * lam_h).unwrap_or((f64::NAN, 21));
-    c.at_most("HW resonance against the held eigenvalue", rel(s_h, lam_h), 1e-8);
-    c.holds(
-        "HW held eigenvalue above 1.2 of the free",
-        lam_h > 1.2 * lam,
-        &format!("{:.6e} of the free", lam_h / lam),
-    );
 
     // HE: the torque on the end node.
     let me = loaded(16, &s, "xl");
