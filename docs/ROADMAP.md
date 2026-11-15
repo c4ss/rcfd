@@ -8544,7 +8544,8 @@ fixed by the item's registration ADR before any code.
     1e-6, the second-order remainder (the tangent at zero 1.3e-16, the odd part 5.1e-11). The Full Hex8 locking control
     was not measured (negative pivot at l_a = 1.133); diagnostic at l_a = 1.125: Full 14.95, mean-dilatation 3.9e-3. Ten
     of ten mutations caught; default bits and baseline hashes unchanged. Citations from memory, to be checked.
-    Follow-ups F-620, F-621, F-622; F-611 unblocked.
+    Follow-ups F-620, F-621, F-622; F-611 unblocked. the Full Hex8 locking control is measured by F-622 (ADR 0557,
+    2026-11-15): 15.6 at l_a = 1.10 (the Full model has no stable state beyond l_a = 1.133 on this mesh).
 - [~] **F-426** Tied non-matching meshes, shell and beam joints to solids, non-matching cyclic boundaries and nodes on the axis
   - depends on: F-408, F-391, F-392, F-393, F-394
   - acceptance: Every limit not stated here is registered in the ADR before the run. With matching meshes the tied model
@@ -12237,13 +12238,23 @@ fixed by the item's registration ADR before any code.
     the maintainer's approval; a case without the key gives every result bit-identical.
   - note: Structural solver, advanced tier. Follow-up of F-425 (ADR 0541, 2026-11-15). NEEDS THE USER: a schema golden
     change.
-- [ ] **F-622** Full Hex8 locking control of the inflated hyperelastic sphere with a converging set-up
+- [~] **F-622** Full Hex8 locking control of the inflated hyperelastic sphere with a converging set-up
   - depends on: F-425
   - acceptance: Every limit not stated here is registered in the ADR before the run. The Full Hex8 locking control of
     the inflated sphere of ADR 0541 with a set-up that converges (a smaller inner stretch with its own registered limit,
     or pressure control with the arc-length step).
-  - note: Structural solver, advanced tier. Follow-up of F-425 (ADR 0541, 2026-11-15). Amending F-425's small-strain
-    clause to option (b) of ADR 0541 open question 1 is the maintainer's call.
+  - note: Structural solver, advanced tier. ADR 0557, 2026-11-15: PARTIAL. The Full Hex8 locking control of the inflated
+    sphere of ADR 0541 (864 Hex8, neo-Hookean kappa/mu = 1e4) measured with a converging set-up, test only (no library
+    code): displacement control to the inner stretch 1.10, Full converged, |p_FE - p_c| / p_c = 15.6 (limit >= 0.1; the
+    1D full-integration model within 1.3e-4), the mean-dilatation Hex8 4.1e-3 (limit 1e-2); pressure control at p_c(1.5)
+    with the follower pressure and the Newton driver (not the arc-length step, which takes its load direction from dead
+    loads only): Full reaches l_a = 1.0114 (extension ratio 2.3e-2, limit <= 0.1), mean-dilatation 1.4956 (8.8e-3, limit
+    2e-2). Diagnostic: the lowest eigenvalue of the Full tangent falls to zero at l_a = 1.1326 by extrapolation, the
+    negative pivot of ADR 0541 at 1.133 (a spurious instability of the locked discrete model). Partial only because two
+    registered mutations (MU1, MU2) named a dispatch the driver does not reach and were not caught; the corrected
+    mutations at is_fbar, MU3 to MU5, were caught. Default bits and baseline hashes unchanged. Done if the maintainer
+    accepts MU1'/MU2' (amendment 2) in place of MU1/MU2. Follow-up F-649 (arc-length with a follower load direction;
+    compare with F-572).
 - [~] **F-623** Mortar contactor for quadratic faces
   - depends on: F-601
   - acceptance: Every limit not stated here is registered in the ADR before the run. A segment-to-segment (mortar)
@@ -12320,14 +12331,29 @@ fixed by the item's registration ADR before any code.
     Follow-ups: buckling eigensolver on sign-asymmetric spectra; load height and non-uniform moment for monosymmetric
     beams. Done is the maintainer's call (A checks met after post-run amendments 2 and 3 to the eigensolver set-up).
     Follow-ups F-642 (buckling eigensolver on sign-asymmetric spectra), F-643 (load height, non-uniform moment).
-- [ ] **F-628** Shells in the cyclic constraint
+- [x] **F-628** Shells in the cyclic constraint
   - depends on: F-541, F-522
   - acceptance: Every limit not stated here is registered in the ADR before the run. The cyclic rows of
     solve_static_mpc, modal_analysis_mpc and the cyclic harmonic paths rotate the rotation unknowns of Shell4 and Shell3
     nodes as the translations; a full ring of Shell4 and the same cut into Shell3 against one sector with the cyclic
     constraint: static displacements within 1e-10 and the frequencies of each harmonic within 1e-8; models without
     shells keep their bits.
-  - note: Structural solver, advanced tier. Follow-up of F-541 (ADR 0545, 2026-11-15).
+  - note: Structural solver, advanced tier. Follow-up of F-541 (ADR 0545, 2026-11-15). DONE. ADR 0556, 2026-11-15:
+    shells in the cyclic constraint by the opt-in CyclicOptions::shells (the default refusals of a shell model with a
+    cyclic constraint and the existing tests that assert them unchanged): low and high name node sets (a shell has no
+    faces); solve_static_mpc, modal_analysis_mpc, cyclic::modal_analysis_harmonic and cyclic::solve_static_harmonic take
+    Shell4 and Shell3 (a shell node shared with a solid and Beam2 stay refused); the cyclic rows rotate the rotation
+    unknowns of every pair of six-unknown nodes by the same R as the translations, theta_H = R (c theta_L - s phi_L),
+    phi_H = R (s theta_L + c phi_L) (the rotation vector turns with the sector; the facet frames are objective); a pair
+    with different unknown counts is refused, and so is the option with interpolation or axis nodes. A clamped conical
+    frustum about an oblique axis, N = 6, against the full ring: static k = 0 within 1.5e-14 (Shell4) and 8.0e-15
+    (Shell3), harmonic static k = 1 to 3 within 1.1e-14 (limit 1e-10); the frequencies of each harmonic k = 0 to 3
+    within 1.7e-15 and 2.0e-15 with equal counts below the cut-off, pair splits 2.1e-15 (limit 1e-8); the rotation rows
+    hold exactly. Models without shells keep their bits: every rcfd-fem test, baseline_hashes, a Hex8 twin bit-equal
+    with and without the option and to its hash recorded before the change. Nine of nine mutations caught. Not covered:
+    the rotating paths on a cyclic sector, full_rotor with shells, interpolated or axis-node boundaries with shells
+    (follow-ups proposed). Follow-ups F-647 (rotating cyclic paths and full rotor with shells), F-648 (interpolated
+    boundaries and axis nodes with shells).
 - [x] **F-629** Six-unknown nodes in the smoothed-aggregation CG
   - depends on: F-541
   - acceptance: Every limit not stated here is registered in the ADR before the run. The near-null space of the smoothed
@@ -12473,3 +12499,26 @@ fixed by the item's registration ADR before any code.
     central differences of the nonlinear static residual within 1e-6, and with the modes at rest within 1e-10 at a load
     of zero.
   - note: Structural solver, advanced tier. Follow-up of F-620 (ADR 0555, 2026-11-15).
+- [ ] **F-647** Shells on the rotating cyclic paths and the full rotor
+  - depends on: F-628
+  - acceptance: Every limit not stated here is registered in the ADR before the run. With CyclicOptions::shells, the
+    rotating paths on a cyclic sector (Campbell, whirl, pre-stressed and spin-softened modes) take Shell4 and Shell3,
+    and full_rotor with FullRotor::expand, expand_field and expand_load copy shell blocks and expand six components; a
+    spinning ring of Shell4 and the same cut into Shell3 against one sector: frequencies of each harmonic at each speed
+    within 1e-8, expanded modes M-orthonormal within 1e-8; models without shells keep their bits.
+  - note: Structural solver, advanced tier. Follow-up of F-628 (ADR 0556, 2026-11-15).
+- [ ] **F-648** Shells with interpolated cyclic boundaries and nodes on the axis
+  - depends on: F-628
+  - acceptance: Every limit not stated here is registered in the ADR before the run. CyclicOptions::shells together with
+    interpolation or axis_nodes gives the rotation unknowns the rows of ADR 0456 D4 (the interpolated rows and the
+    harmonic rule on the axis); a shell sector with non-matching boundaries against the matched sector: frequencies
+    within 1e-6 at the registered mesh, and an axis node of a closed shell cap against the full model within 1e-8;
+    models without shells keep their bits.
+  - note: Structural solver, advanced tier. Follow-up of F-628 (ADR 0556, 2026-11-15).
+- [ ] **F-649** Arc-length continuation with a follower load direction
+  - depends on: F-622, F-424
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The mean-dilatation Hex8 sphere of
+    ADR 0541 under follower pressure traced by the arc-length step through its pressure maximum near l_a = 1.83, the
+    maximum pressure within 1 percent of the closed form (mu/2)((1/l_b^4 + 4/l_b) - (1/l_a^4 + 4/l_a)) maximised over
+    l_a, and every point after it on the descending branch within 1 percent; existing arc-length results bit-identical.
+  - note: Structural solver, advanced tier. Follow-up of F-622 (ADR 0557, 2026-11-15).
