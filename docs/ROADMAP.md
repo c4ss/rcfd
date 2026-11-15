@@ -11799,12 +11799,18 @@ fixed by the item's registration ADR before any code.
     changes, so the exemption is exercised only by the penetration variant, where it is not needed. The total Lagrangian
     path stops with a singular tangent when some contactor nodes start lifted (initial gap > 0), not diagnosed.
     Mutations 4 of 4 caught. No library change, no case-file key. Follow-up F-608 (optional).
-- [ ] **F-601** Contact search and targets: bucket search, rigid cylinder and sphere targets, Hex20 and Tet faces
+- [~] **F-601** Contact search and targets: bucket search, rigid cylinder and sphere targets, Hex20 and Tet faces
   - depends on: F-427
   - acceptance: Every limit not stated here is registered in the ADR before the run. Contact search and targets: a
     bucket search in place of the all-faces loop, rigid cylinder and sphere targets, and Hex20 and Tet faces (the limits
     of ADR 0507).
-  - note: Structural solver, advanced tier. Optional. Follow-up of F-427 (ADR 0507, 2026-11-14).
+  - note: Structural solver, advanced tier. Optional. Follow-up of F-427 (ADR 0507, 2026-11-14). ADR 0540, 2026-11-15:
+    a bucket search (the default) equal bit for bit to the all-faces loop on every model and state checked, 0.12 of
+    its time on the hub at n = 32; rigid sphere and cylinder targets with exact gap, normal and second derivative
+    (tangents 2.4e-10, 1.7e-10); Hertz line contact within 1.1e-2 and point contact within 1.2e-2; Tet4 faces by
+    nodes, Hex20 and Tet10 faces by the Gauss points of the load rule (patch tests to 4e-14, tangents 3e-10); defaults
+    bit-identical. Known misses: the Hertz problem on Hex20 and Tet10 contactors (the augmentation stalls at a gap of
+    5e-7 to 8e-6 against 1e-8; the point contactor over-constrains a curved target). No case-file key (open).
 - [x] **F-602** Thick sphere with J2 on a 16-layer octant: residual hoop stress after unloading
   - depends on: F-561
   - acceptance: Every limit not stated here is registered in the ADR before the run. The partly plastic sphere of ADR
