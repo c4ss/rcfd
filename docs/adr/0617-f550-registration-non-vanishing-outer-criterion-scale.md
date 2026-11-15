@@ -218,3 +218,122 @@ catch it; it stays recorded as not caught. Corrected mutation **MW6b**: the same
 push), so that `None` runs the window of 18. Expected: caught by W1 (`None` against `Some(1)`). Run once after this amendment is
 committed. By the decision rule, a mutation met only after an amendment made after its run gives **partial**; this is recorded,
 not changed.
+
+## Addendum 1: results (2026-11-15)
+
+Commits: `4a3fd521` (this registration), `13149130` (the library change and the registered tests; every registered run was made
+on it), `5eac3548` (`cargo fmt` of the two new test files, layout only), `ad543ef1` (amendment 1; the bullet of
+`docs/dynamic-mesh.md` went into the same commit), and the last commit (this addendum). Every run in release
+(`CARGO_TARGET_DIR=f550-scratch/target`); logs in `w49i-work/f550-scratch` (`run1_fv.log`, `run2_fast.log`, `run3_fcw.log`,
+`baseline_hashes.log`, `fv_n2.log`, `post_f536.log`, `fmt.log`, `clippy.log`, `mutlogs/`, `mut_run.log`).
+
+**The library change** (`crates/rcfd-fv/src/pimple.rs`, opt-in only): `PimpleSettings::outer_scale_window` (default `None` in
+`piso`), `OuterRecord::first` and `::scale`, the private history `PimpleSolver::outer_firsts` (empty in `new`, copied in
+`scratch`, cleared in `reinitialise`), the windowed scale in the outer loop of `step_with` (only with `Some`), the history pushed
+with the record (only with `Some`), `LagCtx::outer` set to `outer + 1` in its two constructions, and `lag_map` running
+`ctx.outer` passes. Without the criterion `outer + 1 == n_outer` there, so the estimate is unchanged.
+
+### Results
+
+| Check | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| K1w every step met before the cap, `N = 25, 50, 100` | every step `met`, `used < 50` | every step; max 12, 9, 7 | yes |
+| A1w bounded (`C = 10, 5, 3`) | bounded | bounded; max `|u|` `1.490, 1.493, 1.496 V0` | yes |
+| A2w periodic | `<= 1e-6` | `1.26e-12`, `6.6e-13`, `1.30e-12` | yes |
+| A3w against `Z_dt` | `1e-2` each part | real `+5.26e-3`, `+5.52e-3`, `+5.66e-3`; imaginary `-2.82e-3`, `-9.0e-4`, `-2.6e-4` | yes |
+| A4w `R_c` against the formula | `3e-2` each part | real `+6.06e-3`, imaginary `+3.77e-3` | yes |
+| K2w one record per step, with `first`, `scale` | every step | 250, 250, 300, numbered, `scale >= first` | yes |
+| K4w total against ADR 0458 | `<= 3590, 2769, 2436` | `2735`, `2044`, `1983` (24, 26, 19 percent fewer) | yes |
+| QFw FQ, `N = 16`, `C = 6` | bounded; `1e-6`; `5e-2`; met before the cap; record per step; total `<=` K's | bounded; `1.3e-13`; real `+1.67e-2`, imaginary `-1.47e-2`; every step (6 to 13); 96; `1113 <= 1380` | yes |
+| W1 `Some(1)` against `None` | bitwise fields and records | equal | yes |
+| W2 windowed maximum, window 3 | exact; met, `used < 30`, ratio `<= 1e-2` | exact every step (2 of 8 steps scaled by an earlier one); `used` 3 to 4 | yes |
+| W3 window without the criterion | bitwise; no record | equal; empty | yes |
+| W4 at rest | `used = 2`, `met` | yes, every step | yes |
+| L1 B4 estimate against the fixed count used | bitwise `rho`, `cell`, fields; a step `< 30` | equal every step; 8 of 8 below the cap | yes |
+| L2 adaptive corrector count | bitwise estimates, fields | equal every step | yes |
+| N1 `baseline_hashes` | passes | 3 passed, 1 ignored | yes |
+| N2 `rcfd-fv` touched tests, release | pass | `--lib pimple` 8; `consistent_correctors_f301` 12, `immersed_lag_estimate_f483` 5, `immersed_single_corrector_f363` 4, `lag_refusal_f535` 6, `outer_criterion_f536` 3, `w34b_lag` 3, `w48v_corrector_control` 5; 0 failed | yes |
+| N3 tests: new files only | adds only | `crates/rcfd-fv/tests/outer_scale_f550.rs`, `crates/rcfd-post/tests/piso_outer_scale_f550.rs` added | yes |
+| NC1w FQ, `tol = 0.5` | must miss `5e-2` | imaginary `-3.54e-1` (2 to 4 outer iterations) | holds |
+| NC2w `N = 25` against the formula | must miss `1e-2` | `+9.25e-2`, `-3.53e-1` | holds |
+
+Also run (not registered; the existing tests that cover the criterion path): the fast tests of ADR 0458's
+`piso_outer_criterion_f536`, 3 passed.
+
+Records (no limit). Outer iterations per step mean / min / max, total, time (ADR 0458's in brackets):
+
+* `N = 25`: `10.94 / 4 / 12`, 2735 (3590), 131 s (148 s).
+* `N = 50`: `8.18 / 5 / 9`, 2044 (2769), 83 s (96 s).
+* `N = 100`: `6.61 / 4 / 7`, 1983 (2436), 76 s (86 s).
+
+S2's floor over the last period, `min scale / max scale`: `0.997`, `0.902`, `0.531` at `N = 25, 50, 100` (derived `1`, `0.876`,
+`0.509`). Over the same period the step's own first change falls to `2.0e-2`, `1.0e-2`, `5.4e-3` of the largest: that is the
+near-zero scale of ADR 0458. Order of the levels: real `0.832`, imaginary `1.101` (the same as ADR 0458). The accuracy is that of
+ADR 0458 to the third digit, so the iteration error the looser scale allows is far below S2's bound.
+
+### Mutations
+
+Applied one at a time to a `git archive` copy of `5eac3548` by `f550-scratch/mutate.py` (exact replacement, the count asserted).
+After each, the fast tests of both new files and of ADR 0458's `outer_criterion_f536` were run in release
+(`f550-scratch/target-mut`), and the file was restored and compared with the archive.
+
+| Mutation | Caught by |
+| --- | --- |
+| MW1 the window ignored | W2 |
+| MW2 the window one longer | W1, W2 |
+| MW3 `lag_map` back to `s.n_outer` | L1, L2 |
+| MW4 `pick_correctors`' context with `s.n_outer` | L2 |
+| MW5 the history not pushed | W2 |
+| MW6 the window when `None`, at the scale only | **not caught**: equivalent as applied (amendment 1: the push is gated on the same option, so the history stays empty) |
+| MW6b (amendment 1) the window when `None`, at the scale and the push | W1 |
+| MW7 the history not copied in `scratch` | not caught (registered as possibly not caught: no check takes a preflight copy with the window) |
+
+### fmt, clippy, documentation
+
+* `cargo fmt -p rcfd-fv --check`, `-p rcfd-post --check`: clean after `5eac3548` (the new test files only).
+* `cargo clippy -p rcfd-fv -p rcfd-post --all-targets -- -D warnings`: clean.
+* `docs/dynamic-mesh.md`: one bullet after ADR 0458's.
+
+### Deviations and what was not run
+
+* MW6 as applied was an equivalent mutant. Amendment 1 (committed before its run) registered MW6b, which was caught. No check was
+  amended and no registered check was re-run.
+* ADR 0458's FCk (`W = 1`) was not re-run; as registered, K4w compares with its recorded totals.
+* Not run: the moving piston, the stable default runs, the whole workspace suite (the lead's gate), a case with more than 100
+  steps per period.
+
+### Decision
+
+Every check of every acceptance clause is met on its registered run: K1w (every step meets the criterion before the cap at all
+three levels), A3w, A4w, K2w, K4w (19 to 26 percent fewer outer iterations), L1 and L2 (the estimate and the adaptive count use
+the count the step used), and N1 to N3 (defaults bit-identical). The registered rule still gives **partial**: MW6 was not caught,
+and its corrected form MW6b was met only after an amendment made after the run. The cause is a defective mutation (equivalent as
+applied), not a weakness of the checks, since W1 catches the intended mutation. **Proposed status: partial.** Question 3 asks the
+lead whether to judge it done.
+
+### Remaining questions
+
+1. **A case key** (`solver.outer_tolerance` with `solver.outer_scale_window`). Options: (a) add both with `hash_omit_default`,
+   which changes the schema golden and needs the maintainer's approval; (b) library only. Recommendation: (a), with the window
+   defaulting to 18 when the tolerance is given. Open (golden).
+2. **The window as the default of the criterion** (`outer_pressure_tolerance = Some` implying `W = 18`). It changes no default
+   result, because the criterion itself is opt-in, but it changes ADR 0458's opt-in results. Options: (a) keep `None` meaning ADR
+   0458's scale; (b) default to 18. Recommendation: (a) for now, and (b) together with question 1's key. Option (a) is what is
+   built, taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation).
+3. **The status.** Options: (a) partial by the letter of the rule; (b) done, since the miss is an equivalent mutant.
+   Recommendation: the lead decides; this ADR proposes partial because the rule requires it.
+4. **The absolute floor** tied to the solver tolerances (for a history that becomes steady, where the window's scale decays with
+   the flow). Options: (a) a follow-up item; (b) leave it. Recommendation: (b) until a case shows the need; the window covers the
+   periodic case asked for.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> Numerics. PARTIAL (ADR 0617, 2026-11-15; registered before the code, amendment 1 for one mutation). The opt-in outer-iteration criterion of ADR 0458 gets the option PimpleSettings::outer_scale_window = Some(w): the ratio is formed against the largest first-iteration pressure change of the step and the w - 1 steps before it. This is derived so that on a periodic history of N steps per period the scale stays above sin(pi (w - 1)/N) of the period's largest (w = 18 for a floor of 1/2 at N = 100). None keeps ADR 0458's scale bit for bit, and Some(1) equals it. The pressure-lag estimate and the adaptive corrector count of a step with the criterion now run the outer iterations the step used (LagCtx::outer; bitwise equal to a solver with that fixed count). On the fixed-mesh channel of ADR 0451 with the consistent correctors, tol 1e-3, cap 50 and w 18, every step at nu dt/dy^2 = 100, 50 and 25 meets the criterion before the cap (at most 12, 9 and 7 outer iterations). Every level is bounded and periodic and within 5.7e-3 (real) and 2.8e-3 (imaginary) of the discrete implicit-Euler impedance, and the extrapolation within 6.1e-3 and 3.8e-3 of the oscillating-channel impedance. Totals are 2735, 2044 and 1983 outer iterations against ADR 0458's 3590, 2769 and 2436. OuterRecord gains first and scale. Defaults bit-identical (baseline_hashes and the touched rcfd-fv tests pass). Partial only by the registered rule: one mutation (the window with None) was equivalent as applied, and its corrected form, caught by the W1 check, was registered after the run; every acceptance clause is met. No case key (schema golden); docs/dynamic-mesh.md. Open: ADR 0617 Q1 to Q4.
+
+F-536, the note's last sentence "Follow-up F-NEW (a scale that does not vanish)." becomes:
+
+> Follow-up F-550 (a scale that does not vanish; ADR 0617: with a window of 18 steps every step of the channel meets the criterion before the cap, with 19 to 26 percent fewer outer iterations).
+
+> Follow-up proposed: Case-file keys for the outer-iteration criterion and its window. Deps F-536, F-550. Acceptance: Every limit not stated here is registered in the ADR before the run. Case keys solver.outer_tolerance and solver.outer_scale_window (hash_omit_default) reach PimpleSettings::outer_pressure_tolerance and outer_scale_window; a case read from a file reproduces the bits of the library call on the channel of ADR 0451; existing keys, goldens and baseline hashes unchanged except the schema golden approved by the maintainer.
