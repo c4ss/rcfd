@@ -6355,9 +6355,9 @@
     "deps": [
       "F-623"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The traction sum_a (t_a/A_a) Phi_a of ADR 0551's mortar contactor recovered at the load-rule points (or projected onto the face's shape functions) and reported per point; the Hertz problems of ADR 0551 HS20m and HS10m read from it meet radius 0.15, peak 0.20, approach 0.10 with the gap tolerance 1e-8; the patch tests PT10m and PT20m within 1e-8 on the recovered traction; defaults bit-identical.",
-    "note": "Structural solver, advanced tier. Follow-up of F-623 (ADR 0551, 2026-11-15)."
+    "note": "Structural solver, advanced tier. Follow-up of F-623 (ADR 0551, 2026-11-15). DONE. ADR 0571, 2026-11-15: rcfd_fem::contact::ContactSet::recovered_tractions: the traction sum_a (t_a/A_a) Phi_a of the mortar contactor at the load-rule points of its contactor faces, one RecoveredTraction per point (face, local coordinates, reference position, weight, nominal pressure); its projection onto the face's shape functions is the same field (span Phi = span N, continuous across faces). Read from it, the Hertz problems HS20m and HS10m meet radius 3.5e-2 and 7.4e-2, peak 7.4e-3 and 4.1e-2, approach 1.2e-2 and 1.4e-2 with the gap tolerance 1e-8 (the same solves as ADR 0551, whose nodal reading gave radius 0.21 and 4.9); the patch tests PT20m and PT10m within 3.4e-14 on the recovered traction (1.6e-14 on the total Lagrangian body); the force identity sum_g W_g p_g = sum_a t_a to 3.3e-16; five of five mutations caught; defaults bit-identical (additions only). Making the recovered traction the reported pressure of mortar nodes, and the mortar contactor the default for quadratic faces, are the maintainer's call. Reporting the recovered traction as the mortar nodes' pressure is the maintainer's call (with the mortar contactor as default)."
   },
   {
     "id": "F-639",
@@ -6366,9 +6366,9 @@
     "deps": [
       "F-623"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. When the exact tangent of the total Lagrangian contact body fails the pivot test, that iteration takes the contact matrix without its curvature part (ADR 0507 amendment 2, as the linear body); ADR 0551 HS20t and HS10t (the mortar contactor, total Lagrangian body) meet radius 0.15, peak 0.20, approach 0.10 with the gap tolerance 1e-8; the existing total Lagrangian contact records and the default bits unchanged.",
-    "note": "Structural solver, advanced tier. Follow-up of F-623 (ADR 0551, 2026-11-15)."
+    "note": "Structural solver, advanced tier. Follow-up of F-623 (ADR 0551, 2026-11-15). DONE. ADR 0570, 2026-11-15: rcfd_fem::nonlinear::Contribution gains has_fallback_tangent and add_fallback_tangent (defaults: none); the Newton attempt (no load-factor control, symmetric factor) takes, for an iteration whose exact tangent fails the pivot test, the element tangent plus each such contribution's tangent without its curvature part. rcfd_fem::contact: the opt-in ContactOptions::curvature_fallback(true) gives the total Lagrangian body the contact matrix eps G G^T on the exact pattern (ADR 0507 amendment 2, as the linear body), counted in NewtonSolve::convex_iterations. ADR 0551 HS20t and HS10t with it: solved with the gap tolerance 1e-8, one fallback iteration each; radius 2.5e-2 and 5.8e-3 (read from the moments of the nodal forces, a = sqrt(5/2 M2/M0), registered so that ADR 0551's coefficient reading, F-638's subject, is not inherited), peak 1.23e-1 both, approach 2.7e-2 and 2.3e-2; the same reading on the linear HS20m and HS10m gives 1.4e-2 and 3.4e-2. The driver's fallback run matches the honest tangent's run bit for bit; the contact fallback equals convex_tangent bit for bit on the exact index set; ADR 0542 P solves with it; defaults, ADR 0542 P's refusal and the ADR 0551 records unchanged; 7 of 7 mutations caught. Making the fallback the default is the maintainer's call (it changes ADR 0542 P's outcome). Making the fallback the default for the total Lagrangian body (supersedes ADR 0542 P and two ADR 0551 TL records) is the maintainer's call."
   },
   {
     "id": "F-640",
