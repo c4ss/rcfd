@@ -57,6 +57,11 @@
 //! ([`crate::beam::element_coriolis`]): on a sector whose cyclic constraint has [`crate::model::CyclicOptions::beams`], and on a
 //! part with [`RotatingOptions::beams`]; without either a beam is refused there as before. The modes paths took the beams of
 //! such a sector without a change.
+//!
+//! ADR 0606 (F-680): the index-0 centrifugal pre-stress of a free sector, whose static solve is singular by the two rigid
+//! motions the cyclic constraint leaves (the axial translation and the rotation about the axis), with both removed by two
+//! reaction-free gauge constraints ([`free_sector_unit_static`]); opt-in by [`RotatingOptions::free_sector_prestress`] on
+//! [`RotatingSector::new`].
 
 use crate::assemble::{assemble_with, point_stiffness};
 use crate::constraint::{check_rigid_body_motions, prescribed_equations, reduce};
@@ -65,7 +70,7 @@ use crate::error::{FemError, Result};
 use crate::geometric::{assemble_geometric, Prestress};
 use crate::mass::{consistent_with, element_mass};
 use crate::modal::{modal_analysis, ModalOptions, ModalResult};
-use crate::model::{Load, SolidModel};
+use crate::model::{Load, SolidModel, SolidResult};
 use crate::mpc::Transformation;
 use crate::solve::{solve_static, StaticOptions};
 use rcfd_core::vec3::{norm, Vec3};
@@ -194,6 +199,11 @@ pub struct RotatingOptions {
     /// false: a beam is refused there as before). A sector whose cyclic constraint has [`crate::model::CyclicOptions::beams`]
     /// takes them without it. Shell elements keep [`RotatingOptions::shells`].
     pub beams: bool,
+    /// Whether [`RotatingSector::new`] with [`RotatingOptions::stress_stiffening`] solves the index-0 centrifugal static
+    /// problem of a free sector (no support, no constraint but its cyclic one) with its two rigid motions, the axial
+    /// translation and the rotation about the axis, removed by two reaction-free gauge constraints ([`free_sector_unit_static`],
+    /// ADR 0606 D1 to D3; default false: such a sector is refused by the static solve as before). No effect elsewhere.
+    pub free_sector_prestress: bool,
 }
 
 impl RotatingOptions {
@@ -211,6 +221,7 @@ impl RotatingOptions {
             corrected_frequency: false,
             shells: false,
             beams: false,
+            free_sector_prestress: false,
         }
     }
     /// The same options with other modal options.
@@ -261,6 +272,11 @@ impl RotatingOptions {
     /// The same options with the Beam2 elements of the whirl analyses taken or not (ADR 0598 D1).
     pub fn beams(mut self, on: bool) -> RotatingOptions {
         self.beams = on;
+        self
+    }
+    /// The same options with the free-sector pre-stress of [`RotatingSector::new`] switched on or off (ADR 0606 D3).
+    pub fn free_sector_prestress(mut self, on: bool) -> RotatingOptions {
+        self.free_sector_prestress = on;
         self
     }
 }
@@ -935,6 +951,128 @@ impl HarmonicSpeedModes {
     }
 }
 
+/// The index-0 centrifugal static solution at 1 rad/s of a free sector (ADR 0606), from [`free_sector_unit_static`].
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub struct FreeSectorStatic {
+    /// The static result of the copy with the gauge constraints, on the model's equations.
+    pub result: SolidResult,
+    /// The gauge node `g`: the node whose axial and tangential translations are held (ADR 0606 D3).
+    pub gauge_node: usize,
+    /// The pre-stress of the result.
+    pub prestress: Prestress,
+}
+
+/// The index-0 static solve of the centrifugal load at 1 rad/s of a free sector (ADR 0606 D1 to D3). Of the rigid motions,
+/// the cyclic constraint leaves the axial translation `r_1 = (a, 0)` and the rotation about the axis `r_2 = (a x (x - O), a)`
+/// (D1); the load is orthogonal to both (D2), so two linear constraints `t_g . u_g = 0` and `a . u_g = 0` at one gauge node
+/// `g`, `t_g = a x (x_g - O) / rho_g`, carry no reaction and give a solution of the free problem, whose stress does not depend
+/// on the gauge. The gauge node is the node of an element, on none of the cyclic boundary's lists and with three
+/// translations, farthest from the axis (the first on equal distances). Refuses (`"free_sector_prestress"`) a model with a
+/// support or a constraint other than its one cyclic constraint, and one without a gauge node off the axis; otherwise what
+/// [`RotatingSector::new`] and [`solve_static`] refuse.
+pub fn free_sector_unit_static(model: &SolidModel, options: &RotatingOptions) -> Result<FreeSectorStatic> {
+    crate::mat_ortho::check_cyclic_axes(model)?;
+    model.validate()?;
+    let ci = crate::cyclic::the_cyclic_constraint(model)?;
+    let bd = crate::cyclic::boundary(model, ci)?;
+    let (axis, origin) = (bd.axis(), bd.origin());
+    check_frame(axis, origin)?;
+    check_model(model)?;
+    let refuse = |reason: String| FemError::InvalidValue {
+        key: "free_sector_prestress",
+        reason,
+    };
+    if !model.supports().is_empty() {
+        return Err(refuse(format!(
+            "{} elastic support(s): the free-sector pre-stress takes a sector without supports",
+            model.supports().len()
+        )));
+    }
+    if model.constraints().len() != 1 {
+        return Err(refuse(format!(
+            "{} constraints: the free-sector pre-stress takes a sector with its cyclic constraint only",
+            model.constraints().len()
+        )));
+    }
+    let a = unit_axis(axis)?;
+    let mesh = model.mesh();
+    let dofs = model.dof_map();
+    let n_nodes = mesh.nodes().len();
+    let mut on_boundary = vec![false; n_nodes];
+    let mut mark = |n: usize| {
+        if let Some(b) = on_boundary.get_mut(n) {
+            *b = true;
+        }
+    };
+    for &(l, h) in bd.pairs() {
+        mark(l);
+        mark(h);
+    }
+    for &n in bd.axis_nodes() {
+        mark(n);
+    }
+    for (h, w) in bd.interpolated() {
+        mark(*h);
+        for &(l, _) in w {
+            mark(l);
+        }
+    }
+    for (l, wl, wh) in bd.two_sided() {
+        mark(*l);
+        for &(n, _) in wl.iter().chain(wh) {
+            mark(n);
+        }
+    }
+    let mut in_element = vec![false; n_nodes];
+    for e in 0..mesh.n_elements() {
+        for &n in mesh.element_nodes(e) {
+            in_element[n] = true;
+        }
+    }
+    let radial = |n: usize| -> Vec3 {
+        let x = mesh.nodes()[n];
+        let d = [x[0] - origin[0], x[1] - origin[1], x[2] - origin[2]];
+        let s = d[0] * a[0] + d[1] * a[1] + d[2] * a[2];
+        [d[0] - s * a[0], d[1] - s * a[1], d[2] - s * a[2]]
+    };
+    let mut gauge: Option<(usize, f64)> = None;
+    for n in 0..n_nodes {
+        if on_boundary[n] || !in_element[n] || (0..3).any(|c| dofs.equation(n, c).is_none()) {
+            continue;
+        }
+        let rho = norm(radial(n));
+        if gauge.map_or(true, |(_, best)| rho > best) {
+            gauge = Some((n, rho));
+        }
+    }
+    let Some((g, rho)) = gauge.filter(|&(_, rho)| rho > bd.tolerance()) else {
+        return Err(refuse(
+            "no node off the cyclic boundary and off the axis to hold the rigid motions".into(),
+        ));
+    };
+    let d = radial(g);
+    let t = [
+        (a[1] * d[2] - a[2] * d[1]) / rho,
+        (a[2] * d[0] - a[0] * d[2]) / rho,
+        (a[0] * d[1] - a[1] * d[0]) / rho,
+    ];
+    let mut copy = unit_centrifugal_model(model, axis, origin)?;
+    for c in [t, a] {
+        copy.add_constraint(crate::model::Constraint::linear(
+            (0..3).map(|k| crate::model::LinearTerm::new(g, k, c[k])).collect(),
+            0.0,
+        ))?;
+    }
+    let result = solve_static(&copy, &options.static_options)?;
+    let prestress = Prestress::from_static(&copy, &result)?;
+    Ok(FreeSectorStatic {
+        result,
+        gauge_node: g,
+        prestress,
+    })
+}
+
 /// A sector with one cyclic constraint rotating about the constraint's axis, prepared for the modes of any harmonic index at
 /// any speed (ADR 0407): the [`RotatingPart`] of the sector (the pre-stress of the index-0 static solve at 1 rad/s and the
 /// matrices `K`, `K_sigma,1`, `M`, `M_perp`), applied at index `k` on the real cos/sin pair of ADR 0386.
@@ -1101,7 +1239,13 @@ impl<'a> RotatingSector<'a> {
         // ADR 0459 D3, ADR 0462 D2: a sector of either material with other axes is refused before its frame.
         crate::mat_ortho::check_cyclic_axes(model)?;
         let (sectors, axis, origin) = Self::frame(model)?;
-        let part = RotatingPart::new(model, axis, origin, options)?;
+        let part = if options.stress_stiffening && options.free_sector_prestress {
+            // ADR 0606 D3: the index-0 pre-stress of a free sector with its two rigid motions removed.
+            let prestress = free_sector_unit_static(model, options)?.prestress;
+            RotatingPart::with_unit_prestress(model, axis, origin, prestress, options)?
+        } else {
+            RotatingPart::new(model, axis, origin, options)?
+        };
         Ok(RotatingSector {
             part,
             sectors,
