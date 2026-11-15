@@ -11314,14 +11314,27 @@ fixed by the item's registration ADR before any code.
     delay with the sign of the phase tested within 1.2e-7; exponential coherence on a Hex8 plate: 0 against the
     uncorrelated result at L = d_min/40 and 3.3e-11 against the fully correlated at L = 1e10 plate sides (1e-8).
     Mutations all caught (one equivalent). No case-file key.
-- [ ] **F-568** Error indicator per unit volume and the effectivity criterion near one
+- [~] **F-568** Error indicator per unit volume and the effectivity criterion near one
   - depends on: F-432
   - acceptance: Every limit not stated here is registered in the ADR before the run. EnergyError gives the density
     eta_e/|K|^{1/2} beside eta_e, the absolute values keeping their bits; on the two-layer plate with a hole of ADR 0478
     the tenth of the elements with the largest density contains every element with a face on the hole; on the
     manufactured solution of F-378 (Hex20 and Tet10 at n = 8, 16 and a finer heavy record where feasible) abs(theta - 1)
     on each mesh is at most max(abs(theta - 1) on the previous mesh, 1e-2); the results of F-432 keep their bits.
-  - note: Structural solver, advanced tier. Follow-up of F-432 (ADR 0478, 2026-11-14).
+  - note: Structural solver, advanced tier. Follow-up of F-432 (ADR 0478, 2026-11-14). PARTIAL. ADR 0616, 2026-11-15:
+    rcfd_fem::estimate::EnergyError gives element_volumes (|K| by the estimate rule), element_densities
+    (eta_e/|K|^{1/2}) and ranked_by_density beside the absolute values. The 24 digests of the F-432 values
+    (element_errors, estimate, solution_norm, relative, ranked and the recovered nodal stress, on the two-layer plate
+    and on case D Hex8, Tet10 and Hex20 at n = 4) are equal to base, and the F-432 effectivities at n = 4 and 8 are
+    reproduced to the printed digit. Volumes are within 1.3e-15 on the cubes and 1.5e-10 on the plate. On the two-layer
+    plate with a hole, the tenth of largest density holds 44 of the 48 hole-edge elements (MISSED: the cells at 80 and
+    84 degrees are 5 percent below rank 116, because plate_map makes the first ring half as thick near 90 degrees as
+    near 0 degrees); the absolute ranking holds 18 of 48 (negative control, as in F-432). The criterion abs(theta - 1)
+    <= max(previous, 1e-2) is met from n = 4 to 8 (Hex20 0.337 -> 0.028, Tet10 0.091 -> 0.005). The heavy record at n =
+    8, 16 and 24 (SupernodalDirect) is committed but NOT RUN: the registered 10 GB of free memory was never available.
+    Six of seven mutations caught (ties to the higher index survived, as registered). Follow-up F-695 (Hole criterion of
+    the error density on a plate graded uniformly along the hole). Follow-up F-696 (Run the heavy effectivity record of
+    ADR 0616).
 - [~] **F-569** Static correction vectors for the split modes of a sector index
   - depends on: F-555
   - acceptance: Every limit not stated here is registered in the ADR before the run. The basis of
@@ -11957,7 +11970,9 @@ fixed by the item's registration ADR before any code.
     baseline_hashes). Nine of nine non-equivalent mutations caught (the condensation correction to the residual
     registered as equivalent at the local tolerance). Not covered: the hourglass instability of enhanced elements in
     large compression, a warm start of the modes, the viscoelastic material through the element, a case-file key.
-    Follow-up F-685 (Hourglass stability of the incompatible-modes Hex8 at finite strain in compression).
+    Follow-up F-685 (Hourglass stability of the incompatible-modes Hex8 at finite strain in compression). ADR 0614
+    (F-685), 2026-11-15: the spurious hourglass mode of the element in large compression is measured (lambda_s = 0.608
+    on the ADR 0614 patch) and removed by an opt-in stabilisation; F-685 takes it.
 - [~] **F-597** A finite-strain reference for the B-bar creep cylinder growth bound, and a Full-solve BBar-recovery locking control
   - depends on: F-587
   - acceptance: Every limit not stated here is registered in the ADR before the run. A creep-cylinder reference for C4
@@ -13672,14 +13687,37 @@ fixed by the item's registration ADR before any code.
     HS20f/HS10f; other step lengths below 1: one each (0.66, 0.61). Trials per correction at most 4. 3 of 3 mutations
     caught. Making the line search and the fallback the default is the maintainer's call (it turns the refusals of ADR
     0542 P and ADR 0551 into solutions).
-- [ ] **F-685** Hourglass stability of the incompatible-modes Hex8 at finite strain in compression
+- [~] **F-685** Hourglass stability of the incompatible-modes Hex8 at finite strain in compression
   - depends on: F-596
   - acceptance: Every limit not stated here is registered in the ADR before the run. The ADR 0608 element under
     homogeneous compression of a distorted patch to a registered stretch: the lowest eigenvalue of the condensed tangent
     tracked against the Full Hex8 and a closed-form bifurcation-free reference, the stretch at which a spurious zero
     eigenvalue appears reported; if it appears within the registered range, a stabilisation from the published
     literature that keeps the ADR 0608 checks within their limits; the default bits unchanged.
-  - note: Follow-up of F-596 (ADR 0608, 2026-11-15).
+  - note: Structural solver, intermediate tier. Follow-up of F-596 (ADR 0608, 2026-11-15). PARTIAL. ADR 0614,
+    2026-11-15: hourglass stability of the incompatible-modes Hex8 of ADR 0608 at finite strain in compression. A
+    distorted 6 x 6 x 6 patch of the unit cube (interior nodes moved by 0.1 h), every boundary node prescribed,
+    neo-Hookean (nu = 0.3), homogeneous uniaxial stress along z to the registered stretch 0.5; the lowest eigenvalue of
+    the free-free tangent against the Full Hex8 vector Laplacian tracked on 51 stretches for the Full Hex8, the ADR 0608
+    element and the stabilised element, against the closed-form bifurcation-free bound q = min_n lambda_min of the
+    acoustic tensor (Van Hove's argument: with its boundary fixed the continuum has no bifurcation while q > 0).
+    Measured: q/mu >= 1.0 and the Full Hex8 above q everywhere (margin 9.5e-3); the ADR 0608 element has a spurious zero
+    eigenvalue at lambda_s = 0.60797 (39 per cent compression; q/mu = 1.09 and the Full Hex8 at 1.17 there; about 0.556
+    on a 4 x 4 x 4 patch and 0.645 for the infinite regular mesh by Bloch probes). New opt-in
+    SolidModel::set_incompatible_stabilisation (default off; defaults bit-identical: 8 new digests of the Incompatible
+    paths recorded on the base, B0 of ADR 0608, every rcfd-fem test, baseline_hashes): a deformation-dependent penalty
+    (c/2) sum_q w_q |F_enh|^2 on the enhanced gradient with c = |D0 : (C0 - C0^-1)/4|^2 / G0 from the rest elasticity
+    and the compatible centre gradient (zero with its first derivative at rest), the idea of Wall, Bischoff and Ramm
+    2000 (cited from memory) in a form derived in the ADR, with its exact tangent; lowest eigenvalue >= 0.977 over the
+    whole range. Every ADR 0608 check re-run with the stabilisation within its limit (tangent at rest 1.9e-16, patch
+    tests to 8.7e-16, consistent tangent 2.6e-11 to 2.0e-8, Newton on the sheared block without a Q(10, 1e-13)
+    violation, the elastica cantilever within 4.6e-4 on 50 and 2.0e-4 on 25 elements, equal to ADR 0608's to 1e-6). Six
+    of seven mutations caught; dropping the stabilisation energy from nl_transient's strain energy is not caught (the
+    copied NT1 bar is at strains of 1e-4, where that energy is 2.5e-13 relative). Not covered: other materials and
+    Poisson ratios, confined compression, a stabilisation reproduced from a specific paper (open question), a case-file
+    key. Follow-up F-693 (The stabilised incompatible-modes Hex8 beyond the F-685 set-up). Lead: "from the published
+    literature" read as a published idea (Wall, Bischoff and Ramm 2000, cited from memory) in a derived form, on the
+    standing instruction.
 - [ ] **F-686** The free-sector pre-stress on tetrahedral, layered-shell and orthotropic sectors
   - depends on: F-683
   - acceptance: Every limit not stated here is registered in the ADR before the run. RotatingSector::new with
@@ -13723,13 +13761,33 @@ fixed by the item's registration ADR before any code.
     free RAM below the registered 16 GB). Not covered: spline fronts, mixed-mode elliptical cracks, the end-face
     exemption of the ring boundary test on closed fronts. No case-file key. Lead to run when 16 GB are free: cargo test
     -p rcfd-fem --release --test sa_fracture_closed -- --ignored wm1_to_wm7 --nocapture, then addendum 2.
-- [ ] **F-690** Early acceptance at the rounding bound of the Newton residual (a stagnation test)
+- [~] **F-690** Early acceptance at the rounding bound of the Newton residual (a stagnation test)
   - depends on: F-571
   - acceptance: Every limit not stated here is registered in the ADR before the run. A step at the rounding floor of ADR
     0604 is accepted in at most a registered number of corrections below max_iterations; S3 and the pendulum of ADR 0479
     at the defaults run in at most half of ADR 0604's iterations; the bits of every existing default-bits test are
     unchanged, or the changed ones are listed for the maintainer's decision.
-  - note: Follow-up of F-571 (ADR 0604, 2026-11-15).
+  - note: Structural solver, advanced tier. Follow-up of F-571 (ADR 0604, 2026-11-15). PARTIAL (opt-in; the default flip
+    is open). ADR 0619, 2026-11-15: an opt-in stagnation acceptance at the rounding bound of ADR 0604,
+    NewtonOptions::stagnation (default false; nonlinear.rs only, no other public change). When a contribution is in the
+    residual reference, an attempt is accepted at an iterate k with 3 <= k < max_iterations if that iterate and the two
+    before it are within eps |(|K| |u|)|_free, the last two corrections did not halve the residual, and the energy test
+    holds. The relative test is tried first, and ADR 0604's last-iterate acceptance is kept. An instrumented audit of
+    the 1355 non-ignored rcfd-fem tests (17752 attempts) found no attempt that the rule ends before the relative test. A
+    one-correction window would have ended ADR 0514 N1e's attempt one iterate early, which set the window of two
+    (disclosed). With the opt-in: S3 of ADR 0479 converges in 50 of 50 steps, and its floor step 50 is accepted in 4
+    corrections instead of 20 (total 102 of 118; the literal half, 59, is unreachable because the 49 relative-test steps
+    need 2 corrections each); |dP|/|P_0| is 1.3e-14, and steps 0 to 49 are bit-equal to ADR 0604's. NC1b's step is
+    accepted in 5 corrections instead of 20. The pendulum runs 1940 steps in 10569 iterations instead of 37367 (worst
+    step 7), with period and energy as ADR 0604 P1 (2.09e-4, 2.76e-4) in 25.6 s instead of 159 s. The N1e spinning bar
+    gives the same state bytes with the opt-in as without. Default bits: the 72 default-bits files with the nl_transient
+    families pass, and the baseline hashes pass. MS1, MS2 and MS4 are caught; MS3 and MS5 (the halving and energy
+    conditions) are not caught, as registered. Not covered: on by default (it would change S3 step 50 of
+    sa_nl_rounding_floor and NC1b of sa_nl_inertia_reference_after_f571, which asserts 20 iterations: a maintainer
+    decision); the energy-momentum and discrete-gradient loops; the static driver without a contribution in the
+    reference. Follow-up F-694 (The stagnation acceptance of ADR 0619 on by default). Lead: partial, not done: the "at
+    the defaults" clause was measured with the opt-in on and the S3 clause was read as the floor steps' iterations (the
+    literal half is unreachable), and MS3, MS5, MS6 were not caught; done is the maintainer's call.
 - [ ] **F-691** A negative control of the energy-momentum inertia-term reference off rest
   - depends on: F-681
   - acceptance: Every limit not stated here is registered in the ADR before the run. One energy-momentum step of a solid
@@ -13744,3 +13802,33 @@ fixed by the item's registration ADR before any code.
     outer_scale_window; a case read from a file reproduces the bits of the library call on the channel of ADR 0451;
     existing keys, goldens and baseline hashes unchanged except the schema golden approved by the maintainer.
   - note: Follow-up of F-550 (ADR 0617, 2026-11-15). NEEDS USER: schema golden change.
+- [ ] **F-693** The stabilised incompatible-modes Hex8 beyond the F-685 set-up
+  - depends on: F-685
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The strain energy of the ADR 0614
+    stabilised element at a large strain against the test's own stabilisation energy (the missed mutation MU7 of ADR
+    0614 caught); the ADR 0614 sweep repeated for confined compression and for nu = 0.45 and 0.49, the lowest eigenvalue
+    of the stabilised element reported against the Full Hex8 and the closed-form bound over a registered range; the
+    default bits unchanged.
+  - note: Follow-up of F-685 (ADR 0614, 2026-11-15).
+- [ ] **F-694** The stagnation acceptance of ADR 0619 on by default
+  - depends on: F-690
+  - acceptance: Every limit not stated here is registered in the ADR before the run. With the maintainer's decision
+    recorded, NewtonOptions::stagnation is true by default; NC1b of ADR 0604 amendment 1 is kept as an ignored record
+    with a copy that asserts at most 10 corrections; S3 and the pendulum of ADR 0479 with the driver defaults reproduce
+    ADR 0619 ST1 and ST3; every other existing default-bits test keeps its bits, and the baseline hashes pass.
+  - note: Follow-up of F-690 (ADR 0619, 2026-11-15). NEEDS USER: changes default results (NC1b of ADR 0604 would become
+    a record plus copy).
+- [ ] **F-695** Hole criterion of the error density on a plate graded uniformly along the hole
+  - depends on: F-568
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A two-layer Hex20 plate with a hole
+    (r/W = 0.05, Kirsch load) whose first ring has one radial size at every angle: the tenth of the elements with the
+    largest eta_e/|K|^{1/2} contains every element with a face on the hole; the recovered peak stress is within 2
+    percent of 3 sigma_0; the F-432 and F-568 results keep their bits.
+  - note: Follow-up of F-568 (ADR 0616, 2026-11-15).
+- [ ] **F-696** Run the heavy effectivity record of ADR 0616
+  - depends on: F-568
+  - acceptance: Every limit not stated here is registered in the ADR before the run. e1_criterion_near_one_heavy of
+    sa_density.rs is run once, alone, with at least 10 GB free: abs(theta - 1) at n = 16 and n = 24 is at most
+    max(abs(theta - 1) on the previous mesh, 1e-2) for Hex20 and Tet10, theta at n = 8 and 16 is within 1e-5 of the
+    F-432 log, and the time and peak memory are recorded.
+  - note: Follow-up of F-568 (ADR 0616, 2026-11-15).
