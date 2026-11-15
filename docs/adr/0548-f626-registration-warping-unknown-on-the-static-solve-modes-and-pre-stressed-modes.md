@@ -271,3 +271,89 @@ registered check missed (a `*_known_miss` record), any mutation not caught, or a
 - **Q1. Warping inertia.** Options: (a) none (this item); (b) an opt-in `rho C_w` term. Recommendation (a) until a check needs
   it: it changes the torsional frequencies of short stocky beams only (`C_w k^2/I_p` = `7e-4` here for `m = 1`).
 - **Q2. The warping unknown on the transient and harmonic paths.** Recommendation: a separate item when a case needs it.
+
+## Addendum 1 (2026-11-15): results
+
+Written after the one registered run of `sa_beam_warping_f626.rs` (log `f626-scratch/run1.log`, code commit 514522b1), the B0 run
+after the change (`b0_after.log`) and the mutation runs (`mutations.log`, `mut_Y*.log`). The numbers are those the tests printed
+(release). There was no amendment and no re-run.
+
+### Results against the registered limits
+
+| id | measured | limit | verdict |
+|---|---|---|---|
+| B0 | 11 digests bit-identical to the base record (and ADR 0546's 12 and ADR 0508's 16 also unchanged) | equal | met |
+| S1 (acceptance a1) | `1.07e-6` (`phi(L) = 0.37541214` against `0.37541254`) | `1e-3` | met |
+| S2 (root warping free) | `1.2e-13` | `1e-10` | met |
+| S3 (root bimoment) | `3.5e-6` (`-700.5525` against `700.5501`) | `1e-4` | met |
+| S4 (8 elements) | `1.7e-5` | `1e-3` | met |
+| S5 (skew axis) | `5.7e-12` | `1e-9` | met |
+| S6 (torsion-free load) | `1.4e-12`; `max|chi| = 0` | `1e-10`; strict | met |
+| S7 (twist reaction) | `3.7e-15` | `1e-10` | met |
+| T1 (torque split) | `1.39e-6` (874.16272/-125.83728 against 874.16255/-125.83745) | `1e-4` | met |
+| T2 (acceptance a2) | `5.4e-8` (`lambda` 62.421729 against 62.421732) | `1e-5` | met |
+| T3 (Saint-Venant split) | `2.55e-2` (64.0129) | `> 1e-2` | met |
+| T4 (the torque acts) | `-0.161` (M only 74.417) | `< -0.1` | met |
+| T5 (`-T_ref`) | `1.2e-15` | `1e-8` | met |
+| T6 (RF8 kept) | both refused, key `"warping"` | exact | met |
+| T7 (torsion-free against ADR 0546) | `1.1e-15` | `1e-9` | met |
+| F1 (`m = 1, 2, 3`) | `7.2e-7`, `2.25e-5`, `1.37e-4` | `1e-4`, `1e-3`, `5e-3` | met |
+| F2 (8 elements) | `1.16e-5` | `1e-3` | met |
+| F3 (`C_w = 0`) | `1.9e-9`; `3.2e-3` against the plain linear-twist modes | `1e-4`; `1e-2` | met |
+| F4 (full beam, mode 2) | `7.2e-7`; modes 1 and 3 at `0.285` and `3.49` of it | `1e-4`; strict | met |
+| F5 (warping held at both ends) | `151151` (2.60 of free) | strict | met |
+| F6 (element mass) | `2.8e-17`; bit-equal; `0` | `1e-12`; exact; `1e-12` | met |
+| F7 (mass frame invariance) | `2.9e-16` | `1e-12` | met |
+| P1 (`N = +/-0.5 |N_T|`) | `4.8e-7`, `1.44e-6` | `1e-4` each | met |
+| P2 (full beam in tension) | `4.8e-7` | `1e-4` | met |
+| P3 (zero pre-stress) | `0` | `1e-12` | met |
+| PT1 (modes with torque) | `2.8e-8`, `1.0e-9`, `4.8e-8` | `1e-5` each | met |
+| PT2 (Saint-Venant split) | `1.30e-2` | `> 5e-3` | met |
+| PT3 (RF8 kept) | refused, key `"warping"` | exact | met |
+| R (9 refusals) | each with its key | exact | met |
+
+Every measured value is within a factor of 3 of its estimate in the arithmetic, except S5 (`5.7e-12` against `1e-13`). S5 is the
+rounding of the rotated frame through the sparse solve, 175 times below its limit.
+
+### Mutations (scratch copy `f626-scratch/mut`, own target dir, one at a time)
+
+| mutation | result | caught by |
+|---|---|---|
+| Y1 restraint not eliminated in the static solve | caught | S1, S3, S4, T1, T2, PT1 |
+| Y2 12-unknown end forces for the warping elements | caught | T1, T2, T4, PT1 |
+| Y3 torque dropped from the pre-stress | caught | T1, T2, T4, PT1 |
+| Y4 mass difference not added | caught | F6, and every modal test refused (`"density"`, the warping unknown has no mass) |
+| Y5 `H_4` sign flipped in the mass | caught | F1 to F4, F6, P1, P2 |
+| Y6 pre-stressed modes without `K_sigma` | caught | P1, P2, PT2 |
+| Y7 RF8 not applied to `torsion_free` | caught | T6, PT3 |
+| Y8 RF10 removed | caught | R (RF10) |
+| Y9 stiffness difference not added in the static solve | caught | S, T and PT tests (singular stiffness at the warping unknown) |
+| Y10 reactions without the warping equations | caught | S3 |
+| Y11 spurious bimoment load on the warping rows | caught | S1 to S4, S6, T1, T2, T5, T7, PT1 |
+
+All eleven mutations are caught. Y6 was predicted to be caught by PT1 but is caught by PT2: without `K_sigma`, all three pre-stresses
+give the same modes, so PT1 is met trivially and PT2 fails.
+
+### Other runs
+
+`cargo test -p rcfd-fem --release`: 244 test binaries and doc-tests, all pass, none failed (the ignored records stay ignored).
+`cargo test -p rcfd-api --release --test baseline_hashes`: 3 passed, 1 ignored (unchanged). `cargo test -p rcfd-cli --release
+--test docs_site`: 2 passed. `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings`: clean. `cargo fmt -p rcfd-fem
+--check`: clean. After the B0 commit, `cargo fmt` reformatted the B0 file `sa_beam_warping_f626_bits.rs` (whitespace only, same
+digests). No documentation page was changed: `docs/structural-solver.md` has no beam section (D7).
+
+### Decision
+
+**Done** by the registered rule. Every registered check is met in the one run: B0, S1 to S7, T1 to T7, F1 to F7, P1 to P3, PT1 to
+PT3 and R. Eleven of eleven mutations are caught. There was no amendment. The acceptance is met: the static twist of the
+cantilever is `1.07e-6` of the closed form at 16 elements. The lateral-torsional factor with torsion in the reference load equals
+the factor from the closed-form warping torque split to `5.4e-8`, and the Saint-Venant split gives a factor `2.6e-2` away. The
+defaults and the ADR 0546 path are bit-identical (B0).
+
+### Remaining questions
+
+- Q1 (warping inertia `rho C_w`): (a) none; (b) an opt-in term. Recommendation (a) until a check needs it (`7e-4` of the first
+  torsional frequency here).
+- Q2 (the warping unknown on the transient and harmonic paths): recommendation, a separate item when a case needs it.
+- Q3 (bimoment loads and the bimoment pre-stress, `beta_omega`): needed only with F-627 (monosymmetric sections). Recommendation:
+  take them in F-627.
