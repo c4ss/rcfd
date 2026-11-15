@@ -290,3 +290,90 @@ Taken on the maintainer's standing instruction of 2026-11-11 (take the recommend
    points (F-638's subject, not yet built); (c) the moments of the nodal forces (D5). Taken (c).
 
 Open (not taken): making the fallback the default of the total Lagrangian contact body (changes a default result, ADR 0542 P).
+
+## Addendum 1: results (2026-11-15)
+
+Each registered run made once (logs in `w49i-work/f639-scratch`: `run-fast.log` (FD, FC, P-f, NF-HS), `run-heavy.log`
+(HS20f, HS10f, HS20m-M, HS10m-M), `run-mut.log` and `mut-MF*.log`, `clippy.log`, `run-fem-full.log`, `run-baseline.log`,
+`run-docs.log`). The library and the tests were committed (1e2ebcce) before any run. No limit changed, no amendment, no
+diagnostic run.
+
+| id | limit | measured | met |
+|---|---|---|---|
+| HS20f | succeeds; `0.15`, `0.20`, `0.10` | succeeds with the gap tolerance `1e-8` (9 augmentations, 19.2 s, 41 of 280 nodes active, penetration `8.1e-9`); radius `a_M` 0.10118 against `a_H` 0.09870: **2.51e-2**; peak 0.06055 against 0.06905: **1.23e-1**; approach **2.65e-2** | yes |
+| HS10f | succeeds; `0.15`, `0.20`, `0.10` | succeeds (12 augmentations, 62.6 s, 30 of 289 active, penetration `9.7e-9`); radius 0.09944 against 0.09887: **5.78e-3**; peak 0.06068 against 0.06916: **1.23e-1**; approach **2.31e-2** | yes |
+| FB | `>= 1` each | HS20f 1, HS10f 1 (both in the first Newton solve, augmentation 0) | yes |
+| HS20m-M | succeeds; `0.15` | succeeds (10 augmentations); radius 0.09923 against 0.10059: **1.35e-2** | yes |
+| HS10m-M | succeeds; `0.15` | succeeds (14 augmentations); radius 0.09728 against 0.10071: **3.40e-2** | yes |
+| FD | succeeds; bit for bit; equal, `>= 1`; refused | succeeds; `u`, residuals, energies bit for bit with the honest run; 3 fallback calls for 3 corrections; without fallback "singular tangent: pivot -9.88e1 at node 7 component 2" | yes |
+| FC | bit for bit; equal; 1; true, false | M20s: 0 of 576 entries differ, index sequences equal (4608), counter 1, flags true and false; M20q: 0 of 2304, 18432, 1, true and false | yes |
+| P-f | one of the two | succeeds (1.6 s); (iterations, fallback iterations) per solve `[(3, 1), (2, 0), (2, 0)]` | yes |
+| NF-HS | refused, the texts | "load step 1 of 1, augmentation 0: solver newton: singular tangent: pivot -1.4836e-1 at node 1129 component 1 (diagonal 2.04e-2)" (ADR 0551's record) | yes |
+| B | pass | `cargo test -p rcfd-fem --release`: 0 failed (1145 passed, 308 ignored over all binaries; `f618_p_refused_pivot_tl_hub` and every bit record among them); `baseline_hashes` 3 passed, 1 ignored; `docs_site` 2 passed | yes |
+
+Recorded (no limit): HS20f Newton iterations `[10, 3, 3, 3, 3, 3, 3, 2, 2, 2]`, HS10f `[9, 3, 3, 3, 3, 3, 3, 3, 3, 2, 2, 2,
+2]`; `F_fe` 1.4088e-3 (HS20f), 1.4159e-3 (HS10f), 1.4915e-3 (HS20m-M), 1.4965e-3 (HS10m-M); `4 sum t |n_z|` within 4.4e-5
+of `F_fe` on all four. ADR 0551's nodal-fit radius at the same states: HS20f 0.145 (error 0.47), HS10f NaN (the fitted slope
+has the wrong sign), HS20m-M 0.121 (0.21, ADR 0551's number reproduced), HS10m-M 0.593 (4.89, reproduced). The linear runs
+HS20m-M and HS10m-M took one fallback iteration each in their first solve (the linear body's own, ADR 0507 amendment 2, as in
+ADR 0551's runs). The heavy runs shared the machine with the mutation builds (their times are not clean measures).
+
+### Notes on the results
+
+1. The fallback was needed once per problem (the first Newton solve, the iteration where the exact tangent was indefinite);
+   every later iteration factored the exact tangent, so the converged iterations are Newton's, as arithmetic 2 expected. The
+   indefiniteness of ADR 0551 was therefore in the contact curvature part, not in the element (the open point of arithmetic 1).
+2. The peak is 12 percent below small-strain Hertz on both meshes (ADR 0551's linear runs: 2.5 and 1.9 percent), and `F_fe`
+   about 5.5 percent below the linear body's at the same approach: the finite-strain effect of arithmetic 4 (estimated 3 to 8
+   percent for the peak; measured a little above). Within the limit 0.20.
+3. The radius read from the moments of the nodal forces (D5) meets on all four runs (5.8e-3 to 3.4e-2), while ADR 0551's nodal
+   fit misses on all four. ADR 0551's radius miss came from reading coefficients as values; this item avoids it through the
+   reading it registered. Recovering the traction itself is still F-638's subject.
+
+### Mutations
+
+Each alone on a `git archive` copy of 1e2ebcce (`f639-scratch/mut`, target `target-mut`); the new test file and
+`f618_p_refused_pivot_tl_hub` run once.
+
+| id | caught by |
+|---|---|
+| MF1 (`has_fallback_tangent` false) | FC (flag); P-f (fails with the plain singular tangent, not the fallback's text) |
+| MF2 (curvature kept) | FC (576 of 576 and 2304 of 2304 entries differ) |
+| MF3 (no `add_fallback_tangent` in the driver) | FD (refused "without the curvature part") |
+| MF4 (default `true`) | NF-HS, FC (flag without the option), `f618_p_refused_pivot_tl_hub` (both routes) |
+| MF5 (counter not incremented) | FC (counter 0), P-f (`[(3, 0), ..]`) |
+| MF6 (fallback built on the exact tangent) | FD (refused) |
+| MF7 (the total Lagrangian path reports 0) | P-f (`[(3, 0), ..]`) |
+
+Every planned mutation was caught by a check named for it; MF7 by P-f's success branch, as declared.
+
+### Crate runs
+
+`cargo fmt -p rcfd-fem --check`: clean. `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings`: clean.
+`cargo test -p rcfd-fem --release`: 0 failed. `cargo test -p rcfd-api --release --test baseline_hashes`: 3 passed, 1 ignored
+(the table not edited). `cargo test -p rcfd-cli --release --test docs_site`: 2 passed. Not run: the workspace suite (the
+lead's gate).
+
+Files: `crates/rcfd-fem/src/nonlinear.rs` (the trait methods at lines 1381 to 1391, `contribute_split` at 1498 to 1530, the
+fallback in `Problem::attempt_with` at 1638 to 1640, 1659, 1662 to 1670, 1716 and 1725 to 1752), `crates/rcfd-fem/src/contact.rs`
+(module doc, `ContactOptions::curvature_fallback`, `History::fallbacks`, `ContactSet::fallback`, the test hook `fallbacks`,
+`force_and_tangent(.., pattern)`, the trait methods, the count on the total Lagrangian path), the new test file
+`crates/rcfd-fem/tests/sa_contact_tl_fallback_f639.rs`. No existing test or record edited.
+
+### Deviations
+
+None from the registration. ADR 0551's known-miss records `hs20t_.._known_miss` and `hs10t_.._known_miss` stay as they are
+(they run without the option and still record its refusal, as NF-HS shows).
+
+### Decision
+
+**done** by the registered rule: every check met on its registered run (the heavy records included), the negative controls as
+expected, every planned mutation caught by a check named for it, B unchanged, fmt and clippy clean.
+
+### Remaining questions
+
+1. Making the fallback the default of the total Lagrangian contact body. Options: (a) keep it opt-in; (b) default on (changes
+   the outcome of ADR 0542 P from a refusal to a solved hub, as P-f shows, and of ADR 0551's HS20t and HS10t records).
+   Recommendation: (b) after the maintainer's approval, since it is already the linear body's rule; ADR 0542 P's test and the
+   two ADR 0551 records would then be superseded by an ADR.
+2. The fallback on the arc-length and unsymmetric paths: no present check needs it; no follow-up proposed.
