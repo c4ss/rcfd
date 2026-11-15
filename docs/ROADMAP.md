@@ -8667,7 +8667,9 @@ fixed by the item's registration ADR before any code.
     10 a (heavy record, 96 267 unknowns) K within 2.2e-3 of 2 sigma sqrt(a/pi), uniform along the front within 2.7e-7;
     Paris m = 3 and m = 2 within 7e-16; a bent front and a ring reaching the boundary refused. Partial by the rule:
     mutation M12 (inner rings left out of the integral) caught by no registered check (11 of 12 caught). No case-file
-    key. Follow-up F-632 (varying J along a front, mode separation).
+    key. Follow-up F-632 (varying J along a front, mode separation). ADR 0605 (F-632), 2026-11-15: the inner-ring
+    mutation M12 is now caught on the circular path by EU2 (uniform-expansion residual 0.50 to 2.0 against 1e-8); status
+    to done recommended, maintainer's call.
 - [~] **F-430** Substructuring: static condensation and fixed-interface component mode synthesis (Craig-Bampton)
   - depends on: F-408, F-382, F-383, F-393
   - acceptance: Every limit not stated here is registered in the ADR before the run. Statics: the condensed model gives
@@ -12446,20 +12448,49 @@ fixed by the item's registration ADR before any code.
     registered limits, the direct harmonic against the mode superposition with all modes within 1e-8; models without
     shells keep their bits.
   - note: Structural solver, advanced tier. Follow-up of F-541 (ADR 0545, 2026-11-15).
-- [ ] **F-631** Residual reference of the Newton driver in free vibration
+- [x] **F-631** Residual reference of the Newton driver in free vibration
   - depends on: F-585
   - acceptance: Every limit not stated here is registered in the ADR before the run. An opt-in residual reference of the
     nonlinear transient with a registered inertia term, so that a converged step of a free vibration without external
     load is not rejected at a rounding floor; the Shell3 strip of ADR 0545 NT1 over 100 periods at the default tolerance
     with that reference; the default reference and its bits unchanged.
-  - note: Structural solver, advanced tier. Follow-up of F-541 (ADR 0545, 2026-11-15).
-- [ ] **F-632** Domain integral on a front with varying J, and mode separation
+  - note: Structural solver, advanced tier. Follow-up of F-541 (ADR 0545, 2026-11-15). DONE. ADR 0603, 2026-11-15: an
+    opt-in residual reference of the nonlinear transient,
+    NlTransientOptions::residual_reference(ResidualReference::InertiaTerms): the reference of each Newton attempt of the
+    Method step is also at least the largest norm of the products the inertia and damping force is a sum of (c_m M
+    u_{n+1}, c_m M u_n, c_m h M v_n, c_m h^2 |1/2 - beta| M a_n, alpha_m M a_n, alpha_f f_int,n and the damping
+    products, c_m = (1 - alpha_m)/((1 - alpha_f) beta h^2)), so that the test is a relative tolerance on the step's
+    displacement and the constant rounding floor of the corotated Shell3 internal force (about 6e-11 of its peak,
+    derived from ADR 0545's stop near a zero crossing) no longer rejects a converged step. The Shell3 strip of ADR 0545
+    NT1 over 100 periods at the default tolerance 1e-10: 4000 steps, 0 halvings, worst residual 6.1e-13, F1 2.05e-3, F1b
+    8.0e-8, F1c 7.9e-5, E1 2.8e-8, EZ 5.1e-7 (limits of ADR 0522); a step at the zero crossing at h/1024 converges in 2
+    iterations to 1.3e-16 with the option and is refused by the default reference (stall at 1.5e-7). Refused with the
+    energy-momentum step. A driver hook Contribution::residual_reference_terms (default 0, read only when positive); the
+    default reference and its bits unchanged (a 40-step hash recorded before the change, every rcfd-fem test,
+    baseline_hashes). Five of five registered mutations caught. Follow-up F-681 (The inertia-term residual reference on
+    the energy-momentum step).
+- [x] **F-632** Domain integral on a front with varying J, and mode separation
   - depends on: F-429
   - acceptance: Every limit not stated here is registered in the ADR before the run. An embedded elliptical crack whose
     K varies along the front against the closed form of Irwin within a registered limit, with a check that catches
     leaving the inner rings out of the tapered integral; an interaction integral separating K_I, K_II and K_III, the
     inclined centre crack within 2 percent of each closed form.
-  - note: Structural solver, advanced tier. Follow-up of F-429 (ADR 0547, 2026-11-15).
+  - note: Structural solver, advanced tier. Follow-up of F-429 (ADR 0547). ADR 0605, 2026-11-15: rcfd_fem::fracture
+    gains CrackFront::elliptical (an ellipse a > b in the crack plane, nodes within 1e-6 a; parameter the elliptic angle
+    of confocal coordinates, advance direction the outward normal of the confocal ellipse, int phi ds along the
+    quadratic front edges), elliptical_crack_block (the penny mesh mapped by mu = mu0 + ln(rho/a) onto an embedded
+    elliptical crack, quarter of a half block), interaction_integral (K_I, K_II, K_III of a straight front from M = int
+    (sigma_ij u^aux_i,k + sigma^aux_ij u_i,k - sigma_ij eps^aux_ij delta_jk) q_k,j dV with the Williams near-tip fields
+    of near_tip_gradient; K_I,II = E' M/2, K_III = mu M; refuses curved and half-symmetric fronts and a domain of
+    several materials). Met: embedded elliptical crack b/a = 0.5 (heavy record, 87 663 unknowns) ring-3 K within 8.4e-3
+    of Irwin's sigma sqrt(pi b)/E(k) (sin^2 phi + (b/a)^2 cos^2 phi)^(1/4) (hat-averaged) at all 13 stations (limit
+    3e-2; K varies by 41 percent), rings 2-4 within 2.2e-3, K(0)/K(pi/2) within 5.7e-3; the inner rings left out of the
+    tapered integral caught by an exact uniform-expansion check (residual 2.7e-14 against 0.5 to 3.7 when mutated) on
+    the elliptical and the circular front; inclined centre crack beta = 30 deg, W = 10 a: K_I within 5.7e-3 of sigma
+    sqrt(pi a) cos^2 beta, K_II within 6.2e-3 of sigma sqrt(pi a) sin beta cos beta (limits 2e-2), K_III 1.3e-16;
+    antiplane shear K_III within 3.9e-3 of tau sqrt(pi a); mode-I plate K_I from M within 1.1e-3 of K from J, K_II and
+    K_III below 1e-12; 10 of 10 mutations caught. No case-file key. Follow-up F-682 (Interaction integral on curved
+    crack fronts).
 - [~] **F-633** Shell3 pressure load exact for the uniform membrane state on irregular curved meshes
   - depends on: F-546
   - acceptance: Every limit not stated here is registered in the ADR before the run. An opt-in Shell3 pressure load
@@ -13244,7 +13275,8 @@ fixed by the item's registration ADR before any code.
     (state dependence of contribution tangents about a nonlinear state, a blind 3-D check). Done is the maintainer's
     call (mutation MC caught only by RNq2 of the post-run amendment 1). The state dependence of the follower tangent,
     which the plane ring could not see, is checked blind by F-677 (ADR 0599, 2026-11-15; MC caught by BFD at 1.69e-4);
-    done recommended, the maintainer's call.
+    done recommended, the maintainer's call. The full unsymmetric path about a state, which ADR 0596 D1 left to a
+    follow-up, is follower::tangent_buckling_factors_full_with (F-676, ADR 0600, 2026-11-15).
 - [~] **F-672** Beam2 elements in the cyclic constraint
   - depends on: F-628
   - acceptance: Every limit not stated here is registered in the ADR before the run. A cyclic sector holding Beam2
@@ -13293,13 +13325,29 @@ fixed by the item's registration ADR before any code.
     loads, warping inertia, a consistent offset mass (ADR 0597 Q1, open: it changes existing results), no case-file key.
     Follow-up proposed: Consistent mass of warping sections with a shear-centre offset. Follow-up F-678 (Consistent mass
     of warping sections with a shear-centre offset).
-- [ ] **F-674** Full_rotor and the expansion of a cyclic sector with Beam2
+- [x] **F-674** Full_rotor and the expansion of a cyclic sector with Beam2
   - depends on: F-672
   - acceptance: Every limit not stated here is registered in the ADR before the run. cyclic::full_rotor of a sector with
     CyclicOptions::beams gives each sector copy of a Beam2 block the orientation R^j v, and FullRotor::expand,
     expand_field and expand_load of the ADR 0595 wheel sector give the fields of the independently built ring within
     1e-10; the defaults bit-identical.
-  - note: Follow-up of F-672 (ADR 0595, 2026-11-15).
+  - note: Structural solver, advanced tier. Follow-up of F-672 (ADR 0595). DONE. ADR 0601, 2026-11-15:
+    cyclic::full_rotor takes Beam2 blocks when CyclicOptions::beams is qualified by the new opt-in
+    CyclicOptions::full_rotor_beams (refused without beams by add_constraint). Without the qualifier the refusal stays,
+    so the existing test that asserts it under beams passes unchanged. Each Beam2 block of the sector becomes N
+    consecutive blocks of the full mesh, and copy j carries the orientation R^j v (copy 0 the sector's property cloned).
+    The element numbering, the sets and the materials are unchanged, and FullRotor::block gives the block of each copy.
+    FullRotor::expand, expand_field and expand_load needed no change (the rotations of six-unknown nodes were already
+    expanded by R^j). On the ADR 0595 wheel sector against the independently built ring: positions within 6.7e-16,
+    orientations exact; expand_load of k = 0..3 (the high node loaded) within 1.4e-16; expand_field of the static
+    solutions k = 0..3 within 6.6e-13; the full-rotor model's static field within 4.3e-13 and its 18 lowest eigenvalues
+    within 2.5e-13; the expanded modes are eigenvectors of the ring to a backward error of 1.5e-13, their Rayleigh
+    quotients within 8.1e-14, and they are M-orthonormal within 1.1e-15 (limit 1e-10). Unrotated copies are seen at
+    0.61, and a mode expanded at the wrong harmonic at 515. Models without the option keep their bits (existing tests,
+    baseline hashes, a shell sector's full rotor and expansions bit-equal with and without it). Six of six mutations
+    caught. Not covered: full_rotor with beams but without the qualifier, RotatingPart on the full rotor of a beam
+    sector, extended boundaries. Behind the extra opt-in CyclicOptions::full_rotor_beams (F-672 NC4 asserts the refusal
+    under beams alone); dropping the qualifier (retiring that assertion) is the maintainer's call.
 - [~] **F-675** Rotating paths on a cyclic sector of beams
   - depends on: F-672
   - acceptance: Every limit not stated here is registered in the ADR before the run. RotatingSector on the ADR 0595
@@ -13321,15 +13369,33 @@ fixed by the item's registration ADR before any code.
     of the assembled matrices compared +0 with -0 by their bits in its first run and was met after an amendment of the
     measure. Not covered: full_rotor and the expanded modes with beams, the whirl directions and the split, state and
     sparse solvers beyond a smoke run, offset or non-principal sections, an independent whirl reference for beams.
-    Follow-up F-679 (An independent whirl reference for spinning beams).
-- [ ] **F-676** Flutter about a nonlinear state with the full contribution tangent
+    Follow-up F-679 (An independent whirl reference for spinning beams). Its mutation X5 (global axis components), not
+    caught by the sector-ring checks, is caught by the independent spinning-ring reference of F-679 (ADR 0602,
+    2026-11-15).
+- [x] **F-676** Flutter about a nonlinear state with the full contribution tangent
   - depends on: F-671, F-653
   - acceptance: Every limit not stated here is registered in the ADR before the run. The complex pencil path of ADR 0580
     takes the driver's tangent at a nonlinear state with the full (unsymmetric) tangents of its contributions; on a
     free-edged follower load (Beck's column of Full Hex8 at a compressed state) the complex eigenvalues satisfy the
     central-difference residual equation of the nonlinear residual including the follower force within 1e-6 (vector
     measure), with the backward error of ADR 0587, and at zero load they equal buckling_factors_full within 1e-10.
-  - note: Follow-up of F-671 (ADR 0596, 2026-11-15).
+  - note: Structural solver, advanced tier. Follow-up of F-671 and F-653 (ADR 0596, ADR 0580). DONE. ADR 0600,
+    2026-11-15: new follower::tangent_buckling_factors_full_with, opt-in beside the unchanged symmetric functions: the
+    buckling pencil (K_T + K_c(u, lambda) + mu (K_sigma + K_c(u, 1) - K_c(u, 0))) x = 0 about a nonlinear state with the
+    full (unsymmetric) tangents of the contributions (Contribution::add_full; for a follower pressure -K_p), complex
+    factors of smallest modulus by the pencil solver of ADR 0580, with the backward errors of ADR 0587;
+    tangent_modes_full (ADR 0580) is the modal path about the state and is checked by the same measure. Set-up: Full
+    Hex8 neo-Hookean cantilever 2 x 0.5 x 0.4 m (8 x 2 x 2), follower end pressure 9e3 Pa (Beck's load, free-edged:
+    antisymmetry of K_p on the free unknowns 2.0), unsymmetric Newton state at 0.27 of the dead Euler load of the mesh
+    (below it; the driver refuses an indefinite tangent). Against the fourth-order central difference of the nonlinear
+    residual with the follower force (complex directions by parts), vector measure max |D4_r[x] + mu (K_sigma x +
+    D4_g[x])| / max |D4_r[x]|: buckling pairs (three complex pairs and a real factor) 3.1e-9, modes 4.3e-9 (limit 1e-6);
+    backward errors at most 8.4e-13 and 9.7e-13 (limit 2e-10); at zero load the factors equal buckling_factors_full in
+    every bit (limit 1e-10). Negative controls: the symmetric part through the full path 1.05, the symmetric
+    tangent_modes 1.02, every contribution tangent at u = 0 2.4e-3, the load-factor derivative dropped 5.4, the rest
+    pairs at the state 6.6e-3. Seven of seven mutations caught; the existing follower, F-653, F-664, F-671, F-677 tests
+    and the baseline hashes pass. Not covered: a flutter search along a nonlinear path (states above the Euler load are
+    not reachable by the driver), shells and beams, one bar and load level.
 - [x] **F-677** State dependence of contribution tangents about a nonlinear state, a blind 3-D check
   - depends on: F-671
   - acceptance: Every limit not stated here is registered in the ADR before the run. On a conservative 3-D follower
@@ -13362,7 +13428,7 @@ fixed by the item's registration ADR before any code.
     bit-identical (the change of results with an offset approved by the maintainer).
   - note: Follow-up of F-673 (ADR 0597, 2026-11-15). Changes existing modal, harmonic and transient results of offset
     sections: NEEDS USER.
-- [ ] **F-679** An independent whirl reference for spinning beams
+- [x] **F-679** An independent whirl reference for spinning beams
   - depends on: F-675
   - acceptance: Every limit not stated here is registered in the ADR before the run. The whirl frequencies and the
     forward and backward split of a spinning ring of Beam2 (a free circular ring rotating about its axis, in-plane and
@@ -13370,4 +13436,67 @@ fixed by the item's registration ADR before any code.
     form derived or cited in the ADR, at three speeds up to half the first frequency: within the registered
     discretisation error at two meshes, the observed order within 0.5 of the expected one, and the split of each
     nodal-diameter pair within 1e-2 relative; the defaults bit-identical.
-  - note: Follow-up of F-675 (ADR 0598, 2026-11-15).
+  - note: Structural solver, advanced tier. Follow-up of F-675 (ADR 0598). DONE. ADR 0602, 2026-11-15: an independent
+    whirl reference for spinning beams, test-only (no library change). A free circular ring of Beam2 (R = 0.5 m, 30 x 20
+    mm steel section, the section axis y along the spin axis) on a 24-sector cyclic sector about an oblique axis with
+    CyclicOptions::beams, its in-plane and out-of-plane forward and backward whirl at nodal diameters 2 and 3 from
+    RotatingSector::whirl_modes, against the exact rotating-frame solution derived in the ADR: the spinning
+    shear-flexible ring with rotary inertia, the Coriolis term of the section kinematics u + theta x s, spin softening
+    and the hoop pre-stress rho A Omega^2 R^2, one 3 x 3 Hermitian gyroscopic problem per family and nodal diameter. It
+    reproduces the thin inextensional rotating-ring formula and the classical out-of-plane ring formula in the thin
+    limit within 3.3e-9. The rigid motions of the free ring (indices 0 and 1) are not solved; the pre-stress comes from
+    a copy with two reaction-free linear constraints through with_unit_prestress, because the free sector's own static
+    solve is singular. Speeds 1/6, 1/3 and 1/2 of the first frequency, without and with the pre-stress, two meshes: the
+    frequencies are within the registered discretisation error (worst 4.1e-3 coarse, 1.0e-3 fine; the limits are twice
+    the error predicted by an independent numpy polygon model, which the library matches to 3.1e-12), the observed order
+    is 1.9997 to 2.0067 (expected 2), and the forward and backward split of every pair is within 1.9e-3 (limit 1e-2).
+    The in-plane split, 83 to 250 rad/s, comes from the translation block; the out-of-plane split, 0.27 to 1.52 rad/s,
+    comes from the rotary block alone. Directions and wave senses are exact, the families are uncoupled to 4e-16, and
+    there is no split without Coriolis. Nine of nine mutations are caught, including the X5 of ADR 0598 (global axis
+    components), which the sector-against-ring check had missed. Not covered: indices 0 and 1, the sparse and state
+    whirl solvers, the ADR 0508 opt-in beam terms, and other section shapes. Follow-up F-680 (The centrifugal pre-stress
+    of a free cyclic sector).
+- [~] **F-680** The centrifugal pre-stress of a free cyclic sector
+  - depends on: F-679
+  - acceptance: Every limit not stated here is registered in the ADR before the run. RotatingSector::new with stress
+    stiffening on a free sector (no constraint removing the index-0 rigid motions), behind an opt-in, solves the index-0
+    centrifugal static problem with the rigid motions removed and gives the pre-stress of the ADR 0602 free ring within
+    1e-10 of the constrained-copy route, with the whirl frequencies of ADR 0602 unchanged within 1e-10; the defaults
+    bit-identical.
+  - note: Structural solver, advanced tier. Follow-up of F-679 (ADR 0602). PARTIAL. ADR 0606, 2026-11-15: the
+    centrifugal pre-stress of a free cyclic sector. The cyclic constraint leaves two of a free body's six rigid motions
+    at index 0, the axial translation and the rotation about the axis (derived in the ADR); the centrifugal load is
+    orthogonal to both, so two linear gauge constraints at one interior node (axial and tangential translation) carry
+    exactly no reaction and give the free stress. RotatingSector::new with stress stiffening and the opt-in
+    RotatingOptions::free_sector_prestress (default false) now solves the free sector this way
+    (rotating::free_sector_unit_static), and refuses a sector with supports or other constraints. On the free Beam2 ring
+    of ADR 0602, two meshes: the pre-stress equals the constrained-copy route within 9e-15 (limit 1e-10), the residual
+    at the interior nodes is 1.9e-14 of the load, the gauge node does not matter (3.3e-15), and the ADR 0602 whirl
+    frequencies are unchanged within 4.0e-12 (limit 1e-10). Without the option the free sector is still refused, and the
+    defaults are bit-identical (baseline_hashes and the existing rotating tests pass). Eight of nine mutations were
+    caught; the one that escaped took the branch with stress stiffening off, which changes no frequency because the
+    operator scales the geometric stiffness by zero, and the check compared frequencies only. Not covered: supported or
+    otherwise constrained sectors with the opt-in, solid and shell sectors, and RotatingPart::new on a free part.
+    Follow-up F-683 (The free-sector pre-stress on solid and shell sectors, and its scope without stress stiffening).
+- [ ] **F-681** The inertia-term residual reference on the energy-momentum step
+  - depends on: F-631, F-611
+  - acceptance: Every limit not stated here is registered in the ADR before the run. ResidualReference::InertiaTerms
+    taken by the energy-momentum step with the products of its midpoint inertia force; a free vibration of a solid
+    without external load over a registered number of periods at the default tolerance with no step rejected at a
+    rounding floor and the energy conserved within a registered limit; the default bits unchanged.
+  - note: Follow-up of F-631 (ADR 0603, 2026-11-15).
+- [ ] **F-682** Interaction integral on curved crack fronts
+  - depends on: F-632
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The interaction integral on
+    circular and elliptical fronts with the correction terms of auxiliary fields that are not exact there; a
+    penny-shaped crack under inclined tension with K_I, K_II and K_III along the front within 3 percent of the closed
+    forms, and the straight-front results of ADR 0605 unchanged.
+  - note: Follow-up of F-632 (ADR 0605, 2026-11-15).
+- [ ] **F-683** The free-sector pre-stress on solid and shell sectors, and its scope without stress stiffening
+  - depends on: F-680
+  - acceptance: Every limit not stated here is registered in the ADR before the run. RotatingSector::new with
+    free_sector_prestress on a free solid sector and a free shell sector gives the pre-stress of a constrained-copy
+    route within 1e-10 and a residual at the interior nodes within 1e-10 of the load; with stress stiffening off, the
+    opt-in leaves unit_prestress, the whirl frequencies and the refusals bit-identical to the run without it; the
+    defaults bit-identical.
+  - note: Follow-up of F-680 (ADR 0606, 2026-11-15).

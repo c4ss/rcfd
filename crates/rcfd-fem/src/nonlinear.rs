@@ -1363,6 +1363,12 @@ pub trait Contribution {
     fn in_residual_reference(&self) -> bool {
         false
     }
+    /// An extra lower bound of the reference of the driver's relative residual at `(u, load_factor)` (ADR 0603 D3), read
+    /// only when [`Contribution::in_residual_reference`] is `true` and taken only when `> 0`: the scale of the terms whose
+    /// cancellation the contribution's force is. The default `0.0` keeps the reference of ADR 0479 D2 bit for bit.
+    fn residual_reference_terms(&self, _u: &[f64], _load_factor: f64) -> f64 {
+        0.0
+    }
     /// Adds the derivative of this contribution's force with the load factor at `(u, load_factor)` to `out` (one value per
     /// equation), for the load direction of the arc-length iteration with `ArcLengthOptions::contribution_load` (ADR 0560
     /// D1, D3). The default adds nothing: a force that does not depend on the load factor.
@@ -1490,6 +1496,11 @@ fn contribute_with(
         if c.in_residual_reference() {
             bounded = true;
             reference = reference.max(norm(force.iter().copied()));
+            // ADR 0603 D3: the contribution's terms, only when it gives a positive bound.
+            let terms = c.residual_reference_terms(u, load_factor);
+            if terms > 0.0 {
+                reference = reference.max(terms);
+            }
         }
         for (a, b) in fint.iter_mut().zip(&force) {
             *a += b;
@@ -1527,6 +1538,11 @@ fn contribute_split(
         if c.in_residual_reference() {
             bounded = true;
             reference = reference.max(norm(force.iter().copied()));
+            // ADR 0603 D3: the contribution's terms, only when it gives a positive bound.
+            let terms = c.residual_reference_terms(u, load_factor);
+            if terms > 0.0 {
+                reference = reference.max(terms);
+            }
         }
         for (a, b) in fint.iter_mut().zip(&force) {
             *a += b;
