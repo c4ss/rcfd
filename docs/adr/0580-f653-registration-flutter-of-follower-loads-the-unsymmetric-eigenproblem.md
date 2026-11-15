@@ -292,3 +292,17 @@ ignored heavy record run once, with a fast test on the same code path.
 3. **The coefficient.** Taken: the derived `20.0509536` (two independent derivations agreeing to `1.5e-8`) is entered in
    `docs/reference-data.md` as derived, with this registration; the 20.05 of the acceptance is cited from memory and matches.
 4. **Case-file keys.** Not added (a schema golden would change).
+
+## Amendment 1 (2026-11-15, after the base run of the record N1, before any library line and any run of a check)
+
+The first base run of N1 (`f653-scratch/n1-base.log`, first attempt) stopped at `tangent_modes` with `ModalOptions::new(4)`:
+the default `ResidualTest::Relative` did not converge in 200 iterations on the slender Hex20 cantilever (residuals `1.2e-8 ..
+5.1e-11`, the floor of ADR 0354 for slender models). N1 and the symmetric reference of F5 therefore use
+`ModalOptions::new(4).residual_test(ResidualTest::Backward)` (as `sa_follower.rs` M1 to M6 do); `tangent_modes_full` ignores
+the residual measure (its test is that of D1). No limit changes. The base run with it printed, besides the digests, the
+values (disclosed): `follower::buckling_factors` with the follower `0.49300851`, `buckling::factors` `0.12334055, 0.49299475`
+(times 20: `2.46681` against Euler's `pi^2/4 = 2.46740`, and the strong plane at four times), `tangent_modes` at `p = 1`
+`omega^2 = 11035.1, 42595.1, 399709, 1616948`. Note for F7c: in this section (`b = 2 h`) the strong-plane Euler factor
+`4 (pi^2/4)/20 = 0.4935` and the factor `pi^2/20` of the symmetric part (arithmetic 3) coincide, so F7c does not tell them
+apart; it stays as registered (a real factor below `2.005` exists on the symmetric path) and F7 asks that the full path has
+none, in either plane (the follower acts on both).
