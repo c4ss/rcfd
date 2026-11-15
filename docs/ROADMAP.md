@@ -12782,7 +12782,7 @@ fixed by the item's registration ADR before any code.
     boundary-node curvature error of ADR 0567 (14 % at 32 x 32) reduced below 2 % by a registered boundary estimator,
     defaults bit-identical.
   - note: Structural solver, advanced tier. Follow-up of F-633 (ADR 0567, 2026-11-15).
-- [ ] **F-657** Whirl of a spinning annular disc of shells (rotary block of the shell Coriolis matrix)
+- [x] **F-657** Whirl of a spinning annular disc of shells (rotary block of the shell Coriolis matrix)
   - depends on: F-654
   - acceptance: Every limit not stated here is registered in the ADR before the run. The transverse modes of a flat
     annular plate clamped at its inner radius and spinning about its normal, from RotatingSector::whirl_modes with
@@ -12791,7 +12791,24 @@ fixed by the item's registration ADR before any code.
     half the first frequency within the registered discretisation error at two meshes, the observed order within 0.5 of
     the expected one, and the rotating-frame split of each nodal-diameter pair against the reference within the
     registered limit; models without shells keep their bits.
-  - note: Structural solver, advanced tier. Follow-up of F-654 (ADR 0569, 2026-11-15).
+  - note: Structural solver, advanced tier. Follow-up of F-654 (ADR 0569, 2026-11-15). DONE. ADR 0573, 2026-11-15: the
+    whirl of a spinning annular disc of shells, test-only (no library change), the first independent reference of the
+    rotary block m2 W^T [a x] W of the shell Coriolis matrix (zero on the band of ADR 0569). A flat annular plate (a =
+    0.04 m, b = 0.1 m, t = 5 mm, steel, nu = 0.3) clamped at its bore, on a 48-sector cyclic sector about a tilted axis,
+    its transverse forward and backward whirl from RotatingSector::whirl_modes with Shell4 and Shell3, against a
+    semi-analytical reference derived in the ADR: the Mindlin plate with rotary inertia in the rotating frame (Coriolis
+    and spin softening of the fibres, the closed-form plane-stress centrifugal membrane stress of the clamped-free
+    disc), a p-version Galerkin solve in r per nodal diameter, converged to 5e-11 and checked against the Kirchhoff
+    closed form (Bessel functions) in the thin limit within 5.2e-6. Nodal diameters 1, 2, 3, speeds 1/6, 1/3 and 1/2 of
+    the first frequency, without and with the library's own centrifugal pre-stress: frequencies within the registered
+    discretisation error at two meshes (worst 1.6e-2 coarse, 5.1e-3 fine, limits 2 and 4 times the estimate), observed
+    order 1.66 to 1.93 (expected 2), the rotating-frame split (3.3 to 31.3 rad/s, carried by the rotary block alone)
+    within 1.5e-2 coarse and 3.2e-3 fine (limit 4 times the estimate), whirl numbers likewise, directions and wave
+    senses exact, transverse and in-plane blocks uncoupled to 1.3e-8, no split without the Coriolis matrix (1.2e-12,
+    within the dense solver's rounding limit); models without shells keep their bits (no library line changed; every
+    rcfd-fem test, baseline_hashes, docs_site). Six of six mutations caught. Every check met in the one registered run.
+    Not resolved by these checks: the rotary spin softening and the opt-in t^2/12 rotation terms of the shell geometric
+    stiffness (below the discretisation error).
 - [ ] **F-658** Opt-in J-based volumetric part of the creep law on the F-bar Hex8 (NEEDS THE USER: material schema golden)
   - depends on: F-637
   - acceptance: Every limit not stated here is registered in the ADR before the run. An opt-in variant of the creep
