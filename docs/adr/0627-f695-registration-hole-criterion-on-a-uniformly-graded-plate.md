@@ -200,3 +200,28 @@ finite-width polynomial is not read; FW is its check by the repository's own con
   mesh least where the peak and the F-568 misses were, so the comparison isolates the grading along the hole.
 - **Q3. Which reference the 2 percent is against.** Options: (a) Kirsch's `3 sigma_0` (the clause literally), the finite width
   recorded and verified beside it; (b) `K_tg sigma_0` from the unread polynomial. Taken (a).
+
+## Amendment 1 (2026-11-15, written after the registered fast run, before any run of the copies, of the records and of the mutations)
+
+The registered fast run (commit cd92e896, `cargo test -p rcfd-fem --release --test sa_uniform_hole -- --nocapture
+--test-threads=1`, once, log `f695-scratch/run_fast.log`) met U1 (`7.5e-15`), U2 (`1.51e-10`, 1152 and 48), NC1 (4 outside,
+ranks 126, 127, 140, 141, rank-116 density `3.8e-6` from the F-568 digit), NC2 (48 of 48 outside by `eta_e`), P2 (`+1.4061e-2`
+of `3 sigma_0`) and FW24 (`3.037015`). **P3 missed: 20 of the 48 hole-edge elements lie outside the 116 of largest density**
+(density ranks 117 to 365; the density of rank 116 `2.5521e-1`, the smallest at the hole edge `1.7055e-1` at 5.6 degrees). The
+hole-edge density is `0.376` at 35 to 39 degrees, falls to `0.17` to `0.22` at 2 to 13 degrees and to `0.23` to `0.245` at 69
+to 84 degrees, and is `0.292` at 88 degrees; the top 116 hold 28, 22, 22, 22, 20 and 2 elements of rings 0 to 5. No limit is
+changed.
+
+Changes before any further run:
+
+- `u1_u2_p3_nc2_p2_uniform_plate` becomes the ignored record `u1_u2_p3_nc2_p2_uniform_plate_known_miss` (body unchanged, the
+  numbers in the ignore text). U1, U2, NC2, P2 and P2r, which were met, are continued unchanged in `u1_u2_nc2_p2_uniform_plate`.
+- Diagnosis record **DQ1** (registered now, no limit, record only, ignored, run once): on the uniform plate, layer 0, the density
+  of rings 0 to 5 at each of the 24 angular cells, and for each hole-edge cell outside the tenth the number of elements of each
+  ring that outrank it. Hypothesis written before the record: along each line the density of rings 0 to 4 is nearly constant
+  (within about 20 percent), because the graded mesh roughly equidistributes `h^2 sigma''` near the hole; the ranking is then
+  decided by the angle, and the hole-edge cells at 0 to 15 and 65 to 85 degrees are outranked by rings 1 to 4 at 20 to 60
+  degrees.
+- The heavy record FW / P2b is run once as registered.
+- Mutations are run on the fast set as registered; since P3 is now ignored, the known-miss record is also run under each
+  mutation (`--include-ignored` for that test only) and its count of hole-edge elements outside is recorded, not judged.
