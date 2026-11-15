@@ -243,3 +243,11 @@ amendment, and both planned mutations are caught by the registered check D (MU3 
    whose discretisation error is linear in the load. Options: (a) leave it to this cylinder; (b) use it for the stress field
    (the bore-zone stress at `p` minus the scaled stress at `q`, against the same difference of the reference) in F-637.
    Recommendation: (b), within F-637.
+
+## For the lead: roadmap entries
+
+> F-636 (done, ADR 0563, 2026-11-15): on the cylinder of ADR 0549 at the registered p (p/E = 1e-4), the error of the 2304 points with r < 1.1 a against the finite-strain reference of ADR 0549 is 5.96e-3 at 5 t* and 1.03e-2 at 20 t* (limit 2e-2), its growth 4.34e-3 within the registered bound 6e-3 (proxy estimate 4.33e-3; the growth is the F-bar pressure drift of ADR 0549 F4, which lies in the bore zone, F-637). The bore-zone stress does not see the two mutations ADR 0549 missed (both lower the growth, as predicted); the registered witness that catches them is the finite-strain part of the bore displacement, isolated by a second run at p/100 (the discretisation error of the element, -1.1e-3 of the displacement, is linear in the load and cancels): the B-bar element's drift between 5 t* and 20 t* agrees with the reference's within 7.9e-4 (limit 5e-2), while the linear strain in the BBar arm gives 0.19 and the creep rate halved 0.73, both caught, both predicted to two digits by a one-dimensional proxy. Reference converged (400 against 800 elements 7.7e-7 in the bore zone, 9e-7 on the drift), the drift a finite-strain effect (3.3e-3 of the displacement). Test only (si_fbar_bore.rs, helpers copied from si_fbar.rs, which is unchanged); the checks of ADR 0549 pass unchanged; no source file changed; rcfd-fem tests, baseline_hashes, docs_site, fmt and clippy pass.
+
+> F-637 (note addition, ADR 0563, 2026-11-15): the pressure drift is what the bore-zone growth of ADR 0563 measures (4.34e-3 at r = 1.093, the point-wise growth 4.40e-3 at r = 1.0545); the pair of runs at p and p/100 of ADR 0563, which cancels the discretisation error linear in the load, is available to isolate its finite-strain part in the stress, and a deviatoric bore-zone measure (sigma_theta - sigma_r) would not carry it.
+
+No new follow-up is proposed: the remaining questions of addendum 1 belong to F-637.
