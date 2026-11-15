@@ -364,3 +364,11 @@ Remaining questions:
 2. `response_with_base` still refuses base motion on the transformation path (the opt-in route, kept so that ADR 0543 RT1
    holds). Options: keep; or route it to the new solve and supersede RT1 by an ignored record. Recommendation: keep until the
    case file gets a direct harmonic analysis, and decide with that item.
+
+## For the lead: roadmap entries
+
+Proposed status of F-619: done by the registered rule. Note:
+
+> Structural solver, advanced tier. Follow-up of F-528 (ADR 0543, 2026-11-15). ADR 0565, 2026-11-15: rcfd_fem::harmonic_direct::DirectHarmonic::response_with_references takes a BaseMotion at the prescribed equations of a model on the transformation path (rigid sets, linear constraints, elastic supports): x = T q + G, G the constant of the ADR 0296 elimination with the real and with the imaginary base values (T unchanged; crate-internal mpc::transformation_with_values), A_r Q = T^T (F - A_ext G) with A_ext of ADR 0543 on its extended pattern (stiffness parts with their coefficients, supports, K_sigma, mass, Rayleigh, dashpots); it returns DirectHarmonicSolution, the mesh response and the six complex reference unknowns of each rigid set (HarmonicReference). response_with_base keeps its refusal on the transformation path (opt-in route; ADR 0543 RT1 unchanged). Met: the ADR 0448 H6 bar with the tip spring against the 1-D chain within 2.4e-13 (limit 1e-8; with loss factor, Rayleigh, base dashpots, complex base 1.2e-13 to 5.9e-13); a rigid set on the base nodes: chain 2.4e-13 and references equal to t = (G, 0, 0), w = 0 exactly; both ends driven through linear constraints 1.3e-13; a cantilever with rigid set, spring, foundation, loss factor, Rayleigh, dashpot and pre-stress against the relative-motion solve within 8.6e-13 (references 1.7e-12), the rigid-set kinematics of the returned references 1.0e-17; 1 and 8 threads bit-identical; defaults bit-identical (7 digests, baseline hashes). 13 of 13 mutations caught by registered checks. Not covered: constraint forces on the transformation path; no case-file key (the case file has no direct harmonic analysis).
+
+No follow-up item is proposed (remaining question 1: the constraint forces on demand).
