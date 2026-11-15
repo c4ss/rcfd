@@ -12860,14 +12860,26 @@ fixed by the item's registration ADR before any code.
     every existing result and the bit records bit-identical; the schema golden changed only with the maintainer's
     approval.
   - note: Structural solver, advanced tier. Follow-up of F-637 (ADR 0568, 2026-11-15).
-- [ ] **F-659** Vertex-patch smoother on a mesh sequence of thin plates (robustness of the ADR 0572 smoother in h/t)
+- [x] **F-659** Vertex-patch smoother on a mesh sequence of thin plates (robustness of the ADR 0572 smoother in h/t)
   - depends on: F-641
   - acceptance: Every limit not stated here is registered in the ADR before the run. The Shell4 and Shell3 simply
     supported plates on at least three meshes, at thicknesses where the CG's true-residual floor is below the tolerance,
     solved by SmoothedAggregationStructural with Smoother::VertexPatch and a forced hierarchy in a registered number of
     iterations each, the growth of the count with h/t bounded by a registered limit; the default settings' bits
     unchanged.
-  - note: Follow-up of F-641 (ADR 0572, 2026-11-15).
+  - note: Structural solver, advanced tier. Follow-up of F-641 (ADR 0572). DONE. ADR 0577, 2026-11-15: the ADR 0572
+    vertex-patch smoother (SmoothedAggregationStructural with Smoother::VertexPatch, max_coarse 60, tau 1e-9) on the
+    simply supported unit plate on 8, 16, 32 and 64 square meshes, Shell4 and Shell3, at every thickness of t/a 0.1,
+    0.03, 0.01, 0.003, 0.001 whose residual-floor probe (restarted CG to 1e-14) is at most tau/4 (34 cases; the next
+    thinner thickness on each limited mesh checked above it). Counts, all without restart and within 4.8e-11 of the
+    direct solve: Shell4 n 8: 6, 9, 11, 14, 14; n 16: 7, 12, 19, 26; n 32: 8, 14, 24; n 64: 9, 13, 24; Shell3 n 8: 8, 9,
+    9, 9, 9; n 16: 10, 14, 16, 16, 16; n 32: 11, 18, 22, 25, 25; n 64: 13, 20, 32, 41 (limits 1.5 x the prototype).
+    Growth exponent of the count in h/t per mesh at most 0.477 (limit 0.6; Shell4 0.18 to 0.48, Shell3 0.03 to 0.33),
+    below the node smoother's on every mesh (Shell4 0.56 to 0.88). The count also grows with n at fixed t (t/a 0.1: 6 to
+    9 and 8 to 13 from n 8 to 64; t/a 0.01 Shell3 9 to 32), recorded, not bounded. No source change; default bits
+    unchanged (F-641 digests and existing tests pass). Four of four mutations caught. Not covered: thinner plates on the
+    fine meshes (floor-limited: finest meshes reach only h/t 1.56 Shell4, 5.2 Shell3), distorted or curved meshes, other
+    supports, memory of the patch inverses.
 - [ ] **F-660** Case-file key for the structural smoothed aggregation with the vertex-patch smoother
   - depends on: F-641, F-640
   - acceptance: Every limit not stated here is registered in the ADR before the run. A solid_case solver key selects
