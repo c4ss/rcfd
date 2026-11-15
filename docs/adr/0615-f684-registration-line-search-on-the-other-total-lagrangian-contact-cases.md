@@ -237,3 +237,119 @@ The new test file `crates/rcfd-fem/tests/sa_contact_line_search_f684.rs` (it use
 2. **How to locate a failure.** Options: (a) a passive recording contribution through `solve_with`'s `extra` (test only, D2);
    (b) a library field in the error (changes error texts, a default output). Taken (a).
 3. **Library changes.** Taken: none unless a run diagnoses a defect (then by an amendment).
+
+## Addendum 1: results (2026-11-15)
+
+The test file was committed (f8ae47a9) after the registration (803be07d). The fast test ran once before that commit and the heavy
+records once after it, with nothing in between that changes a run. Logs in `w49i-work/f684-scratch`: `run-fast.log` (P),
+`run-heavy.log` (HS10 and HS20, one test thread, 172 s, free memory 7.8 GB at the start), `mut-MA.log`, `mut-MB.log`,
+`mut-MC.log`, `run-mut.log`, `run-mut2.log`, `clippy.log`, `run-B.log`. No limit was changed, no amendment was made and no
+diagnostic run followed the registered ones. No library line was changed.
+
+| id | limit | measured | met |
+|---|---|---|---|
+| PL P-0 refused at the first tangent | the text | "load step 1 of 1, augmentation 0: solver newton: singular tangent: pivot -9.009926067085571e8 at node 2418 component 0 (diagonal 9.939e10)" | yes |
+| PL P-L: P-0's text; recorder 1 evaluation, 0 corrections | equal; holds | equal byte for byte; one segment, 1 evaluation, 0 corrections | yes |
+| PLF1 P-LF converges | converges | converges (1.65 s) | yes |
+| PLF2 record equal to P-F's; fallback 1 in the first solve, 1 in all | equal; 1; 1 | `[(3, 1), (2, 0), (2, 0)]` both; 1; 1 | yes |
+| PLF3 one length per correction, all 1 | all; all | `[[1, 1, 1], [1, 1], [1, 1]]` | yes |
+| PLF4 P-LF against P-F | bit for bit | bit for bit (displacement, residuals, energies of the 3 solves) | yes |
+| DH HS20-0: ADR 0551's text; refusal at iteration 1 | holds; 1 | "pivot -1.4835732797044943e-1 at node 1129 component 1 (diagonal 2.036e-2)"; 2 evaluations, 1 correction | yes |
+| DH HS10-0: ADR 0551's text; refusal at iteration 1 | holds; 1 | "pivot -3.363022575389211e-2 at node 931 component 1 (diagonal 4.723e-2)"; 2 evaluations, 1 correction | yes |
+| HK0 `alpha_0`: HS20-L, HS20-LF, HS10-L, HS10-LF | `<= 0.9` each | 0.26123, 0.26123, 0.24875, 0.24875 (L and LF equal bit for bit) | yes |
+| HL HS20-L | converges or a located failure | converges (25.9 s), 10 solves, Newton iterations `[9, 3, 3, 3, 3, 3, 3, 2, 2, 2]` | yes |
+| HL HS10-L | converges or a located failure | converges (52.3 s), 13 solves, `[7, 3, 3, 3, 3, 3, 3, 3, 3, 2, 2, 2, 2]` | yes |
+| HLc HS20-L: radius, peak, approach; `F_fe`, `a_M` against ADR 0570 | `0.15`, `0.20`, `0.10`; `1e-3` | 2.51e-2, 1.23e-1, 2.65e-2; 8.3e-6, 3.8e-5 | yes |
+| HLc HS10-L: the same | the same | 5.78e-3, 1.23e-1, 2.31e-2; 1.2e-5, 3.5e-5 | yes |
+| HLF1 HS20-LF, HS10-LF converge | converges | both converge (19.9 s, 71.8 s); the same records as HS20-L and HS10-L | yes |
+| HLF2 HS20-LF: radius, peak, approach | `0.15`, `0.20`, `0.10` | 2.51e-2, 1.23e-1, 2.65e-2 | yes |
+| HLF2 HS10-LF | the same | 5.78e-3, 1.23e-1, 2.31e-2 | yes |
+| HLF3 HS20-LF `F_fe`, `a_M` against 1.4088e-3, 0.10118 | `<= 1e-3` | 8.3e-6 (`F_fe` 1.408812e-3), 3.8e-5 (`a_M` 0.1011762) | yes |
+| HLF3 HS10-LF against 1.4159e-3, 0.09944 | `<= 1e-3` | 1.2e-5 (1.415883e-3), 3.5e-5 (0.09943648) | yes |
+| HLF4 fallback iterations, all solves | `<= 2` | 0 and 0 | yes |
+| SL converged runs with the line search: one length per correction, in `(0, 1]` | all | all (P-LF, HS20-L, HS20-LF, HS10-L, HS10-LF) | yes |
+| RT trials per correction | `<= 9` | P-LF 1, HS20 4, HS10 3 | yes |
+| RA recorder corrections per solve; `alpha` against `step_lengths` | equal; `<= 1e-6` | equal on all five; 0, 1.0e-14, 1.0e-14, 5.8e-15, 5.8e-15 | yes |
+| B no library line changed; the three existing test files | empty; pass | `git diff a9efc22e -- crates/*/src` empty; `sa_contact_tl_fallback_f639` 4 passed, `sa_newton_supernodal_f618` 4 passed, `sa_contact_lifted_f608` 7 passed | yes |
+
+Recorded (no limit). Step lengths below 1: HS20-L and HS20-LF first solve `[0.2612, 1, 1, 0.6605, 1, 1, 1, 1, 1]`, every later
+solve all 1; HS10-L and HS10-LF first solve `[0.2488, 1, 1, 1, 1, 1, 1]`, the eighth solve (augmentation 7) `[1, 1, 0.6056]`,
+every other all 1. Trials of the damped corrections: HS20 4 and 2, HS10 3 and 2. Final state: HS20 41 of 280 contactor nodes
+active, penetration 8.1e-9, 9 augmentations; HS10 30 of 289, 9.7e-9, 12 augmentations (ADR 0570: 9 and 12 augmentations, the
+same active counts). Penetrations at the end of the first solve 1.6e-5 (HS20) and 2.6e-5 (HS10).
+
+### Notes on the results
+
+1. **The line search alone solves both Hertz cases; the fallback is never taken.** The `-L` and `-LF` runs give the same
+   records, readings and step lengths (`alpha_0` equal bit for bit): with the line search every exact tangent factors, so
+   `curvature_fallback` stays unused, as it did on ADR 0607's T2 punch. Arithmetic 1 was what this turned on. The contact
+   driver's solves start with the prescribed values already in `u` (`lc = lt`), so the first correction is searched, and its
+   length 0.26 (HS20) or 0.25 (HS10), at the low end of arithmetic 5's 0.25 to 0.45, keeps the iterate from going 0.01 into the
+   sphere. Without the cut the next tangent is the one ADR 0551 saw refused. DH places that refusal at iteration 1 for both
+   meshes, which settles the question ADR 0570 arithmetic 1 left open (the iteration was not recorded). The cause is the
+   curvature part at the full-step iterate. The element tangent is not the cause, since the damped iterate factors.
+2. **P is the opposite case.** Its exact tangent is refused at the start, before any correction, so the line search cannot act
+   there and P-L ends with the default's text byte for byte (arithmetic 2). With the fallback, every step passes the test at
+   `alpha = 1` and the run is P-f's bit for bit (arithmetic 3). On this case only the fallback matters.
+3. HS-LF reaches ADR 0570's HS20f and HS10f state to 1e-5 in `F_fe` and 4e-5 in `a_M`. That is the 5-digit rounding of ADR 0570's
+   printed values, so the line search changes the path and not the solution. The Newton iterations of the first solve drop
+   from 10 to 9 (HS20) and from 9 to 7 (HS10). The later solves are the same as ADR 0570's.
+4. MC (below) shows the same mechanism from the other side: with iteration 0 not searched, HS20-L is refused at iteration 1
+   with ADR 0551's text, and HS20-LF goes back to ADR 0570's HS20f record `[(10, 1), ..]`, one fallback iteration.
+
+### Mutations
+
+Each alone on a `git archive` copy of f8ae47a9 (`f684-scratch/mut`, target `target-mut`, `mutate.py`). The fast test was run
+once each; for MC the HS20 heavy record was also run. After each run the copy was checked identical to the worktree up to line
+endings (`diff -r --strip-trailing-cr`). On the first attempt the restore of MA found its replacement text twice (an existing
+`step_lengths: Vec::new(),` on the linear path). The script was stopped before MB's test ran, the source files were extracted
+again from the archive, and MB and MC were run on the clean copy (`run-mut2.log`). MA's own run was on a clean copy and stands.
+
+| id | mutation | caught by |
+|---|---|---|
+| MA | the total Lagrangian path reports `step_lengths: Vec::new()` | PLF3 (`[[], [], []]`), SL |
+| MB | `ContactSet::has_fallback_tangent` returns `false` | PLF1 (P-LF refused with P-0's text) |
+| MC | the line search skips iteration 0 | HK0 on HS20 (`alpha_0 = 1` in both runs; HS20-L then fails at iteration 1 with ADR 0551's text, HS20-LF takes one fallback iteration); the fast test passes, as registered |
+
+Three of three were caught by the checks named for them.
+
+### Crate runs
+
+`cargo fmt -p rcfd-fem --check`: clean. `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings`: clean. Release
+runs: the new test file (fast test, and the two heavy records run once), and the existing `sa_contact_tl_fallback_f639`,
+`sa_newton_supernodal_f618` and `sa_contact_lifted_f608` (B). The `rcfd-fem` suite and `baseline_hashes` were not run because
+no library file changed. The workspace suite was not run (the lead's gate).
+
+Files: the new test file `crates/rcfd-fem/tests/sa_contact_line_search_f684.rs` and this ADR. No library file, existing test
+or record was edited.
+
+### Deviations
+
+None from the registration. The mutation restore incident above does not touch a registered run.
+
+### Decision
+
+**done** by the registered rule. Every check was met on its registered run, the heavy records included. Three of three planned
+mutations were caught by checks named for them, and fmt and clippy are clean. On the acceptance: all six runs were made. Four
+converge (HS20-L, HS20-LF, HS10-L, HS10-LF, the last two identical to the first two) and P-LF converges. P-L fails, and the
+failure is diagnosed: a tangent refused at the start, before any correction. The fallback iterations and step lengths of each
+run are recorded with registered limits.
+
+### Remaining questions
+
+1. **Defaults** (ADR 0570 question 1, ADR 0607 question 1). The cases now cover the line search: it solves the T2 punch (ADR 0607)
+   and both Hertz cases on its own, and the fallback solves P on its own. No case needs both, and no case gets worse with both:
+   every run here with both options matches the better single-option run. Options: (a) keep both opt-in; (b) make both the
+   default of the total Lagrangian contact body by a superseding ADR, which changes the outcomes of ADR 0542 P, ADR 0551
+   HS20t/HS10t and ADR 0519 probe 2 from refusals to solutions, and any default run with `alpha < 1`. Recommendation: (b), as a
+   maintainer decision. It changes default results and records, so it is not taken here.
+2. **A case that needs both options together.** None is known. Options: (a) leave it; (b) look for one, e.g. a hub with a
+   prescribed push-in. Recommendation: (a). No follow-up is proposed.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> Structural solver, advanced tier. Follow-up of F-608 and F-639 (ADR 0607, ADR 0570). DONE. ADR 0615, 2026-11-15: NewtonOptions::line_search run on the total Lagrangian contact cases with and without curvature_fallback, no library change. ADR 0542 P (hub, n = 4, d = 1e-3 a, supernodal): with the line search alone it is refused with the default's text byte for byte (the exact tangent fails at the start, before any correction the search could shorten); with both options it is ADR 0570's P-f bit for bit, record [(3, 1), (2, 0), (2, 0)], every step length 1. ADR 0551 HS20t and HS10t: the default refusal is at Newton iteration 1 (located by a passive recording contribution), after the full first correction; the contact driver's solves start with the prescribed values in u, so the first correction is searched and cut to 0.26 (HS20) and 0.25 (HS10). Every later tangent factors, and both cases converge with the line search alone (fallback iterations 0, identical with the fallback on): radius 2.5e-2 and 5.8e-3, peak 1.23e-1, approach 2.7e-2 and 2.3e-2, F_fe and a_M within 4e-5 of ADR 0570's HS20f/HS10f; other step lengths below 1: one each (0.66, 0.61). Trials per correction at most 4. 3 of 3 mutations caught. Making the line search and the fallback the default is the maintainer's call (it turns the refusals of ADR 0542 P and ADR 0551 into solutions).
+
+> Text F-608's note should gain: "Follow-up F-684 done (ADR 0615, 2026-11-15): the line search alone solves ADR 0551 HS20t and HS10t; ADR 0542 P needs the fallback (refused at the start)."
