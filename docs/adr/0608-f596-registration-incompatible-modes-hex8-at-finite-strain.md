@@ -359,3 +359,116 @@ the creep-strain increment over the step is about `1e-4`, below the limit `5e-4`
 does not start at equilibrium). The test of run 1 stays as the ignored record
 `rf1_incompatible_taken_after_f596` (`#[ignore = "record of run 1 ..."]`); the corrected test is
 `rf1_incompatible_taken_after_f596_amended`, every other row unchanged. Every other check of run 1 is final as run.
+
+## Addendum 1: results (2026-11-15)
+
+Registered run 1 of `crates/rcfd-fem/tests/si_eas.rs` at 86c3c1a3 (`f596-scratch/run1-si_eas.log`, release, `--test-threads
+2`), made once; the RF1 row `solve_in_time` missed by a set-up defect (amendment 1) and its corrected test ran once at 0c11cfe1
+(`f596-scratch/run2-rf1-amended.log`). B0 ran on the base c64046db (`f596-scratch/b0-base.log`) and again at the head (S1).
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| SS1 element at `u = 0` against `element_stiffness(Incompatible)` (T1 element, 36 patch elements; force at 0) | `<= 1e-13` | `1.90e-16` | yes |
+| SS1 patch, `tangent(0)` against `assemble::stiffness` | `<= 1e-13` | `1.21e-16` | yes |
+| SS1 cantilever, the same | `<= 1e-13` | `1.14e-16` | yes |
+| SS2 `eps = 1e-6`, `1e-4`; ratio | `<= 1e-5`, `<= 1e-3`; `[30, 300]` | `1.056e-6`, `1.056e-4`; `100.02` | yes |
+| SS3 cantilever `s = 1e-3` | `<= 1e-6` | `4.80e-7` | yes |
+| PT1 `nu = 0.3`, `0.4999` | `<= 1e-10` | `1.7e-16`, `1.0e-15` | yes |
+| PT2 `100 FIELD_A`, 4 steps | `<= 1e-10` | `1.3e-16` | yes |
+| PT3 `R(60 deg)(I + 100 FIELD_A)`, 8 steps | `<= 1e-10` | `1.2e-16` | yes |
+| PT4 J2, every point yielded | `<= 1e-10` | `1.7e-16` (set-up met) | yes |
+| PM modes on PT1 to PT4 | `<= 1e-10` | `0` (exactly; the local iteration stops at its first test) | yes |
+| PS stress on PT2 | `<= 1e-10` | `1.79e-15` | yes |
+| T1 (a) SVK small, (b) rotated, (c) J2, (d) creep, (e) neo-Hookean | `<= 1e-6` | `2.5e-11`, `1.6e-8`, `1.3e-10`, `7.3e-11`, `7.7e-9` (set-ups 8 of 8) | yes |
+| T2 the same | `<= 1e-12` | `<= 3.5e-16` | yes |
+| T3 extended 33 x 33 tangent | `<= 1e-6` | `1.91e-9` | yes |
+| T4 (a), (b), (e) | `<= 1e-10` | `5.8e-16`, `1.2e-14`, `2.2e-15` | yes |
+| X1 strain against the test's enhanced `F` | `<= 1e-12` | `0` (bit-equal) | yes |
+| Q1 Q(10, 1e-13) on the sheared block; informative pair per step | 0 violations; every step | 0 of 12; 4 of 4 (largest ratio `0.231`) | yes |
+| CE elastica | `<= 1e-6` | `3.8e-9`, `8.3e-10` | yes |
+| CB1 50 x 1 x 1, alpha 1: `v`, `d` | `<= 2e-3` | `1.53e-4`, `3.44e-4` | yes |
+| CB1 alpha 2 | `<= 2e-3` | `2.26e-4`, `4.64e-4` | yes |
+| CB2 25 x 1 x 1, alpha 1; alpha 2 | `<= 2e-3` | `1.73e-4`, `2.03e-4`; `1.38e-4`, `1.46e-4` | yes |
+| CB3 against Hex20 50 x 1 x 1, alpha 1; alpha 2 | `<= 2e-3` | `8.3e-5`, `1.36e-4`; `7.3e-5`, `1.14e-4` | yes |
+| NT1 strain energy | `<= 1e-12` | `0` | yes |
+| RF1 (run 1) | exact | 8 of 9 rows; `solve_in_time` set-up defective (amendment 1) | record |
+| RF1 amended | exact | 9 of 9 | yes |
+| RF2 (the copy of D6) | passes | 31 rows met | yes |
+| B0 11 digests | bit-equal | 11 of 11 bit-equal at 0c11cfe1 (`b0_default_paths_keep_their_bits` ok) | yes |
+| S1 `cargo test -p rcfd-fem --release` | 0 failed | 319 test binaries, 1315 passed, 0 failed, 332 ignored, at 0c11cfe1 (`f596-scratch/s1-rcfd-fem.log`) | yes |
+| S2 `baseline_hashes`; `docs_site` | pass | `baseline_hashes` 3 passed, 0 failed, 1 ignored; `docs_site` 2 passed (`s2-baseline.log`, `s2-docs.log`, at 94c17d3e) | yes |
+| S3 fmt, clippy | clean | `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean after commit 94c17d3e (one `neg_cmp_op_on_partial_ord` in the pivot test rewritten, the same branches; the S1 run was on 0c11cfe1) | yes |
+
+Controls: CL plain Hex8 50 x 1 x 1 `|v/v_ref - 1|` `0.298` and `0.234` (expected `>= 0.1`; `d` `0.515`, `0.438`); CN plain
+Hex8 200 x 1 x 1 `2.49e-2`, `5.09e-2` (alpha 1) and `1.75e-2`, `3.84e-2` (alpha 2) (expected `>= 5e-3`); N3 `0.126` (expected
+`>= 1e-3`); N4 (report) plain Hex8 400 x 1 x 1 `6.15e-3`, `1.27e-2` and `4.17e-3`, `9.31e-3`; the Hex20 run of CB3 against the
+elastica `2.36e-4`, `4.80e-4` and `2.99e-4`, `5.79e-4` (ADR 0404's A6 numbers reproduced). The residual histories of CB1 are
+those of the probe (step 1 of alpha 1: `1, 0.99989, 0.394, 5.93e-5, 3.76e-6, 2.4e-12`): no order reading there, as registered.
+So with 25 elements this element is within `2.1e-4` of the elastica, while the plain Hex8 with 400 elements (16 times) is still
+`4.2e-3` to `1.3e-2` away.
+
+### Deviations
+
+- SS3's estimate (`<= 1e-9`) was wrong by a factor of 500; the measure `4.8e-7` met its limit. Diagnosis: the measure is the
+  largest component of `u_nl/s - u_lin` relative to the largest component of `u_lin`; the axial shortening `~ theta^2 L` is
+  quadratic in the load, so relative to the deflection it is of first order in `delta/L` (`1.6e-6 / 2 = 8e-7` at `s = 1e-3`,
+  times a factor of order one), not of second order as arithmetic 8 assumed. The residuals `1, 4.6e-4, 3.0e-13, 2.3e-13` show
+  the same: the linear predictor leaves a residual of order `delta/L` relative.
+- RF1's `solve_in_time` row: amendment 1 (set-up defect, the same failure with Full and BBar); the run-1 test stays as the
+  ignored record `rf1_incompatible_taken_after_f596`.
+- PM measured exactly zero: on a homogeneous field the first local test finds `R_a` below `LOCAL_TOLERANCE` of its scale, so
+  the modes stay at their start value 0 (arithmetic 4). The measure cannot tell rounding from exact zero here; MU5 shows it
+  responds when the modes do not integrate to zero.
+
+### Mutations
+
+Each on the scratch copy `f596-scratch/mut` (a git archive of 0c11cfe1), run once against `si_eas.rs`, then reverted
+(`f596-scratch/mutate.py`, logs `mutations.log`, `mut-MU*.log`).
+
+| Id | Expected | Caught by | Caught |
+|---|---|---|---|
+| MU1 `K_c = K_uu` | T1, Q1 | T1, Q1 (61 of 65 violations), SS1, RF1, CB1 to CB3 | yes |
+| MU2 `alpha` stays 0 | T1, T4, CB1 | T1, T4, SS2, Q1, CB1 to CB3 | yes |
+| MU3 one local step | T1 (b), T4 | T1 (b) to (e), T4, Q1 | yes |
+| MU4 correction to the residual dropped | not caught (equivalent) | none | equivalent, as registered |
+| MU5 Taylor's correction dropped | PT1, PM, SS1 | PT1 to PT3, PM, PS, SS1, SS2 | yes |
+| MU6 geometric stiffness without mode rows | T1 (a, b), T3 | T1 (a) to (d), T3, Q1 | yes |
+| MU7 `check_model` refuses Incompatible | RF1 | RF1, RF2 and every driver check | yes |
+| MU8 compatible strain in `strain_energy` | NT1 | NT1 (`2.34e-5`) | yes |
+| MU9 dispatch dropped | SS1, CB1 | SS1 (assembled), SS3, CB1 to CB3 | yes |
+| MU10 MU3 with MU4 | T1 (b) | T1, T4, Q1 | yes |
+
+Nine of nine non-equivalent mutations caught by a registered check.
+
+### What was not run
+
+Nothing registered was skipped. The viscoelastic material through the element is covered by no check (Limits); the cost of the
+local iteration was not measured.
+
+### Decision by the registered rule
+
+**done.** Every check met in its single registered run (RF1's `solve_in_time` row through amendment 1, a set-up defect
+corrected before its run), the negative controls as stated, every planned mutation but MU4 caught (MU4 equivalent as
+registered), `baseline_hashes` unchanged, B0 bit-equal. Not yet accepted by the maintainer.
+
+### Remaining questions
+
+1. **Warm start of the modes** (open question 1, taken (a)). Options: keep (a); (b) store the modes per element in the state
+   and start the local iteration from them. Recommendation: keep (a) until a model shows the local iteration's cost; (b)
+   changes the state layout of every nonlinear path.
+2. **Hourglass instability in compression.** Options: (a) leave it unchecked (now); (b) a registered check of the element under
+   large homogeneous compression of a patch with a bifurcation reading (the lowest eigenvalue of the condensed tangent against
+   the Full element's), and a stabilisation if it fails. Recommendation: (b) as the follow-up proposed below, before the element
+   is advertised for compression-dominated models.
+3. **A case-file key** for the formulation of a nonlinear solid block: the existing follow-up of ADR 0506 (open question 3
+   there) now covers Incompatible as well. Recommendation: one key for both formulations, in that follow-up.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> Structural solver, intermediate tier. Follow-up of F-587 (ADR 0506, 2026-11-14). Done. ADR 0608, 2026-11-15: the incompatible-modes Hex8 of F-390 at finite strain in the nonlinear driver, as the enhanced deformation gradient of Simo and Armero (F = I + Grad u + sum_k alpha_k (x) G_k with the nine Wilson modes and Taylor's centre-Jacobian correction, so that the enhancement integrates to zero), new module rcfd_fem::nl_incompatible: at every element evaluation the modes solve R_a = 0 by a local Newton iteration from 0 (tolerance 1e-12 of the cancelling terms, at most 25 iterations, refusal key "internal modes"), and the element returns the condensed force f_u - K_ua K_aa^{-1} R_a and tangent K_uu - K_ua K_aa^{-1} K_au; no element state is added. The refusal of ADR 0506 D2 is removed for Incompatible blocks only (the energy-momentum step, temperature fields and hex8_strains(Incompatible) stay refused, the linear paths unchanged). Met in the registered run: tangent at rest equal to the F-390 condensed stiffness to 1.9e-16 (assembled 1.2e-16); modes against the linear modes O(eps) (ratio 100.0 between eps 1e-6 and 1e-4); patch tests at finite strain (strains 0.1, a 60 degree rotation, J2) to 1.2e-16 to 1.0e-15 with the modes exactly zero; consistent tangent against central differences 2.5e-11 to 1.6e-8 for SVK, J2, creep and neo-Hookean, the uncondensed 33 x 33 tangent 1.9e-9; Newton on a 30 per cent sheared block with no violation of the Q(10, 1e-13) reading of ADR 0515 (largest ratio 0.23); the elastica cantilever (alpha 1 and 2) within 4.6e-4 on 50 x 1 x 1 and 2.1e-4 on 25 x 1 x 1, within 1.4e-4 of the Hex20 50 x 1 x 1 run, where the plain Hex8 is off by 0.23 to 0.52 on 50 elements and by 4.2e-3 to 1.3e-2 on 400. One RF1 row had a defective set-up (an elastic material on the time-stepping driver from an equilibrium start; Full and BBar fail the same way), corrected by amendment 1 before its run. Defaults bit-identical (11 digests recorded on the base, every rcfd-fem test, baseline_hashes). Nine of nine non-equivalent mutations caught (the condensation correction to the residual registered as equivalent at the local tolerance). Not covered: the hourglass instability of enhanced elements in large compression, a warm start of the modes, the viscoelastic material through the element, a case-file key.
+
+> F-587 (note, ADR 0608, 2026-11-15): the incompatible-modes Hex8 is no longer refused by the nonlinear driver; F-596 takes it.
+
+> Follow-up proposed: Hourglass stability of the incompatible-modes Hex8 at finite strain in compression. Deps F-596. Acceptance: Every limit not stated here is registered in the ADR before the run. The ADR 0608 element under homogeneous compression of a distorted patch to a registered stretch: the lowest eigenvalue of the condensed tangent tracked against the Full Hex8 and a closed-form bifurcation-free reference, the stretch at which a spurious zero eigenvalue appears reported; if it appears within the registered range, a stabilisation from the published literature that keeps the ADR 0608 checks within their limits; the default bits unchanged.
