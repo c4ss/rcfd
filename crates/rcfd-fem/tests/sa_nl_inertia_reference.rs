@@ -186,6 +186,7 @@ fn db2_explicit_driver_reference_bits() {
 /// FT1 and NC1: one step from the start (a zero crossing) at `h_f = h/1024`, with the inertia-term reference and with the
 /// driver's reference (ADR 0603).
 #[test]
+#[ignore = "record of ADR 0603's registered run (NC1 refused after 5 halvings, relative residual 1.48e-7 at h_f/32; FT1 2 iterations, 1.25e-16); since ADR 0604 the default reference accepts the NC1 step at the rounding bound (ADR 0604 amendment 1); the copy is ft1_nc1b_a_step_at_the_zero_crossing_after_f571 in sa_nl_inertia_reference_after_f571.rs"]
 fn ft1_nc1_a_step_at_the_zero_crossing() {
     let mut c = Checks::new();
     let (m, f1, _, v0) = start();
