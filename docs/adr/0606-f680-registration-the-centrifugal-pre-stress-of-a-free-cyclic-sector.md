@@ -183,3 +183,96 @@ only after a post-run amendment, a check not run, or a mutation (other than M4) 
 - Only Beam2 is run (the ADR 0602 ring); D2 holds for solids and shells by the same argument but is not checked on them here.
 - The static solve's own refusal threshold is unchanged; a sector that is singular for another reason is still refused.
 - Indices `k = 0, 1` of the free ring (its rigid motions in the whirl) are not solved, as in ADR 0602.
+
+## Addendum 1: results (2026-11-15)
+
+Library change in `crates/rcfd-fem/src/rotating.rs` only (`git diff c64046db`: the module note, the `SolidResult` import, the
+field `free_sector_prestress` with its doc, its default `false` in `RotatingOptions::new`, the builder, the new
+`FreeSectorStatic` and `free_sector_unit_static` inserted before `RotatingSector`, and the branch at the head of
+`RotatingSector::new`; `RotatingPart::new`, `unit_centrifugal_model`, `check_model` and the default branch unchanged). Test file
+`crates/rcfd-fem/tests/sa_free_sector_prestress_f680.rs` (five tests, 0.05 s in release). Run 1 (code and tests at 8a63bebd,
+log `f680-scratch/run1.log`) is the only registered run; 7aa20211 is rustfmt of the test file only. Every check was met in it, so
+there is no amendment.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| FP1 opt-in pre-stress against the copy route | `1e-10` | `1.26e-15` coarse, `8.98e-15` fine | yes |
+| FP2 hoop force against ADR 0602 `PR_TABLE` | `1e-8` | `1.46e-15`, `1.03e-14` | yes |
+| WH every whirl mode (12 calls x 6 modes) | `1e-10`; counts, directions equal | `0` on the coarse mesh and at `Omega_1`, `Omega_2` fine; `4.03e-12` at `Omega_3` fine; equal | yes |
+| AG coarse against ADR 0602 `AG_TABLE` | `1e-8` | `1.61e-12` | yes |
+| RX residual at the interior nodes over `max abs f` | `1e-10` | `4.01e-15` coarse (gauge node 1), `1.87e-14` fine (gauge node 2) | yes |
+| OR `r_1`, `r_2` against the load | `1e-13` | `1.06e-17`, `2.56e-17` | yes |
+| RM (i) `K r` of the six rigid motions | `1e-12` | `<= 3.2e-17` | yes |
+| RM (ii) cyclic mismatch: `r_1`, `r_2` / the other four | `<= 1e-14` / `>= 0.1` | `0`, `8.3e-17` / `0.216 .. 0.324` | yes |
+| NI gauge at node 3 against node 1 (fine) | `1e-10` | `3.34e-15` | yes |
+| GN gauge node off the boundary, `rho_g / R - 1` | node in `1 ..= n_c - 1`; `1e-12` | node 1 (coarse), node 2 (fine); `0` | yes |
+| NC0b without the option | `SingularStiffness` | `SingularStiffness` | yes |
+| NC2 (a) displacement, (b) spring, (c) linear | refused `"free_sector_prestress"` | all three refused with that key | yes |
+| NC3 option without stress stiffening | bit-identical | bit-identical | yes |
+| DF default | `false` | `false` | yes |
+| NC0 ADR 0602's test, unedited | passes | passes | yes |
+| B1 `baseline_hashes` | pass | 3 passed, 1 ignored | yes |
+| B2 existing tests | pass | `sa_ring_whirl_beams_f679` 4, `sa_rotating_cyclic_beams_f675` 4 (+1 ignored), `--lib rotating` 6; also run: the eight `*_default_bits` files of the sector and orthotropic rotating paths, `si_rotating_cyclic`, `sa_rotating_cyclic_shells`, `sa_ring_whirl_shells`, `sa_disc_whirl_shells`: all pass | yes |
+| B3 diff | `rotating.rs` only, default lines unchanged | as stated | yes |
+
+The fine mesh's gauge node is 2, not ADR 0602's node 1 (every interior node is at `R` to the last bit after rounding; node 2 has
+the largest computed `rho`), so FP1 and WH there compare two different gauges: the stress agrees to `9e-15` and the frequencies
+to `4e-12`, the measured solver rounding of arithmetic 3, as D2 says (the gauge changes only the rigid part). On the coarse mesh
+the only candidate is node 1 and the whirl frequencies agree to the last bit.
+
+`cargo fmt -p rcfd-fem --check` clean (after 7aa20211); `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings`
+clean.
+
+**Mutations** (a `git archive` copy of 8a63bebd per mutation, `f680-scratch/mutate.py`, `run_mutations.sh`, logs
+`mut_M*.log`, `mut_summary.log`; each run once):
+
+| Id | Caught by |
+|---|---|
+| M1 axial gauge constraint dropped | the FP1 test and the RX test (the opt-in solve refused `SingularStiffness`: the tests panic) |
+| M2 tangential gauge constraint dropped | as M1 |
+| M3 radial in place of tangential | as M1 |
+| M4 `t_g` from `a x x_g` | not caught, as registered (equivalent by D2): every check met |
+| M5 a third, radial gauge constraint | FP1 (`0.94`), FP2 (`0.94`), WH (`0.26`), AG (`0.26`), RX (`1.9`, `3.7`) |
+| M6 default `true` | DF; NC0 (see below) |
+| M7 refusals removed | NC2 (all three) |
+| M8 branch never taken | the FP1 test (panics), NC2 (the refusals live in the function the branch calls) |
+| M9 branch taken without stress stiffening | **not caught** |
+
+**Deviations.** (1) M9 escaped NC3. Diagnosis: with `stress_stiffening(false)` the mutated branch computes the free-sector
+pre-stress and passes it to `with_unit_prestress`, but the operator scales `K_sigma,1` by `s = 0` when stress stiffening is off
+(the `let s = if self.options.stress_stiffening` lines of `rotating.rs`), so every frequency stays bit-identical and NC3, which
+compares frequencies only, cannot see it. The mutation is not equivalent in every respect: `part().unit_prestress()` becomes
+non-zero, a supported sector with the opt-in and without stress stiffening would be refused, and an extra static solve is made.
+NC3 should have compared the pre-stress and the refusal too: a gap of the registration, not a library defect. (2) M6's registered
+catcher NC0 did not run in the mutation run, because cargo stops at the first failing test binary (DF failed in the F-680 file
+first). It was run afterwards on the M6 copy (log `mut_M6_nc0b.log`) and caught M6 (`SingularStiffness false`). A first attempt
+(`mut_M6_nc0.log`) linked a stale `rcfd-fem` from the shared mutation target (the archive copies share one fingerprint and the
+M6 file was older than the M9 build) and passed; it is disclosed and not counted. Each of the nine registered runs rebuilt
+`rcfd-fem` from a file newer than the previous build (`Compiling rcfd-fem` in every log), and every result matches its
+mutation's expected mechanism, so they are not affected.
+
+**Decision by the registered rule: partial.** Every check FP1 to B3 was met in the one registered run with no amendment, and
+every clause of the acceptance is met: `RotatingSector::new` with stress stiffening and `free_sector_prestress(true)` solves the
+index-0 centrifugal problem of the free ring with its two rigid motions removed by reaction-free gauge constraints (derived in
+D1 and D2; the residual at the interior nodes `1.9e-14` of the load), its pre-stress is the constrained copy's within `9e-15`
+(limit `1e-10`), the ADR 0602 whirl frequencies are unchanged within `4.0e-12` (limit `1e-10`), and the defaults are
+bit-identical. The rule gives partial because one mutation (M9) was not caught.
+
+### Remaining questions
+
+1. **The status.** Options: (a) partial, as the rule gives; (b) done, arguing that M9 changes no frequency and no acceptance
+   clause. Recommendation: (a) as recorded, with the NC3 gap closed by the follow-up below (a check of `unit_prestress()` and of
+   the refusal with stress stiffening off).
+2. **Supported or otherwise constrained sectors with the opt-in.** Options: (a) keep the refusal (now); (b) remove only the
+   rigid motions the supports and constraints leave free (test `r_1`, `r_2` against each prescribed row and linear constraint).
+   Recommendation: (a) until a case needs it; a mounted fan wheel is not free and needs no opt-in.
+3. **Solids and shells.** D2 holds for them by the same argument, unchecked here. Recommendation: fold a solid and a shell sector
+   into the follow-up.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> Structural solver, advanced tier. Follow-up of F-679 (ADR 0602). PARTIAL. ADR 0606, 2026-11-15: the centrifugal pre-stress of a free cyclic sector. The cyclic constraint leaves two of a free body's six rigid motions at index 0, the axial translation and the rotation about the axis (derived in the ADR); the centrifugal load is orthogonal to both, so two linear gauge constraints at one interior node (axial and tangential translation) carry exactly no reaction and give the free stress. RotatingSector::new with stress stiffening and the opt-in RotatingOptions::free_sector_prestress (default false) now solves the free sector this way (rotating::free_sector_unit_static), and refuses a sector with supports or other constraints. On the free Beam2 ring of ADR 0602, two meshes: the pre-stress equals the constrained-copy route within 9e-15 (limit 1e-10), the residual at the interior nodes is 1.9e-14 of the load, the gauge node does not matter (3.3e-15), and the ADR 0602 whirl frequencies are unchanged within 4.0e-12 (limit 1e-10). Without the option the free sector is still refused, and the defaults are bit-identical (baseline_hashes and the existing rotating tests pass). Eight of nine mutations were caught; the one that escaped took the branch with stress stiffening off, which changes no frequency because the operator scales the geometric stiffness by zero, and the check compared frequencies only. Not covered: supported or otherwise constrained sectors with the opt-in, solid and shell sectors, and RotatingPart::new on a free part.
+
+> Follow-up proposed: The free-sector pre-stress on solid and shell sectors, and its scope without stress stiffening. Deps F-680. Acceptance: Every limit not stated here is registered in the ADR before the run. RotatingSector::new with free_sector_prestress on a free solid sector and a free shell sector gives the pre-stress of a constrained-copy route within 1e-10 and a residual at the interior nodes within 1e-10 of the load; with stress stiffening off, the opt-in leaves unit_prestress, the whirl frequencies and the refusals bit-identical to the run without it; the defaults bit-identical.
