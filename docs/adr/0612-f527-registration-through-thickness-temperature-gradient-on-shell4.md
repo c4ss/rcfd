@@ -278,3 +278,106 @@ Added checks (registered now, before their run), test `d1_d2_diagnosis_after_ame
 | D2 | (diagnosis) | plate S, P with `t = 0.3` (ratio `3.5 (h/t)^2 ~ 10`), node 0 clamped, uniform gradient: G1a and G1b | `1e-12` each | the measured scaling: `3e-12 (0.1 / 0.3)^2 = 3.3e-13` |
 
 The decision is partial by the registered rule whatever D1 and D2 give.
+
+## Addendum 1: results (2026-11-15)
+
+Code (`crates/rcfd-fem/src`): `model.rs` (D1: `Load::ShellTemperatureGradient`, `Load::shell_temperature_gradient`, its
+validation in `add_load`), `shell.rs` (D2: `thermal_gradient_load_vector`; D3: `stresses` refuses a non-taking element with a
+non-zero gradient and subtracts the centre thermal curvature; module doc), `thermal.rs` (D2: `GRADIENT_FOLLOW_UP`,
+`temperature_gradient_field`, `refuse_gradient_unless_taken`, `add_thermal_gradient_load`; module doc), `loads.rs` (D2: the
+new arm), `nonlinear.rs`, `nl_transient.rs`, `fracture.rs` (D4: the refusals). New tests
+`crates/rcfd-fem/tests/si_shell_thermal_gradient.rs` (7 running, 2 ignored records, 0.04 s in release) and
+`si_shell_thermal_gradient_bits.rs` (B1, digests printed on the base before any library code, commit `cfc49ec6`). Registered run
+once on `8375c4da` (`f527-scratch/run1.log`); D1, D2 and the met-row copies once on `16e7f614` (`run2.log`). Release,
+`--test-threads=1`.
+
+| id | check | limit | measured | met |
+| --- | --- | --- | --- | --- |
+| G1a | free plate curvature against `alpha g (1, 1, 0)`, P; Q | `1e-12` | `2.96e-12`; `3.36e-12` | **no** (known miss) |
+| G1b | free plate moment, P; Q | `1e-12` | `1.92e-12`; `1.58e-12` | **no** (known miss) |
+| G1c | surface stresses, P; Q | `1e-12` | `1.92e-12`; `1.59e-12` | **no** (known miss) |
+| G1c | membrane force, P; Q | `1e-12` | `0`; `3.1e-14` | yes |
+| G1d | P `w`; rotations against arithmetic 3 | `1e-9` | `2.0e-12`; `1.3e-12` | yes |
+| G1d | P in-plane displacements and `theta_z` | exact zero | exact zero | yes |
+| G1e | plate R (`t = 0.01`) curvature; moment | `1e-10` | `2.63e-10`; `1.23e-10` | **no** (known miss) |
+| G2 | clamped plate, centre moments against `-D (1 + nu) alpha g`, P; Q | `1e-12` | `2.5e-16`; `2.5e-16` | yes |
+| G2 | surface stresses, P; Q | `1e-12` | `2.2e-16`; `2.2e-16` | yes |
+| G2 | Gauss-point moments (test side), P; Q | `1e-12` | `1.3e-16`; `1.3e-16` | yes |
+| G3 | rectangle, linear `g`: nodal moments against the closed form; forces and `theta_z` | `1e-12`; exact | `2.2e-16`; exact zero | yes |
+| G4 (i) | load of both against the sum | `1e-14` | `5.1e-19` | yes |
+| G4 (ii) | membrane strain; curvature | `1e-12` | `2.7e-14`; `3.74e-12` | yes; **no** (known miss) |
+| G4 (iii) | moment; membrane force; surface stresses | `1e-12` | `1.81e-12`; `8.0e-15`; `3.1e-13` | **no** (known miss); yes; yes |
+| G5 | warped: forces; `|sum m| / max |m|` | exact; `1e-12` | exact zero; `6.2e-16` | yes |
+| G6 | ANDES membrane gradient load bitwise | exact | bitwise | yes |
+| D1a | (amendment 1) exact discrete field: moment, P; Q | `1e-13` | `4.2e-16`; `6.0e-16` | yes |
+| D1b | (amendment 1) residual of the solved over that of the exact field, P; Q | `<= 10` | `0.47`; `0.70` (residuals of `max |f|`: P `2.6e-13` solved, `5.5e-13` exact; Q `5.1e-13`, `7.4e-13`) | yes |
+| D2 | (amendment 1) plate S (`t = 0.3`): curvature; moment | `1e-12` | `4.0e-13`; `2.3e-13` | yes |
+| B1 | seven digests (Shell4 load, displacement, stresses; one-ply Layup load; Hex8 load; Shell3 load, stresses) against the base | exact | all seven equal | yes |
+| B2 | `baseline_hashes` (rcfd-api, release); `si_shell_thermal`, `si_shell_thermal_bits`, `si_shell`, `sb_thermal`, `sb_thermal_bits`, `sb_loads`, `sa_shell3`, `sa_shell4_membrane`, `sa_corot_shell`, `sa_fracture`, `sa_nl_transient_default_bits` | pass | all pass (`b2-fem.log`, `b2-api.log`) | yes |
+| N1 | Shell3: load and stresses | refused | `NotYetSupported { variant: "Shell3" }` both | yes |
+| N2 | one-ply Layup | refused | `NotYetSupported { variant: "Layup" }` | yes |
+| N3 | two gradient loads | refused | `InvalidValue { key: "gradient" }` | yes |
+| N4 | `n - 1` values; a NaN | refused | `FieldLength { key: "gradient" }`; `InvalidValue { key: "gradient" }` | yes |
+| N5 | zero gradient: load and displacement | exact zero | exact zero | yes |
+| N6 | Hex8, zero gradient: bits of the plain box; a non-zero value | bitwise; refused | bitwise; `NotYetSupported { variant: "Hex8" }` | yes |
+| N7 | `D kappa` without the thermal curvature | `> 0.5` | `1.0` | yes |
+| N8 | `nonlinear::solve` | refused | `InvalidValue { key: "nonlinear" }` naming the gradient | yes |
+
+Diagnosis of the misses (amendment 1, confirmed): the load and the recovery are exact to rounding (G2 `2.5e-16`, G3
+`2.2e-16`, D1a `4e-16` on the exact discrete field); the computed solution is backward stable (D1b: its residual is below that
+of the exact discrete field itself); the error is the forward error of the bending-shear solve and grows with the
+shear-to-bending ratio `3.5 (h/t)^2` (P to R, ratio x100: error x89; S, ratio /9: `4.0e-13` against the predicted `3.3e-13`).
+Arithmetic 8 under-estimated the mesh factor (10 taken, `~150` measured). The acceptance limit `1e-12` is met on the thick
+plate S and missed by a factor 2 to 4 on the registered plates P and Q (`h/t ~ 5`).
+
+### Mutations (scratch copy `f527-scratch/tree` from `git archive` of `16e7f614`; scripts `mut.py`, `mut.sh`; logs `MU*.log`)
+
+| id | mutation | caught by |
+| --- | --- | --- |
+| MU1 | sign of `kappa_th` in the load | G1d (`2.0`), G3 (`2.0`), G4 (iii), D2 |
+| MU2 | `1 + nu` missing in the load | G1d (`0.23`), G3 (`0.23`), G4 (iii), D2 |
+| MU3 | gradient ignored (no load) | G1d, G3 (`1.0`), N7, G4 (iii), G5, D2 |
+| MU4 | `stresses` without the thermal curvature | G2 (`1.0`), D1a, D2, G4 (iii) |
+| MU5 | thermal curvature sign flipped in `stresses` | G2 (`2.0`), D1a, D2, G4 (iii) |
+| MU6 | `T^T` left out of the load | G1c Q, G1d, G2 (`1.0e-2`), D2 |
+| MU7 | Gauss-point gradient from the first node | G3 (`0.47`) |
+| MU8 | Shell3 refusal removed | N1 |
+| MU9 | `1 + nu` missing in `stresses` (`(1, 0, 0)`) | G2 (`0.77`), D1a, D2, G4 (iii) |
+
+9 of 9 caught (in the met-row copies the G1a and G1b rows are printed, not checked; the curvature mutations are caught by G1d,
+G3 and D2). `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --all-targets --release -- -D warnings` clean. Not
+run: the whole workspace suite (the lead's gate) and the rcfd-fem test files not listed in B2.
+
+### Deviations
+
+- G2 recovers at element centres (the only recovery point of `shell::stresses`); its Gauss-point row is test side.
+- The G1 and G4 tests of the registered run are kept as ignored records; running copies print the missed rows (the ADR 0445
+  pattern).
+
+### Decision by the registered rule
+
+**partial**: registered rows missed (G1a, G1b, G1c surface stresses, G1e, G4 (ii) curvature and (iii) moment), recorded as
+known misses with a confirmed diagnosis (solve rounding growing as `(h/t)^2`). Met: a2 (G3 `2.2e-16`, G5, G6), b1 (G2
+`2.5e-16`), b2 (N1), b3 (G4 (i) and the met rows), a5 (B1, B2, N6); a3 and a4 within `1e-12` only on the thick plate S (D2);
+every mutation caught.
+
+### Remaining questions
+
+1. Free-plate accuracy `~3e-12` at `h/t ~ 5`, `~2.6e-10` at `h/t ~ 50`. Options: (a) accept it as solve rounding (the exact
+   discrete field is reproduced to `4e-16`; no formulation error); (b) a follow-up with iterative refinement of the static
+   solve; (c) restate the limit as a multiple of `eps 3.5 (h/t)^2`. Recommendation: (a), with (b) as an optional follow-up.
+2. A case-file key for the gradient (Q1; needs a schema decision). Options: (a) a `solid_case` load key in a follow-up; (b)
+   none. Recommendation: (a) when a case needs it.
+3. Shell3 and Layup shells under a gradient (L1, L2). Recommendation: one follow-up when a model needs them.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> Structural solver, intermediate tier. Follow-up of F-525 (ADR 0445). PARTIAL. ADR 0612, 2026-11-15: a through-thickness temperature gradient on Shell4, Load::ShellTemperatureGradient (opt-in, one value per node, K/m along each element's normal). A Shell4 element of a Shell block takes the curvature thermal load int B_b^T D_b kappa_th dA, kappa_th = alpha g (1, 1, 0) (shell::thermal_gradient_load_vector), and shell::stresses subtracts the thermal curvature; Shell3, Layup shells, beams and solids with a non-zero value are refused naming the follow-up; the nonlinear static and transient paths and fracture refuse the load. Met: the load against its closed form on a rectangle with a linear gradient within 2.2e-16 (limit 1e-12), warped self-equilibrium 6.2e-16; a clamped plate carries M = -D (1 + nu) alpha g within 2.5e-16 at every centre and Gauss point; a membrane temperature and a gradient superpose (loads within 5e-19); models without a gradient give their former bits (seven digests, baseline_hashes). Partial: the free plate held at one node takes the curvature alpha g and zero moment within 3.4e-12 and 1.9e-12 at h/t ~ 5 (limit 1e-12, known miss) and 2.6e-10 at h/t ~ 50; diagnosed as rounding of the bending-shear solve growing as 3.5 (h/t)^2 (the exact discrete field gives zero moment to 4e-16, the solve is backward stable, a thick plate at h/t ~ 1.7 meets 4.0e-13). Nine mutations, all caught. Not covered: Shell3, Layup shells, a case-file key.
+
+> Follow-up proposed: Through-thickness temperature gradient on Shell3 and Layup shells. Deps F-527. Acceptance: Every limit not stated here is registered in the ADR before the run. Load::ShellTemperatureGradient on a Shell3 model and on a Layup Shell4 model gives the curvature thermal load (ply-integrated for a layup); a clamped plate under a uniform gradient gives the closed-form moment within 1e-12; a model without a gradient gives the bits it gave before.
+
+> Follow-up proposed: Case-file key for the shell temperature gradient. Deps F-527. Acceptance: Every limit not stated here is registered in the ADR before the run. A solid_case load key gives Load::ShellTemperatureGradient; a shell model read from a case file gives the bits of the library call; existing keys, goldens and baseline hashes unchanged.
+
+> Follow-up proposed (optional): Iterative refinement of the static solve for thin shells in bending. Deps F-527. Acceptance: Every limit not stated here is registered in the ADR before the run. With an opt-in refinement the free plates of ADR 0612 (h/t 5 and 50) take the curvature alpha g within a registered limit below their ADR 0612 errors; default bits unchanged.
