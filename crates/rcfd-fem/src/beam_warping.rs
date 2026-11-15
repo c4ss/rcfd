@@ -25,6 +25,11 @@
 //! part of the geometric stiffness stays in centroid unknowns, the moment part takes the Wagner coefficients about the shear
 //! centre `beta - 2 (z_0, y_0)` ([`section_local_geometric_stiffness`]); the mass is that of the centroid. A section without an
 //! offset runs the arithmetic of ADR 0546 and ADR 0548 unchanged. The bimoment load is [`Warping::bimoment`].
+//!
+//! ADR 0574 (F-635) adds the harmonic and transient paths on the 14-unknown stiffness and mass of ADR 0548: the direct
+//! harmonic solve [`WarpingHarmonic`] (`(1 + i eta) K - omega^2 M + i omega (alpha M + beta K)`, one complex factorisation per
+//! frequency) and the linear transient [`WarpingTransient`] (the integrator of ADR 0389 on the reduced matrices), with the load
+//! [`load_vector`]. The model's own harmonic and transient paths do not take beams; nothing of them changes.
 
 use crate::assemble::{element_dofs, point_stiffness};
 use crate::beam::{self, GAUSS4_W, GAUSS4_X};
@@ -1285,20 +1290,10 @@ impl WarpingStaticResult {
     }
 }
 
-/// The linear static solve of `model` with the warping unknowns of `warping` (ADR 0548 D1): `K_aug` of ADR 0546 D5, the model's
-/// nodal loads and the bimoments of [`Warping::bimoment`] on the warping equations (ADR 0553 D6; an unknown set refused as
-/// `UnknownSet`, a node without a warping unknown with key `"warping"`, a non-finite value with key `"bimoment"`), its prescribed values and the restrained warping unknowns (`chi = 0`), the free rigid
-/// motions refused as [`crate::solve::solve_static`], the sparse `L D L^T` after minimum degree with the pivot rule of ADR
-/// 0275 (`FemError::SingularStiffness`, component 6 for a warping unknown), the reactions. Refuses RF1 to RF4 and RF6 of ADR
-/// 0546 D4.
-pub fn solve_static(model: &SolidModel, warping: &Warping, threads: Option<usize>) -> Result<WarpingStaticResult> {
-    entry_checks(model)?;
-    let lay = layout(model, warping)?;
-    let base_dofs = model.dof_map();
-    let mut f = crate::loads::nodal_load_vector(model, &[])?;
-    let mut fixed = prescribed_equations(model, &[])?;
-    check_rigid_body_motions(model, &fixed)?;
-    let k = stiffness_aug(model, &lay, threads)?;
+/// The model's nodal load `f` (six-unknown equations) extended by zeros to the warping equations, plus the bimoments of
+/// [`Warping::bimoment`] (ADR 0553 D6; an unknown set refused as `UnknownSet`, a node without a warping unknown with key
+/// `"warping"`, a non-finite value with key `"bimoment"`). The load of [`solve_static`] (ADR 0574 D1).
+fn add_bimoments(model: &SolidModel, warping: &Warping, lay: &Layout, f: &mut Vec<f64>) -> Result<()> {
     let n = lay.dofs.n_equations();
     f.resize(n, 0.0);
     // The bimoment loads (ADR 0553 D6).
@@ -1322,6 +1317,24 @@ pub fn solve_static(model: &SolidModel, warping: &Warping, threads: Option<usize
             f[eq] += value;
         }
     }
+    Ok(())
+}
+
+/// The linear static solve of `model` with the warping unknowns of `warping` (ADR 0548 D1): `K_aug` of ADR 0546 D5, the model's
+/// nodal loads and the bimoments of [`Warping::bimoment`] on the warping equations (ADR 0553 D6; an unknown set refused as
+/// `UnknownSet`, a node without a warping unknown with key `"warping"`, a non-finite value with key `"bimoment"`), its prescribed values and the restrained warping unknowns (`chi = 0`), the free rigid
+/// motions refused as [`crate::solve::solve_static`], the sparse `L D L^T` after minimum degree with the pivot rule of ADR
+/// 0275 (`FemError::SingularStiffness`, component 6 for a warping unknown), the reactions. Refuses RF1 to RF4 and RF6 of ADR
+/// 0546 D4.
+pub fn solve_static(model: &SolidModel, warping: &Warping, threads: Option<usize>) -> Result<WarpingStaticResult> {
+    entry_checks(model)?;
+    let lay = layout(model, warping)?;
+    let base_dofs = model.dof_map();
+    let mut f = crate::loads::nodal_load_vector(model, &[])?;
+    let mut fixed = prescribed_equations(model, &[])?;
+    check_rigid_body_motions(model, &fixed)?;
+    let k = stiffness_aug(model, &lay, threads)?;
+    add_bimoments(model, warping, &lay, &mut f)?;
     fixed.extend(lay.restrained.iter().map(|&eq| (eq, 0.0)));
     let sys = reduce(&k, &f, &fixed)?;
     let free = sys.free().to_vec();
@@ -1677,4 +1690,437 @@ fn modes_impl(
         rigid_free,
         dofs: lay.dofs,
     })
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// ADR 0574 (F-635): the warping unknown on the harmonic and transient paths.
+// ---------------------------------------------------------------------------------------------------------------------------
+
+/// The load of the warping model (ADR 0574 D1): the model's nodal loads on the six-unknown equations, zero on the warping
+/// equations, plus the bimoments of [`Warping::bimoment`]; one value per equation of [`WarpingDofs`]. The load of
+/// [`solve_static`]. Refuses RF1 to RF4 and RF6 of ADR 0546 D4 and the bimoment refusals of [`solve_static`].
+pub fn load_vector(model: &SolidModel, warping: &Warping) -> Result<Vec<f64>> {
+    entry_checks(model)?;
+    let lay = layout(model, warping)?;
+    let mut f = crate::loads::nodal_load_vector(model, &[])?;
+    add_bimoments(model, warping, &lay, &mut f)?;
+    Ok(f)
+}
+
+/// `K_aug` and `M_aug` of ADR 0548 reduced by the model's prescribed equations and the restrained warping equations.
+struct ReducedDynamic {
+    k: CsrMatrix,
+    m: CsrMatrix,
+    free: Vec<usize>,
+    dofs: WarpingDofs,
+}
+
+/// The checks of ADR 0574 D2 and D3 and the reduced matrices; a nonzero prescribed value is refused (key `"constraint"`,
+/// naming `what`).
+fn reduced_dynamic(
+    model: &SolidModel,
+    warping: &Warping,
+    threads: Option<usize>,
+    what: &str,
+) -> Result<ReducedDynamic> {
+    entry_checks(model)?;
+    let lay = layout(model, warping)?;
+    let base_dofs = model.dof_map();
+    let mut fixed = prescribed_equations(model, &[])?;
+    if let Some(&(eq, v)) = fixed.iter().find(|&&(_, v)| v != 0.0) {
+        let (node, component) = base_dofs.node_component(eq).expect("existing equation");
+        return Err(FemError::InvalidValue {
+            key: "constraint",
+            reason: format!(
+                "prescribed value {v:e} at node {node} component {component}: {what} takes zero values only"
+            ),
+        });
+    }
+    let k = stiffness_aug(model, &lay, threads)?;
+    let m = mass_aug(model, &lay, threads)?;
+    fixed.extend(lay.restrained.iter().map(|&eq| (eq, 0.0)));
+    let zero = vec![0.0; lay.dofs.n_equations()];
+    let kr = reduce(&k, &zero, &fixed)?;
+    let mr = reduce(&m, &zero, &fixed)?;
+    let free = kr.free().to_vec();
+    Ok(ReducedDynamic {
+        k: kr.matrix,
+        m: mr.matrix,
+        free,
+        dofs: lay.dofs,
+    })
+}
+
+fn expand_free(free: &[usize], n: usize, x: &[f64]) -> Vec<f64> {
+    let mut full = vec![0.0; n];
+    for (&eq, &v) in free.iter().zip(x) {
+        full[eq] = v;
+    }
+    full
+}
+
+/// Options of [`WarpingHarmonic`] (ADR 0574 D2).
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct WarpingHarmonicOptions {
+    /// A uniform loss factor `eta` (finite, `>= 0`): the stiffness enters as `(1 + i eta) K`. Default 0.
+    pub loss_factor: f64,
+    /// Rayleigh damping `C = alpha M + beta K` (`None`: none).
+    pub rayleigh: Option<crate::transient::Rayleigh>,
+    /// Without damping, a pivot with `|d| <= resonance_pivot s` is refused as a resonance (default
+    /// [`crate::harmonic_direct::RESONANCE_PIVOT`]).
+    pub resonance_pivot: f64,
+    /// Worker threads of the assembly (`None`: the available parallelism); the result does not depend on it.
+    pub threads: Option<usize>,
+}
+
+impl Default for WarpingHarmonicOptions {
+    fn default() -> Self {
+        WarpingHarmonicOptions {
+            loss_factor: 0.0,
+            rayleigh: None,
+            resonance_pivot: crate::harmonic_direct::RESONANCE_PIVOT,
+            threads: None,
+        }
+    }
+}
+
+impl WarpingHarmonicOptions {
+    /// Undamped, the default resonance pivot.
+    pub fn new() -> WarpingHarmonicOptions {
+        WarpingHarmonicOptions::default()
+    }
+    /// The same options with a uniform loss factor.
+    pub fn loss_factor(mut self, eta: f64) -> WarpingHarmonicOptions {
+        self.loss_factor = eta;
+        self
+    }
+    /// The same options with Rayleigh damping.
+    pub fn rayleigh(mut self, damping: crate::transient::Rayleigh) -> WarpingHarmonicOptions {
+        self.rayleigh = Some(damping);
+        self
+    }
+    /// The same options with a resonance pivot.
+    pub fn resonance_pivot(mut self, tau: f64) -> WarpingHarmonicOptions {
+        self.resonance_pivot = tau;
+        self
+    }
+    /// The same options with a thread count for the assembly.
+    pub fn threads(mut self, threads: usize) -> WarpingHarmonicOptions {
+        self.threads = Some(threads);
+        self
+    }
+}
+
+/// The direct harmonic solve of a model with the warping unknowns of a [`Warping`] (ADR 0574 D2): `K_aug` and `M_aug` of ADR
+/// 0548 reduced once, one complex factorisation per frequency of `A = (1 + i eta) K - omega^2 M + i omega (alpha M + beta K)`.
+#[derive(Debug, Clone)]
+pub struct WarpingHarmonic {
+    // The union pattern of the reduced `K` and `M`: row pointers, columns, and the two values.
+    row_ptr: Vec<usize>,
+    col: Vec<usize>,
+    kv: Vec<f64>,
+    mv: Vec<f64>,
+    free: Vec<usize>,
+    dofs: WarpingDofs,
+    base_dofs: crate::model::DofMap,
+    eta: f64,
+    alpha: f64,
+    beta: f64,
+    resonance_pivot: f64,
+}
+
+impl WarpingHarmonic {
+    /// The solver of `model` and `warping` (ADR 0574 D2). Refuses RF1 to RF4 and RF6 of ADR 0546 D4, a nonzero prescribed
+    /// value (key `"constraint"`), a loss factor or Rayleigh coefficient that is not finite and `>= 0` (key `"damping"`), a
+    /// resonance pivot that is not finite and `>= 0` (key `"resonance pivot"`).
+    pub fn new(model: &SolidModel, warping: &Warping, options: &WarpingHarmonicOptions) -> Result<WarpingHarmonic> {
+        let ok = |x: f64| x.is_finite() && x >= 0.0;
+        let (alpha, beta) = options.rayleigh.map_or((0.0, 0.0), |r| (r.mass, r.stiffness));
+        if !(ok(options.loss_factor) && ok(alpha) && ok(beta)) {
+            return Err(FemError::InvalidValue {
+                key: "damping",
+                reason: format!(
+                    "loss factor {:e}, Rayleigh {alpha:e} (mass) and {beta:e} (stiffness) must be finite and >= 0",
+                    options.loss_factor
+                ),
+            });
+        }
+        if !ok(options.resonance_pivot) {
+            return Err(FemError::InvalidValue {
+                key: "resonance pivot",
+                reason: format!("{:e} must be finite and >= 0", options.resonance_pivot),
+            });
+        }
+        let rd = reduced_dynamic(model, warping, options.threads, "a harmonic analysis")?;
+        let nf = rd.free.len();
+        let mut row_ptr = Vec::with_capacity(nf + 1);
+        row_ptr.push(0usize);
+        let (mut col, mut kv, mut mv) = (Vec::new(), Vec::new(), Vec::new());
+        for r in 0..nf {
+            let mut entries: Vec<(usize, f64, f64)> = Vec::new();
+            for p in rd.k.row_ptr[r]..rd.k.row_ptr[r + 1] {
+                entries.push((rd.k.col[p], rd.k.val[p], 0.0));
+            }
+            for p in rd.m.row_ptr[r]..rd.m.row_ptr[r + 1] {
+                entries.push((rd.m.col[p], 0.0, rd.m.val[p]));
+            }
+            entries.sort_by_key(|e| e.0);
+            let mut last: Option<usize> = None;
+            for (c, a, b) in entries {
+                if last == Some(c) {
+                    let i = col.len() - 1;
+                    kv[i] += a;
+                    mv[i] += b;
+                } else {
+                    col.push(c);
+                    kv.push(a);
+                    mv.push(b);
+                    last = Some(c);
+                }
+            }
+            row_ptr.push(col.len());
+        }
+        Ok(WarpingHarmonic {
+            row_ptr,
+            col,
+            kv,
+            mv,
+            free: rd.free,
+            dofs: rd.dofs,
+            base_dofs: model.dof_map(),
+            eta: options.loss_factor,
+            alpha,
+            beta,
+            resonance_pivot: options.resonance_pivot,
+        })
+    }
+
+    /// The numbering of the responses.
+    pub fn dofs(&self) -> &WarpingDofs {
+        &self.dofs
+    }
+
+    /// The free equations (reduced index `i` is equation `free()[i]` of [`WarpingDofs`]).
+    pub fn free(&self) -> &[usize] {
+        &self.free
+    }
+
+    /// The steady response to `load` (one value per equation of [`WarpingDofs`], key `"harmonic load"`) at the circular
+    /// frequency `omega` (finite, `>= 0`, key `"frequency"`): `x(t) = Re(X e^{i omega t})`, zero at the eliminated equations.
+    /// Without damping a pivot at most `resonance_pivot` of its scale is refused as a resonance (key `"frequency"`).
+    pub fn response(
+        &self,
+        load: &crate::harmonic::HarmonicLoad,
+        omega: f64,
+    ) -> Result<crate::harmonic::HarmonicResponse> {
+        use rcfd_linalg::complex::C64;
+        use rcfd_linalg::cskyline::{ComplexCsr, ComplexSkylineError, ComplexSkylineLdlt, ComplexSkylineOptions};
+        if !(omega.is_finite() && omega >= 0.0) {
+            return Err(FemError::InvalidValue {
+                key: "frequency",
+                reason: format!("omega {omega:e} rad/s must be finite and >= 0"),
+            });
+        }
+        let n = self.dofs.n_equations();
+        if load.re().len() != n {
+            return Err(FemError::FieldLength {
+                key: "harmonic load",
+                expected: n,
+                found: load.re().len(),
+            });
+        }
+        let w2 = omega * omega;
+        let mut damped = false;
+        let val: Vec<C64> = self
+            .kv
+            .iter()
+            .zip(&self.mv)
+            .map(|(&k, &m)| {
+                let v = C64::new(k - w2 * m, self.eta * k + omega * (self.alpha * m + self.beta * k));
+                damped |= v.im != 0.0;
+                v
+            })
+            .collect();
+        let nf = self.free.len();
+        let a =
+            ComplexCsr::new(nf, self.row_ptr.clone(), self.col.clone(), val).map_err(|e| FemError::InvalidValue {
+                key: "pattern",
+                reason: e.to_string(),
+            })?;
+        let rhs: Vec<C64> = self
+            .free
+            .iter()
+            .map(|&i| C64::new(load.re()[i], load.im()[i]))
+            .collect();
+        let opts = ComplexSkylineOptions {
+            min_relative_pivot: if damped { 0.0 } else { self.resonance_pivot },
+            ..ComplexSkylineOptions::default()
+        };
+        let refusal = |e: ComplexSkylineError| match e {
+            ComplexSkylineError::Pivot {
+                row,
+                pivot,
+                threshold,
+                scale,
+                ..
+            } => {
+                let (node, component) = node_component(&self.base_dofs, &self.dofs, self.free[row]);
+                let what = if damped {
+                    "the damped dynamic stiffness is numerically singular without pivoting"
+                } else {
+                    "the undamped dynamic stiffness is singular: a resonance without damping, the steady response does \
+                     not exist"
+                };
+                FemError::InvalidValue {
+                    key: "frequency",
+                    reason: format!(
+                        "omega {omega:e} rad/s ({:e} Hz): {what}; pivot modulus {:e} at node {node} component {component} \
+                         is at most {threshold:e} (scale {scale:e})",
+                        omega / (2.0 * std::f64::consts::PI),
+                        pivot.abs()
+                    ),
+                }
+            }
+            other => FemError::InvalidValue {
+                key: "frequency",
+                reason: format!("omega {omega:e} rad/s: {other}"),
+            },
+        };
+        let x = ComplexSkylineLdlt::factor_with(&a, &opts).map_err(refusal)?.solve(&rhs);
+        let re: Vec<f64> = x.iter().map(|z| z.re).collect();
+        let im: Vec<f64> = x.iter().map(|z| z.im).collect();
+        Ok(crate::harmonic::HarmonicResponse {
+            omega,
+            re: expand_free(&self.free, n, &re),
+            im: expand_free(&self.free, n, &im),
+        })
+    }
+}
+
+/// The linear transient solve of a model with the warping unknowns of a [`Warping`] (ADR 0574 D3): the integrator of ADR 0389
+/// ([`crate::transient::Integrator::from_matrices`]) on `K_aug` and `M_aug` of ADR 0548 reduced by the prescribed and the
+/// restrained warping equations.
+#[derive(Debug, Clone)]
+pub struct WarpingTransient {
+    integrator: crate::transient::Integrator,
+    free: Vec<usize>,
+    dofs: WarpingDofs,
+}
+
+impl WarpingTransient {
+    /// The integrator of `model` and `warping` with the load histories `loads` (each pattern one value per equation of
+    /// [`WarpingDofs`], key `"load pattern"`; [`load_vector`] gives the model's) and `options` (the method, the time step, the
+    /// Rayleigh damping of ADR 0389). Refuses RF1 to RF4 and RF6 of ADR 0546 D4, a nonzero prescribed value (key
+    /// `"constraint"`) and the refusals of [`crate::transient::Integrator::from_matrices`].
+    pub fn new(
+        model: &SolidModel,
+        warping: &Warping,
+        loads: &[crate::transient::LoadHistory],
+        options: &crate::transient::TransientOptions,
+    ) -> Result<WarpingTransient> {
+        let rd = reduced_dynamic(model, warping, options.threads, "the transient integrator")?;
+        let n = rd.dofs.n_equations();
+        let mut reduced = Vec::with_capacity(loads.len());
+        for l in loads {
+            if l.pattern.len() != n {
+                return Err(FemError::FieldLength {
+                    key: "load pattern",
+                    expected: n,
+                    found: l.pattern.len(),
+                });
+            }
+            reduced.push(crate::transient::LoadHistory::new(
+                rd.free.iter().map(|&e| l.pattern[e]).collect(),
+                l.table.clone(),
+            ));
+        }
+        let integrator = crate::transient::Integrator::from_matrices(rd.k, rd.m, &reduced, options)?;
+        Ok(WarpingTransient {
+            integrator,
+            free: rd.free,
+            dofs: rd.dofs,
+        })
+    }
+
+    /// The numbering of the full vectors.
+    pub fn dofs(&self) -> &WarpingDofs {
+        &self.dofs
+    }
+
+    /// The free equations (reduced index `i` is equation `free()[i]` of [`WarpingDofs`]).
+    pub fn free(&self) -> &[usize] {
+        &self.free
+    }
+
+    /// The integrator of the reduced system.
+    pub fn integrator(&self) -> &crate::transient::Integrator {
+        &self.integrator
+    }
+
+    /// The integrator of the reduced system, mutable.
+    pub fn integrator_mut(&mut self) -> &mut crate::transient::Integrator {
+        &mut self.integrator
+    }
+
+    fn to_reduced(&self, x: &[f64], key: &'static str) -> Result<Vec<f64>> {
+        let n = self.dofs.n_equations();
+        if x.len() != n {
+            return Err(FemError::FieldLength {
+                key,
+                expected: n,
+                found: x.len(),
+            });
+        }
+        let mut is_free = vec![false; n];
+        for &e in &self.free {
+            is_free[e] = true;
+        }
+        for (e, &v) in x.iter().enumerate() {
+            if !v.is_finite() || (!is_free[e] && v != 0.0) {
+                return Err(FemError::InvalidValue {
+                    key: "initial state",
+                    reason: format!("{key} {v:e} at equation {e} (finite, and 0 at an eliminated equation)"),
+                });
+            }
+        }
+        Ok(self.free.iter().map(|&e| x[e]).collect())
+    }
+
+    /// Starts at `t0` from the full displacement and velocity (zero at the eliminated equations, else key `"initial
+    /// state"`); the acceleration solves `M a0 = f(t0) - C v0 - K u0`.
+    pub fn start(&mut self, t0: f64, u0: &[f64], v0: &[f64]) -> Result<()> {
+        let u = self.to_reduced(u0, "initial displacement")?;
+        let v = self.to_reduced(v0, "initial velocity")?;
+        self.integrator.start(t0, &u, &v)
+    }
+
+    /// Starts at `t0` from rest.
+    pub fn start_at_rest(&mut self, t0: f64) -> Result<()> {
+        let nf = self.free.len();
+        self.integrator.start(t0, &vec![0.0; nf], &vec![0.0; nf])
+    }
+
+    /// Advances `steps` steps.
+    pub fn run(&mut self, steps: u64) -> Result<()> {
+        self.integrator.run(steps)
+    }
+
+    /// The displacement, one value per equation of [`WarpingDofs`] (0 at the eliminated equations).
+    pub fn displacement(&self) -> Result<Vec<f64>> {
+        Ok(expand_free(
+            &self.free,
+            self.dofs.n_equations(),
+            &self.integrator.displacement()?,
+        ))
+    }
+
+    /// The velocity, one value per equation of [`WarpingDofs`].
+    pub fn velocity(&self) -> Result<Vec<f64>> {
+        Ok(expand_free(
+            &self.free,
+            self.dofs.n_equations(),
+            &self.integrator.velocity()?,
+        ))
+    }
 }
