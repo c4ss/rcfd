@@ -25,6 +25,8 @@
 //! * [`tangent_modes_full`] and [`buckling_factors_full`] (ADR 0580, F-653): the same with the full (unsymmetric) load
 //!   stiffness, complex eigenvalues by the shift-invert Arnoldi solver of [`rcfd_linalg::eigen_pencil`]: the flutter of
 //!   follower loads (Beck's column).
+//! * [`tangent_buckling_factors_full_with`] (ADR 0600, F-676): the buckling factors about a nonlinear state with the full
+//!   (unsymmetric) tangents of the contributions, complex in general, by the same pencil solver.
 //! * [`FollowerTipForce`] and [`prestressed_modes_full`] (ADR 0589, F-665): a tangential follower force on Beam2 nodes,
 //!   turning with the node rotation, with its load stiffness `K_f`, and the complex modes of `(K + lambda (K_sigma - K_f))
 //!   phi = omega^2 M phi` about a linear pre-stress (no Newton tangent, so beams take it).
@@ -974,6 +976,92 @@ pub fn buckling_factors_full(
     let eig = nearest_pencil_eigenpairs(&kr.matrix, &b, options.factors, &opts).map_err(pencil_failed)?;
     Ok(ComplexBuckling {
         modes: eig.vectors.iter().map(|v| expand(&free, n, v)).collect(),
+        factors: eig.values,
+        residuals: eig.residuals,
+        backward_errors: eig.backward_errors,
+        steps: eig.steps,
+        unknowns: nf,
+        dofs,
+    })
+}
+
+/// The buckling factors about a nonlinear state with the full tangents of the contributions (ADR 0600 D1, F-676): `(K_T +
+/// K_c(u, lambda) + mu (K_sigma + K_c(u, 1) - K_c(u, 0))) x = 0`, `K_T` the driver's tangent at the displacement `u` and the
+/// element `states`, `K_c(u, lambda)` the sum of the contributions' full tangents at `(u, load_factor)` (the triplets of
+/// [`Contribution::add_full`], for a [`FollowerPressure`] the unsymmetric `-K_p`), `K_c(u, 1) - K_c(u, 0)` their derivative
+/// with the load factor at fixed `u` (exact for a contribution linear in the load factor) added to the geometric stiffness of
+/// `prestress`, all reduced on the model's prescribed equations and `prescribed` (zero values). The `options.factors` factors
+/// of smallest modulus of `A x = mu B x`, `A = K_T + K_c`, `B = -(K_sigma + K_c')`, complex in general, by
+/// [`rcfd_linalg::eigen_pencil::nearest_pencil_eigenpairs`] at shift 0 with `options.tolerance`; the other options are not
+/// used. The model checks and the rigid-motion test are those of [`tangent_buckling_factors_with`]; there is no zero-shift
+/// pivot test (a singular `A` is refused by the pencil's factor). At `u = 0`, the initial states and `load_factor = 0` with
+/// follower pressures it is the problem of [`buckling_factors_full`].
+#[allow(clippy::too_many_arguments)]
+pub fn tangent_buckling_factors_full_with(
+    model: &SolidModel,
+    prescribed: &[Prescribed],
+    u: &[f64],
+    states: &[ElementState],
+    load_factor: f64,
+    contributions: &[&dyn Contribution],
+    prestress: &Prestress,
+    options: &BucklingOptions,
+) -> Result<ComplexBuckling> {
+    model.validate()?;
+    model.check_supported_nonlinear()?;
+    crate::nonlinear::check_driver_model(model)?;
+    let dofs = model.dof_map();
+    let fixed: Vec<(usize, f64)> = prescribed_equations(model, prescribed)?
+        .into_iter()
+        .map(|(eq, _)| (eq, 0.0))
+        .collect();
+    check_rigid_body_motions(model, &fixed)?;
+    let mut k = crate::nonlinear::tangent(model, u, states, options.threads)?;
+    let mut kg = crate::geometric::assemble_geometric(model, prestress, options.threads)?;
+    if !contributions.is_empty() {
+        let full = |at: f64, out: &mut Vec<(usize, usize, f64)>| -> Result<()> {
+            let mut scratch = vec![0.0; u.len()];
+            for c in contributions {
+                c.add_full(u, at, &mut scratch, out)
+                    .map_err(|e| FemError::InvalidValue {
+                        key: "contribution",
+                        reason: format!("contribution '{}': {e}", c.name()),
+                    })?;
+            }
+            Ok(())
+        };
+        let mut at_state = Vec::new();
+        full(load_factor, &mut at_state)?;
+        add_triplets(&mut k, &at_state);
+        let mut increment = Vec::new();
+        full(1.0, &mut increment)?;
+        let mut at_zero = Vec::new();
+        full(0.0, &mut at_zero)?;
+        increment.extend(at_zero.into_iter().map(|(r, c, v)| (r, c, -v)));
+        add_triplets(&mut kg, &increment);
+    }
+    let zero = vec![0.0; k.n];
+    let kr = reduce(&k, &zero, &fixed)?;
+    let gr = reduce(&kg, &zero, &fixed)?;
+    let free = kr.free().to_vec();
+    let nf = free.len();
+    if options.factors == 0 || options.factors >= nf {
+        return Err(FemError::InvalidValue {
+            key: "factors",
+            reason: format!(
+                "{} factors requested of a model with {nf} free unknowns (at least 1 and fewer than the unknowns)",
+                options.factors
+            ),
+        });
+    }
+    let mut b = gr.matrix.clone();
+    for v in b.val.iter_mut() {
+        *v = -*v;
+    }
+    let opts = PencilOptions::new().tolerance(options.tolerance);
+    let eig = nearest_pencil_eigenpairs(&kr.matrix, &b, options.factors, &opts).map_err(pencil_failed)?;
+    Ok(ComplexBuckling {
+        modes: eig.vectors.iter().map(|v| expand(&free, k.n, v)).collect(),
         factors: eig.values,
         residuals: eig.residuals,
         backward_errors: eig.backward_errors,
