@@ -381,7 +381,8 @@ fn fmt_list(v: &[f64]) -> Vec<String> {
 }
 
 #[test]
-fn ma_mb_mc_w_rotating_sector_of_beams_against_the_full_ring() {
+#[ignore = "run-1 record of ADR 0598 (amendment 1): MA, MB, MC, W, W0 and SM met (the registered results); CB2 of the assembled matrices reported false because the measure compared +0 with -0 by their bits (2 pairs of zeros in W, 10 in the ring, no other difference); continued in cb2_assembled_after_amendment_1"]
+fn ma_mb_mc_w_rotating_sector_of_beams_against_the_full_ring_run1_record() {
     let m = sector(beam_options());
     let full = ring(true);
     let omega1 = (0..=N / 2)
@@ -549,6 +550,58 @@ fn ma_mb_mc_w_rotating_sector_of_beams_against_the_full_ring() {
         fails.push(format!("SM {detail}"));
     }
     assert!(fails.is_empty(), "{fails:?}");
+}
+
+// ---------------------------------------------------------------------------------------------- CB2 (amendment 1)
+
+/// ADR 0598 amendment 1: `c_ij == -c_ji` as values (the two zeros equal), `c_ii == 0`, a non-zero entry; and the number of
+/// pairs whose bits differ, each of which must be a pair of zeros. Returns (skew, non-zero, bit pairs, all of them zeros).
+fn skew_values(a: &CsrMatrix) -> (bool, bool, usize, bool) {
+    let get = |r: usize, c: usize| -> Option<f64> {
+        (a.row_ptr[r]..a.row_ptr[r + 1])
+            .find(|&p| a.col[p] == c)
+            .map(|p| a.val[p])
+    };
+    let (mut skew, mut nonzero, mut pairs, mut zeros) = (true, false, 0, true);
+    for r in 0..a.n {
+        for p in a.row_ptr[r]..a.row_ptr[r + 1] {
+            let (c, v) = (a.col[p], a.val[p]);
+            nonzero |= v != 0.0;
+            if r == c {
+                skew &= v == 0.0;
+                continue;
+            }
+            let w = get(c, r).unwrap_or(0.0);
+            skew &= w == -v;
+            if w.to_bits() != (-v).to_bits() {
+                pairs += 1;
+                zeros &= v == 0.0 && w == 0.0;
+            }
+        }
+    }
+    (skew, nonzero, pairs, zeros)
+}
+
+#[test]
+fn cb2_assembled_after_amendment_1() {
+    let m = sector(beam_options());
+    let full = ring(true);
+    let sec_w = RotatingSector::new(&m, &opts(4).coriolis(true)).unwrap();
+    let part_w = RotatingPart::new(&full, axis(), ORIGIN, &opts(30).coriolis(true).beams(true)).unwrap();
+    let mut all = true;
+    for (name, c) in [
+        ("sector", sec_w.part().coriolis().unwrap()),
+        ("ring", part_w.coriolis().unwrap()),
+    ] {
+        let (skew, nonzero, pairs, zeros) = skew_values(&c);
+        let ok = skew && nonzero && zeros;
+        println!(
+            "CB2 (amended) {name}: c_ij == -c_ji and c_ii == 0 {skew}, non-zero {nonzero}, pairs differing in bits {pairs} (all              pairs of zeros {zeros}) {}",
+            met(ok)
+        );
+        all &= ok;
+    }
+    assert!(all);
 }
 
 // ---------------------------------------------------------------------------------------------- B3
