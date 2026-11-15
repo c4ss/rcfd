@@ -362,3 +362,102 @@ differ near the tip). Mutations, each run once on a scratch copy (`f429-scratch/
 * No singular (quarter-point) elements: the mesh validation refuses them (D8).
 * The Paris law without a threshold, a closure or a critical K; `C`, `m` and toughness are inputs.
 * No case-file key.
+
+## Addendum 1: results (2026-11-15)
+
+Code: `crates/rcfd-fem/src/fracture.rs` (the only library file changed; the stub filled, `PENDING = None`): `CrackFront`,
+`FrontShape`, `j_integral`, `FrontValue`, `plane_strain_k`, `opening_k`, `OpeningPair`, `OpeningFit`, `paris_cycles`,
+`PlateCrack`, `centre_crack_plate`, `CrackedPlate`, `PennyCrack`, `penny_crack_cylinder`, `CrackedCylinder`, as in D1 to D8.
+Tests: `crates/rcfd-fem/tests/sa_fracture.rs` (every row); `sa_scaffold.rs` (D9: the live X1 test given an `#[ignore = "record:
+ADR 0547 ..."]` attribute, body unchanged, and the continued X1 test with `fracture` landed). No shared solver file changed.
+
+Before the registered run two development probes on set-ups that are not registered (a plate with `h0 = a/10`, `n_u = 2`,
+`g = 1.6`, `H = W`; a penny with `h0 = a/6`, `n_theta = 4`, `g = 1.7`) were run to check the pipeline (a temporary test file,
+deleted, not committed): plate K from J of rings 2 to 4 within 0.2 %, opening 4 % low; penny ring 2 1.7 % low. Nothing of the
+registration was changed after them. The fast registered rows were then run once (`f429-scratch/run1.log`, code of b6e87f97
+before formatting), the heavy record PH once alone (`f429-scratch/heavy.log`, 96 267 unknowns, supernodal solve 35.8 s). After
+the runs `cargo clippy` asked for the negated comparisons (`!(x > 0.0)`) in `fracture.rs` to be written as `x.is_nan() || x <=
+0.0` and the like (the same truth values for every input, NaN included); the crate's whole test run that followed includes the
+fast rows on that code (passed).
+
+| check | limit | measured | met |
+|---|---|---|---|
+| P1 K from J, rings 2-4, both stations, against `sigma sqrt(pi a) sqrt(sec(pi a/(2 W)))` | `<= 0.02` | 2.12e-3 (ring 2 -2.12e-3, ring 3 -1.55e-3, ring 4 -1.53e-3) | yes |
+| P2 spread of the J of rings 2-4 | `<= 0.01` | 1.20e-3 | yes |
+| P3 J against the energy difference of `0.98 a`, `1.02 a` | `<= 0.02` | 7.45e-5 (`J_E` 1442.88, ring-3 J 1442.77 J/m^2) | yes |
+| P4 K from the opening, `[0.1 a, 0.4 a]`, 9 points | `<= 0.05` | 1.20e-2 (`K_0` 1.7620e7 against 1.7835e7) | yes |
+| P5 shear opening factor / tension value | `<= 1e-8` | 1.25e-13 | yes |
+| P6 the two stations' ring-3 J | `<= 1e-10` | 2.8e-14 | yes |
+| PH1 penny, ring-3 K at every station against `2 sigma sqrt(a/pi)` | `<= 0.03` | 2.24e-3 | yes |
+| PH2 penny, ring-3 K along the front (13 stations) | `<= 0.02` | 2.7e-7 | yes |
+| PH3 penny rings 2 and 4 (printed) | none | 2.76e-3, 2.22e-3 | (record) |
+| PF coarse penny, ring 2 | `<= 0.10` | 1.27e-2 | yes |
+| G1 Paris `m = 3` against the closed form | `<= 1e-6` | 4.4e-16 | yes |
+| G2 Paris `m = 2` against the logarithm | `<= 1e-6` | 2.2e-16 | yes |
+| G3 Paris `m = 3` with `(1 + a/a1)` | `<= 1e-6` | 6.7e-16 | yes |
+| R1a front bent by `1e-4 t`: refused, "not straight" | refused | refused | yes |
+| R1b front bent by `1e-8 t`: accepted | accepted | accepted | yes |
+| R2a ring 19 (`columns_to_edge + 1`, 18 by arithmetic 2): refused, "reaches the boundary" | refused | refused (a node on `x = W`) | yes |
+| R2b ring 18 accepted | accepted | J 1442.98 | yes |
+| R3 the 13 refusals | refused | refused, each with its key | yes |
+| R4a penny front as straight: "not straight"; R4b centre `1e-4 a` refused ("circle"), `1e-8 a` accepted | as stated | as stated | yes |
+| N1 reversed advance gives `-J` | `<= 1e-12` | 0 | yes |
+| N2 ring 1 against ring 3 (printed) | none | ring 1 7.2 % low | (record) |
+| F1 every aggregated error finite | finite | finite | yes |
+
+Mutations (`f429-scratch/mutate.py` on the copy `f429-scratch/mut` of b6e87f97, `CARGO_TARGET_DIR` `target-f429-mut`, the fast
+rows; log `f429-scratch/mutations.log`), each run once:
+
+| mutation | caught by | as registered? |
+|---|---|---|
+| M1 `- W q_k,k` dropped | P1 (7.7e-2), P2, P3 | yes |
+| M2 gradient transposed | P3 (3.10) | P3 yes; P1 not |
+| M3 half-symmetric factor 2 dropped | PF (0.30) | yes |
+| M4 plane stress `sqrt(J E)` | P1 (4.8e-2) | P1 yes; PF not (4.6 % is inside its 10 %) |
+| M5 `sqrt(pi/r)` | P4 (0.30) | yes |
+| M6 opening from the `x` component | P4, P5 | yes |
+| M7 normalisation by the front length | P1, P3, PF | yes |
+| M8 `rho` from `S_k` | R2b, P1, P2, P3, P6 | yes |
+| M9 boundary test disabled | R2a | yes |
+| M10 straightness test disabled | R1a; R4a (then refused by the advance check, without "not straight") | yes |
+| M11 substitution Jacobian dropped | G1, G2, G3 | yes |
+| M12 inner rings left out of the integral | **none** | **no** |
+
+Diagnosis of M12 (one diagnostic run of the mutated PF, `f429-scratch/m12-diagnosis.log`, not a registered record): PF moves
+from `-1.27 %` to `+2.79 %`, a change of 4 % that stays inside PF's limit of 10 %. In the one-layer plate the terms of the inner
+elements vanish exactly (arithmetic 4); on the circular front only the curvature term `(sigma_thth u_r/r - W) phi/R` of the
+small inner elements remains. The registration expected PF to catch it; PF's limit was set for a coarse mesh and is too loose for
+this effect. That is a gap in coverage, not a limit to change.
+
+Also run: `cargo test -p rcfd-fem --release` (235 test binaries, 1005 passed, 0 failed, 276 ignored), `cargo test -p rcfd-api --release --test
+baseline_hashes` (3 passed, 1 ignored: unchanged), `cargo test -p rcfd-cli --release --test docs_site`, `cargo clippy -p
+rcfd-fem --all-targets --release -- -D warnings` (clean after the rewrite above), `cargo fmt -p rcfd-fem` (applied; `--check`
+clean).
+
+Deviations: none from the registered set-ups; the clippy rewrite after the runs is described above.
+
+**Decision by the registered rule: partial.** Every check of the acceptance (c1 to c10) and every other registered check and
+control is met, PH included. Mutation M12 was caught by no registered check, and the rule asks for every mutation to be caught.
+
+Remaining questions:
+
+1. Status. Options: (a) partial by the rule as written; (b) done, since every acceptance clause is met and the uncaught mutation
+   affects only curved fronts, where PH1 still met its limit. Recommendation: (a) until a check that catches M12 exists (the
+   follow-up below); the lead or maintainer may take (b).
+2. A case-file key for the fracture parameters. Options: none now; a post-processing block naming a front node set and rings.
+   Recommendation: none now. Not taken: it would change a golden (schema), so it stays open.
+3. The citations are from memory (reference-data F-429 section); deLorenzi 1982 and the coefficients of the Tada refinement are
+   the least certain. Recommendation: check them when the books are at hand; no limit depends on them (the checks are against
+   the plain secant form and Sneddon's closed form).
+4. Quarter-point elements are refused by the mesh validation (`det J = 0` at the tip). Recommendation: leave it; the graded mesh
+   meets every limit, and accepting singular elements would change shared validation.
+
+## For the lead: roadmap entries
+
+Proposed status of F-429: partial by the registered rule (one mutation not caught; every acceptance clause met). Note:
+
+> Structural solver, advanced tier (plan ADR 0310, stub ADR 0332). ADR 0547, 2026-11-15: rcfd_fem::fracture. CrackFront (straight within 1e-6 of its length or circular within 1e-6 of its radius; plane normal, advance direction, half-symmetric flag); j_integral, the equivalent domain integral int (sigma_ij u_i,k - W delta_jk) q_k,j dV over rings of element layers about the front, q = rho phi_j e with a hat per front station, refusing a ring whose q = 1 nodes reach a boundary other than the crack faces, the mirror plane and the end faces; plane_strain_k (K = sqrt(J E/(1 - nu^2))); opening_k (least-squares line of K_app = E delta sqrt(2 pi/r)/(8 (1 - nu^2)) extrapolated to r = 0); paris_cycles (Gauss-Legendre in log a); builders centre_crack_plate (slit of doubled nodes, regular Hex20 graded towards the tips; quarter-point elements are refused by the mesh validation) and penny_crack_cylinder. Met: centre crack W = 10 a, plane strain, Hex20: K from J of rings 2-4 within 2.1e-3 of the secant form (limit 2e-2), rings within 1.2e-3 of each other, J against the energy difference of a +/- 0.02 a within 7.5e-5, K from the opening within 1.2e-2 (limit 5e-2); pure shear opening factor 1.3e-13 of the tension value (limit 1e-8); penny crack in R = 10 a (heavy record, 96 267 unknowns) K within 2.2e-3 of 2 sigma sqrt(a/pi), uniform along the front within 2.7e-7; Paris m = 3 and m = 2 within 7e-16; a bent front and a ring reaching the boundary refused. Partial by the rule: mutation M12 (inner rings left out of the integral) caught by no registered check (11 of 12 caught). No case-file key.
+
+Proposed follow-up item:
+
+> F-429b (deps F-429): Domain integral on a front with varying J, and mode separation. Acceptance: Every limit not stated here is registered in the ADR before the run. An embedded elliptical crack whose K varies along the front against the closed form of Irwin within a registered limit, with a check that catches leaving the inner rings out of the tapered integral; an interaction integral separating K_I, K_II and K_III, the inclined centre crack within 2 percent of each closed form.
