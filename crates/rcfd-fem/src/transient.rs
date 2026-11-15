@@ -791,6 +791,11 @@ impl Integrator {
         self.n_full
     }
 
+    /// The stiffness `K` the integrator was built on (reduced; ADR 0592, for the negative-pivot count of the warping path).
+    pub(crate) fn stiffness(&self) -> &CsrMatrix {
+        &self.k
+    }
+
     /// The four parameters `(alpha_m, alpha_f, beta, gamma)`.
     pub fn parameters(&self) -> [f64; 4] {
         self.parameters
