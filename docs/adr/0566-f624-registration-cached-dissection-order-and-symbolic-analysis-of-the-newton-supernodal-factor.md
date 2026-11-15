@@ -247,3 +247,13 @@ edited.
 
 1. **A switch for the reuse.** Not added (D2): taken on the maintainer's standing instruction of 2026-11-11 (take the
    recommendation).
+
+## Amendment 1 (2026-11-15, after the first run of A4, before its corrected run)
+
+The registered run of `rcfd-linalg/tests/sa_supernodal_analysis_f624.rs` on fb6db7c9 (`f624-scratch/run-linalg.log`): A3, A5
+and N2 passed; A4 failed on its NaN case only. The two refusals were `NonFinite { row: 3, col: 13, value: NaN }` from both
+factors (printed identically), but A4 compared them with `SkylineError`'s `==`, which is false for a NaN field against itself:
+a defect of the set-up, not of the factor. The Pivot and Unsymmetric refusals were equal by `==`. Correction: the new test
+`f624_a4_refusals_equal_amended` compares the two errors by their `Debug` text (every field; a float printed in its shortest
+round-trip form, a NaN as `NaN`) and the kind, as registered; the limit (equal) is unchanged. The first test stays as an
+ignored record. By the decision rule, A4 is met only after an amendment made after its run: the item cannot be done.

@@ -130,6 +130,7 @@ fn f624_a3_analysed_factor_bit_for_bit() {
 
 /// A4 of ADR 0566: the refusals of `factor_analysed` with the analysis of `lap7(10)` equal those of `factor`.
 #[test]
+#[ignore = "defective set-up of ADR 0566 A4 (run of fb6db7c9, f624-scratch/run-linalg.log): SkylineError's == is false for NonFinite { value: NaN } against itself; the Pivot and Unsymmetric refusals were equal and the NaN refusals printed equal; corrected by amendment 1 in f624_a4_refusals_equal_amended"]
 fn f624_a4_refusals_equal() {
     let k = lap7(10);
     let analysis = SupernodalAnalysis::nested_dissection(&k).expect("square");
@@ -159,6 +160,44 @@ fn f624_a4_refusals_equal() {
             _ => matches!(y, Some(SkylineError::Unsymmetric { .. })),
         };
         if x != y || !kind_ok {
+            missed.push(name);
+        }
+    }
+    assert!(missed.is_empty(), "A4 missed: {missed:?}");
+}
+
+/// A4 of ADR 0566 as corrected by its amendment 1: the refusals of `factor_analysed` with the analysis of `lap7(10)` equal
+/// those of `factor`, compared by their `Debug` text (every field, a NaN printed as `NaN`) and their kind.
+#[test]
+fn f624_a4_refusals_equal_amended() {
+    let k = lap7(10);
+    let analysis = SupernodalAnalysis::nested_dissection(&k).expect("square");
+    let mut shifted = k.clone();
+    for r in 0..shifted.n {
+        for q in shifted.row_ptr[r]..shifted.row_ptr[r + 1] {
+            if shifted.col[q] == r {
+                shifted.val[q] -= 7.0;
+            }
+        }
+    }
+    let mut nan = k.clone();
+    nan.val[17] = f64::NAN;
+    let mut unsym = k.clone();
+    let q = (unsym.row_ptr[40]..unsym.row_ptr[41])
+        .find(|&q| unsym.col[q] != 40)
+        .expect("an off-diagonal entry");
+    unsym.val[q] += 1e-3;
+    let mut missed = Vec::new();
+    for (name, a) in [("indefinite", &shifted), ("NaN", &nan), ("unsymmetric", &unsym)] {
+        let x = SupernodalLdlt::factor_analysed(a, &analysis).err();
+        let y = SupernodalLdlt::factor(a).err();
+        println!("A4 {name}: analysed {x:?}, factor {y:?}");
+        let kind_ok = match name {
+            "indefinite" => matches!(y, Some(SkylineError::Pivot { .. })),
+            "NaN" => matches!(y, Some(SkylineError::NonFinite { .. })),
+            _ => matches!(y, Some(SkylineError::Unsymmetric { .. })),
+        };
+        if format!("{x:?}") != format!("{y:?}") || !kind_ok {
             missed.push(name);
         }
     }
