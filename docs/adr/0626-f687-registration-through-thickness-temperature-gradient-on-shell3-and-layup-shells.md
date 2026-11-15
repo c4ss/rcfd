@@ -273,3 +273,100 @@ set-up, not of the library. Corrected: the tests `l1_shell3_load_on_a_triangle_a
 `l2_layup_load_on_a_rectangle_after_amendment2` build the same one-element models with a helper that adds no `held` set and
 no constraint; their checks, data and limits are those of L1 and L2 above, unchanged. The two registered tests stay as ignored
 records naming this amendment. Every other row of the registered run is recorded in the addendum as measured in that run.
+
+## Addendum 1: results (2026-11-15)
+
+Code (`crates/rcfd-fem/src`): `laminate.rs` (D1: `Laminate::p_th`, `ply_stresses_with_gradient`, `LayupResponse::gradient`,
+`layup_response` with a gradient), `shell.rs` (D2: `layup_thermal_gradient_load_vector`, `model_thermal_gradient_load_vector`;
+D3: `layup_centre`, `centre_strains`, `layup_stresses`, `shell3_stresses` take the gradient; module doc), `shell3.rs` (D2:
+`thermal_gradient_load_vector`; D3: `element_stresses` takes the thermal curvature), `thermal.rs` (`takes_gradient` Shell4 and
+Shell3, the refusal names the element kind, `add_thermal_gradient_load` dispatch, `GRADIENT_FOLLOW_UP` text), `model.rs` (the
+`Load` doc). New tests `crates/rcfd-fem/tests/si_shell_thermal_gradient_shell3_layup.rs` (11 running, 2 ignored records, 0.03 s
+release) and `si_shell_thermal_gradient_layup_bits.rs` (B1b, digests printed on the base before any library code, commit
+`f622ee90`). The one edit of an existing test registered in the preamble: `#[ignore]` on `n1_to_n8_refusals_and_zero_fields`.
+Registered run once on `3b64887d` (`f687-scratch/run1.log`); L1 and L2 after amendment 2 once on `2022562d` (`run2.log`).
+Release, `--test-threads=1`.
+
+| id | check | limit | measured | met |
+| --- | --- | --- | --- | --- |
+| L1 | Shell3 triangle load against arithmetic 3; forces and `theta_z` | `1e-12`; exact | `1.8e-16`; exact zero | yes (after amendment 2) |
+| L2 | layup rectangle load, UNS; SYM; ANG | `1e-12` | `3.6e-16`; `2.4e-15`; `8.6e-16` | yes (after amendment 2) |
+| L2 | `u_z`, `theta_z`; SYM force entries / `(N_s 0.24)` | exact; `1e-12` | exact zero; `5.6e-17` | yes (after amendment 2) |
+| L3 | one steel ply against the Shell block: load, displacement, stresses | bitwise | bitwise | yes |
+| C1 | clamped TH3 P; Q: moments; faces; membrane | `1e-12` | `2.5e-16`, `2.2e-16`, `0`; `2.5e-16`, `2.2e-16`, `1.1e-18` | yes |
+| C2 | clamped SYM: `M`; `N`; faces; ply stresses | `1e-12` | `2.2e-16`; `3.8e-17`; `3.1e-16`; `4.1e-16` | yes |
+| C2 | clamped UNS: `M`; `N` (non-zero, `-M_th g`); faces; ply stresses | `1e-12` | `6.8e-16`; `9.7e-17`; `8.5e-16`; `8.5e-16` | yes |
+| C3 | clamped BIM (TH Q): `M`; `N`; faces; ply stresses | `1e-12` | `3.0e-16`; `3.0e-17`; `2.2e-16`; `4.3e-16` | yes |
+| F1 | free TH3 P; Q: `|M| / M_s`; `|N| / (s_s t)` | `1e-11` | `4.0e-13`, `0`; `6.1e-13`, `1.0e-14` | yes |
+| F2 | free BIM P: curvature; membrane strain; `M`; `N` | `1e-11` | `6.7e-13`; `1.1e-12`; `3.9e-13`; `1.1e-14` | yes |
+| F2 | free BIM Q: curvature; membrane strain; `M`; `N` | `1e-11` | `2.7e-12`; `4.0e-12`; `1.1e-12`; `3.0e-14` | yes |
+| F3 | free UNS (RG Q): strain; curvature; `M`; `N` | `1e-10` | `1.1e-12`; `3.9e-12`; `3.1e-12`; `2.4e-13` | yes |
+| X1 | exact fields: TH3 P, Q `M`, `N`; BIM `M`, `N`; UNS `M`, `N` | `1e-13` | `4.2e-16`, `0`; `9.7e-16`, `8.5e-15`; `4.0e-15`, `5.9e-15`; `2.9e-14`, `1.3e-14` | yes |
+| B1 | ADR 0612's seven digests | exact | all equal | yes |
+| B1b | eight digests (cross-ply load, displacement, stresses, response; bimetal load, stresses; Shell3 ANDES load, stresses) | exact | all equal | yes |
+| B2 | `baseline_hashes` (rcfd-api, release); the 13 rcfd-fem test files of B2 (with B1, B1b) and the rcfd-fem unit tests | pass | all pass (`b2-fem.log`, `b2-api.log`, `b2-lib.log`) | yes |
+| N1' | ADR 0612 N3 to N8 (copy) | as ADR 0612 | all as registered | yes |
+| N9 | Beam2 stiffener with a gradient: load; stresses | refused `Beam2` | `NotYetSupported { variant: "Beam2" }` both | yes |
+| N10 | (amendment 1) zero on the beam: load bitwise the shell model's | exact | bitwise | yes |
+| N11 | UNS clamped `|N| / N_s` | `> 0.1` | `0.233` | yes |
+| N12 | BIM nonlinear (any refusal); TH3 nonlinear naming the gradient | refused | `NotYetSupported { variant: "Layup" }` (corotated path); `InvalidValue { key: "nonlinear" }` naming the gradient | yes |
+
+Closed forms printed: BIM free `eps0 = 2.573e-5 (1, 1, 0)`, `kappa = 3.348e-3 (1, 1, 0)` 1/m; UNS free `eps0 = 4.334e-5 (1, -1,
+0)`, `kappa = 1.492e-3 (1, 1, 0)` 1/m. Every free-plate row is a factor 2.5 to 30 inside its limit; F2 Q (`2.7e-12` curvature,
+`4.0e-12` strain) is about ADR 0612's measured Shell4 figure, as arithmetic 6 estimated.
+
+### Mutations (scratch copy `f687-scratch/tree` from `git archive` of `2022562d`; scripts `mut.py`, `mut.sh`; logs `MU*.log`)
+
+| id | mutation | caught by |
+| --- | --- | --- |
+| MU1 | layup load `p_th` -> `m_th` | L2 (UNS `1.04`, SYM `1.0`, ANG `1.04`), F2, F3 |
+| MU2 | layup load without the membrane part | L2 UNS, ANG (`1.0`), F2 (strain `0.61`), F3 |
+| MU3 | layup recovery without `- m_th g` | C2 UNS (`0.23`), C3 (`0.088`), F2, F3, X1, N11 |
+| MU4 | layup recovery without `- p_th g` | C2, C3 (`1.0`), F2, F3, X1 |
+| MU5 | layup faces without `z g` | C2 SYM, UNS, C3 faces (`1.0`) |
+| MU6 | `layup_response` without the gradient | C2 SYM, UNS, C3 ply stresses (`1.0`) |
+| MU7 | `p_th` without `t^3/12` | L2 (`7.3e-3` to `6.2e-2`), C2, C3 (`0.25`), F2, F3, X1 |
+| MU8 | Shell3 load sign flipped | L1 (`2.0`), F1 (`2.0`) |
+| MU9 | Shell3 load without `1 + nu` | L1 (`0.23`), F1 (`0.23`) |
+| MU10 | Shell3 load with the first node's gradient | L1 (`0.26`) |
+| MU11 | Shell3 recovery without the thermal curvature | C1 (`1.0`), F1, X1 |
+| MU12 | the one-isotropic-ply route of the load removed | **not caught** |
+| MU13 | `takes_gradient` true for every element | N9 (the beam reaches `thickness_or_error`, refused for the wrong reason), N10 |
+
+12 of 13 caught. MU12 diagnosis: on the L3 data (one steel ply) the general laminate path gives the same load bits as the
+homogeneous route (`zbar = 0` exactly, so `M_th = 0` and the membrane part adds exact zeros, and `p_th = qa t^3/12` rounds here as
+`D_00 + D_01` does); the recovery of a one-ply layup still takes the homogeneous branch. The route is kept for the bitwise promise
+of ADR 0496 D3 on any data; on this data the mutant is equivalent. MU13 was first not applied (the replacement text was not
+unique in `thermal.rs`; the script asserted and the unmutated copy ran); the script was corrected and MU13 run once, caught as
+above. `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --all-targets --release -- -D warnings` clean. Not run:
+the whole workspace suite (the lead's gate) and rcfd-fem test files not listed in B2.
+
+### Deviations
+
+- L1 and L2 of the registered run did not reach their checks (amendment 2: an empty node set in the test helper); they are met
+  in the corrected run, the registered tests kept as ignored records.
+- N10 and the BIM row of N12 were corrected before any run (amendment 1).
+- One existing test (`n1_to_n8_refusals_and_zero_fields`) ignored with a running copy of its rows N3 to N8 (preamble).
+
+### Decision by the registered rule
+
+**partial**: every check and negative control met and B2 passing, but MU12 not caught (an equivalent mutant on the registered
+data) and L1, L2 met only after an amendment written after the registered run. Every clause of the acceptance is met: a2 (L1,
+F1, C1), a3 (L2 with UNS, SYM, ANG; C2, C3; F2, F3), a4 (C1 `2.5e-16`, C2 `6.8e-16`, C3 `3.0e-16`, limit `1e-12`), a5 (B1, B1b,
+B2), b1 (C2 UNS `N = -M_th g` within `9.7e-17`, SYM zero within `3.8e-17`, N11), b2 (N9, N12, N1').
+
+### Remaining questions
+
+1. MU12. Options: (a) accept (the route is a bitwise guarantee, equivalent on these data); (b) a follow-up check with a one-ply
+   material whose `D_00 + D_01` rounds differently from `qa t^3/12`. Recommendation: (a).
+2. A case-file key for the gradient (ADR 0612 Q1, a schema decision). Recommendation: the follow-up already proposed by ADR 0612.
+3. Status. Options: (a) partial as the rule gives; (b) the lead marks it done on the acceptance, every clause being met.
+   Recommendation: (a), the open items being bookkeeping only.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> Structural solver, intermediate tier. Follow-up of F-527 (ADR 0612). PARTIAL. ADR 0626, 2026-11-12: Load::ShellTemperatureGradient on Shell3 and on Layup Shell4. Shell3 takes the curvature thermal load A B_b^T D alpha g_mean (1, 1, 0) (shell3::thermal_gradient_load_vector) and its recovery subtracts the thermal curvature; a layup takes the ply-integrated force and moment of classical lamination theory, N = -M_th g and M = -P_th g, M_th = sum Qbar alphabar t zbar (the existing coupling vector, zero for a symmetric layup) and the new Laminate::p_th = sum Qbar alphabar (t zbar^2 + t^3/12) (shell::layup_thermal_gradient_load_vector), recovered in shell::stresses (resultants, faces) and laminate::layup_response (ply stresses); one isotropic ply keeps the homogeneous route. Met: loads against closed forms on a triangle and on a rectangle (cross-ply, symmetric, angle-ply) within 2.4e-15; clamped plates give the closed-form moment within 6.8e-16 (Shell3, symmetric and unsymmetric cross-ply, steel/aluminium bimetal; limit 1e-12) and the unsymmetric thermal force within 9.7e-17; free plates take the closed-form strain and curvature within 4e-12 and exact discrete fields give zero resultants within 3e-14; beams, solids and the nonlinear paths still refused; models without a gradient keep their bits (ADR 0612 digests, eight new digests, baseline_hashes). Partial by the rule: 12 of 13 mutations caught (removing the one-ply route is bitwise equivalent on the registered data) and two load checks met after a test set-up amendment. Not covered: a case-file key, per-ply temperatures.
+
+> Note for F-527 (ADR 0612): the Shell3 and Layup refusals of ADR 0612 are lifted by ADR 0626; its test n1_to_n8_refusals_and_zero_fields is ignored with a running copy of rows N3 to N8.
