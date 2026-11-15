@@ -6299,9 +6299,9 @@
     "deps": [
       "F-546"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. An opt-in Shell3 pressure load built from a local curvature estimate, on the unstructured sphere octant of ADR 0550 (t = 0.01): the radial displacement within 2 % of `p R^2 (1 - nu)/(2 E t)` at every node at n = 16 and n = 32, the one-diagonal cylinder O1 of ADR 0461 within 1 %, defaults bit-identical.",
-    "note": "Structural solver, advanced tier. Follow-up of F-546 (ADR 0550, 2026-11-15)."
+    "note": "Structural solver, advanced tier. PARTIAL. ADR 0567, 2026-11-15: opt-in `Load::shell_pressure_curvature` (Shell3 only): the area-gradient load scaled by `p/(2 kappa)`, `kappa` the mean curvature of an implicit quadric least-squares fitted to each node's k-ring (k = max(2, 4 - distance to the boundary), exact on any quadric the stencil determines), with a boundary term keeping the smooth continuation's half of each edge's dihedral (right for free edges and symmetry cuts). Unstructured sphere octant of ADR 0550 (t = 0.01): radial displacement within 3.0e-14, 7.8e-14, 1.2e-13 of `p R^2 (1 - nu)/(2 E t)` at every node at n = 16, 32, 64 (t = 0.001 alike); the one-diagonal cylinder O1 of ADR 0461 within 2.0e-10 (other diagonal patterns, warped rows and 16 x 8 within 1.4e-10); the load equals `(p R/2) dA/dx_i` on the sphere and the polygon's tributary hoop load on the cylinder to 7e-14. On a non-quadric torus patch the curvature is second order inside but about 14 % off at the boundary nodes at 32 x 32; flat and zero-mean-curvature nodes refused. Defaults bit-identical (additions only; rcfd-fem suite, baseline_hashes, docs_site pass); seven mutations caught. Partial: the sign-symmetry check S1 compared signed zeros in its first run and was met only after amendment 1. Partial by the rule: S1 met only after the post-run amendment 1 (negated zeros, -0.0 against 0.0). Follow-up F-656 (non-quadric torus segment)."
   },
   {
     "id": "F-634",
@@ -6334,7 +6334,7 @@
     ],
     "status": "done",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. On the cylinder of ADR 0549 at the registered p, the error of the points with r < 1.1 a against the finite-strain reference of ADR 0549, its growth between 5 t* and 20 t* within a registered bound; the mutations of ADR 0549 that were not caught (the linear strain in the BBar arm, the creep rate halved) caught by a registered check; the checks of ADR 0549 unchanged.",
-    "note": "Structural solver, advanced tier. DONE. ADR 0563, 2026-11-15: on the cylinder of ADR 0549 at the registered p (p/E = 1e-4), the error of the 2304 points with r < 1.1 a against the finite-strain reference of ADR 0549 is 5.96e-3 at 5 t* and 1.03e-2 at 20 t* (limit 2e-2), its growth 4.34e-3 within the registered bound 6e-3 (proxy estimate 4.33e-3; the growth is the F-bar pressure drift of ADR 0549 F4, which lies in the bore zone, F-637). The bore-zone stress does not see the two mutations ADR 0549 missed (both lower the growth, as predicted); the registered witness that catches them is the finite-strain part of the bore displacement, isolated by a second run at p/100 (the discretisation error of the element, -1.1e-3 of the displacement, is linear in the load and cancels): the B-bar element's drift between 5 t* and 20 t* agrees with the reference's within 7.9e-4 (limit 5e-2), while the linear strain in the BBar arm gives 0.19 and the creep rate halved 0.73, both caught, both predicted to two digits by a one-dimensional proxy. Reference converged (400 against 800 elements 7.7e-7 in the bore zone, 9e-7 on the drift), the drift a finite-strain effect (3.3e-3 of the displacement). Test only (si_fbar_bore.rs, helpers copied from si_fbar.rs, which is unchanged); the checks of ADR 0549 pass unchanged; no source file changed; rcfd-fem tests, baseline_hashes, docs_site, fmt and clippy pass."
+    "note": "Structural solver, advanced tier. DONE. ADR 0563, 2026-11-15: on the cylinder of ADR 0549 at the registered p (p/E = 1e-4), the error of the 2304 points with r < 1.1 a against the finite-strain reference of ADR 0549 is 5.96e-3 at 5 t* and 1.03e-2 at 20 t* (limit 2e-2), its growth 4.34e-3 within the registered bound 6e-3 (proxy estimate 4.33e-3; the growth is the F-bar pressure drift of ADR 0549 F4, which lies in the bore zone, F-637). The bore-zone stress does not see the two mutations ADR 0549 missed (both lower the growth, as predicted); the registered witness that catches them is the finite-strain part of the bore displacement, isolated by a second run at p/100 (the discretisation error of the element, -1.1e-3 of the displacement, is linear in the load and cancels): the B-bar element's drift between 5 t* and 20 t* agrees with the reference's within 7.9e-4 (limit 5e-2), while the linear strain in the BBar arm gives 0.19 and the creep rate halved 0.73, both caught, both predicted to two digits by a one-dimensional proxy. Reference converged (400 against 800 elements 7.7e-7 in the bore zone, 9e-7 on the drift), the drift a finite-strain effect (3.3e-3 of the displacement). Test only (si_fbar_bore.rs, helpers copied from si_fbar.rs, which is unchanged); the checks of ADR 0549 pass unchanged; no source file changed; rcfd-fem tests, baseline_hashes, docs_site, fmt and clippy pass. the bore-zone growth G of ADR 0563 is the F-bar pressure drift diagnosed by ADR 0568 (finite-strain, O(h), removed in the proxy by a J-based volumetric part of the law)."
   },
   {
     "id": "F-637",
@@ -6344,9 +6344,9 @@
       "F-580",
       "F-587"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The growth of 4.4e-3 of p of the point-wise stress difference against the finite-strain reference at r = 1.05 (ADR 0549 F4, equal in sigma_r and sigma_theta) diagnosed: its scaling with p/E, its presence in a one-dimensional F-bar proxy, and whether a J-based volumetric part of the law removes it, each with a registered limit; the default element and every existing result bit-identical.",
-    "note": "Structural solver, advanced tier. Follow-up of F-580 (ADR 0549, 2026-11-15). the pressure drift is what the bore-zone growth of ADR 0563 measures (4.34e-3 at r = 1.093, the point-wise growth 4.40e-3 at r = 1.0545); the pair of runs at p and p/100 of ADR 0563, which cancels the discretisation error linear in the load, is available to isolate its finite-strain part in the stress, and a deviatoric bore-zone measure (sigma_theta - sigma_r) would not carry it."
+    "note": "Structural solver, advanced tier. PARTIAL. ADR 0568, 2026-11-15: the growth of 4.4e-3 of p of ADR 0549's point-wise difference (F4, at r = 1.0545) diagnosed as a pressure error of the F-bar Hex8 that is finite-strain in origin and O(h) in size: the law's pressure kappa tr E_bar contains kappa sum e'^2 (tr E = ln J + sum e'^2 at second order), which varies inside an element and which the continuum absorbs in J, while the F-bar gives the element one J. Scaling (library runs at p, p/10, p/100): F4/p falls by 0.1005 and 0.01004, the finite-strain part isolated by the pair of ADR 0563 scales by 0.0914 against the linear 0.0909 (limit 5 percent) and is the whole growth (to 4e-5); worst point at r = 1.0545, predicted 5 r0/4 = 1.0543 by the graded mesh. One-dimensional F-bar proxy (written in the test): the same growth to 4.6e-4 at the same point, gone without F-bar (1.1e-6), halved on twice the elements (0.4996), equal to the kinematic mismatch kappa (Q - Q_mean)/p within 1.3e-2. A J-based volumetric part (kappa ln J C^-1, in the proxy only, opt-in by construction) removes it: 5.9e-5 against a reference of the same law (limit 3e-4), although the mismatch stays in the kinematics (4.3e-3). Partial by the rule: the control J4 (the J variant and the library's law within 1e-5 at p/100) missed at 1.30e-4, recorded as known miss: the laws differ at first order in the strain (S_zz at the bore, linear in p/E), the estimate had looked at S_r only. All five mutations caught (three library, two test). Test only (si_fbar_drift.rs, helpers copied from si_fbar_bore.rs); no source file changed; rcfd-fem tests, baseline_hashes, docs_site, fmt and clippy pass. Follow-up F-658 (opt-in J-based volumetric creep law; NEEDS THE USER: material schema golden)."
   },
   {
     "id": "F-638",
@@ -6533,9 +6533,9 @@
     "deps": [
       "F-647"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The forward and backward whirl frequencies of a spinning thin shell of revolution (a flat annular plate clamped at its inner radius, or a free thin ring) from RotatingSector::whirl_modes with Shell4 and Shell3 against a closed form derived or cited in the ADR, at three speeds up to half the first frequency: within the registered discretisation error at two meshes, the observed order within 0.5 of the expected one, and the split of each nodal-diameter pair within 1e-2 relative; models without shells keep their bits.",
-    "note": "Structural solver, advanced tier. Follow-up of F-647 (ADR 0561, 2026-11-15)."
+    "note": "Structural solver, advanced tier. Follow-up of F-647 (ADR 0561, 2026-11-15). PARTIAL. ADR 0569, 2026-11-15: an independent whirl reference for spinning shells, test-only (no library change). The free thin ring as a cylindrical band (R = 0.1 m, t = 0.5 mm, L = 5 mm, nu = 0, so an axially uniform motion is exactly a ring) on a 32-sector cyclic sector about a tilted axis, RotatingSector::whirl_modes with Shell4 and Shell3 against the closed form of the extensible thin ring in the rotating frame derived in the ADR (Coriolis, spin softening and, with the exact hoop pre-stress given through with_unit_prestress, stress stiffening; inextensional limit: split 4 n Omega / (n^2 + 1), Bryan's factor), nodal diameters 2 and 3, speeds 1/6, 1/3 and 1/2 of the first frequency: frequencies within the registered 0.25 (k Delta)^2 (Shell4) and 0.5 (k Delta)^2 (Shell3) at two meshes (worst 2.9e-3 coarse, 6.9e-4 fine), observed order 2.04 to 2.06 (expected 2), every split within 1.3e-3 (limit 1e-2), directions and wave senses exact; models without shells keep their bits (no library line changed; every rcfd-fem test, baseline_hashes, docs_site). Six of six mutations caught. Partial by the rule: run 1 missed the whirl-number check of the backward member (the reference's sign; met after a registered amendment) and the no-Coriolis negative control (split 3.6e-9 against 1e-10, the dense solver's rounding). The rotary block of the shell Coriolis matrix (zero on a band) has no independent reference yet: follow-up proposed. Follow-up F-657 (spinning annular disc, rotary block)."
   },
   {
     "id": "F-655",
@@ -6547,5 +6547,38 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The heavy record f624_tl_hub_n16_reuse_against_present_heavy of ADR 0566, unchanged, run once with no cargo or rustc process on the machine at any 5 s sample of the run: min(t_s)/min(t_p) below 1/3 and the digests of ADR 0542 kept.",
     "note": "Structural solver, advanced tier. Follow-up of F-624 (ADR 0566, 2026-11-15). Command: cargo test -p rcfd-fem --release --test sa_newton_reuse_f624 -- --ignored (about 4 minutes), with no agents or builds running."
+  },
+  {
+    "id": "F-656",
+    "title": "Curvature shell pressure on a non-quadric shell",
+    "phase": 9,
+    "deps": [
+      "F-633"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. A pressurised torus segment (Shell3, symmetry cuts) loaded by `Load::shell_pressure_curvature`: the radial and meridional displacements measured against the membrane solution of the torus on two refinements, with the error and its order recorded and the boundary-node curvature error of ADR 0567 (14 % at 32 x 32) reduced below 2 % by a registered boundary estimator, defaults bit-identical.",
+    "note": "Structural solver, advanced tier. Follow-up of F-633 (ADR 0567, 2026-11-15)."
+  },
+  {
+    "id": "F-657",
+    "title": "Whirl of a spinning annular disc of shells (rotary block of the shell Coriolis matrix)",
+    "phase": 9,
+    "deps": [
+      "F-654"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The transverse modes of a flat annular plate clamped at its inner radius and spinning about its normal, from RotatingSector::whirl_modes with Shell4 and Shell3, against a semi-analytical reference derived in the ADR (the Mindlin plate with rotary inertia and the centrifugal membrane stress of the disc, solved per nodal diameter to 1e-8): frequencies at three speeds up to half the first frequency within the registered discretisation error at two meshes, the observed order within 0.5 of the expected one, and the rotating-frame split of each nodal-diameter pair against the reference within the registered limit; models without shells keep their bits.",
+    "note": "Structural solver, advanced tier. Follow-up of F-654 (ADR 0569, 2026-11-15)."
+  },
+  {
+    "id": "F-658",
+    "title": "Opt-in J-based volumetric part of the creep law on the F-bar Hex8 (NEEDS THE USER: material schema golden)",
+    "phase": 9,
+    "deps": [
+      "F-637"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. An opt-in variant of the creep material with the volumetric stress kappa ln J C^-1 and its consistent tangent (against central differences within 1e-6); on the cylinder of ADR 0549 at the registered p the growth of the point-wise difference against a finite-strain reference of the same law (ADR 0568 F4) within a registered bound below 1e-3; the default material, every existing result and the bit records bit-identical; the schema golden changed only with the maintainer's approval.",
+    "note": "Structural solver, advanced tier. Follow-up of F-637 (ADR 0568, 2026-11-15)."
   }
 ]
