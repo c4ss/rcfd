@@ -36,6 +36,9 @@
 //! K_sigma))`, `K_sigma` the geometric stiffness of [`matrices`] (real and undamped; in the Rayleigh stiffness, as ADR 0543 D5).
 //! Without the option the code of ADR 0574 runs unchanged.
 //!
+//! ADR 0591 (F-667) adds the pre-stress to the transient path ([`WarpingTransient::with_prestress`]): the integrator of ADR
+//! 0389 on `K + K_sigma` and `M` (the Rayleigh stiffness `beta (K + K_sigma)`); [`WarpingTransient::new`] is unchanged.
+//!
 //! ADR 0582 (F-643) adds the load height ([`Warping::load_point`]): a force applied at a point of the section off the shear
 //! centre adds `(1/2) (F . (p - s)) phi^2` at the twist of its node to the geometric stiffness; without an entry a nodal force
 //! acts at the shear centre, as before.
@@ -1965,6 +1968,29 @@ fn reduced_dynamic(
     })
 }
 
+/// ADR 0585 D1 step 2 (ADR 0591 D1 step 2): the geometric stiffness of `prestress` (RF8, RF10, the `check_fits` refusals)
+/// reduced by the prescribed and restrained equations; another free set than `free` is refused (key `"warping"`).
+fn reduced_geometric(
+    model: &SolidModel,
+    warping: &Warping,
+    prestress: &WarpingPrestress,
+    threads: Option<usize>,
+    free: &[usize],
+) -> Result<CsrMatrix> {
+    let check_torque = prestress.check_for(model, warping)?;
+    let mats = matrices_impl(model, &prestress.prestress, warping, threads, check_torque)?;
+    let lay = layout(model, warping)?;
+    let mut fixed = prescribed_equations(model, &[])?;
+    fixed.extend(lay.restrained.iter().map(|&eq| (eq, 0.0)));
+    let gr = reduce(&mats.geometric, &vec![0.0; lay.dofs.n_equations()], &fixed)?;
+    if gr.free() != free {
+        return Err(warping_error(
+            "the geometric stiffness has another set of free equations than the stiffness".to_string(),
+        ));
+    }
+    Ok(gr.matrix)
+}
+
 fn expand_free(free: &[usize], n: usize, x: &[f64]) -> Vec<f64> {
     let mut full = vec![0.0; n];
     for (&eq, &v) in free.iter().zip(x) {
@@ -2138,18 +2164,7 @@ impl WarpingHarmonic {
         alpha: f64,
         beta: f64,
     ) -> Result<WarpingHarmonic> {
-        let check_torque = prestress.check_for(model, warping)?;
-        let mats = matrices_impl(model, &prestress.prestress, warping, options.threads, check_torque)?;
-        let lay = layout(model, warping)?;
-        let mut fixed = prescribed_equations(model, &[])?;
-        fixed.extend(lay.restrained.iter().map(|&eq| (eq, 0.0)));
-        let gr = reduce(&mats.geometric, &vec![0.0; lay.dofs.n_equations()], &fixed)?;
-        if gr.free() != rd.free.as_slice() {
-            return Err(warping_error(
-                "the geometric stiffness has another set of free equations than the stiffness".to_string(),
-            ));
-        }
-        let g = gr.matrix;
+        let g = reduced_geometric(model, warping, prestress, options.threads, &rd.free)?;
         let nf = rd.free.len();
         let mut row_ptr = Vec::with_capacity(nf + 1);
         row_ptr.push(0usize);
@@ -2354,6 +2369,47 @@ impl WarpingTransient {
             ));
         }
         let integrator = crate::transient::Integrator::from_matrices(rd.k, rd.m, &reduced, options)?;
+        Ok(WarpingTransient {
+            integrator,
+            free: rd.free,
+            dofs: rd.dofs,
+        })
+    }
+
+    /// The integrator on `K + K_sigma` (ADR 0591 D1): as [`WarpingTransient::new`] with the geometric stiffness `K_sigma` of
+    /// `prestress` (the `geometric` matrix of [`matrices`], for example of [`WarpingPrestress::from_static`]) added to the
+    /// stiffness, so the equation of motion is `M a + C v + (K + K_sigma) u = f(t)`, the Rayleigh stiffness term is `beta (K +
+    /// K_sigma)` and the integrator's strain energy is `(1/2) u^T (K + K_sigma) u`. An indefinite `K + K_sigma` (beyond a
+    /// buckling load) is integrated as the linear equations say. Refuses as [`WarpingTransient::new`], and RF8 and RF10 of ADR
+    /// 0548 D3 (key `"warping"`) and the refusals of the pre-stress assembly.
+    pub fn with_prestress(
+        model: &SolidModel,
+        warping: &Warping,
+        loads: &[crate::transient::LoadHistory],
+        options: &crate::transient::TransientOptions,
+        prestress: &WarpingPrestress,
+    ) -> Result<WarpingTransient> {
+        let rd = reduced_dynamic(model, warping, options.threads, "the transient integrator")?;
+        let g = reduced_geometric(model, warping, prestress, options.threads, &rd.free)?;
+        let mut t = triplets_of(&rd.k);
+        t.extend(triplets_of(&g));
+        let ke = CsrMatrix::from_triplets(rd.k.n, t);
+        let n = rd.dofs.n_equations();
+        let mut reduced = Vec::with_capacity(loads.len());
+        for l in loads {
+            if l.pattern.len() != n {
+                return Err(FemError::FieldLength {
+                    key: "load pattern",
+                    expected: n,
+                    found: l.pattern.len(),
+                });
+            }
+            reduced.push(crate::transient::LoadHistory::new(
+                rd.free.iter().map(|&e| l.pattern[e]).collect(),
+                l.table.clone(),
+            ));
+        }
+        let integrator = crate::transient::Integrator::from_matrices(ke, rd.m, &reduced, options)?;
         Ok(WarpingTransient {
             integrator,
             free: rd.free,
