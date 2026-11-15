@@ -224,3 +224,80 @@ limit stays; the expected value of the check was wrong.
 
 By the decision rule (a check met only after a post-run amendment) the decision can be at best partial; this is recorded and not
 argued away. The other checks are not re-run.
+
+## Addendum 1: results (2026-11-15)
+
+Commits: bf55e6c4 (registration), 335a28fb (tests, as in run 1), 0e274dfb (amendment 1), f1b6bd9c (amendment 1 tests: the Q0
+record and the corrected Q0), and this addendum. Runs, each once, release, `--nocapture --test-threads=1`, logs in
+`w49i-work/f644-scratch`: run 1, the whole new file (`run1.log`); run 2, the corrected Q0 alone (`run2-q0.log`); B1
+(`b1.log`); the mutations (`mutations.log`, on a `git archive` of f1b6bd9c with its own target). No line under `crates/*/src`
+changed.
+
+| Id | Measured | Limit | Met |
+|---|---|---|---|
+| F0 | hyperelastic and twin `Ok` in 7 iterations, six frequencies each (`1.11922, 1.11922, 3.95920, 5.72788, 5.72788, 7.05308` Hz), residuals `1.5e-10 .. 6.3e-9` | `Ok`, residuals `<= 1e-8` | yes |
+| F1 | `1.080e-10` | `<= 1e-8` | yes |
+| F1n | `5.000e-7` | `>= 1e-7` | yes |
+| F1r (record) | backward test at `1e-10`: both `Ok` in 4 iterations (residuals `3.4e-17 .. 4.8e-11`); hyperelastic against twin `1.0802e-10`; against the F run `1.39e-10` (the sixth frequency) | record | - |
+| Q0 (run 1) | Q0a `0`; **Q0b `abs(W - 1e-6) = 1.000113e-12`**; Q0c `1.9999` (limit `>= 0.99995`); Q0d `inf` | Q0b `<= 1e-12` | **no** (Q0b; the expected value of the set-up wrong, amendment 1; ignored record `q0_the_order_free_measure_known_miss`) |
+| Q0' (am. 1) | Q0a `0`; Q0b' `1.14e-16`; Q0c `1.9999`; Q0d `inf` | as registered, Q0b' `<= 1e-12` | yes (after a post-run amendment) |
+| D0 | both `Ok`, 8 and 8 roots | `Ok` | yes |
+| D1 | `1.131e-13` | `<= 1e-10` | yes |
+| D1n | `1.755e-3` | `>= 1e-6` | yes |
+| D1r (record) | `2.0` (positional; roots 6 and 7 the same `+-` pair near `24.88i` in the opposite order in the two models) | record | - |
+| H0 | `Ok` (three models, two frequencies) | `Ok` | yes |
+| H1 | `1.341e-14` (omega 50), `1.362e-14` (omega 500) | `<= 1e-10` each | yes |
+| H1n | `3.58e-3` (omega 50), `7.09e-2` (omega 500) | `>= 1e-6` each | yes |
+| B1 | `git diff --stat e348eb34 -- crates/*/src` empty; `sa_hyper_paths.rs` 17 passed, 2 ignored (the ADR 0555 records); `sa_hyper_paths_default_bits.rs` 1 passed | empty; pass | yes |
+| S1 | `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings` clean | clean | yes |
+
+**Mutations** (`mutations.log`, one at a time, `sa_hyper_paths_f644.rs` run for each):
+
+| Id | Caught by |
+|---|---|
+| MU1 (`damped.rs` 716 back to `elasticity_matrix`) | D0 (the hyperelastic model refused: "the element-constant elasticity matrix ... a follow-up of ADR 0541"), D1, D1n |
+| MU2 (`harmonic_direct.rs` 719 back to `elasticity_matrix`) | H0 (refused, the same message), H1, H1n |
+| MU3 (`mat_hyper.rs` 62, shear entries `2G`) | F1 (`0.414`), D1 (`0.414`), H1 (`1.03`, `1.24`) |
+| MU4 (control: `damped.rs` 766 sort reversed) | not caught, as declared (D1 `1.131e-13` unchanged: the measure is order-free); the D1r line was not captured by the log filter |
+
+Three of three registered mutations caught; the two multi-material sites of clause a4 each caught by a set-up check registered
+before the run.
+
+**Deviations and diagnoses.** (1) Q0b: the expected value of the registration's own control was wrong (`1e-6` instead of `1e-6 /
+(1 + 1e-6)`, the distance being relative to the scaled root); corrected by amendment 1 before the corrected run, limit kept.
+(2) The estimate of F1 (arithmetic 3, `~8e-13`) was wrong by two orders; the limit (the acceptance's `1e-8`) was met with a factor
+93. Cause (read off the numbers, not tuned): arithmetic 3 treated the difference of the two `D` matrices as a perturbation of the
+volumetric pattern, which a nearly isochoric mode hardly sees. It is not of that pattern: L0t's entrywise difference `3.9e-13`
+of the largest entry is `3.9e-3` absolute, and the deviatoric stiffness is carried as differences such as `(lambda + 2G) -
+lambda = 2G` of entries near `1e10`, so the shear the bending modes feel is perturbed by up to `3.9e-3 / G = 3.9e-9` relative.
+The measured `2.2e-10` in the eigenvalue lies inside that bound. The difference is in the matrices, not in the iteration: the
+backward-test run (4 iterations) gives the first frequency of each model in the same bits as the tolerance run (7 iterations),
+and the same F1 measure `1.0802e-10`. The degenerate first bending pair of each model splits by `7.7e-11` for the same reason.
+(3) Diagnosis of ADR 0555's L3 miss confirmed: at the tolerance `1e-8` both models converge in 7 iterations with residuals
+`<= 6.3e-9`, the default `1e-10` sitting below the floor `~1e-9` of arithmetic 1. Not run: the whole workspace suite (the lead's
+gate) and `baseline_hashes` (no shared solver file changed).
+
+**Decision: partial** by the registered rule: every check of a1 to a4 met in the one registered run, the three mutations
+caught, B1 and S1 met, but Q0 (the control of the order-free measure) was met only after a post-run amendment, and the rule
+makes that partial. Nothing of the acceptance remains open.
+
+**Remaining questions** (recommendations, taken on the maintainer's standing instruction of 2026-11-11 where they need no change
+of a default):
+
+1. Status. Options: (a) partial as the rule gives, with no follow-up (nothing of the acceptance is left; the miss was in the
+   expected value of a control of the measure, corrected and met); (b) done by the maintainer's decision for the same reason.
+   Recommend (b), which needs the maintainer; proposed below as partial, as the rule requires.
+2. The default modal tolerance on near-incompressible models. Options: (a) leave the default `1e-10` and the documented floor
+   (the doc of `ModalOptions::tolerance` names it); (b) a scale-aware default (`ResidualTest::Backward` for modal analysis, as
+   buckling has): a default change with new bits, not taken. Recommend (a); F1r shows the backward test also meets F1's limit.
+3. The order of `damped_modes`' roots within a near-degenerate or `+-` pair. Options: (a) leave it and compare order-free (this
+   ADR); (b) a canonical order (a default change, not taken). Recommend (a).
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> Structural solver, advanced tier. Follow-up of F-620 (ADR 0555, 2026-11-15). PARTIAL. ADR 0581, 2026-11-15: test-only (no library line changed), the checks ADR 0555 left on the hyperelastic linear paths. Diagnosis of ADR 0555's modal miss by arithmetic: the default relative residual of the subspace iteration has the rounding floor c eps lambda_max/lambda_1, about 1e-9 on the BBar cantilever at K/G = 1e4 (lambda_max/lambda_1 ~ 1e8) and 1e-12 at K/G = 10, below which the default tolerance 1e-10 cannot go whatever the material or the iteration count; the existing opt-in ModalOptions::tolerance(1e-8) bounds the frequency error quadratically. With it the NHi BBar cantilever and its isotropic twin converge in 7 iterations (residuals <= 6.3e-9) and their six lowest frequencies agree within 1.1e-10 (limit 1e-8; the backward residual test at 1e-10 gives the same 1.1e-10, so the difference is in the matrices: the shear carried as differences of entries near 1e10); the twin with G (1 + 1e-6) is seen at 5.0e-7. Two hyperelastic materials (neo-Hookean root, Mooney-Rivlin tip) with loss factors 0.02 and 0.05: damped-mode roots against the twin 1.1e-13 matched without regard to order by a bottleneck assignment (limit 1e-10; positional 2.0, a +- pair reported in the opposite order), direct harmonic 1.3e-14 and 1.4e-14 at 50 and 500 rad/s (limit 1e-10); a tip loss factor 0.06 seen at 1.8e-3 (roots) and 3.6e-3, 7.1e-2 (response). The two multi-material call sites (damped.rs, harmonic_direct.rs) reverted to elasticity_matrix are each caught by a registered check, and doubled linearised shear entries by every measure: three of three mutations caught; a reversed root order is not seen by the order-free measure, as declared. Partial by the registered rule only because the control of the order-free measure was met after a post-run amendment (its expected value 1e-6 instead of 1e-6/(1 + 1e-6)); every acceptance clause met in the one registered run. Defaults unchanged by construction. Citations from memory (Kato-Temple, Kuhn), to be checked.
+
+No follow-up is proposed: nothing of the acceptance is left (remaining question 1 recommends that the maintainer mark the item
+done; questions 2 and 3 recommend leaving the defaults).
