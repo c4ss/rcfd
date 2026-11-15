@@ -348,20 +348,22 @@ fn stored(row_ptr: &[usize], col: &[usize], r: usize, c: usize) -> bool {
 }
 
 fn permuted_lower(a: &CsrMatrix, order: &[usize]) -> Permuted {
-    permuted_lower_parts(a.n, &a.row_ptr, &a.col, &a.val, order)
+    permuted_lower_parts(a.n, &a.row_ptr, &a.col, &a.val, order, 0.0)
 }
 
-/// [`permuted_lower`] of a square matrix given by its arrays, of either scalar (ADR 0509 D1).
-fn permuted_lower_parts<T: FrontScalar>(
+/// [`permuted_lower`] of a square matrix given by its arrays, of either scalar (ADR 0509 D1), or of the indices of the
+/// stored entries (the value map of ADR 0566 D1): values are copied, `zero` where nothing is stored.
+fn permuted_lower_parts<T: Copy>(
     n: usize,
     row_ptr: &[usize],
     col: &[usize],
     values: &[T],
     order: &[usize],
+    zero: T,
 ) -> Permuted<T> {
     let inv = inverse_permutation(order);
     let mut count = vec![0usize; n + 1];
-    let mut diag = vec![T::ZERO; n];
+    let mut diag = vec![zero; n];
     let take = |r: usize, k: usize| -> Option<(usize, usize)> {
         let c = col[k];
         let (i, j) = (inv[r], inv[c]);
@@ -388,7 +390,7 @@ fn permuted_lower_parts<T: FrontScalar>(
     let ptr = count.clone();
     let mut fill = count;
     let mut idx = vec![0usize; ptr[n]];
-    let mut val = vec![T::ZERO; ptr[n]];
+    let mut val = vec![zero; ptr[n]];
     for r in 0..n {
         for k in row_ptr[r]..row_ptr[r + 1] {
             if col[k] == r {
@@ -1036,7 +1038,7 @@ struct Columns<T> {
     val: Vec<T>,
 }
 
-fn columns_of<T: FrontScalar>(c: &Permuted<T>) -> Columns<T> {
+fn columns_of<T: Copy>(c: &Permuted<T>, zero: T) -> Columns<T> {
     let n = c.diag.len();
     let mut ptr = vec![0usize; n + 1];
     for &j in &c.idx {
@@ -1047,7 +1049,7 @@ fn columns_of<T: FrontScalar>(c: &Permuted<T>) -> Columns<T> {
     }
     let mut fill = ptr.clone();
     let mut idx = vec![0usize; c.idx.len()];
-    let mut val = vec![T::ZERO; c.idx.len()];
+    let mut val = vec![zero; c.idx.len()];
     for k in 0..n {
         for q in c.ptr[k]..c.ptr[k + 1] {
             let j = c.idx[q];
@@ -1140,16 +1142,49 @@ fn partial_factor<T: FrontScalar, P: Fn(T, T, usize) -> Option<(f64, f64)>>(
     Ok(split)
 }
 
+/// The symbolic phase of the supernodal factor (ADR 0503 D2), from the pattern of the permuted matrix only (ADR 0566 D1):
+/// the row counts, the column structure of the strict lower triangle, the fundamental supernodes, their children and the
+/// rows of each front.
+#[derive(Debug, Clone, PartialEq)]
+struct Symbolic {
+    wrow: Vec<usize>,
+    cols_ptr: Vec<usize>,
+    cols_idx: Vec<usize>,
+    sn_ptr: Vec<usize>,
+    col_sn: Vec<usize>,
+    children: Vec<Vec<usize>>,
+    rows: Vec<Vec<usize>>,
+}
+
 /// The supernodal factorisation of the permuted matrix `c` (ADR 0503 D2, D3) with the pivot test `test`; a refusal carries
-/// the elimination position of the refused pivot.
+/// the elimination position of the refused pivot. The symbolic phase ([`analyse`]) then the numeric phase ([`numeric`]).
 fn supernodal_factor<T: FrontScalar, P: Fn(T, T, usize) -> Option<(f64, f64)>>(
     c: Permuted<T>,
     test: &P,
 ) -> Result<Supernodal<T>, Refusal<T>> {
+    let cols = columns_of(&c, T::ZERO);
+    let sym = analyse(&c, cols.ptr, cols.idx);
+    let (values, d, max_front, split_fronts, peak) = numeric(&sym, &c.diag, &cols.val, test)?;
+    let Symbolic {
+        sn_ptr, col_sn, rows, ..
+    } = sym;
+    Ok(Supernodal {
+        sn_ptr,
+        col_sn,
+        rows,
+        values,
+        d,
+        max_front,
+        split_fronts,
+        peak_front_bytes: peak,
+    })
+}
+
+/// The symbolic phase of ADR 0503 D2 on the permuted matrix `c` whose strict lower triangle has the column structure
+/// `cols_ptr`, `cols_idx` ([`columns_of`]).
+fn analyse<T>(c: &Permuted<T>, cols_ptr: Vec<usize>, cols_idx: Vec<usize>) -> Symbolic {
     let n = c.diag.len();
-    let (parent, counts, wrow) = symbolic_rows(&c);
-    let cols = columns_of(&c);
-    let diag = c.diag;
+    let (parent, counts, wrow) = symbolic_rows(c);
     // fundamental supernodes (D2)
     let mut nchild = vec![0usize; n];
     for &p in &parent {
@@ -1186,7 +1221,7 @@ fn supernodal_factor<T: FrontScalar, P: Fn(T, T, usize) -> Option<(f64, f64)>>(
         let (f, l) = (sn_ptr[s], sn_ptr[s + 1]);
         let mut below = Vec::new();
         for j in f..l {
-            for &i in &cols.idx[cols.ptr[j]..cols.ptr[j + 1]] {
+            for &i in &cols_idx[cols_ptr[j]..cols_ptr[j + 1]] {
                 if i >= l && mark[i] != s {
                     mark[i] = s;
                     below.push(i);
@@ -1208,6 +1243,39 @@ fn supernodal_factor<T: FrontScalar, P: Fn(T, T, usize) -> Option<(f64, f64)>>(
         rows.push(r);
     }
     drop(mark);
+    Symbolic {
+        wrow,
+        cols_ptr,
+        cols_idx,
+        sn_ptr,
+        col_sn,
+        children,
+        rows,
+    }
+}
+
+/// The values, pivots, largest front, split fronts and peak front bytes of a numeric factorisation.
+type Numeric<T> = (Vec<Vec<T>>, Vec<T>, usize, usize, usize);
+
+/// The numeric phase of ADR 0503 D3 on the symbolic phase `sym`, with the diagonal `diag` of the permuted matrix and the
+/// values `colval` of its strict lower triangle in the column structure of `sym`.
+fn numeric<T: FrontScalar, P: Fn(T, T, usize) -> Option<(f64, f64)>>(
+    sym: &Symbolic,
+    diag: &[T],
+    colval: &[T],
+    test: &P,
+) -> Result<Numeric<T>, Refusal<T>> {
+    let n = diag.len();
+    let Symbolic {
+        wrow,
+        cols_ptr,
+        cols_idx,
+        sn_ptr,
+        children,
+        rows,
+        ..
+    } = sym;
+    let nsn = sn_ptr.len() - 1;
     // numeric (D3)
     let bytes = std::mem::size_of::<T>();
     let mut d = vec![T::ZERO; n];
@@ -1229,14 +1297,14 @@ fn supernodal_factor<T: FrontScalar, P: Fn(T, T, usize) -> Option<(f64, f64)>>(
             let j = f + q;
             let oq = off(q, m);
             front[oq] += diag[j];
-            for p in cols.ptr[j]..cols.ptr[j + 1] {
-                let g = cols.idx[p];
+            for p in cols_ptr[j]..cols_ptr[j + 1] {
+                let g = cols_idx[p];
                 let li = if g < l {
                     g - f
                 } else {
                     ns + r[ns..].binary_search(&g).expect("a row of the front")
                 };
-                front[oq + (li - q)] += cols.val[p];
+                front[oq + (li - q)] += colval[p];
             }
         }
         for &ch in &children[s] {
@@ -1266,7 +1334,7 @@ fn supernodal_factor<T: FrontScalar, P: Fn(T, T, usize) -> Option<(f64, f64)>>(
             live -= bytes * upd.len();
         }
         // 2. partial factorisation
-        match partial_factor(&mut front, m, ns, f, &diag, &wrow, test, &mut d) {
+        match partial_factor(&mut front, m, ns, f, diag, wrow, test, &mut d) {
             Ok(split) => split_fronts += usize::from(split),
             Err((k, pivot, threshold, scale)) => return Err((f + k, pivot, threshold, scale)),
         }
@@ -1281,16 +1349,7 @@ fn supernodal_factor<T: FrontScalar, P: Fn(T, T, usize) -> Option<(f64, f64)>>(
         front.shrink_to_fit();
         values.push(front);
     }
-    Ok(Supernodal {
-        sn_ptr,
-        col_sn,
-        rows,
-        values,
-        d,
-        max_front,
-        split_fronts,
-        peak_front_bytes: peak,
-    })
+    Ok((values, d, max_front, split_fronts, peak))
 }
 
 impl<T: FrontScalar> Supernodal<T> {
@@ -1349,6 +1408,67 @@ impl<T: FrontScalar> Supernodal<T> {
     }
 }
 
+/// The nested dissection order and the symbolic phase of [`SupernodalLdlt`] for one pattern (ADR 0566 D1): made once by
+/// [`SupernodalAnalysis::nested_dissection`] and used by [`SupernodalLdlt::factor_analysed`] for every matrix of that
+/// pattern. The order and the symbolic phase read the pattern only, and the values are placed where
+/// [`SupernodalLdlt::factor`] places them, so the factor's bits are those of [`SupernodalLdlt::factor`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct SupernodalAnalysis {
+    n: usize,
+    ncols: usize,
+    row_ptr: Vec<usize>,
+    col: Vec<usize>,
+    order: Vec<usize>,
+    sym: Symbolic,
+    /// For each elimination position, the index in `val` of its diagonal entry (`NONE`: not stored, the value 0).
+    diag_src: Vec<usize>,
+    /// For each entry of the column structure of `sym`, the index in `val` it is copied from.
+    col_src: Vec<usize>,
+}
+
+impl SupernodalAnalysis {
+    /// The analysis of the pattern of `a` with the nested dissection order by level structures ([`nested_dissection_order`],
+    /// the order of [`SupernodalLdlt::factor`]). Refuses a matrix that is not square (`NotSquare`); the values are not read.
+    pub fn nested_dissection(a: &CsrMatrix) -> Result<SupernodalAnalysis, SkylineError> {
+        if a.ncols != a.n {
+            return Err(SkylineError::NotSquare {
+                rows: a.n,
+                cols: a.ncols,
+            });
+        }
+        let order = nested_dissection_order(a);
+        let index: Vec<usize> = (0..a.col.len()).collect();
+        let c = permuted_lower_parts(a.n, &a.row_ptr, &a.col, &index, &order, NONE);
+        let cols = columns_of(&c, NONE);
+        let sym = analyse(&c, cols.ptr, cols.idx);
+        Ok(SupernodalAnalysis {
+            n: a.n,
+            ncols: a.ncols,
+            row_ptr: a.row_ptr.clone(),
+            col: a.col.clone(),
+            order,
+            sym,
+            diag_src: c.diag,
+            col_src: cols.val,
+        })
+    }
+
+    /// Dimension.
+    pub fn n(&self) -> usize {
+        self.n
+    }
+
+    /// Elimination order: `order()[i]` = original index at position `i`.
+    pub fn order(&self) -> &[usize] {
+        &self.order
+    }
+
+    /// Whether `a` has the analysed pattern: the same dimensions, row pointers and column indices.
+    pub fn matches(&self, a: &CsrMatrix) -> bool {
+        a.n == self.n && a.ncols == self.ncols && a.row_ptr == self.row_ptr && a.col == self.col
+    }
+}
+
 /// Supernodal multifrontal `L D L^T` of a symmetric matrix after a fill-reducing ordering (ADR 0503 D2, D3).
 #[derive(Debug, Clone, PartialEq)]
 pub struct SupernodalLdlt {
@@ -1389,6 +1509,51 @@ impl SupernodalLdlt {
         };
         match supernodal_factor(c, &test) {
             Ok(f) => Ok(SupernodalLdlt { n, order, f }),
+            Err((k, pivot, threshold, _)) => Err(SkylineError::Pivot {
+                row: order[k],
+                position: k,
+                pivot,
+                threshold,
+            }),
+        }
+    }
+
+    /// [`SupernodalLdlt::factor`] of `a` with the order and the symbolic phase of `analysis` (ADR 0566 D1): `a` is validated
+    /// as by [`SupernodalLdlt::factor`] (square, finite, symmetric within 1e-12), its values placed through the analysis'
+    /// value map, and the numeric phase run with positive pivots. The result and every refusal are bit for bit those of
+    /// [`SupernodalLdlt::factor`].
+    ///
+    /// # Panics
+    /// If `analysis` is not of the pattern of `a` ([`SupernodalAnalysis::matches`]).
+    pub fn factor_analysed(a: &CsrMatrix, analysis: &SupernodalAnalysis) -> Result<SupernodalLdlt, SkylineError> {
+        validate(a, 1e-12)?;
+        assert!(analysis.matches(a), "the analysis of another pattern");
+        let diag: Vec<f64> = analysis
+            .diag_src
+            .iter()
+            .map(|&k| if k == NONE { 0.0 } else { a.val[k] })
+            .collect();
+        let colval: Vec<f64> = analysis.col_src.iter().map(|&k| a.val[k]).collect();
+        let test = |akk: f64, dk: f64, w: usize| -> Option<(f64, f64)> {
+            let theta = (w as f64 + 1.0) * f64::EPSILON * (akk.abs() + (akk - dk).abs());
+            (dk <= theta || !dk.is_finite()).then_some((theta, 0.0))
+        };
+        let order = &analysis.order;
+        match numeric(&analysis.sym, &diag, &colval, &test) {
+            Ok((values, d, max_front, split_fronts, peak)) => Ok(SupernodalLdlt {
+                n: a.n,
+                order: order.clone(),
+                f: Supernodal {
+                    sn_ptr: analysis.sym.sn_ptr.clone(),
+                    col_sn: analysis.sym.col_sn.clone(),
+                    rows: analysis.sym.rows.clone(),
+                    values,
+                    d,
+                    max_front,
+                    split_fronts,
+                    peak_front_bytes: peak,
+                },
+            }),
             Err((k, pivot, threshold, _)) => Err(SkylineError::Pivot {
                 row: order[k],
                 position: k,
@@ -1545,7 +1710,7 @@ impl ComplexSupernodalLdlt {
             },
         })?;
         drop(pattern);
-        let c = permuted_lower_parts(n, &a.row_ptr, &a.col, &a.val, &order);
+        let c = permuted_lower_parts(n, &a.row_ptr, &a.col, &a.val, &order, C64::ZERO);
         let test = |akk: C64, dk: C64, w: usize| -> Option<(f64, f64)> {
             let scale = akk.abs() + (akk - dk).abs();
             let theta = ((w as f64 + 1.0) * f64::EPSILON * scale).max(tau * scale);
