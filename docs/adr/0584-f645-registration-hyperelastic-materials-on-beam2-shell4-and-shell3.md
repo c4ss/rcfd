@@ -220,3 +220,69 @@ registered extras: a miss there makes the proposed status partial for the title'
 - A hyperelastic ply of a layup stays refused (`laminate::check_plies`); Shell3 layups are refused anyway.
 - The nonlinear paths of shells (`shell_corot`) keep refusing a non-isotropic material; nothing nonlinear is opened here.
 - The linearised material is the small-strain tangent: no claim on large rotations or finite strain of beams and shells.
+
+## Addendum 1: results (2026-11-15)
+
+The registered run was made once (`cargo test -p rcfd-fem --release --test sa_hyper_structures -- --nocapture
+--test-threads=1`, log `w49i-work/f645-scratch/run1.log`, 0.15 s), at commit b93e7ebd (library and tests committed before the run).
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| S-B-NH, S-B-MR `e_u` (a1) | `<= 1e-10` | 0, 0 | yes |
+| M-B-NH, M-B-MR `e_lambda`, `e_phi` (a2) | `<= 1e-10` | 0, 0; 0, 0 (7 / 7 iterations, backward residuals <= 1.1e-11) | yes |
+| S-P4-NH, S-P4-MR `e_u` (a3) | `<= 1e-10` | 0, 0 | yes |
+| M-P4-NH, M-P4-MR `e_lambda`, `e_phi` (a4) | `<= 1e-10` | 0, 0; 0, 0 (6 / 6 iterations, residuals <= 2.8e-11) | yes |
+| S-P3-NH, S-P3-MR `e_u` (Shell3) | `<= 1e-10` | 0, 0 | yes |
+| M-P3-NH, M-P3-MR `e_lambda`, `e_phi` (Shell3) | `<= 1e-10` | 0, 0; 0, 0 (6 / 6 iterations, residuals <= 1.7e-11) | yes |
+| Bb-NH `e_f` (beam buckling) | `<= 1e-10` | 0 (factors 8.8917, 34.884 both) | yes |
+| C-B static / modes | `> 1e-8` | 9.68e-7 / 1.00e-6 | yes |
+| C-P4 static / modes | `> 1e-8` | 9.45e-7 / 9.86e-7 | yes |
+| C-P3 static / modes | `> 1e-8` | 9.45e-7 / 9.86e-7 | yes |
+| N1 (6 rows) | refused, "a structural element" | refused, every row | yes |
+| N2 | refused, "a temperature load" | refused | yes |
+| N3 Beam2, Shell4 static and eigenvalue bits | equal | equal | yes |
+| N4 default | `false` | `false` | yes |
+| B0 | pass | rcfd-fem lib 14, `sa_hyper_paths` 17 (RF1 among them), `sa_hyper_paths_default_bits` 1, `sa_hyper_paths_f644` 4, `sa_geometric_struct` 9, `sa_laminate_default_bits` 1, `sa_beam_warping_f626_bits` 1, `rcfd-api --test baseline_hashes` 3: all pass (ignored records not run) | yes |
+
+Every difference is exactly 0, as arithmetic 2 expected: the library and the test evaluate the same expression on the same `(G,
+K)`. The first beam eigenvalue `2.688` matches the hand estimate `2.7` of arithmetic 3. The controls (`5e-7 .. 1e-6` expected) give
+`9.5e-7 .. 1.0e-6`. fmt (`cargo fmt -p rcfd-fem --check`) clean; `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean.
+
+Mutations (scratch copy `w49i-work/f645-scratch/mut`, script `mutate.py`, log `mutations.log`), each caught:
+
+| Mutation | Caught by |
+|---|---|
+| 1 `E = 9KG/(3K + 2G)` | every S, M and Bb row (`3.1e-2 .. 6.3e-2`) |
+| 2 `nu` with `3K - G` | every S, M and Bb row (`6.0e-5 .. 1.1e-2`) |
+| 3 `shell::moduli` back to the getters | every P4 and P3 row and C-P4, C-P3 (NaN entry refused by the factorisation) |
+| 4 `beam::moduli` back to the getters | every Beam B row, Bb, C-B (NaN) |
+| 5 `beam::axial_force` back to `youngs_modulus` | Bb only (the pre-stress of a Beam2 element not finite), as registered |
+| 6 setting ignored, always lifted | N1 (6 rows) and the existing RF1 of `sa_hyper_paths.rs` |
+| 7 setting ignored, never lifted | every S, M, Bb, C row and N2 (refused as a structural element first) |
+
+Deviations: none. Not run: the other linear paths that take structures (cyclic, rotating, cms, mpc transformation, beam warping,
+harmonic and transient), as declared in "Limits"; the whole workspace suite (the lead's gate).
+
+Decision by the registered rule: **done**. Every acceptance row met in the one registered run, every control held, B0 passed, seven
+of seven mutations caught, fmt and clippy clean. The Shell3 and buckling extras met too.
+
+### Remaining questions
+
+1. **The default.** The hyperelastic material on a structural element needs `set_hyperelastic_structures(true)`; by default it is
+   refused as before. Options: (a) keep the opt-in; (b) make it the default, retiring `sa_hyper_paths.rs::rf1_to_rf4_refusals` as
+   an ignored record with a copy whose RF1 row accepts (the ADR 0291 pattern, which needs the maintainer's approval).
+   Recommendation: (b) once the other linear paths that take structures have a check (question 2): the linearised material is
+   exact by construction and the refusal now protects nothing. Until then (a).
+2. **The other linear paths.** Cyclic, rotating, cms, mpc and beam warping take the same moduli through the same three
+   functions but are unchecked. Options: (a) a follow-up with one twin row per path; (b) accept by construction. Recommendation:
+   (a), a small test-only item (proposed below).
+3. **The case schema.** The setting is not in the case schema or the API crate (that would change the schema golden).
+   Recommendation: add it with question 1 (b) or not at all: with a default lift there is nothing to expose.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> Structural solver, advanced tier. Follow-up of F-620 (ADR 0555). DONE. ADR 0584, 2026-11-15: the linear paths take a hyperelastic (neo-Hookean or Mooney-Rivlin) material on Beam2, Shell4 and Shell3 elements as its linearised material, opted in by SolidModel::set_hyperelastic_structures(true) (default off: the refusal of ADR 0555 D3 and its test RF1 stand); a structural element takes the isotropic element of the small-strain E = 9KG/(3K + G), nu = (3K - 2G)/(2(3K + G)) through mat_hyper::small_strain_young_poisson, read by beam::moduli, shell::moduli and beam::axial_force (unchanged bits for every other material: baseline hashes and the default-bits records pass). A temperature load stays refused. Against the isotropic twin of the same small-strain moduli, a Beam2 cantilever and a Shell4 and a Shell3 plate, each with a neo-Hookean and a Mooney-Rivlin material, give static displacements, the six lowest eigenvalues and mode shapes (backward residual test) with difference exactly 0 (limit 1e-10), and the beam buckling factors 0; the twin with G (1 + 1e-6) is seen at 9.5e-7 .. 1.0e-6. Seven of seven mutations caught. Not covered: the other linear paths with structures (cyclic, rotating, cms, mpc, beam warping), the case schema, the default lift (needs retiring RF1, maintainer's approval).
+
+> Follow-up proposed: Hyperelastic structural elements on the other linear paths and by default. Deps F-645. Acceptance: Every limit not stated here is registered in the ADR before the run. With a neo-Hookean material on Beam2 and Shell4 elements, the cyclic, rotating, cms and mpc-transformation paths give the results of the isotropic twin of the same small-strain moduli within 1e-10; on the maintainer's approval the refusal of ADR 0555 D3 on structural elements is lifted by default with RF1 retired as a record and its copy accepting.
