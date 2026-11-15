@@ -214,3 +214,72 @@ in `sa_nl_transient` (B1 runs it).
    needs a floor below `b`).
 3. **The bound in the static driver without a contribution in the reference**: not taken (it would touch the static default
    path); recommended as a follow-up only with its own audit.
+
+## Addendum 1: results (2026-11-15)
+
+Code: commit `eba14e66` (`nonlinear.rs`: module doc lines 27 to 33; `contribute`, `contribute_with`, `contribute_split` and the
+new `rounding_bound`, lines 1460 to 1551; `Problem::attempt_with` lines 1680 to 1693 and 1725 to 1745; the new test file
+`tests/sa_nl_rounding_floor.rs`). Runs, each once, release profile: `cargo test -p rcfd-fem --release --test sa_nl_rounding_floor`
+(`f571-scratch/run1.log`), the same with `--ignored` for P1 (`run1-p1.log`, 67 s), B1 (`b1.log`), B4 (`b4.log`), B2 (`b2.log`).
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| A1 | 50 of 50 steps converge with `NlTransientOptions::new(T_lin/200)`; `max |P_n - P_0|/|P_0|` `1.297e-14` | all `Ok`; `<= 1e-11` | met |
+| A1h | 0 halvings | `0` | met |
+| A1r | largest final relative residual `1.640e-9` (step 50, accepted at the bound) | `>= 1e-10` | met |
+| A2 | `3.56e-18` (the tolerance-`1e-6` run completes, 50 steps) | `<= 1e-9` | met |
+| P1 | 1940 of 1940 steps with the driver defaults; 10 crossings; period `2.095e-4`; energy `2.762e-4`; 0 halvings; largest final relative residual `1.58e-8` | all `Ok`; `>= 9`; `<= 1e-2`; `<= 1e-3`; `<= 19` | met |
+| H1 | `h1_h2_halvings_and_the_error_with_the_time` passes | pass | met |
+| B1 | the 72 `*_default_bits` files of `rcfd-fem` with `sa_nl_transient`, `sa_dg`, `sa_dgm`, `sa_emc`, `sa_shell3_paths`, `sa_corot_shell_dyn`, `sa_creep_arrhenius_nlt`, `sa_hyper`, `sa_visco`, `sa_temp_field`, `sa_temp_history`, `sa_temp_predictor`: 155 passed, 0 failed, 53 ignored | pass | met |
+| B2 | `baseline_hashes`: 3 passed, 1 ignored | pass | met |
+| B3 | `0` (measured before registration, not re-run) | `0` | met |
+| B4 | `600 steps, error None`, `8.800399e-6`, `3.896782e-6` | equal text | met |
+
+P1 is the ADR 0479 pendulum P0 to P2 at the driver defaults (registered there at `1e-10`, the set-up that amendment 1 there
+corrected to `1e-7`). It now completes at the defaults with P1c's numbers to the printed digits (`2.094897e-4`; energy
+`2.761783e-4` against `2.761787e-4` at `1e-7`).
+
+**Mutations** (`f571-scratch/mutate.py`, `mutations.log`, `mut_*.log`; scratch copy `f571-scratch/mut`, target `target-mut`):
+
+| Id | Caught by |
+|---|---|
+| MU6 (every `c.in_residual_reference()` read as `false`) | A1 (step 1 fails: `r = 1`), A1r, A2; `sa_emc` also fails |
+| MU6s (ADR 0479's script form: the block in `contribute_with` disabled) | A1 (step 50 fails after 5 halvings, as in ADR 0479's run), A1r, A2 |
+| MB1 (`eps` replaced by 0) | A1, A1r, A2 |
+| MB2 (the bound from the tangent without the contributions) | A1, A1r, A2 (the registered doubt did not happen) |
+| MB3 (the energy test dropped from the bound branch) | H1. Registered as "none expected", but the first step was accepted after its halvings with one correction (residual `3.17e-10`, below the bound at `dt/32`). So the energy test carries weight; it is not just a safeguard |
+| MB4 (the last-iterate gate removed) | B4 (N1e `8.800452e-6`, N2e `3.896805e-6`: that test's bits change) |
+
+All six were caught. MB3 was caught by a check that was not expected to catch it; this is recorded here and does not change any
+limit. `cargo fmt -p rcfd-fem --check` and `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings` are clean.
+
+**Deviations.** No limit or set-up changed. The library and the test file landed in one commit after the registration. The
+whole `rcfd-fem` suite was not re-run after the change (that is the lead's gate). B3 rests on the pre-registration audit and on
+the argument for the last-iterate gate: an attempt that converged before is accepted before its last iterate is examined.
+Not run: the ignored records of other ADRs. ADR 0479's record `s3_free_body_momentum_known_miss` is unchanged and would now pass
+with `--ignored`. NT1 of ADR 0545 and the checks of F-631 were not run.
+
+**Decision: done** by the registered rule. A1, A1h, A1r, A2, P1, H1 and B1 to B4 are met; MU6, MU6s, MB1 and MB4 are caught;
+fmt and clippy are clean.
+
+**Remaining questions** (recommendations):
+
+1. ADR 0479's ignored records S3 and P0 to P2 would now pass. Recommendation: leave them as records (house rule: not edited),
+   and have the lead's note of F-423 say that ADR 0604 lifts the floor of S3 and of the pendulum at the defaults.
+2. Overlap with F-631 (ADR 0603). `contribute_with` and `contribute_split` gain `bounded = true;` as the first line of the block
+   that F-631 extends after its first line, so the merge keeps both (adjacent lines). The two changes do not depend on each
+   other: F-631's opt-in raises the reference, and ADR 0604 accepts at the rounding bound at the last iterate.
+   Recommendation: merge both. NT1 of ADR 0545 may now pass at the defaults as well; it was not run here and deserves one run.
+3. Cost. A step at the floor takes all `max_iterations` (20) corrections before it is accepted (P1: 67 s, against about 20 s
+   at `1e-7`). Options: (a) keep this, which is bit-safe (recommended); (b) test the bound at every iterate, which is faster
+   but changes the bits of ADR 0514 N1e (MB4), so it is a maintainer decision; (c) add a stagnation test (follow-up below).
+4. The static driver without a contribution in the reference keeps the ADR 0404 test (open question 3). The incremental unknown
+   (open question 2) stays a maintainer decision.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> Structural solver, advanced tier. Follow-up of F-423 (ADR 0479, 2026-11-14). DONE. ADR 0604, 2026-11-15: the floor is not in the total Lagrangian internal force under translation (its rounding is 3e-11 to 1.1e-8 N on S3). It comes from representing the total displacement through the step tangent K_eff = K_T + M/(beta h^2): the residual of the nearest float vector reaches (eps/2)|(|K_eff| |u|)| (probe: 0.03 to 0.58 of it over 60 steps), while the reference max(|f_int|, |g|) passes through zero every half period of S3's free-free mode (88.5 N at step 50, relative floor 1.64e-9). On the pendulum, the internal-tangent part of the same bound covers the rotation floor (0.12 to 0.24). Change in nonlinear.rs, with no option and no public signature change: when a contribution is in the residual reference, an attempt still above the tolerance at its last iteration is accepted if its residual is within the rounding bound eps |(|K| |u|)|_free and the energy test holds; every attempt that converged before converges at the same iterate. S3 of ADR 0479 with the driver defaults: 50 of 50 steps, 0 halvings, |dP|/|P_0| 1.3e-14, step 50 accepted at the bound (relative 1.64e-9), within 3.6e-18 of the run at tolerance 1e-6. The ADR 0479 pendulum at the defaults: 1940 steps, period 2.09e-4, energy 2.76e-4, 0 halvings (ignored heavy record, 67 s). MU6 of ADR 0479 is caught in both forms (the registered one and its script's), and MB1 to MB4 are caught (the energy test by H1, the last-iterate gate by ADR 0514 N1e's printed values). Default bits: the 72 default-bits files and the nl_transient families pass, the baseline hashes pass, and an instrumented audit of the crate's 1289 non-ignored tests found no attempt the bound would change. Not covered: the floor is accepted, not lowered (an incremental unknown would change every nl_transient bit); the static driver without a contribution in the reference; a step at the floor costs max_iterations corrections; the free spinning bar stays a known miss of the trapezoidal rule.
+
+> Follow-up proposed: Early acceptance at the rounding bound of the Newton residual (a stagnation test). Deps F-571. Acceptance: Every limit not stated here is registered in the ADR before the run. A step at the rounding floor of ADR 0604 is accepted in at most a registered number of corrections below max_iterations; S3 and the pendulum of ADR 0479 at the defaults run in at most half of ADR 0604's iterations; the bits of every existing default-bits test are unchanged, or the changed ones are listed for the maintainer's decision.
