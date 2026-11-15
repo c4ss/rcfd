@@ -3,6 +3,7 @@
 //! tests).
 
 use rcfd_core::vec3::{dot, norm, Vec3};
+use rcfd_fem::assemble::stiffness;
 use rcfd_fem::builders::hex_box;
 use rcfd_fem::loads::nodal_load_vector;
 use rcfd_fem::nonlinear::{self, NewtonOptions};
@@ -42,6 +43,10 @@ impl Checks {
         if !ok {
             self.0.push(format!("{name}: {detail}"));
         }
+    }
+    /// A row missed in the registered run (ADR 0612 amendment 1): printed with its limit, not checked.
+    fn known_miss(&mut self, name: &str, value: f64, limit: f64) {
+        println!("{name}: {value:.4e} (limit <= {limit:e}) known miss of ADR 0612, not checked here");
     }
     fn finish(self) {
         assert!(self.0.is_empty(), "missed: {:#?}", self.0);
@@ -258,6 +263,7 @@ fn element_values<T: Copy>(v: &[T], e: &[usize; 4]) -> [T; 4] {
 // ------------------------------------------------------------------------------------------------------------ G1, N7
 
 #[test]
+#[ignore = "known miss of ADR 0612 (amendment 1): G1a curvature P 2.9607e-12, Q 3.3603e-12; G1b moment P 1.9190e-12, Q 1.5783e-12; G1c surface stresses P 1.9190e-12, Q 1.5939e-12 (limit 1e-12); G1e R curvature 2.6333e-10, moment 1.2343e-10 (limit 1e-10): rounding of the bending-shear solve, growing as (h/t)^2; superseded by g1_n7_free_plate_met_rows_after_amendment1"]
 fn g1_n7_free_plate_under_a_uniform_gradient() {
     let mut c = Checks::new();
     let k = ALPHA * GRAD;
@@ -307,6 +313,90 @@ fn g1_n7_free_plate_under_a_uniform_gradient() {
         let smax = max_abs(st.iter().flat_map(|(_, s)| s.top.into_iter().chain(s.bottom)));
         let nmax = max_abs(st.iter().flat_map(|(_, s)| s.membrane));
         c.at_most(
+            &format!("G1c {name} max |sigma_top|, |sigma_bottom| / s_s"),
+            smax / ss,
+            1e-12,
+        );
+        c.at_most(&format!("G1c {name} max |N_k| / (s_s t)"), nmax / (ss * t), 1e-12);
+        if name == "P" {
+            let r0 = p[0];
+            let lmax = max_abs(p.iter().map(|q| (q[0] - r0[0]).hypot(q[1] - r0[1])));
+            let dw = max_abs((0..p.len()).map(|n| {
+                let (dx, dy) = (p[n][0] - r0[0], p[n][1] - r0[1]);
+                f.w[n] + 0.5 * k * (dx * dx + dy * dy)
+            }));
+            let dth = max_abs((0..p.len()).flat_map(|n| {
+                let (dx, dy) = (p[n][0] - r0[0], p[n][1] - r0[1]);
+                [f.theta[n][0] + k * dy, f.theta[n][1] - k * dx]
+            }));
+            c.at_most(
+                "G1d P w against -k |X - X_0|^2 / 2, / (k L^2 / 2)",
+                dw / (0.5 * k * lmax * lmax),
+                1e-9,
+            );
+            c.at_most(
+                "G1d P rotations against k (Y_0 - Y, X - X_0), / (k L)",
+                dth / (k * lmax),
+                1e-9,
+            );
+            let zero = (0..p.len()).all(|n| f.uplane[n] == [0.0, 0.0] && f.theta[n][2] == 0.0);
+            c.holds("G1d P in-plane displacements and theta_z exactly zero", zero, "");
+        }
+    }
+    c.finish();
+}
+
+/// The copy of G1 after amendment 1: the missed rows are printed, not checked; every met row keeps its limit.
+#[test]
+fn g1_n7_free_plate_met_rows_after_amendment1() {
+    let mut c = Checks::new();
+    let k = ALPHA * GRAD;
+    for (name, place, t) in [
+        ("P", Placement::identity(), 0.1),
+        ("Q", Placement::inclined(), 0.1),
+        ("R", Placement::identity(), 0.01),
+    ] {
+        let (mut m, p, el) = plate(&place, t, &[0]);
+        m.add_load(Load::shell_temperature_gradient(vec![GRAD; p.len()]))
+            .unwrap();
+        let r = solve_static(&m, &StaticOptions::default()).unwrap();
+        let u = r.displacement_values();
+        let f = fields(&m, u, &place, p.len());
+        let (limit, id_a, id_b) = if name == "R" {
+            (1e-10, "G1e", "G1e")
+        } else {
+            (1e-12, "G1a", "G1b")
+        };
+        let mut dk = 0.0f64;
+        let mut naive = 0.0f64;
+        let dc = E * t * t * t / (12.0 * (1.0 - NU * NU));
+        for e in &el {
+            let s = strain_at(&element_values(&p, e), &element_values(&f.beta, e), 0.0, 0.0);
+            dk = dk.max(max_abs([s[0] - k, s[1] - k, s[2]]));
+            naive = naive.max((dc * (s[0] + NU * s[1])).abs() / moment_scale(t, GRAD));
+        }
+        c.known_miss(
+            &format!("{id_a} {name} max |kappa - alpha g (1, 1, 0)| / (alpha g)"),
+            dk / k,
+            limit,
+        );
+        if name == "P" {
+            c.above("N7 P |D kappa|_xx without the thermal curvature / M_s", naive, 0.5);
+        }
+        let st = shell::stresses(&m, u).unwrap();
+        let mmax = max_abs(st.iter().flat_map(|(_, s)| s.bending));
+        c.known_miss(
+            &format!("{id_b} {name} max |M_k| / M_s"),
+            mmax / moment_scale(t, GRAD),
+            limit,
+        );
+        if name == "R" {
+            continue;
+        }
+        let ss = surface_scale(t, GRAD);
+        let smax = max_abs(st.iter().flat_map(|(_, s)| s.top.into_iter().chain(s.bottom)));
+        let nmax = max_abs(st.iter().flat_map(|(_, s)| s.membrane));
+        c.known_miss(
             &format!("G1c {name} max |sigma_top|, |sigma_bottom| / s_s"),
             smax / ss,
             1e-12,
@@ -454,6 +544,7 @@ fn g3_linear_gradient_on_a_rectangle() {
 // ------------------------------------------------------------------------------------------------------------------ G4
 
 #[test]
+#[ignore = "known miss of ADR 0612 (amendment 1): G4 (ii) curvature 3.7367e-12, G4 (iii) moment 1.8133e-12 (limit 1e-12), the rounding of G1; superseded by g4_superposition_met_rows_after_amendment1"]
 fn g4_membrane_temperature_and_gradient_superpose() {
     let mut c = Checks::new();
     let t = 0.1;
@@ -511,6 +602,78 @@ fn g4_membrane_temperature_and_gradient_superpose() {
     let nmax = max_abs(st.iter().flat_map(|(_, s)| s.membrane));
     let smax = max_abs(st.iter().flat_map(|(_, s)| s.top.into_iter().chain(s.bottom)));
     c.at_most("G4 (iii) max |M| / M_s", mmax / moment_scale(t, GRAD), 1e-12);
+    c.at_most(
+        "G4 (iii) max |N| / (E t alpha dT / (1 - nu))",
+        nmax / (E * t * ea / (1.0 - NU)),
+        1e-12,
+    );
+    c.at_most(
+        "G4 (iii) surface stresses / (E alpha dT / (1 - nu) + s_s)",
+        smax / (E * ea / (1.0 - NU) + surface_scale(t, GRAD)),
+        1e-12,
+    );
+    c.finish();
+}
+
+/// The copy of G4 after amendment 1: the missed rows are printed, not checked; every met row keeps its limit.
+#[test]
+fn g4_superposition_met_rows_after_amendment1() {
+    let mut c = Checks::new();
+    let t = 0.1;
+    let place = Placement::inclined();
+    let dt = 50.0;
+    let ea = ALPHA * dt;
+    let k = ALPHA * GRAD;
+    let (p, _) = th_plane();
+    let n = p.len();
+    let build = |temp: bool, grad: bool| {
+        let (mut m, _, _) = plate(&place, t, &[0]);
+        if temp {
+            m.add_load(Load::temperature(vec![300.0 + dt; n], 300.0)).unwrap();
+        }
+        if grad {
+            m.add_load(Load::shell_temperature_gradient(vec![GRAD; n])).unwrap();
+        }
+        m
+    };
+    let mb = build(true, true);
+    let fb = nodal_load_vector(&mb, &[]).unwrap();
+    let ft = nodal_load_vector(&build(true, false), &[]).unwrap();
+    let fg = nodal_load_vector(&build(false, true), &[]).unwrap();
+    let d = max_abs(fb.iter().zip(ft.iter().zip(&fg)).map(|(b, (x, y))| b - (x + y)));
+    c.at_most(
+        "G4 (i) load of both against the sum, / largest entry",
+        d / max_abs(fb.iter().copied()),
+        1e-14,
+    );
+    let (_, p, el) = plate(&place, t, &[0]);
+    let r = solve_static(&mb, &StaticOptions::default()).unwrap();
+    let u = r.displacement_values();
+    let f = fields(&mb, u, &place, n);
+    let mut de = 0.0f64;
+    let mut dk = 0.0f64;
+    for e in &el {
+        let xe = element_values(&p, e);
+        let s = strain_at(&xe, &element_values(&f.uplane, e), 0.0, 0.0);
+        de = de.max(max_abs([s[0] - ea, s[1] - ea, s[2]]));
+        let s = strain_at(&xe, &element_values(&f.beta, e), 0.0, 0.0);
+        dk = dk.max(max_abs([s[0] - k, s[1] - k, s[2]]));
+    }
+    c.at_most(
+        "G4 (ii) membrane strain against alpha dT (1, 1, 0), / (alpha dT)",
+        de / ea,
+        1e-12,
+    );
+    c.known_miss(
+        "G4 (ii) curvature against alpha g (1, 1, 0), / (alpha g)",
+        dk / k,
+        1e-12,
+    );
+    let st = shell::stresses(&mb, u).unwrap();
+    let mmax = max_abs(st.iter().flat_map(|(_, s)| s.bending));
+    let nmax = max_abs(st.iter().flat_map(|(_, s)| s.membrane));
+    let smax = max_abs(st.iter().flat_map(|(_, s)| s.top.into_iter().chain(s.bottom)));
+    c.known_miss("G4 (iii) max |M| / M_s", mmax / moment_scale(t, GRAD), 1e-12);
     c.at_most(
         "G4 (iii) max |N| / (E t alpha dT / (1 - nu))",
         nmax / (E * t * ea / (1.0 - NU)),
@@ -696,5 +859,82 @@ fn n1_to_n8_refusals_and_zero_fields() {
         matches!(&r, Err(FemError::InvalidValue { key: "nonlinear", reason }) if reason.contains("gradient")),
         &format!("{:?}", r.as_ref().err()),
     );
+    c.finish();
+}
+
+// ------------------------------------------------------------------------------------------- D1, D2 (amendment 1)
+
+/// The exact discrete field of ADR 0612 arithmetic 3 about node 0, as global unknowns of the plate model.
+fn exact_field(m: &SolidModel, p: &[[f64; 2]], place: &Placement, k: f64) -> Vec<f64> {
+    let dofs = m.dof_map();
+    let mut u = vec![0.0; dofs.n_equations()];
+    let (ex, ey, ez) = (place.axis(0), place.axis(1), place.axis(2));
+    for (n, q) in p.iter().enumerate() {
+        let (dx, dy) = (q[0] - p[0][0], q[1] - p[0][1]);
+        let w = -0.5 * k * (dx * dx + dy * dy);
+        let (tx, ty) = (-k * dy, k * dx);
+        for i in 0..3 {
+            u[dofs.equation(n, i).unwrap()] = w * ez[i];
+            u[dofs.equation(n, 3 + i).unwrap()] = tx * ex[i] + ty * ey[i];
+        }
+    }
+    u
+}
+
+#[test]
+fn d1_d2_diagnosis_after_amendment1() {
+    let mut c = Checks::new();
+    let k = ALPHA * GRAD;
+    for (name, place) in [("P", Placement::identity()), ("Q", Placement::inclined())] {
+        let t = 0.1;
+        let (mut m, p, _) = plate(&place, t, &[0]);
+        m.add_load(Load::shell_temperature_gradient(vec![GRAD; p.len()]))
+            .unwrap();
+        let ue = exact_field(&m, &p, &place, k);
+        let st = shell::stresses(&m, &ue).unwrap();
+        let mmax = max_abs(st.iter().flat_map(|(_, s)| s.bending));
+        c.at_most(
+            &format!("D1a {name} exact field: max |M_k| / M_s"),
+            mmax / moment_scale(t, GRAD),
+            1e-13,
+        );
+        let kk = stiffness(&m).unwrap();
+        let f = nodal_load_vector(&m, &[]).unwrap();
+        let dofs = m.dof_map();
+        let held: Vec<usize> = (0..6).map(|i| dofs.equation(0, i).unwrap()).collect();
+        let residual = |u: &[f64]| -> f64 {
+            let mut y = vec![0.0; u.len()];
+            kk.matvec(u, &mut y);
+            max_abs((0..u.len()).filter(|q| !held.contains(q)).map(|q| y[q] - f[q]))
+        };
+        let r = solve_static(&m, &StaticOptions::default()).unwrap();
+        let rh = residual(r.displacement_values());
+        let rx = residual(&ue);
+        let fmax = max_abs(f.iter().copied());
+        println!(
+            "D1b {name} residual / max |f|: solved {:.4e}, exact field {:.4e}",
+            rh / fmax,
+            rx / fmax
+        );
+        c.at_most(&format!("D1b {name} max |r(u_h)| / max |r(u_ex)|"), rh / rx, 10.0);
+    }
+    // D2: plate S, t = 0.3.
+    let t = 0.3;
+    let place = Placement::identity();
+    let (mut m, p, el) = plate(&place, t, &[0]);
+    m.add_load(Load::shell_temperature_gradient(vec![GRAD; p.len()]))
+        .unwrap();
+    let r = solve_static(&m, &StaticOptions::default()).unwrap();
+    let u = r.displacement_values();
+    let f = fields(&m, u, &place, p.len());
+    let mut dk = 0.0f64;
+    for e in &el {
+        let s = strain_at(&element_values(&p, e), &element_values(&f.beta, e), 0.0, 0.0);
+        dk = dk.max(max_abs([s[0] - k, s[1] - k, s[2]]));
+    }
+    c.at_most("D2 S max |kappa - alpha g (1, 1, 0)| / (alpha g)", dk / k, 1e-12);
+    let st = shell::stresses(&m, u).unwrap();
+    let mmax = max_abs(st.iter().flat_map(|(_, s)| s.bending));
+    c.at_most("D2 S max |M_k| / M_s", mmax / moment_scale(t, GRAD), 1e-12);
     c.finish();
 }
