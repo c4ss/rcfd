@@ -6633,9 +6633,9 @@
     "deps": [
       "F-643"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The lateral-torsional buckling load of a simply supported doubly symmetric I under a uniformly distributed load on the top flange, at the shear centre and on the bottom flange equals a converged Rayleigh-Ritz reference derived in the ADR within 2 percent at 16 elements; results without a distributed load height unchanged.",
-    "note": "Follow-up of F-643 (ADR 0582, 2026-11-15)."
+    "note": "F-663 note: Structural solver, advanced tier. Follow-up of F-643 (ADR 0582, 2026-11-15). DONE. ADR 0588, 2026-11-15: distributed load height on the warping buckling path (`rcfd_fem::beam_warping`): `Warping::line_load_point(element_set, q, point)` adds the consistent second-order term (1/2) int (q . (p - s)) phi^2 dx of a uniform dead line load along a section point p on the Hermite twist of each element (c M_H, M_H = int H_i H_j dx = (l/420)[156, 22l, 54, -13l; ...]), s each element's own shear centre, to K_sigma of `matrices` (so buckling_factors, buckling_factors_with, prestressed_modes, the pre-stressed harmonic path); without an entry a line load acts at the shear centre, as before; a load with a first-order torque about the centroid, an unknown set and an element without a warping unknown are refused. The pre-stress of a uniform line load (end forces K u) is shown to be the L2 projection of the parabolic moment (end moments shifted by q_z l^2/12, mid-element shear; 3.9e-14). Uniformly distributed load on a simply supported span, L = 3, 16 elements, default BucklingOptions, against Rayleigh-Ritz references derived in the ADR (sine series, converged to 2.4e-8): doubly symmetric I on the top flange 1.7e-5, at the shear centre 1.7e-5, on the bottom flange 7.4e-6 (C_1 = 1.131); ADR 0553 monosymmetric I at the shear centre (both directions), at the centroid and on flange 1 within 3.4e-4; 8 elements within 1.7e-4; axis y 6e-15; from_static 1.4e-15; the lumped point entries of ADR 0582 within 1.1e-6 of the consistent term. Results without a distributed load height bit-identical (nine digests recorded on the base, the F-643 point-load factors and matrices among them; the ADR 0546 to 0585 bit records; baseline_hashes). Ten of ten mutations caught. Not covered: non-uniform distributed loads, loads with a first-order torque, the in-plane second-order terms of an eccentric load, other supports, the parabolic moment within an element (the L2 projection is used, ADR 0588 Q2), pre-stressed modes and the harmonic path with a load height, no case-file key. Follow-up F-670 (Load height on the pre-stressed warping modes and harmonic path)."
   },
   {
     "id": "F-664",
@@ -6677,9 +6677,9 @@
     "deps": [
       "F-661"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. WarpingTransient takes the pre-stress of the warping static solve (K + K_sigma); the midspan twist of the fork-supported I beam under a step torque and an axial force N = +/-0.5 of the torsional buckling load follows the continuous modal series with omega_m^2 = (G J k_m^2 + N I_p/A k_m^2 + E C_w k_m^4)/(rho I_p) within 1.5e-2 of the static twist over two periods at 16 elements; every result without the option bit-identical.",
-    "note": "Follow-up of F-661 (ADR 0585, 2026-11-15)."
+    "note": "Structural solver, advanced tier. Follow-up of F-661 (ADR 0585, 2026-11-15). DONE. ADR 0591, 2026-11-15: the linear transient with the warping unknown takes a pre-stress (`WarpingTransient::with_prestress`, a `WarpingPrestress`, for example `from_static` of the warping static solve): the integrator of ADR 0389 on K + K_sigma and M, so the Rayleigh stiffness is beta (K + K_sigma) and the strain energy that of K + K_sigma; RF8 and RF10 of ADR 0548 apply; `WarpingTransient::new` unchanged. Fork-supported I beam, step torque at midspan, axial force N = +/-0.5 of the torsional buckling load (tension positive): the midspan twist follows the continuous modal series with omega_m^2 = (G J k_m^2 + N I_p/A k_m^2 + E C_w k_m^4)/(rho I_p) within 6.5e-3 of the static twist over two periods at 16 elements (Newmark, T_1/400), both signs, on the full beam and on the torsion-only model; energy conserved to 5e-13; with Rayleigh damping 2.2e-4 of the damped series. In compression the full beam is beyond its weak-axis Euler load (K + K_sigma indefinite): the symmetric torque leaves the bending exactly zero, and a lateral step force grows by a factor of 63 in the second period (bounded in tension); the indefinite system is integrated without a warning. Defaults bit-identical (4 digests, and a zero pre-stress gives the bits of no option). Six of six mutations caught. No warping inertia, no nonlinear transient, no case-file key."
   },
   {
     "id": "F-668",
@@ -6690,7 +6690,7 @@
     ],
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. WarpingHarmonic with a pre-stress reports the number of negative eigenvalues of K + K_sigma on the free equations (a Sturm count of the real factor at omega = 0); the fork-supported I beam under N = -0.5 of the torsional buckling load reports exactly the number of weak-axis bending modes beyond their Euler load (one), and 0 under N = +0.5; every result without the option bit-identical.",
-    "note": "Follow-up of F-661 (ADR 0585, 2026-11-15)."
+    "note": "Follow-up of F-661 (ADR 0585, 2026-11-15). Acceptance extended by the lead on ADR 0591 Q2: and WarpingTransient::with_prestress reports the same count (in progress as ADR 0592)."
   },
   {
     "id": "F-669",
@@ -6702,5 +6702,17 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The buckling factors and the direct harmonic response about a nonlinear static state of a hyperelastic model take the driver's tangent at that state; at a load of zero they equal those of the linear paths within 1e-10, and the BBar bar at K/G = 1e4 about a stretched state gives frequencies that agree with central differences of the nonlinear static residual within 1e-6.",
     "note": "Follow-up of F-646 (ADR 0586, 2026-11-15)."
+  },
+  {
+    "id": "F-670",
+    "title": "Load height on the pre-stressed warping modes and harmonic path",
+    "phase": 9,
+    "deps": [
+      "F-663",
+      "F-661"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The lowest flexural-torsional frequency of the fork-supported doubly symmetric I of ADR 0588 under a uniformly distributed load of 0.5 of its buckling load on the top flange, at the shear centre and on the bottom flange (prestressed_modes, and the resonance of the pre-stressed WarpingHarmonic) equals a Rayleigh-Ritz reference of the same energy with the consistent mass derived in the ADR within 1e-2 at 16 elements and falls to zero at the ADR 0588 buckling load within 1e-2; results without a load height bit-identical.",
+    "note": "Follow-up of F-663 (ADR 0588, 2026-11-15)."
   }
 ]
