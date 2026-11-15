@@ -1204,6 +1204,12 @@ pub struct NewtonOptions {
     /// at most 8 further trials); the lengths are recorded in [`LoadStep::step_lengths`]. Off by default; refused with
     /// `unsymmetric` (key `"line_search"`).
     pub line_search: bool,
+    /// The stagnation acceptance (ADR 0619 D1): with a contribution in the residual reference, an attempt is also accepted
+    /// at an iterate `k` with `3 <= k < max_iterations` whose residual and those of the two iterates before it are within
+    /// the rounding bound `eps |(|K| |u|)|_free` of ADR 0604 D1, whose residual is above half of the one two iterates
+    /// before (the last two corrections did not halve it), and whose energy test holds. Off by default; the relative test
+    /// is tried first at every iterate, and the acceptance of ADR 0604 D2 at the last iterate is kept either way.
+    pub stagnation: bool,
 }
 
 impl NewtonOptions {
@@ -1220,6 +1226,7 @@ impl NewtonOptions {
             factor: DirectFactor::Envelope,
             unsymmetric: false,
             line_search: false,
+            stagnation: false,
         }
     }
     /// The same options with the active-set record of [`LoadStep::yielded`] switched on or off.
@@ -1250,6 +1257,11 @@ impl NewtonOptions {
     /// The same options with the line search on the energy switched on or off (ADR 0607 D1).
     pub fn line_search(mut self, on: bool) -> NewtonOptions {
         self.line_search = on;
+        self
+    }
+    /// The same options with the stagnation acceptance at the rounding bound switched on or off (ADR 0619 D1).
+    pub fn stagnation(mut self, on: bool) -> NewtonOptions {
+        self.stagnation = on;
         self
     }
 
@@ -1747,6 +1759,8 @@ impl Problem<'_> {
             }
             _ => 0.0,
         };
+        // ADR 0619 D1: the residual of each iterate and whether it was within the rounding bound (only with the opt-in).
+        let mut floor: Vec<(f64, bool)> = Vec::new();
         for k in 0..=o.max_iterations {
             // The trial states: a material with history updates them, always from the committed states (ADR 0475 D3);
             // the linear material has none (D5).
@@ -1802,6 +1816,31 @@ impl Problem<'_> {
                     step_lengths,
                     fint: elastic.unwrap_or(fint),
                 });
+            }
+            // ADR 0619 D1: the stagnation acceptance (opt-in): this iterate and the two before it within the rounding bound,
+            // the last two corrections did not halve the residual, the energy test holds.
+            if o.stagnation {
+                let within = bounded && rn <= rounding_bound(&kt, &u, &self.free);
+                floor.push((rn, within));
+                if within
+                    && k >= 3
+                    && k < o.max_iterations
+                    && floor[k - 1].1
+                    && floor[k - 2].1
+                    && rn > 0.5 * floor[k - 2].0
+                    && e_last <= o.energy_tolerance * e_first
+                {
+                    return Ok(Attempt {
+                        u,
+                        states: trial,
+                        residuals,
+                        energies,
+                        yielded,
+                        set_changed,
+                        step_lengths,
+                        fint: elastic.unwrap_or(fint),
+                    });
+                }
             }
             // ADR 0604 D2: at the last iterate, a residual at the rounding bound of a step with a contribution in the
             // reference is accepted (the relative test above is unchanged).
