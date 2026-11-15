@@ -17,6 +17,9 @@
 //! * ADR 0610 (F-682): [`interaction_integral_curved`], the interaction integral on straight, circular and elliptical fronts
 //!   with the auxiliary fields in the frame of each point's foot ([`tip_frame`], [`curved_auxiliary`]) and the correction
 //!   terms of their curvature (D1); [`penny_crack_half_cylinder`], the half `x >= 0` of a whole cracked cylinder (D4).
+//! * ADR 0618 (F-689): closed (periodic) circular and elliptical fronts without end stations ([`CrackFront::closed`], D1);
+//!   the mirror-plane option ([`CrackFront::mirror_plane`]: `K_III = 0` at stations on a mirror plane normal to the front,
+//!   D2); [`penny_crack_whole_cylinder`], the whole cracked cylinder (D3).
 //!
 //! Linear elastic, isotropic, homogeneous material in the domain; no body force, no thermal strain; traction-free crack faces.
 
@@ -98,6 +101,10 @@ pub struct CrackFront {
     normal: Vec3,
     shape: FrontShape,
     half_symmetric: bool,
+    /// A closed (periodic) front without end stations (ADR 0618 D1).
+    closed: bool,
+    /// Mirror planes `(point, normal)` of the model that cut the front (ADR 0618 D2).
+    mirrors: Vec<(Vec3, Vec3)>,
 }
 
 impl CrackFront {
@@ -108,6 +115,8 @@ impl CrackFront {
             normal,
             shape: FrontShape::Straight { advance },
             half_symmetric: false,
+            closed: false,
+            mirrors: Vec::new(),
         }
     }
 
@@ -118,6 +127,8 @@ impl CrackFront {
             normal,
             shape: FrontShape::Circular { centre },
             half_symmetric: false,
+            closed: false,
+            mirrors: Vec::new(),
         }
     }
 
@@ -134,6 +145,8 @@ impl CrackFront {
                 b,
             },
             half_symmetric: false,
+            closed: false,
+            mirrors: Vec::new(),
         }
     }
 
@@ -142,6 +155,31 @@ impl CrackFront {
     pub fn half_symmetric(mut self) -> CrackFront {
         self.half_symmetric = true;
         self
+    }
+
+    /// The same front closed (ADR 0618 D1): the nodes go once around a circle or an ellipse, corner, mid-edge, ..., the
+    /// last the mid-edge node between the last corner and the first (an even number `>= 6`); every corner is a station with a
+    /// full periodic hat, there is no end station.
+    pub fn closed(mut self) -> CrackFront {
+        self.closed = true;
+        self
+    }
+
+    /// The same front with a plane of mirror symmetry of the model (geometry and loads) through `point` with normal `normal`
+    /// (ADR 0618 D2): at the stations on it [`interaction_integral_curved`] returns `K_III = 0`, the tearing mode being
+    /// antisymmetric about a mirror plane normal to the front. Several planes may be given.
+    pub fn mirror_plane(mut self, point: Vec3, normal: Vec3) -> CrackFront {
+        self.mirrors.push((point, normal));
+        self
+    }
+
+    /// Whether the front is closed.
+    pub fn is_closed(&self) -> bool {
+        self.closed
+    }
+    /// The mirror planes `(point, normal)` as given.
+    pub fn mirror_planes(&self) -> &[(Vec3, Vec3)] {
+        &self.mirrors
     }
 
     /// The front nodes in order.
@@ -169,7 +207,22 @@ impl CrackFront {
     fn check(&self, mesh: &SolidMesh) -> Result<FrontGeometry> {
         const KEY: &str = "crack front";
         let nn = mesh.nodes().len();
-        if self.nodes.len() < 3 || self.nodes.len() % 2 == 0 {
+        if self.closed && matches!(self.shape, FrontShape::Straight { .. }) {
+            return Err(invalid(
+                KEY,
+                "a straight front cannot be closed: a closed front is a circle or an ellipse",
+            ));
+        }
+        if self.closed && (self.nodes.len() < 6 || self.nodes.len() % 2 == 1) {
+            return Err(invalid(
+                KEY,
+                format!(
+                    "{} nodes: a closed front needs an even number >= 6 (corner, mid-edge, ..., mid-edge)",
+                    self.nodes.len()
+                ),
+            ));
+        }
+        if !self.closed && (self.nodes.len() < 3 || self.nodes.len() % 2 == 0) {
             return Err(invalid(
                 KEY,
                 format!(
@@ -193,7 +246,7 @@ impl CrackFront {
         let n = unit_of(self.normal, KEY, "the crack-plane normal")?;
         let x: Vec<Vec3> = self.nodes.iter().map(|&i| mesh.nodes()[i]).collect();
         let x0 = x[0];
-        let (kind, s, length) = match &self.shape {
+        let (kind, mut s, length) = match &self.shape {
             FrontShape::Straight { advance } => {
                 let chord = sub(*x.last().expect("3 nodes"), x0);
                 let l = norm(chord);
@@ -341,6 +394,20 @@ impl CrackFront {
                 (kind, s, a)
             }
         };
+        let period = if self.closed {
+            let p = match &kind {
+                FrontKind::Circular { radius, .. } => 2.0 * PI * radius,
+                // A straight front is refused above.
+                FrontKind::Straight { .. } | FrontKind::Elliptical { .. } => 2.0 * PI,
+            };
+            for k in 1..s.len() {
+                let d = s[k] - s[k - 1];
+                s[k] = s[k - 1] + (d - p * (d / p).round());
+            }
+            Some(p)
+        } else {
+            None
+        };
         for k in 1..s.len() {
             if s[k].is_nan() || s[k] <= s[k - 1] {
                 return Err(invalid(
@@ -355,6 +422,31 @@ impl CrackFront {
             }
         }
         let stations: Vec<f64> = s.iter().step_by(2).copied().collect();
+        if let Some(p) = period {
+            let span = s[s.len() - 1] - s[0];
+            if span >= p {
+                return Err(invalid(
+                    KEY,
+                    format!("the closed front goes more than once around (span {span:.6e} of the period {p:.6e})"),
+                ));
+            }
+            let m = stations.len();
+            for j in 0..m {
+                let gap = if j + 1 < m {
+                    stations[j + 1] - stations[j]
+                } else {
+                    stations[0] + p - stations[m - 1]
+                };
+                if gap >= 0.5 * p {
+                    return Err(invalid(
+                        KEY,
+                        format!(
+                            "the closed front has a station gap {gap:.6e} of at least half the period {p:.6e} after station {j}"
+                        ),
+                    ));
+                }
+            }
+        }
         Ok(FrontGeometry {
             n,
             kind,
@@ -363,6 +455,7 @@ impl CrackFront {
             length,
             front_x: x,
             front_s: s,
+            period,
         })
     }
 }
@@ -414,11 +507,12 @@ struct FrontGeometry {
     kind: FrontKind,
     x0: Vec3,
     stations: Vec<f64>,
-    #[allow(dead_code)]
     length: f64,
     /// The front node positions and parameters (all nodes, in order).
     front_x: Vec<Vec3>,
     front_s: Vec<f64>,
+    /// The period of a closed front's parameter (ADR 0618 D1), `None` for an open front.
+    period: Option<f64>,
 }
 
 impl FrontGeometry {
@@ -508,6 +602,9 @@ impl FrontGeometry {
 
     /// The hat of station `j` at parameter `s` (half hats at the ends, 1 beyond them).
     fn hat(&self, j: usize, s: f64) -> f64 {
+        if let Some(p) = self.period {
+            return self.closed_hat(j, s, p);
+        }
         let st = &self.stations;
         let last = st.len() - 1;
         let sj = st[j];
@@ -536,6 +633,9 @@ impl FrontGeometry {
 
     /// `int phi_j ds`.
     fn hat_integral(&self, j: usize) -> f64 {
+        if let Some(p) = self.period {
+            return self.closed_hat_integral(j, p);
+        }
         if let FrontKind::Elliptical { .. } = self.kind {
             return self.edge_hat_integral(j);
         }
@@ -571,6 +671,121 @@ impl FrontGeometry {
             }
         }
         total
+    }
+
+    /// The neighbours `(t_l, t_r)` of station `j` of a closed front of period `p`, wrapped (ADR 0618 D1).
+    fn closed_neighbours(&self, j: usize, p: f64) -> (f64, f64) {
+        let st = &self.stations;
+        let m = st.len();
+        let left = if j == 0 { st[m - 1] - p } else { st[j - 1] };
+        let right = if j + 1 == m { st[0] + p } else { st[j + 1] };
+        (left, right)
+    }
+
+    /// The periodic hat of station `j` of a closed front of period `p` at parameter `s` (ADR 0618 D1).
+    fn closed_hat(&self, j: usize, s: f64, p: f64) -> f64 {
+        let tj = self.stations[j];
+        let (tl, tr) = self.closed_neighbours(j, p);
+        let raw = s - tj;
+        let d = raw - p * (raw / p).round();
+        if d <= 0.0 {
+            let lo = tl - tj;
+            if d <= lo {
+                0.0
+            } else {
+                (d - lo) / (tj - tl)
+            }
+        } else {
+            let hi = tr - tj;
+            if d >= hi {
+                0.0
+            } else {
+                (hi - d) / hi
+            }
+        }
+    }
+
+    /// `int phi_j ds` of a closed front (ADR 0618 D1): `(t_r - t_l)/2` on a circle; on an ellipse the edge integral of
+    /// `edge_hat_integral` over every edge, the closing one included.
+    fn closed_hat_integral(&self, j: usize, p: f64) -> f64 {
+        if !matches!(self.kind, FrontKind::Elliptical { .. }) {
+            let (tl, tr) = self.closed_neighbours(j, p);
+            return 0.5 * (tr - tl);
+        }
+        let (gx, gw) = gauss_legendre(8);
+        let nn = self.front_s.len();
+        let mut total = 0.0;
+        for edge in 0..self.stations.len() {
+            let ids = [2 * edge, 2 * edge + 1, (2 * edge + 2) % nn];
+            let h = ids.map(|i| self.hat(j, self.front_s[i]));
+            if h == [0.0; 3] {
+                continue;
+            }
+            let pts = ids.map(|i| self.front_x[i]);
+            for (&xi, &w) in gx.iter().zip(&gw) {
+                let l = [0.5 * xi * (xi - 1.0), 1.0 - xi * xi, 0.5 * xi * (xi + 1.0)];
+                let dl = [xi - 0.5, -2.0 * xi, xi + 0.5];
+                let mut dx = [0.0; 3];
+                for a in 0..3 {
+                    for (i, dxi) in dx.iter_mut().enumerate() {
+                        *dxi += dl[a] * pts[a][i];
+                    }
+                }
+                total += w * (l[0] * h[0] + l[1] * h[1] + l[2] * h[2]) * norm(dx);
+            }
+        }
+        total
+    }
+
+    /// The stations on the mirror planes of `front` (ADR 0618 D2), refusing a plane without a station, a plane not normal
+    /// to the front at one of its stations and any mirror plane on a closed front.
+    fn mirror_stations(&self, front: &CrackFront, mesh: &SolidMesh) -> Result<Vec<bool>> {
+        const KEY: &str = "crack front";
+        let mut on = vec![false; self.stations.len()];
+        if front.mirrors.is_empty() {
+            return Ok(on);
+        }
+        if self.period.is_some() {
+            return Err(invalid(
+                KEY,
+                "a closed front has no mirror plane: a closed front is a whole model (ADR 0618 D2)",
+            ));
+        }
+        for &(point, normal) in &front.mirrors {
+            let m = unit_of(normal, KEY, "the normal of the mirror plane")?;
+            let mut any = false;
+            for (j, flag) in on.iter_mut().enumerate() {
+                let x = mesh.nodes()[front.nodes[2 * j]];
+                if dot(sub(x, point), m).abs() > FRONT_TOLERANCE * self.length {
+                    continue;
+                }
+                let Some(t) = self.tangent(x) else {
+                    return Err(invalid(
+                        KEY,
+                        format!("the front has no tangent at station {j} on the mirror plane"),
+                    ));
+                };
+                if dot(t, m).abs() < 1.0 - PARALLEL_TOLERANCE {
+                    return Err(invalid(
+                        KEY,
+                        format!(
+                            "the mirror plane through {point:?} of normal {m:?} is not normal to the front at station {j} \
+                             (|t . m| = {:.6e}, tolerance {PARALLEL_TOLERANCE:e})",
+                            dot(t, m).abs()
+                        ),
+                    ));
+                }
+                *flag = true;
+                any = true;
+            }
+            if !any {
+                return Err(invalid(
+                    KEY,
+                    format!("the mirror plane through {point:?} of normal {m:?} holds no station of the front"),
+                ));
+            }
+        }
+        Ok(on)
     }
 }
 
@@ -1050,6 +1265,12 @@ pub fn interaction_integral(
             "crack front",
             "the interaction integral takes a full model: modes II and III are antisymmetric about the crack plane, so a \
              half-symmetric front cannot be doubled",
+        ));
+    }
+    if !front.mirrors.is_empty() {
+        return Err(invalid(
+            "crack front",
+            "interaction_integral takes no mirror plane: the mirror-plane option is in interaction_integral_curved (ADR 0618 D2)",
         ));
     }
     let mesh = model.mesh();
@@ -2527,8 +2748,10 @@ pub enum CurvedTerms {
 /// ring `ring`, the auxiliary fields in the frame of each point's foot on the front (ADR 0610 D1): `M = int P_jk q_k,j dV + int
 /// P_jk,j q_k dV` (the second integral only with [`CurvedTerms::Corrected`]) divided by `int phi_j ds`; `K_I = E' M_I/2`,
 /// `K_II = E' M_II/2`, `K_III = mu M_III`, with `E, nu` of the element of the first front node. In a half-symmetric model
-/// `K_I` is doubled and `K_II = K_III = 0` (the antisymmetric modes vanish by symmetry). Refuses what [`j_integral`] refuses, a
-/// ring element of another `E, nu` and an integration point that [`tip_frame`] refuses.
+/// `K_I` is doubled and `K_II = K_III = 0` (the antisymmetric modes vanish by symmetry). A closed front has periodic hats and
+/// no end station; at the stations on a mirror plane of the front `K_III = 0` (ADR 0618 D1, D2). Refuses what [`j_integral`]
+/// refuses, a ring element of another `E, nu`, an integration point that [`tip_frame`] refuses, a mirror plane that holds no
+/// station or is not normal to the front at one, and a mirror plane on a closed front.
 pub fn interaction_integral_curved(
     model: &SolidModel,
     displacement: &[f64],
@@ -2572,6 +2795,7 @@ pub fn interaction_integral_curved(
             b: *b,
         },
     };
+    let mirror = geometry.mirror_stations(front, mesh)?;
     let adjacency = node_elements(mesh);
     let (elements, rho) = rings(mesh, &adjacency, &front.nodes, ring)?;
     check_boundary(mesh, &geometry, &rho, ring)?;
@@ -2731,6 +2955,8 @@ pub fn interaction_integral_curved(
                     mu0 * m[2] / weight,
                 )
             };
+            // ADR 0618 D2: K_III is antisymmetric about a mirror plane normal to the front.
+            let k_iii = if mirror[j] { 0.0 } else { k_iii };
             ModeFactors {
                 station: j,
                 node,
@@ -3045,4 +3271,109 @@ pub fn penny_crack_half_cylinder(spec: &PennyCrack) -> Result<CrackedHalfCylinde
         front.push(c);
     }
     Ok(CrackedHalfCylinder { mesh: out, front })
+}
+
+// ------------------------------------------------------------------------------------------------------- whole cylinder
+
+/// The mesh of a whole cylinder (both sides of the crack, all angles) with a penny crack (ADR 0618 D3).
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub struct CrackedWholeCylinder {
+    /// The Hex20 mesh (element set `all`; node sets `all`, `top_centre`, `bottom_centre`, `top_rim`; surface sets `top`,
+    /// `bottom`, `side`).
+    pub mesh: SolidMesh,
+    /// The closed front: the nodes at `z = 0`, radius `a`, once around counter-clockwise about `z` from `(0, -a, 0)`, the
+    /// last node the mid-edge node before the first.
+    pub front: Vec<usize>,
+}
+
+impl CrackedWholeCylinder {
+    /// The front as a [`CrackFront`]: circular about the origin, normal `z`, closed.
+    pub fn crack_front(&self) -> CrackFront {
+        CrackFront::circular(self.front.clone(), [0.0, 0.0, 1.0], [0.0; 3]).closed()
+    }
+}
+
+/// The node permutation that keeps a Hex20 positively oriented under a reflection (ADR 0618 D3): corners `0 3 2 1`, `4 7 6 5`
+/// and the mid-edge nodes of [`crate::hex20`] following their edges.
+const HEX20_MIRROR: [usize; 20] = [0, 3, 2, 1, 4, 7, 6, 5, 11, 10, 9, 8, 15, 14, 13, 12, 16, 19, 18, 17];
+
+/// The whole cylinder `-H <= z <= H` of radius `R` with a penny crack of radius `a` on `z = 0` (ADR 0618 D3): the mesh of
+/// [`penny_crack_half_cylinder`] (the same parameters) reflected in `x = 0`, the nodes with `x == 0` shared, the reflected
+/// elements reordered to keep their orientation. Refuses what [`penny_crack_half_cylinder`] refuses.
+pub fn penny_crack_whole_cylinder(spec: &PennyCrack) -> Result<CrackedWholeCylinder> {
+    const KEY: &str = "penny crack";
+    let half = penny_crack_half_cylinder(spec)?;
+    let (big_r, hh) = (spec.cylinder_radius, spec.half_height);
+    let hm = &half.mesh;
+    let mut nodes = hm.nodes().to_vec();
+    let mut refl = vec![0usize; nodes.len()];
+    for (i, p) in hm.nodes().iter().enumerate() {
+        if p[0] == 0.0 {
+            refl[i] = i;
+        } else {
+            refl[i] = nodes.len();
+            nodes.push([-p[0], p[1], p[2]]);
+        }
+    }
+    let mut out = SolidMesh::new(nodes)?;
+    for b in hm.blocks() {
+        if b.kind() != ElementKind::Hex20 {
+            return Err(invalid(KEY, "the half cylinder is not Hex20"));
+        }
+        let conn = b.connectivity();
+        let mut all = conn.to_vec();
+        for e in conn.chunks(20) {
+            all.extend(HEX20_MIRROR.iter().map(|&k| refl[e[k]]));
+        }
+        out.add_block(ElementKind::Hex20, all)?;
+    }
+    let ne = out.n_elements();
+    let nn = out.nodes().len();
+    out.add_element_set("all", (0..ne).collect())?;
+    out.add_node_set("all", (0..nn).collect())?;
+    let find = |target: Vec3, what: &str| -> Result<usize> {
+        out.nodes()
+            .iter()
+            .position(|p| {
+                (p[0] - target[0]).abs() <= 1e-12 * big_r
+                    && (p[1] - target[1]).abs() <= 1e-12 * big_r
+                    && (p[2] - target[2]).abs() <= 1e-12 * hh
+            })
+            .ok_or_else(|| invalid(KEY, format!("no node at {what} {target:?}")))
+    };
+    let top_centre = find([0.0, 0.0, hh], "the top centre")?;
+    let bottom_centre = find([0.0, 0.0, -hh], "the bottom centre")?;
+    let top_rim = find([0.0, big_r, hh], "the top rim")?;
+    out.add_node_set("top_centre", vec![top_centre])?;
+    out.add_node_set("bottom_centre", vec![bottom_centre])?;
+    out.add_node_set("top_rim", vec![top_rim])?;
+    let (mut top, mut bottom, mut side) = (Vec::new(), Vec::new(), Vec::new());
+    for (_, faces) in out.face_incidence() {
+        if faces.len() != 1 {
+            continue;
+        }
+        let f = faces[0];
+        let pts: Vec<Vec3> = out.face_nodes(f).iter().map(|&i| out.nodes()[i]).collect();
+        if pts.iter().all(|p| p[2] >= hh * (1.0 - 1e-12)) {
+            top.push(f);
+        } else if pts.iter().all(|p| p[2] <= -hh * (1.0 - 1e-12)) {
+            bottom.push(f);
+        } else if pts
+            .iter()
+            .all(|p| (p[0] * p[0] + p[1] * p[1]).sqrt() >= big_r * (1.0 - 1e-12))
+        {
+            side.push(f);
+        }
+    }
+    top.sort();
+    bottom.sort();
+    side.sort();
+    out.add_surface_set("top", top)?;
+    out.add_surface_set("bottom", bottom)?;
+    out.add_surface_set("side", side)?;
+    let hf = &half.front;
+    let mut front = hf.clone();
+    front.extend(hf[1..hf.len() - 1].iter().rev().map(|&i| refl[i]));
+    Ok(CrackedWholeCylinder { mesh: out, front })
 }
