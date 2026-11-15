@@ -304,3 +304,109 @@ are. Also disclosed: arithmetic 1 used the ring's `E I` with the width `BW` for 
 the critical pressure is `3 E T^3/(12 R^3) = 5e7` Pa, so the state is at `~0.05` of it, not `0.53` (the factors are `~19`, not
 `~1`). The checks' limits do not depend on it; the negative controls NHc and NH2c come out a factor `~10` below their estimates
 (still above their limits).
+
+## Addendum 1: results (2026-11-15)
+
+Commits: a3b32355 (registration), 229a80da (library and tests, run 1), db9651c8 (amendment 1), fcc47120 (the RNq2 test of
+amendment 1), and this addendum. Each run was made once, in release, with `--nocapture --test-threads=1`. Logs are in
+`w49i-work/f671-scratch`:
+
+- run 1, the whole new file on 229a80da (`run1.log`);
+- E1 on a `git archive` of a3b32355 with the hash test alone (`e1.log`, its own target);
+- B1 (`b1_fem.log`, `b1_hashes.log`, on 229a80da);
+- the mutations (`mutations.log`, `tools/mutate.py`, on a `git archive` of 229a80da with its own target, the new test file for each);
+- run 2, `free_edged_bar_rayleigh_check` on fcc47120 (`run2_rnq2.log`);
+- MC again on that archive with the test file of fcc47120 (`mutations_mc2.log`).
+
+Shared solver files changed (diff a3b32355..fcc47120):
+
+- `follower.rs`: module doc 23-24; the body of `tangent_buckling_factors` is now one call; 606-646 the new
+  `contribution_triplets` and `tangent_buckling_factors_with`; 658-671 the contribution block.
+- `harmonic_direct.rs`: module doc 39-41; the body of `about_state` is now one call, and the new `about_state_with` is at
+  800-818; 878-888 the contribution block.
+
+`buckling.rs`, `finish` and `nonlinear.rs` are unchanged.
+
+| Id | Measured | Limit | Met |
+|---|---|---|---|
+| S0r | ring converged in 4 steps, max `|u|` `1.316e-4` m | `Ok` | yes |
+| BT0r | all four `Ok`, 2 positive factors, 7 iterations, worst residual `4.1e-11`, not exhausted; with the follower at the state `18.8324, 95.2915`; at zero load `19.8327, 96.2930`; without contributions at the state `22.9667, 92.3497`; `follower::buckling_factors` `19.8327, 96.2930` | `Ok` | yes |
+| BFD | `2.04e-11` | `<= 1e-6` | yes |
+| B0c | `0` (equal in every bit) | `<= 1e-6` | yes |
+| P1c | `1.43e-5` | `<= 1e-2` | yes |
+| NBc | `0.220` | `>= 1e-2` | yes |
+| NB2c | `0.209` | `>= 1e-2` | yes |
+| BFVr (record) | `8.5e-7` (the eigenvector error at the backward test `1e-10`) | record | - |
+| HT0r | all seven solvers and responses `Ok`; frequencies at the state `60.439, 329.92` Hz, at rest `62.023, 331.65` Hz | `Ok` | yes |
+| HFD | `1.67e-11` (`omega_a`), `8.1e-12` (`omega_b`) | `<= 1e-6` | yes |
+| H0c | `0` at both frequencies (equal in every bit) | `<= 1e-7` | yes |
+| NHc | `1.16e-2` | `>= 1e-2` | yes |
+| NH2c | `1.28e-2` | `>= 1e-2` | yes |
+| E0 | Bar C NH: factors, residuals, modes, iterations bit-equal; Bar S NH: responses at `omega_a`, `omega_b` bit-equal | `0` | yes |
+| E1 | `702f6a27cd075b15` on a3b32355 and on 229a80da | equal | yes |
+| S0b (record) | Bar F, unsymmetric Newton, 10 steps, max `|u|` `5.84e-3` m | record | - |
+| RNq (record) | `2.6e-12` (factors `18.5063` twice, one for each lateral plane) | record | - |
+| RNv (record) | `0.92` | record | - |
+| RNa (record) | `2.0` (some entries of `K_p` between free unknowns are purely antisymmetric) | record | - |
+| RNh (record) | `1.007` | record | - |
+| RNq2 (amendment 1) | `2.6e-12` | `<= 1e-6` | yes |
+| B1 | `baseline_hashes` 3 passed (1 ignored); all eight `rcfd-fem` test files of B1 passed (`sa_hyper_state_paths_f669` 4 of 4) | pass | yes |
+| S1 | `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean (on fcc47120) | clean | yes |
+
+**Mutations** (`mutations.log`, one at a time; MC again in `mutations_mc2.log`):
+
+| Id | Caught by | Listed as possible |
+|---|---|---|
+| MA (the contributions' tangents at the state dropped, buckling) | BFD `9.1e-3`; P1c `8.7e-3` and NBc `0.21` met; RNq record `1.5e-3` | BFD, P1c, BT0r, NBc |
+| MB (`K_c'` dropped) | BFD `0.17`, B0c `0.21`, P1c `0.20`, NBc `9.1e-3`, NB2c `2.0e-11` (the dropped term is the one NB2c leaves out) | BFD, B0c, P1c, BT0r, NBc |
+| MC (`K_c'` at `u = 0`) | **not caught in run 1** (the ring results were bit-equal; RNq record `8.3e-5`); caught after amendment 1 by RNq2 `8.3e-5` | BFD, P1c |
+| MD (contributions dropped, harmonic) | HFD `1.3e-2`, `7.7e-3`; NHc `0` | HFD, NHc, HT0r |
+| ME (Rayleigh stiffness without the contribution) | HFD at `omega_b` `4.4e-5`; `omega_a` met | HFD at `omega_b` |
+| MF (`symmetric_negative` halved) | BFD `9.0e-2`, HFD `6.5e-3`, `3.8e-3`, NHc `5.8e-3`; S0r converged | S0r, BFD, HFD, B0c, H0c, P1c, BT0r, HT0r |
+
+**Deviations and diagnoses.**
+
+1. No registered check of run 1 caught MC. On the plane ring, the symmetric follower tangent between in-plane unknowns depends
+   only on the `z` components of `x_u` and `x_v`, and in-plane displacements leave those unchanged (amendment 1). The same fact
+   makes B0c and H0c exactly `0` and P1c `1.4e-5`. So the ring checks that the contribution tangents are present and scale with
+   the load factor, but it cannot check how they depend on the state. Bar F (3-D, free edges) does see that dependence.
+2. Arithmetic 1 took a load per unit length for a pressure (amendment 1). The state is at `0.05` of the critical pressure, and the
+   factors are `~19`. The limits were not affected, but the negative controls NHc and NH2c came out at `1.2e-2` and `1.3e-2`,
+   close to their limit of `1e-2`.
+3. BFD and HFD came out 2 to 3 orders below their estimates, because the rounding bounds are worst cases.
+4. The Bar F records confirm the reading of D1. On a free-edged follower load the Rayleigh measure agrees to `2.6e-12`. The vector
+   measure (`0.92`) and the harmonic residual (`1.0`) show that the symmetric approximation is not the linearised problem there.
+   Some entries of the reduced `K_p` are purely antisymmetric (`2.0`).
+
+Not run: the whole workspace suite (the lead's gate).
+
+**Decision: partial** by the registered rule. Every registered check of run 1 was met, and so were B1 and S1. Five of the six
+mutations were caught by listed checks. MC was caught only by RNq2, a check added by a post-run amendment.
+
+**Remaining questions** (none changes a default):
+
+1. MC and the rule. Options:
+   - (a) accept the item as done, reading RNq2 as the coverage of MC (registered by amendment before its run, but its value was
+     already known from the record RNq);
+   - (b) keep it partial and leave the state dependence of the contribution tangent to a follow-up, with a 3-D conservative
+     follower set-up registered blind (for example a closed pressurised box, or a shell segment with symmetry planes and
+     out-of-plane motion).
+
+   Recommend (b) for the record. For the status, recommend (a) if the lead accepts disclosed amendments: the code path is the one
+   `tangent_modes` already uses, and RNq2 catches the mutation by five orders of magnitude.
+2. Flutter about a nonlinear state (the full unsymmetric contribution tangent, complex factors and responses). Options: (a) a
+   follow-up that puts `add_full` into `buckling_factors_full` and `tangent_modes_full` about a state, plus a complex unsymmetric
+   factor for the harmonic path; (b) nothing. Recommend (a) for buckling only: the pencil solver exists (ADR 0580/0587). The
+   harmonic path needs a new complex unsymmetric factor and can wait until a use needs it.
+3. Contributions nonlinear in the load factor get the secant `K_c(u, 1) - K_c(u, 0)`. Options: (a) a trait method for the
+   load-factor derivative of the tangent; (b) keep the documented secant. Recommend (b) until such a contribution exists.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> Structural solver, advanced tier. Follow-up of F-669 (ADR 0590). PARTIAL. ADR 0596, 2026-11-15: follower::tangent_buckling_factors_with and DirectHarmonic::about_state_with take the driver's contributions at a state. The tangent of Contribution::add (for a follower pressure, its symmetric part) is added to K_T; for buckling, its load-factor derivative K_c(u, 1) - K_c(u, 0) is also added to K_sigma; on the harmonic path the tangent also enters the Rayleigh stiffness. Both are opt-in. tangent_buckling_factors and DirectHarmonic::about_state now call them with no contribution and equal the ADR 0590 paths in every bit (direct bit comparison, and a hash of the ADR 0590 results before and after the change, 702f6a27cd075b15 both times; the baseline hashes and the ADR 0590, follower and harmonic tests pass). Quarter ring under external follower pressure (Hex20 SVK, T/R = 0.1, conservative because its loaded-face edges lie on symmetry planes): the factors agree with the fourth-order central difference of the nonlinear residual with the follower force to 2.0e-11 (limit 1e-6), and the harmonic response to 1.7e-11 undamped and 8.1e-12 with Rayleigh damping (limit 1e-6); at zero load both equal follower::buckling_factors and DirectHarmonic::new in every bit; negative controls 1.2e-2 to 0.22. Free-edged follower end load on the hyperelastic bar (records): the Rayleigh measure agrees to 2.6e-12 (the symmetric reading), but the vector residual is 0.92 and the harmonic residual 1.0, so there the symmetric approximation is not the linearised problem and flutter is not represented. Five of six mutations were caught by registered checks. Evaluating the load-factor derivative at u = 0 could not be seen on the plane ring (its in-plane follower tangent does not depend on the state) and was caught only by a check added by a post-run amendment (Bar F, 8.3e-5 against 1e-6), hence partial. Not covered: the full unsymmetric tangent about a state, the state dependence of a follower tangent in a blind registered check, shells and beams.
+
+> Follow-up proposed: flutter about a nonlinear state with the full contribution tangent. Deps F-671, F-653. Acceptance: Every limit not stated here is registered in the ADR before the run. The complex pencil path of ADR 0580 takes the driver's tangent at a nonlinear state with the full (unsymmetric) tangents of its contributions; on a free-edged follower load (Beck's column of Full Hex8 at a compressed state) the complex eigenvalues satisfy the central-difference residual equation of the nonlinear residual including the follower force within 1e-6 (vector measure), with the backward error of ADR 0587, and at zero load they equal buckling_factors_full within 1e-10.
+
+> Follow-up proposed: state dependence of contribution tangents about a nonlinear state, a blind 3-D check. Deps F-671. Acceptance: Every limit not stated here is registered in the ADR before the run. On a conservative 3-D follower set-up whose follower tangent between free unknowns changes with the state (a pressurised box or shell segment with symmetry planes and out-of-plane motion), tangent_buckling_factors_with and DirectHarmonic::about_state_with agree with central differences of the nonlinear residual including the follower force within 1e-6 (vector measure for the response), and evaluating the contribution tangents at zero displacement in place of the state is caught by a registered check.
