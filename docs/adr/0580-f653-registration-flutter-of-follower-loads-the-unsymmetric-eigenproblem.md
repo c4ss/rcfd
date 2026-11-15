@@ -327,3 +327,104 @@ computed in a new test `diag_f3_f8_backward_error` from the reduced matrices ass
 (`nonlinear::tangent`, `FollowerPressure::load_stiffness`, `mass::consistent`, `geometric::geometric_stiffness`,
 `assemble::stiffness`, `constraint::reduce`). The diagnosis holds if `eta <= 1e-11` and the registered residual is at most
 `tol kappa` within a factor 10.
+
+The diagnostic run (`f653-scratch/diag-amendment2.log`, once, after amendment 2 was committed at d7e7568e): every pair has
+`eta = 5.2e-17 .. 2.5e-12` (F3 pairs at `p = 16, 20, 24`: at most `2.3e-13`; F8 pairs: at most `2.5e-12`), `kappa = 1.7e5 ..
+4.7e7`, and the registered residual at most `1.3e-2 tol kappa` (within the factor 10 of the criterion). The test recomputes the
+registered measure from the matrices and reproduces the library's numbers to the printed digits. The diagnosis holds: the
+pairs are backward stable to `<= 2.5e-12`; the registered measure is amplified by `kappa`, and the limit `1e-8` was an
+estimate that forgot it, not a defect of the eigenpairs.
+
+## Addendum 1 (2026-11-15): results
+
+Runs: `sa_eigen_pencil_f653` (`rcfd-linalg`) and `sa_f653` (`rcfd-fem`) once each at 70d27737 (`--release -- --nocapture
+--test-threads=1`; `f653-scratch/run1-pencil.log`, `run1-f653.log`). N1 recorded at the base e348eb34 before any library line
+(`n1-base.log`, `n1-base2.log`, commit b2f3d81b) and passed at the tip. After amendment 2 (7f496190): the release tests of the
+files that cover `follower.rs` (`sa_f653`, `sa_f653_default_bits`, `sa_follower`, `sa_follower_default_bits`,
+`sa_shell_follower`, `sa_shell_follower_default_bits`, `sa_f572`, `sa_f572_default_bits`: all pass; `fem-tests.log`), the whole
+`rcfd-linalg` suite in release (132 passed, 0 failed; `linalg-suite.log`), `baseline_hashes` of `rcfd-api` (3 passed, 1
+ignored), `docs_site` of `rcfd-cli` (2 passed). `cargo fmt -p rcfd-fem --check`, `cargo fmt -p rcfd-linalg --check` and `cargo
+clippy -p rcfd-fem -p rcfd-linalg --release --all-targets -- -D warnings` clean at 7f496190. No limit was changed after a run.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| F1 Beck's flutter load, `|p_meas/20.0509536 - 1|` | `<= 1e-2` | `1.87e-3` (`p_meas = 20.0134059`, below the EB value; estimate `-1.5e-3`) | yes |
+| F1e bracket | holds | `p = 16`: six real `omega^2` (`49.5, 65.9, 244, 1701, 3043, 12835` in `E I/(m L^4)`); `p = 24`: a complex pair | yes |
+| F2 coalescence `|Omega^2/121.34251 - 1|` | `<= 2e-2` | `3.22e-3` (`Omega^2 = 120.951`; Timoshenko estimate `120.85`) | yes |
+| F3 residuals of every evaluation | `<= 1e-8` | `1.96e-8` | **no** (`f1_f2_f3_beck_flutter_known_miss`; diagnosed, amendment 2) |
+| F4 symmetric part: `max |Im|/|lambda|`; lowest `Re` | `<= 1e-8`; `< 0` | `0`; `-54.64` (EB `-54.50`) | yes |
+| F5 against `tangent_modes`; `|Im|/|lambda|` | `<= 1e-8`; `<= 1e-8` | `1.28e-9`; `0` | yes |
+| F6 against `buckling::factors`; `|Im|/|mu|` | `<= 1e-8`; `<= 1e-8` | `2.55e-10`; `0` | yes |
+| F6r `20 mu_1/(pi^2/4) - 1` | recorded | `-2.39e-4` | recorded |
+| F7 no real positive factor `<= 2.005` with the full follower | holds | none; the four of smallest modulus `20 mu = -534.0 +/- 81.6 i, -493.6 +/- 244.8 i` | yes |
+| F7c the symmetric path has a factor in `(0, 2.005]` | holds | `0.49301` | yes |
+| F8 residuals of F6 and F7 | `<= 1e-8` | `7.3e-6` | **no** (`f6_f7_f8_buckling_known_miss`; diagnosed, amendment 2) |
+| F9 refusals | hold | rigid-free and `Shift::Auto` refused (key `"shift"`); the transformation path refused (key `"load stiffness"`) | yes |
+| K1 known spectrum: eigenvalue error; residuals | `<= 1e-10`; `<= 1e-10` | `3.0e-12`; `9.3e-11` (36 steps) | yes |
+| K2 Laplacian; `|Im|/|lambda|` | `<= 1e-10`; `<= 1e-12` | `5.0e-14`; `0` (18 steps) | yes |
+| K3 refusals | hold | count 0 and `n`, sizes, NaN, singular `A - sigma B` (`Factor`) | yes |
+| N1 default bits | exact | the 3 digests equal | yes |
+| N2 existing default-bit records | pass | pass (`sa_follower_default_bits`, `sa_shell_follower_default_bits`, `sa_f572_default_bits`) | yes |
+| N3 `baseline_hashes` | pass | pass | yes |
+
+Remarks. F1 and F2 came out within `4e-4` and `8e-4` of the estimates of arithmetic 3 (the Timoshenko departure `-2.8e-3`
+and `-4.0e-3`, with the shortening of the total-Lagrangian tangent). K1's residual `9.3e-11` is close to its limit for the
+reason of amendment 2 (the measure scales with the spread of the spectrum). In K1 the eight eigenvalues nearest `0.3` are all
+real, so K1 does not exercise the complex output; that output is exercised by F1e (the complex pair) and F7 (four complex
+factors), and MU3 is caught there, not by K1.
+
+### Mutations (scratch copy of 7f496190 by `git archive | tar -x -m`, one at a time, `f653-scratch/mutate.py`, `mutations.log`)
+
+| Id | Caught by |
+|---|---|
+| MU1 `tangent_modes_full` with `add` | F1e (no flutter at `p = 24`) |
+| MU2 `sigma + theta` | K1, K2, F2, F5, F6 |
+| MU3 imaginary part of the Ritz values dropped | F1e (no flutter found); not by K1 (its nearest eigenvalues are real) |
+| MU4 convergence accepted at `m = count + 2` | K1, K2, F5 (`1.2e-2`), F6 (`1.8e-2`) |
+| MU5 symmetric part in `buckling_factors_full` | F7 (2 real positive factors below `2.005`) |
+| MU6 `B = +G` | F6 (`|mu_f/mu_s - 1| = 2`) |
+
+Six of six caught.
+
+### Deviations
+
+- Amendment 1 (before any check ran): the symmetric reference of F5 and the record N1 use `ResidualTest::Backward`.
+- Amendment 2 (after the registered run): F3 and F8 missed; kept as ignored `*_known_miss` records with the limits intact; the
+  met checks run in passing tests through the same code; a diagnostic test (records only) added. No limit changed, no
+  registered check re-run to pick a result (the passing tests are deterministic and print the same numbers).
+- The registration commit also held the `docs/reference-data.md` entry of the derived coefficient (the acceptance asks for the
+  reference before the registration); the house rule asks for the ADR alone in the first commit.
+
+### Not run
+
+- The whole workspace suite (the brief); the whole `rcfd-fem` suite (only the files that cover `follower.rs`; no existing line
+  of `rcfd-fem` changed). No case-file key.
+
+### Decision
+
+**partial** by the registered rule: two registered checks missed (F3, F8, the residual measure; diagnosed as a measure that
+scales with the spread of the spectrum, the pairs backward stable to `2.5e-12`). Every clause of the acceptance is met:
+`tangent_modes_full` and `buckling_factors_full` take the full load stiffness and return complex eigenvalues (a1, a2), Beck's
+flutter load within `1.87e-3` of the derived `20.0509536` (a3; limit 1 percent), the symmetric paths keep their bits (a4: N1 to
+N3). All six mutations caught, fmt and clippy clean.
+
+### Remaining questions (recommendations for the lead)
+
+- **Q1** (the residual measure of the pencil solver): options (a) report the normwise backward error `eta` (the diagnostic's
+  measure) as the residual of `PencilEigen`, a small library change with a registered check; (b) keep the relative measure
+  and document its floor `tol kappa`. Recommendation (a), as a follow-up (below); it changes no default result (the new
+  functions have no users yet).
+- **Q2** (a Beam2 follower tip force): options (a) a Beam2 tangential follower load with a linear pre-stress flutter path (the
+  beam is not on the Newton driver); (b) leave it, the solid route covers the acceptance. Recommendation (b) until a beam case
+  needs it.
+- **Q3** (case-file keys for the flutter analysis): not now; with the keys of ADR 0560 Q1 when those are added.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> Structural solver, advanced tier. Follow-up of F-572 (ADR 0560, 2026-11-15). PARTIAL. ADR 0580, 2026-11-15: new rcfd_linalg::eigen_pencil::nearest_pencil_eigenpairs (eigenpairs of a real unsymmetric pencil A x = lambda B x nearest a real shift, shift-invert Arnoldi with the EnvelopeLu factor, Gram-Schmidt twice, Ritz values by the Francis QR of ADR 0450, complex pairs returned whole) and, opt-in beside the unchanged symmetric functions, follower::tangent_modes_full (the tangent with Contribution::add_full, the full unsymmetric -K_p of a follower pressure; complex omega^2) and follower::buckling_factors_full (K + mu (K_sigma - K_p) with K_p in full; complex factors of smallest modulus; transformation path refused). Beck's flutter coefficient derived, not cited: p_cr = P L^2/(E I) = 20.0509536, Omega_cr^2 = 121.34251 (closed-form determinant, confirmed by Hermite elements to 1.5e-8; in docs/reference-data.md). Hex20 cantilever, L/h = 50, follower pressure on the end face, bisection in the load on the onset of a complex pair: p_cr = 20.0134 (-1.87e-3, limit 1 percent; Timoshenko estimate -2.8e-3), coalescence Omega^2 = 120.95 (-3.2e-3); the symmetric part of the load stiffness gives real eigenvalues and a spurious divergence (lowest omega^2 -54.6 at 1.01 p_cr); the full buckling path finds no real positive factor (smallest 20 mu = -534 +/- 82 i), the symmetric path a factor 0.493; the full solvers agree with tangent_modes and buckling::factors on symmetric problems within 1.3e-9 and 2.6e-10. Missed: the registered pair residual limit 1e-8 (measured 2.0e-8 and 7.3e-6), diagnosed as the relative measure scaling with the spread of the spectrum (normwise backward errors at most 2.5e-12); kept as known-miss records. Six of six mutations caught; default bits (new record N1, the existing records) and baseline hashes unchanged.
+
+> Follow-up proposed: Backward-error residual of the pencil eigensolver. Deps F-653. Acceptance: Every limit not stated here is registered in the ADR before the run. nearest_pencil_eigenpairs reports the normwise backward error ||A x - lambda B x|| / ((||A|| + |lambda| ||B||) ||x||) of each pair (and the convergence test is stated in it); on Beck's column of ADR 0580 and its buckling problem every pair is within a registered limit derived from the tolerance; the eigenvalues and modes of ADR 0580 keep their bits.
+
+> Follow-up proposed: Beam2 tangential follower tip force and a linear pre-stress flutter path. Deps F-653. Acceptance: Every limit not stated here is registered in the ADR before the run. A follower tip force on a Beam2 node with its load stiffness, and the modes of K + lambda (K_sigma - K_f) with the mass as complex eigenvalues; Beck's column of Beam2 elements has its flutter load within a registered limit of the derived 20.0509536 E I/L^2 of docs/reference-data.md; existing beam results keep their bits.
