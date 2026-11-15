@@ -246,3 +246,26 @@ run, or a mutation not caught. **Todo**: MA to W not run.
   both.
 - The public `coriolis_matrix`, `coriolis_matrix_with_shells` and `gyro::gyroscopic_matrix` stay without beams.
 - The warping beam (seven unknowns) is not on these paths; no case key for `RotatingOptions::beams`.
+
+## Amendment 1 (2026-11-15, after run 1, before the corrected run): the CB2 measure of the assembled matrices
+
+Run 1 (`f675-scratch/run1.log`, library and tests at d331a1df, `sa_rotating_cyclic_beams_f675`, every test once) met every
+check but CB2 on the assembled matrices of W and the ring, which reported "skew bit for bit false". The test compared `c_ij`
+with `-c_ji` by `to_bits`, which takes `+0` and `-0` as different. A disclosed diagnostic (a temporary test file, deleted, never
+committed, printing only counts) found the mismatches to be pairs of zeros only: 2 in W's matrix, 10 in the ring's, no pair of
+non-zero entries differing in any bit, every diagonal entry zero. A position of the stiffness pattern where both `c_ij` and
+`c_ji` sum to `0.0` holds `+0` on both sides, and `-(+0) = -0` differs from `+0` in its sign bit. Diagnosis: a defect of the
+measure, not of the matrix. The registered statement is `c_ij = -c_ji`, `c_ii = 0`, which in floating point identifies the two
+zeros; the element check of CB2 met it as written.
+
+Corrections, registered now:
+
+- **CB2 (amended), assembled matrices.** `c_ij == -c_ji` as floating-point values (the two zeros equal), `c_ii == 0`, at least one
+  entry non-zero; and every pair whose bits differ is a pair of zeros (the count reported). Limit: exact, as registered.
+- The run-1 function is kept unchanged as an ignored record (`#[ignore]`, renamed
+  `ma_mb_mc_w_rotating_sector_of_beams_against_the_full_ring_run1_record`); its numbers for MA, MB, MC, W, W0 and SM are the
+  registered results and are not re-run. The amended CB2 is a new function `cb2_assembled_after_amendment_1`, which builds the same
+  two parts and runs only CB2, once.
+- The element CB2 of `cb1_cb2_beam_coriolis_rigid_fields` stands as run (met).
+
+By the decision rule CB2 is met only after a post-run amendment, so the item cannot be done.
