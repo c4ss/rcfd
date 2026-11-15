@@ -201,6 +201,34 @@ fn free_cases() -> Vec<Case> {
     vec![s20(), s8(), shell(ElementKind::Shell4), shell(ElementKind::Shell3)]
 }
 
+/// ADR 0611 amendment 1: S8 with the surface sets of its `hex_box` mesh (the cyclic constraint of a solid reads them).
+fn s8_a1() -> Case {
+    let al = 2.0 * PI / N_SOLID as f64;
+    let b = hex_box([0.25, 0.0, -0.1], [0.5, al, 0.3], [2, 3, 2]).unwrap();
+    let nodes: Vec<Vec3> = b.nodes().iter().map(|&p| frame_map(p)).collect();
+    let mut mesh = SolidMesh::new(nodes).unwrap();
+    mesh.add_block(ElementKind::Hex8, b.blocks()[0].connectivity().to_vec())
+        .unwrap();
+    for name in ["ymin", "ymax", "xmin"] {
+        mesh.add_node_set(name, b.node_set(name).unwrap().to_vec()).unwrap();
+    }
+    for name in b.surface_set_names() {
+        mesh.add_surface_set(name, b.surface_set(name).unwrap().to_vec()).unwrap();
+    }
+    mesh.add_element_set("all", (0..b.n_elements()).collect()).unwrap();
+    Case {
+        name: "S8",
+        model: solid_model(mesh),
+        low: "ymin",
+        high: "ymax",
+        r_max: 0.75,
+    }
+}
+
+fn free_cases_a1() -> Vec<Case> {
+    vec![s20(), s8_a1(), shell(ElementKind::Shell4), shell(ElementKind::Shell3)]
+}
+
 /// The clamped twins of NS3: S20 with `xmin` held in 0..3, SH4 with `clamp` held in 0..6.
 fn clamped_cases() -> Vec<Case> {
     let mut a = s20();
@@ -351,10 +379,22 @@ fn base() -> RotatingOptions {
     RotatingOptions::new(3).coriolis(true)
 }
 
+/// Run 1 (ADR 0611): stopped at the set-up (S8 without its surface sets, amendment 1); kept as the record.
 #[test]
+#[ignore = "ADR 0611 amendment 1: defective set-up (S8 without its surface sets); the record of run 1"]
 fn fs_rx_rxc_or_gn_ws_the_free_solid_and_shell_sectors_against_the_constrained_copy() {
+    fs_run(free_cases());
+}
+
+/// ADR 0611 amendment 1: FS to WS on the corrected S8.
+#[test]
+fn fs_rx_rxc_or_gn_ws_the_free_solid_and_shell_sectors_against_the_constrained_copy_amended() {
+    fs_run(free_cases_a1());
+}
+
+fn fs_run(cases: Vec<Case>) {
     let mut ok = true;
-    for case in free_cases() {
+    for case in cases {
         let m = &case.model;
         let name = case.name;
         let opt = base().free_sector_prestress(true);
@@ -440,15 +480,27 @@ fn nc0s_without_the_opt_in_the_free_solid_and_shell_sectors_are_refused() {
     assert!(ok, "NC0s missed");
 }
 
+/// Run 1 (ADR 0611): stopped at the set-up (S8 without its surface sets, amendment 1) after DF; kept as the record.
 #[test]
+#[ignore = "ADR 0611 amendment 1: defective set-up (S8 without its surface sets); the record of run 1"]
 fn ns1_ns2_ns3_df_the_opt_in_without_stress_stiffening_changes_no_bit() {
+    ns_run(free_cases);
+}
+
+/// ADR 0611 amendment 1: NS1 to NS3 and DF on the corrected S8.
+#[test]
+fn ns1_ns2_ns3_df_the_opt_in_without_stress_stiffening_changes_no_bit_amended() {
+    ns_run(free_cases_a1);
+}
+
+fn ns_run(free: fn() -> Vec<Case>) {
     let mut ok = true;
     let df = !RotatingOptions::new(3).free_sector_prestress;
     println!("DF RotatingOptions::new(3).free_sector_prestress == false: {df} {}", met(df));
     ok &= df;
     let off = base().stress_stiffening(false);
     let off_in = off.clone().free_sector_prestress(true);
-    let mut cases = free_cases();
+    let mut cases = free();
     cases.extend(clamped_cases());
     for case in &cases {
         let m = &case.model;
