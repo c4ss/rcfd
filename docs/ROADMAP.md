@@ -8533,21 +8533,18 @@ fixed by the item's registration ADR before any code.
     (1/l_a^4 + 4/l_a)) with l_b^3 = 1 + (A/B)^3 (l_a^3 - 1) (recomputed by quadrature in the registration) within 1
     percent with the mean-dilatation element, the standard Hex8 on the same mesh being the registered locking control. A
     non-positive modulus is refused; an inverted element is an error with the element.
-  - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0328; the registration is
-    written by the implementation agent before any code. ADR 0493 (2026-11-14): the mean-dilatation B-bar Hex8 exists
-    for the linear paths (BlockProperty::solid(SolidFormulation::BBar)); the nonlinear driver refuses it; its F-bar form
-    for finite strain is proposed as follow-up 1 of ADR 0493. ADR 0541, 2026-11-15: PARTIAL. rcfd_fem::mat_hyper
-    (PENDING None): compressible neo-Hookean and Mooney-Rivlin, W = c10 (Ibar1 - 3) + c01 (Ibar2 - 3) + (kappa/2)(J -
-    1)^2, stress, tangent and energy, det C <= 0 refused with the element; taken by the nonlinear driver through
-    Material::stress; nonlinear_md::block_property() is the F-bar Hex8 of ADR 0506 as the mean-dilatation element; the
-    linear paths and the nonlinear transient Method step refuse it naming a follow-up of ADR 0541; the energy-momentum
-    step with DiscreteGradient takes it. Tangent against central differences 3.4e-9 (limit 1e-6), rotation 3.2e-14
-    (1e-10); uniaxial, equibiaxial (neo-Hookean, Mooney-Rivlin) 1.7e-11 after the compressibility correction, simple
-    shear 7.2e-15 (limit 1e-3); sphere B/A = 2 at l_a = 1.5 with the mean-dilatation Hex8 2.61e-3 (limit 1e-2). Known
-    miss: the small-strain clause 4.7e-6 (neo-Hookean), 4.9e-6 (Mooney-Rivlin) against 1e-6, the second-order remainder
-    (the tangent at zero 1.3e-16, the odd part 5.1e-11). The Full Hex8 locking control was not measured (negative pivot
-    at l_a = 1.133); diagnostic at l_a = 1.125: Full 14.95, mean-dilatation 3.9e-3. Ten of ten mutations caught; default
-    bits and baseline hashes unchanged. Citations from memory, to be checked.
+  - note: ADR 0541, 2026-11-15: PARTIAL. rcfd_fem::mat_hyper (PENDING None): compressible neo-Hookean and Mooney-Rivlin,
+    W = c10 (Ibar1 - 3) + c01 (Ibar2 - 3) + (kappa/2)(J - 1)^2, stress, tangent and energy, det C <= 0 refused with the
+    element; taken by the nonlinear driver through Material::stress; nonlinear_md::block_property() is the F-bar Hex8 of
+    ADR 0506 as the mean-dilatation element; the linear paths and the nonlinear transient Method step refuse it naming a
+    follow-up of ADR 0541; the energy-momentum step with DiscreteGradient takes it. Tangent against central differences
+    3.4e-9 (limit 1e-6), rotation 3.2e-14 (1e-10); uniaxial, equibiaxial (neo-Hookean, Mooney-Rivlin) 1.7e-11 after the
+    compressibility correction, simple shear 7.2e-15 (limit 1e-3); sphere B/A = 2 at l_a = 1.5 with the mean-dilatation
+    Hex8 2.61e-3 (limit 1e-2). Known miss: the small-strain clause 4.7e-6 (neo-Hookean), 4.9e-6 (Mooney-Rivlin) against
+    1e-6, the second-order remainder (the tangent at zero 1.3e-16, the odd part 5.1e-11). The Full Hex8 locking control
+    was not measured (negative pivot at l_a = 1.133); diagnostic at l_a = 1.125: Full 14.95, mean-dilatation 3.9e-3. Ten
+    of ten mutations caught; default bits and baseline hashes unchanged. Citations from memory, to be checked.
+    Follow-ups F-620, F-621, F-622; F-611 unblocked.
 - [~] **F-426** Tied non-matching meshes, shell and beam joints to solids, non-matching cyclic boundaries and nodes on the axis
   - depends on: F-408, F-391, F-392, F-393, F-394
   - acceptance: Every limit not stated here is registered in the ADR before the run. With matching meshes the tied model
@@ -12120,3 +12117,23 @@ fixed by the item's registration ADR before any code.
     0448 H6 with a tip spring equals the 1-D chain within 1e-8; the reference unknowns of the rigid sets are returned;
     defaults bit-identical.
   - note: Structural solver, advanced tier. Follow-up of F-528 (ADR 0543, 2026-11-15).
+- [ ] **F-620** Hyperelastic materials on the nonlinear transient Method step and the linear paths
+  - depends on: F-425
+  - acceptance: Every limit not stated here is registered in the ADR before the run. Hyperelastic materials on the
+    nonlinear transient Method step and the linear paths (the linearised material of the small-strain moduli), the
+    Method step together with F-611.
+  - note: Structural solver, advanced tier. Follow-up of F-425 (ADR 0541, 2026-11-15).
+- [ ] **F-621** Case-file key for hyperelastic materials
+  - depends on: F-425
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A case-file key [material] kind =
+    "hyperelastic" (energy, mu, kappa, c10, c01) with the block formulation = "bbar"; the schema golden re-recorded with
+    the maintainer's approval; a case without the key gives every result bit-identical.
+  - note: Structural solver, advanced tier. Follow-up of F-425 (ADR 0541, 2026-11-15). NEEDS THE USER: a schema golden
+    change.
+- [ ] **F-622** Full Hex8 locking control of the inflated hyperelastic sphere with a converging set-up
+  - depends on: F-425
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The Full Hex8 locking control of
+    the inflated sphere of ADR 0541 with a set-up that converges (a smaller inner stretch with its own registered limit,
+    or pressure control with the arc-length step).
+  - note: Structural solver, advanced tier. Follow-up of F-425 (ADR 0541, 2026-11-15). Amending F-425's small-strain
+    clause to option (b) of ADR 0541 open question 1 is the maintainer's call.
