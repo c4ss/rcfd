@@ -1146,8 +1146,9 @@ impl SolidModel {
                 if options.full_rotor_beams && !options.beams {
                     return Err(FemError::InvalidValue {
                         key: "cyclic",
-                        reason: "the full_rotor_beams option qualifies the beams option of the cyclic constraint (ADR 0601)"
-                            .into(),
+                        reason:
+                            "the full_rotor_beams option qualifies the beams option of the cyclic constraint (ADR 0601)"
+                                .into(),
                     });
                 }
                 // ADR 0556 D1: with shells the boundaries are node sets.
