@@ -937,7 +937,7 @@ pub fn local_coriolis(f: &Facet, m0: f64, m1: f64, m2: f64, a: Vec3) -> ElementM
 pub fn element_coriolis(coords: &[Vec3], m0: f64, m1: f64, m2: f64, axis: Vec3) -> Result<ElementMatrix> {
     let f = facet(coords)?;
     let al = [dot(f.axes[0], axis), dot(f.axes[1], axis), dot(f.axes[2], axis)];
-    let mut c = to_global(&local_coriolis(&f, m0, m1, m2, al), &transformation(&f));
+    let mut c = to_global_general(&local_coriolis(&f, m0, m1, m2, al), &transformation(&f));
     skew(&mut c);
     Ok(c)
 }
@@ -999,6 +999,33 @@ pub fn transformation(f: &Facet) -> Vec<f64> {
 }
 
 /// `T^T A T`, exactly symmetric.
+/// `T^T A T` without symmetrising (ADR 0561 amendment 2: the skew Coriolis matrix; [`to_global`] symmetrises).
+fn to_global_general(a: &ElementMatrix, t: &[f64]) -> ElementMatrix {
+    let av = a.values();
+    let mut at = vec![0.0; 24 * 24];
+    for i in 0..24 {
+        for j in 0..24 {
+            let mut s = 0.0;
+            for k in 0..24 {
+                s += av[i * 24 + k] * t[k * 24 + j];
+            }
+            at[i * 24 + j] = s;
+        }
+    }
+    let mut out = ElementMatrix::zeros(24);
+    let ov = out.values_mut();
+    for i in 0..24 {
+        for j in 0..24 {
+            let mut s = 0.0;
+            for k in 0..24 {
+                s += t[k * 24 + i] * at[k * 24 + j];
+            }
+            ov[i * 24 + j] = s;
+        }
+    }
+    out
+}
+
 fn to_global(a: &ElementMatrix, t: &[f64]) -> ElementMatrix {
     let av = a.values();
     let mut at = vec![0.0; 24 * 24];

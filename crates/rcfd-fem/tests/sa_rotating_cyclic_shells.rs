@@ -397,7 +397,17 @@ fn co1(name: &str, kind: ElementKind, property: BlockProperty, moments: [f64; 3]
 }
 
 #[test]
-fn co1_shell_coriolis_uniform_fields() {
+#[ignore = "known miss of ADR 0561 run 1 (commit 9ec638ba): every uniform-field form of CO1a, CO1b, CO1c was 0, relative error 1.0 against the limit 1e-13 (v1 C v2 refs 96.03, 72.02, 53.09; t1 C t2 refs -1.354e-3, -1.016e-3, -8.456e-4; layup mixed ref 9.678e-2); shell to_global symmetrised the skew matrix to zero; amendment 2; continues as co1_shell_coriolis_uniform_fields_after_amendment_2"]
+fn co1_shell_coriolis_uniform_fields_known_miss() {
+    co1_all();
+}
+
+#[test]
+fn co1_shell_coriolis_uniform_fields_after_amendment_2() {
+    co1_all();
+}
+
+fn co1_all() {
     let mut rec = Record::new();
     let homogeneous = [RHO * T, 0.0, RHO * T * T * T / 12.0];
     co1(
@@ -644,8 +654,42 @@ fn rotating(kind: ElementKind, tag: char) {
         let ring_list: Vec<f64> = rr.modes.iter().map(|x| x.omega).collect();
         compare(&name, &lists, &ring_list, &mut rec);
     }
-    // SM: smoke of the other paths on the same Coriolis matrix.
+    // W0 (amendment 2): the Coriolis term is felt: k = 1 at the top speed, whirl against set A.
     let w2 = speeds[2];
+    let plain = RotatingSector::new(&m, &options(4, Effects::A)).unwrap();
+    let mut a: Vec<f64> = plain
+        .modes(1, w2)
+        .unwrap()
+        .modes()
+        .unwrap()
+        .eigenvalues
+        .iter()
+        .map(|l| l.sqrt())
+        .collect();
+    let mut b: Vec<f64> = sec
+        .whirl_modes(1, w2)
+        .unwrap()
+        .modes()
+        .unwrap()
+        .modes
+        .iter()
+        .map(|x| x.omega)
+        .collect();
+    a.sort_by(f64::total_cmp);
+    b.sort_by(f64::total_cmp);
+    let cut = (1.0 - 1e-6) * a.last().unwrap().min(*b.last().unwrap());
+    let w0 = a
+        .iter()
+        .zip(&b)
+        .filter(|(x, y)| **x < cut && **y < cut)
+        .map(|(x, y)| (y / x - 1.0).abs())
+        .fold(0.0f64, f64::max);
+    rec.hold(
+        &format!("W0{tag} Coriolis effect, k = 1, top speed"),
+        w0 >= 1e-4,
+        format!("{w0:.4e} (limit >= 1e-4)"),
+    );
+    // SM: smoke of the other paths on the same Coriolis matrix.
     let mut ok = true;
     let mut detail = String::new();
     for k in 0..=N / 2 {

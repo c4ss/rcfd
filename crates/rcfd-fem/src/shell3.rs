@@ -790,7 +790,7 @@ pub fn local_coriolis(f: &Facet3, thickness: f64, density: f64, a: Vec3) -> Elem
 pub fn element_coriolis(coords: &[Vec3], thickness: f64, density: f64, axis: Vec3) -> Result<ElementMatrix> {
     let f = facet(coords)?;
     let al = [dot(f.axes[0], axis), dot(f.axes[1], axis), dot(f.axes[2], axis)];
-    let mut c = to_global(&local_coriolis(&f, thickness, density, al), &transformation(&f));
+    let mut c = to_global_general(&local_coriolis(&f, thickness, density, al), &transformation(&f));
     crate::shell::skew(&mut c);
     Ok(c)
 }
@@ -822,6 +822,33 @@ pub fn transformation(f: &Facet3) -> Vec<f64> {
 }
 
 /// `T^T A T`, exactly symmetric.
+/// `T^T A T` without symmetrising (ADR 0561 amendment 2: the skew Coriolis matrix; [`to_global`] symmetrises).
+fn to_global_general(a: &ElementMatrix, t: &[f64]) -> ElementMatrix {
+    let av = a.values();
+    let mut at = vec![0.0; 18 * 18];
+    for i in 0..18 {
+        for j in 0..18 {
+            let mut s = 0.0;
+            for k in 0..18 {
+                s += av[i * 18 + k] * t[k * 18 + j];
+            }
+            at[i * 18 + j] = s;
+        }
+    }
+    let mut out = ElementMatrix::zeros(18);
+    let ov = out.values_mut();
+    for i in 0..18 {
+        for j in 0..18 {
+            let mut s = 0.0;
+            for k in 0..18 {
+                s += t[k * 18 + i] * at[k * 18 + j];
+            }
+            ov[i * 18 + j] = s;
+        }
+    }
+    out
+}
+
 fn to_global(a: &ElementMatrix, t: &[f64]) -> ElementMatrix {
     let av = a.values();
     let mut at = vec![0.0; 18 * 18];
