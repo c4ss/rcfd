@@ -96,7 +96,10 @@ fn all_digests() -> Vec<(String, u64)> {
     let rt = solve_static(&tens, &StaticOptions::default()).unwrap();
     let pt = Prestress::from_static(&tens, &rt).unwrap();
     let pm = prestressed_modes(&m, &pt, &ModalOptions::new(4)).unwrap();
-    out.push(("fork prestressed eigenvalues".to_string(), digest(pm.eigenvalues.clone())));
+    out.push((
+        "fork prestressed eigenvalues".to_string(),
+        digest(pm.eigenvalues.clone()),
+    ));
     out.push((
         "fork prestressed modes".to_string(),
         digest(pm.modes.iter().flatten().copied()),

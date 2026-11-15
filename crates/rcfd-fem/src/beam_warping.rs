@@ -9,10 +9,15 @@
 //!
 //! The six-unknown numbering of the model ([`crate::model::DofMap`]) is not changed: the warping unknowns are appended after it,
 //! one per node of a warping element in ascending node order ([`WarpingDofs`], D3). Nothing else in the library reads a
-//! [`Warping`]: the static solve, the modes and the other paths are those of the six-unknown model. [`buckling_factors`] is
+//! [`Warping`]: the model's own static solve, modes and other paths are those of the six-unknown model. [`buckling_factors`] is
 //! the buckling path of [`crate::buckling::factors`] on the augmented matrices ([`matrices`], D5), with the fork supports of the
 //! model's constraints and the warping free unless [`Warping::restrain`] holds it. The refusals of ADR 0546 D4 (RF1 to RF9) are
 //! listed on the functions.
+//!
+//! ADR 0548 (F-626) adds the static solve with the warping unknown ([`solve_static`]), the pre-stress of that solve with the
+//! total torque of the warping elements ([`WarpingPrestress::from_static`]; RF8 lifted for it, [`buckling_factors_with`]), the
+//! 14-unknown consistent mass ([`local_mass`], the Hermite twist, no warping inertia), the modes ([`modal_analysis`]) and the
+//! pre-stressed modes ([`prestressed_modes`]).
 
 use crate::assemble::{element_dofs, point_stiffness};
 use crate::beam::{self, GAUSS4_W, GAUSS4_X};
@@ -619,6 +624,17 @@ pub fn matrices(
     warping: &Warping,
     threads: Option<usize>,
 ) -> Result<WarpingMatrices> {
+    matrices_impl(model, prestress, warping, threads, true)
+}
+
+/// [`matrices`], with the refusal RF8 of a torque in the pre-stress applied only when `check_torque` (ADR 0548 D3).
+fn matrices_impl(
+    model: &SolidModel,
+    prestress: &Prestress,
+    warping: &Warping,
+    threads: Option<usize>,
+    check_torque: bool,
+) -> Result<WarpingMatrices> {
     entry_checks(model)?;
     prestress.check_fits(model)?;
     let lay = layout(model, warping)?;
@@ -674,7 +690,7 @@ pub fn matrices(
         let stress = prestress.of_element(e);
         let n_ax = section.area() * beam::normal_stress(&stress[0], f.axes[0]);
         let ends = prestress.beam_terms(e).map(|(ef, _)| *ef);
-        if let Some(ef) = &ends {
+        if let (true, Some(ef)) = (check_torque, &ends) {
             // RF8.
             let l = f.length;
             let ip = ((section.i_y() + section.i_z()) / section.area()).sqrt();
@@ -754,6 +770,17 @@ pub fn buckling_factors(
     warping: &Warping,
     options: &BucklingOptions,
 ) -> Result<WarpingBucklingResult> {
+    buckling_impl(model, prestress, warping, options, true)
+}
+
+/// [`buckling_factors`], with RF8 applied only when `check_torque` (ADR 0548 D3).
+fn buckling_impl(
+    model: &SolidModel,
+    prestress: &Prestress,
+    warping: &Warping,
+    options: &BucklingOptions,
+    check_torque: bool,
+) -> Result<WarpingBucklingResult> {
     // RF9.
     if options.coordinate_order {
         return Err(FemError::InvalidValue {
@@ -775,7 +802,7 @@ pub fn buckling_factors(
         });
     }
     check_rigid_body_motions(model, &fixed)?;
-    let mats = matrices(model, prestress, warping, options.threads)?;
+    let mats = matrices_impl(model, prestress, warping, options.threads, check_torque)?;
     let mut all = fixed;
     all.extend(mats.restrained.iter().map(|&eq| (eq, 0.0)));
     let n = mats.dofs.n_equations();
@@ -844,5 +871,555 @@ pub fn buckling_factors(
         unknowns: nf,
         exhausted: eig.exhausted,
         dofs: mats.dofs,
+    })
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// ADR 0548 (F-626): the warping unknown on the static solve, the modes and the pre-stressed modes.
+// ---------------------------------------------------------------------------------------------------------------------------
+
+/// `int H_i H_j dx` of the cubic Hermite twist functions over the element (four-point Gauss, exact for the degree 6).
+fn hermite_mass_block(l: f64) -> [[f64; 4]; 4] {
+    let mut m = [[0.0; 4]; 4];
+    for (x, w) in GAUSS4_X.iter().zip(GAUSS4_W) {
+        let xi = 0.5 * (x + 1.0);
+        let wl = 0.5 * w * l;
+        let (h, _, _) = hermite(l, xi);
+        for i in 0..4 {
+            for j in 0..4 {
+                m[i][j] += wl * h[i] * h[j];
+            }
+        }
+    }
+    m
+}
+
+/// The 14 x 14 consistent mass in local axes (ADR 0548 D4): [`crate::beam::local_mass`] in the 14-unknown order with its
+/// torsion pair `rho I_p L/6 [2, 1; 1, 2]` replaced by `rho I_p int H_i H_j dx` on the Hermite twist, `I_p = I_y + I_z`. No
+/// warping inertia `rho C_w`.
+pub fn local_mass(length: f64, section: &BeamSection, material: &Material) -> ElementMatrix {
+    let mut m = embed_without_twist(&beam::local_mass(length, section, material));
+    let rho_ip = material.density() * (section.i_y() + section.i_z());
+    add_twist(&mut m, rho_ip, &hermite_mass_block(length));
+    m
+}
+
+/// The global 14 x 14 consistent mass of a warping element.
+pub fn element_mass(
+    coords: &[Vec3],
+    section: &BeamSection,
+    orientation: Vec3,
+    material: &Material,
+) -> Result<ElementMatrix> {
+    let f = beam::frame_of(coords, orientation)?;
+    Ok(to_global(&local_mass(f.length, section, material), &f.axes))
+}
+
+/// A warping element of a model: its index, its 14 global equations, its section, frame and material index.
+struct WarpElement {
+    element: usize,
+    eqs: [usize; 14],
+    section: BeamSection,
+    warping: WarpingSection,
+    length: f64,
+    axes: [Vec3; 3],
+    material: usize,
+}
+
+fn warp_elements(model: &SolidModel, lay: &Layout) -> Result<Vec<WarpElement>> {
+    let mesh = model.mesh();
+    let base_dofs = model.dof_map();
+    let materials = model.material_indices()?;
+    let mut out = Vec::new();
+    for (e, ws) in lay.section_of.iter().enumerate() {
+        let Some(ws) = ws else {
+            continue;
+        };
+        let nodes = mesh.element_nodes(e);
+        let (section, v) = beam::beam_property(mesh, e).expect("a Beam2 element of a Beam block");
+        let coords = [mesh.nodes()[nodes[0]], mesh.nodes()[nodes[1]]];
+        let f = beam::frame_of(&coords, v).map_err(|source| FemError::Element {
+            element: e,
+            source: Box::new(source),
+        })?;
+        let base_eqs = element_dofs(&base_dofs, nodes);
+        let mut eqs = [0usize; 14];
+        for (i, &n) in nodes.iter().enumerate() {
+            eqs[7 * i..7 * i + 6].copy_from_slice(&base_eqs[6 * i..6 * i + 6]);
+            eqs[7 * i + 6] = lay.dofs.equation(n).expect("a node of a warping element");
+        }
+        out.push(WarpElement {
+            element: e,
+            eqs,
+            section,
+            warping: *ws,
+            length: f.length,
+            axes: f.axes,
+            material: materials[e],
+        });
+    }
+    Ok(out)
+}
+
+/// The triplets of a matrix of the six-unknown model.
+fn triplets_of(m: &CsrMatrix) -> Vec<(usize, usize, f64)> {
+    let mut t = Vec::with_capacity(m.val.len());
+    for r in 0..m.n {
+        for p in m.row_ptr[r]..m.row_ptr[r + 1] {
+            t.push((r, m.col[p], m.val[p]));
+        }
+    }
+    t
+}
+
+/// `base` (a matrix of the six-unknown model) plus, per warping element, `T^T (A14 - embed(A12)) T` of the pair `local`
+/// returns (`A14`, `A12`).
+fn augmented(
+    base: &CsrMatrix,
+    model: &SolidModel,
+    lay: &Layout,
+    local: impl Fn(&WarpElement, &Material) -> (ElementMatrix, ElementMatrix),
+) -> Result<CsrMatrix> {
+    let mut t = triplets_of(base);
+    for w in warp_elements(model, lay)? {
+        let material = &model.materials()[w.material].1;
+        let (mut d, a12) = local(&w, material);
+        let a12 = embed(&a12);
+        for (a, b) in d.values_mut().iter_mut().zip(a12.values()) {
+            *a -= b;
+        }
+        let d = to_global(&d, &w.axes);
+        let dv = d.values();
+        for i in 0..14 {
+            for j in 0..14 {
+                t.push((w.eqs[i], w.eqs[j], dv[i * 14 + j]));
+            }
+        }
+    }
+    Ok(CsrMatrix::from_triplets(lay.dofs.n_equations(), t))
+}
+
+fn stiffness_aug(model: &SolidModel, lay: &Layout, threads: Option<usize>) -> Result<CsrMatrix> {
+    let k = point_stiffness(model, threads)?;
+    augmented(&k, model, lay, |w, m| {
+        (
+            local_stiffness(w.length, &w.section, m, w.warping.c_w),
+            beam::local_stiffness(w.length, &w.section, m),
+        )
+    })
+}
+
+fn mass_aug(model: &SolidModel, lay: &Layout, threads: Option<usize>) -> Result<CsrMatrix> {
+    let m = crate::mass::consistent_with(model, threads)?;
+    augmented(&m, model, lay, |w, mat| {
+        (
+            local_mass(w.length, &w.section, mat),
+            beam::local_mass(w.length, &w.section, mat),
+        )
+    })
+}
+
+/// The name of an equation of the augmented numbering: `(node, component)`, component 6 the warping unknown.
+fn node_component(model_dofs: &crate::model::DofMap, dofs: &WarpingDofs, eq: usize) -> (usize, usize) {
+    match model_dofs.node_component(eq) {
+        Some(nc) => nc,
+        None => (dofs.node_of(eq).expect("a warping equation"), 6),
+    }
+}
+
+/// The result of [`solve_static`].
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct WarpingStaticResult {
+    /// The displacement on every equation of [`WarpingDofs`]: the model's `DofMap` order, then the warping unknowns.
+    pub displacement: Vec<f64>,
+    /// `K u - f` at the prescribed and the restrained equations, 0 elsewhere (a bimoment at a restrained warping unknown).
+    pub reactions: Vec<f64>,
+    /// The numbering.
+    pub dofs: WarpingDofs,
+    /// `|f_F - K_FF u_F| / |f_F|` of the reduced system (0 when `f_F` is zero).
+    pub relative_residual: f64,
+}
+
+impl WarpingStaticResult {
+    /// The displacement of the six-unknown model (a vector of the model's `DofMap`).
+    pub fn six_unknown(&self) -> &[f64] {
+        &self.displacement[..self.dofs.base_equations()]
+    }
+    /// The warping unknown `chi = phi'` of `node`, if it has one.
+    pub fn warping_at(&self, node: usize) -> Option<f64> {
+        self.dofs.equation(node).map(|eq| self.displacement[eq])
+    }
+}
+
+/// The linear static solve of `model` with the warping unknowns of `warping` (ADR 0548 D1): `K_aug` of ADR 0546 D5, the model's
+/// nodal loads (no bimoment load), its prescribed values and the restrained warping unknowns (`chi = 0`), the free rigid
+/// motions refused as [`crate::solve::solve_static`], the sparse `L D L^T` after minimum degree with the pivot rule of ADR
+/// 0275 (`FemError::SingularStiffness`, component 6 for a warping unknown), the reactions. Refuses RF1 to RF4 and RF6 of ADR
+/// 0546 D4.
+pub fn solve_static(model: &SolidModel, warping: &Warping, threads: Option<usize>) -> Result<WarpingStaticResult> {
+    entry_checks(model)?;
+    let lay = layout(model, warping)?;
+    let base_dofs = model.dof_map();
+    let mut f = crate::loads::nodal_load_vector(model, &[])?;
+    let mut fixed = prescribed_equations(model, &[])?;
+    check_rigid_body_motions(model, &fixed)?;
+    let k = stiffness_aug(model, &lay, threads)?;
+    let n = lay.dofs.n_equations();
+    f.resize(n, 0.0);
+    fixed.extend(lay.restrained.iter().map(|&eq| (eq, 0.0)));
+    let sys = reduce(&k, &f, &fixed)?;
+    let free = sys.free().to_vec();
+    let u_free = if free.is_empty() {
+        Vec::new()
+    } else {
+        let diag = sys.matrix.diag();
+        let singular = |row: usize, pivot: f64| {
+            let (node, component) = node_component(&base_dofs, &lay.dofs, free[row]);
+            FemError::SingularStiffness {
+                node,
+                component,
+                pivot,
+                diagonal: diag[row],
+            }
+        };
+        let ldlt = rcfd_linalg::sparse_chol::SparseLdlt::factor(&sys.matrix).map_err(|e| match e {
+            rcfd_linalg::skyline::SkylineError::Pivot { row, pivot, .. } => singular(row, pivot),
+            other => FemError::Solver {
+                solver: "warping static solve",
+                reason: other.to_string(),
+            },
+        })?;
+        for (&row, &d) in ldlt.order().iter().zip(ldlt.pivots()) {
+            if d <= crate::solve::PIVOT_TOLERANCE * diag[row] {
+                return Err(singular(row, d));
+            }
+        }
+        ldlt.solve(&sys.rhs)
+    };
+    let relative_residual = {
+        let mut ku = vec![0.0; u_free.len()];
+        if !u_free.is_empty() {
+            sys.matrix.matvec(&u_free, &mut ku);
+        }
+        let num: f64 = ku
+            .iter()
+            .zip(&sys.rhs)
+            .map(|(a, b)| (b - a) * (b - a))
+            .sum::<f64>()
+            .sqrt();
+        let den: f64 = sys.rhs.iter().map(|b| b * b).sum::<f64>().sqrt();
+        if den > 0.0 {
+            num / den
+        } else {
+            0.0
+        }
+    };
+    let u = sys.expand(&u_free);
+    let reactions = crate::constraint::reactions(&k, &u, &f, &fixed);
+    Ok(WarpingStaticResult {
+        displacement: u,
+        reactions,
+        dofs: lay.dofs,
+        relative_residual,
+    })
+}
+
+/// Where a [`WarpingPrestress`] comes from (ADR 0548 D2).
+#[derive(Debug, Clone, PartialEq)]
+enum Source {
+    TorsionFree,
+    WithTorsion,
+    Static {
+        blocks: Vec<(usize, WarpingSection)>,
+        dofs: WarpingDofs,
+    },
+}
+
+/// The pre-stress of the warping paths (ADR 0548 D2): a [`Prestress`] and its source, which decides whether a torque on a
+/// warping element is taken (RF8 of ADR 0546 applies to [`WarpingPrestress::torsion_free`] only).
+#[derive(Debug, Clone, PartialEq)]
+pub struct WarpingPrestress {
+    prestress: Prestress,
+    source: Source,
+}
+
+impl WarpingPrestress {
+    /// The pre-stress of the warping static solve `result` of `model` and `warping` (ADR 0548 D2): the stress points of
+    /// [`Prestress::from_static`] of the six-unknown part, and the end forces of every Beam2 element, those of a warping element
+    /// its 14-unknown local forces `K14 u` without the two bimoments (so its torque is the total torque `G J phi' - E C_w
+    /// phi'''`), those of another beam [`crate::beam::local_end_forces`]; the Wagner coefficients `wagner` of the beams outside
+    /// the warping blocks (each warping block has its own). Refuses a result of another numbering (key `"warping"`).
+    pub fn from_static(
+        model: &SolidModel,
+        warping: &Warping,
+        result: &WarpingStaticResult,
+        wagner: [f64; 2],
+    ) -> Result<WarpingPrestress> {
+        let lay = layout(model, warping)?;
+        if lay.dofs != result.dofs || result.displacement.len() != lay.dofs.n_equations() {
+            return Err(warping_error(
+                "the static result has another numbering of the warping unknowns than this model and warping"
+                    .to_string(),
+            ));
+        }
+        let six = result.six_unknown();
+        let sr = crate::model::SolidResult::new(model.dof_map(), six.to_vec())?;
+        let p = Prestress::from_static(model, &sr)?;
+        let mut forces = crate::geometric_struct::beam_end_forces(model, six)?;
+        for w in warp_elements(model, &lay)? {
+            let material = &model.materials()[w.material].1;
+            let mut ul = [0.0; 14];
+            for node in 0..2 {
+                let o = 7 * node;
+                for blk in 0..2 {
+                    for k in 0..3 {
+                        ul[o + 3 * blk + k] = (0..3)
+                            .map(|c| w.axes[k][c] * result.displacement[w.eqs[o + 3 * blk + c]])
+                            .sum();
+                    }
+                }
+                ul[o + 6] = result.displacement[w.eqs[o + 6]];
+            }
+            let kl = local_stiffness(w.length, &w.section, material, w.warping.c_w);
+            let kv = kl.values();
+            let mut f14 = [0.0; 14];
+            for (i, o) in f14.iter_mut().enumerate() {
+                *o = (0..14).map(|j| kv[i * 14 + j] * ul[j]).sum();
+            }
+            let fe = &mut forces[w.element];
+            for (i, v) in fe.iter_mut().enumerate() {
+                *v = f14[index_of(i)];
+            }
+        }
+        Ok(WarpingPrestress {
+            prestress: p.with_beam_end_forces(forces, wagner),
+            source: Source::Static {
+                blocks: warping.blocks().to_vec(),
+                dofs: lay.dofs,
+            },
+        })
+    }
+
+    /// Any pre-stress, taken as ADR 0546 takes it: a torque on a warping element is refused where it is used (RF8).
+    pub fn torsion_free(prestress: Prestress) -> WarpingPrestress {
+        WarpingPrestress {
+            prestress,
+            source: Source::TorsionFree,
+        }
+    }
+
+    /// A pre-stress whose end forces the caller states are those of the warping model (a closed form, a check): a torque is
+    /// taken as given. Not checked.
+    pub fn with_torsion(prestress: Prestress) -> WarpingPrestress {
+        WarpingPrestress {
+            prestress,
+            source: Source::WithTorsion,
+        }
+    }
+
+    /// The same pre-stress times `factor`.
+    pub fn scaled(&self, factor: f64) -> WarpingPrestress {
+        WarpingPrestress {
+            prestress: self.prestress.scaled(factor),
+            source: self.source.clone(),
+        }
+    }
+
+    /// The pre-stress.
+    pub fn prestress(&self) -> &Prestress {
+        &self.prestress
+    }
+
+    /// Whether it was made by [`WarpingPrestress::from_static`].
+    pub fn is_from_static(&self) -> bool {
+        matches!(self.source, Source::Static { .. })
+    }
+
+    /// RF10 (ADR 0548 D3): a pre-stress of the warping static solve of other blocks or another numbering is refused. Returns
+    /// whether RF8 applies.
+    fn check_for(&self, model: &SolidModel, warping: &Warping) -> Result<bool> {
+        match &self.source {
+            Source::TorsionFree => Ok(true),
+            Source::WithTorsion => Ok(false),
+            Source::Static { blocks, dofs } => {
+                let lay = layout(model, warping)?;
+                if blocks.as_slice() != warping.blocks() || *dofs != lay.dofs {
+                    return Err(warping_error(
+                        "the pre-stress comes from the warping static solve of other blocks, sections or numbering"
+                            .to_string(),
+                    ));
+                }
+                Ok(false)
+            }
+        }
+    }
+}
+
+/// [`buckling_factors`] with the pre-stress of ADR 0548 D2 (D3): a torque on a warping element is taken from a pre-stress of
+/// [`WarpingPrestress::from_static`] or [`WarpingPrestress::with_torsion`] and refused (RF8) from
+/// [`WarpingPrestress::torsion_free`]; a `from_static` pre-stress of other blocks or sections is refused (RF10, key
+/// `"warping"`). The other steps and refusals are those of [`buckling_factors`].
+pub fn buckling_factors_with(
+    model: &SolidModel,
+    prestress: &WarpingPrestress,
+    warping: &Warping,
+    options: &BucklingOptions,
+) -> Result<WarpingBucklingResult> {
+    let check_torque = prestress.check_for(model, warping)?;
+    buckling_impl(model, &prestress.prestress, warping, options, check_torque)
+}
+
+/// The result of [`modal_analysis`] and [`prestressed_modes`].
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct WarpingModalResult {
+    /// Eigenvalues `omega^2`, ascending, rad^2/s^2.
+    pub eigenvalues: Vec<f64>,
+    /// Frequencies, Hz.
+    pub frequencies: Vec<f64>,
+    /// Modes, M-orthonormal, one value per equation of [`WarpingDofs`] (0 at prescribed and restrained equations).
+    pub modes: Vec<Vec<f64>>,
+    /// Residuals of the pairs.
+    pub residuals: Vec<f64>,
+    /// Iterations of the subspace iteration.
+    pub iterations: usize,
+    /// The shift used.
+    pub shift: f64,
+    /// The Sturm check.
+    pub sturm: SturmCheck,
+    /// Number of free unknowns.
+    pub unknowns: usize,
+    /// Whether the constraints leave a rigid motion free.
+    pub rigid_free: bool,
+    /// The numbering of the modes.
+    pub dofs: WarpingDofs,
+}
+
+/// The modes of `model` with the warping unknowns of `warping` (ADR 0548 D5): `K_aug x = omega^2 M_aug x` (the mass of D4), the
+/// steps of [`crate::geometric::prestressed_modes`] on the elimination path. Refuses RF1 to RF4, RF6, a nonzero prescribed
+/// value (key `"constraint"`), `coordinate_order` (key `"factorisation"`), an unknown without mass (key `"density"`).
+pub fn modal_analysis(
+    model: &SolidModel,
+    warping: &Warping,
+    options: &crate::modal::ModalOptions,
+) -> Result<WarpingModalResult> {
+    modes_impl(model, None, warping, options)
+}
+
+/// The pre-stressed modes (ADR 0548 D5): `(K_aug + K_sigma,aug) x = omega^2 M_aug x` with the pre-stress of D2 (RF8 and RF10 as
+/// [`buckling_factors_with`]); the other steps and refusals of [`modal_analysis`].
+pub fn prestressed_modes(
+    model: &SolidModel,
+    prestress: &WarpingPrestress,
+    warping: &Warping,
+    options: &crate::modal::ModalOptions,
+) -> Result<WarpingModalResult> {
+    modes_impl(model, Some(prestress), warping, options)
+}
+
+fn modes_impl(
+    model: &SolidModel,
+    prestress: Option<&WarpingPrestress>,
+    warping: &Warping,
+    options: &crate::modal::ModalOptions,
+) -> Result<WarpingModalResult> {
+    use rcfd_linalg::eigen::{lowest_eigenpairs, Shift, SubspaceOptions};
+    if options.coordinate_order {
+        return Err(FemError::InvalidValue {
+            key: "factorisation",
+            reason: "the coordinate order is not offered on the warping path (ADR 0548)".to_string(),
+        });
+    }
+    entry_checks(model)?;
+    let lay = layout(model, warping)?;
+    let base_dofs = model.dof_map();
+    let mut fixed = prescribed_equations(model, &[])?;
+    if let Some(&(eq, v)) = fixed.iter().find(|&&(_, v)| v != 0.0) {
+        let (node, component) = base_dofs.node_component(eq).expect("existing equation");
+        return Err(FemError::InvalidValue {
+            key: "constraint",
+            reason: format!(
+                "prescribed value {v:e} at node {node} component {component}: a modal analysis takes zero values only"
+            ),
+        });
+    }
+    let rigid_free = match check_rigid_body_motions(model, &fixed) {
+        Ok(()) => false,
+        Err(FemError::RigidBodyMotionFree { .. }) => true,
+        Err(e) => return Err(e),
+    };
+    let k = match prestress {
+        None => stiffness_aug(model, &lay, options.threads)?,
+        Some(p) => {
+            let check_torque = p.check_for(model, warping)?;
+            let mats = matrices_impl(model, &p.prestress, warping, options.threads, check_torque)?;
+            crate::geometric::add_on_pattern(&mats.stiffness, &mats.geometric)
+        }
+    };
+    let m = mass_aug(model, &lay, options.threads)?;
+    let n = lay.dofs.n_equations();
+    fixed.extend(lay.restrained.iter().map(|&eq| (eq, 0.0)));
+    let zero = vec![0.0; n];
+    let kr = reduce(&k, &zero, &fixed)?;
+    let mr = reduce(&m, &zero, &fixed)?;
+    let free = kr.free().to_vec();
+    let nf = free.len();
+    if options.modes == 0 || options.modes >= nf {
+        return Err(FemError::InvalidValue {
+            key: "modes",
+            reason: format!(
+                "{} modes requested of a model with {nf} free unknowns (at least 1 and fewer than the unknowns)",
+                options.modes
+            ),
+        });
+    }
+    for (i, d) in mr.matrix.diag().iter().enumerate() {
+        if d.is_nan() || *d <= 0.0 {
+            let (node, component) = node_component(&base_dofs, &lay.dofs, free[i]);
+            return Err(FemError::InvalidValue {
+                key: "density",
+                reason: format!("node {node} component {component} has no mass (diagonal {d:e})"),
+            });
+        }
+    }
+    let shift = options
+        .shift
+        .unwrap_or(if rigid_free { Shift::Auto } else { Shift::Value(0.0) });
+    let opts = SubspaceOptions {
+        shift,
+        tolerance: options.tolerance,
+        residual_test: options.residual_test,
+        max_iterations: options.max_iterations,
+        subspace_size: options.subspace_size,
+        factorisation: options.factorisation,
+        ..SubspaceOptions::default()
+    };
+    let eig = lowest_eigenpairs(&kr.matrix, &mr.matrix, options.modes, &opts).map_err(|e| FemError::Solver {
+        solver: "lowest_eigenpairs",
+        reason: e.to_string(),
+    })?;
+    let modes = eig
+        .vectors
+        .iter()
+        .map(|v| {
+            let mut full = vec![0.0; n];
+            for (&eq, &x) in free.iter().zip(v) {
+                full[eq] = x;
+            }
+            full
+        })
+        .collect();
+    Ok(WarpingModalResult {
+        frequencies: eig.values.iter().map(|&l| crate::modal::frequency(l)).collect(),
+        eigenvalues: eig.values,
+        modes,
+        residuals: eig.residuals,
+        iterations: eig.iterations,
+        shift: eig.shift,
+        sturm: eig.sturm,
+        unknowns: nf,
+        rigid_free,
+        dofs: lay.dofs,
     })
 }
