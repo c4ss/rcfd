@@ -19,6 +19,7 @@
 pub mod arclength;
 pub mod assemble;
 pub mod beam;
+pub mod beam_warping;
 pub mod buckling;
 pub mod builders;
 pub mod cms;

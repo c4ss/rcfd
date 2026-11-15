@@ -2177,3 +2177,20 @@ it is used.
 | Hertz point contact (a rigid sphere of radius `R`, force `F`): radius `a = (3 F R / (4 E*))^(1/3)`, peak `p_0 = 3 F / (2 pi a^2)`, approach `delta = a^2 / R`; measured (H-fast mesh): radius `5.9e-3`, peak `3.9e-3`, approach `1.1e-2` | derived, cited | ADR 0540 HS; Johnson chapter 4: NOT read, from memory; the same forms as ADR 0507 a3 |
 | The rigid sphere's gap `|x - c| - R`, normal `(x - c)/|x - c|`, second derivative `(I - n n^T)/|x - c|`; the cylinder's the same with the axis component removed (`(I - e e^T - n n^T)/d`) | derived | ADR 0540 D2; checked by T1s, T1c against central differences (`2.4e-10`, `1.7e-10`) |
 | The share of a uniform pressure at a corner node of a flat Hex20 face (2 x 2 serendipity, 3 x 3 Gauss): `-1/12` of the face's total (negative: a node contactor cannot carry it, hence the Gauss-point contactor) | derived | ADR 0540 NG |
+
+## F-598 the warping degree of freedom of Beam2 and the I-section lateral-torsional buckling (ADR 0546)
+
+No source was read for F-598. The books below are cited from memory for the names and the published forms (editions, chapters
+and years as recalled, not checked). Every formula used is derived in ADR 0546 (D1, D2, arithmetic 1 to 4) and checked by plain
+numpy scripts (`f598-scratch/arith.py`, `arith2.py` and their logs), no rcfd code.
+
+| Item | Status | Source |
+|---|---|---|
+| Non-uniform torsion: warping displacement `-omega phi'`, energy `(1/2) int (G J phi'^2 + E C_w phi''^2) dx`, `C_w = int omega^2 dA` | derived, cited | ADR 0546 D1; V. Z. Vlasov, Thin-Walled Elastic Beams (1940; English translation 1961); S. P. Timoshenko and J. M. Gere, Theory of Elastic Stability, 2nd ed., McGraw-Hill 1961, ch. 5: NOT read, from memory |
+| Warping constant of a thin-walled doubly symmetric I `C_w = t_f b_f^3 h_c^2/24 = I_f h_c^2/2` (`h_c` between the flange mid-planes; `I_z h^2/4` with the web neglected) | derived, cited | ADR 0546 D1 (the flange sectorial coordinate `y h_c/2`); Timoshenko and Gere, op. cit., ch. 5; N. S. Trahair, Flexural-Torsional Buckling of Structures, E & FN Spon 1993, ch. 2: NOT read, from memory |
+| Wagner coefficients `beta_y = int z (y^2 + z^2) dA/I_y`, `beta_z = int y (y^2 + z^2) dA/I_z`, zero for a section with two axes of symmetry | derived, cited | ADR 0508 D1, ADR 0546 D1; Trahair, op. cit., ch. 6 (the monosymmetry parameter `beta_x`, about the shear centre): NOT read, from memory; the shear-centre form is not used (Limits of ADR 0546) |
+| Lateral-torsional buckling under uniform moment, fork supports, warping free: `M_cr = (pi/L) sqrt(E I_z G J (1 + pi^2 E C_w/(G J L^2)))` | derived, cited | ADR 0546 arithmetic 1 (`v = a sin kx`, `phi = b sin kx`); Timoshenko and Gere, op. cit., ch. 6: NOT read, from memory |
+| Lateral and warping both fixed: `M = (2 pi/L) sqrt(E I_z (G J + 4 pi^2 E C_w/L^2))` (the upper bound of N3) | derived | ADR 0546 arithmetic 1 (mode `1 - cos(2 pi x/L)`) |
+| Cantilever under end torque with the root warping held: `phi(L) = (T/(G J))(L - tanh(kL)/k)`, `k = sqrt(G J/(E C_w))` | derived | solution of `G J phi' - E C_w phi''' = T`, `phi(0) = phi'(0) = 0`, `phi''(L) = 0` (ADR 0546 arithmetic 4) |
+| Cubic Hermite twist element: `G J/(30 L)[36, 3L, -36, 3L; ...]`, `E C_w/L^3 [12, 6L, -12, 6L; ...]` | derived | ADR 0546 D2, arithmetic 3 |
+| Measured: I beam, `L = 3`, 16 elements `5.9e-4` of the closed form (8: `8.3e-4`; `L = 1.5`: `1.1e-3`; `L = 6`: `2.0e-4`); `C_w = 0` `5.9e-4` of `M_0`; torque cantilever `1.1e-6` | computed | ADR 0546 addendum 1 |
