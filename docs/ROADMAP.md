@@ -10720,7 +10720,8 @@ fixed by the item's registration ADR before any code.
     pressure change, the criterion's scale, is nearly zero (4.4e-4 of its largest value), so the criterion is met only
     at iteration 49. Defaults bit-identical (opt-in only; baseline_hashes and the rcfd-fv suite pass); seven mutations
     caught; no case key (schema golden); docs/dynamic-mesh.md. Open: ADR 0458 Q1 to Q4. Follow-up F-550 (a scale that
-    does not vanish).
+    does not vanish). Follow-up F-550 (a scale that does not vanish; ADR 0617: with a window of 18 steps every step of
+    the channel meets the criterion before the cap, with 19 to 26 percent fewer outer iterations).
 - [~] **F-537** Orthotropic and tabulated materials on the modal, prestressed-modal and transformation paths
   - depends on: F-409
   - acceptance: Every limit not stated here is registered in the ADR before the run. Modal analysis, prestressed modes
@@ -10974,7 +10975,7 @@ fixed by the item's registration ADR before any code.
     0.99676; default bilinear 0.884); pure bending of rectangles exact to 2.6e-14; six zero modes per element and per
     free plate; consistent thermal load and centre stresses; within 4.6e-11 of a numpy prototype. Default Shell4, Shell3
     and the ANDES Shell3 bit-identical (17 digests), baseline_hashes unchanged; twelve mutations caught.
-- [ ] **F-550** A non-vanishing scale for the outer-iteration criterion
+- [~] **F-550** A non-vanishing scale for the outer-iteration criterion
   - depends on: F-536
   - acceptance: Every limit not stated here is registered in the ADR before the run. The opt-in outer-iteration
     criterion of ADR 0458 gets a scale that does not vanish at the extremes of the pressure history (for example the
@@ -10984,8 +10985,22 @@ fixed by the item's registration ADR before any code.
     cap, every level matches the discrete implicit-Euler impedance within 1 percent and the extrapolation the
     oscillating-channel impedance within 3 percent, with the outer iterations per step recorded and no more in total
     than with the scale of ADR 0458; the default results of every existing case stay bit-identical.
-  - note: Numerics. Follow-up of F-536 (ADR 0458, 2026-11-14): the K1 miss at the pressure extremes. A case key for the
-    criterion needs the maintainer's schema approval.
+  - note: Numerics. PARTIAL (ADR 0617, 2026-11-15; registered before the code, amendment 1 for one mutation). The opt-in
+    outer-iteration criterion of ADR 0458 gets the option PimpleSettings::outer_scale_window = Some(w): the ratio is
+    formed against the largest first-iteration pressure change of the step and the w - 1 steps before it. This is
+    derived so that on a periodic history of N steps per period the scale stays above sin(pi (w - 1)/N) of the period's
+    largest (w = 18 for a floor of 1/2 at N = 100). None keeps ADR 0458's scale bit for bit, and Some(1) equals it. The
+    pressure-lag estimate and the adaptive corrector count of a step with the criterion now run the outer iterations the
+    step used (LagCtx::outer; bitwise equal to a solver with that fixed count). On the fixed-mesh channel of ADR 0451
+    with the consistent correctors, tol 1e-3, cap 50 and w 18, every step at nu dt/dy^2 = 100, 50 and 25 meets the
+    criterion before the cap (at most 12, 9 and 7 outer iterations). Every level is bounded and periodic and within
+    5.7e-3 (real) and 2.8e-3 (imaginary) of the discrete implicit-Euler impedance, and the extrapolation within 6.1e-3
+    and 3.8e-3 of the oscillating-channel impedance. Totals are 2735, 2044 and 1983 outer iterations against ADR 0458's
+    3590, 2769 and 2436. OuterRecord gains first and scale. Defaults bit-identical (baseline_hashes and the touched
+    rcfd-fv tests pass). Partial only by the registered rule: one mutation (the window with None) was equivalent as
+    applied, and its corrected form, caught by the W1 check, was registered after the run; every acceptance clause is
+    met. No case key (schema golden); docs/dynamic-mesh.md. Open: ADR 0617 Q1 to Q4. Follow-up F-692 (Case-file keys for
+    the outer-iteration criterion and its window).
 - [~] **F-551** Radiation reactance and surface pressure of a baffled plane: analytic self-face integrals of the Rayleigh kernel
   - depends on: F-418
   - acceptance: Every limit not stated here is registered in the ADR before the run. The surface pressure of a baffled
@@ -13685,13 +13700,29 @@ fixed by the item's registration ADR before any code.
     Load::ShellTemperatureGradient; a shell model read from a case file gives the bits of the library call; existing
     keys, goldens and baseline hashes unchanged.
   - note: Follow-up of F-527 (ADR 0612, 2026-11-15).
-- [ ] **F-689** Interaction integral on closed curved fronts and mirror-plane stations
+- [~] **F-689** Interaction integral on closed curved fronts and mirror-plane stations
   - depends on: F-682
   - acceptance: Every limit not stated here is registered in the ADR before the run. A closed (periodic) front without
     end stations and a mirror-plane option that zeroes the antisymmetric modes at stations on a mirror plane; a whole
     penny-shaped crack under tension inclined in a general direction with K_I, K_II and K_III at every station within 3
     percent of the closed forms, and the results of ADR 0610 unchanged.
-  - note: Follow-up of F-682 (ADR 0610, 2026-11-15).
+  - note: Structural solver, advanced tier. Follow-up of F-682 (ADR 0610). ADR 0618, 2026-11-12: rcfd_fem::fracture
+    gains closed (periodic) circular and elliptical crack fronts without end stations (CrackFront::closed: the node
+    parameters unwrapped with the period, every station a full periodic hat, the weights of the closing edge included;
+    j_integral and interaction_integral_curved take them), the mirror-plane option CrackFront::mirror_plane (K_III = 0
+    at stations on a mirror plane normal to the front, derived from the odd tearing displacement under the reflection;
+    refused for a plane without a station, a plane not normal to the front, a closed front, and in
+    interaction_integral), and penny_crack_whole_cylinder (the half cylinder of ADR 0610 reflected in x = 0). Defaults
+    bit-identical: the results of ADR 0610's set-ups byte-identical to b61032f4 in a full {:?} dump, its tests and ADR
+    0605's unchanged. Met: a whole penny (66 174 unknowns, 16 stations) under tension inclined 45 deg towards psi = 35
+    deg, ring 2, K_I within 7.0e-4, K_II within 7.3e-4 A_II and K_III within 4.9e-3 A_III of the hat-averaged closed
+    forms 2 sigma_nn sqrt(a/pi), A_II cos(theta - psi), A_III sin(theta - psi) at every station (limit 3 percent; ADR
+    0610's forms with the shear direction rotated, verified); the half model with the mirror option equal to the whole
+    model within 2.2e-13 A (the end-face term it removes was -0.96 A_III); whole elliptical crack b/a = 0.5 mode I
+    within 1.1e-2 of Irwin; 8 of 8 mutations caught. Not run: the medium whole-penny record (about 240 000 unknowns;
+    free RAM below the registered 16 GB). Not covered: spline fronts, mixed-mode elliptical cracks, the end-face
+    exemption of the ring boundary test on closed fronts. No case-file key. Lead to run when 16 GB are free: cargo test
+    -p rcfd-fem --release --test sa_fracture_closed -- --ignored wm1_to_wm7 --nocapture, then addendum 2.
 - [ ] **F-690** Early acceptance at the rounding bound of the Newton residual (a stagnation test)
   - depends on: F-571
   - acceptance: Every limit not stated here is registered in the ADR before the run. A step at the rounding floor of ADR
@@ -13706,3 +13737,10 @@ fixed by the item's registration ADR before any code.
     the driver reference at the default tolerance and converges without halving with ResidualReference::InertiaTerms;
     the default bits unchanged.
   - note: Follow-up of F-681 (ADR 0609, 2026-11-15).
+- [ ] **F-692** Case-file keys for the outer-iteration criterion and its window
+  - depends on: F-536, F-550
+  - acceptance: Every limit not stated here is registered in the ADR before the run. Case keys solver.outer_tolerance
+    and solver.outer_scale_window (hash_omit_default) reach PimpleSettings::outer_pressure_tolerance and
+    outer_scale_window; a case read from a file reproduces the bits of the library call on the channel of ADR 0451;
+    existing keys, goldens and baseline hashes unchanged except the schema golden approved by the maintainer.
+  - note: Follow-up of F-550 (ADR 0617, 2026-11-15). NEEDS USER: schema golden change.
