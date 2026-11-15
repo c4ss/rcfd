@@ -287,3 +287,84 @@ arc-length comparison); Beam2 and shell models about a hyperelastic state not ch
 `BucklingResult` has a private field (`dofs`), so D1 in `follower.rs` cannot build it. `crates/rcfd-fem/src/buckling.rs` gets one
 additive `pub(crate)` constructor, `BucklingResult::from_parts`, with the fields `factors_with` fills; no existing line of
 `buckling.rs` changes and `factors_with` does not call it. Nothing else of the registration changes.
+
+## Addendum 1: results (2026-11-15)
+
+Commits: 07d87ab6 (registration), 3ca044f0 (amendment 1), 0a6c52ff (library and tests, as in run 1), 82c41f4c (the text of three
+refusal messages of `about_state` put on one logical line each: a backslash continuation had been written with the indentation
+inside the string; text only, no check reads it, the keys are unchanged), and this addendum. Runs, each once, release,
+`--nocapture --test-threads=1`, logs in `w49i-work/f669-scratch`: run 1, the whole new file on 0a6c52ff (`run1.log`); B1
+(`b1_fem.log`, `b1_hashes.log`, on 82c41f4c); the mutations (`mutations.log`, `mutate.py`, on a `git archive` of 82c41f4c with
+its own target, the new test file for each). Shared solver files changed: `follower.rs` (additive function and module doc),
+`buckling.rs` (additive constructor), `harmonic_direct.rs` (additive constructor, field, `stress` refusal, module doc; the code of
+`new` after its assembly wrapped in place as the private `finish`, its lines otherwise unchanged).
+
+| Id | Measured | Limit | Met |
+|---|---|---|---|
+| S0 | Bar C NH 10 steps (stretch `0.99700`), MR 10 steps; Bar S NH `1.05061`, MR `1.05132`; Bar B NHi converged in 40 steps (halvings), stretch `1.05186` | `Ok` | yes |
+| BT0 | all `Ok`, 4 positive factors, 18 iterations, worst residual `4.2e-11`, not exhausted; NH state `4.5360, 4.5360, 35.322, 35.322`, linear `5.4485, 5.4485, 35.809, 35.809` | `Ok` | yes |
+| BFD | NH `3.1e-13`, MR `8.2e-14` | `<= 1e-6` | yes |
+| B0 | `0` (NH, MR: equal in every bit) | `<= 1e-10` | yes |
+| P1 | NH `1.61e-2`, MR `1.72e-2` | `<= 5e-2` | yes |
+| NB1 | NH `0.167`, MR `0.166` | `>= 1e-2` | yes |
+| NB2 | NH `0.202`, MR `0.200` | `>= 1e-2` | yes |
+| HT0 | all six solvers and responses `Ok` (NH, MR); `omega_1` state `13.361` (NH), rest `7.921` rad/s | `Ok` | yes |
+| HFD | NH `7.4e-11` (`omega_a`), `2.7e-11` (`omega_b`); MR `7.4e-11`, `1.9e-11` | `<= 1e-6` | yes |
+| H0 | `0` at both frequencies (NH, MR: equal in every bit) | `<= 1e-10` | yes |
+| NH1 | `0.153` | `>= 1e-3` | yes |
+| NH2 | `0.949` | `>= 1e-2` | yes |
+| HR | loss factor, pre-stress, temperature refused with their keys; `stress` refused (key `"stress"`) | refused | yes |
+| TB0 | `Ok`, six frequencies `2.0416 .. 7.0525` Hz at the state (`1.1192 .. 7.0531` at rest), worst residual `7.5e-10` (state), `6.3e-9` (rest) | `<= 1e-8` | yes |
+| KMb | `2.55e-12` | `<= 1e-8` | yes |
+| FB1 | `5.3e-11` | `<= 1e-6` | yes |
+| CB0 | `5.8e-11` | `<= 1e-6` | yes |
+| NBb | `3.34` | `>= 1e-2` | yes |
+| FB2 (record) | `1.29e-4` (two-point, `a = 5e-6`) | record | - |
+| RB (record) | `1.03e-10` | record | - |
+| B1 | `baseline_hashes` 3 passed (1 ignored); the nine `rcfd-fem` test files of B1 all passed | pass | yes |
+| S1 | `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean | clean | yes |
+
+**Mutations** (`mutations.log`; one at a time):
+
+| Id | Caught by | Expected |
+|---|---|---|
+| MU1 (rest tangent in `tangent_buckling_factors`) | BFD `0.167`, P1 `0.184` (NH, MR); NB1 `0` (as recorded) | BFD, P1; B0 met, as expected |
+| MU2 (`K_sigma` doubled) | B0 `0.5`, BFD `1.0`, P1 `0.40` | B0, BFD |
+| MU3 (`stiffness_with` in `about_state`) | HFD `0.949`, `0.617` (NH), `0.950`, `0.608` (MR) | HFD; H0 met, as expected |
+| MU4 (Rayleigh stiffness at rest) | HFD at `omega_b` `2.5e-2` (NH), `2.4e-2` (MR); `omega_a` met (undamped) | HFD at `omega_b`; H0 met |
+| MU5 (`v_ii` zero) | KMb `3.9e-5`, FB1 `2.5e-2`, BFD `3.3e-3`, HFD `0.15 .. 0.17` | all four; B0, H0 met |
+| MU6 (F-bar mean part zero) | **S0 of Bar B** (Newton fails at load step 3 after 5 halvings); the Full tests met | FB1, KMb (not reached) |
+
+**Deviations and diagnoses.** No limit was missed and no post-run amendment was written. (1) B0 and H0 are exactly `0`: at `u = 0`
+the driver's tangent equals the linear stiffness in every bit on Bar C and Bar S (as ADR 0586 R1), so the factors and the responses
+are bit-equal. (2) BFD, HFD, FB1 and CB0 lie 2 to 3 orders below their estimates: the rounding bounds of arithmetic 2 and 3 are
+worst-case. (3) FB2 (record, `1.3e-4`) confirms the reason of D3: ADR 0586's two-point measure at `K/G = 1e4` is dominated by the
+bulk truncation (arithmetic 2 estimated `2.5e-7 .. 2.5e-6`; the measured value is 50 times the upper estimate, the mean `<j2^2>`
+being larger than estimated); with it the acceptance's `1e-6` would have been missed, with D4 it is met by five orders. (4) Bar B
+needed step halvings (40 steps) but converged. (5) MU6 was caught only by the set-up check S0 (Newton fails without the mean part
+of the F-bar tangent, as ADR 0586's MU4 without the geometric part), not by one of its registered expected checks FB1 or KMb,
+which the failed solve does not reach. Not run: the whole workspace suite (the lead's gate).
+
+**Decision: partial** by the registered rule, on one item only: every check met in the one registered run, MU1 to MU5 caught by
+expected checks, B1 and S1 met; MU6 was caught, but by S0 and not by one of its expected checks, and the rule asks for an expected
+check.
+
+**Remaining questions** (none changes a default):
+
+1. MU6 and the rule. Options: (a) accept the item as done, reading S0 (a registered set-up check of the same test) as catching it,
+   as ADR 0586 listed "or S0" for its analogous MU4; (b) keep partial and add a follow-up mutation of the F-bar tangent that
+   vanishes at rest but keeps Newton converging (for instance the term `(2/9) s_c g_i g_j` alone). Recommend (a): the mutation
+   was caught by a registered check of the same test, and the omission of "or S0" in the expectations was a drafting slip.
+2. Contributions (follower loads) about the state on the new buckling and harmonic paths. Options: (a) a follow-up passing
+   `&[&dyn Contribution]` as `tangent_modes` does, checked against central differences including the follower force; (b)
+   nothing. Recommend (a), proposed below.
+3. Loss factors about a state (a per-material split of the tangent). Options: (a) a follow-up assembling the tangent per material
+   set; (b) leave them refused. Recommend (b) until a use asks for it.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> Structural solver, advanced tier. Follow-up of F-646 (ADR 0586). PARTIAL. ADR 0590, 2026-11-15: follower::tangent_buckling_factors, (K_T + mu K_sigma) x = 0 with the driver's tangent at a state and the geometric stiffness of a given reference pre-stress, and DirectHarmonic::about_state, K_T - omega^2 M + i omega (alpha M + beta K_T + C_d) (no loss factor, pre-stress, temperature or viscoelastic material; stress refused), both opt-in, the code of DirectHarmonic::new after its assembly shared unchanged (baseline hashes and the harmonic and follower tests pass). Compressed hyperelastic bar (Full Hex8 8 x 2 x 2, 2.25e3 N, neo-Hookean and Mooney-Rivlin): the factors about the state against the fourth-order central difference of the nonlinear static residual along each mode 3.1e-13 (limit 1e-6); at zero load equal to buckling::factors in every bit (limit 1e-10); 1 + mu_state against the linear factor 1.6e-2 (limit 5e-2). Stretched bar (3.6e4 N): the harmonic response about the state satisfies the central-difference residual equation within 7.4e-11 (limit 1e-6, undamped and with Rayleigh damping); at zero load equal to DirectHarmonic::new in every bit. BBar bar at K/G = 1e4, stretched: tangent_modes frequencies against the fourth-order central difference 5.3e-11 (limit 1e-6; ADR 0586's two-point difference gives 1.3e-4, a record), the tangent against column differences 2.6e-12. Negative controls 0.15 to 3.3. Six of six mutations caught, five by their expected checks; the dropped mean part of the F-bar tangent was caught only by the failed Newton solve of the set-up, hence partial by the registered rule (recommended to be read as done). Not covered: follower contributions and loss factors about a state, Hex20, Tet, shells and beams.
+
+> Follow-up proposed: contributions about a nonlinear state on the buckling and direct harmonic paths. Deps F-669. Acceptance: Every limit not stated here is registered in the ADR before the run. tangent_buckling_factors and DirectHarmonic::about_state take the tangents of the driver's contributions (a follower pressure) at the state; their factors and responses agree with central differences of the nonlinear residual including the follower force within 1e-6, and with no contribution given they equal the paths of ADR 0590 in every bit.
