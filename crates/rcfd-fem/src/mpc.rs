@@ -787,9 +787,31 @@ fn cyclic_rows(
         }
     }
     // ADR 0456 D4: the interpolated high nodes, `a_H - R (c sum w a_L - s sum w b_L) = 0` and the sine pair.
+    // ADR 0575 D1.4: with the shells option a six-unknown high node and its six-unknown low nodes also take the rows of the
+    // rotations; different unknown counts are refused.
     for (high, weights) in bd.interpolated() {
         let high = *high;
-        for comp in 0..3 {
+        let bases: &[usize] = if shells {
+            let nh = dofs.components(high);
+            if let Some(&(low, _)) = weights.iter().find(|&&(low, _)| dofs.components(low) != nh) {
+                let nl = dofs.components(low);
+                return Err(FemError::InvalidValue {
+                    key: "cyclic",
+                    reason: format!(
+                        "constraint {constraint}: interpolated high node {high} has {nh} unknowns and its low node {low}                          has {nl} (ADR 0575: an interpolated node has the unknowns of its low nodes)"
+                    ),
+                });
+            }
+            if nh == 6 {
+                &[0, 3]
+            } else {
+                &[0]
+            }
+        } else {
+            &[0]
+        };
+        for comp in bases.iter().flat_map(|&b| b..b + 3) {
+            let base = comp - comp % 3;
             let origin = RowOrigin::Cyclic {
                 constraint,
                 node: high,
@@ -799,11 +821,11 @@ fn cyclic_rows(
             let mut terms = vec![(h, 1.0)];
             let mut sine_terms = sine.map(|off| vec![(off + h, 1.0)]);
             for &(low, w) in weights {
-                for (j, &rj) in r[comp].iter().enumerate() {
+                for (j, &rj) in r[comp - base].iter().enumerate() {
                     if rj == 0.0 {
                         continue;
                     }
-                    let l = eq(low, j)?;
+                    let l = eq(low, base + j)?;
                     if c != 0.0 {
                         terms.push((l, -c * w * rj));
                     }
@@ -893,32 +915,40 @@ fn cyclic_rows(
             }
             free.push(piv);
         }
-        let unknown = |q: usize| -> Result<usize> {
-            let e = eq(p, q % 3)?;
-            Ok(if q < 3 { e } else { sine.expect("sine part") + e })
+        // ADR 0575 D1.5: with the shells option the rotations of a six-unknown axis node take the same rows (the same C).
+        let bases: &[usize] = if shells && dofs.components(p) == 6 {
+            &[0, 3]
+        } else {
+            &[0]
         };
-        for d in 0..m {
-            if free.contains(&d) {
-                continue;
-            }
-            let ud = unknown(d)?;
-            let mut terms = vec![(ud, 1.0)];
-            for (i, &f) in free.iter().enumerate() {
-                let v = basis[i][d];
-                if v.abs() > 1e-12 {
-                    terms.push((unknown(f)?, -v));
+        for &base in bases {
+            let unknown = |q: usize| -> Result<usize> {
+                let e = eq(p, base + q % 3)?;
+                Ok(if q < 3 { e } else { sine.expect("sine part") + e })
+            };
+            for d in 0..m {
+                if free.contains(&d) {
+                    continue;
                 }
+                let ud = unknown(d)?;
+                let mut terms = vec![(ud, 1.0)];
+                for (i, &f) in free.iter().enumerate() {
+                    let v = basis[i][d];
+                    if v.abs() > 1e-12 {
+                        terms.push((unknown(f)?, -v));
+                    }
+                }
+                rows.push(Row {
+                    origin: RowOrigin::Cyclic {
+                        constraint,
+                        node: p,
+                        component: base + d % 3,
+                    },
+                    terms,
+                    value: 0.0,
+                    designated: ud,
+                });
             }
-            rows.push(Row {
-                origin: RowOrigin::Cyclic {
-                    constraint,
-                    node: p,
-                    component: d % 3,
-                },
-                terms,
-                value: 0.0,
-                designated: ud,
-            });
         }
     }
     Ok(rows)

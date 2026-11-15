@@ -553,8 +553,12 @@ pub struct CyclicOptions {
     pub axis_nodes: bool,
     /// Shells in the cyclic constraint (ADR 0556 D1): `low` and `high` name node sets (a shell has no faces), Shell4 and
     /// Shell3 blocks are taken by the cyclic paths, and the rotation unknowns of a pair of six-unknown nodes are rotated as
-    /// the translations. Not with `interpolation` or `axis_nodes`.
+    /// the translations. Not with `interpolation` or `axis_nodes` unless `shell_extensions` is also set.
     pub shells: bool,
+    /// With `shells`, `interpolation` and `axis_nodes` are taken (ADR 0575): the interpolated high nodes follow the low shell
+    /// edges rotated by `2 pi / N` (node to edge), and the rotation unknowns of interpolated and axis nodes get the rows of
+    /// ADR 0456 D4. Refused without `shells`.
+    pub shell_extensions: bool,
 }
 
 impl CyclicOptions {
@@ -575,6 +579,11 @@ impl CyclicOptions {
     /// With shells (ADR 0556): node-set boundaries and the rotation unknowns rotated.
     pub fn shells(mut self, on: bool) -> CyclicOptions {
         self.shells = on;
+        self
+    }
+    /// With shells, also interpolated boundaries and nodes on the axis (ADR 0575).
+    pub fn shell_extensions(mut self, on: bool) -> CyclicOptions {
+        self.shell_extensions = on;
         self
     }
 }
