@@ -612,7 +612,7 @@ fn hex8_evaluate(
         SolidFormulation::Full => evaluate(&Hex8, coords, material, displacement, state, want_tangent, context),
         SolidFormulation::BBar => evaluate_fbar(coords, material, displacement, state, want_tangent, context),
         SolidFormulation::Incompatible => {
-            crate::nl_incompatible::evaluate(coords, material, displacement, state, want_tangent, context)
+            crate::nl_incompatible::evaluate(coords, material, displacement, state, want_tangent, context, false)
         }
     }
 }
@@ -1030,7 +1030,16 @@ pub(crate) fn internal_force_field(
         } else if is_fbar(model, e) {
             evaluate_fbar(&coords, material, &ue, &states[e], false, context).map(|ev| ev.force)
         } else if is_incompatible(model, e) {
-            crate::nl_incompatible::evaluate(&coords, material, &ue, &states[e], false, context).map(|ev| ev.force)
+            crate::nl_incompatible::evaluate(
+                &coords,
+                material,
+                &ue,
+                &states[e],
+                false,
+                context,
+                model.incompatible_stabilisation(),
+            )
+            .map(|ev| ev.force)
         } else {
             evaluate_with(
                 crate::element::element_for(kind),
@@ -1118,7 +1127,15 @@ fn force_and_tangent(
         } else if is_fbar(model, ctx.element) {
             evaluate_fbar(ctx.coords, ctx.material, &ue, &states[ctx.element], true, context)?
         } else if is_incompatible(model, ctx.element) {
-            crate::nl_incompatible::evaluate(ctx.coords, ctx.material, &ue, &states[ctx.element], true, context)?
+            crate::nl_incompatible::evaluate(
+                ctx.coords,
+                ctx.material,
+                &ue,
+                &states[ctx.element],
+                true,
+                context,
+                model.incompatible_stabilisation(),
+            )?
         } else {
             let el = crate::element::element_for(ctx.kind);
             let mut buffer = Vec::new();

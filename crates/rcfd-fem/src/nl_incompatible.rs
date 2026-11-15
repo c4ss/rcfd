@@ -16,12 +16,20 @@
 //! * At `u = 0` the tangent is the condensed stiffness of [`crate::hex8x::element_stiffness`] (arithmetic 3); a homogeneous
 //!   deformation gives `alpha = 0` and the Full element's force (arithmetic 4, the patch test).
 //!
+//! * Stabilisation (ADR 0614, F-685, opt-in per model by [`crate::model::SolidModel::set_incompatible_stabilisation`]): the
+//!   element energy gains `Pi_s = (c(u)/2) sum_q w_q |F_enh,q|^2` with `F_enh = sum_k alpha_k (x) G_k` and the coefficient
+//!   `c = (s : s) / G0`, `s = D0 : e0`, `e0 = (C0 - C0^{-1})/4` of the compatible gradient `F0` at the element centre, `D0`
+//!   the rest elasticity of the material and `G0` its mean shear modulus ([`stabilisation_coefficient`]): zero with its first
+//!   derivative at rest and on every rigid motion, and with `alpha = 0` on every homogeneous state, so the element at rest and
+//!   its patch test are those of ADR 0608; it removes the spurious hourglass mode of the element under large homogeneous
+//!   compression (ADR 0614 arithmetic 1 to 4). Force and tangent are the exact derivatives of `Pi_s` (ADR 0614 arithmetic 5).
+//!
 //! The nonlinear driver ([`crate::nonlinear`]) evaluates a Hex8 of a block of the `Incompatible` formulation by this module.
 
-use crate::element::{ElementMatrix, ElementState};
+use crate::element::{Element, ElementMatrix, ElementState, Hex8};
 use crate::error::{FemError, Result};
 use crate::hex8x::{mode_points, ModePoint};
-use crate::material::PointContext;
+use crate::material::{Matrix6, PointContext};
 use crate::model::Material;
 use crate::nonlinear::{
     b_nonlinear, check_hex8_fields, displacement_gradient, green_lagrange, point_update, Evaluation, INVERSION_KEY,
@@ -70,13 +78,216 @@ fn check_state(material: &Material, state: &ElementState, points: usize) -> Resu
     Ok(ns)
 }
 
-/// The extended element of arithmetic 1 at the unknowns `v = (u, alpha)`.
+/// The stabilisation of ADR 0614 D1 at a nodal displacement: the coefficient `c`, its gradient and Hessian over the 24
+/// nodal unknowns (row-major), and the matrix `M` of `P(alpha) = alpha^T M alpha = sum_q w_q |F_enh,q|^2`.
+struct Penalty {
+    c: f64,
+    dc: Vec<f64>,
+    d2c: Vec<f64>,
+    m: [[f64; MODES]; MODES],
+}
+
+type M3 = [[f64; 3]; 3];
+
+fn mul3(a: &M3, b: &M3) -> M3 {
+    std::array::from_fn(|i| std::array::from_fn(|j| a[i][0] * b[0][j] + a[i][1] * b[1][j] + a[i][2] * b[2][j]))
+}
+
+fn inverse3(a: &M3) -> M3 {
+    let det = det3(a);
+    std::array::from_fn(|r| {
+        std::array::from_fn(|c| {
+            let (r1, r2) = ((c + 1) % 3, (c + 2) % 3);
+            let (c1, c2) = ((r + 1) % 3, (r + 2) % 3);
+            (a[r1][c1] * a[r2][c2] - a[r1][c2] * a[r2][c1]) / det
+        })
+    })
+}
+
+fn transpose3(a: &M3) -> M3 {
+    std::array::from_fn(|i| std::array::from_fn(|j| a[j][i]))
+}
+
+/// `D0 : voigt(e)` of a symmetric tensor `e` (engineering shear in, tensor stress out).
+fn rest_stress(d0: &Matrix6, e: &M3) -> [f64; 6] {
+    let v = [e[0][0], e[1][1], e[2][2], 2.0 * e[0][1], 2.0 * e[1][2], 2.0 * e[2][0]];
+    std::array::from_fn(|i| (0..6).map(|j| d0[i][j] * v[j]).sum())
+}
+
+/// The tensor inner product of two Voigt stresses (tensor shear).
+fn inner(a: &[f64; 6], b: &[f64; 6]) -> f64 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + 2.0 * (a[3] * b[3] + a[4] * b[4] + a[5] * b[5])
+}
+
+/// The rest elasticity and the mean shear modulus of the stabilisation (ADR 0614 D1): of the material, or of its elastic
+/// base for J2, creep and viscoelastic materials (ADR 0614 Limits).
+fn rest_moduli(material: &Material, context: &PointContext) -> Result<(Matrix6, f64)> {
+    let elastic = match material {
+        Material::J2 { .. } | Material::Creep { .. } | Material::Viscoelastic { .. } => {
+            material.base().unwrap_or(material)
+        }
+        _ => material,
+    };
+    let d0 = elastic.linear_elasticity_at(context)?;
+    let g0 = (d0[3][3] + d0[4][4] + d0[5][5]) / 3.0;
+    if g0.is_nan() || g0 <= 0.0 || g0.is_infinite() {
+        return Err(FemError::InvalidValue {
+            key: ITERATION_KEY,
+            reason: format!(
+                "the stabilisation of an Incompatible Hex8 needs a positive rest shear modulus, found {g0:e} (ADR 0614 D1)"
+            ),
+        });
+    }
+    Ok((d0, g0))
+}
+
+/// The compatible gradient at the element centre and the shape gradients there.
+fn centre_gradient(coords: &[Vec3], displacement: &[f64]) -> Result<(M3, Vec<[f64; 3]>)> {
+    let g = Hex8.point(coords, [0.0; 3])?.grad;
+    let mut f = [[0.0; 3]; 3];
+    for (a, ga) in g.iter().enumerate() {
+        for (i, row) in f.iter_mut().enumerate() {
+            for (j, v) in row.iter_mut().enumerate() {
+                *v += displacement[3 * a + i] * ga[j];
+            }
+        }
+    }
+    for (i, row) in f.iter_mut().enumerate() {
+        row[i] += 1.0;
+    }
+    Ok((f, g))
+}
+
+/// `e0 = (C0 - C0^{-1})/4` and `C0^{-1}` of a centre gradient.
+fn mean_strain(f0: &M3) -> (M3, M3, M3) {
+    let c = mul3(&transpose3(f0), f0);
+    let ci = inverse3(&c);
+    let e = std::array::from_fn(|i| std::array::from_fn(|j| 0.25 * (c[i][j] - ci[i][j])));
+    (e, c, ci)
+}
+
+/// The penalty of ADR 0614 D1 and arithmetic 5 for one element at its nodal displacement.
+fn penalty(
+    coords: &[Vec3],
+    points: &[ModePoint],
+    material: &Material,
+    displacement: &[f64],
+    context: &PointContext,
+) -> Result<Penalty> {
+    let (d0, g0) = rest_moduli(material, context)?;
+    let (f0, g) = centre_gradient(coords, displacement)?;
+    let (e, _, ci) = mean_strain(&f0);
+    let s = rest_stress(&d0, &e);
+    let c = inner(&s, &s) / g0;
+    // The nine directions dF = e_i (x) e_J (d = 3 i + J): dC = dF^T F0 + F0^T dF, d(C^-1) = -C^-1 dC C^-1, de = (dC -
+    // d(C^-1))/4, ds = D0 de.
+    let dcm: Vec<M3> = (0..9)
+        .map(|d| {
+            let (i, jj) = (d / 3, d % 3);
+            std::array::from_fn(|m| {
+                std::array::from_fn(|n| (if jj == m { f0[i][n] } else { 0.0 }) + (if jj == n { f0[i][m] } else { 0.0 }))
+            })
+        })
+        .collect();
+    let cdc: Vec<M3> = dcm.iter().map(|dc| mul3(&ci, &mul3(dc, &ci))).collect();
+    let ds: Vec<[f64; 6]> = (0..9)
+        .map(|d| {
+            let de: M3 = std::array::from_fn(|m| std::array::from_fn(|n| 0.25 * (dcm[d][m][n] + cdc[d][m][n])));
+            rest_stress(&d0, &de)
+        })
+        .collect();
+    let dcf: Vec<f64> = ds.iter().map(|dsd| 2.0 * inner(&s, dsd) / g0).collect();
+    let mut d2cf = [[0.0; 9]; 9];
+    for a in 0..9 {
+        for b in a..9 {
+            let (ia, ja) = (a / 3, a % 3);
+            let (ib, jb) = (b / 3, b % 3);
+            // d2C[m][n] = delta_(ia ib) (delta_(ja m) delta_(jb n) + delta_(jb m) delta_(ja n)).
+            let d2c_m: M3 = std::array::from_fn(|m| {
+                std::array::from_fn(|n| {
+                    if ia != ib {
+                        0.0
+                    } else {
+                        (if ja == m && jb == n { 1.0 } else { 0.0 }) + (if jb == m && ja == n { 1.0 } else { 0.0 })
+                    }
+                })
+            });
+            // d2(C^-1) = Ci dC_a Ci dC_b Ci + Ci dC_b Ci dC_a Ci - Ci d2C Ci.
+            let t1 = mul3(&cdc[a], &mul3(&dcm[b], &ci));
+            let t2 = mul3(&cdc[b], &mul3(&dcm[a], &ci));
+            let t3 = mul3(&ci, &mul3(&d2c_m, &ci));
+            let d2e: M3 = std::array::from_fn(|m| {
+                std::array::from_fn(|n| 0.25 * (d2c_m[m][n] - (t1[m][n] + t2[m][n] - t3[m][n])))
+            });
+            let d2s = rest_stress(&d0, &d2e);
+            let v = 2.0 * (inner(&ds[a], &ds[b]) + inner(&s, &d2s)) / g0;
+            d2cf[a][b] = v;
+            d2cf[b][a] = v;
+        }
+    }
+    // To the nodal unknowns: dF0_iJ / du_(a,i) = g_a(0)_J.
+    let mut dc = vec![0.0; NODES];
+    for (a, ga) in g.iter().enumerate() {
+        for i in 0..3 {
+            dc[3 * a + i] = (0..3).map(|jj| dcf[3 * i + jj] * ga[jj]).sum();
+        }
+    }
+    let mut d2c = vec![0.0; NODES * NODES];
+    for (a, ga) in g.iter().enumerate() {
+        for i in 0..3 {
+            for (b, gb) in g.iter().enumerate() {
+                for k in 0..3 {
+                    let mut t = 0.0;
+                    for (jj, gaj) in ga.iter().enumerate() {
+                        for (l, gbl) in gb.iter().enumerate() {
+                            t += d2cf[3 * i + jj][3 * k + l] * gaj * gbl;
+                        }
+                    }
+                    d2c[(3 * a + i) * NODES + 3 * b + k] = t;
+                }
+            }
+        }
+    }
+    let mut m = [[0.0; MODES]; MODES];
+    for p in points {
+        for k in 0..3 {
+            for l in 0..3 {
+                let gk = &p.modes[k];
+                let gl = &p.modes[l];
+                let gg = p.weight * (gk[0] * gl[0] + gk[1] * gl[1] + gk[2] * gl[2]);
+                for i in 0..3 {
+                    m[3 * k + i][3 * l + i] += gg;
+                }
+            }
+        }
+    }
+    Ok(Penalty { c, dc, d2c, m })
+}
+
+/// The penalty of a stabilised element, `None` without the stabilisation (ADR 0614 D1).
+fn penalty_if(
+    stabilised: bool,
+    coords: &[Vec3],
+    points: &[ModePoint],
+    material: &Material,
+    displacement: &[f64],
+    context: &PointContext,
+) -> Result<Option<Penalty>> {
+    if stabilised {
+        Ok(Some(penalty(coords, points, material, displacement, context)?))
+    } else {
+        Ok(None)
+    }
+}
+
+/// The extended element of arithmetic 1 at the unknowns `v = (u, alpha)`; with `pen` the penalty of ADR 0614 D1 added.
 fn extended(
     points: &[ModePoint],
     material: &Material,
     v: &[f64],
     state: &ElementState,
     context: &PointContext,
+    pen: Option<&Penalty>,
 ) -> Result<Extended> {
     let ns = check_state(material, state, points.len())?;
     let mut force = vec![0.0; ALL];
@@ -152,6 +363,29 @@ fn extended(
         }
         stress.push(s);
         strain.push(e);
+    }
+    if let Some(p) = pen {
+        // ADR 0614 arithmetic 5: the exact derivatives of (c/2) alpha^T M alpha.
+        let alpha = &v[NODES..];
+        let ma: [f64; MODES] = std::array::from_fn(|r| (0..MODES).map(|j| p.m[r][j] * alpha[j]).sum());
+        let pa: f64 = (0..MODES).map(|r| alpha[r] * ma[r]).sum();
+        for i in 0..NODES {
+            force[i] += 0.5 * pa * p.dc[i];
+            for j in 0..NODES {
+                k[i * ALL + j] += 0.5 * pa * p.d2c[i * NODES + j];
+            }
+            for (r, mar) in ma.iter().enumerate() {
+                k[i * ALL + NODES + r] += p.dc[i] * mar;
+                k[(NODES + r) * ALL + i] += p.dc[i] * mar;
+            }
+        }
+        for (r, mar) in ma.iter().enumerate() {
+            force[NODES + r] += p.c * mar;
+            scale[r] += (p.c * mar).abs();
+            for j in 0..MODES {
+                k[(NODES + r) * ALL + NODES + j] += p.c * p.m[r][j];
+            }
+        }
     }
     Ok(Extended {
         force,
@@ -234,6 +468,7 @@ fn converged(
     displacement: &[f64],
     state: &ElementState,
     context: &PointContext,
+    pen: Option<&Penalty>,
 ) -> Result<([f64; MODES], Extended)> {
     let mut v = vec![0.0; ALL];
     v[..NODES].copy_from_slice(displacement);
@@ -241,7 +476,7 @@ fn converged(
     let mut last = f64::NAN;
     for it in 0..=LOCAL_ITERATIONS {
         v[NODES..].copy_from_slice(&alpha);
-        let ext = extended(points, material, &v, state, context)?;
+        let ext = extended(points, material, &v, state, context, pen)?;
         let r = mode_residual(&ext);
         let rmax = r.iter().fold(0.0f64, |a, &b| a.max(b.abs()));
         if !rmax.is_finite() {
@@ -270,7 +505,7 @@ fn converged(
     })
 }
 
-/// The condensed element of ADR 0608 D2 for the driver.
+/// The condensed element of ADR 0608 D2 for the driver; with `stabilised` the element of ADR 0614 D1.
 pub(crate) fn evaluate(
     coords: &[Vec3],
     material: &Material,
@@ -278,11 +513,13 @@ pub(crate) fn evaluate(
     state: &ElementState,
     want_tangent: bool,
     context: &PointContext,
+    stabilised: bool,
 ) -> Result<Evaluation> {
     check_hex8_fields(coords, displacement)?;
     let points = mode_points(coords)?;
     check_state(material, state, points.len())?;
-    let (_, ext) = converged(&points, material, displacement, state, context)?;
+    let pen = penalty_if(stabilised, coords, &points, material, displacement, context)?;
+    let (_, ext) = converged(&points, material, displacement, state, context, pen.as_ref())?;
     let factor = ModeFactor::new(&ext.tangent)?;
     let kt = &ext.tangent;
     let y = factor.solve(&mode_residual(&ext));
@@ -331,10 +568,72 @@ pub fn modes_and_strains(
     state: &ElementState,
     context: &PointContext,
 ) -> Result<([f64; MODES], Vec<[f64; 6]>)> {
+    modes_and_strains_with(coords, material, displacement, state, context, false)
+}
+
+/// [`modes_and_strains`] of the element with (`stabilised`, ADR 0614 D1) or without the stabilisation.
+pub fn modes_and_strains_with(
+    coords: &[Vec3],
+    material: &Material,
+    displacement: &[f64],
+    state: &ElementState,
+    context: &PointContext,
+    stabilised: bool,
+) -> Result<([f64; MODES], Vec<[f64; 6]>)> {
     check_hex8_fields(coords, displacement)?;
     let points = mode_points(coords)?;
-    let (alpha, ext) = converged(&points, material, displacement, state, context)?;
+    let pen = penalty_if(stabilised, coords, &points, material, displacement, context)?;
+    let (alpha, ext) = converged(&points, material, displacement, state, context, pen.as_ref())?;
     Ok((alpha, ext.strain))
+}
+
+/// The condensed force (24 values), tangent (24 x 24) and second Piola-Kirchhoff stress at the points of an Incompatible
+/// Hex8, with (`stabilised`, ADR 0614 D1) or without (ADR 0608 D2) the stabilisation, from the committed `state` at the
+/// point context `context`.
+pub fn condensed_force_and_tangent(
+    coords: &[Vec3],
+    material: &Material,
+    displacement: &[f64],
+    state: &ElementState,
+    context: &PointContext,
+    stabilised: bool,
+) -> Result<(Vec<f64>, ElementMatrix, Vec<[f64; 6]>)> {
+    let ev = evaluate(coords, material, displacement, state, true, context, stabilised)?;
+    Ok((ev.force, ev.tangent.expect("tangent requested"), ev.stress))
+}
+
+/// The coefficient `c` (Pa) of the stabilisation of ADR 0614 D1 of an element at its displacement.
+pub fn stabilisation_coefficient(
+    coords: &[Vec3],
+    material: &Material,
+    displacement: &[f64],
+    context: &PointContext,
+) -> Result<f64> {
+    check_hex8_fields(coords, displacement)?;
+    let (d0, g0) = rest_moduli(material, context)?;
+    let (f0, _) = centre_gradient(coords, displacement)?;
+    let s = rest_stress(&d0, &mean_strain(&f0).0);
+    Ok(inner(&s, &s) / g0)
+}
+
+/// The energy `Pi_s = (c/2) sum_q w_q |F_enh,q|^2` of the stabilisation of ADR 0614 D1 at the displacement and the modes.
+pub fn stabilisation_energy(
+    coords: &[Vec3],
+    material: &Material,
+    displacement: &[f64],
+    modes: &[f64; MODES],
+    context: &PointContext,
+) -> Result<f64> {
+    check_hex8_fields(coords, displacement)?;
+    let points = mode_points(coords)?;
+    let p = penalty(coords, &points, material, displacement, context)?;
+    let mut pa = 0.0;
+    for (r, row) in p.m.iter().enumerate() {
+        for (j, mrj) in row.iter().enumerate() {
+            pa += modes[r] * mrj * modes[j];
+        }
+    }
+    Ok(0.5 * p.c * pa)
 }
 
 /// The force (33 values: the 24 nodal unknowns, then the nine modes) and the tangent (33 x 33) of the extended Incompatible
@@ -347,6 +646,19 @@ pub fn enhanced_force_and_tangent(
     state: &ElementState,
     context: &PointContext,
 ) -> Result<(Vec<f64>, ElementMatrix)> {
+    enhanced_force_and_tangent_with(coords, material, displacement, modes, state, context, false)
+}
+
+/// [`enhanced_force_and_tangent`] with (`stabilised`, ADR 0614 D1) or without the stabilisation.
+pub fn enhanced_force_and_tangent_with(
+    coords: &[Vec3],
+    material: &Material,
+    displacement: &[f64],
+    modes: &[f64; MODES],
+    state: &ElementState,
+    context: &PointContext,
+    stabilised: bool,
+) -> Result<(Vec<f64>, ElementMatrix)> {
     check_hex8_fields(coords, displacement)?;
     if let Some(i) = modes.iter().position(|v| !v.is_finite()) {
         return Err(FemError::InvalidValue {
@@ -355,9 +667,10 @@ pub fn enhanced_force_and_tangent(
         });
     }
     let points = mode_points(coords)?;
+    let pen = penalty_if(stabilised, coords, &points, material, displacement, context)?;
     let mut v = displacement.to_vec();
     v.extend_from_slice(modes);
-    let ext = extended(&points, material, &v, state, context)?;
+    let ext = extended(&points, material, &v, state, context, pen.as_ref())?;
     let mut k = ElementMatrix::zeros(ALL);
     k.values_mut().copy_from_slice(&ext.tangent);
     Ok((ext.force, k))
