@@ -29,6 +29,8 @@ pub struct ElasticAmgSettings {
     pub drop_tolerance: f64,
     /// The aggregation rule (ADR 0370); [`Aggregation::Greedy`] is the rule of ADR 0305.
     pub aggregation: Aggregation,
+    /// The smoother of the levels above the coarsest (ADR 0572); [`Smoother::BlockGaussSeidel`] is the smoother of ADR 0305.
+    pub smoother: Smoother,
 }
 
 impl Default for ElasticAmgSettings {
@@ -41,8 +43,22 @@ impl Default for ElasticAmgSettings {
             post_sweeps: 1,
             drop_tolerance: 1e-10,
             aggregation: Aggregation::Greedy,
+            smoother: Smoother::BlockGaussSeidel,
         }
     }
+}
+
+/// The smoother of [`ElasticAmg`] (ADR 0572 D2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Smoother {
+    /// ADR 0305: forward block Gauss-Seidel before and backward after the coarse correction, one block per node.
+    BlockGaussSeidel,
+    /// ADR 0572 D2: multiplicative Schwarz on vertex patches with exact local solves; the patch of a block is the block and
+    /// every block coupled to it by a stored entry of the level's matrix; patches visited in increasing order before and in
+    /// decreasing order after the coarse correction. For thin plates and shells, where the transverse shear dominates the
+    /// stiffness of the node blocks; it stores a dense inverse per patch and is not meant for solids.
+    VertexPatch,
 }
 
 /// The aggregation rule of [`ElasticAmg`].
@@ -118,6 +134,13 @@ pub enum ElasticAmgError {
     },
     /// The geometric aggregation needs block points ([`ElasticAmg::with_points`]).
     MissingPoints,
+    /// The matrix of a vertex patch ([`Smoother::VertexPatch`]) is not positive definite.
+    PatchNotPositive {
+        /// The level.
+        level: usize,
+        /// The block whose patch it is.
+        block: usize,
+    },
     /// The points do not match the blocks.
     PointsLength {
         /// The number of blocks.
@@ -142,6 +165,12 @@ impl std::fmt::Display for ElasticAmgError {
                 write!(f, "the coarsest level has order {n} > {MAX_DENSE}")
             }
             ElasticAmgError::MissingPoints => write!(f, "the geometric aggregation needs a point per block"),
+            ElasticAmgError::PatchNotPositive { level, block } => {
+                write!(
+                    f,
+                    "the vertex patch of block {block} of level {level} is not positive definite"
+                )
+            }
             ElasticAmgError::PointsLength { expected, got } => {
                 write!(f, "{got} points for {expected} blocks")
             }
@@ -228,6 +257,82 @@ struct Level {
     r: Option<CsrMatrix>,
     aggregates: Option<Vec<usize>>,
     omega: Option<f64>,
+    /// The vertex patches of [`Smoother::VertexPatch`] (empty otherwise and on the coarsest level).
+    patches: Vec<Patch>,
+}
+
+/// A vertex patch: its rows in increasing order and the dense inverse of the matrix on them, row-major (ADR 0572 D2).
+struct Patch {
+    rows: Vec<usize>,
+    inv: Vec<f64>,
+}
+
+/// The vertex patches of a level (ADR 0572 D2): block `b` and the blocks coupled to it by a stored entry.
+fn build_patches(a: &CsrMatrix, bp: &[usize], level: usize) -> Result<Vec<Patch>, ElasticAmgError> {
+    let nb = bp.len() - 1;
+    let of = block_of_rows(bp, a.n);
+    let mut pos = vec![usize::MAX; a.n];
+    let mut out = Vec::with_capacity(nb);
+    for b in 0..nb {
+        let mut blocks: Vec<usize> = Vec::new();
+        for r in bp[b]..bp[b + 1] {
+            for k in a.row_ptr[r]..a.row_ptr[r + 1] {
+                blocks.push(of[a.col[k]]);
+            }
+        }
+        blocks.sort_unstable();
+        blocks.dedup();
+        let rows: Vec<usize> = blocks.iter().flat_map(|&c| bp[c]..bp[c + 1]).collect();
+        let m = rows.len();
+        for (i, &r) in rows.iter().enumerate() {
+            pos[r] = i;
+        }
+        let mut d = vec![0.0; m * m];
+        for (i, &r) in rows.iter().enumerate() {
+            for k in a.row_ptr[r]..a.row_ptr[r + 1] {
+                let j = pos[a.col[k]];
+                if j != usize::MAX {
+                    d[i * m + j] = a.val[k];
+                }
+            }
+        }
+        for &r in &rows {
+            pos[r] = usize::MAX;
+        }
+        let inv = spd_inverse(&d, m).ok_or(ElasticAmgError::PatchNotPositive { level, block: b })?;
+        out.push(Patch { rows, inv });
+    }
+    Ok(out)
+}
+
+/// One multiplicative Schwarz sweep over the patches (ADR 0572 D2): `x_P += A_PP^{-1} (b - A x)_P`, patches in increasing
+/// order when `forward`, in decreasing order otherwise.
+fn patch_sweep(a: &CsrMatrix, patches: &[Patch], b: &[f64], x: &mut [f64], forward: bool) {
+    let mut res: Vec<f64> = Vec::new();
+    let mut one = |p: &Patch, x: &mut [f64]| {
+        res.clear();
+        for &r in &p.rows {
+            let mut s = b[r];
+            for k in a.row_ptr[r]..a.row_ptr[r + 1] {
+                s -= a.val[k] * x[a.col[k]];
+            }
+            res.push(s);
+        }
+        let m = p.rows.len();
+        for i in 0..m {
+            let d: f64 = (0..m).map(|j| p.inv[i * m + j] * res[j]).sum();
+            x[p.rows[i]] += d;
+        }
+    };
+    if forward {
+        for p in patches {
+            one(p, x);
+        }
+    } else {
+        for p in patches.iter().rev() {
+            one(p, x);
+        }
+    }
 }
 
 /// The multigrid hierarchy; one V-cycle from zero is its [`Preconditioner::apply`].
@@ -828,6 +933,7 @@ impl ElasticAmg {
                     r: None,
                     aggregates: None,
                     omega: None,
+                    patches: Vec::new(),
                 });
                 break;
             }
@@ -837,6 +943,10 @@ impl ElasticAmg {
             let p = smooth_prolongator(&cur, &pt, &bp, &inv, &inv_off, omega);
             let r = p.transpose();
             let ac = r.matmul(&cur.matmul(&p));
+            let patches = match settings.smoother {
+                Smoother::VertexPatch => build_patches(&cur, &bp, l)?,
+                Smoother::BlockGaussSeidel => Vec::new(),
+            };
             levels.push(Level {
                 a: cur,
                 block_ptr: bp,
@@ -848,6 +958,7 @@ impl ElasticAmg {
                 r: Some(r),
                 aggregates: Some(agg),
                 omega: Some(omega),
+                patches,
             });
             cur = ac;
             bp = cbp;
@@ -912,6 +1023,10 @@ impl ElasticAmg {
 
     fn sweep(&self, l: usize, b: &[f64], x: &mut [f64], forward: bool) {
         let lev = &self.levels[l];
+        if self.settings.smoother == Smoother::VertexPatch {
+            patch_sweep(&lev.a, &lev.patches, b, x, forward);
+            return;
+        }
         let a = &lev.a;
         let nb = lev.block_ptr.len() - 1;
         let mut t: Vec<f64> = Vec::new();
