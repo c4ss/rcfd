@@ -164,11 +164,34 @@ struct Ltb {
 }
 
 fn ltb(section: &BeamSection, ws: WarpingSection, n: usize, l: f64, axis: usize, s: f64) -> Ltb {
+    ltb_with(section, ws, n, l, axis, s, &BucklingOptions::new(3))
+}
+
+/// The options of amendment 2: three factors, a subspace of 40.
+fn amended_options() -> BucklingOptions {
+    let mut o = BucklingOptions::new(3);
+    o.subspace_size = Some(40);
+    o
+}
+
+fn ltb_amended(section: &BeamSection, ws: WarpingSection, n: usize, l: f64, axis: usize, s: f64) -> Ltb {
+    ltb_with(section, ws, n, l, axis, s, &amended_options())
+}
+
+fn ltb_with(
+    section: &BeamSection,
+    ws: WarpingSection,
+    n: usize,
+    l: f64,
+    axis: usize,
+    s: f64,
+    opts: &BucklingOptions,
+) -> Ltb {
     let m = fork(n, l, section, axis);
     let loaded = moment_loaded(&m, axis, s);
     let (pre, u) = six_prestress(&loaded);
     let w = Warping::new().block(0, ws);
-    let r = buckling_factors(&m, &pre, &w, &BucklingOptions::new(3)).unwrap();
+    let r = buckling_factors(&m, &pre, &w, opts).unwrap();
     let dofs = m.dof_map();
     let e2 = orient(axis);
     let theta_y = |node: usize| -> f64 { (0..3).map(|c| e2[c] * u[dofs.equation(node, 3 + c).unwrap()]).sum() };
@@ -240,8 +263,13 @@ fn d1_to_d3_section() {
     c.finish();
 }
 
+/// The first-run record of A1 to A8 and N1 (ADR 0553 amendment 2): run 1 stopped at the second solve, the `-M_ref` load case
+/// at 16 elements, refused by `lowest_buckling_factors` with "Sturm count: 32 eigenvalues below 5.397979218577e9, but 3 were
+/// found" (the default subspace of 11 held exactly three positive Ritz values; the negative factors of this sign-asymmetric
+/// spectrum dominate). No A or N1 value was measured. Kept unchanged except for its name and this note.
 #[test]
-fn a_n_lateral_torsional_buckling_of_the_monosymmetric_i() {
+#[ignore = "ADR 0553 amendment 2: run-1 record, refused by the eigensolver (Sturm mismatch) at the -M_ref case"]
+fn a_n_run1_known_miss() {
     let mut c = Checks::new();
     let (s, ws) = mono();
     let z0 = ws.shear_centre()[1];
@@ -339,6 +367,119 @@ fn a_n_lateral_torsional_buckling_of_the_monosymmetric_i() {
             .factors[0];
         c.at_most(
             &format!("A7 from_static against six-unknown ({name})"),
+            rel(f, f_ref),
+            1e-9,
+        );
+    }
+    c.finish();
+}
+
+/// A1' to A8' and N1' (ADR 0553 amendment 2): the checks of A1 to A8 and N1 with a buckling subspace of 40.
+#[test]
+fn a_n_amended_lateral_torsional_buckling_of_the_monosymmetric_i() {
+    let mut c = Checks::new();
+    let (s, ws) = mono();
+    let z0 = ws.shear_centre()[1];
+    let run = |n: usize, l: f64, axis: usize| -> (Ltb, Ltb) {
+        (
+            ltb_amended(&s, ws, n, l, axis, 1.0),
+            ltb_amended(&s, ws, n, l, axis, -1.0),
+        )
+    };
+    // Returns (compressed run, tension run) with the sign of each.
+    let split = |p: Ltb, q: Ltb| -> ((Ltb, f64), (Ltb, f64)) {
+        if p.flange1_compressed {
+            ((p, 1.0), (q, -1.0))
+        } else {
+            ((q, -1.0), (p, 1.0))
+        }
+    };
+    let (big, small, py) = closed(&s, &ws, 3.0);
+    println!("closed |M| flange 1 compressed {big:.8e}, in tension {small:.8e}, P_y {py:.8e}");
+    let (p, q) = run(16, 3.0, 0);
+    c.holds(
+        "A3' one load case each way",
+        p.flange1_compressed != q.flange1_compressed,
+        &format!("strains {:.4e} {:.4e}", p.strain1, q.strain1),
+    );
+    let ((cmp, s_c), (ten, s_t)) = split(p, q);
+    let m_c = cmp.factor * M_REF;
+    let m_t = ten.factor * M_REF;
+    println!(
+        "A1' M {m_c:.8e} signed {:.4e}; A2 M {m_t:.8e} signed {:.4e}",
+        m_c / big - 1.0,
+        m_t / small - 1.0
+    );
+    c.at_most("A1' |M/M_- - 1| flange 1 compressed (acceptance)", rel(m_c, big), 2e-2);
+    c.at_most(
+        "A2' |M/M_+ - 1| flange 1 in tension (acceptance)",
+        rel(m_t, small),
+        2e-2,
+    );
+    c.holds(
+        "A3' the larger |M| has flange 1 in compression",
+        m_c > m_t,
+        &format!("{m_c:.6e} > {m_t:.6e}"),
+    );
+    // A8: the mode at mid-span, v/phi against M/P_y + z_0 (M signed in the convention of D2).
+    for (run, sign, name) in [(&cmp, s_c, "compressed"), (&ten, s_t, "tension")] {
+        let m = fork(16, 3.0, &s, 0);
+        let dofs = m.dof_map();
+        let v = run.mode[dofs.equation(8, 1).unwrap()];
+        let ph = run.mode[dofs.equation(8, 3).unwrap()];
+        let want = sign * run.factor * M_REF / py + z0;
+        println!("A8' {name}: v/phi {:.8e}, closed {want:.8e}", v / ph);
+        c.at_most(&format!("A8' mode ratio ({name})"), rel(v / ph, want), 1e-2);
+    }
+    // N1.
+    let k = PI / 3.0;
+    let gjw = g_mod() * s.torsion() + E * ws.c_w() * k * k;
+    let m0 = (py * gjw).sqrt();
+    let bc = ws.wagner()[0];
+    let rc = ((bc * py / 2.0).powi(2) + py * gjw).sqrt();
+    let (bc_big, bc_small) = (bc.abs() * py / 2.0 + rc, -bc.abs() * py / 2.0 + rc);
+    println!("N1' beta_x = 0 form {m0:.8e}; beta^C forms {bc_big:.8e} {bc_small:.8e}");
+    c.above("N1' A1 against beta_x = 0", rel(m_c, m0), 0.3);
+    c.above("N1' A2 against beta_x = 0", rel(m_t, m0), 0.3);
+    c.above("N1' A1 against beta^C", rel(m_c, bc_big), 0.15);
+    c.above("N1' A2 against beta^C", rel(m_t, bc_small), 0.15);
+    // A4: 8 elements.
+    let (p8, q8) = run(8, 3.0, 0);
+    let ((c8, _), (t8, _)) = split(p8, q8);
+    c.at_most("A4' flange 1 compressed, 8 elements", rel(c8.factor * M_REF, big), 2e-2);
+    c.at_most(
+        "A4' flange 1 in tension, 8 elements",
+        rel(t8.factor * M_REF, small),
+        2e-2,
+    );
+    // A5: L 1.5 and 6.
+    for l in [1.5, 6.0] {
+        let (b, sm, _) = closed(&s, &ws, l);
+        let (pl, ql) = run(16, l, 0);
+        let ((cl, _), (tl, _)) = split(pl, ql);
+        println!(
+            "A5' L {l}: compressed {:.8e} (closed {b:.8e}), tension {:.8e} (closed {sm:.8e})",
+            cl.factor * M_REF,
+            tl.factor * M_REF
+        );
+        c.at_most(&format!("A5' compressed, L {l}"), rel(cl.factor * M_REF, b), 2e-2);
+        c.at_most(&format!("A5' tension, L {l}"), rel(tl.factor * M_REF, sm), 2e-2);
+    }
+    // A6: along global y.
+    let (py_, qy) = run(16, 3.0, 1);
+    let ((cy, _), (ty, _)) = split(py_, qy);
+    c.at_most("A6' axis y, compressed", rel(cy.factor, cmp.factor), 1e-6);
+    c.at_most("A6' axis y, tension", rel(ty.factor, ten.factor), 1e-6);
+    // A7: the pre-stress of the warping static solve.
+    for (sign, f_ref, name) in [(s_c, cmp.factor, "compressed"), (s_t, ten.factor, "tension")] {
+        let m = fork(16, 3.0, &s, 0);
+        let loaded = moment_loaded(&m, 0, sign);
+        let w = Warping::new().block(0, ws);
+        let r = solve_static(&loaded, &w, None).unwrap();
+        let p = WarpingPrestress::from_static(&loaded, &w, &r, [0.0; 2]).unwrap();
+        let f = buckling_factors_with(&m, &p, &w, &amended_options()).unwrap().factors[0];
+        c.at_most(
+            &format!("A7' from_static against six-unknown ({name})"),
             rel(f, f_ref),
             1e-9,
         );
