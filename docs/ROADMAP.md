@@ -8640,7 +8640,7 @@ fixed by the item's registration ADR before any code.
     a follow-up of ADR 0496. Default bits unchanged (11 digests), baseline hashes unchanged; thirteen of thirteen
     mutations caught. No case-file key (open question). Follow-up: layups under body loads and pre-stress. Follow-up
     F-591.
-- [ ] **F-429** Fracture parameters: J-integral by the domain form, stress intensity factor, crack-growth life
+- [~] **F-429** Fracture parameters: J-integral by the domain form, stress intensity factor, crack-growth life
   - depends on: F-408, F-374, F-376, F-389
   - acceptance: Every limit not stated here is registered in the ADR before the run. Centre crack of half-length a in a
     plate of half-width W = 10 a under tension, plane strain (one layer, held in z), Hex20: K_I from J within 2 percent
@@ -8652,8 +8652,21 @@ fixed by the item's registration ADR before any code.
     Growth: the cycles from a0 to a1 by the Paris law with K = d sigma sqrt(pi a) equal the closed-form integral for m =
     3 and the logarithm for m = 2 within 1e-6. A front that is not straight within the registered tolerance and a ring
     that reaches the boundary are refused.
-  - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0332; the registration is
-    written by the implementation agent before any code.
+  - note: Structural solver, advanced tier (plan ADR 0310, stub ADR 0332). ADR 0547, 2026-11-15: rcfd_fem::fracture.
+    CrackFront (straight within 1e-6 of its length or circular within 1e-6 of its radius; plane normal, advance
+    direction, half-symmetric flag); j_integral, the equivalent domain integral int (sigma_ij u_i,k - W delta_jk) q_k,j
+    dV over rings of element layers about the front, q = rho phi_j e with a hat per front station, refusing a ring whose
+    q = 1 nodes reach a boundary other than the crack faces, the mirror plane and the end faces; plane_strain_k (K =
+    sqrt(J E/(1 - nu^2))); opening_k (least-squares line of K_app = E delta sqrt(2 pi/r)/(8 (1 - nu^2)) extrapolated to
+    r = 0); paris_cycles (Gauss-Legendre in log a); builders centre_crack_plate (slit of doubled nodes, regular Hex20
+    graded towards the tips; quarter-point elements are refused by the mesh validation) and penny_crack_cylinder. Met:
+    centre crack W = 10 a, plane strain, Hex20: K from J of rings 2-4 within 2.1e-3 of the secant form (limit 2e-2),
+    rings within 1.2e-3 of each other, J against the energy difference of a +/- 0.02 a within 7.5e-5, K from the opening
+    within 1.2e-2 (limit 5e-2); pure shear opening factor 1.3e-13 of the tension value (limit 1e-8); penny crack in R =
+    10 a (heavy record, 96 267 unknowns) K within 2.2e-3 of 2 sigma sqrt(a/pi), uniform along the front within 2.7e-7;
+    Paris m = 3 and m = 2 within 7e-16; a bent front and a ring reaching the boundary refused. Partial by the rule:
+    mutation M12 (inner rings left out of the integral) caught by no registered check (11 of 12 caught). No case-file
+    key. Follow-up F-632 (varying J along a front, mode separation).
 - [~] **F-430** Substructuring: static condensation and fixed-interface component mode synthesis (Craig-Bampton)
   - depends on: F-408, F-382, F-383, F-393
   - acceptance: Every limit not stated here is registered in the ADR before the run. Statics: the condensed model gives
@@ -12258,3 +12271,10 @@ fixed by the item's registration ADR before any code.
     load is not rejected at a rounding floor; the Shell3 strip of ADR 0545 NT1 over 100 periods at the default tolerance
     with that reference; the default reference and its bits unchanged.
   - note: Structural solver, advanced tier. Follow-up of F-541 (ADR 0545, 2026-11-15).
+- [ ] **F-632** Domain integral on a front with varying J, and mode separation
+  - depends on: F-429
+  - acceptance: Every limit not stated here is registered in the ADR before the run. An embedded elliptical crack whose
+    K varies along the front against the closed form of Irwin within a registered limit, with a check that catches
+    leaving the inner rings out of the tapered integral; an interaction integral separating K_I, K_II and K_III, the
+    inclined centre crack within 2 percent of each closed form.
+  - note: Structural solver, advanced tier. Follow-up of F-429 (ADR 0547, 2026-11-15).
