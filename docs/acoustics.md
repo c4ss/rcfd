@@ -534,6 +534,14 @@ solve and no reaction of the air on the structure. Amplitudes are complex peak a
   rest by the quadrature points; `radiation_impedance` gives the complex power `(1/2) int P conj(V_n) dS`, the impedance
   `Z = 2 Pi/<|V_n|^2>` (for a rigid piston the force over the velocity), `Z/(rho c S)` and the added mass `Im Z/omega`. Its
   resistance is F-418's `power` to rounding. Light fluid only: the added mass is reported, not fed back into the structure.
+- Impedance matrix and light-fluid modes (F-579, ADR 0538): `radiation_impedance_matrix(planes, rho, c, omega)` gives
+  `Z_mn = (1/2) int P[V_m] conj(V_n) dS` of several velocity fields of one plane (`BaffledPlane::with_velocity` builds them;
+  diagonal = the complex power of `radiation_impedance`), with `impedance(m, n) = 2 Z_mn` (force per velocity; for mode shapes
+  the modal radiation impedance), `added_mass` and `damping`. `light_fluid_first_frequency(modes, omegas, modal_masses, rho, c,
+  options)` returns the modal added mass, damping and damping ratio of the first mode, the first-order frequency `omega_1 (1 -
+  M_a,11/(2 mu_1))` and the lowest root of `K q = omega^2 (Mu + M_a(omega)) q` on the given modes (fixed point in `omega`,
+  damping left out). Checked: two small pistons against `(i omega rho/(2 pi)) S1 S2 e^{-i k d}/d`, a clamped plate's modal
+  impedance against a wavenumber-integral reference, and the coupled against the first-order shift (ADR 0538).
 
 Checked against the baffled-piston closed forms (on-axis pressure, directivity, `W/ERP = 1 - J1(2 k a)/(k a)`, the
 low-frequency monopole and a baffled monopole pair): see ADR 0468 for the limits and the measured errors (largest 1.6e-3, from
@@ -559,7 +567,7 @@ the inscribed polygon of the disk mesh). The piston impedance `rho c S (1 - J1(2
 | Acoustic wave solver (linear, medium at rest) | `crates/rcfd-fv/src/acoustic_wave.rs` (`AcousticWaveSolver`, `Medium`, `WaveBc`, `WaveSponge`, `WaveSpongeForm`) |
 | Duct modes, modal decomposition, axial split, `rcfd-duct-modes` export | `crates/rcfd-post/src/duct_modes.rs` (`ModeBasis`, `axial_wavenumber`, `HarmonicDft`, `decompose_section`, `split_axial`, `fit_axial`, `ModalExport`) |
 | Wave solver driven by a sampled surface series | `crates/rcfd-post/src/wave_drive.rs` (`SurfaceDrive`, `DuctFrame`, `DriveOptions`, `HarmonicModes`; returning waves: `SurfaceDrive::from_sections`, `SplitDrive`, `SurfaceDrive::entering_residual`) |
-| Radiated sound of a vibrating structure (ERP, Rayleigh integral of a baffled plane, power bands) | `crates/rcfd-post/src/solid_acoustic.rs` (`VibratingSurface`, `equivalent_radiated_power`, `BaffledPlane`, `RayleighOptions`, `PowerSpectrum`, `erp_spectrum`, `power_level_db`; ADR 0488: `polygon_inverse_distance`, `BaffledPlane::surface_pressure`, `radiation_impedance`, `RadiationImpedance`) |
+| Radiated sound of a vibrating structure (ERP, Rayleigh integral of a baffled plane, power bands) | `crates/rcfd-post/src/solid_acoustic.rs` (`VibratingSurface`, `equivalent_radiated_power`, `BaffledPlane`, `RayleighOptions`, `PowerSpectrum`, `erp_spectrum`, `power_level_db`; ADR 0488: `polygon_inverse_distance`, `BaffledPlane::surface_pressure`, `radiation_impedance`, `RadiationImpedance`; ADR 0538: `radiation_impedance_matrix`, `RadiationImpedanceMatrix`, `BaffledPlane::with_velocity`, `light_fluid_first_frequency`, `LightFluidOptions`, `LightFluidFrequency`) |
 
 ### Surface-series input (`rcfd-surface-series` v1)
 

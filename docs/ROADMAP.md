@@ -10919,7 +10919,7 @@ fixed by the item's registration ADR before any code.
     registered tests (their largest-error aggregation dropped NaN); caught after amendment 1 by a NaN-propagating copy.
     Not covered: unbaffled or curved radiators, a mutual impedance matrix of several velocity fields, feedback of the
     added mass into the structure. Sources cited from memory, not re-read (Wilton et al. 1984, Kinsler, Morse and
-    Ingard, Pierce). Optional follow-up F-579.
+    Ingard, Pierce). Follow-up F-579 (ADR 0538, 2026-11-14).
 - [~] **F-552** Craig-Bampton with residual vectors of the interior loads and kept modes chosen by a cutoff frequency
   - depends on: F-430
   - acceptance: Every limit not stated here is registered in the ADR before the run. An option of the reduction of ADR
@@ -11399,7 +11399,7 @@ fixed by the item's registration ADR before any code.
     Shell3; the facet factor 1/cos(pi/96)). Default bits unchanged (9 digests), baseline hashes unchanged; nine of nine
     mutations caught. A rounding floor of run 1 (absolute coordinates) fixed by amendment; five refusal tests superseded
     by design, kept as ignored records. Follow-up F-585. F-573's cylinder clause is met here (5.4e-4).
-- [ ] **F-579** Mutual radiation impedance matrix of a baffled plane and the light-fluid added mass and damping of structural modes
+- [x] **F-579** Mutual radiation impedance matrix of a baffled plane and the light-fluid added mass and damping of structural modes
   - depends on: F-551
   - acceptance: Every limit not stated here is registered in the ADR before the run. The radiation impedance matrix Z_mn
     = (1/2) int P[V_m] conj(V_n) dS of several velocity fields of a baffled plane by the surface pressure of F-551,
@@ -11408,7 +11408,22 @@ fixed by the item's registration ADR before any code.
     the modal added mass and radiation damping of the first modes of a baffled clamped plate reported, and the shift of
     its first frequency in a light fluid compared with the first-order estimate from the added mass within a registered
     limit.
-  - note: Structural solver, advanced tier. Optional. Follow-up of F-551 (ADR 0488, 2026-11-14).
+  - note: Structural solver, advanced tier. Optional. Follow-up of F-551 (ADR 0488, 2026-11-14). ADR 0538, 2026-11-14:
+    rcfd-post solid_acoustic: radiation_impedance_matrix (Z_mn = (1/2) sum w P[V_m] conj(V_n) by F-551's surface
+    pressure; impedance 2 Z, added_mass Im(2Z)/omega, damping Re(2Z)), BaffledPlane::with_velocity,
+    light_fluid_first_frequency (modal added mass, damping and damping ratio of the first mode, the first-order
+    frequency omega_1 (1 - M_a/(2 mu)) and the lowest root of K q = omega^2 (Mu + M_a(omega)) q on the vacuum modes by a
+    fixed point in omega, damping left out); all additive, the F-551 results bit-identical (two digests), baseline
+    hashes unchanged. Matrix symmetric for real fields within 8.8e-16 (limit 1e-10), Z_nm[V] = Z_mn[conj V] for complex
+    fields within 3.4e-16, diagonal bit-equal to F-551's complex power and impedance. Two square pistons (side L, d = 30
+    L): mutual term within 9.3e-5 (k d = 1) and 7.9e-4 (k d = 3) of (i omega rho/(2 pi)) S1 S2 e^{-i k d}/d, the formula
+    in F-551's e^{+i omega t} convention without conjugation, z_12 = 2 Z_12/(U1 conj U2); 2.1e-2 and 0.17 at d = 2 L
+    (negative control). Clamped steel plate 0.3 x 0.2 x 1 mm (24 x 16 Shell4, FE modes): modal added mass 1.29e-2 kg and
+    radiation damping 2.27 kg/s of the first mode (zeta 1.08e-3), six modes reported; against an independent
+    wavenumber-integral reference within 3.7e-5 (reactance) and 3e-14 (resistance); different-parity coupling 8.3e-12.
+    First frequency 165.65 Hz in vacuum, first-order shift -6.436e-3, coupled (six modes) -6.377e-3: ratio within 9.2e-3
+    of 1 (limit 3e-2, about -3 eps/4); water 0.87 (negative control). Nine of nine mutations caught. Not covered:
+    damping in the coupled root, fluid-loaded modes above the first, two-sided or unbaffled plates, a case-file key.
 - [ ] **F-580** Creep on the B-bar Hex8: point-wise stationary field of the thick cylinder
   - depends on: F-411, F-390
   - acceptance: Every limit not stated here is registered in the ADR before the run. The B-bar Hex8 takes the creep

@@ -1754,6 +1754,21 @@ measured data.
 | Added mass of a baffled piston `8 rho a^3/3` (low-frequency limit of `rho c S H1(2 k a)/(k a)/omega`) | derived | `H1(x) = 2 x^2/(3 pi) + O(x^4)`; Kinsler, Frey, Coppens and Sanders, and Morse and Ingard, chapter 7: NOT read |
 | Surface continuity `P(x + h n) = P(x) - i omega rho V_n h + O(h^2)` | derived | the Euler equation at the plane |
 
+## F-579 mutual radiation impedance and light-fluid modes of a baffled plane (ADR 0538)
+
+No source was read for F-579; every item is cited from memory and derived in ADR 0538 (D1 to D5; numpy checks
+`f579-scratch/estimate.py`). The time convention is F-551's, `x(t) = Re(X e^{+i omega t})`, outgoing `e^{i(omega t - k r)}`.
+No measured data.
+
+| Item | Status | Source |
+|---|---|---|
+| Mutual impedance of two small baffled pistons `z_12 = F_2/U_1 = (i omega rho/(2 pi)) S1 S2 e^{-i k d}/d` in the `e^{+i omega t}` convention; with `Z_mn = (1/2) int P[V_m] conj(V_n) dS`, `z_12 = 2 Z_12/(U1 conj U2)`; no conjugation against F-551 | derived | the baffled simple source `P = (i omega rho/(2 pi)) U S e^{-i k r}/r` (Rayleigh integral of F-418/F-551) integrated over the second piston; R. L. Pritchard, J. Acoust. Soc. Am. 32 (1960) 730 (journal page uncertain): NOT read, from memory |
+| The same in the `e^{-i omega t}` convention: `(-i omega rho/(2 pi)) S1 S2 e^{+i k d}/d` (complex conjugate) | derived | conjugation of the time factor; attributed from memory to A. D. Pierce, *Acoustics*, and P. M. Morse and K. U. Ingard, *Theoretical Acoustics* (`e^{-i omega t}`), and to L. E. Kinsler et al., *Fundamentals of Acoustics* (`e^{j omega t}`): NOT read, open question ADR 0538 OQ2 |
+| Reciprocity of the discrete matrix: `Z_mn = Z_nm` for real fields, `Z_nm[V] = Z_mn[conj V]` for complex ones | derived | the symmetric kernel `e^{-i k R}/R` (ADR 0538 D1) |
+| Modal radiation impedance `Zr_nm = int P[phi_m] phi_n dS = C + i omega M_a` (unit modal velocity), added mass `M_a = Im Zr/omega`, damping `C = Re Zr` | derived | modal projection of the fluid force (ADR 0538 D3); M. C. Junger and D. Feit, *Sound, Structures, and Their Interaction*, and F. Fahy and P. Gardonio, *Sound and Structural Vibration*: NOT read, from memory |
+| Light-fluid first-order shift `omega ~ omega_1 (1 - M_a,11/(2 mu_1))`; one mode exactly `omega_1/sqrt(1 + eps)`, so `Delta_c/Delta_first = 1 - 3 eps/4 + O(eps^2)` | derived | Rayleigh quotient with the added mass (ADR 0538 D4) |
+| Spectral form `Zr_mn = (omega rho/(4 pi^2)) [int_{kappa<k} Vhat_m conj Vhat_n/sqrt(k^2 - kappa^2) + i int_{kappa>k} Vhat_m conj Vhat_n/sqrt(kappa^2 - k^2)] d^2 kappa` | derived | plane-wave expansion of the half-space field, Euler equation at the plane, Parseval (ADR 0538 D5) |
+
 ## F-430 substructuring: static condensation and the Craig-Bampton reduction (ADR 0469)
 
 No source was read for F-430; the two papers are cited from memory for the names and the published form. Every formula used is

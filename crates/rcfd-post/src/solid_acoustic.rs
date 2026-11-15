@@ -12,8 +12,12 @@
 //! - The surface pressure on the plane ([`BaffledPlane::surface_pressure`], [`BaffledPlane::surface_pressures`]) with the
 //!   singular part `1/R` of the kernel integrated analytically over each face ([`polygon_inverse_distance`]), and the
 //!   radiation impedance with the added mass ([`BaffledPlane::radiation_impedance`], ADR 0488).
+//! - The matrix `Z_mn = (1/2) int P[V_m] conj(V_n) dS` of several velocity fields of one plane
+//!   ([`radiation_impedance_matrix`], [`BaffledPlane::with_velocity`]): mutual impedances, modal added mass and radiation
+//!   damping; the first frequency of a baffled structure in a light fluid on its vacuum modes
+//!   ([`light_fluid_first_frequency`], ADR 0538).
 //!
-//! Derivations and the checks: ADR 0468 and ADR 0488.
+//! Derivations and the checks: ADR 0468, ADR 0488 and ADR 0538.
 
 use crate::acoustics::{band_index, third_octave_bands, Spectrum};
 use rcfd_core::vec3::{self, Vec3};
@@ -1031,4 +1035,276 @@ impl BaffledPlane {
             added_mass: impedance.im / omega,
         })
     }
+}
+
+// ------------------------------------------------------------------------------------------- impedance matrix (ADR 0538)
+
+impl BaffledPlane {
+    /// The same nodes, faces and options with another complex velocity vector at each node (ADR 0538): the plane rebuilt by
+    /// [`BaffledPlane::new`] on the new surface. Refuses a velocity list of another length or values that are not finite.
+    pub fn with_velocity(&self, velocity: Vec<[Phasor; 3]>) -> Res<BaffledPlane> {
+        let s = VibratingSurface::new(self.surface.nodes.clone(), self.surface.faces.clone(), velocity)?;
+        BaffledPlane::new(&s, &self.options)
+    }
+}
+
+/// The radiation impedance matrix of several velocity fields of one baffled plane (ADR 0538 D1).
+#[derive(Debug, Clone, PartialEq)]
+pub struct RadiationImpedanceMatrix {
+    /// The angular frequency, rad/s.
+    pub omega: f64,
+    /// `power[m][n] = Z_mn = (1/2) int_S P[V_m] conj(V_n) dS`, W (linear in field `m`, conjugate-linear in field `n`); the
+    /// diagonal is the complex power of [`BaffledPlane::radiation_impedance`].
+    pub power: Vec<Vec<Phasor>>,
+}
+
+impl RadiationImpedanceMatrix {
+    /// The number of fields.
+    pub fn len(&self) -> usize {
+        self.power.len()
+    }
+
+    /// Whether there is no field (never, for a matrix returned by [`radiation_impedance_matrix`]).
+    pub fn is_empty(&self) -> bool {
+        self.power.is_empty()
+    }
+
+    /// `2 Z_mn`: for fields of unit amplitude the force per velocity, N s/m; for real mode shapes (unit modal velocity) the
+    /// modal radiation impedance `int P[phi_m] phi_n dS`.
+    pub fn impedance(&self, m: usize, n: usize) -> Phasor {
+        let z = self.power[m][n];
+        Phasor::new(2.0 * z.re, 2.0 * z.im)
+    }
+
+    /// The added mass `Im(2 Z_mn)/omega`, kg (for unit modal coordinates).
+    pub fn added_mass(&self, m: usize, n: usize) -> f64 {
+        self.impedance(m, n).im / self.omega
+    }
+
+    /// The radiation damping `Re(2 Z_mn)`, kg/s (for unit modal coordinates).
+    pub fn damping(&self, m: usize, n: usize) -> f64 {
+        self.impedance(m, n).re
+    }
+}
+
+/// The matrix `Z_mn = (1/2) sum_i w_i P_m,i conj(V_n,i)` of the planes `planes` (one velocity field each, the same nodes,
+/// faces and options), `P_m` the surface pressure of field `m` ([`BaffledPlane::surface_pressures`], ADR 0488) at the
+/// quadrature points (ADR 0538 D1). Refuses an empty list, planes of other nodes, faces or options than the first, and a
+/// medium or frequency not positive.
+pub fn radiation_impedance_matrix(
+    planes: &[BaffledPlane],
+    rho: f64,
+    c: f64,
+    omega: f64,
+) -> Res<RadiationImpedanceMatrix> {
+    BaffledPlane::check_medium(rho, c, omega)?;
+    let Some(first) = planes.first() else {
+        return err("radiation impedance matrix: no velocity field".into());
+    };
+    for (m, p) in planes.iter().enumerate().skip(1) {
+        if p.surface.nodes != first.surface.nodes
+            || p.surface.faces != first.surface.faces
+            || p.options != first.options
+        {
+            return err(format!(
+                "radiation impedance matrix: field {m} is on other nodes, faces or options than field 0"
+            ));
+        }
+    }
+    let pressures = planes
+        .iter()
+        .map(|p| p.surface_pressures(rho, c, omega))
+        .collect::<Res<Vec<_>>>()?;
+    let mut power = Vec::with_capacity(planes.len());
+    for pm in &pressures {
+        let mut row = Vec::with_capacity(planes.len());
+        for pn in planes {
+            let mut s = Phasor::default();
+            for (&(_, w, v), pp) in pn.points.iter().zip(pm) {
+                // P conj(V)
+                s.re += w * (pp.re * v.re + pp.im * v.im);
+                s.im += w * (pp.im * v.re - pp.re * v.im);
+            }
+            row.push(Phasor::new(s.re / 2.0, s.im / 2.0));
+        }
+        power.push(row);
+    }
+    Ok(RadiationImpedanceMatrix { omega, power })
+}
+
+/// Options of [`light_fluid_first_frequency`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LightFluidOptions {
+    /// The fixed point stops when the frequency changes by at most this fraction (default 1e-12).
+    pub tolerance: f64,
+    /// Largest number of fixed-point steps (default 50).
+    pub max_iterations: usize,
+}
+
+impl Default for LightFluidOptions {
+    fn default() -> LightFluidOptions {
+        LightFluidOptions {
+            tolerance: 1e-12,
+            max_iterations: 50,
+        }
+    }
+}
+
+impl LightFluidOptions {
+    /// The defaults.
+    pub fn new() -> LightFluidOptions {
+        LightFluidOptions::default()
+    }
+
+    /// Set the tolerance.
+    pub fn tolerance(mut self, t: f64) -> LightFluidOptions {
+        self.tolerance = t;
+        self
+    }
+
+    /// Set the largest number of fixed-point steps.
+    pub fn max_iterations(mut self, n: usize) -> LightFluidOptions {
+        self.max_iterations = n;
+        self
+    }
+}
+
+/// The first frequency of a baffled plate in a fluid (ADR 0538 D3, D4).
+#[derive(Debug, Clone, PartialEq)]
+pub struct LightFluidFrequency {
+    /// The first vacuum frequency `omega_1`, rad/s.
+    pub omega_vacuum: f64,
+    /// The modal added mass `M_a,11` of the first mode at `omega_1`, kg.
+    pub added_mass: f64,
+    /// The modal radiation damping `C_11` of the first mode at `omega_1`, kg/s.
+    pub damping: f64,
+    /// `C_11/(2 omega_1 (mu_1 + M_a,11))`.
+    pub damping_ratio: f64,
+    /// The first-order estimate `omega_1 (1 - M_a,11/(2 mu_1))`, rad/s.
+    pub omega_first_order: f64,
+    /// The lowest root of `K q = omega^2 (Mu + M_a(omega)) q` on the given modes (damping left out), rad/s.
+    pub omega_coupled: f64,
+    /// Fixed-point steps taken.
+    pub iterations: usize,
+    /// The coupled mode in modal coordinates (largest entry 1).
+    pub shape: Vec<f64>,
+    /// The symmetrised added-mass matrix at the last step, kg.
+    pub added_mass_matrix: Vec<Vec<f64>>,
+}
+
+/// The lowest eigenpair of `diag(kd) x = lambda m x` (`m` symmetric positive definite) by inverse iteration from `e_1`.
+fn lowest_pair(kd: &[f64], m: &[Vec<f64>]) -> Res<(f64, Vec<f64>)> {
+    let n = kd.len();
+    let mut v = vec![0.0; n];
+    v[0] = 1.0;
+    let quotient = |v: &[f64]| -> Res<f64> {
+        let num: f64 = (0..n).map(|i| kd[i] * v[i] * v[i]).sum();
+        let den: f64 = (0..n).map(|i| (0..n).map(|j| v[i] * m[i][j] * v[j]).sum::<f64>()).sum();
+        if den.is_nan() || den <= 0.0 {
+            return err(format!("light fluid: mass quotient not positive ({den:e})"));
+        }
+        Ok(num / den)
+    };
+    let mut lambda = quotient(&v)?;
+    for _ in 0..2000 {
+        let mut x: Vec<f64> = (0..n)
+            .map(|i| (0..n).map(|j| m[i][j] * v[j]).sum::<f64>() / kd[i])
+            .collect();
+        let big = x.iter().fold(0.0_f64, |a, &b| if b.abs() > a.abs() { b } else { a });
+        if big.is_nan() || big == 0.0 {
+            return err("light fluid: inverse iteration broke down".into());
+        }
+        for xi in x.iter_mut() {
+            *xi /= big;
+        }
+        v = x;
+        let next = quotient(&v)?;
+        let done = (next - lambda).abs() <= 1e-15 * next.abs();
+        lambda = next;
+        if done {
+            return Ok((lambda, v));
+        }
+    }
+    err("light fluid: inverse iteration did not converge in 2000 steps".into())
+}
+
+/// The first frequency of a baffled structure in a fluid on its vacuum modes (ADR 0538 D4): `modes[j]` the plane with the
+/// velocity of mode `j` for a unit modal velocity, `omegas[j]` its vacuum frequency (rad/s, `omegas[0]` the lowest),
+/// `modal_masses[j]` its modal mass. The coupled frequency is the lowest root of `K q = omega^2 (Mu + M_a(omega)) q`, `K =
+/// diag(mu_j omega_j^2)`, by the fixed point `omega <- sqrt(lambda_min(K, Mu + M_a(omega)))` from `omega_1`, damping left
+/// out; the first-order estimate is `omega_1 (1 - M_a,11(omega_1)/(2 mu_1))`.
+pub fn light_fluid_first_frequency(
+    modes: &[BaffledPlane],
+    omegas: &[f64],
+    modal_masses: &[f64],
+    rho: f64,
+    c: f64,
+    options: &LightFluidOptions,
+) -> Res<LightFluidFrequency> {
+    let n = modes.len();
+    if n == 0 {
+        return err("light fluid: no mode".into());
+    }
+    if omegas.len() != n || modal_masses.len() != n {
+        return err(format!(
+            "light fluid: {n} modes, {} frequencies, {} modal masses",
+            omegas.len(),
+            modal_masses.len()
+        ));
+    }
+    for (j, (&w, &mu)) in omegas.iter().zip(modal_masses).enumerate() {
+        positive(&format!("frequency of mode {j}"), w)?;
+        positive(&format!("modal mass of mode {j}"), mu)?;
+        if j > 0 && w <= omegas[0] {
+            return err(format!(
+                "light fluid: the frequency of mode {j} ({w:e}) is not above the first ({:e})",
+                omegas[0]
+            ));
+        }
+    }
+    positive("tolerance", options.tolerance)?;
+    let w1 = omegas[0];
+    let z1 = radiation_impedance_matrix(&modes[..1], rho, c, w1)?;
+    let added_mass = z1.added_mass(0, 0);
+    let damping = z1.damping(0, 0);
+    let mu1 = modal_masses[0];
+    let kd: Vec<f64> = omegas.iter().zip(modal_masses).map(|(w, mu)| mu * w * w).collect();
+    let mut w = w1;
+    for it in 1..=options.max_iterations {
+        let z = radiation_impedance_matrix(modes, rho, c, w)?;
+        let ma: Vec<Vec<f64>> = (0..n)
+            .map(|i| {
+                (0..n)
+                    .map(|j| 0.5 * (z.added_mass(i, j) + z.added_mass(j, i)))
+                    .collect()
+            })
+            .collect();
+        let mut m = ma.clone();
+        for (i, row) in m.iter_mut().enumerate() {
+            row[i] += modal_masses[i];
+        }
+        let (lambda, shape) = lowest_pair(&kd, &m)?;
+        let next = lambda.sqrt();
+        if !next.is_finite() {
+            return err(format!("light fluid: frequency not finite at step {it}"));
+        }
+        if (next - w).abs() <= options.tolerance * w {
+            return Ok(LightFluidFrequency {
+                omega_vacuum: w1,
+                added_mass,
+                damping,
+                damping_ratio: damping / (2.0 * w1 * (mu1 + added_mass)),
+                omega_first_order: w1 * (1.0 - added_mass / (2.0 * mu1)),
+                omega_coupled: next,
+                iterations: it,
+                shape,
+                added_mass_matrix: ma,
+            });
+        }
+        w = next;
+    }
+    err(format!(
+        "light fluid: the fixed point did not converge in {} steps",
+        options.max_iterations
+    ))
 }
