@@ -1030,6 +1030,10 @@ pub fn lowest_eigenpairs(
 /// Relative cut below which a Ritz value `theta = 1/lambda` of [`lowest_buckling_factors`] is not a factor (ADR 0390 D5).
 const POSITIVE_CUT: f64 = 1e-8;
 
+/// Relative steps `delta` of the near Sturm shifts `lambda_mp (1 + delta)` of [`lowest_buckling_factors`] when the subspace
+/// holds no positive Ritz value beyond the wanted set and the count at the far bound differs (ADR 0559 D1).
+const NEAR_COUNT_STEPS: [f64; 3] = [1e-2, 1e-3, 1e-4];
+
 /// Options of [`lowest_buckling_factors`] (ADR 0390 D5).
 #[derive(Debug, Clone, PartialEq)]
 pub struct BucklingEigenOptions {
@@ -1291,10 +1295,25 @@ pub fn lowest_buckling_factors(
                 Err(e) => fail = Some(e),
             }
         }
-        let (s, c) = match counted {
+        let (mut s, mut c) = match counted {
             Some(v) => v,
             None => return Err(fail.expect("a refusal")),
         };
+        if c != mp && !exhausted && mp == positive {
+            // ADR 0559 D1: the subspace holds no positive Ritz value beyond the wanted set (its other values are negative),
+            // so the count at the far bound also sees the factors above the wanted set. A count of exactly mp just above
+            // lambda_mp shows that none is missing below it. Only reached on inputs that were refused before.
+            let l_last = 1.0 / theta[mp - 1];
+            for delta in NEAR_COUNT_STEPS {
+                let sn = l_last * (1.0 + delta);
+                if let Ok(cn) = buckling_count(k, kg, sn, &opts.ordering, opts.factorisation, points) {
+                    if cn == mp {
+                        (s, c) = (sn, cn);
+                        break;
+                    }
+                }
+            }
+        }
         if c != mp {
             return Err(EigenError::SturmMismatch {
                 shift: s,
