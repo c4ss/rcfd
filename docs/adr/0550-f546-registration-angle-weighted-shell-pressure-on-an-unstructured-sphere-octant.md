@@ -274,3 +274,13 @@ Remaining questions (options, recommendation):
    angle split is small on unstructured meshes).
 3. Documentation: (a) note in the shell documentation that a thin curved shell on an unstructured mesh needs `h^2 / (R t)`
    well below one for a percent-level displacement under pressure, whichever split; (b) nothing. Recommend (a), with the lead.
+
+## For the lead: roadmap entries
+
+Proposed status of F-546: **done**.
+
+> F-546 (ADR 0550, 2026-11-15): `Load::shell_pressure_angle_weighted` measured on an unstructured sphere octant (geodesic grid with jittered nodes and random edge flips, smallest angle 20 deg, interior valences 3 to 12; R = 1, t = 0.01, symmetry planes) under internal pressure: radial displacement within 8.0e-3 of `p R^2 (1 - nu)/(2 E t)` at every node at n = 128 (8385 nodes); errors 1.40e-1, 3.33e-2, 7.99e-3 on the base n = 32 and its two refinements (order 2.07, 2.06). Cause: not the stiffness (the area-gradient load `(p R/2) dA/dx_i` gives the uniform expansion exactly, 6e-14) but the thin shell's bending response to the nodal unevenness of any facet lumping, `~ h^2/(R t)`; the default meets 2 % at n = 128 as well (1.01e-2), the angle split is better by 0.62 to 0.79 here (16 on the structured geodesic grid). Test only, no library change; five mutations caught.
+
+> Follow-up proposed: Shell3 pressure load exact for the uniform membrane state on irregular curved meshes. Deps F-546. Acceptance: Every limit not stated here is registered in the ADR before the run. An opt-in Shell3 pressure load built from a local curvature estimate, on the unstructured sphere octant of ADR 0550 (t = 0.01): the radial displacement within 2 % of `p R^2 (1 - nu)/(2 E t)` at every node at n = 16 and n = 32, the one-diagonal cylinder O1 of ADR 0461 within 1 %, defaults bit-identical.
+
+> Follow-up proposed: Shell documentation note on pressure-loaded thin curved shells on unstructured meshes. Deps F-546. Acceptance: Every limit not stated here is registered in the ADR before the run. The shell topic documentation states the `h^2/(R t)` mesh requirement measured in ADR 0550 and when to choose `Load::shell_pressure_angle_weighted`; docs_site test passes.
