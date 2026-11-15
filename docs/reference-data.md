@@ -2134,3 +2134,18 @@ checked by plain numpy probes (`f588-scratch/est588.py`, `est588b.py`), no rcfd 
 | The stiffness of the incompatible element is not additive in `D` (`max |K(D1 + D2) - K(D1) - K(D2)| / max |K|` `1.0e-2` in the prototype, `7.6e-3` measured); that of the B-bar element is (`1.6e-16`) | computed | ADR 0525 arithmetic 4, N-LIN, LIN1 |
 | Euler's buckling load of the clamped-free column `P_cr = pi^2 E I / (4 L^2)`; the strip `L = 2`, `h = 0.1` (`I = h^4/12`), `E = 2e11`: `P_cr = 1.0281e6` N (not a measured value, a closed form) | derived | Euler's column (textbook closed form, not read) |
 | Measured: one-layer strip `20 x 1 x 1`, `lambda P / P_cr` `0.99949` (Incompatible, `nu = 0`), `1.00306` (`nu = 0.3`), `1.498`, `1.542` (Full), `1.074`, `0.826` (B-bar) | computed | ADR 0525 addendum 1 |
+
+## F-601 rigid sphere and cylinder targets, Hex20 and Tet faces in contact (ADR 0540)
+
+No source was read for F-601. The closed forms below are cited from memory (K. L. Johnson, Contact Mechanics, Cambridge
+University Press, 1985, chapters 2 to 4: NOT read, chapter numbers as recalled); the checks of ADR 0540 use them in their
+half-space idealisation. Flamant's field is checked against itself (equilibrium, the free surface, the resultant: CL0) before
+it is used.
+
+| Item | Status | Source |
+|---|---|---|
+| Flamant's line load `P` (per length) on a half-space: `sigma_ij = -2 P x_i x_j z / (pi r^4)` in the `x`-`z` plane (`r^2 = x^2 + z^2`, `z` into the body), radial; measured: equilibrium `1.9e-8` of `P/r^2` (central differences), surface traction `0`, resultant `4.2e-6` of `P` | derived, cited | ADR 0540 CL0; Johnson chapter 2: NOT read, from memory |
+| Hertz line contact (a cylinder of radius `R` on a half-space, load `P` per length): half-width `b = sqrt(4 P R / (pi E*))`, peak `p_0 = 2 P / (pi b)`, `1/E* = (1 - nu^2)/E` (rigid cylinder); measured on the plane-strain slice: `b` within `1.06e-2`, `p_0` within `9.5e-3` | derived, cited | ADR 0540 CL1, CL2; Johnson chapter 4: NOT read, from memory |
+| Hertz point contact (a rigid sphere of radius `R`, force `F`): radius `a = (3 F R / (4 E*))^(1/3)`, peak `p_0 = 3 F / (2 pi a^2)`, approach `delta = a^2 / R`; measured (H-fast mesh): radius `5.9e-3`, peak `3.9e-3`, approach `1.1e-2` | derived, cited | ADR 0540 HS; Johnson chapter 4: NOT read, from memory; the same forms as ADR 0507 a3 |
+| The rigid sphere's gap `|x - c| - R`, normal `(x - c)/|x - c|`, second derivative `(I - n n^T)/|x - c|`; the cylinder's the same with the axis component removed (`(I - e e^T - n n^T)/d`) | derived | ADR 0540 D2; checked by T1s, T1c against central differences (`2.4e-10`, `1.7e-10`) |
+| The share of a uniform pressure at a corner node of a flat Hex20 face (2 x 2 serendipity, 3 x 3 Gauss): `-1/12` of the face's total (negative: a node contactor cannot carry it, hence the Gauss-point contactor) | derived | ADR 0540 NG |

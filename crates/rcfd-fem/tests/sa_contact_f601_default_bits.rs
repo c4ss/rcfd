@@ -48,7 +48,14 @@ fn b_contact_default_bits_f601() {
     let m = hub_model(4);
     let h = hub_h(4);
     let pair = ContactPair::new("bore", Target::Surface("shaft_out".into()), 100.0 * E_HUB / h);
-    let r = solve(&m, &[], &[], &[pair], &ContactOptions::new(1, 1e-6 * hub_d()).newton(newton())).unwrap();
+    let r = solve(
+        &m,
+        &[],
+        &[],
+        &[pair],
+        &ContactOptions::new(1, 1e-6 * hub_d()).newton(newton()),
+    )
+    .unwrap();
     got.push(("G1 hub n = 4", digest(&result_words(&r))));
     // G2: the hub at n = 8 at the states, both reaches.
     let m = hub_model(8);

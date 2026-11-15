@@ -1449,6 +1449,7 @@ fn t2_order_of_the_last_residuals_total_lagrangian_punch_a2_known_miss() {
 }
 
 #[test]
+#[ignore = "record (ADR 0540 D9): its Tet4 row fails by design once Tet faces are accepted (F-601); continued in sa_contact_faces_f601.rs::r1c_r2_refusals_f601"]
 fn r1_r2_refusals_a2() {
     let mut c = Checks::new();
     let m = bar(F_MAX);

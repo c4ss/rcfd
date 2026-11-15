@@ -18,12 +18,16 @@
 //! * Cycling (D6): an active set that comes back after a change more than `max_cycles` times in one Newton solve is an error
 //!   naming the nodes that switched.
 //! * [`ContactSet`] is the contribution; it can be evaluated on its own.
+//! * ADR 0540 (F-601): the search through a uniform grid of buckets ([`SearchMethod::Buckets`], the default; the same
+//!   candidates in the same order as the all-faces loop, so the same bits), the rigid sphere and cylinder targets, and faces
+//!   of Hex20, Tet4 and Tet10 (targets by the general closest-point projection; Hex20 and Tet10 contactors by the points of
+//!   the face's load rule, Gauss-point-to-surface, D3).
 
 use crate::assemble::stiffness;
 use crate::constraint::{prescribed_equations, reduce, Prescribed};
 use crate::element::ElementState;
 use crate::error::{FemError, Result, SetKind};
-use crate::loads::{nodal_load_vector, NodalForceAt};
+use crate::loads::{face_rule, face_shape_functions, nodal_load_vector, NodalForceAt};
 use crate::mesh::{ElementKind, FaceRef};
 use crate::model::{Constraint, DofMap, SolidModel, SolidResult, SolverStats};
 use crate::nonlinear::{add_triplets, initial_states, solve_from, Contribution, NewtonOptions};
@@ -51,8 +55,36 @@ pub enum Target {
         /// The normal (normalised by the pair).
         normal: Vec3,
     },
-    /// A deformable surface: a surface set of Hex8 faces (outward normals).
+    /// A deformable surface: a surface set of Hex8, Hex20, Tet4 or Tet10 faces (outward normals).
     Surface(String),
+    /// A rigid sphere (ADR 0540 D2); the contactor lies outside it.
+    RigidSphere {
+        /// The centre.
+        centre: Vec3,
+        /// The radius.
+        radius: f64,
+    },
+    /// A rigid infinite cylinder through `point` along `axis` (normalised by the pair; ADR 0540 D2); the contactor lies
+    /// outside it.
+    RigidCylinder {
+        /// A point of the axis.
+        point: Vec3,
+        /// The axis direction.
+        axis: Vec3,
+        /// The radius.
+        radius: f64,
+    },
+}
+
+/// How the candidate target faces of a contactor point are found (ADR 0540 D1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SearchMethod {
+    /// A uniform grid of buckets over the target faces' boxes grown by their reach: the same candidates, in the same order,
+    /// as [`SearchMethod::AllFaces`], so the same bits (the default).
+    #[default]
+    Buckets,
+    /// Every target face for every contactor point (the loop of ADR 0507 D1).
+    AllFaces,
 }
 
 /// A contact pair: the contactor surface set, the target, the penalty per unit area (N/m^3) and the initial-gap offsets.
@@ -119,6 +151,9 @@ pub struct ContactOptions {
     /// supernodal multifrontal `L D L^T` after nested dissection by level structures of the tangent's pattern). The envelope
     /// is refused, and so is the supernodal factor with [`Kinematics::TotalLagrangian`].
     pub factor: DirectFactor,
+    /// The search for candidate target faces (ADR 0540 D1): [`SearchMethod::Buckets`] (the default) or
+    /// [`SearchMethod::AllFaces`]; both give the same bits.
+    pub search_method: SearchMethod,
 }
 
 impl ContactOptions {
@@ -134,7 +169,13 @@ impl ContactOptions {
             kinematics: Kinematics::Linear,
             newton: NewtonOptions::new(1),
             factor: DirectFactor::SparseMinimumDegree,
+            search_method: SearchMethod::Buckets,
         }
+    }
+    /// The same options with another search for the candidate faces (ADR 0540 D1).
+    pub fn search_method(mut self, s: SearchMethod) -> ContactOptions {
+        self.search_method = s;
+        self
     }
     /// The same options with another body.
     pub fn kinematics(mut self, k: Kinematics) -> ContactOptions {
@@ -213,14 +254,17 @@ impl ContactOptions {
     }
 }
 
-/// The state of one contactor node.
+/// The state of one contactor node (or Gauss point of a quadratic contactor face, ADR 0540 D4).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ContactNode {
     /// The pair index.
     pub pair: usize,
-    /// The node.
+    /// The node; for a Gauss point the point's id `n_nodes + k` (`n_nodes` the mesh's node count, `k` the point's index over
+    /// the model's Gauss-point pairs in pair order, faces in set order, points in rule order).
     pub node: usize,
-    /// The node's area (D4), m^2.
+    /// For a Gauss point: its contactor face and local coordinates on it; `None` for a node.
+    pub point: Option<(FaceRef, [f64; 2])>,
+    /// The node's area (D4), m^2 (a Gauss point's weight on the face).
     pub area: f64,
     /// The gap (with the offset), m; `None` when no target face is in reach.
     pub gap: Option<f64>,
@@ -286,8 +330,60 @@ pub struct ContactResult {
 
 #[derive(Debug, Clone)]
 enum TargetData {
-    Plane { point: Vec3, normal: Vec3 },
-    Faces(Vec<(FaceRef, [usize; 4])>),
+    Plane {
+        point: Vec3,
+        normal: Vec3,
+    },
+    /// ADR 0540 D2: a sphere (`axis` `None`) or a cylinder (`point` on the axis, the unit `axis`).
+    Curved {
+        point: Vec3,
+        axis: Option<Vec3>,
+        radius: f64,
+    },
+    Faces(Vec<TargetFace>),
+}
+
+/// The shape of a face (ADR 0540 D3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Shape {
+    /// Hex8: bilinear, 4 nodes.
+    Quad4,
+    /// Hex20: serendipity, 8 nodes.
+    Quad8,
+    /// Tet4: linear, 3 nodes.
+    Tri3,
+    /// Tet10: quadratic, 6 nodes.
+    Tri6,
+}
+
+impl Shape {
+    fn corners(self) -> usize {
+        match self {
+            Shape::Quad4 | Shape::Quad8 => 4,
+            Shape::Tri3 | Shape::Tri6 => 3,
+        }
+    }
+    /// Whether the contactor of such a face is its Gauss points (ADR 0540 D3).
+    fn by_points(self) -> bool {
+        matches!(self, Shape::Quad8 | Shape::Tri6)
+    }
+}
+
+#[derive(Debug, Clone)]
+struct TargetFace {
+    face: FaceRef,
+    nodes: Vec<usize>,
+    shape: Shape,
+}
+
+/// A Gauss point of a quadratic contactor face (ADR 0540 D3): its face, local coordinates, the face's nodes and their
+/// shape-function values there.
+#[derive(Debug, Clone)]
+struct GaussPoint {
+    face: FaceRef,
+    local: [f64; 2],
+    nodes: Vec<usize>,
+    weights: Vec<f64>,
 }
 
 #[derive(Debug, Clone)]
@@ -297,11 +393,20 @@ struct PairData {
     areas: Vec<f64>,
     offsets: Vec<f64>,
     eps: Vec<f64>,
+    /// The Gauss points (one per entry of `nodes`, whose entries are then their ids); `None` for node contactors.
+    points: Option<Vec<GaussPoint>>,
+}
+
+/// A contactor point: a node or a Gauss point.
+#[derive(Clone, Copy)]
+enum At<'a> {
+    Node(usize),
+    Point(&'a GaussPoint),
 }
 
 /// The kinematics of one node against its target at one state.
 struct Kin {
-    /// The nodes of the gradient: the contactor node, then the face's corners.
+    /// The nodes of the gradient: the contactor node (or the contactor face's nodes), then the face's nodes.
     nodes: Vec<usize>,
     /// The gap without the offset.
     gap: f64,
@@ -334,6 +439,7 @@ pub struct ContactSet {
     dofs: DofMap,
     reference: Vec<Vec3>,
     search: Option<f64>,
+    method: SearchMethod,
     max_cycles: usize,
     multipliers: RefCell<Vec<Vec<f64>>>,
     history: RefCell<History>,
@@ -341,7 +447,8 @@ pub struct ContactSet {
 
 const CORNERS: [[f64; 2]; 4] = [[-1.0, -1.0], [1.0, -1.0], [1.0, 1.0], [-1.0, 1.0]];
 
-fn hex8_faces(model: &SolidModel, set: &str) -> Result<Vec<(FaceRef, [usize; 4])>> {
+/// The faces of a surface set with their shapes (ADR 0540 D3): Hex8, Hex20, Tet4 and Tet10 faces; any other is refused.
+fn surface_faces(model: &SolidModel, set: &str) -> Result<Vec<TargetFace>> {
     let mesh = model.mesh();
     let faces = mesh.surface_set(set).ok_or_else(|| FemError::UnknownSet {
         kind: SetKind::Surface,
@@ -351,18 +458,398 @@ fn hex8_faces(model: &SolidModel, set: &str) -> Result<Vec<(FaceRef, [usize; 4])
     for &f in faces {
         let kind = mesh.element_kind(f.element);
         let nodes = mesh.face_nodes(f);
-        if kind != ElementKind::Hex8 || nodes.len() != 4 {
-            return Err(FemError::InvalidValue {
-                key: "contact surface",
-                reason: format!(
-                    "face {} of element {} ({kind:?}) in the set '{set}': only Hex8 faces (ADR 0507 limits)",
-                    f.face, f.element
-                ),
-            });
-        }
-        out.push((f, [nodes[0], nodes[1], nodes[2], nodes[3]]));
+        let shape = match (kind, nodes.len()) {
+            (ElementKind::Hex8, 4) => Shape::Quad4,
+            (ElementKind::Hex20, 8) => Shape::Quad8,
+            (ElementKind::Tet4, 3) => Shape::Tri3,
+            (ElementKind::Tet10, 6) => Shape::Tri6,
+            _ => {
+                return Err(FemError::InvalidValue {
+                    key: "contact surface",
+                    reason: format!(
+                        "face {} of element {} ({kind:?}) in the set '{set}': only Hex8, Hex20, Tet4 and Tet10 faces \
+                         (ADR 0540 D3)",
+                        f.face, f.element
+                    ),
+                });
+            }
+        };
+        out.push(TargetFace { face: f, nodes, shape });
     }
     Ok(out)
+}
+
+/// The second derivatives `(uu, uv, vv)` of the face's shape functions at `uv` (ADR 0540 D3).
+fn second_derivatives(shape: Shape, uv: [f64; 2]) -> Vec<[f64; 3]> {
+    let [u, v] = uv;
+    match shape {
+        Shape::Quad4 => CORNERS.iter().map(|c| [0.0, 0.25 * c[0] * c[1], 0.0]).collect(),
+        Shape::Tri3 => vec![[0.0; 3]; 3],
+        Shape::Tri6 => {
+            let dl = [[-1.0, -1.0], [1.0, 0.0], [0.0, 1.0]];
+            let mut out = Vec::with_capacity(6);
+            for l in dl {
+                out.push([4.0 * l[0] * l[0], 4.0 * l[0] * l[1], 4.0 * l[1] * l[1]]);
+            }
+            for [i, j] in [[0usize, 1usize], [1, 2], [2, 0]] {
+                let (a, b) = (dl[i], dl[j]);
+                out.push([8.0 * a[0] * b[0], 4.0 * (a[0] * b[1] + b[0] * a[1]), 8.0 * a[1] * b[1]]);
+            }
+            out
+        }
+        Shape::Quad8 => {
+            const REF: [[f64; 2]; 8] = [
+                [-1.0, -1.0],
+                [1.0, -1.0],
+                [1.0, 1.0],
+                [-1.0, 1.0],
+                [0.0, -1.0],
+                [1.0, 0.0],
+                [0.0, 1.0],
+                [-1.0, 0.0],
+            ];
+            REF.iter()
+                .enumerate()
+                .map(|(a, r)| {
+                    let (fu, fv) = (1.0 + u * r[0], 1.0 + v * r[1]);
+                    if a < 4 {
+                        let s = u * r[0] + v * r[1];
+                        [fv / 2.0, r[0] * r[1] * (2.0 * s + 1.0) / 4.0, fu / 2.0]
+                    } else if r[0] == 0.0 {
+                        [-fv, -u * r[1], 0.0]
+                    } else {
+                        [0.0, -v * r[0], -fu]
+                    }
+                })
+                .collect()
+        }
+    }
+}
+
+/// The face geometry of the search (ADR 0507 D1): the current node positions, the reach and the box grown by it, by the
+/// expressions of the all-faces loop (ADR 0540 D1).
+struct FaceGeo {
+    x: Vec<Vec3>,
+    reach: f64,
+    lo: [f64; 3],
+    hi: [f64; 3],
+}
+
+/// The grid of buckets of one pair's target faces at one state (ADR 0540 D1).
+struct Grid {
+    geo: Vec<FaceGeo>,
+    origin: [f64; 3],
+    top: [f64; 3],
+    size: [f64; 3],
+    counts: [usize; 3],
+    start: Vec<usize>,
+    list: Vec<usize>,
+}
+
+impl Grid {
+    fn coordinate(&self, x: Vec3, i: usize) -> usize {
+        if self.size[i] > 0.0 {
+            let c = ((x[i] - self.origin[i]) / self.size[i]).floor();
+            let last = (self.counts[i] - 1) as f64;
+            if c >= last {
+                self.counts[i] - 1
+            } else {
+                c as usize
+            }
+        } else {
+            0
+        }
+    }
+    fn cell(&self, c: [usize; 3]) -> usize {
+        c[0] + self.counts[0] * (c[1] + self.counts[1] * c[2])
+    }
+    /// The faces listed in the cell of `x`, ascending; none outside the grid.
+    fn candidates(&self, x: Vec3) -> &[usize] {
+        if !(0..3).all(|i| x[i] >= self.origin[i] && x[i] <= self.top[i]) {
+            return &[];
+        }
+        let k = self.cell([self.coordinate(x, 0), self.coordinate(x, 1), self.coordinate(x, 2)]);
+        &self.list[self.start[k]..self.start[k + 1]]
+    }
+    /// The grid of the faces' geometry; `None` when a value is not finite (the all-faces loop is used).
+    fn build(geo: Vec<FaceGeo>) -> Option<Grid> {
+        let finite = |v: &[f64]| v.iter().all(|x| x.is_finite());
+        if geo.is_empty()
+            || !geo
+                .iter()
+                .all(|g| g.reach.is_finite() && finite(&g.lo) && finite(&g.hi) && g.x.iter().all(|p| finite(p)))
+        {
+            return None;
+        }
+        let mut origin = [f64::INFINITY; 3];
+        let mut top = [f64::NEG_INFINITY; 3];
+        let mut size = [0.0f64; 3];
+        for g in &geo {
+            for i in 0..3 {
+                origin[i] = origin[i].min(g.lo[i]);
+                top[i] = top[i].max(g.hi[i]);
+                size[i] = size[i].max(g.hi[i] - g.lo[i]);
+            }
+        }
+        let limit = 8 * geo.len() + 64;
+        let count = |size: &[f64; 3]| -> [usize; 3] {
+            let mut n = [1usize; 3];
+            for i in 0..3 {
+                if size[i] > 0.0 {
+                    n[i] = (((top[i] - origin[i]) / size[i]).floor() as usize).saturating_add(1);
+                }
+            }
+            n
+        };
+        let mut counts = count(&size);
+        while counts.iter().fold(1usize, |a, &b| a.saturating_mul(b)) > limit {
+            for s in &mut size {
+                *s *= 2.0;
+            }
+            counts = count(&size);
+        }
+        let mut grid = Grid {
+            geo: Vec::new(),
+            origin,
+            top,
+            size,
+            counts,
+            start: Vec::new(),
+            list: Vec::new(),
+        };
+        let ncell = counts[0] * counts[1] * counts[2];
+        let ranges: Vec<([usize; 3], [usize; 3])> = geo
+            .iter()
+            .map(|g| {
+                (
+                    [
+                        grid.coordinate(g.lo, 0),
+                        grid.coordinate(g.lo, 1),
+                        grid.coordinate(g.lo, 2),
+                    ],
+                    [
+                        grid.coordinate(g.hi, 0),
+                        grid.coordinate(g.hi, 1),
+                        grid.coordinate(g.hi, 2),
+                    ],
+                )
+            })
+            .collect();
+        let mut start = vec![0usize; ncell + 1];
+        for (lo, hi) in &ranges {
+            for k in lo[2]..=hi[2] {
+                for j in lo[1]..=hi[1] {
+                    for i in lo[0]..=hi[0] {
+                        start[grid.cell([i, j, k]) + 1] += 1;
+                    }
+                }
+            }
+        }
+        for c in 0..ncell {
+            start[c + 1] += start[c];
+        }
+        let mut fill = start.clone();
+        let mut list = vec![0usize; start[ncell]];
+        for (f, (lo, hi)) in ranges.iter().enumerate() {
+            for k in lo[2]..=hi[2] {
+                for j in lo[1]..=hi[1] {
+                    for i in lo[0]..=hi[0] {
+                        let c = grid.cell([i, j, k]);
+                        list[fill[c]] = f;
+                        fill[c] += 1;
+                    }
+                }
+            }
+        }
+        grid.start = start;
+        grid.list = list;
+        grid.geo = geo;
+        Some(grid)
+    }
+}
+
+/// The gap, normal and second derivative of a point at `x` outside a rigid sphere (`axis` `None`, centre `point`) or
+/// cylinder (ADR 0540 D2).
+fn curved(x: Vec3, point: Vec3, axis: Option<Vec3>, radius: f64) -> Option<(f64, Vec3, Vec<f64>)> {
+    let mut d = sub(x, point);
+    if let Some(e) = axis {
+        let s = dot(d, e);
+        d = [d[0] - s * e[0], d[1] - s * e[1], d[2] - s * e[2]];
+    }
+    let len = norm(d);
+    if !(len > 0.0 && len.is_finite()) {
+        return None;
+    }
+    let n = [d[0] / len, d[1] / len, d[2] / len];
+    let e = axis.unwrap_or([0.0; 3]);
+    let mut h = vec![0.0; 9];
+    for i in 0..3 {
+        for j in 0..3 {
+            let delta = if i == j { 1.0 } else { 0.0 };
+            h[3 * i + j] = (delta - e[i] * e[j] - n[i] * n[j]) / len;
+        }
+    }
+    Some((len - radius, n, h))
+}
+
+/// The gradient and second derivative of a Gauss point's gap over its contactor face's nodes then the target's (ADR 0540
+/// D3: the chain through `x_g = sum M_a x_a`), from those over the point and the target's nodes.
+fn expand(p: &GaussPoint, grad: &[f64], hess: Option<&[f64]>) -> (Vec<f64>, Option<Vec<f64>>) {
+    let kc = p.nodes.len();
+    let m0 = grad.len();
+    let kt = m0 / 3 - 1;
+    let m = 3 * (kc + kt);
+    // The full coordinate r: (block, component) -> (point-level index, weight).
+    let map = |r: usize| -> (usize, f64) {
+        let (b, c) = (r / 3, r % 3);
+        if b < kc {
+            (c, p.weights[b])
+        } else {
+            (3 + 3 * (b - kc) + c, 1.0)
+        }
+    };
+    let g: Vec<f64> = (0..m)
+        .map(|r| {
+            let (i, w) = map(r);
+            w * grad[i]
+        })
+        .collect();
+    let h = hess.map(|h0| {
+        let mut h = vec![0.0; m * m];
+        for r in 0..m {
+            let (i, wi) = map(r);
+            for s in 0..m {
+                let (j, wj) = map(s);
+                h[m * r + s] = wi * wj * h0[m0 * i + j];
+            }
+        }
+        h
+    });
+    (g, h)
+}
+
+/// The closest point of `xs` on a face of any shape (ADR 0540 D3): `(xi, gap, normal, gradient, second derivative)` over
+/// the coordinates `xs, x_1 .. x_k`, or `None` when the projection does not converge inside the face.
+#[allow(clippy::type_complexity)]
+fn project_general(xs: Vec3, x: &[Vec3], shape: Shape) -> Option<([f64; 2], f64, Vec3, Vec<f64>, Vec<f64>)> {
+    let k = x.len();
+    let tri = shape.corners() == 3;
+    let mut xi = if tri { [1.0 / 3.0, 1.0 / 3.0] } else { [0.0; 2] };
+    let geom = |xi: [f64; 2]| -> Option<(Vec<f64>, Vec<[f64; 2]>, Vec3, [Vec3; 2], [Vec3; 3])> {
+        let (n, d) = face_shape_functions(k, xi).ok()?;
+        let dd = second_derivatives(shape, xi);
+        let mut p = [0.0; 3];
+        let mut a = [[0.0; 3]; 2];
+        let mut s = [[0.0; 3]; 3];
+        for b in 0..k {
+            for i in 0..3 {
+                p[i] += n[b] * x[b][i];
+                a[0][i] += d[b][0] * x[b][i];
+                a[1][i] += d[b][1] * x[b][i];
+                for (q, sq) in s.iter_mut().enumerate() {
+                    sq[i] += dd[b][q] * x[b][i];
+                }
+            }
+        }
+        Some((n, d, p, a, s))
+    };
+    let mut converged = false;
+    let mut last_step = f64::INFINITY;
+    for _ in 0..30 {
+        let (_, _, p, a, s) = geom(xi)?;
+        let dv = sub(xs, p);
+        let rhs = [dot(dv, a[0]), dot(dv, a[1])];
+        let m = [
+            [dot(a[0], a[0]) - dot(dv, s[0]), dot(a[0], a[1]) - dot(dv, s[1])],
+            [dot(a[0], a[1]) - dot(dv, s[1]), dot(a[1], a[1]) - dot(dv, s[2])],
+        ];
+        let mi = inv2(m)?;
+        let step = [
+            mi[0][0] * rhs[0] + mi[0][1] * rhs[1],
+            mi[1][0] * rhs[0] + mi[1][1] * rhs[1],
+        ];
+        xi[0] += step[0];
+        xi[1] += step[1];
+        if !(xi[0].is_finite() && xi[1].is_finite()) || xi[0].abs() > 10.0 || xi[1].abs() > 10.0 {
+            return None;
+        }
+        last_step = step[0].abs().max(step[1].abs());
+        if last_step <= 1e-14 {
+            converged = true;
+            break;
+        }
+    }
+    // ADR 0517 amendment 1: the rounding floor.
+    if !converged && last_step <= 1e-10 {
+        converged = true;
+    }
+    if !converged {
+        return None;
+    }
+    // ADR 0507 amendment 2, ADR 0540 D3: one percent beyond the face.
+    let tol = 1e-2;
+    let inside = if tri {
+        xi[0] >= -tol && xi[1] >= -tol && xi[0] + xi[1] <= 1.0 + tol
+    } else {
+        xi[0].abs() <= 1.0 + tol && xi[1].abs() <= 1.0 + tol
+    };
+    if !inside {
+        return None;
+    }
+    let (nn, d, p, a, s) = geom(xi)?;
+    let nr = cross(a[0], a[1]);
+    let len = norm(nr);
+    if len <= 0.0 || !len.is_finite() {
+        return None;
+    }
+    let normal = [nr[0] / len, nr[1] / len, nr[2] / len];
+    let g = dot(sub(xs, p), normal);
+    let q = 3 * (k + 1);
+    let mut grad = vec![0.0; q];
+    for i in 0..3 {
+        grad[i] = normal[i];
+        for b in 0..k {
+            grad[3 + 3 * b + i] = -nn[b] * normal[i];
+        }
+    }
+    let mut t = [vec![0.0; q], vec![0.0; q]];
+    let mut pv = [vec![0.0; q], vec![0.0; q]];
+    for al in 0..2 {
+        for i in 0..3 {
+            t[al][i] = a[al][i];
+            for b in 0..k {
+                t[al][3 + 3 * b + i] = -nn[b] * a[al][i];
+                pv[al][3 + 3 * b + i] = d[b][al] * normal[i];
+            }
+        }
+    }
+    let m = [[dot(a[0], a[0]), dot(a[0], a[1])], [dot(a[1], a[0]), dot(a[1], a[1])]];
+    let h = [
+        [dot(normal, s[0]), dot(normal, s[1])],
+        [dot(normal, s[1]), dot(normal, s[2])],
+    ];
+    let am = [
+        [m[0][0] - g * h[0][0], m[0][1] - g * h[0][1]],
+        [m[1][0] - g * h[1][0], m[1][1] - g * h[1][1]],
+    ];
+    let mi = inv2(m)?;
+    let ai = inv2(am)?;
+    let c = mul2(mul2(mi, h), ai);
+    // d2g = - T^T C T - T^T A^-1 P - P^T A^-1 T - g P^T A^-1 P (ADR 0540 D3).
+    let mut hess = vec![0.0; q * q];
+    for al in 0..2 {
+        for be in 0..2 {
+            let (cab, aab) = (c[al][be], ai[al][be]);
+            for r in 0..q {
+                let (tr, pr) = (t[al][r], pv[al][r]);
+                for s2 in 0..q {
+                    hess[q * r + s2] -=
+                        cab * tr * t[be][s2] + aab * (tr * pv[be][s2] + pr * t[be][s2]) + g * aab * pr * pv[be][s2];
+                }
+            }
+        }
+    }
+    Some((xi, g, normal, grad, hess))
 }
 
 /// The bilinear shape functions and their derivatives at `xi`.
@@ -513,15 +1000,18 @@ fn project(xs: Vec3, x: &[Vec3; 4]) -> Option<([f64; 2], f64, Vec3, Vec<f64>, Ve
 }
 
 impl ContactSet {
-    /// The contact set of `pairs` on `model` with the search distance and cycle count of `options`; the multipliers start at
-    /// zero. Refuses an unknown set, a face that is not a Hex8 face, a penalty that is not positive and finite, a plane normal
-    /// of zero or not finite length, an offset at a node that is not a contactor node or not finite, and a node without three
-    /// translations.
+    /// The contact set of `pairs` on `model` with the search distance, search method and cycle count of `options`; the
+    /// multipliers start at zero. Refuses an unknown set, a face that is not a Hex8, Hex20, Tet4 or Tet10 face, a contactor
+    /// set that mixes node faces (Hex8, Tet4) and Gauss-point faces (Hex20, Tet10), a penalty that is not positive and
+    /// finite, a plane normal or a cylinder axis of zero or not finite length, a sphere or cylinder radius that is not
+    /// positive and finite, an offset at a node that is not a contactor node or not finite (or on a Gauss-point pair), and a
+    /// node without three translations.
     pub fn new(model: &SolidModel, pairs: &[ContactPair], options: &ContactOptions) -> Result<ContactSet> {
         let mesh = model.mesh();
         let dofs = model.dof_map();
         let reference = mesh.nodes().to_vec();
         let mut out = Vec::with_capacity(pairs.len());
+        let mut next_point = reference.len();
         for (k, p) in pairs.iter().enumerate() {
             if !(p.penalty > 0.0 && p.penalty.is_finite()) {
                 return Err(FemError::InvalidValue {
@@ -529,24 +1019,87 @@ impl ContactSet {
                     reason: format!("pair {k}: {:e}: must be positive and finite", p.penalty),
                 });
             }
-            // D4: the consistent share of a unit pressure, 2 x 2 Gauss on the reference face.
-            let mut area: BTreeMap<usize, f64> = BTreeMap::new();
-            let gp = 1.0 / 3f64.sqrt();
-            for (_, nodes) in hex8_faces(model, &p.contactor)? {
-                let x = nodes.map(|v| reference[v]);
-                for &(s, r) in &[(-gp, -gp), (gp, -gp), (gp, gp), (-gp, gp)] {
-                    let (n, d) = shape([s, r]);
-                    let a1 = comb(&[d[0][0], d[1][0], d[2][0], d[3][0]], &x);
-                    let a2 = comb(&[d[0][1], d[1][1], d[2][1], d[3][1]], &x);
-                    let j = norm(cross(a1, a2));
-                    for b in 0..4 {
-                        *area.entry(nodes[b]).or_insert(0.0) += n[b] * j;
+            let contactor = surface_faces(model, &p.contactor)?;
+            let by_points = contactor.first().is_some_and(|f| f.shape.by_points());
+            if contactor.iter().any(|f| f.shape.by_points() != by_points) {
+                return Err(FemError::InvalidValue {
+                    key: "contact surface",
+                    reason: format!(
+                        "pair {k}: the contactor set '{}' mixes node faces (Hex8, Tet4) and Gauss-point faces (Hex20, \
+                         Tet10) (ADR 0540 D3)",
+                        p.contactor
+                    ),
+                });
+            }
+            let (nodes, areas, points) = if by_points {
+                // ADR 0540 D3: the points of the face's load rule, the weight times the surface Jacobian.
+                let mut ids = Vec::new();
+                let mut w = Vec::new();
+                let mut pts = Vec::new();
+                for f in &contactor {
+                    let x: Vec<Vec3> = f.nodes.iter().map(|&v| reference[v]).collect();
+                    for (uv, wq) in face_rule(f.nodes.len())? {
+                        let (n, d) = face_shape_functions(f.nodes.len(), uv)?;
+                        let mut a1 = [0.0; 3];
+                        let mut a2 = [0.0; 3];
+                        for (xa, da) in x.iter().zip(&d) {
+                            for i in 0..3 {
+                                a1[i] += da[0] * xa[i];
+                                a2[i] += da[1] * xa[i];
+                            }
+                        }
+                        ids.push(next_point);
+                        next_point += 1;
+                        w.push(wq * norm(cross(a1, a2)));
+                        pts.push(GaussPoint {
+                            face: f.face,
+                            local: uv,
+                            nodes: f.nodes.clone(),
+                            weights: n,
+                        });
                     }
                 }
-            }
-            let nodes: Vec<usize> = area.keys().copied().collect();
-            let areas: Vec<f64> = area.values().copied().collect();
+                (ids, w, Some(pts))
+            } else {
+                // D4: the consistent share of a unit pressure, 2 x 2 Gauss on the reference face (Hex8); A/3 (Tet4).
+                let mut area: BTreeMap<usize, f64> = BTreeMap::new();
+                let gp = 1.0 / 3f64.sqrt();
+                for f in &contactor {
+                    if f.shape == Shape::Tri3 {
+                        let x: Vec<Vec3> = f.nodes.iter().map(|&v| reference[v]).collect();
+                        let third = 0.5 * norm(cross(sub(x[1], x[0]), sub(x[2], x[0]))) / 3.0;
+                        for &v in &f.nodes {
+                            *area.entry(v).or_insert(0.0) += third;
+                        }
+                        continue;
+                    }
+                    let nodes = [f.nodes[0], f.nodes[1], f.nodes[2], f.nodes[3]];
+                    let x = nodes.map(|v| reference[v]);
+                    for &(s, r) in &[(-gp, -gp), (gp, -gp), (gp, gp), (-gp, gp)] {
+                        let (n, d) = shape([s, r]);
+                        let a1 = comb(&[d[0][0], d[1][0], d[2][0], d[3][0]], &x);
+                        let a2 = comb(&[d[0][1], d[1][1], d[2][1], d[3][1]], &x);
+                        let j = norm(cross(a1, a2));
+                        for b in 0..4 {
+                            *area.entry(nodes[b]).or_insert(0.0) += n[b] * j;
+                        }
+                    }
+                }
+                (area.keys().copied().collect(), area.values().copied().collect(), None)
+            };
+            let nodes: Vec<usize> = nodes;
+            let areas: Vec<f64> = areas;
             let mut offsets = vec![0.0; nodes.len()];
+            if points.is_some() && !p.initial_gaps.is_empty() {
+                return Err(FemError::InvalidValue {
+                    key: "initial gap",
+                    reason: format!(
+                        "pair {k}: the contactor set '{}' is of Gauss points (Hex20 or Tet10 faces); initial gaps name \
+                         nodes (ADR 0540 D3)",
+                        p.contactor
+                    ),
+                });
+            }
             for &(node, g0) in &p.initial_gaps {
                 let i = nodes.binary_search(&node).map_err(|_| FemError::InvalidValue {
                     key: "initial gap",
@@ -577,11 +1130,50 @@ impl ContactSet {
                         normal: [normal[0] / l, normal[1] / l, normal[2] / l],
                     }
                 }
-                Target::Surface(set) => TargetData::Faces(hex8_faces(model, set)?),
+                Target::RigidSphere { centre, radius } => {
+                    if !(*radius > 0.0 && radius.is_finite()) || centre.iter().any(|v| !v.is_finite()) {
+                        return Err(FemError::InvalidValue {
+                            key: "rigid sphere",
+                            reason: format!(
+                                "pair {k}: centre {centre:?}, radius {radius:e}: a finite centre and a positive finite \
+                                 radius"
+                            ),
+                        });
+                    }
+                    TargetData::Curved {
+                        point: *centre,
+                        axis: None,
+                        radius: *radius,
+                    }
+                }
+                Target::RigidCylinder { point, axis, radius } => {
+                    let l = norm(*axis);
+                    if !(l > 0.0 && l.is_finite())
+                        || point.iter().any(|v| !v.is_finite())
+                        || !(*radius > 0.0 && radius.is_finite())
+                    {
+                        return Err(FemError::InvalidValue {
+                            key: "rigid cylinder",
+                            reason: format!(
+                                "pair {k}: point {point:?}, axis {axis:?}, radius {radius:e}: a finite point and axis and a \
+                                 positive finite radius"
+                            ),
+                        });
+                    }
+                    TargetData::Curved {
+                        point: *point,
+                        axis: Some([axis[0] / l, axis[1] / l, axis[2] / l]),
+                        radius: *radius,
+                    }
+                }
+                Target::Surface(set) => TargetData::Faces(surface_faces(model, set)?),
             };
-            let mut all: Vec<usize> = nodes.clone();
+            let mut all: Vec<usize> = match &points {
+                Some(pts) => pts.iter().flat_map(|g| g.nodes.iter().copied()).collect(),
+                None => nodes.clone(),
+            };
             if let TargetData::Faces(f) = &target {
-                all.extend(f.iter().flat_map(|(_, n)| n.iter().copied()));
+                all.extend(f.iter().flat_map(|t| t.nodes.iter().copied()));
             }
             for &v in &all {
                 if dofs.components(v) < 3 {
@@ -601,6 +1193,7 @@ impl ContactSet {
                 areas,
                 offsets,
                 eps,
+                points,
             });
         }
         let multipliers = out.iter().map(|p| vec![0.0; p.nodes.len()]).collect();
@@ -609,6 +1202,7 @@ impl ContactSet {
             dofs,
             reference,
             search: options.search_distance,
+            method: options.search_method,
             max_cycles: options.max_cycles,
             multipliers: RefCell::new(multipliers),
             history: RefCell::new(History::default()),
@@ -645,7 +1239,7 @@ impl ContactSet {
         Ok(())
     }
 
-    /// The contactor nodes of pair `pair`, ascending.
+    /// The contactor nodes of pair `pair`, ascending (Gauss points: their ids, ADR 0540 D4).
     pub fn nodes(&self, pair: usize) -> &[usize] {
         &self.pairs[pair].nodes
     }
@@ -704,10 +1298,147 @@ impl ContactSet {
         g
     }
 
-    fn kin(&self, pair: &PairData, u: &[f64], node: usize) -> Option<Kin> {
-        let xs = self.position(u, node);
-        match &pair.target {
-            TargetData::Plane { point, normal } => Some(Kin {
+    /// The current position of a contactor point (a Gauss point: `sum M_a x_a`, ADR 0540 D3).
+    fn at_position(&self, u: &[f64], at: At) -> Vec3 {
+        match at {
+            At::Node(node) => self.position(u, node),
+            At::Point(p) => {
+                let mut x = [0.0; 3];
+                for (&v, &w) in p.nodes.iter().zip(&p.weights) {
+                    let y = self.position(u, v);
+                    for i in 0..3 {
+                        x[i] += w * y[i];
+                    }
+                }
+                x
+            }
+        }
+    }
+
+    /// ADR 0540 D3: the gap from differences against a face of any shape, `n . sum_b N_b sum_a M_a ((X_a - X_b) + (u_a -
+    /// u_b))` (a node: `M` is 1 at the node).
+    fn general_face_gap(&self, u: &[f64], at: At, face: &TargetFace, xi: [f64; 2], n: Vec3) -> f64 {
+        let Ok((nn, _)) = face_shape_functions(face.nodes.len(), xi) else {
+            return f64::NAN;
+        };
+        let one = [1.0];
+        let slot: [usize; 1];
+        let (cn, cw): (&[usize], &[f64]) = match at {
+            At::Node(node) => {
+                slot = [node];
+                (&slot, &one)
+            }
+            At::Point(p) => (&p.nodes, &p.weights),
+        };
+        let mut g = 0.0;
+        for (b, &v) in face.nodes.iter().enumerate() {
+            let (xb, ub) = (self.reference[v], self.displacement(u, v));
+            let mut s = 0.0;
+            for (&a, &w) in cn.iter().zip(cw) {
+                let d = add(sub(self.reference[a], xb), sub(self.displacement(u, a), ub));
+                s += w * dot(d, n);
+            }
+            g += nn[b] * s;
+        }
+        g
+    }
+
+    /// Whether a target face holds the contactor point's node (or a node of its contactor face).
+    fn excluded(at: At, face: &[usize]) -> bool {
+        match at {
+            At::Node(node) => face.contains(&node),
+            At::Point(p) => p.nodes.iter().any(|v| face.contains(v)),
+        }
+    }
+
+    /// The face geometry of the search at `u` (ADR 0540 D1): the expressions of ADR 0507's loop.
+    fn face_geo(&self, u: &[f64], face: &TargetFace) -> FaceGeo {
+        let x: Vec<Vec3> = face.nodes.iter().map(|&v| self.position(u, v)).collect();
+        let k = face.shape.corners();
+        let reach = match self.search {
+            Some(d) => d,
+            None => (0..k).map(|a| norm(sub(x[(a + 1) % k], x[a]))).fold(0.0, f64::max),
+        };
+        let mut lo = [0.0; 3];
+        let mut hi = [0.0; 3];
+        for i in 0..3 {
+            lo[i] = x.iter().map(|p| p[i]).fold(f64::INFINITY, f64::min) - reach;
+            hi[i] = x.iter().map(|p| p[i]).fold(f64::NEG_INFINITY, f64::max) + reach;
+        }
+        FaceGeo { x, reach, lo, hi }
+    }
+
+    /// The per-face tests of the search (ADR 0507 D1): the box, the projection, the gap within the reach and the smallest
+    /// `|g|` (ties to the face visited first).
+    #[allow(clippy::too_many_arguments)]
+    fn try_face(&self, u: &[f64], at: At, xs: Vec3, tf: &TargetFace, geo: &FaceGeo, best: &mut Option<Kin>) {
+        let inside = (0..3).all(|i| xs[i] >= geo.lo[i] && xs[i] <= geo.hi[i]);
+        if !inside {
+            return;
+        }
+        let reach = geo.reach;
+        let projected = if tf.shape == Shape::Quad4 {
+            let x = [geo.x[0], geo.x[1], geo.x[2], geo.x[3]];
+            project(xs, &x).map(|(xi, _, n, grad, hess)| {
+                let g = match at {
+                    At::Node(node) => {
+                        self.face_gap(u, node, &[tf.nodes[0], tf.nodes[1], tf.nodes[2], tf.nodes[3]], xi, n)
+                    }
+                    At::Point(_) => self.general_face_gap(u, at, tf, xi, n),
+                };
+                (xi, g, n, grad, hess)
+            })
+        } else {
+            project_general(xs, &geo.x, tf.shape).map(|(xi, _, n, grad, hess)| {
+                let g = self.general_face_gap(u, at, tf, xi, n);
+                (xi, g, n, grad, hess)
+            })
+        };
+        let Some((xi, g, n, grad, hess)) = projected else {
+            return;
+        };
+        if g.abs() > reach {
+            return;
+        }
+        if best.as_ref().map_or(true, |b| g.abs() < b.gap.abs()) {
+            let (nodes, grad, hess) = match at {
+                At::Node(node) => {
+                    let mut nodes = vec![node];
+                    nodes.extend_from_slice(&tf.nodes);
+                    (nodes, grad, hess)
+                }
+                At::Point(p) => {
+                    let mut nodes = p.nodes.clone();
+                    nodes.extend_from_slice(&tf.nodes);
+                    let (g2, h2) = expand(p, &grad, Some(&hess));
+                    (nodes, g2, h2.expect("given"))
+                }
+            };
+            *best = Some(Kin {
+                nodes,
+                gap: g,
+                normal: n,
+                grad,
+                hess: Some(hess),
+                face: Some(tf.face),
+                local: xi,
+            });
+        }
+    }
+
+    /// The grid of buckets of a pair at `u` (ADR 0540 D1); `None` for the all-faces loop.
+    fn grid(&self, pair: &PairData, u: &[f64]) -> Option<Grid> {
+        match (&pair.target, self.method) {
+            (TargetData::Faces(faces), SearchMethod::Buckets) => {
+                Grid::build(faces.iter().map(|f| self.face_geo(u, f)).collect())
+            }
+            _ => None,
+        }
+    }
+
+    fn kin(&self, pair: &PairData, u: &[f64], at: At, grid: Option<&Grid>) -> Option<Kin> {
+        match (&pair.target, at) {
+            (TargetData::Plane { point, normal }, At::Node(node)) => Some(Kin {
                 nodes: vec![node],
                 // ADR 0507 amendment 3: from differences.
                 gap: dot(sub(self.reference[node], *point), *normal) + dot(self.displacement(u, node), *normal),
@@ -717,44 +1448,63 @@ impl ContactSet {
                 face: None,
                 local: [0.0; 2],
             }),
-            TargetData::Faces(faces) => {
+            (TargetData::Plane { point, normal }, At::Point(p)) => {
+                let mut gap = 0.0;
+                for (&v, &w) in p.nodes.iter().zip(&p.weights) {
+                    gap += w * (dot(sub(self.reference[v], *point), *normal) + dot(self.displacement(u, v), *normal));
+                }
+                let (grad, _) = expand(p, normal, None);
+                Some(Kin {
+                    nodes: p.nodes.clone(),
+                    gap,
+                    normal: *normal,
+                    grad,
+                    hess: None,
+                    face: None,
+                    local: [0.0; 2],
+                })
+            }
+            (TargetData::Curved { point, axis, radius }, _) => {
+                let xs = self.at_position(u, at);
+                let (gap, n, h) = curved(xs, *point, *axis, *radius)?;
+                let (nodes, grad, hess) = match at {
+                    At::Node(node) => (vec![node], n.to_vec(), h),
+                    At::Point(p) => {
+                        let (g2, h2) = expand(p, &n, Some(&h));
+                        (p.nodes.clone(), g2, h2.expect("given"))
+                    }
+                };
+                Some(Kin {
+                    nodes,
+                    gap,
+                    normal: n,
+                    grad,
+                    hess: Some(hess),
+                    face: None,
+                    local: [0.0; 2],
+                })
+            }
+            (TargetData::Faces(faces), _) => {
+                let xs = self.at_position(u, at);
                 let mut best: Option<Kin> = None;
-                for (f, fn_) in faces {
-                    if fn_.contains(&node) {
-                        continue;
+                match grid {
+                    Some(gr) => {
+                        for &f in gr.candidates(xs) {
+                            let tf = &faces[f];
+                            if Self::excluded(at, &tf.nodes) {
+                                continue;
+                            }
+                            self.try_face(u, at, xs, tf, &gr.geo[f], &mut best);
+                        }
                     }
-                    let x = fn_.map(|v| self.position(u, v));
-                    let reach = match self.search {
-                        Some(d) => d,
-                        None => (0..4).map(|a| norm(sub(x[(a + 1) % 4], x[a]))).fold(0.0, f64::max),
-                    };
-                    let inside = (0..3).all(|i| {
-                        let lo = x.iter().map(|p| p[i]).fold(f64::INFINITY, f64::min) - reach;
-                        let hi = x.iter().map(|p| p[i]).fold(f64::NEG_INFINITY, f64::max) + reach;
-                        xs[i] >= lo && xs[i] <= hi
-                    });
-                    if !inside {
-                        continue;
-                    }
-                    let Some((xi, _, n, grad, hess)) = project(xs, &x) else {
-                        continue;
-                    };
-                    let g = self.face_gap(u, node, fn_, xi, n);
-                    if g.abs() > reach {
-                        continue;
-                    }
-                    if best.as_ref().map_or(true, |b| g.abs() < b.gap.abs()) {
-                        let mut nodes = vec![node];
-                        nodes.extend_from_slice(fn_);
-                        best = Some(Kin {
-                            nodes,
-                            gap: g,
-                            normal: n,
-                            grad,
-                            hess: Some(hess),
-                            face: Some(*f),
-                            local: xi,
-                        });
+                    None => {
+                        for tf in faces {
+                            if Self::excluded(at, &tf.nodes) {
+                                continue;
+                            }
+                            let geo = self.face_geo(u, tf);
+                            self.try_face(u, at, xs, tf, &geo, &mut best);
+                        }
                     }
                 }
                 best
@@ -773,9 +1523,14 @@ impl ContactSet {
         let lam = self.multipliers.borrow();
         let mut out = Vec::with_capacity(self.pairs.len());
         for (k, p) in self.pairs.iter().enumerate() {
+            let grid = self.grid(p, u);
             let mut v = Vec::with_capacity(p.nodes.len());
             for (i, &node) in p.nodes.iter().enumerate() {
-                let kin = self.kin(p, u, node);
+                let at = match &p.points {
+                    Some(pts) => At::Point(&pts[i]),
+                    None => At::Node(node),
+                };
+                let kin = self.kin(p, u, at, grid.as_ref());
                 let (gap, force, active) = match &kin {
                     None => (f64::INFINITY, 0.0, false),
                     Some(kn) => {
@@ -812,6 +1567,7 @@ impl ContactSet {
                 out.push(ContactNode {
                     pair: k,
                     node: p.nodes[i],
+                    point: p.points.as_ref().map(|pts| (pts[i].face, pts[i].local)),
                     area: p.areas[i],
                     gap: e.kin.as_ref().map(|_| e.gap),
                     force,
@@ -824,6 +1580,39 @@ impl ContactSet {
             }
         }
         Ok(out)
+    }
+
+    /// A test hook of ADR 0540 (NS): at `u`, the target faces visited by the search summed over the contactor points of the
+    /// pairs with a deformable target, the number of those points, and the sum over them of the target's face count.
+    #[doc(hidden)]
+    pub fn visited_faces(&self, u: &[f64]) -> Result<(usize, usize, usize)> {
+        if u.len() != self.dofs.n_equations() {
+            return Err(FemError::FieldLength {
+                key: "displacement",
+                expected: self.dofs.n_equations(),
+                found: u.len(),
+            });
+        }
+        let (mut visited, mut points, mut faces) = (0, 0, 0);
+        for p in &self.pairs {
+            let TargetData::Faces(f) = &p.target else {
+                continue;
+            };
+            let grid = self.grid(p, u);
+            for (i, &node) in p.nodes.iter().enumerate() {
+                let at = match &p.points {
+                    Some(pts) => At::Point(&pts[i]),
+                    None => At::Node(node),
+                };
+                points += 1;
+                faces += f.len();
+                visited += match &grid {
+                    Some(g) => g.candidates(self.at_position(u, at)).len(),
+                    None => f.len(),
+                };
+            }
+        }
+        Ok((visited, points, faces))
     }
 
     /// The force and the triplets of the state `all` without recording the active set; without `curvature` the matrix is

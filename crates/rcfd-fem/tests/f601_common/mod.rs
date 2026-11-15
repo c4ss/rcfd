@@ -155,18 +155,17 @@ pub fn result_finite(r: &ContactResult) -> bool {
             n.area.is_finite()
                 && n.force.is_finite()
                 && n.pressure.is_finite()
-                && n.gap.is_none_or(|g| g.is_finite())
+                && n.gap.map_or(true, |g| g.is_finite())
                 && fin(&n.local)
                 && fin(&n.normal)
         })
     };
     fin(r.result.displacement_values())
-        && r.result.reactions().is_none_or(fin)
+        && r.result.reactions().map_or(true, fin)
         && nodes_ok(&r.nodes)
         && r.steps.iter().all(|s| {
             nodes_ok(&s.nodes)
-                && s
-                    .solves
+                && s.solves
                     .iter()
                     .all(|x| fin(&x.residuals) && fin(&x.energies) && x.penetration.is_finite())
         })
@@ -424,7 +423,12 @@ pub fn hub_model(n: usize) -> SolidModel {
         }
         for li in 0..nb {
             for k in 0..nper - 1 {
-                conn.extend_from_slice(&hx([band[li][k], band[li + 1][k], band[li + 1][k + 1], band[li][k + 1]]));
+                conn.extend_from_slice(&hx([
+                    band[li][k],
+                    band[li + 1][k],
+                    band[li + 1][k + 1],
+                    band[li][k + 1],
+                ]));
                 if li == nb - 1 {
                     shaft_out.push(FaceRef { element: e, face: 3 });
                 }
@@ -493,4 +497,383 @@ pub fn hub_h(n: usize) -> f64 {
 
 pub fn hub_d() -> f64 {
     D_HUB
+}
+
+// ------------------------------------------------------------------------------------------------------------ ADR 0507 I
+
+pub const E_FIT: f64 = 2.0e11;
+pub const D_FIT: f64 = 1e-3;
+const A_FIT: f64 = 1.0;
+const B_FIT: f64 = 2.0;
+const T_FIT: f64 = 0.1;
+const N_FIT: usize = 64;
+
+/// ADR 0507 D7 I: the ring on the solid shaft (surface sets "ring_in", contactor, and "shaft_out", target).
+pub fn ring_fit_model() -> SolidModel {
+    let dth = 2.0 * PI / N_FIT as f64;
+    let mut pts: Vec<[f64; 2]> = Vec::new();
+    let m = 16;
+    let core = |i: usize, j: usize| i + (m + 1) * j;
+    for j in 0..=m {
+        for i in 0..=m {
+            pts.push([-0.5 + i as f64 / m as f64, -0.5 + j as f64 / m as f64]);
+        }
+    }
+    let mut per = Vec::new();
+    for j in 8..=m {
+        per.push(core(m, j));
+    }
+    for i in (0..m).rev() {
+        per.push(core(i, m));
+    }
+    for j in (0..m).rev() {
+        per.push(core(0, j));
+    }
+    for i in 1..=m {
+        per.push(core(i, 0));
+    }
+    for j in 1..8 {
+        per.push(core(m, j));
+    }
+    assert_eq!(per.len(), N_FIT);
+    let av = A_FIT / (dth / 2.0).cos();
+    let layers = 6;
+    let mut band = vec![per.clone()];
+    for l in 1..=layers {
+        let s = l as f64 / layers as f64;
+        let mut row = Vec::new();
+        for (p, &q) in per.iter().enumerate() {
+            let th = (p as f64 + 0.5) * dth;
+            let c = pts[q];
+            pts.push([
+                (1.0 - s) * c[0] + s * av * th.cos(),
+                (1.0 - s) * c[1] + s * av * th.sin(),
+            ]);
+            row.push(pts.len() - 1);
+        }
+        band.push(row);
+    }
+    let ring0 = pts.len();
+    let rk = |k: usize| (A_FIT - D_FIT) + k as f64 * (B_FIT - A_FIT + D_FIT) / 8.0;
+    let ring = |j: usize, k: usize| ring0 + (j % N_FIT) + N_FIT * k;
+    for k in 0..=8 {
+        for j in 0..N_FIT {
+            let th = j as f64 * dth;
+            pts.push([rk(k) * th.cos(), rk(k) * th.sin()]);
+        }
+    }
+    let n2 = pts.len();
+    let mut nodes: Vec<Vec3> = pts.iter().map(|p| [p[0], p[1], 0.0]).collect();
+    nodes.extend(pts.iter().map(|p| [p[0], p[1], T_FIT]));
+    let hex = |q: [usize; 4]| [q[0], q[1], q[2], q[3], q[0] + n2, q[1] + n2, q[2] + n2, q[3] + n2];
+    let mut conn = Vec::new();
+    let mut shaft_out = Vec::new();
+    let mut ring_in = Vec::new();
+    let mut e = 0;
+    for j in 0..m {
+        for i in 0..m {
+            conn.extend_from_slice(&hex([core(i, j), core(i + 1, j), core(i + 1, j + 1), core(i, j + 1)]));
+            e += 1;
+        }
+    }
+    for l in 0..layers {
+        for p in 0..N_FIT {
+            let p1 = (p + 1) % N_FIT;
+            conn.extend_from_slice(&hex([band[l][p], band[l + 1][p], band[l + 1][p1], band[l][p1]]));
+            if l == layers - 1 {
+                shaft_out.push(FaceRef { element: e, face: 3 });
+            }
+            e += 1;
+        }
+    }
+    for k in 0..8 {
+        for j in 0..N_FIT {
+            conn.extend_from_slice(&hex([ring(j, k), ring(j, k + 1), ring(j + 1, k + 1), ring(j + 1, k)]));
+            if k == 0 {
+                ring_in.push(FaceRef { element: e, face: 5 });
+            }
+            e += 1;
+        }
+    }
+    let mut mesh = SolidMesh::new(nodes).unwrap();
+    mesh.add_block(ElementKind::Hex8, conn).unwrap();
+    let ne = mesh.n_elements();
+    mesh.add_element_set("all", (0..ne).collect()).unwrap();
+    mesh.add_surface_set("ring_in", ring_in).unwrap();
+    mesh.add_surface_set("shaft_out", shaft_out).unwrap();
+    mesh.add_node_set("z0", (0..n2).collect()).unwrap();
+    let both = |v: usize| vec![v, v + n2];
+    mesh.add_node_set("centre", both(core(8, 8))).unwrap();
+    mesh.add_node_set("shaft_x", both(core(m, 8))).unwrap();
+    mesh.add_node_set("ring_0", both(ring(0, 8))).unwrap();
+    let mut r90 = both(ring(16, 8));
+    r90.extend(both(ring(48, 8)));
+    mesh.add_node_set("ring_90_270", r90).unwrap();
+    let mut model = SolidModel::new(mesh);
+    model.add_material("all", elastic(E_FIT, 0.3)).unwrap();
+    model.add_constraint(Constraint::displacement("z0", 2, 0.0)).unwrap();
+    model
+        .add_constraint(Constraint::displacement("centre", 0, 0.0))
+        .unwrap();
+    model
+        .add_constraint(Constraint::displacement("centre", 1, 0.0))
+        .unwrap();
+    model
+        .add_constraint(Constraint::displacement("shaft_x", 1, 0.0))
+        .unwrap();
+    model
+        .add_constraint(Constraint::displacement("ring_0", 1, 0.0))
+        .unwrap();
+    model
+        .add_constraint(Constraint::displacement("ring_90_270", 0, 0.0))
+        .unwrap();
+    model
+}
+
+// ------------------------------------------------------------------------------------------------------------ ADR 0507 H
+
+pub const NU_H: f64 = 0.3;
+pub const R_H: f64 = 1.0;
+pub const A_H: f64 = 0.1;
+
+pub fn e_star() -> f64 {
+    1.0 / (1.0 - NU_H * NU_H)
+}
+
+/// Boussinesq's displacement for the point force `f` into the surface `z = 0` of the body `z <= 0` (E = 1), ADR 0507
+/// arithmetic 3.
+pub fn boussinesq(f: f64, x: Vec3) -> Vec3 {
+    let zeta = -x[2];
+    let r = (x[0] * x[0] + x[1] * x[1]).sqrt();
+    let rho = (r * r + zeta * zeta).sqrt();
+    let c = f * (1.0 + NU_H) / (2.0 * PI);
+    let u_zeta = c * (zeta * zeta / rho.powi(3) + 2.0 * (1.0 - NU_H) / rho);
+    let u_r = c * (r * zeta / rho.powi(3) - (1.0 - 2.0 * NU_H) * r / (rho * (rho + zeta)));
+    let (cx, cy) = if r > 0.0 { (x[0] / r, x[1] / r) } else { (0.0, 0.0) };
+    [u_r * cx, u_r * cy, -u_zeta]
+}
+
+/// ADR 0507 D7 H's graded coordinates: `nf` cells of `h`, then `m` cells growing to `l`.
+pub fn graded(h: f64, nf: usize, m: usize, l: f64) -> Vec<f64> {
+    let xf = h * nf as f64;
+    let (mut lo, mut hi) = (1.0000001f64, 3.0f64);
+    for _ in 0..200 {
+        let q = 0.5 * (lo + hi);
+        let s = h * q * (q.powi(m as i32) - 1.0) / (q - 1.0);
+        if s > l - xf {
+            hi = q
+        } else {
+            lo = q
+        }
+    }
+    let q = 0.5 * (lo + hi);
+    println!("grading factor q = {q:.6}");
+    let mut v: Vec<f64> = (0..=nf).map(|i| h * i as f64).collect();
+    let mut d = h;
+    for _ in 0..m {
+        d *= q;
+        let last = *v.last().unwrap();
+        v.push(last + d);
+    }
+    *v.last_mut().unwrap() = l;
+    v
+}
+
+/// ADR 0507 D7 H's quarter block `[0, 5a]^2 x [-5a, 0]` of Hex8 with the surface set "top" (`z = 0`).
+pub fn hertz_block(per_a: usize, nf: usize, m: usize) -> SolidMesh {
+    let h = A_H / per_a as f64;
+    let xs = graded(h, nf, m, 5.0 * A_H);
+    let n = xs.len();
+    let id = |i: usize, j: usize, k: usize| i + n * (j + n * k);
+    let mut nodes = Vec::with_capacity(n * n * n);
+    for k in 0..n {
+        for j in 0..n {
+            for i in 0..n {
+                nodes.push([xs[i], xs[j], -xs[k]]);
+            }
+        }
+    }
+    let mut conn = Vec::new();
+    let mut top = Vec::new();
+    for k in 0..n - 1 {
+        for j in 0..n - 1 {
+            for i in 0..n - 1 {
+                conn.extend_from_slice(&[
+                    id(i, j, k + 1),
+                    id(i + 1, j, k + 1),
+                    id(i + 1, j + 1, k + 1),
+                    id(i, j + 1, k + 1),
+                    id(i, j, k),
+                    id(i + 1, j, k),
+                    id(i + 1, j + 1, k),
+                    id(i, j + 1, k),
+                ]);
+                if k == 0 {
+                    top.push(FaceRef {
+                        element: i + (n - 1) * (j + (n - 1) * k),
+                        face: 1,
+                    });
+                }
+            }
+        }
+    }
+    let mut mesh = SolidMesh::new(nodes).unwrap();
+    mesh.add_block(ElementKind::Hex8, conn).unwrap();
+    let ne = mesh.n_elements();
+    mesh.add_element_set("all", (0..ne).collect()).unwrap();
+    mesh.add_surface_set("top", top).unwrap();
+    mesh
+}
+
+/// The readings of a Hertz solve (ADR 0540 D5 HS).
+#[derive(Debug, Clone)]
+pub struct Hertz {
+    /// `4 sum t |n_z|`.
+    pub force: f64,
+    pub a_fe: f64,
+    /// The centre node's pressure (NaN when no contactor point lies on the axis).
+    pub p_centre: f64,
+    /// `sqrt(c_0)` of the fit.
+    pub p_fit: f64,
+    pub axis_count: usize,
+    pub penetration: f64,
+    pub points: usize,
+}
+
+/// The position of a contactor point in the reference configuration (a Gauss point: `sum M_a X_a`).
+pub fn point_reference(m: &SolidModel, n: &ContactNode) -> Vec3 {
+    match n.point {
+        None => m.mesh().nodes()[n.node],
+        Some((face, local)) => {
+            let fnodes = m.mesh().face_nodes(face);
+            let (w, _) = rcfd_fem::loads::face_shape_functions(fnodes.len(), local).unwrap();
+            let mut x = [0.0; 3];
+            for (&v, &wa) in fnodes.iter().zip(&w) {
+                for i in 0..3 {
+                    x[i] += wa * m.mesh().nodes()[v][i];
+                }
+            }
+            x
+        }
+    }
+}
+
+/// ADR 0507 D7 H's boundary values on `mesh` (any element kind; by coordinates): `u_x = 0` on `x = 0`, `u_y = 0` on `y =
+/// 0`, Boussinesq's field of `F_th` plus `delta` in `z` on the far faces.
+pub fn hertz_prescribed(mesh: &SolidMesh) -> Vec<rcfd_fem::constraint::Prescribed> {
+    use rcfd_fem::constraint::Prescribed;
+    let a = A_H;
+    let f_th = 4.0 * e_star() * a.powi(3) / (3.0 * R_H);
+    let delta = a * a / R_H;
+    let far = 5.0 * a;
+    let mut pres = Vec::new();
+    for (v, x) in mesh.nodes().iter().enumerate() {
+        let (sx, sy) = (x[0] == 0.0, x[1] == 0.0);
+        if sx {
+            pres.push(Prescribed::new(v, 0, 0.0));
+        }
+        if sy {
+            pres.push(Prescribed::new(v, 1, 0.0));
+        }
+        if x[0] == far || x[1] == far || x[2] == -far {
+            let u = boussinesq(f_th, *x);
+            let vals = [u[0], u[1], u[2] + delta];
+            for (cc, &val) in vals.iter().enumerate() {
+                if (cc == 0 && sx) || (cc == 1 && sy) {
+                    continue;
+                }
+                pres.push(Prescribed::new(v, cc, val));
+            }
+        }
+    }
+    pres
+}
+
+/// The readings of a solved Hertz model (the fit of ADR 0507 D7 H over the points with `p >= 0.5 max p`).
+pub fn hertz_read(model: &SolidModel, r: &ContactResult) -> Hertz {
+    let force = 4.0 * r.nodes.iter().map(|v| v.force * v.normal[2].abs()).sum::<f64>();
+    let pmax = r.nodes.iter().map(|v| v.pressure).fold(0.0, f64::max);
+    let (mut sw, mut sx, mut sy, mut sxx, mut sxy) = (0.0, 0.0, 0.0, 0.0, 0.0);
+    let mut p_centre = f64::NAN;
+    let mut axis_count = 0;
+    for v in &r.nodes {
+        let x = point_reference(model, v);
+        let r2 = x[0] * x[0] + x[1] * x[1];
+        if r2 == 0.0 {
+            p_centre = v.pressure;
+        }
+        if x[1] == 0.0 && v.force > 0.0 {
+            axis_count += 1;
+        }
+        if v.pressure >= 0.5 * pmax {
+            let y = v.pressure * v.pressure;
+            sw += 1.0;
+            sx += r2;
+            sy += y;
+            sxx += r2 * r2;
+            sxy += r2 * y;
+        }
+    }
+    let c1 = (sw * sxy - sx * sy) / (sw * sxx - sx * sx);
+    let c0 = (sy - c1 * sx) / sw;
+    let s = r.steps.last().unwrap();
+    Hertz {
+        force,
+        a_fe: (-c0 / c1).sqrt(),
+        p_centre,
+        p_fit: c0.sqrt(),
+        axis_count,
+        penetration: s.solves.last().unwrap().penetration,
+        points: r.nodes.len(),
+    }
+}
+
+/// `(a_H, p_H, the approach error)` of Hertz's theory at the measured force: `a_H = (3 F R/(4 E*))^(1/3)`, `p_H = 3 F/(2 pi
+/// a_H^2)`, `|delta/(a_H^2/R) - 1|` with the prescribed `delta = a^2/R`.
+pub fn hertz_theory(force: f64) -> (f64, f64, f64) {
+    let a_h = (3.0 * force * R_H / (4.0 * e_star())).cbrt();
+    let p_h = 3.0 * force / (2.0 * PI * a_h * a_h);
+    let delta = A_H * A_H / R_H;
+    (a_h, p_h, (delta / (a_h * a_h / R_H) - 1.0).abs())
+}
+
+/// `max |K - K_fd| / max |K|` of a contact set at `u` with every point active and on the same face at every perturbed
+/// state (ADR 0507 T1's arrangement, step `1e-6`); also the matrix `K` and the central differences.
+pub fn tangent_error(set: &rcfd_fem::contact::ContactSet, u: &[f64]) -> (f64, bool, Vec<f64>, Vec<f64>) {
+    use rcfd_fem::nonlinear::Contribution;
+    let n = u.len();
+    let at = |u: &[f64]| {
+        let mut f = vec![0.0; n];
+        let mut t = Vec::new();
+        set.add(u, 1.0, &mut f, &mut t).unwrap();
+        let mut k = vec![0.0; n * n];
+        for &(r, c, v) in &t {
+            k[n * r + c] += v;
+        }
+        let st: Vec<(bool, Option<FaceRef>)> = set.evaluate(u).unwrap().iter().map(|v| (v.active, v.face)).collect();
+        (f, k, st)
+    };
+    let (_, k, st0) = at(u);
+    let h = 1e-6;
+    let mut kfd = vec![0.0; n * n];
+    let mut same = st0.iter().all(|s| s.0);
+    for j in 0..n {
+        let (mut up, mut um) = (u.to_vec(), u.to_vec());
+        up[j] += h;
+        um[j] -= h;
+        let (fp, _, sp) = at(&up);
+        let (fm, _, sm) = at(&um);
+        same &= sp == st0 && sm == st0;
+        for r in 0..n {
+            kfd[n * r + j] = (fp[r] - fm[r]) / (2.0 * h);
+        }
+    }
+    let kmax = worst(k.iter().map(|v| v.abs()));
+    let err = worst(k.iter().zip(&kfd).map(|(a, b)| (a - b).abs())) / kmax;
+    (err, same, k, kfd)
+}
+
+/// ADR 0507 T1's state `u_i = 0.01 sin(1.7 i + 0.3)`.
+pub fn t1_state(n: usize) -> Vec<f64> {
+    (0..n).map(|i| 0.01 * (1.7 * i as f64 + 0.3).sin()).collect()
 }
