@@ -10496,7 +10496,7 @@ fixed by the item's registration ADR before any code.
     alpha dT_grad; a free plate under a uniform gradient takes the curvature alpha dT_grad and zero moment within 1e-12;
     a model without a gradient gives the bits it gave before.
   - note: Structural solver. Follow-up of F-525 (ADR 0445, 2026-11-14); a new load variant, schema question if exposed.
-- [ ] **F-528** Direct harmonic solve on the transformation path (constraints, rigid sets, elastic supports) and with pre-stress
+- [~] **F-528** Direct harmonic solve on the transformation path (constraints, rigid sets, elastic supports) and with pre-stress
   - depends on: F-412
   - acceptance: Every limit not stated here is registered in the ADR before the run. The direct harmonic solve of ADR
     0448 takes linear constraints, rigid sets and elastic supports through the transformation u = T q (complex
@@ -10504,7 +10504,20 @@ fixed by the item's registration ADR before any code.
     tip equals the 1-D chain with that spring within 1e-8; a model with a rigid set equals the same model with the set's
     nodes merged within 1e-8; with a pre-stress the undamped direct solve equals the F-399 mode superposition with the
     pre-stressed basis and all modes within 1e-8; defaults bit-identical.
-  - note: Structural solver, advanced tier. Follow-up of F-412 (ADR 0448, 2026-11-14; named F-412b there).
+  - note: Structural solver, advanced tier. Follow-up of F-412. PARTIAL. ADR 0543, 2026-11-15:
+    rcfd_fem::harmonic_direct::DirectHarmonic takes linear constraints, rigid sets and elastic supports (nodal
+    springs, foundations) on the transformation x = T q of ADR 0296: every real matrix (stiffness parts with their
+    loss factors or viscoelastic coefficients, supports, K_sigma, mass, Rayleigh stiffness K_0 + K_s + K_sigma,
+    dashpots) reduced once, T^T X T, on one extended pattern; A_r Q = T^T F, the response the mesh part of T Q;
+    supports real and undamped; DirectHarmonicOptions::prestress adds K_sigma (ADR 0390) on both paths. Refused on
+    the transformation path: cyclic constraints, non-zero constraint values, base motion, the supernodal factor.
+    Met: bar on a tip spring against the 1-D chain within 3.9e-13 (limit 1e-8; foundation 3.3e-13); split bar with a
+    rigid set against the merged bar within 1.1e-12, split cantilever against merged within 2.4e-14; pre-stressed
+    undamped direct against F-399 with all 162 modes within 8.2e-12 (with rigid set and spring, 141 modes, 5.9e-12;
+    Rayleigh on K + K_sigma 1.4e-10); Rayleigh on the transformation path against F-399 within 9.1e-11; 1 and 8
+    threads bit-identical; defaults bit-identical (9 digests, baseline hashes). Partial by the registered rule:
+    mutation M2 (T^T F replaced) was not caught by the registered checks, caught by RY2 of amendment 1; 9 of 10
+    caught as registered. No case-file key (the case file has no direct harmonic analysis).
 - [~] **F-529** Nested dissection and supernodal L D L^T for the sparse direct solver; heavy record of 3e5 unknowns
   - depends on: F-431
   - acceptance: Every limit not stated here is registered in the ADR before the run. A nested-dissection ordering and a
