@@ -695,6 +695,7 @@ fn check_loads(model: &SolidModel) -> Result<()> {
             Load::Centrifugal { .. } => Some("a centrifugal load"),
             Load::BodyForceNodal { .. } => Some("a body force"),
             Load::Temperature { .. } => Some("a temperature field"),
+            Load::ShellTemperatureGradient { .. } => Some("a shell temperature gradient"),
             _ => None,
         };
         if let Some(what) = refused {

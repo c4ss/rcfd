@@ -882,6 +882,19 @@ pub(crate) fn check_driver_model(model: &SolidModel) -> Result<()> {
             reason: format!("load {i}: a temperature load is not offered by the nonlinear static solve (ADR 0404)"),
         });
     }
+    // ADR 0612 D4.
+    if let Some(i) = model
+        .loads()
+        .iter()
+        .position(|l| matches!(l, Load::ShellTemperatureGradient { .. }))
+    {
+        return Err(FemError::InvalidValue {
+            key: "nonlinear",
+            reason: format!(
+                "load {i}: a shell temperature gradient is not offered by the nonlinear static solve (ADR 0612)"
+            ),
+        });
+    }
     Ok(())
 }
 

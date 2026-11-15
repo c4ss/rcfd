@@ -156,17 +156,28 @@ fn b1_models_without_a_gradient_keep_their_bits() {
     got.push(("layup load", digest(&nodal_load_vector(&m, &[]).unwrap())));
     // (3) a Hex8 box with a temperature field.
     let mesh = hex_box([0.0; 3], [2.0, 1.0, 1.0], [2, 1, 1]).unwrap();
-    let t: Vec<f64> = mesh.nodes().iter().map(|x| 300.0 + 10.0 * x[0] + 5.0 * x[1] * x[2]).collect();
+    let t: Vec<f64> = mesh
+        .nodes()
+        .iter()
+        .map(|x| 300.0 + 10.0 * x[0] + 5.0 * x[1] * x[2])
+        .collect();
     let mut m = SolidModel::new(mesh);
     m.add_material("all", material()).unwrap();
     m.add_load(Load::temperature(t, 290.0)).unwrap();
     got.push(("hex8 load", digest(&nodal_load_vector(&m, &[]).unwrap())));
     // (4) a Shell3 plate: each quadrilateral cut on its 0-2 diagonal, the plate-Q temperature.
     let tris: Vec<usize> = el.iter().flat_map(|e| [e[0], e[1], e[2], e[0], e[2], e[3]]).collect();
-    let mut m = model(placed(&p), ElementKind::Shell3, tris, BlockProperty::shell(0.05).unwrap());
+    let mut m = model(
+        placed(&p),
+        ElementKind::Shell3,
+        tris,
+        BlockProperty::shell(0.05).unwrap(),
+    );
     m.add_load(temperature(&p)).unwrap();
     got.push(("shell3 load", digest(&nodal_load_vector(&m, &[]).unwrap())));
-    let u: Vec<f64> = (0..m.dof_map().n_equations()).map(|i| 1e-6 * (0.37 * i as f64).sin()).collect();
+    let u: Vec<f64> = (0..m.dof_map().n_equations())
+        .map(|i| 1e-6 * (0.37 * i as f64).sin())
+        .collect();
     got.push(("shell3 stresses", digest(&stress_values(&m, &u))));
     for (name, d) in &got {
         println!("B1 {name}: 0x{d:016x}");

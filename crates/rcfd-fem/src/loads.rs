@@ -264,6 +264,11 @@ pub fn nodal_load_vector(model: &SolidModel, extra: &[NodalForceAt]) -> Result<V
                 crate::thermal::temperature_field(model)?;
                 crate::thermal::add_thermal_load(&mut f, &dofs, model, nodal, *reference)?;
             }
+            Load::ShellTemperatureGradient { gradient } => {
+                // ADR 0612 D2: the curvature thermal load of a through-thickness gradient on Shell4.
+                crate::thermal::temperature_gradient_field(model)?;
+                crate::thermal::add_thermal_gradient_load(&mut f, &dofs, model, gradient)?;
+            }
         }
     }
     for p in extra {
