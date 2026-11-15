@@ -244,3 +244,83 @@ No mutation is declared equivalent.
   registered with it.
 - **L4.** No case-file key, no change to `rcfd-fem`; the existing variants and defaults keep the node smoother.
 
+## Addendum 1: results (2026-11-15)
+
+Run 1, once, at 223b917e with the code later committed as 995a6b87 in the working tree (`f641-scratch/run1.log`: `cargo test -p
+rcfd-fem --release --test sa_thin_plate -- --nocapture --test-threads=1`, 6 tests, 2.35 s). `cargo fmt` was applied after the run
+(layout only) and the code committed as 995a6b87. No amendment; no check re-run. Then, at 995a6b87: `cargo test -p rcfd-linalg
+--release` (129 passed, 0 failed; `linalg-all.log`), `cargo test -p rcfd-fem --release` (1147 passed, 0 failed, 304 ignored; `fem-all.log`), `cargo test -p
+rcfd-api --release --test baseline_hashes` (3 passed, 1 ignored; `baseline.log`), `cargo test -p rcfd-cli --release --test docs_site`
+(2 passed; `docs.log`), `cargo clippy -p rcfd-linalg -p rcfd-fem --release --all-targets -- -D warnings` (clean), `cargo fmt -p
+rcfd-linalg --check` and `cargo fmt -p rcfd-fem --check` (clean).
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| K0 P4b S1; P4a S1 | `531`, 2 restarts, `d8339a8d90774479`; `85` | 531, 2, `d8339a8d90774479`; 85 | yes |
+| KA1 geometric aggregation (P4b, `G`) | `>= 236`, `>= 3.5` | 612, 7.20 (P4a 85) | yes |
+| KA2 `theta = 0.08` | `>= 236`, `>= 3.5` | 576, 7.29 (P4a 79) | yes |
+| KC1 exact level-1 solve | `>= 236`, `>= 3.5` | 620, 8.05 (P4a 77) | yes |
+| KC2 tentative prolongator (two-grid) | `>= 236`, `>= 3.5` | 654, 5.50 (P4a 119) | yes |
+| KC3 prolongator smoothed twice (two-grid) | `>= 236`, `>= 3.5` | 744, 10.33 (P4a 72) | yes |
+| KV test-side two-grid against KC1 (P4b; P4a) | `<= 15 %` | 629 / 620 = 1.5 %; 77 / 77 = 0 % | yes |
+| KS1 vertex patches (two-grid) | `<= 118`, `<= 2.5` | 37, 2.06 (P4a 18) | yes |
+| KS2 `VP(S1)` library path | `<= 118`, `<= 2.5` | 31, 1.63 (P4a 19) | yes |
+| KS3 four node sweeps, `G` | `>= 3.5` | 5.63 (242 / 43) | yes |
+| M1 P3b plain MITC3; default | `>= 236`; `<= 89` | 1147 (3 restarts, residual floor `3.37e-9`); 59 | yes |
+| FX1 P4b `VP(S1)` | `<= 118` and `<= 2 x 25 = 50` | 31 (1 restart) | yes |
+| FX2 `VP(S0)` iterations P4a, P4b, C4, P3a, P3b, C3, BM | `<= 1, 1, 1, 32, 38, 1, 1` | 1, 1, 1, 20, 22, 1, 1 | yes |
+| FX2 `VP(S1)` iterations | `<= 85, 531, 50, 50, 59, 23, 21` | 19, 31, 8, 22, 25, 11, 16 | yes |
+| FX2 errors (2-norm, inf-norm), 14 solves | `<= 1e-8` | largest `9.3e-11`, `1.6e-10` (P4b `VP(S0)`, a one-level solve); with `VP(S1)` largest `7.1e-11`, `9.5e-11` (P4b) | yes |
+| FX3 P4 at t/a = 0.1, 0.01, 0.003, 0.001 | `<= 11, 29, 39, 47` | 7, 19, 26, 31 | yes |
+| SY1 symmetry | `<= 1e-11` | `8.2e-15` | yes |
+| RF1 refusal; node smoother builds | as registered | `PatchNotPositive { level: 0, block: 9 }`; builds | yes |
+| DF defaults | `BlockGaussSeidel` | `BlockGaussSeidel` (three constructors) | yes |
+| B1 existing tests unedited; baseline hashes; docs site | pass | pass (`rcfd-linalg` 129, `rcfd-fem` 1147 passed, 0 failed); 3 passed; 2 passed | yes |
+| B2 four Hex8 digests and the P4b digest | equal | equal (15, 15, 12, 15 iterations, 0 restarts; P4b by K0) | yes |
+| B3 `git diff d1730051 -- crates/*/src` | `amg_elastic.rs` only, additions only | `rcfd-linalg/src/amg_elastic.rs` +115 -0 (hunks at new lines 32-33, 46, 51-63, 137-143, 168-173, 260-335, 936, 946-949, 961, 1026-1029) | yes |
+
+Against the estimates: KC2 654 and KC3 744 (prototype 576 and 646: the prototype changed the prolongator inside its own build,
+the test's two-grid takes the library's tentative and smoothed prolongators and smooths with a test-side Jacobi step; the counts
+stay in the same cluster); KS1 37 and `G = 2.06` (prototype 31 and 1.7; the test-side two-grid solves the coarse problem by a dense
+Cholesky inverse and P4b reaches the residual floor with three restarts), inside the `2.5` limit with less margin than estimated.
+Every library-path count equals the prototype's.
+
+**Cause (a2), by the registered rule: the smoother.** KS1 and KS2 meet the cause side; KA1, KA2, KC1, KC2 and KC3 meet the
+exclusion side; KV holds. No change of the aggregation (two rules) or of the coarse operator (exact level-1 solve, tentative or
+twice-smoothed prolongator) brings P4b under 576 or `G` under 5.5; the vertex-patch smoother alone, on the same aggregates,
+prolongator and coarse operator, brings P4b from 620 to 37 (two levels) and from 531 to 31 (three levels). M1 supports D1: the
+Shell3 plate without its shear factor is as hard for the node smoother as Shell4 (1147), so what separates P4b from P3b is the
+element's shear-to-bending ratio (`1.37e4` against `17.5`, D1), not the triangle or the aggregation.
+
+Mutations (scratch copy `f641-scratch/mut` from `git archive` of 995a6b87, `target-mut`, `mutate.py`, logs `mut-MU*.log`;
+`amg_elastic.rs` restored and checked byte-equal after the run):
+
+| Id | Caught by |
+|---|---|
+| MU1 patches not used | KS2 (531, `G` 6.25), FX1 (531), FX3 (85, 243, 531) |
+| MU2 patch = the block alone | KS2 (506), FX1, FX3, RF1 (no refusal: a single scalar block is positive) |
+| MU3 post-smoother in increasing order | SY1 (`1.6e-4`); FX2, FX3 (the CG does not converge with the non-symmetric cycle) |
+| MU4 default `VertexPatch` | DF, B2 (all four Hex8 digests, `7280e11dfa92b3d0`, 10 iterations), K0 (31), KA1, KA2, KC1, KV, KS3 |
+| MU5 refusal removed | RF1 |
+
+Five of five caught; none declared equivalent.
+
+Not run: meshes other than the ADR 0552 ones and thicknesses below t/a = 0.001 (L1, L2: the CG's residual floor is above `tau`
+there, arithmetic 2); memory and time of the patches (L3); solids with the new smoother.
+
+**Decision by the registered rule: done.** The cause identified by the registered rule (the smoother); every other registered
+check met in the single run (K0, FX1, FX2, FX3, M1, SY1, RF1, DF, B1, B2, B3); every mutation caught; no amendment.
+
+Remaining questions:
+
+1. **Q1. Should `SmoothedAggregationStructural` take the vertex-patch smoother by default?** (a) Keep the node smoother as the
+   variant's default and the patch smoother opt-in (now; the ADR 0552 bits stay). (b) Make the structural variant use
+   `VertexPatch` (every ADR 0552 count falls, FX2; its records would change, and ADR 0552's B2b, which compares the variant with
+   `SmoothedAggregation` on a solid bit for bit, would need the solid rows kept on the node smoother). Recommendation: (a) until a
+   case-file key exists; then (b) for shell models, as a maintainer decision.
+2. **Q2. Robustness beyond this mesh.** On a 32 x 32 Shell4 plate at t/a = 0.001 the prototype's patch-smoother count was 110,
+   floor-limited: the CG's true residual stops at `2.8e-9` there with either smoother (arithmetic 2). (a) Leave it. (b) A
+   follow-up registering the patch smoother on a mesh sequence at thicknesses where the residual floor is below `tau`, with the
+   count against `h / t`. Recommendation: (b).
+3. **Q3. Memory.** The dense patch inverses cost 27 to 54 rows squared per shell node (D2). (a) Leave it (opt-in, meant for thin
+   structures). (b) A sparse local factor (a gain only for the larger patches of coarse levels). Recommendation: (a).
