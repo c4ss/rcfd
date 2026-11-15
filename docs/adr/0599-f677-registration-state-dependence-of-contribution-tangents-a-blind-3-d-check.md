@@ -257,3 +257,93 @@ covered; `CentrifugalFollower` not checked; the symmetric part of the load stiff
 full problem: on free-edged loads the reading of ADR 0596 D1 and its records stand); the full unsymmetric path about a state (the
 flutter follow-up of ADR 0596) not covered; the set-up quantities SCt, SDt, SDq were measured before this registration (disclosed,
 "known"), the tangent paths' checks were not.
+
+## Addendum 1: results (2026-11-15)
+
+Commits: 135c6b36 (registration), 5636a8c3 (the test file, run 1), and this addendum. Each registered run was made once, in
+release, with `--nocapture --test-threads=1`. Logs are in `w49i-work/f677-scratch`:
+
+- the set-up probe made before the registration (`probe1.log`, `probe_final.log`; disclosed above);
+- run 1, the whole new file on 5636a8c3 (`run1.log`);
+- the mutations (`mutations.log`, `tools/mutate.py`), one at a time on a `git archive` of 5636a8c3 with its own target, the new
+  test file run for each;
+- S1 (`clippy.log`).
+
+No library file was changed (L0): `git diff --stat d3d178e9 -- crates/*/src` is empty. The only new code file is
+`crates/rcfd-fem/tests/sa_state_contributions_f677.rs`.
+
+| Id | Measured | Limit | Met |
+|---|---|---|---|
+| S0t | converged in 8 steps, max `|u|` per component `6.02e-3, 6.02e-3, 1.05e-3` m | `Ok` | yes |
+| SCt (known) | `1.9e-15` at `u*`, `4.9e-15` at `0` | `<= 1e-12` | yes |
+| SDt (known) | `8.63e-3` | `>= 1e-3` | yes |
+| SDq (known) | `1.69e-4` | `>= 1e-5` | yes |
+| NSc | `0.561` (`z = 0` edge free) | `>= 1e-1` | yes |
+| BT0t | all five calls `Ok`, 2 positive factors each, 12 to 15 iterations, worst residual `8.4e-11`, none exhausted; factors with the follower at the state `0.45081, 3.88454`; at zero load `1.44594, 4.86734`; without contributions `0.61730, 3.54434`; with `AtZero` `0.45106, 3.88457`; `follower::buckling_factors` `1.44594, 4.86734` | `Ok` | yes |
+| BFD | `8.4e-13` | `<= 1e-6` | yes |
+| BFV | `4.5e-7` | `<= 1e-4` | yes |
+| B0c | `0` (equal in every bit) | `<= 1e-6` | yes |
+| P1c | `3.4e-3` | `<= 1e-1` | yes |
+| NBc | `0.369` | `>= 1e-2` | yes |
+| NB2c | `0.118` | `>= 1e-2` | yes |
+| NMb | `5.43e-4` | `>= 1e-5` | yes |
+| HT0t | all nine responses and both modal solves `Ok`; frequencies at the state `64.02, 231.62` Hz, at rest `114.59, 252.41` Hz | `Ok` | yes |
+| HFD | `3.5e-10` (`omega_a`), `1.7e-10` (`omega_b`) | `<= 1e-6` | yes |
+| H0c | `0` at both frequencies (equal in every bit) | `<= 1e-7` | yes |
+| NHc | `0.231` | `>= 1e-2` | yes |
+| NH2c | `0.651` | `>= 1e-2` | yes |
+| NMh | `1.32e-3` (`omega_a`), `6.60e-4` (`omega_b`) | `>= 2e-6` each | yes |
+| L0 | empty | empty | yes |
+| S1 | `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean (on 5636a8c3) | clean | yes |
+
+**Mutations** (`mutations.log`):
+
+| Id | Caught by (measured) | Listed as possible |
+|---|---|---|
+| MA (the tangent at the state not added) | BFD `0.18`, BFV `0.72` | BFD, BFV, P1c, BT0t, NBc, NMb |
+| MB (`K_c'` not added) | BFD `0.10`, BFV `0.40`, B0c `0.12`, NB2c `5.9e-13` | BFD, BFV, B0c, P1c, BT0t, NBc, NB2c, NMb |
+| MC (`K_c'` at `u = 0`) | BFD `1.69e-4` (estimate `1.7e-4`), BFV `6.0e-4` | BFD, BFV, NMb |
+| MC2 (`K_c(u, lambda*)` at `u = 0`) | BFD `3.74e-4` (estimate `3.8e-4`), BFV `1.3e-3` | BFD, BFV, NMb |
+| MC3 (every contribution tangent at `u = 0`, buckling) | BFD `5.43e-4` (estimate `5.5e-4`; equal to run 1's NMb in every printed digit, as D2 predicts), BFV `1.9e-3` | BFD, BFV |
+| MD (the contributions not added, harmonic) | HFD `0.65`, `0.49`; NHc `0` | HFD, NHc, NMh, HT0t |
+| ME (the Rayleigh stiffness without the contribution) | HFD at `omega_b` `2.6e-3` (`omega_a` still met) | HFD at `omega_b`, NMh at `omega_b` |
+| MH (the contribution tangents at `u = 0`, harmonic) | HFD `1.32e-3`, `6.60e-4` (equal to run 1's NMh) | HFD, NMh |
+| MF (`symmetric_negative` halved) | BFD `0.15`, BFV `0.57`, HFD `0.39`, `0.20`; S0t still converged; B0c and H0c `0` (both sides take the same halved tangent) | S0t, BFD, BFV, HFD, B0c, H0c, P1c, BT0t, HT0t |
+
+All nine were caught, each by a check in its listed column. No check listed as "expected not to move" moved. SCt and SDt kept
+their run-1 values under every mutation. SDq moved only under MF, from `1.691e-4` to `1.706e-4`, because the rest mode of
+`follower::buckling_factors` takes the halved tangent.
+
+**Deviations.** None from the registration. BFD and HFD came out 2 to 3 orders below their estimates, because the rounding
+bounds are worst cases (as in ADR 0596). The first-order estimates of arithmetic 8 for MC, MC2 and MC3 were within 2 percent.
+NMh came out at the upper end of its estimated range.
+
+**What this adds to ADR 0596.** On the plane ring the follower tangent between free unknowns did not depend on the state, so MC
+gave bit-equal results there. On the quarter tube (free `u_z`, a clamped end) the tangent does depend on the state: SDt
+`8.6e-3`, SDq `1.7e-4`. The set-up is conservative: SCt is `4.9e-15`, against `0.56` with one loaded edge freed. The vector
+measure of the buckling modes (`4.5e-7`) confirms that the symmetric pencil is the full linearised problem there. Evaluating the
+tangents at zero displacement is caught blind, both by a permanent test (NMb, NMh) and by the source mutations.
+
+Not run: the whole workspace suite (the lead's gate). The baseline hashes and the ADR 0590/0596 tests were not re-run because no
+library file changed.
+
+**Decision: done** by the registered rule. Every check was met. Nine of nine mutations were caught by listed checks. L0 and S1
+were met, and a5 was met both in the test (NMb, NMh) and by MC3 and MH. No amendment was made.
+
+**Remaining questions** (none changes a default):
+
+1. The status of F-671. ADR 0596 stayed partial only because MC was caught by a check added after the run. Options: (a) leave
+   F-671 partial and let F-677 carry the blind coverage; (b) move F-671 to done with a note pointing to ADR 0599. Recommend (b):
+   this item closes, blind, the gap that F-671 disclosed.
+2. Hyperelastic and larger-strain coverage. On steel the state dependence along the modes is `~1.7e-4`; it scales like the
+   strain at a fixed fraction of `p_cr`, `~(T/R)^2`. Options: (a) a follow-up on a neo-Hookean set-up with large rotations; (b)
+   nothing. Recommend (b) until a use needs it: the code path does not depend on the material, and the catch margin here is
+   more than two orders of magnitude.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> Structural solver, advanced tier. Follow-up of F-671 (ADR 0596). DONE. ADR 0599, 2026-11-15, test only (no library file changed): a blind 3-D check that tangent_buckling_factors_with and DirectHarmonic::about_state_with take the follower tangent at the state. Set-up: quarter tube (Hex20 SVK, R = 1, T = 0.15, half-length 4 m), symmetry planes x = 0, y = 0, z = 0, clamped end, external follower pressure 1.75e8 Pa (0.69 of the linear follower critical pressure). Before the run the set-up was checked for conservativeness (the antisymmetric part of the load stiffness on the free unknowns is 4.9e-15, against 0.56 with one loaded edge freed) and for state dependence (the symmetric follower tangent at the state differs from the one at u = 0 by 8.6e-3 entry-wise and 1.7e-4 along the rest mode). The factors agree with the fourth-order central difference of the nonlinear residual with the follower force to 8.4e-13 (Rayleigh, limit 1e-6) and 4.5e-7 (vector, limit 1e-4); the harmonic responses agree to 3.5e-10 undamped and 1.7e-10 with Rayleigh damping (vector, limit 1e-6); at zero load both equal follower::buckling_factors and DirectHarmonic::new in every bit. Evaluating every contribution tangent at zero displacement in place of the state is caught by registered checks, both by a permanent test contribution (5.4e-4 buckling, 1.3e-3 and 6.6e-4 harmonic, against limits >= 1e-5 and >= 2e-6) and by source mutations; nine of nine mutations caught. Not covered: hyperelastic materials, shells and beams, the full unsymmetric tangent about a state.
+
+> F-671 note, proposed addition (ADR 0599 remaining question 1): the state dependence of the follower tangent, which the plane ring could not see, is checked blind by F-677 (ADR 0599, 2026-11-15); recommended status done.
