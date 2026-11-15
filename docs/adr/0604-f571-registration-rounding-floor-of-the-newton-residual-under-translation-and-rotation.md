@@ -276,6 +276,50 @@ fmt and clippy are clean.
 4. The static driver without a contribution in the reference keeps the ADR 0404 test (open question 3). The incremental unknown
    (open question 2) stays a maintainer decision.
 
+## Amendment 1 (2026-11-15, written after the merge with main d8b6f3f5 and before any run of the merged code)
+
+**What happened.** The base of this branch (43092983) predates F-631 (ADR 0603, merged in main with F-632 and F-680). The
+lead merged F-571 with main for the gate and reported one failure: `crates/rcfd-fem/tests/sa_nl_inertia_reference.rs`
+`ft1_nc1_a_step_at_the_zero_crossing`, check "NC1 Driver refused", now "converged: 0 halvings, residual
+1.3921011428752842e-10". NC1 is ADR 0603's negative control: one step of the Shell3 strip from its zero crossing at `h_f =
+h/1024` with the default reference must be refused (ADR 0603 addendum 1: refused after 5 halvings, stall `1.48e-7` at
+`h_f/32`). With ADR 0604 the default reference path accepts that step at its last iteration at the rounding bound: the step's
+floor (the constant corotated Shell3 rounding `A_f` of ADR 0603) is within `eps |(|K| |u|)|`. This is the behaviour ADR 0604
+D2 registers (a step at a rounding floor of the reference path is accepted with the driver defaults), so the test's
+expectation, not a limit of ADR 0604, is what changed. The number `1.392e-10` is the lead's and is disclosed here; nothing else
+of the merged code was run before this amendment. The audit of ADR 0604 (on 43092983) could not see this test.
+
+**How NC1 is handled** (the lead's instruction, the precedent of F-620 / ADR 0555, the records-and-copies scheme of ADR 0291):
+
+1. `ft1_nc1_a_step_at_the_zero_crossing` becomes an ignored record: its body unchanged, only an `#[ignore = "..."]` naming ADR
+   0603's registered numbers (NC1 refused after 5 halvings, `1.48e-7` at `h_f/32`; FT1 2 iterations, `1.25e-16`) and the
+   reason (ADR 0604 accepts the NC1 step at the rounding bound). No other existing test is changed.
+2. A copy in a new file `crates/rcfd-fem/tests/sa_nl_inertia_reference_after_f571.rs` (helpers copied, the F-631 file not
+   otherwise edited): `ft1_nc1b_a_step_at_the_zero_crossing_after_f571` with FT1 unchanged (same limits: converges, 0 halvings;
+   final relative residual `<= 1e-10`; first-step error `<= 1e-8`) and **NC1b**: the same default step is accepted with 0
+   halvings, its iteration count equals `max_iterations` (20: acceptance at the last iterate, D2), its final relative residual
+   is `> 1e-10` (above the tolerance, so the bound and not the relative test accepted it) and `<= 1e-7` (below the floor ADR
+   0603 measured at `h_f/32`, estimate: `1.39e-10` at `h_f`). Recorded without a limit: the absolute residual `rn` and the bound
+   `b = eps |(|K_eff| |u|)|_free` recomputed in the test from `nonlinear::internal_force`, `nonlinear::tangent` and the
+   integrator's mass at the accepted `u` (a recomputation, not the driver's own numbers; printed as "not available" if the
+   tangent function refuses the shell model).
+3. ADR 0603 gets a short addendum pointing here. NC1's purpose (show that the default reference stalls at the floor) is
+   recorded by the ignored test and by ADR 0603's addendum; FT1 still shows the inertia-term reference converging in 2
+   iterations, which the bound does not affect (the bound is only consulted at the last iterate).
+
+**Checks added (limits fixed now):**
+
+| Id | What | Limit |
+|---|---|---|
+| NC1b | as item 2 above | `Ok`, 0 halvings, iterations `= 20`, `1e-10 < r <= 1e-7` |
+| FT1c | FT1 in the copy | as ADR 0603 FT1 |
+| M1 | `cargo test -p rcfd-fem --release --no-fail-fast` on the merged branch (every non-ignored test; the lead asked for the whole crate) | every failure reported; the only expected change is NC1 |
+| M2 | ADR 0603 NT3 run once with `--ignored` on the merged branch, and FT2, DB1, DB2 in M1: their registered limits | as ADR 0603 (estimate: unchanged, their attempts converge by the relative test before the last iterate: worst residuals `4.9e-13`, `6.1e-13`) |
+| M3 | `baseline_hashes` | pass |
+
+The decision whether ADR 0603's NC1 should be read as superseded (the default path now accepts steps at the floor) is listed
+for the maintainer in the addendum below; recommendation in Addendum 2.
+
 ## For the lead: roadmap entries
 
 > Proposed status: done.
