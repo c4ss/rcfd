@@ -6255,9 +6255,9 @@
     "deps": [
       "F-541"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The near-null space of the smoothed aggregation takes the rotations of Beam2, Shell4 and Shell3 nodes (the six rigid fields with their rotation components); the plate and cantilever models of ADR 0432 and ADR 0454 solved by the preconditioned CG within 1e-8 of the direct solve in a registered number of iterations; the solid-only bits unchanged.",
-    "note": "Structural solver, advanced tier. Follow-up of F-541 (ADR 0545, 2026-11-15)."
+    "note": "Structural solver, advanced tier. Follow-up of F-541 (ADR 0545, 2026-11-15). DONE. ADR 0552, 2026-11-15: new opt-in rcfd_fem::solve::CgPreconditioner::SmoothedAggregationStructural (solver name cg-amg-rbm-structural) with solve::structural_rigid_body_modes: the six rigid fields u = t + w x (x - x_0), theta = w, so a rotation unknown of a Beam2, Shell4 or Shell3 node carries 1 in its rotation column; rcfd-linalg unchanged; the existing SmoothedAggregation and its refusal of the three kinds unchanged (its N2 tests unedited). Near-null fields in the kernel of the assembled stiffness to 3.9e-16 (Shell4 and Shell3 plates placed in space, Beam2; limit 1e-12). The plate and cantilever models of ADR 0432 (Shell4 16 x 16, t/a 0.01 and 0.001; strip 15 x 1) and ADR 0454 (Shell3 32 x 32; strip), and a 40-element Beam2 cantilever, solved to a true relative residual 1e-9 within 1.6e-10 of the direct solve (limit 1e-8); iterations at the default settings 1, 1, 1, 32, 38, 1, 1 (limits 2, 2, 2, 48, 57, 2, 2) and with the forced hierarchy max_coarse 60 (2 to 3 levels, operator complexity 1.08 to 1.45) 85, 531, 50, 50, 59, 23, 21 (limits 128, 797, 75, 75, 89, 35, 32). Without the rotation components the beam takes 46 and the Shell4 strip 71 iterations (21 and 50 with). Solid-only bits unchanged: the columns equal rigid_body_modes bit for bit and a Hex8 cantilever solves to the same bits by both variants (greedy and geometric aggregation); baseline hashes pass. Seven of seven mutations caught. Not covered: robustness in t/a (the thin Shell4 plate with a forced hierarchy takes 531 iterations), solid and structural nodes in one aggregate, a case-file key. Follow-ups F-640 (existing SmoothedAggregation takes structures; retires N2 refusal tests, needs the maintainer), F-641 (thin plates)."
   },
   {
     "id": "F-630",
@@ -6369,5 +6369,27 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. When the exact tangent of the total Lagrangian contact body fails the pivot test, that iteration takes the contact matrix without its curvature part (ADR 0507 amendment 2, as the linear body); ADR 0551 HS20t and HS10t (the mortar contactor, total Lagrangian body) meet radius 0.15, peak 0.20, approach 0.10 with the gap tolerance 1e-8; the existing total Lagrangian contact records and the default bits unchanged.",
     "note": "Structural solver, advanced tier. Follow-up of F-623 (ADR 0551, 2026-11-15)."
+  },
+  {
+    "id": "F-640",
+    "title": "Existing smoothed-aggregation CG takes structures (retire N2 refusal tests; NEEDS THE USER)",
+    "phase": 9,
+    "deps": [
+      "F-629"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. CgPreconditioner::SmoothedAggregation solves the ADR 0552 models with the iteration counts and errors of ADR 0552; the retired refusal tests kept as ignored records with copies; the solid-only bits and the baseline hashes unchanged.",
+    "note": "Structural solver, advanced tier. Follow-up of F-629 (ADR 0552, 2026-11-15)."
+  },
+  {
+    "id": "F-641",
+    "title": "Smoothed aggregation for thin plates and shells",
+    "phase": 9,
+    "deps": [
+      "F-629"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The cause (coarse operator, smoother or aggregation) identified by registered controls on the ADR 0552 plate P4b; if a change is made, P4b at max_coarse 60 in at most twice the Shell3 P3b count, the other ADR 0552 counts not increased and the solid-only bits unchanged.",
+    "note": "Structural solver, advanced tier. Follow-up of F-629 (ADR 0552, 2026-11-15)."
   }
 ]
