@@ -144,7 +144,7 @@ pub struct SkylineLdlt {
 /// Dot product with four fixed accumulators (ADR 0274 D3): blocks of four in index order, the tail into the first,
 /// combined as `(s0 + s1) + (s2 + s3)`.
 #[inline]
-fn dot4(a: &[f64], b: &[f64]) -> f64 {
+pub(crate) fn dot4(a: &[f64], b: &[f64]) -> f64 {
     debug_assert_eq!(a.len(), b.len());
     let mut s = [0.0f64; 4];
     let ca = a.chunks_exact(4);
@@ -163,7 +163,7 @@ fn dot4(a: &[f64], b: &[f64]) -> f64 {
 }
 
 /// First envelope column of every row in the order `order` (`inv` its inverse), from the stored pattern of `a`.
-fn first_columns(a: &CsrMatrix, inv: &[usize]) -> Vec<usize> {
+pub(crate) fn first_columns(a: &CsrMatrix, inv: &[usize]) -> Vec<usize> {
     let mut first: Vec<usize> = (0..a.n).collect();
     for r in 0..a.n {
         let ir = inv[r];
@@ -188,7 +188,7 @@ pub fn envelope_size(a: &CsrMatrix, order: Option<&[usize]>) -> usize {
     first_columns(a, &inv).iter().enumerate().map(|(i, &f)| i - f).sum()
 }
 
-fn rcm_of(a: &CsrMatrix) -> Vec<usize> {
+pub(crate) fn rcm_of(a: &CsrMatrix) -> Vec<usize> {
     let (mut lower, mut upper) = (Vec::new(), Vec::new());
     for r in 0..a.n {
         for k in a.row_ptr[r]..a.row_ptr[r + 1] {

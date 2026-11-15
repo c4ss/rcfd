@@ -274,6 +274,13 @@ impl ContactOptions {
                 ),
             });
         }
+        if self.kinematics == Kinematics::Linear && self.newton.unsymmetric {
+            return Err(FemError::InvalidValue {
+                key: "solver",
+                reason: "newton.unsymmetric: the linear body's loop factors the symmetric tangent (ADR 0560 D4)"
+                    .to_string(),
+            });
+        }
         let mut o = self.newton.clone();
         o.steps = 1;
         o.check()
