@@ -12880,7 +12880,9 @@ fixed by the item's registration ADR before any code.
     most 2.5e-12); kept as known-miss records. Six of six mutations caught; default bits (new record N1, the existing
     records) and baseline hashes unchanged. Follow-up F-664 (Backward-error residual of the pencil eigensolver).
     Follow-up F-665 (Beam2 tangential follower tip force and a linear pre-stress flutter path). The pairs of its F3 and
-    F8 known misses have normwise backward errors at most 3.8e-14 and 4.1e-13 (F-664, ADR 0587, 2026-11-15).
+    F8 known misses have normwise backward errors at most 3.8e-14 and 4.1e-13 (F-664, ADR 0587, 2026-11-15). Its open
+    question 2 (a Beam2 follower tip force with a linear pre-stress flutter path) is answered by F-665 (ADR 0589,
+    2026-11-15): Beck's column of Beam2 elements within 8.9e-4 of 20.0509536 (the Timoshenko departure).
 - [~] **F-654** Independent whirl reference for spinning shells
   - depends on: F-647
   - acceptance: Every limit not stated here is registered in the ADR before the run. The forward and backward whirl
@@ -13086,21 +13088,48 @@ fixed by the item's registration ADR before any code.
     <= 5.2e-3 on the Beck pencils and 0.11 on three test pencils. Eigenvalues, modes, residuals and steps of ADR 0580
     unchanged (new digest records of every bisection evaluation, the buckling problems and three pencils at the base;
     the F-653 tests and known-miss records unedited); baseline hashes unchanged. Six of six mutations caught.
-- [ ] **F-665** Beam2 tangential follower tip force and a linear pre-stress flutter path
+- [x] **F-665** Beam2 tangential follower tip force and a linear pre-stress flutter path
   - depends on: F-653
   - acceptance: Every limit not stated here is registered in the ADR before the run. A follower tip force on a Beam2
     node with its load stiffness, and the modes of K + lambda (K_sigma - K_f) with the mass as complex eigenvalues;
     Beck's column of Beam2 elements has its flutter load within a registered limit of the derived 20.0509536 E I/L^2 of
     docs/reference-data.md; existing beam results keep their bits.
-  - note: Follow-up of F-653 (ADR 0580, 2026-11-15).
-- [ ] **F-666** Hyperelastic structural elements on the other linear paths and by default
+  - note: Structural solver, advanced tier. Follow-up of F-653 (ADR 0580, 2026-11-15). DONE. ADR 0589, 2026-11-15: new
+    rcfd_fem::follower::FollowerTipForce (a tangential follower force on Beam2 nodes, fixed in the end section so that
+    it turns with the node rotation, f = lambda (F + theta x F); its load stiffness K_f with the entries lambda eps_ijk
+    F_k at (translation i, rotation j), unsymmetric; non-beam nodes refused) and follower::prestressed_modes_full (the
+    complex modes of (K + lambda (K_sigma - sum K_f)) phi = omega^2 M phi about the linear pre-stress of the reference
+    load, no Newton tangent, so beams take it; shift-invert Arnoldi of ADR 0580 with the backward errors of ADR 0587;
+    transformation path refused). Beck's column of 40 Beam2 elements, L/h = 100, bisection on the onset of a complex
+    pair: p_cr = 20.03316 E I/L^2 (-8.87e-4 from the derived 20.0509536, registered limit 2e-3; the shear and rotary
+    inertia of the Timoshenko element: within 9.7e-7 of the Timoshenko continuum and equal to an independent
+    re-implementation of the same discretisation), coalescence Omega^2 = 121.19 (-1.26e-3); an oblique 3-D column of a
+    2:1 rectangle gives the same load to the last bit; the dead tip force gives a real spectrum with a negative
+    eigenvalue; without followers the full path agrees with geometric::prestressed_modes within 3e-11; backward errors
+    at most 1.9e-13. Six of six mutations caught (the transpose of K_f leaves the spectrum unchanged and is caught by
+    the element check); existing beam results (new record N1, the existing beam and follower records) and baseline
+    hashes unchanged.
+- [~] **F-666** Hyperelastic structural elements on the other linear paths and by default
   - depends on: F-645
   - acceptance: Every limit not stated here is registered in the ADR before the run. With a neo-Hookean material on
     Beam2 and Shell4 elements, the cyclic, rotating, cms and mpc-transformation paths give the results of the isotropic
     twin of the same small-strain moduli within 1e-10; on the maintainer's approval the refusal of ADR 0555 D3 on
     structural elements is lifted by default with RF1 retired as a record and its copy accepting.
-  - note: Follow-up of F-645 (ADR 0584, 2026-11-15). The default lift part NEEDS USER: it retires sa_hyper_paths.rs
-    rf1_to_rf4_refusals row RF1 as record+copy.
+  - note: Structural solver, advanced tier. Follow-up of F-645 (ADR 0584). PARTIAL. ADR 0593, 2026-11-15: with
+    SolidModel::set_hyperelastic_structures(true) a neo-Hookean material on Shell4 (and Shell3) elements on the cyclic
+    path (solve_static_mpc on a frustum sector with CyclicOptions::shells, solve_static_harmonic k = 1,
+    modal_analysis_harmonic k = 0..3), and on Beam2 and Shell4 elements on the rotating path (RotatingPart::modes at 0.2
+    omega_1 with stress stiffening and spin softening; RotatingSector::modes on the sector), the cms path (cms::reduce:
+    reduced stiffness, mass, load, fixed-interface and reduced eigenvalues, recovered static field) and the
+    mpc-transformation path (solve_static_mpc and modal_analysis_mpc with a rigid set and a linear constraint), gives
+    the results of the isotropic twin of the same small-strain moduli with difference exactly 0 (limit 1e-10); the twin
+    with G (1 + 1e-6) is seen at 9.4e-7 .. 1.0e-6. The registered run found the rotating path refusing the material: its
+    unit pre-stress copy did not carry the setting (fixed by one line in rotating.rs, defaults bit-identical: baseline
+    hashes and the rotating default-bits records pass; the run-1 tests kept as ignored known-miss records). Seven of
+    seven mutations caught. Not done: Beam2 on the cyclic path stays refused for every material (ADR 0556 D1); the
+    default lift with RF1 retired awaits the maintainer's approval. Follow-up F-672 (Beam2 elements in the cyclic
+    constraint). Also fixed an F-645 defect (rotating.rs unit_centrifugal_model dropped hyperelastic_structures). The
+    default lift (RF1 retired as record+copy) NEEDS USER; the agent recommends lifting it now.
 - [x] **F-667** Pre-stress on the warping transient path
   - depends on: F-661
   - acceptance: Every limit not stated here is registered in the ADR before the run. WarpingTransient takes the
@@ -13121,22 +13150,48 @@ fixed by the item's registration ADR before any code.
     step force grows by a factor of 63 in the second period (bounded in tension); the indefinite system is integrated
     without a warning. Defaults bit-identical (4 digests, and a zero pre-stress gives the bits of no option). Six of six
     mutations caught. No warping inertia, no nonlinear transient, no case-file key.
-- [ ] **F-668** Negative-pivot count of the pre-stressed warping harmonic solve
+- [x] **F-668** Negative-pivot count of the pre-stressed warping harmonic solve
   - depends on: F-661
   - acceptance: Every limit not stated here is registered in the ADR before the run. WarpingHarmonic with a pre-stress
     reports the number of negative eigenvalues of K + K_sigma on the free equations (a Sturm count of the real factor at
     omega = 0); the fork-supported I beam under N = -0.5 of the torsional buckling load reports exactly the number of
     weak-axis bending modes beyond their Euler load (one), and 0 under N = +0.5; every result without the option
     bit-identical.
-  - note: Follow-up of F-661 (ADR 0585, 2026-11-15). Acceptance extended by the lead on ADR 0591 Q2: and
-    WarpingTransient::with_prestress reports the same count (in progress as ADR 0592).
-- [ ] **F-669** Buckling and harmonic response about a nonlinear hyperelastic state
+  - note: Structural solver, advanced tier. Follow-up of F-661 and F-667 (ADR 0585, ADR 0591, 2026-11-15). DONE. ADR
+    0592, 2026-11-15: the warping harmonic and transient solvers report the number of negative eigenvalues of the
+    reduced stiffness at omega = 0 (`WarpingHarmonic::negative_eigenvalues`, `WarpingTransient::negative_eigenvalues`; K
+    + K_sigma with a pre-stress, K without), a Sturm count of the real L D L^T factor (reverse Cuthill-McKee, no
+    pivoting, the options of count_below at the shift 0; Sylvester's law of inertia), computed when asked; a numerically
+    singular stiffness is refused (key "stiffness"). Fork-supported I beam, 16 elements: N = -0.5 of the torsional
+    buckling load counts 1 (the weak-axis m = 1 bending mode, beyond its load at 0.285 of N_T), N = +0.5 counts 0,
+    harmonic and transient alike; also -0.25 counts 0, -1.2 counts 3 (weak m = 1, 2 and the torsional mode), the
+    torsion-only model 0 and 1, and the factors below 1 of the warping buckling solve agree. Defaults bit-identical (six
+    warping bit records and baseline_hashes unchanged). Six of six mutations caught. No case-file key, no automatic
+    report during a solve.
+- [~] **F-669** Buckling and harmonic response about a nonlinear hyperelastic state
   - depends on: F-646
   - acceptance: Every limit not stated here is registered in the ADR before the run. The buckling factors and the direct
     harmonic response about a nonlinear static state of a hyperelastic model take the driver's tangent at that state; at
     a load of zero they equal those of the linear paths within 1e-10, and the BBar bar at K/G = 1e4 about a stretched
     state gives frequencies that agree with central differences of the nonlinear static residual within 1e-6.
-  - note: Follow-up of F-646 (ADR 0586, 2026-11-15).
+  - note: Structural solver, advanced tier. Follow-up of F-646 (ADR 0586). PARTIAL. ADR 0590, 2026-11-15:
+    follower::tangent_buckling_factors, (K_T + mu K_sigma) x = 0 with the driver's tangent at a state and the geometric
+    stiffness of a given reference pre-stress, and DirectHarmonic::about_state, K_T - omega^2 M + i omega (alpha M +
+    beta K_T + C_d) (no loss factor, pre-stress, temperature or viscoelastic material; stress refused), both opt-in, the
+    code of DirectHarmonic::new after its assembly shared unchanged (baseline hashes and the harmonic and follower tests
+    pass). Compressed hyperelastic bar (Full Hex8 8 x 2 x 2, 2.25e3 N, neo-Hookean and Mooney-Rivlin): the factors about
+    the state against the fourth-order central difference of the nonlinear static residual along each mode 3.1e-13
+    (limit 1e-6); at zero load equal to buckling::factors in every bit (limit 1e-10); 1 + mu_state against the linear
+    factor 1.6e-2 (limit 5e-2). Stretched bar (3.6e4 N): the harmonic response about the state satisfies the
+    central-difference residual equation within 7.4e-11 (limit 1e-6, undamped and with Rayleigh damping); at zero load
+    equal to DirectHarmonic::new in every bit. BBar bar at K/G = 1e4, stretched: tangent_modes frequencies against the
+    fourth-order central difference 5.3e-11 (limit 1e-6; ADR 0586's two-point difference gives 1.3e-4, a record), the
+    tangent against column differences 2.6e-12. Negative controls 0.15 to 3.3. Six of six mutations caught, five by
+    their expected checks; the dropped mean part of the F-bar tangent was caught only by the failed Newton solve of the
+    set-up, hence partial by the registered rule (recommended to be read as done). Not covered: follower contributions
+    and loss factors about a state, Hex20, Tet, shells and beams. Follow-up F-671 (contributions about a nonlinear state
+    on the buckling and direct harmonic paths). Done is the maintainer's call (every registered check met; MU6 caught
+    only by the set-up check S0, omitted from its expectations by a drafting slip).
 - [ ] **F-670** Load height on the pre-stressed warping modes and harmonic path
   - depends on: F-663, F-661
   - acceptance: Every limit not stated here is registered in the ADR before the run. The lowest flexural-torsional
@@ -13146,3 +13201,16 @@ fixed by the item's registration ADR before any code.
     derived in the ADR within 1e-2 at 16 elements and falls to zero at the ADR 0588 buckling load within 1e-2; results
     without a load height bit-identical.
   - note: Follow-up of F-663 (ADR 0588, 2026-11-15).
+- [ ] **F-671** Contributions about a nonlinear state on the buckling and direct harmonic paths
+  - depends on: F-669
+  - acceptance: Every limit not stated here is registered in the ADR before the run. tangent_buckling_factors and
+    DirectHarmonic::about_state take the tangents of the driver's contributions (a follower pressure) at the state;
+    their factors and responses agree with central differences of the nonlinear residual including the follower force
+    within 1e-6, and with no contribution given they equal the paths of ADR 0590 in every bit.
+  - note: Follow-up of F-669 (ADR 0590, 2026-11-15).
+- [ ] **F-672** Beam2 elements in the cyclic constraint
+  - depends on: F-628
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A cyclic sector holding Beam2
+    elements (the orientation vector and the rotation unknowns rotated per sector) gives the static displacements and
+    the modes of each harmonic index of the full ring of beams within 1e-10, the defaults bit-identical.
+  - note: Follow-up of F-666 (ADR 0593, 2026-11-15).
