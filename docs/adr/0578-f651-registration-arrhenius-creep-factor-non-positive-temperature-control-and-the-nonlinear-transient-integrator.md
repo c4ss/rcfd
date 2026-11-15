@@ -207,3 +207,78 @@ the rate reads the integrator's temperature (a factor fixed at one temperature g
 - The rate is checked for `m = 0` (steady creep), one Hex8, uniform temperature, at two temperatures; not under a temperature
   history in the integrator, not for `m != 0` (whose rate depends on the time of the load), not at finite strain.
 - No case-file key (maintainer's call).
+
+## Addendum 1: results (2026-11-15)
+
+Commits: e78c80e6 (this registration, alone), db81ebf5 and 019ec212 (the bit record B0, its digests printed by the file run on
+the unchanged base e348eb34, `f651-scratch/b0-base.log`, then rustfmt), b267ec03 (D2 in `mat_creep.rs`, `nl_transient.rs`,
+`nonlinear.rs`, and the tests `sa_creep_arrhenius_nlt.rs`), c8b90ba6 (rustfmt). Each registered check ran once, at b267ec03
+(`f651-scratch/run1.log`), release profile. No limit was changed and no test was re-run to pick a result.
+
+Library lines: `mat_creep.rs` module text (4 lines), `use` (2 lines), `check_factor_temperature` (new, 49 lines after
+`arrhenius_factor`); `nl_transient.rs` the doc of `Integrator::new` (2 lines) and the call after the field checks (7 lines);
+`nonlinear.rs` the call after the D3 block of ADR 0558 in `solve_in_time_with` (7 lines, 2694 to 2700).
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| NP1 `arrhenius_factor` and `update` at the 18 values of `S`, `arrhenius_factor(-inf)`, `with_temperature(-inf)` | key `"temperature"`, all 38 | all 38 | yes |
+| NP2 `Integrator::new`, 7 constants and 7 history points | top-level `InvalidValue` key `"temperature"`, all 14 | all 14 | yes |
+| NP3 `solve_in_time_with`, the same 14 | the same | all 14 | yes |
+| NI1 `Integrator::new` without a temperature option | refused, key `"temperature"` | refused | yes |
+| PC1 the 7 positive controls | all accepted | all 7 | yes |
+| CR2 rate at 750 K by the displacement | `<= 1e-2` | `6.010e-5` | yes |
+| CR2 rate at 750 K by the creep state, worst of 8 points | `<= 1e-2` | `5.809e-5` | yes |
+| DV at 750 K, worst step of the window | `<= 1e-2` | `6.010e-5` | yes |
+| CR1 rate at 700 K by the displacement | `<= 1e-2` | `1.057e-5` | yes |
+| CR1 rate at 700 K by the creep state | `<= 1e-2` | `8.575e-6` | yes |
+| DV at 700 K | `<= 1e-2` | `1.058e-5` | yes |
+| CRr ratio of the rates against `f(T2)/f(T1) = 9.883849` | `<= 1e-2` | `9.883359` (`4.95e-5`) | yes |
+| B1 the six digests of B0 on the tip | bits equal | equal | yes |
+| B2 the listed default-bits files, `sa_creep_arrhenius`, `sa_creep`, `sa_qs_visco`, `baseline_hashes` | all pass | all pass; beyond the list also the `rcfd-fem` unit tests, `sa_nl_transient`, `sa_temp_history`, `sa_temp_field`, `sa_visco`, `sa_emc`, `sa_dg`, `sa_scaffold` and the default-bits files of corot_shell_dyn, dg, dgm, emc, hyper, hyper_paths, temp_predictor, visco, si_fbar | yes |
+
+Set-up values printed by the run: `omega_1 = 1961.161 rad/s`, `P = 3.2038e-3 s`, `A = 3.3129e-4`, `A f(T2) = 3.9016e-18`, window
+`[0.05126, 0.10252] s`. The measured rate errors are below the bound of arithmetic 5 (`8.6e-4` at `T2`, `8.7e-5` at `T1`) and
+scale with the creep rate as the damping bias does (`6.0e-5 / 1.06e-5 = 5.7`; the bound's `9.88` assumes the whole mass at the
+full velocity). B0 note: four of its digests are equal (a plain creep material does not read the temperature, and `A_EFF / f1 *
+f1` rounds back to `A_EFF`, so the factor material at 700 K does the same arithmetic); so it was on the base too.
+
+Mutations (scratch copy of b267ec03, `f651-scratch/mut`, own target dir; `mutate.py`, logs `MU*.log`):
+
+| Id | Caught by |
+|---|---|
+| MU1 (MU5 of ADR 0558, `T > 0` removed) | NP1, 20 rows: `arrhenius_factor` accepted every `T <= -34 K` (`-1e10 K` gives `1.0000024`, `-34 K` gives `1.8e307`); `update` at those temperatures returned a stress (`-700 K` and below) or failed with the key `"creep iteration"` (`-34`, `-35`, `-100 K`) |
+| MU2 (D2 (i) removed) | NI1 |
+| MU3 (D2 call removed from `Integrator::new`) | NP2 (14 rows), NI1 |
+| MU4 (D2 call removed from `solve_in_time_with`) | NP3 (14 rows: a solver error after 5 halvings in place of the key) |
+| MU5 (zero accepted) | NP2, NP3 at `0.0` and `-0.0` (8 rows) |
+| MU6 (history not checked) | NP2, NP3 history rows (14) |
+| MU7 (every factor material refused) | PC1 (2 rows), and the CR run (refused at `Integrator::new`) |
+| MU8 (factor dropped in `update`) | CR1, CR2, DV (errors `5.4e4`, `5.4e5`) |
+| MU9 (factor at 700 K whatever the context) | CR2 (`0.899`), CRr (`0.899`), NP1 `update` at `0` and `-0.0` |
+
+Nine of nine caught. `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean.
+
+Deviations: none from the registered set-up. Not run: the whole workspace suite (the lead's gate).
+
+**Decision by the registered rule: done.** Every check NP1 to B2 met on its first run, every planned mutation caught, no
+post-run amendment.
+
+### Remaining questions
+
+1. **A nodal temperature field with a non-positive value** reaches the caller as a step error, with the key `"temperature"` only
+   inside it (D2, Limits). Options: (a) leave; (b) check the field's nodal values up front for meshes of linear elements only;
+   (c) make the drivers surface a point refusal with the key `"temperature"` as a top-level error (not retryable).
+   Recommendation: (a) now, (c) if a field-driven creep case appears; (c) changes the error of other materials too and is a
+   separate item.
+2. **A history refused for a point outside the run's times** (D2 (iii)). Options: (a) keep (simple, conservative); (b) check only
+   `[0, t_last]` in `solve_in_time_with`, where the times are known. Recommendation: (a), taken on the maintainer's standing
+   instruction of 2026-11-11 (take the recommendation).
+3. **Case-file key** (ADR 0558 question 2) stays the maintainer's call.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> Structural solver, advanced tier. Follow-up of F-581 (ADR 0558, 2026-11-15). DONE. ADR 0578, 2026-11-15: mat_creep::check_factor_temperature, called by nl_transient::Integrator::new and nonlinear::solve_in_time_with, refuses a creep material with the Arrhenius factor before any step (key temperature) without a temperature option, with a constant temperature that is not positive and finite, or with a temperature history with such a point; a model without the factor returns before the options are read. Met on the first run: NP1, the registered control of every non-positive temperature (18 values from 0, -0.0 and the subnormal through -34 K and -1e10 K to -f64::MAX, and -inf), refused at arrhenius_factor and the point update, 38 of 38; the same as a top-level refusal at Integrator::new and at solve_in_time_with, 14 of 14 each; Integrator::new without a temperature option refused; seven positive controls accepted; one Hex8 of the factor material under a step load in the nonlinear transient integrator (generalised-alpha rho_inf 0.5, mass damping omega_1, 1280 steps of P/40) at 750 K creeps on the window [16 P, 32 P] at A exp(-Q/(R T)) sigma^3 within 6.0e-5 (displacement), 5.8e-5 (creep state), the velocity within 6.0e-5, at 700 K within 1.1e-5, the ratio of the rates against f(750)/f(700) = 9.88 within 5.0e-5; default bits (six new digests from the base, the default-bits files of the creep, nl_transient, visco and temperature paths) and baseline hashes unchanged; nine of nine mutations caught, among them MU5 of ADR 0558 (caught by NP1 at every T <= -34 K). A nodal temperature field is not checked up front (a non-positive point value is refused at the point, inside the step error). Case-file key not added (maintainer's call).
+
+No follow-up is proposed (remaining question 1 recommends leaving the field case until a field-driven creep case appears).
