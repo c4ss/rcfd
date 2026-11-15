@@ -246,3 +246,90 @@ below the F1b limit's sensitivity (a residual of `1e-8` relative to the internal
 `~1e-16 H`, far below the E1 limit `1e-5`). Not a search: no other value is run. The limits of NT1 apply unchanged to NT1b:
 F1 `1e-2`, F1b `1e-3`, F1c `1e-2`, E1 `1e-5`, EZ `1e-4` (EZ by `ez_clapeyron` with the default options as before). NT1b is a
 heavy ignored record, run once.
+
+## Addendum 1: results (2026-11-15)
+
+Runs: run 1 at 79d2274b (`f541-scratch/run1-fast.log`, the fast tests once; `run1-ignored.log`, NT1 and KM1 once); run 2 at
+3ca86a6a after amendment 1 (`run2-nt1b.log`, NT1b once); mutations on a `git archive` copy of 3ca86a6a with its own target
+(`f541-scratch/MU1.log` to `MU9.log`, `mutations.log`). The commit 19c939f7 after the runs only formats the test file and names
+the RC1 path type for clippy (`type EntryPath`); no check, limit or set-up changed. No library file changed (N1).
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| TR1 (H1, H1b) translations, rotations | `1e-10` | `0` (bit equal to the clamp), both references | yes |
+| TR2 (H2) translations, rotations; H2m four frequencies | `1e-10`; `1e-8` | `0`; `0` (42.161, 104.706, 274.013, 351.452 Hz) | yes |
+| TR3 (H3) tip translations, rotations; H3r forces, moments | `1e-12`; `1e-10` | `0`, `0`; `3.6e-14`, `3.6e-14` | yes |
+| TR4 (K1) `k theta - M`, `S + M`; rigid `theta_y`, `u_z` | `1e-10` | `<= 3.1e-14`; `2.2e-13`, `1.7e-13` | yes |
+| TR5 (K2) root spring; tip rotation, tip deflection | `1e-10` | `<= 2.6e-13`; `8.9e-14`, `1.4e-13` | yes |
+| TR6 Z1 to Z6; Z7 | 6, 1, 0, 1, 6, 0, 0; `1e-12` | 6, 1, 0, 1, 6, 0, 0; `2.3e-16` | yes |
+| NT1 (run 1, 100 periods) | | stopped at step 3908 (Newton residual floor `4.7e-10` against `1e-10`, energy ratio `1.3e-27`); kept as `nt1_shell3_strip_100_periods_known_miss` | set-up defect (amendment 1) |
+| NT1b (amendment 1) F1, F1b, F1c, E1, EZ | `1e-2`, `1e-3`, `1e-2`, `1e-5`, `1e-4` | `2.05e-3`, `8.0e-8`, `7.9e-5`, `2.84e-8`, `5.14e-7` (0 halvings, 11988 iterations, 35 s) | yes |
+| NT2 F1c (fast) | `1e-2` | `7.9e-5` (`f_1 = 0.12287793` Hz, `f_EB = 0.12288769` Hz) | yes |
+| AL1 Shell3 roof `8 x 8 x 2` | holds | stopped, negative pivot after the limit, `P_lim = 2219.1` N (208 points, no halving, 4 s) | yes |
+| AL2 Shell3 8 against Shell4 8 | `1e-2` | `2.01e-3` (Shell4 8: `2223.6` N) | yes |
+| NC1, NC2, NC3, NC4 | | 6 free motions; `0.67`; `-9.9e-4` against Shell3 16 (recorded); 3 rows taken by both, 11 refused by both | yes |
+| RC1 (14 paths) | holds each | consistent on every path (taken by both: static, modal, `initial_states`; refused by both naming the two packages: multigrid, `check_supported`, linear transient, damped modes, direct harmonic, `solve_in_time`, `tangent_modes`, cyclic static, cyclic modal, cyclic harmonic; the energy-momentum step `InvalidValue { key: "nl_transient" }` for both) | yes |
+| RC2 the three N2 rows | exact | refused for both kinds naming `shell::FOLLOW_UP` and `shell3::FOLLOW_UP` | yes |
+| KM1 (ignored) | predicted miss | missed as predicted: the three rows refuse Shell3 (`NotYetSupported`, `a follow-up of ADR 0454`) | **known miss** |
+| N1 `git diff f69eb128 -- crates/*/src` | empty | empty | yes |
+| N2 `baseline_hashes` | pass | pass (3 passed, 1 ignored as before) | yes |
+| B1 `cargo test -p rcfd-fem --release` | pass | pass: 1004 passed, 0 failed, 277 ignored (at 19c939f7, `f541-scratch/b1-fem.log`); also `cargo test -p rcfd-cli --release --test docs_site` 2 passed; `cargo fmt -p rcfd-fem --check` clean, `cargo clippy -p rcfd-fem --all-targets --release -- -D warnings` clean | yes |
+
+The estimates held: TR exact (D2), NT1b within the ADR 0522 Shell4 values, AL2 `2.0e-3` against the estimated `<= 2e-3` (on
+the edge of the estimate, a factor 5 inside the limit).
+
+**Mutations:**
+
+| Id | Caught by |
+|---|---|
+| MU1 bending `a * 1.05` | TR5 (`4.5e-2`), NT2 (`2.5e-2`), AL2 (`2.0e-2`) |
+| MU2 translational mass `* 1.1` | NT2 (`4.7e-2`) |
+| MU3 rotation block identity | TR3 (H3r), TR4, TR5, TR6 (Z7 `5.0e-3`), NT2, AL1, AL2 |
+| MU4 Shell3 mass dispatch removed | NT2 (refused), TR2 (H2m refused), RC1 (`modal_analysis`: Shell3 refused, Shell4 taken) |
+| MU5 Shell3 Green membrane off in `shell_corot` | **not caught** (every check met) |
+| MU6 `is_shell` without Shell3 | AL1 (the roof refused, `InvalidValue { key: "nonlinear" }`), RC1 |
+| MU7 the Shell3 element refusal removed | RC1 (five paths), RC2 |
+| MU8 Shell3 out of the multigrid refusal | RC1 (the smoothed aggregation panics: `amg_elastic.rs:177` index out of bounds on six-unknown nodes) |
+| MU9 the Shell3 cyclic row removed | RC1, RC2 |
+
+Eight of nine caught. MU5 was registered with its doubt and is not answered by a new check: on the shallow roof the
+nonlinearity is carried by the corotated frame at small membrane strains (`~1e-3`), where the Green membrane differs from the
+linear one in the second order; NT runs at the amplitude `1e-3 L`. The Shell3 Green membrane is checked by ADR 0490 (CY3, the
+cylinder to the stretch 1.5), which this item does not repeat. MU8 shows that the multigrid refusal guards a panic, not only a
+missing check.
+
+**Deviations:** amendment 1 (the NT1 set-up). Nothing else.
+
+**Not run:** nothing registered was skipped.
+
+**Decision by the registered rule: partial.** TR, NT (NT1b), AL, RC1, RC2 and N1 met (N2 and B1 as in the table); KM1 missed as
+predicted. Of the four N2 rows of ADR 0454, one (`initial_states`) is replaced with its triangle repeats (ADR 0490, ADR 0522
+and here NT1b, NT2, AL1, AL2). Three (multigrid, `check_supported()`, cyclic) stay refused because Shell4 is refused there too,
+and no Shell4 check exists to repeat. Every path that takes Shell4 takes Shell3 (RC1), and the Shell4 checks of those paths now
+have their triangle repeats (D0 with TR, NT, AL).
+
+### Remaining questions
+
+1. The three rows wait for Shell4. (a) One follow-up item per path (cyclic with shells, smoothed aggregation with six-unknown
+   nodes, the linear dynamic paths with shells), each for Shell4 and Shell3 together; (b) one combined item; (c) leave F-541
+   partial with no follow-up. Recommendation (a): the three are independent and differ in size (the cyclic rows are a small
+   change, the multigrid near-null space a solver change, the linear dynamic paths a set of checks).
+2. MU5 not caught. (a) Accept (ADR 0490 CY3 covers the Shell3 Green membrane); (b) a follow-up check at large membrane strain on
+   the arc-length path. Recommendation (a).
+3. The Newton residual floor of NT1 (amendment 1). (a) Record only; (b) a follow-up on the driver's residual reference in free
+   vibration (no external load, so the reference is the internal force alone). Recommendation (a) for this item; (b) is listed
+   for the lead below.
+
+## For the lead: roadmap entries
+
+F-541: proposed status **partial**. Note:
+
+> Structural solver, advanced tier. Follow-up of F-419 (ADR 0454, 2026-11-14). PARTIAL. ADR 0545, 2026-11-15: audit of every Shell3 refusal: no path takes Shell4 and refuses Shell3 (each refusal sits beside Shell4's with the same condition). Of the four N2 rows of ADR 0454, nonlinear::initial_states was replaced by ADR 0490 and ADR 0522; multigrid, check_supported() and the cyclic constraint refuse Shell4 too and stay refused (known miss KM1: no Shell4 check to repeat). The Shell4 checks without a triangle repeat were repeated on triangles (tests only, no library change): ADR 0435 H1 to Z7 on the transformation path (rigid sets, nodal springs on rotations, free rigid motions) met at 0 to 2.6e-13 (limits 1e-12 to 1e-10); the ADR 0522 100-period free vibration of the Shell3 strip, after a set-up amendment (Newton residual floor 4.7e-10): F1 2.05e-3, F1b 8.0e-8, F1c 7.9e-5, E1 2.8e-8, EZ 5.1e-7; the hinged roof traced through its limit point by arc length on Shell3 8 x 8 x 2, P_lim 2219.1 N within 2.0e-3 of Shell4 8 x 8 (limit 1e-2). A consistency test over 14 entry paths: Shell3 taken exactly where Shell4 is taken, refused with its own package where Shell4 is refused. Eight of nine mutations caught (the Shell3 Green membrane on the shallow roof is not seen; ADR 0490 CY3 covers it). Baseline hashes unchanged.
+
+> (new item, number for the lead) Shells in the cyclic constraint (deps F-541, F-522). Every limit not stated here is registered in the ADR before the run. The cyclic rows of solve_static_mpc, modal_analysis_mpc and the cyclic harmonic paths rotate the rotation unknowns of Shell4 and Shell3 nodes as the translations; a full ring of Shell4 and the same cut into Shell3 against one sector with the cyclic constraint: static displacements within 1e-10 and the frequencies of each harmonic within 1e-8; models without shells keep their bits.
+
+> (new item, number for the lead) Six-unknown nodes in the smoothed-aggregation CG (deps F-541). Every limit not stated here is registered in the ADR before the run. The near-null space of the smoothed aggregation takes the rotations of Beam2, Shell4 and Shell3 nodes (the six rigid fields with their rotation components); the plate and cantilever models of ADR 0432 and ADR 0454 solved by the preconditioned CG within 1e-8 of the direct solve in a registered number of iterations; the solid-only bits unchanged.
+
+> (new item, number for the lead) Shells on the linear dynamic paths (deps F-541). Every limit not stated here is registered in the ADR before the run. The linear transient, the damped modes, the modal and the direct harmonic solve take Shell4 and Shell3: a cantilever strip of each against the closed-form Euler-Bernoulli response (the free-vibration frequency, the harmonic tip response off resonance) within registered limits, the direct harmonic against the mode superposition with all modes within 1e-8; models without shells keep their bits.
+
+> (possible follow-up, number for the lead) The residual reference of the Newton driver in free vibration (deps F-585). Every limit not stated here is registered in the ADR before the run. An opt-in residual reference of the nonlinear transient with a registered inertia term, so that a converged step of a free vibration without external load is not rejected at a rounding floor; the Shell3 strip of ADR 0545 NT1 over 100 periods at the default tolerance with that reference; the default reference and its bits unchanged.
