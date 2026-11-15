@@ -694,3 +694,54 @@ fn free_edged_bar_records() {
     }
     c.finish();
 }
+
+// ------------------------------------------------------------------------------------- Bar F, RNq2 (amendment 1)
+
+/// ADR 0596 amendment 1: Bar F's Rayleigh measure as a check (the ring's follower tangent does not depend on its state).
+#[test]
+fn free_edged_bar_rayleigh_check() {
+    let mut c = Checks::new();
+    let model = bar(None);
+    let n = model.dof_map().n_equations();
+    let fp = FollowerPressure::new(&model, "xmax", 9e3).unwrap();
+    let list: Vec<&dyn Contribution> = vec![&fp];
+    let Some((u, states)) = follower_state(
+        &mut c,
+        "S0b: Bar F, unsymmetric Newton",
+        &model,
+        &list,
+        &NewtonOptions::new(10).unsymmetric(true),
+    ) else {
+        c.finish();
+        return;
+    };
+    let (_, pre) = dead_prestress(&model, "xmax", 9e3);
+    let b = tangent_buckling_factors_with(
+        &model,
+        &[],
+        &u,
+        &states,
+        1.0,
+        &list,
+        &pre,
+        &BucklingOptions::new(FACTORS),
+    )
+    .map_err(|e| e.to_string());
+    if !buckling_ok(&mut c, "RNq2 set-up: Bar F buckling", &b) {
+        c.finish();
+        return;
+    }
+    let b = b.unwrap();
+    let st = State {
+        model: &model,
+        u: u.clone(),
+        states: states.clone(),
+        fp: Some(&fp),
+        lambda: 1.0,
+        dead: vec![0.0; n],
+    };
+    let kg = dense(&geometric_stiffness(&model, &pre, None).unwrap());
+    let (mu_fd, _, _) = buckling_measures(&st, &kg, &free_mask(&model), &b);
+    c.at_most("RNq2", worst(&mu_fd, &b.factors), 1e-6);
+    c.finish();
+}
