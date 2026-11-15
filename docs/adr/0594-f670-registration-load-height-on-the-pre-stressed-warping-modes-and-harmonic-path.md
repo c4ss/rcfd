@@ -263,3 +263,82 @@ any check met only after a post-run amendment. **todo**: A or H missed for any c
   `line_load_point` scale in `WarpingPrestress` (scaled by `scaled`) so that the term follows the pre-stress; (c) read the force
   from the static model's `Load::LineLoad` in `from_static` (ADR 0588 Q1 (b)). Recommendation (a) now, (c) with a case-file key
   (F-625); taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation).
+
+## Addendum 1 (2026-11-15): results
+
+Written after the one registered run of `tests/sa_beam_warping_f670.rs` (release, log `f670-scratch/run1.log`). Commits:
+e66bee5c (this registration), fd3cdee3 (the test file, and in `beam_warping.rs` the doc comment of `Warping::line_load_point`,
+lines 344 to 347: three comment lines added, no code line). `cargo fmt -p rcfd-fem` was applied after the run (it re-wrapped
+two signatures of the test file; no value or limit changed). No limit was changed, no amendment written, nothing re-run to
+pick a result. Logs in `w49i-work/f670-scratch`: `run1.log`, `b0.log`, `baseline.log`, `fmt.log`, `clippy.log`,
+`docs_site.log`, `mutations.log`, `mut_X*.log`; `arith.py`, `arith.log` (before any code).
+
+### Results against the registered limits
+
+| id | measured | limit | verdict |
+|---|---|---|---|
+| B0 | `sa_beam_warping_f598_bits`, `_f626_bits`, `_f635_bits`, `_f661_bits`, `_f663_bits`, `_f667_bits` 1 each; `_f661` 4, `_f663` 5, `_f667` 5, `_f668` 3 passed; `baseline_hashes` 3 passed 1 ignored | pass | met |
+| B1 (a3) | shear-centre entry at `(0, 0)` against none: modes eigenvalue `1.1522422304682117e4` both; harmonic response at every equation, re and im: bit-equal | bit-equal | met |
+| M0 | `omega_0` against `omega_T`: `4.0e-6` (eigenvalue `16571.3425`) | `1e-4` | met |
+| A-T / S / B (a1, modes) | `8.09e-4` / `8.16e-4` / `8.29e-4` (model low) | `1e-2` | met |
+| H-T / S / B (a1, harmonic) | `8.09e-4` / `8.16e-4` / `8.29e-4`; each search ended at step 3 by the resonance refusal D4 predicted | `1e-2` | met |
+| C-T / S / B | `3.8e-11` / `6.0e-12` / `7.4e-13` | `1e-8` | met |
+| Z-T / S / B (a2, modes) | `lambda_cr` `45.184863919`, `59.063014527`, `77.147015523` (as ADR 0588 measured); `z` `2.8e-13` / `7.7e-13` / `4.5e-13` | `1e-2` | met |
+| ZH-T / S / B (a2, harmonic) | `9.3e-11` / `1.7e-10` / `2.7e-10` (each ended at step 3 by a resonance refusal, the refused iterate the result) | `1e-2` | met |
+| Y-T / S / B | `3.20e-5` / `2.71e-5` / `1.04e-5` (eigenvalue negative: beyond the model's buckling load) | `1e-2` | met |
+| YH-T / S / B | `3.11e-5` / `2.58e-5` / `8.75e-6` (the negative rule after 2 steps) | `1e-2` | met |
+| S-T / S / B | `1.59e-3` / `1.40e-3` / `1.27e-3` | `2e-2` | met |
+| N1 | top without the entry `3.92e-2`; bottom without it `1.109e-1` | `> 2e-2`; `> 5e-2` | met |
+| N2 | top entry left at `q_ref`: `3.78e-2` | `> 2e-2` | met |
+| N3 | top/SC `7.1e-6`; bottom/SC `1.28e-5` | `2e-3` | met |
+
+Every value is near its estimate. The frequencies are `8e-4` below the Euler-Bernoulli reference: the Timoshenko lateral plane
+of arithmetic 2 (the Timoshenko `omega_0` is `9.2e-4` below the Rayleigh value; the lateral share of mode 1 is about `0.9`).
+The offset cancels in the ratios N3 to `1e-5`. At the shift `sigma` the eigensolver converged with the default relative
+residual test (residuals `<= 2.5e-11`, Sturm counts 1 as expected).
+
+### Mutations (scratch copy `f670-scratch/mut` from `git archive` of fd3cdee3, own target directory, one at a time; the unmutated copy passes)
+
+| id | mutation | caught by |
+|---|---|---|
+| X1 | `add_line_load_points` not called | A-T/B, H-T/B, S-T/B, N3, Y-T, YH-T; then the modes refuse at Y-B (`K + sigma M` not positive definite: the mutated beam is far beyond its buckling load), which ends that test. Z and ZH not caught (self-consistent), as registered |
+| X2 | entries removed on the harmonic path | H-T/B, C-T/B, ZH-T/B, YH-T/B |
+| X3 | entries removed on the modes path | A-T/B, S-T/B, C-T/B, N3, Z-T, Y-T; then the modes refuse at Y-B |
+| X4 | term doubled | A-T/B, H-T/B, S-T/B, N3; then the modes refuse at Y-T |
+| X5 | term with the wrong sign | A-T/B, H-T/B, S-T/B, N3, Y-T, YH-T; then the modes refuse at Y-B |
+| X6 | rotary inertia of the plane x-y dropped | M0 (`3.0e-4`) |
+| X7 | `K_sigma` left out of the real part of the harmonic | H, C, ZH, YH for every case |
+
+Seven of seven caught. S also caught X1 and X3 to X5, which the registration did not list.
+
+### Other runs
+
+`cargo fmt -p rcfd-fem --check`: clean. `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings`: clean. `cargo test
+-p rcfd-cli --release --test docs_site` for the links of this ADR and of `docs/reference-data.md` (which has a new F-670
+section): passed (`docs_site.log`). Not run: the whole `rcfd-fem` suite and the workspace (the lead runs the gate).
+
+### Decision by the registered rule
+
+**done**: every registered check met in the one run, no amendment, seven of seven mutations caught. By clause: a1 met on both
+paths for the three load heights (`<= 8.3e-4` against `1e-2`); a2 met on both paths at the model's buckling load (`<=
+2.7e-10`) and at the Rayleigh-Ritz one (`<= 3.2e-5`); a3 met (no code line changed; B0, B1, `baseline_hashes`). The audit
+found the capability already in place, so F-670 adds the checks and documents how the entry's force must be given. Whether it
+is done is the maintainer's call.
+
+### Remaining questions
+
+- Q1 (tie the entry's force to the pre-stress): options (a) restated and documented (as now; N2 shows that a forgotten scale
+  moves the top-flange frequency by `3.8e-2`); (b) a scale carried in `WarpingPrestress` and applied by `scaled`; (c) the force
+  read from the static model's line load in `from_static`. Recommendation (a) now, (c) with a case-file key (F-625); taken on
+  the maintainer's standing instruction of 2026-11-11 (take the recommendation).
+- Two cases are not checked: the monosymmetric I (inertial coupling of the centroid translation with the twist about the shear
+  centre) and the transient path with a load height. A follow-up is proposed below for the first. The second is a small
+  extension of F-667 if a case needs it.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> F-670 note: Structural solver, advanced tier. Follow-up of F-663 and F-661 (ADR 0588, ADR 0585, 2026-11-15). DONE. ADR 0594, 2026-11-15: the distributed load height of `Warping::line_load_point` reaches `prestressed_modes` and the pre-stressed `WarpingHarmonic` through K_sigma of `matrices` (audit; no code change, only a doc sentence: the entry holds the load as applied, so a pre-stress scaled by `WarpingPrestress::scaled` needs its force scaled too). Fork-supported doubly symmetric I of ADR 0588, L = 3, 16 elements, UDL of 0.5 of the ADR 0588 buckling load on the top flange, at the shear centre and on the bottom flange: the lowest flexural-torsional frequency, from the modes and from the harmonic resonance, is 8.1e-4 to 8.3e-4 below a sine-series Rayleigh-Ritz reference derived in the ADR (Euler-Bernoulli with rotary inertia, the kinetic energy of the library's consistent mass). The offset comes from the Timoshenko lateral plane: the unloaded frequency is within 4e-6 of the Timoshenko closed form. Harmonic resonance and pre-stressed eigenvalue agree to 4e-11, the mode shape to 1.6e-3. At the model's buckling load omega^2/omega_0^2 <= 7.7e-13 (modes) and 2.7e-10 (harmonic); at the Rayleigh-Ritz buckling load 3.2e-5. Results without a load height bit-identical (no code line changed; an entry at the shear centre gives the bits of none on both paths; the ADR 0546 to 0591 bit records; baseline_hashes). Seven of seven mutations caught. Not covered: monosymmetric sections, the transient path with a load height, other supports and loads, warping inertia, the force not tied to the pre-stress, no case-file key.
+
+> Follow-up proposed: Load height on the pre-stressed modes of a monosymmetric warping beam. Deps F-670, F-627. Acceptance: Every limit not stated here is registered in the ADR before the run. The lowest flexural-torsional frequency of the fork-supported ADR 0553 monosymmetric I under a uniformly distributed load of 0.5 of its ADR 0588 buckling load at the shear centre, at the centroid and on flange 1 (prestressed_modes) equals a Rayleigh-Ritz reference with the consistent mass, including the inertial coupling of the shear-centre offset, derived in the ADR within 1e-2 at 16 elements; results without a load height bit-identical.
