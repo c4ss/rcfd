@@ -8521,7 +8521,7 @@ fixed by the item's registration ADR before any code.
     mutations caught; default bits and baseline hashes unchanged. Done by the registered rule. The reference-data
     entries were cited without re-reading the sources (the Hibbitt 1979 citation is to be checked). Follow-ups F-572,
     F-573.
-- [ ] **F-425** Hyperelastic materials (neo-Hookean, Mooney-Rivlin) with a mean-dilatation element for near incompressibility
+- [~] **F-425** Hyperelastic materials (neo-Hookean, Mooney-Rivlin) with a mean-dilatation element for near incompressibility
   - depends on: F-408, F-390, F-397
   - acceptance: Every limit not stated here is registered in the ADR before the run. The tangent agrees with central
     differences within 1e-6; a rotation of the deformed state leaves the energy unchanged within 1e-10; at a strain of
@@ -8536,7 +8536,18 @@ fixed by the item's registration ADR before any code.
   - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0328; the registration is
     written by the implementation agent before any code. ADR 0493 (2026-11-14): the mean-dilatation B-bar Hex8 exists
     for the linear paths (BlockProperty::solid(SolidFormulation::BBar)); the nonlinear driver refuses it; its F-bar form
-    for finite strain is proposed as follow-up 1 of ADR 0493.
+    for finite strain is proposed as follow-up 1 of ADR 0493. ADR 0541, 2026-11-15: PARTIAL. rcfd_fem::mat_hyper
+    (PENDING None): compressible neo-Hookean and Mooney-Rivlin, W = c10 (Ibar1 - 3) + c01 (Ibar2 - 3) + (kappa/2)(J -
+    1)^2, stress, tangent and energy, det C <= 0 refused with the element; taken by the nonlinear driver through
+    Material::stress; nonlinear_md::block_property() is the F-bar Hex8 of ADR 0506 as the mean-dilatation element; the
+    linear paths and the nonlinear transient Method step refuse it naming a follow-up of ADR 0541; the energy-momentum
+    step with DiscreteGradient takes it. Tangent against central differences 3.4e-9 (limit 1e-6), rotation 3.2e-14
+    (1e-10); uniaxial, equibiaxial (neo-Hookean, Mooney-Rivlin) 1.7e-11 after the compressibility correction, simple
+    shear 7.2e-15 (limit 1e-3); sphere B/A = 2 at l_a = 1.5 with the mean-dilatation Hex8 2.61e-3 (limit 1e-2). Known
+    miss: the small-strain clause 4.7e-6 (neo-Hookean), 4.9e-6 (Mooney-Rivlin) against 1e-6, the second-order remainder
+    (the tangent at zero 1.3e-16, the odd part 5.1e-11). The Full Hex8 locking control was not measured (negative pivot
+    at l_a = 1.133); diagnostic at l_a = 1.125: Full 14.95, mean-dilatation 3.9e-3. Ten of ten mutations caught; default
+    bits and baseline hashes unchanged. Citations from memory, to be checked.
 - [~] **F-426** Tied non-matching meshes, shell and beam joints to solids, non-matching cyclic boundaries and nodes on the axis
   - depends on: F-408, F-391, F-392, F-393, F-394
   - acceptance: Every limit not stated here is registered in the ADR before the run. With matching meshes the tied model
