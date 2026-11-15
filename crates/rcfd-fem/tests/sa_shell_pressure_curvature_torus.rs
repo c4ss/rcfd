@@ -392,9 +392,12 @@ fn meridional_at(th: f64, ph: f64) -> Vec3 {
     [-ph.sin() * th.cos(), -ph.sin() * th.sin(), ph.cos()]
 }
 
+/// A mesh with the `(theta, phi)` of each node.
+type Segment = (Vec<Vec3>, Vec<[usize; 3]>, Vec<(f64, f64)>);
+
 /// The torus segment of ADR 0579 design 2: `6 n x n` cells, nodes `(n + 1) i + j`; returns nodes, triangles and the node
 /// parameters `(theta, phi)`.
-fn segment(n: usize) -> (Vec<Vec3>, Vec<[usize; 3]>, Vec<(f64, f64)>) {
+fn segment(n: usize) -> Segment {
     let nt = 6 * n;
     let idx = |i: usize, j: usize| (n + 1) * i + j;
     let mut nodes = Vec::new();
