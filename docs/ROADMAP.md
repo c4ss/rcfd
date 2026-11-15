@@ -12300,7 +12300,9 @@ fixed by the item's registration ADR before any code.
     registered mutations (MU1, MU2) named a dispatch the driver does not reach and were not caught; the corrected
     mutations at is_fbar, MU3 to MU5, were caught. Default bits and baseline hashes unchanged. Done if the maintainer
     accepts MU1'/MU2' (amendment 2) in place of MU1/MU2. Follow-up F-649 (arc-length with a follower load direction;
-    compare with F-572).
+    compare with F-572). The arc-length step with a follower load direction (F-572, ADR 0560) traces the BBar sphere
+    through its pressure maximum (F-649, ADR 0576, 2026-11-15); under the mutation that evaluates the BBar block by the
+    Full element it also traces the locked Full model past its spurious limit point.
 - [~] **F-623** Mortar contactor for quadratic faces
   - depends on: F-601
   - acceptance: Every limit not stated here is registered in the ADR before the run. A segment-to-segment (mortar)
@@ -12724,15 +12726,25 @@ fixed by the item's registration ADR before any code.
     rcfd-fem test, baseline_hashes, and a matched shell sector bit-equal with and without the flag). Ten of ten
     mutations caught. Not covered: the mortar on shell edges, a two-sided edge tie, and the rotating paths and
     full_rotor with these boundaries. Follow-up F-662 (Two-sided shell edge ties for non-matching cyclic boundaries).
-- [ ] **F-649** Arc-length continuation with a follower load direction
+- [x] **F-649** Arc-length continuation with a follower load direction
   - depends on: F-622, F-424, F-572
   - acceptance: Every limit not stated here is registered in the ADR before the run. The mean-dilatation Hex8 sphere of
     ADR 0541 under follower pressure traced by the arc-length step through its pressure maximum near l_a = 1.83, the
     maximum pressure within 1 percent of the closed form (mu/2)((1/l_b^4 + 4/l_b) - (1/l_a^4 + 4/l_a)) maximised over
     l_a, and every point after it on the descending branch within 1 percent; existing arc-length results bit-identical.
-  - note: Structural solver, advanced tier. Follow-up of F-622 (ADR 0557, 2026-11-15). F-572 (ADR 0560) added
-    ArcLengthOptions::contribution_load, the follower load direction in arclength::trace; this item keeps the sphere
-    trace check on top of it.
+  - note: Structural solver, advanced tier. Follow-up of F-622 (ADR 0557, 2026-11-15). DONE. ADR 0576, 2026-11-15: test
+    only, no library code (the audit found no gap: ArcLengthOptions::contribution_load and
+    FollowerPressure::add_load_factor_derivative of ADR 0560 suffice). The mean-dilatation Hex8 sphere of ADR 0541 D6
+    (864 BBar Hex8, neo-Hookean kappa/mu = 1e4) under follower pressure only, traced by arclength::trace with the
+    contributions' load direction (the symmetric part of the load stiffness, Ds = 0.65, 64 points, no halving, at most 6
+    iterations per point) from rest through its pressure maximum to l_a = 2.5: the maximum pressure 1.00197 p_c,max at
+    l_a = 1.823 (limit 1e-2; closed-form maximum 0.81642365 mu at 1.828147), the 31 points of the descending branch
+    within 1.94e-3 of the closed form at their measured inner stretch (limit 1e-2), the ascending branch within 4.7e-3,
+    the constraint 9.6e-15; one negative pivot from the first point past the maximum. Control: load control at 1.02
+    p_c,max fails (singular tangent at 0.976 p_c,max). Fast test: a coarse sphere by arc-length against load control
+    within 3.9e-15; the default route still refuses the follower-only load. Five of five mutations caught; existing
+    arc-length results bit-identical (no library change; rcfd-fem release suite and baseline hashes pass). Done by the
+    registered rule.
 - [x] **F-650** Buckling eigensolver when the subspace holds fewer positive Ritz values than asked
   - depends on: F-642
   - acceptance: Every limit not stated here is registered in the ADR before the run. With the default BucklingOptions,
