@@ -12320,14 +12320,28 @@ fixed by the item's registration ADR before any code.
     Hertz problem on the total Lagrangian body (singular tangent at the first iteration: no curvature-free fallback on
     that path). Follow-ups F-638 (pressure recovery), F-639 (curvature-free fallback on the total Lagrangian body).
     Making the mortar contactor the default for quadratic faces, and its case-file key, are the maintainer's call.
-- [ ] **F-624** Cached dissection order and symbolic analysis of the Newton driver's supernodal factor
+- [~] **F-624** Cached dissection order and symbolic analysis of the Newton driver's supernodal factor
   - depends on: F-618
   - acceptance: Every limit not stated here is registered in the ADR before the run. The supernodal factor of
     NewtonOptions reuses its nested dissection order and symbolic analysis while the tangent's pattern is unchanged,
     with the same bits as without the reuse: the total Lagrangian contact solve of the ADR 0517 hub at 16 cells (d =
     1e-4 a) in under a third of the present time, measured with no other build on the machine, and every result of ADR
     0542 bit-identical.
-  - note: Structural solver, advanced tier. Follow-up of F-618 (ADR 0542, 2026-11-15).
+  - note: Structural solver, advanced tier. Follow-up of F-618 (ADR 0542, 2026-11-15). PARTIAL. ADR 0566, 2026-11-15:
+    rcfd_linalg::sparse_chol::SupernodalAnalysis (the nested dissection order and the symbolic phase of one pattern,
+    with a map of where each stored value goes) and SupernodalLdlt::factor_analysed (validate, place the values, the
+    numeric phase: bit for bit SupernodalLdlt::factor); rcfd_fem::nonlinear::FactorReuse keeps the analysis of the last
+    reduced tangent's pattern for the supernodal factor of NewtonOptions, made again only when the pattern changes,
+    within solve_with and every attempt, and across calls through solve_from_reusing; the total Lagrangian contact body
+    shares one over its steps and augmentations. ADR 0517's hub at 16 cells (d = 1e-4 a): min of five supernodal solves
+    over min of five present ones 7.36 s / 29.01 s = 0.254 against the limit 1/3 (every pair 0.233 to 0.301; median
+    ratio 0.248); the supernodal and present digests of ADR 0542 kept by all ten solves and a one-thread solve, ADR
+    0542's n = 4 digest by both routes. MISSED: the run started quiet but other agents' builds ran during 35 of its 41
+    process samples, so "measured with no other build on the machine" is not met. A4 (refusals equal) met only after an
+    amendment of its set-up (NaN compared by ==). On a cantilever, one analysis for 13 factorisations over two calls,
+    two when a contribution changes the pattern, bit for bit without the reuse. Ten digests recorded before the change
+    unchanged; baseline_hashes passes. Seven of seven mutations caught. No option, no case-file key. Follow-up F-655
+    (heavy record on a quiet machine, run by the lead).
 - [ ] **F-625** Case-file key for the Beam2 warping unknown, with geometric_terms (NEEDS THE USER: schema golden)
   - depends on: F-598
   - acceptance: Every limit not stated here is registered in the ADR before the run. A case-file key opts a Beam2 block
@@ -12675,3 +12689,10 @@ fixed by the item's registration ADR before any code.
     order within 0.5 of the expected one, and the split of each nodal-diameter pair within 1e-2 relative; models without
     shells keep their bits.
   - note: Structural solver, advanced tier. Follow-up of F-647 (ADR 0561, 2026-11-15).
+- [ ] **F-655** Heavy record of ADR 0566 on a quiet machine (lead run)
+  - depends on: F-624
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The heavy record
+    f624_tl_hub_n16_reuse_against_present_heavy of ADR 0566, unchanged, run once with no cargo or rustc process on the
+    machine at any 5 s sample of the run: min(t_s)/min(t_p) below 1/3 and the digests of ADR 0542 kept.
+  - note: Structural solver, advanced tier. Follow-up of F-624 (ADR 0566, 2026-11-15). Command: cargo test -p rcfd-fem
+    --release --test sa_newton_reuse_f624 -- --ignored (about 4 minutes), with no agents or builds running.
