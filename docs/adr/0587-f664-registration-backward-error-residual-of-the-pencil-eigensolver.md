@@ -216,3 +216,87 @@ same code path.
    change the bits of ADR 0580 (b5) and is not taken.
 3. **The field on the follower results.** Taken: `backward_errors` on `ComplexModes` and `ComplexBuckling` too, so that
    (b3)/(b4) are read from the functions ADR 0580 used, additive on `#[non_exhaustive]` structs.
+
+## Addendum 1 (2026-11-15): results
+
+Runs. N4 and N5 recorded on the base (the registration commit ef13dc47 = 847c5881 plus this file; no library line) before any
+library code (`f664-scratch/n4-base.log`, `n5-base.log`; digests written into the files, commit 4b516dd1, re-run passing on the
+base: `n4-base2.log`, `n5-base2.log`). Library and tests at 053dd93a. The registered runs once each (`--release --
+--nocapture --test-threads=1`): `sa_eigen_pencil_f664` (`run1-pencil.log`), `sa_f664` (`run1-f664.log`). Then, release, at
+053dd93a: `sa_eigen_pencil_f653`, `sa_eigen_pencil_f664_default_bits` (rcfd-linalg) and `sa_f664_default_bits`, `sa_f653`
+(6 passed, the 2 known-miss records ignored and not edited), `sa_f653_default_bits`, `sa_follower`, `sa_follower_default_bits`,
+`sa_shell_follower`, `sa_shell_follower_default_bits`, `sa_f572`, `sa_f572_default_bits` (rcfd-fem): all pass
+(`tests-tip.log`); `baseline_hashes` of `rcfd-api`: 3 passed, 1 ignored (`baseline.log`). `cargo fmt -p rcfd-fem --check`,
+`cargo fmt -p rcfd-linalg --check` and `cargo clippy -p rcfd-fem -p rcfd-linalg --release --all-targets -- -D warnings`
+clean. No limit changed, no amendment.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| B1 max `eta`, every pair of the 32 bisection evaluations | `<= 2e-10` | `3.84e-14` (the registered relative residual of the same pairs `1.96e-8`, ADR 0580 F3) | yes |
+| B1n lengths | holds | 32 evaluations, equal lengths | yes |
+| B2 max `eta`, F6 (dead, 2) and F7 (follower, 4) | `<= 2e-10` | `4.08e-13` (F6 `1.3e-17`, `2.0e-13`; F7 `3.3e-13`, `4.1e-13`; relative residuals up to `7.3e-6`) | yes |
+| B3 direct calls reproduce the follower values to the bit | holds | yes (p = 16, 20, 24, F6, F7) | yes |
+| B3 max `eta/(rho est + delta)` | `<= 1` | `5.2e-3` (F7; flutter pairs at most `5.7e-4`) | yes |
+| B4 max `|eta_lib/eta_test - 1|` | `<= 1e-12` | `0` | yes |
+| K4 the same on K1, K2, K5c | `<= 1e-12` | `0` | yes |
+| K5 max `eta/(rho est + delta)` on K1, K2, K5c | `<= 1` | `0.108` (K5c pair 4: `eta 1.5e-12`, `est 1.3e-11`) | yes |
+| K6 perturbed residual; `||dA||_F/(eta alpha) - 1`; `||dB||_F/(eta beta) - 1` | `<= 1e-13`; `<= 1e-12`; `<= 1e-12` | `1.6e-17`; `1.1e-15`; `2.2e-16` | yes |
+| K7 complex pair in K5c; every `eta <= 2 tol max(1, rho)` | holds; holds | three complex pairs returned (`0.141 +/- 0.302 i`, ...); yes | yes |
+| D documentation states the test and the bound | holds | the module documentation of `eigen_pencil.rs` ("The backward error (F-664, ADR 0587)": `est <= tolerance`, `eta <= rho est`, `rho < 1` at shift 0) and the function documentation of `nearest_pencil_eigenpairs` | yes |
+| N4 rcfd-fem digests | exact | equal | yes |
+| N5 rcfd-linalg digests | exact | equal | yes |
+| N6 existing F-653 tests | pass | pass | yes |
+| N7 `baseline_hashes` | pass | pass | yes |
+
+Remarks. The backward errors are 3 to 4 orders below the estimate of arithmetic 4 (`< 2.5e-12`): most flutter pairs converge
+far past the tolerance (estimates `1e-20 .. 1e-48`), and only the last wanted pair of each run sits near it (`est ~ 1e-11`,
+`eta ~ 1e-14`). The bound `eta <= rho est` is loose by about `1e-3` on these FE pencils (the residual of `T` is in the
+direction of `v_(m+1)`, which `A - sigma B` does not amplify by its full norm). The registered relative residual of ADR 0580
+(`residuals`) is unchanged and remains `1.96e-8` and `7.3e-6` on the same pairs.
+
+### Mutations (scratch copy of 053dd93a by `git archive | tar -x -m`, one at a time, `f664-scratch/mutate.py`, `mutations.log`)
+
+| Id | Caught by |
+|---|---|
+| MU1 the old relative denominator | B1 (`1.96e-8`), B2 (`7.3e-6`), B3, B4, K4, K6 |
+| MU2 `|lambda|` dropped | B4 (`1.3e-2`), K4, K6 |
+| MU3 Frobenius without the root | B4, K4, K6 |
+| MU4 convergence at `1e3 tolerance` | N4, N5, K7 (B1 to B4 still met) |
+| MU5 `residuals` set to `eta` | N4, N5 |
+| MU6 `tangent_modes_full` copies `residuals` into `backward_errors` | B1 (`1.96e-8`), B4 |
+
+Six of six caught. MU6's first attempt stopped in the script before any build (its search text occurs twice, in both
+follower functions; the script asserted one); it was run with the first occurrence (`tangent_modes_full`, as registered) by
+`mutate6.py`.
+
+### Deviations
+
+- The record base is the registration commit ef13dc47 (847c5881 plus the ADR); the library is that of 847c5881.
+- `rustfmt` was applied to the two N files after their base run (formatting only; they pass at the tip).
+
+### Not run
+
+- The whole workspace suite and the whole `rcfd-fem` and `rcfd-linalg` suites (only the files that cover the changed lines);
+  no case-file key.
+
+### Decision
+
+**done** by the registered rule: every check met in its one registered run, six of six mutations caught, no amendment, fmt and
+clippy clean, N4 to N7 unchanged.
+
+### Remaining questions (recommendations for the lead)
+
+- **Q1** (the 2-norm): options (a) keep Frobenius (exact for its norm, `eta` within `sqrt(n)` of the 2-norm version); (b) add
+  a 2-norm estimate of `||A||`, `||B||` (power iteration on `A^T A`). Recommendation (a).
+- **Q2** (a convergence test on `eta`): options (a) keep the Ritz-estimate test (bits of ADR 0580 kept; it bounds `eta`); (b)
+  an opt-in `PencilOptions` test on the backward error, which would stop the Arnoldi process earlier on pencils like Beck's.
+  Recommendation (a) until a caller needs fewer steps.
+- **Q3** (`estimates` on the follower results): not added (not asked; B3 uses direct calls). Recommendation: leave it.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> Follow-up of F-653 (ADR 0580, 2026-11-15). DONE. ADR 0587, 2026-11-15: rcfd_linalg::eigen_pencil::PencilEigen gains backward_errors, the normwise backward error eta = ||A x - lambda B x|| / ((||A||_F + |lambda| ||B||_F) ||x||) of each pair (Frobenius norms: exact as the smallest relative perturbation, attained by a rank-one pair, checked to 1e-15); follower::ComplexModes and ComplexBuckling carry it for the reduced pencils. The convergence test (every returned pair's Ritz estimate est <= tolerance) is stated in the documentation with its bound eta <= rho est, rho = (||A|| + |sigma| ||B||)/(||A|| + |lambda| ||B||) < 1 at shift 0. Beck's column of ADR 0580: every pair of the 32 bisection evaluations eta <= 3.8e-14, the buckling problems (dead load, follower) <= 4.1e-13, limit 2 tolerance = 2e-10 (the registered relative residuals of the same pairs stay 2.0e-8 and 7.3e-6); the bound eta/(rho est + delta) <= 5.2e-3 on the Beck pencils and 0.11 on three test pencils. Eigenvalues, modes, residuals and steps of ADR 0580 unchanged (new digest records of every bisection evaluation, the buckling problems and three pencils at the base; the F-653 tests and known-miss records unedited); baseline hashes unchanged. Six of six mutations caught.
+
+> Note for F-653 (append to its note): The pairs of its F3 and F8 known misses have normwise backward errors at most 3.8e-14 and 4.1e-13 (ADR 0587, 2026-11-15).
