@@ -17,7 +17,9 @@
 //! [`SOLID_ROUTINES`], so the solid stress recovery refuses a shell (ADR 0432 D7). Gravity and the centrifugal load take the
 //! consistent load [`body_load_vector`] instead (ADR 0435 D2), a nodal body-force field that of [`body_load_vector_at`] and
 //! a nodal temperature field the membrane thermal load [`thermal_load_vector`] (uniform through the thickness; ADR 0445),
-//! whose thermal strain [`stresses`] subtracts. The assembly calls
+//! whose thermal strain [`stresses`] subtracts. A gradient through the thickness ([`crate::model::Load::ShellTemperatureGradient`])
+//! takes the curvature thermal load [`thermal_gradient_load_vector`], whose thermal curvature [`stresses`] subtracts (ADR
+//! 0612). The assembly calls
 //! [`model_element_stiffness`] and [`model_element_mass`] for Shell4 (D6).
 //!
 //! A block may choose a drilling membrane in place of the bilinear one ([`Shell4Membrane`], ADR 0470): four overlapping ANDES
@@ -1328,6 +1330,61 @@ pub fn thermal_load_vector_with(
     Ok(out)
 }
 
+/// The consistent nodal load (forces and moments, global axes, the element's unknown order) of a temperature gradient
+/// through the thickness (ADR 0612 D2): `g_i` the gradients `dT/dz` of the four nodes, K/m, `z` along the facet's `e_3`,
+/// interpolated by the facet's functions; the thermal curvature `kappa_th = alpha g (1, 1, 0)` gives `sum_gp det B_b^T D
+/// kappa_th` at the 2 x 2 points of the stiffness, `D` the bending stiffness of the homogeneous section, carried to the nodes
+/// by `T^T`. Refuses other than four gradients and a material without a finite expansion coefficient.
+pub fn thermal_gradient_load_vector(
+    coords: &[Vec3],
+    thickness: f64,
+    material: &Material,
+    gradient_nodal: &[f64],
+) -> Result<[f64; 24]> {
+    if gradient_nodal.len() != 4 {
+        return Err(FemError::FieldLength {
+            key: "gradient",
+            expected: 4,
+            found: gradient_nodal.len(),
+        });
+    }
+    let alpha = material.expansion();
+    if !alpha.is_finite() {
+        return Err(FemError::InvalidValue {
+            key: "expansion",
+            reason: format!(
+                "a {} material has no single expansion coefficient for a shell thermal load",
+                material.name()
+            ),
+        });
+    }
+    let f = facet(coords)?;
+    let d = homogeneous_section(material, thickness).bending;
+    let mut fl = [0.0; 24];
+    for &xi in &GAUSS {
+        for &eta in &GAUSS {
+            let q = point(&f.local, xi, eta);
+            let g: f64 = (0..4).map(|i| q.n[i] * gradient_nodal[i]).sum();
+            let k = alpha * g;
+            let m = [
+                d[0][0] * k + d[0][1] * k,
+                d[1][0] * k + d[1][1] * k,
+                d[2][0] * k + d[2][1] * k,
+            ];
+            let bb = bending_rows(&q);
+            for (c, fc) in fl.iter_mut().enumerate() {
+                *fc += q.det * (bb[0][c] * m[0] + bb[1][c] * m[1] + bb[2][c] * m[2]);
+            }
+        }
+    }
+    let t = transformation(&f);
+    let mut out = [0.0; 24];
+    for (j, o) in out.iter_mut().enumerate() {
+        *o = (0..24).map(|i| t[i * 24 + j] * fl[i]).sum();
+    }
+    Ok(out)
+}
+
 /// The consistent nodal load of a temperature uniform through the thickness of a layup (ADR 0496 D4): at the 2 x 2 points
 /// `dT = sum N_i dT_i`, `sum_gp det (B_m^T N_th dT + B_b^T M_th dT)` with the laminate's thermal resultants per kelvin, carried
 /// to the nodes by `T^T` (the bilinear membrane).
@@ -1624,8 +1681,13 @@ pub fn stresses(model: &SolidModel, displacement: &[f64]) -> Result<Vec<(usize, 
     let mesh = model.mesh();
     let materials = model.material_indices()?;
     let temperature = crate::thermal::temperature_field(model)?;
+    // ADR 0612 D3: the through-thickness gradient, if the model has one.
+    let gradient = crate::thermal::temperature_gradient_field(model)?;
     let mut out = Vec::new();
     for e in 0..mesh.n_elements() {
+        if let Some(g) = gradient {
+            crate::thermal::refuse_gradient_unless_taken(mesh, e, g)?;
+        }
         if mesh.element_kind(e) == ElementKind::Shell3 {
             out.push((e, shell3_stresses(model, displacement, e, temperature)?));
             continue;
@@ -1692,7 +1754,14 @@ pub fn stresses(model: &SolidModel, displacement: &[f64]) -> Result<Vec<(usize, 
             eps[0] -= th;
             eps[1] -= th;
         }
-        let kappa = strain(&bending_rows(&p));
+        let mut kappa = strain(&bending_rows(&p));
+        if let Some(g) = gradient {
+            // ADR 0612 D3: the thermal curvature at the centre.
+            let gc: f64 = mesh.element_nodes(e).iter().zip(&p.n).map(|(&n, &na)| na * g[n]).sum();
+            let th = material.expansion() * gc;
+            kappa[0] -= th;
+            kappa[1] -= th;
+        }
         let mul = |d: &[[f64; 3]; 3], v: [f64; 3]| -> [f64; 3] {
             [
                 d[0][0] * v[0] + d[0][1] * v[1] + d[0][2] * v[2],

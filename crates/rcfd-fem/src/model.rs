@@ -842,6 +842,15 @@ pub enum Load {
         /// Reference (strain-free) temperature.
         reference: f64,
     },
+    /// A nodal temperature gradient through the thickness of Shell4 elements, K/m: `dT/dz` with `z` along each element's
+    /// facet normal `e_3` (ADR 0612 D1). A Shell4 element of a Shell block takes the curvature thermal load `int B_b^T D_b
+    /// kappa_th dA`, `kappa_th = alpha g (1, 1, 0)` ([`crate::shell::thermal_gradient_load_vector`]); any other element with
+    /// a non-zero value at one of its nodes is refused. Independent of [`Load::Temperature`]; opt-in.
+    #[non_exhaustive]
+    ShellTemperatureGradient {
+        /// One gradient per node, K/m.
+        gradient: Vec<f64>,
+    },
 }
 
 impl Load {
@@ -929,6 +938,10 @@ impl Load {
     /// A nodal temperature field with its reference temperature.
     pub fn temperature(nodal: Vec<f64>, reference: f64) -> Load {
         Load::Temperature { nodal, reference }
+    }
+    /// A nodal temperature gradient through the thickness of shells, K/m along each element's normal (ADR 0612).
+    pub fn shell_temperature_gradient(gradient: Vec<f64>) -> Load {
+        Load::ShellTemperatureGradient { gradient }
     }
 }
 
@@ -1581,6 +1594,19 @@ impl SolidModel {
                     finite("nodal", t)?;
                 }
                 finite("reference", *reference)?;
+            }
+            Load::ShellTemperatureGradient { gradient } => {
+                // ADR 0612 D1.
+                if gradient.len() != n {
+                    return Err(FemError::FieldLength {
+                        key: "gradient",
+                        expected: n,
+                        found: gradient.len(),
+                    });
+                }
+                for &g in gradient {
+                    finite("gradient", g)?;
+                }
             }
         }
         self.loads.push(l);

@@ -646,6 +646,17 @@ impl Integrator {
                 ),
             ));
         }
+        // ADR 0612 D4.
+        if let Some(i) = model
+            .loads()
+            .iter()
+            .position(|l| matches!(l, Load::ShellTemperatureGradient { .. }))
+        {
+            return Err(invalid(
+                "nl_transient",
+                format!("load {i}: a shell temperature gradient is not offered by the nonlinear transient integrator (ADR 0612)"),
+            ));
+        }
         nonlinear::check_driver_model(model)?;
         // ADR 0555 D4: the Method step takes the hyperelastic material through the driver's functions (ADR 0541 D4
         // refused it here).
