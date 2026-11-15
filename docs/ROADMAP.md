@@ -12230,13 +12230,28 @@ fixed by the item's registration ADR before any code.
     factors. Without the option three new digests and the contact bit records unchanged; baseline_hashes passes. Eight
     of nine mutations caught (the NonZero-pivot mutant is equivalent under the post-test). No case-file key. M3 argued
     equivalent (maintainer's call). Follow-up F-624.
-- [ ] **F-619** Direct harmonic base motion and reference response on the transformation path
+- [x] **F-619** Direct harmonic base motion and reference response on the transformation path
   - depends on: F-528
   - acceptance: Every limit not stated here is registered in the ADR before the run. A harmonic base motion on a
     prescribed set of a model with constraints enters x = T q + G with right-hand side T^T (F - A_ext G); the bar of ADR
     0448 H6 with a tip spring equals the 1-D chain within 1e-8; the reference unknowns of the rigid sets are returned;
     defaults bit-identical.
-  - note: Structural solver, advanced tier. Follow-up of F-528 (ADR 0543, 2026-11-15).
+  - note: Structural solver, advanced tier. Follow-up of F-528 (ADR 0543, 2026-11-15). DONE. ADR 0565, 2026-11-15:
+    rcfd_fem::harmonic_direct::DirectHarmonic::response_with_references takes a BaseMotion at the prescribed equations
+    of a model on the transformation path (rigid sets, linear constraints, elastic supports): x = T q + G, G the
+    constant of the ADR 0296 elimination with the real and with the imaginary base values (T unchanged; crate-internal
+    mpc::transformation_with_values), A_r Q = T^T (F - A_ext G) with A_ext of ADR 0543 on its extended pattern
+    (stiffness parts with their coefficients, supports, K_sigma, mass, Rayleigh, dashpots); it returns
+    DirectHarmonicSolution, the mesh response and the six complex reference unknowns of each rigid set
+    (HarmonicReference). response_with_base keeps its refusal on the transformation path (opt-in route; ADR 0543 RT1
+    unchanged). Met: the ADR 0448 H6 bar with the tip spring against the 1-D chain within 2.4e-13 (limit 1e-8; with loss
+    factor, Rayleigh, base dashpots, complex base 1.2e-13 to 5.9e-13); a rigid set on the base nodes: chain 2.4e-13 and
+    references equal to t = (G, 0, 0), w = 0 exactly; both ends driven through linear constraints 1.3e-13; a cantilever
+    with rigid set, spring, foundation, loss factor, Rayleigh, dashpot and pre-stress against the relative-motion solve
+    within 8.6e-13 (references 1.7e-12), the rigid-set kinematics of the returned references 1.0e-17; 1 and 8 threads
+    bit-identical; defaults bit-identical (7 digests, baseline hashes). 13 of 13 mutations caught by registered checks.
+    Not covered: constraint forces on the transformation path; no case-file key (the case file has no direct harmonic
+    analysis).
 - [~] **F-620** Hyperelastic materials on the nonlinear transient Method step and the linear paths
   - depends on: F-425
   - acceptance: Every limit not stated here is registered in the ADR before the run. Hyperelastic materials on the
@@ -12456,13 +12471,25 @@ fixed by the item's registration ADR before any code.
     the 14-unknown stiffness and mass of ADR 0548. The first torsional resonance equals sqrt((G J k^2 + E C_w k^4)/(rho
     I_p)) within 1e-3 at 16 elements; every result without the option bit-identical.
   - note: Structural solver, advanced tier. Follow-up of F-626 (ADR 0548, 2026-11-15).
-- [ ] **F-636** Bore-zone witness for the finite-strain growth of the B-bar creep cylinder
+- [x] **F-636** Bore-zone witness for the finite-strain growth of the B-bar creep cylinder
   - depends on: F-580
   - acceptance: Every limit not stated here is registered in the ADR before the run. On the cylinder of ADR 0549 at the
     registered p, the error of the points with r < 1.1 a against the finite-strain reference of ADR 0549, its growth
     between 5 t* and 20 t* within a registered bound; the mutations of ADR 0549 that were not caught (the linear strain
     in the BBar arm, the creep rate halved) caught by a registered check; the checks of ADR 0549 unchanged.
-  - note: Structural solver, advanced tier. Follow-up of F-580 (ADR 0549, 2026-11-15).
+  - note: Structural solver, advanced tier. DONE. ADR 0563, 2026-11-15: on the cylinder of ADR 0549 at the registered p
+    (p/E = 1e-4), the error of the 2304 points with r < 1.1 a against the finite-strain reference of ADR 0549 is 5.96e-3
+    at 5 t* and 1.03e-2 at 20 t* (limit 2e-2), its growth 4.34e-3 within the registered bound 6e-3 (proxy estimate
+    4.33e-3; the growth is the F-bar pressure drift of ADR 0549 F4, which lies in the bore zone, F-637). The bore-zone
+    stress does not see the two mutations ADR 0549 missed (both lower the growth, as predicted); the registered witness
+    that catches them is the finite-strain part of the bore displacement, isolated by a second run at p/100 (the
+    discretisation error of the element, -1.1e-3 of the displacement, is linear in the load and cancels): the B-bar
+    element's drift between 5 t* and 20 t* agrees with the reference's within 7.9e-4 (limit 5e-2), while the linear
+    strain in the BBar arm gives 0.19 and the creep rate halved 0.73, both caught, both predicted to two digits by a
+    one-dimensional proxy. Reference converged (400 against 800 elements 7.7e-7 in the bore zone, 9e-7 on the drift),
+    the drift a finite-strain effect (3.3e-3 of the displacement). Test only (si_fbar_bore.rs, helpers copied from
+    si_fbar.rs, which is unchanged); the checks of ADR 0549 pass unchanged; no source file changed; rcfd-fem tests,
+    baseline_hashes, docs_site, fmt and clippy pass.
 - [ ] **F-637** Pressure drift of the F-bar Hex8 under creep at finite strain
   - depends on: F-580, F-587
   - acceptance: Every limit not stated here is registered in the ADR before the run. The growth of 4.4e-3 of p of the
@@ -12470,7 +12497,11 @@ fixed by the item's registration ADR before any code.
     sigma_theta) diagnosed: its scaling with p/E, its presence in a one-dimensional F-bar proxy, and whether a J-based
     volumetric part of the law removes it, each with a registered limit; the default element and every existing result
     bit-identical.
-  - note: Structural solver, advanced tier. Follow-up of F-580 (ADR 0549, 2026-11-15).
+  - note: Structural solver, advanced tier. Follow-up of F-580 (ADR 0549, 2026-11-15). the pressure drift is what the
+    bore-zone growth of ADR 0563 measures (4.34e-3 at r = 1.093, the point-wise growth 4.40e-3 at r = 1.0545); the pair
+    of runs at p and p/100 of ADR 0563, which cancels the discretisation error linear in the load, is available to
+    isolate its finite-strain part in the stress, and a deviatoric bore-zone measure (sigma_theta - sigma_r) would not
+    carry it.
 - [ ] **F-638** Pressure recovery of the mortar contactor
   - depends on: F-623
   - acceptance: Every limit not stated here is registered in the ADR before the run. The traction sum_a (t_a/A_a) Phi_a
@@ -12549,14 +12580,33 @@ fixed by the item's registration ADR before any code.
     central differences of the nonlinear static residual within 1e-6, and with the modes at rest within 1e-10 at a load
     of zero.
   - note: Structural solver, advanced tier. Follow-up of F-620 (ADR 0555, 2026-11-15).
-- [ ] **F-647** Shells on the rotating cyclic paths and the full rotor
+- [~] **F-647** Shells on the rotating cyclic paths and the full rotor
   - depends on: F-628
   - acceptance: Every limit not stated here is registered in the ADR before the run. With CyclicOptions::shells, the
     rotating paths on a cyclic sector (Campbell, whirl, pre-stressed and spin-softened modes) take Shell4 and Shell3,
     and full_rotor with FullRotor::expand, expand_field and expand_load copy shell blocks and expand six components; a
     spinning ring of Shell4 and the same cut into Shell3 against one sector: frequencies of each harmonic at each speed
     within 1e-8, expanded modes M-orthonormal within 1e-8; models without shells keep their bits.
-  - note: Structural solver, advanced tier. Follow-up of F-628 (ADR 0556, 2026-11-15).
+  - note: Structural solver, advanced tier. Follow-up of F-628 (ADR 0556, 2026-11-15). PARTIAL. ADR 0561, 2026-11-15:
+    shells on the rotating cyclic paths and the full rotor. With CyclicOptions::shells the rotating sector's paths take
+    Shell4 and Shell3: the modes at a speed with both effects, the pre-stressed and the spin-softened modes and the
+    Campbell table (no library change was needed for these after F-628), and the whirl paths (whirl_modes,
+    whirl_campbell, whirl_state, split_modes) through a new Coriolis matrix of the shell director, int rho N^T [a x] N
+    of u + z theta x e3 (m0 [a x] on the translations, the m1 coupling of a layup, m2 W^T [a x] W on the rotations, no
+    drilling term), carried by the congruence and made skew bit for bit (coriolis_matrix_with_shells; a part without a
+    cyclic constraint takes it with the new opt-in RotatingOptions::shells; coriolis_matrix itself unchanged).
+    full_rotor copies Shell4 and Shell3 blocks under the option (Beam2, and shells without the option, still refused),
+    and FullRotor::expand, expand_field and expand_load turn the rotations of six-unknown nodes by the same R^j. The ADR
+    0556 frustum, N = 6, against its full ring from full_rotor at 0, 0.2 and 0.4 omega_1: frequencies of each harmonic
+    at each speed within 2.7e-15 (modes with both effects, pre-stressed, spin-softened) and 1.9e-14 (whirl), equal
+    counts (limit 1e-8); the Coriolis term moves the k = 1 frequencies by 25 %; expanded modes M-orthonormal within
+    1.3e-15 and eigenvectors of the ring within 3.8e-10 (limit 1e-8); expanded static fields within 1.1e-14. Models
+    without shells keep their bits (every rcfd-fem test, baseline_hashes, a Hex8 twin bit-equal with both options and to
+    its hash recorded before the change). Eleven of eleven mutations caught. Partial by the rule: the first run missed
+    the uniform-field check of the Coriolis matrix (the shell to_global symmetrised the skew matrix to zero, so that
+    run's whirl comparison was vacuous); fixed and re-run under a registered amendment, every check met. Partial by the
+    rule: CO1, W, SM and W0 met only after the post-run amendment 2 (run 1: the shell to_global symmetrises, so the
+    Coriolis matrix vanished). Follow-up F-654 (independent whirl reference for spinning shells).
 - [ ] **F-648** Shells with interpolated cyclic boundaries and nodes on the axis
   - depends on: F-628
   - acceptance: Every limit not stated here is registered in the ADR before the run. CyclicOptions::shells together with
@@ -12574,13 +12624,25 @@ fixed by the item's registration ADR before any code.
   - note: Structural solver, advanced tier. Follow-up of F-622 (ADR 0557, 2026-11-15). F-572 (ADR 0560) added
     ArcLengthOptions::contribution_load, the follower load direction in arclength::trace; this item keeps the sphere
     trace check on top of it.
-- [ ] **F-650** Buckling eigensolver when the subspace holds fewer positive Ritz values than asked
+- [x] **F-650** Buckling eigensolver when the subspace holds fewer positive Ritz values than asked
   - depends on: F-642
   - acceptance: Every limit not stated here is registered in the ADR before the run. With the default BucklingOptions,
     the lowest three lateral-torsional buckling factors of the ADR 0553 monosymmetric I at L = 1.5 under -M_ref are
     returned and equal those of a subspace of 40 within 1e-9; every result that the solver returned before is
     bit-identical.
-  - note: Structural solver, advanced tier. Follow-up of F-642 (ADR 0559, 2026-11-15).
+  - note: Structural solver, advanced tier. DONE. ADR 0564, 2026-11-15: rcfd-linalg lowest_buckling_factors restarts
+    once when the subspace holds fewer positive Ritz values than asked (at least one) and the Sturm count at the far
+    bound refuses: the restart size is the number of factors of both signs with |lambda| below a band B = 2R, R the
+    first lambda_mp 2^k holding the asked number of positive factors, both counted by Sylvester's law of inertia (K + s
+    K_sigma at s = B and s = -B); the restart runs the same iteration from the default start and passes the same Sturm
+    check, otherwise the old Sturm mismatch is returned. Only inputs that were refused can change. The ADR 0553
+    monosymmetric I at L = 1.5 under -M_ref with the default BucklingOptions is returned: 610.71097991747,
+    2333.79172623103, 5256.57773727524, within 1.8e-15, 1.2e-15, 3.5e-12 of the subspace-40 solve; 8 elements within
+    6.7e-14 of subspace 24. A diagonal pencil refused before is returned exactly and bit-equal to the solve with the
+    counted subspace; a subspace with no positive Ritz value (the L3 test) is still refused. Results that returned
+    before are bit-identical: a hash over 13 cases (linalg pencils and warping beams, both signs, ADR 0559 paths) equal
+    against cf32422b; rcfd-linalg, rcfd-fem, baseline_hashes and docs_site pass. Five of five mutations caught. Not
+    covered: a subspace with no positive Ritz value at all keeps the refusal; one restart only.
 - [ ] **F-651** Arrhenius creep factor: non-positive temperature control and the nonlinear transient integrator
   - depends on: F-581
   - acceptance: Every limit not stated here is registered in the ADR before the run. A creep material with the Arrhenius
@@ -12604,3 +12666,12 @@ fixed by the item's registration ADR before any code.
     checked against a reference held in docs/reference-data.md before registration; cited from memory); the symmetric
     paths keep their bits.
   - note: Structural solver, advanced tier. Follow-up of F-572 (ADR 0560, 2026-11-15).
+- [ ] **F-654** Independent whirl reference for spinning shells
+  - depends on: F-647
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The forward and backward whirl
+    frequencies of a spinning thin shell of revolution (a flat annular plate clamped at its inner radius, or a free thin
+    ring) from RotatingSector::whirl_modes with Shell4 and Shell3 against a closed form derived or cited in the ADR, at
+    three speeds up to half the first frequency: within the registered discretisation error at two meshes, the observed
+    order within 0.5 of the expected one, and the split of each nodal-diameter pair within 1e-2 relative; models without
+    shells keep their bits.
+  - note: Structural solver, advanced tier. Follow-up of F-647 (ADR 0561, 2026-11-15).
