@@ -177,3 +177,69 @@ not diagnose the element's pressure drift (F-637). `G` is bounded above its esti
 ADR 0506's `2e-3` on the bore zone is not claimed. The reference shares the continuum problem with the library (the small-strain
 law on `E` and `S`, ADR 0549 Limits); time discretisation is common. Only the registered mesh, `m = 0`, `n = 4`, `b/a = 2`,
 `nu = 0.3`. No case-file key.
+
+## Addendum 1: results (2026-11-15)
+
+Code: commit 87294080 (test only: the new file `crates/rcfd-fem/tests/si_fbar_bore.rs`, the copied helpers of `si_fbar.rs`, the
+copied reference with the bore displacement `ua`, `bore_error`, `bore_mean` and the test
+`f636_bore_zone_witness_of_the_b_bar_creep_cylinder`). No library file and no existing test changed. Logs in
+`w49i-work/f636-scratch`: `run1-f636.log` (the registered run, single, 35 s in release), `mutations.log`, `mut-MU3.log`,
+`mut-MU4.log`, `s1-rcfd-fem.log`, `s2-baseline.log`, `s2-docs.log`, `s3-clippy.log`, `s3-fmt.log`.
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| A0 | both BBar runs 71 step ends (0 halvings; largest creep increment `2.38e-4` at `p`, `2.38e-6` at `q`), 2304 points with `r < 1.1 a` | holds | met |
+| B1 | `5.965e-3` (worst at `r = 1.093`) | `<= 2e-2` | met |
+| B2 | `1.030e-2` (worst at `r = 1.093`) | `<= 2e-2` | met |
+| G | `4.335e-3` | `<= 6e-3` | met (proxy `4.33e-3`) |
+| D | `7.88e-4` (`delta_FE = -1.0365e-10`, `delta_ref = -1.0373e-10`, per Pa) | `<= 5e-2` | met (proxy `2.6e-3`) |
+| R1B | `7.70e-7` | `<= 1e-4` | met |
+| R4 | `9.3e-7` | `<= 1e-2` | met |
+| R5 | `3.34e-3` | `>= 1e-3` | met (estimate `3.4e-3`) |
+| U1 | `git diff 0e1e4ea0 -- crates/rcfd-fem/tests/si_fbar.rs` empty | empty | met |
+| U2 | `f580_amendment_1_creep_bbar_against_the_finite_strain_reference` passed in S1 | pass | met |
+| S0 | `git diff --stat 0e1e4ea0 -- crates/*/src` empty | empty | met |
+| S1 | `cargo test -p rcfd-fem --release`: 259 test binaries, 1108 passed, 0 failed, 302 ignored; `baseline_hashes` 3 passed, 1 ignored (as on the base); `docs_site` 2 passed; `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings` clean | 0 failed, clean | met |
+
+Reported: `e_B` `6.87e-3` at `10 t*`, `8.31e-3` at `15 t*` (both at `r = 1.093`); the bore-zone point-wise growth `max |d(20
+t*) - d(5 t*)|` `4.396e-3` at `r = 1.0545` (ADR 0549's F4: the F-bar pressure drift lies in the bore zone and is what `G`
+measures); `Du` of the FE against the reference `-1.097e-3` at `p` and `-1.096e-3` at `q` (the discretisation error, linear in
+the load, cancelled in `delta` to `7.9e-4` of the drift); the drift from `t = 0` at `20 t*`: FE `-1.1271e-10`, reference
+`-1.1280e-10` per Pa; the bore displacement is uniform over the bore nodes to `7e-18`; the reference's largest equivalent creep
+strain `9.715e-3` at `p`, `9.70e-5` at `q`; in the bore zone at `20 t*` the largest equivalent creep strain of the FE
+`9.67e-3`.
+
+### Mutations (scratch copy `f636-scratch/mut` of 87294080, target `f636-scratch/mut-target`, each run once, the file restored after)
+
+| Id | Result of the test | Caught by |
+|---|---|---|
+| MU3 (linear strain in `fbar_kinematics`) | B1 `5.74e-3`, B2 `8.01e-3`, G `2.27e-3` met; **D `0.190` missed** (`delta_FE = -8.40e-11`); R4, R5 met | **caught** (D; predicted `0.19`, and not by G, B1, B2, as predicted) |
+| MU4 (time factor `dt/2`) | B1 `6.50e-3`, B2 `9.91e-3`, G `3.40e-3` met; **D `0.730` missed** (`delta_FE = -2.80e-11`; `Du` itself `-0.50` against the reference) | **caught** (D; predicted `0.73`, and not by G, B1, B2, as predicted) |
+
+As registered (arithmetic 1), both mutations lower the bore-zone growth `G` (MU3 `2.27e-3`, MU4 `3.40e-3`, against `4.34e-3`
+unmutated): the bore-zone stress error is dominated by the O(h) error at the coarsest bore-zone ring and by the element's
+pressure drift, and the finite-strain part of the bore stress is a few `1e-3` of `p`. The witness that catches them is the
+finite-strain part of the bore displacement, isolated by the run at `q = p/100`. The proxy predicted D under both mutations to
+two digits.
+
+### Deviations
+
+None. No amendment; every check was met in the single registered run; both mutations were run once, as planned. Nothing
+registered was skipped.
+
+### Decision (by the rule)
+
+Every registered check (A0, B1, B2, G, D, R1B, R4, R5, U1, U2, S0, S1) is met in the single registered run, without an
+amendment, and both planned mutations are caught by the registered check D (MU3 `0.190`, MU4 `0.730` against the limit
+`5e-2`), as predicted before the run. **Proposed status: done.**
+
+### Remaining questions
+
+1. **The bound of `G`.** `G` is bounded at `6e-3` above an estimate (`4.33e-3`) that is mostly the F-bar element's pressure
+   drift (F-637). Options: (a) keep `6e-3`; (b) once F-637 has diagnosed the drift, re-register the bore-zone growth on the
+   deviatoric difference `sigma_theta - sigma_r`, which does not carry the pressure; (c) a refined radial mesh. Recommendation:
+   (b), as part of F-637's outcome, not a new item.
+2. **The witness D elsewhere.** The pair of runs at `p` and `p/100` isolates the finite-strain part of any FE quantity
+   whose discretisation error is linear in the load. Options: (a) leave it to this cylinder; (b) use it for the stress field
+   (the bore-zone stress at `p` minus the scaled stress at `q`, against the same difference of the reference) in F-637.
+   Recommendation: (b), within F-637.
