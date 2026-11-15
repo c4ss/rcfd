@@ -227,3 +227,49 @@ in N s/m. Release profile.
   variable-density kernels: not run.
 * No library change; whether the default diagonal becomes `corrected` stays the maintainer's open decision of ADR 0455 remaining
   question 1 (`component-diagonal-default.md`).
+
+## Amendment 1 (2026-11-15, written after the registered runs on commit `6857342e`, before the amended comparison)
+
+**What the registered runs showed** (`cargo test -p rcfd-post --release --test relaxed_pimple_diagonal_f538 f538_registered_runs
+-- --ignored --nocapture`, log `f538-scratch/run2_registered.log`, 135 s, all 29 runs made once): R0 (`0` at all four), C2, the PISO
+part of C3, every zero-gradient part of C3, C4 and C6 (within `7.7e-5`), RC, Q5, NC1, NC2 and C5 are met. **Missed**: C1 (`Re`
+`1.07e-2`, limit `5e-3`; measured `Delta Z_pl = -0.00407 - 0.00065 i` against the model's `0.00665 - 0.00107 i`), the Symmetry
+parts of C3 (`3.6e-3`), C4 (`7.9e-3`, `5.4e-3`, `2.4e-3` at `alpha_u = 0.6, 0.7, 0.9`) and C6 (`5.2e-3`), the `Re Delta Z_pl` of
+C4 at `0.6`, `0.7`, `0.9` (`2.2e-2`, `1.5e-2`, `7.1e-3`) and of C6 (`1.5e-2`), and NC3's bracket (the measured sign change lies
+between 0.8 and 0.9, not 0.7 and 0.8). The test is kept as the ignored record
+`f538_registered_runs_relaxed_piso_sweep_and_n50_known_miss` (attribute and name only; limits intact).
+
+**Diagnosis (unregistered arithmetic on the logged numbers, `f538-scratch/diag_cx.py`; disclosed).** The misses are all on the
+Symmetry side, and the model error of `Re Delta Z_pl` is linear in `1/alpha_u - 1`: `-0.0041, -0.0071, -0.0107, -0.0154, -0.0217`
+at `alpha_u = 1.0, 0.9, 0.8, 0.7, 0.6`, i.e. about `-0.0041 - 0.0265 (1/alpha_u - 1)`. **A defect of D1's model**: it drops the
+`x`-direction Laplacian of the momentum matrices because on an `x`-uniform field its diagonal `c` and its off-diagonals cancel
+(`(c + O_x) u = 0`). They cancel in `D + O`, but not in the splitting: the relaxation scales the **whole** diagonal, `(D + c)/alpha_u`,
+and the averaged `a_P` and `HbyA` divide by `D + c + L`. With `D' = D + c` and `O' = O - c` (on `x`-uniform fields) D2 holds with
+`D'`: `D' + O' = D + O` (the zero-gradient fixed point does not move, hence the zero-gradient parts met), but `r = e/d` becomes
+`e/(d + c)`, smaller, and the relaxed excess falls more steeply with `1/alpha_u`. Per volume `c_i = nu sum_x-faces |S_f|/(d_f V_i)`
+(`d_f` the centre distance, half the cell at the piston, nothing at the zero-gradient outlet), which on the graded meshes runs
+from `2 nu/(0.25 h)^2 = 50 /s` at the piston to about `1.7 /s` at the outlet; its length-weighted mean `2 nu 2.87/h^2 = 9.0 /s` is
+`3 %` of `d = 301 /s`, the size the 0-D formula needs for the measured slope. The model with `c_i` (each `x` column of the mesh as a
+developed column with its own `c_i`, `Z = sum_i z(c_i) dx_i`, the per-length part from the two meshes as for the runs; "model X")
+was evaluated on the logged runs before this amendment: it reproduces every `Delta Z_pl` within `1e-5`. This is a postdiction, stated
+as such; the item is **partial** by the registered rule whatever the amended comparison gives (checks met only after an amendment).
+
+**Amended comparison (A-checks; the registered limits unchanged; no solver run is repeated).** A new fast test
+`f538_amended_model_x_against_the_registered_runs` embeds the 29 logged impedances (full digits of `run2_registered.log`) and
+compares them with model X, `c_i` computed from the point coordinates of the two `box_mesh` meshes (no free parameter):
+
+| Id | Quantity | Limit (as registered) |
+|---|---|---|
+| C1A | relaxed `0.8`: `Delta Z_pl` against model X, absolute | real `<= 5e-3`, imaginary `<= 2e-3` |
+| C2A | PISO: the same | real `<= 5e-3`, imaginary `<= 2e-3` |
+| C3A | `Z_pl` of the four runs of C3 against model X, per part | `<= 2e-3` |
+| C4A | sweep: `Re Delta Z_pl` against model X; `Z_pl` per part | `<= 5e-3 + 0.02 abs(Re Delta Z_X)`; `<= 2e-3` |
+| C5A | the measured zero against model X's linear interpolation on the same bracket | `<= 0.02` |
+| C6A | `N = 50`: `Re Delta Z_pl` against model X; `Z_pl` per part | `<= 5e-3 + 0.02 abs(Re Delta Z_X)`; `<= 3e-3` |
+| NC3A | the measured bracket of the sign change equals model X's bracket | holds |
+| C8A | the 0-D formula with `d -> d + c_bar` (`c_bar` the per-length mean of `c_i`, from the meshes) against the measured `sigma = Re Delta Z_pl/Re Delta Z_D1` at every `alpha_u` (N 100) and at N 50; its zero against the measured zero of C5A | `<= 0.06`; `<= 0.02` |
+| E1A | the 20 h `Delta Z` of model X against the measured 20 h `Delta Z` (the ends' 2-D part not modelled) | record |
+
+Planned mutations MU4 and MU5 are applied to model X as well (the test's own model); MU1 to MU3 (library) are run against the
+registered record's fast parts as planned, the measured numbers being the solver's: they are run with the heavy record on a scratch
+copy (each mutation once), and model X compared with the mutated runs' logged output by the same arithmetic.
