@@ -242,3 +242,89 @@ would take more than about two minutes in release is an ignored heavy record run
    `2e-3` of T1, and T3 checks it against the Timoshenko continuum. A more slender column would bring the EB value closer but
    widens the spread of the spectrum (`E A L^2/(E I) = 12 (L/h)^2`).
 4. **No `Contribution`, no buckling-path change, no case-file key** (limits above; a schema golden would change).
+
+## Addendum 1 (2026-11-15): results
+
+Runs: `sa_f665` (`rcfd-fem`) once at 1245ee40 (`--release -- --nocapture --test-threads=1`; `f665-scratch/run1-f665.log`). N1
+recorded at the base 06b66e35 before any library line (`n1-base.log`, `n1-base2.log`, commit 8bc1af34) and passed at the tip.
+At the tip, release: the beam and follower bit records of N2 and the tests that cover `follower.rs` (`sa_follower`, `sa_f572`,
+`sa_f653`, `sa_f664`, `sa_shell_follower`): all pass (`n-tests.log`); `baseline_hashes` of `rcfd-api` (3 passed, 1 ignored;
+`baseline.log`). `cargo fmt -p rcfd-fem -- --check` and `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings` clean.
+No limit was changed after a run; no amendment.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| T1 `|p_meas/20.0509536 - 1|` | `<= 2e-3` | `8.873e-4` (`p_meas = 20.033162590116`, below the EB value: shear and rotary inertia) | yes |
+| T2 `|p_meas/p_A - 1|` (same discretisation, Python) | `<= 1e-8` | `0` (the same final bracket) | yes |
+| T3 `|p_meas/p_T - 1|` (Timoshenko continuum) | `<= 1e-5` | `9.74e-7` | yes |
+| T4 `|W_meas/121.342510 - 1|`; `|W_meas/W_A - 1|` | `<= 3e-3`; `<= 1e-6` | `1.259e-3`; `3.5e-9` (`W_meas = 121.189706`) | yes |
+| T5 brackets (planar, oblique) | hold | `p = 16`: all real; `p = 24`: a pair `W = 94.97 +/- 93.77 i` (both models) | yes |
+| T6 backward errors, every pair of every evaluation | `<= 2e-10` | planar `5.3e-14`, oblique `1.9e-13` | yes |
+| T7 `|p_3D/p_meas - 1|` (oblique axis `(1, 2, 2)/3`, rectangle 2:1) | `<= 1e-8` | `0` (the same final bracket) | yes |
+| T8 (i) linearity of `force` against `K_f`; (ii) `force(0, 1)`; (iii) entries | `<= 1e-14`; exact; exact | `1.4e-16`; bitwise; `K_f[y, theta_z] = -P_ref` exactly, 6 entries | yes |
+| T9 dead tip force at `1.01 p_meas`: real, lowest `Re < 0` | hold | real (`Im = 0`); `W = 12.27, -380.72, 2255.1, 11666` | yes |
+| T10 against `geometric::prestressed_modes`; `|Im|/|w|` | `<= 1e-8`; `<= 1e-8` | `2.97e-11`; `0` | yes |
+| T11 refusals | hold | all nine with the registered key | yes |
+| N1 default bits | exact | the 8 digests equal | yes |
+| N2 existing beam and follower bit records | pass | pass (nine files) | yes |
+| N3 `baseline_hashes` | pass | pass | yes |
+
+Remarks. The Beam2 column flutters at `20.0332 E I/L^2` against the EB `20.0509536` (`-8.87e-4`), within `9.7e-7` of the
+Timoshenko continuum of the same section: the departure is physical, not a defect of the load stiffness. T9: arithmetic 3
+printed `14.14, -422.12, ...` for the dead tip force; that number came from a defect of the script (zeroing the entry
+`B[v_tip, psi_tip]` removed the geometric term together with the follower term). A diagnostic after the run
+(`f665-scratch/dead_load_fix.py`, `dead_load_fix.log`, removing only the follower term) gives `12.2654, -380.718, 2255.13,
+11665.86`, the rcfd numbers to the printed digits. The registered check (real, a negative eigenvalue) was not affected.
+
+### Mutations (scratch copy of 1245ee40 by `git archive | tar -x -m`, one at a time, `f665-scratch/mutate.py`, `mutations.log`)
+
+| Id | Caught by |
+|---|---|
+| MU1 sign of `K_f` flipped | T1 to T5 (no flutter up to `p = 24`), T8 |
+| MU2 `K_f` not scaled by `lambda` | T2 (`7.2e-4`), T3, T4; not by T1 (the shift `7.2e-4` stays inside its `2e-3`) |
+| MU3 `K_f` transposed | T8 only: the spectrum does not change, because `(K + lambda K_sigma) - lambda K_f^T` is the transpose of the registered matrix (`K`, `K_sigma`, `M` symmetric), and a pencil and its transpose have the same eigenvalues |
+| MU4 columns of `K_f` at the translations | T1 to T5, T8 |
+| MU5 forces ignored | T1 to T5 (no flutter at `p = 24`) |
+| MU6 `K_sigma` not scaled by `lambda` | T1 to T5, T10 (`1.8`) |
+
+Six of six caught. The registration expected MU2 to be caught by T1 and MU3 by T1 or T5 as well; both were caught by other
+registered checks.
+
+### Deviations
+
+- None in the checks. The expected numbers of the dead-load control in arithmetic 3 were wrong (script defect, above); the
+  check did not depend on them.
+- T7 and T9 call the bisection of T1 again to get `p_meas` (the same deterministic computation, the same numbers); no check
+  was re-run to pick a result.
+
+### Not run
+
+- The whole workspace suite and the whole `rcfd-fem` suite (the brief); no existing line of `rcfd-fem` changed (D4: only
+  additions at the end of `follower.rs` and in its module documentation). No case-file key.
+
+### Decision
+
+**done** by the registered rule: every check met in the one registered run, six of six mutations caught, no amendment, fmt
+and clippy clean, N1 to N3 unchanged. Every clause of the acceptance is met: a follower tip force on Beam2 nodes with its load
+stiffness (a1: T8, T11), the complex modes of `K + lambda (K_sigma - K_f)` with the mass (a2: T5, T6, T9, T10), Beck's column
+of Beam2 elements within `8.87e-4` of the derived `20.0509536` (a3; registered limit `2e-3`, and within `9.7e-7` of the
+Timoshenko continuum), existing beam results unchanged (a4: N1 to N3).
+
+### Remaining questions (recommendations for the lead)
+
+- **Q1** (the buckling path with a tip force): options (a) let `buckling_factors_full` take tip forces (a new argument or
+  entry point); (b) leave it, since Beck's column has no static factor. Recommendation (b) until a beam follower case with
+  divergence is needed.
+- **Q2** (a `Contribution` for the Newton driver): only when the driver takes beams (a geometrically nonlinear beam); not now.
+- **Q3** (case-file keys for the follower tip force and the flutter modes): with the keys of ADR 0560 Q1 and ADR 0580 Q3,
+  when those are added (a schema golden changes; maintainer approval).
+- **Q4** (MU3 leaves the spectrum unchanged): no eigenvalue check can tell the transpose of `K_f` apart; the element check T8
+  guards it. Recommendation: keep T8; no action.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> Structural solver, advanced tier. Follow-up of F-653 (ADR 0580, 2026-11-15). DONE. ADR 0589, 2026-11-15: new rcfd_fem::follower::FollowerTipForce (a tangential follower force on Beam2 nodes, fixed in the end section so that it turns with the node rotation, f = lambda (F + theta x F); its load stiffness K_f with the entries lambda eps_ijk F_k at (translation i, rotation j), unsymmetric; non-beam nodes refused) and follower::prestressed_modes_full (the complex modes of (K + lambda (K_sigma - sum K_f)) phi = omega^2 M phi about the linear pre-stress of the reference load, no Newton tangent, so beams take it; shift-invert Arnoldi of ADR 0580 with the backward errors of ADR 0587; transformation path refused). Beck's column of 40 Beam2 elements, L/h = 100, bisection on the onset of a complex pair: p_cr = 20.03316 E I/L^2 (-8.87e-4 from the derived 20.0509536, registered limit 2e-3; the shear and rotary inertia of the Timoshenko element: within 9.7e-7 of the Timoshenko continuum and equal to an independent re-implementation of the same discretisation), coalescence Omega^2 = 121.19 (-1.26e-3); an oblique 3-D column of a 2:1 rectangle gives the same load to the last bit; the dead tip force gives a real spectrum with a negative eigenvalue; without followers the full path agrees with geometric::prestressed_modes within 3e-11; backward errors at most 1.9e-13. Six of six mutations caught (the transpose of K_f leaves the spectrum unchanged and is caught by the element check); existing beam results (new record N1, the existing beam and follower records) and baseline hashes unchanged.
+
+> Note for F-653 (append to its note): Its open question 2 (a Beam2 follower tip force with a linear pre-stress flutter path) is answered by F-665 (ADR 0589, 2026-11-15): Beck's column of Beam2 elements within 8.9e-4 of 20.0509536 (the Timoshenko departure).
