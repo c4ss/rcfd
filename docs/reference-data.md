@@ -2227,6 +2227,19 @@ No source was read for F-643. The books are those of F-598 and F-627, cited from
 | Doubly symmetric central-load coefficient `M_max/M_cr = 1.361` | computed; the textbook `1.35` to `1.36` cited from memory, not used | ADR 0582 D4 |
 | Measured, 16 elements: `5.3e-4`, `3.5e-4`, `7.2e-4` (doubly symmetric at, above, below the shear centre); `1.4e-3`, `6.9e-4` (monosymmetric at the shear centre, both directions); all FE values below the Euler-Bernoulli reference (shear-flexible lateral plane) | computed | ADR 0582 addendum 1 |
 
+## F-663 distributed loads at a height on warping beams (ADR 0588)
+
+No source was read for F-663. Every reference used is derived in ADR 0588 (D1, D3, D4) and computed by a plain numpy script
+(`f663-scratch/arith.py`, `arith.log`), no rcfd code.
+
+| Item | Status | Source |
+|---|---|---|
+| Distributed load-height term of a force per length `q` along `p`: `(1/2) int (q . (p - s)) phi^2 dx`, on the Hermite twist `c M_H`, `M_H = (l/420) [156, 22l, 54, -13l; 22l, 4l^2, 13l, -3l^2; 54, 13l, 156, -22l; -13l, -3l^2, -22l, 4l^2]` | derived | ADR 0588 D1 (from the point term of ADR 0582 D1; the block by direct integration) |
+| End forces `K u` of an element under a uniform line load: the end moments shifted by `q_z l^2/12`, the shears the mid-element value (the `L^2` projection of the parabolic moment) | derived, measured `3.9e-14` | ADR 0588 D3, check E1 |
+| Rayleigh-Ritz references, forks, `L = 3`, UDL `q_ref = 1000` N/m downward (`lambda`, sine series `N = 81`, converged to `<= 2.4e-8` from `N = 41`): doubly symmetric I top flange `45.1856414209`, shear centre `59.0640165887`, bottom flange `77.1475881351`; ADR 0553 monosymmetric I at the shear centre `135.747863965` (larger flange compressed), `69.3139026678` (in tension), at the centroid `163.396623703`, on flange 1 `126.453805543` | computed | ADR 0588 D4 |
+| Doubly symmetric UDL moment factor `C_1 = 1.1310` | computed; the textbook `1.13` cited from memory, not used | ADR 0588 D4 |
+| Measured, 16 elements: `1.7e-5`, `1.7e-5`, `7.4e-6` (doubly symmetric top flange, shear centre, bottom flange); monosymmetric within `3.5e-4` | computed | ADR 0588 addendum 1 |
+
 ## F-429 fracture parameters: domain integral, stress intensity factor, growth life (ADR 0547)
 
 No source was read for F-429. The books and papers below are cited from memory (volumes, pages and years as recalled, not

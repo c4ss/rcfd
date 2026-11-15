@@ -13,7 +13,7 @@ addenda at the end; nothing above the addenda is changed after a run.
 Roadmap item F-663 (deps F-643), structural solver, advanced tier, the follow-up named by
 [ADR 0582](0582-f643-registration-load-height-and-non-uniform-moment-for-monosymmetric-warping-beams.md) (its question Q2,
 recommendation (b): a consistent distributed load-height term on the Hermite twist). The element, sections and buckling path are
-those of [ADR 0546](0546-f598-registration-warping-unknown-for-beam2-and-lateral-torsional-buckling.md), ADR 0548 and
+those of [ADR 0546](0546-f598-registration-warping-degree-of-freedom-for-beam2-and-i-section-lateral-torsional-buckling.md), ADR 0548 and
 [ADR 0553](0553-f627-registration-monosymmetric-thin-walled-sections-for-the-warping-element.md); the point-load term is that of
 ADR 0582 D1; the pre-stress on the harmonic path is that of [ADR 0585](0585-f661-registration-pre-stress-on-the-warping-harmonic-path.md).
 Number 0588 given by the lead. Branch `f663-work` from 83b9d18c (the F-661 branch, which carries F-635, F-643 and F-661),
@@ -275,3 +275,93 @@ check met only after a post-run amendment. **todo**: A1 to A3 or B1 missed.
 - **Q2. The element moment under a distributed load**: (a) linear per element from `K u` (now, the `L^2` projection, converges
   at `O(l^2)` in the moment); (b) the parabolic moment from the element's line load added in `local_geometric_stiffness`.
   Option (b) would change results of existing models with line loads and warping, so it is not taken; listed as open.
+
+## Addendum 1 (2026-11-15): results
+
+Written after the one registered run. Commits: 23cb24db (this registration), fcb68a35 (the bit record B1, run once on the base
+83b9d18c plus the registration, no library line changed; its digests are its constants), f384dc5e (`beam_warping.rs`: the field
+and the builder `Warping::line_load_point`, the accessor `line_load_points`, the function `add_line_load_points` and its one call
+at the end of `matrices_impl`, a module-doc paragraph; `tests/sa_beam_warping_f663.rs`). Logs in `w49i-work/f663-scratch`:
+`run1.log` (the registered run, release), `b1_base.log` (the base run of B1), `b0.log`, `baseline.log`, `docs_site.log`,
+`fmt.log`, `clippy.log`, `mutations.log` and `mut_Y*.log`; `arith.py`, `arith.log` (before any code).
+
+### Results against the registered limits
+
+| id | measured | limit | verdict |
+|---|---|---|---|
+| B0 | `sa_beam_warping_f598` 8 passed 1 ignored, `f598_bits` 1, `f626` 7, `f626_bits` 1, `f627` 7 passed 2 ignored, `f635` 4 passed 1 ignored, `f635_bits` 1, `f643` 4, `f661` 4, `f661_bits` 1, `sa_buckling_sign_asymmetric_f642` 2, `sa_buckling_restart_f650` 2, `sa_geometric_struct_f558_bits` 1; `baseline_hashes` 3 passed 1 ignored | pass | met |
+| B1 (a4) | nine digests (the F-643 DS-top point-load factors at 16 and 8 elements, its `K` and `K_sigma`; the UDL factors without an entry, doubly symmetric and monosymmetric both ways, its `K_sigma`, and `from_static`): each equal to the base | bit-equal | met |
+| A1 (a1) | DS top flange: `45.184863919` against `45.1856414209`, `-1.72e-5` | `2e-2` | met |
+| A2 (a2) | DS shear centre: `59.063014527` against `59.0640165887`, `-1.70e-5` | `2e-2` | met |
+| A3 (a3) | DS bottom flange: `77.147015523` against `77.1475881351`, `-7.4e-6` | `2e-2` | met |
+| A4 | MS at the shear centre downward `-3.04e-4`, upward `-1.91e-5`; at the centroid downward `-3.43e-4`; on flange 1 downward `-2.87e-4` | `2e-2` each | met |
+| A5 | 8 elements: `+8.4e-5`, `+1.18e-4`, `+1.66e-4` | `2e-2` each | met |
+| A6 | axis y, DS top flange: `5.7e-15` | `1e-6` | met |
+| A7 | `from_static`: DS top flange `8.9e-16`, MS at the centroid `1.4e-15` | `1e-9` | met |
+| A8 | lumped against consistent: DS top `1.088e-6`, DS bottom `1.079e-6` | `1e-8 < d <= 1e-4` | met |
+| E1 | end shears and moments of the pre-stress against D3: `3.9e-14` of `max |M|` (element 0: `V = -1406.25`, `M = -2.9296875` and `-266.6015625`, as derived) | `1e-9` | met |
+| L0 | DS entry at `(0, 0)`, MS entry at `(0, z_0)`: factors bit-equal to no entry | bit-equal | met |
+| L1 | `K` bit-equal; `K_sigma` pattern equal, equal off the twist equations; the 196 twist entries against `c M_H`: `6.7e-17` of the largest | equal; `1e-12` | met |
+| L2 | rigid-twist energy `-71.12954495500` against `-71.12954495500017`: `2.8e-15` | `1e-12` | met |
+| N1 | DS top/SC `0.7650`; bottom/SC `1.3062`; MS down/up `1.9579`; MS against `beta_x = 0` `0.376` | `< 0.85`; `> 1.2`; `> 1.7`; `> 0.2` | met |
+| R | nine cases, each with its key (`UnknownSet`, `load_point` twice for non-finite values, `load_point` for the lateral load at the flange, `warping` for the plain beam); the four accepted cases accepted | exact | met |
+
+The doubly symmetric values lie within `1.7e-5` of the Euler-Bernoulli reference, well inside the estimate `3e-3`; the
+shear-flexible lateral plane lowers them much less than under the central point load of ADR 0582 (`3.5e-4` to `7.2e-4`),
+plausibly because the UDL mode is closer to the first sine and the moment is smooth (not diagnosed further; no limit depends on
+it). The monosymmetric values lie `1.9e-5` to `3.4e-4` low. At 8 elements the values are high by `0.8e-4` to `1.7e-4`, the
+discretisation of the per-element linear moment (arithmetic 4 predicts `6e-5` to `1.4e-4` for the E-B model). E1 confirms D3 to
+round-off: the pre-stress of a uniform line load is the `L^2` projection of the parabolic moment.
+
+### Mutations (scratch copy `f663-scratch/mut`, own target directory, one at a time; the unmutated copy passes)
+
+| id | mutation | caught by |
+|---|---|---|
+| Y1 | term with the wrong sign | A1, A3, A4 (centroid, flange 1), A5, A8, L1, L2, N1 |
+| Y2 | `r = p` | A4 (centroid, flange 1), L0 (MS), L2 |
+| Y3 | term left out | A1, A3, A4, A5, A8, L1, L2, N1 |
+| Y4 | term doubled | A1, A3, A4, A5, A8, L1, L2 |
+| Y5 | lumped form in place of `M_H` | A8 (lumped differs, both), L1 |
+| Y6 | `chi` rows and columns of `M_H` dropped | A8 (lumped within, both: `d` above `1e-4`), L1 |
+| Y7 | force in global components | A6 |
+| Y8 | term not turned to global axes | A6 |
+| Y9 | first-order torque refusal removed | R |
+| Y10 | the first block's shear centre for every element | L2 |
+
+Ten of ten caught. Y5 and Y6 are caught only by A8 and L1: a wrong element block that keeps the total `c l` moves the factor
+far inside the acceptance limit `2e-2`, which is why A8 and L1 were registered.
+
+### Other runs and deviations
+
+`cargo fmt -p rcfd-fem --check`: clean. `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings`: clean. `cargo test -p
+rcfd-cli --release --test docs_site`: the first run failed on one broken link in this registration (the file name of ADR 0546
+was mistyped in the head); the link target was corrected after the run (an editorial change above the addenda; no check, limit
+or design text changed) and the second run passed (`docs_site.log`). Not run: the whole `rcfd-fem` suite and the workspace (the
+gate of the lead); the new code runs only with a `line_load_point` entry, and the tests that reach `matrices_impl` without one
+are those of B0 and B1. `docs/reference-data.md` has a new F-663 section.
+
+### Decision by the registered rule
+
+**done**: every registered check (B0, B1, A1 to A8, E1, L0, L1, L2, N1, R) met in the one run, no amendment, ten of ten
+mutations caught. The acceptance clauses: a1 `1.72e-5`, a2 `1.70e-5`, a3 `7.4e-6`, each against a Rayleigh-Ritz reference
+derived here and converged to `2.4e-8`, at 16 elements against `2e-2`; a4 bit-identical (B1, B0, `baseline_hashes`). Done is the
+maintainer's call.
+
+### Remaining questions
+
+- Q1 (the force restated on the entry, or read from the model's line load): options (a) restated, (b) read from the model and
+  carried in the `WarpingPrestress`. Recommendation (a) now, (b) with a case-file key (F-625); taken on the maintainer's standing
+  instruction of 2026-11-11 (take the recommendation).
+- Q2 (the element moment under a line load): options (a) the linear `L^2` projection from `K u` (now; measured `<= 1.7e-4` at 8
+  elements), (b) the parabolic moment of the element's line load in `local_geometric_stiffness`. (b) would change the results
+  of existing models with line loads and warping elements, so it stays open for the maintainer; recommendation (a), no change.
+- The load-height terms reach the pre-stressed modes and the pre-stressed harmonic path through `K_sigma` but are not checked
+  there; a follow-up is proposed below.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> F-663 note: Structural solver, advanced tier. Follow-up of F-643 (ADR 0582, 2026-11-15). DONE. ADR 0588, 2026-11-15: distributed load height on the warping buckling path (`rcfd_fem::beam_warping`): `Warping::line_load_point(element_set, q, point)` adds the consistent second-order term (1/2) int (q . (p - s)) phi^2 dx of a uniform dead line load along a section point p on the Hermite twist of each element (c M_H, M_H = int H_i H_j dx = (l/420)[156, 22l, 54, -13l; ...]), s each element's own shear centre, to K_sigma of `matrices` (so buckling_factors, buckling_factors_with, prestressed_modes, the pre-stressed harmonic path); without an entry a line load acts at the shear centre, as before; a load with a first-order torque about the centroid, an unknown set and an element without a warping unknown are refused. The pre-stress of a uniform line load (end forces K u) is shown to be the L2 projection of the parabolic moment (end moments shifted by q_z l^2/12, mid-element shear; 3.9e-14). Uniformly distributed load on a simply supported span, L = 3, 16 elements, default BucklingOptions, against Rayleigh-Ritz references derived in the ADR (sine series, converged to 2.4e-8): doubly symmetric I on the top flange 1.7e-5, at the shear centre 1.7e-5, on the bottom flange 7.4e-6 (C_1 = 1.131); ADR 0553 monosymmetric I at the shear centre (both directions), at the centroid and on flange 1 within 3.4e-4; 8 elements within 1.7e-4; axis y 6e-15; from_static 1.4e-15; the lumped point entries of ADR 0582 within 1.1e-6 of the consistent term. Results without a distributed load height bit-identical (nine digests recorded on the base, the F-643 point-load factors and matrices among them; the ADR 0546 to 0585 bit records; baseline_hashes). Ten of ten mutations caught. Not covered: non-uniform distributed loads, loads with a first-order torque, the in-plane second-order terms of an eccentric load, other supports, the parabolic moment within an element (the L2 projection is used, ADR 0588 Q2), pre-stressed modes and the harmonic path with a load height, no case-file key.
+
+> Follow-up proposed: Load height on the pre-stressed warping modes and harmonic path. Deps F-663, F-661. Acceptance: Every limit not stated here is registered in the ADR before the run. The lowest flexural-torsional frequency of the fork-supported doubly symmetric I of ADR 0588 under a uniformly distributed load of 0.5 of its buckling load on the top flange, at the shear centre and on the bottom flange (prestressed_modes, and the resonance of the pre-stressed WarpingHarmonic) equals a Rayleigh-Ritz reference of the same energy with the consistent mass derived in the ADR within 1e-2 at 16 elements and falls to zero at the ADR 0588 buckling load within 1e-2; results without a load height bit-identical.
