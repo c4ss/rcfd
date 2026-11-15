@@ -233,3 +233,84 @@ the same checks, limits and mutations. The corrected run is the test `f580_amend
 run 1 stays as the ignored record `f580_creep_bbar_against_the_finite_strain_reference` (its body moved into the helper
 `f580_checks`, which it calls with the original `reference`, the stop `1e-13`; the behaviour is that of run 1). The rcfd numbers
 of run 1 (halvings, largest increment) were printed before the panic; no check value was seen.
+
+## Addendum 1: results (2026-11-15)
+
+Code: commit 768304e5 (tests only: `crates/rcfd-fem/tests/si_fbar.rs`, the F-580 section appended: `ref_return`,
+`Reference`, `reference`, `reference_with`, `ref_at`, `ref_differences`, `ref_error`, `ref_against`, `f580_checks`, the ignored
+run-1 record `f580_creep_bbar_against_the_finite_strain_reference`, the corrected test
+`f580_amendment_1_creep_bbar_against_the_finite_strain_reference` and the ignored diagnostic `f580_reference_newton_diagnosis`).
+No library file changed. Logs in `w49i-work/f580-scratch`: `run1-f580.log` (run 1, the set-up defect), `diag-a1.log`
+(diagnostic of amendment 1), `run2-f580-amend1.log` (the corrected run, single, 28 s in release), `s1-rcfd-fem.log`,
+`s2-baseline.log`, `s2-docs.log`, `s3-fmt.log`, `s3-clippy.log`, `mutations.log`, `mut-MU1.log` to `mut-MU4.log`.
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| A1 | 71 step ends, `t = 5` at step 40, `t = 20` at step 70, smallest equivalent creep strain at `20 t*` `2.37e-3` (largest `9.67e-3`); 0 halvings, largest creep increment `2.38e-4` | holds | met |
+| C1 | `5.373e-3` | `<= 1e-2` | met |
+| C2 | `9.540e-3` | `<= 2e-2` | met |
+| C3 | `1.556e-2` | `<= 2e-2` | met |
+| F1 | `9.549e-3` (worst at `r = 1.962`) | `<= 2e-2` | met |
+| F2 | `1.106e-2` (worst at `r = 1.350`) | `<= 2e-2` | met |
+| F3 | `1.506e-3` | `<= 2e-3` | met |
+| F4 | `4.396e-3` at `r = 1.0545` | reported | (proxy `4.4e-3` at `1.055`) |
+| R1 | `2.20e-6` | `<= 1e-4` | met |
+| R2 | `2.92e-6` (Lame), `8.54e-6` (stationary, `20 t*`) | `<= 1e-5`, `<= 1e-4` | met |
+| R3 | `8.62e-3` at `20 t*` (`2.32e-3` at `5 t*`), growth `6.30e-3` | `>= 4e-3`, `>= 3e-3` | met |
+| CL | Full `e_F` `0.1034` (`5 t*`), `0.3638` (`20 t*`), growth `0.2605` | `>= 0.1` | met |
+| S0 | `git diff --stat e906faa8 -- crates/*/src` empty | empty | met |
+| B | `si_fbar_default_bits`, `sa_creep_default_bits`, `si_hex8x_bits`, `si_hex8x_linear_bits` pass (in S1); `baseline_hashes` 3 passed, 1 ignored (as on the base) | pass | met |
+| S1 | `cargo test -p rcfd-fem --release`: 242 test binaries, 1026 passed, 0 failed, 283 ignored; `cargo test -p rcfd-cli --release --test docs_site` 2 passed; `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings` clean | 0 failed, clean | met |
+
+Reported: `e_F` `9.77e-3` at `10 t*` (`r = 1.962`), `1.011e-2` at `15 t*` (`r = 1.916`); the closed-form growth `|C3 - C2|`
+`6.02e-3` (ADR 0506's known miss, the same bits); the reference's largest equivalent creep strain `9.715e-3` at `p`,
+`9.70e-6` at `p/1000`. The numbers of the library run repeat ADR 0506's bits (C1 to C3), as stated in the registration.
+
+### Mutations (scratch copy `f580-scratch/mut` of 768304e5, target `f580-scratch/mut-target`, each run once, the file restored after)
+
+| Id | Result of the test | Caught by |
+|---|---|---|
+| MU1 (`alpha^2 - 1 = 0`) | C1 `1.26e-2`, C2 `0.102`, C3 `0.364`, F1 `0.103`, F2 `0.364`, F3 `0.261` missed | **caught** (C1, C2, C3, F1 to F3) |
+| MU2 (`q^(n - 0.5)` in the local residual) | 232 halvings, largest increment `1.1e-7`, 1915 s; C2 `0.842`, C3 `0.616`, F1 `0.844`, F2 `0.623`, F3 `0.222` missed | **caught** (C2, C3, F1 to F3) |
+| MU3 (linear strain in the BBar arm) | passed: C2 `9.50e-3`, C3 `1.512e-2`, F1 `9.51e-3`, F2 `1.001e-2`, **F3 `5.09e-4`**, F4 `4.31e-3` at `r = 1.005`; closed-form growth `5.62e-3` | **not caught** |
+| MU4 (time factor `dt/2`) | passed: largest increment `1.19e-4`; C2 `9.45e-3`, C3 `9.75e-3`, F1 `9.47e-3`, F2 `9.92e-3`, **F3 `4.51e-4`**, F4 `4.31e-3` at `r = 1.001`; closed-form growth `2.93e-4` | **not caught** |
+
+Diagnosis of MU3 and MU4 (no new run). F3 is the growth of a maximum over the points, and at `5 t*` that maximum is the
+stationary `O(h)` error of the linear element at the outer radius (`9.5e-3` at `r = 1.962`, the same in every run). A
+mutation that changes the field near the bore by a few `1e-3` moves the maximum only once the bore error overtakes the outer
+one, which in the unmutated run happens only after `15 t*` (F2's worst point `r = 1.35`). Under MU4 the bore drift is halved
+and never overtakes; under MU3 the stress is nearly insensitive to the quadratic part of `E` (the creep strain absorbs the
+deviatoric difference, and the F-bar the volumetric one), so the drift that remains is that of the equilibrium on the
+reference configuration (`P = F S`), which MU3 keeps. Both mutated runs therefore pass F3 with a smaller growth than the
+unmutated one. MU3's premise in the registration ("the element then lacks the finite-strain drift") was wrong: the closed-form
+growth stays `5.6e-3` under MU3, so the drift is in the equilibrium, not in the strain measure. A witness that sees MU4 has to
+look at the bore (for instance the error of the points with `r < 1.1` against the reference, whose closed-form drift under MU4
+is half of the reference's) or use a mesh on which the bore error dominates; this is a follow-up, not tuned here.
+
+### Deviations
+
+- **Amendment 1** (the reference's Newton stop `1e-13` below its rounding floor): written and committed (1e0ce522) after run 1
+  and before the corrected run; no check was measured in run 1. The corrected run met every limit in its single run. Run 1
+  stays as the ignored record.
+- MU3's expected catcher was wrong (diagnosis above); MU2 ran 32 minutes (the mutated residual and the unmutated tangent make the
+  driver halve 232 times); both were run once, as planned.
+- Nothing registered was skipped.
+
+### Decision (by the rule)
+
+Every registered check is met (A1, C1 to C3, F1 to F3, R1 to R3, CL, S0, B, S1), F3 against the finite-strain reference at
+`1.51e-3` within the bound `2e-3` that ADR 0506 missed against the small-strain closed form (`6.02e-3`). But two planned
+mutations (MU3, MU4) are not caught by any registered check, and the checks were met in the corrected run after amendment 1.
+**Proposed status: partial.**
+
+### Open questions
+
+1. **The witness of the growth bound.** F3 on the maximum over points is blind to bore-side changes of a few `1e-3` (MU3,
+   MU4). Options: (a) a bore-zone growth (points with `r < 1.1`) against the reference with its own registered limit;
+   (b) a refined radial mesh (e.g. 96 x 24) on which the bore error dominates; (c) the point-wise growth F4 with a limit.
+   Recommendation: (a), with MU4 as the planned catch target, since it keeps the registered mesh and measures where the
+   finite-strain drift lives; (c) is not recommended until F4's own drift is understood (question 2).
+2. **The pressure drift in the F-bar element** (F4: `4.4e-3` at `r = 1.05`, equal in `sigma_r` and `sigma_theta`, present also
+   under MU3 and MU4 at the bore). Options: (a) diagnose by the one-dimensional proxy (F-bar against the reference with a
+   `J`-based volumetric part of the law); (b) leave it as a property of the small-strain law on `E`. Recommendation: (a), as a
+   diagnostic follow-up without a change of the default element.
