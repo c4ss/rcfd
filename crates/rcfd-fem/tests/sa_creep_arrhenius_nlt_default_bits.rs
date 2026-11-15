@@ -133,7 +133,11 @@ fn b0_default_bits_of_the_integrator_and_the_driver() {
     .unwrap();
     got.push(("solve_in_time_with factor cube at 700 K", digest(&flat_history(&h))));
     let table = LoadTable::new(vec![(0.0, 700.0), (1.0, 750.0)]).unwrap();
-    let re = nl_run(&cube(base()), &NlTransientOptions::new(dt).temperature_history(table), 30);
+    let re = nl_run(
+        &cube(base()),
+        &NlTransientOptions::new(dt).temperature_history(table),
+        30,
+    );
     got.push(("nl_transient elastic cube temperature history", digest(&re)));
 
     for (name, d) in &got {
