@@ -1545,3 +1545,353 @@ fn f597_c4_prime_and_the_force_witness_control() {
     ch.at_least("LC-f20 |f_F - f_B| / |f_B| at 20 t*", force_difference(70), 3e-2);
     ch.finish();
 }
+
+// ------------------------------------------------------------------------------------------------ F-580 (ADR 0549)
+
+const REF_E: f64 = 2.0e9;
+const REF_NU: f64 = 0.3;
+
+/// The creep law of ADR 0549 arithmetic 2, written from the law (not by calling `mat_creep`): the backward Euler radial
+/// return of the normal components `(rr, theta theta, zz)` of the Green-Lagrange strain `e` from the creep strain `c`
+/// (updated) over a step `dt`, `m = 0`, `n = CR_N`. Returns the second Piola-Kirchhoff stress.
+fn ref_return(e: [f64; 3], c: &mut [f64; 3], a: f64, dt: f64) -> [f64; 3] {
+    let g = REF_E / (2.0 * (1.0 + REF_NU));
+    let lam = REF_E * REF_NU / ((1.0 + REF_NU) * (1.0 - 2.0 * REF_NU));
+    let el: [f64; 3] = std::array::from_fn(|i| e[i] - c[i]);
+    let tr = el[0] + el[1] + el[2];
+    let sig: [f64; 3] = std::array::from_fn(|i| lam * tr + 2.0 * g * el[i]);
+    let mean = (sig[0] + sig[1] + sig[2]) / 3.0;
+    let s: [f64; 3] = std::array::from_fn(|i| sig[i] - mean);
+    let qtr = (1.5 * (s[0] * s[0] + s[1] * s[1] + s[2] * s[2])).sqrt();
+    if dt == 0.0 || qtr == 0.0 {
+        return sig;
+    }
+    let k = 3.0 * g * a * dt;
+    let mut q = qtr;
+    let mut converged = false;
+    for _ in 0..60 {
+        let f = qtr - q - k * q.powf(CR_N);
+        let df = -1.0 - k * CR_N * q.powf(CR_N - 1.0);
+        let dq = -f / df;
+        q += dq;
+        if dq.abs() <= 1e-15 * qtr {
+            converged = true;
+            break;
+        }
+    }
+    assert!(converged, "reference: local iteration not converged");
+    let de = (qtr - q) / (3.0 * g);
+    for (ci, si) in c.iter_mut().zip(&s) {
+        *ci += de * 1.5 * si / qtr;
+    }
+    std::array::from_fn(|i| sig[i] - 3.0 * g * de * s[i] / qtr)
+}
+
+/// The finite-strain reference of ADR 0549 arithmetic 2: `nel` graded linear elements in R, one point at the midpoint.
+struct Reference {
+    /// The midpoint radii.
+    rm: Vec<f64>,
+    /// The stress `(S_RR, S_ThTh, S_zz) / p` at the midpoints at every step end (`t = 0` and `creep_times`).
+    steps: Vec<Vec<[f64; 3]>>,
+    /// The largest equivalent creep strain at every step end.
+    eq_max: Vec<f64>,
+}
+
+/// One element of the reference: the force `[f0, f1]`, the stress, the creep strain and the equivalent creep strain after
+/// the step.
+struct RefElement {
+    f: [f64; 2],
+    s: [f64; 3],
+    c: [f64; 3],
+    eq: f64,
+}
+
+fn reference(p: f64, nel: usize) -> Reference {
+    reference_with(p, nel, 1e-13, false)
+}
+
+/// The reference with the Newton stop `max |du| <= tol max |u|`; `verbose` prints the ratio of every iteration of step 0.
+fn reference_with(p: f64, nel: usize, tol: f64, verbose: bool) -> Reference {
+    let a_law = 1.0 / (REF_E * p.powi(3));
+    let r: Vec<f64> = (0..=nel)
+        .map(|i| {
+            let s = i as f64 / nel as f64;
+            CYL_A + (CYL_B - CYL_A) * ((2.0 * s).exp() - 1.0) / (2f64.exp() - 1.0)
+        })
+        .collect();
+    let h: Vec<f64> = (0..nel).map(|i| r[i + 1] - r[i]).collect();
+    let rm: Vec<f64> = (0..nel).map(|i| 0.5 * (r[i] + r[i + 1])).collect();
+    let elem = |i: usize, u0: f64, u1: f64, c: &[f64; 3], eq: f64, dt: f64| {
+        let rp = 1.0 + (u1 - u0) / h[i];
+        let rr = 1.0 + 0.5 * (u0 + u1) / rm[i];
+        let mut cn = *c;
+        let s = ref_return([0.5 * (rp * rp - 1.0), 0.5 * (rr * rr - 1.0), 0.0], &mut cn, a_law, dt);
+        let (prr, ptt) = (rp * s[0], rr * s[1]);
+        let w = rm[i] * h[i];
+        let dev: [f64; 3] = std::array::from_fn(|k| cn[k] - c[k]);
+        let de = (2.0 / 3.0 * (dev[0] * dev[0] + dev[1] * dev[1] + dev[2] * dev[2])).sqrt();
+        RefElement {
+            f: [
+                w * (-prr / h[i] + 0.5 * ptt / rm[i]),
+                w * (prr / h[i] + 0.5 * ptt / rm[i]),
+            ],
+            s,
+            c: cn,
+            eq: eq + de,
+        }
+    };
+    let mut times = vec![0.0];
+    times.extend(creep_times());
+    let nn = nel + 1;
+    let mut u = vec![0.0; nn];
+    let mut c = vec![[0.0; 3]; nel];
+    let mut eq = vec![0.0; nel];
+    let mut out = Reference {
+        rm: rm.clone(),
+        steps: Vec::new(),
+        eq_max: Vec::new(),
+    };
+    let hh = 1e-7 * p / REF_E;
+    for k in 0..times.len() {
+        let dt = if k == 0 { 0.0 } else { times[k] - times[k - 1] };
+        let mut converged = false;
+        for _ in 0..40 {
+            let mut res = vec![0.0; nn];
+            let (mut lo, mut dg, mut up) = (vec![0.0; nn], vec![0.0; nn], vec![0.0; nn]);
+            for i in 0..nel {
+                let f = elem(i, u[i], u[i + 1], &c[i], eq[i], dt).f;
+                res[i] += f[0];
+                res[i + 1] += f[1];
+                let fp = elem(i, u[i] + hh, u[i + 1], &c[i], eq[i], dt).f;
+                let fm = elem(i, u[i] - hh, u[i + 1], &c[i], eq[i], dt).f;
+                dg[i] += (fp[0] - fm[0]) / (2.0 * hh);
+                lo[i + 1] += (fp[1] - fm[1]) / (2.0 * hh);
+                let fp = elem(i, u[i], u[i + 1] + hh, &c[i], eq[i], dt).f;
+                let fm = elem(i, u[i], u[i + 1] - hh, &c[i], eq[i], dt).f;
+                up[i] += (fp[0] - fm[0]) / (2.0 * hh);
+                dg[i + 1] += (fp[1] - fm[1]) / (2.0 * hh);
+            }
+            res[0] -= p * CYL_A;
+            // The Thomas algorithm for J du = -res.
+            let mut cp = vec![0.0; nn];
+            let mut dp = vec![0.0; nn];
+            cp[0] = up[0] / dg[0];
+            dp[0] = -res[0] / dg[0];
+            for i in 1..nn {
+                let m = dg[i] - lo[i] * cp[i - 1];
+                cp[i] = if i < nel { up[i] / m } else { 0.0 };
+                dp[i] = (-res[i] - lo[i] * dp[i - 1]) / m;
+            }
+            let mut du = vec![0.0; nn];
+            du[nel] = dp[nel];
+            for i in (0..nel).rev() {
+                du[i] = dp[i] - cp[i] * du[i + 1];
+            }
+            for (ui, d) in u.iter_mut().zip(&du) {
+                *ui += d;
+            }
+            if verbose && k == 0 {
+                println!(
+                    "reference p = {p:e} N = {nel} step 0: max |du| / max |u| = {:.3e}",
+                    max_abs(&du) / max_abs(&u)
+                );
+            }
+            if max_abs(&du) <= tol * max_abs(&u) {
+                converged = true;
+                break;
+            }
+        }
+        assert!(converged, "reference: Newton not converged at step {k}");
+        let mut stress = Vec::with_capacity(nel);
+        for i in 0..nel {
+            let el = elem(i, u[i], u[i + 1], &c[i], eq[i], dt);
+            c[i] = el.c;
+            eq[i] = el.eq;
+            stress.push([el.s[0] / p, el.s[1] / p, el.s[2] / p]);
+        }
+        out.steps.push(stress);
+        out.eq_max.push(worst(eq.iter().copied()));
+    }
+    out
+}
+
+/// The reference stress over `p` at the reference radius `radius` at step `k` (linear between midpoints, clamped).
+fn ref_at(r: &Reference, k: usize, radius: f64) -> [f64; 3] {
+    let rm = &r.rm;
+    let s = &r.steps[k];
+    let last = rm.len() - 1;
+    if radius <= rm[0] {
+        return s[0];
+    }
+    if radius >= rm[last] {
+        return s[last];
+    }
+    let j = rm.partition_point(|&x| x <= radius) - 1;
+    let w = (radius - rm[j]) / (rm[j + 1] - rm[j]);
+    std::array::from_fn(|i| (1.0 - w) * s[j][i] + w * s[j + 1][i])
+}
+
+/// The difference `(sigma_r, sigma_theta) / p - reference` at every point.
+fn ref_differences(pts: &[PolarPoint], r: &Reference, k: usize, p: f64) -> Vec<[f64; 2]> {
+    pts.iter()
+        .map(|pt| {
+            let s = ref_at(r, k, pt.r);
+            [pt.srr / p - s[0], pt.stt / p - s[1]]
+        })
+        .collect()
+}
+
+/// `e_F`: the point-wise error over `p` against the reference, and the radius of the worst point.
+fn ref_error(pts: &[PolarPoint], r: &Reference, k: usize, p: f64) -> (f64, f64) {
+    let d = ref_differences(pts, r, k, p);
+    let mut wr = f64::NAN;
+    let mut wv = -1.0;
+    for (pt, dk) in pts.iter().zip(&d) {
+        let v = dk[0].abs().max(dk[1].abs());
+        if v > wv {
+            wv = v;
+            wr = pt.r;
+        }
+    }
+    (worst(d.iter().map(|dk| dk[0].abs().max(dk[1].abs()))), wr)
+}
+
+/// The reference against a closed form at the FE points: `max |reference - field|`.
+fn ref_against(pts: &[PolarPoint], r: &Reference, k: usize, field: fn(f64) -> (f64, f64)) -> f64 {
+    worst(pts.iter().flat_map(|pt| {
+        let s = ref_at(r, k, pt.r);
+        let (fr, ft) = field(pt.r);
+        [(s[0] - fr).abs(), (s[1] - ft).abs()]
+    }))
+}
+
+/// F-580 (ADR 0549) run 1: the reference stopped at `1e-13`, below its rounding floor (amendment 1).
+#[test]
+#[ignore = "record of ADR 0549 run 1: set-up defect, the reference Newton stop 1e-13 lies below its rounding floor (step 0 not converged, no check measured); corrected by amendment 1 as f580_amendment_1_creep_bbar_against_the_finite_strain_reference"]
+fn f580_creep_bbar_against_the_finite_strain_reference() {
+    f580_checks(reference);
+}
+
+/// F-580 (ADR 0549 amendment 1): run 1 with the reference stopped at `1e-9` of the largest displacement.
+#[test]
+fn f580_amendment_1_creep_bbar_against_the_finite_strain_reference() {
+    f580_checks(|p, nel| reference_with(p, nel, 1e-9, false));
+}
+
+/// A1, C1 to C3, F1 to F3, R1 to R3, CL of ADR 0549; F4 and the rest reported.
+fn f580_checks(reference: impl Fn(f64, usize) -> Reference) {
+    let p = CR_P;
+    let mut ch = Checks::new();
+    let (mb, hb) = creep_run(BBAR, p);
+    let (mf, hf) = creep_run(FULL, p);
+    let r400 = reference(p, 400);
+    let r800 = reference(p, 800);
+    let rsmall = reference(p / 1000.0, 400);
+    println!(
+        "reference p: largest equivalent creep strain at 20 t* {:.4e}; p/1000: {:.4e}",
+        r400.eq_max[70], rsmall.eq_max[70]
+    );
+    let pts_b = |i: usize| polar_points(&mb, BBAR, &hb.steps[i].u, &hb.steps[i].states);
+    let pts_f = |i: usize| polar_points(&mf, FULL, &hf.steps[i].u, &hf.steps[i].states);
+    // A1
+    let b20 = pts_b(70);
+    let eq_min = b20.iter().map(|pt| pt.state[6]).fold(f64::INFINITY, f64::min);
+    ch.holds(
+        "A1 BBar solve_in_time: 71 step ends to 20 t*, creep at every point",
+        hb.steps.len() == 71 && hb.steps[40].time == 5.0 && hb.steps[70].time == 20.0 && eq_min > 0.0,
+        &format!(
+            "{} step ends, smallest equivalent creep strain {eq_min:e}",
+            hb.steps.len()
+        ),
+    );
+    println!(
+        "A1 largest equivalent creep strain of the BBar run at 20 t* {:.4e}",
+        worst(b20.iter().map(|pt| pt.state[6]))
+    );
+    // C1 to C3
+    let (b0, b5) = (pts_b(0), pts_b(40));
+    let c1 = creep_error(&b0, lame, p);
+    let c2 = creep_error(&b5, stationary, p);
+    let c3 = creep_error(&b20, stationary, p);
+    ch.at_most("C1 BBar t = 0: point-wise against Lame / p", c1, 1e-2);
+    ch.at_most(
+        "C2 BBar t = 5 t*: point-wise against the stationary field / p",
+        c2,
+        2e-2,
+    );
+    ch.at_most("C3 BBar t = 20 t*: the same", c3, 2e-2);
+    println!(
+        "closed-form growth |C3 - C2| (ADR 0506 C4, reported): {:.4e}",
+        (c3 - c2).abs()
+    );
+    // F1 to F4
+    let (f1, w5) = ref_error(&b5, &r400, 40, p);
+    let (f2, w20) = ref_error(&b20, &r400, 70, p);
+    for i in [50, 60] {
+        let (e, w) = ref_error(&pts_b(i), &r400, i, p);
+        println!("e_F at t = {}: {e:.4e} at r = {w:.4} (reported)", hb.steps[i].time);
+    }
+    println!("e_F worst points: 5 t* r = {w5:.4}, 20 t* r = {w20:.4}");
+    ch.at_most("F1 BBar 5 t*: e_F against the finite-strain reference", f1, 2e-2);
+    ch.at_most("F2 BBar 20 t*: e_F", f2, 2e-2);
+    ch.at_most("F3 |e_F(20 t*) - e_F(5 t*)|", (f2 - f1).abs(), 2e-3);
+    let d5 = ref_differences(&b5, &r400, 40, p);
+    let d20 = ref_differences(&b20, &r400, 70, p);
+    let (mut f4, mut f4r) = (0.0, f64::NAN);
+    for ((a, b), pt) in d20.iter().zip(&d5).zip(&b20) {
+        let v = (a[0] - b[0]).abs().max((a[1] - b[1]).abs());
+        if v > f4 {
+            f4 = v;
+            f4r = pt.r;
+        }
+    }
+    println!("F4 max_points |d(20 t*) - d(5 t*)| (reported): {f4:.4e} at r = {f4r:.4}");
+    // R1
+    let mut r1 = Vec::new();
+    for (k, pts) in [(0usize, &b0), (40, &b5), (70, &b20)] {
+        for pt in pts.iter() {
+            let (x, y) = (ref_at(&r400, k, pt.r), ref_at(&r800, k, pt.r));
+            r1.push((x[0] - y[0]).abs());
+            r1.push((x[1] - y[1]).abs());
+        }
+    }
+    ch.at_most("R1 reference N = 400 against N = 800 at the FE points", worst(r1), 1e-4);
+    // R2
+    ch.at_most(
+        "R2 reference p/1000, t = 0, against Lame",
+        ref_against(&b0, &rsmall, 0, lame),
+        1e-5,
+    );
+    ch.at_most(
+        "R2 reference p/1000, 20 t*, against the stationary field",
+        ref_against(&b20, &rsmall, 70, stationary),
+        1e-4,
+    );
+    // R3
+    let rs5 = ref_against(&b5, &r400, 40, stationary);
+    let rs20 = ref_against(&b20, &r400, 70, stationary);
+    println!("R3 reference p against the stationary field at 5 t*: {rs5:.4e} (reported)");
+    ch.at_least("R3 reference p, 20 t*, against the stationary field", rs20, 4e-3);
+    ch.at_least("R3 its growth from 5 t*", rs20 - rs5, 3e-3);
+    // CL
+    let (l5, _) = ref_error(&pts_f(40), &r400, 40, p);
+    let (l20, _) = ref_error(&pts_f(70), &r400, 70, p);
+    println!("CL Full e_F: 5 t* {l5:.4e}, 20 t* {l20:.4e}");
+    ch.at_least(
+        "CL Full |e_F(20 t*) - e_F(5 t*)| (locking control)",
+        (l20 - l5).abs(),
+        0.1,
+    );
+    ch.finish();
+}
+
+/// Diagnosis of the set-up defect of run 1 (ADR 0549 amendment 1): the Newton history of the reference at step 0.
+#[test]
+#[ignore = "diagnostic of ADR 0549 amendment 1, run once; reported in the amendment"]
+fn f580_reference_newton_diagnosis() {
+    for p in [CR_P, CR_P / 1000.0] {
+        for nel in [400, 800] {
+            let _ = std::panic::catch_unwind(|| reference_with(p, nel, 0.0, true));
+        }
+    }
+}
