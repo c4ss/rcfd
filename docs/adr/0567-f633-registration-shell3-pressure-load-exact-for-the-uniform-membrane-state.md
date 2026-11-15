@@ -294,3 +294,70 @@ makes the outcome **partial** whatever the corrected run gives.
 A misquote in the checks table, recorded and not changed above: the estimate of NC3 is `9.72e-2`, not `9.5e-2` (ADR 0461 gives
 the O1 range `0.9027895620 .. 1.0950504406`, whose largest deviation is `1 - 0.9028 = 9.72e-2`); the limit `> 1e-2` is
 unaffected.
+
+## Addendum 1 (2026-11-15): results
+
+Run 1 is commit c9a5ce56 (`f633-scratch/run1.keep.log`, the new test file, release, made once, 0.46 s). S1 missed there; its
+set-up was diagnosed and corrected by amendment 1 (commit 0c451b31) and the corrected check run once on commit 3dc25281
+(`run2-s1.log`). Commit ae9a86a6 then added a type alias that clippy asked for (`type_complexity`, layout only); the new test
+file was run once more on it to confirm the change is layout only (`after-alias.log`: every printed number identical to run 1).
+B2, B3, fmt, clippy and the mutations ran on 3dc25281 / ae9a86a6.
+
+| id | limit | measured | met |
+| --- | --- | --- | --- |
+| A1 | `<= 2e-2` | octant n = 16: `e = 3.0e-14` | yes |
+| A2 | `<= 2e-2` | octant n = 32: `e = 7.8e-14` | yes |
+| A3 | `<= 1e-2` | cylinder O1: `e = 2.0e-10` (`u_r / ref` in `0.999999999820 .. 1.000000000203`) | yes |
+| X1 | `<= 1e-8` each | `3.0e-14`, `7.8e-14`, `1.2e-13` (n = 16, 32, 64) | yes |
+| X2 | `<= 1e-7` each | other diagonal `1.1e-10`, checkerboard `1.4e-10`, warped `3.9e-11`, 16 x 8 `8.8e-12` | yes |
+| X3 | `<= 1e-7` each | t = 0.001: `5.9e-14` (n = 16), `1.4e-13` (n = 32) | yes |
+| X4 | `<= 1e-8` | structured n = 16: `2.8e-14` | yes |
+| L1 | `<= 1e-10` | `6.9e-15` | yes |
+| L2 | `<= 1e-10` | `6.8e-14` | yes |
+| K1 | `<= 1e-10` each | octant `1.4e-13`, `2.7e-15`; cylinder `3.6e-13`, `5.9e-15` | yes |
+| K2 | exact | `(361, 104, 96)`, `(377, 88, 96)` | yes |
+| T1 | `<= 3e-3`; `<= 2e-1`; `>= 1.5` | `1.2572e-3`; `1.3573e-1`; `1.546` | yes |
+| T2 | `<= 2e-2`; `<= 2e-1` | `1.0810e-2`; `1.3742e-1` | yes |
+| S1 (run 1) | exact | `false`: the 459 zero (moment) entries compared `-0.0` with `0.0`; the 459 non-zero entries exact (amendment 1) | no, set-up defect; record `s1_negated_load_bits_known_miss` |
+| S1 (after amendment 1) | exact | `true` (459 non-zero entries of 918) | yes, after the amendment |
+| NC1 | `> 2e-2` each | default `7.8775e-1` (n = 16), `2.2612e-1` (n = 32), equal to ADR 0550 | yes |
+| NC2 | `> 2e-2` | angle-weighted n = 32 `1.4014e-1` | yes |
+| NC3 | `> 1e-2` | default O1 `9.7210e-2` | yes |
+| RF1 | each refused with its key | Shell4 `"shell pressure"`, flat plate `"curvature"`, reversed triangle `"orientation"`, unknown set `UnknownSet`, NaN `"pressure"`; the octant n = 8 taken and built | yes |
+| B1 | additions only | `git diff b29c1383 -- crates/*/src`: `lib.rs` +1, `loads.rs` +37, `model.rs` +33, `shell3_curvature.rs` new; no line removed (`b1.diff`); no rewrapped line | yes |
+| B2 | pass | `cargo test -p rcfd-fem --release`: 264 test binaries, 0 failed (`b2.log`) | yes |
+| B3 | pass | baseline_hashes 3 passed, 1 ignored (the existing record); docs_site 2 passed | yes |
+
+The prototype numbers were larger than rcfd's for the exactness checks (for example `9.1e-13` against `3.0e-14`): the prototype
+solves the dense system with `numpy.linalg.solve` on the whole matrix; both are rounding.
+
+Mutations (archive copy of ae9a86a6, `f633-scratch/mutate.py`, `mutlogs/`, the new test file, own target dir), all caught:
+
+| id | caught by |
+| --- | --- |
+| MU1 | A1 to A3, X1 to X4, L1, L2 |
+| MU2 | A3, X2, L2 (the cylinder `0.7` everywhere) |
+| MU3 | RF1 (the octant n = 8 load is refused: the 2-ring of a corner node does not determine a quadric); every other test aborts at its first load |
+| MU4 | A1 to A3, X1 to X4, L1, L2, K1, T1, T2 |
+| MU5 | RF1 (the zero `q^2` column makes every fit rank-deficient, so every load is refused); every other test aborts at its first load |
+| MU6 | X1, X3, X4, L1 (`1.2e-2` at n = 16) |
+| MU7 | A1, A2, X1 to X4, L1, L2, RF1 (the flat plate and the reversed triangle are no longer refused) |
+
+MU3 and MU5 were expected to be caught by K1, X1 and similar; they are caught earlier, because the rank refusal of design 4
+turns the loss of exactness into a refusal. fmt (`cargo fmt -p rcfd-fem --check`) clean; clippy (`cargo clippy -p rcfd-fem
+--release --all-targets -- -D warnings`) clean after the alias of ae9a86a6 (`clippy.log` shows the one `type_complexity` error
+before it, `clippy2.log` clean). Not run: the whole workspace suite (the lead's gate). Files: `crates/rcfd-fem/src/shell3_curvature.rs`
+(new), `lib.rs` (line 70), `loads.rs` (lines 22, 148 to 154, 420 to 448), `model.rs` (lines 757 to 766, 851 to 857, 1445 to
+1460), the new test file, this ADR, and a bullet in `docs/structural-solver.md` ("Shells under pressure on curved meshes").
+
+**Decision: partial**, by the rule: every acceptance clause is met (A1 `3.0e-14`, A2 `7.8e-14`, A3 `2.0e-10`, defaults
+bit-identical), every mutation caught, but S1 was met only after amendment 1 written after its run.
+
+Remaining questions (options, recommendation):
+
+1. The boundary accuracy on surfaces that are not quadrics (L2, T1: 14 percent at the boundary nodes of a torus patch at 32 x 32):
+   (a) leave as a limit; (b) a follow-up that measures a displacement problem on a non-quadric shell (a pressurised torus
+   segment against its membrane solution) and, if needed, a boundary estimator with a better constant. Recommend (b), low
+   priority.
+2. Shell4 sets (L4): (a) refused as now; (b) extend the boundary rule to quadrilateral edges. Recommend (a) until a user asks.
+3. The default pressure: unchanged; recommend keeping this load opt-in (open question 3).
