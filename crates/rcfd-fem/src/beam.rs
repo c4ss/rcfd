@@ -20,6 +20,10 @@
 //! ADR 0473 (F-420): the geometric stiffness of the axial force ([`local_geometric_stiffness`], with the deflection functions
 //! of the interdependent element and Wagner's torsion term), the element-average axial force ([`axial_force`]) and the
 //! spin-softening mass of the section's kinematics ([`local_spin_softening_mass`]).
+//!
+//! ADR 0598 (F-675): the Coriolis matrix per unit speed of the same kinematics ([`local_coriolis`], [`element_coriolis`]),
+//! skew bit for bit, taken by the whirl paths with [`crate::rotating::RotatingOptions::beams`] or
+//! [`crate::model::CyclicOptions::beams`].
 
 use crate::assemble::element_dofs;
 use crate::element::{Element, ElementMatrix, Pending};
@@ -314,8 +318,23 @@ pub fn local_mass(length: f64, section: &BeamSection, material: &Material) -> El
     m
 }
 
-/// `T^T A T` with `T` four copies of the rotation `axes` (rows `e_1, e_2, e_3`).
+/// `T^T A T` with `T` four copies of the rotation `axes` (rows `e_1, e_2, e_3`), made exactly symmetric.
 fn to_global(a: &ElementMatrix, axes: &[Vec3; 3]) -> ElementMatrix {
+    let mut out = congruence(a, axes);
+    let ov = out.values_mut();
+    // Exact symmetry.
+    for i in 0..12 {
+        for j in 0..i {
+            let s = 0.5 * (ov[i * 12 + j] + ov[j * 12 + i]);
+            ov[i * 12 + j] = s;
+            ov[j * 12 + i] = s;
+        }
+    }
+    out
+}
+
+/// `T^T A T` with `T` four copies of the rotation `axes`, not symmetrised (ADR 0598 D2: the congruence of [`to_global`]).
+fn congruence(a: &ElementMatrix, axes: &[Vec3; 3]) -> ElementMatrix {
     // B = A T, then T^T B, block by block.
     let mut b = [[0.0; 12]; 12];
     let av = a.values();
@@ -341,14 +360,6 @@ fn to_global(a: &ElementMatrix, axes: &[Vec3; 3]) -> ElementMatrix {
                 }
                 ov[(3 * bi + r) * 12 + j] = s;
             }
-        }
-    }
-    // Exact symmetry.
-    for i in 0..12 {
-        for j in 0..i {
-            let s = 0.5 * (ov[i * 12 + j] + ov[j * 12 + i]);
-            ov[i * 12 + j] = s;
-            ov[j * 12 + i] = s;
         }
     }
     out
@@ -817,6 +828,69 @@ pub fn element_spin_softening_mass(
         &local_spin_softening_mass(f.length, section, material, al),
         &f.axes,
     ))
+}
+
+/// The 12 x 12 Coriolis matrix per unit speed in local axes for the unit axis `a` in local components (ADR 0598 D2): `int
+/// (rho A R_u^T [a x] R_u + R_theta^T [b x] R_theta) dx` of the section kinematics `u + theta x s`, `b = rho (I_z a_2 e_2 + I_y
+/// a_3 e_3)`, with the field rows and the four-point Gauss rule of [`local_spin_softening_mass`] (exact).
+pub fn local_coriolis(length: f64, section: &BeamSection, material: &Material, a: Vec3) -> ElementMatrix {
+    let rho = material.density();
+    let ma = rho * section.area();
+    let b = [0.0, rho * section.i_z() * a[1], rho * section.i_y() * a[2]];
+    let skew_of = |c: Vec3| [[0.0, -c[2], c[1]], [c[2], 0.0, -c[0]], [-c[1], c[0], 0.0]];
+    let (xa, xb) = (skew_of(a), skew_of(b));
+    let mut m = ElementMatrix::zeros(12);
+    let v = m.values_mut();
+    for (x, w) in GAUSS4_X.iter().zip(GAUSS4_W) {
+        let xi = 0.5 * (x + 1.0);
+        let wl = 0.5 * w * length;
+        let r = field_rows(length, section, material, xi);
+        for i in 0..12 {
+            for j in 0..12 {
+                let mut s = 0.0;
+                for c in 0..3 {
+                    for d in 0..3 {
+                        s += ma * r[c][i] * xa[c][d] * r[d][j] + r[3 + c][i] * xb[c][d] * r[3 + d][j];
+                    }
+                }
+                v[i * 12 + j] += wl * s;
+            }
+        }
+    }
+    m
+}
+
+/// The global Coriolis matrix per unit speed of a beam element for a rotation about `axis` (any non-zero length; ADR 0598
+/// D2): the congruence of [`local_coriolis`] without symmetrisation, made skew in floating point.
+pub fn element_coriolis(
+    coords: &[Vec3],
+    section: &BeamSection,
+    orientation: Vec3,
+    material: &Material,
+    axis: Vec3,
+) -> Result<ElementMatrix> {
+    let f = frame_of(coords, orientation)?;
+    let a = unit_or_error(axis)?;
+    let al = [
+        (0..3).map(|k| f.axes[0][k] * a[k]).sum(),
+        (0..3).map(|k| f.axes[1][k] * a[k]).sum(),
+        (0..3).map(|k| f.axes[2][k] * a[k]).sum(),
+    ];
+    let mut c = congruence(&local_coriolis(f.length, section, material, al), &f.axes);
+    crate::shell::skew(&mut c);
+    Ok(c)
+}
+
+/// The Coriolis matrix per unit speed of a Beam2 element of a model, with its block's section and orientation (ADR 0598 D2).
+pub(crate) fn model_coriolis(
+    mesh: &SolidMesh,
+    element: usize,
+    coords: &[Vec3],
+    material: &Material,
+    axis: Vec3,
+) -> Result<ElementMatrix> {
+    let (s, v) = property_or_error(mesh, element)?;
+    element_coriolis(coords, &s, v, material, axis)
 }
 
 fn unit_or_error(axis: Vec3) -> Result<Vec3> {
