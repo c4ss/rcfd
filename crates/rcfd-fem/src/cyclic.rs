@@ -31,6 +31,10 @@
 //! ADR 0575 (F-648): with [`crate::model::CyclicOptions::shell_extensions`] as well, the shells option takes the extensions of
 //! ADR 0456 D4: interpolated high nodes follow the low shell edges rotated by `R` (node to edge, linear weights), and the
 //! rotation unknowns of interpolated and axis nodes get the rows of the translations.
+//!
+//! ADR 0583 (F-662): on such a boundary the low nodes the high ties leave undetermined (the support of the null space of
+//! the weight matrix) follow the high shell edges rotated back by `R^T`, and the high nodes whose weights lie wholly on them
+//! are released as masters ([`CyclicBoundary::two_sided`]): where the low side is the finer, it is the dependent side.
 
 use crate::assemble::{point_stiffness, stiffness_with};
 use crate::constraint::Prescribed;
@@ -106,7 +110,12 @@ pub struct CyclicBoundary {
     tolerance: f64,
     axis_nodes: Vec<usize>,
     interpolated: Vec<(usize, Vec<(usize, f64)>)>,
+    two_sided: Vec<TwoSidedNode>,
 }
+
+/// A low node of the two-sided shell tie of ADR 0583 D2: the node, its weights over low nodes (taken as they are) and over
+/// released high nodes (taken through `e^{-i theta} R^T`).
+pub type TwoSidedNode = (usize, Vec<(usize, f64)>, Vec<(usize, f64)>);
 
 impl CyclicBoundary {
     /// Index of the constraint in [`SolidModel::constraints`].
@@ -150,9 +159,14 @@ impl CyclicBoundary {
     pub fn interpolated(&self) -> &[(usize, Vec<(usize, f64)>)] {
         &self.interpolated
     }
+    /// The low nodes of an interpolated shell boundary that the high ties leave undetermined, tied to the high shell edges
+    /// rotated back (ADR 0583 D2), ascending in the low node; empty unless such nodes exist.
+    pub fn two_sided(&self) -> &[TwoSidedNode] {
+        &self.two_sided
+    }
     /// Whether the boundary uses an extension of ADR 0456.
     pub fn is_extended(&self) -> bool {
-        !self.axis_nodes.is_empty() || !self.interpolated.is_empty()
+        !self.axis_nodes.is_empty() || !self.interpolated.is_empty() || !self.two_sided.is_empty()
     }
 }
 
@@ -295,12 +309,28 @@ pub fn boundary(model: &SolidModel, constraint: usize) -> Result<CyclicBoundary>
                 .copied()
                 .filter(|h| axis_nodes.binary_search(h).is_err())
                 .collect();
-            shell_edge_weights(mesh, constraint, &lows, &slaves, &map, &interp)?
+            let weights = shell_edge_weights(mesh, constraint, "low", &lows, &slaves, &map, &interp)?;
+            // ADR 0583 D2: the low nodes these ties leave undetermined follow the high edges rotated back.
+            two_sided_ties(
+                model,
+                constraint,
+                &lows,
+                &highs,
+                &axis_nodes,
+                weights,
+                &rotation,
+                o,
+                &interp,
+            )?
         } else {
             let exclude: std::collections::BTreeSet<usize> = axis_nodes.iter().copied().collect();
             let w = crate::tie::weights(mesh, high, low, &map, &interp, &Default::default(), &exclude)?;
-            w.rows.into_iter().filter(|r| r.1 == 0).map(|r| (r.0, r.2)).collect()
+            (
+                w.rows.into_iter().filter(|r| r.1 == 0).map(|r| (r.0, r.2)).collect(),
+                Vec::new(),
+            )
         };
+        let (interpolated, two_sided) = interpolated;
         return Ok(CyclicBoundary {
             constraint,
             sectors: *sectors,
@@ -312,6 +342,7 @@ pub fn boundary(model: &SolidModel, constraint: usize) -> Result<CyclicBoundary>
             tolerance,
             axis_nodes,
             interpolated,
+            two_sided,
         });
     }
     let window = tolerance;
@@ -384,18 +415,21 @@ pub fn boundary(model: &SolidModel, constraint: usize) -> Result<CyclicBoundary>
         tolerance,
         axis_nodes,
         interpolated: Vec::new(),
+        two_sided: Vec::new(),
     })
 }
 
 /// One interpolated high node with its weights over low nodes.
 type InterpolatedNode = (usize, Vec<(usize, f64)>);
 
-/// The node-to-edge weights of ADR 0575 D3: each slave (high) node on the nearest low shell edge mapped by `map`, weights
+/// The node-to-edge weights of ADR 0575 D3: each slave node on the nearest shell edge of the master set `lows` (the low set,
+/// or the high set for the two-sided tie of ADR 0583) mapped by `map`, weights
 /// `(A, 1 - t), (B, t)` at the projection parameter `t` (a zero weight dropped); above the tolerance (that of `options`, else
 /// [`crate::tie::GAP_FACTOR`] times the mean mapped edge length) refused with [`FemError::TieGap`].
 fn shell_edge_weights(
     mesh: &SolidMesh,
     constraint: usize,
+    side: &str,
     lows: &[usize],
     slaves: &[usize],
     map: &dyn Fn(Vec3) -> Vec3,
@@ -420,7 +454,7 @@ fn shell_edge_weights(
     }
     if edges.is_empty() {
         return Err(cyclic_error(format!(
-            "constraint {constraint}: the low node set has no shell edge (ADR 0575: interpolated shell boundaries)"
+            "constraint {constraint}: the {side} node set has no shell edge (ADR 0575: interpolated shell boundaries)"
         )));
     }
     let x = mesh.nodes();
@@ -464,6 +498,217 @@ fn shell_edge_weights(
         out.push((p, w));
     }
     Ok(out)
+}
+
+/// Weights and null-space components at most this size count as zero in the selection of ADR 0583 D2 and D3 (rounding of the
+/// projections; the weights are at most 1).
+const TWO_SIDED_TAU: f64 = 1e-10;
+
+/// The two-sided shell tie of ADR 0583 D2, D3: from the ADR 0575 high ties `weights`, the low nodes they leave undetermined
+/// (the support `F` of the null space of the weight matrix), the high nodes released (their weights wholly on `F`) and, for
+/// each node of `F`, its weights over low nodes and released high nodes after the kept high ties are substituted and the
+/// coupling within `F` solved. With `F` empty the high ties are returned as they came and the list is empty.
+#[allow(clippy::too_many_arguments)]
+fn two_sided_ties(
+    model: &SolidModel,
+    constraint: usize,
+    lows: &[usize],
+    highs: &[usize],
+    axis_nodes: &[usize],
+    weights: Vec<InterpolatedNode>,
+    rotation: &Mat3,
+    origin: Vec3,
+    options: &crate::tie::TieOptions,
+) -> Result<(Vec<InterpolatedNode>, Vec<TwoSidedNode>)> {
+    use std::collections::BTreeMap;
+    let tau = TWO_SIDED_TAU;
+    let nl = lows.len();
+    let column = |p: usize| lows.binary_search(&p).expect("a master of a high tie is a low node");
+    // D3: the reduced row echelon form of W (rows the high slaves, columns the low nodes), partial pivoting by columns.
+    let mut w = vec![vec![0.0f64; nl]; weights.len()];
+    for (r, (_, ws)) in weights.iter().enumerate() {
+        for &(l, x) in ws {
+            w[r][column(l)] += x;
+        }
+    }
+    let mut pivots: Vec<(usize, usize)> = Vec::new();
+    let mut is_pivot = vec![false; nl];
+    let mut r0 = 0;
+    for j in 0..nl {
+        if r0 == w.len() {
+            break;
+        }
+        let (imax, vmax) = (r0..w.len())
+            .map(|i| (i, w[i][j].abs()))
+            .fold((r0, -1.0f64), |b, c| if c.1 > b.1 { c } else { b });
+        if vmax <= tau {
+            continue;
+        }
+        w.swap(r0, imax);
+        let p = w[r0][j];
+        for v in w[r0].iter_mut() {
+            *v /= p;
+        }
+        let pivot_row = w[r0].clone();
+        for (i, row) in w.iter_mut().enumerate() {
+            if i != r0 {
+                let f = row[j];
+                if f != 0.0 {
+                    for (v, &q) in row.iter_mut().zip(&pivot_row) {
+                        *v -= f * q;
+                    }
+                }
+            }
+        }
+        pivots.push((r0, j));
+        is_pivot[j] = true;
+        r0 += 1;
+    }
+    // F: the support of the null vectors e_j - sum_r w[r][j] e_{p(r)} of the free columns j; axis nodes excluded.
+    let mut in_f = vec![false; nl];
+    for j in (0..nl).filter(|&j| !is_pivot[j]) {
+        in_f[j] = true;
+        for &(r, p) in &pivots {
+            if w[r][j].abs() > tau {
+                in_f[p] = true;
+            }
+        }
+    }
+    for (j, &p) in lows.iter().enumerate() {
+        if axis_nodes.binary_search(&p).is_ok() {
+            in_f[j] = false;
+        }
+    }
+    if !in_f.iter().any(|&b| b) {
+        return Ok((weights, Vec::new()));
+    }
+    // D4 (iii): the unknown counts of the high ties (the check of ADR 0575 D1.4, before the low ties are built).
+    let dofs = model.dof_map();
+    for (high, ws) in &weights {
+        let nh = dofs.components(*high);
+        if let Some(&(low, _)) = ws.iter().find(|&&(low, _)| dofs.components(low) != nh) {
+            let nl = dofs.components(low);
+            return Err(cyclic_error(format!(
+                "constraint {constraint}: interpolated high node {high} has {nh} unknowns and its low node {low} has {nl} \
+                 (ADR 0575: an interpolated node has the unknowns of its low nodes)"
+            )));
+        }
+    }
+    // D2.2: the released high nodes (every weight above tau on a node of F).
+    let in_f_node = |p: usize| lows.binary_search(&p).is_ok_and(|j| in_f[j]);
+    let mut kept: Vec<InterpolatedNode> = Vec::new();
+    let mut released: Vec<usize> = Vec::new();
+    for (h, ws) in weights {
+        if ws.iter().all(|&(l, x)| x.abs() <= tau || in_f_node(l)) {
+            released.push(h);
+        } else {
+            kept.push((h, ws));
+        }
+    }
+    // D2.3: the nodes of F on the high shell edges rotated back by R^T.
+    let fs: Vec<usize> = lows.iter().copied().filter(|&p| in_f_node(p)).collect();
+    let mut rt = [[0.0f64; 3]; 3];
+    for (i, row) in rt.iter_mut().enumerate() {
+        for (j, v) in row.iter_mut().enumerate() {
+            *v = rotation[j][i];
+        }
+    }
+    let back = |p: Vec3| rotate_point(&rt, origin, p);
+    let low_weights = shell_edge_weights(model.mesh(), constraint, "high", highs, &fs, &back, options)?;
+    // D2.4: substitute the kept high ties (P^{-1} U_b = sum w U_l) and the axis nodes (P^{-1} U_p = U_p); collect A, B_C, B_D.
+    let nf = fs.len();
+    let mut cols: Vec<(bool, usize)> = Vec::new(); // (a released high node, node)
+    let mut col_of: BTreeMap<(bool, usize), usize> = BTreeMap::new();
+    let mut a = vec![vec![0.0f64; nf]; nf];
+    let mut rhs: Vec<BTreeMap<usize, f64>> = vec![BTreeMap::new(); nf];
+    let mut add = |row: &mut BTreeMap<usize, f64>, key: (bool, usize), x: f64| {
+        let c = *col_of.entry(key).or_insert_with(|| {
+            cols.push(key);
+            cols.len() - 1
+        });
+        *row.entry(c).or_insert(0.0) += x;
+    };
+    for (i, (_, vs)) in low_weights.iter().enumerate() {
+        for &(b, v) in vs {
+            if axis_nodes.binary_search(&b).is_ok() {
+                add(&mut rhs[i], (false, b), v);
+            } else if released.contains(&b) {
+                add(&mut rhs[i], (true, b), v);
+            } else {
+                let (_, ws) = kept
+                    .iter()
+                    .find(|k| k.0 == b)
+                    .expect("a high node is kept, released or on the axis");
+                for &(l, x) in ws {
+                    match fs.binary_search(&l) {
+                        Ok(g) => a[i][g] += v * x,
+                        Err(_) => add(&mut rhs[i], (false, l), v * x),
+                    }
+                }
+            }
+        }
+    }
+    // (I - A) G = [B_C | B_D], Gauss-Jordan with partial pivoting.
+    let nc = col_of.len();
+    let mut m: Vec<Vec<f64>> = (0..nf)
+        .map(|i| {
+            let mut row = vec![0.0f64; nf + nc];
+            for (g, v) in row.iter_mut().enumerate().take(nf) {
+                *v = if i == g { 1.0 } else { 0.0 } - a[i][g];
+            }
+            for (&c, &x) in &rhs[i] {
+                row[nf + c] = x;
+            }
+            row
+        })
+        .collect();
+    for k in 0..nf {
+        let (imax, vmax) = (k..nf)
+            .map(|i| (i, m[i][k].abs()))
+            .fold((k, -1.0f64), |b, c| if c.1 > b.1 { c } else { b });
+        if vmax <= tau {
+            return Err(cyclic_error(format!(
+                "constraint {constraint}: the two-sided tie of the low nodes {fs:?} is singular at low node {} (ADR 0583 D2: \
+                 undetermined low nodes that follow only each other)",
+                fs[k]
+            )));
+        }
+        m.swap(k, imax);
+        let p = m[k][k];
+        for v in m[k].iter_mut() {
+            *v /= p;
+        }
+        let pivot_row = m[k].clone();
+        for (i, row) in m.iter_mut().enumerate() {
+            if i != k {
+                let f = row[k];
+                if f != 0.0 {
+                    for (v, &q) in row.iter_mut().zip(&pivot_row) {
+                        *v -= f * q;
+                    }
+                }
+            }
+        }
+    }
+    let mut out = Vec::with_capacity(nf);
+    for (i, &f) in fs.iter().enumerate() {
+        let mut gl: Vec<(usize, f64)> = Vec::new();
+        let mut gh: Vec<(usize, f64)> = Vec::new();
+        for (c, &(is_high, node)) in cols.iter().enumerate() {
+            let g = m[i][nf + c];
+            if g != 0.0 {
+                if is_high {
+                    gh.push((node, g));
+                } else {
+                    gl.push((node, g));
+                }
+            }
+        }
+        gl.sort_by_key(|e| e.0);
+        gh.sort_by_key(|e| e.0);
+        out.push((f, gl, gh));
+    }
+    Ok((kept, out))
 }
 
 /// One mode of the real sector problem: the cosine part `a` and the sine part `b` (zero for a single harmonic), each over
