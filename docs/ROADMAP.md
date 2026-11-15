@@ -11282,13 +11282,22 @@ fixed by the item's registration ADR before any code.
     ShellPressure and default bits unchanged (10 digests), baseline hashes unchanged; six of six mutations caught. Two
     set-up defects of run 1 corrected by amendment. Follow-up F-578. Its cylinder clause is met by F-578 (ADR 0490,
     2026-11-14): Shell4 5.36e-4, Shell3 5.40e-4 to stretch 1.51.
-- [ ] **F-574** Warning for the constant-strain Shell3 membrane on warped meshes
+- [x] **F-574** Warning for the constant-strain Shell3 membrane on warped meshes
   - depends on: F-556
   - acceptance: Every limit not stated here is registered in the ADR before the run. An opt-in model check reports
     Shell3 blocks with the constant-strain membrane whose adjacent facets meet at angles above a registered threshold,
     naming the ANDES membrane of ADR 0466; on the twisted strip of ADR 0473 the check fires at 15 and 30 degrees of
     twist and not on the flat strip; without the option every result and message bit-identical.
-  - note: Structural solver, advanced tier. Optional, low priority. Follow-up of F-556 (ADR 0483, 2026-11-14).
+  - note: Structural solver, advanced tier. Optional, low priority. Follow-up of F-556 (ADR 0483, 2026-11-14). ADR 0537,
+    2026-11-14: opt-in library check shell3::warped_membrane_report (WARP_ANGLE_DEGREES = 0.4 degrees, registered from
+    the ADR 0483 records: the 5e-3 excess level lies at a largest facet angle of 0.41 degrees between the 48 x 144 and
+    24 x 72 strips at 30 degrees). It reports Shell3 blocks with the constant-strain membrane that have an edge shared
+    with one other Shell3 facet whose oriented normals meet above the threshold, with the edge count, the largest angle
+    and a message naming the ANDES membrane of ADR 0466 and the 4.05 percent of ADR 0483. On the twisted strip of ADR
+    0473 (12 x 36) it fires at 15 degrees (largest angle 0.5892) and 30 degrees (1.1784), not on the flat strip; ANDES,
+    Allman and Shell4 blocks and three-facet edges are not reported. Nothing on a default path changed (no existing line
+    edited, bit record of 8 digests). Ten of ten mutations caught. Not wired into the case file, the CLI or the
+    validators (a schema golden change; open).
 - [x] **F-575** Second-order Ritz error of the corrected sector split modes
   - depends on: F-569
   - acceptance: Every limit not stated here is registered in the ADR before the run. RotatingSector::split_modes with
