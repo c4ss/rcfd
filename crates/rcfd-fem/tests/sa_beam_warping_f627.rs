@@ -374,9 +374,13 @@ fn a_n_run1_known_miss() {
     c.finish();
 }
 
-/// A1' to A8' and N1' (ADR 0553 amendment 2): the checks of A1 to A8 and N1 with a buckling subspace of 40.
+/// A1' to A8' and N1' (ADR 0553 amendment 2): the checks of A1 to A8 and N1 with a buckling subspace of 40. The run-2 record
+/// (amendment 3): A1', A2', A3', A8' and N1' met; it stopped at A4', the 8-element model, refused by `lowest_buckling_factors`
+/// ("the iterated subspace lost rank at iteration 1"): the subspace of 40 exceeds the rank bound 32 of `K_sigma` at 8 elements.
+/// Kept unchanged except for its name and this note.
 #[test]
-fn a_n_amended_lateral_torsional_buckling_of_the_monosymmetric_i() {
+#[ignore = "ADR 0553 amendment 3: run-2 record, stopped at A4' (subspace above the rank of K_sigma at 8 elements)"]
+fn a_n_amended_run2_known_miss() {
     let mut c = Checks::new();
     let (s, ws) = mono();
     let z0 = ws.shear_centre()[1];
@@ -836,6 +840,89 @@ fn r_refusals() {
         let (pd, _) = six_prestress(&ld);
         let ok = buckling_factors(&fd, &pd, &Warping::new().block(0, wd), &BucklingOptions::new(1)).is_ok();
         c.holds("R the same with doubly_symmetric_i accepted", ok, "");
+    }
+    c.finish();
+}
+
+/// A4'' (ADR 0553 amendment 3: subspace 24 at 8 elements), A5', A6', A7' (amendment 2: subspace 40 at 16 elements). The
+/// 16-element reference factors of A6' and A7' are those of the A1' set-up, recomputed.
+#[test]
+fn a_n_amended3_remaining() {
+    let mut c = Checks::new();
+    let (s, ws) = mono();
+    let split = |p: Ltb, q: Ltb| -> ((Ltb, f64), (Ltb, f64)) {
+        if p.flange1_compressed {
+            ((p, 1.0), (q, -1.0))
+        } else {
+            ((q, -1.0), (p, 1.0))
+        }
+    };
+    let run = |n: usize, l: f64, axis: usize, o: &BucklingOptions| -> (Ltb, Ltb) {
+        (
+            ltb_with(&s, ws, n, l, axis, 1.0, o),
+            ltb_with(&s, ws, n, l, axis, -1.0, o),
+        )
+    };
+    let o40 = amended_options();
+    let mut o24 = BucklingOptions::new(3);
+    o24.subspace_size = Some(24);
+    let (big, small, _) = closed(&s, &ws, 3.0);
+    let (p, q) = run(16, 3.0, 0, &o40);
+    let ((cmp, s_c), (ten, s_t)) = split(p, q);
+    println!(
+        "reference (A1' set-up): compressed {:.15e}, tension {:.15e}",
+        cmp.factor, ten.factor
+    );
+    // A4''.
+    let (p8, q8) = run(8, 3.0, 0, &o24);
+    let ((c8, _), (t8, _)) = split(p8, q8);
+    println!(
+        "A4'' 8 elements: compressed {:.8e}, tension {:.8e}",
+        c8.factor * M_REF,
+        t8.factor * M_REF
+    );
+    c.at_most(
+        "A4'' flange 1 compressed, 8 elements",
+        rel(c8.factor * M_REF, big),
+        2e-2,
+    );
+    c.at_most(
+        "A4'' flange 1 in tension, 8 elements",
+        rel(t8.factor * M_REF, small),
+        2e-2,
+    );
+    // A5'.
+    for l in [1.5, 6.0] {
+        let (b, sm, _) = closed(&s, &ws, l);
+        let (pl, ql) = run(16, l, 0, &o40);
+        let ((cl, _), (tl, _)) = split(pl, ql);
+        println!(
+            "A5' L {l}: compressed {:.8e} (closed {b:.8e}), tension {:.8e} (closed {sm:.8e})",
+            cl.factor * M_REF,
+            tl.factor * M_REF
+        );
+        c.at_most(&format!("A5' compressed, L {l}"), rel(cl.factor * M_REF, b), 2e-2);
+        c.at_most(&format!("A5' tension, L {l}"), rel(tl.factor * M_REF, sm), 2e-2);
+    }
+    // A6'.
+    let (py_, qy) = run(16, 3.0, 1, &o40);
+    let ((cy, _), (ty, _)) = split(py_, qy);
+    c.at_most("A6' axis y, compressed", rel(cy.factor, cmp.factor), 1e-6);
+    c.at_most("A6' axis y, tension", rel(ty.factor, ten.factor), 1e-6);
+    // A7'.
+    for (sign, f_ref, name) in [(s_c, cmp.factor, "compressed"), (s_t, ten.factor, "tension")] {
+        let m = fork(16, 3.0, &s, 0);
+        let loaded = moment_loaded(&m, 0, sign);
+        let w = Warping::new().block(0, ws);
+        let r = solve_static(&loaded, &w, None).unwrap();
+        let p = WarpingPrestress::from_static(&loaded, &w, &r, [0.0; 2]).unwrap();
+        let f = buckling_factors_with(&m, &p, &w, &o40).unwrap().factors[0];
+        println!("A7' {name}: {f:.15e} against {f_ref:.15e}");
+        c.at_most(
+            &format!("A7' from_static against six-unknown ({name})"),
+            rel(f, f_ref),
+            1e-9,
+        );
     }
     c.finish();
 }
