@@ -279,3 +279,89 @@ amendment adds one check and changes no registered limit or result:
 
 RY2 is run once on the code of 1840f6ff, then M2 once more on the scratch copy against it. The registered M2 run stays the
 record (not caught by the registered checks); the decision rule is applied to the registered checks as written.
+
+## Addendum 1: results (2026-11-15)
+
+Code: `crates/rcfd-fem/src/harmonic_direct.rs` (the only library file changed): `DirectHarmonicOptions::prestress` and
+`.prestress(p)`; in `DirectHarmonic::new` the refusal of the transformation path replaced by the checks of D4 and, after the
+dashpots, the branch that builds the reduced matrices (`transformed`, D1 to D3); `value` adds `K_sigma` when a pre-stress is
+given (D5); `solve` dispatches to `solve_transformed` on the transformation path. Tests: `sa_harmonic_direct_tp_default_bits.rs`
+(B0, recorded on 498b5417 before the library code, `f528-scratch/b0-base.log`), `sa_harmonic_direct_tp.rs` (every other row),
+and the `#[ignore = "superseded by ADR 0543 ..."]` attribute on `r1_to_r11_refusals_amended` of `sa_harmonic_direct.rs` (D7; its
+body unchanged). Each registered row was run once (`f528-scratch/run1.log`), release profile.
+
+| check | limit | measured | met |
+|---|---|---|---|
+| B0 default bits (9 digests of 498b5417) | 0 differ | 0 | yes |
+| K1a..c spring, loss 0.02, 0.5/1.0/1.5 `w1`, against the chain | `<= 1e-8` | 1.40e-13, 3.37e-13, 2.60e-13 | yes |
+| K1d..f spring, undamped, 0.5/1.5/2.5 `w1` | `<= 1e-8` | 1.57e-13, 8.73e-14, 1.45e-13 | yes |
+| K1g spring and tip dashpot, 1.0 `w1` | `<= 1e-8` | 3.89e-13 | yes |
+| FD1 foundation `E/L` on `xmax`, 1.0 `w1` | `<= 1e-8` | 3.32e-13 | yes |
+| RS1a..c split bar with the rigid set against the merged bar (plain path) | `<= 1e-8` | 8.3e-16, 1.10e-12, 6.6e-15 | yes |
+| RS2a..c split cantilever against merged, both with the rigid set (`w_1 = 1700.8` rad/s) | `<= 1e-8` | 2.44e-14, 1.19e-14, 1.31e-14 | yes |
+| RY1a..d Rayleigh on the transformation path against F-399, all 141 modes | `<= 1e-8` | 3.90e-12, 9.09e-11, 1.26e-12, 6.38e-13 | yes |
+| RY2a..b (amendment 1) load on the dependent node `J` | `<= 1e-8` | 4.08e-12, 1.32e-12 | yes |
+| P1a..c pre-stressed undamped against F-399, all 162 modes (`w_1 = 1784.2` rad/s) | `<= 1e-8` | 8.21e-12, 3.42e-12, 1.62e-12 | yes |
+| P2a..c pre-stress with rigid set and spring, all 141 modes (`w_1 = 1791.5` rad/s) | `<= 1e-8` | 5.85e-12, 2.63e-12, 8.91e-13 | yes |
+| P3a..b pre-stressed Rayleigh (`beta` on `K + K_sigma`) | `<= 1e-8` | 1.41e-10, 1.69e-12 | yes |
+| Z1 zero pre-stress against none | `<= 1e-14` | 0 | yes |
+| T1 threads 1 and 8 (K1b, RS2b, P2b) | 0 bits | 0, 0, 0 | yes |
+| F1 every aggregated error finite | finite | finite (asserted in every row) | yes |
+| N1a..c pre-stress against none | `>= 1e-2` | 0.163, 4.43e-2, 1.59e-2 | yes |
+| N2 spring against none | `>= 1e-2` | 1.27 | yes |
+| N3 rigid set against none | `>= 1e-5` | 3.73e-3 | yes |
+| RT1 base motion, RT2 supernodal factor, RT3 cyclic, RT4 non-zero `Linear` value | as stated | as stated (keys `base motion`, `solver`, `constraint`, `constraint`) | yes |
+| RT5 pre-stress of another model | refused | refused (key `prestress`, length 11 against 25) | yes |
+| R1..R11' copy of the refusals of ADR 0448, R9' accepted and finite | as stated | as stated | yes |
+
+Mutations (`f528-scratch/mutate.py`, copy `f528-scratch/mut`, `CARGO_TARGET_DIR` `target-f528-mut`; log
+`f528-scratch/mutations.log`), each run once:
+
+| mutation | caught by | as registered? |
+|---|---|---|
+| M1 response not expanded | RS1a..c, RY1a..d, P2a..c | yes for RS1; RS2 did not catch (both sides mutated) |
+| M2 `F` at the independent unknowns | **none of the registered rows**; RY2a..b (amendment 1: 9.9e-2, 0.20) | no: the registered catcher RS2 is blind to it |
+| M3 supports not added | K1, FD1, N2, RY1, P2 | yes |
+| M4 supports times the first part's coefficient | K1a..c, FD1 | yes |
+| M5 `K_sigma` omitted, plain path | P1, P3, N1 | yes |
+| M6 `K_sigma` sign flipped | P1, P3 | yes |
+| M7 `beta` on `K_0` only | RY1, P3 | yes |
+| M8 dashpots dropped, transformation path | K1g | yes for K1g; not RS2 |
+| M9 imaginary right-hand side dropped | RY1, P2 | yes for RY1, P2; not RS2 |
+| M10 `K_sigma` omitted, transformation path | P2 | yes |
+
+Diagnosis of the gap: RS2 compares two solves of the transformation path, so any mutation of that path cancels; it checks the
+equivalence of the two constraint sets (and the elimination of 18 against 9 rigid-set nodes), not the path against an
+independent reference. Amendment 1 adds RY2, which catches M2.
+
+Also run: `cargo test -p rcfd-fem --release` (232 test binaries, 985 passed, 0 failed, 269 ignored; before RY2 was added),
+`cargo test -p rcfd-api --release --test baseline_hashes` (ok, unchanged), `cargo test -p rcfd-cli --release --test docs_site`
+(ok), `cargo clippy -p rcfd-fem --all-targets --release -- -D warnings` (clean, also after RY2), `cargo fmt -p rcfd-fem --
+--check` (clean). No case file, schema or golden changed: the case file has no direct harmonic analysis.
+
+Deviations: RT5 refuses with key `prestress` (the error of `check_fits`), as the row allowed. Amendment 1 (one added check).
+
+**Decision by the registered rule: partial.** Every check of the acceptance (B0, K1, RS1, P1) and every other registered check
+and control is met, but mutation M2 was not caught by the registered checks (the rule asks every mutation caught). Amendment 1
+closes the gap (RY2 catches M2); nothing of the acceptance is missed or unrun.
+
+Remaining questions:
+
+1. Status. Options: (a) partial by the rule as written; (b) done, since every acceptance clause is met and the uncaught mutation
+   is a coverage gap closed by an amended check. Recommendation: (b), at the lead's or maintainer's decision; this addendum
+   proposes (a) as the rule requires.
+2. The edit of an existing test (`#[ignore]` on `r1_to_r11_refusals_amended`, body unchanged, copy with R9'). Options: keep; or
+   edit R9 in place. Recommendation: keep (the record stays).
+3. Follow-ups: base motion on the transformation path (complex `g`), the supernodal factor there (coordinates for the reference
+   unknowns), the reference unknowns and constraint forces in the response, a buckling check of `K + K_sigma`. Recommendation:
+   one follow-up item for base motion and the reference response; the others only on demand.
+
+## For the lead: roadmap entries
+
+Proposed status of F-528: partial by the registered rule (recommended to accept as done, remaining question 1). Note:
+
+> Structural solver, advanced tier. Follow-up of F-412. ADR 0543, 2026-11-15: rcfd_fem::harmonic_direct::DirectHarmonic takes linear constraints, rigid sets and elastic supports (nodal springs, foundations) on the transformation x = T q of ADR 0296: every real matrix (stiffness parts with their loss factors or viscoelastic coefficients, supports, K_sigma, mass, Rayleigh stiffness K_0 + K_s + K_sigma, dashpots) reduced once, T^T X T, on one extended pattern; A_r Q = T^T F, the response the mesh part of T Q; supports real and undamped; DirectHarmonicOptions::prestress adds K_sigma (ADR 0390) on both paths. Refused on the transformation path: cyclic constraints, non-zero constraint values, base motion, the supernodal factor. Met: bar on a tip spring against the 1-D chain within 3.9e-13 (limit 1e-8; foundation 3.3e-13); split bar with a rigid set against the merged bar within 1.1e-12, split cantilever against merged within 2.4e-14; pre-stressed undamped direct against F-399 with all 162 modes within 8.2e-12 (with rigid set and spring, 141 modes, 5.9e-12; Rayleigh on K + K_sigma 1.4e-10); Rayleigh on the transformation path against F-399 within 9.1e-11; 1 and 8 threads bit-identical; defaults bit-identical (9 digests, baseline hashes). Partial by the rule: mutation M2 (T^T F replaced) was not caught by the registered checks, caught by RY2 of amendment 1; 9 of 10 caught as registered. No case-file key (the case file has no direct harmonic analysis).
+
+Proposed follow-up item:
+
+> F-528b (deps F-528): Direct harmonic base motion and reference response on the transformation path. Acceptance: Every limit not stated here is registered in the ADR before the run. A harmonic base motion on a prescribed set of a model with constraints enters x = T q + G with right-hand side T^T (F - A_ext G); the bar of ADR 0448 H6 with a tip spring equals the 1-D chain within 1e-8; the reference unknowns of the rigid sets are returned; defaults bit-identical.
