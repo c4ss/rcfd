@@ -2212,3 +2212,17 @@ principles; the reference values of the checks are closed forms evaluated in the
 | Paris law `da/dN = C (Delta K)^m` and its closed-form life for `Delta K = d Delta sigma sqrt(pi a)` | derived, cited | ADR 0547 D7; P. C. Paris and F. Erdogan, J. Basic Eng. 85 (1963) 528-534: NOT read, from memory |
 | Finite-body effects not in the references: the height `H = 2 W` of the plate (estimated `< 0.1 %`), the cylinder `R = H = 10 a` of the penny crack (estimated `~ 1e-3`) | estimate | ADR 0547 arithmetic 1 and 7: estimates, not references |
 | Measured: plate `K` from J of rings 2 to 4 within `2.1e-3` of the secant form, ring spread `1.2e-3`, energy difference `7.4e-5`, opening `1.2e-2`, shear opening `1.3e-13`; penny ring 3 within `2.2e-3`, along the front `2.7e-7`; Paris `<= 6.7e-16` | computed | ADR 0547 addendum 1 |
+## F-580 creep on the B-bar Hex8 against a finite-strain reference of the thick cylinder (ADR 0549)
+
+No source was read for F-580. The books below are cited from memory for the names and the published forms. The stationary
+field is derived in ADR 0549 arithmetic 1; the finite-strain reference is a one-dimensional solve written in the test
+(`si_fbar.rs`, `reference_with`), first prototyped by plain numpy scripts (`f580-scratch/probe_ref1d.py`, `probe_fbar1d.py`
+and their logs), no rcfd code in the probes.
+
+| Item | Status | Source |
+|---|---|---|
+| Stationary Norton creep field of the plane-strain thick tube, `sigma_r = -p ((b/r)^(2/n) - 1)/((b/a)^(2/n) - 1)`, `sigma_theta = p ((2 - n)/n (b/r)^(2/n) + 1)/((b/a)^(2/n) - 1)` | derived, cited | ADR 0549 arithmetic 1, ADR 0489 arithmetic 6; F. K. G. Odqvist, Mathematical Theory of Creep and Creep Rupture, 1966; H. Kraus, Creep Analysis, Wiley, 1980; J. T. Boyle and J. Spence, Stress Analysis for Creep, Butterworths, 1983: NOT read, from memory |
+| Axisymmetric total Lagrangian reference: `F = diag(rho', rho/R, 1)`, `P_rR = rho' S_RR`, `P_thTh = (rho/R) S_ThTh`, `int (P_rR du' + P_thTh du/R) R dR = p a du(a)` (dead pressure) | derived | ADR 0549 arithmetic 2 |
+| Backward Euler radial return of the von Mises power law | derived, cited | ADR 0549 arithmetic 2, ADR 0489 D1; J. C. Simo and T. J. R. Hughes, Computational Inelasticity, Springer, 1998: NOT read, from memory |
+| Measured: the reference at `p/1000` against Lame `2.9e-6`, against the stationary field at `20 t*` `8.5e-6`; `N = 400` against `N = 800` `2.2e-6`; at `p` its own drift from the small-strain stationary field `2.3e-3` (`5 t*`) to `8.6e-3` (`20 t*`) | computed | ADR 0549 addendum 1 |
+| Measured: the BBar Hex8 cylinder (`48 x 24`) against the reference, `9.55e-3` at `5 t*`, `1.11e-2` at `20 t*`, growth `1.51e-3` (bound `2e-3`); the point-wise difference grows by `4.4e-3` at `r = 1.05` (reported) | computed | ADR 0549 addendum 1 |
