@@ -256,3 +256,12 @@ results bit-identical) holds by construction (no library line changed) and by S1
 2. Aspherical bifurcation of the inflated thick sphere (a full-sphere or a lower-symmetry model, the eigenvectors of the
    negative pivot) is not covered. Recommend no follow-up unless a fan or membrane case needs it.
 
+## For the lead: roadmap entries
+
+> F-649 proposed status: done.
+
+> F-649 note: Structural solver, advanced tier. Follow-up of F-622 (ADR 0557, 2026-11-15). DONE. ADR 0576, 2026-11-15: test only, no library code (the audit found no gap: ArcLengthOptions::contribution_load and FollowerPressure::add_load_factor_derivative of ADR 0560 suffice). The mean-dilatation Hex8 sphere of ADR 0541 D6 (864 BBar Hex8, neo-Hookean kappa/mu = 1e4) under follower pressure only, traced by arclength::trace with the contributions' load direction (the symmetric part of the load stiffness, Ds = 0.65, 64 points, no halving, at most 6 iterations per point) from rest through its pressure maximum to l_a = 2.5: the maximum pressure 1.00197 p_c,max at l_a = 1.823 (limit 1e-2; closed-form maximum 0.81642365 mu at 1.828147), the 31 points of the descending branch within 1.94e-3 of the closed form at their measured inner stretch (limit 1e-2), the ascending branch within 4.7e-3, the constraint 9.6e-15; one negative pivot from the first point past the maximum. Control: load control at 1.02 p_c,max fails (singular tangent at 0.976 p_c,max). Fast test: a coarse sphere by arc-length against load control within 3.9e-15; the default route still refuses the follower-only load. Five of five mutations caught; existing arc-length results bit-identical (no library change; rcfd-fem release suite and baseline hashes pass). Done by the registered rule.
+
+> F-622 note addition: the arc-length step with a follower load direction (F-572, ADR 0560) traces the BBar sphere through its pressure maximum (F-649, ADR 0576, 2026-11-15); under the mutation that evaluates the BBar block by the Full element it also traces the locked Full model past its spurious limit point.
+
+No follow-up proposed.
