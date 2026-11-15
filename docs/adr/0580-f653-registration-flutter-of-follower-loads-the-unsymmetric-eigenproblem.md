@@ -306,3 +306,24 @@ values (disclosed): `follower::buckling_factors` with the follower `0.49300851`,
 `4 (pi^2/4)/20 = 0.4935` and the factor `pi^2/20` of the symmetric part (arithmetic 3) coincide, so F7c does not tell them
 apart; it stays as registered (a real factor below `2.005` exists on the symmetric path) and F7 asks that the full path has
 none, in either plane (the follower acts on both).
+
+## Amendment 2 (2026-11-15, after the one registered run at 70d27737, before any further run)
+
+The registered run (`f653-scratch/run1-f653.log`, `run1-pencil.log`) missed F3 (`1.96e-8 > 1e-8`) and F8 (`7.3e-6 > 1e-8`);
+every other check was met (addendum 1). The limits stay. Following the house rules the two checks become ignored
+`*_known_miss` tests with their limits intact: the registered functions `f1_f2_f3_beck_flutter` and `f6_f7_f8_buckling`
+become the ignored records `f1_f2_f3_beck_flutter_known_miss` and `f6_f7_f8_buckling_known_miss` (the same code, through a
+shared function with the residual check on), and the passing tests `f1_f2_beck_flutter` and `f6_f7_buckling` run the same
+code with the residual check off (the met checks F1, F2, F6, F7 kept in the suite).
+
+Diagnosis, written before the diagnostic run. The registered residual `||A x - lambda B x|| / (||A x|| + |lambda| ||B x||)` is
+the "relative" measure whose rounding and convergence floor grows with the spread of the spectrum (ADR 0354 for the symmetric
+solver). The Arnoldi test bounds `||T x - theta x|| <= tol |theta|`, and `A x - lambda B x = -(1/theta)(A - sigma B)(T x - theta
+x)`, so `||A x - lambda B x|| <= tol ||A - sigma B|| ||x||`: relative to `||A x||` the bound is `tol kappa`, `kappa = ||A - sigma
+B|| ||x|| / ||A x||`, about `omega_max^2/omega^2` for a low mode of a slender solid (`10^2` to `10^5` here). The estimate of
+arithmetic 4 (`~1e-12`) forgot that factor. The diagnostic (no limit, recorded): the normwise backward error `eta = ||A x -
+lambda B x|| / ((||A||_1 + |lambda| ||B||_1) ||x||)` and `kappa` of the pairs of F3 (at `p = 16`, `20` and `24`) and F8,
+computed in a new test `diag_f3_f8_backward_error` from the reduced matrices assembled through the public API
+(`nonlinear::tangent`, `FollowerPressure::load_stiffness`, `mass::consistent`, `geometric::geometric_stiffness`,
+`assemble::stiffness`, `constraint::reduce`). The diagnosis holds if `eta <= 1e-11` and the registered residual is at most
+`tol kappa` within a factor 10.
