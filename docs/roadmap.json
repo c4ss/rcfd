@@ -6410,9 +6410,9 @@
     "deps": [
       "F-627"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The lateral-torsional buckling load of a simply supported doubly symmetric I under a central point load at the shear centre, above and below it, and of the ADR 0553 monosymmetric I under a central point load at the shear centre, each equals a closed form or a converged Rayleigh-Ritz reference derived in the ADR within 2 percent at 16 elements; uniform-moment results unchanged.",
-    "note": "Structural solver, advanced tier. Follow-up of F-627 (ADR 0553, 2026-11-15)."
+    "note": "F-643 note: Structural solver, advanced tier. DONE. ADR 0582, 2026-11-15: load height on the warping buckling path (`rcfd_fem::beam_warping`): `Warping::load_point(set, force, point)` adds the second-order term (1/2) (F . (p - s)) phi^2 of a dead force at a section point p, the twist about the shear centre s, to K_sigma of `matrices` (so buckling_factors, buckling_factors_with, prestressed_modes); without an entry a nodal force acts at the shear centre, as before; a force with a first-order torque about the centroid and different shear centres at the node are refused. The non-uniform-moment terms of ADR 0508 and ADR 0553 (shear-force terms in shear-centre form) are checked by this item. Central point load on a simply supported span, L = 3, 16 elements, default BucklingOptions, against Rayleigh-Ritz references derived in the ADR (sine series of int M phi v'' + (1/2) int beta_x M phi'^2 + the load-height term, converged to 3.2e-6): doubly symmetric I at the shear centre 5.3e-4, top flange 3.5e-4, bottom flange 7.2e-4; ADR 0553 monosymmetric I at the shear centre 1.4e-3 (larger flange compressed) and 6.9e-4 (in tension); at the centroid and on flange 1 within 1.7e-3; 8 elements within 1.2e-3; axis y 8e-14; from_static 1e-14. Uniform-moment results bit-identical (the ADR 0553 and 0559 factors, the ADR 0546, 0548, 0553 bit records, baseline_hashes). Ten of ten mutations caught. Not covered: distributed loads at a height, eccentric loads with a first-order torque, the in-plane second-order terms of an eccentric load, other moment diagrams and supports, pre-stressed modes with a load point, no case-file key. Follow-up F-663 (distributed loads at a height on warping beams (a consistent load-height term (1/2) int q (r . e) phi^2 dx on the Hermite twist))."
   },
   {
     "id": "F-644",
@@ -6432,9 +6432,9 @@
     "deps": [
       "F-620"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. A Beam2 cantilever and a Shell4 plate with a neo-Hookean or Mooney-Rivlin material give on the linear static solve and the modes the results of the isotropic material of the same small-strain moduli within 1e-10.",
-    "note": "Structural solver, advanced tier. Follow-up of F-620 (ADR 0555, 2026-11-15)."
+    "note": "Structural solver, advanced tier. Follow-up of F-620 (ADR 0555). DONE. ADR 0584, 2026-11-15: the linear paths take a hyperelastic (neo-Hookean or Mooney-Rivlin) material on Beam2, Shell4 and Shell3 elements as its linearised material, opted in by SolidModel::set_hyperelastic_structures(true) (default off: the refusal of ADR 0555 D3 and its test RF1 stand); a structural element takes the isotropic element of the small-strain E = 9KG/(3K + G), nu = (3K - 2G)/(2(3K + G)) through mat_hyper::small_strain_young_poisson, read by beam::moduli, shell::moduli and beam::axial_force (unchanged bits for every other material: baseline hashes and the default-bits records pass). A temperature load stays refused. Against the isotropic twin of the same small-strain moduli, a Beam2 cantilever and a Shell4 and a Shell3 plate, each with a neo-Hookean and a Mooney-Rivlin material, give static displacements, the six lowest eigenvalues and mode shapes (backward residual test) with difference exactly 0 (limit 1e-10), and the beam buckling factors 0; the twin with G (1 + 1e-6) is seen at 9.5e-7 .. 1.0e-6. Seven of seven mutations caught. Not covered: the other linear paths with structures (cyclic, rotating, cms, mpc, beam warping), the case schema, the default lift (needs retiring RF1, maintainer's approval). Follow-up F-666 (Hyperelastic structural elements on the other linear paths and by default). Lifting the refusal by default (retiring RF1 as record+copy) is the maintainer's call."
   },
   {
     "id": "F-646",
@@ -6522,9 +6522,9 @@
     "deps": [
       "F-572"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. tangent_modes and the buckling path take the full (unsymmetric) load stiffness as an option and return complex eigenvalues; Beck's column (a cantilever under a tangential follower tip force) has its flutter load 20.05 E I/L^2 within 1 percent (the coefficient to be checked against a reference held in docs/reference-data.md before registration; cited from memory); the symmetric paths keep their bits.",
-    "note": "Structural solver, advanced tier. Follow-up of F-572 (ADR 0560, 2026-11-15)."
+    "note": "Structural solver, advanced tier. Follow-up of F-572 (ADR 0560, 2026-11-15). PARTIAL. ADR 0580, 2026-11-15: new rcfd_linalg::eigen_pencil::nearest_pencil_eigenpairs (eigenpairs of a real unsymmetric pencil A x = lambda B x nearest a real shift, shift-invert Arnoldi with the EnvelopeLu factor, Gram-Schmidt twice, Ritz values by the Francis QR of ADR 0450, complex pairs returned whole) and, opt-in beside the unchanged symmetric functions, follower::tangent_modes_full (the tangent with Contribution::add_full, the full unsymmetric -K_p of a follower pressure; complex omega^2) and follower::buckling_factors_full (K + mu (K_sigma - K_p) with K_p in full; complex factors of smallest modulus; transformation path refused). Beck's flutter coefficient derived, not cited: p_cr = P L^2/(E I) = 20.0509536, Omega_cr^2 = 121.34251 (closed-form determinant, confirmed by Hermite elements to 1.5e-8; in docs/reference-data.md). Hex20 cantilever, L/h = 50, follower pressure on the end face, bisection in the load on the onset of a complex pair: p_cr = 20.0134 (-1.87e-3, limit 1 percent; Timoshenko estimate -2.8e-3), coalescence Omega^2 = 120.95 (-3.2e-3); the symmetric part of the load stiffness gives real eigenvalues and a spurious divergence (lowest omega^2 -54.6 at 1.01 p_cr); the full buckling path finds no real positive factor (smallest 20 mu = -534 +/- 82 i), the symmetric path a factor 0.493; the full solvers agree with tangent_modes and buckling::factors on symmetric problems within 1.3e-9 and 2.6e-10. Missed: the registered pair residual limit 1e-8 (measured 2.0e-8 and 7.3e-6), diagnosed as the relative measure scaling with the spread of the spectrum (normwise backward errors at most 2.5e-12); kept as known-miss records. Six of six mutations caught; default bits (new record N1, the existing records) and baseline hashes unchanged. Follow-up F-664 (Backward-error residual of the pencil eigensolver). Follow-up F-665 (Beam2 tangential follower tip force and a linear pre-stress flutter path)."
   },
   {
     "id": "F-654",
@@ -6555,9 +6555,9 @@
     "deps": [
       "F-633"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. A pressurised torus segment (Shell3, symmetry cuts) loaded by `Load::shell_pressure_curvature`: the radial and meridional displacements measured against the membrane solution of the torus on two refinements, with the error and its order recorded and the boundary-node curvature error of ADR 0567 (14 % at 32 x 32) reduced below 2 % by a registered boundary estimator, defaults bit-identical.",
-    "note": "Structural solver, advanced tier. Follow-up of F-633 (ADR 0567, 2026-11-15)."
+    "note": "Structural solver, advanced tier. Follow-up of F-633 (ADR 0567, 2026-11-15). PARTIAL. ADR 0579, 2026-11-15: opt-in boundary curvature estimator for the curvature shell pressure: `Load::shell_pressure_curvature_with(set, p, CurvatureBoundary::Jet)` replaces the ADR 0567 quadric at the nodes of boundary distance 0 and 1 (one-sided stencils) by a quartic height jet fitted over the same stencil in the angle-weighted frame (third order at the boundary, derived), unless the quadric fits that stencil to a relative residual of 1e-9 (then the surface is a quadric there and the ADR 0567 estimate is kept: on the octant and the cylinder O1 the option gives the default's bits). Torus patch of ADR 0567 at 32 x 32: boundary-node curvature error 1.36e-1 to 9.26e-3 (jittered 1.37e-1 to 1.08e-2; 1.14e-3 at 64 x 64, order 3.0). Pressurised torus segment (R0 = 1, r = 0.4, t = 0.001, theta in [0, pi/2], phi in [0, pi/4], 6n x n Shell3 cells, symmetry cuts at theta = 0, pi/2 and phi = 0, the edge phi = pi/4 clamped at the membrane state) against the membrane solution derived in the ADR: normal and meridional displacement errors with the jet 2.36e-3, 1.83e-3 (n = 16) and 4.08e-4, 5.26e-4 (n = 32), orders 2.5 and 1.8; with the ADR 0567 quadric (`Load::shell_pressure_curvature`) 1.69e-2, 1.14e-2 and 3.72e-3, 2.13e-3, orders 2.2 and 2.4; the default pressure 7.4e-2. Defaults bit-identical (four digests of the base reproduced, the rcfd-fem suite, baseline_hashes, docs_site pass); six of six mutations caught. Partial: the diff-scope check B4 missed as worded (two loads.rs lines that pass the new field on were not in its list); every acceptance clause met. Done is the maintainer's call (every acceptance clause met; only the diff-scope check B4 missed as worded: two loads.rs lines passing the option, covered by the bit checks B1, K5, B2). CurvatureBoundary::Jet as the default is the maintainer's call (changes non-quadric results)."
   },
   {
     "id": "F-657",
@@ -6625,5 +6625,49 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. With CyclicOptions::shell_extensions, a non-matching shell cyclic boundary also ties the low nodes that no high-node image reaches (to the high edge rotated back, or by a node-to-edge mortar), so that neither side is left free; the ADR 0575 frustum with the low side finer (2:3) has the four lowest frequencies of each harmonic within 2e-2 of the matched sector, falling under refinement, with no mode local to the interface among them; the rotating paths (ADR 0561) on the ADR 0575 cap at two speeds against the full model within 1e-8; models without the option keep their bits.",
     "note": "Follow-up of F-648 (ADR 0575, 2026-11-15)."
+  },
+  {
+    "id": "F-663",
+    "title": "Distributed loads at a height on warping beams (a consistent load-height term (1/2) int q (r . e) phi^2 dx on the Hermite twist)",
+    "phase": 9,
+    "deps": [
+      "F-643"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The lateral-torsional buckling load of a simply supported doubly symmetric I under a uniformly distributed load on the top flange, at the shear centre and on the bottom flange equals a converged Rayleigh-Ritz reference derived in the ADR within 2 percent at 16 elements; results without a distributed load height unchanged.",
+    "note": "Follow-up of F-643 (ADR 0582, 2026-11-15)."
+  },
+  {
+    "id": "F-664",
+    "title": "Backward-error residual of the pencil eigensolver",
+    "phase": 9,
+    "deps": [
+      "F-653"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. nearest_pencil_eigenpairs reports the normwise backward error ||A x - lambda B x|| / ((||A|| + |lambda| ||B||) ||x||) of each pair (and the convergence test is stated in it); on Beck's column of ADR 0580 and its buckling problem every pair is within a registered limit derived from the tolerance; the eigenvalues and modes of ADR 0580 keep their bits.",
+    "note": "Follow-up of F-653 (ADR 0580, 2026-11-15)."
+  },
+  {
+    "id": "F-665",
+    "title": "Beam2 tangential follower tip force and a linear pre-stress flutter path",
+    "phase": 9,
+    "deps": [
+      "F-653"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. A follower tip force on a Beam2 node with its load stiffness, and the modes of K + lambda (K_sigma - K_f) with the mass as complex eigenvalues; Beck's column of Beam2 elements has its flutter load within a registered limit of the derived 20.0509536 E I/L^2 of docs/reference-data.md; existing beam results keep their bits.",
+    "note": "Follow-up of F-653 (ADR 0580, 2026-11-15)."
+  },
+  {
+    "id": "F-666",
+    "title": "Hyperelastic structural elements on the other linear paths and by default",
+    "phase": 9,
+    "deps": [
+      "F-645"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. With a neo-Hookean material on Beam2 and Shell4 elements, the cyclic, rotating, cms and mpc-transformation paths give the results of the isotropic twin of the same small-strain moduli within 1e-10; on the maintainer's approval the refusal of ADR 0555 D3 on structural elements is lifted by default with RF1 retired as a record and its copy accepting.",
+    "note": "Follow-up of F-645 (ADR 0584, 2026-11-15). The default lift part NEEDS USER: it retires sa_hyper_paths.rs rf1_to_rf4_refusals row RF1 as record+copy."
   }
 ]
