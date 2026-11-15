@@ -164,3 +164,55 @@ with the default options (returned and its difference to the amended `q = 40` so
 ## Open questions
 
 None that changes a default result. The follow-up for branch (i) is proposed in the addendum if the records show it matters.
+
+## Addendum 1 (2026-11-15): results
+
+Written after the one run of each registered check. Code and tests: commit 2979de9b (`eigen.rs`, the constant
+`NEAR_COUNT_STEPS` and the D1 block in step 5 of `lowest_buckling_factors`; `rcfd-linalg/tests/si_buckling_sign_asymmetric_f642.rs`;
+`rcfd-fem/tests/sa_buckling_sign_asymmetric_f642.rs`). Logs in `w49i-work/f642-scratch`: `run1_linalg.log`, `run1_fem.log`
+(the registered run, release), `b2_base.log` (B2 on a `git archive` copy of 3378a508 with the new test file copied in, own
+target directory), `b1_linalg.log`, `b1_fem.log`, `baseline.log`, `docs_site.log`, `mutations.log` and `mut_M*.log`.
+
+### Results against the registered limits
+
+| id | measured | limit | verdict |
+|---|---|---|---|
+| A1 | `Ok`, three factors `178.68421280057305, 612.8282085448661, 1337.0513539777903` (146 iterations, `q = 11`) | holds | met |
+| A2 | `1.2e-15` against the amended run (`q = 40`: `178.68421280057328`, 6 iterations) | `<= 1e-9` | met |
+| A3 | Sturm record `{ shift: 1350.4218675175682, counted: 3, expected: 3 }` (`= 1.01 lambda_3`); factors 2 and 3: `2.2e-16`, `1.2e-12` | holds; `<= 1e-9` | met |
+| A4 | 8 elements, default: `178.8341468817965` against `q = 24`: `0` (bit-equal); Sturm shift `1.01 lambda_3` | `<= 1e-9` | met |
+| P1 | `Ok`, `1, 1.1111111111111112, 1.25`, each `0` relative; Sturm `{ 1.2625, 3, 3 }` (50 iterations) | `<= 1e-12`; as stated | met |
+| N1 | `SturmMismatch { shift: 2.5e5, counted: 2, expected: 1 }`, shift `0` relative | as stated | met |
+| B1 | `cargo test -p rcfd-linalg --release`: 121 passed, 0 failed, 6 ignored (19 binaries; L3 still refused with `counted 1, expected 0`, L4 returned); `cargo test -p rcfd-fem --release`: 1097 passed, 0 failed, 302 ignored (257 binaries); `cargo test -p rcfd-api --release --test baseline_hashes`: 3 passed, 1 ignored; `cargo test -p rcfd-cli --release --test docs_site`: 2 passed | pass | met |
+| B2 | base 3378a508 and branch: every case hash equal, total `0332054be35fc70b` on both (cases 1 to 9: `e5ba1d8f604d723a`, `b62c3b390a32022d`, `bffb438689323aa5`, `23bca50add77ac95`, `33de0cc4db3b6d11`, `29b84359511ab08b`, `8cb130a17cfeab41`, `93799dd511046337`, `4f0cc1d14f7e6bd7`) | equal | met |
+
+Records (no limit): `L = 6`, `-M_ref`, default options: returned, `62.39674065821949` (Sturm at `1.01 lambda_3`), `2.9e-15`
+from `q = 40`. `L = 1.5`, `-M_ref`, default options: **still refused**, "Sturm count: 32 eigenvalues below 1.114e10, but 2 were
+found": the default subspace held only two positive Ritz values for three asked, branch (i) of the registration, which D1 does
+not touch (limit 1). With `q = 40` it returns `610.7109799174692`.
+
+### Mutations (scratch copy `f642-scratch/mut`, own target directory, one at a time)
+
+| id | mutation | caught | by |
+|---|---|---|---|
+| M1 | D1 removed | caught | P1 (refused, counted 12), A1, A4 (refused as in ADR 0553 run 1) |
+| M2 | first `Ok` near count accepted without comparing with `mp` | caught | N1 (the refusal now reports the near shift 1.01 instead of `S`) |
+| M3 | near shift below the wanted set | caught | P1, A1, A4 (refused); N1 (returned the wrong lowest factor `1.0` with a count of 1 at 0.99: the reason the shift must lie above `lambda_mp`) |
+| M4 | near shift used on branch (ii) also when the count at `S` agreed | caught | B2 (case 5 `4eb611e50380f4b7`, total `0d6ee246797741a4` instead of `33de0cc4db3b6d11`, `0332054be35fc70b`) |
+
+`cargo fmt -p rcfd-linalg --check`, `cargo fmt -p rcfd-fem --check`: clean. `cargo clippy -p rcfd-linalg -p rcfd-fem --release
+--all-targets -- -D warnings`: clean.
+
+Deviations: none. Not run: the whole workspace suite (the lead's gate). The ignored ADR 0553 records were not run and are not
+edited.
+
+### Decision by the registered rule
+
+**done**: A1 to A4, P1, N1, B1 and B2 met in the one registered run, no amendment, and the four mutations caught. Clause a1 (returned with the default `BucklingOptions`), a2 (`1.2e-15` against the ADR 0553 amended run, limit `1e-9`) and a3 (bit-identity: B2 hashes equal against 3378a508, B1 suites pass) are met. Done is the maintainer's call. The `L = 1.5` record shows that the other refusing branch (fewer positive Ritz values than asked) remains; it was registered as not covered (limit 1) and is proposed as a follow-up.
+
+### Remaining questions
+
+- **Q1. Branch (i): fewer positive Ritz values than asked** (the `L = 1.5` record). Options: (a) leave it (a larger subspace is
+  the documented remedy); (b) on that refusing path only, restart once with a larger subspace bounded by the rank estimate
+  (`min(n, 2q)`), keeping every returned result bit-identical; (c) a shifted iteration on `(K + sigma K_sigma)^{-1}` for the
+  positive side. Recommendation (b), as a separate registered item.
