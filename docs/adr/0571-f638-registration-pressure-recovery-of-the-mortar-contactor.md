@@ -211,3 +211,79 @@ ignored heavy records, run once). The shared helpers of `tests/f601_common` and 
    it leaves `ContactResult` and every default result unchanged and avoids the solve paths that F-639 changes.
 
 Open (not taken): switching the default contactor of quadratic faces (ADR 0551 open question 3).
+
+## Addendum 1: results (2026-11-15)
+
+Each registered run made once (logs in `w49i-work/f638-scratch`: `run-recovery.log`, `run-hertz.log`, `run-mut.log` and
+`mut-MR*.log`, `clippy.log`, `run-fem-full.log`, `run-baseline.log`, `run-docs.log`). No limit changed, no amendment. The
+library and the tests were committed (48c7fe6a) before the runs.
+
+| id | limit | measured | met |
+|---|---|---|---|
+| HS20r | succeeds; `0.15`, `0.20`, `0.10` | succeeds with the gap tolerance `1e-8` (10 augmentations, 68 s, penetration `9.7e-9`); radius 3.54e-2 (`a_fe` 0.10415, `a_H` 0.10059), peak 7.38e-3, approach 1.18e-2 | yes |
+| HS10r | succeeds; `0.15`, `0.20`, `0.10` | succeeds (14 augmentations, 101 s, penetration `9.5e-9`); radius 7.43e-2 (`a_fe` 0.10819, `a_H` 0.10071), peak 4.12e-2, approach 1.40e-2 | yes |
+| PT20r | `1e-8`; 36 | 3.4e-14; 36 | yes |
+| PT10r | `1e-8`; 72 | 2.5e-14; 72 | yes |
+| PT20rt, PT10rt | `1e-8`; 36, 72 | 1.5e-14, 1.6e-14; 36, 72 | yes |
+| RP | equal; `1e-13`, `1e-13` | order equal on PT20m, PT10m, M20s, M10s (9 points each on M20s, M10s); position and weight differences 0 | yes |
+| PV | `1e-13` | 0 (M20s, M10s; 8 of 8 and 6 of 6 nodes active) | yes |
+| FW | `1e-12` | PT20r 1.1e-16, PT10r 3.3e-16, M20s 1.1e-16, M10s 0, HS20r 2.2e-16, HS10r 2.2e-16 | yes |
+| NR | empty; refused | 0 entries; refused with `"contact nodes"` | yes |
+| B | pass | see "Crate runs" | yes |
+| NC-n | `> 0.15` | 2.07e-1 (HS20r), 4.89 (HS10r): ADR 0551's misses reproduced from the same solve | yes |
+
+Recorded (no limit): HS20r 729 points, 123 with `p_g > 0`, 87 in the fit, `p_g` from `-9.9e-4` to `7.05e-2`, `F_fe`
+1.491464e-3 (ADR 0551: 1.4915e-3); HS10r 1152 points, 144 with `p_g > 0`, 110 in the fit, `p_g` from 0 to `7.27e-2`, `F_fe`
+1.496492e-3 (ADR 0551: 1.4965e-3). The Newton iterations per solve are ADR 0551's (`[9, 3, 2, ..]`, `[7, 3, 2, ..]`). The
+per-point table `(r, p_g)` of the points with `p_g > 0` is printed in `run-hertz.log`. On HS20r a few points near the contact
+edge carry a small negative recovered traction (smallest `-9.9e-4`, 1.4 percent of the peak): `lambda_h` is a quadratic field
+with `lambda_a >= 0` but `Phi_a` not positive everywhere (the Quad8 corner function is negative inside the face), so the
+recovered traction is not sign-preserving pointwise; the fit only uses points at half the peak or above.
+
+The estimates of arithmetic 5 were pessimistic on Tet10 (radius 0.074 against the estimate 0.1 to more than 0.5): the
+evaluation of the field at the 9 points of a face mixes all six coefficients of the face, and the mid-edge excursions cancel
+more than the nodal value `lambda_e/2 + (lambda_i + lambda_j)/4` alone suggests.
+
+### Mutations
+
+Each alone on a `git archive` copy of 48c7fe6a (`f638-scratch/mut`, target `target-mut`), `sa_contact_mortar_recovery_f638.rs`
+run once (`mutate.py`).
+
+| id | caught by |
+|---|---|
+| MR1 (`Phi` replaced by `N`) | PV M20s 0.40, M10s 0.16; FW M20s 0.29, M10s 0.14 |
+| MR2 (`lambda_a = t_a`) | PT20r 0.97, PT10r 0.98, PT20rt, PT10rt; PV; FW |
+| MR3 (no Jacobian in `weight`) | RP weight 15.0, 3.0, 15.2, 1.8; FW |
+| MR4 (`position` the first node) | RP position 0.44 to 0.48 |
+| MR5 (missing node as `lambda = 0`) | NR (not refused) |
+
+Every planned mutation was caught by a check named for it.
+
+### Crate runs
+
+`cargo fmt -p rcfd-fem --check`: clean. `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings`: clean.
+`cargo test -p rcfd-fem --release`: 1145 passed, 0 failed, 306 ignored (every default-bits record, B2 of ADR 0551 and every
+`sa_contact*.rs` test included). `cargo test -p rcfd-api --release --test baseline_hashes`: 3 passed, 1 ignored (the table not
+edited). `cargo test -p rcfd-cli --release --test docs_site`: 2 passed.
+
+`crates/rcfd-fem/src/contact.rs` changed by additions only: lines 29 to 31 (module doc), 368 to 384 (`RecoveredTraction`), 584
+to 645 (the `impl ContactSet` block with `recovered_tractions`); no existing line changed.
+
+### Deviations
+
+None. The heavy records HS20r and HS10r are ignored tests (run once, about 170 s together); the fast file covers the same
+code path. Not run: the workspace test suite (the lead's gate). `docs/reference-data.md` not changed (no new reference value).
+
+### Decision
+
+**done** by the registered rule: every check met on its registered run (HS20r and HS10r included), the negative control as
+expected, every planned mutation caught, B and `baseline_hashes` unchanged, fmt and clippy clean.
+
+### Remaining questions
+
+1. Making the recovered traction the pressure reported in `ContactNode::pressure` for mortar nodes. Options: (a) keep
+   `t_a/A_a` there and the recovery as a separate call (now), (b) add the recovered points to `ContactResult`. (b) changes a
+   public result type and the words of the default-bits records of mortar runs. Recommendation: (a), until the mortar contactor
+   becomes a default (ADR 0551 open question 3, the maintainer's call).
+2. Pointwise negative recovered tractions near the contact edge (above). Options: (a) accept (a reading of the discrete field),
+   (b) dual or positive weighting functions in the contactor. Recommendation: (a); (b) only with a new registered item.
