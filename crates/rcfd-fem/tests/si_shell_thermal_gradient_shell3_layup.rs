@@ -404,6 +404,25 @@ fn model(
     m
 }
 
+/// The one-block model of [`model`] without the `held` node set and constraints (ADR 0626 amendment 2).
+fn free_model(
+    nodes: Vec<Vec3>,
+    kind: ElementKind,
+    conn: Vec<usize>,
+    property: BlockProperty,
+    _clamped: &[usize],
+) -> SolidModel {
+    let per = if kind == ElementKind::Shell3 { 3 } else { 4 };
+    let ne = conn.len() / per;
+    let mut mesh = SolidMesh::new(nodes).unwrap();
+    mesh.add_block(kind, conn).unwrap();
+    mesh.set_block_property(0, property).unwrap();
+    mesh.add_element_set("all", (0..ne).collect()).unwrap();
+    let mut m = SolidModel::new(mesh);
+    m.add_material("all", steel()).unwrap();
+    m
+}
+
 fn placed(p: &[[f64; 2]], place: &Placement) -> Vec<Vec3> {
     p.iter().map(|&q| place.place(q)).collect()
 }
@@ -532,6 +551,7 @@ fn bits_equal(a: &[f64], b: &[f64]) -> bool {
 // -------------------------------------------------------------------------------------------------------------- L1
 
 #[test]
+#[ignore = "defective set-up of the registered run (ADR 0626 amendment 2): the helper adds an empty node set, refused before the checks; superseded by l1_shell3_load_on_a_triangle_after_amendment2"]
 fn l1_shell3_load_on_a_triangle() {
     let mut c = Checks::new();
     let (a, b, t) = (0.5, 0.3, 0.02);
@@ -569,9 +589,49 @@ fn l1_shell3_load_on_a_triangle() {
     c.finish();
 }
 
+/// The corrected test of ADR 0626 amendment 2: the same model without the empty `held` set.
+#[test]
+fn l1_shell3_load_on_a_triangle_after_amendment2() {
+    let mut c = Checks::new();
+    let (a, b, t) = (0.5, 0.3, 0.02);
+    let x = vec![[0.0, 0.0, 0.0], [a, 0.0, 0.0], [0.0, b, 0.0]];
+    let g: Vec<f64> = x.iter().map(|q| 100.0 + 300.0 * q[0] - 150.0 * q[1]).collect();
+    let mut m = free_model(
+        x,
+        ElementKind::Shell3,
+        vec![0, 1, 2],
+        BlockProperty::shell(t).unwrap(),
+        &[],
+    );
+    m.add_load(Load::shell_temperature_gradient(g.clone())).unwrap();
+    let f = nodal_load_vector(&m, &[]).unwrap();
+    let gm = (g[0] + g[1] + g[2]) / 3.0;
+    let ms = steel_moment(t, gm);
+    let area = 0.5 * a * b;
+    let nx = [-1.0 / a, 1.0 / a, 0.0];
+    let ny = [-1.0 / b, 0.0, 1.0 / b];
+    let dofs = m.dof_map();
+    let mut exact = vec![0.0; dofs.n_equations()];
+    for i in 0..3 {
+        exact[dofs.equation(i, 4).unwrap()] = area * nx[i] * ms;
+        exact[dofs.equation(i, 3).unwrap()] = -area * ny[i] * ms;
+    }
+    let fmax = max_abs(exact.iter().copied());
+    let d = max_abs(f.iter().zip(&exact).map(|(x, y)| x - y));
+    c.at_most(
+        "L1 Shell3 triangle load against arithmetic 3, / max |f|",
+        d / fmax,
+        1e-12,
+    );
+    let zero = (0..3).all(|i| [0, 1, 2, 5].iter().all(|&k| f[dofs.equation(i, k).unwrap()] == 0.0));
+    c.holds("L1 forces and theta_z exactly zero", zero, "");
+    c.finish();
+}
+
 // -------------------------------------------------------------------------------------------------------------- L2
 
 #[test]
+#[ignore = "defective set-up of the registered run (ADR 0626 amendment 2): the helper adds an empty node set, refused before the checks; superseded by l2_layup_load_on_a_rectangle_after_amendment2"]
 fn l2_layup_load_on_a_rectangle() {
     let mut c = Checks::new();
     let (a, b) = (0.6, 0.4);
@@ -581,6 +641,58 @@ fn l2_layup_load_on_a_rectangle() {
     for (name, spec) in [("UNS", UNS), ("SYM", SYM), ("ANG", ANG)] {
         let l = hand_laminate(spec);
         let mut m = model(
+            x.clone(),
+            ElementKind::Shell4,
+            vec![0, 1, 2, 3],
+            BlockProperty::layup(plies_of(spec)).unwrap(),
+            &[],
+        );
+        m.add_load(Load::shell_temperature_gradient(g.clone())).unwrap();
+        let f = nodal_load_vector(&m, &[]).unwrap();
+        let dofs = m.dof_map();
+        let (n, mm) = (l.mth, l.pth);
+        let mut exact = vec![0.0; dofs.n_equations()];
+        for (i, cr) in CORNERS.iter().enumerate() {
+            let (ai, ci) = (cr[0], cr[1]);
+            let ix = ai * (b / 8.0) * (4.0 * gc + (2.0 / 3.0) * c2 * b * ci);
+            let iy = ci * (a / 8.0) * (4.0 * gc + (2.0 / 3.0) * c1 * a * ai);
+            exact[dofs.equation(i, 0).unwrap()] = n[0] * ix + n[2] * iy;
+            exact[dofs.equation(i, 1).unwrap()] = n[1] * iy + n[2] * ix;
+            exact[dofs.equation(i, 4).unwrap()] = mm[0] * ix + mm[2] * iy;
+            exact[dofs.equation(i, 3).unwrap()] = -(mm[1] * iy + mm[2] * ix);
+        }
+        let fmax = max_abs(exact.iter().copied());
+        let d = max_abs(f.iter().zip(&exact).map(|(x, y)| x - y));
+        c.at_most(
+            &format!("L2 {name} load against arithmetic 2, / max |f|"),
+            d / fmax,
+            1e-12,
+        );
+        let zero = (0..4).all(|i| [2, 5].iter().all(|&k| f[dofs.equation(i, k).unwrap()] == 0.0));
+        c.holds(&format!("L2 {name} u_z and theta_z exactly zero"), zero, "");
+        if name == "SYM" {
+            let fs = max_abs((0..4).flat_map(|i| [f[dofs.equation(i, 0).unwrap()], f[dofs.equation(i, 1).unwrap()]]));
+            c.at_most(
+                "L2 SYM force entries / (N_s 0.24)",
+                fs / (l.force_scale(gc) * a * b),
+                1e-12,
+            );
+        }
+    }
+    c.finish();
+}
+
+/// The corrected test of ADR 0626 amendment 2: the same model without the empty `held` set.
+#[test]
+fn l2_layup_load_on_a_rectangle_after_amendment2() {
+    let mut c = Checks::new();
+    let (a, b) = (0.6, 0.4);
+    let x = vec![[0.0, 0.0, 0.0], [a, 0.0, 0.0], [a, b, 0.0], [0.0, b, 0.0]];
+    let g: Vec<f64> = x.iter().map(|q| 100.0 + 300.0 * q[0] - 150.0 * q[1]).collect();
+    let (gc, c1, c2) = (100.0 + 300.0 * 0.5 * a - 150.0 * 0.5 * b, 300.0, -150.0);
+    for (name, spec) in [("UNS", UNS), ("SYM", SYM), ("ANG", ANG)] {
+        let l = hand_laminate(spec);
+        let mut m = free_model(
             x.clone(),
             ElementKind::Shell4,
             vec![0, 1, 2, 3],
