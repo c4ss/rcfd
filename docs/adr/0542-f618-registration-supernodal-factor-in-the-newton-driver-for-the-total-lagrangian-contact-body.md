@@ -275,3 +275,105 @@ code does not build or a default bit changes and cannot be restored without chan
 2. **`SparseMinimumDegree` in the Newton driver.** Refused here (not asked for). Taken on the maintainer's standing instruction
    of 2026-11-11 (take the recommendation): refuse rather than add an unchecked factor.
 3. **Default.** Making the supernodal factor the Newton default changes default results: not taken, open.
+
+## Addendum 1: results (2026-11-15)
+
+Commits after the registration (7bff28c3): the default-bits record B on the unchanged library (d05081c7,
+`f618-scratch/bits-base.log`); the option and the tests (fc7a5560; `nonlinear.rs` lines 56, 61, 1159-1163, 1177, 1195-1199,
+1225-1236, 1612, 1649-1650, 1656, 1663-1682; `contact.rs` lines 120-121, 194, 204-212, 1170-1174, 1202; `arclength.rs` lines
+93-102; the attribute line of D3 in `sa_contact_supernodal_f615.rs`); the heavy record renamed a known miss (572222a0). No
+amendment was made and no limit was changed.
+
+Every registered run was made once, in release: B and the three existing contact bit records (`run-bits.log`); the four fast
+tests of `sa_newton_supernodal_f618.rs` with one test thread (`run-fast.log`, 23 s); the heavy record alone through
+`heavy.sh` (`run-heavy.log`; free memory at the start 7.1 GB, 174 s). Logs in `f618-scratch`.
+
+| check | limit | measured | met |
+|---|---|---|---|
+| T1 `median(t_s)/median(t_p)`, `n = 16` | `< 1/3` | **`0.3546`** (medians 13.46 s and 37.96 s; pairs 35.90/10.16 = 0.283, 37.96/15.89 = 0.419, 38.11/13.46 = 0.353; 16 rayon threads) | **no** |
+| V1 `n = 16`: `p_mid`, `B_0.25`, `B_0.5`, `P_f`, `q_0.25`, `q_0.5`, largest node pressure | `<= 1e-10` each | `9.1e-12`, `4.9e-12`, `8.4e-12`, `1.3e-11`, `3.5e-11`, `2.9e-11`, `6.7e-16` | yes |
+| V1 `n = 16`: worst row | `<= 1e-10` | `3.5e-11` | yes |
+| V1e `n = 16`: row of the largest node pressure; E1's flag | equal | 15 and 15; true and true | yes |
+| V2 `n = 4`: the seven readings; worst row | `<= 1e-10` | `3.1e-12`, `2.8e-12`, `1.1e-12`, `5.6e-12`, `1.4e-12`, `5.1e-13`, `3.0e-12`; rows `5.6e-12` | yes |
+| V2 `n = 8`: the seven readings; worst row | `<= 1e-10` | `7.0e-12`, `9.6e-12`, `7.7e-12`, `7.2e-12`, `4.5e-12`, `1.6e-12`, `5.1e-12`; rows `2.5e-11` | yes |
+| V2 `n = 4`, `8`: row of the largest node pressure; E1's flag | equal | equal; equal | yes |
+| V3 Newton record, `n = 4`, `8`, `16` | equal | `[(3, 0), (2, 0), (2, 0)]` at 4 and 8; `[(4, 0), (2, 0)]` at 16; equal | yes |
+| U1 displacement, `n = 4`, `8`, `16` | `<= 1e-10` | `5.5e-14`, `5.9e-14`, `7.4e-14` | yes |
+| H1 cantilever increments (step, load factor, halvings, iterations) | equal | `[(1, 0.25, 1, 5), (1, 0.5, 1, 5), (2, 0.75, 1, 6), (2, 1.0, 1, 6)]` for both | yes |
+| H2 cantilever displacement | `<= 1e-10` | `1.5e-16` | yes |
+| H3 `max_halvings = 0`, both factors | "after 0 halvings: singular tangent: pivot" | both | yes |
+| P ADR 0517's `d = 1e-3 a`, `n = 4`, both factors | refused at the first tangent | both (present: pivot -1.68e10 at node 387; supernodal: -9.0e8 at node 2418) | yes |
+| C1 the two routes, `n = 4` | equal | `0xecd8f40c5721a14f` both | yes |
+| D `n = 16`, a pool of 1 thread | bit for bit | `0xfc936c7553ff35d5` both | yes |
+| R2 repeats | equal | three `0xa5faff8918362a96` (present), three `0xfc936c7553ff35d5` (supernodal) | yes |
+| B G1 to G3 after the change; the contact bit records of ADRs 0533, 0517, 0507 | equal; pass | equal (`0xa2c66c48e61bb15b`, `0x711b5ca995f1e02a`, `0xe5357101080874de`); pass | yes |
+| B `baseline_hashes` | pass | pass (3 passed, 1 ignored) | yes |
+| N1 `n = 4`, `8`, cantilever: not bit-equal | holds | holds | yes |
+| NH the present cantilever halves | holds | 4 halvings | yes |
+| N2 (a) to (d) | `InvalidValue`, key `"solver"` | all four | yes |
+| R record | recorded | `t_p` 35.9 to 38.1 s against Q1's 34.3 s; the 1-thread supernodal solve 22.2 s | |
+
+### Diagnosis of T1
+
+The supernodal driver's time varied by 1.6 times between its three runs (10.2, 15.9, 13.5 s) while the present one varied by
+6 percent (35.9 to 38.1 s): the supernodal factor's parallel later-column update in the 16-thread rayon pool is the part
+exposed to the other agents' builds on the same machine (the 1-thread pool took 22.2 s). The first pair (0.283) met the limit;
+the median of the three did not. The registered estimate (about 0.30, between 0.26 and 0.37) named this risk. Beyond the
+factor, 8 tangent evaluations of about 0.3 s and the order recomputed in each of 6 factorisations (Q4: 0.13 to 0.19 s of about
+1.2 s) add about 3 s to every supernodal run, a floor of about 0.08 of `t_p`. Not re-run (rule 2).
+
+### Mutations
+
+A `git archive` copy of fc7a5560 in `f618-scratch/mut`, target `target-f618-mut`, script `f618-scratch/mutate.py`, logs
+`M1.log` to `M9.log`, each alone, the two fast test files run once.
+
+| id | mutation | caught by | registered |
+|---|---|---|---|
+| M1 | supernodal arm builds `SkylineLdlt` | N1 (`n = 4`, `8`, cantilever bit-equal) | N1, caught |
+| M2 | envelope arm builds `SupernodalLdlt` | B (G1 `0x42e2783ac8bc6024`), and N1 | B, caught |
+| M3 | supernodal arm with `PivotRule::NonZero` | **nothing** (all fast tests pass) | H1, **survived** |
+| M4 | supernodal refusal reported as "tangent factorisation" | H3, and P | H3, caught |
+| M5 | contact pass-through dropped | C1, and N1 | C1, caught |
+| M6 | F-615's refusal kept | V2 (the solve refused), and P | V2, caught |
+| M7 | `NewtonOptions::check` accepts `SparseMinimumDegree` | N2 (b) | N2 (b), caught |
+| M8 | arc-length accepts the supernodal factor | N2 (d) | N2 (d), caught |
+| M9 | linear contact body accepts `newton.factor` | N2 (c) | N2 (c), caught |
+
+M3 is an equivalent mutant of the registered design, seen after the run: the post-test of D2 (`d_i <= PIVOT_TOLERANCE a_ii`
+refused) refuses every negative pivot at a row with a positive diagonal, so a factor that accepts indefinite pivots is refused
+one step later with the same text and no result changes. It could differ only for a pivot in `(1e-10 a_ii, theta]` at a row
+whose diagonal is negative. The registration should have seen this; it is recorded as a survivor.
+
+### Gates
+
+`cargo test -p rcfd-fem --release` passes (exit 0; 981 passed, 0 failed, 270 ignored over 232 test targets; `gate-fem.log`).
+`cargo test -p rcfd-api --release --test baseline_hashes` passes (3 passed, 1 ignored; `gate-bh.log`). `cargo clippy -p
+rcfd-fem --all-targets -- -D warnings` is clean (`gate-clippy.log`). `cargo fmt -p rcfd-fem --check` is clean. `cargo test -p
+rcfd-cli --release --test docs_site` passes (run with this addendum and the roadmap entry in place; `gate-docs.log`). Not run:
+nothing registered was left out.
+
+### Decision by the registered rule
+
+**Partial.** T1 missed its limit on its registered run (0.355 against `< 1/3`) and M3 survived. Every other check met its
+limit: every reading within `3.5e-11` of the present driver (limit 1e-10), the same Newton and halving records, and without the
+option the bits of three new and four existing digests unchanged. Clauses c2, c4 and c5 met; c3 missed.
+
+### Remaining questions, with recommendations
+
+1. **T1.** Options: (a) a follow-up that caches the dissection order and the symbolic analysis by pattern (the order is a
+   function of the pattern only; Q4 shows the same pivot bits with the order given) and measures again with no other build on
+   the machine; (b) accept the measured ratio. Recommendation: (a).
+2. **M3.** Options: (a) a check with a tangent whose refused pivot lies at a row with a negative diagonal, where the sign test
+   and the post-test differ; (b) accept the equivalence. Recommendation: (b); the post-test makes the two rules equal for every
+   tangent the drivers meet.
+3. **Case-file key, default, `SparseMinimumDegree`**: open questions 1 to 3 above; not taken.
+4. **ADR 0517's interference with the total Lagrangian body** is refused by both factors (P). A convex switch as in the linear
+   body would change the present driver's results (an error becomes a solution); it needs the maintainer.
+
+## For the lead: roadmap entries
+
+Proposed status of F-618: **partial**.
+
+> Structural solver, advanced tier. Follow-up of F-615 (ADR 0533, 2026-11-15). PARTIAL. ADR 0542, 2026-11-15: NewtonOptions::factor (rcfd_fem::solve::DirectFactor; default Envelope, the present factor; SupernodalNestedDissection selects the supernodal multifrontal L D L^T of ADR 0503 after nested dissection by level structures, with the same pivot tests and texts, for every Newton attempt without a load-factor control; other values, and the supernodal factor on the arc-length path, refused with the key "solver"). The contact driver's refusal of the supernodal factor with the total Lagrangian body is lifted: ContactOptions::factor(SupernodalNestedDissection) is passed to solve_from as the Newton factor. ADR 0517's hub at 16 cells with the total Lagrangian body needs d = 1e-4 a (with 1e-3 a both factors refuse the first tangent): the median of three alternating pairs 13.46 s against 37.96 s, a ratio of 0.355, MISSED against the limit 1/3 (pair ratios 0.283, 0.419, 0.353; the supernodal runs varied with the other agents' load). Every reading of ADR 0517 D4 within 3.5e-11 of the present driver (limit 1e-10), the same Newton record, displacements within 7.4e-14; at 4 and 8 cells within 2.5e-11. A cantilever whose large increments are refused by a pivot halves identically with both factors. Without the option three new digests and the contact bit records unchanged; baseline_hashes passes. Eight of nine mutations caught (the NonZero-pivot mutant is equivalent under the post-test). No case-file key.
+
+> Follow-up (proposed, not added): the dissection order and symbolic analysis of the Newton driver's supernodal factor cached by pattern (deps F-618). Every limit not stated here is registered in the ADR before the run. The supernodal factor of NewtonOptions reuses its nested dissection order and symbolic analysis while the tangent's pattern is unchanged, with the same bits as without the reuse: the total Lagrangian contact solve of the ADR 0517 hub at 16 cells (d = 1e-4 a) in under a third of the present time, measured with no other build on the machine, and every result of ADR 0542 bit-identical.
