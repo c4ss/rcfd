@@ -12006,3 +12006,25 @@ fixed by the item's registration ADR before any code.
     golden re-recorded with the maintainer's approval; a case without the keys gives every result bit-identical.
   - note: Structural solver, advanced tier. Follow-up of F-553 (ADR 0536, 2026-11-14). NEEDS THE USER: the schema golden
     is re-recorded only with the maintainer's approval.
+- [x] **F-617** A thermal predictor for the attempts of the nonlinear paths with a temperature field
+  - depends on: F-613
+  - acceptance: Every limit not stated here is registered in the ADR before the run. With an opt-in thermal
+    predictor each attempt with a temperature field starts at the committed displacement plus the free thermal
+    expansion increment of the field's change; the free expansion of ADR 0534 FE1 (a step of alpha dT = 1e-2 from
+    u = 0) converges without halving and equals alpha dT within 1e-12, and runs without the predictor keep the
+    bits of ADR 0534.
+  - note: Structural solver, advanced tier. Optional. Follow-up of F-613. DONE. ADR 0539, 2026-11-15: an opt-in
+    thermal predictor (thermal::TemperatureFieldHistory::with_thermal_predictor, default off;
+    thermal::free_expansion_start) starts each attempt of the quasi-static driver and each sub-step of the
+    nonlinear transient integrator at the committed displacement plus the free thermal expansion increment of the
+    field's change: each node moves by (theta_new/theta_old - 1)(x_c - O) about the mean O of the committed
+    positions (the expansion at unchanged elastic deformation, theta = 1 + alpha dT, alpha the mean over the
+    elements of the node), completed by one rigid translation per component fitted to the fixed equations; only
+    free equations change, prescribed values keep their bits, an unchanged field returns the start bit for bit;
+    the attempt at t = 0 starts from the reference state. Met: the free expansion of ADR 0534 FE1 (alpha dT = 1e-2
+    from u = 0) converges without halving, one correction per step, equal to alpha dT within 1.7e-18 (the known
+    miss FE1c of ADR 0534 closed; the same run without the predictor halves twice); a table hot from t = 0 runs
+    with the predictor and is refused without it; the integrator at a consistent free expansion takes one
+    correction per step against three; converged results with and without the predictor agree within 6e-15
+    (nonuniform beam, prescribed displacement, V3T bar); runs without the predictor keep the bits of ADR 0534 (9
+    new digests, the 12 of ADR 0534, the baseline hashes); 11 mutations caught. No case-file key (open).
