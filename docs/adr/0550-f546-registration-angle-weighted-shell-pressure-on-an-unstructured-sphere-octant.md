@@ -214,3 +214,63 @@ Not taken:
    registers it. Recommendation (b), low priority, only if the 2 percent at coarse unstructured meshes matters to a user.
 3. The default pressure of Shell3 (ADR 0461 question 4): unchanged; recommendation still to keep the consistent split as the
    default.
+
+## Addendum 1 (2026-11-15): results
+
+The registered run is commit a8efbc52 (`f546-scratch/run1.log` for the fast test, `run1-heavy.log` for the n = 128 record run
+once with `--ignored`, 3.6 s), made once. No amendment was written. B2, B3 and clippy ran on the same commit.
+
+| id | limit | measured | met |
+| --- | --- | --- | --- |
+| A1 | `<= 2e-2` | `e(128) = 7.9937e-3` (`u_r / ref` in `0.9920063066 .. 1.0048421209`) | yes |
+| A2 | order `>= 1.5` each | `e(32) = 1.4014e-1`, `e(64) = 3.3342e-2`, `e(128) = 7.9937e-3`; orders `2.071`, `2.060` | yes |
+| G1 | exact; `>= 20`; `1e-15`; all | counts equal the prototype at all four levels; smallest angle `20.045, 20.068, 20.002, 20.001`; off-plane `0`; all outward | yes |
+| G2 | `>= 5`; `>= 0.25` | 10 distinct interior valences (3 to 12); `0.579` flipped | yes |
+| P1 | `1e-5` each | largest `3.9e-11` | yes |
+| P2 | `1e-5` each | largest `6.2e-11` | yes |
+| P3 | `1e-5` each | largest `4.9e-11` | yes |
+| D1 | `<= 1e-8` | `6.4e-14` | yes |
+| R1 | `<= 0.8` each | `0.620` (n = 32), `0.624` (64), `0.794` (128) | yes |
+| S1 | `<= 2e-2` | `1.0872e-2` | yes |
+| NC1 | `> 2e-2` | `3.3342e-2` | yes |
+| NC2 | `> 5e-2` | `1.7532e-1` | yes |
+| B1 | empty | `git diff e906faa8 -- crates/*/src` empty (`b1.log`) | yes |
+| B2 | pass | `cargo test -p rcfd-fem --release`: every binary passed, 0 failed (`b2.log`) | yes |
+| B3 | pass | baseline_hashes 3 passed, 1 ignored (the existing record); docs_site 2 passed | yes |
+
+Observation O1 (no limit): the default load at n = 128 gives `e_default(128) = 1.0065e-2` (`0.9899351274 .. 1.0075866889`),
+smaller than the estimate `1.26e-2`; it meets the acceptance's 2 percent as well. R1 at n = 128 (`0.794`) was met with a small
+margin: the default converged faster than second order between 64 and 128 (`5.34e-2 -> 1.01e-2`, order `2.41`) while the angle
+split kept order 2.06, so the angle split's advantage on this mesh family shrinks with refinement.
+
+Mutations (archive copy of a8efbc52, `f546-scratch/mutate.py`, `mutlogs/`, the fast test, own target dir), each caught:
+
+| id | caught by |
+| --- | --- |
+| MU1 | P1, P3, R1, S1 |
+| MU2 | P1, P3, R1, S1 |
+| MU3 | P1, P3, R1, S1, A2 |
+| MU4 | P1, P3, R1, S1 |
+| MU5 | D1, P1, P2, P3 |
+
+fmt (`cargo fmt -p rcfd-fem --check`) and clippy (`cargo clippy -p rcfd-fem --release --all-targets -- -D warnings`): clean.
+Deviations: none. Not run: the whole workspace suite (the lead's gate). Files changed: one new test file
+`crates/rcfd-fem/tests/sa_shell_pressure_sphere.rs` and this ADR; no library line.
+
+**Decision: done**, by the rule: every registered check met on the one run, every mutation caught, no amendment.
+
+What the measurement says, for the record: on an unstructured octant the error of either pressure lumping is set by the thin
+shell's bending response to the nodal unevenness of the load, `~ c h^2 / (R t)` (second order, D4, and growing as `1 / t`,
+D5), not by the stiffness (the area-gradient load is exact to `6e-14` on the same mesh). The 2 percent needs n = 128 (edges
+about `0.012 R`) at `t / R = 0.01`; there the default also meets it. The angle split is better than the default by a factor
+0.62 to 0.79 on this mesh family, by 16 on the structured geodesic grid, and by 300 on the one-diagonal cylinder of ADR 0461.
+
+Remaining questions (options, recommendation):
+
+1. A pressure load that keeps the uniform membrane state exact on irregular curved triangulations (open question 2, limit L3):
+   (a) leave as a limit; (b) a follow-up that designs one from a local curvature estimate and registers it on this octant at n =
+   16 and 32. Recommend (b), low priority.
+2. The default pressure of Shell3: unchanged; recommend keeping the consistent split as the default (the advantage of the
+   angle split is small on unstructured meshes).
+3. Documentation: (a) note in the shell documentation that a thin curved shell on an unstructured mesh needs `h^2 / (R t)`
+   well below one for a percent-level displacement under pressure, whichever split; (b) nothing. Recommend (a), with the lead.
