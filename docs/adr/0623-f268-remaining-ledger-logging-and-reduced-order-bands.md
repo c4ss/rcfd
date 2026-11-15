@@ -1,183 +1,255 @@
-# ADR 0623: F-268 remaining scope: automatic ledger logging and uncertainty bands on the reduced-order fan (stub)
+# ADR 0623: F-268 remaining scope registration: automatic ledger logging from design studies and uncertainty bands on the reduced-order fan
 
-Status: **DRAFT STUB 2026-11-15. Not registered, not accepted.** The maintainer answered the open questions on 2026-11-15 (section \"Maintainer decisions\"); the limits are still proposals until the implementing agent registers them. No code of this item exists and no check has run. The
-numbers in "Registration" are proposals; they become limits only when the maintainer has answered the open questions and
-this text is registered, before any code. Nothing here is a maintainer decision.
+Status: **REGISTERED 2026-11-15, written before any code of F-268's remaining scope and before any run of its checks.** Not yet
+accepted by the maintainer. This text replaces the draft stub of 2026-11-15 (commit 9cf95fc3); the stub's survey, the
+maintainer's decisions and the open questions as asked are kept below (sections "What exists", "Maintainer decisions", "Open
+questions as asked"). Before this text no library or test code of this scope was written in the branch. Disclosed: two smoke
+runs on the existing code (a temporary test calling `FanRomEvaluator::metrics` through `uq::run` with an `FnModel`, kept in
+`w49i-work/f268r-scratch/zz_f268r_smoke.rs`, logs `smoke.log`, `smoke2.log`; it was never committed and computes no check of
+the table, and its seeds 7, 11, 21 are not used by any check). Its numbers are quoted in "Arithmetic done beforehand". Results go
+in the addenda at the end; nothing above the addenda is changed after a run.
 
-Parents: [ADR 0121](0121-wave46d-design-ledger-and-tolerance-study-driver.md) (wave 46D: the ledger and the tolerance driver),
-[ADR 0240](0240-f268-registration-sobol-sensitivity-indices.md) (Sobol indices; its questions Q2, Q4, Q5 are open),
-[ADR 0118](0118-wave46a-computer-fan-schema-checker-perturbations.md) (fan tolerances),
-[ADR 0119](0119-wave46b-reduced-order-axial-fan-tier.md) (reduced-order fan),
-[ADR 0136](0136-fidelity-tiers-xhigh-to-xlow.md) (fidelity tiers, proposed, not implemented). Roadmap item F-268 (deps F-249);
-follow-up F-339 (MCP tools for uq and Sobol). Number 0623 given by the lead. Drafted in parallel with ADR 0620 (F-697,
-objective definition), ADR 0621 (F-698, surrogate model) and ADR 0622 (F-699, multi-fidelity management with a measured-data
-hook); I have not read those drafts.
+Roadmap item F-268 (deps F-249). Parents: [ADR 0121](0121-wave46d-design-ledger-and-tolerance-study-driver.md) (ledger and
+tolerance driver), [ADR 0240](0240-f268-registration-sobol-sensitivity-indices.md) (Sobol indices),
+[ADR 0118](0118-wave46a-computer-fan-schema-checker-perturbations.md) (fan tolerances, set-up T),
+[ADR 0119](0119-wave46b-reduced-order-axial-fan-tier.md) (reduced-order fan). Number 0623 given by the lead. Branch
+`f268r-work` from local main 9cf95fc3, worktree `w49i-work/f268r`, scratch `w49i-work/f268r-scratch`. F-700 (new optional
+ledger fields, pairing and training-set queries, `Fidelity::Measured`) is a separate item and is not touched here.
 
-House rules: clean-room (published literature and first principles only); limits fixed before the code and not changed after a
-run; a missed limit becomes an ignored `*_known_miss` test with the limit intact; defaults bit-identical, every new thing
-opt-in; no edit of `baseline_hashes.rs`, hash tables or goldens (MCP tools-list, CLI help); no existing test edited; no new
-dependency; no case-file key and no MCP tool or argument without the maintainer.
+House rules (`w49i-work/AGENT_RULES.md`): limits fixed here and not changed after a run (a miss becomes an ignored
+`*_known_miss` test with the limit intact and the measured number); each registered run is made once; existing tests not
+edited; defaults bit-identical (with the one disclosed exception of D4 below, argued from the binding acceptance); no edit of
+`baseline_hashes.rs`, of the case and mesh hash tables or of any golden; no new dependency, no unsafe code; clean-room. Library
+only: no MCP tool, no service argument, no case-file key (decision D1 of 2026-11-15). Every choice the maintainer would
+normally be asked about is taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation), unless the
+maintainer's decisions of 2026-11-15 below already settle it, or it is listed as open.
 
-## What F-268 asks
+## What F-268 asks (remaining scope)
 
-Acceptance (quoted, binding today): "Every design variant is recorded in a ledger with its inputs, solver version and results,
-and a tolerance study driver samples manufacturing spread and reports output spread against registered limits (ADR 0121)."
+The acceptance, binding:
 
-The note lists as not done: uncertainty bands on the reduced-order model, automatic ledger logging from runs, an MCP tool for
-uq or Sobol studies. The third is roadmap item F-339 and is not repeated here.
+> Every limit not stated here is registered in ADR 0623 before the run. (a) Logging: a design study run with the opt-in ledger
+> sink writes exactly one evaluation entry per evaluated (candidate, condition) pair, failed ones included with a located reason:
+> 64 of 64 on the registered 32-candidate, 2-condition study; a resumed study adds 0 duplicate and leaves 0 missing entries at
+> every one of the registered kill points; rerun_check of every ok entry of a deterministic evaluator passes with difference 0;
+> the study store file and the study result are byte-identical with and without the sink. (b) Bands: uq::run on the
+> reduced-order fan through a ledger::Model adapter reports the 5, 50 and 95 percent quantiles with 0.95 order-statistic
+> intervals for q, dp_s, power and tone1_pa; the adapter equals FanRomEvaluator::metrics bit for bit at 64 points; at least 10
+> of the 12 intervals contain the value of an independent 100000-sample reference; zero-width tolerances give a standard
+> deviation of exactly 0; the ledger bytes are identical for 1 and 4 workers. (c) Defaults: with the sink and the adapter
+> unused, no existing test, hash table or golden changes.
 
-## What exists (read in the source on 2026-11-15, not taken from the note)
+Clauses: **a1** 64 of 64 entries; **a2** 0 duplicate / 0 missing at every kill point; **a3** rerun_check of every ok entry,
+difference 0; **a4** store bytes and result bits equal with and without the sink; **b1** quantiles 5/50/95 with 0.95 intervals
+for the four metrics; **b2** adapter = `FanRomEvaluator::metrics` bit for bit at 64 points; **b3** at least 10 of 12 intervals
+contain the 100000-sample reference; **b4** zero-width tolerances give sd exactly 0; **b5** ledger bytes equal for 1 and 4
+workers; **c1** defaults.
 
-- **Ledger.** `crates/rcfd-api/src/design/ledger.rs`: format `rcfd-ledger-1`, one JSON object per line. `Entry` has `kind`,
-  `study`, `variant`, `params` and `metrics` as `{name, value, unit}`, `evaluator`, `evaluator_version`, `solver_version`,
-  `geometry_hash`, `settings` (free JSON), `verdict` (`ok`, `diverged`, `constraint_rejected`, `not_evaluated`), `reason`,
-  `fidelity` (`analytic`, `reduced_order`, `cfd`), `recorded_at_ms`, `wall_s`, `seed`, `provenance` (free JSON).
-  `Filter` has `kind`, `verdict`, `study`, `evaluator`, `fidelity` and nothing else. Queries: `pareto_front`, `best_so_far`,
-  `history`, `to_csv`. Re-run: `Model` trait, `FnModel`, `entry_of`, `rerun_check`, `compare_metrics`.
-- **Reader behaviour that matters for new fields.** `Entry::from_json` reads keys by name and ignores keys it does not know,
-  so an extra optional key does not make an old reader skip the line. An unknown `fidelity` or `verdict` text does: the line
-  is skipped and reported. `Entry::to_json` always writes every key, so a new key must be left out when unset or every new
-  ledger differs in bytes from an old one.
-- **Who writes to a ledger.** Only `uq::run` (`design/uq.rs`), `sensitivity::run` (`design/sensitivity.rs`) and the service
-  method `design.ledger_append` (`design/tools.rs`, `ledger_append`). `Study::run` and `Study::record` (`design/study.rs`),
-  `design.evaluate` and `design.run_study` (`design/tools.rs`), the operating maps (`design/opmap.rs`) and the runner path of
-  ADR 0189 write the per-study store (`design/store.rs`) or `run.json` only. A search for `ledger` in `study.rs`, `store.rs`,
-  `case_eval.rs`, `opmap.rs`, `optim.rs`, `cmaes.rs` and `nsga2.rs` finds nothing. So "every design variant is recorded" holds
-  only for entries a caller appends by hand.
-- **Study data lacks what an entry needs.** `ParamDef` (`study.rs`) has a name, bounds and targets but no unit. `CondResult`
-  (`store.rs`) has metric values by name without units, a status text and a message. The store key is `store::key_of`, the
-  bit patterns of the parameter vector.
-- **Reduced-order fan.** `rcfd_post::fan_rom` (`crates/rcfd-post/src/fan_rom.rs`): `RomFan` is one blade row (all blades
-  alike), `RomModel` holds the loss constants, four of them marked ASSUMED or UNVERIFIED in the source (`cl_max` 1.1,
-  `cd_normal` 2.0, `annulus_drag` 0.020, `secondary_drag` 0.018, `tip_cd` pi / (pi + 2)).
-  `design/fan_rom_eval.rs`: `FanRomEvaluator` implements `study::Evaluator` and gives `q`, `dp_s`, `dp_t`, `power`, `torque`,
-  `eta_s`, `eta_t`, `tone1_pa`. It does **not** implement `ledger::Model`; the only `Model` in `crates/` is `FnModel`. So
-  `uq::run` and `sensitivity::run` cannot take the fan without an adapter, and no test runs either of them on it.
-- **Fan tolerances.** `crates/rcfd-mesh/src/fan_design.rs`: `Tolerances` (common and per-blade stagger, chord, thickness,
-  tip-gap error, eccentricity, blade mass, roughness) and `ComputerFan::ensemble`. `RomFan::from_axial_fan` reads the older
-  `rcfd_mesh::fan::AxialFan`; there is no conversion from `ComputerFan` to `RomFan`. The reduced-order model has no input for
-  per-blade differences, eccentricity, mass or roughness.
-- **MCP.** `crates/rcfd-mcp/src/lib.rs`: four ledger tools. `design_ledger_append` and `design_ledger_query` fix `fidelity` to
-  the enum of three values in the schema, which is in the tools-list goldens. `provenance` and `settings` are free objects.
-  No `design_uq` or `design_sobol` tool (F-339, todo).
-- **ADR 0136** proposes a `tier` field, a `cross_tier_check` entry kind and project tools `record_design`, `verify_design`,
-  `query_designs`. None of these names occurs in `crates/`.
+## What was read
 
-## What is left, exactly
+`AGENT_RULES.md`; the brief; `loop-drafts/decisions.md` (D1 to D6, B1 to B4); the stub of this ADR; ADR 0121 (D6: quantile
+`X_(ceil(n p))`, order-statistic interval with exact binomial coverage for independent samples); ADR 0118 (set-up T of the
+tolerance checks, `crates/rcfd-mesh/tests/fan_design_w46a.rs` `tol_t`); ADR 0119 and `crates/rcfd-post/src/fan_rom.rs`
+(`RomFan`, `RomModel`, `operating_point`; thickness is not modelled); `crates/rcfd-api/src/design/` `study.rs` (`Study`,
+`eval_points`, `record`), `store.rs` (`Store::append` writes one batch with one `write_all`; `Store::open` truncates a torn
+last line), `ledger.rs` (`Entry`, `Ledger::append`, `Model`, `rerun_check`, `compare_metrics`), `uq.rs` (`run`, `mean_sd`,
+`quantile_interval`, `Dist`), `fan_rom_eval.rs`; `crates/rcfd-api/tests/fan_rom_design_w46b.rs` (`set_up`, `evaluator`);
+`crates/rcfd-mesh/src/fan_design.rs` (`Tolerances`, `Dist::{Fixed, Uniform, TruncatedNormal}`).
 
-1. **Automatic ledger logging** of design-study evaluations (first clause of the acceptance).
-2. **Bands on the reduced-order fan**: an adapter so the tolerance driver runs on it, a stated mapping from tolerances to the
-   model's inputs, and the spread reported as quantile bands. Which uncertainty the word "bands" covers is Q2.
-3. ADR 0240 Q4 and Q5 (decisions, no code unless Q5 b). ADR 0240 Q2 is carried by F-339.
-4. Not part of F-268's acceptance, but asked of this draft: the ledger fields and queries the three new consumers need (P1 to
-   P8 below).
+## What exists (read in the source on 2026-11-15)
 
-## Decision proposal
+- Only `uq::run`, `sensitivity::run` and the service method `design.ledger_append` write ledger entries. `Study::run`,
+  `Study::record`, `design.evaluate`, `design.run_study` and the operating maps write the per-study store only. So the
+  acceptance's "every design variant is recorded" holds only for entries a caller appends by hand.
+- `ParamDef` has no unit; `CondResult` has metric values by name without units, a status text and a message.
+- `FanRomEvaluator` implements `study::Evaluator` with metrics `q`, `dp_s`, `dp_t`, `power`, `torque`, `eta_s`, `eta_t`,
+  `tone1_pa`; no `ledger::Model` exists for the fan, so `uq::run` cannot run on it.
+- `uq::Dist` refuses zero widths (`lo < hi`, `sd > 0`), and `mean_sd` of `n` bit-identical values returns `fl(sum)/n`, which is
+  not the value in general (smoke: 13 of 10000 random values in [0.01, 1000] at n = 2000 come back exact), so the sd of a
+  constant sample is rounding noise, not 0.
+- A pre-existing defect found while planning the kill points: a kill during the very first `Store::append` (the header line torn)
+  leaves a file that `Store::open` truncates to 0 bytes; the next `append` sees an existing file and writes no header, and the
+  store can no longer be opened ("not a design store"). Not fixed here (it is store behaviour, not ledger); that one kill point
+  is left out of LG5 and listed as a follow-up.
 
-### D1. Ledger sink for studies (opt-in, library)
+## Arithmetic done beforehand (disclosed)
 
-A new optional sink on the study driver, off by default: a `Ledger`, the evaluator id and version, the fidelity, and unit
-maps for parameters and metrics. When set:
+1. **Cost of the reduced-order fan** (smoke, set-up below, release): 127 ms per evaluation at `n_scan = 100`, 84 ms at 20
+   (single thread; the first smoke took 264.8 s for 2000 evaluations). The 100000-sample reference therefore costs about
+   `1e5 x 0.13 s / 4` = 55 min with 4 workers; it is an ignored heavy record (BD2/BD3), run once, with BD7 the fast test of the
+   same code path. `n_scan = 100` of the ADR 0119 set-up is kept (no tuning of the set-up for speed).
+2. **Linearity of the fan at set-up T** (smoke): for each input and metric, the ratio `|f(+s) - 2 f(0) + f(-s)| / |(f(+s) -
+   f(-s))/2|` at one sd `s` is at most 0.031 for `q`, `dp_s`, `power` and `tone1_pa` (0.092 for `eta_s`, not a band metric).
+   For `f = g x + c x^2 / 2` with `x ~ N(0, s^2)`, `Var f = g^2 s^2 + c^2 s^4 / 2`, so the relative sd excess of the linear
+   propagation is about `r^2 / 4` with `r` that ratio: at most `0.031^2 / 4 = 2.4e-4`. The central difference with step `s`
+   has a truncation error of the same order. This fixes BD3's model allowance at 0.01 (40 times the estimate).
+3. **Dominance of the common stagger** (smoke, `g s` per input): the stagger carries 99.4 % of the linear variance of `q`,
+   98.7 % of `power`, 99.1 % of `tone1_pa`, and `dp_s = k q^2` on the system curve. So the four band metrics are nearly
+   comonotone functions of one input, and the 12 coverage events of b3 are close to 3 events (one per quantile level, the 5 and
+   95 % ones nearly independent: order-statistic correlation `sqrt(0.05^2/0.95^2) = 0.05`, the median and a tail `0.23`) each
+   repeated 4 times. With per-interval coverage `>= 0.95` (exact for Monte Carlo) and a reference whose own quantile error is
+   `sqrt(2000/100000) = 0.14` of the interval's sigma (effective coverage about `P(|Z| < 1.96 / 1.01) = 0.948`), the
+   probability that at least 10 of 12 contain the reference is about `0.948^3 = 0.85` (if a cluster misses, 4 intervals miss
+   together, and 8 of 12 follows). The limit 10 of 12 is binding and kept; this calculation is the disclosed estimate that B3
+   asks for: a correct implementation fails b3 with a probability of about 0.15. A miss is read against this: a miss of exactly
+   one quantile level across all four metrics is the expected failure mode; a miss in a pattern that is not clustered points to
+   a defect.
+4. **BD3 sampling allowance.** The relative standard error of a sample sd from `n` values is `sqrt((kappa - 1)/(4 n))` with
+   `kappa` the kurtosis; the truncated normals and the near-linear map give `kappa <= 3`, so at most `1/sqrt(2 n) = 0.0158` at
+   n = 2000; 4 SE = 0.063.
+5. **BD6 failed fraction.** With the tip-gap error uniform on `[-1.5, 0]` mm and the nominal gap 1 mm, a sample fails
+   (negative gap, `RomFan::validate`) exactly when the error is below `-1` mm: probability `0.5 / 1.5 = 1/3`.
+6. **LG set-up strata.** `sampling::latin_hypercube` puts exactly one point in every stratum `[k/32, (k+1)/32)` of each
+   dimension, so a failure rule on `floor(32 x)` makes exactly the registered number of candidates fail.
 
-- each evaluated (candidate, condition) pair becomes one `evaluation` entry (Q5): `study` from the definition, `variant` the
-  store index, `params` from the candidate with the unit map, `metrics` from the `CondResult`, the condition's overrides in
-  `settings`, the store key and the condition label in `provenance`;
-- a failed condition becomes an entry with `diverged` or `not_evaluated` and the located message as `reason`;
-- the store is written first and the ledger second; on resume, store records with no ledger entry of the same store key and
-  condition are appended, and existing ones are not written again;
-- a candidate served from the store without a new evaluation writes nothing.
+## Decision
 
-With the sink unset, no file is touched and no byte of the store or of a result changes. Reaching the sink through the
-service or MCP needs a new argument and is Q4.
+### D1. Ledger sink for design studies (opt-in, library; Q4 (a), Q5 (a), Q6 (a), Q7 (a))
 
-### D2. Reduced-order fan as a `ledger::Model` (opt-in, library)
+New module `crates/rcfd-api/src/design/study_ledger.rs`:
 
-A `FanRomModel` in `design/fan_rom_eval.rs` over named parameters with units, built from a nominal `RomFan`, a `RomModel` and
-a `RomCondition`. Parameters are the tolerances the model can represent (Q3): a common stagger error, relative chord and
-thickness errors of the row, a tip-gap error, and, if Q2 includes them, the loss constants of `RomModel`. A stalled or missing
-operating point is a `not_evaluated` outcome with the located reason. Its metrics equal `FanRomEvaluator::metrics` for the
-same fan and condition.
+- `LedgerSink<'l> { ledger: &'l Ledger, evaluator, evaluator_version, fidelity, param_units, metric_units }` (unit maps
+  name -> unit text).
+- `Study::set_ledger_sink(&mut self, sink) -> Result<usize, String>` (`study.rs`). Refused, located, before anything is
+  written, when a parameter of the definition or a metric of an objective or constraint has no unit in the maps. Then it
+  **reconciles**: it reads the ledger and appends, in store order, the entry of every (store record, condition) pair of the
+  study that has no entry yet (an entry is the study's when `study` is the definition's name and `provenance.driver` is
+  `study`; it is that pair's when `provenance.store_key` and `provenance.condition` match). It returns the number appended.
+- In `Study::eval_points`, after `store.append` of a batch has returned `Ok`, the entries of the new records (record order,
+  then condition order) are built and appended in **one** `Ledger::append`. In `Study::record` the same after its store append.
+  A build or append error stops the study with `Stop::Error("ledger: ...")` (Q7 (a)); the batch is then in the store and
+  reconciled on the next `set_ledger_sink`. Records served from the store write nothing. Nothing in `Study` changes when no
+  sink is set (the field is `None`, every new line is behind it).
+- Entry of record `r` at condition `c`: `kind = evaluation`, `study` = definition name, `variant = "<name>#<index>@<label>"`,
+  `params` in definition order with units, evaluator id/version/fidelity from the sink, `settings = {"condition": label,
+  "set": {path: value, ...}}`, `metrics` from the `CondResult` (name order) with units, `verdict` = `ok` when the result is ok,
+  `constraint_rejected` / `not_evaluated` when its status says so, else `diverged`; `reason = "condition '<label>': <status>:
+  <message>"` when not ok; `seed` and `wall_s` unset; `provenance = {"driver": "study", "store_index", "store_key",
+  "condition", "source", "status", "iterations"}`. No new top-level key (F-700, D5).
+- `ConditionModel<'m>` implements `ledger::Model` for one condition of a study (the definition, the `Evaluator`, the sink's
+  id/version/fidelity/metric units): parameters by name in definition order, the evaluator run on a one-condition copy of the
+  definition, the same non-finite rule as `eval_points`. `rerun_check(entry, &ConditionModel)` re-runs a study entry.
+
+### D2. Reduced-order fan as a `ledger::Model` (opt-in, library; Q3 (a))
+
+In `fan_rom_eval.rs`, `FanRomModel { fan: RomFan, model: RomModel, cond: RomCondition }`, id `rcfd.fan_rom`, fidelity
+`reduced_order`. Parameters (any subset, each at most once, a missing one is 0): `stagger_common_deg` [deg] added to every
+section's stagger (radians), `chord_rel` [1] multiplying every chord by `1 + x`, `tip_gap_delta` [m] added to the tip gap. An
+unknown name or another unit is `not_evaluated` with a located reason. Metrics: `FanRomEvaluator { model, base: cond
+}.metrics(perturbed fan, &cond)` (the same function, so b2 tests the mapping), units `q` m3/s, `dp_s`, `dp_t`, `tone1_pa` Pa,
+`power` W, `torque` N m, `eta_s`, `eta_t` 1. A failed fan or operating point is `not_evaluated` with reason `fan_rom: <error>`
+(as the stub proposed). `geometry_hash` = FNV-1a 64 (Fowler, Noll, Vo; public-domain definition: offset basis
+0xcbf29ce484222325, prime 0x100000001b3) over the bit patterns of the perturbed fan, the model and the condition, so
+`rerun_check` notices another nominal set-up under the same id and version. `settings` = the three deviations and the condition.
+
+**Tolerance mapping (Q3 (a)).** `fan_rom_tolerances(&Tolerances)` maps `stagger_common_deg`, `chord_rel` and `tip_gap_delta`;
+`stagger_blade_deg`, `thickness_rel`, `eccentricity`, `mass_rel` and `roughness_ks` must be `Fixed { value: 0 }`, else a
+located refusal naming the field (the one-row model has no per-blade, eccentricity, mass or roughness input, and thickness is not
+modelled by ADR 0119, so Q3 (a)'s "thickness" cannot be used; recorded as a reading). Reading of "row-mean chord": the per-blade
+`chord_rel` distribution is applied as one error common to all blades, an upper bound on the spread of the row mean (which is
+about `1/sqrt(B)` of it for independent blades); listed as open question R1.
+
+**Standardised inputs (for b4).** `uq::Dist` cannot have zero width, and changing its validation would change a refusal that
+existing callers see. So a generic wrapper `uq::Standardized<'m>` (a `Model`) maps inputs `z.<name>` [1] to the inner model's
+`<name> = offset + width z` (`uq::Affine { name, unit, offset, width }`), id `<inner id>+standardized`, version `<inner
+version>; <name>=<offset bits>,<width bits>; ...`. A fan_design `Dist` becomes: `Fixed{v}` -> offset v, width 0, `z ~
+Uniform(0, 1)`; `Uniform{lo, hi}` -> offset 0, width 1, `z ~ Uniform(lo, hi)`; `TruncatedNormal{mean, sd, lo, hi}` -> offset
+mean, width sd, `z ~ Normal(0, 1)` truncated to `[(lo - mean)/sd, (hi - mean)/sd]` (both renormalised truncations, ADR 0118
+and ADR 0121). Zero-width tolerances (every field `Fixed{0}`) then evaluate the nominal fan in every sample (`0 * z` is
+`+-0`, and `x + (+-0) = x`, `x (1 + (+-0)) = x`).
 
 ### D3. Bands
 
-No new statistics: `uq::run` already gives quantiles with distribution-free order-statistic intervals (ADR 0121 D6, checked
-by U2 and U3). The band of a metric is its 5 and 95 percent quantiles with the median, each with its interval, plus the failed
-fraction; the bands describe the model's response to the stated input spread and nothing about a real fan. If Q2 includes the
-loss constants, `sensitivity::run` splits the variance into the tolerance part and the model-constant part.
+`fan_rom_band_spec(name, &Tolerances, n, seed, workers)` gives the `UqSpec` (Monte Carlo, one batch of `n`, quantiles
+`[0.05, 0.5, 0.95]`, confidence 0.95, no stopping on the SE) and the affine maps; `fan_rom_bands(&FanRomModel, name,
+&Tolerances, n, seed, workers, ledger)` runs `uq::run` on `Standardized(FanRomModel)`. The band of a metric is its 5 and 95 %
+quantiles with the median, each with its order-statistic interval, together with the failed fraction `1 - n_ok / n_samples`
+(statistics are over the ok samples). No new statistics. The bands are the reduced-order model's response to the stated input
+spread (Q2 (a): manufacturing tolerances only), nothing about a real fan.
 
-## Registration (proposed; to be fixed before code)
+### D4. `uq::mean_sd` of a bit-constant sample (the one default change, disclosed)
 
-Set-ups: an analytic study evaluator with closed-form metrics, and the reduced-order fan of
-`crates/rcfd-api/tests/fan_rom_design_w46b.rs` (`set_up`). Seeds, tolerance values and the reference sample are fixed at
-registration.
+When every value of the sample has the same bit pattern, `mean_sd` returns that value and sd 0. This is required by b4 and is a
+first-principles identity (the mean of identical values is the value, the deviations are 0). It changes the output of
+`uq::run` only for a metric whose usable samples are all bit-identical, where the old output was rounding noise (sd of order
+`1e-16 |y|`, mean off by a few ulps); also `metric_ses` then gives SE 0 for such a metric. Every other sample takes the old
+code path unchanged. DF1 checks that no existing test changes. Listed as open question R2 (keep, or revert and record b4 as a
+known miss).
 
-| Check | What | Proposed limit |
-|---|---|---|
-| LG1 | 32 candidates (Latin hypercube) at 2 conditions, sink on | exactly 64 `evaluation` entries, 0 skipped lines |
-| LG2 | same study with and without the sink | store file bytes equal; result bits equal |
-| LG3 | `rerun_check` of every `ok` entry of LG1 (deterministic evaluator) | 64 of 64 pass, largest difference 0 |
-| LG4 | 8 candidates of 32 made to fail (4 diverged, 4 not evaluated) | 16 non-ok entries with a non-empty reason; counts equal the store's |
-| LG5 | 16-evaluation study killed at each of 33 points (before and after each store write, and at the end), then resumed | after resume 0 missing and 0 duplicate (store key, condition) pairs at 33 of 33 points |
-| LG6 | the finished LG1 study run again on its store | 0 new entries |
-| LG7 | 1 and 4 workers, fixed clock | ledger bytes equal |
-| LG8 | a parameter or metric without a unit in the map (if Q6 a) | located refusal before the first evaluation, 0 entries |
-| BD1 | `FanRomModel` against `FanRomEvaluator::metrics` at 64 Latin-hypercube points | every metric bit for bit |
-| BD2 | bands of `q`, `dp_s`, `power`, `tone1_pa` at 5, 50, 95 percent, n = 2000, confidence 0.95, against an independent Monte Carlo reference of 100 000 samples (another seed) | at least 10 of 12 intervals contain the reference quantile |
-| BD3 | small tolerances: sd of each metric against first-order propagation with central-difference gradients | relative difference at most 0.05 plus 4 SE of the sd |
-| BD4 | every tolerance of zero width | sd exactly 0; every quantile equals the nominal value bit for bit |
-| BD5 | every tolerance sd doubled (small-tolerance set-up of BD3) | band width ratio in [1.6, 2.4] for each metric |
-| BD6 | a tolerance set that stalls some samples | failed count in the summary equals the non-ok entries in the ledger; failed fraction reported; `ok` fraction within its Clopper-Pearson 0.999 interval of the reference |
-| BD7 | 1 and 4 workers, fixed clock | ledger bytes equal |
-| BD8 | only if Q2 b: Sobol indices with the loss constants as inputs, N to be fixed | sum of first-order indices at most 1 + 4 SE; a constant the operating point does not use gets exactly 0 |
-| DF1 | sink and adapter unused | no existing test edited; `uq_tests`, `ledger_tests`, `sensitivity_tests`, the design tests of `rcfd-mcp`, and both tools-list goldens unchanged |
+## Set-ups (fixed now)
 
-Negative controls: NC1, a sink that writes before the store fails LG5 at one cut point at least; NC2, a mapping that drops
-the tip-gap error fails BD3 on `q`; NC3, a reference drawn with every sd scaled by 1.1 puts fewer than 10 of 12 intervals of
-BD2 on the reference (to be confirmed by a disclosed estimate before registration; ADR 0121 found a control of this kind
-defective once). Mutations on a scratch copy: one entry per candidate instead of per pair; condition overrides left out of
-`settings`; resume that re-appends; the unit map ignored; the adapter using the default `RomModel` instead of the given one.
+- **LG study.** Parameters `x` in [0, 1] unit `m`, `y` in [0, 1] unit `1`; conditions `c_lo` (`set c = 0.25`) and `c_hi`
+  (`set c = 0.75`); objective `f` min mean; metrics `f = (x - c)^2 + 0.01 y` [m2], `g = x c` [m]. Failure rule on `s =
+  floor(32 x)`: `s` in 0..=3 both conditions `status diverged`, message `analytic: x < 1/8 diverges`; `s` in 4..=7 both
+  `status not_evaluated`, message `analytic: x in [1/8, 1/4) not evaluated`. Method `Doe::Lhs { n: 32, seed: 623_001 }`. So 32
+  candidates, 64 pairs, 16 failed pairs (8 candidates). Ledger clock fixed at 1_700_000_000_000; evaluator `analytic.lg`, version
+  `1`, fidelity analytic.
+- **LG5 study.** The same definition and evaluator, `Method::NelderMead { budget: 16, restarts: 0, seed: 623_005 }`, workers 1,
+  file store and file ledger. A write event is one `Store::append` or one `Ledger::append` inside `eval_points`; `E` = the
+  number of events of the uninterrupted run (determined by the method, read from that run, not chosen). Kill points: for every
+  event `e` in 1..=E, (i) killed before `e` (the write not made) and (ii) killed during `e` (the write not made and a torn
+  fragment `{"format":"rcfd-` without newline appended to the file of that event), except (ii) at the first store write (the
+  pre-existing store defect above). The kill is a test-only hook (`#[cfg(test)]` counter in `Study`) that returns
+  `Stop::Error` at the event; the `Study` is then dropped and a new one is built over the reopened files, `set_ledger_sink`
+  called, and the method run to the end. Count: `2 E - 1` kill points.
+- **Fan set-up.** `set_up()` of `fan_rom_design_w46b.rs` (7 blades, free-vortex design to 45 Pa at Q_D = 0.045 m3/s, 3000
+  rpm, system `k` through the design point, `l = 0`), condition `c0 = 343`, observer 1 m at 90 deg, `n_scan = 100`,
+  `RomModel::default()`. **Tolerances T3**: set-up T of ADR 0118 for the three representable fields
+  (`stagger_common_deg` TN(0, 0.5, -1, 1), `chord_rel` TN(0, 0.01, -0.015, 0.02), `tip_gap_delta` TN(0, 1e-4, -2e-4, 2e-4)),
+  the other five `Fixed{0}`.
 
-BD2's "10 of 12" is my estimate from independent 0.95 intervals (probability about 0.98 of 10 or more); the quantiles of one
-sample are correlated, so the count must be re-derived or simulated and disclosed before registration. BD3's 0.05 depends on
-how small "small" is and is fixed with the tolerance values.
+## Checks (limits fixed now)
 
-Decision rule (proposed): done when LG1 to LG8, BD1 to BD7 and DF1 are met, the controls hold and each mutation fails a check;
-partial when DF1, LG2 and BD1 hold but another limit misses; not merged when DF1 or LG2 fails.
+| Check | Clause | What | Limit |
+|---|---|---|---|
+| LG1 | a1 | LG study with the sink, workers 1 | exactly 64 `evaluation` entries of the study, 0 skipped lines; one per (store key, condition); 16 non-ok, each with a reason naming its condition and the evaluator message; every entry's params (values and units), `settings.condition`, `settings.set`, metrics (values and units) equal the store record and the unit maps |
+| LG2 | a4 | LG study and LG5 study each with and without the sink (separate files) | store file bytes equal; `OptResult` x bits, fitness bits and evaluations equal |
+| LG3 | a3 | `rerun_check(e, ConditionModel, 0, 0)` for every ok entry of LG1 (48) | 48 of 48 pass, largest difference exactly 0; the 16 non-ok entries re-run to the same verdict |
+| LG4 | a1 | LG1's non-ok entries | 8 `diverged` and 8 `not_evaluated`; equal to the store's failed (record, condition) counts |
+| LG5 | a2 | LG5 study killed at each of the `2E - 1` kill points, then resumed | at every point: 0 duplicate and 0 missing (store key, condition) pairs against the resumed store; the set of valid entry lines equals the uninterrupted run's; at most 1 skipped line (the fragment) |
+| LG6 | a2 | the finished LG1 study: new `Study` over its store, `set_ledger_sink`, run again | 0 entries appended (reconcile 0, run 0) |
+| LG7 | a1 | LG1 with workers 1 and 4 | ledger bytes equal |
+| LG8 | Q6 (a) | sink without a unit for `y`; then a sink without a unit for metric `g` | located refusal naming `y` before any evaluation and no ledger file; the run with `g` missing stops with an error naming `g` and the ledger holds 0 entries |
+| BD1 | b2 | `FanRomModel` (with `RomModel { annulus_drag: 0.024, secondary_drag: 0.025, ..default }`) against `FanRomEvaluator::metrics` of the fan perturbed in the test, 64 LHS points (seed 623_101) over the T3 truncation boxes | 64 of 64 points, every one of the 8 metrics bit for bit, same unit set |
+| BD2 | b1, b3 | `fan_rom_bands` on T3, n = 2000, seed 623_102, workers 4, ledger; reference: the same with n = 100000, seed 623_200, no ledger | the result has the quantiles 0.05, 0.5, 0.95 with finite intervals of coverage >= 0.95 for q, dp_s, power, tone1_pa; at least 10 of 12 intervals contain the reference's quantile; 2001 ledger lines (2000 evaluations, 1 summary) |
+| BD3 | — | sd of BD2's four metrics (n = 2000) against first-order propagation: central differences of `FanRomModel` with step one parent sd per input, times the truncated-normal sd of each input (closed form) | relative difference at most 0.01 + 4 / sqrt(2 x 2000) = 0.0732 for each of the four |
+| BD4 | b4 | every tolerance `Fixed{0}`, n = 64, seed 623_104, workers 4 | sd of each of the 8 metrics exactly 0.0; every quantile value and interval end bit-equal to the nominal metric (`FanRomEvaluator::metrics` of the nominal fan) |
+| BD6 | — | T3 with `tip_gap_delta` Uniform(-1.5e-3, 0), n = 120, seed 623_106, workers 4, ledger | `n_samples - n_ok` = number of non-ok evaluation entries, each reason containing `tip_gap`; at least one ok and one failed; 1/3 inside the 0.999 Clopper-Pearson interval of the failed fraction |
+| BD7 | b5 | `fan_rom_bands` on T3, n = 64, seed 623_107, workers 1 and 4, fixed clock | ledger bytes equal (65 lines) |
+| DF1 | c1 | sink and adapter unused | no existing test file edited; existing tests pass: the `design::` unit tests of rcfd-api (ledger, uq, sensitivity, study, store, tools), `fan_rom_design_w46b`, and the rcfd-mcp tests (tools-list goldens), in release; no golden or hash table edited |
 
-## Ledger fields and queries for F-697, F-698, F-699 (proposals, none decided)
+BD2 and BD3 share one ignored heavy test (about 1 h), run once; BD7 is the fast test of the same path. All others are fast.
 
-| | Need | Who | Today | Proposal |
-|---|---|---|---|---|
-| P1 | a stable reference to an entry | all three | the index is the line position in one file; stable because nothing is rewritten, lost on export or merge | reference = `{index}` within one ledger; a content hash of the line as an optional second form (Q9) |
-| P2 | links to parent entries (a band to its nominal variant, a discrepancy to its two entries, a prediction to its training set) | all three | `provenance` is free JSON, no convention | `parents`: list of references |
-| P3 | source id of a value: computed, measured or from literature; data set id, citation, licence, file hash | F-699 | none | `source`: `{id, kind, citation, file_sha256}` |
-| P4 | fidelity level finer than three values, and a level for measured data | F-699, F-698 | `fidelity` in {`analytic`, `reduced_order`, `cfd`}; an unknown value makes old readers skip the line; the MCP enum is in the goldens | Q8, Q10 |
-| P5 | uncertainty of a metric (measurement uncertainty, iteration or sampling error) | F-698 (noise term), F-699 | `Quantity` has no uncertainty | optional standard uncertainty per metric, same unit (Q9 for where) |
-| P6 | discrepancy record between two levels at the same inputs: both references, per-metric difference and relative difference, both uncertainties, a verdict | F-699 | none; ADR 0136 proposes `cross_tier_check` | one summary kind; name and verdict words per Q8 |
-| P7 | objective identity on every scored variant: objective id, version and a hash of its definition; raw metrics per condition kept, so a changed objective can be re-scored from the ledger | F-697 | the study store keeps the scalar; the ledger does not know objectives | `objective`: `{id, version, hash}` on a summary entry of kind `objective_score` with `parents` the raw entries |
-| P8 | queries: filter by `variant` and by condition; group the entries of one variant; pairs of entries with bit-identical parameters across two levels; a training set (parameter matrix and metric columns) that refuses mixed units, evaluators or versions and returns failed points separately; the record of a fitted surrogate or correction (kind, training references, a hash) | F-697, F-698, F-699 | `Filter` has five fields; `to_csv` exists; no pairing | new library functions in `ledger.rs`; through MCP they need new arguments (goldens) |
+Negative control **NC1**: the sink writing the ledger before the store fails LG5 at one kill point at least (a kill between the
+two writes leaves an entry whose record the resume evaluates again). Run as a mutation on a scratch copy.
 
-## Known risks
+Mutations (scratch copy; each must fail a check): M1 one entry per candidate (first condition only) -> LG1; M2 `settings`
+without the overrides -> LG1; M3 reconcile appending every pair whether present or not -> LG6, LG5; M4 unit maps ignored (unit
+`1`) -> LG1; M5 the adapter using `RomModel::default()` instead of its model -> BD1; M6 the chord mapping dropped from the
+adapter -> BD1; M7 `Standardized` ignoring the width (width 1) -> BD4; M8 the constant-sample rule of D4 removed -> BD4.
 
-- **Two files, two truths.** The store and the ledger hold the same evaluations. LG5 covers a kill; it does not cover a
-  ledger edited by hand or shared by two studies under one name.
-- **Units.** Studies carry no units. A wrong unit map is recorded faithfully and nothing can detect it.
-- **Single writer.** ADR 0121 assumes one writer process. A study with a sink and an assistant calling
-  `design_ledger_append` on the same file are two writers; the index returned by the MCP tool can then be wrong.
-- **Bands read as truth.** The bands are the spread of a model with unverified loss constants. Without measured data the
-  dominant uncertainty may be the model form, which no sampling of inputs shows (Kennedy and O'Hagan 2001).
-- **Tolerance mapping.** Per-blade errors, eccentricity, mass and roughness have no place in a one-row model; any averaging
-  rule is an assumption and under-states the spread.
-- **Stalled samples.** Dropping them conditions the bands on "not stalled"; the failed fraction must travel with every band.
-- **Ledger growth.** Tolerance and Sobol studies write every sample; queries read the whole file.
-- **Format drift.** Conventions inside `provenance` are not validated by the reader; top-level fields are, but old builds
-  drop them on export.
-- **Overlap with ADR 0136.** Building P4 and P6 here under other names would leave two schemes for the same thing.
+## Decision rule
+
+**done** when LG1 to LG8, BD1 to BD4, BD6, BD7 and DF1 are met, NC1 holds and every mutation fails a check; **partial** when
+DF1, LG2 and BD1 hold but another limit is missed (a missed limit is an ignored `*_known_miss` record); **todo** (the lead does
+not take the code) when DF1 or LG2 fails.
+
+## Limits (not covered)
+
+- Only studies run through `Study` in the library get the sink; `design_evaluate`, `design_run_study`, the operating maps and
+  the project runner do not (Q4 (a); the service and MCP arguments are F-702).
+- Two files, two truths: a ledger edited by hand, two studies with one name on one ledger, or two writer processes are not
+  covered; units come from the caller's maps and a wrong unit is recorded faithfully.
+- Bands describe the reduced-order model with unverified loss constants under T3; per-blade, eccentricity, mass, roughness and
+  thickness tolerances are not representable; the chord reading over-states the row-mean spread.
+- The kill is simulated by a hook at the write calls and a torn fragment, not by a killed process; a kill inside the OS write is
+  represented by the fragment only.
+- Not done here: BD5 of the stub (doubled widths; implied by BD3's linearity), BD8 (Q2 (b) not taken), ADR 0240 Q2 (F-339).
 
 ## Maintainer decisions (2026-11-15)
 
 The maintainer answered the open questions of the design-loop drafts (ADRs 0620 to 0624) on 2026-11-15, after the stub was
-written; the questions below are kept as asked. Shared decisions:
+written. Shared decisions:
 
 - D1, exposure: library only in F-268, F-697, F-698, F-699 and F-701. Their MCP tools and service methods land in one item,
   F-702, together with F-339, so the tools-list goldens change once.
@@ -199,67 +271,25 @@ written; the questions below are kept as asked. Shared decisions:
   test, never by moving the limit.
 - B4, ADR 0240 Q4: the NC1 miss on ST1 (|z| 3.87 against 4) is accepted as a known miss; ADR 0240 Q5: fixed N.
 
-Every other open question of this ADR takes the recommendation written with it. Here: Q1 is (b), the split to F-700 (D6); Q4 is (a), D1; Q8 is (b), D4; Q9 is (b), D5; Q10 is D2 (library only, not the MCP enum); Q11 is (c) with (b) per entry, D3; Q12 is B4; Q13 is (a); BD2 and BD3 fall under B3.
+Every other open question of this ADR takes the recommendation written with it: Q1 (b), the split to F-700 (D6); Q2 (a); Q3
+(a); Q4 (a), D1; Q5 (a); Q6 (a); Q7 (a); Q8 (b), D4; Q9 (b), D5; Q10 D2 (library only); Q11 (c) with (b) per entry, D3; Q12
+B4; Q13 (a). BD2 and BD3 fall under B3 (arithmetic 2 to 4 above). Stub negative control NC2 (a mapping that drops the tip gap
+fails BD3 on `q`) is replaced: by arithmetic 3 the tip gap carries 0.25 % of the variance of `q`, so BD3 cannot see it; the
+mapping is checked bit for bit by BD1 instead (M6). Stub NC3 (reference with sd times 1.1) is not run: by arithmetic 3 its
+outcome is dominated by the clustering, so it would not separate a defect from chance.
 
-## Open questions for the maintainer
+## Open questions as asked in the stub (kept for the record; answered above)
 
-- **Q1. Amend F-268 or split.** (a) F-268 keeps D1 to D3; P1 to P8 are decided inside F-697 to F-699 as each needs them;
-  (b) F-268 keeps D1 to D3 and P1 to P8 become a new item F-700 that the three depend on; (c) everything left moves to F-700
-  and F-268 closes as far as built. Recommendation: (a) if the three drafts ask for few fields, (b) if two or more of them ask
-  for the same field; not (c), because F-268's own acceptance needs D1.
-- **Q2. What "uncertainty bands on the reduced-order model" means.** (a) the spread from manufacturing tolerances only;
-  (b) also the spread from the unverified loss constants of `RomModel`, with ranges to be stated by the maintainer or taken
-  from the cited sources; (c) also a model-form band from the discrepancy against CFD or measured data, which belongs to
-  F-699. Recommendation: (a) in F-268, (b) only with ranges from a published source, (c) left to F-699.
-- **Q3. Tolerances the one-row model cannot represent.** (a) use only the common stagger, row-mean chord and thickness and the
-  tip-gap error, and refuse a tolerance set with any other non-zero entry; (b) average per-blade draws over the blades and
-  ignore eccentricity, mass and roughness, with a stated warning; (c) wait for a model with per-blade inputs.
-  Recommendation: (a).
-- **Q4. Which runs "automatic ledger logging from runs" covers.** (a) design-study evaluations through the library sink only;
-  (b) also `design_evaluate` and `design_run_study` through a new optional `ledger` argument (service protocol and MCP
-  tools-list goldens change); (c) also runs of the project runner (ADR 0189 tags `run.json` with study, variant and
-  condition) by a library importer, no schema change; (d) every solver run. Recommendation: (a) now, (b) in the same
-  registered golden edit as F-339, (c) later if wanted, not (d).
-- **Q5. Entry granularity.** (a) one entry per (candidate, condition); (b) one entry per candidate with metrics prefixed by
-  the condition label. Recommendation: (a); it keeps one operating point per entry and makes `rerun_check` direct.
-- **Q6. Units.** (a) the sink needs a unit for every parameter and metric and refuses otherwise; (b) a missing unit is
-  recorded as `1`; (c) add an optional unit to `ParamDef`, which reaches the study definition accepted by the MCP tools.
-  Recommendation: (a).
-- **Q7. A ledger write that fails during a study.** (a) the study stops with a located error; (b) the study continues and
-  reports the entries not written. Recommendation: (a), because the acceptance says "every".
-- **Q8. ADR 0136.** It is proposed, not accepted, and proposes `tier`, `cross_tier_check` and three project tools. (a) P4 and
-  P6 follow ADR 0136's names and wait for its acceptance; (b) F-699 defines its own record and ADR 0136 is amended to match;
-  (c) both exist. Recommendation: (a) or (b), decided once, not (c).
-- **Q9. Where new fields live.** (a) as conventions inside `provenance`: no format change, reachable through today's MCP
-  tool, not validated; (b) as new optional top-level keys of `rcfd-ledger-1`, omitted when unset: validated, old readers keep
-  the line but drop the keys on export, not reachable through MCP without a golden edit; (c) a new format `rcfd-ledger-2`.
-  Recommendation: (b) for P2, P3, P5, (a) until then; not (c).
-- **Q10. Measured data in the ledger.** (a) a new `fidelity` value `measured`: old readers skip those lines (which also keeps
-  them out of old Pareto queries), the MCP enum and goldens change; (b) keep three values and mark measured entries by
-  `source.kind`; (c) measured data stays outside the ledger and only discrepancy records refer to it. Recommendation: (a),
-  with the golden edit listed for approval.
-- **Q11. Proprietary measured data.** (a) values in the ledger file, which then must stay out of the repository; (b) the
-  ledger holds a reference and a file hash only, values stay in the user's file; (c) a separate ledger file for measured
-  data. Recommendation: (c) with (b) as an option per entry; needs the maintainer, since it concerns the user's data.
-- **Q12. ADR 0240 Q4, still open.** The NC1 control on ST1 missed its margin (|z| 3.87 against 4). (a) the Sobol part stays
-  partial; (b) the maintainer accepts it as met. ADR 0240 recommends (b), in person. Nothing in this ADR depends on it.
-- **Q13. ADR 0240 Q5, still open.** Stopping rule on the index SE: (a) fixed N; (b) doubling until every SE is below a
-  target. ADR 0240 recommends (a) until a costly evaluator needs it. If Q2 b is chosen and BD8 runs on the reduced-order fan
-  (milliseconds per evaluation), (a) still suffices; F-699 with CFD evaluations would be the first reason for (b).
-- **ADR 0240 Q2** (MCP exposure) is not open here: it is roadmap item F-339, which still needs the maintainer before merge
-  because it edits the tools-list goldens.
+Q1 amend or split (b); Q2 meaning of bands (a); Q3 tolerances the one-row model cannot represent (a); Q4 which runs (a); Q5
+granularity (a); Q6 units (a); Q7 failed ledger write (a); Q8 ADR 0136 (b); Q9 where new fields live (b); Q10 measured data
+(library only); Q11 proprietary data ((c) with (b)); Q12, Q13 ADR 0240 Q4, Q5. The stub's P1 to P8 (ledger fields and queries
+for F-697 to F-699) are F-700.
 
 ## References
 
-- ADR 0121 and ADR 0240 and their references (order-statistic intervals, Clopper and Pearson 1934, Saltelli et al. 2010,
-  Jansen 1999).
-- M. C. Kennedy, A. O'Hagan (2001), Bayesian calibration of computer models, J. R. Statist. Soc. B 63, 425-464 (model
-  discrepancy). Pages UNVERIFIED.
-- A. I. J. Forrester, A. Sobester, A. J. Keane (2007), Multi-fidelity optimization via surrogate modelling, Proc. R. Soc. A
-  463, 3251-3269 (pairing of cheap and costly evaluations). Pages UNVERIFIED.
-- JCGM 100:2008, Evaluation of measurement data: Guide to the expression of uncertainty in measurement (standard
-  uncertainty, first-order propagation used in BD3).
-
-## For the lead: roadmap entries
-
-See `roadmap-entry.json` next to this file: the amended F-268 object (Q1 a), and F-700 as the alternative of Q1 b.
+- ADR 0121 and ADR 0240 and their references (order-statistic intervals; Clopper and Pearson 1934).
+- JCGM 100:2008, Guide to the expression of uncertainty in measurement (first-order propagation, used in BD3).
+- G. Fowler, L. C. Noll, K.-P. Vo, the FNV hash (public-domain definition; constants quoted from memory and stated above,
+  used only as a change detector).
+- M. C. Kennedy, A. O'Hagan (2001), Bayesian calibration of computer models, J. R. Statist. Soc. B 63 (model discrepancy, why
+  the bands are not a statement about a real fan). Pages UNVERIFIED.
