@@ -313,3 +313,83 @@ MU4 ran before MU5; every `rcfd-fem` mutation rewrites a file of that crate, whi
 sources). The set-up is corrected, not the checks: the extraction uses `tar -x -m` (modification time now), so every crate is
 rebuilt from the copy, and MU6, MU7 and MU8 are run once more with it. The first, contaminated log of MU6 to MU8 stays in
 `f572-scratch/mutations.log`; the corrected run goes to `f572-scratch/mutations-amendment1.log`. No limit and no test changes.
+
+## Addendum 1 (2026-11-15): results
+
+Runs: `sa_f572` (`rcfd-fem`) and `sa_envelope_lu_f572` (`rcfd-linalg`) once each at 903576c6 (`--release -- --nocapture`;
+`f572-scratch/run1-f572.log`, `run1-lu.log`). N1 was recorded at the base 3378a508 (`n1-base.log`, commit 1f1cde1c) before any
+library line and passed at 903576c6. Then the whole `rcfd-fem` suite in release (1100 passed, 0 failed, 302 ignored; it runs
+the registered files a second time, all passed; `fem-suite.log`), the whole `rcfd-linalg` suite in release (120 passed, 0
+failed), `baseline_hashes` of `rcfd-api` (3 passed, 1 ignored), `docs_site` of `rcfd-cli` (2 passed). `cargo fmt -p rcfd-fem
+-p rcfd-linalg --check` and `cargo clippy -p rcfd-fem -p rcfd-linalg --release --all-targets -- -D warnings` clean at
+903576c6 (no library or test line changed after it). No limit was changed after a run.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| L1 ring, follower pressure only, `contribution_load(true)` | stopped within 200 | stopped, 19 points, no halving, `c = 41.76` | yes |
+| L1c the default route | `Err(InvalidValue { key: "arc length" })` | the refusal of ADR 0480 D4, its text unchanged | yes |
+| L2 arc-length against the R1 run of ADR 0480 at the common load factors | `<= 1e-6` | `4.0e-13` (worst of 18 points; the R1 run with the hook: 38 increments) | yes |
+| L2n common load factors | `>= 10` | 18 | yes |
+| L3 constraint, ring | `<= 1e-10` | `2.5e-15` | yes |
+| U1 plate, unsymmetric factor: `Q` | `<= 1e4` | `1.03e3` (`r` per step `~1, 0.2 .. 0.7, 2e-3 .. 4e-3, 2e-3 .. 9e-3, 2.6e-7 .. 3.9e-7, 6e-11`) | yes |
+| U1i iterations per step | `<= 7` | 6 in every step | yes |
+| U2 the symmetric path (control): `Q` | `>= 1e5` | `3.6e8`; 7 to 9 iterations per step | yes |
+| U3 final states of U1 and U2 | `<= 1e-6` | `3.9e-10` | yes |
+| U4 plate by `trace` with both options | stopped within 200; `<= 1e-6` | stopped, 20 points; `5.4e-12` against the U1 run with the hook (24 increments) | yes |
+| U4r `Q` of the U4 points | recorded | `4.05e3` | recorded |
+| U5 constraint, plate | `<= 1e-10` | `2.2e-15` | yes |
+| K1 residual, structurally unsymmetric order 300 | `<= 1e-13` | `8.3e-17` | yes |
+| K2 pivots; solutions against `SkylineLdlt` | `<= 1e-13`; `<= 1e-12` | `0`; `0` (bit-equal: on a symmetric matrix the recursions are the same operations, arithmetic 2) | yes |
+| K3 refusals | hold | singular `Pivot`; `[[-1]]` refused by `Positive`, accepted by `NonZero` (1 negative pivot); non-square and NaN refused | yes |
+| C2 refusals | hold | supernodal with `unsymmetric` (key `"solver"`); the linear contact body with `newton.unsymmetric` (key `"solver"`) | yes |
+| N1 default bits | exact | the 7 digests equal | yes |
+| N2 existing default-bit records | pass | pass in the `rcfd-fem` suite (`sa_follower_default_bits`, `sa_newton_f618_default_bits` and the others); `f618_n2_refusals` passes | yes |
+| N3 `baseline_hashes` | pass | pass | yes |
+
+The probe of arithmetic 3 predicted U1 at `8.9e2` (measured `1.03e3`: the driver's LU and the probe's dense LU round
+differently in the last two iterations; the residual histories agree to the printed digits) and U2 at `2.9e7` (measured
+`3.6e8`, from `r_8/r_7^2` of step 4). L2 and U4 came out about three decades under the estimates of arithmetic 4.
+
+### Mutations (scratch copy of 903576c6 by `git archive`, one at a time, `f572-scratch/mutate.py`; MU1 to MU5 in `mutations.log`, MU6 to MU8 in `mutations-amendment1.log` after amendment 1)
+
+| Id | Caught by |
+|---|---|
+| MU1 the follower's load-factor derivative zero | L1 (the option's zero-load refusal), U4 (the same) |
+| MU2 that derivative with the opposite sign | L1 and U4: `trace` fails at point 1 (no real root of the constraint after 5 halvings) |
+| MU3 `add_full` with the symmetric part | U1 (`Q = 3.6e8`), U1i (9 iterations) |
+| MU4 the driver's unsymmetric branch with the symmetric factor | U1 to U3 and U4: the symmetry test refuses the tangent |
+| MU5 backward substitution with `L^T` | K1 (`7.1e-2`), U1 (`Q = 3.7e8`), U1i (10) |
+| MU6 the controlled correction ignores `unsymmetric` | U4: the symmetry test refuses the tangent at point 1 |
+| MU7 the option's zero-load test with the dead `f` | L1, U4 (refused) |
+| MU8 `Spherical::contribution_load` returns `false` | L1 (no real root), U4 (not converged at point 1) |
+
+Eight of eight caught. MU2, MU4, MU6 and MU8 are caught by an error of the solve inside the registered test before the named
+check is evaluated (the test fails), as MU4 to MU6 of ADR 0480.
+
+### Deviations
+
+- Amendment 1: the first mutation run of MU6 to MU8 had MU5 still in place (archive modification times, cargo did not rebuild
+  `rcfd-linalg`); the harness was corrected (`tar -x -m`) and MU6 to MU8 run once more, written and committed before that run.
+  No check, limit or test was touched; the registered checks were run once, before it.
+- None other.
+
+### Not run
+
+- The whole workspace suite (the brief). No case-file key (open question 3).
+
+### Decision
+
+**done** by the registered rule: every check met on the one registered run, every planned mutation caught, fmt and clippy
+clean, N1 to N3 unchanged. The one amendment corrects the mutation harness, not a check (no check was met only after it); the
+lead may read the rule more strictly and take partial on that ground.
+
+### Remaining questions (recommendations for the lead)
+
+- **Q1** (case-file keys): `continuation = { ..., contribution_load = true }` and `newton = { unsymmetric = true }` for the
+  nonlinear static study. Options: (a) add them with a schema golden update approved by the maintainer; (b) keep the API only.
+  Recommendation (a), as a follow-up together with the keys of ADR 0480 open question 1.
+- **Q2** (the residual reference of a follower load on a body without reactions, limits section): options (a) leave the
+  reference of ADR 0404; (b) let `FollowerPressure` enter the reference (`in_residual_reference`), which changes the
+  convergence of existing follower solves and so their bits. Recommendation (a) until a case needs it; (b) would be opt-in.
+- **Q3** (buckling and `tangent_modes` keep the symmetric part): an unsymmetric eigenproblem (flutter of follower loads) is a
+  separate item. Recommendation: not now.
