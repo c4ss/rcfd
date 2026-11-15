@@ -1790,6 +1790,7 @@ impl Problem<'_> {
                     energies,
                     yielded,
                     set_changed,
+                    step_lengths,
                     fint: elastic.unwrap_or(fint),
                 });
             }

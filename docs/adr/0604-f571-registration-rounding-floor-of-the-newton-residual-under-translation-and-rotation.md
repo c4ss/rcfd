@@ -320,6 +320,25 @@ of the merged code was run before this amendment. The audit of ADR 0604 (on 4309
 The decision whether ADR 0603's NC1 should be read as superseded (the default path now accepts steps at the floor) is listed
 for the maintainer in the addendum below; recommendation in Addendum 2.
 
+## Amendment 2 (2026-11-15, written after the merge with main 2bc0141c and before the run of the merged code)
+
+1. **Base.** On the lead's instruction the branch was merged again, with main 2bc0141c (F-608, ADR 0607:
+   `NewtonOptions::line_search` and a field `Attempt::step_lengths`), before M1 to M3 of amendment 1 were run (a run of M1 on
+   the d8b6f3f5 merge was started and stopped before it finished; none of its results was read). The text merge was clean. The
+   bound branch of D2 builds an `Attempt` and so needs the new field: the merge-resolution commit adds `step_lengths` to it
+   (the same value the relative-test branch returns). Nothing else of F-608 or F-571 changes. M1 to M3 and NC1b's file are run
+   on this merged tip, each once (NC1b was run once on the d8b6f3f5 merge, `f571-scratch/am1-nc1b.log`: met; it is run
+   again in M1 as part of the crate, and that is the run reported).
+2. **Correction (the lead, from ADR 0609 of F-681).** The energy-momentum step (`nl_transient/emc.rs`) and the
+   discrete-gradient step (`nl_transient/dg.rs`) have their own Newton loops and never call the driver's `attempt_with`, so
+   they never reach the bound. The sentences "A run with such a contribution (`nl_transient`, its energy-momentum and
+   discrete-gradient steps, ...)" (D3) and "the energy-momentum step's own floor is not checked here (its driver call has a
+   contribution in the reference and gets the bound; the audit covers its tests)" (Limits) are wrong for those steps: read
+   them as "the `Method` step of `nl_transient` and a `solve_with` with a contribution in the reference"; the energy-momentum
+   and discrete-gradient steps keep their own tests unchanged (their bits are untouched by F-571, consistent with the audit,
+   which found no event on them). The audit's 12 events of `sa_emc` `n1e_n2e_trapezoidal_negative_control` are on its
+   `Method` (Newmark) run, which does use the driver.
+
 ## For the lead: roadmap entries
 
 > Proposed status: done.
