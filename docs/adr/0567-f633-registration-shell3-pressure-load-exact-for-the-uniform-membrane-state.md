@@ -361,3 +361,14 @@ Remaining questions (options, recommendation):
    priority.
 2. Shell4 sets (L4): (a) refused as now; (b) extend the boundary rule to quadrilateral edges. Recommend (a) until a user asks.
 3. The default pressure: unchanged; recommend keeping this load opt-in (open question 3).
+
+Note on the commits: the bullet in `docs/structural-solver.md` went into commit ae9a86a6 together with the type alias (staged by
+the same `commit -a`); it is documentation only and was in the tree on which docs_site (B3) passed.
+
+## For the lead: roadmap entries
+
+Proposed status of F-633: **partial** (every acceptance clause met; check S1 met only after amendment 1).
+
+> F-633 (ADR 0567, 2026-11-15): opt-in `Load::shell_pressure_curvature` (Shell3 only): the area-gradient load scaled by `p/(2 kappa)`, `kappa` the mean curvature of an implicit quadric least-squares fitted to each node's k-ring (k = max(2, 4 - distance to the boundary), exact on any quadric the stencil determines), with a boundary term keeping the smooth continuation's half of each edge's dihedral (right for free edges and symmetry cuts). Unstructured sphere octant of ADR 0550 (t = 0.01): radial displacement within 3.0e-14, 7.8e-14, 1.2e-13 of `p R^2 (1 - nu)/(2 E t)` at every node at n = 16, 32, 64 (t = 0.001 alike); the one-diagonal cylinder O1 of ADR 0461 within 2.0e-10 (other diagonal patterns, warped rows and 16 x 8 within 1.4e-10); the load equals `(p R/2) dA/dx_i` on the sphere and the polygon's tributary hoop load on the cylinder to 7e-14. On a non-quadric torus patch the curvature is second order inside but about 14 % off at the boundary nodes at 32 x 32; flat and zero-mean-curvature nodes refused. Defaults bit-identical (additions only; rcfd-fem suite, baseline_hashes, docs_site pass); seven mutations caught. Partial: the sign-symmetry check S1 compared signed zeros in its first run and was met only after amendment 1.
+
+> Follow-up proposed: Curvature shell pressure on a non-quadric shell. Deps F-633. Acceptance: Every limit not stated here is registered in the ADR before the run. A pressurised torus segment (Shell3, symmetry cuts) loaded by `Load::shell_pressure_curvature`: the radial and meridional displacements measured against the membrane solution of the torus on two refinements, with the error and its order recorded and the boundary-node curvature error of ADR 0567 (14 % at 32 x 32) reduced below 2 % by a registered boundary estimator, defaults bit-identical.
