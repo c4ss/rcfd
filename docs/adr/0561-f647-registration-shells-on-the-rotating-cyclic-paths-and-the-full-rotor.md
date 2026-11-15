@@ -264,3 +264,14 @@ positive checks MA to XF not run.
   checked here; the pre-stressed modes of the rotating sector (set B) are.
 - Interpolated boundaries and axis nodes with shells (F-648), warped facets, laminated shells on the sector (the layup takes the
   Coriolis routine, CO1c, but no layup sector is run), the corotated shells of ADR 0522.
+
+## Amendment 1 (2026-11-15, written before any registered run)
+
+The set-up of NC2 is corrected before its run. ADR 0556 NC2's model (a Hex8 box of `hex_box([0, 1, 0], [1, 1, 1])` with
+surface sets `ymin` / `ymax` and a cyclic constraint of 4 sectors about z) was built only to reach the entry checks of the
+harmonic paths, which refuse before the boundary is matched; its two faces are not images of each other under the quarter turn
+(`(x, 1, z) -> (-1, x, z)` is not on `y = 2`), and `full_rotor` matches the boundary before it checks the block kinds, so on that
+model it would report the unmatched boundary (key `cyclic`) and NC2 would not test the kind check at all. NC2 instead uses the
+Hex8 twin sector of B3 (default options, surface sets `low` / `high`, which match) with one disjoint Shell4 element (thickness
+0.01 m, four new nodes away from both boundaries) in a second block; expected, as registered, `UnsupportedKind { kind: "Shell4",
+operation: "full_rotor" }`. MU9 is still to be caught by NC2. Nothing else changes.
