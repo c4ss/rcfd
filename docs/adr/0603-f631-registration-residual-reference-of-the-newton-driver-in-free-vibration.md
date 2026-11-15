@@ -222,6 +222,19 @@ MU1 to MU5 caught, as the rule requires; MU6 not caught as predicted.
 3. Exposure in the case schema / CLI / MCP. (a) Not now (goldens); (b) later with the nonlinear transient case keys.
    Recommendation (a).
 
+## Addendum 2 (2026-11-15, written for F-571 / ADR 0604, by its agent on the lead's instruction)
+
+Since F-571 ([ADR 0604](0604-f571-registration-rounding-floor-of-the-newton-residual-under-translation-and-rotation.md))
+the driver accepts an attempt with a contribution in the residual reference at its last iteration when its residual is
+within the rounding bound `eps |(|K| |u|)|` of the iterate. NC1's step (the default reference at the zero crossing, `h_f =
+h/1024`) is then accepted: 0 halvings, 20 iterations, relative residual `1.39e-10` (ADR 0604 amendment 1). The registered
+`ft1_nc1_a_step_at_the_zero_crossing` stays in `sa_nl_inertia_reference.rs` as an ignored record of this ADR's run (its body
+unchanged); its copy `ft1_nc1b_a_step_at_the_zero_crossing_after_f571` in `sa_nl_inertia_reference_after_f571.rs` checks FT1
+with this ADR's limits and the new default behaviour (NC1b). NC1's finding (the default reference stalls at the constant
+Shell3 floor) holds for the relative test; what changed is that the default path no longer refuses the step. FT1, FT2, DB1,
+DB2 and NT3 converge by the relative test before the last iterate and are not affected (ADR 0604 amendment 1, M2). Whether
+NC1 is read as superseded is listed for the maintainer in ADR 0604.
+
 ## For the lead: roadmap entries
 
 F-631: proposed status **done**. Note:

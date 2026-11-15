@@ -27,7 +27,10 @@
 //!   ADR 0485 D4: time, time increment and temperature for every point, read by the viscoelastic material of
 //!   [`crate::mat_visco`] only; [`solve_from`] is the default context). The static driver [`solve_with`] has no time and
 //!   refuses the viscoelastic material. A contribution may ask to enter the reference of the
-//!   relative residual ([`Contribution::in_residual_reference`]); by default the reference is that of ADR 0404.
+//!   relative residual ([`Contribution::in_residual_reference`]); by default the reference is that of ADR 0404. When one
+//!   does, an attempt whose relative residual is still above the tolerance at its last iteration is accepted if the
+//!   residual is within the rounding bound `eps |(|K| |u|)|` of the iterate and the energy test holds (ADR 0604 D1, D2:
+//!   the floor a translating or rotating body reaches); every attempt that converged before converges as before.
 //! * Creep (ADR 0489): the creep material of [`crate::mat_creep`] gives its trial state as J2 and the viscoelastic material;
 //!   the static driver refuses it; [`solve_in_time`] is a quasi-static time-stepping driver over [`solve_from_at`] with
 //!   constant loads, a limit of the creep-strain increment of a step and step halving; a non-converged local creep iteration
@@ -1504,10 +1507,11 @@ fn contribute(
     fint: &mut [f64],
     k: Option<&mut CsrMatrix>,
 ) -> std::result::Result<f64, String> {
-    contribute_with(contributions, u, load_factor, fint, k, false)
+    contribute_with(contributions, u, load_factor, fint, k, false).map(|(r, _)| r)
 }
 
-/// [`contribute`], with `full` the contributions by [`Contribution::add_full`] (ADR 0560 D4).
+/// [`contribute`], with `full` the contributions by [`Contribution::add_full`] (ADR 0560 D4); also whether a contribution
+/// entered the reference (ADR 0604 D2: the rounding bound of the last iterate applies).
 fn contribute_with(
     contributions: &[&dyn Contribution],
     u: &[f64],
@@ -1515,9 +1519,10 @@ fn contribute_with(
     fint: &mut [f64],
     k: Option<&mut CsrMatrix>,
     full: bool,
-) -> std::result::Result<f64, String> {
+) -> std::result::Result<(f64, bool), String> {
     let mut triplets = Vec::new();
     let mut reference = 0.0f64;
+    let mut bounded = false;
     if contributions.iter().any(|c| c.in_residual_reference()) {
         reference = norm(fint.iter().copied());
     }
@@ -1530,6 +1535,7 @@ fn contribute_with(
         }
         .map_err(|e| format!("contribution '{}': {e}", c.name()))?;
         if c.in_residual_reference() {
+            bounded = true;
             reference = reference.max(norm(force.iter().copied()));
             // ADR 0603 D3: the contribution's terms, only when it gives a positive bound.
             let terms = c.residual_reference_terms(u, load_factor);
@@ -1544,11 +1550,12 @@ fn contribute_with(
     if let Some(k) = k {
         add_triplets(k, &triplets);
     }
-    Ok(reference)
+    Ok((reference, bounded))
 }
 
 /// [`contribute`] for the fallback of ADR 0570 D2: the same forces, the same reference and the same triplets added to `k`
-/// in the same order, and also the matrix `k` before the contributions and each contribution's own triplets.
+/// in the same order, and also the matrix `k` before the contributions, each contribution's own triplets and whether a
+/// contribution entered the reference (ADR 0604 D2).
 #[allow(clippy::type_complexity)]
 fn contribute_split(
     contributions: &[&dyn Contribution],
@@ -1556,10 +1563,11 @@ fn contribute_split(
     load_factor: f64,
     fint: &mut [f64],
     k: &mut CsrMatrix,
-) -> std::result::Result<(f64, CsrMatrix, Vec<Vec<(usize, usize, f64)>>), String> {
+) -> std::result::Result<(f64, CsrMatrix, Vec<Vec<(usize, usize, f64)>>, bool), String> {
     let before = k.clone();
     let mut per = Vec::with_capacity(contributions.len());
     let mut reference = 0.0f64;
+    let mut bounded = false;
     if contributions.iter().any(|c| c.in_residual_reference()) {
         reference = norm(fint.iter().copied());
     }
@@ -1569,6 +1577,7 @@ fn contribute_split(
         c.add(u, load_factor, &mut force, &mut triplets)
             .map_err(|e| format!("contribution '{}': {e}", c.name()))?;
         if c.in_residual_reference() {
+            bounded = true;
             reference = reference.max(norm(force.iter().copied()));
             // ADR 0603 D3: the contribution's terms, only when it gives a positive bound.
             let terms = c.residual_reference_terms(u, load_factor);
@@ -1582,7 +1591,21 @@ fn contribute_split(
         per.push(triplets);
     }
     add_triplets(k, &per.concat());
-    Ok((reference, before, per))
+    Ok((reference, before, per, bounded))
+}
+
+/// The rounding bound of the residual at the iterate `u` (ADR 0604 D1): `eps |(|K| |u|)|` over the free equations, `K` the
+/// assembled tangent with the contributions. The residual that one unit roundoff in every displacement and an equal
+/// evaluation error can produce; no float vector is expected to do better.
+fn rounding_bound(k: &CsrMatrix, u: &[f64], free: &[usize]) -> f64 {
+    let mut s = 0.0f64;
+    for &i in free {
+        let row: f64 = (k.row_ptr[i]..k.row_ptr[i + 1])
+            .map(|p| k.val[p].abs() * u[k.col[p]].abs())
+            .sum();
+        s += row * row;
+    }
+    f64::EPSILON * s.sqrt()
 }
 
 /// The per-element layout of the material states of a model (ADR 0440 D3): per element the number of points of its
@@ -1717,13 +1740,14 @@ impl Problem<'_> {
             let mut elastic = None;
             let mut extra_reference = 0.0;
             let mut split = None;
+            let mut bounded = false;
             if !self.contributions.is_empty() {
                 elastic = Some(fint.clone());
-                extra_reference = if fallback {
-                    let (r, ke, per) =
+                (extra_reference, bounded) = if fallback {
+                    let (r, ke, per, b) =
                         contribute_split(self.contributions, &u, lt, &mut fint, &mut kt).map_err(Failure::Other)?;
                     split = Some((ke, per));
-                    r
+                    (r, b)
                 } else {
                     contribute_with(self.contributions, &u, lt, &mut fint, Some(&mut kt), o.unsymmetric)
                         .map_err(Failure::Other)?
@@ -1751,6 +1775,25 @@ impl Problem<'_> {
                 previous_set = Some(set);
             }
             if k >= 1 && r <= o.residual_tolerance && e_last <= o.energy_tolerance * e_first {
+                return Ok(Attempt {
+                    u,
+                    states: trial,
+                    residuals,
+                    energies,
+                    yielded,
+                    set_changed,
+                    step_lengths,
+                    fint: elastic.unwrap_or(fint),
+                });
+            }
+            // ADR 0604 D2: at the last iterate, a residual at the rounding bound of a step with a contribution in the
+            // reference is accepted (the relative test above is unchanged).
+            if k == o.max_iterations
+                && k >= 1
+                && bounded
+                && e_last <= o.energy_tolerance * e_first
+                && rn <= rounding_bound(&kt, &u, &self.free)
+            {
                 return Ok(Attempt {
                     u,
                     states: trial,
