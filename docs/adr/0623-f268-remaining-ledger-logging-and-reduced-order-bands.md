@@ -293,3 +293,11 @@ for F-697 to F-699) are F-700.
   used only as a change detector).
 - M. C. Kennedy, A. O'Hagan (2001), Bayesian calibration of computer models, J. R. Statist. Soc. B 63 (model discrepancy, why
   the bands are not a statement about a real fan). Pages UNVERIFIED.
+
+## Amendment 1 (2026-11-15, before any run of BD4): BD4's sample size
+
+Found while writing the BD4 test, before it ran: with n = 64 the order-statistic interval of the 0.05 quantile at confidence
+0.95 has no lower end (`P(B <= 0) = 0.95^64 = 0.0375 > 0.025`, so `lo = -inf`), and that of the 0.95 quantile no upper end;
+BD4's "every interval end bit-equal to the nominal metric" could not hold for a defect-free implementation. The smallest n with
+finite ends is 72 (`0.95^n <= 0.025`). BD4 is corrected to **n = 128** (seed 623_104, workers 4 unchanged; `0.95^128 =
+1.4e-3`); the limit is unchanged. LG1 to LG8 had run (once) before this amendment; no BD check had run.
