@@ -72,7 +72,14 @@ fn bits(fl: &PimpleSolver) -> Vec<u64> {
 }
 
 fn record_bits(r: &OuterRecord) -> (usize, usize, bool, u64, u64, u64) {
-    (r.step, r.used, r.met, r.ratio.to_bits(), r.first.to_bits(), r.scale.to_bits())
+    (
+        r.step,
+        r.used,
+        r.met,
+        r.ratio.to_bits(),
+        r.first.to_bits(),
+        r.scale.to_bits(),
+    )
 }
 
 #[test]
@@ -84,7 +91,11 @@ fn w1_window_of_one_is_the_adr_0458_scale_bit_for_bit() {
     for (a, b) in none.outer_record.iter().zip(&one.outer_record) {
         println!("W1 {a:?}");
         assert_eq!(record_bits(a), record_bits(b), "W1: the records differ");
-        assert_eq!(a.first.to_bits(), a.scale.to_bits(), "W1: scale is not first without the window");
+        assert_eq!(
+            a.first.to_bits(),
+            a.scale.to_bits(),
+            "W1: scale is not first without the window"
+        );
     }
 }
 
@@ -98,7 +109,13 @@ fn w2_scale_is_the_windowed_maximum_of_the_first_changes() {
         assert_eq!(e.step, i + 1);
         let lo = i.saturating_sub(2);
         let m = r[lo..=i].iter().fold(0.0f64, |m, x| m.max(x.first));
-        assert_eq!(e.scale.to_bits(), m.to_bits(), "W2: step {} scale {} against {m}", e.step, e.scale);
+        assert_eq!(
+            e.scale.to_bits(),
+            m.to_bits(),
+            "W2: step {} scale {} against {m}",
+            e.step,
+            e.scale
+        );
         assert!(e.scale >= e.first, "W2: scale below first");
         assert!(e.met, "W2: met");
         assert!(e.used < 30, "W2: used {}", e.used);
@@ -163,7 +180,14 @@ fn l1_lag_estimate_uses_the_count_the_step_used() {
     for (x, y) in a.lag_estimates.iter().zip(&b.lag_estimates) {
         println!("L1 {x:?} {y:?}");
         assert_eq!(x.step, y.step);
-        assert_eq!(x.rho.to_bits(), y.rho.to_bits(), "L1: step {} rho {} against {}", x.step, x.rho, y.rho);
+        assert_eq!(
+            x.rho.to_bits(),
+            y.rho.to_bits(),
+            "L1: step {} rho {} against {}",
+            x.step,
+            x.rho,
+            y.rho
+        );
         assert_eq!(x.cell, y.cell, "L1: cell");
     }
     let fewer = a.outer_record.iter().filter(|r| r.used < 30).count();
@@ -186,6 +210,13 @@ fn l2_adaptive_corrector_count_uses_the_count_the_step_used() {
         println!("L2 {x:?}");
         assert_eq!(x.step, y.step);
         assert_eq!(x.correctors, y.correctors, "L2: correctors");
-        assert_eq!(x.rho.to_bits(), y.rho.to_bits(), "L2: step {} rho {} against {}", x.step, x.rho, y.rho);
+        assert_eq!(
+            x.rho.to_bits(),
+            y.rho.to_bits(),
+            "L2: step {} rho {} against {}",
+            x.step,
+            x.rho,
+            y.rho
+        );
     }
 }

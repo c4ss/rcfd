@@ -467,7 +467,11 @@ fn fcw_channel_windowed_scale() {
                 );
                 c.holds(&format!("A1w N {n} bounded"), r.broke.is_none(), "bounded");
                 let total = record_checks(&mut c, &format!("K1w/K2w N {n}"), &r, n);
-                c.at_most(&format!("K4w N {n} total against ADR 0458"), total as f64, total_0458 as f64);
+                c.at_most(
+                    &format!("K4w N {n} total against ADR 0458"),
+                    total as f64,
+                    total_0458 as f64,
+                );
                 if let Some(zz) = impedance(&mut c, &format!("A2w N {n}"), &r, n) {
                     let m = model_zdt(n, FC.ny, FC.lf);
                     let (re, im) = rel_parts(zz, m);
