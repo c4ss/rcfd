@@ -1378,6 +1378,17 @@ pub trait Contribution {
     ) -> Result<()> {
         self.add(u, load_factor, force, tangent)
     }
+    /// Whether the contribution has a tangent without its curvature part, taken by the driver for an iteration whose exact
+    /// tangent fails the pivot test (ADR 0570 D1, D2). The default is `false`: the driver then never changes its matrix.
+    fn has_fallback_tangent(&self) -> bool {
+        false
+    }
+    /// The triplets of the tangent without the curvature part at `(u, load_factor)` (no force; ADR 0570 D1). Called only
+    /// when [`Contribution::has_fallback_tangent`] is true; the default adds nothing.
+    fn add_fallback_tangent(&self, u: &[f64], load_factor: f64, tangent: &mut Vec<(usize, usize, f64)>) -> Result<()> {
+        let _ = (u, load_factor, tangent);
+        Ok(())
+    }
 }
 
 /// The step-control hook of the Newton driver (ADR 0440 D7): it sets the load factor each attempt aims at and is told the
@@ -1482,6 +1493,39 @@ fn contribute_with(
         add_triplets(k, &triplets);
     }
     Ok(reference)
+}
+
+/// [`contribute`] for the fallback of ADR 0570 D2: the same forces, the same reference and the same triplets added to `k`
+/// in the same order, and also the matrix `k` before the contributions and each contribution's own triplets.
+#[allow(clippy::type_complexity)]
+fn contribute_split(
+    contributions: &[&dyn Contribution],
+    u: &[f64],
+    load_factor: f64,
+    fint: &mut [f64],
+    k: &mut CsrMatrix,
+) -> std::result::Result<(f64, CsrMatrix, Vec<Vec<(usize, usize, f64)>>), String> {
+    let before = k.clone();
+    let mut per = Vec::with_capacity(contributions.len());
+    let mut reference = 0.0f64;
+    if contributions.iter().any(|c| c.in_residual_reference()) {
+        reference = norm(fint.iter().copied());
+    }
+    for c in contributions {
+        let mut force = vec![0.0; u.len()];
+        let mut triplets = Vec::new();
+        c.add(u, load_factor, &mut force, &mut triplets)
+            .map_err(|e| format!("contribution '{}': {e}", c.name()))?;
+        if c.in_residual_reference() {
+            reference = reference.max(norm(force.iter().copied()));
+        }
+        for (a, b) in fint.iter_mut().zip(&force) {
+            *a += b;
+        }
+        per.push(triplets);
+    }
+    add_triplets(k, &per.concat());
+    Ok((reference, before, per))
 }
 
 /// The per-element layout of the material states of a model (ADR 0440 D3): per element the number of points of its
@@ -1591,6 +1635,9 @@ impl Problem<'_> {
         let dofs = self.model.dof_map();
         // ADR 0534 amendment 1: with a field whose expansion acts, the thermal force f_int(0) at the empty states enters the
         // reference of the residual.
+        // ADR 0570 D2: a contribution with a tangent without its curvature part makes the attempt keep the element tangent.
+        let fallback =
+            control.is_none() && !o.unsymmetric && self.contributions.iter().any(|c| c.has_fallback_tangent());
         let thermal_reference = match self.field {
             Some(field) if field.expansion => {
                 let empty = initial_states(self.model).map_err(classify)?;
@@ -1609,10 +1656,18 @@ impl Problem<'_> {
             // contribution may extend the reference of the residual.
             let mut elastic = None;
             let mut extra_reference = 0.0;
+            let mut split = None;
             if !self.contributions.is_empty() {
                 elastic = Some(fint.clone());
-                extra_reference = contribute_with(self.contributions, &u, lt, &mut fint, Some(&mut kt), o.unsymmetric)
-                    .map_err(Failure::Other)?;
+                extra_reference = if fallback {
+                    let (r, ke, per) =
+                        contribute_split(self.contributions, &u, lt, &mut fint, &mut kt).map_err(Failure::Other)?;
+                    split = Some((ke, per));
+                    r
+                } else {
+                    contribute_with(self.contributions, &u, lt, &mut fint, Some(&mut kt), o.unsymmetric)
+                        .map_err(Failure::Other)?
+                };
             }
             let rfull: Vec<f64> = self.f.iter().zip(&fint).map(|(fi, gi)| lt * fi - gi).collect();
             let rn = norm(self.free.iter().map(|&i| rfull[i]));
@@ -1658,7 +1713,7 @@ impl Problem<'_> {
                 .iter()
                 .map(|&(eq, v)| (eq, if k == 0 { (lt - lc) * v } else { 0.0 }))
                 .collect();
-            let sys = reduce(&kt, &rfull, &increment).map_err(|e| Failure::Other(e.to_string()))?;
+            let mut sys = reduce(&kt, &rfull, &increment).map_err(|e| Failure::Other(e.to_string()))?;
             // ADR 0480 D4: with a control the correction carries the change of the load factor.
             let mut rhs_control = None;
             let du = match control.as_deref_mut() {
@@ -1667,6 +1722,34 @@ impl Problem<'_> {
                         Vec::new()
                     } else if o.unsymmetric {
                         factor_solve_unsymmetric(&sys.matrix, &sys.rhs, sys.free(), &dofs)?
+                    } else if let Some((ke, per)) = &split {
+                        let exact = factor_solve(&sys.matrix, &sys.rhs, sys.free(), &dofs, o.factor, self.reuse);
+                        match exact {
+                            Ok(du) => du,
+                            // ADR 0570 D2: the exact tangent failed the pivot test; this iteration takes the contributions'
+                            // tangents without their curvature part.
+                            Err(Failure::Other(m)) if m.starts_with("singular tangent") => {
+                                let mut trip = Vec::new();
+                                for (c, t) in self.contributions.iter().zip(per) {
+                                    if c.has_fallback_tangent() {
+                                        c.add_fallback_tangent(&u, lt, &mut trip)
+                                            .map_err(|e| Failure::Other(format!("contribution '{}': {e}", c.name())))?;
+                                    } else {
+                                        trip.extend_from_slice(t);
+                                    }
+                                }
+                                let mut kf = ke.clone();
+                                add_triplets(&mut kf, &trip);
+                                sys = reduce(&kf, &rfull, &increment).map_err(|e| Failure::Other(e.to_string()))?;
+                                factor_solve(&sys.matrix, &sys.rhs, sys.free(), &dofs, o.factor, self.reuse).map_err(
+                                    |f| match f {
+                                        Failure::Other(m) => Failure::Other(format!("without the curvature part: {m}")),
+                                        other => other,
+                                    },
+                                )?
+                            }
+                            Err(e) => return Err(e),
+                        }
                     } else {
                         factor_solve(&sys.matrix, &sys.rhs, sys.free(), &dofs, o.factor, self.reuse)?
                     }

@@ -26,6 +26,9 @@
 //!   gap per contactor node, `int Phi_a g dA / int Phi_a dA`, with the weighting functions `Phi` a transformed basis of the
 //!   face (corner `N_i + (N_e + N_e')/4`, edge `N_e/2`: a partition of unity with positive integrals), integrated by the
 //!   face's load rule on the reference face (element-based integration, no segmentation).
+//! * ADR 0570 (F-639): the opt-in curvature-free fallback of the total Lagrangian body
+//!   (`ContactOptions::curvature_fallback`): an iteration whose exact tangent fails the pivot test of the Newton driver is
+//!   taken with `eps G G^T` (the contact set's [`Contribution::add_fallback_tangent`]), as the linear body always does.
 
 use crate::assemble::stiffness;
 use crate::constraint::{prescribed_equations, reduce, Prescribed};
@@ -173,6 +176,10 @@ pub struct ContactOptions {
     /// The contactor of Hex20 and Tet10 faces (ADR 0551 D4): [`QuadraticContactor::GaussPoints`] (the default) or
     /// [`QuadraticContactor::Mortar`]; Hex8 and Tet4 contactor faces keep their node contactors either way.
     pub quadratic_contactor: QuadraticContactor,
+    /// With [`Kinematics::TotalLagrangian`]: an iteration whose exact tangent fails the pivot test is taken with the contact
+    /// matrix without its curvature part, `eps G G^T` (ADR 0570 D3; `false`, the default, keeps the refusal). The linear
+    /// body always does this (ADR 0507 amendment 2) and does not read the option.
+    pub curvature_fallback: bool,
 }
 
 impl ContactOptions {
@@ -190,7 +197,13 @@ impl ContactOptions {
             factor: DirectFactor::SparseMinimumDegree,
             search_method: SearchMethod::Buckets,
             quadratic_contactor: QuadraticContactor::GaussPoints,
+            curvature_fallback: false,
         }
+    }
+    /// The same options with the curvature-free fallback of the total Lagrangian body on or off (ADR 0570 D3).
+    pub fn curvature_fallback(mut self, on: bool) -> ContactOptions {
+        self.curvature_fallback = on;
+        self
     }
     /// The same options with another contactor of Hex20 and Tet10 faces (ADR 0551 D4).
     pub fn quadratic_contactor(mut self, c: QuadraticContactor) -> ContactOptions {
@@ -328,7 +341,8 @@ pub struct NewtonSolve {
     /// The largest penetration at the converged state, m.
     pub penetration: f64,
     /// Iterations taken with the contact matrix without its curvature part because the exact tangent failed the pivot
-    /// test (linear body, ADR 0507 amendment 2); 0 for the total Lagrangian body.
+    /// test (linear body, ADR 0507 amendment 2; the total Lagrangian body with `ContactOptions::curvature_fallback`, ADR
+    /// 0570, else 0).
     pub convex_iterations: usize,
 }
 
@@ -468,6 +482,8 @@ struct History {
     events: usize,
     label: String,
     failure: Option<FemError>,
+    /// Calls of the fallback tangent since `begin` (ADR 0570 D3).
+    fallbacks: usize,
 }
 
 /// The contact contribution (ADR 0507 D5): the pairs, their node areas and multipliers, the search and the cycle record.
@@ -480,6 +496,8 @@ pub struct ContactSet {
     max_cycles: usize,
     multipliers: RefCell<Vec<Vec<f64>>>,
     history: RefCell<History>,
+    /// ADR 0570 D3: whether the set offers the driver its tangent without the curvature part.
+    fallback: bool,
 }
 
 const CORNERS: [[f64; 2]; 4] = [[-1.0, -1.0], [1.0, -1.0], [1.0, 1.0], [-1.0, 1.0]];
@@ -1378,6 +1396,7 @@ impl ContactSet {
             max_cycles: options.max_cycles,
             multipliers: RefCell::new(multipliers),
             history: RefCell::new(History::default()),
+            fallback: options.curvature_fallback,
         })
     }
 
@@ -1816,6 +1835,12 @@ impl ContactSet {
         Ok((visited, points, faces))
     }
 
+    /// A test hook of ADR 0570 (FC): the calls of the fallback tangent since the last [`ContactSet::begin`].
+    #[doc(hidden)]
+    pub fn fallbacks(&self) -> usize {
+        self.history.borrow().fallbacks
+    }
+
     /// A test hook of ADR 0551 (NT-m): the triplets of the contact matrix without its curvature part (`eps G G^T`, ADR 0507
     /// amendment 2) at `u` with the current multipliers; nothing is recorded.
     #[doc(hidden)]
@@ -1823,18 +1848,20 @@ impl ContactSet {
         let all = self.evaluate_all(u)?;
         let mut f = vec![0.0; u.len()];
         let mut t = Vec::new();
-        self.force_and_tangent(&all, &mut f, Some(&mut t), false);
+        self.force_and_tangent(&all, &mut f, Some(&mut t), false, false);
         Ok(t)
     }
 
     /// The force and the triplets of the state `all` without recording the active set; without `curvature` the matrix is
-    /// `eps G G^T` only (ADR 0507 amendment 2).
+    /// `eps G G^T` only (ADR 0507 amendment 2), and with `pattern` as well its entries are pushed wherever the exact matrix
+    /// has one (ADR 0570 D3: the same pattern).
     fn force_and_tangent(
         &self,
         all: &[Vec<Eval>],
         force: &mut [f64],
         tangent: Option<&mut Vec<(usize, usize, f64)>>,
         curvature: bool,
+        pattern: bool,
     ) {
         let mut trip = tangent;
         for (p, ev) in self.pairs.iter().zip(all) {
@@ -1863,7 +1890,9 @@ impl ContactSet {
                             if let (true, Some(h)) = (curvature, &kn.hess) {
                                 v -= e.force * h[m * r + s];
                             }
-                            if v != 0.0 {
+                            let exact_entry =
+                                pattern && kn.hess.as_ref().is_some_and(|h| v - e.force * h[m * r + s] != 0.0);
+                            if v != 0.0 || exact_entry {
                                 t.push((eqs[r], eqs[s], v));
                             }
                         }
@@ -1925,7 +1954,18 @@ impl Contribution for ContactSet {
     ) -> Result<()> {
         let all = self.evaluate_all(u)?;
         self.record(&all)?;
-        self.force_and_tangent(&all, force, Some(tangent), true);
+        self.force_and_tangent(&all, force, Some(tangent), true, false);
+        Ok(())
+    }
+    fn has_fallback_tangent(&self) -> bool {
+        self.fallback
+    }
+    /// ADR 0570 D3: `eps G G^T` at `u` on the index set of the exact triplets; nothing recorded but the count.
+    fn add_fallback_tangent(&self, u: &[f64], _load_factor: f64, tangent: &mut Vec<(usize, usize, f64)>) -> Result<()> {
+        let all = self.evaluate_all(u)?;
+        let mut scratch = vec![0.0; u.len()];
+        self.force_and_tangent(&all, &mut scratch, Some(tangent), false, true);
+        self.history.borrow_mut().fallbacks += 1;
         Ok(())
     }
 }
@@ -2079,7 +2119,7 @@ fn linear_solve(
                     let all = set.evaluate_all(&u)?;
                     let mut scratch = vec![0.0; n];
                     let mut tc = Vec::new();
-                    set.force_and_tangent(&all, &mut scratch, Some(&mut tc), false);
+                    set.force_and_tangent(&all, &mut scratch, Some(&mut tc), false, false);
                     let convex_sys = build(&tc)?;
                     factor_cached(&convex_sys.matrix, factor, cache).map_err(|e| {
                         fail(format!(
@@ -2202,7 +2242,8 @@ pub fn solve_with(
                 list.extend_from_slice(extra);
                 solve_from_reusing(model, &pres_step, &fstep, &u, &states, &newton_tl, &list, &reuse).map(|e| Solved {
                     reference: 0.0,
-                    convex: 0,
+                    // ADR 0570 D3: the iterations taken without the curvature part (0 without the option).
+                    convex: set.history.borrow().fallbacks,
                     u: e.u,
                     residuals: e.residuals,
                     energies: e.energies,
@@ -2275,7 +2316,7 @@ pub fn solve_with(
                 {
                     // Reactions at the accepted state with the forces of that solve (before the update).
                     let mut total = out.internal;
-                    set.force_and_tangent(&all, &mut total, None, true);
+                    set.force_and_tangent(&all, &mut total, None, true, false);
                     for c in extra {
                         let mut fx = vec![0.0; n];
                         let mut t = Vec::new();
