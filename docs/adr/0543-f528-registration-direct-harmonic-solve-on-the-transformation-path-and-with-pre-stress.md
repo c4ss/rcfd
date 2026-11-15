@@ -263,3 +263,19 @@ rows recorded:
 * A pre-stress beyond the buckling load is not detected; `K_sigma` uses the standard element rule (as the pre-stressed modes).
 * Beams and shells stay refused by the model check of the direct solve, as before.
 * No case-file key: the case file has no direct harmonic analysis.
+
+## Amendment 1 (2026-11-15, written after the mutation runs and before the run of RY2)
+
+The registered mutation runs (addendum 1) show that RS2, registered as the catcher of M1, M2, M8 and M9, cannot catch any
+mutation of the transformation path: both of its sides (the split and the merged model) are solved on that path, so a mutation
+changes both alike and the comparison stays equal. M1, M8 and M9 were caught by other rows (RS1, RY1, P2, K1g); M2 (right-hand
+side `F` at the independent unknowns instead of `T^T F`) was caught by no row, because every load compared against an
+independent reference (RY1, P2, K1) sits on independent unknowns. The set-up of the coverage is defective, not a limit; this
+amendment adds one check and changes no registered limit or result:
+
+| check | clause | set-up | limit | estimate |
+|---|---|---|---|---|
+| RY2a..b | c1 | RY1 with the load of RS2 (the tip load plus `(0, 0, 0.4)` real and `(0.1, 0, 0)` imaginary on the dependent junction node `J`), 0.5 and 1.7 `w_1`, direct against F-399 with every mode (`ModalDamping::Rayleigh`): `e` | `<= 1e-8` | 1e-11 |
+
+RY2 is run once on the code of 1840f6ff, then M2 once more on the scratch copy against it. The registered M2 run stays the
+record (not caught by the registered checks); the decision rule is applied to the registered checks as written.
