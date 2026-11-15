@@ -12446,13 +12446,27 @@ fixed by the item's registration ADR before any code.
     registered limits, the direct harmonic against the mode superposition with all modes within 1e-8; models without
     shells keep their bits.
   - note: Structural solver, advanced tier. Follow-up of F-541 (ADR 0545, 2026-11-15).
-- [ ] **F-631** Residual reference of the Newton driver in free vibration
+- [x] **F-631** Residual reference of the Newton driver in free vibration
   - depends on: F-585
   - acceptance: Every limit not stated here is registered in the ADR before the run. An opt-in residual reference of the
     nonlinear transient with a registered inertia term, so that a converged step of a free vibration without external
     load is not rejected at a rounding floor; the Shell3 strip of ADR 0545 NT1 over 100 periods at the default tolerance
     with that reference; the default reference and its bits unchanged.
-  - note: Structural solver, advanced tier. Follow-up of F-541 (ADR 0545, 2026-11-15).
+  - note: Structural solver, advanced tier. Follow-up of F-541 (ADR 0545, 2026-11-15). DONE. ADR 0603, 2026-11-15: an
+    opt-in residual reference of the nonlinear transient,
+    NlTransientOptions::residual_reference(ResidualReference::InertiaTerms): the reference of each Newton attempt of the
+    Method step is also at least the largest norm of the products the inertia and damping force is a sum of (c_m M
+    u_{n+1}, c_m M u_n, c_m h M v_n, c_m h^2 |1/2 - beta| M a_n, alpha_m M a_n, alpha_f f_int,n and the damping
+    products, c_m = (1 - alpha_m)/((1 - alpha_f) beta h^2)), so that the test is a relative tolerance on the step's
+    displacement and the constant rounding floor of the corotated Shell3 internal force (about 6e-11 of its peak,
+    derived from ADR 0545's stop near a zero crossing) no longer rejects a converged step. The Shell3 strip of ADR 0545
+    NT1 over 100 periods at the default tolerance 1e-10: 4000 steps, 0 halvings, worst residual 6.1e-13, F1 2.05e-3, F1b
+    8.0e-8, F1c 7.9e-5, E1 2.8e-8, EZ 5.1e-7 (limits of ADR 0522); a step at the zero crossing at h/1024 converges in 2
+    iterations to 1.3e-16 with the option and is refused by the default reference (stall at 1.5e-7). Refused with the
+    energy-momentum step. A driver hook Contribution::residual_reference_terms (default 0, read only when positive); the
+    default reference and its bits unchanged (a 40-step hash recorded before the change, every rcfd-fem test,
+    baseline_hashes). Five of five registered mutations caught. Follow-up F-681 (The inertia-term residual reference on
+    the energy-momentum step).
 - [ ] **F-632** Domain integral on a front with varying J, and mode separation
   - depends on: F-429
   - acceptance: Every limit not stated here is registered in the ADR before the run. An embedded elliptical crack whose
@@ -13338,7 +13352,9 @@ fixed by the item's registration ADR before any code.
     of the assembled matrices compared +0 with -0 by their bits in its first run and was met after an amendment of the
     measure. Not covered: full_rotor and the expanded modes with beams, the whirl directions and the split, state and
     sparse solvers beyond a smoke run, offset or non-principal sections, an independent whirl reference for beams.
-    Follow-up F-679 (An independent whirl reference for spinning beams).
+    Follow-up F-679 (An independent whirl reference for spinning beams). Its mutation X5 (global axis components), not
+    caught by the sector-ring checks, is caught by the independent spinning-ring reference of F-679 (ADR 0602,
+    2026-11-15).
 - [x] **F-676** Flutter about a nonlinear state with the full contribution tangent
   - depends on: F-671, F-653
   - acceptance: Every limit not stated here is registered in the ADR before the run. The complex pencil path of ADR 0580
@@ -13395,7 +13411,7 @@ fixed by the item's registration ADR before any code.
     bit-identical (the change of results with an offset approved by the maintainer).
   - note: Follow-up of F-673 (ADR 0597, 2026-11-15). Changes existing modal, harmonic and transient results of offset
     sections: NEEDS USER.
-- [ ] **F-679** An independent whirl reference for spinning beams
+- [x] **F-679** An independent whirl reference for spinning beams
   - depends on: F-675
   - acceptance: Every limit not stated here is registered in the ADR before the run. The whirl frequencies and the
     forward and backward split of a spinning ring of Beam2 (a free circular ring rotating about its axis, in-plane and
@@ -13403,4 +13419,38 @@ fixed by the item's registration ADR before any code.
     form derived or cited in the ADR, at three speeds up to half the first frequency: within the registered
     discretisation error at two meshes, the observed order within 0.5 of the expected one, and the split of each
     nodal-diameter pair within 1e-2 relative; the defaults bit-identical.
-  - note: Follow-up of F-675 (ADR 0598, 2026-11-15).
+  - note: Structural solver, advanced tier. Follow-up of F-675 (ADR 0598). DONE. ADR 0602, 2026-11-15: an independent
+    whirl reference for spinning beams, test-only (no library change). A free circular ring of Beam2 (R = 0.5 m, 30 x 20
+    mm steel section, the section axis y along the spin axis) on a 24-sector cyclic sector about an oblique axis with
+    CyclicOptions::beams, its in-plane and out-of-plane forward and backward whirl at nodal diameters 2 and 3 from
+    RotatingSector::whirl_modes, against the exact rotating-frame solution derived in the ADR: the spinning
+    shear-flexible ring with rotary inertia, the Coriolis term of the section kinematics u + theta x s, spin softening
+    and the hoop pre-stress rho A Omega^2 R^2, one 3 x 3 Hermitian gyroscopic problem per family and nodal diameter. It
+    reproduces the thin inextensional rotating-ring formula and the classical out-of-plane ring formula in the thin
+    limit within 3.3e-9. The rigid motions of the free ring (indices 0 and 1) are not solved; the pre-stress comes from
+    a copy with two reaction-free linear constraints through with_unit_prestress, because the free sector's own static
+    solve is singular. Speeds 1/6, 1/3 and 1/2 of the first frequency, without and with the pre-stress, two meshes: the
+    frequencies are within the registered discretisation error (worst 4.1e-3 coarse, 1.0e-3 fine; the limits are twice
+    the error predicted by an independent numpy polygon model, which the library matches to 3.1e-12), the observed order
+    is 1.9997 to 2.0067 (expected 2), and the forward and backward split of every pair is within 1.9e-3 (limit 1e-2).
+    The in-plane split, 83 to 250 rad/s, comes from the translation block; the out-of-plane split, 0.27 to 1.52 rad/s,
+    comes from the rotary block alone. Directions and wave senses are exact, the families are uncoupled to 4e-16, and
+    there is no split without Coriolis. Nine of nine mutations are caught, including the X5 of ADR 0598 (global axis
+    components), which the sector-against-ring check had missed. Not covered: indices 0 and 1, the sparse and state
+    whirl solvers, the ADR 0508 opt-in beam terms, and other section shapes. Follow-up F-680 (The centrifugal pre-stress
+    of a free cyclic sector).
+- [ ] **F-680** The centrifugal pre-stress of a free cyclic sector
+  - depends on: F-679
+  - acceptance: Every limit not stated here is registered in the ADR before the run. RotatingSector::new with stress
+    stiffening on a free sector (no constraint removing the index-0 rigid motions), behind an opt-in, solves the index-0
+    centrifugal static problem with the rigid motions removed and gives the pre-stress of the ADR 0602 free ring within
+    1e-10 of the constrained-copy route, with the whirl frequencies of ADR 0602 unchanged within 1e-10; the defaults
+    bit-identical.
+  - note: Follow-up of F-679 (ADR 0602, 2026-11-15).
+- [ ] **F-681** The inertia-term residual reference on the energy-momentum step
+  - depends on: F-631, F-611
+  - acceptance: Every limit not stated here is registered in the ADR before the run. ResidualReference::InertiaTerms
+    taken by the energy-momentum step with the products of its midpoint inertia force; a free vibration of a solid
+    without external load over a registered number of periods at the default tolerance with no step rejected at a
+    rounding floor and the energy conserved within a registered limit; the default bits unchanged.
+  - note: Follow-up of F-631 (ADR 0603, 2026-11-15).
