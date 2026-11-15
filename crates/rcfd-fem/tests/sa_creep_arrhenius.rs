@@ -530,3 +530,26 @@ fn p1_na1_na2_na3_no_increment_and_refusals() {
     }
     c.finish();
 }
+
+// ------------------------------------------------------------------------------------------------- NA2b (amendment 1)
+
+#[test]
+fn na2b_a_large_negative_temperature_is_refused() {
+    let mut c = Checks::new();
+    let eps = [7.1e-4, -2.3e-4, -3.9e-4, 1.7e-4, -0.8e-4, 2.6e-4];
+    let st = [1.1e-4, -0.4e-4, -0.7e-4, 0.3e-4, 0.5e-4, -0.2e-4, 3.0e-4];
+    let factor = Material::creep_arrhenius(base(), 1e-26, 3.0, 0.0, Q).unwrap();
+    let r = update(&factor, &eps, &st, &ctx(2.0, 0.5).with_temperature(-1e10).unwrap());
+    c.holds(
+        "NA2b update at T = -1e10 K: key temperature",
+        r.as_ref().err().and_then(key_of) == Some("temperature"),
+        &format!("{:?}", r.err()),
+    );
+    let r = arrhenius_factor(Q, -1e10);
+    c.holds(
+        "NA2b arrhenius_factor at T = -1e10 K: key temperature",
+        r.as_ref().err().and_then(key_of) == Some("temperature"),
+        &format!("{:?}", r),
+    );
+    c.finish();
+}

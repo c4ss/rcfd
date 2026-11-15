@@ -230,3 +230,16 @@ messages of the static-driver and orthotropic-base refusals of the creep materia
    material at `Integrator::start`).
 3. **Case-file key.** Not added. Recommendation for the lead: `creep = { base, a, n, m, activation }` with the quasi-static time
    study of ADR 0499 remaining question 1.
+
+## Amendment 1 (2026-11-15, written after the registered run and the planned mutations, before the run it registers)
+
+The registered run (addendum 1) met every check; mutation MU5 (the check `T > 0` removed from `arrhenius_factor`) was not
+caught. Diagnosis: NA2 tried `T = 0` and `T = -1 K` only, and both are refused without the check by the factor's own test
+(`T = 0`: `exp(-inf) = 0`, underflow; `T = -1 K`: `exp(+2.4e4) = inf`, not finite). A negative temperature of large magnitude
+gives a finite factor near 1 (`T = -1e10 K`: `exp(+2.4e-6)`), which the mutant accepts. The mutation is therefore NOT
+equivalent, and its escape is a gap of the negative control. This amendment adds one check, run once after this commit, with
+the mutation MU5 re-run on it; the decision of addendum 1 stays by the registered rule (an uncaught planned mutation).
+
+| Id | What | Limit |
+|---|---|---|
+| NA2b | `update` of the factor material with an increment at `T = -1e10 K`, and `arrhenius_factor(Q, -1e10)`: key `"temperature"` | refused |
