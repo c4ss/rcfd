@@ -592,6 +592,9 @@ pub struct ComplexModes {
     pub modes: Vec<Vec<C64>>,
     /// `||K_T phi - omega^2 M phi|| / (||K_T phi|| + |omega^2| ||M phi||)` of each pair.
     pub residuals: Vec<f64>,
+    /// The normwise backward error `||K_T phi - omega^2 M phi|| / ((||K_T||_F + |omega^2| ||M||_F) ||phi||)` of each pair, of
+    /// the reduced pencil (ADR 0587 D2; [`rcfd_linalg::eigen_pencil::PencilEigen::backward_errors`]).
+    pub backward_errors: Vec<f64>,
     /// The Arnoldi steps.
     pub steps: usize,
     /// Number of free unknowns.
@@ -616,6 +619,9 @@ pub struct ComplexBuckling {
     pub modes: Vec<Vec<C64>>,
     /// `||K x + mu G x|| / (||K x|| + |mu| ||G x||)` of each pair.
     pub residuals: Vec<f64>,
+    /// The normwise backward error `||K x + mu G x|| / ((||K||_F + |mu| ||G||_F) ||x||)` of each pair, of the reduced pencil
+    /// (ADR 0587 D2; [`rcfd_linalg::eigen_pencil::PencilEigen::backward_errors`]).
+    pub backward_errors: Vec<f64>,
     /// The Arnoldi steps.
     pub steps: usize,
     /// Number of free unknowns.
@@ -739,6 +745,7 @@ pub fn tangent_modes_full(
         modes: eig.vectors.iter().map(|v| expand(&free, k.n, v)).collect(),
         eigenvalues: eig.values,
         residuals: eig.residuals,
+        backward_errors: eig.backward_errors,
         steps: eig.steps,
         unknowns: nf,
         dofs,
@@ -827,6 +834,7 @@ pub fn buckling_factors_full(
         modes: eig.vectors.iter().map(|v| expand(&free, n, v)).collect(),
         factors: eig.values,
         residuals: eig.residuals,
+        backward_errors: eig.backward_errors,
         steps: eig.steps,
         unknowns: nf,
         dofs,
