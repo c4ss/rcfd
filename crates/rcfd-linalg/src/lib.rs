@@ -13,6 +13,7 @@ pub mod complex;
 pub mod cskyline;
 pub mod eigen;
 pub mod eigen_general;
+pub mod eigen_pencil;
 pub mod matrix;
 pub mod precond;
 pub mod reorder;
