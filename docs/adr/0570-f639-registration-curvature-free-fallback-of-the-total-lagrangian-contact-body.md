@@ -377,3 +377,11 @@ expected, every planned mutation caught by a check named for it, B unchanged, fm
    Recommendation: (b) after the maintainer's approval, since it is already the linear body's rule; ADR 0542 P's test and the
    two ADR 0551 records would then be superseded by an ADR.
 2. The fallback on the arc-length and unsymmetric paths: no present check needs it; no follow-up proposed.
+
+## For the lead: roadmap entries
+
+Proposed status of F-639: **done**. New note:
+
+> Structural solver, advanced tier. Follow-up of F-623 (ADR 0551, 2026-11-15). DONE. ADR 0570, 2026-11-15: rcfd_fem::nonlinear::Contribution gains has_fallback_tangent and add_fallback_tangent (defaults: none); the Newton attempt (no load-factor control, symmetric factor) takes, for an iteration whose exact tangent fails the pivot test, the element tangent plus each such contribution's tangent without its curvature part. rcfd_fem::contact: the opt-in ContactOptions::curvature_fallback(true) gives the total Lagrangian body the contact matrix eps G G^T on the exact pattern (ADR 0507 amendment 2, as the linear body), counted in NewtonSolve::convex_iterations. ADR 0551 HS20t and HS10t with it: solved with the gap tolerance 1e-8, one fallback iteration each; radius 2.5e-2 and 5.8e-3 (read from the moments of the nodal forces, a = sqrt(5/2 M2/M0), registered so that ADR 0551's coefficient reading, F-638's subject, is not inherited), peak 1.23e-1 both, approach 2.7e-2 and 2.3e-2; the same reading on the linear HS20m and HS10m gives 1.4e-2 and 3.4e-2. The driver's fallback run matches the honest tangent's run bit for bit; the contact fallback equals convex_tangent bit for bit on the exact index set; ADR 0542 P solves with it; defaults, ADR 0542 P's refusal and the ADR 0551 records unchanged; 7 of 7 mutations caught. Making the fallback the default is the maintainer's call (it changes ADR 0542 P's outcome).
+
+No follow-up proposed.
