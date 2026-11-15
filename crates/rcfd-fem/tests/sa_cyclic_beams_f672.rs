@@ -581,8 +581,11 @@ fn names_adr(r: &Result<(), FemError>) -> bool {
     matches!(r, Err(e @ FemError::InvalidValue { key: "cyclic", .. }) if e.to_string().contains("ADR 0595"))
 }
 
+/// ADR 0595 amendment 1: the run-1 record (its NC1 set-up refused by `add_constraint`); body unchanged. The corrected run is
+/// `nc1_to_nc4_refusals_amended`.
 #[test]
-fn nc1_to_nc4_refusals() {
+#[ignore = "ADR 0595 amendment 1: run-1 record, the NC1 set-up refused by add_constraint (UnknownSet Surface low)"]
+fn nc1_to_nc4_refusals_run1_record() {
     let mut fails = Vec::new();
     let mut hold = |name: &str, ok: bool, what: String| {
         println!("{name}: {} ({what})", met(ok));
@@ -596,6 +599,61 @@ fn nc1_to_nc4_refusals() {
     hold("NC1 solve_static_mpc", names_adr(&r), format!("{r:?}"));
     let r = modal_analysis_harmonic(&m, &[], 1, &ModalOptions::new(2)).map(|_| ());
     hold("NC1 modal_analysis_harmonic k = 1", names_adr(&r), format!("{r:?}"));
+    // NC2: beams with axis nodes or interpolation.
+    let m = sector(beam_options().shell_extensions(true).axis_nodes(true));
+    let r = solve_static_mpc(&m, &[], &[], &[], &StaticOptions::default()).map(|_| ());
+    hold("NC2 axis nodes: solve_static_mpc", names_adr(&r), format!("{r:?}"));
+    let m = sector(
+        beam_options()
+            .shell_extensions(true)
+            .interpolation(TieOptions::new(TieMethod::NodeToSurface)),
+    );
+    let r = solve_static_mpc(&m, &[], &[], &[], &StaticOptions::default()).map(|_| ());
+    hold("NC2 interpolation: solve_static_mpc", names_adr(&r), format!("{r:?}"));
+    // NC3: shells only, unchanged.
+    let m = sector(CyclicOptions::new().shells(true));
+    let beam = |r: &Result<(), FemError>| matches!(r, Err(FemError::NotYetSupported { variant: "Cyclic", package, .. }) if *package == rcfd_fem::beam::FOLLOW_UP);
+    let r = solve_static_mpc(&m, &[], &[], &[], &StaticOptions::default()).map(|_| ());
+    hold("NC3 shells only: solve_static_mpc", beam(&r), format!("{r:?}"));
+    let r = modal_analysis_harmonic(&m, &[], 0, &ModalOptions::new(2)).map(|_| ());
+    hold(
+        "NC3 shells only: modal_analysis_harmonic k = 0",
+        beam(&r),
+        format!("{r:?}"),
+    );
+    // NC4: full_rotor still refuses Beam2.
+    let m = sector(beam_options());
+    let r = full_rotor(&m).map(|_| ());
+    hold(
+        "NC4 full_rotor",
+        matches!(&r, Err(FemError::UnsupportedKind { kind: "Beam2", .. })),
+        format!("{r:?}"),
+    );
+    assert!(fails.is_empty(), "{fails:?}");
+}
+
+/// NC1 to NC4 as amended by ADR 0595 amendment 1: NC1 is the refusal of `add_constraint` (D1a).
+#[test]
+fn nc1_to_nc4_refusals_amended() {
+    let mut fails = Vec::new();
+    let mut hold = |name: &str, ok: bool, what: String| {
+        println!("{name}: {} ({what})", met(ok));
+        if !ok {
+            fails.push(name.to_string());
+        }
+    };
+    // NC1 (amended): beams without shells, refused by add_constraint.
+    let mut m = SolidModel::new(sector(beam_options()).mesh().clone());
+    m.add_material("all", mat()).unwrap();
+    let r = m.add_constraint(Constraint::cyclic_with(
+        "low",
+        "high",
+        axis(),
+        ORIGIN,
+        N,
+        CyclicOptions::new().beams(true),
+    ));
+    hold("NC1 add_constraint", names_adr(&r), format!("{r:?}"));
     // NC2: beams with axis nodes or interpolation.
     let m = sector(beam_options().shell_extensions(true).axis_nodes(true));
     let r = solve_static_mpc(&m, &[], &[], &[], &StaticOptions::default()).map(|_| ());

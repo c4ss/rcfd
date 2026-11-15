@@ -1124,6 +1124,14 @@ impl SolidModel {
                 if let Some(t) = options.interpolation.and_then(|i| i.tolerance) {
                     positive_finite("tolerance", t)?;
                 }
+                // ADR 0595 D1a: the beams option qualifies the shells option.
+                if options.beams && !options.shells {
+                    return Err(FemError::InvalidValue {
+                        key: "cyclic",
+                        reason: "the beams option qualifies the shells option of the cyclic constraint (ADR 0595)"
+                            .into(),
+                    });
+                }
                 // ADR 0556 D1: with shells the boundaries are node sets.
                 let kind = if options.shells {
                     SetKind::Node
