@@ -19,6 +19,10 @@
 //! Piola-Kirchhoff stress (ADR 0489 Limits). Only the nonlinear driver at a point context
 //! ([`crate::nonlinear::solve_from_at`], the time-stepping driver [`crate::nonlinear::solve_in_time`]) and the nonlinear
 //! transient integrator take the material; every other path refuses it naming [`FOLLOW_UP`].
+//!
+//! ADR 0558 (F-581): an optional Arrhenius factor `exp(-Q/(R T))` on `A` ([`Material::creep_arrhenius`]), with the temperature
+//! `T` of the point context held over the step; read only when the step creeps (a step with no time increment is elastic
+//! whatever `A`), refused without a temperature (key `"temperature"`). Without the factor every line runs as before.
 
 use crate::error::{FemError, Result};
 use crate::material::{apply, isotropic_elasticity, Matrix6, PointContext};
@@ -104,6 +108,31 @@ fn point_time_factor(m: f64, point: &PointContext) -> Result<f64> {
         )));
     }
     Ok(time_factor(m, t1, dt))
+}
+
+fn temperature_error(reason: String) -> FemError {
+    FemError::InvalidValue {
+        key: "temperature",
+        reason,
+    }
+}
+
+/// The Arrhenius factor `exp(-Q/(R T))` of the activation energy `activation` (J/mol) at the temperature `temperature` (K),
+/// `R` = [`crate::mat_visco::GAS_CONSTANT`] (ADR 0558 D1). Refused (key `"temperature"`): a temperature not finite or not
+/// positive, a factor that underflows to 0.
+pub fn arrhenius_factor(activation: f64, temperature: f64) -> Result<f64> {
+    if !(temperature.is_finite() && temperature > 0.0) {
+        return Err(temperature_error(format!(
+            "{temperature:e} K: the Arrhenius factor of a creep material needs a positive, finite temperature"
+        )));
+    }
+    let f = (-(activation / (crate::mat_visco::GAS_CONSTANT * temperature))).exp();
+    if !(f > 0.0 && f.is_finite()) {
+        return Err(temperature_error(format!(
+            "{temperature:e} K with Q = {activation:e} J/mol gives the Arrhenius factor {f:e} (must be positive and finite)"
+        )));
+    }
+    Ok(f)
 }
 
 /// The backward Euler return of a creep material with the isotropic base `(e, nu)` and the law `(a, n, m)` at the strain
@@ -234,10 +263,30 @@ pub fn return_map(e: f64, nu: f64, a: f64, n: f64, tau: f64, strain: &[f64; 6], 
 /// `"material"`) and an orthotropic base (`NotYetSupported`).
 pub fn update(material: &Material, strain: &[f64; 6], state: &[f64], point: &PointContext) -> Result<Update> {
     match material {
-        Material::Creep { base, a, n, m } => match base.as_ref() {
+        Material::Creep {
+            base,
+            a,
+            n,
+            m,
+            activation,
+        } => match base.as_ref() {
             Material::IsotropicElastic { e, nu, .. } => {
                 let tau = point_time_factor(*m, point)?;
-                return_map(*e, *nu, *a, *n, tau, strain, state)
+                match activation {
+                    None => return_map(*e, *nu, *a, *n, tau, strain, state),
+                    // ADR 0558 D1, arithmetic 2: the factor is read only when the step creeps.
+                    Some(q) if tau != 0.0 => {
+                        let t = point.temperature.ok_or_else(|| {
+                            temperature_error(
+                                "a creep material with an Arrhenius factor needs a temperature for a step with a time increment"
+                                    .to_string(),
+                            )
+                        })?;
+                        let a_t = *a * arrhenius_factor(*q, t)?;
+                        return_map(*e, *nu, a_t, *n, tau, strain, state)
+                    }
+                    Some(_) => return_map(*e, *nu, *a, *n, tau, strain, state),
+                }
             }
             _ => Err(FemError::NotYetSupported {
                 item: "material",

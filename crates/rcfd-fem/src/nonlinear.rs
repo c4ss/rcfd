@@ -2361,6 +2361,25 @@ pub fn solve_in_time_with(
     model.check_supported_nonlinear()?;
     check_driver_model(model)?;
     options.check()?;
+    // ADR 0558 D3: a creep material with the Arrhenius factor needs a temperature, refused before any attempt.
+    if options.temperature.is_none() && options.temperature_history.is_none() && options.temperature_field.is_none() {
+        if let Some((i, (set, _))) = model.materials().iter().enumerate().find(|(_, (_, m))| {
+            matches!(
+                m,
+                Material::Creep {
+                    activation: Some(_),
+                    ..
+                }
+            )
+        }) {
+            return Err(FemError::InvalidValue {
+                key: "temperature",
+                reason: format!(
+                    "material {i}, element set '{set}': a creep material with an Arrhenius factor needs a temperature (TimeSteppingOptions::temperature, temperature_history or temperature_field)"
+                ),
+            });
+        }
+    }
     for (k, &t) in times.iter().enumerate() {
         let previous = if k == 0 { 0.0 } else { times[k - 1] };
         if !(t.is_finite() && t > previous) {

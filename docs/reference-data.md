@@ -2245,3 +2245,17 @@ and their logs), no rcfd code in the probes.
 | Backward Euler radial return of the von Mises power law | derived, cited | ADR 0549 arithmetic 2, ADR 0489 D1; J. C. Simo and T. J. R. Hughes, Computational Inelasticity, Springer, 1998: NOT read, from memory |
 | Measured: the reference at `p/1000` against Lame `2.9e-6`, against the stationary field at `20 t*` `8.5e-6`; `N = 400` against `N = 800` `2.2e-6`; at `p` its own drift from the small-strain stationary field `2.3e-3` (`5 t*`) to `8.6e-3` (`20 t*`) | computed | ADR 0549 addendum 1 |
 | Measured: the BBar Hex8 cylinder (`48 x 24`) against the reference, `9.55e-3` at `5 t*`, `1.11e-2` at `20 t*`, growth `1.51e-3` (bound `2e-3`); the point-wise difference grows by `4.4e-3` at `r = 1.05` (reported) | computed | ADR 0549 addendum 1 |
+
+## F-581 an Arrhenius temperature factor for power-law creep on the time-stepping driver (ADR 0558)
+
+No source was read for F-581. The names below are cited from memory; the closed forms are those of ADR 0489 with `A`
+replaced by `A exp(-Q/(R T))` (ADR 0558 arithmetic 1), evaluated by one plain python script (`f581-scratch/probe.py`, no
+rcfd code).
+
+| Item | Status | Source |
+|---|---|---|
+| Thermally activated power-law creep, `d eps_bar/dt = A exp(-Q/(R T)) q^n t^m` | stated by the acceptance, cited | F. H. Norton, The Creep of Steel at High Temperatures, McGraw-Hill, 1929; H. J. Frost and M. F. Ashby, Deformation-Mechanism Maps, Pergamon, 1982: NOT read, from memory |
+| `R = 8.314462618 J/(mol K)` (`mat_visco::GAS_CONSTANT`, the 2019 SI value `N_A k_B`) | constant of the repository | from memory |
+| Uniaxial constant stress at `T`: `eps_c = A exp(-Q/(R T)) sigma^n t^(m+1)/(m+1)`; a temperature step `T1 -> T2` at `t_s` (`m = 0`): `eps_c = A sigma^n (f1 min(t, t_s) + f2 max(t - t_s, 0))` | derived | ADR 0558 arithmetic 1, 4 |
+| Relaxation at fixed strain at `T`: `sigma(t) = (sigma0^(1-n) + (n - 1) E A exp(-Q/(R T)) t)^(1/(1-n))` | derived | ADR 0558 arithmetic 1, ADR 0489 arithmetic 3 |
+| `Q = 2e5 J/mol`: `exp(-Q/(R T))` = `1.19154e-15` (700 K), `1.17770e-14` (750 K), ratio `9.8838` | computed | `f581-scratch/probe.log` |
