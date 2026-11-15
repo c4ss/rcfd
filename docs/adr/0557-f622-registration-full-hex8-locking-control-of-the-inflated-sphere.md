@@ -192,3 +192,22 @@ DX does not enter the rule.
    `Contribution::load_derivative` (the derivative of the contribution's force with respect to the load factor) taken into
    `du_f` by `arclength::trace`, defaults bit-identical, checked on the sphere through its pressure maximum at `l_a = 1.83`.
    Recommend (b) as a follow-up.
+
+## Amendment 1 (2026-11-15, written after the registered run 1 and before any corrected run)
+
+**What happened.** The single registered run of `sa_hyper_lock.rs` (log `f622-scratch/run1-sa_hyper_lock.log`) met every
+check (addendum 1). The diagnostic DX was not measured at `l_a = 1.125`: `tangent_modes` at the Full state of that stretch
+returned `subspace iteration did not converge in 200 iterations (tolerance 1e-10); residuals of the wanted pairs: 3.5e-10`
+(the default eigen tolerance `1e-10`; the residual reached is `3.5` times it, an eigenvalue close to zero relative to the norm of
+the tangent converges slowly in the relative test). The values at rest (`8.377e3`) and at `1.10` (`2.171e3`) were measured. A
+defective set-up of a diagnostic; it does not enter the decision rule.
+
+**Correction, registered now (DX').** A new test `dx_after_amendment_1` repeats D3 at the same three states (rest, the Full
+solve to `1.10`, the Full solve to `1.125`, the options of D1) with `ModalOptions::new(1).threads(4).tolerance(1e-8)` (the
+residual reached `3.5e-10` is below it by thirty), and reports `omega_1^2` and the zero crossing of the line through the values
+at `1.10` and `1.125`; expectation unchanged (arithmetic 6: in `[1.125, 1.20]`). Reported only, outside the rule, run once. The
+run-1 test stays as it is (it passes: its DX rows are reported values); its A1 to A3 rows are the registered results.
+
+The line through the values at rest and at `1.10` of run 1 reaches zero at `l_a = 1.0 + 0.1 x 8377 / (8377 - 2171) = 1.135`,
+close to the failure of ADR 0541 at `1.133`; this is a post-run observation (not the registered line), disclosed and not used
+as a result.
