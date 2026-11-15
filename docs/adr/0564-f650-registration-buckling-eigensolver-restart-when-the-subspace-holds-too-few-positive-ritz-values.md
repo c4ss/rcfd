@@ -173,3 +173,66 @@ None is declared equivalent.
 ## Open questions
 
 None that changes a default result.
+
+## Addendum 1 (2026-11-15): results
+
+Written after the one run of each registered check. Code and tests: commit e9cb6798 (`eigen.rs`: the constant
+`RESTART_DOUBLINGS`, lines 1037 to 1039; `lowest_buckling_factors` now calls the unchanged iteration, moved into
+`buckling_iterate`, and makes the D1 restart, lines 1173 to 1284 (with `buckling_default_start`, `buckling_restart_size`,
+`BucklingRun`); the branch (i) refusal inside the moved loop hands back `BucklingRun::Short`, lines 1410 to 1442;
+`rcfd-linalg/tests/si_buckling_restart_f650.rs`; `rcfd-fem/tests/sa_buckling_restart_f650.rs`). Logs in `w49i-work/f650-scratch`:
+`run1_linalg.log`, `run1_fem.log` (the registered run, release), `b2_base.log`, `b2_base.txt`, `b2_branch.txt` (B2 on a `git
+archive` copy of cf32422b with the new fem test file copied in, own target directory), `b1_linalg.log`, `b1_fem.log`,
+`baseline.log`, `docs_site.log`, `clippy.log`, `mutations.log`, `mut_M*.log`.
+
+### Results against the registered limits
+
+| id | measured | limit | verdict |
+|---|---|---|---|
+| A1 | `Ok`, three factors `610.7109799174704, 2333.791726231031, 5256.57773727524`, `exhausted None`, 25 iterations (both runs), 112 unknowns | holds | met |
+| A2 | against `q = 40` (`610.7109799174692, 2333.791726231034, 5256.577737256932`): `1.8e-15`, `1.2e-15`, `3.5e-12` | `<= 1e-9` each | met |
+| A3 | Sturm `{ shift: 7360.265977320068, counted: 3, expected: 3 }`, shift above `lambda_3 = 5256.58` (the midpoint branch of the restart) | holds | met |
+| P1 | `Ok`, `1, 2, 10`, each `0` relative; subspace 12; Sturm `{ 5555555.555555556, 3, 3 }`, shift `0` relative to `1/(1e-8 * 18)`; `exhausted None`; 26 iterations | `<= 1e-12`; holds | met |
+| P2 | bit-equal to the `subspace_size = Some(12)` solve; 26 iterations against its 11 | bit-equal; greater | met |
+| N1 | `SturmMismatch { shift: 1.1111111111111111e5, counted: 1, expected: 0 }`, shift `0` relative | as stated | met |
+| B1 | `cargo test -p rcfd-linalg --release`: 123 passed, 0 failed, 6 ignored (20 binaries; L3 refused as before, L4 returned); `cargo test -p rcfd-fem --release`: 1118 passed, 0 failed, 302 ignored (262 result lines); `cargo test -p rcfd-api --release --test baseline_hashes`: 3 passed, 1 ignored; `cargo test -p rcfd-cli --release --test docs_site`: 2 passed | pass | met |
+| B2 | base cf32422b and branch: every case hash equal, total `83909e05eefe3b26` on both; cases 1 to 9 also equal the ADR 0559 values (`e5ba1d8f604d723a` ... `4f0cc1d14f7e6bd7`); cases 10 to 13: `2f844c5d0e84a2f9`, `7521122d140d8449`, `7b64f823c6641c39`, `6f4affbbdd28034f` | equal | met |
+
+Record (no limit): 8 elements, `L = 1.5`, `-M_ref`, default options: returned, `612.828208544872, 2367.8108280373926,
+5433.573987957625` (60 iterations), against `q = 24`: `2.2e-16`, `2.2e-16`, `6.7e-14`. The restart size `q2` of A1 is not
+exposed by `WarpingBucklingResult` and was not printed (the registration did not ask for it).
+
+### Mutations (scratch copy `f650-scratch/mut`, own target directory, one at a time)
+
+| id | mutation | caught | by |
+|---|---|---|---|
+| M1 | D1 removed | caught | P1 (refused, `counted 3, expected 2`), A1 (refused as in the ADR 0559 record) |
+| M2 | `q2 = N+(B)` | caught | P1, A1 (refused: `q2 <= q`) |
+| M3 | restart iterations not summed | caught | P2 (11 against 11) |
+| M4 | restart also when the count at `S` agreed | caught | B2 (case 4, `K_sigma = +I`, now refused: the mutation passes `mp = 0` exhausted results to the restart path too, so B2 stopped at case 4 before case 10), and the existing A5a of `si_buckling_eigen.rs` |
+| M5 | restart also with `mp = 0`, anchored at `1/max|theta|` | caught | N1 and L3 (both return the factor `1.0` with a subspace of 10) |
+
+Deviation in the mutation runs (not in the registered checks): the script ran `si_buckling_eigen` and
+`si_buckling_restart_f650` in one cargo call without `--no-fail-fast`, so under M4 and M5 the second binary did not run after the
+first failed; it was then run alone for M4 and M5 (`mut_M4_restart.log`, `mut_M5_restart.log`; M5 caught by N1 there, M4 not
+caught by the linalg file, as expected). M4 was caught by a different B2 case than the one named (case 4 instead of case 10).
+
+`cargo fmt -p rcfd-linalg --check`, `cargo fmt -p rcfd-fem --check`: clean. `cargo clippy -p rcfd-linalg -p rcfd-fem --release
+--all-targets -- -D warnings`: clean.
+
+Not run: the whole workspace suite (the lead's gate). The ignored ADR 0553 records were not run and are not edited.
+
+### Decision by the registered rule
+
+**done**: A1 to A3, P1, P2, N1, B1 and B2 met in the one registered run, no amendment, and the five mutations caught (none
+declared equivalent). Clause a1 (three factors returned with the default `BucklingOptions` at `L = 1.5`), a2 (`1.8e-15`, `1.2e-15`,
+`3.5e-12` against the subspace of 40, limit `1e-9`) and a3 (B2 hashes over 13 cases equal against cf32422b, B1 suites pass) are
+met. Done is the maintainer's call.
+
+### Remaining questions
+
+- **Q1. `mp = 0`** (no positive Ritz value in the subspace while positive factors exist below `S`, e.g. L3). Options: (a) leave it
+  refused (the documented remedy is a larger subspace; L3 asserts this refusal); (b) an opt-in restart anchored at
+  `1/max|theta|` (M5 shows it finds L3's factor). Recommendation (a); no follow-up proposed unless a model shows the case.
+- **Q2. Expose the subspace size on `WarpingBucklingResult` and `BucklingResult`** (the restart changes it). Options: (a) leave;
+  (b) add a field (a public struct change, results unchanged). Recommendation (a) for now.
