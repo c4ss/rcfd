@@ -220,3 +220,25 @@ default result.
   centrifugal), the hyperelastic material on beams in the cyclic constraint (ADR 0593 A-B: refused before by the cyclic check;
   with the option it reaches the material checks; not run).
 - The case schema: no case key for the option.
+
+## Amendment 1 (2026-11-15, after run 1, before the corrected run): the NC1 set-up
+
+Run 1 (`run1.log` in the scratch folder) ran every test once. `nc1_to_nc4_refusals` stopped in its set-up: the NC1 model (`beams(true)`
+without `shells`) cannot be built, because `SolidModel::add_constraint` checks the boundary sets of a cyclic constraint by kind
+(surface sets without `shells`) and refused the node set `low` with `UnknownSet { kind: Surface, name: "low" }` before any path
+was called. NC2 to NC4 in the same function were therefore not run. Diagnosis: a defect of the set-up and of D1, not of a limit:
+D1 put the refusal of `beams` without `shells` in the entry checks and in `boundary`, which the model never reaches; the
+helper `check_beams_option` scans `model.constraints()`, which does not yet hold a constraint being added.
+
+Corrections, registered now:
+
+- **D1a.** `SolidModel::add_constraint` refuses a cyclic constraint with `beams` and without `shells` (key `cyclic`, naming ADR
+  0595) before its set check; the refusals in the entry checks and `boundary` stay (a constraint cannot reach them without
+  `shells` any more; they stay as a guard). A constraint without `beams` meets exactly the code it met before.
+- **NC1 (amended).** `add_constraint` of `Constraint::cyclic_with("low", "high", n, O, 6, CyclicOptions::new().beams(true))` on
+  W's mesh: refused, key `cyclic`, the message names ADR 0595. NC2 to NC4 unchanged.
+- The run-1 function is kept unchanged as an ignored record (`#[ignore]`, renamed `nc1_to_nc4_refusals_run1_record`); the
+  corrected copy is `nc1_to_nc4_refusals_amended`, run once.
+- **X5 (amended).** The refusal of D1a removed: caught by NC1 (amended) (the `UnknownSet` of run 1 in its place).
+
+Every other check of run 1 is a registered result and is not re-run (they are in addendum 1).
