@@ -219,3 +219,88 @@ amendment. **todo**: J1 to RW4 not run.
   non-matching sector is not a rotor of identical sectors); `full_rotor` still refuses an extended boundary.
 - Static and harmonic static solves go through the same rows but are not checked here.
 - A tied low node that is also on a second constraint (a user linear row) is not covered.
+
+## Addendum 1: results (2026-11-15)
+
+Set-up run (disclosed): at 32b95ac2 (the registration) with only the B4 part of the new test file, on the unchanged library,
+the B4 function gave `0x828db62c4f50af84` (`f662-scratch/setup_b4.log`); that value is the recorded `B4_HASH`. Then the library
+and the rest of the test file were written. Library at the run: `cyclic.rs` (module docs; `CyclicBoundary::two_sided` and the
+type `TwoSidedNode`; in `boundary` the call of the new private `two_sided_ties` after the ADR 0575 high weights; a `side`
+argument of `shell_edge_weights` for its refusal message; `two_sided_ties`), `mpc.rs` (in `cyclic_rows`, the rows of
+`two_sided` between the interpolated and the axis rows). Tests: `crates/rcfd-fem/tests/sa_cyclic_shell_two_sided.rs`. The run
+(`f662-scratch/run1.log`, 2.7 s in release) was made once on the uncommitted tree. After it came `cargo fmt`, a type alias in
+the test file for clippy and the module-doc paragraph, then commit 8df0c616. None of these changes a number or a branch. The two
+affected test files were run again after them (`after_fmt.log`) and gave the same numbers.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| J0 I2b sets and `G` | exact; 1e-12 | `two_sided` = column-0 nodes 1, 2, 4, 5, 7, 8, 10, 11; `interpolated` = high nodes 40, 42, 44, 46, 48 (b even); `G` within 1.8e-15 of the arithmetic; I1 and I2a: no tied node, 7 and 13 high ties | yes |
+| J1 I2b level 1 against the matched sector | 2e-2 | 1.02e-2 (k = 0..3: 9.6e-3, 6.8e-3, 5.5e-3, 1.02e-2); the fourth k = 0 value 1133.89 Hz against 1138.9 Hz (ADR 0575: 1091.48 Hz) | yes |
+| J2 largest `rho`, levels 1 and 2 | 2 | 1.039, 1.008 | yes (see the deviation below) |
+| J3 level 2 over level 1 | 0.7 | 1.68e-3 / 1.02e-2 = 0.164 | yes |
+| R2 tied low rows in the k = 1 modes | 1e-13 | 8.2e-16 (64 node-modes, translations and rotations) | yes |
+| RA4 / RA3 cap, set A, 0.2 and 0.4 omega_1 | complete; equal; 1e-8 | 11 = 11 at both speeds; worst per harmonic 5.0e-15 / 2.2e-15 | yes |
+| RW4 / RW3 cap, whirl | as RA | 11 = 11; worst 1.75e-14 / 1.64e-14 | yes |
+| RW0 Coriolis felt, k = 1, top speed | `>= 1e-4` | 0.292 | yes |
+| B1 every rcfd-fem test (release) | pass | 1190 passed, 0 failed, 319 ignored (285 test binaries) | yes |
+| B2 `baseline_hashes` | pass | 3 passed, 1 ignored | yes |
+| B4 I1 and I2a frequency bits | `0x828db62c4f50af84` | equal | yes |
+| NC8 tied low node off the high edge | `TieGap` naming node 1 | `TieGap { node: 1, distance: 1.333e-2, tolerance: 1.118e-2 }` | yes |
+| NC9 three-unknown high node | the ADR 0575 count message | "interpolated high node 49 has 3 unknowns and its low node 4 has 6" | yes |
+
+The rotating speeds (as logged) are 1.0076e3 and 2.0153e3 rad/s for A1 and 1.0409e3 and 2.0818e3 rad/s for A2.
+
+The audited existing tests all pass and none was edited. `r1_interpolated_rotation_rows_hold` now checks 40 node-modes (the 5
+kept high nodes; it was 72) and gives 1.5e-15. `i2a_i3_met_parts_of_the_two_to_three_boundaries` asserts the I2b ratio, which is
+now 0.164 (it was 0.034); I2a is unchanged (7.3977e-3, ratio 0.1250). NC3, NC4 and NC6 refuse as before. The ignored ADR 0575
+record `i2_i3_two_to_three_boundaries_against_the_matched_sector_known_miss`, run with `--include-ignored`, now **passes** (I2b
+1.02e-2 against its 2e-2), because the miss it records is the one this item removes. It is not edited. Retiring it is the
+maintainer's decision.
+
+Mutations were run on a `git archive` copy of 8df0c616 with its own target directory (`f662-scratch/mutate.py`,
+`run_mutations.sh`, logs `mut_M*.log`). Each ran `sa_cyclic_shell_two_sided` and `sa_cyclic_shell_extensions`. The first pass
+stopped at the first failing test binary, so M3 to M8 and M10 were run again with `--no-fail-fast`. The logs of the first pass
+are in `first/`.
+
+| Id | Caught by |
+|---|---|
+| M1 `F` empty (the ADR 0575 behaviour) | J0, J1 (4.17e-2, the ADR 0575 number), R2 (no node checked), NC8 (`Ok`); **not** J2 (`rho` 1.22) |
+| M2 no node released (double pass) | J0, J1 (6.7e-2: the locking of D1) |
+| M3 `R` for `R^T` | J1 (1.53), R2 (0.25), `i2a_i3_met_parts` |
+| M4 sign of `s` | J1 (1.03), R2 (1.37), `i2a_i3_met_parts` |
+| M5 low weights swapped | J0 (0.33), J1 (0.13), R2 (0.51), `i2a_i3_met_parts` |
+| M6 rotation rows of the tied nodes not emitted | J1, R2, R1, `i2a_i3_met_parts` (the eigensolve fails: free rotations) |
+| M7 kept-high substitution left out | J0 (0.33), J1 (0.35), R2 (0.33), `i2a_i3_met_parts` |
+| M8 count check before the low ties removed | NC9 and the existing NC6 (a `TieGap` in its place) |
+| M9 `TieGap` of the low ties removed | NC8 (`Ok`) |
+| M10 axis rotation rows not emitted | RA4, RW4, RA3, RW3 and the existing A1, A2 |
+
+Ten of ten mutations were caught.
+
+**Deviations.** (1) The J2 estimate said that at `k = 0` a mode has the same amplitude in every column. That is wrong for the
+`n = 6` modes that fall in `k = 0` (one full period over the sector), which gave `rho` as low as 0.155. The bound `rho <= 2`
+still holds for them, because their boundary amplitude cannot exceed the interior maximum, and the limit was not changed. (2)
+More important: under M1 the measure gave 1.22, so **J2 does not separate the ADR 0575 local mode**. That mode is not confined
+to the boundary column strongly enough for a ratio of maximum amplitudes to see it. J2 is met, but the evidence for clause b4
+comes from J1. The four lowest values of every harmonic match those of the matched sector within 1.02e-2 in sorted order, the
+ADR 0575 value of 1091.48 Hz at both k = 0 and k = 1 is gone (k = 0 now gives 1133.89 Hz against 1138.9 Hz), and M1 brings it
+back. There was no other deviation, and every registered check was run once.
+
+**Decision by the registered rule: done.** Every check J0 to B4 was met, NC8 and NC9 behaved as stated, ten of ten mutations
+were caught, and the audited tests pass. The weakness of J2 is recorded above and in the note for the lead.
+
+### Remaining questions
+
+1. The ADR 0575 known-miss record now passes. Options: (a) keep it ignored as the record of run 1 of ADR 0575, as its text
+   says; (b) retire it as a record plus a copy. Recommendation: (a), which needs no change. The lead may add a line to its note.
+2. A sharper localisation measure for interface modes, such as the energy share of the boundary strip, or a MAC against the
+   matched sector after interpolation. Recommendation: not needed now, since J1 and M1 show that the mode is gone. Keep it in
+   mind for the next non-matching check.
+3. Boundaries other than the nested 2:3 groups (see the D2 limits). Recommendation: a follow-up only when a non-nested user
+   boundary appears. Until then the docs should keep recommending the finer side as the high side where the mesher allows it.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> Structural solver, advanced tier. Follow-up of F-648 (ADR 0575, 2026-11-15). DONE. ADR 0583, 2026-11-12: two-sided shell edge ties for non-matching cyclic boundaries under CyclicOptions::shell_extensions with interpolation. The low nodes that the high ties leave undetermined (the support of the null space of the weight matrix) follow the high shell edges rotated back by R^T. The high nodes whose weights lie wholly on those low nodes are released as masters, so the finer side is the dependent side where it is finer. A double-pass tie that keeps every high row was shown to lock the interface (6.7e-2). The kept high ties are substituted by hand, so the chain refusal of the elimination is not met; the rows are CyclicBoundary::two_sided. On the ADR 0575 frustum with the low side finer (2:3), the four lowest frequencies of each harmonic are within 1.02e-2 of the matched sector (limit 2e-2). ADR 0575 measured 4.2e-2 there, with a mode local to the interface at 1091 Hz; that mode is gone, and the fourth k = 0 value is now 1133.9 Hz against 1138.9 Hz. At the doubled mesh the difference is 1.7e-3 (ratio 0.16), and the tied rows hold to 8e-16. On the rotating paths of ADR 0561 (set A and the Coriolis whirl, at 0.2 and 0.4 omega_1, Shell4 with Shell3 at the pole and all Shell3), the ADR 0575 cap agrees with the full model within 1.8e-14 with equal counts. Boundaries where no low node is undetermined (I1 and I2a of ADR 0575, matched boundaries) keep their bits (a hash of the frequency bits was recorded before the change), and every rcfd-fem test and baseline_hashes pass. Ten of ten mutations caught. The ignored ADR 0575 I2b known-miss record now passes when run, and is kept as a record. The registered localisation measure for interface modes did not separate the old mode (1.22 against a limit of 2), so the no-local-mode clause rests on the frequency comparison. Not covered: a node-to-edge mortar (still refused), non-nested ratios other than 2:3, the rotating paths with a non-matching boundary, and static solves on these boundaries.
