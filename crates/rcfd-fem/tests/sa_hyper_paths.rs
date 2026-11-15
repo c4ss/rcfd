@@ -375,7 +375,7 @@ fn small_amplitude(e: HyperelasticEnergy, s: f64, damping: Option<Rayleigh>) -> 
 fn m3_m3b_m3d_method_step_against_the_linear_integrator_at_small_amplitude() {
     let mut c = Checks::new();
     for (name, e) in [("NHk", nhk()), ("MRk", mrk())] {
-        let big = small_amplitude(e.clone(), 1e-5, None);
+        let big = small_amplitude(e, 1e-5, None);
         let small = small_amplitude(e, 1e-6, None);
         c.at_most(&format!("M3 {name} s = 1e-5"), big, 1e-3);
         println!("M3 {name} s = 1e-6 (for M3b): {small:.6e}");
@@ -449,7 +449,7 @@ fn l0_the_linearised_matrix() {
         ("NHk", nhk(), 1e-10),
         ("MRk", mrk(), 1e-10),
     ] {
-        let d = hyper(e.clone()).linear_elasticity_matrix().unwrap();
+        let d = hyper(e).linear_elasticity_matrix().unwrap();
         let (_, d0) = mat_hyper::stress_and_tangent(&e, &[0.0; 6]).unwrap();
         c.at_most(
             &format!("L0 {name} against the tangent at rest"),
@@ -470,7 +470,7 @@ fn l0_the_linearised_matrix() {
 fn l1_static_and_recovered_stress_against_the_twin() {
     let mut c = Checks::new();
     for (name, e, f, limit) in cantilever_rows() {
-        let a = cantilever(hyper(e.clone()), f, [0.0, 0.0, 1.0]);
+        let a = cantilever(hyper(e), f, [0.0, 0.0, 1.0]);
         let b = cantilever(twin(&e), f, [0.0, 0.0, 1.0]);
         let ra = solve_static(&a, &StaticOptions::default()).unwrap();
         let rb = solve_static(&b, &StaticOptions::default()).unwrap();
@@ -496,7 +496,7 @@ fn l2_homogeneous_uniaxial_bar() {
     let delta = 1e-3;
     for (name, e) in [("NHc", nhc()), ("MRc", mrc())] {
         let mut model = SolidModel::new(hex_box([0.0; 3], [1.0; 3], [2, 2, 2]).unwrap());
-        model.add_material("all", hyper(e.clone())).unwrap();
+        model.add_material("all", hyper(e)).unwrap();
         model.add_constraint(Constraint::displacement("xmin", 0, 0.0)).unwrap();
         model.add_constraint(Constraint::displacement("ymin", 1, 0.0)).unwrap();
         model.add_constraint(Constraint::displacement("zmin", 2, 0.0)).unwrap();
@@ -534,7 +534,7 @@ fn l2_homogeneous_uniaxial_bar() {
 fn l3_modes_against_the_twin_known_miss() {
     let mut c = Checks::new();
     for (name, e, f, limit) in cantilever_rows() {
-        let a = modal_analysis(&cantilever(hyper(e.clone()), f, [0.0, 0.0, 1.0]), &ModalOptions::new(6)).unwrap();
+        let a = modal_analysis(&cantilever(hyper(e), f, [0.0, 0.0, 1.0]), &ModalOptions::new(6)).unwrap();
         let b = modal_analysis(&cantilever(twin(&e), f, [0.0, 0.0, 1.0]), &ModalOptions::new(6)).unwrap();
         let mut w = 0.0;
         for (x, y) in a.frequencies.iter().zip(&b.frequencies) {
@@ -554,7 +554,7 @@ fn l3_modes_against_the_twin_known_miss() {
 fn l4_l5_l6_l8_transient_harmonic_buckling_damped_modes_against_the_twin() {
     let mut c = Checks::new();
     let e = nhc();
-    let a = cantilever(hyper(e.clone()), SolidFormulation::Full, [0.0, 0.0, 1.0]);
+    let a = cantilever(hyper(e), SolidFormulation::Full, [0.0, 0.0, 1.0]);
     let b = cantilever(twin(&e), SolidFormulation::Full, [0.0, 0.0, 1.0]);
     // L4.
     let n = a.dof_map().n_equations();
@@ -601,7 +601,7 @@ fn l4_l5_l6_l8_transient_harmonic_buckling_damped_modes_against_the_twin() {
             .unwrap()
             .factors
     };
-    let fa = factors(&cantilever(hyper(e.clone()), SolidFormulation::Full, [-1.0, 0.0, 0.0]));
+    let fa = factors(&cantilever(hyper(e), SolidFormulation::Full, [-1.0, 0.0, 0.0]));
     let fb = factors(&cantilever(twin(&e), SolidFormulation::Full, [-1.0, 0.0, 0.0]));
     let mut w = 0.0;
     for (x, y) in fa.iter().zip(&fb) {
@@ -940,7 +940,7 @@ fn f1m_refusals_after_f620() {
 fn l3_nhc_mrc_rows() {
     let mut c = Checks::new();
     for (name, e, f, limit) in cantilever_rows().into_iter().take(2) {
-        let a = modal_analysis(&cantilever(hyper(e.clone()), f, [0.0, 0.0, 1.0]), &ModalOptions::new(6)).unwrap();
+        let a = modal_analysis(&cantilever(hyper(e), f, [0.0, 0.0, 1.0]), &ModalOptions::new(6)).unwrap();
         let b = modal_analysis(&cantilever(twin(&e), f, [0.0, 0.0, 1.0]), &ModalOptions::new(6)).unwrap();
         let mut w = 0.0;
         for (x, y) in a.frequencies.iter().zip(&b.frequencies) {
@@ -962,7 +962,7 @@ fn l3_nhc_mrc_rows() {
 fn l3d_nhi_bbar_diagnostic() {
     let e = nhi();
     let a = modal_analysis(
-        &cantilever(hyper(e.clone()), SolidFormulation::BBar, [0.0, 0.0, 1.0]),
+        &cantilever(hyper(e), SolidFormulation::BBar, [0.0, 0.0, 1.0]),
         &ModalOptions::new(6),
     );
     let b = modal_analysis(
@@ -979,10 +979,7 @@ fn l3d_nhi_bbar_diagnostic() {
     );
     let mut o = ModalOptions::new(6);
     o.max_iterations = 2000;
-    let a = modal_analysis(
-        &cantilever(hyper(e.clone()), SolidFormulation::BBar, [0.0, 0.0, 1.0]),
-        &o,
-    );
+    let a = modal_analysis(&cantilever(hyper(e), SolidFormulation::BBar, [0.0, 0.0, 1.0]), &o);
     let b = modal_analysis(&cantilever(twin(&e), SolidFormulation::BBar, [0.0, 0.0, 1.0]), &o);
     println!(
         "L3d (record) 2000 iterations, hyperelastic: {:?}",
