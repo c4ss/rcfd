@@ -616,7 +616,8 @@ impl Integrator {
         if options.step == StepKind::EnergyMomentum && options.residual_reference != ResidualReference::Driver {
             return Err(invalid(
                 "nl_transient",
-                "the inertia-term residual reference with the energy-momentum step: the midpoint step has no inertia                  contribution (ADR 0603 D2)"
+                "the inertia-term residual reference with the energy-momentum step: the midpoint step has no inertia \
+                 contribution (ADR 0603 D2)"
                     .to_string(),
             ));
         }
