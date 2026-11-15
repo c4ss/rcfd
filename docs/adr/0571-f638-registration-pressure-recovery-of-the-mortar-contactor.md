@@ -287,3 +287,11 @@ expected, every planned mutation caught, B and `baseline_hashes` unchanged, fmt 
    becomes a default (ADR 0551 open question 3, the maintainer's call).
 2. Pointwise negative recovered tractions near the contact edge (above). Options: (a) accept (a reading of the discrete field),
    (b) dual or positive weighting functions in the contactor. Recommendation: (a); (b) only with a new registered item.
+
+## For the lead: roadmap entries
+
+Proposed status of F-638: **done**. New note:
+
+> Structural solver, advanced tier. Follow-up of F-623 (ADR 0551, 2026-11-15). DONE. ADR 0571, 2026-11-15: rcfd_fem::contact::ContactSet::recovered_tractions: the traction sum_a (t_a/A_a) Phi_a of the mortar contactor at the load-rule points of its contactor faces, one RecoveredTraction per point (face, local coordinates, reference position, weight, nominal pressure); its projection onto the face's shape functions is the same field (span Phi = span N, continuous across faces). Read from it, the Hertz problems HS20m and HS10m meet radius 3.5e-2 and 7.4e-2, peak 7.4e-3 and 4.1e-2, approach 1.2e-2 and 1.4e-2 with the gap tolerance 1e-8 (the same solves as ADR 0551, whose nodal reading gave radius 0.21 and 4.9); the patch tests PT20m and PT10m within 3.4e-14 on the recovered traction (1.6e-14 on the total Lagrangian body); the force identity sum_g W_g p_g = sum_a t_a to 3.3e-16; five of five mutations caught; defaults bit-identical (additions only). Making the recovered traction the reported pressure of mortar nodes, and the mortar contactor the default for quadratic faces, are the maintainer's call.
+
+No follow-up proposed (the remaining questions of addendum 1 are the maintainer's call or need no item).
