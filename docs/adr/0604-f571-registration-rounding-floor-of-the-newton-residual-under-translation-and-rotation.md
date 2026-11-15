@@ -328,7 +328,9 @@ for the maintainer in the addendum below; recommendation in Addendum 2.
    bound branch of D2 builds an `Attempt` and so needs the new field: the merge-resolution commit adds `step_lengths` to it
    (the same value the relative-test branch returns). Nothing else of F-608 or F-571 changes. M1 to M3 and NC1b's file are run
    on this merged tip, each once (NC1b was run once on the d8b6f3f5 merge, `f571-scratch/am1-nc1b.log`: met; it is run
-   again in M1 as part of the crate, and that is the run reported).
+   again in M1 as part of the crate, and that is the run reported). Before M1 ran (a start on the 2bc0141c merge was stopped
+   unread), the lead's main moved to a9efc22e (F-596, ADR 0608; F-683, ADR 0611): merged as well, clean, it builds without a
+   further change; M1 to M3 run on that tip (`fead5505` and the commit of this paragraph).
 2. **Correction (the lead, from ADR 0609 of F-681).** The energy-momentum step (`nl_transient/emc.rs`) and the
    discrete-gradient step (`nl_transient/dg.rs`) have their own Newton loops and never call the driver's `attempt_with`, so
    they never reach the bound. The sentences "A run with such a contribution (`nl_transient`, its energy-momentum and
