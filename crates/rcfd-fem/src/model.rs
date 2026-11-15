@@ -559,6 +559,11 @@ pub struct CyclicOptions {
     /// edges rotated by `2 pi / N` (node to edge), and the rotation unknowns of interpolated and axis nodes get the rows of
     /// ADR 0456 D4. Refused without `shells`.
     pub shell_extensions: bool,
+    /// With `shells`, Beam2 elements are taken by the cyclic paths (ADR 0595): the rotation unknowns of the six-unknown nodes
+    /// get the rows of ADR 0556 D2, and the sector stands for the ring whose sector `j` has the sector's beams rotated by `R^j`,
+    /// their orientation vectors `R^j v` included (the element is objective, ADR 0595 D3). Refused without `shells` and with
+    /// `interpolation` or `axis_nodes`; [`crate::cyclic::full_rotor`] still refuses Beam2 (one orientation per block).
+    pub beams: bool,
 }
 
 impl CyclicOptions {
@@ -584,6 +589,11 @@ impl CyclicOptions {
     /// With shells, also interpolated boundaries and nodes on the axis (ADR 0575).
     pub fn shell_extensions(mut self, on: bool) -> CyclicOptions {
         self.shell_extensions = on;
+        self
+    }
+    /// With shells, also Beam2 elements (ADR 0595).
+    pub fn beams(mut self, on: bool) -> CyclicOptions {
+        self.beams = on;
         self
     }
 }
@@ -1113,6 +1123,14 @@ impl SolidModel {
             } => {
                 if let Some(t) = options.interpolation.and_then(|i| i.tolerance) {
                     positive_finite("tolerance", t)?;
+                }
+                // ADR 0595 D1a: the beams option qualifies the shells option.
+                if options.beams && !options.shells {
+                    return Err(FemError::InvalidValue {
+                        key: "cyclic",
+                        reason: "the beams option qualifies the shells option of the cyclic constraint (ADR 0595)"
+                            .into(),
+                    });
                 }
                 // ADR 0556 D1: with shells the boundaries are node sets.
                 let kind = if options.shells {
