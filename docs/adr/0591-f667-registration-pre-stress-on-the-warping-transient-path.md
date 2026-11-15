@@ -250,3 +250,83 @@ amendment. **todo**: TR1+ or TR1- missed with TR1T of the same sign missed, or B
   0585); (b) `beta K` only (needs a second stiffness in the integrator, a change of `transient.rs`). Recommendation (a).
 - **Q2. An indefinite `K + K_sigma`.** (a) integrate as the linear equations say (this ADR); (b) report the negative-eigenvalue
   count (the follow-up of ADR 0585 Q3) on the transient too. Recommendation (b) with that follow-up.
+
+## Addendum 1 (2026-11-15): results
+
+Written after the one registered run of `sa_beam_warping_f667.rs` (log `f667-scratch/run1.log`, code commit 295b7ad3), the B0
+runs (`b0_base.log` on the base 25a93dca with no library line changed, `after.log`) and the mutation runs (`mutations.log`,
+`mut_Z*.log`). The numbers are those the tests printed (release). No limit was changed, no amendment was written, and nothing
+was re-run to pick a result.
+
+### Results against the registered limits
+
+| id | measured | limit | verdict |
+|---|---|---|---|
+| B0 | 4 digests of the default `WarpingTransient::new` bit-identical to the base record; the ADR 0546, 0548, 0574, 0585 and 0588 bit records unchanged | equal | met |
+| P0 | undamped and Rayleigh, displacement and velocity after 100 steps with a zero pre-stress bit-equal to `new` | equal | met |
+| TR1+ (acceptance) | `6.484e-3` | `1.5e-2` | met |
+| TR1- (acceptance, full beam beyond its weak-axis Euler load) | `6.516e-3` | `1.5e-2` | met |
+| TR1T+ / TR1T- | `6.484e-3` / `6.516e-3` | `1.5e-2` | met |
+| TR2+ / TR2- | `1.994570` / `1.997194` | `[1.9, 2.05]` | met |
+| TR4+ / TR4- | `1.1e-13` / `4.8e-13` | `1e-9` | met |
+| TRD+ / TRD- | `2.20e-4` / `1.72e-4` | `2e-3` | met |
+| TR3+ / TR3- | `5.48e-6` / `9.11e-7` | `2e-5` | met |
+| TR5+ / TR5- | `2.64` / `1.90` | `> 0.5` | met |
+| HB+ / HB- | `0` / `0` | `1e-10` | met |
+| LG- | `63.3` | `> 10` | met |
+| LG+ | `0.999` | `<= 1.5` | met |
+| R (4 refusals) | RF8, RF10 (section), RF10 (numbering) key `"warping"`; the six-unknown pattern key `"load pattern"` | exact | met |
+
+Every measured value agrees with its numpy estimate to the digits quoted in the arithmetic (TR1, TR2, TRD, TR3, TR5 to four
+figures; LG- `63.3` against the Euler estimate `63.1`). The twist of the full beam and of the torsion-only model are the same to
+ten printed digits in both signs: the bending stays exactly zero (HB), so the indefinite bending part of the compressed full beam
+is never excited by the symmetric load, while the lateral control LG- shows it grows by a factor of 63 per period when it is
+excited.
+
+### Mutations (scratch copy `f667-scratch/mut`, own target dir, one at a time)
+
+| mutation | result | caught by |
+|---|---|---|
+| Z1 `K_sigma` not added | caught | TR1+-, TR1T+-, TR2+-, TRD+-, TR3+-, LG- |
+| Z2 `- K_sigma` | caught | as Z1 and LG+ |
+| Z3 `2 K_sigma` | caught | TR1+-, TR1T+-, TR2+-, TRD+-, TR3+- |
+| Z4 `0.5 K_sigma` | caught | as Z1 |
+| Z5 `K_sigma` not reduced | caught | a panic in `CsrMatrix::from_triplets` (an index beyond the reduced size) in every test that builds `with_prestress` |
+| Z6 `check_for` skipped | caught | R (both RF10 cases) |
+
+Six of six caught. Z5 is caught by a panic, not by a refusal with a key; the registration allowed "a refusal, or TR1".
+
+### Other runs
+
+`cargo test -p rcfd-fem --release` for the warping test binaries (`sa_beam_warping_f598`, `_f598_bits`, `_f626`, `_f626_bits`,
+`_f627`, `_f635`, `_f635_bits`, `_f643`, `_f661`, `_f661_bits`, `_f663`, `_f663_bits`, `_f667`, `_f667_bits`): all passed, the
+ignored records stay ignored (the `_f661` tests cover the shared `reduced_geometric` moved out of the pre-stressed harmonic
+path). `cargo test -p rcfd-api --release --test baseline_hashes`: 3 passed, 1 ignored (unchanged). `cargo clippy -p rcfd-fem
+--release --all-targets -- -D warnings`: clean. `cargo fmt -p rcfd-fem --check`: clean. The whole rcfd-fem suite was not run
+(the lead runs the gate).
+
+### Decision
+
+**Done** by the registered rule: every registered check met in the one run, every mutation caught, no amendment. By clause: a1
+is met (TR5, P0 and mutations Z1 to Z4 show that the integrator runs on `K + K_sigma` of the `from_static` pre-stress); a2 is met
+for both signs on the full fork beam (the compressed one by the registered handling: the symmetric step torque does not excite
+the unstable bending, HB- exactly 0) and on the torsion-only model; a3 is met (B0, P0, the earlier bit records).
+
+### Remaining questions
+
+- Q1 (the Rayleigh stiffness): (a) `beta (K + K_sigma)`, as taken (TRD confirms it against the damped series; `beta K` only
+  would differ by `3.2e-2` / `9.0e-2`); (b) `beta K` only (a second stiffness in `transient.rs`). Recommendation: (a), the
+  convention of ADR 0543 and ADR 0585.
+- Q2 (an indefinite `K + K_sigma`): (a) integrate as the linear equations say (as taken; LG- shows the growth); (b) report the
+  negative-eigenvalue count, as the follow-up proposed by ADR 0585 for the harmonic path. Recommendation: (b), by extending that
+  follow-up to the transient constructor (proposed below as a change of its acceptance, not a new item).
+- Q3 (Z5's failure mode): a matrix of the wrong size given to `from_triplets` panics instead of returning an error. Not reachable
+  through the public API (the reduction is internal). Recommendation: leave it.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> Structural solver, advanced tier. Follow-up of F-661 (ADR 0585, 2026-11-15). DONE. ADR 0591, 2026-11-15: the linear transient with the warping unknown takes a pre-stress (`WarpingTransient::with_prestress`, a `WarpingPrestress`, for example `from_static` of the warping static solve): the integrator of ADR 0389 on K + K_sigma and M, so the Rayleigh stiffness is beta (K + K_sigma) and the strain energy that of K + K_sigma; RF8 and RF10 of ADR 0548 apply; `WarpingTransient::new` unchanged. Fork-supported I beam, step torque at midspan, axial force N = +/-0.5 of the torsional buckling load (tension positive): the midspan twist follows the continuous modal series with omega_m^2 = (G J k_m^2 + N I_p/A k_m^2 + E C_w k_m^4)/(rho I_p) within 6.5e-3 of the static twist over two periods at 16 elements (Newmark, T_1/400), both signs, on the full beam and on the torsion-only model; energy conserved to 5e-13; with Rayleigh damping 2.2e-4 of the damped series. In compression the full beam is beyond its weak-axis Euler load (K + K_sigma indefinite): the symmetric torque leaves the bending exactly zero, and a lateral step force grows by a factor of 63 in the second period (bounded in tension); the indefinite system is integrated without a warning. Defaults bit-identical (4 digests, and a zero pre-stress gives the bits of no option). Six of six mutations caught. No warping inertia, no nonlinear transient, no case-file key.
+
+> Note for the proposed follow-up "Negative-pivot count of the pre-stressed warping harmonic solve" (ADR 0585): extend its acceptance with "and WarpingTransient::with_prestress reports the same count".
