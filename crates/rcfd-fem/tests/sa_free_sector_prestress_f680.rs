@@ -12,8 +12,8 @@ use rcfd_fem::model::CyclicOptions;
 use rcfd_fem::rotating::{free_sector_unit_static, RotatingOptions, RotatingSector, WhirlModes};
 use rcfd_fem::solve::{solve_static, StaticOptions};
 use rcfd_fem::{
-    BeamSection, BlockProperty, Constraint, ElasticSupport, ElementKind, FemError, LinearTerm, Load, Material, SolidMesh,
-    SolidModel,
+    BeamSection, BlockProperty, Constraint, ElasticSupport, ElementKind, FemError, LinearTerm, Load, Material,
+    SolidMesh, SolidModel,
 };
 use std::f64::consts::PI;
 
@@ -36,12 +36,41 @@ const OMEGA_1_TABLE: f64 = 312.434403687127;
 
 /// ADR 0602 arithmetic 4: the polygon model's four lowest `|lambda|` on the coarse mesh, set F, `(j, k, values)`.
 const AG_TABLE: [(usize, usize, [f64; 4]); 6] = [
-    (1, 2, [277.606374132585, 360.935622735102, 424.386111234562, 424.654099882103]),
-    (1, 3, [861.883303688418, 924.417315795607, 1242.513846364662, 1243.021062763019]),
-    (2, 2, [253.762145009690, 420.426358337451, 460.879675777895, 461.415635628995]),
-    (2, 3, [856.410018758138, 981.488151845963, 1271.221898263074, 1272.236345340532]),
-    (3, 2, [239.861473143049, 489.872077918155, 516.050892824875, 516.854789006668]),
-    (3, 3, [866.582637948845, 1054.225102212552, 1317.824847221716, 1319.346553541724]),
+    (
+        1,
+        2,
+        [277.606374132585, 360.935622735102, 424.386111234562, 424.654099882103],
+    ),
+    (
+        1,
+        3,
+        [861.883303688418, 924.417315795607, 1242.513846364662, 1243.021062763019],
+    ),
+    (
+        2,
+        2,
+        [253.762145009690, 420.426358337451, 460.879675777895, 461.415635628995],
+    ),
+    (
+        2,
+        3,
+        [856.410018758138, 981.488151845963, 1271.221898263074, 1272.236345340532],
+    ),
+    (
+        3,
+        2,
+        [239.861473143049, 489.872077918155, 516.050892824875, 516.854789006668],
+    ),
+    (
+        3,
+        3,
+        [
+            866.582637948845,
+            1054.225102212552,
+            1317.824847221716,
+            1319.346553541724,
+        ],
+    ),
 ];
 
 /// ADR 0602 arithmetic 4: the polygon's hoop force over `rho A R^2`, minus 1, per mesh.
@@ -214,7 +243,8 @@ fn fp1_fp2_wh_ag_gn_the_free_sector_prestress_against_the_constrained_copy() {
         let m = sector(nc);
         let new = RotatingSector::new(&m, &opt_in()).unwrap();
         let ps_copy = prestress_at(nc, 1);
-        let copy = RotatingSector::with_unit_prestress(&m, ps_copy.clone(), &RotatingOptions::new(3).coriolis(true)).unwrap();
+        let copy =
+            RotatingSector::with_unit_prestress(&m, ps_copy.clone(), &RotatingOptions::new(3).coriolis(true)).unwrap();
         // GN.
         let fs = free_sector_unit_static(&m, &opt_in()).unwrap();
         let g = fs.gauge_node;
@@ -362,7 +392,12 @@ fn rx_or_rm_the_rigid_motions_and_the_reaction_free_gauge() {
     let rs = rigid_motions(&m);
     let names = ["t e_a", "t e_b", "t a", "r e_a", "r e_b", "r a"];
     let kinf = (0..k.n)
-        .map(|i| k.val[k.row_ptr[i]..k.row_ptr[i + 1]].iter().map(|v| v.abs()).sum::<f64>())
+        .map(|i| {
+            k.val[k.row_ptr[i]..k.row_ptr[i + 1]]
+                .iter()
+                .map(|v| v.abs())
+                .sum::<f64>()
+        })
         .fold(0.0f64, f64::max);
     let dofs = m.dof_map();
     let rot = 2.0 * PI / N as f64;
@@ -418,12 +453,12 @@ fn dot_v(a: &[f64], b: &[f64]) -> f64 {
 #[test]
 fn nc0b_without_the_option_the_free_sector_is_refused() {
     let m = sector(MESHES[0]);
-    let r = RotatingSector::new(
-        &m,
-        &RotatingOptions::new(3).coriolis(true).free_sector_prestress(false),
-    );
+    let r = RotatingSector::new(&m, &RotatingOptions::new(3).coriolis(true).free_sector_prestress(false));
     let refused = matches!(r, Err(FemError::SingularStiffness { .. }));
-    println!("NC0b free_sector_prestress(false): SingularStiffness {refused} {}", met(refused));
+    println!(
+        "NC0b free_sector_prestress(false): SingularStiffness {refused} {}",
+        met(refused)
+    );
     assert!(refused, "expected SingularStiffness");
 }
 
@@ -439,8 +474,17 @@ fn nc2_the_opt_in_refuses_supports_and_other_constraints() {
         .unwrap();
     for (name, m) in [("displacement", &a), ("elastic support", &b), ("linear", &c)] {
         let r = RotatingSector::new(m, &opt_in());
-        let refused = matches!(r, Err(FemError::InvalidValue { key: "free_sector_prestress", .. }));
-        println!("NC2 ({name}): refused with key free_sector_prestress {refused} {}", met(refused));
+        let refused = matches!(
+            r,
+            Err(FemError::InvalidValue {
+                key: "free_sector_prestress",
+                ..
+            })
+        );
+        println!(
+            "NC2 ({name}): refused with key free_sector_prestress {refused} {}",
+            met(refused)
+        );
         ok &= refused;
     }
     assert!(ok, "NC2 missed");
@@ -449,7 +493,10 @@ fn nc2_the_opt_in_refuses_supports_and_other_constraints() {
 #[test]
 fn nc3_df_the_option_is_not_read_without_stress_stiffening_and_is_off_by_default() {
     let df = !RotatingOptions::new(3).free_sector_prestress;
-    println!("DF RotatingOptions::new(3).free_sector_prestress == false: {df} {}", met(df));
+    println!(
+        "DF RotatingOptions::new(3).free_sector_prestress == false: {df} {}",
+        met(df)
+    );
     let m = sector(MESHES[0]);
     let om = speeds()[2];
     let base = RotatingOptions::new(3).coriolis(true).stress_stiffening(false);
@@ -462,7 +509,14 @@ fn nc3_df_the_option_is_not_read_without_stress_stiffening_and_is_off_by_default
             .iter()
             .zip(&wb.modes)
             .all(|(x, y)| x.omega.to_bits() == y.omega.to_bits())
-        && wa.frequencies_all.iter().zip(&wb.frequencies_all).all(|(x, y)| x.to_bits() == y.to_bits());
-    println!("NC3 stress_stiffening(false): whirl frequencies with and without the opt-in bit-identical {same} {}", met(same));
+        && wa
+            .frequencies_all
+            .iter()
+            .zip(&wb.frequencies_all)
+            .all(|(x, y)| x.to_bits() == y.to_bits());
+    println!(
+        "NC3 stress_stiffening(false): whirl frequencies with and without the opt-in bit-identical {same} {}",
+        met(same)
+    );
     assert!(df && same, "NC3 or DF missed");
 }
