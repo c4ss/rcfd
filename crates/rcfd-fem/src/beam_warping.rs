@@ -2021,7 +2021,9 @@ fn sturm_negatives(
             Err(FemError::InvalidValue {
                 key: "stiffness",
                 reason: format!(
-                    "the stiffness at omega = 0 is numerically singular in the elimination order (at a buckling load, or                      an unsupported motion): pivot {pivot:e} at node {node} component {component} is at most                      {threshold:e}; no negative-eigenvalue count"
+                    "the stiffness at omega = 0 is numerically singular in the elimination order (at a buckling load, or \
+                     an unsupported motion): pivot {pivot:e} at node {node} component {component} is at most \
+                     {threshold:e}; no negative-eigenvalue count"
                 ),
             })
         }
