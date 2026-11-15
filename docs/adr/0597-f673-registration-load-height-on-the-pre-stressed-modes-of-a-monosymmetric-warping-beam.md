@@ -246,3 +246,36 @@ after a post-run amendment. **todo**: A missed for any case, or B0/B1 missed.
 
 - None new. ADR 0594 Q1 (tie the entry's force to the pre-stress) stays as recommended there: (a) restated and documented now,
   (c) read from the static model with a case-file key (F-625).
+
+## Amendment 1 (2026-11-15): a diagnostic of the M0 miss, registered before its run
+
+Written after the one registered run (`f673-scratch/run1.log`) and before the run of the diagnostic below. **M0 missed**:
+`omega_0` of `modal_analysis` is `5.22e-4` above `omega_T` (limit `1e-4`, estimate `5e-6`); every other check of the run was
+met. M0 becomes the ignored record `m0_unloaded_coupled_mass_known_miss` with its limit intact; the B1 part of the same test
+function, met, is kept as its own test `b1_shear_centre_entry` (the same code). No limit is changed.
+
+**Diagnosis (by reading and one numpy emulation, `f673-scratch/diag_mass.py`, done after the run).** The estimate `5e-6`
+assumed that the element's mass is the consistent discretisation of `T_ref` of D2 on the element's own fields. It is not, for a
+section with an offset: `local_mass` interpolates the centroid translation from the nodal pair `(v_c, theta_z)` with the bending
+shape functions of the plane (`plane_mass`), while the stiffness's fields are `v_s(x)` from `(v_s, theta_z)` and `phi(x)` from the
+Hermite `(phi, chi)`. The nodal slope of the centroid line is `v_c' = v_s' + z_0 chi`, but the mass reads `theta_z` (about `v_s'`)
+as that slope, so its `v_c(x)` is not `v_s(x) + z_0 phi(x)` inside the element: the coupling `rho A z_0 v_s phi` is integrated
+with a twist field that has lost its nodal slopes. This is an `O(l^2)` error of the mass, not of D2, and it vanishes for a
+section without an offset (which is why ADR 0594 M0 met `4e-6`). An Euler-Bernoulli Hermite emulation of exactly this
+interpolation (nodal `(v_c, theta, phi, chi)`, stiffness in `v_s = v_c - z_0 phi`, mass on the `(v_c, theta)` Hermite) gives
+`omega_0` against the closed form `+2.15e-3` (8 elements), **`+5.38e-4` (16)**, `+1.35e-4` (32), `+3.4e-5` (64), the ratio `0.25`
+per halving; with `v_c(x) = v_s(x) + z_0 phi(x)` it gives `+7.4e-7` at 16. The measured `+5.22e-4` matches the emulation at 16
+elements within `3%`.
+
+**Diagnostic D-M0 (registered now, run once after this commit).** `e_n = omega_0(n)/omega_T - 1` of `modal_analysis` of the fork
+beam with `n = 16, 32, 64` elements (same section, supports and mass; `omega_T` of D5):
+
+| id | check | limit | estimate |
+|---|---|---|---|
+| DM-1 | `e_32/e_16` | in `[0.15, 0.35]` | `0.25` |
+| DM-2 | `e_64/e_32` | in `[0.15, 0.35]` | `0.25` |
+| DM-3 | `|e_64|` | `<= 1e-4` | `3.5e-5` |
+
+DM-1 to DM-3 met confirm the diagnosis (an `O(l^2)` mass discretisation that converges to the coupled closed form of D5, so the
+derived kinetic energy of D2 is the one the library converges to); they do not turn M0 into a met check. The decision rule is
+unchanged: with M0 missed the proposed status is **partial**.
