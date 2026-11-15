@@ -344,3 +344,104 @@ at rings 2 and 3); MT2 and M32 (the separation puts nothing in the absent modes)
   layer include the end-face term (D5) and are records.
 * No surface crack or free-surface corner (the front meets no free surface); no case-file key.
 * The citations of D4 to D6 are from memory; each formula used is derived or verified numerically here.
+
+## Addendum 1: results (2026-11-15)
+
+Code (commit 69607232): `crates/rcfd-fem/src/fracture.rs`, the only library file changed, 606 lines added and none changed or
+removed: `FrontShape::Elliptical`, `CrackFront::elliptical`, the private `FrontKind::Elliptical`, `confocal`, the elliptical
+branches of `check`, `advance`, `tangent`, `param`, `distance`, `hat_integral` (`edge_hat_integral`), the refusal at the head of
+`opening_k`; `TipMode`, `near_tip_gradient`, `ModeFactors`, `interaction_integral`, `hooke`; `EllipticalCrack`,
+`CrackedEllipse`, `elliptical_crack_block`, all as in D1 to D6. Tests: `crates/rcfd-fem/tests/sa_fracture_modes.rs` (every row).
+`sa_fracture.rs` not edited; `docs/reference-data.md` gets an F-632 section.
+
+The fast rows were run once (`f632-scratch/run1.log`, the code before `cargo fmt`), the heavy record EH once alone
+(`f632-scratch/heavy.log`: 87 663 unknowns, supernodal solve 16.5 s, the whole test 17.3 s). `cargo fmt -p rcfd-fem` then
+reformatted the new lines only (no change of a token's meaning); `cargo clippy` was clean without a change. No development probe
+was run before the registered run.
+
+| check | limit | measured | met |
+|---|---|---|---|
+| EH1 fine ellipse, ring-3 K at 13 stations against the hat-averaged Irwin form | `<= 0.03` | 8.42e-3 (station 0, `phi = 0`; all low, -8.4e-3 at `phi = 0` to -2.8e-3 at `phi = pi/2`) | yes |
+| EH2 rings 2 to 4 spread, every station | `<= 0.01` | 2.19e-3 | yes |
+| EH3 `K_0/K_12` against the reference ratio | `<= 0.02` | 5.68e-3 (0.70497 against 0.70900) | yes |
+| EH4 rings 2 and 4 (printed) | none | 1.02e-2, 8.24e-3 | (record) |
+| EF coarse ellipse, ring-2 K at 5 stations | `<= 0.08` | 3.34e-2 (station 0; -3.3e-2 to -1.3e-2) | yes |
+| EU1 uniform expansion, coarse ellipse, rings 1 to 3 | `<= 1e-8` | 3.5e-15, 2.7e-14, 2.1e-14 | yes |
+| EU2 the same, coarse penny | `<= 1e-8` | 3.3e-15, 2.2e-14, 9.1e-15 | yes |
+| MI1 inclined `K_I` against `sigma sqrt(pi a) cos^2 beta` | `<= 0.02` | 5.73e-3 (0.75429 against 0.75) | yes |
+| MI2 inclined `K_II` against `sigma sqrt(pi a) sin beta cos beta` | `<= 0.02` | 6.17e-3 (0.43568 against 0.43301) | yes |
+| MI3 `|K_III|/(sigma sqrt(pi a))` | `<= 1e-8` | 1.3e-16 | yes |
+| MI4 J against `(K_I^2 + K_II^2)/E'` | `<= 0.02` | 2.40e-3 | yes |
+| MI5 `K_I`, `K_II` over rings 2 to 4 | `<= 0.01` | 6.5e-4 | yes |
+| M31 antiplane `K_III` against `tau sqrt(pi a)` | `<= 0.02` | 3.85e-3 | yes |
+| M32 `max(|K_I|, |K_II|)/(tau sqrt(pi a))` | `<= 1e-8` | 3.6e-16 | yes |
+| M33 `sqrt(2 mu J)` against `K_III` | `<= 0.01` | 9.9e-4 | yes |
+| MT1 mode-I plate, `K_I` against `plane_strain_k(J)` | `<= 0.01` | 1.06e-3 | yes |
+| MT2 `max(|K_II|, |K_III|)/K_I` | `<= 1e-8` | 8.0e-13 | yes |
+| MR per-station values (printed) | none | the end-face term of D5 as predicted: inclined ring 3 `K_III = -/+ 0.459 sigma sqrt(pi a)` at the two stations, antiplane `K_II = -/+ 1.385 tau sqrt(pi a)`, both cancelling in the front mean to `1e-16`; mode-I plate `1.5e-12` | (record) |
+| MA near-tip fields: gradient, `div sigma`, face traction, normalisation | `1e-6`, `1e-5`, `1e-6`, `1e-12` | `<= 4.5e-10`, `<= 4.4e-10`, `<= 5.0e-10`, `<= 2.2e-16` | yes |
+| R5 the 11 refusals and the `1e-8 a` control | refused, accepted | each refused with its key and text; the control accepted | yes |
+| F1 every aggregated value finite | finite | finite | yes |
+
+Mutations (`f632-scratch/mutate.py` on the copy `f632-scratch/mut` of 69607232, target `f632-scratch/target-mut`, the fast tests
+of `sa_fracture_modes.rs`; log `f632-scratch/mutations.log`), each run once:
+
+| mutation | caught by | as registered? |
+|---|---|---|
+| M1 inner rings left out (F-429 M12) | EU1 (ring 2 0.93, ring 3 3.7), EU2 (0.50, 2.0), EF (9.1e-2); EU at ring 1 unchanged (control) | yes |
+| M2 radial advance on the ellipse | EF (0.117) | yes |
+| M3 elliptical weight by the circle formula | EF (0.304) | yes |
+| M4 mode-II auxiliary `u2` sign flipped | MA (II div, faces, normalisation), MI2 (0.232), MI4, MI5 | yes (MA also) |
+| M5 `W^int` dropped | MI1, MI2, MI4, MI5, MT1 (0.140), M33 (1.17e-2) | MI1, MI2, MT1 yes; M31 not (antiplane: `W^int` of the III field is zero for a pure III state, as D5 shows) |
+| M6 plane-stress `E M/2` | MI1, MI2, MI4, MT1 | yes |
+| M7 `e3 = n x e` | M31 (2.00: sign), M33 | yes |
+| M8 auxiliary rotation transposed | MI1 (0.79), MI2, MI4, MI5, MT1, M31, M33 | yes |
+| M9 elliptical distance test disabled | R5 (the `1e-4 a` node accepted) | yes |
+| M10 mode-I `u1` with `kappa + cos theta` | MA (I div 2.6, faces, normalisation), MI1, MI4, MI5, MT1 | yes |
+
+All 10 mutations caught. In particular the inner-ring mutation of F-429 (M12 there, M1 here) is caught by the exact
+uniform-field check on both the elliptical and the circular path, with the margin of D2 (rounding `<= 2.7e-14` against
+`>= 0.5`).
+
+Also run: `cargo test -p rcfd-fem --release --lib --test sa_fracture --test sa_scaffold` (14, 7 + 1 ignored, 9 + 32 ignored:
+passed), `cargo test -p rcfd-api --release --test baseline_hashes` (3 passed, 1 ignored: unchanged),
+`cargo clippy -p rcfd-fem --all-targets --release -- -D warnings` (clean), `cargo fmt -p rcfd-fem --check` (clean after the
+format). Not run: the whole `rcfd-fem` suite (the lead runs the gate; no line of an existing path changed) and the F-429 heavy
+record PH (its code path gained match arms only).
+
+Deviations: none from the registered set-ups. The heavy record takes 17 s, well under the two minutes of the house rule; it
+stays `#[ignore]` as registered (the lead may make it a normal test).
+
+**Decision by the registered rule: done.** Every registered check, the heavy record EH included, is met; every mutation is
+caught; fmt and clippy clean; the crate's affected tests and `baseline_hashes` pass. Clause by clause: c1 EH1 (8.4e-3 against
+3e-2, K varying by 41 % along the front), c2 EU1/EU2 and EH2, c3 the interaction integral (MI3, MI4, M32, M33, MT1, MT2), c4 MI1
+and MI2 within 2 %, c5 M31 within 2 %, c6 D4 to D6 with arithmetic 1 to 4, c7 EH `#[ignore]` with EF/EU as fast companions, c8
+D7 (no existing line changed, `baseline_hashes` unchanged).
+
+Remaining questions:
+
+1. F-429's status. Its rule was partial only because its M12 was not caught; the same mutation is now caught on its circular
+   path by EU2 of this ADR. Options: (a) leave F-429 partial and record the catch in its note; (b) F-429 done by reference to
+   ADR 0605 EU2. Recommendation: (b), with the note below; the lead decides (it changes another item's status).
+2. The interaction integral on curved fronts (correction terms for non-exact auxiliary fields, e.g. a mixed-mode penny or
+   elliptical crack under inclined load). Options: none now; a follow-up. Recommendation: the follow-up below.
+3. The heavy record runs in 17 s. Options: keep it ignored as registered; make it a normal test. Recommendation: keep it
+   ignored in this ADR; the lead may un-ignore it without changing a limit.
+4. The citations (Irwin 1962, Green and Sneddon 1950, Williams 1957, Yau, Wang and Corten 1980, Moran and Shih 1987; and the Tada
+   and deLorenzi citations of ADR 0547) remain from memory: no copy is in the repository. No limit depends on them (every formula
+   used is derived or verified numerically). Recommendation: check them when the sources are at hand.
+5. A case-file key for fracture parameters: still open (it would change the schema golden; not taken).
+
+## For the lead: roadmap entries
+
+Proposed status of F-632: done by the registered rule.
+
+> Proposed status: done.
+
+> Structural solver, advanced tier. Follow-up of F-429 (ADR 0547). ADR 0605, 2026-11-12: rcfd_fem::fracture gains CrackFront::elliptical (an ellipse a > b in the crack plane, nodes within 1e-6 a; parameter the elliptic angle of confocal coordinates, advance direction the outward normal of the confocal ellipse, int phi ds along the quadratic front edges), elliptical_crack_block (the penny mesh mapped by mu = mu0 + ln(rho/a) onto an embedded elliptical crack, quarter of a half block), interaction_integral (K_I, K_II, K_III of a straight front from M = int (sigma_ij u^aux_i,k + sigma^aux_ij u_i,k - sigma_ij eps^aux_ij delta_jk) q_k,j dV with the Williams near-tip fields of near_tip_gradient; K_I,II = E' M/2, K_III = mu M; refuses curved and half-symmetric fronts and a domain of several materials). Met: embedded elliptical crack b/a = 0.5 (heavy record, 87 663 unknowns) ring-3 K within 8.4e-3 of Irwin's sigma sqrt(pi b)/E(k) (sin^2 phi + (b/a)^2 cos^2 phi)^(1/4) (hat-averaged) at all 13 stations (limit 3e-2; K varies by 41 percent), rings 2-4 within 2.2e-3, K(0)/K(pi/2) within 5.7e-3; the inner rings left out of the tapered integral caught by an exact uniform-expansion check (residual 2.7e-14 against 0.5 to 3.7 when mutated) on the elliptical and the circular front; inclined centre crack beta = 30 deg, W = 10 a: K_I within 5.7e-3 of sigma sqrt(pi a) cos^2 beta, K_II within 6.2e-3 of sigma sqrt(pi a) sin beta cos beta (limits 2e-2), K_III 1.3e-16; antiplane shear K_III within 3.9e-3 of tau sqrt(pi a); mode-I plate K_I from M within 1.1e-3 of K from J, K_II and K_III below 1e-12; 10 of 10 mutations caught. No case-file key.
+
+Proposed new note text for F-429 (its status to done by ADR 0605's catch of its M12, if the lead agrees; question 1):
+
+> Structural solver, advanced tier (plan ADR 0310, stub ADR 0332). ADR 0547, 2026-11-15: rcfd_fem::fracture. CrackFront (straight within 1e-6 of its length or circular within 1e-6 of its radius; plane normal, advance direction, half-symmetric flag); j_integral, the equivalent domain integral int (sigma_ij u_i,k - W delta_jk) q_k,j dV over rings of element layers about the front, q = rho phi_j e with a hat per front station, refusing a ring whose q = 1 nodes reach a boundary other than the crack faces, the mirror plane and the end faces; plane_strain_k (K = sqrt(J E/(1 - nu^2))); opening_k (least-squares line of K_app = E delta sqrt(2 pi/r)/(8 (1 - nu^2)) extrapolated to r = 0); paris_cycles (Gauss-Legendre in log a); builders centre_crack_plate and penny_crack_cylinder. Met: centre crack W = 10 a, plane strain, Hex20: K from J of rings 2-4 within 2.1e-3 of the secant form (limit 2e-2), rings within 1.2e-3 of each other, J against the energy difference of a +/- 0.02 a within 7.5e-5, K from the opening within 1.2e-2 (limit 5e-2); pure shear opening factor 1.3e-13 of the tension value (limit 1e-8); penny crack in R = 10 a (heavy record, 96 267 unknowns) K within 2.2e-3 of 2 sigma sqrt(a/pi), uniform along the front within 2.7e-7; Paris m = 3 and m = 2 within 7e-16; a bent front and a ring reaching the boundary refused. Mutation M12 (inner rings left out of the integral), uncaught by ADR 0547's checks, is caught on the circular path by the uniform-expansion check EU2 of ADR 0605, 2026-11-12. No case-file key.
+
+> Follow-up proposed: Interaction integral on curved crack fronts. Deps F-632. Acceptance: Every limit not stated here is registered in the ADR before the run. The interaction integral on circular and elliptical fronts with the correction terms of auxiliary fields that are not exact there; a penny-shaped crack under inclined tension with K_I, K_II and K_III along the front within 3 percent of the closed forms, and the straight-front results of ADR 0605 unchanged.
