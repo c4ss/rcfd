@@ -18,6 +18,13 @@
 //! total torque of the warping elements ([`WarpingPrestress::from_static`]; RF8 lifted for it, [`buckling_factors_with`]), the
 //! 14-unknown consistent mass ([`local_mass`], the Hermite twist, no warping inertia), the modes ([`modal_analysis`]) and the
 //! pre-stressed modes ([`prestressed_modes`]).
+//!
+//! ADR 0553 (F-627) adds sections with a shear-centre offset ([`WarpingSection::with_shear_centre`],
+//! [`WarpingSection::monosymmetric_i`]): the element is that of ADR 0546 in the unknowns of the shear centre, `v_s = v_c - z_0
+//! phi`, `w_s = w_c + y_0 phi`, transformed to the centroid unknowns of the nodes ([`section_local_stiffness`]); the axial-force
+//! part of the geometric stiffness stays in centroid unknowns, the moment part takes the Wagner coefficients about the shear
+//! centre `beta - 2 (z_0, y_0)` ([`section_local_geometric_stiffness`]); the mass is that of the centroid. A section without an
+//! offset runs the arithmetic of ADR 0546 and ADR 0548 unchanged. The bimoment load is [`Warping::bimoment`].
 
 use crate::assemble::{element_dofs, point_stiffness};
 use crate::beam::{self, GAUSS4_W, GAUSS4_X};
@@ -59,6 +66,7 @@ fn warping_error(reason: String) -> FemError {
 pub struct WarpingSection {
     c_w: f64,
     wagner: [f64; 2],
+    shear_centre: [f64; 2],
 }
 
 impl WarpingSection {
@@ -81,6 +89,7 @@ impl WarpingSection {
         Ok(WarpingSection {
             c_w,
             wagner: [beta_y, beta_z],
+            shear_centre: [0.0; 2],
         })
     }
 
@@ -89,6 +98,7 @@ impl WarpingSection {
         WarpingSection {
             c_w: 0.0,
             wagner: [0.0; 2],
+            shear_centre: [0.0; 2],
         }
     }
 
@@ -119,7 +129,113 @@ impl WarpingSection {
         let j = (2.0 * b_f * t_f.powi(3) + h_w * t_w.powi(3)) / 3.0;
         let section = BeamSection::new(a, i_y, i_z, j, shear, shear)?;
         let c_w = t_f * b_f.powi(3) * h_c * h_c / 24.0;
-        Ok((section, WarpingSection { c_w, wagner: [0.0; 2] }))
+        Ok((
+            section,
+            WarpingSection {
+                c_w,
+                wagner: [0.0; 2],
+                shear_centre: [0.0; 2],
+            },
+        ))
+    }
+
+    /// The thin-walled monosymmetric I of ADR 0553 D5: flange 1 `b_1 x t_1` on the `+e_3` side, flange 2 `b_2 x t_2` on the
+    /// `-e_3` side, the web `h_w x t_w` between their inner faces, the flanges along the section axis y. `A`, `I_y`, `I_z` and
+    /// the centroidal Wagner coefficient `beta_y = int z (y^2 + z^2) dA/I_y` of the three rectangles, `J = (b_1 t_1^3 + b_2 t_2^3
+    /// + h_w t_w^3)/3`; with the flange inertias `I_k = t_k b_k^3/12` and `h_c = h_w + (t_1 + t_2)/2`, the warping constant `C_w =
+    /// I_1 I_2 h_c^2/(I_1 + I_2)` and the shear centre at `h_c I_1/(I_1 + I_2)` from the mid-plane of flange 2 (`y_0 = 0`, `z_0`
+    /// from the centroid), `beta_z = 0` by symmetry. Refuses a dimension that is not positive and finite, naming it.
+    #[allow(clippy::too_many_arguments)]
+    pub fn monosymmetric_i(
+        b_1: f64,
+        t_1: f64,
+        b_2: f64,
+        t_2: f64,
+        h_w: f64,
+        t_w: f64,
+        shear: f64,
+    ) -> Result<(BeamSection, WarpingSection)> {
+        for (key, v) in [
+            ("b_1", b_1),
+            ("t_1", t_1),
+            ("b_2", b_2),
+            ("t_2", t_2),
+            ("h_w", h_w),
+            ("t_w", t_w),
+        ] {
+            if !(v.is_finite() && v > 0.0) {
+                return Err(FemError::InvalidValue {
+                    key,
+                    reason: format!("{v} must be positive and finite"),
+                });
+            }
+        }
+        let (a_1, a_2, a_w) = (b_1 * t_1, b_2 * t_2, h_w * t_w);
+        let a = a_1 + a_2 + a_w;
+        let h_c = h_w + 0.5 * (t_1 + t_2);
+        // Distances from the mid-plane of flange 2, towards flange 1.
+        let z_web = 0.5 * t_2 + 0.5 * h_w;
+        let z_bar = (a_1 * h_c + a_w * z_web) / a;
+        let (z_1, z_2, z_w) = (h_c - z_bar, -z_bar, z_web - z_bar);
+        let i_y = b_1 * t_1.powi(3) / 12.0
+            + a_1 * z_1 * z_1
+            + b_2 * t_2.powi(3) / 12.0
+            + a_2 * z_2 * z_2
+            + t_w * h_w.powi(3) / 12.0
+            + a_w * z_w * z_w;
+        let i_z = t_1 * b_1.powi(3) / 12.0 + t_2 * b_2.powi(3) / 12.0 + h_w * t_w.powi(3) / 12.0;
+        let j = (b_1 * t_1.powi(3) + b_2 * t_2.powi(3) + h_w * t_w.powi(3)) / 3.0;
+        // int z (y^2 + z^2) dA over a rectangle of width b (along y) between za and zb.
+        let rect = |b: f64, za: f64, zb: f64| {
+            b.powi(3) / 12.0 * (zb * zb - za * za) / 2.0 + b * (zb.powi(4) - za.powi(4)) / 4.0
+        };
+        let s = rect(b_1, z_1 - 0.5 * t_1, z_1 + 0.5 * t_1)
+            + rect(b_2, z_2 - 0.5 * t_2, z_2 + 0.5 * t_2)
+            + rect(t_w, z_w - 0.5 * h_w, z_w + 0.5 * h_w);
+        let (f_1, f_2) = (t_1 * b_1.powi(3) / 12.0, t_2 * b_2.powi(3) / 12.0);
+        let c_w = f_1 * f_2 * h_c * h_c / (f_1 + f_2);
+        let h_2 = h_c * f_1 / (f_1 + f_2);
+        let section = BeamSection::new(a, i_y, i_z, j, shear, shear)?;
+        Ok((
+            section,
+            WarpingSection {
+                c_w,
+                wagner: [s / i_y, 0.0],
+                shear_centre: [0.0, h_2 - z_bar],
+            },
+        ))
+    }
+
+    /// The same section with its shear centre at `(y_0, z_0)` (m, in the section axes, from the centroid; ADR 0553 D1). The
+    /// Wagner coefficients stay the centroidal integrals of [`WarpingSection::new`]. Refuses a non-finite value (key
+    /// `"shear_centre"`).
+    pub fn with_shear_centre(self, y_0: f64, z_0: f64) -> Result<WarpingSection> {
+        if !(y_0.is_finite() && z_0.is_finite()) {
+            return Err(FemError::InvalidValue {
+                key: "shear_centre",
+                reason: format!("({y_0}, {z_0}) must be finite"),
+            });
+        }
+        Ok(WarpingSection {
+            shear_centre: [y_0, z_0],
+            ..self
+        })
+    }
+
+    /// The shear centre `(y_0, z_0)` from the centroid, m.
+    pub fn shear_centre(&self) -> [f64; 2] {
+        self.shear_centre
+    }
+
+    /// The Wagner coefficients about the shear centre, `(beta_y - 2 z_0, beta_z - 2 y_0)` (ADR 0553 D2; `beta_y - 2 z_0` is the
+    /// monosymmetry coefficient `beta_x` of Trahair's notation).
+    pub fn wagner_about_shear_centre(&self) -> [f64; 2] {
+        let [y_0, z_0] = self.shear_centre;
+        [self.wagner[0] - 2.0 * z_0, self.wagner[1] - 2.0 * y_0]
+    }
+
+    fn has_offset(&self) -> bool {
+        self.shear_centre != [0.0; 2]
     }
 
     /// The warping constant `C_w`, m^6.
@@ -139,6 +255,7 @@ impl WarpingSection {
 pub struct Warping {
     blocks: Vec<(usize, WarpingSection)>,
     restrained: Vec<String>,
+    bimoments: Vec<(String, f64)>,
 }
 
 impl Warping {
@@ -163,6 +280,16 @@ impl Warping {
     /// The restrained node sets.
     pub fn restrained(&self) -> &[String] {
         &self.restrained
+    }
+    /// The same with the bimoment `value` (N m^2, the generalised force of the warping unknown `chi`) at every node of
+    /// `node_set`, a load of [`solve_static`] (ADR 0553 D6).
+    pub fn bimoment(mut self, node_set: &str, value: f64) -> Warping {
+        self.bimoments.push((node_set.to_string(), value));
+        self
+    }
+    /// The bimoment loads.
+    pub fn bimoments(&self) -> &[(String, f64)] {
+        &self.bimoments
     }
 }
 
@@ -466,6 +593,93 @@ pub fn element_geometric_stiffness(
     ))
 }
 
+/// `O^T A O` for a 14 x 14 local matrix `A` of the shear-centre unknowns (ADR 0553 D1): `O` the identity with `O[v][phi] =
+/// -z_0`, `O[w][phi] = y_0` at each node (`v_s = v_c - z_0 phi`, `w_s = w_c + y_0 phi`). Only the rows and columns of the twist
+/// `phi` (3 and 10) change.
+fn offset_transform(a: &ElementMatrix, shear_centre: [f64; 2]) -> ElementMatrix {
+    let [y_0, z_0] = shear_centre;
+    let mut out = a.clone();
+    let m = out.values_mut();
+    for o in [0, 7] {
+        let (v, w, p) = (o + 1, o + 2, o + 3);
+        // A O: column phi += -z_0 column v + y_0 column w.
+        for i in 0..14 {
+            m[i * 14 + p] += -z_0 * m[i * 14 + v] + y_0 * m[i * 14 + w];
+        }
+    }
+    for o in [0, 7] {
+        let (v, w, p) = (o + 1, o + 2, o + 3);
+        // O^T (A O): row phi += -z_0 row v + y_0 row w.
+        for j in 0..14 {
+            m[p * 14 + j] += -z_0 * m[v * 14 + j] + y_0 * m[w * 14 + j];
+        }
+    }
+    out
+}
+
+/// The twelve local end forces of the centroid unknowns in the shear-centre form (ADR 0553 D4): the torque at each end about
+/// the shear centre, `T_s = T_c + z_0 V_y - y_0 V_z`; the other entries unchanged.
+pub fn shear_centre_end_forces(end_forces: &[f64; 12], shear_centre: [f64; 2]) -> [f64; 12] {
+    let [y_0, z_0] = shear_centre;
+    let mut f = *end_forces;
+    for o in [0, 6] {
+        f[o + 3] += z_0 * f[o + 1] - y_0 * f[o + 2];
+    }
+    f
+}
+
+/// The 14 x 14 local stiffness of a warping element of the section `ws` in the centroid unknowns (ADR 0553 D1):
+/// [`local_stiffness`] with `ws.c_w()` when the section has no shear-centre offset (the same call), and `O^T K O` of it
+/// otherwise.
+pub fn section_local_stiffness(
+    length: f64,
+    section: &BeamSection,
+    material: &Material,
+    ws: &WarpingSection,
+) -> ElementMatrix {
+    let k = local_stiffness(length, section, material, ws.c_w);
+    if ws.has_offset() {
+        offset_transform(&k, ws.shear_centre)
+    } else {
+        k
+    }
+}
+
+/// The 14 x 14 local geometric stiffness of a warping element of the section `ws` in the centroid unknowns (ADR 0553 D2),
+/// `end_forces` those of the centroid unknowns: [`local_geometric_stiffness`] with `ws.wagner()` when the section has no
+/// shear-centre offset (the same call); otherwise the axial-force part `local_geometric_stiffness(N, None)` in centroid unknowns
+/// plus `O^T G O`, `G` the moment, torque, shear-force and Wagner part of the end forces in shear-centre form
+/// ([`shear_centre_end_forces`]) with the coefficients about the shear centre.
+pub fn section_local_geometric_stiffness(
+    length: f64,
+    section: &BeamSection,
+    material: &Material,
+    axial_force: f64,
+    end_forces: Option<&[f64; 12]>,
+    ws: &WarpingSection,
+) -> ElementMatrix {
+    if !ws.has_offset() {
+        return local_geometric_stiffness(length, section, material, axial_force, end_forces, ws.wagner);
+    }
+    let mut k = local_geometric_stiffness(length, section, material, axial_force, None, [0.0; 2]);
+    if let Some(fc) = end_forces {
+        let fs = shear_centre_end_forces(fc, ws.shear_centre);
+        let g = local_geometric_stiffness(
+            length,
+            section,
+            material,
+            0.0,
+            Some(&fs),
+            ws.wagner_about_shear_centre(),
+        );
+        let g = offset_transform(&g, ws.shear_centre);
+        for (a, b) in k.values_mut().iter_mut().zip(g.values()) {
+            *a += b;
+        }
+    }
+    k
+}
+
 /// What the checks of a model and its [`Warping`] give: the numbering, each element's section (`None` outside the warping
 /// blocks) and the restrained warping equations (ascending).
 struct Layout {
@@ -680,7 +894,7 @@ fn matrices_impl(
             eqs.push(lay.dofs.equation(n).expect("a node of a warping element"));
         }
         // K: the 14-unknown stiffness minus the 12-unknown one (the torsion block only).
-        let mut dk = local_stiffness(f.length, &section, material, ws.c_w);
+        let mut dk = section_local_stiffness(f.length, &section, material, ws);
         let k12 = embed(&beam::local_stiffness(f.length, &section, material));
         for (a, b) in dk.values_mut().iter_mut().zip(k12.values()) {
             *a -= b;
@@ -691,7 +905,12 @@ fn matrices_impl(
         let n_ax = section.area() * beam::normal_stress(&stress[0], f.axes[0]);
         let ends = prestress.beam_terms(e).map(|(ef, _)| *ef);
         if let (true, Some(ef)) = (check_torque, &ends) {
-            // RF8.
+            // RF8, on the torque about the shear centre (ADR 0553 D4).
+            let ef = &if ws.has_offset() {
+                shear_centre_end_forces(ef, ws.shear_centre)
+            } else {
+                *ef
+            };
             let l = f.length;
             let ip = ((section.i_y() + section.i_z()) / section.area()).sqrt();
             let scale = [
@@ -716,8 +935,22 @@ fn matrices_impl(
                 ))));
             }
         }
-        let g = element_geometric_stiffness(&coords, &section, v, material, n_ax, ends.as_ref(), ws.wagner)
-            .map_err(located)?;
+        let g = if ws.has_offset() {
+            let finite = n_ax.is_finite() && ends.as_ref().map_or(true, |f| f.iter().all(|x| x.is_finite()));
+            if !finite {
+                return Err(located(FemError::InvalidValue {
+                    key: "stress",
+                    reason: "the axial force or the end forces of a warping element are not finite".to_string(),
+                }));
+            }
+            to_global(
+                &section_local_geometric_stiffness(f.length, &section, material, n_ax, ends.as_ref(), ws),
+                &f.axes,
+            )
+        } else {
+            element_geometric_stiffness(&coords, &section, v, material, n_ax, ends.as_ref(), ws.wagner)
+                .map_err(located)?
+        };
         let (dkv, gv) = (dk.values(), g.values());
         for i in 0..14 {
             for j in 0..14 {
@@ -1003,7 +1236,7 @@ fn stiffness_aug(model: &SolidModel, lay: &Layout, threads: Option<usize>) -> Re
     let k = point_stiffness(model, threads)?;
     augmented(&k, model, lay, |w, m| {
         (
-            local_stiffness(w.length, &w.section, m, w.warping.c_w),
+            section_local_stiffness(w.length, &w.section, m, &w.warping),
             beam::local_stiffness(w.length, &w.section, m),
         )
     })
@@ -1053,7 +1286,8 @@ impl WarpingStaticResult {
 }
 
 /// The linear static solve of `model` with the warping unknowns of `warping` (ADR 0548 D1): `K_aug` of ADR 0546 D5, the model's
-/// nodal loads (no bimoment load), its prescribed values and the restrained warping unknowns (`chi = 0`), the free rigid
+/// nodal loads and the bimoments of [`Warping::bimoment`] on the warping equations (ADR 0553 D6; an unknown set refused as
+/// `UnknownSet`, a node without a warping unknown with key `"warping"`, a non-finite value with key `"bimoment"`), its prescribed values and the restrained warping unknowns (`chi = 0`), the free rigid
 /// motions refused as [`crate::solve::solve_static`], the sparse `L D L^T` after minimum degree with the pivot rule of ADR
 /// 0275 (`FemError::SingularStiffness`, component 6 for a warping unknown), the reactions. Refuses RF1 to RF4 and RF6 of ADR
 /// 0546 D4.
@@ -1067,6 +1301,27 @@ pub fn solve_static(model: &SolidModel, warping: &Warping, threads: Option<usize
     let k = stiffness_aug(model, &lay, threads)?;
     let n = lay.dofs.n_equations();
     f.resize(n, 0.0);
+    // The bimoment loads (ADR 0553 D6).
+    for (name, value) in &warping.bimoments {
+        if !value.is_finite() {
+            return Err(FemError::InvalidValue {
+                key: "bimoment",
+                reason: format!("{value} on the set '{name}' must be finite"),
+            });
+        }
+        let set = model.mesh().node_set(name).ok_or_else(|| FemError::UnknownSet {
+            kind: SetKind::Node,
+            name: name.clone(),
+        })?;
+        for &node in set {
+            let eq = lay.dofs.equation(node).ok_or_else(|| {
+                warping_error(format!(
+                    "node {node} of the bimoment set '{name}' has no warping unknown"
+                ))
+            })?;
+            f[eq] += value;
+        }
+    }
     fixed.extend(lay.restrained.iter().map(|&eq| (eq, 0.0)));
     let sys = reduce(&k, &f, &fixed)?;
     let free = sys.free().to_vec();
@@ -1181,7 +1436,7 @@ impl WarpingPrestress {
                 }
                 ul[o + 6] = result.displacement[w.eqs[o + 6]];
             }
-            let kl = local_stiffness(w.length, &w.section, material, w.warping.c_w);
+            let kl = section_local_stiffness(w.length, &w.section, material, &w.warping);
             let kv = kl.values();
             let mut f14 = [0.0; 14];
             for (i, o) in f14.iter_mut().enumerate() {
