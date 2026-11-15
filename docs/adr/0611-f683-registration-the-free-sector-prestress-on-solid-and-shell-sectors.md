@@ -203,3 +203,82 @@ the copy route, the limits and the speeds are as registered. The two stopped tes
 (`#[ignore]`, their bodies unchanged and moved into the functions `fs_run` and `ns_run`, which they call with the defective
 `free_cases()` as before); two new tests, `*_amended`, call the same functions with `free_cases_a1()` (the corrected S8). The
 corrected run (run 2) is made once.
+
+## Addendum 1: results (2026-11-15)
+
+No library change (`git diff 2bc0141c -- crates/*/src` is empty): the ADR 0606 code of `free_sector_unit_static` and the
+branch of `RotatingSector::new` take the solid and shell sectors as they are, with the gauge on the three translations of one
+node (D1). Test file `crates/rcfd-fem/tests/sa_free_sector_prestress_solids_shells_f683.rs`: three tests and two ignored
+records of run 1 (the corrected tests run in 1.9 s in release). Run 1 (0e8bcdd6, `f683-scratch/run1.log`) measured NC0s and DF
+and stopped at the S8 set-up (amendment 1); run 2 (c2810294, `f683-scratch/run2.log`, only the two `*_amended` tests) is the
+corrected run, made once; 80ec117d is rustfmt of the test file only.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| FS opt-in pre-stress against the copy route | `1e-10` each | S20 `1.03e-13`, S8 `1.40e-14`, SH4 `1.31e-15`, SH3 `2.42e-15` | yes (run 2) |
+| RX residual at the interior nodes over `max abs f` | `1e-10` each | S20 `1.59e-14`, S8 `3.77e-15`, SH4 `4.79e-15`, SH3 `2.52e-15` | yes (run 2) |
+| RXc the copy route's residual | `1e-10` each | `3.03e-14`, `1.39e-14`, `6.21e-15`, `4.13e-15` | yes (run 2) |
+| OR `r_1`, `r_2` against the load | `1e-13` | `<= 8.8e-17` (all eight) | yes (run 2) |
+| GN gauge node interior, `rho_g / r_max - 1` | interior; `1e-12` | nodes 7, 8, 1, 1, all interior; `<= 2.2e-16` | yes (run 2) |
+| WS whirl frequencies, opt-in against the copy route | `1e-8`; counts, directions equal | S20 `4.26e-14`, SH4 `0` (6 modes each); equal | yes (run 2) |
+| NC0s free S20, SH4 without the opt-in | `SingularStiffness` | both | yes (run 1) |
+| NS1 `unit_prestress`, stress stiffening off, with and without the opt-in | bit-identical | bit-identical on all six models | yes (run 2) |
+| NS2 whirl frequencies at `omega_1 / 2`, `k = 2` | bit-identical | bit-identical on all six (6 modes each) | yes (run 2) |
+| NS3 (a) clamped twins and sprung S20 accepted both ways | both `Ok` | all three | yes (run 2) |
+| NS3 (b) non-zero displacement refused, equal | equal | equal | yes (run 2) |
+| NS3 (c) `whirl_modes(7)` refused, equal | equal | equal | yes (run 2) |
+| NS3 (d) stress stiffening on: clamped and sprung S20 refused | `"free_sector_prestress"` | both | yes (run 2) |
+| DF default | `false` | `false` | yes (runs 1 and 2) |
+| B2 existing tests | pass | `sa_free_sector_prestress_f680` 5, `sa_ring_whirl_beams_f679` 4, `--lib rotating` 6 | yes |
+| B3 diff of the sources | empty | empty (B1 therefore not needed and not run) | yes |
+
+The solid gauges are at the outer radius (S20 node 7, a Hex20 mid-edge node on the arc; S8 node 8), the shell gauges at the
+large end of the frustum (node 1); the copy route held other nodes (S20 nodes 4 and 67, the shells nodes 1 and 10), so FS
+compares two different gauges and confirms D1 and D2: the stress does not depend on the gauge, and the residual at every interior
+node including the gauge node is at rounding (zero reaction). FS on S20, `1.0e-13`, is the largest, as arithmetic 2 expected for
+the stiffest conditioning.
+
+`cargo fmt -p rcfd-fem --check` clean (after 80ec117d); `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings`
+clean.
+
+**Mutations** (a `git archive` copy of 80ec117d per mutation, each with its own `CARGO_TARGET_DIR` and `Compiling rcfd-fem` in
+every log; `f683-scratch/mutate.py`, `run_mutations.sh`, `mut_M*.log`, `mut_summary.log`; each run once, `--no-fail-fast`):
+
+| Id | Caught by |
+|---|---|
+| M1 axial gauge constraint dropped | the FS test (the opt-in `RotatingSector::new` refused `SingularStiffness`: panics) |
+| M2 tangential gauge constraint dropped | as M1 |
+| M5 a third, radial gauge constraint | FS (`0.44 .. 0.89`), RX (`0.38 .. 1.9`), WS (`3.3e-2`, `6.9e-2`) on all four models |
+| M6 default `true` | DF (both files), NC0s (S20, SH4 no longer refused) |
+| M9 branch taken without stress stiffening | **caught**: NS1 on all four free models, NS3 (a) on the clamped twins (refused `"free_sector_prestress"`) and the sprung S20; NS2 (frequencies) stays bit-identical, as ADR 0606 diagnosed; ADR 0606's `sa_free_sector_prestress_f680` still passes under M9 (its NC3, unedited, compares frequencies only) |
+
+**Deviations.** (1) Run 1 stopped at the set-up of S8 (the test copied the node sets of `hex_box` but not its surface sets,
+which a solid sector's cyclic constraint reads); no number of FS to NS3 was printed before amendment 1, which corrected only the
+builder. The two run-1 tests stay as ignored records. (2) None other: every check met in the corrected run, no limit changed.
+
+**Decision by the registered rule: partial.** Every registered check is met and every mutation is caught, M9 among them, and
+every clause of the acceptance is met: `RotatingSector::new` with `free_sector_prestress` on free solid (Hex20, Hex8) and shell
+(Shell4, Shell3) sectors gives the pre-stress of a constrained-copy route within `1.0e-13` (limit `1e-10`) with a residual at the
+interior nodes within `1.6e-14` of the load (limit `1e-10`); with stress stiffening off the opt-in leaves `unit_prestress`, the
+whirl frequencies and the refusals bit-identical on six models; the defaults are bit-identical (no source changed). The rule
+gives partial because FS to NS3 were met only after a post-run amendment (amendment 1), although that amendment fixed a set-up
+defect before any of those numbers had been computed.
+
+### Remaining questions
+
+1. **The status.** Options: (a) partial, as the registered rule gives; (b) done, arguing that amendment 1 corrected a set-up
+   that had stopped before computing any number it governs, so no result could steer it. Recommendation: (a) as recorded, the
+   rule being what it is; the maintainer may take (b) on review, since the corrected run was made once and no limit moved.
+2. **The ADR 0606 NC3 test** still misses M9 on its own. Options: (a) leave it (unedited, as the rules require), the gap now
+   closed by NS1 and NS3 here; (b) a later item replaces it. Recommendation: (a).
+3. **Other element kinds and materials** (tetrahedra, wedges, Shell4 ANDES membranes, layups, orthotropic sectors): D1 holds
+   by the same argument but they are not run. Recommendation: the follow-up below, only if a free sector of one of them is
+   needed; a mounted fan wheel is not free.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> Structural solver, advanced tier. Follow-up of F-680 (ADR 0606). PARTIAL. ADR 0611, 2026-11-15: the free-sector pre-stress on solid and shell sectors, and its scope without stress stiffening. No library change: the ADR 0606 gauge (axial and tangential translation of one interior node, the farthest from the axis) removes the two cyclic rigid motions of solids, which have no rotations, and of shells, whose drilling penalty leaves no other mechanism (derived in the ADR). On free Hex20, Hex8, Shell4 and Shell3 sectors in an oblique frame, RotatingSector::new with free_sector_prestress gives the pre-stress of a constrained-copy route at two other nodes within 1.0e-13 (limit 1e-10), a residual at the interior nodes within 1.6e-14 of the load (limit 1e-10; zero reaction at the gauge), and the whirl frequencies of the copy route within 4.3e-14. With stress stiffening off, the opt-in leaves unit_prestress, the whirl frequencies and the refusals (clamped, sprung and refused sectors) bit-identical on six models; the defaults are bit-identical. Five of five mutations caught, among them the ADR 0606 M9 (the branch taken without stress stiffening), now caught by the pre-stress and refusal checks. Partial by the registered rule only: the checks were met after an amendment that fixed a test set-up (a mesh without its surface sets) before any of their numbers was computed. Not covered: tetrahedra, wedges, ANDES membranes, layups, orthotropic sectors, sectors touching the axis.
+
+> Follow-up proposed: The free-sector pre-stress on tetrahedral, layered-shell and orthotropic sectors. Deps F-683. Acceptance: Every limit not stated here is registered in the ADR before the run. RotatingSector::new with free_sector_prestress on a free Tet10 sector, a free Shell4 layup sector and a free orthotropic solid sector gives the pre-stress of a constrained-copy route within 1e-10 and a residual at the interior nodes within 1e-10 of the load; the defaults bit-identical.
