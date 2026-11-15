@@ -94,6 +94,10 @@ pub enum CgPreconditioner {
     /// One V-cycle of smoothed-aggregation multigrid with the six rigid-body modes of the free nodes as near-null space
     /// (ADR 0305).
     SmoothedAggregation(ElasticAmgSettings),
+    /// [`CgPreconditioner::SmoothedAggregation`] with the six rigid fields carrying their rotation components at the nodes of
+    /// Beam2, Shell4 and Shell3 elements ([`structural_rigid_body_modes`], ADR 0552); takes those kinds. On a solid-only model
+    /// it gives the bits of `SmoothedAggregation`.
+    SmoothedAggregationStructural(ElasticAmgSettings),
 }
 
 /// The ordering of the incomplete Cholesky factor of [`CgPreconditioner::IncompleteCholeskyFill`] (ADR 0357).
@@ -334,8 +338,15 @@ fn solver_name(s: &StaticSolver) -> &'static str {
             preconditioner: CgPreconditioner::SmoothedAggregation(_),
             ..
         } => "cg-amg-rbm",
+        StaticSolver::PreconditionedCg {
+            preconditioner: CgPreconditioner::SmoothedAggregationStructural(_),
+            ..
+        } => STRUCTURAL_AMG_NAME,
     }
 }
+
+/// The solver name of [`CgPreconditioner::SmoothedAggregationStructural`] (ADR 0552).
+pub const STRUCTURAL_AMG_NAME: &str = "cg-amg-rbm-structural";
 
 /// The block partition of the reduced rows by node: `block_ptr` with one block per run of consecutive free equations of
 /// the same node (ADR 0282 D2).
@@ -372,6 +383,65 @@ pub fn smoothed_aggregation(
         .unzip();
     let modes = rigid_body_modes(&points, &components);
     // ADR 0370 D2: the geometric aggregation takes the point of each node block.
+    if settings.aggregation != Aggregation::Greedy {
+        let bp = node_blocks(free, dofs);
+        let block_points: Vec<[f64; 3]> = bp[..bp.len().saturating_sub(1)].iter().map(|&s| points[s]).collect();
+        return ElasticAmg::with_points(a, &bp, &modes, &block_points, settings);
+    }
+    ElasticAmg::new(a, &node_blocks(free, dofs), &modes, settings)
+}
+
+/// The six rigid fields of rows with a point and a component `0..6` (ADR 0552 D1): a small rigid motion `u = t + w x (x - x_0)`,
+/// `theta = w`. Columns 0 to 2 the translations `t = e_j`, 3 to 5 the rotations `w = e_a`; a row of component `c < 3` gets the
+/// entries of `rcfd_linalg::amg_elastic::rigid_body_modes` by the same operations (`x_0` the mean of all rows' points), a row of
+/// component `c >= 3` (a rotation unknown) gets `1` in column `c` and `0` in the others. Panics on a component `>= 6`.
+pub fn structural_rigid_body_modes(points: &[[f64; 3]], components: &[usize]) -> Vec<Vec<f64>> {
+    let n = points.len();
+    let mut x0 = [0.0; 3];
+    for p in points {
+        for d in 0..3 {
+            x0[d] += p[d];
+        }
+    }
+    if n > 0 {
+        for v in x0.iter_mut() {
+            *v /= n as f64;
+        }
+    }
+    let mut modes = vec![vec![0.0; n]; 6];
+    for r in 0..n {
+        let c = components[r];
+        assert!(c < 6, "row {r}: component {c} is not a translation or a rotation");
+        modes[c][r] = 1.0;
+        if c < 3 {
+            let d = [points[r][0] - x0[0], points[r][1] - x0[1], points[r][2] - x0[2]];
+            // e_0 x d = (0, -d_z, d_y); e_1 x d = (d_z, 0, -d_x); e_2 x d = (-d_y, d_x, 0)
+            let rot = [[0.0, -d[2], d[1]], [d[2], 0.0, -d[0]], [-d[1], d[0], 0.0]];
+            for a in 0..3 {
+                modes[3 + a][r] = rot[a][c];
+            }
+        }
+    }
+    modes
+}
+
+/// The multigrid of [`CgPreconditioner::SmoothedAggregationStructural`] (ADR 0552 D2): [`smoothed_aggregation`] with the
+/// near-null space of [`structural_rigid_body_modes`].
+pub fn smoothed_aggregation_structural(
+    a: &CsrMatrix,
+    free: &[usize],
+    dofs: &DofMap,
+    nodes: &[rcfd_core::vec3::Vec3],
+    settings: &ElasticAmgSettings,
+) -> std::result::Result<ElasticAmg, rcfd_linalg::amg_elastic::ElasticAmgError> {
+    let (points, components): (Vec<[f64; 3]>, Vec<usize>) = free
+        .iter()
+        .map(|&q| {
+            let (n, c) = dofs.node_component(q).expect("free equation exists");
+            (nodes[n], c)
+        })
+        .unzip();
+    let modes = structural_rigid_body_modes(&points, &components);
     if settings.aggregation != Aggregation::Greedy {
         let bp = node_blocks(free, dofs);
         let block_points: Vec<[f64; 3]> = bp[..bp.len().saturating_sub(1)].iter().map(|&s| points[s]).collect();
@@ -496,6 +566,14 @@ fn preconditioned_cg(
                 solver,
                 reason: e.to_string(),
             })?;
+            Box::new(amg)
+        }
+        CgPreconditioner::SmoothedAggregationStructural(settings) => {
+            let amg =
+                smoothed_aggregation_structural(a, free, dofs, nodes, settings).map_err(|e| FemError::Solver {
+                    solver,
+                    reason: e.to_string(),
+                })?;
             Box::new(amg)
         }
     };
