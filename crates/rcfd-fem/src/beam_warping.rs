@@ -288,14 +288,12 @@ pub fn local_stiffness(length: f64, section: &BeamSection, material: &Material, 
     k
 }
 
+/// The twist and section rotations `theta`, their derivatives and the translation slopes over the 14 unknowns.
+type Rows14 = ([[f64; 14]; 3], [[f64; 14]; 3], [[f64; 14]; 3]);
+
 /// The rows of the second-order fields of ADR 0508 D1 in the 14-unknown order at `xi`, the twist and its slope on the Hermite
 /// functions.
-fn rows14(
-    length: f64,
-    section: &BeamSection,
-    material: &Material,
-    xi: f64,
-) -> ([[f64; 14]; 3], [[f64; 14]; 3], [[f64; 14]; 3]) {
+fn rows14(length: f64, section: &BeamSection, material: &Material, xi: f64) -> Rows14 {
     let r = beam::second_order_rows(length, section, material, xi);
     let mut theta = [[0.0; 14]; 3];
     let mut theta_p = [[0.0; 14]; 3];
@@ -448,7 +446,7 @@ pub fn element_geometric_stiffness(
 ) -> Result<ElementMatrix> {
     let finite = axial_force.is_finite()
         && wagner.iter().all(|v| v.is_finite())
-        && end_forces.is_none_or(|f| f.iter().all(|v| v.is_finite()));
+        && end_forces.map_or(true, |f| f.iter().all(|v| v.is_finite()));
     if !finite {
         return Err(FemError::InvalidValue {
             key: "stress",
