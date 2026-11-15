@@ -168,7 +168,7 @@ pub enum Material {
         /// Kinematic hardening modulus, Pa.
         kinematic: f64,
     },
-    /// A hyperelastic material (ADR 0328, F-425).
+    /// A hyperelastic material (ADR 0328, F-425; ADR 0541: taken by the nonlinear driver).
     #[non_exhaustive]
     Hyperelastic {
         /// The strain energy.
@@ -1239,6 +1239,15 @@ impl SolidModel {
                     variant: m.name(),
                     location: format!("material {i}, element set '{set}'"),
                     package: crate::mat_creep::FOLLOW_UP,
+                });
+            }
+            // ADR 0541 D3: and the hyperelastic material (the nonlinear driver takes it).
+            if !history && matches!(m, Material::Hyperelastic { .. }) {
+                return Err(FemError::NotYetSupported {
+                    item: "material",
+                    variant: m.name(),
+                    location: format!("material {i}, element set '{set}'"),
+                    package: crate::mat_hyper::FOLLOW_UP,
                 });
             }
             // ADR 0452 D6: a path that does not take the per-point materials refuses them.

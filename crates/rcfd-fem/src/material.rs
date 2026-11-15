@@ -370,7 +370,13 @@ impl Material {
                 location: "the element-constant elasticity matrix".to_string(),
                 package: crate::mat_creep::FOLLOW_UP,
             }),
-            _ => Err(self.not_yet("the constitutive call")),
+            // ADR 0541 D2: nor has the hyperelastic material; only the nonlinear driver takes it.
+            Material::Hyperelastic { .. } => Err(FemError::NotYetSupported {
+                item: "material",
+                variant: self.name(),
+                location: "the element-constant elasticity matrix".to_string(),
+                package: crate::mat_hyper::FOLLOW_UP,
+            }),
         }
     }
 
@@ -417,8 +423,9 @@ impl Material {
     /// does not read the point context. For J2 the return map of [`crate::mat_j2::return_map`] from the committed state
     /// `state` (ADR 0475 D2); for the viscoelastic material the Prony update of [`crate::mat_visco::update`] from the
     /// committed state over the step of `point` (ADR 0485 D2); for the creep material the return of
-    /// [`crate::mat_creep::update`] from the committed state over the step of `point` (ADR 0489 D2). A variant whose package
-    /// has not landed is refused naming it.
+    /// [`crate::mat_creep::update`] from the committed state over the step of `point` (ADR 0489 D2); for the hyperelastic
+    /// material [`crate::mat_hyper::stress_and_tangent`] (ADR 0541 D2). A variant whose package has not landed is refused
+    /// naming it.
     pub fn stress(&self, strain: &[f64; 6], point: &PointContext, state: &[f64]) -> Result<([f64; 6], Matrix6)> {
         let _ = point;
         if self.pending().is_some() {
@@ -445,6 +452,10 @@ impl Material {
             // ADR 0489 D2: the creep return from the committed state over the step of the point context.
             let u = crate::mat_creep::update(self, strain, state, point)?;
             return Ok((u.stress, u.tangent));
+        }
+        if let Material::Hyperelastic { energy, .. } = self {
+            // ADR 0541 D2: the stress and the tangent of the energy (no state, the point context not read).
+            return crate::mat_hyper::stress_and_tangent(energy, strain);
         }
         let d = match self {
             // ADR 0452 D3: the two per-point variants read the point.

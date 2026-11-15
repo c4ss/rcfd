@@ -402,3 +402,20 @@ of the reference unless stated.
    Rice 1974, Rivlin (the simple shear normal stresses, late 1940s) and Bonet and Wood (Nonlinear Continuum Mechanics for Finite
    Element Analysis, the compressible neo-Hookean) are cited from memory, NOT read; volumes, pages and years as recalled.
    Recommend the maintainer checks them; every formula used is derived here.
+
+## Amendment 1 (2026-11-15, written after the code and before any run of `sa_hyper.rs`)
+
+Set-up details fixed while writing the test, before its single registered run; no limit changes.
+
+- **DG1.** The displacement of state (c) of D7 is not zero at `xmin` (`u_y = -0.2 y`, `u_z = -0.2 z` there), so "`xmin` held"
+  cannot hold with it. Corrected: the one-element unit cube without constraints (the free cube of `sa_dg.rs`), started at the
+  displacement of state (c) with zero velocity.
+- **INV1, INV2.** The energies `NH(1e6, 2.1667e6)` and `MR(3.5e5, 1.5e5, 2.1667e6)`. The inverted element of INV2 is the
+  distorted Hex8 of D7 with the nodes of positive reference `x` moved by `u_x = -1.5 x`.
+- **R1 set-up.** At least 5 of the 10 draws of `F` with `det F > 0` per energy.
+- **RF2.** One more row: `nonlinear::solve` of the same model (two load steps) succeeds.
+- **N3.** The smallest relative difference over the points of the element.
+- **Pre-check (disclosed, not a registered run).** After the code and the copies of D8, the existing tests that name the
+  hyperelastic material or the pending states were run once to find other records needed by D8: `sa_dg`, `sa_emc`,
+  `sa_laminate`, `sa_dg_default_bits`, `sa_emc_default_bits`, `si_hex20`, `si_scaffold`, `sa_scaffold` (log
+  `f425-scratch/precheck-affected.log`): all pass, so D8 needs only the two copies of `sa_scaffold.rs`.
