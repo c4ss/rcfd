@@ -11935,7 +11935,8 @@ fixed by the item's registration ADR before any code.
     ADR 0404 order on T2 stays near 1 (0.98 .. 1.16); the reading is a bound, not an order. T2's active set never
     changes, so the exemption is exercised only by the penetration variant, where it is not needed. The total Lagrangian
     path stops with a singular tangent when some contactor nodes start lifted (initial gap > 0), not diagnosed.
-    Mutations 4 of 4 caught. No library change, no case-file key. Follow-up F-608 (optional).
+    Mutations 4 of 4 caught. No library change, no case-file key. Follow-up F-608 (optional). Follow-up F-608 done (ADR
+    0607, 2026-11-15): the lifted-contactor punch converges with NewtonOptions::line_search; Q(10, 1e-12) holds on it.
 - [~] **F-601** Contact search and targets: bucket search, rigid cylinder and sphere targets, Hex20 and Tet faces
   - depends on: F-427
   - acceptance: Every limit not stated here is registered in the ADR before the run. Contact search and targets: a
@@ -12061,12 +12062,28 @@ fixed by the item's registration ADR before any code.
     Large-strain neo-Hookean cube: energy 2.8e-9 against 4.7e-3 with the F-570 average. F-570 bits unchanged (B0),
     defaults bit-identical (baseline_hashes). Ten of ten mutations caught (the acceptance bar alone does not catch
     dropping the correction; the cube does). No case-file key. Follow-up F-611.
-- [ ] **F-608** Total Lagrangian contact with a lifted contactor: convexified tangent on a refused pivot
+- [x] **F-608** Total Lagrangian contact with a lifted contactor: convexified tangent on a refused pivot
   - depends on: F-427, F-600
   - acceptance: Every limit not stated here is registered in the ADR before the run. The total Lagrangian contact driver
     of ADR 0507 converges the punch of T2 with an initial gap of +3e-4 at the four nodes with x > 1.0, and the reading
     Q(10, 1e-12) of ADR 0519 holds on it (limits registered).
-  - note: Structural solver, advanced tier. Optional. Follow-up of F-600 (ADR 0519, 2026-11-14).
+  - note: Structural solver, advanced tier. Follow-up of F-427 and F-600 (ADR 0507, ADR 0519). DONE. ADR 0607,
+    2026-11-15: diagnosis of the refused pivot with a lifted contactor: with the four lifted nodes inactive the first
+    Newton correction (regular tangent) tips the punch about the two supported rows and throws the lifted half 33 to 71
+    gaps into the plate; the next tangent, with forces 1000 times their equilibrium, is indefinite through the contact
+    curvature part; ADR 0570's convexified tangent (curvature_fallback) makes it factor but the undamped iteration then
+    cycles (D6, iteration 12). rcfd_fem::nonlinear::NewtonOptions::line_search (opt-in): each correction of an attempt
+    without a load-factor control takes the step length at which s = -d . r(u + alpha d), the derivative of the energy,
+    has fallen to half its value (full step when it passes, else Illinois regula falsi, at most 8 trials);
+    Contribution::add_trial_force (default add with the tangent dropped; the contact set records nothing); step lengths
+    in LoadStep, Equilibrium and NewtonSolve; refused with the unsymmetric tangent, the arc-length path and the linear
+    contact body. The T2 punch with the gap +3e-4 at the four nodes with x > 1.0 (fallback and line search on) converges
+    (first solve lengths 0.016, 0.042, 0.38, then 1), Q(10, 1e-12) of ADR 0519 holds (0 violations in 13 read pairs,
+    largest ratio 2.6), the punch's z force balance to the last bit; the fallback is never taken (the line search alone
+    gives the same bits). Full steps keep Newton's bits; the line minimum of a soft-tangent cube within 1.2e-5; defaults
+    and records unchanged; 5 of 5 mutations caught. Gaps 1e-4 to 2e-2 converge too (5e-3 with one Q violation, two nodes
+    ending lifted; a report). No case-file key. Follow-up F-684 (Line search on the other total Lagrangian contact
+    cases).
 - [x] **F-609** Pseudo-modes in the viscoelastic own-frequency iteration
   - depends on: F-586
   - acceptance: Every limit not stated here is registered in the ADR before the run. The own-frequency iteration of the
@@ -13500,3 +13517,10 @@ fixed by the item's registration ADR before any code.
     opt-in leaves unit_prestress, the whirl frequencies and the refusals bit-identical to the run without it; the
     defaults bit-identical.
   - note: Follow-up of F-680 (ADR 0606, 2026-11-15).
+- [ ] **F-684** Line search on the other total Lagrangian contact cases
+  - depends on: F-608, F-639
+  - acceptance: "Every limit not stated here is registered in the ADR before the run. The total Lagrangian contact cases
+    ADR 0542 P (hub, d = 1e-3 a) and ADR 0551 HS20t and HS10t are run with NewtonOptions::line_search with and without
+    curvature_fallback; each run converges or its failure is diagnosed, and the fallback iterations and step lengths are
+    recorded (limits registered)."
+  - note: Follow-up of F-608 (ADR 0607, 2026-11-15).
