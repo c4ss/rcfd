@@ -283,3 +283,84 @@ BM3, the relative-motion solve of ADR 0543's load-only path, or the kinematics o
   base variant.
 * The supernodal factor stays refused on the transformation path (ADR 0543 D4).
 * No case-file key: the case file has no direct harmonic analysis.
+
+## Addendum 1: results (2026-11-15)
+
+Code: `crates/rcfd-fem/src/harmonic_direct.rs` (module note; `HarmonicReference`, `DirectHarmonicSolution`; `Transformed`
+keeps the extended-pattern matrices, the prescribed flags and the model; `dynamic_entry`, the entry of `A(omega)` of ADR 0543
+with the same operations in the same order; `solve_transformed` now calls `solve_transformed_full` with no base;
+`base_constant`; `response_with_references`), `crates/rcfd-fem/src/mpc.rs` (`transformation` calls `transformation_body` with
+no values; `transformation_with_values`, crate-internal; a prescribed row takes its value from the map where listed). Tests:
+`sa_harmonic_direct_bm_default_bits.rs` (B0, recorded on cf32422b before the library code, `f619-scratch/b0-base.log`) and
+`sa_harmonic_direct_bm.rs` (every other row). No existing test edited or ignored. Each registered row was run once
+(`f619-scratch/run1.log`, release profile).
+
+| check | limit | measured | met |
+|---|---|---|---|
+| A1 = BM1a H6 with the tip spring, undamped, 0.5 `w1`, against the chain | `<= 1e-8` | 2.38e-13 | yes |
+| A2 = BM3r references of the rigid set on the base against `t = (G, 0, 0)`, `w = 0` | `<= 1e-10` | 0 (one reference, constraint 3) | yes |
+| A3 = RF1 rigid-set kinematics from the returned reference (BM2b) | `<= 1e-10` | 1.02e-17 | yes |
+| A4 = B0 default bits (7 digests of cf32422b) | 0 differ | 0 | yes |
+| BM1b..c undamped, 1.5 / 2.5 `w1` | `<= 1e-8` | 1.18e-13, 2.60e-13 | yes |
+| BM1d loss 0.02, base and tip load, 1.0 `w1` | `<= 1e-8` | 4.49e-13 | yes |
+| BM1e loss 0.02, complex base | `<= 1e-8` | 4.50e-13 | yes |
+| BM1f Rayleigh, complex base, 1.5 `w1` | `<= 1e-8` | 1.67e-13 | yes |
+| BM1g dashpots between the base and the next section | `<= 1e-8` | 5.92e-13 | yes |
+| BM2a..c cantilever (rigid set, spring, foundation, loss, Rayleigh, dashpot, pre-stress) against the relative motion (`w_1 = 1985.6` rad/s) | `<= 1e-8` | 8.58e-13, 5.92e-14, 7.68e-14 | yes |
+| BM2r a..c references against the relative motion's | `<= 1e-8` | 1.73e-12, 3.73e-14, 3.83e-14 | yes |
+| BM3 rigid set on the base, response against the chain | `<= 1e-8` | 2.39e-13 | yes |
+| BM4 both ends driven through linear constraints | `<= 1e-8` | 1.28e-13 | yes |
+| Z1 plain path: bits of `response_with_base`, no references | 0 bits; empty | 0; empty | yes |
+| Z2 transformation path without base: bits of `response`, one reference | 0 bits; one | 0; one | yes |
+| T1 threads 1 and 8 (BM2b, response and references) | 0 bits | 0 | yes |
+| F1 every aggregated error finite | finite | finite (asserted in every row) | yes |
+| N1 BM1d against the tip load alone | `>= 1e-2` | 1.00 | yes |
+| N2 BM2b `y` against `y + G_full` | `>= 1e-2` | 0.690 | yes |
+| RB1, RB2 free / rigid-set dependent equation | key `base motion`, "prescribed equation" | as stated | yes |
+| RB3 given twice, RB4 non-finite | as stated | as stated | yes |
+| RB5 base on one node of the rigid set | key `constraint`, "contradicts" | as stated | yes |
+| RB6 `response_with_base` on the transformation path (ADR 0543 RT1) | key `base motion`, "transformation path" | as stated | yes |
+
+Mutations (`f619-scratch/mutate.py`, copy `f619-scratch/mut` from `git archive` of 4240d999, `CARGO_TARGET_DIR`
+`f619-scratch/target-mut`; log `f619-scratch/mutations.log`), each run once:
+
+| mutation | caught by | as registered? |
+|---|---|---|
+| M1 `A_ext G` dropped | BM1a..g, BM3, BM4, BM2a..c, BM2r a..c | yes |
+| M2 `+ A_ext G` | BM1a..g, BM3, BM4, BM2a..c, BM2r a..c | yes |
+| M3 `G` not added to the response | BM1a..g, BM3, A2, BM4, BM2a..c | yes |
+| M4 `G` only at the base entries | A2, BM4 | yes |
+| M5 `Im G` dropped | BM1e, BM1f, BM3, A2, BM4, BM2a..c, BM2r a..c | yes |
+| M6 mass omitted in `A_ext G` | BM1a..g, BM3, BM4, BM2a..c, BM2r a..c | yes |
+| M7 dashpots omitted in `A_ext G` | BM1g | yes |
+| M8 Rayleigh omitted in `A_ext G` | BM1f, BM2a..c, BM2r a..c | yes |
+| M9 supports omitted in `A_ext G` | BM2a..c, BM2r a..c | yes |
+| M10 `K_sigma` omitted in `A_ext G` | BM2a..c, BM2r a..c | yes |
+| M11 loss coefficient omitted in `A_ext G` | BM1d, BM1e, BM4, BM2a..c, BM2r a..c | yes |
+| M12 references zero | A2, A3, BM2r a..c | yes |
+| M13 references one unknown later | A2, A3, BM2r a..c | yes |
+
+Thirteen of thirteen caught by the registered rows, each by a row whose reference is independent of the mutated code (the
+lesson of ADR 0543 M2).
+
+Also run: `cargo test -p rcfd-fem --release` (263 test binaries, 1121 passed, 0 failed, 302 ignored); `cargo test -p rcfd-api --release --test baseline_hashes` (ok, 3 passed, 1 ignored, unchanged); `cargo test -p rcfd-cli
+--release --test docs_site` (ok, 2 passed); `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings` (clean);
+`cargo fmt -p rcfd-fem -- --check` (clean). No case file, schema or golden changed: the case file has no direct harmonic
+analysis.
+
+Deviations: (1) the mutation script stopped at M12 the first time because its search text had the indentation from before
+`cargo fmt`; M12 had not been applied, so no M12 or M13 run was made then; the text was corrected and M12 and M13 were each
+run once. (2) The B0 base binary was run a second time to capture the whole log (the same binary, the same digests). (3) The
+transformation path of `DirectHarmonic` keeps a clone of the model (for the elimination with the base values, D1), so
+`response_with_references` has the registered signature without a model argument.
+
+**Decision by the registered rule: done.** A1 to A4 and every other registered check and control met; every mutation caught by
+a registered check; no amendment.
+
+Remaining questions:
+
+1. The constraint forces (base reaction, rigid-set forces) on the transformation path are not computed. Options: a follow-up
+   item now; or on demand. Recommendation: on demand (no consumer yet; the case file has no direct harmonic analysis).
+2. `response_with_base` still refuses base motion on the transformation path (the opt-in route, kept so that ADR 0543 RT1
+   holds). Options: keep; or route it to the new solve and supersede RT1 by an ignored record. Recommendation: keep until the
+   case file gets a direct harmonic analysis, and decide with that item.
