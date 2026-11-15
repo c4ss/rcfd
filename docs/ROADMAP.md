@@ -11479,18 +11479,29 @@ fixed by the item's registration ADR before any code.
     modes) -6.377e-3: ratio within 9.2e-3 of 1 (limit 3e-2, about -3 eps/4); water 0.87 (negative control). Nine of nine
     mutations caught. Not covered: damping in the coupled root, fluid-loaded modes above the first, two-sided or
     unbaffled plates, a case-file key.
-- [ ] **F-580** Creep on the B-bar Hex8: point-wise stationary field of the thick cylinder
+- [~] **F-580** Creep on the B-bar Hex8: point-wise stationary field of the thick cylinder
   - depends on: F-411, F-390
   - acceptance: Every limit not stated here is registered in the ADR before the run. The B-bar Hex8 takes the creep
     material on the Newton driver and solve_in_time. The plane-strain cylinder of ADR 0489 (b/a = 2, n = 4) reaches the
     stationary field point-wise within 2 percent of p after the registered redistribution time, and the point-wise error
     does not grow between 5 t* and 20 t* by more than the registered bound. The fully integrated elements keep their
     bits.
-  - note: Structural solver, advanced tier. Follow-up of F-411 (ADR 0489, 2026-11-14). F-580 (note, ADR 0506,
-    2026-11-12/14): creep on the B-bar Hex8 through the nonlinear driver is met point-wise at 5 t* (9.5e-3) and 20 t*
-    (1.6e-2) against the stationary field; the growth bound between them is missed by the finite-strain drift (6.0e-3
-    against 2e-3). F-580 keeps its current status until the growth bound is measured on a reference that allows for
-    finite strain, or is re-registered at a smaller p/E.
+  - note: Structural solver, advanced tier. PARTIAL. ADR 0549, 2026-11-15: creep on the B-bar Hex8 through the
+    Newton driver and solve_in_time (the capability of ADR 0506, no library change), the plane-strain cylinder b/a = 2,
+    n = 4, at the registered p (p/E = 1e-4, largest creep strain 9.7e-3), measured against a finite-strain reference: a
+    one-dimensional axisymmetric total Lagrangian solve written in the test (the same small-strain law on E and S, dead
+    bore pressure, the same steps; it reproduces Lame within 2.9e-6 and the stationary field within 8.5e-6 at p/1000,
+    converges to 2.2e-6 between 400 and 800 elements, and at p departs from the small-strain stationary field by 8.6e-3
+    at 20 t*, growth 6.3e-3, the drift that made ADR 0506's C4 miss). Met: point-wise against the stationary field
+    9.5e-3 at 5 t* and 1.6e-2 at 20 t* (limit 2e-2), against the reference 9.5e-3 and 1.1e-2, growth of the point-wise
+    error against the reference 1.5e-3 within the bound 2e-3 of ADR 0506; Full integration 0.26 (locking control); no
+    source file changed, the bit records and baseline_hashes pass. Partial by the rule: the checks were met after
+    amendment 1 (the reference's Newton stop was below its rounding floor; no check had been measured), and two of four
+    mutations were not caught (the linear strain in the BBar arm, the creep rate halved): the growth of a maximum over
+    points is dominated by the outer-radius O(h) error and does not see bore-side changes of a few 1e-3. The point-wise
+    difference grows by 4.4e-3 at r = 1.05 as a pressure inside the F-bar element (reported). C4 at p of ADR 0506 stays
+    its known miss against the small-strain closed form. Follow-ups F-636 (bore-zone witness), F-637 (F-bar pressure
+    drift).
 - [ ] **F-581** Creep with a temperature factor and load histories on the time-stepping driver
   - depends on: F-411, F-410
   - acceptance: Every limit not stated here is registered in the ADR before the run. Material::Creep takes an optional
@@ -12214,14 +12225,25 @@ fixed by the item's registration ADR before any code.
     or pressure control with the arc-length step).
   - note: Structural solver, advanced tier. Follow-up of F-425 (ADR 0541, 2026-11-15). Amending F-425's small-strain
     clause to option (b) of ADR 0541 open question 1 is the maintainer's call.
-- [ ] **F-623** Mortar contactor for quadratic faces
+- [~] **F-623** Mortar contactor for quadratic faces
   - depends on: F-601
   - acceptance: Every limit not stated here is registered in the ADR before the run. A segment-to-segment (mortar)
     contactor for Hex20 and Tet10 faces that constrains one weighted gap per face node: the Hertz problem of ADR 0540
     HS20 and HS10 on Hex20 and Tet10 meets its limits (radius 0.15, peak 0.20, approach 0.10) with the gap tolerance
     1e-8, the patch tests of ADR 0540 PT10 and PT20 within 1e-8, the tangent within 1e-6, the total Lagrangian body
     included; defaults bit-identical.
-  - note: Structural solver, advanced tier. Follow-up of F-601 (ADR 0540, 2026-11-15).
+  - note: Structural solver, advanced tier. Follow-up of F-601 (ADR 0540, 2026-11-15). PARTIAL. ADR 0551, 2026-11-15:
+    rcfd_fem::contact: an opt-in mortar contactor for Hex20 and Tet10 faces
+    (ContactOptions::quadratic_contactor(QuadraticContactor::Mortar)): one weighted gap per face node with the
+    transformed weighting basis Phi (corner N_i + (N_e + N_e')/4, edge N_e/2, a partition of unity with positive
+    integrals), element-based integration by the face's load rule; the patch tests PT10 and PT20 within 6e-14 (linear
+    and total Lagrangian body), node areas to 7e-16, tangents within 2.8e-10 (warped Hex8, curved Hex20 and rigid sphere
+    targets); the Hertz problems HS20 and HS10 now reach the gap tolerance 1e-8 with peak and approach within 2.5e-2;
+    defaults bit-identical. Known misses: the contact radius of HS20 and HS10 (0.21 and 4.9 against 0.15: the nodal
+    multipliers t_a/A_a oscillate between corner and mid-edge nodes, so the fit reads coefficients, not values) and the
+    Hertz problem on the total Lagrangian body (singular tangent at the first iteration: no curvature-free fallback on
+    that path). Follow-ups F-638 (pressure recovery), F-639 (curvature-free fallback on the total Lagrangian body).
+    Making the mortar contactor the default for quadratic faces, and its case-file key, are the maintainer's call.
 - [ ] **F-624** Cached dissection order and symbolic analysis of the Newton driver's supernodal factor
   - depends on: F-618
   - acceptance: Every limit not stated here is registered in the ADR before the run. The supernodal factor of
@@ -12320,3 +12342,34 @@ fixed by the item's registration ADR before any code.
     the 14-unknown stiffness and mass of ADR 0548. The first torsional resonance equals sqrt((G J k^2 + E C_w k^4)/(rho
     I_p)) within 1e-3 at 16 elements; every result without the option bit-identical.
   - note: Structural solver, advanced tier. Follow-up of F-626 (ADR 0548, 2026-11-15).
+- [ ] **F-636** Bore-zone witness for the finite-strain growth of the B-bar creep cylinder
+  - depends on: F-580
+  - acceptance: Every limit not stated here is registered in the ADR before the run. On the cylinder of ADR 0549 at the
+    registered p, the error of the points with r < 1.1 a against the finite-strain reference of ADR 0549, its growth
+    between 5 t* and 20 t* within a registered bound; the mutations of ADR 0549 that were not caught (the linear strain
+    in the BBar arm, the creep rate halved) caught by a registered check; the checks of ADR 0549 unchanged.
+  - note: Structural solver, advanced tier. Follow-up of F-580 (ADR 0549, 2026-11-15).
+- [ ] **F-637** Pressure drift of the F-bar Hex8 under creep at finite strain
+  - depends on: F-580, F-587
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The growth of 4.4e-3 of p of the
+    point-wise stress difference against the finite-strain reference at r = 1.05 (ADR 0549 F4, equal in sigma_r and
+    sigma_theta) diagnosed: its scaling with p/E, its presence in a one-dimensional F-bar proxy, and whether a J-based
+    volumetric part of the law removes it, each with a registered limit; the default element and every existing result
+    bit-identical.
+  - note: Structural solver, advanced tier. Follow-up of F-580 (ADR 0549, 2026-11-15).
+- [ ] **F-638** Pressure recovery of the mortar contactor
+  - depends on: F-623
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The traction sum_a (t_a/A_a) Phi_a
+    of ADR 0551's mortar contactor recovered at the load-rule points (or projected onto the face's shape functions) and
+    reported per point; the Hertz problems of ADR 0551 HS20m and HS10m read from it meet radius 0.15, peak 0.20,
+    approach 0.10 with the gap tolerance 1e-8; the patch tests PT10m and PT20m within 1e-8 on the recovered traction;
+    defaults bit-identical.
+  - note: Structural solver, advanced tier. Follow-up of F-623 (ADR 0551, 2026-11-15).
+- [ ] **F-639** Curvature-free fallback of the total Lagrangian contact body
+  - depends on: F-623
+  - acceptance: Every limit not stated here is registered in the ADR before the run. When the exact tangent of the total
+    Lagrangian contact body fails the pivot test, that iteration takes the contact matrix without its curvature part
+    (ADR 0507 amendment 2, as the linear body); ADR 0551 HS20t and HS10t (the mortar contactor, total Lagrangian body)
+    meet radius 0.15, peak 0.20, approach 0.10 with the gap tolerance 1e-8; the existing total Lagrangian contact
+    records and the default bits unchanged.
+  - note: Structural solver, advanced tier. Follow-up of F-623 (ADR 0551, 2026-11-15).
