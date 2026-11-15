@@ -289,6 +289,9 @@ fn mixed_errors(name: &str, v: &[ModeFactors]) -> [f64; 3] {
     e
 }
 
+/// A component of a [`ModeFactors`].
+type Getter = fn(&ModeFactors) -> f64;
+
 fn coarse_half_cylinder_spec() -> PennyCrack {
     PennyCrack::new(A, 10.0 * A, 10.0 * A, A / 8.0, 2, 4, 0.25 * A, 1, 0.5 * A, 1.5, 1.6)
 }
@@ -403,7 +406,7 @@ fn pm1_to_pm8_penny_inclined_heavy() {
     c.at_most("PM4 K_II, K_III relative where |K_ref| >= A/2", pm4, 0.03);
     let mut pm5: f64 = 0.0;
     for j in 0..=last {
-        let comps: [(fn(&ModeFactors) -> f64, f64, bool); 3] = [
+        let comps: [(Getter, f64, bool); 3] = [
             (|x| x.k_i, a_one(), true),
             (|x| x.k_ii, a_two(), true),
             (|x| x.k_iii, a_three(), j > 0 && j < last),
@@ -459,7 +462,7 @@ fn pm1_to_pm8_penny_inclined_heavy() {
     let mut spread_dom: f64 = 0.0;
     for j in 1..last {
         for (get, scale) in [
-            ((|x: &ModeFactors| x.k_i) as fn(&ModeFactors) -> f64, a_one()),
+            ((|x: &ModeFactors| x.k_i) as Getter, a_one()),
             (|x: &ModeFactors| x.k_ii, a_two()),
             (|x: &ModeFactors| x.k_iii, a_three()),
         ] {
