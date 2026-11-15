@@ -596,7 +596,7 @@ fn cb2_assembled_after_amendment_1() {
         let (skew, nonzero, pairs, zeros) = skew_values(&c);
         let ok = skew && nonzero && zeros;
         println!(
-            "CB2 (amended) {name}: c_ij == -c_ji and c_ii == 0 {skew}, non-zero {nonzero}, pairs differing in bits {pairs} (all              pairs of zeros {zeros}) {}",
+            "CB2 (amended) {name}: c_ij == -c_ji and c_ii == 0 {skew}, non-zero {nonzero}, pairs differing in bits {pairs} (all pairs of zeros {zeros}) {}",
             met(ok)
         );
         all &= ok;
