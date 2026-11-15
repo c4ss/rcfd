@@ -225,3 +225,103 @@ Changes before any further run:
 - The heavy record FW / P2b is run once as registered.
 - Mutations are run on the fast set as registered; since P3 is now ignored, the known-miss record is also run under each
   mutation (`--include-ignored` for that test only) and its count of hole-edge elements outside is recorded, not judged.
+
+## Addendum 1 (2026-11-15): results
+
+Runs, each once. The registered fast set ran at cd92e896 (`f695-scratch/run_fast.log`). After amendment 1, the following ran at
+2a6f0185: the copies (`run_copies.log`), the record DQ1 (`run_dq1.log`) and the heavy record FW / P2b (`run_fw.log`, 24 s,
+36 GB free; 16 s for the 196 425 equations at 96). The existing tests B2 ran at the tip (`run_b2.log`) and the mutations on the
+scratch copy `f695-scratch/mut` (`mutate.py`, `mut_MU*.log`). Test-only: `git diff --stat 9cf95fc3` lists the new test file
+and this ADR only.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| U1 first-ring radial size, largest relative deviation from `h_1 = 1.5227e-4` m (75 nodes) | `<= 1e-9` | `7.5e-15` (the ADR 0616 mesh: `0.03045 r` to `0.07215 r`, ratio 2.369) | yes |
+| U2 sum of volumes against `t (A B - pi r^2/4)`; 1152 elements, 48 hole-edge | `<= 1e-6`; equal | `1.51e-10`; 1152, 48 | yes |
+| P3 hole-edge elements in the 116 of largest density | 48 of 48 | **28 of 48** (20 outside, ranks 117 to 365; rank 116 `2.5521e-1`, smallest at the hole `1.7055e-1` at 5.6 degrees) | **no** |
+| NC1 the ADR 0616 mesh: outside, ranks, density of rank 116 | 4; `[126, 127, 140, 141]`; within `5e-5` of `2.5082e-1` | 4; `[126, 127, 140, 141]`; `3.8e-6` | yes |
+| NC2 the new mesh ranked by `eta_e` | `>= 1` outside | 48 of 48 outside (ranks 726 to 1149) | yes |
+| P2 recovered peak `sigma_xx` against `3 sigma_0` | `<= 2e-2` | `+1.4061e-2` at `(0, r, 0)` | yes |
+| P2r the same against `K_tg sigma_0 = 3.023492 sigma_0`; nodal average against `3 sigma_0` | record | `+6.18e-3`; `+1.2338e-2` | recorded |
+| FW24 nodal average at `(0, r, 0)`, single layer, 24 cells | record | `3.037015` | recorded |
+| FW `K_96` against `K_tg = 3.023492` | `<= 5e-3` | `K_48 = 3.036973`, `K_96 = 3.036968`: `+4.457e-3`; observed order 2.87, Richardson `3.036967` (`+1.56e-3` of Heywood's `3.032222`) | yes |
+| P2b recovered peak against `K_96 sigma_0` | `<= 1e-2` | `+1.717e-3` | yes |
+| B0 files under `crates/*/src` changed | none | none | yes |
+| B2 `sa_density` (fast), `sa_density_bits`, `sa_estimate_default_bits` | pass | pass (3, 1, 1 tests; the ignored records not run) | yes |
+| DQ1 (record) | none | below | recorded |
+
+DQ1 diagnosis (layer 0, density of rings 0 to 5 per angular cell):
+
+- The hypothesis of amendment 1 holds. Along each line the density of rings 0 to 4 stays within a factor 1.08 to 1.58 (the ratio
+  of largest to smallest). At 24 to 46 degrees ring 1 is slightly above ring 0 (`0.3801` against `0.3761` at 35.5 degrees), so
+  there the hole edge is not even the largest of its own line.
+- The ranking is decided by the angle. The density of the whole near field peaks at 30 to 45 degrees (`0.37` to `0.38` on rings
+  0 to 2) and is lowest at 0 to 13 degrees (ring 0 `0.17` to `0.22`) and at 69 to 85 degrees (ring 0 `0.23` to `0.245`). The
+  20 outside hole-edge elements are the cells at 1.9 to 16.9 degrees and 69 to 84 degrees; each is outranked by rings 1 to 4 of
+  the cells at about 17 to 65 degrees (for example the cell at 84.3 degrees by 26 elements of each of rings 1 to 4).
+- Cause. On the ADR 0616 mesh the first ring at 0 to 60 degrees was 2 to 2.4 times thicker than here, so its hole-edge
+  elements had densities `0.40` to `0.61`, well above the rings behind them. With one first-ring size and a growth of 1.18 to
+  1.24 per ring, the mesh is graded roughly as the stress gradient decays, so `h^2 sigma''` is nearly equidistributed radially.
+  That is the property a good graded mesh has. A density then picks the angles of largest error, not the hole edge. The
+  hole-edge densities at 0 to 13 degrees fell by a factor of 2.3 against the old mesh, roughly in proportion to the radial size
+  (factor 2.1), so the hole-edge extrapolation error of the recovery shrank with the patch, the "against" case of arithmetic 4.
+  The criterion asks the indicator for something it should not do on a mesh graded this way. The density is not defective:
+  NC1 reproduces F-568 to the digit, and MU3 and MU4 below change it as expected.
+- Arithmetic 4 estimated "holds more likely than not". That was wrong: it assumed the hole-edge cells at 0 to 60 degrees keep
+  their lead over the rings behind them, and they do not. Both proxies of arithmetic 3 had predicted misses (6 and 14 cells
+  outside, measured 10 cells), but they were set aside because they failed on the ADR 0616 mesh.
+
+Peak. The recovered peak is `+1.41` percent of `3 sigma_0`, as on the ADR 0478 mesh (`+1.4085e-2` there). The finite-element
+value of this finite plate converges to `3.03697 sigma_0` (`+1.23` percent; the 24-cell mesh is already within `5e-5` of it).
+**Deviation from the estimate:** arithmetic 6, ADR 0449 and ADR 0478 put the mesh part of the `+1.23` percent nodal average at
+about `0.4` percent. It is in fact `0.0015` percent, so the whole `+1.23` percent belongs to the finite plate. It is `+0.45`
+percent above the from-memory Howland polynomial (limit `0.5` percent, met) and `+0.16` percent above the from-memory Heywood
+formula. The finite length (`A/W = 1`) is a possible part of the difference and is not separated here. The recovered peak lies
+`+0.17` percent above the converged value of the plate. The 2 percent is registered against `3 sigma_0` and met.
+
+Mutations (scratch copy; the fast set, then the known-miss record P3 for its count):
+
+| Id | Mutation | Caught by | P3 record (outside) |
+|---|---|---|---|
+| MU1 | `a(q) = 4` (the old spacing) | U1 (`1.37`) | 4 (the F-568 mesh) |
+| MU2 | `d_1 = h_1` along the line | U1 (`3.8e-2`) | 20 |
+| MU3 | `ranked_by_density` ascending (library) | NC1 (48 outside) | 48 |
+| MU4 | density `eta_e/|K|` (library) | NC1 (0 outside, rank-116 value `3e4`) | 2 |
+| MU5 | tenth `n/10` | survived, as registered | 21 |
+| MU6 | peak of `sigma_yy` | P2 (`0.81`) | 20 |
+| MU7 | traction `sigma_0/2` | P2 (`0.49`), NC1 (rank-116 value) | 20 |
+
+MU4 is worth a note. Weighting by `|K|^{-1}` instead of `|K|^{-1/2}` (an `h^{-3}` scaling) leaves only 2 of 48 outside on this
+mesh, and 0 on the old one, because it favours the small hole-edge elements. Reading the clause as "some density" would bias the
+result toward passing. The clause names `eta_e/|K|^{1/2}`, and this is not proposed.
+
+`cargo fmt -p rcfd-fem --check` and `cargo clippy -p rcfd-fem --all-targets -- -D warnings` are clean. No library file was
+changed, so `baseline_hashes` was not run.
+
+**Decision by the rule: partial.** a1 (U1, U2), a3 (P2, with FW and P2b) and a4 (B0, B2, NC1) are met. a2 is missed by 20 of 48
+elements. The cause is diagnosed: the density equidistributes on a mesh graded uniformly along the hole. The miss is kept as
+`u1_u2_p3_nc2_p2_uniform_plate_known_miss`.
+
+Remaining questions:
+
+- **Q4. The hole criterion.** Options: (a) retire it as a property expected of the density. ADR 0616 missed by 4 of 48 and
+  this mesh by 20 of 48, and DQ1 shows it fails for a good reason; the density stays as a ranking for adaptivity; (b) restate
+  it per line (the hole-edge element first along its own line). DQ1 shows that fails too at 24 to 46 degrees by about 1 percent;
+  (c) a criterion on a mesh not graded to the solution (uniform radial spacing), where the hole edge should dominate. That
+  tests the estimator on a mesh no one would use for this plate. Recommendation (a), for the maintainer; no follow-up proposed.
+- **Q5. The finite-width reference.** The repository's converged value for this plate is `3.03697`, against `3.02349` and
+  `3.03222` from two unread formulas. Options: (a) record `3.03697` in `docs/reference-data.md` as this repository's
+  finite-element value of the quarter plate (`r/W = 0.05`, `A/W = 1`, `nu = 0`), with the two formulas beside it still marked
+  unread; (b) leave it in this ADR only. Recommendation (a), by the lead, since it touches a shared document; not done here.
+
+## For the lead: roadmap entries
+
+Proposed status and note of F-695:
+
+> Proposed status: partial.
+
+> Structural solver, advanced tier. Follow-up of F-568 (ADR 0616, 2026-11-15). PARTIAL. ADR 0627, 2026-11-15, test-only (no library change): the two-layer Hex20 plate with a hole of ADR 0478 (r/W = 0.05, Kirsch load, 24 x 24 x 2) re-spaced along the same node lines so that the first ring has one radial size, 0.0304 r, at every angle (within 7.5e-15; the ADR 0616 mesh has 0.030 r to 0.072 r). The tenth of largest eta_e/|K|^{1/2} holds 28 of the 48 hole-edge elements (MISSED: the cells at 2 to 17 and 69 to 84 degrees lose to rings 1 to 4 at 17 to 65 degrees; along each line the density of rings 0 to 4 stays within a factor 1.6, because a mesh graded this way roughly equidistributes the error, so the density picks the angle, not the hole edge). The negative controls hold: the ADR 0616 mesh gives its 4 of 48 outside again, ranks and the rank-116 density matching the F-568 log, and the absolute eta_e ranking gives 48 of 48 outside. The recovered peak sigma_xx is +1.41 percent of 3 sigma_0 (limit 2 percent against Kirsch's infinite plate). The plate's own converged value is 3.03697 sigma_0 (nodal average at 24, 48 and 96 cells), +0.45 percent from Howland's factor by Peterson's polynomial (from memory, limit 0.5 percent) and +0.16 percent from Heywood's; the recovered peak is +0.17 percent above it. No source file changed, and the F-432 and F-568 bit tests pass. Six of seven mutations caught (the tenth as floor(N/10) survives, as registered).
+
+> Note for F-568 (append): ADR 0627 (2026-11-15) ran the hole criterion again on a plate with a uniform first ring and it missed by 20 of 48. The density equidistributes on a mesh graded to the solution, so the hole criterion is not a property to expect of it (ADR 0627 Q4 recommends retiring it).
+
+No follow-up is proposed (Q4 recommends option a).
