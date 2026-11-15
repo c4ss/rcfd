@@ -636,6 +636,7 @@ fn f615_d_threads_n16() {
 
 /// N2: the envelope, and the supernodal factor with the total Lagrangian body, are refused with the key "solver".
 #[test]
+#[ignore = "superseded by ADR 0542 D3 (F-618 lifts the refusal of the supernodal factor with the total Lagrangian body); the envelope half is repeated as N2a of sa_newton_supernodal_f618.rs"]
 fn f615_n2_refusals() {
     let s = Setup { n: 4, ..BASE };
     let fit = fit_model(s);

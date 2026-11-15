@@ -53,11 +53,12 @@ use crate::loads::{nodal_load_vector, NodalForceAt};
 use crate::material::{Matrix6, PointContext};
 use crate::mesh::{ElementKind, SolidFormulation};
 use crate::model::{Load, Material, SolidModel, SolidResult, SolverStats};
-use crate::solve::PIVOT_TOLERANCE;
+use crate::solve::{DirectFactor, PIVOT_TOLERANCE};
 use crate::thermal::{FieldAt, TemperatureFieldHistory};
 use crate::transient::{LoadHistory, LoadTable, MotionHistory};
 use rcfd_core::vec3::Vec3;
 use rcfd_linalg::skyline::{PivotRule, SkylineError, SkylineLdlt, SkylineOptions};
+use rcfd_linalg::sparse_chol::SupernodalLdlt;
 use rcfd_linalg::CsrMatrix;
 use std::borrow::Cow;
 use std::sync::Mutex;
@@ -1155,6 +1156,11 @@ pub struct NewtonOptions {
     /// Record per iteration the yielded points and whether that set changed (ADR 0515 D2); off by default, no arithmetic
     /// depends on it.
     pub record_active_set: bool,
+    /// The factor of the reduced tangent of every attempt without a load-factor control (ADR 0542 D1, D2):
+    /// [`DirectFactor::Envelope`] (the default, the envelope `L D L^T` after reverse Cuthill-McKee) or
+    /// [`DirectFactor::SupernodalNestedDissection`] (the supernodal multifrontal `L D L^T` after nested dissection by level
+    /// structures of the tangent's pattern), each with the same pivot tests; any other value is refused (key `"solver"`).
+    pub factor: DirectFactor,
 }
 
 impl NewtonOptions {
@@ -1168,6 +1174,7 @@ impl NewtonOptions {
             max_halvings: 5,
             threads: None,
             record_active_set: false,
+            factor: DirectFactor::Envelope,
         }
     }
     /// The same options with the active-set record of [`LoadStep::yielded`] switched on or off.
@@ -1183,6 +1190,11 @@ impl NewtonOptions {
     /// The same options with another iteration cap.
     pub fn max_iterations(mut self, n: usize) -> NewtonOptions {
         self.max_iterations = n;
+        self
+    }
+    /// The same options with another factor of the reduced tangent (ADR 0542 D1).
+    pub fn factor(mut self, factor: DirectFactor) -> NewtonOptions {
+        self.factor = factor;
         self
     }
 
@@ -1209,6 +1221,18 @@ impl NewtonOptions {
                     reason: format!("{v:e}: must be positive and finite"),
                 });
             }
+        }
+        if !matches!(
+            self.factor,
+            DirectFactor::Envelope | DirectFactor::SupernodalNestedDissection
+        ) {
+            return Err(FemError::InvalidValue {
+                key: "solver",
+                reason: format!(
+                    "{:?}: the Newton driver factors by Envelope or SupernodalNestedDissection (ADR 0542)",
+                    self.factor
+                ),
+            });
         }
         Ok(())
     }
@@ -1585,7 +1609,7 @@ impl Problem<'_> {
                     if sys.free().is_empty() {
                         Vec::new()
                     } else {
-                        factor_solve(&sys.matrix, &sys.rhs, sys.free(), &dofs)?
+                        factor_solve(&sys.matrix, &sys.rhs, sys.free(), &dofs, o.factor)?
                     }
                 }
                 Some(c) => {
@@ -1622,18 +1646,40 @@ impl Problem<'_> {
     }
 }
 
-/// The envelope `L D L^T` solve of the reduced tangent with the pivot test of the static solve (ADR 0275 arithmetic 4).
+/// The envelope `L D L^T` solve of the reduced tangent with the pivot test of the static solve (ADR 0275 arithmetic 4), or
+/// with `factor` [`DirectFactor::SupernodalNestedDissection`] the supernodal one with the same tests and texts (ADR 0542 D2).
 fn factor_solve(
     a: &CsrMatrix,
     b: &[f64],
     free: &[usize],
     dofs: &crate::model::DofMap,
+    factor: DirectFactor,
 ) -> std::result::Result<Vec<f64>, Failure> {
     let diag = a.diag();
     let at = |row: usize| {
         let (n, c) = dofs.node_component(free[row]).expect("free equation exists");
         format!("node {n} component {c}")
     };
+    if factor == DirectFactor::SupernodalNestedDissection {
+        let ldlt = SupernodalLdlt::factor(a).map_err(|e| match e {
+            SkylineError::Pivot { row, pivot, .. } => Failure::Other(format!(
+                "singular tangent: pivot {pivot:e} at {} (diagonal {:e})",
+                at(row),
+                diag[row]
+            )),
+            other => Failure::Other(format!("tangent factorisation: {other}")),
+        })?;
+        for (&row, &d) in ldlt.order().iter().zip(ldlt.pivots()) {
+            if d.is_nan() || d <= PIVOT_TOLERANCE * diag[row] {
+                return Err(Failure::Other(format!(
+                    "singular tangent: pivot {d:e} at {} (diagonal {:e})",
+                    at(row),
+                    diag[row]
+                )));
+            }
+        }
+        return Ok(ldlt.solve(b));
+    }
     let ldlt = SkylineLdlt::factor(a).map_err(|e| match e {
         SkylineError::Pivot { row, pivot, .. } => Failure::Other(format!(
             "singular tangent: pivot {pivot:e} at {} (diagonal {:e})",

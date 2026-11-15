@@ -90,6 +90,16 @@ impl ArcLengthOptions {
                 reason: "0 points: at least 1".to_string(),
             });
         }
+        // ADR 0542 D2: the controlled correction keeps the indefinite envelope factor and its inertia.
+        if self.newton.factor != crate::solve::DirectFactor::Envelope {
+            return Err(FemError::InvalidValue {
+                key: "solver",
+                reason: format!(
+                    "{:?}: the arc-length correction factors by Envelope only (ADR 0542)",
+                    self.newton.factor
+                ),
+            });
+        }
         self.newton.check()
     }
 }
