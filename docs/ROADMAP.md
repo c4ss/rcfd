@@ -12066,11 +12066,24 @@ fixed by the item's registration ADR before any code.
     of the field's change; the free expansion of ADR 0534 FE1 (a step of alpha dT = 1e-2 from u = 0) converges without
     halving and equals alpha dT within 1e-12, and runs without the predictor keep the bits of ADR 0534.
   - note: Structural solver, advanced tier. Optional. Follow-up of F-613 (ADR 0534, 2026-11-15).
-- [ ] **F-618** The factor choice for the total Lagrangian contact body
+- [~] **F-618** The factor choice for the total Lagrangian contact body
   - depends on: F-615
   - acceptance: Every limit not stated here is registered in the ADR before the run. NewtonOptions gives
     nonlinear::solve_from the supernodal L D L^T as an opt-in factor: a total Lagrangian contact solve of the ADR 0517
     hub at 16 cells in under a third of the present time, every reading within 1e-10 of the present driver, and without
     the option every result bit-identical.
-  - note: Structural solver, advanced tier. Follow-up of F-615 (ADR 0533, 2026-11-15). Fan relevance: hub-shaft
-    press-fit stresses.
+  - note: Structural solver, advanced tier. Follow-up of F-615 (ADR 0533, 2026-11-15). PARTIAL. ADR 0542, 2026-11-15:
+    NewtonOptions::factor (rcfd_fem::solve::DirectFactor; default Envelope, the present factor;
+    SupernodalNestedDissection selects the supernodal multifrontal L D L^T of ADR 0503 after nested dissection by level
+    structures, with the same pivot tests and texts, for every Newton attempt without a load-factor control; other
+    values, and the supernodal factor on the arc-length path, refused with the key "solver"). The contact driver's
+    refusal of the supernodal factor with the total Lagrangian body is lifted:
+    ContactOptions::factor(SupernodalNestedDissection) is passed to solve_from as the Newton factor. ADR 0517's hub at
+    16 cells with the total Lagrangian body needs d = 1e-4 a (with 1e-3 a both factors refuse the first tangent): the
+    median of three alternating pairs 13.46 s against 37.96 s, a ratio of 0.355, MISSED against the limit 1/3 (pair
+    ratios 0.283, 0.419, 0.353; the supernodal runs varied with the other agents' load). Every reading of ADR 0517 D4
+    within 3.5e-11 of the present driver (limit 1e-10), the same Newton record, displacements within 7.4e-14; at 4 and 8
+    cells within 2.5e-11. A cantilever whose large increments are refused by a pivot halves identically with both
+    factors. Without the option three new digests and the contact bit records unchanged; baseline_hashes passes. Eight
+    of nine mutations caught (the NonZero-pivot mutant is equivalent under the post-test). No case-file key. Fan
+    relevance: hub-shaft press-fit stresses.
