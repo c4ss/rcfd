@@ -271,3 +271,81 @@ A mutation is caught if any registered check misses. None is declared equivalent
 3. **The modal path checked too** (MV, ME, NSM), beyond the acceptance's buckling reading, because the item's title is flutter
    and `tangent_modes_full` is the flutter path about a state.
 4. **Case-file keys.** Not added (a schema golden would change).
+
+## Addendum 1 (2026-11-15): results
+
+Commits: 12430655 (registration), 2cac357f (library function D1 and the test file D2, run 1), and this addendum. The registered
+run was made once, in release, `cargo test -p rcfd-fem --release --test sa_flutter_state_f676 -- --nocapture
+--test-threads=1` on 2cac357f (`w49i-work/f676-scratch/run1.log`). N1 (`n1.log`), N2 (`n2.log`), S1 (`clippy.log`) and the
+mutations (`mutate.py`, `mutations.log`, a `git archive` of 2cac357f with its own target) on 2cac357f. Shared solver file
+changed: `crates/rcfd-fem/src/follower.rs`, additions only (88 lines: two module-doc lines 25-26 and the new function
+`tangent_buckling_factors_full_with`, lines 984-1069 at 2cac357f); no existing line edited.
+
+| Id | Measured | Limit | Met |
+|---|---|---|---|
+| S0 (known) | converged, 10 steps, max `|u|` `5.848e-3` m | `Ok` | yes |
+| SA | `2.00` | `>= 1e-1` | yes |
+| BT | 7 pairs at the state: `49.491 +/- 66.357 i`, `69.620 +/- 63.999 i`, `-107.207`, `107.595 +/- 0.660 i`; 67 steps | holds | yes |
+| BV | `3.08e-9` | `<= 1e-6` | yes |
+| BE | `8.35e-13` (7 of 7 lengths) | `<= 2e-10` | yes |
+| BZ | `0` (factors, residuals and backward errors print identically; 74 steps both) | `<= 1e-10` | yes |
+| NS | `1.05` (the symmetric part gives six real factors `-9.88 .. 41.8`) | `>= 1e-2` | yes |
+| NZ | `2.41e-3` | `>= 1e-5` | yes |
+| NG | `5.41` | `>= 1e-2` | yes |
+| NR | `6.58e-3` | `>= 1e-3` | yes |
+| R1 | `factors = 0` refused (key `"factors"`); rigid-free refused (`RigidBodyMotionFree`) | hold | yes |
+| MT | 4 pairs, `omega^2 = 46.257, 64.587, 596.22, 1210.9` (imaginary parts `0`), 15 steps | holds | yes |
+| MV | `4.33e-9` | `<= 1e-6` | yes |
+| ME | `9.70e-13` | `<= 2e-10` | yes |
+| NSM | `1.02` (symmetric `omega^2 = 45.838, 64.296, 596.21, 1210.9`) | `>= 1e-3` | yes |
+| L0 | `git diff --numstat 6c38e510 -- crates/*/src`: `88 0 follower.rs` | additions only | yes |
+| N1 | `sa_f653` (6 passed, 2 ignored), `sa_f653_default_bits`, `sa_f664`, `sa_f664_default_bits`, `sa_state_contributions_f671` (5), `sa_state_contributions_f677` (3), `sa_follower` (5), `sa_follower_default_bits`: all pass | pass | yes |
+| N2 | `baseline_hashes`: 3 passed, 1 ignored | pass | yes |
+| S1 | `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean | clean | yes |
+
+**Mutations** (one at a time):
+
+| Id | Caught by (measured) |
+|---|---|
+| MU1 state tangent by `add` | BV `0.29` |
+| MU2 increment by `add` | BT (no complex pair), BV `1.05`, BZ `1.12` |
+| MU3 increment not added | BT, BV `0.99`, BZ `0.97`, NG `9.8e-10` |
+| MU4 `B = +G` | BV `2.0`, BZ `2.0` |
+| MU5 every contribution tangent at `u = 0` | BV `2.41e-3` (equal to run 1's NZ, as D2 predicts) |
+| MU6 state tangent at load factor 1 | BZ `0.86` |
+| MU7 `point_stiffness` for the driver tangent | BV `4.5e-2` |
+
+Seven of seven caught, each by a check of its listed column.
+
+**Deviations and remarks.** None from the registration; no amendment. BV (`3.1e-9`) sits at the registered worst estimate of the
+pencil part (`3.2e-9`), driven by the last returned pair (`residuals 1.7e-9`, `eta 8.4e-13`); MV (`4.3e-9`) at the typical end of
+its estimate. The spectrum of the full buckling pencil changes with the state: the two complex pairs of smallest modulus at the
+state (`|mu| ~ 83, 95`) are absent at rest, where the end-face pairs near `mu p ~ mu_s` lead; NR (`6.6e-3`) measures the rest
+pairs against the state. On this stubby bar at `0.93 E I/L^2` the follower moves the modal `omega^2` by `0.3 .. 0.9` percent and
+the symmetric part gives the right eigenvalues to that order, yet its modes miss the residual equation by `1.0` (NSM): the
+antisymmetric edge term is first order in the mode.
+
+Not run: the whole workspace suite and the whole `rcfd-fem` suite (the lead's gate); only the files that cover `follower.rs`.
+
+**Decision: done** by the registered rule. Every check met in the one registered run, seven of seven mutations caught, no
+amendment, L0, N1, N2 and S1 met.
+
+**Remaining questions** (none changes a default):
+
+1. The zero-shift pivot test (open question 1): options (a) none, as now; (b) the ADR 0402 test on the symmetric part; (c) a
+   pivot report from `EnvelopeLu`. Recommend (a) until a state near a critical point needs a clearer refusal message.
+2. A flutter search about nonlinear states (the onset of a complex modal pair along a Newton path, Beck's column on a slender
+   bar): the driver refuses states above the Euler load (ADR 0580), so the onset at `20.05 E I/L^2` cannot be reached by load
+   control. Options: (a) a follow-up with an arc-length or a displacement-controlled path whose tangent is unsymmetric-capable;
+   (b) nothing. Recommend (b) until a use needs flutter of a pre-deformed (not straight) state; the straight column is covered by
+   ADR 0580.
+3. `CentrifugalFollower::add_full` is the default (`add`): its tangent is symmetric, so the full path takes it unchanged. No
+   action recommended.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> Structural solver, advanced tier. Follow-up of F-671 and F-653 (ADR 0596, ADR 0580). DONE. ADR 0600, 2026-11-15: new follower::tangent_buckling_factors_full_with, opt-in beside the unchanged symmetric functions: the buckling pencil (K_T + K_c(u, lambda) + mu (K_sigma + K_c(u, 1) - K_c(u, 0))) x = 0 about a nonlinear state with the full (unsymmetric) tangents of the contributions (Contribution::add_full; for a follower pressure -K_p), complex factors of smallest modulus by the pencil solver of ADR 0580, with the backward errors of ADR 0587; tangent_modes_full (ADR 0580) is the modal path about the state and is checked by the same measure. Set-up: Full Hex8 neo-Hookean cantilever 2 x 0.5 x 0.4 m (8 x 2 x 2), follower end pressure 9e3 Pa (Beck's load, free-edged: antisymmetry of K_p on the free unknowns 2.0), unsymmetric Newton state at 0.27 of the dead Euler load of the mesh (below it; the driver refuses an indefinite tangent). Against the fourth-order central difference of the nonlinear residual with the follower force (complex directions by parts), vector measure max |D4_r[x] + mu (K_sigma x + D4_g[x])| / max |D4_r[x]|: buckling pairs (three complex pairs and a real factor) 3.1e-9, modes 4.3e-9 (limit 1e-6); backward errors at most 8.4e-13 and 9.7e-13 (limit 2e-10); at zero load the factors equal buckling_factors_full in every bit (limit 1e-10). Negative controls: the symmetric part through the full path 1.05, the symmetric tangent_modes 1.02, every contribution tangent at u = 0 2.4e-3, the load-factor derivative dropped 5.4, the rest pairs at the state 6.6e-3. Seven of seven mutations caught; the existing follower, F-653, F-664, F-671, F-677 tests and the baseline hashes pass. Not covered: a flutter search along a nonlinear path (states above the Euler load are not reachable by the driver), shells and beams, one bar and load level.
+
+> F-671 note, proposed addition: the full unsymmetric path about a state, which ADR 0596 D1 left to a follow-up, is follower::tangent_buckling_factors_full_with (ADR 0600, 2026-11-15).
