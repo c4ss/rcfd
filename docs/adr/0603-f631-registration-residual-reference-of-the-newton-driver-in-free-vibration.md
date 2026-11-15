@@ -165,3 +165,67 @@ this set-up: recorded, and FT1 then does not show c2 (decision partial).
   absolute terms. Not checked.
 - The floor estimate rests on the phase located from the period elongation (factor 2); NT3 measures the run, not the floor.
 - The option is not exposed in the case schema, CLI or MCP (goldens unchanged).
+
+## Addendum 1: results (2026-11-15)
+
+Runs: DB1's hash recorded once on the unchanged library at 8333080a (`f631-scratch/db1-record.log`, `0xa1c3afbcfc5e3fc6`) before
+any library line changed; run 1 at dd18e312 (`run1-fast.log`, the fast tests once at 832b1049, which differs from dd18e312 only
+in the spacing of the RF1 refusal text; `run1-nt3.log`, NT3 once at dd18e312); B1 and N2 at dd18e312 (`b1-fem.log`,
+`n2-baseline.log`); mutations on a `git archive` copy of dd18e312 with its own target (`MU1.log` to `MU6.log`,
+`mutations.log`). The commit 0f6fbed6 after the runs is rustfmt only. Shared solver file `crates/rcfd-fem/src/nonlinear.rs`:
+three insertions (the trait method, lines 1363 to 1368; `contribute_with`, 1493 to 1497; `contribute_split`, 1532 to 1536), no
+line removed.
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| FT1 converges, halvings; final residual; first step against the linear trapezoidal step | converges, 0; `1e-10`; `1e-8` | converges, 0 halvings, 2 iterations; `1.25e-16`; `8.9e-10` | yes |
+| NC1 `Driver` refused | refused (`nl_transient`) | refused after 5 halvings: relative residual `1.48e-7` at `h_f/32`, energy ratio `8.9e-34` | yes (as predicted, floor estimate `4e-7` at `h_f`) |
+| FT2 one period, halvings; E1 | completes, 0; `1e-5` | completes, 0 halvings, 120 iterations, worst residual `4.9e-13`; `2.77e-8` | yes |
+| NT3 completes; halvings; F1, F1b, F1c, E1, EZ | 4000 steps, 0; `1e-2`, `1e-3`, `1e-2`, `1e-5`, `1e-4` | 4000 steps, 0 halvings, 11988 iterations, worst residual `6.1e-13`; `2.05e-3`, `7.98e-8`, `7.95e-5`, `2.84e-8`, `5.14e-7` (34.9 s) | yes |
+| RF1 refusal with the energy-momentum step | `InvalidValue { key: "nl_transient" }` | refused naming ADR 0603 D2; the same model taken with `Driver` | yes |
+| DB1 default hash | equal to the record | `0xa1c3afbcfc5e3fc6` equal | yes |
+| DB2 explicit `Driver` | equal | equal | yes |
+| DB3 `cargo test -p rcfd-fem --release` (includes `sa_nl_transient`, the `*_default_bits` tests, `sa_shell3_paths`); `baseline_hashes` | pass | 1294 passed, 0 failed, 329 ignored; `baseline_hashes` 3 passed, 1 ignored as before | yes |
+
+`cargo fmt -p rcfd-fem --check` clean (after 0f6fbed6), `cargo clippy -p rcfd-fem --all-targets --release -- -D warnings` clean.
+
+The estimate held: the worst relative residual of the 100 periods with the inertia-term reference, `6.1e-13`, sits below the
+registered floor estimate `2.5e-12` and a factor 160 below the tolerance; the run reproduces NT1b of ADR 0545 (F1, F1c, E1, EZ
+equal to three digits, the same iteration count) at the default tolerance `1e-10` instead of `1e-8`. NC1 confirms the floor that
+does not scale with the displacement: at `h_f/32` the default relative residual stalls at `1.5e-7`, the order the constant floor
+`A_f ~ 6e-11 F_pk` predicts.
+
+**Mutations:**
+
+| Id | Caught by |
+|---|---|
+| MU1 the reference returns 0 with `InertiaTerms` | FT1 (refused, `1.48e-7`) |
+| MU2 the option not stored | FT1 |
+| MU3 `c_m` without `1/(beta h^2)` | FT1 |
+| MU4 the inertia-term reference also with `Driver` | NC1 (converged); DB1 and DB2 **not** (the bits of the 40 default steps unchanged: the registered doubt, the default run already converged at the same iterations) |
+| MU5 the energy-momentum refusal removed | RF1 |
+| MU6 the hook read for every contribution without the `> 0` guard | not caught, as registered (equivalent for finite references) |
+
+MU1 to MU5 caught, as the rule requires; MU6 not caught as predicted.
+
+**Deviations:** none. **Not run:** nothing registered was skipped.
+
+**Decision by the registered rule: done.** FT1, NC1, FT2, NT3, RF1, DB1, DB2, DB3 met; MU1 to MU5 caught.
+
+### Remaining questions
+
+1. Default. (a) Keep `Driver` the default (bits); (b) make `InertiaTerms` the default of the `Method` step in a later item
+   (changes default results: maintainer's decision, not taken here). Recommendation (a) now; (b) is listed as open, since it
+   would change default bits.
+2. The energy-momentum step. (a) Leave refused; (b) a follow-up giving the midpoint step the same reference (its residual has the
+   same inertia terms `M (u_{n+1} - u_n - h v_n)` scaled by `2/h^2`). Recommendation (b) as a small follow-up, proposed below.
+3. Exposure in the case schema / CLI / MCP. (a) Not now (goldens); (b) later with the nonlinear transient case keys.
+   Recommendation (a).
+
+## For the lead: roadmap entries
+
+F-631: proposed status **done**. Note:
+
+> Structural solver, advanced tier. Follow-up of F-541 (ADR 0545, 2026-11-15). DONE. ADR 0603, 2026-11-15: an opt-in residual reference of the nonlinear transient, NlTransientOptions::residual_reference(ResidualReference::InertiaTerms): the reference of each Newton attempt of the Method step is also at least the largest norm of the products the inertia and damping force is a sum of (c_m M u_{n+1}, c_m M u_n, c_m h M v_n, c_m h^2 |1/2 - beta| M a_n, alpha_m M a_n, alpha_f f_int,n and the damping products, c_m = (1 - alpha_m)/((1 - alpha_f) beta h^2)), so that the test is a relative tolerance on the step's displacement and the constant rounding floor of the corotated Shell3 internal force (about 6e-11 of its peak, derived from ADR 0545's stop near a zero crossing) no longer rejects a converged step. The Shell3 strip of ADR 0545 NT1 over 100 periods at the default tolerance 1e-10: 4000 steps, 0 halvings, worst residual 6.1e-13, F1 2.05e-3, F1b 8.0e-8, F1c 7.9e-5, E1 2.8e-8, EZ 5.1e-7 (limits of ADR 0522); a step at the zero crossing at h/1024 converges in 2 iterations to 1.3e-16 with the option and is refused by the default reference (stall at 1.5e-7). Refused with the energy-momentum step. A driver hook Contribution::residual_reference_terms (default 0, read only when positive); the default reference and its bits unchanged (a 40-step hash recorded before the change, every rcfd-fem test, baseline_hashes). Five of five registered mutations caught.
+
+> Follow-up proposed: The inertia-term residual reference on the energy-momentum step. Deps F-631, F-611. Acceptance: Every limit not stated here is registered in the ADR before the run. ResidualReference::InertiaTerms taken by the energy-momentum step with the products of its midpoint inertia force; a free vibration of a solid without external load over a registered number of periods at the default tolerance with no step rejected at a rounding floor and the energy conserved within a registered limit; the default bits unchanged.
