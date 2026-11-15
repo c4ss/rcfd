@@ -13300,12 +13300,28 @@ fixed by the item's registration ADR before any code.
     expand_field and expand_load of the ADR 0595 wheel sector give the fields of the independently built ring within
     1e-10; the defaults bit-identical.
   - note: Follow-up of F-672 (ADR 0595, 2026-11-15).
-- [ ] **F-675** Rotating paths on a cyclic sector of beams
+- [~] **F-675** Rotating paths on a cyclic sector of beams
   - depends on: F-672
   - acceptance: Every limit not stated here is registered in the ADR before the run. RotatingSector on the ADR 0595
     wheel sector (stress stiffening and spin softening, and with Coriolis the whirl modes) at two speeds gives the
     frequencies of each harmonic of RotatingPart on the full ring of beams within 1e-8; the defaults bit-identical.
-  - note: Follow-up of F-672 (ADR 0595, 2026-11-15).
+  - note: Structural solver, advanced tier. Follow-up of F-672 (ADR 0595). ADR 0598, 2026-11-15: the rotating paths on a
+    cyclic sector of beams. The modes paths (stress stiffening, spin softening, both, Campbell) took the ADR 0595 wheel
+    sector without a library change; the whirl paths refused Beam2 because the Coriolis matrix fell through to the
+    solid-routine placeholder, so a Coriolis matrix of the Beam2 section kinematics u + theta x s was added (rho A [a x]
+    on the translations, [b x] on the section rotations with b = rho (I_z a_2 e_2 + I_y a_3 e_3); the second-order
+    rotation adds only a total time derivative), carried by the unsymmetrised congruence and made skew bit for bit,
+    taken by RotatingPart::coriolis with the new opt-in RotatingOptions::beams or a cyclic constraint with
+    CyclicOptions::beams (coriolis_matrix and coriolis_matrix_with_shells unchanged). The wheel sector against the
+    independently built ring at 0.2 and 0.4 omega_1: the frequencies of each harmonic k = 0..3 with both effects,
+    pre-stressed and spin-softened within 1.3e-12, the whirl modes with Coriolis within 9.5e-13, equal counts (limit
+    1e-8); the Coriolis term moves the k = 1 frequencies by 6.9 %; the rigid-field forms of the element matrix within
+    6.7e-16. Models without the options keep their bits (existing tests, baseline hashes, a Hex8 part and the sector
+    bit-equal with and without RotatingOptions::beams). Six of six mutations caught. Partial by the rule: the skew check
+    of the assembled matrices compared +0 with -0 by their bits in its first run and was met after an amendment of the
+    measure. Not covered: full_rotor and the expanded modes with beams, the whirl directions and the split, state and
+    sparse solvers beyond a smoke run, offset or non-principal sections, an independent whirl reference for beams.
+    Follow-up F-679 (An independent whirl reference for spinning beams).
 - [ ] **F-676** Flutter about a nonlinear state with the full contribution tangent
   - depends on: F-671, F-653
   - acceptance: Every limit not stated here is registered in the ADR before the run. The complex pencil path of ADR 0580
@@ -13346,3 +13362,12 @@ fixed by the item's registration ADR before any code.
     bit-identical (the change of results with an offset approved by the maintainer).
   - note: Follow-up of F-673 (ADR 0597, 2026-11-15). Changes existing modal, harmonic and transient results of offset
     sections: NEEDS USER.
+- [ ] **F-679** An independent whirl reference for spinning beams
+  - depends on: F-675
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The whirl frequencies and the
+    forward and backward split of a spinning ring of Beam2 (a free circular ring rotating about its axis, in-plane and
+    out-of-plane modes per nodal diameter) from RotatingSector::whirl_modes with CyclicOptions::beams against a closed
+    form derived or cited in the ADR, at three speeds up to half the first frequency: within the registered
+    discretisation error at two meshes, the observed order within 0.5 of the expected one, and the split of each
+    nodal-diameter pair within 1e-2 relative; the defaults bit-identical.
+  - note: Follow-up of F-675 (ADR 0598, 2026-11-15).
