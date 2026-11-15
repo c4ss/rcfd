@@ -302,6 +302,9 @@ struct Model {
     alpha_p: f64,
     /// Negative-control variant (ADR 0613 NC1): the last outer iteration relaxed as well.
     final_relaxed: bool,
+    /// Model X (ADR 0613 amendment 1): the diagonal `c` of the `x`-direction Laplacian of the column, whose off-diagonals act
+    /// as `-c` on an `x`-uniform field (0: the registered model D1).
+    cx: f64,
 }
 
 impl Model {
@@ -314,6 +317,7 @@ impl Model {
             alpha_u: 1.0,
             alpha_p: 1.0,
             final_relaxed: false,
+            cx: 0.0,
         }
     }
     fn relaxed(n: usize, z_sym: bool, alpha_u: f64) -> Self {
@@ -388,7 +392,8 @@ fn mean(x: &[f64]) -> f64 {
 /// One step of `PimpleSolver::step_with` on the developed channel (ADR 0613 D1): `(u_old, G_old, v) -> (u, G)`, the
 /// averaged diagonal (`corrected = false`) or the corrected split.
 fn model_step(m: &Model, corrected: bool, u_old: &[f64], g_old: f64, v: f64) -> (Vec<f64>, f64) {
-    let d0 = m.diag();
+    // the own diagonal with the x-direction Laplacian (model X; `cx = 0` leaves D1's arithmetic unchanged)
+    let d0: Vec<f64> = m.diag().iter().map(|d| d + m.cx).collect();
     let kap = m.kap();
     let dt = m.dt();
     let b0: Vec<f64> = u_old.iter().map(|x| x / dt).collect();
@@ -407,13 +412,14 @@ fn model_step(m: &Model, corrected: bool, u_old: &[f64], g_old: f64, v: f64) -> 
         let b: Vec<f64> = (0..NY).map(|i| b0[i] + (dr[i] - d0[i]) * u[i]).collect();
         let a_p: Vec<f64> = d0.iter().map(|d| (d + m.lambda) / au).collect();
         let rhs: Vec<f64> = b.iter().map(|x| x - g).collect();
-        u = tridiag(&off, &dr, &off, &rhs);
+        let dp: Vec<f64> = dr.iter().map(|d| d - m.cx).collect();
+        u = tridiag(&off, &dp, &off, &rhs);
         let inv_mean = mean(&a_p.iter().map(|a| 1.0 / a).collect::<Vec<_>>());
         for corr in 0..m.n_corr {
             let ou = off_times(kap, &u);
             let hby_a: Vec<f64> = (0..NY)
                 .map(|i| {
-                    let h = b[i] - ou[i];
+                    let h = b[i] - ou[i] + m.cx * u[i];
                     let extra = if corrected { (a_p[i] - dr[i]) * u[i] } else { 0.0 };
                     (h + extra) / a_p[i]
                 })
@@ -692,8 +698,8 @@ fn per_length(c: &mut Checks, id: &str, z: [Cx; 4], m: &Model, limit: f64) -> Cx
 }
 
 #[test]
-#[ignore = "heavy record (ADR 0613, 29 channel runs, about 2 min in release): run once with --ignored"]
-fn f538_registered_runs_relaxed_piso_sweep_and_n50() {
+#[ignore = "known miss (ADR 0613 amendment 1), heavy record (29 channel runs, 135 s): C1 1.07e-2 (limit 5e-3), the Symmetry parts of C3, C4, C6 and the Re Delta Z_pl of C4 at 0.6, 0.7, 0.9 and of C6, NC3's bracket (0.8, 0.9); diagnosed: the x-direction Laplacian diagonal in the relaxation and in a_P (model X)"]
+fn f538_registered_runs_relaxed_piso_sweep_and_n50_known_miss() {
     let mut c = Checks::new();
     let t0 = std::time::Instant::now();
     // group P: PISO, N 100
@@ -835,5 +841,229 @@ fn f538_registered_runs_relaxed_piso_sweep_and_n50() {
         None => c.holds("C6", false, "a run was refused"),
     }
     println!("all runs {:.1} s", t0.elapsed().as_secs_f64());
+    c.finish();
+}
+
+// ---- ADR 0613 amendment 1: model X against the logged registered runs ---------------------------------------------------
+
+/// One configuration of the registered runs: `alpha_u` (`None`: PISO), `N`, and `[Symmetry 20 h, Symmetry 40 h, zero gradient
+/// 20 h, zero gradient 40 h]`.
+type Logged = (Option<f64>, usize, [(f64, f64); 4]);
+
+/// The impedances of the registered runs (`run2_registered.log`, commit `6857342e`).
+const LOGGED: [Logged; 7] = [
+    (
+        None,
+        100,
+        [
+            (3.3926045570268286, 1.079197068958323),
+            (6.754904879701068, 2.161364829243946),
+            (3.0318371762026075, 1.0928385577536086),
+            (6.032149424900445, 2.188689265043991),
+        ],
+    ),
+    (
+        Some(0.6),
+        100,
+        [
+            (2.782349849919308, 1.0893947694584931),
+            (5.533832231920674, 2.1822218292713176),
+            (3.030114966448081, 1.0806560077985476),
+            (6.033924387529718, 2.1645767626200905),
+        ],
+    ),
+    (
+        Some(0.7),
+        100,
+        [
+            (2.9241807083813804, 1.0841369138229433),
+            (5.8175451918231715, 2.171724382139457),
+            (3.031578331768899, 1.0808110040490946),
+            (6.035428720867575, 2.164956792146438),
+        ],
+    ),
+    (
+        Some(0.8),
+        100,
+        [
+            (3.0308399791722214, 1.080025234703981),
+            (6.030628628230832, 2.1635240987279265),
+            (3.032931844875428, 1.0807530111304366),
+            (6.0367897420343795, 2.164901398320602),
+        ],
+    ),
+    (
+        Some(0.9),
+        100,
+        [
+            (3.1140364527271656, 1.0768126049451898),
+            (6.1966056321479615, 2.1571267585176646),
+            (3.0342200589325516, 1.0806935809760039),
+            (6.038082430749906, 2.1648384479576537),
+        ],
+    ),
+    (
+        Some(1.0),
+        100,
+        [
+            (3.1808022556420354, 1.0742284611163406),
+            (6.329603503581387, 2.151986396283511),
+            (3.0354568610716193, 1.0806331296072462),
+            (6.039325219982094, 2.1647670183014265),
+        ],
+    ),
+    (
+        Some(0.8),
+        50,
+        [
+            (2.9387799428921153, 0.9904399881168894),
+            (5.844799552870221, 1.985439822280563),
+            (3.1004161230213008, 0.9793878553368068),
+            (6.171967867694041, 1.9630607578908492),
+        ],
+    ),
+];
+
+/// The `x` cells of the channel mesh (`long`: 40 h, 60 cells): widths `dx_i` and the per-volume diagonal `c_i = nu sum
+/// |S_f|/(d_f V_i)` of the `x` faces (the piston face at half a cell, nothing at the zero-gradient outlet), from the points.
+fn x_cells(long: bool) -> Vec<(f64, f64)> {
+    let (nx, lf) = if long { (60, 40.0 * H) } else { (30, 20.0 * H) };
+    let mesh = box_mesh(
+        [nx, NY, 1],
+        [lf, H, H],
+        [Grading::Expansion(5.5), Grading::Uniform, Grading::Uniform],
+    )
+    .unwrap();
+    let mut xs: Vec<f64> = mesh.points().iter().map(|p| p[0]).collect();
+    xs.sort_by(f64::total_cmp);
+    xs.dedup_by(|a, b| (*a - *b).abs() < 1e-12 * lf);
+    assert_eq!(xs.len(), nx + 1);
+    let dx: Vec<f64> = xs.windows(2).map(|w| w[1] - w[0]).collect();
+    let xc: Vec<f64> = xs.windows(2).map(|w| 0.5 * (w[0] + w[1])).collect();
+    (0..nx)
+        .map(|i| {
+            let west = if i == 0 { 0.5 * dx[0] } else { xc[i] - xc[i - 1] };
+            let mut c = nu() / (west * dx[i]);
+            if i + 1 < nx {
+                c += nu() / ((xc[i + 1] - xc[i]) * dx[i]);
+            }
+            (dx[i], c)
+        })
+        .collect()
+}
+
+/// Model X on one mesh: `Z = sum_i z(c_i) dx_i/(20 h)` (each `x` column a developed column with its own `c_i`).
+fn model_x_mesh(m: &Model, long: bool, z_sym: bool) -> Cx {
+    x_cells(long).iter().fold(Cx::ZERO, |acc, &(dx, c)| {
+        let mc = Model {
+            cx: c,
+            ..with_lambda(m, z_sym)
+        };
+        acc.add(model_z(&mc, false).scale(dx / (20.0 * H)))
+    })
+}
+
+/// Model X's per-length parts `(Symmetry, zero gradient)` and its 20 h `Delta Z`.
+fn model_x_parts(m: &Model) -> (Cx, Cx, Cx) {
+    let s20 = model_x_mesh(m, false, true);
+    let s40 = model_x_mesh(m, true, true);
+    let z20 = model_x_mesh(m, false, false);
+    let z40 = model_x_mesh(m, true, false);
+    (s40.sub(s20), z40.sub(z20), s20.sub(z20))
+}
+
+/// The per-length mean of `c_i`: `(sum_40 c dx - sum_20 c dx)/(20 h)`.
+fn c_bar() -> f64 {
+    let s = |long: bool| x_cells(long).iter().map(|(dx, c)| dx * c).sum::<f64>();
+    (s(true) - s(false)) / (20.0 * H)
+}
+
+/// The 0-D ratio with `d -> d + c_bar`: `r = (1/dt + 12 nu/h^2)/(1/dt + 2 nu/dy^2 + c_bar)`.
+fn r_0d_x(n: usize, cb: f64) -> f64 {
+    let e = n as f64 + 12.0 * nu() / (H * H);
+    let d = n as f64 + 2.0 * nu() / (H / NY as f64).powi(2) + cb;
+    e / d
+}
+
+#[test]
+fn f538_amended_model_x_against_the_registered_runs() {
+    let mut c = Checks::new();
+    let cb = c_bar();
+    println!("c_bar {cb:e} /s");
+    // (alpha_u, measured Re Delta Z_pl, model X's) at N 100
+    let mut sweep: Vec<(f64, f64, f64)> = Vec::new();
+    for (relaxed, n, z) in LOGGED {
+        let z: Vec<Cx> = z.iter().map(|&(a, b)| Cx(a, b)).collect();
+        let (m, id) = match relaxed {
+            Some(a) => (Model::relaxed(n, true, a), format!("relaxed {a} N {n}")),
+            None => (Model::piso(n, true), format!("PISO N {n}")),
+        };
+        let (xs, xz, x20) = model_x_parts(&m);
+        let (s_pl, z_pl) = (z[1].sub(z[0]), z[3].sub(z[2]));
+        let dz = s_pl.sub(z_pl);
+        let dx = xs.sub(xz);
+        // C3A: the four runs of C3 (PISO and relaxed 0.8 at N 100); C4A the sweep; C6A N 50
+        let main = relaxed.is_none() || (relaxed == Some(0.8) && n == 100);
+        let (cid, lim) = if n == 50 {
+            ("C6A", 3e-3)
+        } else if main {
+            ("C3A", 2e-3)
+        } else {
+            ("C4A", 2e-3)
+        };
+        for (what, meas, model) in [("Symmetry", s_pl, xs), ("zero gradient", z_pl, xz)] {
+            let (re, im) = rel_parts(meas, model);
+            println!("{cid} {id} {what}: Z_pl {meas:?}, model X {model:?}: {re:e}, {im:e}");
+            c.at_most(&format!("{cid} {id} {what} Z_pl real"), re.abs(), lim);
+            c.at_most(&format!("{cid} {id} {what} Z_pl imaginary"), im.abs(), lim);
+        }
+        println!(
+            "E1A {id}: Delta Z_pl {dz:?}, model X {dx:?}; Delta Z(20 h) {:?}, model X {x20:?}",
+            z[0].sub(z[2])
+        );
+        if main {
+            let tag = if relaxed.is_none() { "C2A" } else { "C1A" };
+            c.at_most(&format!("{tag} {id} Delta Z_pl real"), (dz.0 - dx.0).abs(), 5e-3);
+            c.at_most(&format!("{tag} {id} Delta Z_pl imaginary"), (dz.1 - dx.1).abs(), 2e-3);
+        } else {
+            c.at_most(
+                &format!("{cid} {id} Re Delta Z_pl"),
+                (dz.0 - dx.0).abs(),
+                5e-3 + 0.02 * dx.0.abs(),
+            );
+        }
+        if let Some(a) = relaxed {
+            let s_meas = dz.0 / d1_dz(n).0;
+            let r = r_0d_x(n, cb);
+            let s0 = r - (1.0 / a - 1.0) * (1.0 / r - 1.0);
+            println!("C8A {id}: sigma measured {s_meas:e}, 0-D with c_bar {s0:e} (r {r:e})");
+            c.at_most(&format!("C8A {id} sigma"), (s0 - s_meas).abs(), 0.06);
+            if n == 100 {
+                sweep.push((a, dz.0, dx.0));
+            }
+        }
+    }
+    sweep.sort_by(|x, y| x.0.total_cmp(&y.0));
+    let lin = |a0: f64, y0: f64, a1: f64, y1: f64| a0 + (a1 - a0) * (-y0) / (y1 - y0);
+    let mb = sweep.windows(2).find(|w| w[0].1 <= 0.0 && w[1].1 > 0.0);
+    let xb = sweep.windows(2).find(|w| w[0].2 <= 0.0 && w[1].2 > 0.0);
+    match (mb, xb) {
+        (Some(w), Some(v)) => {
+            c.holds(
+                "NC3A bracket",
+                w[0].0 == v[0].0 && w[1].0 == v[1].0,
+                &format!("measured {:?}, model X {:?}", (w[0].0, w[1].0), (v[0].0, v[1].0)),
+            );
+            let meas = lin(w[0].0, w[0].1, w[1].0, w[1].1);
+            let model = lin(w[0].0, w[0].2, w[1].0, w[1].2);
+            println!("C5A zero: measured {meas:e}, model X {model:e}");
+            c.at_most("C5A zero", (meas - model).abs(), 0.02);
+            let r = r_0d_x(100, cb);
+            let a0 = 1.0 / (1.0 + r * r / (1.0 - r));
+            println!("C8A zero: 0-D with c_bar {a0:e}, measured {meas:e}");
+            c.at_most("C8A zero", (a0 - meas).abs(), 0.02);
+        }
+        _ => c.holds("C5A", false, "no sign change"),
+    }
     c.finish();
 }
