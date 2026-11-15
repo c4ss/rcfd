@@ -229,12 +229,14 @@ impl Recovery {
     }
 }
 
-/// The energy-norm estimate (D4).
+/// The energy-norm estimate (D4), with the element volumes and the indicator per unit volume of ADR 0616.
 #[derive(Debug, Clone, PartialEq)]
 pub struct EnergyError {
     element: Vec<f64>,
     estimate: f64,
     solution: f64,
+    volume: Vec<f64>,
+    density: Vec<f64>,
 }
 
 impl EnergyError {
@@ -258,6 +260,20 @@ impl EnergyError {
     pub fn ranked(&self) -> Vec<usize> {
         let mut v: Vec<usize> = (0..self.element.len()).collect();
         v.sort_by(|&a, &b| self.element[b].total_cmp(&self.element[a]).then(a.cmp(&b)));
+        v
+    }
+    /// The volume `|K| = sum_q w_q det J` of every element by its estimate rule (ADR 0616 reading a1).
+    pub fn element_volumes(&self) -> &[f64] {
+        &self.volume
+    }
+    /// The indicator per unit volume `eta_e/|K|^{1/2}` of every element (ADR 0616 D1).
+    pub fn element_densities(&self) -> &[f64] {
+        &self.density
+    }
+    /// The elements by descending density, ties to the lower index.
+    pub fn ranked_by_density(&self) -> Vec<usize> {
+        let mut v: Vec<usize> = (0..self.density.len()).collect();
+        v.sort_by(|&a, &b| self.density[b].total_cmp(&self.density[a]).then(a.cmp(&b)));
         v
     }
 }
@@ -812,7 +828,7 @@ pub fn energy_error(
     let compliance: Vec<Option<Matrix6>> = prepared.d.iter().map(|d| d.as_ref().and_then(invert6)).collect();
     let mesh = model.mesh();
     let dofs = model.dof_map();
-    let per_element = parallel_map(mesh.n_elements(), options.threads, |e| -> Result<(f64, f64)> {
+    let per_element = parallel_map(mesh.n_elements(), options.threads, |e| -> Result<(f64, f64, f64)> {
         let located = |source: FemError| FemError::Element {
             element: e,
             source: Box::new(source),
@@ -831,7 +847,7 @@ pub fn energy_error(
             })
         })?;
         let rule = estimate_rule(kind).expect("checked");
-        let (mut err, mut sol) = (0.0, 0.0);
+        let (mut err, mut sol, mut vol) = (0.0, 0.0, 0.0);
         for ip in element.integration_points(&coords, rule).map_err(located)? {
             let eps = match crate::hex8x::opted(mesh, e) {
                 Some(f) => crate::hex8x::strain_at(f, &coords, &d, &ue, ip.geometry.xi).map_err(located)?,
@@ -842,16 +858,22 @@ pub fn energy_error(
             let diff: [f64; 6] = std::array::from_fn(|k| star[k] - sh[k]);
             err += ip.weight * quadratic_form(&c, &diff);
             sol += ip.weight * quadratic_form(&c, &sh);
+            vol += ip.weight;
         }
-        Ok((err, sol))
+        Ok((err, sol, vol))
     });
     let mut element = Vec::with_capacity(per_element.len());
+    let mut volume = Vec::with_capacity(per_element.len());
+    let mut density = Vec::with_capacity(per_element.len());
     let (mut total, mut solution) = (0.0, 0.0);
     for r in per_element {
-        let (err, sol) = r?;
+        let (err, sol, vol) = r?;
         total += err;
         solution += sol;
-        element.push(err.sqrt());
+        let eta = err.sqrt();
+        element.push(eta);
+        volume.push(vol);
+        density.push(eta / vol.sqrt());
     }
     Ok((
         recovery,
@@ -859,6 +881,8 @@ pub fn energy_error(
             element,
             estimate: total.sqrt(),
             solution: solution.sqrt(),
+            volume,
+            density,
         },
     ))
 }
