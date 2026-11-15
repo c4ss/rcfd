@@ -305,6 +305,70 @@ measures and limits). NC1 gets no corrected test (its set-up was not defective; 
 
 By the decision rule the item cannot be done: KA and NC1 missed in run 1, and KA can only be met after this post-run amendment.
 
-## For the lead: roadmap entries
+## Addendum 1: results (2026-11-15)
 
-To be completed in the addendum.
+No library change: the item is test-only, and no defect of the library was found. Test file
+`crates/rcfd-fem/tests/sa_ring_whirl_shells.rs` (the reference code with RF1/RF2, the two ring tests after amendment 1, the three
+ignored records of run 1), 7.9 s in release. No existing test edited, no golden or hash table touched.
+
+Run 1 (2356e90f, `f654-scratch/run1.log`) missed KA (backward member, a set-up defect of the reference) and NC1 (amendment 1).
+Run 2 (5b0fd131, `f654-scratch/run2.log`) is the corrected run of the two ring tests. RF1, RF2 and every WF, SP, OD and DI number
+are identical in both runs (amendment 1 changed only the reference's backward `kappa`).
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| RF1 lariat | 1e-12 | 2.2e-16 | yes |
+| RF2 inextensional limit | 1e-8 | 9.6e-14 | yes |
+| WF4 Shell4, coarse | `0.25 (k Delta)^2` = 2.4e-3 / 5.4e-3 | `k = 2`: 8.3e-4 .. 2.07e-3; `k = 3`: 2.27e-3 .. 2.87e-3 | yes |
+| WF4 Shell4, fine | 6.0e-4 / 1.36e-3 | `k = 2`: 2.0e-4 .. 5.0e-4; `k = 3`: 5.5e-4 .. 6.9e-4 | yes |
+| WF3 Shell3, coarse | `0.5 (k Delta)^2` = 4.8e-3 / 1.08e-2 | `k = 2`: 7.3e-4 .. 1.69e-3; `k = 3`: 1.92e-3 .. 2.35e-3 | yes |
+| WF3 Shell3, fine | 1.2e-3 / 2.7e-3 | `k = 2`: 1.8e-4 .. 4.1e-4; `k = 3`: 4.6e-4 .. 5.6e-4 | yes |
+| OD4 / OD3 observed order (24 each) | `abs(p - 2) <= 0.5` | p = 2.044 .. 2.052 / 2.048 .. 2.057 | yes |
+| SP4 / SP3 split (24 each) | 1e-2 | coarse 3.6e-4 (`k = 2`), 1.27e-3 (`k = 3`); fine 8.7e-5, 3.1e-4 (both kinds) | yes |
+| KA4 / KA3, run 1 | 1e-2 | forward met (equal to SP); backward `-2.0004 .. -2.0001` (the reference's sign; records `*_known_miss`) | **no** |
+| KA4 / KA3, run 2 | 1e-2 | 1.27e-3 worst (equal to SP) | yes |
+| DI4 / DI3 | forward `tau >= 0.99`, backward `tau <= -0.99`, `omega_3 >= 1.5 omega_b` | every case `Forward` `tau = 1.000000`, `Backward` `tau = -1.000000`; `omega_3 / omega_b >= 2.04` / `1.99` | yes |
+| NC1 no split without `G` | 1e-10 | 8.8e-10, 2.0e-10 (Shell4), 3.6e-9, 9.7e-11 (Shell3); record `nc1_no_split_without_coriolis_known_miss` | **no** |
+| B1 every rcfd-fem test (release) | pass | 1141 passed, 0 failed, 306 ignored | yes |
+| B2 `baseline_hashes`; `docs_site` | pass | 3 passed, 1 ignored; 2 passed | yes |
+
+Every frequency error is positive (the facets are stiff, as D6 expected); the Shell4 constant `e / (k Delta)^2` is 0.09 .. 0.21
+(estimate 0.125). The split and whirl-number errors agree between the kinds to four digits and do not depend on the set or the
+speed: on an axially uniform motion both kinds reduce to the same linear interpolation of the translations (mass, Coriolis and
+the inextensible membrane), and the split depends only on those. In physical terms the Coriolis term splits each pair by about
+`4 n Omega / (n^2 + 1)` (156 rad/s between 108 and 265 rad/s at `Omega_3`, `n = 2`), and the shells reproduce it within 1.3e-3.
+
+`cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings` clean.
+
+Mutations on a `git archive` copy of 5b0fd131 with its own target (`f654-scratch/mut`, `mutate.py`, logs `mut_MU*.log`), the two
+`_after_amendment_1` tests each:
+
+| Id | Caught by |
+|---|---|
+| MU1 translation block zero | WF, SP (1.0), KA (1.0), DI, OD, both kinds |
+| MU2 translation block negated | DI, both kinds, every case (the wave sense flips). KA did not move: `kappa` is computed with the same mutated `C`, so it is self-consistent; the registration also expected KA |
+| MU3 `G = Omega C` | WF (0.24), SP (0.50), OD, both kinds. KA did not move (`kappa` does not depend on the factor of `G`); the registration also expected KA |
+| MU4 Shell4 spin softening zero | WF4 (0.22), OD4 |
+| MU5 Shell4 geometric stiffness without the normal component | WF4 (0.28, set F), OD4 |
+| MU6 Shell3 Coriolis halved | WF3, SP3 (0.50), KA3 (0.50), OD3 |
+
+All six caught (MU2 and MU3 by fewer checks than registered, as noted).
+
+**Decision by the registered rule: partial.** KA missed in run 1 (the reference's backward whirl number had the wrong sign) and
+was met only after the post-run amendment 1. NC1 missed: its rounding limit left out the spectral span of the dense solver, and
+the library is not in question. Every other check was met in its registered run, and every mutation was caught. In substance
+every clause of the acceptance is met: the forward and backward whirl of a free spinning ring of Shell4 and of Shell3, at three
+speeds up to half the first frequency, matches a closed form derived here within the registered discretisation error at two
+meshes, with observed order 2.04 .. 2.06 (expected 2) and every split within 1.3e-3 (limit 1e-2), and no library line changed.
+
+### Remaining questions
+
+1. Status. Options: (a) partial, as the rule gives; (b) done on the maintainer's judgement that the two misses are a sign in the
+   reference (set-up) and a mis-estimated rounding limit of a negative control, neither a property of the library.
+   Recommendation: (a), with the follow-up of question 2 carrying the rotary block.
+2. The rotary block `m2 W^T [a x] W` of the shell Coriolis matrix has no independent whirl reference (it is zero on a band).
+   Options: (a) a follow-up on the flat annular disc clamped at its inner radius (transverse modes; a semi-analytical 1-D
+   reference of the Mindlin plate with rotary inertia and the centrifugal membrane stress of the disc); (b) leave it to the
+   uniform-field check CO1 of ADR 0561. Recommendation: (a), before the fan study relies on thick blades.
+3. NC1's rounding. Options: (a) leave it; (b) state the dense whirl solver's accuracy as `c n eps omega_max` in its
+   documentation. Recommendation: (a) (no defect).
