@@ -8,10 +8,13 @@
 //! converged point, `c` the load scale. The iteration is the driver's own attempt with a per-iteration correction of the
 //! load factor (no second Newton loop): at iteration `k` the driver solves `K_T du_r = R` and `K_T du_f = f` with one
 //! indefinite factor of the reduced tangent, and the correction `d lambda` is the root of the quadratic of the constraint
-//! whose new increment is closer in angle to the reference (at `k = 0` the previous converged increment: the predictor; at `k
-//! >= 1` the increment so far). A failed attempt halves `Ds`; after a converged point `Ds` doubles back towards the given
-//! length. The load direction is that of the dead loads: a contribution's dependence on the load factor is in the residual,
-//! not in `du_f`.
+//! whose new increment is closer in angle to the reference (at `k = 0` the previous converged increment: the predictor; at
+//! `k >= 1` the increment so far). A failed attempt halves `Ds`; after a converged point `Ds` doubles back towards the given
+//! length. By default the load direction is that of the dead loads: a contribution's dependence on the load factor is in the
+//! residual, not in `du_f`. With [`ArcLengthOptions::contribution_load`] (ADR 0560 D3) the load direction is `f - sum_c d
+//! g_c / d lambda` at the iterate ([`crate::nonlinear::Contribution::add_load_factor_derivative`]), so that a reference
+//! load of follower pressure only is traced; with [`crate::nonlinear::NewtonOptions::unsymmetric`] the correction factors
+//! the full tangent by the unsymmetric envelope factor (ADR 0560 D4).
 //!
 //! Shell4 and Shell3 take the corotated element of ADR 0490 (ADR 0522, F-585), their rotation unknowns corrected
 //! additively as every other unknown.
@@ -21,7 +24,9 @@ use crate::element::ElementState;
 use crate::error::{FemError, Result};
 use crate::loads::{nodal_load_vector, NodalForceAt};
 use crate::model::SolidModel;
-use crate::nonlinear::{controlled_attempt, initial_states, Contribution, LoadFactorControl, NewtonOptions};
+use crate::nonlinear::{
+    controlled_attempt, initial_states, load_direction, Contribution, LoadFactorControl, NewtonOptions,
+};
 
 /// The work package that fills this module; `None` once it has landed.
 pub const PENDING: Option<&'static str> = None;
@@ -40,6 +45,9 @@ pub struct ArcLengthOptions {
     pub max_halvings: usize,
     /// The iteration cap, the tolerances and the threads of each attempt (`steps` and `max_halvings` are not used).
     pub newton: NewtonOptions,
+    /// The load direction with the contributions' derivatives with the load factor (ADR 0560 D3); off by default (the dead
+    /// loads only).
+    pub contribution_load: bool,
 }
 
 impl ArcLengthOptions {
@@ -51,6 +59,7 @@ impl ArcLengthOptions {
             max_points: 200,
             max_halvings: 5,
             newton: NewtonOptions::new(1),
+            contribution_load: false,
         }
     }
     /// The same options with a given load scale.
@@ -66,6 +75,11 @@ impl ArcLengthOptions {
     /// The same options with other Newton options.
     pub fn newton(mut self, newton: NewtonOptions) -> ArcLengthOptions {
         self.newton = newton;
+        self
+    }
+    /// The same options with the load direction of the contributions switched on or off (ADR 0560 D3).
+    pub fn contribution_load(mut self, on: bool) -> ArcLengthOptions {
+        self.contribution_load = on;
         self
     }
 
@@ -148,6 +162,8 @@ struct Spherical {
     /// The converged increment of the previous point.
     previous: Option<(Vec<f64>, f64)>,
     negative: usize,
+    /// The load direction of the contributions (ADR 0560 D3).
+    contribution_load: bool,
 }
 
 fn dot(a: &[f64], b: &[f64]) -> f64 {
@@ -214,6 +230,9 @@ impl LoadFactorControl for Spherical {
         self.lambda += dl;
         Ok(dl)
     }
+    fn contribution_load(&self) -> bool {
+        self.contribution_load
+    }
 }
 
 /// Follows the equilibrium path of `model` under the load factor times its loads and `forces` (ADR 0480 D4), from the
@@ -253,7 +272,21 @@ pub fn trace(
     for &(eq, _) in &fixed {
         is_fixed[eq] = true;
     }
-    if (0..n).all(|i| is_fixed[i] || f[i] == 0.0) {
+    if options.contribution_load {
+        // ADR 0560 D3: the load direction at the unloaded start, with the contributions.
+        let f0 = load_direction(&f, contributions, &vec![0.0; n], 0.0).map_err(|reason| FemError::Solver {
+            solver: "arc-length",
+            reason,
+        })?;
+        if (0..n).all(|i| is_fixed[i] || f0[i] == 0.0) {
+            return Err(FemError::InvalidValue {
+                key: "arc length",
+                reason: "the load and the contributions' load-factor derivatives are zero on the free equations: no \
+                         load direction to follow (ADR 0560 D3)"
+                    .to_string(),
+            });
+        }
+    } else if (0..n).all(|i| is_fixed[i] || f[i] == 0.0) {
         return Err(FemError::InvalidValue {
             key: "arc length",
             reason: "the load is zero on the free equations: no load direction to follow (ADR 0480 D4)".to_string(),
@@ -277,6 +310,7 @@ pub fn trace(
                 lambda,
                 previous: previous.clone(),
                 negative: 0,
+                contribution_load: options.contribution_load,
             };
             match controlled_attempt(
                 model,

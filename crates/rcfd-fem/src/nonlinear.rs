@@ -57,7 +57,8 @@ use crate::solve::{DirectFactor, PIVOT_TOLERANCE};
 use crate::thermal::{FieldAt, TemperatureFieldHistory};
 use crate::transient::{LoadHistory, LoadTable, MotionHistory};
 use rcfd_core::vec3::Vec3;
-use rcfd_linalg::skyline::{PivotRule, SkylineError, SkylineLdlt, SkylineOptions};
+use rcfd_linalg::skyline::{PivotRule, SkylineError, SkylineLdlt, SkylineOptions, SkylineOrdering};
+use rcfd_linalg::skyline_lu::EnvelopeLu;
 use rcfd_linalg::sparse_chol::SupernodalLdlt;
 use rcfd_linalg::CsrMatrix;
 use std::borrow::Cow;
@@ -1161,6 +1162,10 @@ pub struct NewtonOptions {
     /// [`DirectFactor::SupernodalNestedDissection`] (the supernodal multifrontal `L D L^T` after nested dissection by level
     /// structures of the tangent's pattern), each with the same pivot tests; any other value is refused (key `"solver"`).
     pub factor: DirectFactor,
+    /// The full tangent (ADR 0560 D4): the contributions by [`Contribution::add_full`] and the reduced tangent factored by
+    /// the unsymmetric envelope `L D U` ([`rcfd_linalg::skyline_lu::EnvelopeLu`], reverse Cuthill-McKee) with the same pivot
+    /// tests; off by default. Refused with [`DirectFactor::SupernodalNestedDissection`] (key `"solver"`).
+    pub unsymmetric: bool,
 }
 
 impl NewtonOptions {
@@ -1175,6 +1180,7 @@ impl NewtonOptions {
             threads: None,
             record_active_set: false,
             factor: DirectFactor::Envelope,
+            unsymmetric: false,
         }
     }
     /// The same options with the active-set record of [`LoadStep::yielded`] switched on or off.
@@ -1195,6 +1201,11 @@ impl NewtonOptions {
     /// The same options with another factor of the reduced tangent (ADR 0542 D1).
     pub fn factor(mut self, factor: DirectFactor) -> NewtonOptions {
         self.factor = factor;
+        self
+    }
+    /// The same options with the full tangent and the unsymmetric factor switched on or off (ADR 0560 D4).
+    pub fn unsymmetric(mut self, on: bool) -> NewtonOptions {
+        self.unsymmetric = on;
         self
     }
 
@@ -1230,6 +1241,15 @@ impl NewtonOptions {
                 key: "solver",
                 reason: format!(
                     "{:?}: the Newton driver factors by Envelope or SupernodalNestedDissection (ADR 0542)",
+                    self.factor
+                ),
+            });
+        }
+        if self.unsymmetric && self.factor != DirectFactor::Envelope {
+            return Err(FemError::InvalidValue {
+                key: "solver",
+                reason: format!(
+                    "{:?} with the unsymmetric tangent: the unsymmetric factor is the envelope L D U (ADR 0560 D4)",
                     self.factor
                 ),
             });
@@ -1339,6 +1359,24 @@ pub trait Contribution {
     fn in_residual_reference(&self) -> bool {
         false
     }
+    /// Adds the derivative of this contribution's force with the load factor at `(u, load_factor)` to `out` (one value per
+    /// equation), for the load direction of the arc-length iteration with `ArcLengthOptions::contribution_load` (ADR 0560
+    /// D1, D3). The default adds nothing: a force that does not depend on the load factor.
+    fn add_load_factor_derivative(&self, u: &[f64], load_factor: f64, out: &mut [f64]) -> Result<()> {
+        let _ = (u, load_factor, out);
+        Ok(())
+    }
+    /// The contribution with its full (possibly unsymmetric) tangent, called instead of [`Contribution::add`] when
+    /// [`NewtonOptions::unsymmetric`] is set (ADR 0560 D1, D4). The default is [`Contribution::add`].
+    fn add_full(
+        &self,
+        u: &[f64],
+        load_factor: f64,
+        force: &mut [f64],
+        tangent: &mut Vec<(usize, usize, f64)>,
+    ) -> Result<()> {
+        self.add(u, load_factor, force, tangent)
+    }
 }
 
 /// The step-control hook of the Newton driver (ADR 0440 D7): it sets the load factor each attempt aims at and is told the
@@ -1407,6 +1445,18 @@ fn contribute(
     fint: &mut [f64],
     k: Option<&mut CsrMatrix>,
 ) -> std::result::Result<f64, String> {
+    contribute_with(contributions, u, load_factor, fint, k, false)
+}
+
+/// [`contribute`], with `full` the contributions by [`Contribution::add_full`] (ADR 0560 D4).
+fn contribute_with(
+    contributions: &[&dyn Contribution],
+    u: &[f64],
+    load_factor: f64,
+    fint: &mut [f64],
+    k: Option<&mut CsrMatrix>,
+    full: bool,
+) -> std::result::Result<f64, String> {
     let mut triplets = Vec::new();
     let mut reference = 0.0f64;
     if contributions.iter().any(|c| c.in_residual_reference()) {
@@ -1414,8 +1464,12 @@ fn contribute(
     }
     for c in contributions {
         let mut force = vec![0.0; u.len()];
-        c.add(u, load_factor, &mut force, &mut triplets)
-            .map_err(|e| format!("contribution '{}': {e}", c.name()))?;
+        if full {
+            c.add_full(u, load_factor, &mut force, &mut triplets)
+        } else {
+            c.add(u, load_factor, &mut force, &mut triplets)
+        }
+        .map_err(|e| format!("contribution '{}': {e}", c.name()))?;
         if c.in_residual_reference() {
             reference = reference.max(norm(force.iter().copied()));
         }
@@ -1554,8 +1608,8 @@ impl Problem<'_> {
             let mut extra_reference = 0.0;
             if !self.contributions.is_empty() {
                 elastic = Some(fint.clone());
-                extra_reference =
-                    contribute(self.contributions, &u, lt, &mut fint, Some(&mut kt)).map_err(Failure::Other)?;
+                extra_reference = contribute_with(self.contributions, &u, lt, &mut fint, Some(&mut kt), o.unsymmetric)
+                    .map_err(Failure::Other)?;
             }
             let rfull: Vec<f64> = self.f.iter().zip(&fint).map(|(fi, gi)| lt * fi - gi).collect();
             let rn = norm(self.free.iter().map(|&i| rfull[i]));
@@ -1608,12 +1662,21 @@ impl Problem<'_> {
                 None => {
                     if sys.free().is_empty() {
                         Vec::new()
+                    } else if o.unsymmetric {
+                        factor_solve_unsymmetric(&sys.matrix, &sys.rhs, sys.free(), &dofs)?
                     } else {
                         factor_solve(&sys.matrix, &sys.rhs, sys.free(), &dofs, o.factor)?
                     }
                 }
                 Some(c) => {
-                    let (du, rhs, dl) = controlled_correction(&sys, &self.f, k, &dofs, c)?;
+                    // ADR 0560 D3: the load direction with the contributions' derivatives, at the iterate.
+                    let f_lambda = if c.contribution_load() {
+                        Some(load_direction(&self.f, self.contributions, &u, lt).map_err(Failure::Other)?)
+                    } else {
+                        None
+                    };
+                    let f = f_lambda.as_deref().unwrap_or(&self.f);
+                    let (du, rhs, dl) = controlled_correction(&sys, f, k, &dofs, c, o.unsymmetric)?;
                     lt += dl;
                     rhs_control = Some(rhs);
                     du
@@ -1700,6 +1763,55 @@ fn factor_solve(
     Ok(ldlt.solve(b))
 }
 
+/// The unsymmetric envelope `L D U` solve of the reduced tangent (ADR 0560 D4) with the pivot test and the texts of
+/// [`factor_solve`].
+fn factor_solve_unsymmetric(
+    a: &CsrMatrix,
+    b: &[f64],
+    free: &[usize],
+    dofs: &crate::model::DofMap,
+) -> std::result::Result<Vec<f64>, Failure> {
+    let diag = a.diag();
+    let at = |row: usize| {
+        let (n, c) = dofs.node_component(free[row]).expect("free equation exists");
+        format!("node {n} component {c}")
+    };
+    let lu = EnvelopeLu::factor(a).map_err(|e| match e {
+        SkylineError::Pivot { row, pivot, .. } => Failure::Other(format!(
+            "singular tangent: pivot {pivot:e} at {} (diagonal {:e})",
+            at(row),
+            diag[row]
+        )),
+        other => Failure::Other(format!("tangent factorisation: {other}")),
+    })?;
+    for (&row, &d) in lu.order().iter().zip(lu.pivots()) {
+        if d.is_nan() || d <= PIVOT_TOLERANCE * diag[row] {
+            return Err(Failure::Other(format!(
+                "singular tangent: pivot {d:e} at {} (diagonal {:e})",
+                at(row),
+                diag[row]
+            )));
+        }
+    }
+    Ok(lu.solve(b))
+}
+
+/// The load direction of the arc-length iteration with the contributions (ADR 0560 D3): `f - sum_c d g_c / d lambda` at
+/// `(u, lambda)`, one value per equation.
+pub(crate) fn load_direction(
+    f: &[f64],
+    contributions: &[&dyn Contribution],
+    u: &[f64],
+    lambda: f64,
+) -> std::result::Result<Vec<f64>, String> {
+    let mut d = vec![0.0; f.len()];
+    for c in contributions {
+        c.add_load_factor_derivative(u, lambda, &mut d)
+            .map_err(|e| format!("contribution '{}': {e}", c.name()))?;
+    }
+    Ok(f.iter().zip(&d).map(|(a, b)| a - b).collect())
+}
+
 /// A correction of the load factor at every iteration of an attempt (ADR 0480 D4: arc-length): given the solutions of
 /// `K_T du_r = R` and `K_T du_f = f` on the free equations (in the order of the reduced system) and the number of negative
 /// pivots of `K_T`, the change `d lambda` of the load factor; the correction of the iteration is `du_r + d lambda du_f`. An
@@ -1713,6 +1825,10 @@ pub(crate) trait LoadFactorControl {
         du_load: &[f64],
         negative_pivots: usize,
     ) -> std::result::Result<f64, String>;
+    /// Whether the load direction `du_load` is that of the contributions too (ADR 0560 D3); `false`: the dead loads.
+    fn contribution_load(&self) -> bool {
+        false
+    }
 }
 
 /// The controlled correction (ADR 0480 D4): the reduced tangent factored as indefinite (a pivot `|d| <= PIVOT_TOLERANCE
@@ -1724,6 +1840,7 @@ fn controlled_correction(
     k: usize,
     dofs: &crate::model::DofMap,
     control: &mut dyn LoadFactorControl,
+    unsymmetric: bool,
 ) -> std::result::Result<(Vec<f64>, Vec<f64>, f64), Failure> {
     let free = sys.free();
     if free.is_empty() {
@@ -1735,33 +1852,42 @@ fn controlled_correction(
         let (n, c) = dofs.node_component(free[row]).expect("free equation exists");
         format!("node {n} component {c}")
     };
-    let options = SkylineOptions {
-        pivots: PivotRule::NonZero,
-        ..SkylineOptions::default()
-    };
-    let ldlt = SkylineLdlt::factor_with(a, &options).map_err(|e| match e {
+    let pivot_error = |e: SkylineError| match e {
         SkylineError::Pivot { row, pivot, .. } => Failure::Other(format!(
             "singular tangent: pivot {pivot:e} at {} (diagonal {:e})",
             at(row),
             diag[row]
         )),
         other => Failure::Other(format!("tangent factorisation: {other}")),
-    })?;
-    for (&row, &d) in ldlt.order().iter().zip(ldlt.pivots()) {
-        if d.is_nan() || d.abs() <= PIVOT_TOLERANCE * diag[row].abs() {
-            return Err(Failure::Other(format!(
-                "singular tangent: pivot {d:e} at {} (diagonal {:e})",
-                at(row),
-                diag[row]
-            )));
+    };
+    let check_pivots = |order: &[usize], pivots: &[f64]| -> std::result::Result<(), Failure> {
+        for (&row, &d) in order.iter().zip(pivots) {
+            if d.is_nan() || d.abs() <= PIVOT_TOLERANCE * diag[row].abs() {
+                return Err(Failure::Other(format!(
+                    "singular tangent: pivot {d:e} at {} (diagonal {:e})",
+                    at(row),
+                    diag[row]
+                )));
+            }
         }
-    }
+        Ok(())
+    };
     let ff: Vec<f64> = free.iter().map(|&q| f[q]).collect();
-    let du_r = ldlt.solve(&sys.rhs);
-    let du_f = ldlt.solve(&ff);
-    let dl = control
-        .correct(k, &du_r, &du_f, ldlt.inertia().0)
-        .map_err(Failure::Other)?;
+    // ADR 0560 D4: the unsymmetric envelope factor with the same pivot test; its negative pivots are not an inertia.
+    let (du_r, du_f, negative) = if unsymmetric {
+        let lu = EnvelopeLu::factor_with(a, &SkylineOrdering::Rcm, PivotRule::NonZero).map_err(pivot_error)?;
+        check_pivots(lu.order(), lu.pivots())?;
+        (lu.solve(&sys.rhs), lu.solve(&ff), lu.negative_pivots())
+    } else {
+        let options = SkylineOptions {
+            pivots: PivotRule::NonZero,
+            ..SkylineOptions::default()
+        };
+        let ldlt = SkylineLdlt::factor_with(a, &options).map_err(pivot_error)?;
+        check_pivots(ldlt.order(), ldlt.pivots())?;
+        (ldlt.solve(&sys.rhs), ldlt.solve(&ff), ldlt.inertia().0)
+    };
+    let dl = control.correct(k, &du_r, &du_f, negative).map_err(Failure::Other)?;
     let du = du_r.iter().zip(&du_f).map(|(a, b)| a + dl * b).collect();
     let rhs = sys.rhs.iter().zip(&ff).map(|(a, b)| a + dl * b).collect();
     Ok((du, rhs, dl))

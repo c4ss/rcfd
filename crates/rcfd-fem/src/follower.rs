@@ -346,6 +346,31 @@ impl Contribution for FollowerPressure {
         }
         self.symmetric_negative(u, load_factor, tangent)
     }
+    /// ADR 0560 D2: the force `-f(u, lambda)` is linear in the load factor; its derivative is `-f(u, 1)`.
+    fn add_load_factor_derivative(&self, u: &[f64], _load_factor: f64, out: &mut [f64]) -> Result<()> {
+        let f = self.force(u, 1.0)?;
+        for (a, b) in out.iter_mut().zip(&f) {
+            *a -= b;
+        }
+        Ok(())
+    }
+    /// ADR 0560 D2: the force as [`Contribution::add`] and the full load stiffness `-K_p` (unsymmetric).
+    fn add_full(
+        &self,
+        u: &[f64],
+        load_factor: f64,
+        force: &mut [f64],
+        tangent: &mut Vec<(usize, usize, f64)>,
+    ) -> Result<()> {
+        let f = self.force(u, load_factor)?;
+        for (a, b) in force.iter_mut().zip(&f) {
+            *a -= b;
+        }
+        for (r, c, v) in self.load_stiffness(u, load_factor)? {
+            tangent.push((r, c, -v));
+        }
+        Ok(())
+    }
 }
 
 /// The part of the centrifugal load that depends on the displacement (ADR 0480 D2): `lambda Omega^2 M_perp u` for the
@@ -413,6 +438,25 @@ impl Contribution for CentrifugalFollower {
                 tangent.push((r, m.col[k], -s * m.val[k]));
             }
             force[r] -= s * v;
+        }
+        Ok(())
+    }
+    /// ADR 0560 D2: the force `-lambda Omega^2 M_perp u` has the derivative `-Omega^2 M_perp u`.
+    fn add_load_factor_derivative(&self, u: &[f64], _load_factor: f64, out: &mut [f64]) -> Result<()> {
+        let m = &self.m_perp;
+        if u.len() != m.n {
+            return Err(FemError::FieldLength {
+                key: "displacement",
+                expected: m.n,
+                found: u.len(),
+            });
+        }
+        for (r, o) in out.iter_mut().enumerate().take(m.n) {
+            let mut v = 0.0;
+            for k in m.row_ptr[r]..m.row_ptr[r + 1] {
+                v += m.val[k] * u[m.col[k]];
+            }
+            *o -= self.omega2 * v;
         }
         Ok(())
     }

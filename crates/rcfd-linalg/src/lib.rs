@@ -17,6 +17,7 @@ pub mod matrix;
 pub mod precond;
 pub mod reorder;
 pub mod skyline;
+pub mod skyline_lu;
 pub mod solvers;
 pub mod sparse_chol;
 pub mod vecops;
