@@ -13192,7 +13192,7 @@ fixed by the item's registration ADR before any code.
     and loss factors about a state, Hex20, Tet, shells and beams. Follow-up F-671 (contributions about a nonlinear state
     on the buckling and direct harmonic paths). Done is the maintainer's call (every registered check met; MU6 caught
     only by the set-up check S0, omitted from its expectations by a drafting slip).
-- [ ] **F-670** Load height on the pre-stressed warping modes and harmonic path
+- [x] **F-670** Load height on the pre-stressed warping modes and harmonic path
   - depends on: F-663, F-661
   - acceptance: Every limit not stated here is registered in the ADR before the run. The lowest flexural-torsional
     frequency of the fork-supported doubly symmetric I of ADR 0588 under a uniformly distributed load of 0.5 of its
@@ -13200,7 +13200,22 @@ fixed by the item's registration ADR before any code.
     of the pre-stressed WarpingHarmonic) equals a Rayleigh-Ritz reference of the same energy with the consistent mass
     derived in the ADR within 1e-2 at 16 elements and falls to zero at the ADR 0588 buckling load within 1e-2; results
     without a load height bit-identical.
-  - note: Follow-up of F-663 (ADR 0588, 2026-11-15).
+  - note: F-670 note: Structural solver, advanced tier. Follow-up of F-663 and F-661 (ADR 0588, ADR 0585, 2026-11-15).
+    DONE. ADR 0594, 2026-11-15: the distributed load height of `Warping::line_load_point` reaches `prestressed_modes`
+    and the pre-stressed `WarpingHarmonic` through K_sigma of `matrices` (audit; no code change, only a doc sentence:
+    the entry holds the load as applied, so a pre-stress scaled by `WarpingPrestress::scaled` needs its force scaled
+    too). Fork-supported doubly symmetric I of ADR 0588, L = 3, 16 elements, UDL of 0.5 of the ADR 0588 buckling load on
+    the top flange, at the shear centre and on the bottom flange: the lowest flexural-torsional frequency, from the
+    modes and from the harmonic resonance, is 8.1e-4 to 8.3e-4 below a sine-series Rayleigh-Ritz reference derived in
+    the ADR (Euler-Bernoulli with rotary inertia, the kinetic energy of the library's consistent mass). The offset comes
+    from the Timoshenko lateral plane: the unloaded frequency is within 4e-6 of the Timoshenko closed form. Harmonic
+    resonance and pre-stressed eigenvalue agree to 4e-11, the mode shape to 1.6e-3. At the model's buckling load
+    omega^2/omega_0^2 <= 7.7e-13 (modes) and 2.7e-10 (harmonic); at the Rayleigh-Ritz buckling load 3.2e-5. Results
+    without a load height bit-identical (no code line changed; an entry at the shear centre gives the bits of none on
+    both paths; the ADR 0546 to 0591 bit records; baseline_hashes). Seven of seven mutations caught. Not covered:
+    monosymmetric sections, the transient path with a load height, other supports and loads, warping inertia, the force
+    not tied to the pre-stress, no case-file key. Follow-up F-673 (Load height on the pre-stressed modes of a
+    monosymmetric warping beam).
 - [ ] **F-671** Contributions about a nonlinear state on the buckling and direct harmonic paths
   - depends on: F-669
   - acceptance: Every limit not stated here is registered in the ADR before the run. tangent_buckling_factors and
@@ -13214,3 +13229,11 @@ fixed by the item's registration ADR before any code.
     elements (the orientation vector and the rotation unknowns rotated per sector) gives the static displacements and
     the modes of each harmonic index of the full ring of beams within 1e-10, the defaults bit-identical.
   - note: Follow-up of F-666 (ADR 0593, 2026-11-15).
+- [ ] **F-673** Load height on the pre-stressed modes of a monosymmetric warping beam
+  - depends on: F-670, F-627
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The lowest flexural-torsional
+    frequency of the fork-supported ADR 0553 monosymmetric I under a uniformly distributed load of 0.5 of its ADR 0588
+    buckling load at the shear centre, at the centroid and on flange 1 (prestressed_modes) equals a Rayleigh-Ritz
+    reference with the consistent mass, including the inertial coupling of the shear-centre offset, derived in the ADR
+    within 1e-2 at 16 elements; results without a load height bit-identical.
+  - note: Follow-up of F-670 (ADR 0594, 2026-11-15).
