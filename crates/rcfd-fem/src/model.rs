@@ -1241,14 +1241,29 @@ impl SolidModel {
                     package: crate::mat_creep::FOLLOW_UP,
                 });
             }
-            // ADR 0541 D3: and the hyperelastic material (the nonlinear driver takes it).
+            // ADR 0555 D3: the linear paths take the hyperelastic material as its linearised material, on solid elements
+            // and without a temperature load (ADR 0541 D3 refused it on every linear path).
             if !history && matches!(m, Material::Hyperelastic { .. }) {
-                return Err(FemError::NotYetSupported {
+                let refused = |what: &str| FemError::NotYetSupported {
                     item: "material",
                     variant: m.name(),
-                    location: format!("material {i}, element set '{set}'"),
-                    package: crate::mat_hyper::FOLLOW_UP,
-                });
+                    location: format!("material {i}, element set '{set}': {what}"),
+                    package: crate::mat_hyper::LINEAR_FOLLOW_UP,
+                };
+                let elements = self.mesh.element_set(set).unwrap_or(&[]);
+                if elements.iter().any(|&e| {
+                    matches!(
+                        self.mesh.element_kind(e),
+                        crate::mesh::ElementKind::Beam2
+                            | crate::mesh::ElementKind::Shell4
+                            | crate::mesh::ElementKind::Shell3
+                    )
+                }) {
+                    return Err(refused("a structural element (Beam2, Shell4, Shell3)"));
+                }
+                if self.loads.iter().any(|l| matches!(l, Load::Temperature { .. })) {
+                    return Err(refused("a temperature load"));
+                }
             }
             // ADR 0452 D6: a path that does not take the per-point materials refuses them.
             if !point_materials && crate::mat_ortho::is_point_material(m) {

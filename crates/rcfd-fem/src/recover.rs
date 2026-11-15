@@ -131,9 +131,9 @@ impl IntegrationPointField {
                                 crate::mat_ortho::thermal_strain(material, &point, reference, dt).map_err(located)?;
                             let elastic: [f64; 6] = std::array::from_fn(|k| eps[k] - eth[k]);
                             thermal_strains.push(eth);
-                            material.stress(&elastic, &point, &[]).map_err(located)?.0
+                            material.linear_stress(&elastic, &point, &[]).map_err(located)?.0
                         }
-                        _ => material.stress(&eps, &point, &[]).map_err(located)?.0,
+                        _ => material.linear_stress(&eps, &point, &[]).map_err(located)?.0,
                     };
                     field.positions.push(ip.geometry.x);
                     field.weights.push(ip.weight);
@@ -142,13 +142,13 @@ impl IntegrationPointField {
                     continue;
                 }
                 let (sigma, _) = match &dte {
-                    None => material.stress(&eps, &context, &[]).map_err(located)?,
+                    None => material.linear_stress(&eps, &context, &[]).map_err(located)?,
                     Some(dte) => {
                         let dt = thermal::point_temperature_change(&ip.geometry.n, dte);
                         let eth = thermal::thermal_strain(material, dt);
                         let elastic: [f64; 6] = std::array::from_fn(|k| eps[k] - eth[k]);
                         thermal_strains.push(eth);
-                        material.stress(&elastic, &context, &[]).map_err(located)?
+                        material.linear_stress(&elastic, &context, &[]).map_err(located)?
                     }
                 };
                 field.positions.push(ip.geometry.x);

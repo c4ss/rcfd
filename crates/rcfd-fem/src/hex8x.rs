@@ -125,13 +125,13 @@ pub(crate) fn element_data(
         match mpoints.filter(|_| crate::mat_ortho::is_point_material(material)) {
             Some(mp) => {
                 let (point, dt) = mp.context(element, material, g.x, &g.n)?;
-                ds.push(material.elasticity_at(&point)?);
+                ds.push(material.linear_elasticity_at(&point)?);
                 if let (Some(v), Some(reference)) = (eths.as_mut(), mp.reference()) {
                     v.push(crate::mat_ortho::thermal_strain(material, &point, reference, dt)?);
                 }
             }
             None => {
-                ds.push(material.elasticity_matrix()?);
+                ds.push(material.linear_elasticity_matrix()?);
                 if let (Some(v), Some(dte)) = (eths.as_mut(), dte) {
                     let dt = crate::thermal::point_temperature_change(&g.n, dte);
                     v.push(crate::thermal::thermal_strain(material, dt));

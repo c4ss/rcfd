@@ -10,8 +10,12 @@
 //!   (Voigt, engineering shear), evaluated so that no terms of order one cancel at small strain. A strain with `det C <= 0` is
 //!   refused with the key [`crate::nonlinear::INVERSION_KEY`].
 //! * Paths: [`crate::model::Material::stress`] gives the stress and the tangent; the nonlinear driver takes the material
-//!   (Full and BBar Hex8, the BBar block being the mean-dilatation element, [`crate::nonlinear_md`]); the linear paths and the
-//!   nonlinear transient Method step refuse it naming [`FOLLOW_UP`].
+//!   (Full and BBar Hex8, the BBar block being the mean-dilatation element, [`crate::nonlinear_md`]) and the nonlinear transient
+//!   Method step (ADR 0555 D4); the linear paths take the linearised material, the isotropic elasticity of the small-strain
+//!   moduli ([`linearised_elasticity`], through [`crate::model::Material::linear_elasticity_matrix`] and
+//!   [`crate::model::Material::linear_stress`], ADR 0555 D1, D2), refusing Beam2 and shell elements and a temperature load
+//!   naming [`LINEAR_FOLLOW_UP`] (ADR 0555 D3); the element-constant matrix
+//!   ([`crate::model::Material::elasticity_matrix`]) stays refused naming [`FOLLOW_UP`].
 
 use crate::error::{FemError, Result};
 use crate::material::{HyperelasticEnergy, Matrix6};
@@ -21,6 +25,10 @@ pub const PENDING: Option<&'static str> = None;
 
 /// The package named by the paths that do not take the hyperelastic material (ADR 0541 D2 to D4).
 pub const FOLLOW_UP: &str = "a follow-up of ADR 0541";
+
+/// The package named by the linear paths' refusals of the hyperelastic material on a structural element or with a
+/// temperature load (ADR 0555 D3).
+pub const LINEAR_FOLLOW_UP: &str = "a follow-up of ADR 0555";
 
 /// The Voigt pairs of the driver: `(0,0), (1,1), (2,2), (0,1), (1,2), (2,0)`.
 const PAIRS: [(usize, usize); 6] = [(0, 0), (1, 1), (2, 2), (0, 1), (1, 2), (2, 0)];
@@ -37,6 +45,23 @@ fn constants(energy: &HyperelasticEnergy) -> (f64, f64, f64) {
 pub fn small_strain_moduli(energy: &HyperelasticEnergy) -> (f64, f64) {
     let (c10, c01, kappa) = constants(energy);
     (2.0 * (c10 + c01), kappa)
+}
+
+/// The linearised elasticity of an energy (ADR 0555 D1): the tangent at rest, `lambda = K - 2G/3`, `D_ij = lambda + 2G
+/// delta_ij` (`i, j < 3`), `D_kk = G` (`k >= 3`, engineering shear), from `(G, K)` of [`small_strain_moduli`] directly.
+pub fn linearised_elasticity(energy: &HyperelasticEnergy) -> Matrix6 {
+    let (g, k) = small_strain_moduli(energy);
+    let lambda = k - 2.0 * g / 3.0;
+    let mut d = [[0.0; 6]; 6];
+    for (i, row) in d.iter_mut().enumerate().take(3) {
+        for (j, v) in row.iter_mut().enumerate().take(3) {
+            *v = if i == j { lambda + 2.0 * g } else { lambda };
+        }
+    }
+    for (m, row) in d.iter_mut().enumerate().skip(3) {
+        row[m] = g;
+    }
+    d
 }
 
 /// The kinematic quantities of a strain.
