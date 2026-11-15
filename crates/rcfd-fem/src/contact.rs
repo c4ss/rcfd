@@ -34,7 +34,7 @@ use crate::error::{FemError, Result, SetKind};
 use crate::loads::{face_rule, face_shape_functions, nodal_load_vector, NodalForceAt};
 use crate::mesh::{ElementKind, FaceRef};
 use crate::model::{Constraint, DofMap, SolidModel, SolidResult, SolverStats};
-use crate::nonlinear::{add_triplets, initial_states, solve_from, Contribution, NewtonOptions};
+use crate::nonlinear::{add_triplets, initial_states, solve_from_reusing, Contribution, FactorReuse, NewtonOptions};
 use crate::solve::DirectFactor;
 use rcfd_core::vec3::{add, cross, dot, norm, sub, Vec3};
 use rcfd_linalg::skyline::SkylineError;
@@ -163,8 +163,9 @@ pub struct ContactOptions {
     /// The factor of the linear body's reduced tangent (ADR 0533): [`DirectFactor::SparseMinimumDegree`] (the default, the
     /// up-looking sparse `L D L^T` after approximate minimum degree) or [`DirectFactor::SupernodalNestedDissection`] (the
     /// supernodal multifrontal `L D L^T` after nested dissection by level structures of the tangent's pattern). The envelope
-    /// is refused. With [`Kinematics::TotalLagrangian`] the supernodal choice is passed to [`solve_from`] as
-    /// [`NewtonOptions::factor`] (ADR 0542 D3); with the linear body `newton.factor` must be the envelope (key `"solver"`).
+    /// is refused. With [`Kinematics::TotalLagrangian`] the supernodal choice is passed to
+    /// [`solve_from`](crate::nonlinear::solve_from) as [`NewtonOptions::factor`] (ADR 0542 D3); with the linear body
+    /// `newton.factor` must be the envelope (key `"solver"`).
     pub factor: DirectFactor,
     /// The search for candidate target faces (ADR 0540 D1): [`SearchMethod::Buckets`] (the default) or
     /// [`SearchMethod::AllFaces`]; both give the same bits.
@@ -2120,10 +2121,11 @@ pub fn solve(
 
 /// The contact solve (ADR 0507 D3): load control `lambda = k/n` of the model's loads, `forces` and the prescribed values
 /// (the model's and `prescribed`), per step Newton solves with the contact set and `extra` (after the contact set; they are
-/// called with the load factor 1 of the step's load, as by [`solve_from`]) and Uzawa updates of the multipliers until the
-/// largest penetration and active gap are within `options.penetration_tolerance` (D2, amendment 3). Errors: the cycle
-/// error of D6, the augmentations exhausted (naming the nodes above the tolerance), a failed Newton solve (located by step
-/// and augmentation), and with [`Kinematics::TotalLagrangian`] a non-zero model displacement constraint.
+/// called with the load factor 1 of the step's load, as by [`solve_from`](crate::nonlinear::solve_from)) and Uzawa updates
+/// of the multipliers until the largest penetration and active gap are within `options.penetration_tolerance` (D2,
+/// amendment 3). Errors: the cycle error of D6, the augmentations exhausted (naming the nodes above the tolerance), a
+/// failed Newton solve (located by step and augmentation), and with [`Kinematics::TotalLagrangian`] a non-zero model
+/// displacement constraint.
 pub fn solve_with(
     model: &SolidModel,
     prescribed: &[Prescribed],
@@ -2169,6 +2171,8 @@ pub fn solve_with(
     if options.factor == DirectFactor::SupernodalNestedDissection {
         newton_tl.factor = DirectFactor::SupernodalNestedDissection;
     }
+    // ADR 0566 D2: one analysis of the supernodal factor shared over the steps and augmentations.
+    let reuse = FactorReuse::new();
     let mut cache = None;
     let mut run_reference = 0.0f64;
     let mut u = vec![0.0; n];
@@ -2196,7 +2200,7 @@ pub fn solve_with(
             let out = if tl {
                 let mut list: Vec<&dyn Contribution> = vec![&set];
                 list.extend_from_slice(extra);
-                solve_from(model, &pres_step, &fstep, &u, &states, &newton_tl, &list).map(|e| Solved {
+                solve_from_reusing(model, &pres_step, &fstep, &u, &states, &newton_tl, &list, &reuse).map(|e| Solved {
                     reference: 0.0,
                     convex: 0,
                     u: e.u,

@@ -59,9 +59,10 @@ use crate::transient::{LoadHistory, LoadTable, MotionHistory};
 use rcfd_core::vec3::Vec3;
 use rcfd_linalg::skyline::{PivotRule, SkylineError, SkylineLdlt, SkylineOptions, SkylineOrdering};
 use rcfd_linalg::skyline_lu::EnvelopeLu;
-use rcfd_linalg::sparse_chol::SupernodalLdlt;
+use rcfd_linalg::sparse_chol::{SupernodalAnalysis, SupernodalLdlt};
 use rcfd_linalg::CsrMatrix;
 use std::borrow::Cow;
+use std::cell::{Cell, RefCell};
 use std::sync::Mutex;
 
 /// The key of the refusal of an inverted point (ADR 0404 D2).
@@ -1549,6 +1550,8 @@ struct Problem<'a> {
     free: Vec<usize>,
     options: &'a NewtonOptions,
     contributions: &'a [&'a dyn Contribution],
+    /// The cached analysis of the supernodal factor (ADR 0566 D2); not read by the envelope factor.
+    reuse: &'a FactorReuse,
     /// The point context of every evaluation (ADR 0485 D3); the default for the static driver.
     context: PointContext,
     /// A nodal temperature field of the attempt (ADR 0534 D2); `None` for every path without one.
@@ -1665,7 +1668,7 @@ impl Problem<'_> {
                     } else if o.unsymmetric {
                         factor_solve_unsymmetric(&sys.matrix, &sys.rhs, sys.free(), &dofs)?
                     } else {
-                        factor_solve(&sys.matrix, &sys.rhs, sys.free(), &dofs, o.factor)?
+                        factor_solve(&sys.matrix, &sys.rhs, sys.free(), &dofs, o.factor, self.reuse)?
                     }
                 }
                 Some(c) => {
@@ -1709,14 +1712,43 @@ impl Problem<'_> {
     }
 }
 
+/// The nested dissection order and symbolic analysis of the supernodal factor kept between the factorisations of the Newton
+/// driver (ADR 0566 D2): the analysis of the last reduced tangent's pattern, used again while the pattern is unchanged and
+/// made again when it changes. The factor's bits are those without the reuse. The envelope factor does not use it.
+#[derive(Debug, Default)]
+pub struct FactorReuse {
+    analysis: RefCell<Option<SupernodalAnalysis>>,
+    analyses: Cell<usize>,
+    factorisations: Cell<usize>,
+}
+
+impl FactorReuse {
+    /// An empty cache.
+    pub fn new() -> FactorReuse {
+        FactorReuse::default()
+    }
+
+    /// The analyses made (one per new pattern).
+    pub fn analyses(&self) -> usize {
+        self.analyses.get()
+    }
+
+    /// The supernodal factorisations made.
+    pub fn factorisations(&self) -> usize {
+        self.factorisations.get()
+    }
+}
+
 /// The envelope `L D L^T` solve of the reduced tangent with the pivot test of the static solve (ADR 0275 arithmetic 4), or
-/// with `factor` [`DirectFactor::SupernodalNestedDissection`] the supernodal one with the same tests and texts (ADR 0542 D2).
+/// with `factor` [`DirectFactor::SupernodalNestedDissection`] the supernodal one with the same tests and texts (ADR 0542 D2),
+/// its order and symbolic analysis taken from `reuse` while the pattern is unchanged (ADR 0566 D2).
 fn factor_solve(
     a: &CsrMatrix,
     b: &[f64],
     free: &[usize],
     dofs: &crate::model::DofMap,
     factor: DirectFactor,
+    reuse: &FactorReuse,
 ) -> std::result::Result<Vec<f64>, Failure> {
     let diag = a.diag();
     let at = |row: usize| {
@@ -1724,7 +1756,16 @@ fn factor_solve(
         format!("node {n} component {c}")
     };
     if factor == DirectFactor::SupernodalNestedDissection {
-        let ldlt = SupernodalLdlt::factor(a).map_err(|e| match e {
+        let mut slot = reuse.analysis.borrow_mut();
+        if !slot.as_ref().is_some_and(|x| x.matches(a)) {
+            let made = SupernodalAnalysis::nested_dissection(a)
+                .map_err(|e| Failure::Other(format!("tangent factorisation: {e}")))?;
+            *slot = Some(made);
+            reuse.analyses.set(reuse.analyses.get() + 1);
+        }
+        let analysis = slot.as_ref().expect("the analysis of this pattern");
+        reuse.factorisations.set(reuse.factorisations.get() + 1);
+        let ldlt = SupernodalLdlt::factor_analysed(a, analysis).map_err(|e| match e {
             SkylineError::Pivot { row, pivot, .. } => Failure::Other(format!(
                 "singular tangent: pivot {pivot:e} at {} (diagonal {:e})",
                 at(row),
@@ -1923,6 +1964,7 @@ pub(crate) fn controlled_attempt(
     for &(eq, _) in fixed {
         is_fixed[eq] = true;
     }
+    let reuse = FactorReuse::new();
     let problem = Problem {
         model,
         f: f.to_vec(),
@@ -1930,6 +1972,7 @@ pub(crate) fn controlled_attempt(
         free: (0..n).filter(|&i| !is_fixed[i]).collect(),
         options,
         contributions,
+        reuse: &reuse,
         // ADR 0485 D3: the arc-length step of ADR 0480 is static, at the default point context.
         context: PointContext::default(),
         field: None,
@@ -2016,6 +2059,7 @@ pub fn solve_with(
         is_fixed[eq] = true;
     }
     let free: Vec<usize> = (0..n).filter(|&i| !is_fixed[i]).collect();
+    let reuse = FactorReuse::new();
     let problem = Problem {
         model,
         f,
@@ -2023,6 +2067,7 @@ pub fn solve_with(
         free,
         options,
         contributions: &contributions,
+        reuse: &reuse,
         context: PointContext::default(),
         field: None,
     };
@@ -2206,6 +2251,34 @@ pub fn solve_from_at(
     )
 }
 
+/// [`solve_from`] with the analysis of the supernodal factor kept in `reuse` (ADR 0566 D2): a sequence of attempts given
+/// the same `reuse` analyses each pattern of the reduced tangent once while it is unchanged. The result is bit for bit that
+/// of [`solve_from`]; with the envelope factor `reuse` is not used.
+#[allow(clippy::too_many_arguments)]
+pub fn solve_from_reusing(
+    model: &SolidModel,
+    prescribed: &[Prescribed],
+    load: &[f64],
+    start: &[f64],
+    states: &[ElementState],
+    options: &NewtonOptions,
+    contributions: &[&dyn Contribution],
+    reuse: &FactorReuse,
+) -> Result<Equilibrium> {
+    solve_from_field_reusing(
+        model,
+        prescribed,
+        load,
+        start,
+        states,
+        options,
+        contributions,
+        &PointContext::default(),
+        None,
+        reuse,
+    )
+}
+
 /// [`solve_from_at`] with an optional nodal temperature field of the attempt and its thermal strain (ADR 0534 D2; the
 /// model is checked against the field by the caller).
 #[allow(clippy::too_many_arguments)]
@@ -2219,6 +2292,34 @@ pub(crate) fn solve_from_field(
     contributions: &[&dyn Contribution],
     context: &PointContext,
     field: Option<&FieldAt>,
+) -> Result<Equilibrium> {
+    solve_from_field_reusing(
+        model,
+        prescribed,
+        load,
+        start,
+        states,
+        options,
+        contributions,
+        context,
+        field,
+        &FactorReuse::new(),
+    )
+}
+
+/// [`solve_from_field`] with the cached analysis `reuse` (ADR 0566 D2).
+#[allow(clippy::too_many_arguments)]
+fn solve_from_field_reusing(
+    model: &SolidModel,
+    prescribed: &[Prescribed],
+    load: &[f64],
+    start: &[f64],
+    states: &[ElementState],
+    options: &NewtonOptions,
+    contributions: &[&dyn Contribution],
+    context: &PointContext,
+    field: Option<&FieldAt>,
+    reuse: &FactorReuse,
 ) -> Result<Equilibrium> {
     model.validate()?;
     // ADR 0522 D4: Shell4 and Shell3 take the corotated element of ADR 0490.
@@ -2264,6 +2365,7 @@ pub(crate) fn solve_from_field(
         free,
         options,
         contributions,
+        reuse,
         context: context.clone(),
         field,
     };
