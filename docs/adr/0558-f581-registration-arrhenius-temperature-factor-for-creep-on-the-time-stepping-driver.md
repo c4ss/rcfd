@@ -243,3 +243,79 @@ the mutation MU5 re-run on it; the decision of addendum 1 stays by the registere
 | Id | What | Limit |
 |---|---|---|
 | NA2b | `update` of the factor material with an increment at `T = -1e10 K`, and `arrhenius_factor(Q, -1e10)`: key `"temperature"` | refused |
+
+## Addendum 1: results (2026-11-15)
+
+Registered run: commit 4bcb16ee (`cargo test -p rcfd-fem --release --test sa_creep_arrhenius --test
+sa_creep_arrhenius_default_bits --test sa_qs_visco -- --nocapture --test-threads=1`, log `f581-scratch/run1.log`). Each check
+ran once. B0 was printed on the unchanged base 15f1fee9 (`f581-scratch/b0-base.log`) and written into the test at bc9738c6,
+before any library code (4bcb16ee). After the run, 5c43f305 joined two refusal messages onto one line (a run of spaces left by
+the script that wrote them; no check reads the text). Amendment 1's check NA2b ran once at 6fa1916c
+(`f581-scratch/run2-na2b.log`).
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| A1 material point, `m = 0`, at `T1` | `<= 1e-8` | `5.831e-13` | yes |
+| A1e one Hex8, dead traction, `temperature(T1)` | `<= 1e-8` | `4.515e-10` | yes |
+| A2 material point, `m = -0.5` | `<= 1e-3` | `1.950e-13` | yes |
+| A3 temperature step `T1 -> T2` at `5 s` (temperature history) | `<= 1e-8` | `1.130e-9` | yes |
+| NA4 ratio of the creep strains at `T2`, `T1` against `f2/f1 = 9.8838489` | `<= 1e-8` | `1.346e-9` (ratio `9.8838488885`) | yes |
+| TA tangent with the factor, `n = 3, m = 0` / `n = 4, m = -0.5` | `<= 1e-6` | `4.764e-10` / `3.956e-10` (both creeping, 3 and 9 local iterations) | yes |
+| RA relaxation with the factor, motion history, `temperature(T1)`, 800 steps | `<= 5e-3` | `1.719e-3` (probe `1.717e-3`; `S_xx(10 s)/S_xx(0) = 0.3017`) | yes |
+| CH1 (i) dead traction as a constant load history | bits | equal | yes |
+| CH1 (ii) held strain as a constant motion history | bits | equal | yes |
+| CH1 (iii) halving step (two halvings both ways) | bits | equal, 2 and 2 | yes |
+| CH1 (iv) (i) with the factor at `T1` | bits | equal | yes |
+| R1t (ADR 0499 test, re-run unchanged) | `<= 1e-10` | `4.654e-16` | yes |
+| C1t | `<= 1e-3` | `1.209e-5` | yes |
+| C2t | `>= 1.9` | `1.996` | yes |
+| P1 no increment / default context: bits of the material without the factor | bits | equal, equal | yes |
+| NA1 (i) increment without a temperature; (ii) the driver without one | key `"temperature"`; `InvalidValue` | both | yes |
+| NA2 `T = 0`, `T = -1 K`, underflow at `1e-3 K` | key `"temperature"` | all three | yes |
+| NA3 activation `0`, `-1`, `NaN`, `inf` | key `"activation"` | all four | yes |
+| N1 B0, 10 digests of 15f1fee9 | equal | equal | yes |
+| N5 `cargo test -p rcfd-fem --release` | pass | 1079 passed, 0 failed, 295 ignored (`f581-scratch/fem-all.log`) | yes |
+| N4 `baseline_hashes` | pass | 3 passed, 1 ignored | yes |
+| NA2b (amendment 1) `T = -1e10 K` at `update` and `arrhenius_factor` | key `"temperature"` | both | yes |
+
+The ADR 0499 test file `sa_qs_visco.rs` passed all six of its tests in the same run (also R3, C3, C4, H1, H2, S1d, V1T, NT1 to
+NT3, B2, RF2, with the values of ADR 0499). Other runs: `cargo test -p rcfd-cli --release --test docs_site`: 2 passed; `cargo
+clippy -p rcfd-fem --release --all-targets -- -D warnings`: clean; `cargo fmt -p rcfd-fem --check`: clean. Not run: the
+workspace suite (the lead's gate).
+
+Shared solver files changed (against 15f1fee9): `mat_creep.rs` 22-25 (module doc), 113-137 (`temperature_error`,
+`arrhenius_factor`), 266-272 and 275-289 (`update`); `model.rs` 158-160 (the field), 384 (`activation: None`), 388-398
+(`creep_arrhenius`); `nonlinear.rs` 2364-2382 (D3 in `solve_in_time_with`). Nothing else in `src/`.
+
+**Mutations** (`f581-scratch/mutate.py` on a git-archive copy with its own target directory, log `mutations.log`; MU0, the copy
+without a mutation, passes 5 of 5):
+
+| Id | Caught by |
+|---|---|
+| MU1 sign of the exponent | the A1 test (the stress control does not converge), CH1 (iv), RA, TA |
+| MU2 factor dropped | the A1 test, CH1 (iv), RA |
+| MU3 `R = 8.314` | A1, A2, A1e, A3 (`1.910e-3` each), NA4 (`1.27e-4`) |
+| MU4 missing temperature as factor 1, D3 removed | NA1 (i) and (ii) |
+| MU5 `T > 0` check removed | **not caught** by the registered checks (NA2: `T = 0` and `-1 K` are still refused by the underflow and overflow tests that remain); caught by NA2b of amendment 1 (`arrhenius_factor(Q, -1e10) = 1.0000024` accepted by the mutant) |
+| MU6 temperature history at the attempt's start | A3 (`1.48e-1`) |
+| MU7 load histories ignored at `t = 0` | CH1 (i), (iv) |
+| MU8 D3 removed | NA1 (ii) (a solver error after five halvings instead) |
+
+**Deviations.** (1) TA uses one fixed strain and committed state (those of B0) rather than the random draws of ADR 0489 T1; the
+registration named the cases, not the draws. (2) Amendment 1 (NA2b) after the run. (3) A section of `docs/reference-data.md`.
+Nothing else deviates.
+
+**Decision by the registered rule: partial.** Every registered check is met on its first run, B0, the default-bits files and
+the baseline hashes are unchanged, fmt and clippy are clean; but the planned mutation MU5 was not caught by the registered
+checks (it is caught only by NA2b of amendment 1, added after the run). Under the rule, a mutation that escapes makes the item
+partial. The library behaviour is not in question: the clauses (a1) to (a4) are met.
+
+### Remaining questions
+
+1. **Re-registration for done.** Options: (a) leave partial; (b) the lead accepts NA2b as closing the gap and sets done in a
+   later review; (c) a follow-up that registers the control before its run. Recommendation: (c), folded into the follow-up below.
+2. **Case-file key.** Options: (a) none; (b) `creep = { base, a, n, m, activation }` with the quasi-static time study.
+   Recommendation: (b), with ADR 0499 remaining question 1.
+3. **The nonlinear transient integrator** does not refuse a factor material without a temperature up front; it fails at its
+   first creeping step. Options: (a) leave; (b) the check of D3 in `Integrator::new`. Recommendation: (b), small, with a check
+   of the factor in a dynamic run.
