@@ -257,3 +257,91 @@ a defect of the set-up, not of the factor. The Pivot and Unsymmetric refusals we
 `f624_a4_refusals_equal_amended` compares the two errors by their `Debug` text (every field; a float printed in its shortest
 round-trip form, a NaN as `NaN`) and the kind, as registered; the limit (equal) is unchanged. The first test stays as an
 ignored record. By the decision rule, A4 is met only after an amendment made after its run: the item cannot be done.
+
+## Addendum 1: results (2026-11-15)
+
+Commits after the registration (2af2258a): the bit records B on the unchanged library (4eeb42e9; `bits-base-linalg.log`,
+`bits-base-fem.log`, each confirmed once with its digests in place, `*2.log`); the reuse and the tests (fb6db7c9;
+`sparse_chol.rs`: `permuted_lower_parts` and `columns_of` generic over a copied value with an explicit zero, the struct
+`Symbolic`, `supernodal_factor` split into `analyse` and `numeric`, `SupernodalAnalysis`, `SupernodalLdlt::factor_analysed`;
+`nonlinear.rs`: `FactorReuse`, the field `Problem::reuse`, the supernodal arm of `factor_solve`, `solve_from_reusing`,
+`solve_from_field` delegating to `solve_from_field_reusing`; `contact.rs`: the import, one `FactorReuse` per solve and
+`solve_from_reusing` in the total Lagrangian body, two doc links); amendment 1 (53f6a05c, A4's set-up); the clippy fix of the test (7e6abe04). No limit was changed.
+
+Runs, each made once, release: the linalg checks A3, A4, A5, N2 (`run-linalg.log`; A4's NaN case failed on the set-up,
+amendment 1) and the corrected A4 (`run-linalg-a4.log`); B's G1, G2 after the split (run once before fb6db7c9, passed; again in
+the gate); the fem fast tests V0, A1, A1b, A2, N1, N3, B's G3 to G8, and ADR 0542's fast tests and bit records
+(`run-fem-fast.log`); the heavy record through `heavy.ps1` (`run-heavy.log`, `heavy-samples.log`). Logs in `f624-scratch`.
+
+| check | limit | measured | met |
+|---|---|---|---|
+| T1 `min(t_s)/min(t_p)`, `n = 16`, five pairs | `< 1/3` | **`0.2536`** (minima 7.36 s and 29.01 s; pairs 29.01/7.81 = 0.269, 33.41/7.82 = 0.234, 31.59/7.36 = 0.233, 30.90/8.27 = 0.268, 34.73/10.45 = 0.301; 16 rayon threads) | yes |
+| Q no `cargo`/`rustc` process during the timed run | 0 at every sample | quiet at the start (after 1 minute of waiting; 7.2 GB free); 41 samples during the run: 6 with 0 (the first 30 s), 35 with 2 to 10 processes of other agents | **no** |
+| V16 the five supernodal digests; the five present | `0xfc936c7553ff35d5`; `0xa5faff8918362a96` | all five each | yes |
+| D one-thread supernodal solve | `0xfc936c7553ff35d5` | `0xfc936c7553ff35d5` (19.52 s) | yes |
+| V0 `n = 4`, both routes | `0xecd8f40c5721a14f` | both | yes |
+| A1 analyses; factorisations | `1`; corrections | `1`; `13` of `13` | yes |
+| A1b analyses | `2` | `2` (13 factorisations) | yes |
+| A2 both calls of A1 and A1b against `solve_from` | bit for bit | all four | yes |
+| A3 `lap7(10)`, `lap7(24)` (23 split fronts), the same and the rescaled matrix: order, pivots, columns, solve, counts | bit for bit / equal | all equal | yes |
+| A4 refusals (Pivot, NonFinite, Unsymmetric) | equal | Pivot and Unsymmetric equal by `==`; NonFinite failed `==` (NaN field), equal by the amended comparison | **only after amendment 1** |
+| A5 order; `NotSquare` | equal; holds | equal; holds | yes |
+| B G1, G2 (linalg); G3 to G8 (fem) after the change | equal | equal (`0xa9e499ca732e8861`, `0xfb760756993e305d`, `0x380cd6dfde2f3fe6`, `0x6874dfe0129f6fbf`; `0x43fad375e5cc2654`, `0xec34844502a5f123`, `0x714129013681f33a`, `0x88d9dee6a05f54e5`, `0xf5ed93c61c21db4e`, `0xcbf5ab0d7beff7aa`) | yes |
+| B ADR 0542's fast tests; its bit record; `sa_f594_bits`; the contact bit records of ADRs 0533, 0517, 0507 | pass | pass | yes |
+| B `cargo test -p rcfd-linalg --release`; `-p rcfd-fem --release`; `baseline_hashes` | pass | pass (127 passed, 7 ignored); pass (1124 passed, 0 failed, 303 ignored over 265 targets); pass (3 passed, 1 ignored) | yes |
+| N1 envelope: analyses, factorisations | 0, 0 | 0, 0 | yes |
+| N2 another pattern of equal size | panics | panics ("the analysis of another pattern") | yes |
+| N3 A1b's count not A1's | holds | 2 against 1 | yes |
+| R record | recorded | median ratio 0.2475 (ADR 0542's measure: 7.82 / 31.59); the one-thread solve 19.52 s; `t_p` 29.0 to 34.7 s against ADR 0542's 35.9 to 38.1 s | |
+
+Reading of T1. The five supernodal runs spread 7.36 to 10.45 s, the present 29.0 to 34.7 s, while 2 to 10 build processes of
+other agents ran: the supernodal time dropped from ADR 0542's 10.2 to 15.9 s by more than the 1.3 s of pattern-only work the
+registration estimated. Part of the difference is the load (ADR 0542's runs were also under load, not sampled). Every one of
+the five pair ratios, and the ratio of the medians, is below 1/3, so T1 does not depend on the choice of the minimum.
+
+Q. The run started on a quiet sample after one minute; other agents' builds started about 30 s into it and continued to its
+end. This agent cannot stop them; the clause "measured with no other build on the machine" is therefore not met. Not re-run
+(rule 2).
+
+### Mutations
+
+A `git archive` copy of 53f6a05c in `f624-scratch/mut` (archive mtimes reset by `tar -m`), target `f624-scratch/target-mut`,
+`mutate.py`, logs `M1.log` to `M7.log`, each alone, the four new test files run once.
+
+| id | mutation | caught by | registered |
+|---|---|---|---|
+| M1 | `matches` always true | A1b (the second call's solve fails: the reused analysis of another pattern gives "singular tangent"), N2, and V0, G3 | A1b, caught |
+| M2 | `matches` compares `n` and the entry count | N2 | N2, caught |
+| M3 | an analysis at every factorisation | A1 (A1, A1b and N3 counts) | A1, caught |
+| M4 | `factor_analysed` without `validate` | A4 (amended; its indefinite case) | A4, caught |
+| M5 | extend-add in decreasing child order | B (G1, G2, G3 to G8), V0 | B, caught |
+| M6 | diagonal values placed as 0 | A3, and A4, A1, V0, G3 | A3, caught |
+| M7 | the envelope arm counts factorisations | N1 | N1, caught |
+
+The contact driver's shared `FactorReuse` (declared before the run as observable by the time only) was not mutated.
+
+### Gates
+
+`cargo test -p rcfd-linalg --release` passes (`gate-linalg.log`). `cargo test -p rcfd-fem --release` passes (`gate-fem.log`).
+`cargo test -p rcfd-api --release --test baseline_hashes` passes (`gate-bh.log`). `cargo fmt -p rcfd-linalg --check` and `cargo
+fmt -p rcfd-fem --check` are clean. `cargo clippy -p rcfd-linalg -p rcfd-fem --release --all-targets -- -D warnings` first
+failed on `type_complexity` in the new test's `two_calls` parameter; a type alias (7e6abe04, no change of behaviour; the
+fast tests of that file passed again, `run-fem-reuse-after-clippy.log`) made it clean (`gate-clippy.log`). `cargo test -p
+rcfd-cli --release --test docs_site` passes with this addendum in place (`gate-docs.log`).
+
+### Decision by the registered rule
+
+**Partial.** Every check met its limit on its registered run except Q (other builds ran during the timed run), and A4 was met
+only after amendment 1, made after its run (a defect of the set-up: `==` on a NaN field). T1 met (0.254 against `< 1/3`, every
+pair below the limit), every result of ADR 0542 kept its bits (V0, V16, D, ADR 0542's tests and records), the reuse is counted
+(one analysis for 13 factorisations; a new one when the pattern changes), and all seven planned mutations were caught by their
+registered checks. Clauses a1, a2, a3 and a5 met; a4 not met.
+
+### Remaining questions, with recommendations
+
+1. **Q (a4).** Options: (a) the lead runs the heavy record (`cargo test -p rcfd-fem --release --test sa_newton_reuse_f624 --
+   --ignored`, about 4 minutes) once when no agent is building, and records it; (b) accept T1 as measured, since every pair met
+   the limit under load. Recommendation: (a), then done if T1 holds.
+2. **More than one cached pattern.** The probe and the hub need one slot. Options: (a) keep one; (b) a small list keyed by
+   pattern. Recommendation: (a) until a model alternates patterns.
+3. **Case-file key, default factor, `SparseMinimumDegree`**: ADR 0542's open questions 1 to 3; not taken.
