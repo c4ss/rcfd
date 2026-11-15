@@ -6232,9 +6232,9 @@
     "deps": [
       "F-598"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The lateral-torsional buckling moment of a simply supported monosymmetric I under uniform moment equals the published closed form with beta_x within 2 percent at 16 elements; doubly symmetric results unchanged.",
-    "note": "Structural solver, advanced tier. Follow-up of F-598 (ADR 0546, 2026-11-15). ADR 0548: the bimoment load and the bimoment pre-stress (beta_omega, zero for doubly symmetric sections, not modelled in ADR 0548) belong to this item."
+    "note": "Structural solver, advanced tier. PARTIAL. ADR 0553, 2026-11-15: monosymmetric thin-walled sections for the warping element of ADR 0546 (`rcfd_fem::beam_warping`): a shear-centre offset on `WarpingSection` (`with_shear_centre`, `monosymmetric_i` with C_w = I_1 I_2 h_c^2/(I_1 + I_2) and the thin-walled shear centre), the element in shear-centre unknowns transformed to the centroid nodes (`section_local_stiffness`), the axial-force geometric part in centroid unknowns and the moment part with the Wagner coefficients about the shear centre, beta_x = int z (y^2 + z^2) dA/I_y - 2 z_0 (`section_local_geometric_stiffness`), the centroid mass, RF8 on the torque about the shear centre, and the bimoment load (`Warping::bimoment`); the bimoment pre-stress beta_omega is zero for every section with an axis of symmetry and is not added. Monosymmetric I under uniform moment against M = beta_x P_y/2 +/- sqrt((beta_x P_y/2)^2 + P_y (G J + pi^2 E C_w/L^2)) at 16 elements: 1.3e-3 with the larger flange in compression, 3.9e-4 in tension (8 elements 2.1e-3, 6.5e-4; L 1.5 and 6 within 2.2e-3); mode ratio 2.7e-6; the beta_x = 0 and centroidal-beta forms are 0.33 to 0.82 away. Flexural-torsional column 3.5e-3, coupled vibration 1.7e-3 and 3.0e-3, lateral-force twist 2.0e-6, tip bimoment 4.5e-7. Doubly symmetric results bit-identical (the ADR 0508, 0546 and 0548 records). Ten of ten mutations caught. Partial under the standing rule: the A checks were met only after two post-run amendments of the eigensolver set-up (run 1: the default subspace refused the -M case with a Sturm mismatch on the sign-asymmetric spectrum; run 2: a subspace of 40 exceeded the rank of K_sigma at 8 elements); both runs are kept as ignored records. Shear-force terms with an offset, load height and sections without symmetry not covered. Follow-ups: buckling eigensolver on sign-asymmetric spectra; load height and non-uniform moment for monosymmetric beams. Done is the maintainer's call (A checks met after post-run amendments 2 and 3 to the eigensolver set-up). Follow-ups F-642 (buckling eigensolver on sign-asymmetric spectra), F-643 (load height, non-uniform moment)."
   },
   {
     "id": "F-628",
@@ -6391,5 +6391,27 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The cause (coarse operator, smoother or aggregation) identified by registered controls on the ADR 0552 plate P4b; if a change is made, P4b at max_coarse 60 in at most twice the Shell3 P3b count, the other ADR 0552 counts not increased and the solid-only bits unchanged.",
     "note": "Structural solver, advanced tier. Follow-up of F-629 (ADR 0552, 2026-11-15)."
+  },
+  {
+    "id": "F-642",
+    "title": "Buckling eigensolver on sign-asymmetric spectra",
+    "phase": 9,
+    "deps": [
+      "F-627"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. With the default BucklingOptions, the lateral-torsional buckling factor of the ADR 0553 monosymmetric I under -M_ref is returned (not refused) and equals the factor of the ADR 0553 amended run within 1e-9; every result that the solver returned before is bit-identical.",
+    "note": "Structural solver, advanced tier. Follow-up of F-627 (ADR 0553, 2026-11-15)."
+  },
+  {
+    "id": "F-643",
+    "title": "Load height and non-uniform moment for monosymmetric warping beams",
+    "phase": 9,
+    "deps": [
+      "F-627"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The lateral-torsional buckling load of a simply supported doubly symmetric I under a central point load at the shear centre, above and below it, and of the ADR 0553 monosymmetric I under a central point load at the shear centre, each equals a closed form or a converged Rayleigh-Ritz reference derived in the ADR within 2 percent at 16 elements; uniform-moment results unchanged.",
+    "note": "Structural solver, advanced tier. Follow-up of F-627 (ADR 0553, 2026-11-15)."
   }
 ]
