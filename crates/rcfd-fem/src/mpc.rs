@@ -27,6 +27,10 @@
 //! Shells (ADR 0435): Shell4 nodes have six unknowns and are treated as beam nodes are; the static solve and the modal
 //! analysis take shell models (a shell node shared with a solid stays refused; a shell model with a cyclic constraint is
 //! refused).
+//!
+//! Shells in the cyclic constraint (ADR 0556): with [`crate::model::CyclicOptions::shells`] the boundaries are node sets,
+//! Shell4 and Shell3 models are taken, and the rotation unknowns of a pair of six-unknown nodes take the rows of the
+//! translations, `theta_H = R (c theta_L - s phi_L)` (the rotation vector turns with the sector as the translation).
 
 use crate::constraint::{prescribed_equations, Prescribed};
 use crate::error::{FemError, Result, SetKind};
@@ -688,9 +692,35 @@ fn cyclic_rows(
         })
     };
     let r = bd.rotation();
+    // ADR 0556 D1, D2: with the shells option the rotation unknowns of a pair of six-unknown nodes take the rows of the
+    // translations; a pair of nodes with different numbers of unknowns is refused.
+    let shells = matches!(
+        model.constraints().get(constraint),
+        Some(Constraint::Cyclic { options, .. }) if options.shells
+    );
     let mut rows = Vec::new();
     for &(low, high) in bd.pairs() {
-        for comp in 0..3 {
+        let bases: &[usize] = if shells {
+            let (nl, nh) = (dofs.components(low), dofs.components(high));
+            if nl != nh {
+                return Err(FemError::InvalidValue {
+                    key: "cyclic",
+                    reason: format!(
+                        "constraint {constraint}: low node {low} has {nl} unknowns and its high partner {high} has {nh} \
+                         (ADR 0556: a pair of the cyclic constraint has the same unknowns on both sides)"
+                    ),
+                });
+            }
+            if nl == 6 {
+                &[0, 3]
+            } else {
+                &[0]
+            }
+        } else {
+            &[0]
+        };
+        for comp in bases.iter().flat_map(|&b| b..b + 3) {
+            let base = comp - comp % 3;
             let origin = RowOrigin::Cyclic {
                 constraint,
                 node: high,
@@ -698,8 +728,8 @@ fn cyclic_rows(
             };
             let h = eq(high, comp)?;
             let mut terms = vec![(h, 1.0)];
-            for (j, &rj) in r[comp].iter().enumerate() {
-                let l = eq(low, j)?;
+            for (j, &rj) in r[comp - base].iter().enumerate() {
+                let l = eq(low, base + j)?;
                 if rj != 0.0 {
                     if c != 0.0 {
                         terms.push((l, -c * rj));
@@ -717,8 +747,8 @@ fn cyclic_rows(
             });
             if let Some(off) = sine {
                 let mut terms = vec![(off + h, 1.0)];
-                for (j, &rj) in r[comp].iter().enumerate() {
-                    let l = eq(low, j)?;
+                for (j, &rj) in r[comp - base].iter().enumerate() {
+                    let l = eq(low, base + j)?;
                     if rj != 0.0 {
                         if s != 0.0 {
                             terms.push((l, -s * rj));
@@ -1201,7 +1231,7 @@ pub fn add_supports(k: &mut CsrMatrix, model: &SolidModel) -> Result<()> {
 /// of a path that takes beams and shells ([`SolidModel::check_supported_with_structures`]: a beam node shared with a solid
 /// is refused with [`FemError::BeamSolidNode`], a shell node shared with a solid naming the node), and a model with Beam2
 /// or Shell4 and a cyclic constraint refused naming [`crate::beam::FOLLOW_UP`] or [`crate::shell::FOLLOW_UP`] (the cyclic
-/// rows rotate translations only).
+/// rows rotate translations only). ADR 0556 D1: with the shells option of the cyclic constraint Shell4 and Shell3 are taken.
 fn check_transformation_model(model: &SolidModel) -> Result<()> {
     // ADR 0457 D2: also the orthotropic and the tabulated material on solid elements (ADR 0452 D6).
     model.check_supported_with_materials()?;
@@ -1209,8 +1239,12 @@ fn check_transformation_model(model: &SolidModel) -> Result<()> {
     // with cylindrical axes about the constraint's axis and origin.
     crate::mat_ortho::check_cyclic_axes(model)?;
     let has = |kind: crate::mesh::ElementKind| model.mesh().blocks().iter().any(|b| b.kind() == kind);
+    // ADR 0556 D1: with the shells option of the cyclic constraint, Shell4 and Shell3 are taken; Beam2 stays refused.
+    let shells = crate::cyclic::shells_opted_in(model);
     let refusal = if has(crate::mesh::ElementKind::Beam2) {
         Some(("Beam2", crate::beam::FOLLOW_UP))
+    } else if shells {
+        None
     } else if has(crate::mesh::ElementKind::Shell4) {
         Some(("Shell4", crate::shell::FOLLOW_UP))
     } else if has(crate::mesh::ElementKind::Shell3) {

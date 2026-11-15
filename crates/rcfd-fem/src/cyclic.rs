@@ -19,6 +19,10 @@
 //! ADR 0462 (F-544): the modal and the static harmonic paths take the orthotropic and the tabulated material of ADR 0452 when
 //! every material with its own axes has cylindrical axes about the cyclic axis and origin (the material is then the same in
 //! every sector); other axes are refused by name ([`crate::mat_ortho::check_cyclic_axes`]).
+//!
+//! ADR 0556 (F-628): with [`crate::model::CyclicOptions::shells`] the boundaries are node sets, the static and the modal
+//! paths (on the transformation and harmonic) take Shell4 and Shell3, and the rotation unknowns of the matched six-unknown
+//! nodes are rotated by `R` as the translations. [`full_rotor`] still refuses structural blocks.
 
 use crate::assemble::{point_stiffness, stiffness_with};
 use crate::constraint::Prescribed;
@@ -144,6 +148,19 @@ impl CyclicBoundary {
     }
 }
 
+/// Whether a model has a cyclic constraint with the shells option of ADR 0556 D1.
+pub(crate) fn shells_opted_in(model: &SolidModel) -> bool {
+    model.constraints().iter().any(|c| {
+        matches!(
+            c,
+            Constraint::Cyclic {
+                options: crate::model::CyclicOptions { shells: true, .. },
+                ..
+            }
+        )
+    })
+}
+
 /// The index of the one cyclic constraint of a model; none or more than one is refused.
 pub fn the_cyclic_constraint(model: &SolidModel) -> Result<usize> {
     let list: Vec<usize> = model
@@ -187,8 +204,28 @@ pub fn boundary(model: &SolidModel, constraint: usize) -> Result<CyclicBoundary>
         });
     }
     let mesh = model.mesh();
-    let lows = mesh.surface_set_nodes(low)?;
-    let highs = mesh.surface_set_nodes(high)?;
+    // ADR 0556 D1: with shells the boundaries are node sets, and the extensions of ADR 0456 are not taken.
+    let (lows, highs) = if options.shells {
+        if options.interpolation.is_some() || options.axis_nodes {
+            return Err(cyclic_error(format!(
+                "constraint {constraint}: shells in the cyclic constraint (ADR 0556) are not taken with interpolated \
+                 boundaries or nodes on the axis (ADR 0456 D4; a follow-up of ADR 0556)"
+            )));
+        }
+        let nodes_of = |name: &str| -> Result<Vec<usize>> {
+            let set = mesh.node_set(name).ok_or_else(|| FemError::UnknownSet {
+                kind: SetKind::Node,
+                name: name.to_string(),
+            })?;
+            let mut v = set.to_vec();
+            v.sort_unstable();
+            v.dedup();
+            Ok(v)
+        };
+        (nodes_of(low)?, nodes_of(high)?)
+    } else {
+        (mesh.surface_set_nodes(low)?, mesh.surface_set_nodes(high)?)
+    };
     let both: Vec<usize> = lows
         .iter()
         .copied()
@@ -404,10 +441,40 @@ fn check_cyclic_model(model: &SolidModel) -> Result<bool> {
         model.check_supported_solids_with_materials()?;
         crate::mat_ortho::check_cyclic_axes(model)?;
         Ok(true)
+    } else if shells_opted_in(model) {
+        // ADR 0556 D1: Shell4 and Shell3 are taken (a shell node shared with a solid stays refused); Beam2 stays refused.
+        model.check_supported_with_structures()?;
+        refuse_cyclic_beams(model)?;
+        Ok(false)
     } else {
         model.check_supported()?;
         Ok(false)
     }
+}
+
+/// A model with Beam2 and a cyclic constraint is refused naming [`crate::beam::FOLLOW_UP`] (ADR 0556 D1: a beam's
+/// orientation vector is a global direction).
+pub(crate) fn refuse_cyclic_beams(model: &SolidModel) -> Result<()> {
+    let beams = model
+        .mesh()
+        .blocks()
+        .iter()
+        .any(|b| b.kind() == crate::mesh::ElementKind::Beam2);
+    if let (true, Some(i)) = (
+        beams,
+        model
+            .constraints()
+            .iter()
+            .position(|c| matches!(c, Constraint::Cyclic { .. })),
+    ) {
+        return Err(FemError::NotYetSupported {
+            item: "constraint",
+            variant: "Cyclic",
+            location: format!("constraint {i}, a model with Beam2"),
+            package: crate::beam::FOLLOW_UP,
+        });
+    }
+    Ok(())
 }
 
 /// The sector stiffness: the per-point stiffness for a model with either material (ADR 0462 D2), else [`stiffness_with`].
