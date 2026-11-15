@@ -264,6 +264,47 @@ No mutation is declared equivalent.
 - `nu != 0` (anticlastic edges), the stationary frame, the sparse whirl solvers, the split modes and the whirl state with shells,
   the Shell4 ANDES membrane, warped facets.
 
+## Amendment 1 (2026-11-15, written after run 1 and before run 2)
+
+**Run 1** (tests at 2356e90f, library unchanged from e33e2047, log `f654-scratch/run1.log`, the four tests of
+`sa_ring_whirl_shells.rs` run once, 7.5 s) **missed two checks**:
+
+1. **KA, the backward member** (`hi`), all 24 cases of each kind: `kappa_hi / kappa_b - 1 = -2.0004` (coarse, `k = 2`) to
+   `-2.0001` (fine), that is `kappa_hi = -1.0004 kappa_b` to `-1.0001 kappa_b`. The library gives `kappa_hi < 0` (and DI, which
+   reads the library's direction and the wave sense `tau`, was met: `Backward`, `tau = -1.000000`); the reference code gave
+   `kappa_b > 0`.
+2. **NC1**: the split without the Coriolis matrix `8.8e-10` (Shell4, `k = 2`), `2.0e-10` (Shell4, `k = 3`), `3.6e-9` (Shell3,
+   `k = 2`) against the limit `1e-10`; Shell3 `k = 3` met (`9.7e-11`).
+
+Every other check of run 1 was met (numbers in addendum 1).
+
+**Diagnosis of KA.** A defect of the set-up, in D3's formula for the whirl number. `kappa = -2 W V / (W^2 + V^2)` was derived
+with `u = Re(phi e^{i omega t})` and `omega > 0` (arithmetic 4: the conjugate of `e^{i (n theta - omega t)}`). The backward root
+is negative, `omega = -omega_b`: `w = W cos(n theta + omega_b t) = Re(W e^{i n theta} e^{i omega_b t})`, so there `phi_w = W e^{i
+n theta}`, `phi_v = -i V e^{i n theta}` and `kappa = +2 W V / (W^2 + V^2)`: the sign of the backward member is the opposite of
+what the test computed. With it the measured ratios are `1.0004` to `1.0001`, inside the limit; the library is not in question
+(its sign agrees with its own direction, with `tau`, and with D3's physics: the backward wave's orbit turns against the rotation).
+
+**Diagnosis of NC1.** The registered estimate (the double eigenvalue resolved to rounding) left out the span of the spectrum.
+The dense solver of ADR 0411 D2 works on the linearisation whose eigenvalues run up to `omega_max`, so its error on `omega_lo` is
+of order `n eps omega_max / omega_lo`. A diagnostic run (disclosed: a temporary test file, deleted, which printed the largest
+entry of `frequencies_all` of the four NC1 cases) gave `omega_max = 2.28e7` rad/s (Shell4) and `7.9e6` rad/s (Shell3), the
+rotations of a thin shell with rotary inertia `rho t^3 / 12`, so `eps omega_max / omega_lo = 3.0e-11, 9.3e-12, 1.0e-11, 3.2e-12`.
+The measured splits are 30 to 350 times these (the growth of the Householder reduction over 96 to 144 unknowns): rounding. NC1's
+purpose holds: without `G` the pair stays split by at most `3.6e-9`, seven orders below the smallest split with `G` (`omega_b -
+omega_f` over `omega` `>= 0.07`). The limit is not changed: NC1 stays a miss.
+
+**Correction and records.** The three tests that missed in run 1 become ignored records with their limits intact and the
+measured numbers in their reasons: `ring_shell4_whirl_against_the_closed_form_known_miss`,
+`ring_shell3_whirl_against_the_closed_form_known_miss` (the KA backward sign) and `nc1_no_split_without_coriolis_known_miss`.
+The two ring tests continue as `ring_shell4_whirl_after_amendment_1` and `ring_shell3_whirl_after_amendment_1`, with the backward
+whirl number of the reference `+2 W V / (W^2 + V^2)` at the negative root and nothing else changed (the same meshes, sets, speeds,
+measures and limits). NC1 gets no corrected test (its set-up was not defective; its limit was).
+
+**Run 2** is the corrected run: the two `_after_amendment_1` tests once, every limit as registered.
+
+By the decision rule the item cannot be done: KA and NC1 missed in run 1, and KA can only be met after this post-run amendment.
+
 ## For the lead: roadmap entries
 
 To be completed in the addendum.
