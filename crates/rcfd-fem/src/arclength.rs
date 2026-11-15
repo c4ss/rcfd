@@ -114,6 +114,13 @@ impl ArcLengthOptions {
                 ),
             });
         }
+        // ADR 0607 D1: the controlled correction is not given the line search.
+        if self.newton.line_search {
+            return Err(FemError::InvalidValue {
+                key: "line_search",
+                reason: "the arc-length correction is not given the line search (ADR 0607 D1)".to_string(),
+            });
+        }
         self.newton.check()
     }
 }
