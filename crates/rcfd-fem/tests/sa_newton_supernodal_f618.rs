@@ -882,8 +882,8 @@ fn f618_n2_refusals() {
 /// The heavy record (ADR 0542): D4's hub at `n = 16`, present and supernodal alternating three times in this process: T1
 /// (the ratio of the medians), V1, V1e, V3, U1 on the first pair, R2 (repeats bit-equal), D (a pool of 1 thread) and R.
 #[test]
-#[ignore = "heavy record (ADR 0542): the n = 16 total Lagrangian hub seven times, about 3 minutes; run once, alone"]
-fn f618_tl_hub_n16_supernodal_against_present_heavy() {
+#[ignore = "known miss T1 of ADR 0542 (heavy record, run of fc7a5560, f618-scratch/run-heavy.log): median(t_s)/median(t_p) = 13.46 s / 37.96 s = 0.3546 against the limit < 1/3 (pair ratios 0.283, 0.419, 0.353); V1 (worst 3.5e-11), V1e, V3, U1 (7.4e-14), R2 and D met; about 3 minutes, run once, alone"]
+fn f618_tl_hub_n16_supernodal_against_present_heavy_known_miss() {
     let fit = fit_model(Setup { n: 16, d: D_TL, ..BASE });
     println!("R: rayon threads {}", rayon::current_num_threads());
     let mut ps = Vec::new();
