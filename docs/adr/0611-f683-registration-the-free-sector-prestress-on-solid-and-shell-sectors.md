@@ -186,3 +186,20 @@ amendment, a check not run, or a mutation not caught. **todo**: FS and RX not ru
   2); `RotatingPart::new` and `RotatingSector::with_unit_prestress` ignore the option.
 - The whirl frequencies of the solid and shell sectors are compared only against the copy route (WS), not against an independent
   reference.
+
+## Amendment 1 (2026-11-15, written before the corrected run): the S8 mesh without its surface sets
+
+Run 1 (tests at 0e8bcdd6, log `f683-scratch/run1.log`) is the registered run. Two of its three tests stopped at the set-up,
+before any check of theirs was computed: the S8 builder of the test copied the node sets of `hex_box` but not its surface sets,
+and a solid sector's cyclic constraint reads its low and high sides from the surface sets
+(`cyclic::boundary`, `mesh.surface_set_nodes`), so `Constraint::cyclic("ymin", ..)` on S8 was refused (`UnknownSet { kind:
+Surface, name: "ymin" }`). `free_cases()` builds all four models before the first check, so no FS, RX, RXc, OR, GN, WS, NS1,
+NS2 or NS3 number was printed. What run 1 did measure: NC0s (S20, SH4 refused `SingularStiffness`: met) and DF (`false`: met);
+these stand as measured and are not re-run.
+
+Correction (a defect of the set-up, not of a limit): the S8 builder also copies every surface set of the `hex_box` mesh (the
+`FaceRef`s keep their meaning, since the Hex8 block has the same elements in the same order). Nothing else changes: the models,
+the copy route, the limits and the speeds are as registered. The two stopped tests stay in the file as ignored records
+(`#[ignore]`, their bodies unchanged and moved into the functions `fs_run` and `ns_run`, which they call with the defective
+`free_cases()` as before); two new tests, `*_amended`, call the same functions with `free_cases_a1()` (the corrected S8). The
+corrected run (run 2) is made once.
