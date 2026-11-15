@@ -52,12 +52,11 @@ impl Contribution for OffPattern {
     }
 }
 
+/// One Newton solve from (load, start, states, contributions).
+type Call<'a> = dyn Fn(&[f64], &[f64], &[ElementState], &[&dyn Contribution]) -> Equilibrium + 'a;
+
 /// The two calls of A1: `0.5 f` from 0, then `f` from the first result (the second call with `second`), by `call`.
-fn two_calls(
-    m: &SolidModel,
-    second: &[&dyn Contribution],
-    call: &dyn Fn(&[f64], &[f64], &[ElementState], &[&dyn Contribution]) -> Equilibrium,
-) -> [Equilibrium; 2] {
+fn two_calls(m: &SolidModel, second: &[&dyn Contribution], call: &Call) -> [Equilibrium; 2] {
     let f = nodal_load_vector(m, &[]).unwrap();
     let half: Vec<f64> = f.iter().map(|v| 0.5 * v).collect();
     let s0 = initial_states(m).unwrap();
