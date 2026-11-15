@@ -119,13 +119,13 @@ Status key: **exists** (done in the roadmap), **partial**, **missing**. Roadmap 
 
 | Part | What | Status |
 |---|---|---|
-| H1 | Objective definition: flow at the system operating point over a range of impedances, noise, power, vibration, robustness to tolerances | missing |
+| H1 | Objective definition: flow at the system operating point over a range of impedances, noise, power, vibration, robustness to tolerances | todo (F-697, ADR 0620) |
 | H2 | Optimisers: Nelder-Mead, DOE, NSGA-II (multi-objective, ADR 0209, ADR 0220) and CMA-ES (ADR 0222) exist; a study on the real fan is todo | partial (F-095, F-249, F-260) |
-| H3 | Surrogate model (for example Gaussian process) fitted to past evaluations to choose the next variant cheaply | missing |
-| H4 | Design ledger: every variant, its parameters, mesh hash, solver version, settings, metrics and verdict, durable and queryable, so progress survives sessions and results can be reproduced | missing |
+| H3 | Surrogate model (for example Gaussian process) fitted to past evaluations to choose the next variant cheaply | todo (F-698, ADR 0621) |
+| H4 | Design ledger: every variant, its parameters, mesh hash, solver version, settings, metrics and verdict, durable and queryable, so progress survives sessions and results can be reproduced | partial (F-268: ledger, uq and Sobol drivers exist, ADR 0121, 0240; logging, fan adapter and bands ADR 0623; shared fields F-700) |
 | H5 | Assistant tools: create variant, run sweep, fetch metrics, compare, propose next, read history | partial (MCP/assistant layer exists; design-loop tools partial) |
-| H6 | Long-horizon improvement: Claude reads the ledger, forms hypotheses (for example "more sweep lowers tonal noise at equal flow"), tests them, and records what it learned | missing |
-| H7 | Fidelity management: use C7 to screen, CFD to confirm, with the disagreement between them logged and used to correct C7 | missing |
+| H6 | Long-horizon improvement: Claude reads the ledger, forms hypotheses (for example "more sweep lowers tonal noise at equal flow"), tests them, and records what it learned | todo (F-701, ADR 0624) |
+| H7 | Fidelity management: use C7 to screen, CFD to confirm, with the disagreement between them logged and used to correct C7 | todo (F-699, ADR 0622) |
 
 ## 4. Order of work
 

@@ -883,6 +883,13 @@ T1 also runs VE3, VM1, VL1 and VL2 (fixtures and cheap cavity runs).
 * Mixed-precision solves on CPU and GPU (T3, T4).
 * Cross-tier ledger rule and multi-fidelity correction (T6; joins part H7 of the fan breakdown).
 
+## Amendment 2026-11-15 (maintainer decision)
+
+The cross-tier ledger rule and multi-fidelity correction proposed here (T6, the `cross_tier_check` record) are superseded by
+the fidelity pair and discrepancy record of [ADR 0622](0622-f699-fidelity-management-screen-confirm-correct.md) (roadmap
+F-699, with the ledger fields in F-700). This ADR keeps the tiers themselves; a later implementation of the tiers writes its
+cross-tier comparisons in the ADR 0622 record and does not define a second one.
+
 ## Files
 
 This ADR only: `docs/adr/0136-fidelity-tiers-xhigh-to-xlow.md`. No code, test, default or baseline is changed.
