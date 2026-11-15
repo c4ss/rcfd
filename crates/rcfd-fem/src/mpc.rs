@@ -550,6 +550,21 @@ impl Elimination<'_> {
 /// rows `u_H = R u_L` of a cyclic constraint, ADR 0386). Refuses a contradictory row and a row that closes a chain on
 /// itself, naming the constraints; drops and lists a redundant row.
 pub fn transformation(model: &SolidModel, prescribed: &[Prescribed]) -> Result<Transformation> {
+    transformation_body(model, prescribed, None)
+}
+
+/// The transformation of a model's constraints with the value of each prescribed row at an equation listed in `values` taken
+/// from there (ADR 0565 D1: the elimination reads the values only for the constants `g` and the redundant / contradictory
+/// decision, so `T` is that of [`transformation`] and `g` is linear in the values).
+pub(crate) fn transformation_with_values(model: &SolidModel, values: &BTreeMap<usize, f64>) -> Result<Transformation> {
+    transformation_body(model, &[], Some(values))
+}
+
+fn transformation_body(
+    model: &SolidModel,
+    prescribed: &[Prescribed],
+    values: Option<&BTreeMap<usize, f64>>,
+) -> Result<Transformation> {
     let fixed = prescribed_equations(model, prescribed)?;
     let dofs = model.dof_map();
     let n = dofs.n_equations();
@@ -565,10 +580,14 @@ pub fn transformation(model: &SolidModel, prescribed: &[Prescribed]) -> Result<T
     let mut rows: Vec<Row> = Vec::new();
     for &(eq, v) in &fixed {
         let (node, component) = dofs.node_component(eq).expect("prescribed equation");
+        let value = match values.and_then(|m| m.get(&eq)) {
+            Some(&b) => b,
+            None => v,
+        };
         rows.push(Row {
             origin: RowOrigin::Prescribed { node, component },
             terms: vec![(eq, 1.0)],
-            value: v,
+            value,
             designated: eq,
         });
     }
