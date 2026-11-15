@@ -10633,7 +10633,10 @@ fixed by the item's registration ADR before any code.
     infinite-corrector sink 4 nu/(3 h^2)) missed on a defective set-up (the relaxed pimple constructor, amendment 1) and
     its corrected run by 7.9e-2 (limit 5e-2), diagnosed: the converged step is the two-corrector map, which an exact
     model reproduces to 0.4 percent. Five mutations caught (one only by a panic). No library line changed. Open: ADR
-    0455 Q1, Q2. Follow-up F-538.
+    0455 Q1, Q2. Follow-up F-538. ADR 0613 (F-538, 2026-11-15): the relaxed PIMPLE loop's near-zero Symmetry excess is
+    an accidental cancellation at alpha_u 0.8 and nu dt/dy^2 = 1 (sigma = r - (1/alpha_u - 1)(1/r - 1)); at N 50 the
+    excess is -0.42 of the sink; ADR 0455's two-corrector model gains the flow-direction Laplacian diagonal and then
+    meets the PISO per-length part to 8.4e-6.
 - [x] **F-532** Damped modes: residual vectors for boundary dampers near the impedance
   - depends on: F-414
   - acceptance: Every limit not stated here is registered in the ADR before the run. damped_modes gains static residual
@@ -10747,14 +10750,30 @@ fixed by the item's registration ADR before any code.
     stays refused by name; the equivalent mutant Mu7 no longer exists. Question 3 answered by F-544 (ADR 0462,
     2026-11-14): a cyclic constraint with cylindrical axes about its own axis is taken by the cyclic harmonic paths and
     the rotating sector; other axes stay refused by name.
-- [ ] **F-538** The averaged component diagonal in the relaxed PIMPLE loop
+- [~] **F-538** The averaged component diagonal in the relaxed PIMPLE loop
   - depends on: F-531
   - acceptance: Every limit not stated here is registered in the ADR before the run. The channel of ADR 0455 QF with
     Symmetry planes under PimpleSettings::pimple (alpha_u 0.8, alpha_p 0.5, one corrector, 10 outer iterations), whose
     excess over the zero-gradient planes was -0.0021 against the averaged two-corrector PISO step's 0.36, is explained
     by an exact linear model of the relaxed step that reproduces the measured impedance of both runs within registered
     limits; the dependence on alpha_u is stated.
-  - note: Numerics. Follow-up of F-531 (ADR 0455, 2026-11-14). Size S.
+  - note: Numerics. PARTIAL (ADR 0613, 2026-11-15; registered before the code, amendment 1 after the registered runs).
+    Test-only, no library line changed. The near-zero Symmetry excess of ADR 0455's relaxed PIMPLE run (pimple(nu, 10):
+    alpha_u 0.8, alpha_p 0.5, one corrector; -0.0021 against the PISO step's 0.36) is an accidental cancellation, not a
+    removal: at the fixed point of the relaxed outer iterations the averaged corrector turns the predictor into D + O +
+    L/alpha_u + O D^-1 L (a sink lambda/alpha_u and an anti-sink through the neighbour links), and the unrelaxed final
+    one-corrector iteration shifts the pressure gradient back, leaving sigma = r - (1/alpha_u - 1)(1/r - 1) of the
+    infinite-corrector sink, r = (1/dt + 12 nu/h^2)/(1/dt + 2 nu/dy^2 + c_x); alpha_p drops out. Measured per-length
+    excess (QF channel at 20 h and 40 h, 29 runs): sigma -0.64, -0.28, -0.010, +0.20, +0.37 at alpha_u 0.6 to 1.0 (N
+    100), zero at alpha_u 0.805 (0-D formula 0.8075); at N 50 the same alpha_u 0.8 gives sigma -0.42 (the Symmetry
+    channel 5.4 percent below the zero-gradient one). An exact linear model of the relaxed step on the developed
+    channel, with each flow-direction column's Laplacian diagonal c_x (it enters through the relaxation and a_P),
+    reproduces the per-length impedance of the relaxed and the PISO runs within 7.2e-5 per part and every excess of the
+    sweep within 8e-6; ADR 0455's printed impedances reproduced bit for bit; the opt-in corrected split removes the
+    effect in the relaxed loop too (4e-6). Partial: the registered model omitted c_x and missed C1 by 1.07e-2 (limit
+    5e-3) and the Symmetry parts of C3, C4, C6 (record f538_registered_runs_relaxed_piso_sweep_and_n50_known_miss); met
+    only after amendment 1. Five of five mutations caught (one only by the periodicity check). Open: ADR 0613 Q1 (the
+    transient default, as ADR 0455 Q1).
 - [~] **F-539** Allman membrane for Shell3
   - depends on: F-419
   - acceptance: Every limit not stated here is registered in the ADR before the run. In-plane bending of a cantilever
@@ -11330,11 +11349,33 @@ fixed by the item's registration ADR before any code.
     1.2e-14, damped energy balance within 1.7e-14. Default step bit-identical (B0, baseline_hashes). Seven of eight
     mutations caught (one by a check added after the mutation run). No case-file key. Follow-up F-607. Open
     (maintainer): the case-file key step = "energy_momentum" under a nonlinear transient study.
-- [ ] **F-571** Rounding floor of the total Lagrangian internal force under large rotation and translation
+- [x] **F-571** Rounding floor of the total Lagrangian internal force under large rotation and translation
   - depends on: F-423, F-397
   - acceptance: Every limit not stated here is registered in the ADR before the run. S3 of ADR 0479 (free Hex8, 50
     steps) converges every step with the driver defaults, and MU6 of ADR 0479 is caught.
-  - note: Structural solver, advanced tier. Follow-up of F-423 (ADR 0479, 2026-11-14).
+  - note: Structural solver, advanced tier. Follow-up of F-423 (ADR 0479, 2026-11-14). DONE. ADR 0604, 2026-11-15: the
+    floor is not in the total Lagrangian internal force under translation (its rounding is 3e-11 to 1.1e-8 N on S3). It
+    comes from representing the total displacement through the step tangent K_eff = K_T + M/(beta h^2): the residual of
+    the nearest float vector reaches (eps/2)|(|K_eff| |u|)| (probe: 0.03 to 0.58 of it over 60 steps), while the
+    reference max(|f_int|, |g|) passes through zero every half period of S3's free-free mode (88.5 N at step 50,
+    relative floor 1.64e-9). On the pendulum, the internal-tangent part of the same bound covers the rotation floor
+    (0.12 to 0.24). Change in nonlinear.rs, with no option and no public signature change: when a contribution is in the
+    residual reference, an attempt still above the tolerance at its last iteration is accepted if its residual is within
+    the rounding bound eps |(|K| |u|)|_free and the energy test holds; every attempt that converged before converges at
+    the same iterate. S3 of ADR 0479 with the driver defaults: 50 of 50 steps, 0 halvings, |dP|/|P_0| 1.3e-14, step 50
+    accepted at the bound (relative 1.64e-9), within 3.6e-18 of the run at tolerance 1e-6. The ADR 0479 pendulum at the
+    defaults: 1940 steps, period 2.09e-4, energy 2.76e-4, 0 halvings (ignored heavy record, 67 s). MU6 of ADR 0479 is
+    caught in both forms (the registered one and its script's), and MB1 to MB4 are caught (the energy test by H1, the
+    last-iterate gate by ADR 0514 N1e's printed values). Default bits: the 72 default-bits files and the nl_transient
+    families pass, the baseline hashes pass, and an instrumented audit of the crate's 1289 non-ignored tests found no
+    attempt the bound would change. Not covered: the floor is accepted, not lowered (an incremental unknown would change
+    every nl_transient bit); the static driver without a contribution in the reference; a step at the floor costs
+    max_iterations corrections; the free spinning bar stays a known miss of the trapezoidal rule. Follow-up F-690 (Early
+    acceptance at the rounding bound of the Newton residual (a stagnation test)). Rework (ADR 0604 amendments 1-2,
+    addendum 2, 2026-11-15): merged after F-631, F-608 and F-596; ADR 0603 NC1 (driver refuses at the zero crossing) is
+    superseded by the bound and kept as an ignored record, its copy NC1b (accepted at the bound, 20 iterations,
+    1.39e-10) active; taken on the standing instruction (option a, recommended); full rcfd-fem release suite 1337
+    passed, 0 failed; ADR 0603 NT3 unchanged.
 - [x] **F-572** Arc-length with a follower reference load and an unsymmetric factor of the load stiffness
   - depends on: F-424
   - acceptance: Every limit not stated here is registered in the ADR before the run. The load direction of the
@@ -12120,7 +12161,8 @@ fixed by the item's registration ADR before any code.
     gives the same bits). Full steps keep Newton's bits; the line minimum of a soft-tangent cube within 1.2e-5; defaults
     and records unchanged; 5 of 5 mutations caught. Gaps 1e-4 to 2e-2 converge too (5e-3 with one Q violation, two nodes
     ending lifted; a report). No case-file key. Follow-up F-684 (Line search on the other total Lagrangian contact
-    cases).
+    cases). Follow-up F-684 done (ADR 0615, 2026-11-15): the line search alone solves ADR 0551 HS20t and HS10t; ADR 0542
+    P needs the fallback (refused at the start).
 - [x] **F-609** Pseudo-modes in the viscoelastic own-frequency iteration
   - depends on: F-586
   - acceptance: Every limit not stated here is registered in the ADR before the run. The own-frequency iteration of the
@@ -12522,7 +12564,9 @@ fixed by the item's registration ADR before any code.
     energy-momentum step. A driver hook Contribution::residual_reference_terms (default 0, read only when positive); the
     default reference and its bits unchanged (a 40-step hash recorded before the change, every rcfd-fem test,
     baseline_hashes). Five of five registered mutations caught. Follow-up F-681 (The inertia-term residual reference on
-    the energy-momentum step).
+    the energy-momentum step). ADR 0604 (F-571), 2026-11-15: NC1 superseded by the rounding-bound acceptance (record
+    kept ignored; copy NC1b in sa_nl_inertia_reference_after_f571.rs); ADR 0609 (F-681): RF1 superseded (the
+    energy-momentum step now takes InertiaTerms).
 - [x] **F-632** Domain integral on a front with varying J, and mode separation
   - depends on: F-429
   - acceptance: Every limit not stated here is registered in the ADR before the run. An embedded elliptical crack whose
@@ -13532,13 +13576,24 @@ fixed by the item's registration ADR before any code.
     operator scales the geometric stiffness by zero, and the check compared frequencies only. Not covered: supported or
     otherwise constrained sectors with the opt-in, solid and shell sectors, and RotatingPart::new on a free part.
     Follow-up F-683 (The free-sector pre-stress on solid and shell sectors, and its scope without stress stiffening).
-- [ ] **F-681** The inertia-term residual reference on the energy-momentum step
+- [~] **F-681** The inertia-term residual reference on the energy-momentum step
   - depends on: F-631, F-611
   - acceptance: Every limit not stated here is registered in the ADR before the run. ResidualReference::InertiaTerms
     taken by the energy-momentum step with the products of its midpoint inertia force; a free vibration of a solid
     without external load over a registered number of periods at the default tolerance with no step rejected at a
     rounding floor and the energy conserved within a registered limit; the default bits unchanged.
-  - note: Follow-up of F-631 (ADR 0603, 2026-11-15).
+  - note: Structural solver, advanced tier. Follow-up of F-631 (ADR 0603). PARTIAL. ADR 0609, 2026-11-12: the
+    energy-momentum step of nl_transient takes NlTransientOptions::residual_reference(ResidualReference::InertiaTerms)
+    (the refusal of ADR 0603 D2 lifted): the reference of each iterate of its own Newton loop is also at least the
+    largest norm of the products of the midpoint inertia and damping force, (2/h^2) M u_{n+1}, (2/h^2) M u_n, (2/h) M
+    v_n, C u_{n+1}/h, C u_n/h. At the default tolerance 1e-10: a clamped Hex8 cantilever in free bending vibration over
+    100 periods, 4000 steps, 0 halvings, energy within 1.1e-11 (limit 1e-6); the free spinning bar of ADR 0514 over ten
+    turns, 1000 steps, 0 halvings, linear momentum 1.8e-13, angular momentum 3.4e-13, energy 5.6e-14, where the driver
+    reference fails step 1 after 5 halvings at the floor (1.29e-10). Known miss: the negative control of a step from
+    rest at h/1024 converged with the driver reference (1.6e-11; the start at rest makes the inertia difference exact).
+    Not dependent on F-571's bound (the step has its own loop). Default bits unchanged (two hashes recorded before the
+    change, the energy-momentum and discrete-gradient tests, baseline_hashes). Five of five registered mutations caught.
+    Follow-up F-691 (A negative control of the energy-momentum inertia-term reference off rest).
 - [~] **F-682** Interaction integral on curved crack fronts
   - depends on: F-632
   - acceptance: Every limit not stated here is registered in the ADR before the run. The interaction integral on
@@ -13583,13 +13638,25 @@ fixed by the item's registration ADR before any code.
     sets) before any of their numbers was computed. Not covered: tetrahedra, wedges, ANDES membranes, layups,
     orthotropic sectors, sectors touching the axis. Follow-up F-686 (The free-sector pre-stress on tetrahedral,
     layered-shell and orthotropic sectors).
-- [ ] **F-684** Line search on the other total Lagrangian contact cases
+- [x] **F-684** Line search on the other total Lagrangian contact cases
   - depends on: F-608, F-639
   - acceptance: "Every limit not stated here is registered in the ADR before the run. The total Lagrangian contact cases
     ADR 0542 P (hub, d = 1e-3 a) and ADR 0551 HS20t and HS10t are run with NewtonOptions::line_search with and without
     curvature_fallback; each run converges or its failure is diagnosed, and the fallback iterations and step lengths are
     recorded (limits registered)."
-  - note: Follow-up of F-608 (ADR 0607, 2026-11-15).
+  - note: Structural solver, advanced tier. Follow-up of F-608 and F-639 (ADR 0607, ADR 0570). DONE. ADR 0615,
+    2026-11-15: NewtonOptions::line_search run on the total Lagrangian contact cases with and without
+    curvature_fallback, no library change. ADR 0542 P (hub, n = 4, d = 1e-3 a, supernodal): with the line search alone
+    it is refused with the default's text byte for byte (the exact tangent fails at the start, before any correction the
+    search could shorten); with both options it is ADR 0570's P-f bit for bit, record [(3, 1), (2, 0), (2, 0)], every
+    step length 1. ADR 0551 HS20t and HS10t: the default refusal is at Newton iteration 1 (located by a passive
+    recording contribution), after the full first correction; the contact driver's solves start with the prescribed
+    values in u, so the first correction is searched and cut to 0.26 (HS20) and 0.25 (HS10). Every later tangent
+    factors, and both cases converge with the line search alone (fallback iterations 0, identical with the fallback on):
+    radius 2.5e-2 and 5.8e-3, peak 1.23e-1, approach 2.7e-2 and 2.3e-2, F_fe and a_M within 4e-5 of ADR 0570's
+    HS20f/HS10f; other step lengths below 1: one each (0.66, 0.61). Trials per correction at most 4. 3 of 3 mutations
+    caught. Making the line search and the fallback the default is the maintainer's call (it turns the refusals of ADR
+    0542 P and ADR 0551 into solutions).
 - [ ] **F-685** Hourglass stability of the incompatible-modes Hex8 at finite strain in compression
   - depends on: F-596
   - acceptance: Every limit not stated here is registered in the ADR before the run. The ADR 0608 element under
@@ -13625,3 +13692,17 @@ fixed by the item's registration ADR before any code.
     penny-shaped crack under tension inclined in a general direction with K_I, K_II and K_III at every station within 3
     percent of the closed forms, and the results of ADR 0610 unchanged.
   - note: Follow-up of F-682 (ADR 0610, 2026-11-15).
+- [ ] **F-690** Early acceptance at the rounding bound of the Newton residual (a stagnation test)
+  - depends on: F-571
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A step at the rounding floor of ADR
+    0604 is accepted in at most a registered number of corrections below max_iterations; S3 and the pendulum of ADR 0479
+    at the defaults run in at most half of ADR 0604's iterations; the bits of every existing default-bits test are
+    unchanged, or the changed ones are listed for the maintainer's decision.
+  - note: Follow-up of F-571 (ADR 0604, 2026-11-15).
+- [ ] **F-691** A negative control of the energy-momentum inertia-term reference off rest
+  - depends on: F-681
+  - acceptance: Every limit not stated here is registered in the ADR before the run. One energy-momentum step of a solid
+    in free vibration centred on a zero crossing (not from rest) at a registered fraction of the period is refused with
+    the driver reference at the default tolerance and converges without halving with ResidualReference::InertiaTerms;
+    the default bits unchanged.
+  - note: Follow-up of F-681 (ADR 0609, 2026-11-15).
