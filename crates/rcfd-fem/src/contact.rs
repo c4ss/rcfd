@@ -11,7 +11,8 @@
 //!   the energy `t^2/(2 eps A)`, its exact force and tangent; Uzawa updates `lambda <- t` after each converged Newton solve
 //!   until the largest penetration and the largest gap at an active node are within the tolerance (amendment 3).
 //! * Driver (D3): [`solve`] and [`solve_with`], load control with the augmentation loop per step, a linear body
-//!   ([`Kinematics::Linear`], the stiffness of [`crate::assemble::stiffness`], Newton here with a sparse `L D L^T`) or the total
+//!   ([`Kinematics::Linear`], the stiffness of [`crate::assemble::stiffness`], Newton here with a sparse `L D L^T`, by
+//!   default after minimum degree, or the supernodal one of `ContactOptions::factor`, ADR 0533) or the total
 //!   Lagrangian body of [`crate::nonlinear::solve_from`] ([`Kinematics::TotalLagrangian`], the contact as its first
 //!   [`Contribution`]).
 //! * Cycling (D6): an active set that comes back after a change more than `max_cycles` times in one Newton solve is an error
@@ -26,9 +27,10 @@ use crate::loads::{nodal_load_vector, NodalForceAt};
 use crate::mesh::{ElementKind, FaceRef};
 use crate::model::{Constraint, DofMap, SolidModel, SolidResult, SolverStats};
 use crate::nonlinear::{add_triplets, initial_states, solve_from, Contribution, NewtonOptions};
+use crate::solve::DirectFactor;
 use rcfd_core::vec3::{add, cross, dot, norm, sub, Vec3};
 use rcfd_linalg::skyline::SkylineError;
-use rcfd_linalg::sparse_chol::SparseLdlt;
+use rcfd_linalg::sparse_chol::{SparseLdlt, SupernodalLdlt};
 use rcfd_linalg::CsrMatrix;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -112,6 +114,11 @@ pub struct ContactOptions {
     pub kinematics: Kinematics,
     /// The Newton iteration and its criteria (`steps` and `max_halvings` are not used).
     pub newton: NewtonOptions,
+    /// The factor of the linear body's reduced tangent (ADR 0533): [`DirectFactor::SparseMinimumDegree`] (the default, the
+    /// up-looking sparse `L D L^T` after approximate minimum degree) or [`DirectFactor::SupernodalNestedDissection`] (the
+    /// supernodal multifrontal `L D L^T` after nested dissection by level structures of the tangent's pattern). The envelope
+    /// is refused, and so is the supernodal factor with [`Kinematics::TotalLagrangian`].
+    pub factor: DirectFactor,
 }
 
 impl ContactOptions {
@@ -126,6 +133,7 @@ impl ContactOptions {
             search_distance: None,
             kinematics: Kinematics::Linear,
             newton: NewtonOptions::new(1),
+            factor: DirectFactor::SparseMinimumDegree,
         }
     }
     /// The same options with another body.
@@ -153,6 +161,11 @@ impl ContactOptions {
         self.newton = o;
         self
     }
+    /// The same options with another factor of the linear body's tangent (ADR 0533).
+    pub fn factor(mut self, f: DirectFactor) -> ContactOptions {
+        self.factor = f;
+        self
+    }
 
     fn check(&self) -> Result<()> {
         if self.steps == 0 {
@@ -173,6 +186,25 @@ impl ContactOptions {
                     key: "search_distance",
                     reason: format!("{d:e}: must be positive and finite"),
                 });
+            }
+        }
+        match self.factor {
+            DirectFactor::SparseMinimumDegree => {}
+            DirectFactor::SupernodalNestedDissection => {
+                if self.kinematics == Kinematics::TotalLagrangian {
+                    return Err(FemError::InvalidValue {
+                        key: "solver",
+                        reason: "the supernodal factor is used by the linear body only (ADR 0533)".to_string(),
+                    });
+                }
+            }
+            other => {
+                return Err(FemError::InvalidValue {
+                    key: "solver",
+                    reason: format!(
+                        "{other:?}: the contact driver factors by SparseMinimumDegree or SupernodalNestedDissection"
+                    ),
+                })
             }
         }
         let mut o = self.newton.clone();
@@ -911,20 +943,43 @@ struct Solved {
     internal: Vec<f64>,
 }
 
-/// Factors `a` into `cache` unless the cached matrix has the same bits.
-fn factor_cached(a: &CsrMatrix, cache: &mut Option<(CsrMatrix, SparseLdlt)>) -> std::result::Result<(), SkylineError> {
+/// The factor of the linear body's reduced tangent (ADR 0533 D2).
+enum Factored {
+    Sparse(SparseLdlt),
+    Supernodal(SupernodalLdlt),
+}
+
+impl Factored {
+    fn solve(&self, b: &[f64]) -> Vec<f64> {
+        match self {
+            Factored::Sparse(l) => l.solve(b),
+            Factored::Supernodal(l) => l.solve(b),
+        }
+    }
+}
+
+/// Factors `a` into `cache` by `factor` unless the cached matrix has the same bits.
+fn factor_cached(
+    a: &CsrMatrix,
+    factor: DirectFactor,
+    cache: &mut Option<(CsrMatrix, Factored)>,
+) -> std::result::Result<(), SkylineError> {
     let same = cache.as_ref().is_some_and(|(c, _)| {
         c.row_ptr == a.row_ptr && c.col == a.col && c.val.iter().zip(&a.val).all(|(x, y)| x.to_bits() == y.to_bits())
     });
     if !same {
-        let l = SparseLdlt::factor(a)?;
+        let l = if factor == DirectFactor::SupernodalNestedDissection {
+            Factored::Supernodal(SupernodalLdlt::factor(a)?)
+        } else {
+            Factored::Sparse(SparseLdlt::factor(a)?)
+        };
         *cache = Some((a.clone(), l));
     }
     Ok(())
 }
 
 /// Newton for the linear body (ADR 0507 D3): `K u + f_c(u) + f_extra(u) = f` on the free equations, the criteria of ADR
-/// 0404 D5, the reduced tangent by a sparse `L D L^T`, reused while its bits do not change.
+/// 0404 D5, the reduced tangent by a sparse `L D L^T` (`factor`, ADR 0533), reused while its bits do not change.
 #[allow(clippy::too_many_arguments)]
 fn linear_solve(
     k: &CsrMatrix,
@@ -934,7 +989,8 @@ fn linear_solve(
     set: &ContactSet,
     extra: &[&dyn Contribution],
     o: &NewtonOptions,
-    cache: &mut Option<(CsrMatrix, SparseLdlt)>,
+    factor: DirectFactor,
+    cache: &mut Option<(CsrMatrix, Factored)>,
     floor: f64,
 ) -> Result<Solved> {
     let n = k.n;
@@ -1015,7 +1071,7 @@ fn linear_solve(
         let du = if sys.free().is_empty() {
             Vec::new()
         } else {
-            match factor_cached(&sys.matrix, cache) {
+            match factor_cached(&sys.matrix, factor, cache) {
                 Ok(()) => {}
                 Err(SkylineError::Pivot { .. }) => {
                     // ADR 0507 amendment 2: the exact tangent is indefinite; this iteration takes eps G G^T.
@@ -1024,7 +1080,7 @@ fn linear_solve(
                     let mut tc = Vec::new();
                     set.force_and_tangent(&all, &mut scratch, Some(&mut tc), false);
                     let convex_sys = build(&tc)?;
-                    factor_cached(&convex_sys.matrix, cache).map_err(|e| {
+                    factor_cached(&convex_sys.matrix, factor, cache).map_err(|e| {
                         fail(format!(
                             "tangent factorisation at Newton iteration {it} (without the curvature part): {e}"
                         ))
@@ -1153,6 +1209,7 @@ pub fn solve_with(
                     &set,
                     extra,
                     &options.newton,
+                    options.factor,
                     &mut cache,
                     run_reference,
                 )
