@@ -1155,11 +1155,28 @@ impl Integrator {
         }
         // ADR 0534 D5: the nodal field at the sub-step's end with its thermal strain.
         let field = self.temperature_field.as_ref().map(|f| FieldAt::of(f, t_b, true));
+        // ADR 0539 D6: with the thermal predictor the Newton start is the committed displacement plus the free expansion
+        // increment of the change of the field from `t_a` to `t_b`.
+        let start: Cow<[f64]> = match self.temperature_field.as_ref().filter(|f| f.thermal_predictor()) {
+            Some(f) => {
+                let old = FieldAt::of(f, t_a, true).nodal;
+                let new = field.as_ref().expect("field of the sub-step").nodal.clone();
+                Cow::Owned(crate::thermal::free_expansion_start(
+                    &self.model,
+                    &[],
+                    u,
+                    &old,
+                    &new,
+                    f.reference(),
+                )?)
+            }
+            None => Cow::Borrowed(u),
+        };
         let eq = nonlinear::solve_from_field(
             &self.model,
             &[],
             &load,
-            u,
+            &start,
             states,
             &self.newton,
             &list,

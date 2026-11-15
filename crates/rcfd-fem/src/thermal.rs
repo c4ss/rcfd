@@ -8,6 +8,7 @@
 //! load of [`crate::shell::thermal_load_vector`], uniform through the thickness (ADR 0445 D2). A model has at most one
 //! temperature field; a second one is refused. Every sum is sequential in a fixed order (elements, points, nodes): no dependence on threads.
 
+use crate::constraint::{prescribed_equations, Prescribed};
 use crate::element::{b_matrix, element_for};
 use crate::error::{FemError, Result};
 use crate::loads::{add_force, add_moment};
@@ -172,6 +173,7 @@ pub(crate) fn add_thermal_load(
 pub struct TemperatureFieldHistory {
     reference: f64,
     points: Vec<(f64, Vec<f64>)>,
+    predictor: bool,
 }
 
 fn field_error(reason: String) -> FemError {
@@ -223,12 +225,30 @@ impl TemperatureFieldHistory {
                 )));
             }
         }
-        Ok(TemperatureFieldHistory { reference, points })
+        Ok(TemperatureFieldHistory {
+            reference,
+            points,
+            predictor: false,
+        })
     }
 
     /// One field held over `[t_start, t_end]`.
     pub fn constant(reference: f64, field: Vec<f64>, t_start: f64, t_end: f64) -> Result<TemperatureFieldHistory> {
         TemperatureFieldHistory::new(reference, vec![(t_start, field.clone()), (t_end, field)])
+    }
+
+    /// With the thermal predictor on or off (ADR 0539 D1; default off): each attempt of the quasi-static driver and of the
+    /// nonlinear transient integrator then starts at the committed displacement plus the free thermal expansion increment of
+    /// the change of the field ([`free_expansion_start`]). The converged results do not depend on it beyond the Newton
+    /// tolerance; without it the runs keep the bits they had before.
+    pub fn with_thermal_predictor(mut self, on: bool) -> TemperatureFieldHistory {
+        self.predictor = on;
+        self
+    }
+
+    /// Whether the thermal predictor is on (ADR 0539 D1).
+    pub fn thermal_predictor(&self) -> bool {
+        self.predictor
     }
 
     /// The reference temperature, K.
@@ -360,4 +380,152 @@ pub(crate) fn check_field_model(model: &SolidModel, history: &TemperatureFieldHi
         }
     }
     Ok(())
+}
+
+/// The start of an attempt with the thermal predictor (ADR 0539 D2 to D5): the committed displacement `committed` (one value per
+/// equation, carrying the prescribed values) plus the free thermal expansion increment of the change of the field from the nodal
+/// temperatures `old` (those of the committed state) to `new` (those of the attempt), both in K, one per node, with the
+/// reference temperature `reference`.
+///
+/// With the multiplicative stretch `theta = 1 + alpha (T - T_ref)` and the committed position `x_c = X + u_c`, a node moves by
+/// `(theta_new / theta_old - 1) (x_c - O)` about the mean `O` of the committed positions (the expansion at unchanged elastic
+/// deformation); `alpha` of a node is the mean over the elements that contain it. The increments are completed by one rigid
+/// translation per component, the mean of the negated increments at the fixed equations of that component (those of the constraints
+/// of the model and of `prescribed`), so a body held statically determinately expands freely about its supports. Only the free
+/// equations change; every fixed entry keeps the bits of `committed`. A change of no node (every ratio exactly 1) returns
+/// `committed` itself. Refuses (key `"temperature"`) a length of `old` or `new` other than the nodes, a value that is not
+/// finite, a non-positive stretch and a start that is not finite.
+pub fn free_expansion_start(
+    model: &SolidModel,
+    prescribed: &[Prescribed],
+    committed: &[f64],
+    old: &[f64],
+    new: &[f64],
+    reference: f64,
+) -> Result<Vec<f64>> {
+    let mesh = model.mesh();
+    let dofs = model.dof_map();
+    let nn = mesh.nodes().len();
+    for (name, x) in [("old", old), ("new", new)] {
+        if x.len() != nn {
+            return Err(FemError::FieldLength {
+                key: "temperature",
+                expected: nn,
+                found: x.len(),
+            });
+        }
+        if let Some(b) = x.iter().position(|v| !v.is_finite()) {
+            return Err(field_error(format!(
+                "the {name} field has the value {:e} at node {b}: not finite",
+                x[b]
+            )));
+        }
+    }
+    if !reference.is_finite() {
+        return Err(field_error(format!(
+            "the reference temperature {reference:e} is not finite"
+        )));
+    }
+    if committed.len() != dofs.n_equations() {
+        return Err(FemError::FieldLength {
+            key: "displacement",
+            expected: dofs.n_equations(),
+            found: committed.len(),
+        });
+    }
+    // D3: the expansion coefficient of each node.
+    let materials = model.material_indices()?;
+    let mut sum = vec![0.0; nn];
+    let mut count = vec![0usize; nn];
+    let mut first: Vec<Option<u64>> = vec![None; nn];
+    let mut same = vec![true; nn];
+    for e in 0..mesh.n_elements() {
+        let alpha = model.materials()[materials[e]].1.expansion();
+        for &node in mesh.element_nodes(e) {
+            sum[node] += alpha;
+            count[node] += 1;
+            match first[node] {
+                None => first[node] = Some(alpha.to_bits()),
+                Some(bits) => same[node] &= bits == alpha.to_bits(),
+            }
+        }
+    }
+    // D2: the ratio of the stretches at each node.
+    let mut ratio = vec![1.0; nn];
+    for b in 0..nn {
+        let alpha = match first[b] {
+            None => 0.0,
+            Some(bits) if same[b] => f64::from_bits(bits),
+            Some(_) => sum[b] / count[b] as f64,
+        };
+        let theta_old = 1.0 + alpha * (old[b] - reference);
+        let theta_new = 1.0 + alpha * (new[b] - reference);
+        if !(theta_old > 0.0 && theta_new > 0.0 && theta_old.is_finite() && theta_new.is_finite()) {
+            return Err(field_error(format!(
+                "node {b}: the thermal stretch {theta_old:e} to {theta_new:e} is not positive (ADR 0539 D2)"
+            )));
+        }
+        ratio[b] = theta_new / theta_old;
+    }
+    if ratio.iter().all(|&s| s == 1.0) {
+        return Ok(committed.to_vec());
+    }
+    // D4: the reference point, the mean of the committed positions of the nodes with three equations.
+    let position =
+        |node: usize, c: usize| -> Option<f64> { dofs.equation(node, c).map(|q| mesh.nodes()[node][c] + committed[q]) };
+    let mut origin = [0.0; 3];
+    let mut n_with = 0usize;
+    for node in 0..nn {
+        if let (Some(x), Some(y), Some(z)) = (position(node, 0), position(node, 1), position(node, 2)) {
+            origin[0] += x;
+            origin[1] += y;
+            origin[2] += z;
+            n_with += 1;
+        }
+    }
+    if n_with == 0 {
+        return Ok(committed.to_vec());
+    }
+    for o in &mut origin {
+        *o /= n_with as f64;
+    }
+    let increment =
+        |node: usize, c: usize| -> Option<f64> { position(node, c).map(|x| (ratio[node] - 1.0) * (x - origin[c])) };
+    // D4, D5: the translation fitted to the fixed equations, then the free equations only.
+    let fixed = prescribed_equations(model, prescribed)?;
+    let mut is_fixed = vec![false; dofs.n_equations()];
+    let mut fit = [0.0; 3];
+    let mut fit_count = [0usize; 3];
+    for &(eq, _) in &fixed {
+        is_fixed[eq] = true;
+        if let Some((node, c)) = dofs.node_component(eq) {
+            if let Some(d) = increment(node, c) {
+                fit[c] -= d;
+                fit_count[c] += 1;
+            }
+        }
+    }
+    let mut translation = [0.0; 3];
+    for c in 0..3 {
+        if fit_count[c] > 0 {
+            translation[c] = fit[c] / fit_count[c] as f64;
+        }
+    }
+    let mut start = committed.to_vec();
+    for node in 0..nn {
+        for c in 0..3 {
+            if let (Some(q), Some(d)) = (dofs.equation(node, c), increment(node, c)) {
+                if !is_fixed[q] {
+                    start[q] += d + translation[c];
+                }
+            }
+        }
+    }
+    if let Some(q) = start.iter().position(|v| !v.is_finite()) {
+        return Err(field_error(format!(
+            "the predicted start has {:e} at equation {q}",
+            start[q]
+        )));
+    }
+    Ok(start)
 }
