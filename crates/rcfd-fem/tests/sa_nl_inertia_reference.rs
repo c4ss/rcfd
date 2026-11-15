@@ -280,6 +280,7 @@ fn ft2_one_period_with_the_inertia_term_reference() {
 
 /// RF1: the inertia-term reference with the energy-momentum step is refused (ADR 0603 D2).
 #[test]
+#[ignore = "superseded by ADR 0609 (F-681 lifts the refusal of ADR 0603 D2: the energy-momentum step takes the inertia-term reference); ADR 0603 RF1 record, met there; the control half is repeated as RT1 of sa_emc_inertia_reference.rs"]
 fn rf1_inertia_terms_refused_with_the_energy_momentum_step() {
     let mut c = Checks::new();
     let mut model = SolidModel::new(hex_box([0.0; 3], [1.0, 0.1, 0.1], [4, 1, 1]).unwrap());
