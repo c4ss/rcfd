@@ -853,3 +853,34 @@ fn r1_to_r11_refusals_f528() {
     );
     c.finish();
 }
+
+// ADR 0543 amendment 1: RY2, a load on the dependent junction node against F-399 with every mode.
+#[test]
+fn ry2_load_on_a_dependent_unknown() {
+    let mut c = Checks::new();
+    let mm = merged();
+    let basis = all_modes(&mm, None);
+    let wc = basis.eigenvalues()[0].sqrt();
+    let (alpha, beta) = (0.02 * wc, 0.02 / wc);
+    let direct = DirectHarmonic::new(&mm, &DirectHarmonicOptions::new().rayleigh(alpha, beta)).unwrap();
+    let ms = modal(
+        &mm,
+        basis,
+        ModalDamping::Rayleigh {
+            mass: alpha,
+            stiffness: beta,
+        },
+    );
+    let load = c_load(&mm, true);
+    for (tag, f) in [("a", 0.5), ("b", 1.7)] {
+        let w = f * wc;
+        let xd = direct.response(&load, w).unwrap();
+        let xm = ms.response(&load, w).unwrap();
+        c.at_most(
+            &format!("RY2{tag} load on J, Rayleigh at {f} w_1"),
+            e_same(&xd, &xm),
+            1e-8,
+        );
+    }
+    c.finish();
+}
