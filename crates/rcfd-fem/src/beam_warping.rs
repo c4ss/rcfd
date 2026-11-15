@@ -39,6 +39,10 @@
 //! ADR 0582 (F-643) adds the load height ([`Warping::load_point`]): a force applied at a point of the section off the shear
 //! centre adds `(1/2) (F . (p - s)) phi^2` at the twist of its node to the geometric stiffness; without an entry a nodal force
 //! acts at the shear centre, as before.
+//!
+//! ADR 0588 (F-663) adds the distributed load height ([`Warping::line_load_point`]): a force per unit length `q` applied along
+//! a point `p` of the section adds the consistent `(1/2) int (q . (p - s)) phi^2 dx` on the Hermite twist of each element of
+//! its set to the geometric stiffness; without an entry a line load acts at the shear centre, as before.
 
 use crate::assemble::{element_dofs, point_stiffness};
 use crate::beam::{self, GAUSS4_W, GAUSS4_X};
@@ -271,6 +275,7 @@ pub struct Warping {
     restrained: Vec<String>,
     bimoments: Vec<(String, f64)>,
     load_points: Vec<(String, Vec3, [f64; 2])>,
+    line_load_points: Vec<(String, Vec3, [f64; 2])>,
 }
 
 impl Warping {
@@ -321,6 +326,23 @@ impl Warping {
     /// The load points of [`Warping::load_point`].
     pub fn load_points(&self) -> &[(String, Vec3, [f64; 2])] {
         &self.load_points
+    }
+    /// The same with the distributed load height of ADR 0588 (F-663): the reference load of the pre-stress holds the force per
+    /// unit length `force` (global components, N/m) on every element of `element_set`, applied along `point = (p_y, p_z)` (m,
+    /// section axes, from the centroid). Its only effect is the consistent second-order term `(1/2) int (q . (p - s)) phi^2 dx`
+    /// on the Hermite twist of each element, `s` that element's shear centre and `q` in its section axes, in `K_sigma` of
+    /// [`matrices`] (so in [`buckling_factors`], [`buckling_factors_with`], [`prestressed_modes`] and the pre-stressed harmonic
+    /// path); the linear load is the model's ([`crate::model::Load::LineLoad`]), and without an entry a line load acts at the
+    /// shear centre. The force must be the one of the reference load the pre-stress comes from. Refused there: a non-finite
+    /// value (key `"load_point"`), an unknown set, an element without a warping unknown (key `"warping"`) and a first-order
+    /// torque about the centroid `p_y q_z - p_z q_y` (key `"load_point"`).
+    pub fn line_load_point(mut self, element_set: &str, force: Vec3, point: [f64; 2]) -> Warping {
+        self.line_load_points.push((element_set.to_string(), force, point));
+        self
+    }
+    /// The distributed load points of [`Warping::line_load_point`].
+    pub fn line_load_points(&self) -> &[(String, Vec3, [f64; 2])] {
+        &self.line_load_points
     }
 }
 
@@ -993,6 +1015,7 @@ fn matrices_impl(
         }
     }
     add_load_points(model, warping, &lay, &mut tg)?;
+    add_line_load_points(model, warping, &lay, &mut tg)?;
     let n = lay.dofs.n_equations();
     Ok(WarpingMatrices {
         stiffness: CsrMatrix::from_triplets(n, tk),
@@ -1090,6 +1113,75 @@ fn add_load_points(
                             .expect("a rotation unknown of a beam node"),
                     );
                     tg.push((ra, rb, c * e_1[a] * e_1[b]));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The distributed load-height terms of [`Warping::line_load_point`] (ADR 0588 D1, D2): per element of each entry, `c M_H` on
+/// the twist unknowns, `c = q . (p - s)` with `q` in the element's section axes and `s` its shear centre, `M_H = int H_i H_j dx`
+/// the Hermite block ([`hermite_mass_block`]), turned to global axes. Nothing is added without an entry.
+fn add_line_load_points(
+    model: &SolidModel,
+    warping: &Warping,
+    lay: &Layout,
+    tg: &mut Vec<(usize, usize, f64)>,
+) -> Result<()> {
+    if warping.line_load_points.is_empty() {
+        return Ok(());
+    }
+    let mesh = model.mesh();
+    let base_dofs = model.dof_map();
+    for (name, force, point) in &warping.line_load_points {
+        if !(force.iter().chain(point.iter()).all(|v| v.is_finite())) {
+            return Err(load_point_error(format!(
+                "the force per length {force:?} or the point {point:?} on the set '{name}' is not finite"
+            )));
+        }
+        let set = mesh.element_set(name).ok_or_else(|| FemError::UnknownSet {
+            kind: SetKind::Element,
+            name: name.clone(),
+        })?;
+        for &e in set {
+            let Some(ws) = lay.section_of.get(e).and_then(|w| w.as_ref()) else {
+                return Err(warping_error(format!(
+                    "element {e} of the line-load-point set '{name}' has no warping unknown"
+                )));
+            };
+            let nodes = mesh.element_nodes(e);
+            let (_, v) = beam::beam_property(mesh, e).expect("a Beam2 element of a Beam block");
+            let coords = [mesh.nodes()[nodes[0]], mesh.nodes()[nodes[1]]];
+            let f = beam::frame_of(&coords, v).map_err(|source| FemError::Element {
+                element: e,
+                source: Box::new(source),
+            })?;
+            let dot = |a: &Vec3| a[0] * force[0] + a[1] * force[1] + a[2] * force[2];
+            let (q_y, q_z) = (dot(&f.axes[1]), dot(&f.axes[2]));
+            let [p_y, p_z] = *point;
+            let torque = p_y * q_z - p_z * q_y;
+            let size = force.iter().map(|v| v * v).sum::<f64>().sqrt() * (p_y * p_y + p_z * p_z).sqrt();
+            if torque.abs() > TORQUE_TOLERANCE * size {
+                return Err(load_point_error(format!(
+                    "the force per length at the point {point:?} of the set '{name}' has the first-order torque {torque:e}                      about the centroid on element {e}: the load height is offered for loads without it"
+                )));
+            }
+            let [y_0, z_0] = ws.shear_centre;
+            let c = q_y * (p_y - y_0) + q_z * (p_z - z_0);
+            let mut k = ElementMatrix::zeros(14);
+            add_twist(&mut k, c, &hermite_mass_block(f.length));
+            let g = to_global(&k, &f.axes);
+            let base_eqs = element_dofs(&base_dofs, nodes);
+            let mut eqs = Vec::with_capacity(14);
+            for (i, &n) in nodes.iter().enumerate() {
+                eqs.extend_from_slice(&base_eqs[6 * i..6 * i + 6]);
+                eqs.push(lay.dofs.equation(n).expect("a node of a warping element"));
+            }
+            let gv = g.values();
+            for i in 0..14 {
+                for j in 0..14 {
+                    tg.push((eqs[i], eqs[j], gv[i * 14 + j]));
                 }
             }
         }
