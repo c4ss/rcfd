@@ -26,6 +26,26 @@ and others) have been added one by one. Each is a roadmap item of the category "
 [detailed roadmap](ROADMAP.md) gives the status and the limits of each one. There is no CLI command and no MCP tool for the
 structural solver yet: it is used from Rust or through the solid case file.
 
+## Shells under pressure on curved meshes
+
+This section states only what [ADR 0550](adr/0550-f546-registration-angle-weighted-shell-pressure-on-an-unstructured-sphere-octant.md)
+measured (test only, no library change).
+
+* **Mesh requirement.** On an unstructured triangulation of a thin curved shell, the error of a pressure load, whichever split of
+  each triangle's pressure is used, is set by the shell's bending response to the nodal unevenness of the load, `~ c h^2 / (R t)`:
+  second order in the edge length `h` and growing as `1 / t`. It is not the stiffness: the area-gradient load gives the uniform
+  expansion to `6e-14` on the same mesh. Measured on a sphere octant (geodesic grid with jittered nodes and random edge flips,
+  `R = 1`, `t = 0.01`, internal pressure), the radial displacement against `p R^2 (1 - nu) / (2 E t)`: error `1.40e-1`, `3.33e-2`,
+  `7.99e-3` at n = 32, 64, 128 (order 2.07 and 2.06). Two percent at every node needs n = 128 (edges about `0.012 R`) at
+  `t / R = 0.01`; the default load also meets it there (`1.01e-2`). ADR 0550 asks for `h^2 / (R t)` well below one for a percent
+  level displacement; it measured no other threshold, thickness or shape.
+* **When to choose `Load::shell_pressure_angle_weighted`.** It is opt-in; the default consistent split of Shell3 stays the
+  default. ADR 0550 measured its error against the default's: better by a factor 0.62 to 0.79 on the unstructured octant above
+  (a small gain; refinement is what reaches the percent level), by 16 on the structured geodesic grid, and by 300 on the
+  one-diagonal cylinder of [ADR 0461](adr/0461-f540-registration-angle-weighted-shell-pressure.md). Choose it on curved meshes
+  where the default split is uneven in that way (structured or one-diagonal meshes); on unstructured meshes do not expect it to
+  replace refinement.
+
 ## The fan-blade demonstration
 
 The test `crates/rcfd-fem/tests/sb_fan_blade.rs` runs one blade of the parametric 120 mm computer fan
