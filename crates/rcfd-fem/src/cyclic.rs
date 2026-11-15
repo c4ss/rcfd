@@ -27,6 +27,10 @@
 //! ADR 0561 (F-647): with the same option [`full_rotor`] copies Shell4 and Shell3 blocks, and [`FullRotor::expand`],
 //! [`FullRotor::expand_field`] and [`FullRotor::expand_load`] expand the rotations of a six-unknown node by the same `R^j` as
 //! its translations; the rotating sector's whirl paths take the shells' Coriolis matrix ([`crate::rotating`]).
+//!
+//! ADR 0575 (F-648): with [`crate::model::CyclicOptions::shell_extensions`] as well, the shells option takes the extensions of
+//! ADR 0456 D4: interpolated high nodes follow the low shell edges rotated by `R` (node to edge, linear weights), and the
+//! rotation unknowns of interpolated and axis nodes get the rows of the translations.
 
 use crate::assemble::{point_stiffness, stiffness_with};
 use crate::constraint::Prescribed;
@@ -210,7 +214,7 @@ pub fn boundary(model: &SolidModel, constraint: usize) -> Result<CyclicBoundary>
     let mesh = model.mesh();
     // ADR 0556 D1: with shells the boundaries are node sets, and the extensions of ADR 0456 are not taken.
     let (lows, highs) = if options.shells {
-        if options.interpolation.is_some() || options.axis_nodes {
+        if (options.interpolation.is_some() || options.axis_nodes) && !options.shell_extensions {
             return Err(cyclic_error(format!(
                 "constraint {constraint}: shells in the cyclic constraint (ADR 0556) are not taken with interpolated \
                  boundaries or nodes on the axis (ADR 0456 D4; a follow-up of ADR 0556)"
@@ -228,6 +232,11 @@ pub fn boundary(model: &SolidModel, constraint: usize) -> Result<CyclicBoundary>
         };
         (nodes_of(low)?, nodes_of(high)?)
     } else {
+        if options.shell_extensions {
+            return Err(cyclic_error(format!(
+                "constraint {constraint}: shell_extensions qualifies the shells option of the cyclic constraint (ADR 0575)"
+            )));
+        }
         (mesh.surface_set_nodes(low)?, mesh.surface_set_nodes(high)?)
     };
     let both: Vec<usize> = lows
@@ -274,9 +283,24 @@ pub fn boundary(model: &SolidModel, constraint: usize) -> Result<CyclicBoundary>
         let rotation = rotation_matrix(n, 2.0 * PI / *sectors as f64);
         let o = *origin;
         let map = |p: Vec3| rotate_point(&rotation, o, p);
-        let exclude: std::collections::BTreeSet<usize> = axis_nodes.iter().copied().collect();
-        let w = crate::tie::weights(mesh, high, low, &map, &interp, &Default::default(), &exclude)?;
-        let interpolated = w.rows.into_iter().filter(|r| r.1 == 0).map(|r| (r.0, r.2)).collect();
+        let interpolated = if options.shells {
+            // ADR 0575 D3: a shell has no faces; the high nodes follow the low shell edges.
+            if interp.method == crate::tie::TieMethod::Mortar {
+                return Err(cyclic_error(format!(
+                    "constraint {constraint}: the mortar method is not taken for shell edges (ADR 0575; node to edge only)"
+                )));
+            }
+            let slaves: Vec<usize> = highs
+                .iter()
+                .copied()
+                .filter(|h| axis_nodes.binary_search(h).is_err())
+                .collect();
+            shell_edge_weights(mesh, constraint, &lows, &slaves, &map, &interp)?
+        } else {
+            let exclude: std::collections::BTreeSet<usize> = axis_nodes.iter().copied().collect();
+            let w = crate::tie::weights(mesh, high, low, &map, &interp, &Default::default(), &exclude)?;
+            w.rows.into_iter().filter(|r| r.1 == 0).map(|r| (r.0, r.2)).collect()
+        };
         return Ok(CyclicBoundary {
             constraint,
             sectors: *sectors,
@@ -361,6 +385,85 @@ pub fn boundary(model: &SolidModel, constraint: usize) -> Result<CyclicBoundary>
         axis_nodes,
         interpolated: Vec::new(),
     })
+}
+
+/// One interpolated high node with its weights over low nodes.
+type InterpolatedNode = (usize, Vec<(usize, f64)>);
+
+/// The node-to-edge weights of ADR 0575 D3: each slave (high) node on the nearest low shell edge mapped by `map`, weights
+/// `(A, 1 - t), (B, t)` at the projection parameter `t` (a zero weight dropped); above the tolerance (that of `options`, else
+/// [`crate::tie::GAP_FACTOR`] times the mean mapped edge length) refused with [`FemError::TieGap`].
+fn shell_edge_weights(
+    mesh: &SolidMesh,
+    constraint: usize,
+    lows: &[usize],
+    slaves: &[usize],
+    map: &dyn Fn(Vec3) -> Vec3,
+    options: &crate::tie::TieOptions,
+) -> Result<Vec<InterpolatedNode>> {
+    let in_low = |p: usize| lows.binary_search(&p).is_ok();
+    let mut edges = std::collections::BTreeSet::new();
+    for block in mesh.blocks() {
+        let k = match block.kind() {
+            ElementKind::Shell4 => 4,
+            ElementKind::Shell3 => 3,
+            _ => continue,
+        };
+        for e in block.connectivity().chunks_exact(k) {
+            for i in 0..k {
+                let (a, b) = (e[i], e[(i + 1) % k]);
+                if a != b && in_low(a) && in_low(b) {
+                    edges.insert((a.min(b), a.max(b)));
+                }
+            }
+        }
+    }
+    if edges.is_empty() {
+        return Err(cyclic_error(format!(
+            "constraint {constraint}: the low node set has no shell edge (ADR 0575: interpolated shell boundaries)"
+        )));
+    }
+    let x = mesh.nodes();
+    let segments: Vec<(usize, usize, Vec3, Vec3)> =
+        edges.into_iter().map(|(a, b)| (a, b, map(x[a]), map(x[b]))).collect();
+    let mean = segments.iter().map(|s| distance(s.2, s.3)).sum::<f64>() / segments.len() as f64;
+    let tolerance = match options.tolerance {
+        Some(t) => t,
+        None => crate::tie::GAP_FACTOR * mean,
+    };
+    let mut out = Vec::with_capacity(slaves.len());
+    for &p in slaves {
+        let y = x[p];
+        let mut best: Option<(bool, f64, usize, f64)> = None;
+        for (k, &(_, _, a, b)) in segments.iter().enumerate() {
+            let ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+            let ay = [y[0] - a[0], y[1] - a[1], y[2] - a[2]];
+            let l2 = ab[0] * ab[0] + ab[1] * ab[1] + ab[2] * ab[2];
+            let raw = (ay[0] * ab[0] + ay[1] * ab[1] + ay[2] * ab[2]) / l2;
+            let inside = (0.0..=1.0).contains(&raw);
+            let t = raw.clamp(0.0, 1.0);
+            let d = distance(y, [a[0] + t * ab[0], a[1] + t * ab[1], a[2] + t * ab[2]]);
+            let better = match best {
+                None => true,
+                Some((bi, bd, _, _)) => (inside && !bi) || (inside == bi && d < bd),
+            };
+            if better {
+                best = Some((inside, d, k, t));
+            }
+        }
+        let (_, d, k, t) = best.expect("a segment");
+        if d > tolerance {
+            return Err(FemError::TieGap {
+                node: p,
+                distance: d,
+                tolerance,
+            });
+        }
+        let (a, b, _, _) = segments[k];
+        let w: Vec<(usize, f64)> = [(a, 1.0 - t), (b, t)].into_iter().filter(|&(_, w)| w != 0.0).collect();
+        out.push((p, w));
+    }
+    Ok(out)
 }
 
 /// One mode of the real sector problem: the cosine part `a` and the sine part `b` (zero for a single harmonic), each over
