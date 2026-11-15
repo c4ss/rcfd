@@ -155,6 +155,9 @@ pub enum Material {
         n: f64,
         /// The time exponent `m`.
         m: f64,
+        /// The activation energy `Q`, J/mol, of the Arrhenius factor `exp(-Q/(R T))` multiplying `a`, with the temperature
+        /// of the point context (ADR 0558 D1); `None`: no factor.
+        activation: Option<f64>,
     },
     /// J2 plasticity with linear isotropic and kinematic hardening on an isotropic base (ADR 0325, F-422).
     #[non_exhaustive]
@@ -378,7 +381,19 @@ impl Material {
             a,
             n,
             m,
+            activation: None,
         })
+    }
+
+    /// A creeping material with the Arrhenius factor `exp(-Q/(R T))` on `a` (ADR 0558 D1): the checks of
+    /// [`Material::creep`], and the activation energy `Q`, J/mol, positive and finite (key `"activation"`).
+    pub fn creep_arrhenius(base: Material, a: f64, n: f64, m: f64, activation: f64) -> Result<Material> {
+        let mut material = Material::creep(base, a, n, m)?;
+        positive_material("activation", activation)?;
+        if let Material::Creep { activation: q, .. } = &mut material {
+            *q = Some(activation);
+        }
+        Ok(material)
     }
 
     /// A J2 plastic material (ADR 0440 D2): refuses a base that is not isotropic, a yield stress not positive and finite,
