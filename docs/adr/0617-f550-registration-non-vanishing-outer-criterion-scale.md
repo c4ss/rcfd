@@ -207,3 +207,14 @@ Printed records, no limit: per level the mean / min / max of `used`, the total a
 * The absolute floor tied to the solvers' tolerances is not built (S2).
 * A non-monotone outer iteration, a hook that changes the sources between outer iterations, relaxation: as ADR 0458.
 * No case key (schema golden); not the default; the moving piston and the stable default runs of ADR 0451 are not run.
+
+## Amendment 1 (2026-11-15, written after the mutation run of MW6, before the run of MW6b)
+
+MW6 was applied as one replacement, `s.outer_scale_window` read as `s.outer_scale_window.or(Some(18))` where the scale is formed.
+It was not caught. Diagnosis (by reading the code, no run): the history of first changes is pushed only under `if let Some(w) =
+s.outer_scale_window`, which the mutation left alone, so with `None` the history stays empty and the scale is
+`fold(change, empty) = change`, bitwise ADR 0458's. The mutation as applied is equivalent (it changes no result), so no test can
+catch it; it stays recorded as not caught. Corrected mutation **MW6b**: the same replacement at both places (the scale and the
+push), so that `None` runs the window of 18. Expected: caught by W1 (`None` against `Some(1)`). Run once after this amendment is
+committed. By the decision rule, a mutation met only after an amendment made after its run gives **partial**; this is recorded,
+not changed.
