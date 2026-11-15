@@ -274,3 +274,24 @@ The decision rule reads B0 as B0 with B0r, H7 as H7', TR5 as TR5'. These correct
 checks; the rule treats a check met only after a post-run amendment as partial: B0 is such a check only if a reader counts the
 failed first attempt as its run (it compared nothing); this is recorded and left to the lead (Addendum 1 says how it is
 counted).
+
+## Amendment 2 (2026-11-15): H3 and HW missed; a corrected search registered (H3', HW')
+
+Written after the one registered run (log `f635-scratch/run1.log`, code commit 426df3bd) and before any run of the checks
+below. In that run H3 measured `1.06e-8` and HW `1.77e-8` against the limit `1e-8` (missed; every other check met). Diagnosis:
+the search D5 on the default options ends at the first refused solve. After two secant steps the iterate was `1.06e-8` (H3) and
+`1.77e-8` (HW) from the eigenvalue, and the solve there was refused as a resonance: the pivot rule refuses a pivot at most
+`RESONANCE_PIVOT = 1e-8` of its scale, so the search cannot get closer than about `1e-8` relative. D5 says such an iterate is the
+result. The arithmetic of the registration (numpy, no pivot test) took a third step and reached `2.4e-12`. The estimate left out
+the refusal, so the limit `1e-8` sat on the pivot threshold. The missed checks stay as the ignored record
+`h3_hw_known_miss` (limits intact, measured values recorded). H2 (the acceptance, `3.6e-7` against `1e-3`) is not affected.
+
+Corrected checks (new, run once after this commit):
+
+- **H3'**: H3 with the search D5 on `WarpingHarmonicOptions::new().resonance_pivot(0.0)` (only the rounding pivot test of ADR
+  0448 D1 is left, so the search ends by its step rule): `|s_r/lambda - 1| <= 1e-8`. Estimate `2.4e-12` (arithmetic 3).
+- **HW'**: HW (the held eigenvalue, the same procedure) with that option: `<= 1e-8`; the held eigenvalue `> 1.2` of the free
+  value (as HW). Estimate `6.8e-13`; `2.60`.
+
+The decision rule: H3 and HW are missed in the registered run, so the item is **partial** by the rule whatever H3' and HW' give.
+H3' and HW' are checks met (or not) only after a post-run amendment.
