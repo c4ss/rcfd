@@ -169,7 +169,9 @@ pub(crate) fn check_factor_temperature(
         )))
     };
     if constant.is_none() && history.is_none() && !field {
-        return refuse("needs a temperature option (a constant temperature, a temperature history or a field)".to_string());
+        return refuse(
+            "needs a temperature option (a constant temperature, a temperature history or a field)".to_string(),
+        );
     }
     let positive = |t: f64| t.is_finite() && t > 0.0;
     if let Some(t) = constant {

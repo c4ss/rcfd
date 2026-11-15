@@ -158,7 +158,11 @@ fn np1_np2_np3_ni1_pc1_refusals_at_every_non_positive_temperature() {
             r.as_ref().err().and_then(key_of) == Some("temperature"),
             &format!("{r:?}"),
         );
-        let p = PointContext::new().with_time(2.0, 0.5).unwrap().with_temperature(t).unwrap();
+        let p = PointContext::new()
+            .with_time(2.0, 0.5)
+            .unwrap()
+            .with_temperature(t)
+            .unwrap();
         let r = update(&fm, &eps, &st, &p);
         c.holds(
             &format!("NP1 update at T = {t:e} K: key temperature"),
@@ -208,7 +212,11 @@ fn np1_np2_np3_ni1_pc1_refusals_at_every_non_positive_temperature() {
     }
 
     // NI1: no temperature option.
-    let (ok, d) = top_temperature(&NlIntegrator::new(&cube(factor()), &loads, &NlTransientOptions::new(1e-3)));
+    let (ok, d) = top_temperature(&NlIntegrator::new(
+        &cube(factor()),
+        &loads,
+        &NlTransientOptions::new(1e-3),
+    ));
     c.holds("NI1 Integrator::new without a temperature option", ok, &d);
 
     // PC1: the positive side.
@@ -340,7 +348,10 @@ fn cr1_cr2_dv_crr_creep_rate_in_the_nonlinear_transient_integrator() {
     let t_c = 1e4 * p;
     let a2 = 1.0 / (E * t_c * SIGMA.powf(N - 1.0));
     let a = a2 / f(T2);
-    println!("omega_1 = {omega:.9e} rad/s, P = {p:.9e} s, A = {a:.6e}, A f(T2) = {:.6e}", a * f(T2));
+    println!(
+        "omega_1 = {omega:.9e} rad/s, P = {p:.9e} s, A = {a:.6e}, A f(T2) = {:.6e}",
+        a * f(T2)
+    );
     let material = Material::creep_arrhenius(base(), a, N, 0.0, Q).unwrap();
     let r2 = creep_run(&material, a, omega, T2);
     c.at_most("CR2 rate by the displacement at T2", r2.by_u, 1e-2);
