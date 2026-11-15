@@ -63,6 +63,9 @@ struct Topology {
     distance: Vec<usize>,
 }
 
+/// One triangle's use of an edge: (from, to, the opposite node, the triangle), local node indices.
+type EdgeUse = (usize, usize, usize, usize);
+
 fn angle(u: Vec3, v: Vec3) -> f64 {
     norm(cross(u, v)).atan2(dot(u, v))
 }
@@ -91,7 +94,7 @@ fn topology(nodes: &[Vec3], tris: &[[usize; 3]]) -> Result<Topology> {
     let mut aw = vec![[0.0; 3]; n];
     let mut g = vec![[0.0; 3]; n];
     // edge (min, max) -> list of (from, to, opposite, triangle)
-    let mut edges: BTreeMap<(usize, usize), Vec<(usize, usize, usize, usize)>> = BTreeMap::new();
+    let mut edges: BTreeMap<(usize, usize), Vec<EdgeUse>> = BTreeMap::new();
     let mut normals = Vec::with_capacity(tris.len());
     for (t, tri) in tris.iter().enumerate() {
         let x = tri.map(|q| nodes[q]);

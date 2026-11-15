@@ -45,6 +45,14 @@ measured (test only, no library change).
   one-diagonal cylinder of [ADR 0461](adr/0461-f540-registration-angle-weighted-shell-pressure.md). Choose it on curved meshes
   where the default split is uneven in that way (structured or one-diagonal meshes); on unstructured meshes do not expect it to
   replace refinement.
+* **`Load::shell_pressure_curvature` (opt-in, Shell3 only).** [ADR 0567](adr/0567-f633-registration-shell3-pressure-load-exact-for-the-uniform-membrane-state.md)
+  scales the area-gradient load by `p / (2 kappa)`, `kappa` the mean curvature of an implicit quadric fitted to each node's
+  neighbourhood, with a boundary term for free edges and symmetry cuts. It is exact for the uniform membrane state on any
+  triangulation inscribed in a sphere and on cylinders of rectangle cells: on the unstructured octant above `1.2e-13` at n = 64
+  and `7.8e-14` at n = 32 (`t = 0.01` and `0.001` alike), the one-diagonal cylinder O1 `2.0e-10`. On a surface that is not a
+  quadric the curvature estimate is only consistent (on a torus patch second order inside, about 14 percent at the boundary
+  nodes at 32 x 32 cells), and nodes of zero mean curvature (flat parts, saddles) are refused: load flat parts with the default
+  pressure on their own element set.
 
 ## The fan-blade demonstration
 
