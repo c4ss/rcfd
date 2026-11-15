@@ -14,6 +14,9 @@
 //! * ADR 0605 (F-632): [`CrackFront::elliptical`], an elliptical front in confocal coordinates (D1); [`interaction_integral`],
 //!   `K_I`, `K_II` and `K_III` of a straight front by the interaction integral with the near-tip fields of
 //!   [`near_tip_gradient`] (D5); [`elliptical_crack_block`], the penny mesh mapped onto an embedded elliptical crack (D3).
+//! * ADR 0610 (F-682): [`interaction_integral_curved`], the interaction integral on straight, circular and elliptical fronts
+//!   with the auxiliary fields in the frame of each point's foot ([`tip_frame`], [`curved_auxiliary`]) and the correction
+//!   terms of their curvature (D1); [`penny_crack_half_cylinder`], the half `x >= 0` of a whole cracked cylinder (D4).
 //!
 //! Linear elastic, isotropic, homogeneous material in the domain; no body force, no thermal strain; traction-free crack faces.
 
@@ -2204,4 +2207,841 @@ pub fn elliptical_crack_block(spec: &EllipticalCrack) -> Result<CrackedEllipse> 
         a,
         b,
     })
+}
+
+// ------------------------------------------------------------------------------------------ curved interaction integral
+
+/// A smooth plane front curve for the curved interaction integral (ADR 0610 D1).
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
+pub enum FrontCurve {
+    /// A straight line through `point`, the advance direction `advance` in the crack plane of normal `normal`.
+    Line {
+        /// A point of the line (in the crack plane).
+        point: Vec3,
+        /// The advance direction (made normal to `normal` and unit).
+        advance: Vec3,
+        /// The crack-plane normal.
+        normal: Vec3,
+    },
+    /// A circle of radius `radius` about `centre` (a point of the crack plane), the advance direction radial outward.
+    Circle {
+        /// The centre, in the crack plane.
+        centre: Vec3,
+        /// The crack-plane normal.
+        normal: Vec3,
+        /// The radius.
+        radius: f64,
+    },
+    /// An ellipse `X^2/a^2 + Y^2/b^2 = 1` about `centre` (in the crack plane), `X` along `major_axis`, `a > b`.
+    Ellipse {
+        /// The centre, in the crack plane.
+        centre: Vec3,
+        /// The crack-plane normal.
+        normal: Vec3,
+        /// The major axis (in the plane).
+        major_axis: Vec3,
+        /// The major semi-axis.
+        a: f64,
+        /// The minor semi-axis.
+        b: f64,
+    },
+}
+
+/// The near-tip frame of a point (ADR 0610 D1): the foot on the curve (the nearest point in the plane), the basis `(N, n, N
+/// x n)` there (`N` the in-plane outward normal), the local coordinates `x1 = (x - foot) . N`, `x2` the height above the
+/// plane, and the curvature `kappa` of the curve at the foot.
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
+pub struct TipFrame {
+    /// The foot on the curve.
+    pub foot: Vec3,
+    /// `[N, n, N x n]`.
+    pub basis: [Vec3; 3],
+    /// The in-plane distance from the foot along `N`.
+    pub x1: f64,
+    /// The height above the crack plane along `n`.
+    pub x2: f64,
+    /// The curvature of the curve at the foot (0 for a line).
+    pub curvature: f64,
+}
+
+/// The near-tip frame of `x` for `curve` (ADR 0610 D1). The foot of an ellipse, `(a cos t, b sin t)`, solves `(a^2 - b^2) sin
+/// t cos t - a X sin t + b Y cos t = 0` by Newton iterations from `atan2(a Y, b X)`. Refuses (key `"crack front"`) an invalid
+/// curve, a point on the axis of a circle, no convergence of the foot and a point at or beyond the centre of curvature (`1 +
+/// kappa x1 <= 0`).
+pub fn tip_frame(curve: &FrontCurve, x: Vec3) -> Result<TipFrame> {
+    const KEY: &str = "crack front";
+    let in_plane = |v: Vec3, n: Vec3, what: &str| unit_of(sub(v, scaled(n, dot(v, n))), KEY, what);
+    let frame = match *curve {
+        FrontCurve::Line { point, advance, normal } => {
+            let n = unit_of(normal, KEY, "the crack-plane normal")?;
+            let e = in_plane(advance, n, "the advance direction")?;
+            let d = sub(x, point);
+            let (x1, x2) = (dot(d, e), dot(d, n));
+            TipFrame {
+                foot: sub(sub(x, scaled(e, x1)), scaled(n, x2)),
+                basis: [e, n, cross(e, n)],
+                x1,
+                x2,
+                curvature: 0.0,
+            }
+        }
+        FrontCurve::Circle { centre, normal, radius } => {
+            let n = unit_of(normal, KEY, "the crack-plane normal")?;
+            if !(radius.is_finite() && radius > 0.0) {
+                return Err(invalid(KEY, format!("the radius {radius} must be finite and positive")));
+            }
+            let d = sub(x, centre);
+            let x2 = dot(d, n);
+            let p = sub(d, scaled(n, x2));
+            let rho = norm(p);
+            if !(rho > 0.0 && rho.is_finite()) {
+                return Err(invalid(
+                    KEY,
+                    format!("the point {x:?} is on the axis of the circular front"),
+                ));
+            }
+            let big_n = scaled(p, 1.0 / rho);
+            TipFrame {
+                foot: [
+                    centre[0] + radius * big_n[0],
+                    centre[1] + radius * big_n[1],
+                    centre[2] + radius * big_n[2],
+                ],
+                basis: [big_n, n, cross(big_n, n)],
+                x1: rho - radius,
+                x2,
+                curvature: 1.0 / radius,
+            }
+        }
+        FrontCurve::Ellipse {
+            centre,
+            normal,
+            major_axis,
+            a,
+            b,
+        } => {
+            let n = unit_of(normal, KEY, "the crack-plane normal")?;
+            if !(a.is_finite() && b.is_finite() && b > 0.0 && a > b) {
+                return Err(invalid(
+                    KEY,
+                    format!("the semi-axes a = {a}, b = {b}: an ellipse needs a > b > 0"),
+                ));
+            }
+            let u = in_plane(major_axis, n, "the major axis")?;
+            let v = cross(n, u);
+            let d = sub(x, centre);
+            let (xx, yy, x2) = (dot(d, u), dot(d, v), dot(d, n));
+            let c2 = a * a - b * b;
+            let mut t = (a * yy).atan2(b * xx);
+            let mut converged = false;
+            for _ in 0..60 {
+                let (st, ct) = t.sin_cos();
+                let f = c2 * st * ct - a * xx * st + b * yy * ct;
+                let df = c2 * (ct * ct - st * st) - a * xx * ct - b * yy * st;
+                let dt = f / df;
+                if !dt.is_finite() {
+                    break;
+                }
+                t -= dt;
+                if dt.abs() <= 1e-14 {
+                    converged = true;
+                    break;
+                }
+            }
+            if !converged {
+                return Err(invalid(
+                    KEY,
+                    format!("the foot of {x:?} on the elliptical front did not converge"),
+                ));
+            }
+            let (st, ct) = t.sin_cos();
+            let (foot_x, foot_y) = (a * ct, b * st);
+            let big_n = unit_of(
+                [
+                    b * ct * u[0] + a * st * v[0],
+                    b * ct * u[1] + a * st * v[1],
+                    b * ct * u[2] + a * st * v[2],
+                ],
+                KEY,
+                "the normal of the ellipse",
+            )?;
+            let foot = [
+                centre[0] + foot_x * u[0] + foot_y * v[0],
+                centre[1] + foot_x * u[1] + foot_y * v[1],
+                centre[2] + foot_x * u[2] + foot_y * v[2],
+            ];
+            let x1 = (xx - foot_x) * dot(big_n, u) + (yy - foot_y) * dot(big_n, v);
+            let curvature = a * b / (a * a * st * st + b * b * ct * ct).powf(1.5);
+            TipFrame {
+                foot,
+                basis: [big_n, n, cross(big_n, n)],
+                x1,
+                x2,
+                curvature,
+            }
+        }
+    };
+    let h = 1.0 + frame.curvature * frame.x1;
+    if h.is_nan() || h <= 0.0 {
+        return Err(invalid(
+            KEY,
+            format!("the point {x:?} is at or beyond the centre of curvature of the front (1 + kappa x1 = {h:.3e})"),
+        ));
+    }
+    Ok(frame)
+}
+
+/// The auxiliary field of one mode at a point near a curved front (ADR 0610 D1): the Williams gradient `G` of
+/// [`near_tip_gradient`] in the local coordinates of the [`TipFrame`], rotated into its basis (`H = R G R^T`), and its stress
+/// (`sigma^aux = C sym H`), global and local.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct CurvedAuxiliary {
+    /// The frame of the point.
+    pub frame: TipFrame,
+    /// `H[i][k]`, the auxiliary displacement gradient in global components.
+    pub grad: [[f64; 3]; 3],
+    /// The auxiliary stress in global components.
+    pub stress: [[f64; 3]; 3],
+    /// `G[a][b]` in the local basis.
+    pub local_grad: [[f64; 3]; 3],
+    /// The auxiliary stress in the local basis.
+    pub local_stress: [[f64; 3]; 3],
+}
+
+/// The auxiliary field of `mode` (unit stress intensity factor) at `x` for `curve`, shear modulus `mu`, Poisson's ratio `nu`
+/// (ADR 0610 D1). Refuses what [`tip_frame`] refuses and a point on the front (`r = 0`).
+pub fn curved_auxiliary(curve: &FrontCurve, mode: TipMode, x: Vec3, mu: f64, nu: f64) -> Result<CurvedAuxiliary> {
+    let frame = tip_frame(curve, x)?;
+    let lambda = 2.0 * mu * nu / (1.0 - 2.0 * nu);
+    curved_auxiliary_in(&frame, mode, lambda, mu, nu)
+}
+
+fn curved_auxiliary_in(frame: &TipFrame, mode: TipMode, lambda: f64, mu: f64, nu: f64) -> Result<CurvedAuxiliary> {
+    let (x1, x2) = (frame.x1, frame.x2);
+    let r = (x1 * x1 + x2 * x2).sqrt();
+    if r.is_nan() || r <= 0.0 {
+        return Err(invalid("crack front", "an integration point lies on the front line"));
+    }
+    let theta = x2.atan2(x1);
+    let (_, local) = near_tip_gradient(mode, r, theta, mu, nu);
+    let basis = &frame.basis;
+    let mut ga = [[0.0; 3]; 3];
+    for i in 0..3 {
+        for k in 0..3 {
+            let mut v = 0.0;
+            for (a, ba) in basis.iter().enumerate() {
+                for (b, bb) in basis.iter().enumerate() {
+                    v += ba[i] * local[a][b] * bb[k];
+                }
+            }
+            ga[i][k] = v;
+        }
+    }
+    Ok(CurvedAuxiliary {
+        frame: *frame,
+        grad: ga,
+        stress: hooke(&ga, lambda, mu),
+        local_grad: local,
+        local_stress: hooke(&local, lambda, mu),
+    })
+}
+
+/// `R^T A R` for the basis `R = [b_1 | b_2 | b_3]`.
+fn to_local(basis: &[Vec3; 3], m: &[[f64; 3]; 3]) -> [[f64; 3]; 3] {
+    let mut out = [[0.0; 3]; 3];
+    for a in 0..3 {
+        for b in 0..3 {
+            let mut v = 0.0;
+            for i in 0..3 {
+                for k in 0..3 {
+                    v += basis[a][i] * m[i][k] * basis[b][k];
+                }
+            }
+            out[a][b] = v;
+        }
+    }
+    out
+}
+
+impl CurvedAuxiliary {
+    /// The correction integrand `P_jk,j q_k = sigma^aux_ij,j u_i,k q_k + sigma_ij (H_ik,j - eps^aux_ij,k) q_k` at the point,
+    /// for an actual field in equilibrium with stress `sigma` and displacement gradient `grad_u[i][k] = du_i/dx_k` there and
+    /// the vector `q` (ADR 0610 D1: C1 + C2). Zero on a straight front.
+    pub fn correction(&self, sigma: &[[f64; 3]; 3], grad_u: &[[f64; 3]; 3], q: Vec3) -> f64 {
+        let kappa = self.frame.curvature;
+        if kappa == 0.0 {
+            return 0.0;
+        }
+        let basis = &self.frame.basis;
+        let h = 1.0 + kappa * self.frame.x1;
+        let s = to_local(basis, sigma);
+        let g_u = to_local(basis, grad_u);
+        let ql = [dot(q, basis[0]), dot(q, basis[1]), dot(q, basis[2])];
+        let g = &self.local_grad;
+        let sa = &self.local_stress;
+        // C1: div sigma^aux = (kappa/h) (sa_11 - sa_33, sa_21, 2 sa_13) against (grad u) q.
+        let d = [sa[0][0] - sa[2][2], sa[1][0], 2.0 * sa[0][2]];
+        let mut c1 = 0.0;
+        for a in 0..3 {
+            c1 += d[a] * (g_u[a][0] * ql[0] + g_u[a][1] * ql[1] + g_u[a][2] * ql[2]);
+        }
+        c1 *= kappa / h;
+        // C2, first part: -(kappa/h) [s_13 (G q)_3 - s_33 (G q)_1 - (s_13 G_11 + s_23 G_21 + s_33 G_31) q_3].
+        let gq = |a: usize| g[a][0] * ql[0] + g[a][1] * ql[1] + g[a][2] * ql[2];
+        let c2a = -(kappa / h)
+            * (s[0][2] * gq(2) - s[2][2] * gq(0) - (s[0][2] * g[0][0] + s[1][2] * g[1][0] + s[2][2] * g[2][0]) * ql[2]);
+        // C2, second part: (q_3/h) sum_ab (s Omega - Omega s)_ab eps^aux_ba, Omega_13 = kappa, Omega_31 = -kappa.
+        let mut omega = [[0.0; 3]; 3];
+        omega[0][2] = kappa;
+        omega[2][0] = -kappa;
+        let mut c2b = 0.0;
+        for a in 0..3 {
+            for b in 0..3 {
+                let mut comm = 0.0;
+                for c in 0..3 {
+                    comm += s[a][c] * omega[c][b] - omega[a][c] * s[c][b];
+                }
+                c2b += comm * 0.5 * (g[b][a] + g[a][b]);
+            }
+        }
+        c2b *= ql[2] / h;
+        c1 + c2a + c2b
+    }
+}
+
+/// The terms of [`interaction_integral_curved`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum CurvedTerms {
+    /// The domain integral and the correction terms of the auxiliary fields (ADR 0610 D1).
+    Corrected,
+    /// The domain integral only: not exact on a curved front (for comparison).
+    DomainOnly,
+}
+
+/// `K_I`, `K_II` and `K_III` at each station of a straight, circular or elliptical `front` by the interaction integral over
+/// ring `ring`, the auxiliary fields in the frame of each point's foot on the front (ADR 0610 D1): `M = int P_jk q_k,j dV + int
+/// P_jk,j q_k dV` (the second integral only with [`CurvedTerms::Corrected`]) divided by `int phi_j ds`; `K_I = E' M_I/2`,
+/// `K_II = E' M_II/2`, `K_III = mu M_III`, with `E, nu` of the element of the first front node. In a half-symmetric model
+/// `K_I` is doubled and `K_II = K_III = 0` (the antisymmetric modes vanish by symmetry). Refuses what [`j_integral`] refuses, a
+/// ring element of another `E, nu` and an integration point that [`tip_frame`] refuses.
+pub fn interaction_integral_curved(
+    model: &SolidModel,
+    displacement: &[f64],
+    front: &CrackFront,
+    ring: usize,
+    terms: CurvedTerms,
+) -> Result<Vec<ModeFactors>> {
+    let dofs = model.dof_map();
+    if displacement.len() != dofs.n_equations() {
+        return Err(FemError::FieldLength {
+            key: "displacement",
+            expected: dofs.n_equations(),
+            found: displacement.len(),
+        });
+    }
+    check_loads(model)?;
+    let mesh = model.mesh();
+    let geometry = front.check(mesh)?;
+    let n = geometry.n;
+    let x0g = geometry.x0;
+    let in_plane = |c: Vec3| {
+        let off = dot(sub(x0g, c), n);
+        [c[0] + off * n[0], c[1] + off * n[1], c[2] + off * n[2]]
+    };
+    let curve = match &geometry.kind {
+        FrontKind::Straight { x0, e, .. } => FrontCurve::Line {
+            point: *x0,
+            advance: *e,
+            normal: n,
+        },
+        FrontKind::Circular { centre, radius, .. } => FrontCurve::Circle {
+            centre: in_plane(*centre),
+            normal: n,
+            radius: *radius,
+        },
+        FrontKind::Elliptical { centre, u, a, b, .. } => FrontCurve::Ellipse {
+            centre: in_plane(*centre),
+            normal: n,
+            major_axis: *u,
+            a: *a,
+            b: *b,
+        },
+    };
+    let adjacency = node_elements(mesh);
+    let (elements, rho) = rings(mesh, &adjacency, &front.nodes, ring)?;
+    check_boundary(mesh, &geometry, &rho, ring)?;
+    let materials = model.material_indices()?;
+    let first = front.nodes[0];
+    let Some(&e0) = adjacency[first].first() else {
+        return Err(invalid(
+            "crack front",
+            format!("the front node {first} belongs to no element"),
+        ));
+    };
+    let (young0, nu0) = element_elastic(model, &materials, e0)?;
+    let n_st = geometry.stations.len();
+    let mut nodal: HashMap<usize, (Vec3, f64)> = HashMap::new();
+    for el in &elements {
+        for &a in mesh.element_nodes(*el) {
+            if rho[a] && !nodal.contains_key(&a) {
+                let x = mesh.nodes()[a];
+                nodal.insert(a, (geometry.advance(x)?, geometry.param(x)));
+            }
+        }
+    }
+    let modes = [TipMode::I, TipMode::II, TipMode::III];
+    let mut m_bar = vec![[0.0; 3]; n_st];
+    for &el in &elements {
+        let (young, nu) = element_elastic(model, &materials, el)?;
+        if young != young0 || nu != nu0 {
+            return Err(invalid(
+                "element",
+                format!(
+                    "element {el} has E = {young}, nu = {nu}, the element {e0} of the first front node E = {young0}, nu = \
+                     {nu0}: the interaction integral takes one material in the domain"
+                ),
+            ));
+        }
+        let lambda = young * nu / ((1.0 + nu) * (1.0 - 2.0 * nu));
+        let mu = young / (2.0 * (1.0 + nu));
+        let kind = mesh.element_kind(el);
+        let element = element_for(kind);
+        let nodes = mesh.element_nodes(el);
+        let coords: Vec<Vec3> = nodes.iter().map(|&a| mesh.nodes()[a]).collect();
+        let mut ue: Vec<Vec3> = Vec::with_capacity(nodes.len());
+        for &a in nodes {
+            let mut u = [0.0; 3];
+            for (c, uc) in u.iter_mut().enumerate() {
+                let q = dofs.equation(a, c).ok_or(FemError::MissingComponent {
+                    role: "displacement",
+                    node: a,
+                    component: c,
+                    available: dofs.components(a),
+                })?;
+                *uc = displacement[q];
+            }
+            ue.push(u);
+        }
+        let mut qa: Vec<Vec<Vec3>> = vec![vec![[0.0; 3]; nodes.len()]; n_st];
+        for (la, &a) in nodes.iter().enumerate() {
+            if let Some(&(dir, s)) = nodal.get(&a) {
+                for (j, qj) in qa.iter_mut().enumerate() {
+                    qj[la] = scaled(dir, geometry.hat(j, s));
+                }
+            }
+        }
+        let points = element
+            .integration_points(&coords, element.stiffness_rule())
+            .map_err(|source| FemError::Element {
+                element: el,
+                source: Box::new(source),
+            })?;
+        for ip in points {
+            let grad = &ip.geometry.grad;
+            let shape = &ip.geometry.n;
+            let mut du = [[0.0; 3]; 3];
+            for (a, g) in grad.iter().enumerate() {
+                for i in 0..3 {
+                    for k in 0..3 {
+                        du[i][k] += ue[a][i] * g[k];
+                    }
+                }
+            }
+            let sigma = hooke(&du, lambda, mu);
+            // Per station: dq[k][j] = dq_k/dx_j and q at the point.
+            let mut dq: Vec<Option<([[f64; 3]; 3], Vec3)>> = Vec::with_capacity(n_st);
+            for qj in &qa {
+                let mut d = [[0.0; 3]; 3];
+                let mut qp = [0.0; 3];
+                let mut any = false;
+                for (a, g) in grad.iter().enumerate() {
+                    let q = qj[a];
+                    if q == [0.0; 3] {
+                        continue;
+                    }
+                    any = true;
+                    for k in 0..3 {
+                        qp[k] += shape[a] * q[k];
+                        for j in 0..3 {
+                            d[k][j] += q[k] * g[j];
+                        }
+                    }
+                }
+                dq.push(any.then_some((d, qp)));
+            }
+            if dq.iter().all(Option::is_none) {
+                continue;
+            }
+            let frame = tip_frame(&curve, ip.geometry.x)?;
+            for (m, &mode) in modes.iter().enumerate() {
+                let aux = curved_auxiliary_in(&frame, mode, lambda, mu, nu)?;
+                let ga = &aux.grad;
+                let sigma_aux = &aux.stress;
+                let mut w_int = 0.0;
+                for i in 0..3 {
+                    for k in 0..3 {
+                        w_int += sigma[i][k] * 0.5 * (ga[i][k] + ga[k][i]);
+                    }
+                }
+                let mut p = [[0.0; 3]; 3];
+                for j in 0..3 {
+                    for k in 0..3 {
+                        let mut v = 0.0;
+                        for i in 0..3 {
+                            v += sigma[i][j] * ga[i][k] + sigma_aux[i][j] * du[i][k];
+                        }
+                        p[j][k] = v - if j == k { w_int } else { 0.0 };
+                    }
+                }
+                for (st, entry) in dq.iter().enumerate() {
+                    let Some((d, qp)) = entry else { continue };
+                    let mut v = 0.0;
+                    for j in 0..3 {
+                        for k in 0..3 {
+                            v += p[j][k] * d[k][j];
+                        }
+                    }
+                    if terms == CurvedTerms::Corrected {
+                        v += aux.correction(&sigma, &du, *qp);
+                    }
+                    m_bar[st][m] += ip.weight * v;
+                }
+            }
+        }
+    }
+    let e_prime = young0 / (1.0 - nu0 * nu0);
+    let mu0 = young0 / (2.0 * (1.0 + nu0));
+    let half = front.half_symmetric;
+    Ok((0..n_st)
+        .map(|j| {
+            let node = front.nodes[2 * j];
+            let weight = geometry.hat_integral(j);
+            let m = m_bar[j];
+            let (k_i, k_ii, k_iii) = if half {
+                (e_prime * m[0] / weight, 0.0, 0.0)
+            } else {
+                (
+                    0.5 * e_prime * m[0] / weight,
+                    0.5 * e_prime * m[1] / weight,
+                    mu0 * m[2] / weight,
+                )
+            };
+            ModeFactors {
+                station: j,
+                node,
+                position: mesh.nodes()[node],
+                s: geometry.stations[j],
+                k_i,
+                k_ii,
+                k_iii,
+                weight,
+            }
+        })
+        .collect())
+}
+
+/// The mesh of the half `x >= 0` of a whole cylinder (both sides of the crack) with a penny crack (ADR 0610 D4).
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub struct CrackedHalfCylinder {
+    /// The Hex20 mesh (element set `all`; node sets `all`, `x0`, `top_centre`, `bottom_centre`; surface sets `top`, `bottom`,
+    /// `side`).
+    pub mesh: SolidMesh,
+    /// The front nodes at `z = 0`, radius `a`, ordered by angle from `-pi/2` (at `(0, -a, 0)`) to `pi/2`.
+    pub front: Vec<usize>,
+}
+
+impl CrackedHalfCylinder {
+    /// The front as a [`CrackFront`]: circular about the origin, normal `z` (a full model on both sides of the crack).
+    pub fn crack_front(&self) -> CrackFront {
+        CrackFront::circular(self.front.clone(), [0.0, 0.0, 1.0], [0.0; 3])
+    }
+}
+
+/// The half `x >= 0` of the whole cylinder `-H <= z <= H` of radius `R` with a penny crack of radius `a` on `z = 0` (ADR 0610
+/// D4): the plane mesh of [`penny_crack_cylinder`] (the same parameters) reflected in `y`, extruded over both sides of the
+/// crack plane, the nodes of `z = 0` inside the crack doubled (the lower face), Hex20 with the circumferential edges of the
+/// polar region on their circles. Refuses what [`penny_crack_cylinder`] refuses.
+pub fn penny_crack_half_cylinder(spec: &PennyCrack) -> Result<CrackedHalfCylinder> {
+    const KEY: &str = "penny crack";
+    let PennyCrack {
+        radius: a,
+        cylinder_radius: big_r,
+        half_height: hh,
+        h0,
+        uniform_layers: n_u,
+        n_theta,
+        core_side: s,
+        transition_layers: n_t,
+        transition_radius: r_t,
+        inner_growth: g_in,
+        outer_growth: g_out,
+    } = *spec;
+    positive(
+        KEY,
+        &[
+            ("a", a),
+            ("R", big_r),
+            ("H", hh),
+            ("h0", h0),
+            ("s", s),
+            ("r_t", r_t),
+            ("inner growth", g_in),
+            ("outer growth", g_out),
+        ],
+    )?;
+    let zone = n_u as f64 * h0;
+    if n_u == 0
+        || n_theta < 2
+        || n_theta % 2 != 0
+        || n_t == 0
+        || g_in <= 1.0
+        || g_out <= 1.0
+        || s * 2f64.sqrt() >= r_t
+        || r_t >= a - zone
+        || a + zone >= big_r
+        || zone >= hh
+    {
+        return Err(invalid(
+            KEY,
+            format!(
+                "needs n_theta even >= 2, layers >= 1, growth > 1 and s sqrt 2 < r_t < a - n_u h0, a + n_u h0 < R, n_u h0 < H \
+                 ({spec:?})"
+            ),
+        ));
+    }
+    // The plane quarter of ADR 0547 D8 (as in penny_crack_cylinder).
+    let m = n_theta / 2;
+    let mut radii = vec![r_t];
+    let inner = graded(a - zone - r_t, h0, g_in);
+    for d in inner.iter().rev().skip(1) {
+        radii.push(a - zone - d);
+    }
+    for i in 0..n_u {
+        radii.push(a - (n_u - i) as f64 * h0);
+    }
+    let k_a = radii.len();
+    radii.push(a);
+    for i in 1..=n_u {
+        radii.push(a + i as f64 * h0);
+    }
+    for d in graded(big_r - a - zone, h0, g_out) {
+        radii.push(a + zone + d);
+    }
+    *radii.last_mut().expect("nonempty") = big_r;
+    let mut zs = vec![0.0];
+    for i in 1..=n_u {
+        zs.push(i as f64 * h0);
+    }
+    for d in graded(hh - zone, h0, g_out) {
+        zs.push(zone + d);
+    }
+    *zs.last_mut().expect("nonempty") = hh;
+    let angle = |l: usize| -> (f64, f64) {
+        if l == 0 {
+            (1.0, 0.0)
+        } else if l == n_theta {
+            (0.0, 1.0)
+        } else {
+            let th = 0.5 * PI * l as f64 / n_theta as f64;
+            (th.cos(), th.sin())
+        }
+    };
+    let mut p2: Vec<[f64; 2]> = Vec::new();
+    for j in 0..=m {
+        for i in 0..=m {
+            p2.push([s * i as f64 / m as f64, s * j as f64 / m as f64]);
+        }
+    }
+    let core = |i: usize, j: usize| i + (m + 1) * j;
+    let square = |l: usize| if l <= m { core(m, l) } else { core(2 * m - l, m) };
+    let n_core = (m + 1) * (m + 1);
+    for tau in 1..=n_t {
+        let f = tau as f64 / n_t as f64;
+        for l in 0..=n_theta {
+            let sp = p2[square(l)];
+            let (c, sn) = angle(l);
+            let cp = [r_t * c, r_t * sn];
+            if tau == n_t {
+                p2.push(cp);
+            } else {
+                p2.push([(1.0 - f) * sp[0] + f * cp[0], (1.0 - f) * sp[1] + f * cp[1]]);
+            }
+        }
+    }
+    for &rk in &radii[1..] {
+        for l in 0..=n_theta {
+            let (c, sn) = angle(l);
+            p2.push([rk * c, rk * sn]);
+        }
+    }
+    let layers = n_t + radii.len() - 1;
+    let ring_node = |layer: usize, l: usize| {
+        if layer == 0 {
+            square(l)
+        } else {
+            n_core + (layer - 1) * (n_theta + 1) + l
+        }
+    };
+    let mut quads: Vec<[usize; 4]> = Vec::new();
+    for j in 0..m {
+        for i in 0..m {
+            quads.push([core(i, j), core(i + 1, j), core(i + 1, j + 1), core(i, j + 1)]);
+        }
+    }
+    for layer in 0..layers {
+        for l in 0..n_theta {
+            quads.push([
+                ring_node(layer, l),
+                ring_node(layer + 1, l),
+                ring_node(layer + 1, l + 1),
+                ring_node(layer, l + 1),
+            ]);
+        }
+    }
+    // Reflected in y: the nodes on y = 0 shared, the reflected quads reversed (counter-clockwise again).
+    let mut refl = vec![0usize; p2.len()];
+    let mut ph = p2.clone();
+    for (i, p) in p2.iter().enumerate() {
+        if p[1] == 0.0 {
+            refl[i] = i;
+        } else {
+            refl[i] = ph.len();
+            ph.push([p[0], -p[1]]);
+        }
+    }
+    let mut qh = quads.clone();
+    for q in &quads {
+        qh.push([refl[q[0]], refl[q[3]], refl[q[2]], refl[q[1]]]);
+    }
+    // Levels -H .. 0 .. H; the crack plane is level nz.
+    let nz = zs.len() - 1;
+    let mut levels: Vec<f64> = zs[1..].iter().rev().map(|z| -z).collect();
+    levels.extend_from_slice(&zs);
+    let n2 = ph.len();
+    let crack: Vec<bool> = ph
+        .iter()
+        .map(|p| (p[0] * p[0] + p[1] * p[1]).sqrt() < a * (1.0 - 1e-9))
+        .collect();
+    let mut nodes = Vec::with_capacity(n2 * levels.len() + n2);
+    for &z in &levels {
+        for p in &ph {
+            nodes.push([p[0], p[1], z]);
+        }
+    }
+    let mut lower = vec![usize::MAX; n2];
+    for (i, p) in ph.iter().enumerate() {
+        if crack[i] {
+            lower[i] = nodes.len();
+            nodes.push([p[0], p[1], 0.0]);
+        }
+    }
+    let id = |n: usize, k: usize| n + n2 * k;
+    let mut conn = Vec::with_capacity(8 * qh.len() * 2 * nz);
+    for k in 0..2 * nz {
+        let top = |n: usize| {
+            if k + 1 == nz && crack[n] {
+                lower[n]
+            } else {
+                id(n, k + 1)
+            }
+        };
+        for q in &qh {
+            conn.extend_from_slice(&[
+                id(q[0], k),
+                id(q[1], k),
+                id(q[2], k),
+                id(q[3], k),
+                top(q[0]),
+                top(q[1]),
+                top(q[2]),
+                top(q[3]),
+            ]);
+        }
+    }
+    let mut mesh = SolidMesh::new(nodes)?;
+    mesh.add_block(ElementKind::Hex8, conn)?;
+    let ne = mesh.n_elements();
+    mesh.add_element_set("all", (0..ne).collect())?;
+    mesh.add_node_set("all", (0..mesh.nodes().len()).collect())?;
+    let x0: Vec<usize> = (0..mesh.nodes().len()).filter(|&i| mesh.nodes()[i][0] == 0.0).collect();
+    mesh.add_node_set("x0", x0)?;
+    mesh.add_node_set("top_centre", vec![id(core(0, 0), 2 * nz)])?;
+    mesh.add_node_set("bottom_centre", vec![id(core(0, 0), 0)])?;
+    let (mut top, mut bottom, mut side) = (Vec::new(), Vec::new(), Vec::new());
+    for (_, faces) in mesh.face_incidence() {
+        if faces.len() != 1 {
+            continue;
+        }
+        let f = faces[0];
+        let pts: Vec<Vec3> = mesh.face_nodes(f).iter().map(|&i| mesh.nodes()[i]).collect();
+        if pts.iter().all(|p| p[2] >= hh * (1.0 - 1e-12)) {
+            top.push(f);
+        } else if pts.iter().all(|p| p[2] <= -hh * (1.0 - 1e-12)) {
+            bottom.push(f);
+        } else if pts
+            .iter()
+            .all(|p| (p[0] * p[0] + p[1] * p[1]).sqrt() >= big_r * (1.0 - 1e-12))
+        {
+            side.push(f);
+        }
+    }
+    mesh.add_surface_set("top", top)?;
+    mesh.add_surface_set("bottom", bottom)?;
+    mesh.add_surface_set("side", side)?;
+    let (mesh, mids) = upgrade_to_hex20(&mesh)?;
+    // The circumferential mid-edge nodes onto their circles (as penny_crack_cylinder).
+    let mut moved = mesh.nodes().to_vec();
+    let rho = |p: Vec3| (p[0] * p[0] + p[1] * p[1]).sqrt();
+    for mnode in &mids {
+        let (pa, pb) = (moved[mnode.ends[0]], moved[mnode.ends[1]]);
+        let (ra, rb) = (rho(pa), rho(pb));
+        if ra >= r_t * (1.0 - 1e-12) && (ra - rb).abs() <= 1e-12 * ra {
+            let p = moved[mnode.node];
+            let rp = rho(p);
+            if rp > 0.0 {
+                let f = ra / rp;
+                moved[mnode.node] = [p[0] * f, p[1] * f, p[2]];
+            }
+        }
+    }
+    let mut out = SolidMesh::new(moved)?;
+    for b in mesh.blocks() {
+        out.add_block(b.kind(), b.connectivity().to_vec())?;
+    }
+    for name in mesh.node_set_names() {
+        out.add_node_set(name, mesh.node_set(name).expect("listed").to_vec())?;
+    }
+    for name in mesh.element_set_names() {
+        out.add_element_set(name, mesh.element_set(name).expect("listed").to_vec())?;
+    }
+    for name in mesh.surface_set_names() {
+        out.add_surface_set(name, mesh.surface_set(name).expect("listed").to_vec())?;
+    }
+    let mid: HashMap<(usize, usize), usize> = mids
+        .iter()
+        .map(|m| ((m.ends[0].min(m.ends[1]), m.ends[0].max(m.ends[1])), m.node))
+        .collect();
+    let front_layer = n_t + k_a;
+    let mut corners: Vec<usize> = (1..=n_theta)
+        .rev()
+        .map(|l| id(refl[ring_node(front_layer, l)], nz))
+        .collect();
+    corners.extend((0..=n_theta).map(|l| id(ring_node(front_layer, l), nz)));
+    let mut front = Vec::with_capacity(2 * corners.len() - 1);
+    for (k, &c) in corners.iter().enumerate() {
+        if k > 0 {
+            let p = corners[k - 1];
+            front.push(
+                *mid.get(&(p.min(c), p.max(c)))
+                    .ok_or_else(|| invalid(KEY, format!("no mid-edge node between {p} and {c}")))?,
+            );
+        }
+        front.push(c);
+    }
+    Ok(CrackedHalfCylinder { mesh: out, front })
 }
