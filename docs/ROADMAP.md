@@ -12236,19 +12236,33 @@ fixed by the item's registration ADR before any code.
     into the warping unknown of ADR 0546 on the buckling path; the case with the key reproduces the library result bit
     for bit, and every case without it keeps its hash.
   - note: Structural solver, advanced tier. Follow-up of F-598 (ADR 0546, 2026-11-15).
-- [ ] **F-626** Warping unknown on the static solve, modes and pre-stressed modes
+- [x] **F-626** Warping unknown on the static solve, modes and pre-stressed modes
   - depends on: F-598
   - acceptance: Every limit not stated here is registered in the ADR before the run. The static twist of a cantilever I
     beam under end torque with the root warping held equals (T/(G J))(L - tanh(kL)/k) within 1e-3 at 16 elements, and
     the lateral-torsional buckling factor of a beam whose reference load includes torsion uses the warping static solve;
     every result without the option bit-identical.
-  - note: Structural solver, advanced tier. Follow-up of F-598 (ADR 0546, 2026-11-15).
+  - note: Structural solver, advanced tier. DONE. ADR 0548, 2026-11-15: the warping unknown of ADR 0546 on the static
+    solve (`rcfd_fem::beam_warping::solve_static`, the 14-unknown stiffness, restrained warping, bimoment reactions), on
+    the modes (`modal_analysis`, a 14-unknown consistent mass with the Hermite twist, no warping inertia) and on the
+    pre-stressed modes (`prestressed_modes`). The pre-stress of the warping static solve
+    (`WarpingPrestress::from_static`) carries the total torque G J phi' - E C_w phi''', and RF8 is lifted for it
+    (`buckling_factors_with`). Cantilever I beam with the root warping held: 1.07e-6 of (T/(G J))(L - tanh(kL)/k) at 16
+    elements (1.7e-5 at 8; root bimoment 3.5e-6). Indeterminate torque split 1.4e-6 of the closed form.
+    Lateral-torsional factor with torsion in the reference load 5.4e-8 of the factor from the closed-form split, while
+    the Saint-Venant split gives 2.6e-2. Torsional frequencies 7.2e-7, 2.2e-5 and 1.4e-4 of (G J k^2 + E C_w k^4)/(rho
+    I_p) (m = 1 to 3). With axial pre-stress +/-0.5 of the torsional buckling load, 4.8e-7 and 1.4e-6. Pre-stressed
+    modes with torque 5e-8 of the closed-form split. Defaults and the ADR 0546 path bit-identical (11 digests). Eleven
+    of eleven mutations caught. No case-file key, no bimoment load, no warping inertia. Follow-up F-635 (harmonic and
+    transient paths).
 - [ ] **F-627** Monosymmetric thin-walled sections for the warping element
   - depends on: F-598
   - acceptance: Every limit not stated here is registered in the ADR before the run. The lateral-torsional buckling
     moment of a simply supported monosymmetric I under uniform moment equals the published closed form with beta_x
     within 2 percent at 16 elements; doubly symmetric results unchanged.
-  - note: Structural solver, advanced tier. Follow-up of F-598 (ADR 0546, 2026-11-15).
+  - note: Structural solver, advanced tier. Follow-up of F-598 (ADR 0546, 2026-11-15). ADR 0548: the bimoment load and
+    the bimoment pre-stress (beta_omega, zero for doubly symmetric sections, not modelled in ADR 0548) belong to this
+    item.
 - [ ] **F-628** Shells in the cyclic constraint
   - depends on: F-541, F-522
   - acceptance: Every limit not stated here is registered in the ADR before the run. The cyclic rows of
@@ -12299,3 +12313,10 @@ fixed by the item's registration ADR before any code.
     states the `h^2/(R t)` mesh requirement measured in ADR 0550 and when to choose
     `Load::shell_pressure_angle_weighted`; docs_site test passes.
   - note: Structural solver, advanced tier. Follow-up of F-546 (ADR 0550, 2026-11-15).
+- [ ] **F-635** Warping unknown on the harmonic and transient paths
+  - depends on: F-626
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The harmonic response of a
+    fork-supported I beam under a harmonic end torque, and the transient twist of the same beam under a step torque, use
+    the 14-unknown stiffness and mass of ADR 0548. The first torsional resonance equals sqrt((G J k^2 + E C_w k^4)/(rho
+    I_p)) within 1e-3 at 16 elements; every result without the option bit-identical.
+  - note: Structural solver, advanced tier. Follow-up of F-626 (ADR 0548, 2026-11-15).
