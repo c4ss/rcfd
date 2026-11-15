@@ -208,3 +208,60 @@ limit and number) or a mutation is not caught. **Todo** if the check cannot be b
 - The edge angle does not measure the twist of the mesh as a whole, the thickness or the membrane share of a mode, which scale
   the excess (ADR 0483 P3).
 - Only edges shared by two Shell3 elements are measured; Shell3 facets adjacent to Shell4 facets are not.
+
+## Addendum 1: results (2026-11-14)
+
+Code: `shell3.rs` appended by 120 lines (`WARP_ANGLE_DEGREES`, `WarpedBlock`, `WarpReport`, `warped_membrane_report`; no existing line changed), tests `tests/sa_shell3_warp.rs` (W1 to W14) and `tests/sa_shell3_warp_bits.rs` (B1). The bit record B1 was written and run on the base c1122807 with this ADR committed (log `f574-scratch/b1-base.log`) and passes unchanged with the code; its twist 30 stiffness and frequency digests equal those of the F-556 record (`d80a_f026_ecce_c7b8`, `1734_d0db_ccaa_9a20`), an independent cross-check. Each registered run was made once. One set-up slip, not a result: the first run of `sa_shell3_warp.rs` stopped in the builder of the fold models (W9, W10) with `UnknownSet` (no element set "all"); the builder was completed and the two tests run again; no limit or check changed, and no other test was affected.
+
+| id | measured | limit | met |
+|---|---|---|---|
+| W1 12 x 36, 30 deg | 1 block, block 0, 1248 edges, largest angle within 1e-8 of 1.1784282153278391 | counts exact, 1e-8 deg | yes |
+| W2 12 x 36, 15 deg | 1 block, 1248 edges, largest angle within 1e-8 of 0.5892452638404285 | same | yes |
+| W3 flat strip | empty at 0.4 and at 1e-300 | empty | yes |
+| W4 refinements | 24 x 72 at 30: 1 block, 5088 edges, 0.5892452638410471 (1e-8); empty at 24 x 72 / 15, 48 x 144 / 15 and 30 | exact | yes |
+| W5 message text | equal to the registered text character for character | exact | yes |
+| W6 ANDES, Allman | empty both | empty | yes |
+| W7 Shell4 strip | empty | empty | yes |
+| W8 mixed model | only block 0, 1248 edges | block 0 only | yes |
+| W9 fold 60 degrees, both node orders | 60 within 1e-8, 1 edge | 1e-8 | yes |
+| W10 three-facet edge | empty | empty | yes |
+| W11 strictness | empty at the largest angle itself; one block at the next smaller `f64` | as stated | yes |
+| W12 validation | the five values refused with key `threshold`; 180 accepted | exact | yes |
+| W13 no Shell3 | empty (Shell4 strip, Hex8 box) | empty | yes |
+| W14 constant | 0.4, report threshold 0.4 | exact | yes |
+| B1 bits | 8 digests equal to the base record | equal | yes |
+| B2 | `cargo test -p rcfd-fem --release` 949 passed, 0 failed, 265 ignored; `baseline_hashes` 3 passed, 1 ignored, table unchanged; `docs_site` 2 passed | all pass | yes |
+
+Mutations (scratch copy of the final commit `f574-scratch/mut`, script `f574-scratch/mutate.py`, own target directory, logs `mut_MU*.log`; the check file `sa_shell3_warp.rs`):
+
+| id | caught by |
+|---|---|
+| MU1 radians against degrees | W1, W2, W4, W5, W8, W9, W11 |
+| MU2 every Shell3 block considered | W6, W8 |
+| MU3 Allman not excluded | W6 |
+| MU4 no orientation flip | W9 |
+| MU5 `>=` | W11 |
+| MU6 three-facet edge not skipped | W10 |
+| MU7 minimum in place of maximum | W1, W2, W4, W5, W11 |
+| MU8 count per element, not per edge | W1, W2, W4, W5, W8, W9 |
+| MU9 validation removed | W12 |
+| MU10 constant 0.3 | W14, W5 (not W4, as registered: with 0.3 the 48 x 144 case at 30 degrees, 0.2946, is still below it) |
+
+All ten caught. `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean.
+
+Decision by the registered rule: **done**. Every clause is met: the check exists and is opt-in (a1, naming the ANDES membrane in the text), fires at 15 and 30 degrees and not on the flat strip (a2), and nothing on any default path changed (a3: no existing line edited, B1 and B2).
+
+Not run: no solution with the check (it reads the mesh only); the check on any mesh other than the strips and the registered folds.
+
+### Remaining questions
+
+1. **A case-file key, CLI or MCP flag, or an automatic call.** Options: (a) none, the library function only; (b) a case-file key that prints the messages on load (adds a key to the schema golden); (c) call it from the validators (changes default messages). Recommendation (a) now; (b) when the maintainer approves the schema golden edit (the golden may not be edited by an agent, rule 3). Open, not taken.
+2. **The threshold of 0.4 degrees.** It is a screening level from one geometry (arithmetic 3). Options: keep it; register a second family (a doubly curved shell against a solid reference) before any wider use. Recommendation: keep, and treat a second family as a follow-up only if the check is wired into the case file.
+
+### For the lead: roadmap entries
+
+Proposed status of F-574: **done**.
+
+> Structural solver, advanced tier. Optional, low priority. Follow-up of F-556 (ADR 0483, 2026-11-14). ADR 0537, 2026-11-14: opt-in library check shell3::warped_membrane_report (with WARP_ANGLE_DEGREES = 0.4 degrees, registered from the ADR 0483 records: the 5e-3 excess level lies at a largest facet angle of 0.41 degrees between the 48 x 144 and 24 x 72 strips at 30 degrees). It reports Shell3 blocks with the constant-strain membrane that have an edge shared with one other Shell3 facet whose oriented normals meet above the threshold, with the edge count, the largest angle and a message naming the ANDES membrane of ADR 0466 and the 4.05 percent of ADR 0483. On the twisted strip of ADR 0473 (12 x 36) it fires at 15 degrees (largest angle 0.5892) and 30 degrees (1.1784), not on the flat strip; ANDES, Allman and Shell4 blocks and three-facet edges are not reported. Nothing on a default path changed (no existing line edited, bit record of 8 digests). Ten of ten mutations caught. Not wired into the case file, the CLI or the validators (a schema golden change; open).
+
+No follow-up item is proposed; the case-file key is the maintainer's question 1.
