@@ -19,6 +19,7 @@
 //! ([`crate::shell::layup_body_load_vector_at`]) and the nodal body-force field over its total thickness; one isotropic ply
 //! the call of its `Shell` twin. Shell3 elements take the same loads from [`crate::shell3`] (ADR 0454);
 //! [`Load::ShellPressureAngleWeighted`] shares each Shell3 element's pressure force by its angles (ADR 0461).
+//! [`Load::ShellPressureCurvature`] gives a Shell3 set the curvature-scaled area-gradient load of ADR 0567.
 //!
 //! Face integrals use the face functions of Tri3, Quad4, Tri6 and the 8-node face of Hex20 ([`face_shape_functions`]) in
 //! the local face orders of ADR 0271 and ADR 0292 and the face rules of [`face_rule`] (the 8-node arms: ADR 0383); body integrals use the element's mass rule (ADR 0276 arithmetic 2: exact for
@@ -143,6 +144,13 @@ pub fn nodal_load_vector(model: &SolidModel, extra: &[NodalForceAt]) -> Result<V
                 for &e in elements {
                     add_shell_pressure(&mut f, &dofs, mesh, e, *pressure, true)?;
                 }
+            }
+            Load::ShellPressureCurvature { set, pressure } => {
+                let elements = mesh.element_set(set).ok_or_else(|| FemError::UnknownSet {
+                    kind: crate::error::SetKind::Element,
+                    name: set.clone(),
+                })?;
+                add_shell_pressure_curvature(&mut f, &dofs, mesh, elements, *pressure)?;
             }
             Load::Traction { set, traction } => {
                 for &face in surface(mesh, set)? {
@@ -405,6 +413,35 @@ fn add_shell_pressure(
     for (a, &node) in nodes.iter().enumerate() {
         add_force(f, dofs, node, &[fe[6 * a], fe[6 * a + 1], fe[6 * a + 2]])?;
         add_moment(f, dofs, node, &[fe[6 * a + 3], fe[6 * a + 4], fe[6 * a + 5]])?;
+    }
+    Ok(())
+}
+
+/// The curvature-scaled area-gradient pressure on a set of Shell3 elements (ADR 0567 design 1, 5): the nodal forces of
+/// [`crate::shell3_curvature::pressure_load_curvature`], added in ascending node order.
+fn add_shell_pressure_curvature(
+    f: &mut [f64],
+    dofs: &DofMap,
+    mesh: &SolidMesh,
+    elements: &[usize],
+    p: f64,
+) -> Result<()> {
+    let mut tris = Vec::with_capacity(elements.len());
+    for &e in elements {
+        if mesh.element_kind(e) != crate::mesh::ElementKind::Shell3 {
+            return Err(FemError::InvalidValue {
+                key: "shell pressure",
+                reason: format!(
+                    "element {e} is a {} element: the curvature shell pressure acts on Shell3 elements (ADR 0567)",
+                    mesh.element_kind(e).name()
+                ),
+            });
+        }
+        let n = mesh.element_nodes(e);
+        tris.push([n[0], n[1], n[2]]);
+    }
+    for (node, force) in crate::shell3_curvature::pressure_load_curvature(mesh.nodes(), &tris, p)? {
+        add_force(f, dofs, node, &force)?;
     }
     Ok(())
 }
