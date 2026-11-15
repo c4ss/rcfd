@@ -244,3 +244,33 @@ TR1 or B0 missed.
   Recommendation (a).
 - **Q2. A pre-stress on the warping harmonic path** (as `DirectHarmonicOptions::prestress`). Recommendation: a separate item when
   a case needs it.
+
+## Amendment 1 (2026-11-15): the plain harmonic and transient paths refuse beams (B0, H7, TR5 set-ups corrected)
+
+Written after the first attempt to record B0 on the base (log `f635-scratch/b0_base.log`) and before any library code and any
+run of the other checks. The attempt stopped at its first call: `DirectHarmonic::new` of the fork beam returns
+`FemError::NotYetSupported { item: "element kind", variant: "Beam2", location: "block 0", package: "a follow-up of ADR 0417" }`.
+On reading the entries (after the attempt, disclosed): `harmonic_direct::DirectHarmonic::new` calls `check_supported`,
+`harmonic.rs` likewise, and `transient::Integrator::new` calls `check_supported_solids_with_materials`; none of the three takes
+a Beam2 block. The registered set-ups that call them on the beam (the plain digests of B0, the negative controls H7 and TR5)
+are therefore defective; no digest was printed and no limit was compared. The limits of every other check are unchanged.
+
+Corrections (the old set-ups are not run; there is no record of them beyond this text and the log):
+
+- **B0** (D7 corrected): the plain harmonic and transient digests are replaced by **B0r**: `DirectHarmonic::new` (undamped and
+  with a loss factor) and `transient::Integrator::new` of the fork beam under the midspan torque are refused with the error
+  above, before and after (compared by `{:?}` of the error, exact). The ADR 0548 warping digests of D7 (static solve with and
+  without a bimoment, displacement and reactions; modes) stay, and the plain `modal::modal_analysis` of the fork beam (4 modes,
+  eigenvalues and modes) is added. The file is rewritten accordingly and run once on the base.
+- **H7'** (negative control, in place of H7): D5 on `WarpingHarmonic` with `WarpingSection::saint_venant()` (`C_w = 0`, the
+  Hermite twist of the same element): `|omega_r/sqrt(C3) - 1| > 0.1`. Estimate (`arith_a1.py`, log `arith_a1.log`): `0.194`
+  (5 secant steps; it lands on `G J k^2/(rho I_p)` to `1.9e-9`).
+- **TR5'** (negative control, in place of TR5): TR1 on `WarpingTransient` with `saint_venant()`: `> 0.5`. Estimate `3.27`.
+- A further fact the attempt shows, registered as a check (**PB**): the plain harmonic and transient paths do not take beams at
+  all, so the warping paths of D2 and D3 are the only harmonic and transient paths a beam has; nothing of the defaults changes
+  (B0r).
+
+The decision rule reads B0 as B0 with B0r, H7 as H7', TR5 as TR5'. These corrections were made before the run of the corrected
+checks; the rule treats a check met only after a post-run amendment as partial: B0 is such a check only if a reader counts the
+failed first attempt as its run (it compared nothing); this is recorded and left to the lead (Addendum 1 says how it is
+counted).
