@@ -122,7 +122,10 @@ impl fmt::Display for PencilError {
             ),
             PencilError::Factor(e) => write!(f, "the factor of A - sigma B failed: {e}"),
             PencilError::InfiniteEigenvalue => {
-                write!(f, "a wanted Ritz value of (A - sigma B)^-1 B is zero (an infinite eigenvalue)")
+                write!(
+                    f,
+                    "a wanted Ritz value of (A - sigma B)^-1 B is zero (an infinite eigenvalue)"
+                )
             }
             PencilError::Dense(e) => write!(f, "the eigensolver of the Hessenberg matrix failed: {e}"),
             PencilError::NotConverged { steps, worst } => write!(
@@ -229,7 +232,12 @@ fn wanted(values: &[C64], count: usize) -> Vec<usize> {
             .abs()
             .partial_cmp(&values[i].abs())
             .unwrap_or(std::cmp::Ordering::Equal)
-            .then(values[j].im.partial_cmp(&values[i].im).unwrap_or(std::cmp::Ordering::Equal))
+            .then(
+                values[j]
+                    .im
+                    .partial_cmp(&values[i].im)
+                    .unwrap_or(std::cmp::Ordering::Equal),
+            )
     });
     let mut take: Vec<usize> = idx.iter().take(count.min(idx.len())).copied().collect();
     if let Some(&last) = take.last() {

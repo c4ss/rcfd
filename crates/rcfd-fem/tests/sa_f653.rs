@@ -3,19 +3,24 @@
 //! symmetric tangent against `tangent_modes` (F5), the full buckling path (F6 to F8) and the refusals (F9). Each registered
 //! run is made once; a miss stays as an ignored `*_known_miss` test with its limit.
 
+use rcfd_fem::assemble::stiffness;
 use rcfd_fem::buckling::{factors, BucklingOptions};
 use rcfd_fem::builders::hex_box;
+use rcfd_fem::constraint::{prescribed_equations, reduce};
 use rcfd_fem::follower::{
     buckling_factors, buckling_factors_full, tangent_modes, tangent_modes_full, ComplexModes, FollowerPressure,
 };
+use rcfd_fem::geometric::geometric_stiffness;
 use rcfd_fem::geometric::Prestress;
 use rcfd_fem::hex20::upgrade_to_hex20;
+use rcfd_fem::mass::consistent;
 use rcfd_fem::modal::ModalOptions;
-use rcfd_fem::nonlinear::{initial_states, Contribution};
+use rcfd_fem::nonlinear::{initial_states, tangent, Contribution};
 use rcfd_fem::solve::{solve_static, StaticOptions};
 use rcfd_fem::{Constraint, FemError, LinearTerm, Load, Material, SolidModel};
 use rcfd_linalg::complex::C64;
 use rcfd_linalg::eigen::{ResidualTest, Shift};
+use rcfd_linalg::CsrMatrix;
 use std::f64::consts::PI;
 
 struct Checks {
@@ -93,12 +98,7 @@ fn setup() -> Beck {
     let s = solve_static(&dead, &StaticOptions::default()).unwrap();
     let ulin = s.displacement_values().to_vec();
     let pre = Prestress::from_static(&dead, &s).unwrap();
-    Beck {
-        model,
-        dead,
-        ulin,
-        pre,
-    }
+    Beck { model, dead, ulin, pre }
 }
 
 /// `tangent_modes_full` at the load coefficient `p` (in `E I/L^2`) about `u = (p/20) u_lin`.
@@ -117,8 +117,8 @@ fn max_res(r: &[f64]) -> f64 {
     r.iter().fold(0.0f64, |m, &x| m.max(x))
 }
 
-#[test]
-fn f1_f2_f3_beck_flutter() {
+/// F1 to F3 (ADR 0580); with `f3` false the residual check F3 is left out (amendment 2).
+fn beck_flutter(f3: bool) {
     let mut ck = Checks::new();
     let b = setup();
     let fp = FollowerPressure::new(&b.model, "xmax", p_ref()).unwrap();
@@ -169,12 +169,32 @@ fn f1_f2_f3_beck_flutter() {
             })
             .unwrap();
         let w = pair.re * RHO * B * H * L.powi(4) / ei();
-        println!("coalescence Omega^2 = {w:.8} (+/- i {:.3e})", pair.im * RHO * B * H / ei());
+        println!(
+            "coalescence Omega^2 = {w:.8} (+/- i {:.3e})",
+            pair.im * RHO * B * H / ei()
+        );
         ck.at_most("F2 |Omega^2/121.34251 - 1|", (w / W_CR - 1.0).abs(), 2e-2);
         ck.record("F2 Omega^2/121.34251 - 1", w / W_CR - 1.0);
     }
-    ck.at_most("F3 max residual over every evaluation", res, 1e-8);
+    if f3 {
+        ck.at_most("F3 max residual over every evaluation", res, 1e-8);
+    } else {
+        ck.record("F3 max residual over every evaluation", res);
+    }
     ck.finish();
+}
+
+/// The registered run of 70d27737 missed F3 (measured `1.96e-8`, limit `1e-8`; ADR 0580 amendment 2, addendum 1).
+#[test]
+#[ignore]
+fn f1_f2_f3_beck_flutter_known_miss() {
+    beck_flutter(true);
+}
+
+/// F1 and F2 of the same run, F3 recorded (amendment 2).
+#[test]
+fn f1_f2_beck_flutter() {
+    beck_flutter(false);
 }
 
 /// The follower with its symmetric part as the "full" tangent (the control F4).
@@ -218,7 +238,11 @@ fn f4_symmetric_part_control() {
         .map(|v| (v.re * RHO * B * H / ei(), v.im * RHO * B * H / ei()))
         .collect();
     println!("F4 omega^2 m L^4/(E I) = {scaled:?}");
-    let im = r.eigenvalues.iter().map(|v| v.im.abs() / v.abs()).fold(0.0f64, f64::max);
+    let im = r
+        .eigenvalues
+        .iter()
+        .map(|v| v.im.abs() / v.abs())
+        .fold(0.0f64, f64::max);
     let lowest = r.eigenvalues.iter().map(|v| v.re).fold(f64::INFINITY, f64::min);
     ck.at_most("F4 max |Im|/|lambda| with the symmetric part", im, 1e-8);
     ck.holds(
@@ -260,8 +284,8 @@ fn f5_symmetric_tangent() {
     ck.finish();
 }
 
-#[test]
-fn f6_f7_f8_buckling() {
+/// F6 to F8 (ADR 0580); with `f8` false the residual check F8 is left out (amendment 2).
+fn buckling_checks(f8: bool) {
     let mut ck = Checks::new();
     let b = setup();
     let fp = FollowerPressure::new(&b.dead, "xmax", p_ref()).unwrap();
@@ -277,12 +301,19 @@ fn f6_f7_f8_buckling() {
     ck.holds("F6 two factors", dead_full.factors.len() >= 2, "");
     ck.at_most("F6 max |mu_f/mu_s - 1|", rel, 1e-8);
     ck.at_most("F6 max |Im|/|mu|", im, 1e-8);
-    ck.record("F6r 20 mu_1/(pi^2/4) - 1", 20.0 * dead_full.factors[0].re / (PI * PI / 4.0) - 1.0);
+    ck.record(
+        "F6r 20 mu_1/(pi^2/4) - 1",
+        20.0 * dead_full.factors[0].re / (PI * PI / 4.0) - 1.0,
+    );
     let beck_full = buckling_factors_full(&b.dead, &b.pre, &[&fp], &BucklingOptions::new(4)).unwrap();
     println!(
         "F7 factors (in p_ref) {:?}; times 20: {:?}",
         beck_full.factors,
-        beck_full.factors.iter().map(|v| (20.0 * v.re, 20.0 * v.im)).collect::<Vec<_>>()
+        beck_full
+            .factors
+            .iter()
+            .map(|v| (20.0 * v.re, 20.0 * v.im))
+            .collect::<Vec<_>>()
     );
     let bad = beck_full
         .factors
@@ -302,8 +333,25 @@ fn f6_f7_f8_buckling() {
         &format!("{:?}", sym.factors),
     );
     let res = max_res(&dead_full.residuals).max(max_res(&beck_full.residuals));
-    ck.at_most("F8 max residual of F6 and F7", res, 1e-8);
+    if f8 {
+        ck.at_most("F8 max residual of F6 and F7", res, 1e-8);
+    } else {
+        ck.record("F8 max residual of F6 and F7", res);
+    }
     ck.finish();
+}
+
+/// The registered run of 70d27737 missed F8 (measured `7.3e-6`, limit `1e-8`; ADR 0580 amendment 2, addendum 1).
+#[test]
+#[ignore]
+fn f6_f7_f8_buckling_known_miss() {
+    buckling_checks(true);
+}
+
+/// F6 and F7 of the same run, F8 recorded (amendment 2).
+#[test]
+fn f6_f7_buckling() {
+    buckling_checks(false);
 }
 
 fn key_of(e: &FemError) -> Option<&'static str> {
@@ -332,7 +380,11 @@ fn f9_refusals() {
         &ModalOptions::new(4),
     )
     .unwrap_err();
-    ck.holds("F9 rigid-free, shift None: key shift", key_of(&e) == Some("shift"), &format!("{e}"));
+    ck.holds(
+        "F9 rigid-free, shift None: key shift",
+        key_of(&e) == Some("shift"),
+        &format!("{e}"),
+    );
     let nb = b.model.dof_map().n_equations();
     let e = tangent_modes_full(
         &b.model,
@@ -344,7 +396,11 @@ fn f9_refusals() {
         &ModalOptions::new(4).shift(Shift::Auto),
     )
     .unwrap_err();
-    ck.holds("F9 Shift::Auto: key shift", key_of(&e) == Some("shift"), &format!("{e}"));
+    ck.holds(
+        "F9 Shift::Auto: key shift",
+        key_of(&e) == Some("shift"),
+        &format!("{e}"),
+    );
     let mut lin = setup().dead;
     let tip: Vec<usize> = lin
         .mesh()
@@ -367,4 +423,132 @@ fn f9_refusals() {
         &format!("{e}"),
     );
     ck.finish();
+}
+
+// ------------------------------------------------------------------------------------------- the diagnosis of amendment 2
+
+fn norm1(a: &CsrMatrix) -> f64 {
+    let mut col = vec![0.0f64; a.ncols];
+    for r in 0..a.n {
+        for k in a.row_ptr[r]..a.row_ptr[r + 1] {
+            col[a.col[k]] += a.val[k].abs();
+        }
+    }
+    col.into_iter().fold(0.0, f64::max)
+}
+
+fn apply(a: &CsrMatrix, x: &[C64]) -> Vec<C64> {
+    (0..a.n)
+        .map(|r| {
+            let mut s = C64::ZERO;
+            for k in a.row_ptr[r]..a.row_ptr[r + 1] {
+                s += x[a.col[k]].scale(a.val[k]);
+            }
+            s
+        })
+        .collect()
+}
+
+fn cnorm(x: &[C64]) -> f64 {
+    x.iter().map(|z| z.norm_sqr()).sum::<f64>().sqrt()
+}
+
+/// `(eta, kappa, registered residual)` of each pair of the pencil `A x = lambda B x` (reduced, `x` on the free equations).
+fn backward(a: &CsrMatrix, b: &CsrMatrix, values: &[C64], vectors: &[Vec<C64>]) -> Vec<(f64, f64, f64)> {
+    let (na, nb) = (norm1(a), norm1(b));
+    values
+        .iter()
+        .zip(vectors)
+        .map(|(&l, x)| {
+            let ax = apply(a, x);
+            let bx = apply(b, x);
+            let r: Vec<C64> = ax.iter().zip(&bx).map(|(&p, &q)| p - l * q).collect();
+            let nx = cnorm(x);
+            let eta = cnorm(&r) / ((na + l.abs() * nb) * nx);
+            let kappa = na * nx / cnorm(&ax);
+            (eta, kappa, cnorm(&r) / (cnorm(&ax) + l.abs() * cnorm(&bx)))
+        })
+        .collect()
+}
+
+fn on_free(free: &[usize], v: &[C64]) -> Vec<C64> {
+    free.iter().map(|&e| v[e]).collect()
+}
+
+#[test]
+fn diag_f3_f8_backward_error() {
+    let b = setup();
+    let fp = FollowerPressure::new(&b.model, "xmax", p_ref()).unwrap();
+    let list: Vec<&dyn Contribution> = vec![&fp];
+    let n = b.model.dof_map().n_equations();
+    let fixed = prescribed_equations(&b.model, &[]).unwrap();
+    let zero = vec![0.0; n];
+    let m = reduce(&consistent(&b.model).unwrap(), &zero, &fixed).unwrap();
+    let free = m.free().to_vec();
+    for p in [16.0, 20.0, 24.0] {
+        let lf = p / 20.0;
+        let u: Vec<f64> = b.ulin.iter().map(|x| lf * x).collect();
+        let states = initial_states(&b.model).unwrap();
+        let mut kt = tangent(&b.model, &u, &states, None).unwrap();
+        let kp: Vec<(usize, usize, f64)> = fp
+            .load_stiffness(&u, lf)
+            .unwrap()
+            .into_iter()
+            .map(|(r, c, v)| (r, c, -v))
+            .collect();
+        add_triplets_test(&mut kt, &kp);
+        let kr = reduce(&kt, &zero, &fixed).unwrap();
+        let r = modes_at(&b, p, &list, 6);
+        let xs: Vec<Vec<C64>> = r.modes.iter().map(|v| on_free(&free, v)).collect();
+        for (j, (eta, kappa, res)) in backward(&kr.matrix, &m.matrix, &r.eigenvalues, &xs).iter().enumerate() {
+            println!(
+                "diag F3 p = {p}: pair {j}: eta {eta:.3e}, kappa {kappa:.3e}, residual {res:.3e} (library {:.3e}), \
+                 residual/(1e-10 kappa) {:.3e}",
+                r.residuals[j],
+                res / (1e-10 * kappa)
+            );
+        }
+    }
+    let fpd = FollowerPressure::new(&b.dead, "xmax", p_ref()).unwrap();
+    let k = reduce(&stiffness(&b.dead).unwrap(), &zero, &fixed).unwrap();
+    for (name, with) in [("F6 dead", false), ("F7 follower", true)] {
+        let mut g = geometric_stiffness(&b.dead, &b.pre, None).unwrap();
+        if with {
+            let kp: Vec<(usize, usize, f64)> = fpd
+                .load_stiffness(&zero, 1.0)
+                .unwrap()
+                .into_iter()
+                .map(|(r, c, v)| (r, c, -v))
+                .collect();
+            add_triplets_test(&mut g, &kp);
+        }
+        let mut gr = reduce(&g, &zero, &fixed).unwrap().matrix;
+        for v in gr.val.iter_mut() {
+            *v = -*v;
+        }
+        let pressures: Vec<&FollowerPressure> = if with { vec![&fpd] } else { Vec::new() };
+        let count = if with { 4 } else { 2 };
+        let r = buckling_factors_full(&b.dead, &b.pre, &pressures, &BucklingOptions::new(count)).unwrap();
+        let xs: Vec<Vec<C64>> = r.modes.iter().map(|v| on_free(&free, v)).collect();
+        for (j, (eta, kappa, res)) in backward(&k.matrix, &gr, &r.factors, &xs).iter().enumerate() {
+            println!(
+                "diag F8 {name}: pair {j}: eta {eta:.3e}, kappa {kappa:.3e}, residual {res:.3e} (library {:.3e}), \
+                 residual/(1e-10 kappa) {:.3e}",
+                r.residuals[j],
+                res / (1e-10 * kappa)
+            );
+        }
+    }
+}
+
+/// `a += triplets` on the pattern, growing it where needed (the test's own copy of the assembly of extra triplets).
+fn add_triplets_test(a: &mut CsrMatrix, extra: &[(usize, usize, f64)]) {
+    let mut t = Vec::with_capacity(a.nnz() + extra.len());
+    for r in 0..a.n {
+        for k in a.row_ptr[r]..a.row_ptr[r + 1] {
+            t.push((r, a.col[k], a.val[k]));
+        }
+    }
+    t.extend_from_slice(extra);
+    *a = CsrMatrix::from_triplets(a.n, t);
 }

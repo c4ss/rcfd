@@ -105,7 +105,10 @@ fn k1_known_complex_spectrum() {
         err = err.max(m / e.abs());
     }
     for v in &r.values {
-        let m = exact.iter().map(|e| (*v - *e).abs() / e.abs()).fold(f64::INFINITY, f64::min);
+        let m = exact
+            .iter()
+            .map(|e| (*v - *e).abs() / e.abs())
+            .fold(f64::INFINITY, f64::min);
         err = err.max(m);
     }
     let res = r.residuals.iter().fold(0.0f64, |x, &y| x.max(y));
@@ -172,10 +175,7 @@ fn k3_refusals() {
         nearest_pencil_eigenpairs(&nan, &eye(3), 1, &o),
         Err(PencilError::NonFinite { matrix: "A", .. })
     ));
-    let sing = CsrMatrix::from_triplets(
-        3,
-        vec![(0, 0, 1.0), (0, 1, 1.0), (1, 0, 1.0), (1, 1, 1.0), (2, 2, 1.0)],
-    );
+    let sing = CsrMatrix::from_triplets(3, vec![(0, 0, 1.0), (0, 1, 1.0), (1, 0, 1.0), (1, 1, 1.0), (2, 2, 1.0)]);
     let e = nearest_pencil_eigenpairs(&sing, &eye(3), 1, &o);
     println!("K3 singular: {e:?}");
     assert!(matches!(e, Err(PencilError::Factor(_))));

@@ -31,10 +31,10 @@ use crate::loads::{face_rule, face_shape_functions};
 use crate::mass::consistent_with;
 use crate::mesh::ElementKind;
 use crate::modal::{ModalOptions, ModalResult};
+use crate::model::DofMap;
 use crate::model::{Load, SolidModel};
 use crate::nonlinear::{add_triplets, Contribution};
 use rcfd_core::vec3::{cross, Vec3};
-use crate::model::DofMap;
 use rcfd_linalg::complex::C64;
 use rcfd_linalg::eigen::{lowest_eigenpairs, Shift, SubspaceOptions};
 use rcfd_linalg::eigen_pencil::{nearest_pencil_eigenpairs, PencilError, PencilOptions};
@@ -763,9 +763,10 @@ pub fn buckling_factors_full(
     if crate::mpc::uses_transformation(model) {
         return Err(FemError::InvalidValue {
             key: "load stiffness",
-            reason: "the full load stiffness is not offered on the transformation path (linear constraints, rigid sets, \
+            reason:
+                "the full load stiffness is not offered on the transformation path (linear constraints, rigid sets, \
                      cyclic constraints, elastic supports; ADR 0580 D4)"
-                .to_string(),
+                    .to_string(),
         });
     }
     let dofs = model.dof_map();
