@@ -11,6 +11,10 @@
 //! * [`paris_cycles`]: the cycles of the Paris law between two crack sizes, integrated numerically (D7).
 //! * [`centre_crack_plate`] and [`penny_crack_cylinder`]: Hex20 meshes with a slit graded towards the front (D8).
 //!
+//! * ADR 0605 (F-632): [`CrackFront::elliptical`], an elliptical front in confocal coordinates (D1); [`interaction_integral`],
+//!   `K_I`, `K_II` and `K_III` of a straight front by the interaction integral with the near-tip fields of
+//!   [`near_tip_gradient`] (D5); [`elliptical_crack_block`], the penny mesh mapped onto an embedded elliptical crack (D3).
+//!
 //! Linear elastic, isotropic, homogeneous material in the domain; no body force, no thermal strain; traction-free crack faces.
 
 use crate::element::element_for;
@@ -68,6 +72,19 @@ pub enum FrontShape {
         /// A point of the axis in the crack plane.
         centre: Vec3,
     },
+    /// An ellipse `X^2/a^2 + Y^2/b^2 = 1` in the crack plane (ADR 0605 D1), `X` along `major_axis` from `centre`, `a > b`;
+    /// the parameter is the elliptic angle `nu` of the confocal coordinates (the parametric angle on the front) and the
+    /// advance direction the outward normal of the confocal ellipse through the point.
+    Elliptical {
+        /// The centre of the ellipse.
+        centre: Vec3,
+        /// The direction of the major semi-axis (in the crack plane; normalised when checked).
+        major_axis: Vec3,
+        /// The major semi-axis `a`.
+        a: f64,
+        /// The minor semi-axis `b < a`.
+        b: f64,
+    },
 }
 
 /// A crack front: its nodes in order along it (an odd number `>= 3`, corner, mid-edge, corner, ...; the corners are the
@@ -97,6 +114,22 @@ impl CrackFront {
             nodes,
             normal,
             shape: FrontShape::Circular { centre },
+            half_symmetric: false,
+        }
+    }
+
+    /// An elliptical front with semi-axes `a > b` about `centre`, the major axis along `major_axis`, in the plane of
+    /// normal `normal` (ADR 0605 D1).
+    pub fn elliptical(nodes: Vec<usize>, normal: Vec3, centre: Vec3, major_axis: Vec3, a: f64, b: f64) -> CrackFront {
+        CrackFront {
+            nodes,
+            normal,
+            shape: FrontShape::Elliptical {
+                centre,
+                major_axis,
+                a,
+                b,
+            },
             half_symmetric: false,
         }
     }
@@ -241,6 +274,69 @@ impl CrackFront {
                     radius,
                 )
             }
+            FrontShape::Elliptical {
+                centre,
+                major_axis,
+                a,
+                b,
+            } => {
+                let (a, b) = (*a, *b);
+                if !(a.is_finite() && b.is_finite() && b > 0.0 && a > b) {
+                    return Err(invalid(
+                        KEY,
+                        format!("the semi-axes a = {a}, b = {b}: an ellipse needs a > b > 0 (a circle is FrontShape::Circular)"),
+                    ));
+                }
+                let u0 = unit_of(*major_axis, KEY, "the major axis")?;
+                if dot(u0, n).abs() > PARALLEL_TOLERANCE {
+                    return Err(invalid(
+                        KEY,
+                        format!(
+                            "the major axis {u0:?} is not in the plane of normal {n:?} (|u . n| = {:.3e}, tolerance \
+                             {PARALLEL_TOLERANCE:e})",
+                            dot(u0, n).abs()
+                        ),
+                    ));
+                }
+                let u = unit_of(sub(u0, scaled(n, dot(u0, n))), KEY, "the major axis")?;
+                let v = cross(n, u);
+                let c = (a * a - b * b).sqrt();
+                let kind = FrontKind::Elliptical {
+                    centre: *centre,
+                    u,
+                    v,
+                    a,
+                    b,
+                    c,
+                };
+                let mut s = Vec::with_capacity(x.len());
+                for (k, &xi) in x.iter().enumerate() {
+                    let d = sub(xi, *centre);
+                    let h = dot(d, n).abs();
+                    let (xx, yy) = (dot(d, u), dot(d, v));
+                    let g = (xx * xx / (a * a) + yy * yy / (b * b)).sqrt();
+                    let grad = (xx * xx / (a * a * a * a) + yy * yy / (b * b * b * b)).sqrt() / g;
+                    let off = ((g - 1.0).abs() / grad).max(h);
+                    if off.is_nan() || off > FRONT_TOLERANCE * a {
+                        return Err(invalid(
+                            KEY,
+                            format!(
+                                "node {} at {xi:?} is {off:.3e} off the ellipse of semi-axes {a:.6e}, {b:.6e} about \
+                                 {centre:?} (tolerance {FRONT_TOLERANCE:e} times a)",
+                                self.nodes[k]
+                            ),
+                        ));
+                    }
+                    let Some((_, nu, _, _)) = confocal(*centre, u, v, c, xi) else {
+                        return Err(invalid(
+                            KEY,
+                            format!("node {} at {xi:?} is on the focal segment", self.nodes[k]),
+                        ));
+                    };
+                    s.push(nu);
+                }
+                (kind, s, a)
+            }
         };
         for k in 1..s.len() {
             if s[k].is_nan() || s[k] <= s[k - 1] {
@@ -262,6 +358,8 @@ impl CrackFront {
             x0,
             stations,
             length,
+            front_x: x,
+            front_s: s,
         })
     }
 }
@@ -279,6 +377,31 @@ enum FrontKind {
         b: Vec3,
         radius: f64,
     },
+    Elliptical {
+        centre: Vec3,
+        u: Vec3,
+        v: Vec3,
+        a: f64,
+        b: f64,
+        c: f64,
+    },
+}
+
+/// The confocal elliptic coordinates `(mu, nu)` and the in-plane coordinates `(X, Y)` of `x` for the foci `(+/- c, 0)` on
+/// the axis `u` (ADR 0605 D1): `X = c cosh mu cos nu`, `Y = c sinh mu sin nu`; `None` on the focal segment (`mu = 0`).
+fn confocal(centre: Vec3, u: Vec3, v: Vec3, c: f64, x: Vec3) -> Option<(f64, f64, f64, f64)> {
+    let d = sub(x, centre);
+    let (xx, yy) = (dot(d, u), dot(d, v));
+    let dp = ((xx - c) * (xx - c) + yy * yy).sqrt();
+    let dm = ((xx + c) * (xx + c) + yy * yy).sqrt();
+    let ch = ((dm + dp) / (2.0 * c)).max(1.0);
+    let sh = (ch * ch - 1.0).sqrt();
+    if sh.is_nan() || sh <= 0.0 {
+        return None;
+    }
+    let mu = ch.acosh();
+    let nu = (yy * ch).atan2(xx * sh);
+    Some((mu, nu, xx, yy))
 }
 
 /// A checked front: unit normal, kind, first node, station parameters.
@@ -290,6 +413,9 @@ struct FrontGeometry {
     stations: Vec<f64>,
     #[allow(dead_code)]
     length: f64,
+    /// The front node positions and parameters (all nodes, in order).
+    front_x: Vec<Vec3>,
+    front_s: Vec<f64>,
 }
 
 impl FrontGeometry {
@@ -314,6 +440,21 @@ impl FrontGeometry {
                 }
                 Ok(scaled(r, 1.0 / l))
             }
+            FrontKind::Elliptical { centre, u, v, c, .. } => {
+                let Some((mu, _, xx, yy)) = confocal(*centre, *u, *v, *c, x) else {
+                    return Err(invalid(
+                        "crack front",
+                        format!("the point {x:?} is on the focal segment of the front"),
+                    ));
+                };
+                let th = mu.tanh();
+                let d = [
+                    xx * th * th * u[0] + yy * v[0],
+                    xx * th * th * u[1] + yy * v[1],
+                    xx * th * th * u[2] + yy * v[2],
+                ];
+                unit_of(d, "crack front", "the advance direction")
+            }
         }
     }
 
@@ -325,6 +466,7 @@ impl FrontGeometry {
                 let (r, l) = self.radial(*centre, x);
                 (l > 0.0).then(|| cross(self.n, scaled(r, 1.0 / l)))
             }
+            FrontKind::Elliptical { .. } => self.advance(x).ok().map(|e| cross(self.n, e)),
         }
     }
 
@@ -335,6 +477,9 @@ impl FrontGeometry {
             FrontKind::Circular { centre, c, b, radius } => {
                 let d = sub(x, *centre);
                 radius * dot(d, *b).atan2(dot(d, *c))
+            }
+            FrontKind::Elliptical { centre, u, v, c, .. } => {
+                confocal(*centre, *u, *v, *c, x).map_or(f64::NAN, |(_, nu, _, _)| nu)
             }
         }
     }
@@ -347,6 +492,14 @@ impl FrontGeometry {
                 norm(sub(d, scaled(*t, dot(d, *t))))
             }
             FrontKind::Circular { centre, radius, .. } => (self.radial(*centre, x).1 - radius).abs(),
+            FrontKind::Elliptical { centre, u, v, a, b, .. } => {
+                // First-order distance |g - 1| / |grad g| (ADR 0605 D1); opening_k refuses this kind before using it.
+                let d = sub(x, *centre);
+                let (xx, yy) = (dot(d, *u), dot(d, *v));
+                let g = (xx * xx / (a * a) + yy * yy / (b * b)).sqrt();
+                let grad = (xx * xx / (a * a * a * a) + yy * yy / (b * b * b * b)).sqrt() / g;
+                (g - 1.0).abs() / grad
+            }
         }
     }
 
@@ -380,11 +533,41 @@ impl FrontGeometry {
 
     /// `int phi_j ds`.
     fn hat_integral(&self, j: usize) -> f64 {
+        if let FrontKind::Elliptical { .. } = self.kind {
+            return self.edge_hat_integral(j);
+        }
         let st = &self.stations;
         let last = st.len() - 1;
         let left = if j == 0 { st[0] } else { st[j - 1] };
         let right = if j == last { st[last] } else { st[j + 1] };
         0.5 * (right - left)
+    }
+
+    /// `int phi_j ds` along the quadratic front edges with the nodal hats interpolated (ADR 0605 D1), 8-point
+    /// Gauss-Legendre on each edge.
+    fn edge_hat_integral(&self, j: usize) -> f64 {
+        let (gx, gw) = gauss_legendre(8);
+        let mut total = 0.0;
+        for edge in 0..self.stations.len() - 1 {
+            let ids = [2 * edge, 2 * edge + 1, 2 * edge + 2];
+            let h = ids.map(|i| self.hat(j, self.front_s[i]));
+            if h == [0.0; 3] {
+                continue;
+            }
+            let p = ids.map(|i| self.front_x[i]);
+            for (&xi, &w) in gx.iter().zip(&gw) {
+                let l = [0.5 * xi * (xi - 1.0), 1.0 - xi * xi, 0.5 * xi * (xi + 1.0)];
+                let dl = [xi - 0.5, -2.0 * xi, xi + 0.5];
+                let mut dx = [0.0; 3];
+                for a in 0..3 {
+                    for (i, dxi) in dx.iter_mut().enumerate() {
+                        *dxi += dl[a] * p[a][i];
+                    }
+                }
+                total += w * (l[0] * h[0] + l[1] * h[1] + l[2] * h[2]) * norm(dx);
+            }
+        }
+        total
     }
 }
 
@@ -758,6 +941,314 @@ pub fn plane_strain_k(j: f64, e: f64, nu: f64) -> Result<f64> {
     Ok((j * e / (1.0 - nu * nu)).sqrt())
 }
 
+// --------------------------------------------------------------------------------------------------- interaction integral
+
+/// A mode of the near-tip field (ADR 0605 D5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TipMode {
+    /// Opening (plane strain).
+    I,
+    /// In-plane sliding (plane strain).
+    II,
+    /// Out-of-plane tearing (antiplane).
+    III,
+}
+
+/// The displacement and its gradient `g[i][k] = du_i/dx_k` of the near-tip field of unit stress intensity factor of `mode`
+/// (ADR 0605 D5) at the polar position `(r, theta)` in the local frame of a straight front (`x1` the advance, `x2` the
+/// crack-plane normal, `x3 = x1 x x2`, `theta` in `(-pi, pi]` with the crack faces at `+/- pi`), plane strain with shear
+/// modulus `mu` and Poisson's ratio `nu`: I `u1, u2 = sqrt(r/(2 pi))/(2 mu) (cos, sin)(theta/2) (kappa - cos theta)`; II `u1 =
+/// sqrt(r/(2 pi))/(2 mu) sin(theta/2) (kappa + 2 + cos theta)`, `u2 = -sqrt(r/(2 pi))/(2 mu) cos(theta/2) (kappa - 2 + cos
+/// theta)`; III `u3 = 2/mu sqrt(r/(2 pi)) sin(theta/2)`; `kappa = 3 - 4 nu`. `r <= 0` gives non-finite values.
+pub fn near_tip_gradient(mode: TipMode, r: f64, theta: f64, mu: f64, nu: f64) -> (Vec3, [[f64; 3]; 3]) {
+    let kappa = 3.0 - 4.0 * nu;
+    let (c2, s2) = ((0.5 * theta).cos(), (0.5 * theta).sin());
+    let (ct, st) = (theta.cos(), theta.sin());
+    // u_i = f sqrt(r/(2 pi)) g_i(theta); dg_i = g_i'(theta).
+    let (f, g, dg) = match mode {
+        TipMode::I => (
+            0.5 / mu,
+            [c2 * (kappa - ct), s2 * (kappa - ct), 0.0],
+            [
+                -0.5 * s2 * (kappa - ct) + c2 * st,
+                0.5 * c2 * (kappa - ct) + s2 * st,
+                0.0,
+            ],
+        ),
+        TipMode::II => (
+            0.5 / mu,
+            [s2 * (kappa + 2.0 + ct), -c2 * (kappa - 2.0 + ct), 0.0],
+            [
+                0.5 * c2 * (kappa + 2.0 + ct) - s2 * st,
+                0.5 * s2 * (kappa - 2.0 + ct) + c2 * st,
+                0.0,
+            ],
+        ),
+        TipMode::III => (0.5 / mu, [0.0, 0.0, 4.0 * s2], [0.0, 0.0, 2.0 * c2]),
+    };
+    let root = (r / (2.0 * PI)).sqrt();
+    let u = [f * root * g[0], f * root * g[1], f * root * g[2]];
+    let mut grad = [[0.0; 3]; 3];
+    for i in 0..3 {
+        let d_r = f * g[i] / (2.0 * (2.0 * PI * r).sqrt());
+        let d_t = f * root * dg[i];
+        grad[i][0] = d_r * ct - d_t * st / r;
+        grad[i][1] = d_r * st + d_t * ct / r;
+    }
+    (u, grad)
+}
+
+/// The stress intensity factors at one station of a straight front (ADR 0605 D5).
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct ModeFactors {
+    /// The station index (0 at the first front node).
+    pub station: usize,
+    /// The corner node of the station.
+    pub node: usize,
+    /// Its position.
+    pub position: Vec3,
+    /// Its front parameter.
+    pub s: f64,
+    /// `K_I`, Pa m^0.5 (opening along the crack-plane normal).
+    pub k_i: f64,
+    /// `K_II`, Pa m^0.5 (sliding along the advance direction).
+    pub k_ii: f64,
+    /// `K_III`, Pa m^0.5 (tearing along `e x n`).
+    pub k_iii: f64,
+    /// `int phi ds` of its hat, m.
+    pub weight: f64,
+}
+
+/// `K_I`, `K_II` and `K_III` at each station of a straight `front` by the interaction integral over ring `ring` (ADR 0605
+/// D5): `M = int (sigma_ij u^aux_i,k + sigma^aux_ij u_i,k - sigma_ij eps^aux_ij delta_jk) q_k,j dV` with the unit near-tip
+/// field of each mode ([`near_tip_gradient`]) in the frame `(e, n, e x n)` of the front, `q` and the rings of
+/// [`j_integral`], divided by `int phi_j ds`; `K_I = E' M_I/2`, `K_II = E' M_II/2`, `K_III = mu M_III`, `E' = E/(1 - nu^2)`, with
+/// `E, nu` of the element of the first front node. Refuses what [`j_integral`] refuses, a front that is not straight, a
+/// half-symmetric front and a ring element of another `E, nu`.
+pub fn interaction_integral(
+    model: &SolidModel,
+    displacement: &[f64],
+    front: &CrackFront,
+    ring: usize,
+) -> Result<Vec<ModeFactors>> {
+    let dofs = model.dof_map();
+    if displacement.len() != dofs.n_equations() {
+        return Err(FemError::FieldLength {
+            key: "displacement",
+            expected: dofs.n_equations(),
+            found: displacement.len(),
+        });
+    }
+    check_loads(model)?;
+    if front.half_symmetric {
+        return Err(invalid(
+            "crack front",
+            "the interaction integral takes a full model: modes II and III are antisymmetric about the crack plane, so a \
+             half-symmetric front cannot be doubled",
+        ));
+    }
+    let mesh = model.mesh();
+    let geometry = front.check(mesh)?;
+    let FrontKind::Straight { x0, e, .. } = geometry.kind else {
+        return Err(invalid(
+            "crack front",
+            "the interaction integral takes a straight front: the near-tip fields are not exact on a curved one",
+        ));
+    };
+    let n = geometry.n;
+    let e3 = cross(e, n);
+    let basis = [e, n, e3];
+    let adjacency = node_elements(mesh);
+    let (elements, rho) = rings(mesh, &adjacency, &front.nodes, ring)?;
+    check_boundary(mesh, &geometry, &rho, ring)?;
+    let materials = model.material_indices()?;
+    let first = front.nodes[0];
+    let Some(&e0) = adjacency[first].first() else {
+        return Err(invalid(
+            "crack front",
+            format!("the front node {first} belongs to no element"),
+        ));
+    };
+    let (young0, nu0) = element_elastic(model, &materials, e0)?;
+    let n_st = geometry.stations.len();
+    let mut nodal: HashMap<usize, (Vec3, f64)> = HashMap::new();
+    for el in &elements {
+        for &a in mesh.element_nodes(*el) {
+            if rho[a] && !nodal.contains_key(&a) {
+                let x = mesh.nodes()[a];
+                nodal.insert(a, (geometry.advance(x)?, geometry.param(x)));
+            }
+        }
+    }
+    let modes = [TipMode::I, TipMode::II, TipMode::III];
+    let mut m_bar = vec![[0.0; 3]; n_st];
+    for &el in &elements {
+        let (young, nu) = element_elastic(model, &materials, el)?;
+        if young != young0 || nu != nu0 {
+            return Err(invalid(
+                "element",
+                format!(
+                    "element {el} has E = {young}, nu = {nu}, the element {e0} of the first front node E = {young0}, nu = \
+                     {nu0}: the interaction integral takes one material in the domain"
+                ),
+            ));
+        }
+        let lambda = young * nu / ((1.0 + nu) * (1.0 - 2.0 * nu));
+        let mu = young / (2.0 * (1.0 + nu));
+        let kind = mesh.element_kind(el);
+        let element = element_for(kind);
+        let nodes = mesh.element_nodes(el);
+        let coords: Vec<Vec3> = nodes.iter().map(|&a| mesh.nodes()[a]).collect();
+        let mut ue: Vec<Vec3> = Vec::with_capacity(nodes.len());
+        for &a in nodes {
+            let mut u = [0.0; 3];
+            for (c, uc) in u.iter_mut().enumerate() {
+                let q = dofs.equation(a, c).ok_or(FemError::MissingComponent {
+                    role: "displacement",
+                    node: a,
+                    component: c,
+                    available: dofs.components(a),
+                })?;
+                *uc = displacement[q];
+            }
+            ue.push(u);
+        }
+        let mut qa: Vec<Vec<Vec3>> = vec![vec![[0.0; 3]; nodes.len()]; n_st];
+        for (la, &a) in nodes.iter().enumerate() {
+            if let Some(&(dir, s)) = nodal.get(&a) {
+                for (j, qj) in qa.iter_mut().enumerate() {
+                    qj[la] = scaled(dir, geometry.hat(j, s));
+                }
+            }
+        }
+        let points = element
+            .integration_points(&coords, element.stiffness_rule())
+            .map_err(|source| FemError::Element {
+                element: el,
+                source: Box::new(source),
+            })?;
+        for ip in points {
+            let grad = &ip.geometry.grad;
+            let mut du = [[0.0; 3]; 3];
+            for (a, g) in grad.iter().enumerate() {
+                for i in 0..3 {
+                    for k in 0..3 {
+                        du[i][k] += ue[a][i] * g[k];
+                    }
+                }
+            }
+            let sigma = hooke(&du, lambda, mu);
+            // dq[st][k][j] = dq_k/dx_j.
+            let mut dq: Vec<Option<[[f64; 3]; 3]>> = Vec::with_capacity(n_st);
+            for qj in &qa {
+                let mut d = [[0.0; 3]; 3];
+                let mut any = false;
+                for (a, g) in grad.iter().enumerate() {
+                    let q = qj[a];
+                    if q == [0.0; 3] {
+                        continue;
+                    }
+                    any = true;
+                    for k in 0..3 {
+                        for j in 0..3 {
+                            d[k][j] += q[k] * g[j];
+                        }
+                    }
+                }
+                dq.push(any.then_some(d));
+            }
+            if dq.iter().all(Option::is_none) {
+                continue;
+            }
+            let rel = sub(ip.geometry.x, x0);
+            let (x1, x2) = (dot(rel, e), dot(rel, n));
+            let r = (x1 * x1 + x2 * x2).sqrt();
+            if r.is_nan() || r <= 0.0 {
+                return Err(invalid(
+                    "crack front",
+                    format!("an integration point of element {el} lies on the front line"),
+                ));
+            }
+            let theta = x2.atan2(x1);
+            for (m, &mode) in modes.iter().enumerate() {
+                let (_, local) = near_tip_gradient(mode, r, theta, mu, nu);
+                // G[i][k] = sum_ab basis_a[i] local[a][b] basis_b[k].
+                let mut ga = [[0.0; 3]; 3];
+                for i in 0..3 {
+                    for k in 0..3 {
+                        let mut v = 0.0;
+                        for (a, ba) in basis.iter().enumerate() {
+                            for (b, bb) in basis.iter().enumerate() {
+                                v += ba[i] * local[a][b] * bb[k];
+                            }
+                        }
+                        ga[i][k] = v;
+                    }
+                }
+                let sigma_aux = hooke(&ga, lambda, mu);
+                let mut w_int = 0.0;
+                for i in 0..3 {
+                    for k in 0..3 {
+                        w_int += sigma[i][k] * 0.5 * (ga[i][k] + ga[k][i]);
+                    }
+                }
+                let mut p = [[0.0; 3]; 3];
+                for j in 0..3 {
+                    for k in 0..3 {
+                        let mut v = 0.0;
+                        for i in 0..3 {
+                            v += sigma[i][j] * ga[i][k] + sigma_aux[i][j] * du[i][k];
+                        }
+                        p[j][k] = v - if j == k { w_int } else { 0.0 };
+                    }
+                }
+                for (st, d) in dq.iter().enumerate() {
+                    let Some(d) = d else { continue };
+                    let mut v = 0.0;
+                    for j in 0..3 {
+                        for k in 0..3 {
+                            v += p[j][k] * d[k][j];
+                        }
+                    }
+                    m_bar[st][m] += ip.weight * v;
+                }
+            }
+        }
+    }
+    let e_prime = young0 / (1.0 - nu0 * nu0);
+    let mu0 = young0 / (2.0 * (1.0 + nu0));
+    Ok((0..n_st)
+        .map(|j| {
+            let node = front.nodes[2 * j];
+            let weight = geometry.hat_integral(j);
+            let m = m_bar[j];
+            ModeFactors {
+                station: j,
+                node,
+                position: mesh.nodes()[node],
+                s: geometry.stations[j],
+                k_i: 0.5 * e_prime * m[0] / weight,
+                k_ii: 0.5 * e_prime * m[1] / weight,
+                k_iii: mu0 * m[2] / weight,
+                weight,
+            }
+        })
+        .collect())
+}
+
+/// `sigma = lambda tr(eps) I + 2 mu eps`, `eps = sym(g)`.
+fn hooke(g: &[[f64; 3]; 3], lambda: f64, mu: f64) -> [[f64; 3]; 3] {
+    let tr = g[0][0] + g[1][1] + g[2][2];
+    let mut sigma = [[0.0; 3]; 3];
+    for i in 0..3 {
+        for k in 0..3 {
+            sigma[i][k] = mu * (g[i][k] + g[k][i]) + if i == k { lambda * tr } else { 0.0 };
+        }
+    }
+    sigma
+}
+
 // --------------------------------------------------------------------------------------------------------------- opening
 
 /// A pair of crack-face nodes at the same position: `upper` on the `+normal` side, `lower` on the other (`None` in a
@@ -807,6 +1298,12 @@ pub fn opening_k(
         return Err(invalid(
             KEY,
             format!("the interval [{r_min}, {r_max}] is empty or not finite"),
+        ));
+    }
+    if let FrontShape::Elliptical { .. } = front.shape {
+        return Err(invalid(
+            KEY,
+            "opening_k takes a straight or circular front (ADR 0605 D1), not an elliptical one",
         ));
     }
     let mesh = model.mesh();
@@ -1598,4 +2095,113 @@ pub fn penny_crack_cylinder(spec: &PennyCrack) -> Result<CrackedCylinder> {
         front.push(c);
     }
     Ok(CrackedCylinder { mesh: out, front })
+}
+
+/// The embedded elliptical crack of ADR 0605 D3: the penny mesh of [`PennyCrack`] (radius `a`, its other parameters in the
+/// polar coordinates of that mesh) mapped in the plane onto a crack of semi-axes `a` (along `x`) and `b < a` (along `y`).
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct EllipticalCrack {
+    /// The penny mesh to map (its `radius` is the major semi-axis `a`).
+    pub penny: PennyCrack,
+    /// The minor semi-axis `b`.
+    pub semi_minor: f64,
+}
+
+impl EllipticalCrack {
+    /// The crack with minor semi-axis `semi_minor` on the penny mesh `penny`.
+    pub fn new(penny: PennyCrack, semi_minor: f64) -> EllipticalCrack {
+        EllipticalCrack { penny, semi_minor }
+    }
+}
+
+/// The mesh of the quarter of the half block with an embedded elliptical crack.
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub struct CrackedEllipse {
+    /// The Hex20 mesh (the sets of [`CrackedCylinder`]: `all`, `ligament`, `x0`, `y0`, surface set `top`).
+    pub mesh: SolidMesh,
+    /// The front nodes at `z = 0` ordered by the elliptic angle from `y = 0` to `x = 0`.
+    pub front: Vec<usize>,
+    /// The major semi-axis `a`.
+    pub a: f64,
+    /// The minor semi-axis `b`.
+    pub b: f64,
+}
+
+impl CrackedEllipse {
+    /// The front as a [`CrackFront`]: elliptical about the origin, normal `z`, major axis `x`, half-symmetric.
+    pub fn crack_front(&self) -> CrackFront {
+        CrackFront::elliptical(
+            self.front.clone(),
+            [0.0, 0.0, 1.0],
+            [0.0; 3],
+            [1.0, 0.0, 0.0],
+            self.a,
+            self.b,
+        )
+        .half_symmetric()
+    }
+}
+
+/// The quarter `x, y >= 0` of the half `z >= 0` of a block with an elliptical crack of semi-axes `a` (x) and `b` (y) on `z =
+/// 0` (ADR 0605 D3): the penny mesh with every node mapped in the plane, `rho >= r_t` by the confocal map `mu = mu0 + ln(rho/a)`,
+/// `(x, y) = (c cosh mu X/rho, c sinh mu Y/rho)`, the core `rho < r_t` by the affine map onto the ellipse `mu_t`. Refuses `b >=
+/// a`, `mu_t <= 0` and what [`penny_crack_cylinder`] refuses.
+pub fn elliptical_crack_block(spec: &EllipticalCrack) -> Result<CrackedEllipse> {
+    const KEY: &str = "elliptical crack";
+    let a = spec.penny.radius;
+    let b = spec.semi_minor;
+    let r_t = spec.penny.transition_radius;
+    if !(a.is_finite() && b.is_finite() && b > 0.0 && b < a) {
+        return Err(invalid(KEY, format!("semi-axes a = {a}, b = {b}: 0 < b < a")));
+    }
+    let c = (a * a - b * b).sqrt();
+    let mu0 = (b / a).atanh();
+    let mu_t = mu0 + (r_t / a).ln();
+    if mu_t.is_nan() || mu_t <= 0.0 {
+        return Err(invalid(
+            KEY,
+            format!(
+                "the transition radius r_t = {r_t} maps inside the focal segment (mu_t = {mu_t:.4e}): r_t > a c/(a + b) = {:.6e}",
+                a * c / (a + b)
+            ),
+        ));
+    }
+    let cyl = penny_crack_cylinder(&spec.penny)?;
+    let (at, bt) = (c * mu_t.cosh(), c * mu_t.sinh());
+    let mapped: Vec<Vec3> = cyl
+        .mesh
+        .nodes()
+        .iter()
+        .map(|p| {
+            let rho = (p[0] * p[0] + p[1] * p[1]).sqrt();
+            if rho >= r_t * (1.0 - 1e-12) {
+                let mu = mu0 + (rho / a).ln();
+                [c * mu.cosh() * p[0] / rho, c * mu.sinh() * p[1] / rho, p[2]]
+            } else {
+                [p[0] * at / r_t, p[1] * bt / r_t, p[2]]
+            }
+        })
+        .collect();
+    let mesh = &cyl.mesh;
+    let mut out = SolidMesh::new(mapped)?;
+    for blk in mesh.blocks() {
+        out.add_block(blk.kind(), blk.connectivity().to_vec())?;
+    }
+    for name in mesh.node_set_names() {
+        out.add_node_set(name, mesh.node_set(name).expect("listed").to_vec())?;
+    }
+    for name in mesh.element_set_names() {
+        out.add_element_set(name, mesh.element_set(name).expect("listed").to_vec())?;
+    }
+    for name in mesh.surface_set_names() {
+        out.add_surface_set(name, mesh.surface_set(name).expect("listed").to_vec())?;
+    }
+    Ok(CrackedEllipse {
+        mesh: out,
+        front: cyl.front,
+        a,
+        b,
+    })
 }

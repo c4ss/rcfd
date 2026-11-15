@@ -2281,6 +2281,21 @@ principles; the reference values of the checks are closed forms evaluated in the
 | Paris law `da/dN = C (Delta K)^m` and its closed-form life for `Delta K = d Delta sigma sqrt(pi a)` | derived, cited | ADR 0547 D7; P. C. Paris and F. Erdogan, J. Basic Eng. 85 (1963) 528-534: NOT read, from memory |
 | Finite-body effects not in the references: the height `H = 2 W` of the plate (estimated `< 0.1 %`), the cylinder `R = H = 10 a` of the penny crack (estimated `~ 1e-3`) | estimate | ADR 0547 arithmetic 1 and 7: estimates, not references |
 | Measured: plate `K` from J of rings 2 to 4 within `2.1e-3` of the secant form, ring spread `1.2e-3`, energy difference `7.4e-5`, opening `1.2e-2`, shear opening `1.3e-13`; penny ring 3 within `2.2e-3`, along the front `2.7e-7`; Paris `<= 6.7e-16` | computed | ADR 0547 addendum 1 |
+## F-632 the domain integral on an elliptical front, and the separation of K_I, K_II and K_III (ADR 0605)
+
+No source was read for F-632. The papers below are cited from memory. Every formula used is derived or verified numerically in
+ADR 0605 (D4 to D6, arithmetic 1 to 6) by plain Python scripts (`f632-scratch/py`, no rcfd code); the references of the checks
+are closed forms evaluated in the tests.
+
+| Item | Status | Source |
+|---|---|---|
+| Embedded elliptical crack under remote tension, `K_I(phi) = sigma sqrt(pi b)/E(k) (sin^2 phi + (b/a)^2 cos^2 phi)^(1/4)`, `k^2 = 1 - b^2/a^2` | derived (shape), verified (factor) | ADR 0605 D4: the shape from the ellipsoidal opening and the local plane-strain opening; the factor `w0 ∝ b/E(k)` verified numerically (`-Lap phi b/E(k) = 2 pi` for `b/a = 1, 0.75, 0.5, 0.25`), its constant by Sneddon's penny and Westergaard's tunnel limits; G. R. Irwin, J. Appl. Mech. 29 (1962) 651-654; A. E. Green and I. N. Sneddon, Proc. Camb. Phil. Soc. 46 (1950) 159-163: NOT read, from memory |
+| Near-tip displacement fields of modes I, II (plane strain, `kappa = 3 - 4 nu`) and III, unit K | verified | ADR 0605 D5, arithmetic 3 (equilibrium, traction-free faces, normalisation, Rice's J of each unit field `1/E'`, `1/E'`, `1/(2 mu)`); M. L. Williams, J. Appl. Mech. 24 (1957) 109-114; T. L. Anderson, Fracture Mechanics, 3rd ed., 2005, chapter 2: NOT read, from memory |
+| Interaction integral `M = int (sigma_ij u^aux_i,k + sigma^aux_ij u_i,k - sigma_ij eps^aux_ij delta_jk) q_k,j dV`, `K_I = E' M_I/2`, `K_II = E' M_II/2`, `K_III = mu M_III` | derived, cited | ADR 0605 D5; J. F. Yau, S. S. Wang and H. T. Corten, J. Appl. Mech. 47 (1980) 335-341; B. Moran and C. F. Shih, Eng. Fract. Mech. 27 (1987) 615-642: NOT read, from memory |
+| Inclined centre crack, infinite plate: `K_I = sigma sqrt(pi a) cos^2 beta`, `K_II = sigma sqrt(pi a) sin beta cos beta`; antiplane `K_III = tau sqrt(pi a)` | derived (I, III and the rotation), cited (II) | ADR 0605 D6; Westergaard (ADR 0547 reference) for I; the Westergaard function of mode II from memory; III derived from `w = (tau/mu) Im sqrt(z^2 - a^2)` |
+| Finite-body effects: the elliptical block (semi-axes `9 a`, `H = 10 a`) about `1.4e-3`; the plate `W = 10 a` for II and III within `1 %` | estimate | ADR 0605 D4, D6: estimates, not references |
+| Measured: elliptical crack `b/a = 0.5` (87 663 unknowns) ring-3 K within `8.4e-3` of the hat-averaged Irwin form at all 13 stations, rings 2 to 4 within `2.2e-3`, `K(0)/K(pi/2)` within `5.7e-3`; coarse `3.3e-2`; uniform-expansion residual `<= 2.7e-14`; inclined crack (`beta = 30 deg`) K_I `5.7e-3`, K_II `6.2e-3`, K_III `1.3e-16`; antiplane K_III `3.9e-3` | computed | ADR 0605 addendum 1 |
+
 ## F-580 creep on the B-bar Hex8 against a finite-strain reference of the thick cylinder (ADR 0549)
 
 No source was read for F-580. The books below are cited from memory for the names and the published forms. The stationary
