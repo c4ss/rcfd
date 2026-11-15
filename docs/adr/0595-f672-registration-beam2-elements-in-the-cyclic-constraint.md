@@ -242,3 +242,75 @@ Corrections, registered now:
 - **X5 (amended).** The refusal of D1a removed: caught by NC1 (amended) (the `UnknownSet` of run 1 in its place).
 
 Every other check of run 1 is a registered result and is not re-run (they are in addendum 1).
+
+## Addendum 1: results (2026-11-15)
+
+Run 1 (`cargo test -p rcfd-fem --release --test sa_cyclic_beams_f672`, once, after the code commit c3cb5182) gave every
+acceptance check; its NC function stopped in its set-up (amendment 1). The amended NC function was run once after 138e0aec. A
+text-only fix of a refusal message followed (no result changed). Logs `run1.log`, `run2_nc.log`, `b1.log`, `b2.log`,
+`mutations.log` in `w49i-work/f672-scratch`.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| S0 (`k = 0`, nodal loads and centrifugal) | `e <= 1e-10` | `e_u 6.57e-13`, `e_theta 6.39e-13` | yes |
+| R1 | `<= 1e-14` | 0 | yes |
+| S1, S2, S3 | `e <= 1e-10` each | `6.08e-13`, `3.92e-13`, `3.96e-13` | yes |
+| M-list | complete; counts equal | cut-off `2.917e6`, ring largest `5.32e6`; 18 and 18 | yes |
+| M0 .. M3 | `<= 1e-10` each | `8.21e-13`, `2.94e-13`, `7.53e-14`, `1.03e-13` | yes |
+| P0 .. P3 | `<= 1e-10` each | `6.1e-16` (3 modes), `1.5e-13` (6), `9.9e-17` (6), `6.5e-17` (3) | yes |
+| Q1, Q2 | `<= 1e-10` | `2.56e-13`, `2.04e-13` | yes |
+| B1 | pass | the registered list and `si_beam`: every test passes (ignored records stay ignored) | yes |
+| B2 | pass | `baseline_hashes` 3 passed, 1 ignored (as before) | yes |
+| B3 | bits equal | 88 values (displacements and 16 frequencies) equal | yes |
+| NC1 (amended) | refused, key `cyclic`, ADR 0595 | `add_constraint` refused as stated | yes |
+| NC2 | refused, ADR 0595 | both (axis nodes, interpolation) | yes |
+| NC3 | `NotYetSupported` naming `beam::FOLLOW_UP` | both rows | yes |
+| NC4 | `UnsupportedKind { kind: "Beam2" }` | as stated | yes |
+| NC-O | `e >= 1e-3` | `0.778` | yes |
+
+The sector frequencies (Hz) of `k = 0`: 21.57, 57.43, 230.0, 297.4; `k = 1`: 24.41, 97.74, 245.7, 283.3; `k = 2`: 38.56, 87.78,
+181.0, 271.8; `k = 3`: 77.00, 92.52, 99.10, 276.3. Iterations 7 to 10, backward residuals `<= 5.4e-13`. Arithmetic 2 put
+`lambda_1` at `1e3 .. 1e4`; the measured one is `(2 pi 21.57)^2 = 1.84e4`, so the worst-case bound of arithmetic 4 is `~5e-12`; the
+measured `8.2e-13` is below it.
+
+**Mutations** (scratch copy, own target directory; each caught):
+
+| Id | Caught by |
+|---|---|
+| X1 | S0 (refused), M (its `k = 0` branch is `modal_analysis_mpc`), NC-O (refused) |
+| X2 | S1 .. S3, M (refused) |
+| X3 | S0, S1 .. S3, M, and B3 (the shell twin too, as stated) |
+| X4 | S0, S1 .. S3, M |
+| X5 (amended) | NC1 |
+| X6 | NC2 |
+
+**Deviations.** Amendment 1 (NC1 and D1a). NC2 uses `TieOptions::new(TieMethod::NodeToSurface)`, not `TieOptions::default()`
+(the type has no `Default`; the method is not reached, the refusal comes first). B3 rebuilds the frustum Shell4 sector of ADR 0556
+with the centrifugal load only (the registration named the sector, not its loads). `cargo fmt -p rcfd-fem --check` and `cargo
+clippy -p rcfd-fem --all-targets -- -D warnings`: clean. Not run: the whole workspace suite (the lead's gate).
+
+**Decision by the registered rule: done.** Every acceptance check, set-up check, control and mutation holds. The NC1 set-up defect
+was a set-up error, corrected by amendment before its corrected run. No limit was missed.
+
+### Remaining questions
+
+1. **`full_rotor` with beams.** Options: (a) a per-copy orientation (one block per sector copy, or an orientation per element in
+   `BlockProperty`) so that `full_rotor`/`expand` take Beam2; (b) leave it to the caller, as the tests here do. Recommend (a) as a
+   follow-up (proposed below).
+2. **Rotating paths on a beam sector.** They are reachable with the option (the stress-stiffening solve passes
+   `solve_static_mpc`) and are not checked. Options: (a) a follow-up that checks them against a rotating full ring; (b) refuse
+   them now with the option. Recommend (a); until then the option's doc names only the static and modal paths.
+3. **Default lift.** The opt-in keeps the four existing refusal tests. Lifting by default would retire NC3 of ADR 0556 and A-B of
+   ADR 0593 (a maintainer decision; not taken).
+
+## For the lead: roadmap entries
+
+Proposed status and note of F-672:
+
+> Proposed status: done.
+
+> Structural solver, advanced tier. Follow-up of F-666 (ADR 0593). DONE. ADR 0595, 2026-11-15: Beam2 elements in the cyclic constraint by the opt-in CyclicOptions::beams (with shells; refused without shells by add_constraint, and with interpolation or axis nodes; the default refusals and the four existing tests that assert them unchanged). The rows are those of ADR 0556 D2 on the six-unknown beam nodes; the sector stands for the ring whose sector j holds the beams rotated by R^j, orientation vectors R^j v included (the Timoshenko element is objective: R e_1 x R v = R (e_1 x v)). A wheel sector of ring and spoke beams about an oblique axis (N = 6, sections with I_z = 4 I_y, oblique orientation vectors), against the full ring built independently with rotated orientations: static k = 0 with nodal forces, moments and a centrifugal load within 6.6e-13, harmonic static k = 1..3 within 6.1e-13 (limit 1e-10), the rotation rows exact; the eigenvalues of each harmonic k = 0..3 within 8.2e-13 with equal counts below the cut-off (limit 1e-10, backward residual test), the expanded sector modes eigenvectors of the ring to a backward error of 1.5e-13, pair splits 2.6e-13. A ring with unrotated orientations is seen at 0.78. Models without the option keep their bits (existing tests, baseline hashes, a shell sector bit-equal with and without it). Six of six mutations caught. Not covered: full_rotor with beams (one orientation per block), the rotating paths on a beam sector, beam ends on interpolated or axis boundaries, line loads in the sector.
+
+> Follow-up proposed: full_rotor and the expansion of a cyclic sector with Beam2. Deps F-672. Acceptance: Every limit not stated here is registered in the ADR before the run. cyclic::full_rotor of a sector with CyclicOptions::beams gives each sector copy of a Beam2 block the orientation R^j v, and FullRotor::expand, expand_field and expand_load of the ADR 0595 wheel sector give the fields of the independently built ring within 1e-10; the defaults bit-identical.
+
+> Follow-up proposed: Rotating paths on a cyclic sector of beams. Deps F-672. Acceptance: Every limit not stated here is registered in the ADR before the run. RotatingSector on the ADR 0595 wheel sector (stress stiffening and spin softening, and with Coriolis the whirl modes) at two speeds gives the frequencies of each harmonic of RotatingPart on the full ring of beams within 1e-8; the defaults bit-identical.
