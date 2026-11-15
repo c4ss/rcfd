@@ -36,6 +36,9 @@
 //! stiffness at rest (one undamped part; Rayleigh damping and dashpots as above; no loss factor, pre-stress or viscoelastic
 //! material; the plain path). The code after the assembly is shared with [`DirectHarmonic::new`], moved unchanged.
 //!
+//! ADR 0596 (F-671): [`DirectHarmonic::about_state_with`] adds the tangents of the driver's contributions (a follower
+//! pressure, by its symmetric part) at the state to `K_T`, in the operator and in the Rayleigh stiffness.
+//!
 //! ADR 0565 (F-619): [`DirectHarmonic::response_with_references`] takes a [`BaseMotion`] at the prescribed equations of a
 //! model on the transformation path, `x = T q + G` with `G` the constant of the elimination for the complex base values
 //! (`T` unchanged), `A_r Q = T^T (F - A_ext G)`, and returns the reference unknowns of the rigid sets with the response
@@ -795,6 +798,25 @@ impl DirectHarmonic {
         states: &[ElementState],
         options: &DirectHarmonicOptions,
     ) -> Result<DirectHarmonic> {
+        Self::about_state_with(model, prescribed, u, states, 0.0, &[], options)
+    }
+
+    /// [`DirectHarmonic::about_state`] with the driver's contributions (ADR 0596 D2, F-671): `K = K_T + K_c(u, lambda)`, the
+    /// contributions' tangents at the displacement `u` and `load_factor` (the triplets of
+    /// [`crate::nonlinear::Contribution::add`], for a [`crate::follower::FollowerPressure`] the symmetric part of its load
+    /// stiffness) added to the driver's tangent before the pattern test, in `A(omega)` and in the Rayleigh stiffness `beta
+    /// K`. The factor is symmetric: where the antisymmetric part of a follower load couples free unknowns the response is
+    /// that of the symmetric approximation. Contribution errors are keyed `"contribution"`. With no contribution it is
+    /// [`DirectHarmonic::about_state`] (the same operations).
+    pub fn about_state_with(
+        model: &SolidModel,
+        prescribed: &[Prescribed],
+        u: &[f64],
+        states: &[ElementState],
+        load_factor: f64,
+        contributions: &[&dyn crate::nonlinear::Contribution],
+        options: &DirectHarmonicOptions,
+    ) -> Result<DirectHarmonic> {
         model.validate()?;
         model.check_supported_nonlinear()?;
         crate::nonlinear::check_driver_model(model)?;
@@ -853,7 +875,17 @@ impl DirectHarmonic {
             .into_iter()
             .map(|(eq, _)| (eq, 0.0))
             .collect();
-        let k_total_m = crate::nonlinear::tangent(model, u, states, options.threads)?;
+        let mut k_total_m = crate::nonlinear::tangent(model, u, states, options.threads)?;
+        if !contributions.is_empty() {
+            // ADR 0596 D2: the contributions' tangents at the state.
+            let mut triplets = Vec::new();
+            let mut scratch = vec![0.0; u.len()];
+            for c in contributions {
+                c.add(u, load_factor, &mut scratch, &mut triplets)
+                    .map_err(|e| invalid("contribution", format!("contribution '{}': {e}", c.name())))?;
+            }
+            crate::nonlinear::add_triplets(&mut k_total_m, &triplets);
+        }
         let mass_m = consistent_with(model, options.threads)?;
         if mass_m.col != k_total_m.col || mass_m.row_ptr != k_total_m.row_ptr {
             return Err(invalid(
