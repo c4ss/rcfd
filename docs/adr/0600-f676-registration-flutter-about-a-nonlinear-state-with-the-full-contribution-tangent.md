@@ -278,8 +278,8 @@ Commits: 12430655 (registration), 2cac357f (library function D1 and the test fil
 run was made once, in release, `cargo test -p rcfd-fem --release --test sa_flutter_state_f676 -- --nocapture
 --test-threads=1` on 2cac357f (`w49i-work/f676-scratch/run1.log`). N1 (`n1.log`), N2 (`n2.log`), S1 (`clippy.log`) and the
 mutations (`mutate.py`, `mutations.log`, a `git archive` of 2cac357f with its own target) on 2cac357f. Shared solver file
-changed: `crates/rcfd-fem/src/follower.rs`, additions only (88 lines: two module-doc lines 25-26 and the new function
-`tangent_buckling_factors_full_with`, lines 984-1069 at 2cac357f); no existing line edited.
+changed: `crates/rcfd-fem/src/follower.rs`, additions only (88 lines: two module-doc lines 28-29 and the new function
+`tangent_buckling_factors_full_with`, lines 988-1073 at 2cac357f); no existing line edited.
 
 | Id | Measured | Limit | Met |
 |---|---|---|---|
