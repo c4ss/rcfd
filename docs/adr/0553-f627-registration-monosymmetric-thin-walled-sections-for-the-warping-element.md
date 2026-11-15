@@ -370,3 +370,96 @@ estimates are unchanged. **A5', A6', A7'** are run as registered in amendment 2 
 The run-2 function stays as the ignored record `a_n_amended_run2_known_miss`. Its measured A1', A2', A3', A8' and N1' are the
 values of record. The new function `a_n_amended3_remaining` runs A4'', A5', A6' and A7' only. It recomputes the 16-element
 reference factors of A6' and A7' with the A1' set-up; this solve is deterministic and is the same computation, not a re-pick.
+
+## Addendum 1 (2026-11-15): results
+
+Written after three runs and the mutation runs. Run 1 (`f627-scratch/run1.log`, commit 9031e35a) ran all seven test functions
+once. Run 2 (`run2_amended.log`, commit f074f51f) is the amendment-2 A test. Run 3 (`run3_amended3.log`, commit 62644de5) is the
+amendment-3 remainder. The mutation runs are in `mutations.log` and `mut_Z*.log`. B0 after the change is in `b0_after.log`. The
+numbers are those the tests printed (release).
+
+### Results against the registered limits
+
+| id | measured | limit | verdict |
+|---|---|---|---|
+| B0 | the bit records of ADR 0508, 0546 and 0548 pass unchanged; `sa_beam_warping_f598.rs` (8 passed, 1 ignored) and `sa_beam_warping_f626.rs` (7 passed) pass unchanged | equal; pass | met |
+| D1 | `A` exact; `I_y` `1.4e-11`, `I_z` `9.0e-12`, `J` `2.9e-11`, `C_w` `1.6e-11`, `z_0` `6.3e-12`, `beta_y^C` `9.2e-12`, `beta_x` `2.6e-11` (rounding of the printed hand digits); `y_0 = beta_z^C = 0` | `1e-9` | met (run 1) |
+| D2 | `0` for each constant; `z_0 = 1.4e-17`, `beta_y^C = 0` | `1e-12` | met (run 1) |
+| D3 | `1.1e-15` | `1e-9` | met (run 1) |
+| A1 to A8, N1 (run 1) | no value: the solver refused the `-M_ref` solve (Sturm mismatch) | | MISSED (set-up, amendment 2) |
+| A1' (acceptance, flange 1 in compression) | `1.29e-3` (`M` 178684.2 against 178454.6) | `2e-2` | met (run 2) |
+| A2' (acceptance, flange 1 in tension) | `3.9e-4` (53979.8 against 53958.8) | `2e-2` | met (run 2) |
+| A3' | strains of flange 1 `+1.33e-5` (`+M_ref`) and `-1.33e-5` (`-M_ref`); the larger `|M|` belongs to the compressed case | holds | met (run 2) |
+| A8' | `2.7e-6` (compressed), `1.1e-6` (tension) | `1e-2` | met (run 2) |
+| N1' | against `beta_x = 0`: `0.82`, `0.45`; against `beta^C`: `0.50`, `0.33` | `> 0.3`; `> 0.15` | met (run 2) |
+| A4' (run 2) | no value: the solver refused at 8 elements (subspace above the rank of `K_sigma`) | | MISSED (set-up, amendment 3) |
+| A4'' (8 elements) | `2.1e-3`, `6.5e-4` | `2e-2` | met (run 3) |
+| A5' (`L = 1.5`; `L = 6`) | `2.2e-3`, `4.0e-4`; `4.6e-4`, `2.3e-4` | `2e-2` | met (run 3) |
+| A6' (axis `y`) | `1.3e-13`, `1.3e-13` | `1e-6` | met (run 3) |
+| A7' (`from_static`) | `3.3e-15`, `8.9e-16` | `1e-9` | met (run 3) |
+| C1 (column) | `3.5e-3` (607505.8 against 609657.1); `0.255` from `P_y` | `1e-2`; `> 0.1` | met (run 1) |
+| V1 (vibration) | `1.7e-3`, `3.0e-3` | `1e-2` | met (run 1) |
+| S1 | `phi(L)` `2.0e-6`; `v(L)` `1.2e-7` | `1e-3` | met (run 1) |
+| S2 | `phi(L) = 0`, every `chi = 0` exactly | strict | met (run 1) |
+| W1 | `phi(L)` `4.5e-7`, `chi(L)` `8.8e-6`, root bimoment reaction `4.8e-5`, `v(L)` against `z_0 phi(L)` `0` | `1e-3` | met (run 1) |
+| W2 | `3.9e-13` | `1e-9` | met (run 1) |
+| E1 | bit-equal outside the twist rows; `0` in them | exact; `1e-12` | met (run 1) |
+| E2' (amendment 1) | (a) `0`; (b) `0`, `5.6e-17` | `1e-12`; `1e-15` | met (run 1) |
+| E3, E4 | bit-equal | exact | met (run 1) |
+| R | 8 cases, each with its key; the doubly symmetric case with the same lateral load is accepted | exact | met (run 1) |
+
+The three functions that the solver stopped stay as ignored records: `a_n_run1_known_miss` and `a_n_amended_run2_known_miss`.
+The run-2 record holds the values of A1', A2', A3', A8' and N1'. Run 3 recomputed the 16-element reference factors of A6' and
+A7' and got them bit-identical to run 2 (`178.68421280057328`, `53.97979218576993`).
+
+Every measured value is at or below its estimate, except A1'. A1' is `1.29e-3` against an estimate of `3e-3`, so it too is
+inside. The shear-flexible lateral plane accounts for the size of the A, C1 and V1 errors: they are about `1e-3`, while the
+Euler-Bernoulli prototype gives about `1e-6`. The +M and -M cases sit above the closed form by about the same relative amount
+as in ADR 0546.
+
+### Mutations (scratch copy `f627-scratch/mut`, own target dir, one at a time; the non-ignored tests)
+
+| mutation | result | caught by |
+|---|---|---|
+| Z1 `beta^C` in the element | caught | A4'', A5', E2'(a) |
+| Z2 shift with the wrong sign | caught | A4'', A5', D1 (`beta_x`), E2'(a), E2'(b) |
+| Z3 `O` left out of the stiffness | caught | A4'', A5', C1, E1, S1, V1, W1 (`v(L)`) |
+| Z4 axial part transformed | caught | C1, E2'(a), E3 |
+| Z5 end-force conversion left out | caught | R (RF8 on the offset), E2'(a) |
+| Z6 bimoment ignored | caught | W1 |
+| Z7 bimoment with the wrong sign | caught | W1 |
+| Z8 shear centre from the wrong flange | caught | A4'', A5', C1, D1, V1 |
+| Z9 `O` with the wrong sign | caught | E1, E2'(a), S1, W1 (`v(L)`) |
+| Z10 mass transformed | caught | V1 |
+
+All ten mutations are caught, and the unmutated copy passes. Z3 is also caught by the A checks, which the registration did not
+predict: removing `O` changes the shear-strain point of the Timoshenko element, and that moves the factor.
+
+### Other runs
+
+| command | result |
+|---|---|
+| `cargo test -p rcfd-fem --release` | 250 test binaries and doc-tests, all pass; the ignored records stay ignored |
+| `cargo test -p rcfd-api --release --test baseline_hashes` | 3 passed, 1 ignored (unchanged) |
+| `cargo test -p rcfd-cli --release --test docs_site` | 2 passed (run again after the docs edit) |
+| `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings` | clean after b8fcb26e (a doc-comment line break, no code change) |
+| `cargo fmt -p rcfd-fem --check` | clean |
+
+Docs: an F-627 section in `docs/reference-data.md`. Only `crates/rcfd-fem/src/beam_warping.rs` changed among the source
+files.
+
+### Decision
+
+**Partial** by the registered rule. Run 1 met every check it measured, and all ten mutations are caught. The acceptance values
+are met: at 16 elements, `1.3e-3` with the larger flange in compression and `3.9e-4` with it in tension, against the `2e-2` of
+the acceptance. The doubly symmetric results are unchanged, bit for bit. However, A1 to A8 and N1 were met only after the
+post-run amendments 2 and 3. Both corrected the eigensolver set-up of the test: first the default subspace of 11, then the
+8-element subspace bound. The element is unchanged. Done is the maintainer's call.
+
+### Remaining questions
+
+- Q1 (load height on monosymmetric beams), recommendation (b), a separate item together with a non-uniform moment check.
+- Q2 (sections without symmetry, `beta_omega`), recommendation (a), not until a case needs it.
+- Q3 (amendment 2: `lowest_buckling_factors` on sign-asymmetric spectra), recommendation (b), a separate registered item in
+  `rcfd-linalg`: with the default options, any monosymmetric LTB load case that puts the larger flange in compression is
+  refused, so users meet it.
