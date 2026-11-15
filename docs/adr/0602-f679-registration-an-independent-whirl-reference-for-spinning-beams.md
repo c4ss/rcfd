@@ -377,3 +377,84 @@ mutation not caught. **todo**: WF, OD and SP not run.
   take them); the reference matches the default.
 - The sparse whirl solvers, the split modes, the whirl state and `full_rotor` with beams; the stationary-frame frequencies.
 - The full ring as a `RotatingPart` (ADR 0598 compared it with the sector); only the sector path is checked here.
+
+## Addendum 1: results (2026-11-15)
+
+No library change: the item is test-only and no library defect was found. Test file
+`crates/rcfd-fem/tests/sa_ring_whirl_beams_f679.rs` (four tests: the D3 reference in Rust with RF1 to RF3; NC0; NC1; the ring test
+with PR, WF, OD, SP, KA, DI, TR, AG), 0.27 s in release. No existing test edited, no golden or hash table touched. Run 1 (test at
+34e59da1, library unchanged from 43092983, log `f679-scratch/run1.log`) is the only registered run. Every check was met in it, so
+there is no amendment.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| RF1 reference against arithmetic 1 (48 roots, `omega_1`) | `1e-9` | `4.9e-13` | yes |
+| RF2 thin limit: ratio, Richardson | `3.9 .. 4.1`; `1e-7` | `3.9995 .. 3.9999`; `<= 3.3e-9` | yes |
+| RF3 reference whirl numbers; signs | `1e-6`; `kappa_f > 0 > kappa_b` | `1.7e-7` (the 7 digits of the table); every case | yes |
+| PR hoop force against the polygon model | `1e-8` | `2.4e-15` coarse, `3.6e-15` fine (deficit `-2.852e-3`, `-7.14e-4` of `rho A R^2`) | yes |
+| WF coarse: S in / S out / F in / F out | `8.1e-3` / `3.3e-3` / `4.9e-3` / `3.1e-3` | `4.05e-3` / `1.65e-3` / `2.45e-3` / `1.56e-3` | yes |
+| WF fine | `2.03e-3` / `8.3e-4` / `1.23e-3` / `7.8e-4` | `1.01e-3` / `4.13e-4` / `6.13e-4` / `3.89e-4` | yes |
+| OD observed order (48 frequencies) | `abs(p - 2) <= 0.5` | `1.9997 .. 2.0067` | yes |
+| SP split, every pair, both meshes | `1e-2` | `1.87e-3` (coarse, out-of-plane); in-plane `<= 4.6e-5`; fine `<= 4.7e-4` | yes |
+| KA whirl numbers | `1e-2` | `1.87e-3` | yes |
+| DI directions, wave senses; fifth over fourth | forward `tau >= 0.99`, backward `tau <= -0.99`; `>= 5` | every pair `Forward` `tau = +1.0000`, `Backward` `tau = -1.0000`; `13.72` | yes |
+| TR family purity | `1e-6` | `4.4e-16` | yes |
+| AG coarse mesh against the polygon model (48 frequencies) | `1e-8` | `3.1e-12` | yes |
+| NC0 free-ring static solve | `SingularStiffness` | `SingularStiffness` | yes |
+| NC1 no split without Coriolis | `10 n_q eps omega_max / omega_lo` (`1.5e-11 .. 7.0e-11`) | `2.2e-13 .. 6.1e-12` | yes |
+| B1 library lines changed | none | `git diff --stat 43092983`: the test and this ADR only | yes |
+| B2 `baseline_hashes` | pass | 3 passed, 1 ignored | yes |
+
+The library's errors equal the independent polygon model's predictions to the digits printed (AG `3.1e-12`): the Beam2 ring
+on the cyclic sector, with its Coriolis matrix, spin-softening mass, geometric stiffness and the pre-stress of the constrained
+copy, is the discretisation D7 describes, and it converges to the exact spinning ring at order 2. The in-plane split (`83` to `250`
+rad/s, the thin-ring `4 n Omega / (n^2 + 1)` within `4e-4`) is carried by the translation block, the out-of-plane split (`0.27` to
+`1.52` rad/s) by the section's rotary block alone; both match the reference within `1.9e-3` on the coarse mesh.
+
+`cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings` clean.
+
+**Mutations** (a `git archive` copy of 34e59da1, own target, `f679-scratch/mutate.py`, `run_mutations.sh`, logs `mut_X*.log`;
+each run once):
+
+| Id | Caught by |
+|---|---|
+| X5 global axis components (the escape of ADR 0598) | WF (up to `0.25`), OD, SP (`50`), KA, DI, TR (`0.43`), AG |
+| X1 rotary block zero | SP (`-1.00`), KA, DI, OD, AG |
+| X2 `I_y`, `I_z` exchanged in `b` | SP (`0.555`), KA, OD, AG |
+| X3 Coriolis matrix negated | DI (every pair: the wave senses reverse) |
+| X4 `G = Omega C` in the sector whirl | SP (`0.50`), WF (`0.25`), OD, AG |
+| X6 geometric stiffness without its lateral terms | WF (set F, `0.27`), OD, AG |
+| X7 Wagner's term zero | AG (`1.05e-4`), OD (`2.56`) |
+| X8 spin softening without the axial projection | WF (`7.3e-2`), OD, AG |
+| X9 rotary spin softening not projected | AG (`4.4e-5`) |
+
+Nine of nine caught. **Deviation:** X3 was registered as caught by DI and KA; KA did not catch it. The library's whirl number is
+computed with the same (negated) Coriolis matrix, so the sign of `kappa` against the mode's own orbit does not change. Only the wave
+sense `tau`, which is computed from the mass, shows the reversal. X3 is caught by DI as registered. Additional catchers beyond the
+registration (OD for X1, X2, X4, X6, X7, X8) are listed for information.
+
+**Decision by the registered rule: done.** Every check, RF1 to B2 and NC0, was met in the one registered run with no amendment,
+and every mutation was caught. Every clause of the acceptance is met. A free circular ring of Beam2 spinning about an oblique axis,
+on a 24-sector cyclic sector with `CyclicOptions::beams`, has its in-plane and out-of-plane forward and backward whirl at nodal
+diameters 2 and 3 from `RotatingSector::whirl_modes` at 1/6, 1/3 and 1/2 of the first frequency, without and with the centrifugal
+pre-stress. It matches the exact rotating-frame Timoshenko ring derived here (checked against the classical thin-ring forms to
+`3.3e-9`) within the registered discretisation error at two meshes, with observed order `1.9997 .. 2.0067` (expected 2) and every
+split within `1.9e-3` (limit `1e-2`).
+
+### Remaining questions
+
+1. **The free ring's own static solve.** `RotatingSector::new` with stress stiffening refuses a free sector (NC0): the index-0
+   centrifugal solve is singular, although its load is orthogonal to the rigid motions. Options: (a) leave it, with callers
+   using `with_unit_prestress` from a constrained copy as here; (b) a follow-up that solves the index-0 pre-stress of a free
+   sector with the rigid motions removed. Recommendation: (b), behind an opt-in (a fan wheel is mounted, so not urgent); it
+   changes no default result, because a free sector is refused today.
+2. **The status.** Options: (a) done, as the rule gives; (b) partial because X3 was caught by one of its two registered catchers.
+   Recommendation: (a). The rule asks for every mutation to be caught by at least one check, and it was.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> Structural solver, advanced tier. Follow-up of F-675 (ADR 0598). DONE. ADR 0602, 2026-11-15: an independent whirl reference for spinning beams, test-only (no library change). A free circular ring of Beam2 (R = 0.5 m, 30 x 20 mm steel section, the section axis y along the spin axis) on a 24-sector cyclic sector about an oblique axis with CyclicOptions::beams, its in-plane and out-of-plane forward and backward whirl at nodal diameters 2 and 3 from RotatingSector::whirl_modes, against the exact rotating-frame solution derived in the ADR: the spinning shear-flexible ring with rotary inertia, the Coriolis term of the section kinematics u + theta x s, spin softening and the hoop pre-stress rho A Omega^2 R^2, one 3 x 3 Hermitian gyroscopic problem per family and nodal diameter. It reproduces the thin inextensional rotating-ring formula and the classical out-of-plane ring formula in the thin limit within 3.3e-9. The rigid motions of the free ring (indices 0 and 1) are not solved; the pre-stress comes from a copy with two reaction-free linear constraints through with_unit_prestress, because the free sector's own static solve is singular. Speeds 1/6, 1/3 and 1/2 of the first frequency, without and with the pre-stress, two meshes: the frequencies are within the registered discretisation error (worst 4.1e-3 coarse, 1.0e-3 fine; the limits are twice the error predicted by an independent numpy polygon model, which the library matches to 3.1e-12), the observed order is 1.9997 to 2.0067 (expected 2), and the forward and backward split of every pair is within 1.9e-3 (limit 1e-2). The in-plane split, 83 to 250 rad/s, comes from the translation block; the out-of-plane split, 0.27 to 1.52 rad/s, comes from the rotary block alone. Directions and wave senses are exact, the families are uncoupled to 4e-16, and there is no split without Coriolis. Nine of nine mutations are caught, including the X5 of ADR 0598 (global axis components), which the sector-against-ring check had missed. Not covered: indices 0 and 1, the sparse and state whirl solvers, the ADR 0508 opt-in beam terms, and other section shapes.
+
+> Follow-up proposed: The centrifugal pre-stress of a free cyclic sector. Deps F-679. Acceptance: Every limit not stated here is registered in the ADR before the run. RotatingSector::new with stress stiffening on a free sector (no constraint removing the index-0 rigid motions), behind an opt-in, solves the index-0 centrifugal static problem with the rigid motions removed and gives the pre-stress of the ADR 0602 free ring within 1e-10 of the constrained-copy route, with the whirl frequencies of ADR 0602 unchanged within 1e-10; the defaults bit-identical.
