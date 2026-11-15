@@ -1182,6 +1182,7 @@ fn is_incompatible_refusal<T: std::fmt::Debug>(r: &rcfd_fem::Result<T>) -> (bool
 }
 
 #[test]
+#[ignore = "record of ADR 0506 RF1: the refusal of the Incompatible formulation by the nonlinear driver, retired by ADR 0608 (F-596); copy in si_eas.rs (rf1_incompatible_taken_after_f596)"]
 fn rf1_incompatible_refused_by_the_nonlinear_driver() {
     let mut ch = Checks::new();
     let inc = SolidFormulation::Incompatible;

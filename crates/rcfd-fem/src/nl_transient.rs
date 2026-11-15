@@ -1331,7 +1331,8 @@ impl Integrator {
     }
 
     /// The strain energy `sum_q w_q S . E/2` at the points of the stiffness rule (the St. Venant-Kirchhoff potential of an
-    /// elastic material; `E` the F-bar strain for a BBar Hex8, ADR 0506 D3; the neo-Hookean energy of a hyperelastic
+    /// elastic material; `E` the F-bar strain for a BBar Hex8, ADR 0506 D3, the enhanced strain for an Incompatible Hex8,
+    /// ADR 0608 D4; the neo-Hookean energy of a hyperelastic
     /// material in the energy-momentum step, ADR 0523 D5); refused for a material with history (key `"strain energy"`).
     pub fn strain_energy(&self) -> Result<f64> {
         let s = self.current()?;
@@ -1370,8 +1371,19 @@ impl Integrator {
                 continue;
             }
             let el = element_for(mesh.element_kind(e));
-            // ADR 0506 D3: an opted Hex8 takes the strain of its formulation (the F-bar strain of a BBar block).
+            // ADR 0506 D3: an opted Hex8 takes the strain of its formulation (the F-bar strain of a BBar block); ADR 0608 D4:
+            // the enhanced strain of an Incompatible block at its condensed modes.
             let opted = match crate::hex8x::opted(mesh, e) {
+                Some(crate::mesh::SolidFormulation::Incompatible) => Some(
+                    crate::nl_incompatible::modes_and_strains(
+                        &coords,
+                        material,
+                        &ue,
+                        &ElementState::new(Vec::new()),
+                        &context,
+                    )?
+                    .1,
+                ),
                 Some(f) => Some(nonlinear::hex8_strains(f, &coords, &ue)?),
                 None => None,
             };
