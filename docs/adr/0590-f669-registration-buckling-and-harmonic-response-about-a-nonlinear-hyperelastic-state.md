@@ -281,3 +281,9 @@ do not take contributions); no nonzero increments of prescribed displacements; t
 factor, pre-stress, temperature or viscoelastic material and recovers no stress; the plain path only (the driver refuses the
 transformation path); the buckling factors about a state are the linearised estimate (D1), not the nonlinear critical load (no
 arc-length comparison); Beam2 and shell models about a hyperelastic state not checked (F-645's materials).
+
+## Amendment 1 (2026-11-15, before any code was compiled or any check run)
+
+`BucklingResult` has a private field (`dofs`), so D1 in `follower.rs` cannot build it. `crates/rcfd-fem/src/buckling.rs` gets one
+additive `pub(crate)` constructor, `BucklingResult::from_parts`, with the fields `factors_with` fills; no existing line of
+`buckling.rs` changes and `factors_with` does not call it. Nothing else of the registration changes.
