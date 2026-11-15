@@ -290,3 +290,103 @@ module doc); the new test file `crates/rcfd-fem/tests/sa_contact_lifted_f608.rs`
 3. **Opt-in**: taken opt-in (a default would change ADR 0519's and ADR 0542's runs that refuse or cycle today).
 
 Open (not taken): making the line search or the fallback the default of the total Lagrangian contact body.
+
+## Addendum 1: results (2026-11-15)
+
+The library and the tests were committed (8045d2d3) before any run. Each registered run made once (`w49i-work/f608-scratch`:
+`run1.log` the new test file; `mut-ML*.log`, `run-mut.log` the mutations; `run-fem-full.log`, `run-baseline.log`,
+`run-docs.log`, `clippy.log`). No limit changed, no amendment, no diagnostic run after the registered one.
+
+| id | limit | measured | met |
+|---|---|---|---|
+| A1 L1 converges | converges | converges: step 1 two augmentations (first solve 7 corrections, then 3 and 2), step 2 two augmentations (4, 3, 2); penetration `2.15e-10` at the end | yes |
+| A2 Q(10, 1e-12) violations on L1 | 0 | 0 of 13 read pairs (2 exempt) | yes |
+| A2c one active set per residual, residuals finite | all | all | yes |
+| A2i an informative read pair per load step | every step | `[4, 3]` | yes |
+| A2r largest `r_{k+1}/r_k^2` of the read pairs above `1e-12` | finite, `<= 10` | 2.61 | yes |
+| A3 force balance `abs(abs(sum t n_z)/(p A) - 1)` | `<= 1e-8` | 0.0 (equal to the last bit) | yes |
+| LSr one length per correction, in `(0, 1]`; some `< 1` | all; some | all; the first solve `[0.0160, 0.0418, 0.3848, 1, 1, 1, 1]`, every later solve all 1 | yes |
+| LS0 bits with and without the option; lengths | bit for bit; all 1; empty without | bit for bit; `[1, 1, 1]`; empty | yes |
+| LS1 `abs(alpha_1/alpha* - 1)`; `0 < alpha_1 < 1` | `<= 1e-2`; holds | `1.15e-5` (`d_q = 6.834e-4`, `alpha_1 = 1.44219e-2`, `alpha* = 1.44221e-2`); holds | yes |
+| LS1n without the line search the solve fails | fails | fails: element 0 inverted (`det F = -1.51`) | yes |
+| LT trial force against `add`; records | bit for bit; unchanged, +1 | bit for bit (24 non-zero entries); `0 -> 0 -> 1` | yes |
+| RF the three refusals, key `"line_search"` | refused | refused, all three | yes |
+| NL0 the default refused with the texts | refused | "load step 1 of 2, augmentation 0: solver newton: singular tangent: pivot -1.4474e1 at node 67 component 2 (diagonal 7.97)" | yes |
+| B `rcfd-fem` release suite; `baseline_hashes`; `docs_site` | pass | 318 test binaries, 1315 passed, 0 failed, 329 ignored; `baseline_hashes` 3 passed, 1 ignored (table not edited); `docs_site` 2 passed | yes |
+
+Recorded without a limit. L1: no fallback iteration in any solve (`convex_iterations` 0 everywhere): with the line search the
+exact tangent factors at every iterate. All 8 contactor nodes end active (forces `3.70e-5 .. 1.44e-4`, the numbers of probe
+3 to four digits). ADR 0404's order on L1 `[2.26, 1.15, 1.00, 1.13]`. **L1-f** (fallback only): the cycle error of probe 1
+at iteration 12, nodes `[82]`, reproduced. **L1-l** (line search only): converges with exactly L1's residuals, sets and
+lengths (the fallback is never asked for). **L1-g** with both options: `1e-4`, `1e-3`, `2e-2` converge with 0 Q violations
+(largest ratios 2.7, 9.3, 6.9); `5e-3` converges with one Q violation (largest ratio 14.3; two nodes end lifted, gaps
+`2.0e-3` and `4.7e-4`); at `2e-2` four nodes end lifted. LS1 with the line search and 20 iterations converges in 4
+corrections (the iteration without it inverts the element).
+
+### Notes on the results
+
+1. The diagnosis holds: the defect recorded by ADR 0519's probe 2 is the length of the first Newton step with the lifted nodes
+   inactive, not the tangent. The first step is cut to 1.6 percent (close to the gap's share of the overshoot, `3e-4/2.1e-2 =
+   1.4` percent), the next two to 4 and 38 percent while the set grows `4 -> 6 -> 8`, then every step is Newton's.
+2. **The convexified tangent is on but not exercised in L1**: L1 and L1-l give the same bits. The title's means (ADR 0570's
+   `curvature_fallback`, a refused pivot taking `eps G G^T`) stays available for an iterate the line search does not prevent;
+   no run here needed it. The acceptance's clauses (convergence and Q) are met by the line search.
+3. A3 is met to the last bit: the punch's z balance holds to rounding at the converged state.
+4. L1-g at `5e-3` shows that the reading can fail on a lifted start where nodes stay out of contact (one pair above `10
+   r_k^2`); it is a report, outside the acceptance.
+
+### Mutations
+
+Each alone on a `git archive` copy of 8045d2d3 (`f608-scratch/mut`, target `target-mut`), the new test file run once.
+
+| id | caught by |
+|---|---|
+| ML1 (`alpha` always 1 in the step) | A1 (the cycle error of L1-f), LS1 (`alpha_1 = 1`) |
+| ML2 (`s` with the wrong sign) | A1 (cycle error), LS1 (`alpha_1 = 1`) |
+| ML3 (`add_trial_force` records) | A2c, A2i (`[0, 0]`), LT (`0, 1, 2`) |
+| ML4 (default `line_search` true) | LS0 (lengths without the option), LS1n (the solve no longer fails) |
+| ML5 (the trial ignores `alpha`) | A1 ("without the curvature part: singular tangent"), LS1 (error 1.0) |
+
+Five of five caught by checks named for them (LSr is not reached under ML1 and ML2: A1 ends the test first).
+
+### Crate runs
+
+`cargo fmt -p rcfd-fem --check`: clean. `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings`: clean. `cargo test -p rcfd-fem --release`: 0 failed. `cargo test -p rcfd-api --release --test baseline_hashes`: 3 passed, 1 ignored. `cargo test -p rcfd-cli --release --test docs_site`: 2 passed. Not run: the workspace suite (the lead's gate).
+
+Files: `crates/rcfd-fem/src/nonlinear.rs` (`NewtonOptions::line_search` field, default, builder and check at 1170 to 1175,
+1191, 1219 to 1223, 1270 to 1276; `LoadStep::step_lengths` 1300 to 1301; `Attempt` 1343 to 1344; `Contribution::add_trial_force`
+1421 to 1427; `attempt_with` 1679 to 1681, 1750, 1835 to 1855; `trial_slope` and `step_length` 1865 to 1979; `step_lengths`
+passed on at 2390, 2464 to 2465, 2649), `crates/rcfd-fem/src/arclength.rs` (117 to 123), `crates/rcfd-fem/src/contact.rs`
+(module doc 35 to 37, refusal 297 to 303, `NewtonSolve::step_lengths` 360 to 362, `add_trial_force` 2066 to 2071, `Solved`
+2081, 2193, 2350, 2414); the new test file `crates/rcfd-fem/tests/sa_contact_lifted_f608.rs`. No existing test or record edited.
+
+### Deviations
+
+None from the registration.
+
+### Decision
+
+**done** by the registered rule: A1 to A3, LSr, LS0, LS1, LS1n, LT, RF, NL0 and B met on their registered runs; five of five
+mutations caught by checks named for them; fmt and clippy clean. Plainly: the convergence comes from the line search; the
+convexified tangent of the title (ADR 0570) is switched on in L1 but never taken.
+
+### Remaining questions
+
+1. **Defaults.** Options: (a) keep both opt-in; (b) make the line search the default of the total Lagrangian contact body (it
+   changes ADR 0519 probe 2's refusal and any default run with `alpha < 1`; full steps keep their bits, LS0).
+   Recommendation: (a) now; (b) as a maintainer decision with a superseding ADR, after the line search has been run on the ADR
+   0542 hub and the ADR 0551 Hertz cases.
+2. **The cycle detector D6** counts returns to the final set as cycles (probe 1). Options: (a) leave (with the line search it
+   did not fire); (b) count only returns while the residual does not fall. Recommendation: (a).
+3. **The line search on the transient and quasi-static drivers** (reached through `solve_from`, not checked). Options: (a)
+   leave unchecked; (b) refuse it there as on the arc-length path. Recommendation: (a) until a case needs it.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> Structural solver, advanced tier. Follow-up of F-427 and F-600 (ADR 0507, ADR 0519). DONE. ADR 0607, 2026-11-15: diagnosis of the refused pivot with a lifted contactor: with the four lifted nodes inactive the first Newton correction (regular tangent) tips the punch about the two supported rows and throws the lifted half 33 to 71 gaps into the plate; the next tangent, with forces 1000 times their equilibrium, is indefinite through the contact curvature part; ADR 0570's convexified tangent (curvature_fallback) makes it factor but the undamped iteration then cycles (D6, iteration 12). rcfd_fem::nonlinear::NewtonOptions::line_search (opt-in): each correction of an attempt without a load-factor control takes the step length at which s = -d . r(u + alpha d), the derivative of the energy, has fallen to half its value (full step when it passes, else Illinois regula falsi, at most 8 trials); Contribution::add_trial_force (default add with the tangent dropped; the contact set records nothing); step lengths in LoadStep, Equilibrium and NewtonSolve; refused with the unsymmetric tangent, the arc-length path and the linear contact body. The T2 punch with the gap +3e-4 at the four nodes with x > 1.0 (fallback and line search on) converges (first solve lengths 0.016, 0.042, 0.38, then 1), Q(10, 1e-12) of ADR 0519 holds (0 violations in 13 read pairs, largest ratio 2.6), the punch's z force balance to the last bit; the fallback is never taken (the line search alone gives the same bits). Full steps keep Newton's bits; the line minimum of a soft-tangent cube within 1.2e-5; defaults and records unchanged; 5 of 5 mutations caught. Gaps 1e-4 to 2e-2 converge too (5e-3 with one Q violation, two nodes ending lifted; a report). No case-file key.
+
+> Text F-600's note should gain: "Follow-up F-608 done (ADR 0607, 2026-11-15): the lifted-contactor punch converges with NewtonOptions::line_search; Q(10, 1e-12) holds on it."
+
+> Follow-up proposed: line search on the other total Lagrangian contact cases. Deps F-608, F-639. Acceptance: "Every limit not stated here is registered in the ADR before the run. The total Lagrangian contact cases ADR 0542 P (hub, d = 1e-3 a) and ADR 0551 HS20t and HS10t are run with NewtonOptions::line_search with and without curvature_fallback; each run converges or its failure is diagnosed, and the fallback iterations and step lengths are recorded (limits registered)."
