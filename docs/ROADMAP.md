@@ -12699,14 +12699,31 @@ fixed by the item's registration ADR before any code.
     run's whirl comparison was vacuous); fixed and re-run under a registered amendment, every check met. Partial by the
     rule: CO1, W, SM and W0 met only after the post-run amendment 2 (run 1: the shell to_global symmetrises, so the
     Coriolis matrix vanished). Follow-up F-654 (independent whirl reference for spinning shells).
-- [ ] **F-648** Shells with interpolated cyclic boundaries and nodes on the axis
+- [~] **F-648** Shells with interpolated cyclic boundaries and nodes on the axis
   - depends on: F-628
   - acceptance: Every limit not stated here is registered in the ADR before the run. CyclicOptions::shells together with
     interpolation or axis_nodes gives the rotation unknowns the rows of ADR 0456 D4 (the interpolated rows and the
     harmonic rule on the axis); a shell sector with non-matching boundaries against the matched sector: frequencies
     within 1e-6 at the registered mesh, and an axis node of a closed shell cap against the full model within 1e-8;
     models without shells keep their bits.
-  - note: Structural solver, advanced tier. Follow-up of F-628 (ADR 0556, 2026-11-15).
+  - note: Structural solver, advanced tier. Follow-up of F-628 (ADR 0556, 2026-11-15). PARTIAL. ADR 0575, 2026-11-15:
+    shells with interpolated cyclic boundaries and nodes on the axis, by the opt-in CyclicOptions::shell_extensions
+    together with CyclicOptions::shells. Without the new flag, the ADR 0556 refusal and the test that asserts it are
+    unchanged; the flag without shells, and the mortar method on shell edges, are refused. Interpolated high nodes
+    follow the low shell edges rotated by R (node to edge, linear weights, FemError::TieGap above the tolerance). The
+    rotation unknowns of interpolated nodes and of axis nodes get the rows of ADR 0456 D4 with the same R as the
+    translations: theta_H - R (c sum w theta_L - s sum w phi_L) and the sine pair, and the axis null space applied to
+    both triples. A node whose unknown count differs from that of its partners is refused. On the ADR 0556 frustum, N =
+    6: a high column moved off the matching positions by 1e-6 of the segment length (15 times the match tolerance) is
+    within 2.9e-8 of the matched sector at the registered mesh (limit 1e-6). A genuine 2:3 boundary is within 7.4e-3
+    when the high side is the finer one (limit 2e-2), but 4.2e-2 when the low side is the finer one: a known miss,
+    caused by a soft mode local to the one-sided interface; at the doubled mesh the difference is 1.4e-3. The rotation
+    rows hold to 1.7e-15. A closed spherical cap with its pole on the axis (Shell4 with Shell3 at the pole, and all
+    Shell3), against the full model: the frequencies of each harmonic agree within 2.9e-15 with equal counts (limit
+    1e-8), and the pole has 2, 4, 0 and 0 free unknowns at k = 0 to 3. Models without shells keep their bits (every
+    rcfd-fem test, baseline_hashes, and a matched shell sector bit-equal with and without the flag). Ten of ten
+    mutations caught. Not covered: the mortar on shell edges, a two-sided edge tie, and the rotating paths and
+    full_rotor with these boundaries. Follow-up F-662 (Two-sided shell edge ties for non-matching cyclic boundaries).
 - [ ] **F-649** Arc-length continuation with a follower load direction
   - depends on: F-622, F-424, F-572
   - acceptance: Every limit not stated here is registered in the ADR before the run. The mean-dilatation Hex8 sphere of
@@ -12852,3 +12869,13 @@ fixed by the item's registration ADR before any code.
     fork-supported I beam under an axial force N = +/-0.5 of the torsional buckling load equals sqrt((G J k^2 + N I_p/A
     k^2 + E C_w k^4)/(rho I_p)) within 1e-3 at 16 elements; every result without the option bit-identical.
   - note: Follow-up of F-635 (ADR 0574, 2026-11-15).
+- [ ] **F-662** Two-sided shell edge ties for non-matching cyclic boundaries
+  - depends on: F-648
+  - acceptance: Every limit not stated here is registered in the ADR before the run. With
+    CyclicOptions::shell_extensions, a non-matching shell cyclic boundary also ties the low nodes that no high-node
+    image reaches (to the high edge rotated back, or by a node-to-edge mortar), so that neither side is left free; the
+    ADR 0575 frustum with the low side finer (2:3) has the four lowest frequencies of each harmonic within 2e-2 of the
+    matched sector, falling under refinement, with no mode local to the interface among them; the rotating paths (ADR
+    0561) on the ADR 0575 cap at two speeds against the full model within 1e-8; models without the option keep their
+    bits.
+  - note: Follow-up of F-648 (ADR 0575, 2026-11-15).
