@@ -211,3 +211,21 @@ run-1 test stays as it is (it passes: its DX rows are reported values); its A1 t
 The line through the values at rest and at `1.10` of run 1 reaches zero at `l_a = 1.0 + 0.1 x 8377 / (8377 - 2171) = 1.135`,
 close to the failure of ADR 0541 at `1.133`; this is a post-run observation (not the registered line), disclosed and not used
 as a result.
+
+## Amendment 2 (2026-11-15, written after the runs of MU1 and MU2 and before any run of MU1', MU2')
+
+**What happened.** MU1 and MU2 were run once each as registered (logs `f622-scratch/mut-MU1.log`, `mut-MU2.log`): every check
+of `sa_hyper_lock.rs` was met with the numbers of run 1 bit for bit, so **neither was caught**. Diagnosis: the registered site,
+`hex8_evaluate` (`nonlinear.rs` lines 604-622, the dispatch at 614-615), serves only the element entry points of ADR 0506 D5
+(`hex8_force_and_tangent_at`, `hex8_internal_force_at`, `hex8_second_piola_kirchhoff`); the driver's assembly
+(`internal_force` at line 1018 and the force-and-tangent loop at line 1104) chooses the F-bar element by `is_fbar(model, e)`
+(line 696) and calls `evaluate_fbar` or `evaluate_with` directly. The registration named a site that the sphere does not
+reach (an error of the registration, not of the checks; the two mutations were equivalent for this test file but were not
+declared so before their runs). They stay recorded as **not caught**, and the decision rule's "a mutation not caught" applies.
+
+**Corrected mutations, registered now** (each run once, scratch copy, against `sa_hyper_lock.rs`, after MU3 to MU5):
+
+| Id | Mutation | Expected to be caught by |
+|---|---|---|
+| MU1' | `is_fbar` returns `false` (every BBar Hex8 of the driver evaluated by the Full element) | A2, P3 |
+| MU2' | `is_fbar` returns `true` (every Hex8 of the driver, Full blocks included, evaluated by the F-bar element) | A1, A3, P1, P2 |
