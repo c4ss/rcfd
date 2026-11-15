@@ -270,3 +270,96 @@ copy (git archive of the code commit) with its own target, one at a time, `dg.rs
    magnitude); (b) a follow-up evaluating it in the step-local form without the cancellation (changes F-425's bits of
    `mat_hyper::energy`). Recommendation (a), recorded for the lead.
 3. **Case-file key.** Not added (brief). Recommendation as ADR 0523 open question 2, with `"material_discrete_gradient"`.
+
+## Addendum 1: results (2026-11-15)
+
+Runs: B0 recorded on the base f69eb128 (commit `62d608de`, `f611-scratch/b0-base.log`) before any library line. The library and
+the tests in commit `a7b58e10`; the registered runs on it, each once: the unit checks E1, Q1 to Q4 (`run1_unit.log`, one
+thread), the model checks of `sa_dgm.rs` (`run1.log`). Then `cargo test -p rcfd-fem --release` (`fem_all.log`, exit 0: 1012
+passed, 0 failed, 274 ignored; it ran `sa_dgm` and the unit checks once more as part of the suite, not a registered run, its
+numbers not used), `baseline_hashes` (`baseline.log`), `docs_site` (`docs_site.log`), clippy (`clippy.log`). No amendment; no
+limit changed; nothing re-run to pick a result.
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| A0 | SVK steady solve converged; NH bar integrator built; 1000 of 1000 steps, no halving, largest final residual `9.94e-8` | `Ok` | met |
+| A1 | `3.805e-13` | `<= 1e-10` | met |
+| A2 | `1.002e-12` | `<= 1e-6` | met |
+| A3 | `2.322e-13` | `<= 1e-6` | met |
+| K0n | 500 of 500 steps, no halving, largest final residual `9.85e-11` | `Ok` | met |
+| K1n | `2.832e-9` | `<= 1e-7` | met |
+| K2n | `dP = 1.458e-13`, `dJ = 3.291e-13` | `<= 1e-10`, `<= 1e-8` | met |
+| K0r | 500 of 500 steps, no halving, largest final residual `9.87e-11` | `Ok` | met |
+| K1r | `2.832e-9` | `<= 1e-7` | met |
+| K2r | `dP = 1.423e-13`, `dJ = 2.948e-13` | `<= 1e-10`, `<= 1e-8` | met |
+| E1a | `W 1.69e-13`, `S 1.42e-15`, `D 7.84e-16` | `<= 1e-12` each | met |
+| E1b | `W/m_425 2.27e-16`, `S 5.46e-16`, `D 6.16e-16` | `<= 1e-12` each | met |
+| E1r (record) | `1.30e-10` at `1e-6`, `1.49e-12` at `1e-4` | record | - |
+| E2 | `2.21e-16` (`W = 513.9648747943739` against `...740`) | `<= 1e-12` | met |
+| Q1 | `1.417e-14` (corrected 2888 of 3200 pairs) | `<= 1e-12` | met |
+| Q2 | bit for bit at `dE = 0`, `1e-13` and `1e-8` | exact | met |
+| Q3 | NH `1.29`, MR `1.45` | `<= 5` | met |
+| Q4 | `m_425 >= |W_425|`, finite, at every end | all | met |
+| I3 | equal state bytes | exact | met |
+| X1r (record) | `2.25e-13` | record | - |
+| X2r (record) | `1.67e-13` | record | - |
+| R1m | equal state bytes | exact | met |
+| T1m | equal state bytes | exact | met |
+| F1m | MR and NH accepted; MR refused with `DiscreteGradient` and `Average` (ADR 0523); NH with the Method step refused (`NotYetSupported`, the follow-up of ADR 0541); NH in a BBar block refused (ADR 0514); `energy_magnitude` of an inverted strain refused (`deformation gradient`) | all | met |
+| B1 | the six B0 digests of f69eb128; `sa_dg` (9 passed), `sa_dg_default_bits`, `sa_emc` (10 passed, 2 ignored), `sa_emc_default_bits`, `sa_nl_transient` (7 passed, 6 ignored), `sa_nl_transient_default_bits`, `sa_hyper` (11 passed, 3 ignored), `sa_hyper_default_bits` pass | exact; pass | met |
+| B2 | `baseline_hashes`: 3 passed, 1 ignored | pass | met |
+| S1 | `rcfd-fem` release 0 failed; `docs_site` 2 passed; `cargo fmt -p rcfd-fem -- --check` clean; `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings` clean | clean | met |
+
+**Mutations** (`f611-scratch/mutations.log`, `mutate.py`; a git-archive copy of `a7b58e10` with its own target
+`target-f611-mut`; the unit checks and `sa_dgm` run for each):
+
+| Id | Caught by |
+|---|---|
+| MV1 correction dropped | K1n `2.39e-3`, K1r `2.39e-3` (not Q1: Q1 tests `discrete_gradient` itself, the mutation was in `material_stress`) |
+| MV2 `beta = 0` (recorded, not required) | caught: Q2, Q4, E1b, and A0 (the bar's first step does not converge: the correction taken on the rounding of F-425's `W` divided by `|dE| ~ 1e-10`) |
+| MV3 MR strain energy without `c01` | K1r `3.1e-2` |
+| MV4 MR midpoint stress from the NH energy (recorded, not required) | caught: Q3 (MR `1.9e8`), Q2; `sa_dgm` passed, as registered |
+| MV5 isotropic material on the F-570 average | I3 |
+| MV6 MR refused in the new mode | F1m, K0r, R1m, T1m |
+| MV7 step-local volumetric energy `* (1 + 1e-9)` | E1a (`W 1.9e-9`), E1b, E2 (`6.1e-10`) |
+| MV8 `energy_magnitude` without the volumetric part | Q4 |
+| MV9 state internal force `* (1 + 1e-6)` (recorded, not required) | not caught (A3, K1n, K1r unchanged in every digit shown). Reading, not a measured decomposition: the cube starts at `u = 0` (zero internal force) and the step's residual is formed from the midpoint stress of each step, so the stored internal force does not enter the energy. Also a deviation: registered as "from the step-local NH stress", applied as F-425's internal force scaled (the step-local stress cannot evaluate Mooney-Rivlin). |
+
+All six required mutations (MV1, MV3, MV5, MV6, MV7, MV8) caught.
+
+**Diagnosis worth recording.** (i) K1n and K1r agree to four digits (`2.831984e-9`, `2.831973e-9`) and with ADR 0523's K1
+(`2.832e-9`): the energy error of the cube is set by the Newton residual tolerance at the same steps, not by the energy (MV3
+shows that the MR energy is the one measured). (ii) MV2 confirms the reason for D2: with F-425's evaluation of `W`, whose
+rounding is `eps |tr E|`, a rounding bound built on `|E|^2` would take the correction on noise at the bar's strain changes and
+the step would not converge. (iii) E1r: the step-local and F-425's energies differ by `1.3e-10` relative at strains of `1e-6`,
+all of it the cancellation in F-425's evaluation (E1b: `2.3e-16` of its term magnitude); the clause's "within 1e-12 at a
+point" holds at every strain of `1e-3` and above (E1a) and in the sense of rounding at every scale (E1b).
+
+**Deviations.** (1) MV9 applied in a form other than registered (above); it is not required. (2) MV1 not caught by Q1, as
+explained; it is caught by the registered K1n and K1r. (3) The step-local energy is kept (the registered choice), not removed.
+
+**Decision: done** by the registered rule (every check met, the records recorded, MV1, MV3, MV5, MV6, MV7, MV8 caught, fmt and
+clippy clean, B1 and B2 unchanged). **Proposed status: done**, unless the lead rules (open question 1) that keeping the
+step-local energy on `DiscreteGradient` beside the new variant falls short of the acceptance; then partial, as the decision
+rule says.
+
+Remaining questions (taken on the maintainer's standing instruction of 2026-11-11; none changes a default):
+
+1. Folding `DiscreteGradient` and `MaterialDiscreteGradient`: options (a) keep both (now); (b) switch `DiscreteGradient` to
+   F-425's functions and remove the step-local code, which needs the Mooney-Rivlin row of `sa_dg.rs` F1h edited and changes the
+   bits of ADR 0523's neo-Hookean runs (X1r, X2r: `~2e-13` of `u`). Recommendation (b) as a maintainer-approved clean-up.
+2. F-425's energy at small strain (`eps/|E|` relative): options (a) leave; (b) evaluate `mat_hyper::energy_parts` in the
+   cancellation-free form of ADR 0523 D2 (changes the bits of `mat_hyper::energy`, not of its stress). Recommendation (a) now,
+   (b) if a small-strain energy check ever needs it.
+3. `Auto` and the hyperelastic material (ADR 0523 open question 5): unchanged; recommendation (b) of ADR 0523 (`Auto` takes
+   `MaterialDiscreteGradient` for a hyperelastic material) once the maintainer allows F1ec of ADR 0514 to be updated.
+4. Case-file key: recommendation `algorithmic_stress = "material_discrete_gradient"` with ADR 0523 open question 2.
+
+## For the lead: roadmap entries
+
+Proposed status of F-611: done (by the registered rule; partial if the lead rules against keeping the step-local energy beside
+the new variant, open question 1).
+
+> Structural solver, advanced tier. ADR 0544, 2026-11-15: nl_transient gains AlgorithmicStress::MaterialDiscreteGradient, the discrete gradient of ADR 0523 with F-425's point functions (mat_hyper energy, stress, tangent at E_m, and the new mat_hyper::energy_magnitude as the rounding bound), taking the neo-Hookean and the Mooney-Rivlin material; DiscreteGradient and Average keep the step-local neo-Hookean of ADR 0523 (bits unchanged, Mooney-Rivlin refused there), Auto unchanged. Neo-Hookean spinning bar over ten turns: linear momentum 3.8e-13 (1e-10), angular momentum 1.0e-12 (1e-6), energy 2.3e-13 (1e-6). Large-strain cubes over 500 steps: neo-Hookean energy 2.8e-9, Mooney-Rivlin (c10 3.5e4, c01 1.5e4, kappa 1e6) energy 2.8e-9 (1e-7), momenta at most 3.3e-13. The step-local energy equals F-425's at a point within 1.7e-13 for strains from 1e-3 (1e-12), stress 1.4e-15, tangent 7.8e-16; at strains of 1e-6 the two differ by 1.3e-10 relative, the cancellation in F-425's evaluation (2.3e-16 of its term magnitude). Six of six required mutations caught (and two of three recorded ones); B0 digests of the base, baseline_hashes and the F-607, F-570 and F-425 tests unchanged. No case-file key. Folding DiscreteGradient into the new variant needs the Mooney-Rivlin row of the F-607 refusal test edited (maintainer's call).
+
+> Proposed follow-up (no new item added): fold AlgorithmicStress::DiscreteGradient into MaterialDiscreteGradient and remove the step-local neo-Hookean of ADR 0523 once the maintainer allows the Mooney-Rivlin row of sa_dg.rs f1h_refusals to be edited (ADR 0544, 2026-11-15, remaining question 1).
