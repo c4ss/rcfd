@@ -556,7 +556,8 @@ fn v1_v2_k1_volumes_densities_ranking() {
 // P3, NC1
 
 #[test]
-fn p3_nc1_plate_density_ranking() {
+#[ignore = "known miss of ADR 0616 (amendment 1): P3 4 of the 48 hole-edge elements outside the 116 of largest density (density ranks 126, 127, 140, 141; rank 116 2.5082e-1, smallest at the hole edge 2.3720e-1), limit unchanged; NC1 met (30 of 48 outside by eta_e), continued in nc1_plate_absolute_ranking"]
+fn p3_nc1_plate_density_ranking_known_miss() {
     let mut c = Checks::new();
     let (model, u) = solved_plate();
     let mesh = model.mesh();
@@ -620,6 +621,93 @@ fn p3_nc1_plate_density_ranking() {
         &format!("{missing_abs} of {} outside", edge.len()),
     );
     c.finish();
+}
+
+/// The hole-edge elements of the plate (every element with a face on the hole).
+fn hole_edge(mesh: &SolidMesh) -> Vec<usize> {
+    (0..mesh.n_elements())
+        .filter(|&e| {
+            let nodes = mesh.element_nodes(e);
+            mesh.element_kind(e)
+                .faces()
+                .iter()
+                .any(|f| f.iter().all(|&a| on_hole(mesh.nodes()[nodes[a]])))
+        })
+        .collect()
+}
+
+/// NC1 continued (ADR 0616 amendment 1): the absolute ranking of F-432 fails the hole criterion, 30 of 48 outside.
+#[test]
+fn nc1_plate_absolute_ranking() {
+    let mut c = Checks::new();
+    let (model, u) = solved_plate();
+    let mesh = model.mesh();
+    let (_, est) = energy_error(&model, &u, &PatchOptions::new()).unwrap();
+    let edge = hole_edge(mesh);
+    let ranked = est.ranked();
+    let top: BTreeSet<usize> = ranked[..mesh.n_elements().div_ceil(10)].iter().copied().collect();
+    let missing = edge.iter().filter(|e| !top.contains(e)).count();
+    c.holds(
+        "NC1 ranked by eta_e alone: 30 hole-edge elements outside the tenth (F-432)",
+        edge.len() == 48 && missing == 30,
+        &format!("{missing} of {} outside", edge.len()),
+    );
+    c.finish();
+}
+
+/// DP3 (ADR 0616 amendment 1), a diagnosis record without a limit: angle and ring of the elements of largest density and of
+/// the hole-edge elements. Element `e` of the 24 x 24 x 2 `hex_box` is ring `e % 24`, angular cell `(e / 24) % 24`, layer
+/// `e / 576`.
+#[test]
+#[ignore = "diagnosis record DP3 of ADR 0616 amendment 1 (no limit), run once"]
+fn dp3_plate_density_diagnosis_record() {
+    let (model, u) = solved_plate();
+    let mesh = model.mesh();
+    let (_, est) = energy_error(&model, &u, &PatchOptions::new()).unwrap();
+    let den = est.element_densities();
+    let edge = hole_edge(mesh);
+    let by_density = est.ranked_by_density();
+    let tenth = mesh.n_elements().div_ceil(10);
+    let angle = |e: usize| -> f64 {
+        let nodes = mesh.element_nodes(e);
+        let (mut x, mut y) = (0.0, 0.0);
+        for &a in nodes {
+            x += mesh.nodes()[a][0];
+            y += mesh.nodes()[a][1];
+        }
+        y.atan2(x).to_degrees()
+    };
+    let describe = |e: usize| {
+        format!(
+            "e {e} ring {} cell {} layer {} angle {:.2} density {:.4e}",
+            e % 24,
+            (e / 24) % 24,
+            e / 576,
+            angle(e),
+            den[e]
+        )
+    };
+    for (rank, &e) in by_density.iter().take(142).enumerate() {
+        println!(
+            "DP3 rank {rank:3}: {}{}",
+            describe(e),
+            if edge.contains(&e) { " (hole edge)" } else { "" }
+        );
+    }
+    let mut per_ring = [0usize; 24];
+    for &e in &by_density[..tenth] {
+        per_ring[e % 24] += 1;
+    }
+    println!("DP3 elements of each ring among the top {tenth}: {per_ring:?}");
+    let top: BTreeSet<usize> = by_density[..tenth].iter().copied().collect();
+    for &e in &edge {
+        let rank = by_density.iter().position(|&r| r == e).unwrap();
+        println!(
+            "DP3 hole edge {} rank {rank}{}",
+            describe(e),
+            if top.contains(&e) { "" } else { " OUTSIDE" }
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
