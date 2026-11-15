@@ -230,3 +230,82 @@ checks I1 to A3 not run.
 - Static and harmonic static solves with these boundaries go through the same rows; not checked here (the acceptance asks for
   frequencies).
 - A shell node shared with a solid and Beam2 stay refused (ADR 0556).
+
+## Addendum 1: results (2026-11-15)
+
+Library at 452cd139 (the run), then 70e0535c and eb90bd4c after the run. Those two commits change the whitespace of one refusal
+message and add a type alias for clippy; neither changes a number or a branch. Files: `model.rs` (`CyclicOptions::shell_extensions`
+and its builder), `cyclic.rs` (the module docs; in `boundary`, the guard of the ADR 0556 refusal, the refusal of the flag without
+`shells`, and the node-to-edge branch with the mortar refusal; the new private `shell_edge_weights`), `mpc.rs` (in `cyclic_rows`,
+the rotation rows and the unknown-count refusal of interpolated nodes, and the rotation rows of six-unknown axis nodes). Tests:
+`crates/rcfd-fem/tests/sa_cyclic_shell_extensions.rs`. No existing test was edited, and no golden or hash table was touched.
+
+Every registered check was run once (`f648-scratch/run1.log`, 2.3 s in release).
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| I1 shifted high column (Shell4, `epsilon = 1e-6`) against the matched sector | 1e-6 | 2.89e-8 (k = 0..3: 6.6e-9, 5.1e-10, 1.0e-9, 2.9e-8); 7 interpolated nodes, 0 matched pairs | yes |
+| I2a 2:3, high side finer (conforming) | 2e-2 | 7.40e-3 (k = 0..3: 7.4e-3, 6.1e-3, 2.0e-3, 4.5e-3) | yes |
+| I2b 2:3, low side finer (one-sided) | 2e-2 | **4.17e-2** (k = 0: 4.2e-2, k = 1: 3.9e-2, k = 2: 5.6e-3, k = 3: 9.9e-3) | **no** |
+| I3 level 2 over level 1 | 0.7 each | I2a 9.25e-4 / 7.40e-3 = 0.125; I2b 1.40e-3 / 4.17e-2 = 0.034 | yes |
+| R1 interpolated rotation rows in the k = 1 modes | 1e-13 | 1.65e-15 (72 node-modes) | yes |
+| A1 cap, Shell4 with Shell3 at the pole, against the full model: counts; k = 0..3; splits | equal; 1e-8; 1e-8 | 11 = 11 (largest full value 3.39e8, above the cut-off 1.26e8); 3.3e-16, 8.9e-16, 6.7e-16, 4.4e-16; 7.2e-16, 7.7e-16 | yes |
+| A2 cap, all Shell3, as A1 | as A1 | 13 = 13 (1.75e8 above 1.35e8); 2.9e-15, 8.9e-16, 4.4e-16, 4.4e-16; 2.3e-15, 1.1e-15 | yes |
+| A3 independent pole unknowns, k = 0..3 | 2, 4, 0, 0 | 2, 4, 0, 0 | yes |
+| B1 every rcfd-fem test (release) | pass | 1156 passed, 0 failed, 310 ignored (at 70e0535c) | yes |
+| B2 `baseline_hashes` | pass | 3 passed, 1 ignored | yes |
+| B3 matched shell sector with and without `shell_extensions` | equal bits | equal | yes |
+| NC1 to NC7 | as stated | each as stated: the ADR 0556 refusal twice; ADR 0575 for the flag alone and for the mortar; `TieGap` of node 43 at 1.33e-2 against 3.73e-3; the pole 1.0e-4 from the axis; "high node 49 has 3 unknowns ... has 6"; on the matched path no image within 1e-8, the nearest at 1.49e-7 | yes |
+
+Also run: `cargo test -p rcfd-cli --release --test docs_site` passed (2 tests), and `cargo fmt -p rcfd-fem --check` is clean. The
+first `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings` failed on `type_complexity` (the return type of
+`shell_edge_weights`). A type alias fixed it (eb90bd4c) and clippy is now clean. After that change the new test file,
+`sa_cyclic_shells` and `sa_tie` were run again and pass.
+
+**I2b known miss, diagnosis.** The low side has 12 segments and the high side has 8. In the ring, the coarse high edge of one
+sector meets the fine low edge of the next sector, and only the high nodes are tied. The intermediate low nodes that no high-node
+image reaches are left free, so the interface has a one-sided gap. The fourth value of k = 0 (1091.48 Hz against 1138.93 Hz) and
+the fourth value of k = 1 (1091.48 Hz against 1135.33 Hz) are the same mode. A frequency that does not change with the harmonic
+points to a mode local to the interface: the free low nodes form a soft line. At level 2 this local mode rises above the four
+lowest values, and the difference falls by a factor of 30 (I3). The rows are not at fault: I2a, the conforming orientation, meets
+its limit at 7.4e-3, and R1 shows the rows hold to 1.7e-15. The registration estimated 5e-3 to 1e-2 and did not foresee a local
+mode among the four lowest values. The test is kept as the ignored record
+`i2_i3_two_to_three_boundaries_against_the_matched_sector_known_miss`, with its limits intact. The checks of that run that were
+met (I2a and both I3 ratios) are also asserted, with the same set-up and limits, by the fast test
+`i2a_i3_met_parts_of_the_two_to_three_boundaries`.
+
+Mutations were run on a `git archive` copy of 70e0535c with its own target directory (`f648-scratch/mut`, `mutate.py`,
+`run_mutations.sh`, logs `mut_M*.log`). Each mutation was applied, its diff logged, and the tests run once with
+`--include-ignored`.
+
+| Id | Caught by |
+|---|---|
+| M1 interpolated rotation rows not emitted | I1, I2a/I3, I2b, R1 (the eigensolver no longer converges because the boundary rotations are free) |
+| M2 identity in place of `R` | I1 (3.4e-2), I2a (3.7e-2), I3, I2b, R1 (0.81) |
+| M3 sign of `s` flipped | I1 (0.25), I2a (0.23), I3, I2b, R1 (1.29) |
+| M4 axis rotation rows not emitted | A1, A2 (counts 16 against 11), A3 |
+| M5 axis rotation rows on the translations | A1, A2, A3 |
+| M6 edge weights swapped | I1 (0.28), I2a (0.50), I3, I2b |
+| M7 low edges not rotated | I1, I2a, I2b, R1, NC4, NC6 (`TieGap`, refused) |
+| M8 `shell_extensions` ignored | every positive check (refused), NC3 to NC6 |
+| M9 unknown-count check removed | NC6 (`Ok`) |
+| M10 axis rotation rows only with a sine part | A1, A2 (k = 0, 3), A3 |
+
+Ten of ten mutations were caught. The I2b record fails under every mutation because it is the known miss. It is never the only
+test that catches a mutation.
+
+Deviations: none from the registered set-ups or limits. The two commits made after the run change only a message string and a
+type name. Every registered check was run.
+
+**Decision by the registered rule: partial.** A registered check, I2b, missed (4.17e-2 against 2e-2) and is now a known miss.
+Every clause of the acceptance was met: a1 and a2 (the rows; R1, A3), a3 (I1, 2.9e-8 against 1e-6 at the registered mesh), a4
+(A1 and A2, within 3e-15) and a5 (B1 to B3). NC1 to NC7 behaved as stated, and every mutation was caught.
+
+### Remaining questions
+
+1. On the one-sided 2:3 shell boundary (I2b), the low nodes that are not tied form a soft line. Options: (a) a follow-up that
+   ties the shell edges on both sides, so that the low nodes no image reaches also follow the high edge rotated back by `R^T`
+   (the chain refusal of the elimination needs to be checked for this), or a node-to-edge mortar; (b) state in the docs that the
+   finer side should be the high side (I2a is conforming). Recommendation: (b) now, and (a) as the follow-up proposed below.
+2. The rotating paths take the rows with interpolated or axis-node shell boundaries but are not checked with them, and
+   `full_rotor` refuses an extended boundary. Recommendation: put a spinning-cap check in the same follow-up.
