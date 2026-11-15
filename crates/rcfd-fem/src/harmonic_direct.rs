@@ -31,6 +31,11 @@
 //! base motion and the supernodal factor are refused there. [`DirectHarmonicOptions::prestress`] adds `K_sigma` (ADR 0390)
 //! on both paths, real and undamped, and in the Rayleigh stiffness. A model without these and without a pre-stress takes the
 //! code of ADR 0448 as it was.
+//!
+//! ADR 0565 (F-619): [`DirectHarmonic::response_with_references`] takes a [`BaseMotion`] at the prescribed equations of a
+//! model on the transformation path, `x = T q + G` with `G` the constant of the elimination for the complex base values
+//! (`T` unchanged), `A_r Q = T^T (F - A_ext G)`, and returns the reference unknowns of the rigid sets with the response
+//! ([`DirectHarmonicSolution`]). [`DirectHarmonic::response_with_base`] keeps refusing base motion on that path.
 
 use crate::assemble::{assemble_with, stiffness_with};
 use crate::constraint::prescribed_equations;
@@ -216,6 +221,30 @@ impl BaseMotion {
     }
 }
 
+/// The harmonic motion of the reference point of one rigid set (ADR 0565 D3): the translation (x, y, z) then the small
+/// rotation (x, y, z), real and imaginary parts.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct HarmonicReference {
+    /// Index of the rigid set in [`SolidModel::constraints`].
+    pub constraint: usize,
+    /// The real parts of the six reference unknowns.
+    pub re: [f64; 6],
+    /// The imaginary parts.
+    pub im: [f64; 6],
+}
+
+/// A response of [`DirectHarmonic::response_with_references`] (ADR 0565 D3): the mesh response and, on the transformation
+/// path, the reference unknowns of every rigid set in the order of the constraints (none on the plain path).
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct DirectHarmonicSolution {
+    /// The mesh response (absolute displacements; the base values at their equations).
+    pub response: HarmonicResponse,
+    /// The reference unknowns of the rigid sets.
+    pub references: Vec<HarmonicReference>,
+}
+
 /// Options of a [`DirectHarmonic`] solver.
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
@@ -361,6 +390,49 @@ struct Transformed {
     beta: Vec<f64>,
     mass: Vec<f64>,
     dashpots: Vec<f64>,
+    /// ADR 0565 D1: the same real matrices on the extended mesh pattern (`n x n`), for `A_ext G`.
+    ext: ExtendedMatrices,
+    /// ADR 0565 D2: whether each mesh equation is prescribed.
+    prescribed: Vec<bool>,
+    /// ADR 0565 D1: the model, for the elimination with the base values.
+    model: Box<SolidModel>,
+}
+
+/// The real matrices of the transformation path on the extended mesh pattern (ADR 0565 D1).
+#[derive(Debug, Clone)]
+struct ExtendedMatrices {
+    row_ptr: Vec<usize>,
+    col: Vec<usize>,
+    parts: Vec<Vec<f64>>,
+    extra: Vec<f64>,
+    beta: Vec<f64>,
+    mass: Vec<f64>,
+    dashpots: Vec<f64>,
+}
+
+/// One entry of `A(omega)` from the real matrices of the transformation path at position `p` (ADR 0543 D1).
+#[allow(clippy::too_many_arguments)]
+fn dynamic_entry(
+    parts: &[Vec<f64>],
+    extra: &[f64],
+    beta_k: &[f64],
+    mass: &[f64],
+    dashpots: &[f64],
+    p: usize,
+    coef: &[C64],
+    rayleigh: (f64, f64),
+    omega: f64,
+) -> C64 {
+    let (alpha, beta) = rayleigh;
+    let w2 = omega * omega;
+    let mut v = C64::ZERO;
+    for (k, c) in parts.iter().zip(coef) {
+        v += c.scale(k[p]);
+    }
+    v += C64::from_real(extra[p]);
+    v += C64::from_real(-w2 * mass[p]);
+    v += C64::new(0.0, omega * (alpha * mass[p] + beta * beta_k[p] + dashpots[p]));
+    v
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -720,7 +792,7 @@ impl DirectHarmonic {
         }
 
         if on_transformation {
-            let t = transformed(
+            let mut t = transformed(
                 model,
                 &k_total_m,
                 &k_parts,
@@ -729,6 +801,9 @@ impl DirectHarmonic {
                 geometric.as_deref(),
                 &cd,
             )?;
+            for &(e, _) in &fixed {
+                t.prescribed[e] = true;
+            }
             return Ok(DirectHarmonic {
                 dofs,
                 n,
@@ -1236,24 +1311,40 @@ fn transformed(
         }
         Ok(r.val)
     };
+    let ext_parts: Vec<Vec<f64>> = k_parts.iter().map(|(v, _)| on_mesh(v)).collect();
+    let ext_mass = on_mesh(mass);
     let mut parts = Vec::with_capacity(k_parts.len());
-    for (v, _) in k_parts {
-        parts.push(reduce(on_mesh(v))?);
+    for v in &ext_parts {
+        parts.push(reduce(v.clone())?);
     }
+    let ext_extra = extra.clone();
+    let ext_beta = beta.clone();
+    let ext_dashpots = c_d.clone();
     let extra = reduce(extra)?;
     let beta = reduce(beta)?;
-    let mass = reduce(on_mesh(mass))?;
+    let mass = reduce(ext_mass.clone())?;
     let dashpots = reduce(c_d)?;
-    let (row_ptr, col) = pattern.expect("one matrix reduced at least");
+    let (r_ptr, r_col) = pattern.expect("one matrix reduced at least");
     Ok(Transformed {
         tr,
-        row_ptr,
-        col,
+        row_ptr: r_ptr,
+        col: r_col,
         parts,
         extra,
         beta,
         mass,
         dashpots,
+        ext: ExtendedMatrices {
+            row_ptr,
+            col,
+            parts: ext_parts,
+            extra: ext_extra,
+            beta: ext_beta,
+            mass: ext_mass,
+            dashpots: ext_dashpots,
+        },
+        prescribed: vec![false; n],
+        model: Box::new(model.clone()),
     })
 }
 
@@ -1300,20 +1391,36 @@ impl DirectHarmonic {
                 ),
             ));
         }
+        let (response, _, _) = self.solve_transformed_full(t, load, None, omega)?;
+        Ok(response)
+    }
+
+    /// The solve on the transformation path with an optional base constant `G = (re, im)` over all `N` unknowns (ADR 0543
+    /// D1, ADR 0565 D1): `A_r(omega) Q = T^T (F - A_ext G)` (`T^T F` without one), the solution `x = T Q + G` over all `N`
+    /// unknowns; returns the mesh response and the real and imaginary parts of `x`.
+    fn solve_transformed_full(
+        &self,
+        t: &Transformed,
+        load: &HarmonicLoad,
+        base: Option<&(Vec<f64>, Vec<f64>)>,
+        omega: f64,
+    ) -> Result<(HarmonicResponse, Vec<f64>, Vec<f64>)> {
         let coef = self.coefficients(omega)?;
-        let (alpha, beta) = self.rayleigh;
-        let w2 = omega * omega;
         let nq = t.row_ptr.len() - 1;
         let mut val = Vec::with_capacity(t.col.len());
         let mut damped = false;
         for p in 0..t.col.len() {
-            let mut v = C64::ZERO;
-            for (k, c) in t.parts.iter().zip(&coef) {
-                v += c.scale(k[p]);
-            }
-            v += C64::from_real(t.extra[p]);
-            v += C64::from_real(-w2 * t.mass[p]);
-            v += C64::new(0.0, omega * (alpha * t.mass[p] + beta * t.beta[p] + t.dashpots[p]));
+            let v = dynamic_entry(
+                &t.parts,
+                &t.extra,
+                &t.beta,
+                &t.mass,
+                &t.dashpots,
+                p,
+                &coef,
+                self.rayleigh,
+                omega,
+            );
             damped |= v.im != 0.0;
             val.push(v);
         }
@@ -1325,8 +1432,42 @@ impl DirectHarmonic {
             x.resize(nn, 0.0);
             x
         };
-        let b_re = t.tr.transpose_times(&extend(load.re()));
-        let b_im = t.tr.transpose_times(&extend(load.im()));
+        let (b_re, b_im) = match base {
+            None => (
+                t.tr.transpose_times(&extend(load.re())),
+                t.tr.transpose_times(&extend(load.im())),
+            ),
+            Some((g_re, g_im)) => {
+                // ADR 0565 D1: F - A_ext G on the mesh rows (the reference rows of A_ext are zero)
+                let e = &t.ext;
+                let (mut y_re, mut y_im) = (extend(load.re()), extend(load.im()));
+                for i in 0..self.n {
+                    let mut s = C64::ZERO;
+                    for p in e.row_ptr[i]..e.row_ptr[i + 1] {
+                        let j = e.col[p];
+                        let gj = C64::new(g_re[j], g_im[j]);
+                        if gj == C64::ZERO {
+                            continue;
+                        }
+                        let v = dynamic_entry(
+                            &e.parts,
+                            &e.extra,
+                            &e.beta,
+                            &e.mass,
+                            &e.dashpots,
+                            p,
+                            &coef,
+                            self.rayleigh,
+                            omega,
+                        );
+                        s += v * gj;
+                    }
+                    y_re[i] -= s.re;
+                    y_im[i] -= s.im;
+                }
+                (t.tr.transpose_times(&y_re), t.tr.transpose_times(&y_im))
+            }
+        };
         let rhs: Vec<C64> = b_re.iter().zip(&b_im).map(|(&r, &i)| C64::new(r, i)).collect();
         let opts = ComplexSkylineOptions {
             min_relative_pivot: if damped { 0.0 } else { self.resonance_pivot },
@@ -1362,10 +1503,117 @@ impl DirectHarmonic {
         let q = ldlt.solve(&rhs);
         let q_re: Vec<f64> = q.iter().map(|z| z.re).collect();
         let q_im: Vec<f64> = q.iter().map(|z| z.im).collect();
-        let mut re = t.tr.expand(&q_re);
-        let mut im = t.tr.expand(&q_im);
-        re.truncate(self.n);
-        im.truncate(self.n);
-        Ok(HarmonicResponse { omega, re, im })
+        let mut x_re = t.tr.expand(&q_re);
+        let mut x_im = t.tr.expand(&q_im);
+        if let Some((g_re, g_im)) = base {
+            for (x, g) in x_re.iter_mut().zip(g_re) {
+                *x += g;
+            }
+            for (x, g) in x_im.iter_mut().zip(g_im) {
+                *x += g;
+            }
+        }
+        let re = x_re[..self.n].to_vec();
+        let im = x_im[..self.n].to_vec();
+        Ok((HarmonicResponse { omega, re, im }, x_re, x_im))
+    }
+
+    /// The constant `G` of `x = T q + G` for the base motion `base` at prescribed equations (ADR 0565 D1, D2): the
+    /// elimination of the model's constraints with the real and with the imaginary base values.
+    fn base_constant(&self, t: &Transformed, base: &BaseMotion) -> Result<(Vec<f64>, Vec<f64>)> {
+        let (mut v_re, mut v_im) = (BTreeMap::new(), BTreeMap::new());
+        for &(node, component, amp) in base.entries() {
+            let eq = self.dofs.equation(node, component).ok_or_else(|| {
+                invalid(
+                    "base motion",
+                    format!("node {node} component {component} is not an unknown of the model"),
+                )
+            })?;
+            if !t.prescribed[eq] {
+                return Err(invalid(
+                    "base motion",
+                    format!(
+                        "node {node} component {component} is not a prescribed equation of the model: base motion is \
+                         given at prescribed equations (ADR 0565 D2)"
+                    ),
+                ));
+            }
+            if v_re.contains_key(&eq) {
+                return Err(invalid(
+                    "base motion",
+                    format!("node {node} component {component} given twice"),
+                ));
+            }
+            if !amp.is_finite() {
+                return Err(invalid(
+                    "base motion",
+                    format!("amplitude {amp} at node {node} component {component} is not finite"),
+                ));
+            }
+            v_re.insert(eq, amp.re);
+            v_im.insert(eq, amp.im);
+        }
+        let mut parts = Vec::with_capacity(2);
+        for values in [&v_re, &v_im] {
+            let tv = crate::mpc::transformation_with_values(&t.model, values)?;
+            if tv.t() != t.tr.t() || tv.independent() != t.tr.independent() {
+                return Err(invalid(
+                    "base motion",
+                    "the elimination with the base values gives another transformation (internal; ADR 0565 D1)"
+                        .to_string(),
+                ));
+            }
+            parts.push(tv.g().to_vec());
+        }
+        let g_im = parts.pop().expect("two eliminations");
+        let g_re = parts.pop().expect("two eliminations");
+        Ok((g_re, g_im))
+    }
+
+    /// The steady response at `omega` to `load` and the base motion `base` with the reference unknowns of the rigid sets
+    /// (ADR 0565). On the transformation path a base motion at the model's prescribed equations enters `x = T q + G`,
+    /// `A_r Q = T^T (F - A_ext G)`; the response is the mesh part of `x`, the references its reference unknowns. On the plain
+    /// path the response of [`DirectHarmonic::response_with_base`] and no references.
+    pub fn response_with_references(
+        &self,
+        load: &HarmonicLoad,
+        base: &BaseMotion,
+        omega: f64,
+    ) -> Result<DirectHarmonicSolution> {
+        let Some(t) = &self.transformed else {
+            let response = self.solve(load, base, omega)?;
+            return Ok(DirectHarmonicSolution {
+                response,
+                references: Vec::new(),
+            });
+        };
+        if !(omega.is_finite() && omega >= 0.0) {
+            return Err(invalid("frequency", format!("{omega:e} (must be finite and >= 0)")));
+        }
+        if load.re().len() != self.n {
+            return Err(FemError::FieldLength {
+                key: "harmonic load",
+                expected: self.n,
+                found: load.re().len(),
+            });
+        }
+        let g = if base.entries().is_empty() {
+            None
+        } else {
+            Some(self.base_constant(t, base)?)
+        };
+        let (response, x_re, x_im) = self.solve_transformed_full(t, load, g.as_ref(), omega)?;
+        let references =
+            t.tr.references()
+                .iter()
+                .map(|&(constraint, r0)| {
+                    let mut re = [0.0; 6];
+                    let mut im = [0.0; 6];
+                    re.copy_from_slice(&x_re[r0..r0 + 6]);
+                    im.copy_from_slice(&x_im[r0..r0 + 6]);
+                    HarmonicReference { constraint, re, im }
+                })
+                .collect();
+        Ok(DirectHarmonicSolution { response, references })
     }
 }
