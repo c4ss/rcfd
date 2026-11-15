@@ -275,3 +275,22 @@ Not taken:
 
 3. Whether a future default should use this load on curved Shell3 sets: no (it changes default results); recommendation to keep
    it opt-in.
+
+## Amendment 1 (2026-11-15): the comparison of S1 (written after run 1, before the corrected run)
+
+Run 1 (commit c9a5ce56, `f633-scratch/run1.log`, made once) met every registered check except S1, which printed `false`.
+Diagnosis (`f633-scratch/diag_s1.log`, a throw-away test file that rebuilt the two load vectors of S1 and was deleted, not
+committed): of the 918 entries, the 459 that differ in their bits are exactly the 459 zero entries, the nodal moments, which
+the load does not set: `nodal_load_vector` starts from `0.0` and negating `0.0` gives `-0.0`, whose bits differ. All 459
+non-zero entries are the exact negation, bit for bit. So the set-up of S1 is defective (it compared signed zeros), not the load.
+
+Corrected S1 (the limit unchanged: exact): every entry `b` of the load of `-p` equals the negation of the entry `a` of the load of
+`p` bit for bit, `(-a).to_bits() == b.to_bits()`, except that an entry with `a == 0.0` and `b == 0.0` (either sign) counts as
+equal. The run-1 code of S1 is kept as the ignored record `s1_negated_load_bits_known_miss` (unchanged, its measured `false`
+recorded); the other checks of run 1 stay in `curvature_pressure_sphere_and_cylinder` (their code unchanged, S1 moved out);
+the corrected check is `s1_negated_load_after_amendment_1`, run once. By the decision rule, S1 met only after this amendment
+makes the outcome **partial** whatever the corrected run gives.
+
+A misquote in the checks table, recorded and not changed above: the estimate of NC3 is `9.72e-2`, not `9.5e-2` (ADR 0461 gives
+the O1 range `0.9027895620 .. 1.0950504406`, whose largest deviation is `1 - 0.9028 = 9.72e-2`); the limit `> 1e-2` is
+unaffected.
