@@ -227,3 +227,70 @@ Full Hex8 only (the BBar block's mean-dilatation element, Hex20 and Tet elements
 about a nonlinear hyperelastic state (the rest of ADR 0555's follow-up text) have no path that takes the driver's tangent (the
 linear pre-stress paths take `D` at rest, N2) and are not built here; Beam2 and shells (F-645). The full-matrix eigenvalues (KE)
 are a record without a limit.
+
+## Addendum 1: results (2026-11-15)
+
+Commits: 4a69ea76 (registration), 7ee49acf (tests, as in run 1), and this addendum. Runs, each once, release, `--nocapture
+--test-threads=1`, logs in `w49i-work/f646-scratch`: run 1, the whole new file (`run1.log`, on 7ee49acf); the mutations
+(`mutations.log`, on a `git archive` of 7ee49acf with its own target, the test `s0_to_n3_stretched_bar` for each). No line under
+`crates/*/src` changed. No amendment.
+
+| Id | Measured | Limit | Met |
+|---|---|---|---|
+| S0 | NH: converged in 10 steps, stretch `1.05061`; MR: 10 steps, stretch `1.05132` | `Ok` | yes |
+| T0 | all six calls `Ok` in 9 iterations, six frequencies each, worst residual `7.6e-11` (NH stretched), `5.9e-11` (MR stretched), `2.0e-11` (rest, both paths) | `Ok`, residuals `<= 1e-10` | yes |
+| KM | NH `3.95e-12`, MR `4.66e-12` | `<= 1e-8` | yes |
+| F1 | NH `1.33e-7`, MR `1.34e-7` | `<= 1e-6` | yes |
+| C0 | NH `1.19e-7`, MR `1.19e-7` | `<= 1e-6` | yes |
+| R0 | `0` (NH, MR) | `<= 1e-9` N | yes |
+| R1 | `0` (NH, MR: the frequencies of `tangent_modes` at zero load and of `modal_analysis` are equal in every bit) | `<= 1e-10` | yes |
+| N1 | NH `0.687`, MR `0.681` (first bending pair `1.2607` to `2.1265` Hz, NH) | `>= 1e-2` | yes |
+| N2 | NH `6.75e-2` (linear pre-stress path `2.2529 .. 7.8762` Hz against `2.1265 .. 7.3447`) | `>= 1e-4` | yes |
+| N3 | NH `0.305`, MR `0.301` | `>= 1e-2` | yes |
+| KE (record) | frequencies of the symmetrised reduced `K_FD` against `tangent_modes`: `1.96e-10` (9 iterations); asymmetry of `K_FD` `1.46e-12` of `max |K_T|` | record | - |
+| B1 | `git diff --stat 8d531fab -- crates/*/src` empty | empty | yes |
+| S1 | `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings` clean | clean | yes |
+
+**Mutations** (`mutations.log`, one at a time; the log keeps the missed lines, so a check absent from a row was met):
+
+| Id | Caught by | Expected "not" entries |
+|---|---|---|
+| MU1 (`v_ii` to zero) | KM `2.34e-2` (NH, MR), F1 `2.80e-2` (NH), `2.83e-2` (MR) | R1, C0 met, as expected |
+| MU2 (`i1 / 3.0` to `3.0 / 3.0` in the isochoric tangent) | KM `1.69e-3`, `1.20e-3`; F1 `2.86e-3`, `2.04e-3` | R1, C0 met, as expected |
+| MU3 (the hyperelastic arm returns the tangent at rest) | KM `0.175`, `0.182`; F1 `7.9e-2`, `9.1e-2` (Newton still converged with the wrong tangent) | R1 met, as expected |
+| MU4 (geometric part dropped, `nonlinear.rs` 275; the registration said 276, the same line `*v += g;`) | S0 (Newton fails at load step 7 after 5 halvings, NH and MR) | R1 not reached (S0 returns first) |
+| MU5 (linearised shear entries `2G`) | R1 `0.293` (NH, MR) | KM, F1, C0 met, as expected |
+
+Five of five registered mutations caught, each by one of its expected checks.
+
+**Deviations and diagnoses.** None of the limits was missed and no amendment was written. (1) R1 came out exactly `0`: at `E =
+0` the driver's element tangent and the linear element stiffness give the same reduced matrices in every bit for this mesh and
+material (the estimate was `~1e-13`; the worst case `5e-10` of arithmetic 5 did not occur). (2) F1 (`1.33e-7`) and C0
+(`1.19e-7`) sit at the estimate `1.4e-7` of arithmetic 2, which was dominated by the worst-case rounding bound; their near
+equality at rest and at the state agrees with rounding, not truncation, being the larger part. (3) KE (record): the eigenvalues
+of the full-matrix central difference agree with the tangent modes within `1.96e-10`, far below the worst-case bound of
+arithmetic 3; it is a record and no decision rests on it. (4) MU4 was caught by the set-up check S0 (Newton fails without the
+geometric stiffness), one of its registered expectations. Not run: the whole workspace suite (the lead's gate) and
+`baseline_hashes` (no shared solver file changed; the mutations of `nonlinear.rs`, `material.rs` and `mat_hyper.rs` were made on
+the scratch copy only).
+
+**Decision: done** by the registered rule: S0, T0, KM, F1, C0, R0, R1 and N1 to N3 met for both rows (N2 for NH) in the one
+registered run, MU1 to MU5 caught, B1 and S1 met, no post-run amendment.
+
+**Remaining questions** (none changes a default):
+
+1. Buckling and the harmonic response about a nonlinear hyperelastic state (the rest of ADR 0555's follow-up text). Options: (a)
+   a follow-up giving `follower::buckling_factors`-style and direct-harmonic entry points the driver's tangent at a state; (b)
+   leave the linear pre-stress paths (`D` at rest, N2 shows a `6.7 %` difference at `5 %` strain) as they are and document it.
+   Recommend (a), proposed below.
+2. The BBar (mean-dilatation) block about a stretched state, near-incompressible. Options: (a) a follow-up with the same checks on
+   the BBar bar at `K/G = 1e4` (the modal tolerance raised as in ADR 0581); (b) nothing. Recommend (a), folded into the
+   follow-up below.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> Structural solver, advanced tier. Follow-up of F-620 (ADR 0555, 2026-11-15). DONE. ADR 0586, 2026-11-15: test-only (no library line changed): follower::tangent_modes already takes the hyperelastic material (the driver's model check) and its matrix is nonlinear::tangent, mat_hyper::stress_and_tangent at each point's Green-Lagrange strain plus the geometric part. Stretched bar (Full Hex8 8 x 2 x 2, 2 x 0.5 x 0.5, clamped, 3.6e4 N axial, stretch 1.051; neo-Hookean mu 1e6 kappa 1e7 and Mooney-Rivlin 3.5e5, 1.5e5, 1e7): the tangent at the state against column central differences of the nonlinear static residual (h = 1e-6) 3.9e-12 and 4.7e-12 of the largest entry (limit 1e-8); the six lowest frequencies of tangent_modes against central differences of the residual along each mode (step 5e-6, derived) 1.3e-7 (limit 1e-6), the same measure at rest 1.2e-7; at zero load tangent_modes equals modal_analysis in every bit (limit 1e-10). Negative controls: stretched against rest 0.69, against the linear pre-stress path (D at rest) 6.7e-2, the directional measure against the rest tangent 0.30. Record: the eigenvalues of the full central-difference matrix agree within 2.0e-10. Five of five mutations caught: two mat_hyper tangent terms that vanish at rest and the tangent at rest at every state (by the matrix and frequency checks, not by the rest check), the dropped geometric part (Newton fails), the linearised shear doubled (only by the rest check). Defaults unchanged by construction. Not covered: BBar, Hex20, Tet, buckling and harmonic about the state.
+
+> Follow-up proposed: buckling and harmonic response about a nonlinear hyperelastic state. Deps F-646. Acceptance: Every limit not stated here is registered in the ADR before the run. The buckling factors and the direct harmonic response about a nonlinear static state of a hyperelastic model take the driver's tangent at that state; at a load of zero they equal those of the linear paths within 1e-10, and the BBar bar at K/G = 1e4 about a stretched state gives frequencies that agree with central differences of the nonlinear static residual within 1e-6.
