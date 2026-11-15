@@ -212,3 +212,81 @@ code does not build or a default bit changes and cannot be restored without chan
    level structures, while the static and harmonic solves order the same variant by coordinates. The variant's name says
    "nested dissection", which holds for both.
 3. **Default.** Making the supernodal factor the contact default changes default results: not taken, open.
+
+## Addendum 1: results (2026-11-14)
+
+Commits after the registration (c2ab5b16): the default-bits record B on the unchanged library (4b185815,
+`f615-scratch/bits-base.log`); the option and the tests (3bbcb043; `contact.rs` lines 30, 33, 117-121, 136, 164-168, 191-209,
+946-975, 982, 992-993, 1074, 1083, 1212); a module doc line (17211a6f, `contact.rs` lines 14-15, comment only). No amendment was
+needed and no limit was changed.
+
+Every registered run was made once, in release: B and the two existing bit records (`run-bits.log`); the three fast tests of
+`sa_contact_supernodal_f615.rs` with one test thread (`run-fast.log`, 51 s); the heavy record alone through `heavy.ps1`
+(`run_heavy.log`, `run_heavy_memory.log`; free memory at the start 11.0 GB). Logs in `f615-scratch`.
+
+| check | limit | measured | met |
+|---|---|---|---|
+| T1 `t_s / t_p`, `n = 32` | `< 1/3` | **`5.63e-2`** (`t_p` 1456.59 s, `t_s` 82.01 s; 16 rayon threads in both) | yes |
+| V1 `n = 32`: `p_mid`, `B_0.25`, `B_0.5`, `P_f`, `q_0.25`, `q_0.5`, largest node pressure | `<= 1e-10` each | `2.4e-14`, `1.8e-13`, `4.4e-15`, `5.0e-12`, `3.1e-12`, `2.2e-12`, `1.4e-12` | yes |
+| V1 `n = 32`: worst row `F_k/A_k` | `<= 1e-10` | `8.1e-12` | yes |
+| V1e `n = 32`: row of the largest node pressure; E1's flag | equal | equal; equal (true) | yes |
+| V2 `n = 4`: the seven readings | `<= 1e-10` | `2.5e-13`, `3.0e-13`, `2.3e-13`, `1.6e-13`, `5.0e-13`, `2.4e-13`, `3.2e-14`; rows `7.1e-13` | yes |
+| V2 `n = 8`: the seven readings | `<= 1e-10` | `7.9e-13`, `1.1e-12`, `4.4e-13`, `1.2e-13`, `5.8e-13`, `1.2e-14`, `2.2e-16`; rows `2.4e-12` | yes |
+| V2 `n = 4`, `8`: row of the largest node pressure; E1's flag | equal | equal; equal | yes |
+| V3 Newton record, `n = 4`, `8`, `32` | equal | `[(3, 1), (2, 0), (2, 0)]` at `n = 4` and `8`; `[(5, 2), (2, 0)]` at `n = 32`; equal | yes |
+| U1 displacement, `n = 4`, `8`, `32` | `<= 1e-10` | `7.0e-15`, `6.6e-15`, `1.4e-14` | yes |
+| B G1 to G3 after the change; B1 and B0 of ADRs 0517, 0507 | equal; pass | equal (`0xf0b1a736e83f52c6`, `0xb9476ca018ee7f9f`, `0x7da920154d9ca17d`); pass | yes |
+| B `baseline_hashes` | pass | pass (3 passed, 1 ignored) | yes |
+| D `n = 16`, pools of 1 and 4 threads | bit for bit | 36 918 values equal | yes |
+| N1 `n = 4`, `8`: supernodal displacement not bit-equal to the present | holds | holds | yes |
+| N2 envelope; supernodal with total Lagrangian | `InvalidValue`, key `"solver"` | both | yes |
+| R record | recorded | `t_p` 1456.6 s against A1-H's 1336 s (9 percent slower, other agents' builds running); peak working set 4.01 GB (estimate about 4.5 GB) | |
+
+Against the estimates: T1 `5.6e-2` against about `0.04`. The `n = 32` record has 2 convex iterations, so the driver factors 9
+times, not 7; `82 s / 9 = 9.1 s` per iteration against P1's 6.24 s for the factor alone. The readings agree to `8.1e-12` at
+worst, against P2's `2.0e-12` at `n = 8`; P1's `8.8e-10` on the indefinite first tangent did not reach the readings, because the
+driver refuses that tangent in both factors (V3: the convex counts are equal) and each Newton iteration corrects the last.
+
+Mutations: a `git archive` copy of 3bbcb043 in `f615-scratch/mut`, target `target-f615-mut`, script `f615-scratch/mutate.py`,
+logs `M1.log` to `M6.log`, each alone, the two fast test files run once.
+
+| id | mutation | caught by | registered |
+|---|---|---|---|
+| M1 | the supernodal arm builds `SparseLdlt` | N1 (`n = 4` and `8` bit-equal) | N1, caught |
+| M2 | the minimum-degree arm builds `SupernodalLdlt` | B (G1 `0xf1d26379bd4efa01`), and N1 | B, caught |
+| M3 | supernodal with `PivotRule::NonZero` | V3 (`[(6, 0), ...]` at `n = 4`, `[(7, 0), ...]` at `n = 8`) | V3, caught |
+| M4 | supernodal factor reused on the same pattern | V3 (`n = 8`: `[(3, 1), (3, 0), (3, 0)]`) | V3, caught |
+| M5 | the envelope accepted | N2 | N2, caught |
+| M6 | supernodal accepted with total Lagrangian | N2 (the solve ran and failed: "singular tangent") | N2, caught |
+
+Gates: `cargo test -p rcfd-fem --release` passes (exit 0; 922 passed, 0 failed, 262 ignored over 216 test
+targets; `gate-fem.log`). `cargo test -p rcfd-api --release --test baseline_hashes` passes (3 passed, 1 ignored;
+`gate-bh.log`). `cargo clippy -p rcfd-fem --all-targets -- -D warnings` is clean (`gate-clippy.log`). `cargo fmt -p rcfd-fem
+--check` is clean. `cargo test -p rcfd-cli --release --test docs_site` passes (run with this addendum and the roadmap entry in
+place; `gate-docs.log`). Not run: nothing registered was left out.
+
+### Decision by the registered rule
+
+**Done.** Every check met its limit on its registered run, the heavy record included; both negative controls held; every
+mutation was caught by the check named for it on its first run. Every clause of the acceptance was met: the `n = 32` hub fit
+in `5.6e-2` of the present time (limit 1/3), every reading of ADR 0517 D4 within `8.1e-12` of the present driver (limit 1e-10),
+and without the option the bits of three new and four existing digests unchanged.
+
+### Remaining questions, with recommendations
+
+1. **Case-file key** (open question 1). Options: (a) one key `solver.factor = "envelope" | "supernodal"` read by every
+   analysis, the contact driver included; (b) a contact-only key; (c) none. Recommendation: (a), after the maintainer approves
+   the schema golden change. Not taken here.
+2. **Default** (open question 3). The supernodal factor is about 18 times faster here and agrees to `1e-11`. Options: (a)
+   make it the contact default (changes default results and the B digests; needs the maintainer); (b) keep it opt-in.
+   Recommendation: (b) until the maintainer decides one default factor policy for every analysis.
+3. **The total Lagrangian body** keeps `nonlinear::solve_from`'s factor. Options: (a) a follow-up that gives
+   `NewtonOptions` the same factor choice; (b) leave it. Recommendation: (a) when a large nonlinear contact model needs it.
+
+## For the lead: roadmap entries
+
+Proposed status of F-615: **done**.
+
+> Structural solver, advanced tier. Follow-up of F-604 (ADR 0517, 2026-11-14). DONE. ADR 0533, 2026-11-14: ContactOptions::factor (rcfd_fem::solve::DirectFactor; default SparseMinimumDegree, the present driver; SupernodalNestedDissection selects the supernodal multifrontal L D L^T of ADR 0503 after nested dissection by level structures of the reduced tangent, which stores 0.67 of the coordinate dissection's entries on this model; the envelope, and the supernodal factor with the total Lagrangian body, refused with the key "solver"). ADR 0517's hub fit at 32 cells through b - a (96 046 free unknowns): 82.0 s against 1456.6 s for the present driver in the same process with 16 threads, a ratio of 5.6e-2 (limit 1/3), peak working set 4.0 GB. Every reading of ADR 0517 D4 (mid-length, the two edge bands, the face row, the two fixed-distance rows, every row resultant, the largest node pressure) within 8.1e-12 of the present driver (limit 1e-10), the same Newton record (iterations and convex iterations) and displacements within 1.4e-14; at 4 and 8 cells within 2.4e-12. The supernodal driver gives the same bits for 1 and 4 threads. Without the option three new digests (the hub at 8 cells, the pure-penalty blocks with an extra contribution, the total Lagrangian blocks) and the existing contact bit records are unchanged; baseline_hashes passes. Six mutations caught. No case-file key (open: one solver.factor key for every analysis).
+
+> Follow-up (proposed, not added): the factor choice for the total Lagrangian contact body (deps F-615). Every limit not stated here is registered in the ADR before the run. NewtonOptions gives nonlinear::solve_from the supernodal L D L^T as an opt-in factor: a total Lagrangian contact solve of the ADR 0517 hub at 16 cells in under a third of the present time, every reading within 1e-10 of the present driver, and without the option every result bit-identical. Fan relevance: hub-shaft press-fit stresses with large rotations.
