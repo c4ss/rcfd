@@ -208,3 +208,84 @@ No mutation is declared equivalent.
   in `h / t` per mesh and records the growth in `n` (HX), it does not bound the latter in general.
 - **L4.** No proof of uniformity; the exponent is a two-point measurement per mesh. Memory and time of the patch inverses not
   checked (as ADR 0572 L3).
+
+## Addendum 1: results (2026-11-15)
+
+Run 1, once, at 4d4f8077 with the test file later committed as 1a89986d in the working tree (`f659-scratch/run1.log`: `cargo
+test -p rcfd-fem --release --test sa_thin_plate_sequence -- --nocapture --test-threads=1`, 3 tests, 24.5 s). `cargo fmt -p
+rcfd-fem` was applied after the run (layout only) and the file committed as 1a89986d. No amendment. Then, at 1a89986d: `cargo
+test -p rcfd-fem --release --test sa_thin_plate --test sa_amg_structural --test sa_thin_plate_sequence` (6, 5 and 3 passed;
+`b2.log`), `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings` (clean; `clippy.log`), `cargo fmt -p rcfd-fem
+--check` (clean). Deviation, disclosed: that B2 command included the new test file, so the registered test ran a second time
+after the formatting; the runs are deterministic, it passed again and no number was taken from it. Deviation in the text above:
+the admissible list of arithmetic 2 has 34 cases (15 Shell4, 19 Shell3), not "32 cases: 15 Shell4, 17 Shell3" as the Checks
+heading says; the list and every limit are as registered and all 34 were run.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| FL floor probe, 34 cases | `<= 2.5e-10` each | largest `2.29e-10` (Shell3 64, t 0.003); Shell4 largest `1.76e-10` (n 8, t 0.001) | yes |
+| BD next thinner `t`: Shell4 16 t 0.001, 32 t 0.003, 64 t 0.003; Shell3 64 t 0.001 | `> 2.5e-10` each | `6.68e-10`, `2.71e-10`, `1.05e-9`, `2.77e-10` | yes |
+| LV levels | `>= 2` | 2 (n 8), 3 (n 16, 32), 4 (n 64) | yes |
+| IT Shell4 n 8 (t 0.1 .. 0.001) | `9, 14, 17, 21, 21` | 6, 9, 11, 14, 14 | yes |
+| IT Shell4 n 16 (0.1 .. 0.003) | `11, 18, 29, 39` | 7, 12, 19, 26 | yes |
+| IT Shell4 n 32 (0.1 .. 0.01) | `12, 21, 36` | 8, 14, 24 | yes |
+| IT Shell4 n 64 (0.1 .. 0.01) | `14, 20, 36` | 9, 13, 24 | yes |
+| IT Shell3 n 8 | `12, 14, 14, 14, 14` | 8, 9, 9, 9, 9 | yes |
+| IT Shell3 n 16 | `15, 21, 24, 24, 24` | 10, 14, 16, 16, 16 | yes |
+| IT Shell3 n 32 | `17, 27, 33, 38, 38` | 11, 18, 22, 25, 25 | yes |
+| IT Shell3 n 64 (0.1 .. 0.003) | `20, 30, 48, 62` | 13, 20, 32, 41 | yes |
+| IT restarts, 34 cases | `0` | 0 everywhere | yes |
+| ER 2-norm and inf-norm against the direct solve, 34 cases | `<= 1e-8` | largest `4.8e-11` (Shell4 8, t 0.1, inf-norm) | yes |
+| GX `p_n` patch, Shell4 n 8, 16, 32, 64 | `<= 0.6` | 0.184, 0.374, 0.477, 0.426 | yes |
+| GX `p_n` patch, Shell3 n 8, 16, 32, 64 | `<= 0.6` | 0.026, 0.102, 0.178, 0.328 | yes |
+| NC `p_n` node, Shell4 (and patch below node) | `>= 0.5`; patch < node | 0.625, 0.883, 0.637, 0.558 (node counts 11 -> 196, 11 -> 243, 12 -> 52, 13 -> 47) | yes |
+| NC `p_n` node, Shell3 (patch below node) | patch < node | 0.094, 0.157, 0.246, 0.418 | yes |
+| HX `count(n 64) / count(n 8)` at t 0.1 | `<= 2.4` | Shell4 9 / 6 = 1.50; Shell3 13 / 8 = 1.63 | yes |
+| B1 `git diff e348eb34 -- crates/*/src` | empty | empty (the item adds one test file and this ADR) | yes |
+| B2 `sa_thin_plate.rs` (DF, B2 digests, K0), `sa_amg_structural.rs`, unedited | pass | 6 passed, 5 passed | yes |
+
+Every measured number equals the prototype's (arithmetic 2 and 3).
+
+Mutations (scratch copy `f659-scratch/mut` from `git archive` of 1a89986d, `target-mut`, `mutate.py`, logs `mut-MU*.log`; each
+file restored and checked byte-equal after its run):
+
+| Id | Caught by |
+|---|---|
+| MU1 `patch_sweep` not called | IT (44 misses; Shell4 16 t 0.003: 243), GX (Shell4 n 8, 16, 32: 0.625, 0.883, 0.637), NC (patch equals node) |
+| MU2 patch = the block alone | IT (42 misses; Shell4 16 t 0.003: 242), GX (0.636, 0.882, 0.637), NC |
+| MU3 post-smoother in increasing order | IT (solves not converged in 5000 iterations), FL (probes up to `9e-7`), ER; 65 misses |
+| MU4 probe target `tau` instead of `1e-14` | FL (21 misses, e.g. Shell4 16 t 0.1: `4.27e-10`) |
+
+Four of four caught; none declared equivalent.
+
+Not run: anything outside L1 to L4 (distorted or curved meshes, other supports, thinner plates where the floor probe exceeds
+`tau / 4`, memory and time of the patches).
+
+**Decision by the registered rule: done.** FL, BD, LV, IT, ER, GX, NC, HX, B1 and B2 met in the single registered run; four of
+four mutations caught; no amendment. The two deviations above (a second identical run inside the B2 command, a miscounted case
+total in the text) change no limit and no result.
+
+What the numbers say: on every mesh of both elements the patch smoother's count grows with `h / t` at most like `(h / t)^0.48`
+(Shell4 32 x 32, 8 -> 24 over a tenfold `h / t`), against `(h / t)^0.56` to `^0.88` for the node smoother on the same Shell4
+meshes. The count is not a function of `h / t` alone (L3): at t 0.01 Shell4 takes 11, 19, 24, 24 on n 8 to 64 (levelling off),
+Shell3 9, 16, 22, 32 (not yet levelling off), and at t 0.1 both grow mildly with `n` (HX 1.50, 1.63). The finest meshes reach
+only `h / t <= 1.56` (Shell4) before the residual floor (L2).
+
+Remaining questions:
+
+1. **Q1. The growth of the Shell3 count with `n` at fixed thin `t`** (9, 16, 22, 32 at t 0.01; 41 at n 64, t 0.003). (a) Leave
+   it: bounded in `h / t` per mesh, recorded. (b) A follow-up measuring the coarse levels (the patch smoother on the fine level
+   only against all levels, and the coarse-level patch size) on Shell3 64 x 64 and 128 x 128 at t 0.01. Recommendation: (a) for
+   now; (b) only if a shell model in use shows counts above about 60 with this smoother.
+2. **Q2. Thinner plates on fine meshes** are floor-limited at `tau = 1e-9` (L2). (a) Leave it (the conditioning, not the
+   multigrid, limits the solve). (b) A diagonal (Jacobi) rescaling of the reduced system before the CG, which would lower the
+   floor on the shear-dominated rows, registered against these probes. Recommendation: (a); (b) is a change to a shared solver
+   path and needs its own item if wanted.
+
+## For the lead: roadmap entries
+
+Proposed status and note of F-659:
+
+> Proposed status: done.
+
+> Structural solver, advanced tier. Follow-up of F-641 (ADR 0572). DONE. ADR 0577, 2026-11-15: the ADR 0572 vertex-patch smoother (SmoothedAggregationStructural with Smoother::VertexPatch, max_coarse 60, tau 1e-9) on the simply supported unit plate on 8, 16, 32 and 64 square meshes, Shell4 and Shell3, at every thickness of t/a 0.1, 0.03, 0.01, 0.003, 0.001 whose residual-floor probe (restarted CG to 1e-14) is at most tau/4 (34 cases; the next thinner thickness on each limited mesh checked above it). Counts, all without restart and within 4.8e-11 of the direct solve: Shell4 n 8: 6, 9, 11, 14, 14; n 16: 7, 12, 19, 26; n 32: 8, 14, 24; n 64: 9, 13, 24; Shell3 n 8: 8, 9, 9, 9, 9; n 16: 10, 14, 16, 16, 16; n 32: 11, 18, 22, 25, 25; n 64: 13, 20, 32, 41 (limits 1.5 x the prototype). Growth exponent of the count in h/t per mesh at most 0.477 (limit 0.6; Shell4 0.18 to 0.48, Shell3 0.03 to 0.33), below the node smoother's on every mesh (Shell4 0.56 to 0.88). The count also grows with n at fixed t (t/a 0.1: 6 to 9 and 8 to 13 from n 8 to 64; t/a 0.01 Shell3 9 to 32), recorded, not bounded. No source change; default bits unchanged (F-641 digests and existing tests pass). Four of four mutations caught. Not covered: thinner plates on the fine meshes (floor-limited: finest meshes reach only h/t 1.56 Shell4, 5.2 Shell3), distorted or curved meshes, other supports, memory of the patch inverses.
