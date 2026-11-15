@@ -1373,6 +1373,7 @@ fn rf1_rf2_rf3_refusals_after_f588() {
 }
 
 #[test]
+#[ignore = "record of ADR 0525 RF1 to RF3 (amended): the Incompatible nonlinear rows retired by ADR 0608 (F-596); copy in si_eas.rs (rf1_rf2_rf3_refusals_after_f596)"]
 fn rf1_rf2_rf3_refusals_after_f588_amended() {
     rf_rows(true);
 }

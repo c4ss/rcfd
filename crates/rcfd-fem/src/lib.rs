@@ -56,6 +56,7 @@ pub mod mesh;
 pub mod modal;
 pub mod model;
 pub mod mpc;
+pub mod nl_incompatible;
 pub mod nl_transient;
 pub mod nonlinear;
 pub mod nonlinear_md;

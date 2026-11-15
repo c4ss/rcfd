@@ -44,8 +44,12 @@
 //!   material at `E_bar = (F_bar^T F_bar - I)/2`, `f = sum_q w_q Bbar_NL^T S_bar` and its consistent, symmetric tangent
 //!   (ADR 0506 arithmetic 1 and 2); at `u = 0` its tangent is the B-bar stiffness of ADR 0493. Every driver takes it through
 //!   the assembly; [`hex8_force_and_tangent_at`], [`hex8_internal_force_at`], [`hex8_second_piola_kirchhoff`] and
-//!   [`hex8_strains`] give one element. The `Incompatible` formulation is refused (key `"nonlinear"`, naming
-//!   [`crate::hex8x::NONLINEAR_FOLLOW_UP`]).
+//!   [`hex8_strains`] give one element.
+//! * The incompatible-modes Hex8 (ADR 0608): a Hex8 of a block of the `Incompatible` formulation takes the enhanced
+//!   deformation gradient of [`crate::nl_incompatible`], its nine modes condensed by a local Newton iteration at every
+//!   evaluation; at `u = 0` its tangent is the condensed stiffness of ADR 0493. Every driver takes it through the assembly;
+//!   [`hex8_force_and_tangent_at`], [`hex8_internal_force_at`] and [`hex8_second_piola_kirchhoff`] give one element, its
+//!   strain [`crate::nl_incompatible::modes_and_strains`].
 
 use crate::assemble::{assemble_with, element_dofs};
 use crate::constraint::{check_rigid_body_motions, prescribed_equations, reduce, Prescribed};
@@ -75,12 +79,12 @@ pub const INVERSION_KEY: &str = "deformation gradient";
 pub const SOLVER_NAME: &str = "newton-tl";
 
 /// What one element evaluation gives.
-struct Evaluation {
-    force: Vec<f64>,
-    tangent: Option<ElementMatrix>,
-    stress: Vec<[f64; 6]>,
+pub(crate) struct Evaluation {
+    pub(crate) force: Vec<f64>,
+    pub(crate) tangent: Option<ElementMatrix>,
+    pub(crate) stress: Vec<[f64; 6]>,
     /// The new state values of a material with history (ADR 0475 D3), empty otherwise.
-    state: Vec<f64>,
+    pub(crate) state: Vec<f64>,
 }
 
 /// The displacement gradient `H = F - I`, `H_iJ = sum_a u_ai g_aJ`.
@@ -119,7 +123,7 @@ pub(crate) fn green_lagrange(h: &[[f64; 3]; 3]) -> [f64; 6] {
 }
 
 /// `B_NL` (6 x 3n, row-major): `delta E = B_NL delta u` (ADR 0404 D1).
-fn b_nonlinear(grad: &[[f64; 3]], f: &[[f64; 3]; 3]) -> Vec<f64> {
+pub(crate) fn b_nonlinear(grad: &[[f64; 3]], f: &[[f64; 3]; 3]) -> Vec<f64> {
     let cols = 3 * grad.len();
     let mut b = vec![0.0; 6 * cols];
     for (a, g) in grad.iter().enumerate() {
@@ -288,7 +292,7 @@ fn evaluate_with<E: Element + ?Sized>(
 
 /// The material at one point: the stress and the tangent at `strain` from the `committed` state, the trial state of a
 /// material with history appended to `new_state`.
-fn point_update(
+pub(crate) fn point_update(
     material: &Material,
     strain: &[f64; 6],
     committed: &[f64],
@@ -395,7 +399,7 @@ fn jacobian_minus_one(h: &[[f64; 3]; 3]) -> f64 {
     tr + 0.5 * (tr * tr - tr2) + det3(h)
 }
 
-fn check_hex8_fields(coords: &[Vec3], displacement: &[f64]) -> Result<()> {
+pub(crate) fn check_hex8_fields(coords: &[Vec3], displacement: &[f64]) -> Result<()> {
     if coords.len() != 8 {
         return Err(FemError::FieldLength {
             key: "coordinates",
@@ -593,19 +597,8 @@ fn evaluate_fbar(
     })
 }
 
-/// The refusal of the `Incompatible` formulation by the nonlinear driver (ADR 0506 D2).
-fn incompatible_refusal(location: String) -> FemError {
-    FemError::InvalidValue {
-        key: "nonlinear",
-        reason: format!(
-            "{location}: the nonlinear driver takes solid elements of the Full and BBar formulations (ADR 0506); the \
-             incompatible modes at finite strain are {}",
-            crate::hex8x::NONLINEAR_FOLLOW_UP
-        ),
-    }
-}
-
-/// One Hex8 of a formulation: `Full` [`evaluate`], `BBar` [`evaluate_fbar`], `Incompatible` refused.
+/// One Hex8 of a formulation: `Full` [`evaluate`], `BBar` [`evaluate_fbar`], `Incompatible` the condensed element of
+/// [`crate::nl_incompatible`] (ADR 0608 D3).
 fn hex8_evaluate(
     formulation: SolidFormulation,
     coords: &[Vec3],
@@ -618,16 +611,15 @@ fn hex8_evaluate(
     match formulation {
         SolidFormulation::Full => evaluate(&Hex8, coords, material, displacement, state, want_tangent, context),
         SolidFormulation::BBar => evaluate_fbar(coords, material, displacement, state, want_tangent, context),
-        other => Err(incompatible_refusal(format!(
-            "a Hex8 of the {} formulation",
-            other.name()
-        ))),
+        SolidFormulation::Incompatible => {
+            crate::nl_incompatible::evaluate(coords, material, displacement, state, want_tangent, context)
+        }
     }
 }
 
 /// The internal force and the tangent of a Hex8 of a formulation at the point context `context` (ADR 0506 D5): `Full` is
-/// [`element_force_and_tangent_at`] with the Hex8 element, `BBar` the F-bar element of ADR 0506 D1; `Incompatible` is
-/// refused (key `"nonlinear"`).
+/// [`element_force_and_tangent_at`] with the Hex8 element, `BBar` the F-bar element of ADR 0506 D1, `Incompatible` the
+/// condensed element of ADR 0608 D2.
 pub fn hex8_force_and_tangent_at(
     formulation: SolidFormulation,
     coords: &[Vec3],
@@ -674,7 +666,8 @@ pub fn hex8_second_piola_kirchhoff(
 }
 
 /// The Green-Lagrange strain (Voigt, engineering shear) at the points of the stiffness rule of a Hex8 of a formulation
-/// (ADR 0506 D5): of `F` for `Full`, of `F_bar` for `BBar`; `Incompatible` refused.
+/// (ADR 0506 D5): of `F` for `Full`, of `F_bar` for `BBar`; `Incompatible` refused (key `"formulation"`: its strain depends
+/// on the material through the condensed modes, [`crate::nl_incompatible::modes_and_strains`], ADR 0608 D3).
 pub fn hex8_strains(formulation: SolidFormulation, coords: &[Vec3], displacement: &[f64]) -> Result<Vec<[f64; 6]>> {
     match formulation {
         SolidFormulation::Full => {
@@ -690,16 +683,24 @@ pub fn hex8_strains(formulation: SolidFormulation, coords: &[Vec3], displacement
             .iter()
             .map(|p| p.ebar)
             .collect()),
-        other => Err(incompatible_refusal(format!(
-            "a Hex8 of the {} formulation",
-            other.name()
-        ))),
+        SolidFormulation::Incompatible => Err(FemError::InvalidValue {
+            key: "formulation",
+            reason:
+                "the strain of an Incompatible Hex8 at finite strain depends on the material through its condensed \
+                     modes: nl_incompatible::modes_and_strains gives it (ADR 0608)"
+                    .to_string(),
+        }),
     }
 }
 
 /// Whether element `e` of `model` is a Hex8 of the BBar formulation (ADR 0506 D2).
 fn is_fbar(model: &SolidModel, e: usize) -> bool {
     crate::hex8x::opted(model.mesh(), e) == Some(SolidFormulation::BBar)
+}
+
+/// Whether element `e` of `model` is a Hex8 of the Incompatible formulation (ADR 0608 D3).
+fn is_incompatible(model: &SolidModel, e: usize) -> bool {
+    crate::hex8x::opted(model.mesh(), e) == Some(SolidFormulation::Incompatible)
 }
 
 /// The second Piola-Kirchhoff stress (Voigt, tensor shear) at the points of the element's stiffness rule, in the rule's
@@ -833,17 +834,10 @@ fn check_model(model: &SolidModel) -> Result<()> {
             continue;
         }
         if !block.kind().is_solid() || block.formulation() != SolidFormulation::Full {
-            // ADR 0506 D2: a BBar block takes the F-bar Hex8; an Incompatible block is refused naming the follow-up.
+            // ADR 0506 D2: a BBar block takes the F-bar Hex8; ADR 0608 D3: an Incompatible block the enhanced Hex8.
             if block.kind().is_solid() {
                 match block.formulation() {
-                    SolidFormulation::BBar => continue,
-                    SolidFormulation::Incompatible => {
-                        return Err(incompatible_refusal(format!(
-                            "block {b} ({} {})",
-                            block.kind().name(),
-                            block.formulation().name()
-                        )))
-                    }
+                    SolidFormulation::BBar | SolidFormulation::Incompatible => continue,
                     _ => {}
                 }
             }
@@ -1022,6 +1016,8 @@ pub(crate) fn internal_force_field(
             crate::shell_corot::model_internal_force(mesh, e, &coords, material, &ue)
         } else if is_fbar(model, e) {
             evaluate_fbar(&coords, material, &ue, &states[e], false, context).map(|ev| ev.force)
+        } else if is_incompatible(model, e) {
+            crate::nl_incompatible::evaluate(&coords, material, &ue, &states[e], false, context).map(|ev| ev.force)
         } else {
             evaluate_with(
                 crate::element::element_for(kind),
@@ -1108,6 +1104,8 @@ fn force_and_tangent(
             }
         } else if is_fbar(model, ctx.element) {
             evaluate_fbar(ctx.coords, ctx.material, &ue, &states[ctx.element], true, context)?
+        } else if is_incompatible(model, ctx.element) {
+            crate::nl_incompatible::evaluate(ctx.coords, ctx.material, &ue, &states[ctx.element], true, context)?
         } else {
             let el = crate::element::element_for(ctx.kind);
             let mut buffer = Vec::new();

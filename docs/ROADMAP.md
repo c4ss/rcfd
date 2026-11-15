@@ -11678,7 +11678,8 @@ fixed by the item's registration ADR before any code.
     between 5 t* and 20 t*) is missed at 6.0e-3, diagnosed as the total Lagrangian finite-strain drift of the bore
     against the small-strain closed form (1.1e-4 at p/10). Defaults bit-identical (11 digests). Follow-ups F-596, F-597.
     Open (maintainer): the block property formulation = "bbar" as a case-file key covering the nonlinear paths. F-587
-    (note): the growth bound C4 is met at p/10 (1.06e-4 against 2e-3) by ADR 0528, 2026-11-14; at p it stays missed.
+    (note): the growth bound C4 is met at p/10 (1.06e-4 against 2e-3) by ADR 0528, 2026-11-14; at p it stays missed. ADR
+    0608 (F-596), 2026-11-15: the incompatible-modes Hex8 is no longer refused by the nonlinear driver; F-596 takes it.
 - [~] **F-588** The Hex8 formulations on the remaining linear paths (temperature load, per-point materials, geometric stiffness, damped and direct harmonic solves, patch recovery)
   - depends on: F-390
   - acceptance: Every limit not stated here is registered in the ADR before the run. The refusals of ADR 0493 D5 lifted
@@ -11858,13 +11859,35 @@ fixed by the item's registration ADR before any code.
     the eigensolvers called directly with the free unknowns' node points. Results bit-identical for 1 and 8 threads; 24
     digests of the default and level-structure paths equal to base; baseline_hashes passes. Eight mutations caught. No
     case-file key (proposed: a value of the pending solver.factor key).
-- [ ] **F-596** The incompatible-modes Hex8 at finite strain (enhanced assumed strain, internal modes condensed in the Newton loop)
+- [~] **F-596** The incompatible-modes Hex8 at finite strain (enhanced assumed strain, internal modes condensed in the Newton loop)
   - depends on: F-587
   - acceptance: Every limit not stated here is registered in the ADR before the run. The incompatible-modes Hex8 of
     F-390 at finite strain, as an enhanced assumed strain element with the internal modes condensed in the Newton loop;
     the nonlinear driver no longer refuses it. Further limits are registered by the implementing ADR (follow-up text of
     ADR 0506 gives no numbers).
-  - note: Structural solver, advanced tier. Follow-up of F-587 (ADR 0506, 2026-11-14).
+  - note: Structural solver, intermediate tier. Follow-up of F-587 (ADR 0506, 2026-11-14). PARTIAL (lead: the amended
+    RF1 row was met only after amendment 1; the agent proposed done, which is the maintainer's call). ADR 0608,
+    2026-11-15: the incompatible-modes Hex8 of F-390 at finite strain in the nonlinear driver, as the enhanced
+    deformation gradient of Simo and Armero (F = I + Grad u + sum_k alpha_k (x) G_k with the nine Wilson modes and
+    Taylor's centre-Jacobian correction, so that the enhancement integrates to zero), new module
+    rcfd_fem::nl_incompatible: at every element evaluation the modes solve R_a = 0 by a local Newton iteration from 0
+    (tolerance 1e-12 of the cancelling terms, at most 25 iterations, refusal key "internal modes"), and the element
+    returns the condensed force f_u - K_ua K_aa^{-1} R_a and tangent K_uu - K_ua K_aa^{-1} K_au; no element state is
+    added. The refusal of ADR 0506 D2 is removed for Incompatible blocks only (the energy-momentum step, temperature
+    fields and hex8_strains(Incompatible) stay refused, the linear paths unchanged). Met in the registered run: tangent
+    at rest equal to the F-390 condensed stiffness to 1.9e-16 (assembled 1.2e-16); modes against the linear modes O(eps)
+    (ratio 100.0 between eps 1e-6 and 1e-4); patch tests at finite strain (strains 0.1, a 60 degree rotation, J2) to
+    1.2e-16 to 1.0e-15 with the modes exactly zero; consistent tangent against central differences 2.5e-11 to 1.6e-8 for
+    SVK, J2, creep and neo-Hookean, the uncondensed 33 x 33 tangent 1.9e-9; Newton on a 30 per cent sheared block with
+    no violation of the Q(10, 1e-13) reading of ADR 0515 (largest ratio 0.23); the elastica cantilever (alpha 1 and 2)
+    within 4.6e-4 on 50 x 1 x 1 and 2.1e-4 on 25 x 1 x 1, within 1.4e-4 of the Hex20 50 x 1 x 1 run, where the plain
+    Hex8 is off by 0.23 to 0.52 on 50 elements and by 4.2e-3 to 1.3e-2 on 400. One RF1 row had a defective set-up (an
+    elastic material on the time-stepping driver from an equilibrium start; Full and BBar fail the same way), corrected
+    by amendment 1 before its run. Defaults bit-identical (11 digests recorded on the base, every rcfd-fem test,
+    baseline_hashes). Nine of nine non-equivalent mutations caught (the condensation correction to the residual
+    registered as equivalent at the local tolerance). Not covered: the hourglass instability of enhanced elements in
+    large compression, a warm start of the modes, the viscoelastic material through the element, a case-file key.
+    Follow-up F-685 (Hourglass stability of the incompatible-modes Hex8 at finite strain in compression).
 - [~] **F-597** A finite-strain reference for the B-bar creep cylinder growth bound, and a Full-solve BBar-recovery locking control
   - depends on: F-587
   - acceptance: Every limit not stated here is registered in the ADR before the run. A creep-cylinder reference for C4
@@ -13509,14 +13532,28 @@ fixed by the item's registration ADR before any code.
     penny-shaped crack under inclined tension with K_I, K_II and K_III along the front within 3 percent of the closed
     forms, and the straight-front results of ADR 0605 unchanged.
   - note: Follow-up of F-632 (ADR 0605, 2026-11-15).
-- [ ] **F-683** The free-sector pre-stress on solid and shell sectors, and its scope without stress stiffening
+- [~] **F-683** The free-sector pre-stress on solid and shell sectors, and its scope without stress stiffening
   - depends on: F-680
   - acceptance: Every limit not stated here is registered in the ADR before the run. RotatingSector::new with
     free_sector_prestress on a free solid sector and a free shell sector gives the pre-stress of a constrained-copy
     route within 1e-10 and a residual at the interior nodes within 1e-10 of the load; with stress stiffening off, the
     opt-in leaves unit_prestress, the whirl frequencies and the refusals bit-identical to the run without it; the
     defaults bit-identical.
-  - note: Follow-up of F-680 (ADR 0606, 2026-11-15).
+  - note: Structural solver, advanced tier. Follow-up of F-680 (ADR 0606). PARTIAL. ADR 0611, 2026-11-15: the
+    free-sector pre-stress on solid and shell sectors, and its scope without stress stiffening. No library change: the
+    ADR 0606 gauge (axial and tangential translation of one interior node, the farthest from the axis) removes the two
+    cyclic rigid motions of solids, which have no rotations, and of shells, whose drilling penalty leaves no other
+    mechanism (derived in the ADR). On free Hex20, Hex8, Shell4 and Shell3 sectors in an oblique frame,
+    RotatingSector::new with free_sector_prestress gives the pre-stress of a constrained-copy route at two other nodes
+    within 1.0e-13 (limit 1e-10), a residual at the interior nodes within 1.6e-14 of the load (limit 1e-10; zero
+    reaction at the gauge), and the whirl frequencies of the copy route within 4.3e-14. With stress stiffening off, the
+    opt-in leaves unit_prestress, the whirl frequencies and the refusals (clamped, sprung and refused sectors)
+    bit-identical on six models; the defaults are bit-identical. Five of five mutations caught, among them the ADR 0606
+    M9 (the branch taken without stress stiffening), now caught by the pre-stress and refusal checks. Partial by the
+    registered rule only: the checks were met after an amendment that fixed a test set-up (a mesh without its surface
+    sets) before any of their numbers was computed. Not covered: tetrahedra, wedges, ANDES membranes, layups,
+    orthotropic sectors, sectors touching the axis. Follow-up F-686 (The free-sector pre-stress on tetrahedral,
+    layered-shell and orthotropic sectors).
 - [ ] **F-684** Line search on the other total Lagrangian contact cases
   - depends on: F-608, F-639
   - acceptance: "Every limit not stated here is registered in the ADR before the run. The total Lagrangian contact cases
@@ -13524,3 +13561,18 @@ fixed by the item's registration ADR before any code.
     curvature_fallback; each run converges or its failure is diagnosed, and the fallback iterations and step lengths are
     recorded (limits registered)."
   - note: Follow-up of F-608 (ADR 0607, 2026-11-15).
+- [ ] **F-685** Hourglass stability of the incompatible-modes Hex8 at finite strain in compression
+  - depends on: F-596
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The ADR 0608 element under
+    homogeneous compression of a distorted patch to a registered stretch: the lowest eigenvalue of the condensed tangent
+    tracked against the Full Hex8 and a closed-form bifurcation-free reference, the stretch at which a spurious zero
+    eigenvalue appears reported; if it appears within the registered range, a stabilisation from the published
+    literature that keeps the ADR 0608 checks within their limits; the default bits unchanged.
+  - note: Follow-up of F-596 (ADR 0608, 2026-11-15).
+- [ ] **F-686** The free-sector pre-stress on tetrahedral, layered-shell and orthotropic sectors
+  - depends on: F-683
+  - acceptance: Every limit not stated here is registered in the ADR before the run. RotatingSector::new with
+    free_sector_prestress on a free Tet10 sector, a free Shell4 layup sector and a free orthotropic solid sector gives
+    the pre-stress of a constrained-copy route within 1e-10 and a residual at the interior nodes within 1e-10 of the
+    load; the defaults bit-identical.
+  - note: Follow-up of F-683 (ADR 0611, 2026-11-15).
