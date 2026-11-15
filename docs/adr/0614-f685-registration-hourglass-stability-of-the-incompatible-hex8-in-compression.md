@@ -345,3 +345,11 @@ heavy test are not claimed).
    same instruction.
 3. **Default.** The stabilisation is opt-in (the brief and c7); whether it should become the default for Incompatible blocks in
    the nonlinear driver changes default results and is left open.
+
+## Amendment 1 (2026-11-15, written after the code and before any run of the checks): H0 at `lambda = 1`
+
+Found while writing the test, before any run: at `lambda = 1` the solved `t` is 1 and `S = 0`, so H0's registered measure
+`|S_11| / |S_33|` is `0/0` there (a non-finite value would miss by the rule, a defect of the measure, not of the element). H0 is
+taken as registered at the 50 stretches `lambda < 1` and as `|S_11| / mu` at `lambda = 1`, with the same limit `1e-12`. No other
+check changes. No check has been run before this amendment; the decision rule's "met only after an amendment" refers to a check
+corrected after a run and does not apply to this one (stated here so that the lead can judge it).
