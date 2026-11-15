@@ -435,7 +435,10 @@ fn model_step(m: &Model, corrected: bool, u_old: &[f64], g_old: f64, v: f64) -> 
 
 /// The periodic state of a linear step `x_n = T x_{n-1} + g v_n`, `x = (u, G)`, and the impedance `-rho h^2 L G s/(i w)` of
 /// `L = 20 h` of developed channel.
-fn periodic_impedance(n: usize, step: &dyn Fn(&[f64], f64, f64) -> (Vec<f64>, f64)) -> Cx {
+/// A linear step `(u_old, G_old, v) -> (u, G)`.
+type Step<'a> = &'a dyn Fn(&[f64], f64, f64) -> (Vec<f64>, f64);
+
+fn periodic_impedance(n: usize, step: Step) -> Cx {
     let dt = 1.0 / n as f64;
     let ns = NY + 1;
     let z = Cx(0.0, -OMEGA * dt).exp();
@@ -529,8 +532,8 @@ fn model_zdt(n: usize, lambda: f64) -> Cx {
         s.add(Cx(lambda + k * (left + right), 0.0))
     };
     let off = Cx(-k, 0.0);
-    let mut c = vec![Cx::ZERO; NY];
-    let mut d = vec![Cx::ZERO; NY];
+    let mut c = [Cx::ZERO; NY];
+    let mut d = [Cx::ZERO; NY];
     for i in 0..NY {
         let (b, r) = if i == 0 {
             (diag(0), Cx::ONE)
@@ -540,7 +543,7 @@ fn model_zdt(n: usize, lambda: f64) -> Cx {
         c[i] = off.div(b);
         d[i] = r.div(b);
     }
-    let mut x = vec![Cx::ZERO; NY];
+    let mut x = [Cx::ZERO; NY];
     x[NY - 1] = d[NY - 1];
     for i in (0..NY - 1).rev() {
         x[i] = d[i].sub(c[i].mul(x[i + 1]));
