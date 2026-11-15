@@ -353,3 +353,133 @@ Found while writing the test, before any run: at `lambda = 1` the solved `t` is 
 taken as registered at the 50 stretches `lambda < 1` and as `|S_11| / mu` at `lambda = 1`, with the same limit `1e-12`. No other
 check changes. No check has been run before this amendment; the decision rule's "met only after an amendment" refers to a check
 corrected after a run and does not apply to this one (stated here so that the lead can judge it).
+
+## Addendum 1: results (2026-11-15)
+
+Registered runs, each made once at bcaf1794 (release): the default tests of `si_eas_hg.rs` (`f685-scratch/run1-si_eas_hg.log`,
+`--test-threads 2`, 8 passed in 3.9 s), the heavy record `h_sweep_on_the_distorted_patch_heavy` with `--ignored`
+(`run1-heavy.log`, 152 s), B1 and B0 (`run1-bits.log`), S4 (`s4-rcfd-fem.log`), S5 (`s5-baseline.log`). Amendment 1 was
+written before any of these runs.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| H0 `|S_11| / |S_33|` (50 stretches), `|S_11| / mu` at 1 | `<= 1e-12` | `1.69e-14` | yes |
+| H1 `q / mu` over [0.5, 1] | `>= 0.9` | `1.0000` (at 1; `1.1449` at 0.5) | yes |
+| H2 `m_Full - q / mu` over [0.5, 1] | `>= -1e-9` | `9.51e-3` (at 1) | yes |
+| H3 interior residual at 0.75 and 0.5, Full, Inc, Stab | `<= 1e-10` | `1.2e-15` to `1.7e-15` | yes |
+| H4 `lambda_s` in [0.55, 0.66] | in range | **`0.607970`** (bracket to `1e-8`) | yes |
+| H5 `q / mu`, `m_Full` at `lambda_s` | `>= 0.9` | `1.094`, `1.175` | yes |
+| H6 report | | the table below; hourglass content of the `m_Inc` vector at 0.60: `0.107` | report |
+| S1 `m_Stab` over [0.5, 1] | `>= 0.5` | `0.9767` (at 1; `1.2117` at 0.5) | yes |
+| S2 `K_Stab - K_Inc` at rest | `<= 1e-14` | `0` (bit-equal) | yes |
+| S3 `c` against the closed form | `<= 1e-12` | `9.1e-16` (`c / mu = 3.0550` at 0.6) | yes |
+| HF 4 x 4 x 4: `m_Full - q/mu`; `m_Inc(0.8)`; `m_Inc(0.5)`; `m_Stab` | `>= -1e-9`; `>= 0.5`; `<= -0.1`; `>= 0.5` | `>= 4.01e-2`; `1.0110`; `-0.5773`; `>= 0.9988` | yes |
+| R-SS1 element; patch; cantilever | `<= 1e-13` | `1.90e-16`; `1.21e-16`; `1.14e-16` | yes |
+| R-SS2 `1e-6`, `1e-4`; ratio | `<= 1e-5`, `<= 1e-3`; [30, 300] | `1.056e-6`, `1.056e-4`; `100.02` | yes |
+| R-SS3 | `<= 1e-6` | `4.80e-7` | yes |
+| R-PT1 (0.3, 0.4999), R-PT2, R-PT3, R-PT4 | `<= 1e-10` | `1.7e-16`, `8.7e-16`, `1.3e-16`, `1.2e-16`, `1.7e-16` (PT4 set-up met) | yes |
+| R-PM; R-PS | `<= 1e-10` | `0` (exactly); `1.79e-15` | yes |
+| R-T1 (a) to (e) | `<= 1e-6` | `2.6e-11`, `2.0e-8`, `1.5e-10`, `8.0e-11`, `8.7e-9` (set-ups 8 of 8) | yes |
+| R-T2 | `<= 1e-12` | `<= 4.2e-16` | yes |
+| R-T3 | `<= 1e-6` | `1.87e-9` | yes |
+| R-T4 (a), (b), (e) | `<= 1e-10` | `4.2e-16`, `2.5e-15`, `1.1e-15` | yes |
+| R-X1 | `<= 1e-12` | `0` | yes |
+| R-Q1 | 0 violations; an informative pair every step | 0 of 12; 4 of 4 (largest ratio `0.163`) | yes |
+| R-CE | `<= 1e-6` | `3.8e-9`, `8.3e-10` | yes |
+| R-CB1 alpha 1; alpha 2 | `<= 2e-3` | `1.53e-4`, `3.44e-4`; `2.26e-4`, `4.64e-4` | yes |
+| R-CB2 alpha 1; alpha 2 | `<= 2e-3` | `1.73e-4`, `2.04e-4`; `1.39e-4`, `1.49e-4` | yes |
+| R-CB3 alpha 1; alpha 2 | `<= 2e-3` | `8.3e-5`, `1.36e-4`; `7.3e-5`, `1.15e-4` | yes |
+| R-NT1 | `<= 1e-12` | `1.4e-16` (stabilisation energy `1.04e-10` of `406.7`) | yes |
+| B1 8 digests | bit-equal | 8 of 8 | yes |
+| B0 (ADR 0608) | passes | passes | yes |
+| S4 `cargo test -p rcfd-fem --release` | 0 failed | 325 test binaries, 1345 passed, 0 failed, 336 ignored | yes |
+| S5 `baseline_hashes` | pass | 3 passed, 0 failed, 1 ignored | yes |
+| S6 fmt, clippy | clean | `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean | yes |
+
+H6, the tracked lowest eigenvalue (selected rows of the 51; over `mu`, the pencil against the Full Laplacian):
+
+| `lambda` | `t` | `q / mu` | `m_Full` | `m_Inc` | `m_Stab` |
+|---|---|---|---|---|---|
+| 1.00 | 1.000000 | 1.0000 | 1.0095 | 0.9767 | 0.9767 |
+| 0.90 | 1.031696 | 1.0256 | 1.0380 | 0.9766 | 0.9843 |
+| 0.80 | 1.066776 | 1.0491 | 1.0719 | 0.9354 | 1.0000 |
+| 0.70 | 1.104472 | 1.0710 | 1.1165 | 0.5815 | 1.0336 |
+| 0.65 | 1.123406 | 1.0826 | 1.1454 | 0.2986 | 1.0616 |
+| 0.61 | 1.137761 | 1.0932 | 1.1734 | 0.0160 | 1.0914 |
+| 0.60 | 1.141124 | 1.0962 | 1.1801 | -0.0644 | 1.1000 |
+| 0.55 | 1.155368 | 1.1147 | 1.2169 | -0.5396 | 1.1503 |
+| 0.50 | 1.161003 | 1.1449 | 1.2698 | -1.1722 | 1.2117 |
+
+So the ADR 0608 element on the distorted 6 x 6 x 6 patch under homogeneous uniaxial compression (neo-Hookean, `nu = 0.3`) has
+a zero eigenvalue at **`lambda_s = 0.60797`** (39 per cent compression), where the continuum is far from a bifurcation (`q / mu
+= 1.094`, the Full Hex8 at `1.175`): the zero is spurious. The stabilisation of D1 keeps the lowest eigenvalue `>= 0.977` over the
+range and equal to the plain element at rest, and every ADR 0608 check copied with the stabilisation on is met within its
+limit; the cantilever numbers equal ADR 0608's to `1e-6`. The measured numbers match the registered probes to their printed
+digits.
+
+### Deviations
+
+- Amendment 1 (before any run): H0 at `lambda = 1` taken as `|S_11| / mu`.
+- H6's hourglass content `0.107` is low: on a patch with every boundary node fixed the spurious mode is not a global
+  checkerboard (the probe's Bloch analysis places the element-level mode at the hourglass wave vectors; the bounded patch
+  modulates it). Report only.
+- MU5: cargo does not start the next test binary after a failing one, so the mutation run of `si_eas_hg.rs` did not reach B1;
+  B1 under MU5 was then run once on its own (`mut-MU5-b1.log`).
+
+### Mutations
+
+Each on the scratch copy `f685-scratch/mut` (a git archive of bcaf1794), run once against `si_eas_hg.rs` (default tests; the
+heavy record not re-run, as registered), then reverted (`f685-scratch/mutate.py`, logs `mutations.log`, `mut-MU*.log`).
+
+| Id | Expected | Caught by | Caught |
+|---|---|---|---|
+| MU1 `c M alpha` dropped from `f_alpha` | R-T1, R-T4 | R-T1 (a) to (d), R-T3, R-Q1 (local iteration refused) | yes |
+| MU2 `(P/2) d2c` dropped | R-T1 (b), (e) | R-T1 (a) to (e), R-T3, R-Q1 (10 of 16 violations) | yes |
+| MU3 `c` from the Green strain | S1 / HF | HF (`m_Stab(0.5) = 0.244`), S3, R-T1 (b), (e), R-T3, R-Q1 | yes |
+| MU4 opt-in ignored (`false`) | S1, HF | HF (`m_Stab = 0.284`, `-0.577` at 0.6, 0.5) | yes |
+| MU5 always on (`true`) | B1, H4, HF | HF (`m_Inc(0.5) = 1.26`), B1 (patch Incompatible tangent digest changed) | yes |
+| MU6 `(P/2) dc/du` force dropped | R-T1 | R-T1 (a) to (e), R-T3, R-Q1 (13 of 18) | yes |
+| MU7 `strain_energy` without `Pi_s` | R-NT1 | **none** | **no** |
+
+MU7 diagnosed: R-NT1 is the ADR 0608 NT1 bar at its load (strains of order `1e-4`), where the stabilisation energy is
+`1.04e-10` of a strain energy of `406.7` (`2.5e-13` relative, below the `1e-12` limit): the copy cannot see the term it was meant
+to check. The D4 path runs (the set-up confirms `Pi_s > 0`) but is not discriminated.
+
+### What was not run
+
+Nothing registered was skipped. The heavy record was not re-run under the mutations (registered so). The copy of the opt-in in
+`rotating.rs` (D4) is covered by no check.
+
+### Decision by the registered rule
+
+**partial.** H0 to H5, S1, B1, S4 and every R-* check met, but one planned mutation (MU7) is not caught by a registered check,
+which the rule names as partial. Every clause of the acceptance is met in its registered run: the element under homogeneous
+compression of a distorted patch to the registered stretch 0.5 (c1), the lowest eigenvalue tracked against the Full Hex8 (c2)
+and the closed-form acoustic-tensor bound (c3), the spurious zero reported at `lambda_s = 0.60797` (c4), an opt-in stabilisation
+(c5) that keeps the ADR 0608 checks within their limits (c6), defaults bit-identical (c7). Whether c5's "from the published
+literature" is met by a published idea in a derived form is open question 1.
+
+### Remaining questions
+
+1. **Which published stabilisation.** Options: (a) keep the repository's penalty (the idea of a deformation-dependent
+   stabilisation vanishing at small strain, the form derived here); (b) a specific paper's stabilisation reproduced with the
+   paper in hand (Wall, Bischoff and Ramm 2000; Korelc, Solinc and Wriggers 2010; Reese and Wriggers 2000). Recommendation: (a),
+   since it meets every registered check; (b) only if the maintainer reads the clause as "reproduced from a paper", which needs
+   the paper.
+2. **MU7.** Options: (a) a follow-up check of the stabilised strain energy at a large strain against the test's own `Pi_s`; (b)
+   accept the D4 path as exercised only. Recommendation: (a), small (proposed below).
+3. **Scope.** One material, one Poisson ratio, uniaxial stress. Options: extend the sweep to confined compression and `nu` to
+   0.49 (where the bulk term dominates `c` and the stabilised element approaches the locking Full Hex8), or leave it.
+   Recommendation: extend in the same follow-up before the stabilisation is advertised for nearly incompressible compression.
+4. **Default.** Options: keep opt-in; make it the default for Incompatible blocks. Recommendation: keep opt-in (a default change
+   changes results and is the maintainer's).
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> Structural solver, intermediate tier. Follow-up of F-596 (ADR 0608, 2026-11-15). PARTIAL. ADR 0614, 2026-11-15: hourglass stability of the incompatible-modes Hex8 of ADR 0608 at finite strain in compression. A distorted 6 x 6 x 6 patch of the unit cube (interior nodes moved by 0.1 h), every boundary node prescribed, neo-Hookean (nu = 0.3), homogeneous uniaxial stress along z to the registered stretch 0.5; the lowest eigenvalue of the free-free tangent against the Full Hex8 vector Laplacian tracked on 51 stretches for the Full Hex8, the ADR 0608 element and the stabilised element, against the closed-form bifurcation-free bound q = min_n lambda_min of the acoustic tensor (Van Hove's argument: with its boundary fixed the continuum has no bifurcation while q > 0). Measured: q/mu >= 1.0 and the Full Hex8 above q everywhere (margin 9.5e-3); the ADR 0608 element has a spurious zero eigenvalue at lambda_s = 0.60797 (39 per cent compression; q/mu = 1.09 and the Full Hex8 at 1.17 there; about 0.556 on a 4 x 4 x 4 patch and 0.645 for the infinite regular mesh by Bloch probes). New opt-in SolidModel::set_incompatible_stabilisation (default off; defaults bit-identical: 8 new digests of the Incompatible paths recorded on the base, B0 of ADR 0608, every rcfd-fem test, baseline_hashes): a deformation-dependent penalty (c/2) sum_q w_q |F_enh|^2 on the enhanced gradient with c = |D0 : (C0 - C0^-1)/4|^2 / G0 from the rest elasticity and the compatible centre gradient (zero with its first derivative at rest), the idea of Wall, Bischoff and Ramm 2000 (cited from memory) in a form derived in the ADR, with its exact tangent; lowest eigenvalue >= 0.977 over the whole range. Every ADR 0608 check re-run with the stabilisation within its limit (tangent at rest 1.9e-16, patch tests to 8.7e-16, consistent tangent 2.6e-11 to 2.0e-8, Newton on the sheared block without a Q(10, 1e-13) violation, the elastica cantilever within 4.6e-4 on 50 and 2.0e-4 on 25 elements, equal to ADR 0608's to 1e-6). Six of seven mutations caught; dropping the stabilisation energy from nl_transient's strain energy is not caught (the copied NT1 bar is at strains of 1e-4, where that energy is 2.5e-13 relative). Not covered: other materials and Poisson ratios, confined compression, a stabilisation reproduced from a specific paper (open question), a case-file key.
+
+> F-596 (note, ADR 0614, 2026-11-15): the spurious hourglass mode of the element in large compression is measured (lambda_s = 0.608 on the ADR 0614 patch) and removed by an opt-in stabilisation; F-685 takes it.
+
+> Follow-up proposed: The stabilised incompatible-modes Hex8 beyond the F-685 set-up. Deps F-685. Acceptance: Every limit not stated here is registered in the ADR before the run. The strain energy of the ADR 0614 stabilised element at a large strain against the test's own stabilisation energy (the missed mutation MU7 of ADR 0614 caught); the ADR 0614 sweep repeated for confined compression and for nu = 0.45 and 0.49, the lowest eigenvalue of the stabilised element reported against the Full Hex8 and the closed-form bound over a registered range; the default bits unchanged.
