@@ -141,8 +141,8 @@ impl WarpingSection {
 
     /// The thin-walled monosymmetric I of ADR 0553 D5: flange 1 `b_1 x t_1` on the `+e_3` side, flange 2 `b_2 x t_2` on the
     /// `-e_3` side, the web `h_w x t_w` between their inner faces, the flanges along the section axis y. `A`, `I_y`, `I_z` and
-    /// the centroidal Wagner coefficient `beta_y = int z (y^2 + z^2) dA/I_y` of the three rectangles, `J = (b_1 t_1^3 + b_2 t_2^3
-    /// + h_w t_w^3)/3`; with the flange inertias `I_k = t_k b_k^3/12` and `h_c = h_w + (t_1 + t_2)/2`, the warping constant `C_w =
+    /// the centroidal Wagner coefficient `beta_y = int z (y^2 + z^2) dA/I_y` of the three rectangles, the thin-walled
+    /// `J = (b_1 t_1^3 + b_2 t_2^3 + h_w t_w^3)/3`; with the flange inertias `I_k = t_k b_k^3/12` and `h_c = h_w + (t_1 + t_2)/2`, the warping constant `C_w =
     /// I_1 I_2 h_c^2/(I_1 + I_2)` and the shear centre at `h_c I_1/(I_1 + I_2)` from the mid-plane of flange 2 (`y_0 = 0`, `z_0`
     /// from the centroid), `beta_z = 0` by symmetry. Refuses a dimension that is not positive and finite, naming it.
     #[allow(clippy::too_many_arguments)]
