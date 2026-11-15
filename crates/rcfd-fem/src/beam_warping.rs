@@ -30,6 +30,10 @@
 //! harmonic solve [`WarpingHarmonic`] (`(1 + i eta) K - omega^2 M + i omega (alpha M + beta K)`, one complex factorisation per
 //! frequency) and the linear transient [`WarpingTransient`] (the integrator of ADR 0389 on the reduced matrices), with the load
 //! [`load_vector`]. The model's own harmonic and transient paths do not take beams; nothing of them changes.
+//!
+//! ADR 0582 (F-643) adds the load height ([`Warping::load_point`]): a force applied at a point of the section off the shear
+//! centre adds `(1/2) (F . (p - s)) phi^2` at the twist of its node to the geometric stiffness; without an entry a nodal force
+//! acts at the shear centre, as before.
 
 use crate::assemble::{element_dofs, point_stiffness};
 use crate::beam::{self, GAUSS4_W, GAUSS4_X};
@@ -261,6 +265,7 @@ pub struct Warping {
     blocks: Vec<(usize, WarpingSection)>,
     restrained: Vec<String>,
     bimoments: Vec<(String, f64)>,
+    load_points: Vec<(String, Vec3, [f64; 2])>,
 }
 
 impl Warping {
@@ -295,6 +300,22 @@ impl Warping {
     /// The bimoment loads.
     pub fn bimoments(&self) -> &[(String, f64)] {
         &self.bimoments
+    }
+    /// The same with the load height of ADR 0582 (F-643): the reference load of the pre-stress holds the force `force` (global
+    /// components, N) at every node of `node_set`, applied at `point = (p_y, p_z)` (m, section axes, from the centroid). Its only
+    /// effect is the second-order term `(1/2) (F . (p - s)) phi^2` of the twist about the shear centre `s` in `K_sigma` of
+    /// [`matrices`] (so in [`buckling_factors`], [`buckling_factors_with`] and [`prestressed_modes`]); the linear load is the
+    /// model's, and without an entry a nodal force acts at the shear centre. The force must be the one of the reference load the
+    /// pre-stress comes from. Refused there: an unknown set, a node without a warping unknown (key `"warping"`), a non-finite
+    /// value, a first-order torque about the centroid `p_y F_z - p_z F_y` (not in the model's loads) and warping elements with
+    /// different shear centres at the node (key `"load_point"`).
+    pub fn load_point(mut self, node_set: &str, force: Vec3, point: [f64; 2]) -> Warping {
+        self.load_points.push((node_set.to_string(), force, point));
+        self
+    }
+    /// The load points of [`Warping::load_point`].
+    pub fn load_points(&self) -> &[(String, Vec3, [f64; 2])] {
+        &self.load_points
     }
 }
 
@@ -966,6 +987,7 @@ fn matrices_impl(
             }
         }
     }
+    add_load_points(model, warping, &lay, &mut tg)?;
     let n = lay.dofs.n_equations();
     Ok(WarpingMatrices {
         stiffness: CsrMatrix::from_triplets(n, tk),
@@ -973,6 +995,101 @@ fn matrices_impl(
         dofs: lay.dofs,
         restrained: lay.restrained,
     })
+}
+
+fn load_point_error(reason: String) -> FemError {
+    FemError::InvalidValue {
+        key: "load_point",
+        reason,
+    }
+}
+
+/// The load-height terms of [`Warping::load_point`] (ADR 0582 D1, D3): `(F . (p - s)) e_1 e_1^T` on the rotation equations of
+/// every node of each entry, `F` in the section axes of the warping elements at the node, `s` their shear centre. Nothing is
+/// added without an entry.
+fn add_load_points(
+    model: &SolidModel,
+    warping: &Warping,
+    lay: &Layout,
+    tg: &mut Vec<(usize, usize, f64)>,
+) -> Result<()> {
+    if warping.load_points.is_empty() {
+        return Ok(());
+    }
+    let mesh = model.mesh();
+    let base_dofs = model.dof_map();
+    for (name, force, point) in &warping.load_points {
+        if !(force.iter().chain(point.iter()).all(|v| v.is_finite())) {
+            return Err(load_point_error(format!(
+                "the force {force:?} or the point {point:?} on the set '{name}' is not finite"
+            )));
+        }
+        let set = mesh.node_set(name).ok_or_else(|| FemError::UnknownSet {
+            kind: SetKind::Node,
+            name: name.clone(),
+        })?;
+        for &node in set {
+            if lay.dofs.equation(node).is_none() {
+                return Err(warping_error(format!(
+                    "node {node} of the load-point set '{name}' has no warping unknown"
+                )));
+            }
+            // The frame and the shear centre of the warping elements at the node (the frames agree by RF3).
+            let mut at: Option<([Vec3; 3], [f64; 2])> = None;
+            for (e, ws) in lay.section_of.iter().enumerate() {
+                let Some(ws) = ws else {
+                    continue;
+                };
+                let nodes = mesh.element_nodes(e);
+                if !nodes.contains(&node) {
+                    continue;
+                }
+                let (_, v) = beam::beam_property(mesh, e).expect("a Beam2 element of a Beam block");
+                let coords = [mesh.nodes()[nodes[0]], mesh.nodes()[nodes[1]]];
+                let f = beam::frame_of(&coords, v).map_err(|source| FemError::Element {
+                    element: e,
+                    source: Box::new(source),
+                })?;
+                match at {
+                    None => at = Some((f.axes, ws.shear_centre)),
+                    Some((_, s)) if s != ws.shear_centre => {
+                        return Err(load_point_error(format!(
+                            "the warping elements at node {node} of the set '{name}' have different shear centres                              ({s:?} and {:?})",
+                            ws.shear_centre
+                        )));
+                    }
+                    Some(_) => {}
+                }
+            }
+            let (axes, [y_0, z_0]) = at.expect("a node with a warping unknown is a node of a warping element");
+            let dot = |a: &Vec3| a[0] * force[0] + a[1] * force[1] + a[2] * force[2];
+            let (f_y, f_z) = (dot(&axes[1]), dot(&axes[2]));
+            let [p_y, p_z] = *point;
+            let torque = p_y * f_z - p_z * f_y;
+            let size = force.iter().map(|v| v * v).sum::<f64>().sqrt() * (p_y * p_y + p_z * p_z).sqrt();
+            if torque.abs() > TORQUE_TOLERANCE * size {
+                return Err(load_point_error(format!(
+                    "the force at the point {point:?} of the set '{name}' has the first-order torque {torque:e} about the                      centroid at node {node}: the load height is offered for forces without it"
+                )));
+            }
+            let c = f_y * (p_y - y_0) + f_z * (p_z - z_0);
+            let e_1 = axes[0];
+            for a in 0..3 {
+                for b in 0..3 {
+                    let (ra, rb) = (
+                        base_dofs
+                            .equation(node, 3 + a)
+                            .expect("a rotation unknown of a beam node"),
+                        base_dofs
+                            .equation(node, 3 + b)
+                            .expect("a rotation unknown of a beam node"),
+                    );
+                    tg.push((ra, rb, c * e_1[a] * e_1[b]));
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 /// The result of [`buckling_factors`].
