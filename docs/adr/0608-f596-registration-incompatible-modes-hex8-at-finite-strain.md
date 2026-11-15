@@ -339,3 +339,23 @@ reference.
    history; (a) costs only local iterations.
 2. **Local tolerance.** `1e-12` of the cancelling terms (arithmetic 2): taken on the same instruction (the rounding of `R_a` is
    about `1e-15` of them; the probes converge in 3 iterations).
+
+## Amendment 1 (2026-11-15, written after run 1 and before the corrected run): the set-up of the RF1 row `solve_in_time`
+
+Run 1 (`f596-scratch/run1-si_eas.log`, the registered run of `si_eas.rs` at 86c3c1a3) missed one row: `RF1 Incompatible
+solve_in_time taken` returned "step 1 of 1 ... after 5 halvings: not converged in 20 iterations (relative residual 1.03e-15,
+energy ratio 0.642)". Diagnosis: the row runs the creep time-stepping driver on an elastic material with constant loads; the
+driver solves the start at full load, so the step from 0 to 1 starts at equilibrium and its energy criterion compares two
+rounding-level energies (the defect named by ADR 0506 amendment 1 for its PT5). Diagnostic, not registered (a scratch test on
+the archive of 86c3c1a3, `f596-scratch/diag-rf1.log`): the same row fails identically with the Full block (energy ratio 0.375)
+and the BBar block (0.433); the refusal itself is gone (the error is the driver's convergence, not the key `"nonlinear"`). The
+same diagnostic ran the model with a creep material `A = 1e-28` (Full taken, BBar and Incompatible exceed the creep-increment
+limit after 5 halvings); that number is not used below.
+
+Corrected row, registered now: the same model with `Material::creep(steel(0.3), 5e-33, 4, 0)` and
+`TimeSteppingOptions::new(5e-4)`, times `[1.0]`, asserted `Ok`. Arithmetic: the clamp stress of the 2 x 1 x 1 bar under the tip
+shear `1e6 Pa x 1 m^2` is about `6 M / (b h^2) = 6 (1e6 x 2) / 1 = 1.2e7 Pa`, the creep rate `5e-33 (1.2e7)^4 = 1.0e-4 / s`, so
+the creep-strain increment over the step is about `1e-4`, below the limit `5e-4` (no halving expected) and not zero (the step
+does not start at equilibrium). The test of run 1 stays as the ignored record
+`rf1_incompatible_taken_after_f596` (`#[ignore = "record of run 1 ..."]`); the corrected test is
+`rf1_incompatible_taken_after_f596_amended`, every other row unchanged. Every other check of run 1 is final as run.

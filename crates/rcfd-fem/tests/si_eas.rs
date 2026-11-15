@@ -1082,6 +1082,7 @@ fn key_of<T>(r: &rcfd_fem::Result<T>) -> Option<(&'static str, String)> {
 }
 
 #[test]
+#[ignore = "record of run 1 of ADR 0608 RF1: the solve_in_time row ran an elastic material from an equilibrium start (set-up defective, amendment 1: Full and BBar fail the same way); the other 8 rows met; corrected as rf1_incompatible_taken_after_f596_amended"]
 fn rf1_incompatible_taken_after_f596() {
     let mut ch = Checks::new();
     let mut m = SolidModel::new(with_formulation(
@@ -1102,6 +1103,91 @@ fn rf1_incompatible_taken_after_f596() {
         (
             "solve_in_time",
             solve_in_time(&m, &[], &[1.0], &TimeSteppingOptions::new(f64::INFINITY)).map(|_| ()),
+        ),
+        ("internal_force", internal_force(&m, &u, &states).map(|_| ())),
+        ("tangent", tangent(&m, &u, &states, None).map(|_| ())),
+        (
+            "nl_transient::Integrator::new",
+            Integrator::new(&m, &[], &NlTransientOptions::new(1e-3)).map(|_| ()),
+        ),
+        (
+            "hex8_force_and_tangent_at",
+            hex8_force_and_tangent_at(INC, &x, &steel(0.3), &[0.0; 24], &empty(), &PointContext::default()).map(|_| ()),
+        ),
+    ];
+    for (path, r) in rows {
+        ch.holds(
+            &format!("RF1 Incompatible {path} taken"),
+            r.is_ok(),
+            &format!("{:?}", r.err()),
+        );
+    }
+    // The refusals that stay.
+    let r = Integrator::new(
+        &m,
+        &[],
+        &NlTransientOptions::new(1e-3).step_kind(StepKind::EnergyMomentum),
+    )
+    .map(|_| ());
+    let k = key_of(&r);
+    ch.holds(
+        "RF1 Incompatible energy-momentum step refused (key nl_transient)",
+        matches!(&k, Some(("nl_transient", _))),
+        &format!("{k:?}"),
+    );
+    let temps = vec![350.0; m.mesh().nodes().len()];
+    let r = internal_force_with_field(&m, &u, &states, &PointContext::default(), &temps, 293.0).map(|_| ());
+    let k = key_of(&r);
+    ch.holds(
+        "RF1 Incompatible internal_force_with_field refused (key temperature)",
+        matches!(&k, Some(("temperature", _))),
+        &format!("{k:?}"),
+    );
+    let r = hex8_strains(INC, &x, &[0.0; 24]).map(|_| ());
+    let k = key_of(&r);
+    ch.holds(
+        "RF1 hex8_strains(Incompatible) refused (key formulation, naming modes_and_strains)",
+        matches!(&k, Some(("formulation", reason)) if reason.contains("modes_and_strains")),
+        &format!("{k:?}"),
+    );
+    ch.finish();
+}
+
+#[test]
+fn rf1_incompatible_taken_after_f596_amended() {
+    let mut ch = Checks::new();
+    let mut m = SolidModel::new(with_formulation(
+        hex_box([0.0; 3], [2.0, 1.0, 1.0], [2, 1, 1]).unwrap(),
+        INC,
+    ));
+    m.add_material("all", steel(0.3)).unwrap();
+    for c in 0..3 {
+        m.add_constraint(Constraint::displacement("xmin", c, 0.0)).unwrap();
+    }
+    m.add_load(Load::traction("xmax", [0.0, 1e6, 0.0])).unwrap();
+    let n = m.dof_map().n_equations();
+    let u = vec![0.0; n];
+    let states = initial_states(&m).unwrap();
+    let x = distorted();
+    // ADR 0608 amendment 1: the same model with a creep material, so that the step does not start at equilibrium.
+    let mut creep_model = SolidModel::new(with_formulation(
+        hex_box([0.0; 3], [2.0, 1.0, 1.0], [2, 1, 1]).unwrap(),
+        INC,
+    ));
+    creep_model
+        .add_material("all", Material::creep(steel(0.3), 5e-33, 4.0, 0.0).unwrap())
+        .unwrap();
+    for c in 0..3 {
+        creep_model
+            .add_constraint(Constraint::displacement("xmin", c, 0.0))
+            .unwrap();
+    }
+    creep_model.add_load(Load::traction("xmax", [0.0, 1e6, 0.0])).unwrap();
+    let rows: Vec<(&str, rcfd_fem::Result<()>)> = vec![
+        ("solve", solve(&m, &[], &[], &newton(1)).map(|_| ())),
+        (
+            "solve_in_time (creep, amendment 1)",
+            solve_in_time(&creep_model, &[], &[1.0], &TimeSteppingOptions::new(5e-4)).map(|_| ()),
         ),
         ("internal_force", internal_force(&m, &u, &states).map(|_| ())),
         ("tangent", tangent(&m, &u, &states, None).map(|_| ())),
