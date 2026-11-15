@@ -315,3 +315,76 @@ the WF limits; Limits).
 - The layup coupling `m1` (zero for a homogeneous shell), `nu`-dependent anticlastic effects of free bands, the stationary frame,
   the sparse whirl solvers, the split modes and whirl state with shells, the Shell4 ANDES membrane, warped facets.
 - `n = 0` (not a pair) enters only through `omega_1`.
+
+## Addendum 1: results (2026-11-15)
+
+No library change: the item is test-only and no defect of the library was found. Test file
+`crates/rcfd-fem/tests/sa_disc_whirl_shells.rs` (the D3 reference in Rust with RF1 to RF4, the two disc tests, NC1), 59.5 s in
+release for its four tests. No existing test edited, no golden or hash table touched. Run 1 (tests at 8697741b, library unchanged
+from 61033836, log `f657-scratch/run1.log`) is the only registered run; every check was met in it, so there is no amendment.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| RF1 reference `(8, 8)` against `(10, 12)` | `1e-9`; split `1e-6` | `4.9e-11`; split `4.3e-8` | yes |
+| RF2 Wronskians | `1e-12` | `3.5e-14` | yes |
+| RF3a clamped-clamped Kirchhoff limit, `n = 0 .. 3` | `2e-5` | `1.8e-6`, `2.3e-6`, `3.5e-6`, `5.2e-6` | yes |
+| RF3b clamped-free Kirchhoff limit, `n = 0` | `1e-6` | `3.5e-8` | yes |
+| RF4 pre-stress closed form | `1e-6` | `5.9e-11` | yes |
+| WF4 Shell4, coarse | `2 e_est` = `2.4e-2` / `3.7e-2` / `5.8e-2` (`k = 1, 2, 3`) | `5.3e-3 .. 7.5e-3` / `6.5e-3 .. 9.4e-3` / `1.02e-2 .. 1.29e-2` | yes |
+| WF4 Shell4, fine | `5.9e-3` / `9.1e-3` / `1.45e-2` | `1.4e-3 .. 2.0e-3` / `1.9e-3 .. 2.7e-3` / `3.0e-3 .. 3.8e-3` | yes |
+| WF3 Shell3, coarse | `4 e_est` = `4.7e-2` / `7.3e-2` / `1.16e-1` | `4.5e-3 .. 6.5e-3` / `8.5e-3 .. 1.14e-2` / `1.37e-2 .. 1.62e-2` | yes |
+| WF3 Shell3, fine | `1.19e-2` / `1.83e-2` / `2.9e-2` | `1.2e-3 .. 1.8e-3` / `2.6e-3 .. 3.5e-3` / `4.2e-3 .. 5.1e-3` | yes |
+| OD4 / OD3 observed order (36 each) | `abs(p - 2) <= 0.5` | `p = 1.77 .. 1.93` / `1.66 .. 1.87` | yes |
+| SP4 split, coarse / fine | `4 e_est` (coarse `4.7e-2 .. 1.16e-1`, fine `1.19e-2 .. 2.9e-2`) | coarse `1.5e-3` (`k = 1`), `6.2e-3` (`k = 2`), `1.53e-2` (`k = 3`); fine `3.5e-4`, `1.31e-3`, `3.2e-3` | yes |
+| SP3 split, coarse / fine | as SP4 | coarse `4.9e-4`, `5.3e-3`, `1.34e-2`; fine `1.5e-5`, `7.7e-4`, `2.07e-3` | yes |
+| KA4 / KA3 whirl numbers (D3's signs) | `4 e_est` | equal to SP to two digits (worst `1.53e-2` / `1.34e-2`, coarse `k = 3`) | yes |
+| DI4 / DI3 | forward `tau >= 0.99`, backward `tau <= -0.99`, `omega_3 >= 1.5 omega_b` | every case `Forward` `tau = 1.000000`, `Backward` `tau = -1.000000`; `omega_3 / omega_b >= 4.39` | yes |
+| TR4 / TR3 in-plane over axial | `1e-6` | `<= 1.27e-8` / `<= 1.25e-8` | yes |
+| NC1 no split without `G` | `10 n_q eps omega_max / omega_lo` (`4.6e-11 .. 8.6e-11`; `omega_max = 2.45e6` rad/s for Shell4 at `k = 1`) | `5.6e-14 .. 1.2e-12` | yes |
+| B1 every rcfd-fem test (release) | pass | 1153 passed, 0 failed, 309 ignored (including the four new tests) | yes |
+| B2 `baseline_hashes`; `docs_site` | pass | 3 passed, 1 ignored; 2 passed | yes |
+
+Every frequency error is positive (the facets are stiff; Shell3's stabilisation lowers its error below Shell4's, as D6 expected),
+and `e / e_est` is `0.44 .. 0.63` for Shell4 on the coarse mesh: the upper estimate of D6 holds with a factor 2 to spare. The
+observed orders are a little below 2 (`1.66` worst, Shell3): the coarse mesh is not yet fully asymptotic (`(k Delta)^2 = 0.15` at
+`k = 3`). The rotary block of the shell Coriolis matrix reproduces the reference's split, `3.3` to `31.3` rad/s (`5e-4` to
+`2.8e-3` of the frequency; in the thin limit it would vanish), within `3.2e-3` on the fine mesh for both kinds, and the split
+error halves to a quarter on refinement at every `k`. TR at `1e-8` is above the `1e-15` the registration guessed for the facet
+axes; it is the eigenvector accuracy of the dense solver on the in-plane part (an error of order `eps omega_max / gap`), still two
+orders below the limit; noted, no consequence.
+
+`cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings` clean.
+
+Mutations on a `git archive` copy of 8697741b with its own target (`f657-scratch/mut`, `mutate.py`, `runmut.sh`, logs
+`mut_MU*.log`), the two disc tests each:
+
+| Id | Caught by |
+|---|---|
+| MU1 rotary block zero | SP (`d = -1`), KA, DI (`Neutral`), OD, both kinds |
+| MU2 rotary block negated | DI (directions and wave senses flip), both kinds, every case |
+| MU3 sector `G = Omega C` | SP (`d = -0.50`), both kinds |
+| MU4 Shell4 Coriolis `m2` halved | SP4 (`-0.50`), KA4 |
+| MU5 Shell3 Coriolis `mr` halved | SP3 (`-0.50`), KA3 |
+| MU6 Shell4 geometric stiffness without the normal component | WF4 (set F, up to `0.17`), OD4 (set F) |
+
+All six caught, each by the checks registered for it (MU1 also by OD). Disclosed: the first application of MU3 by the script
+put the factor in `RotatingPart::whirl_at` (the whole-part path, the first `fn whirl_at` of `whirl.rs`), which the sector tests
+do not use, and nothing moved (`mut_MU3_wrong_site.log`); the script was corrected to the registered site, the sector's
+`whirl_at`, and that run is the one in the table. This was a defect of the mutation script, not a change of any check.
+
+**Decision by the registered rule: done.** Every check RF1 to B2 was met in the one registered run, with no amendment, and every
+mutation was caught. Every clause of the acceptance is met: the transverse forward and backward whirl of a flat annular plate
+clamped at its bore and spinning about its normal, Shell4 and Shell3 on a 48-sector cyclic sector about a tilted axis, nodal
+diameters 1, 2 and 3, three speeds up to half the first frequency, with Coriolis and spin softening and with the library's own
+centrifugal pre-stress, matches the semi-analytical Mindlin reference (solved to `5e-11`) within the registered discretisation
+error at two meshes, with observed order `1.66 .. 1.93` (expected 2), and the rotating-frame split, carried by the rotary block
+alone, within the registered limit (`<= 3.2e-3` on the fine mesh).
+
+### Remaining questions
+
+1. Status. Options: (a) done, as the rule gives; (b) partial until a third mesh shows the order closer to 2. Recommendation: (a);
+   the order is within the registered band at every frequency and the errors are well inside their limits.
+2. The rotary spin softening `I Omega^2 |d|^2` and the opt-in `t^2/12` rotation terms of the shell geometric stiffness (ADR 0508)
+   are below the resolution of these checks (Limits). Options: (a) leave them to the uniform-field checks of ADR 0473/0508; (b) a
+   follow-up with a thick plate at high speed and a Richardson-extrapolated comparison that resolves `1e-4`. Recommendation: (a);
+   their effect on a fan blade's frequencies is of order `(t k)^2 (Omega / omega)^2 / 12`, small next to the stress stiffening.
