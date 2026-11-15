@@ -236,10 +236,10 @@ pub(crate) fn plane_mass(m_a: f64, m_i: f64, ei: f64, ks: f64, l: f64) -> [[f64;
     m
 }
 
-/// `G = E / (2 (1 + nu))` and `E` of the material.
+/// `G = E / (2 (1 + nu))` and `E` of the material (ADR 0584 D2: `E`, `nu` of [`Material::structural_young_poisson`]).
 pub(crate) fn moduli(material: &Material) -> (f64, f64) {
-    let e = material.youngs_modulus();
-    (e, e / (2.0 * (1.0 + material.poisson_ratio())))
+    let (e, nu) = material.structural_young_poisson();
+    (e, e / (2.0 * (1.0 + nu)))
 }
 
 /// Places a plane matrix into the 12 x 12 local matrix at the unknowns `(d, psi)` of each node, with the sign `s` of `psi`.
@@ -738,7 +738,7 @@ pub fn axial_force(
     let f = frame_of(coords, orientation)?;
     let e1 = f.axes[0];
     let du: f64 = (0..3).map(|k| e1[k] * (ue[6 + k] - ue[k])).sum();
-    Ok(material.youngs_modulus() * section.area() * du / f.length)
+    Ok(moduli(material).0 * section.area() * du / f.length)
 }
 
 /// The rows over the twelve local unknowns of the fields `(u_1, u_2, u_3, theta_1, theta_2, theta_3)` at `xi` (ADR 0473 D3): the

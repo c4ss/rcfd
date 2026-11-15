@@ -13,8 +13,10 @@
 //!   (Full and BBar Hex8, the BBar block being the mean-dilatation element, [`crate::nonlinear_md`]) and the nonlinear transient
 //!   Method step (ADR 0555 D4); the linear paths take the linearised material, the isotropic elasticity of the small-strain
 //!   moduli ([`linearised_elasticity`], through [`crate::model::Material::linear_elasticity_matrix`] and
-//!   [`crate::model::Material::linear_stress`], ADR 0555 D1, D2), refusing Beam2 and shell elements and a temperature load
-//!   naming [`LINEAR_FOLLOW_UP`] (ADR 0555 D3); the element-constant matrix
+//!   [`crate::model::Material::linear_stress`], ADR 0555 D1, D2), refusing a temperature load and, unless the model opts in
+//!   ([`crate::model::SolidModel::set_hyperelastic_structures`], ADR 0584), Beam2 and shell elements, naming
+//!   [`LINEAR_FOLLOW_UP`] (ADR 0555 D3); opted in, a structural element takes the isotropic element of
+//!   [`small_strain_young_poisson`] (ADR 0584 D2); the element-constant matrix
 //!   ([`crate::model::Material::elasticity_matrix`]) stays refused naming [`FOLLOW_UP`].
 
 use crate::error::{FemError, Result};
@@ -45,6 +47,15 @@ fn constants(energy: &HyperelasticEnergy) -> (f64, f64, f64) {
 pub fn small_strain_moduli(energy: &HyperelasticEnergy) -> (f64, f64) {
     let (c10, c01, kappa) = constants(energy);
     (2.0 * (c10 + c01), kappa)
+}
+
+/// The small-strain Young modulus and Poisson ratio `(E, nu)` of an energy (ADR 0584 D2): with `(G, K)` of
+/// [`small_strain_moduli`] and `s = 3K + G`, `E = 9 K G / s`, `nu = (3K - 2G) / (2 s)` (so that `E / (2 (1 + nu)) = G`). The
+/// moduli of the linearised material on Beam2, Shell4 and Shell3 elements.
+pub fn small_strain_young_poisson(energy: &HyperelasticEnergy) -> (f64, f64) {
+    let (g, k) = small_strain_moduli(energy);
+    let s = 3.0 * k + g;
+    (9.0 * k * g / s, (3.0 * k - 2.0 * g) / (2.0 * s))
 }
 
 /// The linearised elasticity of an energy (ADR 0555 D1): the tangent at rest, `lambda = K - 2G/3`, `D_ij = lambda + 2G

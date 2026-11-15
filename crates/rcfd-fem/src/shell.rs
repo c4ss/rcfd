@@ -294,10 +294,9 @@ fn sub(a: Vec3, b: Vec3) -> Vec3 {
     [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
 }
 
-/// `E`, `nu`, `G` of the material.
+/// `E`, `nu`, `G` of the material (ADR 0584 D2: `E`, `nu` of [`Material::structural_young_poisson`]).
 fn moduli(material: &Material) -> (f64, f64, f64) {
-    let e = material.youngs_modulus();
-    let nu = material.poisson_ratio();
+    let (e, nu) = material.structural_young_poisson();
     (e, nu, e / (2.0 * (1.0 + nu)))
 }
 

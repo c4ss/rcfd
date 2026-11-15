@@ -937,6 +937,8 @@ pub struct SolidModel {
     constraints: Vec<Constraint>,
     loads: Vec<Load>,
     supports: Vec<ElasticSupport>,
+    /// ADR 0584 D1: the linear paths take a hyperelastic material on Beam2, Shell4 and Shell3 elements (default `false`).
+    hyperelastic_structures: bool,
 }
 
 impl SolidModel {
@@ -948,7 +950,19 @@ impl SolidModel {
             constraints: Vec::new(),
             loads: Vec::new(),
             supports: Vec::new(),
+            hyperelastic_structures: false,
         }
+    }
+
+    /// Whether the linear paths take a hyperelastic material on Beam2, Shell4 and Shell3 elements (ADR 0584 D1).
+    pub fn hyperelastic_structures(&self) -> bool {
+        self.hyperelastic_structures
+    }
+    /// Opts in (`true`) to the hyperelastic material on Beam2, Shell4 and Shell3 elements on the linear paths, as its linearised
+    /// material, the isotropic element of the small-strain `E`, `nu` (ADR 0584 D1, D2). Off (the default), such a material set
+    /// is refused naming [`crate::mat_hyper::LINEAR_FOLLOW_UP`] (ADR 0555 D3). A temperature load stays refused either way.
+    pub fn set_hyperelastic_structures(&mut self, on: bool) {
+        self.hyperelastic_structures = on;
     }
 
     /// The mesh.
@@ -1307,14 +1321,17 @@ impl SolidModel {
                     package: crate::mat_hyper::LINEAR_FOLLOW_UP,
                 };
                 let elements = self.mesh.element_set(set).unwrap_or(&[]);
-                if elements.iter().any(|&e| {
-                    matches!(
-                        self.mesh.element_kind(e),
-                        crate::mesh::ElementKind::Beam2
-                            | crate::mesh::ElementKind::Shell4
-                            | crate::mesh::ElementKind::Shell3
-                    )
-                }) {
+                // ADR 0584 D1: unless the model opts in to the linearised material on structural elements.
+                if !self.hyperelastic_structures
+                    && elements.iter().any(|&e| {
+                        matches!(
+                            self.mesh.element_kind(e),
+                            crate::mesh::ElementKind::Beam2
+                                | crate::mesh::ElementKind::Shell4
+                                | crate::mesh::ElementKind::Shell3
+                        )
+                    })
+                {
                     return Err(refused("a structural element (Beam2, Shell4, Shell3)"));
                 }
                 if self.loads.iter().any(|l| matches!(l, Load::Temperature { .. })) {
