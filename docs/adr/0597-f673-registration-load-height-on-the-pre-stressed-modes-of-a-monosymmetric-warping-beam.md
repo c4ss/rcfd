@@ -279,3 +279,92 @@ beam with `n = 16, 32, 64` elements (same section, supports and mass; `omega_T` 
 DM-1 to DM-3 met confirm the diagnosis (an `O(l^2)` mass discretisation that converges to the coupled closed form of D5, so the
 derived kinetic energy of D2 is the one the library converges to); they do not turn M0 into a met check. The decision rule is
 unchanged: with M0 missed the proposed status is **partial**.
+
+## Addendum 1 (2026-11-15): results
+
+Written after the one registered run of `tests/sa_beam_warping_f673.rs` (release, `f673-scratch/run1.log`) and the one run of
+the diagnostic of amendment 1 (`run2_dm.log`, which also ran `b1_shear_centre_entry`, the unchanged B1 code split out of the
+missed test function). Commits: db1c2f82 (this registration), f87349f2 (amendment 1, before the diagnostic run), c41740c5 (the
+test file: the registered checks, M0 as the ignored record `m0_unloaded_coupled_mass_known_miss` with its limit intact, the
+diagnostic `dm_mass_convergence`). No library file changed. `cargo fmt -p rcfd-fem` was applied before the test commit (layout
+only). No limit was changed, nothing re-run to pick a result. Logs in `w49i-work/f673-scratch`: `run1.log`, `run2_dm.log`,
+`b0.log`, `fmt.log`, `clippy.log`, `docs_site.log`, `mutations.log`, `mut_*.log`; `arith.py`, `arith.log`, `scan.py` (before
+any code); `diag_mass.py`, `diag_loaded.py` (after the run, diagnosis).
+
+### Results against the registered limits
+
+| id | measured | limit | verdict |
+|---|---|---|---|
+| B0 | `sa_beam_warping_f598_bits`, `_f626_bits`, `_f635_bits`, `_f661_bits`, `_f663_bits`, `_f667_bits` 1 each; `_f627` 7 passed 2 ignored, `_f663` 5, `_f670` 3 | pass | met |
+| B1 (a3) | entry at `(0, z_0)` against none: eigenvalue `2.7696104757610396e4` both, all 119 components of mode 1 bit-equal | bit-equal | met |
+| M0 | `omega_0` against `omega_T`: **`5.22e-4`** (`omega_0^2 = 23358.701`) | `1e-4` | **missed** (known miss, amendment 1) |
+| A-S / C / F (a1) | `2.264e-3` / `2.263e-3` / `2.259e-3` (model low; `omega = 166.4215`, `160.9891`, `168.5024` rad/s) | `1e-2` | met |
+| S-S / C / F | `1.98e-4` / `8.5e-4` / `3.8e-4` | `3e-2` | met |
+| N3 | C/S `8.0e-7`; F/S `4.9e-6` | `2e-3` | met |
+| N1 | C without the entry `5.46e-2`; F without it `5.9e-3` | `> 2e-2`; `> 4e-3` | met |
+| N4 | against the reference without the coupling `0.272` / `0.241` / `0.283`; with the mass at the shear centre `0.233` / `0.211` / `0.240` | `> 1e-1` | met |
+| Z-S / C / F | `lambda_cr` `135.706589742`, `163.340623671`, `126.417486944` (ADR 0588 measured `-3.04e-4`, `-3.43e-4`, `-2.87e-4`); `z` `5.9e-13` / `2.1e-13` / `7.2e-13` | `1e-2` | met |
+| Y-S / C / F | `8.29e-4` / `8.56e-4` / `8.07e-4` (eigenvalue negative) | `1e-2` | met |
+| DM-1 / DM-2 / DM-3 (amendment 1) | `e_16 = 5.219e-4`, `e_32 = 1.296e-4`, `e_64 = 3.24e-5`: ratios `0.2484`, `0.2500`; `|e_64| = 3.2e-5` | `[0.15, 0.35]`; `1e-4` | met |
+
+**M0 diagnosed** (amendment 1): the element mass interpolates the centroid translation from the nodal `(v_c, theta_z)` with the
+bending shape functions, so for a section with an offset the coupling `rho A z_0 v_s phi` sees a twist field without its nodal
+slopes: an `O(l^2)` mass error, `+5.2e-4` at 16 elements, converging at the ratio `0.25` per halving to the coupled closed form
+of D5. The emulation of `diag_mass.py` predicted `+5.38e-4` at 16. The derived kinetic energy D2 is the one the library
+converges to; the limit `1e-4` was set from an estimate (`5e-6`) that assumed a consistent interpolation.
+
+**A larger than estimated** (`2.26e-3` against `1.2e-3`, inside the limit): the same mass interpolation, evaluated at the loaded
+state by the emulation of `diag_loaded.py`, lowers `omega` by `4.6e-4` at 16 elements (`1.2e-4` at 32; at half the buckling load
+the mode has the opposite twist sense, so the sign is opposite to the unloaded one). With the Timoshenko lateral plane (about
+`-1.1e-3`, from the unloaded closed form) and the model's lower buckling factor (`-1e-4`) this accounts for about `-1.7e-3`; the
+rest (`-5e-4`) is plausibly the shear-flexible plane under load, not diagnosed further (no limit depends on it). The offsets
+cancel in the ratios N3 to `5e-6`.
+
+### Mutations (scratch copy `f673-scratch/mut` from `git archive` of c41740c5, own target directory, one at a time; the unmutated copy passes)
+
+| id | mutation | caught by |
+|---|---|---|
+| X1 | the mass at the shear centre | A-S/C/F (`0.18` to `0.20`), S, N3, N4, DM-1 to DM-3 (M0 is ignored) |
+| X2 | the coupling with the wrong sign | A-S/C/F (`0.32` to `0.36`), S, N3 (not DM, as registered for M0) |
+| X3 | `add_line_load_points` not called | A-C, S-C/F, N3, then Y-C (the modes refuse beyond the buckling load) |
+| X4 | the line-load term with the wrong sign | A-C, A-F (`1.18e-2`), S-C/F, N3, N4-C, then Y |
+| X5 | the centroidal Wagner coefficient | A-S/C/F (`6e-2`), S, N3 (C/S `2.06e-3`), then Y |
+| X6 | the rotary inertia of the plane x-y dropped | DM-1 to DM-3 (`|e_64| = 3.0e-4`; M0 is ignored) |
+| X7 | the shear centre not subtracted in the line-load term | A-C, A-F, S-C/F, N3, B1, then Y |
+
+Seven of seven caught. Deviation from the registration: X1 and X6 were to be caught by M0, which became an ignored record; they
+are caught by the diagnostic of amendment 1 (X1 also by A, S, N4), registered after the run.
+
+### Other runs
+
+`cargo fmt -p rcfd-fem --check`: clean. `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings`: clean. `cargo test -p
+rcfd-cli --release --test docs_site` for the links of this ADR and of `docs/reference-data.md` (a new F-673 section): passed
+(`docs_site.log`). Not run: `baseline_hashes` (no library file changed; rule 3 asks it only for a changed solver file), the whole
+`rcfd-fem` suite and the workspace (the gate of the lead).
+
+### Decision by the registered rule
+
+**partial**: one registered check missed (M0, a `*_known_miss` record, diagnosed), every other check met in the one run, seven of
+seven mutations caught. By clause: a1 met for the three load heights (`<= 2.26e-3` against `1e-2`); a2 the reference has the
+derived coupled mass, and N4 shows the acceptance check sees it (without the coupling the frequency is `21` to `28%` away); a3
+met (no library line changed; B0, B1). The miss is of a supporting mass check whose limit was tighter than the library's mass
+discretisation for an offset section; whether the item is done in substance is the maintainer's call.
+
+### Remaining questions
+
+- **Q1. The consistent interpolation of the offset mass.** Options: (a) leave the mass as it is (centroid translation from
+  `(v_c, theta_z)`, converges at `O(l^2)`, `5e-4` at 16 elements); (b) build the mass of an offset section in shear-centre
+  unknowns, `T` of D2 with `v_c(x) = v_s(x) + z_0 phi(x)` on the element's own fields, transformed by `offset_transform` (the
+  emulation: `7e-7` at 16 elements). (b) changes the modal, harmonic and transient results of every existing model with a
+  shear-centre offset, so it is not taken; open for the maintainer, recommendation (b) as a follow-up with a bit record of the
+  paths without an offset (unchanged, `z_0 = 0`).
+- ADR 0594 Q1 (the entry's force restated): unchanged, recommendation (a) now, (c) with a case-file key (F-625); taken on the
+  maintainer's standing instruction of 2026-11-11 (take the recommendation).
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> F-673 note: Structural solver, advanced tier. Follow-up of F-670 and F-627 (ADR 0594, ADR 0553, 2026-11-15). PARTIAL. ADR 0597, 2026-11-15: test-only (no library change): the distributed load height of `Warping::line_load_point` on `prestressed_modes` of the fork-supported ADR 0553 monosymmetric I (L = 3, 16 elements, downward UDL of 0.5 of the ADR 0588 buckling load at the shear centre, at the centroid and on flange 1). The kinetic energy of the offset section is derived (in shear-centre unknowns rho A (v_s + z_0 phi)^2 + rho I_z v_s'^2 + rho I_p phi^2, the library's centroid mass) and the Rayleigh-Ritz reference built on it (sine series, converged to 4.3e-9); at half the buckling load the lowest frequency is above the unloaded one (the branch changes its twist sense on the way to zero). Measured: 2.26e-3 below the references for the three heights (limit 1e-2); without the inertial coupling the reference would be 21 to 28 percent away; ratios between heights 5e-6; mode shape 8.5e-4; at the model's buckling load omega^2/omega_0^2 <= 7.2e-13, at the ADR 0588 one 8.6e-4; an entry at the shear centre gives the bits of none. Missed: the unloaded frequency against the coupled Timoshenko closed form, 5.2e-4 against the limit 1e-4 (a known-miss record), diagnosed as an O(l^2) error of the element mass for an offset section (the centroid translation is interpolated from (v_c, theta_z), so the coupling sees a twist without its nodal slopes): 1.3e-4 at 32 and 3.2e-5 at 64 elements, ratio 0.25 per halving. Seven of seven mutations caught. Not covered: the harmonic and transient paths with this section and a load height, the upward load, other supports and loads, warping inertia, a consistent offset mass (ADR 0597 Q1, open: it changes existing results), no case-file key. Follow-up proposed: Consistent mass of warping sections with a shear-centre offset.
+
+> Follow-up proposed: Consistent mass of warping sections with a shear-centre offset. Deps F-673. Acceptance: Every limit not stated here is registered in the ADR before the run. The mass of a warping element with a shear-centre offset is the consistent discretisation of the kinetic energy of ADR 0597 D2 on the element's own fields (v_c = v_s + z_0 phi inside the element); the lowest unloaded frequency of the fork-supported ADR 0553 monosymmetric I equals the coupled Timoshenko-Rayleigh closed form of ADR 0597 D5 within 1e-4 at 16 elements, and the ADR 0597 pre-stressed frequencies stay within 1e-2 of their references; results of sections without an offset bit-identical (the change of results with an offset approved by the maintainer).
