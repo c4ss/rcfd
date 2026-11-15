@@ -866,15 +866,15 @@ fn n1_refusals() {
         ),
         (
             "matrix: rho 0",
-            radiation_impedance_matrix(&[a.clone()], 0.0, C, w).is_err(),
+            radiation_impedance_matrix(std::slice::from_ref(&a), 0.0, C, w).is_err(),
         ),
         (
             "matrix: c NaN",
-            radiation_impedance_matrix(&[a.clone()], RHO, f64::NAN, w).is_err(),
+            radiation_impedance_matrix(std::slice::from_ref(&a), RHO, f64::NAN, w).is_err(),
         ),
         (
             "matrix: omega -1",
-            radiation_impedance_matrix(&[a.clone()], RHO, C, -1.0).is_err(),
+            radiation_impedance_matrix(std::slice::from_ref(&a), RHO, C, -1.0).is_err(),
         ),
         (
             "with_velocity: short",

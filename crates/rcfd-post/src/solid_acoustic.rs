@@ -12,8 +12,12 @@
 //! - The surface pressure on the plane ([`BaffledPlane::surface_pressure`], [`BaffledPlane::surface_pressures`]) with the
 //!   singular part `1/R` of the kernel integrated analytically over each face ([`polygon_inverse_distance`]), and the
 //!   radiation impedance with the added mass ([`BaffledPlane::radiation_impedance`], ADR 0488).
+//! - The matrix `Z_mn = (1/2) int P[V_m] conj(V_n) dS` of several velocity fields of one plane
+//!   ([`radiation_impedance_matrix`], [`BaffledPlane::with_velocity`]): mutual impedances, modal added mass and radiation
+//!   damping; the first frequency of a baffled structure in a light fluid on its vacuum modes
+//!   ([`light_fluid_first_frequency`], ADR 0538).
 //!
-//! Derivations and the checks: ADR 0468 and ADR 0488.
+//! Derivations and the checks: ADR 0468, ADR 0488 and ADR 0538.
 
 use crate::acoustics::{band_index, third_octave_bands, Spectrum};
 use rcfd_core::vec3::{self, Vec3};
