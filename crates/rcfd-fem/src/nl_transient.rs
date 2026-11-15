@@ -31,6 +31,11 @@
 //! unchanged. With the energy-momentum step a neo-Hookean material is taken and its algorithmic stress is the discrete
 //! gradient of Gonzalez ([`AlgorithmicStress`], ADR 0523), which conserves the energy of any stored energy.
 //!
+//! The reference of the relative residual of the `Method` step is the driver's with the inertia force (ADR 0479 D2); the
+//! opt-in [`ResidualReference::InertiaTerms`] (ADR 0603) also takes the largest norm of the products the inertia and damping
+//! force is a sum of, so that a converged step of a free vibration is not rejected at the rounding floor of the internal
+//! force near a zero crossing (the test is then a relative tolerance on the step's displacement).
+//!
 //! Shell4 and Shell3 (ADR 0522, F-585) take the corotated element of [`crate::shell_corot`] (ADR 0490) with the constant
 //! consistent shell mass on the additive unknowns: the translations exactly, the rotations with the rotary inertia of the rate
 //! of the rotation vector (`rho t^3/12`, isotropic; exact at small rotation, no gyroscopic terms). Their strain energy is the
@@ -79,6 +84,21 @@ pub enum StepKind {
     EnergyMomentum,
 }
 
+/// The reference of the relative residual of each Newton attempt of the `Method` step (ADR 0603 D1, D2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
+pub enum ResidualReference {
+    /// The driver's reference with the inertia force of ADR 0479 D2, the default.
+    #[default]
+    Driver,
+    /// Also at least the largest norm of the products the inertia and damping force is a sum of (ADR 0603 D1): `c_m M
+    /// u_{n+1}`, `c_m M u_n`, `c_m h M v_n`, `c_m h^2 |1/2 - beta| M a_n`, `alpha_m/(1 - alpha_f) M a_n`, `alpha_f/(1 -
+    /// alpha_f) f_int,n` and the damping products, `c_m = (1 - alpha_m)/((1 - alpha_f) beta h^2)`; so that a converged step
+    /// of a free vibration is not rejected at the rounding floor of the internal force near a zero crossing. Refused with
+    /// the energy-momentum step.
+    InertiaTerms,
+}
+
 /// Options of the nonlinear integrator.
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
@@ -106,6 +126,8 @@ pub struct NlTransientOptions {
     /// The algorithmic stress of the energy-momentum step (ADR 0523 D4; default [`AlgorithmicStress::Auto`]); not read by
     /// the `Method` step.
     pub stress: AlgorithmicStress,
+    /// The reference of the relative residual (ADR 0603 D2; default [`ResidualReference::Driver`]).
+    pub residual_reference: ResidualReference,
 }
 
 impl NlTransientOptions {
@@ -122,6 +144,7 @@ impl NlTransientOptions {
             temperature_field: None,
             step: StepKind::Method,
             stress: AlgorithmicStress::Auto,
+            residual_reference: ResidualReference::Driver,
         }
     }
     /// The same options with a method.
@@ -173,6 +196,11 @@ impl NlTransientOptions {
     /// The same options with an algorithmic stress of the energy-momentum step (ADR 0523 D4).
     pub fn algorithmic_stress(mut self, stress: AlgorithmicStress) -> NlTransientOptions {
         self.stress = stress;
+        self
+    }
+    /// The same options with a reference of the relative residual (ADR 0603 D2).
+    pub fn residual_reference(mut self, reference: ResidualReference) -> NlTransientOptions {
+        self.residual_reference = reference;
         self
     }
 }
@@ -358,6 +386,8 @@ pub struct Integrator {
     stress: AlgorithmicStress,
     /// A model with a neo-Hookean material in the energy-momentum step (ADR 0523 D5).
     hyper: bool,
+    /// The reference of the relative residual (ADR 0603 D2).
+    residual_reference: ResidualReference,
     state: Option<NlTransientState>,
 }
 
@@ -407,6 +437,52 @@ struct Inertia<'a> {
     c: Option<&'a CsrMatrix>,
     kin: &'a Kinematics<'a>,
     fint_n: &'a [f64],
+    /// The inertia-term reference of ADR 0603 D1 (`None`: the driver's reference).
+    terms: Option<InertiaTerms>,
+}
+
+/// The products of ADR 0603 D1 that do not depend on the iterate: their largest norm and the factors of `M u_{n+1}` and
+/// `C u_{n+1}`.
+struct InertiaTerms {
+    fixed: f64,
+    cm: f64,
+    cc: f64,
+}
+
+impl InertiaTerms {
+    /// The products of the start of the sub-step (ADR 0603 D1).
+    fn new(m: &CsrMatrix, c: Option<&CsrMatrix>, kin: &Kinematics<'_>, u_n: &[f64], fint_n: &[f64]) -> InertiaTerms {
+        let [am, af, beta, gamma] = kin.parameters;
+        let h = kin.h;
+        let nrm = |v: &[f64]| v.iter().map(|x| x * x).sum::<f64>().sqrt();
+        let cm = (1.0 - am) / ((1.0 - af) * beta * h * h);
+        let cc = gamma / (beta * h);
+        let p = h * h * (0.5 - beta).abs();
+        let (mu, mv, ma) = (nrm(&matvec(m, u_n)), nrm(&matvec(m, kin.v_n)), nrm(&matvec(m, kin.a_n)));
+        let mut fixed = [
+            cm * mu,
+            cm * h * mv,
+            cm * p * ma,
+            am / (1.0 - af) * ma,
+            af / (1.0 - af) * nrm(fint_n),
+        ]
+        .into_iter()
+        .fold(0.0f64, f64::max);
+        if let Some(c) = c {
+            let (cu, cv, ca) = (nrm(&matvec(c, u_n)), nrm(&matvec(c, kin.v_n)), nrm(&matvec(c, kin.a_n)));
+            fixed = [
+                cv,
+                h * (1.0 - gamma).abs() * ca,
+                cc * cu,
+                cc * h * cv,
+                cc * p * ca,
+                af / (1.0 - af) * cv,
+            ]
+            .into_iter()
+            .fold(fixed, f64::max);
+        }
+        InertiaTerms { fixed, cm, cc }
+    }
 }
 
 /// The step's kinematics: `a_{n+1}` and `v_{n+1}` of `u_{n+1}` (ADR 0479 D1).
@@ -494,6 +570,18 @@ impl Contribution for Inertia<'_> {
     fn in_residual_reference(&self) -> bool {
         true
     }
+
+    fn residual_reference_terms(&self, u: &[f64], _load_factor: f64) -> f64 {
+        let Some(t) = &self.terms else {
+            return 0.0;
+        };
+        let nrm = |v: &[f64]| v.iter().map(|x| x * x).sum::<f64>().sqrt();
+        let mut r = t.fixed.max(t.cm * nrm(&matvec(self.m, u)));
+        if let Some(c) = self.c {
+            r = r.max(t.cc * nrm(&matvec(c, u)));
+        }
+        r
+    }
 }
 
 /// The end of one sub-step.
@@ -529,6 +617,15 @@ impl Integrator {
                 it.hyper = true;
                 return Ok(it);
             }
+        }
+        // ADR 0603 D2: the inertia-term reference is a reference of the Method step's driver call only.
+        if options.step == StepKind::EnergyMomentum && options.residual_reference != ResidualReference::Driver {
+            return Err(invalid(
+                "nl_transient",
+                "the inertia-term residual reference with the energy-momentum step: the midpoint step has no inertia \
+                 contribution (ADR 0603 D2)"
+                    .to_string(),
+            ));
         }
         model.validate()?;
         // ADR 0522 D4: Shell4 and Shell3 take the corotated element of ADR 0490 with the consistent shell mass (D2).
@@ -707,6 +804,7 @@ impl Integrator {
             step: options.step,
             stress: options.stress,
             hyper: false,
+            residual_reference: options.residual_reference,
             state: None,
         })
     }
@@ -1148,11 +1246,17 @@ impl Integrator {
         let kin = Kinematics::new(u, v, a, self.parameters, h);
         // ADR 0526 D4: the damping at the temperature of the sub-step's end.
         let c = self.damping_at(t_b)?;
+        // ADR 0603 D1: the inertia-term reference, opt-in.
+        let terms = match self.residual_reference {
+            ResidualReference::Driver => None,
+            ResidualReference::InertiaTerms => Some(InertiaTerms::new(&self.m, c.as_deref(), &kin, u, fint)),
+        };
         let inertia = Inertia {
             m: &self.m,
             c: c.as_deref(),
             kin: &kin,
             fint_n: fint,
+            terms,
         };
         let mut list: Vec<&dyn Contribution> = Vec::with_capacity(1 + contributions.len());
         list.push(&inertia);
