@@ -185,7 +185,7 @@ impl ModeFactor {
                 .max_by(|&a, &b| lu[a][c].abs().total_cmp(&lu[b][c].abs()))
                 .expect("a row");
             let pivot = lu[p][c];
-            if !(pivot.abs() > 1e-14 * amax) || !pivot.is_finite() {
+            if pivot.is_nan() || pivot.abs() <= 1e-14 * amax || !pivot.is_finite() {
                 return Err(FemError::InvalidValue {
                     key: ITERATION_KEY,
                     reason: format!(
