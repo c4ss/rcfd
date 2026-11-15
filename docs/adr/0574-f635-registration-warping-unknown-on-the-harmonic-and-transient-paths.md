@@ -295,3 +295,83 @@ Corrected checks (new, run once after this commit):
 
 The decision rule: H3 and HW are missed in the registered run, so the item is **partial** by the rule whatever H3' and HW' give.
 H3' and HW' are checks met (or not) only after a post-run amendment.
+
+## Addendum 1 (2026-11-15): results
+
+Written after the one registered run of `sa_beam_warping_f635.rs` (log `f635-scratch/run1.log`, code commit 426df3bd), the run of
+the amendment 2 checks (`run2.log`, commit after 2ff4b53c), the B0 runs (`b0_base2.log` on the base, `b0_after.log`) and the
+mutation runs (`mutations.log`, `mut_Z*.log`). The numbers are those the tests printed (release). No limit was changed; nothing
+was re-run to pick a result.
+
+### Results against the registered limits
+
+| id | measured | limit | verdict |
+|---|---|---|---|
+| B0 (with B0r, amendment 1) | 10 digests bit-identical to the base record (the three refusals of the plain harmonic and transient paths on a beam, the plain modes, the ADR 0548 static solve with and without a bimoment and its modes); the ADR 0546 and ADR 0548 bit records also unchanged | equal | met |
+| H2 (acceptance) | `3.56e-7` (`241.07708` against `241.07699` rad/s, 2 secant steps) | `1e-3` | met |
+| H3 | `1.06e-8` | `1e-8` | **missed** (record `h3_hw_known_miss`) |
+| H1 | `1.36e-6` | `1e-5` | met |
+| H4 | `2.7e-13`; every imaginary value 0 | `1e-10`; exact | met |
+| H5 (loss factor) | `3.62e-5` | `2e-4` | met |
+| H6 (Rayleigh) | `1.82e-5` | `1e-4` | met |
+| H6b (both) | `1.36e-6` | `1e-5` | met |
+| H7' (Saint-Venant control) | `0.194` | `> 0.1` | met |
+| H8 (8 elements) | `5.79e-6` | `1e-4` | met |
+| HW | `1.77e-8`; held eigenvalue `2.601` of the free | `1e-8`; `> 1.2` | **missed** (the first part; record `h3_hw_known_miss`) |
+| HB | `0` | `1e-10` | met |
+| HE | every value 0 | exact | met |
+| TR1 (acceptance) | `5.37e-3` | `1.5e-2` | met |
+| TR2 | `1.9775` | `[1.9, 2.05]` | met |
+| TR3 | `3.26e-7` | `1e-5` | met |
+| TR3b | `2.07e-6` | `2e-5` | met |
+| TR4 | `3.1e-13` | `1e-9` | met |
+| TR5' (Saint-Venant control) | `3.27` | `> 0.5` | met |
+| R (9 refusals) | each with its key | exact | met |
+| H3' (amendment 2) | `9.7e-13` (3 steps) | `1e-8` | met after a post-run amendment |
+| HW' (amendment 2) | `8.6e-14`; `2.601` | `1e-8`; `> 1.2` | met after a post-run amendment |
+
+Every measured value met is within a factor of 3 of its estimate. H3 and HW: diagnosed in amendment 2. The search stops at the
+first solve refused by the resonance pivot `1e-8`, and the estimate left that refusal out.
+
+### Mutations (scratch copy `f635-scratch/mut`, own target dir, one at a time)
+
+| mutation | result | caught by |
+|---|---|---|
+| Z1 harmonic mass without `M14 - M12` | caught | H1, H2 (`3.2e-3`), H3', HW', H5, H6, H6b, H8, R (resonance) |
+| Z2 harmonic stiffness without `K14 - K12` | caught | H1, H2 (`0.18`), H3', HW', R |
+| Z3 `+ omega^2 M` | caught | H1, H2, H3', HW', H5, H6, H6b, H7', H8, R |
+| Z4 loss factor on the mass term | caught | H6b only (at `omega_1` `omega^2 M` and `K` nearly agree on the resonant mode, so H5 passes) |
+| Z5 Rayleigh `beta K` omitted | caught | H6, H6b |
+| Z6 restraint not eliminated (harmonic) | caught | HW' |
+| Z7 restraint not eliminated (transient) | caught | TR3b |
+| Z8 transient on the six-unknown mass | caught | a refusal (`"mass matrix"`, no mass on `chi`) in TR1 |
+| Z9 imaginary damping sign flipped | caught | H5, H6, H6b |
+
+All nine mutations are caught. Z4 was predicted to be caught by H5 and H6b, and only H6b caught it. Z6 is caught by HW' (the
+amended check); HW missed in the registered run, so HW cannot count as a catch.
+
+### Other runs
+
+`cargo test -p rcfd-fem --release`: 276 test binaries and doc-tests, 1154 passed, 0 failed, 310 ignored (the ignored records,
+including `h3_hw_known_miss`, stay ignored). `cargo test -p rcfd-api --release --test baseline_hashes`: 3 passed, 1 ignored
+(unchanged). `cargo test -p rcfd-cli --release --test docs_site`: 2 passed. `cargo clippy -p rcfd-fem --release --all-targets
+-- -D warnings`: clean. `cargo fmt -p rcfd-fem --check`: clean. No documentation page changed (the module text of
+`beam_warping.rs` has a paragraph for ADR 0574).
+
+### Decision
+
+**Partial** by the registered rule: H3 and HW missed in the registered run (record `h3_hw_known_miss`), and H3' and HW' were met
+only after a post-run amendment. B0 and the refusal records of amendment 1 were corrected before any comparison (amendment 1).
+The acceptance clauses are met. The harmonic response and the transient twist of the fork-supported I beam use the 14-unknown
+stiffness and mass of ADR 0548 (H7', TR5' and mutations Z1, Z2 and Z8 show it). The first torsional resonance is `3.6e-7` from
+`sqrt((G J k^2 + E C_w k^4)/(rho I_p))` at 16 elements. Every result without the option is bit-identical (B0). The misses are in
+supporting checks of the resonance search; they are not in the acceptance.
+
+### Remaining questions
+
+- Q1 (the reading of "end torque"): (a) midspan torque, as taken here; (b) a beam free in twist at the driven end. Recommendation:
+  (a).
+- Q2 (a pre-stress on the warping harmonic path): recommendation, a separate item when a case needs it.
+- Q3 (the resonance pivot cuts the search): (a) leave as is, with the search taking `resonance_pivot(0.0)` when it needs more
+  than `1e-8`; (b) add a search function `first_resonance` to the library that runs without the pivot. Recommendation: (a). The
+  pivot guards a response that does not exist, and a search is a caller's procedure.
