@@ -860,6 +860,80 @@ fn cyclic_rows(
             }
         }
     }
+    // ADR 0583 D2.4: the low nodes of the two-sided shell tie, `a_f - sum G a_g - sum G R^T (c a_d + s b_d) = 0` and the sine
+    // pair `b_f - sum G b_g - sum G R^T (-s a_d + c b_d) = 0`, on the rotations as on the translations.
+    for (f, lows, highs) in bd.two_sided() {
+        let f = *f;
+        let nf = dofs.components(f);
+        if let Some(&(p, _)) = lows.iter().chain(highs).find(|&&(p, _)| dofs.components(p) != nf) {
+            let np = dofs.components(p);
+            return Err(FemError::InvalidValue {
+                key: "cyclic",
+                reason: format!(
+                    "constraint {constraint}: low node {f} of the two-sided tie has {nf} unknowns and node {p} of its row \
+                     has {np} (ADR 0583: a tied node has the unknowns of its partners)"
+                ),
+            });
+        }
+        let bases: &[usize] = if nf == 6 { &[0, 3] } else { &[0] };
+        for comp in bases.iter().flat_map(|&b| b..b + 3) {
+            let base = comp - comp % 3;
+            let i = comp - base;
+            let origin = RowOrigin::Cyclic {
+                constraint,
+                node: f,
+                component: comp,
+            };
+            let a = eq(f, comp)?;
+            let mut terms = vec![(a, 1.0)];
+            let mut sine_terms = sine.map(|off| vec![(off + a, 1.0)]);
+            for &(g, x) in lows {
+                let e = eq(g, comp)?;
+                terms.push((e, -x));
+                if let (Some(off), Some(st)) = (sine, sine_terms.as_mut()) {
+                    st.push((off + e, -x));
+                }
+            }
+            for &(d, x) in highs {
+                for (j, rj) in r.iter().enumerate() {
+                    let rji = rj[i];
+                    if rji == 0.0 {
+                        continue;
+                    }
+                    let e = eq(d, base + j)?;
+                    if c != 0.0 {
+                        terms.push((e, -x * c * rji));
+                    }
+                    if let Some(off) = sine {
+                        if s != 0.0 {
+                            terms.push((off + e, -x * s * rji));
+                        }
+                        let st = sine_terms.as_mut().expect("sine part");
+                        if s != 0.0 {
+                            st.push((e, x * s * rji));
+                        }
+                        if c != 0.0 {
+                            st.push((off + e, -x * c * rji));
+                        }
+                    }
+                }
+            }
+            rows.push(Row {
+                origin,
+                terms,
+                value: 0.0,
+                designated: a,
+            });
+            if let (Some(off), Some(st)) = (sine, sine_terms) {
+                rows.push(Row {
+                    origin,
+                    terms: st,
+                    value: 0.0,
+                    designated: off + a,
+                });
+            }
+        }
+    }
     // ADR 0456 D4 and arithmetic 5: a node on the axis, the null space of its own rows in solved form.
     for &p in bd.axis_nodes() {
         let m = if sine.is_some() { 6 } else { 3 };
