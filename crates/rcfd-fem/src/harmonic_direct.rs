@@ -23,13 +23,23 @@
 //! stiffness; a loss factor on its set is refused. A model without the material takes the code of ADR 0448 as it was.
 //! ADR 0494 (F-583): [`DirectHarmonic::stress`] of a viscoelastic material is `(G*/G_0) dev sigma_0 + (K*/K_0) vol
 //! sigma_0` at each integration point, `sigma_0` the elastic stress of the base (`E*/E_0 sigma_0` for equal weights).
+//!
+//! ADR 0543 (F-528): a model with linear constraints, rigid sets or elastic supports is solved on the transformation `x = T q`
+//! of ADR 0296: every real matrix of `A(omega)` (the stiffness parts, the supports `K_s`, the pre-stress `K_sigma`, the mass,
+//! the Rayleigh stiffness `K_0 + K_s + K_sigma`, the dashpots) is reduced once, `T^T X T`, on one extended pattern; at each
+//! frequency `A_r Q = T^T F` and the response is the mesh part of `T Q`. A cyclic constraint, a non-zero constraint value,
+//! base motion and the supernodal factor are refused there. [`DirectHarmonicOptions::prestress`] adds `K_sigma` (ADR 0390)
+//! on both paths, real and undamped, and in the Rayleigh stiffness. A model without these and without a pre-stress takes the
+//! code of ADR 0448 as it was.
 
 use crate::assemble::{assemble_with, stiffness_with};
 use crate::constraint::prescribed_equations;
 use crate::error::{FemError, Result};
+use crate::geometric::Prestress;
 use crate::harmonic::{HarmonicLoad, HarmonicResponse, HarmonicStress};
 use crate::mass::consistent_with;
 use crate::material::{isotropic_elasticity, Matrix6};
+use crate::model::Constraint;
 use crate::model::{DofMap, Material, SolidModel};
 use crate::recover::IntegrationPointField;
 use rcfd_linalg::complex::C64;
@@ -227,6 +237,9 @@ pub struct DirectHarmonicOptions {
     /// [`DirectFactor::SupernodalNestedDissection`] (the complex supernodal factor after nested dissection of the node
     /// coordinates, the order computed once); the minimum-degree factor is refused.
     pub factor: DirectFactor,
+    /// A pre-stress whose geometric stiffness `K_sigma` (ADR 0390) is added, real and undamped, to the stiffness and to the
+    /// Rayleigh stiffness (ADR 0543 D5; default none).
+    pub prestress: Option<Prestress>,
 }
 
 impl Default for DirectHarmonicOptions {
@@ -239,6 +252,7 @@ impl Default for DirectHarmonicOptions {
             resonance_pivot: RESONANCE_PIVOT,
             temperature: None,
             factor: DirectFactor::Envelope,
+            prestress: None,
         }
     }
 }
@@ -290,6 +304,12 @@ impl DirectHarmonicOptions {
         self.factor = factor;
         self
     }
+
+    /// The pre-stress of the geometric stiffness (ADR 0543 D5).
+    pub fn prestress(mut self, prestress: Prestress) -> DirectHarmonicOptions {
+        self.prestress = Some(prestress);
+        self
+    }
 }
 
 // ----------------------------------------------------------------------------------------------------------- solver
@@ -321,6 +341,26 @@ pub struct DirectHarmonic {
     resonance_pivot: f64,
     /// The elimination order of the supernodal factor (ADR 0509 D4); `None`: the envelope.
     order: Option<Vec<usize>>,
+    /// ADR 0543 D5: `K_sigma` on the mesh pattern of the plain path; `None` without a pre-stress.
+    geometric: Option<Vec<f64>>,
+    /// ADR 0543 D1: the reduced matrices of the transformation path; `None` on the plain path.
+    transformed: Option<Box<Transformed>>,
+}
+
+/// The real matrices of the transformation path reduced once, `T^T X T`, on one reduced pattern (ADR 0543 D1, D3).
+#[derive(Debug, Clone)]
+struct Transformed {
+    tr: crate::mpc::Transformation,
+    row_ptr: Vec<usize>,
+    col: Vec<usize>,
+    /// The reduced stiffness parts, in the order of `k_parts`.
+    parts: Vec<Vec<f64>>,
+    /// `T^T (K_s + K_sigma) T`, coefficient one.
+    extra: Vec<f64>,
+    /// `T^T (K_0 + K_s + K_sigma) T`, the Rayleigh stiffness.
+    beta: Vec<f64>,
+    mass: Vec<f64>,
+    dashpots: Vec<f64>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -472,7 +512,8 @@ fn finite_nonneg(key: &'static str, what: &str, v: f64) -> Result<()> {
 
 impl DirectHarmonic {
     /// Assembles the stiffness per material, the consistent mass and the dashpots of a model (solid elements, zero
-    /// prescribed displacements, not on the transformation path) and checks the options.
+    /// prescribed displacements) and checks the options. A model with linear constraints, rigid sets or elastic supports is
+    /// reduced on the transformation `x = T q` (ADR 0543 D1 to D4; zero values, no cyclic constraint, the envelope factor).
     pub fn new(model: &SolidModel, options: &DirectHarmonicOptions) -> Result<DirectHarmonic> {
         model.validate()?;
         // ADR 0525 D2: the direct solve takes the formulations; Incompatible with a viscoelastic material is refused.
@@ -483,13 +524,33 @@ impl DirectHarmonic {
         } else {
             model.check_supported()?;
         }
-        if crate::mpc::uses_transformation(model) {
-            return Err(invalid(
-                "constraint",
-                "linear constraints, rigid sets, cyclic constraints and elastic supports are not taken by the direct \
-                 harmonic solve (ADR 0448: the transformation path is not included)"
-                    .to_string(),
-            ));
+        // ADR 0543 D4: the transformation path takes linear constraints, rigid sets and elastic supports with zero values.
+        let on_transformation = crate::mpc::uses_transformation(model);
+        if on_transformation {
+            if let Some(i) = model
+                .constraints()
+                .iter()
+                .position(|c| matches!(c, Constraint::Cyclic { .. }))
+            {
+                return Err(invalid(
+                    "constraint",
+                    format!(
+                        "constraint {i} (Cyclic): the direct harmonic solve does not take a cyclic constraint (its \
+                         harmonic transformation belongs to a harmonic index; ADR 0543 D4)"
+                    ),
+                ));
+            }
+            crate::mpc::refuse_nonzero_values(model, "the direct harmonic solve on the transformation path")?;
+            if options.factor != DirectFactor::Envelope {
+                return Err(invalid(
+                    "solver",
+                    format!(
+                        "factor {:?}: the direct harmonic solve on the transformation path takes the envelope factor \
+                         only (ADR 0543 D4)",
+                        options.factor
+                    ),
+                ));
+            }
         }
         let fixed = prescribed_equations(model, &[])?;
         if let Some(&(eq, v)) = fixed.iter().find(|&&(_, v)| v != 0.0) {
@@ -609,6 +670,20 @@ impl DirectHarmonic {
                 "stiffness and mass on different patterns".to_string(),
             ));
         }
+        // ADR 0543 D5: the geometric stiffness of the pre-stress on the same pattern.
+        let geometric = match &options.prestress {
+            None => None,
+            Some(p) => {
+                let kg = crate::geometric::assemble_geometric(model, p, options.threads)?;
+                if kg.col != k_total_m.col || kg.row_ptr != k_total_m.row_ptr {
+                    return Err(invalid(
+                        "pattern",
+                        "stiffness and geometric stiffness on different patterns".to_string(),
+                    ));
+                }
+                Some(kg.val)
+            }
+        };
 
         // dashpots
         let dofs = model.dof_map();
@@ -644,6 +719,34 @@ impl DirectHarmonic {
             }
         }
 
+        if on_transformation {
+            let t = transformed(
+                model,
+                &k_total_m,
+                &k_parts,
+                &k_total,
+                &mass_m.val,
+                geometric.as_deref(),
+                &cd,
+            )?;
+            return Ok(DirectHarmonic {
+                dofs,
+                n,
+                k_parts,
+                k_total,
+                mass: mass_m.val,
+                rayleigh,
+                free: t.tr.independent().to_vec(),
+                reduced: Vec::new(),
+                is_fixed: vec![false; n],
+                rows_free: Vec::new(),
+                rows_fixed: Vec::new(),
+                resonance_pivot: options.resonance_pivot,
+                order: None,
+                geometric: None,
+                transformed: Some(Box::new(t)),
+            });
+        }
         let mut is_fixed = vec![false; n];
         for &(e, _) in &fixed {
             is_fixed[e] = true;
@@ -731,10 +834,13 @@ impl DirectHarmonic {
             rows_fixed,
             resonance_pivot: options.resonance_pivot,
             order,
+            geometric,
+            transformed: None,
         })
     }
 
-    /// The free equations, ascending (reduced index `r` is full equation `free()[r]`).
+    /// The free equations, ascending (reduced index `r` is full equation `free()[r]`). On the transformation path (ADR 0543
+    /// D6) the independent unknowns of `T`, ascending (a reference unknown of a rigid set is `>=` the number of equations).
     pub fn free(&self) -> &[usize] {
         &self.free
     }
@@ -778,8 +884,16 @@ impl DirectHarmonic {
             for ((k, _), c) in self.k_parts.iter().zip(coef) {
                 v += c.scale(k[p]);
             }
+            // ADR 0543 D5: the pre-stress, real, and in the Rayleigh stiffness.
+            let kb = match &self.geometric {
+                Some(g) => {
+                    v += C64::from_real(g[p]);
+                    self.k_total[p] + g[p]
+                }
+                None => self.k_total[p],
+            };
             v += C64::from_real(-w2 * self.mass[p]);
-            v += C64::new(0.0, omega * (alpha * self.mass[p] + beta * self.k_total[p]));
+            v += C64::new(0.0, omega * (alpha * self.mass[p] + beta * kb));
         }
         if e.cd != 0.0 {
             v += C64::new(0.0, omega * e.cd);
@@ -917,6 +1031,9 @@ impl DirectHarmonic {
                 found: load.re().len(),
             });
         }
+        if let Some(t) = &self.transformed {
+            return self.solve_transformed(t, load, base, omega);
+        }
         let mut g = vec![C64::ZERO; self.n];
         let mut given = vec![false; self.n];
         for &(node, component, amp) in base.entries() {
@@ -1025,6 +1142,230 @@ impl DirectHarmonic {
             re[e] = z.re;
             im[e] = z.im;
         }
+        Ok(HarmonicResponse { omega, re, im })
+    }
+}
+
+// ---------------------------------------------------------------------------------------- the transformation path
+
+/// The reduced matrices of the transformation path (ADR 0543 D1 to D3): the extended pattern (the mesh pattern of
+/// `k_mesh`, the dashpot entries `cd` and the support triplets), each real matrix put on it and reduced, `T^T X T`.
+fn transformed(
+    model: &SolidModel,
+    k_mesh: &CsrMatrix,
+    k_parts: &[(Vec<f64>, Damping)],
+    k_total: &[f64],
+    mass: &[f64],
+    geometric: Option<&[f64]>,
+    cd: &BTreeMap<(usize, usize), f64>,
+) -> Result<Transformed> {
+    let tr = crate::mpc::transformation(model, &[])?;
+    let n = k_mesh.n;
+    let mut supports: BTreeMap<(usize, usize), f64> = BTreeMap::new();
+    for (i, j, v) in crate::mpc::support_triplets(model)? {
+        *supports.entry((i, j)).or_insert(0.0) += v;
+    }
+    // the extended pattern, row by row
+    let mut row_ptr = Vec::with_capacity(n + 1);
+    row_ptr.push(0usize);
+    let mut col: Vec<usize> = Vec::new();
+    for i in 0..n {
+        let mut cols: Vec<usize> = k_mesh.col[k_mesh.row_ptr[i]..k_mesh.row_ptr[i + 1]].to_vec();
+        cols.extend(cd.range((i, 0)..(i + 1, 0)).map(|(&(_, j), _)| j));
+        cols.extend(supports.range((i, 0)..(i + 1, 0)).map(|(&(_, j), _)| j));
+        cols.sort_unstable();
+        cols.dedup();
+        col.extend(cols);
+        row_ptr.push(col.len());
+    }
+    let position = |i: usize, j: usize| -> usize {
+        let row = &col[row_ptr[i]..row_ptr[i + 1]];
+        row_ptr[i] + row.binary_search(&j).expect("entry of the extended pattern")
+    };
+    // the mesh pattern's entries in the extended pattern
+    let mut at = vec![0usize; k_mesh.col.len()];
+    for i in 0..n {
+        for p in k_mesh.row_ptr[i]..k_mesh.row_ptr[i + 1] {
+            at[p] = position(i, k_mesh.col[p]);
+        }
+    }
+    let nnz = col.len();
+    let on_mesh = |v: &[f64]| -> Vec<f64> {
+        let mut out = vec![0.0; nnz];
+        for (p, &x) in v.iter().enumerate() {
+            out[at[p]] += x;
+        }
+        out
+    };
+    let mut ks = vec![0.0; nnz];
+    for (&(i, j), &v) in &supports {
+        ks[position(i, j)] += v;
+    }
+    let mut c_d = vec![0.0; nnz];
+    for (&(i, j), &v) in cd {
+        c_d[position(i, j)] += v;
+    }
+    let mut extra = ks;
+    if let Some(g) = geometric {
+        for (e, x) in extra.iter_mut().zip(on_mesh(g)) {
+            *e += x;
+        }
+    }
+    let mut beta = on_mesh(k_total);
+    for (b, x) in beta.iter_mut().zip(&extra) {
+        *b += x;
+    }
+    let zero = vec![0.0; tr.n_unknowns()];
+    let mut pattern: Option<(Vec<usize>, Vec<usize>)> = None;
+    let mut reduce = |v: Vec<f64>| -> Result<Vec<f64>> {
+        let m = CsrMatrix {
+            n,
+            ncols: n,
+            row_ptr: row_ptr.clone(),
+            col: col.clone(),
+            val: v,
+        };
+        let (r, _) = tr.reduce(&m, &zero)?;
+        match &pattern {
+            None => pattern = Some((r.row_ptr, r.col)),
+            Some((rp, c)) => {
+                if *rp != r.row_ptr || *c != r.col {
+                    return Err(invalid("pattern", "reduced matrices on different patterns".to_string()));
+                }
+            }
+        }
+        Ok(r.val)
+    };
+    let mut parts = Vec::with_capacity(k_parts.len());
+    for (v, _) in k_parts {
+        parts.push(reduce(on_mesh(v))?);
+    }
+    let extra = reduce(extra)?;
+    let beta = reduce(beta)?;
+    let mass = reduce(on_mesh(mass))?;
+    let dashpots = reduce(c_d)?;
+    let (row_ptr, col) = pattern.expect("one matrix reduced at least");
+    Ok(Transformed {
+        tr,
+        row_ptr,
+        col,
+        parts,
+        extra,
+        beta,
+        mass,
+        dashpots,
+    })
+}
+
+impl DirectHarmonic {
+    /// A name of independent unknown `r` of the transformation path (the names of `crate::mpc::unknown_name`).
+    fn unknown_name(&self, t: &Transformed, r: usize) -> String {
+        let i = t.tr.independent()[r];
+        if i < t.tr.n_mesh() {
+            return match self.dofs.node_component(i) {
+                Some((node, component)) => format!("node {node} component {component}"),
+                None => format!("unknown {i}"),
+            };
+        }
+        match t.tr.references().iter().rev().find(|&&(_, o)| o <= i) {
+            Some(&(constraint, r0)) => {
+                let what = [
+                    "translation x",
+                    "translation y",
+                    "translation z",
+                    "rotation x",
+                    "rotation y",
+                    "rotation z",
+                ][i - r0];
+                format!("the reference {what} of constraint {constraint} (RigidSet)")
+            }
+            None => format!("unknown {i}"),
+        }
+    }
+
+    /// The solve on the transformation path (ADR 0543 D1): `A_r(omega) Q = T^T F`, the response the mesh part of `T Q`.
+    fn solve_transformed(
+        &self,
+        t: &Transformed,
+        load: &HarmonicLoad,
+        base: &BaseMotion,
+        omega: f64,
+    ) -> Result<HarmonicResponse> {
+        if let Some(&(node, component, _)) = base.entries().first() {
+            return Err(invalid(
+                "base motion",
+                format!(
+                    "node {node} component {component}: base motion is not taken on the transformation path (ADR 0543 \
+                     D4)"
+                ),
+            ));
+        }
+        let coef = self.coefficients(omega)?;
+        let (alpha, beta) = self.rayleigh;
+        let w2 = omega * omega;
+        let nq = t.row_ptr.len() - 1;
+        let mut val = Vec::with_capacity(t.col.len());
+        let mut damped = false;
+        for p in 0..t.col.len() {
+            let mut v = C64::ZERO;
+            for (k, c) in t.parts.iter().zip(&coef) {
+                v += c.scale(k[p]);
+            }
+            v += C64::from_real(t.extra[p]);
+            v += C64::from_real(-w2 * t.mass[p]);
+            v += C64::new(0.0, omega * (alpha * t.mass[p] + beta * t.beta[p] + t.dashpots[p]));
+            damped |= v.im != 0.0;
+            val.push(v);
+        }
+        let a = ComplexCsr::new(nq, t.row_ptr.clone(), t.col.clone(), val)
+            .map_err(|e| invalid("pattern", e.to_string()))?;
+        let nn = t.tr.n_unknowns();
+        let extend = |v: &[f64]| {
+            let mut x = v.to_vec();
+            x.resize(nn, 0.0);
+            x
+        };
+        let b_re = t.tr.transpose_times(&extend(load.re()));
+        let b_im = t.tr.transpose_times(&extend(load.im()));
+        let rhs: Vec<C64> = b_re.iter().zip(&b_im).map(|(&r, &i)| C64::new(r, i)).collect();
+        let opts = ComplexSkylineOptions {
+            min_relative_pivot: if damped { 0.0 } else { self.resonance_pivot },
+            ..ComplexSkylineOptions::default()
+        };
+        let ldlt = ComplexSkylineLdlt::factor_with(&a, &opts).map_err(|e| match e {
+            ComplexSkylineError::Pivot {
+                row,
+                pivot,
+                threshold,
+                scale,
+                ..
+            } => {
+                let what = if damped {
+                    "the damped dynamic stiffness is numerically singular without pivoting"
+                } else {
+                    "the undamped dynamic stiffness is singular: a resonance without damping, the steady response does \
+                     not exist"
+                };
+                invalid(
+                    "frequency",
+                    format!(
+                        "omega {omega:e} rad/s ({:e} Hz): {what}; pivot modulus {:e} at reduced unknown {row} ({}) on the \
+                         transformation path is at most {threshold:e} (scale {scale:e})",
+                        omega / (2.0 * PI),
+                        pivot.abs(),
+                        self.unknown_name(t, row)
+                    ),
+                )
+            }
+            other => invalid("frequency", format!("omega {omega:e} rad/s: {other}")),
+        })?;
+        let q = ldlt.solve(&rhs);
+        let q_re: Vec<f64> = q.iter().map(|z| z.re).collect();
+        let q_im: Vec<f64> = q.iter().map(|z| z.im).collect();
+        let mut re = t.tr.expand(&q_re);
+        let mut im = t.tr.expand(&q_im);
+        re.truncate(self.n);
+        im.truncate(self.n);
         Ok(HarmonicResponse { omega, re, im })
     }
 }

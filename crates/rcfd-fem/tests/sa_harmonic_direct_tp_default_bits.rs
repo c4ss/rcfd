@@ -205,7 +205,10 @@ fn b0_default_bits_of_the_base() {
             .factor(DirectFactor::SupernodalNestedDissection),
     )
     .unwrap();
-    got.push(("cantilever supernodal", digest(&flat(&s.sweep(&cl, &[800.0, 2500.0]).unwrap()))));
+    got.push((
+        "cantilever supernodal",
+        digest(&flat(&s.sweep(&cl, &[800.0, 2500.0]).unwrap())),
+    ));
 
     let mut moved = bar(steel(0.0));
     moved.add_constraint(Constraint::displacement("xmax", 0, 1e-3)).unwrap();

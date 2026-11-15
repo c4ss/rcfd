@@ -657,6 +657,7 @@ fn r1_to_r11_refusals() {
 
 // ADR 0448 amendment 2: R8 corrected (R8b); the other rows unchanged.
 #[test]
+#[ignore = "superseded by ADR 0543 (F-528): row R9 expects the refusal of an elastic support, which the direct harmonic solve now takes on the transformation path; every other row runs unchanged with R9' in r1_to_r11_refusals_f528 of sa_harmonic_direct_tp.rs"]
 fn r1_to_r11_refusals_amended() {
     let mut c = Checks::new();
     let model = bar_with(10, E_MOD);
