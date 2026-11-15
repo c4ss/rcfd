@@ -448,3 +448,87 @@ except three rows, in three of the eleven tests:
   scaled by `0.25`, before the failure; 10 load steps, the options of D6) and the BBar model to the same stretch, each against
   `p_c(1.125)`, to show the size of the locking before the Full tangent loses its positive pivots. Expected, if the failure is
   the locked element: the Full error far above `0.1` and the BBar error near SP1's.
+
+## Addendum 1: results (2026-11-15)
+
+Registered run of `sa_hyper.rs`: `f425-scratch/run1-sa_hyper.log`; the corrected rows of amendment 2: `run2-amend2.log`;
+mutations: `mutations.log`, `mut-MU*.log`; S1 to S3: `s1-fem.log`, `s2-hashes.log`, `s2-docs.log`, `s3-fmt.log`,
+`s3-clippy.log` (all in `f425-scratch`).
+
+| Id | Measured (worst) | Limit | |
+|---|---|---|---|
+| T1 (run 1) / T1' | `4.0e-9` / `3.44e-9` | `1e-6` | met (run-1 set-up missed, amendment 2) |
+| T1s | `0` | `1e-12` | met |
+| EC1 | `2.2e-9` | `1e-6` | met |
+| R1 | `3.2e-14` | `1e-10` | met |
+| T2 | `2.6e-9` | `1e-6` | met |
+| R2, R3 | `3.7e-14`, `2.6e-14` | `1e-10` | met |
+| MD1 | `5.5e-15` | `1e-12` | met |
+| SS1 | `4.7166e-6` (NH), `4.9444e-6` (MR) | `1e-6` | **missed** (predicted `4.9e-6`), `ss1_small_strain_literal_known_miss` |
+| SS2 | `1.3e-16` | `1e-14` | met |
+| SS3 | `5.1e-11` | `1e-8` | met |
+| SS4 | `0.1000` | `[0.08, 0.12]` | met |
+| SSr | `5.3e-5` | reported | |
+| H1, H2, H3, H5 (Full, BBar) | `1.7e-11` | `1e-3` | met; corrections `|Delta / P_inc|` `2.04e-4`, `1.53e-4`, `4.0e-4`, `2.43e-3` |
+| H1c to H3c | `1.7e-11` | `1e-6` | met |
+| H0 | lateral `1.25e-8` of `|S11|`; centre node `5.7e-16` | as stated | met |
+| H4, H4c, H6 | `7.2e-15` | `1e-3`, `1e-6`, `1e-3` | met |
+| SP0 | `1.47e-16` | `1e-12` | met |
+| SP1 (BBar, 864 Hex8) | `p_FE/mu = 0.7574042` against `0.7554331`: `2.61e-3` | `1e-2` | met |
+| RF1, INV1, INV2, RF2 | every row | exact | met |
+| DG1 | `0.0` | `1e-12` | met |
+| RC1 | both copies pass | passes | met |
+| B0 | 7 digests equal to the base's | bit-equal | met |
+| S1 | `cargo test -p rcfd-fem --release`: 983 passed, 0 failed, 273 ignored | 0 failed | met |
+| S2 | `baseline_hashes` 3 passed, 1 ignored; `docs_site` 2 passed | pass | met |
+| S3 | `cargo fmt -p rcfd-fem -- --check`, `cargo clippy -p rcfd-fem --all-targets -- -D warnings` | clean | met |
+
+Controls: **N2** `0.102` (`>= 1e-2`) and **N3** `0.143` (`>= 1e-2`) behave as stated. **SPL** not measured: the Full solve
+failed in load step 3 (load factor `0.2656`, `l_a = 1.133`) after 5 halvings, a negative pivot `-2.79e7` (diagonal `4.52e8`).
+The diagnostic **SPLd** of amendment 2 (to `l_a = 1.125`): Full `14.95` (`p_FE/mu = 5.466` against `0.3427`), BBar `3.93e-3`.
+The Full element is locked (about 44 times the stiffness of the closed form) and loses its positive pivots before the stretch
+of the acceptance; the mean-dilatation element is within SP1's error at the same stretch. The control does not behave as
+stated (a measured `>= 0.1` at `l_a = 1.5`), though the locking it is to show is shown by SPLd.
+
+Mutations (each run once, scratch copy, `sa_hyper.rs`): ten of ten caught.
+
+| Id | Caught by |
+|---|---|
+| MU1 | T1', T2, SS2, SP1 and RF2 (the nonlinear solves do not converge), the homogeneous test stopped (H) |
+| MU2 | T1' (MR), T2, SS2 |
+| MU3 | T1', T2 |
+| MU4 | T1', EC1, T2, H1c to H3c, H5c (H1 not: the error stays inside `1e-3`) |
+| MU5 | EC1, H2, H2c, H5, H5c, H6, N3, SS2 to SS4 |
+| MU6 | EC1, DG1, MD1 |
+| MU7 | EC1 (Mooney-Rivlin rows only; R1 not: the mutated `q` enters only the `c01` part, and the mutation is rotation-invariant) |
+| MU8 | RF2 (the Method step) |
+| MU9 | RF2 (the linear paths fail later, in `elasticity_matrix`, with another error) |
+| MU10 | INV2 (`mat_hyper::stress` at `E11 = -0.6` returns a value) |
+
+Deviations: amendment 1 (set-up details before the run, the pre-check disclosed); amendment 2 (the T1 set-up corrected as
+T1', SS1 recorded as a known miss, SPL not measured, the diagnostic SPLd). No limit was changed.
+
+**Decision: partial** by the registered rule: the code lands with B0, S1 and the checks of (a1), (a2), (a6), (a7) met; a check
+of (a3) is missed (SS1, a known miss with its limit intact, diagnosed by arithmetic 3, its first-order content met by SS2 to
+SS4); the control SPL does not behave as stated. Every mutation was caught.
+
+Remaining questions (the recommendations of the open questions, taken on the maintainer's standing instruction of 2026-11-11):
+
+1. (a3): recommend option (b) of open question 1 (the tangent at zero strain within `1e-14`, the stress at a strain of `1e-6`
+   within `1e-5` relative for `kappa/mu` of order one), with SS2 to SS4 as its checks.
+2. The Method step and the linear paths (a linearised material from `small_strain_moduli`): a follow-up, the Method step with
+   F-611.
+3. The case-file key with `formulation = "bbar"`: a follow-up (it changes the schema golden).
+4. The citations of `docs/reference-data.md` (F-425 section) to be checked.
+5. The locking control: redo with a control that converges, for example the Full element at a smaller inner stretch registered
+   with its own limit, or pressure (follower) control with the arc-length step.
+
+## For the lead: roadmap entries
+
+> F-425 note: ADR 0541, 2026-11-15: PARTIAL. rcfd_fem::mat_hyper (PENDING None): compressible neo-Hookean and Mooney-Rivlin, W = c10 (Ibar1 - 3) + c01 (Ibar2 - 3) + (kappa/2)(J - 1)^2, stress, tangent and energy, det C <= 0 refused with the element; taken by the nonlinear driver through Material::stress; nonlinear_md::block_property() is the F-bar Hex8 of ADR 0506 as the mean-dilatation element; the linear paths and the nonlinear transient Method step refuse it naming a follow-up of ADR 0541; the energy-momentum step with DiscreteGradient takes it. Tangent against central differences 3.4e-9 (limit 1e-6), rotation 3.2e-14 (1e-10); uniaxial, equibiaxial (neo-Hookean, Mooney-Rivlin) 1.7e-11 after the compressibility correction, simple shear 7.2e-15 (limit 1e-3); sphere B/A = 2 at l_a = 1.5 with the mean-dilatation Hex8 2.61e-3 (limit 1e-2). Known miss: the small-strain clause 4.7e-6 (neo-Hookean), 4.9e-6 (Mooney-Rivlin) against 1e-6, the second-order remainder (the tangent at zero 1.3e-16, the odd part 5.1e-11). The Full Hex8 locking control was not measured (negative pivot at l_a = 1.133); diagnostic at l_a = 1.125: Full 14.95, mean-dilatation 3.9e-3. Ten of ten mutations caught; default bits and baseline hashes unchanged. Citations from memory, to be checked.
+
+> Proposed follow-up: hyperelastic materials on the nonlinear transient Method step and the linear paths (the linearised material of the small-strain moduli), the Method step together with F-611 (ADR 0541, 2026-11-15, remaining question 2).
+
+> Proposed follow-up: case-file key [material] kind = "hyperelastic" (energy, mu, kappa, c10, c01) with the block formulation = "bbar", a schema golden change (ADR 0541, 2026-11-15, remaining question 3).
+
+> Proposed follow-up: the Full Hex8 locking control of the inflated sphere with a set-up that converges (a smaller inner stretch with its own registered limit, or pressure control with the arc-length step), and the small-strain clause amended to option (b) of ADR 0541 open question 1 (ADR 0541, 2026-11-15, remaining questions 1 and 5).
