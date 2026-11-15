@@ -273,3 +273,125 @@ compares them with model X, `c_i` computed from the point coordinates of the two
 Planned mutations MU4 and MU5 are applied to model X as well (the test's own model); MU1 to MU3 (library) are run against the
 registered record's fast parts as planned, the measured numbers being the solver's: they are run with the heavy record on a scratch
 copy (each mutation once), and model X compared with the mutated runs' logged output by the same arithmetic.
+
+## Addendum 1: results (2026-11-15)
+
+Runs, each once, release profile, `CARGO_BUILD_JOBS=4`, logs in `w49i-work/f538-scratch`: on `6857342e` the model test
+(`run1_models.log`, 0.01 s) and the 29 registered channel runs (`run2_registered.log`, 135 s); after amendment 1, on `0985fff5`,
+the amended comparison (`run3_amended.log`, arithmetic on the logged impedances); after a clippy-only edit (`4a263303`: a type
+alias and fixed-size arrays) the two fast tests once more (`run4_after_lint.log`, every printed number identical to run1 and
+run3); the unregistered diagnosis `diag_cx.py`; the mutations (`MU*.log`, `mutations_summary.log`, copy `f538-scratch/copy`,
+target `target-mut`, baseline `mut_baseline.log`).
+
+### Checks
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| A0 | registration first | `a384d6d5` precedes every code commit | yes |
+| R0 | `<= 1e-9` | `0` at all four (ADR 0455's QD, QZ, QD10, QZ10 reproduced bit for bit) | yes |
+| C1 | real `<= 5e-3`, imaginary `<= 2e-3` | `Delta Z_pl = -0.004069 - 0.000650 i` against `0.006650 - 0.001075 i`: `1.07e-2`, `4.3e-4` | **no** (record) |
+| C2 | the same | `0.361988 - 0.013683 i` against `0.363511 - 0.013869 i`: `1.52e-3`, `1.9e-4` | yes |
+| C3 | `<= 2e-3` | PISO `5.6e-4`, `6.2e-4` (Symmetry), `1.1e-4`, `4.4e-4`; relaxed zero gradient `7.1e-5`, `2.2e-6`; relaxed Symmetry real **`3.6e-3`**, imaginary `3.9e-4` | **no** (record) |
+| C4 | `<= 5e-3 + 0.02 abs(model)`; `<= 2e-3` | `Re Delta Z_pl` errors `2.2e-2`, `1.5e-2`, `7.1e-3`, `4.1e-3` (`alpha_u` 0.6, 0.7, 0.9, 1.0; the first three missed); Symmetry `Z_pl` real `7.9e-3`, `5.4e-3`, `2.4e-3` missed, `1.4e-3` at 1.0; zero gradient `<= 7.7e-5` | **no** (record) |
+| C5 | `<= 0.02` | measured zero `0.8049` (bracket 0.8, 0.9) against the model's interpolation on that bracket `0.7916`: `1.3e-2` | yes |
+| C6 | `<= 8.0e-3`; `<= 3e-3` | `Re Delta Z_pl = -0.16553` against `-0.15065`: `1.5e-2`; Symmetry real `5.2e-3`; zero gradient `6.9e-5` | **no** (record) |
+| C7 | `<= 1e-3`; `<= 1e-3` | CL against dense `2.1e-5` (`alpha_u` 0.6), `<= 1.7e-6` elsewhere; `alpha_p` 0.3, 0.7: `1.3e-4`, `1.3e-5` | yes |
+| C8 | `<= 0.06`; `<= 0.02` | `sigma` within `3.8e-2`; zeros `0.7952` against `0.7926` (`2.6e-3`), `0.9061` against `0.9090` (`2.9e-3`) | yes |
+| RC | `<= 1e-3` | `2.8e-6`, `3.8e-6` | yes |
+| Q5 | `<= 1e-6` | every run `<= 5.1e-12` | yes |
+| E1 | record | end parts `Delta Z_end`: PISO `-0.00122`; relaxed `+0.0046, +0.0031, +0.0020, +0.0011, +0.0004` (`alpha_u` 0.6 to 1.0), `+0.0039` (N 50) | recorded |
+| NC1 | `>= 0.1` | `0.251`, `0.153`, `0.396` | holds |
+| NC2 | `>= 0.1` | `0.161` | holds |
+| NC3 | monotone; bracket (0.7, 0.8) | monotone; bracket **(0.8, 0.9)** | monotone holds, bracket missed (record) |
+| C1A | real `<= 5e-3`, imaginary `<= 2e-3` | model X `-0.004067 - 0.000649 i`: `2.7e-6`, `3.8e-7` | yes (after amendment) |
+| C2A | the same | `8.4e-6`, `6.0e-7` | yes (after amendment) |
+| C3A | `<= 2e-3` | all eight parts `<= 7.2e-5` | yes (after amendment) |
+| C4A | as C4 | `Re Delta Z_pl` within `5.0e-6`, `6.6e-7`, `5.5e-6`, `7.8e-6`; `Z_pl` `<= 8.0e-5` | yes (after amendment) |
+| C5A | `<= 0.02` | `0.804916` against `0.804913`: `3.5e-6` | yes (after amendment) |
+| C6A | as C6 | `2.0e-7`; `Z_pl` `<= 7.3e-5` | yes (after amendment) |
+| NC3A | brackets equal | (0.8, 0.9) both | holds |
+| C8A | `<= 0.06`; `<= 0.02` | `c_bar = 8.96 /s`; `sigma` within `4.4e-2` (0.6), `2.4e-2`, `8.4e-3`, `3.6e-3`, `1.3e-2`, N 50 `5.4e-3`; zero `0.8075` against `0.8049`: `2.6e-3` | yes (after amendment) |
+| E1A | record | model X's 20 h `Delta Z` against the measured: relaxed 0.8 `-0.00448` against `-0.00209`; PISO `0.36194` against `0.36077`; the others within `5.5e-3` | recorded |
+
+### What the numbers say
+
+* **(c1, c2) An exact linear model of the relaxed step reproduces both runs.** Model X (D1 with the flow-direction Laplacian
+  diagonal `c_i` of each column, amendment 1) gives the measured per-length impedance of the relaxed run and of the PISO run within
+  `7.2e-5` per part, and their excess within `2.7e-6` (relaxed) and `8.4e-6` (PISO); across the sweep and at `N = 50` within
+  `8e-6`. Even the 20 h `Delta Z`, ends included, comes within `2.4e-3`: the `-0.0021` of ADR 0455 Q4 is model X's `-0.0045` plus a
+  2-D end correction. The registered model D1 missed on the Symmetry side by `1.07e-2` (C1), with an error linear in
+  `1/alpha_u - 1`; its zero-gradient side met to `7e-5`, which located the defect in the splitting, not in the fixed point.
+* **(c3) Explained.** The relaxed loop does not remove the averaged diagonal's sink; it cancels it by accident. At the fixed point of
+  the relaxed outer iterations the corrector imposes `u = D (D + L)^{-1} u*`, which turns the predictor into `D + O + L/alpha_u + O
+  D^{-1} L` (a sink `lambda/alpha_u` and an anti-sink through the neighbour links); the unrelaxed final iteration with one averaged
+  corrector shifts the pressure gradient back by about `lambda` times the predictor's overshoot. The remainder is `sigma lambda`,
+  `sigma = r - (1/alpha_u - 1)(1/r - 1)` (C8, C8A); at `alpha_u = 0.8`, `nu dt/dy^2 = 1` it is `-0.010` (measured; the registered
+  D1 said `+0.017`). `alpha_p` drops out (C7). The corrected split removes the effect in the relaxed loop as well (RC: `4e-6`).
+* **(c4) The dependence on `alpha_u`.** Measured `sigma = -0.64, -0.28, -0.010, +0.20, +0.37` at `alpha_u = 0.6, 0.7, 0.8, 0.9,
+  1.0` (`N = 100`), zero at `alpha_u = 0.805` (the 0-D formula with `c_bar`: `0.8075`); at `N = 50` the same `alpha_u = 0.8` gives
+  `sigma = -0.42` (`Delta Z_pl = -0.166`, the Symmetry channel's impedance per length 5.4 % **below** the zero-gradient one). The
+  relaxed loop's error next to a `Symmetry` plane therefore changes sign with `alpha_u`, with the time step (`r` through `1/dt`)
+  and with the flow-direction spacing (`c_x`); `alpha_u = 1` with one corrector keeps `sigma = r`.
+
+### Mutations (copy `f538-scratch/copy`, own target `target-mut`, `mutate.py`; each applied once and reverted)
+
+Library mutations against a scratch-only driver (`mut_test.rs`, appended to the copy only): group R's four runs against model X
+with the limits of C1A and C3A; the driver met every limit on the unmutated copy (`mut_baseline.log`, `2.7e-6`). Test-model
+mutations against the two fast tests.
+
+| Id | Mutation | Caught by |
+|---|---|---|
+| MU1 | `pimple.rs`: the last outer iteration relaxed too | C1A (`0.247`), C3A Symmetry (`8.2e-2`): yes |
+| MU2 | `LduMatrix::relax`: the source `(d/alpha - diag) x_old` dropped | C3A (`7.4` on both sides), C1A (`2.2e-2`): yes |
+| MU3 | `pimple.rs`: `alpha_p` not applied | Q5 (the four runs not periodic, `2.5e-6` to `2.9e-4`): yes, by the periodicity check only |
+| MU4 | the test's model: the final iteration relaxed | C7 (`0.24`), C8 (`0.62`), C1A (`0.247`), C3A: yes |
+| MU5 | the test's model: the relaxation source from `u_old` | C7, C8, C3A, C4A (`8.4e-2`; `1.44` imaginary): yes |
+
+### Deviations
+
+* The registered model D1 omitted the flow-direction Laplacian (amendment 1); the A-checks compare the amended model with the
+  logged impedances of the registered runs, which were not repeated.
+* The amended comparison was evaluated in the unregistered diagnosis before amendment 1 was written (disclosed there); the A-checks
+  keep the registered limits.
+* Amendment 1 said the library mutations would be run "with the heavy record"; they were run with a reduced scratch driver (group
+  R only, the four runs MU1 to MU3 act on), 34 s per mutation instead of 135 s.
+* The two fast tests were run a second time after the clippy-only commit, as a check of that edit (identical numbers); no
+  registered channel run was repeated.
+
+### Not run
+
+* The rest of the rcfd-post suite and `baseline_hashes`: no library line was changed (one new test file, the ADR, a topic page).
+* A 2-D model of the ends (the end parts are recorded, E1, E1A); other meshes across the gap, other Womersley numbers,
+  `n_correctors > 1` with relaxation.
+
+### Decision by the registered rule
+
+**Partial.** The registered checks C1, C3, C4, C6 and NC3's bracket missed on their registered runs (record
+`f538_registered_runs_relaxed_piso_sweep_and_n50_known_miss`, limits intact) and were met only after amendment 1 (model X), which
+corrected a defect of the registered model; every A-check is met (excesses within `8e-6`) and all five mutations are caught (one by
+the periodicity check only). The registered rule's partial clause asks that C1 and C2 be met; C1 was met only after the
+amendment. The cause is located and the amended model reproduces both runs, so the item is not todo; by the rule it is partial.
+
+### Remaining questions
+
+1. **The default.** F-538 adds that the averaged diagonal's error in a relaxed transient run can have either sign and depends on
+   `alpha_u`, the time step and the flow-direction spacing. This strengthens ADR 0455 remaining question 1 (make `corrected` the
+   default of the transient kernel and re-register `packed_bed`). Not taken here: it changes default results and a registered hash.
+   Recommendation: as ADR 0455, option 2 for the transient kernel.
+2. **The ends.** Model X leaves `2.4e-3` of the relaxed 20 h `Delta Z` (and `1.2e-3` of the PISO one) to the 2-D end flow. Options:
+   (a) a 2-D dense model of the short channel; (b) nothing. Recommendation: (b): the per-length part is reproduced to `1e-5`, and
+   the ends do not bear on the default question.
+3. **ADR 0455's two-corrector model** (`channel_step_model.py`) has the same omission; with `c_x` its PISO per-length error goes from
+   `1.5e-3` to `8.4e-6`. Nothing to decide; recorded for later estimates.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial (F-538).
+
+> Numerics. PARTIAL (ADR 0613, 2026-11-15; registered before the code, amendment 1 after the registered runs). Test-only, no library line changed. The near-zero Symmetry excess of ADR 0455's relaxed PIMPLE run (pimple(nu, 10): alpha_u 0.8, alpha_p 0.5, one corrector; -0.0021 against the PISO step's 0.36) is an accidental cancellation, not a removal: at the fixed point of the relaxed outer iterations the averaged corrector turns the predictor into D + O + L/alpha_u + O D^-1 L (a sink lambda/alpha_u and an anti-sink through the neighbour links), and the unrelaxed final one-corrector iteration shifts the pressure gradient back, leaving sigma = r - (1/alpha_u - 1)(1/r - 1) of the infinite-corrector sink, r = (1/dt + 12 nu/h^2)/(1/dt + 2 nu/dy^2 + c_x); alpha_p drops out. Measured per-length excess (QF channel at 20 h and 40 h, 29 runs): sigma -0.64, -0.28, -0.010, +0.20, +0.37 at alpha_u 0.6 to 1.0 (N 100), zero at alpha_u 0.805 (0-D formula 0.8075); at N 50 the same alpha_u 0.8 gives sigma -0.42 (the Symmetry channel 5.4 percent below the zero-gradient one). An exact linear model of the relaxed step on the developed channel, with each flow-direction column's Laplacian diagonal c_x (it enters through the relaxation and a_P), reproduces the per-length impedance of the relaxed and the PISO runs within 7.2e-5 per part and every excess of the sweep within 8e-6; ADR 0455's printed impedances reproduced bit for bit; the opt-in corrected split removes the effect in the relaxed loop too (4e-6). Partial: the registered model omitted c_x and missed C1 by 1.07e-2 (limit 5e-3) and the Symmetry parts of C3, C4, C6 (record f538_registered_runs_relaxed_piso_sweep_and_n50_known_miss); met only after amendment 1. Five of five mutations caught (one only by the periodicity check). Open: ADR 0613 Q1 (the transient default, as ADR 0455 Q1).
+
+F-531 (note addition):
+
+> ADR 0613 (F-538, 2026-11-15): the relaxed PIMPLE loop's near-zero Symmetry excess is an accidental cancellation at alpha_u 0.8 and nu dt/dy^2 = 1 (sigma = r - (1/alpha_u - 1)(1/r - 1)); at N 50 the excess is -0.42 of the sink; ADR 0455's two-corrector model gains the flow-direction Laplacian diagonal and then meets the PISO per-length part to 8.4e-6.
+
+No follow-up is proposed (remaining question 2 recommends leaving the 2-D ends).
