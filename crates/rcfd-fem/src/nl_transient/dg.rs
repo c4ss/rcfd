@@ -9,9 +9,14 @@
 //!
 //! The compressible neo-Hookean energy of D2, private to this step until F-425 (ADR 0328) lands:
 //! `W = (mu/2) (J^{-2/3} I_1 - 3) + (kappa/2) (J - 1)^2`, evaluated in `E` without cancellation at small strain.
+//!
+//! [`AlgorithmicStress::MaterialDiscreteGradient`] (ADR 0544) takes the same discrete gradient with F-425's point functions
+//! (`mat_hyper`: the neo-Hookean and the Mooney-Rivlin energy); the step-local energy above stays on `DiscreteGradient` and
+//! `Average` (equal to F-425's neo-Hookean within rounding, ADR 0544 E1).
 
 use super::invalid;
 use crate::error::{FemError, Result};
+use crate::mat_hyper;
 use crate::material::{HyperelasticEnergy, Matrix6, PointContext};
 use crate::model::{Material, SolidModel};
 use crate::nonlinear;
@@ -38,6 +43,9 @@ pub enum AlgorithmicStress {
     /// The average `(S(E_n) + S(E_{n+1}))/2` for every material (takes the neo-Hookean material); it does not conserve the
     /// energy of a non-quadratic energy (the negative control of ADR 0523).
     Average,
+    /// The discrete gradient of ADR 0523 D3 with the hyperelastic energies of F-425 (`mat_hyper`, ADR 0541 D1): takes the
+    /// neo-Hookean and the Mooney-Rivlin material; the isotropic elastic material as `DiscreteGradient` (ADR 0544 D1).
+    MaterialDiscreteGradient,
 }
 
 /// The energy, the magnitude of its terms and the stress (Voigt) at one strain.
@@ -296,10 +304,31 @@ pub(super) fn elastic_discrete_gradient(
     Ok((sa, d))
 }
 
+/// The point functions of F-425's energy (ADR 0544 D1, D2): `W`, its term magnitude and `S` from `mat_hyper`.
+pub(super) fn material_point(energy: &HyperelasticEnergy, strain: &[f64; 6]) -> Result<Point> {
+    Ok(Point {
+        w: mat_hyper::energy(energy, strain)?,
+        m: mat_hyper::energy_magnitude(energy, strain)?,
+        s: mat_hyper::stress(energy, strain)?,
+    })
+}
+
+/// The algorithmic stress (ADR 0523 D3) and the tangent at `E_m` of a point of F-425's energy (ADR 0544 D1).
+pub(super) fn material_stress(
+    energy: &HyperelasticEnergy,
+    e0: &[f64; 6],
+    e1: &[f64; 6],
+) -> Result<([f64; 6], Matrix6)> {
+    let (sa, em, _) = discrete_gradient(e0, e1, |e| material_point(energy, e))?;
+    let (_, d) = mat_hyper::stress_and_tangent(energy, &em)?;
+    Ok((sa, d))
+}
+
 /// The surrogate of a model with a hyperelastic material for the energy-momentum step (ADR 0523 D5): each neo-Hookean
 /// material replaced by the isotropic elastic material of its small-strain moduli; `None` without a hyperelastic material;
-/// a Mooney-Rivlin material refused (key `"nl_transient"`).
-pub(super) fn surrogate(model: &SolidModel) -> Result<Option<SolidModel>> {
+/// a Mooney-Rivlin material refused (key `"nl_transient"`) unless the stress is `MaterialDiscreteGradient`, which takes
+/// either energy through `mat_hyper::small_strain_moduli` (ADR 0544 D3).
+pub(super) fn surrogate(model: &SolidModel, mode: AlgorithmicStress) -> Result<Option<SolidModel>> {
     if !model
         .materials()
         .iter()
@@ -310,6 +339,12 @@ pub(super) fn surrogate(model: &SolidModel) -> Result<Option<SolidModel>> {
     let mut materials = Vec::with_capacity(model.materials().len());
     for (set, m) in model.materials() {
         let replaced = match m {
+            Material::Hyperelastic { energy, density } if mode == AlgorithmicStress::MaterialDiscreteGradient => {
+                let (mu, kappa) = mat_hyper::small_strain_moduli(energy);
+                let e = 9.0 * kappa * mu / (3.0 * kappa + mu);
+                let nu = (3.0 * kappa - 2.0 * mu) / (2.0 * (3.0 * kappa + mu));
+                Material::isotropic_elastic(e, nu, *density, 0.0)?
+            }
             Material::Hyperelastic { energy, density } => {
                 let nh = NeoHookean::of(energy).map_err(|e| match e {
                     FemError::InvalidValue { key, reason } => FemError::InvalidValue {
@@ -559,5 +594,240 @@ mod tests {
         assert!(p4 <= 1e-6, "P4 {p4:e}");
         assert!(p5 <= 1e-4, "P5 {p5:e}");
         assert!(p6 <= 1e-6, "P6 {p6:e}");
+    }
+}
+
+#[cfg(test)]
+mod tests_adr0544 {
+    //! Checks E1a, E1b, the record E1r (the step-local energy against F-425's at a point) and Q1 to Q4 (the discrete
+    //! gradient with F-425's point functions) of ADR 0544. Every aggregated value is required finite.
+    use super::*;
+
+    /// A deterministic generator of standard normal numbers (xorshift64* and Box-Muller), as the tests of ADR 0523.
+    struct Normal(u64);
+
+    impl Normal {
+        fn uniform(&mut self) -> f64 {
+            self.0 ^= self.0 >> 12;
+            self.0 ^= self.0 << 25;
+            self.0 ^= self.0 >> 27;
+            let x = self.0.wrapping_mul(0x2545_F491_4F6C_DD1D);
+            ((x >> 11) as f64 + 0.5) / (1u64 << 53) as f64
+        }
+        fn next(&mut self) -> f64 {
+            let (a, b) = (self.uniform(), self.uniform());
+            (-2.0 * a.ln()).sqrt() * (2.0 * std::f64::consts::PI * b).cos()
+        }
+        fn strain(&mut self, scale: f64) -> [f64; 6] {
+            let mut e = [0.0; 6];
+            for x in e.iter_mut() {
+                *x = scale * self.next();
+            }
+            e
+        }
+    }
+
+    fn worst(acc: &mut f64, v: f64, what: &str) {
+        assert!(v.is_finite(), "{what}: non-finite {v}");
+        *acc = acc.max(v);
+    }
+
+    fn inf(x: &[f64]) -> f64 {
+        x.iter().fold(0.0f64, |m, v| m.max(v.abs()))
+    }
+
+    fn tensor_norm(e: &[f64; 6]) -> f64 {
+        (e[0] * e[0] + e[1] * e[1] + e[2] * e[2] + 0.5 * (e[3] * e[3] + e[4] * e[4] + e[5] * e[5])).sqrt()
+    }
+
+    /// The neo-Hookean moduli of the bar and of the cube (ADR 0523 D7).
+    fn moduli() -> [(f64, f64); 2] {
+        let (e, nu) = (2.0e9, 0.3);
+        [(e / (2.0 * (1.0 + nu)), e / (3.0 * (1.0 - 2.0 * nu))), (1e5, 1e6)]
+    }
+
+    /// The energies of Q1: NH and MR (`c10 = 0.35 G`, `c01 = 0.15 G`) at the bar and the cube moduli (ADR 0544 arithmetic 2).
+    fn energies() -> Vec<HyperelasticEnergy> {
+        let mut out = Vec::new();
+        for (mu, kappa) in moduli() {
+            out.push(HyperelasticEnergy::neo_hookean(mu, kappa).unwrap());
+            out.push(HyperelasticEnergy::mooney_rivlin(0.35 * mu, 0.15 * mu, kappa).unwrap());
+        }
+        out
+    }
+
+    /// The cube's NH and MR energies (ADR 0544 D5).
+    fn cube_energies() -> [HyperelasticEnergy; 2] {
+        [
+            HyperelasticEnergy::neo_hookean(1e5, 1e6).unwrap(),
+            HyperelasticEnergy::mooney_rivlin(3.5e4, 1.5e4, 1e6).unwrap(),
+        ]
+    }
+
+    fn admissible(energy: &HyperelasticEnergy, e: &[f64; 6]) -> bool {
+        mat_hyper::energy(energy, e).is_ok()
+    }
+
+    #[test]
+    fn e1_step_local_energy_equals_f425_at_a_point() {
+        let mut rng = Normal(0x6A09_E667_F3BC_C908);
+        let mut e1a = [0.0f64; 3];
+        let mut e1b = [0.0f64; 3];
+        let mut e1r = [0.0f64; 2];
+        for (mu, kappa) in moduli() {
+            let nh = NeoHookean { mu, kappa };
+            let energy = HyperelasticEnergy::neo_hookean(mu, kappa).unwrap();
+            for scale in [1e-6, 1e-4, 1e-3, 1e-2, 1e-1, 3e-1] {
+                let mut n = 0;
+                while n < 200 {
+                    let e = rng.strain(scale);
+                    if !admissible(&energy, &e) || nh.point(&e).is_err() {
+                        continue;
+                    }
+                    n += 1;
+                    let p = nh.point(&e).unwrap();
+                    let d_local = nh.tangent(&e).unwrap();
+                    let w = mat_hyper::energy(&energy, &e).unwrap();
+                    let m = mat_hyper::energy_magnitude(&energy, &e).unwrap();
+                    let s = mat_hyper::stress(&energy, &e).unwrap();
+                    let (_, d) = mat_hyper::stress_and_tangent(&energy, &e).unwrap();
+                    let ds: Vec<f64> = (0..6).map(|i| p.s[i] - s[i]).collect();
+                    let rs = inf(&ds) / inf(&s);
+                    let (mut dd, mut dmax) = (0.0f64, 0.0f64);
+                    for r in 0..6 {
+                        for c in 0..6 {
+                            dd = dd.max((d_local[r][c] - d[r][c]).abs());
+                            dmax = dmax.max(d[r][c].abs());
+                        }
+                    }
+                    let rd = dd / dmax;
+                    let rw = (p.w - w).abs() / w.abs();
+                    if scale >= 1e-3 {
+                        worst(&mut e1a[0], rw, "E1a W");
+                        worst(&mut e1a[1], rs, "E1a S");
+                        worst(&mut e1a[2], rd, "E1a D");
+                    } else {
+                        worst(&mut e1b[0], (p.w - w).abs() / m, "E1b W");
+                        worst(&mut e1b[1], rs, "E1b S");
+                        worst(&mut e1b[2], rd, "E1b D");
+                        worst(&mut e1r[usize::from(scale > 1e-5)], rw, "E1r");
+                    }
+                }
+            }
+        }
+        println!(
+            "E1a W, S, D (scales 1e-3 .. 0.3): {:e} {:e} {:e} (limit 1e-12 each)",
+            e1a[0], e1a[1], e1a[2]
+        );
+        println!(
+            "E1b W/m_425, S, D (scales 1e-6, 1e-4): {:e} {:e} {:e} (limit 1e-12 each)",
+            e1b[0], e1b[1], e1b[2]
+        );
+        println!("E1r (record) W/|W| at 1e-6, 1e-4: {:e} {:e}", e1r[0], e1r[1]);
+        for v in e1a.iter().chain(&e1b) {
+            assert!(*v <= 1e-12, "E1a {e1a:?}, E1b {e1b:?}");
+        }
+    }
+
+    #[test]
+    fn q1_q4_identity_and_magnitude_with_the_f425_energies() {
+        let mut rng = Normal(0xBB67_AE85_84CA_A73B);
+        let (mut q1, mut corrected, mut pairs) = (0.0, 0, 0);
+        let mut q4 = true;
+        for energy in energies() {
+            for scale in [1e-6, 1e-4, 1e-2, 1e-1] {
+                let mut n = 0;
+                while n < 200 {
+                    let e0 = rng.strain(scale);
+                    let d = rng.strain(scale * 0.3);
+                    let mut e1 = e0;
+                    for i in 0..6 {
+                        e1[i] += d[i];
+                    }
+                    if !admissible(&energy, &e0) || !admissible(&energy, &e1) {
+                        continue;
+                    }
+                    n += 1;
+                    pairs += 1;
+                    let (sa, _, c) = discrete_gradient(&e0, &e1, |e| material_point(&energy, e)).unwrap();
+                    corrected += usize::from(c);
+                    let (a, b) = (
+                        material_point(&energy, &e0).unwrap(),
+                        material_point(&energy, &e1).unwrap(),
+                    );
+                    for p in [&a, &b] {
+                        q4 &= p.m.is_finite() && p.m >= p.w.abs();
+                    }
+                    let (mut work, mut work_abs) = (0.0, 0.0);
+                    for i in 0..6 {
+                        work += sa[i] * (e1[i] - e0[i]);
+                        work_abs += (sa[i] * (e1[i] - e0[i])).abs();
+                    }
+                    worst(&mut q1, (work - (b.w - a.w)).abs() / (work_abs + a.m + b.m), "Q1");
+                }
+            }
+        }
+        println!("Q1 identity with F-425's energies: {q1:e} (limit 1e-12); corrected {corrected} of {pairs}");
+        println!("Q4 m_425 >= |W_425| and finite at every end: {q4}");
+        assert!(q1 <= 1e-12, "Q1 {q1:e}");
+        assert!(q4, "Q4");
+    }
+
+    fn with_change(rng: &mut Normal, e0: &[f64; 6], size: f64) -> [f64; 6] {
+        let mut d = rng.strain(1.0);
+        let n = tensor_norm(&d);
+        let mut e1 = *e0;
+        for i in 0..6 {
+            d[i] *= size / n;
+            e1[i] += d[i];
+        }
+        e1
+    }
+
+    #[test]
+    fn q2_q3_branch_and_second_order_with_the_f425_energies() {
+        let mut rng = Normal(0x3C6E_F372_FE94_F82B);
+        let (mut q2a, mut q2b) = (true, true);
+        let mut q3 = [0.0f64; 2];
+        for (k, energy) in cube_energies().iter().enumerate() {
+            let bits = |e0: &[f64; 6], e1: &[f64; 6]| {
+                let (sa, em, c) = discrete_gradient(e0, e1, |e| material_point(energy, e)).unwrap();
+                let sm = material_point(energy, &em).unwrap().s;
+                !c && sa.iter().zip(&sm).all(|(a, b)| a.to_bits() == b.to_bits())
+            };
+            for size in [0.0, 1e-13] {
+                for _ in 0..20 {
+                    let e0 = rng.strain(0.1);
+                    let e1 = if size == 0.0 {
+                        e0
+                    } else {
+                        with_change(&mut rng, &e0, size)
+                    };
+                    q2a &= bits(&e0, &e1);
+                }
+            }
+            for _ in 0..100 {
+                let e0 = rng.strain(0.1);
+                let e1 = with_change(&mut rng, &e0, 1e-8);
+                q2b &= bits(&e0, &e1);
+            }
+            for (base, sizes) in [(0.1, [1e-5, 1e-4, 1e-3]), (1e-3, [1e-6, 1e-5, 1e-4])] {
+                for size in sizes {
+                    for _ in 0..100 {
+                        let e0 = rng.strain(base);
+                        let e1 = with_change(&mut rng, &e0, size);
+                        let (sa, em, _) = discrete_gradient(&e0, &e1, |e| material_point(energy, e)).unwrap();
+                        let sm = material_point(energy, &em).unwrap().s;
+                        let diff: Vec<f64> = (0..6).map(|i| sa[i] - sm[i]).collect();
+                        let ratio = inf(&diff) / inf(&sm) / (size * size / tensor_norm(&em));
+                        worst(&mut q3[k], ratio, "Q3");
+                    }
+                }
+            }
+        }
+        println!("Q2 midpoint branch bit for bit at dE = 0, 1e-13: {q2a}; at 1e-8 (base 0.1): {q2b}");
+        println!("Q3 second order (NH, MR): {:e} {:e} (limit 5)", q3[0], q3[1]);
+        assert!(q2a && q2b, "Q2 {q2a} {q2b}");
+        assert!(q3[0] <= 5.0 && q3[1] <= 5.0, "Q3 {q3:?}");
     }
 }

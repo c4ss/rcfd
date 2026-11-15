@@ -522,7 +522,7 @@ impl Integrator {
         // checked and given its mass and K_0 through the isotropic surrogate of its small-strain moduli, then holds its own
         // materials (with `Auto` it is refused as before).
         if options.step == StepKind::EnergyMomentum && options.stress != AlgorithmicStress::Auto {
-            if let Some(surrogate) = dg::surrogate(model)? {
+            if let Some(surrogate) = dg::surrogate(model, options.stress)? {
                 let mut it = Integrator::new(&surrogate, loads, options)?;
                 it.model = model.clone();
                 it.hyper = true;
@@ -898,7 +898,7 @@ impl Integrator {
         };
         let fint = match self.temperature_at(t0) {
             // ADR 0523 D5: the neo-Hookean internal force of the energy-momentum step.
-            _ if self.hyper => emc::internal_force(&self.model, u0, &PointContext::default())?,
+            _ if self.hyper => emc::internal_force(&self.model, u0, &PointContext::default(), self.stress)?,
             // ADR 0534 D5: the start at the field with its thermal strain.
             _ if self.temperature_field.is_some() => {
                 let field = FieldAt::of(self.temperature_field.as_ref().expect("checked"), t0, true);
@@ -1289,9 +1289,15 @@ impl Integrator {
                         nonlinear::green_lagrange(&h)
                     }
                 };
-                // ADR 0523 D5: the neo-Hookean energy of the energy-momentum step.
+                // ADR 0523 D5: the neo-Hookean energy of the energy-momentum step; F-425's energy with
+                // `MaterialDiscreteGradient` (ADR 0544 D3).
                 if let Material::Hyperelastic { energy, .. } = material {
-                    w += ip.weight * dg::energy(energy, &strain)?;
+                    w += ip.weight
+                        * if self.stress == AlgorithmicStress::MaterialDiscreteGradient {
+                            crate::mat_hyper::energy(energy, &strain)?
+                        } else {
+                            dg::energy(energy, &strain)?
+                        };
                     continue;
                 }
                 let (stress, _) = material.stress(&strain, &context, &[])?;
