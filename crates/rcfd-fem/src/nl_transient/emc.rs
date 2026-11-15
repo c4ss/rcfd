@@ -8,7 +8,9 @@
 //! energy, `sum_a f_alg,a = 0` and `sum_a x_m,a x f_alg,a = 0`: energy and momenta change only by the residual (ADR 0514).
 //! Newton's iteration with the symmetric tangent `(2/h^2) M + C/h + sum_q w_q [B_m^T (D/2) B_m + G^T (S_alg/2) G]` (D2).
 //! The neo-Hookean material and the discrete gradient of Gonzalez for `S_alg` (ADR 0523, [`super::dg`]) are chosen by
-//! [`super::AlgorithmicStress`]; the isotropic material with `Auto` is the average above, unchanged.
+//! [`super::AlgorithmicStress`]; the isotropic material with `Auto` is the average above, unchanged. With
+//! [`super::ResidualReference::InertiaTerms`] the reference of the relative residual is also at least the largest norm of the
+//! products of the midpoint inertia and damping force (ADR 0609 D1).
 
 use super::dg::{self, AlgorithmicStress};
 use super::{factor, invalid, Advanced, Integrator};
@@ -320,6 +322,18 @@ pub(super) fn substep(
     }
     let damping = it.damping_at(t_b)?;
     let ci = 2.0 / (h * h);
+    // ADR 0609 D1: with the inertia-term reference the products of the start, formed once per sub-step.
+    let start_terms = match it.residual_reference {
+        super::ResidualReference::Driver => None,
+        super::ResidualReference::InertiaTerms => {
+            let mut t = (ci * norm(super::matvec(&it.m, u).into_iter()))
+                .max(2.0 / h * norm(super::matvec(&it.m, v).into_iter()));
+            if let Some(c) = damping.as_deref() {
+                t = t.max(norm(super::matvec(c, u).into_iter()) / h);
+            }
+            Some(t)
+        }
+    };
     let mut u1 = u.to_vec();
     let (mut e_first, mut e_last) = (0.0, 0.0);
     for k in 0..=options.max_iterations {
@@ -337,9 +351,17 @@ pub(super) fn substep(
         }
         let r_full: Vec<f64> = (0..n).map(|i| inertia[i] + fa[i] - fm[i]).collect();
         let rn = norm(it.free.iter().map(|&i| r_full[i]));
-        let reference = norm(it.free.iter().map(|&i| fm[i]))
+        let mut reference = norm(it.free.iter().map(|&i| fm[i]))
             .max(norm(fa.iter().copied()))
             .max(norm(inertia.iter().copied()));
+        // ADR 0609 D1: the products of the iterate, opt-in.
+        if let Some(t) = start_terms {
+            let mut r1 = t.max(ci * norm(super::matvec(&it.m, &u1).into_iter()));
+            if let Some(c) = damping.as_deref() {
+                r1 = r1.max(norm(super::matvec(c, &u1).into_iter()) / h);
+            }
+            reference = reference.max(r1);
+        }
         let r = if reference > 0.0 { rn / reference } else { rn };
         if !r.is_finite() {
             return Err(newton_failure(format!(

@@ -34,7 +34,8 @@
 //! The reference of the relative residual of the `Method` step is the driver's with the inertia force (ADR 0479 D2); the
 //! opt-in [`ResidualReference::InertiaTerms`] (ADR 0603) also takes the largest norm of the products the inertia and damping
 //! force is a sum of, so that a converged step of a free vibration is not rejected at the rounding floor of the internal
-//! force near a zero crossing (the test is then a relative tolerance on the step's displacement).
+//! force near a zero crossing (the test is then a relative tolerance on the step's displacement). The energy-momentum step
+//! takes the same option with the products of its midpoint inertia force (ADR 0609).
 //!
 //! Shell4 and Shell3 (ADR 0522, F-585) take the corotated element of [`crate::shell_corot`] (ADR 0490) with the constant
 //! consistent shell mass on the additive unknowns: the translations exactly, the rotations with the rotary inertia of the rate
@@ -84,7 +85,8 @@ pub enum StepKind {
     EnergyMomentum,
 }
 
-/// The reference of the relative residual of each Newton attempt of the `Method` step (ADR 0603 D1, D2).
+/// The reference of the relative residual of each Newton attempt of the `Method` step (ADR 0603 D1, D2) and of each iterate
+/// of the energy-momentum step (ADR 0609 D1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[non_exhaustive]
 pub enum ResidualReference {
@@ -94,8 +96,9 @@ pub enum ResidualReference {
     /// Also at least the largest norm of the products the inertia and damping force is a sum of (ADR 0603 D1): `c_m M
     /// u_{n+1}`, `c_m M u_n`, `c_m h M v_n`, `c_m h^2 |1/2 - beta| M a_n`, `alpha_m/(1 - alpha_f) M a_n`, `alpha_f/(1 -
     /// alpha_f) f_int,n` and the damping products, `c_m = (1 - alpha_m)/((1 - alpha_f) beta h^2)`; so that a converged step
-    /// of a free vibration is not rejected at the rounding floor of the internal force near a zero crossing. Refused with
-    /// the energy-momentum step.
+    /// of a free vibration is not rejected at the rounding floor of the internal force near a zero crossing. With the
+    /// energy-momentum step (ADR 0609 D1) the products of its midpoint inertia and damping force: `(2/h^2) M u_{n+1}`,
+    /// `(2/h^2) M u_n`, `(2/h) M v_n`, `C u_{n+1}/h`, `C u_n/h`.
     InertiaTerms,
 }
 
@@ -618,15 +621,7 @@ impl Integrator {
                 return Ok(it);
             }
         }
-        // ADR 0603 D2: the inertia-term reference is a reference of the Method step's driver call only.
-        if options.step == StepKind::EnergyMomentum && options.residual_reference != ResidualReference::Driver {
-            return Err(invalid(
-                "nl_transient",
-                "the inertia-term residual reference with the energy-momentum step: the midpoint step has no inertia \
-                 contribution (ADR 0603 D2)"
-                    .to_string(),
-            ));
-        }
+        // ADR 0609 D2: the energy-momentum step takes the inertia-term reference too (the refusal of ADR 0603 D2 lifted).
         model.validate()?;
         // ADR 0522 D4: Shell4 and Shell3 take the corotated element of ADR 0490 with the consistent shell mass (D2).
         model.check_supported_nonlinear_shells()?;
