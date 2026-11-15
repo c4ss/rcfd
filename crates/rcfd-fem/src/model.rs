@@ -562,8 +562,13 @@ pub struct CyclicOptions {
     /// With `shells`, Beam2 elements are taken by the cyclic paths (ADR 0595): the rotation unknowns of the six-unknown nodes
     /// get the rows of ADR 0556 D2, and the sector stands for the ring whose sector `j` has the sector's beams rotated by `R^j`,
     /// their orientation vectors `R^j v` included (the element is objective, ADR 0595 D3). Refused without `shells` and with
-    /// `interpolation` or `axis_nodes`; [`crate::cyclic::full_rotor`] still refuses Beam2 (one orientation per block).
+    /// `interpolation` or `axis_nodes`; [`crate::cyclic::full_rotor`] still refuses Beam2 (one orientation per block) unless
+    /// `full_rotor_beams` is also set.
     pub beams: bool,
+    /// With `beams`, [`crate::cyclic::full_rotor`] takes Beam2 blocks (ADR 0601): each Beam2 block of the sector becomes `N`
+    /// consecutive blocks of the full mesh, copy `j` with the orientation `R^j v` ([`crate::cyclic::FullRotor::block`]).
+    /// Refused without `beams`.
+    pub full_rotor_beams: bool,
 }
 
 impl CyclicOptions {
@@ -594,6 +599,11 @@ impl CyclicOptions {
     /// With shells, also Beam2 elements (ADR 0595).
     pub fn beams(mut self, on: bool) -> CyclicOptions {
         self.beams = on;
+        self
+    }
+    /// With beams, also the full rotor of the Beam2 blocks (ADR 0601).
+    pub fn full_rotor_beams(mut self, on: bool) -> CyclicOptions {
+        self.full_rotor_beams = on;
         self
     }
 }
@@ -1129,6 +1139,14 @@ impl SolidModel {
                     return Err(FemError::InvalidValue {
                         key: "cyclic",
                         reason: "the beams option qualifies the shells option of the cyclic constraint (ADR 0595)"
+                            .into(),
+                    });
+                }
+                // ADR 0601 D1: the full-rotor option qualifies the beams option.
+                if options.full_rotor_beams && !options.beams {
+                    return Err(FemError::InvalidValue {
+                        key: "cyclic",
+                        reason: "the full_rotor_beams option qualifies the beams option of the cyclic constraint (ADR 0601)"
                             .into(),
                     });
                 }
