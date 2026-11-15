@@ -286,3 +286,21 @@ the records of Bar F; the symmetric part of the load stiffness only (D1 reading:
 unsymmetric path about a state is a follow-up); the harmonic path's other refusals as ADR 0590; contributions nonlinear in the load
 factor get the secant of `[0, 1]` (none exists); the plain path only; shells and beams not covered (the driver takes no follower
 on them here).
+
+## Amendment 1 (2026-11-15, after run 1 and the mutations, before the run of the check it adds)
+
+Run 1 met every registered check, but mutation MC (`K_c'` evaluated at `u = 0`) was not caught: its results on the ring are equal
+to the unmutated ones in every bit. Diagnosis: on the ring every free unknown is in-plane (`u_z` held everywhere), and the entries
+of the symmetric part of the pressure's load stiffness between in-plane components `i, j` are `epsilon_ijz` times the `z`
+component of `x_u` or `x_v`; on the outer face `x_v = (0, 0, BW)`-like and `x_u` in-plane, and an in-plane displacement changes
+neither `z` component. So the ring's follower tangent on its free unknowns does not depend on the state, and no ring check can
+see where it is evaluated (the same fact makes B0c and H0c exactly `0` and P1c small). The free-edged Bar F record RNq moved under
+MC from `2.6e-12` to `8.3e-5`. Amendment: a new test `free_edged_bar_rayleigh_check` registers **RNq2**, Bar F's Rayleigh measure
+(the set-up of D4, the measure of RNq), limit `<= 1e-6` (estimate of arithmetic 8, `<= 6e-8`). Disclosed: its value on the
+unmutated code is already known from the record RNq (`2.6e-12`); the check is added for the coverage of MC, not as a blind test.
+The new test is run once on its commit and MC is run again on a `git archive` of that commit. By the registered rule the item
+stays **partial** whatever RNq2 gives (a mutation caught only after a post-run amendment). Run 1's tests and records stay as they
+are. Also disclosed: arithmetic 1 used the ring's `E I` with the width `BW` for a load per unit length, while `P_R` is a pressure;
+the critical pressure is `3 E T^3/(12 R^3) = 5e7` Pa, so the state is at `~0.05` of it, not `0.53` (the factors are `~19`, not
+`~1`). The checks' limits do not depend on it; the negative controls NHc and NH2c come out a factor `~10` below their estimates
+(still above their limits).
