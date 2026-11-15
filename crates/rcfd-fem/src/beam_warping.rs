@@ -341,7 +341,10 @@ impl Warping {
     /// on the Hermite twist of each element, `s` that element's shear centre and `q` in its section axes, in `K_sigma` of
     /// [`matrices`] (so in [`buckling_factors`], [`buckling_factors_with`], [`prestressed_modes`] and the pre-stressed harmonic
     /// path); the linear load is the model's ([`crate::model::Load::LineLoad`]), and without an entry a line load acts at the
-    /// shear centre. The force must be the one of the reference load the pre-stress comes from. Refused there: a non-finite
+    /// shear centre. The force must be the one of the reference load the pre-stress comes from; the term is linear in this
+    /// force, not in the pre-stress, so on [`prestressed_modes`] and the pre-stressed harmonic and transient paths it is the
+    /// load as applied, and a pre-stress scaled by [`WarpingPrestress::scaled`] needs the force scaled by the same factor (ADR
+    /// 0594 D1; in [`buckling_factors`] both scale with the factor). Refused there: a non-finite
     /// value (key `"load_point"`), an unknown set, an element without a warping unknown (key `"warping"`) and a first-order
     /// torque about the centroid `p_y q_z - p_z q_y` (key `"load_point"`).
     pub fn line_load_point(mut self, element_set: &str, force: Vec3, point: [f64; 2]) -> Warping {

@@ -2240,6 +2240,18 @@ No source was read for F-663. Every reference used is derived in ADR 0588 (D1, D
 | Doubly symmetric UDL moment factor `C_1 = 1.1310` | computed; the textbook `1.13` cited from memory, not used | ADR 0588 D4 |
 | Measured, 16 elements: `1.7e-5`, `1.7e-5`, `7.4e-6` (doubly symmetric top flange, shear centre, bottom flange); monosymmetric within `3.5e-4` | computed | ADR 0588 addendum 1 |
 
+## F-670 load height on the pre-stressed warping modes and harmonic path (ADR 0594)
+
+No source was read for F-670. Every reference is derived in ADR 0594 (D2, D3) and computed by a plain numpy script
+(`f670-scratch/arith.py`, `arith.log`), no rcfd code.
+
+| Item | Status | Source |
+|---|---|---|
+| Kinetic energy of the lateral-torsional motion of a doubly symmetric beam, the continuum of the library's consistent mass: `(1/2) int (rho A v_t^2 + rho I_z v'_t^2 + rho I_p phi_t^2) dx`, no warping inertia | derived | ADR 0594 D2 (from `beam::local_mass`, `beam_warping::local_mass`) |
+| Rayleigh-Ritz frequencies, forks, `L = 3`, the ADR 0588 doubly symmetric I, UDL `0.5 lambda_ref q_ref` (sine series `N = 81`, converged to `<= 1.8e-9` from `N = 41`): `omega = 111.798383170594` (top flange), `107.430207818881` (shear centre), `103.339440973516` rad/s (bottom flange); unloaded `omega_0^2 = 1.660191376344e4`; at `lambda_ref` the reference eigenvalue is `<= 4.2e-12 omega_0^2` | computed | ADR 0594 D3 |
+| Timoshenko-Rayleigh pinned lateral frequency, mode 1, `kappa = 5/6`: `omega_T = 128.729211880906` rad/s | derived (2 x 2 frequency equation of `v = sin`, `psi = cos`) | ADR 0594 arithmetic 2 |
+| Measured, 16 elements: `prestressed_modes` and the pre-stressed `WarpingHarmonic` resonance `8.1e-4` to `8.3e-4` below the references (the shear-flexible lateral plane); at the model's buckling load `|omega^2|/omega_0^2 <= 7.7e-13` (modes), `<= 2.8e-10` (harmonic); at `lambda_ref` `<= 3.2e-5` | computed | ADR 0594 addendum 1 |
+
 ## F-429 fracture parameters: domain integral, stress intensity factor, growth life (ADR 0547)
 
 No source was read for F-429. The books and papers below are cited from memory (volumes, pages and years as recalled, not
