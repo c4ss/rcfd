@@ -22,14 +22,18 @@
 //!
 //! ADR 0556 (F-628): with [`crate::model::CyclicOptions::shells`] the boundaries are node sets, the static and the modal
 //! paths (on the transformation and harmonic) take Shell4 and Shell3, and the rotation unknowns of the matched six-unknown
-//! nodes are rotated by `R` as the translations. [`full_rotor`] still refuses structural blocks.
+//! nodes are rotated by `R` as the translations.
+//!
+//! ADR 0561 (F-647): with the same option [`full_rotor`] copies Shell4 and Shell3 blocks, and [`FullRotor::expand`],
+//! [`FullRotor::expand_field`] and [`FullRotor::expand_load`] expand the rotations of a six-unknown node by the same `R^j` as
+//! its translations; the rotating sector's whirl paths take the shells' Coriolis matrix ([`crate::rotating`]).
 
 use crate::assemble::{point_stiffness, stiffness_with};
 use crate::constraint::Prescribed;
 use crate::error::{FemError, Result, SetKind};
 use crate::loads::NodalForceAt;
 use crate::mass::consistent_with;
-use crate::mesh::{FaceRef, SolidMesh};
+use crate::mesh::{ElementKind, FaceRef, SolidMesh};
 use crate::modal::{frequency, ModalOptions};
 use crate::model::{Constraint, DofMap, SolidModel};
 use crate::mpc::{self, ReferenceLoad, ReferenceMotion, Transformation, REFERENCE_UNKNOWNS};
@@ -675,7 +679,8 @@ impl FullRotor {
     /// The full mode of a sector mode of harmonic index `harmonic` (ADR 0386): at node `p` of sector `j`, `s R^j (cos(j
     /// theta) a_p - sin(j theta) b_p)`, `theta = 2 pi k / N`, `s = sqrt(2 / N)` for a pair and `sqrt(1 / N)` for a single
     /// harmonic, so that an M-orthonormal sector mode gives an M-orthonormal full mode. `sector_dofs` and `full_dofs` are the
-    /// numberings of the sector model and of the full model (three components per node).
+    /// numberings of the sector model and of the full model (three components per node; a six-unknown node also its
+    /// rotations by `R^j`, ADR 0561).
     pub fn expand(&self, sector_dofs: &DofMap, full_dofs: &DofMap, harmonic: usize, mode: &SectorMode) -> Vec<f64> {
         let nsec = self.sectors;
         let single = harmonic % nsec == 0 || 2 * (harmonic % nsec) == nsec;
@@ -700,15 +705,18 @@ impl FullRotor {
                 if self.is_high[p] {
                     continue;
                 }
-                let mut v = [0.0; 3];
-                for (i, vi) in v.iter_mut().enumerate() {
-                    let e = sector_dofs.equation(p, i).expect("sector component");
-                    *vi = c * mode.cos[e] - s * mode.sin[e];
-                }
-                let w = apply(&r, v);
-                let full = self.node_of[j][p];
-                for (i, wi) in w.iter().enumerate() {
-                    out[full_dofs.equation(full, i).expect("full component")] = scale * wi;
+                // ADR 0561 D1: a six-unknown node also takes its rotations by the same R^j.
+                for base in triplets(sector_dofs, p) {
+                    let mut v = [0.0; 3];
+                    for (i, vi) in v.iter_mut().enumerate() {
+                        let e = sector_dofs.equation(p, base + i).expect("sector component");
+                        *vi = c * mode.cos[e] - s * mode.sin[e];
+                    }
+                    let w = apply(&r, v);
+                    let full = self.node_of[j][p];
+                    for (i, wi) in w.iter().enumerate() {
+                        out[full_dofs.equation(full, base + i).expect("full component")] = scale * wi;
+                    }
                 }
             }
         }
@@ -747,15 +755,17 @@ impl FullRotor {
                 if self.is_high[p] {
                     continue;
                 }
-                let mut v = [0.0; 3];
-                for (i, vi) in v.iter_mut().enumerate() {
-                    let e = sector_dofs.equation(p, i).expect("sector component");
-                    *vi = c * cos[e] - s * sin[e];
-                }
-                let w = apply(&r, v);
-                let full = self.node_of[j][p];
-                for (i, wi) in w.iter().enumerate() {
-                    out[full_dofs.equation(full, i).expect("full component")] = *wi;
+                for base in triplets(sector_dofs, p) {
+                    let mut v = [0.0; 3];
+                    for (i, vi) in v.iter_mut().enumerate() {
+                        let e = sector_dofs.equation(p, base + i).expect("sector component");
+                        *vi = c * cos[e] - s * sin[e];
+                    }
+                    let w = apply(&r, v);
+                    let full = self.node_of[j][p];
+                    for (i, wi) in w.iter().enumerate() {
+                        out[full_dofs.equation(full, base + i).expect("full component")] = *wi;
+                    }
                 }
             }
         }
@@ -778,15 +788,17 @@ impl FullRotor {
             let r = rotation_matrix(self.axis, 2.0 * PI * j as f64 / self.sectors as f64);
             let (c, s) = self.phase(harmonic, j);
             for p in 0..self.is_high.len() {
-                let mut v = [0.0; 3];
-                for (i, vi) in v.iter_mut().enumerate() {
-                    let e = sector_dofs.equation(p, i).expect("sector component");
-                    *vi = c * cos[e] - s * sin[e];
-                }
-                let w = apply(&r, v);
-                let full = self.node_of[j][p];
-                for (i, wi) in w.iter().enumerate() {
-                    out[full_dofs.equation(full, i).expect("full component")] += *wi;
+                for base in triplets(sector_dofs, p) {
+                    let mut v = [0.0; 3];
+                    for (i, vi) in v.iter_mut().enumerate() {
+                        let e = sector_dofs.equation(p, base + i).expect("sector component");
+                        *vi = c * cos[e] - s * sin[e];
+                    }
+                    let w = apply(&r, v);
+                    let full = self.node_of[j][p];
+                    for (i, wi) in w.iter().enumerate() {
+                        out[full_dofs.equation(full, base + i).expect("full component")] += *wi;
+                    }
                 }
             }
         }
@@ -794,11 +806,22 @@ impl FullRotor {
     }
 }
 
+/// The first components of the triplets of sector node `p`: the translations, and the rotations of a six-unknown node (ADR
+/// 0561 D1).
+fn triplets(dofs: &DofMap, p: usize) -> &'static [usize] {
+    if dofs.components(p) == 6 {
+        &[0, 3]
+    } else {
+        &[0]
+    }
+}
+
 /// The full rotor of a sector model with one cyclic constraint (ADR 0386 D1): the sector mesh copied `N` times (copy `j`
 /// rotated by `j 2 pi / N`), the low nodes of copy `j >= 1` identified with the matched high nodes of copy `j - 1` and the
 /// high nodes of copy `N - 1` with the low nodes of copy 0. Blocks keep their index, kind and property (copy `j` of element
 /// `e` of block `b` is element `start_b + j n_b + (e - start_b^sector)`); node, element and surface sets are the unions of
-/// their copies. Refuses a block of a structural kind.
+/// their copies. Refuses a block of a structural kind; with [`crate::model::CyclicOptions::shells`] Shell4 and Shell3 blocks
+/// are copied as the solid blocks are (ADR 0561 D1; Beam2 stays refused).
 pub fn full_rotor(model: &SolidModel) -> Result<FullRotor> {
     let ci = the_cyclic_constraint(model)?;
     let bd = boundary(model, ci)?;
@@ -808,8 +831,10 @@ pub fn full_rotor(model: &SolidModel) -> Result<FullRotor> {
         )));
     }
     let mesh = model.mesh();
+    let shells = shells_opted_in(model);
     for (b, block) in mesh.blocks().iter().enumerate() {
-        if !block.kind().is_solid() {
+        let shell = matches!(block.kind(), ElementKind::Shell4 | ElementKind::Shell3);
+        if !block.kind().is_solid() && !(shells && shell) {
             return Err(FemError::UnsupportedKind {
                 block: b,
                 kind: block.kind().name(),

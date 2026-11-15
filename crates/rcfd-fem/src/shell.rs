@@ -867,6 +867,103 @@ pub(crate) fn model_spin_softening_mass(
     element_spin_softening_mass(coords, t, material.density(), axis)
 }
 
+/// The 3 x 3 factors of the Coriolis matrix of the director `u + z W theta`, `W theta = theta x e_3` in facet axes, for the
+/// unit axis `a` in facet components (ADR 0561 D2): `([a x], [a x] W, W^T [a x], W^T [a x] W)`.
+pub(crate) fn coriolis_factors(a: Vec3) -> [[[f64; 3]; 3]; 4] {
+    let x = [[0.0, -a[2], a[1]], [a[2], 0.0, -a[0]], [-a[1], a[0], 0.0]];
+    let w = [[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 0.0]];
+    let mut xw = [[0.0; 3]; 3];
+    let mut wx = [[0.0; 3]; 3];
+    for c in 0..3 {
+        for d in 0..3 {
+            xw[c][d] = (0..3).map(|k| x[c][k] * w[k][d]).sum();
+            wx[c][d] = (0..3).map(|k| w[k][c] * x[k][d]).sum();
+        }
+    }
+    let mut wxw = [[0.0; 3]; 3];
+    for c in 0..3 {
+        for d in 0..3 {
+            wxw[c][d] = (0..3).map(|k| w[k][c] * xw[k][d]).sum();
+        }
+    }
+    [x, xw, wx, wxw]
+}
+
+/// The element matrix made skew in floating point (ADR 0561 D2): `c_ij <- (c_ij - c_ji) / 2`, `c_ji <- -c_ij`, `c_ii <- 0`.
+pub(crate) fn skew(a: &mut ElementMatrix) {
+    let n = a.size();
+    let v = a.values_mut();
+    for i in 0..n {
+        v[i * n + i] = 0.0;
+        for j in 0..i {
+            let s = 0.5 * (v[i * n + j] - v[j * n + i]);
+            v[i * n + j] = s;
+            v[j * n + i] = -s;
+        }
+    }
+}
+
+/// The 24 x 24 Coriolis matrix per unit speed in facet axes of a section with the mass moments `m0`, `m1`, `m2` (homogeneous:
+/// `rho t`, `0`, `rho t^3 / 12`) for the unit axis `a` in facet components (ADR 0561 D2): `int rho N^T [a x] N` of the director
+/// kinematics, `m0 [a x]` on the translations, `m1 [a x] W` and `m1 W^T [a x]` between translations and rotations, `m2 W^T [a
+/// x] W` on the rotations (the drilling rotation takes no term), with the scalars of [`local_mass`].
+pub fn local_coriolis(f: &Facet, m0: f64, m1: f64, m2: f64, a: Vec3) -> ElementMatrix {
+    let [x, xw, wx, wxw] = coriolis_factors(a);
+    let mut m = ElementMatrix::zeros(24);
+    let v = m.values_mut();
+    for &xi in &GAUSS {
+        for &eta in &GAUSS {
+            let p = point(&f.local, xi, eta);
+            for i in 0..4 {
+                for j in 0..4 {
+                    let s = p.det * p.n[i] * p.n[j];
+                    for c in 0..3 {
+                        for d in 0..3 {
+                            v[(6 * i + c) * 24 + 6 * j + d] += m0 * s * x[c][d];
+                            v[(6 * i + c) * 24 + 6 * j + 3 + d] += m1 * s * xw[c][d];
+                            v[(6 * i + 3 + c) * 24 + 6 * j + d] += m1 * s * wx[c][d];
+                            v[(6 * i + 3 + c) * 24 + 6 * j + 3 + d] += m2 * s * wxw[c][d];
+                        }
+                    }
+                }
+            }
+        }
+    }
+    m
+}
+
+/// The global Coriolis matrix per unit speed of a Shell4 element with the mass moments `m0`, `m1`, `m2` for a rotation about
+/// the unit `axis` (ADR 0561 D2), skew in floating point.
+pub fn element_coriolis(coords: &[Vec3], m0: f64, m1: f64, m2: f64, axis: Vec3) -> Result<ElementMatrix> {
+    let f = facet(coords)?;
+    let al = [dot(f.axes[0], axis), dot(f.axes[1], axis), dot(f.axes[2], axis)];
+    let mut c = to_global(&local_coriolis(&f, m0, m1, m2, al), &transformation(&f));
+    skew(&mut c);
+    Ok(c)
+}
+
+/// The Coriolis matrix per unit speed of a Shell4 element of a model (ADR 0561 D2), with the mass moments chosen as
+/// [`model_spin_softening_mass`] chooses them: one isotropic ply of a Layup block its thickness and density, another layup
+/// the laminate's `m0, m1, m2`, any other block its thickness and `material`'s density.
+pub(crate) fn model_coriolis(
+    mesh: &SolidMesh,
+    element: usize,
+    coords: &[Vec3],
+    material: &Material,
+    axis: Vec3,
+) -> Result<ElementMatrix> {
+    let homogeneous = |t: f64, rho: f64| element_coriolis(coords, rho * t, 0.0, rho * t * t * t / 12.0, axis);
+    if let Some(BlockProperty::Layup { plies }) = mesh.blocks()[mesh.block_of(element)].property() {
+        if let Some((ply_material, t)) = crate::laminate::single_isotropic(plies) {
+            return homogeneous(t, ply_material.density());
+        }
+        let l = crate::laminate::laminate(plies)?;
+        return element_coriolis(coords, l.mass[0], l.mass[1], l.mass[2], axis);
+    }
+    let t = thickness_or_error(mesh, element)?;
+    homogeneous(t, material.density())
+}
+
 fn symmetrise(a: &mut ElementMatrix) {
     let n = a.size();
     let v = a.values_mut();

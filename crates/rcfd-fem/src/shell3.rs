@@ -762,6 +762,39 @@ pub fn element_spin_softening_mass(coords: &[Vec3], thickness: f64, density: f64
     ))
 }
 
+/// The 18 x 18 Coriolis matrix per unit speed in facet axes for the unit axis `a` in facet components (ADR 0561 D2): `rho t [a
+/// x]` on the translations and `rho t^3/12 W^T [a x] W` on the rotations with the scalars of [`local_mass`] (a homogeneous
+/// section: no coupling); the drilling rotation takes no term.
+pub fn local_coriolis(f: &Facet3, thickness: f64, density: f64, a: Vec3) -> ElementMatrix {
+    let t = thickness;
+    let (mt, mr) = (density * t, density * t * t * t / 12.0);
+    let [x, _, _, wxw] = crate::shell::coriolis_factors(a);
+    let mut m = ElementMatrix::zeros(18);
+    let v = m.values_mut();
+    for i in 0..3 {
+        for j in 0..3 {
+            let s = f.area * if i == j { 2.0 } else { 1.0 } / 12.0;
+            for c in 0..3 {
+                for d in 0..3 {
+                    v[(6 * i + c) * 18 + 6 * j + d] = mt * s * x[c][d];
+                    v[(6 * i + 3 + c) * 18 + 6 * j + 3 + d] = mr * s * wxw[c][d];
+                }
+            }
+        }
+    }
+    m
+}
+
+/// The global Coriolis matrix per unit speed of a Shell3 element for a rotation about the unit `axis` (ADR 0561 D2), skew in
+/// floating point.
+pub fn element_coriolis(coords: &[Vec3], thickness: f64, density: f64, axis: Vec3) -> Result<ElementMatrix> {
+    let f = facet(coords)?;
+    let al = [dot(f.axes[0], axis), dot(f.axes[1], axis), dot(f.axes[2], axis)];
+    let mut c = to_global(&local_coriolis(&f, thickness, density, al), &transformation(&f));
+    crate::shell::skew(&mut c);
+    Ok(c)
+}
+
 fn symmetrise(a: &mut ElementMatrix) {
     let n = a.size();
     let v = a.values_mut();
