@@ -48,6 +48,10 @@
 //! ADR 0472 (F-415): the Coriolis term on the modal subspace of the F-396 modes, solved by the quadratic eigensolver of ADR
 //! 0450, with the split Campbell table and the stability flag, is [`RotatingPart::split_modes`] and
 //! [`RotatingPart::split_campbell`] in [`crate::gyro`]; nothing here is changed by it.
+//!
+//! ADR 0561 (F-647): Shell4 and Shell3 on the whirl paths, through the Coriolis matrix of the shell director
+//! ([`coriolis_matrix_with_shells`]): on a sector whose cyclic constraint has [`crate::model::CyclicOptions::shells`], and on a
+//! part with [`RotatingOptions::shells`]; without either a shell is refused there as before.
 
 use crate::assemble::{assemble_with, point_stiffness};
 use crate::constraint::{check_rigid_body_motions, prescribed_equations, reduce};
@@ -68,9 +72,9 @@ use std::fmt::Write as _;
 
 mod whirl;
 pub use whirl::{
-    coriolis_matrix, gyroscopic_eigen_dense, stationary_frequency, whirl_order_crossings, CyclicWhirlCampbell,
-    DenseWhirl, HarmonicWhirlSpeedModes, Whirl, WhirlCampbell, WhirlMode, WhirlModes, WhirlSpeedModes,
-    MAX_WHIRL_UNKNOWNS, WHIRL_TOLERANCE,
+    coriolis_matrix, coriolis_matrix_with_shells, gyroscopic_eigen_dense, stationary_frequency, whirl_order_crossings,
+    CyclicWhirlCampbell, DenseWhirl, HarmonicWhirlSpeedModes, Whirl, WhirlCampbell, WhirlMode, WhirlModes,
+    WhirlSpeedModes, MAX_WHIRL_UNKNOWNS, WHIRL_TOLERANCE,
 };
 pub use whirl::{gyroscopic_eigen_sparse, gyroscopic_eigen_sparse_with, LanczosOptions, SparseWhirl, WhirlSolver};
 pub use whirl::{
@@ -177,6 +181,10 @@ pub struct RotatingOptions {
     /// Whether the corrected sector split modes report the corrected frequency `theta'` beside `schur_eta` (default false; ADR
     /// 0527 D2).
     pub corrected_frequency: bool,
+    /// Whether the whirl analyses of a part take Shell4 and Shell3 (the Coriolis matrix of the shell director, ADR 0561 D1,
+    /// D2; default false: a shell is refused there as before). A sector whose cyclic constraint has
+    /// [`crate::model::CyclicOptions::shells`] takes them without it.
+    pub shells: bool,
 }
 
 impl RotatingOptions {
@@ -192,6 +200,7 @@ impl RotatingOptions {
             split_correction: false,
             split_schur: SplitSchur::Dense,
             corrected_frequency: false,
+            shells: false,
         }
     }
     /// The same options with other modal options.
@@ -232,6 +241,11 @@ impl RotatingOptions {
     /// The same options with the corrected frequency `theta'` of the corrected sector split modes reported or not (ADR 0527).
     pub fn corrected_frequency(mut self, on: bool) -> RotatingOptions {
         self.corrected_frequency = on;
+        self
+    }
+    /// The same options with the shells of the whirl analyses taken or not (ADR 0561 D1).
+    pub fn shells(mut self, on: bool) -> RotatingOptions {
+        self.shells = on;
         self
     }
 }
