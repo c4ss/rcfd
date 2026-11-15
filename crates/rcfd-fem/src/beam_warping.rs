@@ -31,6 +31,11 @@
 //! frequency) and the linear transient [`WarpingTransient`] (the integrator of ADR 0389 on the reduced matrices), with the load
 //! [`load_vector`]. The model's own harmonic and transient paths do not take beams; nothing of them changes.
 //!
+//! ADR 0585 (F-661) adds the pre-stress to the harmonic path ([`WarpingHarmonicOptions::prestress`], a [`WarpingPrestress`],
+//! for example that of the warping static solve): `A = (1 + i eta) K + K_sigma - omega^2 M + i omega (alpha M + beta (K +
+//! K_sigma))`, `K_sigma` the geometric stiffness of [`matrices`] (real and undamped; in the Rayleigh stiffness, as ADR 0543 D5).
+//! Without the option the code of ADR 0574 runs unchanged.
+//!
 //! ADR 0582 (F-643) adds the load height ([`Warping::load_point`]): a force applied at a point of the section off the shear
 //! centre adds `(1/2) (F . (p - s)) phi^2` at the twist of its node to the geometric stiffness; without an entry a nodal force
 //! acts at the shear centre, as before.
@@ -1889,6 +1894,9 @@ pub struct WarpingHarmonicOptions {
     pub resonance_pivot: f64,
     /// Worker threads of the assembly (`None`: the available parallelism); the result does not depend on it.
     pub threads: Option<usize>,
+    /// A pre-stress whose geometric stiffness `K_sigma` (the `geometric` matrix of [`matrices`]) is added, real and undamped,
+    /// to the stiffness and to the Rayleigh stiffness (ADR 0585 D1; default none). RF8 and RF10 as [`buckling_factors_with`].
+    pub prestress: Option<WarpingPrestress>,
 }
 
 impl Default for WarpingHarmonicOptions {
@@ -1898,6 +1906,7 @@ impl Default for WarpingHarmonicOptions {
             rayleigh: None,
             resonance_pivot: crate::harmonic_direct::RESONANCE_PIVOT,
             threads: None,
+            prestress: None,
         }
     }
 }
@@ -1927,10 +1936,16 @@ impl WarpingHarmonicOptions {
         self.threads = Some(threads);
         self
     }
+    /// The same options with a pre-stress (ADR 0585 D1).
+    pub fn prestress(mut self, prestress: WarpingPrestress) -> WarpingHarmonicOptions {
+        self.prestress = Some(prestress);
+        self
+    }
 }
 
 /// The direct harmonic solve of a model with the warping unknowns of a [`Warping`] (ADR 0574 D2): `K_aug` and `M_aug` of ADR
 /// 0548 reduced once, one complex factorisation per frequency of `A = (1 + i eta) K - omega^2 M + i omega (alpha M + beta K)`.
+/// With a pre-stress (ADR 0585), `A = (1 + i eta) K + K_sigma - omega^2 M + i omega (alpha M + beta (K + K_sigma))`.
 #[derive(Debug, Clone)]
 pub struct WarpingHarmonic {
     // The union pattern of the reduced `K` and `M`: row pointers, columns, and the two values.
@@ -1938,6 +1953,8 @@ pub struct WarpingHarmonic {
     col: Vec<usize>,
     kv: Vec<f64>,
     mv: Vec<f64>,
+    // ADR 0585: the reduced `K_sigma` on the same pattern, with the option only.
+    gv: Option<Vec<f64>>,
     free: Vec<usize>,
     dofs: WarpingDofs,
     base_dofs: crate::model::DofMap,
@@ -1950,7 +1967,8 @@ pub struct WarpingHarmonic {
 impl WarpingHarmonic {
     /// The solver of `model` and `warping` (ADR 0574 D2). Refuses RF1 to RF4 and RF6 of ADR 0546 D4, a nonzero prescribed
     /// value (key `"constraint"`), a loss factor or Rayleigh coefficient that is not finite and `>= 0` (key `"damping"`), a
-    /// resonance pivot that is not finite and `>= 0` (key `"resonance pivot"`).
+    /// resonance pivot that is not finite and `>= 0` (key `"resonance pivot"`). With a pre-stress, RF8 and RF10 of ADR 0548
+    /// D3 (key `"warping"`) and the refusals of the pre-stress assembly.
     pub fn new(model: &SolidModel, warping: &Warping, options: &WarpingHarmonicOptions) -> Result<WarpingHarmonic> {
         let ok = |x: f64| x.is_finite() && x >= 0.0;
         let (alpha, beta) = options.rayleigh.map_or((0.0, 0.0), |r| (r.mass, r.stiffness));
@@ -1970,6 +1988,9 @@ impl WarpingHarmonic {
             });
         }
         let rd = reduced_dynamic(model, warping, options.threads, "a harmonic analysis")?;
+        if let Some(p) = &options.prestress {
+            return Self::with_prestress(model, warping, options, p, rd, alpha, beta);
+        }
         let nf = rd.free.len();
         let mut row_ptr = Vec::with_capacity(nf + 1);
         row_ptr.push(0usize);
@@ -2003,6 +2024,77 @@ impl WarpingHarmonic {
             col,
             kv,
             mv,
+            gv: None,
+            free: rd.free,
+            dofs: rd.dofs,
+            base_dofs: model.dof_map(),
+            eta: options.loss_factor,
+            alpha,
+            beta,
+            resonance_pivot: options.resonance_pivot,
+        })
+    }
+
+    /// ADR 0585 D1: the solver with the geometric stiffness of `prestress`, reduced by the same equations as `rd`, on the union
+    /// pattern of the reduced `K`, `M` and `K_sigma`.
+    fn with_prestress(
+        model: &SolidModel,
+        warping: &Warping,
+        options: &WarpingHarmonicOptions,
+        prestress: &WarpingPrestress,
+        rd: ReducedDynamic,
+        alpha: f64,
+        beta: f64,
+    ) -> Result<WarpingHarmonic> {
+        let check_torque = prestress.check_for(model, warping)?;
+        let mats = matrices_impl(model, &prestress.prestress, warping, options.threads, check_torque)?;
+        let lay = layout(model, warping)?;
+        let mut fixed = prescribed_equations(model, &[])?;
+        fixed.extend(lay.restrained.iter().map(|&eq| (eq, 0.0)));
+        let gr = reduce(&mats.geometric, &vec![0.0; lay.dofs.n_equations()], &fixed)?;
+        if gr.free() != rd.free.as_slice() {
+            return Err(warping_error(
+                "the geometric stiffness has another set of free equations than the stiffness".to_string(),
+            ));
+        }
+        let g = gr.matrix;
+        let nf = rd.free.len();
+        let mut row_ptr = Vec::with_capacity(nf + 1);
+        row_ptr.push(0usize);
+        let (mut col, mut kv, mut mv, mut gv) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+        for r in 0..nf {
+            let mut entries: Vec<(usize, [f64; 3])> = Vec::new();
+            for (a, which) in [(&rd.k, 0), (&rd.m, 1), (&g, 2)] {
+                for p in a.row_ptr[r]..a.row_ptr[r + 1] {
+                    let mut v = [0.0; 3];
+                    v[which] = a.val[p];
+                    entries.push((a.col[p], v));
+                }
+            }
+            entries.sort_by_key(|e| e.0);
+            let mut last: Option<usize> = None;
+            for (c, v) in entries {
+                if last == Some(c) {
+                    let i = col.len() - 1;
+                    kv[i] += v[0];
+                    mv[i] += v[1];
+                    gv[i] += v[2];
+                } else {
+                    col.push(c);
+                    kv.push(v[0]);
+                    mv.push(v[1]);
+                    gv.push(v[2]);
+                    last = Some(c);
+                }
+            }
+            row_ptr.push(col.len());
+        }
+        Ok(WarpingHarmonic {
+            row_ptr,
+            col,
+            kv,
+            mv,
+            gv: Some(gv),
             free: rd.free,
             dofs: rd.dofs,
             base_dofs: model.dof_map(),
@@ -2049,16 +2141,33 @@ impl WarpingHarmonic {
         }
         let w2 = omega * omega;
         let mut damped = false;
-        let val: Vec<C64> = self
-            .kv
-            .iter()
-            .zip(&self.mv)
-            .map(|(&k, &m)| {
-                let v = C64::new(k - w2 * m, self.eta * k + omega * (self.alpha * m + self.beta * k));
-                damped |= v.im != 0.0;
-                v
-            })
-            .collect();
+        let val: Vec<C64> = match &self.gv {
+            None => self
+                .kv
+                .iter()
+                .zip(&self.mv)
+                .map(|(&k, &m)| {
+                    let v = C64::new(k - w2 * m, self.eta * k + omega * (self.alpha * m + self.beta * k));
+                    damped |= v.im != 0.0;
+                    v
+                })
+                .collect(),
+            // ADR 0585 D1: `K_sigma` real and undamped, and in the Rayleigh stiffness.
+            Some(gv) => self
+                .kv
+                .iter()
+                .zip(&self.mv)
+                .zip(gv)
+                .map(|((&k, &m), &g)| {
+                    let v = C64::new(
+                        k + g - w2 * m,
+                        self.eta * k + omega * (self.alpha * m + self.beta * (k + g)),
+                    );
+                    damped |= v.im != 0.0;
+                    v
+                })
+                .collect(),
+        };
         let nf = self.free.len();
         let a =
             ComplexCsr::new(nf, self.row_ptr.clone(), self.col.clone(), val).map_err(|e| FemError::InvalidValue {
