@@ -369,3 +369,105 @@ models printed, and the worst relative distance from each root of one model to t
 match). The mutation re-run (`mutations2.log`): MU6 and MU11 now make `l5m_l8m_two_materials` fail (it refused, the
 element-constant matrix); for MU11 this is the L8m part, which also missed without the mutation, so MU11 is not counted as caught
 by a met check.
+
+## Addendum 1: results (2026-11-15)
+
+Runs: B0 recorded on the base 89bdd903 (commit dab504ca, `f620-scratch/b0-base.log`) before any library line. Library and tests
+in d1db72c6. Pre-check (`precheck.log`, after the code, before the registered run): the 13 test files that name the hyperelastic
+material or record default bits (`sa_hyper`, `sa_dg`, `sa_dgm`, `sa_emc`, `sa_laminate`, `sa_scaffold`, `si_scaffold` and the
+default-bits files of D8 and B1) all pass; no record beyond the three of D5 was needed. The registered run of `sa_hyper_paths.rs`
+(`run1.log`, once, `--test-threads=1`). Amendment 1 (L3 NHi a known miss, diagnostic L3d, `run2-l3.log`), the mutation run
+(`mutations.log`), amendment 2 (L5m, L8m, `run3-l5m.log`), the MU6 and MU11 re-run (`mutations2.log`), amendment 3 (L8m a known
+miss, diagnostic L8d, `run4-l8d.log`). Then `cargo test -p rcfd-fem --release` (`fem_all.log`, on 607cc54a: 251 binaries, 1075
+passed, 0 failed, 291 ignored; it ran `sa_hyper_paths` once more as part of the suite, its numbers not used), `baseline_hashes`
+(`baseline.log`: 3 passed), `docs_site` (`docs_site.log`: 2 passed), `cargo fmt -p rcfd-fem --check` clean, `cargo clippy -p
+rcfd-fem --release --all-targets -- -D warnings` clean (`clippy.log`). One lint fix in the new test file came before the clippy
+run (`e.clone()` on a `Copy` energy, 607cc54a). It touched the body of the already-run L3 test without changing its meaning. No
+limit was changed.
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| M0 | NHk and MRk: 50 of 50 steps, no error | `Ok` | met |
+| M1 | NHk `0`, MRk `0` (equal accelerations) | `<= 1e-12` | met |
+| M2 | NHk `5.4883805785124045e4` both, MRk `5.488380578512392e4` both | equal bits | met |
+| M3 | NHk `2.481e-6`, MRk `2.158e-6` | `<= 1e-3` | met |
+| M3b | NHk `9.99999`, MRk `9.99999` | `5 ..= 20` | met |
+| M3d | `2.038e-6` | `<= 1e-3` | met |
+| M4 | `D(0.001)`: NHk `1.011e-4`, MRk `1.012e-4` | `<= 1e-2` | met |
+| M4b | NHk `16.60`, MRk `16.60` (`D(0.004)` `1.679e-3`, `1.680e-3`) | `>= 4` | met |
+| M5 | equal state bytes | exact | met |
+| M6 | equal state bytes | exact | met |
+| M7r | NHk `7.750e-3`, MRk `7.748e-3` | record | - |
+| M8 | 20 of 20 steps, energies finite (largest relative energy change `7.75e-3`) | `Ok` | met |
+| L0 | NHc, MRc, NHi `0`; NHk, MRk `2.05e-16` | `<= 1e-14` | met |
+| L0t | NHc, MRc `3.29e-16`; NHi `3.88e-13`; NHk, MRk `6.16e-16` | `<= 1e-10` (NHi `1e-8`) | met |
+| L1 | displacement NHc, MRc `1.34e-13`, NHi `2.26e-10`; stress NHc, MRc `2.56e-13`, NHi `4.38e-10` | `<= 1e-10` (NHi `1e-8`) | met |
+| L2 | `u_y` `1.44e-15`, reactions `7.83e-16` (NHc and MRc) | `<= 1e-10` | met |
+| L3 | NHc, MRc `2.99e-14`; NHi BBar: `modal_analysis` failed (the subspace iteration did not converge in 200 iterations, residuals `1.3e-9 .. 2.7e-11` against `1e-10`) | `<= 1e-10` (NHi `1e-8`) | **missed** on the NHi row (known miss) |
+| L3d | the twin fails the same way (residuals `1.4e-9 .. 3.5e-11`), and both fail at 2000 iterations | record | - |
+| L4 | `4.35e-15` | `<= 1e-10` | met |
+| L5 | `1.13e-14` (omega 50), `4.83e-14` (omega 500) | `<= 1e-10` | met |
+| L6 | `5.16e-14` (factors `1362.13`, `1362.13`, `8952.16`) | `<= 1e-10` | met |
+| L7 | NHc `1.076e-6`, MRc `1.069e-6` | `<= 1e-4` | met |
+| L8 | `1.06e-13` (8 roots) | `<= 1e-10` | met |
+| L5m (am. 2) | `1.34e-14`, `1.36e-14` | `<= 1e-10` | met (post-run addition) |
+| L8m (am. 2) | `2.0` (roots matched by position) | `<= 1e-10` | **missed** (known miss) |
+| L8d (am. 3) | roots 6 and 7 are the same `+-` pair in the opposite order in the two models; order-free worst distance `1.13e-13` | record | - |
+| RF1 | refused, `NotYetSupported`, location "a structural element (Beam2, Shell4, Shell3)", package `a follow-up of ADR 0555` | exact | met |
+| RF2 | refused, location "a temperature load", the same package | exact | met |
+| RF3 | `elasticity_matrix` refused naming `a follow-up of ADR 0541`; `stress` bits equal; isotropic, orthotropic and J2 `linear_elasticity_matrix` equal to `elasticity_matrix` | exact | met |
+| RF4 | refused, key `"expansion"` | exact | met |
+| RC | `rf2_the_paths_after_f620`, `f1h_refusals_after_f620` and `f1m_refusals_after_f620` pass | pass | met |
+| B1 | B0 digests equal; the five default-bits files pass | exact; pass | met |
+| B2 | `baseline_hashes`: 3 passed | pass | met |
+| S1 | suite 0 failed; `docs_site` passes; fmt and clippy clean | clean | met |
+
+**Diagnoses.** L3 NHi: for the BBar cantilever at `K/G = 1e4` the subspace iteration's residual stalls near `1e-9`. It does so
+with the twin as well as with the hyperelastic material, and at ten times the iteration budget (L3d). The modal solver's
+tolerance of `1e-10` sits below the rounding floor of this near-incompressible model. The miss therefore belongs to the set-up and
+the modal solver, not to the linearisation. On the same model, L0t (`3.9e-13`) and L1 NHi (`2.3e-10`) show that the linearised
+matrix and the static path agree with the twin. L8m: `damped_modes` reports the two roots of an oscillating pair in an order that
+differs between two models whose matrices differ only by rounding (the pair near `24.88i`). Matching roots by position, as L8 and
+L8m do, is a flaw in the measure. Matched without regard to order, the worst distance is `1.1e-13`.
+
+**Mutations** (`mutations.log`, `mutations2.log`; `sa_hyper_paths.rs` on a scratch copy, one mutation at a time):
+
+| Id | Caught by |
+|---|---|
+| MU1 | L0, L0t, L1, L2, L3c, L4 to L8, M3, M3b, M3d |
+| MU2 | L0, L0t, L1, L3c, L4 to L8, M3, M3b, M3d |
+| MU3 | L0, L0t, L1, L2, L3c, L4 to L8, M3, M3b, M3d |
+| MU4 | L1 (the stress rows, `5.3e-4 .. 1.15`), L6 (`1.4e-4`) |
+| MU5 | every linear check (refused), RC |
+| MU6 | **not caught** by the registered set-ups (the multi-material branch); after amendment 2, caught by L5m (a post-run check) |
+| MU7 | RF1 |
+| MU8 | RF2 |
+| MU9 | M2 (`5.48838057851239e4` against `5.4883805785124045e4`), M0 (the MRk run refused by the step-local energy) |
+| MU10 | M0, M8, RF4, RC (F1h', F1m', RF2') |
+| MU11 | **not caught** by the registered set-ups (the multi-material branch); after amendment 2 it fails only L8m, which also misses without the mutation, so it is not counted as caught |
+
+**Deviations.** Amendments 1 to 3, each written before the runs it covers, and the lint fix in the new test file. Shared solver
+files changed (line numbers at the head): `assemble.rs` 238; `damped.rs` 716, 974; `estimate.rs` 557; `harmonic_direct.rs` 483,
+647; `hex8x.rs` 128, 134; `recover.rs` 134, 136, 145, 151; `model.rs` 1244-1266 (`check_elements`); `nl_transient.rs` 552-553
+(the removed refusal) and 1279-1283 (`strain_energy`); additions in `material.rs` 468-506 and `mat_hyper.rs` 13-18, 29-32, 50-66.
+The existing tests `sa_hyper.rs::rf2_the_paths`, `sa_dg.rs::f1h_refusals` and `sa_dgm.rs::f1m_refusals` gained an `#[ignore]`
+record attribute (D5), bodies unchanged. Not run: the whole workspace suite (the lead's gate). One behaviour change outside the
+registered checks: a recovered stress field (`IntegrationPointField`) of a hyperelastic model, taken after a nonlinear solve, is
+now `D eps` of the linear strain; before, it was `Material::stress` of the linear strain. No existing test reads it.
+
+**Decision: partial** by the registered rule. B1, B2, M0 to M2 and the NHc and MRc rows of L0 to L3 are met, and every acceptance
+clause (c1 to c3) has met checks. The item is still partial for three reasons. The NHi row of L3 is a known miss (diagnosed: the
+modal solver's floor; the twin fails the same way). Two registered mutations, MU6 and MU11, were not caught by the registered
+set-ups. And L5m was met only after a post-run amendment, while L8m is a known miss (diagnosed: the positional match).
+
+**Remaining questions** (recommendations, taken on the maintainer's standing instruction of 2026-11-11 where they need no change
+of a default):
+
+1. L3 NHi. Options: (a) leave it (the modal solver's `1e-10` tolerance is out of reach for that model, twin included); (b) a
+   follow-up check registered with `ModalOptions::tolerance = 1e-8` for BBar models at `K/G = 1e4`, or a modal residual test
+   relative to the largest stiffness entry. Recommend (b), in the follow-up below.
+2. L8m. Options: (a) register an order-free match as the measure; (b) give `damped_modes` a canonical order for each reported
+   pair (this changes its output order, a default change, so it is not taken here). Recommend (a), in the same follow-up.
+3. Where the linearisation sits (open question 1): option (a), as registered.
+4. The tangent about a pre-stressed state, and the structural elements (open questions 2 and 3): follow-ups.
+5. The citations (Holzapfel, Bonet and Wood, Ogden) are from memory, not read, and should be checked.
