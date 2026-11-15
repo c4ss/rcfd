@@ -191,7 +191,7 @@ fn s1_buckling_factors_below_one_agree() {
         println!("S1 N = {frac} |N_T|: factors {:?}", r.factors);
         let below = r.factors.iter().filter(|&&x| x < 1.0).count();
         let (h, _) = counts(&model, &w, Some(&p));
-        let ok = h.as_ref().map_or(false, |&n| n == below) && below == want;
+        let ok = h.as_ref().is_ok_and(|&n| n == below) && below == want;
         c.holds(
             &format!("S1 N = {frac} |N_T|: factors below 1 against the count"),
             ok,
