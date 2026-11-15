@@ -688,7 +688,8 @@ fn mixed_model(r: f64) -> (SolidModel, SolidModel) {
 }
 
 #[test]
-fn m1_mixed_model() {
+#[ignore = "known miss of ADR 0546 check M1 (run 1): I-beam factor 1.5085e-9 against 1e-9, the solver tolerance 1e-10 (amendment 1)"]
+fn m1_mixed_model_run1_known_miss() {
     let mut c = Checks::new();
     let (s, ws) = i_parts();
     let r = 4266.115 / (30.0 * M_REF);
@@ -700,6 +701,43 @@ fn m1_mixed_model() {
     let ibeam = warp_factors(&s, ws, 16, 3.0, 0, M_REF, false);
     c.at_most("M1 rectangle factor", (res.factors[0] / rect[0] - 1.0).abs(), 1e-9);
     c.at_most("M1 I-beam factor", (res.factors[1] / ibeam[0] - 1.0).abs(), 1e-9);
+    c.finish();
+}
+
+/// M1' of ADR 0546 amendment 1: M1 with the eigensolver tolerance `1e-13` on the three solves, limits unchanged.
+#[test]
+fn a1_m1p_mixed_model() {
+    let mut c = Checks::new();
+    let (s, ws) = i_parts();
+    let opts = BucklingOptions::new(3).tolerance(1e-13);
+    let r = 4266.115 / (30.0 * M_REF);
+    let (m, loaded) = mixed_model(r);
+    let res = buckling_factors(&m, &prestress_of(&loaded), &Warping::new().block(0, ws), &opts).unwrap();
+    println!("M1' mixed factors {:?}, residuals {:?}", res.factors, res.residuals);
+    let mr = beam_model(16, 3.0, &rect_section(), 0);
+    let rect = factors(&mr, &prestress_of(&moment_loaded(&mr, 0, M_REF * r)), &opts).unwrap();
+    let mi = beam_model(16, 3.0, &s, 0);
+    let ibeam = buckling_factors(
+        &mi,
+        &prestress_of(&moment_loaded(&mi, 0, M_REF)),
+        &Warping::new().block(0, ws),
+        &opts,
+    )
+    .unwrap();
+    println!(
+        "M1' rectangle alone {:?}, I beam alone {:?}",
+        rect.factors, ibeam.factors
+    );
+    c.at_most(
+        "M1' rectangle factor",
+        (res.factors[0] / rect.factors[0] - 1.0).abs(),
+        1e-9,
+    );
+    c.at_most(
+        "M1' I-beam factor",
+        (res.factors[1] / ibeam.factors[0] - 1.0).abs(),
+        1e-9,
+    );
     c.finish();
 }
 
