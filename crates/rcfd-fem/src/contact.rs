@@ -117,7 +117,8 @@ pub struct ContactOptions {
     /// The factor of the linear body's reduced tangent (ADR 0533): [`DirectFactor::SparseMinimumDegree`] (the default, the
     /// up-looking sparse `L D L^T` after approximate minimum degree) or [`DirectFactor::SupernodalNestedDissection`] (the
     /// supernodal multifrontal `L D L^T` after nested dissection by level structures of the tangent's pattern). The envelope
-    /// is refused, and so is the supernodal factor with [`Kinematics::TotalLagrangian`].
+    /// is refused. With [`Kinematics::TotalLagrangian`] the supernodal choice is passed to [`solve_from`] as
+    /// [`NewtonOptions::factor`] (ADR 0542 D3); with the linear body `newton.factor` must be the envelope (key `"solver"`).
     pub factor: DirectFactor,
 }
 
@@ -190,14 +191,7 @@ impl ContactOptions {
         }
         match self.factor {
             DirectFactor::SparseMinimumDegree => {}
-            DirectFactor::SupernodalNestedDissection => {
-                if self.kinematics == Kinematics::TotalLagrangian {
-                    return Err(FemError::InvalidValue {
-                        key: "solver",
-                        reason: "the supernodal factor is used by the linear body only (ADR 0533)".to_string(),
-                    });
-                }
-            }
+            DirectFactor::SupernodalNestedDissection => {}
             other => {
                 return Err(FemError::InvalidValue {
                     key: "solver",
@@ -206,6 +200,15 @@ impl ContactOptions {
                     ),
                 })
             }
+        }
+        if self.kinematics == Kinematics::Linear && self.newton.factor != DirectFactor::Envelope {
+            return Err(FemError::InvalidValue {
+                key: "solver",
+                reason: format!(
+                    "newton.factor {:?}: the linear body's factor is ContactOptions::factor (ADR 0542 D3)",
+                    self.newton.factor
+                ),
+            });
         }
         let mut o = self.newton.clone();
         o.steps = 1;
@@ -1164,6 +1167,11 @@ pub fn solve_with(
     } else {
         crate::nonlinear::StateLayout::of(model)?.empty_states()
     };
+    // ADR 0542 D3: the total Lagrangian body takes the supernodal choice through its Newton options.
+    let mut newton_tl = options.newton.clone();
+    if options.factor == DirectFactor::SupernodalNestedDissection {
+        newton_tl.factor = DirectFactor::SupernodalNestedDissection;
+    }
     let mut cache = None;
     let mut run_reference = 0.0f64;
     let mut u = vec![0.0; n];
@@ -1191,7 +1199,7 @@ pub fn solve_with(
             let out = if tl {
                 let mut list: Vec<&dyn Contribution> = vec![&set];
                 list.extend_from_slice(extra);
-                solve_from(model, &pres_step, &fstep, &u, &states, &options.newton, &list).map(|e| Solved {
+                solve_from(model, &pres_step, &fstep, &u, &states, &newton_tl, &list).map(|e| Solved {
                     reference: 0.0,
                     convex: 0,
                     u: e.u,
