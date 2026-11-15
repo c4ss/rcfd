@@ -205,6 +205,73 @@ positive checks S1a to E2 not run.
 - Warped facets are not in the D3 geometry (planar trapezoids); objectivity of the warped facet (its projection uses the node
   positions only) is argued, not checked.
 
-## Addenda
+## Addendum 1: results (2026-11-15)
 
-(none yet)
+Library at e347361b: `model.rs` (`CyclicOptions::shells`, the node-set validation of `add_constraint`), `cyclic.rs`
+(`shells_opted_in`, `refuse_cyclic_beams`, the node-set boundary and the NC5 refusal in `boundary`, the shells branch of
+`check_cyclic_model`, module docs), `mpc.rs` (`check_transformation_model`: the shell refusal skipped under the option;
+`cyclic_rows`: the rotation rows and the unknown-count refusal; module docs). Tests: `crates/rcfd-fem/tests/sa_cyclic_shells.rs`,
+nine tests, 0.31 s in release. No existing test edited, no golden or hash table touched, no case-file key.
+
+Set-up run disclosed (B4): the B4 test was written first with a zero hash and run on the unchanged library (d4ae697d plus only
+the new test file; no library line changed). It was run twice: the first time to see the failure message with the hash, the
+second time to capture the line to `f628-scratch/b4_record.txt`. Both gave the same deterministic hash, `0xb49f8bf2c903ab48`,
+which was then written into the test. Every registered check was then run once (`f628-scratch/run1.log`).
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| S1a Shell4 `k = 0` (`solve_static_mpc`) | 1e-10 | e_u 8.4e-15, e_theta 1.5e-14 | yes |
+| S1b Shell3 `k = 0` | 1e-10 | e_u 5.5e-15, e_theta 8.0e-15 | yes |
+| S2a Shell4 `k = 1, 2, 3` (`solve_static_harmonic`) | 1e-10 | 5.2e-15, 6.9e-15, 1.1e-14 | yes |
+| S2b Shell3 `k = 1, 2, 3` | 1e-10 | 5.3e-15, 3.0e-15, 6.3e-15 | yes |
+| E1 Shell4: counts; `k = 0..3`; pair splits | equal; 1e-8; 1e-8 | 9 = 9 (largest ring value 1.11e8 above the cut-off 5.00e7); 3.3e-16, 4.4e-16, 7.8e-16, 1.7e-15; 7.4e-16, 2.1e-15 | yes |
+| E2 Shell3: as E1 | as E1 | 11 = 11 (8.28e7 above 4.77e7); 5.6e-16, 6.7e-16, 2.0e-15, 1.6e-15; 1.2e-15, 8.6e-16 | yes |
+| E3 `k = 0` equals `modal_analysis_mpc` | equal bits | equal (Shell4, Shell3) | yes |
+| R1 rotation rows in the solution | 1e-14 | 0 (Shell4, Shell3) | yes |
+| B1 every rcfd-fem test (release) | pass | 1077 passed, 0 failed, 295 ignored | yes |
+| B2 `baseline_hashes` | pass | 3 passed, 1 ignored | yes |
+| B3 solid twin default against `shells(true)` | equal bits | equal (displacements, frequencies) | yes |
+| B4 solid twin default hash | `0xb49f8bf2c903ab48` | equal | yes |
+| NC1 to NC6 | as stated | each as stated (UnknownSet Surface; Shell4 `shell::FOLLOW_UP` twice; Cyclic `beam::FOLLOW_UP` twice; key `cyclic` "low node 8 has 6 unknowns ... partner 0 has 3"; key `cyclic` naming ADR 0556 twice; unmatched low node 0) | yes |
+
+Also run: `cargo test -p rcfd-cli --release --test docs_site` passed (2 tests). `cargo fmt -p rcfd-fem --check` is clean, and
+`cargo clippy -p rcfd-fem --release --all-targets -- -D warnings` is clean.
+
+Mutations were run on a `git archive` copy of e347361b with its own target directory (`f628-scratch/mut`, `mutate.py`,
+`run_mutations.sh`). The first pass of the script was a harness failure: Python's `write_text` here takes no `newline` argument,
+so no mutation was applied and every log tested the unmutated copy. Those logs are not counted. The script was fixed and checked
+(the M1 diff was confirmed), and each mutation was then run once:
+
+| Id | Caught by |
+|---|---|
+| M1 | S1a, S1b, S2a, S2b, E1, E2 (R1 sits inside the S1 tests) |
+| M2 | S1a, S1b, S2a, S2b, E1, E2 |
+| M3 | S1a, S1b, S2a, S2b, E1, E2 |
+| M4 | S2a, S2b, E1, E2 (the `k = 1, 2` pairs) |
+| M5 | S2a, S2b, E1, E2, NC (refused) |
+| M6 | S1b, E2 |
+| M7 | NC4 |
+| M8 | every positive check and B3 |
+| M9 | S1a, S1b, S2a, S2b, E1, E2, NC (B3 did not catch it: with no six-unknown node the inverted guard adds nothing, as D1 says; S1a, which was registered as a catcher, did) |
+
+Nine of nine mutations were caught. No deviation from the registration and no amendment.
+
+**Decision by the registered rule: done.** Every check was met, NC1 to NC6 behaved as stated, and every mutation was caught.
+
+### Remaining questions
+
+1. The rotating paths (Campbell, whirl, pre-stressed and spin-softened modes on a cyclic sector) still refuse shells, and the
+   spinning fan blade needs them. Options: (a) a follow-up item that opens their entry checks under `CyclicOptions::shells`,
+   with the full-ring checks repeated on the spinning frustum; (b) leave them refused. Recommendation: (a), proposed below.
+2. `full_rotor` and the expansion functions work on three components. Options: (a) a follow-up that copies shell blocks and
+   expands six components; (b) leave them as they are. Recommendation: (a), included in the same follow-up as question 1.
+
+## For the lead: roadmap entries
+
+F-628 proposed status: **done**.
+
+> Structural solver, advanced tier. Follow-up of F-541 (ADR 0545, 2026-11-15). ADR 0556, 2026-11-15: shells in the cyclic constraint by the opt-in CyclicOptions::shells (the default refusals of a shell model with a cyclic constraint and the existing tests that assert them unchanged): low and high name node sets (a shell has no faces); solve_static_mpc, modal_analysis_mpc, cyclic::modal_analysis_harmonic and cyclic::solve_static_harmonic take Shell4 and Shell3 (a shell node shared with a solid and Beam2 stay refused); the cyclic rows rotate the rotation unknowns of every pair of six-unknown nodes by the same R as the translations, theta_H = R (c theta_L - s phi_L), phi_H = R (s theta_L + c phi_L) (the rotation vector turns with the sector; the facet frames are objective); a pair with different unknown counts is refused, and so is the option with interpolation or axis nodes. A clamped conical frustum about an oblique axis, N = 6, against the full ring: static k = 0 within 1.5e-14 (Shell4) and 8.0e-15 (Shell3), harmonic static k = 1 to 3 within 1.1e-14 (limit 1e-10); the frequencies of each harmonic k = 0 to 3 within 1.7e-15 and 2.0e-15 with equal counts below the cut-off, pair splits 2.1e-15 (limit 1e-8); the rotation rows hold exactly. Models without shells keep their bits: every rcfd-fem test, baseline_hashes, a Hex8 twin bit-equal with and without the option and to its hash recorded before the change. Nine of nine mutations caught. Not covered: the rotating paths on a cyclic sector, full_rotor with shells, interpolated or axis-node boundaries with shells (follow-ups proposed).
+
+> Follow-up proposed: Shells on the rotating cyclic paths and the full rotor. Deps F-628. Acceptance: Every limit not stated here is registered in the ADR before the run. With CyclicOptions::shells, the rotating paths on a cyclic sector (Campbell, whirl, pre-stressed and spin-softened modes) take Shell4 and Shell3, and full_rotor with FullRotor::expand, expand_field and expand_load copy shell blocks and expand six components; a spinning ring of Shell4 and the same cut into Shell3 against one sector: frequencies of each harmonic at each speed within 1e-8, expanded modes M-orthonormal within 1e-8; models without shells keep their bits.
+
+> Follow-up proposed: Shells with interpolated cyclic boundaries and nodes on the axis. Deps F-628. Acceptance: Every limit not stated here is registered in the ADR before the run. CyclicOptions::shells together with interpolation or axis_nodes gives the rotation unknowns the rows of ADR 0456 D4 (the interpolated rows and the harmonic rule on the axis); a shell sector with non-matching boundaries against the matched sector: frequencies within 1e-6 at the registered mesh, and an axis node of a closed shell cap against the full model within 1e-8; models without shells keep their bits.
