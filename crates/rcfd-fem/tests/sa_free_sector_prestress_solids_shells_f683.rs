@@ -13,8 +13,8 @@ use rcfd_fem::model::CyclicOptions;
 use rcfd_fem::rotating::{free_sector_unit_static, RotatingOptions, RotatingSector, WhirlModes};
 use rcfd_fem::solve::{solve_static, StaticOptions};
 use rcfd_fem::{
-    BlockProperty, Constraint, ElasticSupport, ElementKind, FemError, LinearTerm, Load, Material, SolidMesh, SolidModel,
-    SolidResult,
+    BlockProperty, Constraint, ElasticSupport, ElementKind, FemError, LinearTerm, Load, Material, SolidMesh,
+    SolidModel, SolidResult,
 };
 use std::f64::consts::PI;
 
@@ -213,7 +213,8 @@ fn s8_a1() -> Case {
         mesh.add_node_set(name, b.node_set(name).unwrap().to_vec()).unwrap();
     }
     for name in b.surface_set_names() {
-        mesh.add_surface_set(name, b.surface_set(name).unwrap().to_vec()).unwrap();
+        mesh.add_surface_set(name, b.surface_set(name).unwrap().to_vec())
+            .unwrap();
     }
     mesh.add_element_set("all", (0..b.n_elements()).collect()).unwrap();
     Case {
@@ -233,12 +234,16 @@ fn free_cases_a1() -> Vec<Case> {
 fn clamped_cases() -> Vec<Case> {
     let mut a = s20();
     for c in 0..3 {
-        a.model.add_constraint(Constraint::displacement("xmin", c, 0.0)).unwrap();
+        a.model
+            .add_constraint(Constraint::displacement("xmin", c, 0.0))
+            .unwrap();
     }
     a.name = "S20 clamped";
     let mut b = shell(ElementKind::Shell4);
     for c in 0..6 {
-        b.model.add_constraint(Constraint::displacement("clamp", c, 0.0)).unwrap();
+        b.model
+            .add_constraint(Constraint::displacement("clamp", c, 0.0))
+            .unwrap();
     }
     b.name = "SH4 clamped";
     vec![a, b]
@@ -450,8 +455,8 @@ fn fs_run(cases: Vec<Case>) {
             let copy = RotatingSector::with_unit_prestress(m, ps_copy.clone(), &base()).unwrap();
             let omega = half_speed(&copy);
             let (a, b) = (whirl(&new, K, omega), whirl(&copy, K, omega));
-            let same = a.modes.len() == b.modes.len()
-                && a.modes.iter().zip(&b.modes).all(|(x, y)| x.direction == y.direction);
+            let same =
+                a.modes.len() == b.modes.len() && a.modes.iter().zip(&b.modes).all(|(x, y)| x.direction == y.direction);
             let mut dmax: f64 = 0.0;
             for (x, y) in a.modes.iter().zip(&b.modes) {
                 dmax = dmax.max((x.omega / y.omega - 1.0).abs());
@@ -496,7 +501,10 @@ fn ns1_ns2_ns3_df_the_opt_in_without_stress_stiffening_changes_no_bit_amended() 
 fn ns_run(free: fn() -> Vec<Case>) {
     let mut ok = true;
     let df = !RotatingOptions::new(3).free_sector_prestress;
-    println!("DF RotatingOptions::new(3).free_sector_prestress == false: {df} {}", met(df));
+    println!(
+        "DF RotatingOptions::new(3).free_sector_prestress == false: {df} {}",
+        met(df)
+    );
     ok &= df;
     let off = base().stress_stiffening(false);
     let off_in = off.clone().free_sector_prestress(true);
@@ -548,7 +556,10 @@ fn ns_run(free: fn() -> Vec<Case>) {
             let bad = N_SOLID / 2 + 1;
             let (eb_, ea_) = (b.whirl_modes(bad, omega), a.whirl_modes(bad, omega));
             let c = eb_.is_err() && ea_.is_err() && format!("{:?}", eb_.err()) == format!("{:?}", ea_.err());
-            println!("NS3 (c) {name}: whirl_modes({bad}) refused both ways, equal {c} {}", met(c));
+            println!(
+                "NS3 (c) {name}: whirl_modes({bad}) refused both ways, equal {c} {}",
+                met(c)
+            );
             ok &= c;
         }
         println!("NS3 (a) {name}: accepted both ways met");
@@ -560,7 +571,10 @@ fn ns_run(free: fn() -> Vec<Case>) {
         .add_support(ElasticSupport::nodal_spring("xmin", 0, 1.0e6))
         .unwrap();
     sprung.name = "S20 sprung";
-    let (b, a) = (RotatingSector::new(&sprung.model, &off), RotatingSector::new(&sprung.model, &off_in));
+    let (b, a) = (
+        RotatingSector::new(&sprung.model, &off),
+        RotatingSector::new(&sprung.model, &off_in),
+    );
     let both = match (&b, &a) {
         (Ok(b), Ok(a)) => prestress_bits_equal(&sprung.model, a.part().unit_prestress(), b.part().unit_prestress()),
         _ => false,
@@ -576,13 +590,22 @@ fn ns_run(free: fn() -> Vec<Case>) {
         .model
         .add_constraint(Constraint::displacement("xmin", 0, 1.0e-3))
         .unwrap();
-    let (b, a) = (RotatingSector::new(&moved.model, &off), RotatingSector::new(&moved.model, &off_in));
+    let (b, a) = (
+        RotatingSector::new(&moved.model, &off),
+        RotatingSector::new(&moved.model, &off_in),
+    );
     let nb = b.is_err() && a.is_err() && format!("{:?}", b.err()) == format!("{:?}", a.err());
-    println!("NS3 (b) S20 with a non-zero displacement: refused both ways, equal {nb} {}", met(nb));
+    println!(
+        "NS3 (b) S20 with a non-zero displacement: refused both ways, equal {nb} {}",
+        met(nb)
+    );
     ok &= nb;
     // NS3 (d): with stress stiffening on, the opt-in refuses the clamped and the sprung sector.
     let on_in = base().free_sector_prestress(true);
-    for (name, m) in [("S20 clamped", &clamped_cases()[0].model), ("S20 sprung", &sprung.model)] {
+    for (name, m) in [
+        ("S20 clamped", &clamped_cases()[0].model),
+        ("S20 sprung", &sprung.model),
+    ] {
         let r = RotatingSector::new(m, &on_in);
         let d = matches!(
             r,
@@ -591,7 +614,10 @@ fn ns_run(free: fn() -> Vec<Case>) {
                 ..
             })
         );
-        println!("NS3 (d) {name}: stress stiffening on, refused free_sector_prestress {d} {}", met(d));
+        println!(
+            "NS3 (d) {name}: stress stiffening on, refused free_sector_prestress {d} {}",
+            met(d)
+        );
         ok &= d;
     }
     assert!(ok, "a registered check missed (see the output)");
