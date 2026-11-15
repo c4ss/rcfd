@@ -504,6 +504,16 @@ impl Material {
         }
     }
 
+    /// The Young modulus and Poisson ratio read by the Beam2, Shell4 and Shell3 elements (ADR 0584 D2): for a hyperelastic
+    /// material the small-strain values of its energy ([`crate::mat_hyper::small_strain_young_poisson`]); for every other
+    /// variant [`Material::youngs_modulus`] and [`Material::poisson_ratio`].
+    pub(crate) fn structural_young_poisson(&self) -> (f64, f64) {
+        match self {
+            Material::Hyperelastic { energy, .. } => crate::mat_hyper::small_strain_young_poisson(energy),
+            _ => (self.youngs_modulus(), self.poisson_ratio()),
+        }
+    }
+
     /// The refusal of a variant whose package has not landed, at `location`.
     fn not_yet(&self, location: &str) -> FemError {
         FemError::NotYetSupported {
