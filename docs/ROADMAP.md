@@ -13242,7 +13242,9 @@ fixed by the item's registration ADR before any code.
     unsymmetric tangent about a state, the state dependence of a follower tangent in a blind registered check, shells
     and beams. Follow-up F-676 (flutter about a nonlinear state with the full contribution tangent). Follow-up F-677
     (state dependence of contribution tangents about a nonlinear state, a blind 3-D check). Done is the maintainer's
-    call (mutation MC caught only by RNq2 of the post-run amendment 1).
+    call (mutation MC caught only by RNq2 of the post-run amendment 1). The state dependence of the follower tangent,
+    which the plane ring could not see, is checked blind by F-677 (ADR 0599, 2026-11-15; MC caught by BFD at 1.69e-4);
+    done recommended, the maintainer's call.
 - [~] **F-672** Beam2 elements in the cyclic constraint
   - depends on: F-628
   - acceptance: Every limit not stated here is registered in the ADR before the run. A cyclic sector holding Beam2
@@ -13266,14 +13268,31 @@ fixed by the item's registration ADR before any code.
     rule: the negative control NC1 was met only after amendment 1 (its model could not be built; D1a refusal added)
     after run 1. Done is the maintainer's call. Lifting the Beam2 cyclic refusal by default (retiring ADR 0556 NC3 and
     ADR 0593 A-B) NEEDS USER.
-- [ ] **F-673** Load height on the pre-stressed modes of a monosymmetric warping beam
+- [~] **F-673** Load height on the pre-stressed modes of a monosymmetric warping beam
   - depends on: F-670, F-627
   - acceptance: Every limit not stated here is registered in the ADR before the run. The lowest flexural-torsional
     frequency of the fork-supported ADR 0553 monosymmetric I under a uniformly distributed load of 0.5 of its ADR 0588
     buckling load at the shear centre, at the centroid and on flange 1 (prestressed_modes) equals a Rayleigh-Ritz
     reference with the consistent mass, including the inertial coupling of the shear-centre offset, derived in the ADR
     within 1e-2 at 16 elements; results without a load height bit-identical.
-  - note: Follow-up of F-670 (ADR 0594, 2026-11-15).
+  - note: F-673 note: Structural solver, advanced tier. Follow-up of F-670 and F-627 (ADR 0594, ADR 0553, 2026-11-15).
+    PARTIAL. ADR 0597, 2026-11-15: test-only (no library change): the distributed load height of
+    `Warping::line_load_point` on `prestressed_modes` of the fork-supported ADR 0553 monosymmetric I (L = 3, 16
+    elements, downward UDL of 0.5 of the ADR 0588 buckling load at the shear centre, at the centroid and on flange 1).
+    The kinetic energy of the offset section is derived (in shear-centre unknowns rho A (v_s + z_0 phi)^2 + rho I_z
+    v_s'^2 + rho I_p phi^2, the library's centroid mass) and the Rayleigh-Ritz reference built on it (sine series,
+    converged to 4.3e-9); at half the buckling load the lowest frequency is above the unloaded one (the branch changes
+    its twist sense on the way to zero). Measured: 2.26e-3 below the references for the three heights (limit 1e-2);
+    without the inertial coupling the reference would be 21 to 28 percent away; ratios between heights 5e-6; mode shape
+    8.5e-4; at the model's buckling load omega^2/omega_0^2 <= 7.2e-13, at the ADR 0588 one 8.6e-4; an entry at the shear
+    centre gives the bits of none. Missed: the unloaded frequency against the coupled Timoshenko closed form, 5.2e-4
+    against the limit 1e-4 (a known-miss record), diagnosed as an O(l^2) error of the element mass for an offset section
+    (the centroid translation is interpolated from (v_c, theta_z), so the coupling sees a twist without its nodal
+    slopes): 1.3e-4 at 32 and 3.2e-5 at 64 elements, ratio 0.25 per halving. Seven of seven mutations caught. Not
+    covered: the harmonic and transient paths with this section and a load height, the upward load, other supports and
+    loads, warping inertia, a consistent offset mass (ADR 0597 Q1, open: it changes existing results), no case-file key.
+    Follow-up proposed: Consistent mass of warping sections with a shear-centre offset. Follow-up F-678 (Consistent mass
+    of warping sections with a shear-centre offset).
 - [ ] **F-674** Full_rotor and the expansion of a cyclic sector with Beam2
   - depends on: F-672
   - acceptance: Every limit not stated here is registered in the ADR before the run. cyclic::full_rotor of a sector with
@@ -13295,7 +13314,7 @@ fixed by the item's registration ADR before any code.
     central-difference residual equation of the nonlinear residual including the follower force within 1e-6 (vector
     measure), with the backward error of ADR 0587, and at zero load they equal buckling_factors_full within 1e-10.
   - note: Follow-up of F-671 (ADR 0596, 2026-11-15).
-- [ ] **F-677** State dependence of contribution tangents about a nonlinear state, a blind 3-D check
+- [x] **F-677** State dependence of contribution tangents about a nonlinear state, a blind 3-D check
   - depends on: F-671
   - acceptance: Every limit not stated here is registered in the ADR before the run. On a conservative 3-D follower
     set-up whose follower tangent between free unknowns changes with the state (a pressurised box or shell segment with
@@ -13303,4 +13322,27 @@ fixed by the item's registration ADR before any code.
     with central differences of the nonlinear residual including the follower force within 1e-6 (vector measure for the
     response), and evaluating the contribution tangents at zero displacement in place of the state is caught by a
     registered check.
-  - note: Follow-up of F-671 (ADR 0596, 2026-11-15).
+  - note: Structural solver, advanced tier. Follow-up of F-671 (ADR 0596). DONE. ADR 0599, 2026-11-15, test only (no
+    library file changed): a blind 3-D check that tangent_buckling_factors_with and DirectHarmonic::about_state_with
+    take the follower tangent at the state. Set-up: quarter tube (Hex20 SVK, R = 1, T = 0.15, half-length 4 m), symmetry
+    planes x = 0, y = 0, z = 0, clamped end, external follower pressure 1.75e8 Pa (0.69 of the linear follower critical
+    pressure). Before the run the set-up was checked for conservativeness (the antisymmetric part of the load stiffness
+    on the free unknowns is 4.9e-15, against 0.56 with one loaded edge freed) and for state dependence (the symmetric
+    follower tangent at the state differs from the one at u = 0 by 8.6e-3 entry-wise and 1.7e-4 along the rest mode).
+    The factors agree with the fourth-order central difference of the nonlinear residual with the follower force to
+    8.4e-13 (Rayleigh, limit 1e-6) and 4.5e-7 (vector, limit 1e-4); the harmonic responses agree to 3.5e-10 undamped and
+    1.7e-10 with Rayleigh damping (vector, limit 1e-6); at zero load both equal follower::buckling_factors and
+    DirectHarmonic::new in every bit. Evaluating every contribution tangent at zero displacement in place of the state
+    is caught by registered checks, both by a permanent test contribution (5.4e-4 buckling, 1.3e-3 and 6.6e-4 harmonic,
+    against limits >= 1e-5 and >= 2e-6) and by source mutations; nine of nine mutations caught. Not covered:
+    hyperelastic materials, shells and beams, the full unsymmetric tangent about a state.
+- [ ] **F-678** Consistent mass of warping sections with a shear-centre offset
+  - depends on: F-673
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The mass of a warping element with
+    a shear-centre offset is the consistent discretisation of the kinetic energy of ADR 0597 D2 on the element's own
+    fields (v_c = v_s + z_0 phi inside the element); the lowest unloaded frequency of the fork-supported ADR 0553
+    monosymmetric I equals the coupled Timoshenko-Rayleigh closed form of ADR 0597 D5 within 1e-4 at 16 elements, and
+    the ADR 0597 pre-stressed frequencies stay within 1e-2 of their references; results of sections without an offset
+    bit-identical (the change of results with an offset approved by the maintainer).
+  - note: Follow-up of F-673 (ADR 0597, 2026-11-15). Changes existing modal, harmonic and transient results of offset
+    sections: NEEDS USER.
