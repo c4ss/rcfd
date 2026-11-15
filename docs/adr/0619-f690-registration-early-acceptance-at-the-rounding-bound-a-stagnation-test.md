@@ -194,3 +194,88 @@ shared machine), run once with `--ignored`; the fast tests on the same code path
    the record-and-copy of NC1b.
 2. **Reading of "ADR 0604's iterations" for S3** (taken on the maintainer's standing instruction, take the recommendation): the
    floor steps' iterations, because the literal total cannot be halved by a bit-keeping test (reading 3).
+
+## Addendum 1: results (2026-11-15)
+
+Code: commit `afac5b48`. In `crates/rcfd-fem/src/nonlinear.rs`: the field `NewtonOptions::stagnation` (lines 1190 to 1195),
+its default (line 1212), the builder (lines 1245 to 1249), and in `Problem::attempt_with` the per-iterate vector (lines 1745 to
+1746) and the acceptance of D1 (lines 1803 to 1827). The new test file is `crates/rcfd-fem/tests/sa_nl_stagnation.rs`. Each run
+was made once, release profile, target `f690-scratch/target`: `cargo test -p rcfd-fem --release --test sa_nl_stagnation`
+(`run1.log`); the same with `--ignored` for ST3 (`run1-st3.log`, 25.6 s); B1 (`b1.log`); B2 (`b2.log`); fmt (`fmt.log`);
+clippy (`clippy.log`).
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| ST1a | 50 of 50 steps; `max |P_n - P_0|/|P_0|` `1.297e-14`; 0 halvings | all `Ok`; `<= 1e-11`; `0` | met |
+| ST1b | set-up: the base run measures 118; total with the opt-in **102** (literal half 59: recorded, reading 3) | `<= 108` | met |
+| ST1c | the base's floor steps: step 50 only (20 iterations); with the opt-in 4 | `<= 10` | met |
+| ST1d | 4 corrections | `<= 10` | met |
+| ST1e | steps 0 to 49 bit-equal to the base run | equal | met |
+| ST1f | `3.56e-18` | `<= 1e-9` | met |
+| ST2 | `Ok`, 0 halvings, **5** corrections (ADR 0604: 20), relative residual `1.392e-10` | `Ok`; `0`; `<= 10`; `<= 1e-7` | met |
+| ST3 | 1940 of 1940 steps; 10 crossings; period `2.094897e-4`; energy `2.761783e-4`; 0 halvings; total **10569** iterations (ADR 0604: 37367, 28%); worst step 7 corrections; largest final relative residual `1.35e-8` | all `Ok`; `>= 9`; `<= 1e-2`; `<= 1e-3`; `<= 19`; `<= 18683`; `<= 10` | met |
+| ST4 | 600 and 600 steps; final state bytes (9904) equal with and without the opt-in | equal | met |
+| ST5 | `false`, `false`; the builder sets `true` | `false` | met |
+| B1 | 79 test binaries (the 72 `*_default_bits` files and the 7 named): 113 passed, 0 failed, 36 ignored (NC1b's 20 iterations among them) | pass | met |
+| B2 | `baseline_hashes`: 3 passed, 1 ignored | pass | met |
+| B3 | `0` (pre-registration audit, not re-run) | `0` | met |
+| B4 | 2 (S3 step 50 in `sa_nl_rounding_floor` A1; NC1b in `sa_nl_inertia_reference_after_f571`) | recorded | recorded |
+
+ST3's period and energy equal ADR 0604's P1 to the printed digits. The emulation on the audit log predicted 10568 iterations
+and a worst step of 7; the run differs by one iteration because the trajectory after the first early acceptance differs in the
+last bits. The run took 25.6 s against 159 s for ADR 0604's P1 on the same shared machine.
+
+**Mutations.** Script `f690-scratch/tools/mutate.py`, logs `mutations.log` and `mut_*.log`, scratch copy `f690-scratch/mut`,
+target `target-mut`. Tests run for each: `sa_nl_stagnation`, `sa_nl_inertia_reference_after_f571`, `sa_nl_rounding_floor`.
+
+| Id | Caught by |
+|---|---|
+| MS1 (the opt-in ignored) | NC1b (`sa_nl_inertia_reference_after_f571`: 5 iterations, not 20) and ST1b's set-up (the base run gives 102, not 118). `sa_nl_rounding_floor` still passes, as B4 predicts |
+| MS2 (the one-correction window, the pre-audit form) | ST4 (the final state bytes differ: N1e's attempt at `k = 5`) |
+| MS3 (the halving condition dropped) | not caught, as registered (none expected) |
+| MS4 (`b` replaced by 0 in the stagnation branch) | ST1b, ST1c, ST1d (20 corrections at step 50), ST2 (20) |
+| MS5 (the energy test dropped from the stagnation branch) | not caught, as registered (none expected) |
+| MS6 (`k <= max_iterations` in the stagnation branch) | not caught, as registered (none expected) |
+
+The three registered catches (MS1, MS2, MS4) are caught, and the three mutations registered as "none expected" (MS3, MS5,
+MS6) are not caught. In these tests the halving condition and the energy test of D1 therefore add nothing beyond the window.
+They are kept as registered; this is recorded and changes no limit. `cargo fmt -p rcfd-fem --check` and
+`cargo clippy -p rcfd-fem --release --all-targets -- -D warnings` are clean.
+
+**Deviations.** No limit or set-up changed. The library and the test file landed in one commit after the registration. The
+whole `rcfd-fem` suite was not re-run after the change; that is the lead's gate. With the option off the change executes no
+new operation (D2). B3 rests on the audit, which ran on the base and was not repeated.
+
+**Decision: done** by the registered rule. ST1a to ST1f, ST2, ST3, ST4, ST5, B1, B2 and B3 are met; MS1, MS2 and MS4 are
+caught; fmt and clippy are clean. This holds under readings 1 to 3, and the lead should see them:
+
+- c2 is met with the opt-in, not with the driver defaults. Flipping the default is open question 1.
+- For S3, c2 is met on the floor steps (20 corrections down to 4). The literal total is 102 of 118, not 59, and no
+  bit-keeping test can reach 59 (reading 3).
+
+Under the literal reading the status would be partial.
+
+**Remaining questions** (recommendations):
+
+1. **Flip the default?** Open, because it changes default results. Options:
+   (a) keep it opt-in: no bit changes.
+   (b) turn it on by default. The audit lists the two attempts of the non-ignored tests that would change. One is S3 step 50
+   in `sa_nl_rounding_floor`'s A1 test, whose limits still hold under MS1. The other is NC1b, which asserts 20 iterations and
+   fails under MS1, so it would need the record-and-copy scheme of ADR 0604 amendment 1. The ignored records P1 (ADR 0604) and
+   ADR 0479's S3 and pendulum records would also change.
+   Recommendation: (b), once the maintainer decides, with NC1b kept as an ignored record plus a copy that asserts at most 10
+   corrections.
+2. **The halving condition and the energy test are not exercised** (MS3 and MS5 are not caught). Options: (a) keep them as
+   registered; (b) drop them. Recommendation: (a). They are what makes D1 a stagnation test and not just a window, and they cost
+   nothing. A test that separates them would need a contraction that stays slow while it is within the bound, and the crate has
+   no such model.
+3. **Reading of c2 for S3** (taken on the maintainer's standing instruction, take the recommendation): c2 is read as the floor
+   steps' iterations. The literal total is 98 plus the floor steps, and the energy test fixes the 98.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> Structural solver, advanced tier. Follow-up of F-571 (ADR 0604, 2026-11-15). DONE (opt-in; the default flip is open). ADR 0619, 2026-11-15: an opt-in stagnation acceptance at the rounding bound of ADR 0604, NewtonOptions::stagnation (default false; nonlinear.rs only, no other public change). When a contribution is in the residual reference, an attempt is accepted at an iterate k with 3 <= k < max_iterations if that iterate and the two before it are within eps |(|K| |u|)|_free, the last two corrections did not halve the residual, and the energy test holds. The relative test is tried first, and ADR 0604's last-iterate acceptance is kept. An instrumented audit of the 1355 non-ignored rcfd-fem tests (17752 attempts) found no attempt that the rule ends before the relative test. A one-correction window would have ended ADR 0514 N1e's attempt one iterate early, which set the window of two (disclosed). With the opt-in: S3 of ADR 0479 converges in 50 of 50 steps, and its floor step 50 is accepted in 4 corrections instead of 20 (total 102 of 118; the literal half, 59, is unreachable because the 49 relative-test steps need 2 corrections each); |dP|/|P_0| is 1.3e-14, and steps 0 to 49 are bit-equal to ADR 0604's. NC1b's step is accepted in 5 corrections instead of 20. The pendulum runs 1940 steps in 10569 iterations instead of 37367 (worst step 7), with period and energy as ADR 0604 P1 (2.09e-4, 2.76e-4) in 25.6 s instead of 159 s. The N1e spinning bar gives the same state bytes with the opt-in as without. Default bits: the 72 default-bits files with the nl_transient families pass, and the baseline hashes pass. MS1, MS2 and MS4 are caught; MS3 and MS5 (the halving and energy conditions) are not caught, as registered. Not covered: on by default (it would change S3 step 50 of sa_nl_rounding_floor and NC1b of sa_nl_inertia_reference_after_f571, which asserts 20 iterations: a maintainer decision); the energy-momentum and discrete-gradient loops; the static driver without a contribution in the reference.
+
+> Follow-up proposed: The stagnation acceptance of ADR 0619 on by default. Deps F-690. Acceptance: Every limit not stated here is registered in the ADR before the run. With the maintainer's decision recorded, NewtonOptions::stagnation is true by default; NC1b of ADR 0604 amendment 1 is kept as an ignored record with a copy that asserts at most 10 corrections; S3 and the pendulum of ADR 0479 with the driver defaults reproduce ADR 0619 ST1 and ST3; every other existing default-bits test keeps its bits, and the baseline hashes pass.
