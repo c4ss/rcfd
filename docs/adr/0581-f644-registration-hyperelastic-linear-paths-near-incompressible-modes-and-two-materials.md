@@ -206,3 +206,21 @@ that model (a documented floor, not changed here). Other near-incompressible mes
 ratio (locking), Tet elements, Beam2 and shells (a separate follow-up of ADR 0555), viscoelastic or frequency-dependent loss
 factors on two hyperelastic materials, and more than two materials are not covered. The order of `damped_modes`' reported roots
 is not given a canonical form (a default change, not taken).
+
+## Amendment 1 (2026-11-15, written after the registered run and before any further run)
+
+The registered run (`f644-scratch/run1.log`, once, on 335a28fb, `--nocapture --test-threads=1`) met every check of F, D and H and
+Q0a, Q0c, Q0d. **Q0b missed**: `|W - 1e-6| = 1.000113e-12` against `1e-12`. Diagnosis (arithmetic, a defect of the set-up, not of
+the measure): `dist(x, y)` divides by `|y|`, and in Q0b the scaled root is the `y`, so the exact value is `W = 1e-6 |y_0| / ((1 +
+1e-6) |y_0|) = 1e-6 / (1 + 1e-6) = 1e-6 - 1e-12 + O(1e-18)`; the registration expected `1e-6`, so the registered limit `1e-12` sat
+on the exact distance of the set-up from its expected value. The measured value is that `1e-12` plus `1.1e-16` of rounding. The
+limit stays; the expected value of the check was wrong.
+
+- `q0_the_order_free_measure` becomes `q0_the_order_free_measure_known_miss`, `#[ignore]`d with the run's numbers, its body and
+  limits unchanged.
+- **Q0b' (corrected, `q0_the_order_free_measure_corrected`)**: Q0a, Q0c and Q0d as registered, and Q0b with the expected value
+  `1e-6 / (1 + 1e-6)`, the limit `1e-12` unchanged. Estimate: the rounding of `x - y` for `|y| ~ 7 .. 112` and `|x - y| = 1e-6 |y|`
+  is `eps |y|`, a relative `2.2e-10` of `W`, `2.2e-16` absolute.
+
+By the decision rule (a check met only after a post-run amendment) the decision can be at best partial; this is recorded and not
+argued away. The other checks are not re-run.
