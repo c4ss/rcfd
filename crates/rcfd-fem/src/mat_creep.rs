@@ -278,7 +278,7 @@ pub fn update(material: &Material, strain: &[f64; 6], state: &[f64], point: &Poi
                     Some(q) if tau != 0.0 => {
                         let t = point.temperature.ok_or_else(|| {
                             temperature_error(
-                                "a creep material with an Arrhenius factor needs a temperature for a step with a time                                  increment"
+                                "a creep material with an Arrhenius factor needs a temperature for a step with a time increment"
                                     .to_string(),
                             )
                         })?;

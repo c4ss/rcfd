@@ -2375,7 +2375,7 @@ pub fn solve_in_time_with(
             return Err(FemError::InvalidValue {
                 key: "temperature",
                 reason: format!(
-                    "material {i}, element set '{set}': a creep material with an Arrhenius factor needs a temperature                      (TimeSteppingOptions::temperature, temperature_history or temperature_field)"
+                    "material {i}, element set '{set}': a creep material with an Arrhenius factor needs a temperature (TimeSteppingOptions::temperature, temperature_history or temperature_field)"
                 ),
             });
         }
