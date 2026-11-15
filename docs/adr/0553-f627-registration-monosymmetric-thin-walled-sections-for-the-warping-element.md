@@ -290,3 +290,25 @@ equivalent here, none is), or any check met only after a post-run amendment. **t
   a phi^2`. Recommendation (b) as a separate item together with a non-uniform moment check.
 - **Q2. Sections without symmetry** (`beta_omega != 0`, a principal-axis rotation). Options: (a) not offered (this item); (b) a
   general section from a thin-walled outline with the bimoment pre-stress. Recommendation (a) until a case needs it.
+
+## Amendment 1 (2026-11-15): E2 corrected, written while writing the test and before any run of any check
+
+No check has been run. While writing the test of E2 it became clear that its second clause is false by construction: the
+section rotations `theta_y`, `theta_z` of the ADR 0508 moment terms are the interdependent rotation fields of the Timoshenko
+element (`beam::second_order_rows`), which depend on the nodal translations `v`, `w` as well as on the nodal rotations (for
+Euler-Bernoulli, `theta_z = v'` of the Hermite deflection). So the moment part `G` of D2 has entries in the rows of `v` and `w`,
+and `O^T G O - G` is not zero outside the twist block: the difference `section_local_geometric_stiffness - local_geometric_stiffness`
+is not the Wagner shift alone. The design (D1, D2) is unchanged; only the check was wrong.
+
+Corrected **E2'** (limits fixed now, before any run):
+
+- (a) `section_local_geometric_stiffness(L = 0.7, N = -5e3, f, ws)` with the offset `(0.01, 0.04)`, `beta^C = (0.7, -0.4)` and end
+  forces of an element in equilibrium with shear forces, torque and moments (`V_y = 40`, `V_z = -25`, `T = 6`, `M_y(0) = 3`,
+  `M_z(0) = 2`, the end moments from equilibrium) against the dense composition of the test: `local_geometric_stiffness(N, None,
+  [0, 0]) + O^T local_geometric_stiffness(0, f_s, beta^S) O`, with the test's own `O` (D1's signs), its own `f_s` (`T_s = T_c + z_0
+  V_y - y_0 V_z` at each end) and its own `beta^S = (0.7 - 2 * 0.04, -0.4 - 2 * 0.01)`: `max|diff|/max|hand| <= 1e-12`
+  (estimate `1e-16`).
+- (b) `wagner_about_shear_centre()` of that section against `(0.62, -0.42)`: `<= 1e-15` absolute each (estimate `1e-17`).
+
+Mutations: Z1 and Z2 are now expected to be caught by A1, A2, N1 and E2' (b) or (a) depending on where the mutation is placed
+(in `wagner_about_shear_centre`: (b); in the element: (a)). The original E2 is not run (it was found false before any run).
