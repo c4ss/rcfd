@@ -39,13 +39,16 @@
 //! ADR 0595 (F-672): with [`crate::model::CyclicOptions::beams`] as well, the static and the modal paths take Beam2 elements
 //! (the rows of ADR 0556 D2 on their six-unknown nodes; the sector stands for the ring of its beams rotated by `R^j`,
 //! orientation vectors included).
+//!
+//! ADR 0601 (F-674): with [`crate::model::CyclicOptions::full_rotor_beams`] as well, [`full_rotor`] takes Beam2 blocks: each
+//! becomes `N` consecutive blocks of the full mesh, copy `j` with the orientation `R^j v` ([`FullRotor::block`]).
 
 use crate::assemble::{point_stiffness, stiffness_with};
 use crate::constraint::Prescribed;
 use crate::error::{FemError, Result, SetKind};
 use crate::loads::NodalForceAt;
 use crate::mass::consistent_with;
-use crate::mesh::{ElementKind, FaceRef, SolidMesh};
+use crate::mesh::{BlockProperty, ElementKind, FaceRef, SolidMesh};
 use crate::modal::{frequency, ModalOptions};
 use crate::model::{Constraint, DofMap, SolidModel};
 use crate::mpc::{self, ReferenceLoad, ReferenceMotion, Transformation, REFERENCE_UNKNOWNS};
@@ -196,6 +199,24 @@ pub(crate) fn beams_opted_in(model: &SolidModel) -> bool {
                 options: crate::model::CyclicOptions {
                     shells: true,
                     beams: true,
+                    ..
+                },
+                ..
+            }
+        )
+    })
+}
+
+/// Whether a model has a cyclic constraint with the shells, beams and full-rotor options of ADR 0601 D1.
+fn full_rotor_beams_opted_in(model: &SolidModel) -> bool {
+    model.constraints().iter().any(|c| {
+        matches!(
+            c,
+            Constraint::Cyclic {
+                options: crate::model::CyclicOptions {
+                    shells: true,
+                    beams: true,
+                    full_rotor_beams: true,
                     ..
                 },
                 ..
@@ -1060,6 +1081,7 @@ pub struct FullRotor {
     is_high: Vec<bool>,
     sectors: usize,
     axis: Vec3,
+    block_of: Vec<Vec<usize>>,
 }
 
 impl FullRotor {
@@ -1074,6 +1096,11 @@ impl FullRotor {
     /// The node of the full mesh that is node `node` of sector `sector`.
     pub fn node(&self, sector: usize, node: usize) -> usize {
         self.node_of[sector][node]
+    }
+    /// The block of the full mesh that holds copy `sector` of block `block` of the sector mesh: `block` itself, except
+    /// where a Beam2 block was split into one block per copy (ADR 0601 D2).
+    pub fn block(&self, sector: usize, block: usize) -> usize {
+        self.block_of[sector][block]
     }
 
     /// The full mode of a sector mode of harmonic index `harmonic` (ADR 0386): at node `p` of sector `j`, `s R^j (cos(j
@@ -1222,7 +1249,9 @@ fn triplets(dofs: &DofMap, p: usize) -> &'static [usize] {
 /// `e` of block `b` is element `start_b + j n_b + (e - start_b^sector)`); node, element and surface sets are the unions of
 /// their copies. Refuses a block of a structural kind; with [`crate::model::CyclicOptions::shells`] Shell4 and Shell3 blocks
 /// are copied as the solid blocks are (ADR 0561 D1; Beam2 stays refused, also with [`crate::model::CyclicOptions::beams`]:
-/// a block has one orientation vector, ADR 0595 D4).
+/// a block has one orientation vector, ADR 0595 D4). With [`crate::model::CyclicOptions::full_rotor_beams`] as well, a Beam2
+/// block becomes `N` consecutive blocks, copy `j` with the orientation `R^j v` (ADR 0601 D2: the element numbering is
+/// unchanged, the block indices after a split block shift; [`FullRotor::block`]).
 pub fn full_rotor(model: &SolidModel) -> Result<FullRotor> {
     let ci = the_cyclic_constraint(model)?;
     let bd = boundary(model, ci)?;
@@ -1233,9 +1262,11 @@ pub fn full_rotor(model: &SolidModel) -> Result<FullRotor> {
     }
     let mesh = model.mesh();
     let shells = shells_opted_in(model);
+    let split_beams = full_rotor_beams_opted_in(model);
     for (b, block) in mesh.blocks().iter().enumerate() {
         let shell = matches!(block.kind(), ElementKind::Shell4 | ElementKind::Shell3);
-        if !block.kind().is_solid() && !(shells && shell) {
+        let beam = split_beams && block.kind() == ElementKind::Beam2;
+        if !block.kind().is_solid() && !(shells && shell) && !beam {
             return Err(FemError::UnsupportedKind {
                 block: b,
                 kind: block.kind().name(),
@@ -1274,16 +1305,37 @@ pub fn full_rotor(model: &SolidModel) -> Result<FullRotor> {
     let mut sector_start = Vec::new();
     let mut full_start = Vec::new();
     let (mut s0, mut f0) = (0usize, 0usize);
+    let mut block_of = vec![vec![usize::MAX; mesh.blocks().len()]; nsec];
     for (b, block) in mesh.blocks().iter().enumerate() {
         let npe = block.kind().nodes_per_element();
-        let mut conn = Vec::with_capacity(block.connectivity().len() * nsec);
-        for map in &node_of {
-            conn.extend(block.connectivity().iter().map(|&p| map[p]));
-        }
-        let fb = full.add_block(block.kind(), conn)?;
-        debug_assert_eq!(fb, b);
-        if let Some(prop) = block.property() {
-            full.set_block_property(fb, prop.clone())?;
+        if split_beams && block.kind() == ElementKind::Beam2 {
+            // ADR 0601 D2: one block per copy, copy j with the orientation R^j v (copy 0 the sector's property, cloned).
+            for (j, map) in node_of.iter().enumerate() {
+                let conn: Vec<usize> = block.connectivity().iter().map(|&p| map[p]).collect();
+                let fb = full.add_block(block.kind(), conn)?;
+                block_of[j][b] = fb;
+                match block.property() {
+                    Some(BlockProperty::Beam { section, orientation }) if j >= 1 => {
+                        let r = rotation_matrix(bd.axis(), 2.0 * PI * j as f64 / nsec as f64);
+                        full.set_block_property(fb, BlockProperty::beam(*section, apply(&r, *orientation))?)?;
+                    }
+                    Some(prop) => full.set_block_property(fb, prop.clone())?,
+                    None => {}
+                }
+            }
+        } else {
+            let mut conn = Vec::with_capacity(block.connectivity().len() * nsec);
+            for map in &node_of {
+                conn.extend(block.connectivity().iter().map(|&p| map[p]));
+            }
+            let fb = full.add_block(block.kind(), conn)?;
+            debug_assert!(split_beams || fb == b);
+            for row in block_of.iter_mut() {
+                row[b] = fb;
+            }
+            if let Some(prop) = block.property() {
+                full.set_block_property(fb, prop.clone())?;
+            }
         }
         sector_start.push(s0);
         full_start.push(f0);
@@ -1334,6 +1386,7 @@ pub fn full_rotor(model: &SolidModel) -> Result<FullRotor> {
         is_high,
         sectors: nsec,
         axis: bd.axis(),
+        block_of,
     })
 }
 
