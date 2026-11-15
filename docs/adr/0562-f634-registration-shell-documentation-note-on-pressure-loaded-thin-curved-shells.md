@@ -63,3 +63,30 @@ All of C1 to C5 met: done. Any miss: partial, with the miss recorded.
 
 Documentation of one measured case. No new measurement, no guidance on other geometries, thicknesses or meshes, no change to the
 default load (ADR 0550 question 2: keep the consistent split as the default, taken on the standing instruction).
+
+## Addendum 1 (2026-11-15): results
+
+Made once; no amendment, no deviation.
+
+| id | limit | measured | met |
+| --- | --- | --- | --- |
+| C1 | three items present | `h^2 / (R t)` twice, `Load::shell_pressure_angle_weighted` once, link to ADR 0550 present | yes |
+| C2 | 0.62 to 0.79, 16, 300 | all three in the choice rule | yes |
+| C3 | every number found in ADR 0550 | `1.40e-1 3.33e-2 7.99e-3 1.01e-2 6e-14 2.07 2.06 0.012 128` all found | yes |
+| C4 | docs_site passes | 2 passed, 0 failed (release) | yes |
+| C5 | only the ADR and structural-solver.md | no `crates/` path changed | yes |
+
+Negative control: `7.98e-3` is not found in ADR 0550, so C3 fails on an altered number. The planned link-deletion mutation was
+not run as a separate step (it is reasoned in the registration: docs_site would not catch it, C1 does).
+
+Page choice: there was no separate shell topic page; the note is a new section of `docs/structural-solver.md`. The page's
+choice rule goes one step past ADR 0550's wording only in naming "structured or one-diagonal meshes" (the two mesh families where
+ADR 0550 reports factors 16 and 300).
+
+**Decision: done**, by the rule.
+
+## For the lead: roadmap entries
+
+Proposed status of F-634: **done**.
+
+> F-634 (ADR 0562, 2026-11-15): `docs/structural-solver.md` has a new section "Shells under pressure on curved meshes" stating what ADR 0550 measured: the error of a shell pressure load on an unstructured thin curved mesh is `~ c h^2/(R t)` (bending response to the nodal unevenness of the load, not the stiffness), 2 % needs n = 128 at t/R = 0.01 on the sphere octant (errors 1.40e-1, 3.33e-2, 7.99e-3 at n = 32, 64, 128; default 1.01e-2 at n = 128), and `Load::shell_pressure_angle_weighted` is opt-in with measured gains of 0.62 to 0.79 (unstructured octant), 16 (structured geodesic grid) and 300 (one-diagonal cylinder of ADR 0461). Every quoted number checked against ADR 0550; docs_site passes; no code change.
