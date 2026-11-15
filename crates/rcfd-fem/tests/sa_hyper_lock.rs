@@ -422,3 +422,45 @@ fn p0_p1_p2_p3_pressure_control_at_p_c_1_5() {
     }
     c.finish();
 }
+
+/// DX' of amendment 1 (diagnostic, no limit): D3 with the eigen tolerance `1e-8`.
+#[test]
+fn dx_after_amendment_1() {
+    let c = Checks::new();
+    let options = ModalOptions::new(1).threads(4).tolerance(1e-8);
+    let eig = |model: &SolidModel, prescribed: &[Prescribed], u: &[f64], states: &[rcfd_fem::element::ElementState]| {
+        match tangent_modes(model, prescribed, u, states, 1.0, &[], &options) {
+            Ok(m) => m.eigenvalues[0],
+            Err(e) => {
+                println!("  tangent_modes failed: {e}");
+                f64::NAN
+            }
+        }
+    };
+    let mut dx = Vec::new();
+    for l_a in [L_SMALL, 1.125] {
+        let (model, prescribed, full) = displacement_control(FULL, l_a);
+        match full {
+            Ok((r, _)) => {
+                if dx.is_empty() {
+                    let rest = initial_states(&model).unwrap();
+                    let zero = vec![0.0; r.result.displacement_values().len()];
+                    dx.push((1.0, eig(&model, &prescribed, &zero, &rest)));
+                }
+                dx.push((l_a, eig(&model, &prescribed, r.result.displacement_values(), &r.states)));
+            }
+            Err(e) => println!("DX' Full to l_a {l_a}: the solve failed: {e}"),
+        }
+    }
+    for (l, w2) in &dx {
+        c.report(&format!("DX' Full omega_1^2 at l_a {l}"), *w2);
+    }
+    if dx.len() == 3 {
+        let ((l1, w1), (l2, w2)) = (dx[1], dx[2]);
+        c.report(
+            "DX' zero crossing of the line through 1.10 and 1.125",
+            l2 - w2 * (l2 - l1) / (w2 - w1),
+        );
+    }
+    c.finish();
+}
