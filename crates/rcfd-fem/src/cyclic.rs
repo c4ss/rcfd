@@ -421,7 +421,8 @@ fn shell_edge_weights(
         )));
     }
     let x = mesh.nodes();
-    let segments: Vec<(usize, usize, Vec3, Vec3)> = edges.into_iter().map(|(a, b)| (a, b, map(x[a]), map(x[b]))).collect();
+    let segments: Vec<(usize, usize, Vec3, Vec3)> =
+        edges.into_iter().map(|(a, b)| (a, b, map(x[a]), map(x[b]))).collect();
     let mean = segments.iter().map(|s| distance(s.2, s.3)).sum::<f64>() / segments.len() as f64;
     let tolerance = match options.tolerance {
         Some(t) => t,

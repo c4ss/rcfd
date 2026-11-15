@@ -798,7 +798,8 @@ fn cyclic_rows(
                 return Err(FemError::InvalidValue {
                     key: "cyclic",
                     reason: format!(
-                        "constraint {constraint}: interpolated high node {high} has {nh} unknowns and its low node {low}                          has {nl} (ADR 0575: an interpolated node has the unknowns of its low nodes)"
+                        "constraint {constraint}: interpolated high node {high} has {nh} unknowns and its low node {low} \
+                         has {nl} (ADR 0575: an interpolated node has the unknowns of its low nodes)"
                     ),
                 });
             }
