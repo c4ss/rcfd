@@ -269,3 +269,82 @@ Corrections, registered now:
 - The element CB2 of `cb1_cb2_beam_coriolis_rigid_fields` stands as run (met).
 
 By the decision rule CB2 is met only after a post-run amendment, so the item cannot be done.
+
+## Addendum 1: results (2026-11-15)
+
+Library at d331a1df: `beam.rs` (`to_global` split into `congruence` and its symmetrisation, the same operations in the same order;
+new `local_coriolis`, `element_coriolis`, `model_coriolis`; module doc), `rotating/whirl.rs` (`coriolis_assembly` takes a `beams`
+flag; `RotatingPart::coriolis` takes the beam route under either beams option and otherwise makes exactly its former calls;
+`coriolis_matrix` and `coriolis_matrix_with_shells` pass `false`), `rotating.rs` (`RotatingOptions::beams`, its builder, module
+doc). Test `crates/rcfd-fem/tests/sa_rotating_cyclic_beams_f675.rs` (four tests, the amended CB2 and the ignored run-1 record;
+under 1 s in release). No existing test edited, no golden or hash table touched, no case key.
+
+Run 1 (d331a1df, `f675-scratch/run1.log`) ran every test once; CB2 of the assembled matrices failed on its measure (amendment 1).
+Run 2 (5def3183, `run2_cb2.log`) ran only the amended CB2, once. A text-only fix of one message followed (no result changed).
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| CB1 translations / rotations / mixed | `1e-13` each | `2.2e-16` / `6.7e-16` (section part `-1.63e-3` of `-7.24e-3`) / `6.5e-17` | yes |
+| CB2 element | exact, non-zero | skew bit for bit | yes |
+| CB2 assembled (run 1, `to_bits`) | exact | reported false: 2 pairs `(+0, +0)` in W, 10 in the ring, no other difference | defective measure |
+| CB2 assembled (run 2, amended) | exact, non-zero | `c_ij == -c_ji`, `c_ii == 0`, non-zero; the 2 / 10 bit-differing pairs all zeros | yes |
+| MA (both effects) | equal; `1e-8` | 18 / 18 at both speeds; worst `9.3e-13` (`k = 0`, 27.1 rad/s) | yes |
+| MB (pre-stressed) | equal; `1e-8` | 18 / 18; worst `2.7e-13` | yes |
+| MC (spin-softened) | equal; `1e-8` | 18 / 18; worst `1.26e-12` (`k = 0`, 54.2 rad/s) | yes |
+| W (whirl, Coriolis on) | equal; `1e-8` | 19 / 19 at both speeds; worst `9.5e-13` (`k = 0`); `omega_max` 6.40e4 rad/s, `10 n_q eps omega_max / omega_lo` `1.9e-10` | yes |
+| W0 Coriolis effect | `>= 1e-4` | `6.89e-2` (the lowest `k = 1` pair, 159.43 rad/s, splits to 148.60 and 170.42) | yes |
+| SM | `Ok`, finite | split_modes, whirl_state `k = 0 .. 3`, whirl_campbell, campbell | yes |
+| B1 | pass | the registered list and the lib unit tests: 185 passed, 0 failed, 35 ignored (records) | yes |
+| B2 `baseline_hashes` | pass | 3 passed, 1 ignored | yes |
+| B3 | equal bits | Hex8 part: Coriolis matrix and 4 whirl omegas; W with and without `RotatingOptions::beams` | yes |
+| NC1, NC2 | refused as before | all four calls `NotYetSupported Beam2` naming `beam::SOLID_ROUTINES` | yes |
+
+The speeds by the D3 rule: `omega_1 = 135.5555` rad/s, so 27.11 and 54.22 rad/s; no loss of stiffness. Arithmetic 2 put
+`omega_max` at `~ 7e4` rad/s; measured `6.40e4`.
+
+**Mutations** (a `git archive` copy of 5def3183, own target, `f675-scratch/mutate.py`, `run_mutations.sh`, each run with
+`--include-ignored` so the run-1 record's W and W0 run too; that record's CB2 fails on every mutant by its own defect and is not
+counted). The first X5 was a harness failure (the mutated code left `al` without a type, a compile error,
+`mut_X5_harness_fail.log`); the script was corrected and X5 run once more.
+
+| Id | Caught by |
+|---|---|
+| X1 rotation block zero | CB1 rotations (`0.23`) |
+| X2 `I_y`, `I_z` exchanged | CB1 rotations (`0.20`) |
+| X3 `P` in place of `[a x]` | CB1 translations (`1.0`), rotations (`0.77`) |
+| X4 symmetrising `to_global` | CB1 (`1.0`), CB2 element and amended (zero matrix), W0 (`7e-13`) |
+| X5 global axis components | CB1 (`0.13`, `0.12`); **not** W: see below |
+| X6 inverted guard | NC1 (`Ok`); W, B3 and CB2 (refused) |
+
+Six of six caught. X5 was registered as caught also by W; it is not: with the axis's global components put in the local slot, the
+element of sector `j` takes the Coriolis matrix of the axis `T_j^T a = R^j T_0^T a`, so the mutated ring is still cyclically
+symmetric and the sector and the ring agree (W `<= 9.7e-13`) with wrong physics (W0 `0.157` against `0.069`). The sector-ring
+comparison cannot see an error that keeps the structure cyclically symmetric; CB1 is the check of the matrix itself.
+
+**Deviations.** Amendment 1 (CB2's measure). X5 replaces the axis's local components by the global ones in both blocks of the
+matrix (the registration named `b`; the local function receives only the local components, so both blocks change); its expected
+catcher W did not catch it (above). `cargo fmt -p rcfd-fem --check` and `cargo clippy -p rcfd-fem --release --all-targets -- -D
+warnings`: clean. Not run: the whole workspace suite (the lead's gate).
+
+**Decision by the registered rule: partial.** Every acceptance check (MA, MB, MC, W) and every control was met in its registered
+run, and six of six mutations were caught; CB2 of the assembled matrices was met only after a post-run amendment of its measure
+(a signed-zero defect of the test, not of the matrix). In substance every clause of the acceptance is met.
+
+### Remaining questions
+
+1. **Status.** Options: (a) partial as the rule gives; (b) done on the maintainer's judgement that the amended check is a
+   test-side defect with the acceptance checks clean. Recommendation: (a), as ADR 0561 did in a comparable case; the follow-up
+   below gives the beam Coriolis matrix an independent reference anyway.
+2. **The public `coriolis_matrix` and `coriolis_matrix_with_shells` stay without beams.** Options: (a) leave them (beams reach the
+   matrix through `RotatingPart` with an option); (b) a public `coriolis_matrix_with_structures`. Recommendation: (a) until a
+   caller needs it.
+3. **Default lift.** Without the options a beam's whirl paths refuse as before. Lifting by default changes no existing test (the
+   audit) but turns an error into a result; a maintainer decision, not taken.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> Structural solver, advanced tier. Follow-up of F-672 (ADR 0595). ADR 0598, 2026-11-15: the rotating paths on a cyclic sector of beams. The modes paths (stress stiffening, spin softening, both, Campbell) took the ADR 0595 wheel sector without a library change; the whirl paths refused Beam2 because the Coriolis matrix fell through to the solid-routine placeholder, so a Coriolis matrix of the Beam2 section kinematics u + theta x s was added (rho A [a x] on the translations, [b x] on the section rotations with b = rho (I_z a_2 e_2 + I_y a_3 e_3); the second-order rotation adds only a total time derivative), carried by the unsymmetrised congruence and made skew bit for bit, taken by RotatingPart::coriolis with the new opt-in RotatingOptions::beams or a cyclic constraint with CyclicOptions::beams (coriolis_matrix and coriolis_matrix_with_shells unchanged). The wheel sector against the independently built ring at 0.2 and 0.4 omega_1: the frequencies of each harmonic k = 0..3 with both effects, pre-stressed and spin-softened within 1.3e-12, the whirl modes with Coriolis within 9.5e-13, equal counts (limit 1e-8); the Coriolis term moves the k = 1 frequencies by 6.9 %; the rigid-field forms of the element matrix within 6.7e-16. Models without the options keep their bits (existing tests, baseline hashes, a Hex8 part and the sector bit-equal with and without RotatingOptions::beams). Six of six mutations caught. Partial by the rule: the skew check of the assembled matrices compared +0 with -0 by their bits in its first run and was met after an amendment of the measure. Not covered: full_rotor and the expanded modes with beams, the whirl directions and the split, state and sparse solvers beyond a smoke run, offset or non-principal sections, an independent whirl reference for beams.
+
+> Follow-up proposed: An independent whirl reference for spinning beams. Deps F-675. Acceptance: Every limit not stated here is registered in the ADR before the run. The whirl frequencies and the forward and backward split of a spinning ring of Beam2 (a free circular ring rotating about its axis, in-plane and out-of-plane modes per nodal diameter) from RotatingSector::whirl_modes with CyclicOptions::beams against a closed form derived or cited in the ADR, at three speeds up to half the first frequency: within the registered discretisation error at two meshes, the observed order within 0.5 of the expected one, and the split of each nodal-diameter pair within 1e-2 relative; the defaults bit-identical.
