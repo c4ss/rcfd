@@ -226,3 +226,23 @@ MU5 is registered with its doubt; an uncaught mutation is recorded, not answered
 - The roof against a published reference is the separate follow-up of ADR 0522 (Sze, Liu and Lo); AL2 is a Shell3-to-Shell4
   agreement only.
 - The energy-momentum step is in F-611's area: RC1 only observes it.
+
+## Amendment 1 (2026-11-15, written after run 1 and before the corrected run of NT1)
+
+Run 1 (tests at 79d2274b, `f541-scratch/run1-fast.log`, `run1-ignored.log`): the fast tests ran once (results in addendum 1). The
+registered NT1 run stopped at step 3908 of 4000 (`t = 794.89`, period `8.138` s, so 97.7 periods): the step did not converge
+after 5 halvings, Newton at the relative residual `4.728e-10` after 20 iterations against the driver default
+`residual_tolerance = 1e-10`, with the energy ratio `1.28e-27` (the corrections at rounding). F1, F1b, F1c, E1, EZ of NT1 were
+not measured. This is a set-up defect, not a measured miss of a limit: the residual test of the driver (ADR 0404, `|R_F| /
+max(|lambda f_F|, |f_int|)`) has, for the 32-element Shell3 strip in free vibration (no external load, so the reference is the
+internal force alone), a rounding floor near `1e-10` that the Shell4 strip of ADR 0522 did not reach; the step is converged by
+the energy test (`1e-27` against `1e-10`). The record stays as the ignored test `nt1_shell3_strip_100_periods_known_miss` (body
+unchanged, the function renamed and its ignore reason naming this amendment).
+
+Corrected set-up **NT1b**: the same run with `NlTransientOptions::newton(NewtonOptions::new(1))` whose `residual_tolerance` is
+`1e-8` (the energy tolerance `1e-10` unchanged, every other option unchanged). Reason for the value: one value fixed here from
+the floor observed (`4.7e-10`), a factor 20 above it so that a converged step is not rejected by rounding, and still five orders
+below the F1b limit's sensitivity (a residual of `1e-8` relative to the internal force changes the step's energy by
+`~1e-16 H`, far below the E1 limit `1e-5`). Not a search: no other value is run. The limits of NT1 apply unchanged to NT1b:
+F1 `1e-2`, F1b `1e-3`, F1c `1e-2`, E1 `1e-5`, EZ `1e-4` (EZ by `ez_clapeyron` with the default options as before). NT1b is a
+heavy ignored record, run once.

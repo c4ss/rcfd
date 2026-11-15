@@ -730,8 +730,8 @@ fn ez_clapeyron() -> f64 {
 
 /// NT1: the 100-period free vibration of ADR 0522 D6 and amendment 4 on the Shell3 strip. Heavy (4000 steps).
 #[test]
-#[ignore = "heavy registered record of ADR 0545 NT1 (100 periods of the Shell3 strip); run once with --ignored"]
-fn nt1_shell3_strip_100_periods() {
+#[ignore = "ADR 0545 run 1 record: NT1 stopped at step 3908 (Newton residual floor 4.7e-10 against 1e-10, energy ratio 1.3e-27); corrected by nt1b (amendment 1)"]
+fn nt1_shell3_strip_100_periods_known_miss() {
     let mut c = Checks::new();
     let start = Instant::now();
     let m = strip3();
@@ -934,5 +934,65 @@ fn al1_al2_shell3_roof_through_the_limit_point() {
     c.record("AL P_lim(Shell3 8), N", s3.p_lim);
     c.record("AL P_lim(Shell4 8), N", s4.p_lim);
     c.record("NC3 P_lim(Shell3 8)/2221.3 - 1 (Shell3 16 of ADR 0522)", s3.p_lim / 2221.3 - 1.0);
+    c.finish();
+}
+
+/// NT1b (ADR 0545 amendment 1): NT1 with the Newton residual tolerance `1e-8` of each step. Heavy (4000 steps).
+#[test]
+#[ignore = "heavy registered record of ADR 0545 NT1b (amendment 1, 100 periods of the Shell3 strip); run once with --ignored"]
+fn nt1b_shell3_strip_100_periods_corrected() {
+    let mut c = Checks::new();
+    let start = Instant::now();
+    let m = strip3();
+    let modal = modal_analysis(&m, &strip_modal()).unwrap();
+    let f1 = modal.frequencies[0];
+    let qz = m.dof_map().equation(N_S, 2).expect("tip u_z");
+    let phi = &modal.modes[0];
+    let a = 1e-3 * L_S;
+    let omega = 2.0 * PI * f1;
+    let v0: Vec<f64> = phi.iter().map(|x| omega * a * x / phi[qz]).collect();
+    let n = v0.len();
+    let h = 1.0 / (40.0 * f1);
+    let mut newton = NewtonOptions::new(1);
+    newton.residual_tolerance = 1e-8;
+    let mut it = NlIntegrator::new(&m, &[], &NlTransientOptions::new(h).newton(newton)).unwrap();
+    it.start(0.0, &vec![0.0; n], &v0).unwrap();
+    let h0 = it.kinetic_energy().unwrap() + it.strain_energy().unwrap();
+    let mut energy_error = 0.0;
+    let mut prev = (0.0, 0.0);
+    let mut cross_t = vec![0.0];
+    let (mut halvings, mut iterations) = (0, 0);
+    for step in 1..=40 * 100u64 {
+        let rep = it.step().unwrap();
+        halvings += rep.halvings;
+        iterations += rep.iterations;
+        let t = step as f64 * h;
+        let uz = it.displacement().unwrap()[qz];
+        let hn = it.kinetic_energy().unwrap() + it.strain_energy().unwrap();
+        energy_error = nmax(energy_error, ((hn - h0) / h0).abs());
+        if step > 1 && (prev.1 > 0.0) != (uz > 0.0) {
+            cross_t.push(prev.0 + h * prev.1 / (prev.1 - uz));
+        }
+        prev = (t, uz);
+    }
+    let kc = cross_t.len();
+    let fm = if kc >= 2 {
+        (kc - 1) as f64 / (2.0 * (cross_t[kc - 1] - cross_t[0]))
+    } else {
+        f64::NAN
+    };
+    let r = 2.0 * (0.5 * omega * h).atan() / (omega * h);
+    let ez = ez_clapeyron();
+    println!(
+        "NT1b Shell3 strip 100 periods: f_1 {f1:.10e} Hz, f_m {fm:.10e} Hz, r {r:.8}, {kc} crossings, H_0 {h0:.6e},          max |dH|/H_0 {energy_error:.4e}, EZ {ez:.4e}, {halvings} halvings, {iterations} iterations, {:.1} s",
+        start.elapsed().as_secs_f64()
+    );
+    c.at_most("NT1b (F1) |f_m/f_1 - 1|", (fm / f1 - 1.0).abs(), 1e-2);
+    c.at_most("NT1b (F1b) |f_m/(f_1 r) - 1|", (fm / (f1 * r) - 1.0).abs(), 1e-3);
+    c.at_most("NT1b (F1c) |f_1/f_EB - 1|", (f1 / f_eb() - 1.0).abs(), 1e-2);
+    c.at_most("NT1b (E1) max |H_n - H_0|/H_0", energy_error, 1e-5);
+    c.at_most("NT1b (EZ) |Pi(u_s)/(f . u_s/2) - 1|", ez, 1e-4);
+    c.record("NT1b signed f_m/f_1 - 1", fm / f1 - 1.0);
+    c.record("NT1b wall time s", start.elapsed().as_secs_f64());
     c.finish();
 }
