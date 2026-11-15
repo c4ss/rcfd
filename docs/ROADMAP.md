@@ -10753,12 +10753,22 @@ fixed by the item's registration ADR before any code.
     A/4 per corner for either diagonal); O1 within 3.0e-4 of `p R^2/(E t)` at every node (the polygon's `1 -
     cos(pi/128)`, to 1.7e-10, on every diagonal pattern and with Shell4 cells), an irregular warped mesh 6.8e-3 (default
     1.0e-1); defaults bit-identical; seven mutations caught. Follow-up F-546 (optional).
-- [ ] **F-541** Shell3 on the remaining paths
+- [~] **F-541** Shell3 on the remaining paths
   - depends on: F-419
   - acceptance: Every limit not stated here is registered in the ADR before the run. The N2 refusals replaced by the
     Shell4 checks repeated on triangles.
-  - note: Structural solver, advanced tier. Follow-up of F-419 (ADR 0454, 2026-11-14). nonlinear, transient, buckling,
-    cyclic, multigrid take Shell3 when they take Shell4 Also depends on the Shell4 follow-ups of ADR 0432.
+  - note: Structural solver, advanced tier. Follow-up of F-419 (ADR 0454, 2026-11-14). ADR 0545, 2026-11-15: audit of
+    every Shell3 refusal: no path takes Shell4 and refuses Shell3 (each refusal sits beside Shell4's with the same
+    condition). Of the four N2 rows of ADR 0454, nonlinear::initial_states was replaced by ADR 0490 and ADR 0522;
+    multigrid, check_supported() and the cyclic constraint refuse Shell4 too and stay refused (known miss KM1: no Shell4
+    check to repeat). The Shell4 checks without a triangle repeat were repeated on triangles (tests only, no library
+    change): ADR 0435 H1 to Z7 on the transformation path (rigid sets, nodal springs on rotations, free rigid motions)
+    met at 0 to 2.6e-13 (limits 1e-12 to 1e-10); the ADR 0522 100-period free vibration of the Shell3 strip, after a
+    set-up amendment (Newton residual floor 4.7e-10): F1 2.05e-3, F1b 8.0e-8, F1c 7.9e-5, E1 2.8e-8, EZ 5.1e-7; the
+    hinged roof traced through its limit point by arc length on Shell3 8 x 8 x 2, P_lim 2219.1 N within 2.0e-3 of Shell4
+    8 x 8 (limit 1e-2). A consistency test over 14 entry paths: Shell3 taken exactly where Shell4 is taken, refused with
+    its own package where Shell4 is refused. Eight of nine mutations caught (the Shell3 Green membrane on the shallow
+    roof is not seen; ADR 0490 CY3 covers it). Baseline hashes unchanged.
 - [~] **F-542** Orthotropic and tabulated materials on the rotating, buckling and transient paths
   - depends on: F-537
   - acceptance: Every limit not stated here is registered in the ADR before the run. The rotating modes (stress
