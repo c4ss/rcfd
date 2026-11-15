@@ -554,7 +554,7 @@ fn prepare(model: &SolidModel, displacement: &[f64]) -> Result<Prepared> {
         if d[m].is_none() {
             let dm = model.materials()[m]
                 .1
-                .elasticity_matrix()
+                .linear_elasticity_matrix()
                 .map_err(|source| FemError::Element {
                     element: e,
                     source: Box::new(source),

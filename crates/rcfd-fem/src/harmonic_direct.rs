@@ -480,7 +480,7 @@ fn viscoelastic_parts(
                 }
                 let d = match d {
                     Some(d) => d,
-                    None => ctx.material.elasticity_matrix()?,
+                    None => ctx.material.linear_elasticity_matrix()?,
                 };
                 crate::hex8x::element_stiffness_for(model.mesh(), ctx.element, ctx.kind, ctx.coords, &d)
             })?;
@@ -644,7 +644,7 @@ impl DirectHarmonic {
                             let size: usize = ctx.nodes.iter().map(|&a| dofs.components(a)).sum();
                             return Ok(crate::element::ElementMatrix::zeros(size));
                         }
-                        let d = ctx.material.elasticity_matrix()?;
+                        let d = ctx.material.linear_elasticity_matrix()?;
                         crate::hex8x::element_stiffness_for(model.mesh(), ctx.element, ctx.kind, ctx.coords, &d)
                     })?;
                     parts.push((km.val, dm.clone()));

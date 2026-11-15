@@ -1344,6 +1344,7 @@ fn follow_up_refusal<T>(r: &rcfd_fem::Result<T>) -> bool {
 }
 
 #[test]
+#[ignore = "record of ADR 0541: ADR 0555 (F-620) opened the linear paths and the nonlinear transient Method step to the hyperelastic material, retiring the rows solve_static, modal_analysis and Method step refused; continued in sa_hyper_paths.rs rf2_the_paths_after_f620 (ADR 0291 pattern, maintainer standing decision)"]
 fn rf2_the_paths() {
     let mut c = Checks::new();
     let mut model = SolidModel::new(hex_box([0.0; 3], [1.0; 3], [2, 2, 2]).unwrap());

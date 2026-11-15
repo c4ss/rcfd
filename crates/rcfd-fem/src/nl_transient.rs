@@ -549,22 +549,8 @@ impl Integrator {
             ));
         }
         nonlinear::check_driver_model(model)?;
-        // ADR 0541 D4: the Method step does not take the hyperelastic material (the energy-momentum step does, ADR 0523).
-        if options.step != StepKind::EnergyMomentum {
-            if let Some((i, (set, m))) = model
-                .materials()
-                .iter()
-                .enumerate()
-                .find(|(_, (_, m))| matches!(m, Material::Hyperelastic { .. }))
-            {
-                return Err(FemError::NotYetSupported {
-                    item: "material",
-                    variant: m.name(),
-                    location: format!("material {i}, element set '{set}': the nonlinear transient Method step"),
-                    package: crate::mat_hyper::FOLLOW_UP,
-                });
-            }
-        }
+        // ADR 0555 D4: the Method step takes the hyperelastic material through the driver's functions (ADR 0541 D4
+        // refused it here).
         if options.step == StepKind::EnergyMomentum {
             emc::check_model(model)?;
         }
@@ -1290,10 +1276,11 @@ impl Integrator {
                     }
                 };
                 // ADR 0523 D5: the neo-Hookean energy of the energy-momentum step; F-425's energy with
-                // `MaterialDiscreteGradient` (ADR 0544 D3).
+                // `MaterialDiscreteGradient` (ADR 0544 D3) and on the Method step (ADR 0555 D4).
                 if let Material::Hyperelastic { energy, .. } = material {
                     w += ip.weight
-                        * if self.stress == AlgorithmicStress::MaterialDiscreteGradient {
+                        * if self.stress == AlgorithmicStress::MaterialDiscreteGradient || self.step == StepKind::Method
+                        {
                             crate::mat_hyper::energy(energy, &strain)?
                         } else {
                             dg::energy(energy, &strain)?

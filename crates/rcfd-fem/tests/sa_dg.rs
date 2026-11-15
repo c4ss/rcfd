@@ -529,6 +529,7 @@ fn t1h_threads() {
 }
 
 #[test]
+#[ignore = "record of ADR 0523: ADR 0555 (F-620) opened the nonlinear transient Method step to the hyperelastic material, retiring the row NH with the Method step refused; continued in sa_hyper_paths.rs f1h_refusals_after_f620 (ADR 0291 pattern, maintainer standing decision)"]
 fn f1h_refusals() {
     let mut c = Checks::new();
     let dg = bar_options(AlgorithmicStress::DiscreteGradient);

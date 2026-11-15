@@ -713,7 +713,7 @@ pub fn damped_modes(model: &SolidModel, options: &DampedOptions) -> Result<Dampe
                         let size: usize = ctx.nodes.iter().map(|&a| dofs.components(a)).sum();
                         return Ok(crate::element::ElementMatrix::zeros(size));
                     }
-                    let d = ctx.material.elasticity_matrix()?;
+                    let d = ctx.material.linear_elasticity_matrix()?;
                     crate::hex8x::element_stiffness_for(model.mesh(), ctx.element, ctx.kind, ctx.coords, &d)
                 })?;
                 let p = project(&km, phi);
@@ -971,7 +971,7 @@ impl<'a> OwnSetup<'a> {
                 }
                 let d = match d {
                     Some(d) => d,
-                    None => ctx.material.elasticity_matrix()?,
+                    None => ctx.material.linear_elasticity_matrix()?,
                 };
                 crate::hex8x::element_stiffness_for(storage.mesh(), ctx.element, ctx.kind, ctx.coords, &d)
             })?;

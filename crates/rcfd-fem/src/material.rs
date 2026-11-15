@@ -465,6 +465,45 @@ impl Material {
         Ok((apply(&d, strain), d))
     }
 
+    /// The elasticity matrix of the linear paths (ADR 0555 D1): the linearised material of a hyperelastic one, the isotropic
+    /// elasticity of its small-strain moduli ([`crate::mat_hyper::linearised_elasticity`]); for every other variant
+    /// [`Material::elasticity_matrix`].
+    pub fn linear_elasticity_matrix(&self) -> Result<Matrix6> {
+        match self {
+            Material::Hyperelastic { energy, .. } => Ok(crate::mat_hyper::linearised_elasticity(energy)),
+            _ => self.elasticity_matrix(),
+        }
+    }
+
+    /// The elasticity at a point of the linear paths (ADR 0555 D1): the linearised material of a hyperelastic one, as
+    /// [`Material::linear_elasticity_matrix`]; for every other variant [`Material::elasticity_at`].
+    pub fn linear_elasticity_at(&self, point: &PointContext) -> Result<Matrix6> {
+        match self {
+            Material::Hyperelastic { energy, .. } => Ok(crate::mat_hyper::linearised_elasticity(energy)),
+            _ => self.elasticity_at(point),
+        }
+    }
+
+    /// The constitutive call of the linear paths (ADR 0555 D1): for a hyperelastic material `(D eps, D)` with `D` its
+    /// linearised elasticity (after the state-length check of [`Material::stress`]); for every other variant
+    /// [`Material::stress`].
+    pub fn linear_stress(&self, strain: &[f64; 6], point: &PointContext, state: &[f64]) -> Result<([f64; 6], Matrix6)> {
+        match self {
+            Material::Hyperelastic { energy, .. } => {
+                if state.len() != self.state_size() {
+                    return Err(FemError::FieldLength {
+                        key: "state",
+                        expected: self.state_size(),
+                        found: state.len(),
+                    });
+                }
+                let d = crate::mat_hyper::linearised_elasticity(energy);
+                Ok((apply(&d, strain), d))
+            }
+            _ => self.stress(strain, point, state),
+        }
+    }
+
     /// The refusal of a variant whose package has not landed, at `location`.
     fn not_yet(&self, location: &str) -> FemError {
         FemError::NotYetSupported {

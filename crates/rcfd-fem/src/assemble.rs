@@ -235,7 +235,7 @@ fn assemble_stiffness(
                 return crate::mat_ortho::element_stiffness(points, ctx);
             }
         }
-        let d = ctx.material.elasticity_matrix()?;
+        let d = ctx.material.linear_elasticity_matrix()?;
         element_for(ctx.kind).stiffness(ctx.coords, &d)
     })
 }
