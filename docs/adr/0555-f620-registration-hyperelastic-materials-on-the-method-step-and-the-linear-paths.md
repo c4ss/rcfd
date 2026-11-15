@@ -358,3 +358,14 @@ mutation (partial), the checks below being post-run additions.
   on `root` and `0.05` on `tip` at `omega = 50` and `500` (L5m, the measure of L5), `damped_modes` with the same loss factors, 4
   modes (L8m, the measure of L8). Limits `1e-10` each (arithmetic 2, as L5 and L8). Then MU6 and MU11 run once more, on the same
   scratch copy with this test added.
+
+## Amendment 3 (2026-11-15, written after the run of L5m and L8m and before any further run)
+
+The run of amendment 2 (`f620-scratch/run3-l5m.log`, once): L5m met (`1.34e-14`, `1.36e-14`); **L8m missed**: `2.0` against
+`1e-10` (8 roots each). A value of exactly 2 is `|x - y| = 2 |y|`, a root of one model matched against the negative or the
+conjugate of the other's at the same position. `l5m_l8m_two_materials` becomes `l5m_l8m_two_materials_known_miss` (ignored, the
+numbers recorded, limits unchanged). **L8d** (diagnostic record, no limit, `l8m_roots_diagnostic`): the eight roots of both
+models printed, and the worst relative distance from each root of one model to the nearest root of the other (an order-free
+match). The mutation re-run (`mutations2.log`): MU6 and MU11 now make `l5m_l8m_two_materials` fail (it refused, the
+element-constant matrix); for MU11 this is the L8m part, which also missed without the mutation, so MU11 is not counted as caught
+by a met check.
