@@ -536,6 +536,10 @@ pub struct CyclicOptions {
     pub interpolation: Option<crate::tie::TieOptions>,
     /// Nodes on both boundaries are accepted on the axis and constrained by the harmonic rule of ADR 0456 arithmetic 5.
     pub axis_nodes: bool,
+    /// Shells in the cyclic constraint (ADR 0556 D1): `low` and `high` name node sets (a shell has no faces), Shell4 and
+    /// Shell3 blocks are taken by the cyclic paths, and the rotation unknowns of a pair of six-unknown nodes are rotated as
+    /// the translations. Not with `interpolation` or `axis_nodes`.
+    pub shells: bool,
 }
 
 impl CyclicOptions {
@@ -551,6 +555,11 @@ impl CyclicOptions {
     /// With nodes on the axis.
     pub fn axis_nodes(mut self, on: bool) -> CyclicOptions {
         self.axis_nodes = on;
+        self
+    }
+    /// With shells (ADR 0556): node-set boundaries and the rotation unknowns rotated.
+    pub fn shells(mut self, on: bool) -> CyclicOptions {
+        self.shells = on;
         self
     }
 }
@@ -1034,8 +1043,14 @@ impl SolidModel {
                 if let Some(t) = options.interpolation.and_then(|i| i.tolerance) {
                     positive_finite("tolerance", t)?;
                 }
-                self.need_set(SetKind::Surface, low)?;
-                self.need_set(SetKind::Surface, high)?;
+                // ADR 0556 D1: with shells the boundaries are node sets.
+                let kind = if options.shells {
+                    SetKind::Node
+                } else {
+                    SetKind::Surface
+                };
+                self.need_set(kind, low)?;
+                self.need_set(kind, high)?;
                 finite_vec("axis", *axis)?;
                 if axis.iter().all(|&c| c == 0.0) {
                     return Err(FemError::InvalidValue {
