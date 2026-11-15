@@ -133,7 +133,8 @@ fn p1_p5_the_start_of_an_attempt() {
     );
 
     // P4: nonuniform fields on three supports against the formula of D2 to D4 written out.
-    let supports: Vec<(&str, SolidModel, Vec<(usize, usize)>)> = vec![
+    type Support = (&'static str, SolidModel, Vec<(usize, usize)>);
+    let supports: Vec<Support> = vec![
         (
             "3-2-1",
             free_cube(steel(ALPHA)),
