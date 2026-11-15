@@ -172,6 +172,15 @@ impl Prestress {
         Ok(out)
     }
 
+    /// The same pre-stress with the given local end forces of every element (zeros for elements other than Beam2) and the
+    /// Wagner coefficients (ADR 0548 D2, F-626: the end forces of the warping static solve). Opt-in, crate-internal.
+    pub(crate) fn with_beam_end_forces(&self, forces: Vec<[f64; 12]>, wagner: [f64; 2]) -> Prestress {
+        let mut out = self.clone();
+        out.beam_forces = Some(forces);
+        out.beam_wagner = wagner;
+        out
+    }
+
     /// The same pre-stress with the `t^2/12` rotation terms of the Shell4 and Shell3 geometric stiffness (ADR 0508 D2, F-558).
     /// Opt-in.
     pub fn with_shell_rotation_terms(&self) -> Prestress {
