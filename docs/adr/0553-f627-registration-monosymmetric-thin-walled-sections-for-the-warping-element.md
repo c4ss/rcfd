@@ -350,3 +350,23 @@ By the decision rule, a check met only after a post-run amendment makes the item
   negative factors are smaller in magnitude needs a larger subspace; (b) in `lowest_buckling_factors`, when `positive ==
   mp == count` and the subspace also holds negative Ritz values, enlarge the subspace or iterate on, instead of counting at
   `1/cut`. Recommendation (b), as a separate item in `rcfd-linalg` with its own registration (it touches a shared solver).
+
+## Amendment 3 (2026-11-15): the subspace of amendment 2 is too large for the 8-element model; written after the corrected run and before the next run
+
+The corrected run (log `w49i-work/f627-scratch/run2_amended.log`, commit f074f51f) of
+`a_n_amended_lateral_torsional_buckling_of_the_monosymmetric_i` measured A1', A2', A3', A8' and N1', and each met its limit
+(numbers in addendum 1). It then stopped at A4', the 8-element model, where `lowest_buckling_factors` refused with "the iterated
+subspace lost rank at iteration 1 (reduced mass matrix not positive definite)". So A4' to A7' have no value.
+
+Cause, read from the message and the matrices, with no further run. Under uniform moment the geometric stiffness has entries only
+on the unknowns `v`, `theta_z`, `phi` and `chi`: the moment and Wagner terms of ADR 0508 D1 and ADR 0546 D2, with `N`, `V`, `T`
+and `M_z` all zero. At 8 elements that is `4 x 9 - 4 = 32` free unknowns (`v` and `phi` are held at both ends), so `rank(K_sigma)
+<= 32`. A subspace of 40 then cannot keep full rank after the first step `K^{-1} (-K_sigma) X`. At 16 elements the bound is
+`4 x 17 - 4 = 64`, so 40 fits, which is why A1' ran. Amendment 2 did not check this bound for the 8-element case.
+
+Corrected **A4''**: A4 with `subspace_size = Some(24)` at 8 elements. The bound is `24 <= 32`. At most about 16 of the 32
+nonzero `theta` are negative, so at least about 8 of the 24 Ritz values are positive, more than the 3 factors asked. Limits and
+estimates are unchanged. **A5', A6', A7'** are run as registered in amendment 2 (16 elements, subspace 40, within the bound 64).
+The run-2 function stays as the ignored record `a_n_amended_run2_known_miss`. Its measured A1', A2', A3', A8' and N1' are the
+values of record. The new function `a_n_amended3_remaining` runs A4'', A5', A6' and A7' only. It recomputes the 16-element
+reference factors of A6' and A7' with the A1' set-up; this solve is deterministic and is the same computation, not a re-pick.
