@@ -18,8 +18,9 @@
 //! harmonic solve its stiffness, the patch recovery its strain ([`strain_at`]). `Incompatible` with a viscoelastic material is
 //! refused on the damped modes and the direct solve (the condensed stiffness is not linear in `D`).
 //! The nonlinear driver takes `BBar` as the variational F-bar element of ADR 0506 ([`crate::nonlinear`], the element mean of
-//! `det F` in place of the dilatation, the B-bar stiffness of this module at `u = 0`) and refuses `Incompatible` naming
-//! [`NONLINEAR_FOLLOW_UP`].
+//! `det F` in place of the dilatation, the B-bar stiffness of this module at `u = 0`) and `Incompatible` as the enhanced
+//! deformation gradient of ADR 0608 ([`crate::nl_incompatible`]: the modes of this module added to `F`, condensed by a local
+//! Newton iteration at every evaluation, the condensed stiffness of this module at `u = 0`).
 
 use crate::element::{b_matrix, element_for, Element, ElementMatrix, Hex8, PointGeometry};
 use crate::error::{FemError, Result};
@@ -35,7 +36,8 @@ pub const PENDING: Option<&'static str> = None;
 /// The package named by the refusals of the paths that do not take the formulations (ADR 0493 D5).
 pub const FOLLOW_UP: &str = "a follow-up of ADR 0493";
 
-/// The package named by the nonlinear driver's refusal of the `Incompatible` formulation (ADR 0506 D2).
+/// The package named by the nonlinear driver's refusal of the `Incompatible` formulation (ADR 0506 D2). The refusal was
+/// retired by ADR 0608 (F-596); the constant is kept for the records that name it.
 pub const NONLINEAR_FOLLOW_UP: &str = "a follow-up of ADR 0506";
 
 const SIZE: usize = 24;
@@ -283,6 +285,30 @@ fn modes(coords: &[Vec3]) -> Result<Modes> {
         out.w.push(w);
     }
     Ok(out)
+}
+
+/// One point of the stiffness rule of an incompatible Hex8 for the finite-strain element of ADR 0608 D1: the reference
+/// gradients of the shape functions, the three mode gradients of [`mode_gradients`] (Taylor's correction with the centre
+/// Jacobian) and the weight `w det J`.
+pub(crate) struct ModePoint {
+    pub(crate) grad: Vec<[f64; 3]>,
+    pub(crate) modes: Vec<[f64; 3]>,
+    pub(crate) weight: f64,
+}
+
+/// The [`ModePoint`]s of a Hex8 in the order of the stiffness rule (ADR 0608 D1).
+pub(crate) fn mode_points(coords: &[Vec3]) -> Result<Vec<ModePoint>> {
+    let pts = points(coords)?;
+    let centre = Hex8.point(coords, [0.0; 3])?;
+    let j0inv = inverse3(&centre.jacobian, centre.det_j);
+    Ok(pts
+        .into_iter()
+        .map(|(g, w)| ModePoint {
+            modes: mode_gradients(&j0inv, centre.det_j, &g.xi, g.det_j),
+            grad: g.grad,
+            weight: w,
+        })
+        .collect())
 }
 
 /// `K_uu`, `K_ua` (24 x 9) and `K_aa` (9 x 9) of the incompatible element.
