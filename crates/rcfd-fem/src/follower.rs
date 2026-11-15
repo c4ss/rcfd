@@ -20,6 +20,8 @@
 //!   phi = omega^2 M phi`, by the eigensolver of [`crate::geometric::prestressed_modes`].
 //! * [`tangent_buckling_factors`] (ADR 0590, F-669): `(K_T + mu K_sigma) x = 0` about a nonlinear state, the driver's
 //!   tangent in place of the stiffness at rest of [`crate::buckling::factors`].
+//! * [`tangent_buckling_factors_with`] (ADR 0596, F-671): the same with the driver's contributions, their tangents at the
+//!   state in `K_T` and their derivative with the load factor in the increment (the symmetric part of a follower load).
 //! * [`tangent_modes_full`] and [`buckling_factors_full`] (ADR 0580, F-653): the same with the full (unsymmetric) load
 //!   stiffness, complex eigenvalues by the shift-invert Arnoldi solver of [`rcfd_linalg::eigen_pencil`]: the flutter of
 //!   follower loads (Beck's column).
@@ -602,6 +604,47 @@ pub fn tangent_buckling_factors(
     prestress: &Prestress,
     options: &BucklingOptions,
 ) -> Result<BucklingResult> {
+    tangent_buckling_factors_with(model, prescribed, u, states, 0.0, &[], prestress, options)
+}
+
+/// The triplets of the contributions' tangents at `(u, load_factor)` (the tangent of [`Contribution::add`]), errors keyed
+/// `"contribution"` as in [`tangent_modes`].
+fn contribution_triplets(
+    contributions: &[&dyn Contribution],
+    u: &[f64],
+    load_factor: f64,
+    triplets: &mut Vec<(usize, usize, f64)>,
+) -> Result<()> {
+    let mut scratch = vec![0.0; u.len()];
+    for c in contributions {
+        c.add(u, load_factor, &mut scratch, triplets)
+            .map_err(|e| FemError::InvalidValue {
+                key: "contribution",
+                reason: format!("contribution '{}': {e}", c.name()),
+            })?;
+    }
+    Ok(())
+}
+
+/// [`tangent_buckling_factors`] with the driver's contributions (ADR 0596 D1, F-671): `(K_T + K_c(u, lambda) + mu (K_sigma +
+/// K_c(u, 1) - K_c(u, 0))) x = 0`, `K_c(u, lambda)` the sum of the contributions' tangents at the displacement `u` and
+/// `load_factor` (the triplets of [`Contribution::add`], for a [`FollowerPressure`] the symmetric part `-(K_p + K_p^T)/2`),
+/// and `K_c(u, 1) - K_c(u, 0)` their derivative with the load factor at fixed `u`, exact for a contribution linear in the
+/// load factor (both of this module; another gets the secant over `[0, 1]`), added to the geometric stiffness of
+/// `prestress`. The pencil stays symmetric: where the antisymmetric part of a follower load couples free unknowns (a
+/// free-edged loaded surface) the factors are those of the symmetric approximation and flutter is not represented
+/// ([`buckling_factors_full`] at rest). With no contribution it is [`tangent_buckling_factors`] (the same operations).
+#[allow(clippy::too_many_arguments)]
+pub fn tangent_buckling_factors_with(
+    model: &SolidModel,
+    prescribed: &[Prescribed],
+    u: &[f64],
+    states: &[ElementState],
+    load_factor: f64,
+    contributions: &[&dyn Contribution],
+    prestress: &Prestress,
+    options: &BucklingOptions,
+) -> Result<BucklingResult> {
     model.validate()?;
     model.check_supported_nonlinear()?;
     crate::nonlinear::check_driver_model(model)?;
@@ -612,8 +655,20 @@ pub fn tangent_buckling_factors(
         .map(|(eq, _)| (eq, 0.0))
         .collect();
     check_rigid_body_motions(model, &fixed)?;
-    let k = crate::nonlinear::tangent(model, u, states, options.threads)?;
-    let kg = crate::geometric::assemble_geometric(model, prestress, options.threads)?;
+    let mut k = crate::nonlinear::tangent(model, u, states, options.threads)?;
+    let mut kg = crate::geometric::assemble_geometric(model, prestress, options.threads)?;
+    if !contributions.is_empty() {
+        // ADR 0596 D1: the tangents at the state, and their derivative with the load factor in the increment.
+        let mut at_state = Vec::new();
+        contribution_triplets(contributions, u, load_factor, &mut at_state)?;
+        add_triplets(&mut k, &at_state);
+        let mut increment = Vec::new();
+        contribution_triplets(contributions, u, 1.0, &mut increment)?;
+        let mut at_zero = Vec::new();
+        contribution_triplets(contributions, u, 0.0, &mut at_zero)?;
+        increment.extend(at_zero.into_iter().map(|(r, c, v)| (r, c, -v)));
+        add_triplets(&mut kg, &increment);
+    }
     let zero = vec![0.0; k.n];
     let kr = reduce(&k, &zero, &fixed)?;
     let gr = reduce(&kg, &zero, &fixed)?;
