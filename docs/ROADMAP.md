@@ -10768,7 +10768,9 @@ fixed by the item's registration ADR before any code.
     hinged roof traced through its limit point by arc length on Shell3 8 x 8 x 2, P_lim 2219.1 N within 2.0e-3 of Shell4
     8 x 8 (limit 1e-2). A consistency test over 14 entry paths: Shell3 taken exactly where Shell4 is taken, refused with
     its own package where Shell4 is refused. Eight of nine mutations caught (the Shell3 Green membrane on the shallow
-    roof is not seen; ADR 0490 CY3 covers it). Baseline hashes unchanged.
+    roof is not seen; ADR 0490 CY3 covers it). Baseline hashes unchanged. Follow-ups F-628 (shells in the cyclic
+    constraint), F-629 (six-unknown nodes in smoothed-aggregation CG), F-630 (shells on the linear dynamic paths), F-631
+    (Newton residual reference in free vibration).
 - [~] **F-542** Orthotropic and tabulated materials on the rotating, buckling and transient paths
   - depends on: F-537
   - acceptance: Every limit not stated here is registered in the ADR before the run. The rotating modes (stress
@@ -12214,3 +12216,33 @@ fixed by the item's registration ADR before any code.
     moment of a simply supported monosymmetric I under uniform moment equals the published closed form with beta_x
     within 2 percent at 16 elements; doubly symmetric results unchanged.
   - note: Structural solver, advanced tier. Follow-up of F-598 (ADR 0546, 2026-11-15).
+- [ ] **F-628** Shells in the cyclic constraint
+  - depends on: F-541, F-522
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The cyclic rows of
+    solve_static_mpc, modal_analysis_mpc and the cyclic harmonic paths rotate the rotation unknowns of Shell4 and Shell3
+    nodes as the translations; a full ring of Shell4 and the same cut into Shell3 against one sector with the cyclic
+    constraint: static displacements within 1e-10 and the frequencies of each harmonic within 1e-8; models without
+    shells keep their bits.
+  - note: Structural solver, advanced tier. Follow-up of F-541 (ADR 0545, 2026-11-15).
+- [ ] **F-629** Six-unknown nodes in the smoothed-aggregation CG
+  - depends on: F-541
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The near-null space of the smoothed
+    aggregation takes the rotations of Beam2, Shell4 and Shell3 nodes (the six rigid fields with their rotation
+    components); the plate and cantilever models of ADR 0432 and ADR 0454 solved by the preconditioned CG within 1e-8 of
+    the direct solve in a registered number of iterations; the solid-only bits unchanged.
+  - note: Structural solver, advanced tier. Follow-up of F-541 (ADR 0545, 2026-11-15).
+- [ ] **F-630** Shells on the linear dynamic paths
+  - depends on: F-541
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The linear transient, the damped
+    modes, the modal and the direct harmonic solve take Shell4 and Shell3: a cantilever strip of each against the
+    closed-form Euler-Bernoulli response (the free-vibration frequency, the harmonic tip response off resonance) within
+    registered limits, the direct harmonic against the mode superposition with all modes within 1e-8; models without
+    shells keep their bits.
+  - note: Structural solver, advanced tier. Follow-up of F-541 (ADR 0545, 2026-11-15).
+- [ ] **F-631** Residual reference of the Newton driver in free vibration
+  - depends on: F-585
+  - acceptance: Every limit not stated here is registered in the ADR before the run. An opt-in residual reference of the
+    nonlinear transient with a registered inertia term, so that a converged step of a free vibration without external
+    load is not rejected at a rounding floor; the Shell3 strip of ADR 0545 NT1 over 100 periods at the default tolerance
+    with that reference; the default reference and its bits unchanged.
+  - note: Structural solver, advanced tier. Follow-up of F-541 (ADR 0545, 2026-11-15).
