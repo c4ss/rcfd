@@ -302,3 +302,104 @@ plate or piston runs cannot be made.
   the root; no heavy-fluid coupled BEM-FE solve, no feedback into the FE matrices.
 - Cost `O(N P^2)` per matrix (`N` fields, `P` points), each fixed-point step one matrix.
 - References: closed forms, the spectral integral and the F-551/F-418 routes; no measured data.
+
+## Addendum 1: results (2026-11-14)
+
+Commits: 398867f3 (registration, alone), 9aed348d (the DB1 bit record, constants printed at dfd2720d before any library
+line), 6fdc0155 (library and checks, `cargo fmt` applied before the run), then the module docs, `docs/acoustics.md`,
+`docs/reference-data.md` and this addendum. The registered run (`cargo test --release -p rcfd-post --test
+sa_impedance_matrix -- --test-threads=1 --nocapture`, commit 6fdc0155, log `f579-scratch/run_checks.log`) was made once:
+5 tests, all met, 21 s. Release profile throughout. No amendment.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| Y1 asymmetry, real fields (pistons `k d = 1`, 3; plate six modes at `omega_1`) | `<= 1e-10` | 3.8e-18; 8.8e-16 | yes |
+| Y2 complex fields `|Z_nm[F] - Z_mn[conj F]|/max|Z_mm|` | `<= 1e-10` | 3.4e-16 | yes |
+| Q1 sesquilinearity, both sides | `<= 1e-12` | 0, 0 | yes |
+| D1 diagonal vs F-551 complex power (pistons, complex fields, six plate modes) | `<= 1e-10` | 0 (bit-equal) | yes |
+| D2 `2 Z_mm/<|V|^2>` vs F-551 impedance, the same | `<= 1e-10` | 0 | yes |
+| M1 `|z_12 - f|/|f|`, `|z_21 - f|/|f|`, `k d = 1`, 3 | `<= 1e-2` each | 9.26e-5, 9.26e-5; 7.91e-4, 7.91e-4 | yes |
+| M2 real and imaginary parts, `k d = 1`; 3 | `<= 1e-2` each | 5.9e-5, 1.44e-4; 1.21e-3, 7.8e-4 | yes |
+| M3 `Re z_12` vs `(W_pair - W_1 - W_2)/U^2` (F-418) | `<= 1e-6` | 1.7e-15, 1.6e-14 | yes |
+| R1 report (finite) | printed | see below | yes |
+| S1 `Im Zr_nn` vs the spectral reference, modes 1 to 3 | `<= 1e-3` each | 4.9e-6, 1.67e-5, 3.73e-5 | yes |
+| S2 `Re Zr_nn`, the same | `<= 1e-6` each | 5.9e-15, 2.9e-14, 2.1e-14 | yes |
+| S3 `|Zr_13 - ref|/|Zr_11|` (mode 3 is the first of mode 1's parity) | `<= 1e-3` | 8.9e-7 | yes |
+| P1 different parity `|Zr_mn|/sqrt(|Zr_mm Zr_nn|)` | `<= 1e-6` | 8.3e-12 | yes |
+| C1 `C_nn` vs `2 W_n` (F-418), six modes | `<= 1e-6` | 1.4e-13 | yes |
+| F1 `|Delta_c/Delta_first - 1|`, air, `N = 6` | `<= 3e-2` | 9.20e-3 | yes |
+| F2 `N = 1` root by F-551 | `<= 1e-10` | 0 | yes |
+| F3 `N = 6` root by the matrix and Jacobi | `<= 1e-10` | 0 | yes |
+| F4 first-order estimate recomputed | `<= 1e-12` | 0 | yes |
+| F5 report | printed | `N = 6` -9.20e-3, `N = 1` -9.28e-3, `-3 eps/4` -9.65e-3, `zeta^2/2` 5.8e-7 | (record) |
+| NC1 pistons at `d = 2 L` | must be `> 1e-2` | 2.12e-2, 0.167 | as registered |
+| NC2 water | must be `> 3e-2` | 0.870 | as registered |
+| NC3 complex fields without the conjugation | must be `> 1e-6` | 2.0 | as registered |
+| N1 refusals | holds | 16 of 16, no panic | yes |
+| T1 times | printed | plate modal 0.1 s, plate matrix (6 fields, 3456 points) 1.3 s, spectral 0.25 s, coupled `N = 6` 5.7 s (4 steps), water 7.4 s (5 steps) | (record) |
+| DB1 two digests of the F-551 results | `==` | 2 of 2 | yes |
+| DB2 existing `solid_acoustic` tests unedited | pass | pass (in `cargo test -p rcfd-post --release`, every binary ok) | yes |
+
+Reported (b5), the FE plate (24 x 16 `Shell4`, clamped, steel 1 mm, 0.3 x 0.2 m), air, each mode at its own frequency:
+
+| Mode | f (Hz) | parity (x, y even) | added mass (kg) | radiation damping (kg/s) | zeta |
+|---|---|---|---|---|---|
+| 1 | 165.653 | even, even | 1.2873e-2 | 2.2683 | 1.076e-3 |
+| 2 | 256.291 | odd, even | 7.0740e-3 | 1.9058e-1 | 5.88e-5 |
+| 3 | 413.219 | even, even | 5.0926e-3 | 1.7937 | 3.44e-4 |
+| 4 | 413.923 | even, odd | 5.8452e-3 | 5.6807e-1 | 1.09e-4 |
+| 5 | 497.119 | odd, odd | 4.6699e-3 | 9.3079e-2 | 1.48e-5 |
+| 6 | 637.012 | odd, even | 4.1889e-3 | 1.8216 | 2.27e-4 |
+
+(unit modal masses; the matrices at `omega_1` are printed in `run_checks.log`; the largest off-diagonal added mass is
+`M_a,13 = 2.26e-3 kg`). First frequency in air: vacuum 165.653 Hz, `eps = 1.287e-2`; first-order shift `-6.436e-3`,
+coupled (`N = 6`) `-6.377e-3`, i.e. 164.597 Hz against 164.587 Hz first-order. In water the light-fluid estimate fails
+(`eps = 10.96`; first-order `-5.48`, coupled `-0.712`).
+
+Mutations (scratch copy `f579-scratch/copy`, git archive of 6fdc0155, own target `target-copy`, `mutate.py`, logs `MU*.log`):
+
+| Id | Expected | Caught by |
+|---|---|---|
+| MU1 conjugation dropped | Q1, Y2, D1, D2 | Q1, Y2, D1, D2 (and NC3 no longer as registered) |
+| MU2 matrix transposed | Q1 | Q1 (both sides, alone, as registered) |
+| MU3 factor 1/2 dropped | D1, D2, M1, S1, S2 | D1, D2, M1, M2, M3, S1, S2, S3, C1, F2, F4 |
+| MU4 added mass from the real part | F1, F2, F4 | F2, F4; **not F1** (`Delta_c/Delta_first - 1` became 2.6e-3, inside 3e-2: the wrong added mass enters both shifts alike) |
+| MU5 first-order `omega_1 (1 - eps)` | F1, F4 | F1, F4 |
+| MU6 fixed point stopped after one step | F2, F3 | F2, F3, N1 (`max_iterations = 1` no longer refused) |
+| MU7 `with_velocity` keeps the old velocities | D1, D2, M1 | D1, D2, M1, M2, M3, Q1, NC3 |
+| MU8 added mass left out of the coupled pencil | F1 | F1, F2, F3, N1 |
+| MU9 shared-geometry check removed | N1 | N1 |
+
+Nine of nine caught by at least one registered check; MU4 by two of its three expected checks.
+
+Run besides: `cargo test -p rcfd-post --release` (62 test binaries and doc-tests, all ok, log `run_post_all.log`, on the tree of f94a5ee5; it ran the registered tests a second time as part of the suite (passed), not used for any decision); `cargo test -p rcfd-api --release --test baseline_hashes` (3 passed, 1 ignored as before) and `cargo test -p rcfd-cli --release --test docs_site` (2 passed), log `run_gates.log`; `cargo test -p rcfd-fem --release` (no rcfd-fem file changed; log `run_fem_all.log`, exit 0, 222 test binaries and doc-tests ok, none failed); `cargo fmt -p rcfd-post --check` clean; `cargo clippy -p rcfd-post --all-targets --release -- -D warnings` clean after commit f94a5ee5. Not run: the whole workspace (the lead runs the gate). In the library only `crates/rcfd-post/src/solid_acoustic.rs` changed: module docs (lines 15 to 20) and new code appended at the end (from the section "impedance matrix (ADR 0538)"); no shared solver file; no `rcfd-fem` file.
+
+Deviations: (1) after the registered run clippy flagged three `&[a.clone()]` in the refusal test (`cloned_ref_to_slice_refs`); they were replaced by `std::slice::from_ref(&a)` (commit f94a5ee5), the same calls, no check, set-up or limit changed. (2) The registered expectation of MU4 listed F1, which did not catch it (it was caught by F2 and F4). The estimate script's first run of part (1) printed NaN for the scheme (a script
+defect, disclosed in the registration and fixed before it).
+
+**Decision by the registered rule: done.** Every check met at its single registered run, every negative control as registered, every mutation caught by at least one registered check, no amendment. Every clause of the acceptance met: b1 (the matrix by F-551's surface pressure), b2 by Y1 and Y2 (8.8e-16 against 1e-10), b3 by D1 and D2 (bit-equal against 1e-10), b4 by M1 (9.3e-5 and 7.9e-4 against 1e-2), b5 by R1 with S1 to S3, P1 and C1, b6 by F1 (9.2e-3 against 3e-2) with F2 to F4.
+
+Remaining questions:
+1. OQ1 (open, not taken): a case-file key for the modal radiation of a modal run. Options: (a) none; (b) a post-processing
+   key on modal and harmonic runs naming the surface set and the medium. Recommendation: (a) until the fan workflow needs it
+   (it changes the schema golden, the maintainer's step).
+2. OQ3 damping in the coupled root. Options: (a) leave out (`zeta^2/2 = 5.8e-7` here); (b) a complex fixed point with `C`.
+   Recommendation: (a) for light fluids; (b) only with a heavy-fluid item.
+3. OQ4 higher fluid-loaded modes. Options: (a) only the first (as asked); (b) track mode `j` by the largest modal overlap.
+   Recommendation: (b) as a small follow-up if the fan needs fluid-loaded frequencies beyond the first.
+4. OQ2 citations from memory (the time conventions of Pierce, Morse and Ingard, Kinsler et al.; Pritchard 1960). Nothing
+   depends on them. Recommendation: confirm when the books are at hand; no code change expected.
+
+### For the lead: roadmap entries
+
+F-579, status proposed **done**, new note:
+
+> ADR 0538, 2026-11-14: rcfd-post solid_acoustic: radiation_impedance_matrix (Z_mn = (1/2) sum w P[V_m] conj(V_n) by F-551's surface pressure; impedance 2 Z, added_mass Im(2Z)/omega, damping Re(2Z)), BaffledPlane::with_velocity, light_fluid_first_frequency (modal added mass, damping and damping ratio of the first mode, the first-order frequency omega_1 (1 - M_a/(2 mu)) and the lowest root of K q = omega^2 (Mu + M_a(omega)) q on the vacuum modes by a fixed point in omega, damping left out); all additive, the F-551 results bit-identical (two digests), baseline hashes unchanged. Matrix symmetric for real fields within 8.8e-16 (limit 1e-10), Z_nm[V] = Z_mn[conj V] for complex fields within 3.4e-16, diagonal bit-equal to F-551's complex power and impedance. Two square pistons (side L, d = 30 L): mutual term within 9.3e-5 (k d = 1) and 7.9e-4 (k d = 3) of (i omega rho/(2 pi)) S1 S2 e^{-i k d}/d, the formula in F-551's e^{+i omega t} convention without conjugation, z_12 = 2 Z_12/(U1 conj U2); 2.1e-2 and 0.17 at d = 2 L (negative control). Clamped steel plate 0.3 x 0.2 x 1 mm (24 x 16 Shell4, FE modes): modal added mass 1.29e-2 kg and radiation damping 2.27 kg/s of the first mode (zeta 1.08e-3), six modes reported; against an independent wavenumber-integral reference within 3.7e-5 (reactance) and 3e-14 (resistance); different-parity coupling 8.3e-12. First frequency 165.65 Hz in vacuum, first-order shift -6.436e-3, coupled (six modes) -6.377e-3: ratio within 9.2e-3 of 1 (limit 3e-2, about -3 eps/4); water 0.87 (negative control). Nine of nine mutations caught. Not covered: damping in the coupled root, fluid-loaded modes above the first, two-sided or unbaffled plates, a case-file key.
+
+F-551 note: unchanged except its last sentence, from "Optional follow-up F-579." to:
+
+> Follow-up F-579 (ADR 0538, 2026-11-14).
+
+No follow-up item is proposed. Optional, only if the fan needs it (not added):
+
+> Fluid-loaded frequencies above the first (track mode j through the fixed point by the largest modal overlap) and the radiation damping in the coupled root (complex fixed point); registered against the first-order estimates in a light fluid.
