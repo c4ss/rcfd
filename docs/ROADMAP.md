@@ -10947,7 +10947,7 @@ fixed by the item's registration ADR before any code.
     analysis and the direct harmonic solve. A bar of a reduced half and an ordinary half equals the full model within
     1e-10 in statics and its first three frequencies are within 0.1 percent and not below the full model's; beams and
     shells as interface nodes covered; without a reduced part every result bit-identical.
-  - note: Structural solver, advanced tier. Follow-up of F-430 (ADR 0469). DONE. ADR 0536, 2026-11-14:
+  - note: Structural solver, advanced tier. Follow-up of F-430 (ADR 0469). ADR 0536, 2026-11-14:
     rcfd_fem::cms::superelement: SuperelementModel attaches reduced parts of ADR 0469 to an ordinary host model at the
     host nodes of their boundary positions (same component; rotations of beam and shell nodes joined, a component the
     host lacks refused), the part's generalised coordinates numbered after the host's independent unknowns; static solve
@@ -10956,7 +10956,7 @@ fixed by the item's registration ADR before any code.
     within 6.4e-13 (beam 4.8e-14, shell 8.5e-11), first three frequencies 4.5e-7 to 4.6e-4 above the full model (beam
     5.4e-7 to 4.8e-4, shell 1.9e-8 to 9.4e-5) and never above the two-part assembly's, every mode kept exact within
     3.1e-12, harmonic within 1.1e-11 of DirectHarmonic with every mode kept and 7.0e-3 up to 1000 rad/s with five;
-    defaults bit-identical (10 digests). No case-file key (with F-603's interface_enrichment, open).
+    defaults bit-identical (10 digests). No case-file key (with F-603's interface_enrichment, open). Follow-up F-616.
 - [x] **F-554** Zero-speed split frequencies against the Rayleigh quotients of the F-396 basis
   - depends on: F-415
   - acceptance: Every limit not stated here is registered in the ADR before the run. At zero speed with the Coriolis
@@ -11998,3 +11998,11 @@ fixed by the item's registration ADR before any code.
     every reading within 1e-10 of the present driver, and without the option every result bit-identical.
   - note: Structural solver, advanced tier. Follow-up of F-604 (ADR 0517, 2026-11-14). Fan relevance: hub-shaft
     press-fit stresses at fan scale.
+- [ ] **F-616** Case-file keys for superelements and interface enrichment
+  - depends on: F-553, F-603
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A case file names reduced part
+    files of ADR 0469 and the host node sets they attach to (key superelements) and the interface enrichment of ADR 0532
+    (key interface_enrichment); the bar of ADR 0536 run from a case file gives the library's results in bits; the schema
+    golden re-recorded with the maintainer's approval; a case without the keys gives every result bit-identical.
+  - note: Structural solver, advanced tier. Follow-up of F-553 (ADR 0536, 2026-11-14). NEEDS THE USER: the schema golden
+    is re-recorded only with the maintainer's approval.
