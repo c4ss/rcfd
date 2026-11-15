@@ -357,3 +357,11 @@ defaults and the ADR 0546 path are bit-identical (B0).
 - Q2 (the warping unknown on the transient and harmonic paths): recommendation, a separate item when a case needs it.
 - Q3 (bimoment loads and the bimoment pre-stress, `beta_omega`): needed only with F-627 (monosymmetric sections). Recommendation:
   take them in F-627.
+
+## For the lead: roadmap entries
+
+> F-626 status: done. Note: Structural solver, advanced tier. ADR 0548, 2026-11-15: the warping unknown of ADR 0546 on the static solve (`rcfd_fem::beam_warping::solve_static`, the 14-unknown stiffness, restrained warping, bimoment reactions), on the modes (`modal_analysis`, a 14-unknown consistent mass with the Hermite twist, no warping inertia) and on the pre-stressed modes (`prestressed_modes`). The pre-stress of the warping static solve (`WarpingPrestress::from_static`) carries the total torque G J phi' - E C_w phi''', and RF8 is lifted for it (`buckling_factors_with`). Cantilever I beam with the root warping held: 1.07e-6 of (T/(G J))(L - tanh(kL)/k) at 16 elements (1.7e-5 at 8; root bimoment 3.5e-6). Indeterminate torque split 1.4e-6 of the closed form. Lateral-torsional factor with torsion in the reference load 5.4e-8 of the factor from the closed-form split, while the Saint-Venant split gives 2.6e-2. Torsional frequencies 7.2e-7, 2.2e-5 and 1.4e-4 of (G J k^2 + E C_w k^4)/(rho I_p) (m = 1 to 3). With axial pre-stress +/-0.5 of the torsional buckling load, 4.8e-7 and 1.4e-6. Pre-stressed modes with torque 5e-8 of the closed-form split. Defaults and the ADR 0546 path bit-identical (11 digests). Eleven of eleven mutations caught. No case-file key, no bimoment load, no warping inertia.
+
+> F-627 note addition: the bimoment load and the bimoment pre-stress (beta_omega, zero for doubly symmetric sections, not modelled in ADR 0548) belong to this item.
+
+> Follow-up proposed: the warping unknown on the harmonic and transient paths. Deps F-626. Acceptance: Every limit not stated here is registered in the ADR before the run. The harmonic response of a fork-supported I beam under a harmonic end torque, and the transient twist of the same beam under a step torque, use the 14-unknown stiffness and mass of ADR 0548. The first torsional resonance equals sqrt((G J k^2 + E C_w k^4)/(rho I_p)) within 1e-3 at 16 elements; every result without the option bit-identical.
