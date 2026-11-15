@@ -2195,6 +2195,25 @@ numpy scripts (`f598-scratch/arith.py`, `arith2.py` and their logs), no rcfd cod
 | Cubic Hermite twist element: `G J/(30 L)[36, 3L, -36, 3L; ...]`, `E C_w/L^3 [12, 6L, -12, 6L; ...]` | derived | ADR 0546 D2, arithmetic 3 |
 | Measured: I beam, `L = 3`, 16 elements `5.9e-4` of the closed form (8: `8.3e-4`; `L = 1.5`: `1.1e-3`; `L = 6`: `2.0e-4`); `C_w = 0` `5.9e-4` of `M_0`; torque cantilever `1.1e-6` | computed | ADR 0546 addendum 1 |
 
+## F-627 monosymmetric thin-walled sections for the warping element (ADR 0553)
+
+No source was read for F-627. The books below are cited from memory for the names and the published forms (editions and
+chapters as recalled, not checked). Every formula used is derived in ADR 0553 (D1 to D6, arithmetic 1 to 6) and checked by a
+plain numpy script (`f627-scratch/arith.py`, `arith.log`), no rcfd code.
+
+| Item | Status | Source |
+|---|---|---|
+| Shear-centre kinematics `v_c = v_s + z_0 phi`, `w_c = w_s - y_0 phi`; normal-strain energy uncoupled in the shear-centre displacements; mass exact in the centroid ones | derived, cited | ADR 0553 D1; Vlasov, Timoshenko and Gere, op. cit. (F-598): NOT read, from memory |
+| Wagner coefficient about the shear centre (monosymmetry coefficient) `beta_x = int z (y^2 + z^2) dA/I_y - 2 z_0` | derived, cited | ADR 0553 D2 (the work of `sigma` on `(1/2)(v_P'^2 + w_P'^2)`); Trahair, op. cit., ch. 6: NOT read, from memory |
+| LTB of a monosymmetric beam under uniform moment, forks, warping free: `M = (beta_x P_y/2) +/- sqrt((beta_x P_y/2)^2 + P_y (G J + pi^2 E C_w/L^2))`, `P_y = pi^2 E I_z/L^2` | derived, cited | ADR 0553 D3; Trahair, op. cit., ch. 6; Timoshenko and Gere, op. cit., ch. 6: NOT read, from memory |
+| Thin-walled monosymmetric I: shear centre `h_c I_1/(I_1 + I_2)` from flange 2, `C_w = I_1 I_2 h_c^2/(I_1 + I_2)` | derived, cited | ADR 0553 D5 (the principal sectorial coordinate of the flanges); Timoshenko and Gere, Trahair, op. cit.: NOT read, from memory |
+| Approximation `beta_x ~ 0.9 h_c (2 rho_f - 1)(1 - I_z/I_y)^2` (Kitipornchai and Trahair) | cited, not used | ADR 0553 D5: from memory; `0.115` against the derived `0.153` for the section of the checks |
+| Flexural-torsional column `(P_y - P)(G J + E C_w k^2 - P r_0^2) - P^2 z_0^2 = 0`, `r_0^2 = I_p/A + z_0^2` | derived, cited | ADR 0553 arithmetic 3; Timoshenko and Gere, op. cit., ch. 5: NOT read, from memory |
+| Coupled lateral-torsional vibration `det(diag(E I_z k^4, G J k^2 + E C_w k^4) - omega^2 rho [A, A z_0; A z_0, I_p + A z_0^2]) = 0` | derived | ADR 0553 arithmetic 4 |
+| Tip bimoment on a cantilever with the root warping held: `phi(L) = (B/(G J))(1 - 1/cosh kL)`, `chi(L) = B tanh(kL)/(E C_w k)` | derived | ADR 0553 arithmetic 6 |
+| Bimoment pre-stress coefficient `beta_omega = int omega_S (y^2 + z^2) dA/C_w`, zero for every section with an axis of symmetry | derived, cited | ADR 0553 D6; Trahair, op. cit.: NOT read, from memory |
+| Measured: monosymmetric I, `L = 3`, 16 elements: larger flange in compression `1.29e-3` of the closed form, in tension `3.9e-4`; column `3.5e-3`; vibration `1.7e-3`, `3.0e-3`; lateral-force twist `2.0e-6`; bimoment `4.5e-7` | computed | ADR 0553 addendum 1 |
+
 ## F-429 fracture parameters: domain integral, stress intensity factor, growth life (ADR 0547)
 
 No source was read for F-429. The books and papers below are cited from memory (volumes, pages and years as recalled, not
