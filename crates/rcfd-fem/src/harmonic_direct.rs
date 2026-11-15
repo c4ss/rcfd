@@ -802,14 +802,16 @@ impl DirectHarmonic {
             return Err(invalid(
                 "loss factor",
                 format!(
-                    "element set '{set}': the direct harmonic solve about a nonlinear state takes no loss factor (ADR                      0590 D2)"
+                    "element set '{set}': the direct harmonic solve about a nonlinear state takes no loss factor \
+                     (ADR 0590 D2)"
                 ),
             ));
         }
         if options.prestress.is_some() {
             return Err(invalid(
                 "prestress",
-                "the direct harmonic solve about a nonlinear state takes the state's stress in its tangent; no pre-stress                  is added (ADR 0590 D2)"
+                "the direct harmonic solve about a nonlinear state takes the state's stress in its tangent; no \
+                 pre-stress is added (ADR 0590 D2)"
                     .to_string(),
             ));
         }
@@ -825,7 +827,8 @@ impl DirectHarmonic {
             return Err(invalid(
                 "material",
                 format!(
-                    "element set '{set}' carries a {} material: the direct harmonic solve about a nonlinear state takes                      no complex modulus (ADR 0590 D2)",
+                    "element set '{set}' carries a {} material: the direct harmonic solve about a nonlinear state takes \
+                     no complex modulus (ADR 0590 D2)",
                     m.name()
                 ),
             ));
