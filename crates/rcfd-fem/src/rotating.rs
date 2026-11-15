@@ -52,6 +52,11 @@
 //! ADR 0561 (F-647): Shell4 and Shell3 on the whirl paths, through the Coriolis matrix of the shell director
 //! ([`coriolis_matrix_with_shells`]): on a sector whose cyclic constraint has [`crate::model::CyclicOptions::shells`], and on a
 //! part with [`RotatingOptions::shells`]; without either a shell is refused there as before.
+//!
+//! ADR 0598 (F-675): Beam2 on the whirl paths, through the Coriolis matrix of the beam section
+//! ([`crate::beam::element_coriolis`]): on a sector whose cyclic constraint has [`crate::model::CyclicOptions::beams`], and on a
+//! part with [`RotatingOptions::beams`]; without either a beam is refused there as before. The modes paths took the beams of
+//! such a sector without a change.
 
 use crate::assemble::{assemble_with, point_stiffness};
 use crate::constraint::{check_rigid_body_motions, prescribed_equations, reduce};
@@ -185,6 +190,10 @@ pub struct RotatingOptions {
     /// D2; default false: a shell is refused there as before). A sector whose cyclic constraint has
     /// [`crate::model::CyclicOptions::shells`] takes them without it.
     pub shells: bool,
+    /// Whether the whirl analyses of a part take Beam2 (the Coriolis matrix of the beam section, ADR 0598 D1, D2; default
+    /// false: a beam is refused there as before). A sector whose cyclic constraint has [`crate::model::CyclicOptions::beams`]
+    /// takes them without it. Shell elements keep [`RotatingOptions::shells`].
+    pub beams: bool,
 }
 
 impl RotatingOptions {
@@ -201,6 +210,7 @@ impl RotatingOptions {
             split_schur: SplitSchur::Dense,
             corrected_frequency: false,
             shells: false,
+            beams: false,
         }
     }
     /// The same options with other modal options.
@@ -246,6 +256,11 @@ impl RotatingOptions {
     /// The same options with the shells of the whirl analyses taken or not (ADR 0561 D1).
     pub fn shells(mut self, on: bool) -> RotatingOptions {
         self.shells = on;
+        self
+    }
+    /// The same options with the Beam2 elements of the whirl analyses taken or not (ADR 0598 D1).
+    pub fn beams(mut self, on: bool) -> RotatingOptions {
+        self.beams = on;
         self
     }
 }

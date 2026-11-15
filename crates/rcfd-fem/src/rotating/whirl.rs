@@ -56,7 +56,7 @@ const QL_ITERATIONS: usize = 30;
 /// D1), `m_ab` the scalar consistent mass of each element's mass rule, on the stiffness pattern; `G = 2 Omega C`. Skew bit
 /// for bit; bit-identical for any thread count. A zero or non-finite axis is refused (key `"axis"`).
 pub fn coriolis_matrix(model: &SolidModel, axis: Vec3, threads: Option<usize>) -> Result<CsrMatrix> {
-    coriolis_assembly(model, axis, threads, false)
+    coriolis_assembly(model, axis, threads, false, false)
 }
 
 /// [`coriolis_matrix`] with Shell4 and Shell3 elements taking the Coriolis matrix of the shell director (ADR 0561 D2,
@@ -64,13 +64,24 @@ pub fn coriolis_matrix(model: &SolidModel, axis: Vec3, threads: Option<usize>) -
 /// (Beam2 refused by its solid-routine placeholder). [`RotatingPart::coriolis`] calls it with
 /// [`crate::rotating::RotatingOptions::shells`] or [`crate::model::CyclicOptions::shells`] (ADR 0561 D1).
 pub fn coriolis_matrix_with_shells(model: &SolidModel, axis: Vec3, threads: Option<usize>) -> Result<CsrMatrix> {
-    coriolis_assembly(model, axis, threads, true)
+    coriolis_assembly(model, axis, threads, true, false)
 }
 
-fn coriolis_assembly(model: &SolidModel, axis: Vec3, threads: Option<usize>, shells: bool) -> Result<CsrMatrix> {
+/// `beams`: Beam2 takes the Coriolis matrix of its section kinematics (ADR 0598 D1, D2, [`crate::beam::element_coriolis`]).
+fn coriolis_assembly(
+    model: &SolidModel,
+    axis: Vec3,
+    threads: Option<usize>,
+    shells: bool,
+    beams: bool,
+) -> Result<CsrMatrix> {
     let a = unit_axis(axis)?;
     let x = [[0.0, -a[2], a[1]], [a[2], 0.0, -a[0]], [-a[1], a[0], 0.0]];
     assemble_with(model, threads, |ctx| {
+        // ADR 0598 D1: with the option a beam takes the Coriolis matrix of its section.
+        if beams && ctx.kind == ElementKind::Beam2 {
+            return crate::beam::model_coriolis(model.mesh(), ctx.element, ctx.coords, ctx.material, a);
+        }
         // ADR 0561 D1, D2: with the option a shell takes the Coriolis matrix of its director.
         if shells {
             match ctx.kind {
@@ -696,8 +707,14 @@ fn inertia(kr: &CsrMatrix, mr: &CsrMatrix) -> Result<Option<Option<usize>>> {
 impl<'a> RotatingPart<'a> {
     /// The Coriolis matrix per unit speed `C` of the part ([`coriolis_matrix`] about its axis; `G = 2 Omega C`).
     /// With [`crate::rotating::RotatingOptions::shells`] or a cyclic constraint with [`crate::model::CyclicOptions::shells`]
-    /// the shells take the matrix of their director ([`coriolis_matrix_with_shells`], ADR 0561 D1).
+    /// the shells take the matrix of their director ([`coriolis_matrix_with_shells`], ADR 0561 D1). With
+    /// [`crate::rotating::RotatingOptions::beams`] or a cyclic constraint with [`crate::model::CyclicOptions::beams`] the Beam2
+    /// elements take the matrix of their section ([`crate::beam::element_coriolis`], ADR 0598 D1).
     pub fn coriolis(&self) -> Result<CsrMatrix> {
+        if self.options.beams || crate::cyclic::beams_opted_in(self.model) {
+            let shells = self.options.shells || crate::cyclic::shells_opted_in(self.model);
+            return coriolis_assembly(self.model, self.axis, self.options.modal.threads, shells, true);
+        }
         if self.options.shells || crate::cyclic::shells_opted_in(self.model) {
             return coriolis_matrix_with_shells(self.model, self.axis, self.options.modal.threads);
         }
