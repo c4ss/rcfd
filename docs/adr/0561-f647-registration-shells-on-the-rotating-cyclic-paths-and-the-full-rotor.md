@@ -275,3 +275,36 @@ model it would report the unmatched boundary (key `cyclic`) and NC2 would not te
 Hex8 twin sector of B3 (default options, surface sets `low` / `high`, which match) with one disjoint Shell4 element (thickness
 0.01 m, four new nodes away from both boundaries) in a second block; expected, as registered, `UnsupportedKind { kind: "Shell4",
 operation: "full_rotor" }`. MU9 is still to be caught by NC2. Nothing else changes.
+
+## Amendment 2 (2026-11-15, written after run 1 and before run 2)
+
+**Run 1** (library and tests at 9ec638ba, log `f647-scratch/run1.log`, every registered test of `sa_rotating_cyclic_shells.rs`
+and `sa_rotating_cyclic_shells_default_bits.rs` run once) **missed CO1**: every uniform-field form of CO1a, CO1b and CO1c was
+exactly 0 (relative error 1.0 against the limit 1e-13; the references `v_1^T C v_2` = 96.03, 72.02, 53.09, `theta_1^T C
+theta_2` = -1.354e-3, -1.016e-3, -8.456e-4, the layup's mixed form 9.678e-2). CO1d (skew bit for bit) was met, trivially: the
+matrix was zero.
+
+**Diagnosis.** `shell::to_global` and `shell3::to_global`, which D2 used to carry the facet matrix to global axes, end with
+`symmetrise` (`c_ij <- (c_ij + c_ji) / 2`), which annihilates a skew matrix. The local matrix was right (96 non-zeros for a test
+element; a disclosed diagnostic, `tests/zz_debug_f647.rs`, deleted, printed only the non-zero counts of the local and of the
+global matrix); the global one was zero. So in run 1 every shell Coriolis matrix was zero, and **W4 and W3 of run 1 were met
+vacuously** (the sector and the ring both solved the problem without the Coriolis term); they are not counted. The other checks
+of run 1 do not depend on the Coriolis matrix (MA, MB, MC, CA, OR, X2, XF, XL, F1, B3, B4, NC1 to NC4 were met; SM ran on the
+zero matrix and is not counted either).
+
+**Correction.** D2 carries the matrix by the congruence `T^T C_l T` without symmetrising: a new private `to_global_general`
+(the same two loops as `to_global`, no `symmetrise`) in `shell.rs` and `shell3.rs`, used only by `element_coriolis`; `to_global`
+is not touched (every existing shell matrix keeps its bits). Then the skew-symmetrisation of D2 as registered.
+
+**Record.** The CO1 test of run 1 becomes the ignored record `co1_shell_coriolis_uniform_fields_known_miss` (limits intact, the
+measured numbers in its reason) and continues unchanged as `co1_shell_coriolis_uniform_fields_after_amendment_2`.
+
+**Run 2** is the corrected run: the same two test files on the corrected library, every check with its registered limit, run
+once. One check is added now, before run 2, against the vacuity found in run 1:
+
+| Id | Clause | Check | Limit | Estimate behind it |
+|---|---|---|---|---|
+| W0 | a1 | at the top speed `0.4 omega_1`, for Shell4 and Shell3: the largest `|omega_W / omega_A - 1|` between the sorted sector whirl list of `k = 1` (Coriolis on) and the sorted sector mode list of `k = 1` (set A, no Coriolis), over the entries below the `k = 1` cut-off of both | `>= 1e-4` | ADR 0411 D3: a pair splits by `~ kappa Omega`, `kappa` of order `0.1 .. 1` for the in-plane-rich modes of a cone, `Omega / omega ~ 0.4 / 1 .. 3`: `1e-2` expected; `1e-4` is far below it and far above rounding |
+
+By the decision rule the item cannot be done: CO1 missed in run 1, and CO1, W4, W3, SM and W0 can only be met after this
+post-run amendment.
