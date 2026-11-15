@@ -998,3 +998,69 @@ fn l3d_nhi_bbar_diagnostic() {
         println!("L3d (record) 2000 iterations, worst relative frequency difference: {w:e}");
     }
 }
+
+/// ADR 0555 amendment 2, L5m and L8m: Cantilever L with two material sets (`root`, `tip`), each with its own loss factor.
+fn two_materials(root: Material, tip: Material) -> SolidModel {
+    let mut mesh = hex_box([0.0; 3], [2.0, 0.5, 0.5], [8, 2, 2]).unwrap();
+    let centre_x = |e: usize, mesh: &SolidMesh| -> f64 {
+        let nodes = mesh.element_nodes(e);
+        nodes.iter().map(|&n| mesh.nodes()[n][0]).sum::<f64>() / nodes.len() as f64
+    };
+    let ne = mesh.n_elements();
+    let root_set: Vec<usize> = (0..ne).filter(|&e| centre_x(e, &mesh) < 1.0).collect();
+    let tip_set: Vec<usize> = (0..ne).filter(|&e| centre_x(e, &mesh) >= 1.0).collect();
+    assert_eq!((root_set.len(), tip_set.len()), (16, 16));
+    mesh.add_element_set("root", root_set).unwrap();
+    mesh.add_element_set("tip", tip_set).unwrap();
+    let mut model = SolidModel::new(mesh);
+    model.add_material("root", root).unwrap();
+    model.add_material("tip", tip).unwrap();
+    for k in 0..3 {
+        model.add_constraint(Constraint::displacement("xmin", k, 0.0)).unwrap();
+    }
+    model.add_load(Load::nodal_force("xmax", [0.0, 0.0, 1.0])).unwrap();
+    model
+}
+
+#[test]
+fn l5m_l8m_two_materials() {
+    let mut c = Checks::new();
+    let a = two_materials(hyper(nhc()), hyper(mrc()));
+    let b = two_materials(twin(&nhc()), twin(&mrc()));
+    let options = DirectHarmonicOptions::new()
+        .loss_factor("root", LossFactor::Constant(0.02))
+        .loss_factor("tip", LossFactor::Constant(0.05))
+        .threads(1);
+    let ha = DirectHarmonic::new(&a, &options).unwrap();
+    let hb = DirectHarmonic::new(&b, &options).unwrap();
+    let load = HarmonicLoad::from_model(&a).unwrap();
+    for omega in [50.0, 500.0] {
+        let (xa, xb) = (ha.response(&load, omega).unwrap(), hb.response(&load, omega).unwrap());
+        let mut d = 0.0;
+        let mut m = 0.0;
+        for j in 0..xa.re.len() {
+            worst(&mut d, (xa.re[j] - xb.re[j]).hypot(xa.im[j] - xb.im[j]), "dx");
+            worst(&mut m, xb.re[j].hypot(xb.im[j]), "x");
+        }
+        c.at_most(
+            &format!("L5m two materials, direct harmonic at omega {omega}"),
+            d / m,
+            1e-10,
+        );
+    }
+    let mut d = DampedOptions::new(4);
+    d.loss_factors.push(("root".to_string(), LossFactor::Constant(0.02)));
+    d.loss_factors.push(("tip".to_string(), LossFactor::Constant(0.05)));
+    let (da, db) = (damped_modes(&a, &d).unwrap(), damped_modes(&b, &d).unwrap());
+    let mut w = 0.0;
+    for (x, y) in da.roots.iter().zip(&db.roots) {
+        worst(&mut w, (x.re - y.re).hypot(x.im - y.im) / y.re.hypot(y.im), "root");
+    }
+    c.holds(
+        "L8m the same number of roots",
+        !da.roots.is_empty() && da.roots.len() == db.roots.len(),
+        &format!("{} / {}", da.roots.len(), db.roots.len()),
+    );
+    c.at_most("L8m two materials, damped-mode roots, worst relative", w, 1e-10);
+    c.finish();
+}

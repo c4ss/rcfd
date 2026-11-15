@@ -343,3 +343,18 @@ so the twin of that row was not run. The rows NHc and MRc of L3 were met (`2.99e
   linearised material (the twin converges).
 - **L3c (continuation)**: the NHc and MRc rows of L3 as their own test (`l3_nhc_mrc_rows`), the same limits, run in the suite as
   the fast test of the modal path; their registered values are those of run 1.
+
+## Amendment 2 (2026-11-15, written after the mutation run and before any run of the checks below)
+
+The mutation run (`f620-scratch/mutations.log`, one run per mutation on a `git archive` of 607cc54a) left **MU6** (`harmonic_direct.rs`
+647) and **MU11** (`damped.rs` 716) uncaught. Diagnosis (read): both sites are on the branch for two or more materials
+(`materials.len() > 1`: the stiffness of each material set assembled apart for its own loss factor); every registered set-up has
+one material, so that branch was not exercised by L5 and L8 (which take the one-material branches, `harmonic_direct.rs` 483 and
+`damped.rs` 974). A set-up gap, not a defect of the code. No limit changes; the decision stays as the rule gives it for an uncaught
+mutation (partial), the checks below being post-run additions.
+
+- **L5m, L8m** (new, `l5m_l8m_two_materials`): Cantilever L with the element sets `root` (the 16 elements with `x < 1`) and `tip`
+  (the other 16), NHc on `root` and MRc on `tip` against the twins of each, Full; `DirectHarmonic` with `LossFactor::Constant(0.02)`
+  on `root` and `0.05` on `tip` at `omega = 50` and `500` (L5m, the measure of L5), `damped_modes` with the same loss factors, 4
+  modes (L8m, the measure of L8). Limits `1e-10` each (arithmetic 2, as L5 and L8). Then MU6 and MU11 run once more, on the same
+  scratch copy with this test added.
