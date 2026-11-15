@@ -216,3 +216,78 @@ B0 missed.
   load). Recommendation (a).
 - **Q2. A singular matrix.** (a) refuse with key `"stiffness"` (this ADR); (b) report the count of the pivots below `-theta` and
   a flag for the near-zero ones. Recommendation (a): a count with a zero pivot is not an inertia.
+
+## Addendum 1 (2026-11-15): results
+
+Written after the one registered run of `sa_beam_warping_f668.rs` (log `f668-scratch/run1.log`, code commit 31eaf3c2) and the
+mutation runs (`mutations.log`, `mut_Z*.log`). The numbers are those the tests printed (release). No limit was changed, no
+amendment was written, and nothing was re-run to pick a result. Two commits after the run touch no result: 26dfb55a restores the
+line continuations of the refusal message (the registered run printed the message with the source indentation inside it), and
+ee5b6ff0 writes `map_or(false, ..)` of S1 as `is_ok_and(..)` for clippy (the same boolean).
+
+### Results against the registered limits
+
+| id | measured | limit | verdict |
+|---|---|---|---|
+| B0 | the bit records `sa_beam_warping_f598_bits`, `_f626_bits`, `_f635_bits`, `_f661_bits`, `_f663_bits`, `_f667_bits` pass unchanged; `rcfd-api` `baseline_hashes` 3 passed, 1 ignored (as before) | equal | met |
+| C1- (acceptance) | harmonic, full beam, `N = -0.5 |N_T|`: 1 | `= 1` | met |
+| C1+ (acceptance) | harmonic, full beam, `N = +0.5 |N_T|`: 0 | `= 0` | met |
+| C2- / C2+ (acceptance a3) | transient `with_prestress`: 1 / 0, equal to the harmonic | `= 1` / `= 0` | met |
+| C3 | torsion-only `-0.5`: 0 (harmonic and transient) | `= 0` | met |
+| C4 | full `-0.25`: 0 / 0 | `= 0` | met |
+| C4' | full `-1.2`: 3 / 3 | `= 3` | met |
+| C4T | torsion-only `-1.2`: 1 / 1 | `= 1` | met |
+| C5 | no pre-stress: 0 / 0 | `= 0` | met |
+| S1 | factors at `-0.5`: `0.570602, 2.000001, 2.270067, 4.100448` (1 below 1, count 1); at `-1.2`: `0.237751, 0.833334, 0.945861, 1.708520` (3 below 1, count 3) | equal | met |
+| R | harmonic and transient refused, key `"stiffness"`, pivot exactly `0` at node 0 component 0 against `theta = 1.6e-5` | key `"stiffness"` | met |
+
+The buckling factors agree with the Timoshenko estimates of arithmetic 3 to four figures (`0.5706`, `2.0000`, `2.2698` against
+`2.270067` measured, `4.1004`; `0.2378`, `0.8333`, `0.9457` against `0.945861`, `1.7085`): the weak `m = 2` load at `N = -1.2
+|N_T|` is beyond its load by 5.4 % as derived, so the count 3 is not a near miss of the rounding.
+
+### Mutations (scratch copy `f668-scratch/mut`, own target dir, one at a time)
+
+| mutation | result | caught by |
+|---|---|---|
+| Z1 harmonic count of `k` only | caught | C1-, C4', C4T (harmonic 0), the transient-equals-harmonic lines, S1 |
+| Z2 positive pivots counted | caught | every count (112 of 112 free equations, 32 on the torsion-only model) |
+| Z3 harmonic count of `k - g` | caught | C1+ (1), C1-, C4', C4T, S1 |
+| Z4 `PivotRule::Positive` | caught | C1-, C2-, C4', C4T, S1 (refused at the first negative pivot) |
+| Z5 transient returns 0 | caught | C2-, C4', C4T (transient) |
+| Z6 refusal mapped to 0 | caught | R (both) |
+
+Six of six caught.
+
+### Deviation from the registered design
+
+D2 said the fields of both solver types are not changed. `WarpingTransient` has one new private field, `base_dofs` (the model's
+`DofMap`, set in both constructors), so that the refusal names the node and component of the refused row as the harmonic path
+does. It is read only by `negative_eigenvalues`; no arithmetic of the constructors, `start`, `run` or the results is touched (B0
+and the `_f667` tests pass unchanged). `transient.rs` has the one registered `pub(crate)` accessor `Integrator::stiffness`.
+
+### Other runs
+
+`cargo test -p rcfd-fem --release` for `sa_beam_warping_f598_bits`, `_f626_bits`, `_f635`, `_f635_bits`, `_f661`, `_f661_bits`,
+`_f663_bits`, `_f667`, `_f667_bits`: all passed (ignored records stay ignored); `cargo test -p rcfd-api --release --test
+baseline_hashes`: 3 passed, 1 ignored. `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings`: clean (after
+ee5b6ff0). `cargo fmt -p rcfd-fem --check`: clean. The whole rcfd-fem suite was not run (the lead runs the gate).
+
+### Decision
+
+**Done** by the registered rule: every registered check met in the one run, every mutation caught, no amendment. By clause: a1
+met (the method counts the reduced `K + K_sigma` by the real `L D L^T` factor; Z1, Z3 show the pre-stress enters); a2 met (1 under
+compression, 0 under tension, the 1 derived from the Euler and torsional loads and confirmed independently by S1); a3 met (the
+transient count equal in all six pre-stressed cases); a4 met (B0; nothing existing computes differently).
+
+### Remaining questions
+
+- Q1 (when to count): (a) on demand, as taken; (b) at construction. Recommendation (a).
+- Q2 (a singular matrix): (a) refused, key `"stiffness"`, as taken (R); (b) a count with a near-zero flag. Recommendation (a).
+- Q3 (case-file and report exposure): the count is library API only. Options: (a) leave it until F-625 offers the warping
+  solves in case files; (b) add it now to a report. Recommendation (a): no case-file path to the warping solvers exists yet.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> Structural solver, advanced tier. Follow-up of F-661 and F-667 (ADR 0585, ADR 0591, 2026-11-15). DONE. ADR 0592, 2026-11-15: the warping harmonic and transient solvers report the number of negative eigenvalues of the reduced stiffness at omega = 0 (`WarpingHarmonic::negative_eigenvalues`, `WarpingTransient::negative_eigenvalues`; K + K_sigma with a pre-stress, K without), a Sturm count of the real L D L^T factor (reverse Cuthill-McKee, no pivoting, the options of count_below at the shift 0; Sylvester's law of inertia), computed when asked; a numerically singular stiffness is refused (key "stiffness"). Fork-supported I beam, 16 elements: N = -0.5 of the torsional buckling load counts 1 (the weak-axis m = 1 bending mode, beyond its load at 0.285 of N_T), N = +0.5 counts 0, harmonic and transient alike; also -0.25 counts 0, -1.2 counts 3 (weak m = 1, 2 and the torsional mode), the torsion-only model 0 and 1, and the factors below 1 of the warping buckling solve agree. Defaults bit-identical (six warping bit records and baseline_hashes unchanged). Six of six mutations caught. No case-file key, no automatic report during a solve.
