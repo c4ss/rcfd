@@ -10513,13 +10513,27 @@ fixed by the item's registration ADR before any code.
     of the nine solid case files equal an independent inclusive filter. Mutations: exclusive upper bound (ADR 0438 MU4),
     exclusive lower bound and an ignored tolerance key all caught. One negative control (N3) was met only after an
     amendment, so partial by the registered rule.
-- [ ] **F-527** Through-thickness temperature gradient on Shell4
+- [~] **F-527** Through-thickness temperature gradient on Shell4
   - depends on: F-525
   - acceptance: Every limit not stated here is registered in the ADR before the run. A nodal temperature gradient
     through the thickness on a Shell4 model gives the curvature thermal load int B_b^T D_b kappa_th dA with kappa_th =
     alpha dT_grad; a free plate under a uniform gradient takes the curvature alpha dT_grad and zero moment within 1e-12;
     a model without a gradient gives the bits it gave before.
-  - note: Structural solver. Follow-up of F-525 (ADR 0445, 2026-11-14); a new load variant, schema question if exposed.
+  - note: Structural solver, intermediate tier. Follow-up of F-525 (ADR 0445). PARTIAL. ADR 0612, 2026-11-15: a
+    through-thickness temperature gradient on Shell4, Load::ShellTemperatureGradient (opt-in, one value per node, K/m
+    along each element's normal). A Shell4 element of a Shell block takes the curvature thermal load int B_b^T D_b
+    kappa_th dA, kappa_th = alpha g (1, 1, 0) (shell::thermal_gradient_load_vector), and shell::stresses subtracts the
+    thermal curvature; Shell3, Layup shells, beams and solids with a non-zero value are refused naming the follow-up;
+    the nonlinear static and transient paths and fracture refuse the load. Met: the load against its closed form on a
+    rectangle with a linear gradient within 2.2e-16 (limit 1e-12), warped self-equilibrium 6.2e-16; a clamped plate
+    carries M = -D (1 + nu) alpha g within 2.5e-16 at every centre and Gauss point; a membrane temperature and a
+    gradient superpose (loads within 5e-19); models without a gradient give their former bits (seven digests,
+    baseline_hashes). Partial: the free plate held at one node takes the curvature alpha g and zero moment within
+    3.4e-12 and 1.9e-12 at h/t ~ 5 (limit 1e-12, known miss) and 2.6e-10 at h/t ~ 50; diagnosed as rounding of the
+    bending-shear solve growing as 3.5 (h/t)^2 (the exact discrete field gives zero moment to 4e-16, the solve is
+    backward stable, a thick plate at h/t ~ 1.7 meets 4.0e-13). Nine mutations, all caught. Not covered: Shell3, Layup
+    shells, a case-file key. Follow-up F-687 (Through-thickness temperature gradient on Shell3 and Layup shells).
+    Follow-up F-688 (Case-file key for the shell temperature gradient).
 - [~] **F-528** Direct harmonic solve on the transformation path (constraints, rigid sets, elastic supports) and with pre-stress
   - depends on: F-412
   - acceptance: Every limit not stated here is registered in the ADR before the run. The direct harmonic solve of ADR
@@ -13525,13 +13539,28 @@ fixed by the item's registration ADR before any code.
     without external load over a registered number of periods at the default tolerance with no step rejected at a
     rounding floor and the energy conserved within a registered limit; the default bits unchanged.
   - note: Follow-up of F-631 (ADR 0603, 2026-11-15).
-- [ ] **F-682** Interaction integral on curved crack fronts
+- [~] **F-682** Interaction integral on curved crack fronts
   - depends on: F-632
   - acceptance: Every limit not stated here is registered in the ADR before the run. The interaction integral on
     circular and elliptical fronts with the correction terms of auxiliary fields that are not exact there; a
     penny-shaped crack under inclined tension with K_I, K_II and K_III along the front within 3 percent of the closed
     forms, and the straight-front results of ADR 0605 unchanged.
-  - note: Follow-up of F-632 (ADR 0605, 2026-11-15).
+  - note: Structural solver, advanced tier. Follow-up of F-632 (ADR 0605). ADR 0610, 2026-11-12: rcfd_fem::fracture
+    gains interaction_integral_curved (straight, circular and elliptical fronts, full or half-symmetric; the auxiliary
+    fields of near_tip_gradient rotated into the frame of each point's foot on the front by tip_frame, the ellipse foot
+    by Newton, with the correction terms int (sigma^aux_ij,j u_i,k + sigma_ij (H_ik,j - eps^aux_ij,k)) q_k dV derived in
+    closed form in the local frame and verified against central differences to 6.5e-10; CurvedTerms::DomainOnly for
+    comparison), curved_auxiliary, and penny_crack_half_cylinder (the half x >= 0 of the whole cylinder, both crack
+    faces). interaction_integral unchanged. Met: penny crack under tension inclined 45 deg (122 145 unknowns) ring 3 K_I
+    within 5.8e-4, K_II within 1.6e-4 A_II, K_III within 1.5e-3 A_III of the hat-averaged closed forms 2 sigma_nn
+    sqrt(a/pi), 4 tau sqrt(a/pi) sin theta/(2 - nu), -4 (1 - nu) tau sqrt(a/pi) cos theta/(2 - nu) (limit 3 percent; the
+    closed forms derived from the 2-D forms by a Fourier reduction and verified numerically, J of the domain integral
+    within 1.8e-2 of their G), rings 2-4 within 1.3e-3; the domain term alone off by 3 to 14 percent; elliptical crack
+    b/a = 0.5 mode I within 2.5e-3 of Irwin; the straight inclined crack bit-identical to ADR 0605; 11 of 11 mutations
+    caught. Missed: the coarse-ellipse K against K of the coarse-mesh J, 2.29e-2 against 2e-2 (the error of that J;
+    known miss). Not covered: K_III at mirror-plane stations (end-face term), closed fronts, mixed-mode elliptical
+    cracks, non-planar fronts. No case-file key. Follow-up F-689 (Interaction integral on closed curved fronts and
+    mirror-plane stations).
 - [~] **F-683** The free-sector pre-stress on solid and shell sectors, and its scope without stress stiffening
   - depends on: F-680
   - acceptance: Every limit not stated here is registered in the ADR before the run. RotatingSector::new with
@@ -13576,3 +13605,23 @@ fixed by the item's registration ADR before any code.
     the pre-stress of a constrained-copy route within 1e-10 and a residual at the interior nodes within 1e-10 of the
     load; the defaults bit-identical.
   - note: Follow-up of F-683 (ADR 0611, 2026-11-15).
+- [ ] **F-687** Through-thickness temperature gradient on Shell3 and Layup shells
+  - depends on: F-527
+  - acceptance: Every limit not stated here is registered in the ADR before the run. Load::ShellTemperatureGradient on a
+    Shell3 model and on a Layup Shell4 model gives the curvature thermal load (ply-integrated for a layup); a clamped
+    plate under a uniform gradient gives the closed-form moment within 1e-12; a model without a gradient gives the bits
+    it gave before.
+  - note: Follow-up of F-527 (ADR 0612, 2026-11-15).
+- [ ] **F-688** Case-file key for the shell temperature gradient
+  - depends on: F-527
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A solid_case load key gives
+    Load::ShellTemperatureGradient; a shell model read from a case file gives the bits of the library call; existing
+    keys, goldens and baseline hashes unchanged.
+  - note: Follow-up of F-527 (ADR 0612, 2026-11-15).
+- [ ] **F-689** Interaction integral on closed curved fronts and mirror-plane stations
+  - depends on: F-682
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A closed (periodic) front without
+    end stations and a mirror-plane option that zeroes the antisymmetric modes at stations on a mirror plane; a whole
+    penny-shaped crack under tension inclined in a general direction with K_I, K_II and K_III at every station within 3
+    percent of the closed forms, and the results of ADR 0610 unchanged.
+  - note: Follow-up of F-682 (ADR 0610, 2026-11-15).
