@@ -18,6 +18,9 @@
 //! * [`buckling_factors`] (D3): `(K + mu (K_sigma - K_p,sym)) x = 0` by the path of [`crate::buckling::factors`].
 //! * [`tangent_modes`] (D7): the modes of the tangent of a converged nonlinear state (with the contributions' tangents), `K_T
 //!   phi = omega^2 M phi`, by the eigensolver of [`crate::geometric::prestressed_modes`].
+//! * [`tangent_modes_full`] and [`buckling_factors_full`] (ADR 0580, F-653): the same with the full (unsymmetric) load
+//!   stiffness, complex eigenvalues by the shift-invert Arnoldi solver of [`rcfd_linalg::eigen_pencil`]: the flutter of
+//!   follower loads (Beck's column).
 
 use crate::buckling::{BucklingOptions, BucklingResult};
 use crate::constraint::{check_rigid_body_motions, prescribed_equations, reduce, Prescribed};
@@ -31,7 +34,10 @@ use crate::modal::{ModalOptions, ModalResult};
 use crate::model::{Load, SolidModel};
 use crate::nonlinear::{add_triplets, Contribution};
 use rcfd_core::vec3::{cross, Vec3};
+use crate::model::DofMap;
+use rcfd_linalg::complex::C64;
 use rcfd_linalg::eigen::{lowest_eigenpairs, Shift, SubspaceOptions};
+use rcfd_linalg::eigen_pencil::{nearest_pencil_eigenpairs, PencilError, PencilOptions};
 use rcfd_linalg::CsrMatrix;
 
 /// The work package that fills this module; `None` once it has landed.
@@ -574,4 +580,254 @@ pub fn tangent_modes(
         })
         .collect();
     Ok(ModalResult::from_parts(eig, modes, nf, rigid_free, dofs))
+}
+
+/// The complex modes about a nonlinear state with the full (unsymmetric) tangent (ADR 0580 D3).
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct ComplexModes {
+    /// The eigenvalues `omega^2` (rad^2/s^2), nearest the shift first; a complex pair (flutter) returned whole.
+    pub eigenvalues: Vec<C64>,
+    /// The modes, one value per equation of the model's `DofMap` (0 at prescribed equations), unit 2-norm on the free ones.
+    pub modes: Vec<Vec<C64>>,
+    /// `||K_T phi - omega^2 M phi|| / (||K_T phi|| + |omega^2| ||M phi||)` of each pair.
+    pub residuals: Vec<f64>,
+    /// The Arnoldi steps.
+    pub steps: usize,
+    /// Number of free unknowns.
+    pub unknowns: usize,
+    dofs: DofMap,
+}
+
+impl ComplexModes {
+    /// The unknown numbering of the modes.
+    pub fn dofs(&self) -> &DofMap {
+        &self.dofs
+    }
+}
+
+/// The complex buckling factors with the full load stiffness (ADR 0580 D4).
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct ComplexBuckling {
+    /// The factors `mu` of `(K + mu (K_sigma - sum K_p)) x = 0` of smallest modulus, nearest 0 first; complex in general.
+    pub factors: Vec<C64>,
+    /// The modes, one value per equation of the model's `DofMap` (0 at prescribed equations).
+    pub modes: Vec<Vec<C64>>,
+    /// `||K x + mu G x|| / (||K x|| + |mu| ||G x||)` of each pair.
+    pub residuals: Vec<f64>,
+    /// The Arnoldi steps.
+    pub steps: usize,
+    /// Number of free unknowns.
+    pub unknowns: usize,
+    dofs: DofMap,
+}
+
+impl ComplexBuckling {
+    /// The unknown numbering of the modes.
+    pub fn dofs(&self) -> &DofMap {
+        &self.dofs
+    }
+}
+
+fn expand(free: &[usize], n: usize, v: &[C64]) -> Vec<C64> {
+    let mut full = vec![C64::ZERO; n];
+    for (&eq, &x) in free.iter().zip(v) {
+        full[eq] = x;
+    }
+    full
+}
+
+fn pencil_failed(e: PencilError) -> FemError {
+    FemError::Solver {
+        solver: "nearest_pencil_eigenpairs",
+        reason: e.to_string(),
+    }
+}
+
+/// The modes about a nonlinear state with the full tangent of the contributions (ADR 0580 D3): [`tangent_modes`] with
+/// [`Contribution::add_full`] in place of [`Contribution::add`] (for a [`FollowerPressure`] the unsymmetric `-K_p`), the
+/// pencil `K_T phi = omega^2 M phi` solved by [`rcfd_linalg::eigen_pencil::nearest_pencil_eigenpairs`] for the
+/// `options.modes` eigenvalues nearest the shift, complex in general (a pair `omega^2 = a +/- i b`, `b != 0`, is flutter).
+/// The shift: `options.shift` `None` is 0 when the constraints hold every rigid motion and refused otherwise (key
+/// `"shift"`), `Some(Shift::Value(s))` is `s`, `Some(Shift::Auto)` is refused (key `"shift"`); the tolerance is
+/// `options.tolerance` on the Arnoldi estimate; the residual measure, the iteration cap, the subspace size and the
+/// factorisation of `options` are not used. The model checks, the reduction and the mass test are those of
+/// [`tangent_modes`].
+#[allow(clippy::too_many_arguments)]
+pub fn tangent_modes_full(
+    model: &SolidModel,
+    prescribed: &[Prescribed],
+    u: &[f64],
+    states: &[ElementState],
+    load_factor: f64,
+    contributions: &[&dyn Contribution],
+    options: &ModalOptions,
+) -> Result<ComplexModes> {
+    model.validate()?;
+    model.check_supported_nonlinear()?;
+    crate::nonlinear::check_driver_model(model)?;
+    let dofs = model.dof_map();
+    let fixed: Vec<(usize, f64)> = prescribed_equations(model, prescribed)?
+        .into_iter()
+        .map(|(eq, _)| (eq, 0.0))
+        .collect();
+    let rigid_free = match check_rigid_body_motions(model, &fixed) {
+        Ok(()) => false,
+        Err(FemError::RigidBodyMotionFree { .. }) => true,
+        Err(e) => return Err(e),
+    };
+    let shift = match options.shift {
+        None if !rigid_free => 0.0,
+        None => {
+            return Err(FemError::InvalidValue {
+                key: "shift",
+                reason: "the constraints leave a rigid motion free: the full tangent modes need a given shift \
+                         (Shift::Value; ADR 0580 D3)"
+                    .to_string(),
+            })
+        }
+        Some(Shift::Value(s)) => s,
+        Some(Shift::Auto) => {
+            return Err(FemError::InvalidValue {
+                key: "shift",
+                reason: "Shift::Auto tests a symmetric factor; the full tangent modes take Shift::Value (ADR 0580 D3)"
+                    .to_string(),
+            })
+        }
+    };
+    let mut k = crate::nonlinear::tangent(model, u, states, options.threads)?;
+    if !contributions.is_empty() {
+        let mut triplets = Vec::new();
+        let mut scratch = vec![0.0; u.len()];
+        for c in contributions {
+            c.add_full(u, load_factor, &mut scratch, &mut triplets)
+                .map_err(|e| FemError::InvalidValue {
+                    key: "contribution",
+                    reason: format!("contribution '{}': {e}", c.name()),
+                })?;
+        }
+        add_triplets(&mut k, &triplets);
+    }
+    let m = consistent_with(model, options.threads)?;
+    let zero = vec![0.0; k.n];
+    let kr = reduce(&k, &zero, &fixed)?;
+    let mr = reduce(&m, &zero, &fixed)?;
+    let free = kr.free().to_vec();
+    let nf = free.len();
+    if options.modes == 0 || options.modes >= nf {
+        return Err(FemError::InvalidValue {
+            key: "modes",
+            reason: format!(
+                "{} modes requested of a model with {nf} free unknowns (at least 1 and fewer than the unknowns)",
+                options.modes
+            ),
+        });
+    }
+    for (i, d) in mr.matrix.diag().iter().enumerate() {
+        if d.is_nan() || *d <= 0.0 {
+            let (node, component) = dofs.node_component(free[i]).expect("free equation exists");
+            return Err(FemError::InvalidValue {
+                key: "density",
+                reason: format!("node {node} component {component} has no mass (diagonal {d:e})"),
+            });
+        }
+    }
+    let opts = PencilOptions::new().shift(shift).tolerance(options.tolerance);
+    let eig = nearest_pencil_eigenpairs(&kr.matrix, &mr.matrix, options.modes, &opts).map_err(pencil_failed)?;
+    Ok(ComplexModes {
+        modes: eig.vectors.iter().map(|v| expand(&free, k.n, v)).collect(),
+        eigenvalues: eig.values,
+        residuals: eig.residuals,
+        steps: eig.steps,
+        unknowns: nf,
+        dofs,
+    })
+}
+
+/// The buckling factors with the full (unsymmetric) load stiffness of follower pressures (ADR 0580 D4): `(K + mu (K_sigma -
+/// sum K_p)) x = 0`, `K_p` of each pressure at zero displacement and load factor 1 in full, the `options.factors` factors of
+/// smallest modulus, complex in general, by [`rcfd_linalg::eigen_pencil::nearest_pencil_eigenpairs`] on `K x = mu B x`, `B =
+/// -(K_sigma - sum K_p)`, shift 0, tolerance `options.tolerance`. The model checks, the zero-value prescribed equations, the
+/// rigid-motion test and the zero-shift pivot rule are those of [`crate::buckling::factors`]; the transformation path is
+/// refused (key `"load stiffness"`).
+pub fn buckling_factors_full(
+    model: &SolidModel,
+    prestress: &Prestress,
+    pressures: &[&FollowerPressure],
+    options: &BucklingOptions,
+) -> Result<ComplexBuckling> {
+    model.validate()?;
+    model.check_supported_with_materials()?;
+    crate::mat_ortho::refuse_with_cyclic(model)?;
+    if crate::mpc::uses_transformation(model) {
+        return Err(FemError::InvalidValue {
+            key: "load stiffness",
+            reason: "the full load stiffness is not offered on the transformation path (linear constraints, rigid sets, \
+                     cyclic constraints, elastic supports; ADR 0580 D4)"
+                .to_string(),
+        });
+    }
+    let dofs = model.dof_map();
+    let n = dofs.n_equations();
+    let fixed = prescribed_equations(model, &[])?;
+    if let Some(&(eq, v)) = fixed.iter().find(|&&(_, v)| v != 0.0) {
+        let (node, component) = dofs.node_component(eq).expect("existing equation");
+        return Err(FemError::InvalidValue {
+            key: "constraint",
+            reason: format!(
+                "prescribed value {v:e} at node {node} component {component}: a buckling analysis takes zero values only"
+            ),
+        });
+    }
+    check_rigid_body_motions(model, &fixed)?;
+    let mut kg = crate::geometric::assemble_geometric(model, prestress, options.threads)?;
+    let zero = vec![0.0; n];
+    let mut extra = Vec::new();
+    for p in pressures {
+        for (r, c, v) in p.load_stiffness(&zero, 1.0)? {
+            extra.push((r, c, -v));
+        }
+    }
+    if !extra.is_empty() {
+        add_triplets(&mut kg, &extra);
+    }
+    let k = crate::assemble::point_stiffness(model, options.threads)?;
+    let kr = reduce(&k, &zero, &fixed)?;
+    let gr = reduce(&kg, &zero, &fixed)?;
+    let free = kr.free().to_vec();
+    let nf = free.len();
+    if options.factors == 0 || options.factors >= nf {
+        return Err(FemError::InvalidValue {
+            key: "factors",
+            reason: format!(
+                "{} factors requested of a model with {nf} free unknowns (at least 1 and fewer than the unknowns)",
+                options.factors
+            ),
+        });
+    }
+    if let Ok(Some((row, ratio))) = crate::mpc::zero_shift_failing_pivot(&kr.matrix) {
+        let (node, component) = dofs.node_component(free[row]).expect("free equation");
+        return Err(FemError::Solver {
+            solver: "nearest_pencil_eigenpairs",
+            reason: format!(
+                "node {node} component {component}: pivot ratio {ratio:e} of K_FF at zero shift, below 1e-8 (ADR 0402): \
+                 the prescribed displacements leave a motion free; a buckling analysis needs every motion held"
+            ),
+        });
+    }
+    let mut b = gr.matrix.clone();
+    for v in b.val.iter_mut() {
+        *v = -*v;
+    }
+    let opts = PencilOptions::new().tolerance(options.tolerance);
+    let eig = nearest_pencil_eigenpairs(&kr.matrix, &b, options.factors, &opts).map_err(pencil_failed)?;
+    Ok(ComplexBuckling {
+        modes: eig.vectors.iter().map(|v| expand(&free, n, v)).collect(),
+        factors: eig.values,
+        residuals: eig.residuals,
+        steps: eig.steps,
+        unknowns: nf,
+        dofs,
+    })
 }
