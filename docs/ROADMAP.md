@@ -11995,14 +11995,26 @@ fixed by the item's registration ADR before any code.
     it; the Hex20 sequence of ADR 0522 kept as a record of the singular hinge.
   - note: Structural solver, advanced tier. Follow-up of F-585 (ADR 0522, 2026-11-14). Needs the paper's tabulated
     value.
-- [ ] **F-611** Energy-momentum step with F-425's hyperelastic materials
+- [x] **F-611** Energy-momentum step with F-425's hyperelastic materials
   - depends on: F-607, F-425
   - acceptance: Every limit not stated here is registered in the ADR before the run. With F-425's neo-Hookean and
     Mooney-Rivlin energies in the discrete gradient of ADR 0523, the neo-Hookean spinning bar over ten turns keeps
     linear momentum within 1e-10, angular momentum within 1e-6 and energy within 1e-6 relative, and the large-strain
     neo-Hookean and Mooney-Rivlin cubes of ADR 0523 over 500 steps keep energy within 1e-7 relative; the step-local
     energy of ADR 0523 is removed or equals F-425's within 1e-12 at a point.
-  - note: Structural solver, advanced tier. Follow-up of F-607 (ADR 0523, 2026-11-14).
+  - note: Structural solver, advanced tier. ADR 0544, 2026-11-15: nl_transient gains
+    AlgorithmicStress::MaterialDiscreteGradient, the discrete gradient of ADR 0523 with F-425's point functions
+    (mat_hyper energy, stress, tangent at E_m, and the new mat_hyper::energy_magnitude as the rounding bound), taking
+    the neo-Hookean and the Mooney-Rivlin material; DiscreteGradient and Average keep the step-local neo-Hookean of ADR
+    0523 (bits unchanged, Mooney-Rivlin refused there), Auto unchanged. Neo-Hookean spinning bar over ten turns: linear
+    momentum 3.8e-13 (1e-10), angular momentum 1.0e-12 (1e-6), energy 2.3e-13 (1e-6). Large-strain cubes over 500 steps:
+    neo-Hookean energy 2.8e-9, Mooney-Rivlin (c10 3.5e4, c01 1.5e4, kappa 1e6) energy 2.8e-9 (1e-7), momenta at most
+    3.3e-13. The step-local energy equals F-425's at a point within 1.7e-13 for strains from 1e-3 (1e-12), stress
+    1.4e-15, tangent 7.8e-16; at strains of 1e-6 the two differ by 1.3e-10 relative, the cancellation in F-425's
+    evaluation (2.3e-16 of its term magnitude). Six of six required mutations caught (and two of three recorded ones);
+    B0 digests of the base, baseline_hashes and the F-607, F-570 and F-425 tests unchanged. No case-file key. Folding
+    DiscreteGradient into the new variant needs the Mooney-Rivlin row of the F-607 refusal test edited (maintainer's
+    call).
 - [~] **F-612** Accuracy indicator and fallback of the perturbation Schur Ritz error of the sector split modes
   - depends on: F-584
   - acceptance: Every limit not stated here is registered in the ADR before the run. With SplitSchur::Perturbation each
