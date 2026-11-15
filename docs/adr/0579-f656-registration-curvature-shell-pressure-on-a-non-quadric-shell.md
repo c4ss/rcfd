@@ -256,3 +256,82 @@ Not taken:
 4. Whether `Jet` should become the default boundary estimator of `Load::shell_pressure_curvature`: it would change the default
    results on non-quadric shells (none in the hash tables, but a default change); recommendation to keep it opt-in until the
    maintainer decides.
+
+## Addendum 1 (2026-11-15): results
+
+Run 1 is commit 9814173d (`f656-scratch/run1.log`, the new test file, release, made once, every check printed). Commit 782f4d2c
+then added a type alias that clippy asked for (`type_complexity`, layout only; the test file only); B2 ran on it and includes
+the new test file, which passed there again (its numbers are not printed without `--nocapture`; `b2.log`). The mutations ran on a `git archive` copy of
+782f4d2c (`f656-scratch/mutate.py`, `mutlogs/`, own target directory). No amendment was written.
+
+| id | limit | measured | met |
+| --- | --- | --- | --- |
+| M1 | `<= 1e-7` | `1.30e-11` | yes |
+| D1 | `<= 5e-3`; `<= 4e-3` | segment n = 16, `Jet`: `e_w = 2.3635e-3`, `e_v = 1.8323e-3` | yes |
+| D2 | `<= 1e-3`; `<= 1.2e-3` | n = 32: `e_w = 4.0844e-4`, `e_v = 5.2585e-4` | yes |
+| D3 | `>= 1.5` each | orders `2.53` (`w`), `1.80` (`v`) | yes |
+| Q1 | `<= 4e-2`; `<= 3e-2` | n = 16, `Quadric`: `1.6874e-2`, `1.1440e-2` | yes |
+| Q2 | `<= 8e-3`; `<= 5e-3` | n = 32: `3.7167e-3`, `2.1281e-3` | yes |
+| Q3 | `>= 1.5` each | `2.18`, `2.43` | yes |
+| D4 | strict | `Jet` below `Quadric` by the factors 7.14, 6.24 (n = 16), 9.10, 4.05 (n = 32) | yes |
+| NC1 | `> 2e-2` | default `Load::shell_pressure` n = 32: `e_w = 7.4029e-2` (`e_v = 1.9168e-2`) | yes |
+| K1 | `<= 2e-2` | torus patch structured N = 32, all nodes: `9.2628e-3` (ADR 0567: `1.3573e-1`) | yes |
+| K2 | `<= 2e-2` | jittered N = 32: `1.0810e-2` (ADR 0567: `1.3742e-1`) | yes |
+| K3 | `<= 3e-3`; `>= 2.0` | N = 64 jet nodes `1.1360e-3`; order `3.03` | yes |
+| K4 | exact | 248 jet nodes = the nodes of distance `<= 1`, structured and jittered; every other node bit-identical | yes |
+| K5 | exact | octant n = 16, 32, cylinder O1: 0 jet nodes, load bits equal | yes |
+| S1 | exact | `true` (867 non-zero entries of 1734) | yes |
+| RF1 | as stated | `Jet` refused, key `"curvature"` (node 0: 11 points, fewer than 14); `Quadric` accepted | yes |
+| B1 | exact | the four digests `c79b1b660e85edc7`, `7f104d16c739c930`, `30fe5e5c181287d3`, `323bfcb68bd39ddf` reproduced | yes |
+| B2 | pass | `cargo test -p rcfd-fem --release` on 782f4d2c: 280 test binaries, 0 failed (`b2.log`) | yes |
+| B3 | pass | baseline_hashes 3 passed, 1 ignored (the existing record); docs_site 2 passed (with the `docs/structural-solver.md` bullet in the tree; `b3.log`) | yes |
+| B4 | as stated | `git diff e348eb34 -- crates/*/src` (`b4.diff`) touches only the three files named. Changed lines: `model.rs` the validation pattern (`{ set, pressure, .. }`); `shell3_curvature.rs` the `NodalCurvature` constructor and the tail of `pressure_load_curvature` (moved into `assemble`); `loads.rs` the pattern of the arm, **and two lines the registration did not name**: the call `add_shell_pressure_curvature(.., *pressure)` (now also passing `*boundary`) and the `for` line over `pressure_load_curvature` (now a `match` on `boundary` whose `Quadric` arm calls the same function with the same arguments) | **no, as worded**: the two lines are the "arm passes `boundary` on" of design 3, but B4's list omitted them |
+
+The prototype numbers are reproduced to three or four digits everywhere (the prototype solves with numpy's SVD least squares
+and a block-tridiagonal solve; rcfd with Householder QR and its direct solver).
+
+Mutations (all caught; `mutlogs/`):
+
+| id | caught by |
+| --- | --- |
+| MU1 (cubic jet) | K1 `3.91e-2`, K2 `5.83e-2`, K3 `9.31e-3`, D1, D2, D4 (n = 16 `e_w`: the cubic is worse than the quadric there) |
+| MU2 (jet never taken) | K1, K2 (the ADR 0567 values), K3 (no jet nodes: order NaN), K4, D1, D2, D4 (ratio 1), RF1 (not refused) |
+| MU3 (jet always taken) | K5 (92, 200 and 184 jet nodes; bits differ) |
+| MU4 (jet at distance 0 only) | K1 `5.98e-2`, K2 `7.10e-2`, K4, D1, D2 |
+| MU5 (jet normal discarded) | D1 (`e_w = 3.24`), D2, D3, D4 |
+| MU6 (the option ignored by `loads.rs`) | D1, D2, D4 (ratio 1), RF1 (not refused) |
+
+fmt (`cargo fmt -p rcfd-fem --check`) clean; clippy (`cargo clippy -p rcfd-fem --release --all-targets -- -D warnings`) clean
+after the alias of 782f4d2c (`clippy.log` shows the one `type_complexity` error before it, `clippy2.log` clean). Not run: the
+whole workspace suite (the lead's gate). Files: `crates/rcfd-fem/src/shell3_curvature.rs` (the enum, two constants, the field,
+`assemble`, `stencil`, `least_squares_n`, `local_points`, `quadric_residual`, `jet_estimate`, `estimates_with`,
+`curvature_estimates_with`, `pressure_load_curvature_with`), `model.rs` (the variant's field, the builder
+`shell_pressure_curvature_with`, the validation pattern), `loads.rs` (the arm and `add_shell_pressure_curvature`), the new test
+file `crates/rcfd-fem/tests/sa_shell_pressure_curvature_torus.rs`, this ADR, and a bullet in `docs/structural-solver.md`.
+
+**Decision: partial**, by the rule: every acceptance clause is met (the torus segment at two refinements with errors `4.1e-4`
+and `5.3e-4` and orders `2.5` and `1.8` with the boundary estimator, `3.7e-3` and `2.1e-3`, orders `2.2` and `2.4` with the
+ADR 0567 load; the boundary-node curvature error `1.36e-1` to `9.26e-3` at 32 x 32; defaults bit-identical by B1, K4, K5, B2,
+B3), every mutation caught, no amendment; but the diff-scope check B4 is missed as worded (two lines of `loads.rs` that pass
+the new field on were not in its list). The miss is in the registration's wording, not in the bits.
+
+Remaining questions (options, recommendation):
+
+1. B4: (a) keep partial; (b) the maintainer accepts the two `loads.rs` lines as covered by design 3 ("the arm passes
+   `boundary` on") and by B1, K5 and B2 (the bits). Recommend (b) if the maintainer agrees that the diff check's purpose (no
+   default path changed) is shown by the digests; otherwise (a).
+2. The default boundary estimator: (a) keep `Quadric` as the default of `Load::shell_pressure_curvature`; (b) make `Jet` the
+   default (it keeps the ADR 0567 bits wherever ADR 0567 is exact, by K5, but changes the default result on non-quadric
+   shells). Recommend (a) now; (b) is a maintainer decision (open question 4).
+3. A free edge of a non-quadric shell under the curvature load (L1): (a) leave; (b) a follow-up against a shell (not membrane)
+   reference with the edge free. Recommend (a): no user case asks for it yet.
+4. The interior quadric's normal (L3, `1.5e-3` on the torus at N = 32, larger than the jet's boundary normal): (a) leave; (b)
+   measure whether the jet at every node improves the torus segment further. Recommend (a), low priority.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> Structural solver, advanced tier. Follow-up of F-633 (ADR 0567, 2026-11-15). PARTIAL. ADR 0579, 2026-11-15: opt-in boundary curvature estimator for the curvature shell pressure: `Load::shell_pressure_curvature_with(set, p, CurvatureBoundary::Jet)` replaces the ADR 0567 quadric at the nodes of boundary distance 0 and 1 (one-sided stencils) by a quartic height jet fitted over the same stencil in the angle-weighted frame (third order at the boundary, derived), unless the quadric fits that stencil to a relative residual of 1e-9 (then the surface is a quadric there and the ADR 0567 estimate is kept: on the octant and the cylinder O1 the option gives the default's bits). Torus patch of ADR 0567 at 32 x 32: boundary-node curvature error 1.36e-1 to 9.26e-3 (jittered 1.37e-1 to 1.08e-2; 1.14e-3 at 64 x 64, order 3.0). Pressurised torus segment (R0 = 1, r = 0.4, t = 0.001, theta in [0, pi/2], phi in [0, pi/4], 6n x n Shell3 cells, symmetry cuts at theta = 0, pi/2 and phi = 0, the edge phi = pi/4 clamped at the membrane state) against the membrane solution derived in the ADR: normal and meridional displacement errors with the jet 2.36e-3, 1.83e-3 (n = 16) and 4.08e-4, 5.26e-4 (n = 32), orders 2.5 and 1.8; with the ADR 0567 quadric (`Load::shell_pressure_curvature`) 1.69e-2, 1.14e-2 and 3.72e-3, 2.13e-3, orders 2.2 and 2.4; the default pressure 7.4e-2. Defaults bit-identical (four digests of the base reproduced, the rcfd-fem suite, baseline_hashes, docs_site pass); six of six mutations caught. Partial: the diff-scope check B4 missed as worded (two loads.rs lines that pass the new field on were not in its list); every acceptance clause met.
+
+No follow-up is proposed (remaining questions 3 and 4 recommend leaving the free edge and the interior normal until a case asks for them).

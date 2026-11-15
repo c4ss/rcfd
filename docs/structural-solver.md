@@ -53,6 +53,13 @@ measured (test only, no library change).
   quadric the curvature estimate is only consistent (on a torus patch second order inside, about 14 percent at the boundary
   nodes at 32 x 32 cells), and nodes of zero mean curvature (flat parts, saddles) are refused: load flat parts with the default
   pressure on their own element set.
+* **`Load::shell_pressure_curvature_with(set, p, CurvatureBoundary::Jet)` (opt-in).** [ADR 0579](adr/0579-f656-registration-curvature-shell-pressure-on-a-non-quadric-shell.md)
+  replaces the curvature estimate at the nodes next to the boundary (distance 0 and 1, whose stencils are one-sided) by a
+  quartic height jet fitted over the same stencil, unless the quadric fits that stencil to a relative residual of `1e-9` (then
+  the surface is a quadric there and the ADR 0567 estimate is kept: spheres and cylinders give the same bits). On the torus
+  patch the boundary error falls from 14 percent to `9.3e-3` at 32 x 32 (third order); on a pressurised torus segment with
+  symmetry cuts the normal and meridional displacements are within `4.1e-4` and `5.3e-4` of the membrane solution at the
+  finer of two meshes (the default estimator `3.7e-3` and `2.1e-3`, the default pressure `7.4e-2`).
 
 ## The fan-blade demonstration
 
