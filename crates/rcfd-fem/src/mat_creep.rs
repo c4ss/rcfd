@@ -23,10 +23,15 @@
 //! ADR 0558 (F-581): an optional Arrhenius factor `exp(-Q/(R T))` on `A` ([`Material::creep_arrhenius`]), with the temperature
 //! `T` of the point context held over the step; read only when the step creeps (a step with no time increment is elastic
 //! whatever `A`), refused without a temperature (key `"temperature"`). Without the factor every line runs as before.
+//!
+//! ADR 0578 (F-651): the time-stepping driver and the nonlinear transient integrator refuse a factor material before any step
+//! without a temperature option, with a constant temperature that is not positive and finite, or with a temperature history
+//! with such a point ([`check_factor_temperature`]; key `"temperature"`).
 
 use crate::error::{FemError, Result};
 use crate::material::{apply, isotropic_elasticity, Matrix6, PointContext};
-use crate::model::Material;
+use crate::model::{Material, SolidModel};
+use crate::transient::LoadTable;
 
 /// The work package that fills this module; `None` once it has landed.
 pub const PENDING: Option<&'static str> = None;
@@ -133,6 +138,55 @@ pub fn arrhenius_factor(activation: f64, temperature: f64) -> Result<f64> {
         )));
     }
     Ok(f)
+}
+
+/// The up-front temperature check of a model with a creep material with the Arrhenius factor (ADR 0578 D2), for a driver
+/// with the constant temperature `constant`, the temperature history `history` and, if `field`, a nodal temperature field.
+/// A model without a factor material returns `Ok(())` before reading the options. Refused (key `"temperature"`, naming the
+/// first factor material): no temperature option at all; a constant temperature that is not finite or not `> 0`; a history
+/// with a point value that is not finite or not `> 0` (the minimum of a piecewise linear table over its whole range). A field
+/// is not checked here (its point values are refused at the point, [`arrhenius_factor`]).
+pub(crate) fn check_factor_temperature(
+    model: &SolidModel,
+    constant: Option<f64>,
+    history: Option<&LoadTable>,
+    field: bool,
+) -> Result<()> {
+    let Some((i, (set, _))) = model.materials().iter().enumerate().find(|(_, (_, m))| {
+        matches!(
+            m,
+            Material::Creep {
+                activation: Some(_),
+                ..
+            }
+        )
+    }) else {
+        return Ok(());
+    };
+    let refuse = |what: String| {
+        Err(temperature_error(format!(
+            "material {i}, element set '{set}': a creep material with an Arrhenius factor {what} (ADR 0578 D2)"
+        )))
+    };
+    if constant.is_none() && history.is_none() && !field {
+        return refuse(
+            "needs a temperature option (a constant temperature, a temperature history or a field)".to_string(),
+        );
+    }
+    let positive = |t: f64| t.is_finite() && t > 0.0;
+    if let Some(t) = constant {
+        if !positive(t) {
+            return refuse(format!("needs a positive, finite temperature: {t:e} K"));
+        }
+    }
+    if let Some(table) = history {
+        if let Some(&(time, t)) = table.points().iter().find(|&&(_, t)| !positive(t)) {
+            return refuse(format!(
+                "needs a positive, finite temperature: the history gives {t:e} K at t = {time:e} s"
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// The backward Euler return of a creep material with the isotropic base `(e, nu)` and the law `(a, n, m)` at the strain

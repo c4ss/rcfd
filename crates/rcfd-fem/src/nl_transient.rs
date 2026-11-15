@@ -512,7 +512,8 @@ impl Integrator {
     /// patterns) and the options (ADR 0479 D3). Refuses the transformation path and a temperature load (key
     /// `"nl_transient"`), a non-zero prescribed value (`"constraint"`), what the nonlinear driver refuses, a non-positive
     /// step (`"time step"`), `beta = 0` (`"method"`), invalid damping (`"damping"`) and a load pattern of the wrong length
-    /// or with a non-finite value (`"load pattern"`).
+    /// or with a non-finite value (`"load pattern"`), and a creep material with the Arrhenius factor without a temperature
+    /// option or with a constant temperature or history point that is not positive and finite (`"temperature"`, ADR 0578 D2).
     pub fn new(model: &SolidModel, loads: &[LoadHistory], options: &NlTransientOptions) -> Result<Integrator> {
         let dt = options.time_step;
         if !(dt.is_finite() && dt > 0.0) {
@@ -581,6 +582,13 @@ impl Integrator {
             }
             crate::thermal::check_field_model(model, field)?;
         }
+        // ADR 0578 D2: a creep material with the Arrhenius factor needs a positive temperature option, refused before any step.
+        crate::mat_creep::check_factor_temperature(
+            model,
+            options.temperature,
+            options.temperature_history.as_ref(),
+            options.temperature_field.is_some(),
+        )?;
         let parameters = options.method.parameters()?;
         if parameters[2] <= 0.0 {
             return Err(invalid(
