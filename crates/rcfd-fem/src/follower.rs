@@ -21,6 +21,9 @@
 //! * [`tangent_modes_full`] and [`buckling_factors_full`] (ADR 0580, F-653): the same with the full (unsymmetric) load
 //!   stiffness, complex eigenvalues by the shift-invert Arnoldi solver of [`rcfd_linalg::eigen_pencil`]: the flutter of
 //!   follower loads (Beck's column).
+//! * [`FollowerTipForce`] and [`prestressed_modes_full`] (ADR 0589, F-665): a tangential follower force on Beam2 nodes,
+//!   turning with the node rotation, with its load stiffness `K_f`, and the complex modes of `(K + lambda (K_sigma - K_f))
+//!   phi = omega^2 M phi` about a linear pre-stress (no Newton tangent, so beams take it).
 
 use crate::buckling::{BucklingOptions, BucklingResult};
 use crate::constraint::{check_rigid_body_motions, prescribed_equations, reduce, Prescribed};
@@ -833,6 +836,250 @@ pub fn buckling_factors_full(
     Ok(ComplexBuckling {
         modes: eig.vectors.iter().map(|v| expand(&free, n, v)).collect(),
         factors: eig.values,
+        residuals: eig.residuals,
+        backward_errors: eig.backward_errors,
+        steps: eig.steps,
+        unknowns: nf,
+        dofs,
+    })
+}
+
+/// A tangential follower force on Beam2 nodes (ADR 0589 D1, F-665): the force `F` of the reference load (load factor 1) on
+/// each node of a node set, fixed in the end section so that it turns with the node's rotation, `f_a = lambda (F + theta_a x
+/// F)` on the translations of node `a` (`theta_a` the node's rotation unknowns; linear in `theta`, the small-rotation
+/// kinematics of Beam2). Its load stiffness `K_f = d f / d u` has the entries `lambda eps_ijk F_k` at (translation `i`,
+/// rotation `j`) of each node, unsymmetric and independent of `u`. Beck's load is `F = -P e_1` at the free end of a
+/// cantilever.
+#[derive(Debug, Clone)]
+pub struct FollowerTipForce {
+    name: String,
+    force: Vec3,
+    /// Per loaded node the equations of its translations and rotations.
+    nodes: Vec<[usize; 6]>,
+    n: usize,
+}
+
+impl FollowerTipForce {
+    /// The force `force` (N, global axes) on each node of the node set `set` of `model` (ADR 0589 D1). Refused: an unknown
+    /// node set, a non-finite component (key `"force"`), a node that is not a node of a Beam2 element (key `"follower
+    /// force"`), a node without six components (`MissingComponent`).
+    pub fn new(model: &SolidModel, set: &str, force: Vec3) -> Result<FollowerTipForce> {
+        if force.iter().any(|v| !v.is_finite()) {
+            return Err(FemError::InvalidValue {
+                key: "force",
+                reason: format!("{force:?} is not finite"),
+            });
+        }
+        let mesh = model.mesh();
+        let dofs = model.dof_map();
+        let set_nodes = mesh.node_set(set).ok_or_else(|| FemError::UnknownSet {
+            kind: SetKind::Node,
+            name: set.to_string(),
+        })?;
+        let mut on_beam = vec![false; mesh.nodes().len()];
+        for block in mesh.blocks() {
+            if block.kind() == ElementKind::Beam2 {
+                for &node in block.connectivity() {
+                    on_beam[node] = true;
+                }
+            }
+        }
+        let mut nodes = Vec::with_capacity(set_nodes.len());
+        for &node in set_nodes {
+            if !on_beam[node] {
+                return Err(FemError::InvalidValue {
+                    key: "follower force",
+                    reason: format!(
+                        "node set '{set}': node {node} is not a node of a Beam2 element; a follower tip force turns with \
+                         the section rotation of a beam node (ADR 0589 D1)"
+                    ),
+                });
+            }
+            let mut eqs = [0usize; 6];
+            for (c, eq) in eqs.iter_mut().enumerate() {
+                *eq = dofs.equation(node, c).ok_or(FemError::MissingComponent {
+                    role: "follower force",
+                    node,
+                    component: c,
+                    available: dofs.components(node),
+                })?;
+            }
+            nodes.push(eqs);
+        }
+        Ok(FollowerTipForce {
+            name: format!("follower tip force on '{set}'"),
+            force,
+            nodes,
+            n: dofs.n_equations(),
+        })
+    }
+
+    /// The force of the reference load (load factor 1) on each node.
+    pub fn force_vector(&self) -> Vec3 {
+        self.force
+    }
+
+    /// A name for messages.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// The nodal forces at the displacement `u` (one value per unknown of the model's `DofMap`) and the load factor:
+    /// `lambda (F + theta_a x F)` on the translations of each loaded node, zero elsewhere. A `u` of the wrong length is
+    /// refused (key `"displacement"`).
+    pub fn force(&self, u: &[f64], load_factor: f64) -> Result<Vec<f64>> {
+        if u.len() != self.n {
+            return Err(FemError::FieldLength {
+                key: "displacement",
+                expected: self.n,
+                found: u.len(),
+            });
+        }
+        let mut out = vec![0.0; self.n];
+        let f = self.force;
+        for eqs in &self.nodes {
+            let theta = [u[eqs[3]], u[eqs[4]], u[eqs[5]]];
+            let turn = cross(theta, f);
+            for i in 0..3 {
+                out[eqs[i]] += load_factor * (f[i] + turn[i]);
+            }
+        }
+        Ok(out)
+    }
+
+    /// The load stiffness `K_f = d f / d u` at the load factor (ADR 0589 D1): per loaded node the six entries `lambda
+    /// eps_ijk F_k`, `i != j`, at (translation `i`, rotation `j`), as triplets `(row, column, value)`.
+    pub fn load_stiffness(&self, load_factor: f64) -> Vec<(usize, usize, f64)> {
+        let f = self.force;
+        let mut out = Vec::with_capacity(6 * self.nodes.len());
+        for eqs in &self.nodes {
+            for i in 0..3 {
+                for j in 0..3 {
+                    if i == j {
+                        continue;
+                    }
+                    let k = 3 - i - j;
+                    // eps_ijk = +1 when (i, j, k) is a cyclic permutation of (0, 1, 2), that is j = i + 1 (mod 3).
+                    let eps = if j == (i + 1) % 3 { 1.0 } else { -1.0 };
+                    out.push((eqs[i], eqs[3 + j], load_factor * eps * f[k]));
+                }
+            }
+        }
+        out
+    }
+}
+
+/// The modes about a linear pre-stress with follower tip forces (ADR 0589 D2, F-665): `(K + lambda (K_sigma - sum K_f)) phi
+/// = omega^2 M phi`, `K` the stiffness, `K_sigma` the geometric stiffness of `prestress` (the pre-stress of the reference
+/// load, for instance [`Prestress::from_static`] of the linear static solve with the dead forces; no Newton iteration, so
+/// beams take it), `K_f` the load stiffness of each force at load factor 1 ([`FollowerTipForce::load_stiffness`]), `M` the
+/// consistent mass, `lambda = load_factor`; solved by [`rcfd_linalg::eigen_pencil::nearest_pencil_eigenpairs`] for the
+/// `options.modes` eigenvalues nearest the shift, complex in general (a pair `omega^2 = a +/- i b`, `b != 0`, is flutter).
+/// The shift rule and the result are those of [`tangent_modes_full`]; zero prescribed values only (key `"constraint"`); a
+/// non-finite load factor (key `"load factor"`) and the transformation path (key `"load stiffness"`) are refused; the model
+/// checks are those of [`crate::geometric::prestressed_modes`].
+pub fn prestressed_modes_full(
+    model: &SolidModel,
+    prestress: &Prestress,
+    forces: &[&FollowerTipForce],
+    load_factor: f64,
+    options: &ModalOptions,
+) -> Result<ComplexModes> {
+    model.validate()?;
+    model.check_supported_with_materials()?;
+    if !load_factor.is_finite() {
+        return Err(FemError::InvalidValue {
+            key: "load factor",
+            reason: format!("{load_factor:e} is not finite"),
+        });
+    }
+    if crate::mpc::uses_transformation(model) {
+        return Err(FemError::InvalidValue {
+            key: "load stiffness",
+            reason: "the follower load stiffness is not offered on the transformation path (linear constraints, rigid \
+                     sets, cyclic constraints, elastic supports; ADR 0589 D2)"
+                .to_string(),
+        });
+    }
+    let dofs = model.dof_map();
+    let n = dofs.n_equations();
+    let fixed = prescribed_equations(model, &[])?;
+    if let Some(&(eq, v)) = fixed.iter().find(|&&(_, v)| v != 0.0) {
+        let (node, component) = dofs.node_component(eq).expect("existing equation");
+        return Err(FemError::InvalidValue {
+            key: "constraint",
+            reason: format!(
+                "prescribed value {v:e} at node {node} component {component}: a modal analysis takes zero values only"
+            ),
+        });
+    }
+    let rigid_free = match check_rigid_body_motions(model, &fixed) {
+        Ok(()) => false,
+        Err(FemError::RigidBodyMotionFree { .. }) => true,
+        Err(e) => return Err(e),
+    };
+    let shift = match options.shift {
+        None if !rigid_free => 0.0,
+        None => {
+            return Err(FemError::InvalidValue {
+                key: "shift",
+                reason: "the constraints leave a rigid motion free: the full modes need a given shift (Shift::Value; \
+                         ADR 0589 D2)"
+                    .to_string(),
+            })
+        }
+        Some(Shift::Value(s)) => s,
+        Some(Shift::Auto) => {
+            return Err(FemError::InvalidValue {
+                key: "shift",
+                reason: "Shift::Auto tests a symmetric factor; the full modes take Shift::Value (ADR 0589 D2)"
+                    .to_string(),
+            })
+        }
+    };
+    let mut kg = crate::geometric::assemble_geometric(model, prestress, options.threads)?;
+    for v in kg.val.iter_mut() {
+        *v *= load_factor;
+    }
+    let mut k = crate::geometric::add_on_pattern(&crate::assemble::point_stiffness(model, options.threads)?, &kg);
+    let mut extra = Vec::new();
+    for f in forces {
+        for (r, c, v) in f.load_stiffness(1.0) {
+            extra.push((r, c, -load_factor * v));
+        }
+    }
+    if !extra.is_empty() {
+        add_triplets(&mut k, &extra);
+    }
+    let m = consistent_with(model, options.threads)?;
+    let zero = vec![0.0; n];
+    let kr = reduce(&k, &zero, &fixed)?;
+    let mr = reduce(&m, &zero, &fixed)?;
+    let free = kr.free().to_vec();
+    let nf = free.len();
+    if options.modes == 0 || options.modes >= nf {
+        return Err(FemError::InvalidValue {
+            key: "modes",
+            reason: format!(
+                "{} modes requested of a model with {nf} free unknowns (at least 1 and fewer than the unknowns)",
+                options.modes
+            ),
+        });
+    }
+    for (i, d) in mr.matrix.diag().iter().enumerate() {
+        if d.is_nan() || *d <= 0.0 {
+            let (node, component) = dofs.node_component(free[i]).expect("free equation exists");
+            return Err(FemError::InvalidValue {
+                key: "density",
+                reason: format!("node {node} component {component} has no mass (diagonal {d:e})"),
+            });
+        }
+    }
+    let opts = PencilOptions::new().shift(shift).tolerance(options.tolerance);
+    let eig = nearest_pencil_eigenpairs(&kr.matrix, &mr.matrix, options.modes, &opts).map_err(pencil_failed)?;
+    Ok(ComplexModes {
+        modes: eig.vectors.iter().map(|v| expand(&free, n, v)).collect(),
+        eigenvalues: eig.values,
         residuals: eig.residuals,
         backward_errors: eig.backward_errors,
         steps: eig.steps,
