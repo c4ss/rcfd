@@ -2309,6 +2309,18 @@ penny under shear are derived from the 2-D forms of ADR 0605 (D2) and verified n
 | Penny crack, remote shear `tau` along `y`: `K_II = 4 tau sqrt(a/pi) sin theta/(2 - nu)`, `K_III = -4 (1 - nu) tau sqrt(a/pi) cos theta/(2 - nu)` (frame `(e, n, e x n)`, `theta` from `x`) | derived, verified | ADR 0610 D2: the Fourier reduction to the 2-D forms of ADR 0605 D6, the uniform slip traction of the ellipsoidal slip (`phi_xx = phi_yy = -pi^2/2`, `phi_xy = 0` inside, verified at five points), `nu -> 0`, the energy average; M. K. Kassir and G. C. Sih, J. Appl. Mech. (1966); H. Tada, P. C. Paris and G. R. Irwin, The Stress Analysis of Cracks Handbook: NOT read, from memory |
 | Measured: penny under inclined tension (`beta = 45 deg`, half `x >= 0` of the whole cylinder, 122 145 unknowns) ring 3: `K_I` within `5.8e-4`, `K_II` within `1.6e-4 A_II`, `K_III` within `1.5e-3 A_III` of the hat-averaged closed forms; J of the domain integral within `1.8e-2` of `G` of the closed forms; the domain term alone off by `3.1e-2`, `0.135`, `7.0e-2`; elliptical crack `b/a = 0.5` mode I within `2.5e-3` of Irwin | computed | ADR 0610 addendum 1 |
 
+## F-689 the interaction integral on closed fronts and at mirror-plane stations (ADR 0618)
+
+No source was read for F-689. The closed forms are those of ADR 0610 (F-682 above) with the shear direction rotated in the crack
+plane (ADR 0618 D4), verified by plain arithmetic (`f689-scratch/py/pre.py`, numpy, no rcfd code).
+
+| Item | Status | Source |
+|---|---|---|
+| Penny crack, remote tension `sigma` along `(sin beta cos psi, sin beta sin psi, cos beta)`: `K_I = 2 sigma cos^2 beta sqrt(a/pi)`, `K_II = A_II cos(theta - psi)`, `K_III = A_III sin(theta - psi)`, `A_II = 4 tau sqrt(a/pi)/(2 - nu)`, `A_III = 4 (1 - nu) tau sqrt(a/pi)/(2 - nu)`, `tau = sigma sin beta cos beta` (frame `(e, n, e x n)`, `theta` from `x`) | derived, verified | ADR 0618 D4: ADR 0610 D2 rotated by `psi - pi/2` (in-plane isotropy); `psi = pi/2` gives ADR 0610's forms exactly; the projection of the rotated slip jump onto `e` and `e x n` equal to the formulas to `4.2e-16`; the front mean of `G` independent of `psi` |
+| `K_III = 0` at a station on a mirror plane normal to the front (the tearing displacement odd under the reflection) | derived | ADR 0618 D2 |
+| Perimeter of the 16 quadratic edges of the ellipse `b = a/2` through equal steps of the parametric angle: `-2.45e-5` relative to `4 a E(k)` | computed | ADR 0618 arithmetic 1 |
+| Measured: whole penny (66 174 unknowns, closed front, 16 stations) under tension inclined `beta = 45 deg`, `psi = 35 deg`, ring 2: `K_I` within `7.0e-4`, `K_II` within `7.3e-4 A_II`, `K_III` within `4.9e-3 A_III` of the hat-averaged closed forms at every station; the half model of ADR 0610 with the mirror option against the whole model under the same load within `2.2e-13 A`; whole ellipse `b/a = 0.5` mode I within `1.1e-2` of Irwin | computed | ADR 0618 addendum 1 |
+
 ## F-580 creep on the B-bar Hex8 against a finite-strain reference of the thick cylinder (ADR 0549)
 
 No source was read for F-580. The books below are cited from memory for the names and the published forms. The stationary

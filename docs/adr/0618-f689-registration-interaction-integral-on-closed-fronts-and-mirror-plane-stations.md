@@ -272,3 +272,113 @@ nothing else). Mutations, each run once on a scratch copy (`f689-scratch/mut`, i
 ## Limits (not covered)
 
 As D8.
+
+## Addendum 1: results (2026-11-15)
+
+Code (commit 29a0b341): `crates/rcfd-fem/src/fracture.rs`, the only library file changed (336 lines added, 5 changed, after
+`cargo fmt`): as D1 to D3 and D7. Existing lines changed, each adding a branch taken only by the new options or a field at its
+default: the module documentation (lines 20-22), the `CrackFront` struct and its three constructors (104-107, 118-119, 130-131,
+148-149), the new `closed`, `mirror_plane`, `is_closed`, `mirror_planes` (160-184), the node-count test of `CrackFront::check` (210-225, the open message unchanged), `mut s` (249), the unwrapping for
+closed fronts and the span and gap checks (397-410, 425-449), `period` in `FrontGeometry` (458, 514-515; the
+`#[allow(dead_code)]` of `length` removed, now used), the early branches of `hat` and `hat_integral` (605-607, 636-638), the new
+private `closed_neighbours`, `closed_hat`, `closed_hat_integral`, `mirror_stations` (675-789), the mirror refusal of
+`interaction_integral` (1270-1275), the documentation and the mirror stations of `interaction_integral_curved` (2751-2754, 2798,
+2958-2959), and appended `CrackedWholeCylinder`, `HEX20_MIRROR`, `penny_crack_whole_cylinder` (3275-3379). Tests: the new file
+`crates/rcfd-fem/tests/sa_fracture_closed.rs`. No existing test edited; `docs/reference-data.md` gets an F-689 section.
+
+The fast tests were run once (`f689-scratch/run1.log`, 82.7 s for the four, one thread). BI was run once in each tree
+(`f689-scratch/bi/base.out`, `tip.out`). No development probe was run before the registered run.
+
+| check | limit | measured | met |
+|---|---|---|---|
+| WC1 whole penny, `psi = 35 deg`, ring 2, `K_I`, 16 stations | `<= 0.03` | 6.99e-4 | yes |
+| WC2 `K_II`, all stations, `/A_II` | `<= 0.03` | 7.34e-4 | yes |
+| WC3 `K_III`, all stations, `/A_III` | `<= 0.03` | 4.86e-3 | yes |
+| WC4 `K_II`, `K_III` relative where `|K_ref| >= A/2` | `<= 0.03` | 5.00e-3 | yes |
+| WC5 J (closed `j_integral`) against `G` of the closed forms | `<= 0.10` | 3.95e-2 (J low everywhere) | yes |
+| WCR domain term alone (record) | none | `K_I` 3.27e-2, `K_II` 0.139, `K_III` 7.49e-2; 66 174 unknowns, 5 120 Hex20, solve 22.4 s | (record) |
+| WM1 to WM7, WMR medium whole penny (heavy record) | as registered | **not run** (free RAM 4 GB to 6 GB, below the registered 16 GB, throughout) | **not run** |
+| MW1 `K_III` at the two mirror-plane stations of the half | `== 0` | 0, 0 | yes |
+| MW2 every other value against the run without the option | bit-identical | identical | yes |
+| MW3 whole (`psi = 90 deg`) against the half with the option, `max |dK|/A` | `<= 1e-6` | 2.22e-13 | yes |
+| MW4 whole, `|K_III|/A_III` at `theta = +/- pi/2` | `<= 1e-6` | 6.0e-15 | yes |
+| MWR the half without the option, end-station `K_III/A_III` (record) | none | -0.958, -0.958 (closed form 0) | (record) |
+| CL1 closed circle weights | `<= 1e-12` | 8.9e-16 (16 stations) | yes |
+| CL2 closed ellipse weights against `4 a E(k)` | `<= 1e-4` | 2.45e-5 | yes |
+| WE1 whole ellipse, mode I, ring 2, `K_I` against Irwin | `<= 0.08` | 1.10e-2 | yes |
+| WE2 whole ellipse, `max(|K_II|, |K_III|)/max K_ref` | `<= 1e-6` | 9.4e-14 | yes |
+| R1 to R7 the refusals | refused | each refused with its key and text | yes |
+| BI dumps of ADR 0610's set-ups, b61032f4 against 29a0b341 | byte-identical | identical (40 lines, PC, EC, PQ, MS, PM, EH) | yes |
+| F1 every aggregated value finite | finite | finite | yes |
+
+**What the numbers say.** On the whole cylinder with a closed front and a shear direction that is neither a mesh mirror nor a
+station direction, every station is an interior station: `K_III` is now checked at all 16 stations, including the four where the
+half and quarter meshes are joined, and the errors equal those of ADR 0610's half model on the same mesh resolution (PC: 7.0e-4,
+7.4e-4, 4.9e-3). Under ADR 0610's load the whole model reproduces the half model with the mirror option to `2.2e-13 A`: the
+option gives at the mirror-plane stations the value of the whole model's symmetric hat, as D2 derives, where the half model
+without the option has the end-face term `-0.958 A_III` (closed form 0). (ADR 0610's addendum lists `-0.83 A_III` for the end
+stations of PC in its PCR row, the domain term alone; `-0.958` is the corrected value at ring 2 on the same mesh, printed here
+for the first time.)
+
+ADR 0610 unchanged: BI byte-identical; `cargo test -p rcfd-fem --release --test sa_fracture_curved --test sa_fracture_modes
+--test sa_fracture -- --include-ignored` (`f689-scratch/existing.log`, `existing-modes.log`): `sa_fracture` 8 passed,
+`sa_fracture_curved` 6 passed and EC1 its known miss with the recorded `2.2893e-2` (every other printed number as in ADR 0610's
+addendum 1: PM1 5.82e-4, PM3 1.51e-3, PM5 1.27e-3, PM6 1.80e-2, PC3 4.93e-3, EH1 2.45e-3, MS 0), `sa_fracture_modes` 7 passed
+(heavy record included). `cargo test -p rcfd-api --release --test baseline_hashes`: 3 passed, 1 ignored. `cargo clippy -p
+rcfd-fem --all-targets --release -- -D warnings` clean; `cargo fmt -p rcfd-fem --check` clean.
+
+Mutations (`f689-scratch/mutate.py` on the copy `f689-scratch/mut` of 29a0b341, target `target-mut`, the fast tests of
+`sa_fracture_closed.rs`; log `f689-scratch/mutations.log`), each run once:
+
+| mutation | caught by | as registered? |
+|---|---|---|
+| Y1 periodic hat without the wrap | WC1 to WC5 (1.0), CL2 (2.7e-2), WE1, MW3, MW4 | yes (more) |
+| Y2 closed circle weight as open | CL1 (0.50), WC1 to WC5, MW3 | yes (more) |
+| Y3 closed ellipse without the closing edge | CL2 (7.95e-2), WE1 (1.08) | yes |
+| Y4 mirror zeroes `K_II` | MW1, MW2, MW3 (0.99) | yes |
+| Y5 mirror at every station | MW2, MW3 (0.98) | yes |
+| Y6 tangency test removed | R5 (accepted) | yes |
+| Y7 reflected Hex20 without the permutation | WC, MW, WE, CL (the mesh refuses the inverted elements: `InvertedElement`) | yes |
+| Y8 period `2 pi` on a closed circle | CL1, WC, MW (the front refused: "not in order") | yes |
+
+All 8 mutations caught.
+
+Deviations: none from the registered set-ups. **Not run: WM** (the heavy record, `wm1_to_wm7_whole_penny_heavy`, about 240 000
+unknowns): the registration requires at least 16 GB of free RAM before it; the machine had 3.2 GB to 7.9 GB free during the
+work (another tenant's WSL virtual machine held 28 GB to 34 GB), and a monitor checking every 30 s from 16:35 to 16:44 saw at most
+6 GB. The test is in place, `#[ignore]`d, with its limits; it has not been run once, so no number of it exists to be kept or
+re-run.
+
+**Decision by the registered rule: partial.** WM was not run (the rule: "WM or BI not run" gives partial). Every check that was
+run is met, every mutation is caught, BI is byte-identical, the ADR 0610, 0605 and 0547 tests pass unchanged (EC1 its recorded
+known miss), fmt, clippy and `baseline_hashes` clean. Clause by clause: c0 every limit registered before the run; c1 the closed
+front (WC, CL1, CL2, WE, R1 to R3) met; c2 the mirror option (MW1 to MW4, R4 to R7) met; c3 the whole penny inclined in a general
+direction, `K_I`, `K_II` and `K_III` at every station within 3 % (WC1 to WC4: largest `4.9e-3`) met on the coarse mesh, the
+medium record not run; c4 and c7 ADR 0610 unchanged (BI, its tests) met; c5 D4 verified; c6 WM `#[ignore]`d, RAM checked (and
+found short); c8 D7 and MW2.
+
+Remaining questions:
+
+1. Status and WM. The acceptance's own clause (3 % at every station of a whole penny under a general direction) is met on the
+   coarse whole cylinder; only the registered medium record is missing, for lack of free memory. Options: (a) partial as the rule
+   gives, the lead runs `cargo test -p rcfd-fem --release --test sa_fracture_closed -- --ignored wm1_to_wm7 --nocapture` once
+   on a machine with 16 GB free and records the numbers in an addendum 2; (b) done, treating WM as a record beyond the acceptance.
+   Recommendation: (a), then done if WM meets its limits (expected: the half-model PM of ADR 0610 measured `1.5e-3` on the same
+   resolution).
+2. A closed front keeps the end-face exemption of `check_boundary` (D8): a ring boundary face normal to the local tangent would
+   be accepted. Options: (a) leave it (no whole model has such a face); (b) disable the exemption for closed fronts (one
+   condition, opt-in). Recommendation: (b) in a later item with a test that builds such a face; not done here because no
+   registered check covers it.
+3. A spline front (a front given by nodes only) and mixed-mode elliptical cracks remain uncovered (ADR 0610 D7); the citations of
+   ADR 0610 remain from memory.
+4. A case-file key for fracture parameters: still open (it would change the schema golden; not taken).
+
+## For the lead: roadmap entries
+
+Proposed status of F-689: partial by the registered rule (question 1: done once the WM record is run and met).
+
+> Proposed status: partial.
+
+> Structural solver, advanced tier. Follow-up of F-682 (ADR 0610). ADR 0618, 2026-11-12: rcfd_fem::fracture gains closed (periodic) circular and elliptical crack fronts without end stations (CrackFront::closed: the node parameters unwrapped with the period, every station a full periodic hat, the weights of the closing edge included; j_integral and interaction_integral_curved take them), the mirror-plane option CrackFront::mirror_plane (K_III = 0 at stations on a mirror plane normal to the front, derived from the odd tearing displacement under the reflection; refused for a plane without a station, a plane not normal to the front, a closed front, and in interaction_integral), and penny_crack_whole_cylinder (the half cylinder of ADR 0610 reflected in x = 0). Defaults bit-identical: the results of ADR 0610's set-ups byte-identical to b61032f4 in a full {:?} dump, its tests and ADR 0605's unchanged. Met: a whole penny (66 174 unknowns, 16 stations) under tension inclined 45 deg towards psi = 35 deg, ring 2, K_I within 7.0e-4, K_II within 7.3e-4 A_II and K_III within 4.9e-3 A_III of the hat-averaged closed forms 2 sigma_nn sqrt(a/pi), A_II cos(theta - psi), A_III sin(theta - psi) at every station (limit 3 percent; ADR 0610's forms with the shear direction rotated, verified); the half model with the mirror option equal to the whole model within 2.2e-13 A (the end-face term it removes was -0.96 A_III); whole elliptical crack b/a = 0.5 mode I within 1.1e-2 of Irwin; 8 of 8 mutations caught. Not run: the medium whole-penny record (about 240 000 unknowns; free RAM below the registered 16 GB). Not covered: spline fronts, mixed-mode elliptical cracks, the end-face exemption of the ring boundary test on closed fronts. No case-file key.
+
+No follow-up item is proposed: the remaining run is the WM record of this item (question 1), and question 2 is a one-condition change that can join a later fracture item.
