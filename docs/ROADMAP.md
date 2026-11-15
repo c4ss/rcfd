@@ -11802,16 +11802,16 @@ fixed by the item's registration ADR before any code.
     displacement and creep-strain witnesses of run 1 missed (1.1e-3 to 4.2e-3 against 3e-2 and 5e-2) because the locking
     is a pressure oscillation: ignored record f597_run1_known_miss_displacement_and_creep_strain_witnesses. Test only,
     defaults untouched. No finite-strain reference; C4 at p stays the known miss of ADR 0506.
-- [x] **F-598** Warping degree of freedom for Beam2 (14-DOF element) and the I-section lateral-torsional buckling
+- [~] **F-598** Warping degree of freedom for Beam2 (14-DOF element) and the I-section lateral-torsional buckling
   - depends on: F-558
   - acceptance: Every limit not stated here is registered in the ADR before the run. A warping degree of freedom for
     Beam2 (a 14-DOF element), opt-in, with per-section Wagner coefficients from the section properties: the
     lateral-torsional buckling moment of a simply supported I beam under uniform moment equals (pi/L) sqrt(E I_z G J) (1
     + (pi^2 E C_w)/(G J L^2))^(1/2) within 1 percent at 16 elements (the clause of F-558 missed without warping); every
     result without the option bit-identical.
-  - note: Structural solver, advanced tier. ADR 0546, 2026-11-15: opt-in warping unknown for Beam2 (the 14-unknown element,
-    cubic Hermite twist with E C_w, the warping unknowns numbered after the model's six-unknown DofMap,
-    `rcfd_fem::beam_warping::buckling_factors`) with per-section Wagner coefficients
+  - note: Structural solver, advanced tier. PARTIAL. ADR 0546, 2026-11-15: opt-in warping unknown for Beam2 (the
+    14-unknown element, cubic Hermite twist with E C_w, the warping unknowns numbered after the model's six-unknown
+    DofMap, `rcfd_fem::beam_warping::buckling_factors`) with per-section Wagner coefficients
     (`WarpingSection::doubly_symmetric_i` from the plate dimensions, zero by symmetry). The I-beam lateral-torsional
     buckling under uniform moment is 5.9e-4 of (pi/L) sqrt(E I_z G J (1 + pi^2 E C_w/(G J L^2))) at 16 elements (8.3e-4
     at 8; 1.1e-3 and 2.0e-4 at L 1.5 and 6), against the -19.2 percent of ADR 0508 without warping. Saint-Venant control
@@ -11819,7 +11819,9 @@ fixed by the item's registration ADR before any code.
     bound. Torque cantilever 1.1e-6. Frame invariance 5e-16. Mixed model with a non-warping beam exact (M1', amendment
     1: the first M1 missed at 1.5e-9 against 1e-9 because of the eigensolver tolerance, kept as an ignored record).
     Fifteen refusals (shared nodes with other elements, kinks, the transformation path, torsion in the pre-stress).
-    Defaults bit-identical (12 digests). Eleven of eleven mutations caught. Buckling only; no case-file key.
+    Defaults bit-identical (12 digests). Eleven of eleven mutations caught. Buckling only; no case-file key. Partial
+    under the standing rule: M1 was caught only by the post-run amendment M1'; done is the maintainer's call. Follow-ups
+    F-625 (case key, NEEDS THE USER), F-626 (static, modes, pre-stressed modes), F-627 (monosymmetric sections).
 - [x] **F-599** Interference fit through-thickness variation of the contact pressure (re-register I3 of ADR 0507)
   - depends on: F-427
   - acceptance: Every limit not stated here is registered in the ADR before the run. Find why the one-layer
@@ -12183,3 +12185,22 @@ fixed by the item's registration ADR before any code.
     1e-4 a) in under a third of the present time, measured with no other build on the machine, and every result of ADR
     0542 bit-identical.
   - note: Structural solver, advanced tier. Follow-up of F-618 (ADR 0542, 2026-11-15).
+- [ ] **F-625** Case-file key for the Beam2 warping unknown, with geometric_terms (NEEDS THE USER: schema golden)
+  - depends on: F-598
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A case-file key opts a Beam2 block
+    into the warping unknown of ADR 0546 on the buckling path; the case with the key reproduces the library result bit
+    for bit, and every case without it keeps its hash.
+  - note: Structural solver, advanced tier. Follow-up of F-598 (ADR 0546, 2026-11-15).
+- [ ] **F-626** Warping unknown on the static solve, modes and pre-stressed modes
+  - depends on: F-598
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The static twist of a cantilever I
+    beam under end torque with the root warping held equals (T/(G J))(L - tanh(kL)/k) within 1e-3 at 16 elements, and
+    the lateral-torsional buckling factor of a beam whose reference load includes torsion uses the warping static solve;
+    every result without the option bit-identical.
+  - note: Structural solver, advanced tier. Follow-up of F-598 (ADR 0546, 2026-11-15).
+- [ ] **F-627** Monosymmetric thin-walled sections for the warping element
+  - depends on: F-598
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The lateral-torsional buckling
+    moment of a simply supported monosymmetric I under uniform moment equals the published closed form with beta_x
+    within 2 percent at 16 elements; doubly symmetric results unchanged.
+  - note: Structural solver, advanced tier. Follow-up of F-598 (ADR 0546, 2026-11-15).
