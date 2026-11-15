@@ -8667,7 +8667,9 @@ fixed by the item's registration ADR before any code.
     10 a (heavy record, 96 267 unknowns) K within 2.2e-3 of 2 sigma sqrt(a/pi), uniform along the front within 2.7e-7;
     Paris m = 3 and m = 2 within 7e-16; a bent front and a ring reaching the boundary refused. Partial by the rule:
     mutation M12 (inner rings left out of the integral) caught by no registered check (11 of 12 caught). No case-file
-    key. Follow-up F-632 (varying J along a front, mode separation).
+    key. Follow-up F-632 (varying J along a front, mode separation). ADR 0605 (F-632), 2026-11-15: the inner-ring
+    mutation M12 is now caught on the circular path by EU2 (uniform-expansion residual 0.50 to 2.0 against 1e-8); status
+    to done recommended, maintainer's call.
 - [~] **F-430** Substructuring: static condensation and fixed-interface component mode synthesis (Craig-Bampton)
   - depends on: F-408, F-382, F-383, F-393
   - acceptance: Every limit not stated here is registered in the ADR before the run. Statics: the condensed model gives
@@ -11314,11 +11316,29 @@ fixed by the item's registration ADR before any code.
     1.2e-14, damped energy balance within 1.7e-14. Default step bit-identical (B0, baseline_hashes). Seven of eight
     mutations caught (one by a check added after the mutation run). No case-file key. Follow-up F-607. Open
     (maintainer): the case-file key step = "energy_momentum" under a nonlinear transient study.
-- [ ] **F-571** Rounding floor of the total Lagrangian internal force under large rotation and translation
+- [x] **F-571** Rounding floor of the total Lagrangian internal force under large rotation and translation
   - depends on: F-423, F-397
   - acceptance: Every limit not stated here is registered in the ADR before the run. S3 of ADR 0479 (free Hex8, 50
     steps) converges every step with the driver defaults, and MU6 of ADR 0479 is caught.
-  - note: Structural solver, advanced tier. Follow-up of F-423 (ADR 0479, 2026-11-14).
+  - note: Structural solver, advanced tier. Follow-up of F-423 (ADR 0479, 2026-11-14). DONE. ADR 0604, 2026-11-15: the
+    floor is not in the total Lagrangian internal force under translation (its rounding is 3e-11 to 1.1e-8 N on S3). It
+    comes from representing the total displacement through the step tangent K_eff = K_T + M/(beta h^2): the residual of
+    the nearest float vector reaches (eps/2)|(|K_eff| |u|)| (probe: 0.03 to 0.58 of it over 60 steps), while the
+    reference max(|f_int|, |g|) passes through zero every half period of S3's free-free mode (88.5 N at step 50,
+    relative floor 1.64e-9). On the pendulum, the internal-tangent part of the same bound covers the rotation floor
+    (0.12 to 0.24). Change in nonlinear.rs, with no option and no public signature change: when a contribution is in the
+    residual reference, an attempt still above the tolerance at its last iteration is accepted if its residual is within
+    the rounding bound eps |(|K| |u|)|_free and the energy test holds; every attempt that converged before converges at
+    the same iterate. S3 of ADR 0479 with the driver defaults: 50 of 50 steps, 0 halvings, |dP|/|P_0| 1.3e-14, step 50
+    accepted at the bound (relative 1.64e-9), within 3.6e-18 of the run at tolerance 1e-6. The ADR 0479 pendulum at the
+    defaults: 1940 steps, period 2.09e-4, energy 2.76e-4, 0 halvings (ignored heavy record, 67 s). MU6 of ADR 0479 is
+    caught in both forms (the registered one and its script's), and MB1 to MB4 are caught (the energy test by H1, the
+    last-iterate gate by ADR 0514 N1e's printed values). Default bits: the 72 default-bits files and the nl_transient
+    families pass, the baseline hashes pass, and an instrumented audit of the crate's 1289 non-ignored tests found no
+    attempt the bound would change. Not covered: the floor is accepted, not lowered (an incremental unknown would change
+    every nl_transient bit); the static driver without a contribution in the reference; a step at the floor costs
+    max_iterations corrections; the free spinning bar stays a known miss of the trapezoidal rule. Follow-up F-682 (Early
+    acceptance at the rounding bound of the Newton residual (a stagnation test)).
 - [x] **F-572** Arc-length with a follower reference load and an unsymmetric factor of the load stiffness
   - depends on: F-424
   - acceptance: Every limit not stated here is registered in the ADR before the run. The load direction of the
@@ -12467,13 +12487,28 @@ fixed by the item's registration ADR before any code.
     default reference and its bits unchanged (a 40-step hash recorded before the change, every rcfd-fem test,
     baseline_hashes). Five of five registered mutations caught. Follow-up F-681 (The inertia-term residual reference on
     the energy-momentum step).
-- [ ] **F-632** Domain integral on a front with varying J, and mode separation
+- [x] **F-632** Domain integral on a front with varying J, and mode separation
   - depends on: F-429
   - acceptance: Every limit not stated here is registered in the ADR before the run. An embedded elliptical crack whose
     K varies along the front against the closed form of Irwin within a registered limit, with a check that catches
     leaving the inner rings out of the tapered integral; an interaction integral separating K_I, K_II and K_III, the
     inclined centre crack within 2 percent of each closed form.
-  - note: Structural solver, advanced tier. Follow-up of F-429 (ADR 0547, 2026-11-15).
+  - note: Structural solver, advanced tier. Follow-up of F-429 (ADR 0547). ADR 0605, 2026-11-15: rcfd_fem::fracture
+    gains CrackFront::elliptical (an ellipse a > b in the crack plane, nodes within 1e-6 a; parameter the elliptic angle
+    of confocal coordinates, advance direction the outward normal of the confocal ellipse, int phi ds along the
+    quadratic front edges), elliptical_crack_block (the penny mesh mapped by mu = mu0 + ln(rho/a) onto an embedded
+    elliptical crack, quarter of a half block), interaction_integral (K_I, K_II, K_III of a straight front from M = int
+    (sigma_ij u^aux_i,k + sigma^aux_ij u_i,k - sigma_ij eps^aux_ij delta_jk) q_k,j dV with the Williams near-tip fields
+    of near_tip_gradient; K_I,II = E' M/2, K_III = mu M; refuses curved and half-symmetric fronts and a domain of
+    several materials). Met: embedded elliptical crack b/a = 0.5 (heavy record, 87 663 unknowns) ring-3 K within 8.4e-3
+    of Irwin's sigma sqrt(pi b)/E(k) (sin^2 phi + (b/a)^2 cos^2 phi)^(1/4) (hat-averaged) at all 13 stations (limit
+    3e-2; K varies by 41 percent), rings 2-4 within 2.2e-3, K(0)/K(pi/2) within 5.7e-3; the inner rings left out of the
+    tapered integral caught by an exact uniform-expansion check (residual 2.7e-14 against 0.5 to 3.7 when mutated) on
+    the elliptical and the circular front; inclined centre crack beta = 30 deg, W = 10 a: K_I within 5.7e-3 of sigma
+    sqrt(pi a) cos^2 beta, K_II within 6.2e-3 of sigma sqrt(pi a) sin beta cos beta (limits 2e-2), K_III 1.3e-16;
+    antiplane shear K_III within 3.9e-3 of tau sqrt(pi a); mode-I plate K_I from M within 1.1e-3 of K from J, K_II and
+    K_III below 1e-12; 10 of 10 mutations caught. No case-file key. Follow-up F-683 (Interaction integral on curved
+    crack fronts).
 - [~] **F-633** Shell3 pressure load exact for the uniform membrane state on irregular curved meshes
   - depends on: F-546
   - acceptance: Every limit not stated here is registered in the ADR before the run. An opt-in Shell3 pressure load
@@ -13439,14 +13474,28 @@ fixed by the item's registration ADR before any code.
     components), which the sector-against-ring check had missed. Not covered: indices 0 and 1, the sparse and state
     whirl solvers, the ADR 0508 opt-in beam terms, and other section shapes. Follow-up F-680 (The centrifugal pre-stress
     of a free cyclic sector).
-- [ ] **F-680** The centrifugal pre-stress of a free cyclic sector
+- [~] **F-680** The centrifugal pre-stress of a free cyclic sector
   - depends on: F-679
   - acceptance: Every limit not stated here is registered in the ADR before the run. RotatingSector::new with stress
     stiffening on a free sector (no constraint removing the index-0 rigid motions), behind an opt-in, solves the index-0
     centrifugal static problem with the rigid motions removed and gives the pre-stress of the ADR 0602 free ring within
     1e-10 of the constrained-copy route, with the whirl frequencies of ADR 0602 unchanged within 1e-10; the defaults
     bit-identical.
-  - note: Follow-up of F-679 (ADR 0602, 2026-11-15).
+  - note: Structural solver, advanced tier. Follow-up of F-679 (ADR 0602). PARTIAL. ADR 0606, 2026-11-15: the
+    centrifugal pre-stress of a free cyclic sector. The cyclic constraint leaves two of a free body's six rigid motions
+    at index 0, the axial translation and the rotation about the axis (derived in the ADR); the centrifugal load is
+    orthogonal to both, so two linear gauge constraints at one interior node (axial and tangential translation) carry
+    exactly no reaction and give the free stress. RotatingSector::new with stress stiffening and the opt-in
+    RotatingOptions::free_sector_prestress (default false) now solves the free sector this way
+    (rotating::free_sector_unit_static), and refuses a sector with supports or other constraints. On the free Beam2 ring
+    of ADR 0602, two meshes: the pre-stress equals the constrained-copy route within 9e-15 (limit 1e-10), the residual
+    at the interior nodes is 1.9e-14 of the load, the gauge node does not matter (3.3e-15), and the ADR 0602 whirl
+    frequencies are unchanged within 4.0e-12 (limit 1e-10). Without the option the free sector is still refused, and the
+    defaults are bit-identical (baseline_hashes and the existing rotating tests pass). Eight of nine mutations were
+    caught; the one that escaped took the branch with stress stiffening off, which changes no frequency because the
+    operator scales the geometric stiffness by zero, and the check compared frequencies only. Not covered: supported or
+    otherwise constrained sectors with the opt-in, solid and shell sectors, and RotatingPart::new on a free part.
+    Follow-up F-684 (The free-sector pre-stress on solid and shell sectors, and its scope without stress stiffening).
 - [ ] **F-681** The inertia-term residual reference on the energy-momentum step
   - depends on: F-631, F-611
   - acceptance: Every limit not stated here is registered in the ADR before the run. ResidualReference::InertiaTerms
@@ -13454,3 +13503,25 @@ fixed by the item's registration ADR before any code.
     without external load over a registered number of periods at the default tolerance with no step rejected at a
     rounding floor and the energy conserved within a registered limit; the default bits unchanged.
   - note: Follow-up of F-631 (ADR 0603, 2026-11-15).
+- [ ] **F-682** Early acceptance at the rounding bound of the Newton residual (a stagnation test)
+  - depends on: F-571
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A step at the rounding floor of ADR
+    0604 is accepted in at most a registered number of corrections below max_iterations; S3 and the pendulum of ADR 0479
+    at the defaults run in at most half of ADR 0604's iterations; the bits of every existing default-bits test are
+    unchanged, or the changed ones are listed for the maintainer's decision.
+  - note: Follow-up of F-571 (ADR 0604, 2026-11-15).
+- [ ] **F-683** Interaction integral on curved crack fronts
+  - depends on: F-632
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The interaction integral on
+    circular and elliptical fronts with the correction terms of auxiliary fields that are not exact there; a
+    penny-shaped crack under inclined tension with K_I, K_II and K_III along the front within 3 percent of the closed
+    forms, and the straight-front results of ADR 0605 unchanged.
+  - note: Follow-up of F-632 (ADR 0605, 2026-11-15).
+- [ ] **F-684** The free-sector pre-stress on solid and shell sectors, and its scope without stress stiffening
+  - depends on: F-680
+  - acceptance: Every limit not stated here is registered in the ADR before the run. RotatingSector::new with
+    free_sector_prestress on a free solid sector and a free shell sector gives the pre-stress of a constrained-copy
+    route within 1e-10 and a residual at the interior nodes within 1e-10 of the load; with stress stiffening off, the
+    opt-in leaves unit_prestress, the whirl frequencies and the refusals bit-identical to the run without it; the
+    defaults bit-identical.
+  - note: Follow-up of F-680 (ADR 0606, 2026-11-15).
