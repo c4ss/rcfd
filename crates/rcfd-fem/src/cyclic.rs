@@ -35,6 +35,10 @@
 //! ADR 0583 (F-662): on such a boundary the low nodes the high ties leave undetermined (the support of the null space of
 //! the weight matrix) follow the high shell edges rotated back by `R^T`, and the high nodes whose weights lie wholly on them
 //! are released as masters ([`CyclicBoundary::two_sided`]): where the low side is the finer, it is the dependent side.
+//!
+//! ADR 0595 (F-672): with [`crate::model::CyclicOptions::beams`] as well, the static and the modal paths take Beam2 elements
+//! (the rows of ADR 0556 D2 on their six-unknown nodes; the sector stands for the ring of its beams rotated by `R^j`,
+//! orientation vectors included).
 
 use crate::assemble::{point_stiffness, stiffness_with};
 use crate::constraint::Prescribed;
@@ -183,6 +187,46 @@ pub(crate) fn shells_opted_in(model: &SolidModel) -> bool {
     })
 }
 
+/// Whether a model has a cyclic constraint with the shells and the beams options of ADR 0595 D1.
+pub(crate) fn beams_opted_in(model: &SolidModel) -> bool {
+    model.constraints().iter().any(|c| {
+        matches!(
+            c,
+            Constraint::Cyclic {
+                options: crate::model::CyclicOptions {
+                    shells: true,
+                    beams: true,
+                    ..
+                },
+                ..
+            }
+        )
+    })
+}
+
+/// ADR 0595 D1: the beams option qualifies the shells option and is not taken with interpolated boundaries or nodes on the
+/// axis. A no-op for a constraint without it.
+pub(crate) fn check_beams_option(model: &SolidModel) -> Result<()> {
+    for (i, c) in model.constraints().iter().enumerate() {
+        if let Constraint::Cyclic { options, .. } = c {
+            if !options.beams {
+                continue;
+            }
+            if !options.shells {
+                return Err(cyclic_error(format!(
+                    "constraint {i}: the beams option qualifies the shells option of the cyclic constraint (ADR 0595)"
+                )));
+            }
+            if options.interpolation.is_some() || options.axis_nodes {
+                return Err(cyclic_error(format!(
+                    "constraint {i}: Beam2 in the cyclic constraint (ADR 0595) is not taken with interpolated boundaries                      or nodes on the axis"
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
 /// The index of the one cyclic constraint of a model; none or more than one is refused.
 pub fn the_cyclic_constraint(model: &SolidModel) -> Result<usize> {
     let list: Vec<usize> = model
@@ -224,6 +268,9 @@ pub fn boundary(model: &SolidModel, constraint: usize) -> Result<CyclicBoundary>
             key: "sectors",
             reason: format!("{sectors} sectors: a cyclic rotor has at least 2"),
         });
+    }
+    if options.beams {
+        check_beams_option(model)?;
     }
     let mesh = model.mesh();
     // ADR 0556 D1: with shells the boundaries are node sets, and the extensions of ADR 0456 are not taken.
@@ -789,14 +836,18 @@ fn number_of_sectors(model: &SolidModel, ci: usize) -> usize {
 /// the checks of a path that takes them on solid elements and [`crate::mat_ortho::check_cyclic_axes`], else
 /// [`SolidModel::check_supported`] as before. Returns whether the model has either material.
 fn check_cyclic_model(model: &SolidModel) -> Result<bool> {
+    check_beams_option(model)?;
     if crate::mat_ortho::uses_point_materials(model) {
         model.check_supported_solids_with_materials()?;
         crate::mat_ortho::check_cyclic_axes(model)?;
         Ok(true)
     } else if shells_opted_in(model) {
         // ADR 0556 D1: Shell4 and Shell3 are taken (a shell node shared with a solid stays refused); Beam2 stays refused.
+        // ADR 0595 D1: with the beams option as well, Beam2 is taken.
         model.check_supported_with_structures()?;
-        refuse_cyclic_beams(model)?;
+        if !beams_opted_in(model) {
+            refuse_cyclic_beams(model)?;
+        }
         Ok(false)
     } else {
         model.check_supported()?;
@@ -1169,7 +1220,8 @@ fn triplets(dofs: &DofMap, p: usize) -> &'static [usize] {
 /// high nodes of copy `N - 1` with the low nodes of copy 0. Blocks keep their index, kind and property (copy `j` of element
 /// `e` of block `b` is element `start_b + j n_b + (e - start_b^sector)`); node, element and surface sets are the unions of
 /// their copies. Refuses a block of a structural kind; with [`crate::model::CyclicOptions::shells`] Shell4 and Shell3 blocks
-/// are copied as the solid blocks are (ADR 0561 D1; Beam2 stays refused).
+/// are copied as the solid blocks are (ADR 0561 D1; Beam2 stays refused, also with [`crate::model::CyclicOptions::beams`]:
+/// a block has one orientation vector, ADR 0595 D4).
 pub fn full_rotor(model: &SolidModel) -> Result<FullRotor> {
     let ci = the_cyclic_constraint(model)?;
     let bd = boundary(model, ci)?;
