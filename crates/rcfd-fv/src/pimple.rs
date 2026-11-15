@@ -164,9 +164,14 @@ pub struct PimpleSettings {
     /// one, `p^n` the pressure at the start of the step) is formed; once `c_k <= tol`, iteration `k + 1` is run as the final one
     /// (unrelaxed, the checks of the final iteration on its matrices) and the loop ends after it. For a linear contraction `r`
     /// per outer iteration this leaves `r tol` of the error of the non-iterated step. Every step is recorded in
-    /// `PimpleSolver::outer_record`. A negative or NaN tolerance is never met. The pressure-lag estimate keeps `n_outer` outer
-    /// passes. Default `None`: exactly `n_outer` outer iterations (bit-identical).
+    /// `PimpleSolver::outer_record`. A negative or NaN tolerance is never met. The pressure-lag estimate of the step runs the
+    /// outer iterations the step used (F-550, ADR 0617 S3). Default `None`: exactly `n_outer` outer iterations (bit-identical).
     pub outer_pressure_tolerance: Option<f64>,
+    /// F-550 (ADR 0617 S2): with `outer_pressure_tolerance`, form the ratio against the largest first-iteration pressure change
+    /// `max |p_1 - p^n|` of the step and the `w - 1` completed steps before it (`w = max(w, 1)`) instead of the step's own, so the
+    /// scale does not vanish at the extremes of a periodic pressure history (floor `sin(pi (w - 1)/N)` of the period's largest
+    /// for `N` steps per period). `Some(1)` is ADR 0458's scale. Read only with the criterion. Default `None`: ADR 0458's scale.
+    pub outer_scale_window: Option<usize>,
     /// F-535 (ADR 0471 D1): refuse the first step the solver takes, through the divergence guard and before any field is
     /// touched, when the pressure-lag estimate of ADR 0073 for the step's settings (`lag_preflight` with this many power
     /// iterations, at least 2) is at least one. The message names the largest cell diffusion number `nu dt/dx^2`
@@ -186,6 +191,11 @@ pub struct OuterRecord {
     pub met: bool,
     /// The last ratio `c_k` formed (NaN when none was formed).
     pub ratio: f64,
+    /// The step's first-iteration pressure change `max |p_1 - p^n|` (F-550, ADR 0617; NaN when no ratio was formed).
+    pub first: f64,
+    /// The denominator of the ratio: `first`, or with `outer_scale_window` the windowed maximum (F-550, ADR 0617 S2; NaN when
+    /// no ratio was formed).
+    pub scale: f64,
 }
 
 /// Every flag of the consistent (SIMPLEC-type) pressure correctors in one value (ADR 0258 V1). `enabled` asks for the correctors
@@ -836,6 +846,8 @@ struct LagCtx {
     mats: Vec<Option<FvMatrix>>,
     links: Vec<PeriodicLinks>,
     pbc: crate::pressure::PressureBc,
+    /// F-550 (ADR 0617 S3): the outer iterations of the step the context was captured in (`n_outer` without the criterion).
+    outer: usize,
 }
 
 /// Default Courant number above which a step is declared diverged (ADR 0067).
@@ -986,6 +998,7 @@ impl PimpleSettings {
             fractional_step_consistent: false,
             pressure_ic_fallback: false,
             outer_pressure_tolerance: None,
+            outer_scale_window: None,
             lag_onset_refusal: None,
         }
     }
@@ -1204,6 +1217,9 @@ pub struct PimpleSolver {
     /// The outer iterations of every completed step with `PimpleSettings::outer_pressure_tolerance` (F-536, ADR 0458 C2); empty
     /// while it is `None`.
     pub outer_record: Vec<OuterRecord>,
+    /// F-550 (ADR 0617 S4): the first-iteration pressure changes of the last completed steps (only with the criterion and
+    /// `outer_scale_window`).
+    outer_firsts: std::collections::VecDeque<f64>,
 }
 
 /// One pressure solve of a step, as captured by [`PimpleSolver::pressure_capture`] (F-466, ADR 0363 D1). With
@@ -1286,6 +1302,7 @@ impl PimpleSolver {
             lag_mode: None,
             start_projected: false,
             outer_record: Vec::new(),
+            outer_firsts: std::collections::VecDeque::new(),
         }
     }
 
@@ -1324,6 +1341,7 @@ impl PimpleSolver {
             lag_mode: None,
             start_projected: self.start_projected,
             outer_record: Vec::new(),
+            outer_firsts: self.outer_firsts.clone(),
         }
     }
 
@@ -1706,6 +1724,7 @@ impl PimpleSolver {
         let mut outer_used = 0usize;
         let mut outer_ratio = f64::NAN;
         let mut outer_first = 0.0f64;
+        let mut outer_scale = 0.0f64;
         for outer in 0..s.n_outer {
             let last = outer + 1 == s.n_outer || final_next;
             let (alpha_u, alpha_p) = if last { (1.0, 1.0) } else { (s.alpha_u, s.alpha_p) };
@@ -1962,6 +1981,7 @@ impl PimpleSolver {
                     mats: mats.clone(),
                     links: links.clone(),
                     pbc: pbc.clone(),
+                    outer: outer + 1,
                 });
             }
             if let (Some(c), Some(reason), true) = (&cc, cc_reason, last) {
@@ -1970,6 +1990,7 @@ impl PimpleSolver {
                     mats: mats.clone(),
                     links: links.clone(),
                     pbc: pbc.clone(),
+                    outer: outer + 1,
                 };
                 let n_hi = c.max_correctors.max(n_lo);
                 // ADR 0162 D3: no step-down check when the step has grown
@@ -2287,9 +2308,14 @@ impl PimpleSolver {
                 let change = (0..n).fold(0.0f64, |m, c| m.max((self.p.values[c] - p0[c]).abs()));
                 if outer == 0 {
                     outer_first = change;
+                    // F-550 (ADR 0617 S2): the windowed scale (only with `outer_scale_window`)
+                    outer_scale = match s.outer_scale_window {
+                        Some(_) => self.outer_firsts.iter().fold(change, |m, &d| m.max(d)),
+                        None => change,
+                    };
                 }
-                outer_ratio = if outer_first > 0.0 {
-                    change / outer_first
+                outer_ratio = if outer_scale > 0.0 {
+                    change / outer_scale
                 } else if change == 0.0 {
                     0.0
                 } else {
@@ -2361,7 +2387,18 @@ impl PimpleSolver {
                 used: outer_used,
                 met: final_next,
                 ratio: outer_ratio,
+                first: if outer_ratio.is_nan() { f64::NAN } else { outer_first },
+                scale: if outer_ratio.is_nan() { f64::NAN } else { outer_scale },
             });
+            if let Some(w) = s.outer_scale_window {
+                // ADR 0617 S4: the history of the window (the `w - 1` steps before the next one)
+                if !outer_ratio.is_nan() {
+                    self.outer_firsts.push_back(outer_first);
+                }
+                while self.outer_firsts.len() > w.max(1) - 1 {
+                    self.outer_firsts.pop_front();
+                }
+            }
         }
         let cont = divergence(&g, &self.phi).iter().fold(0.0f64, |a, &b| a.max(b.abs()));
         let area_scale = sf.iter().map(|s| vec3::norm(*s)).fold(0.0, f64::max);
@@ -2413,8 +2450,9 @@ impl PimpleSolver {
         let zero_start = lf.is_some_and(|o| o.zero_start);
         let mut p = e.to_vec();
         let mut u: Vec<Vec3> = vec![[0.0; 3]; n];
-        for outer in 0..s.n_outer {
-            let last = outer + 1 == s.n_outer;
+        // F-550 (ADR 0617 S3): the outer passes of the step the context was captured in
+        for outer in 0..ctx.outer {
+            let last = outer + 1 == ctx.outer;
             let (alpha_u, alpha_p) = if last { (1.0, 1.0) } else { (s.alpha_u, s.alpha_p) };
             let bv = boundary_values_pbc(g, pbc_h, &p);
             let grad = green_gauss(g, &p, &bv, 0);
@@ -3087,6 +3125,7 @@ impl PimpleSolver {
         self.correctors.reset_schedule();
         self.ale_bdf2 = None;
         self.start_projected = false;
+        self.outer_firsts.clear();
         Ok(())
     }
 

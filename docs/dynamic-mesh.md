@@ -70,6 +70,16 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   within 0.61 percent, at a mean of 8.1, 11.1 and 14.4 outer iterations per step. Some steps reach the cap, though (10 of 250 at
   100 and at 50). At an extreme of the pressure history the step's own pressure change is nearly zero (diagnosed at 50: 4e-4 of
   its largest value), and the criterion is met only near the cap (49 iterations). So keep a cap. There is no case key yet.
+* A scale that does not vanish (F-550, ADR 0617): `PimpleSettings::outer_scale_window = Some(w)` (with the criterion above)
+  forms the ratio against the largest first-iteration pressure change of the step and the `w - 1` steps before it. On a
+  periodic history of `N` steps per period the scale then stays above `sin(pi (w - 1)/N)` of the period's largest, so the
+  extremes of the pressure no longer drive the count to the cap. On the same channel with `w = 18`, `tol = 1e-3` and a cap of
+  50, every step of every level meets the criterion (at most 12, 9 and 7 outer iterations at `nu dt/dy^2` of 100, 50 and 25;
+  means 10.9, 8.2 and 6.6), with 24, 26 and 19 percent fewer outer iterations in total than the step's own scale and the same
+  accuracy (within 0.57 percent of the discrete model, the extrapolation within 0.61 percent). For a few steps after a start
+  from rest the scale is the start's larger jump, so the criterion is looser there. With the criterion the pressure-lag
+  estimate of a step (ADR 0073) and the adaptive corrector count run the outer iterations the step used. There is no case key
+  yet.
 * Refusal at the onset (F-535, ADR 0471): the opt-in `PimpleSettings::lag_onset_refusal = Some(20)` makes the first step the
   solver takes refuse, through the divergence guard and before any field is touched, when the ADR 0073 estimate of that step
   (20 power iterations on a copy of the solver) is at least one. The message names the largest cell diffusion number
