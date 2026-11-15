@@ -11936,10 +11936,22 @@ fixed by the item's registration ADR before any code.
     displacement test for estimate::element_samples with an opted Hex8 (BBar and Incompatible), which catches the
     mutation MU12 of ADR 0525 (sampling with the compatible strain).
   - note: Structural solver, intermediate tier. Low priority. Follow-up of F-588 (ADR 0525, 2026-11-14); closes F-588.
-- [ ] **F-615** The supernodal factorisation in the linear contact driver
+- [x] **F-615** The supernodal factorisation in the linear contact driver
   - depends on: F-427, F-594
   - acceptance: Every limit not stated here is registered in the ADR before the run. contact::linear_solve with an
     opt-in supernodal L D L^T: the ADR 0517 hub fit at 32 cells through b - a in under a third of the present time,
     every reading within 1e-10 of the present driver, and without the option every result bit-identical.
-  - note: Structural solver, advanced tier. Follow-up of F-604 (ADR 0517, 2026-11-14). Fan relevance: hub-shaft
-    press-fit stresses at fan scale.
+  - note: Structural solver, advanced tier. Follow-up of F-604 (ADR 0517, 2026-11-14). DONE. ADR 0533, 2026-11-14:
+    ContactOptions::factor (rcfd_fem::solve::DirectFactor; default SparseMinimumDegree, the present driver;
+    SupernodalNestedDissection selects the supernodal multifrontal L D L^T of ADR 0503 after nested dissection by level
+    structures of the reduced tangent, which stores 0.67 of the coordinate dissection's entries on this model; the
+    envelope, and the supernodal factor with the total Lagrangian body, refused with the key "solver"). ADR 0517's hub
+    fit at 32 cells through b - a (96 046 free unknowns): 82.0 s against 1456.6 s for the present driver in the same
+    process with 16 threads, a ratio of 5.6e-2 (limit 1/3), peak working set 4.0 GB. Every reading of ADR 0517 D4
+    (mid-length, the two edge bands, the face row, the two fixed-distance rows, every row resultant, the largest node
+    pressure) within 8.1e-12 of the present driver (limit 1e-10), the same Newton record (iterations and convex
+    iterations) and displacements within 1.4e-14; at 4 and 8 cells within 2.4e-12. The supernodal driver gives the same
+    bits for 1 and 4 threads. Without the option three new digests (the hub at 8 cells, the pure-penalty blocks with an
+    extra contribution, the total Lagrangian blocks) and the existing contact bit records are unchanged; baseline_hashes
+    passes. Six mutations caught. No case-file key (open: one solver.factor key for every analysis). Fan relevance:
+    hub-shaft press-fit stresses at fan scale.
