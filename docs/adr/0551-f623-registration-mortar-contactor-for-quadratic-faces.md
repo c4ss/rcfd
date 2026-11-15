@@ -302,3 +302,119 @@ the first state; (G4) ADR 0540 Q20 (the punch on the Hex20 plate) solved. After 
    much more code), (b) element-based integration by the load rule. Taken (b), recorded under the limits.
 
 Open (not taken): the case-file key (as ADR 0540); switching the default contactor of quadratic faces.
+
+## Addendum 1: results (2026-11-15)
+
+Each registered run made once (logs in `w49i-work/f623-scratch`: `bits-base.log` (B2 on the base), `run-bits.log`,
+`run-mortar.log`, `run-hertz.log`, `run-hertz-tl.log`, `run-mut.log` and `mut-MM*.log`, `diag-hertz.log`, `clippy.log`,
+`run-fem-full.log`, `run-baseline.log`, `run-docs.log`). No limit changed, no amendment. The library and the tests were
+committed (6ebad3e6) before the runs.
+
+| id | limit | measured | met |
+|---|---|---|---|
+| HS20m | succeeds; `0.15`, `0.20`, `0.10` | succeeds with the gap tolerance `1e-8` (10 augmentations, 107 s, 41 of 280 nodes active, penetration `9.7e-9`); radius **2.07e-1** (`a_fe` 0.1214 against `a_H` 0.1006), peak 2.47e-2, approach 1.18e-2 | **no** (radius) |
+| HS10m | succeeds; `0.15`, `0.20`, `0.10` | succeeds (14 augmentations, 142 s, 30 of 289 active, penetration `9.5e-9`); radius **4.89** (`a_fe` 0.593), peak 1.90e-2, approach 1.40e-2 | **no** (radius) |
+| PT10m | `1e-8`; 25 | stress 7.2e-15, pressure 2.8e-14, reaction 1.5e-16; 25 | yes |
+| PT20m | `1e-8`; 21 | stress 6.1e-14, pressure 5.9e-14, reaction 5.4e-15; 21 | yes |
+| M20w, M10w, M20s, M10s, M20q | `<= 1e-6` | 2.47e-10, 2.78e-10, 2.58e-10, 2.48e-10, 2.26e-10 (every node active, the same faces) | yes |
+| PT20t | `1e-8`; 21; finite | pressure 2.1e-14, reaction 0; 21; finite | yes |
+| PT10t | `1e-8`; 25; finite | pressure 1.9e-14, reaction 1.5e-16; 25; finite | yes |
+| HS20t | succeeds; limits | not reached: augmentation 0, "singular tangent: pivot -0.148 at node 1129 component 1" (1.1 s) | **no** |
+| HS10t | succeeds; limits | not reached: augmentation 0, singular tangent, pivot -0.0336 at node 931 component 1 (2.0 s) | **no** |
+| B2 | equal | equal (G1 to G4) | yes |
+| B | pass | see "Crate runs" below | see below |
+| EQm | bit for bit | equal, finite (PT10m 5984 words, PT20m 4155) | yes |
+| PW | `<= 1e-14` | 4.4e-16 (PT10m), 6.7e-16 (PT20m); node lists equal | yes |
+| FR | `<= 1e-3` | 4.4e-5 (HS20m), 7.4e-5 (HS10m) | yes |
+| R4 | refused with the key | `"initial gap"`, `"contact surface"` | yes |
+| NT-m | `> 1e-2` | M20s 0.503, M20q 0.912 | yes |
+| NW | `< 0` | `-1/12` | yes |
+
+Recorded (no limit): HS20m `F_fe` 1.4915e-3, at the 729 load-rule points the largest penetration 3.9e-5 (55 points below
+`-1e-8`); HS10m `F_fe` 1.4965e-3, at the 1152 points 7.2e-5 (62 points). The Newton iterations per solve: HS20m `[9, 3, 2, ..]`,
+HS10m `[7, 3, 2, ..]`. HS20m ran while the mutation build used four other cores (its time is not a clean measure).
+
+The four misses are kept as ignored records `hs20m_hertz_on_hex20_mortar_known_miss`, `hs10m_hertz_on_tet10_mortar_known_miss`,
+`hs20t_hertz_on_hex20_mortar_total_lagrangian_known_miss`, `hs10t_hertz_on_tet10_mortar_total_lagrangian_known_miss`, with the
+registered limits and the measured numbers.
+
+### Diagnosis
+
+1. **HS20m, HS10m (radius).** The over-constraint of ADR 0540 is gone: both solves reach the gap tolerance `1e-8`, and the
+   force, the peak and the approach are within 2.5 percent. The radius is read from the fit of `p^2` against `r^2` over the
+   nodal values `t_a/A_a`. A diagnostic run (`diag_hs10m_node_pressures`, `diag_hs20m_node_pressures`, ignored, no limit; not
+   a registered check and not used for any decision) printed the active nodes: the values are the coefficients of the traction
+   in the basis `Phi`, not its values at the nodes, and they oscillate between corner and mid-edge nodes. On Tet10 the
+   mid-edge values near `r = 0.06` to `0.07` range from 0.033 to 0.100 (Hertz: about 0.045 to 0.035); on Hex20 the oscillation
+   is a few percent. Fitted separately, the corner nodes give `a_fe` 0.116 (HS10m) and 0.113 (HS20m), the mid-edge nodes 0.269
+   and 0.132; together 0.593 and 0.121. The constraint is met; the reading of a pressure field from the multipliers of a
+   standard (non-biorthogonal) weighting basis is the defect, plus, on Tet10, the asymmetric diagonals of `split_hexahedra`. The
+   pointwise penetrations at the load-rule points (up to 7e-5) show the same thing: the weighted gaps are zero, the point gaps
+   oscillate with the multipliers. Not a defect of the set-up as registered, so no corrected run.
+2. **HS20t, HS10t (total Lagrangian).** The first Newton iteration of the first solve fails the pivot test of the total
+   Lagrangian driver: the whole approach (0.01, ten percent of `a`) is applied in one load step, so the first iterate penetrates
+   the sphere deeply, and the contact curvature term `-t d2 gbar` with large forces makes the tangent indefinite. The linear body
+   has the fallback of ADR 0507 amendment 2 (the matrix without the curvature part for that iteration); the total Lagrangian
+   path of `solve_from` does not. PT20t and PT10t (flat target, no curvature term) pass to rounding.
+
+### Mutations
+
+Each alone on a `git archive` copy of 6ebad3e6 (`f623-scratch/mut`, target `target-mut`), `sa_contact_mortar_f623.rs` and
+`sa_contact_f623_default_bits.rs` run once.
+
+| id | caught by |
+|---|---|
+| MM1 (`alpha = 0`) | PT10m, PT20m, PT20t, PT10t (the construction refuses `A_a <= 0`), the tangents; R4's first row gets the key `"contact surface"` |
+| MM2 (edge factor 1) | PT10m, PT20m, PT20t, PT10t pressure 0.5; PW 1.0 |
+| MM3 (target blocks dropped) | M20w 0.716, M10w 0.731, M20q 1.0; the PT10m and PT20m solves fail; PT20t reaction 1.0 |
+| MM4 (no second derivative) | M20w 0.627, M10w 0.746, M20s 0.494, M10s 0.554, M20q 0.870 |
+| MM5 (`c_ag` not divided by `A_a`) | PT10m, PT20m, PT20t, PT10t (the solves fail) |
+| MM6 (default `Mortar`) | B2 (G1 differs) |
+| MM7 (no Jacobian in `W_g`) | PT10m pressure 0.75, PT20m 0.9375, PW 3.0 and 15.0, PT20t; M20s |
+
+Every planned mutation was caught by a check named for it.
+
+### Crate runs
+
+`cargo fmt -p rcfd-fem --check`: clean. `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings`: clean.
+`cargo test -p rcfd-fem --release` (after the known-miss renames): 1031 passed, 0 failed, 287 ignored (B2, the existing default-bits records and every test of `sa_contact*.rs` included). `cargo test -p rcfd-api --release --test baseline_hashes`: 3 passed, 1 ignored (the table not edited). `cargo test -p rcfd-cli --release --test docs_site`: 2 passed.
+
+### Deviations
+
+1. HS20m, HS10m, HS20t, HS10t missed (above); recorded as `*_known_miss` (the four test functions renamed and ignored after
+   their registered runs, as ADR 0540 did).
+2. Two ignored diagnostic tests were added after the runs (`diag_hs10m_node_pressures`, `diag_hs20m_node_pressures`): they
+   carry no limit and print the node table quoted in the diagnosis.
+3. `docs/reference-data.md` was not changed (no new reference value: the Hertz formulas are those of ADR 0540).
+
+Not run: the workspace test suite (the lead's gate).
+
+### Decision
+
+**partial** by the registered rule: B2, B and `baseline_hashes` unchanged, PT10m, PT20m and the five tangents met (and PT20t,
+PT10t, EQm, PW, FR, R4, the negative controls, every mutation caught); misses HS20m and HS10m (the contact radius) and HS20t and
+HS10t (the total Lagrangian solve), diagnosed and recorded as `*_known_miss` tests.
+
+### Remaining questions
+
+1. The pressure reading of the mortar contactor (HS20m, HS10m). Options: (a) recover the traction `sum_a (t_a/A_a) Phi_a` at
+   the load-rule points and fit those (or its L2 projection onto the face's shape functions), keeping the contactor; (b) dual
+   (biorthogonal) weighting functions, whose multipliers are local averages; (c) a fit of the corner nodes only. Recommendation:
+   (a) as a follow-up with its limits registered before the run (it changes the reading, not the contactor); (c) would be a
+   choice made after seeing the data.
+2. The total Lagrangian body against a curved rigid target (HS20t, HS10t). Options: (a) the fallback of ADR 0507 amendment 2
+   (the matrix without the curvature part when the pivot test fails) in the total Lagrangian path, (b) several load steps for
+   the Hertz problem, (c) both. Recommendation: (a), since it is the linear body's rule already; (b) changes the registered
+   set-up.
+3. Switching the default contactor of quadratic faces to the mortar one: open (changes default results; needs the
+   maintainer's approval).
+
+## For the lead: roadmap entries
+
+Proposed status of F-623: **partial**. New note:
+
+> Structural solver, advanced tier. Follow-up of F-601 (ADR 0540, 2026-11-15). ADR 0551, 2026-11-15: rcfd_fem::contact: an opt-in mortar contactor for Hex20 and Tet10 faces (ContactOptions::quadratic_contactor(QuadraticContactor::Mortar)): one weighted gap per face node with the transformed weighting basis Phi (corner N_i + (N_e + N_e')/4, edge N_e/2, a partition of unity with positive integrals), element-based integration by the face's load rule; the patch tests PT10 and PT20 within 6e-14 (linear and total Lagrangian body), node areas to 7e-16, tangents within 2.8e-10 (warped Hex8, curved Hex20 and rigid sphere targets); the Hertz problems HS20 and HS10 now reach the gap tolerance 1e-8 with peak and approach within 2.5e-2; defaults bit-identical. Known misses: the contact radius of HS20 and HS10 (0.21 and 4.9 against 0.15: the nodal multipliers t_a/A_a oscillate between corner and mid-edge nodes, so the fit reads coefficients, not values) and the Hertz problem on the total Lagrangian body (singular tangent at the first iteration: no curvature-free fallback on that path). Follow-ups proposed (numbers left to the lead).
+
+> Follow-up proposed: "Pressure recovery of the mortar contactor". Deps F-623. Acceptance: Every limit not stated here is registered in the ADR before the run. The traction sum_a (t_a/A_a) Phi_a of ADR 0551's mortar contactor recovered at the load-rule points (or projected onto the face's shape functions) and reported per point; the Hertz problems of ADR 0551 HS20m and HS10m read from it meet radius 0.15, peak 0.20, approach 0.10 with the gap tolerance 1e-8; the patch tests PT10m and PT20m within 1e-8 on the recovered traction; defaults bit-identical.
+
+> Follow-up proposed: "Curvature-free fallback of the total Lagrangian contact body". Deps F-623. Acceptance: Every limit not stated here is registered in the ADR before the run. When the exact tangent of the total Lagrangian contact body fails the pivot test, that iteration takes the contact matrix without its curvature part (ADR 0507 amendment 2, as the linear body); ADR 0551 HS20t and HS10t (the mortar contactor, total Lagrangian body) meet radius 0.15, peak 0.20, approach 0.10 with the gap tolerance 1e-8; the existing total Lagrangian contact records and the default bits unchanged.
