@@ -308,3 +308,96 @@ once. One check is added now, before run 2, against the vacuity found in run 1:
 
 By the decision rule the item cannot be done: CO1 missed in run 1, and CO1, W4, W3, SM and W0 can only be met after this
 post-run amendment.
+
+## Addendum 1: results (2026-11-15)
+
+Library at 379f1e19. `rotating.rs` (`RotatingOptions::shells`, module docs), `rotating/whirl.rs` (`coriolis_assembly`, the
+public `coriolis_matrix_with_shells`, `RotatingPart::coriolis` choosing it under either option; `coriolis_matrix` unchanged),
+`shell.rs` (`coriolis_factors`, `skew`, `local_coriolis`, `element_coriolis`, `model_coriolis`, `to_global_general`),
+`shell3.rs` (`local_coriolis`, `element_coriolis`, `to_global_general`), `cyclic.rs` (`triplets`; `expand`, `expand_field`,
+`expand_load` over the triplets of a node; `full_rotor` taking Shell4 and Shell3 under `shells_opted_in`; module docs). Tests:
+`crates/rcfd-fem/tests/sa_rotating_cyclic_shells.rs` (eight tests and the ignored record of run 1) and
+`sa_rotating_cyclic_shells_default_bits.rs` (B4), together 2.7 s in release. No existing test edited, no golden or hash table
+touched, no case-file key.
+
+Set-up run disclosed (B4): the B4 file was written with a zero hash and run once on the unchanged library (ffef73e8 plus only
+that file; `f647-scratch/b4_record.txt`), which printed `0x8963b28998b2cdc6` over 1266 values; that hash was written into the
+test before any library change.
+
+Run 1 (9ec638ba, `run1.log`) missed CO1 (amendment 2). Run 2 (379f1e19, `run2.log`) is the corrected run of amendment 2; every
+number below is from run 2 except where marked.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| F1 Shell4, Shell3 | counts, property, `1e-12` | 48 nodes, 36 / 72 elements, `Shell { thickness: 0.05 }` copied, clamp 12, every formula element matched once; positions 7.4e-16 | yes |
+| CO1a Shell4 (run 1) | 1e-13 | every form 0: relative error 1.0 (`co1_shell_coriolis_uniform_fields_known_miss`) | **no** |
+| CO1a Shell4 (run 2) | 1e-13 | translations 3.3e-16, rotations 2.2e-16, mixed 1.0e-16 | yes |
+| CO1b Shell3 (run 2) | 1e-13 | 5.6e-16, 2.2e-16, 0 | yes |
+| CO1c layup (run 2) | 1e-13 | 5.6e-16, 8.9e-16, mixed 2.2e-16 (`m0, m1, m2` = 217, -1.755, 0.0510583) | yes |
+| CO1d skew bit for bit | exact | the CO1 models and both sectors (run 2; in run 1 trivially, the matrix being zero) | yes |
+| MA4 / MA3 (both effects) | equal; 1e-8 | counts 9, 11, 12 / 11, 11, 12 at the three speeds; worst per harmonic 1.8e-15 / 2.3e-15 | yes |
+| MB4 / MB3 (pre-stressed) | equal; 1e-8 | 9, 11, 12 / 11, 11, 12; 1.8e-15 / 2.7e-15 | yes |
+| MC4 / MC3 (spin-softened) | equal; 1e-8 | 9, 9, 9 / 11, 11, 11; 1.6e-15 / 2.0e-15 | yes |
+| W4 / W3 (whirl, run 2) | equal; 1e-8 | 9, 12, 16 / 11, 13, 14; 1.9e-14 / 1.3e-14 (run 1 met vacuously, not counted) | yes |
+| W0 (amendment 2) | `>= 1e-4` | 0.246 (Shell4), 0.251 (Shell3) | yes |
+| CA4 / CA3 Campbell | equal bits | equal | yes |
+| OR4 / OR3 | 1e-8 | 1.3e-15 / 1.1e-15 (24 expanded modes per speed) | yes |
+| X24 / X23 | 1e-8 | 2.1e-10 / 3.8e-10 | yes |
+| XF4 / XF3 | 1e-10 | 1.1e-14 / 6.3e-15 | yes |
+| XL4 / XL3 | 1e-14 | 1.6e-16 / 1.6e-16 | yes |
+| SM4 / SM3 (run 2) | `Ok`, finite | `Ok` (split_modes, whirl_state k = 0..3, whirl_campbell) | yes |
+| B1 every rcfd-fem test (release) | pass | 1116 passed, 0 failed, 303 ignored | yes |
+| B2 `baseline_hashes`; `docs_site` | pass | 3 passed, 1 ignored; 2 passed | yes |
+| B3 Hex8 twin with both options | equal bits | equal, 1266 values | yes |
+| B4 hash | `0x8963b28998b2cdc6` | equal | yes |
+| NC1 to NC4 | as stated | `UnsupportedKind` Beam2; `UnsupportedKind` Shell4 (block 1); `Element { NotYetSupported Shell4 }` twice | yes |
+
+The speeds by the D3 rule: `omega_1` = 2935.2 rad/s (Shell4) and 2950.5 rad/s (Shell3), so 587 and 1174 rad/s (590 and 1180);
+no loss of stiffness. X2 (`~ 2e-10`) is above the `1e-12` backward tolerance of the solve because the measure divides by row
+maxima of `K phi` and `lambda M phi`, not by the norms of the solver's own test; it is well inside its limit.
+
+`cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings` clean.
+
+Mutations on a `git archive` copy of 379f1e19 with its own target (`f647-scratch/mut`, `mutate.py`, `run_mutations.sh`). The
+first pass of MU5 to MU8 was a harness failure (the mutated lines compared `base`, a `&usize`, with an integer and did not
+compile); those logs (`mut_MU5_harness_fail.log` and so on) are not counted. The script was corrected and those four were run
+once more:
+
+| Id | Caught by |
+|---|---|
+| MU1 | CO1a, CO1b, CO1c rotations (1.0) |
+| MU2 | CO1a, CO1b, CO1c rotations (2.0) |
+| MU3 | CO1a, CO1b, CO1c translations (1.0) |
+| MU4 | CO1c mixed (2.0) |
+| MU5 | OR4, OR3 (up to 4.1e-2), X24, X23 (up to 0.91) |
+| MU6 | OR (up to 3.4e-3), X2 (up to 0.86) |
+| MU7 | XF4, XF3 (1.0) |
+| MU8 | XF (38.6, 14.4), XL (9.1e-2) |
+| MU9 | NC2 (`Ok`) |
+| MU10 | F1 (property `None`), and every ring check (the ring refused) |
+| MU11 | W, SM and CO1d on the sector (refused), NC3 (`Ok`) |
+
+Eleven of eleven caught.
+
+**Decision by the registered rule: partial.** CO1 missed in run 1 (a library defect, diagnosed in amendment 2), and CO1, W4,
+W3, SM and W0 were met only after that post-run amendment. Every other check was met in its registered run, NC1 to NC4 behaved
+as stated, and every mutation was caught. In substance every clause of the acceptance is met in run 2.
+
+### Remaining questions
+
+1. Status. Options: (a) partial as the rule gives, with a follow-up item that re-registers the whirl checks on an independent
+   reference (a spinning thin shell of revolution against a closed form) so that the shell Coriolis matrix is checked beyond
+   its uniform-field forms and the sector-ring consistency; (b) done on the maintainer's judgement that run 2 is clean.
+   Recommendation: (a): the rule exists for this case, and an independent whirl reference is worth having before the fan study
+   relies on the forward and backward split.
+2. `coriolis_matrix` and `gyro::gyroscopic_matrix` stay solid-only; the shells reach the Coriolis matrix only through
+   `RotatingPart` or `coriolis_matrix_with_shells`. Options: (a) leave it so; (b) make the public functions take shells too.
+   Recommendation: (a) until the follow-up of question 1 lands.
+
+## For the lead: roadmap entries
+
+F-647 proposed status: **partial**.
+
+> Structural solver, advanced tier. Follow-up of F-628 (ADR 0556, 2026-11-15). ADR 0561, 2026-11-15: shells on the rotating cyclic paths and the full rotor. With CyclicOptions::shells the rotating sector's paths take Shell4 and Shell3: the modes at a speed with both effects, the pre-stressed and the spin-softened modes and the Campbell table (no library change was needed for these after F-628), and the whirl paths (whirl_modes, whirl_campbell, whirl_state, split_modes) through a new Coriolis matrix of the shell director, int rho N^T [a x] N of u + z theta x e3 (m0 [a x] on the translations, the m1 coupling of a layup, m2 W^T [a x] W on the rotations, no drilling term), carried by the congruence and made skew bit for bit (coriolis_matrix_with_shells; a part without a cyclic constraint takes it with the new opt-in RotatingOptions::shells; coriolis_matrix itself unchanged). full_rotor copies Shell4 and Shell3 blocks under the option (Beam2, and shells without the option, still refused), and FullRotor::expand, expand_field and expand_load turn the rotations of six-unknown nodes by the same R^j. The ADR 0556 frustum, N = 6, against its full ring from full_rotor at 0, 0.2 and 0.4 omega_1: frequencies of each harmonic at each speed within 2.7e-15 (modes with both effects, pre-stressed, spin-softened) and 1.9e-14 (whirl), equal counts (limit 1e-8); the Coriolis term moves the k = 1 frequencies by 25 %; expanded modes M-orthonormal within 1.3e-15 and eigenvectors of the ring within 3.8e-10 (limit 1e-8); expanded static fields within 1.1e-14. Models without shells keep their bits (every rcfd-fem test, baseline_hashes, a Hex8 twin bit-equal with both options and to its hash recorded before the change). Eleven of eleven mutations caught. Partial by the rule: the first run missed the uniform-field check of the Coriolis matrix (the shell to_global symmetrised the skew matrix to zero, so that run's whirl comparison was vacuous); fixed and re-run under a registered amendment, every check met.
+
+> Follow-up proposed: An independent whirl reference for spinning shells. Deps F-647. Acceptance: Every limit not stated here is registered in the ADR before the run. The forward and backward whirl frequencies of a spinning thin shell of revolution (a flat annular plate clamped at its inner radius, or a free thin ring) from RotatingSector::whirl_modes with Shell4 and Shell3 against a closed form derived or cited in the ADR, at three speeds up to half the first frequency: within the registered discretisation error at two meshes, the observed order within 0.5 of the expected one, and the split of each nodal-diameter pair within 1e-2 relative; models without shells keep their bits.
