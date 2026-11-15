@@ -145,12 +145,16 @@ pub fn nodal_load_vector(model: &SolidModel, extra: &[NodalForceAt]) -> Result<V
                     add_shell_pressure(&mut f, &dofs, mesh, e, *pressure, true)?;
                 }
             }
-            Load::ShellPressureCurvature { set, pressure } => {
+            Load::ShellPressureCurvature {
+                set,
+                pressure,
+                boundary,
+            } => {
                 let elements = mesh.element_set(set).ok_or_else(|| FemError::UnknownSet {
                     kind: crate::error::SetKind::Element,
                     name: set.clone(),
                 })?;
-                add_shell_pressure_curvature(&mut f, &dofs, mesh, elements, *pressure)?;
+                add_shell_pressure_curvature(&mut f, &dofs, mesh, elements, *pressure, *boundary)?;
             }
             Load::Traction { set, traction } => {
                 for &face in surface(mesh, set)? {
@@ -425,6 +429,7 @@ fn add_shell_pressure_curvature(
     mesh: &SolidMesh,
     elements: &[usize],
     p: f64,
+    boundary: crate::shell3_curvature::CurvatureBoundary,
 ) -> Result<()> {
     let mut tris = Vec::with_capacity(elements.len());
     for &e in elements {
@@ -440,7 +445,13 @@ fn add_shell_pressure_curvature(
         let n = mesh.element_nodes(e);
         tris.push([n[0], n[1], n[2]]);
     }
-    for (node, force) in crate::shell3_curvature::pressure_load_curvature(mesh.nodes(), &tris, p)? {
+    let forces = match boundary {
+        crate::shell3_curvature::CurvatureBoundary::Quadric => {
+            crate::shell3_curvature::pressure_load_curvature(mesh.nodes(), &tris, p)?
+        }
+        _ => crate::shell3_curvature::pressure_load_curvature_with(mesh.nodes(), &tris, p, boundary)?,
+    };
+    for (node, force) in forces {
         add_force(f, dofs, node, &force)?;
     }
     Ok(())
