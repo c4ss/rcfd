@@ -343,3 +343,119 @@ dir), the fast tests of `sa_fracture_curved.rs` (PM and EH not run for mutations
 As D7. Also: the citations (Gosz and Moran 2002, Walters, Paulino and Dodds 2005, Kassir and Sih 1966, Tada) are from memory;
 nothing used depends on them (D1 derived and verified by arithmetic 1; D2 derived from the 2-D forms of ADR 0605 and verified by
 arithmetic 2 and by PM6, PM7).
+
+## Addendum 1: results (2026-11-15)
+
+Code (commit 3cf861b6, a clippy type alias in the test in a2792ddd): `crates/rcfd-fem/src/fracture.rs`, the only library file
+changed, 840 lines added (after `cargo fmt`) and none changed or removed: a bullet of the module documentation and, appended at
+the end, `FrontCurve`, `TipFrame`, `tip_frame`, `CurvedAuxiliary` (with `correction`), `curved_auxiliary`, `CurvedTerms`,
+`interaction_integral_curved`, `CrackedHalfCylinder`, `penny_crack_half_cylinder`, as in D1 and D4. Tests: the new file
+`crates/rcfd-fem/tests/sa_fracture_curved.rs`. `sa_fracture.rs` and `sa_fracture_modes.rs` not edited; `docs/reference-data.md`
+gets an F-682 section.
+
+The fast tests were run once (`f682-scratch/run1.log`), the heavy records once each alone (`f682-scratch/heavy_pm.log`: 122 145
+unknowns, supernodal solve 44.2 s, the whole test 44.7 s; `heavy_eh.log`: 87 663 unknowns, 19.1 s). After the run EC1's miss was
+moved into its own ignored test `ec1_coarse_ellipse_known_miss` (limit intact, measured number in the ignore text) and the other
+rows of that test into `ec2_ec3_pq_mode_one_curved_fronts`; the fast tests were run once more after that restructuring and
+`cargo fmt` (`run2-restructured.log`: the same numbers to every printed digit). No development probe was run before the
+registered run.
+
+| check | limit | measured | met |
+|---|---|---|---|
+| PM1 penny inclined, ring 3, `K_I`, 17 stations | `<= 0.03` | 5.82e-4 | yes |
+| PM2 `K_II`, all stations, `/A_II` | `<= 0.03` | 1.63e-4 | yes |
+| PM3 `K_III`, 15 interior stations, `/A_III` | `<= 0.03` | 1.51e-3 | yes |
+| PM4 `K_II`, `K_III` relative where `|K_ref| >= A/2` | `<= 0.03` | 1.52e-3 | yes |
+| PM5 spread over rings 2 to 4, `/A_mode` | `<= 0.01` | 1.27e-3 | yes |
+| PM6 J of `j_integral` against `G` of the closed forms, every station | `<= 0.04` | 1.80e-2 (J low everywhere) | yes |
+| PM7 front mean of J against that of `G` | `<= 0.02` | 1.36e-2 | yes |
+| PM8 J against `G` of the ring-3 `K`, interior | `<= 0.02` | 1.25e-2 | yes |
+| PMR domain term alone (record) | none | ring 3 errors `K_I` 3.06e-2, `K_II` 0.135, `K_III` 6.95e-2; ring spread 0.150; end-station `K_III` -1.63 `A_III` (closed form 0) | (record) |
+| PC1 coarse penny inclined, ring 2, `K_I` | `<= 0.08` | 7.01e-4 | yes |
+| PC2 `K_II` `/A_II` | `<= 0.08` | 7.39e-4 | yes |
+| PC3 `K_III` interior `/A_III` | `<= 0.08` | 4.93e-3 | yes |
+| PC4 J against `G`, every station | `<= 0.10` | 4.00e-2 | yes |
+| PCR domain term alone (record) | none | 3.27e-2, 0.141, 7.61e-2; end-station `K_III` -0.83 `A_III` | (record) |
+| EC1 coarse ellipse, `K_I` against K of the ring-2 J | `<= 0.02` | **2.29e-2** | **no** (known miss) |
+| EC2 coarse ellipse, `K_I` against Irwin (linear hat average) | `<= 0.08` | 1.10e-2 | yes |
+| EC3 `K_II = K_III = 0` (half-symmetric) | `== 0` | 0 | yes |
+| EH1 fine ellipse ring 3, `K_I` against Irwin | `<= 0.03` | 2.45e-3 | yes |
+| EH2 fine ellipse, `K_I` against K of J | `<= 0.01` | 6.02e-3 | yes |
+| EH3 fine ellipse, spread of rings 2 to 4 | `<= 0.01` | 1.99e-3 | yes |
+| PQ1 coarse quarter penny, `K_I` against `2 sigma sqrt(a/pi)` | `<= 0.10` | 6.50e-4 | yes |
+| PQ2 the same against K of J | `<= 0.02` | 1.22e-2 | yes |
+| MC1 correction against central differences | `<= 1e-7` | 6.5e-10 | yes |
+| MC2 frame residuals, foot on the curve | `<= 1e-12` | 1.7e-16 | yes |
+| MC3 largest correction / scale | `>= 1e-3` | 0.70 | yes |
+| MS curved function on the straight inclined crack against `interaction_integral`, rings 2 to 4, both terms | `<= 1e-12` | 0 (bit-identical) | yes |
+| R6 the four refusals | refused | each refused with its key and text | yes |
+| F1 every aggregated value finite | finite | finite | yes |
+
+**EC1, diagnosis.** The limit assumed that the interaction integral and J on the same coarse mesh share their discretization
+error (estimate 0.006). They do not: K of the coarse-mesh J is `1.4e-2` to `3.3e-2` low (ADR 0605 EF measured the same `3.3e-2`
+at `phi = 0`), while K of the corrected interaction integral is within `1.1e-2` of Irwin (EC2) at every station; the difference
+`K_M/K_J - 1` is `+1.4e-2` to `+2.3e-2`, J's error. On the fine mesh the two agree within `6.0e-3` (EH2) and K_M is within
+`2.5e-3` of Irwin (EH1). The same pattern is seen on the coarse penny (PQ: K_M `6.5e-4` from Sneddon, K_J `1.2e-2` low) and in
+PM6 to PM8 (J `1.3e-2` to `1.8e-2` below the closed-form G while the three K are within `1.5e-3`). The miss is a wrong estimate of
+the coarse-mesh error of J, not a defect of the interaction integral; the limit stays and the test is ignored as
+`ec1_coarse_ellipse_known_miss`.
+
+**What the corrections do.** Without them (records PMR, PCR, and the "domain only" columns of EC, PQ, EH) the curved-front
+results are off by 3 % in `K_I` and 7 % to 14 % in `K_II` and `K_III`, and drift with the ring (spread 0.15); with them every
+mode is within `1.5e-3` and the rings agree within `1.3e-3`. At the two mirror-plane end stations `K_III` carries the end-face
+term of D1 (`-1.63 A_III` on PM, `-0.83 A_III` on PC; closed form 0), as registered a record.
+
+Mutations (`f682-scratch/mutate.py` on the copy `f682-scratch/mut` of a2792ddd, target `f682-scratch/target-mut`, the fast tests
+of `sa_fracture_curved.rs`; log `f682-scratch/mutations.log`), each run once:
+
+| mutation | caught by | as registered? |
+|---|---|---|
+| X1 C1 dropped | MC1 (0.68), PC2 (0.108), PC3 (0.140), EC2 (8.06e-2) | yes (more) |
+| X2 first part of C2 dropped | MC1 (0.32) | yes |
+| X3 last part of C2 dropped | MC1 (0.38) | yes |
+| X4 sign of `kappa` | MC1, PC2, PC3, EC2, PQ2 | yes (more) |
+| X5 `h = 1` | MC1 (0.14) | yes |
+| X6 ellipse foot by the confocal angle | MC1 (4.4e-2), MC2 (2.5e-3) | yes |
+| X7 ellipse curvature `1/a` | MC1 (0.52) | yes |
+| X8 half-symmetric factor 2 dropped | EC2, PQ1, PQ2 (0.50) | yes (EC1 is the ignored known miss) |
+| X9 frame fixed at the first front node | PC1 to PC3, EC2, PQ1, PQ2 | yes |
+| X10 `b3 = n x e` | PC3 (1.97: the sign) | yes |
+| X11 line curvature nonzero | MS (2.3e-3) | yes |
+
+All 11 mutations caught.
+
+Also run: `cargo test -p rcfd-fem --release --test sa_fracture_modes --test sa_fracture -- --include-ignored` (the ADR 0605 and
+ADR 0547 tests including their heavy records: 7 and 8 passed, unchanged); `cargo test -p rcfd-api --release --test
+baseline_hashes` (3 passed, 1 ignored); `cargo clippy -p rcfd-fem --all-targets --release -- -D warnings` (clean after the
+type alias); `cargo fmt -p rcfd-fem --check` (clean). Not run: the whole `rcfd-fem` suite (the lead runs the gate; no existing
+line changed).
+
+Deviations: none from the registered set-ups. The heavy records take 45 s and 20 s, under the two minutes of the house rule;
+they stay `#[ignore]` as registered.
+
+**Decision by the registered rule: partial.** One registered check, EC1, missed (diagnosed above); every other check, the heavy
+records included, is met, every mutation is caught, fmt, clippy and `baseline_hashes` clean. Clause by clause: c1 PM1 to PM5,
+PQ1, PC1 to PC3, MC1 to MC3 (met); c2 EC2, EC3, EH1 to EH3 met, EC1 missed; c3 PM1 to PM4 within 3 % (largest `1.5e-3`); c4 MS
+bit-identical and the ADR 0605 tests unchanged; c5 D2 (Fourier reduction, potential integral, `nu -> 0`, energy average) and PM6,
+PM7; c6 the half `x >= 0` of the whole cylinder (D4); c7 PM and EH ignored with PC, EC, PQ, MC fast; c8 D6.
+
+Remaining questions:
+
+1. Status. Every clause of the acceptance is met; the only miss is a consistency limit against the coarse-mesh J, whose own
+   error caused it. Options: (a) partial as the rule gives; (b) done, recording EC1 as a known miss of the J reference.
+   Recommendation: (a) by the rule; the lead may take (b).
+2. `K_III` at stations on a mirror plane carries the end-face term. Options: leave as a record; a mirror-plane option that sets
+   the antisymmetric mode to zero at such stations (exact by symmetry, D1); closed fronts so that no mirror is needed.
+   Recommendation: the follow-up below (closed fronts and the mirror option together).
+3. The citations (Gosz and Moran, Walters, Paulino and Dodds, Kassir and Sih, Tada) remain from memory; nothing depends on them.
+4. A case-file key for fracture parameters: still open (it would change the schema golden; not taken).
+
+## For the lead: roadmap entries
+
+Proposed status of F-682: partial by the registered rule (question 1: the lead may take done).
+
+> Proposed status: partial.
+
+> Structural solver, advanced tier. Follow-up of F-632 (ADR 0605). ADR 0610, 2026-11-12: rcfd_fem::fracture gains interaction_integral_curved (straight, circular and elliptical fronts, full or half-symmetric; the auxiliary fields of near_tip_gradient rotated into the frame of each point's foot on the front by tip_frame, the ellipse foot by Newton, with the correction terms int (sigma^aux_ij,j u_i,k + sigma_ij (H_ik,j - eps^aux_ij,k)) q_k dV derived in closed form in the local frame and verified against central differences to 6.5e-10; CurvedTerms::DomainOnly for comparison), curved_auxiliary, and penny_crack_half_cylinder (the half x >= 0 of the whole cylinder, both crack faces). interaction_integral unchanged. Met: penny crack under tension inclined 45 deg (122 145 unknowns) ring 3 K_I within 5.8e-4, K_II within 1.6e-4 A_II, K_III within 1.5e-3 A_III of the hat-averaged closed forms 2 sigma_nn sqrt(a/pi), 4 tau sqrt(a/pi) sin theta/(2 - nu), -4 (1 - nu) tau sqrt(a/pi) cos theta/(2 - nu) (limit 3 percent; the closed forms derived from the 2-D forms by a Fourier reduction and verified numerically, J of the domain integral within 1.8e-2 of their G), rings 2-4 within 1.3e-3; the domain term alone off by 3 to 14 percent; elliptical crack b/a = 0.5 mode I within 2.5e-3 of Irwin; the straight inclined crack bit-identical to ADR 0605; 11 of 11 mutations caught. Missed: the coarse-ellipse K against K of the coarse-mesh J, 2.29e-2 against 2e-2 (the error of that J; known miss). Not covered: K_III at mirror-plane stations (end-face term), closed fronts, mixed-mode elliptical cracks, non-planar fronts. No case-file key.
+
+> Follow-up proposed: Interaction integral on closed curved fronts and mirror-plane stations. Deps F-682. Acceptance: Every limit not stated here is registered in the ADR before the run. A closed (periodic) front without end stations and a mirror-plane option that zeroes the antisymmetric modes at stations on a mirror plane; a whole penny-shaped crack under tension inclined in a general direction with K_I, K_II and K_III at every station within 3 percent of the closed forms, and the results of ADR 0610 unchanged.
