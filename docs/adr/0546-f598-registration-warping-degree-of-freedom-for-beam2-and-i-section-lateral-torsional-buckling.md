@@ -283,3 +283,18 @@ defect (amendment).
 - **Q2. The warping unknown on the other paths** (static, modes, pre-stressed modes) and torsion in the pre-stress. Recommendation:
   a separate item; the static solve first (it would lift RF8).
 - **Q3. Monosymmetric sections** (shear-centre offset and `beta_x` about it). Recommendation: a separate item.
+
+## Amendment 1 (2026-11-15): the set-up of M1 is defective; written after the first run of `sa_beam_warping_f598.rs` and before any corrected run
+
+The first run (log `w49i-work/f598-scratch/run1.log`, commit d4dc68cd) met every registered check except one: **M1, the I-beam
+factor of the mixed model, `1.5085e-9` against the limit `1e-9`** (the rectangle factor of the same run: `1.4e-15`). A diagnostic
+(a throwaway copy of the test printing the residuals, deleted, no other number looked at) shows the cause: in the mixed model the
+I-beam pair is the second, next to the rectangle's second mode (factors `58.785` and `60.316`, a gap of 2.6 percent), and the
+subspace iteration stopped when its backward residual fell below the default tolerance `1e-10` (`6.56e-11` after 13 iterations);
+the same pair of the I beam alone converged to `9.4e-19`. A factor error of `1.5e-9` is what a residual of `6.6e-11` gives for a
+pair this close to its neighbour; the registered limit `1e-9` was below the accuracy the registered solver tolerance guarantees,
+so the set-up (not the assembly) is defective.
+
+Corrected **M1'**: the same models and comparison with the eigensolver tolerance `1e-13` (`BucklingOptions::tolerance`) on the
+three solves (the mixed model, the rectangle alone, the I beam alone); limits unchanged (`<= 1e-9` relative each); estimate
+`1e-12`. The first-run function stays as the ignored record `m1_mixed_model_run1_known_miss`.
