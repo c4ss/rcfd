@@ -208,3 +208,28 @@ Limits). It does not say whether that law is the right finite-strain creep model
 would change the drift itself); it measures the element against the problem the library states. The time steps are common, so
 time discretisation error is not measured (ADR 0489 measured the order). Only `m = 0`, `n = 4`, `b/a = 2`, `nu = 0.3`, the one
 registered mesh. No case-file key. The incompatible-modes Hex8 stays refused in the nonlinear driver (ADR 0506).
+
+## Amendment 1 (2026-11-15, written after run 1 and before any corrected run)
+
+**Run 1** (`f580_creep_bbar_against_the_finite_strain_reference`, single run, 26 s in release; log
+`f580-scratch/run1-f580.log`): both rcfd solves completed (BBar and Full, 0 halvings, largest creep increment `2.38e-4`), then
+the reference panicked "reference: Newton not converged at step 0" before any check was measured. **A defective set-up, not a
+result:** the registered stop of the reference's Newton loop (`max |du| <= 1e-13 max |u|`, arithmetic 2) lies at or below its
+rounding floor. The numpy probe of arithmetic 3 did not assert convergence and so did not show it.
+
+Diagnosis (one diagnostic run, `f580_reference_newton_diagnosis`, ignored, the stop set to 0 so every iteration of step 0 is
+printed; log `f580-scratch/diag-a1.log`): at `p` the ratio falls `1, 1.2e-4, 9e-11, 5.6e-14` and then stays between `5e-15`
+and `2e-14`; at `p/1000` it falls `1, 1.1e-4, 4e-8, 8e-11` and then stays between `6e-12` and `2e-11` (the Green-Lagrange
+strain `(rho'^2 - 1)/2` of a strain of `1e-7` is formed by a subtraction and carries a relative rounding of `1e-9`; the
+element tangent by central differences of step `1e-7 p/E` adds its own). The floor at `p` is above `1e-13` in about one
+iteration in two, at `p/1000` always.
+
+**Correction:** the stop becomes `max |du| <= 1e-9 max |u|` (`reference_with(p, nel, 1e-9, false)`), 50 times above the
+largest floor seen and reached in three to four iterations. Its effect on the checks: a displacement error of at most `1e-9`
+of `u(a)` (`1.9e-4` at `p`) is a strain error of at most `1e-9 u(a)/h_min = 1.5e-10` against strains of `1e-4`, so at most
+`2e-6` of `p` in the stress, twenty times below R1's limit and five hundred times below F3's bound (the actual error is much
+smaller: the last Newton correction is far below the stop). Nothing else changes: the same reference, the same rcfd solves,
+the same checks, limits and mutations. The corrected run is the test `f580_amendment_1_creep_bbar_against_the_finite_strain_reference`;
+run 1 stays as the ignored record `f580_creep_bbar_against_the_finite_strain_reference` (its body moved into the helper
+`f580_checks`, which it calls with the original `reference`, the stop `1e-13`; the behaviour is that of run 1). The rcfd numbers
+of run 1 (halvings, largest increment) were printed before the panic; no check value was seen.
