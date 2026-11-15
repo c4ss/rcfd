@@ -301,3 +301,15 @@ ignored heavy record run once, with a fast test on the same code path.
    rule it shares), not a private routine of `rcfd-fem`.
 3. **Case-file keys.** Not added (a golden of the schema would change): recommended `continuation = { ..., contribution_load =
    true }` and `newton = { unsymmetric = true }`, for the lead.
+
+## Amendment 1 (2026-11-15, after the mutation run of MU1 to MU8, before any re-run): a defective mutation harness
+
+The registered tests were run once at 903576c6 (all met; addendum 1). The mutation script `f572-scratch/mutate.py` then ran
+MU1 to MU8 one at a time on a `git archive` copy, extracted afresh for each mutation into the same folder with one shared
+target folder. `tar -x` keeps the archive's modification times, which are older than the build artifacts, so after MU5 (the
+only mutation in `rcfd-linalg`) cargo did not rebuild `rcfd-linalg` for MU6, MU7 and MU8: those three ran with MU5 still in
+place (their log shows K1 at `7.09e-2`, the MU5 value, although they do not touch `rcfd-linalg`). MU1 to MU5 are valid (MU1 to
+MU4 ran before MU5; every `rcfd-fem` mutation rewrites a file of that crate, which recompiles the whole crate from the extracted
+sources). The set-up is corrected, not the checks: the extraction uses `tar -x -m` (modification time now), so every crate is
+rebuilt from the copy, and MU6, MU7 and MU8 are run once more with it. The first, contaminated log of MU6 to MU8 stays in
+`f572-scratch/mutations.log`; the corrected run goes to `f572-scratch/mutations-amendment1.log`. No limit and no test changes.
