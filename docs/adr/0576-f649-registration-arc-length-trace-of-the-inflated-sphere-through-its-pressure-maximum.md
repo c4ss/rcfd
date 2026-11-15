@@ -186,3 +186,73 @@ A mutation is caught if any registered check of the new test file misses (a trac
 
 None taken. (The end `2.5` of the descending branch and the use of the symmetric part are registered choices, taken on the
 maintainer's standing instruction of 2026-11-11, take the recommendation.)
+
+## Addendum 1: results (2026-11-15)
+
+The single registered run of `sa_arclength_sphere_f649.rs` (fast test and the two ignored tests, `--include-ignored`, release,
+62 s): `f649-scratch/run1.log`. Mutations: `mutations.log`, `mut-MU*.log`, `mut-MP1.log`. S1 to S3: `s1-fem.log`,
+`s2-hashes.log`, `s2-docs.log`, `s3-fmt.log`, `s3-clippy.log` (all in `f649-scratch`). No library code was written (the audit
+found no gap), no existing test was edited, no limit was changed.
+
+| Id | Measured | Limit | |
+|---|---|---|---|
+| T1 | `Ok`, stopped at point 64 (`l_mean = 2.50053`); the largest load factor at point 33 (`l_mean = 1.82308`), 31 points after it; no halving | holds | met |
+| M1 | `max lambda p_ref = 1.0019659 p_c,max`: `1.97e-3` | `<= 1e-2` | met |
+| D1c | points 34 to 64: largest `1.94e-3` (point 34), falling to `1.27e-3` at `2.50` | `<= 1e-2` | met |
+| M2 | `|1.82308 - 1.828147| = 5.1e-3` | `<= 0.05` | met |
+| A0 | points 1 to 32: largest `4.71e-3` (point 1, `l_mean = 1.023`) | `<= 1e-2` | met |
+| C1 | `9.6e-15` | `<= 1e-10` | met |
+| I1 | at most 6 iterations per point (5 at most points) | `<= 20` | met |
+| R1 | parabola vertex `l = 1.82674`, `p / p_c,max - 1 = 1.972e-3` (raw `1.966e-3`); negative pivots 0 at points 1 to 33, 1 at points 34 to 64; load scale `22.33`; cavity-volume stretch within `2e-4` of `l_mean`; spread of `|x_a|` `1.4e-4` to `4.7e-3` | reported | |
+| NC1 | `solve_with` at `1.02 p_c,max` failed: step 10 at the load factor `0.956` (`0.976 p_c,max`), singular tangent (negative pivot) after 5 halvings | holds | met |
+| F1 | 3 points; `max |u_al - u_lc| / max |u_lc| = 3.9e-15` | `<= 1e-6` | met |
+| F2 | refused, key `"arc length"` (the text of ADR 0480 D4) | holds | met |
+| F3 | `6.0e-16` | `<= 1e-10` | met |
+| S1 | `cargo test -p rcfd-fem --release`: 1158 passed, 0 failed, 317 ignored | 0 failed | met |
+| S2 | `baseline_hashes` 3 passed, 1 ignored; `docs_site` 2 passed | pass | met |
+| S3 | `cargo fmt -p rcfd-fem -- --check` clean; `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings` clean | clean | met |
+
+Every estimate held: M1 `1.97e-3` (estimate `2.2e-3`), D1c `1.94e-3` (`2.2e-3`), A0 `4.7e-3` (`4.5e-3`), I1 6 (5 to 7). The
+error relative to the closed form falls steadily along the path (`+4.7e-3` at `1.02`, `+2.7e-3` at `1.49`, `+2.0e-3` at the
+maximum, `+1.3e-3` at `2.5`), always positive (the discrete model is slightly stiff); the 1D radial part (arithmetic 2) turns
+negative after `1.95`, so the angular part grows slowly from about `2e-3` to `1.6e-3 .. 1.9e-3` beyond the maximum rather than
+staying constant; the additive estimate of arithmetic 2 held within a factor 1.2. The negative pivot appears at the first point
+past the maximum and stays one to the end: one unstable (spherically symmetric) mode of the pressure-controlled tangent, no
+further pivot within the octant symmetry.
+
+### Mutations (each run once, `git archive` copy of 49cd47e7, `--include-ignored`)
+
+| Id | Caught by |
+|---|---|
+| MU1 (no follower load direction) | T1 and F1 (the `contribution_load` refusal: zero load direction) |
+| MU2 (traction sign) | T1 (point 55 not converged), NC1 unaffected; F1 not (the coarse ascending points converged on both routes alike) |
+| MU3 (dead pressure) | T1 (point 36, load factor 1.337, not converged) |
+| MU4 (wrong root) | T1 and F1 (the first point not converged) |
+| MU5 (`is_fbar` false: the Full element) | M1 (`8.25`), D1c (`10.0`), M2 (`0.48`), A0 (`18.0`), NC1 (the locked model converged at `l_mean = 1.0126`); T1 was **met** (the expectation of the table was wrong: the arc-length step traced the locked Full model past its spurious limit point near `1.13`, the largest load factor at point 13, to `2.5`) |
+| MP1 (probe, half the derivative; outside the rule) | T1 and F1 (the first point not converged in 40 and 20 iterations) |
+
+Five of five registered mutations caught (MU2 and MU5 by other checks than some of those the table expected; the rule asks for
+any registered check).
+
+### Deviations
+
+- The coarse sphere of D3 (`n = 3`, `m = 4`) has `3 n^2 m = 108` Hex8, not 180 as arithmetic 7 said (an arithmetic slip of the
+  registration text; the set-up is the registered one).
+- The MU5 table entry expected T1; T1 was met under MU5 (above). A disclosure, not a change of any check.
+- Nothing was re-run; no amendment.
+
+### Decision
+
+**done** by the registered rule: T1, M1 and D1c met in their single registered run, every companion (M2, A0, C1, I1), the
+control NC1 and the fast checks F1 to F3 met, S1 to S3 met, and every registered mutation caught. c4 (existing arc-length
+results bit-identical) holds by construction (no library line changed) and by S1 and S2.
+
+### Remaining questions (recommendations taken on the maintainer's standing instruction of 2026-11-11)
+
+1. The diagnostic seen under MU5: the arc-length step follows the locked Full Hex8 sphere through its spurious limit point
+   (ADR 0557 DX). Options: (a) leave it as a mutation observation; (b) a follow-up that registers the Full trace as a locking
+   diagnostic (the spurious maximum and its place against ADR 0557's `1.1326`). Recommend (a): it adds nothing the acceptance of
+   F-622 needs; it is recorded here.
+2. Aspherical bifurcation of the inflated thick sphere (a full-sphere or a lower-symmetry model, the eigenvectors of the
+   negative pivot) is not covered. Recommend no follow-up unless a fan or membrane case needs it.
+
