@@ -219,7 +219,8 @@ pub(crate) fn check_beams_option(model: &SolidModel) -> Result<()> {
             }
             if options.interpolation.is_some() || options.axis_nodes {
                 return Err(cyclic_error(format!(
-                    "constraint {i}: Beam2 in the cyclic constraint (ADR 0595) is not taken with interpolated boundaries                      or nodes on the axis"
+                    "constraint {i}: Beam2 in the cyclic constraint (ADR 0595) is not taken with interpolated \
+                     boundaries or nodes on the axis"
                 )));
             }
         }
