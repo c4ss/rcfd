@@ -207,3 +207,43 @@ accepting) and a decision on the Beam2 cyclic refusal (open question 2), in a la
 ## For the lead: roadmap entries
 
 Written in the addendum after the run.
+
+## Amendment 1 (2026-11-15, written and committed after run 1 and before the corrected run)
+
+**Run 1** (the registered run, made once: `cargo test -p rcfd-fem --release --test sa_hyper_structures_f666 -- --nocapture
+--test-threads=1` at 6cb7beca, log `w49i-work/f666-scratch/run1.log`, 0.97 s): 8 of 11 tests passed; the cyclic, cms and mpc
+rows, the Q3 and P3 extras, A-B, N1, N2 and the controls C-CY, C-CM, C-MP held (their numbers go in Addendum 1). Three tests
+failed, every failed row on the **rotating** path, all with the same error before any number: RO-B, RO-P4 (a2), X-RS-Q4 (extra)
+and C-RO (control) were refused by `RotatingPart::new` with `NotYetSupported { variant: "Hyperelastic", package: LINEAR_FOLLOW_UP,
+location: "... a structural element (Beam2, Shell4, Shell3)" }`, although the model has the setting on.
+
+**Diagnosis.** `RotatingPart::new` passes its own entry check (`rotating::check_model`, with the setting), then solves the
+centrifugal pre-stress at 1 rad/s on a copy built by `rotating::unit_centrifugal_model` (rotating.rs 312-334) from
+`SolidModel::new(model.mesh().clone())` with the materials, constraints and supports copied one by one. The copy does not carry
+`hyperelastic_structures` (it is the default `false`), so the static solve of the copy refuses the material. The audit missed it:
+it searched the paths for reads of the material, not for copies of the model. It is the only `SolidModel::new` in the library
+outside `model.rs` (grep). `RotatingSector::new` goes through `RotatingPart::new`, hence X-RS-Q4. A library defect of F-645 (the
+setting was not propagated to the one place that rebuilds a model), not a defect of the set-up; the limits are not touched.
+
+**Records.** The three failed tests stay in the file as ignored records with their limits intact: `ro_rotating_part_known_miss`,
+`x_rs_q4_rotating_sector_known_miss`, `c_perturbed_twin_is_seen_known_miss` (the last missed only its C-RO row; its other three
+rows held). Their bodies are not changed.
+
+**D5 (the fix).** In `unit_centrifugal_model`, after `SolidModel::new`: `copy.set_hyperelastic_structures(model.
+hyperelastic_structures());`. For a model without the setting the copy has `false`, as before, so every default run builds the
+same copy and gives the same bits (B0: `rcfd-api --test baseline_hashes` and the rotating tests listed in the corrected B0 row).
+Shared solver file `rotating.rs`, one line.
+
+**The corrected tests** (copies of the failed ones under new names, the same set-ups, measures and limits as registered, run
+once after the fix): `ro_rotating_part_amended` (RO-B, RO-P4), `x_rs_q4_rotating_sector_amended` (X-RS-Q4),
+`c_perturbed_twin_is_seen_amended` (C-CY, C-RO, C-CM, C-MP). The other tests of run 1 are not re-run as registered runs (they
+run again only as part of the build and B0).
+
+**Mutation 7** (added): the D5 line removed. Expected caught by the amended RO-B, RO-P4, X-RS-Q4, C-RO rows (refused as in run 1).
+
+**B0 (corrected)**: no library line changed except D5 (`git diff --stat 21b526d0 -- crates/*/src`: `rotating.rs` one line);
+`rcfd-api --release --test baseline_hashes`; the rotating tests `sa_geometric_struct`, `sa_geometric_struct_bits`,
+`sa_ortho_rotating_default_bits`, `sa_rotating_cyclic_shells_default_bits`, `si_rotating`; and `sa_hyper_structures`,
+`sa_hyper_paths` (RF1). Pass.
+
+The decision rule is unchanged: at most partial (a5 not approved).
