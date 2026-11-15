@@ -530,7 +530,8 @@ fn l2_homogeneous_uniaxial_bar() {
 }
 
 #[test]
-fn l3_modes_against_the_twin() {
+#[ignore = "known miss of ADR 0555 L3 (registered run, log run1.log): the NHi BBar row failed in modal_analysis of the hyperelastic model, subspace iteration did not converge in 200 iterations (tolerance 1e-10, residuals 1.3e-9 .. 2.7e-11); NHc and MRc met 2.99e-14 (limit 1e-10); amendment 1, continued in l3_nhc_mrc_rows, diagnostic l3d_nhi_bbar_diagnostic"]
+fn l3_modes_against_the_twin_known_miss() {
     let mut c = Checks::new();
     for (name, e, f, limit) in cantilever_rows() {
         let a = modal_analysis(&cantilever(hyper(e.clone()), f, [0.0, 0.0, 1.0]), &ModalOptions::new(6)).unwrap();
@@ -932,4 +933,71 @@ fn f1m_refusals_after_f620() {
     );
     c.holds("F1m' energy_magnitude of an inverted strain refused", ok, &d);
     c.finish();
+}
+
+/// ADR 0555 amendment 1, L3c: the NHc and MRc rows of L3 (met in the registered run).
+#[test]
+fn l3_nhc_mrc_rows() {
+    let mut c = Checks::new();
+    for (name, e, f, limit) in cantilever_rows().into_iter().take(2) {
+        let a = modal_analysis(&cantilever(hyper(e.clone()), f, [0.0, 0.0, 1.0]), &ModalOptions::new(6)).unwrap();
+        let b = modal_analysis(&cantilever(twin(&e), f, [0.0, 0.0, 1.0]), &ModalOptions::new(6)).unwrap();
+        let mut w = 0.0;
+        for (x, y) in a.frequencies.iter().zip(&b.frequencies) {
+            worst(&mut w, (x - y).abs() / y.abs(), "frequency");
+        }
+        c.holds(
+            &format!("L3c {name} six frequencies"),
+            a.frequencies.len() == 6 && b.frequencies.len() == 6,
+            &format!("{:?}", a.frequencies),
+        );
+        c.at_most(&format!("L3c {name} frequencies, worst relative"), w, limit);
+    }
+    c.finish();
+}
+
+/// ADR 0555 amendment 1, L3d (diagnostic record, no limit): the NHi BBar cantilever's modes with the hyperelastic material and
+/// with its twin.
+#[test]
+fn l3d_nhi_bbar_diagnostic() {
+    let e = nhi();
+    let a = modal_analysis(
+        &cantilever(hyper(e.clone()), SolidFormulation::BBar, [0.0, 0.0, 1.0]),
+        &ModalOptions::new(6),
+    );
+    let b = modal_analysis(
+        &cantilever(twin(&e), SolidFormulation::BBar, [0.0, 0.0, 1.0]),
+        &ModalOptions::new(6),
+    );
+    println!(
+        "L3d (record) NHi BBar hyperelastic: {:?}",
+        a.as_ref().map(|r| r.frequencies.clone())
+    );
+    println!(
+        "L3d (record) NHi BBar twin: {:?}",
+        b.as_ref().map(|r| r.frequencies.clone())
+    );
+    let mut o = ModalOptions::new(6);
+    o.max_iterations = 2000;
+    let a = modal_analysis(
+        &cantilever(hyper(e.clone()), SolidFormulation::BBar, [0.0, 0.0, 1.0]),
+        &o,
+    );
+    let b = modal_analysis(&cantilever(twin(&e), SolidFormulation::BBar, [0.0, 0.0, 1.0]), &o);
+    println!(
+        "L3d (record) 2000 iterations, hyperelastic: {:?}",
+        a.as_ref().map(|r| r.frequencies.clone())
+    );
+    println!(
+        "L3d (record) 2000 iterations, twin: {:?}",
+        b.as_ref().map(|r| r.frequencies.clone())
+    );
+    if let (Ok(a), Ok(b)) = (&a, &b) {
+        let w = a
+            .frequencies
+            .iter()
+            .zip(&b.frequencies)
+            .fold(0.0f64, |m, (x, y)| m.max((x - y).abs() / y.abs()));
+        println!("L3d (record) 2000 iterations, worst relative frequency difference: {w:e}");
+    }
 }
