@@ -259,3 +259,81 @@ after a post-run amendment. **todo**: A1 to A5 or U1 missed.
 - **Q2. Distributed loads at a height.** Options: (a) by lumped nodal entries (now); (b) a distributed load-height term
   `(1/2) int q (r . e) phi^2 dx` with the element's Hermite twist (consistent). Recommendation (b) as a separate item when a case
   needs it.
+
+## Addendum 1 (2026-11-15): results
+
+Written after the one registered run. Code and tests: commit 4f5c711d (`beam_warping.rs`: the field and the builder
+`Warping::load_point`, the accessor `load_points`, the function `add_load_points` and its one call at the end of
+`matrices_impl`, a module-doc paragraph; `tests/sa_beam_warping_f643.rs`). Logs in `w49i-work/f643-scratch`: `run1.log` (the
+registered run, release), `b0.log`, `baseline.log`, `docs_site.log`, `fmt.log`, `clippy.log`, `mutations.log` and `mut_Z*.log`;
+the reference arithmetic `arith.py`, `arith.log` (before any code).
+
+### Results against the registered limits
+
+| id | measured | limit | verdict |
+|---|---|---|---|
+| B0 | `sa_beam_warping_f598` 8 passed 1 ignored, `f598_bits` 1, `f626` 7, `f626_bits` 1, `f627` 7 passed 2 ignored, `f635` 4 passed 1 ignored, `sa_buckling_sign_asymmetric_f642` 2, `sa_buckling_restart_f650` 2, `sa_geometric_struct_f558_bits` 1; `baseline_hashes` 3 passed 1 ignored | pass | met |
+| U1 (a5) | `-M_ref` default `178.68421280057305`; `-M_ref` subspace 40 `178.68421280057328`; `+M_ref` subspace 40 `53.97979218576993`: each bit-equal | bit-equal | met |
+| A1 (a1) | DS at the shear centre: `106.58468663` against `106.64131188`, `-5.3e-4` | `2e-2` | met |
+| A2 (a2) | DS above: `76.626135450` against `76.653190682`, `-3.5e-4` | `2e-2` | met |
+| A3 (a3) | DS below: `147.41742208` against `147.52392793`, `-7.2e-4` | `2e-2` | met |
+| A4 (a4) | MS at the shear centre, downward (flange 1 compressed): `229.31935516` against `229.64455760`, `-1.42e-3` | `2e-2` | met |
+| A5 (a4) | MS at the shear centre, upward: `133.82441944` against `133.91738647`, `-6.9e-4` | `2e-2` | met |
+| A6 | MS at the centroid down `-1.67e-3`, on flange 1 down `-1.31e-3`, at the centroid up `-5.0e-4` | `2e-2` | met |
+| A7 | 8 elements: `-4.2e-4`, `-2.8e-4`, `-5.3e-4`, `-1.18e-3`, `-4.6e-4` | `2e-2` | met |
+| A8 | axis y: DS above `2.0e-15`, MS downward `8.4e-14` | `1e-6` | met |
+| A9 | `from_static`: DS above `4.9e-15`, MS downward `9.5e-15` | `1e-9` | met |
+| L0 | DS entry at `(0, 0)` and MS entry at `(0, z_0)`: factors bit-equal to no entry | bit-equal | met |
+| L1 | `K` bit-equal; `K_sigma` pattern equal, bit-equal except at the twist of node 8; there the difference is `-95` exactly (`0` relative) | bit-equal; `1e-12` | met |
+| N1 | DS top/SC `0.7189`; bottom/SC `1.3831`; MS down/up `1.7136`; MS against `beta_x = 0` `0.289` | `< 0.8`; `> 1.25`; `> 1.5`; `> 0.15` | met |
+| R | eight cases, each with its key (`UnknownSet`, `load_point` twice for non-finite values, `load_point` for the lateral force at the flange, `warping`, `load_point` for two shear centres); the two accepted cases accepted | exact | met |
+
+Every LTB value lies below its Euler-Bernoulli reference by `3e-4` to `1.7e-3`, inside the estimate `3e-3`, as the
+shear-flexible lateral plane predicts (arithmetic 4); the Hermite Euler-Bernoulli model of the same energy is within `8e-6` at 16
+elements, so the discretisation contributes little. The default `BucklingOptions` returned every case, including the
+sign-asymmetric monosymmetric spectra (the ADR 0559 and ADR 0564 remedies); no set-up amendment was needed.
+
+### Mutations (scratch copy `f643-scratch/mut`, own target directory, one at a time; the unmutated copy passes)
+
+| id | mutation | caught by |
+|---|---|---|
+| Z1 | term with the wrong sign | A2, A3, A6, A7, L1, N1 |
+| Z2 | `r = p` | A4, A5, A6, A7, L0, N1 |
+| Z3 | `r = p + s` | A4, A5, A6, A7, L0, N1 |
+| Z4 | term left out | A2, A3, A6, A7, L1, N1, R (the refusals go with it) |
+| Z5 | term on global rotation x regardless of `e_1` | A8 (DS above) |
+| Z6 | force in global components | A8 (DS above) |
+| Z7 | first-order torque refusal removed | R |
+| Z8 | term doubled | A2, A3, A6, A7, L1 |
+| Z9 | shear-force terms of `local_geometric_stiffness` dropped | A1 to A7 (16 values) |
+| Z10 | offset moment and shear part not transformed | A4, A5, A6, U1 |
+
+Ten of ten caught. Z5 and Z6 are caught by the DS case of A8 only; the MS case of A8 has `F . r = 0` (load at the shear centre),
+as expected.
+
+### Other runs
+
+`cargo test -p rcfd-cli --release --test docs_site`: 2 passed (after the `docs/reference-data.md` section). `cargo fmt -p
+rcfd-fem --check`: clean. `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings`: clean. Not run: the whole
+`rcfd-fem` suite and the workspace (the gate of the lead); the new code runs only with a load-point entry, and the tests that
+reach `matrices_impl` without one are those of B0.
+
+### Decision by the registered rule
+
+**done**: every registered check (B0, U1, A1 to A9, L0, L1, N1, R) met in the one run, no amendment, ten of ten mutations
+caught. The acceptance clauses: a1 `5.3e-4`, a2 `3.5e-4`, a3 `7.2e-4`, a4 `1.42e-3` and `6.9e-4`, each against a Rayleigh-Ritz
+reference derived here and converged to `3.2e-6`, at 16 elements against `2e-2`; a5 bit-identical. Done is the maintainer's
+call.
+
+### Remaining questions
+
+- Q1 (force restated on the entry or read from the model), recommendation (a) now, (b) with a case-file key (F-625).
+- Q2 (distributed loads at a height), recommendation (b) as a separate item when a case needs it.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> F-643 note: Structural solver, advanced tier. DONE. ADR 0582, 2026-11-15: load height on the warping buckling path (`rcfd_fem::beam_warping`): `Warping::load_point(set, force, point)` adds the second-order term (1/2) (F . (p - s)) phi^2 of a dead force at a section point p, the twist about the shear centre s, to K_sigma of `matrices` (so buckling_factors, buckling_factors_with, prestressed_modes); without an entry a nodal force acts at the shear centre, as before; a force with a first-order torque about the centroid and different shear centres at the node are refused. The non-uniform-moment terms of ADR 0508 and ADR 0553 (shear-force terms in shear-centre form) are checked by this item. Central point load on a simply supported span, L = 3, 16 elements, default BucklingOptions, against Rayleigh-Ritz references derived in the ADR (sine series of int M phi v'' + (1/2) int beta_x M phi'^2 + the load-height term, converged to 3.2e-6): doubly symmetric I at the shear centre 5.3e-4, top flange 3.5e-4, bottom flange 7.2e-4; ADR 0553 monosymmetric I at the shear centre 1.4e-3 (larger flange compressed) and 6.9e-4 (in tension); at the centroid and on flange 1 within 1.7e-3; 8 elements within 1.2e-3; axis y 8e-14; from_static 1e-14. Uniform-moment results bit-identical (the ADR 0553 and 0559 factors, the ADR 0546, 0548, 0553 bit records, baseline_hashes). Ten of ten mutations caught. Not covered: distributed loads at a height, eccentric loads with a first-order torque, the in-plane second-order terms of an eccentric load, other moment diagrams and supports, pre-stressed modes with a load point, no case-file key.
+
+> Follow-up proposed: distributed loads at a height on warping beams (a consistent load-height term (1/2) int q (r . e) phi^2 dx on the Hermite twist). Deps F-643. Acceptance: Every limit not stated here is registered in the ADR before the run. The lateral-torsional buckling load of a simply supported doubly symmetric I under a uniformly distributed load on the top flange, at the shear centre and on the bottom flange equals a converged Rayleigh-Ritz reference derived in the ADR within 2 percent at 16 elements; results without a distributed load height unchanged.
