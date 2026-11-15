@@ -217,3 +217,111 @@ the material schema (a golden) and the case-file surface, which needs the mainta
 Whether the small-strain law on `E` and `S` or a `J`-based one is the right finite-strain creep model is not decided here (ADR
 0549 Limits); the diagnosis is that the F-bar's one volume per element cannot follow the law's `tr E` constraint at second
 order. Only the registered mesh, `m = 0`, `n = 4`, `b/a = 2`, `nu = 0.3`. No case-file key.
+
+## Addendum 1: results (2026-11-15)
+
+Code: commit 4d84f85d (test only: the new file `crates/rcfd-fem/tests/si_fbar_drift.rs`, the copied helpers, `Law`,
+`j_return`, `Proxy`, `proxy`, `proxy_growth`, `library_growth`, `largest`, `pair`, `mismatch_growth`, `ref_gap` and the test);
+after the run, commit 1af12daf turned the registered test into the ignored record
+`f637_pressure_drift_of_the_f_bar_hex8_under_creep_known_miss` (J4 a check, the limit intact) and added
+`f637_pressure_drift_of_the_f_bar_hex8_under_creep_met_checks` (the same body and limits, J4 printed, not asserted), so the
+suite runs the met checks. No library file and no existing test changed. Logs in `w49i-work/f637-scratch`: `run1-f637.log` (the
+registered run, single, 60 s in release), `probe_j4.log` (the numpy diagnosis of J4 after the run), `mutations.log`,
+`mut-MU1.log`, `mut-MU3.log`, `mut-MU4.log`, `mut-MT1.log`, `mut-MT2.log`, `s1-rcfd-fem.log`, `s2-baseline.log`,
+`s2-docs.log`, `s3-fmt.log`, `s3-clippy.log`.
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| L0 | three BBar runs, 71 step ends each, 0 halvings; `F4_lib(p) = 4.3960e-3` at `r = 1.0545`, `8.7e-6` from ADR 0549's printed `4.396e-3` | holds; `<= 2e-4` | met |
+| K1 | `rho = 0.091399`: `5.39e-3` from the linear `0.090909` | `<= 5e-2` | met (estimate `5.5e-3`) |
+| K2 | `Gfs_lib(p) = 4.3518e-3`: `4.29e-5` | `<= 5e-2` | met (estimate `4e-5`) |
+| K3 | `F4_lib(p/100) = 4.4146e-5` | `<= 2e-4` | met (estimate `4.4e-5`) |
+| K4 | `r = 1.0545` | `[1.04, 1.07]` | met (arithmetic 1: `1.0543`) |
+| X1 | proxy `4.3939e-3`: `4.63e-4` | `<= 5e-2` | met |
+| X2 | `1.0549` against `1.0545`: `3.8e-4` | `<= 5e-3` | met |
+| X3 | proxy `Gfs = 4.3498e-3`: `4.67e-4` | `<= 5e-2` | met |
+| X4 | `M = 4.3362e-3`: `1.33e-2`; the same point | `<= 5e-2`; `<= 5e-3` | met |
+| X5 | `1.094e-6` | `<= 1e-4` | met |
+| X6 | `2.1950e-3 / 4.3939e-3 = 0.49955` | `[0.45, 0.55]` | met |
+| X7 | `4.4175e-4 / 4.3939e-3 = 0.10054` | `[0.095, 0.105]` | met |
+| J1 | `F4_J(p) = 5.859e-5` at `r = 1.127` | `<= 3e-4` | met |
+| J2 | `Gfs_J(p) = 5.807e-5` | `<= 3e-4` | met |
+| J3 | `M_J(p) = 4.334e-3` | `>= 3e-3` | met |
+| J4 | **`1.2975e-4`** | `<= 1e-5` | **missed** (the estimate `1.5e-6` was wrong, below) |
+| R0 | `1.95e-11` | `<= 1e-6` | met |
+| R1 | `9.59e-7` (library law, library points); `9.43e-7` (`J` law, proxy points) | `<= 1e-4` | met |
+| U1 | `git diff e33e2047 -- crates/rcfd-fem/tests/si_fbar.rs crates/rcfd-fem/tests/si_fbar_bore.rs` empty | empty | met |
+| S0 | `git diff --stat e33e2047 -- crates/*/src` empty | empty | met |
+| S1 | `cargo test -p rcfd-fem --release`: 270 test binaries, 1139 passed, 0 failed, 304 ignored (the bit records and the tests of ADR 0549 and 0563 among the passed); `baseline_hashes` 3 passed, 1 ignored (as on the base); `docs_site` 2 passed; `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings` clean | 0 failed, clean | met |
+
+Reported: the library's `F4` components at the worst point `(+4.3960e-3, +4.3714e-3)` at `p`, `(+4.4190e-4, +4.3947e-4)` at
+`p/10`, `(+4.4146e-5, +4.3878e-5)` at `p/100`, all at `r = 1.0545` (a pressure: one sign, the two components equal to `6e-3`);
+`F4_lib(p/10)/F4_lib(p) = 0.1005`, `F4_lib(p/100)/F4_lib(p) = 0.01004`; `Gfs_lib(p/10) = 3.9775e-4` at `1.0545`; the proxy
+repeats the library to four digits at every pressure; `F4_J(p/100) = 2.85e-5` at `r = 1.99` (the load-independent remnant of
+the transient at the outer surface); the `J` reference against the library-law reference at `p`, `20 t*`: `1.27e-2`; the largest
+equivalent creep strains: library `9.667e-3`, `9.653e-4`, `9.652e-5`, reference `9.715e-3`, `9.701e-4`, `9.700e-5`.
+
+### The diagnosis (from the registered numbers)
+
+The growth of ADR 0549's F4 (`4.40e-3` of `p` at `r = 1.0545`) is a pressure error of the F-bar element, finite-strain in
+origin and `O(h)` in size. (c1) It is proportional to `p/E`: `F4/p` falls by `0.1005` and `0.01004` at `p/10` and `p/100`; the
+finite-strain part isolated by the pair scales as `rho = 0.0914` against the linear `0.0909`, and it is the whole growth
+(`Gfs/(0.99 F4) - 1 = 4e-5`). (c2) The one-dimensional F-bar proxy has it to four digits at the same point; without F-bar (one
+midpoint per element) it is gone (`1.1e-6`); on twice the elements it halves (`0.4996`); and it equals to `1.3e-2` the kinematic
+mismatch `kappa (Q - Q_mean)/p` of arithmetic 1, at the point predicted by `r = 5 r0/4`: the law's pressure `kappa tr E_bar`
+contains `kappa sum e'^2`, which varies inside the element and which the continuum absorbs in `J`, while the F-bar gives the
+element one `J`. (c3) With the `J`-based volumetric part `kappa ln J C^-1` the proxy's growth against the reference of the same
+law falls 75-fold to `5.9e-5` (`Gfs_J = 5.8e-5`) although the mismatch is still in the kinematics (`M_J = 4.33e-3`): the
+`J`-based law removes it, in the proxy.
+
+### J4, the miss
+
+J4 was to show that the `J` variant is the library's law at small strain: the two references at `p/100` within `1e-5` over steps
+0, 40, 70 and the three components. Measured `1.2975e-4`. Diagnosis (`probe_j4.py`, numpy, after the run; not a re-run of the
+test): the gap is in `S_zz` at the bore at `20 t*` (`1.30e-4`; `S_r` `1.5e-6`, `S_theta` `2.3e-5`); at `p` it is `1.27e-2`, a
+ratio `0.0102`, linear in `p/E`. The estimate was wrong because the prototype printed `S_r` only (`1.5e-6`), and the
+registration read the agreement as second order: `kappa ln J C^-1` and `kappa tr E I` differ at first order in the strain
+relative to the stress (`C^-1 = I - 2E + ...` times a volumetric stress of order `p`), so the gap is of order `p` times the creep
+strain, `1e-4` of `p` at `p/100`. The two laws agree in the limit `p/E -> 0`, not to `1e-5` at `p/100`. The miss does not touch
+J1 to J3, which compare the proxy with a reference of the same law. Recorded in the ignored
+`f637_pressure_drift_of_the_f_bar_hex8_under_creep_known_miss`, the limit intact.
+
+### Mutations (scratch copy `f637-scratch/mut` of 1af12daf, target `f637-scratch/mut-target`, each run once against the met-checks test, the file restored after)
+
+| Id | Result | Caught by |
+|---|---|---|
+| MU1 (`a2m1` times 0) | `F4_lib(p) = 0.261` at `r = 1.255`; L0, K2, K3, K4, X1 (`0.98`), X2, X3 missed | **caught** (X1, as predicted, and L0) |
+| MU3 (linear strain in `fbar_kinematics`) | `F4_lib(p) = 4.31e-3` at `r = 1.0049` (components `-2.1e-3`, `-4.3e-3`: no longer a pressure); L0, K4, X2 (`5.0e-2`) missed | **caught** (X2, as predicted, and L0) |
+| MU4 (time factor `dt/2`) | `F4_lib(p) = 4.31e-3` at `r = 1.0010`; L0, K3 (`1.9e-3`), K4, X2 (`5.4e-2`) missed | **caught** (X2, as predicted, and L0) |
+| MT1 (the proxy's F-bar off) | proxy `F4 = 0.261`; X1, X2, X3, X4, J1, J2, X7 missed | **caught** (X1, X4, as predicted; X6 was met: the locking error halves too) |
+| MT2 (the `J` law's volumetric part `kappa tr E I`) | `F4_J = 4.39e-3`; J1, J2 missed | **caught** (J1, J2, as predicted) |
+
+### Deviations
+
+- **J4 missed** in the single registered run (above); not tuned. After the run the registered test became the ignored record, and
+  a test of the met checks (the same body and limits, J4 printed) was added so that the suite runs them (commit 1af12daf); no
+  limit and no measure changed.
+- MT1 was predicted to be caught also by X6; X6 was met under MT1 (the locking error of the fully integrated proxy is `O(h)`
+  too). X1 and X4 caught it, as predicted.
+- Nothing registered was skipped.
+
+### Decision (by the rule)
+
+Every registered check but J4 is met in the single registered run, and every planned mutation is caught; J4 is missed (`1.30e-4`
+against `1e-5`). **Proposed status: partial.** The three diagnostic clauses of the acceptance (scaling, proxy, `J`-based law)
+are met by their registered checks; the miss is in the control that the variant equals the library's law at small strain, whose
+estimate was wrong (the agreement is first order, not second order).
+
+### Remaining questions
+
+1. **J4.** Options: (a) leave it as the known miss (the diagnosis does not depend on it); (b) re-register the control as a
+   scaling, `gap(p/100)/gap(p) <= 2e-2` (measured `0.0102`), in a follow-up. Recommendation: (a); the item is diagnostic and the
+   scaling of the gap is reported here.
+2. **The `J`-based law in the library.** The library's Hex8 was not run with a `J`-based law: `Material::Creep` has no such
+   option, and adding one changes the material schema golden and the case-file surface. Options: (a) an opt-in volumetric variant
+   of the creep material (`kappa ln J C^-1`, consistent tangent `kappa C^-1 (x) C^-1 - 2 kappa ln J dC^-1/dC`), defaults
+   bit-identical, the schema golden re-recorded with the maintainer's approval; (b) leave the drift as a documented property of
+   the small-strain law on `E`. Recommendation: (a), as a follow-up that needs the maintainer for the schema.
+3. **The bore-zone bound of ADR 0563** (its open question 1): the growth `G` there is this drift; a deviatoric measure
+   `sigma_theta - sigma_r` would not carry it (the two components grow by `4.396e-3` and `4.371e-3`). Recommendation: take it in
+   the follow-up of question 2, where the drift is removed in the element itself.
