@@ -192,3 +192,20 @@ E1 is the only heavy run; F2 and E2 cover its code path in the fast set (the sam
 - **Q2. The finer level.** Options: (a) `n = 32` (halving, beyond the free memory); (b) `n = 24`; (c) none. Taken (b).
 - **Q3. Solver of the heavy record.** Options: (a) `SparseDirect` as F-432 (bits of the F-432 log, about 20 minutes at 16 and
   infeasible at 24); (b) `SupernodalDirect` (rounding-level differences, E1r). Taken (b); the bits of F-432 are kept by B1 and E2.
+
+## Amendment 1 (2026-11-15, written after the registered fast run, before any run of the copies and of the diagnosis record)
+
+The registered fast run (commit c332da2c, `cargo test -p rcfd-fem --release --test sa_density --test sa_density_bits --
+--nocapture --test-threads=1`, once, log `f568-scratch/run_fast.log`) met every fast check except **P3**: 44 of the 48
+hole-edge elements lie in the 116 of largest density, 4 outside (density ranks 126, 127, 140, 141); the density of rank 116 is
+`2.5082e-1`, the smallest at the hole edge `2.3720e-1` (5.4 percent below it); the largest density `6.1322e-1` is a hole-edge
+element (192). No limit is changed. `p3_nc1_plate_density_ranking` becomes the ignored record
+`p3_nc1_plate_density_ranking_known_miss` (limit intact, numbers in the ignore text); NC1, which was met (30 of 48 outside by
+the absolute ranking, as F-432), is continued in `nc1_plate_absolute_ranking`.
+
+Diagnosis record **DP3** (registered now, no limit, record only): for every element in the top 142 by density and for the four
+missing hole-edge elements, the polar angle (degrees) and the ring (index of the radial layer, 0 at the hole, from the
+element's position in `hex_box` order) of its centroid; the number of elements of each ring among the top 116; the density of
+every hole-edge element against its angle. Hypothesis written before the record: the four missing elements are the two layers of
+two angular positions near 0 or 45 degrees (where F-432's absolute ranks were lowest, arithmetic 3), outranked by elements of
+the second and third rings near 90 degrees.
