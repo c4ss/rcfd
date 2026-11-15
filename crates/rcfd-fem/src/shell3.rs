@@ -1141,3 +1141,123 @@ pub(crate) fn element_stresses(
         bottom,
     }
 }
+
+/// The largest angle, in degrees, between the normals of two Shell3 facets sharing an edge above which the opt-in check of
+/// [`warped_membrane_report`] reports a block with the constant-strain membrane (ADR 0537 arithmetic 3: the 5e-3 level of the
+/// ADR 0483 records, interpolated between the largest facet angles 0.2946 and 0.5892 degrees of the twisted strip, 0.410,
+/// rounded to 0.4).
+pub const WARP_ANGLE_DEGREES: f64 = 0.4;
+
+/// A Shell3 block with the constant-strain membrane that has edges meeting above the threshold (ADR 0537 D3).
+#[derive(Debug, Clone, PartialEq)]
+pub struct WarpedBlock {
+    /// The block index.
+    pub block: usize,
+    /// The distinct edges of the block's elements, shared with exactly one other Shell3 element, with a facet angle above the
+    /// threshold.
+    pub n_edges: usize,
+    /// The largest facet angle of those edges of the block (all of them, not only those above the threshold), degrees.
+    pub max_angle: f64,
+}
+
+/// The result of [`warped_membrane_report`]: the threshold used and the blocks above it, in increasing block index.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WarpReport {
+    /// The threshold, degrees.
+    pub threshold: f64,
+    /// The reported blocks.
+    pub blocks: Vec<WarpedBlock>,
+}
+
+impl WarpReport {
+    /// True when no block is reported.
+    pub fn is_empty(&self) -> bool {
+        self.blocks.is_empty()
+    }
+
+    /// One message per reported block (ADR 0537 D3), naming the ANDES membrane of ADR 0466.
+    pub fn messages(&self) -> Vec<String> {
+        self.blocks
+            .iter()
+            .map(|w| {
+                format!(
+                    "block {} (Shell3, constant-strain membrane): {} edges shared with another Shell3 facet meet at a normal \
+                     angle above {} degrees (largest {:.4} degrees); the constant-strain membrane follows a strain that varies \
+                     over a facet only with parasitic in-plane shear and may overstiffen a warped shell (ADR 0483: 4.05 percent \
+                     on the first torsion of the twisted strip of ADR 0473); the ANDES membrane of ADR 0466 \
+                     (BlockProperty::shell_with_membrane with Shell3Membrane::AndesOpt) removes it",
+                    w.block, w.n_edges, self.threshold, w.max_angle
+                )
+            })
+            .collect()
+    }
+}
+
+/// The opt-in model check of ADR 0537 (F-574): the Shell3 blocks with the constant-strain membrane that have an edge, shared
+/// with exactly one other Shell3 element, where the oriented facet normals meet at an angle strictly above
+/// `threshold_degrees` (use [`WARP_ANGLE_DEGREES`]). The constant-strain membrane overstiffens a warped shell (ADR 0483); the
+/// ANDES membrane (ADR 0466) does not. Reads the mesh only, refuses nothing but a threshold outside `(0, 180]` and a degenerate
+/// Shell3 facet, and is called by no solver or validator.
+pub fn warped_membrane_report(model: &crate::model::SolidModel, threshold_degrees: f64) -> Result<WarpReport> {
+    if !(threshold_degrees.is_finite() && threshold_degrees > 0.0 && threshold_degrees <= 180.0) {
+        return Err(FemError::InvalidValue {
+            key: "threshold",
+            reason: format!("the facet angle threshold {threshold_degrees} degrees must be finite and in (0, 180]"),
+        });
+    }
+    let mesh = model.mesh();
+    let mut normals: Vec<Option<Vec3>> = vec![None; mesh.n_elements()];
+    // Edge (low node, high node) -> the Shell3 elements with it and whether each traverses it from the low node.
+    let mut edges: std::collections::BTreeMap<(usize, usize), Vec<(usize, bool)>> = std::collections::BTreeMap::new();
+    for e in 0..mesh.n_elements() {
+        if mesh.element_kind(e) != ElementKind::Shell3 {
+            continue;
+        }
+        normals[e] = Some(model_facet(mesh, e)?.axes[2]);
+        let nodes = mesh.element_nodes(e);
+        for a in 0..3 {
+            let (p, q) = (nodes[a], nodes[(a + 1) % 3]);
+            edges.entry((p.min(q), p.max(q))).or_default().push((e, p < q));
+        }
+    }
+    let considered = |e: usize| model_membrane(mesh, e) == Shell3Membrane::ConstantStrain;
+    // Block -> (edges above the threshold, largest angle).
+    let mut found: std::collections::BTreeMap<usize, (usize, f64)> = std::collections::BTreeMap::new();
+    for owners in edges.values() {
+        let [(e, de), (f, df)] = owners[..] else { continue };
+        let (Some(ne), Some(nf)) = (normals[e], normals[f]) else {
+            continue;
+        };
+        let sign = if de == df { -1.0 } else { 1.0 };
+        let nf = [sign * nf[0], sign * nf[1], sign * nf[2]];
+        let phi = cross(ne, nf);
+        let phi = norm(phi).atan2(dot(ne, nf)).to_degrees();
+        let mut blocks = [mesh.block_of(e), mesh.block_of(f)];
+        if blocks[0] == blocks[1] {
+            blocks[1] = usize::MAX;
+        }
+        for (b, el) in blocks.into_iter().zip([e, f]) {
+            if b == usize::MAX || !considered(el) {
+                continue;
+            }
+            let entry = found.entry(b).or_insert((0, 0.0));
+            if phi > threshold_degrees {
+                entry.0 += 1;
+            }
+            entry.1 = entry.1.max(phi);
+        }
+    }
+    let blocks = found
+        .into_iter()
+        .filter(|(_, (n, _))| *n > 0)
+        .map(|(block, (n_edges, max_angle))| WarpedBlock {
+            block,
+            n_edges,
+            max_angle,
+        })
+        .collect();
+    Ok(WarpReport {
+        threshold: threshold_degrees,
+        blocks,
+    })
+}
