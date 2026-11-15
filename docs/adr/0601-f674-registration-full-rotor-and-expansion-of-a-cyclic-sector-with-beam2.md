@@ -207,3 +207,75 @@ without changing a default result.
 - The block indices of a full mesh with a split block differ from the sector's (D2 ii); a caller that addresses blocks by the
   sector index must use `FullRotor::block`.
 - The case schema: no case key for the option.
+
+## Addendum 1: results (2026-11-15)
+
+The registered run (`cargo test -p rcfd-fem --release --test sa_cyclic_beams_full_rotor_f674`) ran once, after the library
+commit 0b0952af and the test commit 5472a1ad. Every test passed. Logs `run1.log`, `b1.log`, `b2.log`, `mutations.log` are in
+`w49i-work/f674-scratch`.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| G1 | bijection; `<= 1e-14` m | bijection onto 36 nodes; `6.7e-16` | yes |
+| O1 | 12 blocks, structure; copy 0 bits; `<= 1e-15` | 12 blocks, `block(j, b) = 6 b + j`, connectivity and element numbering as stated; copy 0 bits equal; `0` | yes |
+| L0 .. L3 | `<= 1e-10` each | `0`, `1.4e-16`, `0`, `0` | yes |
+| F0 .. F3 | `<= 1e-10` each | `6.57e-13`, `6.08e-13`, `3.92e-13`, `3.96e-13` | yes |
+| Z0 | `<= 1e-10` | `4.25e-13` | yes |
+| ZM | `<= 1e-10` | `2.49e-13` (18 eigenvalues) | yes |
+| P0 .. P3 | `<= 1e-10` each | `6.1e-16` (3 modes), `1.5e-13` (6), `9.6e-17` (6), `6.1e-17` (3) | yes |
+| RQ0 .. RQ3 | `<= 1e-10` each | `8.1e-14`, `4.3e-14`, `5.6e-14`, `3.4e-14` | yes |
+| G | `<= 1e-10` | `1.1e-15` (18 modes) | yes |
+| B1 | pass | the registered list and the lib unit tests all pass (ignored records stay ignored) | yes |
+| B2 | pass | `baseline_hashes`: 3 passed, 1 ignored (as before) | yes |
+| B3 | equal | the `FullRotor`s are equal and 720 values (node coordinates, `expand_load`, `expand_field`) are bit-equal | yes |
+| NC1 | `UnsupportedKind { kind: "Beam2" }` | as stated | yes |
+| NC2 | refused, key `cyclic`, ADR 0601 | as stated | yes |
+| NC-O | `e >= 1e-3` | `0.614` | yes |
+| NC-H | `>= 1e-3` | `515` | yes |
+
+F0 .. F3 reproduce the S0 .. S3 numbers of ADR 0595 to the printed digits. That is expected: `expand_field` is the same formula
+as that test's hand expansion. The Z0 and ZM numbers show that the full mesh built by `full_rotor` is the independently built
+ring up to rounding.
+
+**Mutations** (on a scratch copy with its own target directory; each one caught):
+
+| Id | Caught by |
+|---|---|
+| X1 (copies keep `v`) | O1 (`1.07`), Z0 (`0.61`), ZM (`0.27`) |
+| X2 (`R^{-j} v`) | O1, Z0 (`0.57`), ZM (`0.37`) |
+| X3 (`R^{j+1} v`) | O1, Z0 (`8.7e-2`), ZM (`8.7e-2`) |
+| X4 (the option ignored) | G1, L, F, Z0, ZM, P (all refused) |
+| X5 (no refusal in `add_constraint`) | NC2 |
+| X6 (translations only in `triplets`) | L (`0.13`), F (`e_theta 1.0`), P, RQ, G, Z0 |
+
+**Deviations.** None from the registration. One commit only reformats the new refusal message (72de6092, text only).
+`cargo fmt -p rcfd-fem --check` and `cargo clippy -p rcfd-fem --all-targets -- -D warnings` are clean. Not run: the whole
+workspace suite (the lead's gate).
+
+**Changed library lines.** `crates/rcfd-fem/src/model.rs`: the `full_rotor_beams` field and its doc, the builder, and the
+refusal in `add_constraint`. `crates/rcfd-fem/src/cyclic.rs`: the module doc, the `FullRotor` field `block_of` and
+`FullRotor::block`, `full_rotor_beams_opted_in`, and the block loop of `full_rotor` (the old branch is unchanged apart from the
+`debug_assert`).
+
+**Decision by the registered rule: done.** Every acceptance check, set-up check, control and mutation holds. No limit was
+missed and nothing was amended.
+
+### Remaining questions
+
+1. **The qualifier.** The acceptance names `CyclicOptions::beams`. The capability needs `beams` plus the new
+   `full_rotor_beams`, because the F-672 test NC4 asserts that `full_rotor` refuses Beam2 under `beams` and existing tests are
+   not edited. Options: (a) keep the qualifier; (b) let `beams` alone take `full_rotor`, which retires NC4 of ADR 0595 (a
+   maintainer decision on an existing test). Recommendation: (a) for now. Take (b) only if the maintainer agrees to retire that
+   assertion; it changes no default result.
+2. **Block indices.** In a full mesh with a split block, the block indices are no longer the sector's. `FullRotor::block` gives
+   them. Options: (a) keep the split; (b) give each element its own orientation in `BlockProperty` (a change to `mesh.rs` that
+   every path reads). Recommendation: (a).
+3. **Rotating paths on F.** `RotatingPart` on the full rotor of a beam sector was not run. F-675 compared `RotatingSector` with
+   an independently built ring, and ZM shows that F is that ring. Recommendation: no separate item. A one-line smoke check can be
+   added if the lead wants it.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> Structural solver, advanced tier. Follow-up of F-672 (ADR 0595). DONE. ADR 0601, 2026-11-15: cyclic::full_rotor takes Beam2 blocks when CyclicOptions::beams is qualified by the new opt-in CyclicOptions::full_rotor_beams (refused without beams by add_constraint). Without the qualifier the refusal stays, so the existing test that asserts it under beams passes unchanged. Each Beam2 block of the sector becomes N consecutive blocks of the full mesh, and copy j carries the orientation R^j v (copy 0 the sector's property cloned). The element numbering, the sets and the materials are unchanged, and FullRotor::block gives the block of each copy. FullRotor::expand, expand_field and expand_load needed no change (the rotations of six-unknown nodes were already expanded by R^j). On the ADR 0595 wheel sector against the independently built ring: positions within 6.7e-16, orientations exact; expand_load of k = 0..3 (the high node loaded) within 1.4e-16; expand_field of the static solutions k = 0..3 within 6.6e-13; the full-rotor model's static field within 4.3e-13 and its 18 lowest eigenvalues within 2.5e-13; the expanded modes are eigenvectors of the ring to a backward error of 1.5e-13, their Rayleigh quotients within 8.1e-14, and they are M-orthonormal within 1.1e-15 (limit 1e-10). Unrotated copies are seen at 0.61, and a mode expanded at the wrong harmonic at 515. Models without the option keep their bits (existing tests, baseline hashes, a shell sector's full rotor and expansions bit-equal with and without it). Six of six mutations caught. Not covered: full_rotor with beams but without the qualifier, RotatingPart on the full rotor of a beam sector, extended boundaries.
