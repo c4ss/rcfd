@@ -209,3 +209,92 @@ element's position in `hex_box` order) of its centroid; the number of elements o
 every hole-edge element against its angle. Hypothesis written before the record: the four missing elements are the two layers of
 two angular positions near 0 or 45 degrees (where F-432's absolute ranks were lowest, arithmetic 3), outranked by elements of
 the second and third rings near 90 degrees.
+
+## Addendum 1 (2026-11-15): results
+
+Runs. The fast set ran once at commit c332da2c (`f568-scratch/run_fast.log`). After amendment 1, the copies and the record DP3
+ran once at dd7bf576 (`run_copies.log`, `run_dp3.log`). B1 was recorded at the base (cd19f29c, before any library line) and run
+again after the change. The existing tests covering `estimate.rs` are in `run_b2.log` and `run_b2b.log`. **E1 was not run.**
+The script `run_e1.ps1` waited for 10 GB of free physical memory, the condition registered in arithmetic 4. On the shared
+machine free memory stayed between 3.8 and 8.4 GB. The session then stopped the waiting job for low system memory, before the
+test process had started, and its instructions after such a stop are not to restart the job. No heavy number exists.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| B1 24 digests of the F-432 values (4 models) | equal to base | 24 of 24 equal | yes |
+| B2 `sa_estimate` (fast), `sa_estimate_default_bits`, `si_hex8x_estimate`, `si_hex8x_bits`; also `sa_corot_shell_dyn`, `sa_nl_inertia_reference`, `sa_shell3_paths`, `si_hex8x_linear`, lib tests | pass | pass | yes |
+| E2 `theta` against the F-432 log, Hex20 n = 4, 8; Tet10 n = 4, 8 | `<= 5e-6` | `1.3e-6, 4.1e-6; 7.7e-7, 2.0e-6` (print rounding) | yes |
+| V1 Hex8, Tet10, Hex20 n = 4 largest volume deviation | `<= 1e-13` | `6.7e-16, 1.0e-15, 1.3e-15` | yes |
+| V1 plate sum of volumes against `t (A B - pi r^2/4)` | `<= 1e-6` | `1.51e-10` | yes |
+| V2 density equal to `eta_e/|K|^{1/2}` to the bit (4 models) | holds | 0 differ | yes |
+| K1 ranking by density a permutation, descending, ties ascending | holds | holds (0 equal neighbours) | yes |
+| P3 hole-edge elements in the tenth of largest density | 48 of 48 | **44 of 48** (ranks 126, 127, 140, 141; rank 116 `2.5082e-1`, smallest at the hole `2.3720e-1`) | **no** |
+| NC1 absolute ranking: hole-edge elements outside the tenth | `== 30` | 30 | yes (the reading is confirmed: `eta_e` alone fails) |
+| F2 criterion `4 -> 8`, Hex20, Tet10 | holds | `0.33686 -> 0.02782`; `0.09089 -> 0.00514` | yes |
+| E1 criterion `8 -> 16 -> 24`, Hex20, Tet10 | holds (four) | not run (memory) | not run |
+| E1r, NC2 | as registered | not run | not run |
+| DP3 (record) | none | below | recorded |
+
+DP3 diagnosis:
+
+- Ranked by density, the hole edge comes first: ranks 0 to 9 are all hole-edge elements.
+- Along the hole the density rises from `0.46` at 2 degrees to its maximum `0.613` at 32 degrees. It then falls to `0.257`,
+  `0.245` and `0.237` at 77, 80 and 84 degrees, and rises to `0.292` at 88 degrees, in the cell on the symmetry plane.
+- The top 116 hold 44 elements of ring 0, 34 of ring 1, 28 of ring 2 and 10 of ring 3.
+- The four missing elements are the two layers of the cells at 80 and 84 degrees, 5 percent below the density of rank 116.
+  This refutes the hypothesis of amendment 1, which expected 0 or 45 degrees.
+
+Cause, by hand from `plate_map`. The radial size of the first ring is `g(1/24) = 3.39e-3` times the distance from the hole to
+the outer boundary along the map line. That distance is `0.045` m at 90 degrees and `0.095` m at 0 degrees, so the hole-edge
+elements are about `0.0305 r` long radially near 90 degrees and `0.064 r` near 0 degrees. Arithmetic 3 used the 90-degree size
+at every angle. Near 80 to 85 degrees the hole-edge elements are therefore the finest of the mesh. With an `h^2` stress error,
+their density falls below that of second- and third-ring elements at 0 to 60 degrees. The 88-degree cell is lifted by the
+extrapolation at the symmetry-plane corner. The density itself works as designed; this mesh's grading is what makes the
+criterion miss. ADR 0478 remarks that the hole-edge elements near 90 degrees ranked best by the absolute indicator. That remark
+was not re-checked, because DP3 did not record the absolute ranks by angle. Here the density is lowest near 90 degrees.
+
+Mutations. They ran on the scratch copy `f568-scratch/mut` at dd7bf576, using the fast set of `sa_density` and
+`sa_density_bits` (`mutate.py`, logs `mut_MU*.log`). P3 is ignored in the fast set, so it could not catch any mutation.
+
+| Id | Caught by |
+|---|---|
+| MU1 `eta_e/|K|` | V2 (every element, 4 models) |
+| MU2 volume without `det J` | V1 (plate `1.9e9`, cubes `511`, `63`) |
+| MU3 ascending ranking | K1 (4 models) |
+| MU4 ties to the higher index | survived, as registered (no exact tie on the four models) |
+| MU5 `(err / vol * vol).sqrt()` | B1 (22 of 24 equal) |
+| MU6 `err = (err + vol) - vol` | B1 (15 of 24 equal) |
+| MU7 density shifted by one element | V2 |
+
+`cargo fmt -p rcfd-fem --check` and `cargo clippy -p rcfd-fem --all-targets -- -D warnings` are clean. No shared solver file
+was changed: in `estimate.rs` only `EnergyError`, its accessors and the loop of `energy_error` changed, all additively.
+`baseline_hashes` was not run, because no default path is touched (the lead's gate).
+
+**Decision by the rule: partial.**
+
+- a1, a2 and a5 are met (B1, B2, E2, V1, V2, K1).
+- a3 was missed by 4 of 48 elements. The cause is the grading along the hole. The miss is kept as
+  `p3_nc1_plate_density_ranking_known_miss`.
+- a4 was met only on the fast pair `4 -> 8`. The registered heavy record `8 -> 16 -> 24` was not run, for memory.
+
+Remaining questions:
+
+- **Q4. a3 on this plate.** Options: (a) keep the clause, which stays missed on this graded plate; (b) a follow-up on a plate
+  whose first ring has one radial size at every angle; (c) a different indicator that also scales by element size (for
+  example `eta_e/|K|^{5/6}` for an `h^2` error). Recommendation (b), for the maintainer.
+- **Q5. E1.** Run `e1_criterion_near_one_heavy` once, alone, with at least 10 GB free (`f568-scratch/run_e1.ps1`). Arithmetic 5
+  expects all four pairs to hold. Recommendation: the lead runs it when the machine is quiet. The test and its limits are
+  committed unchanged.
+- **Q1 of ADR 0478** (case-file block and output field): unchanged, not added.
+
+## For the lead: roadmap entries
+
+Proposed status and note of F-568:
+
+> Proposed status: partial.
+
+> Structural solver, advanced tier. Follow-up of F-432 (ADR 0478, 2026-11-14). PARTIAL. ADR 0616, 2026-11-15: rcfd_fem::estimate::EnergyError gives element_volumes (|K| by the estimate rule), element_densities (eta_e/|K|^{1/2}) and ranked_by_density beside the absolute values. The 24 digests of the F-432 values (element_errors, estimate, solution_norm, relative, ranked and the recovered nodal stress, on the two-layer plate and on case D Hex8, Tet10 and Hex20 at n = 4) are equal to base, and the F-432 effectivities at n = 4 and 8 are reproduced to the printed digit. Volumes are within 1.3e-15 on the cubes and 1.5e-10 on the plate. On the two-layer plate with a hole, the tenth of largest density holds 44 of the 48 hole-edge elements (MISSED: the cells at 80 and 84 degrees are 5 percent below rank 116, because plate_map makes the first ring half as thick near 90 degrees as near 0 degrees); the absolute ranking holds 18 of 48 (negative control, as in F-432). The criterion abs(theta - 1) <= max(previous, 1e-2) is met from n = 4 to 8 (Hex20 0.337 -> 0.028, Tet10 0.091 -> 0.005). The heavy record at n = 8, 16 and 24 (SupernodalDirect) is committed but NOT RUN: the registered 10 GB of free memory was never available. Six of seven mutations caught (ties to the higher index survived, as registered).
+
+> Follow-up proposed: Hole criterion of the error density on a plate graded uniformly along the hole. Deps F-568. Acceptance: Every limit not stated here is registered in the ADR before the run. A two-layer Hex20 plate with a hole (r/W = 0.05, Kirsch load) whose first ring has one radial size at every angle: the tenth of the elements with the largest eta_e/|K|^{1/2} contains every element with a face on the hole; the recovered peak stress is within 2 percent of 3 sigma_0; the F-432 and F-568 results keep their bits.
+
+> Follow-up proposed: Run the heavy effectivity record of ADR 0616. Deps F-568. Acceptance: Every limit not stated here is registered in the ADR before the run. e1_criterion_near_one_heavy of sa_density.rs is run once, alone, with at least 10 GB free: abs(theta - 1) at n = 16 and n = 24 is at most max(abs(theta - 1) on the previous mesh, 1e-2) for Hex20 and Tet10, theta at n = 8 and 16 is within 1e-5 of the F-432 log, and the time and peak memory are recorded.
