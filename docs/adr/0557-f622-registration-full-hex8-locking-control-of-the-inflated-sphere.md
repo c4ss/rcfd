@@ -229,3 +229,60 @@ declared so before their runs). They stay recorded as **not caught**, and the de
 |---|---|---|
 | MU1' | `is_fbar` returns `false` (every BBar Hex8 of the driver evaluated by the Full element) | A2, P3 |
 | MU2' | `is_fbar` returns `true` (every Hex8 of the driver, Full blocks included, evaluated by the F-bar element) | A1, A3, P1, P2 |
+
+## Addendum 1: results (2026-11-15)
+
+Registered run 1 of `sa_hyper_lock.rs`: `f622-scratch/run1-sa_hyper_lock.log`; DX' of amendment 1: `run2-dx-amend1.log`;
+mutations: `mutations.log`, `mut-MU*.log`; S1 to S3: `s1-fem.log`, `s2-hashes.log`, `s2-docs.log`, `s3-fmt.log`,
+`s3-clippy.log` (all in `f622-scratch`).
+
+| Id | Measured | Limit | |
+|---|---|---|---|
+| A1 | Full to `l_a = 1.10`: converged (10 steps, 4 iterations each); `p_FE / mu = 4.7701138` against `p_c = 0.2871548`: `15.61` (locking factor `16.6`) | converges; `>= 0.1` | met |
+| A2 | BBar to `1.10`: `p_FE / mu = 0.2883210`: `4.06e-3` | `<= 1e-2` | met |
+| A3 | Full against the 1D full-integration model `4.769507`: `1.27e-4` | `<= 5e-2` | met |
+| P1 | Full at `p_c(1.5)`: converged (10 steps, 4 iterations each); `l_mean = 1.0114106`, `e_F = 2.282e-2` | converges; `0 < e_F <= 0.1` | met |
+| P2 | `|e_F / 2.2826e-2 - 1| = 2.1e-4` | `<= 0.1` | met |
+| P3 | BBar at `p_c(1.5)`: converged (69 increments: the driver halved early steps and continued; 5 to 6 iterations each); `l_mean = 1.4955904`: `8.82e-3` | converges; `<= 2e-2` | met |
+| P0 | spread / `(l_mean - 1)`: Full `2.6e-3`, BBar `3.6e-3`; cavity-volume stretch Full `1.0114119`, BBar `1.4956508` | reported | |
+| DX (run 1) | `omega_1^2`: rest `8.377e3`, `1.10` `2.171e3`, `1.125` not measured (eigen tolerance, amendment 1) | reported | |
+| DX' | rest `8.377e3`, `1.10` `2.171e3`, `1.125` `5.038e2`; zero crossing of the line through `1.10` and `1.125`: `l_a = 1.1326` | expectation `[1.125, 1.20]` | as expected |
+| S1 | `cargo test -p rcfd-fem --release`: 1076 passed, 0 failed, 295 ignored | 0 failed | met |
+| S2 | `baseline_hashes` 3 passed, 1 ignored; `docs_site` 2 passed | pass | met |
+| S3 | `cargo fmt -p rcfd-fem -- --check` clean; `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings` clean | clean | met |
+
+Every estimate held: A1 `15.6` (estimate `15.6`), A2 `4.1e-3` (`4e-3`), P1 `2.28e-2` (`2.3e-2`), P3 `8.8e-3` (`8.8e-3`, the
+larger estimate of arithmetic 4). **DX'** supports arithmetic 1: the lowest eigenvalue of the Full tangent with the inner
+surface held falls by a factor 17 between rest and `1.125` and its linear extrapolation reaches zero at `l_a = 1.1326`, where
+the Full run of ADR 0541 failed (`1.133`): the negative pivot of ADR 0541 is a spurious instability of the locked discrete
+model, not a failure of the Newton path; no control of the static driver can take this Full mesh to `1.5`.
+
+Mutations (each run once, scratch copy, against `sa_hyper_lock.rs`):
+
+| Id | Caught by |
+|---|---|
+| MU1 | **not caught** (site not on the driver's path, amendment 2) |
+| MU2 | **not caught** (the same) |
+| MU3 | P1 (`e_F = -2.1e-2`), P2, P3 (the solve did not converge) |
+| MU4 | P3 (the solve did not converge in step 10) |
+| MU5 | A1, A2, A3 (the solves did not converge in step 1), P2 (`0.98`), P3 |
+| MU1' | A2 (`15.6`), P3 (`0.977`) |
+| MU2' | A1 (`4.06e-3`), A3 (`0.94`), P1 (`0.991`), P2 (`42.4`) |
+
+Deviations: amendment 1 (DX not measured at `1.125` in run 1, DX' added; a diagnostic outside the rule); amendment 2 (MU1 and
+MU2 named a site the driver does not reach; both recorded as not caught; MU1' and MU2' at `is_fbar` registered before their
+runs and caught). No limit changed, no library code, no existing test edited. Option (b) of the acceptance was run with the
+load-stepping Newton driver, not the arc-length step (arithmetic 4).
+
+**Decision: partial** by the registered rule: A1 (the acceptance, option (a)) and every companion met, S1 to S3 met, but two
+planned mutations (MU1, MU2) were not caught and had not been declared equivalent before their runs. The corrected mutations
+at the driver's dispatch were caught, so the checks are sensitive to the element choice; the partial is a defect of the
+registration's mutation table, not of the measurement.
+
+Remaining questions (the recommendations taken on the maintainer's standing instruction of 2026-11-11, none changes a default):
+
+1. Whether MU1/MU2 justify the partial: options (a) keep partial (the rule as written, taken); (b) the maintainer accepts
+   MU1'/MU2' as the registered mutations and marks F-622 done. Recommend (b) is the maintainer's call; nothing else is missing.
+2. F-425's note: add that its locking control is measured by F-622 (ADR 0557). The amendment of F-425's small-strain clause
+   stays the maintainer's call (not taken).
+3. The arc-length step with a follower load direction (open question 2): recommend a follow-up.
