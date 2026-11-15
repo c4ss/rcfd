@@ -13244,7 +13244,8 @@ fixed by the item's registration ADR before any code.
     (state dependence of contribution tangents about a nonlinear state, a blind 3-D check). Done is the maintainer's
     call (mutation MC caught only by RNq2 of the post-run amendment 1). The state dependence of the follower tangent,
     which the plane ring could not see, is checked blind by F-677 (ADR 0599, 2026-11-15; MC caught by BFD at 1.69e-4);
-    done recommended, the maintainer's call.
+    done recommended, the maintainer's call. The full unsymmetric path about a state, which ADR 0596 D1 left to a
+    follow-up, is follower::tangent_buckling_factors_full_with (F-676, ADR 0600, 2026-11-15).
 - [~] **F-672** Beam2 elements in the cyclic constraint
   - depends on: F-628
   - acceptance: Every limit not stated here is registered in the ADR before the run. A cyclic sector holding Beam2
@@ -13293,13 +13294,29 @@ fixed by the item's registration ADR before any code.
     loads, warping inertia, a consistent offset mass (ADR 0597 Q1, open: it changes existing results), no case-file key.
     Follow-up proposed: Consistent mass of warping sections with a shear-centre offset. Follow-up F-678 (Consistent mass
     of warping sections with a shear-centre offset).
-- [ ] **F-674** Full_rotor and the expansion of a cyclic sector with Beam2
+- [x] **F-674** Full_rotor and the expansion of a cyclic sector with Beam2
   - depends on: F-672
   - acceptance: Every limit not stated here is registered in the ADR before the run. cyclic::full_rotor of a sector with
     CyclicOptions::beams gives each sector copy of a Beam2 block the orientation R^j v, and FullRotor::expand,
     expand_field and expand_load of the ADR 0595 wheel sector give the fields of the independently built ring within
     1e-10; the defaults bit-identical.
-  - note: Follow-up of F-672 (ADR 0595, 2026-11-15).
+  - note: Structural solver, advanced tier. Follow-up of F-672 (ADR 0595). DONE. ADR 0601, 2026-11-15:
+    cyclic::full_rotor takes Beam2 blocks when CyclicOptions::beams is qualified by the new opt-in
+    CyclicOptions::full_rotor_beams (refused without beams by add_constraint). Without the qualifier the refusal stays,
+    so the existing test that asserts it under beams passes unchanged. Each Beam2 block of the sector becomes N
+    consecutive blocks of the full mesh, and copy j carries the orientation R^j v (copy 0 the sector's property cloned).
+    The element numbering, the sets and the materials are unchanged, and FullRotor::block gives the block of each copy.
+    FullRotor::expand, expand_field and expand_load needed no change (the rotations of six-unknown nodes were already
+    expanded by R^j). On the ADR 0595 wheel sector against the independently built ring: positions within 6.7e-16,
+    orientations exact; expand_load of k = 0..3 (the high node loaded) within 1.4e-16; expand_field of the static
+    solutions k = 0..3 within 6.6e-13; the full-rotor model's static field within 4.3e-13 and its 18 lowest eigenvalues
+    within 2.5e-13; the expanded modes are eigenvectors of the ring to a backward error of 1.5e-13, their Rayleigh
+    quotients within 8.1e-14, and they are M-orthonormal within 1.1e-15 (limit 1e-10). Unrotated copies are seen at
+    0.61, and a mode expanded at the wrong harmonic at 515. Models without the option keep their bits (existing tests,
+    baseline hashes, a shell sector's full rotor and expansions bit-equal with and without it). Six of six mutations
+    caught. Not covered: full_rotor with beams but without the qualifier, RotatingPart on the full rotor of a beam
+    sector, extended boundaries. Behind the extra opt-in CyclicOptions::full_rotor_beams (F-672 NC4 asserts the refusal
+    under beams alone); dropping the qualifier (retiring that assertion) is the maintainer's call.
 - [~] **F-675** Rotating paths on a cyclic sector of beams
   - depends on: F-672
   - acceptance: Every limit not stated here is registered in the ADR before the run. RotatingSector on the ADR 0595
@@ -13322,14 +13339,30 @@ fixed by the item's registration ADR before any code.
     measure. Not covered: full_rotor and the expanded modes with beams, the whirl directions and the split, state and
     sparse solvers beyond a smoke run, offset or non-principal sections, an independent whirl reference for beams.
     Follow-up F-679 (An independent whirl reference for spinning beams).
-- [ ] **F-676** Flutter about a nonlinear state with the full contribution tangent
+- [x] **F-676** Flutter about a nonlinear state with the full contribution tangent
   - depends on: F-671, F-653
   - acceptance: Every limit not stated here is registered in the ADR before the run. The complex pencil path of ADR 0580
     takes the driver's tangent at a nonlinear state with the full (unsymmetric) tangents of its contributions; on a
     free-edged follower load (Beck's column of Full Hex8 at a compressed state) the complex eigenvalues satisfy the
     central-difference residual equation of the nonlinear residual including the follower force within 1e-6 (vector
     measure), with the backward error of ADR 0587, and at zero load they equal buckling_factors_full within 1e-10.
-  - note: Follow-up of F-671 (ADR 0596, 2026-11-15).
+  - note: Structural solver, advanced tier. Follow-up of F-671 and F-653 (ADR 0596, ADR 0580). DONE. ADR 0600,
+    2026-11-15: new follower::tangent_buckling_factors_full_with, opt-in beside the unchanged symmetric functions: the
+    buckling pencil (K_T + K_c(u, lambda) + mu (K_sigma + K_c(u, 1) - K_c(u, 0))) x = 0 about a nonlinear state with the
+    full (unsymmetric) tangents of the contributions (Contribution::add_full; for a follower pressure -K_p), complex
+    factors of smallest modulus by the pencil solver of ADR 0580, with the backward errors of ADR 0587;
+    tangent_modes_full (ADR 0580) is the modal path about the state and is checked by the same measure. Set-up: Full
+    Hex8 neo-Hookean cantilever 2 x 0.5 x 0.4 m (8 x 2 x 2), follower end pressure 9e3 Pa (Beck's load, free-edged:
+    antisymmetry of K_p on the free unknowns 2.0), unsymmetric Newton state at 0.27 of the dead Euler load of the mesh
+    (below it; the driver refuses an indefinite tangent). Against the fourth-order central difference of the nonlinear
+    residual with the follower force (complex directions by parts), vector measure max |D4_r[x] + mu (K_sigma x +
+    D4_g[x])| / max |D4_r[x]|: buckling pairs (three complex pairs and a real factor) 3.1e-9, modes 4.3e-9 (limit 1e-6);
+    backward errors at most 8.4e-13 and 9.7e-13 (limit 2e-10); at zero load the factors equal buckling_factors_full in
+    every bit (limit 1e-10). Negative controls: the symmetric part through the full path 1.05, the symmetric
+    tangent_modes 1.02, every contribution tangent at u = 0 2.4e-3, the load-factor derivative dropped 5.4, the rest
+    pairs at the state 6.6e-3. Seven of seven mutations caught; the existing follower, F-653, F-664, F-671, F-677 tests
+    and the baseline hashes pass. Not covered: a flutter search along a nonlinear path (states above the Euler load are
+    not reachable by the driver), shells and beams, one bar and load level.
 - [x] **F-677** State dependence of contribution tangents about a nonlinear state, a blind 3-D check
   - depends on: F-671
   - acceptance: Every limit not stated here is registered in the ADR before the run. On a conservative 3-D follower
