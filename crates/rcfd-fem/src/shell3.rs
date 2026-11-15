@@ -1040,6 +1040,47 @@ pub fn thermal_load_vector_with(
     Ok(to_global_vector(&f, &fl))
 }
 
+/// The consistent nodal load of a through-thickness temperature gradient (ADR 0626 D2, arithmetic 3): `g_i` the gradients
+/// `dT/dz` of the three nodes, K/m, `z` along `e_3`; the constant curvature rows give `A B_b^T D alpha g_mean (1, 1, 0)`, exact
+/// for a linear gradient, whatever the membrane. Refuses other than three gradients and a material without a finite
+/// expansion coefficient.
+pub fn thermal_gradient_load_vector(
+    coords: &[Vec3],
+    thickness: f64,
+    material: &Material,
+    gradient_nodal: &[f64],
+) -> Result<[f64; 18]> {
+    if gradient_nodal.len() != 3 {
+        return Err(FemError::FieldLength {
+            key: "gradient",
+            expected: 3,
+            found: gradient_nodal.len(),
+        });
+    }
+    let alpha = material.expansion();
+    if !alpha.is_finite() {
+        return Err(FemError::InvalidValue {
+            key: "expansion",
+            reason: format!(
+                "a {} material has no single expansion coefficient for a shell thermal load",
+                material.name()
+            ),
+        });
+    }
+    let f = facet(coords)?;
+    let d = homogeneous_section(material, thickness).bending;
+    let gm = (gradient_nodal[0] + gradient_nodal[1] + gradient_nodal[2]) / 3.0;
+    let k = alpha * gm;
+    let m = mul3(&d, [k, k, 0.0]);
+    let (nx, ny) = derivatives(&f);
+    let bb = bending_rows(&nx, &ny);
+    let mut fl = [0.0; 18];
+    for (c, fc) in fl.iter_mut().enumerate() {
+        *fc = f.area * (bb[0][c] * m[0] + bb[1][c] * m[1] + bb[2][c] * m[2]);
+    }
+    Ok(to_global_vector(&f, &fl))
+}
+
 /// The facet of an element of a model, its refusals naming the element.
 pub(crate) fn model_facet(mesh: &SolidMesh, e: usize) -> Result<Facet3> {
     let coords: Vec<Vec3> = mesh.element_nodes(e).iter().map(|&n| mesh.nodes()[n]).collect();
@@ -1145,13 +1186,15 @@ pub(crate) fn model_element_mass(
 
 /// The resultants and surface stresses of a Shell3 element at its centroid from its global unknowns (ADR 0454 arithmetic 8):
 /// `thermal` is the membrane thermal strain `alpha dT_mean` subtracted from `eps_xx` and `eps_yy`; the membrane strain is that
-/// of the centroid of the membrane (ADR 0466 D1).
+/// of the centroid of the membrane (ADR 0466 D1); `thermal_curvature` (with a gradient load, ADR 0626 D3) the thermal
+/// curvature `alpha g_mean` subtracted from `kappa_xx` and `kappa_yy`.
 pub(crate) fn element_stresses(
     f: &Facet3,
     ue: &[f64],
     section: &SectionStiffness,
     thickness: f64,
     thermal: f64,
+    thermal_curvature: Option<f64>,
     membrane: Shell3Membrane,
 ) -> ShellStresses {
     let tr = transformation(f);
@@ -1167,7 +1210,11 @@ pub(crate) fn element_stresses(
     let mut eps = strain(&centroid_membrane_rows(f, &nx, &ny, membrane));
     eps[0] -= thermal;
     eps[1] -= thermal;
-    let kappa = strain(&bending_rows(&nx, &ny));
+    let mut kappa = strain(&bending_rows(&nx, &ny));
+    if let Some(th) = thermal_curvature {
+        kappa[0] -= th;
+        kappa[1] -= th;
+    }
     let mut membrane = mul3(&section.membrane, eps);
     let mut bending = mul3(&section.bending, kappa);
     if let Some(c) = &section.coupling {

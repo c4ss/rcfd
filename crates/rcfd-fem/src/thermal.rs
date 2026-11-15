@@ -8,7 +8,7 @@
 //! load of [`crate::shell::thermal_load_vector`], uniform through the thickness (ADR 0445 D2). A model has at most one
 //! temperature field; a second one is refused. A through-thickness gradient ([`crate::Load::ShellTemperatureGradient`]) on
 //! Shell4 takes the curvature thermal load of [`crate::shell::thermal_gradient_load_vector`] ([`add_thermal_gradient_load`],
-//! ADR 0612). Every sum is sequential in a fixed order (elements, points, nodes): no dependence on threads.
+//! ADR 0612), on a Layup Shell4 the ply-integrated load and on Shell3 its own (ADR 0626). Every sum is sequential in a fixed order (elements, points, nodes): no dependence on threads.
 
 use crate::constraint::{prescribed_equations, Prescribed};
 use crate::element::{b_matrix, element_for};
@@ -40,7 +40,7 @@ pub fn temperature_field(model: &SolidModel) -> Result<Option<(&[f64], f64)>> {
 /// The package named when an element that does not take a through-thickness temperature gradient is given one (ADR 0612 L1
 /// to L3).
 pub const GRADIENT_FOLLOW_UP: &str =
-    "a follow-up of ADR 0612 (a through-thickness temperature gradient on Shell3, Layup shells, beams and solids)";
+    "a follow-up of ADR 0612 and ADR 0626 (a through-thickness temperature gradient on beams and solids)";
 
 /// The nodal gradients of the model's through-thickness temperature gradient load, `None` without one (ADR 0612 D1).
 /// Refuses a second gradient load (`InvalidValue { key: "gradient" }`).
@@ -62,13 +62,10 @@ pub fn temperature_gradient_field(model: &SolidModel) -> Result<Option<&[f64]>> 
     Ok(found)
 }
 
-/// Whether element `e` takes the gradient load: a Shell4 element of a block that is not a Layup (ADR 0612 D2).
+/// Whether element `e` takes the gradient load: a Shell4 element (a `Shell` or a `Layup` block) or a Shell3 element (ADR
+/// 0612 D2, ADR 0626 D2).
 fn takes_gradient(mesh: &crate::mesh::SolidMesh, e: usize) -> bool {
-    mesh.element_kind(e) == ElementKind::Shell4
-        && !matches!(
-            mesh.blocks()[mesh.block_of(e)].property(),
-            Some(crate::mesh::BlockProperty::Layup { .. })
-        )
+    matches!(mesh.element_kind(e), ElementKind::Shell4 | ElementKind::Shell3)
 }
 
 /// Refuses element `e` if it does not take the gradient load and a node of it has a non-zero gradient (ADR 0612 D2, D3).
@@ -76,19 +73,11 @@ pub(crate) fn refuse_gradient_unless_taken(mesh: &crate::mesh::SolidMesh, e: usi
     if takes_gradient(mesh, e) || mesh.element_nodes(e).iter().all(|&n| gradient[n] == 0.0) {
         return Ok(());
     }
-    let layup = matches!(
-        mesh.blocks()[mesh.block_of(e)].property(),
-        Some(crate::mesh::BlockProperty::Layup { .. })
-    );
     Err(FemError::Element {
         element: e,
         source: Box::new(FemError::NotYetSupported {
             item: "shell temperature gradient",
-            variant: if layup && mesh.element_kind(e) == ElementKind::Shell4 {
-                "Layup"
-            } else {
-                mesh.element_kind(e).name()
-            },
+            variant: mesh.element_kind(e).name(),
             location: format!("element {e} (block {})", mesh.block_of(e)),
             package: GRADIENT_FOLLOW_UP,
         }),
@@ -96,8 +85,10 @@ pub(crate) fn refuse_gradient_unless_taken(mesh: &crate::mesh::SolidMesh, e: usi
 }
 
 /// Adds the curvature thermal load of the through-thickness gradient `gradient` (one value per node, K/m) to `f`, element by
-/// element in element order (ADR 0612 D2): a Shell4 element of a Shell block takes
-/// [`crate::shell::thermal_gradient_load_vector`]; any other element with a non-zero value at one of its nodes is refused,
+/// element in element order (ADR 0612 D2, ADR 0626 D2): a Shell4 element of a Shell block takes
+/// [`crate::shell::thermal_gradient_load_vector`], of a Layup block its ply-integrated load
+/// ([`crate::shell::layup_thermal_gradient_load_vector`]; one isotropic ply the homogeneous one), a Shell3 element
+/// [`crate::shell3::thermal_gradient_load_vector`]; any other element with a non-zero value at one of its nodes is refused,
 /// one whose values are all zero is skipped.
 pub(crate) fn add_thermal_gradient_load(
     f: &mut [f64],
@@ -116,12 +107,17 @@ pub(crate) fn add_thermal_gradient_load(
         let coords: Vec<Vec3> = nodes.iter().map(|&n| mesh.nodes()[n]).collect();
         let ge: Vec<f64> = nodes.iter().map(|&n| gradient[n]).collect();
         let material = &model.materials()[materials[e]].1;
-        let fe = crate::shell::thickness_or_error(mesh, e)
-            .and_then(|t| crate::shell::thermal_gradient_load_vector(&coords, t, material, &ge))
-            .map_err(|source| FemError::Element {
-                element: e,
-                source: Box::new(source),
-            })?;
+        let fe: Vec<f64> = if mesh.element_kind(e) == ElementKind::Shell3 {
+            crate::shell::thickness_or_error(mesh, e)
+                .and_then(|t| crate::shell3::thermal_gradient_load_vector(&coords, t, material, &ge))
+                .map(|v| v.to_vec())
+        } else {
+            crate::shell::model_thermal_gradient_load_vector(mesh, e, &coords, material, &ge).map(|v| v.to_vec())
+        }
+        .map_err(|source| FemError::Element {
+            element: e,
+            source: Box::new(source),
+        })?;
         for (a, &node) in nodes.iter().enumerate() {
             add_force(f, dofs, node, &[fe[6 * a], fe[6 * a + 1], fe[6 * a + 2]])?;
             add_moment(f, dofs, node, &[fe[6 * a + 3], fe[6 * a + 4], fe[6 * a + 5]])?;

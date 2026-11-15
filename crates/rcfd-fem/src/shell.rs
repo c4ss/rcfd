@@ -19,7 +19,8 @@
 //! a nodal temperature field the membrane thermal load [`thermal_load_vector`] (uniform through the thickness; ADR 0445),
 //! whose thermal strain [`stresses`] subtracts. A gradient through the thickness ([`crate::model::Load::ShellTemperatureGradient`])
 //! takes the curvature thermal load [`thermal_gradient_load_vector`], whose thermal curvature [`stresses`] subtracts (ADR
-//! 0612). The assembly calls
+//! 0612); a layup the force and moment of the gradient by lamination theory ([`layup_thermal_gradient_load_vector`], ADR
+//! 0626), recovered by [`stresses`] and [`crate::laminate::layup_response`]. The assembly calls
 //! [`model_element_stiffness`] and [`model_element_mass`] for Shell4 (D6).
 //!
 //! A block may choose a drilling membrane in place of the bilinear one ([`Shell4Membrane`], ADR 0470): four overlapping ANDES
@@ -1385,6 +1386,72 @@ pub fn thermal_gradient_load_vector(
     Ok(out)
 }
 
+/// The consistent nodal load of a through-thickness temperature gradient on a layup (ADR 0626 D2): at the 2 x 2 points `g =
+/// sum N_i g_i`, `sum_gp det (B_m^T M_th g + B_b^T P_th g)` with the laminate's force and moment per unit gradient (`m_th`,
+/// `p_th`; lamination theory, ADR 0626 arithmetic 1), carried to the nodes by `T^T` (the bilinear membrane). Refuses other
+/// than four gradients.
+pub fn layup_thermal_gradient_load_vector(
+    coords: &[Vec3],
+    laminate: &crate::laminate::Laminate,
+    gradient_nodal: &[f64],
+) -> Result<[f64; 24]> {
+    if gradient_nodal.len() != 4 {
+        return Err(FemError::FieldLength {
+            key: "gradient",
+            expected: 4,
+            found: gradient_nodal.len(),
+        });
+    }
+    let f = facet(coords)?;
+    let mut fl = [0.0; 24];
+    for &xi in &GAUSS {
+        for &eta in &GAUSS {
+            let q = point(&f.local, xi, eta);
+            let g: f64 = (0..4).map(|i| q.n[i] * gradient_nodal[i]).sum();
+            let n = [laminate.m_th[0] * g, laminate.m_th[1] * g, laminate.m_th[2] * g];
+            let m = [laminate.p_th[0] * g, laminate.p_th[1] * g, laminate.p_th[2] * g];
+            let bm = membrane_rows(&q);
+            let bb = bending_rows(&q);
+            for (c, fc) in fl.iter_mut().enumerate() {
+                *fc += q.det
+                    * (bm[0][c] * n[0]
+                        + bm[1][c] * n[1]
+                        + bm[2][c] * n[2]
+                        + bb[0][c] * m[0]
+                        + bb[1][c] * m[1]
+                        + bb[2][c] * m[2]);
+            }
+        }
+    }
+    let t = transformation(&f);
+    let mut out = [0.0; 24];
+    for (j, o) in out.iter_mut().enumerate() {
+        *o = (0..24).map(|i| t[i * 24 + j] * fl[i]).sum();
+    }
+    Ok(out)
+}
+
+/// The through-thickness gradient load of a Shell4 element of a model (ADR 0626 D2): a `Shell` block gives
+/// [`thermal_gradient_load_vector`] of its thickness and the element's material (ADR 0612); a layup of one isotropic ply the
+/// same with the ply's material and thickness; any other layup [`layup_thermal_gradient_load_vector`].
+pub(crate) fn model_thermal_gradient_load_vector(
+    mesh: &SolidMesh,
+    element: usize,
+    coords: &[Vec3],
+    material: &Material,
+    gradient_nodal: &[f64],
+) -> Result<[f64; 24]> {
+    if let Some(BlockProperty::Layup { plies }) = mesh.blocks()[mesh.block_of(element)].property() {
+        if let Some((ply_material, t)) = crate::laminate::single_isotropic(plies) {
+            return thermal_gradient_load_vector(coords, t, ply_material, gradient_nodal);
+        }
+        let l = crate::laminate::laminate(plies)?;
+        return layup_thermal_gradient_load_vector(coords, &l, gradient_nodal);
+    }
+    let t = thickness_or_error(mesh, element)?;
+    thermal_gradient_load_vector(coords, t, material, gradient_nodal)
+}
+
 /// The consistent nodal load of a temperature uniform through the thickness of a layup (ADR 0496 D4): at the 2 x 2 points
 /// `dT = sum N_i dT_i`, `sum_gp det (B_m^T N_th dT + B_b^T M_th dT)` with the laminate's thermal resultants per kelvin, carried
 /// to the nodes by `T^T` (the bilinear membrane).
@@ -1689,7 +1756,7 @@ pub fn stresses(model: &SolidModel, displacement: &[f64]) -> Result<Vec<(usize, 
             crate::thermal::refuse_gradient_unless_taken(mesh, e, g)?;
         }
         if mesh.element_kind(e) == ElementKind::Shell3 {
-            out.push((e, shell3_stresses(model, displacement, e, temperature)?));
+            out.push((e, shell3_stresses(model, displacement, e, temperature, gradient)?));
             continue;
         }
         if mesh.element_kind(e) != ElementKind::Shell4 {
@@ -1705,7 +1772,7 @@ pub fn stresses(model: &SolidModel, displacement: &[f64]) -> Result<Vec<(usize, 
             Some(BlockProperty::Layup { plies }) => match crate::laminate::single_isotropic(plies) {
                 Some((m, t)) => (t, Some(m)),
                 None => {
-                    out.push((e, layup_stresses(model, displacement, e, plies, temperature)?));
+                    out.push((e, layup_stresses(model, displacement, e, plies, temperature, gradient)?));
                     continue;
                 }
             },
@@ -1812,19 +1879,22 @@ pub fn stresses(model: &SolidModel, displacement: &[f64]) -> Result<Vec<(usize, 
     Ok(out)
 }
 
-/// Facet, membrane strain, curvature, transverse shear strain and temperature change at an element centre (ADR 0496 D6).
-type LayupCentre = (Facet, [f64; 3], [f64; 3], [f64; 2], f64);
+/// Facet, membrane strain, curvature, transverse shear strain, temperature change and (with a gradient load) the
+/// through-thickness gradient at an element centre (ADR 0496 D6, ADR 0626 D3).
+type LayupCentre = (Facet, [f64; 3], [f64; 3], [f64; 2], f64, Option<f64>);
 
-/// Element, membrane strain, curvature and temperature change at its centre (ADR 0496 D6).
-pub(crate) type CentreStrain = (usize, [f64; 3], [f64; 3], f64);
+/// Element, membrane strain, curvature, temperature change and (with a gradient load) gradient at its centre (ADR 0496 D6,
+/// ADR 0626 D3).
+pub(crate) type CentreStrain = (usize, [f64; 3], [f64; 3], f64, Option<f64>);
 
 /// The centre values of Shell4 element `e` (bilinear membrane): its facet, the membrane strain, the curvature, the assumed
-/// transverse shear strain and the temperature change at the centre (ADR 0496 D6).
+/// transverse shear strain, the temperature change and the gradient at the centre (ADR 0496 D6, ADR 0626 D3).
 fn layup_centre(
     model: &SolidModel,
     displacement: &[f64],
     e: usize,
     temperature: Option<(&[f64], f64)>,
+    gradient: Option<&[f64]>,
 ) -> Result<LayupCentre> {
     let mesh = model.mesh();
     let f = model_facet(mesh, e)?;
@@ -1867,7 +1937,8 @@ fn layup_centre(
             .sum(),
         None => 0.0,
     };
-    Ok((f, eps, kappa, [g0, g1], dt))
+    let gc = gradient.map(|g| mesh.element_nodes(e).iter().zip(&p.n).map(|(&n, &na)| na * g[n]).sum());
+    Ok((f, eps, kappa, [g0, g1], dt, gc))
 }
 
 /// The membrane strain, curvature and centre temperature change of every Shell4 element of a Layup block (ADR 0496 D6), in
@@ -1883,6 +1954,7 @@ pub(crate) fn centre_strains(model: &SolidModel, displacement: &[f64]) -> Result
     }
     let mesh = model.mesh();
     let temperature = crate::thermal::temperature_field(model)?;
+    let gradient = crate::thermal::temperature_gradient_field(model)?;
     let mut out = Vec::new();
     for e in 0..mesh.n_elements() {
         if mesh.element_kind(e) != ElementKind::Shell4 {
@@ -1894,28 +1966,30 @@ pub(crate) fn centre_strains(model: &SolidModel, displacement: &[f64]) -> Result
         ) {
             continue;
         }
-        let (_, eps, kappa, _, dt) = layup_centre(model, displacement, e, temperature)?;
-        out.push((e, eps, kappa, dt));
+        let (_, eps, kappa, _, dt, gc) = layup_centre(model, displacement, e, temperature, gradient)?;
+        out.push((e, eps, kappa, dt, gc));
     }
     Ok(out)
 }
 
 /// The resultants of Shell4 element `e` of a layup (not one isotropic ply) at its centre (ADR 0496 D2, D7): `N = A eps + B
 /// kappa - N_th dT`, `M = B eps + D kappa - M_th dT`, `Q = H gamma`; `top` and `bottom` the element-axes stresses of the
-/// outer plies at `z = +-t/2`, `Qbar (eps + z kappa - alphabar dT)`.
+/// outer plies at `z = +-t/2`, `Qbar (eps + z kappa - alphabar dT)`. With a gradient load (ADR 0626 D3) `N` and `M` also
+/// subtract `M_th g` and `P_th g` and the faces `alphabar z g`, `g` the gradient at the centre.
 fn layup_stresses(
     model: &SolidModel,
     displacement: &[f64],
     e: usize,
     plies: &[crate::mesh::Ply],
     temperature: Option<(&[f64], f64)>,
+    gradient: Option<&[f64]>,
 ) -> Result<ShellStresses> {
     let located = |source: FemError| FemError::Element {
         element: e,
         source: Box::new(source),
     };
     let l = crate::laminate::laminate(plies).map_err(located)?;
-    let (f, eps, kappa, gamma, dt) = layup_centre(model, displacement, e, temperature)?;
+    let (f, eps, kappa, gamma, dt, gc) = layup_centre(model, displacement, e, temperature, gradient)?;
     let mut membrane = [0.0; 3];
     let mut bending = [0.0; 3];
     for k in 0..3 {
@@ -1934,6 +2008,13 @@ fn layup_stresses(
             + l.d[k][2] * kappa[2]
             - l.m_th[k] * dt;
     }
+    if let Some(g) = gc {
+        // ADR 0626 D3: the force and moment of the through-thickness gradient (lamination theory).
+        for k in 0..3 {
+            membrane[k] -= l.m_th[k] * g;
+            bending[k] -= l.p_th[k] * g;
+        }
+    }
     let h = l.h;
     let shear = [
         h[0][0] * gamma[0] + h[0][1] * gamma[1],
@@ -1944,10 +2025,14 @@ fn layup_stresses(
         let pc = crate::laminate::ply_constants(ply, k)?;
         let qb = crate::laminate::rotated_stiffness(&pc.q, ply.angle);
         let ab = crate::laminate::rotated_expansion(pc.alpha, ply.angle);
+        let th = match gc {
+            Some(g) => dt + z * g,
+            None => dt,
+        };
         let m = [
-            eps[0] + z * kappa[0] - ab[0] * dt,
-            eps[1] + z * kappa[1] - ab[1] * dt,
-            eps[2] + z * kappa[2] - ab[2] * dt,
+            eps[0] + z * kappa[0] - ab[0] * th,
+            eps[1] + z * kappa[1] - ab[1] * th,
+            eps[2] + z * kappa[2] - ab[2] * th,
         ];
         Ok([
             qb[0][0] * m[0] + qb[0][1] * m[1] + qb[0][2] * m[2],
@@ -1968,12 +2053,14 @@ fn layup_stresses(
     })
 }
 
-/// The stresses of Shell3 element `e` (ADR 0454 arithmetic 8).
+/// The stresses of Shell3 element `e` (ADR 0454 arithmetic 8); with a gradient load the thermal curvature `alpha g_m (1, 1,
+/// 0)` of the element's mean gradient is subtracted (ADR 0626 D3).
 fn shell3_stresses(
     model: &SolidModel,
     displacement: &[f64],
     e: usize,
     temperature: Option<(&[f64], f64)>,
+    gradient: Option<&[f64]>,
 ) -> Result<ShellStresses> {
     let mesh = model.mesh();
     let located = |source: FemError| FemError::Element {
@@ -2003,6 +2090,12 @@ fn shell3_stresses(
         }
         None => 0.0,
     };
+    let curvature = gradient.map(|g| {
+        let gm: f64 = mesh.element_nodes(e).iter().map(|&n| g[n]).sum::<f64>() / 3.0;
+        material.expansion() * gm
+    });
     let membrane = crate::shell3::model_membrane(mesh, e);
-    Ok(crate::shell3::element_stresses(&f, &ue, &section, t, thermal, membrane))
+    Ok(crate::shell3::element_stresses(
+        &f, &ue, &section, t, thermal, curvature, membrane,
+    ))
 }
