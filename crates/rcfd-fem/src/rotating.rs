@@ -344,6 +344,8 @@ fn unit_centrifugal_model(model: &SolidModel, axis: Vec3, origin: Vec3) -> Resul
     let mut copy = SolidModel::new(model.mesh().clone());
     // ADR 0593 D5: the copy keeps the opt-in of ADR 0584 D1 (default false, the copy of before).
     copy.set_hyperelastic_structures(model.hyperelastic_structures());
+    // ADR 0614 D4: and the stabilisation of the Incompatible Hex8 (default false, the copy of before).
+    copy.set_incompatible_stabilisation(model.incompatible_stabilisation());
     let points = crate::mat_ortho::uses_point_materials(model);
     for (set, material) in model.materials() {
         if points {

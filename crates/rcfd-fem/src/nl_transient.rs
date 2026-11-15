@@ -1373,17 +1373,23 @@ impl Integrator {
             let el = element_for(mesh.element_kind(e));
             // ADR 0506 D3: an opted Hex8 takes the strain of its formulation (the F-bar strain of a BBar block); ADR 0608 D4:
             // the enhanced strain of an Incompatible block at its condensed modes.
+            // ADR 0614 D4: a stabilised model's element at its stabilised modes, with the energy of the stabilisation.
             let opted = match crate::hex8x::opted(mesh, e) {
-                Some(crate::mesh::SolidFormulation::Incompatible) => Some(
-                    crate::nl_incompatible::modes_and_strains(
+                Some(crate::mesh::SolidFormulation::Incompatible) => {
+                    let stabilised = model.incompatible_stabilisation();
+                    let (modes, strains) = crate::nl_incompatible::modes_and_strains_with(
                         &coords,
                         material,
                         &ue,
                         &ElementState::new(Vec::new()),
                         &context,
-                    )?
-                    .1,
-                ),
+                        stabilised,
+                    )?;
+                    if stabilised {
+                        w += crate::nl_incompatible::stabilisation_energy(&coords, material, &ue, &modes, &context)?;
+                    }
+                    Some(strains)
+                }
                 Some(f) => Some(nonlinear::hex8_strains(f, &coords, &ue)?),
                 None => None,
             };

@@ -96,10 +96,6 @@ fn boundary_nodes(mesh: &SolidMesh) -> BTreeSet<usize> {
     s
 }
 
-fn element_coords(mesh: &SolidMesh, e: usize) -> Vec<Vec3> {
-    mesh.element_nodes(e).iter().map(|&n| mesh.nodes()[n]).collect()
-}
-
 fn empty() -> ElementState {
     ElementState::new(Vec::new())
 }
