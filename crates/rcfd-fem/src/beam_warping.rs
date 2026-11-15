@@ -39,6 +39,11 @@
 //! ADR 0591 (F-667) adds the pre-stress to the transient path ([`WarpingTransient::with_prestress`]): the integrator of ADR
 //! 0389 on `K + K_sigma` and `M` (the Rayleigh stiffness `beta (K + K_sigma)`); [`WarpingTransient::new`] is unchanged.
 //!
+//! ADR 0592 (F-668) adds the negative-pivot count of both paths ([`WarpingHarmonic::negative_eigenvalues`],
+//! [`WarpingTransient::negative_eigenvalues`]): the number of negative eigenvalues of the reduced `K + K_sigma` (`K` without a
+//! pre-stress), a Sturm count of its real `L D L^T` factor (Sylvester's law of inertia), computed when asked; nothing else
+//! changes.
+//!
 //! ADR 0582 (F-643) adds the load height ([`Warping::load_point`]): a force applied at a point of the section off the shear
 //! centre adds `(1/2) (F . (p - s)) phi^2` at the twist of its node to the geometric stiffness; without an entry a nodal force
 //! acts at the shear centre, as before.
@@ -1991,6 +1996,42 @@ fn reduced_geometric(
     Ok(gr.matrix)
 }
 
+/// ADR 0592 D1: the number of negative pivots of the `L D L^T` factor of the reduced symmetric `a` (reverse Cuthill-McKee
+/// order, no pivoting, a pivot with `|d| <= theta` refused; the options of [`rcfd_linalg::eigen::count_below`] at the shift 0),
+/// by Sylvester's law of inertia the number of negative eigenvalues of `a`. A refused pivot (a numerically singular `a` in the
+/// elimination order) is an error with the key `"stiffness"` naming the node and component of the row.
+fn sturm_negatives(
+    a: &CsrMatrix,
+    free: &[usize],
+    base_dofs: &crate::model::DofMap,
+    dofs: &WarpingDofs,
+) -> Result<usize> {
+    use rcfd_linalg::skyline::{PivotRule, SkylineError, SkylineLdlt, SkylineOptions, SkylineOrdering};
+    let opts = SkylineOptions {
+        ordering: SkylineOrdering::Rcm,
+        pivots: PivotRule::NonZero,
+        symmetry_tolerance: 1e-12,
+    };
+    match SkylineLdlt::factor_with(a, &opts) {
+        Ok(f) => Ok(f.inertia().0),
+        Err(SkylineError::Pivot {
+            row, pivot, threshold, ..
+        }) => {
+            let (node, component) = node_component(base_dofs, dofs, free[row]);
+            Err(FemError::InvalidValue {
+                key: "stiffness",
+                reason: format!(
+                    "the stiffness at omega = 0 is numerically singular in the elimination order (at a buckling load, or                      an unsupported motion): pivot {pivot:e} at node {node} component {component} is at most                      {threshold:e}; no negative-eigenvalue count"
+                ),
+            })
+        }
+        Err(other) => Err(FemError::InvalidValue {
+            key: "stiffness",
+            reason: format!("the stiffness at omega = 0 cannot be factored: {other}"),
+        }),
+    }
+}
+
 fn expand_free(free: &[usize], n: usize, x: &[f64]) -> Vec<f64> {
     let mut full = vec![0.0; n];
     for (&eq, &v) in free.iter().zip(x) {
@@ -2222,6 +2263,25 @@ impl WarpingHarmonic {
         &self.free
     }
 
+    /// The number of negative eigenvalues of the reduced real stiffness at `omega = 0`, `K + K_sigma` with a pre-stress and `K`
+    /// without (ADR 0592): a Sturm count of its real `L D L^T` factor, computed when asked. A pre-stressed state beyond a
+    /// buckling load counts one per mode beyond its load. A numerically singular stiffness is refused (key `"stiffness"`).
+    pub fn negative_eigenvalues(&self) -> Result<usize> {
+        let val: Vec<f64> = match &self.gv {
+            None => self.kv.clone(),
+            Some(gv) => self.kv.iter().zip(gv).map(|(&k, &g)| k + g).collect(),
+        };
+        let nf = self.free.len();
+        let a = CsrMatrix {
+            n: nf,
+            ncols: nf,
+            row_ptr: self.row_ptr.clone(),
+            col: self.col.clone(),
+            val,
+        };
+        sturm_negatives(&a, &self.free, &self.base_dofs, &self.dofs)
+    }
+
     /// The steady response to `load` (one value per equation of [`WarpingDofs`], key `"harmonic load"`) at the circular
     /// frequency `omega` (finite, `>= 0`, key `"frequency"`): `x(t) = Re(X e^{i omega t})`, zero at the eliminated equations.
     /// Without damping a pivot at most `resonance_pivot` of its scale is refused as a resonance (key `"frequency"`).
@@ -2339,6 +2399,8 @@ pub struct WarpingTransient {
     integrator: crate::transient::Integrator,
     free: Vec<usize>,
     dofs: WarpingDofs,
+    // ADR 0592: the model's numbering, to name a refused row of the count.
+    base_dofs: crate::model::DofMap,
 }
 
 impl WarpingTransient {
@@ -2373,6 +2435,7 @@ impl WarpingTransient {
             integrator,
             free: rd.free,
             dofs: rd.dofs,
+            base_dofs: model.dof_map(),
         })
     }
 
@@ -2414,6 +2477,7 @@ impl WarpingTransient {
             integrator,
             free: rd.free,
             dofs: rd.dofs,
+            base_dofs: model.dof_map(),
         })
     }
 
@@ -2425,6 +2489,14 @@ impl WarpingTransient {
     /// The free equations (reduced index `i` is equation `free()[i]` of [`WarpingDofs`]).
     pub fn free(&self) -> &[usize] {
         &self.free
+    }
+
+    /// The number of negative eigenvalues of the integrator's reduced stiffness, `K + K_sigma` from
+    /// [`WarpingTransient::with_prestress`] and `K` from [`WarpingTransient::new`] (ADR 0592): a Sturm count of its real `L D
+    /// L^T` factor, the count of [`WarpingHarmonic::negative_eigenvalues`]. A numerically singular stiffness is refused (key
+    /// `"stiffness"`).
+    pub fn negative_eigenvalues(&self) -> Result<usize> {
+        sturm_negatives(self.integrator.stiffness(), &self.free, &self.base_dofs, &self.dofs)
     }
 
     /// The integrator of the reduced system.
