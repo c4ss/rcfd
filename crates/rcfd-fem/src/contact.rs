@@ -29,6 +29,9 @@
 //! * ADR 0570 (F-639): the opt-in curvature-free fallback of the total Lagrangian body
 //!   (`ContactOptions::curvature_fallback`): an iteration whose exact tangent fails the pivot test of the Newton driver is
 //!   taken with `eps G G^T` (the contact set's [`Contribution::add_fallback_tangent`]), as the linear body always does.
+//! * ADR 0571 (F-638): [`ContactSet::recovered_tractions`], the traction `sum_a (t_a/A_a) Phi_a` of a mortar pair at the
+//!   load-rule points of its contactor faces (the multipliers `t_a/A_a` are the traction's coefficients in the basis `Phi`,
+//!   not its values).
 
 use crate::assemble::stiffness;
 use crate::constraint::{prescribed_equations, reduce, Prescribed};
@@ -376,6 +379,23 @@ pub struct ContactResult {
     pub states: Vec<ElementState>,
 }
 
+/// ADR 0571 (F-638): the traction of a mortar pair recovered at one load-rule point of a contactor face.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RecoveredTraction {
+    /// The pair index.
+    pub pair: usize,
+    /// The contactor face.
+    pub face: FaceRef,
+    /// The load-rule point on it (local coordinates).
+    pub local: [f64; 2],
+    /// The point in the reference configuration, `sum_b N_b X_b`.
+    pub position: Vec3,
+    /// The point's reference weight `w_g |X_{,u} x X_{,v}|`, m^2.
+    pub weight: f64,
+    /// The recovered traction `sum_a (t_a/A_a) Phi_a` there, Pa (nominal, per reference area).
+    pub pressure: f64,
+}
+
 #[derive(Debug, Clone)]
 enum TargetData {
     Plane {
@@ -577,6 +597,68 @@ fn mortar_kin(pk: &[Option<Kin>], coeffs: &[(usize, f64)]) -> Option<Kin> {
         face: None,
         local: [0.0; 2],
     })
+}
+
+impl ContactSet {
+    /// ADR 0571 D1 and D3 (F-638): the traction `sum_a (t_a/A_a) Phi_a` of every mortar pair at the load-rule points of its
+    /// contactor faces (pairs in order, faces in set order, points in rule order), from the contactor-node states `nodes`
+    /// (for example [`ContactResult::nodes`] or [`ContactSet::evaluate`]); pairs that are not mortar pairs give no entries.
+    /// Refuses a mortar node missing from `nodes` and a force or area that is not finite (key `"contact nodes"`).
+    pub fn recovered_tractions(&self, nodes: &[ContactNode]) -> Result<Vec<RecoveredTraction>> {
+        let mut out = Vec::new();
+        for (k, p) in self.pairs.iter().enumerate() {
+            let (Some(_), Some(pts)) = (&p.mortar, &p.points) else {
+                continue;
+            };
+            let mut lambda: BTreeMap<usize, f64> = BTreeMap::new();
+            for n in nodes.iter().filter(|n| n.pair == k) {
+                if !(n.force.is_finite() && n.area.is_finite()) {
+                    return Err(FemError::InvalidValue {
+                        key: "contact nodes",
+                        reason: format!("pair {k}: node {}: force or area not finite", n.node),
+                    });
+                }
+                lambda.insert(n.node, n.force / n.area);
+            }
+            for g in pts {
+                let corners = if g.nodes.len() == 8 { 4 } else { 3 };
+                let phi = mortar_basis(&g.weights, corners);
+                let mut pressure = 0.0;
+                for (&v, &ph) in g.nodes.iter().zip(&phi) {
+                    let l = lambda.get(&v).ok_or_else(|| FemError::InvalidValue {
+                        key: "contact nodes",
+                        reason: format!("pair {k}: mortar node {v} is missing from the node states"),
+                    })?;
+                    pressure += l * ph;
+                }
+                let (_, d) = face_shape_functions(g.nodes.len(), g.local)?;
+                let wq = face_rule(g.nodes.len())?
+                    .into_iter()
+                    .find(|(uv, _)| *uv == g.local)
+                    .map_or(f64::NAN, |(_, w)| w);
+                let mut a1 = [0.0; 3];
+                let mut a2 = [0.0; 3];
+                let mut position = [0.0; 3];
+                for ((&v, da), &na) in g.nodes.iter().zip(&d).zip(&g.weights) {
+                    let xa = self.reference[v];
+                    for i in 0..3 {
+                        a1[i] += da[0] * xa[i];
+                        a2[i] += da[1] * xa[i];
+                        position[i] += na * xa[i];
+                    }
+                }
+                out.push(RecoveredTraction {
+                    pair: k,
+                    face: g.face,
+                    local: g.local,
+                    position,
+                    weight: wq * norm(cross(a1, a2)),
+                    pressure,
+                });
+            }
+        }
+        Ok(out)
+    }
 }
 
 /// The faces of a surface set with their shapes (ADR 0540 D3): Hex8, Hex20, Tet4 and Tet10 faces; any other is refused.
