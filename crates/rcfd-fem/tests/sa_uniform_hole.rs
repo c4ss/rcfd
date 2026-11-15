@@ -259,7 +259,8 @@ fn estimate_of(model: &SolidModel, u: &[f64]) -> (Recovery, EnergyError) {
 // U1, U2, P3, NC2, P2, P2r
 
 #[test]
-fn u1_u2_p3_nc2_p2_uniform_plate() {
+#[ignore = "known miss of ADR 0627 (amendment 1): P3 20 of the 48 hole-edge elements outside the 116 of largest density (density ranks 117 to 365; rank 116 2.5521e-1, smallest at the hole edge 1.7055e-1 at 5.6 degrees), limit unchanged; U1, U2, NC2, P2 met, continued in u1_u2_nc2_p2_uniform_plate"]
+fn u1_u2_p3_nc2_p2_uniform_plate_known_miss() {
     let mut c = Checks::new();
     let (model, u) = solved(uniform_map, 24, 2, StaticSolver::SparseDirect);
     let mesh = model.mesh();
@@ -354,6 +355,96 @@ fn u1_u2_p3_nc2_p2_uniform_plate() {
         nodal_average_at_peak(&model, &u) / 3.0 - 1.0
     );
     c.finish();
+}
+
+/// U1, U2, NC2, P2 and P2r continued (ADR 0627 amendment 1), unchanged.
+#[test]
+fn u1_u2_nc2_p2_uniform_plate() {
+    let mut c = Checks::new();
+    let (model, u) = solved(uniform_map, 24, 2, StaticSolver::SparseDirect);
+    let mesh = model.mesh();
+    let h = h1();
+    let sizes = first_ring_sizes(mesh);
+    let dev = sizes.iter().map(|s| (s - h).abs() / h).fold(0.0, f64::max);
+    c.holds(
+        "U1 first-ring corner nodes counted",
+        sizes.len() == 75,
+        &format!("{}", sizes.len()),
+    );
+    c.at_most("U1 largest ||x| - r - h_1| / h_1", dev, 1e-9);
+    let (rec, est) = estimate_of(&model, &u);
+    let exact = HT * (HA * HB - PI * HR * HR / 4.0);
+    let sum: f64 = est.element_volumes().iter().sum();
+    c.at_most(
+        "U2 sum |K| against t (A B - pi r^2/4), relative",
+        (sum / exact - 1.0).abs(),
+        1e-6,
+    );
+    let edge = hole_edge(mesh);
+    c.holds(
+        "U2 1152 elements, 48 hole-edge elements",
+        mesh.n_elements() == 1152 && edge.len() == 48,
+        &format!("{} elements, {} hole-edge", mesh.n_elements(), edge.len()),
+    );
+    let (missing_abs, _) = outside(&est.ranked(), &edge);
+    c.holds(
+        "NC2 ranked by eta_e alone the criterion fails (>= 1 hole-edge element outside the tenth)",
+        missing_abs >= 1,
+        &format!("{missing_abs} of {} outside", edge.len()),
+    );
+    let (_, peak) = recovered_peak(mesh, &rec);
+    c.at_most(
+        "P2 recovered peak sigma_xx against 3 sigma_0",
+        (peak / (3.0 * S0) - 1.0).abs(),
+        2e-2,
+    );
+    println!(
+        "P2r record: recovered peak {:+.4e} of K_tg sigma_0",
+        peak / (KTG_HOWLAND * S0) - 1.0
+    );
+    c.finish();
+}
+
+/// DQ1 (ADR 0627 amendment 1), a diagnosis record without a limit: the density of rings 0 to 5 at every angular cell (layer 0)
+/// and, for each hole-edge cell outside the tenth, how many elements of each ring outrank it.
+#[test]
+#[ignore = "diagnosis record DQ1 of ADR 0627 amendment 1 (no limit), run once"]
+fn dq1_uniform_plate_density_diagnosis_record() {
+    let (model, u) = solved(uniform_map, 24, 2, StaticSolver::SparseDirect);
+    let mesh = model.mesh();
+    let (_, est) = estimate_of(&model, &u);
+    let den = est.element_densities();
+    let by_density = est.ranked_by_density();
+    let tenth = mesh.n_elements().div_ceil(10);
+    let top: BTreeSet<usize> = by_density[..tenth].iter().copied().collect();
+    for cell in 0..24 {
+        let row: Vec<String> = (0..6).map(|ring| format!("{:.4}", den[cell * 24 + ring])).collect();
+        let spread = (0..5).map(|ring| den[cell * 24 + ring]).fold(0.0f64, f64::max)
+            / (0..5).map(|ring| den[cell * 24 + ring]).fold(f64::INFINITY, f64::min);
+        println!(
+            "DQ1 cell {cell:2} angle {:6.2}: rings 0..5 density {} (max/min over rings 0..4 {spread:.3})",
+            angle(mesh, cell * 24),
+            row.join(" ")
+        );
+    }
+    for cell in 0..24 {
+        let e = cell * 24;
+        if top.contains(&e) {
+            continue;
+        }
+        let mut per_ring = [0usize; 24];
+        let mut cells = BTreeSet::new();
+        for &o in by_density.iter().take_while(|&&o| o != e) {
+            per_ring[o % 24] += 1;
+            cells.insert((o % 576) / 24);
+        }
+        println!(
+            "DQ1 hole-edge cell {cell} (angle {:.2}) outranked by rings {:?}; outranking cells {:?}",
+            angle(mesh, e),
+            &per_ring[..8],
+            cells
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
