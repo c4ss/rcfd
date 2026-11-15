@@ -135,10 +135,49 @@ fn rt1_inertia_terms_taken_by_the_energy_momentum_step() {
     c.finish();
 }
 
-/// FZ and NZ: one step from the start (a zero crossing) at `h_f = 1/(40 f_1 1024)` with the inertia-term reference and with
-/// the driver's (ADR 0609).
+/// FZ: one step from the start (a zero crossing) at `h_f = 1/(40 f_1 1024)` with the inertia-term reference (ADR 0609; the
+/// FZ half of the known-miss record below, the same run and limits).
 #[test]
-fn fz_nz_a_step_at_the_zero_crossing() {
+fn fz_a_step_at_the_zero_crossing() {
+    let mut c = Checks::new();
+    let (m, f1, v0) = cantilever();
+    let n = v0.len();
+    let hf = 1.0 / (40.0 * f1) / 1024.0;
+    let omega = 2.0 * PI * f1;
+    // FZ.
+    let mut it = NlIntegrator::new(&m, &[], &emc(hf, ResidualReference::InertiaTerms)).unwrap();
+    it.start(0.0, &vec![0.0; n], &v0).unwrap();
+    match it.step() {
+        Ok(rep) => {
+            println!(
+                "FZ step: {} halvings, {} iterations, residual {:e}",
+                rep.halvings, rep.iterations, rep.residual
+            );
+            c.holds(
+                "FZ converges with 0 halvings",
+                rep.halvings == 0,
+                &format!("{} halvings", rep.halvings),
+            );
+            c.at_most("FZ final relative residual", rep.residual, 1e-10);
+            let u = it.displacement().unwrap();
+            let scale = max_abs(v0.iter().map(|x| hf * x));
+            let k = 1.0 + (omega * hf).powi(2) / 4.0;
+            let e = max_abs(u.iter().zip(&v0).map(|(ui, vi)| ui - hf * vi / k)) / scale;
+            c.at_most("FZ |u_1 - h_f v0/(1 + (omega h_f)^2/4)| / |h_f v0|", e, 1e-8);
+        }
+        Err(e) => c.holds("FZ converges with 0 halvings", false, &format!("refused: {e}")),
+    }
+    c.finish();
+}
+
+/// FZ and NZ: one step from the start (a zero crossing) at `h_f = 1/(40 f_1 1024)` with the inertia-term reference and with
+/// the driver's (ADR 0609). The registered run (run 1 at 4fa0e65e, `f681-scratch/run1-fast.log`): FZ met (0 halvings, 2
+/// iterations, residual 2.251e-16, first-step error 5.317e-9); NZ missed (limit: refused; measured: converged with 0 halvings
+/// at the relative residual 1.640e-11). Diagnosed in ADR 0609 addendum 1: from `u_n = 0` the difference `u_{n+1} - h v_n` is
+/// exact (Sterbenz), so the floor of the inertia force is not reached. FZ alone is repeated in `fz_a_step_at_the_zero_crossing`.
+#[test]
+#[ignore = "known miss of ADR 0609 NZ (limit: refused; measured: Driver converged, 0 halvings, relative residual 1.640e-11; FZ met); record of run 1"]
+fn fz_nz_a_step_at_the_zero_crossing_known_miss() {
     let mut c = Checks::new();
     let (m, f1, v0) = cantilever();
     let n = v0.len();
