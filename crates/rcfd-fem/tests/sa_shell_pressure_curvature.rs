@@ -530,6 +530,29 @@ fn curvature_pressure_sphere_and_cylinder() {
         &format!("{rc:?} (prototype (377, 88, 96))"),
     );
 
+    // NC1 to NC3
+    for (m, n, proto) in [(&m16, 16, 7.8775e-1), (&m32, 32, 2.2612e-1)] {
+        let e = err(&octant(m, Loading::Default, T));
+        println!("octant n = {n} default: e = {e:.4e} (ADR 0550 {proto:.4e})");
+        c.above(&format!("NC1 octant n = {n} default: e"), e, 2e-2);
+    }
+    let e = err(&octant(&m32, Loading::Angle, T));
+    println!("octant n = 32 angle: e = {e:.4e} (ADR 0550 1.4014e-1)");
+    c.above("NC2 octant n = 32 angle-weighted: e", e, 2e-2);
+    let e = err(&cylinder(&o1, Loading::Default));
+    println!("cylinder O1 default: e = {e:.4e} (ADR 0461 9.5e-2)");
+    c.above("NC3 cylinder O1 default: e", e, 1e-2);
+
+    c.finish();
+}
+
+/// Run 1 of S1 (ADR 0567), kept unchanged as the ignored record: it printed `false`, because it compared the signed zeros of
+/// the moment entries (`-0.0` against `0.0`); every non-zero entry was the exact negation (ADR 0567 amendment 1).
+#[test]
+#[ignore]
+fn s1_negated_load_bits_known_miss() {
+    let mut c = Checks::new();
+    let m16 = unstructured(16);
     // S1
     let mut mp = shell3_model(&m16.nodes, &m16.tris, T);
     mp.add_load(Load::shell_pressure_curvature("all", P)).unwrap();
@@ -544,19 +567,31 @@ fn curvature_pressure_sphere_and_cylinder() {
         &format!("{same}"),
     );
 
-    // NC1 to NC3
-    for (m, n, proto) in [(&m16, 16, 7.8775e-1), (&m32, 32, 2.2612e-1)] {
-        let e = err(&octant(m, Loading::Default, T));
-        println!("octant n = {n} default: e = {e:.4e} (ADR 0550 {proto:.4e})");
-        c.above(&format!("NC1 octant n = {n} default: e"), e, 2e-2);
-    }
-    let e = err(&octant(&m32, Loading::Angle, T));
-    println!("octant n = 32 angle: e = {e:.4e} (ADR 0550 1.4014e-1)");
-    c.above("NC2 octant n = 32 angle-weighted: e", e, 2e-2);
-    let e = err(&cylinder(&o1, Loading::Default));
-    println!("cylinder O1 default: e = {e:.4e} (ADR 0461 9.5e-2)");
-    c.above("NC3 cylinder O1 default: e", e, 1e-2);
+    c.finish();
+}
 
+/// S1 as corrected by ADR 0567 amendment 1: bit for bit, two zeros of either sign counting as equal.
+#[test]
+fn s1_negated_load_after_amendment_1() {
+    let mut c = Checks::new();
+    let m16 = unstructured(16);
+    let mut mp = shell3_model(&m16.nodes, &m16.tris, T);
+    mp.add_load(Load::shell_pressure_curvature("all", P)).unwrap();
+    let mut mn = shell3_model(&m16.nodes, &m16.tris, T);
+    mn.add_load(Load::shell_pressure_curvature("all", -P)).unwrap();
+    let fp = nodal_load_vector(&mp, &[]).unwrap();
+    let fm = nodal_load_vector(&mn, &[]).unwrap();
+    let same = fp.len() == fm.len()
+        && fp
+            .iter()
+            .zip(&fm)
+            .all(|(a, b)| (-a).to_bits() == b.to_bits() || (*a == 0.0 && *b == 0.0));
+    let nonzero = fp.iter().filter(|a| **a != 0.0).count();
+    c.holds(
+        "S1 octant n = 16: the load of -p is the load of p negated, bit for bit (zeros of either sign equal)",
+        same,
+        &format!("{same} ({nonzero} non-zero entries of {})", fp.len()),
+    );
     c.finish();
 }
 
