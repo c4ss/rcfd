@@ -248,3 +248,33 @@ Material: `E = 2e11`, `nu = 0.3`, `alpha = 1.2e-5`, `rho = 7850`. Gradient `g = 
    field zero where it does not apply).
 
 Open (not taken: would need a schema decision): **Q1** a case-file key for the gradient.
+
+## Amendment 1 (2026-11-15, written and committed after the registered run, before any run of D1 and D2)
+
+The registered run (`f527-scratch/run1.log`, commit `8375c4da`, release, `--test-threads=1`) missed rows of G1 and G4: G1a
+(curvature) P `2.96e-12`, Q `3.36e-12`; G1b (moment) P `1.92e-12`, Q `1.58e-12`; G1c surface stresses P `1.92e-12`, Q
+`1.59e-12`; G1e (plate R, `t = 0.01`) curvature `2.63e-10`, moment `1.23e-10` (limit `1e-10`); G4 (ii) curvature `3.74e-12`,
+G4 (iii) moment `1.81e-12` (limits `1e-12`). Every other row of G1 to G6 and every negative control was met (G1d P `w`
+`2.0e-12`, rotations `1.3e-12` against `1e-9`, in-plane exactly zero; G2 `2.5e-16`; G3 `2.2e-16`; G4 (i) `5.1e-19`, membrane
+strain `2.7e-14`; G5 `6.2e-16`; G6 bitwise). The limits stay; both tests become ignored `*_known_miss` records with the measured
+numbers, and running copies keep every met row with its limit and print the missed rows.
+
+Diagnosis (to be confirmed by D1 and D2, not a change of limit): the clamped plate (G2, `u ~ 0`) recovers the moment to
+`2.5e-16`, the load matches its closed form to `2.2e-16` (G3), so the load and the recovery are right; the misses are in the
+free plates only, where the solve has to produce the bending field. On plate P the out-of-plane problem is exactly decoupled
+(in-plane exactly zero), so the error is the forward error of the bending-shear solve. It scales with the shear-to-bending
+stiffness ratio `3.5 (h / t)^2`: from P (`t = 0.1`) to R (`t = 0.01`) the ratio grows by 100 and the curvature error by 89.
+Arithmetic 8 took a mesh factor 10 over `eps` times that ratio; the measured factor is `~150` (`3e-12 / (2.2e-16 * 87)`). The
+mechanism: the exact discrete field (arithmetic 3) has zero assumed shear only through the cancellation of `grad w` and
+`beta` at the tying points; the shear stiffness `kappa_s G t` multiplies this cancellation, so the residual of any computed
+field carries `eps |K_s| |u|`, larger than the bending load by the ratio.
+
+Added checks (registered now, before their run), test `d1_d2_diagnosis_after_amendment1`:
+
+| id | clause | check | limit | estimate |
+| --- | --- | --- | --- | --- |
+| D1a | (diagnosis) | plates P and Q, the exact discrete field of arithmetic 3 (`w = -k |X - X_0|^2 / 2` along the plate normal, rotations `k ((Y_0 - Y), (X - X_0), 0)` in plate axes) given to `shell::stresses` with the uniform gradient: `max |M_k| / M_s` | `1e-13` per plate | exact linear `beta`: `~1e-15` |
+| D1b | (diagnosis) | the same plates: `r(u) = K u - f` on the 114 equations not of node 0 (`K` from `assemble::stiffness`, `f` from `nodal_load_vector`), for the exact field and for the solved field of `solve_static`: `max |r(u_h)| <= 10 max |r(u_ex)|` (the computed solution is backward stable: its residual is that of the exact field rounded); both printed relative to `max |f|` | ratio `<= 10` per plate | backward-stable direct solve: ratio `~1` |
+| D2 | (diagnosis) | plate S, P with `t = 0.3` (ratio `3.5 (h/t)^2 ~ 10`), node 0 clamped, uniform gradient: G1a and G1b | `1e-12` each | the measured scaling: `3e-12 (0.1 / 0.3)^2 = 3.3e-13` |
+
+The decision is partial by the registered rule whatever D1 and D2 give.
