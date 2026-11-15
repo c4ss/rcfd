@@ -2163,3 +2163,20 @@ forms (volumes, pages and years as recalled, not checked; ADR 0541 open question
 | Incompressible closed forms: uniaxial nominal stress `mu (l - l^-2)` (neo-Hookean), `2 (c10 + c01 / l)(l - l^-2)` (Mooney-Rivlin), equibiaxial `mu (l - l^-5)`, simple shear `tau = mu gamma`, `N1 = mu gamma^2`; the compressibility correction solved from zero lateral nominal stress | derived, cited | ADR 0541 arithmetic 4, (a4); R. S. Rivlin, Phil. Trans. R. Soc. Lond. A 241 (1948) 379-397; L. R. G. Treloar, The Physics of Rubber Elasticity, 3rd ed., Oxford, 1975; R. W. Ogden, Non-linear Elastic Deformations, Ellis Horwood, 1984: NOT read, from memory |
 | Thick sphere `B/A = 2` inflated to the inner stretch `l_a`: `p = mu int_{l_b}^{l_a} (l^-2 + l^-5) dl`, `l_b^3 = 1 + (A/B)^3 (l_a^3 - 1)`, closed form `(mu/2)((1/l_b^4 + 4/l_b) - (1/l_a^4 + 4/l_a))` | derived, cited | ADR 0541 D6, SP0; A. E. Green and W. Zerna, Theoretical Elasticity, Oxford, 1954; Ogden (1984) above: NOT read, from memory |
 | Measured: tangent against central differences `<= 4.0e-9`; rotation `<= 3.2e-14`; uniaxial, equibiaxial `<= 1.7e-11` relative after the correction; simple shear `<= 7.2e-15`; sphere B-bar `n 6, m 8` at `l_a = 1.5` `2.61e-3`; small strain `4.7e-6` (neo-Hookean), `4.9e-6` (Mooney-Rivlin) against `1e-6` (known miss) | computed | ADR 0541 addendum 1 |
+
+## F-598 the warping degree of freedom of Beam2 and the I-section lateral-torsional buckling (ADR 0546)
+
+No source was read for F-598. The books below are cited from memory for the names and the published forms (editions, chapters
+and years as recalled, not checked). Every formula used is derived in ADR 0546 (D1, D2, arithmetic 1 to 4) and checked by plain
+numpy scripts (`f598-scratch/arith.py`, `arith2.py` and their logs), no rcfd code.
+
+| Item | Status | Source |
+|---|---|---|
+| Non-uniform torsion: warping displacement `-omega phi'`, energy `(1/2) int (G J phi'^2 + E C_w phi''^2) dx`, `C_w = int omega^2 dA` | derived, cited | ADR 0546 D1; V. Z. Vlasov, Thin-Walled Elastic Beams (1940; English translation 1961); S. P. Timoshenko and J. M. Gere, Theory of Elastic Stability, 2nd ed., McGraw-Hill 1961, ch. 5: NOT read, from memory |
+| Warping constant of a thin-walled doubly symmetric I `C_w = t_f b_f^3 h_c^2/24 = I_f h_c^2/2` (`h_c` between the flange mid-planes; `I_z h^2/4` with the web neglected) | derived, cited | ADR 0546 D1 (the flange sectorial coordinate `y h_c/2`); Timoshenko and Gere, op. cit., ch. 5; N. S. Trahair, Flexural-Torsional Buckling of Structures, E & FN Spon 1993, ch. 2: NOT read, from memory |
+| Wagner coefficients `beta_y = int z (y^2 + z^2) dA/I_y`, `beta_z = int y (y^2 + z^2) dA/I_z`, zero for a section with two axes of symmetry | derived, cited | ADR 0508 D1, ADR 0546 D1; Trahair, op. cit., ch. 6 (the monosymmetry parameter `beta_x`, about the shear centre): NOT read, from memory; the shear-centre form is not used (Limits of ADR 0546) |
+| Lateral-torsional buckling under uniform moment, fork supports, warping free: `M_cr = (pi/L) sqrt(E I_z G J (1 + pi^2 E C_w/(G J L^2)))` | derived, cited | ADR 0546 arithmetic 1 (`v = a sin kx`, `phi = b sin kx`); Timoshenko and Gere, op. cit., ch. 6: NOT read, from memory |
+| Lateral and warping both fixed: `M = (2 pi/L) sqrt(E I_z (G J + 4 pi^2 E C_w/L^2))` (the upper bound of N3) | derived | ADR 0546 arithmetic 1 (mode `1 - cos(2 pi x/L)`) |
+| Cantilever under end torque with the root warping held: `phi(L) = (T/(G J))(L - tanh(kL)/k)`, `k = sqrt(G J/(E C_w))` | derived | solution of `G J phi' - E C_w phi''' = T`, `phi(0) = phi'(0) = 0`, `phi''(L) = 0` (ADR 0546 arithmetic 4) |
+| Cubic Hermite twist element: `G J/(30 L)[36, 3L, -36, 3L; ...]`, `E C_w/L^3 [12, 6L, -12, 6L; ...]` | derived | ADR 0546 D2, arithmetic 3 |
+| Measured: I beam, `L = 3`, 16 elements `5.9e-4` of the closed form (8: `8.3e-4`; `L = 1.5`: `1.1e-3`; `L = 6`: `2.0e-4`); `C_w = 0` `5.9e-4` of `M_0`; torque cantilever `1.1e-6` | computed | ADR 0546 addendum 1 |

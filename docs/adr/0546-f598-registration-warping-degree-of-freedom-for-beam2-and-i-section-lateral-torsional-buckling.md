@@ -298,3 +298,98 @@ so the set-up (not the assembly) is defective.
 Corrected **M1'**: the same models and comparison with the eigensolver tolerance `1e-13` (`BucklingOptions::tolerance`) on the
 three solves (the mixed model, the rectangle alone, the I beam alone); limits unchanged (`<= 1e-9` relative each); estimate
 `1e-12`. The first-run function stays as the ignored record `m1_mixed_model_run1_known_miss`.
+
+## Addendum 1 (2026-11-15): results
+
+Written after the first run (`f598-scratch/run1.log`), the corrected run of M1' (`run2_m1p.log`) and the mutation runs
+(`mutations.log`, `mut_X*.log`); the numbers are those printed by `sa_beam_warping_f598.rs` and `sa_beam_warping_f598_bits.rs`
+(release).
+
+### Results against the registered limits
+
+| id | measured | limit | verdict |
+|---|---|---|---|
+| B0 | 12 digests bit-identical to the base record (and the 16 of ADR 0508's B0, `sa_geometric_struct_f558_bits.rs`) | equal | met |
+| A1 (acceptance, 16 elements, `L = 3`) | `5.89e-4` (FE `M` 58784.9 against closed 58750.35) | `1e-2` | met |
+| A2 (8 elements) | `8.27e-4` | `2e-2` | met |
+| A3 (`L = 1.5`, `L = 6`) | `1.12e-3`, `2.03e-4` | `1e-2` each | met |
+| A4 (`-M_ref`) | `6.7e-16` | `1e-8` | met |
+| A5 (axis `y`) | `5.9e-15` | `1e-6` | met |
+| A6 (`3 M_ref`) | `2.9e-15` | `1e-9` | met |
+| N1 (Saint-Venant only) | `5.88e-4` of `M_0`; `1.61e-3` of the F-558 value (47468) | `1e-2` each | met |
+| N2 (rectangle) | `1.5e-5` of the closed form; `3.8e-4` of F-558 | `1e-2`; `5e-3` | met |
+| N3 (warping restrained) | `94814` in `(70542, 169925)` (1.613 of `M_free`) | strict | met |
+| N4 | `+0.2384` | `> 0.15` | met |
+| E1 | `6.3e-17` | `1e-12` | met |
+| E2 | bit-equal | exact | met |
+| E3 | `0`; `8.9e-16` | `1e-12`; `1e-12` | met |
+| E4 | `2.8e-17`; bit-equal | `1e-12`; exact | met |
+| E5 | `5.4e-16` (stiffness), `2.6e-16` (geometric) | `1e-12` | met |
+| E6 | `1.07e-6` (root held), `1.2e-13` (root free) | `1e-3`; `1e-10` | met |
+| E7 | `1.8e-16` | `1e-12` | met |
+| E8 | bit-equal, `C_w = 1.504167e-8`, `wagner = [0, 0]` | exact | met |
+| P1 | `2.0e-16`; the same pattern; every hand entry on it | `1e-8` | met |
+| M1 (run 1) | rectangle `1.4e-15`; I beam `1.5085e-9` | `1e-9` | MISSED (set-up, amendment 1) |
+| M1' (amendment 1, tolerance `1e-13`) | rectangle `0`; I beam `1.8e-15` | `1e-9` | met |
+| R1 to R9 | each refusal with its key (15 cases) | exact | met |
+
+The first-run M1 is the ignored record `m1_mixed_model_run1_known_miss` (limit intact, 1.5085e-9 recorded); its cause, the
+eigensolver tolerance next to a close pair, is diagnosed in amendment 1.
+
+The A1 FE value sits above the closed form by 5.9e-4, while the estimate was -1e-3 (the shear-flexible lateral plane). The
+same +5.9e-4 appears with `C_w = 0` (N1), and at every length it stays within a factor 2 of that, so it does not come from the
+warping term. The Euler-Hermite prototype was within 1.4e-6. The difference is the element's lateral plane together with the
+coupling `theta_z = psi` of ADR 0508. It is not diagnosed further: it is 17 times below the limit.
+
+### Mutations (scratch copy `f598-scratch/mut`, own target dir, one at a time)
+
+| mutation | result | caught by |
+|---|---|---|
+| X1 drop `E C_w` | caught | A1, A2, A3, N3, N4, E1, E6 |
+| X2 `E C_w` times 2 | caught | A1, A2, A3, E1, E6 (M1' too, by mode order) |
+| X3 `H_4` sign flipped in the geometric rows | caught | E7, P1. The registration expected A1 and E4. E4 uses the twist block, so it does not see the rows, and A1 still met under uniform moment |
+| X4 per-section Wagner ignored | caught | P1. E7 calls the element function directly, so it does not see the assembly |
+| X5 warping unknown not shared | caught | the A1, N2, M1' and P1 tests fail: the zero-shift rule refuses the discontinuous model (NaN pivot) |
+| X6 restraint ignored | caught | N3 |
+| X7 six-unknown `G J/L` kept | caught | A1 to A3, N1, N2, M1' |
+| X8 pre-stress not masked | caught | A1 to A3, N1, N2, N4, M1' |
+| X9 RF2 removed | caught | R2 |
+| X10 transform drops the warping unknowns | caught | the A, N2 and M1' tests (refused: NaN pivot) and P1. E5 does not see it: both matrices lose the same rows |
+| X11 Wagner `N I_p/A` kept linear | caught | E4 |
+
+All eleven mutations are caught. For X3, X4, X5 and X10 a different check than the registration predicted catches it, as
+recorded above.
+
+### Other runs
+
+`cargo test -p rcfd-fem --release`: 236 test binaries and doc-tests, all pass, none failed (the ignored records stay ignored).
+`cargo test -p rcfd-api --release --test baseline_hashes`: 3 passed, 1 ignored (unchanged). `cargo test -p rcfd-cli --release
+--test docs_site`: 2 passed. `cargo clippy -p rcfd-fem --all-targets --release -- -D warnings` is
+clean after commit c54bd01d (a type alias and `map_or` for the MSRV, no behaviour change). `cargo fmt -p rcfd-fem --check` is
+clean.
+
+### Decision
+
+**Done** by the registered rule. Every registered check is met: B0, A1 to A6, N1 to N4, E1 to E8, P1, M1' (in place of the
+defective M1, amendment 1), and R1 to R9. The acceptance is met: A1 is 5.9e-4 at 16 elements, and the defaults are
+bit-identical. A strict reader may count the first-run M1 record as "M1 recorded as a known miss", which the rule puts under
+**partial**. The cause was the solver tolerance in the set-up, not the element. The corrected check was registered before its
+run and met it at 1.8e-15. The lead decides.
+
+### Remaining questions
+
+- Q1 (case-file key): (a) none; (b) a `warping` entry per beam block on the buckling block. Recommendation (b), as a separate
+  item together with ADR 0508 Q2, because the schema golden changes.
+- Q2 (the other paths): the static solve (it would lift RF8), the modes and the pre-stressed modes with the warping unknown.
+  Recommendation: a separate item, starting with the static solve.
+- Q3 (monosymmetric sections): the shear-centre offset and `beta_x` about it. Recommendation: a separate item.
+
+## For the lead: roadmap entries
+
+> F-598 status: done. Note: Structural solver, advanced tier. ADR 0546, 2026-11-15: opt-in warping unknown for Beam2 (the 14-unknown element, cubic Hermite twist with E C_w, the warping unknowns numbered after the model's six-unknown DofMap, `rcfd_fem::beam_warping::buckling_factors`) with per-section Wagner coefficients (`WarpingSection::doubly_symmetric_i` from the plate dimensions, zero by symmetry). The I-beam lateral-torsional buckling under uniform moment is 5.9e-4 of (pi/L) sqrt(E I_z G J (1 + pi^2 E C_w/(G J L^2))) at 16 elements (8.3e-4 at 8; 1.1e-3 and 2.0e-4 at L 1.5 and 6), against the -19.2 percent of ADR 0508 without warping. Saint-Venant control (C_w = 0) 5.9e-4 of M_0 and 1.6e-3 of the F-558 value. Warping restrained 1.61 of free, within the fixed-fixed bound. Torque cantilever 1.1e-6. Frame invariance 5e-16. Mixed model with a non-warping beam exact (M1', amendment 1: the first M1 missed at 1.5e-9 against 1e-9 because of the eigensolver tolerance, kept as an ignored record). Fifteen refusals (shared nodes with other elements, kinks, the transformation path, torsion in the pre-stress). Defaults bit-identical (12 digests). Eleven of eleven mutations caught. Buckling only; no case-file key.
+
+> Follow-up proposed: case-file key for the warping unknown (a warping entry per Beam2 block on the buckling block), together with the geometric_terms key of ADR 0508. Deps F-598. Acceptance: Every limit not stated here is registered in the ADR before the run. A case-file key opts a Beam2 block into the warping unknown of ADR 0546 on the buckling path; the case with the key reproduces the library result bit for bit, and every case without it keeps its hash.
+
+> Follow-up proposed: the warping unknown on the static solve, the modes and the pre-stressed modes (lifting the refusal of torsion in the pre-stress). Deps F-598. Acceptance: Every limit not stated here is registered in the ADR before the run. The static twist of a cantilever I beam under end torque with the root warping held equals (T/(G J))(L - tanh(kL)/k) within 1e-3 at 16 elements, and the lateral-torsional buckling factor of a beam whose reference load includes torsion uses the warping static solve; every result without the option bit-identical.
+
+> Follow-up proposed: monosymmetric thin-walled sections for the warping element (shear-centre offset and the monosymmetry coefficient about it). Deps F-598. Acceptance: Every limit not stated here is registered in the ADR before the run. The lateral-torsional buckling moment of a simply supported monosymmetric I under uniform moment equals the published closed form with beta_x within 2 percent at 16 elements; doubly symmetric results unchanged.
