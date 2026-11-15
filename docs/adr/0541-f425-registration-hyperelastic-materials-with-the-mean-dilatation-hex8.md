@@ -419,3 +419,32 @@ Set-up details fixed while writing the test, before its single registered run; n
   hyperelastic material or the pending states were run once to find other records needed by D8: `sa_dg`, `sa_emc`,
   `sa_laminate`, `sa_dg_default_bits`, `sa_emc_default_bits`, `si_hex20`, `si_scaffold`, `sa_scaffold` (log
   `f425-scratch/precheck-affected.log`): all pass, so D8 needs only the two copies of `sa_scaffold.rs`.
+
+## Amendment 2 (2026-11-15, written after the first registered run of `sa_hyper.rs` and before any corrected run)
+
+**What happened.** In the single registered run (log `f425-scratch/run1-sa_hyper.log`) every check of `sa_hyper.rs` was met
+except three rows, in three of the eleven tests:
+
+- **T1 set-up** (test `t1_t1s_ec1_r1_tangent_energy_rotation_at_the_point`): at the amplitude `0.4` only 7, 4, 4 and 4 of the 10
+  draws had `det C > 0` (registered set-up: at least 8). T1, T1s and EC1 were met on every kept strain (T1 at most `4.0e-9`),
+  R1 met (`3.1e-14`). A defective set-up: a symmetric normal matrix of amplitude `0.4` has an eigenvalue below `-1/2` (so `det
+  C <= 0`) with a probability of about one half; the threshold 8 of 10 did not allow for it.
+- **SS1** (test `ss1_small_strain_literal`): `4.72e-6` (neo-Hookean) and `4.94e-6` (Mooney-Rivlin) against `1e-6`, as
+  predicted by arithmetic 3 (`4.9e-6`). A known miss, not amended.
+- **SPL** (test `sp0_sp1_spl_the_inflated_sphere`): the Full solve failed in load step 3 of 10 (load factor `0.2656`, inner
+  stretch `1.133`) after 5 halvings with a negative pivot of the tangent (`-2.79e7` against the diagonal `4.52e8`). Registered:
+  "a failed solve is recorded as the control not measured". SP0 (`1.5e-16`) and SP1 (`2.61e-3`) were met in that run.
+
+**Corrections, registered now.**
+
+- **T1'** (the corrected set-up): the strains of each energy and amplitude are drawn from the same generator until 10 have `det
+  C > 0`, at most 200 draws; set-up check: 10 kept. Measures and limits of T1, T1s, EC1 and R1 unchanged; R1 is evaluated in the
+  same test after T1' (its draws come later in the generator, so its `F` differ from run 1's). The test of run 1 stays as the
+  ignored record `t1_t1s_ec1_r1_tangent_energy_rotation_at_the_point`.
+- **SS1** becomes the ignored `ss1_small_strain_literal_known_miss`, limit intact, numbers recorded.
+- **SPL** stays a control not measured (the rule's "a control does not behave as stated"); the run-1 test becomes the ignored
+  record `sp0_sp1_spl_the_inflated_sphere_known_miss`; SP0 and SP1 continue unchanged in `sp0_sp1_met_rows`. One diagnostic run
+  registered here without a limit, **SPLd**: the Full model of D6 driven to the inner stretch `1.125` (the prescribed values
+  scaled by `0.25`, before the failure; 10 load steps, the options of D6) and the BBar model to the same stretch, each against
+  `p_c(1.125)`, to show the size of the locking before the Full tangent loses its positive pivots. Expected, if the failure is
+  the locked element: the Full error far above `0.1` and the BBar error near SP1's.

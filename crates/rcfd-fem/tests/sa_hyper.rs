@@ -261,9 +261,25 @@ fn strains(rng: &mut Rng, amp: f64) -> Vec<[f64; 6]> {
         .collect()
 }
 
+/// Amendment 2: ten strains of amplitude `amp` with `det C > 0`, drawn until ten are kept (at most 200 draws).
+fn strains_until_ten(rng: &mut Rng, amp: f64) -> Vec<[f64; 6]> {
+    let mut out = Vec::new();
+    for _ in 0..200 {
+        if out.len() == 10 {
+            break;
+        }
+        let e = random_strain(rng, amp);
+        if det_c(&e) > 0.0 {
+            out.push(e);
+        }
+    }
+    out
+}
+
 // --------------------------------------------------------------------------------------------------- point checks
 
 #[test]
+#[ignore = "record of the registered run of ADR 0541 (log run1-sa_hyper.log): T1, T1s, EC1, R1 met; the T1 set-up missed at amplitude 0.4 (7, 4, 4, 4 of 10 strains with det C > 0 against 8); corrected by amendment 2 as t1p_t1s_ec1_r1_after_amendment_2"]
 fn t1_t1s_ec1_r1_tangent_energy_rotation_at_the_point() {
     let mut c = Checks::new();
     let mut rng = Rng(0xF425_0541);
@@ -275,6 +291,79 @@ fn t1_t1s_ec1_r1_tangent_energy_rotation_at_the_point() {
                 &format!("T1 set-up {name} amp {amp:e}: strains kept of 10"),
                 es.len() as f64,
                 8.0,
+            );
+            let (mut t1, mut t1s, mut ec1) = (0.0f64, 0.0f64, 0.0f64);
+            for e in &es {
+                let (s, d) = stress_and_tangent(&en, e).unwrap();
+                let mut dfd = [[0.0; 6]; 6];
+                let mut grad = [0.0; 6];
+                for j in 0..6 {
+                    let (mut ep, mut em) = (*e, *e);
+                    ep[j] += h;
+                    em[j] -= h;
+                    let (sp, sm) = (
+                        mat_hyper::stress(&en, &ep).unwrap(),
+                        mat_hyper::stress(&en, &em).unwrap(),
+                    );
+                    for i in 0..6 {
+                        dfd[i][j] = (sp[i] - sm[i]) / (2.0 * h);
+                    }
+                    let (mut ep, mut em) = (*e, *e);
+                    ep[j] += 1e-6;
+                    em[j] -= 1e-6;
+                    grad[j] = (mat_hyper::energy(&en, &ep).unwrap() - mat_hyper::energy(&en, &em).unwrap()) / 2e-6;
+                }
+                let scale = max_abs(&d.concat());
+                let diff: Vec<f64> = (0..36).map(|k| d[k / 6][k % 6] - dfd[k / 6][k % 6]).collect();
+                let asym: Vec<f64> = (0..36).map(|k| d[k / 6][k % 6] - d[k % 6][k / 6]).collect();
+                t1 = worst([t1, max_abs(&diff) / scale]);
+                t1s = worst([t1s, max_abs(&asym) / scale]);
+                if amp >= 0.1 {
+                    let ds: Vec<f64> = (0..6).map(|i| s[i] - grad[i]).collect();
+                    ec1 = worst([ec1, max_abs(&ds) / max_abs(&s)]);
+                }
+            }
+            c.at_most(&format!("T1 {name} amp {amp:e}: max |D - D_fd| / max |D|"), t1, 1e-6);
+            c.at_most(&format!("T1s {name} amp {amp:e}: max |D - D^T| / max |D|"), t1s, 1e-12);
+            if amp >= 0.1 {
+                c.at_most(&format!("EC1 {name} amp {amp:e}: max |S - dW/de| / max |S|"), ec1, 1e-6);
+            }
+        }
+        // R1: ten F, three rotations.
+        let mut r1 = 0.0f64;
+        let mut kept = 0;
+        for _ in 0..10 {
+            let f: [[f64; 3]; 3] =
+                std::array::from_fn(|i| std::array::from_fn(|j| if i == j { 1.0 } else { 0.0 } + 0.3 * rng.normal()));
+            if det3(&f) <= 0.0 {
+                continue;
+            }
+            kept += 1;
+            let w = mat_hyper::energy(&en, &green(&f)).unwrap();
+            for q in rotations() {
+                let wq = mat_hyper::energy(&en, &green(&matmul(&q, &f))).unwrap();
+                r1 = worst([r1, (wq - w).abs() / w.abs()]);
+            }
+        }
+        c.at_least(&format!("R1 set-up {name}: F kept of 10"), kept as f64, 5.0);
+        c.at_most(&format!("R1 {name}: |W(E(QF)) - W(E(F))| / |W|"), r1, 1e-10);
+    }
+    c.finish();
+}
+
+/// T1' of amendment 2: T1, T1s, EC1 and R1 with ten kept strains per energy and amplitude.
+#[test]
+fn t1p_t1s_ec1_r1_after_amendment_2() {
+    let mut c = Checks::new();
+    let mut rng = Rng(0xF425_0541);
+    let h = 1e-7;
+    for (name, en) in point_energies() {
+        for amp in [1e-3, 0.1, 0.4] {
+            let es = strains_until_ten(&mut rng, amp);
+            c.at_least(
+                &format!("T1' set-up {name} amp {amp:e}: strains kept (of at most 200 draws)"),
+                es.len() as f64,
+                10.0,
             );
             let (mut t1, mut t1s, mut ec1) = (0.0f64, 0.0f64, 0.0f64);
             for e in &es {
@@ -360,7 +449,8 @@ fn small_strain_remainder(en: &HyperelasticEnergy, g: f64, k: f64, norm: f64) ->
 }
 
 #[test]
-fn ss1_small_strain_literal() {
+#[ignore = "known miss of ADR 0541 SS1 (registered run, log run1-sa_hyper.log): 4.7166e-6 (NH) and 4.9444e-6 (MR) against the limit 1e-6, the second-order remainder of arithmetic 3 (predicted 4.9e-6)"]
+fn ss1_small_strain_literal_known_miss() {
     let mut c = Checks::new();
     for (name, en) in [("NH k/mu 2.17", nh(K_LOW)), ("MR k/mu 2.17", mr(K_LOW))] {
         let (g, k) = small_strain_moduli(&en);
@@ -1005,8 +1095,96 @@ fn sphere_pressure(n: usize, m: usize, f: SolidFormulation) -> Result<(f64, f64)
     Ok((p_fe, (p_fe - pc).abs() / pc))
 }
 
+/// Amendment 2: [`sphere_pressure`] driven to the inner stretch `l_a` (the prescribed values `(l_a - 1) X`).
+fn sphere_pressure_to(n: usize, m: usize, f: SolidFormulation, l_a: f64) -> Result<(f64, f64), String> {
+    let (model, inner, faces) = sphere_model(n, m, f);
+    let is_inner: std::collections::BTreeSet<usize> = inner.iter().copied().collect();
+    let mut prescribed = Vec::new();
+    for (k, p) in model.mesh().nodes().iter().enumerate() {
+        for c in 0..3 {
+            if is_inner.contains(&k) {
+                prescribed.push(Prescribed::new(k, c, (l_a - 1.0) * p[c]));
+            } else if p[c] == 0.0 {
+                prescribed.push(Prescribed::new(k, c, 0.0));
+            }
+        }
+    }
+    let mut o = NewtonOptions::new(10).threads(4);
+    o.residual_tolerance = 1e-8;
+    let r = solve(&model, &prescribed, &[], &o).map_err(|e| e.to_string())?;
+    let u = r.result.displacement_values();
+    let reactions = r.result.reactions().ok_or("no reactions")?;
+    let dofs = model.dof_map();
+    let x = |k: usize| -> Vec3 {
+        let p = model.mesh().nodes()[k];
+        std::array::from_fn(|c| p[c] + u[dofs.equation(k, c).unwrap()])
+    };
+    let mut work = 0.0;
+    for &k in &inner {
+        let xk = x(k);
+        for (c, xc) in xk.iter().enumerate() {
+            work += reactions[dofs.equation(k, c).unwrap()] * xc;
+        }
+    }
+    let g = 1.0 / 3.0f64.sqrt();
+    let mut flux = 0.0;
+    for face in &faces {
+        let xs: Vec<Vec3> = face.iter().map(|&k| x(k)).collect();
+        for xi in [-g, g] {
+            for eta in [-g, g] {
+                let nshape = [
+                    0.25 * (1.0 - xi) * (1.0 - eta),
+                    0.25 * (1.0 + xi) * (1.0 - eta),
+                    0.25 * (1.0 + xi) * (1.0 + eta),
+                    0.25 * (1.0 - xi) * (1.0 + eta),
+                ];
+                let dxi = [
+                    -0.25 * (1.0 - eta),
+                    0.25 * (1.0 - eta),
+                    0.25 * (1.0 + eta),
+                    -0.25 * (1.0 + eta),
+                ];
+                let deta = [
+                    -0.25 * (1.0 - xi),
+                    -0.25 * (1.0 + xi),
+                    0.25 * (1.0 + xi),
+                    0.25 * (1.0 - xi),
+                ];
+                let mut p = [0.0; 3];
+                let mut a = [0.0; 3];
+                let mut b = [0.0; 3];
+                for q in 0..4 {
+                    for c in 0..3 {
+                        p[c] += nshape[q] * xs[q][c];
+                        a[c] += dxi[q] * xs[q][c];
+                        b[c] += deta[q] * xs[q][c];
+                    }
+                }
+                let nrm = [
+                    a[1] * b[2] - a[2] * b[1],
+                    a[2] * b[0] - a[0] * b[2],
+                    a[0] * b[1] - a[1] * b[0],
+                ];
+                flux += p[0] * nrm[0] + p[1] * nrm[1] + p[2] * nrm[2];
+            }
+        }
+    }
+    let v_cav = (flux / 3.0).abs();
+    let p_fe = work / (3.0 * v_cav) / MU;
+    let pc = p_closed(l_a);
+    let iterations: Vec<usize> = r.steps.iter().map(|s| s.residuals.len()).collect();
+    println!(
+        "  sphere n {n} m {m} {}: p_FE / mu {p_fe:.10}, closed {pc:.10}, V_cav {v_cav:.8} (exact {:.8}), steps {}, iterations {iterations:?}",
+        f.name(),
+        std::f64::consts::PI / 6.0 * l_a.powi(3),
+        r.steps.len()
+    );
+    Ok((p_fe, (p_fe - pc).abs() / pc))
+}
+
 #[test]
-fn sp0_sp1_spl_the_inflated_sphere() {
+#[ignore = "record of the registered run of ADR 0541 (log run1-sa_hyper.log): SP0 1.47e-16 and SP1 2.61e-3 met; SPL not measured (the Full solve failed in load step 3 with a negative pivot); SP0, SP1 continue in sp0_sp1_met_rows, the diagnostic SPLd of amendment 2 in spld_locking_diagnostic"]
+fn sp0_sp1_spl_the_inflated_sphere_known_miss() {
     let mut c = Checks::new();
     let (lb, la) = (l_b(L_A), L_A);
     let q: f64 = gauss_legendre(20)
@@ -1028,6 +1206,46 @@ fn sp0_sp1_spl_the_inflated_sphere() {
     match sphere_pressure(6, 8, FULL) {
         Ok((_, e)) => c.at_least("SPL Full n 6 m 8 (locking control): |p_FE - p_c| / p_c", e, 0.1),
         Err(e) => c.holds("SPL Full n 6 m 8: the solve (control not measured)", false, &e),
+    }
+    c.finish();
+}
+
+/// SP0 and SP1 of the registered run, continued (amendment 2).
+#[test]
+fn sp0_sp1_met_rows() {
+    let mut c = Checks::new();
+    let (lb, la) = (l_b(L_A), L_A);
+    let q: f64 = gauss_legendre(20)
+        .iter()
+        .map(|(x, w)| {
+            let l = 0.5 * (la + lb) + 0.5 * (la - lb) * x;
+            0.5 * (la - lb) * w * 2.0 * (l.powi(-2) + l.powi(-5))
+        })
+        .sum();
+    c.at_most(
+        "SP0 quadrature against the closed form",
+        (q - p_closed(L_A)).abs() / p_closed(L_A),
+        1e-12,
+    );
+    match sphere_pressure(6, 8, BBAR) {
+        Ok((_, e)) => c.at_most("SP1 BBar n 6 m 8: |p_FE - p_c| / p_c", e, 1e-2),
+        Err(e) => c.holds("SP1 BBar n 6 m 8: the solve", false, &e),
+    }
+    c.finish();
+}
+
+/// SPLd of amendment 2 (diagnostic, no limit): Full and BBar to the inner stretch 1.125.
+#[test]
+fn spld_locking_diagnostic() {
+    let c = Checks::new();
+    for f in [FULL, BBAR] {
+        match sphere_pressure_to(6, 8, f, 1.125) {
+            Ok((_, e)) => c.report(
+                &format!("SPLd {} n 6 m 8 to l_a 1.125: |p_FE - p_c| / p_c", f.name()),
+                e,
+            ),
+            Err(e) => println!("SPLd {} n 6 m 8 to l_a 1.125: the solve failed: {e}", f.name()),
+        }
     }
     c.finish();
 }
