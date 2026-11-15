@@ -387,6 +387,9 @@ pub fn boundary(model: &SolidModel, constraint: usize) -> Result<CyclicBoundary>
     })
 }
 
+/// One interpolated high node with its weights over low nodes.
+type InterpolatedNode = (usize, Vec<(usize, f64)>);
+
 /// The node-to-edge weights of ADR 0575 D3: each slave (high) node on the nearest low shell edge mapped by `map`, weights
 /// `(A, 1 - t), (B, t)` at the projection parameter `t` (a zero weight dropped); above the tolerance (that of `options`, else
 /// [`crate::tie::GAP_FACTOR`] times the mean mapped edge length) refused with [`FemError::TieGap`].
@@ -397,7 +400,7 @@ fn shell_edge_weights(
     slaves: &[usize],
     map: &dyn Fn(Vec3) -> Vec3,
     options: &crate::tie::TieOptions,
-) -> Result<Vec<(usize, Vec<(usize, f64)>)>> {
+) -> Result<Vec<InterpolatedNode>> {
     let in_low = |p: usize| lows.binary_search(&p).is_ok();
     let mut edges = std::collections::BTreeSet::new();
     for block in mesh.blocks() {
