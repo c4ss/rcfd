@@ -115,10 +115,7 @@ fn grid(a: f64, b: f64, nx: usize, ny: usize) -> (Vec<Vec3>, Vec<[usize; 4]>) {
 
 /// Each cell `(a, b, c, d)` cut into the Shell3 `(a, b, c)` and `(a, c, d)` (D2).
 fn cut(cells: &[[usize; 4]]) -> Vec<usize> {
-    cells
-        .iter()
-        .flat_map(|&[a, b, c, d]| [a, b, c, a, c, d])
-        .collect()
+    cells.iter().flat_map(|&[a, b, c, d]| [a, b, c, a, c, d]).collect()
 }
 
 /// One block of the cells (Shell4) or of their cut (Shell3), element set "all", node set "all".
@@ -128,7 +125,11 @@ fn shell_mesh(nodes: Vec<Vec3>, cells: &[[usize; 4]], thickness: f64, tri: bool)
     let (kind, conn, ne) = if tri {
         (ElementKind::Shell3, cut(cells), 2 * cells.len())
     } else {
-        (ElementKind::Shell4, cells.iter().flatten().copied().collect(), cells.len())
+        (
+            ElementKind::Shell4,
+            cells.iter().flatten().copied().collect(),
+            cells.len(),
+        )
     };
     mesh.add_block(kind, conn).unwrap();
     mesh.set_block_property(0, BlockProperty::shell(thickness).unwrap())
@@ -314,7 +315,11 @@ fn tr1_to_tr3_a_shell3_plate_held_by_a_rigid_set() {
     nc.add_constraint(Constraint::rigid_set("edge", [0.0, 0.5, 0.0]))
         .unwrap();
     let z = free_rigid_motions(&nc, &[]).unwrap().count;
-    c.holds("NC1 the rigid set alone: six free rigid motions", z == 6, &format!("{z}"));
+    c.holds(
+        "NC1 the rigid set alone: six free rigid motions",
+        z == 6,
+        &format!("{z}"),
+    );
     c.finish();
 }
 
@@ -397,7 +402,11 @@ fn tr4_tr5_a_nodal_spring_on_a_shell3_rotation() {
                 duz = nmax(duz, (d[2] + th * x[0]).abs());
             }
             c.at_most(&format!("{name} every node turns rigidly: theta_y"), dth / th, 1e-10);
-            c.at_most(&format!("{name} every node turns rigidly: u_z = -theta x"), duz / th, 1e-10);
+            c.at_most(
+                &format!("{name} every node turns rigidly: u_z = -theta x"),
+                duz / th,
+                1e-10,
+            );
         }
     }
     c.finish();
@@ -420,7 +429,11 @@ fn tr6_free_rigid_motions_with_shell3_nodes() {
     let mut z3m = z2m.clone();
     z3m.add_support(ElasticSupport::nodal_spring("root0", 4, 1e6)).unwrap();
     let z3 = count(&z3m);
-    c.holds("TR6 (Z3) root translations, spring on theta_y", z3 == 0, &format!("{z3}"));
+    c.holds(
+        "TR6 (Z3) root translations, spring on theta_y",
+        z3 == 0,
+        &format!("{z3}"),
+    );
     let mut z4m = kstrip(true);
     for comp in 0..4 {
         z4m.add_constraint(Constraint::displacement("root0", comp, 0.0))
@@ -438,7 +451,11 @@ fn tr6_free_rigid_motions_with_shell3_nodes() {
     z5m.add_constraint(Constraint::rigid_set("edge", [0.0, 0.5, 0.0]))
         .unwrap();
     let z5 = count(&z5m);
-    c.holds("TR6 (Z5) plate with a rigid set on its edge only", z5 == 6, &format!("{z5}"));
+    c.holds(
+        "TR6 (Z5) plate with a rigid set on its edge only",
+        z5 == 6,
+        &format!("{z5}"),
+    );
     let mut h1 = z5m.clone();
     clamp(&mut h1, "corner");
     let z6a = count(&h1);
@@ -512,20 +529,43 @@ fn amg() -> StaticOptions {
 /// The outcome of one entry path on a model, as `Ok(())` or the error.
 type Outcome = Result<(), FemError>;
 
-/// The entry paths of RC1 (D3): name, whether the cyclic model is used, the call.
-fn paths() -> Vec<(&'static str, bool, Box<dyn Fn(&SolidModel) -> Outcome>)> {
+/// One entry path of RC1: its name, whether it takes the cyclic model, the call.
+type EntryPath = (&'static str, bool, Box<dyn Fn(&SolidModel) -> Outcome>);
+
+/// The entry paths of RC1 (D3).
+fn paths() -> Vec<EntryPath> {
     vec![
-        ("solve_static (default)", false, Box::new(|m| solve_static(m, &StaticOptions::default()).map(|_| ()))),
-        ("modal_analysis", false, Box::new(|m| modal_analysis(m, &ModalOptions::new(2)).map(|_| ()))),
-        ("nonlinear::initial_states", false, Box::new(|m| initial_states(m).map(|_| ()))),
-        ("solve_static smoothed-aggregation CG", false, Box::new(|m| solve_static(m, &amg()).map(|_| ()))),
+        (
+            "solve_static (default)",
+            false,
+            Box::new(|m| solve_static(m, &StaticOptions::default()).map(|_| ())),
+        ),
+        (
+            "modal_analysis",
+            false,
+            Box::new(|m| modal_analysis(m, &ModalOptions::new(2)).map(|_| ())),
+        ),
+        (
+            "nonlinear::initial_states",
+            false,
+            Box::new(|m| initial_states(m).map(|_| ())),
+        ),
+        (
+            "solve_static smoothed-aggregation CG",
+            false,
+            Box::new(|m| solve_static(m, &amg()).map(|_| ())),
+        ),
         ("check_supported", false, Box::new(|m| m.check_supported())),
         (
             "transient::Integrator::new",
             false,
             Box::new(|m| LinIntegrator::new(m, &[], &TransientOptions::new(1e-3)).map(|_| ())),
         ),
-        ("damped::damped_modes", false, Box::new(|m| damped_modes(m, &DampedOptions::new(2)).map(|_| ()))),
+        (
+            "damped::damped_modes",
+            false,
+            Box::new(|m| damped_modes(m, &DampedOptions::new(2)).map(|_| ())),
+        ),
         (
             "harmonic_direct::DirectHarmonic::new",
             false,
@@ -632,7 +672,11 @@ fn rc1_rc2_shell3_taken_where_shell4_is_taken() {
         both_ok >= 1 && both_err >= 1,
         &format!("{both_ok} taken, {both_err} refused"),
     );
-    for row in ["solve_static smoothed-aggregation CG", "check_supported", "mpc::solve_static_mpc cyclic"] {
+    for row in [
+        "solve_static smoothed-aggregation CG",
+        "check_supported",
+        "mpc::solve_static_mpc cyclic",
+    ] {
         let (_, r4, r3) = outcomes.iter().find(|(n, _, _)| *n == row).unwrap();
         let ok4 = matches!(r4, Err(FemError::NotYetSupported { package, .. }) if *package == shell::FOLLOW_UP);
         let ok3 = matches!(r3, Err(FemError::NotYetSupported { package, .. }) if *package == shell3::FOLLOW_UP);
@@ -930,10 +974,17 @@ fn al1_al2_shell3_roof_through_the_limit_point() {
     );
     let (m, apex) = roof_shell(8, false);
     let s4 = roof_limit("AL Shell4 8 x 8", &m, apex);
-    c.at_most("AL2 |P_lim(Shell3 8)/P_lim(Shell4 8) - 1|", (s3.p_lim / s4.p_lim - 1.0).abs(), 1e-2);
+    c.at_most(
+        "AL2 |P_lim(Shell3 8)/P_lim(Shell4 8) - 1|",
+        (s3.p_lim / s4.p_lim - 1.0).abs(),
+        1e-2,
+    );
     c.record("AL P_lim(Shell3 8), N", s3.p_lim);
     c.record("AL P_lim(Shell4 8), N", s4.p_lim);
-    c.record("NC3 P_lim(Shell3 8)/2221.3 - 1 (Shell3 16 of ADR 0522)", s3.p_lim / 2221.3 - 1.0);
+    c.record(
+        "NC3 P_lim(Shell3 8)/2221.3 - 1 (Shell3 16 of ADR 0522)",
+        s3.p_lim / 2221.3 - 1.0,
+    );
     c.finish();
 }
 
