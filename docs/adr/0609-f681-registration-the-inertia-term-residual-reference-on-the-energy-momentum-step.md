@@ -196,3 +196,87 @@ recorded; the decision is then partial (c2 not shown on that model).
 - No rounding bound (F-571 style) on the energy-momentum step: with `Driver` the step keeps failing where it failed.
 - With a large rigid drift `R1` grows with the drifted displacement (ADR 0603 Limits, the same here): looser in absolute terms.
 - The option is not exposed in the case schema, CLI or MCP (goldens unchanged).
+
+## Addendum 1: results (2026-11-12)
+
+Runs, each once, release profile, own `CARGO_TARGET_DIR`: DB1's hashes recorded once on the unchanged library at 731ceef5
+(`f681-scratch/db1-record.log`: `0xfe094c8e3a145311`, `0xcd910d4f0b77ec56`) before any library line changed; run 1 of the fast
+checks at 4fa0e65e (`run1-fast.log`); V once with `--ignored` at 58024667 (`run1-v.log`, 47.0 s); DB3 (`db3.log`, `db3b.log`,
+`b2.log`); mutations on a `git archive` copy of 58024667 with its own target (`mutate.py`, `mutations.log`, `MU1.log` to
+`MU6.log`). Code: commit 4fa0e65e. `nl_transient.rs`: module doc line 37, the doc of `ResidualReference` (lines 88 to 89, 99 to
+101), the refusal of ADR 0603 D2 removed (lines 621 to 629 of the base, now one comment line 624); `nl_transient/emc.rs`: module
+doc lines 11 to 13, `substep` lines 325 to 336 (the products of the start) and 354 to 364 (the reference). `nonlinear.rs` is not
+changed. After run 1, NZ was split off as the ignored record `fz_nz_a_step_at_the_zero_crossing_known_miss` (body unchanged)
+and FZ repeated alone as `fz_a_step_at_the_zero_crossing` (commit 58024667; the same deterministic run, the same numbers,
+`run1b-split.log`).
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| RT1 taken with `InertiaTerms`; with `Driver` | both `Ok` | both `Ok` | yes |
+| FZ converges, halvings; final residual; first step against the linear midpoint step | converges, 0; `1e-10`; `1e-8` | converges, 0 halvings, 2 iterations; `2.25e-16`; `5.32e-9` | yes |
+| NZ `Driver` refused | refused (`nl_transient`) | **converged**, 0 halvings, relative residual `1.64e-11` | **no** (known miss, below) |
+| S 1000 steps; halvings; largest final residual; dP; dJ; dE | 1000 `Ok`; 0; `1e-10`; `1e-10`; `1e-6`; `1e-6` | 1000 `Ok`; 0 (6963 iterations); `9.99e-11`; `1.83e-13`; `3.44e-13`; `5.59e-14` | yes |
+| NS `Driver` refused at step 1 | refused (`nl_transient`) | refused after 5 halvings: relative residual `1.29e-10` at `h/32`, energy ratio `1.4e-28` | yes |
+| V1 40 steps; halvings; energy | 40 `Ok`; 0; `1e-6` | 40 `Ok`; 0 (179 iterations); `1.46e-13` | yes |
+| V 4000 steps (100 periods); halvings; largest final residual; energy | 4000 `Ok`; 0; `1e-10`; `1e-6` | 4000 `Ok`; 0 (18015 iterations); `9.9996e-11`; `1.13e-11` | yes |
+| DB1 default hashes (spinning bar, cantilever) | equal to the record | equal, both | yes |
+| DB2 explicit `Driver` | equal | equal, both | yes |
+| DB3 `sa_emc`, `sa_emc_default_bits`, `sa_dg`, `sa_dg_default_bits`, `sa_dgm`, `sa_dgm_default_bits`, `sa_nl_transient`, `sa_nl_rounding_floor`, `sa_nl_inertia_reference`; `baseline_hashes` | pass (RF1 ignored by D3) | all pass except `sa_nl_inertia_reference::ft1_nc1_a_step_at_the_zero_crossing` (NC1 of ADR 0603: the Method step now converges at `1.39e-10`, accepted by F-571's rounding bound of ADR 0604; failing at the base f5cdf93a since the F-571 merge, see below); `baseline_hashes` 3 passed, 1 ignored | yes for F-681 (the one failure is not on a path F-681 changes) |
+
+`cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --all-targets --release -- -D warnings` clean.
+
+**NZ diagnosed.** The registered floor rests on the rounding of `w = u_{n+1} - u_n - h v_n`. From the registered start `u_n = 0`
+the sum has two terms, `u_{n+1}` and `h v_n`, within a factor 2 of each other; their difference is then exact (Sterbenz's
+lemma), so `w` carries no rounding and the floor is only that of the product `M w`, relative to `|w|`. FZ measures it: the
+residual against D1's reference is `2.25e-16`, a factor 50 below the `1e-14` taken from probe 2 (steps with `u_n != 0`). With
+the present reference about `5.2e5` times smaller (the estimate), that is about `1.2e-10` relative at the floor, and the step
+reached `1.64e-11`: below the tolerance, so it converged. The floor assumed was the wrong one for a start at rest. NS shows the
+floor on this step instead: on the spinning bar the present reference fails at every halving (`1.29e-10` at `h/32`) where D1's
+reference converges all 1000 steps at the default tolerance.
+
+**Dependence on F-571 (ADR 0604).** None of F-681's results depends on F-571's rounding bound: the energy-momentum step has its
+own Newton loop in `emc.rs` and never reaches `Problem::attempt_with`, where the bound is (S, V, V1, FZ are accepted by the
+relative test against D1's reference; NS fails because no bound exists on this step). The only interaction is NC1 of ADR 0603
+in `sa_nl_inertia_reference.rs` (the Method step, F-631's test), which fails at the base f5cdf93a since the F-571 merge; it is
+not edited here and is not counted as F-681's (the lead's instruction). If F-571 is reworked, F-681's checks do not change; the
+only line F-681 adds to that file is D3's `#[ignore]` on RF1, a different test.
+
+**Mutations:**
+
+| Id | Caught by |
+|---|---|
+| MU1 `R1` not taken | S (step 1 refused, `1.29e-10`); not FZ (registered "FZ, S": FZ converges with the present reference, as NZ) |
+| MU2 the products without their factors | S (as MU1); not FZ |
+| MU3 only the velocity product | S (1000 steps completed but with 3119 halvings); not FZ, as registered |
+| MU4 `R1` also with `Driver` | NS (converges, `2.27e-11`), DB1 and DB2 (the spinning bar hash changes; the registered doubt resolved: caught) |
+| MU5 the refusal restored | RT1 (and FZ, S, V1, which unwrap the integrator) |
+| MU6 the damping products dropped | not caught, as registered |
+
+MU1 to MU5 caught; MU6 not caught as predicted.
+
+**Deviations:** NZ split into a known-miss record and an FZ test after its run (above); no limit changed. **Not run:** nothing
+registered was skipped.
+
+**Decision by the registered rule: partial.** Every check met except NZ, which converged ("or NZ or NS converges" in the
+partial clause). c1, c2 (V and S at the default tolerance with 0 halvings), c3 (energy `1.1e-11` and `5.6e-14` against `1e-6`)
+and c4 are met; the floor's existence on this step is shown by NS, while NZ's start at rest was the wrong place to show it.
+
+### Remaining questions
+
+1. **The known miss NZ.** (a) Leave the record; (b) a follow-up with a negative control whose step does not start at rest
+   (the step centred on the zero crossing, `u_n = -h_f v_0/2`, three terms in `w`), registered before its run. Recommendation
+   (b), small; or accept NS as the negative control and move F-681 to done (the maintainer's call; the registered rule says
+   partial).
+2. **A rounding bound on the energy-momentum step** (the F-571 form for its own loop, so that the default `Driver` reference
+   does not fail the spinning bar at `1e-10`): would change results where the step fails today. Recommendation: not now; after
+   F-571's rework settles, as its own item with an audit of the step's tests.
+3. **Default.** Keep `Driver` the default (bits). Making `InertiaTerms` the default changes default results: open, the
+   maintainer's decision.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> Structural solver, advanced tier. Follow-up of F-631 (ADR 0603). PARTIAL. ADR 0609, 2026-11-12: the energy-momentum step of nl_transient takes NlTransientOptions::residual_reference(ResidualReference::InertiaTerms) (the refusal of ADR 0603 D2 lifted): the reference of each iterate of its own Newton loop is also at least the largest norm of the products of the midpoint inertia and damping force, (2/h^2) M u_{n+1}, (2/h^2) M u_n, (2/h) M v_n, C u_{n+1}/h, C u_n/h. At the default tolerance 1e-10: a clamped Hex8 cantilever in free bending vibration over 100 periods, 4000 steps, 0 halvings, energy within 1.1e-11 (limit 1e-6); the free spinning bar of ADR 0514 over ten turns, 1000 steps, 0 halvings, linear momentum 1.8e-13, angular momentum 3.4e-13, energy 5.6e-14, where the driver reference fails step 1 after 5 halvings at the floor (1.29e-10). Known miss: the negative control of a step from rest at h/1024 converged with the driver reference (1.6e-11; the start at rest makes the inertia difference exact). Not dependent on F-571's bound (the step has its own loop). Default bits unchanged (two hashes recorded before the change, the energy-momentum and discrete-gradient tests, baseline_hashes). Five of five registered mutations caught.
+
+> Follow-up proposed: A negative control of the energy-momentum inertia-term reference off rest. Deps F-681. Acceptance: Every limit not stated here is registered in the ADR before the run. One energy-momentum step of a solid in free vibration centred on a zero crossing (not from rest) at a registered fraction of the period is refused with the driver reference at the default tolerance and converges without halving with ResidualReference::InertiaTerms; the default bits unchanged.
