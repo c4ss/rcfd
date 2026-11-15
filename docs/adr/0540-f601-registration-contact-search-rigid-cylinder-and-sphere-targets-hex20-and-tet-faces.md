@@ -399,3 +399,100 @@ another existing test that fails by design, it is handled the same way by an ame
 
 Open (not taken): a case-file key (`[[contact]]` of ADR 0507 open question 4, with `target = { sphere | cylinder }`, the
 faces now accepted): changes the schema golden.
+
+## Addendum 1: results (2026-11-15)
+
+Each registered run made once (logs in `w49i-work/f601-scratch`: `bits-base.log`, `run-bits.log`, `run-search.log`,
+`run-targets.log`, `run-faces.log`, `run-hsh.log`, `run-mut.log` and `mut-*.log`, `run-fem-full.log`). No limit changed, no
+amendment.
+
+| id | limit | measured | met |
+|---|---|---|---|
+| B (G1 to G5), b0, B1 + PJ1, F-615 bits, `sa_contact.rs` | equal; pass | equal to the base digests; 9 passed, 10 ignored | yes |
+| EQ1 (B1, S1, I, T2, M3, hub `n = 4`; PT4, PT10, PT20, Q20) | bit for bit; finite | equal, finite | yes |
+| EQ2 (hub `n = 8` both reaches, punch, T1) | bit for bit; `>= 10` changes | equal; 3748 face changes | yes |
+| BT | `< 0.5`; equal | 0.1217 (0.0243 s against 0.1994 s, 400 contactor nodes); equal | yes |
+| NS | `< 0.25` | 0.2258 (`n = 8`, state 0: 14719 of 67584 face visits) | yes |
+| T1s, NT-s | `<= 1e-6`; `> 1e-2` | 2.40e-10; 0.952 | yes |
+| T1c | `<= 1e-6` | 1.65e-10 | yes |
+| CL0 | `1e-5`, `1e-12`, `1e-4` | 1.91e-8, 0, 4.24e-6 | yes |
+| CL1, CL2 | `<= 5e-2` | 1.064e-2 (`b_fe` 0.1010638 against 0.1000001), 9.51e-3 | yes |
+| CL3, CL4, CL5 | `1e-6`, `>= 10`, `1e-8` | 3.89e-12, 17, 7.26e-10 | yes |
+| HS | `0.15`, `0.20`, `0.10` | 5.93e-3, 3.87e-3, 1.123e-2 | yes |
+| HSH | `5e-2`, `5e-2`, `3e-2`; `>= 10`; `1e-8` | 2.08e-3, 4.35e-3, 1.236e-2; 13; 4.05e-9 (525 s) | yes |
+| SX | `<= 3e-2` | force 1.89e-2, radius 5.92e-3, peak 9.66e-3 | yes |
+| PT4 | `1e-8`; 9 | stress 1.19e-15, pressure 2.43e-14, reaction 1.49e-16; 9 | yes |
+| PT10 | `1e-8`; 72 | 1.24e-14, 3.56e-14, 2.98e-15; 72 | yes |
+| PT20 | `1e-8`; 36 | 3.83e-14, 4.05e-14, 2.98e-16; 36 | yes |
+| T1q, NT-q | `1e-6`; `> 1e-2` | 3.89e-10; 0.999 | yes |
+| T1t3, T1t6, T1g20, T1g10 | `<= 1e-6` | 1.75e-10, 2.84e-10, 1.96e-10, 2.85e-10 | yes |
+| NG | `< 0` | `-1/12` of the face's total at each corner | yes |
+| HS20 | `0.15`, `0.20`, `0.10` | not reached: the solve fails, "augmentation 20: the gap tolerance 1e-8 not met"; 76 points over it, max `|gap|` 4.95e-7 | **no** |
+| HS10 | `0.15`, `0.20`, `0.10` | not reached: the same failure; 82 points over, max `|gap|` 7.63e-6 | **no** |
+| R3, R1c | refused; holds | every row as registered; the Tet4 contactor accepted with 4 nodes | yes |
+
+HS20 and HS10 are kept as ignored records `hs20_hertz_on_hex20_known_miss`, `hs10_hertz_on_tet10_known_miss` with their
+numbers and the registered limits. Diagnosis: the Gauss-point contactor of D3 puts 9 constraints on each Quad8 or Tri6 face
+(fewer independent node positions per face against a curved rigid target); the sphere's gap is not quadratic (its quartic part
+`r^4/(8 R^3)`), so the augmentation cannot zero every point's gap at once and stalls at `1e-7` to `1e-5`, above the absolute
+tolerance `1e-8`. The patch tests (flat target) pass to rounding, and the same faces against the plane and the warped Hex8
+target pass T1g20, T1g10. No corrected run was made: the set-up is not defective; the miss is a property of the contactor.
+
+Mutations (each alone on a `git archive` copy of f5d0c09b, `target-f601-mut`, the three new fast test files run once):
+
+| id | caught by |
+|---|---|
+| MB1 | EQ1 (B1, S1), EQ2 (hub, punch), BT; PT20 and Q20 solves fail |
+| MB2 | EQ1, EQ2, BT; Q20 solve fails |
+| MB3 | EQ2 (hub, default reach) |
+| MB4 | EQ1 (B1, S1, PT4) (caught, not a survivor) |
+| MS1 | T1s 0.890, T1c 0.902 |
+| MS2 | T1s 2.0, T1c 2.0; HS and CL solves fail |
+| MC1 | T1c 1.02 |
+| MQ1 | T1q 0.187 |
+| MQ2 | T1t6 3.96e-2 |
+| MG1 | PT10 0.75, PT20 0.9375 (pressure) |
+| MG2 | PT10, PT20 (stress 0.841, 0.747); T1g20 not (the tangent stays consistent with the moved point) |
+| MT1 | PT4 (stress 0.693, pressure 0.886) |
+| MT2 | PT4 (the solve refuses: the tangent not positive definite); T1t3 not (self-consistent) |
+
+Every planned mutation was caught by a check named for it.
+
+`cargo fmt -p rcfd-fem --check`: clean. `cargo clippy -p rcfd-fem --all-targets -- -D warnings`: clean. `cargo test -p rcfd-fem --release`:
+230 test binaries, 971 passed, 0 failed, 272 ignored. `cargo test -p rcfd-api --release --test baseline_hashes`: 3 passed,
+1 ignored (the table unchanged, not edited). `cargo test -p rcfd-cli --release --test docs_site`: 2 passed.
+
+### Deviations
+
+1. HS20 and HS10 missed (above); recorded as `*_known_miss`.
+2. After the registered runs and before the full crate run, three edits without a change of any value: `cargo fmt` (layout
+   only, including the B record file `sa_contact_f601_default_bits.rs` of 3ce63499, which was not formatted when committed);
+   `Option::is_none_or` replaced by `map_or(true, ..)` in two test helpers (the crate's MSRV 1.80, a clippy error); and
+   `&normal.to_vec()` replaced by `normal` in `contact.rs` (a clippy error). The full crate run after them includes B.
+3. HSH took 525 s and 1.4 GB against the estimate of about 4 minutes and 0.7 GB.
+
+Not run: the workspace test suite (the lead's gate).
+
+### Decision
+
+**partial** by the registered rule: B, `baseline_hashes`, EQ1, EQ2 and BT met; every other check met except HS20 and HS10,
+diagnosed and recorded as `*_known_miss` tests.
+
+### Remaining questions
+
+1. Case-file key (`[[contact]]` with `target = { sphere | cylinder }`). Open; it changes the schema golden.
+2. Quadratic contactors on curved targets (HS20, HS10). Options: (a) a segment-to-segment (mortar) contactor that constrains
+   the face's projected gap moments (one per node) instead of each point; (b) a gap tolerance relative to the approach, which
+   would leave the over-constraint in place; (c) fewer points. Recommendation: (a) as a follow-up item; (b) is a tuned limit.
+3. The total Lagrangian body with the new targets and faces is covered only by EQ1's punch. Recommendation: in the follow-up of
+   question 2.
+
+### For the lead: roadmap entries
+
+Proposed status of F-601: **partial**. New note:
+
+> Structural solver, advanced tier. Optional. Follow-up of F-427 (ADR 0507). ADR 0540, 2026-11-15: rcfd_fem::contact: a bucket search (SearchMethod::Buckets, the default) equal bit for bit to the all-faces loop on every model and state checked, 0.12 of its time on the hub at n = 32; Target::RigidSphere and Target::RigidCylinder with exact gap, normal and second derivative (tangents 2.4e-10, 1.7e-10); Hertz line contact within 1.1e-2 and point contact within 1.2e-2 (heavy mesh, approach); Tet4 faces by nodes, Hex20 and Tet10 faces by the Gauss points of the load rule (patch tests to 4e-14, tangents 3e-10); defaults bit-identical. Known misses: the Hertz problem on Hex20 and Tet10 contactors (the augmentation stalls at a gap of 5e-7 to 8e-6 against 1e-8: the point contactor over-constrains a curved target). No case-file key (open).
+
+Proposed follow-up (number left to the lead), title "Mortar contactor for quadratic faces", deps F-601:
+
+> Every limit not stated here is registered in the ADR before the run. A segment-to-segment (mortar) contactor for Hex20 and Tet10 faces that constrains one weighted gap per face node: the Hertz problem of ADR 0540 HS20 and HS10 on Hex20 and Tet10 meets its limits (radius 0.15, peak 0.20, approach 0.10) with the gap tolerance 1e-8, the patch tests of ADR 0540 PT10 and PT20 within 1e-8, the tangent within 1e-6, the total Lagrangian body included; defaults bit-identical.
