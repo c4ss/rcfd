@@ -1034,6 +1034,9 @@ const POSITIVE_CUT: f64 = 1e-8;
 /// holds no positive Ritz value beyond the wanted set and the count at the far bound differs (ADR 0559 D1).
 const NEAR_COUNT_STEPS: [f64; 3] = [1e-2, 1e-3, 1e-4];
 
+/// The most doublings `R = lambda_mp 2^k` of the restart size of [`lowest_buckling_factors`] (ADR 0564 D1).
+const RESTART_DOUBLINGS: i32 = 64;
+
 /// Options of [`lowest_buckling_factors`] (ADR 0390 D5).
 #[derive(Debug, Clone, PartialEq)]
 pub struct BucklingEigenOptions {
@@ -1167,16 +1170,7 @@ pub fn lowest_buckling_factors(
             }
             cols.clone()
         }
-        None => {
-            let mut s = START_SEED;
-            (0..q)
-                .map(|_| {
-                    (0..n)
-                        .map(|_| ((lcg(&mut s) >> 11) as f64 / (1u64 << 53) as f64) * 2.0 - 1.0)
-                        .collect()
-                })
-                .collect()
-        }
+        None => buckling_default_start(q, n),
     };
     let fopts = SkylineOptions {
         ordering: opts.ordering.clone(),
@@ -1190,6 +1184,104 @@ pub fn lowest_buckling_factors(
         ResidualTest::Relative => None,
         ResidualTest::Backward => Some((inf_norm(kg), inf_norm(k))),
     };
+    let (refusal, l_last, bound, first_iterations) =
+        match buckling_iterate(k, kg, count, q, &x0, opts, &fac, points, scale)? {
+            BucklingRun::Done(r) => return Ok(r),
+            BucklingRun::Short {
+                refusal,
+                l_last,
+                bound,
+                iterations,
+            } => (refusal, l_last, bound, iterations),
+        };
+    // ADR 0564 D1: fewer positive Ritz values than asked and the count at the far bound differs (refused before). With at
+    // least one positive value found, restart once with a subspace that holds every factor of |lambda| below a counted band.
+    let Some(l_last) = l_last else {
+        return Err(refusal);
+    };
+    let q2 = match buckling_restart_size(k, kg, count, l_last, bound, opts, points) {
+        Some(q2) if q2.min(n) > q && q2.min(n) > count => q2.min(n),
+        _ => return Err(refusal),
+    };
+    let x2 = buckling_default_start(q2, n);
+    match buckling_iterate(k, kg, count, q2, &x2, opts, &fac, points, scale) {
+        Ok(BucklingRun::Done(mut r)) => {
+            r.iterations += first_iterations;
+            Ok(r)
+        }
+        _ => Err(refusal),
+    }
+}
+
+/// The default start of [`lowest_buckling_factors`]: `q` pseudo-random columns of length `n`, generated one after another
+/// (the first `q` columns of a larger start are the start of `q` columns).
+fn buckling_default_start(q: usize, n: usize) -> Vec<Vec<f64>> {
+    let mut s = START_SEED;
+    (0..q)
+        .map(|_| {
+            (0..n)
+                .map(|_| ((lcg(&mut s) >> 11) as f64 / (1u64 << 53) as f64) * 2.0 - 1.0)
+                .collect()
+        })
+        .collect()
+}
+
+/// The size of the restart of ADR 0564 D1: `R = lambda_mp 2^k` until `R` holds `count` positive factors (or reaches the far
+/// bound `S`), then the number of factors of both signs with `|lambda| < B = min(2 R, S)`, by Sturm counts of
+/// `K + s K_sigma` at `s = B` and `s = -B`. `None` if a count is refused.
+fn buckling_restart_size(
+    k: &CsrMatrix,
+    kg: &CsrMatrix,
+    count: usize,
+    l_last: f64,
+    bound: f64,
+    opts: &BucklingEigenOptions,
+    points: Option<&[[f64; 3]]>,
+) -> Option<usize> {
+    let mut r = bound;
+    for e in 1..=RESTART_DOUBLINGS {
+        let t = l_last * 2f64.powi(e);
+        if t >= bound {
+            break;
+        }
+        if buckling_count(k, kg, t, &opts.ordering, opts.factorisation, points).ok()? >= count {
+            r = t;
+            break;
+        }
+    }
+    let band = (2.0 * r).min(bound);
+    let pos = buckling_count(k, kg, band, &opts.ordering, opts.factorisation, points).ok()?;
+    let neg = buckling_count(k, kg, -band, &opts.ordering, opts.factorisation, points).ok()?;
+    Some(pos + neg)
+}
+
+/// The outcome of one subspace iteration of [`lowest_buckling_factors`].
+enum BucklingRun {
+    Done(BucklingEigen),
+    /// Fewer positive Ritz values than asked and the Sturm count at the far bound differs: the refusal, the largest
+    /// positive factor found (`None` if none), the far bound and the iterations made (ADR 0564 D1).
+    Short {
+        refusal: EigenError,
+        l_last: Option<f64>,
+        bound: f64,
+        iterations: usize,
+    },
+}
+
+/// Steps 1 to 5 of ADR 0390 D5 with `q` columns from the start `x0`.
+#[allow(clippy::too_many_arguments)]
+fn buckling_iterate(
+    k: &CsrMatrix,
+    kg: &CsrMatrix,
+    count: usize,
+    q: usize,
+    x0: &[Vec<f64>],
+    opts: &BucklingEigenOptions,
+    fac: &Factor,
+    points: Option<&[[f64; 3]]>,
+    scale: Option<(f64, f64)>,
+) -> Result<BucklingRun, EigenError> {
+    let n = k.n;
     // A v with A = -K_sigma.
     let apply_a = |v: &[f64]| -> Vec<f64> { matvec(kg, v).into_iter().map(|t| -t).collect() };
     let mut ax: Vec<Vec<f64>> = x0.iter().map(|c| apply_a(c)).collect();
@@ -1315,18 +1407,27 @@ pub fn lowest_buckling_factors(
             }
         }
         if c != mp {
-            return Err(EigenError::SturmMismatch {
+            let refusal = EigenError::SturmMismatch {
                 shift: s,
                 counted: c,
                 expected: mp,
-            });
+            };
+            if exhausted {
+                return Ok(BucklingRun::Short {
+                    refusal,
+                    l_last: (mp >= 1).then(|| 1.0 / theta[mp - 1]),
+                    bound,
+                    iterations: it,
+                });
+            }
+            return Err(refusal);
         }
         let found = count.min(mp);
         let mut vectors: Vec<Vec<f64>> = x.into_iter().take(found).collect();
         for v in vectors.iter_mut() {
             normalise_sign(v);
         }
-        return Ok(BucklingEigen {
+        return Ok(BucklingRun::Done(BucklingEigen {
             values: theta[..found].iter().map(|t| 1.0 / t).collect(),
             vectors,
             residuals: res[..found].to_vec(),
@@ -1338,7 +1439,7 @@ pub fn lowest_buckling_factors(
                 expected: mp,
             },
             exhausted: if exhausted { Some(bound) } else { None },
-        });
+        }));
     }
     Err(EigenError::NotConverged {
         iterations: opts.max_iterations,
