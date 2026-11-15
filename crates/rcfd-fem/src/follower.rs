@@ -18,6 +18,8 @@
 //! * [`buckling_factors`] (D3): `(K + mu (K_sigma - K_p,sym)) x = 0` by the path of [`crate::buckling::factors`].
 //! * [`tangent_modes`] (D7): the modes of the tangent of a converged nonlinear state (with the contributions' tangents), `K_T
 //!   phi = omega^2 M phi`, by the eigensolver of [`crate::geometric::prestressed_modes`].
+//! * [`tangent_buckling_factors`] (ADR 0590, F-669): `(K_T + mu K_sigma) x = 0` about a nonlinear state, the driver's
+//!   tangent in place of the stiffness at rest of [`crate::buckling::factors`].
 //! * [`tangent_modes_full`] and [`buckling_factors_full`] (ADR 0580, F-653): the same with the full (unsymmetric) load
 //!   stiffness, complex eigenvalues by the shift-invert Arnoldi solver of [`rcfd_linalg::eigen_pencil`]: the flutter of
 //!   follower loads (Beck's column).
@@ -36,7 +38,7 @@ use crate::model::{Load, SolidModel};
 use crate::nonlinear::{add_triplets, Contribution};
 use rcfd_core::vec3::{cross, Vec3};
 use rcfd_linalg::complex::C64;
-use rcfd_linalg::eigen::{lowest_eigenpairs, Shift, SubspaceOptions};
+use rcfd_linalg::eigen::{lowest_buckling_factors, lowest_eigenpairs, BucklingEigenOptions, Shift, SubspaceOptions};
 use rcfd_linalg::eigen_pencil::{nearest_pencil_eigenpairs, PencilError, PencilOptions};
 use rcfd_linalg::CsrMatrix;
 
@@ -580,6 +582,88 @@ pub fn tangent_modes(
         })
         .collect();
     Ok(ModalResult::from_parts(eig, modes, nf, rigid_free, dofs))
+}
+
+/// The buckling factors about a nonlinear state (ADR 0590 D1): the lowest positive `mu` of `(K_T + mu K_sigma) x = 0`, `K_T`
+/// the tangent of the driver at the displacement `u` and the element `states` ([`crate::nonlinear::tangent`]), `K_sigma` the
+/// geometric stiffness of `prestress` (the increment of the reference load), both reduced on the model's prescribed
+/// equations and `prescribed` with zero values (their values are not used). The model check is the driver's (the
+/// transformation path and temperature loads are refused); the rigid-motion test, the zero-shift pivot rule of ADR 0402,
+/// the eigensolver, its options and the result are those of [`crate::buckling::factors`]. At `u = 0` with the initial states
+/// it is that path's problem.
+pub fn tangent_buckling_factors(
+    model: &SolidModel,
+    prescribed: &[Prescribed],
+    u: &[f64],
+    states: &[ElementState],
+    prestress: &Prestress,
+    options: &BucklingOptions,
+) -> Result<BucklingResult> {
+    model.validate()?;
+    model.check_supported_nonlinear()?;
+    crate::nonlinear::check_driver_model(model)?;
+    crate::modal::check_coordinate_order(options.coordinate_order, options.factorisation, false)?;
+    let dofs = model.dof_map();
+    let fixed: Vec<(usize, f64)> = prescribed_equations(model, prescribed)?
+        .into_iter()
+        .map(|(eq, _)| (eq, 0.0))
+        .collect();
+    check_rigid_body_motions(model, &fixed)?;
+    let k = crate::nonlinear::tangent(model, u, states, options.threads)?;
+    let kg = crate::geometric::assemble_geometric(model, prestress, options.threads)?;
+    let zero = vec![0.0; k.n];
+    let kr = reduce(&k, &zero, &fixed)?;
+    let gr = reduce(&kg, &zero, &fixed)?;
+    let free = kr.free().to_vec();
+    let nf = free.len();
+    if options.factors == 0 || options.factors >= nf {
+        return Err(FemError::InvalidValue {
+            key: "factors",
+            reason: format!(
+                "{} factors requested of a model with {nf} free unknowns (at least 1 and fewer than the unknowns)",
+                options.factors
+            ),
+        });
+    }
+    if let Ok(Some((row, ratio))) = crate::mpc::zero_shift_failing_pivot(&kr.matrix) {
+        let (node, component) = dofs.node_component(free[row]).expect("free equation");
+        return Err(FemError::Solver {
+            solver: "lowest_buckling_factors",
+            reason: format!(
+                "node {node} component {component}: pivot ratio {ratio:e} of the tangent K_T,FF at zero shift, below 1e-8 \
+                 (ADR 0402): the state is at or beyond a critical point, or the prescribed displacements leave a motion \
+                 free (ADR 0590 D1)"
+            ),
+        });
+    }
+    let opts = BucklingEigenOptions {
+        tolerance: options.tolerance,
+        residual_test: options.residual_test,
+        max_iterations: options.max_iterations,
+        subspace_size: options.subspace_size,
+        factorisation: options.factorisation,
+        points: options
+            .coordinate_order
+            .then(|| crate::modal::free_points(model, &dofs, &free)),
+        ..BucklingEigenOptions::default()
+    };
+    let eig =
+        lowest_buckling_factors(&kr.matrix, &gr.matrix, options.factors, &opts).map_err(|e| FemError::Solver {
+            solver: "lowest_buckling_factors",
+            reason: e.to_string(),
+        })?;
+    let modes = eig
+        .vectors
+        .iter()
+        .map(|v| {
+            let mut full = vec![0.0; k.n];
+            for (&eq, &x) in free.iter().zip(v) {
+                full[eq] = x;
+            }
+            full
+        })
+        .collect();
+    Ok(BucklingResult::from_parts(eig, modes, nf, dofs))
 }
 
 /// The complex modes about a nonlinear state with the full (unsymmetric) tangent (ADR 0580 D3).

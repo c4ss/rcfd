@@ -32,13 +32,18 @@
 //! on both paths, real and undamped, and in the Rayleigh stiffness. A model without these and without a pre-stress takes the
 //! code of ADR 0448 as it was.
 //!
+//! ADR 0590 (F-669): [`DirectHarmonic::about_state`] takes the tangent of the nonlinear driver at a state in place of the
+//! stiffness at rest (one undamped part; Rayleigh damping and dashpots as above; no loss factor, pre-stress or viscoelastic
+//! material; the plain path). The code after the assembly is shared with [`DirectHarmonic::new`], moved unchanged.
+//!
 //! ADR 0565 (F-619): [`DirectHarmonic::response_with_references`] takes a [`BaseMotion`] at the prescribed equations of a
 //! model on the transformation path, `x = T q + G` with `G` the constant of the elimination for the complex base values
 //! (`T` unchanged), `A_r Q = T^T (F - A_ext G)`, and returns the reference unknowns of the rigid sets with the response
 //! ([`DirectHarmonicSolution`]). [`DirectHarmonic::response_with_base`] keeps refusing base motion on that path.
 
 use crate::assemble::{assemble_with, stiffness_with};
-use crate::constraint::prescribed_equations;
+use crate::constraint::{prescribed_equations, Prescribed};
+use crate::element::ElementState;
 use crate::error::{FemError, Result};
 use crate::geometric::Prestress;
 use crate::harmonic::{HarmonicLoad, HarmonicResponse, HarmonicStress};
@@ -374,6 +379,8 @@ pub struct DirectHarmonic {
     geometric: Option<Vec<f64>>,
     /// ADR 0543 D1: the reduced matrices of the transformation path; `None` on the plain path.
     transformed: Option<Box<Transformed>>,
+    /// ADR 0590 D2: a solver of [`DirectHarmonic::about_state`] (its stress is refused).
+    about_state: bool,
 }
 
 /// The real matrices of the transformation path reduced once, `T^T X T`, on one reduced pattern (ADR 0543 D1, D3).
@@ -757,6 +764,124 @@ impl DirectHarmonic {
             }
         };
 
+        Self::finish(
+            model,
+            options,
+            rayleigh,
+            &fixed,
+            k_total_m,
+            mass_m,
+            k_parts,
+            k_total,
+            geometric,
+            on_transformation,
+            false,
+        )
+    }
+
+    /// The direct harmonic solver about a nonlinear state (ADR 0590 D2): `A(omega) = K_T - omega^2 M + i omega (alpha M + beta
+    /// K_T + C_d)`, `K_T` the tangent of the driver at the displacement `u` and the element `states`
+    /// ([`crate::nonlinear::tangent`]), `M` the consistent mass, the Rayleigh damping and the dashpots of `options`. The model
+    /// check is the driver's (the transformation path and temperature loads are refused); the prescribed equations of the
+    /// model and of `prescribed` are held with zero increments (their values are not used; a [`BaseMotion`] gives a harmonic
+    /// increment there). Refused: a loss factor (key `"loss factor"`), a pre-stress (key `"prestress"`: the state's stress is
+    /// in `K_T`), a temperature (key `"temperature"`), a viscoelastic material (key `"material"`), a tangent off the mass
+    /// pattern (key `"pattern"`). [`DirectHarmonic::stress`] of this solver is refused. At `u = 0` with the initial states the
+    /// operator is that of [`DirectHarmonic::new`] without a pre-stress.
+    pub fn about_state(
+        model: &SolidModel,
+        prescribed: &[Prescribed],
+        u: &[f64],
+        states: &[ElementState],
+        options: &DirectHarmonicOptions,
+    ) -> Result<DirectHarmonic> {
+        model.validate()?;
+        model.check_supported_nonlinear()?;
+        crate::nonlinear::check_driver_model(model)?;
+        if let Some((set, _)) = options.loss_factors.first() {
+            return Err(invalid(
+                "loss factor",
+                format!(
+                    "element set '{set}': the direct harmonic solve about a nonlinear state takes no loss factor (ADR                      0590 D2)"
+                ),
+            ));
+        }
+        if options.prestress.is_some() {
+            return Err(invalid(
+                "prestress",
+                "the direct harmonic solve about a nonlinear state takes the state's stress in its tangent; no pre-stress                  is added (ADR 0590 D2)"
+                    .to_string(),
+            ));
+        }
+        if let Some(t) = options.temperature {
+            return Err(invalid(
+                "temperature",
+                format!(
+                    "temperature {t:e}: not read by the direct harmonic solve about a nonlinear state (ADR 0590 D2)"
+                ),
+            ));
+        }
+        if let Some((set, m)) = model.materials().iter().find(|(_, m)| is_viscoelastic(m)) {
+            return Err(invalid(
+                "material",
+                format!(
+                    "element set '{set}' carries a {} material: the direct harmonic solve about a nonlinear state takes                      no complex modulus (ADR 0590 D2)",
+                    m.name()
+                ),
+            ));
+        }
+        finite_nonneg("damping", "resonance pivot threshold", options.resonance_pivot)?;
+        if !matches!(
+            options.factor,
+            DirectFactor::Envelope | DirectFactor::SupernodalNestedDissection
+        ) {
+            return Err(invalid(
+                "solver",
+                format!(
+                    "factor {:?}: the direct harmonic solve takes the envelope or the supernodal factor (ADR 0509)",
+                    options.factor
+                ),
+            ));
+        }
+        let rayleigh = options.rayleigh.unwrap_or((0.0, 0.0));
+        finite_nonneg("damping", "Rayleigh mass coefficient", rayleigh.0)?;
+        finite_nonneg("damping", "Rayleigh stiffness coefficient", rayleigh.1)?;
+        let fixed: Vec<(usize, f64)> = prescribed_equations(model, prescribed)?
+            .into_iter()
+            .map(|(eq, _)| (eq, 0.0))
+            .collect();
+        let k_total_m = crate::nonlinear::tangent(model, u, states, options.threads)?;
+        let mass_m = consistent_with(model, options.threads)?;
+        if mass_m.col != k_total_m.col || mass_m.row_ptr != k_total_m.row_ptr {
+            return Err(invalid(
+                "pattern",
+                "the tangent and the mass on different patterns".to_string(),
+            ));
+        }
+        let k_total = k_total_m.val.clone();
+        let k_parts: StiffnessParts = vec![(k_total_m.val.clone(), Damping::None)];
+        Self::finish(
+            model, options, rayleigh, &fixed, k_total_m, mass_m, k_parts, k_total, None, false, true,
+        )
+    }
+
+    /// The dashpots, the transformation branch, the free rows and the nested-dissection order of a solver whose matrices are
+    /// assembled (ADR 0590 D2: the code of [`DirectHarmonic::new`] after its assembly, moved unchanged; `about_state` marks a
+    /// solver of [`DirectHarmonic::about_state`]).
+    #[allow(clippy::too_many_arguments)]
+    fn finish(
+        model: &SolidModel,
+        options: &DirectHarmonicOptions,
+        rayleigh: (f64, f64),
+        fixed: &[(usize, f64)],
+        k_total_m: CsrMatrix,
+        mass_m: CsrMatrix,
+        k_parts: StiffnessParts,
+        k_total: Vec<f64>,
+        geometric: Option<Vec<f64>>,
+        on_transformation: bool,
+        about_state: bool,
+    ) -> Result<DirectHarmonic> {
         // dashpots
         let dofs = model.dof_map();
         let n = dofs.n_equations();
@@ -801,7 +926,7 @@ impl DirectHarmonic {
                 geometric.as_deref(),
                 &cd,
             )?;
-            for &(e, _) in &fixed {
+            for &(e, _) in fixed {
                 t.prescribed[e] = true;
             }
             return Ok(DirectHarmonic {
@@ -820,10 +945,11 @@ impl DirectHarmonic {
                 order: None,
                 geometric: None,
                 transformed: Some(Box::new(t)),
+                about_state,
             });
         }
         let mut is_fixed = vec![false; n];
-        for &(e, _) in &fixed {
+        for &(e, _) in fixed {
             is_fixed[e] = true;
         }
         let free: Vec<usize> = (0..n).filter(|&e| !is_fixed[e]).collect();
@@ -911,6 +1037,7 @@ impl DirectHarmonic {
             order,
             geometric,
             transformed: None,
+            about_state,
         })
     }
 
@@ -996,6 +1123,14 @@ impl DirectHarmonic {
     /// [`HarmonicResponse::stress`] times the coefficient `s_m (1 + i eta_m)` of each element's material at the response's
     /// frequency, so that a loss factor gives the stress `E* eps` of the complex modulus (ADR 0448 amendment 2).
     pub fn stress(&self, model: &SolidModel, response: &HarmonicResponse) -> Result<HarmonicStress> {
+        // ADR 0590 D2: the recovered stress is that of the material at rest, not the state's increment.
+        if self.about_state {
+            return Err(invalid(
+                "stress",
+                "the stress of a direct harmonic solve about a nonlinear state is not recovered (ADR 0590 D2)"
+                    .to_string(),
+            ));
+        }
         // ADR 0494 D1: a viscoelastic part takes the split stress of the elastic base.
         if self
             .k_parts

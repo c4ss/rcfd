@@ -117,6 +117,26 @@ impl BucklingResult {
     pub fn dofs(&self) -> &DofMap {
         &self.dofs
     }
+
+    /// A result from the eigensolver's output and the expanded modes (ADR 0590 amendment 1: the buckling factors about a
+    /// nonlinear state of [`crate::follower::tangent_buckling_factors`]).
+    pub(crate) fn from_parts(
+        eig: rcfd_linalg::eigen::BucklingEigen,
+        modes: Vec<Vec<f64>>,
+        unknowns: usize,
+        dofs: DofMap,
+    ) -> BucklingResult {
+        BucklingResult {
+            factors: eig.values,
+            modes,
+            residuals: eig.residuals,
+            iterations: eig.iterations,
+            sturm: eig.sturm,
+            unknowns,
+            exhausted: eig.exhausted,
+            dofs,
+        }
+    }
 }
 
 /// The lowest positive buckling factors of `model` for the pre-stress of its reference load (ADR 0390 D6).
