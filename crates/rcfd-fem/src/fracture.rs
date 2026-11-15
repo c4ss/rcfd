@@ -161,7 +161,7 @@ impl CrackFront {
             FrontShape::Straight { advance } => {
                 let chord = sub(*x.last().expect("3 nodes"), x0);
                 let l = norm(chord);
-                if !(l > 0.0) {
+                if l.is_nan() || l <= 0.0 {
                     return Err(invalid(KEY, "the end nodes of the front coincide"));
                 }
                 let t = scaled(chord, 1.0 / l);
@@ -207,7 +207,7 @@ impl CrackFront {
                 let d0 = sub(x0, *centre);
                 let r0 = sub(d0, scaled(n, dot(d0, n)));
                 let radius = norm(r0);
-                if !(radius > 0.0) {
+                if radius.is_nan() || radius <= 0.0 {
                     return Err(invalid(KEY, "the first front node is on the axis"));
                 }
                 let c = scaled(r0, 1.0 / radius);
@@ -243,7 +243,7 @@ impl CrackFront {
             }
         };
         for k in 1..s.len() {
-            if !(s[k] > s[k - 1]) {
+            if s[k].is_nan() || s[k] <= s[k - 1] {
                 return Err(invalid(
                     KEY,
                     format!(
@@ -306,7 +306,7 @@ impl FrontGeometry {
             FrontKind::Straight { e, .. } => Ok(*e),
             FrontKind::Circular { centre, .. } => {
                 let (r, l) = self.radial(*centre, x);
-                if !(l > 0.0) {
+                if l.is_nan() || l <= 0.0 {
                     return Err(invalid(
                         "crack front",
                         format!("the point {x:?} is on the axis of the front"),
@@ -1107,7 +1107,7 @@ pub fn centre_crack_plate(spec: &PlateCrack) -> Result<CrackedPlate> {
         &[("a", a), ("W", w), ("H", hh), ("t", t), ("h0", h0), ("growth", g)],
     )?;
     let zone = nu_ as f64 * h0;
-    if nu_ == 0 || !(g > 1.0) || !(zone < a) || !(a + zone < w) || !(zone < hh) {
+    if nu_ == 0 || g <= 1.0 || zone >= a || a + zone >= w || zone >= hh {
         return Err(invalid(
             KEY,
             format!(
@@ -1385,11 +1385,12 @@ pub fn penny_crack_cylinder(spec: &PennyCrack) -> Result<CrackedCylinder> {
         || n_theta < 2
         || n_theta % 2 != 0
         || n_t == 0
-        || !(g_in > 1.0 && g_out > 1.0)
-        || !(s * 2f64.sqrt() < r_t)
-        || !(r_t < a - zone)
-        || !(a + zone < big_r)
-        || !(zone < hh)
+        || g_in <= 1.0
+        || g_out <= 1.0
+        || s * 2f64.sqrt() >= r_t
+        || r_t >= a - zone
+        || a + zone >= big_r
+        || zone >= hh
     {
         return Err(invalid(
             KEY,
