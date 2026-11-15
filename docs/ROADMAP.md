@@ -12205,12 +12205,31 @@ fixed by the item's registration ADR before any code.
     0448 H6 with a tip spring equals the 1-D chain within 1e-8; the reference unknowns of the rigid sets are returned;
     defaults bit-identical.
   - note: Structural solver, advanced tier. Follow-up of F-528 (ADR 0543, 2026-11-15).
-- [ ] **F-620** Hyperelastic materials on the nonlinear transient Method step and the linear paths
+- [~] **F-620** Hyperelastic materials on the nonlinear transient Method step and the linear paths
   - depends on: F-425
   - acceptance: Every limit not stated here is registered in the ADR before the run. Hyperelastic materials on the
     nonlinear transient Method step and the linear paths (the linearised material of the small-strain moduli), the
     Method step together with F-611.
-  - note: Structural solver, advanced tier. Follow-up of F-425 (ADR 0541, 2026-11-15).
+  - note: Structural solver, advanced tier. ADR 0555, 2026-11-15: PARTIAL. The nonlinear transient Method step takes the
+    hyperelastic material (neo-Hookean and Mooney-Rivlin) through the driver's functions, its strain energy F-425's
+    mat_hyper::energy as F-611's MaterialDiscreteGradient step; the linear paths (static, recovered stress, modes,
+    damped modes, direct harmonic, linear transient, buckling) take the linearised material, the isotropic elasticity of
+    the small-strain moduli (mat_hyper::linearised_elasticity through Material::linear_elasticity_matrix,
+    linear_elasticity_at and linear_stress at the linear call sites; elasticity_matrix still refuses it); Beam2 and
+    shell elements and a temperature load with the material refused naming a follow-up of ADR 0555. Method step against
+    F-611 at state S: accelerations equal, strain energy equal bits; free large-strain cube D(0.001) 1.0e-4 (limit
+    1e-2), order ratio 16.6 (>= 4); small amplitude against the linear integrator 2.5e-6 (1e-3), first-order ratio 10.0,
+    damped 2.0e-6; threads and restore bit-equal. Linear paths against the isotropic twin: matrix 0 to 2e-16 of the
+    tangent at rest, static 1.3e-13 (BBar K/G 1e4: 2.3e-10), homogeneous bar 1.4e-15, modes 3.0e-14, transient 4.4e-15,
+    harmonic 4.8e-14, buckling 5.2e-14, damped modes 1.1e-13, linear against nonlinear at strain 1e-6 1.1e-6 (1e-4).
+    Known misses: the modes of the BBar cantilever at K/G = 1e4 (the modal solver does not reach its 1e-10 tolerance,
+    the twin neither), and the two-material damped modes matched by position (2.0; order-free 1.1e-13). Nine of eleven
+    mutations caught; the two multi-material sites caught only after a post-run set-up (one of them only by the missed
+    check). Default bits (B0 and five default-bits files) and baseline hashes unchanged; three refusal rows retired as
+    records (ADR 0291 pattern). Citations from memory, to be checked. Follow-ups proposed. Three existing tests
+    (sa_hyper rf2_the_paths, sa_dg f1h_refusals, sa_dgm f1m_refusals) retired as ignored records with passing copies in
+    sa_hyper_paths.rs (ADR 0291 records-and-copies pattern). Follow-ups F-644 (remaining linear checks), F-645 (Beam2
+    and shells), F-646 (pre-stressed state).
 - [ ] **F-621** Case-file key for hyperelastic materials
   - depends on: F-425
   - acceptance: Every limit not stated here is registered in the ADR before the run. A case-file key [material] kind =
@@ -12433,3 +12452,24 @@ fixed by the item's registration ADR before any code.
     converged Rayleigh-Ritz reference derived in the ADR within 2 percent at 16 elements; uniform-moment results
     unchanged.
   - note: Structural solver, advanced tier. Follow-up of F-627 (ADR 0553, 2026-11-15).
+- [ ] **F-644** Hyperelastic linear paths: near-incompressible modes, order-free damped modes on two materials, multi-material sites under mutation
+  - depends on: F-620
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The six lowest frequencies of the
+    BBar cantilever of ADR 0555 at K/G = 1e4 with the hyperelastic material equal those of its isotropic twin within
+    1e-8; the damped-mode roots and the direct harmonic response of a model with two hyperelastic materials and two loss
+    factors equal the twin's within 1e-10 with the roots matched without regard to order; the mutations of the two
+    multi-material call sites are caught.
+  - note: Structural solver, advanced tier. Follow-up of F-620 (ADR 0555, 2026-11-15).
+- [ ] **F-645** Hyperelastic materials on Beam2, Shell4 and Shell3 on the linear paths
+  - depends on: F-620
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A Beam2 cantilever and a Shell4
+    plate with a neo-Hookean or Mooney-Rivlin material give on the linear static solve and the modes the results of the
+    isotropic material of the same small-strain moduli within 1e-10.
+  - note: Structural solver, advanced tier. Follow-up of F-620 (ADR 0555, 2026-11-15).
+- [ ] **F-646** Linear paths about a pre-stressed hyperelastic state
+  - depends on: F-620
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The modes about a nonlinear static
+    state of a stretched hyperelastic bar take the tangent of mat_hyper at that state; their frequencies agree with
+    central differences of the nonlinear static residual within 1e-6, and with the modes at rest within 1e-10 at a load
+    of zero.
+  - note: Structural solver, advanced tier. Follow-up of F-620 (ADR 0555, 2026-11-15).
