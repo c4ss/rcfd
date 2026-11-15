@@ -8,6 +8,17 @@
 //! on the Hessenberg matrix, and a pair is converged when `|h_(m+1,m)| |e_m^T y| <= tolerance |theta|` (the residual of `T`
 //! of its Ritz vector). Every returned pair carries its true residual `||A x - lambda B x|| / (||A x|| + |lambda| ||B x||)`.
 //! No restart: the Krylov dimension grows to `max_steps`. Every operation is sequential with a fixed order.
+//!
+//! The backward error (F-664, ADR 0587). Every returned pair also carries its normwise backward error `eta = ||A x - lambda B
+//! x|| / ((||A||_F + |lambda| ||B||_F) ||x||)` (2-norms of the vectors, Frobenius norms of the matrices): the smallest `eps`
+//! for which `(A + dA) x = lambda (B + dB) x` with `||dA||_F <= eps ||A||_F` and `||dB||_F <= eps ||B||_F` (attained by a
+//! rank-one pair; ADR 0587 arithmetic 1). The convergence test is the one above: every returned pair has `est = |h_(m+1,m)|
+//! |e_m^T y| / |theta| <= tolerance` (the field `estimates`; or the Krylov space is the whole space). From `A x - lambda B x =
+//! -(1/theta) (A - sigma B) (T x - theta x)` it bounds the backward error, in exact arithmetic, by `eta <= rho est`, `rho =
+//! (||A||_F + |sigma| ||B||_F) / (||A||_F + |lambda| ||B||_F)`; at the shift 0, `rho < 1` and `eta < tolerance`. Rounding adds
+//! a term of the order of the unit roundoff times the growth of the factor and the spread `|lambda - sigma| / min_k
+//! |lambda_k - sigma|` of the returned pairs (ADR 0587 arithmetic 3). The relative measure `residuals` is not a backward
+//! error: it is amplified by `||A - sigma B|| ||x|| / ||A x||`, the spread of the spectrum (ADR 0580 amendment 2).
 
 use crate::complex::C64;
 use crate::eigen_general::{general_eigen, GeneralEigenError};
@@ -149,6 +160,9 @@ pub struct PencilEigen {
     pub vectors: Vec<Vec<C64>>,
     /// `||A x - lambda B x|| / (||A x|| + |lambda| ||B x||)` of each pair.
     pub residuals: Vec<f64>,
+    /// The normwise backward error `||A x - lambda B x|| / ((||A||_F + |lambda| ||B||_F) ||x||)` of each pair (F-664, ADR
+    /// 0587): at most `rho` times its estimate in exact arithmetic (the module documentation).
+    pub backward_errors: Vec<f64>,
     /// The convergence estimate `|h_(m+1,m)| |e_m^T y| / |theta|` of each pair.
     pub estimates: Vec<f64>,
     /// The Krylov dimension (solves with the factor).
@@ -273,7 +287,22 @@ fn cnorm(x: &[C64]) -> f64 {
     x.iter().map(|z| z.norm_sqr()).sum::<f64>().sqrt()
 }
 
-/// The `count` eigenpairs of `A x = lambda B x` nearest `options.shift` (ADR 0580 D1).
+/// The Frobenius norm of the stored values, summed row by row in storage order (ADR 0587 D1).
+fn frobenius(a: &CsrMatrix) -> f64 {
+    let mut s = 0.0;
+    for r in 0..a.n {
+        for k in a.row_ptr[r]..a.row_ptr[r + 1] {
+            s += a.val[k] * a.val[k];
+        }
+    }
+    s.sqrt()
+}
+
+/// The `count` eigenpairs of `A x = lambda B x` nearest `options.shift` (ADR 0580 D1), each with its residual, its
+/// convergence estimate and its normwise backward error (ADR 0587 D1). Converged when every returned pair has the estimate
+/// `|h_(m+1,m)| |e_m^T y| / |theta| <= options.tolerance`, which bounds the backward error by `rho` times the tolerance in exact
+/// arithmetic (`rho = (||A||_F + |sigma| ||B||_F) / (||A||_F + |lambda| ||B||_F)`, below 1 at the shift 0; the module
+/// documentation).
 pub fn nearest_pencil_eigenpairs(
     a: &CsrMatrix,
     b: &CsrMatrix,
@@ -381,7 +410,8 @@ fn finish(
     m: usize,
 ) -> PencilEigen {
     let n = a.n;
-    let mut out: Vec<(C64, Vec<C64>, f64, f64)> = Vec::with_capacity(set.len());
+    let (na, nb) = (frobenius(a), frobenius(b));
+    let mut out: Vec<(C64, Vec<C64>, f64, f64, f64)> = Vec::with_capacity(set.len());
     for (&k, &e) in set.iter().zip(est) {
         let theta = values[k];
         let lambda = C64::from_real(sigma) + C64::ONE / theta;
@@ -414,7 +444,9 @@ fn finish(
         let r: Vec<C64> = ax.iter().zip(&bx).map(|(&p, &q)| p - lambda * q).collect();
         let den = cnorm(&ax) + lambda.abs() * cnorm(&bx);
         let res = if den > 0.0 { cnorm(&r) / den } else { cnorm(&r) };
-        out.push((lambda, x, res, e));
+        let bden = (na + lambda.abs() * nb) * cnorm(&x);
+        let eta = if bden > 0.0 { cnorm(&r) / bden } else { cnorm(&r) };
+        out.push((lambda, x, res, e, eta));
     }
     out.sort_by(|p, q| {
         let dp = (p.0 - C64::from_real(sigma)).abs();
@@ -428,6 +460,7 @@ fn finish(
         vectors: out.iter().map(|o| o.1.clone()).collect(),
         residuals: out.iter().map(|o| o.2).collect(),
         estimates: out.iter().map(|o| o.3).collect(),
+        backward_errors: out.iter().map(|o| o.4).collect(),
         steps: m,
     }
 }
