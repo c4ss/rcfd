@@ -6388,9 +6388,9 @@
     "deps": [
       "F-629"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The cause (coarse operator, smoother or aggregation) identified by registered controls on the ADR 0552 plate P4b; if a change is made, P4b at max_coarse 60 in at most twice the Shell3 P3b count, the other ADR 0552 counts not increased and the solid-only bits unchanged.",
-    "note": "Structural solver, advanced tier. Follow-up of F-629 (ADR 0552, 2026-11-15)."
+    "note": "Structural solver, advanced tier. Follow-up of F-629 (ADR 0552, 2026-11-15). DONE. ADR 0572, 2026-11-15: the cause of the thin Shell4 plate's count with the forced hierarchy is the smoother. Registered controls on P4b (Shell4 16 x 16, t/a 0.001, max_coarse 60) and P4a (t/a 0.01), G = P4b / P4a: changes of the aggregation (geometric 612, G 7.2; theta 0.08 576, 7.3) and of the coarse operator (exact level-1 solve 620, 8.1; tentative prolongator 654, 5.5; prolongator smoothed twice 744, 10.3) leave the count above 236 and G above 3.5; the vertex-patch smoother alone on the same hierarchy gives 37 (G 2.1, two levels) and 31 (G 1.6, three levels); four node sweeps lower the count but keep G at 5.6. Mechanism (derived): the MITC4 shear-to-bending stiffness ratio 3.50 (h/t)^2 is 1.37e4 on P4b, the Lyly-Stenberg-Vihinen factor keeps Shell3's at 17.5, and Shell3 without it takes 1147 iterations. Change, opt-in: rcfd_linalg::amg_elastic::Smoother::VertexPatch (new field ElasticAmgSettings::smoother, default BlockGaussSeidel; multiplicative Schwarz on the patch of each block and its matrix neighbours with exact local solves, forward before and backward after the coarse correction, on every level above the coarsest; ElasticAmgError::PatchNotPositive), reached through SmoothedAggregationStructural(settings) or SmoothedAggregation(settings); rcfd-fem unchanged. P4b at max_coarse 60 in 31 iterations (limit 118 = twice ADR 0552's P3b 59, and within twice P3b's 25 with the change); the ADR 0552 counts with the change 1, 1, 1, 20, 22, 1, 1 (default settings) and 19, 31, 8, 22, 25, 11, 16 (forced hierarchy), none increased, within 1.6e-10 of the direct solve; the Shell4 plate at t/a 0.1, 0.01, 0.003, 0.001 in 7, 19, 26, 31; cycle symmetric to 8.2e-15. Solid-only bits unchanged: four Hex8 digests and the P4b reference digest of the base reproduced, existing tests unedited, baseline hashes pass. Five of five mutations caught. Not covered: other meshes and t/a below 0.001 (the CG residual floor is above 1e-9 there), memory of the patch inverses, a case-file key."
   },
   {
     "id": "F-642",
@@ -6580,5 +6580,28 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. An opt-in variant of the creep material with the volumetric stress kappa ln J C^-1 and its consistent tangent (against central differences within 1e-6); on the cylinder of ADR 0549 at the registered p the growth of the point-wise difference against a finite-strain reference of the same law (ADR 0568 F4) within a registered bound below 1e-3; the default material, every existing result and the bit records bit-identical; the schema golden changed only with the maintainer's approval.",
     "note": "Structural solver, advanced tier. Follow-up of F-637 (ADR 0568, 2026-11-15)."
+  },
+  {
+    "id": "F-659",
+    "title": "Vertex-patch smoother on a mesh sequence of thin plates (robustness of the ADR 0572 smoother in h/t)",
+    "phase": 9,
+    "deps": [
+      "F-641"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The Shell4 and Shell3 simply supported plates on at least three meshes, at thicknesses where the CG's true-residual floor is below the tolerance, solved by SmoothedAggregationStructural with Smoother::VertexPatch and a forced hierarchy in a registered number of iterations each, the growth of the count with h/t bounded by a registered limit; the default settings' bits unchanged.",
+    "note": "Follow-up of F-641 (ADR 0572, 2026-11-15)."
+  },
+  {
+    "id": "F-660",
+    "title": "Case-file key for the structural smoothed aggregation with the vertex-patch smoother",
+    "phase": 9,
+    "deps": [
+      "F-641",
+      "F-640"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. A solid_case solver key selects SmoothedAggregationStructural with Smoother::VertexPatch; a shell model read from a case file solves to the bits of the library call; existing keys, goldens and baseline hashes unchanged.",
+    "note": "Follow-up of F-641 (ADR 0572, 2026-11-15)."
   }
 ]
