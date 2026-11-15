@@ -265,7 +265,8 @@ fn f0_f1_f1n_f1r_near_incompressible_bbar_modes_against_the_twin() {
 // ----------------------------------------------------------------------------------------------- Q0: the measure
 
 #[test]
-fn q0_the_order_free_measure() {
+#[ignore = "known miss of ADR 0581 Q0b (registered run, log run1.log): |W - 1e-6| = 1.000113e-12 against 1e-12, the expected value of the set-up wrong (the exact W is 1e-6 / (1 + 1e-6)); Q0a 0, Q0c 1.9999, Q0d inf met; amendment 1, continued in q0_the_order_free_measure_corrected"]
+fn q0_the_order_free_measure_known_miss() {
     let mut c = Checks::new();
     let roots: Vec<C64> = (1..=4)
         .flat_map(|k| {
@@ -280,6 +281,37 @@ fn q0_the_order_free_measure() {
     scaled[3] = C64::new(scaled[3].re * (1.0 + 1e-6), scaled[3].im * (1.0 + 1e-6));
     let w = order_free(&roots, &scaled);
     c.at_most("Q0b one root scaled by 1 + 1e-6: |W - 1e-6|", (w - 1e-6).abs(), 1e-12);
+    let mut duplicated = roots.clone();
+    duplicated[0] = duplicated[1];
+    let w = order_free(&duplicated, &roots);
+    let gap = dist(&roots[0], &roots[1]) / 2.0;
+    c.at_least("Q0c root 0 replaced by root 1 (a bijection enforced)", w, gap);
+    let w = order_free(&roots, &roots[..7]);
+    c.holds("Q0d lists of 8 and 7: a miss", w.is_infinite(), &format!("{w:e}"));
+    c.finish();
+}
+
+/// ADR 0581 amendment 1: Q0 with the expected value of Q0b corrected to `1e-6 / (1 + 1e-6)`, the limit unchanged.
+#[test]
+fn q0_the_order_free_measure_corrected() {
+    let mut c = Checks::new();
+    let roots: Vec<C64> = (1..=4)
+        .flat_map(|k| {
+            let w = 7.0 * (k * k) as f64;
+            [C64::new(-0.01 * w, w), C64::new(-0.01 * w, -w)]
+        })
+        .collect();
+    let reversed: Vec<C64> = roots.iter().rev().copied().collect();
+    let w = order_free(&roots, &reversed);
+    c.holds("Q0a against the reverse: exactly 0", w == 0.0, &format!("{w:e}"));
+    let mut scaled = roots.clone();
+    scaled[3] = C64::new(scaled[3].re * (1.0 + 1e-6), scaled[3].im * (1.0 + 1e-6));
+    let w = order_free(&roots, &scaled);
+    c.at_most(
+        "Q0b' one root scaled by 1 + 1e-6: |W - 1e-6 / (1 + 1e-6)|",
+        (w - 1e-6 / (1.0 + 1e-6)).abs(),
+        1e-12,
+    );
     let mut duplicated = roots.clone();
     duplicated[0] = duplicated[1];
     let w = order_free(&duplicated, &roots);
