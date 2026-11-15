@@ -32,6 +32,9 @@
 //! * ADR 0571 (F-638): [`ContactSet::recovered_tractions`], the traction `sum_a (t_a/A_a) Phi_a` of a mortar pair at the
 //!   load-rule points of its contactor faces (the multipliers `t_a/A_a` are the traction's coefficients in the basis `Phi`,
 //!   not its values).
+//! * ADR 0607 (F-608): with `NewtonOptions::line_search` (opt-in, the total Lagrangian body only) each Newton correction is
+//!   damped by a line search on the energy; the contact set's trial forces ([`Contribution::add_trial_force`]) record
+//!   nothing. With `curvature_fallback` it converges the punch whose contactor starts lifted (ADR 0607 diagnosis).
 
 use crate::assemble::stiffness;
 use crate::constraint::{prescribed_equations, reduce, Prescribed};
@@ -291,6 +294,13 @@ impl ContactOptions {
                 ),
             });
         }
+        if self.kinematics == Kinematics::Linear && self.newton.line_search {
+            return Err(FemError::InvalidValue {
+                key: "line_search",
+                reason: "newton.line_search: the linear body's loop takes the full Newton step (ADR 0607 D1)"
+                    .to_string(),
+            });
+        }
         if self.kinematics == Kinematics::Linear && self.newton.unsymmetric {
             return Err(FemError::InvalidValue {
                 key: "solver",
@@ -347,6 +357,9 @@ pub struct NewtonSolve {
     /// test (linear body, ADR 0507 amendment 2; the total Lagrangian body with `ContactOptions::curvature_fallback`, ADR
     /// 0570, else 0).
     pub convex_iterations: usize,
+    /// The step lengths of the line search of the total Lagrangian body with `NewtonOptions::line_search` (ADR 0607 D1),
+    /// one per correction; empty otherwise.
+    pub step_lengths: Vec<f64>,
 }
 
 /// One load step of the driver.
@@ -2050,6 +2063,12 @@ impl Contribution for ContactSet {
         self.history.borrow_mut().fallbacks += 1;
         Ok(())
     }
+    /// ADR 0607 D2: the force of `add` at `u`, nothing recorded (no active set, no cycle event).
+    fn add_trial_force(&self, u: &[f64], _load_factor: f64, force: &mut [f64]) -> Result<()> {
+        let all = self.evaluate_all(u)?;
+        self.force_and_tangent(&all, force, None, true, false);
+        Ok(())
+    }
 }
 
 fn norm2(v: impl Iterator<Item = f64>) -> f64 {
@@ -2059,6 +2078,7 @@ fn norm2(v: impl Iterator<Item = f64>) -> f64 {
 struct Solved {
     reference: f64,
     convex: usize,
+    step_lengths: Vec<f64>,
     u: Vec<f64>,
     residuals: Vec<f64>,
     energies: Vec<f64>,
@@ -2170,6 +2190,7 @@ fn linear_solve(
             return Ok(Solved {
                 reference,
                 convex,
+                step_lengths: Vec::new(),
                 u,
                 residuals,
                 energies,
@@ -2326,6 +2347,7 @@ pub fn solve_with(
                     reference: 0.0,
                     // ADR 0570 D3: the iterations taken without the curvature part (0 without the option).
                     convex: set.history.borrow().fallbacks,
+                    step_lengths: e.step_lengths,
                     u: e.u,
                     residuals: e.residuals,
                     energies: e.energies,
@@ -2389,6 +2411,7 @@ pub fn solve_with(
                 active_sets: set.active_sets(),
                 penetration,
                 convex_iterations: out.convex,
+                step_lengths: out.step_lengths,
             });
             let accepted = options.max_augmentations == 0 || over.is_empty();
             if accepted {

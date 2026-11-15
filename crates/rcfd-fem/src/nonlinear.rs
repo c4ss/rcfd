@@ -1167,6 +1167,12 @@ pub struct NewtonOptions {
     /// the unsymmetric envelope `L D U` ([`rcfd_linalg::skyline_lu::EnvelopeLu`], reverse Cuthill-McKee) with the same pivot
     /// tests; off by default. Refused with [`DirectFactor::SupernodalNestedDissection`] (key `"solver"`).
     pub unsymmetric: bool,
+    /// The line search on the energy (ADR 0607 D1): each correction of an attempt without a load-factor control is taken
+    /// with the step length `alpha` at which the derivative of the energy along it, `s = -d . r(u + alpha d)`, has fallen to
+    /// at most half of its value at `alpha = 0` (the full step whenever it passes, else Illinois regula falsi on `(0, 1)`,
+    /// at most 8 further trials); the lengths are recorded in [`LoadStep::step_lengths`]. Off by default; refused with
+    /// `unsymmetric` (key `"line_search"`).
+    pub line_search: bool,
 }
 
 impl NewtonOptions {
@@ -1182,6 +1188,7 @@ impl NewtonOptions {
             record_active_set: false,
             factor: DirectFactor::Envelope,
             unsymmetric: false,
+            line_search: false,
         }
     }
     /// The same options with the active-set record of [`LoadStep::yielded`] switched on or off.
@@ -1207,6 +1214,11 @@ impl NewtonOptions {
     /// The same options with the full tangent and the unsymmetric factor switched on or off (ADR 0560 D4).
     pub fn unsymmetric(mut self, on: bool) -> NewtonOptions {
         self.unsymmetric = on;
+        self
+    }
+    /// The same options with the line search on the energy switched on or off (ADR 0607 D1).
+    pub fn line_search(mut self, on: bool) -> NewtonOptions {
+        self.line_search = on;
         self
     }
 
@@ -1255,6 +1267,13 @@ impl NewtonOptions {
                 ),
             });
         }
+        if self.line_search && self.unsymmetric {
+            return Err(FemError::InvalidValue {
+                key: "line_search",
+                reason: "with the unsymmetric tangent: the line search needs a symmetric positive definite factor (ADR 0607 D1)"
+                    .to_string(),
+            });
+        }
         Ok(())
     }
 }
@@ -1278,6 +1297,8 @@ pub struct LoadStep {
     /// With the record, per iteration whether that set differs from the one of the previous iteration (`false` at
     /// iteration 0); empty otherwise.
     pub set_changed: Vec<bool>,
+    /// With [`NewtonOptions::line_search`], the step length of every correction (ADR 0607 D1); empty otherwise.
+    pub step_lengths: Vec<f64>,
 }
 
 /// The result of [`solve`]: the displacement, the reactions and the solver statistics at load factor 1, and the converged
@@ -1319,6 +1340,8 @@ struct Attempt {
     /// The active-set record of the iterations (ADR 0515 D2); empty unless asked for.
     yielded: Vec<usize>,
     set_changed: Vec<bool>,
+    /// The step lengths of the line search (ADR 0607 D1); empty without it.
+    step_lengths: Vec<f64>,
     /// The internal force of the converged iterate, without the contributions (ADR 0479 D2).
     fint: Vec<f64>,
 }
@@ -1394,6 +1417,13 @@ pub trait Contribution {
     fn add_fallback_tangent(&self, u: &[f64], load_factor: f64, tangent: &mut Vec<(usize, usize, f64)>) -> Result<()> {
         let _ = (u, load_factor, tangent);
         Ok(())
+    }
+    /// The force of [`Contribution::add`] at `(u, load_factor)` for a trial evaluation of the line search (ADR 0607 D2),
+    /// without side effects. The default calls `add` with a scratch tangent that is dropped; a contribution that records its
+    /// evaluations overrides it.
+    fn add_trial_force(&self, u: &[f64], load_factor: f64, force: &mut [f64]) -> Result<()> {
+        let mut scratch = Vec::new();
+        self.add(u, load_factor, force, &mut scratch)
     }
 }
 
@@ -1646,6 +1676,9 @@ impl Problem<'_> {
         let mut residuals = Vec::new();
         let mut energies = Vec::new();
         let (mut yielded, mut set_changed) = (Vec::new(), Vec::new());
+        let mut step_lengths = Vec::new();
+        // ADR 0607 D1: the line search, decided once per attempt.
+        let search = o.line_search && control.is_none() && !o.unsymmetric;
         let mut previous_set: Option<Vec<bool>> = None;
         let (mut e_first, mut e_last) = (0.0, 0.0);
         let dofs = self.model.dof_map();
@@ -1714,6 +1747,7 @@ impl Problem<'_> {
                     energies,
                     yielded,
                     set_changed,
+                    step_lengths,
                     fint: elastic.unwrap_or(fint),
                 });
             }
@@ -1798,8 +1832,27 @@ impl Problem<'_> {
             }
             e_last = e;
             energies.push(e);
-            for (&q, d) in sys.free().iter().zip(&du) {
-                u[q] += d;
+            if search {
+                // ADR 0607 D1: only an iteration without a prescribed increment is searched.
+                let alpha = if increment.iter().all(|&(_, v)| v == 0.0) {
+                    self.step_length(&u, k, lt, states_c, sys.free(), &du, &rfull)
+                } else {
+                    1.0
+                };
+                step_lengths.push(alpha);
+                if alpha == 1.0 {
+                    for (&q, d) in sys.free().iter().zip(&du) {
+                        u[q] += d;
+                    }
+                } else {
+                    for (&q, d) in sys.free().iter().zip(&du) {
+                        u[q] += alpha * d;
+                    }
+                }
+            } else {
+                for (&q, d) in sys.free().iter().zip(&du) {
+                    u[q] += d;
+                }
             }
             if k == 0 {
                 for &(eq, v) in &self.fixed {
@@ -1808,6 +1861,121 @@ impl Problem<'_> {
             }
         }
         unreachable!("the loop returns at k = max_iterations")
+    }
+
+    /// The derivative of the energy along the correction `du` (on the equations `free`) at the trial `u + alpha du` (ADR
+    /// 0607 D1): `-du . r` on the free equations, the fixed equations at their values after iteration `k`, the contributions
+    /// by [`Contribution::add_trial_force`]. `None` for a failed evaluation or a non-finite value.
+    #[allow(clippy::too_many_arguments)]
+    fn trial_slope(
+        &self,
+        u: &[f64],
+        k: usize,
+        lt: f64,
+        states_c: &[ElementState],
+        free: &[usize],
+        du: &[f64],
+        alpha: f64,
+    ) -> Option<f64> {
+        let mut x = u.to_vec();
+        for (&q, d) in free.iter().zip(du) {
+            x[q] += alpha * d;
+        }
+        if k == 0 {
+            for &(eq, v) in &self.fixed {
+                x[eq] = lt * v;
+            }
+        }
+        let (mut fint, _, _) = force_and_tangent(
+            self.model,
+            &x,
+            states_c,
+            self.options.threads,
+            &self.context,
+            self.field,
+        )
+        .ok()?;
+        for c in self.contributions {
+            let mut force = vec![0.0; x.len()];
+            c.add_trial_force(&x, lt, &mut force).ok()?;
+            for (a, b) in fint.iter_mut().zip(&force) {
+                *a += b;
+            }
+        }
+        let s = -free
+            .iter()
+            .zip(du)
+            .map(|(&q, d)| d * (lt * self.f[q] - fint[q]))
+            .sum::<f64>();
+        s.is_finite().then_some(s)
+    }
+
+    /// The step length of the line search (ADR 0607 D1): 1 when the full step passes `s(1) <= eta |s_0|`, else the Illinois
+    /// regula falsi on `(0, 1)` until `|s(alpha)| <= eta |s_0|` or 8 further trials (the last trial's length).
+    #[allow(clippy::too_many_arguments)]
+    fn step_length(
+        &self,
+        u: &[f64],
+        k: usize,
+        lt: f64,
+        states_c: &[ElementState],
+        free: &[usize],
+        du: &[f64],
+        rfull: &[f64],
+    ) -> f64 {
+        const ETA: f64 = 0.5;
+        const TRIALS: usize = 8;
+        let s0 = -free.iter().zip(du).map(|(&q, d)| d * rfull[q]).sum::<f64>();
+        if s0.is_nan() || s0 >= 0.0 {
+            return 1.0;
+        }
+        let tol = ETA * s0.abs();
+        let s1 = self.trial_slope(u, k, lt, states_c, free, du, 1.0);
+        if let Some(v) = s1 {
+            if v <= tol {
+                return 1.0;
+            }
+        }
+        // The bracket: s_a < 0 at a, s_b > 0 (or a failed evaluation, None) at b.
+        let (mut a, mut sa) = (0.0f64, s0);
+        let (mut b, mut sb) = (1.0f64, s1);
+        // The end retained at the last trial: -1 a, +1 b, 0 none (the Illinois halving).
+        let mut kept = 0i8;
+        let mut alpha = 1.0;
+        for _ in 0..TRIALS {
+            alpha = match sb {
+                Some(vb) => (a * vb - b * sa) / (vb - sa),
+                None => 0.5 * (a + b),
+            };
+            if alpha.is_nan() || alpha <= a || alpha >= b {
+                alpha = 0.5 * (a + b);
+            }
+            let s = self.trial_slope(u, k, lt, states_c, free, du, alpha);
+            if let Some(v) = s {
+                if v.abs() <= tol {
+                    return alpha;
+                }
+            }
+            match s {
+                Some(v) if v < 0.0 => {
+                    a = alpha;
+                    sa = v;
+                    if kept == 1 {
+                        sb = sb.map(|x| 0.5 * x);
+                    }
+                    kept = 1;
+                }
+                _ => {
+                    b = alpha;
+                    sb = s;
+                    if kept == -1 {
+                        sa *= 0.5;
+                    }
+                    kept = -1;
+                }
+            }
+        }
+        alpha
     }
 }
 
@@ -2219,6 +2387,7 @@ pub fn solve_with(
                         halvings,
                         yielded: a.yielded,
                         set_changed: a.set_changed,
+                        step_lengths: a.step_lengths,
                     });
                     if let Some(hook) = step_control.as_mut() {
                         hook.converged(records.last().expect("just pushed"));
@@ -2292,6 +2461,8 @@ pub struct Equilibrium {
     pub residuals: Vec<f64>,
     /// The energies of the corrections.
     pub energies: Vec<f64>,
+    /// With [`NewtonOptions::line_search`], the step length of every correction (ADR 0607 D1); empty otherwise.
+    pub step_lengths: Vec<f64>,
 }
 
 /// One attempt of the Newton driver (ADR 0479 D2): `f_int(u) + sum of the contributions(u) = load` on the free equations,
@@ -2475,6 +2646,7 @@ fn solve_from_field_reusing(
             internal_force: a.fint,
             residuals: a.residuals,
             energies: a.energies,
+            step_lengths: a.step_lengths,
         }),
         Err(Failure::Inverted(e)) => Err(e),
         Err(Failure::Other(cause)) => Err(FemError::Solver {
