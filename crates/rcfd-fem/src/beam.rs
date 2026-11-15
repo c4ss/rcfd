@@ -182,13 +182,13 @@ pub(crate) fn plane_stiffness(ei: f64, ks: f64, l: f64) -> [[f64; 4]; 4] {
 }
 
 // Four-point Gauss-Legendre rule on [-1, 1].
-const GAUSS4_X: [f64; 4] = [
+pub(crate) const GAUSS4_X: [f64; 4] = [
     -0.861_136_311_594_052_6,
     -0.339_981_043_584_856_3,
     0.339_981_043_584_856_3,
     0.861_136_311_594_052_6,
 ];
-const GAUSS4_W: [f64; 4] = [
+pub(crate) const GAUSS4_W: [f64; 4] = [
     0.347_854_845_137_453_9,
     0.652_145_154_862_546_1,
     0.652_145_154_862_546_1,
@@ -237,7 +237,7 @@ pub(crate) fn plane_mass(m_a: f64, m_i: f64, ei: f64, ks: f64, l: f64) -> [[f64;
 }
 
 /// `G = E / (2 (1 + nu))` and `E` of the material.
-fn moduli(material: &Material) -> (f64, f64) {
+pub(crate) fn moduli(material: &Material) -> (f64, f64) {
     let e = material.youngs_modulus();
     (e, e / (2.0 * (1.0 + material.poisson_ratio())))
 }
@@ -376,7 +376,7 @@ pub fn element_mass(
     Ok(to_global(&local_mass(f.length, section, material), &f.axes))
 }
 
-fn frame_of(coords: &[Vec3], orientation: Vec3) -> Result<BeamFrame> {
+pub(crate) fn frame_of(coords: &[Vec3], orientation: Vec3) -> Result<BeamFrame> {
     if coords.len() != 2 {
         return Err(FemError::FieldLength {
             key: "coordinates",
@@ -456,13 +456,13 @@ pub fn local_geometric_stiffness(
 /// The twelve local unknowns' rows of the fields of one element at `xi` (ADR 0508 D1): the section rotations `theta = (phi,
 /// theta_y, theta_z)` and their derivatives, and the slopes `(u', v', w')` of the translations (the deflection functions of
 /// each plane, as the axial-force term of [`local_geometric_stiffness`]).
-struct SecondOrderRows {
-    theta: [[f64; 12]; 3],
-    theta_p: [[f64; 12]; 3],
-    slope: [[f64; 12]; 3],
+pub(crate) struct SecondOrderRows {
+    pub(crate) theta: [[f64; 12]; 3],
+    pub(crate) theta_p: [[f64; 12]; 3],
+    pub(crate) slope: [[f64; 12]; 3],
 }
 
-fn second_order_rows(length: f64, section: &BeamSection, material: &Material, xi: f64) -> SecondOrderRows {
+pub(crate) fn second_order_rows(length: f64, section: &BeamSection, material: &Material, xi: f64) -> SecondOrderRows {
     let (e, g) = moduli(material);
     let a = section.area();
     let l = length;
@@ -513,7 +513,7 @@ fn second_order_rows(length: f64, section: &BeamSection, material: &Material, xi
 
 /// The section resultants `(N, V_y, V_z, T, M_y, M_z)` at the ends of an element from its twelve local end forces: `-f` at
 /// `x = 0` and `+f` at `x = L` (the force of the rest of the structure on the cut face).
-fn end_resultants(f: &[f64; 12]) -> ([f64; 6], [f64; 6]) {
+pub(crate) fn end_resultants(f: &[f64; 12]) -> ([f64; 6], [f64; 6]) {
     let mut r0 = [0.0; 6];
     let mut r1 = [0.0; 6];
     for k in 0..6 {
@@ -689,7 +689,7 @@ fn check_stress(stress: &[f64; 6]) -> Result<()> {
 }
 
 /// `e . S e` for the Voigt stress `s` (tensor shear).
-fn normal_stress(s: &[f64; 6], e: Vec3) -> f64 {
+pub(crate) fn normal_stress(s: &[f64; 6], e: Vec3) -> f64 {
     let t = [[s[0], s[3], s[5]], [s[3], s[1], s[4]], [s[5], s[4], s[2]]];
     let mut v = 0.0;
     for i in 0..3 {
