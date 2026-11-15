@@ -182,3 +182,71 @@ partial.
   0609 probe 1), the spinning bar does (ADR 0609 NS).
 - The damping products (MU6 of ADR 0609), the neo-Hookean and F-425 materials of the step are not exercised.
 - No rounding bound on the energy-momentum step (ADR 0609 remaining question 2) and no default change (question 3): unchanged.
+
+## Addendum 1: results (2026-11-15)
+
+Runs, each once, release profile, own `CARGO_TARGET_DIR`: the registration committed alone (67634b9c); the test file committed
+(621887c4) before its run; run 1 of C1, N1, N1b, DZ at 621887c4 (`f691-scratch/run1.log`, 0.63 s for the three tests); DB
+(`db.log`); mutations on a `git archive` copy of 621887c4 with its own target (`mutate.py`, `mutations.log`, `MU1.log` to
+`MU5.log`). No library line changed (tests only).
+
+Measured: `f_1 = 5.330987204 Hz`, `h_c = 7.1557e-8 s`, `omega_1 h_c = 2.3968e-6`.
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| C1 converges; halvings | `Ok`; 0 | `Ok`; 0 (2 iterations) | yes |
+| C1 final relative residual | `<= 1e-10` | `2.09e-17` | yes |
+| C1 `max |u_1 + u_0| / max |h_c v_0|` | `<= 1e-8` | `1.07e-14` | yes |
+| C1 `max |v_1 - v_0| / max |v_0|` | `<= 1e-8` | `2.17e-14` | yes |
+| C1 `|H_1 - H_0|/H_0` | `<= 1e-8` | `2.02e-16` | yes |
+| N1 `Driver` refused (`nl_transient`, "after 5 halvings") | refused | refused after 5 halvings | yes |
+| N1b last level relative residual | `> 1e-10` | `2.31e-5` (estimate `1.5e-5 .. 3e-4`) | yes |
+| N1b last level energy ratio | `<= 1e-20` | `1.31e-31` (estimate `~3e-30`) | yes |
+| DB (i) `git diff --stat 9cf95fc3 -- crates/*/src crates/*/Cargo.toml Cargo.toml` | empty | empty | yes |
+| DB (ii) `sa_emc_inertia_reference` (DB1, DB2 with the rest), `sa_emc_default_bits` | pass | 6 passed, 2 ignored (the NZ known miss and V, as before); 1 passed | yes |
+| DZ (diagnostic) from rest at `h_c`, `Driver` | predicted refused | refused after 5 halvings, last level relative residual `9.99e-5`, energy ratio `1.7e-33` | as predicted |
+
+`cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --all-targets --release -- -D warnings` clean.
+
+**DZ and ADR 0609's NZ.** The step from rest is refused at `h_c` as the quantization estimate predicts, so the start at rest
+does not by itself remove the floor: ADR 0609's NZ converged because at `h_f` the ratio `R1/R0` was only about `1e6`, putting the
+floor (`~2e-17 R1`) just under `1e-10 R0`. Sterbenz's lemma makes `w` exact from rest, but the quantization of `u_{n+1}` stays.
+This revises the diagnosis in ADR 0609 addendum 1 (ADR 0609 not edited). The centred step still adds something: at level 0 its
+driver reference is set by the quadratic terms alone, the largest ratio of any level.
+
+**Mutations:**
+
+| Id | Caught by |
+|---|---|
+| MU1 `R1` not taken | C1 (refused after 5 halvings, `2.31e-5`, the N1 failure) |
+| MU2 the products without their factors | C1 (refused after 5 halvings, last level `2.11e-7`); the registered doubt resolved: caught |
+| MU3 only the velocity product | not caught, as registered (C1 bit-equal: 2 iterations, `2.09e-17`) |
+| MU4 `R1` also with `Driver` | N1 and N1b (the step converges, 0 halvings, `2.09e-17`); DZ converges too (not counted) |
+| MU5 the refusal of ADR 0603 D2 restored | C1 (`Integrator::new` refused) |
+
+MU1, MU2, MU4 and MU5 caught; MU3 not caught, as predicted.
+
+**Deviations:** none. **Not run:** `baseline_hashes` (no shared solver file changed; rule 3 asks for it only then).
+
+**Decision by the registered rule: done.** C1, N1, N1b and DB met; MU1, MU4 and MU5 caught (MU2 caught as well); fmt and clippy
+clean.
+
+### Remaining questions
+
+1. **ADR 0609's NZ record and diagnosis.** DZ shows a step from rest is also refused once `h` is small enough, so the Sterbenz
+   reading in ADR 0609 is not the whole cause. Options: (a) leave ADR 0609 as written and let this addendum carry the
+   correction; (b) add an amendment note to ADR 0609 pointing here. Recommendation (b), one line, for the lead, since the roadmap
+   note of F-681 quotes the old diagnosis. Taken here as (a) only: ADR 0609 not edited, on the house rules.
+2. **F-681's status.** F-681 was partial only because NZ, its negative control, converged. With N1 here, the negative control
+   is now shown off rest. Options: (a) F-681 stays partial (its own registered rule); (b) the lead moves F-681 to done on the
+   strength of F-691. Recommendation (b) is the maintainer's call; the rule of ADR 0609 says partial, and that is not changed
+   here.
+3. **Remaining questions 2 and 3 of ADR 0609** (a rounding bound on the step; the default) are unchanged and still open.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> Structural solver, advanced tier. Follow-up of F-681 (ADR 0609, 2026-11-15). DONE. ADR 0625, 2026-11-15, tests only (no library line changed): one energy-momentum step of the clamped Hex8 cantilever of ADR 0609 in free vibration of its first mode, centred on a zero crossing (start u_0 = -(h/2) v_0, so the midpoint displacement is zero), at h = T_1/2621440 (ADR 0609's h/1024 step divided by 64, from a derivation of the weakest halving level). With ResidualReference::InertiaTerms it converges with 0 halvings in 2 iterations, relative residual 2.1e-17, u_1 = -u_0 to 1.1e-14 and v_1 = v_0 to 2.2e-14, energy 2.0e-16. With the driver reference at the default tolerance it is refused after the 5 halvings. Its last level stays at a rounding floor: relative residual 2.3e-5, energy ratio 1.3e-31. A diagnostic step from rest at the same h is also refused (1.0e-4), which revises ADR 0609's diagnosis of its NZ miss: the floor is the quantization of u_{n+1}, and NZ's step was not small enough for that floor to exceed the tolerance. Default bits unchanged (DB1, DB2 and the energy-momentum default-bits test pass). Four of five registered mutations caught; the velocity-product-only mutation is not caught, as registered.
+
+> F-681 note, appended sentence proposed: Its negative control off rest is F-691 (ADR 0625, 2026-11-15): refused with the driver reference after 5 halvings at a rounding floor, converged with 0 halvings with InertiaTerms; the from-rest miss NZ is explained by the step size (the ratio of the references), not by Sterbenz's lemma alone.
