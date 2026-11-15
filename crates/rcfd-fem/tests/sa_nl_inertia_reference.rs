@@ -96,7 +96,8 @@ fn strip3() -> SolidModel {
     mesh.add_node_set("root", vec![0, N_S + 1]).unwrap();
     mesh.add_node_set("tip", vec![N_S, 2 * N_S + 1]).unwrap();
     let mut m = SolidModel::new(mesh);
-    m.add_material("all", Material::isotropic_elastic(E_S, 0.0, RHO_S, 0.0).unwrap()).unwrap();
+    m.add_material("all", Material::isotropic_elastic(E_S, 0.0, RHO_S, 0.0).unwrap())
+        .unwrap();
     for comp in 0..6 {
         m.add_constraint(Constraint::displacement("root", comp, 0.0)).unwrap();
     }
@@ -144,7 +145,11 @@ fn period_hash(options: impl Fn(f64) -> NlTransientOptions) -> u64 {
     let mut it = NlIntegrator::new(&m, &[], &options(1.0 / (40.0 * f1))).unwrap();
     it.start(0.0, &vec![0.0; n], &v0).unwrap();
     it.run(40).unwrap();
-    let (u, v, a) = (it.displacement().unwrap(), it.velocity().unwrap(), it.acceleration().unwrap());
+    let (u, v, a) = (
+        it.displacement().unwrap(),
+        it.velocity().unwrap(),
+        it.acceleration().unwrap(),
+    );
     fnv(&[&u, &v, &a])
 }
 

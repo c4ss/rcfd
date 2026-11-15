@@ -459,9 +459,15 @@ impl InertiaTerms {
         let cc = gamma / (beta * h);
         let p = h * h * (0.5 - beta).abs();
         let (mu, mv, ma) = (nrm(&matvec(m, u_n)), nrm(&matvec(m, kin.v_n)), nrm(&matvec(m, kin.a_n)));
-        let mut fixed = [cm * mu, cm * h * mv, cm * p * ma, am / (1.0 - af) * ma, af / (1.0 - af) * nrm(fint_n)]
-            .into_iter()
-            .fold(0.0f64, f64::max);
+        let mut fixed = [
+            cm * mu,
+            cm * h * mv,
+            cm * p * ma,
+            am / (1.0 - af) * ma,
+            af / (1.0 - af) * nrm(fint_n),
+        ]
+        .into_iter()
+        .fold(0.0f64, f64::max);
         if let Some(c) = c {
             let (cu, cv, ca) = (nrm(&matvec(c, u_n)), nrm(&matvec(c, kin.v_n)), nrm(&matvec(c, kin.a_n)));
             fixed = [
