@@ -2691,6 +2691,13 @@ pub fn solve_in_time_with(
             });
         }
     }
+    // ADR 0578 D2: a non-positive constant temperature or history point of a factor material, refused before any attempt.
+    crate::mat_creep::check_factor_temperature(
+        model,
+        options.temperature,
+        options.temperature_history.as_ref(),
+        options.temperature_field.is_some(),
+    )?;
     for (k, &t) in times.iter().enumerate() {
         let previous = if k == 0 { 0.0 } else { times[k - 1] };
         if !(t.is_finite() && t > previous) {
