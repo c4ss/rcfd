@@ -203,3 +203,87 @@ The start of a held or prescribed body is a least-squares translation of the fre
 committed displacement of the integrator is assumed to belong to the field at `t_a`. Models the field refuses (shells, other
 formulations, the energy-momentum step) stay refused. A thermal predictor for the linear thermal load, for the creep-strain
 increment limit or for the contact driver is not offered. No case-file key.
+
+## Addendum 1: results (2026-11-15)
+
+Commits after the registration: the B2 record on the base (digests written from `f617-scratch/b2-base.log` before any library
+code), the predictor (`thermal::free_expansion_start`, `TemperatureFieldHistory::with_thermal_predictor`, the calls in
+`nonlinear::solve_in_time_with` and `nl_transient::Integrator::substep`), the checks `tests/sa_temp_predictor.rs` (shared set-ups
+in `tests/pred_common/mod.rs`), a type alias for clippy. Every check was run once; no limit was changed.
+
+| check | limit | measured | met |
+|---|---|---|---|
+| B2 (9 digests of the field runs without the predictor, base 8ebc67e8) | equal | equal after the code | yes |
+| N1 `sa_temp_field_default_bits.rs` | pass | pass (inside N5) | yes |
+| N4 `baseline_hashes` | pass | 3 passed, 1 ignored | yes |
+| N5 `cargo test -p rcfd-fem --release` | pass | 959 passed, 0 failed, 267 ignored (`f617-scratch/fem-all.log`) | yes |
+| P1 start against `a X` | `<= 1e-14` | `8.67e-18` | yes |
+| P2 prescribed kept | 0 differing | 0 of 8 fixed equations | yes |
+| P3 unchanged field or `alpha = 0` | 0 differing | 0 | yes |
+| P4 nonuniform, three supports | `<= 1e-14` | `8.67e-19` | yes |
+| P5 multiplicative form; distance to additive | `<= 1e-14`; `>= 1e-5` | `6.94e-18`; `1.0e-4` | yes |
+| FE1p | `<= 1e-12` | `1.73e-18` | yes |
+| FE1c-p halvings, entries, `u(0)`, corrections | 0; 4; `<= 1e-12`; `<= 2` | 0; 4; 0; 1 | yes |
+| FE1s-p | `<= 1e-10` | `6.48e-17` | yes |
+| FE2p; halvings | `<= 1e-12`; 0 | `3.47e-18`; 0 | yes |
+| FE0p; halvings | `<= 1e-12`; 0 | `1.73e-18`; 0 (3 entries) | yes |
+| NC0 hot start without the predictor | refused | refused, pivot `-2.17e10` at node 5 component 2 | yes |
+| HB1p face force; `max abs(u)/(a L)` | `<= 1e-10`; `<= 1e-12` | `7.67e-16`; `3.74e-16` | yes |
+| CONV beam | `<= 1e-9` | `6.25e-15` | yes |
+| CONVp prescribed displacement | `<= 1e-9` | `3.25e-16` | yes |
+| INT1; halvings; corrections per step | `<= 1e-12`; 0; `<= 1` | `3.47e-18`; 0; 1 | yes |
+| INT2 total corrections with against without | with < without | 20 against 60 | yes |
+| INTn V3T bar | `<= 1e-9` | `9.01e-15` | yes |
+| UBp driver and integrator (`alpha = 0` ramp, reference-constant field) | equal bits | equal | yes |
+| NCp driver (halvings without: 2) and integrator (1 against 3 corrections per step) | differ | differ | yes |
+| RFp six refusals and the flag defaults | each as stated | all | yes |
+
+Other runs: `cargo clippy -p rcfd-fem --all-targets --release -- -D warnings` clean (one `type_complexity` in the new test was fixed
+with a type alias before the final run); `cargo fmt -p rcfd-fem --check` clean; `cargo test -p rcfd-cli --release --test docs_site`
+passed (2 passed). Not run: the workspace test suite (the lead's gate).
+
+**Mutations** (scratch copy of the tip, own target dir, `f617-scratch/mutations.log`; the registered set, all caught):
+
+| id | caught by |
+|---|---|
+| MU1 driver ignores the flag | FE1c-p (2 halvings, 12 corrections), FE0p (refused), NCp |
+| MU2 integrator ignores the flag | INT1 (3 corrections per step), INT2 (60 against 60), NCp |
+| MU3 `theta_old = 1` | P3 (129 differing), P4 (`4.9e-3`), FE1c-p (4 corrections), INT1 (4) |
+| MU4 increment at the fixed equations | P2 (3 differing), P4 (`3.4e-3`), the runs refused (panics of FE1p, CONV, INT) |
+| MU5 translation dropped | P1 (`5.0e-3`), P4, P5, FE1c-p, INT1, INT2 |
+| MU6 reference-configuration form | P5 (`1.0e-4`, distance `1e-17`), P4 (`7.8e-6`), INT1 |
+| MU7 `alpha = 1` | P1 (`99.99`), UBp, FE1c-p, INT1, INT2, CONV |
+| MU8 attempt at `t = 0` from `field(0)` | FE0p (refused) |
+| MU9 predictor active with the flag off | B2 (digest mismatch), NC0, NCp, INT2; UBp does not catch it (both of its runs are predicted) |
+| MU10 sign reversed | P1 (`2e-2`), P4, P5, FE1c-p (3 halvings), FE2p, FE0p, INT1, INT2 |
+| MU11 origin at the coordinate origin | P4 (`6.5e-3`, the x-only support) only |
+
+**Deviations (disclosed).** (1) The registration says "6 field runs" for B2; the record has 9 digests (the driver FE1, FE2, the
+hot-start refusal text, HB1, the nonuniform beam; the integrator FEi, INT1 values, INT1 corrections, V3T with state bytes), a
+superset. (2) INTn, INT1 and INT2 use `tight()` Newton options (`1e-13`), as arithmetic 6 assumed; the B2 record of V3T uses the
+default options of ADR 0534. (3) UBp does not catch MU9 (both of its runs are predicted); B2 does. (4) MU11 is caught by one check
+only (P4, the x-only support).
+
+**Decision by the registered rule: done.** B2, N1, N4, N5 met; every check met in its single registered run; every counted
+mutation caught; fmt and clippy clean.
+
+**Remaining questions.**
+1. A case-file key for the predictor. Options: (a) library-only, as ADR 0534 D7; (b) add the key with the temperature-field key
+   when that is decided. Recommendation (b), together, because a case-file key changes the schema golden and needs the
+   maintainer's approval.
+2. Default on. The predictor changes the Newton start only and the results agree to `1e-14` (CONV, INTn), but the bits differ
+   from the unpredicted runs, so a default flip re-records hash tables. Recommendation: keep it opt-in.
+3. A held body whose solution is not near the free expansion (HB1) is started from a least-squares translation of it, exact on
+   the 2 x 2 x 2 mesh only by symmetry. A start from one linear elastic solve of the thermal load would be better for held
+   bodies, at the cost of a factorisation per attempt. Recommendation: leave until a case shows halvings with the predictor.
+4. The predictor does not help a tangent that is indefinite at the converged solution; none occurred in the checks.
+
+## For the lead: roadmap entries
+
+Proposed status of F-617: **done**. Proposed note:
+
+> Structural solver, advanced tier. Optional. Follow-up of F-613. DONE. ADR 0539, 2026-11-15: an opt-in thermal predictor (thermal::TemperatureFieldHistory::with_thermal_predictor, default off; thermal::free_expansion_start) starts each attempt of the quasi-static driver and each sub-step of the nonlinear transient integrator at the committed displacement plus the free thermal expansion increment of the field's change: each node moves by (theta_new/theta_old - 1)(x_c - O) about the mean O of the committed positions (the expansion at unchanged elastic deformation, theta = 1 + alpha dT, alpha the mean over the elements of the node), completed by one rigid translation per component fitted to the fixed equations; only free equations change, prescribed values keep their bits, an unchanged field returns the start bit for bit; the attempt at t = 0 starts from the reference state. Met: the free expansion of ADR 0534 FE1 (alpha dT = 1e-2 from u = 0) converges without halving, one correction per step, equal to alpha dT within 1.7e-18 (the known miss FE1c of ADR 0534 closed; the same run without the predictor halves twice); a table hot from t = 0 runs with the predictor and is refused without it; the integrator at a consistent free expansion takes one correction per step against three; converged results with and without the predictor agree within 6e-15 (nonuniform beam, prescribed displacement, V3T bar); runs without the predictor keep the bits of ADR 0534 (9 new digests, the 12 of ADR 0534, the baseline hashes); 11 mutations caught. No case-file key (open).
+
+Note for F-613 (to append to its note):
+
+> The known miss FE1c is closed by the opt-in thermal predictor of F-617 (ADR 0539, 2026-11-15).
