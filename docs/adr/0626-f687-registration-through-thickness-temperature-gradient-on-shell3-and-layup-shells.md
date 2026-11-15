@@ -251,3 +251,15 @@ ANG only takes `rotated_stiffness` and `rotated_expansion` of `laminate.rs` (ADR
    (preamble), rather than edits to its rows.
 
 Open (not taken): **Q1** a case-file key for the gradient (needs a schema decision; ADR 0612 remaining question 2).
+
+## Amendment 1 (2026-11-15, written and committed before any run of any check)
+
+Two negative controls were set up defectively; corrected here before any run, the registered text above unchanged:
+
+- **N10.** "The beam rows of the load vector exactly zero" is wrong: the stiffener's nodes are shell nodes and receive the load
+  of the adjacent shell elements (whose other nodes carry the gradient). Corrected: the load vector of the mixed model equals
+  **bitwise** that of the same shell model without the beam block (the beam receives nothing and is not refused); limit exact.
+- **N12, the BIM row.** `nonlinear::solve` checks `check_supported_nonlinear_shells` before `check_driver_model`, and the
+  corotated path refuses a Layup there (ADR 0496 D7, ADR 0502), so the gradient refusal is not reached on a layup. Corrected: for
+  TH P with BIM and a gradient the expected result is a refusal (any `Err`; recorded as printed), and the gradient refusal row
+  is the TH3 row alone (`InvalidValue { key: "nonlinear" }` naming the gradient), unchanged.
