@@ -247,3 +247,77 @@ run again only as part of the build and B0).
 `sa_hyper_paths` (RF1). Pass.
 
 The decision rule is unchanged: at most partial (a5 not approved).
+
+## Addendum 1: results (2026-11-15)
+
+Run 1 (registered, at 6cb7beca, log `w49i-work/f666-scratch/run1.log`) as described in Amendment 1; the corrected run of the
+amended tests (once, at b9602743 after D5, `cargo test -p rcfd-fem --release --test sa_hyper_structures_f666 amended --
+--nocapture --test-threads=1`, log `run2.log`, 0.10 s). Every difference is exactly 0, as arithmetic 1 expected.
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| CY-S-Q4 `e_u` (a1, run 1) | `<= 1e-10` | 0 | yes |
+| CY-H-Q4 `e_u` (a1, run 1) | `<= 1e-10` | 0 | yes |
+| CY-M-Q4 `e_lambda` k = 0..3, `e_phi` k = 0, 3 (a1, run 1) | `<= 1e-10` | 0 each (7 / 16 / 11 / 7 iterations, backward residuals <= 7.6e-11) | yes |
+| A-B Beam2 on the cyclic path (a1 audit, run 1) | refused, `beam::FOLLOW_UP` | refused: "constraint 6, a model with Beam2", "a follow-up of ADR 0417" | holds |
+| RO-B `e_lambda`, `e_phi` (a2) | `<= 1e-10` | run 1: refused (Amendment 1, record `ro_rotating_part_known_miss`); corrected: 0, 0 (Omega = 0.328 rad/s, 7 / 7 iterations) | yes after D5 |
+| RO-P4 `e_lambda`, `e_phi` (a2) | `<= 1e-10` | run 1: refused (same record); corrected: 0, 0 (Omega = 0.117 rad/s, 6 / 6) | yes after D5 |
+| CM-B `e_K`, `e_M`, `e_f`, fixed-interface and reduced `e_lambda`, recovered `e_u` (a3, run 1) | `<= 1e-10` | 0 each (6 boundary, 54 interior, 4 modes) | yes |
+| CM-P4 the same (a3, run 1) | `<= 1e-10` | 0 each (42 boundary, 378 interior) | yes |
+| MP-B static `e_u`, modes `e_lambda`, `e_phi` (a4, run 1) | `<= 1e-10` | 0, 0, 0 (6 / 6 iterations) | yes |
+| MP-P4 the same (a4, run 1) | `<= 1e-10` | 0, 0, 0 | yes |
+| X-CY-Q3 static, harmonic, modes (extra, run 1) | `<= 1e-10` | 0 each | yes |
+| X-RS-Q4 k = 0..3 (extra) | `<= 1e-10` | run 1: refused (record `x_rs_q4_rotating_sector_known_miss`); corrected: 0 each (Omega = 6.18 rad/s) | yes after D5 |
+| X-MP-P3 (extra, run 1) | `<= 1e-10` | 0, 0, 0 | yes |
+| C-CY, C-CM, C-MP (run 1 and corrected) | `> 1e-8` | 9.43e-7, 9.68e-7, 9.44e-7 | yes |
+| C-RO | `> 1e-8` | run 1: refused (record `c_perturbed_twin_is_seen_known_miss`); corrected: 1.00e-6 | yes after D5 |
+| N1 (4 rows, run 1) | refused, "a structural element" | refused, every row | holds |
+| N2 cyclic static, rotating B (run 1) | bits equal | equal | holds |
+| B0 (corrected) | pass | `git diff --stat 21b526d0 -- crates/*/src`: rotating.rs +2 (D5 and its comment); `sa_geometric_struct` 9, `sa_geometric_struct_bits` 1, `sa_ortho_rotating_default_bits` 1, `sa_rotating_cyclic_shells_default_bits` 1, `si_rotating` 9, `sa_hyper_structures` 6, `sa_hyper_paths` 17 (RF1 among them), `rcfd-api --test baseline_hashes` 3: all pass (ignored records not run). The B0 command also ran the whole `sa_hyper_structures_f666` file: 11 pass, 3 ignored | yes |
+
+fmt (`cargo fmt -p rcfd-fem --check`) clean; `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean.
+
+Mutations (scratch copy `w49i-work/f666-scratch/mut` of b9602743, script `mutate.py`, log `mutations.log`), each caught:
+
+| Mutation | Caught by |
+|---|---|
+| 1 `E = 9KG/(3K + 2G)` | every acceptance and extra row (`3.0e-2 .. 3.2e-2` on eigenvalues and displacements) |
+| 2 setting never lifted | every acceptance, extra and control row (refused), and A-B (refused by the material before the Beam2 cyclic check) |
+| 3 setting always lifted | N1, all 4 rows |
+| 4 `shell::moduli` back to the getters | every Q4, Q3, P4, P3 row, C-CY, C-MP (NaN) |
+| 5 `beam::moduli` back to the getters | RO-B, CM-B, MP-B, C-RO, C-CM (NaN) |
+| 6 `beam::axial_force` back to `youngs_modulus` | RO-B and C-RO only (the Beam2 pre-stress not finite), as registered |
+| 7 D5 removed | RO-B, RO-P4, X-RS-Q4, C-RO (refused as in run 1), as registered |
+
+Deviations: the rotating rows missed in run 1 (Amendment 1: a defect of F-645, the pre-stress copy dropped the setting); fixed
+by D5 (one line plus a comment in the shared solver file `crates/rcfd-fem/src/rotating.rs`, lines 314-315) and met in the
+corrected run. Not run: a5; Beam2 on the cyclic path (refused, A-B); the whirl, Campbell, full-rotor, cms assembly and
+superelement paths; the whole workspace suite (the lead's gate).
+
+**Decision by the registered rule: partial, path clauses met.** Every acceptance row of a1 (Shell4) to a4 met (the rotating rows
+after Amendment 1), A-B holds, every control holds, B0 passes, seven of seven mutations caught, fmt and clippy clean. Partial
+because a5 (the default lift and RF1) is not approved, and because the Beam2 half of a1 is refused by the cyclic path for every
+material (ADR 0556 D1).
+
+### Remaining questions
+
+1. **The default lift (a5).** Options: (a) keep the opt-in; (b) lift by default: drop the structural branch of the ADR 0555 D3
+   refusal (keep the temperature refusal), retire `sa_hyper_paths.rs::rf1_to_rf4_refusals` as an ignored record with a copy
+   whose RF1 row accepts (the ADR 0291 pattern), and keep `set_hyperelastic_structures` as a documented no-op. Recommendation:
+   (b). Every linear path that takes structures now has a twin check at exact equality, and the one defect the checks found
+   (the rotating copy) is fixed, so the refusal protects nothing. It needs the maintainer's approval (it changes a default
+   result: a refused model becomes accepted). Not taken.
+2. **Beam2 on the cyclic path.** Refused for every material (ADR 0556 D1). Options: (a) a follow-up that rotates the beam's
+   orientation vector and rotation unknowns per sector, checked on a beam ring against its sector; (b) leave it.
+   Recommendation: (a), independent of the material, proposed below. Until then a1 can only be met for shells; the lead may
+   prefer to restate a1 as "Shell4 on the cyclic path" and leave the beam half to the follow-up.
+3. **Other model copies.** D5 was found because a path rebuilds a model field by field. Recommendation: a `SolidModel` method
+   that copies the mesh with every setting, for future copies; not done here (no other copy exists today).
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> Structural solver, advanced tier. Follow-up of F-645 (ADR 0584). PARTIAL. ADR 0593, 2026-11-15: with SolidModel::set_hyperelastic_structures(true) a neo-Hookean material on Shell4 (and Shell3) elements on the cyclic path (solve_static_mpc on a frustum sector with CyclicOptions::shells, solve_static_harmonic k = 1, modal_analysis_harmonic k = 0..3), and on Beam2 and Shell4 elements on the rotating path (RotatingPart::modes at 0.2 omega_1 with stress stiffening and spin softening; RotatingSector::modes on the sector), the cms path (cms::reduce: reduced stiffness, mass, load, fixed-interface and reduced eigenvalues, recovered static field) and the mpc-transformation path (solve_static_mpc and modal_analysis_mpc with a rigid set and a linear constraint), gives the results of the isotropic twin of the same small-strain moduli with difference exactly 0 (limit 1e-10); the twin with G (1 + 1e-6) is seen at 9.4e-7 .. 1.0e-6. The registered run found the rotating path refusing the material: its unit pre-stress copy did not carry the setting (fixed by one line in rotating.rs, defaults bit-identical: baseline hashes and the rotating default-bits records pass; the run-1 tests kept as ignored known-miss records). Seven of seven mutations caught. Not done: Beam2 on the cyclic path stays refused for every material (ADR 0556 D1); the default lift with RF1 retired awaits the maintainer's approval.
+
+> Follow-up proposed: Beam2 elements in the cyclic constraint. Deps F-628. Acceptance: Every limit not stated here is registered in the ADR before the run. A cyclic sector holding Beam2 elements (the orientation vector and the rotation unknowns rotated per sector) gives the static displacements and the modes of each harmonic index of the full ring of beams within 1e-10, the defaults bit-identical.
