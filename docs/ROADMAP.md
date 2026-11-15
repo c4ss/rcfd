@@ -12653,14 +12653,33 @@ fixed by the item's registration ADR before any code.
     converged Rayleigh-Ritz reference derived in the ADR within 2 percent at 16 elements; uniform-moment results
     unchanged.
   - note: Structural solver, advanced tier. Follow-up of F-627 (ADR 0553, 2026-11-15).
-- [ ] **F-644** Hyperelastic linear paths: near-incompressible modes, order-free damped modes on two materials, multi-material sites under mutation
+- [~] **F-644** Hyperelastic linear paths: near-incompressible modes, order-free damped modes on two materials, multi-material sites under mutation
   - depends on: F-620
   - acceptance: Every limit not stated here is registered in the ADR before the run. The six lowest frequencies of the
     BBar cantilever of ADR 0555 at K/G = 1e4 with the hyperelastic material equal those of its isotropic twin within
     1e-8; the damped-mode roots and the direct harmonic response of a model with two hyperelastic materials and two loss
     factors equal the twin's within 1e-10 with the roots matched without regard to order; the mutations of the two
     multi-material call sites are caught.
-  - note: Structural solver, advanced tier. Follow-up of F-620 (ADR 0555, 2026-11-15).
+  - note: Structural solver, advanced tier. Follow-up of F-620 (ADR 0555, 2026-11-15). PARTIAL. ADR 0581, 2026-11-15:
+    test-only (no library line changed), the checks ADR 0555 left on the hyperelastic linear paths. Diagnosis of ADR
+    0555's modal miss by arithmetic: the default relative residual of the subspace iteration has the rounding floor c
+    eps lambda_max/lambda_1, about 1e-9 on the BBar cantilever at K/G = 1e4 (lambda_max/lambda_1 ~ 1e8) and 1e-12 at K/G
+    = 10, below which the default tolerance 1e-10 cannot go whatever the material or the iteration count; the existing
+    opt-in ModalOptions::tolerance(1e-8) bounds the frequency error quadratically. With it the NHi BBar cantilever and
+    its isotropic twin converge in 7 iterations (residuals <= 6.3e-9) and their six lowest frequencies agree within
+    1.1e-10 (limit 1e-8; the backward residual test at 1e-10 gives the same 1.1e-10, so the difference is in the
+    matrices: the shear carried as differences of entries near 1e10); the twin with G (1 + 1e-6) is seen at 5.0e-7. Two
+    hyperelastic materials (neo-Hookean root, Mooney-Rivlin tip) with loss factors 0.02 and 0.05: damped-mode roots
+    against the twin 1.1e-13 matched without regard to order by a bottleneck assignment (limit 1e-10; positional 2.0, a
+    +- pair reported in the opposite order), direct harmonic 1.3e-14 and 1.4e-14 at 50 and 500 rad/s (limit 1e-10); a
+    tip loss factor 0.06 seen at 1.8e-3 (roots) and 3.6e-3, 7.1e-2 (response). The two multi-material call sites
+    (damped.rs, harmonic_direct.rs) reverted to elasticity_matrix are each caught by a registered check, and doubled
+    linearised shear entries by every measure: three of three mutations caught; a reversed root order is not seen by the
+    order-free measure, as declared. Partial by the registered rule only because the control of the order-free measure
+    was met after a post-run amendment (its expected value 1e-6 instead of 1e-6/(1 + 1e-6)); every acceptance clause met
+    in the one registered run. Defaults unchanged by construction. Citations from memory (Kato-Temple, Kuhn), to be
+    checked. Done is the maintainer's call (every acceptance clause met in the registered run; only the order-free
+    control Q0b met after amendment 1, a wrong expected value).
 - [ ] **F-645** Hyperelastic materials on Beam2, Shell4 and Shell3 on the linear paths
   - depends on: F-620
   - acceptance: Every limit not stated here is registered in the ADR before the run. A Beam2 cantilever and a Shell4
@@ -12764,7 +12783,7 @@ fixed by the item's registration ADR before any code.
     before are bit-identical: a hash over 13 cases (linalg pencils and warping beams, both signs, ADR 0559 paths) equal
     against cf32422b; rcfd-linalg, rcfd-fem, baseline_hashes and docs_site pass. Five of five mutations caught. Not
     covered: a subspace with no positive Ritz value at all keeps the refusal; one restart only.
-- [ ] **F-651** Arrhenius creep factor: non-positive temperature control and the nonlinear transient integrator
+- [x] **F-651** Arrhenius creep factor: non-positive temperature control and the nonlinear transient integrator
   - depends on: F-581
   - acceptance: Every limit not stated here is registered in the ADR before the run. A creep material with the Arrhenius
     factor is refused with the key temperature at every non-positive temperature, including T = -1e10 K, by a control
@@ -12772,7 +12791,22 @@ fixed by the item's registration ADR before any code.
     without a temperature option; a one-element bar of the factor material under a step load in the nonlinear transient
     integrator at a uniform temperature T creeps, after the vibration has decayed, at the closed-form rate with A
     exp(-Q/(R T)) within 1 percent. Materials without the factor keep their bits.
-  - note: Structural solver, advanced tier. Follow-up of F-581 (ADR 0558, 2026-11-15).
+  - note: Structural solver, advanced tier. Follow-up of F-581 (ADR 0558, 2026-11-15). DONE. ADR 0578, 2026-11-15:
+    mat_creep::check_factor_temperature, called by nl_transient::Integrator::new and nonlinear::solve_in_time_with,
+    refuses a creep material with the Arrhenius factor before any step (key temperature) without a temperature option,
+    with a constant temperature that is not positive and finite, or with a temperature history with such a point; a
+    model without the factor returns before the options are read. Met on the first run: NP1, the registered control of
+    every non-positive temperature (18 values from 0, -0.0 and the subnormal through -34 K and -1e10 K to -f64::MAX, and
+    -inf), refused at arrhenius_factor and the point update, 38 of 38; the same as a top-level refusal at
+    Integrator::new and at solve_in_time_with, 14 of 14 each; Integrator::new without a temperature option refused;
+    seven positive controls accepted; one Hex8 of the factor material under a step load in the nonlinear transient
+    integrator (generalised-alpha rho_inf 0.5, mass damping omega_1, 1280 steps of P/40) at 750 K creeps on the window
+    [16 P, 32 P] at A exp(-Q/(R T)) sigma^3 within 6.0e-5 (displacement), 5.8e-5 (creep state), the velocity within
+    6.0e-5, at 700 K within 1.1e-5, the ratio of the rates against f(750)/f(700) = 9.88 within 5.0e-5; default bits (six
+    new digests from the base, the default-bits files of the creep, nl_transient, visco and temperature paths) and
+    baseline hashes unchanged; nine of nine mutations caught, among them MU5 of ADR 0558 (caught by NP1 at every T <=
+    -34 K). A nodal temperature field is not checked up front (a non-positive point value is refused at the point,
+    inside the step error). Case-file key not added (maintainer's call).
 - [ ] **F-652** Case-file keys for the follower load, continuation and unsymmetric tangent (NEEDS THE USER: schema golden)
   - depends on: F-572
   - acceptance: Every limit not stated here is registered in the ADR before the run. A case with the keys reproduces the
