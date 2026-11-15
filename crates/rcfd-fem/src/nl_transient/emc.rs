@@ -106,9 +106,16 @@ fn algorithmic_stress(
     mode: AlgorithmicStress,
 ) -> Result<([f64; 6], crate::material::Matrix6)> {
     if let Material::Hyperelastic { energy, .. } = material {
+        // ADR 0544 D1: F-425's energy with `MaterialDiscreteGradient`.
+        if mode == AlgorithmicStress::MaterialDiscreteGradient {
+            return dg::material_stress(energy, e0, e1);
+        }
         return dg::hyperelastic_stress(&dg::NeoHookean::of(energy)?, e0, e1, mode);
     }
-    if mode == AlgorithmicStress::DiscreteGradient {
+    if matches!(
+        mode,
+        AlgorithmicStress::DiscreteGradient | AlgorithmicStress::MaterialDiscreteGradient
+    ) {
         return dg::elastic_discrete_gradient(material, context, e0, e1);
     }
     let (s0, _) = material.stress(e0, context, &[])?;
@@ -243,8 +250,18 @@ fn force_and_tangent(
 }
 
 /// The internal force `sum_q w B_NL(F)^T S(E)` of a model with a neo-Hookean material at `u` (ADR 0523 D5): the element
-/// routine with `u_0 = u_1`, whose algorithmic stress is `S(E)` (the midpoint branch at `dE = 0`), in element order.
-pub(super) fn internal_force(model: &SolidModel, u: &[f64], context: &PointContext) -> Result<Vec<f64>> {
+/// routine with `u_0 = u_1`, whose algorithmic stress is `S(E)` (the midpoint branch at `dE = 0`), in element order; in the
+/// mode `MaterialDiscreteGradient` with F-425's stress, in `Auto` (the step-local stress) otherwise (ADR 0544 D3).
+pub(super) fn internal_force(
+    model: &SolidModel,
+    u: &[f64],
+    context: &PointContext,
+    mode: AlgorithmicStress,
+) -> Result<Vec<f64>> {
+    let mode = match mode {
+        AlgorithmicStress::MaterialDiscreteGradient => mode,
+        _ => AlgorithmicStress::Auto,
+    };
     let dofs = model.dof_map();
     let mesh = model.mesh();
     let materials = model.material_indices()?;
@@ -256,12 +273,12 @@ pub(super) fn internal_force(model: &SolidModel, u: &[f64], context: &PointConte
         let ue: Vec<f64> = d.iter().map(|&q| u[q]).collect();
         let el = element_for(mesh.element_kind(e));
         let material = &model.materials()[materials[e]].1;
-        let (f, _) = element_step(el, &coords, material, &ue, &ue, context, AlgorithmicStress::Auto, false).map_err(
-            |source| FemError::Element {
+        let (f, _) = element_step(el, &coords, material, &ue, &ue, context, mode, false).map_err(|source| {
+            FemError::Element {
                 element: e,
                 source: Box::new(source),
-            },
-        )?;
+            }
+        })?;
         for (&q, v) in d.iter().zip(&f) {
             out[q] += v;
         }
@@ -333,7 +350,7 @@ pub(super) fn substep(
             let v1: Vec<f64> = (0..n).map(|i| 2.0 * (u1[i] - u[i]) / h - v[i]).collect();
             let a1: Vec<f64> = (0..n).map(|i| (v1[i] - v[i]) / h).collect();
             let fint = if it.hyper {
-                internal_force(&it.model, &u1, &context)?
+                internal_force(&it.model, &u1, &context, it.stress)?
             } else {
                 nonlinear::internal_force_at(&it.model, &u1, states, &context)?
             };

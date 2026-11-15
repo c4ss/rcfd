@@ -146,6 +146,24 @@ pub fn energy(energy: &HyperelasticEnergy, strain: &[f64; 6]) -> Result<f64> {
     Ok(iso + vol)
 }
 
+/// The magnitude of the terms of [`energy_parts`]'s evaluation at a strain (ADR 0544 D2): `|c10| (3 |a - 1| + 2 |t| a) +
+/// |c01| (3 |b - 1| + b (4 |t| + 2 t^2 + 2 q)) + (kappa/2)(J - 1)^2` with `a = J^(-2/3)`, `b = J^(-4/3)`, `t = tr E`, `q = tr
+/// E^2`; a bound of `|energy|` and the scale of its rounding (the rounding test of the discrete gradient, ADR 0523 D3).
+pub fn energy_magnitude(energy: &HyperelasticEnergy, strain: &[f64; 6]) -> Result<f64> {
+    let k = kin(strain)?;
+    let (c10, c01, kappa) = constants(energy);
+    let (t, q) = (k.t, k.q);
+    let a = (-2.0 * k.ln_j / 3.0).exp();
+    let am1 = (-2.0 * k.ln_j / 3.0).exp_m1();
+    let mut m = c10.abs() * (3.0 * am1.abs() + 2.0 * t.abs() * a);
+    if c01 != 0.0 {
+        let b = (-4.0 * k.ln_j / 3.0).exp();
+        let bm1 = (-4.0 * k.ln_j / 3.0).exp_m1();
+        m += c01.abs() * (3.0 * bm1.abs() + b * (4.0 * t.abs() + 2.0 * t * t + 2.0 * q));
+    }
+    Ok(m + 0.5 * kappa * k.jm1 * k.jm1)
+}
+
 fn stress_of(k: &Kin, c10: f64, c01: f64, kappa: f64) -> [f64; 6] {
     let (t, q) = (k.t, k.q);
     let a = (-2.0 * k.ln_j / 3.0).exp();
