@@ -213,3 +213,73 @@ bits; it is registered to show that B2 sees the solid-only bits. No mutation is 
 - **L3.** Models mixing solids and structural nodes (blocks of 3 and 6 rows in one aggregate) are not run: a shell may not share a
   node with a solid (ADR 0432 D4), so such an aggregate needs a joint through the transformation path, where the CG is refused.
 - **L4.** Only the static solve uses the multigrid; no eigen or transient path takes it.
+
+## Addendum 1: results (2026-11-15)
+
+Run 1, once, at cf80ecdd (`f629-scratch/run1.log`: `cargo test -p rcfd-fem --release --test sa_amg_structural -- --nocapture
+--test-threads=1`, 5 tests, 0.31 s). No amendment; no check re-run. Then, at cf80ecdd: `cargo test -p rcfd-fem --release` (1057
+passed, 0 failed, 286 ignored; `fem-all.log`), `cargo test -p rcfd-api --release --test baseline_hashes` (3 passed, 1 ignored),
+`cargo test -p rcfd-cli --release --test docs_site` (2 passed), `cargo clippy -p rcfd-fem --release --all-targets -- -D
+warnings` (clean), `cargo fmt -p rcfd-fem --check` (clean).
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| NN1 Shell4 / Shell3 / Beam2 | `<= 1e-12` | `3.7e-16` / `3.9e-16` / `1.1e-16` | yes |
+| NN2 (rotation components zeroed) | `>= 1e-6` | `5.1e-2` / `1.1e-3` / `8.3e-3` | yes |
+| NN3 rotation rows exact | exact | 75 / 75 / 123 rows exact | yes |
+| IT1 S0 errors (2-norm, inf-norm), seven models | `<= 1e-8` | largest `9.3e-11`, `1.6e-10` (P4b) | yes |
+| IT2 S0 iterations P4a, P4b, C4, P3a, P3b, C3, BM | `2, 2, 2, 48, 57, 2, 2` | `1, 1, 1, 32, 38, 1, 1` | yes |
+| IT3 S1 errors, seven models | `<= 1e-8` | largest `1.0e-10`, `1.2e-10` (P4b) | yes |
+| IT4 S1 iterations | `128, 797, 75, 75, 89, 35, 32` | `85, 531 (2 restarts), 50, 50, 59, 23, 21` | yes |
+| IT5 S1 levels; operator complexity | `>= 2`; `<= 1.5` | 3, 3, 2, 3, 3, 2, 3; 1.145, 1.145, 1.076, 1.187, 1.187, 1.104, 1.449 | yes |
+| NC1 BM; C4 (`it_six < it_norot`) | strict | 21 < 46; 50 < 71 | yes |
+| B1 existing tests unedited; baseline hashes | pass | pass; pass | yes |
+| B2a modes bit for bit on 1200 solid rows | exact | equal | yes |
+| B2b S0; quadratic (bits, iterations, restarts) | exact | equal (15 / 15, 0 / 0); equal (15 / 15, 0 / 0) | yes |
+| B3 `git diff 2cc5a1c7 -- crates/*/src` | `solve.rs` only, additions only | `solve.rs` +78 -0 (hunks at new lines 97-100, 341-344, 348-350, 394-452, 571-578) | yes |
+| R1 transformation path | `InvalidValue { key: "solver" }` | as registered | yes |
+
+Every measured number equals the prototype's (arithmetic 3) to the printed digits: the library path forms the same matrices and
+columns on these models. NC1's C4 control count is 71 (one CG run from zero, as registered) against the prototype's 78 (with
+restarts); the registered comparison is the single run.
+
+Mutations (scratch copy `f629-scratch/mut`, `target-mut`, `mutate.py`, logs `mut-MU*.log`; `solve.rs` restored and checked
+byte-equal after the run):
+
+| Id | Caught by |
+|---|---|
+| MU1 rotation rows zero | NN1, NN3, IT4 (C4 78 > 75, BM 46 > 32), NC1 |
+| MU2 rotation rows on the translation columns | NN1, NN3, IT3 (P4b not converged), IT4, IT5 (P3 OC 1.503), NC1 |
+| MU3 rotation entry `-1` | NN1, NN3, IT2 (P3a 53 > 48), IT3, IT4, NC1 |
+| MU4 `x_0` not subtracted | B2a, B2b (and IT3: P4b not converged after three restarts at `1.07e-9`) |
+| MU5 the old columns | IT (panic at `amg_elastic.rs:177`, as ADR 0545 MU8) |
+| MU6 new variant refused | IT1, IT3 (every model) |
+| MU7 old refusal removed | B1: `sa_shell3.rs::s1_n2_n3_refusals_after_f578` panics at `amg_elastic.rs:177` (cargo stopped at that binary; the `si_beam`, `si_shell` N2 rows assert the same refusal) |
+
+Seven of seven caught; none declared equivalent.
+
+Not run: models mixing solid and structural nodes (L3); a robustness study in `t/a` or mesh size (L2).
+
+**Decision by the registered rule: done.** Every registered check met in the single run, every mutation caught, no amendment.
+
+Remaining questions:
+
+1. **Q1. Should the existing `SmoothedAggregation` take structures?** (a) Keep two variants (now). (b) Retire the N2 rows of
+   `si_beam.rs`, `si_shell.rs`, `sa_shell3.rs` and RC1 of `sa_shell3_paths.rs` as ignored records with `_after_f629` copies, and
+   make `SmoothedAggregation` use the structural columns (solid bits unchanged by B2a). Recommendation: (b), as a small follow-up
+   the maintainer approves, since it retires the record of four test files.
+2. **Q2. The thin Shell4 plate under a forced hierarchy** (531 iterations at t/a = 0.001 against 59 for Shell3). (a) Leave it
+   (the default settings solve these sizes in one level). (b) A follow-up: diagnose whether the coarse operator, the block
+   Gauss-Seidel or the aggregation limits it. Recommendation: (b), diagnosis first.
+3. **Q3. Case-file key.** `rcfd-api` `solid_case` has no shell or beam blocks, so a key `amg_structural` would be untested now.
+   Recommendation: add it with the case file's structural blocks, not before.
+
+## For the lead: roadmap entries
+
+Proposed status of F-629: **done**. Proposed note:
+
+> Structural solver, advanced tier. Follow-up of F-541 (ADR 0545, 2026-11-15). ADR 0552, 2026-11-15: new opt-in rcfd_fem::solve::CgPreconditioner::SmoothedAggregationStructural (solver name cg-amg-rbm-structural) with solve::structural_rigid_body_modes: the six rigid fields u = t + w x (x - x_0), theta = w, so a rotation unknown of a Beam2, Shell4 or Shell3 node carries 1 in its rotation column; rcfd-linalg unchanged; the existing SmoothedAggregation and its refusal of the three kinds unchanged (its N2 tests unedited). Near-null fields in the kernel of the assembled stiffness to 3.9e-16 (Shell4 and Shell3 plates placed in space, Beam2; limit 1e-12). The plate and cantilever models of ADR 0432 (Shell4 16 x 16, t/a 0.01 and 0.001; strip 15 x 1) and ADR 0454 (Shell3 32 x 32; strip), and a 40-element Beam2 cantilever, solved to a true relative residual 1e-9 within 1.6e-10 of the direct solve (limit 1e-8); iterations at the default settings 1, 1, 1, 32, 38, 1, 1 (limits 2, 2, 2, 48, 57, 2, 2) and with the forced hierarchy max_coarse 60 (2 to 3 levels, operator complexity 1.08 to 1.45) 85, 531, 50, 50, 59, 23, 21 (limits 128, 797, 75, 75, 89, 35, 32). Without the rotation components the beam takes 46 and the Shell4 strip 71 iterations (21 and 50 with). Solid-only bits unchanged: the columns equal rigid_body_modes bit for bit and a Hex8 cantilever solves to the same bits by both variants (greedy and geometric aggregation); baseline hashes pass. Seven of seven mutations caught. Not covered: robustness in t/a (the thin Shell4 plate with a forced hierarchy takes 531 iterations), solid and structural nodes in one aggregate, a case-file key.
+
+> Follow-up proposed: The existing smoothed-aggregation CG takes structures (retire the N2 multigrid rows of si_beam.rs, si_shell.rs, sa_shell3.rs and RC1 of sa_shell3_paths.rs as ignored records with copies; SmoothedAggregation uses structural_rigid_body_modes). Deps F-629. Acceptance: Every limit not stated here is registered in the ADR before the run. CgPreconditioner::SmoothedAggregation solves the ADR 0552 models with the iteration counts and errors of ADR 0552; the retired refusal tests kept as ignored records with copies; the solid-only bits and the baseline hashes unchanged.
+
+> Follow-up proposed: Smoothed aggregation for thin plates and shells (the 531 iterations of the thin Shell4 plate with a forced hierarchy against 59 for Shell3). Deps F-629. Acceptance: Every limit not stated here is registered in the ADR before the run. The cause (coarse operator, smoother or aggregation) identified by registered controls on the ADR 0552 plate P4b; if a change is made, P4b at max_coarse 60 in at most twice the Shell3 P3b count, the other ADR 0552 counts not increased and the solid-only bits unchanged.
