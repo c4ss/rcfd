@@ -22,6 +22,10 @@
 //!   candidates in the same order as the all-faces loop, so the same bits), the rigid sphere and cylinder targets, and faces
 //!   of Hex20, Tet4 and Tet10 (targets by the general closest-point projection; Hex20 and Tet10 contactors by the points of
 //!   the face's load rule, Gauss-point-to-surface, D3).
+//! * ADR 0551 (F-623): the opt-in mortar contactor of Hex20 and Tet10 faces ([`QuadraticContactor::Mortar`]): one weighted
+//!   gap per contactor node, `int Phi_a g dA / int Phi_a dA`, with the weighting functions `Phi` a transformed basis of the
+//!   face (corner `N_i + (N_e + N_e')/4`, edge `N_e/2`: a partition of unity with positive integrals), integrated by the
+//!   face's load rule on the reference face (element-based integration, no segmentation).
 
 use crate::assemble::stiffness;
 use crate::constraint::{prescribed_equations, reduce, Prescribed};
@@ -85,6 +89,16 @@ pub enum SearchMethod {
     Buckets,
     /// Every target face for every contactor point (the loop of ADR 0507 D1).
     AllFaces,
+}
+
+/// The contactor of Hex20 and Tet10 faces (ADR 0540 D3, ADR 0551 D4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum QuadraticContactor {
+    /// The points of the face's load rule, each with its own gap (ADR 0540 D3; the default).
+    #[default]
+    GaussPoints,
+    /// One weighted gap per face node (segment-to-segment mortar, ADR 0551 D1 to D3).
+    Mortar,
 }
 
 /// A contact pair: the contactor surface set, the target, the penalty per unit area (N/m^3) and the initial-gap offsets.
@@ -155,6 +169,9 @@ pub struct ContactOptions {
     /// The search for candidate target faces (ADR 0540 D1): [`SearchMethod::Buckets`] (the default) or
     /// [`SearchMethod::AllFaces`]; both give the same bits.
     pub search_method: SearchMethod,
+    /// The contactor of Hex20 and Tet10 faces (ADR 0551 D4): [`QuadraticContactor::GaussPoints`] (the default) or
+    /// [`QuadraticContactor::Mortar`]; Hex8 and Tet4 contactor faces keep their node contactors either way.
+    pub quadratic_contactor: QuadraticContactor,
 }
 
 impl ContactOptions {
@@ -171,7 +188,13 @@ impl ContactOptions {
             newton: NewtonOptions::new(1),
             factor: DirectFactor::SparseMinimumDegree,
             search_method: SearchMethod::Buckets,
+            quadratic_contactor: QuadraticContactor::GaussPoints,
         }
+    }
+    /// The same options with another contactor of Hex20 and Tet10 faces (ADR 0551 D4).
+    pub fn quadratic_contactor(mut self, c: QuadraticContactor) -> ContactOptions {
+        self.quadratic_contactor = c;
+        self
     }
     /// The same options with another search for the candidate faces (ADR 0540 D1).
     pub fn search_method(mut self, s: SearchMethod) -> ContactOptions {
@@ -396,8 +419,11 @@ struct PairData {
     areas: Vec<f64>,
     offsets: Vec<f64>,
     eps: Vec<f64>,
-    /// The Gauss points (one per entry of `nodes`, whose entries are then their ids); `None` for node contactors.
+    /// The Gauss points (one per entry of `nodes`, whose entries are then their ids); `None` for node contactors. For a
+    /// mortar pair every point of the contactor faces (`nodes` are then mesh nodes).
     points: Option<Vec<GaussPoint>>,
+    /// ADR 0551 D2: per entry of `nodes`, the points and coefficients `c_ag` of its weighted gap; `None` unless mortar.
+    mortar: Option<Vec<Vec<(usize, f64)>>>,
 }
 
 /// A contactor point: a node or a Gauss point.
@@ -449,6 +475,83 @@ pub struct ContactSet {
 }
 
 const CORNERS: [[f64; 2]; 4] = [[-1.0, -1.0], [1.0, -1.0], [1.0, 1.0], [-1.0, 1.0]];
+
+/// ADR 0551 D1: the share `alpha` of a mid-edge function given to each corner of its edge.
+const MORTAR_ALPHA: f64 = 0.25;
+
+/// ADR 0551 D1: the weighting functions `Phi` of a quadratic face from its shape-function values `n` (corners first, then
+/// the mid-edge nodes, the edge `c + i` from corner `i` to corner `i + 1`): `Phi_i = N_i + alpha (N_{c+i} + N_{c+i-1})`,
+/// `Phi_e = (1 - 2 alpha) N_e`, a partition of unity.
+fn mortar_basis(n: &[f64], corners: usize) -> Vec<f64> {
+    let mut phi = vec![0.0; n.len()];
+    for e in corners..n.len() {
+        phi[e] = (1.0 - 2.0 * MORTAR_ALPHA) * n[e];
+    }
+    for i in 0..corners {
+        phi[i] = n[i] + MORTAR_ALPHA * (n[corners + i] + n[corners + (i + corners - 1) % corners]);
+    }
+    phi
+}
+
+/// ADR 0551 D2: the weighted gap of a mortar node from its points' kinematics `pk` and its coefficients; `None` when a
+/// point has no kinematics.
+fn mortar_kin(pk: &[Option<Kin>], coeffs: &[(usize, f64)]) -> Option<Kin> {
+    let mut slot: BTreeMap<usize, usize> = BTreeMap::new();
+    let mut nodes = Vec::new();
+    for &(g, _) in coeffs {
+        let k = pk[g].as_ref()?;
+        for &v in &k.nodes {
+            if let std::collections::btree_map::Entry::Vacant(e) = slot.entry(v) {
+                e.insert(nodes.len());
+                nodes.push(v);
+            }
+        }
+    }
+    let m = 3 * nodes.len();
+    let curved = coeffs
+        .iter()
+        .any(|&(g, _)| pk[g].as_ref().is_some_and(|k| k.hess.is_some()));
+    let mut grad = vec![0.0; m];
+    let mut hess = if curved { Some(vec![0.0; m * m]) } else { None };
+    let mut gap = 0.0;
+    let mut mean = [0.0; 3];
+    for &(g, c) in coeffs {
+        let k = pk[g].as_ref().expect("checked");
+        gap += c * k.gap;
+        for i in 0..3 {
+            mean[i] += c * k.normal[i];
+        }
+        let map: Vec<usize> = (0..3 * k.nodes.len())
+            .map(|r| 3 * slot[&k.nodes[r / 3]] + r % 3)
+            .collect();
+        for (r, &rr) in map.iter().enumerate() {
+            grad[rr] += c * k.grad[r];
+        }
+        if let (Some(h), Some(hk)) = (hess.as_mut(), k.hess.as_ref()) {
+            let mk = map.len();
+            for (r, &rr) in map.iter().enumerate() {
+                for (s2, &ss) in map.iter().enumerate() {
+                    h[m * rr + ss] += c * hk[mk * r + s2];
+                }
+            }
+        }
+    }
+    let len = norm(mean);
+    let normal = if len > 0.0 && len.is_finite() {
+        [mean[0] / len, mean[1] / len, mean[2] / len]
+    } else {
+        mean
+    };
+    Some(Kin {
+        nodes,
+        gap,
+        normal,
+        grad,
+        hess,
+        face: None,
+        local: [0.0; 2],
+    })
+}
 
 /// The faces of a surface set with their shapes (ADR 0540 D3): Hex8, Hex20, Tet4 and Tet10 faces; any other is refused.
 fn surface_faces(model: &SolidModel, set: &str) -> Result<Vec<TargetFace>> {
@@ -1034,7 +1137,59 @@ impl ContactSet {
                     ),
                 });
             }
-            let (nodes, areas, points) = if by_points {
+            let mortar_pair = by_points && options.quadratic_contactor == QuadraticContactor::Mortar;
+            let (nodes, areas, points, mortar) = if mortar_pair {
+                // ADR 0551 D2: the nodes of the faces, their areas int Phi_a dA and coefficients by the load rule.
+                let mut pts = Vec::new();
+                let mut acc: BTreeMap<usize, (f64, Vec<(usize, f64)>)> = BTreeMap::new();
+                for f in &contactor {
+                    let x: Vec<Vec3> = f.nodes.iter().map(|&v| reference[v]).collect();
+                    for (uv, wq) in face_rule(f.nodes.len())? {
+                        let (n, d) = face_shape_functions(f.nodes.len(), uv)?;
+                        let mut a1 = [0.0; 3];
+                        let mut a2 = [0.0; 3];
+                        for (xa, da) in x.iter().zip(&d) {
+                            for i in 0..3 {
+                                a1[i] += da[0] * xa[i];
+                                a2[i] += da[1] * xa[i];
+                            }
+                        }
+                        let wg = wq * norm(cross(a1, a2));
+                        let phi = mortar_basis(&n, f.shape.corners());
+                        let g = pts.len();
+                        for (&v, &ph) in f.nodes.iter().zip(&phi) {
+                            let e = acc.entry(v).or_insert((0.0, Vec::new()));
+                            e.0 += ph * wg;
+                            e.1.push((g, ph * wg));
+                        }
+                        pts.push(GaussPoint {
+                            face: f.face,
+                            local: uv,
+                            nodes: f.nodes.clone(),
+                            weights: n,
+                        });
+                    }
+                }
+                let mut ids = Vec::with_capacity(acc.len());
+                let mut w = Vec::with_capacity(acc.len());
+                let mut coeffs: Vec<Vec<(usize, f64)>> = Vec::with_capacity(acc.len());
+                for (v, (a, list)) in acc {
+                    if !(a > 0.0 && a.is_finite()) {
+                        return Err(FemError::InvalidValue {
+                            key: "contact surface",
+                            reason: format!(
+                                "pair {k}: node {v} of the contactor set '{}' has the mortar weight {a:e}: must be \
+                                 positive (a distorted face, ADR 0551 D4)",
+                                p.contactor
+                            ),
+                        });
+                    }
+                    ids.push(v);
+                    w.push(a);
+                    coeffs.push(list.into_iter().map(|(g, c)| (g, c / a)).collect());
+                }
+                (ids, w, Some(pts), Some(coeffs))
+            } else if by_points {
                 // ADR 0540 D3: the points of the face's load rule, the weight times the surface Jacobian.
                 let mut ids = Vec::new();
                 let mut w = Vec::new();
@@ -1062,7 +1217,7 @@ impl ContactSet {
                         });
                     }
                 }
-                (ids, w, Some(pts))
+                (ids, w, Some(pts), None)
             } else {
                 // D4: the consistent share of a unit pressure, 2 x 2 Gauss on the reference face (Hex8); A/3 (Tet4).
                 let mut area: BTreeMap<usize, f64> = BTreeMap::new();
@@ -1088,7 +1243,12 @@ impl ContactSet {
                         }
                     }
                 }
-                (area.keys().copied().collect(), area.values().copied().collect(), None)
+                (
+                    area.keys().copied().collect(),
+                    area.values().copied().collect(),
+                    None,
+                    None,
+                )
             };
             let nodes: Vec<usize> = nodes;
             let areas: Vec<f64> = areas;
@@ -1197,6 +1357,7 @@ impl ContactSet {
                 offsets,
                 eps,
                 points,
+                mortar,
             });
         }
         let multipliers = out.iter().map(|p| vec![0.0; p.nodes.len()]).collect();
@@ -1527,13 +1688,27 @@ impl ContactSet {
         let mut out = Vec::with_capacity(self.pairs.len());
         for (k, p) in self.pairs.iter().enumerate() {
             let grid = self.grid(p, u);
+            // ADR 0551 D2: a mortar pair's points first, once each.
+            let point_kin: Option<Vec<Option<Kin>>> = match (&p.mortar, &p.points) {
+                (Some(_), Some(pts)) => Some(
+                    pts.iter()
+                        .map(|g| self.kin(p, u, At::Point(g), grid.as_ref()))
+                        .collect(),
+                ),
+                _ => None,
+            };
             let mut v = Vec::with_capacity(p.nodes.len());
             for (i, &node) in p.nodes.iter().enumerate() {
-                let at = match &p.points {
-                    Some(pts) => At::Point(&pts[i]),
-                    None => At::Node(node),
+                let kin = match (&p.mortar, &point_kin) {
+                    (Some(mc), Some(pk)) => mortar_kin(pk, &mc[i]),
+                    _ => {
+                        let at = match &p.points {
+                            Some(pts) => At::Point(&pts[i]),
+                            None => At::Node(node),
+                        };
+                        self.kin(p, u, at, grid.as_ref())
+                    }
                 };
-                let kin = self.kin(p, u, at, grid.as_ref());
                 let (gap, force, active) = match &kin {
                     None => (f64::INFINITY, 0.0, false),
                     Some(kn) => {
@@ -1570,7 +1745,10 @@ impl ContactSet {
                 out.push(ContactNode {
                     pair: k,
                     node: p.nodes[i],
-                    point: p.points.as_ref().map(|pts| (pts[i].face, pts[i].local)),
+                    point: match (&p.mortar, &p.points) {
+                        (None, Some(pts)) => Some((pts[i].face, pts[i].local)),
+                        _ => None,
+                    },
                     area: p.areas[i],
                     gap: e.kin.as_ref().map(|_| e.gap),
                     force,
@@ -1602,6 +1780,18 @@ impl ContactSet {
                 continue;
             };
             let grid = self.grid(p, u);
+            if let (Some(_), Some(pts)) = (&p.mortar, &p.points) {
+                // ADR 0551 D4: a mortar pair's points.
+                for g in pts {
+                    points += 1;
+                    faces += f.len();
+                    visited += match &grid {
+                        Some(gr) => gr.candidates(self.at_position(u, At::Point(g))).len(),
+                        None => f.len(),
+                    };
+                }
+                continue;
+            }
             for (i, &node) in p.nodes.iter().enumerate() {
                 let at = match &p.points {
                     Some(pts) => At::Point(&pts[i]),
@@ -1616,6 +1806,17 @@ impl ContactSet {
             }
         }
         Ok((visited, points, faces))
+    }
+
+    /// A test hook of ADR 0551 (NT-m): the triplets of the contact matrix without its curvature part (`eps G G^T`, ADR 0507
+    /// amendment 2) at `u` with the current multipliers; nothing is recorded.
+    #[doc(hidden)]
+    pub fn convex_tangent(&self, u: &[f64]) -> Result<Vec<(usize, usize, f64)>> {
+        let all = self.evaluate_all(u)?;
+        let mut f = vec![0.0; u.len()];
+        let mut t = Vec::new();
+        self.force_and_tangent(&all, &mut f, Some(&mut t), false);
+        Ok(t)
     }
 
     /// The force and the triplets of the state `all` without recording the active set; without `curvature` the matrix is
