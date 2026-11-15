@@ -6321,9 +6321,9 @@
     "deps": [
       "F-626"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The harmonic response of a fork-supported I beam under a harmonic end torque, and the transient twist of the same beam under a step torque, use the 14-unknown stiffness and mass of ADR 0548. The first torsional resonance equals sqrt((G J k^2 + E C_w k^4)/(rho I_p)) within 1e-3 at 16 elements; every result without the option bit-identical.",
-    "note": "Structural solver, advanced tier. Follow-up of F-626 (ADR 0548, 2026-11-15)."
+    "note": "F-635 status: partial. Note: Structural solver, advanced tier. ADR 0574, 2026-11-15: the warping unknown of ADR 0548 on a direct harmonic solve (`rcfd_fem::beam_warping::WarpingHarmonic`: (1 + i eta) K - omega^2 M + i omega (alpha M + beta K) on the 14-unknown stiffness and mass, one complex factorisation per frequency, resonance refused without damping) and on the linear transient (`WarpingTransient`: the integrator of ADR 0389 on the reduced 14-unknown matrices), with the load `load_vector`. The plain harmonic and transient paths do not take beams at all; they are unchanged. Fork-supported I beam, torque at midspan (an end torque at a fork support goes into the reaction): first torsional resonance of the harmonic path 3.6e-7 from sqrt((G J k^2 + E C_w k^4)/(rho I_p)) at 16 elements (5.8e-6 at 8); response 1.4e-6 of the continuous modal series undamped, 3.6e-5 with a loss factor and 1.8e-5 with Rayleigh damping at the resonance. Step-torque transient (Newmark, T_1/400) 5.4e-3 of the static twist from the continuous series over two periods, energy conserved to 3e-13. The Saint-Venant section misses the resonance by 0.19. Partial: the resonance search against the modal eigenvalue missed its 1e-8 limit (1.1e-8 and 1.8e-8) because the search stops at the 1e-8 resonance pivot; with the pivot off it gives 1e-12 (amendment 2). Defaults bit-identical (10 digests). Nine of nine mutations caught. No warping inertia, no pre-stress, no mode superposition, no case-file key. Follow-up F-661 (a pre-stress on the warping harmonic path)."
   },
   {
     "id": "F-636",
@@ -6603,5 +6603,16 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. A solid_case solver key selects SmoothedAggregationStructural with Smoother::VertexPatch; a shell model read from a case file solves to the bits of the library call; existing keys, goldens and baseline hashes unchanged.",
     "note": "Follow-up of F-641 (ADR 0572, 2026-11-15)."
+  },
+  {
+    "id": "F-661",
+    "title": "Pre-stress on the warping harmonic path",
+    "phase": 9,
+    "deps": [
+      "F-635"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The direct harmonic solve with the warping unknown takes the pre-stress of the warping static solve (K + K_sigma); the first torsional resonance of a fork-supported I beam under an axial force N = +/-0.5 of the torsional buckling load equals sqrt((G J k^2 + N I_p/A k^2 + E C_w k^4)/(rho I_p)) within 1e-3 at 16 elements; every result without the option bit-identical.",
+    "note": "Follow-up of F-635 (ADR 0574, 2026-11-15)."
   }
 ]
