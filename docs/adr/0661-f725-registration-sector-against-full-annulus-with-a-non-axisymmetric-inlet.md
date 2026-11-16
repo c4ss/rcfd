@@ -253,3 +253,98 @@ code path fast). The registered test `lockstep_from_a_start_consistent_with_the_
 `lockstep_known_miss_h1_from_a_start_consistent_with_the_inlet`; a corrected test `lockstep_corrected_from_a_start_consistent_with_the_inlet`
 runs `V(1, 6)` once more (deterministic) and asserts G1, G2, G0, A1s, NC2 with the registered limits, printing H1; the new
 test `h1c_seam_pairs_off_the_interface_rings_are_orthogonal` asserts H1c. No other change.
+
+## Addendum 1: results (2026-11-16)
+
+Measured against the limits registered above and in amendment 1; no limit was changed. Release builds on Windows, on a
+machine shared with other building agents. The registration is fe650a6d (alone, first); the tests d2ce25d9 (committed before
+their run); amendment 1 a266e4d6; the records and the corrected tests 6ce4ba9c (committed before the corrected run); a
+clippy fix of the test (a needless borrow, no behaviour) 0ce3894b. The registered run (three tests, `--test-threads=1`,
+1291 s) was made once; one geometry-only diagnostic followed (amendment 1); the corrected lockstep and H1c ran once (83 s;
+the corrected lockstep printed the same numbers as the registered one, digit for digit).
+
+**Built as registered.** No library change: `git diff 9f06e866 -- crates/` is the new file
+`crates/rcfd-fv/tests/sliding_annulus_inlet_f725.rs` only (6 tests: the corrected lockstep, H1c and J run; the registered
+lockstep and the I1 decomposition are ignored records). `docs/dynamic-mesh.md`: one paragraph on the result.
+
+### Results
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| G1 (c1, c2) `max abs(u_C - u_A) / U_in` from `u0`, every one of the 400 steps | `<= 3e-2` each step | `1.981e-2` (step 390, the stator's inner ring next to the stator seam); step 1 `1.86e-3`; coincidence steps `1.95e-2` | met |
+| G2 rms at step 400 | `<= 1.5e-2` | `8.65e-3` | met |
+| G0 cell match, every variant, every step | `<= 1e-9`, one-to-one | `1.45e-15` (J `9.5e-16`), yes | met |
+| A1s C `flux_residual` from step 2 | `<= 1e-12` | `3.85e-15` | met |
+| H1 (as registered) seam pairs' non-orthogonality | `<= 1e-12` | `9.08e-4` | **missed** (wrong premise, amendment 1) |
+| H1c (amendment 1) seam pairs off the interface rings, 400 meshes | `<= 1e-12` | `2.33e-14` (at the interface rings `9.08e-4`, wrap pairs `0.750`, printed) | met |
+| I1 (c3) shares over 400 steps: `q`, `l`, `rho` | Q4 identified (`q >= 0.5`, largest) or ruled out (`q <= 0.1`) | `q = 0.302`, `l = 1.017`, `rho = 0.007`: the lag identified, the rest ruled out, **Q4 undecided** | **missed** (c3 undecided) |
+| LC lag converged at `K = 6` | `<= 0.05 M(L)` over J = `1.75e-3` | `3.45e-7` | met |
+| J0 ADR 0641's step 1 reproduced | `3.4941e-2` within `1e-6` | `3.494135e-2` | met |
+| I2 ADR 0641's step-1 difference: one part `>= 0.5` and the largest | as stated | `l = 1.000` (lag), `q = 0.055`, `rho = 0.020` | met |
+| NC1 (control) ADR 0641's start exceeds G1's limit | `>= 3e-2` | `3.494e-2` | held |
+| NC2 (control) one rotor cell off | `>= 5e-2` | `0.134` | held |
+| B1 `baseline_hashes`; diff of `crates/` | pass; the new file only | 3 passed, 1 ignored; as stated (`rcfd-fv --lib` 113 passed, 6 ignored; `rcfd-cli` `docs_site` 2 passed) | met |
+
+Printed, no limit (I1, 400 steps from `u0`): `G` of the variants `V(1,6)` `1.98e-2`, `V(6,6)` `5.99e-3` (step 101, the rotor's
+outer ring `r = 1.469` next to the stator seam, where the wrap pairs are), `V(1,0)` `2.02e-2`, `V(6,0)` `1.48e-4`; parts
+`M(L) = 2.011e-2`, `M(L') = 2.015e-2`, `M(Q) = 5.98e-3`, `M(Q') = 5.90e-3`, `M(R) = 1.48e-4`. J (ADR 0641's start, 16 steps):
+`V(1,6)` `3.494e-2` at step 1 (`r = 1.031`, next to the rotor seam, as ADR 0641 found), `V(6,6)` `1.91e-3`, `V(1,0)` `3.493e-2`,
+`V(6,0)` `7.1e-4`, `V(10,6)` `1.91e-3`. Elapsed: lockstep 118 s (registered run, under load) and 82 s (corrected), J 81 s, I1
+1092 s (hence the heavy record).
+
+Against the estimates: G `1.98e-2` against `2.2e-2` estimated; the lag `2.0e-2` against `<= 1.0e-2` estimated (twice the
+estimate; the saturation argument was too rough), Q4 plus rest `6.0e-3` against `1.2e-2`. The expected shares (`l` about 0.45)
+were wrong: the lag is nearly the whole difference.
+
+### Mutations (scratch copy `w49i-work/f725-scratch/mut` of 6ce4ba9c, script `mutate.py`, log `mutations.log`, target `target-mut`; the corrected lockstep run once per mutation)
+
+| Mutation | Must fail | Caught by |
+| --- | --- | --- |
+| MU1 `Periodic` span doubled | G1 | G1 (`5.32e-2`), A1s (`1.66e-3`) |
+| MU2 `Periodic` partner value replaced by the owner's | G1 | G1 (`0.280`) |
+| MU3 `boundary_hby_a` coupled weight 1 | G1 or A1s | G1 (`8.92e-2`), G2 (`3.16e-2`), A1s (`1.79e-2`) |
+| MU4 C from ADR 0641's start, A from `u0` | G1 | G1 (`0.328`, step 1) |
+
+Four of four caught. The files were restored and compared after each. `cargo fmt -p rcfd-fv --check` clean; `cargo clippy
+--release -p rcfd-fv --all-targets -- -D warnings` clean (after 0ce3894b). Not run: the whole workspace or crate suites (the
+daily gate); the ignored records again (each ran once in the registered run).
+
+### What is shown
+
+c1 and c2 hold: from a start consistent with the inlet the sector stays within `1.98e-2 U_in` of the full annulus on every
+one of the 400 steps (limit `3e-2`), through the 50 coincidence steps and two re-imagings, rms `8.6e-3`. The source of the
+difference is identified by an exact decomposition: almost all of it (`M(L) = 2.0e-2`, share 1.0) is the **lagged partner
+value of the momentum equation on the coupled faces** (read 3), which six outer iterations remove (converged to `3e-7`, LC);
+the same lag makes ADR 0641's step-1 miss (share 1.0 over J). What is left once the lag is removed (`6.0e-3`, at the wrap
+pairs next to the stator seam) is Q4, the orthogonal-only coupling of the wrap faces: removing the non-orthogonal correction
+from both runs leaves `1.5e-4`. On the seam pairs Q4 is zero to rounding off the interface rings (H1c) and acts through a
+`9e-4` non-orthogonality at the two interface rings only. So Q4 is the source of the difference that remains after the lag,
+but by the registered rule (shares of the whole difference) it is neither the main source (`0.30 < 0.5`) nor negligible
+(`> 0.1`): c3 is undecided as registered.
+
+### Decision
+
+By the registered rule: G1 met, but c3 undecided (I1) and the set-up check H1 missed as registered (H1c met): **partial**.
+
+### Remaining questions
+
+1. **c3's reading.** Options: (a) accept the decomposition as c3's answer (the lag is the source of the remaining difference;
+   Q4 is the whole of what is left after the lag, `5.8e-3` of `6.0e-3`) and record done; (b) keep partial under the
+   registered rule. Recommendation (b) for the record, with (a)'s statement in the note; the lead decides.
+2. **The lag (new).** The momentum equation takes the partner's old value across periodic faces; a sector run is then
+   `2e-2 U_in` off the annulus at this inlet, a full-annulus run is not. Options: (a) a follow-up: an opt-in implicit coupling
+   of the periodic pairs in the momentum matrix (as the pressure already does with its `extras`), checked against this
+   lockstep, defaults bit-identical; (b) advise `n_outer >= 6` for sector runs (no code; six times the cost); (c) leave it.
+   Recommendation (a), with (b) as the interim advice in the docs.
+3. **Q4 itself** (ADR 0629 Q4 (b)): an opt-in non-orthogonal correction on the coupled faces would take the remaining
+   `6e-3` (after the lag) to about `1.5e-4`; a shared solver file. Recommendation: after question 2, as its own item.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> ADR 0661, 2026-11-16: sector against the full annulus with a non-axisymmetric inlet (tests only, no library change). ADR 0641's lockstep (the 60-degree sector SS through periodic_sliding_step_coupled against the full annulus of ADR 0216, inlet U_in (1 + 0.5 sin 6 theta) x_hat, dt = rotor pitch / 8, 400 steps, 50 coincidence steps, two re-imagings) from a start consistent with the inlet (u0 = U_in (1 + 0.5 sin 6 theta) (r_i / r) x_hat, divergence-free): largest velocity difference 1.98e-2 U_in on every step against a limit 3e-2 derived before the run (step 1 1.9e-3), rms 8.6e-3 (limit 1.5e-2). An exact decomposition by variants (outer iterations, non-orthogonal correctors) names the source: nearly all of it (2.0e-2) is the lagged partner value of the momentum equation on the coupled seam and wrap faces, which six outer iterations remove (to 6.0e-3), and the same lag makes ADR 0641's step-1 miss (3.494e-2, reproduced); what remains after the lag is the orthogonal-only coupling of the wrap faces (ADR 0629 Q4): without a non-orthogonal corrector in either run 1.5e-4. On the seam pairs Q4 is zero to rounding (2.3e-14) except at the two interface rings (9e-4). By the registered rule Q4 is neither the main source of the whole difference (share 0.30, needed 0.5) nor ruled out (needed 0.1): undecided, so partial. A registered seam-orthogonality check had a wrong premise (the join cuts the interface-ring cells; corrected check met). Four of four mutations caught; baseline_hashes unchanged.
+
+> Follow-up proposed: "Implicit momentum coupling of periodic pairs". Deps F-725. Acceptance: an opt-in setting couples the two faces of every periodic pair implicitly in the momentum matrix (the partner's new value, as the pressure equation already does), with the defaults bit-identical; on ADR 0661's lockstep the sector's largest difference from the full annulus with one outer iteration is within a registered limit of ADR 0661's six-outer-iteration variant V(6, 6) (6.0e-3) on every step, and ADR 0641's step-1 difference falls below a registered limit. Every limit not stated here is registered in the ADR before the run.
+
+> Follow-up proposed: "Non-orthogonal correction on coupled faces". Deps the implicit momentum coupling item. Acceptance: an opt-in explicit non-orthogonal correction on the coupled (wrap and seam) faces in the pressure equation and the momentum diffusion, defaults bit-identical; on ADR 0661's lockstep with the lag removed the sector's difference from the full annulus falls from 6.0e-3 to within a registered limit of ADR 0661's V(6, 0) (1.5e-4) on every step. Every limit not stated here is registered in the ADR before the run.
