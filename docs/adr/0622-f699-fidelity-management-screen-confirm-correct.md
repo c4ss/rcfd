@@ -692,3 +692,25 @@ Mutations (scratch copy, one at a time, each must fail a registered check):
 * `MeasuredTable` maps a candidate to a row by a caller-given function; several rows per variant (it takes the first), matching by
   tolerance and fan-law scaling between speeds (Q14) are not built.
 * No check runs the driver with an F-697 `ObjectiveModel` as the low model (it is a `ledger::Model`, so it plugs in; not run).
+
+## Amendment 2 (2026-11-16, after the first registered run, before the corrected runs): two defective set-ups
+
+The registered run (`cargo test -p rcfd-api --release --test f699_fidelity -- --test-threads=2`, log `f699-scratch/run1.log`)
+passed every check except two, both from defects of the test set-up, not of the driver. Diagnosed (a scratch copy of the test
+file with one diagnostic test, `f699-scratch/zz_f699_diag.rs`, never committed):
+
+1. **P1 (and with it NC4 and P5, which did not run: they follow P1 in the same test).** Measured: 632 values, 1260 texts searched,
+   24 found. Every found text is the `pred` of a round-1 pair, which is bit-equal to that pair's `low` value (12 values in two
+   text forms): before any correction exists the prediction is the uncorrected low value, and the low values are public by
+   design (D7 table). The registered search set ("every `pred` of the private pairs") wrongly included uncorrected predictions,
+   while for the final predictions the test already excluded those equal to the low value. Corrected set-up: a pair's `pred` is
+   searched only when it is not bit-equal to the pair's `low` value (the same rule as for the final predictions). Every other
+   value, the limits (0 found, at least 400 searched), NC4 and P5 are unchanged.
+2. **R1 for S7.** Measured: public 130872 and 130872 bytes, equal; private 201673 and 201673 bytes, not equal. The two runs used
+   different directories (`r1s7a`, `r1s7b`), and the private summaries record the spec including the private ledger path
+   (D6: provenance holds the full spec; the path is written only to the private ledger), so the private files differ in the path
+   text. Corrected set-up: both runs use the same directory; the first run's bytes are read, the directory is removed, and the
+   second run writes the same paths. Limit unchanged (bytes equal).
+
+The two original tests stay as ignored records with their names and the measured numbers above; the corrected tests are new
+(`p1_nc4_p5_corrected`, `r1_s7_corrected`) and are run once.
