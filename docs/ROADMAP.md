@@ -14191,7 +14191,9 @@ fixed by the item's registration ADR before any code.
     exposure is F-702. Follow-up F-727 (Hypothesis record, seeded re-run sample and evidence-parameter guard). Follow-up
     F-728 (Coupled held metrics and the held-tolerance resolution floor for hypotheses). ADR 0662 (F-727, 2026-11-16):
     M15 is now caught by a check that edits one evidence parameter and rewrites the reference hashes; verify can re-run
-    a registered seeded sample of k pairs (k recorded in the result).
+    a registered seeded sample of k pairs (k recorded in the result). ADR 0665 (F-728, 2026-11-16): two held metrics are
+    solved together (register_with_floor) and the held-tolerance floor of the ADR 0624 stub is computed and enforced;
+    every ADR 0624 check keeps its numbers.
 - [ ] **F-702** MCP tools for the design loop (objective, surrogate, fidelity driver, hypothesis record, ledger logging), together with the tools of F-339
   - depends on: F-339, F-697, F-698, F-699, F-701
   - acceptance: Every limit not stated here is registered in an ADR before the run. Each library entry point of F-268
@@ -14756,12 +14758,32 @@ fixed by the item's registration ADR before any code.
     S4 118). Nine mutations caught. Not covered: the sample is derivable from the file, so it guards against mistakes
     and version drift, not a deliberate forger; no MCP tool (F-702). Follow-up F-745 (Verifier-drawn re-run sample for
     hypotheses from evaluators outside the maintainer's control).
-- [ ] **F-728** Coupled held metrics and the held-tolerance resolution floor for hypotheses
+- [x] **F-728** Coupled held metrics and the held-tolerance resolution floor for hypotheses
   - depends on: F-701
   - acceptance: two held metrics (flow and speed) solved together on a synthetic evaluator with a known joint solution
     within the registered tolerance, the floor from the held tolerance computed against a closed form, a registration
     below that floor refused with both values named, and every ADR 0624 check keeps its result.
-  - note: Follow-up of F-701 (ADR 0624, 2026-11-16).
+  - note: Follow-up of F-701 (ADR 0624 question 4). ADR 0665, 2026-11-16. DONE. Library only, opt-in: design::hypothesis
+    register_with_floor(ledger, h, model) registers a hypothesis with one or two held metrics; two are solved together
+    in each arm by a damped, projected Newton iteration on the held residuals (forward-difference Jacobian, backtracking
+    on the tolerance-scaled residual, inside the brackets; Dennis and Schnabel 1983, cited from memory), and the
+    registration computes the held-tolerance floor (held_floor): at the domain midpoint, phi = sum_j |S_j| tol_j per
+    solved arm with S = J^-T grad y by differences, summed over both arms for value targets and the high arm for
+    as_low_arm targets, the first-order change of a paired difference that the tolerances allow; a min_effect below 10
+    times it is refused with both values named. The floor is stored in the registration entry (settings.held_floor),
+    verify requires it for two holds and recomputes it with the evaluator. Checks on a synthetic flow-and-speed
+    evaluator with closed forms (q = b n A, n = a B / (G (1 + 0.2 b)), power = a b C): 64 of 64 arms within the
+    tolerances (1e-6, 1e-5) in 10 evaluations each, every solved parameter within twice its first-order bound of the
+    closed-form joint solution, the mean change 0.0243761 within 8.7e-9 of the closed form (limit the floor 2.04e-6),
+    confirmed; the floor within 2.8e-11 relative of the closed form (single hold 1.9e-13, as_low_arm 2.9e-13);
+    min_effect 2e-5 below 10 x 2.04e-6 refused naming both, 2.1e-5 accepted; a decoupled sweep leaves q off by 0.088 and
+    0.30, holding the flow alone moves the answer by 6.5e-4 (negative controls); the floor removed, too large or edited,
+    a second compensating parameter or held metric edited are each caught; void, resume and worker-count bytes as in ADR
+    0624. register and register_batch keep one hold and their bytes (single-hold ledgers byte-identical to the base);
+    every ADR 0624 check keeps its numbers (S1 1, S2 1592 of 1595, NC1 400, NC2 61, S4 118) and every ADR 0662 one (A1
+    394, NC7 116). Ten of ten mutations caught (the backtracking one recorded, it survives). Not covered: three or more
+    holds, mixed targets, batches with two holds, the floor away from the domain midpoint; no MCP tool (F-702).
+    Follow-up F-749 (Held-tolerance floor over a sample of the design).
 - [ ] **F-729** Planar periodic sliding in the case tree
   - depends on: F-711
   - acceptance: a case file runs a planar slider against a stator of the same period beyond one period
@@ -14792,7 +14814,7 @@ fixed by the item's registration ADR before any code.
     run at pitch / 8, the sector limits of ADR 0646. Partial by the rule: the registered E1c test was defective (the
     refusal was returned by Case::parse_toml before its assertion) and E1c was met only by the corrected E1cc of
     amendment 1; every acceptance clause is met, so done is the maintainer's call.
-- [ ] **F-731** Moving immersed shapes at lock-in: a transversely oscillating cylinder shedding vortices
+- [~] **F-731** Moving immersed shapes at lock-in: a transversely oscillating cylinder shedding vortices
   - depends on: F-707
   - acceptance: Every limit not stated here is registered in the ADR before the run. A cylinder oscillating across a
     uniform stream at Re 100 inside the lock-in range, away from the phase jump, gives the shedding locked to the
@@ -14800,7 +14822,26 @@ fixed by the item's registration ADR before any code.
     repository within registered limits that allow for the natural-frequency difference of the two discretisations; a
     fast test checks that the body-fitted solver starts on the grid at the initial pose; a negative control with the
     body velocity left out of the forcing misses them.
-  - note: Follow-up of F-707 (ADR 0648, 2026-11-16).
+  - note: Moving immersed shapes at lock-in, a transversely oscillating cylinder shedding vortices. Follow-up of F-707
+    (ADR 0648). PARTIAL (ADR 0657, 2026-11-16): test-only, no library change (the F-308 MovingImmersed; default bits
+    unchanged by construction). Re 100, A/D 0.5, f D/U 0.14, in the square of half side 8 D with a Freestream far field,
+    PISO with linear upwind, dt = T/700 for every run, 20 periods, window the last 4; immersed on a Cartesian D/40 core
+    against the body-fitted swept-volume ALE run on a 256 x 128 O-grid mapped to the same square, started on the grid at
+    the initial pose (fast test T5, which catches the F-707 survivor). Fixed cylinders give St 0.16479 (body-fitted) and
+    0.16472 (immersed): natural frequencies within 0.044 per cent, so f/f0 = 0.850 in both and the registered allowance
+    (the slope from body-fitted runs at -2.8 and +2.9 per cent of the forcing frequency times the ratio difference) is
+    negligible. Every forced run is locked (lift periodic with the forcing period to 1e-8). Met: mean drag 0.8220
+    against 0.8189 (0.37 per cent, limit 4.0), lift phase -96.4 against -103.3 degrees (6.9, limit 8.0), phase change
+    across the bracket 5.9 degrees (limit 25), mean lift, the 128 x 64 reference within its limits; with the body
+    velocity left out of the forcing the lift is 21 times larger and 131 degrees off. Missed (limits unchanged,
+    known-miss record): lift amplitude 0.0551 against 0.0478 (15 per cent, limit 8.3) and complex harmonic 20 per cent
+    (limit 12.3), because the first lift harmonic nearly cancels at this point (0.048 against 0.178 for the fixed
+    cylinder; it changes by 43 per cent across the bracket, limit 25), absolute differences 0.007 to 0.010; the immersed
+    lift's harmonics above the fifth hold 13 per cent of its rms (staircase cell crossings, limit 5); the negative
+    control's mean drag differs by only 2.2 per cent (limit: more than 4.0). Six fast tests, nine of nine mutations
+    caught. Not included: other amplitudes and frequencies, a map of the lock-in range and the phase jump, a case-file
+    key (open, F-307 schema golden), rotating or deforming shapes, BDF2, three dimensions. Follow-up F-750 (Moving
+    immersed shapes at lock-in where the lift does not cancel).
 - [~] **F-732** The inverted iterate of the incompatible-modes Hex8 at the punch edge of a distorted mesh (ADR 0649 DB4)
   - depends on: F-719
   - acceptance: Every limit not stated here is registered in the ADR before the run. The punch block of ADR 0649 on the
@@ -15051,3 +15092,35 @@ fixed by the item's registration ADR before any code.
     or reads them today shown first, the results equal to the cold S to a registered tolerance; the mutations of the new
     code caught by the item's own checks; the default bits unchanged.
   - note: Follow-up of F-742 (ADR 0666, 2026-11-16).
+- [ ] **F-749** Held-tolerance floor over a sample of the design
+  - depends on: F-728
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The floor of register_with_floor
+    taken as the largest over a registered seeded sample of design points (both arms solved at each), against a closed
+    form on a synthetic evaluator whose sensitivity to the held metrics varies over the domain so that the midpoint
+    floor is exceeded at some point by a registered factor; a registration accepted by the midpoint floor and below the
+    sample floor refused with both values named; registrations made by the midpoint rule keep their bytes; every ADR
+    0624, ADR 0662 and ADR 0665 check keeps its result.
+  - note: Follow-up of F-728 (ADR 0665, 2026-11-16).
+- [ ] **F-750** Moving immersed shapes at lock-in where the lift does not cancel
+  - depends on: F-731
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A cylinder oscillating across a
+    uniform stream at Re 100 inside the lock-in range, at a forcing point where the first harmonic of the lift is at
+    least half the fixed cylinder's lift amplitude in the body-fitted reference, gives the shedding locked to the
+    forcing, the mean drag, the lift amplitude and the phase of the lift against a body-fitted moving-mesh run of this
+    repository within registered limits that allow for the natural-frequency difference of the two discretisations, with
+    the lift limits stated against a fixed force scale as well as relative; the force series are kept for diagnosis; a
+    negative control with the body velocity left out of the forcing misses the lift amplitude and phase.
+  - note: Follow-up of F-731 (ADR 0657, 2026-11-16).
+- [ ] **F-751** The two failures of the first daily gate (2026-11-16, run 43919555816)
+  - depends on: F-723
+  - acceptance: Every limit not stated here is registered in the ADR before the run. (1) f699_fidelity
+    p4_table_errors_name_row_and_column_never_a_value: its leak search matched the cell '198' inside the runner's temp
+    path (rcfd_f699_p4_1980); the old test made a record (ignored, limit intact) in favour of ADR 0642's P4c, which
+    searches with the path removed, or the shared cause otherwise fixed, with no other test edited. (2) rcfd-project
+    edit_lock_w48f two_writers_with_base_hashes_lose_no_update: fails 1 in 6 locally ('edit lock ... is held by another
+    writer' returned to a cooperative writer); the cause located (lock retry or the test's expectation), fixed without
+    changing a default result, and the test passing in 200 of 200 repeated runs; both shown by re-running the gate's
+    per-test command.
+  - note: First green-ish full gate since early November: 5872 passed, 2 failed, 1633 ignored, wall 4.1 h (run
+    43919555816 at d55c43c4). The f699 P4 failure is the pid flakiness of ADR 0624 R2 (the path held the cell's digits);
+    the edit-lock failure reproduces locally 1 in 6.
