@@ -28,10 +28,11 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   remap of the old flux are then solved on the interface faces together with the faces between the parts (only when a
   part's targets do not sum to zero beyond rounding), so a uniform flow stays uniform to `1e-14` on those steps too; every
   other step is bit-identical to before. The periodic (sector, planar) path is not changed by this. Since F-724 (ADR 0659)
-  "beyond rounding" means above `1e-10` of the largest term magnitude of the targets over the interface cells (the sum of
-  the absolute values of the fluxes, and for the GCL also of `V/dt`, that make up a cell's target: the bound of its
-  rounding), no longer of the largest target, so a flow whose targets are all rounding (an axial uniform flow at a
-  coincidence) stays on the uncoupled step; `sliding_step_with` takes the rule (`PartCoupling`).
+  `sliding_step_with` takes the rule (`PartCoupling`); the opt-in `FluxScale` measures "beyond rounding" against `1e-10` of
+  the largest term magnitude of the targets over the interface cells (the sum of the absolute values of the fluxes, and for
+  the GCL also of `V/dt`, that make up a cell's target: the bound of its rounding) instead of the largest target, so a flow
+  whose targets are all rounding (an axial uniform flow at a coincidence) stays on the uncoupled step. `sliding_step` keeps
+  F-710's rule (making `FluxScale` its default is open for the maintainer).
 * Planar and sector sliding interfaces with periodic seams, library only (F-304, ADR 0629): a slider periodic in the slide
   direction, or a rotor sector against a stator sector of the same pitch (`rcfd_mesh::sliding_periodic`,
   `rcfd_fv::sliding_periodic`, `PimpleSolver::step_sliding_periodic`). The periodic join keeps the blocks' seam pairs; the

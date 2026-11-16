@@ -434,3 +434,66 @@ not re-run.
 
 **Decision rule.** Unchanged, with E1o and E3o in place of E1 and E3 and with D0 added to the checks that must be met.
 `FluxScale` as the default of `sliding_step` moves to the open questions that need the maintainer (Q5, next to Q4).
+
+## Addendum 2: results of amendment 3 (2026-11-16)
+
+Amendment 3 is acec0755 (before the change); the code change and the new tests 2cf7ad0c (committed before their run). This
+addendum replaces addendum 1's decision, default statement, remaining questions and roadmap entries; addendum 1's
+measurements stand as recorded.
+
+**Built.** `crates/rcfd-fv/src/sliding.rs`: `sliding_step` calls `sliding_step_with(.., PartCoupling::LargestTarget)` (its
+doc and the module text say so); nothing else in the library changed against e1ed0432. The test file: E1 and E3 are ignored
+records of their run at e1ed0432; new `e1o_...`, `e3o_...`, `d0_...` and the replica R0 of main's `sliding_step` (copied
+from adc8402f, with its private `coupling_faces` and `coupled_balance` renamed `r0_...`). `docs/dynamic-mesh.md`: the
+F-724 sentence says that FluxScale is opt-in. Every default path is now bit-identical to main 14b155cd.
+
+### Results (run once, three threads, 52 s; log `w49i-work/f724-scratch/run3.log`)
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| E1o, opt-in FluxScale against F-710's step: UC 50, U2 100, U3 40, LP 20 | bit-equal every step | no step differs | met |
+| E1u on the opt-in UC: deviation; coincidence residuals | `<= 1e-10`; `<= 1e-12` | `8.86e-15`, `5.20e-14`; `1.24e-15`, `1.05e-14` | met |
+| NC3, UC: FluxScale against Off | exactly 8, ..., 48 | as stated | held |
+| E3o, AX: opt-in FluxScale against Off; velocity | bit-equal on 48; `<= 1e-10` | none differs; `4.04e-15` | met |
+| X3, AX parts | 8 on `n % 8 == 0`, 1 elsewhere | as stated | met |
+| NC2, AX: LargestTarget against Off | `>= 1` | 6 | held |
+| **D0**, the default `sliding_step` against main's (R0): UC 50, U2 100, U3 40, LP 20, AX 48 | no step differs | none differs, on any of the five | met |
+| D0n, AX: R0 against FluxScale | `>= 1` | 6 (every coincidence step) | held |
+| B (re-run; log `b3.log`): `rcfd-fv` lib 113/6, `sliding_coincidence_f710` 3/0, `sliding_interface_f250` 14/4, `sliding_periodic_coincidence_f720` 4/0, `sliding_periodic_coupled_f721` 2/2, `sliding_periodic_f304` 8/2, `sliding_reimaging_f704` 12/2, `step_consistent_paths_f443` 5/2; `rcfd-api` `baseline_hashes` 3/1, `sliding_coincidence_f710` 1/0, `sliding_sector_coincidence_f730` 2/3, `sliding_sector_case_f711` 5/0, `sliding_case_f303` 7/4, `dynamic_mesh` 5/1, `wall_pressure_case_f358` au2 1/0 | pass unedited | all pass | met |
+
+Deviation (disclosed): running the test file also ran E2, which is not ignored and was not named by amendment 3. It gave the
+numbers of addendum 1 (CS and CP equal to the base on every step; NC1 25 and 81). `rcfd-cli` `docs_site` was run once more
+after the docs edit (2/0). Slow runs, reported and not stopped (other builds were sharing the machine):
+`sliding_interface_f250` 649 s, `sliding_reimaging_f704` 165 s, `sliding_periodic_coupled_f721` 141 s,
+`sliding_sector_case_f711` 138 s. `cargo fmt -p rcfd-fv --check` and `cargo clippy --release -p rcfd-fv --all-targets --
+-D warnings` are clean. MU2 and MU5 were not re-run (amendment 3): their branch code is unchanged.
+
+### Decision
+
+By the rule as amended: S, E1o, E1u, E2, E3o, X3, K1, K1r, D0, FLc, B and B4 met; the controls held; five of five mutations
+caught; K2 missed (the estimate; ADR 0641's limit met); FL missed as registered (a defective scope). Two steps need the
+maintainer: a4 (Q4) and FluxScale as the default of `sliding_step` (Q5). **Partial.** No default result changes: the
+default `sliding_step` equals main's bit for bit (D0), `periodic_sliding_step` is untouched, and the new rule is reachable
+only through `sliding_step_with`, `periodic_sliding_step_with`, `periodic_sliding_step_coupled` (opt-in already) and the
+tree's opt-in `[mesh.sliding.coincidences] coupled = true` (which calls it).
+
+### Remaining questions (these replace addendum 1's)
+
+1. **Q4 (open, needs the maintainer): a4.** Options: (a) switch `periodic_sliding_step` to `FluxScale` (F-720's N1 test
+   becomes an ignored record; the tree's sector loop is coupled by default, so ADR 0654's key becomes a no-op, with ADR 0654
+   Q4); (b) keep it opt-in. Recommendation (a): E2 shows that the coupled step no longer touches flows whose targets are
+   rounding.
+2. **Q5 (open, needs the maintainer): FluxScale as the default of `sliding_step`.** It changes default bits only on steps
+   where F-710's rule coupled a rounding-level part mean (flows whose targets are all rounding at a coincidence, for example
+   AX: 6 of 48 steps, by rounding); FLc found no such step in `baseline_hashes` or the named suites. Options: (a) make it the
+   default (one line, the state of e1ed0432); (b) keep F-710's rule. Recommendation (a), together with Q4, so that both
+   paths use one rule.
+3. **K2's record.** Leave the known-miss record (recommended); the difference is the intended one.
+
+## For the lead: roadmap entries (these replace addendum 1's)
+
+> Proposed status: partial.
+
+> ADR 0659, 2026-11-16: the threshold scale of the coupled interface solves. New opt-in rule rcfd_fv::sliding::PartCoupling::FluxScale (with sliding_step_with and sliding_periodic::periodic_sliding_step_with): a part mean couples the interface graph's parts only above 1e-10 of the largest term magnitude of the targets over the interface cells (the sum of the absolute fluxes, and for the GCL of (V1 + V0)/dt, that make up a cell's target: the bound of its rounding, derived), instead of 1e-10 of the largest target. periodic_sliding_step_coupled (opt-in) uses it: on ADR 0640's uniform flows it now equals periodic_sliding_step bit for bit on every step (200 and 650, coincidences included; F-721's B1u met), and ADR 0641's sector run equals F-721's bit for bit over 400 steps (divergence 2.5e-14); its planar run differs only in the rounding-level GCL closure, which is no longer coupled (1.4e-13 of max|S_f|; a registered bit-equality missed, ADR 0641's limit met). Through sliding_step_with, FluxScale equals F-710's step bit for bit on ADR 0638's uniform flows (UC, U2, U3, LP), and on an axial uniform flow on the 3-D full annulus it stays on the uncoupled step, where F-710's rule couples 6 coincidence steps on rounding. Defaults are unchanged: sliding_step keeps F-710's rule and equals main's bit for bit on those five flows; periodic_sliding_step is untouched; baseline_hashes and the F-250, F-303, F-704, F-710, F-720, F-721, F-711 and F-730 suites pass unedited. A registered flip count had a defective scope (corrected count 0). Five of five mutations caught. Open for the maintainer: FluxScale as the default of sliding_step, and switching periodic_sliding_step to the coupled path (changes F-720's N1 test and the sector default at coincidences).
+
+> F-721 note: append "Threshold scale: F-724 (ADR 0659); periodic_sliding_step_coupled now equals the base on F-720's uniform flows."
