@@ -1111,7 +1111,7 @@ fn r3_core(
         // G_ii = |L^-1 e_i|^2; g = -(X^T G e_i) / G_ii; q_j = x_j^T H g + P_ji (x_i^T H g) / (1 - h_ii), q_i = 0
         let mut ei = vec![0.0; n];
         ei[i] = 1.0;
-        let v = surrogate::solve_lower(&chol, n, &ei);
+        let v = surrogate::solve_lower(chol, n, &ei);
         let cond = 1.0 / v.iter().map(|t| t * t).sum::<f64>();
         let gv: Vec<f64> = (0..x[0].len())
             .map(|a| -(0..n).map(|j| x[j][a] * g[j * n + i]).sum::<f64>() / gii)

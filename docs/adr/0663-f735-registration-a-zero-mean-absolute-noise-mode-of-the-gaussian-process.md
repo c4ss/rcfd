@@ -210,3 +210,85 @@ where named; expected to fail):
 ## Addenda
 
 Results, amendments and the roadmap entries go here; nothing above is changed after a run.
+
+## Addendum 1: results (2026-11-16)
+
+Code: fe2bcce2 (the mode in `surrogate.rs`, R3 on it in `fidelity.rs`, the new test `f735_gp_zero_mean.rs`); registration
+bce0b56a before it. `surrogate.rs`: additions only (the module doc, `ZeroMeanOptions`, `chol_inverse`, `check_noise`, the two
+private fields, `zero_mean_with_hyper`, `build_zero_mean`, `fit_zero_mean`, `zero_mean_gradient`, one branch at the top of
+`lik_gradient`, `predict` and `loo`, four accessors) and one doc line of `log_likelihood_and_gradient` reworded; no line of the
+existing modes' arithmetic changed. `fidelity.rs`: `r3_cov`, `r3_lik`, `r3_search` and the `optim` import removed,
+`r3_log_likelihood` and the process lines of `r3_core` call the mode, `r3_options` added. Docs: `docs/design-loop.md` (a
+paragraph on the mode, one phrase of the R3 bullet). No shared solver file, golden, hash table, case key or MCP tool; `bayes.rs`
+and the hypothesis code untouched.
+
+Runs (release), each once: the registered run `f735-scratch/run1.log` (1.0 s); K-0652 and K-0621 in one invocation
+`run_k.log`; mutations `mut.log` (script `mutate.py`, runner `mut_run.sh`, copy `mcopy` from `git archive fe2bcce2`; the
+unmutated copy passed first, 9 of 9); fmt, clippy and docs_site after the docs edit.
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| Z1 mode vs frozen R3 process (N1a, N1b, N2, H1) | bit-equal or `<= 1e-12` relative | 6688 numbers (theta, `l`, `tau`, factor, `alpha`, likelihood and gradient at 3 points, `r3_loo`'s `l`, `sf2`, loglik): **all bit-equal** | yes |
+| Z2 R3 fits vs main's probe | equal | `Correction::hash` and `r3_loo` digest equal on all four (N1a, N1b, H1 rung R3; N2 R2) | yes |
+| Z3 R3 calls the mode | inspection | `fidelity.rs` has no `r3_cov`, `r3_lik`, `r3_search` or `surrogate::cholesky`; `r3_core` calls `Gp::fit_zero_mean` / `Gp::zero_mean_with_hyper`, `r3_log_likelihood` the latter | yes |
+| Z4a gradient vs central differences (SE, Matern) | rel `<= 1e-5` | largest 2.6e-7 | yes |
+| Z4b log likelihood vs Gauss-Jordan | rel `<= 1e-10` | 4.9e-15 (SE), 0 (Matern) | yes |
+| Z4c predict vs brute force | `<= 1e-10 sqrt(sf2)` | 9.4e-15 | yes |
+| Z4d loo vs brute force | `<= 1e-10 sqrt(sf2)` | 2.1e-13 | yes |
+| Z4e `v_0 = 1e8` vs observation removed | `<= 1e-6 sqrt(sf2)` | 1.7e-14 | yes |
+| Z4f search at 1 and 4 workers; improvement | bit-equal; not below the start | bit-equal; loglik 41.896 against 40.292 at `(0.4, 0.6, 0.5)` | yes |
+| Z4g refusals | each `Err` | 8 of 8 | yes |
+| Z5 existing modes A to D vs main | equal | all four digests equal | yes |
+| K-0652 | all pass | `f718_fidelity_r3` 8 passed (4 ignored records not run); `f734_r3_sd` 1 passed; `f699_fidelity` 17 passed (4 ignored) | yes |
+| K-0621 | all pass | `f698_surrogate` 19 passed (3 ignored); `f715_robust_ei` 6 passed (2 ignored); `f697_fan_objective` 22 passed; `--lib` 141 passed (4 ignored) | yes |
+| R docs_site | pass | 2 passed (after the docs and ADR edits) | yes |
+| F fmt, clippy | clean | `cargo fmt -p rcfd-api --check` clean; clippy clean after two lint fixes (below) | yes |
+| T time | `< 120 s` | 1.0 s | yes |
+| NC-K ordinary kriging on N1b's residual (reported) | expected to differ `> 1e-12` | `l` differs by 0.16 relative | as expected |
+
+Mutations:
+
+| Id | Expected | Caught by |
+|---|---|---|
+| MZ1 jitter dropped | Z1, Z2 | Z1, Z2, Z4a, Z4bcd |
+| MZ2 noise as a ratio | Z1, Z2, Z4b, Z4e | Z1, Z2, Z4a, Z4bcd (Z4e passed: `1e8 sf2` is as good as infinite) |
+| MZ3 trace term dropped | Z1, Z4a | Z1, Z2, Z4a, Z4f |
+| MZ4 predict variance `sf2` | Z4c | Z4bcd |
+| MZ5 loo variance `G_ii` | Z4d | Z4bcd |
+| MZ6 LHS seed + 1 | Z1, Z2 | Z1, Z2 |
+| MZ7 mean-uncertainty term dropped (existing `predict`) | Z5, f698_surrogate | Z5; f698 `g2_two_point_closed_form`, `g7_leave_one_out` |
+| MZ8 jitter escalation in the mode (reported) | none expected | survived (no start of the registered fits fails to factorise) |
+
+MZ1 to MZ7 caught; MZ8 survived as registered.
+
+### Deviations and what was not run
+
+None in set-ups or limits; no amendment. Clippy (`-D warnings`) first refused a needless borrow in `r3_core` (`solve_lower(&chol, ..)` on the now borrowed factor) and a complex tuple type in the test's helper `scaled`; both were fixed in the commit that holds this addendum (no arithmetic changed). After the fix `f735_gp_zero_mean`, `f718_fidelity_r3` and `f734_r3_sd` were run once more as a confirmation of the build (`run_post_lint.log`), not to pick a result: 9, 8 and 1 passed. Z4b, Z4c and Z4d are one test function (`z4bcd_...`), so a mutation caught by one of
+them shows as that function. Not run: the whole workspace and whole-crate integration suites (the daily gate, ADR 0653);
+`baseline_hashes` (no shared solver file is touched); ADR 0622's heavy record `b_reduced_order_fan_heavy` (R3 is off there;
+registered limit).
+
+### Decision by the registered rule
+
+**done.** Z1 (every number bit-equal), Z2, Z3, Z5, K-0652 and K-0621 (the acceptance) are met, as are Z4a to Z4g, R, F and T;
+MZ1 to MZ7 are caught. NC-K and MZ8 came out as expected.
+
+### Remaining questions (each with a recommendation)
+
+1. **Jitter escalation in the zero-mean mode.** Options: (a) keep the fixed jitter (R3's bits); (b) escalate as the existing
+   modes do, opt-in. Recommendation: (a), taken on the maintainer's standing instruction of 2026-11-11 (take the
+   recommendation): (b) would change R3 fits wherever a start fails, and none of the registered fits needs it.
+2. **R3's prediction from a stored fit (`r3_mean`).** Options: (a) leave it in `fidelity.rs` (it needs only the JSON's `beta`,
+   `l`, `sf2`); (b) a `Gp` constructor from stored weights. Recommendation: (a); nothing calls for it now.
+3. **A thread count for R3's search.** `R3Rule` has none, so R3 uses one worker; the mode would give the same bits at any count
+   (Z4f). Recommendation: leave it until a fit is slow enough to matter.
+
+## For the lead: roadmap entries
+
+> Proposed status: done
+
+> Follow-up of F-718 and F-715 (ADR 0652, ADR 0651). ADR 0663, 2026-11-16. DONE. Library only, opt-in: surrogate::Gp gains a zero-mean mode (Gp::fit_zero_mean, Gp::zero_mean_with_hyper, ZeroMeanOptions) with y ~ N(0, s_f^2 (R + 1e-8 I) + diag(v)), an absolute noise variance v_i per observation, the process variance a fitted hyperparameter in an absolute box, no standardisation and a fixed jitter; predict, loo and the likelihood gradient follow the mode (against brute force within 2e-13 of the process sd, gradient within 2.6e-7 of central differences, both kernels). R3 of the fidelity driver now runs on this mode, and its own process code is removed from fidelity.rs. Against a frozen copy of main's R3 process, all 6688 compared numbers on four fits (N1a, N1b, N2 and a new heteroscedastic H1) are bit-equal, and the correction hashes and leave-one-out digests equal those recorded on main before the change. F-698's existing modes give main's bits (four fits by digest), and every ADR 0652, ADR 0656, ADR 0622 and ADR 0621 test passes (f718_fidelity_r3, f734_r3_sd, f699_fidelity, f698_surrogate, f715_robust_ei, f697_fan_objective, --lib). Seven of seven decisive mutations caught. Verified on synthetic data only (n up to 40, two parameters); R3 now inherits F-698's cap of 2000 observations.
+
+> Note for F-718: R3's zero-mean process is now F-698's zero-mean mode (ADR 0663, 2026-11-16); its fits are bit-identical to before.
+
+No follow-up is proposed.

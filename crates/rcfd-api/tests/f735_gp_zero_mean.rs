@@ -198,7 +198,9 @@ fn frozen_r3_search(u: &[Vec<f64>], r: &[f64], sig2: &[f64], rule: &R3Rule) -> O
 }
 
 /// R3's scaled data of metric 0: unit-box inputs, `r / s`, `(sigma / s)^2` (as `r3_core`), and `s`.
-fn scaled(pairs: &[PairData], params: &[ParamBox]) -> (Vec<Vec<f64>>, Vec<f64>, Vec<f64>, Vec<f64>, f64) {
+type Scaled = (Vec<Vec<f64>>, Vec<f64>, Vec<f64>, Vec<f64>, f64);
+
+fn scaled(pairs: &[PairData], params: &[ParamBox]) -> Scaled {
     let o = r3_loo(pairs, params, 0, &R3Rule::default(), None).unwrap();
     let u: Vec<Vec<f64>> = pairs.iter().map(|q| unit(params, &q.x)).collect();
     let rs: Vec<f64> = o.r.iter().map(|v| v / o.s).collect();
