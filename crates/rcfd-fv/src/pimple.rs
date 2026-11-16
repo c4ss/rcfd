@@ -27,7 +27,7 @@ use crate::gradient::{green_gauss, least_squares};
 use crate::lumped::FaceJump;
 use crate::pressure::{
     boundary_hby_a, boundary_values_pbc, corrected_flux, coupled_gamma, divergence, face_interpolate, pressure_bc,
-    solve_pressure, PressureBc, PressureControls,
+    solve_pressure, CoupledNonOrth, PressureBc, PressureControls,
 };
 use crate::simple::{normalised_residual, BodyForce};
 use rcfd_core::vec3::{self, Vec3};
@@ -186,6 +186,16 @@ pub struct PimpleSettings {
     /// links. Acts only where a rotational link exists (no-op otherwise); the pressure-lag estimate and the adaptive corrector
     /// count keep the lagged coupling. Default `false` (bit-identical).
     pub rotational_periodic_implicit: bool,
+    /// F-744 (ADR 0667): the explicit non-orthogonal correction on the coupled (periodic) faces, in the pressure equation, its
+    /// flux and the momentum diffusion. Each pair is treated as the internal face between the owner and the partner cell's
+    /// image in the owner's frame (`pressure::CoupledNonOrth`): the orthogonal part is unchanged and the remainder `k . grad_f`
+    /// is added where the internal faces add theirs (with `non_orth_correctors > 0` in the pressure, with a momentum gradient in
+    /// the momentum diffusion); the cell gradients of the correction (also those of the internal faces' correction) are the
+    /// least-squares gradients with the partner cell as the point of every coupled face (ADR 0077 F-H0). Refused (panics) with
+    /// `gradient_pressure`, `gradient_momentum`, an immersed volume source or the consistent correctors with non-orthogonal
+    /// correctors. Not used by the fractional step, the pressure-lag estimate or the adaptive corrector count. Default `false`
+    /// (bit-identical).
+    pub coupled_non_orth: bool,
 }
 
 /// The outer iterations of one step with `PimpleSettings::outer_pressure_tolerance` (F-536, ADR 0458 C2).
@@ -1009,6 +1019,7 @@ impl PimpleSettings {
             outer_scale_window: None,
             lag_onset_refusal: None,
             rotational_periodic_implicit: false,
+            coupled_non_orth: false,
         }
     }
 
@@ -1858,6 +1869,33 @@ impl PimpleSolver {
                 }
                 _ => RotationalLinks::default(),
             };
+            // F-744 (ADR 0667, opt-in): the coupled faces' non-orthogonal correction and the partner-point gradients of the
+            // momentum, formed from the values the default gradient is formed from
+            let cn_u = s.coupled_non_orth.then(|| {
+                assert!(
+                    s.gradient_momentum.is_none() && s.gradient_pressure.is_none(),
+                    "coupled_non_orth: not supported with gradient_momentum or gradient_pressure"
+                );
+                assert!(
+                    !(cf.enabled && s.non_orth_correctors > 0),
+                    "coupled_non_orth: not supported with the consistent correctors and non-orthogonal correctors"
+                );
+                CoupledNonOrth::build(&g, |pi| self.u.bc(pi).is_coupled())
+            });
+            let cn_grads: Option<[Option<Vec<Vec3>>; 3]> = match &cn_u {
+                Some(cn) if s.convection.needs_gradient() || s.non_orth_correctors > 0 => {
+                    let cells: [Vec<f64>; 3] = [0, 1, 2].map(|k| match (extrap, &self.hist_u[k].older) {
+                        (Some(r), Some(older)) => (0..n)
+                            .map(|c| (1.0 + r) * self.hist_u[k].old[c] - r * older[c])
+                            .collect(),
+                        _ => u_iter.iter().map(|v| v[k]).collect(),
+                    });
+                    let values: Vec<Vec3> = (0..n).map(|c| [cells[0][c], cells[1][c], cells[2][c]]).collect();
+                    let bvals: [Vec<f64>; 3] = [0, 1, 2].map(|k| ub.iter().map(|v| v[k]).collect());
+                    Some(cn.vector_gradients(&g, &values, &cells, &bvals))
+                }
+                _ => None,
+            };
             let mut deferred: Vec<Option<FvMatrix>> = vec![None, None, None];
             for k in 0..3 {
                 if !g.active[k] {
@@ -1894,15 +1932,23 @@ impl PimpleSolver {
                     limited.as_deref().or(grad.as_deref()),
                 );
                 // ADR 0204 K3: the gradient options of the momentum Laplacian, with the values the gradient was computed from
+                // (F-744, ADR 0667: with `coupled_non_orth` the partner-point gradient)
+                let lap_grad = match &cn_grads {
+                    Some(gs) => gs[k].as_deref(),
+                    None => grad.as_deref(),
+                };
                 m.add(&laplacian_opt(
                     &g,
                     &gamma_nu,
                     &bc,
-                    grad.as_deref(),
+                    lap_grad,
                     &conv_cells,
                     &bv,
                     s.gradient_momentum,
                 ));
+                if let (Some(cn), Some(gs)) = (&cn_u, &cn_grads) {
+                    cn.add_vector_rhs(&mut m.b, k, &gamma_nu, gs);
+                }
                 // periodic partner values implicit (ADR 0046): move the lagged partner term back into the matrix
                 let lk = PeriodicLinks::build(&g, &self.u, &phi_conv, &gamma_nu, &bc);
                 let q_lag: Vec<f64> = u_iter.iter().map(|v| v[k]).collect();
@@ -2229,9 +2275,22 @@ impl PimpleSolver {
                 let p_old = self.p.values.clone();
                 let mut p_new = p_old.clone();
                 // ADR 0204 K3: the gradient options of the pressure equation (`None`: as before)
+                // F-744 (ADR 0667, opt-in): the coupled faces' non-orthogonal correction in the pressure equation and its flux
+                let cn_p = s.coupled_non_orth.then(|| {
+                    assert!(
+                        ib_src.is_none(),
+                        "coupled_non_orth: not supported with an immersed volume source"
+                    );
+                    CoupledNonOrth::build(&g, |pi| self.p.bc(pi).is_coupled())
+                });
                 let (r0, it) = match s.gradient_pressure {
                     None => match &ib_src {
-                        None => solve_pressure(&g, &gamma_j, &pbc, phi_solve, &mut p_new, &controls),
+                        None => match &cn_p {
+                            None => solve_pressure(&g, &gamma_j, &pbc, phi_solve, &mut p_new, &controls),
+                            Some(cn) => crate::pressure::solve_pressure_coupled(
+                                &g, &gamma_j, &pbc, phi_solve, &mut p_new, &controls, cn,
+                            ),
+                        },
                         Some(q) => {
                             crate::pressure::solve_pressure_src(&g, &gamma_j, &pbc, phi_solve, &mut p_new, &controls, q)
                         }
@@ -2297,7 +2356,19 @@ impl PimpleSolver {
                     );
                 }
                 self.phi = match s.gradient_pressure {
-                    None => corrected_flux(&g, &gamma_j, &pbc, &phi_hby_a, &p_new, &ub, s.non_orth_correctors > 0),
+                    None => match &cn_p {
+                        None => corrected_flux(&g, &gamma_j, &pbc, &phi_hby_a, &p_new, &ub, s.non_orth_correctors > 0),
+                        Some(cn) => crate::pressure::corrected_flux_coupled(
+                            &g,
+                            &gamma_j,
+                            &pbc,
+                            &phi_hby_a,
+                            &p_new,
+                            &ub,
+                            s.non_orth_correctors > 0,
+                            cn,
+                        ),
+                    },
                     Some(o) => {
                         let grad = (s.non_orth_correctors > 0)
                             .then(|| least_squares(&g, &p_new, &boundary_values_pbc(&g, &pbc, &p_new)));
@@ -3518,6 +3589,49 @@ mod tests {
             bits(&a),
             bits(&b),
             "D1: the setting changed a run without rotational pairs"
+        );
+    }
+
+    /// U1 of ADR 0667 (F-744): on the doubly periodic Taylor-Green box (translational pairs, an orthogonal mesh, so `k = 0`
+    /// to rounding on every coupled face) `coupled_non_orth` with two non-orthogonal correctors changes the velocity and the
+    /// pressure of five PISO steps by at most `1e-12`.
+    #[test]
+    fn coupled_non_orth_on_an_orthogonal_periodic_box() {
+        let run = |on: bool| {
+            let mut s = taylor_green(16, 0.05, |mut st| {
+                st.convection = ConvScheme::Central;
+                st.non_orth_correctors = 2;
+                st.coupled_non_orth = on;
+                st
+            });
+            for _ in 0..5 {
+                s.step(0.02);
+            }
+            s
+        };
+        let (a, b) = (run(false), run(true));
+        let du =
+            a.u.values
+                .iter()
+                .zip(&b.u.values)
+                .flat_map(|(x, y)| (0..3).map(move |k| (x[k] - y[k]).abs()))
+                .fold(0.0f64, f64::max);
+        let dp =
+            a.p.values
+                .iter()
+                .zip(&b.p.values)
+                .map(|(x, y)| (x - y).abs())
+                .fold(0.0f64, f64::max);
+        let cn = CoupledNonOrth::build(&b.geom, |pi| b.u.bc(pi).is_coupled());
+        let kmax = cn.geometry().iter().map(|e| vec3::norm(e.2)).fold(0.0f64, f64::max);
+        println!(
+            "U1: {} coupled faces, largest |k| {kmax:.2e}, velocity {du:.2e}, pressure {dp:.2e}",
+            cn.geometry().len()
+        );
+        assert!(!cn.is_empty(), "U1: the box has coupled faces");
+        assert!(
+            du <= 1e-12 && dp <= 1e-12,
+            "U1: velocity {du:.3e}, pressure {dp:.3e} (1e-12)"
         );
     }
 }

@@ -299,7 +299,7 @@ pub fn solve_pressure_parts_src_k(
     slope: Option<&[f64]>,
 ) -> (f64, usize, Option<crate::simple::ResidualParts>) {
     solve_pressure_inner(
-        geom, gamma_p, bc, phi_hby_a, p, ctl, want_parts, vol_src, slope, None, None,
+        geom, gamma_p, bc, phi_hby_a, p, ctl, want_parts, vol_src, slope, None, None, None,
     )
 }
 
@@ -323,7 +323,9 @@ pub fn solve_pressure_parts_grad(
     want_parts: bool,
     grad: Option<PressureGradientFn>,
 ) -> (f64, usize, Option<crate::simple::ResidualParts>) {
-    solve_pressure_inner(geom, gamma_p, bc, phi_hby_a, p, ctl, want_parts, None, None, grad, None)
+    solve_pressure_inner(
+        geom, gamma_p, bc, phi_hby_a, p, ctl, want_parts, None, None, grad, None, None,
+    )
 }
 
 /// [`solve_pressure_parts_grad`] with the gradient options on the explicit non-orthogonal flux of the pressure equation (ADR 0204
@@ -341,7 +343,9 @@ pub fn solve_pressure_parts_opt(
     grad: Option<PressureGradientFn>,
     opts: Option<GradientOptions>,
 ) -> (f64, usize, Option<crate::simple::ResidualParts>) {
-    solve_pressure_inner(geom, gamma_p, bc, phi_hby_a, p, ctl, want_parts, None, None, grad, opts)
+    solve_pressure_inner(
+        geom, gamma_p, bc, phi_hby_a, p, ctl, want_parts, None, None, grad, opts, None,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -357,6 +361,7 @@ fn solve_pressure_inner(
     slope: Option<&[f64]>,
     grad_fn: Option<PressureGradientFn>,
     opts: Option<GradientOptions>,
+    coupled_no: Option<&CoupledNonOrth>,
 ) -> (f64, usize, Option<crate::simple::ResidualParts>) {
     let mut parts = None;
     let mut div = divergence(geom, phi_hby_a);
@@ -393,6 +398,10 @@ fn solve_pressure_inner(
                 pm.b[own[f]] -= gamma_eff[f] * area * co.d;
                 extras.push((own[f], own[g], gamma_eff[f] * area * co.c));
             }
+        }
+        // F-744 (ADR 0667, opt-in): the explicit non-orthogonal part of the coupled pairs
+        if let (Some(cn), Some(gr)) = (coupled_no, grad) {
+            cn.add_scalar_rhs(&mut pm.b, &gamma_eff, gr);
         }
         if !bc.has_dirichlet() {
             let (cell, value) = ctl.p_ref;
@@ -764,4 +773,225 @@ pub fn boundary_hby_a(geom: &FvGeometry, bc: &PressureBc, ub: &[Vec3], hby_a: &[
         }
     }
     out
+}
+
+/// One coupled (periodic) boundary face of [`CoupledNonOrth`].
+#[derive(Debug, Clone, Copy)]
+struct CoupledFace {
+    /// Global face index.
+    f: usize,
+    /// Owner cell.
+    r: usize,
+    /// The partner face's owner cell.
+    c: usize,
+    /// Rotation of the pair (the partner's frame to this face's frame); `None` for a translation.
+    rot: Option<[[f64; 3]; 3]>,
+    /// Owner weight `dn_g / (dn_f + dn_g)` (the `a` of `bc::Periodic`).
+    w: f64,
+    /// Owner centre to the partner centre's image, `(x_f - c_r) + R (c_c - x_g)`.
+    d: Vec3,
+    /// Non-orthogonal remainder `S - d |S|^2 / (S . d)`.
+    k: Vec3,
+}
+
+/// F-744 (ADR 0667): the explicit non-orthogonal correction of the coupled (periodic) faces, each pair treated as the internal
+/// face between the owner and the partner cell's image in the owner's frame: `d = (x_f - c_r) + R (c_c - x_g)`, the orthogonal
+/// part `|S|^2 / (S . d) = |S| / (dn_f + dn_g)` (the coefficient the coupled faces already carry) and the remainder
+/// `k = S - d |S|^2 / (S . d)` with the face gradient `w grad_r + (1 - w) R grad_c`. The two faces of a pair carry opposite
+/// corrections. The cell gradients are the least-squares gradients with the partner cell as the point of every coupled face
+/// (ADR 0077 F-H0, [`crate::gradient::least_squares_partner`]). Built only with `PimpleSettings::coupled_non_orth`.
+#[derive(Debug, Clone, Default)]
+pub struct CoupledNonOrth {
+    faces: Vec<CoupledFace>,
+}
+
+impl CoupledNonOrth {
+    /// The coupled faces of the patches for which `coupled(patch index)` holds and that have a partner map (empty faces
+    /// skipped), in boundary-face order.
+    pub fn build(geom: &FvGeometry, coupled: impl Fn(usize) -> bool) -> Self {
+        let mesh = &geom.mesh;
+        let (own, cc, fc, sf) = (
+            mesh.owner(),
+            mesh.cell_centres(),
+            mesh.face_centres(),
+            mesh.face_area_vectors(),
+        );
+        let mut faces = Vec::new();
+        for (pi, p) in mesh.patches().iter().enumerate() {
+            let (Some(map), true) = (&geom.periodic_partner[pi], coupled(pi)) else {
+                continue;
+            };
+            let rot = geom.periodic_rot[pi];
+            for (local, f) in p.faces().enumerate() {
+                if geom.empty[f] {
+                    continue;
+                }
+                let g = map[local];
+                let (r, c) = (own[f], own[g]);
+                let back = vec3::sub(cc[c], fc[g]);
+                let d = vec3::add(vec3::sub(fc[f], cc[r]), rot.as_ref().map_or(back, |m| rotate(m, back)));
+                let s = sf[f];
+                let k = vec3::sub(s, vec3::scale(d, vec3::dot(s, s) / vec3::dot(s, d)));
+                let (dp, dq) = (geom.dn[f - geom.n_internal], geom.dn[g - geom.n_internal]);
+                faces.push(CoupledFace {
+                    f,
+                    r,
+                    c,
+                    rot,
+                    w: dq / (dp + dq),
+                    d,
+                    k,
+                });
+            }
+        }
+        faces.sort_by_key(|e| e.f);
+        CoupledNonOrth { faces }
+    }
+
+    /// True when there is no coupled face.
+    pub fn is_empty(&self) -> bool {
+        self.faces.is_empty()
+    }
+
+    /// `(face, d, k)` of every coupled face (diagnostic, ADR 0667 H2).
+    pub fn geometry(&self) -> Vec<(usize, Vec3, Vec3)> {
+        self.faces.iter().map(|e| (e.f, e.d, e.k)).collect()
+    }
+
+    fn rot(e: &CoupledFace, v: Vec3) -> Vec3 {
+        e.rot.as_ref().map_or(v, |m| rotate(m, v))
+    }
+
+    /// The face gradient `w grad_r + (1 - w) R grad_c` of a scalar.
+    fn face_gradient(e: &CoupledFace, grad: &[Vec3]) -> Vec3 {
+        let gc = Self::rot(e, grad[e.c]);
+        [0, 1, 2].map(|i| e.w * grad[e.r][i] + (1.0 - e.w) * gc[i])
+    }
+
+    /// The least-squares gradient of a scalar with the partner cell as the point of every coupled face.
+    pub fn scalar_gradient(&self, geom: &FvGeometry, cells: &[f64], bvals: &[f64]) -> Vec<Vec3> {
+        let pts: Vec<(usize, Vec3, f64)> = self
+            .faces
+            .iter()
+            .map(|e| (e.f - geom.n_internal, e.d, cells[e.c]))
+            .collect();
+        crate::gradient::least_squares_partner(geom, cells, bvals, &pts)
+    }
+
+    /// The least-squares gradients of the active components of a vector field (`cells[j]`, `bvals[j]` the cell and boundary
+    /// values of component `j`, `values` the cell vectors the partner values are rotated from), the partner cell (its
+    /// rotated value) the point of every coupled face. Inactive components get `None`.
+    pub fn vector_gradients(
+        &self,
+        geom: &FvGeometry,
+        values: &[Vec3],
+        cells: &[Vec<f64>; 3],
+        bvals: &[Vec<f64>; 3],
+    ) -> [Option<Vec<Vec3>>; 3] {
+        let q: Vec<Vec3> = self.faces.iter().map(|e| Self::rot(e, values[e.c])).collect();
+        [0, 1, 2].map(|j| {
+            geom.active[j].then(|| {
+                let pts: Vec<(usize, Vec3, f64)> = self
+                    .faces
+                    .iter()
+                    .zip(&q)
+                    .map(|(e, v)| (e.f - geom.n_internal, e.d, v[j]))
+                    .collect();
+                crate::gradient::least_squares_partner(geom, &cells[j], &bvals[j], &pts)
+            })
+        })
+    }
+
+    /// Add `gamma_f k_f . (w grad_r + (1 - w) R grad_c)` of every coupled face to `b[r]` (a scalar, e.g. the pressure).
+    pub fn add_scalar_rhs(&self, b: &mut [f64], gamma: &[f64], grad: &[Vec3]) {
+        for e in &self.faces {
+            b[e.r] += gamma[e.f] * vec3::dot(e.k, Self::face_gradient(e, grad));
+        }
+    }
+
+    /// Subtract `gamma_f k_f . grad_f` of every coupled face from its flux (the flux of the pressure equation with
+    /// [`Self::add_scalar_rhs`]; `gamma` the pair-averaged coefficient of that equation).
+    pub fn fix_flux(&self, phi: &mut [f64], gamma: &[f64], grad: &[Vec3]) {
+        for e in &self.faces {
+            phi[e.f] -= gamma[e.f] * vec3::dot(e.k, Self::face_gradient(e, grad));
+        }
+    }
+
+    /// Add the correction of component `k` of a vector field to `b[r]`: the face gradient of component `k` is
+    /// `w grad u_k(r) + (1 - w) sum_i R_ki R grad u_i(c)` (the partner's gradient tensor in the owner's frame).
+    pub fn add_vector_rhs(&self, b: &mut [f64], k: usize, gamma: &[f64], grads: &[Option<Vec<Vec3>>; 3]) {
+        let Some(gk) = &grads[k] else {
+            return;
+        };
+        for e in &self.faces {
+            let gc = match &e.rot {
+                None => gk[e.c],
+                Some(m) => {
+                    let mut gc = [0.0; 3];
+                    for (i, gi) in grads.iter().enumerate() {
+                        if let Some(gi) = gi {
+                            vec3::axpy(&mut gc, m[k][i], rotate(m, gi[e.c]));
+                        }
+                    }
+                    gc
+                }
+            };
+            let gf = [0, 1, 2].map(|i| e.w * gk[e.r][i] + (1.0 - e.w) * gc[i]);
+            b[e.r] += gamma[e.f] * vec3::dot(e.k, gf);
+        }
+    }
+}
+
+/// [`solve_pressure`] with the explicit non-orthogonal correction of the coupled faces (F-744, ADR 0667): every corrector pass
+/// takes the partner-point least-squares gradient of the current pressure ([`CoupledNonOrth::scalar_gradient`]) for the
+/// non-orthogonal part of every face and adds that of the coupled pairs to the right-hand side. Without non-orthogonal
+/// correctors it is [`solve_pressure`].
+pub fn solve_pressure_coupled(
+    geom: &FvGeometry,
+    gamma_p: &[f64],
+    bc: &PressureBc,
+    phi_hby_a: &[f64],
+    p: &mut [f64],
+    ctl: &PressureControls,
+    cn: &CoupledNonOrth,
+) -> (f64, usize) {
+    let gf = |x: &[f64]| cn.scalar_gradient(geom, x, &boundary_values_pbc(geom, bc, x));
+    let (r, it, _) = solve_pressure_inner(
+        geom,
+        gamma_p,
+        bc,
+        phi_hby_a,
+        p,
+        ctl,
+        false,
+        None,
+        None,
+        Some(&gf),
+        None,
+        Some(cn),
+    );
+    (r, it)
+}
+
+/// [`corrected_flux`] with the explicit non-orthogonal correction of the coupled faces (F-744, ADR 0667), the flux of
+/// [`solve_pressure_coupled`]: the partner-point gradient of `p` in the non-orthogonal part of every face. `non_orth = false`
+/// is [`corrected_flux`] without correction.
+#[allow(clippy::too_many_arguments)]
+pub fn corrected_flux_coupled(
+    geom: &FvGeometry,
+    gamma_p: &[f64],
+    bc: &PressureBc,
+    phi_hby_a: &[f64],
+    p: &[f64],
+    ub: &[Vec3],
+    non_orth: bool,
+    cn: &CoupledNonOrth,
+) -> Vec<f64> {
+    if !non_orth {
+        return corrected_flux(geom, gamma_p, bc, phi_hby_a, p, ub, false);
+    }
+    let grad = cn.scalar_gradient(geom, p, &boundary_values_pbc(geom, bc, p));
+    let mut phi = corrected_flux_with(geom, gamma_p, bc, phi_hby_a, p, ub, Some(&grad));
+    cn.fix_flux(&mut phi, &coupled_gamma(geom, bc, gamma_p), &grad);
+    phi
 }
