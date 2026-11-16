@@ -200,3 +200,147 @@ code that reads the key is not changed (`sim.rs`, `vd.rs`, `sim/adapt.rs` then s
 settings data and hash of every case change (the hash tables and goldens that hold them), and `sim/adapt.rs` refuses
 `corrected` with mesh adaptation, so an adapted case without `averaged` is refused. For B1 only the solution hashes of
 `baseline_hashes.rs` are read (they hash fields, not settings).
+
+## Addendum 1: results (2026-11-16)
+
+Runs, each made once, in release:
+
+- `cargo test -p rcfd-api --release --test symmetry_uniform_f712`, all seven registered tests in 6.3 s (log
+  `f712-scratch/run1.log`);
+- B2c after amendment 1 (`run2_b2c.log`);
+- B1 on the flipped scratch copy `f712-scratch/flip` (`b1.log`);
+- the unflipped `baseline_hashes -- --include-ignored` on the worktree, which gave the current `rotating_channel` value that
+  B1 is compared with: 3 passed, and the ignored row gave `dd45d309f7acc28a`, as before this item;
+- B3 on the flipped copy (`b3.log`);
+- `docs_site` (rcfd-cli), because `docs/` changed.
+
+`cargo fmt -p rcfd-api --check` is clean, and so is `cargo clippy -p rcfd-api --all-targets -- -D warnings`. No library or
+solver file is changed. Files changed: this ADR, the new test file `crates/rcfd-api/tests/symmetry_uniform_f712.rs` and
+`docs/component-diagonal-default.md` (a new section at the end).
+
+### Results
+
+| Id | Limit | Measured | Met |
+|----|-------|----------|-----|
+| A1 UFc, frozen join, `corrected`, 40 steps | `du`, `dp <= 1e-10`; continuity `<= 1e-9` | `7.8e-16`, `0`; `5.8e-16` | yes |
+| A2 UF, default, step 1 | `du` in `[2.35e-2, 2.37e-2]` | `2.3588e-2` (in a wall cell, `r = 1.968`; `dp = 23.5`) | yes |
+| A3 UF pressure slope against `-k U` | relative `<= 0.10` | `(-13.3405, -6.6703)` against `(-13.3333, -6.6667)`: `5.4e-4` | yes |
+| A4 UFz, zero-gradient planes, default, 40 steps | `<= 1e-10` each | `1.4e-15`, `0` | yes |
+| A5 UA, conformal, default, step 1 | `du` in `[1e-2, 4e-2]` | `2.340e-2` (`dp = 23.6`, slope `(-13.3406, -6.6703)`) | yes |
+| A6 UA, largest deviation in a wall cell | yes | cell 175, `r = 1.968` (an outer wall cell) | yes |
+| A7 UAc, conformal, `corrected`, 40 steps | `<= 1e-10` each; continuity `<= 1e-9` | `8.9e-16`, `0`; `6.0e-16` | yes |
+| A8 USc, sliding table, `corrected`, 40 steps (five coincidence steps) | `<= 1e-10` each; continuity `<= 1e-9` | `7.9e-15`, `3.2e-13`; `5.6e-15` | yes |
+| B1 flipped `baseline_hashes` | prediction: only `packed_bed` moves | `packed_bed` (60, 19e53df373637262) to (16, fb46cdfee5d0d781); the other 12 rows unchanged (`rotating_channel` is `dd45d309f7acc28a` both flipped and unflipped; it is the known-differs ignored row) | yes |
+| B2 C3 as registered | `<= 1e-12` | not run: defective set-up (amendment 1) | n/a (ignored record) |
+| B2c C3c, default against `corrected` | `<= 1e-12` | `du = 2.8e-17`, `dp = 1.1e-15` of the range; **not bit for bit** | yes (the bits change, as foreseen) |
+| B3 flipped, 49 files | enumeration | 277 passed, 11 failed, 110 ignored; one test **not run** (stopped, see deviation 3); the list below | measured, except one test |
+
+Reading of A2 to A6:
+
+- The default misses by the same amount on the frozen join (`2.359e-2`) and on the conformal annulus without an interface
+  (`2.340e-2`). In both, the largest deviation sits in an outer wall cell.
+- The pressure carries the slope of the drag `k = 4 nu / (3 lz^2)` to `5e-4`.
+- The miss disappears with zero-gradient planes (no diagonal term on any component) and with `corrected`.
+
+So the cause is the averaged momentum diagonal of the default PISO split (ADR 0010's defect), as D-a and D-b diagnosed. The
+frozen join and the mesh are not the cause. Nor are the symmetry condition's face values: they are exact for these planes,
+and only the diagonal term they put on `u_z` matters. The disclosed `2.36e-2` is close to the wall-cell estimate
+`(1 - lambda)/2 = 0.021`.
+
+**B3: the tests whose outcome changes with `corrected` as the default.** Every other test of the 49 files passes; ignored
+tests were not run.
+
+| Test | Why |
+|------|-----|
+| `baseline_hashes` `packed_bed` row (B1) | the registered hash moves (the case converges in 16 iterations instead of stalling) |
+| `component_diagonal::averaged_is_the_default_and_accepted_explicitly` | asserts that the default is `averaged` |
+| `w34c_component_diagonal_transient::w1_component_diagonal_key_reaches_the_transient_kernel` | W1a asserts that the default equals `averaged` |
+| `duct_diagnosis::a6_default_deviation_is_located_in_the_wall_cells` | documents the averaged defect; with `corrected` the deviation is `4.4e-13` |
+| `lumped::z4_heat_exchanger_energy_balance`, `lumped::z4_effectiveness_duty_follows_reported_inlet_temperature` | a relative stationarity criterion on a round-off pressure (ADR 0077 part D, as in wave 34C) |
+| `consistent_correctors_case_f301::c1_the_key_is_the_library_option`, `c4_a_dynamic_mesh_with_the_key` | the case tree refuses `consistent_correctors.enabled` together with `component_diagonal = "corrected"` (ADR 0223 E5), so a case that does not write `averaged` is refused (new since wave 34C) |
+| `cosim_case_f444::k2_the_case_built_participant_starts_as_the_hand_built_one`, `k3_the_case_runs_as_the_hand_built_model_problem` | the case-built solver gets `component_diagonal: true` while the hand-built one keeps the library default; the runs differ by `2.9e-3 X` in the displacement (new since wave 34C) |
+| `film_gas_f292::d3_film_case_settings_hash_matches_the_base_record`, `d3b_settings_hash_with_the_gas_keys` | the settings hashes recorded in the test change with the schema default (new since wave 34C) |
+
+The flip also changes three things outside that list:
+
+- the settings data and hash of every case, and with them the case hash tables `case_hashes_w48u.rs`,
+  `w48v_case_hashes.rs` and the schema golden (not run here);
+- every 3-D transient `piso`/`pimple` result, in its last bits (B2c: where the three diagonals are equal, the unguarded
+  split `(a_p - a_k) u_k` is a nonzero round-off);
+- every mesh-adapted case that does not write `averaged`, which `sim/adapt.rs` would refuse (no test of the 49 files met
+  that).
+
+### Mutations (scratch copy `f712-scratch/mut`, script `mutate.sh`, log `mutations.log`)
+
+| Id | Mutation | Caught by |
+|----|----------|-----------|
+| MU1 | `pimple.rs` fixed-mesh corrector loop: the corrected `hby_a` replaced by `h / a_p` | A1 (`7.2e-2`), A7 (`7.0e-2`), A8 (`7.2e-2`) |
+| MU2 | `pimple.rs` line 2509: the same replacement | **not caught** (every test passed) |
+| MU3 | `sim.rs`: transient `s.component_diagonal = false` | A1, A7, A8 |
+| MU4 | `bc.rs` `Symmetry`: normal component `a = 1` | A2 (`4.4e-16`), A3 (slope 0), A5, A6 |
+
+MU2 was targeted wrongly at registration. Read 2 called the loop near line 2500 "the moving-mesh loop that the sliding step
+runs". That loop is in fact in `PimpleSolver::lag_map`, the corrector of the lag preflight and trial (`pimple.rs` from line
+2422). The sliding step (`step_sliding` to `sliding_advance`) runs the corrector loop of MU1, as MU1 shows by catching A8.
+No check of F-712 runs `lag_map`, so MU2 could not be caught. Three of four mutations were caught; the fourth targeted code
+outside F-712's paths.
+
+### Deviations
+
+1. B2's set-up was defective (amendment 1); B2c was registered and run once.
+2. B1 and B3 were flipped at the schema default, not in the code that reads the key (amendment 1, written before the runs).
+3. **Stopped runs (disclosed).**
+   - (a) During B3, after 92 minutes, I stopped the test binary of `transient_sources` from my own B3 run
+     (`Stop-Process -Id 31856`). At that point
+     `transient_sources::t3d_solved_potential_cancels_the_motional_current_converged_outer_iterations` was running; it takes
+     969 s on an idle machine (`docs/test-process.md`). That test counts as **not run** in B3, and its outcome with the
+     flipped default is unknown. The other 25 tests of the file ran and passed or were ignored.
+   - (b) To free the machine, I stopped my own background shell that was running the same test unflipped
+     (`TaskStop b7a65eixn`). This also ended the cargo process I had started under that shell. The run produced no result.
+   - (c) I stopped three of my own watcher loops (`TaskStop b8wck5arp`, `bxniah48p`, `blcaynru9`).
+
+   I told the lead about all three. Stopping a test run to save time is against the updated rule 7.
+4. B3 ran 49 named integration-test files of `rcfd-api` in the flipped scratch copy. It was registered before rule 7 was
+   updated. Under the updated rule it would be cut down to the named files.
+
+### Decision
+
+Against the registered rule:
+
+- A1 to A8 met.
+- B1 and B2c measured.
+- B3 measured except one test, which was not run.
+- Three of four mutations caught (MU2 targeted code that F-712 does not run).
+
+"done" requires every mutation caught and B measured in full, so the rule gives **partial**.
+
+The acceptance itself is met. The miss is diagnosed: the averaged diagonal acts as a uniform drag, and the checks separate it
+from the join, the mesh and the symmetry face values. The existing opt-in `solver.component_diagonal = "corrected"` keeps
+the flow to `8e-16` on the frozen join and to `8e-15` through the sliding table. Every default result that would change if
+the opt-in became the default is listed above.
+
+### Remaining questions
+
+- **Q1. `corrected` as the default.** It would change a `baseline_hashes` row, the settings hashes and goldens, 11 tests and
+  the last bits of 3-D transient results. Options:
+  - (a) keep `averaged` and document it;
+  - (b) flip, re-register `packed_bed`, the hash tables and the goldens, and update the 11 tests;
+  - (c) as (b), with the transient split guarded to cells whose component diagonals differ (as in the steady kernel), so
+    that symmetry-free 3-D transient results stay bit-identical.
+
+  Not taken, because it changes defaults, hashes and goldens. Recommendation: (c), for the maintainer.
+- **Q2. The un-run test of B3.** Options: (a) run `t3d_..._converged_outer_iterations` flipped once, under the daily gate's
+  conditions; (b) leave it as not run. Recommendation: (a), if Q1 goes to (b) or (c). The test belongs to that change, not
+  to F-712.
+- **Q3. Consistent correctors with `corrected` in the case tree.** ADR 0223 E5 refuses the pair, although the library has
+  accepted the component diagonal on fixed meshes since ADR 0258 X2. This needs a follow-up only if Q1 flips the default.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> ADR 0650, 2026-11-16: the uniform in-plane flow of ADR 0637 UT on the frozen join of annulus_3d_cylindrical_interface with zmin, zmax symmetry. Cause (diagnosed and registered before any run): the default averaged momentum diagonal of the PISO split. On the one-cell-deep pair every cell touches both planes, and their Dirichlet term on u_z makes the in-plane HbyA a fraction lambda of U, which acts as a uniform spurious drag k = 4 nu / (3 lz^2) = 13.3 s^-1. The pressure balances the drag with a linear field. The Green-Gauss cell gradient of that field is wrong in the wall cells, where the pressure is zero-gradient on the fixed-velocity walls, so the wall cells deviate by about (1 - lambda)/2. The cause is not the frozen join, the mesh or the symmetry face values: the default misses by the same amount on a conformal annulus_3d (2.34e-2, against 2.36e-2 on the join, both in an outer wall cell), the pressure slope is -k U to 5e-4, and zero-gradient planes keep the flow (1.4e-15). With the existing opt-in solver.component_diagonal = "corrected" (ADR 0010, ADR 0074 W1) the flow is kept to 7.8e-16 on the frozen join over 40 steps, 8.9e-16 on the conformal annulus and 7.9e-15 through [mesh.sliding] with coinciding nodes; the default is unchanged. Making corrected the default would move the baseline_hashes row packed_bed, the settings hashes and goldens, the last bits of 3-D transient piso/pimple results, and 11 tests in the 49 files checked (component_diagonal, w34c W1a, duct_diagnosis A6, lumped z4 twice, consistent_correctors_case_f301 c1 and c4, cosim_case_f444 k2 and k3, film_gas_f292 d3 and d3b); one test of the flipped run was not run. Three of four mutations caught; the fourth targeted the lag preflight, which no check runs.
+
+> F-303 note: append "The symmetry-plane miss of UT (ADR 0637 amendment 1) is the averaged component diagonal; it is removed by solver.component_diagonal = corrected (F-712, ADR 0650)."
+
+> Follow-up proposed: "Corrected component diagonal as the default". Deps F-712. Acceptance: the maintainer's decision on ADR 0650 Q1 is applied; if the default is flipped, the transient split is guarded to cells whose component diagonals differ, so that symmetry-free 3-D transient results stay bit-identical; packed_bed, the settings hash tables and the goldens are re-registered with the maintainer's approval; and the 11 tests of ADR 0650 B3 and the transient_sources t3d test that was not run are rerun with their limits.
