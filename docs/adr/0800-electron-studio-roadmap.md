@@ -18,7 +18,7 @@ The Electron Studio is planned from three documents, and every item below names 
 
 | Authority | File | Holds | Decided |
 |---|---|---|---|
-| Guardrails | `docs/studio-guardrails.md` | G1 to G14: what must not happen (clean room, Rust is the engine, bit-exact pictures, additive interfaces, dependencies, honesty, runs outlive the window, accessibility (keyboard, focus, state in words; no contrast requirement since 2026-11-16), performance floor, Electron security, Claude Code, project folder contract, testable without eyes, rcfd-studio frozen); G15 to G21: what the Studio must do (everything the engine can do; no UI-only capability; reproducible with provenance; non-destructive; explain in place; every action a command; never block) | G1 to G14 approved as drafted, 2026-11-16; G15 to G21 asked for by the maintainer the same day |
+| Guardrails | `docs/studio-guardrails.md` | G1 to G14: what must not happen (clean room, Rust is the engine, bit-exact pictures, additive interfaces, dependencies, honesty, runs outlive the window, accessibility (keyboard, focus, state in words; no contrast requirement since 2026-11-16), performance floor, Electron security, Claude Code, project folder contract, testable without eyes, rcfd-studio frozen); G15 to G21: what the Studio must do (everything the engine can do; no UI-only capability; reproducible with provenance; non-destructive; explain in place; every action a command; never block); G22: implicit by default, explicit on exception | G1 to G14 approved as drafted, 2026-11-16; G15 to G22 asked for by the maintainer the same day |
 | Product | `PRODUCT.md` | Users (learners first, engineers next), purpose, positioning, operating context, stack, principles | impeccable `init`, 2026-11-16; stack chosen by the maintainer |
 | Design | `DESIGN.md` (+ `.impeccable/design.json`) | The visual system: palette with one job per hue, Archivo with tabular figures, square hairline forms, state pictograms, run bands, field view | Recorded by impeccable's documenter from the shipped prototype `apps/studio-prototype/` |
 
@@ -113,3 +113,13 @@ The maintainer removed every WCAG AA contrast requirement from the Studio (G8, P
 to revert the eight contrast-driven token changes of F-802, so the product tokens equal DESIGN.md again. Keyboard
 access, visible focus, names and roles, state carried by shape and words as well as colour, colour-blind-safe field
 maps and reduced motion stay.
+
+## 8. Change of 2026-11-16: G22, implicit by default
+
+The maintainer added guardrail G22 ("Implicit by default, explicit on exception") and The Quiet Rule in DESIGN.md
+(option (a) of three: guardrail plus design principle, rather than a design principle only or a per-surface review).
+Cause: features kept adding standing text, as they did in `rcfd-studio`, because G6, G8, G18 and G19 were met most
+cheaply with a visible sentence and tests asserted visible text. From now on those words live in accessible names,
+tooltips, help and the palette, tests read them by role and name, and visible words are for exceptions. Every F-8xx
+acceptance clause that asks for words ("says what is missing", "names what is lost", "state in words") is read under
+G22.
