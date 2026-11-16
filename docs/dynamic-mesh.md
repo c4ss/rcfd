@@ -27,7 +27,12 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   interface drops its zero-area overlaps and its graph falls into parts; since F-710 (ADR 0638) the GCL closure and the
   remap of the old flux are then solved on the interface faces together with the faces between the parts (only when a
   part's targets do not sum to zero beyond rounding), so a uniform flow stays uniform to `1e-14` on those steps too; every
-  other step is bit-identical to before. The periodic (sector, planar) path is not changed by this.
+  other step is bit-identical to before. The periodic (sector, planar) path is not changed by this. Since F-724 (ADR 0659)
+  `sliding_step_with` takes the rule (`PartCoupling`); the opt-in `FluxScale` measures "beyond rounding" against `1e-10` of
+  the largest term magnitude of the targets over the interface cells (the sum of the absolute values of the fluxes, and for
+  the GCL also of `V/dt`, that make up a cell's target: the bound of its rounding) instead of the largest target, so a flow
+  whose targets are all rounding (an axial uniform flow at a coincidence) stays on the uncoupled step. `sliding_step` keeps
+  F-710's rule (making `FluxScale` its default is open for the maintainer).
 * Planar and sector sliding interfaces with periodic seams, library only (F-304, ADR 0629): a slider periodic in the slide
   direction, or a rotor sector against a stator sector of the same pitch (`rcfd_mesh::sliding_periodic`,
   `rcfd_fv::sliding_periodic`, `PimpleSolver::step_sliding_periodic`). The periodic join keeps the blocks' seam pairs; the
@@ -48,7 +53,8 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   in the pitch but not in the coincidence spacing the remapped old flux stays divergence-free to `2.5e-14` on every step
   from the second (50 coincidence steps, two re-imagings), and its step data built from the full annulus's state equal the
   annulus's to `2e-14` (old flux) and `1.6e-13` (mesh flux); off coincidences it is the base step bit for bit. The default
-  `periodic_sliding_step` keeps the base path (ADR 0641 Q1).
+  `periodic_sliding_step` keeps the base path (ADR 0641 Q1). Since F-724 (ADR 0659) its threshold has the term-magnitude
+  scale of the full annulus, so on F-720's uniform flows it equals the base on every step, coincidences included.
   data set per face on rotor patches are the caller's to set on the new mesh; sectors of different pitch are refused. In the
   case tree since F-711 (ADR 0646) for the sector: `[mesh.sliding]` on `mesh.generator =
   "annulus_3d_sector_cylindrical_interface"` runs ADR 0634's turned loop (`mesh_turned`, `periodic_sliding_step`,
