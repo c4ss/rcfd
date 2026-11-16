@@ -7231,9 +7231,9 @@
     "deps": [
       "F-808"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Each derived picture computed by the engine (rcfd-render or a registered opt-in service method) or, if computed in the Studio, matched against the engine's reference value for value within a tolerance registered before the code; a view that does not apply to a case (for example a cut plane on a 2D case) is disabled with the reason shown (G6).",
-    "note": "ADR 0800. Traces: G3, G6, G2; PRODUCT Operating Context."
+    "note": "ADR 0800. Traces: G3, G6, G2; PRODUCT Operating Context. Partial 2026-11-16: field viewport has cut plane (rcfd-render's clip rule, on the GPU) and vectors (overlay_vectors' rule, stored components unchanged), checked against engine references with tolerances T1-T3 registered before the code (ADR 0801 Addendum 7); cut plane disabled on 2D cases with the reason in name and tooltip (G22). Left: iso-surfaces and streamlines have no engine entry point (shown unavailable); no CLI/MCP way to make the cut/arrows of a store (G16); no length unit for mesh coordinates."
   },
   {
     "id": "F-810",

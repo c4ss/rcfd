@@ -932,7 +932,7 @@ busy fraction 1.00 before and after, with 6 to 7 `cargo`/`rustc`/`link` processe
   and does not use a service session's panel; which item should own it?
 - The roadmap task text named P6 "live update latency"; ADR 0350's P6 is the 4e6-cell scrub. Both are recorded above.
 
-## Addendum F-809: derived pictures in the field viewport (2026-11-16)
+## Addendum 7: F-809, derived pictures in the field viewport (2026-11-16)
 
 F-809 (iso-surfaces, streamlines, cut planes and vectors in the field viewport; guardrails G2, G3, G6, G8, G13, G22)
 adds **no dependency** and changes no Rust file, service method, reply shape, golden or default. No existing test was

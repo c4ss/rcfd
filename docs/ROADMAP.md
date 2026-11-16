@@ -14183,13 +14183,17 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     P7 met by R2 (median 71 ms; R1 2.0 s), P8 met (p99 frame 4.4 ms at 1e6 triangles); hover value bit-exact. Open: a
     256-entry table matches rcfd-render exactly only at its 256 points and within 3/255 elsewhere (F808-D1, maintainer:
     accept or switch to exact shader evaluation); view-and-report pending.
-- [ ] **F-809** Electron Studio: derived pictures (iso-surfaces, streamlines, cut planes, vectors)
+- [~] **F-809** Electron Studio: derived pictures (iso-surfaces, streamlines, cut planes, vectors)
   - depends on: F-808
   - acceptance: Each derived picture computed by the engine (rcfd-render or a registered opt-in service method) or, if
     computed in the Studio, matched against the engine's reference value for value within a tolerance registered before
     the code; a view that does not apply to a case (for example a cut plane on a 2D case) is disabled with the reason
     shown (G6).
-  - note: ADR 0800. Traces: G3, G6, G2; PRODUCT Operating Context.
+  - note: ADR 0800. Traces: G3, G6, G2; PRODUCT Operating Context. Partial 2026-11-16: field viewport has cut plane
+    (rcfd-render's clip rule, on the GPU) and vectors (overlay_vectors' rule, stored components unchanged), checked
+    against engine references with tolerances T1-T3 registered before the code (ADR 0801 Addendum 7); cut plane disabled
+    on 2D cases with the reason in name and tooltip (G22). Left: iso-surfaces and streamlines have no engine entry point
+    (shown unavailable); no CLI/MCP way to make the cut/arrows of a store (G16); no length unit for mesh coordinates.
 - [x] **F-810** Electron Studio: run bands and linked time scrubbing
   - depends on: F-808, F-811
   - acceptance: The run bands of DESIGN.md on one shared time axis, each end marked with its pictogram and word; one
