@@ -14220,13 +14220,19 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     2026-11-16: case editor at #/case (src/renderer/case, src/main/case); opens via session.create, saves via edit_case
     with base_hash on a writable project server, comments kept; CLI round trip and conflict tests; screenshots for the
     maintainer's view-and-report in test-results-visual/f812.
-- [ ] **F-813** Electron Studio: a learner's first path
+- [~] **F-813** Electron Studio: a learner's first path
   - depends on: F-807, F-812
   - acceptance: From an empty folder to a first honest result with the quick-start project, without CFD jargon on the
     path; every empty state says what is missing and the next step; the disclaimers stay visible (G6); a Playwright walk
     of the path; a view-and-report step by the maintainer as a first-time user. The short path hides nothing for good:
     every capability stays one step away (G15).
   - note: ADR 0800. Traces: G6; PRODUCT Users, Principle 5. Surface not yet designed: shape it with impeccable first.
+    Partial 2026-11-16: first path in the project home from an empty folder to a first result (quick-start example,
+    start_run with stored fields, result numbers equal metrics.json and status.json, picture drawn, disclaimers
+    visible), quiet under G22 with words behind Explain; Playwright and keyboard walks against real rcfd binaries. Left:
+    no engine command creates a project (rcfd project init / MCP create_project wrapping Project::create proposed, needs
+    an ADR), so the walk's test writes rcfd-project.json in its place; the field caption still uses precise terms; the
+    result link goes to Runs, not yet the F-810 workspace; maintainer's first-time view-and-report.
 - [~] **F-814** Electron Studio: Claude Code panel
   - depends on: F-805
   - acceptance: The Claude Code chat for the project through rcfd-claude: open sessions mirrored read-only, closed
