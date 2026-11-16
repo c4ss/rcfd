@@ -148,6 +148,11 @@ pub enum PickKind {
 }
 
 impl PickKind {
+    /// Whether the pick was made without a fitted model (initial design or space filling).
+    pub fn is_model_free(self) -> bool {
+        matches!(self, PickKind::Initial | PickKind::Filling)
+    }
+
     /// Text form.
     pub fn as_str(self) -> &'static str {
         match self {
@@ -447,6 +452,19 @@ impl Models {
 
 /// Propose the next `o.batch` points (ADR 0621 D6 to D8).
 pub fn propose(b: &Bounds, obs: &[Observation], o: &BayesOptions) -> Result<Proposal, String> {
+    propose_ranked(b, obs, o, 0).map(|r| r.0)
+}
+
+/// [`propose`], and with `n_alt > 0` a ranked list of at most `n_alt` points of the first pick's step from the same fitted
+/// models (ADR 0645 D3): the refined finalists in score order (the pick first; one within the exclusion radius of an earlier
+/// member is left out), then the raw candidates in score order at least 0.05 (unit cube) from every earlier member. Empty for
+/// a model-free pick. `n_alt = 0` computes exactly what [`propose`] did before.
+fn propose_ranked(
+    b: &Bounds,
+    obs: &[Observation],
+    o: &BayesOptions,
+    n_alt: usize,
+) -> Result<(Proposal, Vec<Pick>), String> {
     check_bounds(b)?;
     let d = b.len();
     if o.batch == 0 {
@@ -486,7 +504,7 @@ pub fn propose(b: &Bounds, obs: &[Observation], o: &BayesOptions) -> Result<Prop
             }
         }
         if !picks.is_empty() {
-            return Ok(Proposal { picks });
+            return Ok((Proposal { picks }, Vec::new()));
         }
     }
     if cn.ok_u.len() < d + 2 {
@@ -504,7 +522,7 @@ pub fn propose(b: &Bounds, obs: &[Observation], o: &BayesOptions) -> Result<Prop
             }
             round += 1;
         }
-        return Ok(Proposal { picks });
+        return Ok((Proposal { picks }, Vec::new()));
     }
     // models
     let mut gpo = o.gp.clone();
@@ -580,6 +598,7 @@ pub fn propose(b: &Bounds, obs: &[Observation], o: &BayesOptions) -> Result<Prop
     });
     best.truncate(5);
     let mut picks = Vec::new();
+    let mut alternates: Vec<Pick> = Vec::new();
     for q in 0..o.batch {
         let mut cand = latin_hypercube(
             o.candidates_per_dim * d,
@@ -613,6 +632,7 @@ pub fn propose(b: &Bounds, obs: &[Observation], o: &BayesOptions) -> Result<Prop
         let scores = parallel_map(&cand, o.workers, &|u: &Vec<f64>| score(u));
         let mut order: Vec<usize> = (0..cand.len()).collect();
         order.sort_by(|&a, &bb| scores[bb].total_cmp(&scores[a]).then(a.cmp(&bb)));
+        let full_order = if n_alt > 0 && q == 0 { order.clone() } else { Vec::new() };
         order.truncate(5);
         let unit: Vec<(f64, f64)> = vec![(0.0, 1.0); d];
         let refine = |&i: &usize| -> (Vec<f64>, f64) {
@@ -645,9 +665,9 @@ pub fn propose(b: &Bounds, obs: &[Observation], o: &BayesOptions) -> Result<Prop
         };
         let refined = parallel_map(&order, o.workers, &refine);
         let mut win: Option<(Vec<f64>, f64)> = None;
-        for (u, s) in refined {
-            if win.as_ref().is_none_or(|w| s > w.1) {
-                win = Some((u, s));
+        for (u, s) in &refined {
+            if win.as_ref().is_none_or(|w| *s > w.1) {
+                win = Some((u.clone(), *s));
             }
         }
         let (u, s) = win.expect("five candidates");
@@ -716,13 +736,63 @@ pub fn propose(b: &Bounds, obs: &[Observation], o: &BayesOptions) -> Result<Prop
                 u
             }
         };
+        // ADR 0645 D3: the ranked fallback of the first pick; none on a restart step (merge with ADR 0651)
+        let restart_step = picks.last().is_some_and(|k| k.kind == PickKind::Restart);
+        if n_alt > 0 && q == 0 && !restart_step {
+            let kind = if models.incumbent.is_some() {
+                PickKind::Ei
+            } else {
+                PickKind::Feasibility
+            };
+            let record = |u: &[f64]| -> Pick {
+                let (acq, ei, m, sd, pof) = models.acquisition(u);
+                Pick {
+                    x: from_unit(u, b),
+                    kind,
+                    acquisition: acq,
+                    ei,
+                    mean: m,
+                    sd,
+                    feasibility: pof,
+                    incumbent: models.incumbent,
+                    length_scales: models.f.length_scales().to_vec(),
+                    nugget: models.f.nugget(),
+                    jitter: models.f.jitter(),
+                    n_obs: cn.ok_u.len(),
+                    n_imputed: models.n_imputed,
+                    n_pending,
+                }
+            };
+            // finalists by score (stable: ties by index, so the pick comes first), then raw candidates
+            let mut fin: Vec<usize> = (0..refined.len()).collect();
+            fin.sort_by(|&a, &bb| refined[bb].1.total_cmp(&refined[a].1));
+            let mut list: Vec<Vec<f64>> = Vec::new();
+            for i in fin {
+                let (v, sv) = &refined[i];
+                if list.len() == n_alt {
+                    break;
+                }
+                if sv.is_finite() && list.iter().all(|w| dist(w, v) >= excl) {
+                    list.push(v.clone());
+                }
+            }
+            for &i in &full_order {
+                if list.len() == n_alt {
+                    break;
+                }
+                if scores[i].is_finite() && list.iter().all(|w| dist(w, &cand[i]) >= 0.05) {
+                    list.push(cand[i].clone());
+                }
+            }
+            alternates = list.iter().map(|v| record(v)).collect();
+        }
         taken.push(u.clone());
         if q + 1 < o.batch {
             models.believe(&u, &mut us, &mut fs, &mut cs, &mut cus)?;
             n_pending += 1;
         }
     }
-    Ok(Proposal { picks })
+    Ok((Proposal { picks }, alternates))
 }
 
 /// What the basin restart reads from one proposal step.
@@ -1077,13 +1147,98 @@ fn fnv(bytes: &[u8]) -> u64 {
 /// the pick record (driver `gp_ei`, acquisition, expected improvement, predicted mean and standard deviation, incumbent,
 /// length scales, nugget, jitter, observation counts); one `surrogate_summary` entry closes the run.
 pub fn run(spec: &BayesSpec, model: &dyn Model, ledger: Option<&Ledger>) -> Result<BayesResult, String> {
+    run_inner(spec, model, None, ledger).map(|r| r.run)
+}
+
+/// When the pre-check of [`run_prechecked`] runs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PreCheckScope {
+    /// On the picks made without a model (the initial Latin hypercube and space filling).
+    Initial,
+    /// On every pick.
+    Every,
+}
+
+/// A cheap model asked before the evaluation of a pick (ADR 0645): a pick it fails is not evaluated; its entry (an
+/// `evaluation` entry of the pre-check model) is a failed observation of the objective from then on.
+pub struct PreCheck<'a> {
+    /// The pre-check model (its id must differ from the evaluated model's).
+    pub model: &'a dyn Model,
+    /// When it runs.
+    pub scope: PreCheckScope,
+    /// Largest number of failed pre-checks of one run; one more is a located refusal.
+    pub max_rejected: usize,
+    /// Tries of one step (the pick, then the ranked fallback of the same fit; ADR 0645 D3); at least 1.
+    pub max_per_step: usize,
+    /// Called with one line at the end of every step (ADR 0645 D5); the library prints nothing itself.
+    pub progress: Option<&'a (dyn Fn(&str) + Sync)>,
+}
+
+/// Result of [`run_prechecked`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct PreCheckedResult {
+    /// The run (its `entries`, `failed` and `best` concern the evaluated model only).
+    pub run: BayesResult,
+    /// The pre-check entries of this run, in order (also appended to the ledger when given).
+    pub prechecks: Vec<Entry>,
+    /// Pre-checks of this run that failed (their picks were not evaluated).
+    pub rejected: usize,
+}
+
+/// [`run`] with a pre-check (ADR 0645): every pick in `pre.scope` is first given to `pre.model`; a pick whose pre-check
+/// does not end `ok` is not evaluated, and the pre-check entries of `spec.study` that failed (this run's and the ones read
+/// from the ledger) are failed observations of the proposal. `spec.budget` counts evaluations of `model` only; every
+/// pre-check is a ledger entry of its own. More than `pre.max_rejected` failed pre-checks in one run is a located refusal.
+pub fn run_prechecked(
+    spec: &BayesSpec,
+    model: &dyn Model,
+    pre: &PreCheck<'_>,
+    ledger: Option<&Ledger>,
+) -> Result<PreCheckedResult, String> {
+    if pre.model.id() == model.id() {
+        return Err(format!(
+            "bayes: the pre-check model has the id '{}' of the evaluated model",
+            model.id()
+        ));
+    }
+    if pre.max_per_step == 0 {
+        return Err("bayes: pre-check max_per_step must be >= 1".into());
+    }
+    run_inner(spec, model, Some(pre), ledger)
+}
+
+/// The failed pre-check entries of `spec.study` among `entries` as failed observations (entry order).
+fn precheck_failures(entries: &[Entry], spec: &BayesSpec, pre_id: &str) -> Vec<Observation> {
+    entries
+        .iter()
+        .filter(|e| {
+            e.kind == "evaluation" && e.study == spec.study && e.evaluator == pre_id && e.verdict != Verdict::Ok
+        })
+        .filter_map(|e| {
+            spec.params
+                .iter()
+                .map(|p| e.param(&p.name).map(|q| q.value))
+                .collect::<Option<Vec<f64>>>()
+        })
+        .map(|x| Observation {
+            x,
+            status: Status::Failed,
+        })
+        .collect()
+}
+
+fn run_inner(
+    spec: &BayesSpec,
+    model: &dyn Model,
+    pre: Option<&PreCheck<'_>>,
+    ledger: Option<&Ledger>,
+) -> Result<PreCheckedResult, String> {
     spec.validate()?;
     let b = spec.bounds();
     let mut read: Vec<Entry> = match ledger {
         Some(l) => l.read()?.entries,
         None => Vec::new(),
     };
-    let base_len = read.len();
     let sel = |entries: &[Entry]| -> Vec<usize> {
         (0..entries.len())
             .filter(|&i| entries[i].study == spec.study && entries[i].evaluator == model.id())
@@ -1092,6 +1247,11 @@ pub fn run(spec: &BayesSpec, model: &dyn Model, ledger: Option<&Ledger>) -> Resu
     let mut new_entries: Vec<Entry> = Vec::new();
     let mut picks_all: Vec<Pick> = Vec::new();
     let mut failed = 0;
+    let mut pre_entries: Vec<Entry> = Vec::new();
+    let mut rejected = 0;
+    let mut new_rows: Vec<usize> = Vec::new();
+    let mut step = 0usize;
+    let t0 = std::time::Instant::now();
     let named = |x: &[f64]| -> Vec<Quantity> {
         spec.params
             .iter()
@@ -1101,18 +1261,91 @@ pub fn run(spec: &BayesSpec, model: &dyn Model, ledger: Option<&Ledger>) -> Resu
     };
     while new_entries.len() < spec.budget {
         let idx = sel(&read);
-        let lo = observations(&read, &idx, spec)?;
+        let mut lo = observations(&read, &idx, spec)?;
+        if let Some(pc) = pre {
+            lo.obs.extend(precheck_failures(&read, spec, pc.model.id()));
+        }
         let mut oo = spec.options.clone();
         oo.batch = oo.batch.min(spec.budget - new_entries.len());
-        let p = propose(&b, &lo.obs, &oo)?;
-        let xs: Vec<Vec<f64>> = p.picks.iter().map(|k| k.x.clone()).collect();
+        let (p, alternates) = match pre {
+            Some(pc) if oo.batch == 1 && pc.scope == PreCheckScope::Every => {
+                propose_ranked(&b, &lo.obs, &oo, pc.max_per_step)?
+            }
+            _ => (propose(&b, &lo.obs, &oo)?, Vec::new()),
+        };
+        // the pre-check of the picks in its scope (ADR 0645 D2, D3): the picks to evaluate, with their batch index
+        let mut todo: Vec<(usize, Pick)> = Vec::new();
+        let mut pre_batch = Vec::new();
+        match pre {
+            None => todo.extend(p.picks.iter().cloned().enumerate()),
+            Some(pc) => {
+                for (k, pick) in p.picks.iter().enumerate() {
+                    if !(pc.scope == PreCheckScope::Every || pick.kind.is_model_free()) {
+                        todo.push((k, pick.clone()));
+                        continue;
+                    }
+                    let mut tries: Vec<&Pick> = vec![pick];
+                    if k == 0 && !pick.kind.is_model_free() {
+                        tries.extend(alternates.iter().skip(1));
+                    }
+                    tries.truncate(pc.max_per_step);
+                    for (j, t) in tries.into_iter().enumerate() {
+                        let out = evaluate_guarded(pc.model, &named(&t.x));
+                        let ok = out.verdict == Verdict::Ok;
+                        let sign = if spec.sense == Sense::Max { -1.0 } else { 1.0 };
+                        pre_batch.push(Entry {
+                            study: spec.study.clone(),
+                            variant: format!("{}/gp_ei/{}/precheck/{j}", spec.study, lo.obs.len() + k),
+                            seed: Some(spec.options.seed),
+                            provenance: json!({
+                                "driver": "gp_ei",
+                                "role": "precheck",
+                                "scope": if pc.scope == PreCheckScope::Every { "every" } else { "initial" },
+                                "iteration": lo.obs.len(),
+                                "batch_index": k,
+                                "try": j,
+                                "acquisition": t.kind.as_str(),
+                                "acquisition_value": num(t.acquisition),
+                                "predicted_mean": num(sign * t.mean),
+                                "predicted_sd": num(t.sd),
+                                "feasibility": num(t.feasibility),
+                                "evaluated_model": model.id(),
+                                "passed": ok,
+                            }),
+                            recorded_at_ms: spec.clock_ms.unwrap_or(0),
+                            ..entry_of(pc.model, named(&t.x), out)
+                        });
+                        if ok {
+                            todo.push((k, t.clone()));
+                            break;
+                        }
+                        rejected += 1;
+                        if rejected > pc.max_rejected {
+                            if let Some(l) = ledger {
+                                l.append(&pre_batch)?;
+                            }
+                            return Err(format!(
+                                "bayes: {rejected} pre-checks of '{}' failed in this run, more than max_rejected = {} \
+                                 ({} of {} evaluations made)",
+                                pc.model.id(),
+                                pc.max_rejected,
+                                new_entries.len(),
+                                spec.budget
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        let xs: Vec<Vec<f64>> = todo.iter().map(|(_, t)| t.x.clone()).collect();
         let outs: Vec<Outcome> = parallel_map(&xs, spec.options.workers, &|x: &Vec<f64>| {
             evaluate_guarded(model, &named(x))
         });
         let mut batch = Vec::new();
-        for (k, (pk, out)) in p.picks.iter().zip(outs).enumerate() {
+        for ((k, pk), out) in todo.iter().zip(outs) {
+            let k = *k;
             let sign = if spec.sense == Sense::Max { -1.0 } else { 1.0 };
-            let prov = json!({
+            let mut prov = json!({
                 "driver": "gp_ei",
                 "iteration": lo.obs.len(),
                 "batch_index": k,
@@ -1132,6 +1365,10 @@ pub fn run(spec: &BayesSpec, model: &dyn Model, ledger: Option<&Ledger>) -> Resu
                 "n_imputed": pk.n_imputed,
                 "n_pending": pk.n_pending,
             });
+            if let Some(pc) = pre {
+                let ran = pc.scope == PreCheckScope::Every || pk.kind.is_model_free();
+                prov["precheck"] = json!(if ran { "passed" } else { "not_run" });
+            }
             if out.verdict != Verdict::Ok {
                 failed += 1;
             }
@@ -1146,17 +1383,35 @@ pub fn run(spec: &BayesSpec, model: &dyn Model, ledger: Option<&Ledger>) -> Resu
             batch.push(e);
         }
         if let Some(l) = ledger {
+            if !pre_batch.is_empty() {
+                l.append(&pre_batch)?;
+            }
             l.append(&batch)?;
         }
-        for e in &batch {
+        for e in pre_batch.iter().chain(&batch) {
             let mut e2 = e.clone();
             if e2.solver_version.is_empty() {
                 e2.solver_version = super::ledger::solver_version();
             }
             read.push(e2);
         }
+        new_rows.extend(read.len() - batch.len()..read.len());
+        let added = batch.len() + pre_batch.iter().filter(|e| e.verdict != Verdict::Ok).count();
         new_entries.extend(batch);
-        picks_all.extend(p.picks);
+        pre_entries.extend(pre_batch);
+        picks_all.extend(todo.into_iter().map(|(_, t)| t));
+        step += 1;
+        if let Some(f) = pre.and_then(|pc| pc.progress) {
+            f(&format!(
+                "seed {} step {step}: evaluations {}/{}, failed {failed}, pre-checks {}, rejected {rejected}, observations {}, {:.1} s",
+                spec.options.seed,
+                new_entries.len(),
+                spec.budget,
+                pre_entries.len(),
+                lo.obs.len() + added,
+                t0.elapsed().as_secs_f64()
+            ));
+        }
     }
     // best over everything of this study and model, and the final fit for the summary
     let idx = sel(&read);
@@ -1171,7 +1426,7 @@ pub fn run(spec: &BayesSpec, model: &dyn Model, ledger: Option<&Ledger>) -> Resu
             }
         }
     }
-    let best = best_row.and_then(|r| r.checked_sub(base_len));
+    let best = best_row.and_then(|r| new_rows.iter().position(|&n| n == r));
     let sign = if spec.sense == Sense::Max { -1.0 } else { 1.0 };
     let ok: Vec<(Vec<f64>, f64, usize)> = lo
         .obs
@@ -1189,6 +1444,10 @@ pub fn run(spec: &BayesSpec, model: &dyn Model, ledger: Option<&Ledger>) -> Resu
     ];
     if let Some(v) = best_value {
         metrics.push(Quantity::new("best", sign * v, "1"));
+    }
+    if pre.is_some() {
+        metrics.push(Quantity::new("prechecks", pre_entries.len() as f64, "1"));
+        metrics.push(Quantity::new("precheck_failed", rejected as f64, "1"));
     }
     let mut fitted = None;
     let mut parents: Vec<EntryRef> = Vec::new();
@@ -1245,13 +1504,17 @@ pub fn run(spec: &BayesSpec, model: &dyn Model, ledger: Option<&Ledger>) -> Resu
     if let Some(l) = ledger {
         l.append(std::slice::from_ref(&summary))?;
     }
-    Ok(BayesResult {
-        entries: new_entries,
-        picks: picks_all,
-        best,
-        best_value: best_value.map(|v| sign * v),
-        failed,
-        summary,
+    Ok(PreCheckedResult {
+        run: BayesResult {
+            entries: new_entries,
+            picks: picks_all,
+            best,
+            best_value: best_value.map(|v| sign * v),
+            failed,
+            summary,
+        },
+        prechecks: pre_entries,
+        rejected,
     })
 }
 
