@@ -78,7 +78,8 @@ const STARTUP_REPORT = process.env['RCFD_STUDIO_STARTUP_REPORT'] ?? '';
 /** The solver service (src/main/service/config.ts names the environment variables that choose it). */
 const service = new ServiceClient(serviceConfig(process.env, path.join(app.getPath('userData'), 'service')));
 /** Bulk field data (F-804): R2 reads local stores inside the data roots, R1 goes through the service (src/main/data/). */
-const data = new StudioData(service, DataRoots.fromEnv(process.env));
+const dataRoots = DataRoots.fromEnv(process.env);
+const data = new StudioData(service, dataRoots);
 const dataPorts = new DataPorts(data);
 /** P1 and P2 measurement only (scripts/measure-service.mjs): the client, reachable from Playwright's main-process evaluate. */
 if (process.env['RCFD_STUDIO_BENCH'] === '1') (globalThis as { rcfdStudioBench?: unknown }).rcfdStudioBench = { service };
@@ -115,6 +116,14 @@ const caseEditor = new CaseEditor({
   startServer: (exe, folder) => ProjectServer.start(exe, folder, undefined, { readOnly: false }),
 });
 projects.onState(() => caseEditor.projectChanged());
+// F-813: the open project's folder is a data root, so its runs' stored fields can be drawn (roots.ts, route local)
+projects.onState((s) => {
+  try {
+    if (s.project) dataRoots.allow(s.project.folder);
+  } catch {
+    // a folder the data roots refuse (pathProblem) is simply not drawn; the field view says why
+  }
+});
 /** The Claude Code panel (F-814): claude from RCFD_STUDIO_CLAUDE (src/main/claude/config.ts), for the open project. */
 const claude = new ClaudePanel({
   config: claudeConfig(process.env, app.getPath('userData'), isFile, process.execPath),

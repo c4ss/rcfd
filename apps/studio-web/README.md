@@ -364,6 +364,7 @@ Decisions taken in building F-814 (options, the recommendation followed; each re
 
 | `src/renderer/field/` | The field viewport: `FieldViewport.tsx` (loading through the data door, legend, caption, readout), `FieldCanvas.tsx` (WebGPURenderer, the TSL material, pick, grid, keyboard, P8 bench), `colormap.ts`, `surface.ts`, `grid.worker.ts`, `Legend.tsx`, `field.css`; its development page is `src/renderer/dev/FieldDev.tsx` at `#/dev/field` | as above | F-808 |
 | `src/renderer/data/` | `door.ts`: the renderer's one door to `window.studioData` (F-804's bulk data) | as above | F-808 |
+| `src/renderer/first/` | A learner's first path: `FirstPath.tsx` (the intro, the not-a-project section, the four steps), `model.ts` (the step from the engine's lists), `words.ts` (disclaimer, limits, help, precise terms), `target.ts` (the result link), `first.css`; its run action is `src/shared/actions/first.ts` | as above | F-813 |
 | `tests/unit/` | Pure tests of `security.ts` and the built `index.html` (F-801); tokens against `DESIGN.md`, the pictogram grid (F-802); the service client against a fake service (F-803) | run by Playwright (project `unit`) | F-801, F-802, F-803 |
 | `tests/e2e/` | The packaged shell driven by Playwright's `_electron.launch`; the primitives (F-802); the service port's allow-list against a fake service, and the client against the real `rcfd serve` (F-803) | run by Playwright (project `electron`) | F-801 onwards |
 | `tests/support/` | The fake service, finding and starting `rcfd`, launching the packaged Studio | imported by the tests | F-803 |
@@ -582,6 +583,64 @@ Decisions taken in building F-829 (options, the recommendation followed; each ca
 - Open: whether an ordinary settings change on a session that holds results should also ask first (F-825 sends it at
   once; undo and redo ask). Options: (a) ask once before the first change that discards results, (b) keep as is.
   Recommended (a); not done here, it changes F-825's surface.
+
+## A learner's first path (F-813)
+
+From no project, or an empty folder, to a first honest result with the quick-start example (the engine's built-in
+template `lid_driven_cavity`, the case of `docs/tutorials/quick-start-cli.md`). The path lives on the project home
+(`src/renderer/first/`): with no project open, a station strip of four steps (Make the example, Run it, Watch it work,
+See the result); a folder the engine refuses as no project gets a short "not a project yet" section beside the failure;
+an open project that holds nothing but the example's case and runs shows the path above its index until the learner
+makes a case of their own (or hides it).
+
+- Make the example: the engine's `new_case {name: "first-cavity", template: "lid_driven_cavity"}` through the case door
+  (F-812), offered only when `case.sources` lists the template.
+- Run it: `first.run_example`, the engine's `start_run {case, store: "plan"}` through run control (F-807; CLI
+  equivalent `rcfd-runner start <case> --project <folder>` plus the plan's `--set` entries, which the engine answers
+  and the help shows). The plan stores the fields about 100 times in single precision, so the result has a picture.
+- Watch it work: the run's pictogram and round count; "Start the runner" when the runner has not picked the run up.
+- See the result: the engine's numbers (rounds, solver time, the case's `lid_drag` report with its full value on
+  hover), the stored field of the last snapshot drawn by the field viewport (F-808) with a plain-word field toggle,
+  the limits and the README's disclaimer, "Open the run in Runs" and "Edit the case".
+
+The Quiet Rule (G22): at rest the path shows the stations, one action and the numbers. What a step is and does, where
+its full control lives (G15), the precise terms with their sources (G19), the engine's words and the same run from the
+command line (G17) open under "Explain" (help on demand), and run states are pictograms whose plain word, precise word
+and outcome are their accessible name and tooltip. Visible sentences are kept for the exceptions: the folder that is not
+a project, failures, a runner that has not picked the run up, a run with no stored pictures, and the result's limits and
+disclaimer (G6). Tests read them by role and accessible name. Focus moves to each new step's action when the focus was
+on the path, so the walk works by keyboard alone.
+
+Nothing on the path writes to a project folder or keeps project state (G2, G12): its step is read from the engine's
+lists every time (`model.ts`), and the result link is one function, `openFirstResult` in `target.ts` (it opens the run in
+Runs today; repoint it there when F-810's run workspace lands).
+
+Missing engine entry point: no CLI, MCP or service call makes a project in an empty folder (only the library's
+`rcfd_project::Project::create`, used by the frozen `rcfd-studio`). Until one exists the Studio shows the folder as not a
+project yet, with "Make a project here" unavailable and the reason in its tooltip, watches the folder (every second, no
+writes) and opens it by itself when `rcfd-project.json` appears. Proposed: `rcfd project init <dir> [--name]` and an MCP
+`create_project` wrapping `Project::create`.
+
+Decisions taken in building F-813 (options, the recommendation followed; each reversible without touching the engine):
+
+- D1, an empty folder: (a) say what is missing, watch the folder and open it when the project file appears; (b) write
+  the manifest from the Studio (refused: G2, G12); (c) an engine entry point (proposed above, Rust). Taken: (a).
+- D2, the missing command: show "Make a project here" as unavailable with its reason, rather than leave it out, so the
+  learner sees it is a known gap (G6). Taken.
+- D3, how the example runs: (a) `start_run` with the engine's start plan (a picture to show); (b) F-807's
+  `project.run_case` (stores no fields, so no picture); (c) one `start_run {new_case}` call (no separate make step to
+  explain). Taken: (a), as a separate action list (`src/shared/actions/first.ts`), because `RUN_ACTIONS` is pinned by
+  the F-807 tests.
+- D4, after Run: the path stays on Home and moves to "Watch it work", with "Follow it in Runs", rather than switching to
+  Runs as the case table's Run does. Taken.
+- D5, the result: on Home, with the field viewport embedded; the link to the run is the single function
+  `openFirstResult`.
+- D6, the project folder as a data root: opening a project now allows its folder for the field viewport's local route
+  (`src/main/index.ts`), so a run's stored fields can be drawn.
+- D7, G22 (maintainer, 2026-11-16): the path's explanations moved behind Explain and into accessible names; visible
+  copy is kept for the exceptions listed above.
+- Open: name the command palette (F-831) in each step's "Full control" once it is merged; the field viewport's own
+  caption keeps the precise terms (`ux, m/s`, snapshot, step), one line under the picture.
 
 ## Security (G10)
 
