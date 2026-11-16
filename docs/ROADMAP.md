@@ -15023,6 +15023,8 @@ fixed by the item's registration ADR before any code.
     history), creep and viscoelastic materials with W (creep_increment would read the modes as a short point),
     arc-length and contact paths, the line search with W. Follow-up F-747 (Rule L against F-bar with a J2 material on a
     refined reference). Follow-up F-748 (The creep and viscoelastic readings of the committed modes of the warm start).
+    ADR 0668 (F-748, 2026-11-16): the creep reading of the committed modes (creep_increment) is fixed behind the warm
+    start (F-748); the viscoelastic material had no reader that misread them.
 - [ ] **F-741** Stall pre-check: the named point and the saving against a dearer model
   - depends on: F-716
   - acceptance: Every limit not stated here is registered in the ADR before the run. A fast fan check in which the
@@ -15096,14 +15098,26 @@ fixed by the item's registration ADR before any code.
     reading, a registered J2 tolerance derived from it, and the reason for the gap of ADR 0666 A1.2 identified or
     bounded; the default bits unchanged.
   - note: Follow-up of F-742 (ADR 0666, 2026-11-16).
-- [ ] **F-748** The creep and viscoelastic readings of the committed modes of the warm start
+- [x] **F-748** The creep and viscoelastic readings of the committed modes of the warm start
   - depends on: F-742
   - acceptance: Every limit not stated here is registered in the ADR before the run. W of ADR 0660 with a creep material
     and a viscoelastic material on a small Incompatible block through the time-stepping path of ADR 0489: no reader of
     the element states (creep_increment and every other) reads the nine committed modes as a point, a solve that panics
     or reads them today shown first, the results equal to the cold S to a registered tolerance; the mutations of the new
     code caught by the item's own checks; the default bits unchanged.
-  - note: Follow-up of F-742 (ADR 0666, 2026-11-16).
+  - note: Structural solver, intermediate tier. Follow-up of F-742 (ADR 0666). DONE. ADR 0668, 2026-11-16: the warm
+    start W of ADR 0660 with a creep material (Norton, A = 5e-33, n = 4) and a viscoelastic material (one Prony branch,
+    weights 0.5, tau 0.25 s) on a 16-element Incompatible block (rule L, cantilever under an end traction) through the
+    time-stepping path of ADR 0489 (solve_in_time, four steps of 0.25 s), against the cold S of ADR 0658. An audit of
+    the twelve readers of the element states (listed in the ADR) found creep_increment the only one that read the nine
+    committed modes as a point; before the fix the W creep run panicked there (index out of bounds, kept as an ignored
+    record), the viscoelastic run did not. Opt-in change: with the warm start creep_increment reads only the material
+    part of each element (the rule of ADR 0666 D1). Met: W against S within 6.4e-16 (displacement), 1.8e-14 (creep
+    states), 2.7e-15 (creep increments) and 1.7e-16, 1.4e-13 (viscoelastic), the same halvings and sub-steps, the
+    reported creep increment equal bit for bit to the test's own reading of the material parts, the viscoelastic tip
+    ratio 1.859 against the closed form 1.865. No default bit changed (five bit records, the rcfd-api baseline hashes).
+    Five of five mutations caught. Not covered: creep and viscoelastic with W on the nonlinear transient path (correct
+    by reading), a distorted mesh, the Arrhenius factor.
 - [ ] **F-749** Held-tolerance floor over a sample of the design
   - depends on: F-728
   - acceptance: Every limit not stated here is registered in the ADR before the run. The floor of register_with_floor
