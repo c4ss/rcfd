@@ -451,7 +451,10 @@ fn check_mesh_options(case: &Case, generator: &str) -> std::result::Result<(), V
             bad("mesh.core_fraction", "a cross-section core (pipe_sweep only)");
         }
     }
-    if generator != "annulus_3d_cylindrical_interface" {
+    if !matches!(
+        generator,
+        "annulus_3d_cylindrical_interface" | "annulus_3d_sector_cylindrical_interface"
+    ) {
         if get_f(case, "mesh.r_interface") != 0.0 {
             bad(
                 "mesh.r_interface",
@@ -465,7 +468,11 @@ fn check_mesh_options(case: &Case, generator: &str) -> std::result::Result<(), V
             );
         }
     }
-    if generator != "annulus_3d_sector" && get_f(case, "mesh.sector_angle") != 0.0 {
+    if !matches!(
+        generator,
+        "annulus_3d_sector" | "annulus_3d_sector_cylindrical_interface"
+    ) && get_f(case, "mesh.sector_angle") != 0.0
+    {
         bad("mesh.sector_angle", "a sector angle (annulus_3d_sector only)");
     }
     if generator != "box_2d" {
@@ -492,7 +499,7 @@ fn cylindrical_interface_mesh(
 ) -> std::result::Result<Mesh, Vec<Diagnostic>> {
     use rcfd_mesh::non_conformal as nc;
     let me = |e: Error| diag("mesh", e.to_string());
-    let (a, b) = cylindrical_interface_blocks(case, nx, ny, grading)?;
+    let (a, b) = cylindrical_interface_blocks(case, nx, ny, grading, None)?;
     let (mut m, rep) =
         nc::join_non_conformal_cylindrical(&a, "outer", &b, "inner", [0.0; 3], [0.0, 0.0, 1.0], 1e-8).map_err(me)?;
     m.add_cell_zone("rotor", (0..rep.b_cell_offset).collect()).map_err(me)?;
@@ -512,12 +519,14 @@ fn cylindrical_interface_mesh(
 }
 
 /// The rotor and stator blocks of `annulus_3d_cylindrical_interface` (the part of `cylindrical_interface_mesh` before the
-/// join; F-303, ADR 0637 D2 builds the sliding interface from them).
+/// join; F-303, ADR 0637 D2 builds the sliding interface from them); with `sector = Some(angle)` the sectors of that angle
+/// of `annulus_3d_sector_cylindrical_interface` (F-711, ADR 0646 G1). `None` makes the calls of the full annulus.
 fn cylindrical_interface_blocks(
     case: &Case,
     nx: usize,
     ny: usize,
     grading: f64,
+    sector: Option<f64>,
 ) -> std::result::Result<(Mesh, Mesh), Vec<Diagnostic>> {
     use rcfd_mesh::non_conformal as nc;
     let me = |e: Error| diag("mesh", e.to_string());
@@ -551,7 +560,8 @@ fn cylindrical_interface_blocks(
                 "mesh.isotropic_interface = true sets the grading of both blocks; remove mesh.grading",
             ));
         }
-        let h = nc::cylindrical_interface_layer_size(r_if, 2.0 * std::f64::consts::PI, [nx, nxr], lz, [nz, nzr], 45.0);
+        let span = sector.unwrap_or(2.0 * std::f64::consts::PI);
+        let h = nc::cylindrical_interface_layer_size(r_if, span, [nx, nxr], lz, [nz, nzr], 45.0);
         if h == 0.0 {
             (Grading::Uniform, Grading::Uniform) // conformal pair: no offset to compensate
         } else {
@@ -573,9 +583,86 @@ fn cylindrical_interface_blocks(
     } else {
         (Grading::Uniform, Grading::Uniform)
     };
+    if let Some(angle) = sector {
+        let a = gen::annulus_3d_sector(nx, ny, nz, r_in, r_if, lz, angle, ga).map_err(me)?;
+        let b = gen::annulus_3d_sector(nxr, nyr, nzr, r_if, r_out, lz, angle, gb).map_err(me)?;
+        return Ok((a, b));
+    }
     let a = gen::annulus_3d(nx, ny, nz, r_in, r_if, lz, 0.0, ga).map_err(me)?;
     let b = gen::annulus_3d(nxr, nyr, nzr, r_if, r_out, lz, 0.0, gb).map_err(me)?;
     Ok((a, b))
+}
+
+/// The sector angle (radians) of `annulus_3d_sector_cylindrical_interface` (F-711, ADR 0646 G1): `0 < sector_angle < 180`
+/// degrees (the open interval of the periodic join).
+fn sector_interface_angle(case: &Case) -> std::result::Result<f64, Vec<Diagnostic>> {
+    let deg = get_f(case, "mesh.sector_angle");
+    if !(deg > 0.0 && deg < 180.0) {
+        return Err(diag(
+            "mesh.sector_angle",
+            format!("annulus_3d_sector_cylindrical_interface needs 0 < sector_angle < 180 degrees (got {deg})"),
+        ));
+    }
+    Ok(deg.to_radians())
+}
+
+/// The sector pair of `annulus_3d_sector_cylindrical_interface` (F-711, ADR 0646 G1): the rotor sector `r_in..r_interface`
+/// and the stator sector `r_interface..r_out` of one pitch, about `+z` through the origin.
+fn sector_interface_pair(
+    case: &Case,
+    nx: usize,
+    ny: usize,
+    grading: f64,
+) -> std::result::Result<rcfd_mesh::sliding_periodic::PeriodicSlidingInterface, Vec<Diagnostic>> {
+    let angle = sector_interface_angle(case)?;
+    let (a, b) = cylindrical_interface_blocks(case, nx, ny, grading, Some(angle))?;
+    rcfd_mesh::sliding_periodic::PeriodicSlidingInterface::sector(
+        a,
+        "outer",
+        b,
+        "inner",
+        [0.0; 3],
+        [0.0, 0.0, 1.0],
+        angle,
+        1e-8,
+    )
+    .map_err(|e| diag("mesh", e.to_string()))
+}
+
+/// The zone `rotor` (the first `n_rotor` cells) and the pre-flight of ADR 0112 on the direct interface faces `faces` of a
+/// joined sector mesh (F-711, ADR 0646 G1); the worst non-orthogonality in degrees.
+pub(crate) fn sector_interface_finish(
+    m: &mut Mesh,
+    n_rotor: usize,
+    faces: &[usize],
+) -> std::result::Result<f64, Vec<Diagnostic>> {
+    use rcfd_mesh::non_conformal as nc;
+    let me = |e: Error| diag("mesh", e.to_string());
+    m.add_cell_zone("rotor", (0..n_rotor).collect()).map_err(me)?;
+    let q =
+        nc::interface_non_orthogonality(m, faces, nc::CYLINDRICAL_INTERFACE_MAX_NON_ORTHOGONALITY_DEG).map_err(me)?;
+    if q.exceeds {
+        return Err(diag(
+            "mesh.r_interface",
+            format!("{}; mesh.isotropic_interface = true sizes them", q.message()),
+        ));
+    }
+    Ok(q.worst_deg)
+}
+
+/// The frozen sector join of `annulus_3d_sector_cylindrical_interface` (F-711, ADR 0646 G1): the pair at offset 0 with the
+/// zone `rotor` and the pre-flight.
+fn sector_interface_mesh(
+    case: &Case,
+    nx: usize,
+    ny: usize,
+    grading: f64,
+) -> std::result::Result<Mesh, Vec<Diagnostic>> {
+    let iface = sector_interface_pair(case, nx, ny, grading)?;
+    let j = iface.mesh_at(0.0).map_err(|e| diag("mesh", e.to_string()))?;
+    let mut m = j.mesh;
+    sector_interface_finish(&mut m, iface.n_rotor_cells(), &j.report.join.interface_faces)?;
+    Ok(m)
 }
 
 /// The blocks of `annulus_3d_cylindrical_interface` as `build_mesh` reads the case (its generator checks first), for the
@@ -583,7 +670,17 @@ fn cylindrical_interface_blocks(
 fn sliding_blocks(case: &Case) -> std::result::Result<(Mesh, Mesh), Vec<Diagnostic>> {
     check_mesh_options(case, &get_s(case, "mesh.generator"))?;
     let (nx, ny) = (get_i(case, "mesh.nx") as usize, get_i(case, "mesh.ny") as usize);
-    cylindrical_interface_blocks(case, nx, ny, get_f(case, "mesh.grading"))
+    cylindrical_interface_blocks(case, nx, ny, get_f(case, "mesh.grading"), None)
+}
+
+/// The sector pair of `annulus_3d_sector_cylindrical_interface` as `build_mesh` reads the case (its generator checks first),
+/// for the periodic sliding of `[mesh.sliding]` (F-711, ADR 0646 P1).
+fn sliding_sector_pair(
+    case: &Case,
+) -> std::result::Result<rcfd_mesh::sliding_periodic::PeriodicSlidingInterface, Vec<Diagnostic>> {
+    check_mesh_options(case, &get_s(case, "mesh.generator"))?;
+    let (nx, ny) = (get_i(case, "mesh.nx") as usize, get_i(case, "mesh.ny") as usize);
+    sector_interface_pair(case, nx, ny, get_f(case, "mesh.grading"))
 }
 
 /// Build the mesh described by the case: the mesh file (scaled by `mesh.scale`) or the generator's mesh, then the
@@ -763,6 +860,7 @@ fn build_untransformed_mesh(case: &Case) -> std::result::Result<Mesh, Vec<Diagno
             }
         }
         "annulus_3d_cylindrical_interface" => cylindrical_interface_mesh(case, nx, ny, grading),
+        "annulus_3d_sector_cylindrical_interface" => sector_interface_mesh(case, nx, ny, grading),
         "annulus_3d_sector" => {
             // annulus_3d cut to a rotationally cyclic sector with planar faces (ADR 0116)
             let (r_in, r_out, angle) = (
@@ -2859,6 +2957,12 @@ impl Simulation {
         self.sliding.as_ref().map(|s| s.interface_faces())
     }
 
+    /// The wrap pairs `(rotor copy, stator copy)` of the current joined mesh of a sector `[mesh.sliding]` run (F-711, ADR
+    /// 0646 P1); `None` without the table or for the full annulus.
+    pub fn sliding_wrap_pairs(&self) -> Option<&[(usize, usize)]> {
+        self.sliding.as_ref().and_then(|s| s.wrap_pairs())
+    }
+
     /// The PISO/PIMPLE solver of a transient incompressible run (diagnostics and tests), if that is the engine.
     pub fn pimple_solver(&self) -> Option<&PimpleSolver> {
         match &self.engine {
@@ -4248,6 +4352,10 @@ impl Simulation {
                                     ("sliding_non_orthogonality", rec.non_orthogonality),
                                 ] {
                                     self.monitors.push(name, "", i.time, v);
+                                }
+                                // F-711, ADR 0646 P1: the image of a sector rotor
+                                if let Some(k) = rec.image {
+                                    self.monitors.push("sliding_image", "", i.time, k as f64);
                                 }
                                 i
                             }

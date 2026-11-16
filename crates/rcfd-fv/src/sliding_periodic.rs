@@ -17,8 +17,12 @@
 //! [`periodic_sliding_step_coupled`] (opt-in, F-721, ADR 0641) then couples the parts through the internal faces and the
 //! seam pairs between them, as `sliding::sliding_step` does on the full annulus (ADR 0638), so that the remapped old flux
 //! stays divergence-free for flows without the parts' symmetry.
+//! [`periodic_rotor_wall_conditions`] gives the no-slip walls of a sector's rotor (and the stator faces of the same patches)
+//! their velocity and the fixed-flux pressure gradient of the step, in the rotor's current image (F-711, ADR 0646 P2).
 
+use crate::bc::{FixedValue, Profile};
 use crate::convection::face_flux;
+use crate::field::VectorField;
 use crate::geometry::FvGeometry;
 use crate::sliding::{graph_balance, InterfaceSolve};
 use rcfd_core::vec3::{self, Vec3};
@@ -438,6 +442,78 @@ fn step_impl(
     })
 }
 
+/// The wall velocity of the listed patches of a sector pair for the step `step` to the joined mesh `new` (F-711, ADR 0646
+/// P2), as `sliding::rotor_wall_conditions` (ADR 0637 D4) on the periodic mesh: a rotor face (`new.is_rotor_face`) gets the
+/// velocity of a wall turning at `omega_w` about the pair's axis, `(omega_w a x (x_f - o))_t + n_f m_f / |S_f|` at the face
+/// centre as `new` shows it (in the rotor's current image), a stator face that of a wall at rest (`0`, its mesh flux being
+/// zero); the result is the fixed-flux gradient `dp/dn = -n . (u_b,new - u_b,old) / dt` of every boundary face of the listed
+/// patches (NaN elsewhere). On a re-imaging step (`step.reimage` set) the old value of a rotor face is turned by
+/// `step.reimage.rotation` first (it was held in the old image, ADR 0634 R2). `old_geom` is the geometry the solver holds
+/// (that of the old mesh), on which `u`'s current boundary values are the old ones. A planar pair is refused.
+pub fn periodic_rotor_wall_conditions(
+    u: &mut VectorField,
+    step: &PeriodicSlidingStep,
+    old_geom: &FvGeometry,
+    new: &PeriodicSlidingMesh,
+    patches: &[String],
+    omega_w: f64,
+    dt: f64,
+) -> Result<Vec<f64>, String> {
+    let (origin, axis) = match new.periodicity() {
+        Periodicity::Rotation { origin, axis, .. } => (origin, vec3::unit(axis)),
+        Periodicity::Translation { .. } => {
+            return Err(
+                "periodic_rotor_wall_conditions: a planar pair has no rotor walls here (sector pairs only)".into(),
+            )
+        }
+    };
+    let g = &step.geom;
+    let (ni, nb) = (g.n_internal, g.mesh.n_boundary_faces());
+    if new.mesh.n_faces() != g.mesh.n_faces() || new.mesh.n_cells() != g.mesh.n_cells() {
+        return Err("periodic_rotor_wall_conditions: the sliding mesh is not the one of the step".into());
+    }
+    if old_geom.mesh.n_boundary_faces() < new.n_fixed_boundary_faces()
+        || old_geom.n_cells() != g.n_cells()
+        || step.mesh_flux.len() != g.mesh.n_faces()
+    {
+        return Err("periodic_rotor_wall_conditions: the old geometry or the step data do not fit the new mesh".into());
+    }
+    let before = u.boundary_values(old_geom);
+    let mut dpdn = vec![f64::NAN; nb];
+    let (sf, cf, own) = (g.mesh.face_area_vectors(), g.mesh.face_centres(), g.mesh.owner());
+    for name in patches {
+        let patch = g
+            .mesh
+            .patch(name)
+            .ok_or_else(|| format!("periodic_rotor_wall_conditions: no patch '{name}'"))?;
+        if patch.start + patch.size > ni + new.n_fixed_boundary_faces() {
+            return Err(format!(
+                "periodic_rotor_wall_conditions: patch '{name}' is not an original boundary patch"
+            ));
+        }
+        let mut v = Vec::with_capacity(patch.size);
+        for f in patch.faces() {
+            let rotor = new.is_rotor_face(f);
+            let w = if rotor { omega_w } else { 0.0 };
+            let area = vec3::norm(sf[f]).max(1e-300);
+            let nrm = vec3::scale(sf[f], 1.0 / area);
+            let rigid = vec3::scale(vec3::cross(axis, vec3::sub(cf[f], origin)), w);
+            let tangential = vec3::sub(rigid, vec3::scale(nrm, vec3::dot(rigid, nrm)));
+            let ub = vec3::add(tangential, vec3::scale(nrm, step.mesh_flux[f] / area));
+            let old = match &step.reimage {
+                Some(ri) if rotor && own[f] < ri.n_rotor_cells => mat_vec(&ri.rotation, before[f - ni]),
+                _ => before[f - ni],
+            };
+            let acc = vec3::scale(vec3::sub(ub, old), 1.0 / dt);
+            dpdn[f - ni] = -vec3::dot(nrm, acc);
+            v.push(ub);
+        }
+        u.set_bc(g, name, Box::new(FixedValue(Profile::PerFace(v))))
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(dpdn)
+}
+
 #[cfg(test)]
 mod tests {
     //! T1 of ADR 0641 (registered before this code ran).
@@ -510,5 +586,197 @@ mod tests {
             assert_eq!(cp.seams.len(), seams_expected, "T1 r = {r}: seam pairs");
             assert!(res <= 1e-12, "T1 r = {r}: residual {res:.2e}");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests_f711 {
+    //! W1p to W4p of ADR 0646 (registered before this code ran).
+    use super::*;
+    use crate::sliding::{rotor_wall_conditions, sliding_step, SlidingStep};
+    use rcfd_mesh::gen::{annulus_3d, annulus_3d_sector, rectilinear_2d, Grading};
+    use rcfd_mesh::sliding::{SlidingInterface, SlidingMesh};
+    use rcfd_mesh::sliding_periodic::PeriodicSlidingInterface;
+
+    const Z: Vec3 = [0.0, 0.0, 1.0];
+    const DT: f64 = 0.005;
+
+    fn pitch() -> f64 {
+        60f64.to_radians()
+    }
+
+    /// The sector pair of the tree's set-ups (ADR 0646 SP) and the full annulus TP of ADR 0637.
+    fn pairs() -> (PeriodicSlidingInterface, SlidingInterface) {
+        let a = annulus_3d_sector(24, 8, 1, 1.0, 1.5, 0.1, pitch(), Grading::Uniform).unwrap();
+        let b = annulus_3d_sector(20, 8, 1, 1.5, 2.0, 0.1, pitch(), Grading::Uniform).unwrap();
+        let sc = PeriodicSlidingInterface::sector(a, "outer", b, "inner", vec3::ZERO, Z, pitch(), 1e-8).unwrap();
+        let a = annulus_3d(144, 8, 1, 1.0, 1.5, 0.1, 0.0, Grading::Uniform).unwrap();
+        let b = annulus_3d(120, 8, 1, 1.5, 2.0, 0.1, 0.0, Grading::Uniform).unwrap();
+        let fa = SlidingInterface::cylindrical(a, "outer", b, "inner", vec3::ZERO, Z, 1e-8).unwrap();
+        (sc, fa)
+    }
+
+    const WALLS: [&str; 2] = ["inner", "zmin"];
+
+    /// The old state of WP on the geometry `g0`: `u = (x, -y, 0.1 z)`, the walls `inner` and `zmin` holding the tangential
+    /// rigid velocity `(a x x_f)_t` of their faces, every other non-cyclic patch fixed 0; its face flux.
+    fn old_state(g0: &FvGeometry) -> (VectorField, Vec<f64>) {
+        let mut u = VectorField::from_fn("U", g0, |x| [x[0], -x[1], 0.1 * x[2]]);
+        let (sf, cf) = (g0.mesh.face_area_vectors(), g0.mesh.face_centres());
+        for p in g0.mesh.patches() {
+            if p.kind == rcfd_mesh::PatchKind::Cyclic {
+                continue;
+            }
+            let v: Vec<Vec3> = p
+                .faces()
+                .map(|f| {
+                    if WALLS.contains(&p.name.as_str()) {
+                        let n = vec3::unit(sf[f]);
+                        let r = vec3::cross(Z, cf[f]);
+                        vec3::sub(r, vec3::scale(n, vec3::dot(r, n)))
+                    } else {
+                        [0.0; 3]
+                    }
+                })
+                .collect();
+            u.set_bc(g0, &p.name, Box::new(FixedValue(Profile::PerFace(v))))
+                .unwrap();
+        }
+        let phi = face_flux(g0, &u.values, &vec![vec3::ZERO; g0.mesh.n_boundary_faces()]);
+        (u, phi)
+    }
+
+    fn geom(m: &rcfd_mesh::Mesh) -> Arc<FvGeometry> {
+        Arc::new(FvGeometry::new(Arc::new(m.clone())).unwrap())
+    }
+
+    struct Sector {
+        st: PeriodicSlidingStep,
+        new: PeriodicSlidingMesh,
+        u: VectorField,
+        dpdn: Vec<f64>,
+    }
+
+    fn sector_step(sc: &PeriodicSlidingInterface, t0: f64, t1: f64) -> Sector {
+        let (old, new) = (sc.mesh_turned(t0).unwrap(), sc.mesh_turned(t1).unwrap());
+        let g0 = geom(&old.mesh);
+        let (mut u, phi) = old_state(&g0);
+        let st = periodic_sliding_step(&g0, &old, &new, &phi, &u.values, DT).unwrap();
+        let names: Vec<String> = WALLS.iter().map(|s| s.to_string()).collect();
+        let dpdn = periodic_rotor_wall_conditions(&mut u, &st, &g0, &new, &names, 1.0, DT).unwrap();
+        Sector { st, new, u, dpdn }
+    }
+
+    struct Annulus {
+        st: SlidingStep,
+        u: VectorField,
+        dpdn: Vec<f64>,
+    }
+
+    fn annulus_step(fa: &SlidingInterface, t0: f64, t1: f64) -> Annulus {
+        let (old, new): (SlidingMesh, SlidingMesh) = (fa.mesh_at(t0).unwrap(), fa.mesh_at(t1).unwrap());
+        let g0 = geom(&old.mesh);
+        let (mut u, phi) = old_state(&g0);
+        let st = sliding_step(&g0, &old, &new, &phi, &u.values, DT).unwrap();
+        let names: Vec<String> = WALLS.iter().map(|s| s.to_string()).collect();
+        let dpdn = rotor_wall_conditions(&mut u, &st, &g0, &new, &names, 1.0, DT).unwrap();
+        Annulus { st, u, dpdn }
+    }
+
+    /// Largest differences `(values, dpdn)` over the wall faces of the sector against the annulus, the annulus face found at
+    /// the sector face centre turned by `turn` and its value turned back; the largest match distance; the stator faces of
+    /// `zmin` that are not exactly zero; the faces compared.
+    fn compare(s: &Sector, a: &Annulus, turn: f64) -> (f64, f64, f64, usize, usize) {
+        let (gs, ga) = (&s.st.geom, &a.st.geom);
+        let (vs, va) = (s.u.boundary_values(gs), a.u.boundary_values(ga));
+        let (cs, ca) = (gs.mesh.face_centres(), ga.mesh.face_centres());
+        let (nis, nia) = (gs.n_internal, ga.n_internal);
+        let fwd = rotation_matrix(Z, turn);
+        let back = rotation_matrix(Z, -turn);
+        let (mut dv, mut dd, mut dist, mut stator_bad, mut n) = (0.0f64, 0.0f64, 0.0f64, 0, 0);
+        for name in WALLS {
+            let pa: Vec<usize> = ga.mesh.patch(name).unwrap().faces().collect();
+            for f in gs.mesh.patch(name).unwrap().faces() {
+                let x = mat_vec(&fwd, cs[f]);
+                let (g, d) = pa
+                    .iter()
+                    .map(|&g| (g, vec3::norm(vec3::sub(ca[g], x))))
+                    .fold((usize::MAX, f64::INFINITY), |b, c| if c.1 < b.1 { c } else { b });
+                dist = dist.max(d);
+                let ua = mat_vec(&back, va[g - nia]);
+                dv = dv.max(vec3::norm(vec3::sub(vs[f - nis], ua)));
+                dd = dd.max((s.dpdn[f - nis] - a.dpdn[g - nia]).abs());
+                if name == "zmin" && !s.new.is_rotor_face(f) && vs[f - nis] != [0.0; 3] {
+                    stator_bad += 1;
+                }
+                n += 1;
+            }
+        }
+        (dv, dd, dist, stator_bad, n)
+    }
+
+    #[test]
+    fn w1p_w3p_step_without_reimaging_equals_the_full_annulus() {
+        let (sc, fa) = pairs();
+        let s = sector_step(&sc, 0.0123, 0.0173);
+        let a = annulus_step(&fa, 0.0123, 0.0173);
+        assert!(s.st.reimage.is_none());
+        let (dv, dd, dist, bad, n) = compare(&s, &a, 0.0);
+        println!(
+            "W1p: {n} faces, match {dist:.2e} (1e-9), values {dv:.2e} (1e-12), dpdn {dd:.2e} (1e-9); W3p: {bad} stator faces of zmin not zero"
+        );
+        assert!(n > 0 && dist <= 1e-9 && dv <= 1e-12 && dd <= 1e-9, "W1p");
+        assert_eq!(bad, 0, "W3p");
+    }
+
+    #[test]
+    fn w2p_w3p_reimaging_step_equals_the_full_annulus_in_the_image() {
+        let (sc, fa) = pairs();
+        let p = pitch();
+        let s = sector_step(&sc, p - 0.0025, p + 0.0025);
+        let a = annulus_step(&fa, p - 0.0025, p + 0.0025);
+        assert!(s.st.reimage.is_some() && s.new.image == 1);
+        let (dv, dd, dist, bad, n) = compare(&s, &a, p);
+        println!(
+            "W2p: {n} faces, match {dist:.2e} (1e-9), values {dv:.2e} (1e-12), dpdn {dd:.2e} (1e-9); W3p: {bad} stator faces of zmin not zero"
+        );
+        assert!(n > 0 && dist <= 1e-9 && dv <= 1e-12 && dd <= 1e-9, "W2p");
+        assert_eq!(bad, 0, "W3p");
+    }
+
+    #[test]
+    fn w4p_refusals() {
+        let (sc, _) = pairs();
+        let s = sector_step(&sc, 0.0123, 0.0173);
+        let names = vec!["inner".to_string()];
+        let other = sc.mesh_turned(0.0).unwrap(); // 40 direct faces (coincident nodes), not the step's 44
+        let g0 = geom(&sc.mesh_turned(0.0123).unwrap().mesh);
+        let mut u = old_state(&g0).0;
+        let e1 = periodic_rotor_wall_conditions(&mut u, &s.st, &g0, &other, &names, 1.0, DT);
+        // a planar pair
+        let xs: Vec<f64> = (0..=20).map(|i| i as f64 / 20.0).collect();
+        let xb: Vec<f64> = (0..=16).map(|i| i as f64 / 16.0).collect();
+        let ya: Vec<f64> = (0..=4).map(|i| 0.5 + 0.5 * i as f64 / 4.0).collect();
+        let yb: Vec<f64> = (0..=4).map(|i| 0.5 * i as f64 / 4.0).collect();
+        let per = |mut m: rcfd_mesh::Mesh| {
+            m.set_periodic("xmin", "xmax").unwrap();
+            m.set_periodic("xmax", "xmin").unwrap();
+            m
+        };
+        let a = per(rectilinear_2d(&xs, &ya, 0.1).unwrap());
+        let b = per(rectilinear_2d(&xb, &yb, 0.1).unwrap());
+        let pp = PeriodicSlidingInterface::planar(a, "ymin", b, "ymax", [1.0, 0.0, 0.0], 1e-8).unwrap();
+        let (o, nw) = (pp.mesh_turned(0.01).unwrap(), pp.mesh_turned(0.015).unwrap());
+        let gp = geom(&o.mesh);
+        let mut up = VectorField::uniform("U", &gp, [1.0, 0.0, 0.0]);
+        let phi = face_flux(&gp, &up.values, &vec![vec3::ZERO; gp.mesh.n_boundary_faces()]);
+        let stp = periodic_sliding_step(&gp, &o, &nw, &phi, &up.values, DT).unwrap();
+        let e2 = periodic_rotor_wall_conditions(&mut up, &stp, &gp, &nw, &["ymax".to_string()], 1.0, DT);
+        println!(
+            "W4p: another mesh {:?}; planar pair {:?}",
+            e1.as_ref().err(),
+            e2.as_ref().err()
+        );
+        assert!(e1.is_err() && e2.is_err());
     }
 }
