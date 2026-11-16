@@ -6,7 +6,7 @@ open a project and select a run. No result in these folders is a validation: the
 project's notes).
 
 The cases of `wind-tunnel/` and `quick-start/` are one cell thick (2D), and the Studio draws them face-on. `axial-fan/` is
-the 3D example, drawn in a view that rotates (middle drag).
+the 3D example, drawn in a view you can turn.
 
 | Folder | What is inside | Start with |
 |---|---|---|
@@ -14,7 +14,9 @@ the 3D example, drawn in a view that rotates (middle drag).
 | `quick-start/` | a lid-driven cavity and a heated cavity, each with a variant and both runs; every run takes one or two seconds | `quick-start/notes/README.md` |
 | `axial-fan/` | one periodic blade passage of the FAN-01 axial fan in 3D (k-omega SST, rotating frame) and one run with first-order `upwind`, for viewing the 3D geometry and flow pattern only: not a validated fan prediction (ADR 0176) | `axial-fan/notes/README.md` |
 
-Build with `cargo build --release -p rcfd-studio -p rcfd-runner -p rcfd-cli`, then open a project with
+Open a project with Open project folder… in the desktop Studio; `docs/tutorials/desktop-assistant.md` says how to start
+it from a checkout. The older `rcfd-studio`, frozen until roadmap item F-449, opens them too: build it with
+`cargo build --release -p rcfd-studio -p rcfd-runner -p rcfd-cli`, then start
 `target\release\rcfd-studio.exe example-projects\wind-tunnel`. To start runs of your own, copy the folder out of the
 repository first; new runs inside the checkout show up as untracked files (the checks below ignore them).
 

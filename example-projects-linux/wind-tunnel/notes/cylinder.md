@@ -18,15 +18,17 @@ street); the lift force then oscillates at the shedding frequency f, given as th
 * Stored: `ux`, `uy`, `p` and `vorticity_z` once per D / U from t = 1 (80 snapshots), single precision.
 * Reports: drag and lift coefficients `cd` and `cl` (reference area D x depth), every step.
 
-## What to click
+## What to look at
 
-1. Select the run of `cases/cylinder-re100.toml` in the Runs panel; the Viewport shows `p` at the last snapshot.
-2. Choose `vorticity_z` in the "field" box and "whole run" as the range, so the colours stay fixed while you scrub.
-3. Press first, then play. You see the push behind the cylinder, the wake starting to swing, and from about t = 40 the
-   regular street. One shedding period is about 6.6 D / U, so each period has about 6 to 7 stored frames and the animation
-   is coarse in time.
-4. In the Plots panel, `cl` swings around zero and `cd` oscillates at twice that frequency; the line marks the shown step.
-5. Select the run of `cases/cylinder-re200.toml` and compare: shorter period, stronger lift swing.
+1. Select the run of `cases/cylinder-re100.toml` in Runs and choose Open in workspace; the field view shows `p`.
+2. Choose `vorticity_z` in Field. The colour range is that of the shown snapshot (the legend gives it), so the colours
+   are scaled again at every stop of the scrubber.
+3. First snapshot, then Play. You see the push behind the cylinder, the wake starting to swing, and from about t = 40 the
+   regular street. One shedding period is about 6.6 D / U, so each period has about 6 to 7 stored frames and the
+   animation is coarse in time.
+4. In the time panel, choose `cl` in Monitor series: it swings around zero; `cd` oscillates at twice that frequency. The
+   line marks the shown step.
+5. Compare runs, with the run of `cases/cylinder-re200.toml` as Compared run: shorter period, stronger lift swing.
 
 ## How it relates to published data, and the limits
 
