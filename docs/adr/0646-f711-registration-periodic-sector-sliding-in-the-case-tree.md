@@ -314,3 +314,130 @@ parallel runs); the Studio preview counts the new generator's cells as "unknown"
 - **Q3. Planar sliding in the tree.** (a) A follow-up item (a periodic channel rotor-stator generator, the planar wall
   conditions, a planar check against a closed form) (taken); (b) in F-711. Taken (a) on the standing instruction; proposed in
   the roadmap entries.
+
+## Addendum 1: results (2026-11-16)
+
+Measured against the limits registered above; no limit was changed and there is no amendment. Release builds on Windows.
+The registration is 7fef1ca1 (alone, first); the code and the tests of the registered run 1d7d5df5. Each registered run was
+made once: the W unit tests (0.30 s; on the working tree that became 1d7d5df5, which differs from it only by `cargo fmt`),
+then the five tree tests (three threads, 89 s for the longest; the whole command 3 min 12 s with the build), then the two
+CLI tests (20 s). The runs are deterministic; none was repeated. No diagnostic run was made.
+
+**Built as registered** (G1, G2, P1, P2, D4s, D6s). Shared files: `crates/rcfd-api/src/sim.rs` (the generator conditions of
+`check_mesh_options`, lines 454 to 457 and 471 to 475; `cylindrical_interface_blocks` with the argument `sector`, lines 502,
+522 to 523, 529, 563 to 564 and 586 to 590 (`None` makes the full annulus's calls; the span `sector.unwrap_or(2 pi)` is the
+same value); the new `sector_interface_angle`, `sector_interface_pair`, `sector_interface_finish`, `sector_interface_mesh`,
+lines 596 to 667; `sliding_sector_pair`, lines 673 to 683; the generator arm, line 863; `Simulation::sliding_wrap_pairs`,
+lines 2960 to 2965; the `sliding_image` monitor in the step's match arm, lines 4356 to 4359), `crates/rcfd-api/src/schema.rs`
+(the enumeration value and four doc strings, lines 78, 80, 125, 131, 135), `crates/rcfd-api/src/sim/sliding.rs` (the
+sector arm: `Pair`, `with_zone_sector`, the sector branch of `new_sliding`, the cyclic skip and the axial rule of D4s,
+`step_sector`, `wrap_pairs`; the full-annulus step is the same body behind the match), `crates/rcfd-fv/src/sliding_periodic.rs`
+(new `periodic_rotor_wall_conditions`, lines 269 to 340, and the unit tests W1p to W4p, lines 342 to 532; nothing existing
+edited but the imports). Tests: `crates/rcfd-api/tests/sliding_sector_case_f711.rs` (5), `crates/rcfd-cli/tests/sliding_sector_case_f711.rs`
+(2). Docs: `docs/case-schema.md`, `docs/dynamic-mesh.md`, the README gap line (prose, no TOML block). **No golden, no hash
+table, no existing test edited; no golden diff is needed.**
+
+### Results
+
+| Check | Limit | Measured (every step; the two re-imaging steps) | Verdict |
+| --- | --- | --- | --- |
+| C1 (c1) `rcfd run` of CL, 220 steps; angle, image, reports against in process | exit 0; `1e-12`; `>= pi/3`, image 1; `1e-12` | exit 0; angle `1.0999999999999985` and image 1 in both (difference 0); reports bit-equal | met |
+| C2 `rcfd validate`, `angular_velocity = -1` | exit 3, names the key | exit 3, `mesh.sliding.angular_velocity` | met |
+| C3 (c1, set-up) re-imaging steps; final angle | `{210, 419}`; `>= 2 pi/3` | `[210, 419]` in FS, FW and US; 2.2 rad, image 2 | held |
+| K1 (c1) the frozen sector generator | as stated | 352 cells, zone `rotor` 0..192, cyclic pair at 60 deg, patch sizes 24, 20, 352, 352, 16, 16, 0, 0, 40 direct faces, worst non-orthogonality 43.5 deg | met |
+| K2 FZ 5 steps | `1e-10` each | velocity `1.8e-15`, pressure 0 | met |
+| L0s sector mesh at angle 0 against the generator | hash equal | `0x564803ff8ad9d3f1` both | met |
+| K0s no table in the data or the text | as stated | as stated | met |
+| K3 the other generators' refusals | located | `mesh.sector_angle`; `mesh.r_interface` | met |
+| D1 (c3) `baseline_hashes` | pass | 3 passed, 1 ignored (as before) | met |
+| D2 (c3) unedited suites | pass | `rcfd-api` lib 138/3, `sliding_case_f303` 7/4, `sliding_coincidence_f710` 1/0, `case_hashes_w48u` 1/0, `cylindrical_interface_w44b` 5/1, `revolved_sector_w45b` 7/1, `mesh_transform_w48u` 13/0, `rules_w19c` 8/1, `dynamic_mesh` 5/1; `rcfd-fv` lib 112/6 (the 109 before and W1p, W2p, W4p), `sliding_periodic_f304` 8/2, `sliding_reimaging_f704` 12/2; `rcfd-cli` `sliding_case_f303` 2/0, `docs_site` 2/0 (passed / ignored) | met |
+| L1s FS tree against FSL after 440 steps | `1e-12` each | 0, 0 | met |
+| L2s FW tree against FWL | `1e-12` each | 0, 0 | met |
+| F0 (set-up) cell match, FS and FW | `1e-9`, one-to-one | `1.65e-15`, one-to-one | held |
+| **F1 (c2)** FS sector against the full-annulus tree run | `<= 2e-2` | `1.15e-2`; `3.18e-3` | **met** |
+| F2 FS rms, last step | `<= 1e-2` | `3.54e-4` | met |
+| **F3 (c2)** FW (turning hub) sector against the full annulus | `<= 2e-2` | `1.01e-2`; `8.07e-4` | **met** |
+| F4 FW rms, last step | `<= 1e-2` | `1.30e-4` | met |
+| FN1 (control of F1) rotor vectors not re-imaged | `>= 2e-2`, `>= 5 F1` | `7.83e-2`, ratio 6.8 | held |
+| FN2 (control of F3) | `>= 2e-2`, `>= 5 F3` | `4.62e-1`, ratio 45.7 | held |
+| X1 (set-up) 44 sector pieces, 264 annulus faces, a wrap pair every step | as stated | every step, FS and FW (and US: 44) | held |
+| X0 (set-up) interface non-orthogonality | `70 deg` | 49.20 deg (sector and annulus, FS, FW, US) | held |
+| M1 FS net interface flux, GCL, continuity | `1e-10`, `1e-12`, `1e-9` | `1.22e-14`, `1.12e-14`, `3.95e-12`; `2.8e-17`, `7.5e-15`, `1.4e-13` | met |
+| **U1s (c1)** US uniform axial flow | `1e-10` each | velocity `2.38e-14` (`1.85e-14`), pressure 0 | met |
+| U2s US GCL, continuity, net interface flux | `1e-12`, `1e-9`, `1e-10` | `1.12e-14`, `2.5e-16`, `1.0e-17` | met |
+| W1p step without re-imaging against the annulus | values `1e-12`, dpdn `1e-9` | 376 faces, match `8.0e-16`, values `3.0e-14`, dpdn `6.0e-12` | met |
+| W2p re-imaging step in the image | as W1p | match `1.2e-15`, values `3.0e-14`, dpdn `6.1e-12` | met |
+| W3p stator faces of `zmin` zero | exact | 0 of 160 not zero, both steps | met |
+| W4p refusals | `Err` | another mesh; a planar pair | met |
+| E1s refusals (6) | located | each names its key | met |
+| E2s restart | false | false | met |
+
+Printed, no limit: FS's initial cell velocities against the closed form `3.3e-16`, largest `|u|` `0.89 U0` at the start and
+`0.016` (sector) / `0.016` (annulus) at the end; FS's difference before the first re-imaging step `1.15e-2`, from it
+`3.24e-3`; FW's `1.01e-2` and `1.04e-3`, its largest speed at the end `0.646` (sector) against `0.646` (annulus); FW's net
+interface flux `4.1e-16`, continuity `9.8e-14`. Times: FS 89.0 s, FW 86.5 s (four solvers each in lockstep), under the two
+minutes of a heavy record, so they run as ordinary tests.
+
+### Mutations
+
+Each applied alone by an exact text replacement to a `git archive` copy of 1d7d5df5 in `w49i-work/f711-scratch/mut` (script
+`f711-scratch/mutate.py`, target `f711-scratch/target-mut`, log `f711-scratch/mutations.log`), the named tests run once, the
+file restored and compared equal.
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 the loop keeps the old image | F1 | caught: F1 `1.70e-1` (and L1s, M1 continuity `1.05e-9`, C3: no re-imaging step) |
+| MU2 old rotor-face values not turned on a re-imaging step | W2p | caught: dpdn `1.74e2` against `1e-9` |
+| MU3 every face given the rotor's wall speed | W1p or W3p | caught: values `1.97`, 160 stator faces not zero (W1p, W2p, W3p) |
+| MU4 the loop keeps the old mesh | L1s or C1 | caught: the tree run fails at its second step (the step is refused) |
+| MU5 the stator sector built with `nx` | K1 | caught: 384 cells, 24 direct faces |
+
+`cargo fmt -p rcfd-api --check`, `-p rcfd-fv`, `-p rcfd-cli`: clean. `cargo clippy --release -p rcfd-fv -p rcfd-api -p
+rcfd-cli --all-targets -- -D warnings`: clean. Not run: the whole workspace suite (the lead's gate).
+
+### Reading
+
+- c1 is met: a case file with `[mesh.sliding]` on the new sector rotor-stator generator runs from `rcfd run` past one pitch
+  through `mesh_turned` (one re-imaging step in CL; two in the tree runs, at the steps the arithmetic gave), the binary
+  equal to the in-process run bit for bit; the tree loop equals ADR 0634's library loop bit for bit; a uniform axial flow
+  stays uniform to `2.4e-14` through both re-imaging steps.
+- c2 is met: over 2.1 pitches the sector's velocity stays within `1.15e-2 U0` (m = 6 vortical field, walls at rest) and
+  `1.01e-2 Omega r_in` (turning hub) of the full-annulus tree run of ADR 0637's pair, rms `3.5e-4` and `1.3e-4` at the end.
+  The largest differences come before the first re-imaging step, in the start transient (the re-imaging steps themselves
+  show `3.2e-3` and `8.1e-4`); leaving the rotor vectors in the old image raises them to `7.8e-2` and `0.46`.
+- c3 is met: the table stays optional, the new generator is a new enumeration value, the full-annulus path is the same
+  operations (its suites, the bit-for-bit library-loop checks of ADR 0637 and the baseline hashes pass unedited).
+- FN1's ratio (6.8) is near its registered `5`: FS's field decays strongly (`0.89` to `0.016 U0`), so the control's error,
+  set at the first re-imaging step (`t = 1.05`), is smaller than the start-transient difference would suggest.
+
+### Decision
+
+By the registered rule: C1, C3, K1, K0s, L0s, F1 and F3 with F0, D1, D2, L1s, U1s, M1, W1p and W2p met; X0, X1 held; FN1
+and FN2 held; five of five mutations caught; no golden or hash table edited: **done**.
+
+### Remaining questions
+
+- **Q4. Planar sliding in the tree** (the item's title): follow-up proposed below (Q3 as taken). Recommendation: the
+  follow-up.
+- **Q5. Coincidences on the sector path.** The tree's sector path calls the base periodic step, which leaves the parts'
+  means in the remapped flux for a flow without the parts' symmetry at node coincidences (ADR 0640 N1); the checks here
+  avoid coincidences by the step. Options: (a) when F-721's coupled step is merged, re-run FS with ADR 0637's `dt = pitch /
+  8` (a coincidence every rotor pitch) against the full annulus as a follow-up check; (b) a located warning in the tree when
+  `angular_velocity . dt` is near a multiple of the coincidence spacing; (c) leave it documented (done in
+  `docs/case-schema.md`). Recommendation (a), after F-721.
+- **Q6. The Studio preview** counts the new generator's cells as unknown (`rcfd-studio/src/preview.rs`). Options: (a) add it
+  to `count_keys` and the estimate (two arms) in a later UI item; (b) leave it. Recommendation (a), small.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> ADR 0646, 2026-11-12: periodic sector sliding in the case tree. New generator mesh.generator = "annulus_3d_sector_cylindrical_interface" (a rotor sector r_in..r_interface and a stator sector r_interface..r_out of the same sector_angle, below 180 deg, joined by the periodic join of F-304; cell zone rotor, the 70 deg pre-flight; without a table a frozen-rotor sector). With the optional table [mesh.sliding] the rotor sector turns any number of pitches through PeriodicSlidingInterface::mesh_turned, periodic_sliding_step and step_sliding_periodic, re-imaged one pitch back whenever its angle passes one (monitor sliding_image); the rotor's walls through the new rcfd_fv::sliding_periodic::periodic_rotor_wall_conditions (the wall velocity in the rotor's image, the old values turned on a re-imaging step; checked against the full annulus's rotor_wall_conditions face by face to 3e-14). rcfd run of a case file past one pitch equals the in-process run bit for bit; the tree loop equals the library loop bit for bit. Against the full-annulus tree run of ADR 0637's pair over 2.1 pitches (440 steps of 0.005, two re-imagings, no node coincidence): an m = 6 vortical field with walls at rest within 1.2e-2 U0 (limit 2e-2), a turning hub within 1.0e-2 Omega r_in, rms 3.5e-4 and 1.3e-4; not re-imaging the rotor vectors gives 7.8e-2 and 0.46 (negative controls). Uniform axial flow 2.4e-14 through the re-imaging steps; mass across the interface 1.2e-14, GCL 1.1e-14. Five of five mutations caught; defaults bit-identical (F-303 suites, baseline hashes, hash tables unchanged; no golden edit). Limits: sector about z, forward rotation, a non-zero fixed value on a rotor patch must be axial, steps that land on node coincidences are not coupled on the sector path for flows without the node sets' symmetry (ADR 0640), the refusals of F-303; planar sliding not in the tree.
+
+> F-303 note: append "Sector form: F-711 (ADR 0646)." and change its limit "sector and planar sliding not in the tree" to "planar sliding not in the tree".
+
+> F-704 note: append "Case tree (sector): F-711 (ADR 0646)." and drop "no case-file key (F-303)" from its limits.
+
+> Follow-up proposed: "Planar periodic sliding in the case tree". Deps F-711. Acceptance: a case file runs a planar slider against a stator of the same period beyond one period (PeriodicSlidingInterface::mesh_turned on a planar pair) through [mesh.sliding] with a periodic channel rotor-stator generator; the wall conditions of the slider's walls in its image; a uniform flow kept to 1e-10 on every step including the re-imaging steps and a through-flow checked against a registered reference; defaults bit-identical. Every limit not stated here is registered in the ADR before the run.
+
+> Follow-up proposed: "Sector sliding in the tree at node coincidences". Deps F-711, F-721. Acceptance: the FS set-up of ADR 0646 with ADR 0637's step pitch / 8 (a node coincidence every rotor pitch on both runs) through the coupled periodic step of F-721, the sector against the full-annulus tree run within a registered limit; the F-711 results unchanged where no coincidence occurs.

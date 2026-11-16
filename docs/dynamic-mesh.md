@@ -37,8 +37,12 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   one period and records the periods taken off in `PeriodicSlidingMesh::image`; the step whose image changes by one
   re-images the rotor (its swept volumes from the old offset less one period, its cells' velocity and history turned back
   by one pitch, in `periodic_sliding_step` and `step_sliding_periodic`). Steps of less than one period, forwards; boundary
-  data set per face on rotor patches are the caller's to set on the new mesh; sectors of different pitch are refused; no
-  case key (the full-annulus key of F-303 does not cover them; ADR 0637 Q3).
+  data set per face on rotor patches are the caller's to set on the new mesh; sectors of different pitch are refused. In the
+  case tree since F-711 (ADR 0646) for the sector: `[mesh.sliding]` on `mesh.generator =
+  "annulus_3d_sector_cylindrical_interface"` runs ADR 0634's turned loop (`mesh_turned`, `periodic_sliding_step`,
+  `step_sliding_periodic`), the rotor's walls through `rcfd_fv::sliding_periodic::periodic_rotor_wall_conditions` (the wall
+  velocity at the face as the mesh shows it, the old values of the rotor faces turned back on a re-imaging step). The
+  sector run is checked against the full-annulus tree run of F-303 over two pitches. The planar slider has no case key.
 * Local remeshing of tetrahedral meshes is in the library since F-247 (ADR 0215), for the compressible solver in a box
   with planar walls; the case tree does not use it yet (ADR 0215 Q1).
 * Overset (chimera) meshes in the library only (F-134, ADR 0219): one component mesh moving rigidly over a static
