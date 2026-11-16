@@ -315,7 +315,7 @@ const code = (t: string) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"
 
 test('only workspace/door.ts of the renderer names window.studioRunData (not to be confused with F-807’s studioRuns)', () => {
   const naming = sources(renderer)
-    .filter((f) => /\bstudioRun\b/.test(code(f.text)))
+    .filter((f) => /\bstudioRunData\b/.test(code(f.text)))
     .map((f) => f.file);
   expect(naming).toEqual(['workspace/door.ts']);
 });
