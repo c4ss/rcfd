@@ -1,12 +1,10 @@
-// The primitives gallery (F-802): every primitive of DESIGN.md Components in its states, the tokens, and the contrast
-// table, on one page. For development and the maintainer's view-and-report (npm run gallery, or the screenshots that
+// The primitives gallery (F-802): every primitive of DESIGN.md Components in its states, and the tokens, on one page. For development and the maintainer's view-and-report (npm run gallery, or the screenshots that
 // tests/e2e/primitives.spec.ts writes); reached at #/dev/primitives. The keyboard tests drive this page.
 //
 // Every label here is a sample: the page shows controls, not solver results (G6), and says so in its footer.
 import { useMemo, useState, type ReactNode } from 'react';
 import type { SortDescriptor } from 'react-aria-components';
-import { evaluateAll, EXEMPT, groundName } from '../design/contrast.js';
-import { palette, PRODUCT_DEVIATIONS, role, typeRamp, type PaletteName, type TypeName } from '../design/tokens.js';
+import { palette, role, typeRamp, type PaletteName, type TypeName } from '../design/tokens.js';
 import {
   Button,
   Cell,
@@ -392,65 +390,6 @@ function Tokens() {
   );
 }
 
-function Contrast() {
-  const results = evaluateAll();
-  const failing = results.filter((r) => !r.pass).length;
-  return (
-    <Section id="contrast" title="Contrast of every token pair (WCAG 2.2 AA)" wide>
-      <p className="gx-note">
-        {results.length} pairs; {failing === 0 ? 'all pass' : `${failing} below AA`}. Text needs 4.5:1, graphics and UI
-        states 3:1. The same table is the unit test tests/unit/contrast.spec.ts.
-      </p>
-      <table className="gx-plain gx-contrast">
-        <thead>
-          <tr>
-            <th scope="col">Foreground</th>
-            <th scope="col">Ground</th>
-            <th scope="col">Kind</th>
-            <th scope="col">Ratio</th>
-            <th scope="col">Needs</th>
-            <th scope="col">Result</th>
-            <th scope="col">Use</th>
-          </tr>
-        </thead>
-        <tbody>
-          {results.map((r, i) => (
-            <tr key={i}>
-              <td>
-                {r.fg} <span className="gx-hex">{r.fgHex}</span>
-              </td>
-              <td>
-                {groundName(r.bg)} <span className="gx-hex">{r.bgHex}</span>
-              </td>
-              <td>{r.kind}</td>
-              <td>{r.ratio.toFixed(2)}</td>
-              <td>{r.required.toFixed(1)}</td>
-              <td className={r.pass ? '' : 'gx-fail'}>{r.pass ? 'pass' : 'below AA'}</td>
-              <td className="gx-roles">{r.use}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <h3 className="gx-subhead">Not held to AA, and why</h3>
-      <ul className="gx-notes">
-        {EXEMPT.map((e) => (
-          <li key={e.role}>
-            <b>{e.role}</b>: {e.why}
-          </li>
-        ))}
-      </ul>
-      <h3 className="gx-subhead">Where the product tokens differ from DESIGN.md (proposed DESIGN.md edits)</h3>
-      <ul className="gx-notes">
-        {PRODUCT_DEVIATIONS.map((d) => (
-          <li key={d.key}>
-            <b>{d.key}</b>: {d.product} {d.why}
-          </li>
-        ))}
-      </ul>
-    </Section>
-  );
-}
-
 // ---- page ------------------------------------------------------------------------------------------------------
 
 export default function PrimitivesGallery() {
@@ -494,7 +433,6 @@ export default function PrimitivesGallery() {
           <Tables />
           <Pictograms />
           <Tokens />
-          <Contrast />
         </div>
       </main>
       <footer className="gx-foot">

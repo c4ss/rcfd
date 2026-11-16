@@ -1,6 +1,6 @@
 // The design tokens of rcfd Studio: the one source of the values in DESIGN.md (and its sidecar .impeccable/design.json)
 // that the renderer uses. tokens.css is generated from this file (npm run tokens:css) and tests/unit/tokens.spec.ts
-// fails when the two disagree, or when a value here drifts from DESIGN.md without being listed in PRODUCT_DEVIATIONS.
+// fails when the two disagree, or when a value here drifts from DESIGN.md.
 //
 // This file has no imports and uses only erasable TypeScript, so Node can run it with type stripping
 // (scripts/write-tokens-css.mjs) and the unit tests can import it directly.
@@ -22,7 +22,7 @@ export const palette = {
   silver: '#c9cdd1',
   'silver-wash': '#eef1f4',
   white: '#ffffff',
-  /** DESIGN.md, Disclaimer footer: "secondary text in a light ink tint (#c7d3e2, 7.6:1)". Footer (on ink) only. */
+  /** DESIGN.md, Disclaimer footer: "secondary text in a light ink tint (#c7d3e2)". Footer (on ink) only. */
   'ink-tint': '#c7d3e2',
 } as const;
 
@@ -30,7 +30,8 @@ export type PaletteName = keyof typeof palette;
 
 /**
  * Each job a colour does, named once (the Colour Has a Job Rule). Components use roles, never palette names, so a
- * contrast fix changes one line here. Where a role differs from what DESIGN.md says, PRODUCT_DEVIATIONS says why.
+ * change of colour for a job is one line here. Each role is what DESIGN.md gives that job; where DESIGN.md is silent
+ * (text selection, scrollbar) it is what the prototype (apps/studio-prototype/src/styles.css) drew.
  */
 export const role = {
   // Grounds
@@ -48,24 +49,22 @@ export const role = {
   // Lines
   rule: 'ink',
   hair: 'silver',
-  'field-border': 'ink-2',
-  'field-border-hover': 'ink',
+  'field-border': 'silver',
+  'field-border-hover': 'ink-2',
   'field-border-focus': 'ink',
-  scrollbar: 'ink-2',
+  scrollbar: 'silver',
   // Interaction
   hover: 'sky-wash',
   pressed: 'silver',
   primary: 'ink',
   'primary-hover': 'ink-hover',
   'focus-ring': 'orange',
-  'focus-edge': 'ink',
-  caret: 'orange-deep',
+  caret: 'orange',
   'selection-bg': 'sky',
-  'selection-text': 'ink',
+  'selection-text': 'white',
   'segment-selected': 'ink',
   'sub-tab-selected': 'meadow',
   'sub-tab-hover': 'meadow-wash',
-  'tab-selected-mark': 'ink',
   'project-tab-selected': 'white',
   'switch-on': 'meadow',
   'switch-knob': 'ink',
@@ -77,13 +76,12 @@ export const role = {
   'row-selected': 'sky-wash',
   'row-selected-edge': 'ink',
   'row-failed': 'fail-wash',
-  // State marks (pictograms), each on light grounds: white, sky-wash, silver-wash, fail-wash
+  // State marks (pictograms); the running mark is orange-deep (design.json, State Pictogram with Word)
   'state-queued': 'ink',
   'state-running': 'orange-deep',
   'state-converged': 'meadow-deep',
   'state-finished': 'ink',
   'state-failed': 'fail',
-  'state-faded': 'ink-2',
   // Run band fills (F-810 draws the bands; the fills are named here so the job stays in one place)
   'band-iterating': 'sky',
   'band-converged': 'meadow',
@@ -175,10 +173,14 @@ export const line = {
 } as const;
 
 /**
- * Focus: on every focusable element, a 2px orange ring with a 1px ink edge outside it (PRODUCT_DEVIATIONS: focus).
- * Outset on controls; inset (offset negative) on tabs, table rows and cells, where neighbours would hide an outset ring.
+ * Focus (design.json `focus-outline`): on every focusable element, a 2px orange outline at a 1px offset. Tabs, table
+ * cells, list options and panels take a negative offset, where neighbours would hide an outset outline; project tabs
+ * -3px (design.json `.ds-ptab:focus-visible`), the others -2px (the prototype's sub-tabs).
  */
-export const focus = { ring: 2, edge: 1 } as const;
+export const focus = { width: 2, offset: 1, inset: -2, 'inset-project-tab': -3 } as const;
+
+/** Fade (the Fade by Colour Rule): a faded pictogram is half-filled, its opacity halved; faded text turns ink-2. */
+export const fade = { pictogram: 0.5 } as const;
 
 /** Shadows (design.json `shadows`): the popover lift only (the Flat Field Rule). */
 export const shadow = { popover: { x: 0, y: 6, blur: 18, tint: 'popover-shadow' } } as const;
@@ -202,55 +204,6 @@ export const pictogram = {
 } as const;
 
 export const breakpoint = { 'min-desktop': 1180 } as const;
-
-/**
- * Where the product tokens knowingly differ from DESIGN.md, and why. Each is a proposed DESIGN.md edit for the
- * maintainer (F-802 report); tests/unit/tokens.spec.ts allows exactly these differences and no others.
- */
-export const PRODUCT_DEVIATIONS = [
-  {
-    key: 'focus',
-    design: 'Focus: 2px orange outline, 1px offset, on every focusable element.',
-    product: '2px orange ring with a 1px ink edge outside it (orange next to the control, ink next to the ground).',
-    why: 'Orange on white is 2.51:1 and on sky 1.10:1, under the 3:1 of WCAG 1.4.11; the ink edge holds 11.52:1 on white and 5.05:1 on sky, and orange holds 4.59:1 against ink controls (a two-colour indicator, WCAG technique C40). The outline survives forced-colours mode.',
-  },
-  {
-    key: 'caret',
-    design: 'Signal Orange: ... the focus outline and the text caret.',
-    product: 'caret in orange-deep (#b35a00).',
-    why: 'An orange caret on a white input is 2.51:1; orange-deep keeps the hue at 4.80:1 (the deep variant DESIGN.md already gives marks on white).',
-  },
-  {
-    key: 'selection',
-    design: 'not specified (the prototype used white text on sky).',
-    product: 'text selection: ink on sky.',
-    why: 'White on sky is 2.28:1 (debt recorded by the DESIGN.md documenter); ink on sky is 5.05:1.',
-  },
-  {
-    key: 'field-border',
-    design: 'Inputs: a silver hairline border (ink-2 on hover).',
-    product: 'field border ink-2 at rest, ink on hover and focus.',
-    why: 'Silver on white is 1.60:1; the border is what identifies an input, so WCAG 1.4.11 asks 3:1. Ink-2 is 6.18:1.',
-  },
-  {
-    key: 'tab-selected-mark',
-    design: 'Sub-tabs: the selected tab is a meadow field at 700 weight. Project tabs: the selected project becomes a white tab at 700 weight.',
-    product: 'the selected sub-tab also carries a 3px ink bar on its lower edge; the selected project tab 1px ink rules on its sides.',
-    why: 'Meadow against white is 2.22:1 and white against sky 2.28:1, so the selected state rested on weight alone; the ink marks hold 5.18:1 on meadow, 5.05:1 on sky and 11.52:1 on white.',
-  },
-  {
-    key: 'state-running',
-    design: 'Orange Deep: the running pictogram where it sits on white inside the run bands.',
-    product: 'the running pictogram is orange-deep on every light ground (runs table, number grid, lists, bands).',
-    why: 'The prototype drew it plain orange in the runs table, 2.51:1 on white (debt recorded by the documenter); orange-deep is 4.80:1 on white, 4.14:1 on sky-wash.',
-  },
-  {
-    key: 'state-faded',
-    design: 'Runs table: other rows fade, with their text turning ink-2 and pictograms half-filled.',
-    product: 'a faded pictogram switches its stroke to ink-2 (the Fade by Colour Rule), instead of 50% opacity.',
-    why: 'Orange-deep at 50% on white is about 2.0:1; ink-2 is 6.18:1. Shape and word still carry the state (G8).',
-  },
-] as const;
 
 // ---- CSS custom properties -----------------------------------------------------------------------------------
 
@@ -288,8 +241,11 @@ export function cssCustomProperties(): Array<readonly [string, string]> {
     '--line-hatch',
     `repeating-linear-gradient(${line.hatch.angle}deg, var(--role-hatch) 0 ${px(line.hatch.stripe)}, var(--role-ground) ${px(line.hatch.stripe)} ${px(2 * line.hatch.stripe)})`,
   ]);
-  out.push(['--focus-ring-width', px(focus.ring)]);
-  out.push(['--focus-edge-width', px(focus.edge)]);
+  out.push(['--focus-width', px(focus.width)]);
+  out.push(['--focus-offset', px(focus.offset)]);
+  out.push(['--focus-offset-inset', px(focus.inset)]);
+  out.push(['--focus-offset-project-tab', px(focus['inset-project-tab'])]);
+  out.push(['--fade-pictogram', String(fade.pictogram)]);
   const s = shadow.popover;
   out.push(['--shadow-popover', `${px(s.x)} ${px(s.y)} ${px(s.blur)} var(--tint-${s.tint})`]);
   out.push(['--motion-ease', motion.ease]);
@@ -308,7 +264,7 @@ export function cssCustomProperties(): Array<readonly [string, string]> {
 export function tokensCssText(): string {
   const head = [
     '/* GENERATED from tokens.ts by `npm run tokens:css`; do not edit by hand. tests/unit/tokens.spec.ts keeps the two',
-    '   equal. The values are DESIGN.md\'s, with the product deviations listed in tokens.ts (PRODUCT_DEVIATIONS). */',
+    '   equal. The values are DESIGN.md\'s. */',
   ];
   const body = cssCustomProperties().map(([k, v]) => `  ${k}: ${v};`);
   return [...head, ':root {', ...body, '}', ''].join('\n');

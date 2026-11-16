@@ -1,6 +1,6 @@
 // The design tokens (F-802): tokens.css is exactly what tokens.ts generates, every stylesheet uses only defined tokens
-// and no colour literals, and tokens.ts holds DESIGN.md's values (its frontmatter and .impeccable/design.json), apart
-// from the product deviations it lists.
+// and no colour literals, and tokens.ts holds DESIGN.md's values (its frontmatter and .impeccable/design.json), with no
+// deviations; where DESIGN.md is silent (text selection, scrollbar) the values are the prototype's.
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -8,13 +8,13 @@ import { fileURLToPath } from 'node:url';
 import {
   breakpoint,
   cssCustomProperties,
+  fade,
   focus,
   font,
   line,
   motion,
   palette,
   pictogram,
-  PRODUCT_DEVIATIONS,
   radius,
   role,
   shadow,
@@ -223,44 +223,59 @@ test.describe('tokens.ts holds the values of DESIGN.md', () => {
   });
 });
 
-test.describe('the product deviations from DESIGN.md are exactly the listed ones', () => {
-  test('each listed deviation is in the tokens, and DESIGN.md still says otherwise', () => {
-    expect(PRODUCT_DEVIATIONS.map((d) => d.key)).toEqual([
-      'focus',
-      'caret',
-      'selection',
-      'field-border',
-      'tab-selected-mark',
-      'state-running',
-      'state-faded',
-    ]);
-    // focus: DESIGN.md has a plain orange outline; the product adds the ink edge.
-    expect(named(ext.focus, 'focus-outline').value).toBe('outline: 2px solid #f08a24; outline-offset: 1px');
-    expect([role['focus-ring'], role['focus-edge'], focus.ring, focus.edge]).toEqual(['orange', 'ink', 2, 1]);
-    // caret: DESIGN.md gives the caret to orange.
-    expect(designMd).toContain('the focus outline and the text caret');
-    expect(role.caret).toBe('orange-deep');
-    // selection
-    expect([role['selection-bg'], role['selection-text']]).toEqual(['sky', 'ink']);
-    // field-border: DESIGN.md has a silver hairline.
-    expect(named(sidecar.components, 'Text Input').css).toContain('border:1px solid var(--silver, #c9cdd1)');
-    expect([role['field-border'], role['field-border-hover'], role['field-border-focus']]).toEqual(['ink-2', 'ink', 'ink']);
-    // tab-selected-mark
-    expect(role['tab-selected-mark']).toBe('ink');
-    // state-running and state-faded
-    expect(role['state-running']).toBe('orange-deep');
-    expect(role['state-faded']).toBe('ink-2');
+test.describe('focus, caret, fields, tabs, selection and pictograms are what DESIGN.md says', () => {
+  const prototype = read(repo, 'apps', 'studio-prototype', 'src', 'styles.css');
+  const css = (name: string): string => named(sidecar.components, name).css;
+
+  test('focus: a 2px orange outline at a 1px offset; project tabs -3px', () => {
+    expect(named(ext.focus, 'focus-outline').value).toBe(
+      `outline: ${focus.width}px solid ${palette[role['focus-ring']]}; outline-offset: ${focus.offset}px`,
+    );
+    expect(designMd).toContain(`**Focus:** ${focus.width}px orange outline, ${focus.offset}px offset, on every focusable element.`);
+    expect(css('Header Band with Project Tabs')).toContain(
+      `.ds-ptab:focus-visible{outline:${focus.width}px solid var(--orange, ${palette.orange});outline-offset:${focus['inset-project-tab']}px;}`,
+    );
+    expect(prototype).toContain(`.sub-tabs .react-aria-Tab[data-focus-visible] { outline: 2px solid var(--orange); outline-offset: ${focus.inset}px; }`);
   });
 
-  test('every other role keeps the job DESIGN.md gives its colour', () => {
-    // The Colour Has a Job Rule: orange only for the live band, focus (and, in DESIGN.md, the caret); meadow for the
-    // active sub-tab, the switch and converged; sky for the header band, iterating and selection; red for failure.
+  test('inputs: silver hairline border, ink-2 on hover, ink on focus, ink-2 placeholder, orange caret', () => {
+    const input = css('Text Input');
+    expect(input).toContain(`border:1px solid var(--${role['field-border']}, ${palette[role['field-border']]})`);
+    expect(input).toContain(`.ds-input:hover{border-color:var(--${role['field-border-hover']}, ${palette[role['field-border-hover']]});}`);
+    expect(input).toContain(`.ds-input:focus{border-color:var(--${role['field-border-focus']}, ${palette[role['field-border-focus']]});`);
+    expect(input).toContain(`.ds-input::placeholder{color:var(--${role.placeholder}, ${palette[role.placeholder]});}`);
+    expect(input).toContain(`caret-color:var(--${role.caret}, ${palette[role.caret]})`);
+    expect(designMd).toContain('a silver hairline border, square, ink-2 placeholder, orange caret.');
+  });
+
+  test('tabs: the selected sub-tab a meadow field, the selected project tab white, both with weight alone', () => {
+    expect(role['sub-tab-selected']).toBe('meadow');
+    expect(role['project-tab-selected']).toBe('white');
+    expect(css('Header Band with Project Tabs')).toContain('.ds-ptab.on{background:var(--white, #fff);font-weight:700;}');
+    expect(prototype).toContain('.sub-tabs .react-aria-Tab[data-selected] { background: var(--meadow); font-weight: 700; }');
+  });
+
+  test('pictograms: the running mark orange-deep, a faded mark half-filled', () => {
+    expect(css('State Pictogram with Word')).toContain(`.ds-state-running svg{color:${palette[role['state-running']]};`);
+    expect(css('State Pictogram with Word')).toContain(`.ds-state-converged svg{color:${palette[role['state-converged']]};}`);
+    expect(designMd).toContain('pictograms half-filled');
+    expect(prototype).toContain(`.run-row.faded .picto { opacity: ${fade.pictogram}; }`);
+  });
+
+  test('selection and scrollbar, where DESIGN.md is silent: the prototype', () => {
+    expect(prototype).toContain(`::selection { background: var(--${role['selection-bg']}); color: var(--${role['selection-text']}); }`);
+    expect(prototype).toContain(`scrollbar-color: var(--${role.scrollbar}) transparent;`);
+  });
+
+  test('every role keeps the job DESIGN.md gives its colour', () => {
+    // The Colour Has a Job Rule: orange only for the live band, focus and the caret; meadow for the active sub-tab, the
+    // switch and converged; sky for the header band, iterating and selection; red for failure.
     const users = (c: string): string[] =>
       Object.entries(role)
         .filter(([, v]) => v === c)
         .map(([k]) => k)
         .sort();
-    expect(users('orange')).toEqual(['band-live', 'focus-ring', 'slider-thumb-active']);
+    expect(users('orange')).toEqual(['band-live', 'caret', 'focus-ring', 'slider-thumb-active']);
     expect(users('meadow')).toEqual(['band-converged', 'sub-tab-selected', 'switch-on']);
     expect(users('sky')).toEqual(['band-iterating', 'header-band', 'selection-bg']);
     expect(users('fail')).toEqual(['band-failed', 'state-failed', 'text-fail']);

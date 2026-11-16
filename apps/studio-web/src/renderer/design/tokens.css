@@ -1,5 +1,5 @@
 /* GENERATED from tokens.ts by `npm run tokens:css`; do not edit by hand. tests/unit/tokens.spec.ts keeps the two
-   equal. The values are DESIGN.md's, with the product deviations listed in tokens.ts (PRODUCT_DEVIATIONS). */
+   equal. The values are DESIGN.md's. */
 :root {
   --color-ink: #1d3a5f;
   --color-ink-2: #4a6382;
@@ -29,23 +29,21 @@
   --role-placeholder: var(--color-ink-2);
   --role-rule: var(--color-ink);
   --role-hair: var(--color-silver);
-  --role-field-border: var(--color-ink-2);
-  --role-field-border-hover: var(--color-ink);
+  --role-field-border: var(--color-silver);
+  --role-field-border-hover: var(--color-ink-2);
   --role-field-border-focus: var(--color-ink);
-  --role-scrollbar: var(--color-ink-2);
+  --role-scrollbar: var(--color-silver);
   --role-hover: var(--color-sky-wash);
   --role-pressed: var(--color-silver);
   --role-primary: var(--color-ink);
   --role-primary-hover: var(--color-ink-hover);
   --role-focus-ring: var(--color-orange);
-  --role-focus-edge: var(--color-ink);
-  --role-caret: var(--color-orange-deep);
+  --role-caret: var(--color-orange);
   --role-selection-bg: var(--color-sky);
-  --role-selection-text: var(--color-ink);
+  --role-selection-text: var(--color-white);
   --role-segment-selected: var(--color-ink);
   --role-sub-tab-selected: var(--color-meadow);
   --role-sub-tab-hover: var(--color-meadow-wash);
-  --role-tab-selected-mark: var(--color-ink);
   --role-project-tab-selected: var(--color-white);
   --role-switch-on: var(--color-meadow);
   --role-switch-knob: var(--color-ink);
@@ -61,7 +59,6 @@
   --role-state-converged: var(--color-meadow-deep);
   --role-state-finished: var(--color-ink);
   --role-state-failed: var(--color-fail);
-  --role-state-faded: var(--color-ink-2);
   --role-band-iterating: var(--color-sky);
   --role-band-converged: var(--color-meadow);
   --role-band-live: var(--color-orange);
@@ -129,8 +126,11 @@
   --line-hair: 1px solid var(--role-hair);
   --line-header-rule: 3px solid var(--role-rule);
   --line-hatch: repeating-linear-gradient(135deg, var(--role-hatch) 0 4px, var(--role-ground) 4px 8px);
-  --focus-ring-width: 2px;
-  --focus-edge-width: 1px;
+  --focus-width: 2px;
+  --focus-offset: 1px;
+  --focus-offset-inset: -2px;
+  --focus-offset-project-tab: -3px;
+  --fade-pictogram: 0.5;
   --shadow-popover: 0 6px 18px var(--tint-popover-shadow);
   --motion-ease: cubic-bezier(0.16, 1, 0.3, 1);
   --motion-toggle: 160ms;

@@ -9,7 +9,7 @@ function ShapeEl({ shape }: { shape: Shape }) {
 
 export interface StatePictogramProps {
   state: RunState;
-  /** Rows that are not selected fade: the stroke turns ink-2 (Fade by Colour). A failure never fades. */
+  /** Rows that are not selected fade: the pictogram is half-filled (Fade by Colour). A failure never fades. */
   faded?: boolean;
   size?: number;
   className?: string;

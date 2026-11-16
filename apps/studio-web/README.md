@@ -33,10 +33,10 @@ On Linux it needs a display (CI uses a virtual one, F-823).
 | `src/preload/` | Preload script (CommonJS `.cts`, because a sandboxed preload cannot be an ES module): `window.studio`, the IPC allow-list | `tsc -p tsconfig.node.json` -> `dist/preload/` | F-801, F-803 |
 | `src/shared/ipc.ts` | The typed IPC contract shared by all three processes: channel names, arguments, replies | `tsc -p tsconfig.node.json` -> `dist/shared/` | F-801, F-803 |
 | `src/renderer/` | Renderer (browser code only, no Node types): React, three.js, React Aria Components | `vite build` -> `dist/renderer/` | F-802 onwards |
-| `src/renderer/design/` | `tokens.ts`, the one source of the `DESIGN.md` tokens (colour roles, type ramp, spacing, sizes, lines, focus, motion, pictogram grid) and of its product deviations; `tokens.css`, generated from it; `contrast.ts`, the WCAG contrast of every token pair | as above | F-802 |
+| `src/renderer/design/` | `tokens.ts`, the one source of the `DESIGN.md` tokens (colour roles, type ramp, spacing, sizes, lines, focus, motion, pictogram grid); `tokens.css`, generated from it | as above | F-802 |
 | `src/renderer/ui/` | The primitives of `DESIGN.md` Components on React Aria Components: buttons, toggles and segmented toggles, text and number fields, select, switch, tabs (sub and project), table, slider, tooltip, state pictograms and icons; `primitives.css` | as above | F-802 |
-| `src/renderer/dev/` | The primitives gallery at `#/dev/primitives` (loaded on demand): every primitive, the tokens and the contrast table, with sample labels only | as above | F-802 |
-| `tests/unit/` | Pure tests of `security.ts` and the built `index.html` (F-801); tokens against `DESIGN.md`, the contrast of every token pair, the pictogram grid (F-802) | run by Playwright (project `unit`) | F-801, F-802 |
+| `src/renderer/dev/` | The primitives gallery at `#/dev/primitives` (loaded on demand): every primitive and the tokens, with sample labels only | as above | F-802 |
+| `tests/unit/` | Pure tests of `security.ts` and the built `index.html` (F-801); tokens against `DESIGN.md`, the pictogram grid (F-802) | run by Playwright (project `unit`) | F-801, F-802 |
 | `tests/e2e/` | The packaged shell driven by Playwright's `_electron.launch` | run by Playwright (project `electron`) | F-801 onwards |
 | `scripts/` | `package-dir.mjs` (packaging by hand), `measure-cold-start.mjs` (P10) | run by Node | F-801 |
 
@@ -47,13 +47,11 @@ On Linux it needs a display (CI uses a virtual one, F-823).
 - The values come from `DESIGN.md` and `.impeccable/design.json`; `tests/unit/tokens.spec.ts` checks them against both,
   checks that `tokens.css` is exactly `tokens.ts`'s output, and that the stylesheets use only defined tokens and no
   colour literals. Components use roles (`--role-text`, `--role-focus-ring`), never palette names.
-- Where the product tokens differ from `DESIGN.md` to meet WCAG 2.2 AA (G8), `tokens.ts` lists the difference and why
-  (`PRODUCT_DEVIATIONS`): the two-colour focus ring, the orange-deep caret, ink-on-sky selection, the ink-2 field border,
-  the ink mark of a selected tab, the orange-deep running pictogram and ink-2 faded pictograms.
-- `tests/unit/contrast.spec.ts` computes the contrast of every text and graphic role on every ground it is used on and
-  fails below 4.5:1 (text) or 3:1 (graphics and UI states); every role must be tested, a ground, or exempt with a reason.
+- The product tokens equal `DESIGN.md`; where `DESIGN.md` is silent (text selection, scrollbar) they take the
+  prototype's values (`apps/studio-prototype/src/styles.css`). Focus is DESIGN.md's 2px orange outline on every
+  focusable element, inset on tabs, table rows and cells, list options and panels.
 - `tests/e2e/primitives.spec.ts` drives the gallery from the keyboard (focus visible, operable, role and name) and
-  checks the rendered page's contrast and that it raised no CSP violation, then writes screenshots at 1440x900 to
+  checks that the page raised no CSP violation or console error, then writes screenshots at 1440x900 to
   `test-results-visual/f802/` for the maintainer's view-and-report.
 - React Aria's `usePress` would inject a one-rule `<style>` element, which the CSP refuses; `main.tsx` puts a marker
   element with its id in the head and the rule lives in `base.css`.

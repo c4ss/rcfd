@@ -45,14 +45,12 @@ textarea {
   scrollbar-color: var(--role-scrollbar) transparent;
 }
 
-/* Focus on every focusable element: a 2px orange ring next to the control with a 1px ink edge outside it, so one of
-   the two always contrasts with what is next to it (tokens.ts PRODUCT_DEVIATIONS, focus). The edge is an outline, so it
-   stays in forced-colours mode. ui/primitives.css applies the same ring to React Aria parts by [data-focus-visible], and
-   draws it inside the box where neighbours would hide it (tabs, table rows and cells, list options). */
+/* Focus on every focusable element (DESIGN.md Components, Buttons): a 2px orange outline at a 1px offset.
+   ui/primitives.css applies the same outline to React Aria parts by [data-focus-visible], and draws it inside the box
+   where neighbours would hide it (tabs, table rows and cells, list options). */
 :focus-visible {
-  outline: var(--focus-edge-width) solid var(--role-focus-edge);
-  outline-offset: var(--focus-ring-width);
-  box-shadow: 0 0 0 var(--focus-ring-width) var(--role-focus-ring);
+  outline: var(--focus-width) solid var(--role-focus-ring);
+  outline-offset: var(--focus-offset);
 }
 
 :focus:not(:focus-visible) {

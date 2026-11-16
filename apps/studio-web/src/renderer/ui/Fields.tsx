@@ -1,5 +1,5 @@
-// Inputs and number fields (DESIGN.md Components, Inputs / Fields): white, 26px tall, square, ink-2 border at rest
-// (ink on hover and focus), ink-2 placeholder, orange-deep caret. The unit goes in the label ("Length, m"), never after
+// Inputs and number fields (DESIGN.md Components, Inputs / Fields): white, 26px tall, square, silver hairline border
+// (ink-2 on hover, ink on focus), ink-2 placeholder, orange caret. The unit goes in the label ("Length, m"), never after
 // the value (the Tabular Figures Rule). A field always has a visible label or an aria-label.
 import type { ReactNode } from 'react';
 import {

@@ -229,13 +229,6 @@
   white-space: normal;
   color: var(--role-text-2);
 }
-.gx-hex {
-  color: var(--role-text-2);
-}
-.gx-fail {
-  color: var(--role-text-fail);
-  font-weight: var(--font-weight-bold);
-}
 .gx-swatch {
   display: inline-block;
   width: 14px;
@@ -274,28 +267,6 @@
   gap: var(--space-hair);
   border-bottom: var(--line-hair);
   padding-bottom: var(--space-md);
-}
-
-.gx-note {
-  margin: 0;
-  max-width: 90ch;
-}
-.gx-contrast td:nth-child(4),
-.gx-contrast td:nth-child(5) {
-  text-align: right;
-}
-.gx-subhead {
-  margin: var(--space-md) 0 0;
-  font-size: var(--type-body-size);
-  font-weight: var(--font-weight-bold);
-}
-.gx-notes {
-  margin: 0;
-  padding-left: var(--space-xl);
-  max-width: 110ch;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-xs);
 }
 
 .gx-foot {
