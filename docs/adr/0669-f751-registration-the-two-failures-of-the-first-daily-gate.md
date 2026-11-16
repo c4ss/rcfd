@@ -179,3 +179,23 @@ folder that logs every run.
 * Breaking a stale claim, like breaking a stale lock, is not atomic against a second writer doing the same at the same moment.
 * Linux and macOS: the races A and B need the Windows rename and final-path semantics; D1 and D2 run there too (no platform
   branch) but are only measured here on Windows 11.
+
+## Amendment 1 (2026-11-16, after the registered run of F1 to F3 and mutation M1 on F1; before any run of F1c)
+
+* The registered run of F1 to F3 was made once at 3b19da48 (results in addendum 1). Mutation M1 (no claim) was then run on F1 and
+  **survived**: with the old acquire every one of the 10 trials was accepted, the longest after 375.0 ms (with the claim: 109.7
+  ms). F1's set-up is defective as a negative control: its holder checks the claim file (one `stat`) between its release and its
+  re-take, so the gap the old waiter must hit is about 0.1 ms, not microseconds, and at about 8 waiter attempts per 20 ms hold the
+  old waiter gets in after some tens of cycles. F1 stays as it is (its limit was met; it is still the check that the claim bounds
+  the wait); M1's survival on F1 is a result, kept in addendum 1.
+* Corrected negative control **F1c** (new test `f1c_a_waiter_is_not_starved_by_a_holder_that_re_takes_the_lock_within_one_create`,
+  same file): the holder looks for the claim while it holds the lock (at the end of its hold) and, when there is none, removes the
+  lock and creates it again at once (the gap is one `remove_file` plus one `create_new`, estimated 0.05 ms); when there is a claim
+  it releases and waits until the claim is gone (1 ms sleeps) before it goes round again. Hold 100 ms. 10 trials, each on its own
+  file, the call made 150 ms after the holder starts. Limit as F1: 10 of 10 accepted, each in under 1.0 s, no claim file left.
+  Estimate with the claim: 50 ms + one hold (100 ms) + one sleep, about 150 ms. Estimate for M1: per hold the old waiter lands in
+  the gap with probability about 0.05 / 2.1 = 0.024; in 2 s (20 holds) it gets in with probability about 0.38, so about 6 of 10
+  trials end in `LockBusy`; M1 is caught when at least one does.
+* Not added: retrying the lock file's removal in `EditLock::drop` on a transient error (a stuck lock, left when the remove fails,
+  would also give `LockBusy` to both writers; the gate log shows only the first thread's panic, so this alternative cause is not
+  excluded). It cannot be forced by a test here without a hook in the library; left as remaining question 1 of addendum 1.
