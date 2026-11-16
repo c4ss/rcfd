@@ -277,3 +277,24 @@ changes.
   `MovingImmersed::forcing_at(geom, t_n)` exactly and that `bodies_at(t_n)` places the cylinder centre at `(0, -A cos(omega t_n),
   0)` within 1e-14 (closed form, not the motion object), which is what the registered check meant.
 - **Time of a sample.** Step `n` (1-based) ends at `t_n = n dt`; the harmonics use these times, as in ADR 0631.
+
+## Amendment 2 (2026-11-16, after the first run of the fast tests, before the corrected run): two defects of the T1 and T3 test code
+
+**What happened.** The fast tests were run once (log `w49i-work/f707-scratch/fast_tests.log`): T2 and T4 passed, T1 and T3
+failed. No limit was involved in either failure.
+
+- **T1.** The test took "a face on `x = -8`" as a face whose centre has `x == -8`. The face centre of `polygon_geometry` is the
+  area-weighted mean of the fan triangles' centroids, which lands on `-7.999999999999999` for a face whose four points are exactly
+  on `x = -8`. The face that failed (49256) has the area vector `(-0.2795, 0, 0)`, exactly the one registered: the check it was
+  meant to make held; the test's selection of the faces was wrong.
+- **T3.** The test compared the forcing after step `n` with `forcing_at(geom, n dt)`. `MovingImmersed::step` builds at
+  `solver.time + dt`, the accumulated time, which differs from `n dt` by round-off, so the shapes differ in the last bits and the
+  forcing is not bit-equal (ADR 0631 T4 compared with `solver.time`). The check stopped at the first step, before the solid-cell
+  velocity was evaluated.
+
+**Correction.** T1 selects the faces on `x = -8` (on `y = +-8`) as those whose points all have `x == -8` (`abs y == 8`) exactly;
+everything else unchanged. T3 compares with `forcing_at(geom, solver.time)`, checks `abs(solver.time - n dt) <= 1e-12`, and the
+centre and the rigid velocity against the closed forms at `solver.time`; limits unchanged. The two first tests stay in the file
+unchanged as ignored records (`t1_..._first_run`, `t3_..._first_run`). The heavy record uses `t_n = n dt` for the harmonics
+(amendment 1) and the solver's own time for the poses (the IB library and, in the BF run, `(n + 1) dt`): the difference is
+round-off in the phase and is not a set-up change. By the decision rule T1 and T3 are met only after an amendment if they pass now.
