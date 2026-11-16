@@ -267,3 +267,52 @@ three elements; the energy record's cold modes against the committed ones (the l
    committed modes with the start rule of the driver, the extended restore behind the opt-in, the accessor for checks):
    taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation).
 2. **Default.** W stays opt-in (ADR 0660 open question 2): open for the maintainer, not taken.
+
+## Amendment 1 (2026-11-16, written after the single registered run and before any further run)
+
+The registered run (code and test commit b061d780, log `run1.log` in the scratch folder; the four tests one after the other,
+13 s in all) met every check of `w_on_the_transient_cantilever` (TT1, TT2, TE1, TE2, NCE, TS1, NCR) and of
+`rotating_path_with_w_inert` (RO1), and on both J2 blocks M0, M1, JY, AS2, JL0, JL2, NCA and `e_w`. Three rows missed:
+
+- **JB1 `e_R`** (`4^3`): `0.1675` against `0.15` (`R_L = 0.08147`, `R_Fbar = 0.09786`); **JB2 `e_R`** (DB4): `0.1219` against
+  `0.10` (`0.06653`, `0.07577`). The cold S gives the same values (W against S within `5.5e-13` and `4.0e-15`): the miss is
+  the element with J2 against F-bar, not the warm start. Rule L's reaction is *below* F-bar's, the opposite of the stiffening
+  arithmetic 4 feared. Which of the two is nearer the converged answer is not known from these runs (A1.2).
+- **AS1** (`4^3`): `28` entries of W's record differ from S's (`30` on DB4, reported). Read from the log: the entries at the
+  converged iterate of every increment are equal on both meshes (`4^3`: `17, 171, 279, 361, 391, 431, 460, 473, 468, 470` for
+  both), and the differences are at iteration 0 and in the pre-asymptotic iterations (for example increment 3: W `83`, S `92` at
+  iteration 0), and in one increment's iteration count (increment 5: S takes one iteration more). **Diagnosis**: arithmetic 6
+  assumed that a point at the yield surface to rounding is rare; but every committed plastic point sits on the yield surface
+  (`f = 0` after the return), so at the first iterates of an increment, where the strain at most such points changes very
+  little, the sign of `f_trial` is decided by strain differences of the order of the local tolerance (`1e-12`), which is
+  exactly how W's and S's modes differ (they meet the same test from different starts). The records then differ by points that
+  yield or not on a perturbation of `1e-12`, not by the reading of the state: NCA, JL2 and AS2 show the state read correctly.
+  The registered limit stays; the check was defective as a test of c5 (it compares two different iterations, not the reading).
+
+No limit is changed. The registered rule gives **partial** whatever follows.
+
+### A1.1 The records and the corrected check (registered now, run once)
+
+- `j2_w_on_the_punch_block` and `j2_w_on_the_distorted_block_db4` are kept unchanged in code and limits as the ignored
+  records `j2_w_on_the_punch_block_known_miss` and `j2_w_on_the_distorted_block_db4_known_miss` (the measured values in
+  their ignore text).
+- `j2_w_on_the_punch_block_met_rows` and `j2_w_on_the_distorted_block_db4_met_rows`: the same code and limits for every row
+  except JB1 or JB2 `e_R` and AS1, which they print instead of checking (a regression test of the rows already met, as ADR
+  0660 A1.2), and **AS1c**, a corrected check of c5: on each block the entries of W's record at the converged iterate of every
+  increment (the last `yielded` entry of each increment, and the number of increments) that differ from S's: limit `0`. At the
+  converged iterate both solves are within the global tolerance of the same equilibrium and the yield decisions are those of
+  the converged plastic flow, not of a first iterate. Disclosed: the run1 log already shows these entries equal on `4^3` and on
+  the visible part of DB4, so AS1c is a regression check that the mutations MA1 and MA2 (which shift every entry from the
+  second increment on by the reading) can fail, not new evidence.
+
+### A1.2 A diagnosis of JB (not a check; run once)
+
+`j2_reaction_against_mesh_diagnosis` (ignored): F-bar and rule L with S on the regular `4^3` and `8^3` blocks with the J2
+material, `R` printed, to see whether the two elements approach each other under refinement and from which side. No limit;
+the reading goes in Addendum 1.
+
+### A1.3 The mutations
+
+Run once each on a scratch copy of the commit with the amendment 1 tests, against the default tests of `si_eas_hg9.rs`
+(the two `_met_rows` tests, the transient and the rotating test). MA1 and MA2, registered as caught by AS1, are expected to be
+caught by AS1c.
