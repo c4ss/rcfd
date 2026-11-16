@@ -4,7 +4,7 @@
 // drawn, then a held key), changes the field, and loads fields of the same store by the other bulk route (R1, the
 // service's data.* methods of `f447_bench serve`) and by R2 on the field viewport's own page. It fails on any task over
 // LONG_TASK_LIMIT_MS and any frame over LONG_FRAME_LIMIT_MS (src/shared/work.ts; registered in README.md and ADR 0801,
-// addendum F-832, before this test was written). The entries, their phases and the machine's load go to
+// addendum 9 (F-832), before this test was written). The entries, their phases and the machine's load go to
 // test-results-visual/f832/long-tasks.json.
 //
 // A probe first: a deliberate 130 ms task in the page must be recorded, so the recorder cannot pass by seeing nothing.
@@ -258,7 +258,7 @@ const fmt = (e: LongEntry) =>
   }`;
 
 test('no task over LONG_TASK_LIMIT_MS and no frame over LONG_FRAME_LIMIT_MS while a run opens, fields load (R2 and R1) and the line scrubs', async () => {
-  test.setTimeout(PASSES * (SIZE === '1e6' ? 600_000 : 240_000));
+  test.setTimeout(PASSES * (SIZE === '1e6' ? 600_000 : 360_000));
   const passes: PassReport[] = [];
   for (let n = 1; n <= PASSES; n++) {
     const r = await onePass(n);

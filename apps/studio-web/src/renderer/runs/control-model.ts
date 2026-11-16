@@ -1,9 +1,13 @@
 // What the run list shows of the run-control requests (F-807), as pure functions of the view the main process pushes
 // (src/shared/project.ts, RunRequest), so the unit tests check them without a window. Every state shown is the
 // runner's, as the engine answered; a request only says what was asked and whether the runner has acted on it yet.
-import { getRunAction } from '../../shared/actions/runs.js';
+import { getRunAction as getF807Action } from '../../shared/actions/runs.js';
+import { getFirstRunAction } from '../../shared/actions/first.js';
 import type { RunEntry, RunRequest } from '../../shared/project.js';
 import { clock } from './model.js';
+
+/** F-813: run control's actions and the first path's (src/shared/actions/first.ts). */
+const getRunAction = (id: string) => getF807Action(id) ?? getFirstRunAction(id);
 
 /**
  * The run list with the runs this window started that the engine's list does not hold yet: start_run answered with the

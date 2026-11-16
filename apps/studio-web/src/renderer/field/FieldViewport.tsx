@@ -16,7 +16,10 @@ import { cancelLoads, loadField, loadSurface, openStore } from '../data/door.js'
 import { Button, Toggle } from '../ui/index.js';
 import { colourRange, f32Text, lutBytes, type ColourRange } from './colormap.js';
 import { FieldCanvas, type Backend, type FieldCanvasApi, type Pick } from './FieldCanvas.js';
+import { CutPanel, DerivedControls, useArrows } from './DerivedControls.js';
+import { availability, middleCut, type Cut, type Glyphs, type Layers } from './derived.js';
 import { Legend } from './Legend.js';
+import { Provenance, cellValue } from '../provenance/index.js';
 import { FieldPrep, type PreparedSurface } from './prepare.js';
 import { beginWork } from '../work/work.js';
 import { WorkProgress } from '../work/WorkProgress.js';
@@ -91,9 +94,15 @@ export function FieldViewport({ store, snapshot, field, forceWebGL = false, reop
   const [moved, setMoved] = useState(false);
   const [grid, setGrid] = useState(false);
   const [gridState, setGridState] = useState<'off' | 'computing' | 'on'>('off');
+  // F-809: the derived pictures (./derived.ts): rcfd-render's cut plane and the vector arrows
+  const [cutAsked, setCut] = useState<Cut | null>(null);
+  const [vectorsAsked, setVectors] = useState(false);
+  const [pointerAt, setPointerAt] = useState('');
   const [hover, setHover] = useState<{ pick: Pick; by: 'pointer' | 'keyboard' } | null>(null);
   const [attempt, setAttempt] = useState(0);
   const api = useRef<FieldCanvasApi>(null);
+  // F-828: the readout stays while its provenance is open (the pointer leaves the surface for the popover)
+  const pinned = useRef(false);
   const tag = useRef('');
   const firstPicture = useRef(false);
   const reopened = useRef(reopen);
@@ -102,6 +111,23 @@ export function FieldViewport({ store, snapshot, field, forceWebGL = false, reop
   const drawnCb = useRef(onDrawnSnapshot);
   drawnCb.current = onDrawnSnapshot;
   const storeKey = `${store.route}\u0000${store.path}`;
+  // F-832: the layers are made in the worker with the surface's arrays (F-809's meshLayers, unchanged)
+  const layers = opened?.prepared.layers ?? null;
+  const derivedCtx = useMemo(
+    () => (opened && layers ? { layers, fields: opened.info.fields, nCells: opened.info.nCells } : null),
+    [opened?.info.fields, opened?.info.nCells, layers],
+  );
+  // a picture that does not apply to this store (another store was opened) is off
+  const cut = derivedCtx && cutAsked && availability('cut', derivedCtx).ok ? cutAsked : null;
+  const vectorsOn = !!derivedCtx && vectorsAsked && availability('vectors', derivedCtx).ok;
+  // F-832: the arrows are made in the worker too, on the surface it holds
+  const preparedSurface = opened?.prepared ?? null;
+  const glyphsOf = useCallback(
+    (s: SurfaceData, comps: readonly (Float32Array | null)[], l: Layers, n: number): Promise<Glyphs> =>
+      preparedSurface && preparedSurface.surface === s ? prep.glyphs(preparedSurface, comps, l, n) : Promise.reject(new Error('the surface changed')),
+    [prep, preparedSurface],
+  );
+  const arrows = useArrows(store, shown?.snapshot ?? null, shown?.surface ?? null, layers, opened?.info.nCells ?? 0, vectorsOn, tagBase, glyphsOf);
 
   // the store: open it and read its surface (once per store)
   useEffect(() => {
@@ -147,7 +173,7 @@ export function FieldViewport({ store, snapshot, field, forceWebGL = false, reop
       }
       let prepared: PreparedSurface;
       try {
-        prepared = await prep.surface(surface.result);
+        prepared = await prep.surface(surface.result, info.result.nCells);
       } catch (e) {
         if (!live) return;
         work.end();
@@ -312,6 +338,8 @@ export function FieldViewport({ store, snapshot, field, forceWebGL = false, reop
   const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
     const pick = api.current?.pickAt(e.clientX, e.clientY) ?? null;
     setHover(pick ? { pick, by: 'pointer' } : null);
+    // F-809: where the readout was taken (the e2e tests wait for the readout of the point they moved to)
+    setPointerAt(`${e.clientX},${e.clientY}`);
   };
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (!api.current?.key(e.key)) return;
@@ -335,6 +363,19 @@ export function FieldViewport({ store, snapshot, field, forceWebGL = false, reop
           Mesh grid
         </Toggle>
         {grid && gridState === 'computing' && <span className="fv-note">Finding the face edges…</span>}
+        <DerivedControls
+          ctx={derivedCtx}
+          cut={cut}
+          onCut={setCut}
+          vectors={vectorsOn}
+          onVectors={setVectors}
+          startCut={layers ? () => middleCut(layers, 0) : null}
+        />
+        {arrows.kind === 'error' && (
+          <span className="fv-note fv-note--error" role="alert">
+            {arrows.message}
+          </span>
+        )}
         <span className="fv-tools-gap" />
         {backend && (
           <span className="fv-backend" data-backend={backend.kind}>
@@ -349,11 +390,13 @@ export function FieldViewport({ store, snapshot, field, forceWebGL = false, reop
         aria-label={`${quantity} on the boundary surface. Arrow keys orbit, plus and minus zoom, Home resets the view; the value at the centre is read out.`}
         tabIndex={shown ? 0 : -1}
         onPointerMove={onPointerMove}
-        onPointerLeave={() => setHover((h) => (h?.by === 'pointer' ? null : h))}
+        onPointerLeave={() => setHover((h) => (h?.by === 'pointer' && !pinned.current ? null : h))}
         onKeyDown={onKeyDown}
         data-ready={phase.kind === 'ready' ? '' : undefined}
         data-snapshot={shown ? shown.snapshot : undefined}
         data-step={snap?.step}
+        data-arrows={arrows.kind === 'on' && arrows.snapshot === shown?.snapshot ? arrows.glyphs.cells.length : undefined}
+        data-provenance="fv-readout"
       >
         <FieldCanvas
           ref={api}
@@ -366,9 +409,12 @@ export function FieldViewport({ store, snapshot, field, forceWebGL = false, reop
           onMoved={setMoved}
           onDrawn={onDrawn}
           onGridState={setGridState}
+          cut={cut}
+          arrows={arrows.kind === 'on' && arrows.snapshot === shown?.snapshot ? arrows.glyphs.segments : null}
           prepared={opened?.prepared ?? null}
           scalars={shown?.scalars ?? null}
         />
+        {cut && layers && shown && <CutPanel cut={cut} layers={layers} onCut={setCut} />}
         <WorkProgress scope={tagBase} />
         {moved && shown && (
           <Button className="fv-reset" onPress={reset}>
@@ -395,12 +441,38 @@ export function FieldViewport({ store, snapshot, field, forceWebGL = false, reop
               {unit ? `, ${unit}` : ''} · snapshot {shown.snapshot + 1} of {shown.info.snapshots.length} · step {snap?.step} · t = {snap?.time} ·
               viridis, range of the shown values · {shown.surface.cells.length} triangles of {shown.info.nCells} cells
             </p>
-            <div className="fv-readout" aria-live={hover?.by === 'keyboard' ? 'polite' : 'off'}>
+            <div className="fv-readout" aria-live={hover?.by === 'keyboard' ? 'polite' : 'off'} data-pointer={pointerAt || undefined}>
               <span className="fv-readout-label">{`${quantity} at the ${hover?.by === 'keyboard' ? 'centre' : 'cursor'}${unit ? `, ${unit}` : ''}`}</span>
               {hover ? (
                 <>
-                  <output className="fv-readout-value" data-cell={hover.pick.cell} data-triangle={hover.pick.triangle}>
-                    {f32Text(hover.pick.value)}
+                  <output
+                    className="fv-readout-value"
+                    data-cell={hover.pick.cell}
+                    data-triangle={hover.pick.triangle}
+                    data-point={hover.pick.point ? hover.pick.point.join(' ') : undefined}
+                  >
+                    <Provenance
+                      pkey="fv-readout"
+                      onOpenChange={(o) => (pinned.current = o)}
+                      subject={{
+                        kind: 'number',
+                        source: cellValue({
+                          run: runName(shown.info.path),
+                          quantity,
+                          shown: f32Text(hover.pick.value),
+                          value: hover.pick.value,
+                          unit,
+                          cell: hover.pick.cell,
+                          triangle: hover.pick.triangle,
+                          snapshot: shown.snapshot,
+                          of: shown.info.snapshots.length,
+                          step: snap?.step ?? 0,
+                          time: snap?.time ?? null,
+                        }),
+                      }}
+                    >
+                      {f32Text(hover.pick.value)}
+                    </Provenance>
                   </output>
                   <span className="fv-readout-where">
                     cell {hover.pick.cell} · triangle {hover.pick.triangle}

@@ -357,6 +357,8 @@
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
+  /* F-813: positioned, so screen-reader text inside it scrolls with it instead of lengthening the page when the index is short */
+  position: relative;
 }
 .ph-group {
   border-bottom: var(--line-rule);

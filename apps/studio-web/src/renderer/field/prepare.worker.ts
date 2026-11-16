@@ -1,12 +1,30 @@
 // The field viewport's data work, off the renderer's main thread (F-832, G21): the arrays the GPU draws are made here
 // from F-804's surface and field (./surface.ts, unchanged arithmetic), and only handed back, transferred without a
-// copy. The worker keeps the owner cells of the surface it was given last, so a field (one value per cell) needs only
-// its values.
+// copy. The worker keeps the surface it was given last, so a field (one value per cell) needs only its values. F-809's
+// derived pictures loop over the whole surface too: the mesh's layers (with the surface) and the vector arrows (./derived.ts,
+// unchanged arithmetic) are made here as well.
+import { meshLayers, vectorGlyphs, type Glyphs, type Layers } from './derived.js';
 import { bounds, cornerPositions, cornerScalars, shownRange } from './surface.js';
 
 export type PrepRequest =
-  | { readonly op: 'surface'; readonly id: number; readonly points: Float32Array; readonly triangles: Uint32Array; readonly cells: Uint32Array }
-  | { readonly op: 'field'; readonly id: number; readonly surface: number; readonly values: Float32Array<ArrayBuffer> };
+  | {
+      readonly op: 'surface';
+      readonly id: number;
+      readonly points: Float32Array;
+      readonly triangles: Uint32Array;
+      readonly cells: Uint32Array;
+      /** The store's cell count (F-809's layers). */
+      readonly nCells: number;
+    }
+  | { readonly op: 'field'; readonly id: number; readonly surface: number; readonly values: Float32Array<ArrayBuffer> }
+  | {
+      readonly op: 'glyphs';
+      readonly id: number;
+      readonly surface: number;
+      readonly components: readonly (Float32Array<ArrayBuffer> | null)[];
+      readonly layers: Layers;
+      readonly nCells: number;
+    };
 
 export type PrepReply =
   | {
@@ -17,7 +35,9 @@ export type PrepReply =
       readonly max: [number, number, number];
       readonly centre: [number, number, number];
       readonly radius: number;
+      readonly layers: Layers;
     }
+  | { readonly op: 'glyphs'; readonly id: number; readonly glyphs: Glyphs }
   | {
       readonly op: 'field';
       readonly id: number;
@@ -32,14 +52,14 @@ const scope = self as unknown as {
   postMessage(message: PrepReply, transfer: Transferable[]): void;
 };
 
-let cells: Uint32Array | null = null;
+let held: { points: Float32Array; triangles: Uint32Array; cells: Uint32Array } | null = null;
 let surfaceId = 0;
 
 scope.onmessage = (e) => {
   const r = e.data;
   try {
     if (r.op === 'surface') {
-      cells = r.cells;
+      held = { points: r.points, triangles: r.triangles, cells: r.cells };
       surfaceId = r.id;
       const positions = cornerPositions(r);
       const b = bounds(r.points);
@@ -53,13 +73,20 @@ scope.onmessage = (e) => {
         const d = dx * dx + dy * dy + dz * dz;
         if (d > r2) r2 = d;
       }
-      scope.postMessage({ op: 'surface', id: r.id, positions, min: b.min, max: b.max, centre, radius: Math.sqrt(r2) }, [positions.buffer]);
+      const layers = meshLayers(r, r.nCells);
+      scope.postMessage({ op: 'surface', id: r.id, positions, min: b.min, max: b.max, centre, radius: Math.sqrt(r2), layers }, [positions.buffer]);
       return;
     }
-    if (!cells || r.surface !== surfaceId) {
-      scope.postMessage({ op: 'error', id: r.id, message: 'the field came for a surface this worker does not hold' }, []);
+    if (!held || r.surface !== surfaceId) {
+      scope.postMessage({ op: 'error', id: r.id, message: `the ${r.op} came for a surface this worker does not hold` }, []);
       return;
     }
+    if (r.op === 'glyphs') {
+      const glyphs = vectorGlyphs(held, r.components, r.layers, r.nCells);
+      scope.postMessage({ op: 'glyphs', id: r.id, glyphs }, [glyphs.triangles.buffer, glyphs.cells.buffer, glyphs.segments.buffer]);
+      return;
+    }
+    const cells = held.cells;
     const range = shownRange(cells, r.values);
     const scalars = cornerScalars(cells, r.values);
     scope.postMessage({ op: 'field', id: r.id, scalars, values: r.values, range }, [scalars.buffer, r.values.buffer]);

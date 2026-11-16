@@ -7,14 +7,19 @@
 //
 // The hover readout picks on the CPU against the same triangles (three's Raycaster on the drawn geometry): the triangle's
 // owner cell and its stored value. The mesh grid is computed in a worker (./grid.worker.ts) the first time it is shown.
+//
+// F-809: the cut plane is rcfd-render's (`View::clip`): every material keeps a fragment only where `n . p <= d`
+// (`maskNode`, the same test as `crates/rcfd-render/src/shader.wgsl`), and the pick takes the nearest hit the rule keeps.
+// The vector arrows (./derived.ts) are ink line segments over the surface, cut by the same plane.
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, type Ref } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import * as THREE from 'three/webgpu';
-import { attribute, floor, texture, uniform, varying, vec2 } from 'three/tsl';
+import { attribute, dot, float, floor, positionWorld, texture, uniform, varying, vec2, vec3 } from 'three/tsl';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { SurfaceData } from '../../shared/data.js';
 import { palette } from '../design/tokens.js';
 import { LUT_SIZE, lutBytes, type ColourRange } from './colormap.js';
+import { clipPlane, keeps, type Cut } from './derived.js';
 import { bounds, cornerPositions, cornerScalars, gridEdges } from './surface.js';
 import type { PreparedSurface } from './prepare.js';
 
@@ -27,6 +32,8 @@ export interface Pick {
   readonly cell: number;
   /** The stored value of that cell (the f32 the page received). */
   readonly value: number;
+  /** F-809: where the pick ray meets the triangle (mesh coordinates). */
+  readonly point?: readonly [number, number, number];
 }
 
 export interface BenchResult {
@@ -65,6 +72,10 @@ export interface FieldCanvasProps {
   /** The first picture of this surface, values and range: drawn, finished on the GPU, and one animation frame later. */
   readonly onDrawn?: () => void;
   readonly onGridState?: (state: 'off' | 'computing' | 'on') => void;
+  /** F-809: rcfd-render's cut plane, or null for none. */
+  readonly cut?: Cut | null;
+  /** F-809: the vector arrows as line segments (./derived.ts `vectorGlyphs`), or null for none. */
+  readonly arrows?: Float32Array<ArrayBuffer> | null;
   /**
    * F-832 (G21): the surface's arrays made off the main thread (./prepare.ts); used when made from `surface`, else the
    * canvas makes them itself (the P8 bench page).
@@ -126,6 +137,29 @@ interface Material {
   readonly inv: { value: number };
 }
 
+/** F-809: rcfd-render's cut plane as uniforms shared by every material: `on`, the normal `n` and `d`. */
+interface Clip {
+  readonly on: { value: number };
+  readonly n: { value: THREE.Vector3 };
+  readonly d: { value: number };
+  /** The mask: true where a fragment is kept (`n . p <= d`, or no cut). */
+  readonly mask: ReturnType<typeof dot>;
+}
+
+function clipUniforms(): Clip {
+  const on = uniform(0);
+  const n = uniform(new THREE.Vector3(1, 0, 0));
+  const d = uniform(0);
+  // rcfd-render's shader discards where `dot(u.clip.xyz, v.world) > u.clip.w`; this keeps the rest
+  const mask = on.lessThan(float(0.5)).or(dot(vec3(n), positionWorld).lessThanEqual(d));
+  return {
+    on: on as unknown as { value: number },
+    n: n as unknown as { value: THREE.Vector3 },
+    d: d as unknown as { value: number },
+    mask: mask as unknown as ReturnType<typeof dot>,
+  };
+}
+
 /**
  * The TSL material: in the vertex stage k = floor(clamp((scalar - lo) * inv, 0, 1) * 255 + 0.5), passed flat (every
  * corner of a triangle has its cell's value), then the texel at k. `lutIndex` of ./colormap.ts is the same arithmetic.
@@ -181,7 +215,7 @@ interface SceneProps extends Omit<FieldCanvasProps, 'forceWebGL' | 'onBackend'> 
 
 let gridIds = 0;
 
-function Scene({ surface, values, range, grid, onMoved, onDrawn, onGridState, apiRef, prepared, scalars }: SceneProps) {
+function Scene({ surface, values, range, grid, onMoved, onDrawn, onGridState, cut = null, arrows = null, apiRef, prepared, scalars }: SceneProps) {
   // F-832: the arrays made off the main thread, when they belong to this surface
   const prep = prepared && prepared.surface === surface ? prepared : null;
   const box = prep ? { min: prep.min, max: prep.max } : undefined;
@@ -191,14 +225,28 @@ function Scene({ surface, values, range, grid, onMoved, onDrawn, onGridState, ap
   const renderer = gl as unknown as THREE.WebGPURenderer;
   const cam = camera as THREE.PerspectiveCamera;
   const lut = useMemo(lutTexture, []);
-  const mat = useMemo(() => fieldMaterial(lut), [lut]);
+  const clip = useMemo(clipUniforms, []);
+  const mat = useMemo(() => {
+    const m = fieldMaterial(lut);
+    m.material.maskNode = clip.mask;
+    return m;
+  }, [lut, clip]);
   const mesh = useMemo(() => new THREE.Mesh(new THREE.BufferGeometry(), mat.material), [mat]);
   const lines = useMemo(() => {
     const m = new THREE.LineBasicNodeMaterial({ color: raw(palette.white), transparent: true, opacity: 0.38, depthWrite: false });
+    m.maskNode = clip.mask;
     const l = new THREE.LineSegments(new THREE.BufferGeometry(), m);
     l.visible = false;
     return l;
-  }, []);
+  }, [clip]);
+  // F-809: the vector arrows, deep ink like the other annotations of the field (DESIGN.md Field view), opaque
+  const arrowLines = useMemo(() => {
+    const m = new THREE.LineBasicNodeMaterial({ color: raw(palette.ink) });
+    m.maskNode = clip.mask;
+    const l = new THREE.LineSegments(new THREE.BufferGeometry(), m);
+    l.visible = false;
+    return l;
+  }, [clip]);
   const controls = useRef<OrbitControls | null>(null);
   const report = useRef(onMoved);
   report.current = onMoved;
@@ -214,15 +262,39 @@ function Scene({ surface, values, range, grid, onMoved, onDrawn, onGridState, ap
   const gridFor = useRef<SurfaceData | null>(null);
 
   useEffect(() => {
-    scene.add(mesh, lines);
+    scene.add(mesh, lines, arrowLines);
     return () => {
-      scene.remove(mesh, lines);
+      scene.remove(mesh, lines, arrowLines);
       mesh.geometry.dispose();
       lines.geometry.dispose();
+      arrowLines.geometry.dispose();
       mat.material.dispose();
       lut.dispose();
     };
-  }, [scene, mesh, lines, mat, lut]);
+  }, [scene, mesh, lines, arrowLines, mat, lut]);
+
+  // F-809: the cut plane's uniforms (rcfd-render's (n, d))
+  const cutRef = useRef<Cut | null>(cut);
+  cutRef.current = cut;
+  useEffect(() => {
+    if (cut) {
+      const { n, d } = clipPlane(cut);
+      clip.n.value.set(n[0], n[1], n[2]);
+      clip.d.value = d;
+      clip.on.value = 1;
+    } else clip.on.value = 0;
+    invalidate();
+  }, [cut, clip, invalidate]);
+
+  // F-809: the vector arrows
+  useEffect(() => {
+    arrowLines.geometry.dispose();
+    const g = new THREE.BufferGeometry();
+    if (arrows && arrows.length > 0) g.setAttribute('position', new THREE.BufferAttribute(arrows, 3));
+    arrowLines.geometry = g;
+    arrowLines.visible = !!arrows && arrows.length > 0;
+    invalidate();
+  }, [arrows, arrowLines, invalidate]);
 
   useEffect(() => {
     const c = new OrbitControls(cam, renderer.domElement);
@@ -358,12 +430,14 @@ function Scene({ surface, values, range, grid, onMoved, onDrawn, onGridState, ap
       const pickNdc = (x: number, y: number): Pick | null => {
         if (!surface || !values || !mesh.visible) return null;
         raycaster.setFromCamera(new THREE.Vector2(x, y), cam);
-        const hit = raycaster.intersectObject(mesh, false)[0];
+        // F-809: the nearest hit rcfd-render's cut plane keeps
+        const c = cutRef.current;
+        const hit = raycaster.intersectObject(mesh, false).find((h) => keeps(c, [h.point.x, h.point.y, h.point.z]));
         if (!hit || hit.faceIndex == null) return null;
         const triangle = hit.faceIndex;
         const cell = surface.cells[triangle];
         if (cell === undefined) return null;
-        return { triangle, cell, value: values[cell]! };
+        return { triangle, cell, value: values[cell]!, point: [hit.point.x, hit.point.y, hit.point.z] };
       };
       const orbit = (dAzimuth: number, dPolar: number, scale: number) => {
         const c = controls.current;

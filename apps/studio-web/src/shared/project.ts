@@ -229,7 +229,23 @@ export interface OpenFailure {
   readonly message: string;
   /** The engine's own message, when it gave one. */
   readonly detail: string | null;
+  /**
+   * F-813: for `not_a_project`, what the folder holds as the main process saw it (names counted, nothing read), and
+   * whether the home is watching for the project file to appear (it then opens the folder by itself).
+   */
+  readonly folderState?: FolderState;
 }
+
+/** F-813: a folder that is not a project yet. */
+export interface FolderState {
+  /** Entries at the folder's top level; null when it could not be listed. */
+  readonly entries: number | null;
+  /** True while the home checks, every FIRST_WATCH_MS, whether rcfd-project.json has appeared. */
+  readonly watching: boolean;
+}
+
+/** F-813: how often the home checks whether a folder that was not a project has become one (ms). */
+export const FIRST_WATCH_MS = 1000;
 
 export interface ProjectState {
   readonly engine: EngineStatus;

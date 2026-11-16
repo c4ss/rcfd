@@ -14183,20 +14183,29 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     P7 met by R2 (median 71 ms; R1 2.0 s), P8 met (p99 frame 4.4 ms at 1e6 triangles); hover value bit-exact. Open: a
     256-entry table matches rcfd-render exactly only at its 256 points and within 3/255 elsewhere (F808-D1, maintainer:
     accept or switch to exact shader evaluation); view-and-report pending.
-- [ ] **F-809** Electron Studio: derived pictures (iso-surfaces, streamlines, cut planes, vectors)
+- [~] **F-809** Electron Studio: derived pictures (iso-surfaces, streamlines, cut planes, vectors)
   - depends on: F-808
   - acceptance: Each derived picture computed by the engine (rcfd-render or a registered opt-in service method) or, if
     computed in the Studio, matched against the engine's reference value for value within a tolerance registered before
     the code; a view that does not apply to a case (for example a cut plane on a 2D case) is disabled with the reason
     shown (G6).
-  - note: ADR 0800. Traces: G3, G6, G2; PRODUCT Operating Context.
-- [ ] **F-810** Electron Studio: run bands and linked time scrubbing
+  - note: ADR 0800. Traces: G3, G6, G2; PRODUCT Operating Context. Partial 2026-11-16: field viewport has cut plane
+    (rcfd-render's clip rule, on the GPU) and vectors (overlay_vectors' rule, stored components unchanged), checked
+    against engine references with tolerances T1-T3 registered before the code (ADR 0801 Addendum 7); cut plane disabled
+    on 2D cases with the reason in name and tooltip (G22). Left: iso-surfaces and streamlines have no engine entry point
+    (shown unavailable); no CLI/MCP way to make the cut/arrows of a store (G16); no length unit for mesh coordinates.
+- [x] **F-810** Electron Studio: run bands and linked time scrubbing
   - depends on: F-808, F-811
   - acceptance: The run bands of DESIGN.md on one shared time axis, each end marked with its pictogram and word; one
     scrubber line with its own flag lane moves the field, the residual cursor, the monitor readouts and the snapshot
     counter of the selected run together; Follow live for a running run; P5 and P6 met; a test that the field, residual
     and monitor values at a scrub position all belong to the same snapshot; a view-and-report step.
-  - note: ADR 0800. Traces: G3, G9 (P5, P6); DESIGN Run bands (signature), Named Rules (One Live Thing).
+  - note: ADR 0800. Traces: G3, G9 (P5, P6); DESIGN Run bands (signature), Named Rules (One Live Thing). Done
+    2026-11-16: run workspace (Workspace tab): run bands on one shared iteration axis with pictogram and word at each
+    end, one scrubber with its own flag lane moving field, residual cursor, monitor readout and snapshot counter
+    together, Follow live; same-snapshot test against a real quick-start run; P5 met (23.6 snapshots/s at 1e6 cells), P6
+    met on rate (9.1/s at 4e6 cells, 4 of 100 frames over 150 ms, machine fully loaded); screenshots in test-results-
+    visual/f810 for view-and-report.
 - [~] **F-811** Electron Studio: residual and monitor plots
   - depends on: F-803
   - acceptance: Residuals and monitors fetched once and then by increments (ADR 0353); every plot range holds every
@@ -14215,13 +14224,19 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     2026-11-16: case editor at #/case (src/renderer/case, src/main/case); opens via session.create, saves via edit_case
     with base_hash on a writable project server, comments kept; CLI round trip and conflict tests; screenshots for the
     maintainer's view-and-report in test-results-visual/f812.
-- [ ] **F-813** Electron Studio: a learner's first path
+- [~] **F-813** Electron Studio: a learner's first path
   - depends on: F-807, F-812
   - acceptance: From an empty folder to a first honest result with the quick-start project, without CFD jargon on the
     path; every empty state says what is missing and the next step; the disclaimers stay visible (G6); a Playwright walk
     of the path; a view-and-report step by the maintainer as a first-time user. The short path hides nothing for good:
     every capability stays one step away (G15).
   - note: ADR 0800. Traces: G6; PRODUCT Users, Principle 5. Surface not yet designed: shape it with impeccable first.
+    Partial 2026-11-16: first path in the project home from an empty folder to a first result (quick-start example,
+    start_run with stored fields, result numbers equal metrics.json and status.json, picture drawn, disclaimers
+    visible), quiet under G22 with words behind Explain; Playwright and keyboard walks against real rcfd binaries. Left:
+    no engine command creates a project (rcfd project init / MCP create_project wrapping Project::create proposed, needs
+    an ADR), so the walk's test writes rcfd-project.json in its place; the field caption still uses precise terms; the
+    result link goes to Runs, not yet the F-810 workspace; maintainer's first-time view-and-report.
 - [~] **F-814** Electron Studio: Claude Code panel
   - depends on: F-805
   - acceptance: The Claude Code chat for the project through rcfd-claude: open sessions mirrored read-only, closed
@@ -14347,12 +14362,16 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     glossary, with no help text kept only in the Studio; every error message names the problem and the recovery, checked
     by a test over the engine's error catalogue; a learner's view-and-report step (G19).
   - note: ADR 0800 (G16 to G21 added 2026-11-16). Traces: G19, G2; PRODUCT Users, Principle 5.
-- [ ] **F-831** Electron Studio: command palette and keyboard shortcuts
+- [x] **F-831** Electron Studio: command palette and keyboard shortcuts
   - depends on: F-827, F-802
   - acceptance: A command palette generated from the action registry that finds every action by name; shortcuts for
     frequent actions with no conflicts (a test); a coverage test that every registered action is in the palette (G20);
     everything usable from the keyboard alone (G8).
-  - note: ADR 0800 (G16 to G21 added 2026-11-16). Traces: G20, G15, G8.
+  - note: ADR 0800 (G16 to G21 added 2026-11-16). Traces: G20, G15, G8. Done 2026-11-16: command palette (Ctrl+K,
+    Ctrl+Shift+P) generated from the action, run, case and Studio command registries (54 commands), unavailable commands
+    listed with their reason; one shortcut table for palette, listing, key listener and tests; no-conflict test incl.
+    Electron's menu accelerators and reserved keys; coverage test that every registered action is in the palette;
+    keyboard-only e2e.
 - [ ] **F-832** Electron Studio: responsiveness budget and cancellable work
   - depends on: F-808, F-810
   - acceptance: No engine or data work on the renderer's main thread: a test that records long tasks while opening a

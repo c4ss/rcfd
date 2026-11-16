@@ -2,8 +2,8 @@
 // processes, so it uses neither Node nor DOM types.
 //
 // The numbers were registered in apps/studio-web/README.md ("Responsiveness and cancellable work") and ADR 0801,
-// addendum F-832, before the measurement was written; tests/e2e/responsiveness.spec.ts imports them from here. Changing
-// one needs the maintainer, like a limit of G9.
+// addendum 9 (F-832), before the measurement was written; tests/e2e/responsiveness.spec.ts imports them from here.
+// Changing one needs the maintainer, like a limit of G9.
 
 /** Longest task allowed on the renderer's main thread while a run is opened, fields load and the scrubber moves (ms). */
 export const LONG_TASK_LIMIT_MS = 100;

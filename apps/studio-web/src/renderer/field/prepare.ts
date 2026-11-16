@@ -4,6 +4,7 @@
 // values go and come back transferred. Where this window has no worker the same functions run here instead
 // (`onMainThread` says so; the Studio's windows have workers).
 import type { SurfaceData } from '../../shared/data.js';
+import { meshLayers, vectorGlyphs, type Glyphs, type Layers } from './derived.js';
 import { bounds, cornerPositions, cornerScalars, shownRange } from './surface.js';
 import type { PrepReply, PrepRequest } from './prepare.worker.js';
 
@@ -17,6 +18,8 @@ export interface PreparedSurface {
   readonly max: readonly [number, number, number];
   readonly centre: readonly [number, number, number];
   readonly radius: number;
+  /** F-809's layers of the mesh (./derived.ts meshLayers), made with the rest. */
+  readonly layers: Layers;
 }
 
 export interface PreparedField {
@@ -82,7 +85,8 @@ export class FieldPrep {
     });
   }
 
-  async surface(surface: SurfaceData): Promise<PreparedSurface> {
+  /** The surface's arrays and layers; `nCells` is the store's cell count. */
+  async surface(surface: SurfaceData, nCells: number): Promise<PreparedSurface> {
     const id = ++prepIds;
     const w = this.ensure();
     if (!w) {
@@ -91,15 +95,31 @@ export class FieldPrep {
       const centre: [number, number, number] = [(b.min[0] + b.max[0]) / 2, (b.min[1] + b.max[1]) / 2, (b.min[2] + b.max[2]) / 2];
       let r2 = 0;
       for (let i = 0; i + 2 < positions.length; i += 3) r2 = Math.max(r2, (positions[i]! - centre[0]) ** 2 + (positions[i + 1]! - centre[1]) ** 2 + (positions[i + 2]! - centre[2]) ** 2);
-      return { surface, id, positions, min: b.min, max: b.max, centre, radius: Math.sqrt(r2) };
+      return { surface, id, positions, min: b.min, max: b.max, centre, radius: Math.sqrt(r2), layers: meshLayers(surface, nCells) };
     }
     const points = surface.points.slice();
     const triangles = surface.triangles.slice();
     const cells = surface.cells.slice();
-    const r = await this.ask(w, { op: 'surface', id, points, triangles, cells }, [points.buffer, triangles.buffer, cells.buffer]);
+    const r = await this.ask(w, { op: 'surface', id, points, triangles, cells, nCells }, [points.buffer, triangles.buffer, cells.buffer]);
     if (r.op === 'error') throw new Error(r.message);
     if (r.op !== 'surface') throw new Error('unexpected reply of the field worker');
-    return { surface, id, positions: r.positions, min: r.min, max: r.max, centre: r.centre, radius: r.radius };
+    return { surface, id, positions: r.positions, min: r.min, max: r.max, centre: r.centre, radius: r.radius, layers: r.layers };
+  }
+
+  /**
+   * F-809's vector arrows on `prepared`'s surface (./derived.ts vectorGlyphs). The components are handed over
+   * (transferred, or copied when they share a buffer); the caller does not use them afterwards.
+   */
+  async glyphs(prepared: PreparedSurface, components: readonly (Float32Array | null)[], layers: Layers, nCells: number): Promise<Glyphs> {
+    const w = this.ensure();
+    if (!w) return vectorGlyphs(prepared.surface, components, layers, nCells);
+    const id = ++prepIds;
+    const own = components.map((c) => (c === null ? null : c.byteOffset === 0 && c.byteLength === c.buffer.byteLength ? (c as Float32Array<ArrayBuffer>) : c.slice()));
+    const transfer = [...new Set(own.flatMap((c) => (c ? [c.buffer] : [])))];
+    const r = await this.ask(w, { op: 'glyphs', id, surface: prepared.id, components: own, layers, nCells }, transfer);
+    if (r.op === 'error') throw new Error(r.message);
+    if (r.op !== 'glyphs') throw new Error('unexpected reply of the field worker');
+    return r.glyphs;
   }
 
   /** The arrays of one field on `prepared`'s surface. `values` is handed over (transferred) and comes back in the result. */

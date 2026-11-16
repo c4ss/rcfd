@@ -19,6 +19,7 @@ import { ProjectHome, type RecentLike } from '../../src/main/project/home.js';
 import type { ProjectServerLike } from '../../src/main/project/server.js';
 import type { StoredRecent } from '../../src/main/project/recent.js';
 import { benchSoup, cornerPositions, cornerScalars, shownRange } from '../../src/renderer/field/surface.js';
+import { meshLayers, vectorGlyphs } from '../../src/renderer/field/derived.js';
 import { FieldPrep } from '../../src/renderer/field/prepare.js';
 import { cssCustomProperties } from '../../src/renderer/design/tokens.js';
 import { appRoot } from '../support/rcfd.js';
@@ -272,8 +273,9 @@ test.describe('cancelling a project opening', () => {
 });
 
 test.describe('the field worker', () => {
-  test('its arrays are the ones ./surface.ts makes on the main thread, and the fallback gives the same', async () => {
+  test('its arrays are the ones ./surface.ts and ./derived.ts make on the main thread, and the fallback gives the same', async () => {
     const { surface, values } = benchSoup(40, 20);
+    const nCells = Math.max(...surface.cells) + 1;
     // the worker module run here, with a stand-in for its global scope
     const replies: unknown[] = [];
     const scope: { onmessage: ((e: { data: unknown }) => void) | null; postMessage: (m: unknown) => void } = { onmessage: null, postMessage: (m) => replies.push(m) };
@@ -283,10 +285,24 @@ test.describe('the field worker', () => {
     } finally {
       delete (globalThis as { self?: unknown }).self;
     }
-    scope.onmessage!({ data: { op: 'surface', id: 1, points: surface.points.slice(), triangles: surface.triangles.slice(), cells: surface.cells.slice() } });
+    scope.onmessage!({ data: { op: 'surface', id: 1, points: surface.points.slice(), triangles: surface.triangles.slice(), cells: surface.cells.slice(), nCells } });
     scope.onmessage!({ data: { op: 'field', id: 2, surface: 1, values: values.slice() } });
     scope.onmessage!({ data: { op: 'field', id: 3, surface: 99, values: values.slice() } });
-    const [s, f, bad] = replies as [{ positions: Float32Array; radius: number }, { scalars: Float32Array; values: Float32Array; range: unknown }, { op: string }];
+    const layers = meshLayers(surface, nCells);
+    const comps = [values.slice(), values.map((v) => -v), values.map((v) => v / 2)];
+    scope.onmessage!({ data: { op: 'glyphs', id: 4, surface: 1, components: comps.map((c) => c?.slice() ?? null), layers, nCells } });
+    const [s, f, bad, g] = replies as [
+      { positions: Float32Array; radius: number; layers: unknown },
+      { scalars: Float32Array; values: Float32Array; range: unknown },
+      { op: string },
+      { glyphs: { segments: Float32Array; triangles: Uint32Array; vmax: number } },
+    ];
+    expect(s.layers).toEqual(layers);
+    const ref = vectorGlyphs(surface, comps, layers, nCells);
+    expect(ref.segments.length).toBeGreaterThan(0);
+    expect(Array.from(g.glyphs.segments)).toEqual(Array.from(ref.segments));
+    expect(Array.from(g.glyphs.triangles)).toEqual(Array.from(ref.triangles));
+    expect(g.glyphs.vmax).toBe(ref.vmax);
     expect(Array.from(s.positions)).toEqual(Array.from(cornerPositions(surface)));
     expect(Array.from(f.scalars)).toEqual(Array.from(cornerScalars(surface.cells, values)));
     expect(Array.from(f.values)).toEqual(Array.from(values));
@@ -295,13 +311,15 @@ test.describe('the field worker', () => {
 
     // this process has no Worker: FieldPrep computes the same arrays itself
     const prep = new FieldPrep();
-    const ps = await prep.surface(surface);
+    const ps = await prep.surface(surface, nCells);
+    expect(ps.layers).toEqual(layers);
     expect(prep.onMainThread).toBe(true);
     expect(Array.from(ps.positions)).toEqual(Array.from(s.positions));
     expect(ps.radius).toBeCloseTo(s.radius, 6);
     const pf = await prep.field(ps, values.slice());
     expect(Array.from(pf.scalars)).toEqual(Array.from(f.scalars));
     expect(pf.range).toEqual(f.range);
+    expect(Array.from((await prep.glyphs(ps, comps, layers, nCells)).segments)).toEqual(Array.from(ref.segments));
     prep.dispose();
   });
 });
