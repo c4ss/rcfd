@@ -220,3 +220,13 @@ One control added to P3, no limit changed: **P3-0**, the fifteen copied variants
 only for "thin blade 3", C3 for the mould codes). It checks the verbatim copy of `bad_variants` against the ADR 0118 result.
 Limit: every variant holds. The tests are in `crates/rcfd-post/tests/f713_schema_fan_rom.rs` (rcfd-post depends on rcfd-mesh,
 so one file reaches the schema, the checker, the sector generators and the ROM).
+
+### Amendment 2 (2026-11-16, after the one registered run, before any further run)
+
+The registered run missed P1c and P4 (results in addendum 1). By rule 2 the two tests become ignored records with their limits
+intact: `p1_the_candidate_is_unstalled_down_to_forty_percent_known_miss` and `p4_the_candidate_meshes_as_s4_known_miss`. So
+that the met clauses of P1 keep running, one test is added, `p1_the_candidate_is_unstalled_down_to_forty_percent_met_limits`:
+the same code and the same limits for P1a, P1b, P1d, P1e and P1f, without P1c (it is the same deterministic computation, so
+its numbers are those of the registered run; it is run once to confirm that). No limit is changed. One diagnostic run after
+the miss (scratch `zz_f713_diag2.rs`, log `diag2.log`, never committed) located the rise of P1c and evaluated three system
+curves on P; it is reported in addendum 1 as diagnosis, not as a check.
