@@ -328,3 +328,10 @@ near-singular `K_aa`, smallest eigenvalue near zero or negative); a consistency 
 says the mode block is not the Jacobian of the mode residual there, so neither a Newton iteration nor the decrease test of D1
 can be expected to converge; a negative eigenvalue of the symmetric part says the mode problem is not a minimum there (no
 energy descent). The decision rule is unchanged.
+
+## Amendment 2 (2026-11-16, written after the diagnosis of amendment 1 and before the mutation runs)
+
+The mutations were registered against the default tests of `si_eas_hg7.rs`. They are run, each once, on a scratch copy of
+**commit 8da3a0f6** (the amendment 1 tests: the registered seed test is an ignored record there, its met rows a default test),
+so that every default test passes unmutated; "caught" is a default test of that copy that fails under the mutation (a check
+missed). No limit and no test is changed.
