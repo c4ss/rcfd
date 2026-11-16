@@ -6,6 +6,7 @@
 //                      (npm run gallery); loaded on demand, so it costs the project home nothing
 //   #/settings[/<id>]  the case settings of a service session (F-825), loaded on demand
 //   #/dev/plots        the residual and monitor plots of a service session (F-811), loaded on demand
+//   #/dev/field?...    the field viewport on a store (F-808, dev/FieldDev.tsx; npm run field), loaded on demand
 import { lazy, StrictMode, Suspense, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import '@fontsource/archivo/400.css';
@@ -24,6 +25,9 @@ const PlotsDev = lazy(() => import('./dev/PlotsDev'));
 
 const SETTINGS_HASH = '#/settings';
 const SettingsPage = lazy(() => import('./settings/SettingsPage'));
+
+const FIELD_HASH = '#/dev/field';
+const FieldDev = lazy(() => import('./dev/FieldDev'));
 
 // React Aria's usePress adds a one-rule <style> element unless an element with this id exists; the Content Security
 // Policy refuses inline style elements, so the rule is in base.css and this marker stands in for the element.
@@ -61,6 +65,13 @@ function Root() {
     return (
       <Suspense fallback={null}>
         <SettingsPage />
+      </Suspense>
+    );
+  }
+  if (hash === FIELD_HASH || hash.startsWith(`${FIELD_HASH}?`)) {
+    return (
+      <Suspense fallback={null}>
+        <FieldDev hash={hash} />
       </Suspense>
     );
   }

@@ -692,3 +692,140 @@ results stay in the scratch folder, not committed.
 - **Q-811-3, runs on disk.** The plots read a live session's `monitors.get`; a finished run's `monitors.json` on disk is
   not read yet. Recommendation: the run list (F-806) hands the plots a reader of that file behind the same feed
   interface.
+
+## Addendum 5 (F-808): the field viewport on three.js WebGPU (2026-11-16)
+
+F-808 (mesh and fields on surfaces drawn by `WebGPURenderer` with a TSL material, the WebGL 2 fallback; guardrails G3,
+G8, G9 with P7 and P8, G13, G21) adds **no dependency**: it is the first code to use `three` 0.187.0 (`three/webgpu`,
+`three/tsl`, and `OrbitControls` from the package's own `examples/jsm`) and `@react-three/fiber` 9.8.2, both in §2 since
+F-800. `package-lock.json` did not change. No Rust file, service method, reply shape, golden or default changed; no
+existing test was edited. The spike's `bench/electron/` was read for the P7 and P8 methods, not copied; the prototype's
+field view and `colormap.ts` were read for the approach, not copied (its stops are not rcfd-render's, see F808-D6).
+
+### What F-808 built
+
+- **`src/renderer/field/`**: `FieldViewport.tsx` (a store, a snapshot and a field: opens the store, reads the surface
+  once per store and the field, all through the data door with the view's tag; progress with Cancel, errors with their
+  reason and Try again; legend, caption, readout, mesh-grid toggle, Reset view, the back end named on screen),
+  `FieldCanvas.tsx` (R3F `Canvas` with an async `gl` factory: `new WebGPURenderer({antialias: false, alpha: false,
+  forceWebGL})`, `await init()`, linear output, no tone mapping; the TSL material; OrbitControls; the CPU pick; keyboard
+  orbit, zoom and reset; the mesh grid; the P8 loop), `colormap.ts` (the table, the f32 mirror of the shader's
+  arithmetic, tick labels, the readout's text), `surface.ts` (corner positions and values, the shown range, the grid's
+  edges, the P8 surface), `grid.worker.ts`, `Legend.tsx`, `field.css`.
+- **`src/renderer/data/door.ts`**: the one renderer module that names `window.studioData`, like `project/door.ts` for the
+  project (F-805).
+- **`src/renderer/dev/FieldDev.tsx`** at `#/dev/field?route=&path=&field=&snapshot=[&backend=webgl]` (loaded on demand;
+  the project home's chunk does not contain three.js: `index` 582 649 bytes, `FieldDev` 1 569 087 bytes), and
+  `#/dev/field?bench=p8[&uncapped=1]`. `main.tsx` gained the route.
+- **Scripts**: `npm run field` (the viewport on a store at 1440 x 900, view-and-report), `npm run bench:field`
+  (`scripts/measure-field.mjs`, P7 and P8, by hand).
+- **Tests** (no human step; data made afresh by `f447_bench gen` on every e2e run; 26 new tests):
+  - `tests/unit/field-colormap.spec.ts` (10): the reference is rcfd-render's map taken from the Rust source
+    (`tests/support/rcfd-render-map.ts` reads the stops out of `crates/rcfd-post/src/render.rs` and checks, verbatim,
+    the lines of `colormap` and of `ColorMap::eval`/`viridis` in `crates/rcfd-render/src/lib.rs` that it repeats). Every
+    one of the 256 entries equals rcfd-render's colour at k / 255; entries 0 and 255 equal its colours at 0 and 1; values
+    at and beyond both ends and non-finite values take rcfd-render's colours; at the table points the colour of a value
+    is exactly rcfd-render's colour of that value; over a sweep of the full range the colour is within 3 levels of
+    rcfd-render's colour of the value itself (the bound is reached); tick labels; the readout's text; the stylesheets
+    use tokens only.
+  - `tests/unit/field-surface.spec.ts` (4): corners carry the owner cell's value bit for bit; the shown range; the grid
+    is exactly the boundary faces' edges (no fan diagonal); the P8 surface.
+  - `tests/unit/data-door-static.spec.ts` (2).
+  - `tests/e2e/field.spec.ts` (10, the packaged Studio, the tiny box and the 1e5-cell box by R2): the back end named
+    (WebGPU here); every corner of every surface triangle against rcfd-render's map (worst 3 levels); **pixels read
+    back** from screenshots: at grid points inside triangles the pixel equals the table colour of the stored value (the
+    Rust reader's reference bytes) of the cell the hover readout names, and the viewport ground is exactly its token
+    colour (nothing converts colours on the way), by WebGPU on both boxes and by WebGL 2 on the tiny one; the hover
+    readout equals the stored value, bit for bit and as its shortest text; the legend bar's pixels are the table; the
+    mesh grid by keyboard (white at 38% over the surface, compounding where lines meet; off restores every pixel); Reset
+    view after a drag restores every pixel; keyboard orbit with the readout at the centre; no CSP violation, no console
+    error; screenshots at 1440 x 900 in `test-results-visual/f808/`.
+
+### Decisions taken in F-808 (reversible; the maintainer may change them)
+
+- **F808-D1, how a value finds its colour.** The acceptance asks that every vertex colour equal rcfd-render's colour of the
+  same value, and DESIGN.md and the item ask for a 256-entry table. Both cannot hold for every value: rcfd-render's map
+  rounds a continuous piecewise-linear function and takes 635 distinct colours over [0, 1]. (a) The nearest of 256
+  entries, entry k = rcfd-render's colour at k / 255 (done): exact at the 256 table points and at and beyond both ends,
+  within 3 levels of 255 per channel elsewhere, a tolerance stated in `colormap.ts` and measured by the tests (G3 allows
+  a tolerance stated before the code). (b) 257 entries holding the unrounded values in a float texture, the shader
+  interpolating between two entries and rounding: equal to rcfd-render's colour except at f32 rounding ties, but not
+  DESIGN.md's 256-entry table. (c) The shader evaluates the 9 stops as rcfd-render's shader does: equal likewise, no
+  lookup table. Recommendation: (a), with the tolerance written into the acceptance text; (b) if "equals" must hold for
+  every value.
+- **F808-D2, where the data door lives.** `src/renderer/data/door.ts` (done), shared by every surface that reads bulk data
+  (scrubbing, F-810), rather than inside `field/`.
+- **F808-D3, point fields.** `data.surface` gives the used points in order of first use, not their numbers in the mesh, so
+  a point field cannot be placed on the surface. (a) Draw cell fields only and say why for a point field (done);
+  (b) add the point numbers to `data.surface` (a Rust and protocol addition, outside this item). Recommendation: (a)
+  now, (b) as a follow-up when a store holds point fields (the run path writes cell fields).
+- **F808-D4, the colour range.** The min and max of the shown values (the cells that own a surface triangle), as
+  rcfd-studio's snapshot range (done). Range over the run and a typed range are rcfd-studio's other modes; not in
+  F-808's acceptance.
+- **F808-D5, picture settings.** Unlit, no MSAA, linear output and no tone mapping, so a pixel is exactly a table colour and
+  testable (done). Edges are therefore aliased; MSAA would change only edge pixels, if wanted later.
+- **F808-D6, the stops.** The Studio uses rcfd-post's 9 stops (`#440154`, `#482475`, `#414487`, `#355f8d`, `#2a788e`,
+  `#22a884`, `#44bf70`, `#7ad151`, `#fde725`). The prototype's `colormap.ts` uses other samples (`#472d7b`, ...), which
+  differ from rcfd-render's; DESIGN.md names only the two ends, which agree. Nothing to decide unless DESIGN.md should
+  list the stops.
+- **F808-D7, capability coverage.** No capability of `capabilities/inventory.json` gains a UI path: the viewport reads the
+  store through the data port, which the inventory does not list, not `field.slice`, `field.grid`, `field.stats`,
+  `field.export_vtk`, `render.png`, `render.glb` or the MCP tools `render_field`, `render_image`, `field_summary`,
+  `get_field_stats`, `export_vtk`, whose exemptions name F-808 with the reason "not built yet".
+  `capabilities/coverage.json` is unchanged here (its F-808 lines sit next to F-811's, which a parallel item changes).
+  (a) At merge, reword those exemptions ("the viewport draws stored fields through the data port; this live-session
+  method has no UI path yet") and keep F-808, or (b) move them to the item that will reach them. Recommendation: (a) at
+  merge, then (b) when the roadmap names a home.
+
+### P7 and P8 through the product shell (run once by hand, house rule 7)
+
+`npm run bench:field -- --data=<folder> --bench-server=<f447_bench>` once, after `f447_bench gen <folder> tiny 1e5 1e6`
+(made afresh; the run path took 196.7 s for the 1e6 box; its raw store is 491 MB). Method of ADR 0350 with the Studio's
+viewport in place of the spike's code:
+
+- P7: from the viewport's open of the store to the first animation frame after the draw finished on the GPU
+  (`rcfd:field:first-picture`), through `data.open`, the surface and `p` of snapshot 19, the geometry, the material's
+  pipeline and the draw. The renderer and device exist before (the viewport is open on the tiny box, and switches store
+  between repeats); 5 repeats per route, judged on the median, the first reported. Also recorded: one cold mount of the
+  viewport on the 1e6 box (renderer and device made inside the time).
+- P8: `#/dev/field?bench=p8`: the viewport's canvas and material on 1e6 synthetic triangles (1000 x 500 x 2, a value per
+  triangle), orbiting one turn per 600 frames; 120 warm-up and 1200 timed `requestAnimationFrame` intervals; once with
+  vertical sync, once launched with `--disable-frame-rate-limit --disable-gpu-vsync`, each frame waiting for the GPU.
+
+| Id | Limit | Measured (Electron 45.3.3, product shell, WebGPU) | Met | ADR 0350 (spike) |
+|---|---|---|---|---|
+| P7 R2 | median <= 1.5 s | median 71 ms; first 752 ms; all 752, 77, 67, 62, 71 | yes | median 55, first 65 |
+| P7 R1 | median <= 1.5 s | median 2027 ms; all 2027, 2065, 2026, 1980, 2050 | **no** | median 1153, first 1580 |
+| P7 cold mount (recorded) | | 134 ms (R2, the store already opened in the reader's worker) | | |
+| P8, vertical sync | p99 frame <= 25 ms | 239.8 frames per s on a 238 Hz display; frame p50 4.20, p99 4.40, max 5.50 ms | yes | 60.0 per s, p99 16.9 |
+| P8, no rate limit | >= 60 frames per s | 54.4 per s (frame p50 18.4, p99 19.6 ms); draw to GPU done p50 1.60, p99 5.50 ms | see below | 332 per s |
+
+**P7 is met by route R2** (the limit is "R1 or R2", ADR 0350 §3), the route of projects on this machine. Its first
+opening (752 ms) includes the reader's first open of the store with the MESH frame's checksum (D8 of addendum 3) and the first compile of the material. **R1 missed P7**
+(about 2.0 s every time): the spike's R1 met with 1.15 s; this run was at full load (below), and `data.surface` decodes
+and checks the whole stored mesh on the service's side on every call (ADR 0350, P7 R1 note). Not tuned; recorded.
+
+**P8 is met**: with vertical sync the 1e6 triangles ran at the display's 238 Hz with a p99 frame of 4.40 ms, which is
+also more than 60 frames per second. The run without a rate limit did not lift the frame rate in this set-up: launched
+with the two switches on the command line (Electron reports both with `app.commandLine.hasSwitch`), even an empty
+page's `requestAnimationFrame` ran at about 50 to 58 Hz, below the vertically synced 238 Hz; the spike set the switches
+with `app.commandLine.appendSwitch` in its own main process, which the product's main process does not do. The work of
+a frame (draw call to the GPU's end of it) took p50 1.60 ms, p99 5.50 ms. Deviation recorded, not tuned; a
+measurement-only switch in the main process would let the run be repeated as the spike made it (open question).
+
+Also measured (by hand, recorded): the hover pick (three's Raycaster over every drawn triangle, on the main thread)
+takes p50 1.2 ms, max 6.3 ms per pointer move on the 1e5 box (26 000 triangles), p50 5.4 ms, max 10.6 ms on the 1e6 box
+(120 000 triangles); a bounding-volume tree would be the next step for larger surfaces.
+
+Set-up: 2026-11-16 15:31 UTC, Windows 11 (10.0.26300), AMD Ryzen 7 9800X3D (16 logical), 93.6 GB (35.4 GB free),
+launcher on Node 22.19.0, Electron 45.3.3 (Chromium 156.0.8078.100, Node 24.22.3), WebGPU adapter vendor `nvidia`,
+architecture `blackwell`, window content 1280 x 800, visible, a 238 Hz display. **Deviation:** the machine was fully
+busy, processor busy fraction 1.00 before and after the run, with 4 `cargo`/`rustc`/`link` processes of other jobs.
+`f447_bench` was the one in the shared target folder. The raw results stay in the scratch folder, not committed;
+`npm test` times nothing.
+
+### Notes for later items
+
+- The project view (F-806) hosts the viewport: `<FieldViewport store snapshot field />`; scrubbing (F-810) can change
+  `snapshot` alone, which loads one field and rewrites one vertex attribute (the geometry and the pipeline stay).
+- Range modes, other colour maps, point fields (F808-D3) and cut planes are not in F-808.

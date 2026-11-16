@@ -22,6 +22,8 @@
     "bench:service": "node scripts/measure-service.mjs",
     "bench:data": "node scripts/measure-data.mjs",
     "bench:plots": "node scripts/measure-plots.mjs",
+    "bench:field": "node scripts/measure-field.mjs",
+    "field": "node scripts/open-field.mjs",
     "start": "electron ."
   },
   "dependencies": {

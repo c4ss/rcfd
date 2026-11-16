@@ -1,0 +1,164 @@
+/* The field viewport (field/FieldViewport.tsx, F-808; DESIGN.md Field view). The canvas sits on the silver-wash viewport
+   ground inside ink rules; the chrome around it stays ink and white (the Data Owns the Field Rule). Tokens only, no
+   colour literals (tests/unit/field-colormap.spec.ts checks this sheet as tokens.spec.ts checks the others). */
+
+.fv {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  border: var(--line-rule);
+  background: var(--role-ground);
+  font-variant-numeric: tabular-nums;
+}
+
+.fv-tools {
+  height: var(--size-tab-row);
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+  padding: 0 var(--space-lg);
+  border-bottom: var(--line-rule);
+}
+.fv-tools-gap {
+  flex: 1;
+}
+.fv-note,
+.fv-backend {
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+}
+.fv-backend[data-backend='webgl2'] {
+  color: var(--role-text);
+  font-weight: var(--font-weight-medium);
+}
+
+.fv-frame {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background: var(--role-viewport);
+  border-bottom: var(--line-rule);
+  touch-action: none;
+}
+.fv-frame:focus-visible {
+  outline: var(--focus-width) solid var(--role-focus-ring);
+  outline-offset: var(--focus-offset-inset);
+}
+.fv-frame > div:first-child {
+  position: absolute;
+  inset: 0;
+}
+
+/* Reset view: in the top right corner once the view has been moved (DESIGN.md Field view). */
+.fv-reset.ui-button {
+  position: absolute;
+  top: var(--space-lg);
+  right: var(--space-lg);
+}
+
+/* The keyboard's readout point: a small ink cross at the centre of the view. */
+.fv-crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 13px;
+  height: 13px;
+  margin: -6px 0 0 -6px;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--role-rule), var(--role-rule)) center / 1px 100% no-repeat,
+    linear-gradient(var(--role-rule), var(--role-rule)) center / 100% 1px no-repeat;
+}
+
+.fv-status {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--space-lg);
+  padding: var(--space-xxl);
+  text-align: center;
+  background: var(--role-viewport);
+}
+.fv-status p {
+  margin: 0;
+  max-width: 60ch;
+}
+.fv-hint {
+  color: var(--role-text-2);
+}
+
+/* Under the frame, a fixed height: legend (48), caption (24), readout (32). */
+.fv-info {
+  flex: none;
+  height: 104px;
+  overflow: hidden;
+}
+
+/* Legend: the colour table as an ink-ruled bar with ticks, the unit in the title. */
+.fv-legend {
+  height: 48px;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-xl);
+  padding: var(--space-lg) var(--space-lg) var(--space-sm);
+  font-size: var(--type-label-size);
+}
+.fv-legend-title {
+  font-weight: var(--font-weight-bold);
+  padding-top: 1px;
+  white-space: nowrap;
+}
+.fv-legend-scale {
+  flex: 1;
+  max-width: 420px;
+}
+.fv-legend-bar {
+  display: block;
+  width: 100%;
+  height: 10px;
+  border: var(--line-rule);
+  image-rendering: pixelated;
+}
+.fv-legend-ticks {
+  display: flex;
+  justify-content: space-between;
+  margin-top: var(--space-xs);
+}
+
+.fv-caption {
+  height: 24px;
+  margin: 0;
+  padding: 0 var(--space-lg);
+  font-size: var(--type-label-size);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A fixed height: the readout changing must never resize the canvas above it. */
+.fv-readout {
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+  height: var(--size-tab-row);
+  padding: 0 var(--space-lg);
+  border-top: var(--line-hair);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.fv-readout-label {
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+}
+.fv-readout-value {
+  font-size: var(--type-title-size);
+  font-weight: var(--font-weight-bold);
+}
+.fv-readout-where {
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+}
