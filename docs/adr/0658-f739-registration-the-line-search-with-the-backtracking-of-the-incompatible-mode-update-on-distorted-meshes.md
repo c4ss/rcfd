@@ -335,3 +335,140 @@ The mutations were registered against the default tests of `si_eas_hg7.rs`. They
 **commit 8da3a0f6** (the amendment 1 tests: the registered seed test is an ignored record there, its met rows a default test),
 so that every default test passes unmutated; "caught" is a default test of that copy that fails under the mutation (a check
 missed). No limit and no test is changed.
+
+## Addendum 1: results (2026-11-16)
+
+The registered run was made once on the test commit d9289b11 (`run1-default.log` in the scratch folder; 60 s, 20 s, 77 s,
+17 s, the four tests one after the other); the met rows of A1.1 once (`run2-met-rows.log`, 61 s, every checked row identical
+to the registered run); the diagnosis of A1.2 once (`a1-diagnosis.log`); the mutations once each on a scratch copy of
+8da3a0f6 (amendment 2; `mutations.log`, `mut-M*.log`); B6, S5, S7 and `docs_site` once (`b6.log`, `s5-baseline.log`,
+`s7-lib.log`, `s7-tests.log`, `docs-site.log`). No limit, set-up, seed or measure was changed after a run; no seed was replaced
+by the rule of c3 (all three passed M0).
+
+### Results
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| M0 eight meshes | `> 0` | block `0.6977`, `0.2179`, `0.6648`, `0.0762`; cantilever `0.8557`, `0.6113`, `0.6611`, `0.0773` | yes |
+| M0 seeds `0xF739_0001` to `_0003` | `> 0` | `0.0680`, `0.0957`, `0.1788` | yes |
+| M1 | `27`, `343`, `9`, `171`; `343` per seed | all as registered | yes |
+| FR3 (16 values) | `<= 1e-6` | largest `7.3e-8` (`w_c`, `8^3`, `0.25 h`) | yes |
+| RB1 `e_R`, `e_w` | `<= 0.15` | `0.1202`, `0.0406` | yes |
+| RB2 | `<= 0.15` | `0.1278`, `0.0870` | yes |
+| RB3 | `<= 0.10` | `0.0664`, `0.0349` | yes |
+| RB4 (ADR 0649 DB4) | `<= 0.10` | `0.0750`, `0.0287` (11 increments, 2 halved, 3 searched steps) | yes |
+| RC1 `e_P`, `e_d` | `<= 0.15` | `0.0580`, `0.0058` | yes |
+| RC2 | `<= 0.15` | `0.0694`, `0.0045` | yes |
+| RC3 | `<= 0.10` | `0.0203`, `0.0027` | yes |
+| RC4 | `<= 0.10` | `0.0297`, `0.0028` | yes |
+| RS1 (`0xF739_0001`) | `<= 0.10` | `0.0743`, `0.0495` | yes |
+| RS2 (`0xF739_0002`) | `<= 0.10` | **NaN: R fails** (element 420, modes not converged in 25 local iterations, load factor `0.9375`) | **no** (known miss) |
+| RS3 (`0xF739_0003`) | `<= 0.10` | **NaN: R fails** (element 476, the same, load factor `0.85625`) | **no** (known miss) |
+| SLR, negative count | `0` | `0` on nine set-ups; NaN on RS2, RS3 | **no** on two |
+| SLR, lowest / max diagonal | `> 0` | block `6.63e-3`, `6.01e-3`, `1.94e-3`, `1.81e-3`; cantilever `1.57e-5`, `1.53e-5`, `5.16e-6`, `4.54e-6`; seed 1 `1.74e-3`; NaN on RS2, RS3 | **no** on two |
+| S (measured) | no limit | **passes** on the eight meshes (DB4 included: `0.0750`, `0.0287`, 10 increments, no halving, positive definite) and on seed 1; **fails** on seeds 2 and 3 (the decrease test exhausted at elements 420 and 476) | measured |
+| DT0 | `> 1` | `263` (domain-only record at `u_T`: `|r|_2` from `4.0e4` to `1.06e7` in one step; 20 iterates) | yes |
+| DT1a | `<= 1` | `0.524` (decrease record: 7 iterates, 3 halvings, monotone) | yes |
+| DT1b | converged | converged, modes within `2.5e-13` of the domain-only record's | yes |
+| NC1 | fails, element 476, `[0.67, 0.68]` | fails, element 476, `0.675` | yes |
+| NCB | fails | fails, element 475, `0.890625` (as ADR 0655) | yes |
+| NCS | differs | S converges where NCB fails | yes |
+| NC4 | `0` bits | `0` (and S against the default on that set-up: `0`, reported) | yes |
+| B6 | pass | the four bit records pass | yes |
+| S5 | pass | 3 passed, 1 ignored | yes |
+| S6 | clean | `cargo fmt -p rcfd-fem --check`, `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean | yes |
+| S7 | pass | `--lib` 14; `si_eas_hg6` 4, `si_eas_hg5` 3, `si_eas_hg3` 4, `si_hex8x` 8, `si_eas` 8, `si_eas_hg` 8, `si_eas_hg2` 3 passed | yes |
+
+Reported (no limit). R reproduces the default rule L bit for bit where the default converges (`0.0` relative on the seven
+meshes: neither the line search nor the backtracking acts there). F-bar on the seeds: `R = 0.34387169`, `0.34915749`,
+`0.34360196`, SL positive definite. **The default rule L fails on all three new seeds** (seed 1 element 475 inverted at
+`0.809`; seed 2 element 420 inverted at `0.9375`; seed 3 element 476, modes not converged, at `0.856`): the punch edge of the
+`8^3` block at `0.25 h` defeats the plain element on four of four seeds; R rescues two of them (seed `0xF719_0008` and seed 1).
+
+**Diagnosis A1.2.** E1: R converges to the punch `0.0930`, `0.0937` (seed 2) and `0.0850`, `0.0855` (seed 3). At the trial
+`u_T` of seed 2 (punch `0.0939`) both library records converge (domain-only in 19 iterates with a rise to `8.1e5`, the
+decrease variant in 8): `u_T` is not the driver's failing iterate (as in ADR 0655 E1). At the trial of seed 3 (punch `0.0858`)
+**both fail**: the domain-only record wanders (`|r|_2` up to `6.5e7`) and stops at the cap; the decrease record falls
+monotonically from `1.06e5` to `223.1` in six iterates and then stalls there (halvings `2, 9, 13, 19`, then none accepted). E2
+(the replica, which follows the decrease record): the mode block is the exact Jacobian of the mode residual at every iterate
+(consistency `4e-10` to `1.1e-9`, asymmetry `1e-16`), and the Newton direction is a descent direction at small `t` (slope
+`-1.0000` at `t = 1e-8` at every iterate), so the stall is not an inconsistent tangent. What changes along the stall is the
+mode block: its symmetric part becomes **indefinite or nearly singular** (smallest eigenvalue `-3.8e4` at iterate 3, then
+`+3.6e4`, `-3.3e3`, `-6.8e2`, `+1.2e2`, `+48` against a largest of `5.2e7`) while `|delta|_inf / |alpha|_inf` grows from
+`0.14` to `195`, and the slope at `t = 1e-4` turns from `-1` to `+25` and `+163`: the iterate is drawn to a point where `|r|_2`
+has a local minimum (`223`, far from zero) with a near-singular `K_aa`, the classical stagnation of a Newton method with a
+merit-function line search. E3: at the converged modes of the states of R before the failing increments the mode block is
+positive definite (smallest `1.2e5` and `1.95e5`) and consistent (`4.7e-10`, `4.8e-10`). By the interpretation registered in
+A1.2: the direction is a descent direction and the stall is a step large against the modes with a near-singular, at times
+indefinite, `K_aa`; along the way from `alpha = 0` to the root at such a state the mode problem of the stabilised element is not
+a minimum. Neither backtracking (domain only, or with the decrease test) can lead the iteration from `alpha = 0` around that
+region; a start nearer the root (the committed modes, ADR 0655 question 1 (c)) or a trust region on the modes would be needed.
+
+### Deviations
+
+- **RS2, RS3, SLR on two seeds** (amendment 1): R fails there; the known-miss record is
+  `r_and_s_on_three_further_seeds_known_miss`, the met rows run as `r_and_s_on_three_further_seeds_met_rows`.
+- **Arithmetic 3** expected R to pass a new seed; the punch edge of this mesh family is harder than one seed showed: the default
+  fails on every seed tried, R on two of four.
+- **Arithmetic 4** expected the decrease test not to fail before convergence; it does fail at a stagnation point with a
+  near-singular, indefinite mode block (E2), which arithmetic 4 assumed away.
+- **Arithmetic 5** expected S to pass DB4: it does, and more simply than R (10 increments, no halving, no line search; the same
+  `R`, `w_c` to 8 digits).
+- **Mutations** were run on the amendment 1 tests (amendment 2).
+
+### Mutations (scratch copy of 8da3a0f6, the default tests of `si_eas_hg7.rs`, each run once; amendment 2)
+
+| Id | Caught | By |
+|---|---|---|
+| MB1 (the driver ignores the backtracking) | **yes** | RB4, SLR on DB4 (R fails), RS1, SLR on seed 1, NCS, DT0, DT1a, DT1b (the backtracking-alone solve to `0.088` fails at `0.747`) |
+| MB2 (the step not halved) | **yes** | the same rows as MB1 except NCS |
+| MB3 (the backtracking always on) | **yes** | NC1 (the default fails at element 475, `0.8906`) |
+| MB4 (the previous iterate returned as converged) | **yes** | RB4, SLR on DB4, RS1, SLR on seed 1, NCS, DT0, DT1a, DT1b (a singular global tangent at `0.747`) |
+| MB5 (the halving from the inverted iterate) | **yes** | RB4, SLR on DB4, RS1, SLR on seed 1, DT0, DT1a, DT1b |
+| MS1 (the driver ignores the decrease test) | **yes** | NCS |
+| MS2 (the decrease test removed in `backtracked`) | **yes** | DT1a (`6.9e4`), NCS |
+| MS3 (the decrease against the first residual) | **no** (registered as possibly not caught) | every check passes; the DT records are unchanged (the only halved step there is the first). Reported: under MS3 S **passes** seed 3 (`e_R = 0.0787`, `e_w = 0.0490`, positive definite) and still fails seed 2 at a later load factor (`0.972`) |
+
+Seven of eight caught: all five mutations of the backtracking of ADR 0655 by this item's own checks (clause c7), and the two
+of the decrease test registered as catchable. MS3 is a weaker decrease test (not monotone with respect to the last iterate),
+and it happens to pass one more seed: a pointer for a follow-up, not a result of this item.
+
+### Not run
+
+Nothing registered was skipped. The whole rcfd-fem suite was not run (the daily gate runs it, rule 7): `si_eas_hg7.rs` (its
+default tests and its two ignored records each once), the lib tests, `si_eas_hg6`, `si_eas_hg5`, `si_eas_hg3`, `si_hex8x`,
+`si_eas`, `si_eas_hg`, `si_eas_hg2`, B6, S5, `docs_site`. No test is a heavy record (the longest default test takes 61 s).
+
+### Decision
+
+**partial**, by the registered rule: B6, S5, NC4 met (no default bit changed: the bit records, the baseline hashes, the ADR
+0655 tests and NC4), and M0, M1, FR3, RB1 to RB4, RC1 to RC4, RS1, DT0, DT1a, DT1b, NC1, NCB, NCS, S6, S7 met; S measured on
+all eleven set-ups; every mutation of the backtracking caught by this item's own checks (MB1 to MB5) and MS1, MS2 caught; but R
+fails on two of the three further seeds (RS2, RS3 and their SLR missed), so R is not a remedy for the punch edge of this mesh
+family in general. On the eight meshes of ADR 0649 R meets every row (DB4 included: `0.0750`, `0.0287`, positive definite),
+and the sufficient-decrease test alone (S, no line search) passes all eight as well and the first new seed: with it the
+backtracking alone passes, which answers the question of c6 on the eight meshes.
+
+### Remaining questions
+
+1. **The two failing seeds.** Options: (a) a warm start of the local mode iteration from the converged modes of the committed
+   state (ADR 0655 question 1 (c); adds element state, a different design); (b) a trust region (Levenberg-Marquardt) on the
+   mode step instead of the backtracking, which handles the indefinite, near-singular `K_aa` of E2; (c) a non-monotone decrease
+   test (MS3 passed seed 3; not derived here); (d) record it as a limit of rule L at a singular punch edge on strongly
+   distorted meshes and close. Recommendation: (a), measured beside (b), on the same eleven set-ups; (a) starts inside the
+   basin of the root, which E3 shows is well conditioned. Proposed below.
+2. **Default.** R and S stay opt-in; making either the default would change default results where a default solve fails
+   today. Open for the maintainer (not taken).
+3. **Which opt-in to recommend** on distorted meshes: S passed every set-up R passed, with fewer increments on DB4 and without
+   the line search. Recommendation: document S (the backtracking with the decrease test) as the preferred opt-in for the
+   incompatible element at finite strain, R as the fallback; no default change.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> Structural solver, intermediate tier. Follow-up of F-732 (ADR 0655). PARTIAL. ADR 0658, 2026-11-16: rule L of the stabilised incompatible-modes Hex8 with the driver's line search and the opt-in backtracking of the mode update of ADR 0655 (the remedy R, now registered) on the eight distorted meshes of ADR 0649 and on the 8^3 block at 0.25 h with three further seeds (0xF739_0001 to _0003), against the F-bar Hex8 on the same meshes with the ADR 0636 tolerances. Met on the eight meshes: punch reaction within 12.0, 12.8, 6.6 and 7.5 per cent (DB4, the ADR 0649 known miss, now solved), corner bulge within 8.7 per cent, tip reaction within 5.8, 6.9, 2.0 and 3.0 per cent, shortening within 0.6 per cent, loaded state positive definite; and on the first new seed (7.4 and 5.0 per cent). Missed on two of the three new seeds: R fails at 94 and 86 per cent of the load (elements 420 and 476, the local mode iteration not converged in 25 steps); diagnosed: the mode block is the exact Jacobian and the Newton direction a descent direction, but on the way from alpha = 0 the mode block turns indefinite and near singular (smallest eigenvalue from -3.8e4 to +48 against 5.2e7) and the iterate stagnates at a local minimum of the mode residual far from zero; the default rule L fails on all three new seeds. New opt-in SolidModel::set_incompatible_mode_decrease (with the backtracking, a step is also halved without the Armijo decrease of the mode residual, c = 1e-4): measured beside R without the line search, it passes all eight meshes (DB4 in 10 increments without halving) and the first new seed and fails on the same two seeds; at the trial state of ADR 0655 element 475 its record is monotone where the backtracking alone rises by a factor 263. No default bit changed (the bit records of ADR 0506, 0608, 0614, 0630, the ADR 0655 tests and the rcfd-api baseline hashes pass; the decrease flag without the backtracking is bitwise the default). All five mutations of the ADR 0655 backtracking and two of three of the decrease test caught by the item's own checks. Not covered: a warm start or a trust region for the modes, other materials, statistics beyond eleven set-ups.
+
+> F-732 (note, ADR 0658, 2026-11-16): the combination reported by ADR 0655 is registered and checked in F-739: it passes the eight distorted meshes of ADR 0649 (DB4 at 7.5 and 2.9 per cent, positive definite) and one of three further seeds of the 8^3 block at 0.25 h; the mutations of the backtracking that escaped ADR 0655 are all caught there.
+
+> Follow-up proposed: A warm start of the incompatible-mode iteration from the committed modes, measured beside a trust region on the mode step, for the seeds of ADR 0658 where the line search with the backtracking fails. Deps F-739. Acceptance: Every limit not stated here is registered in the ADR before the run. Rule L on the eleven set-ups of ADR 0658 (the eight distorted meshes of ADR 0649 and the 8^3 block at 0.25 h with seeds 0xF739_0001 to _0003) and three more registered seeds: an opt-in warm start of the local mode iteration from the modes of the committed state (element state added only behind the opt-in), and a trust-region (Levenberg-Marquardt) mode step measured beside it on the same set-ups; punch reaction, corner bulge, tip reaction and shortening within the ADR 0636 tolerances of the F-bar Hex8 and the loaded state positive definite for the registered remedy; the mutations of the new update caught by the item's own checks; the default bits unchanged.
