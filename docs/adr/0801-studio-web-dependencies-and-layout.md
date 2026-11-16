@@ -1234,3 +1234,13 @@ tooltips (Compare runs, Side by side, Difference) on the 14-unit grid at 0, 45 a
 - One legend under two views: one range for both, the caption saying "one range for both runs".
 - A small hairline table of metrics (A, B, Δ) in tabular figures.
 - A diverging colour map for differences, centred on zero (decision 5).
+
+### Verification (2026-11-16, after merging studio-roadmap d13151f5)
+
+- `npm ci`: 0 vulnerabilities. `npm run typecheck`: clean.
+- `npm test`: 556 passed, 2 failed, 4 did not run. Rerun alone: `workspace.spec.ts` 5 passed (the Follow live race
+  with a running run); `provenance.spec.ts:220` (focus back on the trigger after Escape) fails the same way on the
+  studio-roadmap tip without F-815, so it is not F-815's. `tests/unit/compare.spec.ts` 16 passed,
+  `tests/e2e/compare.spec.ts` 7 passed (screenshots in `test-results-visual/f815/`).
+- `python scripts/third_party_licenses.py --check`: up to date.
+- `cargo test -p rcfd-cli --release --test docs_site --test workspace_graph`: 2 and 4 passed.
