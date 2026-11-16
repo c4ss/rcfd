@@ -20,6 +20,7 @@
     "gallery": "node scripts/open-gallery.mjs",
     "bench:cold-start": "node scripts/measure-cold-start.mjs",
     "bench:service": "node scripts/measure-service.mjs",
+    "bench:plots": "node scripts/measure-plots.mjs",
     "start": "electron ."
   },
   "dependencies": {

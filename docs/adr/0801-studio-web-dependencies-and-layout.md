@@ -417,3 +417,107 @@ results stay in the scratch folder, not committed.
   `RCFD_STUDIO_STARTUP_REPORT` does in addendum 1.
 - The renderer shows nothing of the service yet; F-802 onwards build the surfaces on `window.studioService`. The
   Studio's named actions (G16, G20) will sit on top of the allow-list, not replace the checks in main.
+
+## Addendum 3: F-811, the residual and monitor plots (2026-11-16)
+
+F-811 (residual and monitor plots; guardrails G3, G6, G9 P3) adds **no dependency**: the plots use `three` (already
+here, section 2) and the React Aria primitives of F-802. `package-lock.json` did not change. No Rust file, service
+method, reply shape, golden or default changed (G4); `rcfd serve` was only run.
+
+### What F-811 built
+
+- `src/renderer/plots/feed.ts`: one feed per run (service instance + session). The first `monitors.get {session}` is
+  whole; every later one sends `since` = the f64 just below the last abscissa held (ADR 0353), so the samples at that
+  abscissa come back, are checked against what the feed holds (same value, `Object.is`), and only the rest is appended.
+  A mismatch or a shorter history (a run built again) reads the whole history again ("resync", counted). Series held at
+  different abscissas are asked in groups with `names`; a series that appears later is read whole once. The run's
+  events (`watchEvents` of the action layer) wake the feed, coalesced to at most one request per 100 ms; nothing polls
+  on a timer. A plot only ever reads the snapshot of the run it was opened for; replies of another run are dropped by
+  key.
+- `range.ts`: the axis rule of G3. The range of every axis holds every value drawn, whatever the magnitude (5e-324 to
+  1.7e308, ties, single values); a value that cannot be drawn (not finite, or not above zero on the log scale) breaks
+  the line and is counted under the plot, never clamped onto an edge.
+- `linePlot.ts`: the lines on three.js `WebGPURenderer` (WebGL2 where WebGPU is missing) with `LineSegments2` and
+  `Line2NodeMaterial`. The buffers grow in place, and an increment uploads only its new segments (`addUpdateRange`).
+  Coordinates are stored relative to an origin and a span set from the data, so the GPU's 32-bit floats place every
+  finite f64 correctly (set again when the data outgrows them a thousandfold). Ticks, names, values and captions are
+  HTML in Archivo beside the canvas (the canvas is `aria-hidden`).
+- `ResidualPlot.tsx` (log scale, `continuity` and `res_*`), `MonitorPlot.tsx` (the other series, one at a time with a
+  Select, the latest value at display size), `parts.tsx`, `words.ts` (empty states: a sentence and the run's state
+  pictogram, for example "No residuals: session s2 is defined and has no simulation yet.").
+- `src/renderer/dev/PlotsDev.tsx`: the development route `#/dev/plots[?session=..&case=..]`; F-810 places the plots in
+  the time panel. It calls only `dispatch`.
+- `src/shared/monitors.ts` and one hook in `src/main/service/bridge.ts` (decision D5 below).
+- Tests: `tests/unit/plots-feed.spec.ts` (increments exact against `tests/support/fake-monitors.ts`, a stand-in with
+  the service's `names`/`since` semantics; replies of two runs crossed; a rebuilt run resyncs; mutation checks: an
+  off-by-one in the repeated-sample check and a disabled check both fail it), `plots-range.spec.ts` (4000 seeded random
+  series, linear and log), `plots-css.spec.ts` (tokens only); `tests/e2e/plots.spec.ts` against the real `rcfd serve`
+  with the quick-start cavity cases.
+
+### The renderer: three.js, not SVG
+
+PRODUCT.md (maintainer, 2026-11-16) names three.js on `WebGPURenderer` for every 2D and 3D visualisation, so three.js is
+the default, and SVG needed a measured reason. The measurement (below, same session, same load) gives the opposite
+reason. Four polylines of 1e5 points as one SVG took 134.6 ms from insertion to the next frame, and every append of 100
+points (an SVG path's `d` is rebuilt whole) 104 to 128 ms, against an empty frame of 45.8 ms under that load. The
+three.js plots drew 3e5 residual segments in 67.8 ms (render call 59.1 ms) the first time, and 3.5 ms and 3.8 ms after
+an increment, because only new segments are uploaded. Reasons kept: (1) an increment costs its own size, not the
+history's (G21); (2) the maintainer's stack, one renderer for plots and fields; (3) the WebGL2 fallback is built in.
+react-three-fiber is not used for the plots: an orthographic scene with nothing to declare, and the per-frame path is
+imperative anyway (PRODUCT.md, Stack).
+
+### Decisions taken in F-811 (reversible; the maintainer may change them)
+
+- **D5, `monitors.get` crosses the service port as `Float64Array`s.** The main process packs `x` and `y` of each series
+  (a `null` of the wire becomes `NaN`) before the reply is posted; a reply of any other shape passes unchanged. Reason:
+  in the smoke runs the structured clone of 8e5 JavaScript numbers through main, preload and the context bridge cost
+  about 55 ms; typed arrays cost about 3 ms. (a) Pack (done). (b) Send the reply line as a string and parse it in the
+  renderer (the spike's way; a second parse of 11 MB). (c) Plain arrays. Recommendation: (a). The action log (F-827)
+  records parameters, not replies, so its exports are unchanged.
+- **D6, line styles without hue for meaning.** Residuals are told apart by dash and weight in ink and secondary text,
+  `res_p` dotted in the converged role; the sky accent is not used for a residual (DESIGN.md, colour has a job). The
+  legend draws the same swatch. (a) As done. (b) A categorical palette. Recommendation: (a) until the time panel (F-810)
+  shows how many series sit together.
+- **D7, coverage.** `service:monitors.get` and the six `monitors:*` keys are mapped to a UI path worded "on the
+  development route until F-810". (a) As done. (b) Keep their exemptions until F-810. Recommendation: (a): the path is
+  built and tested, and the wording says where it is.
+
+### P3 through the product shell (run once by hand, house rule 7)
+
+Method of ADR 0350 A1.4 and ADR 0353 (check `p3` of bench/electron): `scripts/measure-plots.mjs` starts `rcfd serve`
+(the release build in the shared target folder) and the packaged Studio attached to it, makes a 4 x 4 x 4 lid-driven box
+with `[reports.lid_drag] type="force" patch="ymax" component="viscous"`, steps it 1e5 times (166.1 s), then from the
+renderer sends `monitors.get {session, names}` for the first four series by name (`continuity`, `lid_drag`, `res_p`,
+`res_u`, 1e5 samples each) through `window.studioService.call`, the call `dispatch` makes. Request to parsed object (the
+reply arrives as `Float64Array`s), 20 repeats.
+
+| Id | Limit | Measured (Electron 45.3.3, product shell) | Met |
+|---|---|---|---|
+| P3 | median <= 100 ms | median 118.3, max 147.8, min 96.0 (20) | **no** |
+| P3, main process alone | recorded | median 95.7, max 112.5, min 90.2 (20) | recorded |
+| I1 (ADR 0353), the last 100 samples of each series | median <= 2 ms | median 0.4, p99 1.1, max 6.3 (200 after 20 warm-up); 100 samples per series returned | yes |
+| Plots, first whole fetch on `#/dev/plots` | recorded | 112.0 ms (the feed's first `monitors.get`, every series) | recorded |
+| Plots, first draw (WebGPU) | recorded | residuals, 3e5 segments: 67.8 ms (render 59.1); monitor, 1e5 segments: 22.3 ms (render 21.2) | recorded |
+| Plots, draw after an increment of 100 steps | recorded | 3.5 ms and 3.8 ms; 0 resyncs | recorded |
+
+Set-up: 2026-11-16 15:22 UTC, Windows 11 (10.0.26300), AMD Ryzen 7 9800X3D (16 logical), 35.6 GB free, launcher Node
+22.19.0, Electron 45.3.3 (Chromium 156.0.8078.100, Node 24.22.3). **Deviation:** the machine was fully busy: processor
+busy fraction 1.00 before, during and after the run, with 4 `cargo`/`rustc`/`link` processes of other jobs; ADR 0350's
+run had none. The miss is recorded, not tuned (ADR 0353). Most of the time is in the main process (95.7 ms: the
+service's formatting of about 11 MB and the parse in main); the port adds about 20 ms. The run was not repeated; the raw
+results stay in the scratch folder, not committed.
+
+### Open questions for the maintainer
+
+- **Q-811-1, P3 missed under load.** (a) Repeat the registered run once on an idle machine and judge P3 on it. (b) Accept
+  the miss for F-811 and register a later item for a cheaper whole read (a binary series payload from the service is a
+  protocol change, with an ADR of its own). (c) Raise the limit. Recommendation: (a), then (b) if it still misses.
+  F-811's P3 clause stays open until then.
+- **Q-811-2, abscissa of the compressible solver.** `crates/rcfd-api/src/sim.rs` (near line 3893) pushes `dt`, `courant`
+  and `res_rho` against the step index while the document's `x_label` may be "time". The plots read one `x_label` per
+  document, so these series would be placed and captioned against the wrong abscissa. A Rust change, not made here
+  (G4). (a) The engine pushes them against the same abscissa as the other series. (b) The document gives an abscissa
+  label per series. Recommendation: (a).
+- **Q-811-3, runs on disk.** The plots read a live session's `monitors.get`; a finished run's `monitors.json` on disk is
+  not read yet. Recommendation: the run list (F-806) hands the plots a reader of that file behind the same feed
+  interface.

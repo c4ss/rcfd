@@ -19,6 +19,7 @@ import {
 } from '../../shared/service.js';
 import type { ClientEventBatch } from './client.js';
 import { RpcError } from './rpc.js';
+import { packResult } from '../../shared/monitors.js';
 
 const ALLOWED = new Set<string>(SERVICE_METHODS);
 
@@ -204,7 +205,8 @@ export class PortBridge {
       case 'call':
         try {
           const result = await this.client.call(r.method, r.params ?? {}, r.timeoutMs ?? DEFAULT_CALL_TIMEOUT_MS);
-          this.reply(r.id, { ok: true, result });
+          // monitors.get: series as Float64Array, the same numbers in one block (F-811, src/shared/monitors.ts)
+          this.reply(r.id, { ok: true, result: packResult(r.method, result) });
         } catch (e) {
           const error: ServiceError =
             e instanceof RpcError ? e.toServiceError() : { code: 'protocol', message: e instanceof Error ? e.message : String(e) };

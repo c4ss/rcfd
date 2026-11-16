@@ -19,13 +19,13 @@ Engine read: rcfd 0.1.0, service protocol rcfd-service/1 version 1.1, MCP server
 
 | Kind | Capabilities | UI path | Exemption | Exemption whose item does not name it |
 |---|---|---|---|---|
-| Service methods | 69 | 0 | 69 | 46 |
+| Service methods | 69 | 1 | 68 | 46 |
 | MCP tools | 56 | 0 | 56 | 26 |
 | CLI commands | 36 | 0 | 36 | 19 |
 | CLI options | 156 | 0 | 156 | 98 |
 | Case schema keys | 948 | 0 | 948 | 0 |
-| Monitor format keys | 6 | 0 | 6 | 0 |
-| **All** | **1271** | **0** (0.0 %) | **1271** | **189** |
+| Monitor format keys | 6 | 6 | 0 | 0 |
+| **All** | **1271** | **7** (0.6 %) | **1264** | **189** |
 
 A case key stands for every value of its enumeration (the solver options of that key, listed in the inventory): the
 schema-driven surface of F-825 offers them all. A CLI option is mapped with its command. "Item does not name it" marks an
@@ -34,7 +34,7 @@ new item (see the last sections).
 
 ## Gaps by kind and target item
 
-### Service methods (69 without a UI path)
+### Service methods (68 without a UI path)
 
 | Item | Count | Capabilities |
 |---|---|---|
@@ -43,7 +43,7 @@ new item (see the last sections).
 | F-808 field viewport on three.js WebGPU | 6 | `field.export_vtk` (not named), `field.grid`, `field.slice`, `field.stats`, `render.glb`, `render.png` |
 | F-809 derived pictures (iso-surfaces, streamlines, cut planes, vectors) | 1 | `field.sample` |
 | F-810 run bands and linked time scrubbing | 1 | `panel.snapshot` |
-| F-811 residual and monitor plots | 4 | `monitors.get`, `particles.report` (not named), `report.export` (not named), `reports.get` |
+| F-811 residual and monitor plots | 3 | `particles.report` (not named), `report.export` (not named), `reports.get` |
 | F-812 case editor validated by the engine's schema | 11 | `mesh.check`, `mesh.inflate` (not named), `mesh.partition` (not named), `run.check`, `session.close`, `session.create`, `session.list`, `settings.get`, `settings.remove`, `settings.set`, `settings.validate` |
 | F-815 compare two runs | 5 | `design.compare` (not named), `design.get_metrics` (not named), `design.ledger_query` (not named), `design.ledger_rerun_check` (not named), `design.list_study` (not named) |
 | F-825 schema-driven case and settings surface | 1 | `settings.schema` |
@@ -100,12 +100,6 @@ new item (see the last sections).
 | Item | Count | Capabilities |
 |---|---|---|
 | F-825 schema-driven case and settings surface | 948 | `boundaries` (72), `chain` (5), `chemistry` (21), `components` (33), `compressible` (17), `convergence` (5), `cosim` (7), `decomposition` (17), `dynamic_mesh` (48), `electric` (5), `energy` (5), `expressions` (1), `fluid` (23), `initial` (12), `limits` (6), `linear_solver` (3), `mesh` (102), `mixing_plane` (11), `multiphase` (60), `output` (11), `particles` (89), `phase_change` (6), `physics` (8), `postprocessing` (15), `properties` (42), `radiation` (4), `regions` (6), `registers` (15), `reports` (14), `restart` (3), `rheology` (19), `scalars` (14), `solids` (10), `solver` (73), `sources` (29), `species` (9), `statistics` (3), `study` (12), `tables` (6), `thermal_interfaces` (6), `title` (1), `turbulence` (80), `udf` (9), `zone_sources` (11) |
-
-### Monitor format keys (6 without a UI path)
-
-| Item | Count | Capabilities |
-|---|---|---|
-| F-811 residual and monitor plots | 6 | `format`, `series.*.unit`, `series.*.x`, `series.*.y`, `version`, `x_label` |
 
 ## Capabilities no Studio item names yet
 
