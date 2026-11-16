@@ -451,7 +451,9 @@ impl ComputerFan {
     /// of incidence at 40 percent of the free delivery in the ADR 0119 strip model at 3000 rpm), every section a symmetric
     /// NACA 00xx so that the camber line runs downstream at every station (stagger 69.8 / 75.4 / 77.6 deg). A model fan of
     /// low flow coefficient for the reduced-order tier (its stall window asks for it), not a measured fan; every field but
-    /// `stations` is the default's. Its usable range against quadratic systems is stated in ADR 0643.
+    /// `stations` is the default's. Measured in ADR 0643 (`RomModel::default()`, 3000 rpm, rho 1.2): free delivery 0.02826
+    /// m^3/s, no stalled strip down to 0.31 of it, static characteristic peaking at 0.457 of it, so operating points against
+    /// `dp = k Q^2` exist for `k` up to 1.61e5 Pa s^2/m^6. h_slit meshes it; the camber_seam_h C-grid does not (ADR 0643).
     pub fn rom_reference() -> Self {
         let cp = |span, chord, stagger_deg, thickness, skew_deg| ControlPoint {
             span,

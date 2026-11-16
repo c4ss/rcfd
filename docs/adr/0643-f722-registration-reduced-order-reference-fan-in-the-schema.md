@@ -185,3 +185,116 @@ No limit is changed. One diagnostic run after the miss (scratch `f722-scratch/zz
 committed) locates the fold and evaluates camber_seam_h at other `front_gap` and `n_nose` inside the documented control range
 and on the reference with lower hub stagger; it is reported in addendum 1 as diagnosis, not as a check, and changes no station
 of `rom_reference()`.
+
+## Addendum 1: results (2026-11-16)
+
+One registered run (`f722-scratch/run1.log`, release, `cargo test -p rcfd-post --release --test f722_rom_reference_fan --
+--nocapture --test-threads 1`: 5 passed, 1 failed), then after amendment 1 one run of the split tests (`run2.log`: 6 passed, 1
+ignored; the numbers are those of run 1).
+
+| id | limit | measured | met |
+|---|---|---|---|
+| A1a | 7 blades; side 0.12 m; `r_tip + gap` <= 0.06 m | 7; 0.12; 0.059 | yes |
+| A1b | fields but stations equal the default's; fans differ | equal; differ | yes |
+| A1c | stations equal the table | equal | yes |
+| A2 | `stagger + atan(2 m / p)` < 90 deg at every station | 69.8 / 75.4 / 77.6 deg | yes |
+| A3a | `operating_point` for `q_f` succeeds | ok, 0.0282591 m^3/s | yes |
+| A3b | stalled grid flows 0 | 0 of 601 | yes |
+| A4a | scalars in `PARAMS` bounds | in bounds | yes |
+| A4b | `check(&Limits::default())` empty | empty | yes |
+| A5a | h_slit builds, cells > 0 | 11648 cells (max non-orthogonality 85.37 deg, skewness 16.7, aspect 827) | yes |
+| A5b | camber_seam_h builds, cells > 0 | refused: "the line family is folded at layer 0 (r = 0.02150), C block around line 1, row 2: the leading-edge fan cannot be built for this blade with the front_gap 0.3 and n_nose 6 given" | **no** (record `a5_..._known_miss`) |
+| A5c | reported | pursuit C-grid rejected: "the wake line (s from -0.0150 to -0.0259) leaves the passage (-0.0172, 0.0021)" at the hub layer | - |
+| A6a | `k_max` in [1.53e5, 1.69e5] | 1.60806e5 Pa s^2/m^6 (just above: "rising fan characteristic") | yes |
+| A6b | `q_min / q_f` in [0.44, 0.48] | 0.45708 (0.012917 m^3/s) | yes |
+| A6c | `q / q_f` within 0.01 of 0.9148 / 0.8473 / 0.7051 / 0.5634 | 0.91480 / 0.84728 / 0.70508 / 0.56338 (`dp` 6.68 / 11.47 / 19.85 / 25.35 Pa) | yes |
+| A6d | `k` 2e5 refused | refused: operating point 0.011493 m^3/s on a rising characteristic | yes |
+| R1 | `q_f / 0.028259` in [0.99, 1.01] | 1.000005 | yes |
+| R2 | largest incidence at 0.4 `q_f` within 0.15 of 8.215 deg | 8.2147 deg | yes |
+| R3 | `f_s` in [0.28, 0.34] | 0.309 | yes |
+| R4 | peak fraction in [0.44, 0.48]; value / 26.83 in [0.98, 1.02] | 0.457; 0.99996 (26.829 Pa) | yes |
+| R5 | reported | `[q_f, 1.25 q_f]`: 0 of 101 stalled, smallest incidence -5.99 deg; on G incidence -3.01 to 8.21 deg; `dp_s` 26.30 / 20.10 Pa at 0.4 / 0.7 `q_f` | - |
+| NC1 | P's hub >= 90 deg | 92.699 deg | yes |
+| NC2 | stagger -8 deg: stalled grid flows > 0 | 156 of 601, highest 0.555, `q_f` 0.043464 | yes |
+| NC3 | `cl_max` 0.8: stalled grid flows > 0 | 52 of 601, highest 0.451 | yes |
+| NC4 | hub chord 0.022: `AxialOverlap` at `stations[0].chord` | found, overlap 1.351e-3 m at r 0.0215 | yes |
+| NC5 | P through camber_seam_h refused | refused: "the camber line does not run downstream monotonically" | yes |
+| B1 | diff lists only this ADR, `fan_design.rs` (added lines only), the new test | `git diff --stat 32f3c320`: these three; `fan_design.rs` lines 449-477 added, 0 removed | yes |
+| B2 | same pass / ignore counts as on the base | `fan_design_w46a` 13 passed 2 ignored, `--lib fan_design` 1 passed, `f713_schema_fan_rom` 5 passed 2 ignored, on the base (`base_b2.log`) and with the change (`b2.log`) | yes |
+
+Usable operating range against quadratic systems (a8): at 3000 rpm the reference delivers 0.02826 m^3/s free (`dp_s` 0) and has
+an operating point against `dp = k Q^2` for every `k` from 0 to 1.608e5 Pa s^2/m^6, i.e. for flows from `q_f` down to 0.457
+`q_f` (0.01292 m^3/s, 26.83 Pa). A stiffer system meets the curve on its rising part below the peak and is refused, although no
+strip stalls above 0.31 `q_f`.
+
+Mutations (scratch copy `f722-scratch/mut`, `mutate.sh`, logs `mut_M*.log`): five of five caught.
+
+| id | mutation | caught by |
+|---|---|---|
+| M1 | hub camber 0.06 | A1c, A3b (81 stalled), R1 (1.041), R2 (13.14 deg), R3, R4, A6a, A6b. Not A2 as expected: 69.8 + atan(0.3) = 86.5 deg < 90 (the expectation used P's stagger) |
+| M2 | tip stagger 72.6 | A1c, A3b (129 stalled), R1 (1.105), R2, R3, R4, A6a to A6c |
+| M3 | hub chord 0.022 | A1c, A4b (`AxialOverlap` 1.351e-3 m), R2 (8.048) |
+| M4 | `r_tip` 0.059 | A1b, A4b (`FrameWall`), R1 (1.055), R4, A6a, A6c |
+| M5 | stall threshold doubled | R3 (no onset), NC2 and NC3 (0 stalled) |
+
+Defect of the mutation script, disclosed: its first M5 run (`mut_M5_stale.log`) built against the M4 source, because restoring
+`fan_design.rs` by `mv` of the copy gave it an mtime older than the M4 build and cargo did not rebuild it. M5 was run again after
+touching both files (`mut_M5.log`, above); M1 to M4 each edited the same file afresh and are not affected.
+
+`cargo fmt -p rcfd-mesh --check`, `cargo fmt -p rcfd-post --check`: clean. `cargo clippy -p rcfd-mesh -p rcfd-post --all-targets
+-- -D warnings`: clean. `baseline_hashes` not run: the only library change is a new associated function (and its rustdoc,
+extended after the run with the measured numbers), which no existing path calls.
+
+### Diagnosis of the A5b miss (scratch `zz_f722_diag.rs`, `diag1.log`, after the run; not a check)
+
+- No in-range specification builds it: camber_seam_h refuses the reference at every `front_gap` in {0.15, 0.3, 0.5} and `n_nose`
+  in {4, 6, 9} (inside the ADR 0079 control range for `n_chord` 24) with the same fold, and at `front_gap` 1.0 the front edge
+  leaves the domain.
+- The hub section is not the cause: the default with the reference's hub section (stagger 69.8, chord 0.016, camber 0) builds
+  (12841 cells, 89.6 deg); the reference with its hub stagger lowered to 40 to 67.5 deg still folds (at layer 3 or 0); the
+  default with the reference's tip (77.6 deg, camber 0) folds at layer 5 (mid-span). The fold is reported at the first folded
+  layer of the whole coupled grid (`folded_quad` runs after the radial filter), so "layer 0" in the registered run does not
+  locate the cause at the hub.
+- The cause is the high stagger of the outer span (75.4 to 77.6 deg): the camber-seam C-grid builds its leading-edge fan from
+  seams that leave the nose at the camber slope, and ADR 0079 states that its control range "does not make strongly staggered
+  blades (FAN-01 tip, 70 deg) robust". The reference is above that. The ADR 0639 rule needs those staggers (zero-lift angles 75.4
+  and 77.6 deg keep the outer strips attached at 0.4 `q_f`), so a5 and a7 conflict in the present generator, not in the rule.
+
+### Deviations
+
+The M1 expectation "A2" was wrong (see the mutation table); the mutation was caught by seven other checks. The mutation-script
+defect above. Nothing else.
+
+### Not run
+
+The ADR 0118 mass, ensemble and unbalance tests, the FEM blade tests and the F-697 / F-698 objectives on the reference (nothing
+reads it); flow solves on the h_slit mesh; the whole workspace (the lead's gate).
+
+### Decision by the registered rule
+
+**partial.** Every acceptance check but A5b is met, with B1, B2 and the five negative controls: `ComputerFan::rom_reference()`
+sits beside the unchanged default, is a 120 mm 7-blade fan derived by the ADR 0639 rule with camber 0 at every station
+(`stagger + atan(2 m / p)` 69.8 / 75.4 / 77.6 deg), has no stalled strip on [0.4, 1] `q_f` (nor down to 0.31), is accepted by
+the checker, meshes with h_slit, and its usable range against quadratic systems is `k` <= 1.608e5 Pa s^2/m^6 (flows down to 0.457
+`q_f`). It does not mesh with the camber_seam_h C-grid at the s4 specs (nor at any other in-range `front_gap` / `n_nose`), so a7
+is half met; the cause is diagnosed (outer staggers above the generator's robust range).
+
+### Remaining questions (each with options and a recommendation)
+
+1. **The camber_seam_h C-grid on strongly staggered blades.** Options: (a) generator work so that camber_seam_h (or an opt-in
+   construction beside it) builds blades with stagger up to about 80 deg, with the reference at the s4 specs as its acceptance
+   case; (b) accept h_slit as the reference's mesh and drop the C-grid clause for it; (c) a second derivation rule with lower
+   outer staggers (it would stall: ADR 0639's bound needs these zero-lift angles unless the ROM's attached window widens).
+   Recommendation: (a) as a follow-up (proposed below), with (b) as the state meanwhile; (c) is ruled out by ADR 0639's bound.
+2. **The h_slit mesh quality of the reference** (85.4 deg non-orthogonality, skewness 16.7): reported, no limit was registered.
+   Recommendation: leave it to the follow-up of question 1, which registers quality limits for both generators on the reference.
+3. **Where the reference is used.** Options: (a) nothing yet (now); (b) make it the base of the F-697 / F-698 objectives in place
+   of set-up F of ADR 0620. Recommendation: (a) here; (b) needs its own item, as it changes the inputs of registered tests.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial
+
+> Follow-up of F-713 (ADR 0639 questions 1 to 3). ADR 0643, 2026-11-16. PARTIAL (the C-grid clause missed). ComputerFan::rom_reference() beside the unchanged default (ComputerFan::default() and every existing test unchanged: fan_design_w46a 13 passed 2 ignored, f713_schema_fan_rom 5 passed 2 ignored, before and after; only added lines in fan_design.rs). A 120 mm 7-blade fan derived by the ADR 0639 rule with camber 0 at every station (stagger 69.8 / 75.4 / 77.6 deg, chord 0.016 / 0.029 / 0.036 m, every other field the default's; stagger + atan(2 m / p) below 90 deg everywhere). In RomModel::default() at 3000 rpm: free delivery 0.02826 m^3/s (the Python derivation reproduced to 5e-6), no stalled strip at any of 601 flows on [0.4, 1] q_f (largest incidence 8.21 deg against 10.03), stall from 0.31 q_f; accepted by ComputerFan::check with Limits::default(); meshed by h_slit at the s4 specs (11648 cells, max non-orthogonality 85.4 deg). Usable range against dp = k Q^2: k up to 1.608e5 Pa s^2/m^6, flows from q_f down to 0.457 q_f (26.83 Pa peak of the static characteristic; stiffer systems meet its rising part and are refused); q / q_f 0.915 / 0.847 / 0.705 / 0.563 at k 1e4 / 2e4 / 5e4 / 1e5. Missed (known-miss record): the camber_seam_h C-grid folds its leading-edge fan at every in-range front_gap and n_nose; diagnosed to the outer staggers of 75 to 78 deg (the default with the reference's hub section builds, the default with its tip does not), above the range ADR 0079 states the construction is robust for. Negative controls: stagger -8 deg stalls from 0.555 q_f, cl_max 0.8 from 0.451, hub chord 0.022 gives AxialOverlap, P's hub (92.7 deg) is refused by camber_seam_h. Five of five mutations caught.
+
+> Follow-up proposed: camber_seam_h C-grid on strongly staggered blades. Deps F-722. Acceptance: Every limit not stated here is registered in the ADR before the run. The camber_seam_h C-grid (or a new opt-in construction beside it, camber_seam_h unchanged in bits on every existing case) builds ComputerFan::rom_reference() blade 0 at the ADR 0118 s4 specs with no folded cell and registered non-orthogonality, skewness and aspect limits, and the ADR 0079 and ADR 0083 cases keep their results; the h_slit mesh of the reference is measured against the same limits.
