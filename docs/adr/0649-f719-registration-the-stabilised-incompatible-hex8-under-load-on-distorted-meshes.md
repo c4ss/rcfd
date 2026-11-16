@@ -284,3 +284,45 @@ increments of every solve; the corner displacement of the Full Hex8 (N2 of ADR 0
 3. **The F-bar control by consistency and a recorded value** (reading c6) rather than by a second reference element: taken on
    the same instruction.
 4. **Default.** Every rule stays opt-in; open for the maintainer, as ADR 0614, 0628, 0630, 0636.
+
+## Amendment 1 (2026-11-16, written after the single registered run and before any further run)
+
+The registered run (test commit 3026f1d0, log `run1-default.log` in the scratch folder) met every check except four rows of one
+mesh: on the refined block `8^3` at `a = 0.25` the solve of rule L **fails**: `element 476: det F = -8.05e-2 at point 0 of an
+Incompatible Hex8 element (inverted); load step 7 of 10 (load factor 0.675 to 0.678125) after 5 halvings`. DB4 `e_R`, `e_w` and
+SL (both rows) on that mesh are non-finite and missed. The probe (arithmetic 2) converged on the same mesh (`0.367871`, 13
+extra increments); the probe updates the modes by the linearised condensation and has no inversion test at the Newton
+iterates of the modes, rcfd's driver rejects any inverted point. The plain element on the coarse block at `a = 0.25` failed the
+same way (report only: element 53, load factor 0.675). Element 476 of the `8^3` mesh is `i = 4, j = 3, k = 7` (top layer,
+`x in [0.5, 0.625]`, `y in [0.375, 0.5]`), element 53 of the `4^3` mesh is `i = 1, j = 1, k = 3`: both touch the corner of the
+punch edge, where the strain is singular.
+
+Records, as the house rules require: the test `db_punch_block_distorted_against_fbar` is kept unchanged as the ignored record
+`db_punch_block_distorted_against_fbar_known_miss` (the limits intact, the measured values in its ignore text); no limit is
+changed.
+
+### A1.1 The met rows as the default test
+
+`db_punch_block_distorted_met_rows`: the same code and limits for every row of the registered test except the four rows of rule
+L on `8^3` at `a = 0.25` (DB4 `e_R`, `e_w`, SL negative count, SL ratio), which it prints instead of checking. It is a
+regression test of rows already met (as `pt1_to_pt4_ps1_met_rows` of ADR 0506); it is not a new registered run and not counted
+as one.
+
+### A1.2 Diagnosis (registered now, no limit, run once, ignored record `a1_diagnosis_db4_rule_l`)
+
+Question: is the failure a loss of stability of rule L under the punch edge on this mesh (a tangent with a non-positive
+eigenvalue on the path), or a failure of the load stepping (an iterate that inverts the near-degenerate element from a stable
+state)? Runs, each once, rule L on the `8^3` mesh at `a = 0.25`:
+
+- **D1**: the punch moved to `0.0675` (the last converged load factor, `0.675 delta`) in 10 increments: R, `w_c`, and SL (the
+  negative count and the ratio) at that state. A ratio near the registered coarse values (`~1e-3`) and no negative eigenvalue
+  says the state before the failure is stable; a negative count or a ratio near 0 says it is not.
+- **D2**: the punch at `0.1` in 40 increments (the driver's defaults otherwise): if it converges, R and `w_c` and their `e_R`,
+  `e_w` against the F-bar values of the registered run (`0.34220247`, `0.06389947`), and SL. Expectation from the probe:
+  `e_R ~ 0.075`, `e_w ~ 0.029`. This is a diagnosis only; DB4 stays a known miss whatever D2 gives (more increments are a
+  different set-up, chosen after the run).
+- **D3**: the corner ratio (M0's measure) of element 476 and the smallest over the mesh, printed.
+
+Interpretation registered: D1 stable and D2 converging within the tolerances means the miss is the load stepping of the driver
+on a near-degenerate element at the singular punch edge, not the element's stability; D1 unstable means rule L loses stability
+under the punch edge on this mesh. The decision rule is unchanged: a DB limit missed is **partial**.
