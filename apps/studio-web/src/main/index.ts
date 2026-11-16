@@ -452,6 +452,14 @@ function openWindow(): void {
     if (!HEADLESS) return win.show();
     win.setIgnoreMouseEvents(true);
     win.showInactive();
+    // a window that never has the system focus fires no focus events; the page is told it has the focus, as headless
+    // Chromium does
+    try {
+      contents.debugger.attach('1.3');
+      void contents.debugger.sendCommand('Emulation.setFocusEmulationEnabled', { enabled: true }).catch(() => undefined);
+    } catch {
+      // another debugger client is attached already: the page runs without focus emulation
+    }
   });
   void win.loadURL(APP_ENTRY);
 }
