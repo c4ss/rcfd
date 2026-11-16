@@ -5,6 +5,7 @@
 //   #/dev/primitives   the primitives gallery (F-802), for development and the maintainer's view-and-report
 //                      (npm run gallery); loaded on demand, so it costs the project home nothing
 //   #/settings[/<id>]  the case settings of a service session (F-825), loaded on demand
+//   #/dev/plots        the residual and monitor plots of a service session (F-811), loaded on demand
 import { lazy, StrictMode, Suspense, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import '@fontsource/archivo/400.css';
@@ -18,6 +19,8 @@ import { ProjectHome } from './project/ProjectHome';
 const GALLERY_HASH = '#/dev/primitives';
 
 const PrimitivesGallery = lazy(() => import('./dev/PrimitivesGallery'));
+const PLOTS_HASH = '#/dev/plots';
+const PlotsDev = lazy(() => import('./dev/PlotsDev'));
 
 const SETTINGS_HASH = '#/settings';
 const SettingsPage = lazy(() => import('./settings/SettingsPage'));
@@ -44,6 +47,13 @@ function Root() {
     return (
       <Suspense fallback={null}>
         <PrimitivesGallery />
+      </Suspense>
+    );
+  }
+  if (hash === PLOTS_HASH || hash.startsWith(`${PLOTS_HASH}?`)) {
+    return (
+      <Suspense fallback={null}>
+        <PlotsDev />
       </Suspense>
     );
   }

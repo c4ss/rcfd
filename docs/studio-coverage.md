@@ -19,13 +19,13 @@ Engine read: rcfd 0.1.0, service protocol rcfd-service/1 version 1.1, MCP server
 
 | Kind | Capabilities | UI path | Exemption | Exemption whose item does not name it |
 |---|---|---|---|---|
-| Service methods | 69 | 7 | 62 | 47 |
+| Service methods | 69 | 8 | 61 | 47 |
 | MCP tools | 56 | 7 | 49 | 27 |
 | CLI commands | 36 | 2 | 34 | 20 |
 | CLI options | 156 | 0 | 156 | 99 |
 | Case schema keys | 948 | 948 | 0 | 0 |
-| Monitor format keys | 6 | 0 | 6 | 0 |
-| **All** | **1271** | **964** (75.8 %) | **307** | **193** |
+| Monitor format keys | 6 | 6 | 0 | 0 |
+| **All** | **1271** | **971** (76.4 %) | **300** | **193** |
 
 A case key stands for every value of its enumeration (the solver options of that key, listed in the inventory): the
 schema-driven surface of F-825 offers them all. A CLI option is mapped with its command. "Item does not name it" marks an
@@ -34,7 +34,7 @@ new item (see the last sections).
 
 ## Gaps by kind and target item
 
-### Service methods (62 without a UI path)
+### Service methods (61 without a UI path)
 
 | Item | Count | Capabilities |
 |---|---|---|
@@ -42,7 +42,7 @@ new item (see the last sections).
 | F-808 field viewport on three.js WebGPU | 6 | `field.export_vtk` (not named), `field.grid`, `field.slice`, `field.stats`, `render.glb`, `render.png` |
 | F-809 derived pictures (iso-surfaces, streamlines, cut planes, vectors) | 1 | `field.sample` |
 | F-810 run bands and linked time scrubbing | 1 | `panel.snapshot` |
-| F-811 residual and monitor plots | 4 | `monitors.get`, `particles.report` (not named), `report.export` (not named), `reports.get` |
+| F-811 residual and monitor plots | 3 | `particles.report` (not named), `report.export` (not named), `reports.get` |
 | F-812 case editor validated by the engine's schema | 5 | `mesh.check`, `mesh.inflate` (not named), `mesh.partition` (not named), `run.check`, `session.close` |
 | F-815 compare two runs | 5 | `design.compare` (not named), `design.get_metrics` (not named), `design.ledger_query` (not named), `design.ledger_rerun_check` (not named), `design.list_study` (not named) |
 | F-828 provenance inspector and reproduce-from-CLI | 3 | `journal.get`, `journal.replay`, `service.info` |
@@ -89,12 +89,6 @@ new item (see the last sections).
 | F-827 one action layer for every UI action | 1 | `rcfd call` (1) |
 | F-828 provenance inspector and reproduce-from-CLI | 11 | `rcfd` (1), `rcfd data list` (3), `rcfd data provenance` (3), `rcfd data verify` (3), `rcfd run` (1) |
 | F-830 explain in place from the engine's docs | 1 | `rcfd` (1) |
-
-### Monitor format keys (6 without a UI path)
-
-| Item | Count | Capabilities |
-|---|---|---|
-| F-811 residual and monitor plots | 6 | `format`, `series.*.unit`, `series.*.x`, `series.*.y`, `version`, `x_label` |
 
 ## Capabilities no Studio item names yet
 

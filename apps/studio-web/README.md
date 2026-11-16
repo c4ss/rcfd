@@ -25,6 +25,8 @@ dialog, read through the engine's project server, and kept live (below). Depende
     npm run bench:cold-start  # P10, 10 cold starts of the packaged copy; a heavy record, run by hand only
     npm run bench:service -- --bench-server=<f447_bench>   # P1 and P2 through the shell; heavy, by hand only
     npm run bench:data -- --bench-server=<f447_bench> --data=<folder> [--p12]   # P4 (and P12 at 1e6, 4e6); by hand only
+
+    npm run bench:plots -- --rcfd=<rcfd>   # P3 through the shell, with the plots' first fetch and draw; heavy, by hand only
     npm start                 # electron . (run npm run build first); downloads the Electron binary on first use
 
 `npm test` opens the Studio window for a few seconds on Windows (Electron has no headless mode there); it needs no input.
@@ -186,6 +188,9 @@ Decisions taken in building F-806 (options, the recommendation followed; each re
 | `src/renderer/project/` | The project home (`ProjectHome.tsx`, `project.css`) and its one door to `window.studioProject` (`door.ts`) | as above | F-805 |
 | `src/renderer/dev/` | The primitives gallery at `#/dev/primitives` (loaded on demand): every primitive and the tokens, with sample labels only | as above | F-802 |
 | `src/renderer/settings/` | The case settings surface at `#/settings/<session>` (loaded on demand): `schema.ts` (the model of `settings.schema`, value encoding), `disclosure.ts` (learner-first tiers, search), the page, the surface, key rows and groups, `settings.css` | as above | F-825 |
+
+| `src/renderer/plots/` | The residual plot (log scale) and the monitor chart (F-811): `feed.ts` (one run's `monitors.get`, whole once, then increments), `series.ts`, `range.ts` (axes that hold every value drawn), `linePlot.ts` (the lines on three.js `WebGPURenderer`), `PlotFrame.tsx` and the two plots; `src/renderer/dev/PlotsDev.tsx` shows them at `#/dev/plots` | as above | F-811 |
+| `src/shared/monitors.ts` | The `monitors.get` reply packed into `Float64Array`s in main before it crosses the port (F-811) | `tsc -p tsconfig.node.json` | F-811 |
 | `tests/unit/` | Pure tests of `security.ts` and the built `index.html` (F-801); tokens against `DESIGN.md`, the pictogram grid (F-802); the service client against a fake service (F-803) | run by Playwright (project `unit`) | F-801, F-802, F-803 |
 | `tests/e2e/` | The packaged shell driven by Playwright's `_electron.launch`; the primitives (F-802); the service port's allow-list against a fake service, and the client against the real `rcfd serve` (F-803) | run by Playwright (project `electron`) | F-801 onwards |
 | `tests/support/` | The fake service, finding and starting `rcfd`, launching the packaged Studio | imported by the tests | F-803 |
@@ -265,6 +270,24 @@ strings and lists, a JSON field for any shape a later schema adds; its unit (`x-
   the check, live changes, read-only, keyboard and focus, screenshots) and `tests/e2e/settings-rcfd.spec.ts` (the real
   `rcfd serve`: every one of the schema's keys has exactly one control in the window). Screenshots at 1440 by 900:
   `test-results-visual/f825/`.
+
+## Residual and monitor plots (F-811)
+
+- One feed per run (`src/renderer/plots/feed.ts`, keyed by service instance and session): the first `monitors.get` is
+  whole, every later one asks `since` the last abscissa held (ADR 0353), checks the samples it already holds that come
+  back, and appends the rest; a mismatch (a run rebuilt) reads the whole history again. The run's events wake it; nothing
+  polls on a timer. A plot only ever draws the snapshot of the run it was opened for.
+- The range rule (G3): every axis range holds every value drawn (`range.ts`); a value that cannot be drawn (not finite,
+  or not above zero on the log scale) breaks the line and is counted under the plot, never clamped onto an edge.
+- A run without series says so in words with its state pictogram (`parts.tsx`, `words.ts`).
+- The lines are three.js (`WebGPURenderer`, WebGL2 where WebGPU is missing); ticks, names and values are HTML. The choice,
+  the packing of the reply and P3 through the shell are in ADR 0801 addendum 3.
+- Development route: `#/dev/plots?session=<id>` (and `&case=cases/<file>.toml` for its "New session" button) against a
+  service named by `RCFD_STUDIO_SERVICE` or started from `RCFD_STUDIO_RCFD` with `RCFD_STUDIO_SERVICE_ROOT`. F-810 places
+  the plots in the time panel.
+- Tests: `tests/unit/plots-feed.spec.ts` (increments exact against `tests/support/fake-monitors.ts`, two runs never
+  mixed), `plots-range.spec.ts`, `plots-css.spec.ts`; `tests/e2e/plots.spec.ts` against the real `rcfd serve` with the
+  quick-start cavity, screenshots at 1440x900 to `test-results-visual/f811/`.
 
 ## Security (G10)
 

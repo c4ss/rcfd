@@ -37,7 +37,7 @@
     {"id": "service:mesh.check", "exemption": {"item": "F-812", "date": "2026-11-16", "reason": "The case editor (F-812) opens, edits, checks and saves a case through the engine's sessions, settings and validation; not built yet."}},
     {"id": "service:mesh.inflate", "exemption": {"item": "F-812", "date": "2026-11-16", "reason": "Mesh tools (partition, inflation layers, conversion, import, mesh preview): no Studio item names them; nearest homes the case editor (F-812) and project home (F-805).", "unplanned": true}},
     {"id": "service:mesh.partition", "exemption": {"item": "F-812", "date": "2026-11-16", "reason": "Mesh tools (partition, inflation layers, conversion, import, mesh preview): no Studio item names them; nearest homes the case editor (F-812) and project home (F-805).", "unplanned": true}},
-    {"id": "service:monitors.get", "exemption": {"item": "F-811", "date": "2026-11-16", "reason": "Residual and monitor plots (F-811); not built yet."}},
+    {"id": "service:monitors.get", "ui": "Residual plot and monitor chart (F-811; on the development route #/dev/plots until the time panel, F-810, holds them)"},
     {"id": "service:panel.snapshot", "exemption": {"item": "F-810", "date": "2026-11-16", "reason": "Run bands and linked time scrubbing (F-810), with Follow live for a running run; not built yet."}},
     {"id": "service:particles.report", "exemption": {"item": "F-811", "date": "2026-11-16", "reason": "Particle-tracking reports: no item names them; nearest home the plots (F-811).", "unplanned": true}},
     {"id": "service:render.glb", "exemption": {"item": "F-808", "date": "2026-11-16", "reason": "The field viewport (F-808) draws the mesh and fields and shows their values; not built yet."}},
@@ -248,11 +248,11 @@
     {"prefix": "case:udf.", "ui": "Case settings (F-825, #/settings/<session>): section udf; every key has a control generated from settings.schema (type, unit, range, values, default), learner-first disclosure, search and Show every key; edits are the settings.set action."},
     {"prefix": "case:zone_sources.", "ui": "Case settings (F-825, #/settings/<session>): section zone_sources; every key has a control generated from settings.schema (type, unit, range, values, default), learner-first disclosure, search and Show every key; edits are the settings.set action."},
     {"id": "case:title", "ui": "Case settings (F-825, #/settings/<session>): section case; a control generated from settings.schema; edits are the settings.set action."},
-    {"id": "monitors:format", "exemption": {"item": "F-811", "date": "2026-11-16", "reason": "The residual and monitor plots (F-811) read the rcfd-monitors format; not built yet."}},
-    {"id": "monitors:series.*.unit", "exemption": {"item": "F-811", "date": "2026-11-16", "reason": "The residual and monitor plots (F-811) read the rcfd-monitors format; not built yet."}},
-    {"id": "monitors:series.*.x", "exemption": {"item": "F-811", "date": "2026-11-16", "reason": "The residual and monitor plots (F-811) read the rcfd-monitors format; not built yet."}},
-    {"id": "monitors:series.*.y", "exemption": {"item": "F-811", "date": "2026-11-16", "reason": "The residual and monitor plots (F-811) read the rcfd-monitors format; not built yet."}},
-    {"id": "monitors:version", "exemption": {"item": "F-811", "date": "2026-11-16", "reason": "The residual and monitor plots (F-811) read the rcfd-monitors format; not built yet."}},
-    {"id": "monitors:x_label", "exemption": {"item": "F-811", "date": "2026-11-16", "reason": "The residual and monitor plots (F-811) read the rcfd-monitors format; not built yet."}}
+    {"id": "monitors:format", "ui": "Residual plot and monitor chart (F-811), which read the rcfd-monitors document of monitors.get (#/dev/plots until F-810)"},
+    {"id": "monitors:series.*.unit", "ui": "Residual plot and monitor chart (F-811), which read the rcfd-monitors document of monitors.get (#/dev/plots until F-810)"},
+    {"id": "monitors:series.*.x", "ui": "Residual plot and monitor chart (F-811), which read the rcfd-monitors document of monitors.get (#/dev/plots until F-810)"},
+    {"id": "monitors:series.*.y", "ui": "Residual plot and monitor chart (F-811), which read the rcfd-monitors document of monitors.get (#/dev/plots until F-810)"},
+    {"id": "monitors:version", "ui": "Residual plot and monitor chart (F-811), which read the rcfd-monitors document of monitors.get (#/dev/plots until F-810)"},
+    {"id": "monitors:x_label", "ui": "Residual plot and monitor chart (F-811), which read the rcfd-monitors document of monitors.get (#/dev/plots until F-810)"}
   ]
 }
