@@ -273,3 +273,9 @@ fraction of 1.00. Its cause was not diagnosed. The shared Chromium profile (Q5) 
   `RCFD_TEST_HEADLESS=0` (taken); (b) the normal window by default, since G9's limits describe what a user sees, with the
   test mode by flag. Recommendation: (a), and the idle baseline of Q4 taken once in each mode, which shows whether the
   mode moves any number.
+
+### Answers of the maintainer (2026-11-16)
+
+- **Q4:** yes, one baseline on an idle machine (no other jobs) before F-448's acceptance.
+- **Q5:** yes, a scratch `--user-data-dir` for every bench case except P10, which keeps the user's own profile.
+- **Q3:** yes, the bench stays out of CI and is run by hand (hosted runners have no WebGPU adapter).

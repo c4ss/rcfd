@@ -14274,7 +14274,8 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     machine load recorded beside the numbers, never retried; results in ADR 0800 §9. All runs were on a fully loaded
     machine: P4/P7 (R2) and P8 met every time; P10 missed in three of four runs (3.6-40.3 s vs 2.5 s, cause not
     diagnosed; shared Chromium profile suspected); P5 met once, missed twice. Left: an idle-machine baseline (Q4) and
-    the maintainer's answers to Q1-Q6.
+    the maintainer's answers to Q1-Q6. Maintainer 2026-11-16: idle baseline before F-448 (Q4), scratch profile for every
+    case but P10 (Q5), bench stays out of CI (Q3); Q5 not yet implemented.
 - [ ] **F-818** Electron Studio: dark theme
   - depends on: F-802
   - acceptance: A dark variant of every DESIGN.md token that keeps each hue's single job; the field colour maps
