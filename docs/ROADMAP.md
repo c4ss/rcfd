@@ -14190,11 +14190,14 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     counter of the selected run together; Follow live for a running run; P5 and P6 met; a test that the field, residual
     and monitor values at a scrub position all belong to the same snapshot; a view-and-report step.
   - note: ADR 0800. Traces: G3, G9 (P5, P6); DESIGN Run bands (signature), Named Rules (One Live Thing).
-- [ ] **F-811** Electron Studio: residual and monitor plots
+- [~] **F-811** Electron Studio: residual and monitor plots
   - depends on: F-803
   - acceptance: Residuals and monitors fetched once and then by increments (ADR 0353); every plot range holds every
     value it draws; a run without a series says so in words with its pictogram, never with another run's data; P3 met.
-  - note: ADR 0800. Traces: G3, G6, G9 (P3); PRODUCT Principle 4.
+  - note: ADR 0800. Traces: G3, G6, G9 (P3); PRODUCT Principle 4. Partial 2026-11-16 (ADR 0801 addendum 4): residual and
+    monitor plots on three.js (SVG measured 30x slower per increment), fetched once then by increments with 0 resyncs
+    against real rcfd, range holds every value; dev route #/dev/plots until F-810. P3 missed under full machine load
+    (median 118.3 ms vs 100 ms); re-measure on an idle machine (Q-811-1).
 - [ ] **F-812** Electron Studio: case editor validated by the engine's schema
   - depends on: F-805, F-825
   - acceptance: Open, edit and save a case through the engine's own schema and validation (no copy of either in the
