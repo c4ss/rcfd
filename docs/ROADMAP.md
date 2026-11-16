@@ -14954,14 +14954,32 @@ fixed by the item's registration ADR before any code.
     paths and the line search with the warm start, the trust region with the warm start, statistics beyond fourteen
     set-ups. Follow-up F-742 (The warm start of the incompatible-mode iteration on a history material and on the
     transient and rotating paths).
-- [ ] **F-742** The warm start of the incompatible-mode iteration on a history material and on the transient and rotating paths
+- [~] **F-742** The warm start of the incompatible-mode iteration on a history material and on the transient and rotating paths
   - depends on: F-740
   - acceptance: Every limit not stated here is registered in the ADR before the run. The remedy W of ADR 0660 with a J2
     material on the punch block of ADR 0636 and on one distorted mesh of ADR 0649, and on the nonlinear transient path
     (its energy record from the committed modes): the results within the ADR 0636 tolerances of the F-bar Hex8 on the
     same set-ups, the active-set record of ADR 0515 unchanged by the committed modes, the energy record consistent with
     the driver's modes; the mutations of the new code caught by the item's own checks; the default bits unchanged.
-  - note: Follow-up of F-740 (ADR 0660, 2026-11-16).
+  - note: Structural solver, intermediate tier. Follow-up of F-740 (ADR 0660). PARTIAL. ADR 0666, 2026-11-16: the warm
+    start of the incompatible-mode iteration (the remedy W of ADR 0660: warm start, backtracking, decrease test) with a
+    J2 material (E = 2.98e6, nu = 0.49, sigma_y = 6e4, H = 3e5) on the punch block of ADR 0636 (4^3) and on DB4 of ADR
+    0649, on the nonlinear transient path and on the rotating path; opt-in changes: the active-set record of ADR 0515
+    cuts each state to its material part with the warm start, the transient energy record starts from the committed
+    modes (Integrator::strain_energy_modes for checks), and the transient restore accepts a warm state. Met: corner
+    bulge within 1.0 and 6.3 per cent of F-bar, the committed modes converged (one local iterate for every element), the
+    record equal to the cold S at the converged iterate of every increment, the transient tip deflection and strain
+    energy within 2.3 and 2.2 per cent of F-bar, the energy record's modes the committed modes bit for bit and its
+    energy equal to an independent sum, the transient state round-tripping through bytes, the rotating frequencies
+    unchanged bit for bit (the path is linear). Missed: the punch reaction of rule L with J2 is 16.8 per cent (4^3) and
+    12.2 per cent (DB4) below F-bar against 0.15 and 0.10, identically with and without the warm start, and the gap
+    grows to 20.0 per cent on the regular 8^3 block (the elastic tolerances do not transfer to J2); the registered
+    record check compared first iterates, where committed plastic points on the yield surface are decided by 1e-12
+    perturbations (corrected by amendment). No default bit changed (the bit records, the rcfd-api baseline hashes pass).
+    Six of six mutations of the new code caught. Not covered: J2 on the transient path (the energy record refuses
+    history), creep and viscoelastic materials with W (creep_increment would read the modes as a short point),
+    arc-length and contact paths, the line search with W. Follow-up F-747 (Rule L against F-bar with a J2 material on a
+    refined reference). Follow-up F-748 (The creep and viscoelastic readings of the committed modes of the warm start).
 - [ ] **F-741** Stall pre-check: the named point and the saving against a dearer model
   - depends on: F-716
   - acceptance: Every limit not stated here is registered in the ADR before the run. A fast fan check in which the
@@ -15015,3 +15033,19 @@ fixed by the item's registration ADR before any code.
     iteration of the step on a rotationally periodic case within a registered limit. Every limit not stated here is
     registered in the ADR before the run.
   - note: Follow-up of F-743 (ADR 0664, 2026-11-16).
+- [ ] **F-747** Rule L against F-bar with a J2 material on a refined reference
+  - depends on: F-742
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The punch block of ADR 0636 with
+    the J2 material of ADR 0666 on 4^3, 8^3 and 16^3 (and the Hex20 on 8^3 if it runs), rule L and F-bar: the punch
+    reaction and the corner bulge of each element against the finest reference with a registered order-of-convergence
+    reading, a registered J2 tolerance derived from it, and the reason for the gap of ADR 0666 A1.2 identified or
+    bounded; the default bits unchanged.
+  - note: Follow-up of F-742 (ADR 0666, 2026-11-16).
+- [ ] **F-748** The creep and viscoelastic readings of the committed modes of the warm start
+  - depends on: F-742
+  - acceptance: Every limit not stated here is registered in the ADR before the run. W of ADR 0660 with a creep material
+    and a viscoelastic material on a small Incompatible block through the time-stepping path of ADR 0489: no reader of
+    the element states (creep_increment and every other) reads the nine committed modes as a point, a solve that panics
+    or reads them today shown first, the results equal to the cold S to a registered tolerance; the mutations of the new
+    code caught by the item's own checks; the default bits unchanged.
+  - note: Follow-up of F-742 (ADR 0666, 2026-11-16).
