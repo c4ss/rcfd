@@ -181,3 +181,22 @@ or B not measured in full; the miss named. **todo**: A1 missed and no cause esta
 - Only the uniform in-plane flow on one-cell-deep pairs; deeper meshes, steady SIMPLE, variable density and VOF are not
   examined here (ADR 0010, 0074 and 0103 cover them).
 - The Green-Gauss wall-cell gradient error (D-b) is a property of the default pressure gradient; it is named, not changed.
+
+## Amendment 1 (2026-11-16, written after the registered run of the test file and before any further run; no limit changed)
+
+**B2: a defective set-up.** The registered run of `symmetry_uniform_f712.rs` (once, all seven tests, log
+`f712-scratch/run1.log`) did not run C3: `Simulation::new` refused the case, "no boundary condition for mesh patch 'xmin'"
+(and `xmax`, `ymin`, `zmin`, `zmax`); `box_3d` requires every patch to be written. No step of C3 was made, so nothing of B2
+was measured. The test `b2_three_d_walls_only_default_against_corrected` stays as an ignored record. Corrected set-up,
+registered here before it runs, run once: **C3c** = C3 with `[boundaries.xmin]`, `xmax`, `ymin`, `zmin`, `zmax` each
+`velocity = "fixed"` (zero), as ADR 0638's neighbour test `adapt_case_f342.rs` T-3 writes them. **B2c**: as B2 on C3c, the
+same limit `<= 1e-12`, the bit equality reported.
+
+**B1 and B3: how the default is flipped.** The settings tree stores every default in its data (`SettingsTree::get` reads
+`data`), so "unless a case writes `averaged`" cannot be told from the data in `sim.rs`. The flip is therefore made where the
+default lives: in the scratch copy the schema default of `solver.component_diagonal` (`schema.rs`) becomes `"corrected"`; the
+code that reads the key is not changed (`sim.rs`, `vd.rs`, `sim/adapt.rs` then see `corrected` unless the case writes
+`averaged`, which is the registered meaning). Consequences that belong to the flip and are reported as such in B3: the
+settings data and hash of every case change (the hash tables and goldens that hold them), and `sim/adapt.rs` refuses
+`corrected` with mesh adaptation, so an adapted case without `averaged` is refused. For B1 only the solution hashes of
+`baseline_hashes.rs` are read (they hash fields, not settings).
