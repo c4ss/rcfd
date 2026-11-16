@@ -2,7 +2,7 @@
   "name": "rcfd-studio-web",
   "version": "0.0.0",
   "private": true,
-  "description": "rcfd Studio, the Electron desktop front end of rcfd (F-448 and the Studio roadmap of ADR 0800). F-801 hardened shell (G10) and F-802 design tokens and primitives, with their Playwright tests: no service client and no surfaces yet.",
+  "description": "rcfd Studio, the Electron desktop front end of rcfd (F-448 and the Studio roadmap of ADR 0800). F-801 hardened shell (G10), F-802 design tokens and primitives, F-803 client of the solver service, with their Playwright tests. No surfaces yet.",
   "license": "AGPL-3.0-only",
   "type": "module",
   "main": "dist/main/index.js",
@@ -18,6 +18,7 @@
     "tokens:css": "node --experimental-strip-types scripts/write-tokens-css.mjs",
     "gallery": "node scripts/open-gallery.mjs",
     "bench:cold-start": "node scripts/measure-cold-start.mjs",
+    "bench:service": "node scripts/measure-service.mjs",
     "start": "electron ."
   },
   "dependencies": {

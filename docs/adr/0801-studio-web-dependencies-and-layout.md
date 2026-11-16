@@ -288,3 +288,132 @@ changed.
   step; on Linux CI the job of F-823 runs under a virtual display.
 - **Refused navigations leave Playwright waiting.** After a navigation is prevented, Playwright's locators wait for a
   navigation that never finishes, so the tests read the page with `page.evaluate` from that point on.
+
+## Addendum 2: F-803, the service client (2026-11-16)
+
+F-803 (the service client for control and events; guardrails G2, G4, G7, G9 P1 and P2, G10, G21) adds **no
+dependency**: the client uses Node's `net`, `child_process`, `fs` and Electron's `MessageChannelMain`. Section 2 and
+addendum 1 are unchanged, and `package-lock.json` did not change. No Rust file, service method, reply shape, golden or
+default changed (G4); `rcfd serve` and the spike's server (`crates/rcfd-api/examples/f447_bench.rs`) were only built and
+run.
+
+### What F-803 built
+
+- **`src/main/service/rpc.ts`**: one connection of `rcfd-service/1` over TCP or over any pair of streams (the stdio of
+  `rcfd serve --stdio`): newline framing kept as bytes until the newline (a UTF-8 character cut between two chunks is
+  decoded whole), increasing integer ids, replies matched by id, a time limit per request (a late reply is dropped),
+  JSON-RPC errors kept with their code, message and data, pending requests rejected when the connection ends; a reply
+  line over 512 MiB, or a line that is not JSON, ends the connection.
+- **`src/main/service/client.ts`**: two TCP connections to the service, one for calls (answered in the order sent) and
+  one that only long-polls `events.poll {after, timeout_ms: 15000, limit: 500}`, so a waiting poll never holds a call up.
+  The first connection starts the cursor at the head of the log, found with instant polls by doubling and halving
+  `after` (about 2 log2(head) requests): events from now on. When a connection drops, calls fail at once with
+  `disconnected` and the client tries again after 100 ms, doubling to 5 s. After a reconnection it tells a restarted
+  service from the same one by the last event it saw (the same instance still has it under its sequence number; a new
+  one has a shorter log or another event there; in spawn mode a new process id settles it): a new instance resets the
+  cursor to 0 and raises `instance`; events dropped from the bounded log meanwhile are reported as `missed`. Everything
+  is asynchronous; nothing waits on the main process's thread.
+- **`src/main/service/spawn.ts`**: `rcfd serve --addr 127.0.0.1:0 [--root <dir>]`, detached, its output appended to
+  `service.log` (a pipe would break when the Studio exits), the address read from the line it prints; `service.json`
+  records address and process id, so the next start attaches to the same service.
+- **`src/main/service/config.ts`**: the service from the environment: `RCFD_STUDIO_SERVICE` (attach; loopback addresses
+  only), `RCFD_STUDIO_RCFD` (start and own `rcfd serve`), `RCFD_STUDIO_SERVICE_ROOT`, `RCFD_STUDIO_STATE_DIR`; neither
+  of the first two: `off`.
+- **The renderer's way in** (`src/shared/service.ts`, `src/main/service/bridge.ts`, `src/preload/index.cts`): after each
+  load of an app page (`dom-ready`, URL on `app://studio/`) the main process hands the preload script one MessagePort on
+  `studio.service-port`; the preload keeps it and exposes `window.studioService` (`info`, `call`, `state`, `onState`,
+  `offState`, `subscribe`, `unsubscribe`). Every reply is a value `{ok, result}` or `{ok: false, error: {code, message,
+  data?}}`, never a thrown error. The main process checks every message: the exact fields of its operation, a method on
+  the allow-list `SERVICE_METHODS`, parameters of plain JSON values (depth at most 64, at most 10^6 values), a time limit
+  from 1 ms to 10 min. The allow-list is 14 read methods (`service.info`, `settings.schema`, `session.list`,
+  `settings.get`, `settings.validate`, `mesh.check`, `run.status`, `monitors.get`, `reports.get`, `field.stats`,
+  `log.tail`, `journal.get`, `panel.snapshot`, `data.info`) and 10 control methods (`session.create`, `session.close`,
+  `settings.set`, `settings.remove`, `run.initialize`, `run.start`, `run.pause`, `run.resume`, `run.stop`, `run.step`).
+  Left out on purpose: `events.poll` (the main process owns it), the calls that hold the connection until a run or a
+  study ends (`run.wait`, `workflow.run`, `run.headless`, `design.*`, `journal.replay`), bulk data (F-804), file output
+  and co-simulation; the comment on `SERVICE_METHODS` gives the reason for each.
+- **Quitting** (G7): a service the Studio started is stopped only if `session.list` shows no session; otherwise it is
+  left running and found again at the next start (`adopted: true`). An attached service is never stopped. A reload of
+  the renderer does not touch the connections.
+- **Tests** (no human step): `tests/unit/service-rpc.spec.ts` (framing, ids, out-of-order replies, errors, time limits,
+  closing, in-memory streams and a stdio child), `service-client.spec.ts` (configuration, back-off, `findHead`, the
+  client against `tests/support/fake-service.ts`: head of the log, a long poll not holding calls, immediate failure while
+  disconnected, protocol refusal, a dropped connection, two kinds of restart, missed events), `service-bridge.spec.ts`
+  (the allow-list, `parseRequest` on accepted, refused and malformed messages, the bridge over Node's MessageChannel);
+  `tests/e2e/service-security.spec.ts` (the packaged Studio attached to the fake service, which records every line it
+  receives: the bridge's exact shape, two connections only, refused methods and malformed arguments never arriving, the
+  page unable to open a connection of its own by fetch, WebSocket, image, EventSource or beacon, the port never visible
+  in the page across a reload, the shell's ipcMain channels unchanged, session filtering, every listed method forwarded);
+  `tests/e2e/service.spec.ts` (the real `rcfd serve`: every listed method but `data.info` is in its `service.info`;
+  `--stdio`; a `service.info` round trip from the renderer; the `created`, `initialized` and three `iteration` events of
+  a session in the renderer; kill and restart on the same port, the cursor following the new instance; a started
+  service killed and replaced; a running run surviving a reload and the Studio's quit, and found again; an idle started
+  service stopped at quit). 62 new tests (43 unit, 19 e2e); F-801's 21 unchanged and passing.
+- **Mutations** (applied in place, rebuilt, packaged, both e2e files run, then restored and compared byte for byte): the
+  allow-list check removed (3 e2e tests fail, the two refusal tests among them; with the check gone `run.wait` reached
+  the service and held the call connection, which made the restart test fail too); the cursor kept on a new instance
+  (the restart test fails); a started service always stopped at quit (both G7 tests fail).
+
+### Decisions taken in F-803 (reversible; the maintainer may change them)
+
+- **D1, how the renderer reaches the service.** F-801's `tests/e2e/shell.spec.ts` pins the ipcMain handlers to
+  `app.info` and `app.ready` and `window.studio` to `{app}`, and house rule 2 forbids editing an existing test.
+  (a) A MessagePort per page, checked in main, behind a second global `window.studioService` (done). (b) `ipcMain.handle`
+  channels `service.*` under `window.studio`, with F-801's allow-list constants extended, which needs the maintainer's
+  word on the test edit. Recommendation: (a). It leaves ipcMain to the shell, carries event batches as a stream rather
+  than one IPC call per event, and is the arrangement ADR 0350 measured P2 on. If (b) is wanted, the bridge's functions
+  keep their signatures and only the transport changes.
+- **D2, where the service comes from.** (a) The environment variables above, until F-820 (packaging) decides where a
+  packaged Studio finds `rcfd` and F-805 whether a project names one (done). (b) Look for `rcfd` on `PATH` by default.
+  Recommendation: (a): nothing is started that the user did not name.
+- **D3, a started service at quit.** (a) Stop it only when it holds no session, else leave it running and attach to it
+  at the next start (done). (b) Always stop it: a run in it would end with the window, against G7. (c) Never stop it:
+  idle processes pile up. Recommendation: (a).
+- **D4, one ordered call connection.** A slow call (`run.initialize` of a large case, `run.step` with a large count)
+  delays the calls behind it. (a) Keep one ordered connection now and revisit with the first surface that makes long
+  calls: a second connection for slow methods, or a pool where order does not matter (done). (b) A pool now, which
+  loses the order of calls the renderer sends without waiting for each. Recommendation: (a).
+- A limit, not a decision: over stdio the client works (tested against `rcfd serve --stdio`), but the Studio uses TCP,
+  because a long-poll on the single stdio stream would hold every call behind it (the service answers one stream's
+  lines one after the other).
+
+### P1 and P2 through the product shell (run once by hand, house rule 7)
+
+Method of ADR 0350 A1.4, with the Studio's own client in place of the spike's: `scripts/measure-service.mjs` launches
+the packaged Studio attached to the spike's server (`f447_bench serve`: the same `Service` and `serve_tcp` as `rcfd
+serve`, with `data.*` on and an in-process long-poll that writes `seq kind unix_ns` of every event to a file; the event
+log carries no time stamp, which is why ADR 0350 used it too). P1: in the Studio's main process through its
+`ServiceClient` (the call connection), a ready session of the 1e5-cell box, 50 warm-up calls, then 1000 timed calls of
+each method; the same calls from the renderer through `window.studioService` are recorded beside it. P2: that session
+running (`run.start`), the renderer subscribed through the port; the latency of each `iteration` event is the renderer's
+receive time minus the server's stamp, the two clocks joined by 200 `data.info` round trips through the Studio before
+and after the sample; the first 300 events. One difference from the spike: there the renderer long-polled through the
+port; here the main process owns the long-poll and pushes each batch, which is what the product does.
+
+| Id | Limit | Measured (Electron 45.3.3, product shell) | Met | ADR 0350 (45.1.0, spike) |
+|---|---|---|---|---|
+| P1 | p50 <= 0.5 ms, p99 <= 2 ms (main process) | `service.info` p50 0.114, p99 0.302, max 0.732; `run.status` p50 0.072, p99 0.255, max 0.374 (1000 each) | yes | `service.info` p50 0.056, p99 0.272; `run.status` p50 0.038, p99 0.132 |
+| P1, renderer | recorded | `service.info` p50 0.3, p99 0.5, max 1.5; `run.status` p50 0.3, p99 0.4, max 1.0 (1000 each; the renderer's clock steps by 0.1 ms) | recorded | not taken |
+| P2 | p99 <= 20 ms | 300 `iteration` events in 75.2 s: p50 0.35, p99 1.17, max 1.62, min -0.52; clock join round trip 0.1 ms before and after, drift 0.48 ms over the sample, so p99 <= 1.7 at worst; no event missed, none without a stamp | yes | p50 0.0, p99 0.80, max 0.92; drift 1.30 |
+
+Set-up: 2026-11-16 13:37 UTC, Windows 11 (10.0.26300), AMD Ryzen 7 9800X3D (16 logical), 93.6 GB (42.5 GB free),
+launcher on Node 22.19.0, Electron 45.3.3 (Chromium 156.0.8078.100, Node 24.22.3), `f447_bench` built from this branch
+(`cargo build --release -p rcfd-api --example f447_bench`; protocol 1.2, because `data.*` is on). **Deviation:** the
+machine was busy: processor busy fraction 0.91 before the run, with 8 `cargo`/`rustc`/`link` processes of other jobs,
+and 0.81 after it, with 1; ADR 0350's run had none. The numbers are an upper side of what an idle machine gives; the run
+was not repeated (a registered run is made once). The run appears in no test: `npm test` never times anything. The raw
+results stay in the scratch folder, not committed.
+
+### Notes for later items
+
+- **Windows handle inheritance.** A child process on Windows inherits every inheritable handle of its parent, and Node
+  cannot spawn without that. A service the Studio starts therefore holds the Studio's own standard streams open: when
+  the Studio was started with pipes (Playwright does that) and the service is left running, whoever waits for those
+  pipes to close waits for the service. The tests wait for the Studio's process instead (`quitLeavingService`). A
+  launcher that starts the Studio and reads its output (a future `rcfd studio` command, the Claude Code bridge) would see
+  the same; F-820 can start the service through a helper that passes no handles on, or the maintainer can allow a
+  native addon (G5).
+- `RCFD_STUDIO_BENCH=1` exposes the client to Playwright's main-process evaluate, for the measurement only, as
+  `RCFD_STUDIO_STARTUP_REPORT` does in addendum 1.
+- The renderer shows nothing of the service yet; F-802 onwards build the surfaces on `window.studioService`. The
+  Studio's named actions (G16, G20) will sit on top of the allow-list, not replace the checks in main.
