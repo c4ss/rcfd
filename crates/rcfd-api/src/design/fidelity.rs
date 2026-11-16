@@ -1144,6 +1144,10 @@ fn r3_core(
     if !(s.is_finite() && s > 0.0) {
         return Err("the R2 residual is zero".into());
     }
+    // ADR 0652 amendment 1: a residual at the rounding level of least squares is not a discrepancy
+    if s <= 1e-10 * mean_sq(yh).sqrt() {
+        return Err("the R2 residual is at the rounding level".into());
+    }
     let rs: Vec<f64> = r.iter().map(|v| v / s).collect();
     let sig2: Vec<f64> = sigma.iter().map(|v| (v / s) * (v / s)).collect();
     let (l, tau) = match hyper {
