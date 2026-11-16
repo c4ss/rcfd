@@ -244,3 +244,37 @@ Mutations (scratch copy from `git archive` of the code commit, one at a time, th
 ## Addenda
 
 Results, amendments and the roadmap entries go here; nothing above is changed after a run.
+
+## Amendment 1 (2026-11-16, after the registered run, before the corrected runs)
+
+The registered run (`cargo test -p rcfd-api --release --test f718_fidelity_r3 -- --test-threads=2 --nocapture`, code commit
+70561b19, log `f718-scratch/run1.log`): K1, NC-C, P6 and NC-P passed; three tests failed. Diagnosed with a scratch copy and one
+diagnostic test (`f718-scratch/mcopy/crates/rcfd-api/tests/zz_f718_diag.rs`, never committed, log `diag1.log`):
+
+1. **S2 on N3 missed (a design gap).** On the exact affine N3 the R2 residual is rounding only (MSE 2.2e-30 for `f`); R3 is
+   available, D2 scales the residual to unit rms, the process fits the rounding pattern and its leave-one-out MSE (1.6e-30) is
+   more than one standard error below R2's, so the rule (S1 met: the choice is the one-standard-error rule's) picks R3. The
+   registered design had no floor below which a residual is rounding and not a discrepancy. **Design change:** R3 is not
+   available, with the reason `the R2 residual is at the rounding level`, when `rms(r) <= 1e-10 rms(y_H)`. Derivation: the
+   rounding of a least-squares residual is about `eps cond(X) rms(y_H)`; `eps = 2.2e-16` and `cond(X)` up to about `1e4` for the
+   ladder's columns (`y_L`, 1, unit-box parameters) give about `2e-12`, so `1e-10` is 50 times above rounding and far below any
+   discrepancy a driver should correct. Fixed now, not searched.
+2. **L3s missed on the noise-free fits (N1a: 6.3e-8 of rms(r); ND final: 1.63e-8), limit 1e-8.** The L3 residuals met their limit
+   (2.5e-10 and 1.7e-9). Diagnosis: two independent brute-force references (Gauss-Jordan and Cholesky) of the conditional
+   variance agree to 2.0e-10 of rms(r), so the reference solves are not the cause; the leave-one-out sd in the noise-free case is
+   small (smallest 7.0e-4 of rms(r)) while the quadratic form `a_i^T C a_i` is a sum of terms of order `|a_i|^2 s_f^2` (the
+   correlation matrix has condition about 2e9 at jitter 1e-8), so both evaluations lose about 1e-4 of the sd's relative accuracy to
+   cancellation. With noise (N1b, diagnostic) the two agree to 1.3e-14. The limit stays; the two misses are recorded.
+3. **Test set-up defect.** The N1a/N1b/N2 test asserted L3s for N1a before N1b and N2 were evaluated, and the ND test asserted
+   L3s before D2, X1 and T6, so those checks did not run. Corrected set-up: one test per case, every number computed and printed
+   before any assertion, the same limits.
+
+The three original tests stay, ignored, with their names suffixed `_known_miss` and the measured numbers in the ignore reason.
+New tests, run once each, limits unchanged: `n1a_corrected` (S1, S2, L3, C1, C2; L3s recorded, its miss is the record above),
+`n1b_corrected` and `n2_corrected` (S1, S2, L3, L3s, and C1, C2 for N1b), `n3_corrected` (the design change: S1, S2 with R3
+unavailable for the rounding reason, R2 coefficients bit-equal), `nd_corrected` (D1 to D4, S1 per round, L3, C1, D2, X1, T6; L3s
+recorded). The floor changes no other registered set-up (their residuals are 1e-2 to 1e-1 of `y_H`). K2, K3, R, F and the
+mutations run on the code with the floor.
+
+Decision rule, as registered, applied to the corrected runs; the S2 miss of the registered design and the L3s misses are reported
+with the decision, and with the L3s misses the decision is at most partial (L3s is a non-acceptance check).
