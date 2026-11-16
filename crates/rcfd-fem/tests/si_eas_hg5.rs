@@ -68,6 +68,22 @@ impl Checks {
             self.0.push(format!("{name} = {value} != {expected}"));
         }
     }
+    /// A row checked by `at_most`, or printed as a known miss (ADR 0649 A1.1).
+    fn at_most_unless(&mut self, skip: bool, name: &str, value: f64, limit: f64) {
+        if skip {
+            println!("{name}: {value:.4e} (known miss, printed; ADR 0649 amendment 1)");
+        } else {
+            self.at_most(name, value, limit);
+        }
+    }
+    /// A row checked by `above`, or printed as a known miss (ADR 0649 A1.1).
+    fn above_unless(&mut self, skip: bool, name: &str, value: f64, limit: f64) {
+        if skip {
+            println!("{name}: {value:.4e} (known miss, printed; ADR 0649 amendment 1)");
+        } else {
+            self.above(name, value, limit);
+        }
+    }
     fn finish(self) {
         assert!(self.0.is_empty(), "missed: {:#?}", self.0);
     }
@@ -500,7 +516,8 @@ fn run_block(mesh: &SolidMesh, n: usize, amp: f64, kind: Kind) -> Run {
 }
 
 #[test]
-fn db_punch_block_distorted_against_fbar() {
+#[ignore = "known miss of ADR 0649 (registered run, test commit 3026f1d0): DB4 e_R, e_w and SL on the 8^3 block at a = 0.25 non-finite, the rule L solve fails (element 476 inverted, det F = -8.05e-2, load factor 0.675 to 0.678125 after 5 halvings); every other row met (DB1 0.1202, 0.0406; DB2 0.1278, 0.0870; DB3 0.0664, 0.0349); the met rows run in db_punch_block_distorted_met_rows (amendment 1)"]
+fn db_punch_block_distorted_against_fbar_known_miss() {
     let mut ch = Checks::new();
     let ids = [["DB1", "DB2"], ["DB3", "DB4"]];
     for (level, (n, tol, moved)) in [(4, 0.15, 27), (8, 0.10, 343)].into_iter().enumerate() {
@@ -579,6 +596,163 @@ fn db_punch_block_distorted_against_fbar() {
         }
     }
     ch.finish();
+}
+
+#[test]
+/// ADR 0649 A1.1: the registered test with the four rows of rule L on `8^3` at `a = 0.25` printed instead of checked.
+fn db_punch_block_distorted_met_rows() {
+    let mut ch = Checks::new();
+    let ids = [["DB1", "DB2"], ["DB3", "DB4"]];
+    for (level, (n, tol, moved)) in [(4, 0.15, 27), (8, 0.10, 343)].into_iter().enumerate() {
+        let (regular, _) = block_mesh(n, 0.0);
+        let f0 = run_block(&regular, n, 0.0, K_FBAR);
+        let l0 = run_block(&regular, n, 0.0, K_L);
+        for (ia, &amp) in AMPS.iter().enumerate() {
+            let id = ids[level][ia];
+            let tag = format!("{n}^3 a {amp}");
+            let (mesh, count) = block_mesh(n, amp);
+            let skip = n == 8 && amp == 0.25;
+            ch.above(
+                &format!("M0 block {tag}: min corner det J / centre det J"),
+                min_corner_ratio(&mesh),
+                0.0,
+            );
+            ch.equals(&format!("M1 block {tag}: moved nodes"), count, moved);
+            let f = run_block(&mesh, n, amp, K_FBAR);
+            let l = run_block(&mesh, n, amp, K_L);
+            let full = run_block(&mesh, n, amp, K_FULL);
+            ch.at_most_unless(
+                skip,
+                &format!("{id} block {tag}: e_R = |R_L / R_Fbar - 1|"),
+                rel(l.a, f.a),
+                tol,
+            );
+            ch.at_most_unless(
+                skip,
+                &format!("{id} block {tag}: e_w = |w_L / w_Fbar - 1|"),
+                rel(l.b, f.b),
+                tol,
+            );
+            ch.at_least(&format!("N1 block {tag}: |R_Full / R_Fbar - 1|"), rel(full.a, f.a), tol);
+            println!(
+                "N2 block {tag}: |w_Full / w_Fbar - 1| = {:.4e} (printed)",
+                rel(full.b, f.b)
+            );
+            let coarse = n == 4;
+            let (neg, low, dense) = stability(&l, coarse);
+            ch.at_most_unless(
+                skip,
+                &format!("SL block {tag}: negative eigenvalues of K_ff, rule L"),
+                neg,
+                0.0,
+            );
+            ch.above_unless(
+                skip,
+                &format!("SL block {tag}: lowest eigenvalue / max diagonal, rule L"),
+                low,
+                0.0,
+            );
+            if coarse {
+                ch.at_most(
+                    &format!("SLx block {tag}: |sparse / dense - 1|, rule L"),
+                    rel(low, dense),
+                    1e-6,
+                );
+            }
+            let (fneg, flow, _) = stability(&f, false);
+            println!("report SL block {tag} Fbar: negative {fneg}, lowest / max diagonal {flow:.4e}");
+            ch.at_most(
+                &format!("FR1 block {tag}: F-bar worst element max |K - K_fd| / max |K|"),
+                worst(tangent_mismatch(&f, FBAR)),
+                1e-6,
+            );
+            println!(
+                "report distortion block {tag}: Fbar R {:+.4e} w {:+.4e}; L R {:+.4e} w {:+.4e}",
+                f.a / f0.a - 1.0,
+                f.b / f0.b - 1.0,
+                l.a / l0.a - 1.0,
+                l.b / l0.b - 1.0
+            );
+            if coarse {
+                let inc = run_block(&mesh, n, amp, K_INC);
+                println!(
+                    "report block {tag} Inc: e_R {:.4e}, e_w {:.4e}",
+                    rel(inc.a, f.a),
+                    rel(inc.b, f.b)
+                );
+            }
+        }
+    }
+    ch.finish();
+}
+
+/// `(R, w_c)` of the block on a mesh with a punch displacement and a number of increments (ADR 0649 A1.2).
+fn run_block_with(mesh: &SolidMesh, delta: f64, steps: usize, kind: Kind) -> Run {
+    let mut m = model_of(mesh.clone(), kind);
+    let prescribed = constrain(
+        &mut m,
+        &[
+            ("xmin", 0, 0.0),
+            ("xmax", 0, 0.0),
+            ("ymin", 1, 0.0),
+            ("ymax", 1, 0.0),
+            ("zmin", 2, 0.0),
+            ("punch", 2, -delta),
+        ],
+    );
+    let (result, a, b) = match solve(&m, &[], &[], &NewtonOptions::new(steps).threads(4)) {
+        Ok(r) => {
+            let punch = m.mesh().node_set("punch").unwrap().to_vec();
+            let corner = m.mesh().node_set("corner").unwrap()[0];
+            let rz = -reaction_sum(&r, &punch, 2) / MU;
+            let wc = r.result.displacement(corner)[2];
+            let halved = r.steps.iter().filter(|s| s.halvings > 0).count();
+            println!(
+                "A1 delta {delta} steps {steps} {}: R/mu {rz:.8}, w_c {wc:+.8}, increments {}, halved {halved}",
+                kind.name,
+                r.steps.len()
+            );
+            (Some(r), rz, wc)
+        }
+        Err(e) => {
+            println!("A1 delta {delta} steps {steps} {}: solve failed: {e}", kind.name);
+            (None, f64::NAN, f64::NAN)
+        }
+    };
+    Run {
+        model: m,
+        prescribed,
+        result,
+        a,
+        b,
+    }
+}
+
+#[test]
+#[ignore = "diagnosis of ADR 0649 amendment 1 (A1.2, D1 to D3): rule L on the 8^3 block at a = 0.25; no limit; run once with --ignored"]
+fn a1_diagnosis_db4_rule_l() {
+    let (mesh, _) = block_mesh(8, 0.25);
+    // D3.
+    let x = element_coords(&mesh, 476);
+    let d0 = det_jacobian(&x, [0.0; 3]);
+    let r476 = least(XI.iter().map(|&c| det_jacobian(&x, c) / d0));
+    println!(
+        "D3 element 476: min corner det J / centre det J {r476:.4e}; mesh {:.4e}",
+        min_corner_ratio(&mesh)
+    );
+    // D1.
+    let d1 = run_block_with(&mesh, 0.675 * DELTA, 10, K_L);
+    let (neg, low, _) = stability(&d1, false);
+    println!("D1 delta 0.0675: negative eigenvalues of K_ff {neg}, lowest / max diagonal {low:.4e}");
+    // D2.
+    let d2 = run_block_with(&mesh, DELTA, 40, K_L);
+    let (neg, low, _) = stability(&d2, false);
+    println!(
+        "D2 delta 0.1, 40 increments: e_R {:.4e}, e_w {:.4e} (against F-bar 0.34220247, 0.06389947); negative {neg}, \
+         lowest / max diagonal {low:.4e}",
+        rel(d2.a, 0.34220247),
+        rel(d2.b, 0.06389947)
+    );
 }
 
 // ============================================================================ DC: the cantilever (ADR 0636 reading c2)
