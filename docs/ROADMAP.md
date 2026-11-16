@@ -4987,25 +4987,28 @@ Added after the static feature-gap review; wording is product-independent. Phase
       item keeps the analytic clauses.
 - [~] **F-250** Sliding interface (AMI): arbitrary mesh interface between non-conforming moving or rotating zones
   - depends on: F-063, F-114
-  - acceptance: A rotor-stator case with a sliding interface, the mesh sliding by at least one full cell pitch, conserves mass across the interface to 1e-10 relative per step summed over all interface faces; rigid rotation of a fluid across the interface differs from the same case on a conforming mesh by no more than 1.5 times the conforming-mesh velocity error; a Taylor-Couette torque across the interface is within 2 percent of the closed form; a case without the interface is bit-identical (baseline hashes unchanged)
+  - acceptance: A rotor-stator case with a sliding interface, the mesh sliding by at least one full cell pitch,
+    conserves mass across the interface to 1e-10 relative per step summed over all interface faces; rigid rotation of a
+    fluid across the interface differs from the same case on a conforming mesh by no more than 1.5 times the
+    conforming-mesh velocity error; a Taylor-Couette torque across the interface is within 2 percent of the closed form;
+    a case without the interface is bit-identical (baseline hashes unchanged)
   - note: Split from F-063 on 2026-10-21 (user decision after the F-063 audit). Acceptance text proposed by the lead;
     refine when scheduled. F-114 handles planar interfaces only; F-126 covers frozen-rotor and mixing-plane. Size L.
-    - USER DECISION 2026-10-22: acceptance tightened with numeric limits (the 1.5x ratio and 2 percent are fixed here;
-      refine only with the user).
-    - ADR 0216 (registration of F-250, 2026-11-07, branch `f250-sliding-interface`, not merged): PARTIAL, library only.
-      - Built: a rotor block turns against a stator block across a cylinder and the interface is rebuilt every step
-        (`rcfd_mesh::sliding`, `rcfd_fv::sliding`, `PimpleSolver::step_sliding`); the mesh flux of the interface faces
-        closes the GCL of the interface slivers, and the old flux is projected onto the new faces.
-      - Met: rigid rotation (A2) 5.94e-4 against 1.5 x the static conforming controls (8.90e-4), and the equal-count cell
-        difference 2.36e-4 against 8.63e-4; Taylor-Couette torque (A3) on the rotor wall +1.41 %, on the stator wall
-        -1.34 %, through the interface -0.10 % (limit 2 %); uniform flow held to 9e-15 (2-D) and 4e-15 (3-D); the decaying
-        azimuthal mode at -0.41 % of nu k^2 (closed form); a case without the interface unchanged (no tree change).
-      - A1 missed as registered (two non-orthogonal correctors): interface mass 1.51e-10 against 1e-10, the lagged
-        non-orthogonal flux; met with six correctors (amendment 2): 3.0e-15. Other known misses: continuity 1.8e-9 to
-        1.7e-8 with two correctors (limit 1e-9), and R1b against rotating conforming controls (the static stator wall's
-        pressure condition).
-      - Not delivered: the case-tree, CLI and Studio wiring (ADR 0216 Q1); planar and sector sliding (Q3); a flow check
-        that sees the rotor mesh flux (Q7).
+    USER DECISION 2026-10-22: acceptance tightened with numeric limits (the 1.5x ratio and 2 percent are fixed here;
+    refine only with the user). ADR 0216 (registration of F-250, 2026-11-07, branch f250-sliding-interface, not merged):
+    PARTIAL, library only. Built: a rotor block turns against a stator block across a cylinder and the interface is
+    rebuilt every step (rcfd_mesh::sliding, rcfd_fv::sliding, PimpleSolver::step_sliding); the mesh flux of the
+    interface faces closes the GCL of the interface slivers, and the old flux is projected onto the new faces. Met:
+    rigid rotation (A2) 5.94e-4 against 1.5 x the static conforming controls (8.90e-4), and the equal-count cell
+    difference 2.36e-4 against 8.63e-4; Taylor-Couette torque (A3) on the rotor wall +1.41 %, on the stator wall -1.34
+    %, through the interface -0.10 % (limit 2 %); uniform flow held to 9e-15 (2-D) and 4e-15 (3-D); the decaying
+    azimuthal mode at -0.41 % of nu k^2 (closed form); a case without the interface unchanged (no tree change). A1
+    missed as registered (two non-orthogonal correctors): interface mass 1.51e-10 against 1e-10, the lagged
+    non-orthogonal flux; met with six correctors (amendment 2): 3.0e-15. Other known misses: continuity 1.8e-9 to 1.7e-8
+    with two correctors (limit 1e-9), and R1b against rotating conforming controls (the static stator wall's pressure
+    condition). Not delivered: the case-tree, CLI and Studio wiring (ADR 0216 Q1); planar and sector sliding (Q3); a
+    flow check that sees the rotor mesh flux (Q7). Case-tree wiring: F-303 (ADR 0637); the uniform state at coinciding
+    nodes is kept since F-710 (ADR 0638).
 
 ## Revision additions (F-251 to F-260)
 
@@ -5326,7 +5329,7 @@ Added after the static feature-gap review; wording is product-independent. Phase
   - depends on: F-262, F-265
   - acceptance: A Claude Code plugin ships an MCP server (extending rcfd-mcp) with tools to list projects and runs, edit project files with validation, start and stop runs, read metrics and compare runs; edits made from Claude Code show in the application. Protocol tests pass and one real session is checked where possible.
   - note: Wave 48 in docs/ui-restart-plan.md. Size L.
-- [~] **F-268** Design ledger and tolerance study driver
+- [x] **F-268** Design ledger and tolerance study driver
   - depends on: F-249
   - acceptance: Every limit not stated here is registered in ADR 0623 before the run. (a) Logging: a design study run
     with the opt-in ledger sink writes exactly one evaluation entry per evaluated (candidate, condition) pair, failed
@@ -5339,30 +5342,22 @@ Added after the static feature-gap review; wording is product-independent. Phase
     contain the value of an independent 100000-sample reference; zero-width tolerances give a standard deviation of
     exactly 0; the ledger bytes are identical for 1 and 4 workers. (c) Defaults: with the sink and the adapter unused,
     no existing test, hash table or golden changes.
-  - note: Wave 46D (ADR 0121); Sobol indices ADR 0240 (merged 2026-11-12). Size M. Every model is a stated proxy until
-    checked against measured fan data, which does not exist yet. BUILT (ADR 0240): the opt-in library function
-    design::sensitivity::run gives first-order and total Sobol indices of independent inputs (the uq distributions) with
-    delta-method standard errors, on the A, B, A_B^(i) Monte Carlo design (Saltelli 2002) at N (d + 2) evaluations, with
-    the centred Saltelli et al. (2010) first-order and the Jansen (1999) total estimators; rows with a failed evaluation
-    are dropped and counted; every evaluation and a sobol_summary can go to the ledger; bit-identical for any worker
-    count. Met: Ishigami (N 16384) and a linear function with mixed distributions within 4 SE of the closed forms
-    (largest z 2.41), a dummy input exactly zero, delta-method coverage 0.920 to 0.963 at 1.96 SE (400 runs, limit
-    0.90), the interaction ST3 - S3 = 0.239 seen where SRC gives SRC_2^2 = 5e-6; six mutations caught (one after a
-    corrected check). Known miss: the NC1 control on ST1 (|z| 3.87 against the a = 6 value, limit 4; the estimator meets
-    its own limit). Not done: uncertainty bands on the reduced-order model, automatic ledger logging from runs, an MCP
-    tool for uq or Sobol studies (changes the tools-list goldens). Follow-up for the tool exposure (ADR 0240 Q2,
-    recommendation taken on the maintainer's standing instruction of 2026-11-11): F-339. REMAINING (ADR 0623): (1)
-    automatic ledger logging: nothing in crates/ appends to a ledger except uq::run, sensitivity::run and the
-    design.ledger_append method; Study::run, Study::record, design.evaluate and design.run_study write only the
-    per-study store. (2) uncertainty bands on the reduced-order model: FanRomEvaluator implements study::Evaluator, not
-    ledger::Model, so uq::run and sensitivity::run cannot take it; no bridge from the ComputerFan tolerances (rcfd-mesh
-    fan_design, ADR 0118) to the RomFan exists. NOT IN THIS ITEM: the MCP tools for uq and Sobol (F-339); the ledger
-    fields for objectives, surrogates and multi-fidelity or measured data (ADR 0623 P1 to P8 for F-697, F-698, F-699;
-    split to F-700, ADR 0623 Q1 b). ADR 0240 Q4: the NC1 miss is accepted by the maintainer as a known miss
-    (2026-11-15), so the Sobol part counts as met; Q5: fixed N (recommendation taken); Q2 is carried by F-339.
-    Maintainer decisions 2026-11-15 (recorded in ADR 0623, section "Maintainer decisions"): library only now, MCP tools
-    in F-702 together with F-339; every other open question takes the ADR's recommendation; limits marked as estimates
-    are fixed from a disclosed smoke run or calculation before registration and never moved after.
+  - note: Design loop. ADR 0121, ADR 0240, ADR 0623, 2026-11-16. DONE. Every design variant can be recorded in the
+    ledger with its inputs, solver version and results, and the tolerance study driver reports output spread on the
+    reduced-order fan. ADR 0623 (library only, opt-in): Study::set_ledger_sink writes one evaluation entry per evaluated
+    (candidate, condition) pair after its store write, failed pairs with a located reason, and reconciles store and
+    ledger on resume (64 of 64 on the 32-candidate, 2-condition study; 0 duplicate and 0 missing at all 55 kill points
+    of a Nelder-Mead study; rerun_check of the 48 ok entries through ConditionModel with difference 0; store bytes and
+    result bits equal with and without the sink; ledger bytes equal for 1 and 4 workers; missing units refused).
+    FanRomModel is the reduced-order fan as a ledger::Model over common stagger, chord and tip-gap errors, bit for bit
+    equal to FanRomEvaluator::metrics at 64 points; fan_rom_bands runs uq::run on it through the standardised wrapper
+    uq::Standardized: 5, 50 and 95 percent quantiles with 0.95 order-statistic intervals for q, dp_s, power and tone1_pa
+    under the ADR 0118 set-up T tolerances, 12 of 12 intervals contain a 100000-sample reference, the sd within 2.7
+    percent of first-order propagation, zero-width tolerances give sd exactly 0 (uq::mean_sd returns the value of a
+    bit-constant sample, the one default change, listed for the maintainer), failed samples counted and logged.
+    Per-blade, eccentricity, mass, roughness and thickness tolerances are refused (one-row model); the bands describe
+    the model, not a real fan. No MCP tool or service argument (F-702), no new ledger field (F-700). Nine of nine
+    mutations caught. Follow-up F-705 (Design store header after a torn first write).
 - [~] **F-269** Test gate speed and strictness
   - depends on: F-106
   - acceptance: The full gate runs each test in its own process from a small pool with a per-test time limit, prints the
@@ -5796,14 +5791,47 @@ fixed by the item's registration ADR before any code.
       The cases of the ignored F-294 S1 run again in ADR 0227 S1t. Defaults bit-identical. Open: ADR 0227 Q1 to Q5 (the
       position of a user function on a pair, the energy diffusivity on a seam, pair for the property law, the F-294
       record, one call per pair).
-- [ ] **F-303** Sliding interface in the case tree: rotor-stator generator, simulation loop and a non-axisymmetric check
+- [~] **F-303** Sliding interface in the case tree: rotor-stator generator, simulation loop and a non-axisymmetric check
   - depends on: F-250
-  - acceptance: A case file runs a sliding rotor-stator interface from the CLI; an optional table or hash_omit_default keys carry it; a registered non-axisymmetric flow check sees the rotor mesh flux (ADR 0216 question 7).
-  - note: From ADR 0216 questions 1 and 7, recommendations taken. Golden edits, if any, are listed for the maintainer.
-- [ ] **F-304** Planar and sector sliding interfaces
+  - acceptance: A case file runs a sliding rotor-stator interface from the CLI; an optional table or hash_omit_default
+    keys carry it; a registered non-axisymmetric flow check sees the rotor mesh flux (ADR 0216 question 7).
+  - note: ADR 0637, 2026-11-16: the optional table [mesh.sliding] (angular_velocity, rotor_walls = rotating or rest) on
+    mesh.generator = "annulus_3d_cylindrical_interface" runs the sliding interface of F-250 from a case file: every step
+    the rotor block is turned to angular_velocity t and joined to the stator again (sliding_step, step_sliding), the
+    rotor's no-slip walls turn with it or rest (rcfd_fv::sliding::rotor_wall_conditions, stator faces of a mixed patch
+    at rest), and the monitors sliding_angle, sliding_interface_flux, sliding_gcl, sliding_non_orthogonality are
+    written. rcfd run of the case file equals the in-process run bit for bit; the tree loop equals ADR 0216's library
+    loop bit for bit; a case without the table is unchanged (no hash table or golden edited). Non-axisymmetric check
+    (ADR 0216 Q7): a vortical m = 2 field with every wall at rest, the sliding run against the static join after 6 rotor
+    pitches, cell for cell: 6.8e-4 U0 (limit 1e-2); with the rotor mesh flux dropped 3.2e-2 (48 times larger), so the
+    check sees the rotor mesh flux (also mutation MU1); the control's registered threshold 5e-2 was missed. Mass across
+    the interface 2.8e-17, GCL 1.1e-14, continuity 1.7e-12. Uniform flow: 7.3e-15 on steps without node coincidences,
+    and, since F-710 (ADR 0638), 6.0e-15 on the steps where rotor and stator nodes coincide (ADR 0637's ignored U1c
+    record stays as the record of the miss). Two set-ups of the registration were defective and corrected by amendment.
+    Five of five mutations caught. Limits: full annulus about z only, laminar piso / pimple with Euler, no expression
+    boundary values, sources, models or restart; sector and planar sliding not in the tree. Follow-up F-710 (Sliding
+    interface at coinciding nodes). Follow-up F-711 (Periodic (sector and planar) sliding in the case tree). Follow-up
+    F-712 (Symmetry planes and a uniform in-plane flow on the annulus interface pair).
+- [~] **F-304** Planar and sector sliding interfaces
   - depends on: F-250
-  - acceptance: A planar sliding interface and a periodic sector join conserve mass and a uniform flow to round-off; periodic pairs are kept by the join.
-  - note: From ADR 0216 question 3, recommendation taken: a separate item.
+  - acceptance: A planar sliding interface and a periodic sector join conserve mass and a uniform flow to round-off;
+    periodic pairs are kept by the join.
+  - note: CFD solver, moving meshes. Split from F-250 (ADR 0216 question 3). DONE in the library. ADR 0629, 2026-11-16:
+    planar and sector sliding interfaces with periodic seams (rcfd_mesh::sliding_periodic, rcfd_fv::sliding_periodic,
+    PimpleSolver::step_sliding_periodic). A periodic join keeps the blocks' seam pairs (partner, transform, face
+    identity) and couples the part of the rotor beyond the stator's seam to the stator's periodic image by pairs of
+    coupled boundary faces in two appended patches, whose mesh flux and old flux are antisymmetric; the GCL closure and
+    the old-flux projection of ADR 0216 run on the graph of the direct faces and the wrap pairs. Planar slider (20
+    against 16 cells, periodic in x, 0.49 of the period): mass across the interface per step 4.4e-14 relative (limit
+    1e-10, 1e3 pressure-solver tolerances), a uniform flow held to 9.2e-15 (pressure 3.6e-13), GCL 1.1e-14, periodic
+    pair sums 1.0e-15. Sector (60 deg, 24 against 20 cells, 0.5 rad): radial source flow mass 1.1e-15, continuity
+    3.4e-13; 3-D sector (12 against 10 cells, 2 against 3 layers) uniform axial flow held to 4.9e-15. Periodic pairs
+    kept on 12 meshes: 16, 16 and 20 seam pairs plus 0 to 84 wrap pairs, identity exact; the existing joins keep 0
+    (negative control). Negative controls held, five of five mutations caught, baseline hashes and the F-250 suites
+    unchanged. Amendment 1: the registered planar mass measure had the wrong sign (the inflow enters the stator);
+    corrected before its run. Limits: offsets within one period, sectors of different pitch refused, no non-orthogonal
+    correction on the coupled wrap faces, no case-file key (F-303). Follow-up F-704 (Sector and planar sliding beyond
+    one period (re-imaging of the rotor)). Beyond one period: F-704 (ADR 0634).
 - [ ] **F-305** Local remeshing in the case tree (compressible solver)
   - depends on: F-247, F-259
   - acceptance: dynamic_mesh.deformation = remeshing runs a compressible case from the CLI; the tetrahedral generator and h0 in an optional table so existing case hashes are unchanged.
@@ -5837,10 +5865,32 @@ fixed by the item's registration ADR before any code.
     edit before it merges. From ADR 0234 questions 2 to 4 and 6 (2026-11-12): the table also carries second_order; the
     second-order treatment with an unsupported pressure option is refused with a located diagnostic instead of a panic;
     the continuity residual excludes the solid-cell sources; the corrector trial solve gets the reconstruction.
-- [ ] **F-308** Moving immersed shapes
+- [~] **F-308** Moving immersed shapes
   - depends on: F-219
-  - acceptance: An oscillating cylinder gives the force and the wake against a body-fitted moving-mesh run within a registered limit.
-  - note: From ADR 0218 question 4, recommendation taken.
+  - acceptance: An oscillating cylinder gives the force and the wake against a body-fitted moving-mesh run within a
+    registered limit.
+  - note: Immersed solid, moving shapes. From ADR 0218 question 4. PARTIAL by the amendment rule (ADR 0631, 2026-11-16):
+    every check met, but only after amendment 2, which corrected the start of the body-fitted reference (its mesh was
+    not at the initial pose; both reference runs stopped at steps 10 and 12 in the first record); the immersed runs were
+    unchanged and reproduced line for line, so the recommendation is done (ADR 0631 Q3, the lead's call). Delivered:
+    rcfd-fv immersed_motion.rs (opt-in, a new file; no line of immersed.rs or pimple.rs changed): HarmonicTranslation,
+    translate_shape, MovingImmersed (bodies_at; forcing_at, the forcing of ADR 0218 rebuilt at the pose and rigid
+    velocity of the new time level; step, which sets PimpleSolver::immersed and steps; velocity_in_forcing = false is
+    the negative control). The force of a moving body is force_moment_unsteady with velocity_rate of the step, the
+    staircase surface force at the new level, whose storage term cancels the reaction of the cells that enter the solid
+    (derived in the ADR). Measured (limits registered before the code): an in-line oscillating cylinder, KC 5, Re 100,
+    in a fixed circular wall of radius 8 D, PISO, 1000 steps per period, 4 periods; immersed on a Cartesian D/40 core
+    (56 644 cells, the moving cylinder and an inverted wall body) against the body-fitted O-grid 256 x 128 swept-volume
+    ALE run (rigid core and cosine blend): drag first-harmonic amplitude +0.84 % (limit 5 %), phase 0.29 degree (limit
+    3), complex difference 0.98 % (limit 6 %), mean drag 8.3e-5 of the amplitude (limit 0.02), lift below 3.3e-8 of the
+    drag amplitude in both runs (limit 1e-3), station velocities at x = -0.6, 0, 0.6, 1.2 D at three phases max 0.033
+    U_m (limit 0.15) and RMS 0.0090 U_m (limit 0.05). The reference on a 128 x 64 grid is within 0.12 % in force and
+    0.0024 U_m RMS; D/20 errors are larger (1.74 %, 0.021 U_m); with the body velocity left out of the forcing the force
+    is zero and the station RMS 0.26 U_m (caught). Fast tests T1 to T7, eight of eight mutations caught, default bits
+    unchanged (baseline_hashes). Not included: a case-file key (open, needs the F-307 schema golden); a transverse
+    oscillation in a stream and the lift of a moving body; rotating or deforming shapes; free motion; the second-order
+    flux faces with motion; BDF2 force; SIMPLE; three dimensions; the cost of the per-step rebuild. Follow-up F-707
+    (Moving immersed shapes: a transversely oscillating cylinder in a stream).
 - [x] **F-309** Second-order immersed forcing: fluid-solid face flux at the surface crossing
   - depends on: F-219
   - acceptance: Circular Couette flow with an immersed rotating cylinder reaches an observed order of 1.5 (the F-219 V1
@@ -13748,13 +13798,26 @@ fixed by the item's registration ADR before any code.
     standing instruction. F-693 catches the missed mutation MU7 and measures the stabilisation in confined and nearly
     incompressible compression (lowest eigenvalue >= 0.977 mu in five new cases; near incompressibility the element
     approaches the locking Full Hex8).
-- [ ] **F-686** The free-sector pre-stress on tetrahedral, layered-shell and orthotropic sectors
+- [x] **F-686** The free-sector pre-stress on tetrahedral, layered-shell and orthotropic sectors
   - depends on: F-683
   - acceptance: Every limit not stated here is registered in the ADR before the run. RotatingSector::new with
     free_sector_prestress on a free Tet10 sector, a free Shell4 layup sector and a free orthotropic solid sector gives
     the pre-stress of a constrained-copy route within 1e-10 and a residual at the interior nodes within 1e-10 of the
     load; the defaults bit-identical.
-  - note: Follow-up of F-683 (ADR 0611, 2026-11-15).
+  - note: Structural solver, advanced tier. Follow-up of F-683 (ADR 0611). DONE. ADR 0633, 2026-11-16: the free-sector
+    pre-stress on tetrahedral, layered-shell and orthotropic sectors. No library change: the ADR 0606 gauge removes the
+    two cyclic rigid motions of a curved Tet10 sector, of an unsymmetric two-density Shell4 layup frustum (B != 0, first
+    mass moment m1 != 0) and of a Hex20 sector of a cylindrical orthotropic material, all in an oblique frame (derived
+    in the ADR). RotatingSector::new with free_sector_prestress gives the pre-stress of a constrained-copy route at two
+    other nodes within 1.9e-13 (limit 1e-10), a residual at the interior nodes within 2.0e-13 of the load (limit 1e-10),
+    and the whirl frequencies of the copy route within 1.5e-13; without the opt-in the three sectors are refused as
+    singular; the defaults are bit-identical. A Shell3 layup is refused (NotYetSupported Layup), as registered. Five of
+    five mutations caught. Finding: the layup centrifugal load of ADR 0502 D1 drops the force term m1 Omega^2
+    r_perp(e_3) and so has a net torque m1 Omega^2 int e_3 . (r_perp x a) dA about the axis, zero on the
+    meridian-symmetric frustum but m1 A rho_c Omega^2 on a facet in a meridian plane (measured to 1.5e-14); a free
+    sector of such facets with m1 != 0 has no reaction-free gauge. Not covered: Tet4, wedges, the tabulated material,
+    Shell3 layups, layups with m1 != 0 on non-symmetric facets as free sectors. Follow-up F-709 (The torque-free
+    centrifugal load of a layup with a first mass moment).
 - [~] **F-687** Through-thickness temperature gradient on Shell3 and Layup shells
   - depends on: F-527
   - acceptance: Every limit not stated here is registered in the ADR before the run. Load::ShellTemperatureGradient on a
@@ -13884,7 +13947,9 @@ fixed by the item's registration ADR before any code.
     Full Hex8 is 13 per cent stiffer than the plain element at nu = 0.49). Not covered: tension, shear and free
     boundaries, other materials, a locking-free reference of the compressed state, a coefficient without the bulk
     modulus. Follow-up F-703 (A deviatoric coefficient for the stabilised incompatible-modes Hex8 near
-    incompressibility).
+    incompressibility). F-703 measures the stabilisation against F-bar on the same patch; near incompressibility the ADR
+    0614 coefficient's softest mode is 7 to 16 per cent stiffer than F-bar, and no coefficient without the bulk modulus
+    stabilises confined compression at nu >= 0.45.
 - [ ] **F-694** The stagnation acceptance of ADR 0619 on by default
   - depends on: F-690
   - acceptance: Every limit not stated here is registered in the ADR before the run. With the maintainer's decision
@@ -13920,7 +13985,7 @@ fixed by the item's registration ADR before any code.
     F-432 log, and the time and peak memory are recorded.
   - note: Follow-up of F-568 (ADR 0616, 2026-11-15). DONE 2026-11-16: run by the lead, ADR 0616 addendum 2, every E1
     check met.
-- [ ] **F-697** Fan objective layer (fan breakdown H1): flow at the system operating point over a set of impedances, tonal noise, power, unbalance vibration and robustness to tolerances, on the reduced-order fan
+- [x] **F-697** Fan objective layer (fan breakdown H1): flow at the system operating point over a set of impedances, tonal noise, power, unbalance vibration and robustness to tolerances, on the reduced-order fan
   - depends on: F-249, F-268, F-113, F-700
   - acceptance: Every limit not stated here is registered in ADR 0620 before any code. An opt-in library objective (no
     case-file key, no MCP tool, no default changed) builds a study from a list of system curves, metric terms and an
@@ -13940,16 +14005,29 @@ fixed by the item's registration ADR before any code.
     and CMA-ES find the closed-form constrained optimum (speed scale 1.2, pitch 0.3, mean shaft power 3.6 W) within the
     registered limits, and the NSGA-II front lies within the registered distance of the closed-form front. (7)
     baseline_hashes, the existing design tests and both tools-list goldens are unchanged.
-  - note: Fan breakdown part H1 (docs/fan-project-breakdown.md). Size M. The agent registers the numeric limits in ADR
-    0620 before any code and does not change them after a run. Library only (crates/rcfd-api/src/design, new module);
-    everything is opt-in and defaults stay bit-identical. First target is the reduced-order fan of ADR 0119 (part C7),
-    so no converged CFD is needed; F-218 (actuator disk) is named by the breakdown under C7 but is not a code
-    dependency. Every number is from a stated proxy: no measured fan data exists, so the objective ranks variants of the
-    model, not real fans. Maintainer decisions 2026-11-15 (recorded in ADR 0620, section "Maintainer decisions"):
-    library only now, MCP tools in F-702 together with F-339; every other open question takes the ADR's recommendation;
-    limits marked as estimates are fixed from a disclosed smoke run or calculation before registration and never moved
-    after.
-- [ ] **F-698** Surrogate model for the design loop: Gaussian-process regression over the design ledger and an expected-improvement proposal of the next variant
+  - note: Fan breakdown part H1 (docs/fan-project-breakdown.md). ADR 0620, 2026-11-16. DONE (reduced-order tier only).
+    Library only, opt-in (no case key, no MCP tool, no default changed): design::fan_objective states a fan objective
+    once (impedance points as system curves with weights, terms with a statistic over tolerance specimens and a
+    combination over the points, limits held at every point or on an aggregate, an optional tolerance plan with one seed
+    for every candidate) and builds an ordinary StudyDef, so Nelder-Mead, CMA-ES, NSGA-II, the study store and the ADR
+    0623 ledger sink run it unchanged; objective_score entries carry the F-700 objective identity and parents and re-run
+    through ObjectiveModel. FanRomTarget evaluates the ADR 0119 reduced-order fan on a ComputerFan with flow, pressure
+    rise, power, efficiency, tone1_pa, tone1_db, the A-weighted sum of the first three tones and the static-unbalance
+    force of the specimen's blades. Checks: linear fan against three quadratic systems, per-point flows within 1.4e-16
+    of the closed form and mean, worst, weighted and mean-plus-sigma flows equal to the hand aggregation; mean static
+    unbalance of N(0, sigma) blade mass errors on 7 blades within 1.7 SE of r_c m sigma sqrt(7 pi / 4) at 4096 samples
+    and a linear Gaussian metric's mean + 2 sd within 1.5 SE; the violation of the one violated point is 0.75 exactly, a
+    stalled point fails the candidate with a located reason (linear fan and reduced-order fan), feasible violation
+    exactly 0; objective vectors, violations and ledger bytes identical for 1, 2, 3 and 8 workers and for two runs, all
+    32 differ for another seed; reduced-order objective values bit-equal to FanRomEvaluator::metrics aggregated by hand,
+    flow strictly falling as the system coefficient rises; Nelder-Mead and CMA-ES reach the constrained optimum (speed
+    scale 1.2, pitch 0.3, 3.6 W) within 4e-8 relative in power and the robust optimum of the sampled plan, NSGA-II front
+    within 1.8 percent of the closed-form front over the full flow range; baseline_hashes, the design tests and the
+    tools-list goldens unchanged. Ten of ten mutations caught. Not covered: per-blade aero, eccentricity and roughness
+    tolerances (refused by the one-row model), the other aggregation order and chance constraints, any CFD evaluator
+    behind the layer; every number ranks variants of the model, not real fans (no measured data). MCP exposure is F-702.
+    Follow-up F-713 (Schema default fan usable in the reduced-order model).
+- [~] **F-698** Surrogate model for the design loop: Gaussian-process regression over the design ledger and an expected-improvement proposal of the next variant
   - depends on: F-268, F-249, F-697, F-700
   - acceptance: Every limit not stated here is registered in ADR 0621 before the code. An opt-in library Gaussian
     process (constant mean, one length scale per parameter, hyperparameters by maximum likelihood, dense Cholesky, no
@@ -13967,24 +14045,29 @@ fixed by the item's registration ADR before any code.
     Every proposal is a ledger entry with its predicted mean and standard deviation; the proposal is bit-identical for a
     repeated run, for any worker count and for any order of the ledger lines; defaults, baselines and goldens are
     unchanged.
-  - note: Part H3 of docs/fan-project-breakdown.md. Proposed 2026-11-15 (ADR 0621, a stub, not registered). Maintainer
-    decisions 2026-11-15 (recorded in ADR 0621, section "Maintainer decisions"): library only now, MCP tools in F-702
-    together with F-339; every other open question takes the ADR's recommendation; limits marked as estimates are fixed
-    from a disclosed smoke run or calculation before registration and never moved after. Size L. Sits beside NSGA-II
-    (ADR 0209, ADR 0220), CMA-ES (ADR 0222), differential evolution and Nelder-Mead; meant for objectives that cost
-    minutes or more per evaluation. Proposed: Matern 5/2 kernel, noise off by default (fitted or fixed nugget opt-in),
-    diverged evaluations imputed at predicted mean plus one standard deviation (Forrester, Sobester and Keane 2006),
-    probability of feasibility for constraints, kriging believer for batches and pending entries, one fidelity tier and
-    one evaluator per fit (joining tiers is H7). Library only in this item: no case-file key, no service method, no MCP
-    tool; a study method gp_ei is a follow-up (question 1). Objective from F-697 (ADR 0620); until it is merged the
-    checks use a metric name and a sense. rcfd-linalg has no public dense Cholesky (four private copies): a private one
-    in the new file is proposed (question 9). Estimates from a disclosed numpy prototype outside the repository: Branin
-    20 of 20 seeds, median 29 evaluations; Hartmann 6 only 6 of 10 seeds (46 to 61 evaluations, 4 not within 200), which
-    is why that limit is 5 of 10 (ADR risk 10, question 14). The noise, failure-region, comparison and reduced-order-fan
-    limits have no estimate and are to be fixed after a smoke run on other seeds, before registration. Every fan result
-    is on the reduced-order model, a stated proxy until checked against measured fan data. Sources: Rasmussen and
-    Williams (2006); Jones, Schonlau and Welch (1998); clean-room.
-- [ ] **F-699** Fidelity management driver: screen with the reduced-order fan model, confirm with a higher-fidelity source, log the disagreement and correct the screening (H7)
+  - note: Fan breakdown part H3 (docs/fan-project-breakdown.md). ADR 0621, 2026-11-16. DONE (reduced-order tier only).
+    Library only, opt-in (no case key, no MCP tool, no default changed): design::surrogate is ordinary kriging with a
+    Matern 5/2 correlation (squared exponential opt-in), length scales and an optional nugget fitted by maximum
+    likelihood from ten starts with the analytic gradient, a 1e-8 jitter, prediction with the mean-uncertainty term and
+    leave-one-out from one factorisation; design::bayes proposes the next variant by expected improvement after a
+    Latin-hypercube start, imputes failed points at m + s and multiplies by a failure model, takes constraints by
+    feasibility probability, believes pending and batch points at their mean, sorts the observations so the ledger line
+    order does not matter, and drives a ledger Model with the prediction in the provenance of each entry and a
+    surrogate_summary entry naming the fitted model and its parents. Checks: two-point closed form within 2.7e-15,
+    likelihood gradient within 1e-9, leave-one-out within 2e-15 of refits, EI within 3e-14 of quadrature; coverage 0.938
+    on prior draws (0.865 with a wrong length scale), hyperparameters recovered (median length scale 0.174 for 0.2); the
+    Branin minimum within 1 percent on 20 of 20 seeds in a median of 28 evaluations (random search 0 of 20), Hartmann 6
+    on 6 of 10 within 55 evaluations against CMA-ES 1 and DE 0 at 200, a failure disc avoided (3 percent failed against
+    86 percent without the failure handling), noisy Branin 20 of 20, a constraint 10 of 10; on the reduced-order fan
+    (stagger, chord and camber scales, power at three impedance points) 10 of 10 runs within 1 percent of a 9261-point
+    grid optimum by evaluation 22, with every failure located; ledger resume, shuffled lines, worker counts and replay
+    bit-equal; baseline_hashes and the design and tools-list tests unchanged. The batch believer first missed its spread
+    check and was corrected under a recorded amendment. Eleven of twelve mutations caught (the imputation sign survived,
+    as registered). Not covered: multi-fidelity joining (H7), multi-objective EI, the study method and the MCP tool;
+    every number ranks variants of the model, not real fans (no measured data). Follow-up F-714 (Gaussian-process study
+    method and MCP tool). Follow-up F-715 (Robust expected improvement on multimodal functions). Follow-up F-716 (Stall
+    pre-check for the fan initial design).
+- [~] **F-699** Fidelity management driver: screen with the reduced-order fan model, confirm with a higher-fidelity source, log the disagreement and correct the screening (H7)
   - depends on: F-268, F-697, F-700
   - acceptance: Every limit not stated here is registered in ADR 0622 before the run, and no check uses FAN-01 or any
     CFD run. An opt-in library driver screens at least 2000 candidates with a ledger::Model of the reduced-order tier,
@@ -14002,21 +14085,35 @@ fixed by the item's registration ADR before any code.
     corrected prediction appears in the public ledger (byte search of the file), aggregates appear only for at least 5
     pairs, and a private path inside the repository tree is refused with a located error; (6) the same seed gives a
     byte-identical ledger for 1 and 8 workers, and no existing default-bits test changes.
-  - note: Part H7 of docs/fan-project-breakdown.md. Proposed 2026-11-15 with ADR 0622 (stub, not registered). Maintainer
-    decisions 2026-11-15 (recorded in ADR 0622, section "Maintainer decisions"): library only now, MCP tools in F-702
-    together with F-339; every other open question takes the ADR's recommendation; limits marked as estimates are fixed
-    from a disclosed smoke run or calculation before registration and never moved after. Privacy (maintainer,
-    2026-11-15): strict split; measured values, pairs, the fitted correction and corrected predictions go to a
-    caller-given private ledger refused inside the repository tree, the public ledger gets aggregates only (3
-    significant digits, at least 5 pairs). Measured data is read from the CSV of docs/fan-measurement-protocol.md with a
-    variant-id column added. The first R0 to R2 rungs ship here; R3 reuses F-698's process. Low tier:
-    design::fan_rom_eval on rcfd_post::fan_rom (ADR 0119; C7, with F-218 and F-113). Related: F-698 (surrogate, ADR
-    0621; the Gaussian-process rung may reuse it), F-339 (MCP exposure of named evaluators), F-260 (the real-fan study,
-    blocked on FAN-01). Library only, opt-in, no case-file key and no MCP tool in this item. The measured-data source is
-    designed and tested with a synthetic file only; real measured data stays outside the repository and only aggregate
-    calibration residuals may be published. Verified on synthetic sources only: it says nothing about how well the
-    reduced-order model predicts a real fan. Size M.
-- [ ] **F-700** Ledger records for objectives, surrogates and multi-fidelity or measured data: source, links, uncertainty, discrepancy, pairing queries
+  - note: Part H7 of docs/fan-project-breakdown.md. ADR 0622, 2026-11-16. PARTIAL (every check met; one mutation not
+    caught). Library only, opt-in (no case key, no MCP tool, no default changed): design::fidelity::run screens a
+    candidate set with a low ledger::Model, promotes per round exploit picks by the corrected objective and explore
+    picks by greedy max-min distance (or random, the negative control) to a HighSource (ModelSource for any model;
+    MeasuredTable for the protocol CSV with a variant column, tier measured, private), writes one fidelity_pair (ADR
+    0632) per ok promotion with the prediction made before the high result and one fidelity_summary per round, and fits
+    a discrepancy ladder R0, R1 (additive or multiplicative), R2 (rho y_L + b0 + c . x) chosen by leave-one-out error
+    with the one-standard-error rule, trusted only when it helps on held-out points and exceeds twice the stated
+    uncertainty, applied inside the calibrated region only (outside: flagged, constant only). Privacy: measured values,
+    pairs, corrections and predictions go to a private ledger refused inside a repository tree (and the public ledger
+    refused inside its directory); the public ledger gets the low entries and aggregates over at least 5 pairs, once per
+    block of 5, rounded to 3 significant digits. Checks: an affine high source recovered within 8.7e-15, the
+    one-variable pair of Forrester et al. as written (rho 2, slope -20, intercept 20) within 2.2e-16, and the other sign
+    of the pair (intercept 0); on the reduced-order fan against a copy with larger loss constants (2000 candidates, 24
+    promotions) the held-out RMSE ratio is 0.36 (dp_s) and 0.12 (eta_s), the best promoted candidate is the true best
+    (gap 0) while random promotion misses by 5.8 percent of the range, and the round-4 prediction error is 0.06 of round
+    1's; noise and an always-failing source leave the correction untrusted and the screening bit-identical to no
+    correction; every query outside the calibrated region is flagged and gets only the constant, bit for bit; no private
+    value in the public ledger (0 of 1236 texts; 96 of 96 found without the split), aggregates only from 5 pairs, both
+    path refusals before any evaluation, table errors without cell values; ledgers byte-identical for 1 and 8 workers;
+    baseline_hashes, the design tests and the tools-list goldens unchanged. Eleven of twelve mutations caught; ignoring
+    the stated uncertainty survives (the one-standard-error rule already rejects the noise correction at the registered
+    seed). Two test set-up defects were corrected by amendment 2 before their corrected runs. Not covered: a
+    Gaussian-process rung (reuses F-698), any CFD or real measured source, calibration of the loss constants themselves,
+    an F-697 ObjectiveModel as the low model in a check. Verified on synthetic sources only: it says nothing about how
+    well the reduced-order model predicts a real fan. MCP exposure is F-702. Follow-up F-717 (Fidelity driver, the
+    uncertainty guard and P4 robustness). Follow-up F-718 (Gaussian-process discrepancy rung R3 for the fidelity
+    driver).
+- [x] **F-700** Ledger records for objectives, surrogates and multi-fidelity or measured data: source, links, uncertainty, discrepancy, pairing queries
   - depends on: F-268
   - acceptance: Every limit not stated here is registered in an ADR before the run. A ledger written by the new code
     with none of the new fields set is byte-identical to one written by the base; a ledger line with the new optional
@@ -14025,12 +14122,21 @@ fixed by the item's registration ADR before any code.
     discrepancy record round-trips bit for bit and names both entries; the training-set query returns the registered
     matrix (rows, columns and values bit for bit) and refuses mixed evaluator versions; a Fidelity::Measured entry is
     written only to a private ledger and refused by a public one; the MCP tools-list goldens are unchanged.
-  - note: Split from F-268 by the maintainer on 2026-11-15 (ADR 0623 Q1 b). Size M. Holds proposals P1 to P8 of ADR
-    0623: the ledger fields and queries that F-697 (ADR 0620), F-698 (ADR 0621), F-699 (ADR 0622) and F-701 (ADR 0624)
-    need. Maintainer decisions 2026-11-15: new fields are optional top-level keys of rcfd-ledger-1, omitted when unset
-    (provenance conventions until they land); a Fidelity::Measured value is added in the library only and written only
-    to private ledgers, the MCP enums stay unchanged until F-702; the fidelity pair and discrepancy record is the one of
-    ADR 0622, and ADR 0136 is amended to point to it. Built first, with the rest of F-268, before F-697.
+  - note: Split from F-268 by the maintainer on 2026-11-15 (ADR 0623 Q1 b). ADR 0632, 2026-11-16. DONE. Library only (no
+    MCP tool, case key or golden edit): rcfd-ledger-1 gains optional top-level keys parents (references with an FNV-1a
+    64 hash of the line), source (computed, measured or literature, citation, file SHA-256), fidelity_level, uncertainty
+    (per metric, same unit), objective and fitted ({id, version, hash}), omitted when unset; Fidelity::Measured and any
+    entry with a measured source are written only to a private ledger (Ledger::private, refused inside a repository
+    tree) and refused by a public one, whose reader skips them; the MCP tools keep the three public tiers.
+    ledger::fidelity_pair writes the ADR 0622 pair and discrepancy record naming both entries; pair_by_params,
+    training_set, group_by_variant and the variant and condition filters are the P8 queries. Checks: the default ledger
+    is byte-identical to the base writer on three fixtures (0 differing bytes); 8 lines with the new fields read by the
+    verbatim base reader with 0 skipped; exactly the registered 24 pairs and 4 duplicates on the 96-entry fixture, mixed
+    units refused; the pair record round-trips bit for bit with both parents resolved; the 12 by 4 training matrix bit
+    for bit with the failed points apart, mixed versions and units refused; measured content refused by a public ledger,
+    kept by a private one outside the repository; MCP tools-list goldens unchanged. Ten of ten mutations caught. Not
+    covered: the public-path-inside-private check and the rounded public aggregates (F-699's driver), to_csv does not
+    show the new keys. Follow-up F-706 (Private-ledger repository markers beyond git and Cargo).
 - [ ] **F-701** Long-horizon design loop (fan breakdown H6): a durable hypothesis record in the design ledger, tests registered before their runs, verdicts scoped to evaluator version and fidelity, and a lessons query
   - depends on: F-268, F-697, F-699
   - acceptance: Every limit not stated here is registered in ADR 0624 before the run, and no check uses FAN-01, a CFD
@@ -14086,7 +14192,7 @@ fixed by the item's registration ADR before any code.
   - note: Decided by the maintainer 2026-11-15 (shared decision D1 of the design-loop drafts): the loop items stay
     library only, and their tools land in this one item together with F-339 so the goldens change once. NEEDS USER: the
     tools-list golden edit. Size M.
-- [ ] **F-703** A deviatoric coefficient for the stabilised incompatible-modes Hex8 near incompressibility
+- [~] **F-703** A deviatoric coefficient for the stabilised incompatible-modes Hex8 near incompressibility
   - depends on: F-693
   - acceptance: Every limit not stated here is registered in the ADR before the run. An opt-in coefficient of the ADR
     0614 stabilisation without the bulk modulus, from the published literature or derived in the ADR; the ADR 0628 sweep
@@ -14094,4 +14200,190 @@ fixed by the item's registration ADR before any code.
     locking measure of the compressed state against a locking-free reference of the repository (an F-bar or mixed Hex8
     on the same patch) reported for the ADR 0614 and the new coefficient; the ADR 0608 checks within their limits; the
     default bits unchanged.
-  - note: Follow-up of F-693 (ADR 0628, 2026-11-15).
+  - note: Structural solver, intermediate tier. Follow-up of F-693 (ADR 0628). PARTIAL. ADR 0630, 2026-11-16: two opt-in
+    coefficients of the ADR 0614 stabilisation of the incompatible-modes Hex8, chosen per model through
+    IncompatibleStabilisation (Off by default; RestStress the ADR 0614 coefficient in its bits; Deviatoric, without the
+    bulk modulus; LinearStress, the bulk modulus linear through the stress, diagnostic); defaults unchanged (the bit
+    records of ADR 0608 and ADR 0614 and a new record of the ADR 0614 paths pass, the rcfd-api baseline hashes pass).
+    The ADR 0628 sweep (6 x 6 x 6 patch, 51 stretches on [0.5, 1], six cases) repeated with the F-bar Hex8 of ADR 0506
+    on the same patch as the locking-free reference (within 7.8 per cent of the closed-form acoustic bound everywhere).
+    The deviatoric coefficient keeps the lowest eigenvalue >= 0.5 mu in uniaxial stress at nu = 0.3, 0.45, 0.49 and in
+    confined compression at nu = 0.3 (>= 0.515 mu), and misses in confined compression at nu = 0.45 (-2.58 mu) and 0.49
+    (-70.8 mu, negative from 5 per cent compression), as derived in the ADR before the run: the destabilising term
+    scales with the pressure, so no coefficient without the bulk modulus can cover it. The linear-stress coefficient
+    keeps >= 0.559 mu in all six cases; near incompressibility its softest mode is within -19 to +13 per cent of F-bar,
+    where the ADR 0614 coefficient reaches +16 per cent. Strain energy, tangent and the ADR 0608 checks hold for both
+    rules; eight of eight mutations caught. Not covered: a locking measure under a load, tension, shear, free
+    boundaries, other materials, a current-stress coefficient. Follow-up F-708 (The linear-stress coefficient of the
+    stabilised incompatible-modes Hex8 under load). F-708 measures the LinearStress rule under load: within 12 per cent
+    (coarse) and 7 per cent (refined) of the F-bar reaction on a confined punch block at nu = 0.49, where the plain
+    element fails on the refined mesh.
+- [~] **F-704** Sector and planar sliding beyond one period (re-imaging of the rotor)
+  - depends on: F-304
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A rotor sector turning at least
+    three sector pitches and a planar slider at least three periods, re-imaged by one period whenever the offset reaches
+    it, conserve mass and a uniform flow to round-off in every step including the re-imaging steps; the radial source
+    flow on the sector against the full-annulus sliding run of ADR 0216 within a registered limit; defaults
+    bit-identical.
+  - note: CFD solver, moving meshes. Follow-up of F-304 (ADR 0629 question 3). DONE in the library. ADR 0634,
+    2026-11-16: sector and planar sliding beyond one period. PeriodicSlidingInterface::mesh_turned takes any turned
+    offset, builds the joined mesh at the offset reduced to one period and records the periods taken off in
+    PeriodicSlidingMesh::image; a step whose image changes by one re-images the rotor: its swept volumes from the old
+    offset less one period, its cells' old velocity turned back by one pitch for the interpolations on the new faces,
+    and PimpleSolver::step_sliding_periodic turns the rotor cells' velocity and every stored history level before the
+    step. Planar slider 3.06 periods (620 steps, re-imaged at steps 203, 406, 609): mass across the interface 4.4e-14
+    relative (limit 1e-10), uniform flow 8.7e-15 (pressure 8.2e-13), GCL 1.2e-14, sweep of the slider faces 9.6e-14.
+    Sector 3.2 rad (3.06 pitches, re-imaged three times): radial source flow mass 1.3e-15, continuity 3.4e-13; 3-D
+    sector uniform axial flow 6.2e-15; every measure also met on the re-imaging steps alone. Against the full-annulus
+    sliding run of ADR 0216 over the same 640 steps: largest velocity difference 8.0e-3 U_in (limit 2e-2), rms 5.0e-3,
+    inner-ring pressure 2.7e-4 of the potential-flow rise; not re-imaging the vectors gives 0.78 U_in (negative
+    control). Defaults bit-identical (F-304 and F-250 suites, records and baseline hashes unchanged). Amendment 2: the
+    registered no-re-imaging controls on the uniform flows could not fail (a uniform flow does not see a rigid sweep
+    that closes the GCL); replaced, before their run, by a check of the sweep on every step and its control (2.0e2 and
+    8.5e1 without re-imaging); four of four mutations caught, one only by the corrected checks. Limits: steps of less
+    than one period, forwards; per-face boundary data on rotor patches are the caller's; sectors of different pitch
+    refused; no non-orthogonal correction on the coupled wrap faces; no case-file key (F-303).
+- [ ] **F-705** Design store header after a torn first write
+  - depends on: F-268
+  - acceptance: a study store whose first append is killed while writing the header line reopens and resumes with the
+    header present at every kill point inside the first append, and every existing store test keeps its bytes.
+  - note: Follow-up of F-268 (ADR 0623, 2026-11-15).
+- [ ] **F-706** Private-ledger repository markers beyond git and Cargo
+  - depends on: F-700, F-699
+  - acceptance: Ledger::private refuses a path under a directory holding .hg, .svn or the project-mode marker of ADR
+    0185, with a located message, and every ADR 0632 check keeps its result.
+  - note: Follow-up of F-700 (ADR 0632, 2026-11-15).
+- [ ] **F-707** Moving immersed shapes: a transversely oscillating cylinder in a stream
+  - depends on: F-308
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A cylinder oscillating across a
+    uniform stream at a low Reynolds number gives the mean drag, the lift amplitude and the phase of the lift against a
+    body-fitted moving-mesh run of this repository within registered limits; a negative control with the body velocity
+    left out of the forcing misses them.
+  - note: Follow-up of F-308 (ADR 0631, 2026-11-15).
+- [~] **F-708** The linear-stress coefficient of the stabilised incompatible-modes Hex8 under load
+  - depends on: F-703
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The LinearStress rule of ADR 0630
+    measured under a load against the F-bar Hex8 of ADR 0506: a nearly incompressible (nu = 0.49) block in confined
+    compression and a bending cantilever, displacement and reaction within a registered tolerance of the F-bar result on
+    the same and on a refined mesh; the lowest eigenvalue of the ADR 0628 sweep kept above a registered positive limit
+    in all six cases; the ADR 0608 checks within their limits; the default bits unchanged.
+  - note: Structural solver, intermediate tier. Follow-up of F-703 (ADR 0630). PARTIAL. ADR 0636, 2026-11-16: the
+    LinearStress rule of ADR 0630 (opt-in, unchanged; tests only, no library file changed, the bit records of ADR 0506,
+    0608, 0614, 0630 and the rcfd-api baseline hashes pass) measured under load against the F-bar Hex8 of ADR 0506 on
+    the same mesh. A confined block at nu = 0.49 in a die, compressed by a rigid punch on a quarter of its top
+    (homogeneous confined compression is a patch test and could not fail): punch reaction within 12.1 per cent of F-bar
+    on 4^3 and 6.6 per cent on 8^3 (tolerances 15 and 10 per cent), corner bulge within 1.3 and 4.1 per cent; the Full
+    Hex8 reaction 79 and 40 per cent off (the locking control); the plain incompatible element loses positive
+    definiteness under the punch on 8^3 and cannot be solved, rule L converges. A displacement-controlled cantilever at
+    nu = 0.49 (tip 30 per cent of the length): tip reaction within 5.7 per cent of F-bar on 10 x 2 x 2 and 1.8 per cent
+    on 20 x 4 x 4, shortening within 0.6 and 0.2 per cent; Full 73 and 34 per cent off. The ADR 0628 sweep of rule L
+    keeps the lowest eigenvalue >= 0.559 mu in all six cases (limit 0.5 mu); the ADR 0608 checks hold. Three of four
+    mutations caught; the one missed (the F-bar ratio zeroed in the reference) moves the reference by under 2 per cent
+    and is caught by the ADR 0506 tests. Not covered: distorted meshes under load, other materials and Poisson ratios,
+    tension and shear loads, a contact punch. Follow-up F-719 (The stabilised incompatible-modes Hex8 (LinearStress)
+    under load on distorted meshes).
+- [x] **F-709** The torque-free centrifugal load of a layup with a first mass moment
+  - depends on: F-686
+  - acceptance: Every limit not stated here is registered in the ADR before the run. An opt-in adds the force term m1
+    Omega^2 r_perp(e_3) to the centrifugal load of a Shell4 layup; with it the load of a layup with m1 != 0 on a facet
+    in a meridian plane has a torque about the axis within 1e-12 of zero relative to m1 A rho Omega^2, its force
+    resultant matches the through-thickness integral of the exact body force within 1e-12, and a free layup sector of
+    such facets with free_sector_prestress gives the pre-stress of a constrained-copy route within 1e-10; the defaults
+    bit-identical.
+  - note: Structural solver, advanced tier. Follow-up of F-686 (ADR 0633). DONE. ADR 0635, 2026-11-16: the torque-free
+    centrifugal load of a layup with a first mass moment. An opt-in, SolidModel::set_layup_first_moment_force (copied by
+    the rotating pre-stress model), adds the force term m1 Omega^2 P e_3 of the through-thickness integral of the exact
+    body force to the centrifugal load of a Shell4 layup of more than one ply (shell::layup_body_load_vector_affine_at,
+    derived in the ADR: with it the load is orthogonal to both cyclic rigid motions pointwise). With it, on a meridian
+    facet of the unsymmetric two-density layup (m1 = 0.4375 kg/m) the torque about the axis is 2.1e-14 of m1 A rho
+    Omega^2 (limit 1e-12) and the force resultant matches the ply-by-ply exact integral within 6.5e-16 (limit 1e-12),
+    likewise on an oblique facet; a free fan-like sector (hub ring and a blade in the meridian plane) with
+    free_sector_prestress gives the pre-stress of a constrained-copy route within 6.6e-14 (limit 1e-10), where without
+    the opt-in the blade torque m1 int rho dA makes it depend on the gauge by 1.1e-2. Shell, one-ply, Shell3, solid and
+    gravity loads keep their bits under the opt-in; the defaults are bit-identical (baseline_hashes, the default-bits
+    tests). Five of five mutations caught. Not covered: the torque-free m2 moment term (dropped for all shells), warped
+    facets beyond the projected-facet route, Shell3 layups (refused), a case-file key; the default stays the ADR 0502 D1
+    load.
+- [x] **F-710** Sliding interface at coinciding nodes
+  - depends on: F-250
+  - acceptance: a uniform flow on the sliding pair of ADR 0216 with a step that lands on node coincidences (every whole
+    rotor pitch) is kept to 1e-10 on every step, including the steps where the interface loses or regains zero-area
+    overlaps; the cause found in ADR 0637 amendment 2 is diagnosed and registered before the fix; the F-250, F-304,
+    F-704 and F-303 results are unchanged where no coincidence occurs.
+  - note: ADR 0638, 2026-11-16: the sliding interface at coinciding nodes. Cause (diagnosed and registered before the
+    fix): at a whole rotor pitch 24 rotor and stator nodes of ADR 0216's pair coincide, the join drops the 48 zero-area
+    overlaps there and the interface graph falls into 24 parts; the remap of the old flux (ADR 0216 M4) removed each
+    part's target mean, which is the old flux that crossed the vanished overlaps, so the old flux kept a divergence of
+    2.1e-3 and the uniform state was lost (2.4e-4). Fix in rcfd_fv::sliding::sliding_step: when a part's mean exceeds
+    1e-10 of the largest target, the GCL closure and the remap are solved on the interface faces together with the faces
+    between the parts (48 per coincidence step), whose mapped values receive the correction; every other step runs the
+    base code. Uniform flow on the pair with dt = rotor pitch / 8 over 50 steps: 8.9e-15 velocity, 5.2e-14 pressure
+    (limit 1e-10), the 6 coincidence and 6 regain steps included; through the case tree (ADR 0637's UTc, 40 steps)
+    6.0e-15 and 3.2e-13; the base step as control 5.7e-4. sliding_step equals a replica of the base step bit for bit on
+    every step without a coincidence (44 of 50; U2, U3 and an equal-axial-layer pair on every step); every F-250, F-304,
+    F-704 and F-303 test and baseline_hashes pass unedited. Four of four mutations caught. Limits: the periodic (sector,
+    planar) path is not changed; the GCL coupling is exercised by a unit test only. Follow-up F-720 (Periodic sliding at
+    coinciding nodes).
+- [ ] **F-711** Periodic (sector and planar) sliding in the case tree
+  - depends on: F-303, F-704
+  - acceptance: a case file runs a rotor sector sliding against a stator sector of the same pitch beyond one pitch
+    (PeriodicSlidingInterface::mesh_turned) through an optional table, with a sector rotor-stator generator; the sector
+    run against the full-annulus tree run of ADR 0637 within a registered limit; defaults bit-identical.
+  - note: Follow-up of F-303 (ADR 0637, 2026-11-15).
+- [ ] **F-712** Symmetry planes and a uniform in-plane flow on the annulus interface pair
+  - acceptance: the uniform in-plane flow of ADR 0637 UT on the frozen join of annulus_3d_cylindrical_interface with
+    zmin, zmax symmetry (2.4e-2 after one step) is diagnosed; either it is kept to 1e-10 with the cause fixed and every
+    changed default result listed for the maintainer, or the limitation is documented with its cause.
+  - note: Follow-up of F-303 (ADR 0637, 2026-11-15).
+- [ ] **F-713** Schema default fan usable in the reduced-order model
+  - depends on: F-697
+  - acceptance: ComputerFan::default() through RomFan::from_axial_fan runs unstalled at 3000 rpm for every flow above 40
+    percent of its free delivery in the reduced-order model, every ADR 0118 schema, checker and ensemble test keeps its
+    result, and no golden or hash table changes (or the needed change is listed for the maintainer before any edit).
+  - note: Follow-up of F-697 (ADR 0620, 2026-11-15).
+- [ ] **F-714** Gaussian-process study method and MCP tool
+  - depends on: F-698, F-702
+  - acceptance: a study with method gp_ei runs through the study store and the design MCP tools with the same entries as
+    bayes::run for the same spec and seed (bytes equal), the tools-list golden changes only by the listed addition, and
+    every F-698 check keeps its result.
+  - note: Follow-up of F-698 (ADR 0621, 2026-11-15).
+- [ ] **F-715** Robust expected improvement on multimodal functions
+  - depends on: F-698
+  - acceptance: on Hartmann 6 (n0 30, budget 200, seeds 1 to 10) at least 9 of 10 runs within 1 percent of the minimum
+    with hyperparameter averaging or a registered exploration restart, every F-698 check keeps its result, and a check
+    with the failure classifier off separates imputation at m + s from m - s (the surviving mutation M6).
+  - note: Follow-up of F-698 (ADR 0621, 2026-11-15).
+- [ ] **F-716** Stall pre-check for the fan initial design
+  - depends on: F-698, F-697
+  - acceptance: on the F-698 R1 set-up the failed share of the 50 evaluations falls below 0.3 on every seed from 1 to 10
+    while R1 still holds on 9 of 10, with the pre-check evaluations of the reduced-order model counted in the ledger.
+  - note: Follow-up of F-698 (ADR 0621, 2026-11-15).
+- [ ] **F-717** Fidelity driver, the uncertainty guard and P4 robustness
+  - depends on: F-699
+  - acceptance: a registered check on a synthetic noise source on which the one-standard-error rule alone would trust a
+    correction shows the correction untrusted only because the discrepancy is not above twice the stated uncertainty
+    (and trusted with that guard off), the mutation stated uncertainty ignored fails it, P4 searches its messages with
+    the file path removed, and every ADR 0622 check keeps its result.
+  - note: Follow-up of F-699 (ADR 0622, 2026-11-15).
+- [ ] **F-718** Gaussian-process discrepancy rung R3 for the fidelity driver
+  - depends on: F-699, F-698
+  - acceptance: with F-698's Gaussian process on the R2 residual (zero mean, nugget from the stated uncertainty,
+    hyperparameters fixed per fit and leave-one-out from the closed form), R3 is chosen over R2 only by the
+    one-standard-error rule, its leave-one-out residuals equal brute force within 1e-8, its 2-sigma leave-one-out
+    coverage is at least the registered value on a smooth nonlinear synthetic discrepancy, and every ADR 0622 check
+    keeps its result.
+  - note: Follow-up of F-699 (ADR 0622, 2026-11-15).
+- [ ] **F-719** The stabilised incompatible-modes Hex8 (LinearStress) under load on distorted meshes
+  - depends on: F-708
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The confined punch block and the
+    displacement-controlled cantilever of ADR 0636 on meshes with the interior nodes moved by 0.1 h (2U - 1) and by 0.25
+    h (2U - 1), rule L against the F-bar Hex8 of ADR 0506 on the same meshes, reaction and displacement within
+    registered tolerances; the stability of the loaded state reported; a negative control of the F-bar reference within
+    the item's own tests; the default bits unchanged.
+  - note: Follow-up of F-708 (ADR 0636, 2026-11-15).
+- [ ] **F-720** Periodic sliding at coinciding nodes
+  - depends on: F-710, F-704
+  - acceptance: a uniform flow on the sector pair of ADR 0629 with a step that lands on node coincidences is kept to
+    1e-10 on every step through periodic_sliding_step, the same coupling of the interface graph's parts applied if the
+    base misses; F-304 and F-704 results unchanged where no coincidence occurs.
+  - note: Follow-up of F-710 (ADR 0638, 2026-11-15).
