@@ -542,6 +542,16 @@ someone kept:
   and 0.02 it is 13. The sample is derivable from the file, so it guards against mistakes and version drift, not a deliberate
   forger. Records without the key keep the bytes and hashes of ADR 0624 and are read as before; code of ADR 0624 reading a new
   record ignores the key and re-runs all or none.
+* Two held metrics (ADR 0665; "at equal flow and speed") are registered with `register_with_floor(ledger, h, model)`: the two
+  compensating parameters are solved together in each arm by a damped Newton iteration on the held residuals (forward-difference
+  Jacobian, backtracking on the tolerance-scaled residual, kept inside the brackets), and the registration computes the
+  held-tolerance floor: at the domain midpoint, `phi = sum_j |S_j| tol_j` per solved arm with `S_j = dy/dg_j` along the hold (by
+  differences), summed over both arms for value targets and the high arm for `as_low_arm` targets. That is the first-order change
+  of a paired difference the held tolerances allow; a `min_effect` below 10 times it is refused with both values named.
+  `held_floor(h, model)` gives it alone; it works for one hold too. The floor is stored in the registration entry
+  (`settings.held_floor`), not in the record, so the record hash is the claim's; `verify` requires it for two holds and
+  recomputes it with the evaluator at hand. `register` and `register_batch` keep one hold and write no new key; targets must be
+  all values or all `as_low_arm`, and three or more holds are refused.
 * `explore` ranks parameter-metric pairs by Spearman correlation over existing entries; it is marked exploratory and never
   evidence.
 
