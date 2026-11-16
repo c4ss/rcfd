@@ -296,6 +296,8 @@ test('the workspace: residual values, the monitor readout, the counter and the n
   await page.getByRole('tab', { name: 'Workspace' }).click();
   await page.getByRole('listbox', { name: 'Runs of the project' }).locator(`[data-run="${CAVITY}"]`).click();
   await expect(page.locator('.ws')).toHaveAttribute('data-run', CAVITY);
+  // the run's stops must be loaded before the keys move along them (the scrubber ignores keys while it has none)
+  await expect(page.locator('.ws')).toHaveAttribute('data-snapshot', /^\d+$/);
   const slider = page.getByRole('slider', { name: /^Time of / });
   await slider.focus();
   await page.keyboard.press('Home');
