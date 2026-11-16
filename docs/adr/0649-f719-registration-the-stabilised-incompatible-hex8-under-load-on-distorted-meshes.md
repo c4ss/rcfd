@@ -326,3 +326,23 @@ state)? Runs, each once, rule L on the `8^3` mesh at `a = 0.25`:
 Interpretation registered: D1 stable and D2 converging within the tolerances means the miss is the load stepping of the driver
 on a near-degenerate element at the singular punch edge, not the element's stability; D1 unstable means rule L loses stability
 under the punch edge on this mesh. The decision rule is unchanged: a DB limit missed is **partial**.
+
+## Amendment 2 (2026-11-16, written after the diagnosis of amendment 1 and before any further run)
+
+The diagnosis A1.2 was run once (commit b806449d, log `a1-diagnosis.log`): D3 element 476's smallest corner ratio is `0.308`
+(the mesh's smallest is `0.0762`, another element: 476 is not the most distorted one). **D1 failed**: the solve to `0.0675` in
+10 increments fails at its last increment (load factor `0.99687 -> 1`, punch `0.06729 -> 0.0675`), element 476 inverted
+(`det F = -3.84` at point 2), so no state at `0.0675` exists to measure SL at. **D2 failed**: 40 increments fail at load factor
+`0.67734 -> 0.67813` (punch `0.06773 -> 0.06781`), element 476 inverted, after 5 halvings. The two runs and the registered one
+fail at the same punch displacement, `0.0673` to `0.0678`, for increments from `0.01` down to `0.0003`: the wall is a property
+of the path, not of the increment size. The registered interpretation of A1.2 cannot be applied as written (D1 gave no state).
+
+### A2.1 D4: the stability along the path (registered now, no limit, run once, ignored record `a2_diagnosis_path_stability`)
+
+Rule L and F-bar on the `8^3` mesh at `a = 0.25`, the punch at `0.05`, `0.06`, `0.065`, `0.067` (10 increments each, the
+driver's defaults otherwise): the negative count of `K_ff` and its lowest eigenvalue over the largest diagonal at each
+converged state (SL's measures), and the smallest `det F` over the points of element 476 is not available from the API, so it
+is not measured. Interpretation registered: a rule L ratio falling by a factor of 10 or more from `0.05` to `0.067` (or a
+negative count) says rule L approaches a loss of stability (a limit or bifurcation point) on this mesh under the punch edge;
+a ratio within a factor 2 of its value at `0.05` says the tangent stays well-conditioned and the failure is the Newton iterate
+inverting element 476 from a stable state. A solve that fails is printed as such. The decision rule is unchanged.
