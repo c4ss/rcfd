@@ -30,6 +30,7 @@ dialog, read through the engine's project server, and kept live (below). Depende
 
     npm run field -- --data=<folder> [--store=<fields folder>]   # F-808: the field viewport on a store at 1440x900 (view-and-report)
     npm run bench:field -- --data=<folder> [--bench-server=<f447_bench>]   # P7 and P8 through the shell; heavy, by hand only
+    npm run bench [-- --heavy]  # F-817: P2, P4, P5, P7, P8, P10 against their limits in one run (below); not in npm test
     npm start                 # electron . (run npm run build first); downloads the Electron binary on first use
 
 `npm test` opens the Studio window for a few seconds on Windows (Electron has no headless mode there); it needs no input.
@@ -474,7 +475,7 @@ Decisions taken in building F-814 (options, the recommendation followed; each re
 | `tests/unit/` | Pure tests of `security.ts` and the built `index.html` (F-801); tokens against `DESIGN.md`, the pictogram grid (F-802); the service client against a fake service (F-803) | run by Playwright (project `unit`) | F-801, F-802, F-803 |
 | `tests/e2e/` | The packaged shell driven by Playwright's `_electron.launch`; the primitives (F-802); the service port's allow-list against a fake service, and the client against the real `rcfd serve` (F-803) | run by Playwright (project `electron`) | F-801 onwards |
 | `tests/support/` | The fake service, finding and starting `rcfd`, launching the packaged Studio | imported by the tests | F-803 |
-| `scripts/` | `package-dir.mjs` (packaging by hand), `measure-cold-start.mjs` (P10), `measure-service.mjs` (P1, P2), `write-tokens-css.mjs`, `open-gallery.mjs` | run by Node | F-801, F-802, F-803 |
+| `scripts/` | `package-dir.mjs` (packaging by hand), `measure-cold-start.mjs` (P10), `measure-service.mjs` (P1, P2), `write-tokens-css.mjs`, `open-gallery.mjs`; `bench.mjs` (F-817: the G9 bench over the `measure-*.mjs` scripts) | run by Node | F-801, F-802, F-803, F-817 |
 
 `out/`, `dist/`, `test-results/`, `test-results-visual/` and `node_modules/` are build output and never committed.
 
@@ -810,6 +811,41 @@ Decisions taken in building F-813 (options, the recommendation followed; each re
   copy is kept for the exceptions listed above.
 - Open: name the command palette (F-831) in each step's "Full control" once it is merged; the field viewport's own
   caption keeps the precise terms (`ux, m/s`, snapshot, step), one line under the picture.
+
+## The performance bench (F-817, G9)
+
+`npm run bench` repeats P2, P4, P5, P7, P8 and P10 of `docs/studio-guardrails.md` G9 against the packaged Studio
+(`npm run build && npm run package:dir` first) and prints each against its limit, one line each:
+
+    P<n> <what> <value> <unit> limit <limit> met|MISSED
+
+    npm run bench                              # the light set: a few minutes idle, 20 under full load
+    npm run bench -- --heavy                   # the full samples and the large cases; once, by hand (house rule 7)
+    npm run bench -- --only=P2,P10             # a subset; also --data=<folder>, --bench-server=<f447_bench>, --out=<file.json>, --no-gen
+
+- One entry point over the scripts of the items that measured each limit first: `measure-cold-start.mjs` (P10, F-801),
+  `measure-service.mjs` (P2 with P1, F-803), `measure-data.mjs` (P4, F-804), `measure-scrub.mjs` (P5, F-810) and
+  `measure-field.mjs` (P7 and P8, F-808). Each runs as its own process; its output is echoed under `|` and its JSON kept.
+  F-807's P2 per run action (`test-results-visual/f807/p2.json`, written by `npm test`) is printed beside P2 when present.
+- Light: P2 on 100 iteration events of the 1e5 box, P4 at 1e6 with 200 repeats per route and codec, P5 at 1e6 with 10
+  passes, P7 with 5 repeats per route, P8 with 1200 frames twice, P10 with 10 starts. `--heavy` takes P2's full 300 events
+  and adds, recorded and not judged, P6 at 4e6, Follow live, and P12 over the 1e6 and 4e6 boxes.
+- Judging follows the records of ADR 0801: P4 and P7 by route R1 or R2 (ADR 0350 §3), P4 on the raw store; P8's frame
+  rate is the better of the vertically synced and the uncapped run, its p99 frame the synced run's. Lines marked
+  `(recorded)` are not judged. Exit code 0 when every judged line is met, 1 on a miss, 2 when a case could not run.
+- Load: the processor busy fraction and the processes that use the processor (summed by name over 2 s, in cores) are
+  taken before and after the run, and each script takes its own before and after. A case whose busy fraction was 0.5 or
+  more says `LOADED MACHINE` beside its lines. Nothing is retried.
+- Data: the boxes of `f447_bench gen` (tiny and 1e6; 4e6 for `--heavy`) in `--data`, `$RCFD_BENCH_DATA` or
+  `<temp>/rcfd-studio-bench-data`, generated once when missing (about 3 min for 1e6 and 25 min for 4e6, not counted).
+  `measure-scrub.mjs` makes the folder a project the Studio opens (the boxes move into run folders, linked back).
+  Binaries: `f447_bench` and `rcfd-mcp`, found as the tests find them (`RCFD_F447_BENCH`, `RCFD_MCP_BIN`,
+  `$CARGO_TARGET_DIR`, `target/release` here or above).
+- Window: the Studio runs in the tests' mode, `RCFD_TEST_HEADLESS=1` (transparent, click-through, unfocused, off the
+  taskbar, background throttling off), so a run opens no visible window; `RCFD_TEST_HEADLESS=0 npm run bench` measures
+  with the normal window. The mode is printed and kept in the results.
+- Results: `out/bench/bench-<time>.json` (every line, the machine, the load, each script's own JSON). The bench is not
+  part of `npm test` or CI; results are recorded by hand in ADR 0800 §9.
 
 ## Provenance and reproduce from the CLI (F-828)
 
