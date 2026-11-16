@@ -230,3 +230,87 @@ run, or a mutation not caught. **todo**: TQ-M, FR-M and FS not run.
   only flat facets are run.
 - Whether the opt-in should become the default (it would change the results of every layup with `m1 != 0` under a centrifugal
   load, ADR 0633 option (b)) is the maintainer's decision; not taken.
+
+## Addendum 1: results (2026-11-16)
+
+Library change of D2 in 414e9765 (`model.rs` the flag, getter and setter; `rotating.rs` one line in `unit_centrifugal_model`;
+`shell.rs` the new `layup_body_load_vector_affine_at` after the unchanged `layup_body_load_vector_at`; `loads.rs` the optional
+`along` field of `ShellBody::PerMass`, the centrifugal `along` rule and the module note). Test file
+`crates/rcfd-fem/tests/sa_layup_centrifugal_first_moment_f709.rs` (three tests, 0.04 s in release), committed in 5c0595c2 before
+its run; the registered run (run 1, log `f709-scratch/run1.log`) was made once, with no amendment.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| TQ-M torque on the meridian facet, on | `1e-12` | `2.10e-14` | yes |
+| FR-M force resultant against the exact through-thickness integral, on | `1e-12` | `6.46e-16` | yes |
+| TQ-O torque on the oblique facet, on | `1e-12` | `1.32e-14` | yes |
+| FR-O resultant on the oblique facet, on | `1e-12` | `5.71e-16` | yes |
+| OR1 `r_1` against the facet loads, on | `1e-13` | FM `5.0e-17`, FO `1.0e-16` | yes |
+| NF resultant's miss, off | `>= 1e-3` | FM `6.99e-3`, FO `6.58e-3` (as the probe) | yes |
+| NT torque of the default against the closed form; its size | `1e-10`; `>= 0.1` | FM `2.1e-14`, `1.000`; FO `1.6e-14`, `0.469` | yes |
+| FS HB on, opt-in pre-stress against the copy route | `1e-10` | `6.55e-14` | yes |
+| RX HB on, residual at the interior nodes | `1e-10` | `6.28e-14` | yes |
+| RXc the copy route's residual | `1e-10` | `5.66e-14` | yes |
+| OR HB on, `r_1`, `r_2` | `1e-13` | `3.5e-17`, `3.3e-17` | yes |
+| GN gauge node | interior; `1e-12` | node 14 (blade tip), interior; `0` | yes |
+| NT-HB blade torque, off | `1e-10` | `1.6e-14` (`r_2^T f = 4.921875e-2`) | yes |
+| NC1 HB off, the free-sector pre-stress against the copy route | `>= 1e-5` | `1.11e-2` | yes |
+| NC0 HB on and off without `free_sector_prestress` | `SingularStiffness` | both | yes |
+| NB bits on against off: Shell4 `Shell`, one-ply layup, Shell3, Hex8 (centrifugal); gravity on L2 | bits equal | all five equal | yes |
+| DF default of the flag | `false` | `false` | yes |
+| B1 `baseline_hashes` | pass | 3 passed (1 ignored record, as before) | yes |
+| B2 existing tests | pass | `sa_laminate_body` 6 (1 ignored), `sa_laminate_body_default_bits` 1, `..._f686` 3, `..._f683` 3 (2 ignored), `..._f680` 5, `--lib rotating` 6 | yes |
+
+On HB the default load has exactly the blade torque `m1 int rho dA` of arithmetic 5 (the hub facets add nothing, as ADR 0633
+D1), and the free-sector pre-stress then depends on the gauge by `1.1e-2` (NC1, estimate `~ 2e-2`); with the opt-in the torque
+is at rounding (`3.3e-17`) and the two gauges agree to `6.6e-14`. The force resultant with the opt-in is the ply-by-ply
+through-thickness integral of the exact body force to `6e-16` on both facets; without it, it misses by `m1 |P e_3| / |F|` as
+predicted.
+
+`cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings` clean.
+
+**Mutations** (a `git archive` copy of 5c0595c2 per mutation, each with its own `CARGO_TARGET_DIR` and `Compiling rcfd-fem` in
+every log; `f709-scratch/mutate.py`, `run_mutations.sh`, `mut_M*.log`, `mut_summary.log`; each run once, `--no-fail-fast`):
+
+| Id | Caught by |
+|---|---|
+| M1 sign of the term flipped | TQ-M (`2.00`), TQ-O, FR-M (`1.4e-2`), FR-O, OR HB `r_2` (`3.7e-3`), FS (`2.2e-2`), RX, RXc |
+| M2 `m0` for `m1` | TQ-M (`239`), TQ-O, FR-M, FR-O, OR HB, FS (`0.75`), RX, RXc |
+| M3 the flag not copied by `unit_centrifugal_model` | FS (`5.7e-3`), RX (`2.1e-2`); the facet checks stay met, as expected |
+| M4 no projection `P` in `along` | FR-O (`5.1e-3`), OR1-FO (`5.1e-3`); FM and HB met, as registered (`e_3 . a = 0` there) |
+| M5 default `true` | DF, and the f686 OL record (`r_2^T f = 2e-16` against `P = 1.17e-2`) |
+
+**Deviations.** The registered B2 filters `--lib loads`, `--lib shell`, `--lib model` select no unit test (the crate's 14 unit
+tests are in other modules; `rotating` has 6, run). In their place the existing integration tests that exercise the changed
+shell-load lines were run, all passing: `sa_cyclic_shell_extensions`, `sa_cyclic_shells`, `sa_geometric_struct_bits`,
+`sa_laminate`, `sa_laminate_default_bits`, `sa_prestress_mixed_bits`, `sa_shell3`, `sa_shell3_bits`, `sa_shell4_membrane_bits`,
+`sa_shell3_membrane_bits`, `si_shell`, `si_shell_rotating_disc`, `si_shell_thermal`, `si_shell_thermal_gradient_layup_bits`,
+`sa_ortho_rotating`, `sa_hyper_structures` (log `f709-scratch/b2b.log`). No limit changed, no check re-run.
+
+**Decision by the registered rule: done.** Every check TQ-M to B2 met in the registered run and every mutation caught by its
+expected checks. Every clause of the acceptance is met: the opt-in `SolidModel::set_layup_first_moment_force` adds `m1 Omega^2
+P e_3` to the centrifugal load of a Shell4 layup; with it the load on a meridian facet with `m1 != 0` has a torque of `2.1e-14`
+relative to `m1 A rho_c Omega^2` (limit `1e-12`), its force resultant matches the through-thickness integral of the exact body
+force within `6.5e-16` (limit `1e-12`), and the free hub-and-meridian-blade layup sector with `free_sector_prestress` gives the
+pre-stress of a constrained-copy route within `6.6e-14` (limit `1e-10`); the defaults are bit-identical (DF, NB,
+`baseline_hashes`, the default-bits tests and the f686 OL record of the default's torque).
+
+### Remaining questions
+
+1. **Default.** Should the term become the default (ADR 0633 option (b))? It changes the centrifugal results of every layup
+   with `m1 != 0` (a correction of about `m1 / (m0 rho)`, here `7e-3` of the force). Options: (a) keep it opt-in; (b) flip the
+   default with the maintainer's approval and a re-record of any affected hash or golden. Recommendation: (b) after the
+   maintainer's approval, the exact load being the consistent one; not taken here (it changes default results).
+2. **The moment term 4 of D1** (`m2 Omega^2 e_3 x P e_3`, torque-free, dropped for all shells). Options: (a) leave it; (b) an
+   opt-in item. Recommendation: (a); its size relative to the kept moment is `~ m2 / (m1 rho)` and it does not affect the
+   free-sector gauge.
+3. **Exposure.** The opt-in is a library flag only; a case-file key would touch the schema golden. Recommendation: add it with
+   the fan-blade case work that needs it, with the maintainer's approval of the golden change.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> Structural solver, advanced tier. Follow-up of F-686 (ADR 0633). DONE. ADR 0635, 2026-11-16: the torque-free centrifugal load of a layup with a first mass moment. An opt-in, SolidModel::set_layup_first_moment_force (copied by the rotating pre-stress model), adds the force term m1 Omega^2 P e_3 of the through-thickness integral of the exact body force to the centrifugal load of a Shell4 layup of more than one ply (shell::layup_body_load_vector_affine_at, derived in the ADR: with it the load is orthogonal to both cyclic rigid motions pointwise). With it, on a meridian facet of the unsymmetric two-density layup (m1 = 0.4375 kg/m) the torque about the axis is 2.1e-14 of m1 A rho Omega^2 (limit 1e-12) and the force resultant matches the ply-by-ply exact integral within 6.5e-16 (limit 1e-12), likewise on an oblique facet; a free fan-like sector (hub ring and a blade in the meridian plane) with free_sector_prestress gives the pre-stress of a constrained-copy route within 6.6e-14 (limit 1e-10), where without the opt-in the blade torque m1 int rho dA makes it depend on the gauge by 1.1e-2. Shell, one-ply, Shell3, solid and gravity loads keep their bits under the opt-in; the defaults are bit-identical (baseline_hashes, the default-bits tests). Five of five mutations caught. Not covered: the torque-free m2 moment term (dropped for all shells), warped facets beyond the projected-facet route, Shell3 layups (refused), a case-file key; the default stays the ADR 0502 D1 load.
+
+> Follow-up proposed: none. Remaining question 1 (making the term the default) is for the maintainer, since it changes default results.
