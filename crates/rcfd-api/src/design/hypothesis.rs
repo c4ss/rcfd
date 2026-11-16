@@ -7,6 +7,9 @@
 //!   version and tier, and the level spent) before any evidence exists. The family is the ledger file; hypothesis `i` of the
 //!   family is tested at `a_i = 0.05 * 6 / (pi^2 i^2)`, so the levels of any number of hypotheses sum to at most 0.05 (union
 //!   bound). [`register_batch`] registers several hypotheses in one slot of the series, judged together by Holm's procedure.
+//! * [`register_with_floor`] (ADR 0665) registers a hypothesis with one or two held metrics (two are solved together by a damped
+//!   Newton iteration) and refuses a `min_effect` below [`K_RES`] times the held-tolerance floor of [`held_floor`]: the first-order
+//!   change of the paired difference that the held tolerances allow, at the domain midpoint.
 //! * [`run`] evaluates exactly the registered pairs (a seeded Latin hypercube of the domain, the factor at its low and high level,
 //!   the held metric matched by bisection on its compensating parameter) with a [`Model`], appends them as evidence entries in
 //!   pair order (whatever the worker count), resumes after a kill, and appends a `hypothesis_result` entry.
@@ -48,6 +51,12 @@ pub const KIND_HYPOTHESIS: &str = "hypothesis";
 pub const KIND_RESULT: &str = "hypothesis_result";
 /// Kind of a withdrawal entry.
 pub const KIND_WITHDRAWN: &str = "hypothesis_withdrawn";
+/// Largest number of held metrics, solved together by [`register_with_floor`]'s records (ADR 0665).
+pub const MAX_HELD: usize = 2;
+/// Newton iterations of a coupled hold (ADR 0665 D1).
+const NEWTON_MAX_ITER: usize = 50;
+/// Step halvings of one Newton iteration.
+const NEWTON_HALVINGS: usize = 30;
 
 fn num(v: f64) -> Value {
     serde_json::Number::from_f64(v).map_or(Value::Null, Value::Number)
@@ -943,7 +952,7 @@ fn recount(regs: &[Registered]) -> Vec<(String, usize)> {
         .collect()
 }
 
-fn validate(h: &Hypothesis, entries: &[Entry], regs: &[Registered]) -> Result<(), String> {
+fn validate(h: &Hypothesis, entries: &[Entry], regs: &[Registered], max_held: usize) -> Result<(), String> {
     let finite = |x: f64, what: &str| -> Result<(), String> {
         if x.is_finite() {
             Ok(())
@@ -1009,11 +1018,32 @@ fn validate(h: &Hypothesis, entries: &[Entry], regs: &[Registered]) -> Result<()
             return Err(format!("domain '{}': the factor cannot be in the domain", b.name));
         }
     }
-    if h.held.len() > 1 {
-        return Err(format!(
-            "held: {} held metrics; at most one is supported (ADR 0624 amendment 1, limits)",
-            h.held.len()
-        ));
+    if h.held.len() > max_held {
+        return Err(if max_held <= 1 {
+            format!(
+                "held: {} held metrics; `register` takes one, `register_with_floor` takes up to {MAX_HELD} (ADR 0665)",
+                h.held.len()
+            )
+        } else {
+            format!(
+                "held: {} held metrics; at most {MAX_HELD} are supported (ADR 0665)",
+                h.held.len()
+            )
+        });
+    }
+    for (i, x) in h.held.iter().enumerate() {
+        if h.held[..i].iter().any(|y| y.metric == x.metric) {
+            return Err(format!("held '{}': given twice", x.metric));
+        }
+        if h.held[..i].iter().any(|y| y.by == x.by) {
+            return Err(format!(
+                "held '{}': the compensating parameter '{}' is given twice",
+                x.metric, x.by
+            ));
+        }
+    }
+    if h.held.len() > 1 && !same_target_kind(&h.held) {
+        return Err("held: targets must be all values or all as_low_arm (a mix is not covered, ADR 0665)".into());
     }
     for x in &h.held {
         if x.metric.is_empty() || x.unit.is_empty() || x.by.is_empty() || x.by_unit.is_empty() {
@@ -1162,7 +1192,7 @@ pub fn register_batch(ledger: &Ledger, hs: &[Hypothesis]) -> Result<Vec<Register
     let first = format!("H-{}", regs.len() + 1);
     let mut out = Vec::new();
     for (j, h) in hs.iter().enumerate() {
-        validate(h, &entries, &regs).map_err(|e| format!("hypothesis {}: {e}", regs.len() + j + 1))?;
+        validate(h, &entries, &regs, 1).map_err(|e| format!("hypothesis {}: {e}", regs.len() + j + 1))?;
         let id = format!("H-{}", regs.len() + j + 1);
         let batch = (hs.len() > 1).then(|| Batch {
             first: first.clone(),
@@ -1249,17 +1279,22 @@ fn is_evidence_of(e: &Entry, id: &str) -> bool {
         && e.provenance.get("hypothesis").and_then(Value::as_str) == Some(id)
 }
 
-fn params_for(h: &Hypothesis, x: &[f64], arm: Arm, by: Option<f64>) -> Vec<Quantity> {
+fn params_for(h: &Hypothesis, x: &[f64], arm: Arm, by: &[f64]) -> Vec<Quantity> {
     let mut p = vec![Quantity::new(
         &h.factor.name,
         if arm == Arm::Low { h.factor.low } else { h.factor.high },
         &h.factor.unit,
     )];
     p.extend(h.domain.iter().zip(x).map(|(b, &v)| Quantity::new(&b.name, v, &b.unit)));
-    if let (Some(hd), Some(v)) = (h.held.first(), by) {
+    for (hd, &v) in h.held.iter().zip(by) {
         p.push(Quantity::new(&hd.by, v, &hd.by_unit));
     }
     p
+}
+
+fn same_target_kind(held: &[Held]) -> bool {
+    held.iter().all(|x| matches!(x.target, HeldTarget::Value(_)))
+        || held.iter().all(|x| matches!(x.target, HeldTarget::AsLowArm { .. }))
 }
 
 fn safe_eval(model: &dyn Model, p: &[Quantity]) -> Outcome {
@@ -1287,24 +1322,27 @@ fn eval_arm(
     h: &Hypothesis,
     x: &[f64],
     arm: Arm,
-    low_held: Option<f64>,
+    low_held: Option<&[f64]>,
 ) -> (Vec<Quantity>, Outcome, usize) {
+    if h.held.len() > 1 {
+        return eval_arm_coupled(model, h, x, arm, low_held);
+    }
     let Some(hd) = h.held.first() else {
-        let p = params_for(h, x, arm, None);
+        let p = params_for(h, x, arm, &[]);
         let o = safe_eval(model, &p);
         return (p, o, 1);
     };
     let target = match (hd.target, arm) {
         (HeldTarget::AsLowArm { at }, Arm::Low) => {
-            let p = params_for(h, x, arm, Some(at));
+            let p = params_for(h, x, arm, &[at]);
             let o = safe_eval(model, &p);
             return (p, o, 1);
         }
         (HeldTarget::AsLowArm { at }, Arm::High) => match low_held {
-            Some(t) => t,
+            Some(t) => t[0],
             None => {
                 // the low arm failed, so the pair is failed; the high arm is evaluated at the low arm's setting for the record
-                let p = params_for(h, x, arm, Some(at));
+                let p = params_for(h, x, arm, &[at]);
                 let o = safe_eval(model, &p);
                 return (p, o, 1);
             }
@@ -1315,7 +1353,7 @@ fn eval_arm(
     let mut it = 0;
     let mut f = |v: f64| {
         it += 1;
-        let p = params_for(h, x, arm, Some(v));
+        let p = params_for(h, x, arm, &[v]);
         let o = safe_eval(model, &p);
         let r = if o.verdict == Verdict::Ok {
             metric_of(&o, &hd.metric, &hd.unit).map(|m| m - target)
@@ -1356,6 +1394,378 @@ fn eval_arm(
         last = (pm, om);
     }
     (last.0, last.1, it)
+}
+
+/// Evaluate one arm of a record with two or more held metrics (ADR 0665 D1): the compensating parameters are solved together
+/// by a damped Newton iteration on the held residuals. `low_held` is the low arm's held metric values (as_low_arm targets).
+fn eval_arm_coupled(
+    model: &dyn Model,
+    h: &Hypothesis,
+    x: &[f64],
+    arm: Arm,
+    low_held: Option<&[f64]>,
+) -> (Vec<Quantity>, Outcome, usize) {
+    let ats: Option<Vec<f64>> = h
+        .held
+        .iter()
+        .map(|hd| match hd.target {
+            HeldTarget::AsLowArm { at } => Some(at),
+            HeldTarget::Value(_) => None,
+        })
+        .collect();
+    let single = |by: &[f64]| {
+        let p = params_for(h, x, arm, by);
+        let o = safe_eval(model, &p);
+        (p, o, 1)
+    };
+    match (&ats, arm) {
+        (Some(at), Arm::Low) => single(at),
+        (Some(at), Arm::High) => match low_held {
+            Some(t) => solve_holds(model, h, x, arm, t, at.clone()),
+            // the low arm failed, so the pair is failed; the high arm is evaluated at the low arm's setting for the record
+            None => single(at),
+        },
+        (None, _) => {
+            // a mixed record is refused at registration; one written by hand never matches (NaN target)
+            let t: Vec<f64> = h
+                .held
+                .iter()
+                .map(|hd| match hd.target {
+                    HeldTarget::Value(t) => t,
+                    HeldTarget::AsLowArm { .. } => f64::NAN,
+                })
+                .collect();
+            let start = h
+                .held
+                .iter()
+                .map(|hd| hd.bracket.0 + 0.5 * (hd.bracket.1 - hd.bracket.0))
+                .collect();
+            solve_holds(model, h, x, arm, &t, start)
+        }
+    }
+}
+
+/// One evaluation of an arm at the compensating values `u`: the parameters, the outcome and the held residuals (`None` when
+/// the evaluation failed or a held metric is missing).
+fn eval_holds(
+    model: &dyn Model,
+    h: &Hypothesis,
+    (x, arm): (&[f64], Arm),
+    targets: &[f64],
+    u: &[f64],
+    count: &mut usize,
+) -> (Vec<Quantity>, Outcome, Option<Vec<f64>>) {
+    *count += 1;
+    let p = params_for(h, x, arm, u);
+    let o = safe_eval(model, &p);
+    let r = if o.verdict == Verdict::Ok {
+        h.held
+            .iter()
+            .zip(targets)
+            .map(|(hd, t)| metric_of(&o, &hd.metric, &hd.unit).map(|g| g - t))
+            .collect()
+    } else {
+        None
+    };
+    (p, o, r)
+}
+
+/// Damped, projected Newton iteration on the held residuals `r_j = g_j(u) - t_j` (ADR 0665 D1; Dennis and Schnabel 1983,
+/// chapters 5 and 6): forward-difference Jacobian, step `J delta = -r`, the trial `P(u + lambda delta)` (P the bracket box)
+/// accepted when the tolerance-scaled residual norm falls below `(1 - 1e-4 lambda)` times its value; `lambda` halved at most
+/// 30 times; at most 50 iterations. Returns the evidence (the accepted iterate's evaluation) and the number of evaluations.
+fn solve_holds(
+    model: &dyn Model,
+    h: &Hypothesis,
+    x: &[f64],
+    arm: Arm,
+    targets: &[f64],
+    start: Vec<f64>,
+) -> (Vec<Quantity>, Outcome, usize) {
+    let held = &h.held;
+    let m = held.len();
+    let boxed = |k: usize, v: f64| v.max(held[k].bracket.0).min(held[k].bracket.1);
+    let scaled = |r: &[f64]| {
+        r.iter()
+            .zip(held)
+            .map(|(r, hd)| (r / hd.tolerance) * (r / hd.tolerance))
+            .sum::<f64>()
+            .sqrt()
+    };
+    let matched = |r: &[f64]| r.iter().zip(held).all(|(r, hd)| r.abs() <= hd.tolerance);
+    let mut it = 0;
+    let mut u: Vec<f64> = start.iter().enumerate().map(|(k, &v)| boxed(k, v)).collect();
+    let (mut p, mut o, r) = eval_holds(model, h, (x, arm), targets, &u, &mut it);
+    let Some(mut r) = r else { return (p, o, it) };
+    for _ in 0..NEWTON_MAX_ITER {
+        if matched(&r) {
+            return (p, o, it);
+        }
+        let mut jac = vec![vec![0.0; m]; m];
+        for k in 0..m {
+            let (lo, hi) = held[k].bracket;
+            let mut step = f64::EPSILON.sqrt() * u[k].abs().max(hi - lo);
+            if u[k] + step > hi {
+                step = -step;
+            }
+            let mut up = u.clone();
+            up[k] += step;
+            let (_, _, rp) = eval_holds(model, h, (x, arm), targets, &up, &mut it);
+            let Some(rp) = rp else { return (p, o, it) };
+            for j in 0..m {
+                jac[j][k] = (rp[j] - r[j]) / step;
+            }
+        }
+        let Some(delta) = gauss_solve(jac, r.iter().map(|v| -v).collect()) else {
+            return (p, o, it);
+        };
+        let m0 = scaled(&r);
+        let mut lambda = 1.0;
+        let mut accepted = false;
+        for _ in 0..=NEWTON_HALVINGS {
+            let ut: Vec<f64> = (0..m).map(|k| boxed(k, u[k] + lambda * delta[k])).collect();
+            let (pt, ot, rt) = eval_holds(model, h, (x, arm), targets, &ut, &mut it);
+            let Some(rt) = rt else { return (pt, ot, it) };
+            if scaled(&rt) < (1.0 - 1e-4 * lambda) * m0 {
+                (u, p, o, r) = (ut, pt, ot, rt);
+                accepted = true;
+                break;
+            }
+            lambda *= 0.5;
+        }
+        if !accepted {
+            return (p, o, it);
+        }
+    }
+    (p, o, it)
+}
+
+/// Solve `a x = b` by Gaussian elimination with partial pivoting; `None` when singular or not finite.
+fn gauss_solve(mut a: Vec<Vec<f64>>, mut b: Vec<f64>) -> Option<Vec<f64>> {
+    let n = b.len();
+    for c in 0..n {
+        let piv = (c..n).max_by(|&i, &j| a[i][c].abs().total_cmp(&a[j][c].abs()))?;
+        if a[piv][c] == 0.0 || !a[piv][c].is_finite() {
+            return None;
+        }
+        a.swap(c, piv);
+        b.swap(c, piv);
+        for i in c + 1..n {
+            let f = a[i][c] / a[c][c];
+            for k in c..n {
+                a[i][k] -= f * a[c][k];
+            }
+            b[i] -= f * b[c];
+        }
+    }
+    let mut x = vec![0.0; n];
+    for i in (0..n).rev() {
+        let s: f64 = (i + 1..n).map(|k| a[i][k] * x[k]).sum();
+        x[i] = (b[i] - s) / a[i][i];
+    }
+    x.iter().all(|v| v.is_finite()).then_some(x)
+}
+
+// ---------------------------------------------------------------- the held-tolerance floor (ADR 0665 D2)
+
+/// The floor of one solved arm at the probe point.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ArmFloor {
+    /// Arm.
+    pub arm: Arm,
+    /// Solved compensating parameters (held order).
+    pub by: Vec<f64>,
+    /// `S_j = dy / dg_j` along the hold (response unit per held-metric unit).
+    pub sensitivity: Vec<f64>,
+    /// `phi = sum_j |S_j| tolerance_j` (response unit).
+    pub bound: f64,
+}
+
+/// The held-tolerance floor of a record and model (ADR 0665 D2).
+#[derive(Debug, Clone, PartialEq)]
+pub struct HeldFloor {
+    /// `phi_low + phi_high` (value targets) or `phi_high` (as_low_arm targets), response unit.
+    pub value: f64,
+    /// The probe point: the domain midpoint, in registered order.
+    pub probe: Vec<f64>,
+    /// The solved arms.
+    pub arms: Vec<ArmFloor>,
+}
+
+impl HeldFloor {
+    fn to_json(&self) -> Value {
+        let nums = |v: &[f64]| v.iter().map(|x| num(*x)).collect::<Vec<_>>();
+        json!({
+            "value": num(self.value), "k": num(K_RES), "probe": nums(&self.probe),
+            "arms": self.arms.iter().map(|a| json!({
+                "arm": a.arm.as_str(), "by": nums(&a.by), "sensitivity": nums(&a.sensitivity), "bound": num(a.bound),
+            })).collect::<Vec<_>>(),
+        })
+    }
+}
+
+fn held_values(o: &Outcome, h: &Hypothesis) -> Option<Vec<f64>> {
+    if o.verdict != Verdict::Ok {
+        return None;
+    }
+    h.held.iter().map(|hd| metric_of(o, &hd.metric, &hd.unit)).collect()
+}
+
+/// The response and the held metrics at compensating values `u` (`None` when the evaluation fails or a metric is missing).
+fn probe_eval(model: &dyn Model, h: &Hypothesis, x: &[f64], arm: Arm, u: &[f64]) -> Option<(f64, Vec<f64>)> {
+    let o = safe_eval(model, &params_for(h, x, arm, u));
+    let y = (o.verdict == Verdict::Ok)
+        .then(|| metric_of(&o, &h.response.name, &h.response.unit))
+        .flatten()?;
+    Some((y, held_values(&o, h)?))
+}
+
+fn arm_floor(
+    model: &dyn Model,
+    h: &Hypothesis,
+    (x, arm): (&[f64], Arm),
+    (p, o): (&[Quantity], &Outcome),
+    targets: &[f64],
+) -> Result<ArmFloor, String> {
+    let where_ = format!("held: the floor probe at the domain midpoint, arm {}", arm.as_str());
+    let g = held_values(o, h).ok_or_else(|| format!("{where_}: the evaluation failed or a held metric is missing"))?;
+    if metric_of(o, &h.response.name, &h.response.unit).is_none() {
+        return Err(format!("{where_}: the response '{}' is missing", h.response.name));
+    }
+    for ((hd, g), t) in h.held.iter().zip(&g).zip(targets) {
+        let within = (g - t).abs() <= hd.tolerance; // false for NaN
+        if !within {
+            return Err(format!(
+                "{where_}: held metric '{}' = {g} not within {} of the target {t}",
+                hd.metric, hd.tolerance
+            ));
+        }
+    }
+    let m = h.held.len();
+    let n0 = 1 + h.domain.len();
+    let u: Vec<f64> = p[n0..n0 + m].iter().map(|q| q.value).collect();
+    let mut jt = vec![vec![0.0; m]; m]; // jt[k][j] = d g_j / d u_k (the transpose of J)
+    let mut gy = vec![0.0; m];
+    for k in 0..m {
+        let (lo, hi) = h.held[k].bracket;
+        let scale = u[k].abs().max(hi - lo);
+        let hc = f64::EPSILON.cbrt() * scale;
+        let hs = f64::EPSILON.sqrt() * scale;
+        let (a, b) = if u[k] - hc >= lo && u[k] + hc <= hi {
+            (u[k] - hc, u[k] + hc)
+        } else if u[k] + hs <= hi {
+            (u[k], u[k] + hs)
+        } else {
+            (u[k] - hs, u[k])
+        };
+        let at = |v: f64| {
+            let mut w = u.clone();
+            w[k] = v;
+            probe_eval(model, h, x, arm, &w)
+                .ok_or_else(|| format!("{where_}: the evaluation at a difference point failed"))
+        };
+        let (ya, ga) = at(a)?;
+        let (yb, gb) = at(b)?;
+        let den = b - a;
+        gy[k] = (yb - ya) / den;
+        for j in 0..m {
+            jt[k][j] = (gb[j] - ga[j]) / den;
+        }
+    }
+    let s = gauss_solve(jt, gy).ok_or_else(|| {
+        format!("{where_}: the compensating parameters do not control the held metrics (singular Jacobian)")
+    })?;
+    let bound = s.iter().zip(&h.held).map(|(s, hd)| s.abs() * hd.tolerance).sum();
+    Ok(ArmFloor {
+        arm,
+        by: u,
+        sensitivity: s,
+        bound,
+    })
+}
+
+/// The held-tolerance floor of `h` with `model` (ADR 0665 D2): at the domain midpoint, each arm solved as its evidence would be,
+/// `phi = sum_j |S_j| tolerance_j` with `S = J^{-T} grad_u y` by differences; `phi_low + phi_high` for value targets, `phi_high`
+/// for as_low_arm targets (the low arm has no residual). First order: the change of the paired difference that the held
+/// tolerances allow.
+pub fn held_floor(h: &Hypothesis, model: &dyn Model) -> Result<HeldFloor, String> {
+    if h.held.is_empty() {
+        return Err("held: no held metric, so there is no held-tolerance floor".into());
+    }
+    if !same_target_kind(&h.held) {
+        return Err("held: targets must be all values or all as_low_arm (a mix is not covered, ADR 0665)".into());
+    }
+    let x: Vec<f64> = h.domain.iter().map(|b| b.lo + 0.5 * (b.hi - b.lo)).collect();
+    let as_low = matches!(h.held[0].target, HeldTarget::AsLowArm { .. });
+    let values: Vec<f64> = h
+        .held
+        .iter()
+        .map(|hd| match hd.target {
+            HeldTarget::Value(t) => t,
+            HeldTarget::AsLowArm { .. } => f64::NAN,
+        })
+        .collect();
+    let (pl, ol, _) = eval_arm(model, h, &x, Arm::Low, None);
+    let low = held_values(&ol, h).ok_or(
+        "held: the floor probe at the domain midpoint, arm low: the evaluation failed or a held metric is missing",
+    )?;
+    let mut arms = Vec::new();
+    if !as_low {
+        arms.push(arm_floor(model, h, (&x, Arm::Low), (&pl, &ol), &values)?);
+    }
+    let (ph, oh, _) = eval_arm(model, h, &x, Arm::High, Some(&low));
+    let high_targets = if as_low { low.clone() } else { values };
+    arms.push(arm_floor(model, h, (&x, Arm::High), (&ph, &oh), &high_targets)?);
+    Ok(HeldFloor {
+        value: arms.iter().map(|a| a.bound).sum(),
+        probe: x,
+        arms,
+    })
+}
+
+/// Register one hypothesis with one or two held metrics and its held-tolerance floor (ADR 0665): ADR 0624's validation with up
+/// to [`MAX_HELD`] holds, the model's identity equal to the record's, the floor of [`held_floor`], and `min_effect` at least
+/// [`K_RES`] times the floor. The registration entry carries `settings.held_floor`; the record and its hash are not changed.
+pub fn register_with_floor(ledger: &Ledger, h: &Hypothesis, model: &dyn Model) -> Result<Registered, String> {
+    let entries = ledger.read()?.entries;
+    let regs = registrations(&entries);
+    let slot = recount(&regs).last().map_or(0, |x| x.1) + 1;
+    let n = regs.len() + 1;
+    let fail = |e: String| format!("hypothesis {n}: {e}");
+    validate(h, &entries, &regs, MAX_HELD).map_err(fail)?;
+    if h.held.is_empty() {
+        return Err(fail(
+            "held: no held metric; register_with_floor computes the floor of one or two (use register)".into(),
+        ));
+    }
+    if model.id() != h.evaluator.id || model.version() != h.evaluator.version || model.fidelity() != h.evaluator.tier {
+        return Err(fail(format!(
+            "evaluator: the model is {} version '{}' tier {}, the registration names {} version '{}' tier {}",
+            model.id(),
+            model.version(),
+            model.fidelity().as_str(),
+            h.evaluator.id,
+            h.evaluator.version,
+            h.evaluator.tier.as_str()
+        )));
+    }
+    let floor = held_floor(h, model).map_err(fail)?;
+    if h.min_effect < K_RES * floor.value {
+        return Err(fail(format!(
+            "min_effect: {} is below {K_RES} times the held-tolerance floor {} of '{}' (the change of the paired difference \
+             that the held tolerances allow, first order, at the domain midpoint; ADR 0665)",
+            h.min_effect, floor.value, h.response.name
+        )));
+    }
+    let id = format!("H-{n}");
+    let mut e = registration_entry(h, &id, slot, None);
+    if let Some(o) = e.settings.as_object_mut() {
+        o.insert("held_floor".into(), floor.to_json());
+    }
+    ledger.append(&[e])?;
+    let entries = ledger.read()?.entries;
+    let k = entries.len() - 1;
+    Ok(parse_registration(k, &entries[k]))
 }
 
 fn evidence_entry(
@@ -1503,6 +1913,35 @@ fn check_member(entries: &[Entry], regs: &[Registered], counts: &[(String, usize
             ));
         }
     }
+    if let Some(h) = &rec {
+        // the held-tolerance floor (ADR 0665): required with two holds, checked against min_effect when stored
+        match entries[reg.index].settings.get("held_floor") {
+            None | Some(Value::Null) => {
+                if h.held.len() > 1 {
+                    v.problems.push(format!(
+                        "{}: registration of {id} holds {} metrics and carries no held-tolerance floor (register_with_floor, ADR 0665)",
+                        at(reg.index),
+                        h.held.len()
+                    ));
+                }
+            }
+            Some(f) => match f.get("value").and_then(Value::as_f64) {
+                Some(x) if x.is_finite() && x >= 0.0 => {
+                    if h.min_effect < K_RES * x {
+                        v.problems.push(format!(
+                            "{}: min_effect {} of {id} is below {K_RES} times its stored held-tolerance floor {x}",
+                            at(reg.index),
+                            h.min_effect
+                        ));
+                    }
+                }
+                _ => v.problems.push(format!(
+                    "{}: the held-tolerance floor of {id} is not a finite non-negative number",
+                    at(reg.index)
+                )),
+            },
+        }
+    }
     v.withdrawn = entries
         .iter()
         .enumerate()
@@ -1582,8 +2021,8 @@ fn check_member(entries: &[Entry], regs: &[Registered], counts: &[(String, usize
         }
         v.evidence[s] = Some(k);
         // the parameters must be the design's
-        let want = params_for(&h, &pts[pair], arm, None);
-        let extra = usize::from(!h.held.is_empty());
+        let want = params_for(&h, &pts[pair], arm, &[]);
+        let extra = h.held.len();
         if e.params.len() != want.len() + extra {
             v.problems.push(format!(
                 "{}: evidence of {id} pair {pair} has {} parameters, the design {}",
@@ -1608,8 +2047,8 @@ fn check_member(entries: &[Entry], regs: &[Registered], counts: &[(String, usize
                 ));
             }
         }
-        if let Some(hd) = h.held.first() {
-            let b = &e.params[want.len()];
+        for (i, hd) in h.held.iter().enumerate() {
+            let b = &e.params[want.len() + i];
             let in_bracket = b.value >= hd.bracket.0 && b.value <= hd.bracket.1;
             let at_ok = match (hd.target, arm) {
                 (HeldTarget::AsLowArm { at }, Arm::Low) => b.value.to_bits() == at.to_bits(),
@@ -1663,7 +2102,7 @@ fn member_result(entries: &[Entry], m: &Member, level: f64) -> TestResult {
             failed += 1;
             continue;
         };
-        if let Some(hd) = h.held.first() {
+        for hd in &h.held {
             let ml = lo.metric(&hd.metric).filter(|q| q.unit == hd.unit).map(|q| q.value);
             let mh = hi.metric(&hd.metric).filter(|q| q.unit == hd.unit).map(|q| q.value);
             let check = |arm: &str, got: Option<f64>, target: Option<f64>| -> Option<String> {
@@ -1684,6 +2123,7 @@ fn member_result(entries: &[Entry], m: &Member, level: f64) -> TestResult {
             };
             if let Some(r) = bad {
                 unmatched.get_or_insert(r);
+                break;
             }
         }
         *dp = Some(s * (b - a));
@@ -1935,6 +2375,28 @@ fn verify_slot(
         if model.id() != h.evaluator.id || model.version() != h.evaluator.version || !tier_ok {
             continue;
         }
+        let stored_floor = entries[m.reg.index]
+            .settings
+            .get("held_floor")
+            .and_then(|f| f.get("value"))
+            .and_then(Value::as_f64);
+        if let Some(stored) = stored_floor {
+            match held_floor(h, model) {
+                Ok(f) if f.value.to_bits() == stored.to_bits() => {}
+                Ok(f) => m.v.problems.push(format!(
+                    "entry {}: held-tolerance floor of {} stored {stored}, re-computed {} with {} {}: not reproduced",
+                    m.reg.index,
+                    m.reg.id,
+                    f.value,
+                    model.id(),
+                    model.version()
+                )),
+                Err(e) => m.v.problems.push(format!(
+                    "entry {}: held-tolerance floor of {} could not be re-computed: {e}",
+                    m.reg.index, m.reg.id
+                )),
+            }
+        }
         let (targets, rtol, atol): (Vec<usize>, f64, f64) = match &plan {
             Some(p) => (
                 p.pairs
@@ -2132,29 +2594,31 @@ pub fn run(ledger: &Ledger, id: &str, model: &dyn Model, opts: &RunOptions) -> R
     for chunk in missing.chunks(opts.chunk.max(1)) {
         let out: Vec<Vec<Entry>> = parallel_map(chunk, opts.workers, &|&p: &usize| {
             let mut es = Vec::new();
-            let mut low_held = None;
-            let held = h.held.first();
+            let mut low_held: Option<Vec<f64>> = None;
+            let held = &h.held;
             match have[2 * p] {
                 Some(k) => {
-                    if let Some(hd) = held {
+                    if !held.is_empty() {
                         let e = &entries[k];
                         low_held = (e.verdict == Verdict::Ok)
-                            .then(|| e.metric(&hd.metric).filter(|q| q.unit == hd.unit).map(|q| q.value))
+                            .then(|| {
+                                held.iter()
+                                    .map(|hd| e.metric(&hd.metric).filter(|q| q.unit == hd.unit).map(|q| q.value))
+                                    .collect::<Option<Vec<f64>>>()
+                            })
                             .flatten();
                     }
                 }
                 None => {
                     let r = eval_arm(model, &h, &pts[p], Arm::Low, None);
-                    if let Some(hd) = held {
-                        low_held = (r.1.verdict == Verdict::Ok)
-                            .then(|| metric_of(&r.1, &hd.metric, &hd.unit))
-                            .flatten();
+                    if !held.is_empty() {
+                        low_held = held_values(&r.1, &h);
                     }
                     es.push(evidence_entry(model, &reg, &reg_ref, p, Arm::Low, r));
                 }
             }
             if have[2 * p + 1].is_none() {
-                let r = eval_arm(model, &h, &pts[p], Arm::High, low_held);
+                let r = eval_arm(model, &h, &pts[p], Arm::High, low_held.as_deref());
                 es.push(evidence_entry(model, &reg, &reg_ref, p, Arm::High, r));
             }
             es
@@ -2412,11 +2876,18 @@ fn statement(h: &Hypothesis, l: &Lesson, higher: Option<(&str, Fidelity)>) -> St
             (st.sign_share * st.n as f64).round() as usize,
             st.n
         ));
-        if let Some(hd) = h.held.first() {
-            t.push_str(&format!(
-                " with `{}` held within {} {} by `{}`",
-                hd.metric, hd.tolerance, hd.unit, hd.by
-            ));
+        if !h.held.is_empty() {
+            let holds: Vec<String> = h
+                .held
+                .iter()
+                .map(|hd| {
+                    format!(
+                        "`{}` held within {} {} by `{}`",
+                        hd.metric, hd.tolerance, hd.unit, hd.by
+                    )
+                })
+                .collect();
+            t.push_str(&format!(" with {}", holds.join(", ")));
         }
         t.push_str(" over the registered domain.");
         if st.all_zero {
