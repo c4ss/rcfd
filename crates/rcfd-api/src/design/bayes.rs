@@ -69,6 +69,26 @@ pub struct Observation {
     pub status: Status,
 }
 
+/// The basin restart of ADR 0651 (F-715), opt-in: when the best expected improvement of a proposal falls below `tau` times
+/// the standard deviation of the evaluated objective values (the basin of the incumbent is exhausted), the point is chosen
+/// instead by expected improvement of a fresh process fitted to the evaluated points outside the incumbent's basin, below
+/// the best of them, among the candidates outside that basin. The basin is the ellipsoid `sum ((u_i - u*_i) / l_i)^2 <
+/// rho^2` around the incumbent point `u*` in the length scales `l` of the objective process. Stateless: a function of the
+/// observations as a set, like the rest of [`propose`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Restart {
+    /// Trigger: best acquisition below `tau` times the population standard deviation of the evaluated objective values.
+    pub tau: f64,
+    /// Basin radius in length scales of the objective process.
+    pub rho: f64,
+}
+
+impl Default for Restart {
+    fn default() -> Self {
+        Restart { tau: 1e-4, rho: 2.0 }
+    }
+}
+
 /// Options of [`propose`], [`minimise`] and [`run`].
 #[derive(Debug, Clone, PartialEq)]
 pub struct BayesOptions {
@@ -91,6 +111,8 @@ pub struct BayesOptions {
     /// Model the success of an evaluation: a Gaussian process on the label (+1 failed, -1 ok) whose probability of a
     /// negative value multiplies the acquisition (least-squares classification, Rasmussen and Williams 2006 section 6.5).
     pub classify_failures: bool,
+    /// The basin restart (ADR 0651); `None` (default) keeps the plain expected improvement of ADR 0621.
+    pub restart: Option<Restart>,
 }
 
 impl Default for BayesOptions {
@@ -105,6 +127,7 @@ impl Default for BayesOptions {
             candidates_per_dim: 1000,
             exclusion: 1e-6,
             classify_failures: true,
+            restart: None,
         }
     }
 }
@@ -120,6 +143,8 @@ pub enum PickKind {
     Ei,
     /// Probability of feasibility alone (no feasible point yet).
     Feasibility,
+    /// Expected improvement of the basin restart (ADR 0651): a fresh process outside the incumbent's basin.
+    Restart,
 }
 
 impl PickKind {
@@ -135,6 +160,7 @@ impl PickKind {
             PickKind::Filling => "filling",
             PickKind::Ei => "ei",
             PickKind::Feasibility => "pof",
+            PickKind::Restart => "restart",
         }
     }
 }
@@ -375,6 +401,23 @@ impl Models {
             }
             None => (pof, f64::NAN, m, s, pof),
         }
+    }
+
+    /// The probability of feasibility alone (declared constraints and the failure model).
+    fn feasibility(&self, u: &[f64]) -> f64 {
+        let mut pof: f64 = self
+            .c
+            .iter()
+            .map(|g| {
+                let (mc, sc) = g.predict(u);
+                prob_feasible(mc, sc)
+            })
+            .product();
+        if let Some(g) = &self.success {
+            let (mc, sc) = g.predict(u);
+            pof *= prob_feasible(mc, sc);
+        }
+        pof
     }
 
     fn believe(
@@ -631,33 +674,96 @@ fn propose_ranked(
         if !s.is_finite() {
             return Err("bayes: every candidate lies inside the exclusion radius of an evaluated point".into());
         }
-        let kind = if models.incumbent.is_some() {
-            PickKind::Ei
-        } else {
-            PickKind::Feasibility
+        let restarted = match &o.restart {
+            Some(r) if models.incumbent.is_some() => {
+                let rs = RestartScope {
+                    cn: &cn,
+                    models: &models,
+                    cand: &cand,
+                    taken: &taken,
+                    gpo: &gpo,
+                    seed: mix(o.seed, n_total as u64, 5),
+                    workers: o.workers,
+                    exclusion: excl,
+                };
+                basin_restart(r, s, &rs)
+            }
+            _ => None,
         };
-        let record = |u: &[f64]| -> Pick {
-            let (acq, ei, m, sd, pof) = models.acquisition(u);
-            Pick {
-                x: from_unit(u, b),
-                kind,
-                acquisition: acq,
-                ei,
-                mean: m,
-                sd,
-                feasibility: pof,
-                incumbent: models.incumbent,
-                length_scales: models.f.length_scales().to_vec(),
-                nugget: models.f.nugget(),
-                jitter: models.f.jitter(),
-                n_obs: cn.ok_u.len(),
-                n_imputed: models.n_imputed,
-                n_pending,
+        let u = match restarted {
+            Some(rp) => {
+                picks.push(Pick {
+                    x: from_unit(&rp.u, b),
+                    kind: PickKind::Restart,
+                    acquisition: rp.acquisition,
+                    ei: rp.ei,
+                    mean: rp.mean,
+                    sd: rp.sd,
+                    feasibility: rp.feasibility,
+                    incumbent: Some(rp.incumbent),
+                    length_scales: models.f.length_scales().to_vec(),
+                    nugget: models.f.nugget(),
+                    jitter: models.f.jitter(),
+                    n_obs: cn.ok_u.len(),
+                    n_imputed: models.n_imputed,
+                    n_pending,
+                });
+                rp.u
+            }
+            None => {
+                let kind = if models.incumbent.is_some() {
+                    PickKind::Ei
+                } else {
+                    PickKind::Feasibility
+                };
+                let (acq, ei, m, sd, pof) = models.acquisition(&u);
+                picks.push(Pick {
+                    x: from_unit(&u, b),
+                    kind,
+                    acquisition: acq,
+                    ei,
+                    mean: m,
+                    sd,
+                    feasibility: pof,
+                    incumbent: models.incumbent,
+                    length_scales: models.f.length_scales().to_vec(),
+                    nugget: models.f.nugget(),
+                    jitter: models.f.jitter(),
+                    n_obs: cn.ok_u.len(),
+                    n_imputed: models.n_imputed,
+                    n_pending,
+                });
+                u
             }
         };
-        picks.push(record(&u));
-        if n_alt > 0 && q == 0 {
-            // ADR 0645 D3: finalists by score (stable: ties by index, so the pick comes first), then raw candidates
+        // ADR 0645 D3: the ranked fallback of the first pick; none on a restart step (merge with ADR 0651)
+        let restart_step = picks.last().is_some_and(|k| k.kind == PickKind::Restart);
+        if n_alt > 0 && q == 0 && !restart_step {
+            let kind = if models.incumbent.is_some() {
+                PickKind::Ei
+            } else {
+                PickKind::Feasibility
+            };
+            let record = |u: &[f64]| -> Pick {
+                let (acq, ei, m, sd, pof) = models.acquisition(u);
+                Pick {
+                    x: from_unit(u, b),
+                    kind,
+                    acquisition: acq,
+                    ei,
+                    mean: m,
+                    sd,
+                    feasibility: pof,
+                    incumbent: models.incumbent,
+                    length_scales: models.f.length_scales().to_vec(),
+                    nugget: models.f.nugget(),
+                    jitter: models.f.jitter(),
+                    n_obs: cn.ok_u.len(),
+                    n_imputed: models.n_imputed,
+                    n_pending,
+                }
+            };
+            // finalists by score (stable: ties by index, so the pick comes first), then raw candidates
             let mut fin: Vec<usize> = (0..refined.len()).collect();
             fin.sort_by(|&a, &bb| refined[bb].1.total_cmp(&refined[a].1));
             let mut list: Vec<Vec<f64>> = Vec::new();
@@ -687,6 +793,104 @@ fn propose_ranked(
         }
     }
     Ok((Proposal { picks }, alternates))
+}
+
+/// What the basin restart reads from one proposal step.
+struct RestartScope<'a> {
+    cn: &'a Canon,
+    models: &'a Models,
+    cand: &'a [Vec<f64>],
+    taken: &'a [Vec<f64>],
+    gpo: &'a GpOptions,
+    seed: u64,
+    workers: usize,
+    exclusion: f64,
+}
+
+/// A point chosen by the basin restart.
+struct RestartPick {
+    u: Vec<f64>,
+    acquisition: f64,
+    ei: f64,
+    mean: f64,
+    sd: f64,
+    feasibility: f64,
+    incumbent: f64,
+}
+
+/// The basin restart of ADR 0651 D1 to D4: `None` when it does not fire (the plain pick stands).
+fn basin_restart(r: &Restart, best: f64, rs: &RestartScope<'_>) -> Option<RestartPick> {
+    let cn = rs.cn;
+    let n = cn.ok_f.len();
+    let d = cn.ok_u.first()?.len();
+    let mf = cn.ok_f.iter().sum::<f64>() / n as f64;
+    let sdf = (cn.ok_f.iter().map(|v| (v - mf).powi(2)).sum::<f64>() / n as f64).sqrt();
+    if best.is_nan() || best >= r.tau * sdf {
+        return None;
+    }
+    let feasible: Vec<bool> = cn.ok_c.iter().map(|c| c.iter().all(|v| *v <= 0.0)).collect();
+    // the incumbent point: the lowest feasible value, the first in canonical order on ties
+    let mut ib: Option<usize> = None;
+    for i in 0..n {
+        if feasible[i] && ib.is_none_or(|j| cn.ok_f[i] < cn.ok_f[j]) {
+            ib = Some(i);
+        }
+    }
+    let star = cn.ok_u[ib?].clone();
+    let l = rs.models.f.length_scales().to_vec();
+    let delta = |u: &[f64]| -> f64 {
+        u.iter()
+            .zip(&star)
+            .zip(&l)
+            .map(|((a, b), s)| ((a - b) / s).powi(2))
+            .sum::<f64>()
+            .sqrt()
+    };
+    let outside: Vec<usize> = (0..n).filter(|&i| delta(&cn.ok_u[i]) >= r.rho).collect();
+    if outside.len() < d + 2 {
+        return None;
+    }
+    let incumbent = outside
+        .iter()
+        .filter(|&&i| feasible[i])
+        .map(|&i| cn.ok_f[i])
+        .fold(f64::INFINITY, f64::min);
+    if !incumbent.is_finite() {
+        return None;
+    }
+    let ou: Vec<Vec<f64>> = outside.iter().map(|&i| cn.ok_u[i].clone()).collect();
+    let of: Vec<f64> = outside.iter().map(|&i| cn.ok_f[i]).collect();
+    let mut go = rs.gpo.clone();
+    go.seed = rs.seed;
+    let fresh = Gp::fit(&ou, &of, &go).ok()?;
+    let score = |u: &Vec<f64>| -> f64 {
+        if delta(u) < r.rho || rs.taken.iter().any(|t| dist(t, u) < rs.exclusion) {
+            return f64::NEG_INFINITY;
+        }
+        let (m, s) = fresh.predict(u);
+        expected_improvement(m, s, incumbent) * rs.models.feasibility(u)
+    };
+    let vals = parallel_map(rs.cand, rs.workers, &score);
+    let mut bi = 0;
+    for i in 1..vals.len() {
+        if vals[i] > vals[bi] {
+            bi = i;
+        }
+    }
+    if !vals[bi].is_finite() {
+        return None;
+    }
+    let u = rs.cand[bi].clone();
+    let (m, s) = fresh.predict(&u);
+    Some(RestartPick {
+        ei: expected_improvement(m, s, incumbent),
+        feasibility: rs.models.feasibility(&u),
+        acquisition: vals[bi],
+        mean: m,
+        sd: s,
+        incumbent,
+        u,
+    })
 }
 
 /// Minimise through the batch interface of the optimisers: propose, evaluate, repeat to `budget` evaluations. A failed

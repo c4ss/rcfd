@@ -38,7 +38,27 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   re-images the rotor (its swept volumes from the old offset less one period, its cells' velocity and history turned back
   by one pitch, in `periodic_sliding_step` and `step_sliding_periodic`). Steps of less than one period, forwards; boundary
   data set per face on rotor patches are the caller's to set on the new mesh; sectors of different pitch are refused; no
-  case key (the full-annulus key of F-303 does not cover them; ADR 0637 Q3).
+  case key (the full-annulus key of F-303 does not cover them; ADR 0637 Q3). At steps where rotor and stator nodes
+  coincide (F-720, ADR 0640) the interface graph falls into parts here too, but a uniform flow invariant under the motion
+  (axial on a sector, any on a planar slider) gives every part a zero target, so the step is unchanged and the uniform state
+  is kept to `1e-13` on those steps; a flow without the parts' symmetry leaves the parts' means in the remapped old flux
+  (`flux_residual` up to `1e-3` on those steps), which `periodic_sliding_step` does not correct. Since F-721 (ADR 0641)
+  `periodic_sliding_step_coupled` (opt-in, the same arguments) couples the parts through the internal faces and the seam
+  pairs between them, the quotient of F-710's coupling on the full annulus: on the 60-degree sector with an inlet periodic
+  in the pitch but not in the coincidence spacing the remapped old flux stays divergence-free to `2.5e-14` on every step
+  from the second (50 coincidence steps, two re-imagings), and its step data built from the full annulus's state equal the
+  annulus's to `2e-14` (old flux) and `1.6e-13` (mesh flux); off coincidences it is the base step bit for bit. The default
+  `periodic_sliding_step` keeps the base path (ADR 0641 Q1).
+  data set per face on rotor patches are the caller's to set on the new mesh; sectors of different pitch are refused. In the
+  case tree since F-711 (ADR 0646) for the sector: `[mesh.sliding]` on `mesh.generator =
+  "annulus_3d_sector_cylindrical_interface"` runs ADR 0634's turned loop (`mesh_turned`, `periodic_sliding_step`,
+  `step_sliding_periodic`), the rotor's walls through `rcfd_fv::sliding_periodic::periodic_rotor_wall_conditions` (the wall
+  velocity at the face as the mesh shows it, the old values of the rotor faces turned back on a re-imaging step). The
+  sector run is checked against the full-annulus tree run of F-303 over two pitches. Since F-730 (ADR 0654) the opt-in
+  table `[mesh.sliding.coincidences]` with `coupled = true` makes the sector loop call `periodic_sliding_step_coupled` (and
+  write the monitor `sliding_flux_residual`); without it the loop is unchanged. With ADR 0637's step `pitch / 8` (50
+  coincidence steps in 400) the remapped old flux stays divergence-free to `1e-13` and the sector stays within `1.25e-2` of
+  the full-annulus tree run; off coincidences the run is the same bit for bit. The planar slider has no case key.
 * Local remeshing of tetrahedral meshes is in the library since F-247 (ADR 0215), for the compressible solver in a box
   with planar walls; the case tree does not use it yet (ADR 0215 Q1).
 * Overset (chimera) meshes in the library only (F-134, ADR 0219): one component mesh moving rigidly over a static

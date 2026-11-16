@@ -1,11 +1,12 @@
 # The full gate (docs/test-process.md): fmt, clippy, then every non-ignored test of the workspace in release, one process per
-# test, followed by the doc-tests. It takes hours, so it runs on a schedule and on demand, not on pull requests.
+# test, followed by the doc-tests. It takes hours, so it runs daily on main and on demand, not on pull requests (ADR 0653).
+# A scheduled run is skipped when the last green Windows gate on main tested the same commit.
 # What a green run does not prove is listed in docs/releasing.md.
 name: Full gate
 
 on:
   schedule:
-    - cron: "0 2 * * 0" # Sundays 02:00 UTC
+    - cron: "0 2 * * *" # daily 02:00 UTC; a schedule runs on the default branch (main) only
   workflow_dispatch:
     inputs:
       os:
@@ -13,6 +14,18 @@ on:
         type: choice
         options: [windows-latest, ubuntu-24.04]
         default: windows-latest
+      bisect:
+        description: On a failure, bisect over the candidate merges, re-running only the failed test (ADR 0653)
+        type: boolean
+        default: false
+      bisect_minutes:
+        description: Time budget of the bisect, minutes in all
+        type: number
+        default: 30
+      open_issues:
+        description: Open one issue per non-flaky failed test (skipped when an open issue has the same title)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -28,15 +41,64 @@ env:
   RUST_TEST_THREADS: "3"
 
 jobs:
+  # Finds the last successful Windows gate on main (read-only API calls) and skips a scheduled run when it tested the same SHA.
+  # Any failure of the query runs the gate (fail open).
+  decide:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      run: ${{ steps.d.outputs.run }}
+      last_green: ${{ steps.d.outputs.last_green }}
+    steps:
+      - id: d
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          SHA: ${{ github.sha }}
+        run: |
+          last=""
+          ids=$(gh api "repos/$REPO/actions/workflows/gate.yml/runs?branch=main&status=success&per_page=20"                   --jq '.workflow_runs[].id') || ids=""
+          for id in $ids; do
+            ok=$(gh api "repos/$REPO/actions/runs/$id/jobs"                    --jq '[.jobs[] | select(.name == "full gate, windows-latest" and .conclusion == "success")] | length') || ok=0
+            if [ "$ok" != "0" ]; then
+              last=$(gh api "repos/$REPO/actions/runs/$id" --jq .head_sha) || last=""
+              break
+            fi
+          done
+          run=true
+          if [ "$EVENT" = "schedule" ]; then
+            if [ "$REF" != "refs/heads/main" ]; then
+              run=false
+            elif [ -n "$last" ] && [ "$last" = "$SHA" ]; then
+              run=false
+            fi
+          fi
+          echo "last green Windows gate on main: ${last:-none}; this run: $SHA ($EVENT, $REF); run: $run"
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          echo "last_green=$last" >> "$GITHUB_OUTPUT"
+
   gate:
+    needs: decide
+    if: needs.decide.outputs.run == 'true'
     name: full gate, ${{ inputs.os || 'windows-latest' }}
     runs-on: ${{ inputs.os || 'windows-latest' }}
     timeout-minutes: 340
+    env:
+      # SHA tested by the last successful Windows gate on main (empty if none); for the failure attribution (ADR 0653).
+      GATE_LAST_GREEN: ${{ needs.decide.outputs.last_green }}
     defaults:
       run:
         shell: bash
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the history since the last green gate, for the failure attribution
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: ${{ env.RUST_GATE_TOOLCHAIN }}
@@ -46,11 +108,23 @@ jobs:
           python-version: "3.x"
       # No build cache: the gate starts from an empty target folder.
       - name: fmt
-        run: cargo fmt --all -- --check
+        # Per package: `cargo fmt --all` hands every target's root file to one rustfmt process, whose command line is above
+        # the Windows limit of 32767 characters (os error 206, ADR 0653). The members are the same set `--all` formats.
+        run: |
+          pkgs=$(cargo metadata --no-deps --format-version 1 --locked |
+                 python -c "import json,sys; sys.stdout.write(' '.join(p['name'] for p in json.load(sys.stdin)['packages']))")
+          [ -n "$pkgs" ] || { echo "fmt: no packages listed"; exit 1; }
+          rc=0
+          for p in $pkgs; do
+            echo "fmt $p"
+            cargo fmt -p "$p" -- --check || rc=1
+          done
+          exit $rc
       - name: clippy
         timeout-minutes: 45
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: tests (scripts/gate_test.py)
+        id: tests
         # Shorter than the job, so the logs are still uploaded when this step runs out of time.
         timeout-minutes: 290
         run: |
@@ -73,3 +147,48 @@ jobs:
           path: gate-out/
           if-no-files-found: warn
           retention-days: 90
+      # After the logs are uploaded, so a slow attribution cannot lose them (ADR 0653).
+      - name: failure attribution (scripts/gate_attribute.py)
+        if: failure() && steps.tests.outcome == 'failure'
+        timeout-minutes: 40
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target
+          BISECT: ${{ inputs.bisect }}
+          BISECT_MINUTES: ${{ inputs.bisect_minutes || 30 }}
+        run: |
+          python scripts/adr_test_index.py --out gate-out/adr_test_index.json
+          extra=()
+          if [ "$BISECT" = "true" ]; then extra=(--bisect --bisect-minutes "$BISECT_MINUTES"); fi
+          python scripts/gate_attribute.py attribute --tsv gate-out/times.tsv --log gate-out/test.log             --index gate-out/adr_test_index.json --base "$GATE_LAST_GREEN" --head "$GITHUB_SHA" --rerun "${extra[@]}"             --work "$RUNNER_TEMP/bisect" --json gate-out/attribution.json --summary gate-out/attribution.md
+          cat gate-out/attribution.md >> "$GITHUB_STEP_SUMMARY"
+      - name: upload attribution
+        if: always() && hashFiles('gate-out/attribution.json') != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: gate-attribution-${{ inputs.os || 'windows-latest' }}-${{ github.sha }}
+          path: |
+            gate-out/attribution.json
+            gate-out/attribution.md
+            gate-out/adr_test_index.json
+          retention-days: 90
+
+  # One issue per non-flaky failure, only when a dispatch asks for it; the only job that may write issues.
+  issues:
+    needs: gate
+    if: always() && needs.gate.result == 'failure' && inputs.open_issues
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: open issues
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NAME: gate-attribution-${{ inputs.os || 'windows-latest' }}-${{ github.sha }}
+        run: |
+          gh run download "${{ github.run_id }}" -n "$NAME" -D gate-out
+          python3 scripts/gate_attribute.py issues --json gate-out/attribution.json

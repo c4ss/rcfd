@@ -9,6 +9,8 @@
 //! * [`Correction`] is the discrepancy ladder R0 (none), R1 (additive or multiplicative constant), R2 (`rho y_L + b0 + c . x`)
 //!   chosen by leave-one-out error with the one-standard-error rule, trusted only when it helps on held-out points and the
 //!   discrepancy exceeds the source's stated noise, applied only inside the calibrated region (outside: the constant only).
+//!   Opt-in rung R3 (ADR 0652, `TrustRule::r3`): R2 plus a zero-mean Gaussian process on the R2 residual, with the nugget
+//!   from the stated uncertainty, hyperparameters fixed per fit and leave-one-out residuals from the closed form.
 //! * Privacy (ADR 0622 D7, ADR 0632): a private source (for example [`MeasuredTable`]) sends measured values, pairs, the
 //!   correction and corrected predictions to a private ledger outside any repository; the public ledger gets the low
 //!   entries and rounded aggregates over at least `n_pub` pairs only.
@@ -17,9 +19,11 @@
 //! fan.
 
 use super::ledger::{self, Entry, Fidelity, Identity, Ledger, Model, Outcome, Quantity, Source, Verdict};
+use super::optim::{projected_gradient, PgOptions, Stop};
 use super::rng::Rng;
 use super::sampling;
 use super::study::{parallel_map, Sense};
+use super::surrogate::{self, Kernel};
 use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -361,6 +365,44 @@ pub struct TrustRule {
     pub in_sample: bool,
     /// One-standard-error rule (off: the smallest error wins; a negative control).
     pub one_se: bool,
+    /// Rung R3, the Gaussian process on the R2 residual (ADR 0652); `None` (the default) leaves the ladder R0 to R2.
+    pub r3: Option<R3Rule>,
+}
+
+/// Settings of rung R3 (ADR 0652 D2, D4).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct R3Rule {
+    /// R3 needs at least `n_per_d * d` pairs.
+    pub n_per_d: usize,
+    /// Smallest 2-sigma leave-one-out coverage of a trusted R3.
+    pub coverage_min: f64,
+    /// Starts of the likelihood search (the centre of the log box and `starts - 1` Latin-hypercube points).
+    pub starts: usize,
+    /// Starts refined by the gradient search.
+    pub refine: usize,
+    /// Gradient iterations per refined start.
+    pub iters: usize,
+    /// Length-scale box (unit-box lengths).
+    pub l_bounds: (f64, f64),
+    /// Box of the process variance over the mean squared R2 residual.
+    pub tau_bounds: (f64, f64),
+    /// Seed of the multi-start design.
+    pub seed: u64,
+}
+
+impl Default for R3Rule {
+    fn default() -> Self {
+        R3Rule {
+            n_per_d: 10,
+            coverage_min: 0.8,
+            starts: 10,
+            refine: 3,
+            iters: 40,
+            l_bounds: (0.05, 10.0),
+            tau_bounds: (1e-6, 1e2),
+            seed: 1,
+        }
+    }
 }
 
 impl Default for TrustRule {
@@ -372,6 +414,7 @@ impl Default for TrustRule {
             h_max: 0.25,
             in_sample: false,
             one_se: true,
+            r3: None,
         }
     }
 }
@@ -471,6 +514,13 @@ impl FidelitySpec {
             Candidates::Lhs { n, seed } => json!({"lhs": {"n": n, "seed": seed}}),
         };
         let t = &self.trust;
+        let mut trust = json!({"f_trust": t.f_trust, "k_u": t.k_u, "margin": t.margin, "h_max": t.h_max, "in_sample": t.in_sample, "one_se": t.one_se});
+        if let Some(r) = &t.r3 {
+            trust["r3"] = json!({
+                "n_per_d": r.n_per_d, "coverage_min": r.coverage_min, "starts": r.starts, "refine": r.refine, "iters": r.iters,
+                "l_bounds": [r.l_bounds.0, r.l_bounds.1], "tau_bounds": [r.tau_bounds.0, r.tau_bounds.1], "seed": r.seed,
+            });
+        }
         json!({
             "name": self.name,
             "params": self.params.iter().map(|p| json!({"name": p.name, "unit": p.unit, "lo": p.lo, "hi": p.hi})).collect::<Vec<_>>(),
@@ -481,7 +531,7 @@ impl FidelitySpec {
             "rounds": self.rounds, "promote_per_round": self.promote_per_round, "explore_per_round": self.explore_per_round,
             "promotion": match self.promotion { Promotion::Rule => json!("rule"), Promotion::Random { seed } => json!({"random": seed}) },
             "correct": self.correct,
-            "trust": {"f_trust": t.f_trust, "k_u": t.k_u, "margin": t.margin, "h_max": t.h_max, "in_sample": t.in_sample, "one_se": t.one_se},
+            "trust": trust,
             "privacy": self.privacy.as_ref().map(|p| {
                 let mut v = json!({"id": p.id, "n_pub": p.n_pub, "digits": p.digits, "block": p.block});
                 if with_path {
@@ -539,6 +589,19 @@ impl FidelitySpec {
         ] {
             if !(v.is_finite() && v >= 0.0) {
                 return Err(format!("spec.trust.{n}: not finite and non-negative"));
+            }
+        }
+        if let Some(r) = &t.r3 {
+            let (l0, l1) = r.l_bounds;
+            let (t0, t1) = r.tau_bounds;
+            if r.n_per_d == 0 || r.starts == 0 || r.refine == 0 {
+                return Err("spec.trust.r3: n_per_d, starts and refine must be at least 1".into());
+            }
+            if !(l0 > 0.0 && l1 > l0 && l1.is_finite() && t0 > 0.0 && t1 > t0 && t1.is_finite()) {
+                return Err("spec.trust.r3: need 0 < lo < hi, finite, for l_bounds and tau_bounds".into());
+            }
+            if !(0.0..=1.01).contains(&r.coverage_min) {
+                return Err("spec.trust.r3.coverage_min: outside [0, 1.01]".into());
             }
         }
         match &self.candidates {
@@ -606,6 +669,8 @@ pub enum Rung {
     R1Mul,
     /// `rho y_L + b0 + c . x`.
     R2,
+    /// R2 plus a zero-mean Gaussian process on the R2 residual (ADR 0652; opt-in).
+    R3,
 }
 
 impl Rung {
@@ -616,15 +681,17 @@ impl Rung {
             Rung::R1Add => "R1add",
             Rung::R1Mul => "R1mul",
             Rung::R2 => "R2",
+            Rung::R3 => "R3",
         }
     }
 
     fn parse(s: &str) -> Option<Rung> {
-        [Rung::R0, Rung::R1Add, Rung::R1Mul, Rung::R2]
+        [Rung::R0, Rung::R1Add, Rung::R1Mul, Rung::R2, Rung::R3]
             .into_iter()
             .find(|r| r.as_str() == s)
     }
 
+    /// The rungs of ADR 0622 (the keys of `MetricFit::mse`); R3 is reported in `MetricFit::r3`.
     const ALL: [Rung; 4] = [Rung::R0, Rung::R1Add, Rung::R1Mul, Rung::R2];
 }
 
@@ -667,6 +734,46 @@ pub struct MetricFit {
     pub rmse0: f64,
     /// RMS stated uncertainty of the high values.
     pub u_rms: f64,
+    /// Rung R3 (ADR 0652), `None` when `TrustRule::r3` is off.
+    pub r3: Option<R3Fit>,
+}
+
+impl MetricFit {
+    /// Mean squared (leave-one-out) error of the chosen rung.
+    pub fn chosen_mse(&self) -> Option<f64> {
+        match self.rung {
+            Rung::R3 => self.r3.as_ref().map(|r| r.mse),
+            r => self.mse[Rung::ALL.iter().position(|&x| x == r).unwrap_or(0)],
+        }
+    }
+}
+
+/// The R3 part of a metric's fit (ADR 0652). Process inputs are the region's points (the pairs' unit-box points, in pair
+/// order); the R2 coefficients are the fit's `coef` when R3 is chosen.
+#[derive(Debug, Clone, PartialEq)]
+pub struct R3Fit {
+    /// Whether R3 was available.
+    pub available: bool,
+    /// Why not (empty when available).
+    pub why: String,
+    /// Length scales (unit box).
+    pub l: Vec<f64>,
+    /// Process variance (output units squared).
+    pub sf2: f64,
+    /// Jitter relative to the process variance.
+    pub jitter: f64,
+    /// `C^-1 r`, `r` the in-sample R2 residual (output units).
+    pub beta: Vec<f64>,
+    /// Mean squared leave-one-out (or, with `in_sample`, in-sample) error.
+    pub mse: f64,
+    /// Its standard error.
+    pub se: f64,
+    /// Fraction of leave-one-out residuals within two predictive standard deviations.
+    pub coverage: f64,
+    /// Zero-mean log marginal likelihood of the scaled residual (without the constant).
+    pub loglik: f64,
+    /// Raw R2 coefficients `[rho, b0, c_1..c_d]`.
+    pub r2: Vec<f64>,
 }
 
 /// The calibrated region (unit box).
@@ -842,6 +949,8 @@ fn rung_residuals(rung: Rung, u: &[Vec<f64>], yl: &[f64], yh: &[f64]) -> Option<
             let e = r.iter().zip(&h).map(|(ri, hi)| ri / (1.0 - hi)).collect();
             Some((e, r, c))
         }
+        // R3 has its own path (`r3_core`)
+        Rung::R3 => None,
     }
 }
 
@@ -857,6 +966,310 @@ fn se_of_sq(e: &[f64]) -> f64 {
     let m = mean_sq(e);
     let v = e.iter().map(|x| (x * x - m) * (x * x - m)).sum::<f64>() / (n - 1) as f64;
     v.sqrt() / (n as f64).sqrt()
+}
+
+// ---------------------------------------------------------------- rung R3 (ADR 0652)
+
+/// Jitter of R3 relative to the process variance (F-698's constant).
+pub const R3_JITTER: f64 = surrogate::JITTER;
+
+/// Scaled covariance `tau (R + J I) + diag(sig2)` of R3 (row-major).
+fn r3_cov(u: &[Vec<f64>], l: &[f64], tau: f64, sig2: &[f64]) -> Vec<f64> {
+    let n = u.len();
+    let mut c = vec![0.0; n * n];
+    for i in 0..n {
+        c[i * n + i] = tau * (1.0 + R3_JITTER) + sig2[i];
+        for j in 0..i {
+            let v = tau * surrogate::correlation(Kernel::SquaredExponential, &u[i], &u[j], l);
+            c[i * n + j] = v;
+            c[j * n + i] = v;
+        }
+    }
+    c
+}
+
+/// Inverse from a Cholesky factor, column by column (row-major).
+fn chol_inverse(chol: &[f64], n: usize) -> Vec<f64> {
+    let mut g = vec![0.0; n * n];
+    for k in 0..n {
+        let mut e = vec![0.0; n];
+        e[k] = 1.0;
+        let col = surrogate::solve_upper_t(chol, n, &surrogate::solve_lower(chol, n, &e));
+        for (i, v) in col.into_iter().enumerate() {
+            g[i * n + k] = v;
+        }
+    }
+    g
+}
+
+/// Zero-mean log marginal likelihood (without its constant) of `r` at `theta = (ln l_1.., ln tau)` and, when `grad`, its
+/// gradient in `theta`; `None` when the factorisation fails.
+fn r3_lik(u: &[Vec<f64>], r: &[f64], sig2: &[f64], theta: &[f64], grad: bool) -> Option<(f64, Vec<f64>)> {
+    let n = u.len();
+    let d = theta.len() - 1;
+    let l: Vec<f64> = theta[..d].iter().map(|v| v.exp()).collect();
+    let tau = theta[d].exp();
+    let c = r3_cov(u, &l, tau, sig2);
+    let chol = surrogate::cholesky(&c, n).ok()?;
+    let alpha = surrogate::solve_upper_t(&chol, n, &surrogate::solve_lower(&chol, n, r));
+    let value = -0.5 * r.iter().zip(&alpha).map(|(a, b)| a * b).sum::<f64>()
+        - (0..n).map(|i| chol[i * n + i].ln()).sum::<f64>();
+    if !value.is_finite() {
+        return None;
+    }
+    if !grad {
+        return Some((value, Vec::new()));
+    }
+    let g = chol_inverse(&chol, n);
+    let mut out = vec![0.0; d + 1];
+    // tau: dC = tau (R + J I); l_k: dC_ij = tau R_ij ((u_ik - u_jk) / l_k)^2 off the diagonal
+    let mut quad_t = 0.0;
+    let mut tr_t = 0.0;
+    for i in 0..n {
+        let dii = tau * (1.0 + R3_JITTER);
+        quad_t += alpha[i] * alpha[i] * dii;
+        tr_t += g[i * n + i] * dii;
+        for j in 0..i {
+            let dij = tau * surrogate::correlation(Kernel::SquaredExponential, &u[i], &u[j], &l);
+            quad_t += 2.0 * alpha[i] * alpha[j] * dij;
+            tr_t += 2.0 * g[i * n + j] * dij;
+            for k in 0..d {
+                let t = dij * ((u[i][k] - u[j][k]) / l[k]).powi(2);
+                out[k] += 2.0 * (alpha[i] * alpha[j] - g[i * n + j]) * t;
+            }
+        }
+    }
+    out[d] = quad_t - tr_t;
+    for v in &mut out {
+        *v *= 0.5;
+    }
+    Some((value, out))
+}
+
+/// Value and gradient of R3's zero-mean log marginal likelihood (without its constant) in scaled units: unit-box inputs
+/// `u`, residual `r`, stated standard uncertainties `sigma` (same scale), `theta = (ln l_1, .., ln l_d, ln tau)`
+/// (ADR 0652 D2; check K1).
+pub fn r3_log_likelihood(u: &[Vec<f64>], r: &[f64], sigma: &[f64], theta: &[f64]) -> Option<(f64, Vec<f64>)> {
+    let sig2: Vec<f64> = sigma.iter().map(|s| s * s).collect();
+    r3_lik(u, r, &sig2, theta, true)
+}
+
+/// Maximum-likelihood `theta` by F-698's multi-start pattern (ADR 0652 D2).
+fn r3_search(u: &[Vec<f64>], r: &[f64], sig2: &[f64], rule: &R3Rule) -> Option<Vec<f64>> {
+    let d = u.first().map_or(0, Vec::len);
+    let mut bx: Vec<(f64, f64)> = vec![(rule.l_bounds.0.ln(), rule.l_bounds.1.ln()); d];
+    bx.push((rule.tau_bounds.0.ln(), rule.tau_bounds.1.ln()));
+    let value = |t: &[f64]| r3_lik(u, r, sig2, t, false).map_or(f64::NEG_INFINITY, |v| v.0);
+    let mut starts: Vec<Vec<f64>> = vec![bx.iter().map(|(a, b)| 0.5 * (a + b)).collect()];
+    for p in sampling::latin_hypercube(rule.starts - 1, d + 1, rule.seed) {
+        starts.push(p.iter().zip(&bx).map(|(v, (a, b))| a + (b - a) * v).collect());
+    }
+    let vals: Vec<f64> = starts.iter().map(|t| value(t)).collect();
+    let mut order: Vec<usize> = (0..starts.len()).collect();
+    order.sort_by(|&a, &b| vals[b].total_cmp(&vals[a]).then(a.cmp(&b)));
+    let mut best: Option<(Vec<f64>, f64)> = None;
+    for &s in order.iter().take(rule.refine) {
+        let opts = PgOptions {
+            max_iters: rule.iters,
+            step: 0.1,
+            armijo: 1e-4,
+            max_halvings: 30,
+            x0: starts[s].clone(),
+        };
+        let mut ev = |t: &[f64], grad: bool| -> Result<(f64, Vec<f64>), Stop> {
+            match r3_lik(u, r, sig2, t, grad) {
+                None => Ok((f64::INFINITY, vec![0.0; d + 1])),
+                Some((v, g)) => Ok((-v, g.iter().map(|x| -x).collect())),
+            }
+        };
+        let (t, v) = match projected_gradient(&bx, &opts, &mut ev) {
+            Ok(res) if res.fitness.f.is_finite() => (res.x, -res.fitness.f),
+            _ => (starts[s].clone(), vals[s]),
+        };
+        if best.as_ref().is_none_or(|b| v > b.1) {
+            best = Some((t, v));
+        }
+    }
+    best.filter(|b| b.1.is_finite()).map(|b| b.0)
+}
+
+/// R3's leave-one-out result for one metric (ADR 0652 D3), in output units.
+#[derive(Debug, Clone, PartialEq)]
+pub struct R3Loo {
+    /// Leave-one-out residuals `e3` (R2 refitted without the pair, the process with the fit's hyperparameters).
+    pub e: Vec<f64>,
+    /// Their predictive standard deviations `sqrt(a_i^T C a_i)`, evaluated as `sqrt(1 / G_ii + |L^T q_i|^2)` (ADR 0656).
+    pub sd: Vec<f64>,
+    /// In-sample residuals of R3, `r - s_f^2 R beta`.
+    pub in_sample: Vec<f64>,
+    /// In-sample R2 residuals `r`.
+    pub r: Vec<f64>,
+    /// Scale `sqrt(mean(r^2))`.
+    pub s: f64,
+    /// Length scales.
+    pub l: Vec<f64>,
+    /// Process variance.
+    pub sf2: f64,
+    /// `C^-1 r`.
+    pub beta: Vec<f64>,
+    /// Log likelihood of the scaled residual at the hyperparameters.
+    pub loglik: f64,
+    /// R2 coefficients in the unit box `[rho, b0_u, b_1..b_d]`.
+    pub r2_unit: Vec<f64>,
+}
+
+fn r3_core(
+    u: &[Vec<f64>],
+    yl: &[f64],
+    yh: &[f64],
+    sigma: &[f64],
+    rule: &R3Rule,
+    hyper: Option<(&[f64], f64)>,
+) -> Result<R3Loo, String> {
+    let n = yl.len();
+    let d = u.first().map_or(0, Vec::len);
+    let n_min = (rule.n_per_d * d).max(d + 4);
+    if n < n_min {
+        return Err(format!("{n} pairs; R3 needs at least {n_min}"));
+    }
+    let x: Vec<Vec<f64>> = (0..n)
+        .map(|i| {
+            let mut row = vec![yl[i], 1.0];
+            row.extend_from_slice(&u[i]);
+            row
+        })
+        .collect();
+    let (coef, r, h) = lstsq(&x, yh).ok_or("R2 not available")?;
+    let s = mean_sq(&r).sqrt();
+    if !(s.is_finite() && s > 0.0) {
+        return Err("the R2 residual is zero".into());
+    }
+    // ADR 0652 amendment 1: a residual at the rounding level of least squares is not a discrepancy
+    if s <= 1e-10 * mean_sq(yh).sqrt() {
+        return Err("the R2 residual is at the rounding level".into());
+    }
+    let rs: Vec<f64> = r.iter().map(|v| v / s).collect();
+    let sig2: Vec<f64> = sigma.iter().map(|v| (v / s) * (v / s)).collect();
+    let (l, tau) = match hyper {
+        Some((l, sf2)) => {
+            if l.len() != d || l.iter().any(|v| !(v.is_finite() && *v > 0.0)) || !(sf2.is_finite() && sf2 > 0.0) {
+                return Err("hyperparameters not finite and positive".into());
+            }
+            (l.to_vec(), sf2 / (s * s))
+        }
+        None => {
+            let t = r3_search(u, &rs, &sig2, rule).ok_or("no start of the likelihood search factorised")?;
+            (t[..d].iter().map(|v| v.exp()).collect(), t[d].exp())
+        }
+    };
+    let c = r3_cov(u, &l, tau, &sig2);
+    let chol = surrogate::cholesky(&c, n)
+        .map_err(|(i, p)| format!("covariance not positive definite (row {i}, pivot {p:e})"))?;
+    let g = chol_inverse(&chol, n);
+    let alpha = surrogate::solve_upper_t(&chol, n, &surrogate::solve_lower(&chol, n, &rs));
+    let loglik = -0.5 * rs.iter().zip(&alpha).map(|(a, b)| a * b).sum::<f64>()
+        - (0..n).map(|i| chol[i * n + i].ln()).sum::<f64>();
+    // hat matrix, column by column: P e_k = e_k - (residual of regressing e_k on X)
+    let mut p = vec![0.0; n * n];
+    // ADR 0656: the coefficients `b_k = H x_k` of the same regressions, `H = (X^T X)^-1 = sum_k b_k b_k^T`
+    let mut bk = Vec::with_capacity(n);
+    for k in 0..n {
+        let mut ek = vec![0.0; n];
+        ek[k] = 1.0;
+        let (b, rk, _) = lstsq(&x, &ek).ok_or("R2 not available")?;
+        for i in 0..n {
+            p[i * n + k] = ek[i] - rk[i];
+        }
+        bk.push(b);
+    }
+    let mut e = Vec::with_capacity(n);
+    let mut sd = Vec::with_capacity(n);
+    for i in 0..n {
+        let gii = g[i * n + i];
+        let gp_ii: f64 = (0..n).map(|j| g[i * n + j] * p[j * n + i]).sum();
+        let e2 = rs[i] / (1.0 - h[i]);
+        e.push(s * (alpha[i] + e2 * gp_ii) / gii);
+        // ADR 0656 D1: var(e3_i) = 1 / G_ii + q^T C q, both terms sums of squares (no cancellation of a^T C a):
+        // G_ii = |L^-1 e_i|^2; g = -(X^T G e_i) / G_ii; q_j = x_j^T H g + P_ji (x_i^T H g) / (1 - h_ii), q_i = 0
+        let mut ei = vec![0.0; n];
+        ei[i] = 1.0;
+        let v = surrogate::solve_lower(&chol, n, &ei);
+        let cond = 1.0 / v.iter().map(|t| t * t).sum::<f64>();
+        let gv: Vec<f64> = (0..x[0].len())
+            .map(|a| -(0..n).map(|j| x[j][a] * g[j * n + i]).sum::<f64>() / gii)
+            .collect();
+        let mut hg = vec![0.0; gv.len()];
+        for b in &bk {
+            let bg: f64 = b.iter().zip(&gv).map(|(s, t)| s * t).sum();
+            for (o, s) in hg.iter_mut().zip(b) {
+                *o += s * bg;
+            }
+        }
+        let t: Vec<f64> = x
+            .iter()
+            .map(|row| row.iter().zip(&hg).map(|(s, t)| s * t).sum())
+            .collect();
+        let ti = t[i] / (1.0 - h[i]);
+        let q: Vec<f64> = (0..n)
+            .map(|j| if j == i { 0.0 } else { t[j] + p[j * n + i] * ti })
+            .collect();
+        let refit: f64 = (0..n)
+            .map(|k| (k..n).map(|m| chol[m * n + k] * q[m]).sum::<f64>().powi(2))
+            .sum();
+        sd.push(s * (cond + refit).sqrt());
+    }
+    let in_sample: Vec<f64> = (0..n)
+        .map(|i| {
+            let mu: f64 = (0..n)
+                .map(|j| {
+                    let rij = if i == j {
+                        1.0
+                    } else {
+                        surrogate::correlation(Kernel::SquaredExponential, &u[i], &u[j], &l)
+                    };
+                    tau * rij * alpha[j]
+                })
+                .sum();
+            s * (rs[i] - mu)
+        })
+        .collect();
+    Ok(R3Loo {
+        e,
+        sd,
+        in_sample,
+        r,
+        s,
+        l,
+        sf2: tau * s * s,
+        beta: alpha.iter().map(|a| a / s).collect(),
+        loglik,
+        r2_unit: coef,
+    })
+}
+
+/// R3's leave-one-out residuals and standard deviations for metric index `m` of `pairs` (ADR 0652 D3); with `hyper`
+/// `(l, s_f^2)` given, no search is made.
+pub fn r3_loo(
+    pairs: &[PairData],
+    params: &[ParamBox],
+    m: usize,
+    rule: &R3Rule,
+    hyper: Option<(&[f64], f64)>,
+) -> Result<R3Loo, String> {
+    let u: Vec<Vec<f64>> = pairs.iter().map(|p| unit_of(params, &p.x)).collect();
+    let yl: Vec<f64> = pairs.iter().map(|p| p.low[m]).collect();
+    let yh: Vec<f64> = pairs.iter().map(|p| p.high[m]).collect();
+    let sg: Vec<f64> = pairs.iter().map(|p| p.u_high[m]).collect();
+    r3_core(&u, &yl, &yh, &sg, rule, hyper)
+}
+
+/// Posterior mean of R3's process at the unit-box point `u`.
+fn r3_mean(f: &R3Fit, points: &[Vec<f64>], u: &[f64]) -> f64 {
+    points
+        .iter()
+        .zip(&f.beta)
+        .map(|(p, b)| f.sf2 * surrogate::correlation(Kernel::SquaredExponential, p, u, &f.l) * b)
+        .sum()
 }
 
 /// Leave-one-out residuals of `rung` for metric index `m` of `pairs` (`None` when the rung is not available).
@@ -910,6 +1323,48 @@ fn fit_metric(name: &str, pairs: &[PairData], params: &[ParamBox], m: usize, t: 
             }
         }
     }
+    // rung R3 (ADR 0652): index 4 of the arrays, level 3
+    let mut mse5 = [mse[0], mse[1], mse[2], mse[3], None];
+    let mut se5 = [se[0], se[1], se[2], se[3], 0.0];
+    let r3 = t.r3.as_ref().map(|rule| {
+        let sg: Vec<f64> = pairs.iter().map(|p| p.u_high[m]).collect();
+        match r3_core(&u, &yl, &yh, &sg, rule, None) {
+            Ok(o) => {
+                let e = if t.in_sample { &o.in_sample } else { &o.e };
+                let inside = o.e.iter().zip(&o.sd).filter(|(e, s)| e.abs() <= 2.0 * **s).count();
+                mse5[4] = Some(mean_sq(e));
+                se5[4] = se_of_sq(e);
+                R3Fit {
+                    available: true,
+                    why: String::new(),
+                    l: o.l,
+                    sf2: o.sf2,
+                    jitter: R3_JITTER,
+                    beta: o.beta,
+                    mse: mean_sq(e),
+                    se: se_of_sq(e),
+                    coverage: inside as f64 / n as f64,
+                    loglik: o.loglik,
+                    r2: raw_coef(Rung::R2, &o.r2_unit, params),
+                }
+            }
+            Err(why) => R3Fit {
+                available: false,
+                why,
+                l: Vec::new(),
+                sf2: 0.0,
+                jitter: R3_JITTER,
+                beta: Vec::new(),
+                mse: 0.0,
+                se: 0.0,
+                coverage: 0.0,
+                loglik: 0.0,
+                r2: Vec::new(),
+            },
+        }
+    });
+    let mse = mse5;
+    let se = se5;
     // levels: 0 R0, 1 the better R1 form (ties additive), 2 R2
     let lvl1 = match (mse[1], mse[2]) {
         (Some(a), Some(b)) => Some(if b < a { 2 } else { 1 }),
@@ -917,7 +1372,7 @@ fn fit_metric(name: &str, pairs: &[PairData], params: &[ParamBox], m: usize, t: 
         (None, Some(_)) => Some(2),
         (None, None) => None,
     };
-    let levels: Vec<usize> = [Some(0), lvl1, mse[3].map(|_| 3)]
+    let levels: Vec<usize> = [Some(0), lvl1, mse[3].map(|_| 3), mse[4].map(|_| 4)]
         .into_iter()
         .flatten()
         .filter(|&k| mse[k].is_some())
@@ -943,7 +1398,7 @@ fn fit_metric(name: &str, pairs: &[PairData], params: &[ParamBox], m: usize, t: 
             kmin
         }
     };
-    let rung = Rung::ALL[chosen];
+    let rung = [Rung::R0, Rung::R1Add, Rung::R1Mul, Rung::R2, Rung::R3][chosen];
     let ok_trust = |k: usize| -> Result<(), String> {
         let m = mse[k].ok_or("not available")?;
         if m.sqrt() > t.f_trust * rmse0 {
@@ -960,6 +1415,16 @@ fn fit_metric(name: &str, pairs: &[PairData], params: &[ParamBox], m: usize, t: 
                 t.k_u
             ));
         }
+        if k == 4 {
+            if let (Some(rule), Some(f)) = (&t.r3, &r3) {
+                if f.coverage < rule.coverage_min {
+                    return Err(format!(
+                        "leave-one-out 2-sigma coverage {:.3} below {}",
+                        f.coverage, rule.coverage_min
+                    ));
+                }
+            }
+        }
         Ok(())
     };
     let (trusted, why) = if n == 0 {
@@ -974,27 +1439,37 @@ fn fit_metric(name: &str, pairs: &[PairData], params: &[ParamBox], m: usize, t: 
     };
     let constant_trusted = mse[1].is_some() && ok_trust(1).is_ok();
     let constant = coefs[1].first().copied().unwrap_or(0.0);
+    let coef = if rung == Rung::R3 {
+        raw_coef(Rung::R2, &coefs[3], params)
+    } else {
+        raw_coef(rung, &coefs[chosen], params)
+    };
     MetricFit {
         metric: name.into(),
         rung,
-        coef: raw_coef(rung, &coefs[chosen], params),
+        coef,
         trusted,
         why,
         constant,
         constant_trusted,
         n,
-        mse,
+        mse: [mse[0], mse[1], mse[2], mse[3]],
         rmse0,
         u_rms,
+        r3,
     }
 }
 
-fn apply(f: &MetricFit, x: &[f64], y: f64) -> f64 {
+fn apply(f: &MetricFit, x: &[f64], y: f64, points: &[Vec<f64>], u: &[f64]) -> f64 {
     match f.rung {
         Rung::R0 => y,
         Rung::R1Add => y + f.coef[0],
         Rung::R1Mul => f.coef[0] * y,
         Rung::R2 => f.coef[0] * y + f.coef[1] + f.coef[2..].iter().zip(x).map(|(c, v)| c * v).sum::<f64>(),
+        Rung::R3 => {
+            let r2 = f.coef[0] * y + f.coef[1] + f.coef[2..].iter().zip(x).map(|(c, v)| c * v).sum::<f64>();
+            r2 + f.r3.as_ref().map_or(0.0, |g| r3_mean(g, points, u))
+        }
     }
 }
 
@@ -1017,6 +1492,28 @@ fn arr<'a>(v: &'a Value, k: &str, at: &str) -> Result<&'a Vec<Value>, String> {
     v.get(k)
         .and_then(Value::as_array)
         .ok_or_else(|| format!("correction: {at}.{k}: missing"))
+}
+
+fn r3_fit_from_json(g: &Value) -> Result<R3Fit, String> {
+    let num_of = |k: &str| f64_of(g.get(k).unwrap_or(&Value::Null), &format!("fits.r3.{k}"));
+    let list =
+        |k: &str| -> Result<Vec<f64>, String> { arr(g, k, "fits.r3")?.iter().map(|x| f64_of(x, "fits.r3")).collect() };
+    Ok(R3Fit {
+        available: g
+            .get("available")
+            .and_then(Value::as_bool)
+            .ok_or("correction: fits.r3.available: missing")?,
+        why: str_of(g, "why", "fits.r3")?,
+        l: list("l")?,
+        sf2: num_of("sf2")?,
+        jitter: num_of("jitter")?,
+        beta: list("beta")?,
+        mse: num_of("mse")?,
+        se: num_of("se")?,
+        coverage: num_of("coverage")?,
+        loglik: num_of("loglik")?,
+        r2: list("r2")?,
+    })
 }
 
 impl Correction {
@@ -1049,13 +1546,21 @@ impl Correction {
     /// Corrected values of `y_low` (one per metric) at raw parameters `x`, and per metric whether the query is outside the
     /// calibrated region (`extrapolated`; then only a trusted constant is applied).
     pub fn predict(&self, x: &[f64], y_low: &[f64]) -> (Vec<f64>, Vec<bool>) {
-        let inside = self.region.contains(&unit_of(&self.params, x));
+        let u = unit_of(&self.params, x);
+        let inside = self.region.contains(&u);
         self.fits
             .iter()
             .zip(y_low)
             .map(|(f, &y)| {
                 if inside {
-                    (if f.trusted { apply(f, x, y) } else { y }, false)
+                    (
+                        if f.trusted {
+                            apply(f, x, y, &self.region.points, &u)
+                        } else {
+                            y
+                        },
+                        false,
+                    )
                 } else {
                     (if f.constant_trusted { y + f.constant } else { y }, true)
                 }
@@ -1105,13 +1610,24 @@ impl Correction {
                 "points": self.region.points.iter().map(|p| p.iter().map(|&v| num(v)).collect::<Vec<_>>()).collect::<Vec<_>>(),
                 "margin": num(self.region.margin), "h_max": num(self.region.h_max),
             },
-            "fits": self.fits.iter().map(|f| json!({
-                "metric": f.metric, "rung": f.rung.as_str(), "coef": f.coef.iter().map(|&v| num(v)).collect::<Vec<_>>(),
-                "trusted": f.trusted, "why": f.why, "constant": num(f.constant), "constant_trusted": f.constant_trusted,
-                "n": f.n,
-                "mse": Rung::ALL.iter().zip(&f.mse).map(|(r, m)| (r.as_str().to_string(), m.map_or(Value::Null, num))).collect::<Map<String, Value>>(),
-                "rmse0": num(f.rmse0), "u_rms": num(f.u_rms),
-            })).collect::<Vec<_>>(),
+            "fits": self.fits.iter().map(|f| {
+                let mut o = json!({
+                    "metric": f.metric, "rung": f.rung.as_str(), "coef": f.coef.iter().map(|&v| num(v)).collect::<Vec<_>>(),
+                    "trusted": f.trusted, "why": f.why, "constant": num(f.constant), "constant_trusted": f.constant_trusted,
+                    "n": f.n,
+                    "mse": Rung::ALL.iter().zip(&f.mse).map(|(r, m)| (r.as_str().to_string(), m.map_or(Value::Null, num))).collect::<Map<String, Value>>(),
+                    "rmse0": num(f.rmse0), "u_rms": num(f.u_rms),
+                });
+                if let Some(g) = &f.r3 {
+                    let v = |x: &[f64]| x.iter().map(|&v| num(v)).collect::<Vec<_>>();
+                    o["r3"] = json!({
+                        "available": g.available, "why": g.why, "l": v(&g.l), "sf2": num(g.sf2), "jitter": num(g.jitter),
+                        "beta": v(&g.beta), "mse": num(g.mse), "se": num(g.se), "coverage": num(g.coverage),
+                        "loglik": num(g.loglik), "r2": v(&g.r2),
+                    });
+                }
+                o
+            }).collect::<Vec<_>>(),
         })
     }
 
@@ -1174,6 +1690,10 @@ impl Correction {
                     mse,
                     rmse0: f64_of(f.get("rmse0").unwrap_or(&Value::Null), "fits.rmse0")?,
                     u_rms: f64_of(f.get("u_rms").unwrap_or(&Value::Null), "fits.u_rms")?,
+                    r3: match f.get("r3") {
+                        None => None,
+                        Some(g) => Some(r3_fit_from_json(g)?),
+                    },
                 })
             })
             .collect::<Result<Vec<_>, String>>()?;
@@ -1664,9 +2184,7 @@ pub fn run(
             let diffs: Vec<f64> = pair_data.iter().map(|p| p.high[k] - p.low[k]).collect();
             let rmse0 = if n == 0 { 0.0 } else { mean_sq(&diffs).sqrt() };
             let rung = fit.map_or(Rung::R0, |f| f.rung);
-            let after = fit
-                .and_then(|f| f.mse[Rung::ALL.iter().position(|&x| x == f.rung).unwrap_or(0)])
-                .map_or(rmse0, f64::sqrt);
+            let after = fit.and_then(MetricFit::chosen_mse).map_or(rmse0, f64::sqrt);
             let bias = if n == 0 {
                 0.0
             } else {

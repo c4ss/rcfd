@@ -6,7 +6,7 @@ Status: written 2026-10-27, before the first release. No version has been tagged
 This page is for the maintainer who cuts a release and for contributors who want to know what the automatic checks on a pull
 request prove. It says what a version number means, what counts as a release, what each check covers and does not, and the steps to
 cut a release. The checks on a pull request do not run the integration tests in `crates/*/tests`, which include every solver
-validation case; the `Full gate` workflow runs the non-ignored ones on Sundays and on demand, and some of those skip there and
+validation case; the `Full gate` workflow runs the non-ignored ones daily on main (skipped when the commit already passed it) and on demand, and some of those skip there and
 count as passed (see "What the checks prove"). How the gate itself works and how long it takes is in
 [the test process](test-process.md).
 
@@ -49,7 +49,7 @@ is never moved or reused: a broken release is followed by a new one with a highe
 | CI `type-checks with Rust 1.90` | same | the workspace except the two desktop apps (`rcfd-studio` and `rcfd-gui`, which need 1.95: ADR 0131, ADR 0165), tests included, still type-checks (`cargo check`) with the oldest toolchain README promises | that it links or passes tests there; the lower per-crate `rust-version` values are not checked; the desktop apps' 1.95 is not checked |
 | CI `dependency licences and sources` | same | every dependency's licence is on the allow-list in `deny.toml`, no dependency comes from a git URL or an unknown registry | RustSec advisories (left out so a new advisory cannot fail an unrelated pull request) |
 | CI `script self-tests` | same | the gate runner's time-limit rule, the limit scanner and the release-notes check work | |
-| `Full gate` workflow | Sundays and on demand | fmt, clippy and every non-ignored test plus the doc-tests pass, one process per test (`scripts/gate_test.py`) | the about 660 `#[ignore]` tests; CUDA tests (no device: they skip and count as passed); wgpu tests where the runner offers no adapter (same); the 12 tests that need fetched validation data (they skip and count as passed, [test process](test-process.md) section 6.3); macOS |
+| `Full gate` workflow | daily on main (skipped when the last green Windows gate tested the same commit, ADR 0653) and on demand | fmt, clippy and every non-ignored test plus the doc-tests pass, one process per test (`scripts/gate_test.py`) | the about 660 `#[ignore]` tests; CUDA tests (no device: they skip and count as passed); wgpu tests where the runner offers no adapter (same); the 12 tests that need fetched validation data (they skip and count as passed, [test process](test-process.md) section 6.3); macOS |
 
 GitHub switches off scheduled workflows in a public repository after 60 days without a push, so the weekly gate stops by itself
 in a quiet period. Start it by hand before a release, and re-enable it in the Actions tab if it was switched off.

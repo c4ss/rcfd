@@ -22,6 +22,7 @@ exercised on small laminar cases and on analytic surrogates. The [glossary](glos
 * warm start for transient runs, the coupled solver and turbulence models other than k-epsilon and k-omega SST (they run
   cold); the warm start of energy and k-epsilon / k-omega SST runs exists in the library only (below)
 * any use with the real fan (the fan case belongs to the other wave 32 work and the milestone itself)
+* MCP tools for the fan objective, the surrogate, the fidelity driver and the hypothesis record (all library only; F-702)
 
 ## Operating maps
 
@@ -139,7 +140,9 @@ service method `design.create_study`) creates it:
 The store has one header line and one record per evaluated candidate (`index` in request order, `key` = exact bit pattern of the
 parameters, `params`, `source` (`evaluated` or `recorded`), the result of each condition with status, iterations and metrics,
 `message`). A re-run of the same study finds every earlier candidate in the store and continues where it stopped, so a killed run
-resumes and ends identical to an uninterrupted one. A truncated last line is dropped and that one evaluation is repeated. A store
+resumes and ends identical to an uninterrupted one. A truncated last line is dropped and that one evaluation is repeated; a
+kill inside the very first write (an empty file or a torn header) leaves an empty file, which gets the header on the next write
+(ADR 0644). A store
 belongs to a signature (base case fingerprint, parameters with targets, conditions, chaining, step cap): another definition refuses to
 open it.
 
@@ -378,6 +381,8 @@ Records for objectives, surrogates and multi-fidelity or measured data (ADR 0632
   `objective` and `fitted` (`{id, version, hash}` of the objective that scored the entry, or of a fitted surrogate or correction).
 * The tier `measured` (`Fidelity::Measured`) and any entry with a `measured` source are written only to a private ledger
   (`Ledger::private`, refused for a path inside a repository tree) and refused by a public one; a public reader skips such lines.
+  A repository tree is the nearest ancestor directory holding `.git`, a `Cargo.toml` with `[workspace]`, `.hg`, `.svn` or an rcfd
+  project manifest `rcfd-project.json` (ADR 0647, `ledger::repository_marker`); the refusal names that directory and the marker.
   The MCP tools keep the three public tiers.
 * `ledger::fidelity_pair` builds the pair and discrepancy record of ADR 0622 (`m.low`, `m.high`, `m.diff`, `m.rel`, `m.pred`,
   with both entries as `parents`); `ledger::pair_by_params` pairs `ok` entries of two levels with bit-identical parameters and
@@ -453,6 +458,11 @@ keeps near-duplicate points factorable. `Gp::predict` gives the mean and the sta
 * Failed evaluations are imputed at the predicted mean plus one standard deviation and also feed a failure model (a process on
   the label ok / failed) whose probability of success multiplies the acquisition; constraints get a process each and their
   probability of feasibility. Pending entries and the points of a batch are believed at their predicted mean.
+* Opt-in basin restart (ADR 0651, `BayesOptions::restart: Some(Restart::default())`, off by default): when the best expected
+  improvement falls below `1e-4` of the spread of the evaluated values, the incumbent's basin (the ellipsoid of radius 2 in the
+  fitted length scales) is set aside and the point is chosen by expected improvement of a fresh process fitted to the points
+  outside it. On Hartmann 6 (30 initial points, 200 evaluations) it reaches the minimum within 1 percent on 9 of 10 seeds,
+  against 6 of 10 for plain expected improvement; on Branin it changes nothing before the target.
 * `minimise` has the batch interface of the other optimisers; `run(spec, model, ledger)` drives a `ledger::Model` and appends
   one entry per evaluation with the predicted mean and standard deviation in the provenance (`driver: gp_ei`), then a
   `surrogate_summary` with the fitted model's identity (`fitted`) and its training entries (`parents`). A run resumes from the
@@ -473,7 +483,16 @@ fits a discrepancy correction that the next rounds use for their ranking:
   chosen by leave-one-out error with the one-standard-error rule; trusted only when its leave-one-out RMSE is at most 0.8 of
   the uncorrected one and the discrepancy exceeds twice the source's stated uncertainty; applied only inside the calibrated
   region (box of the pairs grown by 0.05 and within 0.25 of a pair, unit box); outside, a query is flagged and gets the trusted
-  constant only. A Gaussian-process rung is a follow-up that reuses F-698.
+  constant only.
+* Rung R3 (ADR 0652, opt-in with `TrustRule::r3 = Some(R3Rule::default())`): R2 plus a zero-mean Gaussian process
+  (squared exponential, F-698's kernel and factorisation) on the R2 residual, the nugget from the stated uncertainty, the
+  hyperparameters fitted once per fit by maximum likelihood and held in every leave-one-out fold. Its leave-one-out residuals
+  come from a closed form that includes the refit of the R2 coefficients, `e3_i = ((G r)_i + e2_i (G P)_ii) / G_ii`
+  (`G = C^-1`, `P` the hat matrix), and its predictive standard deviation as the conditional variance `1 / G_ii` plus the
+  variance of the R2 refit, `|L^T q_i|^2` through the Cholesky factor (ADR 0656; equal to a double-double brute force within
+  1e-9 of the residual scale on noise-free fits). R3 needs `10 d` pairs and a
+  residual above the rounding level, is chosen over R2 only by the one-standard-error rule, and is trusted only when, besides
+  the conditions above, its 2-sigma leave-one-out coverage is at least 0.8. With `r3: None` every byte is as before.
 * Ledger: an `evaluation` entry for every low and high evaluation, one `fidelity_pair` (ADR 0632) per ok promotion with the
   prediction made before the high result, one `fidelity_summary` per round (rung, RMSE before and after, bias, out-of-sample
   RMSE, the correction with its hash in `fitted`).
@@ -486,6 +505,48 @@ fits a discrepancy correction that the next rounds use for their ranking:
 Verified on synthetic high sources only (an exact affine source, the one-variable pair of Forrester et al., the reduced-order
 fan against a copy with larger loss constants, noise, a source that always fails, an identical source). It says nothing about
 how well the reduced-order model predicts a real fan.
+
+## Hypotheses: tests registered before their runs (ADR 0624, library only)
+
+`design::hypothesis` keeps what the loop learns across sessions as records in the design ledger, so a claim is never just text
+someone kept:
+
+* `register` appends a `hypothesis` entry before any evidence exists: the claim in the author's words, one factor at two levels,
+  the response, the direction (`increases`, `decreases`, `no_effect`), the smallest change that matters (`min_effect`, at least
+  10 times the resolution declared for the response), at most one held metric ("at equal flow": the metric is matched in both
+  arms by bisection on one compensating parameter), the domain of the other parameters, the paired design (`n` pairs, a seed),
+  the evaluator id, version and tier, and the level spent. The family is the ledger file: hypothesis `i` is tested at
+  `0.05 * 6 / (pi^2 i^2)`, so the levels of any number of hypotheses sum to at most 0.05; the count is read from the file, so a new
+  session cannot restart it. `register_batch` puts several hypotheses in one slot, judged by Holm's procedure.
+* `run` evaluates exactly the registered pairs (a Latin hypercube of the domain from a seed derived from the record), appends them
+  in pair order whatever the worker count, resumes after a kill, and appends a `hypothesis_result`: `confirmed` when the one-sided
+  lower bound of the mean paired difference is at least `min_effect`, `refuted` when the upper bound is below it, `inconclusive`
+  otherwise, `void` when too many pairs failed or the held metric was not matched. A paired sign test is the registered
+  alternative to the t test.
+* `verify` and `lessons` recompute every verdict from the registration and the evidence; a result line written by hand, evidence
+  before its registration, an altered registration, another evaluator version, a different number of pairs, or evidence away from
+  the registered design is reported with its entry and never returned. With the evaluator at hand (analytic or reduced-order tier)
+  every evidence entry is re-run. `lessons` gives one row per hypothesis with a generated statement next to the author's words, the
+  scope (evaluator, version, tier), the model error of the tier (from a fidelity summary of ADR 0622, or declared, else unknown),
+  staleness against the evaluator versions the caller holds now, and replicate links between tiers. Analytic results are never
+  returned.
+* `explore` ranks parameter-metric pairs by Spearman correlation over existing entries; it is marked exploratory and never
+  evidence.
+
+How to use it (protocol guidance, ADR 0624 Q12):
+
+1. Look at existing entries (`explore`, queries) as much as needed, then write the claim down before testing it. Choose
+   `min_effect` from what matters for the product, not from what the exploration showed.
+2. State the domain where the claim is meant to hold; do not narrow it to where the effect was seen.
+3. Run it. A refuted or inconclusive result is as much a result as a confirmation; re-test an inconclusive one as a new hypothesis
+   with more pairs (`supersedes`, at most two re-tests), never by adding runs to the old one.
+4. Quote a lesson with its scope: "on the reduced-order model (version ...), raising ... lowered ... by ...". With the tiers
+   available today every confirmation is a statement about the reduced-order model. A claim about the fan needs a re-test at a
+   higher tier (`replicates`), and both results stay.
+
+Verified with scripted agents on synthetic worlds with planted effects, a two-tier model with planted artefacts, an equal-flow
+closed form and the reduced-order fan. It shows that the record and its guards work, not that an assistant uses them well.
+There is no MCP tool for it yet (F-702).
 
 ## Code map
 
@@ -511,6 +572,7 @@ The code is `crates/rcfd-api/src/design/`:
 | `surrogate` | Gaussian-process regression: kernel, maximum-likelihood fit, prediction, leave-one-out (ADR 0621) |
 | `bayes` | expected-improvement proposal, failure model, batches, the driver over a ledger model (ADR 0621) |
 | `fidelity` | fidelity management driver: screen, confirm, log the pairs, correct; measured table with the privacy split (ADR 0622) |
+| `hypothesis` | hypothesis record of the long-horizon loop: registration, paired runs, recomputed verdicts, lessons, explore (ADR 0624) |
 
 ## Where to go next
 

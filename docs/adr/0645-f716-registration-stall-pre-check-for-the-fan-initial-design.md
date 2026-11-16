@@ -341,3 +341,25 @@ and A3 are met with margin, and one mutation (M6) survives. Without the NC1 tran
 > Fan breakdown part H3 (docs/fan-project-breakdown.md), follow-up of F-698 (ADR 0621). ADR 0645, 2026-11-16. Library only, opt-in (no case key, no MCP tool, no golden; default bits equal to d40cd665 by digest): bayes::run_prechecked gives every pick of the surrogate loop first to a cheaper model (PreCheck with scope Initial or Every, at most 400 failed pre-checks per run and 20 tries per step, a progress line per step); a pick it fails is not evaluated, its entry (an evaluation entry of the pre-check's own evaluator id) is a failed observation from then on, and after a failed pick the step tries the next point of a ranked list from the same fit. fan_objective::StallPreCheck runs the objective's own per-point call at named impedance points, so a candidate it fails also fails the objective, with the same reason; R3 (largest system coefficient, lowest flow, highest incidence) is checked. On the F-698 R1 set-up (seeds 1 to 10, 50 evaluations): 0 failed evaluations on every seed (34 to 39 without it), 10 of 10 within 1 percent of the grid optimum (best / P_ref 0.99303 to 0.99310, reached by evaluation 10 to 14), 243 to 278 failed pre-checks per run, all in the ledger with the summary counts, and all 2649 rejected points fail the objective at R3; a pre-check of the initial design alone changes nothing (34 to 39 failed). Fast checks: pass-through equals run, cap refusal, scope, resume byte-equal, workers bit-equal. Six of seven mutations caught (checking another point than the named one survives: the fast fan test has no bound on its failed count). The control with the pre-check off reproduced every F-698 run but missed its registered ratio range on seed 4 (0.99351 against 0.9935, a range copied from rounded text), which the registered rule counts as todo. Not covered: a dearer evaluated model (in R1 the run makes about three times the ROM operating points of F-698), tolerance plans, batches above 1 with the fallback.
 
 > Follow-up proposed: Stall pre-check: the named point and the saving against a dearer model. Deps F-716. Acceptance: Every limit not stated here is registered in the ADR before the run. A fast fan check in which the pre-check entries carry the metrics of the named point and the failed count of the evaluations is bounded, so that checking a point other than the named one fails it; the ADR 0645 checks keep their results; and, once a CFD fan objective runs in the loop, the number of CFD evaluations saved by the reduced-order pre-check measured on a registered set-up.
+
+## Addendum 2 (2026-11-16): merge of main 14b155cd (F-715, ADR 0651), deviation note
+
+At the lead's request, main 14b155cd was merged into `f716-work` with a merge commit. It carries F-715's basin restart (ADR 0651,
+opt-in `BayesOptions::restart`), which pushes the pick inside its restart and plain branches. The one conflict, in
+`propose_ranked` of `design/bayes.rs`, is resolved so that both features hold. The pick is the one of ADR 0651 (`Restart` or
+`Ei` / `Feasibility`), and the ranked fallback of D3 is built after it from the same fitted models. **On a restart step there
+is no fallback list**: the pre-check tries only the restart pick, and if that pick fails, the next step refits, as for a
+model-free pick. This choice was made at the merge. No registered check combines the two options, so it is not tested.
+
+Re-run after the merge (the registered heavy record was not re-run): the `f716_stall_precheck` fast tests, 7 passed with the
+same printed numbers as before (F1b 68 pre-checks and 50 rejected, L1 54 lines, F5 10 pre-checks, F2 equal, F3c, F4);
+`f715_robust_ei` 6 passed (2 ignored); `f698_surrogate` 19 passed (3 ignored); `f697_fan_objective` 22 passed; `--lib` 141
+passed (4 ignored); `cargo fmt -p rcfd-api --check` and `cargo clippy -p rcfd-api --all-targets -- -D warnings` clean.
+
+B1 at the merge: the digest is `be4bc4aa0063bc33`, equal to main's default digest recomputed on a `git archive` of 14b155cd.
+**Deviation in how B1's base was computed first**: the base copies and the worktree shared one cargo target directory. A
+workspace member's artifact name does not depend on its checkout path, and `git archive` gives the files old mtimes, so a base
+build can reuse the worktree's `rcfd-api` library. (A worktree build after a base build failed to compile for the same reason,
+which showed it.) Both bases were therefore rebuilt in a separate, fresh target directory (`f716-scratch/target-base`). The
+rebuild compiled each base's own `rcfd-api`, and both d40cd665 and 14b155cd give `be4bc4aa0063bc33`. The B1 result of
+addendum 1 stands, now on a clean base build.

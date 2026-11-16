@@ -511,7 +511,7 @@ through the interface is conserved to round-off by construction.
 The Rust function also joins general planar interfaces in 3-D (convex faces; the patches must cover each other, otherwise
 the join is rejected). Use `solver.non_orthogonal_correctors` for accuracy on the skewed interface faces.
 
-### Annulus blocks for rotating-frame zones (`mesh.generator = "annulus_3d"`, `"annulus_3d_interface"`, `"annulus_3d_stage"`, `"annulus_3d_cylindrical_interface"`, `"annulus_3d_sector"`, F-031)
+### Annulus blocks for rotating-frame zones (`mesh.generator = "annulus_3d"`, `"annulus_3d_interface"`, `"annulus_3d_stage"`, `"annulus_3d_cylindrical_interface"`, `"annulus_3d_sector_cylindrical_interface"`, `"annulus_3d_sector"`, F-031)
 
 `annulus_3d`: a full cylindrical annulus `r_in <= r <= r_out` about the z axis, height `lz`, `nx` cells around, `ny`
 radial, `nz` axial; patches `inner`, `outer`, `zmin`, `zmax` (walls unless the case sets other conditions).
@@ -546,8 +546,8 @@ converged run is 48.75 deg).
 the interface have the radial size at which the geometric bound of that angle is 45 deg (near-isotropic interface cells).
 With few cells around this can need a strong radial grading, and a block too thin for that size is a located error.
 
-Known limits: full annulus only (no sector form of the interface; `annulus_3d_sector` below has no interface), and the sum of
-absolute interface fluxes of a swirling flow is first order in the cell size around (ADR 0109).
+Known limits: the sum of absolute interface fluxes of a swirling flow is first order in the cell size around (ADR 0109).
+The sector form is `annulus_3d_sector_cylindrical_interface` (below).
 
 `mesh.r_interface` and `mesh.isotropic_interface` on any other generator are rejected with a located error.
 
@@ -563,6 +563,24 @@ faces, `velocity = "fixed"` with value 0 is a rotor wall (its stator faces stay 
 forces, expression boundary values, a dynamic mesh, a mesh rotation, adaptive step control or restart files; each is a
 located error. The monitors `sliding_angle`, `sliding_interface_flux`, `sliding_gcl` and `sliding_non_orthogonality` are
 written every step, and a step whose interface faces exceed 70 deg stops the run. Without the table the case is unchanged.
+
+`annulus_3d_sector_cylindrical_interface` (F-711, ADR 0646): the same rotor and stator blocks cut to a sector of
+`sector_angle` degrees (strictly between 0 and 180, required), `nx` and `nx_right` chords around, both of the same pitch,
+joined on the cylinder `r = r_interface` by the periodic join of F-304 (ADR 0629). Patches `inner`, `outer`, `zmin`, `zmax`,
+the rotationally cyclic pair `theta_min` / `theta_max` (no boundary entry is needed) and the coupled pair `sliding_wrap_a` /
+`sliding_wrap_b` that carries the part of the rotor beyond the stator's seam (empty in the frozen join). Cell zone `rotor`,
+`grading`, `isotropic_interface` and the 70 deg pre-flight as above. Without `[mesh.sliding]` it is a frozen-rotor sector.
+With `[mesh.sliding]` the rotor sector turns against the stator sector any number of pitches (`angular_velocity >= 0`):
+every step the joined mesh is built at the turned angle reduced to one pitch, and when the angle passes a whole pitch the
+rotor is re-imaged one pitch back (ADR 0634); the monitor `sliding_image` counts the pitches taken off. The rotor's walls
+get their wall velocity in the rotor's image; a non-zero fixed value on a patch with rotor faces must be axial (the only
+uniform vector periodic under the pitch rotation); the other conditions and refusals are those of the full annulus. Over two
+pitches the sector run stays within 1.2e-2 of the full-annulus run of the same pair (ADR 0646). A step that lands on a coincidence of rotor and
+stator nodes is not coupled on the sector path by default for a flow without the symmetry of the node sets (ADR 0640); the
+optional table `[mesh.sliding.coincidences]` with `coupled = true` (F-730, ADR 0654; default false) couples it through
+`periodic_sliding_step_coupled` (ADR 0641) and writes the monitor `sliding_flux_residual` (the remapped old flux's
+divergence); off coincidences the run is the same bit for bit. The full annulus is coupled at coincidences always (F-710) and
+refuses the table. Without the table, choose the step so that the turned angle avoids multiples of the coincidence spacing.
 
 `annulus_3d_sector` (ADR 0116): `annulus_3d` cut to a sector `0 <= theta <= sector_angle` (degrees, strictly between 0 and
 360, required), `nx` chords around, `ny` radial (`grading` as `annulus_3d`), `nz` axial, height `lz` from z = 0. Patches

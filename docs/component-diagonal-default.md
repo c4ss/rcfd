@@ -195,3 +195,24 @@ gives `sigma = -0.42` (the `Symmetry` channel's impedance per length 5.4 percent
 (each flow-direction column with its own `c_x`) reproduces every measured per-length excess (`alpha_u = 0.6` to `1.0`, `N = 50`
 and `100`) within `1e-5`. A relaxed transient result next to a `Symmetry` plane can therefore err in either direction; the
 opt-in corrected split removes the effect in the relaxed loop as well (to `4e-6` of the zero-gradient run).
+
+## Update 2026-11-16 (F-712, ADR 0650): one-cell-deep annuli with `symmetry` planes, and the flipped default re-measured
+
+A uniform in-plane flow `U` on `annulus_3d_cylindrical_interface` or `annulus_3d` that is one cell deep, with `zmin` and
+`zmax` set to `symmetry`, is not kept under the default `averaged`. The deviation is `2.4e-2` of `|U|` after one PISO step.
+Because every cell touches both planes, the averaged diagonal acts as a uniform drag `k = 4 nu / (3 lz^2)` on the in-plane
+components. The pressure balances the drag with the linear field `-k U . x` (measured to `5e-4`). The Green-Gauss cell
+gradient of that field is wrong in the wall cells, and those cells then deviate by about `(1 - lambda)/2`. The defect is the
+same on the frozen interface join and on the conformal annulus. With zero-gradient planes the flow is kept (`1.4e-15`), and
+`corrected` keeps it to `8e-16` (`8e-15` through `[mesh.sliding]`).
+
+ADR 0650 re-measured the flipped default on the tree of 2026-11-16:
+
+- `baseline_hashes`: only `packed_bed` moves, as in wave 34C.
+- A 3-D walls-only PISO box changes in its last bits (`1e-15`), because the transient split is not guarded where the
+  component diagonals are equal.
+- Of the 49 `rcfd-api` test files that name a component-specific condition, 11 tests change outcome. They are the five of
+  wave 34C, plus `consistent_correctors_case_f301` c1 and c4 (the case tree refuses consistent correctors with
+  `corrected`), `cosim_case_f444` k2 and k3 (the case-built solver against a hand-built one with the library default), and
+  `film_gas_f292` d3 and d3b (recorded settings hashes).
+- One heavy test was not run. The list is in ADR 0650 addendum 1.
