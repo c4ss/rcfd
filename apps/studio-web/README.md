@@ -244,6 +244,36 @@ by WebGL 2 (fallback: <why>)"). Until a project view hosts it (F-806), it is sho
   keyboard; screenshots at 1440 x 900 in `test-results-visual/f808/`).
 - `performance` marks: `rcfd:field:open` and the measure `rcfd:field:first-picture` (P7, `scripts/measure-field.mjs`).
 
+## Derived pictures (F-809)
+
+The field viewport's tool row has one pictogram per derived picture, named in its accessible name and tooltip (G22):
+cut plane, vectors, iso-surface, streamlines (`src/renderer/field/derived.ts`, `DerivedControls.tsx`). One that does
+not apply is a dashed chip that says why in its accessible name and in the tooltip its focus shows (G6), never as
+standing text. What the engine computes was read first (ADR 0801, addendum F-809), and the tolerances were registered
+there before the code (G3):
+
+- **Cut plane**: rcfd-render's own cut (`View::clip`, only points with `n . p <= d` are drawn), on the GPU for the
+  surface, the mesh grid and the arrows (`maskNode` of each TSL material), and in the pick, so the readout names what is
+  seen. A plane normal to x, y or z: axis, position (a slider in mesh coordinates; the store gives no length unit) and
+  the side kept, in a small panel in the frame's top left corner. Unavailable on a 2D case (one cell layer, the
+  engine's own test of `render_field`).
+- **Vectors**: the arrows of `render.png` (`rcfd_post::render::overlay_vectors`: a 24-per-axis lattice, the largest
+  arrow 0.8 of a step, the head 0.3 back and half that out) carried to the boundary surface: one arrow per lattice bin,
+  at the centroid of the first surface triangle in it, carrying its owner cell's stored components unchanged (on a 2D
+  case the in-plane components, on the face the view looks at). Deep ink. The components come through the data door
+  for the shown snapshot, with the view's tag.
+- **Iso-surface, streamlines**: unavailable everywhere: the engine has no entry point for either on a stored field, and
+  the Studio does not draw a picture it cannot check against the engine.
+- Tests: `tests/unit/field-derived.spec.ts` (the 2D verdict against `render_field` on the quick-start and axial-fan
+  runs; availability and reasons; the cut rule and the arrows' constants read from the Rust source; every arrow against
+  an independent recomputation, components bit for bit the Rust reader's; the pictograms on the grid) and
+  `tests/e2e/field-derived.spec.ts` (the packaged Studio: reasons by role and accessible name, tooltips on keyboard focus;
+  the cut plane pixel by pixel on the tiny and 1e5-cell boxes; the arrows change only pixels to deep ink and their number
+  is the recomputation's; keyboard; screenshots at 1440 x 900 in `test-results-visual/f809/`).
+- Missing in the engine (no Rust change here): an iso-surface of a stored cell field, streamlines, and a store-based
+  slice, sample or vector picture of a 3D case (`render_field` refuses 3D; `render.png`, `field.sample` and
+  `render_image` work on live sessions only).
+
 ## Run control (F-807)
 
 Runs are started, queued, paused, resumed, stopped and cancelled from the window, and only through the project's runner
