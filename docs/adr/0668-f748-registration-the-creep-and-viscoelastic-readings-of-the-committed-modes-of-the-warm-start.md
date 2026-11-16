@@ -226,3 +226,87 @@ between steps 1 and 2 (what the old reading would have read in its ninth chunk).
    than a refusal of W with a creep material: taken on the maintainer's standing instruction of 2026-11-11 (take the
    recommendation of ADR 0666 remaining question 2, option (a)).
 2. **Default.** W stays opt-in (ADR 0660 open question 2): open for the maintainer, not taken.
+
+## Addendum 1: results (2026-11-16)
+
+Run 0 (before D1) was made once on 3a43cd85 with `--include-ignored` (`run0.log` in the scratch folder, 0.2 s): P0 panicked
+in `creep_increment` ("index out of bounds: the len is 2 but the index is 6", `nonlinear.rs` line 2926), the creep test
+failed by the same panic, the viscoelastic test passed (P0v). Run 1 (after D1) was made once on e8067fef (`run1.log`, the
+default tests of `si_eas_hg10.rs` 0.3 s and the unit test). The viscoelastic test thus ran in both runs, as registered (P0v
+and VE); every printed value is identical in the two. The mutations once each on a scratch copy of e8067fef
+(`mutations.log`, `mut-M*.log`); S5, S6, S7, B once (`checks.sh`, `fmt.log`, `s7-lib.log`, `s7-tests.log`,
+`s5-baseline.log`, `clippy.log`). No limit, set-up or measure was changed after a run; no amendment.
+
+### Results
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| P0 | panics | panicked, "index out of bounds: the len is 2 but the index is 6" | yes |
+| P0v | passes | passed (every VE row met before D1) | yes |
+| CR1 | `Ok`, 5 entries | `Ok`, 5 | yes |
+| CR2 | `<= 1e-9` | `6.4e-16` | yes |
+| CR3 | `<= 1e-9` | `1.8e-14` | yes |
+| CR4 | `<= 1e-9`; equal | `2.7e-15`; equal (no halving, one sub-step per step, 3 iterations each, W and S) | yes |
+| CR5 | `0`, `0` | `0`, `0` | yes |
+| CR6 | `> 1.1` | `1.213` | yes |
+| CI | bitwise; `>= 3` steps | bitwise on all 4 steps | yes |
+| NCP | panics; bitwise | the old reading panics on W's states; on S's equals S's `3.9615e-6` bitwise | yes |
+| VE1 | `Ok`, 5 entries | `Ok`, 5 | yes |
+| VE2 | `<= 1e-9` | `1.7e-16` | yes |
+| VE3 | `<= 1e-9` | `1.4e-13` | yes |
+| VE4 | `0`, `0`; `0.0` | `0`, `0`; `0.0` at every entry | yes |
+| VE5 | in `[1.6, 2.0]` | `1.859` | yes |
+| NCV | `16` | `16` | yes |
+| U1 to U3 | bitwise | pass | yes |
+| B | pass | `sa_creep_arrhenius_default_bits`, `sa_qs_visco_default_bits`, `sa_temp_history_default_bits`, `si_eas_default_bits`, `si_eas_hg_default_bits` pass | yes |
+| S5 | pass | 3 passed, 1 ignored | yes |
+| S6 | clean | fmt and clippy clean | yes |
+| S7 | pass | `--lib` 15; `si_eas_hg9` 4, `si_eas_hg8` 5, `si_eas_hg7` 4, `si_eas` 8, `sa_creep` 9, `sa_creep_arrhenius` 6, `sa_qs_visco` 6 passed | yes |
+
+Reported. The tip `u_y` of W and S agree to the printed seven digits at every entry (creep `1.7497e-4` to `2.1218e-4`,
+viscoelastic `1.7497e-4` to `3.2529e-4`). The largest change of a committed mode between steps 1 and 2: `2.3e-7` (creep),
+`7.0e-7` (viscoelastic); the largest creep increment per step `4.4e-6` to `3.4e-6`.
+
+### Deviations
+
+- Arithmetic 2 over-estimated the creep: the increments are `4.4e-6` per step (estimate `2.6e-5` to `1.3e-4`) and the tip
+  ratio `1.21` (estimate 1.5 to 3; the limit `1.1` still met). Only the estimate was off; the check is the existence of
+  creep. VE5 `1.859` against the closed-form `1.865`.
+
+### Mutations (scratch copy of e8067fef, each run once)
+
+| Id | Caught | By |
+|---|---|---|
+| MC1 (no cut) | **yes** | CR1 (the panic), U1 (the panic) |
+| MC2 (cut one point long) | **yes** | U1 (`1e3`: mode 6 read as a point); not by the integration tests (the mode changes, `2.3e-7`, are below the creep increments) |
+| MC3 (cut one point short) | **yes** | U1 (`0.1`), CI |
+| MC4 (`None` in the sub-steps) | **yes** | CR1 (the panic) |
+| MJ1 (the driver ignores the warm start) | **yes** | CR5 (`80`), NCP, VE4 (`80`), NCV (`0`) |
+
+Five of five caught.
+
+### Not run
+
+Nothing registered was skipped. The whole rcfd-fem suite was not run (rule 7). Not run by design (Limits): creep and
+viscoelastic materials with W on the nonlinear transient path, a distorted mesh, an Arrhenius or temperature case.
+
+### Decision
+
+**done**, by the registered rule: every check met in its single registered run, five of five mutations caught, no amendment,
+the default bits unchanged (B, S5). The audit lists twelve readers; `creep_increment` was the only one on the time-stepping
+path that read the modes as a point, and it now reads the material part with the warm start.
+
+### Remaining questions
+
+1. **Default.** W stays opt-in (ADR 0660 open question 2): open for the maintainer.
+2. **The nonlinear transient path with creep or viscoelastic and W.** By reading correct (R4 to R6, R9); not run. Options:
+   (a) a small check on the transient integrator; (b) leave it to the reading. Recommendation: (b): no reader there reads the
+   state by points, and the restore is covered by ADR 0666 TS1. No follow-up proposed.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> Structural solver, intermediate tier. Follow-up of F-742 (ADR 0666). DONE. ADR 0668, 2026-11-16: the warm start W of ADR 0660 with a creep material (Norton, A = 5e-33, n = 4) and a viscoelastic material (one Prony branch, weights 0.5, tau 0.25 s) on a 16-element Incompatible block (rule L, cantilever under an end traction) through the time-stepping path of ADR 0489 (solve_in_time, four steps of 0.25 s), against the cold S of ADR 0658. An audit of the twelve readers of the element states (listed in the ADR) found creep_increment the only one that read the nine committed modes as a point; before the fix the W creep run panicked there (index out of bounds, kept as an ignored record), the viscoelastic run did not. Opt-in change: with the warm start creep_increment reads only the material part of each element (the rule of ADR 0666 D1). Met: W against S within 6.4e-16 (displacement), 1.8e-14 (creep states), 2.7e-15 (creep increments) and 1.7e-16, 1.4e-13 (viscoelastic), the same halvings and sub-steps, the reported creep increment equal bit for bit to the test's own reading of the material parts, the viscoelastic tip ratio 1.859 against the closed form 1.865. No default bit changed (five bit records, the rcfd-api baseline hashes). Five of five mutations caught. Not covered: creep and viscoelastic with W on the nonlinear transient path (correct by reading), a distorted mesh, the Arrhenius factor.
+
+> F-742 (note, ADR 0668, 2026-11-16): the creep reading of the committed modes (creep_increment) is fixed behind the warm start (F-748); the viscoelastic material had no reader that misread them.
