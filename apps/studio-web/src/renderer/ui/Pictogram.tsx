@@ -1,6 +1,6 @@
 // State pictograms and interface icons (DESIGN.md Shapes). A pictogram is decorative to assistive technology: it always
 // stands beside its word (StateMark), which carries the state; colour only reinforces it (G8).
-import { ICON_PATHS, STATE_SHAPES, STATE_WORD, type IconName, type RunState, type Shape } from './pictogramPaths.js';
+import { ICON_PATHS, markShape, markWord, type IconName, type MarkState, type Shape } from './pictogramPaths.js';
 import { cx } from './cx.js';
 
 function ShapeEl({ shape }: { shape: Shape }) {
@@ -8,7 +8,8 @@ function ShapeEl({ shape }: { shape: Shape }) {
 }
 
 export interface StatePictogramProps {
-  state: RunState;
+  /** One of DESIGN.md's five run states, or paused or cancelled (F-806, proposed for DESIGN.md). */
+  state: MarkState;
   /** Rows that are not selected fade: the pictogram is half-filled (Fade by Colour). A failure never fades. */
   faded?: boolean;
   size?: number;
@@ -27,7 +28,7 @@ export function StatePictogram({ state, faded = false, size = 14, className }: S
       focusable="false"
       data-state={state}
     >
-      <ShapeEl shape={STATE_SHAPES[state]} />
+      <ShapeEl shape={markShape(state)} />
     </svg>
   );
 }
@@ -43,7 +44,7 @@ export function StateMark({ state, faded, label, className, size }: StateMarkPro
   return (
     <span className={cx('ui-state', `ui-state--${state}`, isFaded && 'ui-state--faded', className)}>
       <StatePictogram state={state} faded={faded} size={size} />
-      <span className="ui-state-word">{label ?? STATE_WORD[state]}</span>
+      <span className="ui-state-word">{label ?? markWord(state)}</span>
     </span>
   );
 }

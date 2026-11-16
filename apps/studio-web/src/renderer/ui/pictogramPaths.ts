@@ -27,6 +27,30 @@ export const STATE_SHAPES: Record<RunState, Shape> = {
   failed: { path: 'M2 2L6 6M8 8L12 12M12 2L8 6' },
 };
 
+/**
+ * F-806: the runner's two states that DESIGN.md has no pictogram for yet (PRODUCT.md lists paused; the runner also
+ * writes cancelled). Drawn on the same grid, from the same family, and proposed for DESIGN.md (not recorded there or in
+ * design.json yet, so they stay apart from RUN_STATES):
+ *   paused     the running mark's L held at a gate: the path stops short and two bars stand where the arrow was
+ *   cancelled  the running mark's L run into an end bar (the finished mark's bar) before its arrow: stopped on request
+ */
+export const RUNNER_STATES = ['paused', 'cancelled'] as const;
+export type RunnerState = (typeof RUNNER_STATES)[number];
+
+/** Every state a run can be shown in: the five of DESIGN.md and the two of RUNNER_STATES. */
+export type MarkState = RunState | RunnerState;
+
+export const RUNNER_STATE_WORD: Record<RunnerState, string> = { paused: 'Paused', cancelled: 'Cancelled' };
+
+export const RUNNER_STATE_SHAPES: Record<RunnerState, { readonly path: string }> = {
+  paused: { path: 'M2 12V3H5M8 0V6M12 0V6' },
+  cancelled: { path: 'M2 12V3H10M10 0V6' },
+};
+
+/** The word and shape of any MarkState. */
+export const markWord = (s: MarkState): string => (s === 'paused' || s === 'cancelled' ? RUNNER_STATE_WORD[s] : STATE_WORD[s]);
+export const markShape = (s: MarkState): Shape => (s === 'paused' || s === 'cancelled' ? RUNNER_STATE_SHAPES[s] : STATE_SHAPES[s]);
+
 export const ICON_NAMES = [
   'plus',
   'minus',
