@@ -279,3 +279,11 @@ fraction of 1.00. Its cause was not diagnosed. The shared Chromium profile (Q5) 
 - **Q4:** yes, one baseline on an idle machine (no other jobs) before F-448's acceptance.
 - **Q5:** yes, a scratch `--user-data-dir` for every bench case except P10, which keeps the user's own profile.
 - **Q3:** yes, the bench stays out of CI and is run by hand (hosted runners have no WebGPU adapter).
+
+## 10. Retiring the egui apps early (maintainer, 2026-11-16)
+
+The maintainer asked to "kill the old rcfd-studio and clear up some test bandwidth" and chose (a) of three options:
+(a) delete `crates/rcfd-studio` and `crates/rcfd-gui` now; (b) drop them from the workspace and keep the code until
+F-448; (c) delete only rcfd-studio. G14 now records them as retired. F-449 is done ahead of F-448; F-448 keeps its
+meaning (the Electron Studio covers what rcfd-studio did), judged against the capabilities listed when they were
+deleted. `rcfd-claude` stays, because `rcfd-mcp` uses it.

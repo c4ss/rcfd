@@ -104,10 +104,11 @@ Agents cannot see the window. Each roadmap item has automated tests (unit tests,
 view-and-report step for the maintainer, named in its acceptance. Each wave ends with a short view-and-report
 checklist. Whether `scripts/gate_test.py` also runs the Studio's npm tests is the maintainer's decision.
 
-## G14. rcfd-studio is frozen until parity
+## G14. rcfd-studio is retired
 
-`rcfd-studio` and `rcfd-gui` keep building and keep passing their tests; they get no new features. They are removed
-only through F-449, after the maintainer has used the new shell and approved.
+The maintainer decided on 2026-11-16 to delete `rcfd-studio` and `rcfd-gui` before parity, to free test and build
+time (F-449, ahead of F-448). Git history keeps them. Capabilities only they had are roadmap items for the Electron
+Studio; no doc may tell a user to run them. (Before 2026-11-16 this rule froze them until parity.)
 
 ## G15. Everything the engine can do, the Studio can do
 
