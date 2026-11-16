@@ -458,6 +458,11 @@ keeps near-duplicate points factorable. `Gp::predict` gives the mean and the sta
 * Failed evaluations are imputed at the predicted mean plus one standard deviation and also feed a failure model (a process on
   the label ok / failed) whose probability of success multiplies the acquisition; constraints get a process each and their
   probability of feasibility. Pending entries and the points of a batch are believed at their predicted mean.
+* Opt-in basin restart (ADR 0651, `BayesOptions::restart: Some(Restart::default())`, off by default): when the best expected
+  improvement falls below `1e-4` of the spread of the evaluated values, the incumbent's basin (the ellipsoid of radius 2 in the
+  fitted length scales) is set aside and the point is chosen by expected improvement of a fresh process fitted to the points
+  outside it. On Hartmann 6 (30 initial points, 200 evaluations) it reaches the minimum within 1 percent on 9 of 10 seeds,
+  against 6 of 10 for plain expected improvement; on Branin it changes nothing before the target.
 * `minimise` has the batch interface of the other optimisers; `run(spec, model, ledger)` drives a `ledger::Model` and appends
   one entry per evaluation with the predicted mean and standard deviation in the provenance (`driver: gp_ei`), then a
   `surrogate_summary` with the fitted model's identity (`fitted`) and its training entries (`parents`). A run resumes from the
