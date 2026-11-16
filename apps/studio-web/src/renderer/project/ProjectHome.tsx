@@ -21,6 +21,7 @@ import { baseName, clock, dateTime, inFolder, kilobytes, plural, sourceWord } fr
 import { RunsView } from '../runs/RunsView.js';
 import { runRows, shownState, timeText, unknownWord, type RunRow } from '../runs/model.js';
 import { projectActions, watchProjectState } from './door.js';
+import { caseHash } from '../case/hash.js';
 import './project.css';
 
 let reported = false;
@@ -71,6 +72,9 @@ export function ProjectHome() {
             )}
             <Button variant="ghost" onPress={() => void (location.hash = '#/settings')}>
               Case settings
+            </Button>
+            <Button variant="ghost" icon="plus" onPress={() => void (location.hash = caseHash.new)}>
+              New case
             </Button>
           </div>
         )}
@@ -529,6 +533,9 @@ function CasesTable({ cases, changed }: { cases: readonly CaseEntry[]; changed: 
           <th scope="col">
             <span className="sr-only">Last change</span>
           </th>
+          <th scope="col">
+            <span className="sr-only">Edit</span>
+          </th>
         </tr>
       </thead>
       <tbody>
@@ -547,6 +554,12 @@ function CasesTable({ cases, changed }: { cases: readonly CaseEntry[]; changed: 
             <td className="ph-num">{c.runs}</td>
             <td className="ph-change-cell">
               <Changed at={changed.get(c.path)} />
+            </td>
+            <td className="ph-edit-cell">
+              {/* F-812: the case editor opens the file into a service session through the engine */}
+              <Button variant="chip" onPress={() => void (location.hash = caseHash.open(c.path))} aria-label={`Edit ${c.path}`}>
+                Edit
+              </Button>
             </td>
           </tr>
         ))}

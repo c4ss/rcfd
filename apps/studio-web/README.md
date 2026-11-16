@@ -329,6 +329,65 @@ strings and lists, a JSON field for any shape a later schema adds; its unit (`x-
   mixed), `plots-range.spec.ts`, `plots-css.spec.ts`; `tests/e2e/plots.spec.ts` against the real `rcfd serve` with the
   quick-start cavity, screenshots at 1440x900 to `test-results-visual/f811/`.
 
+## The case editor (F-812)
+
+From the project home, "Edit" on a case row (or "New case" in the header band) opens `#/case/...`: the F-825 surface on
+a service session made from the file, with the file named as a white tab in the header band and a case file panel at
+the head of the right column. Surface brief: `.impeccable/surfaces/apps-studio-web-src-renderer-case.md`.
+
+- Open: the main process reads the file's hash through the project server (`read_project_file`); the renderer dispatches
+  `session.create {path}` (an action, logged and replayable, so the engine parses and validates the file with its own
+  schema); the main process then binds the session to the file only when its journal names that file as its source and
+  the hash is unchanged. A file the engine refuses opens nothing and shows the engine's diagnostics (key, problem) with
+  the fix.
+- Edit: the F-825 surface unchanged (learner first, every key one step away, search, "Show every key").
+- Save (Ctrl+S, or the Save button): the settings set since the last save, read from the session's journal, with the
+  session's current values, written by the engine's `edit_case` against the hash read (`base_hash`), in place: other
+  lines and comments of the file stay. The panel names the keys written and the form. A file changed by another writer
+  meanwhile is not overwritten: the panel shows each key with the value here and the value in the file now, and three
+  named choices (write my changes into the file as it is now; load the file as it is now, dropping mine; keep
+  editing), none preselected. The editor reads the file's hash again when the engine's change feed names it, so
+  "Changed outside" shows before a save.
+- Case actions: New case (from the engine's templates, the shipped examples one step away, both lists from the
+  project server's `new_case` schema), Duplicate as (byte-for-byte copy, `new_case {copy}`), Check the mesh (the
+  `mesh.check` action), Check the saved file (`check_case_headless`, the check-only launch with its exit code), Close
+  the session (asks first with unsaved changes and names them). Each shows its Claude Code and CLI equivalents
+  (`CASE_ACTIONS` in `src/shared/case.ts`).
+- The page reaches the case operations only through `window.studioCase` (`state`, `sources`, `prepare`, `attach`,
+  `status`, `conflict`, `save`, `create`, `duplicate`, `check`, `forget`), from one module, `src/renderer/case/door.ts`;
+  a third MessagePort on `studio.case-port`, checked by `src/main/case/bridge.ts` (exact fields, paths `cases/<...>.toml`
+  or `.json` without `..`). The ipcMain channels stay `app.info` and `app.ready`.
+- Tests: `tests/unit/case-editor.spec.ts` (fake service and project server: what a save writes, conflicts, removals,
+  refusals, bindings, the allow-list, the port's checks; no case key in the editor's code; tokens-only CSS) and
+  `tests/e2e/case-editor.spec.ts` (the packaged Studio against `rcfd serve` and `rcfd-mcp`: open from the home, a key
+  saved and read back with `rcfd run <case> --print-settings` and `rcfd validate`, a conflict with nothing overwritten
+  and each choice, an invalid file, new case, duplicate, checks, close, the keyboard path). Screenshots at 1440 by 900:
+  `test-results-visual/f812/`.
+
+Decisions taken in building F-812 (options, the recommendation followed; each can be reversed without an engine change):
+
+- D1, the write path: (a) a second project server per open project, `rcfd-mcp --project <folder>` without
+  `--read-only`, started on the first case operation, called only with the tools of `CASE_TOOLS` (`read_project_file`,
+  `edit_case`, `new_case`, `check_case_headless`; `src/main/case/server.ts` refuses the rest before the server); (b)
+  drop `--read-only` from the project home's server; (c) a new save method in `rcfd serve` around the workspace's
+  `save_case` (a Rust change). Taken: (a). The project home's server stays read-only. Every write is the engine's, hash
+  guarded, with a line in `.rcfd/edits.jsonl` (reason `rcfd Studio case editor: save`, `...: new case`, `...: duplicate`).
+- D2, the action registry: the registry (F-827) holds one service method per action and its test requires exactly the
+  service's methods, so the case-file actions (which combine project-server tools and service methods in the main
+  process) are a separate table, `CASE_ACTIONS`, as the project home's operations are (F-805 D7). Proposed: let the
+  registry hold actions whose engine side is a project-server tool.
+- D3, opening: the session is made by the renderer through the dispatcher (`session.create {path}`), and the main process
+  binds it after checking the journal's source and the hash; a file changed between the two is opened again (up to
+  three times), then reported.
+- D4, what a save writes: the leaf settings set since the last save, with the session's values; an entry removed in the
+  session that the file holds cannot be written (`edit_case` sets keys; it does not remove), so the save is refused with
+  the entry named and the way out (remove it in a text editor or ask Claude Code, then open the file again). An entry
+  added and removed again since the last save writes nothing.
+- D5, conflicts: never resolved for the user; no choice preselected; "write my changes" writes only the keys listed onto
+  the file as it is now and then reopens the session from the result.
+- D6, the sessions made in the main process to read the file as it is now (for the conflict table and the removal
+  check) are short-lived, closed at once, and bypass the action log, which records the user's actions only.
+
 ## Security (G10)
 
 - The renderer is sandboxed (`app.enableSandbox()` and the window's settings), context-isolated, with Node integration
@@ -350,6 +409,8 @@ strings and lists, a JSON field for any shape a later schema adds; its unit (`x-
   (`src/main/service/bridge.ts`): the exact fields of each operation, a method on `SERVICE_METHODS`
   (`src/shared/service.ts`) and parameters of plain JSON values; anything else is refused before the service. The
   shell's ipcMain channels stay `app.info` and `app.ready`. A method is added to the list with a test.
+- The case editor (F-812): the page sees `window.studioCase`, a third MessagePort checked by `src/main/case/bridge.ts`;
+  the project server that writes is called only with the four tools of `CASE_TOOLS`.
 - `RCFD_STUDIO_STARTUP_REPORT=<file>` (measurement only): the main process writes the time the project view was ready
   to that file and quits. Unset, it does nothing.
 
