@@ -301,3 +301,80 @@ Found while writing the BD4 test, before it ran: with n = 64 the order-statistic
 BD4's "every interval end bit-equal to the nominal metric" could not hold for a defect-free implementation. The smallest n with
 finite ends is 72 (`0.95^n <= 0.025`). BD4 is corrected to **n = 128** (seed 623_104, workers 4 unchanged; `0.95^128 =
 1.4e-3`); the limit is unchanged. LG1 to LG8 had run (once) before this amendment; no BD check had run.
+
+## Addendum 1: results (2026-11-16)
+
+Code: commit 6643b85b. New `crates/rcfd-api/src/design/study_ledger.rs` (D1, with `study_ledger_tests.rs`); `study.rs` (the
+`sink` field, `set_ledger_sink`, `log_records`, the `#[cfg(test)]` kill hook; lines 15, 408-417, 437-443, 447-479, 553-561,
+855: additions only, every one behind `sink: None` or `cfg(test)`); `uq.rs` (D4 at lines 354-358, `Affine` and
+`Standardized` at 781-887); `fan_rom_eval.rs` (`FanRomModel`, `fan_rom_tolerances`, `fan_rom_band_spec`, `fan_rom_bands`,
+lines 112-404, plus imports); `mod.rs` (module line and doc); new `crates/rcfd-api/tests/fan_rom_bands_f268.rs` (BD1 to BD7).
+No shared solver file, no golden, no hash table, no case-file key, no MCP tool. All runs in release.
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| LG1 | 64 entries, 0 skipped, one per pair, 16 non-ok with located reason, content equal to the store and the unit maps | 64 entries, 64 unique pairs of 64, 0 skipped, 8 failing candidates (set-up), 0 content problems | yes |
+| LG2 | store bytes and result bits equal with and without the sink | DOE: 14346 = 14346 bytes, result equal; NM: 6955 = 6955 bytes, result equal; no ledger file without the sink | yes |
+| LG3 | 48 of 48 ok entries pass `rerun_check` with difference 0; non-ok re-run to the same verdict | 48 of 48, largest difference 0; 16 of 16 same verdict | yes |
+| LG4 | 8 diverged, 8 not_evaluated, equal to the store's failed pairs | 8, 8, store 16 | yes |
+| LG5 | 0 duplicate, 0 missing, same entry set, at most 1 skipped line at all `2E - 1` kill points | E = 28 write events, 55 kill points, 0 failing points (32 reference entries) | yes |
+| LG6 | 0 new entries on rerunning the finished study | reconcile 0, entries after the rerun 64 | yes |
+| LG7 | ledger bytes equal for 1 and 4 workers | 46841 = 46841 bytes | yes |
+| LG8 | located refusal naming `y`, no file; run without a unit for `g` stops naming `g`, 0 entries | "parameter 'y': no unit in the ledger sink", no file; "ledger: metric 'g': no unit ...", 0 entries | yes |
+| BD1 | 64 of 64 points bit for bit (8 metrics, units) | 64 of 64 | yes |
+| BD2 | quantiles 0.05/0.5/0.95, finite intervals, coverage >= 0.95; at least 10 of 12 contain the reference; 2001 ledger lines | coverage 0.9600 (tails), 0.9534 (median); **12 of 12**; 2001 entries, 0 skipped; 2000 of 2000 and 100000 of 100000 ok; 66 s band, 3763 s in all | yes |
+| BD3 | relative sd difference at most 0.0732 | q 0.0265, dp_s 0.0263, power 0.0266, tone1_pa 0.0266 | yes |
+| BD4 (amendment 1, n = 128) | sd exactly 0, every quantile and interval end bit-equal to the nominal | sd 0.0 for all 8 metrics, 128 of 128 ok, 0 failing | yes |
+| BD6 | failed = non-ok entries, every reason naming `tip_gap`, at least 1 ok and 1 failed, 1/3 in the 0.999 Clopper-Pearson interval | 36 failed of 120 = 36 non-ok entries, 36 naming tip_gap, fraction 0.300, interval [0.174, 0.451] | yes |
+| BD7 | band ledger bytes equal for 1 and 4 workers | 104556 = 104556 bytes, 65 lines | yes |
+| DF1 | existing tests pass, nothing edited | rcfd-api `design::` unit tests 65 passed (3 ignored, pre-existing), `fan_rom_design_w46b` 1 passed; rcfd-mcp lib 18, `default_f1` 2, `design_f249` 4, `design_f260` 2, `design_f297` 2, `tool_list_f275` 7 (tools-list goldens) passed; no existing test, golden or hash table touched | yes |
+
+BD3: all four relative differences are 0.026 to 0.027 and of one sign (sample sd below the first-order value), consistent with
+one sampling deviation of the dominant stagger input shared by the four near-comonotone metrics (arithmetic 3), not four
+independent errors; within the limit, not a finding.
+
+Negative control and mutations (scratch copy `f268r-scratch/mut`, script `mutate.py`, logs `mut_*.log`): **NC1** (ledger
+before store) fails LG5; **M1** fails LG1 and LG5; **M2** LG1; **M3** LG1 (its LG6 part) and LG5; **M4** LG1; **M5** BD1 (0 of
+64); **M6** BD1 (0 of 64); **M7** BD4 (126 of 128 samples fail, sds up to 0.57 Pa); **M8** BD4 (sds of rounding size, `dp_s`
+2.6e-14 Pa, not 0). Nine of nine caught.
+
+fmt: `cargo fmt -p rcfd-api --check` clean. clippy: `cargo clippy -p rcfd-api --all-targets -- -D warnings` clean.
+
+Deviations and run record:
+- Each registered check ran once, except that the LG tests ran a second time inside DF1's `design::` run (same results;
+  deterministic, fixed clock). The heavy BD2/BD3 record ran once, to completion (3766 s); it was not killed.
+- **Re-runs because a process was killed or blocked** (mutations, not registered checks): the first attempt of M5 to M8 could
+  not link its test binary while the heavy BD2/BD3 binary was running (Windows lock on the executable of the same name,
+  LNK1104); the second attempt was killed when the session ended (M5 had completed and failed BD1; M6 was killed mid-run and
+  had left its mutation in the scratch copy, restored from the worktree before continuing); M6 to M8 were then run a third time,
+  to completion. No result was chosen among runs: the earlier attempts produced no test result.
+- The smoke runs before registration are disclosed in the status line; nothing else ran before the registration commit.
+- Not run: `baseline_hashes` (no solver file changed), the workspace suite (the lead's gate), rcfd-mcp tests other than the six
+  listed.
+
+Decision by the registered rule: **done**. Every check met (LG1 to LG8, BD1 to BD4, BD6, BD7, DF1), NC1 holds and every
+mutation fails a check.
+
+Remaining questions (each with a recommendation; none blocks the decision):
+- **R1, chord reading.** The per-blade `chord_rel` of `Tolerances` is applied as one row-common error, an upper bound on the
+  row-mean spread. (a) keep; (b) map it to the row mean of `B` independent draws (sd over `sqrt(B)` for a normal, not exact
+  under truncation); (c) refuse a non-zero `chord_rel` until a per-blade model exists. Recommendation: (a), with (b) only after a
+  derivation of the truncated row-mean distribution.
+- **R2, D4.** `uq::mean_sd` returns the value and sd 0 for a bit-constant sample; before, it returned rounding noise. No
+  existing test changes, but `uq::run` on a constant metric now differs in its last bits. (a) keep (required by b4, a
+  first-principles identity); (b) revert and record BD4 as a known miss. Recommendation: (a). It is the one default change and
+  needs the maintainer's yes.
+- **R3, store header defect.** A kill during the first `Store::append` leaves a store that cannot be reopened ("What exists").
+  Proposed as a follow-up below. Recommendation: write the header when the file is empty, not only when it is absent, with a
+  kill test.
+- **R4, uniform tolerance input.** A `Uniform` tolerance becomes `z ~ Uniform(lo, hi)` with width 1, so its ledger parameter
+  `z.<name>` carries the physical value under unit `1` (the value with its unit is in `settings`). Recommendation: keep; F-700's
+  field conventions can carry the unit.
+
+## For the lead: roadmap entries
+
+> Proposed status: done
+
+> Design loop. ADR 0121, ADR 0240, ADR 0623, 2026-11-16. DONE. Every design variant can be recorded in the ledger with its inputs, solver version and results, and the tolerance study driver reports output spread on the reduced-order fan. ADR 0623 (library only, opt-in): Study::set_ledger_sink writes one evaluation entry per evaluated (candidate, condition) pair after its store write, failed pairs with a located reason, and reconciles store and ledger on resume (64 of 64 on the 32-candidate, 2-condition study; 0 duplicate and 0 missing at all 55 kill points of a Nelder-Mead study; rerun_check of the 48 ok entries through ConditionModel with difference 0; store bytes and result bits equal with and without the sink; ledger bytes equal for 1 and 4 workers; missing units refused). FanRomModel is the reduced-order fan as a ledger::Model over common stagger, chord and tip-gap errors, bit for bit equal to FanRomEvaluator::metrics at 64 points; fan_rom_bands runs uq::run on it through the standardised wrapper uq::Standardized: 5, 50 and 95 percent quantiles with 0.95 order-statistic intervals for q, dp_s, power and tone1_pa under the ADR 0118 set-up T tolerances, 12 of 12 intervals contain a 100000-sample reference, the sd within 2.7 percent of first-order propagation, zero-width tolerances give sd exactly 0 (uq::mean_sd returns the value of a bit-constant sample, the one default change, listed for the maintainer), failed samples counted and logged. Per-blade, eccentricity, mass, roughness and thickness tolerances are refused (one-row model); the bands describe the model, not a real fan. No MCP tool or service argument (F-702), no new ledger field (F-700). Nine of nine mutations caught.
+
+> Follow-up proposed: Design store header after a torn first write. Deps F-268. Acceptance: a study store whose first append is killed while writing the header line reopens and resumes with the header present at every kill point inside the first append, and every existing store test keeps its bytes.
