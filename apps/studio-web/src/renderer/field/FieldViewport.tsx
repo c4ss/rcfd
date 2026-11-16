@@ -27,6 +27,13 @@ export interface FieldViewportProps {
   readonly field: string;
   /** Use three's WebGL 2 back end even where WebGPU works (tests of the fallback). */
   readonly forceWebGL?: boolean;
+  /**
+   * F-810: a number that changes when the store may hold more snapshots (a live run): the store's snapshots are read
+   * again (the surface is kept while the stored mesh is the same). A snapshot past the known ones waits for that read.
+   */
+  readonly reopen?: number;
+  /** F-810: called when the field of a snapshot is drawn, finished on the GPU and one animation frame has passed. */
+  readonly onDrawn?: (snapshot: number) => void;
 }
 
 type Phase =
@@ -45,6 +52,9 @@ interface Shown {
 
 let views = 0;
 
+/** F-810: how long a new snapshot's load keeps the shown picture without the loading notice (ms). */
+const QUIET_MS = 300;
+
 /** The run a store belongs to: the folder above `fields` (runs/<id>/fields), else the last segment. */
 function runName(path: string): string {
   const parts = path.split(/[\\/]+/).filter(Boolean);
@@ -52,7 +62,7 @@ function runName(path: string): string {
   return (i > 0 ? parts[i - 1] : parts[parts.length - 1]) ?? path;
 }
 
-export function FieldViewport({ store, snapshot, field, forceWebGL = false }: FieldViewportProps) {
+export function FieldViewport({ store, snapshot, field, forceWebGL = false, reopen = 0, onDrawn: onDrawnSnapshot }: FieldViewportProps) {
   const tagBase = useMemo(() => `field-view-${++views}`, []);
   const lut = useMemo(lutBytes, []);
   const [phase, setPhase] = useState<Phase>({ kind: 'loading', what: 'Opening the store' });
@@ -67,6 +77,13 @@ export function FieldViewport({ store, snapshot, field, forceWebGL = false }: Fi
   const api = useRef<FieldCanvasApi>(null);
   const tag = useRef('');
   const firstPicture = useRef(false);
+  // F-810: while scrubbing, a new snapshot's load keeps the last picture without the loading notice for QUIET_MS
+  const [quiet, setQuiet] = useState(false);
+  const reopened = useRef(reopen);
+  const reopening = useRef(false);
+  const drawnFor = useRef<number | null>(null);
+  const drawnCb = useRef(onDrawnSnapshot);
+  drawnCb.current = onDrawnSnapshot;
   const storeKey = `${store.route}\u0000${store.path}`;
 
   // the store: open it and read its surface (once per store)
@@ -105,6 +122,37 @@ export function FieldViewport({ store, snapshot, field, forceWebGL = false }: Fi
     // the store is named by its key; a new object with the same route and path is the same store
   }, [storeKey, tagBase, attempt]);
 
+  // F-810: the store's snapshots again (a live run writes more); the surface stays while the stored mesh is the same
+  useEffect(() => {
+    if (reopen === reopened.current) return;
+    if (!opened || opened.key !== storeKey) {
+      reopened.current = reopen;
+      return;
+    }
+    let live = true;
+    const t = `${tagBase}-reopen-${reopen}`;
+    reopening.current = true;
+    void (async () => {
+      const info = await openStore(store, { tag: t });
+      if (!live) return;
+      reopening.current = false;
+      reopened.current = reopen;
+      if (!info.ok) {
+        // the snapshots read before stay shown; the next reopen tries again
+        setOpened((o) => (o ? { ...o } : o));
+        return;
+      }
+      if (info.result.meshHash !== opened.info.meshHash) setAttempt((a) => a + 1);
+      else setOpened((o) => (o && o.key === storeKey ? { ...o, info: info.result } : o));
+    })();
+    return () => {
+      live = false;
+      reopening.current = false;
+      void cancelLoads(t);
+    };
+    // `store` is named by storeKey; `opened` is read when the reopen is asked for
+  }, [reopen, storeKey, tagBase]);
+
   // the field of the snapshot
   useEffect(() => {
     if (!opened || opened.key !== storeKey) return;
@@ -126,10 +174,17 @@ export function FieldViewport({ store, snapshot, field, forceWebGL = false }: Fi
       return;
     }
     if (!(snapshot >= 0 && snapshot < info.snapshots.length)) {
+      if (reopening.current || reopen !== reopened.current) {
+        setPhase({ kind: 'loading', what: 'Reading the store’s new snapshots' });
+        return;
+      }
       setPhase({ kind: 'error', message: `The store has no snapshot ${snapshot + 1}.`, hint: `It holds ${info.snapshots.length} snapshots.` });
       return;
     }
     setPhase({ kind: 'loading', what: `Reading ${field} of snapshot ${snapshot + 1} of ${info.snapshots.length}` });
+    // a picture is shown: keep it without the loading notice for a moment (scrubbing loads one field after another)
+    setQuiet(true);
+    const quietTimer = setTimeout(() => setQuiet(false), QUIET_MS);
     void (async () => {
       const r = await loadField(store, snapshot, field, { tag: t });
       if (!live) return;
@@ -151,17 +206,20 @@ export function FieldViewport({ store, snapshot, field, forceWebGL = false }: Fi
         setPhase({ kind: 'error', message: 'The surface has no triangles to draw.', hint: 'The stored mesh has no boundary faces.' });
         return;
       }
+      drawnFor.current = snapshot;
       setShown({ info, fieldInfo: fi, surface, values, range: colourRange(span.lo, span.hi), snapshot });
       setPhase({ kind: 'ready' });
     })();
     return () => {
       live = false;
+      clearTimeout(quietTimer);
       void cancelLoads(t);
     };
-    // `store` is named by storeKey
+    // `store` is named by storeKey; `reopen` is read to tell a snapshot not read yet from one that does not exist
   }, [opened, storeKey, snapshot, field, tagBase, attempt]);
 
   const onDrawn = useCallback(() => {
+    if (drawnFor.current !== null) drawnCb.current?.(drawnFor.current);
     if (!firstPicture.current) return;
     firstPicture.current = false;
     try {
@@ -215,6 +273,8 @@ export function FieldViewport({ store, snapshot, field, forceWebGL = false }: Fi
         onPointerLeave={() => setHover((h) => (h?.by === 'pointer' ? null : h))}
         onKeyDown={onKeyDown}
         data-ready={phase.kind === 'ready' ? '' : undefined}
+        data-snapshot={shown ? shown.snapshot : undefined}
+        data-step={snap?.step}
       >
         <FieldCanvas
           ref={api}
@@ -234,7 +294,7 @@ export function FieldViewport({ store, snapshot, field, forceWebGL = false }: Fi
           </Button>
         )}
         {hover?.by === 'keyboard' && <span className="fv-crosshair" aria-hidden="true" />}
-        {phase.kind !== 'ready' && (
+        {phase.kind !== 'ready' && !(phase.kind === 'loading' && quiet && shown) && (
           <div className="fv-status" role={phase.kind === 'error' ? 'alert' : 'status'}>
             {loading ? (
               <>

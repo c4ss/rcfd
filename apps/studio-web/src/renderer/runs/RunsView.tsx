@@ -40,9 +40,11 @@ export interface RunsViewProps {
   /** The selected run (kept by the project view, so it survives a switch of tab). */
   selected: string | null;
   onSelect: (id: string | null) => void;
+  /** F-810: opens the run workspace on the selected run (absent: no such button). */
+  onOpenWorkspace?: () => void;
 }
 
-export function RunsView({ view, selected, onSelect }: RunsViewProps) {
+export function RunsView({ view, selected, onSelect, onOpenWorkspace }: RunsViewProps) {
   const [filter, setFilter] = useState('');
   const [stateFilter, setStateFilter] = useState<StateFilter>('all');
   const [sort, setSort] = useState<Sort>({ column: 'case', direction: 'ascending' });
@@ -150,7 +152,7 @@ export function RunsView({ view, selected, onSelect }: RunsViewProps) {
           </ul>
         )}
       </section>
-      <SelectedRun row={picked} selected={selected} onClear={() => onSelect(null)} />
+      <SelectedRun row={picked} selected={selected} onClear={() => onSelect(null)} onOpenWorkspace={onOpenWorkspace} />
     </div>
   );
 }
@@ -204,7 +206,7 @@ const report = (v: number): string => {
   return s.includes('e') ? s : String(Number(s));
 };
 
-function SelectedRun({ row, selected, onClear }: { row: RunRow | null; selected: string | null; onClear: () => void }) {
+function SelectedRun({ row, selected, onClear, onOpenWorkspace }: { row: RunRow | null; selected: string | null; onClear: () => void; onOpenWorkspace?: () => void }) {
   if (row === null) {
     return (
       <aside className="rv-run rv-run--none" aria-labelledby="rv-run-title">
@@ -237,6 +239,11 @@ function SelectedRun({ row, selected, onClear }: { row: RunRow | null; selected:
           Clear selection
         </Button>
       </header>
+      {onOpenWorkspace && (
+        <div className="rv-open-workspace">
+          <Button onPress={onOpenWorkspace}>Open in workspace</Button>
+        </div>
+      )}
       {row.detailError !== null && (
         <div className="rv-error" role="alert">
           <StateMark state="failed" label="Failed to read the run’s status" />

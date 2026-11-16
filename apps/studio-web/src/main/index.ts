@@ -18,6 +18,9 @@
 // - The case editor (F-812): a third MessagePort on CASE_PORT_CHANNEL (src/main/case/), checked against
 //   src/shared/case.ts. Saving and making cases go through a project server started without --read-only, on which this
 //   process calls only the tools of CASE_TOOLS.
+// - The run workspace (F-810): a fourth MessagePort on RUN_PORT_CHANNEL (src/main/run/), checked against
+//   src/shared/run.ts; a run's histories are read by the open project's read-only project server. Opening a project
+//   makes its folder a data root, so the workspace reads its runs' stores (runs/<id>/fields) through route local.
 //
 // Service and file I/O live in this process, never in the renderer.
 import {
@@ -40,6 +43,8 @@ import { CHANNELS, type AppInfo, type Channel, type IpcContract } from '../share
 import { SERVICE_PORT_CHANNEL } from '../shared/service.js';
 import { PROJECT_PORT_CHANNEL } from '../shared/project.js';
 import { CASE_PORT_CHANNEL } from '../shared/case.js';
+import { RUN_PORT_CHANNEL } from '../shared/run.js';
+import { RunPortBridge, type RunPortLike } from './run/bridge.js';
 import { CasePortBridge, type CasePortLike } from './case/bridge.js';
 import { CaseEditor } from './case/editor.js';
 import { ProjectServer } from './project/server.js';
@@ -73,7 +78,8 @@ const STARTUP_REPORT = process.env['RCFD_STUDIO_STARTUP_REPORT'] ?? '';
 /** The solver service (src/main/service/config.ts names the environment variables that choose it). */
 const service = new ServiceClient(serviceConfig(process.env, path.join(app.getPath('userData'), 'service')));
 /** Bulk field data (F-804): R2 reads local stores inside the data roots, R1 goes through the service (src/main/data/). */
-const data = new StudioData(service, DataRoots.fromEnv(process.env));
+const roots = DataRoots.fromEnv(process.env);
+const data = new StudioData(service, roots);
 const dataPorts = new DataPorts(data);
 /** P1 and P2 measurement only (scripts/measure-service.mjs): the client, reachable from Playwright's main-process evaluate. */
 if (process.env['RCFD_STUDIO_BENCH'] === '1') (globalThis as { rcfdStudioBench?: unknown }).rcfdStudioBench = { service };
@@ -107,6 +113,16 @@ const caseEditor = new CaseEditor({
   startServer: (exe, folder) => ProjectServer.start(exe, folder, undefined, { readOnly: false }),
 });
 projects.onState(() => caseEditor.projectChanged());
+// F-810: the open project's folder is a data root (roots.ts), so its runs' stores are read by route local
+projects.onState((s) => {
+  if (s.project) {
+    try {
+      roots.allow(s.project.folder);
+    } catch {
+      // not an absolute folder: route local refuses it with the reason
+    }
+  }
+});
 
 // Before ready: the scheme must be privileged to behave like a secure web origin (fetch, CSP 'self', module scripts).
 protocol.registerSchemesAsPrivileged([
@@ -279,6 +295,36 @@ function offerCasePort(contents: WebContents): void {
   contents.postMessage(CASE_PORT_CHANNEL, null, [port2]);
 }
 
+/** The run port of each web contents (F-810), like the case port. */
+const runPorts = new Map<number, RunPortBridge>();
+
+const adaptRunPort = (p: MessagePortMain): RunPortLike => ({
+  postMessage: (m) => p.postMessage(m),
+  onMessage: (listener) => {
+    p.on('message', (e) => listener(e.data));
+  },
+  onClose: (listener) => {
+    p.on('close', listener);
+  },
+  close: () => p.close(),
+});
+
+function offerRunPort(contents: WebContents): void {
+  runPorts.get(contents.id)?.dispose();
+  runPorts.delete(contents.id);
+  if (contents.isDestroyed() || !isAppUrl(contents.getURL())) return;
+  const { port1, port2 } = new MessageChannelMain();
+  runPorts.set(
+    contents.id,
+    new RunPortBridge(adaptRunPort(port1), {
+      query: () => (projects.state.project ? (tool, args) => projects.query(tool, args) : null),
+      now: () => new Date().toISOString(),
+    }),
+  );
+  port1.start();
+  contents.postMessage(RUN_PORT_CHANNEL, null, [port2]);
+}
+
 /** After a load of one of our own pages: a new port for its preload script, and the old one closed. */
 function offerServicePort(contents: WebContents): void {
   servicePorts.get(contents.id)?.dispose();
@@ -317,6 +363,7 @@ function openWindow(): void {
     offerServicePort(contents);
     offerProjectPort(contents);
     offerCasePort(contents);
+    offerRunPort(contents);
     dataPorts.offer(contents);
   });
   contents.once('destroyed', () => {
@@ -327,6 +374,8 @@ function openWindow(): void {
     projectPorts.delete(id);
     casePorts.get(id)?.dispose();
     casePorts.delete(id);
+    runPorts.get(id)?.dispose();
+    runPorts.delete(id);
   });
   win.once('ready-to-show', () => win.show());
   void win.loadURL(APP_ENTRY);

@@ -4,7 +4,7 @@
 //
 // No Electron import: the folder dialog is passed in, so the unit tests drive the home with fakes.
 import { stat } from 'node:fs/promises';
-import type { EngineStatus, OpenFailure, PickResult, ProjectState, ProjectView } from '../../shared/project.js';
+import type { EngineStatus, OpenFailure, PickResult, ProjectState, ProjectTool, ProjectView } from '../../shared/project.js';
 import { filesUnder, type Names } from './listing.js';
 import { sameFolder, withExistence, withOpened, without, type StoredRecent } from './recent.js';
 import { ProjectServer, StartFailure, type ProjectServerLike } from './server.js';
@@ -204,6 +204,13 @@ export class ProjectHome {
       this.fail(openFailure(s.folder, e));
       this.emit();
     }
+  }
+
+  /** F-810: one read-only query of the open project's server (the run workspace); refused when no project is open. */
+  query(tool: ProjectTool, args: Record<string, unknown>): Promise<unknown> {
+    const s = this.session;
+    if (!s) return Promise.reject(new Error('no project is open'));
+    return s.query(tool, args);
   }
 
   dismiss(): void {

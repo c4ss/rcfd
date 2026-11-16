@@ -4,7 +4,7 @@
 //
 // The renderer keeps no project state (G12): everything shown comes in the state the main process pushes on the
 // project port (window.studioProject through ./door.ts, src/shared/project.ts), and the page only filters it for display.
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type {
   CaseEntry,
   ChangeEntry,
@@ -23,6 +23,9 @@ import { runRows, shownState, timeText, unknownWord, type RunRow } from '../runs
 import { projectActions, watchProjectState } from './door.js';
 import { caseHash } from '../case/hash.js';
 import './project.css';
+
+// F-810: the run workspace, loaded on demand (it brings three.js), so the project home costs nothing more at start
+const RunWorkspace = lazy(() => import('../workspace/RunWorkspace.js'));
 
 let reported = false;
 
@@ -246,9 +249,12 @@ const DESCRIBE: Record<Exclude<Kind, 'all'>, string> = {
   notes: 'free text',
 };
 
-type View = 'home' | 'runs';
+type View = 'home' | 'runs' | 'workspace';
 
-/** An open project: two views under the header band, Home (the index of the folder, F-805) and Runs (F-806). */
+/**
+ * An open project: three views under the header band, Home (the index of the folder, F-805), Runs (F-806) and the run
+ * workspace (F-810), which share the selected run.
+ */
 function OpenProject({ view, state }: { view: ProjectView; state: ProjectState }) {
   const [tab, setTab] = useState<View>('home');
   // the selected run belongs to the project view, so it survives a switch of view; it is display state, not project state
@@ -269,7 +275,19 @@ function OpenProject({ view, state }: { view: ProjectView; state: ProjectState }
               <div className="ph-runs">
                 {state.failure && <FailureNotice failure={state.failure} recent={state.recent} />}
                 {!view.liveness.live && <NotLive view={view} />}
-                <RunsView view={view} selected={run} onSelect={setRun} />
+                <RunsView view={view} selected={run} onSelect={setRun} onOpenWorkspace={() => setTab('workspace')} />
+              </div>
+            ),
+          },
+          {
+            id: 'workspace',
+            label: 'Workspace',
+            panel: (
+              <div className="ph-runs">
+                {!view.liveness.live && <NotLive view={view} />}
+                <Suspense fallback={<p className="ph-empty-line">Opening the run workspace…</p>}>
+                  <RunWorkspace view={view} selected={run} onSelect={setRun} />
+                </Suspense>
               </div>
             ),
           },

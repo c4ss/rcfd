@@ -296,3 +296,8 @@
   font-size: var(--type-label-size);
   color: var(--role-text-2);
 }
+
+/* F-810: the selected run's way to the run workspace, under its head. */
+.rv-open-workspace {
+  padding: var(--space-md) var(--space-xl) 0;
+}

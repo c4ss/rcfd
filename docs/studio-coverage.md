@@ -20,12 +20,12 @@ Engine read: rcfd 0.1.0, service protocol rcfd-service/1 version 1.1, MCP server
 | Kind | Capabilities | UI path | Exemption | Exemption whose item does not name it |
 |---|---|---|---|---|
 | Service methods | 69 | 10 | 59 | 47 |
-| MCP tools | 56 | 15 | 41 | 27 |
+| MCP tools | 56 | 16 | 40 | 27 |
 | CLI commands | 36 | 3 | 33 | 20 |
 | CLI options | 156 | 0 | 156 | 99 |
 | Case schema keys | 948 | 948 | 0 | 0 |
 | Monitor format keys | 6 | 6 | 0 | 0 |
-| **All** | **1271** | **982** (77.3 %) | **289** | **193** |
+| **All** | **1271** | **983** (77.3 %) | **288** | **193** |
 
 A case key stands for every value of its enumeration (the solver options of that key, listed in the inventory): the
 schema-driven surface of F-825 offers them all. A CLI option is mapped with its command. "Item does not name it" marks an
@@ -47,14 +47,14 @@ new item (see the last sections).
 | F-815 compare two runs | 5 | `design.compare` (not named), `design.get_metrics` (not named), `design.ledger_query` (not named), `design.ledger_rerun_check` (not named), `design.list_study` (not named) |
 | F-828 provenance inspector and reproduce-from-CLI | 3 | `journal.get`, `journal.replay`, `service.info` |
 
-### MCP tools (41 without a UI path)
+### MCP tools (40 without a UI path)
 
 | Item | Count | Capabilities |
 |---|---|---|
 | F-805 project home and the live project folder | 3 | `import_mesh` (not named), `list_changes`, `write_note` (not named) |
 | F-807 run control (quick run, stop, pause, queue) | 22 | `cancel_run`, `create_workflow` (not named), `design_create_study` (not named), `design_create_variant` (not named), `design_evaluate` (not named), `design_ledger_append` (not named), `design_ledger_export` (not named), `design_propose` (not named), `design_record` (not named), `design_run_operating_map` (not named), `design_run_study` (not named), `edit_workflow` (not named), `list_workflow_tasks` (not named), `pause_run`, `read_status_stream` (not named), `resume_run`, `run` (not named), `run_headless` (not named), `run_workflow_task` (not named), `start_run`, `status` (not named), `wait_run` (not named) |
 | F-808 field viewport on three.js WebGPU | 5 | `export_vtk` (not named), `field_summary`, `get_field_stats`, `render_field`, `render_image` |
-| F-811 residual and monitor plots | 3 | `get_residuals`, `read_metrics`, `read_residuals` |
+| F-811 residual and monitor plots | 2 | `get_residuals`, `read_metrics` |
 | F-812 case editor validated by the engine's schema | 1 | `preview_mesh` (not named) |
 | F-813 a learner's first path | 1 | `list_cases` |
 | F-815 compare two runs | 6 | `compare_runs`, `design_compare_variants` (not named), `design_get_metrics` (not named), `design_ledger_query` (not named), `design_ledger_rerun_check` (not named), `design_list_study` (not named) |

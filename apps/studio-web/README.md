@@ -173,6 +173,43 @@ Decisions taken in building F-806 (options, the recommendation followed; each re
 - Missing in the engine (no Rust change here): units of report values; a read-only query of whether the project's runner
   is alive (`RunService::runner_running` has no MCP tool), so a queued run under no runner cannot be told apart.
 
+## The run workspace (F-810)
+
+The third view of an open project, Workspace, is where a run is read through time: the runs of the project and the
+selected run's numbers on the left, its field (the viewport of F-808) on the right, and under both the 248 px time panel
+of `DESIGN.md`: one band per run on one shared axis, the selected run's residual plot on the same axis, a monitor
+readout and chart, and one scrubber line with its own flag lane. "Open in workspace" in the Runs view brings the
+selected run here. Code: `src/renderer/workspace/` (`RunWorkspace.tsx`, `TimePanel.tsx`, `model.ts`, `door.ts`,
+`workspace.css`), `src/main/run/` and `src/shared/run.ts`.
+
+- **Run bands**: each band ends in its state's pictogram and word ("converged · it 121", "failed · it 0",
+  "running · it 1450"; a transient run's end in simulated time, "converged · 13.2 s"). Segments: sky iterating, a meadow
+  cap for converged, a red cap for failed, silver hatching for queued and for the part of the axis a running run has not
+  computed yet; orange only for the one live run (One Live Thing: the selected run if it runs, else the newest running
+  one). The other bands fade to 40% fill, a failure never. The bands grow in (700 ms, staggered 90 ms) except under
+  reduced motion.
+- **One line moves everything**: the scrubber stops at the store's snapshots (a run without fields: at its residual
+  samples). Moving it (pointer, arrow keys, Page Up and Down, Home and End, the transport's first, previous, Play, next)
+  moves the field, the residual cursor, the monitor readout and the snapshot counter together; they read the same stop.
+  Play steps to the next snapshot once the one before is drawn. The flag reads "it 40", or "t = 1.25 s · it 145" for a
+  transient run.
+- **Follow live**: on for a running run; the line stays on its newest snapshot as the runner writes them; moving the line
+  stops following, Follow live brings it back.
+- **The axis is iterations** (steps) for every run: the store's snapshots, `read_residuals` and `status.json` share it,
+  and `read_residuals` gives no simulated time per sample.
+- **Through the engine only**: a fourth port, `window.studioRun` (`src/shared/run.ts`; the one renderer module naming it
+  is `workspace/door.ts`), asks the open project's read-only project server: `read_residuals` (every series on its own,
+  at most `SERIES_POINTS` = 800 samples, so the reply stays under the engine's text budget and is never written to a
+  file), `read_residuals {since_step}` for the exact values at the line when a series was decimated or the line is past
+  what was read, and `read_project_file` for the units in `runs/<id>/output/monitors.json` (at most 1 MB). Fields come
+  through the data door (F-804) from `runs/<id>/fields`; the project folder is a data root while it is open.
+- `performance` marks `rcfd:scrub:request` and `rcfd:scrub:drawn` (P5 and P6, `npm run bench:scrub`).
+- Tests: `tests/unit/workspace.spec.ts` (stops, axis, bands, the port's checks, reading series and units against a fake
+  engine, the door, the stylesheet) and `tests/e2e/workspace.spec.ts` (a copy of quick-start and the real runner: one
+  snapshot's field values, residual cursor, monitor readout and counter agree with `store.rts`, `residuals.jsonl` and
+  `field_summary`; the bands; the keyboard; Follow live on a running run; screenshots at 1440 x 900 in
+  `test-results-visual/f810/`).
+
 ## The field viewport (F-808)
 
 `src/renderer/field/FieldViewport.tsx` draws one cell field of one snapshot of a store on the boundary surface of the
@@ -231,6 +268,8 @@ by WebGL 2 (fallback: <why>)"). Until a project view hosts it (F-806), it is sho
 
 | `src/renderer/field/` | The field viewport: `FieldViewport.tsx` (loading through the data door, legend, caption, readout), `FieldCanvas.tsx` (WebGPURenderer, the TSL material, pick, grid, keyboard, P8 bench), `colormap.ts`, `surface.ts`, `grid.worker.ts`, `Legend.tsx`, `field.css`; its development page is `src/renderer/dev/FieldDev.tsx` at `#/dev/field` | as above | F-808 |
 | `src/renderer/data/` | `door.ts`: the renderer's one door to `window.studioData` (F-804's bulk data) | as above | F-808 |
+| `src/renderer/workspace/` | The run workspace (`RunWorkspace.tsx`, `TimePanel.tsx`: run bands, scrubber, residual plot, monitor), `model.ts`, its one door to `window.studioRun` (`door.ts`), `workspace.css` | as above | F-810 |
+| `src/main/run/`, `src/shared/run.ts` | The run port: `bridge.ts` (the checks), `series.ts` (a run's residual and monitor series and their units through the project server) | `tsc -p tsconfig.node.json` | F-810 |
 | `tests/unit/` | Pure tests of `security.ts` and the built `index.html` (F-801); tokens against `DESIGN.md`, the pictogram grid (F-802); the service client against a fake service (F-803) | run by Playwright (project `unit`) | F-801, F-802, F-803 |
 | `tests/e2e/` | The packaged shell driven by Playwright's `_electron.launch`; the primitives (F-802); the service port's allow-list against a fake service, and the client against the real `rcfd serve` (F-803) | run by Playwright (project `electron`) | F-801 onwards |
 | `tests/support/` | The fake service, finding and starting `rcfd`, launching the packaged Studio | imported by the tests | F-803 |
