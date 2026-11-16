@@ -1,0 +1,21 @@
+/* Base styles of the skeleton only. The design tokens of DESIGN.md arrive with F-802. */
+html,
+body {
+  margin: 0;
+  font-family: Archivo, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 12px;
+  line-height: 1.35;
+  background: #ffffff;
+  color: #1d3a5f;
+}
+
+.project-view {
+  padding: 24px;
+  max-width: 60ch;
+}
+
+.project-view h1 {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0 0 12px;
+}

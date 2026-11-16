@@ -1,0 +1,18 @@
+// The Electron main process (src/main, an ES module) and the preload script (src/preload, CommonJS because a sandboxed preload cannot be an ES module). Emits to dist/main and dist/preload.
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "types": ["node"],
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": ["src/main", "src/preload"]
+}
