@@ -196,7 +196,7 @@ fn a6_violations(t: &Trace, b: &[(f64, f64)], rho: f64) -> (usize, usize) {
             .map(|((a, c), l)| ((a - c) / l).powi(2))
             .sum::<f64>()
             .sqrt();
-        bad += usize::from(!(delta >= rho));
+        bad += usize::from(delta.is_nan() || delta < rho);
     }
     (n, bad)
 }
@@ -330,10 +330,10 @@ fn a4_a6_a7_branin_with_the_restart() {
     let w8x: Vec<Vec<f64>> = w8.hist.iter().map(|o| o.x.clone()).collect();
     let d_workers = bits(&w1) == bits(&w8x);
     let o1 = opts(1, 10, true);
-    let p0 = bayes::propose(&BRANIN_B.to_vec(), &runs[0].hist, &o1).unwrap();
+    let p0 = bayes::propose(BRANIN_B.as_ref(), &runs[0].hist, &o1).unwrap();
     let mut sh = runs[0].hist.clone();
     Rng::new(715_001).shuffle(&mut sh);
-    let p1 = bayes::propose(&BRANIN_B.to_vec(), &sh, &o1).unwrap();
+    let p1 = bayes::propose(BRANIN_B.as_ref(), &sh, &o1).unwrap();
     let xs0: Vec<Vec<f64>> = p0.picks.iter().map(|p| p.x.clone()).collect();
     let xs1: Vec<Vec<f64>> = p1.picks.iter().map(|p| p.x.clone()).collect();
     let d_order = bits(&xs0) == bits(&xs1);
