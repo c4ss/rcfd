@@ -203,6 +203,12 @@ export interface ProjectView {
   readonly runDetails: Readonly<Record<string, RunDetail>>;
   /** F-806: runs whose `run_status` failed, with the engine's message. */
   readonly runDetailErrors: Readonly<Record<string, string>>;
+  /**
+   * F-807: the run-control actions dispatched from this window since the project was opened, newest first (at most
+   * RUN_REQUESTS_KEPT), each with the engine's answer and whether the runner has acted on it yet. The Studio's own
+   * action log, not project state: the runs themselves are the runner's (G7, G12).
+   */
+  readonly runRequests?: readonly RunRequest[];
   /** Feed entries since the project was opened, newest first (at most MAX_CHANGES). */
   readonly changes: readonly ChangeEntry[];
   readonly openedAt: string;
@@ -242,10 +248,12 @@ export type ProjectRequest =
   | { readonly op: 'forget'; readonly id: number; readonly path: string }
   | { readonly op: 'close'; readonly id: number }
   | { readonly op: 'refresh'; readonly id: number }
-  | { readonly op: 'dismiss'; readonly id: number };
+  | { readonly op: 'dismiss'; readonly id: number }
+  /** F-807: a run-control action (src/shared/actions/runs.ts) with its parameters; the reply's result is a RunActionResult. */
+  | { readonly op: 'action'; readonly id: number; readonly action: string; readonly params: Readonly<Record<string, unknown>> };
 
 export type ProjectOp = ProjectRequest['op'];
-export const PROJECT_OPS = ['state', 'pick', 'open', 'forget', 'close', 'refresh', 'dismiss'] as const satisfies readonly ProjectOp[];
+export const PROJECT_OPS = ['state', 'pick', 'open', 'forget', 'close', 'refresh', 'dismiss', 'action'] as const satisfies readonly ProjectOp[];
 
 export interface ProjectError {
   /** `bad_request` (the message has the wrong shape), `not_recent` (open of a folder the recent list does not hold). */
@@ -281,4 +289,80 @@ export interface ProjectBridge {
   refresh(): Promise<ProjectReply<null>>;
   /** Clears the message of a failed open. */
   dismiss(): Promise<ProjectReply<null>>;
+}
+
+// ---- F-807: run control (src/shared/actions/runs.ts; src/main/project/control.ts)
+
+/** Run-control requests the view keeps (newest first). */
+export const RUN_REQUESTS_KEPT = 20;
+
+/**
+ * After this long (ms) without the change a request asks for, the request is marked slow: the runner has not acted on it,
+ * and the page says that the runner may not be running (the engine has no query for whether it is) and offers to start it.
+ */
+export const RUN_SLOW_MS = 3000;
+
+/** For this long (ms) after a run-control action, the main process reads the feed at RUN_FAST_POLL_MS. */
+export const RUN_BOOST_MS = 5000;
+export const RUN_FAST_POLL_MS = 100;
+
+/** Why a run-control action was refused or failed, in words that name the problem and the way to recover (G19). */
+export interface RunActionFailure {
+  readonly code:
+    | 'unknown_action'
+    | 'bad_request'
+    | 'unavailable'
+    | 'no_project'
+    | 'not_found'
+    | 'bad_state'
+    | 'refused_path'
+    | 'runner'
+    | 'engine'
+    | 'disconnected';
+  readonly problem: string;
+  readonly recovery: string;
+  /** The engine's own code and message, when the refusal is the engine's. */
+  readonly engine: { readonly code: number | string; readonly message: string } | null;
+}
+
+/** One run-control action as the view keeps it: what was asked, the engine's answer, and what the runner did since. */
+export interface RunRequest {
+  /** Increases by one with each action dispatched in this project. */
+  readonly seq: number;
+  /** The action id (src/shared/actions/runs.ts). */
+  readonly action: string;
+  readonly params: Readonly<Record<string, unknown>>;
+  /** The run it is about; for a run started by it, the new run (null when the engine made none). */
+  readonly run: string | null;
+  readonly case: string | null;
+  /** When it was dispatched (RFC 3339). */
+  readonly at: string;
+  /** When the main process had the engine's answer: ms since the epoch, fractional (performance.timeOrigin + now). */
+  readonly answeredAt: number;
+  /** Milliseconds from the dispatch to the engine's answer. */
+  readonly ms: number;
+  readonly outcome: 'accepted' | 'refused';
+  /** The run's state in the engine's answer (start_run, pause_run, ... return it). */
+  readonly state: string | null;
+  /** The runner has done what was asked (the run list shows the run, held, released or ended). */
+  readonly settled: boolean;
+  /** Not settled after RUN_SLOW_MS. */
+  readonly slow: boolean;
+  readonly failure: RunActionFailure | null;
+  /** The same from Claude Code and from the CLI (G16, G17). */
+  readonly mcp: { readonly tool: string; readonly arguments: Readonly<Record<string, unknown>> } | null;
+  readonly cli: { readonly argv: readonly string[]; readonly cwd: string };
+}
+
+/** What the `action` operation answers. */
+export type RunActionResult =
+  | { readonly ok: true; readonly request: RunRequest; readonly result: Readonly<Record<string, unknown>> }
+  | { readonly ok: false; readonly failure: RunActionFailure; readonly request: RunRequest | null };
+
+/**
+ * What the preload script puts on `window.studioRuns` (F-807): run-control actions over the project port. A separate
+ * global, so that `window.studioProject` keeps exactly the functions of F-805.
+ */
+export interface RunsBridge {
+  dispatch(action: string, params?: Readonly<Record<string, unknown>>): Promise<RunActionResult>;
 }

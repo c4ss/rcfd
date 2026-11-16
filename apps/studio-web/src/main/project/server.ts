@@ -1,12 +1,15 @@
 // The engine's project server for one folder: `rcfd-mcp --project <folder> --read-only`, spoken to over its standard
 // streams (MCP: newline-delimited JSON-RPC 2.0, docs/mcp-tools.md). The tools are the queries of the project workspace
 // (crates/rcfd-workspace, ADR 0173): the same code Claude Code's project tools run, so the Studio and Claude Code see one
-// folder the same way. `--read-only` makes the server refuse every tool that writes; this item only reads.
+// folder the same way. `--read-only` makes the server refuse every tool that writes; the home only reads.
+// F-807: run control starts a second server for the same folder without `--read-only` (`{ readOnly: false }`), and
+// calls only the run-control tools on it (src/main/project/control.ts); the reading server stays read-only.
 //
 // No Electron import: the unit tests drive it with a stand-in executable.
 import { spawn, type ChildProcess } from 'node:child_process';
 import { RpcConnection, RpcError } from '../service/rpc.js';
 import type { ProjectTool } from '../../shared/project.js';
+import type { RunControlTool } from '../../shared/actions/runs.js';
 
 /** Time limits (ms). */
 export const START_TIMEOUT_MS = 15_000;
@@ -37,7 +40,7 @@ export interface ServerInfo {
 export interface ProjectServerLike {
   readonly info: ServerInfo;
   readonly exited: boolean;
-  call(tool: ProjectTool, args?: Record<string, unknown>): Promise<unknown>;
+  call(tool: ProjectTool | RunControlTool, args?: Record<string, unknown>): Promise<unknown>;
   /** Called once when the server process ends (with its exit code and the end of its standard error). */
   onExit(listener: (why: string) => void): void;
   close(): Promise<void>;
@@ -75,11 +78,12 @@ export class ProjectServer implements ProjectServerLike {
    * Starts the server for `folder` and completes the MCP handshake. Rejects with a StartFailure: `not_a_project` when
    * the engine refuses the folder (no rcfd-project.json, or one it cannot read), `engine` for anything else.
    */
-  static start(exe: string, folder: string, timeoutMs = START_TIMEOUT_MS): Promise<ProjectServer> {
+  static start(exe: string, folder: string, timeoutMs = START_TIMEOUT_MS, options: { readonly readOnly?: boolean } = {}): Promise<ProjectServer> {
     return new Promise((resolve, reject) => {
       let child: ChildProcess;
       try {
-        child = spawn(exe, ['--project', folder, '--read-only'], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+        const args = options.readOnly === false ? ['--project', folder] : ['--project', folder, '--read-only'];
+        child = spawn(exe, args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
       } catch (e) {
         reject(new StartFailure('engine', `The engine's project server ${exe} could not be started: ${String(e)}`, null));
         return;
@@ -153,7 +157,7 @@ export class ProjectServer implements ProjectServerLike {
     else this.exitListeners.push(listener);
   }
 
-  async call(tool: ProjectTool, args: Record<string, unknown> = {}): Promise<unknown> {
+  async call(tool: ProjectTool | RunControlTool, args: Record<string, unknown> = {}): Promise<unknown> {
     const r = await this.rpc.request('tools/call', { name: tool, arguments: args });
     return toolResult(tool, r);
   }
