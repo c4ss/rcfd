@@ -722,3 +722,26 @@ recorded, E2 checked) and F3 with budget 18, seed 1 (entries, provenance and fai
 Q2 (a) Matern 5/2, SE opt-in; Q3 (b) analytic gradient with `projected_gradient`, S = 10; Q4 (a) noise off; Q5 (a) `n0 = max(5
 d, 10)`; Q6 (a), with (c) brought forward by the smoke (above); Q7 (a); Q8 (a) as a refusal; Q9 (a); Q10 (a) refuse; Q11 (a);
 Q12 (b) F-697's layer; Q13 (a) the comparative limit kept; Q14 (a) plain EI (the (b) variant tried in the smoke changed nothing).
+
+## Amendment 2 (2026-11-16, after the first registered run, before any corrected run): the kriging believer's incumbent
+
+The registered run of the fast tests (commit 49f7f75e, log `f698-scratch/run1.log`) met every limit it covers except **P1
+batch**: the four points of the batch-4 proposal have a minimum pairwise unit-cube distance of 0.0000 (limit `>= 1e-3`); the
+pending part of P1 was met (0.911).
+
+Diagnosis (from the code, no further run): the kriging believer of the registered design adds each chosen point to the data
+at its predicted mean, but the committed `Models::believe` left the incumbent unchanged. A believed point whose predicted mean
+is below the incumbent then sits in a neighbourhood where the posterior sd is about 0 and the posterior mean is below the
+incumbent, so its expected improvement is about `f_min - m > 0`, and the next pick lands just outside the exclusion radius
+next to it. In the rule of Ginsbourger, Le Riche and Carraro (2010, from memory) the believed values are data, so they enter the
+incumbent like any other value. The code missed the registered design; the set-up and the limit are right.
+
+Correction (registered now): `believe` also updates the incumbent with the believed mean when the believed point is feasible
+under the believed constraint means (all `<= 0`; no constraints: always), as `min(incumbent, m)` (or `m` when there was no
+incumbent). This code is reached only by pending entries and by the second and later points of a batch: every other registered
+check ran with batch 1 and no pending entry, so its bits do not change and its result stands.
+
+The first P1 test stays in the file as the ignored record `p1_batch_and_pending_points_are_spread_known_miss` (limit intact,
+measured 0.0000 recorded). A corrected test `p1b_batch_and_pending_points_are_spread` with the same set-up and the same limits
+(`>= 1e-3` for the batch and for the pending point) is run once on the corrected code. The decision rule is unchanged, with
+P1b in the place of P1.
