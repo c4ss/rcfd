@@ -14477,7 +14477,27 @@ fixed by the item's registration ADR before any code.
   - depends on: F-698, F-697
   - acceptance: on the F-698 R1 set-up the failed share of the 50 evaluations falls below 0.3 on every seed from 1 to 10
     while R1 still holds on 9 of 10, with the pre-check evaluations of the reduced-order model counted in the ledger.
-  - note: Follow-up of F-698 (ADR 0621, 2026-11-15).
+  - note: Fan breakdown part H3 (docs/fan-project-breakdown.md), follow-up of F-698 (ADR 0621). ADR 0645, 2026-11-16.
+    Library only, opt-in (no case key, no MCP tool, no golden; default bits equal to d40cd665 by digest):
+    bayes::run_prechecked gives every pick of the surrogate loop first to a cheaper model (PreCheck with scope Initial
+    or Every, at most 400 failed pre-checks per run and 20 tries per step, a progress line per step); a pick it fails is
+    not evaluated, its entry (an evaluation entry of the pre-check's own evaluator id) is a failed observation from then
+    on, and after a failed pick the step tries the next point of a ranked list from the same fit.
+    fan_objective::StallPreCheck runs the objective's own per-point call at named impedance points, so a candidate it
+    fails also fails the objective, with the same reason; R3 (largest system coefficient, lowest flow, highest
+    incidence) is checked. On the F-698 R1 set-up (seeds 1 to 10, 50 evaluations): 0 failed evaluations on every seed
+    (34 to 39 without it), 10 of 10 within 1 percent of the grid optimum (best / P_ref 0.99303 to 0.99310, reached by
+    evaluation 10 to 14), 243 to 278 failed pre-checks per run, all in the ledger with the summary counts, and all 2649
+    rejected points fail the objective at R3; a pre-check of the initial design alone changes nothing (34 to 39 failed).
+    Fast checks: pass-through equals run, cap refusal, scope, resume byte-equal, workers bit-equal. Six of seven
+    mutations caught (checking another point than the named one survives: the fast fan test has no bound on its failed
+    count). The control with the pre-check off reproduced every F-698 run but missed its registered ratio range on seed
+    4 (0.99351 against 0.9935, a range copied from rounded text), which the registered rule counts as todo. Not covered:
+    a dearer evaluated model (in R1 the run makes about three times the ROM operating points of F-698), tolerance plans,
+    batches above 1 with the fallback. Follow-up F-741 (Stall pre-check: the named point and the saving against a dearer
+    model). Every acceptance clause is met; the item recommends partial (the control reproduces the F-698 log exactly;
+    the missed range was copied from rounded text): the maintainer's call. Merged with F-715's basin restart (ADR 0645
+    addendum 2): on a restart step the pre-check has no fallback list; that pairing is not checked.
 - [x] **F-717** Fidelity driver, the uncertainty guard and P4 robustness
   - depends on: F-699
   - acceptance: a registered check on a synthetic noise source on which the one-standard-error rule alone would trust a
@@ -14898,3 +14918,11 @@ fixed by the item's registration ADR before any code.
     same set-ups, the active-set record of ADR 0515 unchanged by the committed modes, the energy record consistent with
     the driver's modes; the mutations of the new code caught by the item's own checks; the default bits unchanged.
   - note: Follow-up of F-740 (ADR 0660, 2026-11-16).
+- [ ] **F-741** Stall pre-check: the named point and the saving against a dearer model
+  - depends on: F-716
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A fast fan check in which the
+    pre-check entries carry the metrics of the named point and the failed count of the evaluations is bounded, so that
+    checking a point other than the named one fails it; the ADR 0645 checks keep their results; and, once a CFD fan
+    objective runs in the loop, the number of CFD evaluations saved by the reduced-order pre-check measured on a
+    registered set-up.
+  - note: Follow-up of F-716 (ADR 0645, 2026-11-16).
