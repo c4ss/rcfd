@@ -851,3 +851,117 @@ Mutations (scratch copy, one at a time, each must fail a registered fast check):
   that model (assumed loss constants), never about a fan. The checks show that the record and its guards work for scripted agents
   that are greedy in one fixed way, not that an assistant uses them well (risk 1).
 * The hash is FNV-1a 64: it detects accidental edits; a deliberate rewrite of the ledger defeats every guard (risk 8).
+
+## Addendum 1: results (2026-11-16)
+
+Code: commit adc35501 (registration dc351026 before it). New `crates/rcfd-api/src/design/hypothesis.rs` (the design of
+amendment 1), `crates/rcfd-api/tests/f701_hypothesis.rs` (21 tests: 19 fast, the two heavy W1 and W1b tests ignored), one module
+line and doc lines in `design/mod.rs`; docs `docs/design-loop.md` (one section with the protocol guidance of Q12, one code-map row,
+one "Not delivered" bullet for the MCP tools of F-702) and `docs/fan-project-breakdown.md` (H6 row: "partial (F-701, ADR 0624:
+the record, registered paired tests and the lessons query in the library; no MCP tool until F-702, and every confirmation so far
+is about the reduced-order model)"). No other source file, no shared solver file, no golden, no hash table, no case key, no MCP
+tool.
+
+Runs: the registered run `cargo test -p rcfd-api --release --test f701_hypothesis -- --test-threads=2` (log
+`f701-scratch/run1.log`): 19 passed. The two heavy tests once each (`--ignored`, `heavy.log`: W1 177.9 s, W1b 76 s). After
+`cargo fmt` and one clippy change (`map_or(true, ..)` to `is_none_or`, same logic) the fast tests ran once more to confirm
+(`run2_after_fmt.log`, 19 passed). R2 in `r2.log`. Mutations on a `git archive` copy of adc35501 with its own target directory
+(`mutate.py`, `mutate_summary.log`; the unmutated control 19 of 19). Release profile throughout.
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| K1 | rel <= 1e-9; cdf within 1e-12 | largest rel 1.33e-11; cdf error 0 | yes |
+| K2 | rel <= 1e-12; verdicts exact | rel 0; verdicts exact; sign-test p 0.4018 (9 of 16) equal to the binomial sum | yes |
+| L1 | bit-equal to `0.05 * 6 / (PI^2 i^2)`; sum <= 0.05 | 12 of 12 bit-equal; sum 0.047570 | yes |
+| G1 | equal | record equal; hash `fnv1a64:4b58385209778c10` stored = recomputed = test's | yes |
+| G2 | 5 of 5 refused by `verify` and `run`, index and rule named | 5 of 5, for example "entry 60: evidence of H-1 precedes its registration (entry 61)", "entry 189: ... pair 64, outside the registered 64 pairs", "entry 187: result of H-1 with evidence for 126 of the registered 128 ...", "entry 60: the registration of H-1 was altered ...", "entry 61: evidence evaluator synthetic.w1 version '2' ..." | yes |
+| G3 | 0 of 5 returned, 5 of 5 flagged, (a) and (b) | (a) 0 and 5; (b) 0 and 5 | yes |
+| NC5 | 5 forged verdicts returned | 5 of 5 | yes (fails G3 as it must) |
+| G4 | 0 duplicate, 0 missing, result bit-identical, file identical (untorn) | cuts 0, 1, 63, 127, 128: 0, 0, identical, identical; torn at 63: result identical, 1 skipped line | yes |
+| G5 | a problem per entry; 0 rows with re-run; 1 row with `None` without | 128 of 128; 0 rows; 1 row, `evidence_rerun = None` | yes |
+| V1 | refused, field named, file unchanged | 22 of 22 (deviation: 22 cases, the registration said 17) | yes |
+| S1 | <= 37 of 400 | 1 | yes |
+| S2 | >= 0.95 | 1592 of 1595 = 0.998 | yes |
+| S3 | <= 0.05 per world; 4th registration slot 4 | largest sum 0.047570; slot 4 with `a_4` after a new handle | yes |
+| S4 | 79 to 165 of 4000 | 118 (at `a_1` 0.030396; z -0.33) | yes |
+| S5 | 0 | 0 | yes |
+| NC1 | >= 300 of 400 | 400 | yes (fails as it must) |
+| NC2 | >= 38 of 400 | 61 | yes (fails as it must) |
+| NC3 | >= 40 of 400 | 75 | yes (fails as it must) |
+| F1 | artefacts confirmed reduced_order, model error unknown; 0 rows at `min_tier` cfd before; 0 confirmed artefact rows after | 5 low rows, as stated; 0 rows; after the re-test 5 rows, 0 confirmed artefact | yes |
+| F1b | 4 artefact rows `below_model_error`, declared | 4 of 4 | yes |
+| F1c | model error = last summary's `y.oos_rmse`, bit for bit, index named | 5 of 5 rows take 7.0060 from entry 1372 | yes |
+| F2 | 4 of 4 refuted (x2, x3 opposite), x4 confirmed at cfd; rows kept and linked | as registered; 4 of 4 linked both ways | yes |
+| F3 | every d 0; refuted; "does not respond" | as registered | yes |
+| F4 | confirmed, reduced_order, model error unknown, "Not tested at cfd", re-run passes | mean change -7.3941e-3, bounds (-8.4664e-3, -6.3218e-3) at level 7.599e-3; re-run `Some(true)`; statement as registered | yes |
+| F5 | refused, `min_effect` and resolution named | "min_effect: 0.000005 is below 10 times the declared resolution 0.000001 of 'eta_s'" | yes |
+| E1 | abs(mean) <= 1e-9; refuted | -3.553e-15; refuted | yes |
+| E2 | rel <= 1e-9; confirmed | 8.38e-14; confirmed | yes |
+| E2b | rel <= 1e-9; confirmed | 4.16e-13; confirmed | yes |
+| NC4 | confirmed | mean 1.3553, confirmed | yes (fails E1 as it must) |
+| E3 | void, pair, arm and `q` named; next slot | "pair 0 arm low: held metric 'q' = 0.5 not within 1e-13 of the target 1"; next H-2 at slot 2 | yes |
+| T1 | 12 stale, 0 by default, 12 with `include_stale` | 12, 0, 12 | yes |
+| HB1 | one slot; verdicts = Holm by hand; member 2 confirmed by Holm; no early result | set-up `mu_b` 0.587869 (p 0.009379 in (a/4 0.00760, a/3 0.01013]); p [1.39e-47, 0.009379, 0.5035, 0.9963]; [T, T, F, F] = by hand; 0 early results; next registration slot 2 | yes |
+| X1 | within 1e-12; ordering; exploratory | 4 cells, error 0, sorted, `exploratory = true` | yes |
+| R1 | bytes equal, workers 1 and 8 | W1 world 2347886 bytes, W3 B 56361 bytes, equal | yes |
+| R2 | pass; empty diff | `design::` 76 passed (3 ignored), f697 22, fan_rom_bands_f268 4, f249 4, f260 1, f297 3, baseline_hashes 3, rcfd-mcp default_f1 2, tool_list_f275 7, project_list_f270 1; diff empty. f699_fidelity: 15 passed, 1 failed, `p4_table_errors_name_row_and_column_never_a_value` (P4 leaked "168"): the temporary path `rcfd_f699_p4_41688` holds the cell text "168", the process-id dependence of ADR 0622 question 3; no file of F-699 is changed (diff empty). A diagnostic run of that one test (`r2_p4_diag.log`, pid 42436) passed | no, as written (see the decision) |
+| R3 | fmt and clippy clean | `cargo fmt -p rcfd-api --check` clean; `cargo clippy -p rcfd-api --all-targets -- -D warnings` clean | yes |
+
+Mutations (each a one-place change, the tests run once; caught = at least one test fails):
+
+| Id | Mutation | Expected | Failing tests | Caught |
+|---|---|---|---|---|
+| M1 | sign of `d` flipped | E2, F4 | E1-E3/NC4, F1/F2, HB1, NC3, F3-F5 | yes |
+| M2 | `sd` with divisor n | K2 | K2 | yes |
+| M3 | two-sided quantile | K2 | K2, HB1 | yes |
+| M4 | slot not advanced by a void or withdrawn hypothesis | E3 | E1-E3, HB1, L1/S3 | yes |
+| M5 | slot restarted per handle | L1, S3 | L1/S3 and 8 others | yes |
+| M6 | order rule removed | G2 (a) | G2 | yes |
+| M7 | staleness on id only | T1 | T1 | yes |
+| M8 | held tolerance ignored | E3 | E1-E3 | yes |
+| M9 | `min_effect` against `m` | K2 | K2 | yes |
+| M10 | stored verdict trusted by default | G3 | G3/NC5, G5 | yes |
+| M11 | pair-count rule removed | G2 (b) | G2 | yes |
+| M12 | registration hash not checked | G2 (c) | G2 | yes |
+| M13 | re-run ignored in `verify` | G5 | G5, F3-F5 | yes |
+| M14 | Holm replaced by Bonferroni | HB1 | HB1 | yes |
+| M15 | evidence parameters not compared with the design | recorded | none (19 of 19 pass) | recorded |
+
+M15 survives, as amendment 1 expected: no check isolates a forged evidence parameter.
+
+Deviations: (1) one development run before the registered run, of a copy of the test file with other seeds (prefixes 751, 752
+and 753 in place of the registered ones; not committed): 19 passed. The seed-free checks K1, K2 and X1 (and the structure of V1)
+therefore ran twice with the same deterministic inputs; disclosed. (2) V1 has 22 cases, not the 17 written (more cases, same
+limit). (3) The fast tests ran a second time after fmt and clippy (same result). (4) The diagnostic run of the one f699 test
+above. Not run: the whole workspace (the lead's gate), the heavy tests more than once, any rcfd-mcp test beyond the three listed.
+
+Decision by the registered rule: **partial**. Every check from K to R1 and R3 is met, NC1 to NC5 fail as they must, and M1 to
+M14 are all caught. R2 as written ("pass") is not met: one f699 test failed for a reason that depends on the process id and
+lies in a file this item does not touch. The rule does not name R2 among the guard checks. "Done" requires every check, so the
+rule gives at most partial; it does not give todo, because every guard check is met.
+
+### Remaining questions (each with a recommendation)
+
+1. **R2 and the f699 P4 fragility.** Options: (a) keep partial; (b) count R2 as met, because the failing test is in a file with
+   an empty diff and passed under another process id. Recommendation: (a). H6 stays partial anyway until F-702 adds the MCP
+   tools. The fix (P4 searches its messages with the file path removed) is already the follow-up proposed in ADR 0622.
+2. **Wording of the statement.** "pairs with d > 0" in a statement means pairs in the claimed direction (the sign is flipped
+   for `Direction::Decrease`). Options: (a) keep; (b) print the sign of the claimed direction. Recommendation: (b), a text change
+   with the MCP tools of F-702.
+3. **Seeded re-run sample for expensive tiers (Q14 (c)).** `verify` re-runs all or none. Options: (a) keep; (b) a registered
+   sample of k evidence pairs with a derived seed. Recommendation: (b) before the first re-run at cfd, as a follow-up.
+4. **Several held metrics and the second resolution floor.** One held metric is solved; the floor from the held tolerance is not
+   computed. Options: (a) keep; (b) a follow-up with coupled holds and the second floor. Recommendation: (b) when a fan
+   hypothesis needs two holds (flow and speed together).
+5. **M15.** Options: (a) keep recorded; (b) a check that edits one evidence parameter and re-hashes the reference chain, so the
+   parameter comparison is the guard that decides. Recommendation: (b) inside the follow-up of question 3.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial
+
+> Part H6 of docs/fan-project-breakdown.md. ADR 0624, 2026-11-16. PARTIAL (every F-701 check met, M1 to M14 caught; R2 missed only by the process-id dependence of an f699 test, file unchanged). Library only, opt-in (no case key, no MCP tool, no default changed): design::hypothesis records a hypothesis (claim, factor at two levels, response with resolution, direction, predicted size, min_effect at least 10 times the resolution, held metric with bisection, domain, pairs at least 16, seed, evaluator scope, statistic) in the design ledger before any evidence, gives it the next level of the family series 0.05 * 6 / (pi^2 i^2) (Holm inside a registered batch), runs paired evidence with resume after a cut, and judges a one-sided t (or sign) test against min_effect. Verdicts are never trusted from the file: verify and lessons recompute them from the evidence, check order, pair count, registration hash and evaluator version, and optionally re-run the evidence; lessons scope every row to its tier, model error (unknown, declared or taken from a fidelity summary) and staleness, and keep replications unmerged. Checks: t quantiles against closed forms within 1.3e-11; 400 synthetic worlds with 1 false confirmation (limit 37) and 0.998 of large effects found, while the naive agent confirms falsely in 400, the unadjusted one in 61 and the peeking one in 75; 4000 single tests at a_1 give 118 (79 to 165); all 5 forged results ignored (returned with trust on); a cut run resumes byte-identical; an impostor evaluator is caught by re-run; low-tier artefacts are scoped and refuted at the high tier; on the reduced-order fan, +1 mm tip gap lowers eta_s by 7.39e-3 (confirmed, "Not tested at cfd") and sweep does not respond; ledgers byte-identical for 1 and 8 workers. M15 (evidence parameters not compared) is recorded, not caught. Every confirmation is about the evaluator that produced it, never about a real fan. MCP exposure is F-702.
+
+> Follow-up proposed: Hypothesis record, seeded re-run sample and evidence-parameter guard. Deps F-701. Acceptance: verify with a registered sample of k evidence pairs (derived seed, k recorded in the result) catches an impostor evaluator on at least the registered share of synthetic worlds; a check that edits one evidence parameter and rewrites the reference hashes is refused only by the parameter comparison (the mutation "parameters not compared" fails it); every ADR 0624 check keeps its result.
+
+> Follow-up proposed: Coupled held metrics and the held-tolerance resolution floor for hypotheses. Deps F-701. Acceptance: two held metrics (flow and speed) solved together on a synthetic evaluator with a known joint solution within the registered tolerance, the floor from the held tolerance computed against a closed form, a registration below that floor refused with both values named, and every ADR 0624 check keeps its result.
