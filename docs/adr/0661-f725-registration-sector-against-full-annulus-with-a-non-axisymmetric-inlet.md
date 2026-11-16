@@ -221,3 +221,35 @@ missed and I1 does not name its cause.
   and internal faces are equal) and the lag (outer iterations), an exact decomposition, no library change (taken); (b) an
   opt-in non-orthogonal correction on coupled faces in the solver (a shared solver file, a larger change). Taken (a) on the
   standing instruction.
+
+## Amendment 1 (2026-11-16, written after the registered run and before any corrected run)
+
+The registered run (code and tests d2ce25d9, run once, `--test-threads=1`, log `w49i-work/f725-scratch/run.log`, 1291 s in
+all) met G1, G2, G0, A1s, NC2, J0, LC, I2 and NC1, and missed two checks. One diagnostic run followed (disclosed; geometry
+only, no solver; scratch test `w49i-work/f725-scratch/zz_f725_diag.rs`, moved out of the worktree after the run and never
+committed, log `diag.log`). No limit is changed. Results of the registered run go in addendum 1.
+
+**H1 missed: a wrong premise of this registration (a defective set-up check).** Measured `9.08e-4` against `1e-12`. The
+premise "the two cells of a seam pair are mirror images in the seam plane" holds for the blocks, not for the joined mesh: the
+rotor's outer-ring cells and the stator's inner-ring cells have their interface face cut into pieces by the join (direct
+faces and wrap faces), and the cell centre of a polygonal cell depends on how its faces are cut. The diagnosis printed, over
+eight offsets: the seam pairs whose two cells touch no interface or wrap face `1.27e-14`; the seam pairs at the interface
+rings (`r = 1.469` and `1.531`) up to `9.08e-4` (about 0.05 degree). So the missing correction of Q4 is zero to rounding on
+every seam pair except the two at the interface rings, where it is small but not zero. Corrected check, **H1c**: on C's new
+mesh of every one of the 400 steps of `V(1, 6)` (the mesh alone, `mesh_turned(n dt)`), the seam pairs whose cells touch no
+interface or wrap face `<= 1e-12`; the seam pairs at the interface rings and the wrap pairs printed. It runs as a separate
+geometry-only test (deterministic meshes, no solver).
+
+**I1 undecided (c3): not corrected.** Measured `q = 0.302` (`M(Q) = 5.98e-3`, `M(Q') = 5.90e-3`), `l = 1.017`
+(`M(L) = 2.011e-2`), `rho = 0.007` (`M(R) = 1.48e-4`) against `G = 1.98e-2`: by the registered rule the lag is identified,
+the rest ruled out, and Q4 neither identified (`< 0.5`) nor ruled out (`> 0.1`). The rule stands; c3 is undecided. The
+numbers say more, which addendum 1 reports without changing the rule: with the lag removed (`V(6, 6)`), what is left
+(`5.99e-3`) is Q4 almost entirely (`V(6, 0)` leaves `1.5e-4`), located at the rotor's outer ring next to the stator seam
+(the wrap pairs).
+
+**Records and the corrected tests.** The I1 test took 1092 s: it becomes an ignored heavy record named
+`difference_by_part_known_miss_lag_and_q4`, its check intact and the measured shares in the ignore text (J covers the same
+code path fast). The registered test `lockstep_from_a_start_consistent_with_the_inlet` becomes an ignored record named
+`lockstep_known_miss_h1_from_a_start_consistent_with_the_inlet`; a corrected test `lockstep_corrected_from_a_start_consistent_with_the_inlet`
+runs `V(1, 6)` once more (deterministic) and asserts G1, G2, G0, A1s, NC2 with the registered limits, printing H1; the new
+test `h1c_seam_pairs_off_the_interface_rings_are_orthogonal` asserts H1c. No other change.
