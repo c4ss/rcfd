@@ -1116,3 +1116,131 @@ F-828, registers the comparison).
   offset; focus keeps the orange outline.
 - The provenance popover: the popover lift, 480 px wide; a head (quantity, value, unit in ink-2), a two-column facts
   list (labels ink-2), the command on the viewport fill, its gaps in medium weight, then Copy command and Copy.
+
+## Addendum F-815: comparing two runs in the run workspace (2026-11-16)
+
+F-815 (two runs side by side at the same time and the same colour range, the difference field where the meshes match
+and a stated refusal where they do not; guardrails G2, G3, G6, G8, G16, G20, G21, G22) adds **no dependency** and
+changes no Rust file, service method, reply shape, golden or default. No existing test was edited.
+
+### What the engine computes today (read before the code)
+
+| What | Engine entry point | What exists only inside the libraries |
+|---|---|---|
+| Metrics of two runs and their differences | MCP `compare_runs` (project): the metrics of `metrics.json` of 2 to 10 runs, `differences` = each run's value minus the first run's, each run's state, step, time and residual line count | none needed |
+| Whether two meshes are the same | none as a query; every store records the mesh's content hash in its MESH frame (`rcfd_tsstore`, `Writer` from `Mesh::content_hash`), and `data.open` / the Studio's reader report it as `mesh_hash` | `rcfd_post::remap::Remapper::new`: the transfer is an identity copy when `src.n_cells() == tgt.n_cells() && src.content_hash() == tgt.content_hash()` (`crates/rcfd-post/src/remap.rs`) |
+| A difference field of two stored runs | none (no MCP tool, CLI command or service method takes two stores) | `rcfd_post::compare::difference(ref_mesh, ref_values, mesh, values, method)`: `values - remap(ref_values)` in `f64`; on identical meshes the remap is a copy, so it is `values[c] - ref_values[c]`; it refuses a value that is not finite (`difference: values[i] is not finite`) and a length that is not the cell count |
+
+So the metrics come from `compare_runs` through the run port (G16: the same call Claude Code makes), and the
+difference field is computed in the Studio by the library's own rule on identical meshes, with the rules below
+registered before the code (G3). The missing entry point is recorded at the end.
+
+### Rules and tolerances, registered before the code (G3)
+
+- **C1, the same time.** A run's time is its iteration when it is steady (the runner's `steady`; when not known, a
+  store whose every snapshot time is 0, which is what a steady solver writes) and its simulated time otherwise. The
+  compared run's snapshot at a stop of the selected run is the one with the same iteration (steady) or exactly the same
+  stored `f64` time (transient; when several snapshots carry that time, the last of them). Nothing is interpolated and
+  nothing is taken from the nearest snapshot: when the compared run has no snapshot at that time, its view and the
+  difference say so in words ("No snapshot at it 45"), and a steady run is never compared with a transient one (no
+  common time; stated). The scrubber stops at the selected run's snapshots, as in F-810, and drives both views.
+- **C2, the same mesh.** The meshes match when the two stores' cell counts are equal and their recorded content hashes
+  are equal: the identity rule of `Remapper::new`. (The point counts, which the hash covers, are checked as well.)
+  Otherwise there is no difference field; the refusal says which differs (the cell counts, or with equal counts the
+  mesh hashes).
+- **C3, the difference.** `d[c] = vB[c] - vA[c]`, A the selected run (the baseline, as `compare_runs` takes the first
+  run and `difference` the reference), B the compared run, in IEEE-754 `f64` with round to nearest, where `v` are the
+  stored values as `Reader::read_field` returns them (an `f64` store bit for bit, an `f32` store widened exactly).
+  Tolerance: none; every value equals an independent `f64` computation from the stored bytes bit for bit. It is drawn
+  as `f32` (`Math.fround`, as `as f32`) through F-808's table and range rule, and the readout shows that `f32`. Refused,
+  with the reason, as `difference` refuses or because the Studio converts nothing (G2): the field missing from either
+  snapshot, a point field, a value count that is not the cell count, different units, a value that is not finite.
+  Computed in the main process's reader worker (G21), local route only.
+- **C4, one colour range.** Side by side, both views and the one legend use `[min(loA, loB), max(hiA, hiB)]`, where
+  `lo` and `hi` are each view's F-808 range (the min and max of its shown values, over the cells that own surface
+  triangles): exactly the union, no padding and no rounding. Each view reports the span of the values it shows in the
+  same render that shows them, so the range drawn always holds every value drawn and the legend is always the range
+  drawn. The difference view has its own F-808 range.
+
+### What F-815 built
+
+- `src/shared/compare.ts`: C1 to C4 as pure functions (`timeKind`, `counterpart`, `counterpartWords`, `meshMatch`,
+  `fieldsMatch`, `difference`, `unionSpan`), shared by the reader worker and the workspace.
+- The data port gains one request, `difference {store, snapshot, other, otherSnapshot, field}`, answered by the main
+  process's reader worker with the `f64` values (an `ArrayBuffer`, as `field`). The renderer reaches it through a
+  new frozen bridge, `window.studioCompare {difference}`, over the same data port, so that `window.studioData` keeps
+  exactly its four functions (an existing test fixes them). Local route only: a service or mixed
+  route is refused (`bad_request`), since the service has no field difference. The reader gains `field64`, the stored
+  values as `f64`, decoded as `field` is.
+- The run port gains one request, `compare {run, other}` (`RUN_COMPARE_OPS`, kept apart from `RUN_OPS`, whose list an
+  existing test fixes), answered by `compare_runs {runs: [run, other]}` through the read-only project server;
+  `compare_runs` joins `PROJECT_TOOLS`.
+- The run workspace: a pictogram toggle Compare runs, a Select of the compared run and a segmented pictogram toggle
+  Side by side / Difference in the field bar (`workspace/Compare.tsx`, `compare-model.ts`, `compare.css`); the two
+  views (each a `FieldViewport` with its own camera, legend off, the one range passed in) and one legend; the
+  difference view (`Δp`, "B − A", vectors and cuts off); refusals in a view's place (role `status`, pictogram and words);
+  the metrics table under the run's numbers. `FieldViewport` gains additive, optional props (`range`, `onShown`,
+  `legend`, `load`, `loadKey`, `quantity`, `title`, `derived`); without them it is unchanged.
+- The time panel overlays the compared run's residual and monitor lines (secondary ink, 1 px, the same dash per
+  equation as the selected run's) and lists its residuals at the line; its band keeps its fill and gets a dashed ink
+  underline. The compared run's lines are at their own steps on the one iteration axis.
+- The palette: Compare runs (`workspace.compare`, group Project runs, MCP `compare_runs`), asking which run; the
+  selected run and a project with fewer than two runs are unavailable with their reason.
+- Coverage: `mcp:compare_runs` moves from its F-815 exemption to the run workspace.
+
+### How G22 applies
+
+At rest the comparison adds one pictogram button to the field bar and no words. When it is on, the only visible words
+are data (the compared run's case and id in its Select, the captions' run ids and quantity) and the exceptions: a
+refusal's words, which are always shown. The toggle and the two modes are pictograms with accessible names and
+tooltips (Compare runs, Side by side, Difference) on the 14-unit grid at 0, 45 and 90 degrees.
+
+### Decisions taken here (reversible, within the guardrails; the maintainer may overturn them)
+
+1. **Where the scrubber stops.** Options: (a) at the selected run's snapshots, the compared view saying where it has
+   none; (b) only at the times both runs stored; (c) at the union. Taken: (a), which keeps F-810's scrubber unchanged
+   and makes the gaps visible instead of hiding them. Recommendation: (a).
+2. **Where the difference is computed.** Options: (a) in the Studio's reader worker by `rcfd_post::compare`'s rule on
+   identical meshes; (b) wait for an engine entry point. Taken: (a), registered as C3 and tested bit for bit against
+   an independent decode. Recommendation: add the engine entry point (below) and switch the Studio to it, keeping the
+   test as its check.
+3. **Side by side or overlaid.** The acceptance allows either. Taken: fields side by side (two pictures cannot overlay
+   on one surface without hiding one), residuals and monitors overlaid on the shared axis. Recommendation: as taken.
+4. **Cameras.** Options: (a) each view its own camera; (b) one camera driving both. Taken: (a), since `FieldViewport`
+   holds its camera inside and linking them needs a change to F-808's canvas. Recommendation: (b) as a follow-up
+   item; it helps reading two pictures at once.
+5. **The difference's colour map.** Options: (a) viridis with the difference's own range; (b) a diverging map centred
+   on zero. Taken: (a), the only map `DESIGN.md` defines. Recommendation: (b), once `DESIGN.md` adds a diverging map;
+   a maintainer decision (design).
+6. **The compared run's residuals.** Its lines are drawn at their own steps; the list gives its value at the selected
+   run's step (exact, from `read_residuals`). No resampling.
+
+### Missing engine entry points (no Rust changed)
+
+- A field difference of two stores: `rcfd_post::compare::difference` exists only in the library. Proposed: an MCP tool
+  (`compare_fields {run_a, run_b, field, step}` returning summary statistics and writing nothing large into the
+  reply), a CLI command (`rcfd post difference`) and a service method taking two stores, so that Claude Code and the
+  Studio's service route reach the same computation (G16).
+- A mesh identity query (whether two runs' meshes are the same, and why not): today read from the stores' MESH frames.
+- `compare_runs` compares metrics only; no field or residual comparison. `read_residuals` still gives no simulated
+  time per sample (F-810), so transient residuals are compared on the iteration axis.
+
+### Proposed `DESIGN.md` additions (not edited here)
+
+- Compare pictograms: two framed panels (side by side), a triangle (difference); toggle as a pictogram button.
+- The compared run's band: full fill like the selected one, with a 1 px dashed ink underline; its plot lines in the
+  secondary ink at 1 px with the selected run's dashes.
+- The refusal panel: a view's place filled with the viewport colour, a pictogram and the reason in words.
+- One legend under two views: one range for both, the caption saying "one range for both runs".
+- A small hairline table of metrics (A, B, Δ) in tabular figures.
+- A diverging colour map for differences, centred on zero (decision 5).
+
+### Verification (2026-11-16, after merging studio-roadmap d13151f5)
+
+- `npm ci`: 0 vulnerabilities. `npm run typecheck`: clean.
+- `npm test`: 556 passed, 2 failed, 4 did not run. Rerun alone: `workspace.spec.ts` 5 passed (the Follow live race
+  with a running run); `provenance.spec.ts:220` (focus back on the trigger after Escape) fails the same way on the
+  studio-roadmap tip without F-815, so it is not F-815's. `tests/unit/compare.spec.ts` 16 passed,
+  `tests/e2e/compare.spec.ts` 7 passed (screenshots in `test-results-visual/f815/`).
+- `python scripts/third_party_licenses.py --check`: up to date.
+- `cargo test -p rcfd-cli --release --test docs_site --test workspace_graph`: 2 and 4 passed.

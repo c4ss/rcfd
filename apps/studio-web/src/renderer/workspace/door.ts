@@ -5,7 +5,7 @@
 // The run port is a main-process read through the open project's read-only project server (`read_residuals`,
 // `read_project_file`), not a service method of SERVICE_METHODS, so it has no entry in the action registry (G16;
 // reported with F-810, as F-805 and F-812 report theirs).
-import type { RunReply, RunSeries, RunValuesAt } from '../../shared/run.js';
+import type { RunComparison, RunReply, RunSeries, RunValuesAt } from '../../shared/run.js';
 
 const bridge = () => window.studioRunData;
 
@@ -21,4 +21,10 @@ export function runSeries(run: string): Promise<RunReply<RunSeries>> {
 export function runValuesAt(run: string, step: number): Promise<RunReply<RunValuesAt>> {
   const b = bridge();
   return b ? b.at(run, step) : Promise.resolve(noBridge());
+}
+
+/** F-815: the engine's compare_runs of the baseline run and the compared run. */
+export function runComparison(run: string, other: string): Promise<RunReply<RunComparison>> {
+  const b = bridge();
+  return b ? b.compare(run, other) : Promise.resolve(noBridge());
 }

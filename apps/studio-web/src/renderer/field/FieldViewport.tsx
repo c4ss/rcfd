@@ -11,7 +11,7 @@
 // opened, then the measure `rcfd:field:first-picture` when its first field is drawn, finished on the GPU and one
 // animation frame has passed.
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
-import type { FieldInfo, StoreInfo, StoreRef, SurfaceData } from '../../shared/data.js';
+import type { DataOptions, DataReply, FieldInfo, StoreInfo, StoreRef, SurfaceData } from '../../shared/data.js';
 import { cancelLoads, loadField, loadSurface, openStore } from '../data/door.js';
 import { Button, Toggle } from '../ui/index.js';
 import { colourRange, f32Text, lutBytes, type ColourRange } from './colormap.js';
@@ -37,7 +37,24 @@ export interface FieldViewportProps {
   readonly reopen?: number;
   /** F-810: called when the field of a snapshot is drawn, finished on the GPU and one animation frame has passed. */
   readonly onDrawn?: (snapshot: number) => void;
+  /** F-815: the colour range to draw with (a comparison's one range); absent, the range of the shown values (F-808). */
+  readonly range?: ColourRange;
+  /** F-815: called in the render that shows new values, with their own F-808 range (a comparison unites two). */
+  readonly onShown?: (shown: { readonly snapshot: number; readonly lo: number; readonly hi: number }) => void;
+  /** F-815: the legend under the view (default on; a comparison draws one legend for both views). */
+  readonly legend?: boolean;
+  /** F-815: where the values come from instead of the snapshot's stored field (a difference), and its key. */
+  readonly load?: FieldLoad;
+  readonly loadKey?: string;
+  /** F-815: the quantity's name and the caption's name when the values are not one run's stored field. */
+  readonly quantity?: string;
+  readonly title?: string;
+  /** F-815: the derived-picture controls (default on). */
+  readonly derived?: boolean;
 }
+
+/** F-815: values for the viewport instead of a stored field (the difference of two runs, as f32 to draw). */
+export type FieldLoad = (snapshot: number, field: string, options: DataOptions) => Promise<DataReply<{ readonly values: Float32Array }>>;
 
 type Phase =
   | { readonly kind: 'loading'; readonly what: string }
@@ -65,7 +82,22 @@ function runName(path: string): string {
   return (i > 0 ? parts[i - 1] : parts[parts.length - 1]) ?? path;
 }
 
-export function FieldViewport({ store, snapshot, field, forceWebGL = false, reopen = 0, onDrawn: onDrawnSnapshot }: FieldViewportProps) {
+export function FieldViewport({
+  store,
+  snapshot,
+  field,
+  forceWebGL = false,
+  reopen = 0,
+  onDrawn: onDrawnSnapshot,
+  range: rangeProp,
+  onShown,
+  legend = true,
+  load,
+  loadKey = '',
+  quantity: quantityProp,
+  title,
+  derived = true,
+}: FieldViewportProps) {
   const tagBase = useMemo(() => `field-view-${++views}`, []);
   const lut = useMemo(lutBytes, []);
   const [phase, setPhase] = useState<Phase>({ kind: 'loading', what: 'Opening the store' });
@@ -93,6 +125,11 @@ export function FieldViewport({ store, snapshot, field, forceWebGL = false, reop
   const drawnFor = useRef<number | null>(null);
   const drawnCb = useRef(onDrawnSnapshot);
   drawnCb.current = onDrawnSnapshot;
+  // F-815: the comparison's hooks, read when used
+  const shownCb = useRef(onShown);
+  shownCb.current = onShown;
+  const loadRef = useRef(load);
+  loadRef.current = load;
   const storeKey = `${store.route}\u0000${store.path}`;
   const layers = useMemo(() => (opened ? meshLayers(opened.surface, opened.info.nCells) : null), [opened?.surface, opened?.info.nCells]);
   const derivedCtx = useMemo(
@@ -204,7 +241,7 @@ export function FieldViewport({ store, snapshot, field, forceWebGL = false, reop
     setQuiet(true);
     const quietTimer = setTimeout(() => setQuiet(false), QUIET_MS);
     void (async () => {
-      const r = await loadField(store, snapshot, field, { tag: t });
+      const r = await (loadRef.current ? loadRef.current(snapshot, field, { tag: t }) : loadField(store, snapshot, field, { tag: t }));
       if (!live) return;
       if (!r.ok) {
         setPhase({
@@ -225,6 +262,7 @@ export function FieldViewport({ store, snapshot, field, forceWebGL = false, reop
         return;
       }
       drawnFor.current = snapshot;
+      shownCb.current?.({ snapshot, lo: span.lo, hi: span.hi });
       setShown({ info, fieldInfo: fi, surface, values, range: colourRange(span.lo, span.hi), snapshot });
       setPhase({ kind: 'ready' });
     })();
@@ -233,8 +271,9 @@ export function FieldViewport({ store, snapshot, field, forceWebGL = false, reop
       clearTimeout(quietTimer);
       void cancelLoads(t);
     };
-    // `store` is named by storeKey; `reopen` is read to tell a snapshot not read yet from one that does not exist
-  }, [opened, storeKey, snapshot, field, tagBase, attempt]);
+    // `store` is named by storeKey; `reopen` is read to tell a snapshot not read yet from one that does not exist;
+    // F-815: `loadKey` names the values when they are not the stored field
+  }, [opened, storeKey, snapshot, field, tagBase, attempt, loadKey]);
 
   const onDrawn = useCallback(() => {
     if (drawnFor.current !== null) drawnCb.current?.(drawnFor.current);
@@ -261,7 +300,9 @@ export function FieldViewport({ store, snapshot, field, forceWebGL = false, reop
   };
   const loading = phase.kind === 'loading';
   const fi = shown?.fieldInfo;
-  const quantity = fi?.name ?? field;
+  const quantity = quantityProp ?? fi?.name ?? field;
+  // F-815: the range drawn and shown in the legend: a comparison's one range, else the shown values' own
+  const drawnRange = shown ? (rangeProp ?? shown.range) : null;
   const unit = fi?.unit ?? '';
   const snap = shown ? shown.info.snapshots[shown.snapshot] : undefined;
   const reset = () => {
@@ -276,14 +317,16 @@ export function FieldViewport({ store, snapshot, field, forceWebGL = false, reop
           Mesh grid
         </Toggle>
         {grid && gridState === 'computing' && <span className="fv-note">Finding the face edges…</span>}
-        <DerivedControls
-          ctx={derivedCtx}
-          cut={cut}
-          onCut={setCut}
-          vectors={vectorsOn}
-          onVectors={setVectors}
-          startCut={layers ? () => middleCut(layers, 0) : null}
-        />
+        {derived && (
+          <DerivedControls
+            ctx={derivedCtx}
+            cut={cut}
+            onCut={setCut}
+            vectors={vectorsOn}
+            onVectors={setVectors}
+            startCut={layers ? () => middleCut(layers, 0) : null}
+          />
+        )}
         {arrows.kind === 'error' && (
           <span className="fv-note fv-note--error" role="alert">
             {arrows.message}
@@ -309,13 +352,14 @@ export function FieldViewport({ store, snapshot, field, forceWebGL = false, reop
         data-snapshot={shown ? shown.snapshot : undefined}
         data-step={snap?.step}
         data-arrows={arrows.kind === 'on' && arrows.snapshot === shown?.snapshot ? arrows.glyphs.cells.length : undefined}
+        data-range={drawnRange ? `${drawnRange.lo} ${drawnRange.hi}` : undefined}
         data-provenance="fv-readout"
       >
         <FieldCanvas
           ref={api}
           surface={opened?.surface ?? null}
           values={shown?.values ?? null}
-          range={shown?.range ?? null}
+          range={drawnRange}
           grid={grid}
           forceWebGL={forceWebGL}
           onBackend={setBackend}
@@ -353,11 +397,11 @@ export function FieldViewport({ store, snapshot, field, forceWebGL = false, reop
       <div className="fv-info">
         {shown && (
           <>
-            <Legend lut={lut} quantity={quantity} unit={unit} lo={shown.range.lo} hi={shown.range.hi} />
+            {legend && drawnRange && <Legend lut={lut} quantity={quantity} unit={unit} lo={drawnRange.lo} hi={drawnRange.hi} />}
             <p className="fv-caption">
-              <b>{runName(shown.info.path)}</b> · {quantity}
+              <b>{title ?? runName(shown.info.path)}</b> · {quantity}
               {unit ? `, ${unit}` : ''} · snapshot {shown.snapshot + 1} of {shown.info.snapshots.length} · step {snap?.step} · t = {snap?.time} ·
-              viridis, range of the shown values · {shown.surface.cells.length} triangles of {shown.info.nCells} cells
+              {' '}{rangeProp ? 'viridis, one range for both runs' : 'viridis, range of the shown values'} · {shown.surface.cells.length} triangles of {shown.info.nCells} cells
             </p>
             <div className="fv-readout" aria-live={hover?.by === 'keyboard' ? 'polite' : 'off'} data-pointer={pointerAt || undefined}>
               <span className="fv-readout-label">{`${quantity} at the ${hover?.by === 'keyboard' ? 'centre' : 'cursor'}${unit ? `, ${unit}` : ''}`}</span>

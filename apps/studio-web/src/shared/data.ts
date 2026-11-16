@@ -74,6 +74,18 @@ export interface FieldData {
  * (three `f32` each, used points only, in order of first use), triangle corners (`u32`, three per triangle) and the
  * owner cell of each triangle (`u32`).
  */
+/**
+ * F-815: the difference of one cell field between a snapshot of a store (the baseline A) and a snapshot of another store
+ * on the same mesh (the compared run B): `B - A` in `f64` of the stored values, every cell (ADR 0801, addendum F-815,
+ * C2 and C3; src/shared/compare.ts). Route `local` only.
+ */
+export interface DifferenceData {
+  readonly snapshot: number;
+  readonly otherSnapshot: number;
+  readonly field: string;
+  readonly values: Float64Array<ArrayBuffer>;
+}
+
 export interface SurfaceData {
   readonly points: Float32Array<ArrayBuffer>;
   readonly triangles: Uint32Array<ArrayBuffer>;
@@ -131,6 +143,14 @@ export type DataRequest =
   | ({ readonly op: 'open'; readonly store: StoreRef } & Common)
   | ({ readonly op: 'field'; readonly store: StoreRef; readonly snapshot: number; readonly field: string } & Common)
   | ({ readonly op: 'surface'; readonly store: StoreRef } & Common)
+  | ({
+      readonly op: 'difference';
+      readonly store: StoreRef;
+      readonly snapshot: number;
+      readonly other: StoreRef;
+      readonly otherSnapshot: number;
+      readonly field: string;
+    } & Common)
   | { readonly op: 'cancel'; readonly id: number; readonly tag: string | number };
 
 /**
@@ -141,6 +161,7 @@ export type DataWireResult =
   | { readonly kind: 'open'; readonly info: StoreInfo }
   | { readonly kind: 'field'; readonly snapshot: number; readonly field: string; readonly values: ArrayBuffer }
   | { readonly kind: 'surface'; readonly points: ArrayBuffer; readonly triangles: ArrayBuffer; readonly cells: ArrayBuffer }
+  | { readonly kind: 'difference'; readonly snapshot: number; readonly otherSnapshot: number; readonly field: string; readonly values: ArrayBuffer }
   | { readonly kind: 'cancel'; readonly cancelled: number };
 
 export type DataPortMessage = { readonly type: 'reply'; readonly id: number; readonly reply: DataReply<DataWireResult> };
@@ -155,4 +176,16 @@ export interface DataBridge {
   surface(store: StoreRef, options?: DataOptions): Promise<DataReply<SurfaceData>>;
   /** Cancels every waiting request with this tag; each answers `cancelled`. Resolves with how many there were. */
   cancel(tag: string | number): Promise<DataReply<number>>;
+}
+
+/**
+ * F-815: what the preload script puts on `window.studioCompare`, over the same data port as `window.studioData` (kept
+ * apart so that F-804's bridge keeps exactly its four functions). Its arguments are checked again in main.
+ */
+export interface CompareBridge {
+  /**
+   * `other`'s field at `otherSnapshot` minus `store`'s at `snapshot`, in `f64`, when the two stores have the same mesh
+   * (route `local` only; a refusal says why). A `tag` is cancelled by `window.studioData.cancel`.
+   */
+  difference(store: StoreRef, snapshot: number, other: StoreRef, otherSnapshot: number, field: string, options?: DataOptions): Promise<DataReply<DifferenceData>>;
 }

@@ -5,7 +5,7 @@
 // No Electron import: the port is any object with postMessage and message and close callbacks (the unit tests use
 // Node's MessageChannel; src/main/index.ts adapts Electron's MessagePortMain).
 import { RUN_ID, type RunError, type RunPortMessage, type RunReply, type RunRequest } from '../../shared/run.js';
-import { readRunAt, readRunSeries, type Query } from './series.js';
+import { readComparison, readRunAt, readRunSeries, type Query } from './series.js';
 
 export interface RunPortLike {
   postMessage(message: RunPortMessage): void;
@@ -51,6 +51,14 @@ export function parseRunRequest(raw: unknown): ParsedRun {
       const step = raw['step'];
       if (!isId(step)) return bad('at: the step must be a non-negative integer');
       return { ok: true, request: { op, id, run, step } };
+    }
+    case 'compare': {
+      // F-815
+      if (keys !== 'id,op,other,run') return bad('compare: takes exactly a run and another run');
+      const other = raw['other'];
+      if (!runOk || typeof other !== 'string' || !RUN_ID.test(other)) return bad('compare: both runs must be run ids (letters, digits, ".", "_" and "-", at most 128)');
+      if (other === run) return bad('compare: the two runs must differ');
+      return { ok: true, request: { op, id, run, other } };
     }
     default:
       return bad(`unknown op '${String(op).slice(0, 40)}'`);
@@ -104,7 +112,8 @@ export class RunPortBridge {
       return;
     }
     try {
-      const result = r.op === 'series' ? await readRunSeries(query, r.run, this.source.now) : await readRunAt(query, r.run, r.step);
+      const result =
+        r.op === 'series' ? await readRunSeries(query, r.run, this.source.now) : r.op === 'at' ? await readRunAt(query, r.run, r.step) : await readComparison(query, r.run, r.other);
       this.reply(r.id, { ok: true, result });
     } catch (e) {
       this.reply(r.id, { ok: false, error: { code: 'engine', message: e instanceof Error ? e.message : String(e) } });

@@ -136,6 +136,21 @@ export const STUDIO_COMMANDS: readonly StudioCommand[] = [
     note: NAV_NOTE,
   },
 
+  // ---- comparing two runs (F-815)
+  {
+    id: 'workspace.compare',
+    title: 'Compare runs',
+    description:
+      'Show the run selected in the workspace and another run at the same time, side by side in one colour range, with their difference field where the meshes match; the residual lines of both, and the metrics of both from the engine.',
+    group: 'Project runs',
+    effect: 'navigate',
+    params: [{ name: 'run', kind: 'run', optional: false, description: 'The run to compare with the one selected in the workspace (the baseline).' }],
+    engine: 'compare_runs of the project server (the metrics and their differences); the stored fields of both runs through the Studio’s reader of store.rts',
+    cli: null,
+    mcp: 'compare_runs',
+    note: 'The metrics are the engine’s compare_runs, as Claude Code gets them; the difference field (B − A of the stored values, ADR 0801 addendum F-815) has no engine entry point yet.',
+  },
+
   // ---- the project folder (F-805)
   {
     id: 'project.open_folder',

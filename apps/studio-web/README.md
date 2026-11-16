@@ -210,6 +210,38 @@ selected run here. Code: `src/renderer/workspace/` (`RunWorkspace.tsx`, `TimePan
   `field_summary`; the bands; the keyboard; Follow live on a running run; screenshots at 1440 x 900 in
   `test-results-visual/f810/`).
 
+## Comparing two runs (F-815)
+
+In the run workspace, Compare runs (the pictogram toggle in the field bar, or the palette's Compare runs, which asks
+which run) adds a second run to the selected one. The selected run is the baseline A, the compared run B; the rules are
+ADR 0801, addendum F-815 (C1 to C4), coded in `src/shared/compare.ts`. Code: `src/renderer/workspace/Compare.tsx`,
+`compare-model.ts`, `compare.css`; the difference in the main process's reader (`src/main/data/worker.ts`).
+
+- **The same time** (C1): steady runs are compared at the same iteration, transient runs at exactly the same stored
+  simulated time. The scrubber stops at A's snapshots; where B has no snapshot at that stop its view says
+  "No snapshot at it 45" (or "No snapshot at t = 1.25 s"). Nothing is interpolated, nothing taken from the nearest
+  snapshot. A steady run is not compared with a transient one ("Steady against transient: no common time").
+- **Side by side**: two views edge to edge, one scrubber moving both, one legend under both: the colour range is exactly
+  the union of the two views' own ranges (C4). Each view keeps its own camera.
+- **Difference**: B − A of the stored values in f64, computed in the main process's reader worker from the two stores
+  (C3), drawn as f32 with its own range; the readout shows the f32 of a cell's difference. It is refused, in words, when
+  the meshes differ (C2: the cell counts or the recorded mesh content hashes, rcfd-post's identity rule), when one run
+  lacks the field, when the units differ, for a point field and for a value that is not finite. No remap is done.
+- **Residuals overlaid**: the time panel's residual plot and monitor chart draw B's lines with A's, thinner and in the
+  secondary ink; the list under the plot gives B's residuals at the line. B's band keeps its fill and gets a dashed ink
+  underline.
+- **Metrics**: `compare_runs` of the two runs (the engine's metrics and its difference) in a table under the run's numbers.
+- Through the engine and the stores only: the difference is a new data-port request (`difference`, on its own bridge
+  `window.studioCompare` so that `window.studioData` keeps its four functions; local route only:
+  the service route has no field difference, see the addendum's missing entry points), and `compare` a new run-port
+  request (`compare_runs` through the read-only project server).
+- Tests: `tests/unit/compare.spec.ts` (the rules on the example projects' stores; the mesh rule read from rcfd-post's
+  source; the difference through the reader worker against an independent f64 decode of the stored bytes,
+  `tests/support/rts-decode.ts`; the ports; compare_runs of the real project server; the palette; pictograms and
+  stylesheet) and `tests/e2e/compare.spec.ts` (a copy of quick-start plus two short runs that store f64 fields: both
+  views at the same snapshot time, the one range, the refusals, the difference bit for bit, the residual overlay, the
+  metrics, the keyboard, the palette; screenshots at 1440 x 900 in `test-results-visual/f815/`).
+
 ## The field viewport (F-808)
 
 `src/renderer/field/FieldViewport.tsx` draws one cell field of one snapshot of a store on the boundary surface of the
@@ -434,6 +466,7 @@ Decisions taken in building F-814 (options, the recommendation followed; each re
 | `src/renderer/data/` | `door.ts`: the renderer's one door to `window.studioData` (F-804's bulk data) | as above | F-808 |
 | `src/renderer/workspace/` | The run workspace (`RunWorkspace.tsx`, `TimePanel.tsx`: run bands, scrubber, residual plot, monitor), `model.ts`, its one door to `window.studioRunData` (`door.ts`), `workspace.css` | as above | F-810 |
 | `src/main/run/`, `src/shared/run.ts` | The run port: `bridge.ts` (the checks), `series.ts` (a run's residual and monitor series and their units through the project server) | `tsc -p tsconfig.node.json` | F-810 |
+| `src/shared/compare.ts`, `src/renderer/workspace/Compare.tsx` | Comparing two runs: the rules (same time, same mesh, difference, one range), the side-by-side and difference views, the metrics table (`compare-model.ts`, `compare.css`) | as above | F-815 |
 
 | `src/renderer/first/` | A learner's first path: `FirstPath.tsx` (the intro, the not-a-project section, the four steps), `model.ts` (the step from the engine's lists), `words.ts` (disclaimer, limits, help, precise terms), `target.ts` (the result link), `first.css`; its run action is `src/shared/actions/first.ts` | as above | F-813 |
 

@@ -76,7 +76,7 @@
     {"id": "mcp:check_case_headless", "ui": "Case editor (F-812): Check the saved file, the check-only launch of the file on disk with its exit code (rcfd run <case> --check-only)."},
     {"id": "mcp:check_case_mesh", "ui": "Case editor (F-812): Check the saved file builds the file's mesh and lists its mesh errors and warnings; the quality report is Check the mesh."},
     {"id": "mcp:check_mesh", "ui": "Case editor (F-812): Check the mesh, the same report through the mesh.check action; the panel names the Claude Code equivalents."},
-    {"id": "mcp:compare_runs", "exemption": {"item": "F-815", "date": "2026-11-16", "reason": "Compare two runs (F-815); not built yet."}},
+    {"id": "mcp:compare_runs", "ui": "Run workspace (F-815): Compare runs, the metrics of the selected and the compared run and the engine's difference (compare_runs of the two); palette Compare runs."},
     {"id": "mcp:create_case", "ui": "Case editor (F-812): opening a case file from the project home makes a session from the file (session.create {path}), as create_case {path} does."},
     {"id": "mcp:create_workflow", "exemption": {"item": "F-807", "date": "2026-11-16", "reason": "Task workflows (the workflow methods, tools and commands): no Studio item covers them; nearest home run control (F-807).", "unplanned": true}},
     {"id": "mcp:design_compare_variants", "exemption": {"item": "F-815", "date": "2026-11-16", "reason": "Design studies, operating maps and the design ledger: no Studio item covers them; nearest homes run control (F-807) for running and compare (F-815) for results.", "unplanned": true}},
