@@ -260,3 +260,19 @@ or A10 fails.
 - JCGM 100:2008 (standard uncertainty, the meaning of the `uncertainty` values).
 - A. I. J. Forrester, A. Sobester, A. J. Keane (2007), Proc. R. Soc. A 463 (pairing cheap and costly evaluations; motivation
   only, nothing numeric is taken). Pages UNVERIFIED.
+
+## Amendment 1 (2026-11-16, before any run of any check): the public reader and a `measured` source
+
+Found while writing the A8 test, before any check ran: set P holds an entry of tier `cfd` with a source of kind `measured`.
+D2 makes the public `append` refuse it, but D2's public reader skips only `measured` lines, and the base reader skips only an
+unknown tier; so A8's "public `read` and the base `parse_text` of that file return 0 entries and 3 skipped lines" is wrong for
+that entry under the text as registered (the base reader cannot know the `source` key). Corrected before any run:
+
+- D2, public reader: a public `read` (and `parse_text`) skips every line that is private content (tier `measured` or a source
+  of kind `measured`), with a reason naming the private ledger. This is the strict reading of decision D3.
+- A8, corrected limit: public `read` of the private file returns 0 entries and 3 skipped lines; the base `parse_text` returns
+  1 entry (the `cfd` entry with a measured source) and 2 skipped lines (the two `measured` lines). Every other clause of A8 is
+  unchanged.
+- Limits, added: a build older than F-700 reads an entry of a public tier with a measured source from a private file as an
+  ordinary entry; the private file is outside any repository by construction, so this concerns only a user who points an old
+  build at it.
