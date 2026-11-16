@@ -7,6 +7,35 @@ import { LocalData, WORKER_URL } from './local.js';
 import { DataFailure, type Job } from './queue.js';
 import { RemoteData, type RemoteService } from './remote.js';
 import type { DataRoots } from './roots.js';
+import { DataFailure as Failure } from './queue.js';
+import { testDelayMs } from '../work/delay.js';
+
+/**
+ * F-832: the tests' delay before a request reaches its route (none outside them). A cancel during it sends nothing to
+ * the reader or the service; the job rejects at once, as SerialQueue's do.
+ */
+function delayed(ms: number, make: () => Job<DataWireResult>): Job<DataWireResult> {
+  let inner: Job<DataWireResult> | null = null;
+  let stop: ((e: DataFailure) => void) | null = null;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const promise = new Promise<DataWireResult>((resolve, reject) => {
+    stop = reject;
+    timer = setTimeout(() => {
+      stop = null;
+      inner = make();
+      inner.promise.then(resolve, reject);
+    }, ms);
+  });
+  return {
+    promise,
+    cancel: (reason = new Failure('cancelled', 'cancelled')) => {
+      if (inner) return inner.cancel(reason);
+      clearTimeout(timer);
+      stop?.(reason);
+      stop = null;
+    },
+  };
+}
 
 /** A job that fails at once with `bad_request` (F-815: a difference the route cannot give). */
 function failed(message: string): Job<DataWireResult> {
@@ -24,6 +53,11 @@ export class StudioData implements DataBackend {
   }
 
   run(r: Exclude<DataRequest, { op: 'cancel' }>, timeoutMs: number): Job<DataWireResult> {
+    const ms = testDelayMs('data');
+    return ms > 0 ? delayed(ms, () => this.route(r, timeoutMs)) : this.route(r, timeoutMs);
+  }
+
+  private route(r: Exclude<DataRequest, { op: 'cancel' }>, timeoutMs: number): Job<DataWireResult> {
     const p = r.store.path;
     if (r.store.route === 'local') {
       switch (r.op) {

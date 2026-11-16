@@ -29,6 +29,8 @@ export interface BridgeHome {
   dismiss(): void;
   /** F-807: a run-control action (the home answers it; optional so that a home without run control refuses it). */
   action?(id: string, params: Readonly<Record<string, unknown>>): Promise<RunActionResult>;
+  /** F-832: cancels the opening that is going; true when there was one. */
+  cancelOpen?(): boolean;
 }
 
 /** F-807: the longest action id the port accepts, and the most bytes of an action's parameters as JSON. */
@@ -83,6 +85,7 @@ export function parseProjectRequest(raw: unknown): ParsedProject {
     case 'close':
     case 'refresh':
     case 'dismiss':
+    case 'cancel':
       if (keys !== 'id,op') return bad(`${op}: takes no arguments`);
       return { ok: true, request: { op, id } };
     case 'open':
@@ -184,6 +187,9 @@ export class ProjectPortBridge {
           break;
         case 'dismiss':
           this.home.dismiss();
+          break;
+        case 'cancel':
+          result = { cancelled: this.home.cancelOpen?.() ?? false };
           break;
         case 'action':
           result = this.home.action

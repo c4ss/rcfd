@@ -17,9 +17,9 @@ export const caseDoor: CaseBridge = {
   attach: (session, path, hash) => bridge()?.attach(session, path, hash) ?? Promise.resolve(missing),
   status: (session) => bridge()?.status(session) ?? Promise.resolve(missing),
   conflict: (session) => bridge()?.conflict(session) ?? Promise.resolve(missing),
-  save: (session, onto) => bridge()?.save(session, onto) ?? Promise.resolve(missing),
+  save: (session, onto, options) => bridge()?.save(session, onto, options) ?? Promise.resolve(missing),
   create: (name, source) => bridge()?.create(name, source) ?? Promise.resolve(missing),
   duplicate: (path, name) => bridge()?.duplicate(path, name) ?? Promise.resolve(missing),
-  check: (path) => bridge()?.check(path) ?? Promise.resolve(missing),
+  check: (path, options) => bridge()?.check(path, options) ?? Promise.resolve(missing),
   forget: (session) => bridge()?.forget(session) ?? Promise.resolve(missing),
 };

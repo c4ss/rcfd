@@ -1117,6 +1117,122 @@ F-828, registers the comparison).
 - The provenance popover: the popover lift, 480 px wide; a head (quantity, value, unit in ink-2), a two-column facts
   list (labels ink-2), the command on the viewport fill, its gaps in medium weight, then Copy command and Copy.
 
+## Addendum 9: F-832, responsiveness budget and cancellable work (2026-11-16)
+
+Item F-832 of `docs/ROADMAP.md`. Traces G21, G9 (P5), G22, G18. No new dependency.
+
+### The registered limits (written before the measurement code)
+
+| Name | Value | What it bounds |
+|---|---|---|
+| `LONG_TASK_LIMIT_MS` | 100 ms | any one `longtask` entry on the renderer's main thread while a run is opened, fields are loaded (both bulk routes) and the scrubber moves |
+| `LONG_FRAME_LIMIT_MS` | 150 ms | any one `long-animation-frame` entry in the same window |
+| `PROGRESS_AFTER_MS` | 300 ms | an operation still going after this shows progress and Cancel; a shorter one shows nothing |
+
+Chosen as follows. 100 ms per task: while a task runs nothing on the page answers, Cancel included; 0.1 s is the
+classic limit for a reaction to feel immediate (Card, Moran and Newell), two thirds of P5's 150 ms frame limit, and
+twice Chromium's 50 ms long-task threshold, so ordinary renders of the workspace are not counted. 150 ms per frame: P5's
+own "no frame > 150 ms", applied to every frame of the measurement. 300 ms before progress: below it progress would
+flash (G22), above it a long operation speaks well before the 1 s at which flow is lost (Nielsen); it equals F-810's
+`QUIET_MS` and lies above every scrub frame of addendum 6 (1e6 p99 75 ms, 4e6 p99 159 ms), so scrubbing at those sizes
+stays silent while P7's first picture (up to 1.5 s) and opening a project speak.
+
+### What was built
+
+The parts are listed in `apps/studio-web/README.md`, under "Responsiveness and cancellable work":
+
+- the work tracker and its progress row (`src/renderer/work/`);
+- the cancel hook for doors (`CancelOptions`, `src/shared/work.ts`), and the `cancel` requests of the project and case
+  ports;
+- the field worker (`src/renderer/field/prepare.worker.ts`), which also makes F-809's mesh layers and vector arrows
+  (`derived.ts` `meshLayers`, `vectorGlyphs`, unchanged) since the merge with F-809;
+- the tests' delay (`RCFD_STUDIO_TEST_DELAY`, `src/main/work/delay.ts`);
+- the long-task test (`tests/e2e/responsiveness.spec.ts`) and the cancel tests (`tests/e2e/cancel.spec.ts`,
+  `tests/unit/work.spec.ts`).
+
+The bridges' key sets are unchanged. `window.studioProject`, `studioCase`, `studioData` and the run port's `RUN_OPS`
+are pinned by the existing tests.
+
+### Measurements (AMD Ryzen 7 9800X3D, 16 logical processors, 93 GB; every processor busy with other agents' builds)
+
+All runs happened with every processor busy (`cpuBusy` 0.83 to 1.00 before and after, 26 to 50 build, node and electron
+processes). Each figure is the largest entry of its kind, by phase. The limits are 100 ms per task and 150 ms per held
+frame.
+
+| Run | Store | Result | Largest task | Largest long frame |
+|---|---|---|---|---|
+| Before (first harness, no worker or tracker) | 1e5 | passed | 51 ms (run open) | 136 ms (project open), 112 ms (scrub) |
+| Before | 1e6 | failed | 69 ms | 298 ms (blocking 0), 183 ms (blocking 11), 152 ms (blocking 19), all while the workspace first opened |
+| After, before frames were split by `blockingDuration` | 1e5 | 3 passes failed | 95 ms | 246 / 178 / 163 ms in the Workspace tab's first frame, blocking 0, no script over 5 ms; one 13.5 s frame, blocking 0 |
+| After (final) | 1e5 | passed, pass 1 | none over 50 ms | 144 ms (workspace tab), 70 ms (scrub) |
+| After (final) | 1e6 | passed, pass 1 | 61 ms (workspace tab) | 136 ms (workspace tab), 67 ms (run open) |
+
+The probe (a deliberate 130 ms task) was recorded every time.
+
+Two changes in the harness cleared the run-open breaches (184 and 258 ms, with blocking 85 and 52 ms) in the first
+run after the worker. First, the test now selects a small run before it measures the big one, so the workspace's own
+first mount is not counted as "opening a run". Second, the first mount of the Workspace tab gets a phase of its own.
+That first mount compiles about 1.6 MB of script (the field viewport and three's WebGPU renderer) and creates the GPU
+device, and it showed up as unheld frames, not tasks. Fetching that code on idle once a project was open did not change
+those frames, so that experiment was removed.
+
+### Decisions taken on the recommendation (reversible, within the guardrails; the maintainer may overturn any of them)
+
+1. **How a cancel crosses `contextBridge`.** Options: (a) new bridge keys (`cancel` on each bridge); (b) an
+   `options.onCancel` callback argument, which the preload script calls with the function that cancels that request;
+   (c) a shared request-id scheme exposed to the page. Recommended and taken: **(b)**. The key sets are pinned by
+   tests that may not change, functions cross as proxies, and the page never sees a request id.
+2. **Cancelling a save after `edit_case` was sent.** Options: (a) refuse the cancel and say so; (b) let the save finish
+   and report it as usual, without the progress; (c) undo with a second edit. Recommended and taken: **(b)**. The
+   engine writes a file whole or not at all, so there is no partial state. Option (c) would be a second write the user
+   did not ask for (G18).
+3. **Cancelling a project opening once the project server has started.** Options: (a) let it finish, then close the
+   late session; (b) kill the process. Taken: **(a)**. The engine has no abortable start, and killing a child process
+   from the renderer's request would be a new kind of power for the page.
+4. **Run histories (`run.series`) and mesh checks.** These are dropped on cancel and not stopped. The run port's ops
+   are pinned (`RUN_OPS`), and the service has no cancel. They are recorded below as missing entry points.
+5. **The tests' delay** (`RCFD_STUDIO_TEST_DELAY`). Options: (a) a delay hook in the main process, read only from the
+   environment; (b) large fixtures that are slow by nature; (c) fake engines. Taken: **(a)**. It works on any
+   machine, cancels at once, and is inert when unset. The real engine is used in every test.
+6. **F-810's `QUIET_MS` is replaced by the tracker's `PROGRESS_AFTER_MS`.** It is the same 300 ms, but now there is one
+   mechanism for every surface. The field viewport's loading words ("Reading the stored fields of ...") are replaced
+   by the progress row's accessible name (G22: the normal state says nothing).
+7. **Which long frames count.** Options: (a) every `long-animation-frame` entry over 150 ms; (b) only those the
+   renderer's thread held up (`blockingDuration` > 0); (c) no frame limit, tasks only. Recommended and taken: **(b)**.
+   Under full load, frames of 157 to 246 ms, and one of 13.5 s, had `blockingDuration` 0 and no script over 5 ms: the
+   thread was free for input all along, and rendering waited on the GPU process or the scheduler. Such frames are
+   reported (`notHeld`), not failed. The test also makes up to three passes in fresh windows and passes on the first
+   clean one. A task that the Studio's own code makes recurs in every pass.
+
+### Gaps, and missing engine entry points (no Rust was changed)
+
+- `rcfd-mcp` handles one request at a time and ignores notifications. It has no `notifications/cancelled` (MCP's cancel),
+  so `check_case_headless` (in-process `run.check`) and `read_residuals` cannot be stopped once sent, only dropped. A
+  cancellable tool call in `crates/rcfd-mcp/src/lib.rs` would let the Studio stop them.
+- The service has no cancel for `mesh.check` or `run.check`; a `cancel` by request id (or a `$/cancelRequest`) is
+  missing.
+- A project server's start cannot be aborted half way (`rcfd-mcp --project` start-up).
+- Neither the Studio nor the engine's paths to it have a field export, so there is no export to make cancellable. A
+  future one must use the tracker.
+- Not yet made works: creating or duplicating a case (`new_case`), run-control actions (F-807 shows its own pending
+  state), and the Claude panel (F-813 has its own stop). These are short, or already cancellable in their own
+  terms, but they do not use the one mechanism yet.
+- The hover pick (three's `Raycaster` over the surface) runs on the main thread, O(triangles), on pointer movement.
+  It is not engine or data work, and the long-task test does not hover, but at large surfaces it belongs in the worker.
+  Proposed for F-819.
+
+### Proposed for DESIGN.md (not edited here)
+
+- **Progress row.** One 26 px row (`--size-control`) per long operation, in the surface it concerns: over the top edge
+  of the field frame (overlay), in the flow of the case panel and the empty project home (inline), and in the header
+  actions of an open project (band). The row holds an indeterminate bar drawn as the "not yet" hatch in a 1 px ink rule,
+  moving one stripe period per `--motion-band-grow` (still under reduced motion), a short word in label type, and a
+  Cancel button that holds the row's right edge. There are no percentages, because the engine gives none.
+- **Shown only after 300 ms** (`PROGRESS_AFTER_MS`). A shorter operation shows nothing. The words are in the accessible
+  names: the bar is "Opening run r-...", and the button is "Cancel opening run r-...".
+- **Cancel leaves the screen as it was before the operation**: the previous picture, run or result. It does not show a
+  "cancelled" notice (G22).
+
 ## Addendum 10: F-815, comparing two runs in the run workspace (2026-11-16)
 
 F-815 (two runs side by side at the same time and the same colour range, the difference field where the meshes match

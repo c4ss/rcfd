@@ -1,0 +1,55 @@
+/* Progress of a long operation (F-832, G21): one 26 px row per work. The bar is DESIGN.md's "not yet" hatch (silver and
+   white at 135 degrees) in a 1px ink rule, moving one stripe period per band-grow time; still under reduced motion.
+   Overlay: over the top edge of its surface (the field frame keeps its picture under it). Inline: in the flow. */
+.wk {
+  display: grid;
+  gap: var(--space-xs);
+  font-size: var(--type-label-size);
+  color: var(--role-text);
+}
+.wk--overlay {
+  position: absolute;
+  top: var(--space-md);
+  left: var(--space-md);
+  right: var(--space-md);
+  z-index: 2;
+}
+.wk--inline {
+  margin: var(--space-md) 0;
+}
+.wk--band {
+  min-width: 320px;
+}
+.wk-item {
+  display: grid;
+  grid-template-columns: minmax(80px, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-md);
+  min-height: var(--size-control);
+  padding: 0 0 0 var(--space-md);
+  background: var(--role-ground);
+  border: var(--line-rule);
+}
+.wk-bar {
+  height: var(--space-sm);
+  border: var(--line-rule);
+  background: var(--line-hatch);
+  animation: wk-hatch var(--motion-band-grow) linear infinite;
+}
+.wk-word {
+  white-space: nowrap;
+  font-weight: 500;
+}
+.wk-cancel.ui-button {
+  border-width: 0 0 0 1px;
+}
+@keyframes wk-hatch {
+  to {
+    background-position: 11.3137px 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wk-bar {
+    animation: none;
+  }
+}

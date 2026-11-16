@@ -21,6 +21,7 @@ import { palette } from '../design/tokens.js';
 import { LUT_SIZE, lutBytes, type ColourRange } from './colormap.js';
 import { clipPlane, keeps, type Cut } from './derived.js';
 import { bounds, cornerPositions, cornerScalars, gridEdges } from './surface.js';
+import type { PreparedSurface } from './prepare.js';
 
 export type Backend = { readonly kind: 'webgpu' } | { readonly kind: 'webgl2'; readonly reason: string };
 
@@ -75,6 +76,13 @@ export interface FieldCanvasProps {
   readonly cut?: Cut | null;
   /** F-809: the vector arrows as line segments (./derived.ts `vectorGlyphs`), or null for none. */
   readonly arrows?: Float32Array<ArrayBuffer> | null;
+  /**
+   * F-832 (G21): the surface's arrays made off the main thread (./prepare.ts); used when made from `surface`, else the
+   * canvas makes them itself (the P8 bench page).
+   */
+  readonly prepared?: PreparedSurface | null;
+  /** F-832: the corner scalars of `values` made off the main thread (3 per triangle); else the canvas makes them. */
+  readonly scalars?: Float32Array | null;
 }
 
 /** A colour of tokens.ts written to the canvas unchanged (the output does no colour space conversion). */
@@ -172,8 +180,8 @@ function fieldMaterial(lut: THREE.DataTexture): Material {
 }
 
 /** The camera that shows the whole surface: a three-quarter view (z up), or straight on for a flat one. */
-function fit(camera: THREE.PerspectiveCamera, controls: OrbitControls | null, s: SurfaceData, aspect: number): void {
-  const b = bounds(s.points);
+function fit(camera: THREE.PerspectiveCamera, controls: OrbitControls | null, s: SurfaceData, aspect: number, box?: { min: readonly number[]; max: readonly number[] }): void {
+  const b = box ?? bounds(s.points);
   const c = new THREE.Vector3((b.min[0] + b.max[0]) / 2, (b.min[1] + b.max[1]) / 2, (b.min[2] + b.max[2]) / 2);
   const ext = [b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]];
   const big = Math.max(...ext) || 1;
@@ -207,7 +215,12 @@ interface SceneProps extends Omit<FieldCanvasProps, 'forceWebGL' | 'onBackend'> 
 
 let gridIds = 0;
 
-function Scene({ surface, values, range, grid, onMoved, onDrawn, onGridState, cut = null, arrows = null, apiRef }: SceneProps) {
+function Scene({ surface, values, range, grid, onMoved, onDrawn, onGridState, cut = null, arrows = null, apiRef, prepared, scalars }: SceneProps) {
+  // F-832: the arrays made off the main thread, when they belong to this surface
+  const prep = prepared && prepared.surface === surface ? prepared : null;
+  const box = prep ? { min: prep.min, max: prep.max } : undefined;
+  const boxRef = useRef(box);
+  boxRef.current = box;
   const { gl, camera, scene, invalidate, size } = useThree();
   const renderer = gl as unknown as THREE.WebGPURenderer;
   const cam = camera as THREE.PerspectiveCamera;
@@ -306,25 +319,32 @@ function Scene({ surface, values, range, grid, onMoved, onDrawn, onGridState, cu
       return;
     }
     const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(cornerPositions(surface), 3));
+    g.setAttribute('position', new THREE.BufferAttribute(prep ? prep.positions : cornerPositions(surface), 3));
     g.setAttribute('scalar', new THREE.BufferAttribute(new Float32Array(surface.triangles.length), 1));
-    g.computeBoundingSphere();
-    g.computeBoundingBox();
+    if (prep) {
+      g.boundingSphere = new THREE.Sphere(new THREE.Vector3(...prep.centre), prep.radius);
+      g.boundingBox = new THREE.Box3(new THREE.Vector3(...prep.min), new THREE.Vector3(...prep.max));
+    } else {
+      g.computeBoundingSphere();
+      g.computeBoundingBox();
+    }
     const old = mesh.geometry;
     mesh.geometry = g;
     old.dispose();
     lines.geometry.dispose();
     lines.geometry = new THREE.BufferGeometry();
     mesh.visible = false; // until its values are in
-    fit(cam, controls.current, surface, aspectRef.current);
+    fit(cam, controls.current, surface, aspectRef.current, boxRef.current);
     moved.current(false);
+    // `prep` is made from `surface` (a new surface comes with its own); it is read when the surface is set
   }, [surface, mesh, lines, cam, invalidate]);
 
   // the values and the range, then the first picture of them
   useEffect(() => {
     if (!surface || !values || !range) return;
     const a = mesh.geometry.getAttribute('scalar') as THREE.BufferAttribute;
-    cornerScalars(surface.cells, values, a.array as Float32Array<ArrayBuffer>);
+    if (scalars && scalars.length === a.array.length) (a.array as Float32Array).set(scalars);
+    else cornerScalars(surface.cells, values, a.array as Float32Array<ArrayBuffer>);
     a.needsUpdate = true;
     mat.lo.value = range.loF32;
     mat.inv.value = range.invF32;
@@ -341,7 +361,7 @@ function Scene({ surface, values, range, grid, onMoved, onDrawn, onGridState, cu
       live = false;
     };
     // onDrawn is read when the picture is done; a new callback alone does not redraw
-  }, [surface, values, range, mesh, mat, renderer, scene, cam, invalidate]);
+  }, [surface, values, scalars, range, mesh, mat, renderer, scene, cam, invalidate]);
 
   // the mesh grid: computed once per surface, in a worker
   useEffect(() => {
@@ -399,7 +419,7 @@ function Scene({ surface, values, range, grid, onMoved, onDrawn, onGridState, cu
   useEffect(() => {
     cam.aspect = aspect;
     cam.updateProjectionMatrix();
-    if (surface && !userMoved.current) fit(cam, controls.current, surface, aspect);
+    if (surface && !userMoved.current) fit(cam, controls.current, surface, aspect, boxRef.current);
     invalidate();
   }, [aspect, cam, invalidate, surface]);
 
@@ -438,7 +458,7 @@ function Scene({ surface, values, range, grid, onMoved, onDrawn, onGridState, cu
       };
       const reset = () => {
         if (!surface) return;
-        fit(cam, controls.current, surface, aspectRef.current);
+        fit(cam, controls.current, surface, aspectRef.current, boxRef.current);
         moved.current(false);
         invalidate();
       };

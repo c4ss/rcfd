@@ -6,6 +6,8 @@
 // session.close, settings.*, mesh.check) go through the F-827 dispatcher; the case-file actions (bind, save, new,
 // duplicate, check the saved file) through the case port (door.ts), whose main-process side calls the engine's project
 // server (src/main/case/editor.ts).
+import { abortable, beginWork, cancelHook } from '../work/work.js';
+import { WorkProgress } from '../work/WorkProgress.js';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import type { CaseDoorState, CaseSources, CaseStatus, ConflictView, CreatedCase, FileCheck, SaveOutcome } from '../../shared/case.js';
 import { CASE_ACTIONS } from '../../shared/case.js';
@@ -513,6 +515,9 @@ function FileStateWord({ status }: { status: CaseStatus }) {
   return <span className="ce-word">{n === 0 ? 'Saved' : `${plural(n, 'change', 'changes')} not saved`}</span>;
 }
 
+/** F-832: the scope of the case editor's works (save, checks) in the work tracker. */
+const WORK_SCOPE = 'case-editor';
+
 // ---- the case file panel at the head of the right column (inside the settings surface's context)
 
 function CasePanel({ status, refresh }: { status: CaseStatus; refresh: () => Promise<void> }) {
@@ -549,8 +554,16 @@ function CasePanel({ status, refresh }: { status: CaseStatus; refresh: () => Pro
         active.blur();
         await new Promise((r) => setTimeout(r, 150));
       }
-      const r = await caseDoor.save(b.session, onto);
+      // F-832 (G21): a save is a work (progress and Cancel after PROGRESS_AFTER_MS); a cancel reaches the main process,
+      // which stops the save only while nothing has gone to the engine: either nothing is written, or all of it
+      const work = beginWork({ kind: 'case.save', scope: WORK_SCOPE, label: `Saving ${b.path}`, word: 'Saving' });
+      const r = await caseDoor.save(b.session, onto, cancelHook(work.signal)).finally(() => work.end());
       setBusy(null);
+      if (!r.ok && r.error.code === 'cancelled') {
+        // nothing was written: the session's changes stay pending, as before the save
+        await refresh();
+        return;
+      }
       if (!r.ok) {
         setNotice({ kind: 'failed', message: r.error.message });
         return;
@@ -621,14 +634,27 @@ function CasePanel({ status, refresh }: { status: CaseStatus; refresh: () => Pro
 
   const checkFile = async () => {
     setBusy('check');
-    const r = await caseDoor.check(b.path);
+    // F-832 (G21): a check is a work; cancelled, it shows no result (the one shown before, if any, stays as it was)
+    const work = beginWork({ kind: 'case.check', scope: WORK_SCOPE, label: `Checking the saved file ${b.path}`, word: 'Checking' });
+    const r = await caseDoor.check(b.path, cancelHook(work.signal)).finally(() => work.end());
     setBusy(null);
+    if (!r.ok && r.error.code === 'cancelled') return;
     setFileCheck(r.ok ? r.result : { failed: r.error.message });
   };
 
   const checkMesh = async () => {
     setBusy('mesh-check');
-    const r = await dispatch('mesh.check', { session: b.session });
+    // F-832 (G21): the service has no way to stop a mesh check; a cancelled one's reply is dropped (and the gap recorded)
+    const work = beginWork({ kind: 'mesh.check', scope: WORK_SCOPE, label: `Checking the mesh of session ${b.session}`, word: 'Checking the mesh' });
+    let r: Awaited<ReturnType<typeof dispatch>>;
+    try {
+      r = await abortable(dispatch('mesh.check', { session: b.session }), work.signal);
+    } catch {
+      setBusy(null);
+      return;
+    } finally {
+      work.end();
+    }
     setBusy(null);
     if (!r.ok) return setMeshCheck({ failed: r.error.message });
     const x = r.result as { ok?: unknown; patches?: { name?: unknown }[]; report?: { n_cells?: unknown; errors?: unknown; warnings?: unknown } };
@@ -748,6 +774,7 @@ function CasePanel({ status, refresh }: { status: CaseStatus; refresh: () => Pro
             {busy === 'check' ? 'Checking the file' : 'Check the saved file'}
           </Button>
         </div>
+        <WorkProgress scope={WORK_SCOPE} placement="inline" />
         <MeshCheckView check={meshCheck} />
         <FileCheckView check={fileCheck} />
         <div className="ce-dup">

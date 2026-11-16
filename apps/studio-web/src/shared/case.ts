@@ -20,6 +20,7 @@
 //
 // The project server for these calls is started without `--read-only`, one per open project, and the main process
 // calls only the tools of CASE_TOOLS on it (src/main/case/server.ts). The project home keeps its own read-only server.
+import type { CancelOptions } from './work.js';
 
 /** The one IPC channel main uses to hand the preload script the case port (main -> renderer only). */
 export const CASE_PORT_CHANNEL = 'studio.case-port';
@@ -193,10 +194,18 @@ export type CaseRequest =
   | { readonly op: 'create'; readonly id: number; readonly name: string; readonly source: NewCaseSource }
   | { readonly op: 'duplicate'; readonly id: number; readonly path: string; readonly name: string }
   | { readonly op: 'check'; readonly id: number; readonly path: string }
-  | { readonly op: 'forget'; readonly id: number; readonly session: string };
+  | { readonly op: 'forget'; readonly id: number; readonly session: string }
+  /**
+   * F-832 (G21): cancels the save or check of request `target`. A check is answered `cancelled` at once (the engine's
+   * project server has no way to stop a tool call, so its result is dropped when it comes). A save is cancelled only
+   * while nothing has been sent to the engine's `edit_case`; once it has, the save completes and its own reply says
+   * so (a file is written whole or not at all, by the engine). The reply's result is `{cancelled: boolean}`: whether
+   * `target` was a save or check still going.
+   */
+  | { readonly op: 'cancel'; readonly id: number; readonly target: number };
 
 export type CaseOp = CaseRequest['op'];
-export const CASE_OPS = ['state', 'sources', 'prepare', 'attach', 'status', 'conflict', 'save', 'create', 'duplicate', 'check', 'forget'] as const satisfies readonly CaseOp[];
+export const CASE_OPS = ['state', 'sources', 'prepare', 'attach', 'status', 'conflict', 'save', 'create', 'duplicate', 'check', 'forget', 'cancel'] as const satisfies readonly CaseOp[];
 
 export interface CaseError {
   /**
@@ -206,7 +215,7 @@ export interface CaseError {
    * `timeout`, or the engine's own code (1003 invalid, 1004 refused path, 1200 changed since read, 1201 lock busy, 1202
    * not found, ...).
    */
-  readonly code: 'bad_request' | 'no_project' | 'not_bound' | 'changed' | 'not_from_file' | 'not_configured' | 'no_port' | 'timeout' | 'engine' | number;
+  readonly code: 'bad_request' | 'no_project' | 'not_bound' | 'changed' | 'not_from_file' | 'not_configured' | 'no_port' | 'timeout' | 'engine' | 'cancelled' | number;
   readonly message: string;
   readonly data?: unknown;
 }
@@ -228,11 +237,15 @@ export interface CaseBridge {
   status(session: string): Promise<CaseReply<CaseStatus>>;
   /** The editor's changes beside the file's values now, when the file changed since it was read. */
   conflict(session: string): Promise<CaseReply<ConflictView>>;
-  /** `onto: 'opened'` writes only if the file is as it was read; `'current'` writes onto the file as it is now. */
-  save(session: string, onto: 'opened' | 'current'): Promise<CaseReply<SaveOutcome>>;
+  /**
+   * `onto: 'opened'` writes only if the file is as it was read; `'current'` writes onto the file as it is now. F-832:
+   * `options.onCancel` receives the function that cancels this save (the port's `cancel`; see there what it can undo).
+   */
+  save(session: string, onto: 'opened' | 'current', options?: CancelOptions): Promise<CaseReply<SaveOutcome>>;
   create(name: string, source: NewCaseSource): Promise<CaseReply<CreatedCase>>;
   duplicate(path: string, name: string): Promise<CaseReply<CreatedCase>>;
-  check(path: string): Promise<CaseReply<FileCheck>>;
+  /** F-832: `options.onCancel` receives the function that cancels this check. */
+  check(path: string, options?: CancelOptions): Promise<CaseReply<FileCheck>>;
   forget(session: string): Promise<CaseReply<null>>;
 }
 

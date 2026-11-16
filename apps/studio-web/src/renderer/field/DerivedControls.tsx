@@ -141,6 +141,8 @@ export function useArrows(
   nCells: number,
   on: boolean,
   tagBase: string,
+  /** F-832: where the arrows are made (the field worker); without it, here. */
+  glyphsOf?: (surface: SurfaceData, components: readonly (Float32Array | null)[], layers: Layers, nCells: number) => Promise<Glyphs>,
 ): ArrowsState {
   const [state, setState] = useState<ArrowsState>({ kind: 'off' });
   const storeKey = `${store.route}\u0000${store.path}`;
@@ -168,13 +170,22 @@ export function useArrows(
         }
         comps[k] = r.result.values;
       }
-      setState({ kind: 'on', glyphs: vectorGlyphs(surface, comps, layers, nCells), snapshot });
+      let glyphs: Glyphs;
+      try {
+        glyphs = glyphsOf ? await glyphsOf(surface, comps, layers, nCells) : vectorGlyphs(surface, comps, layers, nCells);
+      } catch (e) {
+        if (!live) return;
+        setState({ kind: 'error', message: `The arrows could not be made: ${e instanceof Error ? e.message : String(e)}` });
+        return;
+      }
+      if (!live) return;
+      setState({ kind: 'on', glyphs, snapshot });
     })();
     return () => {
       live = false;
       void cancelLoads(tag);
     };
     // `store` is named by storeKey
-  }, [storeKey, snapshot, surface, layers, nCells, on, tagBase, need]);
+  }, [storeKey, snapshot, surface, layers, nCells, on, tagBase, need, glyphsOf]);
   return state;
 }

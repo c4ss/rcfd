@@ -153,6 +153,7 @@
 /* ---- field ------------------------------------------------------------------------------------------------------ */
 
 .ws-field {
+  position: relative; /* F-832: the progress of opening a run lies over its top */
   min-width: 0;
   min-height: 0;
   display: flex;

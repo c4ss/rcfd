@@ -8,6 +8,7 @@
 // this item writes nothing to the folder. The renderer never names a tool or a file: it asks for the operations below,
 // and the main process checks every message on the port (src/main/project/bridge.ts). The page can open a folder only
 // through the folder dialog of the main process or from the recent list the main process keeps.
+import type { CancelOptions } from './work.js';
 
 /** The one IPC channel main uses to hand the preload script the project port (main -> renderer only). */
 export const PROJECT_PORT_CHANNEL = 'studio.project-port';
@@ -267,10 +268,16 @@ export type ProjectRequest =
   | { readonly op: 'refresh'; readonly id: number }
   | { readonly op: 'dismiss'; readonly id: number }
   /** F-807: a run-control action (src/shared/actions/runs.ts) with its parameters; the reply's result is a RunActionResult. */
-  | { readonly op: 'action'; readonly id: number; readonly action: string; readonly params: Readonly<Record<string, unknown>> };
+  | { readonly op: 'action'; readonly id: number; readonly action: string; readonly params: Readonly<Record<string, unknown>> }
+  /**
+   * F-832 (G21): cancels the opening of a folder that is going (`opening` in the state): the project open before stays
+   * open, the recent list is not touched, and a project server started for it is stopped. The reply's result is
+   * `{cancelled: boolean}` (false when nothing was being opened).
+   */
+  | { readonly op: 'cancel'; readonly id: number };
 
 export type ProjectOp = ProjectRequest['op'];
-export const PROJECT_OPS = ['state', 'pick', 'open', 'forget', 'close', 'refresh', 'dismiss', 'action'] as const satisfies readonly ProjectOp[];
+export const PROJECT_OPS = ['state', 'pick', 'open', 'forget', 'close', 'refresh', 'dismiss', 'action', 'cancel'] as const satisfies readonly ProjectOp[];
 
 export interface ProjectError {
   /** `bad_request` (the message has the wrong shape), `not_recent` (open of a folder the recent list does not hold). */
@@ -294,10 +301,13 @@ export interface ProjectBridge {
   state(): Promise<ProjectState>;
   onState(listener: (state: ProjectState) => void): number;
   offState(id: number): void;
-  /** Shows the folder dialog of the main process and opens the folder chosen. */
-  pick(): Promise<ProjectReply<PickResult>>;
-  /** Opens a folder of the recent list (any other path is refused with `not_recent`). */
-  open(path: string): Promise<ProjectReply<null>>;
+  /**
+   * Shows the folder dialog of the main process and opens the folder chosen. F-832: `options.onCancel` receives the
+   * function that cancels the opening (the project port's `cancel`).
+   */
+  pick(options?: CancelOptions): Promise<ProjectReply<PickResult>>;
+  /** Opens a folder of the recent list (any other path is refused with `not_recent`). F-832: `options` as for pick. */
+  open(path: string, options?: CancelOptions): Promise<ProjectReply<null>>;
   /** Removes a folder from the recent list. */
   forget(path: string): Promise<ProjectReply<null>>;
   /** Closes the open project (stops its project server). */

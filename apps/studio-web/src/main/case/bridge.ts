@@ -50,6 +50,7 @@ const FIELDS: Record<CaseRequest['op'], string> = {
   duplicate: 'name,path',
   check: 'path',
   forget: 'session',
+  cancel: 'target',
 };
 
 /** Checks one message from the port. Anything not exactly a CaseRequest is refused, with the reason. */
@@ -73,6 +74,7 @@ export function parseCaseRequest(raw: unknown): ParsedCase {
   if ('hash' in raw && !text(raw['hash'], 200)) return bad(`${o}: the hash must be a non-empty string`);
   if ('name' in raw && !text(raw['name'], MAX_NAME_CHARS)) return bad(`${o}: the name must be a non-empty string of at most ${MAX_NAME_CHARS} characters`);
   if (o === 'save' && raw['onto'] !== 'opened' && raw['onto'] !== 'current') return bad("save: onto is 'opened' or 'current'");
+  if (o === 'cancel' && !isId(raw['target'])) return bad('cancel: target must be the id of a request');
   if (o === 'create') {
     const s = raw['source'];
     if (!isPlainObject(s) || Object.keys(s).sort().join(',') !== 'kind,name' || (s['kind'] !== 'template' && s['kind'] !== 'example') || !text(s['name'], MAX_PATH_CHARS)) {
@@ -86,6 +88,8 @@ export function parseCaseRequest(raw: unknown): ParsedCase {
 /** Serves one port: requests in, replies out. Ends when the port closes. */
 export class CasePortBridge {
   private disposed = false;
+  /** F-832: the saves and checks going, by request id, with what cancels them. */
+  private readonly going = new Map<number, { readonly op: 'save' | 'check'; readonly controller: AbortController; readonly cancelled: () => void }>();
   /** Requests refused by parseCaseRequest (for tests and diagnostics). */
   refused = 0;
 
@@ -100,6 +104,8 @@ export class CasePortBridge {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    for (const g of this.going.values()) g.controller.abort();
+    this.going.clear();
     try {
       this.port.close();
     } catch {
@@ -125,6 +131,43 @@ export class CasePortBridge {
     }
     const r = parsed.request;
     const e = this.editor;
+    if (r.op === 'cancel') {
+      const g = this.going.get(r.target);
+      if (g) {
+        g.controller.abort();
+        g.cancelled();
+      }
+      this.reply(r.id, { ok: true, result: { cancelled: g !== undefined } });
+      return;
+    }
+    // F-832: a save or a check can be cancelled while it is going (`cancel` above)
+    let signal: AbortSignal | undefined;
+    if (r.op === 'save' || r.op === 'check') {
+      const controller = new AbortController();
+      signal = controller.signal;
+      let answered = false;
+      const settle = (reply: CaseReply) => {
+        if (answered) return;
+        answered = true;
+        this.going.delete(r.id);
+        this.reply(r.id, reply);
+      };
+      this.going.set(r.id, {
+        op: r.op,
+        controller,
+        // a check is answered at once (its result, when the engine gives it, is dropped); a save answers for itself
+        cancelled: () => {
+          if (r.op === 'check') settle({ ok: false, error: { code: 'cancelled', message: 'The check was cancelled; its result is not shown.' } });
+        },
+      });
+      try {
+        const result = r.op === 'save' ? await e.save(r.session, r.onto, signal) : await e.check(r.path, signal);
+        settle({ ok: true, result });
+      } catch (err) {
+        settle({ ok: false, error: caseError(err) });
+      }
+      return;
+    }
     try {
       let result: unknown = null;
       switch (r.op) {
@@ -146,17 +189,11 @@ export class CasePortBridge {
         case 'conflict':
           result = await e.conflict(r.session);
           break;
-        case 'save':
-          result = await e.save(r.session, r.onto);
-          break;
         case 'create':
           result = await e.create(r.name, r.source);
           break;
         case 'duplicate':
           result = await e.duplicate(r.path, r.name);
-          break;
-        case 'check':
-          result = await e.check(r.path);
           break;
         case 'forget':
           e.forget(r.session);
@@ -164,11 +201,13 @@ export class CasePortBridge {
       }
       this.reply(r.id, { ok: true, result });
     } catch (err) {
-      const error: CaseError =
-        err instanceof CaseRefusal
-          ? { code: err.code, message: err.message, ...(err.data !== undefined ? { data: err.data } : {}) }
-          : { code: 'engine', message: err instanceof Error ? err.message : String(err) };
-      this.reply(r.id, { ok: false, error });
+      this.reply(r.id, { ok: false, error: caseError(err) });
     }
   }
+}
+
+function caseError(err: unknown): CaseError {
+  return err instanceof CaseRefusal
+    ? { code: err.code, message: err.message, ...(err.data !== undefined ? { data: err.data } : {}) }
+    : { code: 'engine', message: err instanceof Error ? err.message : String(err) };
 }

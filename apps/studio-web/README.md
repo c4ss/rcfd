@@ -925,6 +925,96 @@ Decisions taken in building F-828 (options, the recommendation followed; each re
   snapshot (`rcfd-runner rerun <id>` or `start_run {from_run}`, proposed); `status.json` gives `time` with no unit, so
   the Runs view's "Time, s" caption is the Studio's word, not the engine's (shown as such in the provenance).
 
+## Responsiveness and cancellable work (F-832, G21)
+
+### The registered limits
+
+Written here before the measurement code (and in ADR 0801, addendum 9); `src/shared/work.ts` holds the same numbers
+and the tests import them from there. Changing one needs the maintainer, like a G9 limit.
+
+| Name | Value | What it bounds |
+|---|---|---|
+| `LONG_TASK_LIMIT_MS` | 100 ms | any one task on the renderer's main thread (a `longtask` entry) while a run is opened, fields are loaded and the scrubber moves |
+| `LONG_FRAME_LIMIT_MS` | 150 ms | any one animation frame in the same window (a `long-animation-frame` entry: its tasks, style, layout and paint) |
+| `PROGRESS_AFTER_MS` | 300 ms | an operation still going after this shows its progress and a Cancel; a shorter one shows nothing |
+
+How they were chosen:
+
+- 100 ms per task: while a task runs, nothing else on the page answers, not even the Cancel button or the scrubber's next
+  key. 100 ms is the classic limit for a reaction to feel immediate (Card, Moran and Newell's 0.1 s; the same figure as
+  the "respond within 100 ms" input budget of web performance practice), so a key pressed during the longest allowed
+  task is still answered in time. It is also two thirds of G9's P5 frame limit (150 ms), leaving the rest of a frame for
+  the GPU write and the draw, and twice the 50 ms at which Chromium starts reporting a task as long, so ordinary React
+  renders of the 1440 x 900 workspace (10 to 40 ms) are not counted against it.
+- 150 ms per frame: G9's P5 already says "no frame > 150 ms" while scrubbing; the frame limit is that number, applied to
+  every frame of the measurement, not just the scrub requests.
+- 300 ms before progress shows: below it, progress would appear and vanish (noise; G22: the normal state carries no
+  words); above it, anything long says so well before the 1 s at which a person loses the sense of an uninterrupted
+  flow (Nielsen). It is the `QUIET_MS` F-810 chose for scrubbing, so the field viewport keeps its behaviour, and it lies
+  above every scrub frame measured in ADR 0801 addendum 6 (1e6 cells p99 75 ms, max 92 ms; 4e6 cells p99 159 ms), so
+  scrubbing at those sizes never shows progress, while a first picture of 1e6 cells (P7, up to 1.5 s) or the opening
+  of a project does.
+
+### What is built
+
+- **One mechanism for long operations.** `src/renderer/work/work.ts` is the work tracker: every operation that may take
+  long begins a work there and ends it when it is done, failed or cancelled. A work still going after
+  `PROGRESS_AFTER_MS` is shown by `WorkProgress` (`src/renderer/work/WorkProgress.tsx`) in its own surface as one row:
+  an indeterminate bar drawn as DESIGN.md's "not yet" hatch moving (still under reduced motion), a few words, and
+  Cancel. Nothing is rendered for a shorter work (G22). Cancel aborts the work's `AbortSignal` and runs the work's own
+  undo. The operations: opening a project (the project home), opening a run (the run workspace), opening a store and
+  loading a field (the field viewport, both bulk routes), checking or saving a case and checking a mesh (the case
+  editor).
+- **How a cancel crosses a door.** `contextBridge` copies objects, so an `AbortSignal` would arrive dead. The caller
+  passes `options.onCancel` instead (`CancelOptions`, `src/shared/work.ts`); the preload script calls it with the
+  function that cancels that request, and functions do cross as proxies. The bridges' key sets stay as they were (the
+  e2e tests pin them). The data door already cancelled by tag (F-806); the project port gained `cancel`, and the case
+  port gained `cancel {target}`.
+- **What a cancel undoes.**
+  - Opening a project: the project open before stays open; the recent list is not written; no failure is shown. A
+    cancel before the engine's project server is started starts nothing. After it, the server's start finishes (the
+    engine cannot stop it half way) and the late session is closed.
+  - Opening a run: the run selected before is selected again, with its picture and stop. With none before, nothing is
+    selected and the workspace stops choosing one for you until you pick one. The store's request is cancelled through
+    the data door. The histories (`run.series`) are dropped, because the run port has no cancel.
+  - A field load: the picture shown before stays, the same pixels. The line goes back to the stop of that picture, and
+    playing and Follow live stop. The request is cancelled through the data door: a queued one is never sent, and a
+    started one's result is dropped.
+  - Saving a case: a cancel that comes before anything has been sent to the engine's `edit_case` writes nothing (the
+    file's bytes are unchanged) and the changes stay pending. Once `edit_case` has been sent, the save completes and
+    reports itself as usual. The engine writes a file whole or not at all, so the outcome is never half a file.
+  - Checking the saved file: no result is shown, and a result shown before stays. The engine's `check_case_headless`
+    finishes anyway, and it writes nothing.
+  - Checking a mesh: the reply is dropped. The service has no way to stop `mesh.check`.
+- **The main thread does no data work.** The arrays the GPU draws (a corner position per triangle, the bounding box and
+  sphere, a scalar per corner, the shown range) are made in a worker (`src/renderer/field/prepare.worker.ts`, client
+  `prepare.ts`) from `surface.ts`'s unchanged arithmetic. So are F-809's mesh layers and vector arrows (`derived.ts`,
+  unchanged). Values go there and come back transferred. The decoding was already off the main thread: the data
+  bridge reads and decodes in the main process.
+- **The proof.** `tests/e2e/responsiveness.spec.ts` (below) and `tests/e2e/cancel.spec.ts` (each operation cancelled
+  while it runs, and checked to leave nothing partial; screenshots of the progress at 1440 x 900 in
+  `test-results-visual/f832/`), plus `tests/unit/work.spec.ts`.
+
+### The long-task test
+
+`tests/e2e/responsiveness.spec.ts` runs the packaged Studio at 1440 x 900, with a `PerformanceObserver` on `longtask`
+and `long-animation-frame` installed before anything is measured. It opens a project and then a run of 1e5 cells
+(`RCFD_F832_SIZE=1e6` gives a run of 1e6 cells, by hand). It scrubs through the run's 20 snapshots, one stop at a time
+and then with a held key, changes the field, and loads fields by both bulk routes (R1 through `f447_bench serve`, R2
+on the field viewport's page). First it runs a probe: a deliberate 130 ms task, which must be recorded. The test fails
+on any task over `LONG_TASK_LIMIT_MS`, and on any frame over `LONG_FRAME_LIMIT_MS` that the renderer's thread held up
+(`blockingDuration` over 0). A frame whose tasks were all short and whose rendering came late is reported, not failed.
+It makes up to three passes, each in a fresh window, and passes on the first clean one. A task that the Studio's own
+code makes recurs in every pass. A stall caused by the machine's other load does not. The entries, their phases and
+the machine's load go to `test-results-visual/f832/long-tasks.json`.
+
+### The tests' delay
+
+`RCFD_STUDIO_TEST_DELAY` is a JSON object such as `{"data": 4000, "projectOpen": 4000, "caseCheck": 4000, "caseSave": 4000}`.
+It adds a delay, in milliseconds, before the engine is asked (`src/main/work/delay.ts`), so the e2e tests can cancel an
+operation while it is running on any machine. A cancel during the delay sends nothing to the engine. The variable is unset outside the
+tests, and then nothing waits.
+
 ## Security (G10)
 
 - The renderer is sandboxed (`app.enableSandbox()` and the window's settings), context-isolated, with Node integration
