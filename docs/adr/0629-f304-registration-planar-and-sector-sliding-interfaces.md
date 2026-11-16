@@ -300,3 +300,31 @@ tree (F-303); the compressible solver; parallel runs.
   standing instruction of 2026-11-11 (take the recommendation).
 - **Q2. Offset range.** (a) One period, re-imaging as a follow-up (taken); (b) re-imaging now (a solver operation that turns the
   rotor's cell vectors and their history between two steps). Taken (a) on the standing instruction.
+
+## Amendment 1 (2026-11-16, written after the registered run and before any corrected run)
+
+The registered run (once, release, two test threads, 2.8 s for the eight flow tests; the K unit tests before it, once, 0.1 s)
+met every check except two, with one cause:
+
+| Id | Limit | Measured |
+| --- | --- | --- |
+| P1 (c1) | `abs(Q_I - Q_in) / Q_in <= 1e-10` | `2.00e0` |
+| P9 (c1, net flux part) | `abs(Q_I - Q_in) / Q_in <= 1e-10` | `2.00e0` (its GCL `1.05e-14` and continuity `5.83e-15` met) |
+
+Diagnosis (from the printed numbers; nothing re-run): `Q_I` is defined (M7, and the test) as the flux **out of the rotor**
+through the interface. In SF the inflow enters the rotor (its inner patch) and leaves through the interface, so `Q_I = +Q_in`
+(S1 met, `1.06e-15`). In PF and PU the inflow enters the **stator** (the bottom `ymin` is a stator patch) and reaches the slider
+through the interface, so `Q_I = -Q_in`: the measured `2.00` is `abs(-Q_in - Q_in) / Q_in`. The registered measure has the
+wrong sign for the planar set-ups; a defective set-up, not a loss of mass (P2 `5.55e-16` and P3 `2.05e-12` met in PF). The
+registered negative control PN1 held (`1.468`) with the same sign error, so it is corrected too. P1 and P9 stay as
+registered, as ignored `*_known_miss` records with their limits and measured numbers.
+
+Corrected checks, registered here before they run (each run once, the set-ups unchanged):
+
+| Id | Set-up | Check | Limit |
+| --- | --- | --- | --- |
+| P1c (c1) | PF | every step `abs(Q_I + Q_in) / Q_in` (the flux into the slider through the interface, direct faces and rotor copies, against the inflow through the stator) | `<= 1e-10` (`1e3` solver tolerances) |
+| P9c (c1) | PU | every step `abs(Q_I + Q_in) / Q_in`, with P9's GCL and continuity | `<= 1e-10`, `<= 1e-12`, `<= 1e-9` |
+| PN1c (negative control of P1c) | PF | last step `abs(sum_direct phi + Q_in) / Q_in` | `>= 0.1` |
+
+The decision rule is unchanged, with P1c in place of P1 and P9c in place of P9.
