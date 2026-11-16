@@ -280,3 +280,97 @@ with their limits intact and the measured numbers in the ignore text. A correcte
 (the run is deterministic) and asserts A1, A1g, X1c, S2, Q, QX, F0, F2, B1, N1 and QN with the registered limits; it prints
 F1 (all steps, and from step 2) against its registered limit without asserting it (the record holds the miss). No other
 change.
+
+## Addendum 1: results (2026-11-16)
+
+Measured against the limits registered above and in amendment 1; no limit was changed. Release builds on Windows. The
+registration is e9bc2b44 (alone, first); the code and the tests 9413b5ea (committed before their run); amendment 1 f64fa647;
+the known-miss records and the corrected test fe8ad09e (committed before the corrected run). The registered run (T1, then
+the three tests, 20.3 s) was made once; one diagnostic run followed (amendment 1); the corrected test ran once (21.7 s, the
+same deterministic numbers as the registered run for every shared check).
+
+**Built as registered** (D1 to D3). `crates/rcfd-fv/src/sliding_periodic.rs` (shared solver file): module text lines 16 to
+19; `periodic_sliding_step` now calls `step_impl(.., false)`, and `periodic_sliding_step_coupled`, `PART_MEAN_TOL`,
+`Coupling`, `coupling_edges`, `coupled_solve`, `add_coupling` and the head of `step_impl`, lines 95 to 234; the M5 assignment,
+lines 306 to 321; the M6 assignment, lines 396 to 414; the unit test T1, lines 441 to 514. Nothing else in the body of the
+step changed. New `crates/rcfd-fv/tests/sliding_periodic_coupled_f721.rs` (4 tests: the corrected LS and PL run; the LS and
+B1u records are ignored). `docs/dynamic-mesh.md`: the periodic paragraph. `sliding.rs`, `pimple/`, `rcfd-mesh`, `rcfd-api`,
+goldens, hash tables and existing tests: untouched.
+
+### Results
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| A1 (a1) C `flux_residual`, steps 2 to 400; the 50 coincidence steps; the re-imaging steps | `<= 1e-12` each | `2.46e-14`; `2.57e-15`; `7.46e-16` (step 1, the start flux: `2.07e-1`, printed) | met |
+| A1g C `gcl_residual`, every step | `<= 1e-12` | `1.17e-14` | met |
+| X1 (set-up, as registered) re-imaging `{192, 384}` at offset 0 | exact | `{193, 385}` at offset `dt`; the coincidence pattern held | **missed** (arithmetic error, amendment 1) |
+| X1c (amendment 1) pattern; re-imaging `{193, 385}`, offset `dt`; steps 192, 384 within `1e-15` of `P` | exact; `1e-12`; `1e-15` | as stated; `0`; `2.2e-16`, `4.4e-16` (images 0, 1) | met |
+| S2 coupling edges per coincidence step; seam pairs | 8; 2 if `k mod 6 == 0` else 1 | 8 on all 50 (7 + 1 on 42, 6 + 2 on 8) | met |
+| Q (a2) sector step from the annulus's state against the annulus step: old flux; mesh flux | `<= 1e-10` each | `2.22e-14`; `1.56e-13` | met |
+| QX nearest centres on the Q-steps; one-to-one | `<= 1e-9` | `1.73e-15`; yes | met |
+| F0 cell match every step | `<= 1e-9` | `1.45e-15`, one-to-one | met |
+| F1 (a3) `max abs(u_C - u_A) / U_in`, 400 steps | `<= 3e-2` | `3.494e-2` (step 1; base B the same); coincidence steps `1.94e-2`; from step 2 `2.67e-2` | **missed** |
+| F2 (a3) rms at the last step | `<= 1.5e-2` | `8.63e-3` | met |
+| B1 (a4) coupled = base bit for bit off coincidences; differing on the coincidence steps | 350 equal, 50 differ | 350, 50 | met |
+| B1u (a4, stricter) coupled = base on every step of F-720's CS and CP | bit-equal | differ on every coincidence step (25, 81), by `<= 4.8e-16` / `3.2e-15` of `max abs(S_f)` in the old flux (diagnosis) | **missed** (amendment 1) |
+| B2 (a4) existing suites, unedited | pass | `rcfd-fv` lib 110/6 (109 before plus T1), `sliding_periodic_f304` 8/2, `sliding_reimaging_f704` 12/2, `sliding_periodic_coincidence_f720` 4/0 (its N1 still holds: the default is unchanged), `sliding_coincidence_f710` 3/0; `rcfd-mesh` lib 77/2; `rcfd-api` `baseline_hashes` 3/1 | met |
+| B3 (a4) diff of `crates/` | `sliding_periodic.rs` and the new test file only | as stated | met |
+| A2 (supporting) PL coupled `flux_residual` from step 2 | `<= 1e-12` | `4.37e-15` (base on the coincidence steps `1.88e-4`, printed) | met |
+| T1 coupling edges at `r = pi/72`, `r = 0`; residual | 7 + 1, 6 + 2; `<= 1e-12` | as stated; `4.2e-16`, `2.1e-16` | met |
+| N1 (control) base B `flux_residual` on the 50 coincidence steps | `>= 1e-6` each | `3.98e-4` to `2.19e-3` | held |
+| QN (control) Q with the base step | `>= 1e-6` | `1.82e-2` | held |
+
+Printed, no limit: the annulus's own `flux_residual` on its coincidence steps `7.5e-16` (F-710); C against B (the coupling's
+effect on the velocity) `4.15e-4 U_in`; base B against the annulus `3.494e-2 U_in` (the same as C: F1's maximum is the
+step-1 transient). Correction to amendment 1's text (not a limit): it said the diagnosis printed at most `1.93e-2` from step
+2; that diagnosis printed only every 50th step and each new maximum, and the corrected test's full maximum from step 2 is
+`2.67e-2`.
+
+### Mutations (scratch copy `w49i-work/f721-scratch/mut` of fe8ad09e, script `mutate.py`, log `mutations.log`, target `target-mut`)
+
+| Mutation | Must fail | Caught by |
+| --- | --- | --- |
+| MU1 coupled path never taken | A1 (and Q) | A1 (`2.19e-3`), Q (`1.82e-2`), B1 (no step differs), A2 (`1.88e-4`), T1 |
+| MU2 seam pairs left out | Q (A1 registered not to fail) | Q (`5.49e-3`), T1; A1 met (`2.46e-14`), as registered |
+| MU3 seam partner `+x` | A1 or Q | A1 (`1.07e-2`), Q (`1.10e-2`), A2 (`5.56e-4`) |
+| MU4 threshold removed | B1u | **not by B1u** (it already misses at the base); caught by Q's mesh flux (`2.70e-3`): without the threshold the GCL solve of SS couples on rounding-level part means and moves the sliver fluxes away from the annulus's |
+| MU5 coupling values set, not added | A1 or Q | A1 (`6.52e-2`), Q (`6.48e-2`), A2 (`4.57e-2`) |
+
+Five of five caught, MU4 by a different check than registered. The file was restored and compared after each.
+`cargo fmt -p rcfd-fv --check` clean; `cargo clippy --release -p rcfd-fv --all-targets -- -D warnings` clean. Not run: the
+whole workspace suite (the lead's gate).
+
+### Decision
+
+By the registered rule: A1 met, but F1 (a3) missed, the set-up check X1 missed as registered (corrected X1c met), B1u
+missed and MU4 caught only by another check: **partial**. What is shown: a1 (divergence-free to `2.5e-14` on every step from
+the second, `2.6e-15` on the 50 coincidence steps) and a2 (the sector's coupled step equals the full annulus's coupled step
+to `2e-14` from the same state, so the extension to direct faces, wrap pairs and seam pairs is the annulus's coupling seen
+in one sector). a4 holds where no coincidence occurs. a3 misses by the step-1 start transient at the rotor seam next to the
+modulated inlet, the same for the base sector and unrelated to the coincidences. The coupling is opt-in, so
+`periodic_sliding_step` itself is unchanged (Q1, open).
+
+### Remaining questions
+
+1. **Q1 (open, not taken): the default.** Options: (a) switch `periodic_sliding_step` to the coupled path, with F-720's N1
+   test becoming an ignored record (it changes default results on coincidence steps and an existing test: the maintainer's
+   approval); (b) keep it opt-in. Recommendation (a), after question 3, for consistency with F-710's `sliding_step`.
+2. **F1.** Options: (a) a follow-up that registers a limit for the sector-against-annulus difference under this inlet from
+   a derivation that includes the start transient at the seam (or starts both runs from a state consistent with the inlet),
+   and runs it once; (b) accept F2 and Q as the a3 evidence. Recommendation (a); Q already shows that the step matches the
+   annulus to rounding, so the remaining difference is the solver's treatment of the seam faces (ADR 0629 Q4).
+3. **The threshold scale (B1u, MU4).** A threshold relative to the largest target does not keep the base path when every
+   target is rounding (uniform flows). Options: (a) scale it by a flux scale of the graph's faces (for example the largest
+   mapped face flux) in both `sliding_step` and the periodic step, so that rounding-level means never couple; (b) leave it
+   (the changes are rounding, `<= 1e-13`). Recommendation (a), as a follow-up with its own registration, since it touches
+   F-710's `sliding_step` (default results).
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> ADR 0641, 2026-11-16: periodic sliding at coinciding nodes for flows without the parts' symmetry. New opt-in rcfd_fv::sliding_periodic::periodic_sliding_step_coupled (the same arguments as periodic_sliding_step, which is unchanged): when a part of the graph of direct faces and wrap pairs keeps a target mean above 1e-10 of the largest target, the GCL closure and the remap are solved together with the faces between the parts, internal faces and seam pairs (8 edges per coincidence step on the 60-degree sector, the quotient of F-710's coupling on the full annulus). On the sector pair SS with an inlet (1 + 0.5 sin 6 theta) x_hat and dt = rotor pitch / 8 over 400 steps (50 coincidence steps, two re-imagings) the remapped old flux is divergence-free to 2.5e-14 on every step from the second (limit 1e-12; the base 4.0e-4 to 2.2e-3 on the coincidence steps); the sector step built from the full annulus's state equals the annulus's step to 2.2e-14 (old flux) and 1.6e-13 (mesh flux), the base step 1.8e-2; off coincidences the coupled step equals the base bit for bit (350 of 350 steps). Against the full-annulus run of ADR 0216 in lockstep: rms 8.6e-3 U_in at the end (limit 1.5e-2), but the largest difference 3.49e-2 U_in against the registered 3e-2, reached on step 1 by the start transient at the rotor seam next to the modulated inlet, the same for the base sector (known miss, diagnosed; 2.7e-2 from step 2). Also missed: a registered re-imaging-step set-up check (an arithmetic error, FRAC_PI_3 is one ulp above pi/3; corrected check met) and a check that the coupled step equals the base on F-720's uniform runs at coincidence steps too (they differ by rounding, 3e-15: the threshold is relative to rounding-level targets). Every F-304, F-704, F-720 and F-710 test and baseline_hashes pass unedited. Five of five mutations caught (one by another check than registered). Open: making the coupling the default of periodic_sliding_step (changes F-720's N1 test; maintainer).
+
+> Follow-up proposed: "Threshold scale of the coupled interface solves". Deps F-721, F-710. Acceptance: the part-mean threshold of sliding_step and periodic_sliding_step_coupled is scaled by a flux scale of the interface faces rather than by the largest target, registered from a derivation; the coupled step equals the base step bit for bit on every step of the uniform flows of ADR 0638 and ADR 0640 (coincidence steps included), and every result of ADR 0638 and ADR 0641 at coincidences with a non-symmetric flow is kept within registered limits; then periodic_sliding_step is switched to the coupled path with the maintainer's approval (ADR 0640's N1 test becomes an ignored record). Every limit not stated here is registered in the ADR before the run.
+
+> Follow-up proposed: "Sector against full annulus with a non-axisymmetric inlet". Deps F-721. Acceptance: the lockstep of ADR 0641 (sector SS and the full annulus of ADR 0216, inlet periodic in the pitch, steps through node coincidences) with a limit on the largest velocity difference derived before the run to include the start transient at the seams (or from a start state consistent with the inlet), met on every step; the seam faces' orthogonal coupling (ADR 0629 Q4) identified as the source of the remaining difference or ruled out. Every limit not stated here is registered in the ADR before the run.

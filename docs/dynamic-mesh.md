@@ -42,7 +42,13 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   coincide (F-720, ADR 0640) the interface graph falls into parts here too, but a uniform flow invariant under the motion
   (axial on a sector, any on a planar slider) gives every part a zero target, so the step is unchanged and the uniform state
   is kept to `1e-13` on those steps; a flow without the parts' symmetry leaves the parts' means in the remapped old flux
-  (`flux_residual` up to `1e-3` on those steps), which F-710's coupling does not yet cover on this path.
+  (`flux_residual` up to `1e-3` on those steps), which `periodic_sliding_step` does not correct. Since F-721 (ADR 0641)
+  `periodic_sliding_step_coupled` (opt-in, the same arguments) couples the parts through the internal faces and the seam
+  pairs between them, the quotient of F-710's coupling on the full annulus: on the 60-degree sector with an inlet periodic
+  in the pitch but not in the coincidence spacing the remapped old flux stays divergence-free to `2.5e-14` on every step
+  from the second (50 coincidence steps, two re-imagings), and its step data built from the full annulus's state equal the
+  annulus's to `2e-14` (old flux) and `1.6e-13` (mesh flux); off coincidences it is the base step bit for bit. The default
+  `periodic_sliding_step` keeps the base path (ADR 0641 Q1).
 * Local remeshing of tetrahedral meshes is in the library since F-247 (ADR 0215), for the compressible solver in a box
   with planar walls; the case tree does not use it yet (ADR 0215 Q1).
 * Overset (chimera) meshes in the library only (F-134, ADR 0219): one component mesh moving rigidly over a static
