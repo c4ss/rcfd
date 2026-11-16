@@ -123,3 +123,7 @@ cheaply with a visible sentence and tests asserted visible text. From now on tho
 tooltips, help and the palette, tests read them by role and name, and visible words are for exceptions. Every F-8xx
 acceptance clause that asks for words ("says what is missing", "names what is lost", "state in words") is read under
 G22.
+
+The maintainer then chose a visible-word budget per surface (option (a) of three: per surface, rather than one global
+budget or no test): each surface's budget of chrome words at rest is set from its screenshots once it is quieted, a
+test counts them from the DOM, and raising a budget needs the maintainer's word.

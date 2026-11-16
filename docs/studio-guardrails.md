@@ -169,7 +169,10 @@ must act on. Everything G6, G8, G18 and G19 ask to be said in words is still sai
 or focus detail, the help on demand or the command palette, not as standing text on the screen. Tests check those words
 by role and accessible name, so G13 holds without painting a sentence for the test to read. G6's disclaimers, failed
 runs and known misses stay visible: they are exceptions by definition. A surface that grows adds no standing prose for
-its normal state; a feature that needs a sentence to be understood at rest is redesigned, not annotated.
+its normal state; a feature that needs a sentence to be understood at rest is redesigned, not annotated. Each surface has
+a budget of visible chrome words at rest (labels, notes, hints and empty-state text; not data, disclaimers or
+exceptions), set from its screenshots once the surface is quieted and approved by the maintainer; a test counts them
+from the DOM and fails past the budget, and raising a budget needs the maintainer's word.
 
 ## Open (for the maintainer)
 
