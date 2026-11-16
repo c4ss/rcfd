@@ -189,7 +189,7 @@ or B not measured in full; the miss named. **todo**: A1 missed and no cause esta
 (and `xmax`, `ymin`, `zmin`, `zmax`); `box_3d` requires every patch to be written. No step of C3 was made, so nothing of B2
 was measured. The test `b2_three_d_walls_only_default_against_corrected` stays as an ignored record. Corrected set-up,
 registered here before it runs, run once: **C3c** = C3 with `[boundaries.xmin]`, `xmax`, `ymin`, `zmin`, `zmax` each
-`velocity = "fixed"` (zero), as ADR 0638's neighbour test `adapt_case_f342.rs` T-3 writes them. **B2c**: as B2 on C3c, the
+`velocity = "fixed"` (zero), as the existing test `adapt_case_f342.rs` T-3 (F-342) writes them. **B2c**: as B2 on C3c, the
 same limit `<= 1e-12`, the bit equality reported.
 
 **B1 and B3: how the default is flipped.** The settings tree stores every default in its data (`SettingsTree::get` reads
