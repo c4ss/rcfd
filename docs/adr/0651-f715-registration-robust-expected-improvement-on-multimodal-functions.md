@@ -187,3 +187,83 @@ fires, A4), `bayes::minimise` with `BayesOptions { seed, n0: Some(10), ..Default
 `restart: None`: every evaluated point bit-equal, and different from the run with `restart: Some(Restart::default())` on seed 2
 (so the check can fail). Run once; then R4 is run once against it. The decision rule is unchanged with A2b and A2d together in
 the place of A2b for R4.
+
+## Addendum 1 (2026-11-16): results
+
+Code: ed5e4bbf (the restart in `bayes.rs`, the test file), then the A8b test (amendment 1), 73d67a4d (clippy in the test file,
+the same checks; the fast tests rerun on it gave the same lines), the A2d test (amendment 2). Each registered check ran once;
+logs in `f715-scratch/logs` (`run_a1.log`, `run_a2b.log`, `run_a2a.log`, `run_a2c.log`, `run_fast.log`, `run_a8b.log`,
+`run_a2d.log`, `clippy.log`, `clippy2.log`, `mutations.log`, `mut_*.log`). Release profile throughout.
+
+### Results
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| A1 Hartmann 6 with the restart, seeds 1 to 10 | >= 9 of 10; E2 0 | **9 of 10** (first hits 48, 167, 55, 41, 52, 147, 54, 50, 166; seed 10 best -3.20312); E2 0; 367 s | yes |
+| A1r record | recorded | restart picks per seed 100, 45, 98, 103, 91, 44, 92, 102, 36, 32; the three rescued seeds (2, 6, 9) reach the target at 147 to 167 | recorded |
+| A2a F-698 fast tests, unedited | pass | f698_surrogate 19 passed (3 ignored records not run) | yes |
+| A2b F-698 O2 hit list on the F-715 code | exactly [48, -, 55, 41, 52, -, 54, 50, -, -] | [48, -, 55, 41, 52, -, 54, 50, -, -]; 291 s | yes |
+| A2c lib `design::`, f697 | pass | 76 passed (3 ignored); 22 passed | yes |
+| A2d (amendment 2) default `restart` is `None`; default and explicit `None` bit-equal; differs from the restart on seed 2 | all three | true, true, true | yes |
+| A3 classifier off, imputation at m + s | pooled <= 0.30; >= 14 of 20 | 0.035; 20 of 20 | yes |
+| NC3 classifier and imputation off | pooled > 0.30 | 0.862 (0 of 20 at the target) | yes |
+| A4 Branin with the restart | >= 18 of 20; median <= 35 | 20 of 20; 28 (as ADR 0621 O1) | yes |
+| A5 failure disc with the restart | >= 18 of 20; each <= 0.25 | 20 of 20; worst 0.040 | yes |
+| A6 restart picks outside the basin; fired | 0 violations; >= 1 | A4: 115 picks, 0; A5: 286 picks, 0 | yes |
+| A7 workers 1 and 8; shuffled observations | bit-equal; bit-equal | true; true | yes |
+| A8 ledger provenance, seed 1 | equal | 0 and 0: met, but vacuous (amendment 1) | yes (vacuous) |
+| A8b (amendment 1) seed 2 | equal; >= 1 | 10 and 10 | yes |
+| B1 fmt, clippy, files | clean; as stated | clean (`cargo fmt -p rcfd-api --check`, `cargo clippy -p rcfd-api --all-targets -- -D warnings`); `git diff d40cd665 --stat`: `bayes.rs`, the new test, this ADR, `design-loop.md`, `reference-data.md` | yes |
+
+Seed 10 is the one miss (A1 allows one): it stays at -3.20312 with 32 restart picks, the fewest of all seeds. From the record
+alone (no further run): between restart picks the plain EI rises above the trigger again and pulls the search back near the
+old basin, so this seed spends the fewest evaluations outside it. The smoke rescues came as late as 188 of 200, so the margin of
+the rule within the budget is thin; that was registered as the estimate.
+
+### Mutations
+
+| Id | Mutation | Caught by |
+|---|---|---|
+| R1 | trigger never fires | A1 (6 of 10, the plain hit list exactly), A6 fired (0 picks), A8b |
+| R2 | pick scored by the objective process of the step, not the fresh one | **survived** A1 (10 of 10, rescues at 141 to 194; registered doubt). On seeds 1 to 10 the basin exclusion with the incumbent outside it is enough; the smoke S4 (1 of 2) was on two seeds only |
+| R3 | basin exclusion of candidates dropped | A6 (A4: 151 of 153 restart picks inside the basin; A5: 279 of 280) |
+| R4 | `restart` defaulting to `Some` | **survived** A2b and the F-698 fast tests (amendment 2); caught by A2d |
+| M6 | imputation at m - s | A3 (pooled 0.832, 3 of 20) |
+| R5 | `delta` in the unit cube without the length scales | A6 fired and A8b (0 restart picks: a radius of 2 in the unit cube covers the box, so no point is outside and the restart never fires; not the "inside" clause expected) |
+
+Control: the unmutated copy passes every non-ignored test (`run_fast.log`, `run_fast_after_clippy.log`).
+
+### Deviations
+
+* A8 was vacuous at seed 1; amendment 1 added A8b at seed 2 before its run.
+* A2b could not see the default (the test sets `restart` explicitly); amendment 2 added A2d before its run and before R4 was
+  run against it.
+* The F-698 heavy records O2/O3 and R1/R2 were not re-run as such: A2b repeats O2 (the GP part) on the new code; O3 (CMA-ES,
+  DE) and R1/R2 (the fan, 12 minutes) do not touch the changed code path, which A2d shows is the default one.
+* The fast tests were run a second time after the clippy edit of the test file (same checks, same lines).
+
+### Decision
+
+By the registered rule with amendments 1 and 2: every check met (A1 9 of 10, at the limit), and R1, R3, R4 (by A2d), R5 and M6
+caught; R2 survived as a registered doubt. **done** (library, opt-in). The claim is Hartmann 6 on ten seeds; the parameters
+`tau` and `rho` were fixed from smoke runs on the same function.
+
+### Remaining questions (taken on the maintainer's standing instruction of 2026-11-11; the recommendation is given in each)
+
+1. R2 survived: the fresh process may not be needed. Options: (a) keep it (it did 20 of 20 in the smoke where the S4 variant
+   did 1 of 2); (b) drop it for the simpler basin exclusion. Recommend (a) until a second multimodal function (Shekel 10, or
+   Hartmann 6 on more seeds) decides between them, in a follow-up.
+2. Default on or off: off. Recommend keeping it off until the follow-up of question 1 and the fan R1 set-up with the restart are
+   run; turning it on changes F-698's recorded picks.
+3. Hyperparameter averaging (S1, Laplace draws) did not help; recommend not pursuing it before MCMC draws are justified by a
+   function where the length-scale posterior is wide.
+4. A test that pins the default bits of every F-698 driver loop (a hash of the O1 seed 1 points) would have caught R4 directly;
+   recommend it as part of the follow-up, not here.
+
+## For the lead: roadmap entries
+
+> Proposed status: done
+
+> Follow-up of F-698 (ADR 0621, 2026-11-15). ADR 0651, 2026-11-16. DONE (library, opt-in). design::bayes gains BayesOptions::restart (default None, so every F-698 result and default bit is unchanged): when the best expected improvement falls below 1e-4 of the spread of the evaluated values, the incumbent's basin (an ellipsoid of radius 2 in the fitted length scales) is set aside and the point is chosen by expected improvement of a fresh process fitted to the points outside it, times the feasibility and failure probabilities, below the best of them; stateless, so ledger order, resume and worker counts keep their bits. Hyperparameter averaging by Laplace draws was tried in a disclosed smoke run and did not help. Checks: Hartmann 6 (n0 30, budget 200, seeds 1 to 10) reaches the minimum within 1 percent on 9 of 10 runs with the restart (plain EI 6 of 10; the rescued seeds at 147 to 167 evaluations, seed 10 stays at -3.2031); the F-698 O2 hit list is reproduced exactly on the new code and the F-698 fast tests pass unedited; with the failure classifier off, imputation at m + s keeps the failed share at 0.035 (20 of 20 at the Branin target) where m - s gives 0.832 and no imputation 0.862, so the surviving F-698 mutation M6 is now caught; Branin and the failure disc with the restart unchanged in result (20 of 20, median 28; 20 of 20, worst failed share 0.04); every restart pick outside the basin; workers and observation order bit-equal; restart picks recorded in the ledger provenance. Two checks were corrected under recorded amendments (a vacuous ledger check, a default check that could not see the default). Four of six mutations caught by the registered checks and a fifth by the amended default check; the fresh-model choice survived, as registered. Not covered: other multimodal functions, the reduced-order fan with the restart, the parameters tau and rho beyond Hartmann 6 where they were fixed.
+
+> Follow-up proposed: Basin restart on a second multimodal function and on the fan. Deps F-715. Acceptance: on Shekel 10 or a registered second multimodal function, and on the F-698 R1 fan set-up, the restart of ADR 0651 with its registered tau and rho reaches the target on at least as many seeds as plain expected improvement, a check decides whether the fresh process of the restart is needed (the surviving mutation R2), and a hash of the default proposal points of the F-698 O1 run pins the default bits.
