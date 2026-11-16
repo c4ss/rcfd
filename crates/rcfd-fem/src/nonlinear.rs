@@ -620,6 +620,7 @@ fn hex8_evaluate(
             context,
             crate::nl_incompatible::IncompatibleStabilisation::Off,
             false,
+            false,
         ),
     }
 }
@@ -1046,6 +1047,7 @@ pub(crate) fn internal_force_field(
                 context,
                 model.incompatible_stabilisation_rule(),
                 model.incompatible_mode_update(),
+                model.incompatible_mode_warm_start(),
             )
             .map(|ev| ev.force)
         } else {
@@ -1144,6 +1146,7 @@ fn force_and_tangent(
                 context,
                 model.incompatible_stabilisation_rule(),
                 model.incompatible_mode_update(),
+                model.incompatible_mode_warm_start(),
             )?
         } else {
             let el = crate::element::element_for(ctx.kind);

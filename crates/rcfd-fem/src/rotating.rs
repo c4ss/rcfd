@@ -350,6 +350,9 @@ fn unit_centrifugal_model(model: &SolidModel, axis: Vec3, origin: Vec3) -> Resul
     copy.set_incompatible_mode_backtracking(model.incompatible_mode_backtracking());
     // ADR 0658 D1: and its decrease test (default false, the copy of before).
     copy.set_incompatible_mode_decrease(model.incompatible_mode_decrease());
+    // ADR 0660 D1, D2: and its warm start and trust-region step (default false, the copy of before).
+    copy.set_incompatible_mode_warm_start(model.incompatible_mode_warm_start());
+    copy.set_incompatible_mode_trust_region(model.incompatible_mode_trust_region());
     // ADR 0635 D2: and the force of a layup's first mass moment (default false, the copy of before).
     copy.set_layup_first_moment_force(model.layup_first_moment_force());
     let points = crate::mat_ortho::uses_point_materials(model);

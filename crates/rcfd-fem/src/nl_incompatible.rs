@@ -124,6 +124,9 @@ pub enum IncompatibleModeUpdate {
     /// As `Backtracking`, and a trial with `|r(t)|_2^2 > (1 - 2 c t) |r_j|_2^2`, `c =` [`DECREASE_FRACTION`], is halved as
     /// well, in the same sequence (ADR 0658 D1).
     BacktrackingWithDecrease,
+    /// The Levenberg-Marquardt step of ADR 0660 D2 (a trust region on the mode step): `d` minimises `|r - J d|_2^2 + mu
+    /// |d|_2^2`, accepted on the gain ratio of the merit `|r|_2^2 / 2` ([`TRUST_REGION_ACCEPT`]).
+    TrustRegion,
 }
 
 impl From<bool> for IncompatibleModeUpdate {
@@ -139,6 +142,16 @@ impl From<bool> for IncompatibleModeUpdate {
 /// The constant `c` of the sufficient-decrease test of the mode update (ADR 0658 arithmetic 4: the Armijo condition of the
 /// backtracking line search for nonlinear equations, Dennis and Schnabel 1983, cited from memory).
 pub const DECREASE_FRACTION: f64 = 1e-4;
+
+/// The initial scale-free damping `lambda_0` of the trust-region mode step, `mu = lambda max_i (J^T J)_ii` (ADR 0660
+/// arithmetic 5: a direction of singular value at least `1e-3` of the largest stays within one per cent of the Newton step).
+pub const TRUST_REGION_DAMPING: f64 = 1e-8;
+
+/// The smallest damping `lambda` of the trust-region mode step (ADR 0660 arithmetic 5).
+pub const TRUST_REGION_DAMPING_FLOOR: f64 = 1e-16;
+
+/// The gain ratio above which a trial of the trust-region mode step is accepted (ADR 0660 arithmetic 5, `eta`).
+pub const TRUST_REGION_ACCEPT: f64 = 1e-4;
 
 /// The deviatoric part of a Voigt stress (the mean of the normal components removed; ADR 0630 D1).
 fn deviatoric(s: [f64; 6]) -> [f64; 6] {
@@ -612,11 +625,36 @@ fn converged(
     context: &PointContext,
     pen: Option<&Penalty>,
     update: IncompatibleModeUpdate,
+    start: Option<[f64; MODES]>,
     mut record: Option<&mut Vec<ModeIterate>>,
 ) -> Result<([f64; MODES], Extended)> {
+    if update == IncompatibleModeUpdate::TrustRegion {
+        // ADR 0660 D2: a separate iteration; its iterates recorded as ModeIterate (halvings = rejections).
+        let mut trec = record.as_ref().map(|_| Vec::new());
+        let out = trust_region(
+            points,
+            material,
+            displacement,
+            state,
+            context,
+            pen,
+            start,
+            trec.as_mut(),
+        );
+        if let (Some(rec), Some(t)) = (record, trec) {
+            rec.extend(t.iter().map(|i| ModeIterate {
+                residual_norm: i.residual_norm,
+                residual_max: i.residual_max,
+                scale: i.scale,
+                halvings: i.rejections,
+            }));
+        }
+        return out;
+    }
     let mut v = vec![0.0; ALL];
     v[..NODES].copy_from_slice(displacement);
-    let mut alpha = [0.0; MODES];
+    // ADR 0660 D1: the warm start from the given modes (None: alpha = 0, the iteration of ADR 0608 D2).
+    let mut alpha = start.unwrap_or([0.0; MODES]);
     let mut last = f64::NAN;
     // ADR 0655 D1: the iterate before the last step and the step, for the backtracking; ADR 0658 D1: with the 2-norm of
     // the residual there (NaN without the decrease test).
@@ -669,6 +707,205 @@ fn converged(
         }
         for (a, d) in alpha.iter_mut().zip(&delta) {
             *a -= d;
+        }
+    }
+    Err(FemError::InvalidValue {
+        key: ITERATION_KEY,
+        reason: format!(
+            "the modes of an Incompatible Hex8 did not converge in {LOCAL_ITERATIONS} local iterations (relative mode residual {last:e}, ADR 0608 D2)"
+        ),
+    })
+}
+
+/// One accepted iterate of the trust-region iteration of the modes (ADR 0660 D2, for checks): as [`ModeIterate`], with the
+/// rejected trials of the step that led to it, the damping `lambda` and the gain ratio `rho` of that step (NaN at the start).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TrustRegionIterate {
+    /// `|r|_2` of the mode residual at the iterate.
+    pub residual_norm: f64,
+    /// `|r|_inf` of the mode residual at the iterate.
+    pub residual_max: f64,
+    /// The scale of the mode residual.
+    pub scale: f64,
+    /// The rejected trials of the step to this iterate.
+    pub rejections: usize,
+    /// The damping `lambda` of the accepted step (`mu = lambda max_i (J^T J)_ii`).
+    pub damping: f64,
+    /// The gain ratio `rho` of the accepted step.
+    pub gain: f64,
+}
+
+/// The mode block `J = K_aa` of an extended tangent.
+fn mode_block(k: &[f64]) -> [[f64; MODES]; MODES] {
+    std::array::from_fn(|i| std::array::from_fn(|c| k[(NODES + i) * ALL + NODES + c]))
+}
+
+/// ADR 0660 arithmetic 5: the damped least-squares step `d = argmin |[J; sqrt(mu) I] d - [r; 0]|_2` by Householder QR of
+/// the 18 x 9 stacked matrix; `None` if it is rank deficient or not finite.
+fn damped_step(j: &[[f64; MODES]; MODES], r: &[f64; MODES], mu: f64) -> Option<[f64; MODES]> {
+    const ROWS: usize = 2 * MODES;
+    let mut a = [[0.0; MODES]; ROWS];
+    let mut b = [0.0; ROWS];
+    a[..MODES].copy_from_slice(j);
+    b[..MODES].copy_from_slice(r);
+    let sm = mu.sqrt();
+    for (i, row) in a[MODES..].iter_mut().enumerate() {
+        row[i] = sm;
+    }
+    for c in 0..MODES {
+        let norm = a[c..].iter().map(|row| row[c] * row[c]).sum::<f64>().sqrt();
+        if norm.is_nan() || norm <= 0.0 || norm.is_infinite() {
+            return None;
+        }
+        let head = if a[c][c] > 0.0 { -norm } else { norm };
+        let mut v = [0.0; ROWS];
+        for (vi, row) in v[c..].iter_mut().zip(&a[c..]) {
+            *vi = row[c];
+        }
+        v[c] -= head;
+        let vv: f64 = v[c..].iter().map(|x| x * x).sum();
+        for col in c..MODES {
+            let s = 2.0 * v[c..].iter().zip(&a[c..]).map(|(vi, row)| vi * row[col]).sum::<f64>() / vv;
+            for (vi, row) in v[c..].iter().zip(a[c..].iter_mut()) {
+                row[col] -= s * vi;
+            }
+        }
+        let s = 2.0 * v[c..].iter().zip(&b[c..]).map(|(vi, bi)| vi * bi).sum::<f64>() / vv;
+        for (vi, bi) in v[c..].iter().zip(b[c..].iter_mut()) {
+            *bi -= s * vi;
+        }
+    }
+    let mut d = [0.0; MODES];
+    for i in (0..MODES).rev() {
+        let mut t = b[i];
+        for k in i + 1..MODES {
+            t -= a[i][k] * d[k];
+        }
+        if a[i][i] == 0.0 {
+            return None;
+        }
+        d[i] = t / a[i][i];
+    }
+    if d.iter().all(|x| x.is_finite()) {
+        Some(d)
+    } else {
+        None
+    }
+}
+
+/// ADR 0660 D2: the local iteration of the modes with the Levenberg-Marquardt step from `start` (`None`: `alpha = 0`). A
+/// trial `alpha_j - d` is accepted when its gain ratio `rho = (f(0) - f(trial)) / pred` exceeds [`TRUST_REGION_ACCEPT`],
+/// `f = |r|_2^2 / 2`, `pred = (|r|^2 - |r - J d|^2) / 2`; an inverted or non-finite trial is rejected. After a rejection or
+/// `rho < 1/4` the damping is multiplied by 4, after `rho > 3/4` divided by 4 (not below [`TRUST_REGION_DAMPING_FLOOR`]).
+/// At most [`MODE_HALVINGS`] rejections per step and [`LOCAL_ITERATIONS`] accepted steps; the convergence test of ADR 0608
+/// D2.
+#[allow(clippy::too_many_arguments)]
+fn trust_region(
+    points: &[ModePoint],
+    material: &Material,
+    displacement: &[f64],
+    state: &ElementState,
+    context: &PointContext,
+    pen: Option<&Penalty>,
+    start: Option<[f64; MODES]>,
+    mut record: Option<&mut Vec<TrustRegionIterate>>,
+) -> Result<([f64; MODES], Extended)> {
+    let mut v = vec![0.0; ALL];
+    v[..NODES].copy_from_slice(displacement);
+    let mut alpha = start.unwrap_or([0.0; MODES]);
+    v[NODES..].copy_from_slice(&alpha);
+    let mut ext = extended(points, material, &v, state, context, pen)?;
+    let mut lambda = TRUST_REGION_DAMPING;
+    let (mut rejections, mut used, mut gain) = (0, f64::NAN, f64::NAN);
+    let mut last = f64::NAN;
+    for it in 0..=LOCAL_ITERATIONS {
+        let r = mode_residual(&ext);
+        let rmax = r.iter().fold(0.0f64, |a, &b| a.max(b.abs()));
+        let rn = norm2(&r);
+        if let Some(rec) = record.as_deref_mut() {
+            rec.push(TrustRegionIterate {
+                residual_norm: rn,
+                residual_max: rmax,
+                scale: ext.mode_scale,
+                rejections,
+                damping: used,
+                gain,
+            });
+        }
+        if !rmax.is_finite() {
+            return Err(FemError::InvalidValue {
+                key: ITERATION_KEY,
+                reason: format!("the mode residual of an Incompatible Hex8 is not finite at local iteration {it}"),
+            });
+        }
+        if rmax <= LOCAL_TOLERANCE * ext.mode_scale {
+            return Ok((alpha, ext));
+        }
+        last = rmax / ext.mode_scale;
+        if it == LOCAL_ITERATIONS {
+            break;
+        }
+        let j = mode_block(&ext.tangent);
+        let dmax = (0..MODES)
+            .map(|c| j.iter().map(|row| row[c] * row[c]).sum::<f64>())
+            .fold(0.0f64, f64::max);
+        let f0 = 0.5 * rn * rn;
+        rejections = 0;
+        loop {
+            let mu = lambda * dmax;
+            let mut accepted = None;
+            let mut rho = f64::NEG_INFINITY;
+            if let Some(d) = damped_step(&j, &r, mu) {
+                let res: [f64; MODES] =
+                    std::array::from_fn(|i| r[i] - j[i].iter().zip(&d).map(|(jik, dk)| jik * dk).sum::<f64>());
+                let pred = 0.5 * (rn * rn - norm2(&res).powi(2));
+                let trial: [f64; MODES] = std::array::from_fn(|k| alpha[k] - d[k]);
+                v[NODES..].copy_from_slice(&trial);
+                match extended(points, material, &v, state, context, pen) {
+                    Ok(e) => {
+                        let ft = 0.5 * norm2(&mode_residual(&e)).powi(2);
+                        if pred > 0.0 {
+                            rho = (f0 - ft) / pred;
+                        }
+                        if rho.is_finite() && rho > TRUST_REGION_ACCEPT {
+                            accepted = Some((trial, e));
+                        }
+                    }
+                    Err(e) => {
+                        let inverted = matches!(&e, FemError::InvalidValue { key, .. } if *key == INVERSION_KEY);
+                        if !inverted {
+                            return Err(e);
+                        }
+                    }
+                }
+            }
+            match accepted {
+                Some((trial, e)) => {
+                    used = lambda;
+                    gain = rho;
+                    if rho < 0.25 {
+                        lambda *= 4.0;
+                    } else if rho > 0.75 {
+                        lambda = (lambda / 4.0).max(TRUST_REGION_DAMPING_FLOOR);
+                    }
+                    alpha = trial;
+                    ext = e;
+                    break;
+                }
+                None => {
+                    if rejections >= MODE_HALVINGS {
+                        return Err(FemError::InvalidValue {
+                            key: ITERATION_KEY,
+                            reason: format!(
+                                "the trust-region step of the modes of an Incompatible Hex8 was rejected {} times at local iteration {it} (|r|_2 {rn:e}, ADR 0660 D2)",
+                                MODE_HALVINGS + 1
+                            ),
+                        });
+                    }
+                    rejections += 1;
+                    lambda *= 4.0;
+                }
+            }
         }
     }
     Err(FemError::InvalidValue {
@@ -754,21 +991,62 @@ pub(crate) fn evaluate(
     context: &PointContext,
     stabilised: IncompatibleStabilisation,
     update: impl Into<IncompatibleModeUpdate>,
+    warm: bool,
 ) -> Result<Evaluation> {
     check_hex8_fields(coords, displacement)?;
     let points = mode_points(coords)?;
-    check_state(material, state, points.len())?;
+    // ADR 0660 D1: with the warm start, the state may carry the committed modes after the material state.
+    let split = if warm {
+        Some(warm_state(material, state, points.len())?)
+    } else {
+        check_state(material, state, points.len())?;
+        None
+    };
     let pen = penalty_if(stabilised, coords, &points, material, displacement, context)?;
-    let (_, ext) = converged(
-        &points,
-        material,
-        displacement,
-        state,
-        context,
-        pen.as_ref(),
-        update.into(),
-        None,
-    )?;
+    let update = update.into();
+    let (alpha, ext) = match &split {
+        None => converged(
+            &points,
+            material,
+            displacement,
+            state,
+            context,
+            pen.as_ref(),
+            update,
+            None,
+            None,
+        )?,
+        Some((material_state, start)) => {
+            let first = start.map(|s| {
+                converged(
+                    &points,
+                    material,
+                    displacement,
+                    material_state,
+                    context,
+                    pen.as_ref(),
+                    update,
+                    Some(s),
+                    None,
+                )
+            });
+            match first {
+                Some(Ok(found)) => found,
+                // ADR 0660 D1: no committed modes, or the warm iteration failed: the iteration from alpha = 0.
+                _ => converged(
+                    &points,
+                    material,
+                    displacement,
+                    material_state,
+                    context,
+                    pen.as_ref(),
+                    update,
+                    None,
+                    None,
+                )?,
+            }
+        }
+    };
     let factor = ModeFactor::new(&ext.tangent)?;
     let kt = &ext.tangent;
     let y = factor.solve(&mode_residual(&ext));
@@ -799,12 +1077,42 @@ pub(crate) fn evaluate(
     } else {
         None
     };
+    let mut trial_state = ext.state;
+    if warm {
+        // ADR 0660 D1: the converged modes after the material trial state.
+        trial_state.extend_from_slice(&alpha);
+    }
     Ok(Evaluation {
         force,
         tangent,
         stress: ext.stress,
-        state: ext.state,
+        state: trial_state,
     })
+}
+
+/// ADR 0660 D1: the material part of a warm element state and the committed modes, if present (a state of `points x
+/// state_size` values, or of nine more).
+fn warm_state(
+    material: &Material,
+    state: &ElementState,
+    points: usize,
+) -> Result<(ElementState, Option<[f64; MODES]>)> {
+    let n = points * material.state_size();
+    let values = state.values();
+    if values.len() == n {
+        Ok((ElementState::new(values.to_vec()), None))
+    } else if values.len() == n + MODES {
+        Ok((
+            ElementState::new(values[..n].to_vec()),
+            Some(std::array::from_fn(|k| values[n + k])),
+        ))
+    } else {
+        Err(FemError::FieldLength {
+            key: "state",
+            expected: n + MODES,
+            found: values.len(),
+        })
+    }
 }
 
 /// The converged modes (order `3 k + c`) and the Green-Lagrange strain at the points of the stiffness rule (Voigt,
@@ -856,6 +1164,7 @@ pub(crate) fn modes_and_strains_opt(
         pen.as_ref(),
         update.into(),
         None,
+        None,
     )?;
     Ok((alpha, ext.strain))
 }
@@ -880,6 +1189,7 @@ pub fn condensed_force_and_tangent(
         context,
         stabilised.into(),
         false,
+        false,
     )?;
     Ok((ev.force, ev.tangent.expect("tangent requested"), ev.stress))
 }
@@ -902,6 +1212,7 @@ pub fn condensed_force_and_tangent_backtracked(
         context,
         stabilised.into(),
         true,
+        false,
     )?;
     Ok((ev.force, ev.tangent.expect("tangent requested"), ev.stress))
 }
@@ -925,6 +1236,7 @@ pub fn condensed_force_and_tangent_update(
         context,
         stabilised.into(),
         update,
+        false,
     )?;
     Ok((ev.force, ev.tangent.expect("tangent requested"), ev.stress))
 }
@@ -957,10 +1269,106 @@ pub fn mode_iteration_record(
         context,
         pen.as_ref(),
         update,
+        None,
         Some(&mut rec),
     )
     .map(|(alpha, _)| alpha);
     Ok((rec, out))
+}
+
+/// [`mode_iteration_record`] from the modes `start` (ADR 0660 D1, for checks; `None`: from `alpha = 0`). With `TrustRegion`
+/// the iterates of [`trust_region_record`] (halvings: the rejected trials).
+#[allow(clippy::too_many_arguments)]
+pub fn mode_iteration_record_from(
+    coords: &[Vec3],
+    material: &Material,
+    displacement: &[f64],
+    state: &ElementState,
+    context: &PointContext,
+    stabilised: impl Into<IncompatibleStabilisation>,
+    update: IncompatibleModeUpdate,
+    start: Option<&[f64; MODES]>,
+) -> Result<ModeRecord> {
+    check_hex8_fields(coords, displacement)?;
+    let points = mode_points(coords)?;
+    check_state(material, state, points.len())?;
+    let pen = penalty_if(stabilised.into(), coords, &points, material, displacement, context)?;
+    let mut rec = Vec::new();
+    let out = converged(
+        &points,
+        material,
+        displacement,
+        state,
+        context,
+        pen.as_ref(),
+        update,
+        start.copied(),
+        Some(&mut rec),
+    )
+    .map(|(alpha, _)| alpha);
+    Ok((rec, out))
+}
+
+/// The modes and the accepted iterates of a trust-region iteration (ADR 0660 D2).
+pub type TrustRegionRecord = (Vec<TrustRegionIterate>, Result<[f64; MODES]>);
+
+/// The accepted iterates of the trust-region iteration of the modes of an Incompatible Hex8 (ADR 0660 D2, for checks) from
+/// `start` (`None`: `alpha = 0`), from the same iteration as the driver's evaluation, and its outcome.
+pub fn trust_region_record(
+    coords: &[Vec3],
+    material: &Material,
+    displacement: &[f64],
+    state: &ElementState,
+    context: &PointContext,
+    stabilised: impl Into<IncompatibleStabilisation>,
+    start: Option<&[f64; MODES]>,
+) -> Result<TrustRegionRecord> {
+    check_hex8_fields(coords, displacement)?;
+    let points = mode_points(coords)?;
+    check_state(material, state, points.len())?;
+    let pen = penalty_if(stabilised.into(), coords, &points, material, displacement, context)?;
+    let mut rec = Vec::new();
+    let out = trust_region(
+        &points,
+        material,
+        displacement,
+        state,
+        context,
+        pen.as_ref(),
+        start.copied(),
+        Some(&mut rec),
+    )
+    .map(|(alpha, _)| alpha);
+    Ok((rec, out))
+}
+
+/// The condensed force, tangent and stress of the driver's warm evaluation (ADR 0660 D1) and its trial state (the material
+/// trial state, then the nine converged modes).
+pub type WarmEvaluation = (Vec<f64>, ElementMatrix, Vec<[f64; 6]>, Vec<f64>);
+
+/// [`condensed_force_and_tangent_update`] with the warm start of ADR 0660 D1 (for checks): `state` the material state,
+/// optionally followed by the nine committed modes the iteration starts from.
+pub fn condensed_force_and_tangent_warm(
+    coords: &[Vec3],
+    material: &Material,
+    displacement: &[f64],
+    state: &ElementState,
+    context: &PointContext,
+    stabilised: impl Into<IncompatibleStabilisation>,
+    update: IncompatibleModeUpdate,
+) -> Result<WarmEvaluation> {
+    let ev = evaluate(
+        coords,
+        material,
+        displacement,
+        state,
+        true,
+        context,
+        stabilised.into(),
+        update,
+        true,
+    )?;
+    Ok((ev.force, ev.tangent.expect("tangent requested"), ev.stress, ev.state))
 }
 
 /// The compatible displacement gradient `H_c` and the mode part `F_m` at a point (ADR 0655 reading c2).
