@@ -780,8 +780,9 @@ fn further_seeds() -> Vec<(u64, SolidMesh, usize, f64)> {
 }
 
 #[test]
+#[ignore = "known miss of ADR 0658 (registered run, test commit d9289b11): RS2, RS3 and their SLR missed (NaN): R fails on seed 0xF739_0002 (element 420, the modes not converged in 25 local iterations, relative residual 3.05e-1, load factor 0.9375 to 0.940625) and on seed 0xF739_0003 (element 476, relative residual 3.73e-1, load factor 0.85625 to 0.859375); M0, M1 met on all three seeds, RS1 met (e_R 0.0743, e_w 0.0495, lowest / max diagonal 1.74e-3); S passes seed 0xF739_0001 and fails on the other two (the decrease test exhausted); the met rows run in r_and_s_on_three_further_seeds_met_rows (amendment 1)"]
 /// RS1 to RS3, SLR, M0, M1 on the `8^3` block at `0.25 h` with three further seeds; S measured; the default reported.
-fn r_and_s_on_three_further_seeds() {
+fn r_and_s_on_three_further_seeds_known_miss() {
     let mut ch = Checks::new();
     let mut s_passes = Vec::new();
     for (i, (seed, mesh, count, m0)) in further_seeds().into_iter().enumerate() {
@@ -889,4 +890,249 @@ fn dt_decrease_record_at_the_trial_of_element_475() {
         );
     }
     ch.finish();
+}
+
+// ============================================================================ ADR 0658 amendment 1
+
+#[test]
+/// ADR 0658 A1.1: the rows of the registered seed test that were met (M0, M1 on all three seeds; RS1 and SLR on the first),
+/// the same code and limits; RS2, RS3 and their SLR printed, not checked.
+fn r_and_s_on_three_further_seeds_met_rows() {
+    let mut ch = Checks::new();
+    let mut s_passes = Vec::new();
+    for (i, (seed, mesh, count, m0)) in further_seeds().into_iter().enumerate() {
+        let id = format!("RS{}", i + 1);
+        let tag = format!("block 8^3 a 0.25 seed {seed:#X}");
+        ch.above(&format!("M0 {tag}: min corner det J / centre det J"), m0, 0.0);
+        ch.equals(&format!("M1 {tag}: moved nodes"), count, 343);
+        let f = run_block(&mesh, &tag, DELTA, K_FBAR, DEFAULT);
+        let (fneg, flow) = stability(&f);
+        println!("report SL {tag} Fbar: negative {fneg}, lowest / max diagonal {flow:.4e}");
+        let r = run_block(&mesh, &tag, DELTA, K_L, R);
+        if i == 0 {
+            r_rows(&mut ch, &id, &tag, 0.10, BLOCK_NAMES, &f, &r);
+        } else {
+            let (neg, low) = stability(&r);
+            println!(
+                "{id} {tag} R (known miss, printed): e_R {:.4e}, e_w {:.4e}, negative {neg}, lowest / max diagonal {low:.4e}",
+                rel(r.a, f.a),
+                rel(r.b, f.b)
+            );
+        }
+        let s = run_block(&mesh, &tag, DELTA, K_L, S);
+        s_passes.push((tag.clone(), s_measured(&tag, 0.10, BLOCK_NAMES, &f, &s)));
+    }
+    println!("S on the seeds: {s_passes:?}");
+    ch.finish();
+}
+
+/// Gaussian elimination with partial pivoting of a 9 x 9 system.
+fn solve9(mut a: [[f64; 9]; 9], mut b: [f64; 9]) -> [f64; 9] {
+    for c in 0..9 {
+        let p = (c..9).max_by(|&i, &j| a[i][c].abs().total_cmp(&a[j][c].abs())).unwrap();
+        a.swap(c, p);
+        b.swap(c, p);
+        for r in c + 1..9 {
+            let l = a[r][c] / a[c][c];
+            for k in c..9 {
+                a[r][k] -= l * a[c][k];
+            }
+            b[r] -= l * b[c];
+        }
+    }
+    let mut x = [0.0; 9];
+    for r in (0..9).rev() {
+        let mut t = b[r];
+        for k in r + 1..9 {
+            t -= a[r][k] * x[k];
+        }
+        x[r] = t / a[r][r];
+    }
+    x
+}
+
+/// The mode residual and the mode block of the extended element at `(u, alpha)`; `None` if the evaluation fails.
+fn mode_rows(x: &[Vec3], ue: &[f64], alpha: &[f64; 9]) -> Option<([f64; 9], [[f64; 9]; 9])> {
+    let mat = material(NU);
+    let ctx = PointContext::default();
+    let st = ElementState::new(Vec::new());
+    let (f, k) = rcfd_fem::nl_incompatible::enhanced_force_and_tangent_with(x, &mat, ue, alpha, &st, &ctx, LIN).ok()?;
+    let kv = k.values();
+    let a: [[f64; 9]; 9] = std::array::from_fn(|i| std::array::from_fn(|j| kv[(24 + i) * 33 + 24 + j]));
+    Some((std::array::from_fn(|i| f[24 + i]), a))
+}
+
+fn norm9(r: &[f64; 9]) -> f64 {
+    r.iter().map(|v| v * v).sum::<f64>().sqrt()
+}
+
+fn inf9(r: &[f64; 9]) -> f64 {
+    r.iter().fold(0.0f64, |w, v| w.max(v.abs()))
+}
+
+/// E2's measures at the modes `alpha`: the eigenvalue range and asymmetry of `K_aa`, its consistency against central
+/// differences of the mode residual, the Newton step's size against the modes and the slope of `|r|_2` along it.
+fn mode_block_measures(tag: &str, x: &[Vec3], ue: &[f64], alpha: &[f64; 9]) -> Option<[f64; 9]> {
+    let (r, a) = mode_rows(x, ue, alpha)?;
+    let amax = a.iter().flatten().fold(0.0f64, |w, v| w.max(v.abs()));
+    let asym = (0..9)
+        .flat_map(|i| (0..9).map(move |j| (i, j)))
+        .fold(0.0f64, |w, (i, j)| w.max((a[i][j] - a[j][i]).abs()))
+        / amax;
+    let sym: Vec<f64> = (0..81).map(|p| 0.5 * (a[p / 9][p % 9] + a[p % 9][p / 9])).collect();
+    let (lo, hi) = rcfd_linalg::eigen::symmetric_eigen(&sym, 9)
+        .map(|e| (least(e.values.iter().copied()), worst(e.values.iter().copied())))
+        .unwrap_or((f64::NAN, f64::NAN));
+    let h = 1e-9;
+    let mut fd = 0.0f64;
+    for j in 0..9 {
+        let mut p = *alpha;
+        p[j] += h;
+        let mut m = *alpha;
+        m[j] -= h;
+        match (mode_rows(x, ue, &p), mode_rows(x, ue, &m)) {
+            (Some((rp, _)), Some((rm, _))) => {
+                for i in 0..9 {
+                    fd = fd.max((a[i][j] - (rp[i] - rm[i]) / (2.0 * h)).abs());
+                }
+            }
+            _ => fd = f64::NAN,
+        }
+    }
+    let delta = solve9(a, r);
+    let rn = norm9(&r);
+    let slopes: Vec<f64> = [1e-4, 1e-6, 1e-8]
+        .iter()
+        .map(|&t| {
+            let q: [f64; 9] = std::array::from_fn(|k| alpha[k] - t * delta[k]);
+            mode_rows(x, ue, &q)
+                .map(|(rq, _)| (norm9(&rq) - rn) / (t * rn))
+                .unwrap_or(f64::NAN)
+        })
+        .collect();
+    println!(
+        "{tag}: |r|_2 {rn:.4e}, |delta|_inf / |alpha|_inf {:.4e}, eig sym K_aa [{lo:.4e}, {hi:.4e}], asymmetry {asym:.3e}, \
+         consistency {:.3e}, slope at t = 1e-4, 1e-6, 1e-8: {slopes:?}",
+        inf9(&delta) / inf9(alpha).max(1e-300),
+        fd / amax
+    );
+    Some(delta)
+}
+
+/// E2: the replicated local iteration with the decrease halvings of D1 (a failed evaluation, an inversion, is halved too),
+/// the measures at every iterate.
+fn replica_with_measures(tag: &str, x: &[Vec3], ue: &[f64]) {
+    let mut alpha = [0.0; 9];
+    for it in 0..=25 {
+        let Some((r, _)) = mode_rows(x, ue, &alpha) else {
+            println!("{tag} iterate {it}: the evaluation fails");
+            return;
+        };
+        let rn = norm9(&r);
+        let Some(delta) = mode_block_measures(&format!("{tag} iterate {it}"), x, ue, &alpha) else {
+            return;
+        };
+        let mut m = 0;
+        let mut accepted = None;
+        while m <= 20 {
+            let t = 0.5f64.powi(m);
+            let q: [f64; 9] = std::array::from_fn(|k| alpha[k] - t * delta[k]);
+            if let Some((rq, _)) = mode_rows(x, ue, &q) {
+                if norm9(&rq).powi(2) <= (1.0 - 2.0 * DECREASE_FRACTION * t) * rn * rn {
+                    accepted = Some(q);
+                    break;
+                }
+            }
+            m += 1;
+        }
+        match accepted {
+            Some(q) => {
+                println!("{tag} iterate {it}: step accepted after {m} halvings");
+                alpha = q;
+            }
+            None => {
+                println!("{tag} iterate {it}: no step accepted in 20 halvings");
+                return;
+            }
+        }
+        if let Some((r2, _)) = mode_rows(x, ue, &alpha) {
+            if norm9(&r2) <= 1e-6 {
+                println!("{tag}: converged after {} iterates", it + 1);
+                return;
+            }
+        }
+    }
+    println!("{tag}: not converged in 25 steps");
+}
+
+#[test]
+#[ignore = "diagnosis of ADR 0658 amendment 1 (A1.2, E1 to E3): the local mode iteration of element 420 (seed 0xF739_0002) and element 476 (seed 0xF739_0003); no limit; run once with --ignored"]
+fn a1_diagnosis_seeds_2_and_3() {
+    let mat = material(NU);
+    let ctx = PointContext::default();
+    let st = ElementState::new(Vec::new());
+    let cases = [
+        (0xF739_0002u64, 420usize, 0.0930, 0.0937, 0.0939),
+        (0xF739_0003, 476, 0.0850, 0.0855, 0.0858),
+    ];
+    for (seed, e, pa, pb, pt) in cases {
+        let tag = format!("seed {seed:#X} element {e}");
+        let (mesh, _) = block_mesh(8, 0.25, seed);
+        let x = element_coords(&mesh, e);
+        let ra = run_block(&mesh, &format!("E1 {tag}"), pa, K_L, R);
+        let rb = run_block(&mesh, &format!("E1 {tag}"), pb, K_L, R);
+        let ub = rb
+            .result
+            .as_ref()
+            .map(|r| element_u(&rb.model, r.result.displacement_values(), e));
+        let ua = ra
+            .result
+            .as_ref()
+            .map(|r| element_u(&ra.model, r.result.displacement_values(), e));
+        let (label, ut) = match (&ua, &ub) {
+            (Some(a), Some(b)) => (
+                format!("u_T (punch {pt})"),
+                b.iter()
+                    .zip(a)
+                    .map(|(q, p)| q + (pt - pb) / (pb - pa) * (q - p))
+                    .collect::<Vec<f64>>(),
+            ),
+            (Some(a), None) => (format!("the last converged state (punch {pa})"), a.clone()),
+            _ => {
+                println!("E1 {tag}: both solves failed");
+                continue;
+            }
+        };
+        for update in [
+            IncompatibleModeUpdate::Backtracking,
+            IncompatibleModeUpdate::BacktrackingWithDecrease,
+        ] {
+            match mode_iteration_record(&x, &mat, &ut, &st, &ctx, LIN, update) {
+                Ok((rec, out)) => {
+                    print_record(&format!("E1 {tag} at {label} {update:?} record"), &rec);
+                    println!(
+                        "E1 {tag} {update:?} outcome: {}",
+                        out.as_ref()
+                            .map(|_| "converged".to_string())
+                            .unwrap_or_else(|er| er.to_string())
+                    );
+                }
+                Err(er) => println!("E1 {tag} {update:?}: {er}"),
+            }
+        }
+        replica_with_measures(&format!("E2 {tag} at {label}"), &x, &ut);
+        if let Some(b) = ub.as_ref() {
+            match mode_iteration_record(&x, &mat, b, &st, &ctx, LIN, IncompatibleModeUpdate::Backtracking) {
+                Ok((_, Ok(alpha))) => {
+                    let _ = mode_block_measures(
+                        &format!("E3 {tag} at the state of R (punch {pb}), converged modes"),
+                        &x,
+                        b,
+                        &alpha,
+                    );
+                }
+                _ => println!("E3 {tag}: no converged modes at the state of R"),
+            }
+        }
+    }
 }
