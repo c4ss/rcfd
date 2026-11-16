@@ -488,7 +488,9 @@ fits a discrepancy correction that the next rounds use for their ranking:
   (squared exponential, F-698's kernel and factorisation) on the R2 residual, the nugget from the stated uncertainty, the
   hyperparameters fitted once per fit by maximum likelihood and held in every leave-one-out fold. Its leave-one-out residuals
   come from a closed form that includes the refit of the R2 coefficients, `e3_i = ((G r)_i + e2_i (G P)_ii) / G_ii`
-  (`G = C^-1`, `P` the hat matrix), and its predictive standard deviation from the same linear map. R3 needs `10 d` pairs and a
+  (`G = C^-1`, `P` the hat matrix), and its predictive standard deviation as the conditional variance `1 / G_ii` plus the
+  variance of the R2 refit, `|L^T q_i|^2` through the Cholesky factor (ADR 0656; equal to a double-double brute force within
+  1e-9 of the residual scale on noise-free fits). R3 needs `10 d` pairs and a
   residual above the rounding level, is chosen over R2 only by the one-standard-error rule, and is trusted only when, besides
   the conditions above, its 2-sigma leave-one-out coverage is at least 0.8. With `r3: None` every byte is as before.
 * Ledger: an `evaluation` entry for every low and high evaluation, one `fidelity_pair` (ADR 0632) per ok promotion with the

@@ -170,3 +170,101 @@ Mutations (scratch copy from `git archive` of the code commit, one at a time, th
 ## Addenda
 
 Results, amendments and the roadmap entries go here; nothing above is changed after a run.
+
+## Addendum 1: results (2026-11-16)
+
+Code: cc8a0f43 (the sd of D1 in `r3_core`, the new test `f734_r3_sd.rs`); registration aa00d354 before it. Library change only in
+`crates/rcfd-api/src/design/fidelity.rs`: the doc comment of `R3Loo::sd` (line 1101), the hat-matrix loop of `r3_core` keeps the
+coefficients it already computed (lines 1174 to 1186), and the sd lines (1192 to 1222) replace the `a_i^T C a_i` evaluation.
+Docs: `docs/design-loop.md` (one sentence in the R3 bullet). No shared solver file, golden, hash table, case key or MCP tool;
+`bayes.rs`, `fan_objective.rs`, `surrogate.rs` and `f718_fidelity_r3.rs` untouched.
+
+Runs (release profile throughout), each once: the registered run `f734-scratch/run1.log` (0.5 s); K-0652 and K3 fast
+`run_k.log`; the heavy record, `--lib` and docs_site `run_r.log`; mutations `mut.log` (script `mutate.py`, runner `mut_run.sh`,
+copy `mcopy` from `git archive cc8a0f43`; the unmutated copy passed with the same numbers).
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| V1 N1a sd vs double-double brute force | `<= 1e-8 rms(r)` | 1.33e-10 (smallest sd 6.97e-4 of rms(r)) | yes |
+| V2 ND final (36 pairs) | `<= 1e-8 rms(r)` | 9.22e-10 (smallest sd 2.54e-4 of rms(r)) | yes |
+| V3 N1b, N2 | `<= 1e-8 rms(r)` | 1.6e-15, 3.0e-16 | yes |
+| B0 reference `a_i . y` vs `e_i` | `<= 1e-8 rms(r)` | N1a 1.4e-10, N1b 1.1e-14, N2 2.8e-14, ND 1.1e-9 | yes |
+| B1 double-double vs double `a^T C a` (N1b, N2) | `<= 1e-12 rms(r)` | 2.3e-15, 6.1e-16 | yes |
+| E1 diff of `fidelity.rs` | only the sd lines, the loop binding, the doc | three hunks, as stated | yes |
+| K-0652 `f718_fidelity_r3` | 8 pass | 8 passed, the 4 ignored records not run; coverage N1a 1.000, N1b 0.950, ND rounds 4 to 6 1.000 (as in ADR 0652) | yes |
+| K3 `f699_fidelity` | pass | 17 passed (the file now holds 17 fast tests), 4 ignored; heavy `b_reduced_order_fan_heavy` passed (274.4 s) | yes |
+| R `--lib`, docs_site | pass | 141 passed (4 ignored); docs_site 2 passed | yes |
+| F fmt, clippy | clean | `cargo fmt -p rcfd-api --check` clean; `cargo clippy -p rcfd-api --all-targets -- -D warnings` clean | yes |
+| T time | `< 120 s` | 0.5 s | yes |
+| NC-S (diagnostic) double `a^T C a` of the accurate `a_i`, N1a | expected `> 1e-8` | **8.7e-11** (ND 5.3e-11) | not as expected (reported; no effect on the decision) |
+
+R3's published numbers do not change on any registered fit: `e`, `beta`, `mse`, `se` and `loglik` come from unchanged code, and no
+pair crossed the 2-sigma boundary (coverage 1.000, 0.950, 0.950, 1.000 as before).
+
+Mutations:
+
+| Id | Expected | Measured (largest V, of rms(r)) | Caught by |
+|---|---|---|---|
+| MS1 ADR 0652's `a_i^T C a_i` restored | V1 or V2 | N1a 1.31e-10, ND 8.1e-10, N1b 4.6e-15 | **survived** |
+| MS2 conditional variance only | V1 to V3 | 1.3e-2 to 3.1e-1 | V (N1a first) |
+| MS3 deletion correction dropped | at least one of V | 2.4e-3 to 6.9e-2 | V (N1a first) |
+| MS4 `q_i` not zeroed | at least one of V | 3.0e-3 to 8.2e-2 | V (N1a first) |
+| MS5 `L q` for `L^T q` | at least one of V | 1.1e-2 (N1a), 2.5e-1 (ND); N2 1.5e-13 | V (N1a first) |
+
+Four of five caught.
+
+### Diagnosis of MS1 and NC-S: the ADR 0652 miss was in its reference, not in the closed form
+
+MS1 survives and NC-S stays under its limit for the same reason. Against the double-double reference, ADR 0652's closed-form
+`sqrt(a_i^T C a_i)` is itself accurate to 1.3e-10 (N1a) and 8.1e-10 (ND) of rms(r), and the double quadratic form of an accurate
+`a_i` loses only 8.7e-11. The 6.3e-8 and 1.6e-8 of ADR 0652 amendment 1 are the error of its test's double brute force. That test
+forms each `a_i` by applying the brute-force predictor to the `n` unit vectors with double Gauss-Jordan solves of the 39 x 39
+covariance (condition about 2e9), so the error sits in that `a_i` and not in the summation. Two observations confirm it. First,
+K-0652 prints the same L3s numbers with the new sd as ADR 0652 did with the old (6.30e-8 for N1a, 1.62e-8 for ND), so the double
+reference differs from both closed forms by the same amount. Second, the double-double reference agrees with both closed forms
+within 1e-9. This corrects ADR 0652 amendment 1's diagnosis (that both evaluations lose about 1e-4 to cancellation in `a^T C a`):
+at these sizes the closed form did not lose measurable accuracy, but its reference did. ADR 0652 could not see this from the inside,
+because its two double references agreed with each other and neither was compared with the exact value; the double-double
+reference settles it. The registration's estimate that the cancellation was in the closed form was wrong. The limits were not
+changed.
+
+What the new form still gives: no difference of large terms anywhere in the evaluation (both terms are sums of squares, D1), so its
+accuracy does not depend on `|a_i|`; `O(n^2)` work per pair instead of `O(n^3)`; and the acceptance's accuracy clause met with a
+margin of 11 (ND) to 75 (N1a). The old form's accuracy at larger `n` or smaller jitter was not measured.
+
+### Deviations and what was not run
+
+No set-up or limit changed and there is no amendment. NC-S and MS1 came out against their expectation and are reported above.
+`f699_fidelity` now holds 17 fast tests (the registration said 16, the count in ADR 0622's addendum); all passed. Not run: the
+whole workspace and whole-crate integration suites (the daily gate, ADR 0653), and `baseline_hashes` (no shared solver file is
+touched). docs_site was run before the one-sentence `design-loop.md` edit and once more after it.
+
+### Decision by the registered rule
+
+**partial.** V1 and V2 (the accuracy clause), the evaluation without `a^T C a` (D1), and K-0652 and K3 (every ADR 0652 and ADR 0622
+check keeps its result) are met, as is every other check. MS1 survives, and under the rule a surviving mutation makes the item
+partial. The survival does not expose a gap in the new code. It shows that the old form was accurate too, so the acceptance's
+premise, that the old evaluation lost accuracy, came from a misdiagnosis in ADR 0652, which this item corrects.
+
+### Remaining questions (each with a recommendation)
+
+1. **Status.** Options: (a) partial, as the rule gives; (b) the lead records done, since every acceptance clause is met and the
+   surviving mutation only shows that the replaced form was not the faulty one. Recommendation: (a), by the rule, with a note
+   saying why. Nothing more is needed to settle the accuracy question.
+2. **ADR 0652's L3s records.** Its two `*_known_miss` records keep their limit and numbers (not edited). Options: (a) leave them,
+   with the F-718 note naming this correction; (b) a follow-up that swaps the L3s reference in `f718_fidelity_r3.rs` for the
+   double-double one. Recommendation: (a), because `f734_r3_sd.rs` already holds the check with the correct reference on the same
+   fits.
+3. **Keep the new form or the old.** Both are accurate here. Options: (a) keep the new one (no large intermediate terms, `O(n^2)`
+   per pair); (b) revert. Recommendation: (a), taken on the maintainer's standing instruction of 2026-11-11 (take the
+   recommendation).
+
+## For the lead: roadmap entries
+
+> Proposed status: partial
+
+> Follow-up of F-718 (ADR 0652, 2026-11-16). ADR 0656, 2026-11-16. PARTIAL (every acceptance clause met; one registered mutation survived because the replaced form proved accurate too). Library only, opt-in (behind TrustRule::r3, default None): R3's leave-one-out predictive standard deviation is now evaluated as the conditional variance 1/G_ii = 1/|L^-1 e_i|^2 plus the variance of the R2 refit |L^T q_i|^2 through the Cholesky factor (q_i from the deletion formula of least squares), both sums of squares, instead of a_i^T C a_i; the ADR derives it from first principles. Against a brute force in double-double arithmetic (about 32 digits) it agrees within 1.3e-10 (N1a) and 9.2e-10 (the driver's final fit) of the residual scale on the noise-free fits of ADR 0652 (limit 1e-8), and within 2e-15 with noise. Every ADR 0652 test and every ADR 0622 test (including the heavy fan record) passes, R3's published numbers and coverage are unchanged, and default runs never reach the changed code. Four of five mutations caught. The fifth, which restores ADR 0652's old a^T C a, also agrees with the double-double reference within 8.1e-10: the 6.3e-8 and 1.6e-8 misses of ADR 0652 came from that test's double-precision brute force (unit-vector solves at condition about 2e9), not from cancellation in the closed form. Verified on synthetic fits only (n up to 40, two parameters).
+
+> Note for F-718: the L3s misses recorded by ADR 0652 (6.3e-8 and 1.6e-8 of the residual scale) are errors of its double-precision brute-force reference; against a double-double reference the closed form agreed within 1.3e-10 and 8.1e-10 (ADR 0656, 2026-11-16).
+
+No follow-up is proposed (remaining question 2 recommends keeping ADR 0652's records as they are).
