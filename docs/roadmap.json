@@ -7416,9 +7416,9 @@
     "deps": [
       "F-719"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The punch block of ADR 0649 on the 8^3 mesh at 0.25 h (seed 0xF719_0008) with rule L: the cause of the inverted point at 67.5 per cent of the load located (the incompatible-mode field of the element against the compatible one along the path); the driver's line search, and an opt-in backtracking of the mode update when a point inverts, each measured on the same set-up; if one passes the load, reaction and displacement within the ADR 0636 tolerance (10 per cent) of the F-bar Hex8 and the loaded state positive definite; the plain element on the 4^3 mesh at 0.25 h reported; the default bits unchanged.",
-    "note": "Follow-up of F-719 (ADR 0649, 2026-11-16)."
+    "note": "Structural solver, intermediate tier. Follow-up of F-719 (ADR 0649 DB4). PARTIAL. ADR 0655, 2026-11-16: the inverted point of the stabilised incompatible-modes Hex8 (rule L) at the punch edge of the 8^3 block at 0.25 h (seed 0xF719_0008). Cause located: not the compatible field and not the converged enhanced field (both keep det F >= 0.88 along the path at element 476), but a Newton iterate of the element's local mode iteration from alpha = 0 overshooting into det F < 0 (the second iterate at -1.31 at the failing load), within a band of the path entered at 67.5 per cent of the load. New opt-in SolidModel::set_incompatible_mode_backtracking (default off; an inverted mode iterate halves its step, at most 20 times): no default bit changed (the bit records of ADR 0506, 0608, 0614, 0630 and the rcfd-api baseline hashes pass; with the opt-in, bitwise identical results on two set-ups that do not need it). Measured on the same set-up: the driver's line search alone fails as the default (0.675); the backtracking alone passes 0.675 but fails at 0.89 (element 475, the damped mode iteration not converged in 25 steps); the two together pass: punch reaction and corner displacement within 7.5 and 2.9 per cent of the F-bar Hex8, loaded state positive definite (reported, not a registered pass). The plain element on the 4^3 block at 0.25 h passes with the backtracking alone (6.9 and 3.8 per cent of F-bar), the same cause. One of five mutations of the backtracking caught by the registered checks (the others only change reported rows). Not covered: a sufficient-decrease test in the backtracking, the combination on other meshes and seeds, other materials. Follow-up F-739 (The line search with the backtracking of the incompatible-mode update as a registered remedy on distorted meshes (ADR 0655 question 1))."
   },
   {
     "id": "F-733",
@@ -7486,5 +7486,16 @@
     "status": "todo",
     "acceptance": "the maintainer's decision on ADR 0650 Q1 is applied; if the default is flipped, the transient split is guarded to cells whose component diagonals differ, so that symmetry-free 3-D transient results stay bit-identical; packed_bed, the settings hash tables and the goldens are re-registered with the maintainer's approval; and the 11 tests of ADR 0650 B3 and the transient_sources t3d test that was not run are rerun with their limits.",
     "note": "Follow-up of F-712 (ADR 0650, 2026-11-16)."
+  },
+  {
+    "id": "F-739",
+    "title": "The line search with the backtracking of the incompatible-mode update as a registered remedy on distorted meshes (ADR 0655 question 1)",
+    "phase": 9,
+    "deps": [
+      "F-732"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. Rule L with NewtonOptions::line_search and the opt-in backtracking of ADR 0655 on the eight distorted meshes of ADR 0649 and on the 8^3 block at 0.25 h with three further registered seeds: punch reaction, corner bulge, tip reaction and shortening within the ADR 0636 tolerances of the F-bar Hex8 and the loaded state positive definite; a sufficient-decrease test of the mode update measured beside it on the same set-ups (does the backtracking alone then pass); the mutations of the backtracking caught by the item's own checks; the default bits unchanged.",
+    "note": "Follow-up of F-732 (ADR 0655, 2026-11-16)."
   }
 ]
