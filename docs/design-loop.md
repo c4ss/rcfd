@@ -378,6 +378,8 @@ Records for objectives, surrogates and multi-fidelity or measured data (ADR 0632
   `objective` and `fitted` (`{id, version, hash}` of the objective that scored the entry, or of a fitted surrogate or correction).
 * The tier `measured` (`Fidelity::Measured`) and any entry with a `measured` source are written only to a private ledger
   (`Ledger::private`, refused for a path inside a repository tree) and refused by a public one; a public reader skips such lines.
+  A repository tree is the nearest ancestor directory holding `.git`, a `Cargo.toml` with `[workspace]`, `.hg`, `.svn` or an rcfd
+  project manifest `rcfd-project.json` (ADR 0647, `ledger::repository_marker`); the refusal names that directory and the marker.
   The MCP tools keep the three public tiers.
 * `ledger::fidelity_pair` builds the pair and discrepancy record of ADR 0622 (`m.low`, `m.high`, `m.diff`, `m.rel`, `m.pred`,
   with both entries as `parents`); `ledger::pair_by_params` pairs `ok` entries of two levels with bit-identical parameters and
