@@ -19,11 +19,10 @@
 //! fan.
 
 use super::ledger::{self, Entry, Fidelity, Identity, Ledger, Model, Outcome, Quantity, Source, Verdict};
-use super::optim::{projected_gradient, PgOptions, Stop};
 use super::rng::Rng;
 use super::sampling;
 use super::study::{parallel_map, Sense};
-use super::surrogate::{self, Kernel};
+use super::surrogate::{self, Gp, Kernel, ZeroMeanOptions};
 use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -973,21 +972,6 @@ fn se_of_sq(e: &[f64]) -> f64 {
 /// Jitter of R3 relative to the process variance (F-698's constant).
 pub const R3_JITTER: f64 = surrogate::JITTER;
 
-/// Scaled covariance `tau (R + J I) + diag(sig2)` of R3 (row-major).
-fn r3_cov(u: &[Vec<f64>], l: &[f64], tau: f64, sig2: &[f64]) -> Vec<f64> {
-    let n = u.len();
-    let mut c = vec![0.0; n * n];
-    for i in 0..n {
-        c[i * n + i] = tau * (1.0 + R3_JITTER) + sig2[i];
-        for j in 0..i {
-            let v = tau * surrogate::correlation(Kernel::SquaredExponential, &u[i], &u[j], l);
-            c[i * n + j] = v;
-            c[j * n + i] = v;
-        }
-    }
-    c
-}
-
 /// Inverse from a Cholesky factor, column by column (row-major).
 fn chol_inverse(chol: &[f64], n: usize) -> Vec<f64> {
     let mut g = vec![0.0; n * n];
@@ -1002,95 +986,32 @@ fn chol_inverse(chol: &[f64], n: usize) -> Vec<f64> {
     g
 }
 
-/// Zero-mean log marginal likelihood (without its constant) of `r` at `theta = (ln l_1.., ln tau)` and, when `grad`, its
-/// gradient in `theta`; `None` when the factorisation fails.
-fn r3_lik(u: &[Vec<f64>], r: &[f64], sig2: &[f64], theta: &[f64], grad: bool) -> Option<(f64, Vec<f64>)> {
-    let n = u.len();
-    let d = theta.len() - 1;
-    let l: Vec<f64> = theta[..d].iter().map(|v| v.exp()).collect();
-    let tau = theta[d].exp();
-    let c = r3_cov(u, &l, tau, sig2);
-    let chol = surrogate::cholesky(&c, n).ok()?;
-    let alpha = surrogate::solve_upper_t(&chol, n, &surrogate::solve_lower(&chol, n, r));
-    let value = -0.5 * r.iter().zip(&alpha).map(|(a, b)| a * b).sum::<f64>()
-        - (0..n).map(|i| chol[i * n + i].ln()).sum::<f64>();
-    if !value.is_finite() {
-        return None;
-    }
-    if !grad {
-        return Some((value, Vec::new()));
-    }
-    let g = chol_inverse(&chol, n);
-    let mut out = vec![0.0; d + 1];
-    // tau: dC = tau (R + J I); l_k: dC_ij = tau R_ij ((u_ik - u_jk) / l_k)^2 off the diagonal
-    let mut quad_t = 0.0;
-    let mut tr_t = 0.0;
-    for i in 0..n {
-        let dii = tau * (1.0 + R3_JITTER);
-        quad_t += alpha[i] * alpha[i] * dii;
-        tr_t += g[i * n + i] * dii;
-        for j in 0..i {
-            let dij = tau * surrogate::correlation(Kernel::SquaredExponential, &u[i], &u[j], &l);
-            quad_t += 2.0 * alpha[i] * alpha[j] * dij;
-            tr_t += 2.0 * g[i * n + j] * dij;
-            for k in 0..d {
-                let t = dij * ((u[i][k] - u[j][k]) / l[k]).powi(2);
-                out[k] += 2.0 * (alpha[i] * alpha[j] - g[i * n + j]) * t;
-            }
-        }
-    }
-    out[d] = quad_t - tr_t;
-    for v in &mut out {
-        *v *= 0.5;
-    }
-    Some((value, out))
-}
-
 /// Value and gradient of R3's zero-mean log marginal likelihood (without its constant) in scaled units: unit-box inputs
 /// `u`, residual `r`, stated standard uncertainties `sigma` (same scale), `theta = (ln l_1, .., ln l_d, ln tau)`
-/// (ADR 0652 D2; check K1).
+/// (ADR 0652 D2; check K1); F-698's zero-mean mode (ADR 0663). `None` when the factorisation fails or the value is not
+/// finite.
 pub fn r3_log_likelihood(u: &[Vec<f64>], r: &[f64], sigma: &[f64], theta: &[f64]) -> Option<(f64, Vec<f64>)> {
     let sig2: Vec<f64> = sigma.iter().map(|s| s * s).collect();
-    r3_lik(u, r, &sig2, theta, true)
+    let d = theta.len() - 1;
+    let l: Vec<f64> = theta[..d].iter().map(|v| v.exp()).collect();
+    let gp = Gp::zero_mean_with_hyper(u, r, &sig2, Kernel::SquaredExponential, &l, theta[d].exp()).ok()?;
+    let (v, g) = gp.log_likelihood_and_gradient(false);
+    v.is_finite().then_some((v, g))
 }
 
-/// Maximum-likelihood `theta` by F-698's multi-start pattern (ADR 0652 D2).
-fn r3_search(u: &[Vec<f64>], r: &[f64], sig2: &[f64], rule: &R3Rule) -> Option<Vec<f64>> {
-    let d = u.first().map_or(0, Vec::len);
-    let mut bx: Vec<(f64, f64)> = vec![(rule.l_bounds.0.ln(), rule.l_bounds.1.ln()); d];
-    bx.push((rule.tau_bounds.0.ln(), rule.tau_bounds.1.ln()));
-    let value = |t: &[f64]| r3_lik(u, r, sig2, t, false).map_or(f64::NEG_INFINITY, |v| v.0);
-    let mut starts: Vec<Vec<f64>> = vec![bx.iter().map(|(a, b)| 0.5 * (a + b)).collect()];
-    for p in sampling::latin_hypercube(rule.starts - 1, d + 1, rule.seed) {
-        starts.push(p.iter().zip(&bx).map(|(v, (a, b))| a + (b - a) * v).collect());
+/// The search options of R3's process (ADR 0652 D2, ADR 0663 D3): the squared exponential, `tau` as the process variance
+/// of the scaled residual, one worker.
+fn r3_options(rule: &R3Rule) -> ZeroMeanOptions {
+    ZeroMeanOptions {
+        kernel: Kernel::SquaredExponential,
+        starts: rule.starts,
+        refine: rule.refine,
+        iters: rule.iters,
+        l_bounds: rule.l_bounds,
+        sf2_bounds: rule.tau_bounds,
+        seed: rule.seed,
+        workers: 1,
     }
-    let vals: Vec<f64> = starts.iter().map(|t| value(t)).collect();
-    let mut order: Vec<usize> = (0..starts.len()).collect();
-    order.sort_by(|&a, &b| vals[b].total_cmp(&vals[a]).then(a.cmp(&b)));
-    let mut best: Option<(Vec<f64>, f64)> = None;
-    for &s in order.iter().take(rule.refine) {
-        let opts = PgOptions {
-            max_iters: rule.iters,
-            step: 0.1,
-            armijo: 1e-4,
-            max_halvings: 30,
-            x0: starts[s].clone(),
-        };
-        let mut ev = |t: &[f64], grad: bool| -> Result<(f64, Vec<f64>), Stop> {
-            match r3_lik(u, r, sig2, t, grad) {
-                None => Ok((f64::INFINITY, vec![0.0; d + 1])),
-                Some((v, g)) => Ok((-v, g.iter().map(|x| -x).collect())),
-            }
-        };
-        let (t, v) = match projected_gradient(&bx, &opts, &mut ev) {
-            Ok(res) if res.fitness.f.is_finite() => (res.x, -res.fitness.f),
-            _ => (starts[s].clone(), vals[s]),
-        };
-        if best.as_ref().is_none_or(|b| v > b.1) {
-            best = Some((t, v));
-        }
-    }
-    best.filter(|b| b.1.is_finite()).map(|b| b.0)
 }
 
 /// R3's leave-one-out result for one metric (ADR 0652 D3), in output units.
@@ -1150,25 +1071,22 @@ fn r3_core(
     }
     let rs: Vec<f64> = r.iter().map(|v| v / s).collect();
     let sig2: Vec<f64> = sigma.iter().map(|v| (v / s) * (v / s)).collect();
-    let (l, tau) = match hyper {
+    // ADR 0663 D3: the process is F-698's zero-mean mode with the absolute noise `sig2` (scaled units)
+    let gp = match hyper {
         Some((l, sf2)) => {
             if l.len() != d || l.iter().any(|v| !(v.is_finite() && *v > 0.0)) || !(sf2.is_finite() && sf2 > 0.0) {
                 return Err("hyperparameters not finite and positive".into());
             }
-            (l.to_vec(), sf2 / (s * s))
+            Gp::zero_mean_with_hyper(u, &rs, &sig2, Kernel::SquaredExponential, l, sf2 / (s * s))
         }
-        None => {
-            let t = r3_search(u, &rs, &sig2, rule).ok_or("no start of the likelihood search factorised")?;
-            (t[..d].iter().map(|v| v.exp()).collect(), t[d].exp())
-        }
-    };
-    let c = r3_cov(u, &l, tau, &sig2);
-    let chol = surrogate::cholesky(&c, n)
-        .map_err(|(i, p)| format!("covariance not positive definite (row {i}, pivot {p:e})"))?;
-    let g = chol_inverse(&chol, n);
-    let alpha = surrogate::solve_upper_t(&chol, n, &surrogate::solve_lower(&chol, n, &rs));
-    let loglik = -0.5 * rs.iter().zip(&alpha).map(|(a, b)| a * b).sum::<f64>()
-        - (0..n).map(|i| chol[i * n + i].ln()).sum::<f64>();
+        None => Gp::fit_zero_mean(u, &rs, &sig2, &r3_options(rule)),
+    }
+    .map_err(|e| e.trim_start_matches("gp: ").to_string())?;
+    let (l, tau) = (gp.length_scales().to_vec(), gp.process_variance());
+    let chol = gp.cholesky_factor();
+    let g = chol_inverse(chol, n);
+    let alpha = gp.weights();
+    let loglik = gp.log_likelihood();
     // hat matrix, column by column: P e_k = e_k - (residual of regressing e_k on X)
     let mut p = vec![0.0; n * n];
     // ADR 0656: the coefficients `b_k = H x_k` of the same regressions, `H = (X^T X)^-1 = sum_k b_k b_k^T`

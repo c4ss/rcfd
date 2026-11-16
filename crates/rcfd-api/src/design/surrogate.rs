@@ -4,6 +4,9 @@
 //! and Welch 1998, section 2). Dense Cholesky factorisation; inputs are points of the unit cube, outputs are standardised for
 //! the fit and mapped back. The model knows nothing of the ledger or the optimisers (`bayes` does).
 //!
+//! Opt-in (ADR 0663, F-735): a zero-mean mode with an absolute noise variance per observation and the process variance a
+//! hyperparameter, no standardisation (`Gp::zero_mean_with_hyper`, `Gp::fit_zero_mean`); rung R3 of `fidelity` uses it.
+//!
 //! Deterministic: a fit is a function of (inputs, outputs, options) only; the multi-start draws come from `Rng::new(seed)` in
 //! a fixed order and the starts are evaluated in index order (in parallel when `workers > 1`, results kept in index order).
 
@@ -79,6 +82,43 @@ impl Default for GpOptions {
     }
 }
 
+/// Options of [`Gp::fit_zero_mean`] (ADR 0663 D2): the search of [`Gp::fit`] over `(l, s_f^2)`, the process variance
+/// box in output units squared (the mode does not scale its outputs).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ZeroMeanOptions {
+    /// Kernel.
+    pub kernel: Kernel,
+    /// Starts of the likelihood search (the centre of the log box and `starts - 1` Latin-hypercube points).
+    pub starts: usize,
+    /// Starts refined by the gradient search (the best by likelihood, ties by start order).
+    pub refine: usize,
+    /// Gradient iterations per refined start.
+    pub iters: usize,
+    /// Length-scale box (unit-cube lengths).
+    pub l_bounds: (f64, f64),
+    /// Process-variance box (output units squared).
+    pub sf2_bounds: (f64, f64),
+    /// Seed of the multi-start design.
+    pub seed: u64,
+    /// Threads for the start evaluations (results in index order; any count gives the same fit).
+    pub workers: usize,
+}
+
+impl Default for ZeroMeanOptions {
+    fn default() -> Self {
+        ZeroMeanOptions {
+            kernel: Kernel::Matern52,
+            starts: 10,
+            refine: 3,
+            iters: 40,
+            l_bounds: (0.05, 10.0),
+            sf2_bounds: (1e-6, 1e2),
+            seed: 1,
+            workers: 1,
+        }
+    }
+}
+
 /// Dense Cholesky `A = L L^T` of the symmetric `n x n` row-major `a` (lower triangle read). The lower factor, row-major; a
 /// pivot `<= (row + 1) eps A_ii` refuses with `(row, pivot)`.
 pub fn cholesky(a: &[f64], n: usize) -> Result<Vec<f64>, (usize, f64)> {
@@ -128,6 +168,30 @@ pub fn solve_upper_t(l: &[f64], n: usize, b: &[f64]) -> Vec<f64> {
     x
 }
 
+/// Inverse from a Cholesky factor, column by column (row-major).
+fn chol_inverse(chol: &[f64], n: usize) -> Vec<f64> {
+    let mut g = vec![0.0; n * n];
+    for k in 0..n {
+        let mut e = vec![0.0; n];
+        e[k] = 1.0;
+        let col = solve_upper_t(chol, n, &solve_lower(chol, n, &e));
+        for (i, v) in col.into_iter().enumerate() {
+            g[i * n + k] = v;
+        }
+    }
+    g
+}
+
+fn check_noise(n: usize, v: &[f64]) -> Result<(), String> {
+    if v.len() != n {
+        return Err(format!("gp: {} noise variances for {n} observations", v.len()));
+    }
+    if let Some(i) = v.iter().position(|x| !(x.is_finite() && *x >= 0.0)) {
+        return Err(format!("gp: noise variance {i} ({}) must be finite and >= 0", v[i]));
+    }
+    Ok(())
+}
+
 /// Squared scaled distance `sum ((a_i - b_i) / l_i)^2`.
 fn dist2(a: &[f64], b: &[f64], l: &[f64]) -> f64 {
     a.iter().zip(b).zip(l).map(|((x, y), s)| ((x - y) / s).powi(2)).sum()
@@ -175,6 +239,10 @@ pub struct Gp {
     kinv1: Vec<f64>,
     one_kinv_one: f64,
     loglik: f64,
+    /// ADR 0663: the zero-mean mode (`y ~ N(0, s2 (R + J I) + diag(noise))`, no standardisation, `s2` not profiled).
+    zero_mean: bool,
+    /// Absolute noise variances of the zero-mean mode (empty otherwise).
+    noise: Vec<f64>,
 }
 
 /// Value and gradient of the concentrated log likelihood at one hyperparameter vector, or `None` when the factorisation
@@ -285,6 +353,8 @@ impl Gp {
                         kinv1,
                         one_kinv_one,
                         loglik,
+                        zero_mean: false,
+                        noise: Vec::new(),
                     });
                 }
                 Err(e) => last = e,
@@ -297,6 +367,188 @@ impl Gp {
             last.0,
             last.1
         ))
+    }
+
+    /// The zero-mean process with absolute noise (ADR 0663 D1): `y ~ N(0, C)`, `C = sf2 (R + J I) + diag(noise_var)`, the
+    /// outputs neither centred nor scaled, `noise_var` in output units squared; given length scales and process variance.
+    pub fn zero_mean_with_hyper(
+        u: &[Vec<f64>],
+        y: &[f64],
+        noise_var: &[f64],
+        kernel: Kernel,
+        l: &[f64],
+        sf2: f64,
+    ) -> Result<Gp, String> {
+        let d = check_inputs(u, y)?;
+        check_noise(u.len(), noise_var)?;
+        if l.len() != d || l.iter().any(|v| !(v.is_finite() && *v > 0.0)) {
+            return Err(format!(
+                "gp: {} length scales for {d} coordinates, each finite and > 0 needed",
+                l.len()
+            ));
+        }
+        if !(sf2.is_finite() && sf2 > 0.0) {
+            return Err(format!("gp: process variance {sf2} must be finite and > 0"));
+        }
+        Self::build_zero_mean(u, y, noise_var, kernel, l, sf2)
+            .map_err(|(i, p)| format!("gp: covariance not positive definite (row {i}, pivot {p:e})"))
+    }
+
+    /// The covariance, its factor, `alpha = C^-1 y` and the log likelihood `-y^T alpha / 2 - sum ln L_ii` of the zero-mean
+    /// mode (fixed jitter, no escalation: ADR 0663 D1).
+    fn build_zero_mean(
+        u: &[Vec<f64>],
+        y: &[f64],
+        noise_var: &[f64],
+        kernel: Kernel,
+        l: &[f64],
+        sf2: f64,
+    ) -> Result<Gp, (usize, f64)> {
+        let n = u.len();
+        let mut c = vec![0.0; n * n];
+        for i in 0..n {
+            c[i * n + i] = sf2 * (1.0 + JITTER) + noise_var[i];
+            for j in 0..i {
+                let v = sf2 * correlation(kernel, &u[i], &u[j], l);
+                c[i * n + j] = v;
+                c[j * n + i] = v;
+            }
+        }
+        let chol = cholesky(&c, n)?;
+        let alpha = solve_upper_t(&chol, n, &solve_lower(&chol, n, y));
+        let loglik = -0.5 * y.iter().zip(&alpha).map(|(a, b)| a * b).sum::<f64>()
+            - (0..n).map(|i| chol[i * n + i].ln()).sum::<f64>();
+        Ok(Gp {
+            kernel,
+            u: u.to_vec(),
+            ys: y.to_vec(),
+            l: l.to_vec(),
+            g: 0.0,
+            jitter: JITTER,
+            y_mean: 0.0,
+            y_sd: 1.0,
+            mu: 0.0,
+            s2: sf2,
+            chol,
+            alpha,
+            kinv1: Vec::new(),
+            one_kinv_one: 0.0,
+            loglik,
+            zero_mean: true,
+            noise: noise_var.to_vec(),
+        })
+    }
+
+    /// Fit the length scales and the process variance of the zero-mean mode by maximum likelihood (ADR 0663 D2), the
+    /// multi-start search of [`Gp::fit`] over the log box of `(l, sf2)`.
+    pub fn fit_zero_mean(u: &[Vec<f64>], y: &[f64], noise_var: &[f64], o: &ZeroMeanOptions) -> Result<Gp, String> {
+        let d = check_inputs(u, y)?;
+        check_noise(u.len(), noise_var)?;
+        if o.starts == 0 || o.refine == 0 {
+            return Err("gp: starts and refine must be >= 1".into());
+        }
+        for (name, (a, b)) in [("length-scale", o.l_bounds), ("process-variance", o.sf2_bounds)] {
+            if !(a > 0.0 && b > a && b.is_finite()) {
+                return Err(format!("gp: {name} bounds ({a}, {b}) need 0 < lo < hi"));
+            }
+        }
+        let mut bx: Vec<(f64, f64)> = vec![(o.l_bounds.0.ln(), o.l_bounds.1.ln()); d];
+        bx.push((o.sf2_bounds.0.ln(), o.sf2_bounds.1.ln()));
+        let hyper = |t: &[f64]| -> (Vec<f64>, f64) { (t[..d].iter().map(|v| v.exp()).collect(), t[d].exp()) };
+        let eval = |t: &[f64]| -> Option<Gp> {
+            let (l, sf2) = hyper(t);
+            Self::build_zero_mean(u, y, noise_var, o.kernel, &l, sf2)
+                .ok()
+                .filter(|gp| gp.loglik.is_finite())
+        };
+        let value = |t: &[f64]| -> f64 { eval(t).map_or(f64::NEG_INFINITY, |gp| gp.loglik) };
+        let mut starts: Vec<Vec<f64>> = vec![bx.iter().map(|(a, b)| 0.5 * (a + b)).collect()];
+        for p in latin_hypercube(o.starts - 1, d + 1, o.seed) {
+            starts.push(p.iter().zip(&bx).map(|(v, (a, b))| a + (b - a) * v).collect());
+        }
+        let vals = parallel_map(&starts, o.workers, &|t: &Vec<f64>| value(t));
+        let mut order: Vec<usize> = (0..starts.len()).collect();
+        order.sort_by(|&a, &b| vals[b].total_cmp(&vals[a]).then(a.cmp(&b)));
+        let chosen: Vec<usize> = order.into_iter().take(o.refine).collect();
+        let refine = |&s: &usize| -> (Vec<f64>, f64) {
+            let opts = PgOptions {
+                max_iters: o.iters,
+                step: 0.1,
+                armijo: 1e-4,
+                max_halvings: 30,
+                x0: starts[s].clone(),
+            };
+            let mut ev = |t: &[f64], grad: bool| -> Result<(f64, Vec<f64>), Stop> {
+                match eval(t) {
+                    None => Ok((f64::INFINITY, vec![0.0; d + 1])),
+                    Some(gp) => {
+                        if grad {
+                            let le = gp.zero_mean_gradient();
+                            Ok((-le.value, le.grad.iter().map(|v| -v).collect()))
+                        } else {
+                            Ok((-gp.loglik, Vec::new()))
+                        }
+                    }
+                }
+            };
+            match projected_gradient(&bx, &opts, &mut ev) {
+                Ok(r) if r.fitness.f.is_finite() => (r.x, -r.fitness.f),
+                _ => (starts[s].clone(), vals[s]),
+            }
+        };
+        let refined = parallel_map(&chosen, o.workers, &refine);
+        let mut best: Option<(Vec<f64>, f64)> = None;
+        for (t, v) in refined {
+            if best.as_ref().is_none_or(|b| v > b.1) {
+                best = Some((t, v));
+            }
+        }
+        let (t, v) = best.expect("refine >= 1");
+        if !v.is_finite() {
+            return Err("gp: no start of the likelihood search factorised".into());
+        }
+        let (l, sf2) = hyper(&t);
+        Self::build_zero_mean(u, y, noise_var, o.kernel, &l, sf2)
+            .map_err(|(i, p)| format!("gp: covariance not positive definite (row {i}, pivot {p:e})"))
+    }
+
+    /// Gradient of the zero-mean log likelihood in `(ln l_1, .., ln l_d, ln sf2)` (ADR 0663 D1; ADR 0652 D2):
+    /// `dL/dt = (alpha^T dC alpha - tr(C^-1 dC)) / 2`.
+    fn zero_mean_gradient(&self) -> LikEval {
+        let n = self.u.len();
+        let d = self.l.len();
+        let (u, l, tau, alpha) = (&self.u, &self.l, self.s2, &self.alpha);
+        let g = chol_inverse(&self.chol, n);
+        let mut out = vec![0.0; d + 1];
+        // sf2: dC = sf2 (R + J I); l_k: dC_ij = sf2 (dk_ij / d ln l_k) off the diagonal
+        let mut quad_t = 0.0;
+        let mut tr_t = 0.0;
+        for i in 0..n {
+            let dii = tau * (1.0 + self.jitter);
+            quad_t += alpha[i] * alpha[i] * dii;
+            tr_t += g[i * n + i] * dii;
+            for j in 0..i {
+                let dij = tau * correlation(self.kernel, &u[i], &u[j], l);
+                quad_t += 2.0 * alpha[i] * alpha[j] * dij;
+                tr_t += 2.0 * g[i * n + j] * dij;
+                let dl = match self.kernel {
+                    Kernel::SquaredExponential => dij,
+                    Kernel::Matern52 => tau * dcorr_common(self.kernel, &u[i], &u[j], l),
+                };
+                for k in 0..d {
+                    let t = dl * ((u[i][k] - u[j][k]) / l[k]).powi(2);
+                    out[k] += 2.0 * (alpha[i] * alpha[j] - g[i * n + j]) * t;
+                }
+            }
+        }
+        out[d] = quad_t - tr_t;
+        for v in &mut out {
+            *v *= 0.5;
+        }
+        LikEval {
+            value: self.loglik,
+            grad: out,
+        }
     }
 
     /// Fit the length scales (and the nugget of `Noise::Fitted`) by maximum likelihood (ADR 0621 D4).
@@ -401,6 +653,9 @@ impl Gp {
     /// Value and gradient (in `ln l_i`, and `ln g` when `with_g`) of the concentrated log likelihood:
     /// `dL/dt = (a^T dK a / s2 - tr(K^-1 dK)) / 2`, `a = K^-1 (y - mu 1)` (mu and s2 at their profile values).
     fn lik_gradient(&self, with_g: bool) -> LikEval {
+        if self.zero_mean {
+            return self.zero_mean_gradient();
+        }
         let n = self.u.len();
         let d = self.l.len();
         // K^-1 from the factor: column by column
@@ -444,7 +699,8 @@ impl Gp {
         }
     }
 
-    /// Value and gradient of the concentrated log likelihood (check G4).
+    /// Value and gradient of the concentrated log likelihood (check G4); in the zero-mean mode the zero-mean log likelihood
+    /// and its gradient in `(ln l, ln sf2)`, `with_g` ignored (ADR 0663).
     pub fn log_likelihood_and_gradient(&self, with_g: bool) -> (f64, Vec<f64>) {
         let e = self.lik_gradient(with_g);
         (e.value, e.grad)
@@ -457,8 +713,21 @@ impl Gp {
 
     /// Mean and standard deviation of the latent function at `u` (output units). The variance is
     /// `s2 [1 - k^T K^-1 k + (1 - 1^T K^-1 k)^2 / (1^T K^-1 1)]`, floored at 0 (the last term is the uncertainty of the mean).
+    ///
+    /// In the zero-mean mode (ADR 0663 D1): mean `k^T alpha`, `k_i = sf2 R(u_i, u)`, variance `sf2 - |L^-1 k|^2`, floored at 0.
     pub fn predict(&self, u: &[f64]) -> (f64, f64) {
         let n = self.u.len();
+        if self.zero_mean {
+            let k: Vec<f64> = self
+                .u
+                .iter()
+                .map(|p| self.s2 * correlation(self.kernel, p, u, &self.l))
+                .collect();
+            let m: f64 = k.iter().zip(&self.alpha).map(|(a, b)| a * b).sum();
+            let v = solve_lower(&self.chol, n, &k);
+            let var = (self.s2 - v.iter().map(|x| x * x).sum::<f64>()).max(0.0);
+            return (m, var.sqrt());
+        }
         let k: Vec<f64> = self.u.iter().map(|p| correlation(self.kernel, p, u, &self.l)).collect();
         let m = self.mu + k.iter().zip(&self.alpha).map(|(a, b)| a * b).sum::<f64>();
         let v = solve_lower(&self.chol, n, &k);
@@ -471,9 +740,20 @@ impl Gp {
     /// Leave-one-out mean and standard deviation at every observation from the one factorisation, hyperparameters and `s2`
     /// held, the mean re-estimated (Dubrule 1983): with `Q = K^-1 - K^-1 1 1^T K^-1 / (1^T K^-1 1)`, the residual is
     /// `(Q y)_i / Q_ii` and the variance `s2 / Q_ii`, the variance of the observation `y_i` (latent plus `s2 (g + jitter)`).
+    ///
+    /// In the zero-mean mode (ADR 0663 D1): mean `y_i - alpha_i / G_ii`, variance `1 / G_ii`, `G_ii = |L^-1 e_i|^2`.
     pub fn loo(&self) -> Vec<(f64, f64)> {
         let n = self.u.len();
         let mut out = Vec::with_capacity(n);
+        if self.zero_mean {
+            for i in 0..n {
+                let mut e = vec![0.0; n];
+                e[i] = 1.0;
+                let gii: f64 = solve_lower(&self.chol, n, &e).iter().map(|x| x * x).sum();
+                out.push((self.ys[i] - self.alpha[i] / gii, (1.0 / gii).max(0.0).sqrt()));
+            }
+            return out;
+        }
         for i in 0..n {
             let mut e = vec![0.0; n];
             e[i] = 1.0;
@@ -520,6 +800,26 @@ impl Gp {
     /// Kernel.
     pub fn kernel(&self) -> Kernel {
         self.kernel
+    }
+
+    /// Whether the process is in the zero-mean mode (ADR 0663).
+    pub fn is_zero_mean(&self) -> bool {
+        self.zero_mean
+    }
+
+    /// Absolute noise variances of the zero-mean mode (empty otherwise).
+    pub fn noise_variances(&self) -> &[f64] {
+        &self.noise
+    }
+
+    /// Row-major lower Cholesky factor of the covariance (the zero-mean mode) or of the correlation matrix plus nugget.
+    pub fn cholesky_factor(&self) -> &[f64] {
+        &self.chol
+    }
+
+    /// `alpha`: `C^-1 y` in the zero-mean mode; `K^-1 (y - mu 1)` of the standardised outputs otherwise.
+    pub fn weights(&self) -> &[f64] {
+        &self.alpha
     }
 }
 
