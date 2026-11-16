@@ -4357,6 +4357,10 @@ impl Simulation {
                                 if let Some(k) = rec.image {
                                     self.monitors.push("sliding_image", "", i.time, k as f64);
                                 }
+                                // F-730, ADR 0654 S3: the coupled sector step's remap residual
+                                if let Some(r) = rec.flux_residual {
+                                    self.monitors.push("sliding_flux_residual", "", i.time, r);
+                                }
                                 i
                             }
                             Err(e) => {
