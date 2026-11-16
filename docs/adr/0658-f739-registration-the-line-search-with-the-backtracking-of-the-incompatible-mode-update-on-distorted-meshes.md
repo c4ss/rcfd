@@ -278,3 +278,53 @@ decrease test may halve a non-monotone full step where nothing inverts).
    standing instruction of 2026-11-11 (take the recommendation).
 2. **Default.** Making R (or S) the default would change default results (where a default solve fails today, and the bits of a
    failed attempt that later converges): open for the maintainer, not taken.
+
+## Amendment 1 (2026-11-16, written after the single registered run and before any further run)
+
+The registered run (test commit d9289b11, log `run1-default.log` in the scratch folder; the four tests one after the other,
+60 s, 20 s, 77 s, 17 s) met every check of `r_and_s_on_the_four_blocks`, `r_and_s_on_the_four_cantilevers` and
+`dt_decrease_record_at_the_trial_of_element_475`, and in `r_and_s_on_three_further_seeds` M0, M1 on all three seeds and RS1,
+SLR on the first (`0xF739_0001`; no seed was replaced). **R fails on the seeds `0xF739_0002` and `0xF739_0003`**: `element
+420: the modes of an Incompatible Hex8 did not converge in 25 local iterations (relative mode residual 3.05e-1)`, load factor
+`0.9375` to `0.940625`, and `element 476: ... did not converge in 25 local iterations (relative mode residual 3.73e-1)`, load
+factor `0.85625` to `0.859375`, each after 5 halvings. RS2, RS3 and SLR on those two seeds are non-finite and missed. S fails
+on the same two seeds at the same elements with the decrease test exhausted: `|r|_2 = 167.07343` against `167.07289` (element
+420, load factor `0.94375`) and `324.61004` against `324.60719` (element 476, `0.84375`) after 20 halvings: at `t = 2^-20` the
+residual still rises, by `3.2e-6` and `8.8e-6` relative, where an exact Newton direction predicts a fall by about `t = 9.5e-7`
+(arithmetic 4).
+
+Records, as the house rules require: the test `r_and_s_on_three_further_seeds` is kept unchanged as the ignored record
+`r_and_s_on_three_further_seeds_known_miss` (the limits intact, the measured values in its ignore text); no limit is changed.
+The registered rule gives **partial** whatever follows.
+
+### A1.1 The met rows as a default test
+
+`r_and_s_on_three_further_seeds_met_rows`: the same code and limits for every row of the registered test except RS2, RS3 and
+SLR on the seeds `0xF739_0002` and `0xF739_0003`, which it prints instead of checking. It is a regression test of rows already
+met (as ADR 0649 A1.1, ADR 0655 A1.1), not a new registered run.
+
+### A1.2 Diagnosis (registered now, no limit, run once, ignored record `a1_diagnosis_seeds_2_and_3`)
+
+Question: why the local mode iteration of element 420 (seed 2) and element 476 (seed 3) fails, with and without the decrease
+test; in particular whether the Newton direction of the modes is a descent direction of `|r|_2` there (arithmetic 4 assumes the
+mode block `K_aa` is the exact Jacobian of the mode residual). Runs, each once, rule L on the `8^3` block at `0.25 h`:
+
+- **E1**: R solved to the punch at `0.0930` and `0.0937` (seed 2) and at `0.0850` and `0.0855` (seed 3), 10 increments each;
+  the trial `u_T = u_b + (p_T - p_b) / (p_b - p_a) (u_b - u_a)` with `p_T = 0.0939` (seed 2) and `0.0858` (seed 3), inside the
+  failing increments. At `u_T` for the failing element: the library's records (`mode_iteration_record`) with `Backtracking` and
+  `BacktrackingWithDecrease` (iterates, halvings, outcome).
+- **E2**: at `u_T`, a replica of the local iteration in the test (the extended force and tangent by
+  `enhanced_force_and_tangent_with`, the 9 x 9 mode block solved by Gaussian elimination with partial pivoting, the decrease and
+  inversion halvings of D1, 25 steps), printing per iterate `|r|_2`, `|delta|_inf / |alpha|_inf`, the smallest and largest
+  eigenvalue of the symmetric part of `K_aa` and its asymmetry `max |K_aa - K_aa^T| / max |K_aa|`, and the consistency `max |K_aa
+  - K_fd| / max |K_aa|` of `K_aa` against central differences of the mode residual in `alpha` (step `1e-9`), and the measured
+  slope `(|r(alpha - t delta)|_2 - |r|_2) / (t |r|_2)` at `t = 1e-4, 1e-6, 1e-8` (`-1` for an exact Newton direction).
+- **E3**: the same replica measures at the converged modes of R's state `u_b` (where the iteration converges).
+- If a solve of E1 fails, it is printed and the replica is run at the last converged state instead.
+
+Interpretation registered: a consistency measure `<= 1e-5` with a slope near `-1` at small `t` says the direction is a descent
+direction and the stall is the nonlinearity of a step that is large against the modes (`|delta| / |alpha|` large; a
+near-singular `K_aa`, smallest eigenvalue near zero or negative); a consistency measure `>= 1e-3` or a slope `>= 0` at `t = 1e-8`
+says the mode block is not the Jacobian of the mode residual there, so neither a Newton iteration nor the decrease test of D1
+can be expected to converge; a negative eigenvalue of the symmetric part says the mode problem is not a minimum there (no
+energy descent). The decision rule is unchanged.
