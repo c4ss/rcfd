@@ -475,3 +475,250 @@ Every other open question of this ADR takes the recommendation written with it. 
 See `roadmap-entry.json` beside this file (F-698, phase 9, deps F-268, F-249, F-697, status todo). Possible follow-ups, not
 created: the study method and tool exposure (question 1 (b)), ParEGO (question 11 (b)), a shared dense module in `rcfd-linalg`
 (question 9 (b)).
+
+## Addenda
+
+## Amendment 1 (2026-11-16): registration, before any committed code of F-698 and before any run of its checks
+
+Status: **REGISTERED 2026-11-16**, written before any code of F-698 was committed to the branch and before any run of the checks
+below. Written by the implementing agent on branch `f698-work` (from 6400c929, the F-697 tip on F-700 and F-268), worktree
+`w49i-work/f698`, scratch `w49i-work/f698-scratch`. Every choice the maintainer would normally be asked about is taken on the
+maintainer's standing instruction of 2026-11-11 (take the recommendation), on top of the maintainer decisions of 2026-11-15
+above.
+
+### What was read
+
+`AGENT_RULES.md`; the brief; F-698's roadmap acceptance and note (binding, quoted below); this ADR (stub, maintainer decisions,
+questions); ADR 0620 (F-697: `FanObjective`, `ObjectiveModel`, `FanRomTarget`, set-up F) and its addendum; ADR 0623 (F-268) and
+ADR 0632 (F-700: optional ledger fields `parents`, `fitted`, the `training_set` query of its D4, which refuses mixed evaluators,
+versions, tiers and levels); `docs/fan-project-breakdown.md` part H3; `loop-drafts/decisions.md`. The stub's prototype
+`loop-drafts/h3-surrogate/gp_proto.py` was not run. Source: `design/ledger.rs` (`Entry`, `Model`, `entry_of`, `training_set`,
+`entry_ref`), `design/optim.rs` (`Fitness`, `Eval`, `nelder_mead`, `differential_evolution`, `projected_gradient`),
+`design/cmaes.rs` (`run`, `Options`, `normal`), `design/sampling.rs` (`latin_hypercube`, `full_factorial`), `design/study.rs`
+(`parallel_map`: results in index order for any worker count; `Sense`, `Cmp`, `ParamDef`), `design/uq.rs` (`norm_cdf` through
+`rcfd_reactor::mixfrac::erfc`, a series below 2 and a continued fraction above; `evaluate_guarded`), `design/sensitivity.rs`
+(the driver pattern), `design/fan_objective.rs` and `tests/f697_fan_objective.rs` (set-up F).
+
+No paper was opened for this registration (none is in the repository). Every citation below is from memory, as in the stub;
+every formula used is derived here or guarded by a closed form or a numerical check of its own (recorded in
+`docs/reference-data.md` with the code).
+
+The binding acceptance:
+
+> Every limit not stated here is registered in ADR 0621 before the code. An opt-in library Gaussian process (constant mean, one length scale per parameter, hyperparameters by maximum likelihood, dense Cholesky, no new crate) fitted to the evaluated variants of a design ledger: reproduces its training values within 1e-2 of their standard deviation with noise off (Branin, 40 points, 10 seeds); its 95 percent interval covers between 0.92 and 0.98 of held-out values of functions drawn from its own prior and at least 0.90 on Branin with fitted hyperparameters, with an rms prediction error of at most 0.10 of the output standard deviation; expected improvement matches numerical quadrature within 1e-10. The proposal loop from 10 initial points reaches within 1 percent of the Branin minimum 0.397887 on at least 18 of 20 seeds within 60 evaluations with a median of at most 35, where uniform random search reaches it on at most 4 of 20; on Hartmann 6 it reaches within 1 percent of -3.32237 on at least 5 of 10 seeds within 200 evaluations and on at least 2 more seeds than CMA-ES (ADR 0222) and differential evolution at the same budget; with a region of failed evaluations it still reaches the Branin target on at least 18 of 20 seeds with at most 25 percent failed evaluations after the initial design; on the reduced-order fan model (ADR 0119) it comes within 1 percent of the best of a 21^3 factorial reference within 50 evaluations on at least 9 of 10 seeds. Every proposal is a ledger entry with its predicted mean and standard deviation; the proposal is bit-identical for a repeated run, for any worker count and for any order of the ledger lines; defaults, baselines and goldens are unchanged.
+
+### Disclosed: a scratch prototype and its smoke runs (seeds 101 to 110 only), before this registration
+
+To fix the limits the stub marks "smoke first", the design below was written as a prototype in a scratch copy
+(`f698-scratch/proto`, a `git archive` of 6400c929, outside the worktree) with two smoke test files there
+(`zz_f698_smoke.rs`, `zz_f698_fan_smoke.rs`; logs `smoke_s2.log`, `smoke_s2b.log`). Nothing of it is in the branch before this
+commit. The code committed after this registration is that prototype (formatted and documented); the test file of the checks is
+written after this registration. No seed of a registered check was used (smoke seeds 101 to 110).
+
+| Smoke | Set-up | Result |
+|---|---|---|
+| S1 | Branin, `n0 = 10`, budget 60, seeds 101 to 105 | target reached at 23, 28, 23, 28, 22 evaluations; uniform random search 0 of 5 within 60 |
+| S2 | Hartmann 6, `n0 = 30`, budget 200, seeds 101 to 105 | GP: target at 47, 55, none (best -3.20316, the second minimum), 58, 52 (about 100 s per seed); CMA-ES defaults, budget 200: 3 of 5 (at 135, 186, 159); DE defaults (population 60): 0 of 5 (best -2.76) |
+| S3 | Branin, failures inside the unit-cube disc of radius 0.15 around (pi, 2.275), budget 60 | target at 26, 32, 24, 21, 30; failed share after the initial design 0.02, 0.02, 0.02, 0, 0.04. Imputation and failure model off: 0 of 5, failed share 0.74 to 0.88 |
+| S4 | Branin plus N(0, 1) noise, `Noise::Fitted`, budget 80 | true value at the point of lowest posterior mean 0.399, 0.463, 0.642, 0.487, 0.459 (limit 1.398) |
+| S5 | G5 set-up, 5 draws | fitted l 0.244, 0.184, 0.168, 0.364, 0.243 (median 0.243); g 4.7e-3, 9.5e-3, 2.6e-2, 5.2e-4, 7.2e-3 (median 7.2e-3) |
+| S5 | G6a set-up, 10 draws | pooled coverage 0.947; with the length scales 10 times too long (l = 3) 0.840 |
+| S6 | G3 and G6b set-ups, LHS seeds 101 to 103 | interpolation error 6.5e-4 to 7.6e-4 of sd(y); sd at the data 1.0e-4 of sqrt(s2); coverage 0.993 to 1.000; rms 0.017 to 0.027 of sd(y); one fit 0.03 s |
+| S7 | reduced-order fan, set-up F3 below, a 6^3 grid and GP runs of 50 (seeds 101 to 103) | 97 of 216 grid points fail (stall at one of the points); 216 evaluations in 23 s on 8 threads. Mean `eta_s`: grid range 0.312 to 0.344, within 1 percent at evaluation 2 to 4 (a trivial check), 40 to 42 of 50 failed. Weighted flow: best at a box corner, reached at 16. Mean power: grid best 1.4719 W; with imputation alone the GP ended at 1.68, 2.01, 1.81 W (41 of 50 failed); with the failure model (below) at 1.4454, 1.4461, 1.4462 W, within 1 percent of the grid best at 16 to 19, 31 to 33 failed |
+| S8 | constraint set-up K below, seeds 101 to 105 | feasible within 1 percent of 0.18 at evaluation 11 or 12 each; 20 to 21 infeasible after the initial design |
+| S9 | likelihood gradient against central differences (both kernels, nugget on, LHS seed 101) | 7.7e-11 and 1.5e-10 relative |
+| S9 | leave-one-out against refits (LHS seed 102) | means 5e-15 of sd(y); sd 3.4e-8 against the refit's latent sd, 5.3e-15 against the refit's observation sd (latent variance plus `s2 (g + jitter)`): the leave-one-out variance is that of the observation, and G7 is registered so |
+
+Design changes made from the smoke, before registration: (1) a failure model, question 6 (c), whose recommendation made it a
+follow-up "if F1 or R1 show that imputation distorts the model near the boundary of the failure region": S7 shows it, so it is
+taken now; (2) an exploration rule, question 14 (b), in a stateless variant (take the candidate farthest from the data when the
+best acquisition is below `1e-6` of the spread of the values), was tried on S2 and changed no result, so by the recommendation
+("taken only if it raises the count") it is not taken and is not in the code; (3) the fan objective, question 12 (b), F-697's
+layer: mean power, because mean efficiency makes the 1 percent check trivial (S7).
+
+What the smoke says about limits the acceptance fixes: S2 makes **O3 likely to miss** (GP 4 of 5, CMA-ES 3 of 5 on the smoke
+seeds; the acceptance needs at least 2 more of 10). The limit is kept as the acceptance gives it.
+
+### Design (fixed now)
+
+Two new files, `crates/rcfd-api/src/design/surrogate.rs` and `crates/rcfd-api/src/design/bayes.rs`, and two module lines (and
+the doc line) in `design/mod.rs`. Nothing existing calls them; no other existing source file is edited (`ledger.rs` is not).
+
+**surrogate.rs** (the stub's D2 to D4, with the following fixed):
+
+* `Kernel::{Matern52 (default), SquaredExponential}`; `correlation(kernel, a, b, l)`; Matern `(1 + r + r^2/3) e^-r`,
+  `r = sqrt(5 sum (d_i/l_i)^2)`; SE `exp(-sum (d_i/l_i)^2 / 2)`.
+* `Noise::{None (default), Fitted, Nugget(g)}`: the stub's `Fixed(sd)` becomes a fixed nugget **ratio** `g` (noise variance over
+  process variance), because with `s2` profiled a fixed absolute variance has no closed-form profile (deviation).
+* Outputs standardised (mean, population sd; sd 0 replaced by 1); `K = R + (g + j) I`, jitter `j = 1e-8`, multiplied by 100 at
+  most 3 times on a failed factorisation, then a located refusal. `mu = 1^T K^-1 y / 1^T K^-1 1`, `s2 = (y - mu 1)^T K^-1
+  (y - mu 1) / n`, concentrated log likelihood `L = -(n/2) ln s2 - sum ln L_ii`.
+* `cholesky(a, n) -> Result<L, (row, pivot)>` row-major lower, refusing `pivot <= (row + 1) eps a_ii`; `solve_lower`,
+  `solve_upper_t` (question 9 (a)).
+* `predict(u) -> (mean, sd)` of the latent function, variance `s2 [1 - k^T K^-1 k + (1 - 1^T K^-1 k)^2 / 1^T K^-1 1]` floored at
+  0, in output units.
+* Gradient (question 3 (b)), derived: with `a = K^-1 (y - mu 1)` and mu, s2 at their profile maximum, the envelope theorem gives
+  `dL/dt = (a^T (dK/dt) a / s2 - tr(K^-1 dK/dt)) / 2`; `dk/d ln l_i = (5/3)(1 + r) e^-r (d_i/l_i)^2` (Matern: `dk/dr = -(r/3)(1
+  + r) e^-r`, `dr/d ln l_i = -5 (d_i/l_i)^2 / r`), `k (d_i/l_i)^2` (SE); `dK/d ln g = g I`.
+* `fit`: search in `ln l_i` in `[ln 0.05, ln 10]` and, for `Fitted`, `ln g` in `[ln 1e-8, ln 1]`; starts: the box centre and
+  the 9 points of `latin_hypercube(9, dim, seed)` scaled to the box, in that order; the best 3 by likelihood (ties by start
+  order) refined by `optim::projected_gradient` on `-L` (40 iterations, step 0.1, Armijo 1e-4, 30 halvings); the best final
+  value wins (first on ties). A start whose factorisation fails has value `-inf`. Refusals: fewer than `d + 2` or more than
+  2000 observations (question 10 (a)), a non-finite input or output, mismatched sizes.
+* `loo()`: leave-one-out mean and sd from one factorisation (Dubrule 1983, from memory; derived: with `Q = K^-1 - K^-1 1 1^T
+  K^-1 / 1^T K^-1 1`, `Q y = a`, residual `a_i / Q_ii`, variance `s2 / Q_ii`), hyperparameters and `s2` held, mean
+  re-estimated: the variance of the observation `y_i` (latent plus `s2 (g + j)`).
+* `log_likelihood_and_gradient(with_g)`, `length_scales`, `nugget`, `jitter`, `process_variance`, `mean`, `n`, `kernel`.
+* Workers: start values and refinements through `study::parallel_map` (index order kept): the same bits for any count.
+
+**bayes.rs** (the stub's D6 to D10):
+
+* `expected_improvement(m, s, f_min) = (f_min - m) Phi(z) + s phi(z)`, `z = (f_min - m)/s`, `max(f_min - m, 0)` at `s = 0`;
+  `prob_feasible(m, s) = Phi(-m/s)` (1 or 0 at `s = 0`).
+* `Observation { x, status: Ok { f, c } | Failed | Pending }` in parameter space, `f` minimised, `c_k <= 0` feasible; an `Ok`
+  with a non-finite value is `Failed`.
+* `BayesOptions { gp, n0: None -> max(5 d, 10), batch 1, seed 1, workers 1, impute true, candidates_per_dim 1000, exclusion
+  1e-6, classify_failures true }`.
+* `propose(bounds, obs, options)`: (1) map to the unit cube; (2) **canonical order**: sort by the unit coordinates
+  (lexicographic, `total_cmp`), then status, then value bits; with `Noise::None`, bit-identical `Ok` points are merged into
+  their mean (the stub's 1e-12 merge radius becomes bit identity; near-duplicates are handled by the jitter); (3) while fewer
+  than `n0` observations of any status exist, the next points of `latin_hypercube(n0, d, seed)` not within 1e-12 of an
+  observation (`initial`); (4) with fewer than `d + 2` `Ok` points, untaken points of further hypercubes with derived seeds
+  (`filling`); (5) else fit the objective process on the `Ok` points (gp seed derived from `seed` and the number of
+  observations by FNV-1a); with `impute`, every failed point gets `m + s` of that fit and the process is refitted with the
+  hyperparameters held (Forrester, Sobester and Keane 2006); one fitted process per constraint on the `Ok` points (question 6
+  (a)); with `classify_failures` and at least one failure, a process fitted to the label -1 (ok) / +1 (failed) of every `Ok` and
+  failed point, whose `prob_feasible` multiplies the acquisition (least-squares classification, Rasmussen and Williams 2006
+  section 6.5, from memory); (6) incumbent: the lowest feasible `f` (noise off) or the lowest posterior mean at feasible `Ok`
+  points (noise on); none feasible: the acquisition is the feasibility product alone (`pof`); (7) pending points, and each
+  earlier point of a batch, are added at their predicted mean (kriging believer, hyperparameters held); (8) candidates:
+  `latin_hypercube(1000 d, d, derived seed)` plus 200 clamped normal perturbations (sd 0.02 for the first 100, 0.1 for the
+  next 100) of each of the best 5 `Ok` points (feasible first, then by `f`, then canonical order); a candidate within
+  `exclusion` of an observation or an earlier pick scores `-inf`; the best 5 by score (ties by index) are refined by
+  `nelder_mead` in the unit box (budget `100 d`, restarts 0, initial step 0.05, x0 the candidate); the best refined point wins
+  (first on ties). Scoring and refinement run through `parallel_map`. Each `Pick` records kind, acquisition, ei, mean, sd,
+  feasibility, incumbent, length scales, nugget, jitter, `n_obs`, `n_imputed`, `n_pending`.
+* No stop rule (deviation from D6): the loop runs to the budget; a stop before it can only lower the counts the acceptance
+  measures, and the exploration variant was not taken.
+* `minimise(bounds, options, budget, eval)`: the batch interface of the optimisers; a point with `f` not finite or violation
+  `> 0` is a failed point (declared constraints are modelled by `run` only); the result is the best point by Deb's rules.
+* `observations(entries, idx, spec)`: `evaluation` entries of `idx`; an entry without a declared parameter is skipped and
+  counted; then `ledger::training_set` (F-700), which refuses a mix of evaluators, versions, tiers or levels (question 8 (a)
+  without the `allow_mixed_versions` escape, deviation: no check needs it); a declared unit that differs from the ledger's is
+  refused; `diverged` and `constraint_rejected` are failed points (the stub's "feasibility model only" for
+  `constraint_rejected` becomes the failure model, which covers both), `not_evaluated` pending.
+* `run(spec, model, ledger)`: `BayesSpec { study, params (name, unit, lo, hi), objective, sense, constraints (metric, cmp,
+  limit), budget, options, clock_ms }`; reads the ledger's entries of `study` from `model.id()`, proposes, evaluates the batch
+  through `parallel_map` with `uq::evaluate_guarded`, appends one `evaluation` entry per point (variant `<study>/gp_ei/<n>`,
+  seed, provenance `{driver "gp_ei", iteration, batch_index, acquisition, acquisition_value, ei, predicted_mean, predicted_sd,
+  feasibility, incumbent, objective, sense, length_scales, nugget, jitter, n_obs, n_imputed, n_pending}`, mean and incumbent in
+  the natural sign), repeats to the budget, then appends one `surrogate_summary` entry (metrics evaluations, failed,
+  observations, best, `loo_rms_z`, `loo_cover95`; F-700 `fitted` = `{rcfd.design.surrogate.gp, 1, FNV-1a of the hyperparameter
+  bits}` and `parents` = references with hashes to the `Ok` rows). `propose_from_entries(entries, spec, model_id)` is the next
+  proposal of `run` from a ledger read.
+
+### Set-ups (fixed now)
+
+* **Branin** on `[-5, 10] x [0, 15]`, `(x2 - b x1^2 + c x1 - 6)^2 + 10 (1 - t) cos x1 + 10`, `b = 5.1/(4 pi^2)`, `c = 5/pi`,
+  `t = 1/(8 pi)`; minimum 0.397887 at (-pi, 12.275), (pi, 2.275), (9.42478, 2.475). Target: `<= 0.397887 (1 + 0.01)`.
+* **Hartmann 3 and 6** on the unit cube (Dixon and Szego 1978; constants from memory, checked by G0): minima -3.86278 at
+  (0.114614, 0.555649, 0.852547) and -3.32237 at (0.20169, 0.150011, 0.476874, 0.275332, 0.311652, 0.6573). Target: `<= f* (1 -
+  0.01)`.
+* **F3, the reduced-order fan**: ADR 0620's `FanRomTarget` on its set-up F (`fan_f`, 3000 rpm, rho 1.2, nu 1.5e-5, c0 343,
+  observer 1 m at 90 deg, n_scan 100, `RomModel::default()`, `Tolerances::default()`, no plan), geometry `x = (stagger offset
+  [deg] in [-3, 3] added to every station's stagger, chord scale [1] in [0.8, 1.2] multiplying every chord, camber scale [1] in
+  [0.5, 1.5] multiplying every camber)`; points R1, R2, R3 (k 5e3, 1.5e4, 2.5e4 Pa s^2/m^6, weights 0.5, 0.3, 0.2); one term
+  `power`, `Min`, `Nominal`, `Over::Mean`; no limit; objective workers 1; as a `ledger::Model` through `ObjectiveModel`, metric
+  `power@nominal@mean` [W]. A stall at any point makes the candidate `diverged` with the located reason. Reference: the
+  `full_factorial([21, 21, 21])` grid on the box (9261 candidates), `P_ref` its lowest feasible value. Target: `<= P_ref (1 +
+  0.01)`.
+* **K, a constraint**: minimise `(a - 0.8)^2 + (b - 0.8)^2` subject to `a + b <= 1` on `[0, 1]^2` (closed form (0.5, 0.5), 0.18),
+  `n0 = 10`, budget 40. Target: feasible and `<= 0.18 (1 + 0.01)`.
+
+### Checks (limits fixed now)
+
+Test file `crates/rcfd-api/tests/f698_surrogate.rs` (new). Release profile. Default options unless stated; "seed s" is
+`BayesOptions::seed` (and the uniform-search or optimiser seed). E2 applies to every proposal loop of the table. Clauses: (a)
+interpolation, (b) coverage and error, (c) EI, (d) Branin and random search, (e) Hartmann 6 and the comparison, (f) failures,
+(g) the fan, (h) ledger, repeat, workers, line order, (i) defaults.
+
+| Id | Clause | What | Limit |
+|---|---|---|---|
+| G0 | set-ups | Branin at its three minimisers; Hartmann 3 and 6 at theirs | within 1e-6 of 0.397887; within 1e-5 of -3.86278 and -3.32237 |
+| G1a | Cholesky | `A = B B^T + 50 I`, B 50 x 50 uniform(-1, 1) from Rng 698_001: max abs of `L L^T - A` over max abs of `A`; `diag(1, -1)` | `<= 1e-12`; refused at row 1 |
+| G1b | jitter | `Gp::with_hyper` on 10 Branin LHS points (seed 698_002) with the first point repeated, l (0.3, 0.3), noise off | succeeds with jitter 1e-8 |
+| G2 | model | d 1, u (0.2, 0.7), y (1, 3), l 0.4, g 0, both kernels: process variance against `delta^2/(a - rho)` (`delta = (y1 - y2)/2`, `a = 1 + 1e-8`, `rho = k(u1, u2)`), mean against `(y1 + y2)/2`, prediction at 0.45 and 0.9 against `m = mu + delta (k1 - k2)/(a - rho)`, `var = s2 [1 - (a (k1^2 + k2^2) - 2 rho k1 k2)/(a^2 - rho^2) + (1 - (k1 + k2)/(a + rho))^2 (a + rho)/2]`, kernels written out in the test | relative `<= 1e-12` each |
+| G3 | (a) | Branin, 40 LHS points, LHS seeds 698_101 to 698_110 (gp seed the same), fitted, noise off: max `abs(m(u_i) - y_i)` / sd(y); max `s(u_i)` / sqrt(s2) | `<= 1e-2`; `<= 1e-2` |
+| G4 | gradient | Hartmann 3 on 30 LHS points (seed 698_201), 5 hyperparameter points (`ln l_i` uniform in [ln 0.1, 0], `ln g` in [ln 1e-4, ln 0.1], Rng 698_202), both kernels, with the nugget component: max abs difference to central differences (h 1e-5) over the max abs of the differences | `<= 1e-5` |
+| G5 | fit | 20 draws, d 1, l 0.2, g 0.01, 100 LHS points (seed 698_300 + k), draw from Rng(698_300 + k), `Noise::Fitted` (gp seed k): median fitted l; median fitted g | in [0.2/1.5, 0.3]; in [0.01/3, 0.03] |
+| G6a | (b) | 50 draws, d 2, l (0.3, 0.3), 40 LHS training points (seed 698_400 + k), 200 uniform test points and then the joint draw (jitter 1e-10) from Rng(698_400 + k); `with_hyper` at the true l, g 0: pooled share of test values inside `m +- 1.96 s` | in [0.92, 0.98] |
+| NC2 | control | G6a with l (3, 3) | pooled share `< 0.92` |
+| G6b | (b) | Branin, 40 LHS points (seeds 698_501 to 698_510), fitted; 2000 uniform test points from Rng(seed + 1000): share inside `m +- 1.96 s`; `rms(y - m)` / sd(y) | each seed `>= 0.90`; each `<= 0.10` |
+| G6c | record | Hartmann 6, 120 LHS points, seeds 698_601 to 698_605: coverage and error | recorded |
+| G7 | loo | Branin, 25 LHS points (seed 698_701), l (0.3, 0.3), g 0: `loo()` against 25 refits without the point (mean; sd as `sqrt(s_refit^2 s2/s2_refit + s2 j)`) | max abs difference over sd(y) `<= 1e-9` |
+| E1 | (c) | `expected_improvement(0, s, z s)` for s in {0.01, 0.1, 1, 3}, z in {-6, -2, 0, 1, 4} against Simpson's rule for `s int_{z-40}^{z} (z - t) phi(t) dt`, 400000 intervals; at s = 0: (m 2, f 1) and (m 1, f 2) | abs `<= 1e-10`; exactly 0 and 1 |
+| E2 | design | every proposal of every loop of this table: inside the box; unit-cube distance to every earlier point `>= 1e-6` | 0 violations |
+| P1 | batch | Branin, the 15 points of LHS seed 698_950 evaluated: `propose` with batch 4: min pairwise unit-cube distance; the batch-1 pick added as `Pending`: distance of the new batch-1 pick to it | `>= 1e-3`; `>= 1e-3` |
+| O1 | (d) | Branin, `n0 = 10`, budget 60, seeds 1 to 20 (`minimise`): seeds that reach the target; median evaluations to it (a miss counts as 61) | `>= 18 of 20`; `<= 35` |
+| NC1 | (d) | uniform random search, Rng(seed), 60 points, seeds 1 to 20 | `<= 4 of 20` |
+| O4 | record | Nelder-Mead, default options, budget 60, seed s, on O1 | recorded |
+| O2 | (e) | Hartmann 6, `n0 = 30`, budget 200, seeds 1 to 10: seeds that reach the target; largest evaluations to it; every seed's best | `>= 5 of 10`; `<= 100`; `<= -3.15` |
+| O3 | (e) | Hartmann 6, budget 200, seeds 1 to 10: `cmaes::run` (defaults, max_evals 200) and `differential_evolution` (defaults, max_evals 200): seeds that reach the target | O2's count `>= max(CMA-ES, DE) + 2` |
+| F1 | (f) | O1 with every point inside the unit-cube disc of radius 0.15 around (pi, 2.275) failing (`Fitness::FAILED`): seeds that reach the target; failed share among evaluations 11 to 60 | `>= 18 of 20`; every seed `<= 0.25` |
+| F2 | control | F1 with `impute` and `classify_failures` off | pooled failed share larger than F1's |
+| N1 | noise | Branin plus N(0, 1) (Box-Muller from Rng(698_800 + s), evaluation order), `Noise::Fitted`, `n0 = 10`, budget 80, seeds 1 to 20; after the run a `Noise::Fitted` fit (gp seed 698_899) on all points: the true Branin value at the evaluated point of lowest posterior mean | `<= 1.397887` on `>= 16 of 20` |
+| K1 | constraint | set-up K through `run` (an `FnModel`), seeds 1 to 10: seeds whose best feasible value meets the target; infeasible evaluations after the initial design | `>= 9 of 10`; recorded |
+| R1 | (g) | F3, `run` with budget 50 (`n0 = 15`), seeds 1 to 10, against `P_ref`: seeds with a feasible value `<= P_ref (1.01)`; every failed entry `diverged` with a reason naming its point; failed counts; seeds within 1 percent of the reference range (recorded) | `>= 9 of 10`; all |
+| R2 | record | F3, budget 50: `cmaes::run` (defaults) and `nelder_mead` (defaults, seed s), seeds 1 to 10 (failure = `FAILED`) | recorded |
+| L1 | (h) | Branin `FnModel` (id `test.branin`), `run` budget 25, seed 698_901, clock 1_700_000_000_000, ledger file: every evaluation entry has the provenance keys of the design, `predicted_mean` and `predicted_sd` finite after the initial 10; `propose_from_entries` on the read file against pick 26 of a run with budget 26 and no ledger; a run of 15 then a run of 10 on one ledger against the 25-run | bit-equal; evaluation lines byte-equal |
+| L2 | (h) | L1's lines shuffled (Rng 698_902), written and read: `propose_from_entries` | bit-equal to L1's |
+| L3 | design | entries of one evaluator at `analytic` and `reduced_order`; of two evaluator ids in `idx`; one entry without a declared parameter | refused, located, naming the mix; refused; skipped and counted 1 |
+| D1 | (h) | O1 seed 1 twice at workers 1 and once at workers 8; F1 seed 1 at workers 1 and 8 | every proposal bit-equal |
+| D2 | design | O1 seed 2 replayed through an evaluator answering from the direct run's table | the same points, bit for bit |
+| B1 | (i) | `cargo test -p rcfd-api --release --lib design::`, `--test f697_fan_objective`, `--test fan_rom_design_w46b`, `--test f249_default_bits`, `--test f260_default_bits`, `--test f297_default_bits`, `--test baseline_hashes` | pass; no existing test file edited |
+| B2 | (i) | rcfd-mcp `default_f1`, `tool_list_f275`, `project_list_f270`; `git diff 6400c929 -- crates/rcfd-mcp` | pass; empty |
+| B3 | — | `cargo fmt -p rcfd-api --check`; `cargo clippy -p rcfd-api --all-targets -- -D warnings` | clean |
+
+Heavy records (each `#[ignore]`, run once): O2 with O3 (about 100 s per seed, seeds in parallel) and R1 with R2 (the
+9261-point reference, about 12 minutes on 12 threads). Fast tests on the same paths: Hartmann 3 (`n0 = 15`, budget 40, seed 1,
+recorded, E2 checked) and F3 with budget 18, seed 1 (entries, provenance and failure reasons checked, no target).
+
+### Mutations (scratch copy, one at a time)
+
+| Id | Mutation | Expected to fail |
+|---|---|---|
+| M1 | EI with the sign of `f_min - m` flipped | E1, O1 |
+| M2 | the mean-uncertainty term of the variance dropped | G2 |
+| M3 | jitter 0 | G1b |
+| M4 | `s2` divided by `n - 1` | G2 |
+| M5 | Matern without the factor `sqrt 5` | G2 |
+| M6 | imputation at `m - s` | F1 (doubt: the failure model also steers away) |
+| M7 | canonical sort removed | L2 |
+| M8 | exclusion radius 0 | E2 (doubt: noise-free EI is 0 at a data point; N1 may show it) |
+| M9 | trace term of the gradient with the wrong sign | G4 |
+| M10 | leave-one-out without the mean correction (`Q_ii = (K^-1)_ii`) | G7 |
+| M11 | believer removed (pending and earlier batch points ignored) | P1 |
+| M12 | `classify_failures` false by default | R1 |
+
+### Decision rule
+
+* **done**: every check met (O4, G6c, R2 recorded) and every mutation except M6 and M8 caught.
+* **partial**: G0 to G7, E1, E2, P1, O1, NC1, L1 to L3, D1, D2 and B1 to B3 met, and a limit of O2, O3, F1, F2, N1, K1, R1, G5,
+  G6a, G6b or NC2 missed (an ignored `*_known_miss` record with the limit intact), or a mutation other than M6 and M8 survives.
+* **todo** (the lead does not take the code): G2, E1, O1, L2, D1, B1 or B2 missed.
+
+### Limits (not covered)
+
+* Library only: no service method, MCP tool, study method `gp_ei` (question 1 (b), a follow-up), case key or golden change.
+* One fidelity tier, one evaluator and one version per fit (H7 joins tiers); no `allow_mixed_versions`.
+* Scalar objective only (question 11 (a)); ParEGO is a follow-up.
+* No hyperparameter averaging, no stop rule, no exploration restart; `n <= 2000`; dense `O(n^3)` per likelihood value.
+* `minimise` treats infeasible points as failed; declared constraints only through `run`.
+* Every fan result is on the reduced-order model with mean power over three impedance points as a proxy objective; it ranks
+  variants of the model, not real fans (no measured data).
+
+### Open questions taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation)
+
+Q2 (a) Matern 5/2, SE opt-in; Q3 (b) analytic gradient with `projected_gradient`, S = 10; Q4 (a) noise off; Q5 (a) `n0 = max(5
+d, 10)`; Q6 (a), with (c) brought forward by the smoke (above); Q7 (a); Q8 (a) as a refusal; Q9 (a); Q10 (a) refuse; Q11 (a);
+Q12 (b) F-697's layer; Q13 (a) the comparative limit kept; Q14 (a) plain EI (the (b) variant tried in the smoke changed nothing).
