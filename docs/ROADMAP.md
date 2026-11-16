@@ -9090,13 +9090,16 @@ fixed by the item's registration ADR before any code.
     for local projects, `data.*` (R1) for a remote service, monitors fetched once and then by increments. Open before
     the start: the maintainer's go-ahead, QA1 (the cost of `monitors.get`) and QA2 (the route). F-456 (ADR 0353): the
     history is fetched once, then `since` increments at 0.3 ms; QA1 is answered.
-- [ ] **F-449** Retire rcfd-studio and rcfd-gui
+- [x] **F-449** Retire rcfd-studio and rcfd-gui
   - depends on: F-448
   - acceptance: After F-448 passes and the maintainer has used the new shell and approved, rcfd-studio and the frozen
     rcfd-gui are removed with their tests, docs that name them are updated, and the two layer lines of
     crates/rcfd-cli/tests/workspace_graph.rs are removed with the maintainer's approval; every other crate and test is
     unchanged and the gate passes.
-  - note: ADR 0350 section 5. NEEDS THE USER: removal of crates and an edit of an existing test.
+  - note: ADR 0350 section 5. NEEDS THE USER: removal of crates and an edit of an existing test. Done 2026-11-16 ahead
+    of F-448 by the maintainer's decision (ADR 0800 §10, G14): crates/rcfd-studio and crates/rcfd-gui removed (47,263
+    lines, 381 tests; Cargo.lock 471 to 216 packages), launch scripts, CI excludes and doc references gone; lost
+    capabilities are F-835 to F-838 and lost engine tests F-834.
 - [~] **F-450** Overset: the prescribed fringe flux with a moving component
   - depends on: F-445, F-336
   - acceptance: With OversetSolver::set_fringe_flux(PrescribedOwnGradient) and the quadratic donor interpolation of
@@ -14096,7 +14099,7 @@ fixed by the item's registration ADR before any code.
     default bits unchanged.
   - note: Follow-up of F-693 (ADR 0628, 2026-11-15).
 
-## Electron Studio (F-800 to F-833)
+## Electron Studio (F-800 to F-838)
 
 Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0800](adr/0800-electron-studio-roadmap.md)). The F-800 to F-849 block is reserved for this roadmap (maintainer, 2026-11-16). F-448 depends on the parity subset.
 
@@ -14418,3 +14421,43 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     from the DOM per surface and fails past its budget; a view-and-report step.
   - note: ADR 0800 §8 (G22 added by the maintainer 2026-11-16; sweep as one item, option chosen by the maintainer).
     Traces: G22, G8, G13, G6.
+- [ ] **F-834** Engine tests that went with rcfd-studio, moved to rcfd-workspace
+  - depends on: F-449
+  - acceptance: The engine behaviour the deleted rcfd-studio tests checked is checked again in
+    crates/rcfd-workspace/tests (or the crate that owns it): the start-plan record of 22 shipped cases
+    (plans_6867e40.txt, restored from git history, not re-recorded), store hashes of the 10 shipped cases (F-476), plan
+    parity over every shipped example (F-271), the end-to-end store checks (SF2, SF4, SF5, SF8, SF9), a clean stop
+    writing its last snapshot with status.json cancelled and exit 7 (AA1), every schema leaf's default parsing, and no
+    iteration lost while polling a live run; each restored test names the deleted test it replaces.
+  - note: Added 2026-11-16 when F-449 ran ahead of F-448 (ADR 0800 §10). Traces: G14, G17.
+- [ ] **F-835** Electron Studio: new project
+  - depends on: F-449, F-805
+  - acceptance: An engine entry point creates a project (rcfd project init and an MCP create_project, through
+    rcfd_project::Project::create, ADR first); the Studio's project home offers it (button and palette) and opens the
+    new project; the learner's first path uses it instead of a copied example; e2e test.
+  - note: Lost with rcfd-studio (S/ui.rs). Traces: G14, G4, G15.
+- [ ] **F-836** Electron Studio: mesh preview before a run
+  - depends on: F-449, F-812, F-808
+  - acceptance: The case editor shows the mesh a case will build (generator and imported meshes, including a
+    [mesh.adapt] mesh) with patch visibility, from an engine entry point that builds the mesh without solving (ADR first
+    if none exists); the preview equals the solver's mesh (test replacing preview_g1 and adaptive_preview_f475); e2e
+    test.
+  - note: Lost with rcfd-studio (preview.rs, preview_ui.rs). Traces: G14, G15.
+- [ ] **F-837** Electron Studio: run setup, logs and field-view extras from rcfd-studio
+  - depends on: F-449, F-807, F-810
+  - acceptance: Each capability the deleted rcfd-studio had and the Electron Studio lacks is built or recorded as
+    declined by the maintainer: run setup for "simulate N s" (time step, adaptive correctors, store plan, Courant
+    warning with its fix), the Start run store section, runner budgets (.rcfd/runner-config.json), the log tail and
+    event list with solver warnings, residual columns and the report.html path in Runs, Save PNG, range modes whole run
+    and fixed, the 2D scale bar and domain size, Refine x2, Re-run with fields stored, the project argument at start, a
+    Designs group, data files apart from cases, unsaved marks and save-or-discard on exit, the Claude model name and
+    session cost; rcfd-gui's open-and-save of a single case file anywhere and the monitors plot log scale; one e2e test
+    per built capability.
+  - note: Lost with rcfd-studio and rcfd-gui (list in the F-449 merge report). Traces: G14, G15.
+- [ ] **F-838** Local-model assistant: keep, port or remove
+  - depends on: F-449
+  - acceptance: The maintainer decides what becomes of the local-model assistant that only rcfd-gui offered (presets
+    ollama, lm-studio, llama-cpp, vllm, openai, anthropic; keychain key; read-only and approve-writes modes; quick
+    actions) and of the crates left without users (rcfd-assistant, rcfd-render, the rcfd-claude code only rcfd-studio
+    used); the choice is carried out (a Studio panel, or removal with docs updated).
+  - note: Needs the maintainer. Traces: G14.

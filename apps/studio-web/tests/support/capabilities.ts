@@ -606,7 +606,7 @@ export function coverageReport(inv: Inventory, cov: CoverageFile, roadmap: reado
     '  switches on, and `rcfd serve` does not, so `service.info` does not list them. F-804 is their Studio item.',
     '- The co-simulation participants that `rcfd serve --cosim <case>` hosts: the `cosim.*` methods are listed, the',
     '  participants depend on a case.',
-    '- `rcfd-studio` and `rcfd-gui`: frozen until parity and then removed (G14, F-449); they are not engine capabilities.',
+    '- `rcfd-studio` and `rcfd-gui`: removed on 2026-11-16 (G14, F-449); they were not engine capabilities.',
     '- The arguments of each MCP tool and service method (their input schemas): the tool or method is the capability.',
     '- Exit codes, event kinds of `events.poll` and error codes: the engine prints or documents them but has no list to read.',
     '',
