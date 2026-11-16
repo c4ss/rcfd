@@ -694,8 +694,8 @@ fn l1_d1_resume_and_workers() {
 type CaseOut = (Result<PreCheckedResult, String>, Vec<Entry>);
 
 #[test]
-#[ignore = "heavy record (ADR 0645 A1 to A6, NC1, NC2): 30 fan runs of 50 evaluations in parallel, run once"]
-fn a_reduced_order_fan_with_stall_precheck_record() {
+#[ignore = "heavy record (ADR 0645 A1 to A6, NC1, NC2), run once: A1 to A6 met; NC1 missed on seed 4 (best / P_ref 0.99351 against the registered [0.9930, 0.9935]; every seed equal to the F-698 log), see ADR 0645 addendum 1"]
+fn a_reduced_order_fan_with_stall_precheck_record_nc1_known_miss() {
     let t = Instant::now();
     let tg = target_f3();
     let o = objective_f3();

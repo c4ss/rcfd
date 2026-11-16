@@ -248,3 +248,96 @@ point set from its first run. The decision rule is unchanged, with F1b in the pl
 Also before the corrected run, with no effect on any check: the located refusal of D4 carried a run of spaces inside its
 message, from a broken string continuation. It now reads `... more than max_rejected = 5 (0 of 25 evaluations made)`. F3c checks
 only that it contains `max_rejected = 5`.
+
+## Addendum 1 (2026-11-16): results
+
+Code: commit 9a2f770d (`bayes::run_prechecked`, `PreCheck`, `PreCheckScope`, `PreCheckedResult`, `PickKind::is_model_free`,
+the internal `propose_ranked`, `run` through the shared loop; `fan_objective::StallPreCheck`, `STALL_PRECHECK_ID`; the test file
+`tests/f716_stall_precheck.rs`), and the record renames of the results commit. Each registered run was made once. Logs in
+`f716-scratch`: `run_fast.log` (the fast tests, first run), `run_f1b.log` (F1b after amendment 1), `run_heavy.log` (the heavy
+record, 652 s), `b2.log`, `mutations.log` and `mut_*.log`. The B1 base digest is from `f716-scratch/base` (a `git archive` of
+d40cd665 with the B1 function as `tests/zz_b1_base.rs`, not committed).
+
+### Results
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| A1 failed share, seeds 1 to 10 | every seed `<= 14` of 50, no refusal | **0 of 50 on every seed**; no refusal | yes |
+| A2 R1 | `>= 9 of 10` within `P_ref (1.01)` | 10 of 10, best / `P_ref` 0.99303 to 0.99310, reached at evaluation 10 to 14 (F-698: 18 to 22) | yes |
+| A3 pre-checks in the ledger | counts equal; 50 objective entries; summary metrics equal | all equal; pre-checks 326, 325, 309, 310, 324, 313, 317, 304, 293, 328; rejected 276, 275, 259, 260, 274, 263, 267, 254, 243, 278; ROM operating points 443 to 478 per run (F-698: 150) | yes |
+| A4 located | all | every failed pre-check names `point 'R3'`; no objective entry failed | yes |
+| A5 exactness | every rejected point fails the objective at R3 | 2649 of 2649 | yes |
+| A6 E2 over the proposals (amendment 1) | 0 | 0 | yes |
+| NC1 pre-check off | every seed: failed in [34, 39] and best / `P_ref` in [0.9930, 0.9935] | failed 37, 35, 34, 36, 36, 36, 39, 36, 34, 36 (in range); ratios in range except **seed 4: 0.99351**; every seed equal to the F-698 log (failed count, ratio within 6e-6) | **no** (seed 4) |
+| NC2 scope `Initial` | recorded | failed 37, 35, 34, 36, 36, 36, 39, 36, 34, 36 (all at R3); 5 to 8 of the 15 initial points rejected; the same bests as NC1; target reached at evaluation 10 to 15 | recorded |
+| F1 (first run) | E2 0 | 18 (each evaluation against its own passed pre-check: the defective set-up of amendment 1) | no, set-up defect |
+| F1b | all clauses | 18 evaluations, 0 failed, 68 pre-checks and 50 rejected (ledger equal), fields, R3 reasons, exact, located, E2 0, every evaluation after a passed pre-check | yes |
+| F2 pass-through | equal; 25, 0 | equal; 25, 0 | yes |
+| F3c cap | `Err` with `max_rejected = 5`; 6 and 0 entries | as stated | yes |
+| F4 refusals | both refused, located | both | yes |
+| F5 scope `Initial` | model-free only, count equal | 10 pre-checks, all model-free, 10 tried (1 rejected) | yes |
+| L1 resume | lines byte-equal | equal (54 lines, 4 rejected) | yes |
+| D1 workers 1 and 8 | bit-equal | equal | yes |
+| B1 default bits | digest equal to d40cd665 | `be4bc4aa0063bc33` both | yes |
+| B2 existing | pass, unedited | `--lib` 138 passed; `f698_surrogate` 19 passed (3 ignored); `f697_fan_objective` 22 passed; `docs_site` passed | yes |
+| B3 fmt, clippy | clean | clean | yes |
+
+Where the fan failures sit (NC1): 352 of the 359 failures of the ten F-698 runs are at R3, 7 at R2, none at R1. With the
+pre-check on, no failure remained among the 500 evaluations.
+
+### Mutations (scratch copy `f716-scratch/mcopy`, fast tests; the unmutated control passes 7 of 7)
+
+| | Mutation | Caught by |
+|---|---|---|
+| M1 | failed pre-checks not fed back | F1b, F5, L1 |
+| M2 | a failed pre-check does not stop the evaluation | F1b, F3c |
+| M3 | pre-check entries not appended to the ledger | F1b, F3c, L1 |
+| M4 | `max_rejected` not enforced | F3c, by non-termination: the script's 5400 s timeout, not an assertion |
+| M5 | scope ignored | F5 |
+| M6 | the objective's first point checked instead of the named one | **survived** |
+| M7 | pre-check entries read from the ledger ignored | L1 |
+
+M6, diagnosed: with the pre-check at R1, almost nothing on the F3 box is rejected (NC1: no failure at R1). F1b's clauses on
+the rejected entries (reasons name R3, exactness) then hold vacuously. F1b also puts no limit on the failed count of its
+evaluations and does not check that the pre-check entries carry the metrics of R3. Only the heavy A1 would have caught M6.
+
+### Deviations
+
+* The uncapped prototype smoke was stopped by its PID (60096) after 277 minutes with no output, with the lead's agreement
+  (registration, "Prototype and an unfinished smoke").
+* F1's point set for E2 was defective. Amendment 1 corrected it before the corrected run, and the first test stays as the
+  ignored `f1_fan_fast_path_defective_e2_record`.
+* NC1's ratio range was copied from the rounded text of ADR 0621 ("0.9930 to 0.9935"), while its log has 0.99351 for seed 4.
+  The limit stays as registered. The heavy test is now the ignored record
+  `a_reduced_order_fan_with_stall_precheck_record_nc1_known_miss`, with A1 to A6 inside it, run once. It asserts NC1 first, so
+  its assertions stopped there. The A values above were printed before the assertions.
+* `propose_ranked` also leaves out a refined finalist within the exclusion radius (1e-6) of an earlier member of the list. D3
+  named a radius for the raw candidates only. This is the radius E2 checks, and A6 met it.
+* M4 was caught by non-termination, not by an assertion.
+
+### Decision
+
+By the registered rule: **todo**. NC1 is among the checks whose miss makes the item todo ("defaults or the control broken").
+The measured facts are these. The control is not broken: all ten pre-check-off runs reproduce the F-698 record, the counts
+exactly and the ratios within 6e-6. The miss comes from a limit copied from a rounded range. The acceptance clauses A1, A2
+and A3 are met with margin, and one mutation (M6) survives. Without the NC1 transcription error the rule would give
+**partial** (M6 survives), not done. The rule is applied as registered. Question 1 asks the maintainer.
+
+### Remaining questions
+
+1. **Status under the NC1 transcription miss.** (a) Keep todo as the rule says. (b) The maintainer reclassifies the item to
+   partial, because the control reproduced F-698 exactly and every acceptance clause is met. **Recommendation: (b)**. It needs
+   the maintainer and is not taken here.
+2. **M6.** Add a check that the pre-check entries carry the metrics of the named point, and a fan fast test whose box makes R1
+   and R3 differ. **Recommendation: in the follow-up below**, with no change here.
+3. **Cost.** In R1 the run makes about three times the ROM operating-point solves of F-698 (443 to 478 against 150). It pays
+   only when the evaluated model is dearer than one ROM operating point. **Recommendation: measure the saving when a CFD fan
+   objective runs in the loop** (the follow-up below).
+
+## For the lead: roadmap entries
+
+> Proposed status: todo (by the registered rule of ADR 0645: the control NC1 missed its transcribed ratio range on one seed while reproducing every F-698 run; every acceptance clause met; recommendation to the maintainer: partial, question 1)
+
+> Fan breakdown part H3 (docs/fan-project-breakdown.md), follow-up of F-698 (ADR 0621). ADR 0645, 2026-11-16. Library only, opt-in (no case key, no MCP tool, no golden; default bits equal to d40cd665 by digest): bayes::run_prechecked gives every pick of the surrogate loop first to a cheaper model (PreCheck with scope Initial or Every, at most 400 failed pre-checks per run and 20 tries per step, a progress line per step); a pick it fails is not evaluated, its entry (an evaluation entry of the pre-check's own evaluator id) is a failed observation from then on, and after a failed pick the step tries the next point of a ranked list from the same fit. fan_objective::StallPreCheck runs the objective's own per-point call at named impedance points, so a candidate it fails also fails the objective, with the same reason; R3 (largest system coefficient, lowest flow, highest incidence) is checked. On the F-698 R1 set-up (seeds 1 to 10, 50 evaluations): 0 failed evaluations on every seed (34 to 39 without it), 10 of 10 within 1 percent of the grid optimum (best / P_ref 0.99303 to 0.99310, reached by evaluation 10 to 14), 243 to 278 failed pre-checks per run, all in the ledger with the summary counts, and all 2649 rejected points fail the objective at R3; a pre-check of the initial design alone changes nothing (34 to 39 failed). Fast checks: pass-through equals run, cap refusal, scope, resume byte-equal, workers bit-equal. Six of seven mutations caught (checking another point than the named one survives: the fast fan test has no bound on its failed count). The control with the pre-check off reproduced every F-698 run but missed its registered ratio range on seed 4 (0.99351 against 0.9935, a range copied from rounded text), which the registered rule counts as todo. Not covered: a dearer evaluated model (in R1 the run makes about three times the ROM operating points of F-698), tolerance plans, batches above 1 with the fallback.
+
+> Follow-up proposed: Stall pre-check: the named point and the saving against a dearer model. Deps F-716. Acceptance: Every limit not stated here is registered in the ADR before the run. A fast fan check in which the pre-check entries carry the metrics of the named point and the failed count of the evaluations is bounded, so that checking a point other than the named one fails it; the ADR 0645 checks keep their results; and, once a CFD fan objective runs in the loop, the number of CFD evaluations saved by the reduced-order pre-check measured on a registered set-up.
