@@ -185,3 +185,91 @@ Mutations (scratch copy of the code commit, one at a time; each must fail a regi
 
 * ADR 0665 D2 (the held-tolerance floor, first principles) and ADR 0662 D2 (the seeded Fisher-Yates draw: Fisher and Yates
   1938, Durstenfeld 1964, cited from memory there and here; the draw is the existing `rerun_pairs`).
+
+## Addendum 1: results (2026-11-16)
+
+Code: commit dd5e05d5 (registration f182d456 before it). `crates/rcfd-api/src/design/hypothesis.rs`: `FloorSample` and the
+record field `floor_sample` (written only when given), its parse and validation (`register` and `register_batch` refuse it),
+`floor_seed`, `floor_sample_pairs`, `SampledFloor` and `HeldFloor::sample` (the stored `sample` key written only with a sample),
+`held_floor` (the midpoint rule unchanged without a sample; the largest over the midpoint and the sampled design points with
+one), `held_floor_at`, the private `floor_at` (ADR 0665's midpoint body, the place named in its messages), the sample refusal in
+`register_with_floor`, the sample checks in `check_member`, a module doc line. New `crates/rcfd-api/tests/f749_floor_sample.rs`
+(8 fast tests). `docs/design-loop.md`: one bullet. No shared solver file, no golden, no hash table, no case key, no MCP tool.
+
+Runs (release profile; logs in `f749-scratch/`): the registered run `cargo test -p rcfd-api --release --test f749_floor_sample
+-- --test-threads=2 --nocapture` (`run1.log`), made once: 8 passed. Then `f728_coupled_held` (`c3_f728.log`), `f701_hypothesis`
+(`c1_fast.log`) and once `--ignored` (`c1_heavy.log`), `f727_rerun_sample` (`c2_fast.log`) and once `--ignored`
+(`c2_heavy.log`), `--lib` (`c4_lib.log`), rcfd-cli `docs_site` (`c4_docs.log`); fmt and clippy before the registered run
+(`fmt.log`, `clippy.log`). Mutations on a `git archive` copy of dd5e05d5 with its own target directory (`mutate.py`,
+`mutate_summary.log`, one log per mutation; the unmutated control 8 of 8).
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| P0 | the smoke literals of 6600f7c9; no new key; `sample` None | WC value 66 entries, 63350 bytes, `07ff3427fa1da108`, `fnv1a64:54561c0a1e6d09c4`; WQ value 66, 63469, `0de2dc24545db9a1`, `fnv1a64:c9810d4e57d4ccd3`; WC as_low_arm 66, 61909, `60277d546d014ba1`, `fnv1a64:166ddb3ab9838223`; no `floor_sample` or `sample` key; `sample` None; 3 of 3 | yes |
+| P1 (a) | pairs and seed exact | 24 pairs equal to `rerun_pairs(32, 24, FNV("<hash>:floor:749001"))`; seed and points equal | yes |
+| P1 (b) | 24 of 24 within 1e-6 | 24 of 24, worst 1.1e-9 | yes |
+| P1 (c) | midpoint within 1e-6 | 3.570801708666e-6 against 3.570801709402e-6: 2.1e-10 | yes |
+| P1 (d) | value within 1e-6 of the closed-form maximum; probe equal | 7.941611649655e-6 against 7.941611650587e-6: 1.2e-10; probe c = 0.98185 (pair 2), equal bit for bit | yes |
+| P1 (e) | `held_floor` = stored bit for bit | equal | yes |
+| P1 run | confirmed, no problem, genuine | 64 evidence, confirmed (mean 0.04877), no problem with the re-run model (`evidence_rerun` true, the sample floor recomputed), genuine (entry 65) | yes |
+| P2 (a) | sample / midpoint >= 1.5 | 2.2240 | yes |
+| P2 (b) | `held_floor_at(1)` within 1e-6 of 4 F_WC | 8.161832477353e-6 against 8.161832478632e-6: 1.6e-10 | yes |
+| P2 (c) | closed-form F(1) / F(0.5) >= 2 | 2.285714 | yes |
+| P3 | refused naming min_effect, the sample floor and the midpoint floor; between; closed form; file unchanged; midpoint accepted at slot 1 | "min_effect: 0.00005 is below 10 times the held-tolerance floor 0.000007881777033679951 of 'power' over the domain midpoint and 24 sampled design pairs (largest at pair 22; the midpoint floor is 0.0000035708017086659505; ADR 0670)"; 10 F_mid 3.571e-5 < 5e-5 < 10 F_s 7.882e-5; F_s within 1.1e-10 of the closed form; unchanged; H-1 slot 1 | yes |
+| P4 | one high arm at every point; 8 values and the midpoint within 1e-6 | 8 of 8 (one arm, high; `held_floor_at` equal bit for bit), worst 3.0e-12; midpoint 4.4e-12; the stored floor one arm, high | yes |
+| P5 | inflation <= 1e-6 | 0 (the 32 per-pair floors are not above the midpoint's; largest the midpoint) | yes |
+| P6 | (a) to (d), 4 of 4 | (a) "... registers a floor sample and its stored held-tolerance floor carries none"; (b) "the sampled pairs ... do not match its record"; (c) "... is not the largest of its sample" without the model, and also "... not reproduced" with it; (d) "... carries a floor sample its record does not register"; 4 of 4 | yes |
+| P7 | 5 of 5 refused, field named, file unchanged, the [10, 150] record accepted by the midpoint rule | 5 of 5 ("floor_sample: `register` computes no held-tolerance floor; use `register_with_floor`" twice; "floor_sample: 0 points" and "33 points"; "the floor probe at design pair 10 of the floor sample, arm low: held metric 'q' ... not within ..."); no file written; the midpoint registration at slot 1 | yes |
+| P8 | byte-identical | 2507 and 2507 bytes, equal | yes |
+| C1 | 19 fast; heavy S1 1, S2 1592 of 1595, NC1 400, NC2 61, S4 118 | 19 passed (2 ignored); heavy S1 1, NC2 61, NC1 400, S2 1592 of 1595, S5 0, S4 118 | yes |
+| C2 | fast pass; heavy A1 394, NC6 0, NC7 116 | 8 passed (1 ignored); heavy A1 394 of 400, A1b 400, A2 0 (re-run ok 400), A3 800 of 800 (pair counts 60 to 107), NC6 0 (None 400), NC7 116 | yes |
+| C3 | 10 pass with ADR 0665's numbers | 10 passed; J1 (d) 8.673e-9, J2 2.79e-11, J0 literals equal, J3 to J9 as in ADR 0665 addendum 1 | yes |
+| C4 | `--lib`, `docs_site` | 141 passed (4 ignored); 2 passed | yes |
+| R | fmt, clippy clean | clean, clean | yes |
+
+Mutations (each a one-place change, the 8 tests run once; caught = at least one test fails):
+
+| Id | Mutation | Expected | Failing tests | Caught |
+|---|---|---|---|---|
+| M35 | the sample ignored | P1, P3 | P1/P2, P3, P6 | yes |
+| M36 | the smallest per-point floor | P1 | P1/P2, P3, P6 | yes |
+| M37 | pairs drawn with the design seed | P1 (a) | P1/P2, P6 | yes |
+| M38 | a sampled pair's floor at the midpoint | P1 (b), P4 | P1/P2, P3, P4, P6, P7 | yes |
+| M39 | design points from the caller seed | P1 (b) | P1/P2, P3, P4 | yes |
+| M40 | `verify` does not require `sample` | P6 (a) | P6 | yes |
+| M41 | `verify` does not compare the pairs | P6 (b) | P6 | yes |
+| M42 | `verify` does not check the largest | P6 (c) | P6 | yes |
+| M43 | plain `register` accepts a floor sample | P7 | P7 | yes |
+| M44 | `"sample": null` written without a sample | P0 | P0 | yes |
+| M45 | the refusal leaves out the midpoint floor | P3 | P3 | yes |
+
+Deviations: none. P1's largest point is pair 2 (c = 0.982); P3's record (another hash, so another design and sample) has its
+largest at pair 22. The heavy records ran concurrently with the mutation builds; f701's heavy pair took 411 s (S4 140 s). Not
+run: the whole workspace and the whole rcfd-api integration suite (the daily gate), rcfd-mcp tests (no MCP file touched),
+`baseline_hashes` (no shared solver file touched).
+
+Decision by the registered rule: **done**. Every registered check is met, P5 holds as stated, and M35 to M45 are all caught.
+Every ADR 0624 check keeps its numbers (C1), every ADR 0662 check (C2) and every ADR 0665 check (C3).
+
+### Remaining questions (each with a recommendation)
+
+1. **The default size of the sample.** Opt-in, `k` chosen by the caller. Options: (a) keep; (b) default `k = n_pairs` whenever
+   a hold is given. Recommendation: (a) in the library (defaults stay bit-identical); the MCP tool of F-702 should pass
+   `floor_sample = n_pairs` when the evaluator is cheap, since only then does the floor bound every pair of the design. Taken
+   on the maintainer's standing instruction of 2026-11-11 (take the recommendation).
+2. **A bound at unsampled pairs.** With `k < n_pairs` the floor bounds the sampled pairs only. Options: (a) keep and say so;
+   (b) a Lipschitz or second-sample bound. Recommendation: (a); a bound between points needs to know how fast the sensitivity
+   varies, and the evaluator does not report that.
+3. **Cost at the CFD tier.** About 36 evaluations per point for two holds. Recommendation: nothing now (synthetic evaluators
+   only). A fan hypothesis at the CFD tier should start with a small `k` plus the midpoint, and the ADR that registers it should
+   say why that `k` is enough.
+
+## For the lead: roadmap entries
+
+> Proposed status: done
+
+> Follow-up of F-728 (ADR 0665 question 2). ADR 0670, 2026-11-16. DONE. Library only, opt-in: a hypothesis record may carry floor_sample {points: k} (written only when given, so midpoint records keep their text and hash); register_with_floor then takes the held-tolerance floor as the largest over the domain midpoint and the design points of k of the registered pairs (drawn by the seeded Fisher-Yates of ADR 0662 from FNV-1a of "<record hash>:floor:<seed>"), with both arms solved at each point exactly as their evidence would be; the stored settings.held_floor gains a sample object (pairs, seed, per-pair values, midpoint, largest) that verify checks against the record without a model and recomputes with one; register and register_batch refuse a floor sample. Checks on a synthetic flow-and-speed evaluator whose sensitivity to the held metrics grows as G = 1 + 3 c^2 over the domain (closed form F(c) = G(c) F_WC, F(1) / F(0.5) = 2.29): with 24 of 32 pairs every per-pair floor within 1.1e-9 of the closed form, the sample floor 7.94e-6 within 1.2e-10 of the closed-form maximum and 2.22 times the midpoint floor (registered factor 1.5), the as_low_arm sample within 3e-12, and no inflation (0) on the evaluator without variation; a min_effect of 5e-5, above 10 times the midpoint floor (3.57e-5) and below 10 times the sample floor (7.88e-5), refused naming min_effect, the sample floor and the midpoint floor, and accepted by the midpoint rule; a removed, edited or invented stored sample is caught; registrations made by the midpoint rule are byte-identical to the base (three ledgers through register_with_floor and run); every ADR 0624 (S1 1, S2 1592 of 1595, NC1 400, NC2 61, S4 118), ADR 0662 (A1 394, NC7 116) and ADR 0665 check (10 of 10, J1 8.67e-9, J2 2.8e-11) keeps its numbers. Eleven of eleven mutations caught. Not covered: a bound at unsampled pairs, a sample off the design, second order; no MCP tool (F-702).
+
+> Note for F-728 (append): ADR 0670 (F-749, 2026-11-16): the held-tolerance floor may be taken over a registered seeded sample of the design (floor_sample); midpoint registrations keep their bytes and every ADR 0665 check keeps its numbers.
+
+> Note for F-702 (append): ADR 0670 (F-749, 2026-11-16): when a hold is given, the MCP tool should call register_with_floor, and may pass floor_sample = n_pairs for a cheap evaluator (the floor then bounds every pair of the design).
