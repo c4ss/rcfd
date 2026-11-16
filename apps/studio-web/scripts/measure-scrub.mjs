@@ -14,8 +14,9 @@
 //
 //   npm run build && node scripts/package-dir.mjs
 //   f447_bench gen <folder> tiny 1e6 4e6        (crates/rcfd-api/examples/f447_bench.rs; once, by hand; 4e6 takes ~20 min)
-//   npm run bench:scrub -- --data=<folder> [--out=<file.json>] [--smoke] [--no-live]
+//   npm run bench:scrub -- --data=<folder> [--out=<file.json>] [--smoke] [--no-live] [--no-p6]
 //
+// --no-p6 leaves out P6 (the 4e6 box), as the light set of scripts/bench.mjs does (F-817).
 // The script adds what the engine's run list needs beside the generated stores (rcfd-project.json; for each box a folder
 // named as a run id, runs/r-20261116T000000-<size>: runs/box-<size>-raw moved there and linked back (a junction), with
 // run.json, status.json and a residuals.jsonl of one line per stored step), so that <folder>/project is a project the
@@ -35,6 +36,7 @@ const repo = path.resolve(root, '..', '..');
 const arg = (name) => process.argv.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3) ?? '';
 const smoke = process.argv.includes('--smoke');
 const noLive = process.argv.includes('--no-live');
+const noP6 = process.argv.includes('--no-p6');
 const data = arg('data') ? path.resolve(arg('data')) : '';
 if (!data) {
   console.error('usage: node --experimental-strip-types scripts/measure-scrub.mjs --data=<folder of f447_bench gen> [--out=<file.json>] [--smoke] [--no-live]');
@@ -55,7 +57,7 @@ if (!mcp) {
   console.error('rcfd-mcp not found: cargo build --release -p rcfd-mcp, or set RCFD_MCP_BIN');
   process.exit(2);
 }
-const CHECKS = smoke
+const CHECKS = (smoke
   ? [
       { name: 'P5', size: '1e5', passes: 1, rate: 10, frameMs: 150, blocking: true },
       { name: 'P6', size: 'tiny', passes: 1, rate: 3, frameMs: null, blocking: false },
@@ -63,7 +65,8 @@ const CHECKS = smoke
   : [
       { name: 'P5', size: '1e6', passes: 10, rate: 10, frameMs: 150, blocking: true },
       { name: 'P6', size: '4e6', passes: 5, rate: 3, frameMs: null, blocking: false },
-    ];
+    ]
+).filter((c) => !(noP6 && c.name === 'P6'));
 const project = path.join(data, 'project');
 // the engine lists only folders named as run ids (r-<date>T<time>-<hex>), and not through a link: each generated box is
 // moved to such a name (a rename), and its old name left as a link to it for scripts/measure-field.mjs

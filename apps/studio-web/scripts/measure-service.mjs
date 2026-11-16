@@ -14,8 +14,9 @@
 //   sample. Sample: the first 300 iteration events or what 120 s give.
 //
 //   npm run build && node scripts/package-dir.mjs
-//   node scripts/measure-service.mjs --bench-server=<path of f447_bench(.exe)> [--out=<file.json>] [--smoke]
+//   node scripts/measure-service.mjs --bench-server=<path of f447_bench(.exe)> [--out=<file.json>] [--smoke] [--events=<n>]
 //
+// --events=<n> takes the first n iteration events for P2 in place of 300 (the light set of scripts/bench.mjs, F-817).
 // f447_bench is built by `cargo build --release -p rcfd-api --example f447_bench`. A heavy record (house rule 7): run by
 // hand, once, and recorded in ADR 0801 addendum 2. Not part of npm test. --smoke runs a small version to check the script.
 import { _electron as electron } from '@playwright/test';
@@ -34,6 +35,7 @@ if (!benchServer) {
   process.exit(2);
 }
 const Q = smoke ? { calls: 20, warm: 5, box: [10, 10, 10], events: 8, joins: 20, maxS: 30 } : { calls: 1000, warm: 50, box: [50, 50, 40], events: 300, joins: 200, maxS: 120 };
+if (arg('events')) Q.events = Number(arg('events'));
 
 function boxToml(n) {
   const walls = ['xmin', 'xmax', 'ymin', 'zmin', 'zmax'].map((p) => `[boundaries.${p}]\nvelocity = "fixed"\n`).join('');

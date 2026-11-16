@@ -24,6 +24,7 @@
     "bench:plots": "node scripts/measure-plots.mjs",
     "bench:field": "node scripts/measure-field.mjs",
     "bench:scrub": "node --experimental-strip-types scripts/measure-scrub.mjs",
+    "bench": "node scripts/bench.mjs",
     "field": "node scripts/open-field.mjs",
     "start": "electron ."
   },
