@@ -768,6 +768,96 @@ impl<M: SpecimenModel> Model for ObjectiveModel<'_, M> {
     }
 }
 
+/// Evaluator id of [`StallPreCheck`].
+pub const STALL_PRECHECK_ID: &str = "rcfd.fan_objective.stall_precheck";
+/// Version of [`StallPreCheck`].
+pub const STALL_PRECHECK_VERSION: &str = "1";
+
+/// A stall pre-check of the objective (ADR 0645): the nominal specimen of the candidate at the named impedance points only,
+/// with the objective's metrics, through the same [`SpecimenModel::evaluate`] call and the same finiteness test as
+/// [`TolerantEvaluator::specimen_table`]. A candidate it fails fails the objective too, with the same located reason
+/// (`point '<label>': nominal: ...`); one it passes may still fail at the other points or in its specimens.
+pub struct StallPreCheck<'a, M: SpecimenModel> {
+    /// The objective.
+    pub objective: &'a FanObjective,
+    /// The model.
+    pub model: &'a M,
+    /// Labels of the points checked, in this order (each must be a point of the objective).
+    pub points: Vec<String>,
+}
+
+impl<M: SpecimenModel> Model for StallPreCheck<'_, M> {
+    fn id(&self) -> &str {
+        STALL_PRECHECK_ID
+    }
+    fn version(&self) -> &str {
+        STALL_PRECHECK_VERSION
+    }
+    fn fidelity(&self) -> Fidelity {
+        self.model.fidelity()
+    }
+    fn evaluate(&self, params: &[Quantity]) -> Outcome {
+        let o = self.objective;
+        let refuse = |reason: String| Outcome {
+            verdict: Verdict::NotEvaluated,
+            reason,
+            ..Default::default()
+        };
+        let x = match o
+            .study_def()
+            .vector(&|n| params.iter().find(|q| q.name == n).map(|q| q.value))
+        {
+            Ok(x) => x,
+            Err(e) => return refuse(e),
+        };
+        let mut pts = Vec::with_capacity(self.points.len());
+        for l in &self.points {
+            match o.points.iter().find(|p| &p.label == l) {
+                Some(p) => pts.push(p),
+                None => return refuse(format!("stall pre-check: point '{l}' is not a point of the objective")),
+            }
+        }
+        if pts.is_empty() {
+            return refuse("stall pre-check: no point named".into());
+        }
+        let failed = |label: &str, e: String| Outcome {
+            verdict: Verdict::Diverged,
+            reason: format!("point '{label}': nominal: {e}"),
+            ..Default::default()
+        };
+        let spec = match self.model.nominal(&x) {
+            Ok(s) => s,
+            Err(e) => {
+                return Outcome {
+                    verdict: Verdict::Diverged,
+                    reason: format!("nominal: {e}"),
+                    ..Default::default()
+                }
+            }
+        };
+        let needed = o.needed();
+        let mut metrics = Vec::new();
+        for p in pts {
+            let r = match self.model.evaluate(&spec, p, &needed) {
+                Ok(r) => r,
+                Err(e) => return failed(&p.label, e),
+            };
+            for m in &needed {
+                match r.get(m) {
+                    Some(v) if v.is_finite() => metrics.push(Quantity::new(
+                        &format!("{m}@{}", p.label),
+                        *v,
+                        &o.unit_of(self.model, m),
+                    )),
+                    Some(v) => return failed(&p.label, format!("metric '{m}' is not finite ({v})")),
+                    None => return failed(&p.label, format!("metric '{m}' was not returned")),
+                }
+            }
+        }
+        Outcome::ok(metrics)
+    }
+}
+
 // ---------------------------------------------------------------- the reduced-order fan target
 
 /// Candidate -> fan of the schema of ADR 0118.
