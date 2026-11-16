@@ -7151,9 +7151,9 @@
     "deps": [
       "F-801"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "The DESIGN.md tokens (colour, type ramp, rules, pictogram grid) as one CSS token file and a TypeScript export of the same values; the primitives of DESIGN.md Components (buttons, segmented toggles, inputs, tabs, select, switch, table, slider, pictograms) built on React Aria Components; a unit test that computes the contrast of every text and graphic token pair against its ground and fails below WCAG 2.2 AA (G8); a keyboard test of each primitive; a view-and-report step for the maintainer.",
-    "note": "ADR 0800. Traces: G1, G8; DESIGN Colors, Typography, Shapes, Components. The reference is apps/studio-prototype/."
+    "note": "ADR 0800. Traces: G1, G8; DESIGN Colors, Typography, Shapes, Components. The reference is apps/studio-prototype/. Done 2026-11-16: tokens.ts single source (tokens.css generated), primitives in src/renderer/ui/, gallery at #/dev/primitives, 98-pair contrast test, keyboard e2e. Six contrast fixes made in product tokens; DESIGN.md edits proposed, awaiting the maintainer."
   },
   {
     "id": "F-803",

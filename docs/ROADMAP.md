@@ -14115,7 +14115,7 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     view within the P10 limit of docs/studio-guardrails.md G9 on the maintainer's machine.
   - note: ADR 0800; ADR 0801 addendum 1 (@playwright/test 1.65.1; P10 on Electron 45.3.3: median 476 ms, max 989 ms,
     one run under load 0.87 to 1.00). Traces: G9 (P10), G10, G13; PRODUCT Stack.
-- [ ] **F-802** Electron Studio: design tokens and accessible primitives from DESIGN.md
+- [x] **F-802** Electron Studio: design tokens and accessible primitives from DESIGN.md
   - depends on: F-801
   - acceptance: The DESIGN.md tokens (colour, type ramp, rules, pictogram grid) as one CSS token file and a TypeScript
     export of the same values; the primitives of DESIGN.md Components (buttons, segmented toggles, inputs, tabs, select,
@@ -14123,7 +14123,9 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     text and graphic token pair against its ground and fails below WCAG 2.2 AA (G8); a keyboard test of each primitive;
     a view-and-report step for the maintainer.
   - note: ADR 0800. Traces: G1, G8; DESIGN Colors, Typography, Shapes, Components. The reference is apps/studio-
-    prototype/.
+    prototype/. Done 2026-11-16: tokens.ts single source (tokens.css generated), primitives in src/renderer/ui/, gallery
+    at #/dev/primitives, 98-pair contrast test, keyboard e2e. Six contrast fixes made in product tokens; DESIGN.md edits
+    proposed, awaiting the maintainer.
 - [ ] **F-803** Electron Studio: service client for control and events
   - depends on: F-801
   - acceptance: A TypeScript client of rcfd-service/1 in the main process (JSON-RPC over TCP or stdio, events.poll long-
