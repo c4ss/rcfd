@@ -30,6 +30,9 @@ import {
   type Sort,
   type StateFilter,
 } from './model.js';
+import { pendingByRun, requestWords, withStartedRuns } from './control-model.js';
+import { RunBar, SelectedRunControls } from './RunControls.js';
+import type { RunRequest } from '../../shared/project.js';
 import './runs.css';
 
 /** The order of the state filter's options. */
@@ -48,7 +51,10 @@ export function RunsView({ view, selected, onSelect, onOpenWorkspace }: RunsView
   const [filter, setFilter] = useState('');
   const [stateFilter, setStateFilter] = useState<StateFilter>('all');
   const [sort, setSort] = useState<Sort>({ column: 'case', direction: 'ascending' });
-  const all = useMemo(() => runRows(view.runs.items, view.runDetails, view.runDetailErrors), [view.runs.items, view.runDetails, view.runDetailErrors]);
+  // F-807: a run this window started shows at once, from start_run's answer, until the list holds its record
+  const items = useMemo(() => withStartedRuns(view.runs.items, view.runRequests), [view.runs.items, view.runRequests]);
+  const all = useMemo(() => runRows(items, view.runDetails, view.runDetailErrors), [items, view.runDetails, view.runDetailErrors]);
+  const pending = useMemo(() => pendingByRun(view.runRequests), [view.runRequests]);
   const rows = useMemo(() => sortRows(filterRows(all, filter, stateFilter), sort), [all, filter, stateFilter, sort]);
   const counts = useMemo(() => stateCounts(all), [all]);
   const picked = selected === null ? null : (all.find((r) => r.id === selected) ?? null);
@@ -62,6 +68,7 @@ export function RunsView({ view, selected, onSelect, onOpenWorkspace }: RunsView
   return (
     <div className="rv">
       <section className="rv-list" aria-labelledby="rv-title">
+        <RunBar view={view} onStarted={onSelect} />
         <div className="rv-tools">
           <h1 id="rv-title" className="rv-title">
             Runs <span className="rv-total">{view.runs.total}</span>
@@ -79,8 +86,8 @@ export function RunsView({ view, selected, onSelect, onOpenWorkspace }: RunsView
         ) : all.length === 0 ? (
           <p className="rv-empty">
             No runs yet. A run solves one case and keeps its results in <span className="rv-file">runs/</span>; the runner owns it, so it goes on when
-            the Studio is closed. The Studio cannot start runs yet; Claude Code can (<span className="rv-file">start_run</span>), and so can the CLI (
-            <span className="rv-file">rcfd-runner start</span>). Their runs appear here as they start.
+            the Studio is closed. Choose a case above and Run it, or Queue it with a priority. Claude Code (<span className="rv-file">start_run</span>)
+            and the CLI (<span className="rv-file">rcfd-runner start</span>) start the same runs; theirs appear here as they start.
           </p>
         ) : (
           <div
@@ -119,7 +126,7 @@ export function RunsView({ view, selected, onSelect, onOpenWorkspace }: RunsView
               </TableHeader>
               <TableBody
                 items={rows}
-                dependencies={[selected, view.runDetails]}
+                dependencies={[selected, view.runDetails, view.runRequests]}
                 renderEmptyState={() => (
                   <div className="rv-nomatch">
                     <p>No run matches this filter.</p>
@@ -135,7 +142,7 @@ export function RunsView({ view, selected, onSelect, onOpenWorkspace }: RunsView
                   </div>
                 )}
               >
-                {(r) => <RunTableRow row={r} faded={selected !== null && r.id !== selected} />}
+                {(r) => <RunTableRow row={r} faded={selected !== null && r.id !== selected} pending={pending.get(r.id) ?? null} />}
               </TableBody>
             </Table>
           </div>
@@ -152,7 +159,7 @@ export function RunsView({ view, selected, onSelect, onOpenWorkspace }: RunsView
           </ul>
         )}
       </section>
-      <SelectedRun row={picked} selected={selected} onClear={() => onSelect(null)} onOpenWorkspace={onOpenWorkspace} />
+      <SelectedRun row={picked} selected={selected} onClear={() => onSelect(null)} view={view} onSelect={onSelect} onOpenWorkspace={onOpenWorkspace} />
     </div>
   );
 }
@@ -162,7 +169,7 @@ function StateCell({ row, faded }: { row: RunRow; faded: boolean }) {
   return s ? <StateMark state={s} faded={faded} /> : <span className="ui-state rv-state-word">{unknownWord(row.state)}</span>;
 }
 
-function RunTableRow({ row, faded }: { row: RunRow; faded: boolean }) {
+function RunTableRow({ row, faded, pending }: { row: RunRow; faded: boolean; pending: RunRequest | null }) {
   const r = result(row);
   const failed = row.state === 'failed';
   return (
@@ -181,6 +188,12 @@ function RunTableRow({ row, faded }: { row: RunRow; faded: boolean }) {
           {r.head}
         </span>
         <span className={failed ? 'rv-note rv-note--failed' : 'rv-note'}>{r.note}</span>
+        {pending && (
+          // F-807: what this window asked of the runner and has not seen it do yet (the state cell stays the runner's)
+          <span className="rc-pending" data-request-seq={pending.seq} data-answered-at={pending.answeredAt} data-slow={pending.slow ? 'true' : 'false'}>
+            {requestWords(pending)}
+          </span>
+        )}
       </Cell>
     </Row>
   );
@@ -206,7 +219,21 @@ const report = (v: number): string => {
   return s.includes('e') ? s : String(Number(s));
 };
 
-function SelectedRun({ row, selected, onClear, onOpenWorkspace }: { row: RunRow | null; selected: string | null; onClear: () => void; onOpenWorkspace?: () => void }) {
+function SelectedRun({
+  row,
+  selected,
+  onClear,
+  view,
+  onSelect,
+  onOpenWorkspace,
+}: {
+  row: RunRow | null;
+  selected: string | null;
+  onClear: () => void;
+  view: ProjectView;
+  onSelect: (id: string | null) => void;
+  onOpenWorkspace?: () => void;
+}) {
   if (row === null) {
     return (
       <aside className="rv-run rv-run--none" aria-labelledby="rv-run-title">
@@ -251,6 +278,7 @@ function SelectedRun({ row, selected, onClear, onOpenWorkspace }: { row: RunRow 
           <Button onPress={projectActions.refresh}>Read again</Button>
         </div>
       )}
+      <SelectedRunControls view={view} row={row} onStarted={onSelect} />
       <dl className="rv-grid" aria-label={`Numbers of ${row.id}`}>
         <Num caption={steady === true ? 'Iterations' : 'Steps'}>{row.step}</Num>
         <Num caption="Time, s" word={timeNote(row) !== null}>

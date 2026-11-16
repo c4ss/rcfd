@@ -244,6 +244,133 @@ by WebGL 2 (fallback: <why>)"). Until a project view hosts it (F-806), it is sho
   keyboard; screenshots at 1440 x 900 in `test-results-visual/f808/`).
 - `performance` marks: `rcfd:field:open` and the measure `rcfd:field:first-picture` (P7, `scripts/measure-field.mjs`).
 
+## Run control (F-807)
+
+Runs are started, queued, paused, resumed, stopped and cancelled from the window, and only through the project's runner
+(G7): the Studio asks the engine's project server (`start_run`, `pause_run`, `resume_run`, `cancel_run`), the server
+writes the request into the project, and `rcfd-runner` acts on it. Closing or killing the Studio leaves every run going.
+
+- Where: the run bar above the runs table (Start a run: the case, Run, Queue…, Start the runner); Run on each case of the
+  project home (switches to Runs with the new run selected); and Run control in the selected run's panel (Pause or
+  Resume, Stop… or Cancel…, Run again). Every control is reached and operated from the keyboard.
+- Actions: `src/shared/actions/runs.ts` names each one (`project.run_case`, `project.queue_case`, `project.pause_run`,
+  `project.resume_run`, `project.stop_run`, `project.cancel_run`, `project.start_runner`) with its parameters, when it
+  applies (with the reason when it does not), its confirmation, and its MCP and `rcfd-runner` equivalents (G16), shown
+  under each request. They are a registry of their own: the action registry of F-827 maps the service methods one to one.
+- Availability: a control that cannot apply is an unavailable chip whose tooltip says why and what to do (Stop on an
+  ended run: "there is nothing to stop. Run its case again for a new run."). The main process checks the same rules
+  again before anything reaches the engine (`src/main/project/control.ts`).
+- Confirmation (G18): Stop… and Cancel… open a confirmation strip in the panel that says what is lost (Stop: the steps
+  not computed yet; the run cannot be resumed; results so far stay in `runs/<id>/`; a solver that does not stop within
+  the runner's grace time is killed. Cancel of a queued run: no result is lost, only its place in the queue). The safe
+  button has the focus; Escape keeps the run and returns the focus to the control.
+- Feedback: the request shows in the run list at once (a note in the run's result cell: what was asked, when, and what it
+  waits for), the new run of a start shows from `start_run`'s answer before the list holds it, and the runner's own state
+  follows with the feed and the fast reads (every 100 ms for 5 s after an action, `RUN_BOOST_MS`).
+- Refusals (G19): each says the problem (with the engine's own words when the engine refused) and the recovery: a case
+  deleted outside the Studio, a run that ended before the request reached the runner, a run that is not there, a project
+  server that does not start, a runner that does not start.
+- No runner alive: the engine has no query for it, so a request the runner has not acted on after 3 s (`RUN_SLOW_MS`)
+  says the runner may not be running and offers Start the runner (`rcfd-runner ensure --project <folder>`, the runner
+  beside `rcfd-mcp`, never one from `PATH`). `start_run` itself starts a runner when none is alive.
+- P2, measured (`tests/e2e/run-control.spec.ts`, written to `test-results-visual/f807/p2.json`): from the main process's
+  engine answer to the renderer's state listener, under 1 ms (0.75 to 0.90 ms); to the run list's note in the DOM, 13 to
+  19 ms; for run, queue, cancel, pause, resume and stop, on the maintainer's machine. The test holds the arrival to P2
+  (20 ms) and the DOM commit to 50 ms.
+- Tests: `tests/unit/run-control.spec.ts` (each action against the engine's sources and inventory, availability,
+  confirmations, refusals, the session with a fake engine, the port, the run list's notes, the stylesheet),
+  `tests/e2e/run-control.spec.ts` (against the real `rcfd-mcp` and `rcfd-runner` on a copy of the quick-start project
+  holding one run at a time: each action by keyboard, a refused action in the window, past the page and by the engine,
+  no runner alive, and G7; screenshots in `test-results-visual/f807/`).
+
+Decisions taken in building F-807 (options, the recommendation followed; each reversible without touching the engine):
+
+- D1, the route to the runner: (a) a second project server for the project, not read-only, started on the first action
+  and used only for the four run tools; (b) run `rcfd-runner start|pause|resume|cancel` as child processes; (c) open the
+  one project server without `--read-only`. Taken: (a). The reading server stays read-only, the requests are journalled
+  by the engine (`rcfd-runner`'s own commands write no journal line), and the engine's error codes come back as they are.
+- D2, quick run and queue: (a) Run is `start_run` with the case only, and the new run is selected and followed; Queue…
+  is `start_run` with per-run priority, threads, memory and `--set` lines from a form under the run bar; both select the
+  new run. (b) one action with an optional form. Taken: (a). Neither makes a plan (`store: none`), as the CLI does not.
+- D3, stop and cancel: both are `cancel_run`; Stop… is offered for a launched run (it has a solver to stop) and Cancel…
+  for one that has not started (queued, or held before launch), each with its own words.
+- D4, a runner that is not alive: (a) mark a request after 3 s and offer Start the runner (`rcfd-runner ensure`);
+  (b) start a runner before every action; (c) add an engine query (needs Rust; not here). Taken: (a).
+- D5, confirmation: an inline strip in the run's panel (no dialog of `DESIGN.md` covers it yet), proposed for
+  `DESIGN.md` with the pending-request note and the run bar.
+- D6, the window's door: `window.studioRuns` (`dispatch(action, params)`) over the project port's new `action`
+  operation; only `src/renderer/project/door.ts` names it, and `window.studioProject` keeps its methods.
+- Coverage: `start_run`, `pause_run`, `resume_run`, `cancel_run`, `rcfd-runner start|pause|resume|cancel|ensure`,
+  `--project` and the start options `--priority`, `--threads`, `--mem-mb` and `--set` have UI paths.
+- Missing in the engine (no Rust change here): an MCP query of whether the project's runner is alive
+  (`RunService::runner_running`), and an MCP tool that starts the runner alone (Start the runner runs `rcfd-runner
+  ensure`, the only process the Studio starts for run control besides `rcfd-mcp`).
+
+## The Claude Code panel (F-814)
+
+An open project has a Claude Code panel on the right of its views (DESIGN.md Layout): the project's Claude Code
+sessions, the transcript of the selected one, and a message field. A session another process has open (a terminal, the
+VS Code extension, another Studio) is mirrored read-only as its transcript grows; a closed one is resumed with
+`claude -p --resume <id>`; "New chat" starts one with `--session-id <uuid>`. Run ids and project files named in a reply
+are chips that open the run in Runs or the file on Home. The panel hides to a slim strip and shows again. Surface brief:
+`.impeccable/surfaces/web-src-renderer-claude-claudepanel-tsx.md`.
+
+- Which claude: only the program named by `RCFD_STUDIO_CLAUDE=<path>` (a `.mjs`, `.cjs` or `.js` path runs on the
+  Studio's own runtime). PATH is never searched. Unset, the sessions are still listed from their transcripts, read-only.
+  Claude Code's home is `CLAUDE_CONFIG_DIR`, else `~/.claude`; the Studio's own records (folder confirmations, the MCP
+  config it hands Claude Code) are in `RCFD_STUDIO_CLAUDE_STATE`, else `<userData>/claude`, never in the project.
+- Sessions: the transcripts under `<home>/projects/<folder>/` and `claude agents --json` (every 2 s, `DISCOVER_MS`;
+  the transcript every 500 ms, `MIRROR_MS`; the last 50 entries, `TAIL`). Open: listed with a live process. Closed: not
+  listed. Unknown (the listing failed): read-only. Studio: answered by this Studio now.
+- One writer per session (G11): the main process holds one lock for the whole turn, from before its checks to the
+  process's exit; a second message is refused (`busy`). Right before every resume it lists again, so a session opened
+  elsewhere since the last listing is refused (`read_only`). A running `claude -p` is listed by `claude agents --json`,
+  so another Studio or terminal sees the session open.
+- Spawn: from the main process, no shell, the project folder as the working folder, the message as one stream-json line
+  on stdin (never in the argument list): `-p --output-format stream-json --verbose --include-partial-messages
+  --input-format stream-json --strict-mcp-config --mcp-config <app-owned file> --permission-mode dontAsk
+  --permission-prompts none --allowedTools <rule>... --resume|--session-id <id>`. `checkArgs` checks the whole list
+  before every spawn and refuses any bypass or approve-everything flag, another permission mode, `--settings`,
+  `--add-dir`, `--permission-prompt-tool` and malformed rules. A turn whose `system/init` does not report `dontAsk` is
+  killed before any action. Stop kills the process tree.
+- Tool approvals: the allow-list file `.rcfd/claude-allow.json` (`{"version":1,"rules":[...]}`) when valid (one bad
+  rule refuses the whole file and no chat starts), else the conservative first list: the 15 read-class tools of the
+  engine's project server (`mcp__rcfd_project__project_info`, `list_runs`, `run_status`, `read_metrics`,
+  `read_residuals`, `field_summary`, `render_field`, `compare_runs`, `list_changes`, `read_project_file`, `wait_run`,
+  `read_feed`, `check_case_mesh`, `preview_mesh`, `list_meshes`). Everything else is denied without asking; a denied
+  call shows the narrowest rule that would allow it.
+- The project server Claude Code is given: `rcfd-mcp --project <folder> --root <folder>` (`RCFD_STUDIO_MCP`), in an MCP
+  config the Studio writes in its own state folder; with `--strict-mcp-config` no other server is loaded. Without
+  `RCFD_STUDIO_MCP` the config lists no server.
+- The folder's Claude Code control files (`.mcp.json`, `CLAUDE.md`, `.claude/`, `.claude-plugin/`, the allow-list file)
+  can run code or widen permissions, so the first chat in a folder that has them asks to confirm them by name and hash;
+  a change asks again.
+- The page sees `window.studioClaude` (`state`, `onState`, `offState`, `select`, `send`, `cancel`, `confirm`,
+  `refresh`) over a MessagePort; the main process checks every message (`src/main/claude/bridge.ts`): exact fields, a
+  session that is null or a UUID, a message of at most 20,000 characters. The page cannot name a program, a flag or a
+  path.
+- Tests: `tests/unit/claude.spec.ts` (configuration, allow-list and argument check, readers, discovery, port, links, the
+  panel driven against the fake claude, stylesheet) and `tests/e2e/claude.spec.ts` (packaged app, quick-start copy,
+  screenshots in `test-results-visual/f814/`). Both use `tests/support/fake-claude.mjs`, which records its argument
+  list and replays a canned stream; no test starts a real claude.
+
+Decisions taken in building F-814 (options, the recommendation followed; each reversible without touching the engine):
+
+- D1, session discovery: (a) port the discovery, transcript and allow-list logic of `rcfd-claude` to the main process
+  as a stopgap; (b) wait for an engine entry point. Taken: (a); the engine has none (see below).
+- D2, which claude: (a) `RCFD_STUDIO_CLAUDE` only, as F-805 takes `RCFD_STUDIO_MCP`; (b) search PATH. Taken: (a), which
+  also keeps automated tests off a real CLI; packaging the CLI path is F-820's.
+- D3, placement: (a) the right column of the workspace, hideable (DESIGN.md Layout); (b) a third tab. Taken: (a).
+- D4, folder confirmation: ported from `rcfd-claude` (names and sha256, recorded in the Studio's state, not the folder).
+- D5, approvals: the allow-list file if valid, else the first list; a denied call shows its rule, but the Studio does
+  not write the allow-list file (it writes nothing into the project, G12; that needs an engine entry point).
+- D6, a file link: opens Home filtered to the file, until the case editor (F-812) can open it.
+- D7, a new chat: allowed, with `--session-id` and a UUID chosen by the main process.
+- D8, MCP config: always `--strict-mcp-config` with an app-owned config (no server when there is no `rcfd-mcp`).
+- Missing in the engine (no Rust change here): a CLI, MCP or service entry point for Claude Code session discovery,
+  transcript reading, resume and writing the allow-list file (`rcfd-claude` has the code; only the frozen egui Studio
+  uses it).
+
 ## Layout
 
 | Path | Process | Built by | Filled in by |
@@ -255,11 +382,17 @@ by WebGL 2 (fallback: <why>)"). Until a project view hosts it (F-806), it is sho
 | `src/shared/ipc.ts` | The typed IPC contract shared by all three processes: channel names, arguments, replies | `tsc -p tsconfig.node.json` -> `dist/shared/` | F-801 |
 | `src/main/project/` | The project home (no Electron import, unit-tested in Node): `server.ts` (the engine's project server over MCP), `session.ts` (one open folder: lists, feed, liveness), `home.ts` (recent list, opening, failures), `listing.ts` (case and note names, D2), `recent.ts`, `config.ts`, `bridge.ts` (the checks on the project port) | `tsc -p tsconfig.node.json` -> `dist/main/` | F-805 |
 | `src/shared/project.ts` | The project port's contract: what the home shows, the port messages, `window.studioProject` | as above | F-805 |
+| `src/main/claude/` | The Claude Code panel (unit-tested in Node; only `port.ts` imports Electron): `config.ts` (which claude), `allow.ts` (rules, the allow-list file, `checkArgs`), `discover.ts`, `transcript.ts`, `stream.ts`, `trust.ts` (control-file confirmation), `driver.ts` (spawning `claude`), `panel.ts` (one project's sessions, the writer lock), `bridge.ts` and `port.ts` (the Claude port) | `tsc -p tsconfig.node.json` -> `dist/main/` | F-814 |
+| `src/shared/claude.ts` | The Claude port's contract: what the panel shows, the port messages, `window.studioClaude` | as above | F-814 |
 | `src/shared/service.ts` | The service port's contract: the allow-list of service methods, the port messages, `window.studioService` | as above | F-803 |
 | `src/renderer/` | Renderer (browser code only, no Node types): React, three.js, React Aria Components | `vite build` -> `dist/renderer/` | F-802 onwards |
 | `src/renderer/design/` | `tokens.ts`, the one source of the `DESIGN.md` tokens (colour roles, type ramp, spacing, sizes, lines, focus, motion, pictogram grid); `tokens.css`, generated from it | as above | F-802 |
 | `src/renderer/ui/` | The primitives of `DESIGN.md` Components on React Aria Components: buttons, toggles and segmented toggles, text and number fields, select, switch, tabs (sub and project), table, slider, tooltip, state pictograms and icons; `primitives.css` | as above | F-802 |
+| `src/renderer/project/` | The project home (`ProjectHome.tsx`, `project.css`) and its one door to `window.studioProject` and `window.studioRuns` (`door.ts`) | as above | F-805, F-807 |
+| `src/renderer/runs/` | The Runs view (`RunsView.tsx`, `runs.css`, F-806) and run control (`RunControls.tsx`, `control-model.ts`, `control.css`, F-807) | as above | F-806, F-807 |
+
 | `src/renderer/project/` | The project home (`ProjectHome.tsx`, `project.css`) and its one door to `window.studioProject` (`door.ts`) | as above | F-805 |
+| `src/renderer/claude/` | The Claude Code panel (`ClaudePanel.tsx`, `claude.css`), reference links in a reply (`links.ts`) and its one door to `window.studioClaude` (`door.ts`) | as above | F-814 |
 | `src/renderer/dev/` | The primitives gallery at `#/dev/primitives` (loaded on demand): every primitive and the tokens, with sample labels only | as above | F-802 |
 | `src/renderer/settings/` | The case settings surface at `#/settings/<session>` (loaded on demand): `schema.ts` (the model of `settings.schema`, value encoding), `disclosure.ts` (learner-first tiers, search), the page, the surface, key rows and groups, `settings.css` | as above | F-825 |
 
@@ -426,6 +559,68 @@ Decisions taken in building F-812 (options, the recommendation followed; each ca
   the file as it is now and then reopens the session from the result.
 - D6, the sessions made in the main process to read the file as it is now (for the conflict table and the removal
   check) are short-lived, closed at once, and bypass the action log, which records the user's actions only.
+
+## Undo, safe deletes and edit conflicts (F-829, G18)
+
+- Undo and redo (`src/shared/actions/history.ts`): every edit dispatched through `src/renderer/actions/` that succeeds
+  and has an undo hook in the registry becomes a step of its session's history: `settings.set`, `settings.remove`, a
+  named entry made from its first key (the settings surface gives the inverse, removing the entry it made, because the
+  engine has no old value), and a new session made from the case settings page. Undo dispatches the registry's inverse
+  (origin `undo`), redo the step's own call (origin `redo`), so both are in the action log and replayable. Opening a
+  case file is not a step (`dispatch(..., { undo: false })`); Close the session is the way back.
+- Scope: one history per session. The case settings page (`#/settings/<id>`) and the case editor (`#/case/<id>`) show
+  the history of the session they edit; a closed session takes its history with it; a restarted service clears every
+  history. Redo of a new session makes a new session, and the history (and the page) follow its new id. A case save is
+  the file's own step: undo changes the session, never the file, and a save after an undo writes the restored value
+  (hash guarded as before). At most 200 steps per session.
+- Controls (`src/renderer/history/`): two ghost buttons in the header band that name the step ("Undo: set
+  solver.alpha_u", "Redo: remove boundaries.lid"; "Nothing to undo" when there is none), Ctrl+Z, Ctrl+Shift+Z and Ctrl+Y
+  (Cmd on macOS) from anywhere on the page. Inside a text field that holds typing not yet sent, Ctrl+Z is the field's own
+  undo of that typing; once the value is sent (Enter, or focus leaves) or dropped (Escape) it undoes the last edit.
+- Conflicts: before a step is undone or redone, the settings it left are read again; a value another writer (Claude
+  Code, the CLI, another window) changed since is shown with both values and three choices (undo anyway, replacing the
+  value now; keep the value now and drop this step; cancel), none preselected, and nothing is sent until one is chosen.
+  A typed value is checked the same way before it is sent: when the engine's value changed after the typing began,
+  the field says so and offers "Set mine" or "Keep" the other value. The F-812 case save already refuses a file changed
+  since it was read (`edit_case` with `base_hash`, conflict 1200) and was checked, not changed; `new_case` and duplicate
+  never replace a file. The recent list (user data) is read again before each write and the one change applied to it,
+  so another window's entries stay.
+- Losses (`src/shared/actions/loss.ts`): every change action has an inverse or words for what it loses
+  (`NO_INVERSE`; a unit test fails on one with neither). Close session (case settings page) and undoing a new session
+  ask first, in words that name the session, its settings that exist only in the service (with the edits made here),
+  its built mesh and fields and its results, with keeping as the focused default. An undo or redo of a settings change
+  on a session that holds results (an ended run, or steps taken) asks first too: the engine discards them. The words
+  for `run.start`, `run.step` and `run.initialize` on a session with results are there for run control (F-807).
+- Deletes: the engine has no delete or trash of a run, a result or a case (no service method, MCP tool or CLI command;
+  the F-824 inventory holds only `settings.remove` and `workflow.delete`, which touch no file). The Studio offers none
+  and never deletes a project file itself (G2, G12): `tests/unit/history.spec.ts` fails when the engine gains one (so
+  the Studio can offer it) and when Studio code removes a file other than its own service record.
+- Tests: `tests/unit/history.spec.ts` (fake service: round trips, conflicts on undo and redo, losses, the loss table,
+  rename on redo, no delete path, the recent list, history.css), `tests/e2e/undo-rcfd.spec.ts` (the same history on the
+  real `rcfd serve`, another writer on a second connection, results from `run.step`), `tests/e2e/undo.spec.ts`
+  (packaged Studio, fake service: buttons, keyboard, conflicts, typed-value conflict, confirmations, focus) and
+  `tests/e2e/undo-case.spec.ts` (packaged Studio, `rcfd serve` and `rcfd-mcp`: the case editor's history). Screenshots
+  at 1440 by 900: `test-results-visual/f829/`.
+
+Decisions taken in building F-829 (options, the recommendation followed; each can be reversed without an engine change):
+
+- D1, scope: (a) one history per session, (b) one per page, (c) one per surface. Taken: (a); a new session belongs to
+  the history of the session it made; opening a case file is not a step.
+- D2, conflict checks: the service has no compare-and-set, so (a) read again and compare before undo, redo and a typed
+  value is sent (a gap of a few milliseconds between read and write), (b) an engine `settings.set` that takes the
+  expected value (Rust, proposed), (c) none. Taken: (a), (b) proposed.
+- D3, deletes: (a) none in the Studio until the engine has one, the gap recorded and tested; (b) a Studio-side trash
+  that moves files (refused: G2, G12). Taken: (a); proposed engine entry points: project tools to move a run or a case
+  to a trash under `.rcfd/` with a journal line, list it, restore and empty it.
+- D4, Ctrl+Z in a text field: the field's own while it holds typing not yet sent, the Studio's otherwise.
+- D5, a named entry made from its first key: the surface passes the inverse (remove the entry) when the name was new;
+  the registry's inverse stays as F-827 tested it.
+- D6, the recent list: merged (read again, one change applied), not a conflict prompt: an entry is a path and a time.
+- D7, the decision panel's focus: shown always (the panel moves focus itself, also after Ctrl+Z, which does not count as
+  keyboard use for focus-visible).
+- Open: whether an ordinary settings change on a session that holds results should also ask first (F-825 sends it at
+  once; undo and redo ask). Options: (a) ask once before the first change that discards results, (b) keep as is.
+  Recommended (a); not done here, it changes F-825's surface.
 
 ## Security (G10)
 

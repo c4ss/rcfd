@@ -20,7 +20,7 @@
 // named as a run id, runs/r-20261116T000000-<size>: runs/box-<size>-raw moved there and linked back (a junction), with
 // run.json, status.json and a residuals.jsonl of one line per stored step), so that <folder>/project is a project the
 // Studio opens. rcfd-mcp and rcfd-runner are found as the tests find them (RCFD_MCP_BIN, CARGO_TARGET_DIR, target/release).
-// A heavy record (house rule 7): run by hand, once, and recorded in ADR 0801, addendum F-810. Not part of npm test.
+// A heavy record (house rule 7): run by hand, once, and recorded in ADR 0801, addendum 6 (F-810). Not part of npm test.
 // --smoke uses the 1e5 box for P5 and the tiny box for P6, one pass each, to check the script.
 import { _electron as electron } from '@playwright/test';
 import { execFileSync, spawnSync } from 'node:child_process';

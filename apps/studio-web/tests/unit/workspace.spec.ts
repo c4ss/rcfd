@@ -252,6 +252,14 @@ test('the value at a step comes from read_residuals {since_step}: the sample at 
 
 test('units: none yet while the run goes on; a too large or changing or foreign file is not read; over budget is refused', async () => {
   expect((await readUnits(fakeEngine(LINES, null).query, 'r-1')).note).toBe('no units: the run has no runs/r-1/output/monitors.json (the runner writes it when a run ends)');
+  const osError2: Query = async () => {
+    throw new Error('read monitors.json: os error 2');
+  };
+  expect((await readUnits(osError2, 'r-1')).note).toMatch(/^no units: the run has no /);
+  const denied: Query = async () => {
+    throw new Error('read monitors.json: os error 5');
+  };
+  expect((await readUnits(denied, 'r-1')).note).toMatch(/cannot be read \(read monitors.json: os error 5\)/);
   const big: Query = async () => ({ size: UNITS_MAX_BYTES + 1, hash: 'h', text: '{', next_offset: 1 });
   expect((await readUnits(big, 'r-1')).note).toMatch(/more than the Studio reads/);
   let n = 0;
@@ -305,9 +313,9 @@ function sources(dir: string): { file: string; text: string }[] {
 }
 const code = (t: string) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`\\])\/\/.*$/gm, '$1');
 
-test('only workspace/door.ts of the renderer names window.studioRun', () => {
+test('only workspace/door.ts of the renderer names window.studioRun (not to be confused with F-807’s studioRuns)', () => {
   const naming = sources(renderer)
-    .filter((f) => /studioRun/.test(code(f.text)))
+    .filter((f) => /\bstudioRun\b/.test(code(f.text)))
     .map((f) => f.file);
   expect(naming).toEqual(['workspace/door.ts']);
 });

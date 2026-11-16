@@ -3,7 +3,20 @@
 // recent list and the project server's read-only queries are main-process operations behind the project port's
 // allow-list (src/shared/project.ts, src/main/project/bridge.ts), not service methods, and have no action-registry
 // entry yet (G16; reported with F-805).
-import type { ProjectState } from '../../shared/project.js';
+// F-807: run control goes over the same project port (window.studioRuns, op `action`): every control calls
+// `runAction(id, params)`, an action of src/shared/actions/runs.ts, and asks `runActionAvailability` and
+// `runActionConfirmation` for its state and words; the main process checks the action again and makes the engine call.
+import type { ProjectState, ProjectView, RunActionResult } from '../../shared/project.js';
+import {
+  contextOf,
+  getRunAction,
+  runAvailability,
+  runConfirmation,
+  type Confirmation,
+  type RunActionId,
+  type RunActionParams,
+  type RunAvailability,
+} from '../../shared/actions/runs.js';
 
 const bridge = () => window.studioProject;
 
@@ -35,3 +48,29 @@ export const projectActions = {
   refresh: () => void bridge()?.refresh(),
   dismiss: () => void bridge()?.dismiss(),
 };
+
+/** F-807: dispatches a run-control action; resolves with the engine's answer or the refusal in words (never rejects). */
+export async function runAction<Id extends RunActionId>(id: Id, params: RunActionParams<Id>): Promise<RunActionResult> {
+  const b = window.studioRuns;
+  if (!b) {
+    return {
+      ok: false,
+      request: null,
+      failure: { code: 'disconnected', problem: 'This window has no run control.', recovery: 'Reload the window (Ctrl+R); runs are not affected.', engine: null },
+    };
+  }
+  return b.dispatch(id, params as Readonly<Record<string, unknown>>);
+}
+
+/** F-807: whether a run-control action is available on this view, and why not. */
+export function runActionAvailability<Id extends RunActionId>(id: Id, params: Partial<RunActionParams<Id>>, view: ProjectView | null): RunAvailability {
+  const a = getRunAction(id)!;
+  const p = params as Record<string, unknown>;
+  return runAvailability(a, view ? contextOf(view, p) : { project: false }, p);
+}
+
+/** F-807: the words of the confirmation the action asks for (G18), or null. */
+export function runActionConfirmation<Id extends RunActionId>(id: Id, params: RunActionParams<Id>, view: ProjectView): Confirmation | null {
+  const p = params as Record<string, unknown>;
+  return runConfirmation(getRunAction(id)!, contextOf(view, p), p);
+}

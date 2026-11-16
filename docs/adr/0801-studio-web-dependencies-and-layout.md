@@ -830,7 +830,7 @@ busy, processor busy fraction 1.00 before and after the run, with 4 `cargo`/`rus
   `snapshot` alone, which loads one field and rewrites one vertex attribute (the geometry and the pipeline stay).
 - Range modes, other colour maps, point fields (F808-D3) and cut planes are not in F-808.
 
-## Addendum F-810: run bands and linked time scrubbing, the run workspace (2026-11-16)
+## Addendum 6: F-810, run bands and linked time scrubbing, the run workspace (2026-11-16)
 
 Item F-810 of `docs/ROADMAP.md`. Traces G3, G9 (P5, P6), G12; `DESIGN.md` Layout, Run bands, One Live Thing.
 

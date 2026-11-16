@@ -34,7 +34,8 @@ export async function openCase(path: string, attempts = 3): Promise<Opened> {
   for (let i = 0; i < attempts; i++) {
     const p = await caseDoor.prepare(path);
     if (!p.ok) return { ok: false, failure: { message: p.error.message, diagnostics: [], code: p.error.code } };
-    const c = await dispatch('session.create', { path: p.result.file });
+    // opening a file is not an edit: it stays out of the undo history (F-829); Close the session is the way back
+    const c = await dispatch('session.create', { path: p.result.file }, { undo: false });
     if (!c.ok) return { ok: false, failure: { message: c.error.message, diagnostics: diags(c.error.data), code: c.error.code } };
     const session = (c.result as { session?: unknown }).session;
     if (typeof session !== 'string') return { ok: false, failure: { message: 'session.create answered without a session', diagnostics: [], code: 'protocol' } };

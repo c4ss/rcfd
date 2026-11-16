@@ -14163,12 +14163,15 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     (src/renderer/runs), live state from the runner feed plus 1 s re-read while a run is active; G7 close-and-kill e2e
     with a real rcfd-runner run; paused and cancelled pictograms drawn (DESIGN.md addition proposed); steady runs no
     longer show time 0 (engine reports 0 for steady runs; shown in words).
-- [ ] **F-807** Electron Studio: run control (quick run, stop, pause, queue)
+- [x] **F-807** Electron Studio: run control (quick run, stop, pause, queue)
   - depends on: F-806
   - acceptance: Start a case as a quick run, stop, pause and queue through the runner service only; each action shown in
     the run list within P2; a test for each action and for a refused action (the error names the problem and the
     recovery).
-  - note: ADR 0800. Traces: G2, G7; PRODUCT Capabilities (parity: quick run, stop).
+  - note: ADR 0800. Traces: G2, G7; PRODUCT Capabilities (parity: quick run, stop). Done 2026-11-16: run bar in the Runs
+    view and Run per case on the home; start_run/pause_run/resume_run/cancel_run on a writable project server (shared
+    with the F-812 case editor), rcfd-runner ensure to start the runner; confirmations name what is lost; P2 met for
+    every action (<= 19.4 ms to the painted frame).
 - [~] **F-808** Electron Studio: field viewport on three.js WebGPU
   - depends on: F-804, F-802
   - acceptance: Mesh and fields on surfaces drawn by three.js WebGPURenderer with a TSL material that colours from the
@@ -14202,13 +14205,16 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     monitor plots on three.js (SVG measured 30x slower per increment), fetched once then by increments with 0 resyncs
     against real rcfd, range holds every value; dev route #/dev/plots until F-810. P3 missed under full machine load
     (median 118.3 ms vs 100 ms); re-measure on an idle machine (Q-811-1).
-- [ ] **F-812** Electron Studio: case editor validated by the engine's schema
+- [x] **F-812** Electron Studio: case editor validated by the engine's schema
   - depends on: F-805, F-825
   - acceptance: Open, edit and save a case through the engine's own schema and validation (no copy of either in the
     Studio, G2); invalid input names the key, the problem and the fix; learner defaults first with advanced keys one
     step away (PRODUCT Principle 5); round-trip test against the CLI's reading of the same file; a view-and-report step.
     The editor is the F-825 surface plus case-level actions; every case key is reachable (G15).
-  - note: ADR 0800. Traces: G2, G12; PRODUCT Principle 5. Surface not yet designed: shape it with impeccable first.
+  - note: ADR 0800. Traces: G2, G12; PRODUCT Principle 5. Surface not yet designed: shape it with impeccable first. Done
+    2026-11-16: case editor at #/case (src/renderer/case, src/main/case); opens via session.create, saves via edit_case
+    with base_hash on a writable project server, comments kept; CLI round trip and conflict tests; screenshots for the
+    maintainer's view-and-report in test-results-visual/f812.
 - [ ] **F-813** Electron Studio: a learner's first path
   - depends on: F-807, F-812
   - acceptance: From an empty folder to a first honest result with the quick-start project, without CFD jargon on the
@@ -14216,12 +14222,16 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     of the path; a view-and-report step by the maintainer as a first-time user. The short path hides nothing for good:
     every capability stays one step away (G15).
   - note: ADR 0800. Traces: G6; PRODUCT Users, Principle 5. Surface not yet designed: shape it with impeccable first.
-- [ ] **F-814** Electron Studio: Claude Code panel
+- [~] **F-814** Electron Studio: Claude Code panel
   - depends on: F-805
   - acceptance: The Claude Code chat for the project through rcfd-claude: open sessions mirrored read-only, closed
     sessions resumed and typed into, one writer per session, tool approvals by a conservative allow-list and never
     approve-everything (G11); run ids and files in a reply link to the run or file in the Studio; a test for each rule.
-  - note: ADR 0800. Traces: G11; PRODUCT Positioning; DESIGN Claude Code panel.
+  - note: ADR 0800. Traces: G11; PRODUCT Positioning; DESIGN Claude Code panel. Partial 2026-11-16: panel lists
+    sessions, mirrors open ones read-only, resumes closed ones with claude -p --resume, single writer, conservative
+    allow-list asserted in argv (dontAsk, no approve-everything flag), run/file links; tests use a fake claude. Left: a
+    file link opens the case editor (F-812 now exists) instead of a filtered Home; claude-head colour role and writing
+    .rcfd/claude-allow.json wait for the maintainer; no engine entry point for session discovery (TypeScript stopgap).
 - [ ] **F-815** Electron Studio: compare two runs
   - depends on: F-810
   - acceptance: Two runs side by side or overlaid at the same time and the same colour range, with the difference field
@@ -14318,13 +14328,19 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     command give bit-identical results on a quick-start case (G17); units come from the engine, never converted in the
     Studio.
   - note: ADR 0800 (G16 to G21 added 2026-11-16). Traces: G17, G3, G2; docs/provenance.md.
-- [ ] **F-829** Electron Studio: undo, safe deletes and edit conflicts
+- [~] **F-829** Electron Studio: undo, safe deletes and edit conflicts
   - depends on: F-827, F-805
   - acceptance: Undo and redo for every edit made through the action layer; deleting a run, result or case is
     recoverable (for example a project trash) or confirmed in words that name what is lost; a file changed by another
     writer since the Studio read it is never overwritten silently, the conflict is shown with a choice; a test for each
     (G18).
-  - note: ADR 0800 (G16 to G21 added 2026-11-16). Traces: G18, G11, G12.
+  - note: ADR 0800 (G16 to G21 added 2026-11-16). Traces: G18, G11, G12. Partial 2026-11-16: undo/redo for every action-
+    layer edit (one history per session, named Undo/Redo controls, Ctrl+Z/Ctrl+Shift+Z/Ctrl+Y), tested on the fake
+    service and real rcfd serve; actions without an inverse ask first naming what is lost; undo/redo and typed values
+    show a conflict instead of overwriting; case saves refuse a changed file (edit_case base_hash). Left: no engine
+    delete or trash for runs/results/cases, so the Studio offers none (engine tools
+    trash_run/trash_case/list_trash/restore_trash proposed, needs an ADR); engine compare-and-set for settings.set
+    proposed.
 - [ ] **F-830** Electron Studio: explain in place from the engine's docs
   - depends on: F-826, F-825
   - acceptance: Help on every control, term and value taken from the engine's case schema help text (F-826), docs and

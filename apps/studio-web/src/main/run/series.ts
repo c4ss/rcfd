@@ -84,7 +84,7 @@ export async function readUnits(query: Query, run: string): Promise<{ units: Map
   } catch (e) {
     const m = e instanceof Error ? e.message : String(e);
     // the usual case while a run goes on: the file is not there yet
-    if (/not found|cannot find|no such file|os error [23]/i.test(m)) return { units: new Map(), note: `no units: the run has no ${path} (the runner writes it when a run ends)` };
+    if (/not found|cannot find|no such file|os error [23]\b/i.test(m)) return { units: new Map(), note: `no units: the run has no ${path} (the runner writes it when a run ends)` };
     return { units: new Map(), note: `no units: ${path} cannot be read (${m})` };
   }
   try {

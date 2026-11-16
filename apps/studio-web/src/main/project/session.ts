@@ -7,7 +7,12 @@
 import {
   FEED_POLL_MS,
   MAX_CHANGES,
+  RUN_BOOST_MS,
+  RUN_FAST_POLL_MS,
   RUN_POLL_MS,
+  RUN_REQUESTS_KEPT,
+  RUN_SLOW_MS,
+  type RunActionResult,
   type RunDetail,
   type CaseEntry,
   type ChangeEntry,
@@ -19,6 +24,7 @@ import {
   type RunEntry,
   type ProjectTool,
 } from '../../shared/project.js';
+import { RunControl, settle, type ControlDeps } from './control.js';
 import type { Names } from './listing.js';
 import { isActive, readRunDetail, readRuns, stale } from './runs.js';
 import type { ProjectServerLike } from './server.js';
@@ -43,6 +49,8 @@ export interface SessionDeps {
   pollMs?: number;
   /** F-806: the progress read of active runs (default RUN_POLL_MS). */
   runPollMs?: number;
+  /** F-807: run control (the not-read-only server and the runner's CLI); without it every run-control action is refused. */
+  control?: ControlDeps;
 }
 
 const message = (e: unknown): string => (e instanceof Error ? e.message : String(e));
@@ -166,6 +174,12 @@ export class ProjectSession {
   private readonly runPollMs: number;
   /** When the run list was last read (ms, Date.now()), for the progress read of active runs (RUN_POLL_MS). */
   private runsReadAt = 0;
+  /** F-807: run control, made on the first action. */
+  private control: RunControl | null = null;
+  /** F-807: until when (Date.now()) the feed is read at RUN_FAST_POLL_MS after a run-control action. */
+  private boostUntil = 0;
+  private polling = false;
+  private slowTimers = new Set<NodeJS.Timeout>();
   view: ProjectView;
 
   private constructor(
@@ -189,6 +203,7 @@ export class ProjectSession {
       ...lists,
       runDetails: {},
       runDetailErrors: {},
+      runRequests: [],
       changes: [],
       openedAt: now,
       readAt: now,
@@ -224,7 +239,11 @@ export class ProjectSession {
   }
 
   private set(patch: Partial<ProjectView>): void {
-    this.view = { ...this.view, ...patch };
+    const next = { ...this.view, ...patch };
+    // F-807: whether the runner has acted on each run-control request, from the lists just read
+    const requests = next.runRequests ?? [];
+    const settled = requests.some((r) => !r.settled) ? settle(requests, next, performance.timeOrigin + performance.now()) : requests;
+    this.view = settled === requests ? next : { ...next, runRequests: settled };
     this.onChange(this.view);
   }
 
@@ -236,12 +255,13 @@ export class ProjectSession {
   private schedule(): void {
     this.stopTimer();
     if (this.closed || this.server.exited) return;
-    this.timer = setTimeout(() => void this.poll(), this.pollMs);
+    this.timer = setTimeout(() => void this.poll(), Date.now() < this.boostUntil ? Math.min(RUN_FAST_POLL_MS, this.pollMs) : this.pollMs);
   }
 
   /** One read of the feed; a refresh of the lists when it holds anything. */
   private async poll(): Promise<void> {
-    if (this.closed || this.server.exited) return;
+    if (this.closed || this.server.exited || this.polling) return;
+    this.polling = true;
     const server = this.server;
     try {
       const fresh: ChangeEntry[] = [];
@@ -276,8 +296,47 @@ export class ProjectSession {
         this.set({ liveness: { live: false, since: this.deps.now(), reason: `The engine's change feed could not be read: ${message(e)}`, serverStopped: false } });
       }
     } finally {
+      this.polling = false;
       if (server === this.server) this.schedule();
     }
+  }
+
+  /**
+   * F-807: one run-control action. The engine's answer is in the view at once (the request, with the run it made or is
+   * about), the feed is then read fast for RUN_BOOST_MS so the runner's change shows as soon as it writes it, and the
+   * run list is read again now. A request still waiting after RUN_SLOW_MS is marked slow.
+   */
+  async dispatch(action: string, params: Readonly<Record<string, unknown>>): Promise<RunActionResult> {
+    if (!this.deps.control) {
+      return {
+        ok: false,
+        request: null,
+        failure: {
+          code: 'engine',
+          problem: 'Run control is not set up in this Studio: it has no way to reach the engine’s run tools.',
+          recovery: 'Start the Studio with RCFD_STUDIO_MCP set to the path of rcfd-mcp, with rcfd-runner and rcfd beside it.',
+          engine: null,
+        },
+      };
+    }
+    if (this.closed) {
+      return { ok: false, request: null, failure: { code: 'no_project', problem: 'The project was closed.', recovery: 'Open the project again.', engine: null } };
+    }
+    this.control ??= new RunControl(this.folder, this.deps.control);
+    const r = await this.control.dispatch(action, params, this.view);
+    if (this.closed || !r.request) return r;
+    this.set({ runRequests: [r.request, ...(this.view.runRequests ?? [])].slice(0, RUN_REQUESTS_KEPT) });
+    if (r.request.outcome === 'accepted') {
+      this.boostUntil = Date.now() + RUN_BOOST_MS;
+      if (!this.polling) this.schedule();
+      void this.read(RUNS);
+      const t = setTimeout(() => {
+        this.slowTimers.delete(t);
+        if (!this.closed) this.set({});
+      }, RUN_SLOW_MS + 20);
+      this.slowTimers.add(t);
+    }
+    return r;
   }
 
   /** Reads the lists again (coalesced: a request during a read makes one more read after it). */
@@ -402,6 +461,8 @@ export class ProjectSession {
   async close(): Promise<void> {
     this.closed = true;
     this.stopTimer();
-    await this.server.close();
+    for (const t of this.slowTimers) clearTimeout(t);
+    this.slowTimers.clear();
+    await Promise.all([this.server.close(), this.control?.close()]);
   }
 }

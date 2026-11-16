@@ -7207,9 +7207,9 @@
     "deps": [
       "F-806"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Start a case as a quick run, stop, pause and queue through the runner service only; each action shown in the run list within P2; a test for each action and for a refused action (the error names the problem and the recovery).",
-    "note": "ADR 0800. Traces: G2, G7; PRODUCT Capabilities (parity: quick run, stop)."
+    "note": "ADR 0800. Traces: G2, G7; PRODUCT Capabilities (parity: quick run, stop). Done 2026-11-16: run bar in the Runs view and Run per case on the home; start_run/pause_run/resume_run/cancel_run on a writable project server (shared with the F-812 case editor), rcfd-runner ensure to start the runner; confirmations name what is lost; P2 met for every action (<= 19.4 ms to the painted frame)."
   },
   {
     "id": "F-808",
@@ -7265,9 +7265,9 @@
       "F-805",
       "F-825"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Open, edit and save a case through the engine's own schema and validation (no copy of either in the Studio, G2); invalid input names the key, the problem and the fix; learner defaults first with advanced keys one step away (PRODUCT Principle 5); round-trip test against the CLI's reading of the same file; a view-and-report step. The editor is the F-825 surface plus case-level actions; every case key is reachable (G15).",
-    "note": "ADR 0800. Traces: G2, G12; PRODUCT Principle 5. Surface not yet designed: shape it with impeccable first."
+    "note": "ADR 0800. Traces: G2, G12; PRODUCT Principle 5. Surface not yet designed: shape it with impeccable first. Done 2026-11-16: case editor at #/case (src/renderer/case, src/main/case); opens via session.create, saves via edit_case with base_hash on a writable project server, comments kept; CLI round trip and conflict tests; screenshots for the maintainer's view-and-report in test-results-visual/f812."
   },
   {
     "id": "F-813",
@@ -7288,9 +7288,9 @@
     "deps": [
       "F-805"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "The Claude Code chat for the project through rcfd-claude: open sessions mirrored read-only, closed sessions resumed and typed into, one writer per session, tool approvals by a conservative allow-list and never approve-everything (G11); run ids and files in a reply link to the run or file in the Studio; a test for each rule.",
-    "note": "ADR 0800. Traces: G11; PRODUCT Positioning; DESIGN Claude Code panel."
+    "note": "ADR 0800. Traces: G11; PRODUCT Positioning; DESIGN Claude Code panel. Partial 2026-11-16: panel lists sessions, mirrors open ones read-only, resumes closed ones with claude -p --resume, single writer, conservative allow-list asserted in argv (dontAsk, no approve-everything flag), run/file links; tests use a fake claude. Left: a file link opens the case editor (F-812 now exists) instead of a filtered Home; claude-head colour role and writing .rcfd/claude-allow.json wait for the maintainer; no engine entry point for session discovery (TypeScript stopgap)."
   },
   {
     "id": "F-815",
@@ -7460,9 +7460,9 @@
       "F-827",
       "F-805"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Undo and redo for every edit made through the action layer; deleting a run, result or case is recoverable (for example a project trash) or confirmed in words that name what is lost; a file changed by another writer since the Studio read it is never overwritten silently, the conflict is shown with a choice; a test for each (G18).",
-    "note": "ADR 0800 (G16 to G21 added 2026-11-16). Traces: G18, G11, G12."
+    "note": "ADR 0800 (G16 to G21 added 2026-11-16). Traces: G18, G11, G12. Partial 2026-11-16: undo/redo for every action-layer edit (one history per session, named Undo/Redo controls, Ctrl+Z/Ctrl+Shift+Z/Ctrl+Y), tested on the fake service and real rcfd serve; actions without an inverse ask first naming what is lost; undo/redo and typed values show a conflict instead of overwriting; case saves refuse a changed file (edit_case base_hash). Left: no engine delete or trash for runs/results/cases, so the Studio offers none (engine tools trash_run/trash_case/list_trash/restore_trash proposed, needs an ADR); engine compare-and-set for settings.set proposed."
   },
   {
     "id": "F-830",

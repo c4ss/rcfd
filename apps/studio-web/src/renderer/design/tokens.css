@@ -64,6 +64,7 @@
   --role-band-live: var(--color-orange);
   --role-band-failed: var(--color-fail);
   --role-hatch: var(--color-silver);
+  --role-chat-own: var(--color-sky-wash);
   --role-tooltip: var(--color-ink);
   --role-tooltip-text: var(--color-white);
   --role-popover: var(--color-white);
