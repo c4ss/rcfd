@@ -1062,12 +1062,16 @@ impl Integrator {
                 )));
             }
         }
+        // ADR 0666 D3: with the warm start an Incompatible element may carry its nine committed modes after its layout.
+        let warm = self.model.incompatible_mode_warm_start();
         if state.states.len() != self.layout.len()
-            || state
-                .states
-                .iter()
-                .zip(&self.layout)
-                .any(|(s, &k)| s.values().len() != k)
+            || state.states.iter().zip(&self.layout).enumerate().any(|(e, (s, &k))| {
+                s.values().len() != k
+                    && !(warm
+                        && s.values().len() == k + 9
+                        && crate::hex8x::opted(self.model.mesh(), e)
+                            == Some(crate::mesh::SolidFormulation::Incompatible))
+            })
         {
             return Err(state_error(format!(
                 "material states of {} elements that do not match the model's layout ({} elements)",
@@ -1385,16 +1389,8 @@ impl Integrator {
                     // ADR 0630 D4: the modes and the energy of the model's rule.
                     let stabilised = model.incompatible_stabilisation_rule();
                     // ADR 0655 D1: with the model's backtracking of the modes (default false, the modes of before); ADR 0658
-                    // D1: the model's local update.
-                    let (modes, strains) = crate::nl_incompatible::modes_and_strains_opt(
-                        &coords,
-                        material,
-                        &ue,
-                        &ElementState::new(Vec::new()),
-                        &context,
-                        stabilised,
-                        model.incompatible_mode_update(),
-                    )?;
+                    // D1: the model's local update; ADR 0666 D2: with the warm start, from the committed modes.
+                    let (modes, strains) = self.energy_modes(s, e, &coords, material, &ue, &context)?;
                     if stabilised != crate::nl_incompatible::IncompatibleStabilisation::Off {
                         w += crate::nl_incompatible::stabilisation_energy_with(
                             &coords, material, &ue, &modes, &context, stabilised,
@@ -1434,6 +1430,73 @@ impl Integrator {
             }
         }
         Ok(w)
+    }
+
+    /// The modes and the enhanced strains at which the energy record evaluates the Incompatible Hex8 `e` of the state `s`
+    /// (ADR 0608 D4, ADR 0655 D1, ADR 0658 D1): without the model's warm start from an empty state (cold, the call of
+    /// before); with it from the committed modes of `s.states[e]` (ADR 0666 D2, the start rule of ADR 0660 D1).
+    fn energy_modes(
+        &self,
+        s: &NlTransientState,
+        e: usize,
+        coords: &[Vec3],
+        material: &Material,
+        ue: &[f64],
+        context: &PointContext,
+    ) -> Result<([f64; 9], Vec<[f64; 6]>)> {
+        let model = &self.model;
+        let stabilised = model.incompatible_stabilisation_rule();
+        if model.incompatible_mode_warm_start() {
+            crate::nl_incompatible::modes_and_strains_warm(
+                coords,
+                material,
+                ue,
+                &s.states[e],
+                context,
+                stabilised,
+                model.incompatible_mode_update(),
+            )
+        } else {
+            crate::nl_incompatible::modes_and_strains_opt(
+                coords,
+                material,
+                ue,
+                &ElementState::new(Vec::new()),
+                context,
+                stabilised,
+                model.incompatible_mode_update(),
+            )
+        }
+    }
+
+    /// Per element the modes at which [`Integrator::strain_energy`] evaluates it (ADR 0666 D2, for checks): `Some` for an
+    /// Incompatible Hex8, `None` for another element.
+    pub fn strain_energy_modes(&self) -> Result<Vec<Option<[f64; 9]>>> {
+        let s = self.current()?;
+        let model = &self.model;
+        let mesh = model.mesh();
+        let dofs = model.dof_map();
+        let materials = model.material_indices()?;
+        let context = match self.temperature_at(self.time_of(s.t0, s.step)) {
+            None => PointContext::default(),
+            Some(t) => PointContext::new().with_temperature(t)?,
+        };
+        let mut out = Vec::with_capacity(mesh.n_elements());
+        for e in 0..mesh.n_elements() {
+            if crate::hex8x::opted(mesh, e) != Some(crate::mesh::SolidFormulation::Incompatible) {
+                out.push(None);
+                continue;
+            }
+            let nodes = mesh.element_nodes(e);
+            let coords: Vec<Vec3> = nodes.iter().map(|&nd| mesh.nodes()[nd]).collect();
+            let ue: Vec<f64> = crate::assemble::element_dofs(&dofs, nodes)
+                .iter()
+                .map(|&q| s.u[q])
+                .collect();
+            let material = &model.materials()[materials[e]].1;
+            out.push(Some(self.energy_modes(s, e, &coords, material, &ue, &context)?.0));
+        }
+        Ok(out)
     }
 
     /// The linear momentum `P = sum over the nodes of (M v)_node` and the angular momentum about the origin `J = sum over

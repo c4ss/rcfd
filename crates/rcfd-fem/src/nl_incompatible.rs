@@ -1169,6 +1169,53 @@ pub(crate) fn modes_and_strains_opt(
     Ok((alpha, ext.strain))
 }
 
+/// [`modes_and_strains_opt`] from the committed modes (ADR 0666 D2, the energy record of the transient path with the warm
+/// start): `state` the material state, optionally followed by the nine committed modes; the local iteration starts from them
+/// and, if there are none or that iteration fails, runs from `alpha = 0` (the start rule of ADR 0660 D1).
+pub(crate) fn modes_and_strains_warm(
+    coords: &[Vec3],
+    material: &Material,
+    displacement: &[f64],
+    state: &ElementState,
+    context: &PointContext,
+    stabilised: IncompatibleStabilisation,
+    update: impl Into<IncompatibleModeUpdate>,
+) -> Result<([f64; MODES], Vec<[f64; 6]>)> {
+    check_hex8_fields(coords, displacement)?;
+    let points = mode_points(coords)?;
+    let (material_state, start) = warm_state(material, state, points.len())?;
+    let pen = penalty_if(stabilised, coords, &points, material, displacement, context)?;
+    let update = update.into();
+    let first = start.map(|s| {
+        converged(
+            &points,
+            material,
+            displacement,
+            &material_state,
+            context,
+            pen.as_ref(),
+            update,
+            Some(s),
+            None,
+        )
+    });
+    let (alpha, ext) = match first {
+        Some(Ok(found)) => found,
+        _ => converged(
+            &points,
+            material,
+            displacement,
+            &material_state,
+            context,
+            pen.as_ref(),
+            update,
+            None,
+            None,
+        )?,
+    };
+    Ok((alpha, ext.strain))
+}
+
 /// The condensed force (24 values), tangent (24 x 24) and second Piola-Kirchhoff stress at the points of an Incompatible
 /// Hex8, with (`stabilised`, ADR 0614 D1; a rule of ADR 0630 D1) or without (ADR 0608 D2) the stabilisation, from the
 /// committed `state` at the point context `context`.
