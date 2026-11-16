@@ -236,3 +236,19 @@ ADR 0646; the Studio preview does not know the key.
 
 - **Q4. Coupled by default on the sector path** (with F-721's Q1 and F-724): changes the default results of sector runs on
   coincidence steps and F-720's N1 test; needs the maintainer.
+
+## Amendment 1 (2026-11-16, written after the registered run and before any corrected run)
+
+The registered run (code and tests f3e57a2d, run once, four tests on four threads, log `w49i-work/f730-scratch/run.log`) met
+every check of the lockstep, R1 and FT, and failed the test of E1c. No limit is changed; the results go in addendum 1.
+
+**E1c: a defective set-up of the test, not of the code.** The test parses the case with a helper that panics on a parse
+error, and `Case::parse_toml` already runs the static checks of `[mesh.sliding]` (through `dynmesh::check`): the parse
+returned exactly the registered refusal, `Diagnostic { path: "mesh.sliding.coincidences", line: Some(18), .. }` (printed in
+the panic message), so the test stopped before it could assert it. Corrected test **E1cc**: the refusal located at
+`mesh.sliding.coincidences` from `Case::parse_toml`, or, if the parse passes, from both `dynmesh::check` and
+`Simulation::new`; limit as E1c (an `Err` located at the key). The registered test stays as an ignored record.
+
+**Times.** The lockstep took 167 s and R1 172 s (four tests at once on a shared machine), above the two minutes of a heavy
+record: by the registration's own provision both are marked `#[ignore]` as heavy records (no limit changes, their results
+stand from the registered run), FT (2.6 s of solving) covering the code path fast.

@@ -365,6 +365,7 @@ fn step_ok(sim: &mut Simulation) {
 // -------------------------------------------------------------------------------------------------------------------
 
 #[test]
+#[ignore = "heavy record (ADR 0654 amendment 1): 167 s in the registered run, every check met (addendum 1); FT covers the code path"]
 fn fc_coupled_sector_at_pitch_over_8_against_the_full_annulus_tree_run() {
     let mut fails = Fails::new();
     let t0 = Instant::now();
@@ -601,6 +602,7 @@ fn r1_pair(name: &str, plain: &str, coupled: &str) -> (Vec<usize>, bool) {
 }
 
 #[test]
+#[ignore = "heavy record (ADR 0654 amendment 1): 172 s in the registered run, R1 met for FS, FW and US (addendum 1)"]
 fn r1_the_f711_runs_are_unchanged_with_the_table() {
     let t0 = Instant::now();
     let mut fails = Fails::new();
@@ -691,6 +693,7 @@ fn ft_coupled_and_default_sector_steps_at_two_coincidences() {
 // -------------------------------------------------------------------------------------------------------------------
 
 #[test]
+#[ignore = "defective set-up record (ADR 0654 amendment 1): the parse already refused the table at mesh.sliding.coincidences and the helper panicked; E1cc is the corrected test"]
 fn e1c_the_coincidence_table_is_refused_on_the_full_annulus() {
     let t = fs(ANNULUS, DT_TEXT, true);
     let c = case(&t);
@@ -705,5 +708,35 @@ fn e1c_the_coincidence_table_is_refused_on_the_full_annulus() {
         "E1c: static {stat:?}; new {new} -> {}",
         if ok { "met" } else { "MISSED" }
     );
+    assert!(ok);
+}
+
+/// E1cc (ADR 0654 amendment 1): the refusal from the parse (which runs the static checks), or else from the static check and
+/// `Simulation::new`.
+#[test]
+fn e1cc_the_coincidence_table_is_refused_on_the_full_annulus_corrected() {
+    let t = fs(ANNULUS, DT_TEXT, true);
+    let path = "mesh.sliding.coincidences";
+    let (ok, msg) = match Case::parse_toml(&t) {
+        Err(d) => (
+            d.iter().any(|x| x.path == path),
+            format!(
+                "parse: {}",
+                d.iter().map(ToString::to_string).collect::<Vec<_>>().join("; ")
+            ),
+        ),
+        Ok(c) => {
+            let stat: Vec<String> = rcfd_api::dynmesh::check(&c).iter().map(ToString::to_string).collect();
+            let new = match Simulation::new(&c) {
+                Err(d) => d.iter().map(ToString::to_string).collect::<Vec<_>>().join("; "),
+                Ok(_) => "no error".into(),
+            };
+            (
+                stat.iter().any(|m| m.contains(path)) && new.contains(path),
+                format!("static {stat:?}; new {new}"),
+            )
+        }
+    };
+    println!("E1cc: {msg} -> {}", if ok { "met" } else { "MISSED" });
     assert!(ok);
 }
