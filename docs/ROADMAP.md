@@ -5812,7 +5812,9 @@ fixed by the item's registration ADR before any code.
     Five of five mutations caught. Limits: full annulus about z only, laminar piso / pimple with Euler, no expression
     boundary values, sources, models or restart; planar sliding not in the tree. Follow-up F-710 (Sliding interface at
     coinciding nodes). Follow-up F-711 (Periodic (sector and planar) sliding in the case tree). Follow-up F-712
-    (Symmetry planes and a uniform in-plane flow on the annulus interface pair). Sector form: F-711 (ADR 0646).
+    (Symmetry planes and a uniform in-plane flow on the annulus interface pair). Sector form: F-711 (ADR 0646). The
+    symmetry-plane miss of UT (ADR 0637 amendment 1) is the averaged component diagonal; it is removed by
+    solver.component_diagonal = corrected (F-712, ADR 0650).
 - [~] **F-304** Planar and sector sliding interfaces
   - depends on: F-250
   - acceptance: A planar sliding interface and a periodic sector join conserve mass and a uniform flow to round-off;
@@ -14398,11 +14400,27 @@ fixed by the item's registration ADR before any code.
     must be axial, steps that land on node coincidences are not coupled on the sector path for flows without the node
     sets' symmetry (ADR 0640), the refusals of F-303; planar sliding not in the tree. Follow-up F-729 (Planar periodic
     sliding in the case tree). Follow-up F-730 (Sector sliding in the tree at node coincidences).
-- [ ] **F-712** Symmetry planes and a uniform in-plane flow on the annulus interface pair
+- [~] **F-712** Symmetry planes and a uniform in-plane flow on the annulus interface pair
   - acceptance: the uniform in-plane flow of ADR 0637 UT on the frozen join of annulus_3d_cylindrical_interface with
     zmin, zmax symmetry (2.4e-2 after one step) is diagnosed; either it is kept to 1e-10 with the cause fixed and every
     changed default result listed for the maintainer, or the limitation is documented with its cause.
-  - note: Follow-up of F-303 (ADR 0637, 2026-11-15).
+  - note: ADR 0650, 2026-11-16: the uniform in-plane flow of ADR 0637 UT on the frozen join of
+    annulus_3d_cylindrical_interface with zmin, zmax symmetry. Cause (diagnosed and registered before any run): the
+    default averaged momentum diagonal of the PISO split. On the one-cell-deep pair every cell touches both planes, and
+    their Dirichlet term on u_z makes the in-plane HbyA a fraction lambda of U, which acts as a uniform spurious drag k
+    = 4 nu / (3 lz^2) = 13.3 s^-1. The pressure balances the drag with a linear field. The Green-Gauss cell gradient of
+    that field is wrong in the wall cells, where the pressure is zero-gradient on the fixed-velocity walls, so the wall
+    cells deviate by about (1 - lambda)/2. The cause is not the frozen join, the mesh or the symmetry face values: the
+    default misses by the same amount on a conformal annulus_3d (2.34e-2, against 2.36e-2 on the join, both in an outer
+    wall cell), the pressure slope is -k U to 5e-4, and zero-gradient planes keep the flow (1.4e-15). With the existing
+    opt-in solver.component_diagonal = "corrected" (ADR 0010, ADR 0074 W1) the flow is kept to 7.8e-16 on the frozen
+    join over 40 steps, 8.9e-16 on the conformal annulus and 7.9e-15 through [mesh.sliding] with coinciding nodes; the
+    default is unchanged. Making corrected the default would move the baseline_hashes row packed_bed, the settings
+    hashes and goldens, the last bits of 3-D transient piso/pimple results, and 11 tests in the 49 files checked
+    (component_diagonal, w34c W1a, duct_diagnosis A6, lumped z4 twice, consistent_correctors_case_f301 c1 and c4,
+    cosim_case_f444 k2 and k3, film_gas_f292 d3 and d3b); one test of the flipped run was not run. Three of four
+    mutations caught; the fourth targeted the lag preflight, which no check runs. Follow-up F-738 (Corrected component
+    diagonal as the default).
 - [~] **F-713** Schema default fan usable in the reduced-order model
   - depends on: F-697
   - acceptance: ComputerFan::default() through RomFan::from_axial_fan runs unstalled at 3000 rpm for every flow above 40
@@ -14735,3 +14753,10 @@ fixed by the item's registration ADR before any code.
     ADR); the integration-test binaries left unmapped in ADR 0653 addendum 2 (81) fall below a registered number; a
     registered sample of primary ADRs is checked by reading.
   - note: Follow-up of F-723 (ADR 0653, 2026-11-16).
+- [ ] **F-738** Corrected component diagonal as the default
+  - depends on: F-712
+  - acceptance: the maintainer's decision on ADR 0650 Q1 is applied; if the default is flipped, the transient split is
+    guarded to cells whose component diagonals differ, so that symmetry-free 3-D transient results stay bit-identical;
+    packed_bed, the settings hash tables and the goldens are re-registered with the maintainer's approval; and the 11
+    tests of ADR 0650 B3 and the transient_sources t3d test that was not run are rerun with their limits.
+  - note: Follow-up of F-712 (ADR 0650, 2026-11-16).
