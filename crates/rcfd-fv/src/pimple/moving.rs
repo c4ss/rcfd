@@ -289,35 +289,94 @@ impl PimpleSolver {
         step: crate::sliding::SlidingStep,
         wall_dpdn: Vec<f64>,
     ) -> Result<StepInfo, String> {
+        self.sliding_advance(
+            "step_sliding",
+            dt,
+            step.geom,
+            step.mesh_flux,
+            step.vol_old,
+            step.phi_old,
+            step.old_defect,
+            wall_dpdn,
+            &[],
+        )
+    }
+
+    /// [`step_sliding`](Self::step_sliding) for a planar or sector sliding interface with periodic seams (F-304, ADR 0629
+    /// S3): `step` (from `sliding_periodic::periodic_sliding_step`) holds the new joined mesh, whose two wrap patches
+    /// (`sliding_periodic::PeriodicSlidingStep::wrap_patches`) may have other sizes than the current ones and must be
+    /// cyclic in both; every other patch must be as in `step_sliding`. The refusals of `step_sliding` apply, leaving the
+    /// solver unchanged.
+    pub fn step_sliding_periodic(
+        &mut self,
+        dt: f64,
+        step: crate::sliding_periodic::PeriodicSlidingStep,
+        wall_dpdn: Vec<f64>,
+    ) -> Result<StepInfo, String> {
+        self.sliding_advance(
+            "step_sliding_periodic",
+            dt,
+            step.geom,
+            step.mesh_flux,
+            step.vol_old,
+            step.phi_old,
+            step.old_defect,
+            wall_dpdn,
+            &crate::sliding_periodic::PeriodicSlidingStep::wrap_patches(),
+        )
+    }
+
+    /// The step of [`step_sliding`](Self::step_sliding) and [`step_sliding_periodic`](Self::step_sliding_periodic):
+    /// the patches named in `resizable` may change their size (they must be cyclic in both meshes); every other patch must
+    /// keep its name, kind and size.
+    #[allow(clippy::too_many_arguments)]
+    fn sliding_advance(
+        &mut self,
+        who: &str,
+        dt: f64,
+        g: Arc<FvGeometry>,
+        step_mesh_flux: Vec<f64>,
+        vol_old: Vec<f64>,
+        step_phi_old: Vec<f64>,
+        old_defect: Vec<f64>,
+        wall_dpdn: Vec<f64>,
+        resizable: &[&str],
+    ) -> Result<StepInfo, String> {
         if self.settings.time_scheme != TimeScheme::ImplicitEuler {
-            return Err("step_sliding: a moving mesh supports the implicit Euler time scheme only".into());
+            return Err(format!(
+                "{who}: a moving mesh supports the implicit Euler time scheme only"
+            ));
         }
-        let g = step.geom.clone();
         if g.n_cells() != self.geom.n_cells() {
             return Err(format!(
-                "step_sliding: the step's mesh has {} cells, the solver's {}",
+                "{who}: the step's mesh has {} cells, the solver's {}",
                 g.n_cells(),
                 self.geom.n_cells()
             ));
         }
         let (nf, ni, nb) = (g.mesh.n_faces(), g.n_internal, g.mesh.n_boundary_faces());
-        if step.mesh_flux.len() != nf
-            || step.phi_old.len() != nf
-            || step.vol_old.len() != g.n_cells()
-            || step.old_defect.len() != ni
+        if step_mesh_flux.len() != nf
+            || step_phi_old.len() != nf
+            || vol_old.len() != g.n_cells()
+            || old_defect.len() != ni
             || !(wall_dpdn.is_empty() || wall_dpdn.len() == nb)
         {
-            return Err("step_sliding: the step's data do not fit its mesh".into());
+            return Err(format!("{who}: the step's data do not fit its mesh"));
         }
         let same_patches = {
             let (a, b) = (self.geom.mesh.patches(), g.mesh.patches());
             a.len() == b.len()
-                && a.iter()
-                    .zip(b)
-                    .all(|(x, y)| x.name == y.name && x.kind == y.kind && x.size == y.size)
+                && a.iter().zip(b).all(|(x, y)| {
+                    x.name == y.name
+                        && x.kind == y.kind
+                        && (x.size == y.size
+                            || (resizable.contains(&x.name.as_str()) && x.kind == rcfd_mesh::PatchKind::Cyclic))
+                })
         };
         if !same_patches {
-            return Err("step_sliding: the step's mesh must have the patches of the current one".into());
+            return Err(format!(
+                "{who}: the step's mesh must have the patches of the current one"
+            ));
         }
         if self.nu_face.is_some()
             || self.body_force.is_some()
@@ -325,19 +384,17 @@ impl PimpleSolver {
             || self.sink.is_some()
             || self.face_jump.is_some()
         {
-            return Err(
-                "step_sliding: a face viscosity, body force, source force, sink or face jump is set (sized to the current mesh)"
-                    .into(),
-            );
+            return Err(format!(
+                "{who}: a face viscosity, body force, source force, sink or face jump is set (sized to the current mesh)"
+            ));
         }
-        let mut mesh_flux = step.mesh_flux;
+        let mut mesh_flux = step_mesh_flux;
         for (f, m) in mesh_flux.iter_mut().enumerate() {
             if g.empty[f] {
                 *m = 0.0;
             }
         }
         let vol_new = g.mesh.cell_volumes();
-        let vol_old = step.vol_old;
         let defect = if self.settings.ddt_correction {
             let (own, nei) = (g.mesh.owner(), g.mesh.neighbour());
             (0..ni)
@@ -345,14 +402,14 @@ impl PimpleSolver {
                     let (o, n) = (own[f], nei[f]);
                     let w = g.weights[f];
                     let r = w * vol_old[o] / vol_new[o] + (1.0 - w) * vol_old[n] / vol_new[n];
-                    r * step.old_defect[f]
+                    r * old_defect[f]
                 })
                 .collect()
         } else {
             vec![0.0; ni]
         };
-        self.phi_hist = History::new(step.phi_old.clone());
-        self.phi = step.phi_old;
+        self.phi_hist = History::new(step_phi_old.clone());
+        self.phi = step_phi_old;
         self.fs_q = Vec::new();
         self.geom = g;
         self.ale = Some(AleStep {

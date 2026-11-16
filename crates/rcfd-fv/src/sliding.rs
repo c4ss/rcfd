@@ -56,10 +56,31 @@ pub fn interface_balance(mesh: &Mesh, faces: &[usize], target: &[f64]) -> Result
         return Err(format!("interface_balance: face {f} is not an internal face"));
     }
     let (own, nei) = (mesh.owner(), mesh.neighbour());
+    let edges: Vec<(usize, usize)> = faces.iter().map(|&f| (own[f], nei[f])).collect();
+    let w: Vec<f64> = faces.iter().map(|&f| mesh.face_area(f)).collect();
+    graph_balance(&edges, &w, target)
+}
+
+/// [`interface_balance`] on a given graph (F-304, ADR 0629 M5, M6): edge `e` joins the cells `edges[e] = (a, b)` with the
+/// weight `weights[e]`; the value `x_e` counts out of `a` and into `b`. Of all edge values with `sum_e sigma_ce x_e = t_c -
+/// mean` on every cell touched (each connected part with the mean of its targets removed) the weighted minimum-norm one,
+/// `x_e = weights[e] (lambda_a - lambda_b)`. `target` holds one value per cell; the cells not touched are ignored.
+pub fn graph_balance(edges: &[(usize, usize)], weights: &[f64], target: &[f64]) -> Result<InterfaceSolve, String> {
+    let nc = target.len();
+    if weights.len() != edges.len() {
+        return Err(format!(
+            "graph_balance: {} weights for {} edges",
+            weights.len(),
+            edges.len()
+        ));
+    }
+    if let Some(&(a, b)) = edges.iter().find(|&&(a, b)| a >= nc || b >= nc) {
+        return Err(format!("graph_balance: edge ({a}, {b}) outside the {nc} cells"));
+    }
     let mut node = vec![usize::MAX; nc];
     let mut cells: Vec<usize> = Vec::new();
-    for &f in faces {
-        for c in [own[f], nei[f]] {
+    for &(a, b) in edges {
+        for c in [a, b] {
             if node[c] == usize::MAX {
                 node[c] = cells.len();
                 cells.push(c);
@@ -67,8 +88,8 @@ pub fn interface_balance(mesh: &Mesh, faces: &[usize], target: &[f64]) -> Result
         }
     }
     let n = cells.len();
-    let edges: Vec<(usize, usize)> = faces.iter().map(|&f| (node[own[f]], node[nei[f]])).collect();
-    let w: Vec<f64> = faces.iter().map(|&f| mesh.face_area(f)).collect();
+    let edges: Vec<(usize, usize)> = edges.iter().map(|&(a, b)| (node[a], node[b])).collect();
+    let w: Vec<f64> = weights.to_vec();
     // connected parts (union-find)
     let mut parent: Vec<usize> = (0..n).collect();
     fn root(p: &mut [usize], mut i: usize) -> usize {
@@ -125,7 +146,7 @@ pub fn interface_balance(mesh: &Mesh, faces: &[usize], target: &[f64]) -> Result
     let dot = |a: &[f64], b: &[f64]| a.iter().zip(b).map(|(x, y)| x * y).sum::<f64>();
     let amax = |a: &[f64]| a.iter().fold(0.0f64, |m, x| m.max(x.abs()));
     let tnorm = amax(&t);
-    let mut values = vec![0.0; faces.len()];
+    let mut values = vec![0.0; edges.len()];
     let mut iterations = 0;
     let divergence = |x: &[f64]| {
         let mut d = vec![0.0; n];

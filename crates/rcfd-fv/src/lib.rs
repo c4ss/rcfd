@@ -46,6 +46,7 @@ pub mod scalar;
 pub mod simple;
 pub mod sixdof;
 pub mod sliding;
+pub mod sliding_periodic;
 pub mod smoothing;
 pub mod solidification;
 pub mod sources;

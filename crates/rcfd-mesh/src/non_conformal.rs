@@ -43,19 +43,19 @@ pub struct JoinReport {
 
 type PatchFaces = Vec<(usize, Vec<usize>)>;
 
-struct Registry {
-    d: f64,
+pub(crate) struct Registry {
+    pub(crate) d: f64,
     bin: f64,
     /// Chart shifts to try in coordinate 0: `[0]`, or `[0, P, -P]` for a chart of period `P` (cylinder).
     shifts: Vec<f64>,
-    coords: Vec<[f64; 2]>,
-    gid: Vec<usize>,
+    pub(crate) coords: Vec<[f64; 2]>,
+    pub(crate) gid: Vec<usize>,
     bins: HashMap<(i64, i64), Vec<usize>>,
-    by_gid: HashMap<usize, usize>,
+    pub(crate) by_gid: HashMap<usize, usize>,
 }
 
 impl Registry {
-    fn new(d: f64, bin: f64, period: Option<f64>) -> Self {
+    pub(crate) fn new(d: f64, bin: f64, period: Option<f64>) -> Self {
         Registry {
             d,
             bin: bin.max(4.0 * d),
@@ -69,7 +69,7 @@ impl Registry {
     fn key(&self, p: [f64; 2]) -> (i64, i64) {
         ((p[0] / self.bin).floor() as i64, (p[1] / self.bin).floor() as i64)
     }
-    fn find(&self, p0: [f64; 2]) -> Option<usize> {
+    pub(crate) fn find(&self, p0: [f64; 2]) -> Option<usize> {
         let mut best: Option<(f64, usize)> = None;
         for &sh in &self.shifts {
             let p = if sh == 0.0 { p0 } else { [p0[0] + sh, p0[1]] };
@@ -90,7 +90,7 @@ impl Registry {
             }
         }
     }
-    fn insert(&mut self, p: [f64; 2], gid: usize) -> usize {
+    pub(crate) fn insert(&mut self, p: [f64; 2], gid: usize) -> usize {
         let k = self.coords.len();
         self.coords.push(p);
         self.gid.push(gid);
@@ -100,7 +100,7 @@ impl Registry {
     }
     /// Registry points strictly inside the segment `p0 -> p1` (further than `d` from both ends and within `d` of the
     /// line), ordered from `p0`.
-    fn on_segment(&self, q0: [f64; 2], q1: [f64; 2]) -> Vec<usize> {
+    pub(crate) fn on_segment(&self, q0: [f64; 2], q1: [f64; 2]) -> Vec<usize> {
         let mut found: Vec<(f64, usize)> = vec![];
         for &sh in &self.shifts {
             let (p0, p1) = if sh == 0.0 {
@@ -142,7 +142,7 @@ impl Registry {
 /// axis through `o` (`(s, z) = (r theta, sign * axial)`, theta measured from `e1` towards `e2 = axis x e1`; `sign` makes
 /// patch A's loops counter-clockwise).
 #[derive(Clone, Copy)]
-enum Chart {
+pub(crate) enum Chart {
     Plane {
         o: Vec3,
         e1: Vec3,
@@ -161,7 +161,7 @@ enum Chart {
 
 impl Chart {
     /// Chart coordinates of `p` and its offset from the surface.
-    fn coords(&self, p: Vec3) -> ([f64; 2], f64) {
+    pub(crate) fn coords(&self, p: Vec3) -> ([f64; 2], f64) {
         match *self {
             Chart::Plane { o, e1, e2, n } => {
                 let r = vec3::sub(p, o);
@@ -181,7 +181,7 @@ impl Chart {
             }
         }
     }
-    fn point(&self, c: [f64; 2]) -> Vec3 {
+    pub(crate) fn point(&self, c: [f64; 2]) -> Vec3 {
         match *self {
             Chart::Plane { o, e1, e2, .. } => vec3::add(o, vec3::add(vec3::scale(e1, c[0]), vec3::scale(e2, c[1]))),
             Chart::Cylinder {
@@ -199,7 +199,7 @@ impl Chart {
         }
     }
     /// Unit normal of patch A's side of the surface at `x`.
-    fn normal(&self, x: Vec3) -> Vec3 {
+    pub(crate) fn normal(&self, x: Vec3) -> Vec3 {
         match *self {
             Chart::Plane { n, .. } => n,
             Chart::Cylinder { o, axis, sign, .. } => {
@@ -224,7 +224,7 @@ impl Chart {
     }
 }
 
-fn shoelace(p: &[[f64; 2]]) -> f64 {
+pub(crate) fn shoelace(p: &[[f64; 2]]) -> f64 {
     let n = p.len();
     0.5 * (0..n)
         .map(|i| p[i][0] * p[(i + 1) % n][1] - p[(i + 1) % n][0] * p[i][1])
@@ -232,7 +232,7 @@ fn shoelace(p: &[[f64; 2]]) -> f64 {
 }
 
 /// Sutherland-Hodgman: `subject` clipped against the convex counter-clockwise polygon `clip`.
-fn clip_polygon(subject: &[[f64; 2]], clip: &[[f64; 2]]) -> Vec<[f64; 2]> {
+pub(crate) fn clip_polygon(subject: &[[f64; 2]], clip: &[[f64; 2]]) -> Vec<[f64; 2]> {
     let mut out = subject.to_vec();
     for i in 0..clip.len() {
         if out.is_empty() {

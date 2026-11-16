@@ -30,6 +30,7 @@ pub mod predicates;
 pub mod quality;
 pub mod remesh;
 pub mod sliding;
+pub mod sliding_periodic;
 pub mod surface;
 pub mod surface_remesh;
 pub mod sweep;
