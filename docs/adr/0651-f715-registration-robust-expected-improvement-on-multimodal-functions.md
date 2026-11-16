@@ -172,3 +172,18 @@ Correction (registered now): a test `a8b_restart_picks_in_the_ledger_provenance_
 with two limits: the count of restart picks in `BayesResult::picks` equals the count of entries with `"acquisition":
 "restart"`, and that count is at least 1. A8 stays as it is (met, recorded as vacuous). The decision rule is unchanged with A8b
 in the place of A8.
+
+## Amendment 2 (2026-11-16, after the mutation runs, before any corrected run): A2b cannot see the default of `restart`
+
+Mutation R4 (`restart` defaulting to `Some`) survived A2b (log `f715-scratch/logs/mut_R4.log`: the hit list unchanged). Cause, from
+the test code: A2b builds its options with `restart: restart.then(Restart::default)`, i.e. an explicit `None`, so it never reads
+the default. A supplementary run of the unedited F-698 fast tests under R4 (`mut_R4_f698.log`) also passes: they check limits,
+not bits, and the restart does not move a limit on Branin, the disc, the noise or the constraint. The set-up of A2b is defective
+for the clause "defaults unchanged"; A2b's own result (the plain O2 hit list) stands.
+
+Correction (registered now): a fast test `a2d_default_options_are_the_plain_ei_of_adr_0621`: (1)
+`BayesOptions::default().restart` is `None`; (2) Branin, n0 10, budget 60, seeds 1 and 2 (seed 2 is a seed on which the restart
+fires, A4), `bayes::minimise` with `BayesOptions { seed, n0: Some(10), ..Default::default() }` and with the same plus an explicit
+`restart: None`: every evaluated point bit-equal, and different from the run with `restart: Some(Restart::default())` on seed 2
+(so the check can fail). Run once; then R4 is run once against it. The decision rule is unchanged with A2b and A2d together in
+the place of A2b for R4.
