@@ -259,3 +259,43 @@ together; F-bar's SL; c6 (all of it).
 2. **Default.** Making the backtracking the default would change default results only where the default fails today (a solve
    that errors), but it would change the bits of a failed attempt that later converges after a halving; it is open for the
    maintainer (not taken: it would change default results).
+
+## Amendment 1 (2026-11-16, written after the single registered run and before any further run)
+
+The registered run (test commit 5ae69e54, log `run1-default.log` in the scratch folder, 102 s) met CA (H1, the only hypothesis
+that holds), NC1, NC2 (both set-ups), NC3, and measured the line search (it fails exactly as the default: element 476, load
+factor `0.675`). **The backtracking alone does not pass the load**: it passes the wall of element 476 at `0.675` but fails at
+load step 9 (load factor `0.890625` to `0.89375`, after 5 halvings) with `element 475: the modes of an Incompatible Hex8 did not
+converge in 25 local iterations (relative mode residual 1.07e-1)`. So P, T-FD and BA missed (T-FD and BA have no BT state to be
+measured at). **The two together pass** (reported, no limit by the registration): `R = 0.36787102`, `w_c = 0.06573382`, `e_R =
+0.0750`, `e_w = 0.0287` against F-bar (the probe's `0.0750`, `0.0287` of ADR 0649), no negative eigenvalue, lowest over max
+diagonal `1.81e-3`; 11 increments, 2 halved, 3 searched corrections. The plain element on `4^3` at `0.25 h` (c6) passes with the
+backtracking alone (`e_R = 0.0687`, `e_w = 0.0376`, positive definite), and its cause is H1 too (element 53).
+
+Records, as the house rules require: the test `db4_line_search_and_backtracking` is kept unchanged as the ignored record
+`db4_line_search_and_backtracking_known_miss` (the limits intact, the measured values in its ignore text); no limit is changed.
+The registered rule gives **partial** whatever follows (P missed); the combination is not counted as a pass of c5.
+
+### A1.1 The met rows as the default test
+
+`db4_met_rows`: NC1, NC3 and the line-search measurement of the registered test, same code and limits; it is a regression
+test of rows already met (as ADR 0649 A1.1), not a new registered run.
+
+### A1.2 Diagnosis (registered now, no limit, run once, ignored record `a1_diagnosis_bt_element_475`)
+
+Questions: (i) why the backtracked local iteration of element 475 does not converge at load factor `0.89` with the backtracking
+alone; (ii) at the loaded state of the two together, what T-FD and BA would have measured. Runs, each once, rule L on the `8^3`
+mesh at `a = 0.25`:
+
+- **E1**: the backtracking alone, the punch at `0.088` and at `0.089` (10 increments each, otherwise c4); if both converge, the
+  trial `u_T = u(0.089) + 0.2 (u(0.089) - u(0.088))` (the punch at `0.0892`, inside the failing increment `0.0890625` to
+  `0.089375`); at `u_T`, element 475: the c2 measures (`dc`; the plain replica's iterates) and the backtracked replica run to
+  100 steps (not 25), its `|R_a|_inf` and smallest `det F` per iterate and its halvings; the library's backtracked and plain
+  evaluations (Ok or the error). Interpretation registered: the backtracked replica converging after more than 25 steps (with
+  the halvings spread over many steps) says the cap is hit by the slow damped iteration; not converging in 100 steps (a
+  residual that does not fall below `1e-3` of its first value) says the damped iteration without a decrease test stalls or
+  cycles (the limit registered under "Limits"); the plain replica converging at `u_T` while the backtracked fails says the
+  backtracking itself leads the iteration astray. If a run fails, it is printed as such.
+- **E2**: at the loaded state of the two together, element 476: T-FD's measure and BA's (as registered for BT), and the number
+  of elements whose plain evaluation at that state returns the inversion error (the elements whose modes the backtracking
+  holds). Reported, not counted as T-FD or BA.
