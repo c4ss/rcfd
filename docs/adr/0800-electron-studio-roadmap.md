@@ -127,3 +127,6 @@ G22.
 The maintainer then chose a visible-word budget per surface (option (a) of three: per surface, rather than one global
 budget or no test): each surface's budget of chrome words at rest is set from its screenshots once it is quieted, a
 test counts them from the DOM, and raising a budget needs the maintainer's word.
+
+The built surfaces are quieted by one sweep item, F-833 (option chosen by the maintainer, rather than one item per surface or
+folding it into F-816); F-448 now also depends on F-833. Surfaces built after it ship under G22 from the start.

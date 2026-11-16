@@ -9080,7 +9080,7 @@ fixed by the item's registration ADR before any code.
     maintainer's decision; questions QA1 to QA5 of addendum 1. P3 is met after F-456 (ADR 0353, 2026-11-12): median 82.6
     ms against 100; viability remains the maintainer's decision.
 - [ ] **F-448** Electron Studio to parity with rcfd-studio
-  - depends on: F-447, F-824, F-825, F-827, F-828, F-829, F-830, F-831, F-832, F-801, F-802, F-803, F-804, F-805, F-806, F-807, F-808, F-809, F-810, F-811, F-812, F-813, F-814, F-816, F-817, F-822
+  - depends on: F-447, F-824, F-825, F-827, F-828, F-829, F-830, F-831, F-832, F-833, F-801, F-802, F-803, F-804, F-805, F-806, F-807, F-808, F-809, F-810, F-811, F-812, F-813, F-814, F-816, F-817, F-822
   - acceptance: An Electron shell in TypeScript over the service and the bulk route chosen by F-447 passes every parity
     check of ADR 0350 section 5 (the docs/ui-restart-plan.md section 6 list and the Studio checks added since),
     automated with Playwright where a check can be automated and by the maintainer's view-and-report where it cannot;
@@ -14096,7 +14096,7 @@ fixed by the item's registration ADR before any code.
     default bits unchanged.
   - note: Follow-up of F-693 (ADR 0628, 2026-11-15).
 
-## Electron Studio (F-800 to F-832)
+## Electron Studio (F-800 to F-833)
 
 Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0800](adr/0800-electron-studio-roadmap.md)). The F-800 to F-849 block is reserved for this roadmap (maintainer, 2026-11-16). F-448 depends on the parity subset.
 
@@ -14360,3 +14360,14 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     operation longer than a registered threshold shows progress and can be cancelled, and cancelling leaves no partial
     state (G21).
   - note: ADR 0800 (G16 to G21 added 2026-11-16). Traces: G21, G9.
+- [ ] **F-833** Electron Studio: quiet the built surfaces and lock a word budget per surface (G22)
+  - depends on: F-805, F-806, F-807, F-810, F-812, F-814, F-825, F-829, F-831
+  - acceptance: One quieting pass over every built surface (project home, runs, settings, case editor, Claude Code
+    panel, run workspace, command palette, undo and decision panels): normal states carry no visible words of their own;
+    words that G6, G8, G18 and G19 ask for move into accessible names, tooltips or focus detail, help on demand or the
+    palette; tests that read visible prose for a normal state are moved to role and accessible name (each change listed
+    for the maintainer); disclaimers, failures and known misses stay visible; a budget of visible chrome words at rest
+    proposed per surface from before-and-after screenshots and approved by the maintainer; a test counts those words
+    from the DOM per surface and fails past its budget; a view-and-report step.
+  - note: ADR 0800 §8 (G22 added by the maintainer 2026-11-16; sweep as one item, option chosen by the maintainer).
+    Traces: G22, G8, G13, G6.

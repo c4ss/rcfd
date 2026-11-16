@@ -4250,7 +4250,8 @@
       "F-814",
       "F-816",
       "F-817",
-      "F-822"
+      "F-822",
+      "F-833"
     ],
     "status": "todo",
     "acceptance": "An Electron shell in TypeScript over the service and the bulk route chosen by F-447 passes every parity check of ADR 0350 section 5 (the docs/ui-restart-plan.md section 6 list and the Studio checks added since), automated with Playwright where a check can be automated and by the maintainer's view-and-report where it cannot; its field values equal the Rust reader's bit for bit; rcfd-studio is frozen while it is built.",
@@ -7499,5 +7500,24 @@
     "status": "todo",
     "acceptance": "No engine or data work on the renderer's main thread: a test that records long tasks while opening a run, loading fields and scrubbing and fails on any task over a limit registered before the measurement; every operation longer than a registered threshold shows progress and can be cancelled, and cancelling leaves no partial state (G21).",
     "note": "ADR 0800 (G16 to G21 added 2026-11-16). Traces: G21, G9."
+  },
+  {
+    "id": "F-833",
+    "title": "Electron Studio: quiet the built surfaces and lock a word budget per surface (G22)",
+    "phase": 8,
+    "deps": [
+      "F-805",
+      "F-806",
+      "F-807",
+      "F-810",
+      "F-812",
+      "F-814",
+      "F-825",
+      "F-829",
+      "F-831"
+    ],
+    "status": "todo",
+    "acceptance": "One quieting pass over every built surface (project home, runs, settings, case editor, Claude Code panel, run workspace, command palette, undo and decision panels): normal states carry no visible words of their own; words that G6, G8, G18 and G19 ask for move into accessible names, tooltips or focus detail, help on demand or the palette; tests that read visible prose for a normal state are moved to role and accessible name (each change listed for the maintainer); disclaimers, failures and known misses stay visible; a budget of visible chrome words at rest proposed per surface from before-and-after screenshots and approved by the maintainer; a test counts those words from the DOM per surface and fails past its budget; a view-and-report step.",
+    "note": "ADR 0800 §8 (G22 added by the maintainer 2026-11-16; sweep as one item, option chosen by the maintainer). Traces: G22, G8, G13, G6."
   }
 ]
