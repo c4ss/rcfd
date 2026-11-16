@@ -7162,9 +7162,9 @@
     "deps": [
       "F-801"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "A TypeScript client of rcfd-service/1 in the main process (JSON-RPC over TCP or stdio, events.poll long-poll), with reconnect after the service restarts; P1 and P2 of ADR 0350 met again through the product shell; no existing service method, reply shape or golden changes (G4); a test that the renderer cannot reach the service except through the IPC allow-list.",
-    "note": "ADR 0800. Traces: G2, G4, G7, G9 (P2); PRODUCT Operating Context."
+    "note": "ADR 0800. Traces: G2, G4, G7, G9 (P2); PRODUCT Operating Context. Done 2026-11-16: main-process client (TCP, events.poll, reconnect), renderer via MessagePort + allow-list (window.studioService); P1 p99 0.30 ms, P2 p99 1.17 ms (ADR 0801 addendum 2, decisions D1-D4 proceeded on recommendations, awaiting the maintainer's review)."
   },
   {
     "id": "F-804",
@@ -7392,7 +7392,7 @@
       "F-801"
     ],
     "status": "partial",
-    "acceptance": "The Studio's unit and Playwright tests run as a job in .github/workflows/ci.yml (ADR 0800 Q3, maintainer 2026-11-16), with npm ci from the committed lock file and Electron run headless; the job fails the workflow on any test failure; docs/test-process.md names the job. A weekly, grouped Dependabot npm entry for /apps/studio-web lands with the job (ADR 0801 Q2).",
+    "acceptance": "The Studio's unit and Playwright tests run as a job in .github/workflows/ci.yml (ADR 0800 Q3, maintainer 2026-11-16), with npm ci from the committed lock file and Electron run headless; the job fails the workflow on any test failure; docs/test-process.md names the job. A weekly, grouped Dependabot npm entry for /apps/studio-web lands with the job (ADR 0801 Q2). The job builds rcfd-cli first so the service e2e tests do not skip.",
     "note": "ADR 0800 Q3, ADR 0801 Q2. studio-web job (ubuntu-24.04 + windows-latest, Node 22.19.0) and grouped weekly Dependabot npm entry written; all steps pass locally on Windows and in an Ubuntu 24.04 container; done when the job first runs green on GitHub Actions. Traces: G13."
   },
   {

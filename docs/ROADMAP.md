@@ -14125,13 +14125,15 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     source (tokens.css generated), primitives in src/renderer/ui/, gallery at #/dev/primitives, keyboard e2e. Contrast
     requirement removed and contrast-driven token changes reverted to DESIGN.md (maintainer, 2026-11-16; ADR 0800
     section 7).
-- [ ] **F-803** Electron Studio: service client for control and events
+- [x] **F-803** Electron Studio: service client for control and events
   - depends on: F-801
   - acceptance: A TypeScript client of rcfd-service/1 in the main process (JSON-RPC over TCP or stdio, events.poll long-
     poll), with reconnect after the service restarts; P1 and P2 of ADR 0350 met again through the product shell; no
     existing service method, reply shape or golden changes (G4); a test that the renderer cannot reach the service
     except through the IPC allow-list.
-  - note: ADR 0800. Traces: G2, G4, G7, G9 (P2); PRODUCT Operating Context.
+  - note: ADR 0800. Traces: G2, G4, G7, G9 (P2); PRODUCT Operating Context. Done 2026-11-16: main-process client (TCP,
+    events.poll, reconnect), renderer via MessagePort + allow-list (window.studioService); P1 p99 0.30 ms, P2 p99 1.17
+    ms (ADR 0801 addendum 2, decisions D1-D4 proceeded on recommendations, awaiting the maintainer's review).
 - [ ] **F-804** Electron Studio: bulk field data by the R2 reader and the R1 route, bit for bit
   - depends on: F-803
   - acceptance: The Node reader of store.rts (R2) for local projects and the opt-in data.* route (R1) for a remote
