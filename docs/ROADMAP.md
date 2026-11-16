@@ -14153,13 +14153,16 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     the DESIGN.md system before building. Done 2026-11-16: project home (src/renderer/project), read through rcfd-mcp
     --read-only per open project, live updates under 2 s (e2e), no Studio state in the folder; case and note names read
     from the folder until the engine has list_cases/list_notes (README F-805 D2); decisions D1-D7 in the README.
-- [ ] **F-806** Electron Studio: run list and run state
+- [x] **F-806** Electron Studio: run list and run state
   - depends on: F-805
   - acceptance: The runs table of DESIGN.md (case, id, state pictogram and word, result, sort and filter, selection that
     fades the others by colour and never fades a failure); run state from the runner, updated live; a test that closes
     and kills the Studio during a run and shows, on restart, that the run went on and its true state is displayed (G7);
     a view-and-report step.
-  - note: ADR 0800. Traces: G6, G7, G8; DESIGN Runs table, Named Rules (Fade by Colour).
+  - note: ADR 0800. Traces: G6, G7, G8; DESIGN Runs table, Named Rules (Fade by Colour). Done 2026-11-16: Runs tab
+    (src/renderer/runs), live state from the runner feed plus 1 s re-read while a run is active; G7 close-and-kill e2e
+    with a real rcfd-runner run; paused and cancelled pictograms drawn (DESIGN.md addition proposed); steady runs no
+    longer show time 0 (engine reports 0 for steady runs; shown in words).
 - [ ] **F-807** Electron Studio: run control (quick run, stop, pause, queue)
   - depends on: F-806
   - acceptance: Start a case as a quick run, stop, pause and queue through the runner service only; each action shown in
