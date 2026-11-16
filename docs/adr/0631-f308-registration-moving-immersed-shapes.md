@@ -279,3 +279,27 @@ registration did not state them:
 - **The phase** of a harmonic is `atan2` of `(2/N) sum F exp(-i omega t_n)`, the A2 difference wrapped to `(-180, 180]` degrees.
 - **The five runs** BF, BFc, IB40 (G40), IB20 (G20) and N1 run on five threads of `f308_oscillating_cylinder_record`; a stopped
   run (S1) ends the test before any other check is evaluated.
+
+## Amendment 2 (2026-11-16, after the first run of the heavy record, before the corrected run): the body-fitted start was defective
+
+**What happened.** The registered record `f308_oscillating_cylinder_record` was run once (log `w49i-work/f308-scratch/heavy_record.log`).
+The three immersed runs IB40, IB20 and N1 ran to the end without a stop (S1 met for them: largest step continuity 4.9e-8, 2.8e-11
+and 0). Both body-fitted runs were stopped by the divergence guard, BF at step 10 (Courant 4.5e6) and BFc at step 12 (1.7e6),
+with a step continuity of about 1e-2 from the first step. Because S1 ends the test, no other check was evaluated; no measure of
+the immersed runs was printed.
+
+**Cause (a defect of the test set-up, not of a solver).** The O-grid is generated about the origin, the mean pose of the
+cylinder, but the motion `x_c(t) = -A cos(omega t)` starts at `x_c(0) = -A = -0.796`. `run_bf` built the solver on the undeformed
+grid and moved the points to `x0 + x_c(t_1) w` in the first step: a jump of 0.79 D in one step of 0.005, a mesh velocity of 160
+U_m. The immersed runs build the shape at `x_c(t)` from the first step and are consistent. Checked by a diagnosis run on a scratch
+copy (not a registered run; `diag_bf_variants`, BFc for 6 steps): with the displacement taken relative to `x_c(0)` the step
+continuity is 2e-12 to 3e-14 with the registered settings, and the same with the AMG off, with tight tolerances or with a depth
+of 0.1, so neither the solver settings nor the cell aspect ratio are involved.
+
+**Correction.** The body-fitted runs start from the grid deformed to the initial pose, `x0 + x_c(0) w(|x0|)` (the same blend),
+on which the solver is built at rest; every step then moves the points to `x0 + x_c(t_{n+1}) w(|x0|)` from the undeformed grid,
+as registered. Nothing else changes: case, meshes, settings, windows, stations, limits, decision rule. The corrected record
+`f308_oscillating_cylinder_record_corrected` repeats all five runs in one process (the comparison is formed in one process; the
+immersed runs use no changed line and are deterministic, so their repetition does not select a result; the hashes of their force
+series are printed). The first record stays in the file unchanged as the ignored defective record. By the decision rule a check
+met only after an amendment makes the proposal partial at most.

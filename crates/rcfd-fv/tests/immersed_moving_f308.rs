@@ -694,6 +694,86 @@ fn run_bf(label: &str, n_theta: usize, n_r: usize, periods: usize) -> Run {
     out
 }
 
+/// `run_bf` with the solver built on the grid deformed to the initial pose `x0 + x_c(0) w` (ADR 0631 amendment 2).
+fn run_bf_corrected(label: &str, n_theta: usize, n_r: usize, periods: usize) -> Run {
+    let t0 = Instant::now();
+    let mesh0 = cylinder_ogrid(n_theta, n_r, RADIUS, R_WALL, Grading::Expansion(35.0), 1.0).unwrap();
+    let x0: Vec<Vec3> = mesh0.points().to_vec();
+    let w: Vec<f64> = x0.iter().map(|p| blend((p[0] * p[0] + p[1] * p[1]).sqrt())).collect();
+    let start: Vec<Vec3> = x0
+        .iter()
+        .zip(&w)
+        .map(|(p, w)| [p[0] + xc_at(0.0) * w, p[1], p[2]])
+        .collect();
+    let mesh_start = rcfd_mesh::motion::moved_mesh(&mesh0, start).unwrap();
+    let geom = Arc::new(FvGeometry::new(Arc::new(mesh_start)).unwrap());
+    let cells = geom.n_cells();
+    let mut u = VectorField::uniform("U", &geom, vec3::ZERO);
+    for name in ["cylinder", "farfield"] {
+        u.set_bc(&geom, name, Box::new(FixedValue::vector(vec3::ZERO))).unwrap();
+    }
+    let p = ScalarField::uniform("p", &geom, 0.0);
+    let mut s = PimpleSolver::new(geom, u, p, heavy_settings());
+    let names = vec!["cylinder".to_string()];
+    let steps = periods * STEPS_PER_PERIOD;
+    let samples = sample_steps(periods);
+    let mut out = Run {
+        label: label.into(),
+        force: Vec::new(),
+        wake: Vec::new(),
+        max_continuity: 0.0,
+        stopped: None,
+        seconds: 0.0,
+        cells,
+    };
+    let dt = dt();
+    for n in 1..=steps {
+        let t = n as f64 * dt;
+        let xc = xc_at(t);
+        let pts: Vec<Vec3> = x0.iter().zip(&w).map(|(p, w)| [p[0] + xc * w, p[1], p[2]]).collect();
+        let st = match move_mesh(&s.geom, pts, dt) {
+            Ok(st) => st,
+            Err(e) => {
+                out.stopped = Some(format!("step {n}: {e}"));
+                break;
+            }
+        };
+        let old = s.geom.mesh.clone();
+        let walls = set_follow_conditions(&mut s.u, &st, &old, &names, dt).unwrap();
+        let info = match s.step_ale_with_walls(dt, st.geom, st.mesh_flux, walls.clone()) {
+            Ok(i) => i,
+            Err(e) => {
+                out.stopped = Some(format!("step {n}: {e}"));
+                break;
+            }
+        };
+        if let Some(d) = &s.diverged {
+            out.stopped = Some(format!("step {n}: {}", d.message(None)));
+            break;
+        }
+        out.max_continuity = out.max_continuity.max(info.continuity);
+        let (f, _) =
+            patch_force_moment_wall_gradient(&s.geom, &s.u, &s.p, 1.0, NU, &names, [xc, 0.0, 0.0], &walls).unwrap();
+        out.force.push(f);
+        if samples.contains(&n) {
+            out.wake.push((n, sample(&s.geom, &s.u, &wake_points(xc))));
+        }
+        if n % 500 == 0 {
+            println!(
+                "[{label}] step {n}/{steps}, {:.0} s, F_x {:.5}, continuity {:.2e}",
+                t0.elapsed().as_secs_f64(),
+                f[0],
+                info.continuity
+            );
+        }
+    }
+    if !s.u.values.iter().flatten().all(|x| x.is_finite()) && out.stopped.is_none() {
+        out.stopped = Some("non-finite velocity".into());
+    }
+    out.seconds = t0.elapsed().as_secs_f64();
+    out
+}
+
 /// Mean and first harmonic `(2/N) sum F exp(-i omega t)` (as (re, im)) of component `k` over steps `first..=last` (1-based).
 fn harmonic(v: &[f64], first: usize, last: usize) -> (f64, (f64, f64)) {
     let n = (last - first + 1) as f64;
@@ -805,6 +885,150 @@ fn f308_oscillating_cylinder_record() {
         println!(
             "S1 [{}]: {} cells, {:.0} s, max continuity {:.3e}, stopped {:?}",
             r.label, r.cells, r.seconds, r.max_continuity, r.stopped
+        );
+        if r.stopped.is_some() {
+            fails.push(format!("S1 {} stopped: {:?}", r.label, r.stopped));
+        }
+    }
+    if !fails.is_empty() {
+        panic!("{fails:#?}");
+    }
+    let [bf, bfc, ib40, ib20, n1] = [&runs[0], &runs[1], &runs[2], &runs[3], &runs[4]];
+    let (w0, w1) = (2 * STEPS_PER_PERIOD + 1, 4 * STEPS_PER_PERIOD);
+    let hb = harm(bf, w0, w1);
+    let amp_bf = cabs(hb.hx);
+    for (r, h) in [
+        (bf, &hb),
+        (bfc, &harm(bfc, w0, w1)),
+        (ib40, &harm(ib40, w0, w1)),
+        (ib20, &harm(ib20, w0, w1)),
+    ] {
+        let (ca, cv) = morison(h, w0, w1);
+        println!(
+            "[{}] drag mean {:+.5e}, harmonic ({:+.6}, {:+.6}) amplitude {:.6} phase {:+.3} deg; lift mean {:+.3e} amplitude {:.3e}; \
+             C_a {:.4}, C_v {:.4} (reported only)",
+            r.label,
+            h.mean_x,
+            h.hx.0,
+            h.hx.1,
+            cabs(h.hx),
+            h.hx.1.atan2(h.hx.0).to_degrees(),
+            h.mean_y,
+            cabs(h.hy),
+            ca,
+            cv
+        );
+        // periodicity, reported only
+        let p3 = harm(r, w0, 3 * STEPS_PER_PERIOD);
+        let p4 = harm(r, 3 * STEPS_PER_PERIOD + 1, w1);
+        println!(
+            "[{}] periods 3 and 4 drag amplitude {:.6} {:.6}",
+            r.label,
+            cabs(p3.hx),
+            cabs(p4.hx)
+        );
+    }
+    let hi = harm(ib40, w0, w1);
+    let a1 = (cabs(hi.hx) - amp_bf).abs() / amp_bf;
+    let a2 = wrap(hi.hx.1.atan2(hi.hx.0) - hb.hx.1.atan2(hb.hx.0)).abs().to_degrees();
+    let a3 = cabs((hi.hx.0 - hb.hx.0, hi.hx.1 - hb.hx.1)) / amp_bf;
+    let a4 = (hi.mean_x - hb.mean_x).abs() / amp_bf;
+    let lifts = [
+        hi.mean_y.abs() / amp_bf,
+        cabs(hi.hy) / amp_bf,
+        hb.mean_y.abs() / amp_bf,
+        cabs(hb.hy) / amp_bf,
+    ];
+    let a5 = lifts.iter().cloned().fold(0.0, f64::max);
+    let p4_steps: Vec<usize> = sample_steps(4)
+        .into_iter()
+        .filter(|&s| s > 3 * STEPS_PER_PERIOD)
+        .collect();
+    let (a6, a7) = wake_diff(ib40, bf, &p4_steps);
+    let hc = harm(bfc, w0, w1);
+    let r1f = cabs((hc.hx.0 - hb.hx.0, hc.hx.1 - hb.hx.1)) / amp_bf;
+    let (_, r1w) = wake_diff(bfc, bf, &p4_steps);
+    let h20 = harm(ib20, w0, w1);
+    let c1f = cabs((h20.hx.0 - hb.hx.0, h20.hx.1 - hb.hx.1)) / amp_bf;
+    let (_, c1w) = wake_diff(ib20, bf, &p4_steps);
+    let (q0, q1) = (STEPS_PER_PERIOD + 1, 2 * STEPS_PER_PERIOD);
+    let hb2 = harm(bf, q0, q1);
+    let hn = harm(n1, q0, q1);
+    let n1f = cabs((hn.hx.0 - hb2.hx.0, hn.hx.1 - hb2.hx.1)) / cabs(hb2.hx);
+    let p2_steps: Vec<usize> = sample_steps(2).into_iter().filter(|&s| s > STEPS_PER_PERIOD).collect();
+    let (_, n1w) = wake_diff(n1, bf, &p2_steps);
+    println!("A1 drag amplitude {a1:.4e} (limit 0.05)");
+    println!("A2 drag phase {a2:.4} deg (limit 3)");
+    println!("A3 drag harmonic complex {a3:.4e} (limit 0.06)");
+    println!("A4 mean drag {a4:.4e} (limit 0.02)");
+    println!(
+        "A5 lift (IB mean, IB amplitude, BF mean, BF amplitude) {:.3e} {:.3e} {:.3e} {:.3e} (limit 1e-3 each)",
+        lifts[0], lifts[1], lifts[2], lifts[3]
+    );
+    println!("A6 wake e_max {a6:.4e} (limit 0.15)");
+    println!("A7 wake e_rms {a7:.4e} (limit 0.05)");
+    println!("R1 BFc against BF: drag harmonic {r1f:.4e} (limit 0.04), wake e_rms {r1w:.4e} (limit 0.025)");
+    println!("C1 G20: drag harmonic {c1f:.4e} against G40 {a3:.4e}; wake e_rms {c1w:.4e} against {a7:.4e} (G20 larger: reported)");
+    println!("N1 velocity left out (period 2): drag harmonic {n1f:.4e} (must exceed 0.3), wake e_rms {n1w:.4e} (must exceed 0.15)");
+    let checks = [
+        ("A1", a1 <= 0.05),
+        ("A2", a2 <= 3.0),
+        ("A3", a3 <= 0.06),
+        ("A4", a4 <= 0.02),
+        ("A5", a5 <= 1e-3),
+        ("A6", a6 <= 0.15),
+        ("A7", a7 <= 0.05),
+        ("R1 force", r1f <= 0.04),
+        ("R1 wake", r1w <= 0.025),
+        ("N1 force", n1f >= 0.3),
+        ("N1 wake", n1w >= 0.15),
+    ];
+    println!("C1 met: {}", c1f > a3 && c1w > a7);
+    for (id, ok) in checks {
+        println!("{id}: {}", if ok { "met" } else { "MISSED" });
+        if !ok {
+            fails.push(id.to_string());
+        }
+    }
+    assert!(fails.is_empty(), "missed: {fails:?}");
+}
+
+/// ADR 0631 A1 to A7, R1, C1, N1, S1 with the body-fitted start of amendment 2: the corrected heavy record (run once).
+#[test]
+#[ignore = "heavy record (ADR 0631 amendment 2): five runs, about 25 minutes in release"]
+fn f308_oscillating_cylinder_record_corrected() {
+    let t0 = Instant::now();
+    let jobs: Vec<(&str, Job)> = vec![
+        ("BF", Box::new(|| run_bf_corrected("BF", 256, 128, 4))),
+        ("BFc", Box::new(|| run_bf_corrected("BFc", 128, 64, 4))),
+        ("IB40", Box::new(|| run_ib("IB40", 0.025, 4, true))),
+        ("IB20", Box::new(|| run_ib("IB20", 0.05, 4, true))),
+        ("N1", Box::new(|| run_ib("N1", 0.025, 2, false))),
+    ];
+    let runs: Vec<Run> = std::thread::scope(|sc| {
+        let hs: Vec<_> = jobs
+            .into_iter()
+            .map(|(name, job)| {
+                std::thread::Builder::new()
+                    .name(name.into())
+                    .stack_size(64 << 20)
+                    .spawn_scoped(sc, job)
+                    .unwrap()
+            })
+            .collect();
+        hs.into_iter().map(|h| h.join().unwrap()).collect()
+    });
+    println!("all runs done in {:.0} s", t0.elapsed().as_secs_f64());
+    let mut fails: Vec<String> = Vec::new();
+    for r in &runs {
+        println!(
+            "S1 [{}]: {} cells, {:.0} s, max continuity {:.3e}, stopped {:?}",
+            r.label, r.cells, r.seconds, r.max_continuity, r.stopped
+        );
+        println!(
+            "[{}] force series hash {:016x}",
+            r.label,
+            fnv(r.force.iter().flat_map(|f| f.iter().map(|x| x.to_bits())))
         );
         if r.stopped.is_some() {
             fails.push(format!("S1 {} stopped: {:?}", r.label, r.stopped));
