@@ -88,6 +88,28 @@ Which service the Studio uses is set by its environment (`src/main/service/confi
 - React Aria's `usePress` would inject a one-rule `<style>` element, which the CSP refuses; `main.tsx` puts a marker
   element with its id in the head and the rule lives in `base.css`.
 
+## The action layer (F-827)
+
+Every UI action is a named entry of one registry, `src/shared/actions/registry.ts` (G16): a stable id, a title and a
+description (the command palette of F-831 and help on the spot, G19), a parameter schema (`params.ts`: the TypeScript
+type, a JSON Schema and the shape check), the engine call (a method of `SERVICE_METHODS`, sent the action's parameters
+unchanged), its CLI equivalent (`rcfd call --addr <service> <method> '<json>'`) and MCP tool where the MCP server has one,
+an availability predicate with the reason in words, and an undo hook for F-829. Today it holds one action per method of
+the allow-list (24).
+
+- The dispatcher (`src/shared/actions/dispatcher.ts`) checks the parameters and the availability, makes the call, and
+  logs it: every change kept (up to 10 000), the latest 500 reads in a ring of their own. The log exports as a JSON
+  script (`rcfd-studio-actions` 1) that `replay` runs again, mapping the sessions it made, or as a POSIX shell script of
+  `rcfd call` commands.
+- In the renderer, `src/renderer/actions/index.ts` is the one module that touches `window.studioService`; surfaces
+  call `dispatch('run.start', { session })` and `availability(...)` from there. `tests/unit/actions-static.spec.ts`
+  fails when any other renderer file names the bridge or calls a service method by name.
+- Tests: `tests/unit/actions-registry.spec.ts` (every action has an engine equivalent, read from the engine's sources;
+  every allow-listed method has an action; schemas, types, availability, equivalents), `actions-dispatch.spec.ts`
+  (dispatch, log, export and replay against the fake service through the port bridge), and
+  `tests/e2e/actions-rcfd.spec.ts` (the real `rcfd serve`: a recorded session replayed from JSON and from the shell gives
+  the same journal hash and run status; the undo hooks restore what was there).
+
 ## Security (G10)
 
 - The renderer is sandboxed (`app.enableSandbox()` and the window's settings), context-isolated, with Node integration
