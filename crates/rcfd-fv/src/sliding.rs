@@ -15,7 +15,8 @@
 //! At a rotor angle where rotor and stator nodes coincide the join drops the zero-area overlaps there and the interface
 //! graph falls into parts; when a part's targets do not sum to zero (beyond rounding) the two solves above are made on the
 //! interface faces together with the faces between the parts, whose mapped values receive the correction (ADR 0638).
-//! "Beyond rounding" is measured against the term magnitudes of the targets (F-724, ADR 0659 D1, [`PartCoupling`]).
+//! "Beyond rounding" is measured against the largest target; [`sliding_step_with`] with [`PartCoupling::FluxScale`] measures
+//! it against the term magnitudes of the targets (F-724, ADR 0659 D1, opt-in).
 //!
 //! `PimpleSolver::step_sliding` advances one step with it. [`rotating_wall_conditions`] gives a wall on the rotor its
 //! velocity and the fixed-flux pressure gradient (M6).
@@ -349,8 +350,8 @@ pub struct SlidingStep {
 /// and the cell velocity `u_old`) to the new joined mesh `new` of the same pair, for a step of size `dt` (ADR 0216 M2 to
 /// M4). Fails when the meshes are not of one pair, the sizes do not fit or the new mesh is not a valid geometry.
 ///
-/// The parts of the interface graph at coinciding nodes are coupled by the rule [`PartCoupling::FluxScale`] (F-710, ADR
-/// 0638; the threshold scale of F-724, ADR 0659); [`sliding_step_with`] takes the rule.
+/// The parts of the interface graph at coinciding nodes are coupled by the rule [`PartCoupling::LargestTarget`] (F-710, ADR
+/// 0638 D3); [`sliding_step_with`] takes the rule, among them the opt-in [`PartCoupling::FluxScale`] of F-724 (ADR 0659).
 pub fn sliding_step(
     old_geom: &FvGeometry,
     old: &SlidingMesh,
@@ -359,11 +360,11 @@ pub fn sliding_step(
     u_old: &[Vec3],
     dt: f64,
 ) -> Result<SlidingStep, String> {
-    sliding_step_with(old_geom, old, new, phi_old, u_old, dt, PartCoupling::FluxScale)
+    sliding_step_with(old_geom, old, new, phi_old, u_old, dt, PartCoupling::LargestTarget)
 }
 
 /// [`sliding_step`] with the coupling rule `coupling` at coinciding nodes (ADR 0659 D2): `Off` the uncoupled step of ADR
-/// 0216, `LargestTarget` the step of F-710 (ADR 0638 D3), `FluxScale` that of [`sliding_step`].
+/// 0216, `LargestTarget` the step of F-710 (ADR 0638 D3) and of [`sliding_step`], `FluxScale` the opt-in rule of F-724.
 pub fn sliding_step_with(
     old_geom: &FvGeometry,
     old: &SlidingMesh,
