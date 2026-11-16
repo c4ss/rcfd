@@ -207,7 +207,7 @@ impl<'a> Variant<'a> {
         self.a.u.set_bc(&ga, "cylinder", per_face(&ga, "cylinder")).unwrap();
         self.a.step_sliding(DT, st_a, Vec::new()).unwrap();
         self.a_cur = new_a;
-        let (idx, match_d, match_one) = match_points(&self.c.geom.mesh.cell_centres(), &self.a.geom.mesh);
+        let (idx, match_d, match_one) = match_points(self.c.geom.mesh.cell_centres(), &self.a.geom.mesh);
         let delta = idx
             .iter()
             .enumerate()
