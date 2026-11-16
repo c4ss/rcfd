@@ -16,8 +16,11 @@
 //! [`PeriodicSlidingInterface`] builds the joined mesh at an offset (ADR 0629 M4), always from the rotor's reference points,
 //! for `0 <= delta < P`; [`PeriodicSlidingMesh`] maps faces across a step and gives the rotor's swept volumes.
 //!
-//! Limits: one period of offset (a rotor turning further needs its cells re-imaged by one period); patches of one period each
-//! (a stator of another pitch is refused); planar or cylindrical patches; one interface.
+//! [`PeriodicSlidingInterface::mesh_turned`] takes any turned offset `>= 0` (F-704, ADR 0634 R1): the mesh at the offset
+//! reduced to one period, with the number of periods taken off in [`PeriodicSlidingMesh::image`]; the step across a change
+//! of image re-images the rotor's state (`rcfd_fv::sliding_periodic`).
+//!
+//! Limits: patches of one period each (a stator of another pitch is refused); planar or cylindrical patches; one interface.
 
 use crate::mesh::{Mesh, PatchKind, PeriodicRotation};
 use crate::motion::{mat_vec, moved_mesh, rotation_matrix, swept_volumes_about};
@@ -798,11 +801,51 @@ impl PeriodicSlidingInterface {
             mesh,
             report,
             offset,
+            image: 0,
             n_rotor_cells: self.rotor.n_cells(),
             per: self.per,
             interface,
             wrap,
         })
+    }
+}
+
+impl PeriodicSlidingInterface {
+    /// The image `k` and the reduced offset `r` in `[0, period())` of a turned offset `turned >= 0` (F-704, ADR 0634 R1):
+    /// `turned = r + k . period()`, the rotor at `turned` being the image of the rotor at `r` moved by `k` periods.
+    pub fn reduce(&self, turned: f64) -> Result<(i64, f64)> {
+        let p = self.period();
+        if !(turned.is_finite() && turned >= 0.0) {
+            return bad(format!(
+                "periodic sliding interface: the turned offset must be finite and not negative (got turned = {turned})"
+            ));
+        }
+        let mut k = (turned / p).floor() as i64;
+        let mut r = turned - k as f64 * p;
+        if r < 0.0 {
+            k -= 1;
+            r = turned - k as f64 * p;
+        } else if r >= p {
+            k += 1;
+            r = turned - k as f64 * p;
+        }
+        if !(r >= 0.0 && r < p) {
+            return bad(format!(
+                "periodic sliding interface: the turned offset {turned} cannot be reduced to one period"
+            ));
+        }
+        Ok((k, r))
+    }
+
+    /// The joined mesh with the rotor turned by `turned >= 0` from its reference position, any number of periods (F-704,
+    /// ADR 0634 R1): the mesh of [`mesh_at`](Self::mesh_at) at the reduced offset, with [`PeriodicSlidingMesh::image`] the
+    /// number of whole periods taken off. A step between two such meshes whose images differ by one is a re-imaging step
+    /// (ADR 0634 R2).
+    pub fn mesh_turned(&self, turned: f64) -> Result<PeriodicSlidingMesh> {
+        let (k, r) = self.reduce(turned)?;
+        let mut m = self.mesh_at(r)?;
+        m.image = k;
+        Ok(m)
     }
 }
 
@@ -815,6 +858,9 @@ pub struct PeriodicSlidingMesh {
     pub report: PeriodicJoinReport,
     /// Offset of the rotor.
     pub offset: f64,
+    /// The image of the rotor (F-704, ADR 0634 R1): the rotor stands `image` periods further on than this mesh shows it
+    /// (its turned offset is `offset + image . period`). `0` from [`PeriodicSlidingInterface::mesh_at`].
+    pub image: i64,
     n_rotor_cells: usize,
     per: Periodicity,
     interface: Vec<bool>,
@@ -830,6 +876,11 @@ impl PeriodicSlidingMesh {
     /// The periodicity of the pair.
     pub fn periodicity(&self) -> Periodicity {
         self.per
+    }
+
+    /// The turned offset `offset + image . period` (ADR 0634 R1).
+    pub fn turned(&self) -> f64 {
+        self.offset + self.image as f64 * self.per.motion_period()
     }
 
     /// Whether face `f` is a direct (internal) interface face.
@@ -1193,5 +1244,170 @@ mod tests {
         );
         println!("K6 stator of another pitch: {e}");
         assert!(e.contains("period"), "{e}");
+    }
+
+    // ---------------------------------------------------------------------------------------------------------------
+    // F-704 (ADR 0634): turned offsets and the re-imaging step
+    // ---------------------------------------------------------------------------------------------------------------
+
+    type MeshBits = (Vec<u64>, Vec<usize>, Vec<usize>, Vec<Vec<usize>>, String);
+
+    fn mesh_bits(m: &Mesh) -> MeshBits {
+        (
+            m.points().iter().flatten().map(|x| x.to_bits()).collect(),
+            m.owner().to_vec(),
+            m.neighbour().to_vec(),
+            (0..m.n_faces()).map(|f| m.face_points(f).to_vec()).collect(),
+            format!("{:?}", m.patches()),
+        )
+    }
+
+    /// Whether rotor cell `c` has a face on the interface (a direct or a wrap face).
+    fn on_interface(m: &PeriodicSlidingMesh, c: usize) -> bool {
+        m.mesh.cell_faces(c).iter().any(|&f| m.is_interface(f) || m.is_wrap(f))
+    }
+
+    /// K1 and K2 (with K2c of amendment 1) of ADR 0634.
+    #[test]
+    fn f704_k1_k2_turned_offsets() {
+        let cases: [(&str, PeriodicSlidingInterface, [f64; 4]); 2] = [
+            ("PP", pair_pp(), [0.0, 0.0123, 0.3, 0.9]),
+            ("SS", pair_ss(), [0.0, 0.0123, 0.3, 1.0]),
+        ];
+        for (name, s, offs) in &cases {
+            let p = s.period();
+            let reference = s.rotor().cell_centres().to_vec();
+            let nr = s.n_rotor_cells();
+            for &t in offs {
+                let a = s.mesh_at(t).unwrap();
+                let b = s.mesh_turned(t).unwrap();
+                let k1 = b.image == 0 && b.offset.to_bits() == t.to_bits() && mesh_bits(&a.mesh) == mesh_bits(&b.mesh);
+                println!("K1 {name} t {t}: image {}, bit for bit {k1}", b.image);
+                assert!(k1, "K1 {name} t {t}");
+                for k in 1..=3i64 {
+                    let turned = t + k as f64 * p;
+                    let m = s.mesh_turned(turned).unwrap();
+                    let de = (m.offset - t).abs();
+                    let at = s.mesh_at(m.offset).unwrap();
+                    let same = (0..nr).all(|c| {
+                        m.mesh.cell_centres()[c]
+                            .iter()
+                            .zip(&at.mesh.cell_centres()[c])
+                            .all(|(x, y)| x.to_bits() == y.to_bits())
+                    });
+                    let (mut ec, mut n_off) = (0.0f64, 0);
+                    for c in 0..nr {
+                        if on_interface(&m, c) {
+                            continue;
+                        }
+                        let moved = s.periodicity().apply(turned, reference[c]);
+                        let back = s.periodicity().apply(-(k as f64) * p, moved);
+                        ec = ec.max(vec3::norm(vec3::sub(m.mesh.cell_centres()[c], back)));
+                        n_off += 1;
+                    }
+                    println!(
+                        "K2 {name} t {t} k {k}: image {} ({k}), |offset - t| {de:.2e} ({:.1e}); K2c centres off the \
+                         interface {ec:.2e} over {n_off} cells (1e-12); every rotor centre as mesh_at(offset): {same}",
+                        m.image,
+                        1e-14 * k as f64
+                    );
+                    assert!(m.image == k, "K2 image");
+                    assert!(de <= 1e-14 * k as f64, "K2 offset {de:.3e}");
+                    assert!(n_off > 0 && ec <= 1e-12, "K2c {ec:.3e}");
+                    assert!(same, "K2c bits");
+                }
+            }
+        }
+    }
+
+    /// K3 of ADR 0634: the re-imaging step on the mesh.
+    #[test]
+    fn f704_k3_re_imaging_step_face_map_and_swept_volumes() {
+        for (name, s, t0, t1) in [
+            ("PP", pair_pp(), 0.9975, 1.0025),
+            ("SS", pair_ss(), FRAC_PI_3 - 0.0025, FRAC_PI_3 + 0.0025),
+        ] {
+            let p = s.period();
+            let (old, new) = (s.mesh_turned(t0).unwrap(), s.mesh_turned(t1).unwrap());
+            assert_eq!((old.image, new.image), (0, 1), "K3 {name}: images");
+            // (i) the face map
+            let map = new.face_map_from(&old).unwrap();
+            let (m0, m1) = (&old.mesh, &new.mesh);
+            let mut used = vec![0usize; m0.n_faces()];
+            let mut ok = true;
+            for (f, g) in map.iter().enumerate() {
+                match g {
+                    Some(g) => {
+                        ok &= !new.is_interface(f) && !new.is_wrap(f) && !old.is_interface(*g) && !old.is_wrap(*g);
+                        ok &= m1.owner()[f] == m0.owner()[*g];
+                        if f < m1.n_internal_faces() {
+                            ok &= *g < m0.n_internal_faces() && m1.neighbour()[f] == m0.neighbour()[*g];
+                        } else {
+                            ok &= *g >= m0.n_internal_faces()
+                                && m1.patch_of_face(f).unwrap().name == m0.patch_of_face(*g).unwrap().name;
+                        }
+                        used[*g] += 1;
+                    }
+                    None => ok &= new.is_interface(f) || new.is_wrap(f),
+                }
+            }
+            ok &= used.iter().all(|&u| u <= 1);
+            // (ii) the swept volumes of the motion 0.005 from old.offset - P
+            let w = new.rotor_swept_volumes(old.offset - p).unwrap();
+            let (mut e, mut n, mut e0) = (0.0f64, 0, 0.0f64);
+            for f in 0..m1.n_faces() {
+                if !new.is_rotor_face(f) {
+                    e0 = e0.max(w[f].abs());
+                    continue;
+                }
+                let sv = m1.face_area_vectors()[f];
+                if name == "PP" {
+                    e = e.max((w[f] - sv[0] * 0.005).abs() / (vec3::norm(sv) * 0.005));
+                    n += 1;
+                    continue;
+                }
+                if sv[2].abs() > 1e-9 * vec3::norm(sv) {
+                    continue;
+                }
+                let c = m1.face_centres()[f];
+                if vec3::dot(vec3::unit(sv), vec3::unit([c[0], c[1], 0.0])).abs() > 1e-9 {
+                    continue;
+                }
+                let rs: Vec<f64> = m1
+                    .face_points(f)
+                    .iter()
+                    .map(|&q| m1.points()[q][0].hypot(m1.points()[q][1]))
+                    .collect();
+                let (r1, r2) = (
+                    rs.iter().cloned().fold(f64::INFINITY, f64::min),
+                    rs.iter().cloned().fold(0.0, f64::max),
+                );
+                let ex = L * (r2 * r2 - r1 * r1) * 0.005f64.sin() / 2.0;
+                e = e.max((w[f].abs() - ex).abs() / ex);
+                n += 1;
+            }
+            println!(
+                "K3 {name}: offsets {:.6} (image {}) -> {:.6} (image {}); (i) face map exact {ok}; (ii) swept volumes \
+                 {e:.2e} over {n} faces (1e-12), largest off the rotor {e0:.2e} (exact zero)",
+                old.offset, old.image, new.offset, new.image
+            );
+            assert!(ok, "K3 (i) {name}");
+            assert!(n > 0 && e <= 1e-12, "K3 (ii) {name} {e:.3e}");
+            assert!(e0 == 0.0, "K3 (ii) zero {name} {e0:.3e}");
+        }
+    }
+
+    /// K4 of ADR 0634: refusals of a turned offset.
+    #[test]
+    fn f704_k4_refusals() {
+        let (pp, ss) = (pair_pp(), pair_ss());
+        for s in [&pp, &ss] {
+            for t in [-0.1, f64::NAN, f64::INFINITY] {
+                let e1 = format!("{:?}", s.reduce(t).unwrap_err());
+                let e2 = format!("{:?}", s.mesh_turned(t).unwrap_err());
+                println!("K4 turned {t}: {e2}");
+                assert!(e1.contains("turned") && e2.contains("turned"), "{e1} / {e2}");
+            }
+        }
     }
 }

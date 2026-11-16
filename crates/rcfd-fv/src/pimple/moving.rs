@@ -299,6 +299,7 @@ impl PimpleSolver {
             step.old_defect,
             wall_dpdn,
             &[],
+            None,
         )
     }
 
@@ -307,6 +308,10 @@ impl PimpleSolver {
     /// (`sliding_periodic::PeriodicSlidingStep::wrap_patches`) may have other sizes than the current ones and must be
     /// cyclic in both; every other patch must be as in `step_sliding`. The refusals of `step_sliding` apply, leaving the
     /// solver unchanged.
+    ///
+    /// On a re-imaging step (`step.reimage` set, F-704, ADR 0634 R2) the velocity of the rotor cells and every stored level
+    /// of its history are turned by `step.reimage.rotation` before the step (the rotor is represented one period back); a
+    /// rotor cell count above the cell count is refused, leaving the solver unchanged.
     pub fn step_sliding_periodic(
         &mut self,
         dt: f64,
@@ -323,12 +328,14 @@ impl PimpleSolver {
             step.old_defect,
             wall_dpdn,
             &crate::sliding_periodic::PeriodicSlidingStep::wrap_patches(),
+            step.reimage.as_ref(),
         )
     }
 
     /// The step of [`step_sliding`](Self::step_sliding) and [`step_sliding_periodic`](Self::step_sliding_periodic):
     /// the patches named in `resizable` may change their size (they must be cyclic in both meshes); every other patch must
-    /// keep its name, kind and size.
+    /// keep its name, kind and size. `reimage` (ADR 0634 R2) turns the rotor cells' velocity and its history before the
+    /// step; `None` leaves them as they are.
     #[allow(clippy::too_many_arguments)]
     fn sliding_advance(
         &mut self,
@@ -341,6 +348,7 @@ impl PimpleSolver {
         old_defect: Vec<f64>,
         wall_dpdn: Vec<f64>,
         resizable: &[&str],
+        reimage: Option<&crate::sliding_periodic::Reimage>,
     ) -> Result<StepInfo, String> {
         if self.settings.time_scheme != TimeScheme::ImplicitEuler {
             return Err(format!(
@@ -387,6 +395,41 @@ impl PimpleSolver {
             return Err(format!(
                 "{who}: a face viscosity, body force, source force, sink or face jump is set (sized to the current mesh)"
             ));
+        }
+        if let Some(ri) = reimage {
+            if ri.n_rotor_cells > g.n_cells() {
+                return Err(format!(
+                    "{who}: the re-imaging names {} rotor cells of {}",
+                    ri.n_rotor_cells,
+                    g.n_cells()
+                ));
+            }
+            let turn = |v: Vec3| rcfd_mesh::motion::mat_vec(&ri.rotation, v);
+            for v in self.u.values.iter_mut().take(ri.n_rotor_cells) {
+                *v = turn(*v);
+            }
+            for c in 0..ri.n_rotor_cells {
+                let old = turn([0, 1, 2].map(|k| self.hist_u[k].old[c]));
+                for (k, h) in self.hist_u.iter_mut().enumerate() {
+                    h.old[c] = old[k];
+                }
+                if self.hist_u.iter().all(|h| h.older.is_some()) {
+                    let v = turn([0, 1, 2].map(|k| self.hist_u[k].older.as_ref().map_or(0.0, |o| o[c])));
+                    for (k, h) in self.hist_u.iter_mut().enumerate() {
+                        if let Some(o) = h.older.as_mut() {
+                            o[c] = v[k];
+                        }
+                    }
+                }
+                if self.hist_u.iter().all(|h| h.oldest.is_some()) {
+                    let v = turn([0, 1, 2].map(|k| self.hist_u[k].oldest.as_ref().map_or(0.0, |o| o[c])));
+                    for (k, h) in self.hist_u.iter_mut().enumerate() {
+                        if let Some(o) = h.oldest.as_mut() {
+                            o[c] = v[k];
+                        }
+                    }
+                }
+            }
         }
         let mut mesh_flux = step_mesh_flux;
         for (f, m) in mesh_flux.iter_mut().enumerate() {

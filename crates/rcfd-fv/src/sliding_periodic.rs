@@ -7,13 +7,19 @@
 //! `M1`, as `sliding::sliding_step` (ADR 0216 M3, M4) with the wrap pairs as further edges of the interface graph: on a
 //! wrap pair the rotor copy carries `x` and the stator copy `-x`, so the pair is antisymmetric as the periodic coupling of
 //! the solver requires. `PimpleSolver::step_sliding_periodic` advances one step with it.
+//!
+//! A step between two meshes of `PeriodicSlidingInterface::mesh_turned` whose images differ by one is a re-imaging step
+//! (F-704, ADR 0634 R2): the old mesh is read in the new image, so the rotor's swept volumes are those of the motion from
+//! the old offset less one period, the rotor cells' old vectors are turned back by one period for the interpolations on the
+//! new faces, and [`PeriodicSlidingStep::reimage`] tells the solver to turn its rotor state likewise.
 
 use crate::convection::face_flux;
 use crate::geometry::FvGeometry;
 use crate::sliding::graph_balance;
 use rcfd_core::vec3::{self, Vec3};
-use rcfd_mesh::motion::mat_vec;
-use rcfd_mesh::sliding_periodic::{PeriodicSlidingMesh, WRAP_A, WRAP_B};
+use rcfd_mesh::motion::{mat_vec, rotation_matrix};
+use rcfd_mesh::sliding_periodic::{PeriodicSlidingMesh, Periodicity, WRAP_A, WRAP_B};
+use std::borrow::Cow;
 use std::sync::Arc;
 
 /// What `PimpleSolver::step_sliding_periodic` needs for one step from the old to the new joined mesh (ADR 0629 S2). Public
@@ -43,6 +49,20 @@ pub struct PeriodicSlidingStep {
     pub gcl_residual: f64,
     /// `max_c abs(sum_f sigma_cf phi_old,f) / max_f abs(S_f)` of the remapped old flux.
     pub flux_residual: f64,
+    /// The image change of the step, `new.image - old.image` (`0`, or `1` on a re-imaging step; ADR 0634 R2).
+    pub images: i64,
+    /// On a re-imaging step of a sector: the rotor cells and the rotation the solver turns their velocity and its history
+    /// by before the step (ADR 0634 R2). `None` otherwise (a translation turns no vector).
+    pub reimage: Option<Reimage>,
+}
+
+/// The re-imaging of the rotor's vectors on one step (F-704, ADR 0634 R2).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Reimage {
+    /// The rotor cells are the first `n_rotor_cells` cells.
+    pub n_rotor_cells: usize,
+    /// The rotation applied to every vector of a rotor cell (by minus one pitch per image).
+    pub rotation: [[f64; 3]; 3],
 }
 
 impl PeriodicSlidingStep {
@@ -55,6 +75,9 @@ impl PeriodicSlidingStep {
 /// The step data from the old joined mesh `old` (whose geometry the solver holds, `old_geom`, with the face flux `phi_old`
 /// and the cell velocity `u_old`) to the new joined mesh `new` of the same pair, for a step of size `dt` (ADR 0629 M4 to
 /// M6). Fails when the meshes are not of one pair, the sizes do not fit or the new mesh is not a valid geometry.
+///
+/// When `new.image` is `old.image + 1` the step is a re-imaging step (F-704, ADR 0634 R2; `u_old` is then the velocity of
+/// the old image, as the solver holds it); any other image change is refused.
 pub fn periodic_sliding_step(
     old_geom: &FvGeometry,
     old: &PeriodicSlidingMesh,
@@ -78,6 +101,13 @@ pub fn periodic_sliding_step(
             u_old.len(),
             old.mesh.n_faces(),
             old.mesh.n_cells()
+        ));
+    }
+    let images = new.image - old.image;
+    if images != 0 && images != 1 {
+        return Err(format!(
+            "periodic_sliding_step: the image changes by {images} (old image {}, new image {}); a step re-images the rotor              by at most one period, forwards",
+            old.image, new.image
         ));
     }
     let map = new.face_map_from(old).map_err(|e| e.to_string())?;
@@ -104,7 +134,12 @@ pub fn periodic_sliding_step(
         }
     };
     // M5: mesh flux
-    let w = new.rotor_swept_volumes(old.offset).map_err(|e| e.to_string())?;
+    let old_offset = if images == 0 {
+        old.offset
+    } else {
+        old.offset - images as f64 * new.periodicity().motion_period()
+    };
+    let w = new.rotor_swept_volumes(old_offset).map_err(|e| e.to_string())?;
     let mut m: Vec<f64> = w.iter().map(|x| x / dt).collect();
     for (f, x) in m.iter_mut().enumerate() {
         if geom.empty[f] || is_new(f) {
@@ -133,8 +168,32 @@ pub fn periodic_sliding_step(
     }
     let mean_v = vol_new.iter().sum::<f64>() / n as f64;
     let gcl_residual = (0..n).fold(0.0f64, |a, c| a.max((vol_new[c] - vol_old[c] - swept[c]).abs())) / mean_v;
-    // M6: old-level flux and defect
-    let interp_new = face_flux(&geom, u_old, &vec![vec3::ZERO; mesh.n_boundary_faces()]);
+    // M6: old-level flux and defect; on a re-imaging step the rotor's vectors in the new image (ADR 0634 R2)
+    let reimage = match new.periodicity() {
+        Periodicity::Rotation { axis, angle, .. } if images != 0 => Some(Reimage {
+            n_rotor_cells: new.n_rotor_cells(),
+            rotation: rotation_matrix(axis, -(images as f64) * angle),
+        }),
+        _ => None,
+    };
+    let u_new: Cow<[Vec3]> = match &reimage {
+        None => Cow::Borrowed(u_old),
+        Some(ri) => Cow::Owned(
+            u_old
+                .iter()
+                .enumerate()
+                .map(|(c, &v)| {
+                    if c < ri.n_rotor_cells {
+                        mat_vec(&ri.rotation, v)
+                    } else {
+                        v
+                    }
+                })
+                .collect(),
+        ),
+    };
+    let u_new: &[Vec3] = &u_new;
+    let interp_new = face_flux(&geom, u_new, &vec![vec3::ZERO; mesh.n_boundary_faces()]);
     let interp_old = face_flux(old_geom, u_old, &vec![vec3::ZERO; old.mesh.n_boundary_faces()]);
     let rot = new.wrap_rotation();
     let sf = mesh.face_area_vectors();
@@ -144,9 +203,9 @@ pub fn periodic_sliding_step(
         .chain(pairs.iter().map(|&(fa, fb)| {
             let (dn_a, dn_b) = (geom.dn[fa - ni], geom.dn[fb - ni]);
             let wa = dn_b / (dn_a + dn_b);
-            let ub = u_old[own[fb]];
+            let ub = u_new[own[fb]];
             let ub = rot.as_ref().map_or(ub, |r| mat_vec(r, ub));
-            let ua = u_old[own[fa]];
+            let ua = u_new[own[fa]];
             let uf = [0, 1, 2].map(|k| wa * ua[k] + (1.0 - wa) * ub[k]);
             vec3::dot(uf, sf[fa])
         }))
@@ -198,5 +257,7 @@ pub fn periodic_sliding_step(
         wrap_pairs: pairs,
         gcl_residual,
         flux_residual,
+        images,
+        reimage,
     })
 }
