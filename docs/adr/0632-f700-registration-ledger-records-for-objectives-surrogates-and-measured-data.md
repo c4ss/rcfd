@@ -276,3 +276,63 @@ that entry under the text as registered (the base reader cannot know the `source
 - Limits, added: a build older than F-700 reads an entry of a public tier with a measured source from a private file as an
   ordinary entry; the private file is outside any repository by construction, so this concerns only a user who points an old
   build at it.
+
+## Addendum 1: results (2026-11-16)
+
+Code: `design/ledger.rs` (D1 to D4), `design/ledger_f700_tests.rs` (A1 to A8, A11 to A13), the base copy
+`design/ledger_base_c4424c9b.rs` (identity with c4424c9b's `ledger.rs` lines 1 to 854 checked with `cmp` when copied and again
+after `cargo fmt`; SHA-256 `fa5786d77855bd2b88991e827bd08d5fc5541b5737ac913cb98124d5e046ccd9`), `design/tools.rs` (two
+`..Default::default()`, lines 1580 and 1602, no behaviour change), `docs/design-loop.md` (one section). The registered run is
+`cargo test -p rcfd-api --release --lib design::` (76 passed, 3 ignored pre-existing, 0 failed) and
+`cargo test -p rcfd-mcp --release --no-fail-fast` (every test binary ok; `adopt_f288` first failed because the `rcfd` and
+`rcfd-runner` binaries were not built in this target directory, its own precondition message; built with
+`cargo build --release -p rcfd-cli -p rcfd-runner` and run again: 2 of 2 ok).
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| A1 default bytes | 0 differing bytes in 3 file pairs; entry texts equal | L1 set 3704 bytes, F96 45630 bytes, T14 7283 bytes: 0 differing bytes each; every entry text equal | yes |
+| A2 base reader | 8 entries, 0 skipped, base fields bit-equal | 8 entries, 0 skipped, equal; the new reader returns all six fields equal | yes |
+| A3 pairing | the registered 24 pairs, duplicates [51, 70, 73, 92] | exactly the registered list and duplicates | yes |
+| A4 mixed units | refused, parameter, both units, two entries named | `parameter 'x' has unit 'm' in entry 0 and 'mm' in entry 85`; `parameter 'y' has unit '1' in entry 0 and 'rad' in entry 37` | yes |
+| A5 pair round trip | equal, bits equal, parents [{2, h2}, {78, h78}] with the line hashes, `resolve` 2 and 78, diff and rel by formula | all hold; hashes `fnv1a64:edd65df0c9e20f89`, `fnv1a64:e6a2fb93f88b6255` equal the test's own FNV of lines 2 and 78; a stale reference is refused | yes |
+| A6 matrix | rows 0..11, columns, 48 values bit-equal to the table and the formula, failed [12, 13] | as registered, 48 of 48 | yes |
+| A7 mixed versions | refused, versions 2 and 3, entries 0 and 15; units f Pa kPa | `evaluator_version is '2' in entry 0 and '3' in entry 15`; `'f' has unit 'Pa' in entry 0 and 'kPa' in entry 4` | yes |
+| A8 privacy (amended) | 3 public refusals, no file; private read equal; public 0 entries 3 skipped; base 1 entry 2 skipped; repository path refused naming the ancestor; no value in messages | as registered; ancestor `\?\E:\projects\cfd\w49i-work\f700` (the canonical form on Windows) | yes |
+| A9 goldens | `default_f1`, `project_list_f270` pass; empty diff in `crates/rcfd-mcp` | pass (2 and 1 tests); `git diff c4424c9b -- crates/rcfd-mcp` empty | yes |
+| A10 existing tests | all pass, none edited | 76 `design::` tests and every rcfd-mcp test pass; no existing test file edited | yes |
+| A11 validation | 6 of 6 by `validate`, 6 of 6 skipped by the reader | 6 of 6, 6 of 6, each message naming the field | yes |
+| A12 filters | [0, 1, 3], [1, 4], two groups | as registered; `Filter::default()` matches all 6 | yes |
+| A13 levels | 2 pairs; equal levels refused | [(0, 1), (2, 3)]; refused | yes |
+
+Mutations (scratch copy `w49i-work/f700-scratch/mcopy`, `cargo test --release --lib design::ledger::f700_tests`, unmutated
+copy 11 of 11 pass): M1 A1 (3213 differing bytes in the L1 set); M2 A3; M3 A4; M4 A7; M5 A8; M6 A8; M7 A5 (also A2, A8,
+A11); M8 A3; M9 A8; M10 A6. Ten of ten caught. M1's first attempt did not apply (its search text predated `cargo fmt`; the
+script refused and that run tested the unmutated code); its corrected text was applied and run once.
+
+Deviations: after the registered run, `clippy -D warnings` asked for a type alias of the pairing key (`type_complexity`) and
+`cargo fmt` reformatted `ledger.rs`; neither changes behaviour, and `design::ledger` (19 tests) was run once more after them to
+confirm (19 of 19). `cargo fmt -p rcfd-api --check` and `cargo clippy -p rcfd-api --all-targets -- -D warnings` are clean. Not
+run: `baseline_hashes` (no shared solver file changed), the rcfd-api integration tests (none constructs `Entry` or `Filter`
+literally; the design unit tests cover every changed line), the whole workspace (the lead's gate).
+
+Decision by the registered rule: **done** (A1 to A13 met, ten of ten mutations caught).
+
+### Remaining questions
+
+1. Repository marker. `Ledger::private` refuses an ancestor with `.git` or a `Cargo.toml` containing `[workspace]`. A user's
+   project folder in another repository kind (Mercurial, a non-Rust git-less tree) is not detected. Options: (a) keep; (b) also
+   refuse `.hg`, `.svn` and a project-mode marker of ADR 0185. Recommendation: (b) as a small follow-up when F-699 lands, since
+   it decides where measured data lives.
+2. Error text of the repository refusal shows Windows' verbatim prefix (`\?\E:\...`). Options: (a) keep; (b) strip the
+   prefix for display. Recommendation: (a) now; it is exact and located.
+3. MCP. `design_ledger_query` now shows the new keys of a library-written ledger (through `indexed_json`); nothing can write
+   them through MCP. Options: (a) leave to F-702; (b) hide them until F-702. Recommendation: (a); no golden covers such a file
+   and showing what is in the file is the reader's job.
+
+## For the lead: roadmap entries
+
+> Proposed status: done
+
+> Split from F-268 by the maintainer on 2026-11-15 (ADR 0623 Q1 b). ADR 0632, 2026-11-16. DONE. Library only (no MCP tool, case key or golden edit): rcfd-ledger-1 gains optional top-level keys parents (references with an FNV-1a 64 hash of the line), source (computed, measured or literature, citation, file SHA-256), fidelity_level, uncertainty (per metric, same unit), objective and fitted ({id, version, hash}), omitted when unset; Fidelity::Measured and any entry with a measured source are written only to a private ledger (Ledger::private, refused inside a repository tree) and refused by a public one, whose reader skips them; the MCP tools keep the three public tiers. ledger::fidelity_pair writes the ADR 0622 pair and discrepancy record naming both entries; pair_by_params, training_set, group_by_variant and the variant and condition filters are the P8 queries. Checks: the default ledger is byte-identical to the base writer on three fixtures (0 differing bytes); 8 lines with the new fields read by the verbatim base reader with 0 skipped; exactly the registered 24 pairs and 4 duplicates on the 96-entry fixture, mixed units refused; the pair record round-trips bit for bit with both parents resolved; the 12 by 4 training matrix bit for bit with the failed points apart, mixed versions and units refused; measured content refused by a public ledger, kept by a private one outside the repository; MCP tools-list goldens unchanged. Ten of ten mutations caught. Not covered: the public-path-inside-private check and the rounded public aggregates (F-699's driver), to_csv does not show the new keys.
+
+> Follow-up proposed: Private-ledger repository markers beyond git and Cargo. Deps F-700, F-699. Acceptance: Ledger::private refuses a path under a directory holding .hg, .svn or the project-mode marker of ADR 0185, with a located message, and every ADR 0632 check keeps its result.

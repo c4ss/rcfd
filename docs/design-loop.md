@@ -369,6 +369,21 @@ evaluator and fidelity tier in one JSON-lines file, so the design history surviv
 * Re-run: an evaluator implements `ledger::Model` (id, version, tier, evaluate over named parameters); `ledger::rerun_check` refuses
   another id or version, re-evaluates from the stored parameters and compares metrics, units, verdict and geometry hash.
 
+Records for objectives, surrogates and multi-fidelity or measured data (ADR 0632, library only; no MCP tool until F-702):
+
+* Optional top-level keys, written only when set, so a ledger without them is byte-identical to the format above and older readers
+  keep the line (they ignore the keys): `parents` (references `{index, hash}`, the hash being FNV-1a 64 of the entry's line, see
+  `ledger::entry_ref` and `ledger::resolve`), `source` (`{id, kind: computed | measured | literature, citation, file_sha256}`),
+  `fidelity_level` (a finer level inside the tier), `uncertainty` (standard uncertainty of named metrics, in their units),
+  `objective` and `fitted` (`{id, version, hash}` of the objective that scored the entry, or of a fitted surrogate or correction).
+* The tier `measured` (`Fidelity::Measured`) and any entry with a `measured` source are written only to a private ledger
+  (`Ledger::private`, refused for a path inside a repository tree) and refused by a public one; a public reader skips such lines.
+  The MCP tools keep the three public tiers.
+* `ledger::fidelity_pair` builds the pair and discrepancy record of ADR 0622 (`m.low`, `m.high`, `m.diff`, `m.rel`, `m.pred`,
+  with both entries as `parents`); `ledger::pair_by_params` pairs `ok` entries of two levels with bit-identical parameters and
+  refuses mixed units; `ledger::training_set` returns the parameter and metric matrix with the failed points apart and refuses mixed
+  evaluators, versions, levels or units. `Filter` also selects by `variant` and by `condition`.
+
 ## Tolerance and uncertainty studies (ADR 0121, library only)
 
 The function `design::uq::run(spec, model, ledger)` samples named parameters with units from uniform, truncated normal or beta
