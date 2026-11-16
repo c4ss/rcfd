@@ -182,3 +182,109 @@ docs_site`: `2 passed; 0 failed`. No Rust file, test or golden changed.
 - **Q4:** keep the full npm licence list (every lock-file entry).
 - **Q5:** ADR 0801 accepted: the 14 direct dependencies, the layout, the pin and update policy, and the change to
   `scripts/third_party_licenses.py`. F-800 is done.
+
+## Addendum 1: F-801 dependencies (2026-11-16)
+
+F-801 (the hardened shell and its test harness, guardrails G10, G13 and P10 of G9) adds one direct dependency under the
+policy of §4 (a new direct dependency needs an ADR entry with the columns of §2; this is that entry). Nothing else
+changed in §2: the fourteen packages keep their versions. The maintainer may review this addendum like any ADR text;
+F-801 proceeded on it because the dependency is development-only and removing it is one `npm uninstall`.
+
+### The new direct dependency (`devDependencies`)
+
+| Package | Version | Licence | Why it | Alternatives considered |
+|---|---|---|---|---|
+| `@playwright/test` | 1.65.1 | Apache-2.0 | G13 and F-801's acceptance ask for "a Playwright test that drives the packaged shell". `_electron.launch` starts the packaged executable, gives the renderer as a page (DOM, locators, `page.evaluate`) and evaluates code in the main process (`electronApplication.evaluate`), which the G10 checks need on both sides of the bridge. The same runner runs the pure unit tests (project `unit`), so no second runner is added. It drives the Electron it is given and downloads no browser (`npx playwright install` is never run). 1.65.1 was the latest release on 2026-11-16 (published 2026-11-13; a patch of 1.65.0 of 2026-11-05). | WebdriverIO with `wdio-electron-service` (a larger tree: WebDriver, ChromeDriver for the bundled Chromium); Spectron (deprecated since 2022); Puppeteer over the remote-debugging port (renderer only: no main-process evaluation, and it downloads Chrome unless told not to); a hand-written CDP client under `node --test` (no locators or assertions; the code the library replaces). |
+
+It brings two packages: `playwright` 1.65.1 and `playwright-core` 1.65.1, both Apache-2.0, neither with an install
+script or a native binary. The lock file now has 122 entries (Apache-2.0 35, the rest as in §2) and
+`THIRD_PARTY_LICENSES.md` is regenerated (`python scripts/third_party_licenses.py`). Pairs (§4): the three move together;
+`@playwright/test` pins `playwright` exactly.
+
+**No unit-test runner.** The unit tests (`tests/unit/`, pure checks of `src/main/security.ts` and the built
+`index.html`) run under `@playwright/test` too; Node's built-in `node --test` would have been the alternative at zero
+dependencies, but one runner and one report are simpler. A component-test runner (for example Vitest for React
+components in F-802) would be justified by the item that needs it.
+
+### What F-801 built (so the dependency is read in context)
+
+- **`src/main/security.ts`** (pure, no Electron import): the scheme `app://studio/`, the Content Security Policy
+  (`default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'self';
+  object-src 'none'; base-uri 'none'; form-action 'none'`, plus `frame-ancestors 'none'` in the header only, since a
+  `<meta>` cannot carry it), the network rule (cancel http, https, ws, wss, ftp, file and foreign `app://` hosts) and the
+  protocol handler's path resolution (no way out of `dist/renderer`).
+- **`src/main/index.ts`**: `app.enableSandbox()`; the window with `sandbox`, `contextIsolation`, `webSecurity` on and
+  `nodeIntegration`, `nodeIntegrationInWorker`, `nodeIntegrationInSubFrames`, `allowRunningInsecureContent`,
+  `webviewTag`, `experimentalFeatures`, `navigateOnDragDrop` off; the renderer served by `protocol.handle('app')` with
+  the CSP header on every response, and the header set again by `webRequest.onHeadersReceived`; `onBeforeRequest`
+  cancelling the network rule; `will-navigate`, `will-frame-navigate` and `will-redirect` refused for anything but
+  `app://studio/`; `setWindowOpenHandler` denying every `window.open`; `will-attach-webview` refused; permission
+  requests, checks and device permissions denied. IPC: one `ipcMain.handle` per channel of the allow-list, refusing
+  senders whose frame is not on `app://studio/`, each handler checking its own arguments.
+- **`src/shared/ipc.ts`**: the typed allow-list (`IpcContract`, `CHANNELS`, `StudioBridge`). Two channels: `app.info`
+  (name and versions) and `app.ready` (the renderer reports that the empty project view is in the document and one
+  animation frame has passed; used by P10). F-803 adds the service client's channels here.
+- **`src/preload/index.cts`**: `window.studio.app.{info, ready}` through `contextBridge`, nothing else (no
+  `ipcRenderer`, no generic invoke).
+- **`src/renderer/index.html`** carries the policy in a `<meta>`; `vite.config.ts` sets `assetsInlineLimit: 0` (no
+  `data:` URLs) and no module-preload polyfill, so `'self'` is enough.
+- **The packaged shell**: `scripts/package-dir.mjs` packages by hand as ADR 0350 did for P10 (Electron's `dist` copied
+  to `out/packaged/`, the executable renamed `rcfd-studio.exe` so `app.isPackaged` is true, the app's `package.json` and
+  `dist/` in `resources/app`). No packaging dependency; installers, signing, fuses and ASAR are F-820's.
+- **Tests**: `tests/unit/security.spec.ts` (9 tests) and `tests/e2e/shell.spec.ts` (12 tests on the packaged shell):
+  the window's effective web preferences (`getLastWebPreferences`, not public in Electron's types) and the OS sandbox of
+  the renderer process (`app.getAppMetrics().sandboxed`, Windows and macOS); no `require`, `process`, `module`,
+  `Buffer` or `ipcRenderer` in the page; the bridge is exactly `app.{info, ready}` and frozen; the main process handles
+  exactly the allow-listed channels (read from Electron's private `ipcMain._invokeHandlers`, Electron's own all-capitals
+  internal handler set aside) and refuses foreign senders and unexpected arguments; the CSP header and meta present and
+  equal to `security.ts`; inline script, `eval`, `Function` and string timers blocked; remote fetch, image, stylesheet
+  and frame blocked by the policy; navigation to https, file and foreign `app://` URLs (by `location` and by a followed
+  link) refused; `window.open` denied for remote, own and `about:blank` URLs; notifications, geolocation, camera and
+  microphone denied; and the network layer cancelling remote loads that the main process itself starts
+  (`ERR_BLOCKED_BY_CLIENT`).
+- **npm scripts**: `build` (three type checks, `vite build`, `tsc` for main, preload and shared), `test` (`build`, then
+  `package:dir`, then `playwright test`: everything, no human step), `test:unit`, `package:dir`, `bench:cold-start`.
+  `tsconfig.test.json` is a third type environment, for the tests and `playwright.config.ts`.
+
+Mutations (each applied to a scratch copy of `src/`, rebuilt, packaged, and the e2e project run; then restored): window
+opening allowed, the CSP meta removed, the CSP header removed in both places, `sandbox: false`, permission checks
+granted, the network rule disabled, `ipcRenderer` exposed to the page, an extra channel registered, and both navigation
+handlers removed: each makes exactly one e2e test fail, the one that names it. Removing only one CSP header source, or only
+`will-navigate`, is not caught: the other layer still holds (`onHeadersReceived`, `will-frame-navigate`), as intended.
+
+### P10 on Electron 45.3.3 (run once by hand, house rule 7)
+
+Method of ADR 0350 §4: packaged by hand (`scripts/package-dir.mjs`), `scripts/measure-cold-start.mjs` takes the time
+from `spawn` to the main process's receipt of `app.ready` (the empty project view in the document, one animation frame
+later; the main process writes the time to `RCFD_STUDIO_STARTUP_REPORT` and quits), 10 starts one second apart, judged
+on the median.
+
+| Id | Limit | Measured (Electron 45.3.3, product shell, empty project view) | Met | ADR 0350 (45.1.0, spike, run list) |
+|---|---|---|---|---|
+| P10 | <= 2.5 s | median 476 ms; first start 953; max 989; the ten: 953, 427, 387, 460, 484, 429, 589, 848, 989, 476 | yes | median 383; first 1173; max 6747 |
+
+Set-up: 2026-11-16 12:55 UTC, Windows 11 (10.0.26300), AMD Ryzen 7 9800X3D (16 logical), 93.6 GB, launcher on Node
+22.19.0. **Deviation:** the machine was busy: processor busy fraction 0.87 before the run and 1.00 after it, with 3
+`cargo`/`rustc`/`link` processes of another job running throughout (ADR 0350's P10 ran at 0.49 with none). The numbers
+are therefore an upper side of what an idle machine gives; the run was not repeated (a registered run is made once).
+A true cold start after a reboot was not taken (an agent cannot reboot), as in ADR 0350. The run appears in no test:
+`npm test` never times anything.
+
+### Verification (2026-11-16, Windows 11, Node 22.19.0, npm 11.12.0)
+
+Recorded in the F-801 commit message and the report of the job; summary: `npm ci` clean, the three type checks exit 0,
+`npm run build` passes, `npm test` 21 passed (9 unit, 12 e2e), `python scripts/third_party_licenses.py --check` up to
+date, `cargo test -p rcfd-cli --release --test docs_site --test workspace_graph` passes. No Rust file, test or golden
+changed.
+
+### Notes for later items (no decision needed now)
+
+- **Permissions are denied wholesale**, including clipboard writes from the renderer. An item that needs one (copying a
+  CLI command, G17) allows that one permission in `security.ts` with a test.
+- **The default application menu stays**, so the developer tools open with Ctrl+Shift+I in the packaged copy too
+  (`devtools://` is not on the blocked list). Whether a release build removes them, and which Electron fuses it sets
+  (RunAsNode, the inspector arguments that Playwright's launch uses, ASAR integrity), is F-820's.
+- **Windows appear during `npm test`** on Windows: Electron has no headless mode there. "Headless" here means no human
+  step; on Linux CI the job of F-823 runs under a virtual display.
+- **Refused navigations leave Playwright waiting.** After a navigation is prevented, Playwright's locators wait for a
+  navigation that never finishes, so the tests read the page with `page.evaluate` from that point on.

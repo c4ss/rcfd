@@ -2,7 +2,7 @@
   "name": "rcfd-studio-web",
   "version": "0.0.0",
   "private": true,
-  "description": "rcfd Studio, the Electron desktop front end of rcfd (F-448 and the Studio roadmap of ADR 0800). F-800 skeleton: no service client and no surfaces yet.",
+  "description": "rcfd Studio, the Electron desktop front end of rcfd (F-448 and the Studio roadmap of ADR 0800). F-801 hardened shell (G10) with its Playwright tests: no service client and no surfaces yet.",
   "license": "AGPL-3.0-only",
   "type": "module",
   "main": "dist/main/index.js",
@@ -10,8 +10,12 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.test.json",
     "build": "npm run typecheck && vite build && tsc -p tsconfig.node.json",
+    "package:dir": "node scripts/package-dir.mjs",
+    "test": "npm run build && npm run package:dir && playwright test",
+    "test:unit": "playwright test --project=unit",
+    "bench:cold-start": "node scripts/measure-cold-start.mjs",
     "start": "electron ."
   },
   "dependencies": {
@@ -23,6 +27,7 @@
     "three": "0.187.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.65.1",
     "@types/node": "24.19.2",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",

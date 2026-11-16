@@ -1,0 +1,19 @@
+// The tests (tests/unit, tests/e2e) and playwright.config.ts: Node and DOM types (page.evaluate bodies run in the page,
+// and src/renderer/env.d.ts types window.studio), checked only; Playwright runs the TypeScript itself. The tests import
+// src/main/security.ts, which is pure and has no Electron import.
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023", "DOM"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["tests", "playwright.config.ts", "src/renderer/env.d.ts"]
+}

@@ -7140,9 +7140,9 @@
     "deps": [
       "F-800"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "An Electron main process, a sandboxed and context-isolated renderer with nodeIntegration off, a strict Content Security Policy, no remote content and an allow-list of IPC calls through the preload script (G10); a Playwright test that drives the packaged shell and asserts each of those settings; cold start to an empty project view within the P10 limit of docs/studio-guardrails.md G9 on the maintainer's machine.",
-    "note": "ADR 0800. Traces: G9 (P10), G10, G13; PRODUCT Stack."
+    "note": "ADR 0800; ADR 0801 addendum 1 (@playwright/test 1.65.1; P10 on Electron 45.3.3: median 476 ms, max 989 ms, one run under load 0.87 to 1.00). Traces: G9 (P10), G10, G13; PRODUCT Stack."
   },
   {
     "id": "F-802",

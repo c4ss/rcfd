@@ -14107,13 +14107,14 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     its licence in THIRD_PARTY_LICENSES.md and justified in ADR 0800 or a follow-up ADR (G5); crates/rcfd-
     cli/tests/workspace_graph.rs and every existing test pass unchanged.
   - note: ADR 0800, ADR 0801 (accepted 2026-11-16; Electron 45.3.3). Traces: G5, G14; PRODUCT Stack.
-- [ ] **F-801** Electron Studio: hardened shell and test harness
+- [x] **F-801** Electron Studio: hardened shell and test harness
   - depends on: F-800
   - acceptance: An Electron main process, a sandboxed and context-isolated renderer with nodeIntegration off, a strict
     Content Security Policy, no remote content and an allow-list of IPC calls through the preload script (G10); a
     Playwright test that drives the packaged shell and asserts each of those settings; cold start to an empty project
     view within the P10 limit of docs/studio-guardrails.md G9 on the maintainer's machine.
-  - note: ADR 0800. Traces: G9 (P10), G10, G13; PRODUCT Stack.
+  - note: ADR 0800; ADR 0801 addendum 1 (@playwright/test 1.65.1; P10 on Electron 45.3.3: median 476 ms, max 989 ms,
+    one run under load 0.87 to 1.00). Traces: G9 (P10), G10, G13; PRODUCT Stack.
 - [ ] **F-802** Electron Studio: design tokens and accessible primitives from DESIGN.md
   - depends on: F-801
   - acceptance: The DESIGN.md tokens (colour, type ramp, rules, pictogram grid) as one CSS token file and a TypeScript

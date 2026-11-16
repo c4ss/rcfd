@@ -1,4 +1,4 @@
-// The Electron main process (src/main, an ES module) and the preload script (src/preload, CommonJS because a sandboxed preload cannot be an ES module). Emits to dist/main and dist/preload.
+// The Electron main process (src/main, an ES module), the preload script (src/preload, CommonJS because a sandboxed preload cannot be an ES module) and the IPC contract they share with the renderer (src/shared). Emits to dist/main, dist/preload and dist/shared.
 {
   "compilerOptions": {
     "target": "ES2023",
@@ -14,5 +14,5 @@
     "rootDir": "src",
     "outDir": "dist"
   },
-  "include": ["src/main", "src/preload"]
+  "include": ["src/main", "src/preload", "src/shared"]
 }

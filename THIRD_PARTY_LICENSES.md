@@ -548,6 +548,7 @@ Pinned to exact versions in `apps/studio-web/package.json` and justified in ADR 
 | react-aria-components | 1.22.1 | `Apache-2.0` | `dependencies` |
 | react-dom | 19.3.1 | `MIT` | `dependencies` |
 | three | 0.187.0 | `MIT` | `dependencies` |
+| @playwright/test | 1.65.1 | `Apache-2.0` | `devDependencies` |
 | @types/node | 24.19.2 | `MIT` | `devDependencies` |
 | @types/react | 19.3.0 | `MIT` | `devDependencies` |
 | @types/react-dom | 19.3.0 | `MIT` | `devDependencies` |
@@ -557,12 +558,12 @@ Pinned to exact versions in `apps/studio-web/package.json` and justified in ADR 
 | typescript | 7.0.2 | `Apache-2.0` | `devDependencies` |
 | vite | 8.3.8 | `MIT` | `devDependencies` |
 
-### Licence summary (119 packages in the lock file)
+### Licence summary (122 packages in the lock file)
 
 | Licence (as recorded) | Packages |
 |---|---|
 | `MIT` | 68 |
-| `Apache-2.0` | 32 |
+| `Apache-2.0` | 35 |
 | `MPL-2.0` | 12 |
 | `BSD-3-Clause` | 2 |
 | `ISC` | 2 |
@@ -589,6 +590,7 @@ Development packages are build and test tools; the built app contains only the r
 | @internationalized/string | 3.2.10 | `Apache-2.0` | runtime |
 | @napi-rs/wasm-runtime | 1.2.6 | `MIT` | development, optional |
 | @oxc-project/types | 0.156.0 | `MIT` | development |
+| @playwright/test | 1.65.1 | `Apache-2.0` | development |
 | @react-three/fiber | 9.8.2 | `MIT` | runtime |
 | @react-types/shared | 3.37.0 | `Apache-2.0` | runtime |
 | @rolldown/binding-android-arm-eabi | 1.2.19 | `MIT` | development, optional (android) |
@@ -672,6 +674,8 @@ Development packages are build and test tools; the built app contains only the r
 | nanoid | 3.3.20 | `MIT` | development |
 | picocolors | 1.1.1 | `ISC` | development |
 | picomatch | 4.0.7 | `MIT` | development |
+| playwright | 1.65.1 | `Apache-2.0` | development |
+| playwright-core | 1.65.1 | `Apache-2.0` | development |
 | postcss | 8.5.33 | `MIT` | development |
 | progress | 2.0.3 | `MIT` | development |
 | react | 19.3.1 | `MIT` | runtime |
