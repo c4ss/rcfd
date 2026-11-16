@@ -303,3 +303,95 @@ as registered. Nothing else changes: case, meshes, settings, windows, stations, 
 immersed runs use no changed line and are deterministic, so their repetition does not select a result; the hashes of their force
 series are printed). The first record stays in the file unchanged as the ignored defective record. By the decision rule a check
 met only after an amendment makes the proposal partial at most.
+
+## Addendum 1: results (2026-11-16)
+
+Release builds on Windows. Registration 84141978; library, tests and amendment 1 09560a20 (the fast tests and the first heavy
+record were run on it); amendment 2 and the corrected record 35c6d394 (the corrected record was run once on it). Logs in
+`w49i-work/f308-scratch`: `fast_tests.log`, `heavy_record.log` (the defective first record), `heavy_record_corrected.log`,
+`mutations.log`, `baseline_hashes.log`. No limit was changed.
+
+### The heavy record (corrected, amendment 2)
+
+Measured drag first harmonic `Fhat_x` (window periods 3 and 4, per unit depth): BF `(-1.436300, +0.900729)`, amplitude
+1.695367, phase 147.907 degrees; BFc 1.694105, 147.852; IB40 1.709617, 148.200; IB20 1.724269, 147.708. Mean drag 4.58e-3
+(BF), 4.44e-3 (IB40). Reported only: `C_a` 1.4553 (BF), 1.4722 (IB40); `C_v` 1.8015, 1.8018. The period 3 and period 4
+amplitudes differ by 0.3 per cent in every run (close to periodic, not exactly periodic).
+
+| Id | Check | Limit | Measured | Met |
+| --- | --- | --- | --- | --- |
+| A1 | drag amplitude, relative | <= 0.05 | 8.41e-3 | met |
+| A2 | drag phase | <= 3 deg | 0.293 deg | met |
+| A3 | drag first harmonic, complex, relative | <= 0.06 | 9.85e-3 | met |
+| A4 | mean drag, over the BF amplitude | <= 0.02 | 8.32e-5 | met |
+| A5 | lift mean and amplitude (IB; BF), over the BF amplitude | <= 1e-3 each | 7.6e-9, 3.3e-8; 7.7e-12, 3.3e-10 | met |
+| A6 | wake `e_max` | <= 0.15 | 3.32e-2 | met |
+| A7 | wake `e_rms` | <= 0.05 | 8.99e-3 | met |
+| R1 | BFc against BF: drag harmonic; wake `e_rms` | <= 0.04; <= 0.025 | 1.23e-3; 2.40e-3 | met |
+| C1 | G20 larger than G40 (drag harmonic; wake) | larger | 1.74e-2 > 9.85e-3; 2.06e-2 > 8.99e-3 | met (reported) |
+| N1 | velocity left out: drag harmonic; wake `e_rms` | >= 0.3; >= 0.15 | 1.000; 0.260 | met (caught) |
+| S1 | no stop, finite | no stop | none stopped; max step continuity BF 1.1e-12, BFc 1.8e-12, IB40 4.9e-8, IB20 2.8e-11, N1 0 | met |
+
+N1 gives a force of exactly zero and a fluid at rest: a solid that holds zero velocity and changes place in fluid at rest does
+not set the fluid in motion, so the reference is missed by the whole force and by the RMS of the reference's own station
+velocities. The immersed runs of the corrected record reproduce those of the first record line for line (every progress line of
+IB40, IB20 and N1 identical in the two logs), so their repetition selected nothing.
+
+### Fast tests (run once on 09560a20)
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| T1 | 1e-14; 1e-8 | 1.6e-15, 1.1e-15, 5.7e-16; 1.3e-10, 1.3e-10 | met |
+| T2 | exact | exact | met |
+| T3 | bit-identical | `0ba60d8b8aa47933` both, without motion and with zero amplitude | met |
+| T4 | exact; differs | exact; the solid-cell sets differ (52 cells each) | met |
+| T5 | 1e-3 | 4.5e-5 (with velocity); 0 and zero sources (negative control) | met |
+| T6 | located errors | as stated | met |
+| T7 | no stop | one period, max `F_x` 0.202, max continuity 1.6e-9 | met |
+
+### Mutations
+
+Run once each on a scratch copy against the fast tests: eight of eight caught. M1 by T2 and T5; M2 by T4 and T5; M3, M4, M5 by
+T1; M6 by T2; M7 by T2 and T5; M8 by T4 and T5. (The first attempt at M5 did not apply because rustfmt had split the line; the
+string was corrected and M5 to M8 were run once.)
+
+### Defaults, fmt, clippy
+
+No line of an existing solver file changed (a new file `immersed_motion.rs` and one `pub mod` line in `lib.rs`).
+`cargo test -p rcfd-api --release --test baseline_hashes`: 3 passed, 1 ignored. `cargo fmt -p rcfd-fv --check` clean;
+`cargo clippy -p rcfd-fv --all-targets --release -- -D warnings` clean. The rcfd-fv tests run: `immersed_moving_f308` (all).
+
+### Deviations
+
+The first heavy record had a defective body-fitted start (amendment 2): both body-fitted runs stopped at steps 10 and 12 and no
+measure was evaluated. Corrected by amendment 2 before the corrected run. The record took 23 (first) and 26 (corrected) minutes
+against the estimated 20; the body-fitted step cost 0.28 s on 32 768 cells (the geometry is rebuilt every step).
+
+### What was not run
+
+The whole workspace suite (the lead runs the gate). A transverse oscillation in a stream, rotating shapes, BDF2, the second-order
+flux faces with motion, the SIMPLE solver, three dimensions (D5 and "Limits").
+
+### Decision by the registered rule
+
+Every check of A1 to A7, R1, N1, S1 and T1 to T7 met, eight of eight mutations caught, default bits unchanged. A1 to A7, R1 and
+N1 were met only in the corrected record, after amendment 2, and the rule makes a check met only after an amendment partial. The
+amendment corrected the reference's start (the body-fitted mesh was not at the initial pose), not the immersed path, and changed
+no limit. By the letter of the rule: **partial**.
+
+### Remaining questions
+
+- **Q1 (open, from the registration).** A case-file key for moving immersed bodies: (a) in the F-307 table when that is made,
+  (b) a separate item. Recommendation (a). Open: it needs the schema golden edit of F-307.
+- **Q3. Status under the amendment rule.** (a) partial by the letter; (b) done, because the amendment corrected only the
+  reference's start and the immersed runs reproduced bit for bit. Recommendation (b); the lead's call.
+- **Q4. A harder moving case.** Options: (a) a transversely oscillating cylinder in a stream (lock-in, lift of a moving body);
+  (b) leave it. Recommendation (a), as a follow-up: the lift of a moving body is zero by symmetry here and not tested.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> Immersed solid, moving shapes. From ADR 0218 question 4. PARTIAL by the amendment rule (ADR 0631, 2026-11-16): every check met, but only after amendment 2, which corrected the start of the body-fitted reference (its mesh was not at the initial pose; both reference runs stopped at steps 10 and 12 in the first record); the immersed runs were unchanged and reproduced line for line, so the recommendation is done (ADR 0631 Q3, the lead's call). Delivered: rcfd-fv immersed_motion.rs (opt-in, a new file; no line of immersed.rs or pimple.rs changed): HarmonicTranslation, translate_shape, MovingImmersed (bodies_at; forcing_at, the forcing of ADR 0218 rebuilt at the pose and rigid velocity of the new time level; step, which sets PimpleSolver::immersed and steps; velocity_in_forcing = false is the negative control). The force of a moving body is force_moment_unsteady with velocity_rate of the step, the staircase surface force at the new level, whose storage term cancels the reaction of the cells that enter the solid (derived in the ADR). Measured (limits registered before the code): an in-line oscillating cylinder, KC 5, Re 100, in a fixed circular wall of radius 8 D, PISO, 1000 steps per period, 4 periods; immersed on a Cartesian D/40 core (56 644 cells, the moving cylinder and an inverted wall body) against the body-fitted O-grid 256 x 128 swept-volume ALE run (rigid core and cosine blend): drag first-harmonic amplitude +0.84 % (limit 5 %), phase 0.29 degree (limit 3), complex difference 0.98 % (limit 6 %), mean drag 8.3e-5 of the amplitude (limit 0.02), lift below 3.3e-8 of the drag amplitude in both runs (limit 1e-3), station velocities at x = -0.6, 0, 0.6, 1.2 D at three phases max 0.033 U_m (limit 0.15) and RMS 0.0090 U_m (limit 0.05). The reference on a 128 x 64 grid is within 0.12 % in force and 0.0024 U_m RMS; D/20 errors are larger (1.74 %, 0.021 U_m); with the body velocity left out of the forcing the force is zero and the station RMS 0.26 U_m (caught). Fast tests T1 to T7, eight of eight mutations caught, default bits unchanged (baseline_hashes). Not included: a case-file key (open, needs the F-307 schema golden); a transverse oscillation in a stream and the lift of a moving body; rotating or deforming shapes; free motion; the second-order flux faces with motion; BDF2 force; SIMPLE; three dimensions; the cost of the per-step rebuild.
+
+> Follow-up proposed: Moving immersed shapes: a transversely oscillating cylinder in a stream. Deps F-308. Acceptance: Every limit not stated here is registered in the ADR before the run. A cylinder oscillating across a uniform stream at a low Reynolds number gives the mean drag, the lift amplitude and the phase of the lift against a body-fitted moving-mesh run of this repository within registered limits; a negative control with the body velocity left out of the forcing misses them.
