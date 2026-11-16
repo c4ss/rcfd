@@ -14336,13 +14336,19 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     src/shared/actions (24 actions, one per allow-listed method, CLI and MCP equivalents, undo hooks), renderer door
     src/renderer/actions, action log with JSON/sh export and replay; static check forbids window.studioService outside
     the door.
-- [ ] **F-828** Electron Studio: provenance inspector and reproduce-from-CLI
+- [~] **F-828** Electron Studio: provenance inspector and reproduce-from-CLI
   - depends on: F-810, F-827
   - acceptance: Any number on screen opens its provenance (run id, snapshot, file, engine version, unit); every run
     shows the CLI command that reproduces it; a test that a run started from the Studio and the same run started by that
     command give bit-identical results on a quick-start case (G17); units come from the engine, never converted in the
     Studio.
-  - note: ADR 0800 (G16 to G21 added 2026-11-16). Traces: G17, G3, G2; docs/provenance.md.
+  - note: ADR 0800 (G16 to G21 added 2026-11-16). Traces: G17, G3, G2; docs/provenance.md. Partial 2026-11-16: numbers
+    in Runs, the run workspace (residuals, monitor readout, snapshot counter) and the field readout open their
+    provenance (run, snapshot, file, reader, engine version, unit as the engine gives it) by click, Enter, Ctrl+I or the
+    palette, quiet at rest (G22); every runner run shows its reproduce command (rcfd-runner start from run.json) with
+    Copy; G17 test: a Studio-started run and the copied command run from a shell give byte-identical store, fields,
+    residuals and monitors. Left: service-session numbers (settings, dev plots) and the field caption's repeated numbers
+    have no provenance; run.json records no launch argv or build id; status.json time has no unit.
 - [~] **F-829** Electron Studio: undo, safe deletes and edit conflicts
   - depends on: F-827, F-805
   - acceptance: Undo and redo for every edit made through the action layer; deleting a run, result or case is
