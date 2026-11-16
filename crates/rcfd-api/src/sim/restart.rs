@@ -92,6 +92,8 @@ impl Simulation {
             && self.catalogue.is_none()
             && self.udfs.is_empty()
             && self.particles.is_none()
+            // F-303, ADR 0637 D5: the mesh of a sliding run is not that of the case
+            && self.sliding.is_none()
     }
 
     /// Whether [`save_restart`](Self::save_restart) works for this run: steady SIMPLE/SIMPLEC without

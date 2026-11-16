@@ -56,10 +56,31 @@ pub fn interface_balance(mesh: &Mesh, faces: &[usize], target: &[f64]) -> Result
         return Err(format!("interface_balance: face {f} is not an internal face"));
     }
     let (own, nei) = (mesh.owner(), mesh.neighbour());
+    let edges: Vec<(usize, usize)> = faces.iter().map(|&f| (own[f], nei[f])).collect();
+    let w: Vec<f64> = faces.iter().map(|&f| mesh.face_area(f)).collect();
+    graph_balance(&edges, &w, target)
+}
+
+/// [`interface_balance`] on a given graph (F-304, ADR 0629 M5, M6): edge `e` joins the cells `edges[e] = (a, b)` with the
+/// weight `weights[e]`; the value `x_e` counts out of `a` and into `b`. Of all edge values with `sum_e sigma_ce x_e = t_c -
+/// mean` on every cell touched (each connected part with the mean of its targets removed) the weighted minimum-norm one,
+/// `x_e = weights[e] (lambda_a - lambda_b)`. `target` holds one value per cell; the cells not touched are ignored.
+pub fn graph_balance(edges: &[(usize, usize)], weights: &[f64], target: &[f64]) -> Result<InterfaceSolve, String> {
+    let nc = target.len();
+    if weights.len() != edges.len() {
+        return Err(format!(
+            "graph_balance: {} weights for {} edges",
+            weights.len(),
+            edges.len()
+        ));
+    }
+    if let Some(&(a, b)) = edges.iter().find(|&&(a, b)| a >= nc || b >= nc) {
+        return Err(format!("graph_balance: edge ({a}, {b}) outside the {nc} cells"));
+    }
     let mut node = vec![usize::MAX; nc];
     let mut cells: Vec<usize> = Vec::new();
-    for &f in faces {
-        for c in [own[f], nei[f]] {
+    for &(a, b) in edges {
+        for c in [a, b] {
             if node[c] == usize::MAX {
                 node[c] = cells.len();
                 cells.push(c);
@@ -67,8 +88,8 @@ pub fn interface_balance(mesh: &Mesh, faces: &[usize], target: &[f64]) -> Result
         }
     }
     let n = cells.len();
-    let edges: Vec<(usize, usize)> = faces.iter().map(|&f| (node[own[f]], node[nei[f]])).collect();
-    let w: Vec<f64> = faces.iter().map(|&f| mesh.face_area(f)).collect();
+    let edges: Vec<(usize, usize)> = edges.iter().map(|&(a, b)| (node[a], node[b])).collect();
+    let w: Vec<f64> = weights.to_vec();
     // connected parts (union-find)
     let mut parent: Vec<usize> = (0..n).collect();
     fn root(p: &mut [usize], mut i: usize) -> usize {
@@ -125,7 +146,7 @@ pub fn interface_balance(mesh: &Mesh, faces: &[usize], target: &[f64]) -> Result
     let dot = |a: &[f64], b: &[f64]| a.iter().zip(b).map(|(x, y)| x * y).sum::<f64>();
     let amax = |a: &[f64]| a.iter().fold(0.0f64, |m, x| m.max(x.abs()));
     let tnorm = amax(&t);
-    let mut values = vec![0.0; faces.len()];
+    let mut values = vec![0.0; edges.len()];
     let mut iterations = 0;
     let divergence = |x: &[f64]| {
         let mut d = vec![0.0; n];
@@ -393,4 +414,133 @@ pub fn rotating_wall_conditions(
             .map_err(|e| e.to_string())?;
     }
     Ok(dpdn)
+}
+
+/// [`rotating_wall_conditions`] for walls that may hold rotor and stator faces (F-303, ADR 0637 D4): a rotor face of the
+/// listed patches (`new.is_rotor_face`, `new` the joined mesh the step was built for) gets the wall velocity of a wall
+/// turning at `omega_w`, a stator face that of a wall at rest (`u_b = 0`, its mesh flux being zero). On a patch of rotor
+/// faces only the values and gradients are those of [`rotating_wall_conditions`], bit for bit.
+pub fn rotor_wall_conditions(
+    u: &mut VectorField,
+    step: &SlidingStep,
+    old_geom: &FvGeometry,
+    new: &SlidingMesh,
+    patches: &[String],
+    omega_w: f64,
+    dt: f64,
+) -> Result<Vec<f64>, String> {
+    let g = &step.geom;
+    let (ni, nb) = (g.n_internal, g.mesh.n_boundary_faces());
+    if old_geom.mesh.n_boundary_faces() != nb {
+        return Err("rotor_wall_conditions: the old geometry has another number of boundary faces".into());
+    }
+    if new.mesh.n_faces() != g.mesh.n_faces() || new.mesh.n_cells() != g.mesh.n_cells() {
+        return Err("rotor_wall_conditions: the sliding mesh is not the one of the step".into());
+    }
+    let before = u.boundary_values(old_geom);
+    let mut dpdn = vec![f64::NAN; nb];
+    let (sf, cf) = (g.mesh.face_area_vectors(), g.mesh.face_centres());
+    for name in patches {
+        let patch = g
+            .mesh
+            .patch(name)
+            .ok_or_else(|| format!("rotor_wall_conditions: no patch '{name}'"))?;
+        let mut v = Vec::with_capacity(patch.size);
+        for f in patch.faces() {
+            let w = if new.is_rotor_face(f) { omega_w } else { 0.0 };
+            let area = vec3::norm(sf[f]).max(1e-300);
+            let nrm = vec3::scale(sf[f], 1.0 / area);
+            let rigid = vec3::scale(vec3::cross(step.axis, vec3::sub(cf[f], step.origin)), w);
+            let tangential = vec3::sub(rigid, vec3::scale(nrm, vec3::dot(rigid, nrm)));
+            let ub = vec3::add(tangential, vec3::scale(nrm, step.mesh_flux[f] / area));
+            let acc = vec3::scale(vec3::sub(ub, before[f - ni]), 1.0 / dt);
+            dpdn[f - ni] = -vec3::dot(nrm, acc);
+            v.push(ub);
+        }
+        u.set_bc(g, name, Box::new(FixedValue(Profile::PerFace(v))))
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(dpdn)
+}
+
+#[cfg(test)]
+mod tests {
+    //! W1 and W2 of ADR 0637 (registered before this code ran).
+    use super::*;
+    use rcfd_mesh::gen::{annulus_3d, Grading};
+    use rcfd_mesh::sliding::SlidingInterface;
+
+    const Z: Vec3 = [0.0, 0.0, 1.0];
+
+    /// ADR 0216's P3 from 0.0123 to 0.0173 rad: the step, the old geometry and the new mesh.
+    fn p3_step() -> (SlidingStep, Arc<FvGeometry>, SlidingMesh, VectorField) {
+        let a = annulus_3d(48, 4, 2, 1.0, 1.5, 0.4, 0.0, Grading::Uniform).unwrap();
+        let b = annulus_3d(40, 4, 3, 1.5, 2.0, 0.4, 0.0, Grading::Uniform).unwrap();
+        let sc = SlidingInterface::cylindrical(a, "outer", b, "inner", vec3::ZERO, Z, 1e-8).unwrap();
+        let (old, new) = (sc.mesh_at(0.0123).unwrap(), sc.mesh_at(0.0173).unwrap());
+        let g0 = Arc::new(FvGeometry::new(Arc::new(old.mesh.clone())).unwrap());
+        // a non-trivial old state u = (x, -y, 0.1 z) with its face flux; every patch a wall at rest (as in the tree)
+        let mut u = VectorField::from_fn("U", &g0, |x| [x[0], -x[1], 0.1 * x[2]]);
+        for name in ["inner", "outer", "zmin", "zmax"] {
+            u.set_bc(&g0, name, Box::new(FixedValue(Profile::Uniform([0.0; 3]))))
+                .unwrap();
+        }
+        let phi = face_flux(&g0, &u.values, &vec![vec3::ZERO; g0.mesh.n_boundary_faces()]);
+        let st = sliding_step(&g0, &old, &new, &phi, &u.values, 0.005).unwrap();
+        (st, g0, new, u)
+    }
+
+    fn values(u: &VectorField, g: &FvGeometry, patch: &str) -> Vec<Vec3> {
+        let ni = g.n_internal;
+        let bv = u.boundary_values(g);
+        g.mesh.patch(patch).unwrap().faces().map(|f| bv[f - ni]).collect()
+    }
+
+    #[test]
+    fn w1_rotor_only_patch_equals_rotating_wall_conditions() {
+        let (st, g0, new, u) = p3_step();
+        let names = ["inner".to_string()];
+        let (mut ua, mut ub) = (u.clone(), u);
+        let da = rotating_wall_conditions(&mut ua, &st, &g0, &names, 1.0, 0.005).unwrap();
+        let db = rotor_wall_conditions(&mut ub, &st, &g0, &new, &names, 1.0, 0.005).unwrap();
+        let (va, vb) = (values(&ua, &st.geom, "inner"), values(&ub, &st.geom, "inner"));
+        let same_v = va
+            .iter()
+            .zip(&vb)
+            .all(|(a, b)| a.iter().zip(b).all(|(x, y)| x.to_bits() == y.to_bits()));
+        let same_d = da.iter().zip(&db).all(|(x, y)| x.to_bits() == y.to_bits());
+        println!(
+            "W1: {} faces, values equal {same_v}, gradients equal {same_d}",
+            va.len()
+        );
+        assert!(!va.is_empty() && same_v && same_d && da.len() == db.len());
+    }
+
+    #[test]
+    fn w2_mixed_patch_stator_faces_at_rest() {
+        let (st, g0, new, u) = p3_step();
+        let names = ["zmin".to_string()];
+        let (mut ua, mut ub) = (u.clone(), u);
+        let da = rotating_wall_conditions(&mut ua, &st, &g0, &names, 1.0, 0.005).unwrap();
+        let db = rotor_wall_conditions(&mut ub, &st, &g0, &new, &names, 1.0, 0.005).unwrap();
+        let ni = st.geom.n_internal;
+        let (va, vb) = (values(&ua, &st.geom, "zmin"), values(&ub, &st.geom, "zmin"));
+        let faces: Vec<usize> = st.geom.mesh.patch("zmin").unwrap().faces().collect();
+        let (mut n_rotor, mut n_stator, mut bad) = (0, 0, 0);
+        for (k, &f) in faces.iter().enumerate() {
+            if new.is_rotor_face(f) {
+                n_rotor += 1;
+                if va[k] != vb[k] || da[f - ni].to_bits() != db[f - ni].to_bits() {
+                    bad += 1;
+                }
+            } else {
+                n_stator += 1;
+                if vb[k] != [0.0; 3] || db[f - ni] != 0.0 {
+                    bad += 1;
+                }
+            }
+        }
+        println!("W2: zmin {n_rotor} rotor faces, {n_stator} stator faces, {bad} not as registered");
+        assert!(n_rotor > 0 && n_stator > 0 && bad == 0);
+    }
 }

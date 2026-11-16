@@ -1,0 +1,532 @@
+# ADR 0637: F-303 registration: the sliding rotor-stator interface in the case tree, its loop and a non-axisymmetric check
+
+Status: **REGISTERED 2026-11-16, written before any code of F-303 and before any run of its checks.** Not yet accepted by the
+maintainer. Before this text no library, tree or test code of F-303 was written and nothing was run; the code of the base was
+read only, and the arithmetic below was done in `w49i-work/f303-scratch/arith.py` (disclosed). Results go in the addenda at
+the end; nothing above the addenda is changed after a run.
+
+Roadmap item F-303 (deps F-250), proposed by [ADR 0216](0216-f250-registration-sliding-interface-on-a-cylinder.md) (F-250)
+questions Q1 (the case-tree wiring) and Q7 (a flow check that sees the rotor mesh flux). Parents: ADR 0216 (the sliding mesh
+M1 to M7, the loop SL, the pair P, the checks S, U, R, T, D and the mutation MU4 that no flow check caught),
+[ADR 0629](0629-f304-registration-planar-and-sector-sliding-interfaces.md) (F-304) and
+[ADR 0634](0634-f704-registration-sliding-beyond-one-period-re-imaging-of-the-rotor.md) (F-704; its Q3: the periodic key with
+`mesh_turned`), [ADR 0112](0112-wave44b-cylindrical-interface-preflight-sizing-case-tree.md) (the generator
+`annulus_3d_cylindrical_interface` and its 70 deg pre-flight), [ADR 0266](0266-f350-registration-strong-body-flow-coupling-case-key.md)
+and [ADR 0257](0257-f259-registration-tree-wiring-of-prism-and-incompressible-layering-and-moving-characteristic-faces.md) (optional tables with no hash-table or golden edit). Number 0637
+given by the lead. Branch `f303-work` from 20340be6 (the F-704 tip, on F-304), worktree `w49i-work/f303`, scratch
+`w49i-work/f303-scratch`.
+
+House rules (`w49i-work/AGENT_RULES.md`): limits fixed here and not changed after a run (a miss becomes an ignored
+`*_known_miss` test with the limit intact and the measured number); each registered run made once; existing tests not
+edited; defaults bit-identical; no edit of `baseline_hashes.rs`, of the case and mesh hash tables or of any golden file; no
+new dependency, no unsafe code; clean-room. The roadmap files are not edited. Every choice the maintainer would normally be
+asked about is taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation), except where listed
+as open.
+
+Clean-room: the loop is ADR 0216's (derived there from the swept volumes and the GCL of ADR 0033); the new check rests on
+the frame invariance of a flow whose walls are at rest (first principles, below). No source was read and no vendor code,
+text or install was used. Reference values are the repository's own runs (the same case on the static joined mesh).
+
+## What F-303 asks
+
+The acceptance, binding:
+
+> A case file runs a sliding rotor-stator interface from the CLI; an optional table or hash_omit_default keys carry it; a registered non-axisymmetric flow check sees the rotor mesh flux (ADR 0216 question 7).
+
+The note: from ADR 0216 questions 1 and 7, recommendations taken; golden edits, if any, are listed for the maintainer.
+
+Clauses:
+
+- **c1** a case file with a sliding rotor-stator interface runs from the CLI (`rcfd run`), the rotor turning and the
+  interface rebuilt every step;
+- **c2** the keys are an optional table (or `hash_omit_default` keys): a case that does not write them is bit-identical,
+  no hash table and no golden is edited;
+- **c3** a registered flow check on a non-axisymmetric flow through the turning rotor that sees the rotor mesh flux: it is
+  met by the method and fails when the rotor mesh flux is dropped (ADR 0216 MU4, which no F-250 flow check caught).
+
+## What the code read shows (base 20340be6, read only)
+
+1. **The generator** `annulus_3d_cylindrical_interface` (`sim.rs`, `cylindrical_interface_mesh`): rotor block
+   `annulus_3d(nx, ny, nz, r_in, r_interface, lz, 0, ga)`, stator block `annulus_3d(nx_right, ny_right, nz_right, r_interface,
+   r_out, lz, 0, gb)` (0 = the rotor's count), joined by `join_non_conformal_cylindrical(a, "outer", b, "inner", 0, z, 1e-8)`,
+   cell zone `rotor` = the rotor cells, then ADR 0112's pre-flight (worst interface non-orthogonality `<= 70 deg`). Patches of
+   the joined mesh: `inner` (rotor), `outer` (stator), `zmin`, `zmax` (rotor faces first, then stator faces, merged). Cell
+   index of `annulus_3d`: `ir + n_r (it + n_theta k)`, node angle `2 pi it / n_theta`.
+2. **`rcfd_mesh::sliding::SlidingInterface::cylindrical(rotor, "outer", stator, "inner", 0, z, 1e-8)`**; `mesh_at(0)` joins the
+   rotor clone unrotated, so its mesh is the generator's join before the zone; `mesh_at(theta)` takes any finite angle.
+   `SlidingMesh::mesh` is public (a zone can be added), `is_rotor_face(f)`, `report.interface_faces`.
+3. **`rcfd_fv::sliding::sliding_step`**, **`rotating_wall_conditions(u, step, old_geom, patches, omega_w, dt)`** (one
+   `omega_w` for every face of the listed patches) and **`PimpleSolver::step_sliding`** (refuses BDF2, a set `nu_face`,
+   `body_force`, `source_force`, `sink`, `face_jump`, another patch list).
+4. **The tree.** `Simulation::new` builds the mesh (`build_mesh`, then `[mesh.transform]`) and calls `from_geometry`
+   (ADR 0262 D3); `[mesh.adapt]` branches off before the mesh through `sim/adapt.rs` (`present`: the data holds the table).
+   The transient step's flow advance is `match &mut self.dynmesh { Some(dm) => dm.step(s, dt), None if ... => ..., None =>
+   s.step(dt) }`, after which `self.geom` is the solver's when the mesh moved. The static checks of `rcfd validate` run
+   `dynmesh::check`, which starts with `adapt_check`. `transient_restartable` (restart files) and `into_cosim_flow` list the
+   models they exclude.
+5. **Keys without a hash or golden edit** (ADR 0266 read 6, ADR 0257): an optional table (`Schema::object().optional()`)
+   stays out of the data of every case that does not write it, so the settings hash, `to_toml`, `to_json_string` and the mesh
+   of every existing input are unchanged and `case_hashes_w48u.rs` H1 needs no `DEFAULT_KEYS` entry. The MCP goldens
+   (`crates/rcfd-mcp/tests/golden`) hold no case-schema key and no generator name (read: no occurrence of
+   `annulus_3d_cylindrical_interface` or `box_3d`). No test compares the schema's JSON with a recorded text. `rules_w19c` E2
+   evaluates the TOML literals of test sources that hold `[mesh]` or `generator` with the setup rules (no error-level
+   diagnostic, warnings only SV101 / SV103).
+6. **Boundary keys**: `boundaries.<patch>.velocity` (`fixed` default; "fixed with value 0 is a no-slip wall"),
+   `velocity_value`, `velocity_expression_x/y/z`, `kind` (catalogue, `none` default).
+
+## Design (derived; additive)
+
+**D1. The table `[mesh.sliding]`** (optional, in the `mesh` object beside `box_3d` and `adapt`), ADR 0216 Q1 (a):
+
+- `angular_velocity` (float, `Dimension::ANGULAR_VELOCITY`, default 0): `Omega` [rad/s] of the rotor block about `+z`
+  through the origin (the generator's axis), right-handed;
+- `rotor_walls` (`"rotating"` default, or `"rest"`): the no-slip walls of the rotor block turn with it (a hub) or are at
+  rest in the laboratory frame.
+
+Absent table: the generator's frozen join as before. Present: the generator must be `annulus_3d_cylindrical_interface`
+(`mesh.source = "generator"`); the rotor block and its interface are those of read 1.
+
+**D2. The mesh.** The blocks of read 1 are built by one helper shared with `cylindrical_interface_mesh` (the same calls in the
+same order, extracted; the frozen join is unchanged). The sliding run's mesh at angle 0 is `SlidingInterface::mesh_at(0)` with
+the zone `rotor` added and ADR 0112's pre-flight; it is the generator's mesh (L0). Every later mesh is `mesh_at(theta)` with
+the zone added.
+
+**D3. The loop** (ADR 0216 SL in the tree): before step `n + 1`, with the solver at time `t` and step `dt`, `theta = Omega (t +
+dt)`; `new = mesh_at(theta)`; `st = sliding_step(&s.geom, &cur, &new, &s.phi, &s.u.values, dt)`; the wall conditions (D4);
+`s.step_sliding(dt, st, dpdn)`; `cur = new`; `self.geom = s.geom`. A step whose interface non-orthogonality exceeds 70 deg
+(ADR 0112's measure on the new mesh) stops the run with a located message (`mesh.sliding`). Monitors pushed after each step
+(new names, only with the table): `sliding_angle`, `sliding_interface_flux` (`sum_{f in I} phi_f`), `sliding_gcl`
+(`SlidingStep::gcl_residual`), `sliding_non_orthogonality` (deg).
+
+**D4. Boundary conditions on the rotor.** A patch with at least one rotor face (owner in the rotor block) is classified once,
+at construction: velocity `fixed`, `velocity_value = [0, 0, 0]`, no expression, `kind = none`: a **rotor wall**; `fixed` with a
+non-zero uniform value, `symmetry`, `zero_gradient`: kept as written (laboratory-frame values; the rotor faces of `zmin`,
+`zmax` move in their own plane and those of `inner` along a circle, so a uniform value stays valid); anything else on such a
+patch (`moving_wall`, `shear`, `partial_slip`, `marangoni`, `freestream`, an expression, a catalogue kind): refused, located
+at the patch's key. Every step, each rotor wall gets ADR 0216 M6 face by face: on a rotor face `u_b = (w a x (x_f - o))_t +
+n_f m_f / |S_f|` with `w = Omega` (`rotor_walls = "rotating"`) or `0` (`"rest"`), on a stator face of the same patch `u_b = 0`
+(`m_f = 0` there), and `dp/dn = -n . (u_b,new - u_b,old) / dt`. This is a new library function
+`rcfd_fv::sliding::rotor_wall_conditions(u, step, old_geom, new: &SlidingMesh, patches, omega_w, dt)`, equal to
+`rotating_wall_conditions` on a patch of rotor faces only (W1). Stator-only patches are not touched.
+
+**D5. Refusals** (located diagnostics; the solver path of ADR 0216 has no other terms). Static (`rcfd validate`, through
+`dynmesh::check`): another generator or a mesh file (`mesh.generator`), `solver.algorithm` other than `piso` / `pimple`,
+`solver.time_scheme` other than `euler`, `dynamic_mesh.enabled`, `solver.time_advance = "fractional_step"`. At
+`Simulation::new`: a rotation of `[mesh.transform]`; energy, a turbulence model, scalars, chemistry, rheology, sources, zone
+sources, lumped components, radiation, conjugate heat transfer, the electric potential, phase change, particles, a mixing
+plane, expression or user-function boundary values, Marangoni walls, user functions, a body force, catalogue conditions,
+adaptive step control (`solver.error_tolerance > 0`), `solver.corrector_control = "adaptive"`; the D4 refusals. Restart files
+are refused (`transient_restartable` false with the table) and a co-simulation participant with the table is refused
+(`into_cosim_flow`).
+
+**D6. What a case without the table runs.** `Simulation::new` reaches the sliding module only through `present` (the data
+holds `/mesh/sliding`); the new struct field is `None`; the new match arm of the step is guarded by it; the extracted helper
+makes the same calls; `transient_restartable` and `into_cosim_flow` gain a term that is false. So every existing input runs the
+same operations (D1 to D3 of the checks below).
+
+## The non-axisymmetric check (c3), derived
+
+**N1. Frame invariance.** With every wall at rest in the laboratory frame (`rotor_walls = "rest"`, the stator's walls fixed
+0, the planes `zmin`, `zmax` symmetry), the flow does not depend on how the rotor mesh moves: the sliding run approximates
+the same solution as the run on the static joined mesh (the case without the table). If the rotor turns by a whole number
+`k` of rotor pitches, the final sliding mesh is the static mesh with the rotor cells relabelled (rotor cell `(ir, it)` sits at
+the static cell `(ir, it + k)`, read 1; up to the rounding of the rotated points), so the two final states can be compared
+cell for cell with no interpolation (ADR 0216's reading B, R2).
+
+**N2. Why a uniform or axisymmetric flow is blind to the rotor mesh flux, and this one is not.** The ALE step convects with
+`phi - m`. If the rotor faces' `m` is dropped (`W_f = 0`; the rotor cells off the interface keep their GCL, the motion being
+rigid, and the interface closure of ADR 0216 M3 still closes the rest), the rotor's cell values are carried with the cells:
+after a turn `alpha` the value held at the laboratory point `x` is the old value of `Rot(-alpha) x`, its Cartesian
+components unturned. A uniform field is unchanged by that. An axisymmetric swirl `f(r) e_theta` is changed in its Cartesian
+components, but the change is a rotation of each vector, whose divergent radial part the pressure projection removes and
+whose swirl part is again `f(r) e_theta` to first order; ADR 0216's MU4 diagnostic found T and D moved by `2e-5` and `4e-4`
+only. A flow whose pattern has an azimuthal wave number `m >= 1` is displaced by `alpha` in the rotor against the stator and
+against the static solution, which no projection undoes.
+
+**N3. The field.** The plane strain `u = G (x, -y, 0)` (`m = 2` in the pattern; divergence-free; Cartesian components `G r cos
+theta`, `-G r sin theta`), `G = 0.5`, `U0 = G r_out = 1` (the velocity scale). It is not tangent to the walls (`u_r = G r cos
+2 theta`); the first pressure projection removes the normal part, and the field then decays from the walls inward with
+`nu = 0.01`. With the rotor mesh flux dropped, a rotor cell at `x` holds after a turn `alpha` the velocity of `Rot(-alpha)
+x`: `u_x` changes by about `G y alpha`, so the change is about `G r alpha` (estimate below).
+
+**N4. Its estimate.** `alpha = 6` rotor pitches `= 0.2618` rad: `G r alpha = 0.164 U0` at `r = 1.25` (mid-rotor) and `0.196
+U0` at `r = 1.5` (the interface). The slowest viscous decay over the run, `exp(-nu (pi / (r_out - r_in))^2 alpha) = 0.974`
+(arith.py), leaves it of that size. The sliding run against the static run: ADR 0216 R2 measured `2.36e-4 Omega r_o` for the
+rigid rotation, whose Cartesian components have the same `m = 1` variation along the interface as this field's, with an
+interface speed `1.5 = 0.75 Omega r_o`; scaled to this field's interface speed `G R = 0.75 U0` that is about `2.4e-4 U0`; the
+transient start (an impulsively blocked wall flow, boundary layers `sqrt(nu t) = 0.05` below one radial cell `1/16`) is the
+same in both runs. The limit `1e-2 U0` leaves a factor of about 40 over that estimate and a factor of 16 below the control's
+estimate.
+
+## Arithmetic before this registration (disclosed, `f303-scratch/arith.py`)
+
+- Rotor pitch `2 pi / 144 = 0.0436332`, stator pitch `2 pi / 120 = 0.0523599`; `dt = pitch_rotor / 8 = 0.00545415391248228`;
+  48 steps turn `0.261799388` rad = 6 rotor pitches = 5 stator pitches.
+- A rotor node meets a stator node at angles `m 2 pi / 720` (ADR 0216 amendment 2 (c)); step ends `j 2 pi / 1152`; equal when
+  `5 j = 8 m`, i.e. only at whole rotor pitches (steps 8, 16, ..., 48), as at angle 0, where the join drops the zero-area
+  overlaps (ADR 0216 R2 record).
+- Courant number about `U0 dt / (r_in pitch) = 0.125`; mesh Courant number `Omega dt / pitch = 0.125`.
+
+## Set-ups
+
+The pair **TP** in the tree: `[mesh] generator = "annulus_3d_cylindrical_interface"`, `nx = 144`, `ny = 8`, `nz = 1`,
+`nx_right = 120`, `ny_right = 8`, `nz_right = 1`, `r_in = 1`, `r_interface = 1.5`, `r_out = 2`, `lz = 0.1` (ADR 0216's P as a
+3-D block one cell deep: 2112 cells, interface non-orthogonality about 49 deg, ADR 0216 X0). Solver **TS**: `algorithm =
+"piso"`, `convection = "central"`, `non_orthogonal_correctors = 6` (ADR 0216 amendment 2), `time_scheme = "euler"` (default),
+`momentum_rel_tol = 1e-13`, `pressure_rel_tol = 1e-13`, `pressure_abs_tol = 1e-16`, `momentum_max_iter = 5000`,
+`pressure_max_iter = 5000`, `dt = 0.00545415391248228`, `end_time = 1` (the runs are driven by a step count). `[physics] nu
+= 0.01`. Boundaries: `zmin`, `zmax` `velocity = "symmetry"`; `inner`, `outer` default (fixed 0, walls).
+
+- **NA** (non-axisymmetric, c3): TP, TS, `[mesh.sliding] angular_velocity = 1, rotor_walls = "rest"`; `[initial]
+  velocity_expression_x = "0.5 [1/s] * x"`, `velocity_expression_y = "-0.5 [1/s] * y"`; 48 steps.
+- **NA0** (its reference): NA without the table (the frozen join, the existing path); 48 steps.
+- **NAL** (the library loop): the solver of a Simulation of NA (`pimple_solver_mut`, never stepped by the tree), advanced 48
+  steps by ADR 0216's loop SL written in the test with the library calls (`mesh_at`, the zone, `sliding_step`,
+  `rotating_wall_conditions(.., ["inner"], 0, dt)`, `step_sliding`), angle `Omega (t + dt)`.
+- **NAN** (negative control): NAL with, after `sliding_step`, the mesh flux of every rotor face that is not an interface face
+  set to zero and the interface closure solved again (`interface_balance` on the step's volumes, as `sliding_step`): ADR
+  0216 MU4 as a control.
+- **UT** (uniform flow, tree): TP, TS, `[mesh.sliding] angular_velocity = 1` (`rotor_walls` default); `inner` and `outer`
+  `velocity = "fixed"`, `velocity_value = [1, 0.5, 0]`; `[initial] velocity = [1, 0.5, 0]`; `nu = 0.1`; 40 steps (0.218 rad,
+  4.2 stator pitches).
+- **WT** (rotating rotor wall, tree): NA with `rotor_walls = "rotating"`, `[initial] velocity = [0, 0, 0]`; 20 steps; and its
+  library loop **WL** as NAL with `rotating_wall_conditions(.., ["inner"], 1, dt)`.
+- **CL** (the CLI): NA written to a temporary case file with `end_time = 48 dt` (`0.2617993877991494`) and two reports
+  (`volume_average` of `ux` and of `uy`), run by `rcfd run <case> --out <dir> --quiet`; the same text in process.
+
+## Registered checks
+
+All in release. "Every step" is the largest value over the steps. `U0 = 1` in NA, `|U|` in UT. Tests: the tree checks in
+`crates/rcfd-api/tests/sliding_case_f303.rs`, the CLI checks in `crates/rcfd-cli/tests/sliding_case_f303.rs`, the unit checks
+of D4 in `crates/rcfd-fv/src/sliding.rs`.
+
+### C. The case file from the CLI (c1)
+
+| Id | Check | Limit |
+| --- | --- | --- |
+| C1 (c1) | CL: `rcfd run` exits 0; its `monitors.csv` last `sliding_angle` equals `Omega end_time`; its last `ux_mean`, `uy_mean` report values against the in-process run | exit 0; `abs(angle - 0.2617993877991494) <= 1e-12`; relative `<= 1e-12` (as ADR 0257 X3) |
+| C2 | CL: `rcfd validate` of the case with `generator = "annulus_3d"` (other keys kept) | exit 3, the message naming `mesh.sliding` |
+| C3 (set-up) | NA: the interface owner-neighbour pairs differ between the first and the last mesh of the run in at least one step, and the final `sliding_angle` is at least one stator pitch | as stated |
+
+### K. The keys (c2)
+
+| Id | Check | Limit |
+| --- | --- | --- |
+| K0 | NA0's case (no table): the data has no `/mesh/sliding`, `to_toml` has no `sliding`; NA's case: `mesh.sliding.rotor_walls` reads `rest`, the defaults read `angular_velocity = 0`, `rotor_walls = "rotating"` when the table is written empty; an unknown key in the table is a located parse error | as stated |
+| L0 | the sliding Simulation's mesh at angle 0 against the frozen generator's mesh (NA0) | `content_hash` equal |
+| D1 | `cargo test -p rcfd-api --release --test baseline_hashes` (shared files `sim.rs`, `dynmesh.rs`, `restart.rs`) | pass (unedited) |
+| D2 | unedited suites: `rcfd-api` `case_hashes_w48u` (H1), `cylindrical_interface_w44b` (T1 to T4, the generator's mesh and runs), `cylindrical_interface_w43b`, `dynamic_mesh`, `rules_w19c` (E2 with the new literals); `rcfd-fv` `sliding_interface_f250`, `sliding_interface_f250_records` (R1 to R3), the `rcfd-fv` library tests | pass |
+| D3 | NA0 run twice in process: equal bit for bit (the frozen path is deterministic, so the NA0 used by NA1 is the existing path's result) | equal |
+
+### L. The tree loop is the library loop
+
+| Id | Check | Limit |
+| --- | --- | --- |
+| L1 | NA against NAL after 48 steps: `max_c abs(u_tree - u_lib) / U0`, `max_f abs(phi_tree - phi_lib) / (U0 max abs(S_f))` | `<= 1e-12` each |
+| L2 | WT against WL after 20 steps, as L1 | `<= 1e-12` each |
+
+### N. The non-axisymmetric flow through the turning rotor (c3)
+
+| Id | Check | Limit |
+| --- | --- | --- |
+| N0 (set-up) | NA: every rotor cell centre `(ir, it)` of the final mesh within `1e-9` of the NA0 centre of `(ir, it + 6 mod 144)`, every stator cell centre within `1e-9` of NA0's same cell | as stated |
+| NA1 (c3) | `E = max_c abs(u_NA(c) - u_NA0(map c)) / U0` after 48 steps, over all cells (the map of N0) | `<= 1e-2` (N4) |
+| NA2 (c3, negative control) | NAN's `E` | `>= 5e-2` (N4: `0.16` to `0.20`) |
+| NA3 | `E_NAN >= 5 E_NA` (the check separates the two) | as stated |
+| M1 (mass) | NA, every step `abs(sliding_interface_flux) / (U0 A_I)`, `sliding_gcl`, `continuity` | `<= 1e-10`, `<= 1e-12`, `<= 1e-9` (ADR 0216 T5 of TC6) |
+| X0 (set-up) | NA, UT, WT: every step `sliding_non_orthogonality` | `<= 70 deg` |
+
+Printed, no limit: `E` over the stator cells alone and over the rotor cells alone, for NA and NAN; the rms of the difference;
+NA0's and NA's largest `abs(u) / U0` at the end; the same `E` of a uniform-flow comparison of NAN on UT (expected blind, N2).
+
+### U. Uniform flow through the tree
+
+| Id | Check | Limit |
+| --- | --- | --- |
+| U1 | UT, after every step `max_c abs(u_c - U) / abs(U)` and `max_c abs(p_c - pbar) / abs(U)^2` (`pbar` the volume mean) | `<= 1e-10` each (ADR 0216 U3) |
+| U2 | UT, every step `sliding_gcl` and `continuity` | `<= 1e-12`, `<= 1e-9` |
+
+### W. The rotor wall conditions (unit, `rcfd-fv`)
+
+| Id | Check | Limit |
+| --- | --- | --- |
+| W1 | ADR 0216's pair P3 (3-D, `annulus_3d` blocks, patches `inner`, `zmin`, `zmax`, `outer`) at 0.0123 to 0.0173 rad: `rotor_wall_conditions` on `["inner"]` against `rotating_wall_conditions` on `["inner"]`, `omega_w = 1`: the face values and `dpdn` | bit for bit |
+| W2 | the same step on `["zmin"]` (rotor and stator faces): every stator face value is `[0, 0, 0]` and its `dpdn` 0; every rotor face value equals `rotating_wall_conditions`'s on that face | exact |
+
+### E. Refusals
+
+| Id | Check | Limit |
+| --- | --- | --- |
+| E1 | `Simulation::new` of NA with, one at a time: `algorithm = "simplec"`; `time_scheme = "bdf2"`; `turbulence.model = "k_epsilon"`; `[dynamic_mesh] enabled = true`; `[boundaries.inner] velocity = "moving_wall"`; an expression on `outer`; `generator = "annulus_3d"`; `[mesh.transform] rotate_z_deg = 10` | `Err` each, the message naming the key or `mesh.sliding` |
+| E2 | NA: `supports_restart()` | false |
+
+### Mutations (scratch copy, not committed)
+
+Each applied alone to the final tree by an exact text replacement on a `git archive` copy, the named tests run once; each
+must fail.
+
+| Id | Mutation | Must fail |
+| --- | --- | --- |
+| MU1 | `rcfd_mesh::sliding::SlidingMesh::rotor_swept_volumes` returns zeros (ADR 0216 MU4) | NA1 |
+| MU2 | the tree's wall conditions use `Omega` whatever `rotor_walls` says | NA1 |
+| MU3 | the tree loop does not keep the new mesh (`cur` not replaced) | L1 or C1 (a refused or failed step counts) |
+| MU4 | `rotor_wall_conditions` treats every face as a rotor face | W2 |
+| MU5 | `sliding_step`'s interface closure skipped (interface mesh flux left 0; ADR 0216 MU1) | U1 |
+
+### Decision rule
+
+**Done**: C1 (c1), K0, L0, D1, D2, D3 (c2), NA1 with NA2 and NA3 (c3), L1, M1, U1 met; the set-up checks C3, N0, X0 and
+the negative control NA2 held; every mutation caught; no golden or hash table edited. A miss of an acceptance check, or a
+control or mutation that does not show its check can fail: **partial** with the miss named. The tree cannot run a sliding
+case: **todo**. Every other check is supporting and reported.
+
+## Limits (not covered)
+
+The full annulus of `annulus_3d_cylindrical_interface` only, axis `z` through the origin; no sector or planar sliding key
+(the periodic interfaces of F-304 and F-704 need a sector rotor-stator generator; Q3); one rotor; a constant angular
+velocity; no turbulence, energy, scalars, sources, body force, BDF2 or the other refusals of D5; expression boundary values
+refused everywhere (a rotor patch's profile would rotate with its faces; a stator patch's is not refused for a reason of the
+method but for the size of this item); no restart; the Studio and the MCP tools see the table only as schema data (no
+dedicated UI); the compressible solver; parallel runs. The first-order interface interpolation of ADR 0109 is unchanged.
+
+## Open questions taken on the standing instruction
+
+- **Q1. Where the keys go.** (a) The optional table `[mesh.sliding]` (taken: ADR 0216 Q1 (a), beside `[mesh.box_3d]` and
+  `[mesh.adapt]`; the interface is a property of the generated mesh, and the table needs no hash-table or golden edit, read 5);
+  (b) a new generator name (`annulus_3d_sliding_interface`; changes the generator enumeration and its documentation, and
+  duplicates the generator's keys); (c) keys in `[dynamic_mesh]` (its checks and step belong to a mesh of one topology).
+  Taken (a) on the maintainer's standing instruction of 2026-11-11 (take the recommendation).
+- **Q2. The default of `rotor_walls`.** (a) `"rotating"` (taken: a hub turns with its rotor, the fan case); (b) `"rest"`.
+  Taken (a) on the standing instruction; the checks write the key.
+- **Q3. Periodic sliding in the tree** (ADR 0634 Q3 (a): F-303 uses `mesh_turned` directly). F-303's acceptance names the
+  rotor-stator interface; the periodic join needs a sector rotor-stator generator that the tree does not have. (a) A follow-up
+  item (a sector rotor-stator generator and the `mesh_turned` loop under the same table); (b) in F-303. Taken (a) on the
+  standing instruction; proposed in the roadmap entries.
+- **Q4. The non-axisymmetric check's form.** (a) Frame invariance against the static joined mesh (taken: a closed comparison
+  of the repository's own runs, cell for cell after whole pitches); (b) ADR 0216 Q7's radial source flow against the
+  potential flow (axisymmetric in its pattern; caught MU4 in a diagnostic, `0.22`, but needs a per-face inlet on the rotor's
+  `inner`, which D4 does not allow). Taken (a) on the standing instruction.
+
+## Amendment 1 (2026-11-16, written after the registered run and before any corrected run)
+
+The registered run (once, release, code 2bcc8b0c; the W unit tests, then the six tree tests with three threads, 59.3 s, then
+the two CLI tests, 13.5 s) met W1, W2, K0, L0, E1, E2, D3, L1, L2, N0, NA1, M1, X0 (NA, UT, WT), C1, C2, C3 and U2, and
+missed:
+
+| Id | Limit | Measured |
+| --- | --- | --- |
+| NA2 (negative control) | `>= 5e-2` | `6.20e-3` |
+| NA3 | `E_NAN >= 5 E_NA` | `0.90` (`E_NA = 6.86e-3`) |
+| U1 | `<= 1e-10` each | velocity `7.24e-2`, pressure `2.35e1` |
+
+**NA: a defective set-up (the field).** NA0's largest `abs(u) / U0` at the end is `0.0427` (printed by the run), not of
+order one. The plane strain `G (x, -y, 0)` is the gradient of the harmonic potential `G (x^2 - y^2) / 2`: it is
+irrotational and divergence-free, and the only such fields in the annulus with no normal flow on both walls are the
+circulations `Gamma / (2 pi r)`. The pressure projection therefore removes it entirely (N3 said "removes the normal part",
+which is wrong), and what both runs carry is the discretisation residue of that projection (`4e-2`), mostly near the
+non-conformal interface, where the two runs' meshes differ. Dropping the rotor mesh flux moves a field that is not there, so
+NA2 could not hold. Read from the printed numbers and the decomposition above; nothing was re-run to see it.
+
+**UT: a defective set-up (the symmetry planes).** One diagnostic was run after the registered run (a scratch test file
+`crates/rcfd-api/tests/zz_f303_diag.rs`, five steps per variant, deleted after the run, not committed; disclosed): UT's
+largest velocity deviation after the first and fifth step is `2.36e-2`, `6.22e-2` as registered, the same with
+`angular_velocity = 0` and the same **without the table** (the frozen join, the existing path: `2.36e-2`, `6.22e-2`, pressure
+`2.9e1`); with `zmin`, `zmax` `velocity = "fixed"` at `U` it is `3.9e-15`, `6.0e-15` with the table and `4.4e-16`, `1.1e-15`
+without. So the uniform in-plane flow is not kept by the tree's `symmetry` planes on this mesh whether or not the rotor
+slides; the miss is not of F-303. (The cause in the existing symmetry condition is not diagnosed here; it is listed as a
+remaining question.) NA's comparison is not affected by it in kind: NA and NA0 share the planes.
+
+The registered checks stay as they are; NA2, NA3 and U1 become ignored `*_known_miss` records with their limits (the tests
+`na_known_miss_strain_field_removed_by_the_projection` and `ut_known_miss_symmetry_planes`, which also keep the checks they
+met). Corrected set-ups, registered here before they run, each run once:
+
+- **NAc**: NA with the initial field of the stream function `psi = C (q - 1)(4 - q) x y`, `q = x^2 + y^2` (lengths in m):
+  `u_x = C x (2 y^2 (5 - 2 q) + (q - 1)(4 - q))`, `u_y = -C y (2 x^2 (5 - 2 q) + (q - 1)(4 - q))`, `C = 1/24` m/s (so that the
+  largest speed in the annulus is `U0 = 1`; arith.py: the curl of `psi` checked to `8e-9`, `u_r = 5e-15` on both walls). It is
+  divergence-free and tangent to both walls, so the projection keeps it, and its vorticity has the azimuthal wave number 2.
+  **NA0c** is NAc without the table, **NANc** NAN on NAc, **NALc** NAL on NAc.
+- **UTc**: UT with `zmin`, `zmax` `velocity = "fixed"`, `velocity_value = [1, 0.5, 0]` (ADR 0216 U3's choice).
+
+| Id | Set-up | Check | Limit |
+| --- | --- | --- | --- |
+| N0c, NA1c, NA2c, NA3c, L1c, M1c, X0c, C3c | NAc, NA0c, NANc, NALc | as N0, NA1, NA2, NA3, L1, M1, X0, C3 | as registered (`1e-9`; `1e-2`; `>= 5e-2`; `>= 5`; `1e-12`; `1e-10`, `1e-12`, `1e-9`; `70 deg`; as stated) |
+| U1c, U2c, X0c | UTc | as U1, U2, X0 | as registered |
+
+Estimate of NA2c (arith.py): the rotor-region speed of the field is at most `0.24 U0` (the field is largest at the outer
+wall); a turn of `alpha = 0.2618` of a pattern of wave number 2 changes it by about `2 alpha 0.24 = 0.126 U0`, the decay over
+the run `exp(-nu (pi^2 + 4/1.5^2) alpha) = 0.97`: about `0.12`, a factor 2.4 over `5e-2`. NA1c: the residue that NA measured
+(`6.9e-3`) came from removing a field of order one at the interface; NAc removes no field, so its difference is the interface
+error of a field of `0.24 U0` at the interface (ADR 0216 R2 scaled: about `1e-4`).
+
+The decision rule is unchanged, with NA2c, NA3c and U1c in place of NA2, NA3 and U1 among the checks; the decision by the
+rule as first registered is reported as well. The CLI check C1 ran on NA's text and was met; it is not re-run (it checks
+the binary against the in-process run, not the field).
+
+## Amendment 2 (2026-11-16, written after the run of amendment 1's corrected checks and before any further run)
+
+The corrected run (once, release, two threads, 53.5 s, the tests of 1daa0489 on the code of 2bcc8b0c) met N0c (`1.6e-15`),
+NA1c (`6.76e-4`), NA3c (`47.8`), L1c (exactly 0), M1c, X0c, C3c and U2c, and missed:
+
+| Id | Limit | Measured |
+| --- | --- | --- |
+| NA2c (negative control) | `>= 5e-2` | `3.23e-2` |
+| U1c | `<= 1e-10` each | velocity `2.28e-4`, pressure `3.76e-3` |
+
+Both stay as registered and become ignored `*_known_miss` records with their limits (no limit changes).
+
+**NA2c, diagnosis from the printed numbers.** NA0c's largest speed falls from `0.842` (start; the cell centres) to `0.333`
+at the end: the field slides along both walls at the start, and the no-slip walls remove that slip in diffusion layers, a
+decay that the registered estimate (`0.97`, the slowest mode) left out. Scaled by `0.333 / 0.842`, the estimate `0.12`
+becomes `0.047`, the size measured (`0.032`). The control is not blind: it raises `E` by a factor 48 (NA3c) and exceeds the
+limit of NA1c by a factor 3.2, so NA1c fails when the rotor mesh flux is dropped; only its own threshold, set from the
+estimate, was too high.
+
+**U1c, one diagnostic run after it** (a scratch test file `crates/rcfd-api/tests/zz_f303_diag2.rs`, deleted after the run,
+not committed; disclosed): UTc's deviation per step is `4e-15` to `6e-15` for steps 1 to 7, jumps to `2.0e-4` (pressure
+`3.8e-3`) at step 8 and decays to `3e-5` by step 15, and jumps again at steps 16, 24, 32 and 40; at exactly those steps the
+interface has 240 faces in place of 264. With `angular_velocity = 0` (240 faces every step) it stays at `1.1e-15`. Steps 8,
+16, ... are the whole rotor pitches, where rotor and stator nodes coincide (the registration's arithmetic), so 24 overlaps
+of zero area are dropped and come back on the next step. So the uniform state of ADR 0216 M4 is lost on a step whose
+interface loses or regains faces at coinciding nodes, in the library path that F-303 calls (`sliding_step`). ADR 0216's own
+uniform-flow set-ups (U2, U3, `dt = 0.005`) never met a coincidence after angle 0, so its checks could not see this. The
+cause inside `sliding_step` (a dropped overlap's share of the remap or of the GCL closure; the snapping of nearly
+coinciding nodes by the join's tolerance) is not diagnosed here; it is a remaining question and a proposed follow-up. The
+non-axisymmetric checks NA1c and M1c ran through the same coincidence steps and were met.
+
+Supporting check, registered here before it runs (once), to show that the tree path keeps the uniform state on steps
+without coincidences, as ADR 0216 U2 does in the library:
+
+| Id | Set-up | Check | Limit |
+| --- | --- | --- | --- |
+| U1d | UTd = UTc with `dt = 0.005` (ADR 0216's step; over 40 steps the rotor angle comes no closer than `9.3e-5` rad to a node coincidence, arith) | as U1 | `<= 1e-10` each |
+
+U1d does not replace U1c in the decision rule. By the rule, with NA2c and U1c missed, the outcome is **partial**.
+
+## Addendum 1: results (2026-11-16)
+
+Measured against the limits registered above and in amendments 1 and 2; no limit was changed. Release builds on Windows.
+The registration is 761ec25c; the code and the tests of the registered run 2bcc8b0c; amendment 1 676c9bbc; its corrected
+tests and the first known-miss records 1daa0489; amendment 2, its records and U1d a0c7d464. Each registered run was made
+once (the registered run, then the corrected run of amendment 1, then U1d); the runs are deterministic and none was repeated
+to change a result. Diagnostics after the runs (the five-step UT variants of amendment 1, the per-step UTc record of
+amendment 2) and one set-up check before the corrected run (NAc's initial cell velocities against the formula, `2.2e-16`,
+largest `0.842`) ran from scratch test files that were deleted and never committed.
+
+**Built as registered** (D1 to D6). `crates/rcfd-api/src/sim/sliding.rs` (new): the schema of `[mesh.sliding]`, `present`,
+the static checks, `new_sliding` (blocks, `SlidingInterface`, zone, pre-flight, refusals, D4's classification) and
+`SlidingRun::step`. Shared files: `crates/rcfd-api/src/sim.rs` (the module and its re-exports, lines 54 and 59 to 61;
+`cylindrical_interface_mesh` split into itself and `cylindrical_interface_blocks` plus `sliding_blocks`, lines 493 to 521 and
+578 to 586, the same calls in the same order; the struct field, lines 1292 to 1293; the branch of `Simulation::new`, lines
+1310 to 1313; `sliding: None`, line 2564; `sliding_interface_faces`, lines 2857 to 2861; the step's match arm, lines 4238 to
+4272; the co-simulation exclusion, lines 5450 to 5452), `crates/rcfd-api/src/schema.rs` (the field, lines 299 to 301),
+`crates/rcfd-api/src/dynmesh.rs` (the static checks, lines 389 to 390), `crates/rcfd-api/src/sim/restart.rs` (lines 95 to 96).
+`crates/rcfd-fv/src/sliding.rs`: `rotor_wall_conditions` and the unit tests W1, W2 (lines 418 to 546); nothing existing
+edited. Tests: `crates/rcfd-api/tests/sliding_case_f303.rs` (11: 7 run, 4 ignored known-miss records),
+`crates/rcfd-cli/tests/sliding_case_f303.rs` (2). Docs: `docs/case-schema.md`, `docs/dynamic-mesh.md`, README gap line
+(prose; no TOML block added to a document). **No golden, no hash table, no existing test edited; no golden diff is needed**
+(the table is optional; `baseline_hashes`, `case_hashes_w48u` H1, `rules_w19c` and `docs_site` pass unedited).
+
+### Results
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| C1 (c1) `rcfd run` of the case file; angle; reports against in process | exit 0; `1e-12`; `1e-12` | exit 0; `1.7e-16`; `0`, `0` (bit-equal) | met |
+| C2 `rcfd validate`, wrong generator | exit 3, names `mesh.sliding` | exit 3, names `mesh.sliding` | met |
+| C3 (set-up) pairs change; angle `>=` one stator pitch | as stated | 36 of 48 steps; `0.2618` | held |
+| K0 (c2) absent table not in the data or the text; defaults; unknown key located | as stated | as stated | met |
+| L0 mesh at angle 0 against the generator | hash equal | `0xac3a5c08ad4c7e89` both | met |
+| D1 (c2) `baseline_hashes` | pass | 3 passed, 1 ignored (as before) | met |
+| D2 (c2) unedited suites | pass | `case_hashes_w48u` 1/0, `cylindrical_interface_w44b` 5/1, `w43b` 4/6, `dynamic_mesh` 5/1, `rules_w19c` 8/1, `rcfd-api` lib 122/3; `rcfd-fv` lib 108/6, `sliding_interface_f250` 14/4, `_records` 3/0, `sliding_periodic_f304` 8/2, `sliding_reimaging_f704` 12/2; `rcfd-cli` `docs_site` 2/0 (passed / ignored) | met |
+| D3 the frozen path twice | bit-equal | equal | met |
+| L1 tree loop against the library loop (NA; NAc) | `1e-12` | `0`, `0`; `0`, `0` | met |
+| L2 rotating rotor wall, tree against library | `1e-12` | `0`, `0` (largest speed `0.344`) | met |
+| W1 rotor-only patch against `rotating_wall_conditions` | bit for bit | 96 faces equal | met |
+| W2 mixed patch: stator faces at rest | exact | 192 rotor, 160 stator faces, none off | met |
+| N0 / N0c the cell map after 6 pitches | `1e-9` | `1.6e-15` / `1.6e-15` | held |
+| NA1 (NA, strain field) | `1e-2` | `6.86e-3` | met (on a set-up found defective) |
+| NA2 (NA, negative control) | `>= 5e-2` | `6.20e-3` | **missed** (defective set-up, amendment 1) |
+| NA3 (NA) | `>= 5` | `0.90` | **missed** (defective set-up) |
+| **NA1c (c3)** sliding against static, NAc | `<= 1e-2` | `6.76e-4` (rotor `6.76e-4`, stator `4.56e-4`, rms `2.55e-4`) | **met** |
+| NA2c (negative control) rotor mesh flux dropped | `>= 5e-2` | `3.23e-2` (stator `2.20e-2`, rms `1.47e-2`) | **missed** (amendment 2) |
+| NA3c `E_NAN / E_NA` | `>= 5` | `47.8` | met |
+| M1 / M1c net interface flux, GCL, continuity | `1e-10`, `1e-12`, `1e-9` | `1.5e-14`, `1.1e-14`, `4.1e-10` / `2.8e-17`, `1.1e-14`, `1.7e-12` | met |
+| X0 interface non-orthogonality (NA, NAc, UT, UTc, UTd, WT) | `70 deg` | `48.56`; UTd `49.15` | held |
+| U1 (UT, symmetry planes) | `1e-10` each | `7.24e-2`, `2.35e1` | **missed** (defective set-up; the frozen path misses too) |
+| U2 (UT) | `1e-12`, `1e-9` | `1.10e-14`, `1.22e-10` | met |
+| U1c (UTc, planes fixed at U) | `1e-10` each | `2.28e-4`, `3.76e-3` | **missed** (coinciding nodes, amendment 2) |
+| U2c | `1e-12`, `1e-9` | `1.10e-14`, `2.49e-14` | met |
+| U1d (UTd, `dt = 0.005`) | `1e-10` each | `7.28e-15`, `3.42e-13` | met |
+| E1 refusals (8) | located | each names its key | met |
+| E2 restart | false | false | met |
+
+Times (release, Windows): the tree tests 59 s (registered, three threads), 54 s (corrected, two), 12 s (U1d); the CLI tests
+14 s; no test exceeds two minutes, so none is a heavy record.
+
+### Mutations
+
+Each applied alone by an exact text replacement to a `git archive` copy of a0c7d464 (script `f303-scratch/mutate.py`,
+separate target directory), the named test run once, the file restored.
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 rotor swept volumes zero (ADR 0216 MU4) | NA1 | caught: NA1c `E = 3.23e-2` against `1e-2` (the same number as the control) |
+| MU2 rotor walls turn whatever `rotor_walls` says | NA1 | caught: `E = 5.24e-1` (and L1 `5.2e-1`) |
+| MU3 the loop keeps the old mesh | L1 or C1 | caught: step 2 refused (`sliding_step: the old geometry is not that of the old sliding mesh`) |
+| MU4 every face a rotor face in `rotor_wall_conditions` | W2 | caught |
+| MU5 interface closure skipped | U1 | caught by U1d (velocity `8.7e-4`, GCL `1.1e-3`); U1c is a known miss and its run test does not assert U1 |
+
+`cargo fmt --check` for `rcfd-api`, `rcfd-fv`, `rcfd-cli`: clean. `cargo clippy --release -p rcfd-fv -p rcfd-api -p
+rcfd-cli --all-targets -- -D warnings`: clean. Not run: the whole workspace suite (the lead's gate).
+
+### Reading
+
+- c1 is met: a case file with `[mesh.sliding]` runs from `rcfd run`, the rotor turning 6 pitches and the interface rebuilt
+  each step (36 topology changes), and the binary's numbers equal the in-process run's bits.
+- c2 is met: an optional table, no hash-table or golden edit, every default suite unchanged.
+- c3: the non-axisymmetric check NA1c (a vortical `m = 2` field, every wall at rest, the sliding run against the static join
+  after whole pitches) is met at `6.8e-4` of `U0`, and dropping the rotor mesh flux (the control, and the same as mutation
+  MU1) raises it to `3.2e-2`, 48 times larger and 3.2 times its limit. So the check sees the rotor mesh flux, as ADR 0216 Q7
+  asked, where every F-250 flow check had been blind to MU4. The control's own registered threshold (`5e-2`) was missed:
+  its estimate left out the decay of the wall slip (amendment 2).
+- The uniform flow found a defect of the F-250 library path: on a step where rotor and stator nodes coincide and the
+  interface drops its zero-area overlaps (here every whole rotor pitch), the uniform state is lost by `2e-4`, then decays;
+  without coincidences (U1d) the tree keeps it to `7e-15`. How often a free choice of `dt` meets a coincidence (within the
+  join's tolerance) is not measured.
+- Found on the way, outside F-303: the tree's `symmetry` velocity planes do not keep a uniform in-plane flow on this one-cell
+  deep annulus pair, on the frozen join too (`2.4e-2` after one step).
+
+### Decision
+
+By the registered rule (with amendments 1 and 2): C1, K0, L0, D1, D2, D3, NA1c, L1, M1 met, the set-up checks held, five of
+five mutations caught, no golden edited; **NA2c (a negative control's threshold) and U1c missed: partial.** By the rule as
+first registered the outcome is partial as well (NA2, NA3, U1 missed). Every acceptance clause is met in substance (c1, c2
+fully; c3 by NA1c with NA3c and MU1), so the lead may prefer done (Q6).
+
+### Remaining questions
+
+- **Q5. The coinciding-node defect of `sliding_step` (U1c).** Options: (a) a follow-up item in the library (diagnose the
+  step where overlaps of zero area appear or vanish: the remap of the old flux on the faces that lose or gain them, and the
+  join's snapping of nodes within its tolerance; a uniform-flow check at coincidences); (b) avoid it in the tree by nudging
+  the rotor angle off a coincidence (changes the motion); (c) leave it documented. Recommendation (a); until then the
+  limitation is documented in `docs/dynamic-mesh.md`.
+- **Q6. Status.** Options: (a) partial by the rule; (b) done, the acceptance's three clauses being met (NA1c sees the mesh
+  flux by a factor 48), with U1c moved to the follow-up of Q5. Recommendation (b) for the lead to confirm; the proposed
+  status below follows the rule (a).
+- **Q7. The symmetry planes of the frozen path.** A uniform in-plane flow on `annulus_3d_cylindrical_interface` with
+  `zmin`, `zmax` `symmetry` is not kept (`2.4e-2` after one step, no table). Options: (a) a follow-up diagnosis item;
+  (b) leave it. Recommendation (a); a fix may change default results, so it is not taken here.
+- **Q3** (periodic sliding in the tree) stays as taken: a follow-up item.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> ADR 0637, 2026-11-16: the optional table [mesh.sliding] (angular_velocity, rotor_walls = rotating or rest) on mesh.generator = "annulus_3d_cylindrical_interface" runs the sliding interface of F-250 from a case file: every step the rotor block is turned to angular_velocity t and joined to the stator again (sliding_step, step_sliding), the rotor's no-slip walls turn with it or rest (rcfd_fv::sliding::rotor_wall_conditions, stator faces of a mixed patch at rest), and the monitors sliding_angle, sliding_interface_flux, sliding_gcl, sliding_non_orthogonality are written. rcfd run of the case file equals the in-process run bit for bit; the tree loop equals ADR 0216's library loop bit for bit; a case without the table is unchanged (no hash table or golden edited). Non-axisymmetric check (ADR 0216 Q7): a vortical m = 2 field with every wall at rest, the sliding run against the static join after 6 rotor pitches, cell for cell: 6.8e-4 U0 (limit 1e-2); with the rotor mesh flux dropped 3.2e-2 (48 times larger), so the check sees the rotor mesh flux (also mutation MU1); the control's registered threshold 5e-2 was missed. Mass across the interface 2.8e-17, GCL 1.1e-14, continuity 1.7e-12. Uniform flow: 7.3e-15 on steps without node coincidences, but 2.3e-4 on the steps where rotor and stator nodes coincide and the interface drops its zero-area overlaps (a defect of the F-250 step; follow-up). Two set-ups of the registration were defective and corrected by amendment. Five of five mutations caught. Limits: full annulus about z only, laminar piso / pimple with Euler, no expression boundary values, sources, models or restart; sector and planar sliding not in the tree.
+
+> F-250 note: append "Case-tree wiring: F-303 (ADR 0637); the uniform state is lost on steps where rotor and stator nodes coincide (ADR 0637 amendment 2)." and drop the case-tree wiring (ADR 0216 Q1) and the flow check that sees the rotor mesh flux (Q7) from its not-delivered list.
+
+> Follow-up proposed: "Sliding interface at coinciding nodes". Deps F-250. Acceptance: a uniform flow on the sliding pair of ADR 0216 with a step that lands on node coincidences (every whole rotor pitch) is kept to 1e-10 on every step, including the steps where the interface loses or regains zero-area overlaps; the cause found in ADR 0637 amendment 2 is diagnosed and registered before the fix; the F-250, F-304, F-704 and F-303 results are unchanged where no coincidence occurs.
+
+> Follow-up proposed: "Periodic (sector and planar) sliding in the case tree". Deps F-303, F-704. Acceptance: a case file runs a rotor sector sliding against a stator sector of the same pitch beyond one pitch (PeriodicSlidingInterface::mesh_turned) through an optional table, with a sector rotor-stator generator; the sector run against the full-annulus tree run of ADR 0637 within a registered limit; defaults bit-identical.
+
+> Follow-up proposed: "Symmetry planes and a uniform in-plane flow on the annulus interface pair". Deps none. Acceptance: the uniform in-plane flow of ADR 0637 UT on the frozen join of annulus_3d_cylindrical_interface with zmin, zmax symmetry (2.4e-2 after one step) is diagnosed; either it is kept to 1e-10 with the cause fixed and every changed default result listed for the maintainer, or the limitation is documented with its cause.

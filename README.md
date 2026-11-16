@@ -21,8 +21,9 @@ warranty of any kind (see the licences). The main gaps today:
   reach its expected operating point, and the diagnosis is open
   ([fan milestone](docs/milestone-fan.md)).
 * There is no structural solver.
-* Sliding-mesh transient solves are not available from a case or the app;
-  the library has a first rotor-stator sliding interface (F-250, ADR 0216).
+* Sliding-mesh transient solves run from a case file for the full-annulus
+  rotor-stator generator only (`[mesh.sliding]`, F-303, ADR 0637; laminar
+  piso / pimple); sector and planar sliding are in the library only.
 * Overset (chimera) meshes are not available from a case or the app; the
   library has a first overset coupling of one moving component mesh
   (F-134, ADR 0219).
