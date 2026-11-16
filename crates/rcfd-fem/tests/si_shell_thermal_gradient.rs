@@ -752,6 +752,7 @@ fn is_gradient_refusal(r: &Result<impl std::fmt::Debug, FemError>, kind: &str) -
 }
 
 #[test]
+#[ignore = "superseded by ADR 0626: its rows N1 (Shell3) and N2 (one-ply Layup) assert the refusals that F-687 lifts; N3 to N8 run unchanged in si_shell_thermal_gradient_shell3_layup.rs n3_to_n8_after_adr_0626"]
 fn n1_to_n8_refusals_and_zero_fields() {
     let mut c = Checks::new();
     let (p, el) = th_plane();

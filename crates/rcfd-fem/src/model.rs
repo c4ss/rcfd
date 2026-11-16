@@ -842,10 +842,13 @@ pub enum Load {
         /// Reference (strain-free) temperature.
         reference: f64,
     },
-    /// A nodal temperature gradient through the thickness of Shell4 elements, K/m: `dT/dz` with `z` along each element's
-    /// facet normal `e_3` (ADR 0612 D1). A Shell4 element of a Shell block takes the curvature thermal load `int B_b^T D_b
-    /// kappa_th dA`, `kappa_th = alpha g (1, 1, 0)` ([`crate::shell::thermal_gradient_load_vector`]); any other element with
-    /// a non-zero value at one of its nodes is refused. Independent of [`Load::Temperature`]; opt-in.
+    /// A nodal temperature gradient through the thickness of shells, K/m: `dT/dz` with `z` along each element's facet
+    /// normal `e_3` (ADR 0612 D1). A Shell4 element of a Shell block takes the curvature thermal load `int B_b^T D_b kappa_th
+    /// dA`, `kappa_th = alpha g (1, 1, 0)` ([`crate::shell::thermal_gradient_load_vector`]); a Shell4 element of a Layup
+    /// block the ply-integrated force and moment of lamination theory
+    /// ([`crate::shell::layup_thermal_gradient_load_vector`]); a Shell3 element that of its constant curvature
+    /// ([`crate::shell3::thermal_gradient_load_vector`]) (ADR 0626); any other element with a non-zero value at one of its
+    /// nodes is refused. Independent of [`Load::Temperature`]; opt-in.
     #[non_exhaustive]
     ShellTemperatureGradient {
         /// One gradient per node, K/m.

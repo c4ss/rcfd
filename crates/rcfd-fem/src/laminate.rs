@@ -195,8 +195,12 @@ pub struct Laminate {
     pub h: [[f64; 2]; 2],
     /// `N_th = sum Qbar_k alphabar_k t_k`, per kelvin, N/(m K).
     pub n_th: [f64; 3],
-    /// `M_th = sum Qbar_k alphabar_k t_k zbar_k`, per kelvin, N/K.
+    /// `M_th = sum Qbar_k alphabar_k t_k zbar_k`, per kelvin, N/K. Also the membrane force per unit through-thickness
+    /// gradient `dT/dz` (ADR 0626 arithmetic 1).
     pub m_th: [f64; 3],
+    /// `P_th = sum Qbar_k alphabar_k (t_k zbar_k^2 + t_k^3/12)`, the moment per unit through-thickness gradient `dT/dz`,
+    /// N m/K (ADR 0626 D1).
+    pub p_th: [f64; 3],
     /// The total thickness, m.
     pub thickness: f64,
     /// `(m0, m1, m2) = sum rho_k t_k (1, zbar_k, zbar_k^2 + t_k^2/12)`.
@@ -216,6 +220,7 @@ pub fn laminate(plies: &[Ply]) -> Result<Laminate> {
         h: [[0.0; 2]; 2],
         n_th: [0.0; 3],
         m_th: [0.0; 3],
+        p_th: [0.0; 3],
         thickness: t,
         mass: [0.0; 3],
         z: Vec::with_capacity(plies.len() + 1),
@@ -239,6 +244,7 @@ pub fn laminate(plies: &[Ply]) -> Result<Laminate> {
             }
             out.n_th[i] += qa[i] * tk;
             out.m_th[i] += qa[i] * tk * zb;
+            out.p_th[i] += qa[i] * i2;
         }
         for i in 0..2 {
             for j in 0..2 {
@@ -326,6 +332,44 @@ pub fn ply_stresses_at(plies: &[Ply], eps0: [f64; 3], kappa: [f64; 3], dt: f64) 
     Ok(out)
 }
 
+/// The ply strains and stresses of a layup as [`ply_stresses_at`] with a through-thickness gradient `g` (K/m along `e_3`)
+/// at the centre: the free strain `alphabar (dt + z g)` (ADR 0626 D1).
+pub fn ply_stresses_with_gradient(
+    plies: &[Ply],
+    eps0: [f64; 3],
+    kappa: [f64; 3],
+    dt: f64,
+    g: f64,
+) -> Result<Vec<PlyStress>> {
+    let l = laminate(plies)?;
+    let mut out = Vec::with_capacity(plies.len());
+    for (k, ply) in plies.iter().enumerate() {
+        let pc = ply_constants(ply, k)?;
+        let ab = rotated_expansion(pc.alpha, ply.angle);
+        let te = strain_rotation(ply.angle);
+        let z = [l.z[k], l.z[k + 1]];
+        let mut strain = [[0.0; 3]; 2];
+        let mut stress = [[0.0; 3]; 2];
+        for s in 0..2 {
+            let th = dt + z[s] * g;
+            let e = [
+                eps0[0] + z[s] * kappa[0] - ab[0] * th,
+                eps0[1] + z[s] * kappa[1] - ab[1] * th,
+                eps0[2] + z[s] * kappa[2] - ab[2] * th,
+            ];
+            strain[s] = mul3(&te, e);
+            stress[s] = mul3(&pc.q, strain[s]);
+        }
+        out.push(PlyStress {
+            ply: k,
+            z,
+            strain,
+            stress,
+        });
+    }
+    Ok(out)
+}
+
 /// The response of a Shell4 element of a Layup block at its centre (ADR 0496 D6).
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
@@ -338,6 +382,8 @@ pub struct LayupResponse {
     pub curvature: [f64; 3],
     /// The temperature change at the centre, K (0 without a temperature field).
     pub delta_t: f64,
+    /// The through-thickness gradient at the centre, K/m (0 without a gradient load; ADR 0626 D1).
+    pub gradient: f64,
     /// The plies' strains and stresses.
     pub plies: Vec<PlyStress>,
 }
@@ -347,14 +393,19 @@ pub struct LayupResponse {
 pub fn layup_response(model: &SolidModel, displacement: &[f64]) -> Result<Vec<LayupResponse>> {
     let mesh = model.mesh();
     let mut out = Vec::new();
-    for (e, eps, kappa, dt) in crate::shell::centre_strains(model, displacement)? {
+    for (e, eps, kappa, dt, gc) in crate::shell::centre_strains(model, displacement)? {
         if mesh.element_kind(e) != ElementKind::Shell4 {
             continue;
         }
         let Some(BlockProperty::Layup { plies }) = mesh.blocks()[mesh.block_of(e)].property() else {
             continue;
         };
-        let plies_out = ply_stresses_at(plies, eps, kappa, dt).map_err(|source| FemError::Element {
+        // ADR 0626 D1: with a gradient load the ply stresses take its free strain.
+        let plies_out = match gc {
+            Some(g) => ply_stresses_with_gradient(plies, eps, kappa, dt, g),
+            None => ply_stresses_at(plies, eps, kappa, dt),
+        }
+        .map_err(|source| FemError::Element {
             element: e,
             source: Box::new(source),
         })?;
@@ -363,6 +414,7 @@ pub fn layup_response(model: &SolidModel, displacement: &[f64]) -> Result<Vec<La
             strain: eps,
             curvature: kappa,
             delta_t: dt,
+            gradient: gc.unwrap_or(0.0),
             plies: plies_out,
         });
     }
