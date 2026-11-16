@@ -7288,9 +7288,9 @@
     "deps": [
       "F-805"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "The Claude Code chat for the project through rcfd-claude: open sessions mirrored read-only, closed sessions resumed and typed into, one writer per session, tool approvals by a conservative allow-list and never approve-everything (G11); run ids and files in a reply link to the run or file in the Studio; a test for each rule.",
-    "note": "ADR 0800. Traces: G11; PRODUCT Positioning; DESIGN Claude Code panel."
+    "note": "ADR 0800. Traces: G11; PRODUCT Positioning; DESIGN Claude Code panel. Partial 2026-11-16: panel lists sessions, mirrors open ones read-only, resumes closed ones with claude -p --resume, single writer, conservative allow-list asserted in argv (dontAsk, no approve-everything flag), run/file links; tests use a fake claude. Left: a file link opens the case editor (F-812 now exists) instead of a filtered Home; claude-head colour role and writing .rcfd/claude-allow.json wait for the maintainer; no engine entry point for session discovery (TypeScript stopgap)."
   },
   {
     "id": "F-815",

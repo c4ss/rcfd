@@ -14222,12 +14222,16 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     of the path; a view-and-report step by the maintainer as a first-time user. The short path hides nothing for good:
     every capability stays one step away (G15).
   - note: ADR 0800. Traces: G6; PRODUCT Users, Principle 5. Surface not yet designed: shape it with impeccable first.
-- [ ] **F-814** Electron Studio: Claude Code panel
+- [~] **F-814** Electron Studio: Claude Code panel
   - depends on: F-805
   - acceptance: The Claude Code chat for the project through rcfd-claude: open sessions mirrored read-only, closed
     sessions resumed and typed into, one writer per session, tool approvals by a conservative allow-list and never
     approve-everything (G11); run ids and files in a reply link to the run or file in the Studio; a test for each rule.
-  - note: ADR 0800. Traces: G11; PRODUCT Positioning; DESIGN Claude Code panel.
+  - note: ADR 0800. Traces: G11; PRODUCT Positioning; DESIGN Claude Code panel. Partial 2026-11-16: panel lists
+    sessions, mirrors open ones read-only, resumes closed ones with claude -p --resume, single writer, conservative
+    allow-list asserted in argv (dontAsk, no approve-everything flag), run/file links; tests use a fake claude. Left: a
+    file link opens the case editor (F-812 now exists) instead of a filtered Home; claude-head colour role and writing
+    .rcfd/claude-allow.json wait for the maintainer; no engine entry point for session discovery (TypeScript stopgap).
 - [ ] **F-815** Electron Studio: compare two runs
   - depends on: F-810
   - acceptance: Two runs side by side or overlaid at the same time and the same colour range, with the difference field
