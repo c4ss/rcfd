@@ -1664,7 +1664,9 @@ fn rounding_bound(k: &CsrMatrix, u: &[f64], free: &[usize]) -> f64 {
 }
 
 /// The per-element layout of the material states of a model (ADR 0440 D3): per element the number of points of its
-/// stiffness rule and the values per point (`Material::state_size`).
+/// stiffness rule and the values per point (`Material::state_size`). With the warm start of ADR 0660 D1 the state of an
+/// Incompatible Hex8 carries its nine committed modes after these `points x values_per_point` values (ADR 0668 D2): the
+/// layout describes the material part only.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StateLayout {
     points: Vec<usize>,
@@ -2886,7 +2888,8 @@ pub struct TimeStep {
     pub time: f64,
     /// The displacement, one value per equation.
     pub u: Vec<f64>,
-    /// The committed element states.
+    /// The committed element states (with the warm start of ADR 0660 D1 an Incompatible Hex8's state ends with its nine
+    /// committed modes, ADR 0668 D2).
     pub states: Vec<ElementState>,
     /// The internal force at `u` with those states.
     pub internal_force: Vec<f64>,
@@ -2914,15 +2917,23 @@ fn is_creep_iteration(e: &FemError) -> bool {
 }
 
 /// The largest increment of the equivalent creep strain between two sets of element states, over the points of the elements
-/// marked in `creep`.
-fn creep_increment(creep: &[bool], old: &[ElementState], new: &[ElementState]) -> f64 {
+/// marked in `creep`. With `cut` (the model's warm start, ADR 0668 D1) the values of element `e` are cut to their first
+/// `cut[e]` values, the material part, first: the committed modes of ADR 0660 D1 after it are not points.
+fn creep_increment(creep: &[bool], cut: Option<&[usize]>, old: &[ElementState], new: &[ElementState]) -> f64 {
     let ns = crate::mat_creep::STATE_SIZE;
     let mut worst = 0.0f64;
-    for ((&c, o), n) in creep.iter().zip(old).zip(new) {
+    for (e, ((&c, o), n)) in creep.iter().zip(old).zip(new).enumerate() {
         if !c {
             continue;
         }
-        for (po, pn) in o.values().chunks(ns).zip(n.values().chunks(ns)) {
+        let (ov, nv) = match cut {
+            Some(cut) => {
+                let (ov, nv) = (o.values(), n.values());
+                (&ov[..cut[e].min(ov.len())], &nv[..cut[e].min(nv.len())])
+            }
+            None => (o.values(), n.values()),
+        };
+        for (po, pn) in ov.chunks(ns).zip(nv.chunks(ns)) {
             worst = worst.max(pn[ns - 1] - po[ns - 1]);
         }
     }
@@ -3071,6 +3082,17 @@ pub fn solve_in_time_with(
         .iter()
         .map(|&m| matches!(model.materials()[m].1, Material::Creep { .. }))
         .collect();
+    // ADR 0668 D1: with the warm start the creep reading is cut to the material part of each element.
+    let cut: Option<Vec<usize>> = if model.incompatible_mode_warm_start() {
+        let layout = StateLayout::of(model)?;
+        Some(
+            (0..materials.len())
+                .map(|e| layout.points(e) * layout.values_per_point(e))
+                .collect(),
+        )
+    } else {
+        None
+    };
     let context = |t: f64, h: f64| -> Result<PointContext> {
         let c = PointContext::new().with_time(t, h)?;
         // ADR 0526 D2: the temperature history at the end time of the attempt.
@@ -3098,7 +3120,7 @@ pub fn solve_in_time_with(
         internal_force: eq.internal_force,
         halvings: 0,
         substeps: 1,
-        max_creep_increment: creep_increment(&creep, &start, &eq.states),
+        max_creep_increment: creep_increment(&creep, cut.as_deref(), &start, &eq.states),
         iterations: eq.residuals.len() - 1,
     }];
     let mut u = eq.u;
@@ -3121,7 +3143,7 @@ pub fn solve_in_time_with(
             };
             let failure = match attempt {
                 Ok(eq) => {
-                    let inc = creep_increment(&creep, &states, &eq.states);
+                    let inc = creep_increment(&creep, cut.as_deref(), &states, &eq.states);
                     if inc <= options.max_creep_increment {
                         iterations += eq.residuals.len() - 1;
                         substeps += 1;
@@ -3303,5 +3325,53 @@ impl<'a> Histories<'a> {
             }
         }
         (f, Cow::Owned(list), Cow::Owned(start))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// ADR 0668 D3, U1 to U3: `creep_increment` with the cut reads only the material part of a warm creep element.
+    #[test]
+    fn creep_increment_reads_the_material_part_with_the_warm_start() {
+        let ns = crate::mat_creep::STATE_SIZE;
+        let points = 8;
+        let n = points * ns;
+        // Element 0: creep, 8 points and nine trailing values; element 1: not creep (its values change by 5).
+        let mut old0 = vec![0.0; n + 9];
+        let mut new0 = vec![0.0; n + 9];
+        for p in 0..points {
+            old0[p * ns + ns - 1] = 1.0;
+            new0[p * ns + ns - 1] = 1.0 + if p == points - 1 { 0.3 } else { 0.1 };
+        }
+        for j in 0..9 {
+            old0[n + j] = 2.0;
+            new0[n + j] = 2.0 + 1e3;
+        }
+        let old1 = vec![0.0; n];
+        let new1 = vec![5.0; n];
+        let creep = [true, false];
+        let old = [ElementState::new(old0.clone()), ElementState::new(old1.clone())];
+        let new = [ElementState::new(new0.clone()), ElementState::new(new1.clone())];
+        let cut = [n, n];
+        let with_cut = creep_increment(&creep, Some(&cut), &old, &new);
+        // U1: the last point's increment, bitwise.
+        assert_eq!(with_cut.to_bits(), ((1.0 + 0.3) - 1.0f64).to_bits(), "U1: {with_cut:e}");
+        // U2: the same as the reading without the cut on the states without the trailing values.
+        let old_m = [ElementState::new(old0[..n].to_vec()), ElementState::new(old1)];
+        let new_m = [ElementState::new(new0[..n].to_vec()), ElementState::new(new1)];
+        let plain = creep_increment(&creep, None, &old_m, &new_m);
+        assert_eq!(
+            with_cut.to_bits(),
+            plain.to_bits(),
+            "U2: {with_cut:e} against {plain:e}"
+        );
+        // U3: no creep element, no increment.
+        assert_eq!(
+            creep_increment(&[false, false], None, &old_m, &new_m).to_bits(),
+            0.0f64.to_bits(),
+            "U3"
+        );
     }
 }
