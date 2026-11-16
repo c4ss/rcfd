@@ -9,7 +9,8 @@
 //!   bound). [`register_batch`] registers several hypotheses in one slot of the series, judged together by Holm's procedure.
 //! * [`register_with_floor`] (ADR 0665) registers a hypothesis with one or two held metrics (two are solved together by a damped
 //!   Newton iteration) and refuses a `min_effect` below [`K_RES`] times the held-tolerance floor of [`held_floor`]: the first-order
-//!   change of the paired difference that the held tolerances allow, at the domain midpoint.
+//!   change of the paired difference that the held tolerances allow, at the domain midpoint. A record with a [`FloorSample`]
+//!   (ADR 0670) takes the largest of that floor over the midpoint and a seeded sample of its design points.
 //! * [`run`] evaluates exactly the registered pairs (a seeded Latin hypercube of the domain, the factor at its low and high level,
 //!   the held metric matched by bisection on its compensating parameter) with a [`Model`], appends them as evidence entries in
 //!   pair order (whatever the worker count), resumes after a kill, and appends a `hypothesis_result` entry.
@@ -496,6 +497,14 @@ pub struct RerunSample {
     pub atol: f64,
 }
 
+/// A registered seeded sample of the design for the held-tolerance floor (ADR 0670 D1): `points` of the registered pairs, drawn
+/// by [`floor_sample_pairs`]; the floor of [`held_floor`] is then the largest over the domain midpoint and their design points.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FloorSample {
+    /// Number of design pairs sampled (`1..=n_pairs`).
+    pub points: usize,
+}
+
 /// The re-run sample of a hypothesis as [`verify`] derives it (ADR 0662 D2, D4).
 #[derive(Debug, Clone, PartialEq)]
 pub struct RerunPlan {
@@ -548,6 +557,9 @@ pub struct Hypothesis {
     pub replicates: Option<String>,
     /// Registered re-run sample (ADR 0662); `None` keeps the record of ADR 0624 bit for bit.
     pub rerun_sample: Option<RerunSample>,
+    /// Registered sample of the design for the held-tolerance floor (ADR 0670); `None` keeps the midpoint rule of ADR 0665 and
+    /// the record bit for bit.
+    pub floor_sample: Option<FloorSample>,
 }
 
 impl Hypothesis {
@@ -584,6 +596,7 @@ impl Hypothesis {
             supersedes: None,
             replicates: None,
             rerun_sample: None,
+            floor_sample: None,
         }
     }
 
@@ -625,6 +638,10 @@ impl Hypothesis {
                 "rerun_sample".into(),
                 json!({"pairs": r.pairs, "rtol": num(r.rtol), "atol": num(r.atol)}),
             );
+        }
+        // the same rule for the floor sample (ADR 0670 D1)
+        if let (Some(f), Some(o)) = (&self.floor_sample, v.as_object_mut()) {
+            o.insert("floor_sample".into(), json!({"points": f.points}));
         }
         v
     }
@@ -723,6 +740,15 @@ impl Hypothesis {
                 atol: f(r, "atol")?,
             }),
         };
+        let floor_sample = match v.get("floor_sample") {
+            None | Some(Value::Null) => None,
+            Some(r) => Some(FloorSample {
+                points: r
+                    .get("points")
+                    .and_then(Value::as_u64)
+                    .ok_or("record: floor_sample points missing")? as usize,
+            }),
+        };
         Ok(Hypothesis {
             claim_text: s(v, "claim_text")?,
             factor: Factor {
@@ -769,6 +795,7 @@ impl Hypothesis {
             supersedes: opt_id("supersedes"),
             replicates: opt_id("replicates"),
             rerun_sample,
+            floor_sample,
         })
     }
 
@@ -829,6 +856,17 @@ pub fn rerun_sample_size(n: usize, bad: usize, miss: f64) -> Option<usize> {
         return None;
     }
     (1..=n).find(|&k| rerun_miss_probability(n, bad, k) <= miss)
+}
+
+/// Seed of the floor sample: FNV-1a 64 of `<record hash>:floor:<seed>` (ADR 0670 D1).
+pub fn floor_seed(hash: &str, seed: u64) -> u64 {
+    fnv64(format!("{hash}:floor:{seed}").as_bytes())
+}
+
+/// The design pairs of the floor sample of `h`, ascending ([`rerun_pairs`] with [`floor_seed`]); `None` without a sample.
+pub fn floor_sample_pairs(h: &Hypothesis) -> Option<Vec<usize>> {
+    h.floor_sample
+        .map(|f| rerun_pairs(h.n_pairs, f.points, floor_seed(&h.hash(), h.seed)))
 }
 
 /// The re-run plan of a registered record (`None` without a sample).
@@ -1117,6 +1155,23 @@ fn validate(h: &Hypothesis, entries: &[Entry], regs: &[Registered], max_held: us
                 "rerun_sample: the evaluator is not declared deterministic, so a re-run at zero tolerances cannot reproduce it"
                     .into(),
             );
+        }
+    }
+    if let Some(f) = &h.floor_sample {
+        if f.points == 0 || f.points > h.n_pairs {
+            return Err(format!(
+                "floor_sample: {} points; it must lie in 1..={} (the registered pairs)",
+                f.points, h.n_pairs
+            ));
+        }
+        if max_held <= 1 {
+            return Err(
+                "floor_sample: `register` computes no held-tolerance floor; use `register_with_floor` (ADR 0670)"
+                    .into(),
+            );
+        }
+        if h.held.is_empty() {
+            return Err("floor_sample: no held metric, so there is no held-tolerance floor to sample".into());
         }
     }
     if let Origin::Exploratory { entries: refs } = &h.origin {
@@ -1590,17 +1645,47 @@ pub struct HeldFloor {
     pub probe: Vec<f64>,
     /// The solved arms.
     pub arms: Vec<ArmFloor>,
+    /// The floor sample (ADR 0670); `None` for the midpoint rule of ADR 0665.
+    pub sample: Option<SampledFloor>,
+}
+
+/// The floor over a sample of the design (ADR 0670 D2).
+#[derive(Debug, Clone, PartialEq)]
+pub struct SampledFloor {
+    /// Number of sampled pairs.
+    pub points: usize,
+    /// Seed of the draw ([`floor_seed`]).
+    pub seed: u64,
+    /// Sampled pairs, ascending.
+    pub pairs: Vec<usize>,
+    /// The floor at the domain midpoint.
+    pub midpoint: f64,
+    /// The floor at the design point of each sampled pair (`pairs` order).
+    pub values: Vec<f64>,
+    /// The pair of the largest point (`None`: the midpoint).
+    pub largest: Option<usize>,
 }
 
 impl HeldFloor {
     fn to_json(&self) -> Value {
         let nums = |v: &[f64]| v.iter().map(|x| num(*x)).collect::<Vec<_>>();
-        json!({
+        let mut v = json!({
             "value": num(self.value), "k": num(K_RES), "probe": nums(&self.probe),
             "arms": self.arms.iter().map(|a| json!({
                 "arm": a.arm.as_str(), "by": nums(&a.by), "sensitivity": nums(&a.sensitivity), "bound": num(a.bound),
             })).collect::<Vec<_>>(),
-        })
+        });
+        // written only with a sample, so a midpoint floor keeps its bytes (ADR 0670 D3)
+        if let (Some(f), Some(o)) = (&self.sample, v.as_object_mut()) {
+            o.insert(
+                "sample".into(),
+                json!({
+                    "points": f.points, "seed": f.seed, "pairs": f.pairs, "midpoint": num(f.midpoint),
+                    "values": nums(&f.values), "largest": f.largest,
+                }),
+            );
+        }
+        v
     }
 }
 
@@ -1623,11 +1708,11 @@ fn probe_eval(model: &dyn Model, h: &Hypothesis, x: &[f64], arm: Arm, u: &[f64])
 fn arm_floor(
     model: &dyn Model,
     h: &Hypothesis,
-    (x, arm): (&[f64], Arm),
+    (x, arm, place): (&[f64], Arm, &str),
     (p, o): (&[Quantity], &Outcome),
     targets: &[f64],
 ) -> Result<ArmFloor, String> {
-    let where_ = format!("held: the floor probe at the domain midpoint, arm {}", arm.as_str());
+    let where_ = format!("held: the floor probe at {place}, arm {}", arm.as_str());
     let g = held_values(o, h).ok_or_else(|| format!("{where_}: the evaluation failed or a held metric is missing"))?;
     if metric_of(o, &h.response.name, &h.response.unit).is_none() {
         return Err(format!("{where_}: the response '{}' is missing", h.response.name));
@@ -1687,15 +1772,61 @@ fn arm_floor(
 /// The held-tolerance floor of `h` with `model` (ADR 0665 D2): at the domain midpoint, each arm solved as its evidence would be,
 /// `phi = sum_j |S_j| tolerance_j` with `S = J^{-T} grad_u y` by differences; `phi_low + phi_high` for value targets, `phi_high`
 /// for as_low_arm targets (the low arm has no residual). First order: the change of the paired difference that the held
-/// tolerances allow.
+/// tolerances allow. With a registered [`FloorSample`] (ADR 0670 D2) the largest of that floor over the domain midpoint and the
+/// design points of the sampled pairs ([`floor_sample_pairs`]); the first point reaching it gives `probe` and `arms`.
 pub fn held_floor(h: &Hypothesis, model: &dyn Model) -> Result<HeldFloor, String> {
+    let mid: Vec<f64> = h.domain.iter().map(|b| b.lo + 0.5 * (b.hi - b.lo)).collect();
+    let Some(fs) = h.floor_sample else {
+        return floor_at(h, model, &mid, "the domain midpoint");
+    };
+    let hash = h.hash();
+    let seed = floor_seed(&hash, h.seed);
+    let pairs = rerun_pairs(h.n_pairs, fs.points, seed);
+    let pts = design_points(h, derived_seed(&hash, h.seed));
+    let first = floor_at(h, model, &mid, "the domain midpoint")?;
+    let midpoint = first.value;
+    let mut best = first;
+    let mut largest = None;
+    let mut values = Vec::with_capacity(pairs.len());
+    for &i in &pairs {
+        let f = floor_at(h, model, &pts[i], &format!("design pair {i} of the floor sample"))?;
+        values.push(f.value);
+        if f.value > best.value {
+            best = f;
+            largest = Some(i);
+        }
+    }
+    best.sample = Some(SampledFloor {
+        points: fs.points,
+        seed,
+        pairs,
+        midpoint,
+        values,
+        largest,
+    });
+    Ok(best)
+}
+
+/// The held-tolerance floor of ADR 0665 D2 at one point `x` of the domain (domain order); `sample` is `None` (ADR 0670 D3).
+pub fn held_floor_at(h: &Hypothesis, model: &dyn Model, x: &[f64]) -> Result<HeldFloor, String> {
+    if x.len() != h.domain.len() {
+        return Err(format!(
+            "held: the floor point has {} coordinates, the domain {}",
+            x.len(),
+            h.domain.len()
+        ));
+    }
+    floor_at(h, model, x, "the given point")
+}
+
+fn floor_at(h: &Hypothesis, model: &dyn Model, x: &[f64], place: &str) -> Result<HeldFloor, String> {
     if h.held.is_empty() {
         return Err("held: no held metric, so there is no held-tolerance floor".into());
     }
     if !same_target_kind(&h.held) {
         return Err("held: targets must be all values or all as_low_arm (a mix is not covered, ADR 0665)".into());
     }
-    let x: Vec<f64> = h.domain.iter().map(|b| b.lo + 0.5 * (b.hi - b.lo)).collect();
+    let x = x.to_vec();
     let as_low = matches!(h.held[0].target, HeldTarget::AsLowArm { .. });
     let values: Vec<f64> = h
         .held
@@ -1706,20 +1837,21 @@ pub fn held_floor(h: &Hypothesis, model: &dyn Model) -> Result<HeldFloor, String
         })
         .collect();
     let (pl, ol, _) = eval_arm(model, h, &x, Arm::Low, None);
-    let low = held_values(&ol, h).ok_or(
-        "held: the floor probe at the domain midpoint, arm low: the evaluation failed or a held metric is missing",
-    )?;
+    let low = held_values(&ol, h).ok_or_else(|| {
+        format!("held: the floor probe at {place}, arm low: the evaluation failed or a held metric is missing")
+    })?;
     let mut arms = Vec::new();
     if !as_low {
-        arms.push(arm_floor(model, h, (&x, Arm::Low), (&pl, &ol), &values)?);
+        arms.push(arm_floor(model, h, (&x, Arm::Low, place), (&pl, &ol), &values)?);
     }
     let (ph, oh, _) = eval_arm(model, h, &x, Arm::High, Some(&low));
     let high_targets = if as_low { low.clone() } else { values };
-    arms.push(arm_floor(model, h, (&x, Arm::High), (&ph, &oh), &high_targets)?);
+    arms.push(arm_floor(model, h, (&x, Arm::High, place), (&ph, &oh), &high_targets)?);
     Ok(HeldFloor {
         value: arms.iter().map(|a| a.bound).sum(),
         probe: x,
         arms,
+        sample: None,
     })
 }
 
@@ -1750,6 +1882,14 @@ pub fn register_with_floor(ledger: &Ledger, h: &Hypothesis, model: &dyn Model) -
         )));
     }
     let floor = held_floor(h, model).map_err(fail)?;
+    if let (Some(f), true) = (&floor.sample, h.min_effect < K_RES * floor.value) {
+        let at = f.largest.map_or("the midpoint".to_string(), |i| format!("pair {i}"));
+        return Err(fail(format!(
+            "min_effect: {} is below {K_RES} times the held-tolerance floor {} of '{}' over the domain midpoint and {} sampled \
+             design pairs (largest at {at}; the midpoint floor is {}; ADR 0670)",
+            h.min_effect, floor.value, h.response.name, f.points, f.midpoint
+        )));
+    }
     if h.min_effect < K_RES * floor.value {
         return Err(fail(format!(
             "min_effect: {} is below {K_RES} times the held-tolerance floor {} of '{}' (the change of the paired difference \
@@ -1940,6 +2080,53 @@ fn check_member(entries: &[Entry], regs: &[Registered], counts: &[(String, usize
                     at(reg.index)
                 )),
             },
+        }
+        // the floor sample (ADR 0670 D3): required by a record that registers one, its pairs and its largest checked
+        let stored = entries[reg.index].settings.get("held_floor").filter(|f| !f.is_null());
+        let sample = stored.and_then(|f| f.get("sample")).filter(|x| !x.is_null());
+        match (h.floor_sample.is_some(), stored, sample) {
+            (true, None, _) => v.problems.push(format!(
+                "{}: the record of {id} registers a floor sample and its registration carries no held-tolerance floor (ADR 0670)",
+                at(reg.index)
+            )),
+            (true, Some(_), None) => v.problems.push(format!(
+                "{}: the record of {id} registers a floor sample and its stored held-tolerance floor carries none (ADR 0670)",
+                at(reg.index)
+            )),
+            (false, _, Some(_)) => v.problems.push(format!(
+                "{}: the stored held-tolerance floor of {id} carries a floor sample its record does not register (ADR 0670)",
+                at(reg.index)
+            )),
+            (true, Some(f), Some(x)) => {
+                let pairs: Option<Vec<usize>> = x
+                    .get("pairs")
+                    .and_then(Value::as_array)
+                    .and_then(|a| a.iter().map(|q| q.as_u64().map(|q| q as usize)).collect());
+                if pairs != floor_sample_pairs(h) {
+                    v.problems.push(format!(
+                        "{}: the sampled pairs of the held-tolerance floor of {id} do not match its record (ADR 0670)",
+                        at(reg.index)
+                    ));
+                }
+                let mut all: Vec<Option<f64>> = vec![x.get("midpoint").and_then(Value::as_f64)];
+                if let Some(a) = x.get("values").and_then(Value::as_array) {
+                    all.extend(a.iter().map(Value::as_f64));
+                }
+                let largest = all
+                    .iter()
+                    .copied()
+                    .collect::<Option<Vec<f64>>>()
+                    .and_then(|a| a.into_iter().reduce(f64::max));
+                let value = f.get("value").and_then(Value::as_f64);
+                let same = matches!((value, largest), (Some(a), Some(b)) if a.to_bits() == b.to_bits());
+                if !same {
+                    v.problems.push(format!(
+                        "{}: the stored held-tolerance floor of {id} ({value:?}) is not the largest of its sample ({largest:?}; ADR 0670)",
+                        at(reg.index)
+                    ));
+                }
+            }
+            (false, _, None) => {}
         }
     }
     v.withdrawn = entries
