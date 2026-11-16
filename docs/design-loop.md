@@ -414,6 +414,29 @@ interactions (`ST_i - S_i`) and non-monotone effects; an input the model does no
 evaluation is dropped as a whole. Every evaluation and a `sobol_summary` entry can be written to the ledger; the result does not
 depend on the worker count. It is opt-in, verified on the Ishigami function and a linear function, and has no MCP tool.
 
+## Fan objective over impedance points and tolerances (ADR 0620, library only)
+
+`design::fan_objective` states a fan objective once and builds an ordinary study from it, so Nelder-Mead, CMA-ES, NSGA-II, the
+study store and the ledger sink run it unchanged:
+
+* `FanObjective` holds the parameters (with units), the impedance points (`ImpedancePoint`: a system curve `dp = k Q^2 + l Q`
+  and a weight), the terms (`Term`: metric, sense, statistic over the tolerance specimens `TolStat`, combination over the points
+  `Over`, weight), the limits (`Limit`: held at every point, or on an aggregate over the points) and an optional
+  `TolerancePlan` (`n` specimens from one seed for every candidate, so the objective is deterministic; failed specimens are
+  dropped and counted up to `max_failed_fraction`, default 0).
+* The statistic is taken over the specimens at each point first (sample sd, divisor `n - 1`; `mean + k sd` of the minimised
+  quantity), the combination over the points second (`Robust` of the study, population sd). There is no default for either.
+* A model is a `SpecimenModel` (nominal and perturbed specimens, metrics at a point). `FanRomTarget` is the reduced-order fan of
+  ADR 0119 on a `ComputerFan`: flow, pressure rises, power, efficiencies, the first tone (`tone1_pa`, `tone1_db`), the
+  A-weighted sum of the first three tones (`tone_a3_db`), and the static-unbalance force of the specimen's blades
+  (`unbalance`, `unbalance_force`). Per-blade aero, eccentricity and roughness tolerances are refused.
+* Ledger: `ledger_sink` gives the study sink with every unit (one entry per candidate and point); `append_scores` writes one
+  `objective_score` entry per candidate with `objective` (id, version and hash of the objective record) and `parents` (its point
+  entries); `ObjectiveModel` re-runs a score entry for `rerun_check`.
+
+A typical first formulation: minimise `tone_a3_db` (or `tone1_db`) subject to a flow limit at every impedance point and a power
+cap. Every number is a model proxy: no measured fan data exists, so the objective ranks variants of the model, not real fans.
+
 ## Code map
 
 The code is `crates/rcfd-api/src/design/`:
@@ -434,6 +457,7 @@ The code is `crates/rcfd-api/src/design/`:
 | `ledger` | design ledger across studies (ADR 0121): entries with units, verdicts, tiers, queries, export, re-run check |
 | `uq` | tolerance / uncertainty study driver (ADR 0121): distributions, MC and replicated LHS, stopping rule, statistics, SRC |
 | `sensitivity` | first-order and total Sobol indices with standard errors (ADR 0240) |
+| `fan_objective` | fan objective over impedance points and tolerances, the reduced-order fan target (ADR 0620) |
 
 ## Where to go next
 
