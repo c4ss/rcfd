@@ -14953,7 +14953,9 @@ fixed by the item's registration ADR before any code.
     item's own checks (all those registered as catchable). Not covered: history materials, the transient and rotating
     paths and the line search with the warm start, the trust region with the warm start, statistics beyond fourteen
     set-ups. Follow-up F-742 (The warm start of the incompatible-mode iteration on a history material and on the
-    transient and rotating paths).
+    transient and rotating paths). ADR 0666 (F-742, 2026-11-16): W runs with a J2 material, on the transient path and on
+    the rotating path; the reaction gap of rule L against F-bar with J2 is the element's, not the warm start's. With W,
+    a creep or viscoelastic material would read the committed modes as a point (found by reading, F-748).
 - [~] **F-742** The warm start of the incompatible-mode iteration on a history material and on the transient and rotating paths
   - depends on: F-740
   - acceptance: Every limit not stated here is registered in the ADR before the run. The remedy W of ADR 0660 with a J2
