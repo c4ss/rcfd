@@ -688,8 +688,27 @@ pub struct Ledger {
     private: bool,
 }
 
-/// The ancestor directory of `path` that makes it part of a repository tree (holds `.git` or a workspace `Cargo.toml`).
-pub fn repository_ancestor(path: &Path) -> Option<PathBuf> {
+/// Name of the project-mode marker of ADR 0185 / ADR 0135 (`rcfd_project::project::MANIFEST`; a test in `rcfd-workspace`
+/// keeps the two equal).
+pub const PROJECT_MARKER: &str = "rcfd-project.json";
+
+/// Test of one directory for one repository marker.
+type MarkerTest = fn(&Path) -> bool;
+
+/// Repository markers in the order they are tested in one directory (ADR 0632, ADR 0647 D1): the name shown, and the test.
+const MARKERS: [(&str, MarkerTest); 5] = [
+    (".git", |d| d.join(".git").exists()),
+    ("Cargo.toml [workspace]", |d| {
+        std::fs::read_to_string(d.join("Cargo.toml")).is_ok_and(|t| t.contains("[workspace]"))
+    }),
+    (".hg", |d| d.join(".hg").exists()),
+    (".svn", |d| d.join(".svn").exists()),
+    (PROJECT_MARKER, |d| d.join(PROJECT_MARKER).exists()),
+];
+
+/// The nearest ancestor directory of `path` that makes it part of a repository tree, and the name of the first marker it
+/// holds: `.git`, a `Cargo.toml` with `[workspace]`, `.hg`, `.svn` or the project manifest [`PROJECT_MARKER`] (ADR 0647).
+pub fn repository_marker(path: &Path) -> Option<(PathBuf, &'static str)> {
     let abs = if path.is_absolute() {
         path.to_path_buf()
     } else {
@@ -711,13 +730,17 @@ pub fn repository_ancestor(path: &Path) -> Option<PathBuf> {
         }
     };
     let full = rest.iter().rev().fold(canon, |p, n| p.join(n));
-    full.ancestors()
-        .skip(1)
-        .find(|d| {
-            d.join(".git").exists()
-                || std::fs::read_to_string(d.join("Cargo.toml")).is_ok_and(|t| t.contains("[workspace]"))
-        })
-        .map(Path::to_path_buf)
+    full.ancestors().skip(1).find_map(|d| {
+        MARKERS
+            .iter()
+            .find(|(_, test)| test(d))
+            .map(|(name, _)| (d.to_path_buf(), *name))
+    })
+}
+
+/// The ancestor directory of `path` that makes it part of a repository tree (see [`repository_marker`]).
+pub fn repository_ancestor(path: &Path) -> Option<PathBuf> {
+    repository_marker(path).map(|(d, _)| d)
 }
 
 impl Ledger {
@@ -732,11 +755,11 @@ impl Ledger {
     }
 
     /// Private ledger at `path` (ADR 0632 D2, ADR 0622 D7): may hold `measured` content. Refused, before anything is written,
-    /// when `path` lies inside a repository tree (see [`repository_ancestor`]).
+    /// when `path` lies inside a repository tree (see [`repository_marker`]); the message names the directory and its marker.
     pub fn private(path: &Path) -> Result<Ledger, String> {
-        if let Some(a) = repository_ancestor(path) {
+        if let Some((a, m)) = repository_marker(path) {
             return Err(format!(
-                "private ledger: {} lies inside the repository tree at {}; give a path outside any repository",
+                "private ledger: {} lies inside the repository tree at {} (marker {m}); give a path outside any repository",
                 path.display(),
                 a.display()
             ));
