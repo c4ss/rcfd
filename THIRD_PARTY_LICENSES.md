@@ -553,7 +553,7 @@ Pinned to exact versions in `apps/studio-web/package.json` and justified in ADR 
 | @types/react-dom | 19.3.0 | `MIT` | `devDependencies` |
 | @types/three | 0.187.0 | `MIT` | `devDependencies` |
 | @vitejs/plugin-react | 6.3.0 | `MIT` | `devDependencies` |
-| electron | 45.1.0 | `MIT` | `devDependencies` |
+| electron | 45.3.3 | `MIT` | `devDependencies` |
 | typescript | 7.0.2 | `Apache-2.0` | `devDependencies` |
 | vite | 8.3.8 | `MIT` | `devDependencies` |
 
@@ -647,7 +647,7 @@ Development packages are build and test tools; the built app contains only the r
 | csstype | 3.2.3 | `MIT` | runtime |
 | debug | 4.4.3 | `MIT` | development |
 | detect-libc | 2.1.2 | `Apache-2.0` | development |
-| electron | 45.1.0 | `MIT` | development |
+| electron | 45.3.3 | `MIT` | development |
 | env-paths | 3.0.0 | `MIT` | development |
 | fdir | 6.5.0 | `MIT` | development |
 | fflate | 0.8.3 | `MIT` | development |

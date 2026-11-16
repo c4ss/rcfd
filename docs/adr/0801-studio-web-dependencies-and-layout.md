@@ -1,6 +1,6 @@
 # ADR 0801: The dependencies and the directory layout of apps/studio-web
 
-Status: PROPOSED 2026-11-16, for the maintainer to accept. Follow-up of [ADR 0800](0800-electron-studio-roadmap.md) for
+Status: ACCEPTED by the maintainer 2026-11-16 (answers in section 7). Follow-up of [ADR 0800](0800-electron-studio-roadmap.md) for
 F-800. ADR 0800 §5 named the prototype's dependency list as "the starting point for F-800's justification, not an approval
 of it"; this ADR is that justification (guardrail G5). F-800 stays `partial` until the maintainer accepts it or answers
 the questions in §6.
@@ -44,7 +44,7 @@ is committed. All versions are the ones the prototype already builds with, excep
 
 | Package | Version | Licence | Why it | Alternatives considered |
 |---|---|---|---|---|
-| `electron` | 45.1.0 | MIT | The shell (ADR 0350 Q5 (a)). 45.1.0 is the version the spike measured every limit of G9 on; it is in the current stable line (45.0.0 was released 2026-10-21; 43, 44 and 45 are the supported majors), which G10 asks for. It bundles Chromium 156 and Node 24.22.1. The npm package is small; it downloads the binary on first use, so `npm ci` stays fast. A dev dependency by Electron's own convention: the packager (F-820) ships the binary, not the npm package. | Tauri (system web view: WebGPU support differs per platform, and the measurements of ADR 0350 do not carry over), NW.js (smaller community, no measured numbers). |
+| `electron` | 45.3.3 | MIT | The shell (ADR 0350 Q5 (a)). The spike measured every limit of G9 on 45.1.0; the maintainer chose the 45.3.3 security patch for F-800 (Q1 (b)), and F-801 measures P10 again on it; it is in the current stable line (45.0.0 was released 2026-10-21; 43, 44 and 45 are the supported majors), which G10 asks for. It bundles Chromium 156 and Node 24.22.1. The npm package is small; it downloads the binary on first use, so `npm ci` stays fast. A dev dependency by Electron's own convention: the packager (F-820) ships the binary, not the npm package. | Tauri (system web view: WebGPU support differs per platform, and the measurements of ADR 0350 do not carry over), NW.js (smaller community, no measured numbers). |
 | `vite` | 8.3.8 | MIT | The maintainer's choice; builds the renderer (`vite build`) and serves it in development with hot reload. Brings `rolldown` (bundler), `lightningcss` (MPL-2.0, CSS, build only) and `postcss`. | webpack (slower, more configuration), esbuild alone (no dev server with React refresh), Parcel. |
 | `@vitejs/plugin-react` | 6.3.0 | MIT | JSX and React fast refresh in Vite; the version that matches Vite 8. | `@vitejs/plugin-react-swc` (adds a native SWC binary for no measured gain at this size). |
 | `typescript` | 7.0.2 | Apache-2.0 | Type checking of all three processes, and the compiler of the main and preload scripts (no bundler for them, §3). 7.x is the native compiler; the prototype already type-checks with it. | TypeScript 6.x, the JavaScript compiler (slower; the fallback if a later tool needs the JavaScript API, §6 Q3). |
@@ -170,3 +170,15 @@ docs_site`: `2 passed; 0 failed`. No Rust file, test or golden changed.
   Recommendation: (a): one rule for both ecosystems, and `--check` keeps it true.
 - **Q5, accept this ADR.** Accepting it accepts the fourteen dependencies of §2, the layout of §3 and the policy of §4,
   and lets F-800 be marked done.
+
+## 7. Answers of the maintainer (2026-11-16)
+
+- **Q1:** (b), move to Electron 45.3.3 now. Applied in F-800: `npm install --save-exact --save-dev electron@45.3.3`,
+  then `npx tsc --noEmit`, `npm run build` and `python scripts/third_party_licenses.py --check` pass. The G9 numbers of
+  ADR 0350 were measured on 45.1.0; F-801 measures P10 again on 45.3.3.
+- **Q2:** add the weekly, grouped npm Dependabot entry for `/apps/studio-web` together with the CI job of F-823; update
+  by hand until then.
+- **Q3:** keep TypeScript 7.0.2.
+- **Q4:** keep the full npm licence list (every lock-file entry).
+- **Q5:** ADR 0801 accepted: the 14 direct dependencies, the layout, the pin and update policy, and the change to
+  `scripts/third_party_licenses.py`. F-800 is done.
