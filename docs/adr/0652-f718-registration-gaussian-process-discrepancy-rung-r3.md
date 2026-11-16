@@ -278,3 +278,15 @@ mutations run on the code with the floor.
 
 Decision rule, as registered, applied to the corrected runs; the S2 miss of the registered design and the L3s misses are reported
 with the decision, and with the L3s misses the decision is at most partial (L3s is a non-acceptance check).
+
+## Amendment 2 (2026-11-16, after the corrected runs of amendment 1, before a second corrected ND run)
+
+The corrected run (code 57df8d5c, log `f718-scratch/run2.log`): `n1a_corrected`, `n1b_corrected`, `n2_corrected`,
+`n3_corrected` and the earlier passing tests passed; `nd_corrected` failed on X1's "at least 1 flagged": **0 of 500** queries
+were flagged. Set-up defect: with 36 pairs spread by the explore picks over a two-parameter box, `h_max = 0.25` and margin 0.05,
+the calibrated region covers the whole box, so a query inside the box is never flagged and X1 could not test the flagged
+branch; T6, after X1 in the same test, did not run. Corrected set-up: X1 and T6 use the 500 registered queries plus 100 queries
+at `latin_hypercube(100, 2, 718_052)` with `x1` scaled to [1.1, 1.5] (outside the box beyond the margin; `predict` takes any
+point) and `x2` over its box. Limits unchanged (flagged values bit for bit, unflagged within 1e-12 relative, at least 1
+flagged; round trip bit-equal). `nd_corrected` stays as the ignored record `nd_corrected_known_miss`; the new test is
+`nd_corrected2`, run once.
