@@ -993,6 +993,8 @@ pub struct SolidModel {
     hyperelastic_structures: bool,
     /// ADR 0614 D2: the nonlinear driver evaluates an Incompatible Hex8 with the stabilisation of its modes (default `false`).
     incompatible_stabilisation: bool,
+    /// ADR 0635 D2: the centrifugal load of a Shell4 layup takes the force of its first mass moment (default `false`).
+    layup_first_moment_force: bool,
 }
 
 impl SolidModel {
@@ -1006,7 +1008,21 @@ impl SolidModel {
             supports: Vec::new(),
             hyperelastic_structures: false,
             incompatible_stabilisation: false,
+            layup_first_moment_force: false,
         }
+    }
+
+    /// Whether the centrifugal load of a Shell4 layup takes the force of its first mass moment (ADR 0635 D2).
+    pub fn layup_first_moment_force(&self) -> bool {
+        self.layup_first_moment_force
+    }
+    /// Opts in (`true`) to the force term `m1 Omega^2 P e_3` of the through-thickness integral of the centrifugal body force on
+    /// a Shell4 layup of more than one ply (ADR 0635 D1, D2: [`crate::shell::layup_body_load_vector_affine_at`]), so that the
+    /// load has no torque about the axis on any flat facet. Off (the default), the load of ADR 0502 D1 (`m0 b` and the moment
+    /// `m1 e_3 x b`), which has a torque about the axis on a facet without mirror symmetry about a meridian plane when `m1 != 0`
+    /// (ADR 0633 D1). Loads of `Shell` blocks, one-ply layups, Shell3 and solids are the same either way (their `m1` is zero).
+    pub fn set_layup_first_moment_force(&mut self, on: bool) {
+        self.layup_first_moment_force = on;
     }
 
     /// Whether the nonlinear driver stabilises the modes of an Incompatible Hex8 (ADR 0614 D2).
