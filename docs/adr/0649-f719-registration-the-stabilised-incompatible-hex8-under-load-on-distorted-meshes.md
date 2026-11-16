@@ -346,3 +346,114 @@ is not measured. Interpretation registered: a rule L ratio falling by a factor o
 negative count) says rule L approaches a loss of stability (a limit or bifurcation point) on this mesh under the punch edge;
 a ratio within a factor 2 of its value at `0.05` says the tangent stays well-conditioned and the failure is the Newton iterate
 inverting element 476 from a stable state. A solve that fails is printed as such. The decision rule is unchanged.
+
+## Addendum 1: results (2026-11-16)
+
+The registered run was made once on the test commit 3026f1d0 (`run1-default.log` in the scratch folder, 21.7 s); the diagnoses
+of amendments 1 and 2 once each (`a1-diagnosis.log`, `a2-diagnosis.log`); the met rows of A1.1 once (`run2-met-rows.log`,
+39.9 s, every checked row identical to the registered run); the mutations once each (`mutations.log`, `mut-MU*.log`); B6, S5,
+S6 once (`b6.log`, `s5-baseline.log`, `s6-fmt.log`). No limit, set-up, seed or measure was changed after a run. rcfd reproduced
+the probe to four or more digits in every row the probe converged on, and M0 to four digits (the meshes are the probe's).
+
+### Results
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| M0 block `4^3`, `8^3` (0.1, 0.25) | `> 0` | `0.6977`, `0.2179`; `0.6648`, `0.0762` | yes |
+| M0 cantilever `10 x 2 x 2`, `20 x 4 x 4` | `> 0` | `0.8557`, `0.6113`; `0.6611`, `0.0773` | yes |
+| M1 | `27`, `343`, `9`, `171` | `27`, `343`, `9`, `171` | yes |
+| DB1 `e_R`, `e_w` (`4^3`, 0.1) | `<= 0.15` | `0.1202`, `0.0406` | yes |
+| DB2 (`4^3`, 0.25) | `<= 0.15` | `0.1278`, `0.0870` | yes |
+| DB3 (`8^3`, 0.1) | `<= 0.10` | `0.0664`, `0.0349` | yes |
+| DB4 (`8^3`, 0.25) | `<= 0.10` | **NaN, NaN: the rule L solve fails** (element 476 inverted at load factor `0.675`) | **no** (known miss) |
+| DC1 `e_P`, `e_d` (`10 x 2 x 2`, 0.1) | `<= 0.15` | `0.0580`, `0.0058` | yes |
+| DC2 (`10 x 2 x 2`, 0.25) | `<= 0.15` | `0.0694`, `0.0045` | yes |
+| DC3 (`20 x 4 x 4`, 0.1) | `<= 0.10` | `0.0203`, `0.0027` | yes |
+| DC4 (`20 x 4 x 4`, 0.25) | `<= 0.10` | `0.0297`, `0.0028` | yes |
+| N1 block | `>= 0.15`, `0.15`, `0.10`, `0.10` | `0.791`, `0.821`, `0.395`, `0.405` | yes |
+| N1 cantilever | `>= 0.15`, `0.15`, `0.10`, `0.10` | `0.741`, `0.767`, `0.345`, `0.362` | yes |
+| SL rule L, negative count | `0` | `0` on seven meshes; **NaN on `8^3`, 0.25** (no state) | **no** on one (known miss) |
+| SL rule L, lowest / max diagonal | `> 0` | block `6.63e-3`, `6.01e-3`, `1.94e-3`, **NaN**; cantilever `1.57e-5`, `1.53e-5`, `5.16e-6`, `4.54e-6` | **no** on one (known miss) |
+| SLx (coarse meshes) | `<= 1e-6` | `2.5e-14`, `1.6e-14` (block), `1.9e-11`, `3.6e-11` (cantilever) | yes |
+| FR1 (F-bar, eight meshes) | `<= 1e-6` | block `1.44e-10`, `1.40e-10`, `1.81e-10`, `1.53e-10`; cantilever `2.10e-10`, `2.10e-10`, `1.98e-10`, `3.04e-10` | yes |
+| FR2 | `<= 1e-5`, `1e-5`, `2e-5`, `2e-5` | `9.8e-7`, `7.0e-7`, `5.5e-6`, `8.5e-6` | yes |
+| NF1 | `>= 0.1` | `0.361` (smallest element; largest `0.557`) | yes |
+| B5 | empty | `git diff d40cd665 -- crates/*/src`: 0 lines | yes |
+| B6 | pass | the four bit records pass | yes |
+| S5 | pass | 3 passed, 1 ignored | yes |
+| S6 | clean | `cargo fmt -p rcfd-fem --check` and `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean | yes |
+
+Reported (no limit). F-bar's SL: no negative eigenvalue on any of the eight meshes, ratios block `8.04e-3`, `7.12e-3`,
+`2.68e-3`, `2.39e-3`, cantilever `1.76e-5`, `1.67e-5`, `5.72e-6`, `4.82e-6` (rule L's are 73 to 94 per cent of F-bar's). The
+plain element: coarse block `e_R = 0.0575`, `e_w = 0.0108` at 0.1, **fails at 0.25** (element 53 inverted, load factor
+`0.675`); coarse cantilever `0.0530`, `0.0057` (0.1) and `0.0636`, `0.0043` (0.25). The distortion change against the regular
+mesh: F-bar's punch reaction `-0.4` to `-0.7` per cent, rule L's `-0.2` to `-0.8`; the coarse corner bulge F-bar `-1.2`, `-2.4`
+per cent, rule L `+1.5`, `+4.6`; the tip reaction F-bar `+0.1` to `+0.6`, rule L `+0.2` to `+1.7`. N2 (the Full corner
+displacement against F-bar): `0.077`, `0.054`, `0.104`, `0.101`. Every solve that converged took 10 increments.
+
+### Deviations
+
+- **DB4 and SL on `8^3` at `a = 0.25`** (amendment 1): rule L fails there; the known-miss record is
+  `db_punch_block_distorted_against_fbar_known_miss`, the met rows run as `db_punch_block_distorted_met_rows`.
+- **Diagnosis** (amendments 1, 2). The failure is at the same punch displacement (`0.0673` to `0.0678`) for increments from
+  `0.01` to `0.0003` (D1, D2), always element 476 (top layer, at the corner of the punch edge; its own corner ratio `0.308`, not
+  the mesh's worst). Along the path the free tangent of rule L stays positive definite and its lowest eigenvalue barely moves
+  (D4: `2.41e-3` at `0.05`, `2.36e-3` at `0.06`, `2.31e-3` at `0.065`, `2.29e-3` at `0.067`; F-bar `2.60e-3` to `2.52e-3`; no
+  negative eigenvalue), and the solve to `0.067` converges (with three halved increments). By the interpretation registered in
+  A2.1 the miss is **not a loss of stability of rule L**: a Newton iterate inverts a point of one element at the singular punch
+  edge from a stable state. The condensed global tangent does not see an incompatible-mode field that drives one point's
+  `det F` towards zero, and the driver rejects the inverted trial. The probe passed the same load because it does not test the
+  iterates for inversion (arithmetic 2, P2). The plain element fails the same way on the coarse block (element 53, the same
+  corner, the same load factor `0.675`). Not diagnosed further: whether the driver's line search (`NewtonOptions::line_search`,
+  not used), a guard on the mode update or a smaller element at the edge would pass; no run was made to find out.
+- **NF1's estimate**: measured `0.361` (smallest element) against the probe's `0.561`. The probe compared two difference-quotient
+  Hessians; rcfd compares the Full analytic tangent with the F-bar force differences at rcfd's F-bar state. The limit `0.1` is met
+  by a factor of 3.6.
+- **MU25** was registered "not FR2 or the load checks"; it is also caught by every cantilever row and FR2's cantilever rows:
+  with the mean part of its tangent dropped the F-bar cantilever solves do not converge (the block solves do).
+
+### Mutations (scratch copy, the default tests of `si_eas_hg5.rs` and `si_eas_hg3.rs`, each run once)
+
+| Id | Caught | By |
+|---|---|---|
+| MU21 (rule L made `Off`) | yes | HF3, S3b L, E1L of `si_eas_hg3.rs`; in this file the met rows: the plain element fails on `4^3` at 0.25 and on `8^3` at 0.1 (DB2, DB3, SL NaN) |
+| MU22 (rule L times 4) | yes | DB1 `e_R = 0.1721`, DB2 `0.1790` (probe `0.172`, `0.179`); HF3 O2, S3b L, E1L |
+| MU24 (F-bar `a2m1 = 0`) | yes, by this file | FR1 on all eight meshes (`3.7e-2` to `3.2e-1`), FR2 (`1.7e-2`, `3.0e-2`, `1.1e-3`, `1.7e-3`); `si_eas_hg3.rs` passes |
+| MU25 (F-bar mean tangent dropped) | yes, by this file | FR1 on the block meshes (`2.6e-2` to `3.7e-2`); the F-bar cantilever solves fail (DC1 to DC4, FR2 cantilever rows); `si_eas_hg3.rs` passes |
+
+Four of four caught; the two mutations of the reference by this item's own file (the c6 control; ADR 0636 remaining question 1
+answered by construction).
+
+### Not run
+
+Nothing registered was skipped. The ADR 0628 sweep and the ADR 0608 checks were not repeated (registered as not covered). The
+whole rcfd-fem suite was not run (the lead runs the gate): `si_eas_hg5.rs`, `si_eas_hg3.rs` under the mutations, B6 and S5.
+
+### Decision
+
+**partial**, by the registered rule: B5, B6, S5, S6, FR1, FR2, NF1 met, every mutation caught (MU24 and MU25 by this file), but
+DB4 and SL missed on one of the eight meshes (rule L cannot be solved on the refined block at `0.25 h`). Every other clause of
+the acceptance is met: on the other seven distorted meshes rule L is within `0.128` (coarse) and `0.066` (refined) of the F-bar
+punch reaction and within `0.069` and `0.030` of the F-bar tip reaction, where the Full Hex8 is `0.35` to `0.82` off; the loaded
+state is positive definite on those seven; the reference's controls are in the item's tests and see a broken reference.
+
+### Remaining questions
+
+1. **Rule L at the punch edge of the strongly distorted refined block.** Options: (a) record it as a limit of rule L (an iterate
+   inversion at a singular edge on a mesh with corner ratios down to `0.08`) and close; (b) a follow-up that locates the cause
+   and measures whether the driver's line search or an opt-in guard on the incompatible-mode update lets rule L pass the same
+   load, tests first, a library change only behind an opt-in; (c) a mesh-quality rule (refuse or warn below a corner ratio).
+   Recommendation: (b); the plain element fails the same way, so the cause is the incompatible-mode iterate rather than rule L.
+   Proposed below.
+2. **Default.** Every rule stays opt-in (as ADR 0614, 0628, 0630, 0636). Recommendation: keep; a default change would change
+   default results and is the maintainer's.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> Structural solver, intermediate tier. Follow-up of F-708 (ADR 0636). PARTIAL. ADR 0649, 2026-11-16: the LinearStress rule of ADR 0630 (opt-in, unchanged; tests only, no library file changed, the bit records of ADR 0506, 0608, 0614, 0630 and the rcfd-api baseline hashes pass) under load on distorted meshes: the confined punch block (nu = 0.49) and the displacement-controlled cantilever of ADR 0636 on two mesh levels with the interior nodes moved by 0.1 h (2U - 1) and 0.25 h (2U - 1) (SplitMix64, seeds 0xF719_0004, 0xF719_0008, 0xF719_1010, 0xF719_1020; every element valid, corner Jacobian ratio down to 0.076), against the F-bar Hex8 of ADR 0506 on the same meshes with the tolerances of ADR 0636 (15 per cent coarse, 10 refined). Met on seven of eight meshes: punch reaction within 12.0 and 12.8 per cent (4^3) and 6.6 per cent (8^3 at 0.1 h), corner bulge within 8.7 per cent; tip reaction within 5.8 and 6.9 per cent (10 x 2 x 2) and 2.0 and 3.0 per cent (20 x 4 x 4), shortening within 0.6 per cent; the Full Hex8 35 to 82 per cent off (the locking control). Missed: on the 8^3 block at 0.25 h rule L cannot be solved (one element at the corner of the punch edge inverts at 67.5 per cent of the load, for every increment size tried); diagnosed as a Newton iterate inverting a point from a stable state (the free tangent stays positive definite along the path, its lowest eigenvalue within 5 per cent of its value at half the load), not a loss of stability; the plain element fails the same way on the coarse block. The loaded state is positive definite on the other seven meshes (lowest eigenvalue 73 to 94 per cent of F-bar's). The F-bar reference is controlled in the item's own tests: its tangent against central differences at every loaded state (within 3.0e-10, limit 1e-6), its regular-mesh values against ADR 0636 (within 8.5e-6), and a negative control (the Full tangent offered as F-bar's, 0.36 off); the ADR 0636 mutation of the reference that escaped there (the F-bar ratio zeroed) and a tangent-only one are both caught by this file. Four of four mutations caught. Not covered: other materials and Poisson ratios, moved boundary nodes, statistics over seeds, the line search or a guard of the mode update at the punch edge.
+
+> F-708 (note, ADR 0649, 2026-11-16): F-719 repeats the two load cases on distorted meshes (0.1 h and 0.25 h): within the ADR 0636 tolerances on seven of eight meshes; rule L cannot be solved on the 8^3 block at 0.25 h (an inverted iterate at the punch edge, not a loss of stability); the reference control asked for by ADR 0636 question 1 is in the F-719 tests and catches the ADR 0636 mutation MU24.
+
+> Follow-up proposed: The inverted iterate of the incompatible-modes Hex8 at the punch edge of a distorted mesh (ADR 0649 DB4). Deps F-719. Acceptance: Every limit not stated here is registered in the ADR before the run. The punch block of ADR 0649 on the 8^3 mesh at 0.25 h (seed 0xF719_0008) with rule L: the cause of the inverted point at 67.5 per cent of the load located (the incompatible-mode field of the element against the compatible one along the path); the driver's line search, and an opt-in backtracking of the mode update when a point inverts, each measured on the same set-up; if one passes the load, reaction and displacement within the ADR 0636 tolerance (10 per cent) of the F-bar Hex8 and the loaded state positive definite; the plain element on the 4^3 mesh at 0.25 h reported; the default bits unchanged.
