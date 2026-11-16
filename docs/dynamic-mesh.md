@@ -63,6 +63,12 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   pairs into the momentum matrix implicitly (one block system of the velocity components), so one outer iteration does what
   six did: within `2.4e-4 U_in` of `n_outer = 6` on every step of the same lockstep, and ADR 0641's step-1 difference falls
   from `3.5e-2` to `6.7e-4`. The default keeps the lagged partner.
+  The opt-in `PimpleSettings::coupled_non_orth` (F-744, ADR 0667) gives the coupled pairs the explicit non-orthogonal
+  correction of an internal face (the partner cell's image in the owner's frame, `pressure::CoupledNonOrth`) in the pressure
+  equation, its flux and the momentum diffusion, with the partner-point least-squares gradient of ADR 0077 F-H0; the wrap
+  pairs' remainder `|k| / |S|` reaches `1.1`. With both opt-ins and one outer iteration the sector stays within `1.1e-4 U_in`
+  of the annulus over the 400 steps (without the correction `5.9e-3`), within `3.8e-5` of the reference without any
+  non-orthogonal corrector. The default keeps the orthogonal coupling.
   data set per face on rotor patches are the caller's to set on the new mesh; sectors of different pitch are refused. In the
   case tree since F-711 (ADR 0646) for the sector: `[mesh.sliding]` on `mesh.generator =
   "annulus_3d_sector_cylindrical_interface"` runs ADR 0634's turned loop (`mesh_turned`, `periodic_sliding_step`,

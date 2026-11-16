@@ -230,3 +230,105 @@ missed without a diagnosis, or b2 fails (D0h, D0J, D2 or B1).
   non-orthogonal correctors are on. Not taken: it changes default results. Recommendation (b) together with ADR 0664's Q1 (the
   implicit pair by default, F-746), in one change with the hashes re-recorded by the maintainer.
 - **Q3. A case key.** (a) none (taken: a key changes the schema golden); (b) a key beside F-746's. Open for the maintainer.
+
+## Addendum 1: results (2026-11-16)
+
+Measured against the limits registered above; no limit was changed and no amendment was made. Release builds on Windows, on a
+machine shared with other building agents. The registration is 89e179f1 (alone, first); the library change and the tests
+04ded908 (committed before their run). Each registered run was made once: the fast tests (16 s), the heavy record (291 s,
+`--ignored --test-threads=1`; under the 600 s estimate), `rcfd-fv --lib` (U1 in it; U1 was then run once more alone to read its
+printed line, deterministic, same result). One diagnostic run followed the mutations (disclosed below). Logs in
+`w49i-work/f744-scratch` (`fast.log`, `heavy.log`, `lib.log`, `suites.log`, `baseline.log`, `mutations.log`, `diag.log`).
+
+**Built as registered.** `PimpleSettings::coupled_non_orth` (default `false`) in `crates/rcfd-fv/src/pimple.rs` (the field and
+its default; in `step_with` the momentum's coupled faces and partner-point gradients, the Laplacian's gradient, the momentum
+right-hand side, the pressure solve and the flux behind the setting; unit test U1); in `crates/rcfd-fv/src/pressure.rs`
+`CoupledNonOrth`, `solve_pressure_coupled`, `corrected_flux_coupled` and one more argument of the private
+`solve_pressure_inner` (`None` from every existing caller); the new test file
+`crates/rcfd-fv/tests/sliding_annulus_inlet_f744.rs` (the fast test, H2, the heavy record). With the setting off every changed
+line of the step takes the previous arithmetic. No case key, no golden, no hash table.
+
+### Results
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| N1 (b3) `abs(G_**(n) - G_(6,0)(n))`, every one of 400 steps from `u0` | `<= 3e-4` each step | `3.80e-5` (step 9; `G_**` smaller) | met |
+| N2 (b3) largest `G_**` | `<= 4.5e-4` (from `6.0e-3`) | `1.104e-4` (step 9) | met |
+| N1f (supporting) field form, every step | `<= 5e-4` | `3.94e-5` | met |
+| D0h largest `G_(6,0)`; largest `G_*` | `1.48e-4`, `5.891e-3` within `5e-7` | `1.483922e-4`; `5.890778e-3` (step 102) | met |
+| NC1 (control) `max abs(G_* - G_(6,0))` | `>= 3e-3` | `5.86e-3` | held |
+| A1s C `flux_residual` of `V**(1, 6)` from step 2 | `<= 1e-12` | `2.61e-15` | met |
+| N1J fast, 16 steps | `<= 3e-4` each step | `3.80e-5` | met |
+| N1fJ fast, field form | `<= 5e-4` each step | `3.94e-5` | met |
+| D0J `G_*(1)` | `7.90e-4` within `5e-7` | `7.896331e-4` | met |
+| D2 the annulus with the setting on against off, 16 steps | bit for bit | equal on every step | met |
+| NC1J (control) 16 steps | `>= 5e-4` | `4.65e-3` | held |
+| G0 cell match, every variant, every step | `<= 1e-9`, one-to-one | `1.45e-15` (fast `9.5e-16`), yes | met |
+| H2 coupled faces as annulus faces, 17 meshes, 606 faces | centre `<= 1e-9`; `d`, `k` `<= 1e-10` | `9.5e-16`; `1.5e-15`, `1.3e-16`; none unmatched or misoriented; largest `abs(k) / abs(S)` `1.107` | met |
+| U1 Taylor-Green box, setting on against off | `<= 1e-12` | velocity `5.6e-16`, pressure `3.6e-14` (64 coupled faces, `abs(k) <= 7e-16`) | met |
+| B1 `baseline_hashes`; `--lib`; the named suites | pass | see below | met |
+
+Printed, no limit: step 1 `G_**` `3.8e-15` (the sector equals the annulus to rounding on the first step), `G_(6,0)` `6.6e-8`,
+`G_*` `7.9e-4`; `G_**` and `G_(6,0)` both peak at step 9 (`1.10e-4`, `1.48e-4`), the start transient of the rest `R`. The
+correction takes the sector's largest difference from `5.89e-3` to `1.10e-4`, below `V(6, 0)`'s own. Against the estimates: N1
+`3.8e-5` against `1.5e-4`.
+
+Suites (release, run once, all passed): `periodic` 3, `sliding_periodic_f304` 8, `sliding_periodic_coincidence_f720` 4,
+`sliding_periodic_coupled_f721` 2, `sliding_annulus_inlet_f725` 3, `sliding_annulus_inlet_f743` 1, `consistent_periodic_f367`
+13, `seam_no_harm_f344` 6, `w35a_seam` 2, `mrf_cyclic_seams_w44c` 12, `rotating_seam_h1_w45c` 2, and the non-orthogonal pimple
+suites that run the changed lines `piso_thin_gap_f299` 18, `gradient_pressure_f291` 3, `non_conformal` 2,
+`sliding_coincidence_f710` 3 (ignored records not run); `rcfd-fv --lib` 115 passed, 6 ignored; `rcfd-api` `baseline_hashes` 3
+passed, 1 ignored. `cargo fmt -p rcfd-fv --check` clean; `cargo clippy --release -p rcfd-fv --all-targets -- -D warnings`
+clean.
+
+### Mutations (scratch copy `w49i-work/f744-scratch/mut` of 04ded908, script `mutate.py`, target `target-mut`; the fast test run once per mutation)
+
+| Mutation | Must fail | Result |
+| --- | --- | --- |
+| MN1 the pressure equation without the coupled correction | N1J or N1fJ | **not caught** (N1J `5.5e-5`, N1fJ `6.1e-5`) |
+| MN2 the partner's gradient not rotated | N1J or N1fJ | caught: N1J `1.71e-3`, N1fJ `1.74e-3` |
+| MN3 the momentum correction with the opposite sign | N1J or N1fJ | caught: N1J `9.09e-3`, N1fJ `9.11e-3` |
+| MN4 the flux correction with the opposite sign | N1J or N1fJ | **not caught** (N1J `3.8012e-5` against `3.8008e-5` unmutated) |
+| MN5 (diagnostic) the plain least-squares gradient | none | N1J `8.2e-5`, N1fJ `9.8e-5`: within the limits, about twice the partner-point form |
+
+Two of four required mutations caught. D0J, D2, NC1J held under every mutation (the default path untouched). The file was
+restored after each (equal to 04ded908 up to line endings).
+
+**Diagnosis of MN1 and MN4 (one diagnostic run, disclosed).** The scratch copy printed, over the fast test's 16 steps, the
+largest pressure correction `gamma k . grad_f p` on the coupled faces and the largest coupled-face flux: at most `1.17e-6`
+against fluxes up to `4.7e-3`, a relative `2.5e-4`; the momentum correction is up to `2.7e-4` per face. On the wrap faces `k`
+is nearly tangential (the faces are pieces of the interface circle, the offset to the partner's image is along it) and this
+flow's pressure is nearly radial, so `k . grad p` is small: the pressure part of the correction is below what the lockstep
+resolves, and Q4 here was almost all the momentum diffusion's (MN3). The registered checks are not defective; they are blind to
+the pressure part on this flow. The pressure part is built and its geometry is checked (H2, and the antisymmetry by the
+derivation), but its effect is not shown by a registered check.
+
+### Not covered
+
+As registered: no case key; the default unchanged; the refused combinations, the fractional step, the steady solver, the
+pressure-lag estimate and the adaptive corrector count keep the orthogonal coupling; the Green-Gauss gradients of the velocity
+correction and the momentum's pressure term unchanged; one mesh pair, one step, one inlet, 2-D. Not shown: the pressure part's
+effect (above). `docs_site` not run (only prose under `docs/`: this ADR and one paragraph of `docs/dynamic-mesh.md`; left to
+the daily gate).
+
+### Decision
+
+By the registered rule: N1 and N2 met, every fast, set-up and default check met, but MN1 and MN4 not caught: **partial**.
+
+### Remaining questions
+
+1. **The pressure part (MN1, MN4).** Options: (a) a follow-up item checking the pressure part on a flow with a tangential
+   pressure gradient across non-orthogonal coupled faces, with a per-cell continuity check of the corrected flux; (b) accept
+   the momentum result and record done. Recommendation (a): MN4 breaks the pairing of the equation and its flux, which a
+   per-cell continuity check would see at once.
+2. **The default (Q2, open).** Recommendation: together with F-746 (ADR 0664's implicit pair by default), in one change with
+   the hashes re-recorded by the maintainer.
+3. **A case key (Q3, open).** Recommendation: beside F-746's key.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> ADR 0667, 2026-11-16: non-orthogonal correction on coupled faces. The opt-in PimpleSettings::coupled_non_orth (default false) treats every coupled (seam and wrap) pair as the internal face between the owner and the partner cell's image (rcfd_fv::pressure::CoupledNonOrth: d = (x_f - c_r) + R (c_c - x_g), k = S - d |S|^2/(S.d), face gradient w grad_r + (1 - w) R grad_c, the partner's velocity-gradient tensor rotated) and adds its explicit non-orthogonal part to the pressure equation, its flux and the momentum diffusion, with the partner-point least-squares gradient of ADR 0077 F-H0; the coupled faces' d and k equal the full annulus's internal faces to 1.5e-15 on 606 faces (the wrap pairs' |k|/|S| up to 1.1). On ADR 0661's lockstep with the lag removed by ADR 0664's implicit pair in one outer iteration, the sector's largest difference from the annulus falls from 5.89e-3 to 1.10e-4 U_in over 400 steps, within 3.8e-5 of V(6, 0) on every step (limit 3e-4; the first step equal to rounding, 3.8e-15). Defaults bit-identical (the annulus bit for bit with the setting on, ADR 0661's and ADR 0664's numbers reproduced, baseline_hashes and the periodic, sliding and non-orthogonal suites pass). Partial: two of four mutations caught; the pressure part of the correction is below the lockstep's resolution on this flow (at most 2.5e-4 of the coupled-face flux: the wrap faces' k is tangential and the pressure nearly radial), so its effect is not shown; the momentum part carries the result. No case key; the default not changed (open, with F-746).
+
+> Follow-up proposed: "Pressure part of the non-orthogonal correction on coupled faces". Deps F-744. Acceptance: on a flow with a tangential pressure gradient across non-orthogonal coupled faces (a swirling inlet on ADR 0661's lockstep, or a skewed translational periodic channel against its unrolled twin) the opt-in of ADR 0667 brings the periodic run within a registered limit of the reference on every step where the setting without its pressure part does not, and the corrected flux is divergence-free per cell within a registered limit; defaults bit-identical. Every limit not stated here is registered in the ADR before the run.
