@@ -5,7 +5,7 @@
 //
 // The data port is a main-process read of a store (`local`, R2) or the service's `data.*` methods (`service`, R1), not a
 // service method of SERVICE_METHODS, so it has no entry in the action registry (G16; reported with F-804 and F-808).
-import type { DataOptions, DataReply, FieldData, StoreInfo, StoreRef, SurfaceData } from '../../shared/data.js';
+import type { DataOptions, DataReply, DifferenceData, FieldData, StoreInfo, StoreRef, SurfaceData } from '../../shared/data.js';
 
 const bridge = () => window.studioData;
 
@@ -27,6 +27,20 @@ export function loadField(store: StoreRef, snapshot: number, field: string, opti
 export function loadSurface(store: StoreRef, options?: DataOptions): Promise<DataReply<SurfaceData>> {
   const b = bridge();
   return b ? b.surface(store, options) : Promise.resolve(noBridge());
+}
+
+/** F-815: `other`'s field at `otherSnapshot` minus `store`'s at `snapshot`, in f64, on the same mesh (route local). */
+export function loadDifference(
+  store: StoreRef,
+  snapshot: number,
+  other: StoreRef,
+  otherSnapshot: number,
+  field: string,
+  options?: DataOptions,
+): Promise<DataReply<DifferenceData>> {
+  // F-815: the difference has its own bridge over the same data port (window.studioCompare)
+  const b = window.studioCompare as typeof window.studioCompare | undefined;
+  return b ? b.difference(store, snapshot, other, otherSnapshot, field, options) : Promise.resolve(noBridge());
 }
 
 /** Cancels every waiting request with this tag (G21: a superseded load is dropped). */

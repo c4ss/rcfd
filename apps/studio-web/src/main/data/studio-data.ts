@@ -4,9 +4,15 @@
 import type { DataRequest, DataWireResult } from '../../shared/data.js';
 import type { DataBackend } from './bridge.js';
 import { LocalData, WORKER_URL } from './local.js';
-import type { Job } from './queue.js';
+import { DataFailure, type Job } from './queue.js';
 import { RemoteData, type RemoteService } from './remote.js';
 import type { DataRoots } from './roots.js';
+
+/** A job that fails at once with `bad_request` (F-815: a difference the route cannot give). */
+function failed(message: string): Job<DataWireResult> {
+  const promise = Promise.reject(new DataFailure('bad_request', message));
+  return { promise, cancel: () => undefined };
+}
 
 export class StudioData implements DataBackend {
   readonly local: LocalData;
@@ -27,6 +33,9 @@ export class StudioData implements DataBackend {
           return this.local.field(p, r.snapshot, r.field);
         case 'surface':
           return this.local.surface(p);
+        case 'difference':
+          if (r.other.route !== 'local') return failed('difference: both stores must be on the same route (local)');
+          return this.local.difference(p, r.snapshot, r.other.path, r.otherSnapshot, r.field);
       }
     }
     switch (r.op) {
@@ -36,6 +45,9 @@ export class StudioData implements DataBackend {
         return this.remote.field(p, r.snapshot, r.field, timeoutMs);
       case 'surface':
         return this.remote.surface(p, timeoutMs);
+      case 'difference':
+        // F-815: the service's data.* methods have no difference (ADR 0801, addendum F-815)
+        return failed('difference: the service route has no difference of two stores; it is computed by the local reader only');
     }
   }
 

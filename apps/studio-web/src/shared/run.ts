@@ -65,6 +65,19 @@ export interface RunValuesAt {
   readonly values: Readonly<Record<string, number>>;
 }
 
+/**
+ * F-815: two runs' metrics side by side as the engine's `compare_runs` gives them (the metrics of each run's
+ * metrics.json, the differences to the first run), for the baseline A and the compared run B.
+ */
+export interface RunComparison {
+  readonly baseline: string;
+  readonly compared: string;
+  /** Each metric: A's value, B's value and the engine's difference B - A; null where the engine gives none. */
+  readonly metrics: readonly { readonly name: string; readonly a: number | null; readonly b: number | null; readonly difference: number | null }[];
+  /** Metrics the engine left out of its reply (its text budget). */
+  readonly omitted: number;
+}
+
 export interface RunError {
   /** `bad_request` (wrong shape), `no_project` (no project open), `engine` (the project server refused or failed). */
   readonly code: 'bad_request' | 'no_project' | 'engine' | 'no_port' | 'timeout';
@@ -76,10 +89,14 @@ export type RunReply<T = unknown> = { readonly ok: true; readonly result: T } | 
 /** Preload -> main. */
 export type RunRequest =
   | { readonly op: 'series'; readonly id: number; readonly run: string }
-  | { readonly op: 'at'; readonly id: number; readonly run: string; readonly step: number };
+  | { readonly op: 'at'; readonly id: number; readonly run: string; readonly step: number }
+  | { readonly op: 'compare'; readonly id: number; readonly run: string; readonly other: string };
 
 export type RunOp = RunRequest['op'];
+/** The operations of F-810. */
 export const RUN_OPS = ['series', 'at'] as const satisfies readonly RunOp[];
+/** The operation F-815 added (kept apart so that F-810's list stays as its tests read it). */
+export const RUN_COMPARE_OPS = ['compare'] as const satisfies readonly RunOp[];
 
 /** Main -> preload. */
 export type RunPortMessage = { readonly type: 'reply'; readonly id: number; readonly reply: RunReply };
@@ -93,4 +110,6 @@ export interface RunBridge {
   series(run: string): Promise<RunReply<RunSeries>>;
   /** The value of each series at one step of a run of the open project. */
   at(run: string, step: number): Promise<RunReply<RunValuesAt>>;
+  /** F-815: `compare_runs` of the baseline `run` and the compared run `other`. */
+  compare(run: string, other: string): Promise<RunReply<RunComparison>>;
 }

@@ -462,6 +462,41 @@ export class Store {
     return out.buffer;
   }
 
+  /** F-815: the stored information of field `name` of snapshot `i` (unit, location, count, precision). */
+  fieldInfo(i: number, name: string): StoreFieldInfo {
+    return this.info(i, name);
+  }
+
+  /**
+   * F-815: all values of field `name` of snapshot `i` as `f64` bytes, little-endian: `Reader::read_field` itself (an
+   * `f64` field's bits unchanged; an `f32` field widened, which is exact). The same blocks and checks as `field`.
+   */
+  field64(i: number, name: string): ArrayBuffer {
+    const f = this.info(i, name);
+    const w = f.precision === 'f32' ? 4 : 8;
+    const out = new Float64Array(f.n);
+    for (let b = 0; b < f.blocks.length; b++) {
+      const count = Math.min(f.block_values, f.n - b * f.block_values);
+      const max = count * 16 + 1024;
+      let p = this.payloadAt(f.blocks[b]!, this.len, 'DATA', max);
+      if (f.codec === 'shuffle_deflate') {
+        let s: Buffer;
+        try {
+          s = zlib.inflateRawSync(p, { maxOutputLength: count * w });
+        } catch (e) {
+          throw bad(`deflate block: ${(e as Error).message}`);
+        }
+        if (s.length !== count * w) throw bad('deflate block has the wrong length');
+        p = unshuffle(s, count, w, this.hooks.wrongStride === true);
+      }
+      if (p.length !== count * w) throw bad('data block has the wrong length');
+      const bytes = p.byteOffset % w === 0 ? p : p.slice();
+      const v = w === 4 ? new Float32Array(bytes.buffer, bytes.byteOffset, count) : new Float64Array(bytes.buffer, bytes.byteOffset, count);
+      out.set(v, b * f.block_values);
+    }
+    return out.buffer;
+  }
+
   /** Verifies the payload checksum of the MESH frame (streamed; once per open store). */
   verifyMesh(): void {
     if (this.meshVerified) return;

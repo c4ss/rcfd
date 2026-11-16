@@ -76,8 +76,13 @@ export function parseDataRequest(raw: unknown): ParsedData {
     if (!isTag(raw['tag'])) return bad('cancel: tag must be a string of at most 64 characters or a non-negative integer');
     return { ok: true, request: { op: 'cancel', id, tag: raw['tag'] } };
   }
-  if (op !== 'open' && op !== 'field' && op !== 'surface') return bad(`unknown op '${String(op).slice(0, 40)}'`);
-  const required = op === 'field' ? ['op', 'id', 'store', 'snapshot', 'field'] : ['op', 'id', 'store'];
+  if (op !== 'open' && op !== 'field' && op !== 'surface' && op !== 'difference') return bad(`unknown op '${String(op).slice(0, 40)}'`);
+  const required =
+    op === 'field'
+      ? ['op', 'id', 'store', 'snapshot', 'field']
+      : op === 'difference'
+        ? ['op', 'id', 'store', 'snapshot', 'other', 'otherSnapshot', 'field']
+        : ['op', 'id', 'store'];
   const k = exactKeys(raw, required, ['tag', 'timeoutMs']);
   if (k) return bad(`${op}: ${k}`);
   const sp = storeProblem(raw['store']);
@@ -91,6 +96,19 @@ export function parseDataRequest(raw: unknown): ParsedData {
   const s = raw['store'] as Record<string, unknown>;
   const store: StoreRef = { route: s['route'] as StoreRef['route'], path: s['path'] as string };
   const common = { id, ...(tag !== undefined ? { tag } : {}), ...(t !== undefined ? { timeoutMs: t as number } : {}) };
+  if (op === 'difference') {
+    // F-815: two stores, two snapshots, one field (ADR 0801, addendum F-815)
+    const op2 = storeProblem(raw['other']);
+    if (op2) return bad(`difference: other ${op2}`);
+    const o = raw['other'] as Record<string, unknown>;
+    const other: StoreRef = { route: o['route'] as StoreRef['route'], path: o['path'] as string };
+    const snapshot = raw['snapshot'];
+    const otherSnapshot = raw['otherSnapshot'];
+    const field = raw['field'];
+    if (!isId(snapshot) || !isId(otherSnapshot)) return bad('difference: snapshot and otherSnapshot must be non-negative integers');
+    if (typeof field !== 'string' || field.length === 0 || field.length > MAX_FIELD_NAME) return bad(`difference: the field name must be a string of 1 to ${MAX_FIELD_NAME} characters`);
+    return { ok: true, request: { op, store, snapshot, other, otherSnapshot, field, ...common } };
+  }
   if (op === 'field') {
     const snapshot = raw['snapshot'];
     const field = raw['field'];

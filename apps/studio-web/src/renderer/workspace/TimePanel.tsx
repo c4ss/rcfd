@@ -41,7 +41,14 @@ export interface TimePanelProps {
   readonly onFollow: (on: boolean) => void;
   readonly playing: boolean;
   readonly onPlay: (on: boolean) => void;
+  /** F-815: the compared run, whose residual and monitor lines are drawn over the selected run's. */
+  readonly compare?: { readonly row: RunRow; readonly series: RunSeries | null; readonly version: number; readonly cursor: ReadonlyMap<string, CursorValue> } | null;
 }
+
+/** F-815: a compared run's line: the same dashes as the selected run's (one per equation), thinner and in ink-2. */
+const comparedStyle = (s: LineStyle): LineStyle => ({ role: 'text-2', width: 1, dash: s.dash });
+/** F-815: the key of a compared run's series in a plot's map. */
+const comparedKey = (run: string, name: string): string => `${run} · ${name}`;
 
 const pct = (f: number): string => `${(Math.max(0, Math.min(1, f)) * 100).toFixed(4)}%`;
 
@@ -78,7 +85,7 @@ function valueOf(v: CursorValue | undefined, format: (x: number) => string): str
 }
 
 export function TimePanel(props: TimePanelProps) {
-  const { rows, bands, axis, row, onSelect, positions, index, onMove, series, seriesError, version, cursor, running, follow, onFollow, playing, onPlay } = props;
+  const { rows, bands, axis, row, onSelect, positions, index, onMove, series, seriesError, version, cursor, running, follow, onFollow, playing, onPlay, compare = null } = props;
   const name = caseName(row.case) || row.id;
   const position = positions[index] ?? null;
   const last = positions.length - 1;
@@ -89,6 +96,22 @@ export function TimePanel(props: TimePanelProps) {
   const monitor = monitorChoice && monitorChoice.run === row.id && monitorNames.includes(monitorChoice.name) ? monitorChoice.name : (monitorNames[0] ?? null);
   const monitorSeries = useSeriesMap(series, version, (n) => new Map(n.map((k) => [k, MONITOR_STYLE])), 'monitor', monitor);
   const monitorEntry = series?.series.find((s) => s.name === monitor) ?? null;
+  // F-815: the compared run's residuals, and its line of the same monitor, over the selected run's
+  const comparedResiduals = useSeriesMap(compare?.series ?? null, compare?.version ?? 0, residualStyles, 'residual');
+  const comparedMonitor = useSeriesMap(compare?.series ?? null, compare?.version ?? 0, (n) => new Map(n.map((k) => [k, MONITOR_STYLE])), 'monitor', monitor ?? '');
+  const residualLines = useMemo(() => {
+    if (!compare || comparedResiduals.size === 0) return residuals;
+    const out = new Map(residuals);
+    for (const [n, e] of comparedResiduals) out.set(comparedKey(compare.row.id, n), { data: e.data, style: comparedStyle(e.style) });
+    return out;
+  }, [residuals, comparedResiduals, compare?.row.id]);
+  const monitorLines = useMemo(() => {
+    if (!compare || comparedMonitor.size === 0) return monitorSeries;
+    const out = new Map(monitorSeries);
+    for (const [n, e] of comparedMonitor) out.set(comparedKey(compare.row.id, n), { data: e.data, style: comparedStyle(e.style) });
+    return out;
+  }, [monitorSeries, comparedMonitor, compare?.row.id]);
+  const plotVersion = version * 1000 + (compare?.version ?? 0);
   const ownEnd = bands.find((b) => b.id === row.id)?.end ?? 0;
 
   return (
@@ -105,11 +128,16 @@ export function TimePanel(props: TimePanelProps) {
               const r = rows.find((x) => x.id === b.id)!;
               const selected = b.id === row.id;
               return (
-                <div key={b.id} className={`tp-band-row${selected ? ' tp-band-row--selected' : ''}`} data-run={b.id} data-state={r.state}>
+                <div
+                  key={b.id}
+                  className={`tp-band-row${selected ? ' tp-band-row--selected' : ''}${b.id === compare?.row.id ? ' tp-band-row--compared' : ''}`}
+                  data-run={b.id}
+                  data-state={r.state}
+                >
                   <div className="tp-band-name" onClick={() => onSelect(b.id)} title={`${caseName(r.case)} · ${b.id}`}>
                     {caseName(r.case) || b.id}
                   </div>
-                  <div className={`tp-band${selected ? '' : ' tp-band--faded'}`}>
+                  <div className={`tp-band${selected || b.id === compare?.row.id ? '' : ' tp-band--faded'}`}>
                     <div className="tp-track">
                       {b.segments.map((s, k) => (
                         <span
@@ -140,6 +168,7 @@ export function TimePanel(props: TimePanelProps) {
             <div className="tp-resid-label">
               <span className="tp-resid-title">
                 Residuals · <b>{name}</b>
+                {compare && <span className="tp-resid-compared"> · {caseName(compare.row.case) || compare.row.id}</span>}
               </span>
               <span className="tp-resid-at">{position ? `at it ${position.step}, log scale` : 'log scale'}</span>
               <ul className="tp-resid-values" aria-label={`Residuals of ${name} at the line`}>
@@ -154,10 +183,24 @@ export function TimePanel(props: TimePanelProps) {
                   );
                 })}
               </ul>
+              {compare && (
+                <ul className="tp-resid-compare" aria-label={`Residuals of ${caseName(compare.row.case) || compare.row.id} at the line`} data-run={compare.row.id}>
+                  {[...comparedResiduals].map(([n, { style }]) => {
+                    const v = compare.cursor.get(n);
+                    return (
+                      <li key={n} data-name={n} data-step={v?.step} data-value={v?.kind === 'value' ? String(v.value) : undefined}>
+                        <Swatch style={comparedStyle(style)} />
+                        <span className="tp-resid-name">{n}</span>
+                        <span className="tp-resid-value">{valueOf(v, fmtResidual)}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </div>
             <div className="tp-resid-plot">
               {residuals.size > 0 ? (
-                <PlotFrame series={residuals} version={version} log xCaption="iteration" height={56} xAxis={axis} cursor={position?.step ?? null} />
+                <PlotFrame series={residualLines} version={plotVersion} log xCaption="iteration" height={56} xAxis={axis} cursor={position?.step ?? null} />
               ) : (
                 <p className="tp-empty" role="status">
                   <StatePictogram state={row.state === 'failed' ? 'failed' : 'queued'} />
@@ -213,7 +256,7 @@ export function TimePanel(props: TimePanelProps) {
               </output>
             </div>
             <div className="tp-monitor-plot">
-              <PlotFrame series={monitorSeries} version={version} log={false} xCaption="iteration" height={36} cursor={position?.step ?? null} />
+              <PlotFrame series={monitorLines} version={plotVersion} log={false} xCaption="iteration" height={36} cursor={position?.step ?? null} />
             </div>
           </>
         ) : (

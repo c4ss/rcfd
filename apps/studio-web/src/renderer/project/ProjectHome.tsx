@@ -297,6 +297,8 @@ function OpenProject({ view, state }: { view: ProjectView; state: ProjectState }
   // F-814: a file a Claude Code reply named, shown on Home (n changes on every request), and whether the panel is shown
   const [focus, setFocus] = useState<{ path: string; n: number } | null>(null);
   const [claude, setClaude] = useState(true);
+  // F-815: the palette's Compare runs, handed to the run workspace (`n` changes on every request)
+  const [compareReq, setCompareReq] = useState<{ run: string; n: number } | null>(null);
   const openRun = (id: string) => {
     setRun(id);
     setTab('runs');
@@ -319,6 +321,14 @@ function OpenProject({ view, state }: { view: ProjectView; state: ProjectState }
     },
     'go.claude': { run: () => (setClaude(true), focusLater('.cc textarea', '.cc button')) },
     'view.toggle_claude': { run: () => (setClaude(!claude), focusLater(claude ? '.cc-show button' : '.cc textarea', '.cc button')) },
+    'workspace.compare': {
+      run: (a) => {
+        const other = a['run'];
+        if (typeof other === 'string') setCompareReq((c) => ({ run: other, n: (c?.n ?? 0) + 1 }));
+        setTab('workspace');
+        focusLater('.cmp-other button', '.ph-views [role="tab"][aria-selected="true"]');
+      },
+    },
   });
   return (
     <div className="ph-work">
@@ -348,7 +358,7 @@ function OpenProject({ view, state }: { view: ProjectView; state: ProjectState }
               <div className="ph-runs">
                 {!view.liveness.live && <NotLive view={view} />}
                 <Suspense fallback={<p className="ph-empty-line">Opening the run workspace…</p>}>
-                  <RunWorkspace view={view} selected={run} onSelect={setRun} />
+                  <RunWorkspace view={view} selected={run} onSelect={setRun} compareRequest={compareReq} />
                 </Suspense>
               </div>
             ),

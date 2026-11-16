@@ -15,7 +15,7 @@ export const PROJECT_PORT_CHANNEL = 'studio.project-port';
 /** The tools of the engine's project server that the main process calls; all of them only read. `run_status` (F-806):
  * one run's status.json, its last events and its record, for the runs table. `read_residuals` and `read_project_file`
  * (F-810): a run's residual and monitor histories and its output/monitors.json, for the run workspace (src/shared/run.ts). */
-export const PROJECT_TOOLS = ['project_info', 'list_runs', 'list_meshes', 'read_feed', 'run_status', 'read_residuals', 'read_project_file'] as const;
+export const PROJECT_TOOLS = ['project_info', 'list_runs', 'list_meshes', 'read_feed', 'run_status', 'read_residuals', 'read_project_file', 'compare_runs'] as const;
 export type ProjectTool = (typeof PROJECT_TOOLS)[number];
 
 /** How often the main process asks the engine's change feed what changed (ms). */

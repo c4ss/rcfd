@@ -8,7 +8,7 @@
 // a `path` instead of the series is refused here, with the reason.
 //
 // No Electron import: the unit tests drive it with a fake query.
-import { SERIES_POINTS, UNITS_MAX_BYTES, type RunSeries, type RunSeriesEntry, type RunValuesAt, type SeriesKind } from '../../shared/run.js';
+import { SERIES_POINTS, UNITS_MAX_BYTES, type RunComparison, type RunSeries, type RunSeriesEntry, type RunValuesAt, type SeriesKind } from '../../shared/run.js';
 import type { ProjectTool } from '../../shared/project.js';
 
 /** One query of the open project's read-only server (ProjectHome.query). */
@@ -129,4 +129,22 @@ export async function readRunAt(query: Query, run: string, step: number): Promis
   const out: Record<string, number> = {};
   for (const [source, s] of r.series) if (s.x.length > 0 && s.x[0] === step) out[plotName(source).name] = s.y[0]!;
   return { run, step, values: out };
+}
+
+/**
+ * F-815: the engine's `compare_runs` of the baseline and the compared run: each metric's two values and the engine's own
+ * difference (the compared run's value minus the baseline's). Nothing is computed here.
+ */
+export async function readComparison(query: Query, run: string, other: string): Promise<RunComparison> {
+  const r = obj(await query('compare_runs', { runs: [run, other] }));
+  if (r['baseline'] !== run) throw new Error(`compare_runs answered for ${String(r['baseline'])}, not ${run}`);
+  const metrics = obj(r['metrics']);
+  const diffs = obj(r['differences']);
+  const value = (v: unknown): number | null => (typeof v === 'number' ? v : null);
+  const out: RunComparison['metrics'][number][] = [];
+  for (const name of Object.keys(metrics).sort()) {
+    const m = obj(metrics[name]);
+    out.push({ name, a: value(m[run]), b: value(m[other]), difference: value(obj(diffs[name])[other]) });
+  }
+  return { baseline: run, compared: other, metrics: out, omitted: num(r['metrics_omitted']) };
 }

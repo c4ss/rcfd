@@ -52,6 +52,7 @@ import type {
 } from '../shared/project.js';
 import type {
   DATA_PORT_CHANNEL as DataPortChannel,
+  CompareBridge,
   DataBridge,
   DataOptions,
   DataPortMessage,
@@ -418,6 +419,19 @@ const data: DataBridge = {
 
 contextBridge.exposeInMainWorld('studioData', data);
 
+// F-815: the difference of two stores' field, f64 (src/main/data/worker.ts), over the same data port
+const compare: CompareBridge = {
+  difference: async (store, snapshot, other, otherSnapshot, field, options) => {
+    const r = await sendData({ op: 'difference', id: nextDataId++, store, snapshot, other, otherSnapshot, field, ...dataCommon(options) });
+    if (!r.ok) return r;
+    const x = r.result;
+    if (x.kind !== 'difference') return unexpected(x.kind);
+    return { ok: true, result: { snapshot: x.snapshot, otherSnapshot: x.otherSnapshot, field: x.field, values: new Float64Array(x.values) } };
+  },
+};
+
+contextBridge.exposeInMainWorld('studioCompare', compare);
+
 // ---- the case port (F-812, src/shared/case.ts)
 //
 // `window.studioCase`: requests and replies only (no pushed state). A save or a check asks the engine to validate the
@@ -637,6 +651,7 @@ ipcRenderer.on(RUN_PORT_CHANNEL, (event) => {
 const runHistories: RunBridge = {
   series: (run) => runSend({ op: 'series', id: nextRunId++, run }),
   at: (run, step) => runSend({ op: 'at', id: nextRunId++, run, step }),
+  compare: (run, other) => runSend({ op: 'compare', id: nextRunId++, run, other }),
 };
 
 contextBridge.exposeInMainWorld('studioRunData', runHistories);

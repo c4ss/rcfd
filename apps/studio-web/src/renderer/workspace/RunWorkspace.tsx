@@ -20,6 +20,7 @@ import { Select, StateMark, StatePictogram } from '../ui/index.js';
 import { runSeries, runValuesAt } from './door.js';
 import { bandOf, defaultField, lastStep, liveRun, positionsOf, sampleAt, sharedAxis, storePath, type Position } from './model.js';
 import { TimePanel, type CursorValue } from './TimePanel.js';
+import { CompareControls, CompareFields, CompareMetrics, useComparison, type CompareState } from './Compare.js';
 import './workspace.css';
 
 export interface RunWorkspaceProps {
@@ -27,6 +28,8 @@ export interface RunWorkspaceProps {
   /** The selected run, shared with the Runs view (kept by the project view). */
   readonly selected: string | null;
   readonly onSelect: (id: string | null) => void;
+  /** F-815: the palette's Compare runs (the run to compare with the selected one; `n` changes on every request). */
+  readonly compareRequest?: { readonly run: string; readonly n: number } | null;
 }
 
 const ACTIVE = new Set(['queued', 'running', 'paused']);
@@ -136,7 +139,7 @@ function useCursorValues(run: string | null, series: RunSeries | null, step: num
   }, [series, step, asked, key]);
 }
 
-export default function RunWorkspace({ view, selected, onSelect }: RunWorkspaceProps) {
+export default function RunWorkspace({ view, selected, onSelect, compareRequest = null }: RunWorkspaceProps) {
   const rows = useMemo(() => runRows(view.runs.items, view.runDetails, view.runDetailErrors), [view.runs.items, view.runDetails, view.runDetailErrors]);
   const live = liveRun(rows, selected);
   // with nothing selected the workspace brings forward the live run, else the newest run
@@ -224,6 +227,18 @@ export default function RunWorkspace({ view, selected, onSelect }: RunWorkspaceP
 
   const cursor = useCursorValues(row?.id ?? null, series, position?.step ?? null);
 
+  // F-815: the compared run (B): its store, histories and values at the line, and the engine's compare_runs
+  const [cmp, setCmp] = useState<CompareState>({ on: false, other: null, mode: 'side' });
+  useEffect(() => {
+    if (compareRequest) setCmp((c) => ({ ...c, on: true, other: compareRequest.run }));
+  }, [compareRequest?.n]);
+  const otherId = cmp.other !== null && cmp.other !== row?.id && rows.some((r) => r.id === cmp.other) ? cmp.other : (rows.find((r) => r.id !== row?.id)?.id ?? null);
+  const otherRow = cmp.on && row ? (rows.find((r) => r.id === otherId) ?? null) : null;
+  const otherStore = useStore(view.folder, otherRow);
+  const otherSeries = useSeries(otherRow);
+  const otherCursor = useCursorValues(otherRow?.id ?? null, otherSeries.series, otherRow ? (position?.step ?? null) : null);
+  const comparison = useComparison(otherRow ? row : null, otherRow);
+
   // the bands: every run on one axis of steps
   const ends = useMemo(() => {
     const m = new Map<string, number>();
@@ -268,6 +283,7 @@ export default function RunWorkspace({ view, selected, onSelect }: RunWorkspaceP
             {(r) => <RunItem row={r} faded={selected !== null && r.id !== selected} />}
           </ListBox>
           {row && <RunNumbers row={row} store={store.info} storeError={store.error} series={series} seriesError={seriesError} position={position} />}
+          {row && otherRow && <CompareMetrics a={row} b={otherRow} comparison={comparison.comparison} error={comparison.error} />}
         </section>
         <section className="ws-field" aria-label="Field view">
           {row && store.ref && store.info && field !== null && position?.snapshot !== null && position?.snapshot !== undefined ? (
@@ -280,11 +296,25 @@ export default function RunWorkspace({ view, selected, onSelect }: RunWorkspaceP
                   selected={field}
                   onChange={(f) => setFieldChoice({ run: row.id, field: f })}
                 />
+                <CompareControls rows={rows} selected={row.id} state={cmp} other={otherId} onChange={setCmp} />
                 <span className="ws-field-note">
                   {caseName(row.case)} · {row.id} · stored fields of runs/{row.id}/fields
                 </span>
               </div>
-              <FieldViewport store={store.ref} snapshot={position.snapshot} field={field} reopen={store.info.snapshots.length} onDrawn={onDrawn} />
+              {otherRow ? (
+                <CompareFields
+                  mode={cmp.mode}
+                  a={{ row, ref: store.ref, info: store.info }}
+                  b={{ row: otherRow, ref: otherStore.ref, info: otherStore.info, error: otherStore.error }}
+                  field={field}
+                  snapshot={position.snapshot}
+                  reopenA={store.info.snapshots.length}
+                  reopenB={otherStore.info?.snapshots.length ?? 0}
+                  onDrawn={onDrawn}
+                />
+              ) : (
+                <FieldViewport store={store.ref} snapshot={position.snapshot} field={field} reopen={store.info.snapshots.length} onDrawn={onDrawn} />
+              )}
             </>
           ) : (
             <NoField row={row} storeError={store.error} store={store.info} hasStops={positions.length > 0} />
@@ -314,6 +344,7 @@ export default function RunWorkspace({ view, selected, onSelect }: RunWorkspaceP
           }}
           playing={playing}
           onPlay={setPlaying}
+          compare={otherRow ? { row: otherRow, series: otherSeries.series, version: otherSeries.version, cursor: otherCursor } : null}
         />
       )}
     </div>

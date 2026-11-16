@@ -88,6 +88,11 @@ function studioReason(id: string, env: PaletteEnv): string | null {
       if (env.claude?.project?.writer) return 'A message is being answered; wait for the reply or stop it (Stop the Claude Code reply), then choose another session.';
       return null;
     }
+    case 'workspace.compare': {
+      const v = view(env);
+      if (!v) return NO_PROJECT;
+      return v.runs.items.length < 2 ? 'The project has fewer than two runs: there is nothing to compare yet. Run a case again (Run the case, F5).' : null;
+    }
     case 'claude.stop':
       if (!view(env)) return NO_PROJECT;
       return turnRunning(env) ? null : 'No Claude Code reply is being written: there is nothing to stop.';
@@ -152,7 +157,7 @@ export async function choicesFor(e: PaletteEntry, p: PaletteParam, values: Value
           value: r.id,
           label: r.id,
           detail: `${r.case} · ${r.state}${r.step > 0 ? ` · step ${r.step}` : ''}`,
-          reason: runReason(e.id, { ...values, [p.name]: r.id }, v),
+          reason: e.source === 'run' ? runReason(e.id, { ...values, [p.name]: r.id }, v) : compareReason(e.id, r.id, selected),
           mark: r.id === selected ? 'selected in Runs' : null,
         })),
         empty: 'The project has no run yet: run a case first (Run the case, F5).',
@@ -189,6 +194,11 @@ export async function choicesFor(e: PaletteEntry, p: PaletteParam, values: Value
     default:
       return { choices: [], empty: '' };
   }
+}
+
+/** F-815: the run Compare runs compares with must not be the selected run itself. */
+function compareReason(id: string, run: string, selected: string | null): string | null {
+  return id === 'workspace.compare' && run === selected ? 'This is the selected run, the baseline of the comparison: choose another run to compare with it.' : null;
 }
 
 function runReason(id: string, values: Values, v: ProjectView): string | null {
@@ -324,6 +334,8 @@ async function studio(e: PaletteEntry, values: Values): Promise<Outcome> {
     case 'go.runs':
     case 'go.claude':
     case 'view.toggle_claude':
+      return close(() => inProject(e.id, values));
+    case 'workspace.compare':
       return close(() => inProject(e.id, values));
     case 'go.settings':
       return close(() => void (location.hash = '#/settings'));

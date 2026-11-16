@@ -36,6 +36,20 @@ export class LocalData {
     return this.job(p, (dir) => ({ op: 'surface', dir }));
   }
 
+  /** F-815: `other`'s field minus `p`'s, in f64, on the same mesh; both folders are checked against the data roots. */
+  difference(p: string, snapshot: number, other: string, otherSnapshot: number, field: string): Job<DataWireResult> {
+    return this.queue.push(async () => {
+      const a = await this.roots.resolve(p);
+      if (!a.ok) throw new DataFailure('not_allowed', a.message);
+      const b = await this.roots.resolve(other);
+      if (!b.ok) throw new DataFailure('not_allowed', b.message);
+      const reply = await this.send({ op: 'difference', dir: a.dir, snapshot, otherDir: b.dir, otherSnapshot, field });
+      if (!reply.ok) throw new DataFailure(reply.store ? 'store' : 'internal', reply.message);
+      if (reply.result.kind !== 'difference') throw new DataFailure('internal', 'unexpected reply of the reader');
+      return reply.result;
+    });
+  }
+
   /** Test hook (mutation M3 of ADR 0350): the worker's unshuffle uses the wrong stride. Never called by the Studio. */
   setWrongStrideForTest(on: boolean): Promise<unknown> {
     return this.queue.push(() => this.send({ op: 'hooks', wrongStride: on })).promise;
