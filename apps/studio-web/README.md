@@ -25,6 +25,8 @@ dialog, read through the engine's project server, and kept live (below). Depende
     npm run bench:cold-start  # P10, 10 cold starts of the packaged copy; a heavy record, run by hand only
     npm run bench:service -- --bench-server=<f447_bench>   # P1 and P2 through the shell; heavy, by hand only
     npm run bench:data -- --bench-server=<f447_bench> --data=<folder> [--p12]   # P4 (and P12 at 1e6, 4e6); by hand only
+    npm run field -- --data=<folder> [--store=<fields folder>]   # F-808: the field viewport on a store at 1440x900 (view-and-report)
+    npm run bench:field -- --data=<folder> [--bench-server=<f447_bench>]   # P7 and P8 through the shell; heavy, by hand only
     npm start                 # electron . (run npm run build first); downloads the Electron binary on first use
 
 `npm test` opens the Studio window for a few seconds on Windows (Electron has no headless mode there); it needs no input.
@@ -132,6 +134,40 @@ snapshot as a `Float32Array` (`field`) or the boundary surface (`surface`), nami
   limit and `cancel(tag)` answers waiting requests at once. Values cross from main to the renderer as one structured
   clone of an ArrayBuffer over a second MessagePort, then once more through `contextBridge` (ADR 0801 addendum 3).
 
+## The field viewport (F-808)
+
+`src/renderer/field/FieldViewport.tsx` draws one cell field of one snapshot of a store on the boundary surface of the
+stored mesh: three.js `WebGPURenderer` (made and initialised asynchronously inside react-three-fiber's `Canvas`), with
+three's WebGL 2 back end as the fallback; the back end that runs is named above the canvas ("Drawn by WebGPU", or "Drawn
+by WebGL 2 (fallback: <why>)"). Until a project view hosts it (F-806), it is shown on a development page,
+`#/dev/field?route=local&path=<fields folder>&field=p&snapshot=19[&backend=webgl]` (`npm run field`).
+
+- **Colour from the raw value on the GPU** (G3, the Data Owns the Field Rule): each triangle corner carries its owner
+  cell's stored `f32`; a TSL material computes the table entry `k = floor(clamp((v - lo) * inv, 0, 1) * 255 + 0.5)` in the
+  vertex stage (passed flat) and reads it from a 256 x 1 texture with nearest sampling. Unlit, no tone mapping, no
+  colour space conversion, no MSAA: a pixel is exactly a table colour.
+- **The table is rcfd-render's map** (`field/colormap.ts`): entry k is rcfd-render's `ColorMap::viridis().eval(k / 255)`
+  (the 9 stops of `rcfd_post::render::colormap`). Stated tolerance: exact at the 256 table points and at and beyond both
+  ends; between them a value's colour is within 3 levels of 255 per channel of rcfd-render's colour of the same value
+  (a 256-entry table cannot hold the 635 colours of the piecewise-linear map). ADR 0801, addendum F-808, F808-D1.
+- **Legend** from the same table (its 256 entries put into a canvas), ticks in rcfd-studio's `{:.4e}`, the unit in the
+  title; the range is the min and max of the shown values (rcfd-studio's snapshot range).
+- **Hover readout**: the stored value of the cell under the cursor (a CPU pick with three's Raycaster on the drawn
+  triangles), its shortest text that reads back as the same `f32`, with cell and triangle. From the keyboard the view
+  orbits with the arrow keys, zooms with + and -, resets with Home, and reads out the value at its centre.
+- **Mesh grid** toggle (the faces' edges, 38% white, computed once per surface in a worker) and **Reset view** (top right
+  once the view has moved).
+- **Data only through the door**: `src/renderer/data/door.ts` is the one renderer module that names `window.studioData`
+  (`tests/unit/data-door-static.spec.ts`). Every load carries the view's tag and a superseded or cancelled one is
+  cancelled (G21); progress and errors are shown in the frame with Cancel or Try again.
+- Point fields are refused with the reason: `data.surface` does not say which mesh points the surface uses (ADR 0801, addendum F-808, F808-D3).
+- Tests: `tests/unit/field-colormap.spec.ts` (every entry and both ends against rcfd-render's map read from the Rust
+  source; the full range against the tolerance), `field-surface.spec.ts`, `data-door-static.spec.ts`, and
+  `tests/e2e/field.spec.ts` (pixels read back from screenshots of the packaged Studio equal the table colour of the
+  stored value under them, by WebGPU and by WebGL 2; the hover readout equals the stored value; legend; grid; reset;
+  keyboard; screenshots at 1440 x 900 in `test-results-visual/f808/`).
+- `performance` marks: `rcfd:field:open` and the measure `rcfd:field:first-picture` (P7, `scripts/measure-field.mjs`).
+
 ## Layout
 
 | Path | Process | Built by | Filled in by |
@@ -149,6 +185,8 @@ snapshot as a `Float32Array` (`field`) or the boundary surface (`surface`), nami
 | `src/renderer/ui/` | The primitives of `DESIGN.md` Components on React Aria Components: buttons, toggles and segmented toggles, text and number fields, select, switch, tabs (sub and project), table, slider, tooltip, state pictograms and icons; `primitives.css` | as above | F-802 |
 | `src/renderer/project/` | The project home (`ProjectHome.tsx`, `project.css`) and its one door to `window.studioProject` (`door.ts`) | as above | F-805 |
 | `src/renderer/dev/` | The primitives gallery at `#/dev/primitives` (loaded on demand): every primitive and the tokens, with sample labels only | as above | F-802 |
+| `src/renderer/field/` | The field viewport: `FieldViewport.tsx` (loading through the data door, legend, caption, readout), `FieldCanvas.tsx` (WebGPURenderer, the TSL material, pick, grid, keyboard, P8 bench), `colormap.ts`, `surface.ts`, `grid.worker.ts`, `Legend.tsx`, `field.css`; its development page is `src/renderer/dev/FieldDev.tsx` at `#/dev/field` | as above | F-808 |
+| `src/renderer/data/` | `door.ts`: the renderer's one door to `window.studioData` (F-804's bulk data) | as above | F-808 |
 | `tests/unit/` | Pure tests of `security.ts` and the built `index.html` (F-801); tokens against `DESIGN.md`, the pictogram grid (F-802); the service client against a fake service (F-803) | run by Playwright (project `unit`) | F-801, F-802, F-803 |
 | `tests/e2e/` | The packaged shell driven by Playwright's `_electron.launch`; the primitives (F-802); the service port's allow-list against a fake service, and the client against the real `rcfd serve` (F-803) | run by Playwright (project `electron`) | F-801 onwards |
 | `tests/support/` | The fake service, finding and starting `rcfd`, launching the packaged Studio | imported by the tests | F-803 |

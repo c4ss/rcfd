@@ -21,6 +21,8 @@
     "bench:cold-start": "node scripts/measure-cold-start.mjs",
     "bench:service": "node scripts/measure-service.mjs",
     "bench:data": "node scripts/measure-data.mjs",
+    "bench:field": "node scripts/measure-field.mjs",
+    "field": "node scripts/open-field.mjs",
     "start": "electron ."
   },
   "dependencies": {
