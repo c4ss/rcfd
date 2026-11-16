@@ -14602,7 +14602,8 @@ fixed by the item's registration ADR before any code.
     Five of five mutations caught (one by another check than registered). Open: making the coupling the default of
     periodic_sliding_step (changes F-720's N1 test; maintainer). Follow-up F-724 (Threshold scale of the coupled
     interface solves). Follow-up F-725 (Sector against full annulus with a non-axisymmetric inlet). Case tree (sector,
-    opt-in [mesh.sliding.coincidences]): F-730 (ADR 0654).
+    opt-in [mesh.sliding.coincidences]): F-730 (ADR 0654). Threshold scale: F-724 (ADR 0659);
+    periodic_sliding_step_coupled now equals the base on F-720's uniform flows.
 - [~] **F-722** Reduced-order reference fan in the schema
   - depends on: F-713
   - acceptance: Every limit not stated here is registered in the ADR before the run. A named ComputerFan constructor
@@ -14655,7 +14656,7 @@ fixed by the item's registration ADR before any code.
     schedule, the attribution, bisect and issues paths on the runner. Follow-up F-736 (First GitHub runs of the daily
     gate (ADR 0653 checks on the runner)). Follow-up F-737 (Wave-tag mapping and a primary ADR in the test-to-ADR
     index).
-- [ ] **F-724** Threshold scale of the coupled interface solves
+- [~] **F-724** Threshold scale of the coupled interface solves
   - depends on: F-721, F-710
   - acceptance: the part-mean threshold of sliding_step and periodic_sliding_step_coupled is scaled by a flux scale of
     the interface faces rather than by the largest target, registered from a derivation; the coupled step equals the
@@ -14663,7 +14664,22 @@ fixed by the item's registration ADR before any code.
     every result of ADR 0638 and ADR 0641 at coincidences with a non-symmetric flow is kept within registered limits;
     then periodic_sliding_step is switched to the coupled path with the maintainer's approval (ADR 0640's N1 test
     becomes an ignored record). Every limit not stated here is registered in the ADR before the run.
-  - note: Follow-up of F-721 (ADR 0641, 2026-11-16).
+  - note: ADR 0659, 2026-11-16: the threshold scale of the coupled interface solves. New opt-in rule
+    rcfd_fv::sliding::PartCoupling::FluxScale (with sliding_step_with and sliding_periodic::periodic_sliding_step_with):
+    a part mean couples the interface graph's parts only above 1e-10 of the largest term magnitude of the targets over
+    the interface cells (the sum of the absolute fluxes, and for the GCL of (V1 + V0)/dt, that make up a cell's target:
+    the bound of its rounding, derived), instead of 1e-10 of the largest target. periodic_sliding_step_coupled (opt-in)
+    uses it: on ADR 0640's uniform flows it now equals periodic_sliding_step bit for bit on every step (200 and 650,
+    coincidences included; F-721's B1u met), and ADR 0641's sector run equals F-721's bit for bit over 400 steps
+    (divergence 2.5e-14); its planar run differs only in the rounding-level GCL closure, which is no longer coupled
+    (1.4e-13 of max|S_f|; a registered bit-equality missed, ADR 0641's limit met). Through sliding_step_with, FluxScale
+    equals F-710's step bit for bit on ADR 0638's uniform flows (UC, U2, U3, LP), and on an axial uniform flow on the
+    3-D full annulus it stays on the uncoupled step, where F-710's rule couples 6 coincidence steps on rounding.
+    Defaults are unchanged: sliding_step keeps F-710's rule and equals main's bit for bit on those five flows;
+    periodic_sliding_step is untouched; baseline_hashes and the F-250, F-303, F-704, F-710, F-720, F-721, F-711 and
+    F-730 suites pass unedited. A registered flip count had a defective scope (corrected count 0). Five of five
+    mutations caught. Open for the maintainer: FluxScale as the default of sliding_step, and switching
+    periodic_sliding_step to the coupled path (changes F-720's N1 test and the sector default at coincidences).
 - [ ] **F-725** Sector against full annulus with a non-axisymmetric inlet
   - depends on: F-721
   - acceptance: the lockstep of ADR 0641 (sector SS and the full annulus of ADR 0216, inlet periodic in the pitch, steps
