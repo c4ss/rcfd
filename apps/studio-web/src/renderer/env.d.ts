@@ -20,7 +20,7 @@ declare global {
     readonly studioData: DataBridge;
     readonly studioCase: CaseBridge;
     /** F-810: a runner run's residual and monitor histories, read only (not run control: that is studioRuns). */
-    readonly studioRun: RunBridge;
+    readonly studioRunData: RunBridge;
     readonly studioClaude: ClaudeBridge;
   }
 }

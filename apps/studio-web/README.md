@@ -197,7 +197,7 @@ selected run here. Code: `src/renderer/workspace/` (`RunWorkspace.tsx`, `TimePan
   stops following, Follow live brings it back.
 - **The axis is iterations** (steps) for every run: the store's snapshots, `read_residuals` and `status.json` share it,
   and `read_residuals` gives no simulated time per sample.
-- **Through the engine only**: a fourth port, `window.studioRun` (`src/shared/run.ts`; the one renderer module naming it
+- **Through the engine only**: a fourth port, `window.studioRunData` (`src/shared/run.ts`; the one renderer module naming it
   is `workspace/door.ts`), asks the open project's read-only project server: `read_residuals` (every series on its own,
   at most `SERIES_POINTS` = 800 samples, so the reply stays under the engine's text budget and is never written to a
   file), `read_residuals {since_step}` for the exact values at the line when a series was decimated or the line is past
@@ -402,7 +402,7 @@ Decisions taken in building F-814 (options, the recommendation followed; each re
 
 | `src/renderer/field/` | The field viewport: `FieldViewport.tsx` (loading through the data door, legend, caption, readout), `FieldCanvas.tsx` (WebGPURenderer, the TSL material, pick, grid, keyboard, P8 bench), `colormap.ts`, `surface.ts`, `grid.worker.ts`, `Legend.tsx`, `field.css`; its development page is `src/renderer/dev/FieldDev.tsx` at `#/dev/field` | as above | F-808 |
 | `src/renderer/data/` | `door.ts`: the renderer's one door to `window.studioData` (F-804's bulk data) | as above | F-808 |
-| `src/renderer/workspace/` | The run workspace (`RunWorkspace.tsx`, `TimePanel.tsx`: run bands, scrubber, residual plot, monitor), `model.ts`, its one door to `window.studioRun` (`door.ts`), `workspace.css` | as above | F-810 |
+| `src/renderer/workspace/` | The run workspace (`RunWorkspace.tsx`, `TimePanel.tsx`: run bands, scrubber, residual plot, monitor), `model.ts`, its one door to `window.studioRunData` (`door.ts`), `workspace.css` | as above | F-810 |
 | `src/main/run/`, `src/shared/run.ts` | The run port: `bridge.ts` (the checks), `series.ts` (a run's residual and monitor series and their units through the project server) | `tsc -p tsconfig.node.json` | F-810 |
 | `tests/unit/` | Pure tests of `security.ts` and the built `index.html` (F-801); tokens against `DESIGN.md`, the pictogram grid (F-802); the service client against a fake service (F-803) | run by Playwright (project `unit`) | F-801, F-802, F-803 |
 | `tests/e2e/` | The packaged shell driven by Playwright's `_electron.launch`; the primitives (F-802); the service port's allow-list against a fake service, and the client against the real `rcfd serve` (F-803) | run by Playwright (project `electron`) | F-801 onwards |

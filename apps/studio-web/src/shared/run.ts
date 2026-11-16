@@ -87,7 +87,7 @@ export type RunPortMessage = { readonly type: 'reply'; readonly id: number; read
 /** A run id as the runner writes them (`r-20261028T152641-3900`): letters, digits, `.`, `_` and `-`, not `.` or `..`. */
 export const RUN_ID = /^(?!\.{1,2}$)[A-Za-z0-9._-]{1,128}$/;
 
-/** What the preload script puts on `window.studioRun`. Each function's arguments are checked again in main. */
+/** What the preload script puts on `window.studioRunData`. Each function's arguments are checked again in main. */
 export interface RunBridge {
   /** The residual and monitor series of a run of the open project. */
   series(run: string): Promise<RunReply<RunSeries>>;

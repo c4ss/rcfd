@@ -1,7 +1,7 @@
 // The run workspace (F-810) without a window: the scrubber's stops and the shared axis (src/renderer/workspace/model.ts),
 // the run bands of DESIGN.md with One Live Thing, the run port's request check and the reading of a run's histories
 // through the engine's read_residuals and read_project_file (src/main/run/), the one renderer module that names
-// window.studioRun, and the stylesheet's tokens.
+// window.studioRunData, and the stylesheet's tokens.
 import { expect, test } from '@playwright/test';
 import { readdirSync, readFileSync } from 'node:fs';
 import { MessageChannel } from 'node:worker_threads';
@@ -313,7 +313,7 @@ function sources(dir: string): { file: string; text: string }[] {
 }
 const code = (t: string) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`\\])\/\/.*$/gm, '$1');
 
-test('only workspace/door.ts of the renderer names window.studioRun (not to be confused with F-807’s studioRuns)', () => {
+test('only workspace/door.ts of the renderer names window.studioRunData (not to be confused with F-807’s studioRuns)', () => {
   const naming = sources(renderer)
     .filter((f) => /\bstudioRun\b/.test(code(f.text)))
     .map((f) => f.file);

@@ -11,7 +11,7 @@
 //   PROJECT_PORT_CHANNEL in the same way; the checks are src/main/project/bridge.ts's.
 // - `window.studioCase`: the case editor's case files (F-812, src/shared/case.ts), on a port of its own on
 //   CASE_PORT_CHANNEL; the checks are src/main/case/bridge.ts's. See the end of this file.
-// - `window.studioRun`: a runner run's residual and monitor histories (F-810, src/shared/run.ts), on a port of its own on
+// - `window.studioRunData`: a runner run's residual and monitor histories (F-810, src/shared/run.ts), on a port of its own on
 //   RUN_PORT_CHANNEL; the checks are src/main/run/bridge.ts's. See the end of this file.
 // - `window.studioClaude`: the Claude Code panel (F-814, src/shared/claude.ts), over a port on CLAUDE_PORT_CHANNEL in
 //   the same way; the checks are src/main/claude/bridge.ts's.
@@ -580,7 +580,7 @@ contextBridge.exposeInMainWorld('studioClaude', claude);
 
 // ---- the run port (F-810, src/shared/run.ts)
 //
-// `window.studioRun`: requests and replies only, like the case port. The main process asks the open project's read-only
+// `window.studioRunData`: requests and replies only, like the case port. The main process asks the open project's read-only
 // project server, which reads the run's residuals.jsonl on every call.
 
 const RUN_PORT_CHANNEL: typeof RunChannel = 'studio.run-port';
@@ -639,4 +639,4 @@ const runHistories: RunBridge = {
   at: (run, step) => runSend({ op: 'at', id: nextRunId++, run, step }),
 };
 
-contextBridge.exposeInMainWorld('studioRun', runHistories);
+contextBridge.exposeInMainWorld('studioRunData', runHistories);

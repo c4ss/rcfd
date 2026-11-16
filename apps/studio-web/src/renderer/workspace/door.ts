@@ -1,4 +1,4 @@
-// The run workspace's one door to a runner run's histories (F-810, window.studioRun, src/shared/run.ts): the only
+// The run workspace's one door to a runner run's histories (F-810, window.studioRunData, src/shared/run.ts): the only
 // renderer code that names the bridge (tests/unit/workspace.spec.ts), as data/door.ts is for window.studioData and
 // project/door.ts for window.studioProject. Every answer is the bridge's own `{ok, result}` or `{ok: false, error}`.
 //
@@ -7,9 +7,9 @@
 // reported with F-810, as F-805 and F-812 report theirs).
 import type { RunReply, RunSeries, RunValuesAt } from '../../shared/run.js';
 
-const bridge = () => window.studioRun;
+const bridge = () => window.studioRunData;
 
-const noBridge = <T>(): RunReply<T> => ({ ok: false, error: { code: 'no_port', message: 'this page has no run bridge (window.studioRun)' } });
+const noBridge = <T>(): RunReply<T> => ({ ok: false, error: { code: 'no_port', message: 'this page has no run bridge (window.studioRunData)' } });
 
 /** The residual and monitor series of a run of the open project. */
 export function runSeries(run: string): Promise<RunReply<RunSeries>> {

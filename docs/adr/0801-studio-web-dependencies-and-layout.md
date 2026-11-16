@@ -852,7 +852,7 @@ Item F-810 of `docs/ROADMAP.md`. Traces G3, G9 (P5, P6), G12; `DESIGN.md` Layout
   prop), monitor readout (Display 30 px, unit from `output/monitors.json` or "no unit given") and snapshot counter move
   together. Transport: first, previous, Play (next stop once the one before is drawn), next; Follow live for a running
   run.
-- **The run port**, `window.studioRun` (`src/shared/run.ts`, `src/main/run/bridge.ts`, `series.ts`): `series(run)` and
+- **The run port**, `window.studioRunData` (`src/shared/run.ts`, `src/main/run/bridge.ts`, `series.ts`): `series(run)` and
   `at(run, step)`, answered by the open project's read-only project server: `read_residuals` per series (at most 800
   samples each, so a reply stays under the engine's 36 000-byte text budget and is never written to a file), `read_residuals
   {since_step: step, max_points: 2}` for the exact values at the line, `read_project_file` for the units (at most 1 MB,
@@ -869,7 +869,7 @@ Item F-810 of `docs/ROADMAP.md`. Traces G3, G9 (P5, P6), G12; `DESIGN.md` Layout
 - F810-D2, the source of residuals and monitors: (a) `read_residuals` of the project server, each series under 800
   samples, exact values at the line by `since_step`; (b) `output/monitors.json` through `read_project_file` (written
   only at the end of a run); (c) a new engine query. Taken: (a), with the units from (b).
-- F810-D3, a fourth port `window.studioRun` instead of new operations on `window.studioProject`: the project port's key
+- F810-D3, a fourth port `window.studioRunData` instead of new operations on `window.studioProject`: the project port's key
   set is pinned by `tests/e2e/project.spec.ts`, which F-810 may not change.
 - F810-D4, One Live Thing with several running runs: the selected run if it runs, else the newest running one; a paused
   run is not live (ink, not orange).
