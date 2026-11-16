@@ -18,6 +18,7 @@ import { colourRange, f32Text, lutBytes, type ColourRange } from './colormap.js'
 import { FieldCanvas, type Backend, type FieldCanvasApi, type Pick } from './FieldCanvas.js';
 import { Legend } from './Legend.js';
 import { shownRange } from './surface.js';
+import { Provenance, cellValue } from '../provenance/index.js';
 import './field.css';
 
 export interface FieldViewportProps {
@@ -75,6 +76,8 @@ export function FieldViewport({ store, snapshot, field, forceWebGL = false, reop
   const [hover, setHover] = useState<{ pick: Pick; by: 'pointer' | 'keyboard' } | null>(null);
   const [attempt, setAttempt] = useState(0);
   const api = useRef<FieldCanvasApi>(null);
+  // F-828: the readout stays while its provenance is open (the pointer leaves the surface for the popover)
+  const pinned = useRef(false);
   const tag = useRef('');
   const firstPicture = useRef(false);
   // F-810: while scrubbing, a new snapshot's load keeps the last picture without the loading notice for QUIET_MS
@@ -270,11 +273,12 @@ export function FieldViewport({ store, snapshot, field, forceWebGL = false, reop
         aria-label={`${quantity} on the boundary surface. Arrow keys orbit, plus and minus zoom, Home resets the view; the value at the centre is read out.`}
         tabIndex={shown ? 0 : -1}
         onPointerMove={onPointerMove}
-        onPointerLeave={() => setHover((h) => (h?.by === 'pointer' ? null : h))}
+        onPointerLeave={() => setHover((h) => (h?.by === 'pointer' && !pinned.current ? null : h))}
         onKeyDown={onKeyDown}
         data-ready={phase.kind === 'ready' ? '' : undefined}
         data-snapshot={shown ? shown.snapshot : undefined}
         data-step={snap?.step}
+        data-provenance="fv-readout"
       >
         <FieldCanvas
           ref={api}
@@ -326,7 +330,28 @@ export function FieldViewport({ store, snapshot, field, forceWebGL = false, reop
               {hover ? (
                 <>
                   <output className="fv-readout-value" data-cell={hover.pick.cell} data-triangle={hover.pick.triangle}>
-                    {f32Text(hover.pick.value)}
+                    <Provenance
+                      pkey="fv-readout"
+                      onOpenChange={(o) => (pinned.current = o)}
+                      subject={{
+                        kind: 'number',
+                        source: cellValue({
+                          run: runName(shown.info.path),
+                          quantity,
+                          shown: f32Text(hover.pick.value),
+                          value: hover.pick.value,
+                          unit,
+                          cell: hover.pick.cell,
+                          triangle: hover.pick.triangle,
+                          snapshot: shown.snapshot,
+                          of: shown.info.snapshots.length,
+                          step: snap?.step ?? 0,
+                          time: snap?.time ?? null,
+                        }),
+                      }}
+                    >
+                      {f32Text(hover.pick.value)}
+                    </Provenance>
                   </output>
                   <span className="fv-readout-where">
                     cell {hover.pick.cell} · triangle {hover.pick.triangle}

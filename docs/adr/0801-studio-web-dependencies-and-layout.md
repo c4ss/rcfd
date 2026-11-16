@@ -931,3 +931,64 @@ busy fraction 1.00 before and after, with 6 to 7 `cargo`/`rustc`/`link` processe
 - `service:panel.snapshot` keeps its exemption naming F-810: the workspace reads runner runs through the project server
   and does not use a service session's panel; which item should own it?
 - The roadmap task text named P6 "live update latency"; ADR 0350's P6 is the 4e6-cell scrub. Both are recorded above.
+
+## Addendum F-828: provenance and reproduce from the CLI (2026-11-16)
+
+No new dependency. The popover is React Aria's `Popover` and `Dialog` (already a dependency), drawn in a React root of
+its own (`react-dom/client`, already a dependency) so that its keys do not reach the handlers of the row the number sits
+in. The clipboard is Electron's `clipboard` in the main process.
+
+### Layout
+
+- `src/shared/provenance.ts`: the provenance port's contract (`studio.provenance-port`, ops `run` and `copy`), the run
+  record's facts, a number's source (`NumberSource`), the reproduce command built from a record alone with its gaps
+  in words, and the facts shown.
+- `src/main/provenance/`: `record.ts` reads `runs/<id>/run.json` whole, the hashes of `runs/<id>/case.snapshot` and of
+  the case file now, and the units of `output/monitors.json`, all through the project server's read-only
+  `read_project_file`; `bridge.ts` checks each request (a run id, or a text of at most 16000 characters to copy).
+- `src/renderer/provenance/`: `Provenance.tsx` (the trigger, a button with the number's words as its accessible name,
+  or a passive span inside a grid row or a list option; the popover), `registry.ts` (which number Show provenance
+  opens; the palette commands `provenance.show` and `provenance.copy_command`), `sources.ts` (each surface's numbers),
+  `door.ts` (the one renderer module naming `window.studioProvenance`), `provenance.css`.
+- Wrapped: the time panel's residual values, monitor readout and snapshot counter (the scrubber names the counter);
+  the workspace's numbers and run ids; the Runs view's table result, the selected run's id and numbers and its report
+  values; the field view's readout (the field view names it). Ctrl+I is Show provenance (global, the shortcut table).
+
+### Decisions (options, the recommendation taken; each reversible without an engine change)
+
+- D1 the reproduce command: `rcfd-runner start <case> --project <folder> --threads --priority [--mem-mb] [--set]...`
+  from `run.json` (taken; the CLI twin of `start_run`, making the same run folder), against `rcfd run
+  runs/<id>/case.snapshot` with the runner's launch flags (not recorded, so the Studio would write them from the
+  runner's source). A changed case, a mismatched snapshot, settings with no `rcfd-runner start` option
+  (`continue_from`, `max_steps`), a mesh file, a case outside the project and an unknown or different engine version
+  are said in words beside the command.
+- D2 a fifth MessagePort rather than new operations on the run port (F-810's test fixes the run port's operations).
+- D3 Copy writes the clipboard in the main process (every permission of the page stays denied).
+- D4 Ctrl+I for Show provenance.
+- D5 the engine versions compared as `<name> <version>`, the form of `rcfd --version` and `solver_version`.
+
+### G17 measured
+
+`tests/e2e/provenance.spec.ts`: a run of `cases/cavity-re100.toml` started from the window, its command copied from its
+provenance and run from PowerShell with `--project` changed to an empty project: `fields/store.rts`,
+`fields/index.json`, `residuals.jsonl`, `output/monitors.json`, `output/monitors.csv`, `output/report.html`,
+`output/restart.rcfd`, `output/solution.vtu`, `case.snapshot` and `check.json` byte for byte equal; `metrics.json`,
+`status.json` and `solver-status.jsonl` equal without times, process ids and own paths; `run.json`'s
+`case_snapshot_hash`, `solver_version` and `settings` equal; the sequence of `events.jsonl` kinds equal (the README,
+F-828, registers the comparison).
+
+### Missing in the engine (no Rust change here)
+
+- `run.json` records neither the solver's launch argv nor a build id (`solver_version` is a release name).
+- `rcfd-runner start` has no options for `continue_from` and `max_steps`; no `rcfd-runner rerun <id>` or
+  `start_run {from_run}` reruns a run from its own `case.snapshot`.
+- `status.json`'s `time` has no unit (the Runs view's "Time, s" caption is the Studio's word).
+- No read-only hash of a mesh file a run names (the reproduce check cannot say whether it changed).
+- A service session has no reproduce surface yet (`journal.get` then `rcfd run --journal`).
+
+### Proposed for `DESIGN.md` (not edited here)
+
+- The provenance affordance: a number at rest unchanged; hover, focus and open add a 1px dotted ink underline at 3px
+  offset; focus keeps the orange outline.
+- The provenance popover: the popover lift, 480 px wide; a head (quantity, value, unit in ink-2), a two-column facts
+  list (labels ink-2), the command on the viewport fill, its gaps in medium weight, then Copy command and Copy.

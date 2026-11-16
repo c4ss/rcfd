@@ -19,13 +19,13 @@ Engine read: rcfd 0.1.0, service protocol rcfd-service/1 version 1.1, MCP server
 
 | Kind | Capabilities | UI path | Exemption | Exemption whose item does not name it |
 |---|---|---|---|---|
-| Service methods | 69 | 18 | 51 | 39 |
+| Service methods | 69 | 19 | 50 | 39 |
 | MCP tools | 56 | 20 | 36 | 27 |
 | CLI commands | 36 | 9 | 27 | 21 |
 | CLI options | 156 | 8 | 148 | 114 |
 | Case schema keys | 948 | 948 | 0 | 0 |
 | Monitor format keys | 6 | 6 | 0 | 0 |
-| **All** | **1271** | **1009** (79.4 %) | **262** | **201** |
+| **All** | **1271** | **1010** (79.5 %) | **261** | **201** |
 
 A case key stands for every value of its enumeration (the solver options of that key, listed in the inventory): the
 schema-driven surface of F-825 offers them all. A CLI option is mapped with its command. "Item does not name it" marks an
@@ -34,7 +34,7 @@ new item (see the last sections).
 
 ## Gaps by kind and target item
 
-### Service methods (51 without a UI path)
+### Service methods (50 without a UI path)
 
 | Item | Count | Capabilities |
 |---|---|---|
@@ -45,7 +45,7 @@ new item (see the last sections).
 | F-811 residual and monitor plots | 3 | `particles.report` (not named), `report.export` (not named), `reports.get` |
 | F-812 case editor validated by the engine's schema | 3 | `mesh.inflate` (not named), `mesh.partition` (not named), `run.check` |
 | F-815 compare two runs | 5 | `design.compare` (not named), `design.get_metrics` (not named), `design.ledger_query` (not named), `design.ledger_rerun_check` (not named), `design.list_study` (not named) |
-| F-828 provenance inspector and reproduce-from-CLI | 3 | `journal.get`, `journal.replay`, `service.info` |
+| F-828 provenance inspector and reproduce-from-CLI | 2 | `journal.get`, `journal.replay` |
 
 ### MCP tools (36 without a UI path)
 
