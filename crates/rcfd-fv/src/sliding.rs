@@ -12,6 +12,10 @@
 //!   (M4);
 //! - the old-level Rhie-Chow defect: as `step_ale` on the mapped internal faces, zero on the interface faces (M4).
 //!
+//! At a rotor angle where rotor and stator nodes coincide the join drops the zero-area overlaps there and the interface
+//! graph falls into parts; when a part's targets do not sum to zero (beyond rounding) the two solves above are made on the
+//! interface faces together with the faces between the parts, whose mapped values receive the correction (ADR 0638).
+//!
 //! `PimpleSolver::step_sliding` advances one step with it. [`rotating_wall_conditions`] gives a wall on the rotor its
 //! velocity and the fixed-flux pressure gradient (M6).
 
@@ -214,6 +218,69 @@ pub fn graph_balance(edges: &[(usize, usize)], weights: &[f64], target: &[f64]) 
     })
 }
 
+/// Relative size of a connected part's target mean above which the parts of the interface graph are coupled (ADR 0638 D3:
+/// more than two decades above the rounding of a part's sum, seven below the mean that coinciding nodes leave).
+const PART_MEAN_TOL: f64 = 1e-10;
+
+/// The coupling faces of the interface graph on the faces `faces` of `mesh` (ADR 0638 D1): the internal faces that are not
+/// in `faces` whose owner and neighbour are both touched by `faces` and lie in different connected parts of the graph.
+fn coupling_faces(mesh: &Mesh, faces: &[usize]) -> Vec<usize> {
+    let nc = mesh.n_cells();
+    let (own, nei) = (mesh.owner(), mesh.neighbour());
+    let mut parent: Vec<usize> = (0..nc).collect();
+    fn root(p: &mut [usize], mut i: usize) -> usize {
+        while p[i] != i {
+            p[i] = p[p[i]];
+            i = p[i];
+        }
+        i
+    }
+    let mut touched = vec![false; nc];
+    let mut on = vec![false; mesh.n_faces()];
+    for &f in faces {
+        on[f] = true;
+        let (a, b) = (own[f], nei[f]);
+        touched[a] = true;
+        touched[b] = true;
+        let (ra, rb) = (root(&mut parent, a), root(&mut parent, b));
+        if ra != rb {
+            parent[ra] = rb;
+        }
+    }
+    (0..mesh.n_internal_faces())
+        .filter(|&f| {
+            !on[f] && touched[own[f]] && touched[nei[f]] && root(&mut parent, own[f]) != root(&mut parent, nei[f])
+        })
+        .collect()
+}
+
+/// The coupling faces and the values of the coupled solve (interface faces first), or `None` for the base solve.
+type Coupled = Option<(Vec<usize>, Vec<f64>)>;
+
+/// ADR 0638 D2: when the base solve `base` of [`interface_balance`] on `faces` removed a part mean above
+/// [`PART_MEAN_TOL`] times the largest target over the graph's cells and coupling faces exist, the solve on the edges
+/// "`faces`, then the coupling faces" (weights the face areas): `Some((coupling faces, values))`, the values in that order.
+/// `None` keeps the base solve.
+fn coupled_balance(mesh: &Mesh, faces: &[usize], target: &[f64], base: &InterfaceSolve) -> Result<Coupled, String> {
+    let (own, nei) = (mesh.owner(), mesh.neighbour());
+    let tmax = faces
+        .iter()
+        .flat_map(|&f| [own[f], nei[f]])
+        .fold(0.0f64, |a, c| a.max(target[c].abs()));
+    if base.removed_mean.partial_cmp(&(PART_MEAN_TOL * tmax)) != Some(std::cmp::Ordering::Greater) {
+        return Ok(None);
+    }
+    let coupling = coupling_faces(mesh, faces);
+    if coupling.is_empty() {
+        return Ok(None);
+    }
+    let all: Vec<usize> = faces.iter().chain(&coupling).copied().collect();
+    let edges: Vec<(usize, usize)> = all.iter().map(|&f| (own[f], nei[f])).collect();
+    let w: Vec<f64> = all.iter().map(|&f| mesh.face_area(f)).collect();
+    let sol = graph_balance(&edges, &w, target)?;
+    Ok(Some((coupling, sol.values)))
+}
+
 /// What `PimpleSolver::step_sliding` needs for one step from the old to the new joined mesh (ADR 0216 S2). Public so that a
 /// caller can inspect or alter it.
 #[derive(Debug, Clone)]
@@ -299,8 +366,21 @@ pub fn sliding_step(
         }
     }
     let gcl = interface_balance(mesh, &faces, &t)?;
-    for (k, &f) in faces.iter().enumerate() {
-        m[f] = gcl.values[k];
+    match coupled_balance(mesh, &faces, &t, &gcl)? {
+        None => {
+            for (k, &f) in faces.iter().enumerate() {
+                m[f] = gcl.values[k];
+            }
+        }
+        // ADR 0638 D2: a part of the interface graph with a mean above rounding, coupled through the faces between parts
+        Some((coupling, values)) => {
+            for (k, &f) in faces.iter().enumerate() {
+                m[f] = values[k];
+            }
+            for (k, &f) in coupling.iter().enumerate() {
+                m[f] += values[faces.len() + k];
+            }
+        }
     }
     let mut swept = vec![0.0; n];
     for f in 0..nf {
@@ -340,8 +420,21 @@ pub fn sliding_step(
         e[nei[f]] += interp_new[f];
     }
     let cor = interface_balance(mesh, &faces, &e)?;
-    for (k, &f) in faces.iter().enumerate() {
-        phi[f] = interp_new[f] + cor.values[k];
+    match coupled_balance(mesh, &faces, &e, &cor)? {
+        None => {
+            for (k, &f) in faces.iter().enumerate() {
+                phi[f] = interp_new[f] + cor.values[k];
+            }
+        }
+        // ADR 0638 D2: as for the mesh flux; the defect of a coupling face stays its mapped one
+        Some((coupling, values)) => {
+            for (k, &f) in faces.iter().enumerate() {
+                phi[f] = interp_new[f] + values[k];
+            }
+            for (k, &f) in coupling.iter().enumerate() {
+                phi[f] += values[faces.len() + k];
+            }
+        }
     }
     let mut div = vec![0.0; n];
     for f in 0..nf {
@@ -542,5 +635,36 @@ mod tests {
         }
         println!("W2: zmin {n_rotor} rotor faces, {n_stator} stator faces, {bad} not as registered");
         assert!(n_rotor > 0 && n_stator > 0 && bad == 0);
+    }
+
+    /// T1 of ADR 0638: two parts of an interface graph whose targets sum to `+1` and `-1`, coupled through the one face
+    /// between them; the coupled solve meets every target.
+    #[test]
+    fn t1_coupled_balance_meets_the_targets_of_two_parts() {
+        let mesh = rcfd_mesh::gen::box_2d(4, 1, 4.0, 1.0, false, false).unwrap();
+        let (own, nei) = (mesh.owner(), mesh.neighbour());
+        let face = |a: usize, b: usize| {
+            (0..mesh.n_internal_faces())
+                .find(|&f| (own[f], nei[f]) == (a, b) || (own[f], nei[f]) == (b, a))
+                .unwrap()
+        };
+        let faces = vec![face(0, 1), face(2, 3)];
+        let t = vec![1.0, 0.0, 0.0, -1.0];
+        let base = interface_balance(&mesh, &faces, &t).unwrap();
+        let (coupling, values) = coupled_balance(&mesh, &faces, &t, &base).unwrap().unwrap();
+        let mut d = [0.0; 4];
+        for (k, &f) in faces.iter().chain(&coupling).enumerate() {
+            d[own[f]] += values[k];
+            d[nei[f]] -= values[k];
+        }
+        let res = (0..4).fold(0.0f64, |a, c| a.max((d[c] - t[c]).abs()));
+        println!(
+            "T1: base removed mean {:.3e}, coupling faces {:?} (one: {}), residual {res:.2e} (1e-14)",
+            base.removed_mean,
+            coupling,
+            face(1, 2)
+        );
+        assert_eq!(coupling, vec![face(1, 2)]);
+        assert!(res <= 1e-14);
     }
 }
