@@ -14274,13 +14274,17 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     CLI commands) are additive and go through an ADR under G4. Done 2026-11-16: 1271 capabilities from the engine (69
     service methods, 56 MCP tools, 36 CLI commands, 156 CLI options, 948 case keys, 6 monitor keys); 0 with a UI path,
     all with dated exemptions, 189 flagged unplanned; docs/studio-coverage.md.
-- [ ] **F-825** Electron Studio: schema-driven case and settings surface
+- [x] **F-825** Electron Studio: schema-driven case and settings surface
   - depends on: F-824, F-802
   - acceptance: Every key of settings.schema gets a control generated from the schema (type, unit, range, enumeration,
     default), laid out by learner-first disclosure: defaults and common keys first, advanced keys one step away and
     never hidden for good; a new key added to the schema appears in the Studio with no Studio code change, shown by a
     test that adds a key to a test schema; validation messages come from the engine.
-  - note: ADR 0800 (G15 added 2026-11-16). Traces: G15, G2, G8; PRODUCT Principle 5; DESIGN Inputs.
+  - note: ADR 0800 (G15 added 2026-11-16). Traces: G15, G2, G8; PRODUCT Principle 5; DESIGN Inputs. Done 2026-11-16:
+    src/renderer/settings at #/settings (linked from the project home header); every one of 948 case keys has exactly
+    one control generated from settings.schema (real-engine e2e); structural learner-first tiers until F-826 metadata;
+    engine validation messages shown unchanged; coverage 0 -> 957 of 1271. A DESIGN.md subsection the agent added was
+    held back as a proposal for the maintainer.
 - [ ] **F-826** Engine: UI metadata in the case schema (labels, units, ranges, advanced flag)
   - depends on: F-824
   - acceptance: Opt-in, additive metadata on settings.schema entries (human label, unit, recommended range, an advanced

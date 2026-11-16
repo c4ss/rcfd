@@ -7414,9 +7414,9 @@
       "F-824",
       "F-802"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Every key of settings.schema gets a control generated from the schema (type, unit, range, enumeration, default), laid out by learner-first disclosure: defaults and common keys first, advanced keys one step away and never hidden for good; a new key added to the schema appears in the Studio with no Studio code change, shown by a test that adds a key to a test schema; validation messages come from the engine.",
-    "note": "ADR 0800 (G15 added 2026-11-16). Traces: G15, G2, G8; PRODUCT Principle 5; DESIGN Inputs."
+    "note": "ADR 0800 (G15 added 2026-11-16). Traces: G15, G2, G8; PRODUCT Principle 5; DESIGN Inputs. Done 2026-11-16: src/renderer/settings at #/settings (linked from the project home header); every one of 948 case keys has exactly one control generated from settings.schema (real-engine e2e); structural learner-first tiers until F-826 metadata; engine validation messages shown unchanged; coverage 0 -> 957 of 1271. A DESIGN.md subsection the agent added was held back as a proposal for the maintainer."
   },
   {
     "id": "F-826",
