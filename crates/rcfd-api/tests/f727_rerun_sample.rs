@@ -144,10 +144,10 @@ fn sample(k: usize) -> Option<RerunSample> {
     })
 }
 
-/// The corrupted pairs of a world: the first 16 of `0..64` shuffled by `Rng::new(world ^ 0xC0FF_EE)`.
+/// The corrupted pairs of a world: the first 16 of `0..64` shuffled by `Rng::new(world ^ 0x00C0_FFEE)`.
 fn corrupted(world: u64) -> Vec<usize> {
     let mut idx: Vec<usize> = (0..64).collect();
-    Rng::new(world ^ 0xC0FF_EE).shuffle(&mut idx);
+    Rng::new(world ^ 0x00C0_FFEE).shuffle(&mut idx);
     idx.truncate(16);
     idx
 }
@@ -612,6 +612,9 @@ fn w3b_claim() -> Hypothesis {
     h
 }
 
+/// (tag, base ledger, entry, parameter index, new value, the expected text, the model).
+type Case<'a> = (&'a str, &'a Path, usize, usize, f64, String, &'a dyn Model);
+
 /// Edit parameter `pi` of entry `k` to `value`; with `rehash`, rewrite the result's parent hash of that entry.
 fn edit(src: &Path, dst: &Path, k: usize, pi: usize, value: f64, rehash: bool) {
     let mut ls = lines(src);
@@ -649,7 +652,7 @@ fn b1_ncb_parameter_guard() {
     let x1_p5 = entries(&ledger_at(&base5))[11].params[1].value;
     assert_eq!(entries(&ledger_at(&base3))[7].params[2].value, 0.8);
     // (tag, base, entry, parameter index, new value, the expected text, the model)
-    let cases: Vec<(&str, &Path, usize, usize, f64, String, &dyn Model)> = vec![
+    let cases: Vec<Case> = vec![
         (
             "a",
             base5.as_path(),
