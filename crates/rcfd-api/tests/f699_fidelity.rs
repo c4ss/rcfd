@@ -1020,6 +1020,7 @@ fn p3_private_path_in_the_repository_and_public_inside_private_refused() {
 }
 
 #[test]
+#[ignore = "superseded set-up record (ADR 0642): the search included the temporary path, whose process id can contain a cell text; corrected test p4c_table_errors_with_the_path_removed"]
 fn p4_table_errors_name_row_and_column_never_a_value() {
     let d = tmp("p4");
     let good = std::fs::read_to_string(s7_table(&d)).unwrap();
@@ -1400,4 +1401,199 @@ fn b_reduced_order_fan_heavy() {
     assert!(g <= 0.02, "B2");
     assert!(g_rand > 0.02, "NC1 must miss");
     assert!(b4 <= 0.75, "B4");
+}
+
+// ---------------------------------------------------------------- ADR 0642 (F-717): the uncertainty guard, P4 with the path removed
+
+/// S8 (ADR 0642): `f + 0.075 + 0.01 z`, stated uncertainty 0.05: a constant offset within twice the stated uncertainty.
+struct OffsetNoisy;
+
+impl HighSource for OffsetNoisy {
+    fn id(&self) -> &str {
+        "synthetic.s8"
+    }
+    fn version(&self) -> &str {
+        "1"
+    }
+    fn fidelity(&self) -> Fidelity {
+        Fidelity::Analytic
+    }
+    fn level(&self) -> Option<String> {
+        Some("offset-noisy".into())
+    }
+    fn observe(&self, x: &[Quantity]) -> Observation {
+        let mut g = Rng::new(717_002 ^ fnv_bits(x));
+        let (u1, u2) = (g.uniform(), g.uniform());
+        let z = (-2.0 * (1.0 - u1).ln()).sqrt() * (2.0 * std::f64::consts::PI * u2).cos();
+        let (f, gg) = s1_low_fg(x);
+        Observation {
+            outcome: fg(f + 0.075 + 0.01 * z, gg),
+            uncertainty: vec![Quantity::new("f", 0.05, "Pa")],
+        }
+    }
+}
+
+fn rung_index(r: Rung) -> usize {
+    [Rung::R0, Rung::R1Add, Rung::R1Mul, Rung::R2]
+        .iter()
+        .position(|&x| x == r)
+        .unwrap()
+}
+
+#[test]
+fn g_uncertainty_guard_decides() {
+    let d = tmp("g");
+    let low = s1_low();
+    let spec = f_only_spec("s8", 300, 717_001);
+    let with_ku = |ku: f64, file: &str| {
+        let sp = FidelitySpec {
+            trust: TrustRule {
+                k_u: ku,
+                ..TrustRule::default()
+            },
+            ..spec.clone()
+        };
+        fidelity::run(&sp, &low, &OffsetNoisy, &ledger_at(&d.join(file))).unwrap()
+    };
+    let on = fidelity::run(&spec, &low, &OffsetNoisy, &ledger_at(&d.join("on.jsonl"))).unwrap();
+    let off = fidelity::run(
+        &FidelitySpec {
+            correct: false,
+            ..spec.clone()
+        },
+        &low,
+        &OffsetNoisy,
+        &ledger_at(&d.join("off.jsonl")),
+    )
+    .unwrap();
+    let guard_off = with_ku(0.0, "ku0.jsonl");
+    let factor_one = with_ku(1.0, "ku1.jsonl");
+    assert_eq!(on.rounds.len(), 4);
+    for (k, rd) in on.rounds.iter().enumerate() {
+        let f = &rd.correction.as_ref().unwrap().fits[0];
+        let ci = rung_index(f.rung);
+        let loo = f.mse[ci].map_or(f64::NAN, f64::sqrt);
+        let loo1 = f.mse[1].map_or(f64::NAN, f64::sqrt);
+        let g = &guard_off.rounds[k].correction.as_ref().unwrap().fits[0];
+        let h = &factor_one.rounds[k].correction.as_ref().unwrap().fits[0];
+        eprintln!(
+            "G round {}: rung {} trusted {} constant {} ({}); rmse0 {:.4e}, u_rms {:.4e}, rmse0/u_rms {:.4}; loo/rmse0 {:.4}, R1add loo/rmse0 {:.4}; k_u 0: rung {} trusted {} constant {}; k_u 1: trusted {}",
+            k + 1,
+            f.rung.as_str(),
+            f.trusted,
+            f.constant_trusted,
+            f.why,
+            f.rmse0,
+            f.u_rms,
+            f.rmse0 / f.u_rms,
+            loo / f.rmse0,
+            loo1 / f.rmse0,
+            g.rung.as_str(),
+            g.trusted,
+            g.constant_trusted,
+            h.trusted
+        );
+        // G1
+        assert!(f.rung != Rung::R0, "G1a round {}", k + 1);
+        assert!(loo <= 0.8 * f.rmse0 && loo1 <= 0.8 * f.rmse0, "G1b round {}", k + 1);
+        assert!(f.rmse0 <= 2.0 * f.u_rms, "G1c round {}", k + 1);
+        assert!(!f.trusted && !f.constant_trusted, "G1d round {}", k + 1);
+        assert!(
+            f.why.starts_with("the discrepancy") && f.why.contains("is not above 2 times the stated uncertainty"),
+            "G1e round {}: {}",
+            k + 1,
+            f.why
+        );
+        // G2
+        assert_eq!(g.rung, f.rung, "G2 rung round {}", k + 1);
+        assert_eq!(g.rmse0.to_bits(), f.rmse0.to_bits(), "G2 rmse0 round {}", k + 1);
+        for (a, b) in g.mse.iter().zip(&f.mse) {
+            assert_eq!(a.map(f64::to_bits), b.map(f64::to_bits), "G2 mse round {}", k + 1);
+        }
+        assert!(g.trusted && g.constant_trusted, "G2 trusted round {}", k + 1);
+        // G3
+        assert!(f.rmse0 > f.u_rms, "G3 bound round {}", k + 1);
+        assert!(h.trusted, "G3 k_u 1 round {}", k + 1);
+    }
+    // G1f
+    same_screening(&on, &off);
+    assert_eq!(
+        low_lines(&d.join("on.jsonl"), 300),
+        low_lines(&d.join("off.jsonl"), 300)
+    );
+}
+
+#[test]
+fn p4c_table_errors_with_the_path_removed() {
+    // the tag holds the cell text `158` (the `point` cell of row v158), so the old form's defect occurs on every run
+    let d = tmp("p4c_158");
+    let good = std::fs::read_to_string(s7_table(&d)).unwrap();
+    let cells: Vec<String> = good
+        .lines()
+        .skip(1)
+        .flat_map(|l| l.split(',').map(str::to_string).collect::<Vec<_>>())
+        .filter(|c| c.len() >= 3)
+        .collect();
+    assert!(cells.iter().any(|c| c == "158"));
+    let mk = |name: &str, text: String| {
+        let p = d.join(name);
+        std::fs::write(&p, text).unwrap();
+        p
+    };
+    let mut lines: Vec<String> = good.lines().map(str::to_string).collect();
+    let mut f: Vec<String> = lines[3].split(',').map(str::to_string).collect();
+    f[4] = "12.5x".into();
+    lines[3] = f.join(",");
+    let bad_cell = mk("bad_cell.csv", lines.join("\n"));
+    let no_col = mk("no_col.csv", good.replacen(",eta_s,", ",eta_x,", 1));
+    let no_var = mk("no_var.csv", good.replacen("variant,", "variant_id,", 1));
+    let mut unstripped_found = 0usize;
+    for (p, want) in [
+        (&bad_cell, vec!["row 4", "column 'dp_static_Pa'"]),
+        (&no_col, vec!["eta_s"]),
+        (&no_var, vec!["variant"]),
+    ] {
+        let e = match MeasuredTable::read(
+            p,
+            vec![
+                TableColumn {
+                    column: "dp_static_Pa".into(),
+                    metric: "f".into(),
+                    unit: "Pa".into(),
+                    uncertainty: 0.01,
+                },
+                TableColumn {
+                    column: "eta_s".into(),
+                    metric: "g".into(),
+                    unit: "W".into(),
+                    uncertainty: 0.001,
+                },
+            ],
+            Box::new(|_| None),
+            "rig-synthetic",
+            "1",
+        ) {
+            Err(e) => e,
+            Ok(_) => panic!("P4c: {} accepted", p.display()),
+        };
+        eprintln!("P4c: {e}");
+        let path = p.display().to_string();
+        assert!(e.contains(&path), "P4c: '{e}' does not name the path '{path}'");
+        for w in &want {
+            assert!(e.contains(w), "P4c: '{e}' lacks '{w}'");
+        }
+        unstripped_found += cells.iter().filter(|c| e.contains(c.as_str())).count();
+        let stripped = e.replace(&path, "");
+        let leaked: Vec<&String> = cells.iter().filter(|c| stripped.contains(c.as_str())).collect();
+        assert!(
+            leaked.is_empty() && !stripped.contains("12.5x"),
+            "P4c leaked {leaked:?} in '{stripped}'"
+        );
+    }
+    eprintln!(
+        "P4c: {} cells of at least 3 characters searched in 3 messages with the path removed, 0 found; PC: {} found with the path kept",
+        cells.len(),
+        unstripped_found
+    );
+    assert!(unstripped_found >= 1, "PC: the old form must fail on this set-up");
 }
