@@ -84,6 +84,74 @@ fn f1_a_waiter_is_not_starved_by_a_holder_that_takes_the_lock_again_at_once() {
     assert_eq!(left, 0, "F1: a claim file was left");
 }
 
+/// F1c (ADR 0669 amendment 1): the holder looks for a claim while it holds the lock and, without one, re-takes the lock
+/// within one remove and one create; hold 100 ms.
+#[test]
+fn f1c_a_waiter_is_not_starved_by_a_holder_that_re_takes_the_lock_within_one_create() {
+    let base = common::scratch("f751-f1c");
+    let p = Project::create(&base.join("p"), "f1c", "0").unwrap();
+    let root = p.root().to_path_buf();
+    let mut times = Vec::new();
+    let mut bad = Vec::new();
+    for k in 0..10 {
+        let rel = format!("cases/t{k}.txt");
+        let lock = edit_lock_path(&root, &rel);
+        let claim = edit_claim_path(&root, &rel);
+        std::fs::create_dir_all(lock.parent().unwrap()).unwrap();
+        let stop = Arc::new(AtomicBool::new(false));
+        let create = |l: &std::path::Path| std::fs::OpenOptions::new().write(true).create_new(true).open(l).is_ok();
+        let holder = {
+            let (lock, claim, stop) = (lock.clone(), claim.clone(), stop.clone());
+            std::thread::spawn(move || {
+                let mut cycles = 0usize;
+                while !create(&lock) {}
+                while !stop.load(Ordering::SeqCst) {
+                    std::thread::sleep(Duration::from_millis(100));
+                    cycles += 1;
+                    if claim.exists() || stop.load(Ordering::SeqCst) {
+                        while std::fs::remove_file(&lock).is_err() && lock.exists() {}
+                        while claim.exists() && !stop.load(Ordering::SeqCst) {
+                            std::thread::sleep(Duration::from_millis(1));
+                        }
+                        if stop.load(Ordering::SeqCst) {
+                            return cycles;
+                        }
+                        while !create(&lock) {}
+                    } else {
+                        while std::fs::remove_file(&lock).is_err() && lock.exists() {}
+                        while !create(&lock) {}
+                    }
+                }
+                while std::fs::remove_file(&lock).is_err() && lock.exists() {}
+                cycles
+            })
+        };
+        std::thread::sleep(Duration::from_millis(150));
+        let t0 = Instant::now();
+        let r = replace_if_hash(&root, &rel, None, b"x", "f1c");
+        let dt = t0.elapsed();
+        stop.store(true, Ordering::SeqCst);
+        let cycles = holder.join().unwrap();
+        eprintln!(
+            "F1c trial {k}: {:?} after {:.1} ms, holder cycles {cycles}",
+            r.as_ref().map(|_| "accepted"),
+            dt.as_secs_f64() * 1e3
+        );
+        if r.is_err() || dt >= Duration::from_secs(1) {
+            bad.push((k, format!("{r:?}"), dt));
+        }
+        times.push(dt);
+    }
+    let left = claims_left(&root);
+    eprintln!(
+        "F1c: {} of 10 accepted in under 1.0 s, max {:.1} ms; claim files left {left}",
+        10 - bad.len(),
+        times.iter().max().unwrap().as_secs_f64() * 1e3
+    );
+    assert!(bad.is_empty(), "F1c: {bad:?}");
+    assert_eq!(left, 0, "F1c: a claim file was left");
+}
+
 /// F2: a cooperating racer replaces the file continuously; every call of a probe with a wrong base is a conflict.
 #[test]
 fn f2_a_cooperating_writers_renames_never_refuse_or_fail_another_writers_path() {
