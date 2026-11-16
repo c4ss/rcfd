@@ -212,6 +212,12 @@ fn to_json<T: serde::Serialize>(path: &Path, value: &T) -> Result<Vec<u8>> {
 pub const EDIT_LOCK_STALE: Duration = Duration::from_secs(30);
 /// How long [`replace_if_hash`] waits for a busy edit lock before it gives up with [`ProjectError::LockBusy`].
 pub const EDIT_LOCK_WAIT: Duration = Duration::from_secs(2);
+/// A writer that has waited this long for a busy edit lock claims it ([`edit_claim_path`], ADR 0669 D2): while a fresh claim
+/// exists, no other cooperating writer takes the lock, so the claimant gets it at the next release.
+pub const EDIT_CLAIM_AFTER: Duration = Duration::from_millis(50);
+/// A claim older than this is taken to be left by a crashed writer and is removed (a claimant waits at most
+/// [`EDIT_LOCK_WAIT`] and removes its claim on every exit).
+pub const EDIT_CLAIM_STALE: Duration = Duration::from_secs(4);
 /// Project-relative edit log: one JSON line per accepted cooperative edit and per broken stale lock.
 pub const EDIT_LOG: &str = ".rcfd/edits.jsonl";
 
@@ -243,11 +249,43 @@ pub fn edit_lock_path(root: &Path, rel: &str) -> PathBuf {
         .join(format!("{:016x}.lock", rcfd_core::hash::fnv64(key.as_bytes())))
 }
 
+/// The claim file beside the edit lock of `rel`: `.rcfd/locks/<fnv64>.claim` ([`EDIT_CLAIM_AFTER`], ADR 0669 D2).
+pub fn edit_claim_path(root: &Path, rel: &str) -> PathBuf {
+    edit_lock_path(root, rel).with_extension("claim")
+}
+
 struct EditLock(PathBuf);
 
 impl Drop for EditLock {
     fn drop(&mut self) {
         let _ = fs::remove_file(&self.0);
+    }
+}
+
+/// A claim this writer made; removed when dropped (the lock is held, or the wait ended).
+struct Claim(Option<PathBuf>);
+
+impl Drop for Claim {
+    fn drop(&mut self) {
+        if let Some(p) = self.0.take() {
+            let _ = fs::remove_file(p);
+        }
+    }
+}
+
+/// True when another writer's claim of the lock is present and fresh; a stale one is removed (best effort).
+fn claimed_by_other(claim: &Path) -> bool {
+    match fs::metadata(claim).and_then(|m| m.modified()) {
+        Ok(m) => {
+            if m.elapsed().is_ok_and(|a| a > EDIT_CLAIM_STALE) {
+                let _ = fs::remove_file(claim);
+                false
+            } else {
+                true
+            }
+        }
+        // absent, or being removed right now
+        Err(_) => false,
     }
 }
 
@@ -259,12 +297,21 @@ fn log_edit(root: &Path, line: serde_json::Value) {
 
 fn acquire(root: &Path, rel: &str, file: &Path, who: &str) -> Result<(EditLock, bool)> {
     let lock = edit_lock_path(root, rel);
+    let claim_path = edit_claim_path(root, rel);
+    let mut claim = Claim(None);
     let t0 = std::time::Instant::now();
     let mut broke = false;
     loop {
-        match OpenOptions::new().write(true).create_new(true).open(&lock) {
+        // ADR 0669 D2: a fresh claim of another writer is a busy lock
+        let attempt = if claim.0.is_none() && claimed_by_other(&claim_path) {
+            Err(io::Error::from(io::ErrorKind::AlreadyExists))
+        } else {
+            OpenOptions::new().write(true).create_new(true).open(&lock)
+        };
+        match attempt {
             Ok(mut f) => {
                 let _ = writeln!(f, "{} {} {}", std::process::id(), who, crate::time::now());
+                drop(claim);
                 return Ok((EditLock(lock), broke));
             }
             Err(e) if e.kind() == io::ErrorKind::NotFound => {
@@ -294,6 +341,12 @@ fn acquire(root: &Path, rel: &str, file: &Path, who: &str) -> Result<(EditLock, 
                         lock,
                     });
                 }
+                if claim.0.is_none() && t0.elapsed() >= EDIT_CLAIM_AFTER {
+                    if let Ok(mut f) = OpenOptions::new().write(true).create_new(true).open(&claim_path) {
+                        let _ = writeln!(f, "{} {} {}", std::process::id(), who, crate::time::now());
+                        claim.0 = Some(claim_path.clone());
+                    }
+                }
                 std::thread::sleep(Duration::from_millis(2));
             }
             Err(e) => {
@@ -316,6 +369,10 @@ fn acquire(root: &Path, rel: &str, file: &Path, who: &str) -> Result<(EditLock, 
 /// Limits: only writers that use this function take the lock. A writer that does not (an editor, Claude Code's own
 /// file tools) can still replace the file between the check and the rename; the watcher sees such edits afterwards.
 /// Breaking a stale lock is not atomic against a second writer breaking the same stale lock at the same moment.
+///
+/// ADR 0669: a writer that has waited [`EDIT_CLAIM_AFTER`] claims the lock ([`edit_claim_path`]) so that a writer taking the
+/// lock again at once cannot starve it; a path whose first resolve fails in a way a concurrent rename can cause is resolved
+/// once more under the lock.
 pub fn replace_if_hash(root: &Path, rel: &str, base: Option<&str>, bytes: &[u8], who: &str) -> Result<Replaced> {
     replace_if_hash_with(root, rel, base, bytes, who, serde_json::Map::new())
 }
@@ -331,9 +388,24 @@ pub fn replace_if_hash_with(
     who: &str,
     extra: serde_json::Map<String, serde_json::Value>,
 ) -> Result<Replaced> {
-    let path = crate::paths::resolve_in(root, rel)?;
-    let norm = crate::paths::rel_string(root, &path).unwrap_or_else(|| rel.to_string());
-    let (_lock, broke) = acquire(root, &norm, &path, who)?;
+    let (path, norm, (_lock, broke)) = match crate::paths::resolve_in(root, rel) {
+        Ok(path) => {
+            let norm = crate::paths::rel_string(root, &path).unwrap_or_else(|| rel.to_string());
+            let held = acquire(root, &norm, &path, who)?;
+            (path, norm, held)
+        }
+        // ADR 0669 D1: a cooperating writer's rename can make the resolve fail (on Windows the canonical path of the
+        // replaced file is under `\$Extend\$Deleted`, or it is delete-pending); resolve once more under the lock
+        Err(e) if may_have_raced(&e) => {
+            let Some(norm) = crate::paths::lexical_rel(rel) else {
+                return Err(e);
+            };
+            let held = acquire(root, &norm, &root.join(&norm), who)?;
+            let path = crate::paths::resolve_in(root, rel)?;
+            (path, norm, held)
+        }
+        Err(e) => return Err(e),
+    };
     let current = match read(&path) {
         Ok(b) => Some(b),
         Err(ProjectError::Io { source, .. }) if source.kind() == io::ErrorKind::NotFound => None,
@@ -376,6 +448,15 @@ pub fn replace_if_hash_with(
         new_hash,
         broke_stale_lock: broke,
     })
+}
+
+/// Errors of [`crate::paths::resolve_in`] that a concurrent replacement of the file can cause (ADR 0669 D1).
+fn may_have_raced(e: &ProjectError) -> bool {
+    match e {
+        ProjectError::PathRefused { reason, .. } => *reason == crate::paths::OUTSIDE_ROOT,
+        ProjectError::Io { .. } => true,
+        _ => false,
+    }
 }
 
 /// Create a directory and its parents.
