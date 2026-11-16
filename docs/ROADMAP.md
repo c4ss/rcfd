@@ -14169,13 +14169,17 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     the run list within P2; a test for each action and for a refused action (the error names the problem and the
     recovery).
   - note: ADR 0800. Traces: G2, G7; PRODUCT Capabilities (parity: quick run, stop).
-- [ ] **F-808** Electron Studio: field viewport on three.js WebGPU
+- [~] **F-808** Electron Studio: field viewport on three.js WebGPU
   - depends on: F-804, F-802
   - acceptance: Mesh and fields on surfaces drawn by three.js WebGPURenderer with a TSL material that colours from the
     raw scalar through a lookup table, with the WebGL2 fallback; the colour of every vertex equals rcfd-render's colour
     map for the same value (G3, a test over the full range and the end points); the legend drawn from the same table;
     hover shows the value at the cursor; a mesh-grid toggle; P7 and P8 met; a view-and-report step.
-  - note: ADR 0800. Traces: G3, G9 (P7, P8); DESIGN Field view, Named Rules (Data Owns the Field).
+  - note: ADR 0800. Traces: G3, G9 (P7, P8); DESIGN Field view, Named Rules (Data Owns the Field). Partial 2026-11-16
+    (ADR 0801 addendum 5): field viewport src/renderer/field on WebGPU (WebGL2 fallback tested), dev route #/dev/field;
+    P7 met by R2 (median 71 ms; R1 2.0 s), P8 met (p99 frame 4.4 ms at 1e6 triangles); hover value bit-exact. Open: a
+    256-entry table matches rcfd-render exactly only at its 256 points and within 3/255 elsewhere (F808-D1, maintainer:
+    accept or switch to exact shader evaluation); view-and-report pending.
 - [ ] **F-809** Electron Studio: derived pictures (iso-surfaces, streamlines, cut planes, vectors)
   - depends on: F-808
   - acceptance: Each derived picture computed by the engine (rcfd-render or a registered opt-in service method) or, if
