@@ -306,3 +306,58 @@ dedicated UI); the compressible solver; parallel runs. The first-order interface
   of the repository's own runs, cell for cell after whole pitches); (b) ADR 0216 Q7's radial source flow against the
   potential flow (axisymmetric in its pattern; caught MU4 in a diagnostic, `0.22`, but needs a per-face inlet on the rotor's
   `inner`, which D4 does not allow). Taken (a) on the standing instruction.
+
+## Amendment 1 (2026-11-16, written after the registered run and before any corrected run)
+
+The registered run (once, release, code 2bcc8b0c; the W unit tests, then the six tree tests with three threads, 59.3 s, then
+the two CLI tests, 13.5 s) met W1, W2, K0, L0, E1, E2, D3, L1, L2, N0, NA1, M1, X0 (NA, UT, WT), C1, C2, C3 and U2, and
+missed:
+
+| Id | Limit | Measured |
+| --- | --- | --- |
+| NA2 (negative control) | `>= 5e-2` | `6.20e-3` |
+| NA3 | `E_NAN >= 5 E_NA` | `0.90` (`E_NA = 6.86e-3`) |
+| U1 | `<= 1e-10` each | velocity `7.24e-2`, pressure `2.35e1` |
+
+**NA: a defective set-up (the field).** NA0's largest `abs(u) / U0` at the end is `0.0427` (printed by the run), not of
+order one. The plane strain `G (x, -y, 0)` is the gradient of the harmonic potential `G (x^2 - y^2) / 2`: it is
+irrotational and divergence-free, and the only such fields in the annulus with no normal flow on both walls are the
+circulations `Gamma / (2 pi r)`. The pressure projection therefore removes it entirely (N3 said "removes the normal part",
+which is wrong), and what both runs carry is the discretisation residue of that projection (`4e-2`), mostly near the
+non-conformal interface, where the two runs' meshes differ. Dropping the rotor mesh flux moves a field that is not there, so
+NA2 could not hold. Read from the printed numbers and the decomposition above; nothing was re-run to see it.
+
+**UT: a defective set-up (the symmetry planes).** One diagnostic was run after the registered run (a scratch test file
+`crates/rcfd-api/tests/zz_f303_diag.rs`, five steps per variant, deleted after the run, not committed; disclosed): UT's
+largest velocity deviation after the first and fifth step is `2.36e-2`, `6.22e-2` as registered, the same with
+`angular_velocity = 0` and the same **without the table** (the frozen join, the existing path: `2.36e-2`, `6.22e-2`, pressure
+`2.9e1`); with `zmin`, `zmax` `velocity = "fixed"` at `U` it is `3.9e-15`, `6.0e-15` with the table and `4.4e-16`, `1.1e-15`
+without. So the uniform in-plane flow is not kept by the tree's `symmetry` planes on this mesh whether or not the rotor
+slides; the miss is not of F-303. (The cause in the existing symmetry condition is not diagnosed here; it is listed as a
+remaining question.) NA's comparison is not affected by it in kind: NA and NA0 share the planes.
+
+The registered checks stay as they are; NA2, NA3 and U1 become ignored `*_known_miss` records with their limits (the tests
+`na_known_miss_strain_field_removed_by_the_projection` and `ut_known_miss_symmetry_planes`, which also keep the checks they
+met). Corrected set-ups, registered here before they run, each run once:
+
+- **NAc**: NA with the initial field of the stream function `psi = C (q - 1)(4 - q) x y`, `q = x^2 + y^2` (lengths in m):
+  `u_x = C x (2 y^2 (5 - 2 q) + (q - 1)(4 - q))`, `u_y = -C y (2 x^2 (5 - 2 q) + (q - 1)(4 - q))`, `C = 1/24` m/s (so that the
+  largest speed in the annulus is `U0 = 1`; arith.py: the curl of `psi` checked to `8e-9`, `u_r = 5e-15` on both walls). It is
+  divergence-free and tangent to both walls, so the projection keeps it, and its vorticity has the azimuthal wave number 2.
+  **NA0c** is NAc without the table, **NANc** NAN on NAc, **NALc** NAL on NAc.
+- **UTc**: UT with `zmin`, `zmax` `velocity = "fixed"`, `velocity_value = [1, 0.5, 0]` (ADR 0216 U3's choice).
+
+| Id | Set-up | Check | Limit |
+| --- | --- | --- | --- |
+| N0c, NA1c, NA2c, NA3c, L1c, M1c, X0c, C3c | NAc, NA0c, NANc, NALc | as N0, NA1, NA2, NA3, L1, M1, X0, C3 | as registered (`1e-9`; `1e-2`; `>= 5e-2`; `>= 5`; `1e-12`; `1e-10`, `1e-12`, `1e-9`; `70 deg`; as stated) |
+| U1c, U2c, X0c | UTc | as U1, U2, X0 | as registered |
+
+Estimate of NA2c (arith.py): the rotor-region speed of the field is at most `0.24 U0` (the field is largest at the outer
+wall); a turn of `alpha = 0.2618` of a pattern of wave number 2 changes it by about `2 alpha 0.24 = 0.126 U0`, the decay over
+the run `exp(-nu (pi^2 + 4/1.5^2) alpha) = 0.97`: about `0.12`, a factor 2.4 over `5e-2`. NA1c: the residue that NA measured
+(`6.9e-3`) came from removing a field of order one at the interface; NAc removes no field, so its difference is the interface
+error of a field of `0.24 U0` at the interface (ADR 0216 R2 scaled: about `1e-4`).
+
+The decision rule is unchanged, with NA2c, NA3c and U1c in place of NA2, NA3 and U1 among the checks; the decision by the
+rule as first registered is reported as well. The CLI check C1 ran on NA's text and was met; it is not re-run (it checks
+the binary against the in-process run, not the field).
