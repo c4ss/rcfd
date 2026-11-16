@@ -22,6 +22,7 @@ exercised on small laminar cases and on analytic surrogates. The [glossary](glos
 * warm start for transient runs, the coupled solver and turbulence models other than k-epsilon and k-omega SST (they run
   cold); the warm start of energy and k-epsilon / k-omega SST runs exists in the library only (below)
 * any use with the real fan (the fan case belongs to the other wave 32 work and the milestone itself)
+* MCP tools for the fan objective, the surrogate, the fidelity driver and the hypothesis record (all library only; F-702)
 
 ## Operating maps
 
@@ -487,6 +488,48 @@ Verified on synthetic high sources only (an exact affine source, the one-variabl
 fan against a copy with larger loss constants, noise, a source that always fails, an identical source). It says nothing about
 how well the reduced-order model predicts a real fan.
 
+## Hypotheses: tests registered before their runs (ADR 0624, library only)
+
+`design::hypothesis` keeps what the loop learns across sessions as records in the design ledger, so a claim is never just text
+someone kept:
+
+* `register` appends a `hypothesis` entry before any evidence exists: the claim in the author's words, one factor at two levels,
+  the response, the direction (`increases`, `decreases`, `no_effect`), the smallest change that matters (`min_effect`, at least
+  10 times the resolution declared for the response), at most one held metric ("at equal flow": the metric is matched in both
+  arms by bisection on one compensating parameter), the domain of the other parameters, the paired design (`n` pairs, a seed),
+  the evaluator id, version and tier, and the level spent. The family is the ledger file: hypothesis `i` is tested at
+  `0.05 * 6 / (pi^2 i^2)`, so the levels of any number of hypotheses sum to at most 0.05; the count is read from the file, so a new
+  session cannot restart it. `register_batch` puts several hypotheses in one slot, judged by Holm's procedure.
+* `run` evaluates exactly the registered pairs (a Latin hypercube of the domain from a seed derived from the record), appends them
+  in pair order whatever the worker count, resumes after a kill, and appends a `hypothesis_result`: `confirmed` when the one-sided
+  lower bound of the mean paired difference is at least `min_effect`, `refuted` when the upper bound is below it, `inconclusive`
+  otherwise, `void` when too many pairs failed or the held metric was not matched. A paired sign test is the registered
+  alternative to the t test.
+* `verify` and `lessons` recompute every verdict from the registration and the evidence; a result line written by hand, evidence
+  before its registration, an altered registration, another evaluator version, a different number of pairs, or evidence away from
+  the registered design is reported with its entry and never returned. With the evaluator at hand (analytic or reduced-order tier)
+  every evidence entry is re-run. `lessons` gives one row per hypothesis with a generated statement next to the author's words, the
+  scope (evaluator, version, tier), the model error of the tier (from a fidelity summary of ADR 0622, or declared, else unknown),
+  staleness against the evaluator versions the caller holds now, and replicate links between tiers. Analytic results are never
+  returned.
+* `explore` ranks parameter-metric pairs by Spearman correlation over existing entries; it is marked exploratory and never
+  evidence.
+
+How to use it (protocol guidance, ADR 0624 Q12):
+
+1. Look at existing entries (`explore`, queries) as much as needed, then write the claim down before testing it. Choose
+   `min_effect` from what matters for the product, not from what the exploration showed.
+2. State the domain where the claim is meant to hold; do not narrow it to where the effect was seen.
+3. Run it. A refuted or inconclusive result is as much a result as a confirmation; re-test an inconclusive one as a new hypothesis
+   with more pairs (`supersedes`, at most two re-tests), never by adding runs to the old one.
+4. Quote a lesson with its scope: "on the reduced-order model (version ...), raising ... lowered ... by ...". With the tiers
+   available today every confirmation is a statement about the reduced-order model. A claim about the fan needs a re-test at a
+   higher tier (`replicates`), and both results stay.
+
+Verified with scripted agents on synthetic worlds with planted effects, a two-tier model with planted artefacts, an equal-flow
+closed form and the reduced-order fan. It shows that the record and its guards work, not that an assistant uses them well.
+There is no MCP tool for it yet (F-702).
+
 ## Code map
 
 The code is `crates/rcfd-api/src/design/`:
@@ -511,6 +554,7 @@ The code is `crates/rcfd-api/src/design/`:
 | `surrogate` | Gaussian-process regression: kernel, maximum-likelihood fit, prediction, leave-one-out (ADR 0621) |
 | `bayes` | expected-improvement proposal, failure model, batches, the driver over a ledger model (ADR 0621) |
 | `fidelity` | fidelity management driver: screen, confirm, log the pairs, correct; measured table with the privacy split (ADR 0622) |
+| `hypothesis` | hypothesis record of the long-horizon loop: registration, paired runs, recomputed verdicts, lessons, explore (ADR 0624) |
 
 ## Where to go next
 

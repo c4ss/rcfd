@@ -124,7 +124,7 @@ Status key: **exists** (done in the roadmap), **partial**, **missing**. Roadmap 
 | H3 | Surrogate model (for example Gaussian process) fitted to past evaluations to choose the next variant cheaply | done (F-698, ADR 0621: library only, reduced-order tier) |
 | H4 | Design ledger: every variant, its parameters, mesh hash, solver version, settings, metrics and verdict, durable and queryable, so progress survives sessions and results can be reproduced | partial (F-268: ledger, uq and Sobol drivers exist, ADR 0121, 0240; logging, fan adapter and bands ADR 0623; shared fields F-700) |
 | H5 | Assistant tools: create variant, run sweep, fetch metrics, compare, propose next, read history | partial (MCP/assistant layer exists; design-loop tools partial) |
-| H6 | Long-horizon improvement: Claude reads the ledger, forms hypotheses (for example "more sweep lowers tonal noise at equal flow"), tests them, and records what it learned | todo (F-701, ADR 0624) |
+| H6 | Long-horizon improvement: Claude reads the ledger, forms hypotheses (for example "more sweep lowers tonal noise at equal flow"), tests them, and records what it learned | partial (F-701, ADR 0624: the record, registered paired tests and the lessons query in the library; no MCP tool until F-702, and every confirmation so far is about the reduced-order model) |
 | H7 | Fidelity management: use C7 to screen, CFD to confirm, with the disagreement between them logged and used to correct C7 | partial (F-699, ADR 0622: the driver on synthetic high sources; no CFD or measured tier yet) |
 
 ## 4. Order of work

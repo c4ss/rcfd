@@ -11,6 +11,8 @@
 //! `surrogate` is a Gaussian-process regression and `bayes` the expected-improvement proposal of the next variant over it
 //! (ADR 0621), both opt-in.
 //! `fidelity` is the opt-in fidelity management driver: screen, confirm, correct (ADR 0622).
+//! `hypothesis` is the opt-in hypothesis record of the long-horizon loop: tests registered before their runs, verdicts recomputed
+//! from the evidence and scoped to the evaluator and its tier, and the lessons query (ADR 0624).
 //! `nsga2` is the multi-objective optimiser (ADR 0209). `cmaes` is CMA-ES with restarts of increasing population (ADR 0222).
 
 pub mod adjoint;
@@ -20,6 +22,7 @@ pub mod cmaes;
 pub mod fan_objective;
 pub mod fan_rom_eval;
 pub mod fidelity;
+pub mod hypothesis;
 pub mod ledger;
 pub mod nsga2;
 pub mod opmap;
