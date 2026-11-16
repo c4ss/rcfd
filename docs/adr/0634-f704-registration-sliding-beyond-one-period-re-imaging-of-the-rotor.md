@@ -274,3 +274,16 @@ solver; parallel runs.
 - **Q2. Who turns the solver's vectors.** (a) `step_sliding_periodic`, from a field of the step (taken: the step and the state
   stay consistent, and a caller cannot forget it); (b) a separate public method the caller calls. Taken (a) on the standing
   instruction.
+
+## Amendment 1 (2026-11-16, written before any run and before the test code of K2)
+
+K2's centre clause as registered ("every rotor cell centre against the reference centre moved by the turned offset and then
+back by `k` periods, `<= 1e-12`") is defective for the sector SS: the join places the points it inserts on the interface on
+the cylinder (ADR 0629 M2, `chart.point`), so a rotor cell with a face on the interface has more boundary points than the
+block's cell and a centre that depends on the offset (the volume of each interface cell changes with the hanging nodes, ADR
+0629 K3), by much more than `1e-12`. Found on reading the join while writing the test, before anything ran. Corrected clause,
+registered here before its run: **K2c**, the same comparison for the rotor cells **with no face on the interface** (no direct
+interface face and no wrap face), limit `<= 1e-12` as registered; for every rotor cell, the cell centre of `mesh_turned(t + k
+P)` equal bit for bit to that of `mesh_at` at the reduced offset it reports (the mesh is the one of that offset). The image and
+offset clauses of K2 are unchanged. The clause as registered is kept as an ignored `*_known_miss`-style record only if it is
+run; it is not run (its outcome follows from the read above), and the decision rule does not use K2.
