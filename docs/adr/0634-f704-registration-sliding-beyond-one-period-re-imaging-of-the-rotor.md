@@ -322,3 +322,122 @@ taken on the step data before the solver step, so on every step including the re
 
 The decision rule: PN2c and SN2c in place of PN2 and SN2 among the negative controls; MU1 caught when P8, P9, S9, S10, P10
 or S11 fails. The decision by the rule as first registered (without this amendment) is reported as well.
+
+## Addendum 1: results (2026-11-16)
+
+Measured against the limits registered above and in amendments 1 and 2; no limit was changed. Release builds on Windows. The
+registration is 96f58b6e, amendment 1 e2e8d88e (before any run), the code and tests of the registered run 85ac095f, amendment
+2 56ddfd33, the corrected checks and the known-miss records 8ebbea40, the prose of `docs/dynamic-mesh.md` 1aa7efd8. The K unit
+tests ran once (0.08 s), then the ten flow tests once (35.4 s, two threads), then amendment 2 was written and committed, then
+the four corrected tests ran once (5.8 s). The runs are deterministic; none was repeated to change a result.
+
+**Built as registered** (S1 to S4). `crates/rcfd-mesh/src/sliding_periodic.rs`: `PeriodicSlidingMesh::image` and `turned()`,
+`PeriodicSlidingInterface::reduce` and `mesh_turned`, the K1 to K4 unit tests; `mesh_at`, the join, `face_map_from` and
+`rotor_swept_volumes` not edited (only `image: 0` added to the struct literal of `mesh_at`).
+`crates/rcfd-fv/src/sliding_periodic.rs`: `Reimage`, the fields `images` and `reimage` of `PeriodicSlidingStep`, the image
+check, the old offset less one period for the swept volumes and the turned rotor vectors for the new-face interpolations on a
+re-imaging step (the old vectors borrowed, the same operations, when the image does not change).
+`crates/rcfd-fv/src/pimple/moving.rs` (shared solver file), lines 299 to 433: the extra argument `reimage` of
+`sliding_advance` (`None` from `step_sliding`), its check and the turning of the rotor cells' `u.values` and `hist_u` levels
+after every other check. New `crates/rcfd-fv/tests/sliding_reimaging_f704.rs` (14 tests: 12 run, 2 ignored known-miss
+records). No case-tree, CLI, schema, golden or hash-table change.
+
+### Results
+
+| Check | Limit | Measured (all steps; the three re-imaging steps) | Verdict |
+| --- | --- | --- | --- |
+| K1 `mesh_turned(t)` within one period against `mesh_at(t)` (8 meshes) | bit for bit | equal, image 0 | met |
+| K2 image and reduced offset, `k = 1, 2, 3` (24 meshes) | exact; `1e-14 k` | exact; `4.4e-16` worst | met |
+| K2c centres of the rotor cells off the interface (amendment 1) | `<= 1e-12`; every rotor centre as `mesh_at` | `9.2e-16` (PP), `8.0e-16` (SS); bit for bit | met |
+| K3 the re-imaging step on the mesh: (i) face map; (ii) swept volumes of a motion of 0.005 | exact; `1e-12`, zero | exact; `2.88e-14` (PP, 648 faces), `4.94e-14` (SS, 200 faces), zero | met |
+| K4 refusals of `-0.1`, `NaN`, `inf` | `Err` naming `turned` | all six | met |
+| P1 (c3) PF `abs(Q_I + Q_in) / Q_in` | `<= 1e-10` | `4.41e-14`; `2.78e-16` | met |
+| P2 PF outflow | `<= 1e-10` | `5.55e-16`; `2.78e-16` | met |
+| P3 PF continuity | `<= 1e-9` | `2.06e-12`; `4.23e-15` | met |
+| P4 PF GCL | `<= 1e-12` | `1.17e-14`; `7.69e-15` | met |
+| P5 PF remapped old flux from step 2 | `<= 1e-9` | `6.49e-15`; `2.08e-15` | met |
+| P6 PF periodic pair sums | `<= 1e-12` | `9.76e-16`; `2.71e-19` | met |
+| P7 (set-up) re-imaging steps, turned offset (PF and PU) | `{203, 406, 609}`; `>= 3` | `{203, 406, 609}`; 3.0566 | held |
+| P8 (c4) PU velocity, pressure | `<= 1e-10` each | `8.71e-15`, `8.24e-13`; `5.78e-15`, `2.58e-13` | met |
+| P9 (c3) PU net flux, GCL, continuity | `1e-10`, `1e-12`, `1e-9` | `5.69e-15`, `1.17e-14`, `6.52e-15`; `6.94e-16`, `7.69e-15`, `3.05e-15` | met |
+| P10 (amendment 2) PU slider sweep on every step's data | `<= 1e-12` | `9.57e-14` (648 faces); `8.82e-14` | met |
+| PN1 (negative control) direct faces alone, largest | `>= 0.1` | `0.998` | held |
+| PN2 (negative control, registered) no re-imaging, PU velocity | `>= 1e-6` | `8.71e-15` | **not held** (defective by design, amendment 2) |
+| PN2c (negative control, amendment 2) no re-imaging, P10's measure | `>= 0.1` | `2.03e2` | held |
+| S1 (c1) SF `abs(Q_I - Q_in) / Q_in` | `<= 1e-10` | `1.33e-15`; `7.95e-16` | met |
+| S2 SF outflow | `<= 1e-10` | `6.63e-16`; `3.98e-16` | met |
+| S3 SF continuity | `<= 1e-9` | `3.39e-13`; `1.28e-13` | met |
+| S4 SF GCL | `<= 1e-12` | `1.20e-14`; `7.59e-15` | met |
+| S5 SF remapped old flux from step 2 | `<= 1e-9` | `4.64e-15`; `2.65e-15` | met |
+| S6 SF periodic pair sums | `<= 1e-12` | `5.92e-15`; `7.32e-16` | met |
+| S7 (set-up) re-imaging steps, turned angle | SF `{210, 419, 629}`, SU `{105, 210, 315}`; `>= pi` | as stated; 3.2 rad each | held |
+| S8 SF against the potential flow | `<= 2e-2` | `8.65e-3`; `8.52e-3` | met |
+| S9 (c2) SU velocity, pressure (3-D sector) | `<= 1e-10` each | `6.23e-15`, `4.07e-14`; `3.79e-15`, `1.15e-14` | met |
+| S10 (c1) SU net flux, GCL, continuity | `1e-10`, `1e-12`, `1e-9` | `6.90e-17`, `6.03e-15`, `2.24e-15`; `2.48e-17`, `4.07e-15`, `7.90e-16` | met |
+| S11 (amendment 2) SU rotor sweep on every step's data | `<= 1e-12` | `3.80e-14` (104 faces); `3.08e-14` | met |
+| SN1 (negative control) vectors not re-imaged | `>= 0.1` | `0.776` | held |
+| SN2 (negative control, registered) no re-imaging, SU velocity | `>= 1e-6` | `6.22e-15` | **not held** (defective by design, amendment 2) |
+| SN2c (negative control, amendment 2) no re-imaging, S11's measure | `>= 0.1` | `8.51e1` | held |
+| F0 (set-up) cell match sector to annulus, every step | `<= 1e-9`, one-to-one | `1.57e-15`, one-to-one | held |
+| F1 (c5) `max abs(u_sector - u_annulus) / U_in` over 640 steps | `<= 2e-2` | `8.03e-3` | met |
+| F2 rms at the last step | `<= 1e-2` | `5.00e-3` | met |
+| F3 inner-ring mean pressure difference / `dp_pot` | `<= 5e-2` | `2.71e-4` | met |
+| FN (negative control) vectors not re-imaged, F1's measure | `>= 0.1` | `0.776` | held |
+| E1 image changes of 2 and of -1 | `Err` naming `image` | both | met |
+| E2 too many rotor cells | `Err`, unchanged | both | met |
+| D1 `baseline_hashes` | pass | 3 passed, 1 ignored (as before) | met |
+| D2 unedited suites | pass | `sliding_periodic_f304` 8 passed / 2 ignored; `sliding_interface_f250` 14 / 4; `sliding_interface_f250_records` 3 / 0 (R1 to R3 hashes asserted equal); `rcfd-fv` lib 106 / 6; `rcfd-mesh` lib 77 / 2 (the 74 of F-304 and the three new) | met |
+| D3 20 steps through `mesh_turned` against `mesh_at` | bit for bit | equal | met |
+
+Printed, no limit: F1 over steps 1 to 209 (before the first re-imaging) `7.29e-3`, over 210 to 640 `8.03e-3`; against the
+potential flow at the end the annulus `6.19e-3`, the sector `8.43e-3`; inner-ring mean pressure sector `-0.38404`, annulus
+`-0.38414`; PF `Q_in = 5.000000e-2`; wrap pairs at the end 2 (PF), 3 (SF). The F test took 35.1 s, under the 120 s
+registered for a heavy record, so it runs as an ordinary test.
+
+### Mutations
+
+Each applied alone by an exact text replacement to a `git archive` copy of 8ebbea40 in `w49i-work/f704-scratch/mut` (script
+`f704-scratch/mutate.py`, target `f704-scratch/target-mut`, log `f704-scratch/mutations.log`), the named tests run once, the
+file restored and compared equal with the branch file.
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 swept volumes of a re-imaging step from `old.offset` | P8, P9, S9, S10 (registered); P10 or S11 (amendment 2) | **not caught by P8, P9, S9, S10** (the blindness of amendment 2); caught by P10 (`2.03e2`) and S11 (`8.51e1`), and also by S3 (continuity `1.32e-9`) and S8 (`0.444`) |
+| MU2 rotation the wrong way | S8 | caught: `0.877` |
+| MU3 history not turned | S8 | caught: `0.781` |
+| MU4 every cell turned | S8 | caught: `0.561` |
+
+`cargo fmt -p rcfd-mesh --check`, `cargo fmt -p rcfd-fv --check`: clean. `cargo clippy --release -p rcfd-mesh -p rcfd-fv
+--all-targets -- -D warnings`: clean. Not run: the whole workspace suite (the lead's gate).
+
+### Decision
+
+Every clause of the acceptance was met: c1 (S1, S10, on every step including the three re-imaging steps), c2 (S9), c3 (P1,
+P9), c4 (P8), c5 (F1, with F2 and F3), c6 (D1 to D3). By the rule with amendment 2: the set-up checks held, the negative
+controls PN1, PN2c, SN1, SN2c and FN held, four of four mutations caught (MU1 by P10 and S11): **done** in the library. By the
+rule as first registered the outcome would be **partial**: the controls PN2 and SN2 did not hold and MU1 was not caught by its
+named checks, all for one diagnosed cause (a uniform flow does not see a rigid sweep that closes the GCL, amendment 2), not a
+defect of the method. The proposed status is done, with that disclosed; the lead may prefer partial (question Q5).
+
+### Remaining questions
+
+- **Q3. The case tree.** The re-imaging is in the library; a case key for periodic sliding is F-303. Options: (a) F-303 uses
+  `mesh_turned` directly (the loop is the one of these tests); (b) a separate item. Recommendation (a).
+- **Q4. Non-orthogonal correction on coupled faces** (ADR 0629 Q4), now measured against the full annulus: the sector's
+  velocity stays within `8.0e-3 U_in` of the annulus's over three pitches (`7.3e-3` within the first period), and its error
+  against the potential flow is `8.4e-3` against the annulus's `6.2e-3`. Options: (a) leave it (the difference is below the
+  discretisation error, and changing the coupled faces would change the default results of every periodic case); (b) a
+  solver change, open for the maintainer as in ADR 0629. Recommendation (a).
+- **Q5. Status with defective controls.** Options: (a) done, the corrected controls and sweep checks of amendment 2 in place
+  of PN2 and SN2 (the acceptance clauses were met as registered, and the corrected controls show that the sweep of the
+  re-imaging step is checked); (b) partial, by the rule as first registered. Recommendation (a), for the lead to confirm.
+- **Q6. Backward motion.** A rotor turning backwards across a period (image change `-1`) is refused. Options: (a) leave it
+  until a case needs it; (b) allow `-1` (the same formulas with the sign of the image change). Recommendation (a).
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> CFD solver, moving meshes. Follow-up of F-304 (ADR 0629 question 3). DONE in the library. ADR 0634, 2026-11-16: sector and planar sliding beyond one period. PeriodicSlidingInterface::mesh_turned takes any turned offset, builds the joined mesh at the offset reduced to one period and records the periods taken off in PeriodicSlidingMesh::image; a step whose image changes by one re-images the rotor: its swept volumes from the old offset less one period, its cells' old velocity turned back by one pitch for the interpolations on the new faces, and PimpleSolver::step_sliding_periodic turns the rotor cells' velocity and every stored history level before the step. Planar slider 3.06 periods (620 steps, re-imaged at steps 203, 406, 609): mass across the interface 4.4e-14 relative (limit 1e-10), uniform flow 8.7e-15 (pressure 8.2e-13), GCL 1.2e-14, sweep of the slider faces 9.6e-14. Sector 3.2 rad (3.06 pitches, re-imaged three times): radial source flow mass 1.3e-15, continuity 3.4e-13; 3-D sector uniform axial flow 6.2e-15; every measure also met on the re-imaging steps alone. Against the full-annulus sliding run of ADR 0216 over the same 640 steps: largest velocity difference 8.0e-3 U_in (limit 2e-2), rms 5.0e-3, inner-ring pressure 2.7e-4 of the potential-flow rise; not re-imaging the vectors gives 0.78 U_in (negative control). Defaults bit-identical (F-304 and F-250 suites, records and baseline hashes unchanged). Amendment 2: the registered no-re-imaging controls on the uniform flows could not fail (a uniform flow does not see a rigid sweep that closes the GCL); replaced, before their run, by a check of the sweep on every step and its control (2.0e2 and 8.5e1 without re-imaging); four of four mutations caught, one only by the corrected checks. Limits: steps of less than one period, forwards; per-face boundary data on rotor patches are the caller's; sectors of different pitch refused; no non-orthogonal correction on the coupled wrap faces; no case-file key (F-303).
+
+> F-304 note: append the sentence "Beyond one period: F-704 (ADR 0634)." to its existing note, and drop "(no re-imaging of the rotor)" from its limits.
