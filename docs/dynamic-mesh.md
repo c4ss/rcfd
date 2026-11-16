@@ -17,9 +17,13 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
 * Euler time scheme only (PISO/PIMPLE) in the case tree. The library's moving-mesh step takes BDF2 as an opt-in since F-345
   (ADR 0379; see "BDF2 on a moving mesh" below); `step_sliding` and `replace_mesh` stay Euler-only.
 * No turbulence, energy, scalars, particles, sources, rheology, statistics or restart.
-* Sliding interfaces in the library only (F-250, ADR 0216): a rotor block turning against a stator block across a
-  cylinder, the interface rebuilt every step, in the PISO/PIMPLE path (`rcfd_fv::sliding`,
-  `PimpleSolver::step_sliding`). The tree does not use it yet (ADR 0216 Q1).
+* Sliding interfaces (F-250, ADR 0216): a rotor block turning against a stator block across a cylinder, the interface
+  rebuilt every step, in the PISO/PIMPLE path (`rcfd_fv::sliding`, `PimpleSolver::step_sliding`). In the case tree since
+  F-303 (ADR 0637): the optional table `[mesh.sliding]` (`angular_velocity`, `rotor_walls`) on
+  `mesh.generator = "annulus_3d_cylindrical_interface"` runs it from a case file (see docs/case-schema.md); laminar
+  constant-property piso / pimple with Euler only, no expression boundary values, no restart. A non-axisymmetric flow
+  through the turning rotor (a plane strain field with every wall at rest) checks the rotor mesh flux: the sliding run
+  against the static join, after whole rotor pitches, cell for cell.
 * Planar and sector sliding interfaces with periodic seams, library only (F-304, ADR 0629): a slider periodic in the slide
   direction, or a rotor sector against a stator sector of the same pitch (`rcfd_mesh::sliding_periodic`,
   `rcfd_fv::sliding_periodic`, `PimpleSolver::step_sliding_periodic`). The periodic join keeps the blocks' seam pairs; the
@@ -30,7 +34,7 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   re-images the rotor (its swept volumes from the old offset less one period, its cells' velocity and history turned back
   by one pitch, in `periodic_sliding_step` and `step_sliding_periodic`). Steps of less than one period, forwards; boundary
   data set per face on rotor patches are the caller's to set on the new mesh; sectors of different pitch are refused; no
-  case key (F-303).
+  case key (the full-annulus key of F-303 does not cover them; ADR 0637 Q3).
 * Local remeshing of tetrahedral meshes is in the library since F-247 (ADR 0215), for the compressible solver in a box
   with planar walls; the case tree does not use it yet (ADR 0215 Q1).
 * Overset (chimera) meshes in the library only (F-134, ADR 0219): one component mesh moving rigidly over a static

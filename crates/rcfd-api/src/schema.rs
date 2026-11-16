@@ -296,7 +296,9 @@ pub fn case_schema() -> Schema {
                 ),
         )
         // F-342, ADR 0262 D1: an optional table, absent from every case that does not write it
-        .field("adapt", crate::sim::adapt_schema());
+        .field("adapt", crate::sim::adapt_schema())
+        // F-303, ADR 0637 D1: an optional table, absent from every case that does not write it
+        .field("sliding", crate::sim::sliding_schema());
 
     let physics = Schema::object()
         .doc("Fluid properties")

@@ -51,10 +51,14 @@ use std::sync::Arc;
 
 mod adapt;
 mod restart;
+mod sliding;
 mod warm;
 
 pub use adapt::{adapted_mesh, present as has_mesh_adapt, AdaptedMesh};
 pub(crate) use adapt::{check as adapt_check, schema as adapt_schema};
+// F-303, ADR 0637: the optional table [mesh.sliding]
+pub use sliding::present as has_mesh_sliding;
+pub(crate) use sliding::{check as sliding_check, schema as sliding_schema};
 
 pub use warm::{TurbWarm, WarmState};
 
@@ -488,6 +492,35 @@ fn cylindrical_interface_mesh(
 ) -> std::result::Result<Mesh, Vec<Diagnostic>> {
     use rcfd_mesh::non_conformal as nc;
     let me = |e: Error| diag("mesh", e.to_string());
+    let (a, b) = cylindrical_interface_blocks(case, nx, ny, grading)?;
+    let (mut m, rep) =
+        nc::join_non_conformal_cylindrical(&a, "outer", &b, "inner", [0.0; 3], [0.0, 0.0, 1.0], 1e-8).map_err(me)?;
+    m.add_cell_zone("rotor", (0..rep.b_cell_offset).collect()).map_err(me)?;
+    let q = nc::interface_non_orthogonality(
+        &m,
+        &rep.interface_faces,
+        nc::CYLINDRICAL_INTERFACE_MAX_NON_ORTHOGONALITY_DEG,
+    )
+    .map_err(me)?;
+    if q.exceeds {
+        return Err(diag(
+            "mesh.r_interface",
+            format!("{}; mesh.isotropic_interface = true sizes them", q.message()),
+        ));
+    }
+    Ok(m)
+}
+
+/// The rotor and stator blocks of `annulus_3d_cylindrical_interface` (the part of `cylindrical_interface_mesh` before the
+/// join; F-303, ADR 0637 D2 builds the sliding interface from them).
+fn cylindrical_interface_blocks(
+    case: &Case,
+    nx: usize,
+    ny: usize,
+    grading: f64,
+) -> std::result::Result<(Mesh, Mesh), Vec<Diagnostic>> {
+    use rcfd_mesh::non_conformal as nc;
+    let me = |e: Error| diag("mesh", e.to_string());
     let (r_in, r_if, r_out, lz) = (
         get_f(case, "mesh.r_in"),
         get_f(case, "mesh.r_interface"),
@@ -542,22 +575,15 @@ fn cylindrical_interface_mesh(
     };
     let a = gen::annulus_3d(nx, ny, nz, r_in, r_if, lz, 0.0, ga).map_err(me)?;
     let b = gen::annulus_3d(nxr, nyr, nzr, r_if, r_out, lz, 0.0, gb).map_err(me)?;
-    let (mut m, rep) =
-        nc::join_non_conformal_cylindrical(&a, "outer", &b, "inner", [0.0; 3], [0.0, 0.0, 1.0], 1e-8).map_err(me)?;
-    m.add_cell_zone("rotor", (0..rep.b_cell_offset).collect()).map_err(me)?;
-    let q = nc::interface_non_orthogonality(
-        &m,
-        &rep.interface_faces,
-        nc::CYLINDRICAL_INTERFACE_MAX_NON_ORTHOGONALITY_DEG,
-    )
-    .map_err(me)?;
-    if q.exceeds {
-        return Err(diag(
-            "mesh.r_interface",
-            format!("{}; mesh.isotropic_interface = true sizes them", q.message()),
-        ));
-    }
-    Ok(m)
+    Ok((a, b))
+}
+
+/// The blocks of `annulus_3d_cylindrical_interface` as `build_mesh` reads the case (its generator checks first), for the
+/// sliding interface of `[mesh.sliding]` (F-303, ADR 0637 D2).
+fn sliding_blocks(case: &Case) -> std::result::Result<(Mesh, Mesh), Vec<Diagnostic>> {
+    check_mesh_options(case, &get_s(case, "mesh.generator"))?;
+    let (nx, ny) = (get_i(case, "mesh.nx") as usize, get_i(case, "mesh.ny") as usize);
+    cylindrical_interface_blocks(case, nx, ny, get_f(case, "mesh.grading"))
 }
 
 /// Build the mesh described by the case: the mesh file (scaled by `mesh.scale`) or the generator's mesh, then the
@@ -1263,6 +1289,8 @@ pub struct Simulation {
     clipped: usize,
     /// The adaptive steady loop of `[mesh.adapt]` (F-342, ADR 0262); `None` without the table.
     adapt: Option<adapt::AdaptState>,
+    /// The sliding rotor-stator interface of `[mesh.sliding]` (F-303, ADR 0637); `None` without the table.
+    sliding: Option<sliding::SlidingRun>,
 }
 
 impl Simulation {
@@ -1278,6 +1306,10 @@ impl Simulation {
         // F-342, ADR 0262 D2, D3: with [mesh.adapt] the run starts on the base lattice and adapts at its first step
         if adapt::present(case) {
             return adapt::new_adaptive(case);
+        }
+        // F-303, ADR 0637 D2: with [mesh.sliding] the rotor block turns against the stator block
+        if sliding::present(case) {
+            return sliding::new_sliding(case);
         }
         let mesh = build_mesh(case)?;
         let geom = Arc::new(FvGeometry::new(Arc::new(mesh)).map_err(|e| diag("mesh", e.to_string()))?);
@@ -2529,6 +2561,7 @@ impl Simulation {
             limit_s,
             clipped: 0,
             adapt: None,
+            sliding: None,
         };
         if let Some(sc) = &mut sim.scalars {
             let ctx = StepCtx {
@@ -2819,6 +2852,11 @@ impl Simulation {
     /// simulation is its `to_mesh`.
     pub fn adaptive_lattice(&self) -> Option<&rcfd_mesh::adapt::AmrMesh> {
         self.adapt.as_ref().and_then(|a| a.lattice.as_ref())
+    }
+
+    /// The interface faces of the current joined mesh of a `[mesh.sliding]` run (F-303, ADR 0637); `None` without the table.
+    pub fn sliding_interface_faces(&self) -> Option<&[usize]> {
+        self.sliding.as_ref().map(|s| s.interface_faces())
     }
 
     /// The PISO/PIMPLE solver of a transient incompressible run (diagnostics and tests), if that is the engine.
@@ -4197,6 +4235,41 @@ impl Simulation {
                             }
                         }
                     },
+                    // F-303, ADR 0637 D3: the sliding rotor-stator interface (no dynamic mesh with it, D5)
+                    None if self.sliding.is_some() => {
+                        let sl = self.sliding.as_mut().expect("checked");
+                        match sl.step(s, dt) {
+                            Ok((i, rec)) => {
+                                self.geom = s.geom.clone();
+                                for (name, v) in [
+                                    ("sliding_angle", rec.angle),
+                                    ("sliding_interface_flux", rec.interface_flux),
+                                    ("sliding_gcl", rec.gcl),
+                                    ("sliding_non_orthogonality", rec.non_orthogonality),
+                                ] {
+                                    self.monitors.push(name, "", i.time, v);
+                                }
+                                i
+                            }
+                            Err(e) => {
+                                udf_error = Some(format!(
+                                    "[mesh.sliding] step {} (t = {}): {e}",
+                                    s.history.len() + 1,
+                                    s.time + dt
+                                ));
+                                rcfd_fv::pimple::StepInfo {
+                                    step: s.history.len() + 1,
+                                    time: s.time,
+                                    dt,
+                                    courant: 0.0,
+                                    continuity: 0.0,
+                                    res_u: 0.0,
+                                    res_p: 0.0,
+                                    p_iters: 0,
+                                }
+                            }
+                        }
+                    }
                     None if self.sources.is_some()
                         || self.components.is_some()
                         || self.particles.as_ref().is_some_and(|p| p.is_two_way())
@@ -5374,8 +5447,9 @@ impl Simulation {
     /// the co-simulation fluid participant of `[cosim]` (`crate::cosim_case`). Fails, naming the first model found, when
     /// the simulation would advance anything outside the flow solver.
     pub(crate) fn into_cosim_flow(self) -> std::result::Result<PimpleSolver, String> {
-        let others: [(bool, &str); 27] = [
+        let others: [(bool, &str); 28] = [
             (self.dynmesh.is_some(), "a dynamic mesh"),
+            (self.sliding.is_some(), "a sliding interface"),
             (self.turb.is_some(), "a turbulence model"),
             (self.energy.is_some(), "the energy equation"),
             (self.scalars.is_some(), "transported scalars or species"),

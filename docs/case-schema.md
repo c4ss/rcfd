@@ -551,6 +551,19 @@ absolute interface fluxes of a swirling flow is first order in the cell size aro
 
 `mesh.r_interface` and `mesh.isotropic_interface` on any other generator are rejected with a located error.
 
+Sliding interface (F-303, ADR 0637): the optional table `[mesh.sliding]` makes the rotor block turn against the stator block
+instead of the frozen join. `angular_velocity` (rad/s, default 0) is the rotor's rate about `+z` (the rotor angle after the
+time `t` is `angular_velocity t`); `rotor_walls` (`"rotating"`, default, or `"rest"`) says whether the no-slip walls of the
+rotor block turn with it (a hub) or are at rest. Every step the rotor block is turned and joined to the stator again (the
+sliding interface of F-250, ADR 0216: the rotor faces' swept volumes, an interface mesh flux that closes the geometric
+conservation law of the interface slivers, the old flux projected onto the new interface faces). On a patch that holds rotor
+faces, `velocity = "fixed"` with value 0 is a rotor wall (its stator faces stay at rest), a non-zero uniform fixed value,
+`symmetry` and `zero_gradient` are kept as written; other conditions there are refused. The run must be transient laminar
+`piso` / `pimple` with `time_scheme = "euler"`, without energy, turbulence, scalars, sources, components, particles, body
+forces, expression boundary values, a dynamic mesh, a mesh rotation, adaptive step control or restart files; each is a
+located error. The monitors `sliding_angle`, `sliding_interface_flux`, `sliding_gcl` and `sliding_non_orthogonality` are
+written every step, and a step whose interface faces exceed 70 deg stops the run. Without the table the case is unchanged.
+
 `annulus_3d_sector` (ADR 0116): `annulus_3d` cut to a sector `0 <= theta <= sector_angle` (degrees, strictly between 0 and
 360, required), `nx` chords around, `ny` radial (`grading` as `annulus_3d`), `nz` axial, height `lz` from z = 0. Patches
 `inner`, `outer`, `zmin`, `zmax` and the rotationally cyclic pair `theta_min` / `theta_max` (rotation `sector_angle` about
