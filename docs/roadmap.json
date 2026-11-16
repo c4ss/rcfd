@@ -7300,9 +7300,9 @@
     "deps": [
       "F-810"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Two runs side by side or overlaid at the same time and the same colour range, with the difference field where the meshes match and a stated refusal where they do not; a test that both views read the same snapshot time.",
-    "note": "ADR 0800. Traces: G3, G6; PRODUCT Operating Context."
+    "note": "ADR 0800. Traces: G3, G6; PRODUCT Operating Context. Done 2026-11-16: compare mode in the run workspace: a second run chosen by keyboard or pointer, both fields at the same snapshot time (iteration when steady, exact stored time when transient, never interpolated; a missing snapshot and steady-vs-transient are stated), one shared colour range and legend, the scrubber drives both, residuals and monitors overlaid, compare_runs metrics; difference field equal bit for bit to an f64 subtraction of the stored bytes where the meshes match (cell count and MESH hash), refusal in words where they do not (ADR 0801 Addendum 10). Engine gaps: no field-difference entry point (compare_fields proposed), no mesh-identity query."
   },
   {
     "id": "F-816",

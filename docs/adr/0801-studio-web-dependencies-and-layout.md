@@ -1117,7 +1117,7 @@ F-828, registers the comparison).
 - The provenance popover: the popover lift, 480 px wide; a head (quantity, value, unit in ink-2), a two-column facts
   list (labels ink-2), the command on the viewport fill, its gaps in medium weight, then Copy command and Copy.
 
-## Addendum F-815: comparing two runs in the run workspace (2026-11-16)
+## Addendum 10: F-815, comparing two runs in the run workspace (2026-11-16)
 
 F-815 (two runs side by side at the same time and the same colour range, the difference field where the meshes match
 and a stated refusal where they do not; guardrails G2, G3, G6, G8, G16, G20, G21, G22) adds **no dependency** and

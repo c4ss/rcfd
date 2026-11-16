@@ -14247,11 +14247,17 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     allow-list asserted in argv (dontAsk, no approve-everything flag), run/file links; tests use a fake claude. Left: a
     file link opens the case editor (F-812 now exists) instead of a filtered Home; claude-head colour role and writing
     .rcfd/claude-allow.json wait for the maintainer; no engine entry point for session discovery (TypeScript stopgap).
-- [ ] **F-815** Electron Studio: compare two runs
+- [x] **F-815** Electron Studio: compare two runs
   - depends on: F-810
   - acceptance: Two runs side by side or overlaid at the same time and the same colour range, with the difference field
     where the meshes match and a stated refusal where they do not; a test that both views read the same snapshot time.
-  - note: ADR 0800. Traces: G3, G6; PRODUCT Operating Context.
+  - note: ADR 0800. Traces: G3, G6; PRODUCT Operating Context. Done 2026-11-16: compare mode in the run workspace: a
+    second run chosen by keyboard or pointer, both fields at the same snapshot time (iteration when steady, exact stored
+    time when transient, never interpolated; a missing snapshot and steady-vs-transient are stated), one shared colour
+    range and legend, the scrubber drives both, residuals and monitors overlaid, compare_runs metrics; difference field
+    equal bit for bit to an f64 subtraction of the stored bytes where the meshes match (cell count and MESH hash),
+    refusal in words where they do not (ADR 0801 Addendum 10). Engine gaps: no field-difference entry point
+    (compare_fields proposed), no mesh-identity query.
 - [ ] **F-816** Electron Studio: keyboard and assistive-technology pass
   - depends on: F-806, F-808, F-810
   - acceptance: Every parity check passable by keyboard alone with visible focus; names and roles for every control;
