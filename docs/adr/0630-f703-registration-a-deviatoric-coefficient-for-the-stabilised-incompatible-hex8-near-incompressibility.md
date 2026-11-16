@@ -349,3 +349,124 @@ test are not claimed).
 2. **The locking-free reference.** F-bar (ADR 0506) rather than a mixed `u-p` Hex8 (none in the nonlinear driver). Taken on
    the same instruction.
 3. **Default.** All rules stay opt-in; open for the maintainer, as ADR 0614 and ADR 0628.
+
+## Addendum 1: results (2026-11-16)
+
+Every registered check was run once, on the code of the commit that adds the rules and the tests (logs in the item's scratch
+directory: `run1-default.log`, `run1-heavy.log`, `run1-b4.log`, `s4-fem.log`, `s5-baseline.log`, `mutations.log`). No limit,
+set-up, seed or measure was changed after a run; no amendment was written. The two misses are the ones arithmetic 1 predicts;
+their heavy records are kept as `g4_sweep_c45_known_miss` and `g4_sweep_c49_known_miss` (ignored, limit `>= 0.5` intact, the
+measured numbers in the ignore reason).
+
+### Results
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| S1D U30 | `>= 0.5` | `0.7720` (at 0.50) | yes |
+| S1D C30 | `>= 0.5` | `0.5148` (at 0.55) | yes (margin 3 per cent) |
+| S1D C45 | `>= 0.5` | `-2.583` (at 0.53); below 0.5 from `lambda = 0.82`, negative from 0.78 | **no** (N1, predicted) |
+| S1D C49 | `>= 0.5` | `-70.80` (at 0.56); `+0.611` at 0.96, `-0.029` at 0.95 | **no** (N1, predicted) |
+| S1D U45 | `>= 0.5` | `1.0036` (at 0.79) | yes |
+| S1D U49 | `>= 0.5` | `1.0511` (at 0.50) | yes |
+| S1L (diag.) | `>= 0.5` | U30 `0.5590`, C30 `0.7272`, C45 `1.0051`, C49 `1.0555`, U45 `1.0032`, U49 `1.0553` | yes, all six |
+| S1R | `>= 0.5` | `0.9767` (U30, C30), `1.0051` (C45, U45), `1.0555` (C49), `1.0553` (U49) | yes |
+| K0 | 51 of 51 | 51 of 51 in all six; smallest `143.10 mu h^3` (C49) | yes |
+| O2 | `<= 1e-9` | `0` for all five differences, ten lowest, every stretch, all six | yes |
+| F1 | `>= 0.5` | `>= 0.9582` (U49) | yes |
+| F2 | `<= 0.15` | `0.0776` (U30), `0.0712` (C30), `0.0231` (C45), `0.0173` (C49), `0.0151` (U45), `0.0423` (U49) | yes |
+| LK, R2 | report | `run1-heavy.log`; summary below | reported |
+| HF3 | as registered | all met; N1 `m_D = -1.430` (C45 0.5), `-19.28` (C49 0.8) | yes |
+| S2b | `<= 1e-14` | `0`, `0` | yes |
+| S3b | `<= 1e-12` | `<= 6.0e-15` (six coefficients) | yes |
+| S3c | bit-equal; `0`; holds | bit-equal; `0`; `c_D = 9.74e5 < c_L = 5.10e7 < c_R = 2.70e9` (C49 0.6) | yes |
+| S3d | `<= 1e-12` | `9.7e-16` (N3: `c_R` ratio `500.97`) | yes |
+| H3c | `<= 1e-10` | `<= 1.8e-15` | yes |
+| E1sD, E1sL | `>= 1e-4` | `7.142e-4`, `7.192e-4` | yes |
+| E1D, E1L | `<= 1e-12` | `3.6e-16`, `1.8e-16` | yes |
+| E3D, E3L | `<= 1e-6` | `5.5e-11`, `3.7e-10` | yes |
+| R-*D | ADR 0608 | all met (R-T1 (b) `1.65e-8`, (e) `1.03e-8`; R-Q1 0 of 12; R-CB `<= 4.6e-4`) | yes |
+| R-*L | ADR 0608 | all met (R-T1 (b) `1.81e-8`, (e) `8.6e-9`; R-Q1 0 of 12; R-CB `<= 4.6e-4`) | yes |
+| B3 | bit-equal | the ten digests of the base | yes |
+| B4 | pass | the five files pass | yes |
+| S4 | 0 failed | 1413 passed, 0 failed, 371 ignored | yes |
+| S5 | pass | 3 passed, 1 ignored | yes |
+| S6 | clean | `cargo fmt -p rcfd-fem --check` and `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean | yes |
+
+Locking measure `Lambda1_X = m_X / m_Fbar - 1` (report, at 0.5 unless stated):
+
+| Case | R | D | L | Full | Inc |
+|---|---|---|---|---|---|
+| U30 | `-0.018` | `-0.374` | `-0.547` | `+0.029` | `-1.95` |
+| C30 | `-0.018` | `-0.636` | `-0.514` | `+0.021` | `-1.83` |
+| C45 | `+0.035` | `-2.65` | `-0.119` | `+0.038` | `-7.65` |
+| C49 | `+0.066` | `-44.5` | `-0.188` | `+0.067` | `-124` |
+| C49 at 0.95 | `+0.128` | `-1.03` | `+0.069` | `+0.172` | `-1.05` |
+| U45 | `+0.063` | `+0.027` | `+0.024` | `+0.071` | `-1.99` |
+| U49 | `+0.160` | `+0.097` | `+0.129` | `+0.167` | `-1.15` |
+
+`Lambda10` follows the same pattern (C49 0.5: R `+0.079`, L `-0.099`, Full `+0.080`; U49 0.5: R `+0.211`, D `+0.108`, L
+`+0.154`, Full `+0.222`). Read with the limit of the measure (section Limits): near incompressibility rule R sits within 0.3 per
+cent of the Full Hex8 (the ADR 0628 finding); rule L lies between F-bar and Full in uniaxial stress and is 10 to 19 per cent
+softer than F-bar in confined compression near incompressibility; rule D is the softest rule wherever it stays positive.
+
+### Negative controls
+
+N1 as stated (S1D negative at C45 and C49; HF3 `m_D <= -1` at both controls). N2: the plain element's lowest eigenvalue is
+negative at 0.5 in all six cases (R2; `-0.145` at U49, the mildest). N3: `c_R` changes by the factor `500.97` between
+`kappa/mu = 2.17` and `49.7` (`(49.7/2.17)^2 = 524.6`), `c_D` by `1e-15`.
+
+### Mutations (scratch copy, default tests of the four files, each run once)
+
+| Id | Caught | By |
+|---|---|---|
+| MU13 | yes | S3b D (C49 `2.8e3`, U30, T1 (b)), S3d (`5.0e2`), HF3 N1 (C45 0.5 `+1.62`, C49 0.8 `+1.69`), E1D |
+| MU14 | yes | R-T1 D (b) `3.2e-6`, (e) `2.7e-5`; R-Q1 D (4 of 12) |
+| MU15 | yes | R-T1 L (b) `6.1e-5`, (e) `4.8e-5`, R-T3 L (b) `8.9e-6`; R-Q1 L (7 of 14) |
+| MU16 | yes | S3b L (three), E1L `3.5e-4`, E3L `1.2e-3`, R-T1 L (b), (e), R-T3 L, R-Q1 L |
+| MU17 | yes | HF3 N1 (both), E3D `4.0e-3`, E3L `4.0e-3` |
+| MU18 | yes | E1D `1.5e-3`, E1L `1.5e-3`, E3D, E3L |
+| MU19 | yes | B3 (the opted U30 0.6 digest changed) |
+| MU20 | yes | E3L `1.0`, R-T1 L (a) to (e), R-T3 L |
+
+Eight of eight caught. MU17 was expected to be caught by HF3, E1D and E1L; E1D and E1L do not catch it (`strain_energy` takes
+the rule on its own path, so only the force and the tangent fall back to rule R), HF3 and E3D, E3L do.
+
+### Deviations
+
+None in the checks. On the estimates: C30's S1D margin (`0.5148` at 0.55) is smaller than estimated (`~0.53`, read at 0.6).
+
+### Not run
+
+Nothing registered was skipped. The heavy records were not re-run for the mutations (as registered).
+
+### Decision
+
+**partial**. B3, B4, S4, S5, S3b, S3d, O2, F1, F2 and every R-*D check met; S1D missed at C45 and C49 (recorded as known
+misses), as arithmetic 2 predicts for any coefficient without the bulk modulus: the destabilising term of the incompatible field
+scales with the pressure, so in confined compression near incompressibility a coefficient that does not grow with `kappa` cannot
+cover it. Rule D is a correct opt-in (tangent, energy and the ADR 0608 checks hold) that stabilises uniaxial stress at every
+`nu` and confined compression at `nu = 0.3`, not confined compression at `nu >= 0.45`. The diagnostic rule L (bulk modulus
+linear, through the stress) met every check in all six cases, with `Lambda1` between `-0.55` and `+0.13` against F-bar (between
+`-0.19` and `+0.13` near incompressibility), where rule R reaches `+0.16`.
+
+### Remaining questions
+
+1. **The reading of "without the bulk modulus".** Options: (a) literal: close the line at this finding, rule D documented as
+   unstable in confined nearly incompressible compression; (b) "without the bulk modulus squared": a follow-up that takes rule L
+   as the candidate, with its own acceptance (a locking measure under a load against F-bar, not only the softest modes); (c) a
+   current-stress coefficient (needs a third derivative of the energy). Recommendation: (b). Rule L is built and measured here,
+   stays positive where rule D fails, and removes part of rule R's over-stiffening near incompressibility (U49 `Lambda1`
+   `+0.129` against `+0.160`).
+2. **Rule L's margin at `nu = 0.3`** (U30 `0.559` at 0.5, softer than rule D's `0.772`). Options: (a) accept; (b) a blend such
+   as `max(c_D, c_L)`. Recommendation: (a); a blend needs its own tangent at the switch and its own registration.
+3. **Default.** Recommendation: every rule stays opt-in (as ADR 0614 and ADR 0628).
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> Structural solver, intermediate tier. Follow-up of F-693 (ADR 0628). PARTIAL. ADR 0630, 2026-11-16: two opt-in coefficients of the ADR 0614 stabilisation of the incompatible-modes Hex8, chosen per model through IncompatibleStabilisation (Off by default; RestStress the ADR 0614 coefficient in its bits; Deviatoric, without the bulk modulus; LinearStress, the bulk modulus linear through the stress, diagnostic); defaults unchanged (the bit records of ADR 0608 and ADR 0614 and a new record of the ADR 0614 paths pass, the rcfd-api baseline hashes pass). The ADR 0628 sweep (6 x 6 x 6 patch, 51 stretches on [0.5, 1], six cases) repeated with the F-bar Hex8 of ADR 0506 on the same patch as the locking-free reference (within 7.8 per cent of the closed-form acoustic bound everywhere). The deviatoric coefficient keeps the lowest eigenvalue >= 0.5 mu in uniaxial stress at nu = 0.3, 0.45, 0.49 and in confined compression at nu = 0.3 (>= 0.515 mu), and misses in confined compression at nu = 0.45 (-2.58 mu) and 0.49 (-70.8 mu, negative from 5 per cent compression), as derived in the ADR before the run: the destabilising term scales with the pressure, so no coefficient without the bulk modulus can cover it. The linear-stress coefficient keeps >= 0.559 mu in all six cases; near incompressibility its softest mode is within -19 to +13 per cent of F-bar, where the ADR 0614 coefficient reaches +16 per cent. Strain energy, tangent and the ADR 0608 checks hold for both rules; eight of eight mutations caught. Not covered: a locking measure under a load, tension, shear, free boundaries, other materials, a current-stress coefficient.
+
+> F-693 (note, ADR 0630, 2026-11-16): F-703 measures the stabilisation against F-bar on the same patch; near incompressibility the ADR 0614 coefficient's softest mode is 7 to 16 per cent stiffer than F-bar, and no coefficient without the bulk modulus stabilises confined compression at nu >= 0.45.
+
+> Follow-up proposed: The linear-stress coefficient of the stabilised incompatible-modes Hex8 under load. Deps F-703. Acceptance: Every limit not stated here is registered in the ADR before the run. The LinearStress rule of ADR 0630 measured under a load against the F-bar Hex8 of ADR 0506: a nearly incompressible (nu = 0.49) block in confined compression and a bending cantilever, displacement and reaction within a registered tolerance of the F-bar result on the same and on a refined mesh; the lowest eigenvalue of the ADR 0628 sweep kept above a registered positive limit in all six cases; the ADR 0608 checks within their limits; the default bits unchanged.

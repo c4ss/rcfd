@@ -691,14 +691,14 @@ fn g4_sweep_c30_heavy() {
 }
 
 #[test]
-#[ignore = "heavy record of ADR 0630 (C45); run once with --ignored; the fast companion is hf3_fast_companion_on_a_4_cube_patch"]
-fn g4_sweep_c45_heavy() {
+#[ignore = "known miss of ADR 0630 Addendum 1 (heavy record, C45): S1D C45 smallest m_D -2.5833 at lambda 0.53 (below 0.5 from lambda 0.82), limit >= 0.5 kept; every other check of the case met; the fast companion is hf3_fast_companion_on_a_4_cube_patch"]
+fn g4_sweep_c45_known_miss() {
     sweep(C45);
 }
 
 #[test]
-#[ignore = "heavy record of ADR 0630 (C49); run once with --ignored; the fast companion is hf3_fast_companion_on_a_4_cube_patch"]
-fn g4_sweep_c49_heavy() {
+#[ignore = "known miss of ADR 0630 Addendum 1 (heavy record, C49): S1D C49 smallest m_D -70.799 at lambda 0.56 (below 0.5 from lambda 0.95), limit >= 0.5 kept; every other check of the case met; the fast companion is hf3_fast_companion_on_a_4_cube_patch"]
+fn g4_sweep_c49_known_miss() {
     sweep(C49);
 }
 
