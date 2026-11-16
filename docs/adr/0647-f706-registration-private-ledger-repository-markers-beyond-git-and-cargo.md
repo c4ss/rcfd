@@ -174,3 +174,75 @@ B6, B7) and `crates/rcfd-workspace/tests/private_marker_f706.rs` (B3w). Each is 
 - A case-insensitive file system makes `.HG` match `.hg` (Windows, macOS default); a case-sensitive one does not. Not tested.
 - The marker of a project folder is only its manifest; a folder that has only `.rcfd/` is not refused.
 - No new MCP or CLI path; the message is a library error.
+
+## Addendum 1: results (2026-11-16)
+
+Built as registered (D1 to D5) in `crates/rcfd-api/src/design/ledger.rs` (base lines 691 to 720 and 735 to 739; new
+`PROJECT_MARKER`, `MARKERS`, `repository_marker`; `repository_ancestor` now delegates; the refusal adds `(marker <name>)`). New
+tests `crates/rcfd-api/tests/f706_private_markers.rs` (B1 to B7) and `crates/rcfd-workspace/tests/private_marker_f706.rs` (B3w).
+`docs/design-loop.md` names the markers. One registered run, release profile, on this machine (Windows 11, NTFS temp directory).
+
+| check | limit | measured | met |
+|---|---|---|---|
+| N0 | temp directory outside every marker | `None` in all 8 new tests | yes |
+| B1 `.hg` | both paths refused, located, marker named, nothing created | both refused at `\?\C:\...\rcfd_f706_b1_<pid>\hgrepo (marker .hg)`; no file, no `a/` | yes |
+| B2 `.svn` | as B1 | both refused at `...\svnrepo (marker .svn)`; nothing created | yes |
+| B3 manifest | as B1 | both refused at `...\proj (marker rcfd-project.json)`; no file, no `designs/` | yes |
+| B3w real project | constant equal; refused naming the project root and manifest; no file | `PROJECT_MARKER == MANIFEST`; refused at `...\rcfd_f706_b3w_<pid>\proj (marker rcfd-project.json)`; no file | yes |
+| B4 nearest | inner directory and its marker, no `.hg` in (a) | (a) `...\outer\inner (marker rcfd-project.json)`, no `.hg`; (b) `...\o2\i2 (marker .svn)` | yes |
+| B5 order | `.git` before `.hg` | `(canonical both, ".git")` | yes |
+| B6 negative controls | 5 of 5 accepted, `None`, measured entry round trip | 5 of 5 accepted, all `None`; 1 entry appended and read back equal, 0 skipped | yes |
+| B7 driver | `fidelity: private ledger:` with `T/drv` and `.hg`; 0 and 0 calls; no files | `fidelity: private ledger: ... at \?\...\drv (marker .hg)`; low 0, observe 0; neither file exists | yes |
+| B8 ADR 0632 checks | all pass unchanged | `design::` unit tests 76 passed, 0 failed, 3 ignored (11 of 11 `f700_tests`, 8 of 8 `ledger::tests` among them); A8 refusal now `... at \?\E:\projects\cfd\w49i-work\f706 (marker .git)`, ancestor equal to the workspace root as before; `tests/f699_fidelity.rs` 16 passed, 0 failed, 3 ignored (P3 (a) names the same ancestor, `.git`); rcfd-mcp `default_f1` 2 passed, `project_list_f270` 1 passed; `git diff d40cd665 -- crates/rcfd-mcp` empty; no existing test file changed | yes |
+| B9 diff | only the listed files; no shared solver file | `ledger.rs`, two new test files, this ADR, `docs/design-loop.md` | yes |
+
+Mutations (`git ls-files` copy in `w49i-work/f706-scratch/mut`, script `mutate.py`, runner `runmut.sh`, log `mutations.log`;
+each alone; the f706 tests, B3w and ADR 0632 A8 run for each):
+
+| id | caught by | expected |
+|---|---|---|
+| M1 no `.hg` | B1, B7 | B1, B7 |
+| M2 no `.svn` | B2, B4 | B2, B4 |
+| M3 no manifest | B3, B4, B3w | B3, B3w, B4 |
+| M4 `is_dir()` | B3, B4, B3w | B3, B3w, B4 |
+| M5 outermost ancestor | B4 | B4 |
+| M6 name prefix | B6 | B6 |
+| M7 no marker in message | B1, B2, B3, B4, B7, B3w | B1, B2, B3 |
+| M8 misspelt constant | B3, B4, B3w | B3w, B3 |
+| M9 never refuse | B1, B2, B3, B4, B7, B3w, A8 | B1, B2, B3, B7, A8 |
+
+Nine of nine caught. A8 passed under M1 to M8 as expected (the copy has no `.git`; its ancestor is found by the workspace
+`Cargo.toml`, as in a `git archive` copy).
+
+`cargo fmt -p rcfd-api --check` and `cargo fmt -p rcfd-workspace --check`: clean. `cargo clippy -p rcfd-api -p rcfd-workspace
+--all-targets --release -- -D warnings`: clean after one change.
+
+Deviations, disclosed:
+
+1. After the registered run clippy refused the type of `MARKERS` (`type_complexity`); a type alias `MarkerTest = fn(&Path) ->
+   bool` was added (no behaviour change), and `cargo fmt` reflowed the two new test files. The 8 new tests were run once more
+   on the final source as a build confirmation (8 passed); the mutations ran on the source of the registered run (the alias is
+   not on any mutated line).
+2. ADR 0632 A8 was run twice: within the `design::` set and alone with `--nocapture` to record its message.
+3. `baseline_hashes` not run: no shared solver file changed (rule 3). The whole workspace was not run (the lead's gate).
+
+Decision by the registered rule: **done** (B1 to B9 met in the one registered run, nine of nine mutations caught).
+
+### Remaining questions
+
+1. Other version-control markers (`.bzr`, `_darcs`, `.fslckout` / `_FOSSIL_`, `.pijul`, `.jj`, Subversion's `_svn`). Options:
+   (a) keep the five; (b) add them. Recommendation: (a) until a user asks; each is one line in `MARKERS` and one check. Taken on
+   the maintainer's standing instruction of 2026-11-11 (take the recommendation).
+2. A folder holding only `.rcfd/` (a project whose manifest was removed). Options: (a) not a marker; (b) also refuse.
+   Recommendation: (a); `rcfd-mcp --project` and the edit hook do not treat such a folder as a project either.
+3. Windows' verbatim prefix in the message (ADR 0632 question 2) stays as recommended there.
+
+## For the lead: roadmap entries
+
+> Proposed status: done
+
+> Follow-up of F-700 (ADR 0632 remaining question 1 b). ADR 0647, 2026-11-12. DONE. Library only (no MCP tool, case key or golden edit): Ledger::private now refuses a path whose nearest ancestor directory holds .git, a Cargo.toml with [workspace], .hg, .svn or the rcfd project manifest rcfd-project.json (the marker of the project folder that rcfd-mcp --project and the Studio open, rcfd_project::project::MANIFEST, kept equal to ledger::PROJECT_MARKER by a test in rcfd-workspace); the new ledger::repository_marker returns that directory and the marker, and the message names both (for example "lies inside the repository tree at ...\hgrepo (marker .hg)"). Checks: both paths under each of .hg, .svn and the manifest refused with the canonical directory and the marker named and nothing created; a private ledger in a project folder made by Project::create refused; the nearest of two nested markers named; .git first in one directory; 5 of 5 negative controls accepted (plain folder; .hgignore, rcfd-project.json.bak and seven more look-alike names; markers in a sibling and in a sub-directory; a non-workspace Cargo.toml) with a measured entry round trip; the fidelity driver refuses a privacy path under .hg before any evaluation (0 low and 0 high calls, no file). Every ADR 0632 check keeps its result (76 design:: unit tests, 16 F-699 tests, the two MCP tools-list goldens, the A8 and P3 refusals still at the workspace root by .git). Nine of nine mutations caught. Not covered: other version-control systems (Bazaar, Darcs, Fossil, Pijul, Jujutsu, _svn), case-insensitive matching, links that point out of a repository; a path check is not access control.
+
+> Note for F-700: Its remaining question 1 is answered by F-706 (ADR 0647): Ledger::private also refuses .hg, .svn and rcfd-project.json ancestors.
+
+No follow-up is proposed (remaining question 1 recommends adding further markers only when asked).
