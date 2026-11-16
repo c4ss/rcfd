@@ -931,3 +931,56 @@ busy fraction 1.00 before and after, with 6 to 7 `cargo`/`rustc`/`link` processe
 - `service:panel.snapshot` keeps its exemption naming F-810: the workspace reads runner runs through the project server
   and does not use a service session's panel; which item should own it?
 - The roadmap task text named P6 "live update latency"; ADR 0350's P6 is the 4e6-cell scrub. Both are recorded above.
+
+## Addendum F-809: derived pictures in the field viewport (2026-11-16)
+
+F-809 (iso-surfaces, streamlines, cut planes and vectors in the field viewport; guardrails G2, G3, G6, G8, G13, G22)
+adds **no dependency** and changes no Rust file, service method, reply shape, golden or default. No existing test was
+edited.
+
+### What the engine computes today (read before the code)
+
+| Picture | Engine entry point on a stored field | What exists only inside the libraries |
+|---|---|---|
+| Iso-surface | none | `rcfd_post::surfaces::cut_implicit` cuts by a function of position (marching tetrahedra), not by a cell field; `Surface::clip_by_values` clips a surface by its vertex values. Nothing turns a stored cell field into an iso-surface. |
+| Streamlines | none | none (no integrator anywhere in the workspace; `particles.report` tracks particles of a particle run, which is another thing) |
+| Cut plane | `render_field` (MCP, project) draws a 2D case only and refuses a 3D one; `render.png` (service, live session) draws the middle slice of the thinnest direction; `field.sample` (service, live session) samples a plane | rcfd-render's cut plane: `View::clip = (n, d)`, "only points with `n . p <= d` are drawn (clipped per fragment in the shader)" (`crates/rcfd-render/src/shader.wgsl`); `rcfd_post::render::render_scalar` with `axis` and `slice` |
+| Vectors | `render.png` with `vectors: true` and MCP `render_image` (live session only: an image of arrows on the middle slice) | `rcfd_post::render::overlay_vectors` (in-plane arrows on a lattice of `density` x `density`, 24 in `render.png`) |
+
+The viewport draws a run's **store** (F-804's data door). None of the entry points above takes a store and a 3D
+derived picture, and the Studio cannot add one (no Rust change). So:
+
+- **Cut plane**: computed in the Studio by rcfd-render's own rule, on the GPU, for the surface, the mesh grid and the
+  vectors, and in the CPU pick.
+- **Vectors**: computed in the Studio from the stored components, by the rule of `overlay_vectors` carried to the
+  boundary surface.
+- **Iso-surface** and **streamlines**: not drawn; each is shown as unavailable with the reason (G6), and recorded below
+  as a missing engine entry point.
+
+### Tolerances, registered before the code (G3)
+
+- **T1, which cases are 2D.** The engine's word for a 2D case is `render_field`'s: "one cell layer", the middle plane of
+  the thinnest direction cuts every cell. The Studio decides from the surface it already has: the thinnest direction of
+  the surface's bounding box is `a`; the case is 2D when every cell of the store owns a surface triangle lying in the
+  plane `p[a] = min[a]` and one lying in `p[a] = max[a]` (all three corners equal to the bound, in `f32`). Tolerance:
+  none; the verdict must equal `render_field`'s on real cases (the quick-start cavity, 2D; the axial-fan passage, 3D)
+  and be 3D for the f447 box.
+- **T2, cut plane.** rcfd-render keeps a point when `n . p <= d`. The Studio's planes are normal to an axis, `n = e_a`
+  (keep the side below `d`) or `n = -e_a` (keep the side above), so the test is `p[a] <= d` or `p[a] >= d`: exact in
+  `f32` and `f64` alike, no tolerance in the rule itself. `d` is held as an `f32`. On screen, a fragment's `p` is the
+  rasterised world position, so pixels within 2 CSS pixels of the plane's trace, or of a triangle edge, are not judged;
+  every other pixel must be either the viewport ground or exactly the table colour (F-808's 3-level bound to
+  rcfd-render's colour) of a cell whose picked point satisfies the rule, and a pixel whose unclipped point broke the
+  rule must have changed. The pick (hover readout) takes the nearest hit that satisfies the rule.
+- **T3, vectors.** Taken from `overlay_vectors` and `render.png` (read from the Rust source by the tests): a lattice of
+  `24` bins per axis over the bounding box, the first candidate in order per bin; the arrow of the largest vector is
+  `0.8` of a lattice step and an arrow's length is proportional to `|v| / max |v|`, the maximum over every cell of the
+  store; the head is two strokes back `0.3` of the length and out `0.5` of that to each side. Carried to a surface: a
+  candidate is a surface triangle (on a 2D case only the triangles of the face the fitted view looks at, and the
+  in-plane components, as `overlay_vectors` draws them); the anchor is the triangle's centroid; the lattice step is the
+  largest extent of the bounding box over 24; the head's side is the triangle's normal crossed with the arrow; a zero or
+  non-finite vector draws nothing (`overlay_vectors`' half-pixel floor is an image rule and is not taken). Tolerance:
+  every arrow carries its cell's stored components bit for bit (the Rust reader's reference bytes); the set of arrows
+  (triangle, cell) equals an independent `f64` recomputation exactly; every drawn point is within `2^-20` of the
+  largest extent of that recomputation (the `f32` rounding of the drawn positions); on screen the only pixels the
+  arrows change are deep ink.
