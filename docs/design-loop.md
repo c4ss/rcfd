@@ -437,6 +437,32 @@ study store and the ledger sink run it unchanged:
 A typical first formulation: minimise `tone_a3_db` (or `tone1_db`) subject to a flow limit at every impedance point and a power
 cap. Every number is a model proxy: no measured fan data exists, so the objective ranks variants of the model, not real fans.
 
+## Fidelity management: screen, confirm, correct (ADR 0622, library only)
+
+`design::fidelity::run` screens a candidate set (a list, or a seeded Latin hypercube in a box) with a cheap `ledger::Model`,
+promotes a few candidates per round to a `HighSource` (a model through `ModelSource`, later CFD, or a measured table), and
+fits a discrepancy correction that the next rounds use for their ranking:
+
+* Promotion: per round `promote_per_round` picks, of them `explore_per_round` by greedy max-min distance in the unit box and the
+  rest by the corrected objective (`Promotion::Random` is the negative control). A failed high evaluation uses its pick.
+* Correction (`Correction`), per metric: R0 (none), R1 (additive or multiplicative constant), R2 (`rho y_L + b0 + c . x`),
+  chosen by leave-one-out error with the one-standard-error rule; trusted only when its leave-one-out RMSE is at most 0.8 of
+  the uncorrected one and the discrepancy exceeds twice the source's stated uncertainty; applied only inside the calibrated
+  region (box of the pairs grown by 0.05 and within 0.25 of a pair, unit box); outside, a query is flagged and gets the trusted
+  constant only. A Gaussian-process rung is a follow-up that reuses F-698.
+* Ledger: an `evaluation` entry for every low and high evaluation, one `fidelity_pair` (ADR 0632) per ok promotion with the
+  prediction made before the high result, one `fidelity_summary` per round (rung, RMSE before and after, bias, out-of-sample
+  RMSE, the correction with its hash in `fitted`).
+* Privacy: a private source (`MeasuredTable`, tier `measured`) needs `spec.privacy`. The private ledger (refused inside a
+  repository tree, and the public ledger is refused inside its directory) gets the measured values, pairs, corrections and
+  predictions; the public ledger gets the low entries and per-round summaries whose aggregates appear only for at least 5 pairs,
+  once per block of 5 new pairs, rounded to 3 significant digits. `MeasuredTable` reads the CSV of
+  [the measurement protocol](fan-measurement-protocol.md) with a `variant` column; its errors name row and column, never a value.
+
+Verified on synthetic high sources only (an exact affine source, the one-variable pair of Forrester et al., the reduced-order
+fan against a copy with larger loss constants, noise, a source that always fails, an identical source). It says nothing about
+how well the reduced-order model predicts a real fan.
+
 ## Code map
 
 The code is `crates/rcfd-api/src/design/`:
@@ -458,6 +484,7 @@ The code is `crates/rcfd-api/src/design/`:
 | `uq` | tolerance / uncertainty study driver (ADR 0121): distributions, MC and replicated LHS, stopping rule, statistics, SRC |
 | `sensitivity` | first-order and total Sobol indices with standard errors (ADR 0240) |
 | `fan_objective` | fan objective over impedance points and tolerances, the reduced-order fan target (ADR 0620) |
+| `fidelity` | fidelity management driver: screen, confirm, log the pairs, correct; measured table with the privacy split (ADR 0622) |
 
 ## Where to go next
 

@@ -115,8 +115,12 @@ Deliver one CSV per speed, with SI units in the header and one row per point, pl
 (make, model, range, calibration date, stated accuracy) and any deviation from this protocol. Example header:
 
 ```text
-point,rpm,flow_m3_s,dp_static_Pa,dp_side,supply_V,supply_A,p_amb_Pa,T_amb_K,rh,lwa_dB,notes
+variant,point,rpm,flow_m3_s,dp_static_Pa,dp_side,supply_V,supply_A,p_amb_Pa,T_amb_K,rh,lwa_dB,notes
 ```
+
+`variant` names the rotor (for example the printed prototype's variant id) so that rows can be matched to design candidates by
+the fidelity driver (`design::fidelity::MeasuredTable`, ADR 0622). Fields are separated by commas without quoting, so `notes`
+must not contain a comma. Measured files stay outside the repository; only aggregate calibration residuals are published.
 
 Name raw audio and vibration files by point. State the licence under which the data may be used: under CC BY 4.0 (or the user's
 choice) the files can be pinned with checksums in `validation-data/manifest.json` like the other datasets; without a stated licence they
