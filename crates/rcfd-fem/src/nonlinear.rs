@@ -611,9 +611,15 @@ fn hex8_evaluate(
     match formulation {
         SolidFormulation::Full => evaluate(&Hex8, coords, material, displacement, state, want_tangent, context),
         SolidFormulation::BBar => evaluate_fbar(coords, material, displacement, state, want_tangent, context),
-        SolidFormulation::Incompatible => {
-            crate::nl_incompatible::evaluate(coords, material, displacement, state, want_tangent, context, false)
-        }
+        SolidFormulation::Incompatible => crate::nl_incompatible::evaluate(
+            coords,
+            material,
+            displacement,
+            state,
+            want_tangent,
+            context,
+            crate::nl_incompatible::IncompatibleStabilisation::Off,
+        ),
     }
 }
 
@@ -1037,7 +1043,7 @@ pub(crate) fn internal_force_field(
                 &states[e],
                 false,
                 context,
-                model.incompatible_stabilisation(),
+                model.incompatible_stabilisation_rule(),
             )
             .map(|ev| ev.force)
         } else {
@@ -1134,7 +1140,7 @@ fn force_and_tangent(
                 &states[ctx.element],
                 true,
                 context,
-                model.incompatible_stabilisation(),
+                model.incompatible_stabilisation_rule(),
             )?
         } else {
             let el = crate::element::element_for(ctx.kind);

@@ -23,6 +23,11 @@
 //!   derivative at rest and on every rigid motion, and with `alpha = 0` on every homogeneous state, so the element at rest and
 //!   its patch test are those of ADR 0608; it removes the spurious hourglass mode of the element under large homogeneous
 //!   compression (ADR 0614 arithmetic 1 to 4). Force and tangent are the exact derivatives of `Pi_s` (ADR 0614 arithmetic 5).
+//! * Rules of the coefficient (ADR 0630, F-703; [`IncompatibleStabilisation`], opt-in per model by the same setter): besides
+//!   the coefficient above (`RestStress`), `Deviatoric` `c = (dev s : dev s) / G0` (for an isotropic material `4 G0 |dev
+//!   e0|^2`, without the bulk modulus) and `LinearStress` `c = (s : s) / (G0 + |s|)` (equal to the coefficient above to
+//!   second order at rest, linear in the stress at large stress: the order of the pressure-driven need of ADR 0630
+//!   arithmetic 2). Both keep the properties at rest and on homogeneous states, and are at most the coefficient above.
 //!
 //! The nonlinear driver ([`crate::nonlinear`]) evaluates a Hex8 of a block of the `Incompatible` formulation by this module.
 
@@ -76,6 +81,50 @@ fn check_state(material: &Material, state: &ElementState, points: usize) -> Resu
         });
     }
     Ok(ns)
+}
+
+/// The rule of the coefficient of the stabilisation of the modes of an Incompatible Hex8 (ADR 0614 D1, ADR 0630 D1). `Off`
+/// is the element of ADR 0608; `true` converts to `RestStress` (the coefficient of ADR 0614), `false` to `Off`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
+pub enum IncompatibleStabilisation {
+    /// No stabilisation (ADR 0608 D2; the default).
+    #[default]
+    Off,
+    /// `c = (s : s) / G0`, `s = D0 : (C0 - C0^{-1})/4` (ADR 0614 D1).
+    RestStress,
+    /// `c = (dev s : dev s) / G0` (ADR 0630 arithmetic 3, rule D).
+    Deviatoric,
+    /// `c = (s : s) / (G0 + |s|)` (ADR 0630 arithmetic 3, rule L).
+    LinearStress,
+}
+
+impl From<bool> for IncompatibleStabilisation {
+    fn from(on: bool) -> IncompatibleStabilisation {
+        if on {
+            IncompatibleStabilisation::RestStress
+        } else {
+            IncompatibleStabilisation::Off
+        }
+    }
+}
+
+/// The deviatoric part of a Voigt stress (the mean of the normal components removed; ADR 0630 D1).
+fn deviatoric(s: [f64; 6]) -> [f64; 6] {
+    let m = (s[0] + s[1] + s[2]) / 3.0;
+    [s[0] - m, s[1] - m, s[2] - m, s[3], s[4], s[5]]
+}
+
+/// The coefficient of a rule at the (for `Deviatoric` projected) rest stress `s` (ADR 0614 D1, ADR 0630 arithmetic 3).
+fn rule_coefficient(rule: IncompatibleStabilisation, s: &[f64; 6], g0: f64) -> f64 {
+    match rule {
+        IncompatibleStabilisation::Off => 0.0,
+        IncompatibleStabilisation::LinearStress => {
+            let ss = inner(s, s);
+            ss / (g0 + ss.sqrt())
+        }
+        _ => inner(s, s) / g0,
+    }
 }
 
 /// The stabilisation of ADR 0614 D1 at a nodal displacement: the coefficient `c`, its gradient and Hessian over the 24
@@ -173,12 +222,34 @@ fn penalty(
     material: &Material,
     displacement: &[f64],
     context: &PointContext,
+    rule: IncompatibleStabilisation,
 ) -> Result<Penalty> {
     let (d0, g0) = rest_moduli(material, context)?;
     let (f0, g) = centre_gradient(coords, displacement)?;
     let (e, _, ci) = mean_strain(&f0);
-    let s = rest_stress(&d0, &e);
-    let c = inner(&s, &s) / g0;
+    // ADR 0630 D1: rule D takes the deviatoric part of the rest stress and of its derivatives (linear in the stress).
+    let project = |v: [f64; 6]| {
+        if rule == IncompatibleStabilisation::Deviatoric {
+            deviatoric(v)
+        } else {
+            v
+        }
+    };
+    let s = project(rest_stress(&d0, &e));
+    let c = rule_coefficient(rule, &s, g0);
+    // ADR 0630 arithmetic 3, rule L: dc = a s : ds, d2c = a (ds : ds + s : d2s) + b (s : ds)(s : ds).
+    let soft = if rule == IncompatibleStabilisation::LinearStress {
+        let r = inner(&s, &s).sqrt();
+        let gr = g0 + r;
+        let b = if r > 0.0 {
+            -(3.0 * g0 + r) / (gr * gr * gr * r)
+        } else {
+            0.0
+        };
+        Some(((2.0 * g0 + r) / (gr * gr), b))
+    } else {
+        None
+    };
     // The nine directions dF = e_i (x) e_J (d = 3 i + J): dC = dF^T F0 + F0^T dF, d(C^-1) = -C^-1 dC C^-1, de = (dC -
     // d(C^-1))/4, ds = D0 de.
     let dcm: Vec<M3> = (0..9)
@@ -193,10 +264,16 @@ fn penalty(
     let ds: Vec<[f64; 6]> = (0..9)
         .map(|d| {
             let de: M3 = std::array::from_fn(|m| std::array::from_fn(|n| 0.25 * (dcm[d][m][n] + cdc[d][m][n])));
-            rest_stress(&d0, &de)
+            project(rest_stress(&d0, &de))
         })
         .collect();
-    let dcf: Vec<f64> = ds.iter().map(|dsd| 2.0 * inner(&s, dsd) / g0).collect();
+    let dcf: Vec<f64> = ds
+        .iter()
+        .map(|dsd| match soft {
+            None => 2.0 * inner(&s, dsd) / g0,
+            Some((a, _)) => a * inner(&s, dsd),
+        })
+        .collect();
     let mut d2cf = [[0.0; 9]; 9];
     for a in 0..9 {
         for b in a..9 {
@@ -219,8 +296,13 @@ fn penalty(
             let d2e: M3 = std::array::from_fn(|m| {
                 std::array::from_fn(|n| 0.25 * (d2c_m[m][n] - (t1[m][n] + t2[m][n] - t3[m][n])))
             });
-            let d2s = rest_stress(&d0, &d2e);
-            let v = 2.0 * (inner(&ds[a], &ds[b]) + inner(&s, &d2s)) / g0;
+            let d2s = project(rest_stress(&d0, &d2e));
+            let v = match soft {
+                None => 2.0 * (inner(&ds[a], &ds[b]) + inner(&s, &d2s)) / g0,
+                Some((sa, sb)) => {
+                    sa * (inner(&ds[a], &ds[b]) + inner(&s, &d2s)) + sb * inner(&s, &ds[a]) * inner(&s, &ds[b])
+                }
+            };
             d2cf[a][b] = v;
             d2cf[b][a] = v;
         }
@@ -264,19 +346,26 @@ fn penalty(
     Ok(Penalty { c, dc, d2c, m })
 }
 
-/// The penalty of a stabilised element, `None` without the stabilisation (ADR 0614 D1).
+/// The penalty of a stabilised element, `None` without the stabilisation (ADR 0614 D1, ADR 0630 D1).
 fn penalty_if(
-    stabilised: bool,
+    stabilised: IncompatibleStabilisation,
     coords: &[Vec3],
     points: &[ModePoint],
     material: &Material,
     displacement: &[f64],
     context: &PointContext,
 ) -> Result<Option<Penalty>> {
-    if stabilised {
-        Ok(Some(penalty(coords, points, material, displacement, context)?))
-    } else {
+    if stabilised == IncompatibleStabilisation::Off {
         Ok(None)
+    } else {
+        Ok(Some(penalty(
+            coords,
+            points,
+            material,
+            displacement,
+            context,
+            stabilised,
+        )?))
     }
 }
 
@@ -505,7 +594,8 @@ fn converged(
     })
 }
 
-/// The condensed element of ADR 0608 D2 for the driver; with `stabilised` the element of ADR 0614 D1.
+/// The condensed element of ADR 0608 D2 for the driver; with a rule other than `Off` the element of ADR 0614 D1 with the
+/// coefficient of the rule (ADR 0630 D1).
 pub(crate) fn evaluate(
     coords: &[Vec3],
     material: &Material,
@@ -513,7 +603,7 @@ pub(crate) fn evaluate(
     state: &ElementState,
     want_tangent: bool,
     context: &PointContext,
-    stabilised: bool,
+    stabilised: IncompatibleStabilisation,
 ) -> Result<Evaluation> {
     check_hex8_fields(coords, displacement)?;
     let points = mode_points(coords)?;
@@ -571,15 +661,17 @@ pub fn modes_and_strains(
     modes_and_strains_with(coords, material, displacement, state, context, false)
 }
 
-/// [`modes_and_strains`] of the element with (`stabilised`, ADR 0614 D1) or without the stabilisation.
+/// [`modes_and_strains`] of the element with (`stabilised`, ADR 0614 D1; a rule of ADR 0630 D1) or without the
+/// stabilisation.
 pub fn modes_and_strains_with(
     coords: &[Vec3],
     material: &Material,
     displacement: &[f64],
     state: &ElementState,
     context: &PointContext,
-    stabilised: bool,
+    stabilised: impl Into<IncompatibleStabilisation>,
 ) -> Result<([f64; MODES], Vec<[f64; 6]>)> {
+    let stabilised = stabilised.into();
     check_hex8_fields(coords, displacement)?;
     let points = mode_points(coords)?;
     let pen = penalty_if(stabilised, coords, &points, material, displacement, context)?;
@@ -588,17 +680,17 @@ pub fn modes_and_strains_with(
 }
 
 /// The condensed force (24 values), tangent (24 x 24) and second Piola-Kirchhoff stress at the points of an Incompatible
-/// Hex8, with (`stabilised`, ADR 0614 D1) or without (ADR 0608 D2) the stabilisation, from the committed `state` at the
-/// point context `context`.
+/// Hex8, with (`stabilised`, ADR 0614 D1; a rule of ADR 0630 D1) or without (ADR 0608 D2) the stabilisation, from the
+/// committed `state` at the point context `context`.
 pub fn condensed_force_and_tangent(
     coords: &[Vec3],
     material: &Material,
     displacement: &[f64],
     state: &ElementState,
     context: &PointContext,
-    stabilised: bool,
+    stabilised: impl Into<IncompatibleStabilisation>,
 ) -> Result<(Vec<f64>, ElementMatrix, Vec<[f64; 6]>)> {
-    let ev = evaluate(coords, material, displacement, state, true, context, stabilised)?;
+    let ev = evaluate(coords, material, displacement, state, true, context, stabilised.into())?;
     Ok((ev.force, ev.tangent.expect("tangent requested"), ev.stress))
 }
 
@@ -609,11 +701,36 @@ pub fn stabilisation_coefficient(
     displacement: &[f64],
     context: &PointContext,
 ) -> Result<f64> {
+    stabilisation_coefficient_with(
+        coords,
+        material,
+        displacement,
+        context,
+        IncompatibleStabilisation::RestStress,
+    )
+}
+
+/// The coefficient `c` (Pa) of the stabilisation of an element at its displacement by a rule (ADR 0630 D2; 0 for `Off`).
+pub fn stabilisation_coefficient_with(
+    coords: &[Vec3],
+    material: &Material,
+    displacement: &[f64],
+    context: &PointContext,
+    rule: IncompatibleStabilisation,
+) -> Result<f64> {
     check_hex8_fields(coords, displacement)?;
+    if rule == IncompatibleStabilisation::Off {
+        return Ok(0.0);
+    }
     let (d0, g0) = rest_moduli(material, context)?;
     let (f0, _) = centre_gradient(coords, displacement)?;
     let s = rest_stress(&d0, &mean_strain(&f0).0);
-    Ok(inner(&s, &s) / g0)
+    let s = if rule == IncompatibleStabilisation::Deviatoric {
+        deviatoric(s)
+    } else {
+        s
+    };
+    Ok(rule_coefficient(rule, &s, g0))
 }
 
 /// The energy `Pi_s = (c/2) sum_q w_q |F_enh,q|^2` of the stabilisation of ADR 0614 D1 at the displacement and the modes.
@@ -624,9 +741,31 @@ pub fn stabilisation_energy(
     modes: &[f64; MODES],
     context: &PointContext,
 ) -> Result<f64> {
+    stabilisation_energy_with(
+        coords,
+        material,
+        displacement,
+        modes,
+        context,
+        IncompatibleStabilisation::RestStress,
+    )
+}
+
+/// The energy `Pi_s` of the stabilisation by a rule (ADR 0630 D2; 0 for `Off`).
+pub fn stabilisation_energy_with(
+    coords: &[Vec3],
+    material: &Material,
+    displacement: &[f64],
+    modes: &[f64; MODES],
+    context: &PointContext,
+    rule: IncompatibleStabilisation,
+) -> Result<f64> {
     check_hex8_fields(coords, displacement)?;
+    if rule == IncompatibleStabilisation::Off {
+        return Ok(0.0);
+    }
     let points = mode_points(coords)?;
-    let p = penalty(coords, &points, material, displacement, context)?;
+    let p = penalty(coords, &points, material, displacement, context, rule)?;
     let mut pa = 0.0;
     for (r, row) in p.m.iter().enumerate() {
         for (j, mrj) in row.iter().enumerate() {
@@ -649,7 +788,7 @@ pub fn enhanced_force_and_tangent(
     enhanced_force_and_tangent_with(coords, material, displacement, modes, state, context, false)
 }
 
-/// [`enhanced_force_and_tangent`] with (`stabilised`, ADR 0614 D1) or without the stabilisation.
+/// [`enhanced_force_and_tangent`] with (`stabilised`, ADR 0614 D1; a rule of ADR 0630 D1) or without the stabilisation.
 pub fn enhanced_force_and_tangent_with(
     coords: &[Vec3],
     material: &Material,
@@ -657,8 +796,9 @@ pub fn enhanced_force_and_tangent_with(
     modes: &[f64; MODES],
     state: &ElementState,
     context: &PointContext,
-    stabilised: bool,
+    stabilised: impl Into<IncompatibleStabilisation>,
 ) -> Result<(Vec<f64>, ElementMatrix)> {
+    let stabilised = stabilised.into();
     check_hex8_fields(coords, displacement)?;
     if let Some(i) = modes.iter().position(|v| !v.is_finite()) {
         return Err(FemError::InvalidValue {
