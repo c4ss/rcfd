@@ -10553,7 +10553,8 @@ fixed by the item's registration ADR before any code.
     bending-shear solve growing as 3.5 (h/t)^2 (the exact discrete field gives zero moment to 4e-16, the solve is
     backward stable, a thick plate at h/t ~ 1.7 meets 4.0e-13). Nine mutations, all caught. Not covered: Shell3, Layup
     shells, a case-file key. Follow-up F-687 (Through-thickness temperature gradient on Shell3 and Layup shells).
-    Follow-up F-688 (Case-file key for the shell temperature gradient).
+    Follow-up F-688 (Case-file key for the shell temperature gradient). the Shell3 and Layup refusals of ADR 0612 are
+    lifted by ADR 0626; its test n1_to_n8_refusals_and_zero_fields is ignored with a running copy of rows N3 to N8.
 - [~] **F-528** Direct harmonic solve on the transformation path (constraints, rigid sets, elastic supports) and with pre-stress
   - depends on: F-412
   - acceptance: Every limit not stated here is registered in the ADR before the run. The direct harmonic solve of ADR
@@ -11354,7 +11355,9 @@ fixed by the item's registration ADR before any code.
     8, 16 and 24 (SupernodalDirect) is committed but NOT RUN: the registered 10 GB of free memory was never available.
     Six of seven mutations caught (ties to the higher index survived, as registered). Follow-up F-695 (Hole criterion of
     the error density on a plate graded uniformly along the hole). Follow-up F-696 (Run the heavy effectivity record of
-    ADR 0616).
+    ADR 0616). ADR 0627 (2026-11-15) ran the hole criterion again on a plate with a uniform first ring and it missed by
+    20 of 48. The density equidistributes on a mesh graded to the solution, so the hole criterion is not a property to
+    expect of it (ADR 0627 Q4 recommends retiring it).
 - [~] **F-569** Static correction vectors for the split modes of a sector index
   - depends on: F-555
   - acceptance: Every limit not stated here is registered in the ADR before the run. The basis of
@@ -13643,7 +13646,10 @@ fixed by the item's registration ADR before any code.
     rest at h/1024 converged with the driver reference (1.6e-11; the start at rest makes the inertia difference exact).
     Not dependent on F-571's bound (the step has its own loop). Default bits unchanged (two hashes recorded before the
     change, the energy-momentum and discrete-gradient tests, baseline_hashes). Five of five registered mutations caught.
-    Follow-up F-691 (A negative control of the energy-momentum inertia-term reference off rest).
+    Follow-up F-691 (A negative control of the energy-momentum inertia-term reference off rest). Its negative control
+    off rest is F-691 (ADR 0625, 2026-11-15): refused with the driver reference after 5 halvings at a rounding floor,
+    converged with 0 halvings with InertiaTerms; the from-rest miss NZ is explained by the step size (the ratio of the
+    references), not by Sterbenz's lemma alone.
 - [~] **F-682** Interaction integral on curved crack fronts
   - depends on: F-632
   - acceptance: Every limit not stated here is registered in the ADR before the run. The interaction integral on
@@ -13737,7 +13743,9 @@ fixed by the item's registration ADR before any code.
     Poisson ratios, confined compression, a stabilisation reproduced from a specific paper (open question), a case-file
     key. Follow-up F-693 (The stabilised incompatible-modes Hex8 beyond the F-685 set-up). Lead: "from the published
     literature" read as a published idea (Wall, Bischoff and Ramm 2000, cited from memory) in a derived form, on the
-    standing instruction.
+    standing instruction. F-693 catches the missed mutation MU7 and measures the stabilisation in confined and nearly
+    incompressible compression (lowest eigenvalue >= 0.977 mu in five new cases; near incompressibility the element
+    approaches the locking Full Hex8).
 - [ ] **F-686** The free-sector pre-stress on tetrahedral, layered-shell and orthotropic sectors
   - depends on: F-683
   - acceptance: Every limit not stated here is registered in the ADR before the run. RotatingSector::new with
@@ -13745,13 +13753,27 @@ fixed by the item's registration ADR before any code.
     the pre-stress of a constrained-copy route within 1e-10 and a residual at the interior nodes within 1e-10 of the
     load; the defaults bit-identical.
   - note: Follow-up of F-683 (ADR 0611, 2026-11-15).
-- [ ] **F-687** Through-thickness temperature gradient on Shell3 and Layup shells
+- [~] **F-687** Through-thickness temperature gradient on Shell3 and Layup shells
   - depends on: F-527
   - acceptance: Every limit not stated here is registered in the ADR before the run. Load::ShellTemperatureGradient on a
     Shell3 model and on a Layup Shell4 model gives the curvature thermal load (ply-integrated for a layup); a clamped
     plate under a uniform gradient gives the closed-form moment within 1e-12; a model without a gradient gives the bits
     it gave before.
-  - note: Follow-up of F-527 (ADR 0612, 2026-11-15).
+  - note: Structural solver, intermediate tier. Follow-up of F-527 (ADR 0612). PARTIAL. ADR 0626, 2026-11-12:
+    Load::ShellTemperatureGradient on Shell3 and on Layup Shell4. Shell3 takes the curvature thermal load A B_b^T D
+    alpha g_mean (1, 1, 0) (shell3::thermal_gradient_load_vector) and its recovery subtracts the thermal curvature; a
+    layup takes the ply-integrated force and moment of classical lamination theory, N = -M_th g and M = -P_th g, M_th =
+    sum Qbar alphabar t zbar (the existing coupling vector, zero for a symmetric layup) and the new Laminate::p_th = sum
+    Qbar alphabar (t zbar^2 + t^3/12) (shell::layup_thermal_gradient_load_vector), recovered in shell::stresses
+    (resultants, faces) and laminate::layup_response (ply stresses); one isotropic ply keeps the homogeneous route. Met:
+    loads against closed forms on a triangle and on a rectangle (cross-ply, symmetric, angle-ply) within 2.4e-15;
+    clamped plates give the closed-form moment within 6.8e-16 (Shell3, symmetric and unsymmetric cross-ply,
+    steel/aluminium bimetal; limit 1e-12) and the unsymmetric thermal force within 9.7e-17; free plates take the
+    closed-form strain and curvature within 4e-12 and exact discrete fields give zero resultants within 3e-14; beams,
+    solids and the nonlinear paths still refused; models without a gradient keep their bits (ADR 0612 digests, eight new
+    digests, baseline_hashes). Partial by the rule: 12 of 13 mutations caught (removing the one-ply route is bitwise
+    equivalent on the registered data) and two load checks met after a test set-up amendment. Not covered: a case-file
+    key, per-ply temperatures.
 - [ ] **F-688** Case-file key for the shell temperature gradient
   - depends on: F-527
   - acceptance: Every limit not stated here is registered in the ADR before the run. A solid_case load key gives
@@ -13808,13 +13830,23 @@ fixed by the item's registration ADR before any code.
     reference. Follow-up F-694 (The stagnation acceptance of ADR 0619 on by default). Lead: partial, not done: the "at
     the defaults" clause was measured with the opt-in on and the S3 clause was read as the floor steps' iterations (the
     literal half is unreachable), and MS3, MS5, MS6 were not caught; done is the maintainer's call.
-- [ ] **F-691** A negative control of the energy-momentum inertia-term reference off rest
+- [x] **F-691** A negative control of the energy-momentum inertia-term reference off rest
   - depends on: F-681
   - acceptance: Every limit not stated here is registered in the ADR before the run. One energy-momentum step of a solid
     in free vibration centred on a zero crossing (not from rest) at a registered fraction of the period is refused with
     the driver reference at the default tolerance and converges without halving with ResidualReference::InertiaTerms;
     the default bits unchanged.
-  - note: Follow-up of F-681 (ADR 0609, 2026-11-15).
+  - note: Structural solver, advanced tier. Follow-up of F-681 (ADR 0609, 2026-11-15). DONE. ADR 0625, 2026-11-15, tests
+    only (no library line changed): one energy-momentum step of the clamped Hex8 cantilever of ADR 0609 in free
+    vibration of its first mode, centred on a zero crossing (start u_0 = -(h/2) v_0, so the midpoint displacement is
+    zero), at h = T_1/2621440 (ADR 0609's h/1024 step divided by 64, from a derivation of the weakest halving level).
+    With ResidualReference::InertiaTerms it converges with 0 halvings in 2 iterations, relative residual 2.1e-17, u_1 =
+    -u_0 to 1.1e-14 and v_1 = v_0 to 2.2e-14, energy 2.0e-16. With the driver reference at the default tolerance it is
+    refused after the 5 halvings. Its last level stays at a rounding floor: relative residual 2.3e-5, energy ratio
+    1.3e-31. A diagnostic step from rest at the same h is also refused (1.0e-4), which revises ADR 0609's diagnosis of
+    its NZ miss: the floor is the quantization of u_{n+1}, and NZ's step was not small enough for that floor to exceed
+    the tolerance. Default bits unchanged (DB1, DB2 and the energy-momentum default-bits test pass). Four of five
+    registered mutations caught; the velocity-product-only mutation is not caught, as registered.
 - [ ] **F-692** Case-file keys for the outer-iteration criterion and its window
   - depends on: F-536, F-550
   - acceptance: Every limit not stated here is registered in the ADR before the run. Case keys solver.outer_tolerance
@@ -13822,14 +13854,33 @@ fixed by the item's registration ADR before any code.
     outer_scale_window; a case read from a file reproduces the bits of the library call on the channel of ADR 0451;
     existing keys, goldens and baseline hashes unchanged except the schema golden approved by the maintainer.
   - note: Follow-up of F-550 (ADR 0617, 2026-11-15). NEEDS USER: schema golden change.
-- [ ] **F-693** The stabilised incompatible-modes Hex8 beyond the F-685 set-up
+- [x] **F-693** The stabilised incompatible-modes Hex8 beyond the F-685 set-up
   - depends on: F-685
   - acceptance: Every limit not stated here is registered in the ADR before the run. The strain energy of the ADR 0614
     stabilised element at a large strain against the test's own stabilisation energy (the missed mutation MU7 of ADR
     0614 caught); the ADR 0614 sweep repeated for confined compression and for nu = 0.45 and 0.49, the lowest eigenvalue
     of the stabilised element reported against the Full Hex8 and the closed-form bound over a registered range; the
     default bits unchanged.
-  - note: Follow-up of F-685 (ADR 0614, 2026-11-15).
+  - note: Structural solver, intermediate tier. Follow-up of F-685 (ADR 0614). DONE. ADR 0628, 2026-11-16: the
+    stabilised incompatible-modes Hex8 of ADR 0614 beyond its set-up, tests only (no library change; defaults unchanged
+    by construction, the bit records of ADR 0608 and ADR 0614 pass). Strain energy at a large strain:
+    Integrator::strain_energy of a stabilised 4 x 4 x 4 distorted neo-Hookean patch at 40 per cent confined compression
+    with bending (stabilisation energy 5.3e-4 of the total) equals the test's own elastic plus stabilisation energy to
+    5.4e-16 (the plain model's to 1.8e-16) and is the potential of the stabilised internal force to 2.0e-9 (central
+    difference); the missed mutation MU7 of ADR 0614 is now caught (by 5.3e-4 and 3.6e-3), and five more mutations are
+    caught. The ADR 0614 sweep (6 x 6 x 6 patch, every boundary node fixed, 51 stretches on [0.5, 1]) repeated for
+    confined compression at nu = 0.3, 0.45, 0.49 and uniaxial stress at nu = 0.45, 0.49, against a closed-form acoustic
+    bound for the neo-Hookean energy at diag(t, t, lambda) derived in the ADR (q = min over the polar angle of mu J^-2/3
+    (1 + mu_-), equal to the numerical sphere minimum to 3.8e-5): the stabilised element's lowest eigenvalue stays >=
+    0.977 mu in every case and lies between the plain element and the Full Hex8 at every stretch (an ordering derived in
+    the ADR, which holds whether or not the Full Hex8 locks); the Full Hex8 stays above q everywhere. The plain element
+    has a spurious zero in every case: lambda_s = 0.6418 (confined, nu 0.3), 0.8094 (0.45), 0.9507 (0.49: 5 per cent
+    compression), 0.5644 and 0.5103 (uniaxial, 0.45, 0.49). Finding: near incompressibility the coefficient (up to 6507
+    mu) drives the stabilised element to within 0.15 to 0.6 per cent of the Full Hex8, which locks there (at rest the
+    Full Hex8 is 13 per cent stiffer than the plain element at nu = 0.49). Not covered: tension, shear and free
+    boundaries, other materials, a locking-free reference of the compressed state, a coefficient without the bulk
+    modulus. Follow-up F-703 (A deviatoric coefficient for the stabilised incompatible-modes Hex8 near
+    incompressibility).
 - [ ] **F-694** The stagnation acceptance of ADR 0619 on by default
   - depends on: F-690
   - acceptance: Every limit not stated here is registered in the ADR before the run. With the maintainer's decision
@@ -13838,13 +13889,25 @@ fixed by the item's registration ADR before any code.
     ADR 0619 ST1 and ST3; every other existing default-bits test keeps its bits, and the baseline hashes pass.
   - note: Follow-up of F-690 (ADR 0619, 2026-11-15). NEEDS USER: changes default results (NC1b of ADR 0604 would become
     a record plus copy).
-- [ ] **F-695** Hole criterion of the error density on a plate graded uniformly along the hole
+- [~] **F-695** Hole criterion of the error density on a plate graded uniformly along the hole
   - depends on: F-568
   - acceptance: Every limit not stated here is registered in the ADR before the run. A two-layer Hex20 plate with a hole
     (r/W = 0.05, Kirsch load) whose first ring has one radial size at every angle: the tenth of the elements with the
     largest eta_e/|K|^{1/2} contains every element with a face on the hole; the recovered peak stress is within 2
     percent of 3 sigma_0; the F-432 and F-568 results keep their bits.
-  - note: Follow-up of F-568 (ADR 0616, 2026-11-15).
+  - note: Structural solver, advanced tier. Follow-up of F-568 (ADR 0616, 2026-11-15). PARTIAL. ADR 0627, 2026-11-15,
+    test-only (no library change): the two-layer Hex20 plate with a hole of ADR 0478 (r/W = 0.05, Kirsch load, 24 x 24 x
+    2) re-spaced along the same node lines so that the first ring has one radial size, 0.0304 r, at every angle (within
+    7.5e-15; the ADR 0616 mesh has 0.030 r to 0.072 r). The tenth of largest eta_e/|K|^{1/2} holds 28 of the 48
+    hole-edge elements (MISSED: the cells at 2 to 17 and 69 to 84 degrees lose to rings 1 to 4 at 17 to 65 degrees;
+    along each line the density of rings 0 to 4 stays within a factor 1.6, because a mesh graded this way roughly
+    equidistributes the error, so the density picks the angle, not the hole edge). The negative controls hold: the ADR
+    0616 mesh gives its 4 of 48 outside again, ranks and the rank-116 density matching the F-568 log, and the absolute
+    eta_e ranking gives 48 of 48 outside. The recovered peak sigma_xx is +1.41 percent of 3 sigma_0 (limit 2 percent
+    against Kirsch's infinite plate). The plate's own converged value is 3.03697 sigma_0 (nodal average at 24, 48 and 96
+    cells), +0.45 percent from Howland's factor by Peterson's polynomial (from memory, limit 0.5 percent) and +0.16
+    percent from Heywood's; the recovered peak is +0.17 percent above it. No source file changed, and the F-432 and
+    F-568 bit tests pass. Six of seven mutations caught (the tenth as floor(N/10) survives, as registered).
 - [ ] **F-696** Run the heavy effectivity record of ADR 0616
   - depends on: F-568
   - acceptance: Every limit not stated here is registered in the ADR before the run. e1_criterion_near_one_heavy of
@@ -14018,3 +14081,12 @@ fixed by the item's registration ADR before any code.
   - note: Decided by the maintainer 2026-11-15 (shared decision D1 of the design-loop drafts): the loop items stay
     library only, and their tools land in this one item together with F-339 so the goldens change once. NEEDS USER: the
     tools-list golden edit. Size M.
+- [ ] **F-703** A deviatoric coefficient for the stabilised incompatible-modes Hex8 near incompressibility
+  - depends on: F-693
+  - acceptance: Every limit not stated here is registered in the ADR before the run. An opt-in coefficient of the ADR
+    0614 stabilisation without the bulk modulus, from the published literature or derived in the ADR; the ADR 0628 sweep
+    repeated for it in all six cases, the lowest eigenvalue kept above a registered positive limit over [0.5, 1]; a
+    locking measure of the compressed state against a locking-free reference of the repository (an F-bar or mixed Hex8
+    on the same patch) reported for the ADR 0614 and the new coefficient; the ADR 0608 checks within their limits; the
+    default bits unchanged.
+  - note: Follow-up of F-693 (ADR 0628, 2026-11-15).
