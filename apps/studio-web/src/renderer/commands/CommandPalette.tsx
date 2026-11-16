@@ -42,7 +42,7 @@ import {
   type PaletteEntry,
   type PaletteParam,
 } from '../../shared/commands/index.js';
-import { Button, StatePictogram, TextField } from '../ui/index.js';
+import { Button, Quiet, StatePictogram, TextField } from '../ui/index.js';
 import { watchServiceState } from '../actions/index.js';
 import { watchProjectState } from '../project/door.js';
 import { watchClaudeState } from '../claude/door.js';
@@ -299,14 +299,15 @@ export default function CommandPalette({ request }: { request: PaletteRequest })
 
 // ---- parts
 
-function StepHead({ title, sub, failed }: { title: string; sub?: string; failed?: boolean }) {
+/** A step's title, and its sub-line (`quietSub`: said to readers only, G22). */
+function StepHead({ title, sub, failed, quietSub }: { title: string; sub?: string; failed?: boolean; quietSub?: boolean }) {
   return (
     <div className="cp-head">
       <Heading slot="title" className="cp-title">
         {failed && <StatePictogram state="failed" />}
         {title}
       </Heading>
-      {sub && <span className="cp-sub">{sub}</span>}
+      {sub && (quietSub ? <Quiet>{sub}</Quiet> : <span className="cp-sub">{sub}</span>)}
     </div>
   );
 }
@@ -406,7 +407,9 @@ function CommandList({
             <Text slot="description" className="cp-item-reason">
               {reason ? (
                 <>
-                  <span className="cp-unavailable-word">Unavailable:</span> {reason}
+                  <span data-words="exception">
+                    <span className="cp-unavailable-word">Unavailable:</span> {reason}
+                  </span>
                 </>
               ) : (
                 <span className="cp-visually-hidden">
@@ -422,14 +425,16 @@ function CommandList({
   };
   return (
     <>
-      <StepHead title="Commands" sub={`${model.length} commands; ↑ ↓ to move, Enter to run, Esc to close`} />
+      {/* G22: how to move and run is said to readers, and in the shortcut list (Ctrl+/) */}
+      <StepHead title="Commands" sub={`${model.length} commands; ↑ ↓ to move, Enter to run, Esc to close`} quietSub />
       <Autocomplete inputValue={query} onInputChange={setQuery}>
         <AriaTextField aria-label="Find a command by its name or its id" className="cp-search" autoFocus>
-          <Input className="ui-input cp-input" placeholder="Type a command or an id (Run the case, run.start)" />
+          <Input className="ui-input cp-input" placeholder="Command or id" />
         </AriaTextField>
         <ListBox
           aria-label="Commands"
           className="cp-list"
+          data-words="help"
           onAction={(k: Key) => onRun(String(k))}
           renderEmptyState={() => <p className="cp-empty">No command matches “{query}”. Try a word of its name or of its id.</p>}
         >
@@ -446,7 +451,7 @@ function CommandList({
             : found.map(row)}
         </ListBox>
       </Autocomplete>
-      <div className="cp-detail" aria-live="polite">
+      <div className="cp-detail" aria-live="polite" data-words="help">
         {focusedEntry && (
           <>
             <p className="cp-detail-text">{focusedEntry.description}</p>
@@ -457,12 +462,7 @@ function CommandList({
           </>
         )}
       </div>
-      <div className="cp-foot">
-        <span>
-          <Keys keys="Ctrl+/" /> every shortcut
-        </span>
-        <span>Unavailable commands stay listed with the reason.</span>
-      </div>
+      <Quiet>Ctrl+/ lists every shortcut. Unavailable commands stay listed with the reason.</Quiet>
     </>
   );
 }

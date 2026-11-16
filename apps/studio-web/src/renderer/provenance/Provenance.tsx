@@ -220,7 +220,7 @@ function ProvenancePopover({ subject, triggerRef, onClose }: { subject: Provenan
     <Popover triggerRef={triggerRef} isOpen onOpenChange={(o) => !o && onClose()} placement="bottom start" offset={4} className="ui-popover pv-pop">
       <Dialog aria-label={`Provenance of ${title}`} className="pv-dialog" data-run={run}>
         {subject.kind === 'number' && (
-          <header className="pv-head">
+          <header className="pv-head" data-words="data">
             <span className="pv-quantity">{subject.source.quantity}</span>
             <span className="pv-value">{subject.source.shown}</span>
             {subject.source.unit.kind === 'engine' && subject.source.unit.unit !== '' && <span className="pv-unit">{subject.source.unit.unit}</span>}
@@ -230,11 +230,11 @@ function ProvenancePopover({ subject, triggerRef, onClose }: { subject: Provenan
           {facts.map(([k, v]) => (
             <div key={k} data-fact={k}>
               <dt>{k}</dt>
-              <dd>{v}</dd>
+              <dd data-words="data">{v}</dd>
             </div>
           ))}
           {serviceDiffers && (
-            <div data-fact="Service engine" className="pv-exception">
+            <div data-fact="Service engine" className="pv-exception" data-words="exception">
               <dt>Service</dt>
               <dd>{`${versionLine(engine)}, not ${made}`}</dd>
             </div>
@@ -242,14 +242,15 @@ function ProvenancePopover({ subject, triggerRef, onClose }: { subject: Provenan
         </dl>
         <section className="pv-repro" aria-label={`Reproduce ${run} from the command line`}>
           {p?.reproduce.text ? (
-            <p className="pv-cmd" data-command="">
+            <p className="pv-cmd" data-command="" data-words="data">
               {p.reproduce.text}
             </p>
           ) : (
-            <p className="pv-reading">{error ? `Not read: ${error}` : p ? '' : 'Reading the run’s record…'}</p>
+            <p className="pv-reading" data-words={error ? 'exception' : undefined}>
+              {error ? `Not read: ${error}` : p ? '' : 'Reading the run’s record…'}</p>
           )}
           {p && p.reproduce.gaps.length > 0 && (
-            <ul className="pv-gaps" aria-label="Why the command would not give the same result">
+            <ul className="pv-gaps" aria-label="Why the command would not give the same result" data-words="exception">
               {p.reproduce.gaps.map((g) => (
                 <li key={g}>{g}</li>
               ))}
@@ -263,7 +264,7 @@ function ProvenancePopover({ subject, triggerRef, onClose }: { subject: Provenan
           <Button icon={copied?.what === 'all' && copied.ok ? 'check' : undefined} onPress={() => void copy('all')}>
             Copy
           </Button>
-          <span className={copied && !copied.ok ? 'pv-copy-failed' : 'sr-only'} role="status">
+          <span className={copied && !copied.ok ? 'pv-copy-failed' : 'sr-only'} role="status" data-words="exception">
             {copied?.message ?? ''}
           </span>
         </div>

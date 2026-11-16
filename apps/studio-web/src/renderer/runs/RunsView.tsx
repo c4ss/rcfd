@@ -9,7 +9,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import type { SortDescriptor } from 'react-aria-components';
 import type { ProjectView } from '../../shared/project.js';
-import { Button, Cell, Column, Row, Select, StateMark, StatePictogram, Table, TableBody, TableHeader, TextField, markWord } from '../ui/index.js';
+import { Button, Cell, Column, Dash, EmptyMark, IconButton, Quiet, Row, Select, StateMark, StatePictogram, Table, TableBody, TableHeader, TextField, markWord } from '../ui/index.js';
 import type { MarkState } from '../ui/index.js';
 import { dateTime } from '../project/format.js';
 import { projectActions } from '../project/door.js';
@@ -23,6 +23,7 @@ import {
   shownState,
   sortRows,
   stateCounts,
+  timeIsQuiet,
   timeNote,
   timeText,
   unknownWord,
@@ -71,25 +72,28 @@ export function RunsView({ view, selected, onSelect, onOpenWorkspace }: RunsView
       <section className="rv-list" aria-labelledby="rv-title">
         <RunBar view={view} onStarted={onSelect} />
         <div className="rv-tools">
-          <h1 id="rv-title" className="rv-title">
-            Runs <span className="rv-total">{view.runs.total}</span>
+          <h1 id="rv-title" className="rv-title sr-only">
+            Runs <span className="rv-total" data-words="data">{view.runs.total}</span>
           </h1>
-          <TextField aria-label="Filter runs by case or run id" placeholder="Filter by case or run id" value={filter} onChange={setFilter} className="rv-filter" />
+          <TextField aria-label="Filter runs by case or run id" placeholder="Filter" value={filter} onChange={setFilter} className="rv-filter" />
           <Select aria-label="Run state" options={options} selected={stateFilter} onChange={(k) => setStateFilter(k as StateFilter)} className="rv-state" />
-          <span className="rv-read">{filtered ? `${rows.length} of ${all.length} shown · ` : ''}read {clock(view.readAt)}</span>
+          {/* G22: a filter's count is shown; the time of the reading is said to readers */}
+          <span className="rv-read">
+            {filtered ? <span data-words="data">{`${rows.length} of ${all.length} shown`}</span> : ''}
+            <Quiet>{` · read ${clock(view.readAt)}`}</Quiet>
+          </span>
         </div>
         {view.runs.error !== null ? (
-          <div className="rv-error" role="alert">
+          <div className="rv-error" role="alert" data-words="exception">
             <StateMark state="failed" label="Failed to list the runs" />
             <span>{view.runs.error}</span>
             <Button onPress={projectActions.refresh}>Read again</Button>
           </div>
         ) : all.length === 0 ? (
-          <p className="rv-empty">
-            No runs yet. A run solves one case and keeps its results in <span className="rv-file">runs/</span>; the runner owns it, so it goes on when
-            the Studio is closed. Choose a case above and Run it, or Queue it with a priority. Claude Code (<span className="rv-file">start_run</span>)
-            and the CLI (<span className="rv-file">rcfd-runner start</span>) start the same runs; theirs appear here as they start.
-          </p>
+          <EmptyMark
+            className="rv-empty"
+            text="No runs yet. A run solves one case and keeps its results in runs/; the runner owns it, so it goes on when the Studio is closed. Choose a case above and Run it, or Queue it with a priority. Claude Code (start_run) and the CLI (rcfd-runner start) start the same runs; theirs appear here as they start."
+          />
         ) : (
           <div
             className="rv-scroll"
@@ -129,7 +133,7 @@ export function RunsView({ view, selected, onSelect, onOpenWorkspace }: RunsView
                 items={rows}
                 dependencies={[selected, view.runDetails, view.runRequests]}
                 renderEmptyState={() => (
-                  <div className="rv-nomatch">
+                  <div className="rv-nomatch" data-words="exception">
                     <p>No run matches this filter.</p>
                     <Button
                       variant="ghost"
@@ -149,7 +153,7 @@ export function RunsView({ view, selected, onSelect, onOpenWorkspace }: RunsView
           </div>
         )}
         {view.skippedRuns.length > 0 && (
-          <ul className="rv-skipped">
+          <ul className="rv-skipped" data-words="exception">
             {view.skippedRuns.map((s) => (
               <li key={s.path}>
                 <StateMark state="failed" label="Failed to read" />
@@ -167,7 +171,11 @@ export function RunsView({ view, selected, onSelect, onOpenWorkspace }: RunsView
 
 function StateCell({ row, faded }: { row: RunRow; faded: boolean }) {
   const s = shownState(row);
-  return s ? <StateMark state={s} faded={faded} /> : <span className="ui-state rv-state-word">{unknownWord(row.state)}</span>;
+  return (
+    <span data-words={row.state === 'failed' ? 'exception' : 'chrome'}>
+      {s ? <StateMark state={s} faded={faded} quiet /> : <span className="ui-state rv-state-word">{unknownWord(row.state)}</span>}
+    </span>
+  );
 }
 
 function RunTableRow({ row, faded, pending }: { row: RunRow; faded: boolean; pending: RunRequest | null }) {
@@ -176,16 +184,18 @@ function RunTableRow({ row, faded, pending }: { row: RunRow; faded: boolean; pen
   return (
     <Row id={row.id} textValue={`${caseName(row.case)} ${row.id}`} failed={failed} faded={faded} className="rv-row">
       <Cell className="rv-cell-case">
-        <span className="rv-case" data-run={row.id} data-state={row.state}>
+        <span className="rv-case" data-run={row.id} data-state={row.state} data-words="data">
           {caseName(row.case) || 'case not recorded'}
         </span>
-        <span className="rv-id">{row.id}</span>
+        <span className="rv-id" data-words="data">
+          {row.id}
+        </span>
       </Cell>
       <Cell className="rv-cell-state">
         <StateCell row={row} faded={faded} />
       </Cell>
       <Cell className="rv-cell-result">
-        <span className="rv-head" data-step={row.step}>
+        <span className="rv-head" data-step={row.step} data-words="data">
           {row.state === 'queued' || row.step === 0 ? (
             r.head
           ) : (
@@ -198,7 +208,14 @@ function RunTableRow({ row, faded, pending }: { row: RunRow; faded: boolean; pen
             </Provenance>
           )}
         </span>
-        <span className={failed ? 'rv-note rv-note--failed' : 'rv-note'}>{r.note}</span>
+        {/* G22: a failure's or a stop's note is shown; a normal state's note is said to readers and in the tooltip */}
+        {failed || row.state === 'cancelled' ? (
+          <span className={failed ? 'rv-note rv-note--failed' : 'rv-note'} data-words="exception">
+            {r.note}
+          </span>
+        ) : (
+          <Quiet>{` ${r.note}`}</Quiet>
+        )}
         {pending && (
           // F-807: what this window asked of the runner and has not seen it do yet (the state cell stays the runner's)
           <span className="rc-pending" data-request-seq={pending.seq} data-answered-at={pending.answeredAt} data-slow={pending.slow ? 'true' : 'false'}>
@@ -212,11 +229,13 @@ function RunTableRow({ row, faded, pending }: { row: RunRow; faded: boolean; pen
 
 // ---- the selected run
 
-function Num({ caption, children, word, wide }: { caption: string; children: ReactNode; word?: boolean; wide?: boolean }) {
+function Num({ caption, children, word, wide, named }: { caption: string; children: ReactNode; word?: boolean; wide?: boolean; named?: boolean }) {
   return (
     <div className={`rv-num${wide ? ' rv-num--wide' : ''}`}>
-      <dt>{caption}</dt>
-      <dd className={word ? 'rv-num-word' : undefined}>{children}</dd>
+      <dt data-words={named ? 'data' : undefined}>{caption}</dt>
+      <dd className={word ? 'rv-num-word' : undefined} data-words={word ? 'chrome' : 'data'}>
+        {children}
+      </dd>
     </div>
   );
 }
@@ -248,14 +267,17 @@ function SelectedRun({
   if (row === null) {
     return (
       <aside className="rv-run rv-run--none" aria-labelledby="rv-run-title">
-        <h2 id="rv-run-title" className="rv-run-title">
+        {/* G22: nothing selected is the normal state and says nothing; a selected run that is gone speaks */}
+        <h2 id="rv-run-title" className={selected === null ? 'rv-run-title sr-only' : 'rv-run-title'} data-words={selected === null ? undefined : 'exception'}>
           {selected === null ? 'No run selected' : 'The selected run is gone'}
         </h2>
-        <p className="rv-empty-line">
-          {selected === null
-            ? 'Select a run in the table (arrow keys and Space, or a click) to bring it forward: its numbers, why it is in its state and the state changes the runner recorded. Escape clears the selection.'
-            : `${selected} is no longer in the project folder: it was removed or renamed outside the Studio.`}
-        </p>
+        {selected === null ? (
+          <EmptyMark text="Select a run in the table (arrow keys and Space, or a click) to bring it forward: its numbers, why it is in its state and the state changes the runner recorded. Escape clears the selection." />
+        ) : (
+          <p className="rv-empty-line" data-words="exception">
+            {`${selected} is no longer in the project folder: it was removed or renamed outside the Studio.`}
+          </p>
+        )}
         {selected !== null && <Button onPress={onClear}>Clear the selection</Button>}
       </aside>
     );
@@ -268,18 +290,16 @@ function SelectedRun({
   return (
     <aside className="rv-run" aria-labelledby="rv-run-title" data-run={row.id}>
       <header className="rv-run-head">
-        <h2 id="rv-run-title" className="rv-run-title">
+        <h2 id="rv-run-title" className="rv-run-title" data-words="data">
           {caseName(row.case) || 'case not recorded'}
         </h2>
-        {s ? <StateMark state={s} /> : <span className="ui-state">{unknownWord(row.state)}</span>}
-        <span className="rv-id">
+        <span data-words={row.state === 'failed' ? 'exception' : 'chrome'}>{s ? <StateMark state={s} quiet /> : <span className="ui-state">{unknownWord(row.state)}</span>}</span>
+        <span className="rv-id" data-words="data">
           <Provenance runOpener subject={{ kind: 'run', run: row.id }}>
             {row.id}
           </Provenance>
         </span>
-        <Button variant="ghost" icon="close" onPress={onClear} className="rv-clear">
-          Clear selection
-        </Button>
+        <IconButton variant="ghost" icon="close" label="Clear selection" onPress={onClear} className="rv-clear" />
       </header>
       {onOpenWorkspace && (
         <div className="rv-open-workspace">
@@ -287,7 +307,7 @@ function SelectedRun({
         </div>
       )}
       {row.detailError !== null && (
-        <div className="rv-error" role="alert">
+        <div className="rv-error" role="alert" data-words="exception">
           <StateMark state="failed" label="Failed to read the run’s status" />
           <span>{row.detailError}</span>
           <Button onPress={projectActions.refresh}>Read again</Button>
@@ -301,7 +321,11 @@ function SelectedRun({
           </Provenance>
         </Num>
         <Num caption="Time, s" word={timeNote(row) !== null}>
-          {timeNote(row) === null ? (
+          {timeIsQuiet(timeNote(row)) ? (
+            <Dash words={timeText(row)} />
+          ) : timeNote(row) !== null ? (
+            <span data-words="exception">{timeText(row)}</span>
+          ) : (
             <Provenance
               subject={{
                 kind: 'number',
@@ -310,8 +334,6 @@ function SelectedRun({
             >
               {timeText(row)}
             </Provenance>
-          ) : (
-            timeText(row)
           )}
         </Num>
         <Num caption="Solver time, s" word={d?.finish?.elapsed == null}>
@@ -333,9 +355,9 @@ function SelectedRun({
               {plain(d.finish.elapsed, 2)}
             </Provenance>
           ) : ended ? (
-            'not reported'
+            <span data-words="exception">not reported</span>
           ) : (
-            'not finished'
+            <Dash words="not finished" />
           )}
         </Num>
         <Num caption="Solver process" word={d?.pid == null}>
@@ -344,7 +366,7 @@ function SelectedRun({
               {d.pid}
             </Provenance>
           ) : d ? (
-            'none'
+            <Dash words="none" />
           ) : (
             '…'
           )}
@@ -354,17 +376,15 @@ function SelectedRun({
             <Provenance subject={{ kind: 'number', source: statusValue({ run: row.id, quantity: 'exit code', shown: String(d.exitCode), value: d.exitCode, unit: { why: 'the solver’s exit code, status.json exit_code' } }) }}>
               {d.exitCode}
             </Provenance>
-          ) : ended ? (
-            'none'
           ) : (
-            'not ended'
+            <Dash words={ended ? 'none' : 'not ended'} />
           )}
         </Num>
         <Num caption="Updated" word>
-          {d ? (sameDay(d.updated) ? clock(d.updated) : dateTime(d.updated)) : '…'}
+          <span data-words="data">{d ? (sameDay(d.updated) ? clock(d.updated) : dateTime(d.updated)) : '…'}</span>
         </Num>
         {reports.map(([k, v]) => (
-          <Num key={k} caption={k}>
+          <Num key={k} caption={k} named>
             <span title={String(v)}>
               <Provenance subject={{ kind: 'number', source: reportValue({ run: row.id, name: k, shown: report(v), value: v }) }}>{report(v)}</Provenance>
             </span>
@@ -372,25 +392,31 @@ function SelectedRun({
         ))}
       </dl>
       {reports.length > 0 && (
-        <p className="rv-caption">
-          {reports.length === 1 ? 'The report value' : 'The report values'} of the case, as the runner recorded them in metrics.json; the engine gives
-          no unit for them.
+        // a known miss stays visible (G6, G22): the engine gives these no unit; where they come from is said to readers
+        <p className="rv-caption" data-words="exception">
+          <Quiet>{reports.length === 1 ? 'The report value' : 'The report values'} of the case, as the runner recorded them in metrics.json; </Quiet>
+          No unit from the engine.
         </p>
       )}
       <section className="rv-block" aria-labelledby="rv-why">
-        <h3 id="rv-why" className="rv-block-title">
+        <h3 id="rv-why" className="rv-block-title sr-only">
           {ended ? 'Why it ended' : row.state === 'queued' ? 'Why it is waiting' : `Why it is ${s ? markWord(s).toLowerCase() : row.state}`}
         </h3>
-        <p className={row.state === 'failed' ? 'rv-why rv-why--failed' : 'rv-why'}>
-          {d?.reason ?? (d ? (row.state === 'running' ? 'Launched by the runner; the solver is working.' : 'The runner recorded no reason.') : 'Reading the run’s status…')}
-        </p>
+        {/* G22: the runner's reason is data and stays; the Studio's own words for a normal state are said to readers */}
+        {d?.reason || row.state === 'failed' ? (
+          <p className={row.state === 'failed' ? 'rv-why rv-why--failed' : 'rv-why'} data-words={row.state === 'failed' ? 'exception' : 'data'}>
+            {d?.reason ?? (d ? 'The runner recorded no reason.' : 'Reading the run’s status…')}
+          </p>
+        ) : (
+          <Quiet>{d ? (row.state === 'running' ? 'Launched by the runner; the solver is working.' : 'The runner recorded no reason.') : 'Reading the run’s status…'}</Quiet>
+        )}
       </section>
       <section className="rv-block" aria-labelledby="rv-history">
-        <h3 id="rv-history" className="rv-block-title">
+        <h3 id="rv-history" className="rv-block-title sr-only">
           State changes the runner recorded
         </h3>
         {d && d.history.length > 0 ? (
-          <ol className="rv-history">
+          <ol className="rv-history" data-words="data">
             {d.history.map((h, i) => (
               <li key={`${h.t}-${i}`}>
                 <time dateTime={h.t}>{clock(h.t)}</time>
@@ -400,12 +426,20 @@ function SelectedRun({
             ))}
           </ol>
         ) : (
-          <p className="rv-empty-line">{d ? 'None among the run’s last events.' : 'Reading the run’s events…'}</p>
+          <Quiet>{d ? 'None among the run’s last events.' : 'Reading the run’s events…'}</Quiet>
         )}
       </section>
-      <p className="rv-source">
-        Created {dateTime(row.created)}
-        {d ? `, solver ${d.solverVersion}. Read through the engine (run_status of runs/${row.id}) at ${clock(d.readAt)}.` : '.'}
+      {/* G22: where the numbers come from is said to readers and one step away in the provenance (F-828) */}
+      <p className="rv-source sr-only">
+        Created <span data-words="data">{dateTime(row.created)}</span>
+        {d ? (
+          <>
+            , solver <span data-words="data">{d.solverVersion}</span>. Read through the engine (run_status of runs/<span data-words="data">{row.id}</span>) at{' '}
+            <span data-words="data">{clock(d.readAt)}</span>.
+          </>
+        ) : (
+          '.'
+        )}
       </p>
     </aside>
   );

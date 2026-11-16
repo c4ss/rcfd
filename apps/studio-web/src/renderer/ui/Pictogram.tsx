@@ -36,13 +36,34 @@ export function StatePictogram({ state, faded = false, size = 14, className }: S
 export interface StateMarkProps extends StatePictogramProps {
   /** Replaces the state word, e.g. "converged · 13.2 s" (it must still start with the state word). */
   label?: string;
+  /**
+   * The Quiet Rule (G22, F-833): a normal state shows its pictogram alone, with the word as its accessible name (role
+   * img) and tooltip. A failure and a cancelled run keep the visible word: the exception speaks.
+   */
+  quiet?: boolean;
 }
 
-/** Pictogram plus word: the only way a run state is shown. */
-export function StateMark({ state, faded, label, className, size }: StateMarkProps) {
+/** Pictogram plus word: the only way a run state is shown (the word visible, or the name and tooltip when quiet). */
+export function StateMark({ state, faded, label, className, size, quiet }: StateMarkProps) {
   const isFaded = faded && state !== 'failed';
+  const word = label ?? markWord(state);
+  if (quiet && state !== 'failed' && state !== 'cancelled') {
+    return (
+      <span
+        className={cx('ui-state', 'ui-state--quiet', `ui-state--${state}`, isFaded && 'ui-state--faded', className)}
+        role="img"
+        aria-label={word}
+        title={word}
+      >
+        <StatePictogram state={state} faded={faded} size={size} />
+      </span>
+    );
+  }
   return (
-    <span className={cx('ui-state', `ui-state--${state}`, isFaded && 'ui-state--faded', className)}>
+    <span
+      className={cx('ui-state', `ui-state--${state}`, isFaded && 'ui-state--faded', className)}
+      data-words={state === 'failed' || state === 'cancelled' ? 'exception' : undefined}
+    >
       <StatePictogram state={state} faded={faded} size={size} />
       <span className="ui-state-word">{label ?? markWord(state)}</span>
     </span>

@@ -505,3 +505,22 @@
   display: block;
   overflow-y: auto;
 }
+
+/* The Quiet Rule (G22, F-833): a key's description, hint, default, range and reset are its focus detail. At rest they are
+   kept for readers (and stay in the tab order) but take no room; the row that holds the focus shows them. */
+.st-key-detail {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.st-key:focus-within .st-key-detail {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip-path: none;
+  white-space: normal;
+}

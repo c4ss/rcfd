@@ -12,7 +12,7 @@ import type { Axis } from '../plots/range.js';
 import { SeriesData } from '../plots/series.js';
 import { MONITOR_STYLE, residualOrder, residualStyles, type LineStyle } from '../plots/style.js';
 import { caseName, type RunRow } from '../runs/model.js';
-import { Button, IconButton, Select, StatePictogram, Toggle } from '../ui/index.js';
+import { IconButton, Quiet, Select, StatePictogram, Toggle } from '../ui/index.js';
 import '../plots/plots.css';
 import { counterText, flagText, fraction, labelAfter, nearestPosition, valueText, type Band, type Position } from './model.js';
 import { Provenance, counterValue, seriesValue, type StopFacts } from '../provenance/index.js';
@@ -127,8 +127,9 @@ export function TimePanel(props: TimePanelProps) {
     <section className="tp" aria-label={`Time of ${name}`}>
       <div className="tp-main">
         <div className="tp-head">
-          <h2 className="tp-title">Run bands</h2>
-          <small>one band per run on a shared axis of iterations · move the line to move field, residuals and monitor together</small>
+          {/* G22: the bands say what they are by their place; the words are for readers */}
+          <h2 className="tp-title sr-only">Run bands</h2>
+          <Quiet>one band per run on a shared axis of iterations · move the line to move field, residuals and monitor together</Quiet>
         </div>
         <div className="tp-body">
           <div className="tp-lane" aria-hidden="true" />
@@ -143,7 +144,7 @@ export function TimePanel(props: TimePanelProps) {
                   data-run={b.id}
                   data-state={r.state}
                 >
-                  <div className="tp-band-name" onClick={() => onSelect(b.id)} title={`${caseName(r.case)} · ${b.id}`}>
+                  <div className="tp-band-name" onClick={() => onSelect(b.id)} title={`${caseName(r.case)} · ${b.id}`} data-words="data">
                     {caseName(r.case) || b.id}
                   </div>
                   <div className={`tp-band${selected || b.id === compare?.row.id ? '' : ' tp-band--faded'}`}>
@@ -162,10 +163,15 @@ export function TimePanel(props: TimePanelProps) {
                       ))}
                       <span
                         className={`tp-end tp-end--${b.state ?? 'other'} ${labelAfter(b.end, axis) ? 'tp-end--after' : 'tp-end--inside'}`}
+                        data-words={b.state === 'failed' || b.state === 'cancelled' ? 'exception' : 'data'}
+                        role="img"
+                        aria-label={b.label}
+                        title={b.label}
                         style={labelAfter(b.end, axis) ? { left: `calc(${pct(fraction(b.end, axis))} + var(--space-sm))` } : { right: `calc(${pct(1 - fraction(b.end, axis))} + var(--space-md))` }}
                       >
                         {b.state && <StatePictogram state={b.state} size={12} />}
-                        {b.label}
+                        {/* G22: a normal end shows its pictogram and where it ended; the state word is its name and tooltip */}
+                        {b.state === 'failed' || b.state === 'cancelled' || !b.label.includes(' · ') ? b.label : b.label.slice(b.label.indexOf(' · ') + 3)}
                       </span>
                     </div>
                   </div>
@@ -176,11 +182,16 @@ export function TimePanel(props: TimePanelProps) {
           <div className="tp-resid">
             <div className="tp-resid-label">
               <span className="tp-resid-title">
-                Residuals · <b>{name}</b>
-                {compare && <span className="tp-resid-compared"> · {caseName(compare.row.case) || compare.row.id}</span>}
+                Residuals · <b data-words="data">{name}</b>
+                {compare && (
+                  <span className="tp-resid-compared" data-words="data">
+                    {' '}
+                    · {caseName(compare.row.case) || compare.row.id}
+                  </span>
+                )}
               </span>
-              <span className="tp-resid-at">{position ? `at it ${position.step}, log scale` : 'log scale'}</span>
-              <ul className="tp-resid-values" aria-label={`Residuals of ${name} at the line`}>
+              <Quiet>{position ? ` at it ${position.step}, log scale` : ' log scale'}</Quiet>
+              <ul className="tp-resid-values" aria-label={`Residuals of ${name} at the line`} data-words="data">
                 {[...residuals].map(([n, { style }]) => {
                   const v = cursor.get(n);
                   return (
@@ -195,7 +206,7 @@ export function TimePanel(props: TimePanelProps) {
                 })}
               </ul>
               {compare && (
-                <ul className="tp-resid-compare" aria-label={`Residuals of ${caseName(compare.row.case) || compare.row.id} at the line`} data-run={compare.row.id}>
+                <ul className="tp-resid-compare" aria-label={`Residuals of ${caseName(compare.row.case) || compare.row.id} at the line`} data-run={compare.row.id} data-words="data">
                   {[...comparedResiduals].map(([n, { style }]) => {
                     const v = compare.cursor.get(n);
                     return (
@@ -213,7 +224,7 @@ export function TimePanel(props: TimePanelProps) {
               {residuals.size > 0 ? (
                 <PlotFrame series={residualLines} version={plotVersion} log xCaption="iteration" height={56} xAxis={axis} cursor={position?.step ?? null} />
               ) : (
-                <p className="tp-empty" role="status">
+                <p className="tp-empty" role="status" data-words={seriesError || row.state === 'failed' ? 'exception' : 'chrome'}>
                   <StatePictogram state={row.state === 'failed' ? 'failed' : 'queued'} />
                   {seriesError
                     ? `The residuals of ${name} could not be read: ${seriesError}`
@@ -241,23 +252,26 @@ export function TimePanel(props: TimePanelProps) {
           {monitorNames.length > 1 ? (
             <Select
               aria-label="Monitor series"
+              valueWords="data"
               className="tp-monitor-select"
               options={monitorNames.map((n) => ({ id: n, label: n }))}
               selected={monitor}
               onChange={(n) => setMonitorChoice({ run: row.id, name: n })}
             />
           ) : (
-            <small>{monitor ?? name}</small>
+            <small data-words="data">{monitor ?? name}</small>
           )}
         </div>
         {monitor !== null && monitorEntry ? (
           <>
             <div className="tp-readout">
               <small>
-                {monitorEntry.unit ? `${monitor}, ${monitorEntry.unit}` : `${monitor}, no unit given`}
-                {position ? ` · at it ${position.step}` : ''}
+                <span data-words="data">{monitorEntry.unit ? `${monitor}, ${monitorEntry.unit}` : monitor}</span>
+                {monitorEntry.unit ? '' : <span data-words="exception">, no unit given</span>}
+                <Quiet>{position ? ` · at it ${position.step}` : ''}</Quiet>
               </small>
               <output
+                data-words="data"
                 className="tp-readout-value"
                 data-name={monitor}
                 data-step={cursor.get(monitor)?.step}
@@ -281,9 +295,7 @@ export function TimePanel(props: TimePanelProps) {
         <div className="tp-transport" role="group" aria-label="Snapshots">
           <IconButton label="First snapshot" icon="first" isDisabled={last < 0 || index === 0} onPress={() => onMove(0)} />
           <IconButton label="Previous snapshot" icon="back" isDisabled={last < 0 || index === 0} onPress={() => onMove(index - 1)} />
-          <Button variant="primary" icon={playing ? 'pause' : 'play'} isDisabled={last < 1 || (!playing && index >= last)} onPress={() => onPlay(!playing)}>
-            {playing ? 'Pause' : 'Play'}
-          </Button>
+          <IconButton variant="primary" icon={playing ? 'pause' : 'play'} label={playing ? 'Pause' : 'Play'} isDisabled={last < 1 || (!playing && index >= last)} onPress={() => onPlay(!playing)} />
           <IconButton label="Next snapshot" icon="forward" isDisabled={last < 0 || index >= last} onPress={() => onMove(index + 1)} />
           {running && (
             <Toggle isSelected={follow} onChange={onFollow} className="tp-follow">
@@ -291,7 +303,7 @@ export function TimePanel(props: TimePanelProps) {
             </Toggle>
           )}
         </div>
-        <output className="tp-counter" data-step={position?.step} data-snapshot={position?.snapshot ?? undefined} aria-live="off">
+        <output className="tp-counter" data-step={position?.step} data-snapshot={position?.snapshot ?? undefined} aria-live="off" data-words="data">
           {stop ? (
             <Provenance pkey="tp-counter" subject={{ kind: 'number', source: counterValue({ run: row.id, shown: counterText(index, positions, running), stop }) }}>
               {counterText(index, positions, running)}
@@ -376,7 +388,9 @@ function Scrubber({
     >
       {p && (
         <span className="tp-line" style={{ left: pct(f) }}>
-          <span className={`tp-flag${f < 0.18 ? ' tp-flag--right' : ''}`}>{flagText(p)}</span>
+          <span className={`tp-flag${f < 0.18 ? ' tp-flag--right' : ''}`} data-words="data">
+            {flagText(p)}
+          </span>
         </span>
       )}
     </div>

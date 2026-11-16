@@ -107,11 +107,16 @@ textarea {
   font-weight: var(--type-chart-micro-weight);
 }
 
+/* Words for readers only. Important: the Quiet Rule (G22, F-833) puts it on elements that have their own padding,
+   margin, border and display (a source line, a section, a heading), and those must not bring the words back. */
 .sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  border: 0 !important;
+  overflow: hidden !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
 }

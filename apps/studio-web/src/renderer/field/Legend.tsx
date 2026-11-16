@@ -25,10 +25,12 @@ export function Legend({ lut, quantity, unit, lo, hi }: LegendProps) {
   const marks = ticks(lo, hi);
   return (
     <div className="fv-legend" role="group" aria-label={`Colour map viridis, ${title}, from ${tickLabel(lo)} to ${tickLabel(hi)}`}>
-      <span className="fv-legend-title">{title}</span>
+      <span className="fv-legend-title" data-words="data">
+        {title}
+      </span>
       <span className="fv-legend-scale">
         <canvas ref={bar} className="fv-legend-bar" width={LUT_SIZE} height={1} aria-hidden="true" data-legend-bar="" />
-        <span className="fv-legend-ticks" aria-hidden="true">
+        <span className="fv-legend-ticks" aria-hidden="true" data-words="data">
           {marks.map((v, i) => (
             <span key={i}>{tickLabel(v)}</span>
           ))}

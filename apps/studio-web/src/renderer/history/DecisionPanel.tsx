@@ -54,7 +54,14 @@ export function DecisionPanel({ title, children, choices, onCancel, failed }: De
   }, []);
 
   return (
-    <section ref={root} className={failed ? 'hi-panel hi-panel--failed' : 'hi-panel'} role="alertdialog" aria-labelledby={titleId} aria-describedby={bodyId}>
+    <section
+      ref={root}
+      className={failed ? 'hi-panel hi-panel--failed' : 'hi-panel'}
+      role="alertdialog"
+      aria-labelledby={titleId}
+      aria-describedby={bodyId}
+      data-words="exception"
+    >
       <h2 id={titleId} ref={heading} tabIndex={-1} className="hi-panel-title">
         {title}
       </h2>

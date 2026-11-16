@@ -1360,3 +1360,102 @@ tooltips (Compare runs, Side by side, Difference) on the 14-unit grid at 0, 45 a
   `tests/e2e/compare.spec.ts` 7 passed (screenshots in `test-results-visual/f815/`).
 - `python scripts/third_party_licenses.py --check`: up to date.
 - `cargo test -p rcfd-cli --release --test docs_site --test workspace_graph`: 2 and 4 passed.
+
+## Addendum F-833: the Quiet Rule swept over the built surfaces, and a word budget per surface (2026-11-16)
+
+F-833 (G22, with G6, G8, G13, G18, G19, G20) quiets every built surface of the Studio and locks a budget of visible
+chrome words per surface. It adds **no dependency** and changes no Rust file, service method, reply shape, golden or
+default. `DESIGN.md` and `docs/studio-guardrails.md` are not edited; proposed `DESIGN.md` changes are below.
+
+### What "a chrome word at rest" is (written before the first count)
+
+Defined in `apps/studio-web/src/shared/word-budget.ts`: a whitespace token with a letter or digit, in a text node or an
+empty field's placeholder inside the surface's root, laid out (`checkVisibility`) with a box of at least 2 by 2 pixels
+and not clipped away by an ancestor (so `.sr-only` text is not counted); words outside the window count. Not counted:
+text whose nearest `data-words` is `data`, `exception`, `disclaimer` or `help`; accessible names, descriptions and
+tooltips that are not open. `tests/e2e/word-budget.spec.ts` brings 17 surfaces to rest in one Studio, photographs and
+counts them, and fails past a budget.
+
+### Counts (1440 by 900; BEFORE and AFTER photographs in `apps/studio-web/test-results-visual/f833/`)
+
+| Surface | Before | After = proposed budget |
+|---|---:|---:|
+| project home, no project | 75 | 6 |
+| first path, no project | 22 | 22 |
+| project home, project open | 167 | 49 |
+| first path, empty project | 22 | 22 |
+| runs | 64 | 14 |
+| runs, a run selected | 64 | 16 |
+| run workspace | 111 | 17 |
+| compare | 65 | 8 |
+| derived-picture controls | 0 | 0 |
+| provenance popover | 11 | 11 |
+| Claude Code panel | 63 | 13 |
+| command palette | 31 | 4 |
+| case settings | 144 | 23 |
+| case editor | 553 | 51 |
+| undo controls | 6 | 0 |
+| decision panel | 0 | 0 |
+| progress rows | 3 | 3 |
+
+The budgets are proposed and await the maintainer's approval (`BUDGET_STATUS`).
+
+### Where the words went
+
+- Accessible names and tooltips: a normal run state (`StateMark quiet`: the pictogram, the word as name and title), the
+  project's Live mark, a band's end ("converged · it 121" as name, "it 121" shown), Saved in the case editor, the undo
+  and redo arrows with nothing to take back, icon buttons (Close project, Clear selection, Close session, a case row's
+  Run, Play and Pause) whose names did not change.
+- Accessible descriptions (`aria-describedby`): what a project is (Open project folder…), when the folder was read (Read
+  again), the composer's keys, Save's shortcut, Check the case's what-it-does.
+- Readers only (`Quiet`, `.sr-only`): section headings whose place says them, source lines (where the numbers come from:
+  also one step away in the provenance, F-828), the normal facts of the folder, of a case file and of a session, the
+  palette's key hints, the footer's right-hand line, "listed hh:mm" and "read hh:mm".
+- Focus detail: a settings key's description, hint, default, range and value count (`.st-key-detail`, shown while the
+  row holds the focus).
+- Empty states: `EmptyMark`, DESIGN.md's "not yet" hatch with the sentence as the name of a `note` and its tooltip.
+
+### What stayed visible, and why
+
+Data; the controls' own labels; column headers and field labels; the G6 disclaimer; the exceptions: a failed or
+cancelled run's word and note, the WebGL 2 fallback, a decimation of the lines, monitor units the engine does not give,
+report values with no unit ("No unit from the engine."), a service that is not connected, changes not saved, why a save
+cannot be made, refusals, conflicts and the decision panel; a work in progress (its name and Cancel). The first path
+(F-813) was already quiet and is unchanged.
+
+### Decisions taken here (reversible, within the guardrails; the maintainer may overturn them)
+
+1. **How an empty state looks at rest.** Options: (a) nothing at all; (b) a short visible word ("Empty"); (c) the "not
+   yet" hatch with the sentence as its accessible name and tooltip. Taken: (c): the place stays marked and the sentence
+   stays one step away. Recommendation: (c).
+2. **A normal state word.** Options: (a) keep the word; (b) the pictogram alone with the word as name and tooltip.
+   Taken: (b), as DESIGN.md already says for normal states. Failed and cancelled keep the word. Recommendation: (b).
+3. **A key's description in settings.** Options: (a) visible; (b) tooltip only; (c) focus detail and the field's
+   description. Taken: (c) (also the name's title). A set key keeps its Reset button visible. Recommendation: (c).
+4. **Shortcut hints beside a control** (Save's Ctrl+S, the composer's Enter). Options: (a) visible; (b) the control's
+   description plus `aria-keyshortcuts` and the shortcut list (Ctrl+/). Taken: (b). Recommendation: (b); G20 still
+   holds through the shortcut list and the palette.
+5. **Where the counter draws the line between data and chrome.** Marked in the markup (`data-words`), not guessed from
+   classes. Recommendation: as taken; a new surface marks its data as it is built.
+6. **`.sr-only` with `!important`.** Needed so that a quieted element's own padding or display does not bring the
+   words back. Recommendation: as taken.
+
+### Proposed `DESIGN.md` changes (not edited here)
+
+- Under The Quiet Rule: "An empty state at rest is the 'not yet' hatch (48 by 8 px), its sentence the accessible name
+  and tooltip"; "a normal absence of a value is an en dash named by its words".
+- Under Components, buttons: "an action whose icon says it (close, play, pause, a row's run, undo and redo with nothing
+  to take back) is an icon button; its name is its tooltip".
+- Under Components, settings rows: "a key's description, default and range are focus detail".
+- A line on the word budget: "each surface's budget of visible chrome words is in `src/shared/word-budget.ts`; raising
+  one needs the maintainer's word (G22)".
+
+### Verification (2026-11-16, on studio-roadmap bfc2f381)
+
+- `npm ci`: exit 0. `npm run typecheck`: clean.
+- `npm test`: 586 passed, 1 failed, 3 did not run. The failure is `provenance.spec.ts:220` (focus back on the trigger
+  after Escape). Run alone, `provenance.spec.ts` fails at line 156 or 232 (the same focus-after-Escape check) on F-833
+  and equally on the unchanged studio-roadmap sources (bfc2f381 built and packaged: 3 runs, failing at 232, 156, 232),
+  so it is not F-833's. `tests/e2e/word-budget.spec.ts`: 10 passed.
+- `python scripts/third_party_licenses.py --check`: up to date.
+- `cargo test -p rcfd-cli --release --test docs_site --test workspace_graph`: 2 and 4 passed.

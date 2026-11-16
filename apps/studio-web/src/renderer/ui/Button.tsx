@@ -79,7 +79,7 @@ export function Unavailable({ label, reason }: UnavailableProps) {
   return (
     <TooltipTrigger delay={300}>
       <Focusable>
-        <span className="ui-unavailable" role="button" aria-disabled="true" tabIndex={0}>
+        <span className="ui-unavailable" role="button" aria-disabled="true" tabIndex={0} data-words="exception">
           {label}
         </span>
       </Focusable>

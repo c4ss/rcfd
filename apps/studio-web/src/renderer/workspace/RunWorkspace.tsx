@@ -16,7 +16,7 @@ import type { RunSeries } from '../../shared/run.js';
 import { openStore, cancelLoads } from '../data/door.js';
 import { FieldViewport } from '../field/FieldViewport.js';
 import { caseName, runRows, shownState, unknownWord, type RunRow } from '../runs/model.js';
-import { Select, StateMark, StatePictogram } from '../ui/index.js';
+import { EmptyMark, Quiet, Select, StateMark, StatePictogram } from '../ui/index.js';
 import { runSeries, runValuesAt } from './door.js';
 import { bandOf, defaultField, lastStep, liveRun, positionsOf, sampleAt, sharedAxis, storePath, type Position } from './model.js';
 import { TimePanel, type CursorValue } from './TimePanel.js';
@@ -299,10 +299,10 @@ export default function RunWorkspace({ view, selected, onSelect, compareRequest 
   if (rows.length === 0) {
     return (
       <div className="ws ws--empty">
-        <p className="ws-empty">
-          No runs yet. The run workspace shows a run’s field, residuals and monitors together once the project holds a run: start one from Claude Code (
-          <span className="ws-file">start_run</span>) or the CLI (<span className="ws-file">rcfd-runner start</span>).
-        </p>
+        <EmptyMark
+          className="ws-empty"
+          text="No runs yet. The run workspace shows a run’s field, residuals and monitors together once the project holds a run: start one from Claude Code (start_run) or the CLI (rcfd-runner start)."
+        />
       </div>
     );
   }
@@ -311,8 +311,8 @@ export default function RunWorkspace({ view, selected, onSelect, compareRequest 
     <div className="ws" data-run={row?.id} data-index={index} data-step={position?.step} data-snapshot={position?.snapshot ?? undefined}>
       <div className="ws-top">
         <section className="ws-runs" aria-labelledby="ws-runs-title">
-          <h2 id="ws-runs-title" className="ws-head">
-            Runs <span className="ws-head-note">{rows.length}</span>
+          <h2 id="ws-runs-title" className="ws-head sr-only">
+            Runs <span className="ws-head-note" data-words="data">{rows.length}</span>
           </h2>
           <ListBox
             aria-label="Runs of the project"
@@ -339,6 +339,7 @@ export default function RunWorkspace({ view, selected, onSelect, compareRequest 
               <div className="ws-field-bar">
                 <Select
                   aria-label="Field"
+                  valueWords="data"
                   className="ws-field-select"
                   options={cellFields.map((f) => ({ id: f.name, label: f.unit ? `${f.name}, ${f.unit}` : f.name }))}
                   selected={field}
@@ -346,7 +347,8 @@ export default function RunWorkspace({ view, selected, onSelect, compareRequest 
                 />
                 <CompareControls rows={rows} selected={row.id} state={cmp} other={otherId} onChange={setCmp} />
                 <span className="ws-field-note">
-                  {caseName(row.case)} · {row.id} · stored fields of runs/{row.id}/fields
+                  <span data-words="data">{caseName(row.case)}</span> · <span data-words="data">{row.id}</span>
+                  <Quiet> · stored fields of runs/{row.id}/fields</Quiet>
                 </span>
               </div>
               {otherRow ? (
@@ -411,15 +413,15 @@ function RunItem({ row, faded }: { row: RunRow; faded: boolean }) {
   const s = shownState(row);
   return (
     <ListBoxItem id={row.id} textValue={`${caseName(row.case)} ${row.id}`} className={`ws-item${row.state === 'failed' ? ' ws-item--failed' : ''}`}>
-      <span className="ws-item-case" data-run={row.id}>
+      <span className="ws-item-case" data-run={row.id} data-words="data">
         {caseName(row.case) || 'case not recorded'}
       </span>
-      <span className="ws-item-id">
+      <span className="ws-item-id" data-words="data">
         <Provenance tabStop={false} runOpener subject={{ kind: 'run', run: row.id }}>
           {row.id}
         </Provenance>
       </span>
-      <span className="ws-item-state">{s ? <StateMark state={s} faded={faded} /> : <span className="ui-state">{unknownWord(row.state)}</span>}</span>
+      <span className="ws-item-state" data-words={row.state === 'failed' ? 'exception' : 'chrome'}>{s ? <StateMark state={s} faded={faded} quiet /> : <span className="ui-state">{unknownWord(row.state)}</span>}</span>
     </ListBoxItem>
   );
 }
@@ -444,9 +446,9 @@ function RunNumbers({
   const decimated = series?.series.some((s) => s.decimated) ?? false;
   return (
     <div className="ws-numbers" aria-label={`Numbers of ${row.id}`}>
-      <dl className="ws-grid">
+      <dl className="ws-grid" data-words="data">
         <div>
-          <dt>{row.detail?.steady === true ? 'Iterations' : 'Steps'}</dt>
+          <dt data-words="chrome">{row.detail?.steady === true ? 'Iterations' : 'Steps'}</dt>
           <dd>
             <Provenance
               subject={{
@@ -459,7 +461,7 @@ function RunNumbers({
           </dd>
         </div>
         <div>
-          <dt>Snapshots stored</dt>
+          <dt data-words="chrome">Snapshots stored</dt>
           <dd>
             {store ? (
               <Provenance
@@ -478,7 +480,7 @@ function RunNumbers({
           </dd>
         </div>
         <div>
-          <dt>Residual lines</dt>
+          <dt data-words="chrome">Residual lines</dt>
           <dd>
             {series ? (
               <Provenance
@@ -497,7 +499,7 @@ function RunNumbers({
           </dd>
         </div>
         <div>
-          <dt>At the line, step</dt>
+          <dt data-words="chrome">At the line, step</dt>
           <dd>
             {position ? (
               <Provenance subject={{ kind: 'number', source: { ...counterValue({ run: row.id, shown: String(position.step), stop: { ...position, of: positionsCount } }), quantity: 'step' } }}>
@@ -509,14 +511,20 @@ function RunNumbers({
           </dd>
         </div>
       </dl>
+      {/* G22: where the numbers come from is said to readers (and in each number's provenance); a decimation (G3) and a
+          unit the engine does not give (G6) stay visible */}
       <p className="ws-source">
-        Fields from runs/{row.id}/fields{store ? ` (${store.nCells} cells, index ${store.index ?? 'not said'})` : ''}; residuals and monitors from runs/{row.id}
-        /residuals.jsonl, read by the engine’s read_residuals
-        {decimated ? `, decimated by the engine to ${series!.maxPoints} samples per series for the lines (the values at the line are the engine’s at that step)` : ''}.
-        {series?.unitsNote ? ` Monitor units: ${series.unitsNote}.` : ''}
+        <Quiet>
+          Fields from runs/{row.id}/fields{store ? ` (${store.nCells} cells, index ${store.index ?? 'not said'})` : ''}; residuals and monitors from runs/
+          {row.id}/residuals.jsonl, read by the engine’s read_residuals.
+        </Quiet>
+        {decimated ? (
+          <span data-words="exception">{`Decimated by the engine to ${series!.maxPoints} samples per series for the lines (the values at the line are the engine’s at that step).`}</span>
+        ) : null}
+        {series?.unitsNote ? <span data-words="exception">{` Monitor units: ${series.unitsNote}.`}</span> : null}
       </p>
       {seriesError && (
-        <p className="ws-error" role="alert">
+        <p className="ws-error" role="alert" data-words="exception">
           <StatePictogram state="failed" /> Failed to read the histories: {seriesError}
         </p>
       )}
@@ -525,7 +533,7 @@ function RunNumbers({
 }
 
 function NoField({ row, storeError, store, hasStops }: { row: RunRow | null; storeError: string | null; store: StoreInfo | null; hasStops: boolean }) {
-  if (!row) return <p className="ws-nofield">Select a run to see its field, residuals and monitors.</p>;
+  if (!row) return <EmptyMark className="ws-nofield" text="Select a run to see its field, residuals and monitors." />;
   const s = shownState(row);
   const name = caseName(row.case) || row.id;
   let text: string;
@@ -537,7 +545,7 @@ function NoField({ row, storeError, store, hasStops }: { row: RunRow | null; sto
   // F-832 (G22): reading is the normal state and says nothing; a long read shows the workspace's progress after 300 ms
   else return <div className="ws-nofield" aria-busy="true" />;
   return (
-    <div className="ws-nofield" role="status">
+    <div className="ws-nofield" role="status" data-words={storeError !== null || row.state === 'failed' ? 'exception' : 'chrome'}>
       {s && <StatePictogram state={s} size={28} />}
       <p>{text}</p>
     </div>

@@ -35,9 +35,11 @@ export interface SelectProps {
   onBand?: boolean;
   isDisabled?: boolean;
   className?: string;
+  /** F-833: what the shown value's words are (src/shared/word-budget.ts): `data` for a case, a run or a field. */
+  valueWords?: 'data' | 'chrome';
 }
 
-export function Select({ label, description, options, selected, onChange, placeholder, onBand, isDisabled, className, ...aria }: SelectProps) {
+export function Select({ label, description, options, selected, onChange, placeholder, onBand, isDisabled, className, valueWords, ...aria }: SelectProps) {
   return (
     <AriaSelect
       aria-label={aria['aria-label']}
@@ -52,7 +54,7 @@ export function Select({ label, description, options, selected, onChange, placeh
     >
       {label && <Label className="ui-label">{label}</Label>}
       <AriaButton className="ui-select-button">
-        <SelectValue className="ui-select-value" />
+        <SelectValue className="ui-select-value" data-words={valueWords} />
         <Icon name="caret-down" className="ui-select-caret" />
       </AriaButton>
       {description && (

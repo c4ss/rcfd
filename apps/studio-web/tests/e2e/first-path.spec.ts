@@ -173,8 +173,8 @@ test('an empty project: one action, the example made by the engine; the explanat
   await expect(stepGroup(page, 'Make the example')).toBeVisible();
   await quietAtRest(page);
   // the F-805 empty states of the groups are still there, each once
-  await expect(page.getByText('No cases yet.')).toBeVisible();
-  await expect(page.getByText('No runs yet.')).toBeVisible();
+  await expect(page.getByRole('note', { name: /^No cases yet\./ })).toBeVisible();
+  await expect(page.getByRole('note', { name: /^No runs yet\./ })).toBeVisible();
   await shot(page, '03-empty-project');
   await path_(page).getByRole('button', { name: 'Explain this step' }).click();
   const about = path_(page).getByRole('region', { name: 'About this step' });

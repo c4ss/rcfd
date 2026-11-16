@@ -46,7 +46,7 @@ export function KeyRow({ leaf, path, label }: KeyRowProps) {
         aria-describedby={describedBy}
       >
         <span className="sr-only">{accessibleName}</span>
-        <span aria-hidden="true">{shown === true ? 'true' : shown === false ? 'false' : formatValue(shown)}</span>
+        <span aria-hidden="true" data-words="data">{shown === true ? 'true' : shown === false ? 'false' : formatValue(shown)}</span>
       </Switch>
     );
   } else if (leaf.control === 'enum' && leaf.options) {
@@ -71,42 +71,68 @@ export function KeyRow({ leaf, path, label }: KeyRowProps) {
   return (
     <div className="st-key" data-path={path} data-pattern={leaf.pattern} data-control={leaf.control} data-set={set ? 'true' : 'false'} aria-busy={pending}>
       <div className="st-key-head">
-        <span className="st-key-name">
+        <span className="st-key-name" data-words="data" title={leaf.description || undefined}>
           {name}
           {unit ? `, ${unit}` : ''}
         </span>
-        {label === undefined && <span className="st-key-path">{path}</span>}
-        <p className="st-key-desc" id={descId}>
+        {label === undefined && (
+          <span className="st-key-path" data-words="data">
+            {path}
+          </span>
+        )}
+        {/* G22: the engine's description is the field's description, shown as focus detail (and in the name's tooltip) */}
+        <p className="st-key-desc st-key-detail" id={descId}>
           {leaf.description || 'The schema gives no description of this key.'}
           {dimension && <span className="st-key-si">Stored in SI ({dimension}); a number with a unit is converted by the engine.</span>}
         </p>
       </div>
-      <div className="st-key-control">
+      <div className="st-key-control" data-words="data">
         {control}
-        {TEXT_HINT[leaf.control] && <span className="st-key-hint">{TEXT_HINT[leaf.control]}</span>}
+        {TEXT_HINT[leaf.control] && <span className="st-key-hint st-key-detail" data-words="chrome">{TEXT_HINT[leaf.control]}</span>}
         {error && (
-          <span className="st-key-error" id={errId}>
+          <span className="st-key-error" id={errId} data-words="exception">
             <StatePictogram state="failed" size={12} />
             <span>Change failed. {error}</span>
           </span>
         )}
       </div>
-      <div className="st-key-meta">
-        <span>{leaf.default !== undefined ? `Default ${formatValue(leaf.default) || '(empty)'}` : 'No default in the schema'}</span>
-        {range && <span>Range {range}</span>}
-        {leaf.control === 'enum' && leaf.options && <span>{leaf.options.length} values</span>}
-        {pending && <span>Sending to the engine</span>}
-        {set && (
-          <span className="st-set">
-            Set
-            {leaf.default !== undefined && (
-              <Button isDisabled={!c.editable || pending} onPress={() => void c.change(path, leaf.default!)} aria-label={`Reset ${path} to its default`}>
-                Reset
-              </Button>
-            )}
+      <div className="st-key-meta st-key-detail">
+        <span>
+          {leaf.default !== undefined ? (
+            <>
+              Default <span data-words="data">{formatValue(leaf.default) || '(empty)'}</span>
+            </>
+          ) : (
+            'No default in the schema'
+          )}
+        </span>
+        {range && (
+          <span>
+            Range <span data-words="data">{range}</span>
+          </span>
+        )}
+        {leaf.control === 'enum' && leaf.options && (
+          <span>
+            <span data-words="data">{leaf.options.length}</span> values
           </span>
         )}
       </div>
+      {/* G22: what is not at rest stays visible: a change on its way, and a set key's Reset (the word Set is for readers) */}
+      {(pending || set) && (
+        <div className="st-key-meta">
+          {pending && <span>Sending to the engine</span>}
+          {set && (
+            <span className="st-set">
+              <span className="sr-only">Set</span>
+              {leaf.default !== undefined && (
+                <Button isDisabled={!c.editable || pending} onPress={() => void c.change(path, leaf.default!)} aria-label={`Reset ${path} to its default`}>
+                  Reset
+                </Button>
+              )}
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -202,7 +228,7 @@ function TextControl({ leaf, path, shown, name, describedBy, invalid }: TextCont
         autoComplete="off"
       />
       {overtaken !== null && draft !== null && (
-        <div className="hi-overtaken" role="alert">
+        <div className="hi-overtaken" role="alert" data-words="exception">
           <p>
             Not sent: {path} changed outside the Studio while you typed. It is now {overtaken || 'empty'} (it was {basis || 'empty'} when
             you began).

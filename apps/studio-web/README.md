@@ -186,8 +186,9 @@ readout and chart, and one scrubber line with its own flag lane. "Open in worksp
 selected run here. Code: `src/renderer/workspace/` (`RunWorkspace.tsx`, `TimePanel.tsx`, `model.ts`, `door.ts`,
 `workspace.css`), `src/main/run/` and `src/shared/run.ts`.
 
-- **Run bands**: each band ends in its state's pictogram and word ("converged · it 121", "failed · it 0",
-  "running · it 1450"; a transient run's end in simulated time, "converged · 13.2 s"). Segments: sky iterating, a meadow
+- **Run bands**: each band ends in its state's pictogram and where it ended ("it 121"; a transient run's end in
+  simulated time, "13.2 s"); the full label ("converged · it 121") is the end's accessible name and tooltip. A failed or
+  cancelled band keeps the word on screen ("failed · it 0"), the Quiet Rule's exceptions (F-833). Segments: sky iterating, a meadow
   cap for converged, a red cap for failed, silver hatching for queued and for the part of the axis a running run has not
   computed yet; orange only for the one live run (One Live Thing: the selected run if it runs, else the newest running
   one). The other bands fade to 40% fill, a failure never. The bands grow in (700 ms, staggered 90 ms) except under
@@ -250,8 +251,8 @@ ADR 0801, addendum F-815 (C1 to C4), coded in `src/shared/compare.ts`. Code: `sr
 
 `src/renderer/field/FieldViewport.tsx` draws one cell field of one snapshot of a store on the boundary surface of the
 stored mesh: three.js `WebGPURenderer` (made and initialised asynchronously inside react-three-fiber's `Canvas`), with
-three's WebGL 2 back end as the fallback; the back end that runs is named above the canvas ("Drawn by WebGPU", or "Drawn
-by WebGL 2 (fallback: <why>)"). Until a project view hosts it (F-806), it is shown on a development page,
+three's WebGL 2 back end as the fallback; the back end that runs is named for readers ("Drawn by WebGPU"), and the
+fallback, a loss, is named above the canvas ("Drawn by WebGL 2 (fallback: <why>)", F-833). Until a project view hosts it (F-806), it is shown on a development page,
 `#/dev/field?route=local&path=<fields folder>&field=p&snapshot=19[&backend=webgl]` (`npm run field`).
 
 - **Colour from the raw value on the GPU** (G3, the Data Owns the Field Rule): each triangle corner carries its owner
@@ -646,7 +647,7 @@ Decisions taken in building F-812 (options, the recommendation followed; each ca
   the file's own step: undo changes the session, never the file, and a save after an undo writes the restored value
   (hash guarded as before). At most 200 steps per session.
 - Controls (`src/renderer/history/`): two ghost buttons in the header band that name the step ("Undo: set
-  solver.alpha_u", "Redo: remove boundaries.lid"; "Nothing to undo" when there is none), Ctrl+Z, Ctrl+Shift+Z and Ctrl+Y
+  solver.alpha_u", "Redo: remove boundaries.lid"; when there is none, an arrow alone named "Nothing to undo", F-833), Ctrl+Z, Ctrl+Shift+Z and Ctrl+Y
   (Cmd on macOS) from anywhere on the page. Inside a text field that holds typing not yet sent, Ctrl+Z is the field's own
   undo of that typing; once the value is sent (Enter, or focus leaves) or dropped (Escape) it undoes the last edit.
 - Conflicts: before a step is undone or redone, the settings it left are read again; a value another writer (Claude
@@ -1017,6 +1018,50 @@ the machine's load go to `test-results-visual/f832/long-tasks.json`.
 It adds a delay, in milliseconds, before the engine is asked (`src/main/work/delay.ts`), so the e2e tests can cancel an
 operation while it is running on any machine. A cancel during the delay sends nothing to the engine. The variable is unset outside the
 tests, and then nothing waits.
+
+## The Quiet Rule and the word budget (F-833, G22)
+
+A normal state carries no visible words (DESIGN.md's Quiet Rule, G22). The words a normal state needs are kept, moved off
+the screen: to accessible names and descriptions, to tooltips, to focus detail, to Explain (help on demand) and to the
+command palette. What stays on the screen: data (names, paths, ids, numbers, times), the controls' own labels, column
+headers and field labels, the G6 disclaimer, and the exceptions, which speak: a failure, a cancelled run, a loss (the
+WebGL 2 fallback, a decimation), a known miss (a report value with no unit from the engine), a conflict, something
+unavailable and why, a value to act on (changes not saved).
+
+- The pieces (`src/renderer/ui/Quiet.tsx`): `Quiet` (words for readers only, the `.sr-only` class), `EmptyMark` (an empty
+  state at rest: DESIGN.md's "not yet" hatch, its sentence as the accessible name of a `note` and its tooltip) and
+  `Dash` (a normal absence of a value, an en dash named by its words). `StateMark quiet` shows a normal run state's
+  pictogram alone (role `img`, the word as name and tooltip); `failed` and `cancelled` keep their word.
+- A key of case settings and the case editor shows its name and control; its description, hint, default, range and value
+  count are its focus detail (`.st-key-detail`, shown while the row holds the focus, always its field's description).
+  A set key keeps its Reset button.
+- The counter: `src/shared/word-budget.ts` defines a chrome word at rest (written before the first count) and holds
+  the budget of every surface; `tests/support/word-count.ts` counts from the DOM; `data-words` marks the visible words
+  that are not chrome (`data`, `exception`, `disclaimer`, `help`). `tests/e2e/word-budget.spec.ts` brings each surface
+  to rest in one Studio, photographs it, counts it, and fails when a surface passes its budget. `RCFD_WORD_PHASE=before`
+  writes the photographs and counts to `test-results-visual/f833/before/` instead of `after/`.
+- The budgets are the AFTER counts of the sweep, proposed and awaiting the maintainer's approval
+  (`BUDGET_STATUS`); raising one needs the maintainer's word.
+
+| Surface | Before | After = budget | What stayed |
+|---|---:|---:|---|
+| project home, no project | 75 | 6 | brand, Commands, Open project folder… |
+| first path, no project | 22 | 22 | the four stations and Explain (F-813 was quiet already) |
+| project home, project open | 167 | 49 | tabs, filter toggles, group titles, column headers, row actions |
+| first path, empty project | 22 | 22 | as above |
+| runs | 64 | 14 | run control, filters, column headers |
+| runs, a run selected | 64 | 16 | actions and number captions; the no-unit miss and the runner's reason (data) |
+| run workspace | 111 | 17 | number captions, Mesh grid, caption keys, axis titles |
+| compare | 65 | 8 | Mesh grid and caption keys of each view |
+| derived-picture controls | 0 | 0 | |
+| provenance popover | 11 | 11 | on demand: its field captions and Copy |
+| Claude Code panel | 63 | 13 | title, List again, Sessions, New chat, Tool approvals, the placeholder |
+| command palette | 31 | 4 | title and placeholder |
+| case settings | 144 | 23 | section list, Show every key, Check the case |
+| case editor | 553 | 51 | as settings, plus Reset of each set key and the case actions |
+| undo controls | 6 | 0 | arrows named "Nothing to undo" and "Nothing to redo" |
+| decision panel | 0 | 0 | the whole panel is an exception |
+| progress rows | 3 | 3 | the work's name and Cancel (a work in progress is not at rest) |
 
 ## Security (G10)
 

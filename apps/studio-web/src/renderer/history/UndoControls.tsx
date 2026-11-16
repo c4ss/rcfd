@@ -128,12 +128,33 @@ export function UndoControls({ scope, onRenamed }: UndoControlsProps) {
       {view.undo && !view.undo.available ? (
         <Unavailable label={`Cannot undo: ${view.undo.title}`} reason={view.undo.reason ?? 'This step cannot be undone.'} />
       ) : (
-        <Button variant="ghost" className="hi-button" onPress={() => void run('undo')} isDisabled={!view.undo} aria-describedby={undoKeys} aria-label={undoLabel}>
-          <span className="hi-label">{undoLabel}</span>
+        // G22: nothing to undo is the normal state: the arrow alone, the words its name and tooltip
+        <Button
+          variant="ghost"
+          className="hi-button"
+          icon={view.undo ? undefined : 'back'}
+          onPress={() => void run('undo')}
+          isDisabled={!view.undo}
+          aria-describedby={undoKeys}
+          aria-label={undoLabel}
+        >
+          <span className={view.undo ? 'hi-label' : 'hi-label sr-only'} title={view.undo ? undefined : undoLabel}>
+            {undoLabel}
+          </span>
         </Button>
       )}
-      <Button variant="ghost" className="hi-button" onPress={() => void run('redo')} isDisabled={!view.redo} aria-describedby={redoKeys} aria-label={redoLabel}>
-        <span className="hi-label">{redoLabel}</span>
+      <Button
+        variant="ghost"
+        className="hi-button"
+        icon={view.redo ? undefined : 'forward'}
+        onPress={() => void run('redo')}
+        isDisabled={!view.redo}
+        aria-describedby={redoKeys}
+        aria-label={redoLabel}
+      >
+        <span className={view.redo ? 'hi-label' : 'hi-label sr-only'} title={view.redo ? undefined : redoLabel}>
+          {redoLabel}
+        </span>
       </Button>
       <span id={undoKeys} className="sr-only">
         Ctrl+Z

@@ -66,7 +66,7 @@ test('first start: no project open, the next step, and an empty recent list', as
   const { page } = studio;
   expect(await page.evaluate(() => document.querySelector('h1')?.textContent)).toBe('No project open');
   await expect(page.getByRole('button', { name: 'Open project folder…' })).toBeEnabled();
-  await expect(page.getByText('No recent projects.')).toBeVisible();
+  await expect(page.getByRole('note', { name: /^No recent projects\./ })).toBeVisible();
   const s = await projectState(page);
   expect(s).toMatchObject({ engine: { configured: true, path: mcp, from: 'RCFD_STUDIO_MCP' }, recent: [], opening: null, failure: null, project: null });
   await shot(page, '01-no-project');
@@ -122,7 +122,7 @@ test('opening a project lists its cases, meshes, runs and notes as the engine li
   for (const r of engine.runs.runs) await expect(page.locator(`tr[data-run="${r.id}"]`)).toBeVisible();
   for (const c of v.cases.items) await expect(page.locator(`tr[data-path="${c.path}"]`)).toBeVisible();
   await expect(page.getByRole('radio', { name: `Runs ${engine.runs.total}` }).or(page.getByRole('button', { name: `Runs ${engine.runs.total}` }))).toBeVisible();
-  await expect(page.getByRole('status').filter({ hasText: 'Live' })).toBeVisible();
+  await expect(page.getByRole('status', { name: 'Live', exact: true })).toBeVisible();
   await shot(page, '02-open-quick-start');
   // the recent list holds the folder and when, nothing else
   const recent = JSON.parse(await readFile(recentFile, 'utf8')) as { projects: Record<string, unknown>[] };
@@ -195,7 +195,7 @@ test('when the project server stops, the home says so and Reconnect brings the l
   await expect(page.getByRole('status').filter({ hasText: 'Not live' })).toBeVisible();
   await shot(page, '04-server-stopped');
   await page.getByRole('alert').getByRole('button', { name: 'Reconnect' }).click();
-  await expect(page.getByRole('status').filter({ hasText: /^Live$/ })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('status', { name: 'Live', exact: true })).toBeVisible({ timeout: 20_000 });
   await writeFile(path.join(quick, 'notes', 'after-reconnect.md'), 'x\n');
   await expect(page.locator('tr[data-path="notes/after-reconnect.md"]')).toBeVisible({ timeout: 2000 });
 });
@@ -225,11 +225,11 @@ test('an empty project: every group says what is missing and the next step', asy
   const { app, page } = studio!;
   const empty = await emptyProject(dir);
   await openByDialog(app, page, empty, 'Empty project');
-  await expect(page.getByText('No cases yet.')).toBeVisible();
-  await expect(page.getByText('No mesh files.')).toBeVisible();
-  await expect(page.getByText('No runs yet.')).toBeVisible();
-  await expect(page.getByText('No notes.')).toBeVisible();
-  await expect(page.getByText('Nothing has changed since the project was opened.')).toBeVisible();
+  await expect(page.getByRole('note', { name: /^No cases yet\./ })).toBeVisible();
+  await expect(page.getByRole('note', { name: /^No mesh files\./ })).toBeVisible();
+  await expect(page.getByRole('note', { name: /^No runs yet\./ })).toBeVisible();
+  await expect(page.getByRole('note', { name: /^No notes\./ })).toBeVisible();
+  await expect(page.getByRole('note', { name: /^Nothing has changed since the project was opened\./ })).toBeVisible();
   await shot(page, '06-empty-project');
   // the first case appears without a reload
   await writeFile(path.join(empty, 'cases', 'first.toml'), 'title = "first"\n');

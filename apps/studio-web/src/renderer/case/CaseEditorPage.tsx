@@ -21,7 +21,7 @@ import { caseModel, formatValue, type CaseModel } from '../settings/schema.js';
 import { useSettings } from '../settings/context.js';
 import { SettingsSurface } from '../settings/SettingsSurface.js';
 import { UndoControls } from '../history/UndoControls.js';
-import { Button, Icon, SegmentedToggle, Select, StatePictogram, TextField } from '../ui/index.js';
+import { Button, Icon, Quiet, SegmentedToggle, Select, StatePictogram, TextField } from '../ui/index.js';
 import { caseDoor } from './door.js';
 import { caseHash, caseRoute, replaceHash, type CaseRoute } from './hash.js';
 import { openCase, type OpenFailure } from './open.js';
@@ -109,7 +109,7 @@ export default function CaseEditorPage() {
         <div className="st-brand">
           rcfd <span>Studio</span>
         </div>
-        <div className="ce-tab" title={title}>
+        <div className="ce-tab" title={title} data-words={editing ? 'data' : undefined}>
           {title}
         </div>
         <div className="ce-top-actions">
@@ -126,16 +126,24 @@ export default function CaseEditorPage() {
           {/* F-829: undo and redo of this file's session edits; saving is the file's own step (hash guarded) */}
           {editing && <UndoControls scope={route.session} />}
           {stateWord}
-          <span className="st-conn">{engine.service ? `Service ${engine.service.status}${engine.service.address ? `, ${engine.service.address}` : ''}` : ''}</span>
+          {/* G22: a connected service is the normal state and is said to readers; any other state is shown */}
+          {engine.service && engine.service.status !== 'connected' ? (
+            <span className="st-conn" data-words="exception">
+              Service {engine.service.status}
+              {engine.service.address ? `, ${engine.service.address}` : ''}
+            </span>
+          ) : (
+            <Quiet>{engine.service ? `Service ${engine.service.status}${engine.service.address ? `, ${engine.service.address}` : ''}` : ''}</Quiet>
+          )}
         </div>
       </header>
       {body}
       <footer className="st-foot">
-        <span>
+        <span data-words="disclaimer">
           rcfd is early-stage software. It is not validated for engineering decisions or for safety-critical use, and it
           comes with no warranty.
         </span>
-        <span className="st-foot-right">The case file is read, checked and written by the engine.</span>
+        <Quiet>The case file is read, checked and written by the engine.</Quiet>
       </footer>
     </div>
   );
@@ -366,7 +374,7 @@ function NewCaseView({ project }: { project: ProjectState | null }) {
               {name.trim() === '' && <span className="st-small">Type a name first.</span>}
             </div>
             {refused && (
-              <p className="ce-refused" role="alert">
+              <p className="ce-refused" role="alert" data-words="exception">
                 <StatePictogram state="failed" />
                 <span>Failed: {refused}</span>
               </p>
@@ -510,9 +518,32 @@ function EditorView({ session, engine, project, setTitle, setStateWord }: Editor
 
 function FileStateWord({ status }: { status: CaseStatus }) {
   const n = status.pending.count;
-  if (status.file.state === 'changed') return <span className="ce-word">Changed outside</span>;
-  if (status.file.state === 'missing') return <span className="ce-word ce-word--failed"><StatePictogram state="failed" />File missing</span>;
-  return <span className="ce-word">{n === 0 ? 'Saved' : `${plural(n, 'change', 'changes')} not saved`}</span>;
+  if (status.file.state === 'changed')
+    return (
+      <span className="ce-word" data-words="exception">
+        Changed outside
+      </span>
+    );
+  if (status.file.state === 'missing')
+    return (
+      <span className="ce-word ce-word--failed" data-words="exception">
+        <StatePictogram state="failed" />
+        File missing
+      </span>
+    );
+  // G22: saved is the normal state: the check alone, the word its name and tooltip; changes not saved are shown
+  if (n === 0)
+    return (
+      <span className="ce-word ce-word--quiet" role="img" aria-label="Saved" title="Saved">
+        <Icon name="check" />
+        <span className="sr-only">Saved</span>
+      </span>
+    );
+  return (
+    <span className="ce-word" data-words="exception">
+      {plural(n, 'change', 'changes')} not saved
+    </span>
+  );
 }
 
 /** F-832: the scope of the case editor's works (save, checks) in the work tracker. */
@@ -696,25 +727,26 @@ function CasePanel({ status, refresh }: { status: CaseStatus; refresh: () => Pro
   return (
     <>
       <section className="ce-panel" aria-labelledby="ce-file-title">
-        <h2 id="ce-file-title" className="ce-file-title">
+        <h2 id="ce-file-title" className="ce-file-title" data-words="data">
           {b.path}
         </h2>
-        <dl className="st-facts">
+        {/* G22: the file's facts are said to readers; its state is in the header band */}
+        <dl className="st-facts sr-only">
           <dt>State</dt>
           <dd>
             <FileStateWord status={status} />
           </dd>
           <dt>Project</dt>
-          <dd>{b.folder}</dd>
+          <dd data-words="data">{b.folder}</dd>
           <dt>Opened</dt>
-          <dd>{clock(b.openedAt)}</dd>
+          <dd data-words="data">{clock(b.openedAt)}</dd>
           <dt>Last saved</dt>
-          <dd>{clock(b.savedAt)}</dd>
+          <dd data-words="data">{clock(b.savedAt)}</dd>
           <dt>Read at hash</dt>
-          <dd>{b.hash}</dd>
+          <dd data-words="data">{b.hash}</dd>
         </dl>
         {pending.count > 0 && (
-          <div className="ce-pending">
+          <div className="ce-pending" data-words="exception">
             <p>
               {plural(pending.count, 'change', 'changes')} since {b.savedAt ? 'the last save' : 'the file was opened'}; a save writes{' '}
               {plural(pending.paths.length, 'setting', 'settings')}:
@@ -729,13 +761,23 @@ function CasePanel({ status, refresh }: { status: CaseStatus; refresh: () => Pro
           </div>
         )}
         <div className="ce-row">
-          <Button variant="primary" icon="check" onPress={() => void save('opened')} isDisabled={!canSave || pending.count === 0}>
+          <Button
+            variant="primary"
+            icon="check"
+            onPress={() => void save('opened')}
+            isDisabled={!canSave || pending.count === 0}
+            aria-describedby="ce-save-keys"
+            aria-keyshortcuts="Control+S"
+          >
             {busy === 'save' ? 'Saving' : 'Save'}
           </Button>
-          <span className="st-small">{saveReason ?? (pending.count === 0 ? 'Nothing to save. Ctrl+S saves.' : 'Ctrl+S saves.')}</span>
+          {/* G22: why a save cannot be made is shown; the shortcut is the button's description (and in the shortcut list) */}
+          <span className={saveReason ? 'st-small' : 'st-small sr-only'} id="ce-save-keys" data-words={saveReason ? 'exception' : undefined}>
+            {saveReason ?? (pending.count === 0 ? 'Nothing to save. Ctrl+S saves.' : 'Ctrl+S saves.')}
+          </span>
         </div>
         {outside && (
-          <div className="ce-notice" role="status">
+          <div className="ce-notice" role="status" data-words="exception">
             <h3 className="ce-notice-title">
               {b.path} changed outside the Studio
             </h3>
@@ -753,7 +795,7 @@ function CasePanel({ status, refresh }: { status: CaseStatus; refresh: () => Pro
           </div>
         )}
         {file.state === 'missing' && (
-          <div className="ce-notice ce-notice--failed" role="alert">
+          <div className="ce-notice ce-notice--failed" role="alert" data-words="exception">
             <h3 className="ce-notice-title">
               <StatePictogram state="failed" />
               Failed to find {b.path}
@@ -765,7 +807,9 @@ function CasePanel({ status, refresh }: { status: CaseStatus; refresh: () => Pro
       </section>
 
       <section className="ce-panel" aria-labelledby="ce-actions-title">
-        <h2 id="ce-actions-title">Case actions</h2>
+        <h2 id="ce-actions-title" className="sr-only">
+          Case actions
+        </h2>
         <div className="ce-row">
           <Button onPress={() => void checkMesh()} isDisabled={busy !== null}>
             {busy === 'mesh-check' ? 'Checking the mesh' : 'Check the mesh'}
@@ -780,7 +824,8 @@ function CasePanel({ status, refresh }: { status: CaseStatus; refresh: () => Pro
         <div className="ce-dup">
           <TextField
             label="Duplicate as"
-            description="A new name in cases/: the saved file is copied byte for byte. Changes not saved stay here."
+            data-words="data"
+            description={<Quiet>A new name in cases/: the saved file is copied byte for byte. Changes not saved stay here.</Quiet>}
             value={dupName}
             onChange={setDupName}
             placeholder={`${fileName(b.path).replace(/\.(toml|json)$/i, '')}-copy`}
@@ -804,7 +849,7 @@ function CasePanel({ status, refresh }: { status: CaseStatus; refresh: () => Pro
             </p>
           )}
           {dup?.ok === false && (
-            <p className="ce-refused" role="alert">
+            <p className="ce-refused" role="alert" data-words="exception">
               <StatePictogram state="failed" />
               <span>Failed: {dup.message}</span>
             </p>
@@ -816,7 +861,7 @@ function CasePanel({ status, refresh }: { status: CaseStatus; refresh: () => Pro
               Close the session
             </Button>
           ) : (
-            <div className="ce-confirm" role="alert">
+            <div className="ce-confirm" role="alert" data-words="exception">
               <p>
                 Close session {b.session} and lose {plural(pending.count, 'change', 'changes')} not saved to {b.path}
                 {pending.paths.length > 0 ? ` (${pending.paths.slice(0, 4).join(', ')}${pending.paths.length > 4 ? ', …' : ''})` : ''}?
@@ -830,9 +875,9 @@ function CasePanel({ status, refresh }: { status: CaseStatus; refresh: () => Pro
             </div>
           )}
         </div>
-        <p className="st-small">
+        <Quiet>
           From Claude Code, the same file: {CLAUDE('case.save').mcp} to save, {CLAUDE('case.check_file').mcp} to check. Command line: {CLAUDE('case.check_file').cli}.
-        </p>
+        </Quiet>
       </section>
     </>
   );
@@ -875,7 +920,7 @@ function NoticeView(props: {
   }
   if (n.kind === 'failed') {
     return (
-      <div className="ce-notice ce-notice--failed" role="alert">
+      <div className="ce-notice ce-notice--failed" role="alert" data-words="exception">
         <h3 className="ce-notice-title" ref={titleRef} tabIndex={-1}>
           <StatePictogram state="failed" />
           Failed to save
@@ -889,7 +934,7 @@ function NoticeView(props: {
   }
   if (n.kind === 'refused') {
     return (
-      <div className="ce-notice ce-notice--failed" role="alert">
+      <div className="ce-notice ce-notice--failed" role="alert" data-words="exception">
         <h3 className="ce-notice-title" ref={titleRef} tabIndex={-1}>
           <StatePictogram state="failed" />
           Save failed: the engine refused the edit
@@ -918,7 +963,7 @@ function NoticeView(props: {
   }
   if (n.kind === 'cannot') {
     return (
-      <div className="ce-notice" role="alert">
+      <div className="ce-notice" role="alert" data-words="exception">
         <h3 className="ce-notice-title" ref={titleRef} tabIndex={-1}>
           Not saved: a removed entry
         </h3>
@@ -931,7 +976,7 @@ function NoticeView(props: {
   }
   const v = n.view;
   return (
-    <div className="ce-notice ce-conflict" role="alert">
+    <div className="ce-notice ce-conflict" role="alert" data-words="exception">
       <h3 className="ce-notice-title" ref={titleRef} tabIndex={-1}>
         Not saved: {path} changed outside the Studio
       </h3>
@@ -977,7 +1022,7 @@ function MeshCheckView({ check }: { check: { ok: boolean; cells: number | null; 
   if (check === null) return null;
   if ('failed' in check) {
     return (
-      <p className="ce-refused" role="status">
+      <p className="ce-refused" role="status" data-words="exception">
         <StatePictogram state="failed" />
         <span>Mesh check failed: {check.failed}</span>
       </p>
@@ -1010,7 +1055,7 @@ function FileCheckView({ check }: { check: FileCheck | { failed: string } | null
   if (check === null) return null;
   if ('failed' in check) {
     return (
-      <p className="ce-refused" role="status">
+      <p className="ce-refused" role="status" data-words="exception">
         <StatePictogram state="failed" />
         <span>The check of the saved file failed to run: {check.failed}</span>
       </p>
