@@ -1,0 +1,258 @@
+# ADR 0659: F-724 registration: the threshold scale of the coupled interface solves
+
+Status: **REGISTERED 2026-11-16, written before any code of F-724 and before any run of its checks.** Not yet accepted by the
+maintainer. Before this text no library or test code of F-724 was written and no run of any kind was made; the numbers quoted
+are those measured and printed in ADR 0638, ADR 0640, ADR 0641 and ADR 0654. Results go in the addenda at the end; nothing
+above the addenda is changed after a run.
+
+Roadmap item F-724 (deps F-721, F-710), proposed by [ADR 0641](0641-f721-registration-periodic-sliding-at-coinciding-nodes-without-the-parts-symmetry.md)
+remaining question 3 (B1u, MU4). Parents: [ADR 0638](0638-f710-registration-sliding-interface-at-coinciding-nodes.md)
+(F-710: `sliding_step` coupled at coincidences, the threshold D3), [ADR 0640](0640-f720-registration-periodic-sliding-at-coinciding-nodes.md)
+(F-720: the uniform flows CS and CP of the periodic path), ADR 0641 (F-721: `periodic_sliding_step_coupled`, its Q1 on the
+default), [ADR 0654](0654-f730-registration-sector-sliding-in-the-tree-at-node-coincidences.md) (F-730: the opt-in tree key,
+its Q4). Number 0659 given by the lead. Branch `f724-work` from main adc8402f (F-710, F-720, F-721 and F-730 merged), worktree
+`w49i-work/f724`, scratch `w49i-work/f724-scratch`.
+
+House rules (`w49i-work/AGENT_RULES.md`) apply: limits fixed here; each registered run made once; existing tests not edited;
+defaults bit-identical except where the lead's brief allows (below); no edit of `baseline_hashes.rs`, of a hash table or of a
+golden; no new dependency, no unsafe code; clean-room; the roadmap files are not edited. Every choice the maintainer would
+normally be asked about is taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation), except
+where listed as open.
+
+Clean-room: the scale is the classical a-priori bound of a floating-point sum, `|fl(sum x_i) - sum x_i| <= gamma_{n-1} sum
+|x_i|` with `gamma_n = n u / (1 - n u)` and `u = 2^-53` (the standard error analysis of recursive summation, as in Higham,
+"Accuracy and Stability of Numerical Algorithms", ch. 4; cited from memory, and the bound used here is derived below from
+the definition of the rounded operations, not taken from the book). No source was read; no vendor code, text or install was
+used. The references are the repository's own steps (ADR 0638 and 0641's coupled and base steps) and closed forms (a uniform
+field).
+
+## What F-724 asks
+
+The acceptance, binding (from the lead's brief):
+
+> the part-mean threshold of sliding_step and periodic_sliding_step_coupled is scaled by a flux scale of the interface faces rather than by the largest target, registered from a derivation; the coupled step equals the base step bit for bit on every step of the uniform flows of ADR 0638 and ADR 0640 (coincidence steps included), and every result of ADR 0638 and ADR 0641 at coincidences with a non-symmetric flow is kept within registered limits; then periodic_sliding_step is switched to the coupled path with the maintainer's approval (ADR 0640's N1 test becomes an ignored record). Every limit not stated here is registered in the ADR before the run.
+
+Clauses:
+
+- **a1** the threshold of `sliding_step` and of `periodic_sliding_step_coupled` scaled by a flux scale of the interface
+  (cells') faces instead of the largest target, from a derivation (this document, D1);
+- **a2** the coupled step equals the base step bit for bit on every step of the uniform flows of ADR 0638 and ADR 0640,
+  coincidence steps included (reading below);
+- **a3** every result of ADR 0638 and ADR 0641 at coincidences with a non-symmetric flow kept within registered limits;
+- **a4** then `periodic_sliding_step` switched to the coupled path, with the maintainer's approval, ADR 0640's N1 test
+  becoming an ignored record.
+
+The lead's brief adds: **a4 is not made here** (it changes default results and an existing test: rule 3 and rule 6); it is
+built up to the switch and reported as the remaining step. `sliding_step` is on a default path: if changing its threshold
+changes any default bits on `baseline_hashes` and the named sliding suites, the new scale is made opt-in for it and the
+default change is reported for approval instead.
+
+**Reading of a2 (registered; question Q1).** On ADR 0640's uniform flows (CS: S3 with `U = (0, 0, 1)`; CP: PP with `U = (1,
+0.5, 0)`) every remap target and every GCL target is rounding (ADR 0640's first-principles argument: the flow is invariant
+under the motion), so "the coupled step equals the base step" means `periodic_sliding_step_coupled` equals
+`periodic_sliding_step` bit for bit on all 200 and 650 steps: the check ADR 0641 B1u missed. On ADR 0638's uniform flows the
+pair P with `U = (1, 0.5, 0)` (UC) is **not** invariant under the rotation: its coincidence steps have a remap part mean of
+`2.16e-5` (ADR 0638 diagnosis), which is the defect F-710 fixed, and the uncoupled step loses the uniform state there (ADR
+0638 N1, `5.7e-4`). The literal reading (the coupled step equal to the uncoupled one on UC's coincidence steps) would undo
+F-710 and contradict a3 and ADR 0638's A1; it cannot be what is asked. On ADR 0638's flows the "base step" is read as the
+step of F-710 (`sliding_step` with ADR 0638's threshold): the new `sliding_step` equals it bit for bit on every step of UC,
+U2, U3 and LP, coincidence steps included, and equals the uncoupled step wherever ADR 0638 B1/B2 showed F-710 to equal it.
+The uncoupled-equality reading for `sliding_step` is checked on the flow where it is meaningful: an axial uniform flow on
+the 3-D full annulus P3 at coincidences (E3, the full-annulus analogue of CS).
+
+## What the code read shows (adc8402f, read only)
+
+1. `rcfd_fv::sliding::coupled_balance` (ADR 0638 D2, D3): coupled when `removed_mean > PART_MEAN_TOL * tmax`, `PART_MEAN_TOL
+   = 1e-10`, `tmax` the largest `|t_c|` over the owners and neighbours of the interface faces, and coupling faces exist.
+   Called for the GCL targets `t` and the remap targets `e` in `sliding_step`. Its unit test T1 calls it directly.
+2. `rcfd_fv::sliding_periodic::coupled_solve` (ADR 0641 D2): the same test with `tmax` over the endpoints of the graph's
+   edges (direct faces and wrap pairs); only on the path `couple = true` (`periodic_sliding_step_coupled`). Its unit test T1
+   calls it directly.
+3. The targets: GCL `t_c = (V1_c - V0_c)/dt - sum_{f in faces(c), f not new} sigma_cf m_f`; remap `e_c = -sum_{f not new}
+   sigma_cf phi_f - sum_{f new} sigma_cf x_f`, `x_f` the interpolated flux of a new face (`interp_new` on the full annulus,
+   `interp_edge` on a direct face or wrap pair of the periodic graph). "New" faces: the interface faces (and the wrap copies).
+4. Callers of `periodic_sliding_step_coupled`: the tree's sector loop with `[mesh.sliding.coincidences] coupled = true`
+   (F-730, opt-in), F-721's and F-730's tests. Callers of `sliding_step`: the tree's full-annulus loop (default), the tests
+   named in the brief, `step_consistent_paths_f443`, `wall_pressure_case_f358` (au2).
+5. ADR 0641 amendment 1 (B1u): on CS and CP the coupled step differs from the base on every coincidence step (25, 81), by
+   `<= 4.8e-16` (CS) and `<= 3.2e-15` (CP) of `max|S_f|` in the old flux and up to `9.8e-14` in CP's mesh flux: with every
+   target at rounding, `tmax` is itself rounding and `1e-10 tmax` lets rounding-level means couple.
+
+## Design
+
+**D1. The scale (derivation).** A computed target is a sum of a few terms; its rounding error, and so a part mean that is
+zero in exact arithmetic, is bounded by the sum of the absolute values of its terms, not by the size of the computed targets
+(which for an exactly balanced cell is itself rounding). Derivation: each rounded addition `fl(a + b) = (a + b)(1 + d)`,
+`|d| <= u`; summing `k` terms recursively, the error is at most `sum_j |partial sum_j| u + O(u^2) <= (k - 1) u sum_i |x_i| +
+O(u^2)`. So for the cell `c` with the term magnitude
+
+- GCL: `a_c = (V1_c + V0_c)/dt + sum_{f in faces(c), f not new} |m_f|` (the two volumes are terms of the difference; each
+  volume and each swept volume carries its own geometric rounding of a few `u` of itself, which the same sum bounds);
+- remap: `a_c = sum_{f in faces(c), f not new} |phi_f| + sum_{f new, at c} |x_f|` (on the periodic graph a wrap pair adds
+  `|interp_edge|` at both its cells);
+
+the computed `t_c` (or `e_c`) differs from the exact one by at most `(k_c + 2) u a_c`, `k_c` the number of terms (`<= 12` on
+the meshes here: a hexahedron's 6 faces, an interface cell's slivers up to 4 more). The part mean computed by
+`graph_balance` (`sum over the part / n_p`) adds at most `n_p u max |t_c| <= n_p u max a_c`. The input fluxes themselves are a
+solver's output: the old flux is divergence-free only to the pressure solve's tolerance, a cell divergence of `eps_s a_c`
+with `eps_s` the solver's relative tolerance (`1e-13` in every run here, `tol_rel`). Altogether, for a part whose exact
+mean is zero:
+
+`removed_mean <= ((k + 2 + n_p) u + eps_s) A`, `A = max_{c in graph} a_c`.
+
+With `k <= 12`, `n_p <= 1e3` (the parts here hold at most a few hundred cells: P has 264 interface cells in one part off coincidences) and `eps_s = 1e-13`: `removed_mean
+<= 2.2e-13 A`. The genuine means of the coincidences, from the measured base numbers and hand arithmetic of `A` (below), are
+at least `9e-5 A`. The threshold is `PART_MEAN_TOL * max(A, tmax)` with **`PART_MEAN_TOL = 1e-10` kept** (ADR 0638 D3's
+value): 2.7 decades above the rounding bound, 5.9 below the smallest genuine mean. Taking `max(A, tmax)` (in exact arithmetic
+`|t_c| <= a_c`, so `A >= tmax` up to rounding) makes the new threshold never smaller than ADR 0638's, so the new rule couples
+on a subset of the steps the old rule coupled on: it can only return a coupled step to the base, never couple a step the old
+rule left alone (property P).
+
+Hand arithmetic of `A` and the margins (from the ADRs' printed numbers, face areas by hand):
+
+| Set-up | genuine or rounding mean | `A` (hand) | `mean / A` |
+| --- | --- | --- | --- |
+| UC (P, `U = (1, 0.5, 0)`), remap, coincidence | `2.16e-5` (ADR 0638 diagnosis) | `|U| sum |S_f| ~ 1.12 (6.25 + 6.25 + 6.54 + 6.27) 1e-3 = 2.8e-2` | `7.7e-4` |
+| NS on SS (ADR 0641), remap, coincidence | `>= 3.98e-4 max|S_f| = 4.2e-6` (the base residual is the part mean, `max|S_f| = 2 (pi/60) 0.1 = 1.05e-2`) | `<= 1.5 (2.9e-2) = 4.4e-2` | `>= 9.5e-5` |
+| FS (ADR 0654), remap, coincidence | `>= 1.4e-4 max|S_f|` (0654) | as SS | `>= 3e-5` |
+| CS (S3, axial), remap | `<= 2.2e-15 max|S_f| = 6e-17` (the base residual, ADR 0640) | `>= 2 |S_z| = 2 (1.44 (pi/36) 0.125) = 3.1e-2` | `<= 2e-15` |
+| CP (PP), remap | `<= 5.3e-15 (6.25e-3) = 3.3e-17` | `>= 2 (6.25e-3) + 2 (0.5)(5e-3) = 1.75e-2` | `<= 2e-15` |
+| CP (PP), GCL | `<= 1.1e-14 mean V / dt = 2.2e-15` | `>= 2 V/dt = 2 (3.1e-4)(640) = 0.4` | `<= 6e-15` |
+
+**D2. API.** `crates/rcfd-fv/src/sliding.rs`: a public enum `PartCoupling { Off, LargestTarget, FluxScale }` (Off: the
+uncoupled step of ADR 0216; LargestTarget: ADR 0638 D3's rule; FluxScale: D1) and `sliding_step_with(old_geom, old, new,
+phi_old, u_old, dt, coupling)`; the body of `sliding_step` moves there; the decision for `LargestTarget` is made by the
+unchanged `coupled_balance` (same expression, same operations), for `FluxScale` by a new `coupled_balance_above(.., threshold)`
+that `coupled_balance` itself calls (so T1 is untouched and the coupled solve is one code); `Off` never calls them. The term
+magnitudes `a_c` are computed only for `FluxScale`, in a separate vector; no target, value or operation of the step changes.
+`crates/rcfd-fv/src/sliding_periodic.rs`: `periodic_sliding_step_with(.., coupling)`; `periodic_sliding_step` calls it with
+`Off` (the operations of today's `couple = false`), `periodic_sliding_step_coupled` with `FluxScale`; `coupled_solve` keeps
+its signature (T1) and calls a new `coupled_solve_above(.., threshold)`. The periodic `PART_MEAN_TOL` stays a copy of the
+constant.
+
+**D3. The default of `sliding_step` (conditional, registered).** `sliding_step` is made `sliding_step_with(..,
+FluxScale)` **if** FL (below) counts no decision flip on the named suites; otherwise `sliding_step` stays
+`sliding_step_with(.., LargestTarget)` (bit-identical to F-710), FluxScale is reachable through `sliding_step_with` only,
+and the default switch is reported for approval. By property P a flip can only be a step that F-710 coupled on a rounding
+mean (all targets rounding, at a coincidence), whose result changes by rounding. Inputs of that class outside the named
+suites (for example E3's axial uniform flow on a 3-D full annulus) do change bits under the new default; that is the purpose
+of a1 and is reported plainly for the maintainer either way.
+
+**D4. Not changed.** `periodic_sliding_step` (the base; a4 open), ADR 0640's N1 test, every existing test and record,
+`graph_balance`, `interface_balance`, `pimple/`, `rcfd-mesh`, `rcfd-api` (the tree calls the same two public functions; the
+opt-in sector loop inherits FluxScale through `periodic_sliding_step_coupled`), goldens, hash tables. New test file
+`crates/rcfd-fv/tests/sliding_threshold_scale_f724.rs`; `docs/dynamic-mesh.md` one sentence.
+
+## Set-ups
+
+As registered in the parent ADRs (code copied into the new test file; nothing edited):
+
+- **UC, U2, U3, LP** of ADR 0638 (its `uniform_run`: PS `nu = 0.1`, central, 2 non-orthogonal correctors, tight solvers;
+  every non-empty patch fixed at `U`): UC P `U = (1, 0.5, 0)`, `dt = 2 pi / 144 / 8`, 50 steps (coincidences 8, ..., 48);
+  U2 P `dt = 0.005`, 100 steps; U3 P3 `U = (1, 0.5, 0.3)`, `dt = 0.01`, 40 steps; LP `U = (1, 0.5, 0.3)`, `dt = 0.01`, 20
+  steps. The loop is driven by the default `sliding_step`; on every step `sliding_step_with(.., LargestTarget)` and `(..,
+  Off)` are built from the same inputs.
+- **CS, CP** of ADR 0640 (ADR 0641's `uniform_compare`, PS6): CS S3 `U = (0, 0, 1)`, `dt = pi/288`, 200 steps; CP PP `U =
+  (1, 0.5, 0)`, `dt = 1/640`, 650 steps. Driven by `periodic_sliding_step`; on every step `periodic_sliding_step_coupled` and
+  `periodic_sliding_step_with(.., LargestTarget)` from the same inputs.
+- **AX** (new, E3): P3 of ADR 0216 (`annulus_3d(48, 4, 2, 1, 1.5, 0.4)` against `annulus_3d(40, 4, 3, 1.5, 2, 0.4)`), `U =
+  (0, 0, 1)` fixed on every non-empty patch, uniform start, ADR 0638's `uniform_run` settings, `dt = 2 pi / 48 / 8` (the
+  rotor pitch over 8), **48 steps**. Arithmetic: rotor nodes `theta + i 2 pi/48`, stator `j 2 pi/40`, meeting at multiples
+  of `2 pi/240`; `n 2 pi/384 = m 2 pi/240` needs `5 n = 8 m`: coincidences at `n = 8, 16, ..., 48` (6 steps), each with
+  `gcd(48, 40) = 8` coinciding angles, so **8 parts** (the two blocks' axial layers, 2 and 3, share only `z = 0` and `0.4`,
+  so no axial cut); 1 part elsewhere. Driven by the default `sliding_step`; on every step `(.., Off)` and `(..,
+  LargestTarget)` from the same inputs.
+- **NS** of ADR 0641 (SS, inlet `(1 + 0.5 sin 6 theta) x_hat` on `inner` reset every step, outlet `outer`, start `(r_i/r)
+  x_hat`, PS6, `dt = pi/576`, 400 steps; coincidences on the 50 steps `n % 8 == 0`): driven by
+  `periodic_sliding_step_coupled`; on every step `periodic_sliding_step_with(.., LargestTarget)` (= ADR 0641's coupled step)
+  and `periodic_sliding_step` from the same inputs.
+- **PL** of ADR 0641 (PP, PF inlet, `dt = 1/640`, 160 steps): as NS.
+
+## Checks (limits fixed now)
+
+| Id | Clause | Set-up | Check | Limit |
+| --- | --- | --- | --- | --- |
+| S | a1 | this document | the scale derived and registered before the code (this commit, alone, first) | present |
+| E1 | a2 (ADR 0638), a3 | UC, U2, U3, LP | default `sliding_step` against `LargestTarget` (F-710's step): `mesh_flux`, `phi_old`, `old_defect`, `vol_old`, both residuals, interface faces | bit-equal on every step (50 + 100 + 40 + 20) |
+| E1u | a3 (ADR 0638 A1, S1 kept) | UC | velocity and pressure deviation every step; `flux_residual`, `gcl_residual` on the 6 coincidence steps | `<= 1e-10`; `<= 1e-12` |
+| E2 | a2 (ADR 0640) | CS, CP | `periodic_sliding_step_coupled` against `periodic_sliding_step`, every field as E1 plus wrap pairs, images, reimage | bit-equal on every step (200, 650) |
+| E3 | a2 (full annulus, uncoupled reading) | AX | default `sliding_step` against `Off`, as E1; velocity deviation every step | bit-equal on all 48; `<= 1e-10` |
+| X3 | set-up of E3 | AX | interface-graph parts (union-find in the test): 8 on exactly the steps `n % 8 == 0`, 1 elsewhere | exact |
+| K1 | a3 (ADR 0641) | NS | `periodic_sliding_step_coupled` against `LargestTarget` (ADR 0641's coupled step), as E2 | bit-equal on all 400 |
+| K1r | a3 (ADR 0641 A1 kept) | NS | coupled `flux_residual` steps 2 to 400; `gcl_residual` every step | `<= 1e-12` each |
+| K2 | a3 (ADR 0641 A2) | PL | as K1; coupled `flux_residual` steps 2 to 160 | bit-equal on all 160; `<= 1e-12` |
+| FL | D3 (default bits of `sliding_step`) | the named suites on an instrumented scratch copy (D3; instrumentation: one `eprintln!` where the LargestTarget and the FluxScale decisions differ, in `sliding_step`'s path only) | decision flips | 0 |
+| B | a3, defaults | existing suites, unedited, on the worktree code | `rcfd-fv`: lib, `sliding_coincidence_f710`, `sliding_interface_f250`, `sliding_periodic_coincidence_f720`, `sliding_periodic_coupled_f721`, `sliding_periodic_f304`, `sliding_reimaging_f704`, `step_consistent_paths_f443`; `rcfd-api`: `baseline_hashes`, `sliding_coincidence_f710`, `sliding_sector_coincidence_f730`, `sliding_sector_case_f711`, `sliding_case_f303`, `dynamic_mesh`, `wall_pressure_case_f358` (its `au2` test, the only one that calls `sliding_step`) | pass as before (non-ignored tests) |
+| B4 | D4 | code | `git diff adc8402f -- crates/` touches `sliding.rs`, `sliding_periodic.rs` and the new test file only | as stated |
+| NC1 | control of E2 | CS, CP | `LargestTarget` against `periodic_sliding_step`: steps that differ | `>= 1` on each of CS and CP (ADR 0641: 25 and 81) |
+| NC2 | control of E3 | AX | `LargestTarget` against `Off`: steps that differ | `>= 1` |
+| NC3 | control of E1, K1, K2 (the coupling acts) | UC; NS; PL | `Off` against the default (UC) / coupled (NS, PL) step: steps that differ | exactly the coincidence steps: 6 of 50; 50 of 400; 20 of 160 |
+
+FL's scope: the non-ignored tests of the `rcfd-fv` files `sliding_coincidence_f710`, `sliding_interface_f250`,
+`sliding_periodic_coupled_f721`, `sliding_reimaging_f704`, `step_consistent_paths_f443`, the lib, the new file, and of the
+`rcfd-api` files `baseline_hashes`, `sliding_coincidence_f710`, `sliding_sector_coincidence_f730`, `sliding_case_f303`,
+`dynamic_mesh`, `wall_pressure_case_f358` (au2). FL is made on the instrumented copy of the committed code, once.
+
+Estimates. E1: property P with the table's margins: on UC the remap's coincidence decisions are coupled under both rules
+(`7.7e-4 A` against `1e-10 A`), every other decision is "base" under the old rule and so under the new; on U2, U3 the graph
+is connected (no coupling faces), on LP the old rule keeps the base (ADR 0638 B2). E1u: equal to ADR 0638's measured
+`8.9e-15`, `5.2e-14`, `1.2e-15`, `1.1e-14` if E1 holds. E2: the table's CS and CP rows, more than four decades below the new
+threshold. E3: as CS (the same flow and the same two node sets, on the full annulus): every target rounding, `A >= 2 |S_z|
+|U|`. K1, K2: NS's and PL's genuine means about six decades above the threshold, the GCL means rounding by the node sets'
+symmetry (ADR 0641) and base under both rules. NC1: ADR 0641 B1u. NC2: E3's flow is CS's flow on the full annulus, where the
+old rule's rounding-relative threshold is expected to couple at least once on the 6 coincidence steps; if it never does,
+E3 is shown only for the steps it covers and NC2 is reported as not held. NC3: ADR 0638 B1 (6), ADR 0641 B1 (50); PL: 20
+coincidence steps (ADR 0641 PL). FL: 0 expected by property P, because every named suite's coincidence steps carry a
+flow not invariant under the motion or no flow at a coincidence. Each run is made once; the new file's tests are expected to
+take under two minutes together in release (ADR 0641's LS, with three solvers and 400 steps, took 21 s).
+
+Mutations (on a scratch copy of the committed library, after the checks; each applied alone; the named tests run once; each
+must fail):
+
+- **MU1** `periodic_sliding_step_coupled`'s threshold scale `A` replaced by `tmax` (ADR 0641's rule): E2 must fail.
+- **MU2** the same in `sliding_step`'s FluxScale: E3 must fail.
+- **MU3** `PART_MEAN_TOL` of the FluxScale decision raised to `1e-2` (both files): E1 (UC) and K1 must fail.
+- **MU4** the remap scale from the new faces' interpolated fluxes only (the interface faces and wrap pairs, the literal
+  "interface faces" reading, Q2) in the periodic step: E2 (CS: an axial flow has no flux through a cylindrical interface)
+  must fail.
+- **MU5** the FluxScale threshold of `sliding_step` set to zero (couple whenever coupling faces exist): E1 (LP) or E3 must
+  fail.
+
+Decision rule: **done** is not available while a4 is open (it needs the maintainer's approval). **Partial (all but a4)** when
+S, E1, E1u, E2, E3, X3, K1, K1r, K2, FL, B, B4 are met, the controls NC1 to NC3 hold and every mutation is caught; the
+report then names a4 as the one remaining step. **Partial** with the named misses when any of E1, E2, E3, K1 or a control or
+mutation is missed. **Todo** when E2 is missed (the threshold does not keep the base path on ADR 0640's flows). If FL counts
+flips, D3's opt-in branch is taken (by an amendment written before any further run), and the decision says so. A B failure
+stops the work and is reported (no existing test is edited).
+
+## Limits (not covered)
+
+- a4 (the switch of `periodic_sliding_step`, ADR 0640's N1 test to an ignored record): not made; needs the maintainer.
+- The bound of D1 assumes the solver tolerance `eps_s` of the runs here (`1e-13`). With a looser pressure tolerance the old
+  flux's divergence (`eps_s A`) can exceed `1e-10 A` and couple; the coupled solve is then still correct (it closes every
+  cell), only not bit-equal to the base. Not checked.
+- The GCL branch of the FluxScale rule is exercised by CP (where the old rule coupled the GCL on rounding, ADR 0641's B1u
+  diagnosis) and AX; no set-up here has a genuine GCL part mean (T1 of ADR 0638 and 0641 cover the coupled GCL solve).
+- FL covers the named suites only; inputs outside them whose old decision was a rounding coupling change by rounding (D3).
+- The case tree's opt-in sector loop is not re-run beyond `sliding_sector_coincidence_f730`'s non-ignored tests (its
+  lockstep records are ignored heavy records of ADR 0654).
+
+## Open questions taken on the standing instruction
+
+- **Q1. Reading of a2 on ADR 0638's flows.** (a) The new step equals F-710's step bit for bit on UC, U2, U3, LP, and the
+  uncoupled step on a flow invariant under the rotation (E3) (taken); (b) the literal reading (equal to the uncoupled step on
+  UC's coincidence steps), which would undo F-710. Taken (a) on the maintainer's standing instruction of 2026-11-11 (take the
+  recommendation).
+- **Q2. "A flux scale of the interface faces".** (a) The term magnitudes of the targets of the interface graph's cells
+  (D1: the fluxes of every face of those cells, the interface faces among them) (taken): the rounding of a target is bounded
+  by all its terms; (b) the interface faces' own fluxes: for an axial flow on a cylindrical interface those are zero and the
+  threshold would again be rounding-relative (MU4 checks this). Taken (a) on the standing instruction.
+- **Q3. The constant.** (a) Keep `1e-10` with the new scale (taken; D1's margins: 2.7 decades above the bound, 5.9 below the
+  smallest genuine mean); (b) a new constant at the geometric middle (`~1e-8.5`). Taken (a) on the standing instruction (one
+  change at a time; no margin is short).
+
+## Open (not taken)
+
+- **Q4. a4: `periodic_sliding_step` to the coupled path** (with ADR 0641 Q1 and ADR 0654 Q4): changes default results of the
+  sector and planar paths at coincidence steps for flows without the parts' symmetry (ADR 0640 N1 becomes an ignored record;
+  any other test that asserts the base's result at coincidences would need the same review). Needs the maintainer.
