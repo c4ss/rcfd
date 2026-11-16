@@ -1000,6 +1000,11 @@ pub struct SolidModel {
     /// ADR 0658 D1: with the backtracking, a step of the modes is also halved without a sufficient decrease of the mode
     /// residual (default `false`).
     incompatible_mode_decrease: bool,
+    /// ADR 0660 D1: the local iteration of the modes of an Incompatible Hex8 starts from the committed modes, kept in the
+    /// element state (default `false`).
+    incompatible_mode_warm_start: bool,
+    /// ADR 0660 D2: the local iteration of the modes of an Incompatible Hex8 takes the trust-region step (default `false`).
+    incompatible_mode_trust_region: bool,
     /// ADR 0635 D2: the centrifugal load of a Shell4 layup takes the force of its first mass moment (default `false`).
     layup_first_moment_force: bool,
 }
@@ -1017,6 +1022,8 @@ impl SolidModel {
             incompatible_stabilisation: crate::nl_incompatible::IncompatibleStabilisation::Off,
             incompatible_mode_backtracking: false,
             incompatible_mode_decrease: false,
+            incompatible_mode_warm_start: false,
+            incompatible_mode_trust_region: false,
             layup_first_moment_force: false,
         }
     }
@@ -1077,13 +1084,41 @@ impl SolidModel {
     }
     /// The local update of the modes of an Incompatible Hex8 the nonlinear driver uses (ADR 0658 D1): `Plain` without the
     /// backtracking (the default), `Backtracking` with it, `BacktrackingWithDecrease` with it and the decrease test.
+    /// ADR 0660 D2: `TrustRegion` with [`SolidModel::set_incompatible_mode_trust_region`] on, whatever the other flags.
     pub fn incompatible_mode_update(&self) -> crate::nl_incompatible::IncompatibleModeUpdate {
         use crate::nl_incompatible::IncompatibleModeUpdate as U;
+        if self.incompatible_mode_trust_region {
+            return U::TrustRegion;
+        }
         match (self.incompatible_mode_backtracking, self.incompatible_mode_decrease) {
             (false, _) => U::Plain,
             (true, false) => U::Backtracking,
             (true, true) => U::BacktrackingWithDecrease,
         }
+    }
+
+    /// Whether the local iteration of the modes of an Incompatible Hex8 starts from the committed modes (ADR 0660 D1).
+    pub fn incompatible_mode_warm_start(&self) -> bool {
+        self.incompatible_mode_warm_start
+    }
+    /// Opts in (`true`) to the warm start of the local mode iteration of the Incompatible Hex8 at finite strain (ADR 0660
+    /// D1): the element's trial state gains its nine converged modes after the material state, the driver commits them with
+    /// the state, and the next evaluation starts its local iteration from them (from `alpha = 0` if the state has none or that
+    /// iteration fails). Off (the default), every evaluation starts from `alpha = 0` and the element state is the material
+    /// state alone.
+    pub fn set_incompatible_mode_warm_start(&mut self, on: bool) {
+        self.incompatible_mode_warm_start = on;
+    }
+
+    /// Whether the local iteration of the modes of an Incompatible Hex8 takes the trust-region step (ADR 0660 D2).
+    pub fn incompatible_mode_trust_region(&self) -> bool {
+        self.incompatible_mode_trust_region
+    }
+    /// Opts in (`true`) to the trust-region (Levenberg-Marquardt) step of the local mode iteration of the Incompatible Hex8
+    /// at finite strain (ADR 0660 D2, [`crate::nl_incompatible::IncompatibleModeUpdate::TrustRegion`]), in place of the
+    /// update of the backtracking and decrease flags. Off (the default), the update of those flags unchanged.
+    pub fn set_incompatible_mode_trust_region(&mut self, on: bool) {
+        self.incompatible_mode_trust_region = on;
     }
 
     /// Whether the linear paths take a hyperelastic material on Beam2, Shell4 and Shell3 elements (ADR 0584 D1).
