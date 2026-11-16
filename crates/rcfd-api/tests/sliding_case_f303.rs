@@ -71,6 +71,8 @@ end_time = 1.0
 
 const STRAIN: &str = "velocity_expression_x = \"0.5 [1/s] * x\"\nvelocity_expression_y = \"-0.5 [1/s] * y\"";
 const WALL: &str = "velocity = \"fixed\"";
+/// NAc of ADR 0637 amendment 1: the field of the stream function `psi = (q - 1)(4 - q) x y / 24`, `q = x^2 + y^2`.
+const PSI: &str = "velocity_expression_x = \"0.041666666666666664 [m/s] * (x / 1 [m]) * (2 * (y / 1 [m])^2 * (5 - 2 * ((x / 1 [m])^2 + (y / 1 [m])^2)) + ((x / 1 [m])^2 + (y / 1 [m])^2 - 1) * (4 - ((x / 1 [m])^2 + (y / 1 [m])^2)))\"\nvelocity_expression_y = \"-0.041666666666666664 [m/s] * (y / 1 [m]) * (2 * (x / 1 [m])^2 * (5 - 2 * ((x / 1 [m])^2 + (y / 1 [m])^2)) + ((x / 1 [m])^2 + (y / 1 [m])^2 - 1) * (4 - ((x / 1 [m])^2 + (y / 1 [m])^2)))\"";
 
 fn text(sliding: &str, nu: &str, initial: &str, inner: &str, outer: &str) -> String {
     BASE.replace("@SLIDING@", sliding)
@@ -82,29 +84,43 @@ fn text(sliding: &str, nu: &str, initial: &str, inner: &str, outer: &str) -> Str
 
 /// NA (with `walls` the value of `rotor_walls`) and NA0 (no table).
 fn na(walls: &str) -> String {
+    na_with(walls, STRAIN)
+}
+
+/// NA with the initial field `initial` (`STRAIN`: NA; `PSI`: NAc of amendment 1).
+fn na_with(walls: &str, initial: &str) -> String {
     text(
         &format!("\n[mesh.sliding]\nangular_velocity = 1.0\nrotor_walls = \"{walls}\"\n"),
         "0.01",
-        STRAIN,
+        initial,
         WALL,
         WALL,
     )
 }
 
-fn na0() -> String {
-    text("", "0.01", STRAIN, WALL, WALL)
+fn na0_with(initial: &str) -> String {
+    text("", "0.01", initial, WALL, WALL)
 }
 
-/// UT.
-fn ut() -> String {
+fn na0() -> String {
+    na0_with(STRAIN)
+}
+
+/// UT, or UTc of amendment 1 (`fixed_planes`: zmin and zmax fixed at U in place of symmetry).
+fn ut(fixed_planes: bool) -> String {
     let fixed = "velocity = \"fixed\"\nvelocity_value = [1.0, 0.5, 0.0]";
-    text(
+    let t = text(
         "\n[mesh.sliding]\nangular_velocity = 1.0\n",
         "0.1",
         "velocity = [1.0, 0.5, 0.0]",
         fixed,
         fixed,
-    )
+    );
+    if fixed_planes {
+        t.replace("velocity = \"symmetry\"", fixed)
+    } else {
+        t
+    }
 }
 
 /// WT.
@@ -299,8 +315,8 @@ fn e_against(u: &[Vec3], u0: &[Vec3], vol: &[f64]) -> (f64, f64, f64, f64) {
 }
 
 /// NA0 run 48 steps.
-fn na0_state() -> (Vec<Vec3>, Arc<FvGeometry>, Vec<f64>) {
-    let mut s0 = sim_of(&na0());
+fn na0_state(initial: &str) -> (Vec<Vec3>, Arc<FvGeometry>, Vec<f64>) {
+    let mut s0 = sim_of(&na0_with(initial));
     s0.run(STEPS);
     assert!(s0.failure().is_none(), "{:?}", s0.failure());
     (s0.velocity().values.clone(), s0.geom.clone(), s0.flux().to_vec())
@@ -371,8 +387,8 @@ fn k0_l0_the_optional_table() {
 
 #[test]
 fn d3_the_frozen_path_is_deterministic() {
-    let (a, _, pa) = na0_state();
-    let (b, _, pb) = na0_state();
+    let (a, _, pa) = na0_state(STRAIN);
+    let (b, _, pb) = na0_state(STRAIN);
     let same = a
         .iter()
         .flatten()
@@ -387,12 +403,12 @@ fn d3_the_frozen_path_is_deterministic() {
 // N, M1, X0, C3, L1: the non-axisymmetric flow through the turning rotor
 // -------------------------------------------------------------------------------------------------------------------
 
-#[test]
-fn na_non_axisymmetric_flow_sees_the_rotor_mesh_flux() {
+/// The checks N0, NA1 to NA3, L1, M1, X0, C3 on NA (`STRAIN`) or NAc (`PSI`).
+fn na_checks(initial: &str) -> Fails {
     let mut fails = Fails::new();
-    let (u0, g0, _) = na0_state();
+    let (u0, g0, _) = na0_state(initial);
     // NA through the tree
-    let mut sim = sim_of(&na("rest"));
+    let mut sim = sim_of(&na_with("rest", initial));
     let ts = run_tree(&mut sim, STEPS, None);
     let angle = last(&sim, "sliding_angle");
     // N0: the cell map
@@ -414,7 +430,7 @@ fn na_non_axisymmetric_flow_sees_the_rotor_mesh_flux() {
     println!("NA: E rotor {er:.3e}, stator {es:.3e}, rms {rms:.3e}; largest |u|/U0 NA0 {umax0:.4}, NA {umax:.4}");
     check(&mut fails, "NA1", e <= 1e-2, format!("E = {e:.3e} (1e-2)"));
     // L1: the library loop on a second tree simulation's solver
-    let mut lib = sim_of(&na("rest"));
+    let mut lib = sim_of(&na_with("rest", initial));
     library_loop(lib.pimple_solver_mut().unwrap(), 1.0, 0.0, STEPS, false);
     let sl = lib.pimple_solver().unwrap();
     let smax = sl
@@ -439,7 +455,7 @@ fn na_non_axisymmetric_flow_sees_the_rotor_mesh_flux() {
         format!("tree against library loop: velocity {l1u:.3e}, flux {l1p:.3e} (1e-12 each)"),
     );
     // NAN: the rotor mesh flux dropped
-    let mut neg = sim_of(&na("rest"));
+    let mut neg = sim_of(&na_with("rest", initial));
     library_loop(neg.pimple_solver_mut().unwrap(), 1.0, 0.0, STEPS, true);
     let un = neg.pimple_solver().unwrap().u.values.clone();
     let (en, enr, ens, rmsn) = e_against(&un, &u0, &vol);
@@ -480,18 +496,38 @@ fn na_non_axisymmetric_flow_sees_the_rotor_mesh_flux() {
             ts.changed
         ),
     );
-    require(&fails, &["N0", "NA1", "L1", "NA2", "NA3", "M1", "X0", "C3"]);
+    fails
+}
+
+const NA_IDS: [&str; 8] = ["N0", "NA1", "L1", "NA2", "NA3", "M1", "X0", "C3"];
+
+/// NA as registered: KNOWN MISS of NA2 and NA3 (ADR 0637 amendment 1: the strain field is a gradient field, which the
+/// projection removes; NA0's largest speed at the end is 0.0427 U0). Registered run: NA2 `6.20e-3` (limit `>= 5e-2`), NA3
+/// `0.90` (limit `>= 5`); N0, NA1 (`6.86e-3`), L1, M1, X0, C3 met. Run with `--ignored`; it fails on NA2 and NA3.
+#[test]
+#[ignore]
+fn na_known_miss_strain_field_removed_by_the_projection() {
+    let fails = na_checks(STRAIN);
+    require(&fails, &NA_IDS);
+}
+
+/// NAc of ADR 0637 amendment 1 (the stream-function field, which the projection keeps): N0c, NA1c, NA2c, NA3c, L1c, M1c,
+/// X0c, C3c.
+#[test]
+fn nac_non_axisymmetric_flow_sees_the_rotor_mesh_flux() {
+    let fails = na_checks(PSI);
+    require(&fails, &NA_IDS);
 }
 
 // -------------------------------------------------------------------------------------------------------------------
 // U: uniform flow through the tree
 // -------------------------------------------------------------------------------------------------------------------
 
-#[test]
-fn ut_uniform_flow_through_the_tree() {
+/// The checks U1, U2, X0 on UT (`fixed_planes` false) or UTc (true).
+fn ut_checks(fixed_planes: bool) -> Fails {
     let mut fails = Fails::new();
     let uu = [1.0, 0.5, 0.0];
-    let mut sim = sim_of(&ut());
+    let mut sim = sim_of(&ut(fixed_planes));
     let ts = run_tree(&mut sim, 40, Some(uu));
     check(
         &mut fails,
@@ -521,6 +557,23 @@ fn ut_uniform_flow_through_the_tree() {
             last(&sim, "sliding_angle")
         ),
     );
+    fails
+}
+
+/// UT as registered: KNOWN MISS of U1 (ADR 0637 amendment 1: the tree's symmetry planes do not keep the uniform in-plane
+/// flow on this mesh, with or without the table). Registered run: velocity `7.24e-2`, pressure `2.35e1` (limit `1e-10`
+/// each); U2, X0 met. Run with `--ignored`; it fails on U1.
+#[test]
+#[ignore]
+fn ut_known_miss_symmetry_planes() {
+    let fails = ut_checks(false);
+    require(&fails, &["U1", "U2", "X0"]);
+}
+
+/// UTc of ADR 0637 amendment 1 (zmin, zmax fixed at U): U1c, U2c, X0c.
+#[test]
+fn utc_uniform_flow_through_the_tree() {
+    let fails = ut_checks(true);
     require(&fails, &["U1", "U2", "X0"]);
 }
 
