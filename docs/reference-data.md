@@ -2364,3 +2364,9 @@ Nonconservative Problems of the Theory of Elastic Stability, Pergamon 1963: NOT 
 | Unloaded cantilever, `Omega = 3.516015, 22.034492` | derived | the same determinant at `p = 0` |
 | Timoshenko beam (`kappa = 5/6`, `nu = 0`, rotary inertia) under the same load: `p_cr = 19.8277, 19.9946, 20.0368` at `L/h = 25, 50, 100` | computed | transfer matrix of the first-order system, ADR 0580 arithmetic 3 |
 | The static problem of Beck's column with the full load stiffness has no positive real factor (Hermite, `N = 10, 25, 50`); with the symmetric part of the follower term the factor `pi^2` appears (a spurious divergence); with a dead tip force `pi^2/4` (Euler) | derived, computed | ADR 0580 arithmetic 3 |
+
+## F-695 the converged peak stress of the two-layer plate with a hole (ADR 0627)
+
+| Quantity | Source | Value and use |
+|---|---|---|
+| Peak hoop stress at the hole edge of the ADR 0478 two-layer Hex20 plate (`r/W = 0.05`, length equal to width), per remote stress | computed in this repository, not a published value: the uniformly graded meshes of 24, 48 and 96 cells along the hole in ADR 0627 | `K_96 = 3.03697`; mesh error about 1.5e-5 relative. It is 1.23 percent above Kirsch's `3 sigma_0` (finite plate). The finite-width forms recorded above (Howland/Peterson, from memory, not read) bracket it but are not its source. Recorded on the maintainer's standing instruction (ADR 0627 Q5). |
