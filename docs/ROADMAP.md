@@ -14857,8 +14857,10 @@ fixed by the item's registration ADR before any code.
     default). All five mutations of the ADR 0655 backtracking and two of three of the decrease test caught by the item's
     own checks. Not covered: a warm start or a trust region for the modes, other materials, statistics beyond eleven
     set-ups. Follow-up F-740 (A warm start of the incompatible-mode iteration from the committed modes, measured beside
-    a trust region on the mode step, for the seeds of ADR 0658 where the line search with the backtracking fails).
-- [ ] **F-740** A warm start of the incompatible-mode iteration from the committed modes, measured beside a trust region on the mode step, for the seeds of ADR 0658 where the line search with the backtracking fails
+    a trust region on the mode step, for the seeds of ADR 0658 where the line search with the backtracking fails). ADR
+    0660 (F-740, 2026-11-16): the two seeds where R and S fail (0xF739_0002, _0003) are passed by the warm start of the
+    mode iteration from the committed modes (F-740), at 8.2 and 7.9 per cent in the punch reaction, positive definite.
+- [~] **F-740** A warm start of the incompatible-mode iteration from the committed modes, measured beside a trust region on the mode step, for the seeds of ADR 0658 where the line search with the backtracking fails
   - depends on: F-739
   - acceptance: Every limit not stated here is registered in the ADR before the run. Rule L on the eleven set-ups of ADR
     0658 (the eight distorted meshes of ADR 0649 and the 8^3 block at 0.25 h with seeds 0xF739_0001 to _0003) and three
@@ -14867,4 +14869,32 @@ fixed by the item's registration ADR before any code.
     on the same set-ups; punch reaction, corner bulge, tip reaction and shortening within the ADR 0636 tolerances of the
     F-bar Hex8 and the loaded state positive definite for the registered remedy; the mutations of the new update caught
     by the item's own checks; the default bits unchanged.
-  - note: Follow-up of F-739 (ADR 0658, 2026-11-16).
+  - note: Structural solver, intermediate tier. Follow-up of F-739 (ADR 0658). PARTIAL. ADR 0660, 2026-11-16: an opt-in
+    warm start of the local mode iteration of the stabilised incompatible-modes Hex8 (rule L) from the modes of the
+    committed state (SolidModel::set_incompatible_mode_warm_start: the nine converged modes kept after the material
+    state of the element, only with the opt-in, committed and rolled back with it; a failed warm iteration falls back to
+    alpha = 0), with the backtracking and decrease test of ADR 0658 and without the line search (the remedy W), on the
+    eleven set-ups of ADR 0658 and three more seeds of the 8^3 block at 0.25 h (0xF740_0001, _0002, _0004; _0003 refused
+    as an inverted mesh), against the F-bar Hex8 with the ADR 0636 tolerances. Met on all fourteen: punch reaction
+    within 12.0, 12.8, 6.6, 7.5 per cent on the blocks and 7.4 to 8.2 per cent on the six seeds, corner bulge within 8.7
+    per cent, tip reaction within 6.9 per cent, shortening within 0.6 per cent, loaded state positive definite; in
+    particular on seeds 0xF739_0002 and _0003, where the line search with the backtracking and the decrease test both
+    fail (8.2 and 4.4, 7.9 and 4.9 per cent); at the stall state of ADR 0658 E1 the warm iteration converges in four
+    Newton steps where the cold one stalls at |r| = 223. An opt-in trust-region (Levenberg-Marquardt) mode step
+    (set_incompatible_mode_trust_region: QR of the damped least-squares step, gain-ratio acceptance) measured beside it
+    from alpha = 0 passes twelve of fourteen set-ups and fails on the same two seeds; its record stalls at a nonzero
+    residual (|r| ~ 99) even at a regular state where backtracked Newton converges (TR2 missed, a known miss). No
+    default bit changed (the bit records of ADR 0506, 0608, 0614, 0630, the ADR 0655 and 0658 tests, the rcfd-api
+    baseline hashes pass; a default model commits no modes). Seven of nine mutations of the two updates caught by the
+    item's own checks (all those registered as catchable). Not covered: history materials, the transient and rotating
+    paths and the line search with the warm start, the trust region with the warm start, statistics beyond fourteen
+    set-ups. Follow-up F-742 (The warm start of the incompatible-mode iteration on a history material and on the
+    transient and rotating paths).
+- [ ] **F-742** The warm start of the incompatible-mode iteration on a history material and on the transient and rotating paths
+  - depends on: F-740
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The remedy W of ADR 0660 with a J2
+    material on the punch block of ADR 0636 and on one distorted mesh of ADR 0649, and on the nonlinear transient path
+    (its energy record from the committed modes): the results within the ADR 0636 tolerances of the F-bar Hex8 on the
+    same set-ups, the active-set record of ADR 0515 unchanged by the committed modes, the energy record consistent with
+    the driver's modes; the mutations of the new code caught by the item's own checks; the default bits unchanged.
+  - note: Follow-up of F-740 (ADR 0660, 2026-11-16).
