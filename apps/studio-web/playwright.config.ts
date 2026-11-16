@@ -4,6 +4,10 @@
 // One worker: each e2e file starts its own Electron, and the timings of a shared machine stay out of the way.
 import { defineConfig } from '@playwright/test';
 
+// Headless by default: the Studio keeps its window hidden while tests drive it (src/main/index.ts, RCFD_TEST_HEADLESS).
+// Set RCFD_TEST_HEADLESS=0 to watch the windows.
+process.env.RCFD_TEST_HEADLESS ??= '1';
+
 export default defineConfig({
   testDir: 'tests',
   outputDir: 'test-results',

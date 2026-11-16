@@ -391,12 +391,23 @@ function offerServicePort(contents: WebContents): void {
   contents.postMessage(SERVICE_PORT_CHANNEL, null, [port2]);
 }
 
+/**
+ * Test runs only: RCFD_TEST_HEADLESS=1 (set by playwright.config.ts). Electron has no headless mode, a hidden window never
+ * paints (screenshots wait for it) and an off-screen one gets other sizes, so the window is shown in place but fully
+ * transparent, passing mouse input through, without a taskbar button and without taking the focus; background
+ * throttling is off so its frames and timers run as in a window in front. Unset, the window and its settings are as
+ * before.
+ */
+const HEADLESS = process.env.RCFD_TEST_HEADLESS === '1';
+
 function openWindow(): void {
   const win = new BrowserWindow({
     width: 1280,
     height: 800,
     show: false,
+    ...(HEADLESS ? { skipTaskbar: true, opacity: 0, focusable: true } : {}),
     webPreferences: {
+      ...(HEADLESS ? { backgroundThrottling: false } : {}),
       preload: PRELOAD,
       sandbox: true,
       contextIsolation: true,
@@ -437,7 +448,11 @@ function openWindow(): void {
     provenancePorts.get(id)?.dispose();
     provenancePorts.delete(id);
   });
-  win.once('ready-to-show', () => win.show());
+  win.once('ready-to-show', () => {
+    if (!HEADLESS) return win.show();
+    win.setIgnoreMouseEvents(true);
+    win.showInactive();
+  });
   void win.loadURL(APP_ENTRY);
 }
 
