@@ -575,3 +575,90 @@ Mutations (scratch copy, one at a time, each must fail a registered check):
   the row is changed in `docs/fan-project-breakdown.md` with the code.
 * Deviation from the stub's R set-up: the points cannot sit at 25, 50 and 75 % of free delivery (smokes 1 and 2: stall); they
   are placed inside the unstalled range of set-up F as listed.
+
+## Addendum 1: results (2026-11-16)
+
+Code: commit 71792e36 (registration 6b695045 before it). New `crates/rcfd-api/src/design/fan_objective.rs` (the design of
+amendment 1), `crates/rcfd-api/tests/f697_fan_objective.rs` (22 tests, none ignored), one module line and one doc line in
+`design/mod.rs`; docs `docs/design-loop.md` (one section, one code-map row) and `docs/fan-project-breakdown.md` (H1 row:
+"partial (F-697, ADR 0620: reduced-order tier only)"). No other existing file, no shared solver file, no golden, no hash table, no
+case key, no MCP tool. The registered run was made once: `cargo test -p rcfd-api --release --test f697_fan_objective --
+--test-threads=2`, 22 passed in 16.3 s (log `f697-scratch/run1.log`). `cargo fmt -p rcfd-api` then reformatted the two new files
+(layout only) before the commit.
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| C1 | rel <= 1e-9 | 0, 1.4e-16, 0 | yes |
+| C2 | rel <= 1e-12 against `Robust::apply` by hand | 0 for all four | yes |
+| C3 | rel <= 1e-9 against 0.025, 0.0125, 0.02125, 0.025 - 0.0125 sqrt(2/3) | 1.4e-16, 0, 0, 1.2e-16 | yes |
+| C4 | rel <= 1e-9 (25/12 W, 2.5 W) | 0, 0 | yes |
+| C5 | bit-equal | equal (-0.02125) | yes |
+| C6 | both changes > 1e-3 | 7.3e-2 (k doubled), 0.353 (weights) | yes |
+| T1 | abs(z) <= 4 | mean -0.60, mean+2sd -1.46, mean-2sd 0.77 | yes |
+| T2 | abs(z) <= 4 | mean abs(U) 1.13684e-6 against 1.12112e-6 kg m (z 1.68); mean abs(U)^2 z 2.02 | yes |
+| T3 | rel <= 1e-14 | 0 | yes |
+| T4 | <= 1e-12 | 7.3e-17 | yes |
+| T5 | rel <= 1e-12 | 1.4e-16 | yes |
+| T6 | (a) bit-equal; (b) rel <= 1e-13 | (a) equal; (b) 3.7e-16 | yes |
+| T7 | bit-equal | equal | yes |
+| T8 | rel <= 1e-15; sd exactly 0 and mean bit-equal | 1.5e-16; 0 and equal | yes |
+| K1 | rel <= 1e-9 (0.75) | 0 | yes |
+| K2 | exactly 0 | 0 | yes |
+| K3 | rel <= 1e-12 | 0 (1.25 = 0.75 + 0.5) | yes |
+| K4 | FAILED, reason names I4 and stall, ranked after the feasible one | "I4: point 'I4': nominal: operating point q = 1.800000e-3 m^3/s lies on a rising fan characteristic ...: stall region" | yes |
+| K5 | located refusal naming `nope` | "limit 'nope': the model analytic.linear_fan does not offer the metric 'nope'" | yes |
+| K6 | rel <= 1e-9 (0.5) | 1.2e-15 | yes |
+| W1 | bits and bytes equal at workers 1, 2, 3, 8 | equal; ledger 150590 bytes, 128 lines (96 point entries, 32 score entries) | yes |
+| W2 | same seed equal; other seed 32 of 32 differ | equal; 32 of 32 | yes |
+| W3 | NM, CMA-ES, NSGA-II records and results bit-equal at workers 1 and 4 | equal, all three | yes |
+| R1 | bit-equal, four terms | four of four | yes |
+| R2 | q strictly falls, dp_s strictly rises | q 0.044359, 0.039472, 0.035836 m^3/s; dp_s 9.84, 23.37, 32.11 Pa | yes |
+| R3 | finishes; counts equal; time recorded | finished; failed specimens 0, 0, 3 (R1, R2, R3) both ways; 7.0 s for 65 specimens x 3 points (4 workers) | yes |
+| R4 | sd exactly 0, mean bit-equal to nominal | 12 of 12 (metric, point) pairs | yes |
+| R5 | 0 skipped, 12 + 4 entries, fields, parents resolve, reruns pass with difference 0 | as registered; 2 of the 4 candidates (stagger offset -3 and -1 deg) stall at R3 and have `diverged` score entries; the 2 ok ones re-run with difference 0 | yes |
+| R6 | failed, names R4 and stalled | "R4: point 'R4': nominal: operating point q = 2.137518e-2 m^3/s is stalled: 40 of 40 strips ..." | yes |
+| N1 | bit-equal | equal at R1 to R3 (-86.79, -85.15, -84.40 dB) | yes |
+| N2 | rel <= 1e-12 | 0 at R1 to R3 | yes |
+| O1 NM | feasible, P <= 3.6 (1 + 1e-3), abs(s - 1.2) <= 1e-3, abs(t - 0.3) <= 3e-2 | s - 1.2 = 1.6e-12, t 0.300135, P / 3.6 - 1 = 3.7e-8, 199 evaluations | yes |
+| O1 CMA-ES | same | s - 1.2 = 2.2e-16, t 0.300000, P / 3.6 - 1 = 6.7e-16, 1094 evaluations | yes |
+| O2 | -1e-9 <= P / P_f - 1 <= 0.02; span >= 0.8 | [1.0e-11, 1.78e-2] over 1422 Pareto records; span 1.000 | yes |
+| O3 NM | feasible, P <= P* (1 + 1e-3), abs(s - s*) <= 1e-3, abs(t - 0.3) <= 3e-2 | s* 1.251698 (population 1.25; sample ebar -3.1e-3, s_e 0.01909); s - s* = 0, P = P* = 4.051873, 306 evaluations | yes |
+| O3 CMA-ES | same | s - s* = 0, P = P*, 1181 evaluations | yes |
+| B1 | pass | `design::` 76 passed (3 ignored, pre-existing); `fan_rom_design_w46b` 1, `fan_rom_bands_f268` 4 (1 ignored heavy record, pre-existing), `f249_default_bits` 4, `f260_default_bits` 1, `f297_default_bits` 3, `baseline_hashes` 3 (1 ignored, pre-existing); no existing test file edited | yes |
+| B2 | pass, empty diff | `default_f1` 2, `tool_list_f275` 7, `project_list_f270` 1 passed; `git diff c3590958 -- crates/rcfd-mcp` empty | yes |
+| B3 | clean | `cargo fmt -p rcfd-api --check` clean; `cargo clippy -p rcfd-api --all-targets -- -D warnings` clean | yes |
+
+Mutations (scratch copy `f697-scratch/mcopy` from `git archive` of 71792e36, script `mutate.py`, logs `mut_*.log`; the unmutated
+copy passed 22 of 22, `mut_control.log`): M1 caught by C2 and R1, not by C6 as expected (both weight vectors are reversed, so they
+still differ); M2 by T8; M3 by T6 and O3, not by W2 as expected (a per-candidate seed is still a function of the candidate, so two
+runs agree and another base seed still differs); M4 by W1 and also W3, T6, R1, R3, R4, N1; M5 by K1; M6 by T3; M7 by T1 and O3;
+M8 by R4 (T8 did not see it: five copies of 0.1 sum and divide back exactly); M9 by K6, O1 and O3; M10 by R5. Ten of ten caught.
+
+Observations (not checks): the `violation` metric of a score entry with no limit is `-0.0` (the `f64` sum of an empty iterator in
+`Study::violation_of`); with a limit that is met it is `+0.0`. NSGA-II's Pareto set is taken over all 1422 store records of the
+run, so O2 covers every non-dominated evaluation, not only the last population.
+
+Deviations: none from the registration. The two smoke runs before it are disclosed in amendment 1. Not run: the whole workspace
+(the lead's gate), rcfd-mcp tests other than the three listed.
+
+Decision by the registered rule: **done**. Every check met, R3 finished, every mutation fails a check.
+
+### Remaining questions (each with a recommendation; none blocks the decision)
+
+1. **Aggregated limits repeat their value in every point entry of the ledger.** Options: (a) keep; (b) put aggregates only in the
+   score entry and give `Study` a constraint over an aggregate (a change to `study.rs`). Recommendation: (a); (b) touches the
+   shared study code for no change of result.
+2. **`ComputerFan::default()` is not usable in the reduced-order model** (stalled below about 80 % of free delivery, smoke 1).
+   Options: (a) leave it, set-up F is the working row; (b) a follow-up that gives the schema default a blade the reduced-order
+   model runs over most of its range. Recommendation: (b), a small follow-up, since the schema default is what a user tries
+   first; that item must first check whether the default is hashed or in a golden.
+3. **The other aggregation order (Q3 (b)) and a chance constraint (Q4 (c)).** Options: (a) wait for a study that needs them; (b)
+   add now. Recommendation: (a); the chance constraint first when a tolerance requirement is written down.
+
+## For the lead: roadmap entries
+
+> Proposed status: done
+
+> Fan breakdown part H1 (docs/fan-project-breakdown.md). ADR 0620, 2026-11-16. DONE (reduced-order tier only). Library only, opt-in (no case key, no MCP tool, no default changed): design::fan_objective states a fan objective once (impedance points as system curves with weights, terms with a statistic over tolerance specimens and a combination over the points, limits held at every point or on an aggregate, an optional tolerance plan with one seed for every candidate) and builds an ordinary StudyDef, so Nelder-Mead, CMA-ES, NSGA-II, the study store and the ADR 0623 ledger sink run it unchanged; objective_score entries carry the F-700 objective identity and parents and re-run through ObjectiveModel. FanRomTarget evaluates the ADR 0119 reduced-order fan on a ComputerFan with flow, pressure rise, power, efficiency, tone1_pa, tone1_db, the A-weighted sum of the first three tones and the static-unbalance force of the specimen's blades. Checks: linear fan against three quadratic systems, per-point flows within 1.4e-16 of the closed form and mean, worst, weighted and mean-plus-sigma flows equal to the hand aggregation; mean static unbalance of N(0, sigma) blade mass errors on 7 blades within 1.7 SE of r_c m sigma sqrt(7 pi / 4) at 4096 samples and a linear Gaussian metric's mean + 2 sd within 1.5 SE; the violation of the one violated point is 0.75 exactly, a stalled point fails the candidate with a located reason (linear fan and reduced-order fan), feasible violation exactly 0; objective vectors, violations and ledger bytes identical for 1, 2, 3 and 8 workers and for two runs, all 32 differ for another seed; reduced-order objective values bit-equal to FanRomEvaluator::metrics aggregated by hand, flow strictly falling as the system coefficient rises; Nelder-Mead and CMA-ES reach the constrained optimum (speed scale 1.2, pitch 0.3, 3.6 W) within 4e-8 relative in power and the robust optimum of the sampled plan, NSGA-II front within 1.8 percent of the closed-form front over the full flow range; baseline_hashes, the design tests and the tools-list goldens unchanged. Ten of ten mutations caught. Not covered: per-blade aero, eccentricity and roughness tolerances (refused by the one-row model), the other aggregation order and chance constraints, any CFD evaluator behind the layer; every number ranks variants of the model, not real fans (no measured data). MCP exposure is F-702.
+
+> Follow-up proposed: Schema default fan usable in the reduced-order model. Deps F-697. Acceptance: ComputerFan::default() through RomFan::from_axial_fan runs unstalled at 3000 rpm for every flow above 40 percent of its free delivery in the reduced-order model, every ADR 0118 schema, checker and ensemble test keeps its result, and no golden or hash table changes (or the needed change is listed for the maintainer before any edit).
