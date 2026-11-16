@@ -238,3 +238,45 @@ the maintainer (Q1); the lead may prefer to record partial until it is made.
 - **Q1. Make the coupling the default of `periodic_sliding_step`** (as F-710 did for `sliding_step`). It changes default
   results at coincidence steps and makes F-720's existing test N1 fail (it would become an ignored record). Needs the
   maintainer.
+
+## Amendment 1 (2026-11-16, written after the registered run and before any corrected run)
+
+The registered run (code and tests 9413b5ea, run once, log `w49i-work/f721-scratch/run.log`) met T1, A2, A1, A1g, S2, Q, QX,
+F0, F2, B1, N1 and QN, and missed three checks. One diagnostic run followed (disclosed; scratch test
+`w49i-work/f721-scratch/zz_f721_diag.rs`, moved out of the worktree after the run and never committed, log `diag.log`). No
+limit is changed. Results of the registered run go in addendum 1.
+
+**X1 missed: an arithmetic error of this registration (a defective set-up check).** The pitch of SS is `FRAC_PI_3`, whose
+binary64 value is one unit in the last place above `PI / 3.0`; the registration's Python line compared `192 * (pi/576)` with
+`pi/3` computed as a quotient. With the constant: `192 dt = FRAC_PI_3 - 2.2e-16` and `384 dt = 2 FRAC_PI_3 - 4.4e-16`, so
+`reduce` gives image 0 at step 192 (reduced offset `P - 2.2e-16`) and image 1 at step 384 (`P - 4.4e-16`), and the re-imaging
+steps are **193 and 385** with the reduced offset `193 dt - P = 5.454e-3` (one step). The run printed exactly that. The
+coincidence pattern of X1 held (4 parts exactly on `n % 8 == 0`). Steps 192 and 384 are still the steps where both seams
+coincide (geometrically the offset `P` is the offset `0`), but in the representation with every overlap a wrap overlap and
+no direct face of positive area; the exact `r = 0` case is covered by T1 only. Corrected check, **X1c**: the coincidence
+pattern as X1; the re-imaging steps exactly `{193, 385}` with reduced offset within `1e-12` of `dt`; on steps 192 and 384 the
+reduced offset within `1e-15` of `P`.
+
+**F1 missed (a3): diagnosed, not corrected.** Measured `3.494e-2` against `3e-2`. The diagnosis printed the largest
+difference per step: it is reached on **step 1**, equal for the coupled sector C and the base sector B (`3.4941e-2` both), at
+the rotor's inner-ring cell next to the rotor seam (`r = 1.031`, `theta = 1.031`, the inlet ring, where the inlet's
+modulation `sin 6 theta` has its largest tangential gradient at the seam angle). On step 1 no coincidence and no coupling
+acts (B1: C equals B bit for bit), so the miss is the start transient through the seam faces' orthogonal coupling (ADR 0629
+Q4) under an inlet that the start field `(r_i/r) x_hat` does not match; the estimate scaled ADR 0634's limit for a uniform
+inlet and did not foresee the modulated inlet's start. From step 2 the diagnosis printed at most `1.93e-2` (C) and `1.96e-2`
+(B). F1 stays a miss (the record keeps it); no new limit is registered for it.
+
+**B1u missed (stricter than a4): diagnosed, not corrected.** On every coincidence step of F-720's uniform runs (CS 25 steps,
+CP 81) the coupled step data differ from the base's. The diagnosis printed the size: on CS the old flux differs by at most
+`4.8e-16 max|S_f|` and the mesh flux not at all, on CP `3.2e-15` and `9.8e-14`; the flux residuals are equal. Cause: for a
+uniform flow every remap target (and on CP every GCL target) is itself rounding, so D2's threshold `1e-10 max_c |t_c|` is
+relative to a rounding-level scale and does not keep the base path; the coupled solve then redistributes rounding. a4 asks
+for unchanged results where no coincidence occurs, which B1 (350 of 350 steps bit-equal) and B2 cover; B1u asked more and
+is missed. Consequence for the mutations: MU4 (threshold removed) cannot be caught by B1u; it is run and reported as it
+comes out.
+
+**Records and the corrected test.** The registered tests `ls_...` and `b1u_...` become ignored records named `*_known_miss_*`
+with their limits intact and the measured numbers in the ignore text. A corrected test `ls_corrected_...` runs LS once more
+(the run is deterministic) and asserts A1, A1g, X1c, S2, Q, QX, F0, F2, B1, N1 and QN with the registered limits; it prints
+F1 (all steps, and from step 2) against its registered limit without asserting it (the record holds the miss). No other
+change.
