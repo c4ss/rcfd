@@ -38,7 +38,11 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   re-images the rotor (its swept volumes from the old offset less one period, its cells' velocity and history turned back
   by one pitch, in `periodic_sliding_step` and `step_sliding_periodic`). Steps of less than one period, forwards; boundary
   data set per face on rotor patches are the caller's to set on the new mesh; sectors of different pitch are refused; no
-  case key (the full-annulus key of F-303 does not cover them; ADR 0637 Q3).
+  case key (the full-annulus key of F-303 does not cover them; ADR 0637 Q3). At steps where rotor and stator nodes
+  coincide (F-720, ADR 0640) the interface graph falls into parts here too, but a uniform flow invariant under the motion
+  (axial on a sector, any on a planar slider) gives every part a zero target, so the step is unchanged and the uniform state
+  is kept to `1e-13` on those steps; a flow without the parts' symmetry leaves the parts' means in the remapped old flux
+  (`flux_residual` up to `1e-3` on those steps), which F-710's coupling does not yet cover on this path.
 * Local remeshing of tetrahedral meshes is in the library since F-247 (ADR 0215), for the compressible solver in a box
   with planar walls; the case tree does not use it yet (ADR 0215 Q1).
 * Overset (chimera) meshes in the library only (F-134, ADR 0219): one component mesh moving rigidly over a static

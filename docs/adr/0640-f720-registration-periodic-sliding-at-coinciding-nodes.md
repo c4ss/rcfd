@@ -172,3 +172,70 @@ existing test is edited).
   for the coupling only if the base misses the uniform flow, and the brief says to record a non-miss with the check only; a
   follow-up with a non-symmetric check and its own limits (taken); (b) apply it now, unchecked by a reference. Taken (a) on the
   maintainer's standing instruction of 2026-11-11 (take the recommendation).
+
+## Addendum 1: results (2026-11-16)
+
+Measured against the limits registered above; no limit was changed. Release builds on Windows. The registration is b6e28829
+(alone, first); the test file 46631d3e (committed before its run). The four tests ran once (two threads, 4.2 s); every check
+was met in that run. No library line was written or changed.
+
+**Built as registered** (D1). New `crates/rcfd-fv/tests/sliding_periodic_coincidence_f720.rs` (4 tests: CS, CP, N1, N2).
+`docs/dynamic-mesh.md`: one paragraph on the periodic path at coincidences. No shared solver file, golden, hash table or
+existing test touched, so `baseline_hashes` was not run (nothing it covers changed; B1).
+
+### Results
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| A1 (a1) CS, 200 steps | `<= 1e-10` each | velocity `5.80e-15`, pressure `3.91e-14` | met |
+| A1c (a1) the 25 coincidence steps; the 24 after them; the 2 re-imaging steps | `<= 1e-10` each | `4.80e-15`, `2.54e-14`; `5.35e-15`, `3.35e-14`; `3.44e-15`, `2.75e-14` | met |
+| X1 (set-up) 2 parts exactly on `n % 8 == 0`; re-imaging steps | exact; `{97, 193}` | 25 steps, as stated; `[97, 193]` | met |
+| A2 (supporting) CP, 650 steps; the 81 coincidence steps | `<= 1e-10` each | `2.28e-14`, `3.19e-13`; `2.13e-14`, `2.88e-13` | met |
+| X2 (set-up) 4 parts exactly on `n % 8 == 0`; re-imaging steps | exact; `{640}` | 81 steps, as stated; `[640]` | met |
+| S1 coincidence steps, flux and GCL residual: CS; CP | `<= 1e-12` each | `1.88e-15`, `5.10e-15`; `4.30e-15`, `9.05e-15` | met |
+| A3 (a2) the base's result registered before the checks; no coupling built | present | b6e28829 before 46631d3e; no library change | met |
+| B1 (a3) `git diff d40cd665 -- crates/` | the test file only | 1 file, 414 lines added | met |
+| B2 (a3) existing suites, unedited | pass as before | `sliding_periodic_f304` 8/2, `sliding_reimaging_f704` 12/2, `sliding_coincidence_f710` 3/0, `rcfd-mesh` lib 77/2 (passed / ignored) | met |
+| N1 (control, the latent defect) CN: `flux_residual` on the 5 coincidence steps; elsewhere from step 2 | `>= 1e-6` each; `<= 1e-12` | `3.98e-4`, `5.54e-4`, `7.08e-4`, `8.56e-4`, `9.86e-4` (4 parts each); `2.46e-14` | held |
+| N2 (control) CS with the sliver GCL open on the coincidence steps | `>= 1e-6` | `2.02e-3` | held |
+
+### Mutations (scratch copy `w49i-work/f720-scratch/mut` of 46631d3e, script `mutate.py`, log `mutations.log`, target `target-mut`)
+
+| Mutation | Caught by |
+| --- | --- |
+| MU1 GCL closure skipped on coincidence steps | A1 (`2.02e-3`), A1c, S1 (GCL `2.82e-3`) |
+| MU2 stator wrap copy `+x` on coincidence steps | A1 (`3.13e-3`), A1c, S1; A2 (`1.45e-1`), S1 on CP |
+| MU3 interpolation dropped from the new faces' old flux on coincidence steps | A2 (`3.16e-2`), S1 on CP (`5.0e-1`); CS not (an axial flow has no flux through the interface), as registered |
+
+Three of three caught; the file restored and compared after each. `cargo fmt -p rcfd-fv --check` clean; `cargo clippy -p
+rcfd-fv --all-targets -- -D warnings` clean.
+
+### Decision
+
+By the registered rule: A1, A1c, X1, A3, B1, B2, N1 and N2 met and every mutation caught: **done**. The base periodic step
+keeps the uniform flow at coincidences; the coupling of ADR 0638 is not needed for it and is not applied.
+
+Not covered (as registered): non-uniform flows at coincidences on the periodic path, where the base step leaves the parts'
+means in the remapped old flux (N1: `4e-4` to `1e-3` of `max |S_f|` per cell on those steps, against `2.5e-14` elsewhere);
+its effect on the velocity is not measured. The 2-D sector has no uniform invariant flow. No case-tree path.
+
+### Remaining questions
+
+1. The latent defect of N1. Options: (a) a follow-up item that applies ADR 0638's coupling to `periodic_sliding_step` (with
+   the coupling faces found on the graph of direct faces and wrap pairs, internal faces first, and a registered decision on
+   seam pairs where both seams coincide) and checks it on a flow without the parts' symmetry; (b) leave it until a periodic
+   case key exists. Recommendation (a), taken on the maintainer's standing instruction of 2026-11-11 (take the
+   recommendation): follow-up below.
+2. A check of the follow-up needs a reference for a non-symmetric flow at coincidences. Options: (a) the remapped old flux's
+   per-cell divergence (`flux_residual <= 1e-12` on every step) plus the same run with a step that avoids coincidences as a
+   comparison within a registered limit; (b) the full annulus of ADR 0216 (through `sliding_step`, coupled since F-710) run in
+   lockstep with the sector, as ADR 0634 F, with an inlet periodic in the sector pitch. Recommendation (b) where it applies
+   (the sector SS is the first sixth of P), with (a) as the cheap check; left to the follow-up's registration.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> ADR 0640, 2026-11-12: periodic sliding at coinciding nodes. The base periodic_sliding_step was run once at node coincidences before any code (disclosed) and does not miss: a uniform axial flow on ADR 0629's 3-D sector pair with dt = rotor pitch / 8 (a coincidence every 8th step, the interface graph in 2 parts) over 200 steps and two re-imagings is kept to 5.8e-15 velocity and 3.9e-14 pressure (limit 1e-10), the 25 coincidence steps 4.8e-15 and 2.5e-14; the planar pair with U = (1, 0.5, 0) over 650 steps (81 coincidences, 4 parts) 2.3e-14 and 3.2e-13. Cause of the immunity: a uniform flow invariant under the motion gives every cell a zero remap target, and the parts' GCL targets cancel by the node sets' symmetry, so ADR 0638's coupling is not applied (no library change; F-304 and F-704 tests pass unedited). Negative controls: a source flow without the parts' symmetry leaves the part means in the remapped old flux, flux residual 4e-4 to 1e-3 on the coincidence steps against 2.5e-14 elsewhere (the latent defect, follow-up); the sliver GCL left open on the coincidence steps 2.0e-3. Three of three mutations caught. Limits: non-uniform flows at coincidences on the periodic path are not fixed.
+
+> Follow-up proposed: "Periodic sliding at coinciding nodes for flows without the parts' symmetry". Deps F-720. Acceptance: on the sector pair SS of ADR 0629 with a source flow periodic in the sector pitch but not in the coincidence spacing, and a step that lands on node coincidences, the remapped old flux of periodic_sliding_step is divergence-free to 1e-12 on every step (ADR 0640 N1 measured 4e-4 to 1e-3 at the base), the coupling of ADR 0638 extended to the graph of direct faces and wrap pairs; the sector run against the full-annulus run of ADR 0216 within a registered limit; every result of F-304, F-704 and F-720 unchanged where no coincidence occurs. Every limit not stated here is registered in the ADR before the run.
