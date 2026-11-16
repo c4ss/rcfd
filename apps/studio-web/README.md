@@ -4,6 +4,9 @@ The Electron desktop front end of rcfd: F-448 and the Studio roadmap of ADR 0800
 outside the Cargo workspace (ADR 0350 Q2, guardrail G5). The engine is Rust and stays Rust (G2); this app is a client of
 it.
 
+For users: how to start the Studio from a checkout and use it, step by step, is the tutorial
+`docs/tutorials/desktop-assistant.md` (F-822).
+
 **State: F-801 hardened shell, F-802 design tokens and primitives, F-803 service client.** The window shows an empty
 project view inside the hardened shell of guardrail G10, with Playwright tests that drive the packaged app. The design
 tokens of `DESIGN.md` and the primitives (on React Aria Components) are in place, shown on a primitives gallery. The main

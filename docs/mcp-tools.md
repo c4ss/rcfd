@@ -226,9 +226,11 @@ arguments cannot be used there. `initialize`'s first sentence then names no sess
 | `run_headless` | `start_run`; no equivalent for `continue_from`, interpolation, checkpoints, `out_dir` and `max_elapsed_s` |
 | `list_workflow_tasks`, `create_workflow`, `edit_workflow`, `run_workflow_task` | none yet |
 
-The Studio's Claude Code sidebar allows the project's read tools without asking: in a project whose allow-list file
-(`.rcfd/claude-allow.json`) the Studio makes after this change, those are the 15 read-class project tools, `read_feed`,
-`check_case_mesh`, `preview_mesh` and `list_meshes` among them; an existing allow-list file is not changed (ADR 0195 P5).
+The Claude Code sidebar of the older `rcfd-studio` allows the project's read tools without asking: in a project whose
+allow-list file (`.rcfd/claude-allow.json`) it makes after this change, those are the 15 read-class project tools,
+`read_feed`, `check_case_mesh`, `preview_mesh` and `list_meshes` among them; an existing allow-list file is not changed
+(ADR 0195 P5). The Claude Code panel of the desktop Studio (`apps/studio-web/`) uses the allow-list file when it is
+valid, else the same 15 read-class tools, and refuses every other tool without asking; it never writes the file.
 
 ### The plugin's edit hook
 

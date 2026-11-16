@@ -2,7 +2,7 @@
 
 This finished example project of the rcfd Studio holds three classic external and internal flows, each as a case file, a
 variant of it and a completed run of both, made by the real solver through the run service (ADR 0142). Open it to see a
-picture at once, scrub a run through time, and compare a case with its variant. Every mesh is coarse on purpose and no
+picture of a run, scrub it through time, and compare a case with its variant. Every mesh is coarse on purpose and no
 result here is a validation, so read the limits at the end of this page before using a number. To start, follow "Open it";
 the table names each problem's own note. ADR numbers refer to the architecture decision records in the repository's
 `docs/adr/`.
@@ -20,32 +20,43 @@ results equal those of the flow-rotated cases to about 1e-7 (`notes/naca0012.md`
 
 ## Open it
 
-1. Build the Studio and the two programs it starts: `cargo build --release -p rcfd-studio -p rcfd-runner -p rcfd-cli`.
-2. If you want to start runs of your own, first copy this folder out of the repository. New runs would otherwise appear as
-   untracked files in the repository. The Studio does not change the committed runs.
-3. Start `target\release\rcfd-studio.exe <this folder>`, or start the Studio and use Project > Open project...
+1. If you want to start runs of your own, copy this folder out of the repository. New runs would otherwise show up as
+   untracked files in the repository. Opening and looking write nothing into the folder.
+2. Start the desktop Studio as the tutorial `../../docs/tutorials/desktop-assistant.md` says. There is no installer yet:
+   build `rcfd`, `rcfd-runner` and `rcfd-mcp` in release, then run `npm start` in `apps/studio-web/` with
+   `RCFD_STUDIO_RCFD` set to the `rcfd` you built.
+3. Choose Open project folder… (Ctrl+O) and pick this folder.
 
-## What to click, in order
+The older `rcfd-studio`, frozen until roadmap item F-449, still opens the folder: build it with
+`cargo build --release -p rcfd-studio -p rcfd-runner -p rcfd-cli`, then start `target\release\rcfd-studio.exe <this folder>`
+(on Linux `target/release/rcfd-studio`).
 
-1. In the Project panel, find the eight cases under `cases/`, the mesh files under `meshes/` and the ledger under
-   `designs/`.
-2. Select a case (for example `cases/cylinder-re100.toml`): the Case editor shows its settings. Case > Validate checks
-   it. If your Studio has the mesh preview of wave 48G (a wave is a numbered batch of work), the Viewport shows the case's
-   mesh.
-3. In the Runs panel, find the eight finished runs, one per case, with their final state and step. Select the run of
-   `cases/cylinder-re100.toml`.
-4. The Viewport shows the run's pressure field `p` on the mesh. Pick another field (`vorticity_z` for the cylinder) in the
-   "field" box; hover to read values.
-5. To scrub, drag the time slider, or use the first, previous, play, next and last buttons. A transient run (the cylinder)
-   slides over simulated time; a steady run (aerofoil, step) slides over iterations. The Plots panel shows the residuals
-   and the report monitors (`cd`, `cl`, ...) of the selected run, with a line at the viewport's step.
-6. To compare a variant, select the run of the variant case (for example `cases/cylinder-re200.toml`) and look at the same
-   field and time. Side-by-side views are not in the Studio yet (wave 49); the numbers of both runs are in the table below
-   and in `designs/variants.ledger.jsonl`.
-7. To run a variant yourself, work in a copy of the folder (step 2 of "Open it"). To try another value, first change it in
-   the Case editor (for example `physics.nu`) and Save. Then choose Runs > Start run..., pick the case, keep "Store fields"
-   as the case sets it, and choose Start. The new run streams into the Runs and Plots panels; the committed run stays for
-   comparison.
+## What to look at, in order
+
+The Studio names many controls only in tooltips and accessible names; the names below are those.
+
+1. Home (Ctrl+1) lists the eight cases under `cases/`, the mesh under `meshes/`, the runs and the notes. Filter by name
+   narrows the list. The design ledger `designs/variants.ledger.jsonl` is not listed there; open it in an editor.
+2. Edit on the row of a case (for example `cases/cylinder-re100.toml`) opens the case editor on its settings. Check the
+   case runs the engine's check, and Check the mesh runs the engine's check of the mesh. The desktop Studio has no
+   picture of a mesh before a run; the older `rcfd-studio` has one.
+3. Runs (Ctrl+2) lists the eight finished runs, one per case, with their state and step. Select the run of
+   `cases/cylinder-re100.toml`, then Open in workspace.
+4. The field view shows the run's pressure field `p`. Choose another field in Field (`vorticity_z` for the cylinder), and
+   point at the field to read the value of a cell.
+5. To scrub, drag the scrubber or use First snapshot, Previous snapshot, Play and Next snapshot (with the scrubber
+   focused: the arrow keys, Home and End). The axis is iterations for every run; for a transient run (the cylinder) the
+   scrubber's flag also gives the simulated time. The time panel shows the residuals and one report at a time, chosen
+   in Monitor series (`cd`, `cl`, ...), with a line at the shown step.
+6. To compare a variant, choose Compare runs (the pictogram in the field bar), then the run of the variant case (for
+   example `cases/cylinder-re200.toml`) as Compared run, and Side by side. One scrubber moves both views, at the same
+   stored time; where the compared run has no snapshot at that time, its view says so. A table under the run's numbers
+   gives the engine's comparison metrics; the numbers of both runs are also in the table below and in
+   `designs/variants.ledger.jsonl`.
+7. To run a variant yourself, work in a copy of the folder (step 1 of "Open it"). To try another value, first change it
+   in the case editor (for example `physics.nu`) and Save (Ctrl+S). Then choose Run on the case's row on Home, or F5 and
+   the case. The run stores the fields the case asks for. The new run shows in Runs and in the Workspace; the committed
+   run stays for comparison.
 
 ## The runs in this folder
 
@@ -77,9 +88,10 @@ machine that made them. `designs/variants.ledger.jsonl` holds every value with i
   `notes/naca0012.md`.
 * The fields are stored in single precision (f32, ADR 0133): each stored value is within |x| 2^-24 of the solver's
   value. The solver itself runs in double precision.
-* The Case editor of the Studio resolves relative paths against the Studio's working folder, not against the case's
-  folder (ADR 0131, question 3). The aerofoil cases name their mesh as `../meshes/naca0012-ogrid`, so Case > Validate
-  reports the mesh as missing unless the Studio was started in `cases/`. Runs are not affected: the run service resolves
-  the path against the case's folder.
+* The Case editor of the older `rcfd-studio` resolves relative paths against its working folder, not against the case's
+  folder (ADR 0131, question 3). The aerofoil cases name their mesh as `../meshes/naca0012-ogrid`, so its Case > Validate
+  reports the mesh as missing unless it was started in `cases/`. The desktop Studio's case editor opens a case file
+  through the solver service, which resolves relative paths against the case's folder. Runs are not affected: the run
+  service resolves the path against the case's folder.
 * The run records hold the absolute paths of the machine that made them (`case_source`, `case_dir` in each `run.json`,
   paths in the solver events); they are information only.

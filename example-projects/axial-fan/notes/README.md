@@ -7,7 +7,7 @@ solve does not converge on this mesh with the second-order scheme the fan studie
 also reports `not_converged` for this run, at its iteration cap of 1500.
 
 The other example projects hold one-cell-thick 2D cases, which the Studio draws face-on. This mesh is not flat, so the
-Studio draws it in 3D and the view can be rotated.
+Studio draws it in 3D and the view can be turned.
 
 * Case: `cases/fan01-passage-upwind.toml`, steady, k-omega SST, SIMPLEC, solved in the rotating frame of the blade.
 * Fan: one periodic blade passage of the FAN-01 low-pressure axial fan (FAU / EAA, CC BY 4.0 CAD and data): 9 blades, hub
@@ -24,23 +24,32 @@ Studio draws it in 3D and the view can be rotated.
 
 ## Open it
 
-1. Build: `cargo build --release -p rcfd-studio -p rcfd-runner -p rcfd-cli`.
-2. If you want to start runs of your own, copy this folder out of the repository. New runs would otherwise show up as
-   untracked files in the repository.
-3. Start `target\release\rcfd-studio.exe <this folder>` (on Linux: `sh scripts/studio.sh example-projects-linux/axial-fan`),
-   or choose Project > Open project... in the Studio.
+1. If you want to start runs of your own, copy this folder out of the repository. New runs would otherwise show up as
+   untracked files in the repository. Opening and looking write nothing into the folder.
+2. Start the desktop Studio as the tutorial `../../docs/tutorials/desktop-assistant.md` says. There is no installer yet:
+   build `rcfd`, `rcfd-runner` and `rcfd-mcp` in release, then run `npm start` in `apps/studio-web/` with
+   `RCFD_STUDIO_RCFD` set to the `rcfd` you built.
+3. Choose Open project folder… (Ctrl+O) and pick this folder.
 
-## What to click, in order
+The older `rcfd-studio`, frozen until roadmap item F-449, still opens the folder: build it with
+`cargo build --release -p rcfd-studio -p rcfd-runner -p rcfd-cli`, then start `target\release\rcfd-studio.exe <this folder>`
+(on Linux `target/release/rcfd-studio`).
 
-1. Project panel: select `cases/fan01-passage-upwind.toml`. The Case editor shows its settings and the Viewport shows
-   the mesh preview, labelled "3D". Middle drag rotates the view, right drag pans, the wheel zooms, and a double click
-   fits the passage into the view. "patch colours" tells the blade, hub, casing, inlet and outlet apart.
-2. Runs panel: select the run of the case. The Viewport shows `p` on the surfaces of the passage, in 3D like the
-   preview. Choose `uz` (the axial velocity) or `nut` in the "field" box and hover for values.
-3. Scrub: the run is steady, so the slider runs over iterations (a snapshot every 150). The Plots panel shows the
-   residuals and these reports: `m_blade` and `m_hub` (the moments of one passage about the fan axis), `m_in` and
-   `m_out` (mass flows), `p_in` and `p_out` (area averages of `p`). The torque of the whole rotor is
-   -9 (`m_blade` + `m_hub`).
+## What to look at, in order
+
+The Studio names many controls only in tooltips and accessible names; the names below are those.
+
+1. Home lists `cases/fan01-passage-upwind.toml` and its run. Edit on its row opens the case editor on its settings. The
+   desktop Studio has no picture of a mesh before a run; the older `rcfd-studio` shows the case's mesh in 3D before it is
+   run (see "Open it").
+2. Runs (Ctrl+2): select the run of the case, then Open in workspace. The field view shows `p` on the surfaces of the
+   passage, in 3D. Drag turns the view, right drag pans and the wheel zooms; Reset view goes back. Choose `uz` (the axial
+   velocity) or `nut` in Field, and point at the surface to read the value of a cell. Cut plane cuts the passage normal
+   to x, y or z.
+3. Scrub: the run is steady, so the scrubber runs over iterations (a snapshot every 150). The time panel shows the
+   residuals and one report at a time, chosen in Monitor series: `m_blade` and `m_hub` (the moments of one passage about
+   the fan axis), `m_in` and `m_out` (mass flows), `p_in` and `p_out` (area averages of `p`). The torque of the whole
+   rotor is -9 (`m_blade` + `m_hub`).
 
 ## The run in this folder
 

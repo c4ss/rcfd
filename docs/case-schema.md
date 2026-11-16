@@ -478,7 +478,7 @@ when `nx = ny` and `lx = ly`. Before wave 11 it silently built an `nx` x `nx` ca
 
 `box_3d` (F-259, ADR 0191) is the uniform box `[0, lx] x [0, ly] x [0, lz]` of `nx` x `ny` x `nz` cells, with the patches
 `xmin`, `xmax`, `ymin`, `ymax`, `zmin` and `zmax`, all walls. It has no grading and no periodic pairs. It is the mesh of
-`dynamic_mesh.deformation = "layering"` and can also be used on its own. The Studio gives no cell estimate for it yet
+`dynamic_mesh.deformation = "layering"` and can also be used on its own. The older `rcfd-studio` gives no cell estimate for it yet
 (ADR 0191 Q4).
 
 The optional table `[mesh.box_3d]` (ADR 0257) has one key, `section`, the cells of the box: `"box"` (default) is the
@@ -712,7 +712,7 @@ while the rotation is not 0:
 - the mixing plane
 - a geometric `decomposition`
 
-The Studio's Case > Validate shows errors only, so not these warnings.
+The Case > Validate of the older `rcfd-studio` shows errors only, so not these warnings.
 
 Periodic pairs: a translational pair stays matched (its shift is taken from the rotated patches). A rotationally
 periodic pair (`annulus_3d_sector`, `axial_fan_sector`, imported cyclic patches with a rotation) only allows a rotation
