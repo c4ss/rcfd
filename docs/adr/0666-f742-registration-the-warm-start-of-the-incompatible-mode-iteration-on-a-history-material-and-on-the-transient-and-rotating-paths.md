@@ -316,3 +316,105 @@ the reading goes in Addendum 1.
 Run once each on a scratch copy of the commit with the amendment 1 tests, against the default tests of `si_eas_hg9.rs`
 (the two `_met_rows` tests, the transient and the rotating test). MA1 and MA2, registered as caught by AS1, are expected to be
 caught by AS1c.
+
+## Addendum 1: results (2026-11-16)
+
+The registered run was made once on b061d780 (`run1.log` in the scratch folder; the four tests 13 s in all); the met rows of
+amendment 1 once on 6e62ac51 (`run2.log`, 56 s, the machine shared; every printed value identical to the registered run) and
+the diagnosis A1.2 once (`run2-diagnosis.log`, 20 s); the mutations once each on a scratch copy of 6e62ac51 (`mutations.log`,
+`mut-M*.log`); S5, S6, S7, B6 once (`checks.log`, `fmt.log`, `clippy.log`, `s7-lib.log`, `s7-tests.log`, `b6.log`,
+`s5-baseline.log`). No limit, set-up or measure was changed after a run. No test is a heavy record (the longest about 40 s).
+
+### Results
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| JB1 `e_R` (J2, `4^3`) | `<= 0.15` | **`0.1675`** (`R_L = 0.08147`, `R_Fbar = 0.09786`; S the same) | **no** (known miss) |
+| JB1 `e_w` | `<= 0.15` | `0.0096` | yes |
+| JB2 `e_R` (J2, DB4) | `<= 0.10` | **`0.1219`** (`0.06653`, `0.07577`; S the same) | **no** (known miss) |
+| JB2 `e_w` | `<= 0.10` | `0.0628` | yes |
+| M0, M1 (DB4) | `> 0`; `343` | `0.0762`; `343` | yes |
+| JY | `> 0` | `4^3`: W `491`, F-bar `493` of 512; DB4: W `3799`, F-bar `3765` of 4096 | yes |
+| AS1 (`4^3`) | `0` | **`28`** (DB4 reported: `30`) | **no** (defective, amendment 1) |
+| AS1c (A1.1), `4^3` and DB4 | `0` | `0`, `0` | yes (after the amendment) |
+| AS2 | `<= 1` | `0.930`, `0.915` | yes |
+| JL0 | `0` | `0`, `0` (every warm record one iterate: 64 and 512 elements) | yes |
+| JL2 | `0` | `0`, `0` | yes |
+| NCA | `64` | `64` | yes |
+| TT1 `e_d`, `e_W` | `<= 0.15` | `0.0232`, `0.0221` (F-bar `d = 0.15557`, `W_s = 15.337`; W `0.15196`, `14.998`) | yes |
+| TT2 | `0` | `0` | yes |
+| TE1 | `0` | `0` | yes |
+| TE2 | `<= 1e-10` | `0.0` (the same 16 digits) | yes |
+| NCE | `> 0` | `40` of 40 (largest relative difference `1.66e-12`) | yes |
+| TS1 | succeeds; `0` | succeeds; `0` | yes |
+| NCR | refused | refused | yes |
+| RO1 | `0`; `> 0` | `0` bit differences over 8 frequencies; lowest `1.8296` Hz | yes |
+| B6 | pass | the seven bit records pass | yes |
+| S5 | pass | 3 passed, 1 ignored | yes |
+| S6 | clean | fmt and clippy clean | yes |
+| S7 | pass | `--lib` 14; `si_eas_hg8` 5, `si_eas_hg7` 4, `si_eas_hg6` 4, `si_eas_hg5` 3, `si_eas_hg3` 4, `si_hex8x` 8, `si_eas` 8, `si_eas_hg` 8, `si_eas_hg2` 3, `sa_j2_order` 2, `sa_j2_unload` 2, `sa_nl_transient` 7 passed | yes |
+
+Reported. W against S: `5.5e-13` (`4^3`), `4.0e-15` (DB4), the same root; S converges on DB4 with J2 (10 increments, no
+halving), so the warm start is not needed on these J2 set-ups. SL of W: no negative eigenvalue, lowest over largest diagonal
+`7.47e-3` (`4^3`), `2.03e-3` (DB4). The default L on the transient equals W to `6.7e-16`: the cold path converges there.
+
+**The diagnosis A1.2 (JB).** F-bar `R = 0.09786` (`4^3`), `0.07717` (`8^3`); rule L `0.08147`, `0.06172`: `R_L / R_Fbar - 1 =
+-0.168` and `-0.200`. The gap does not close under one refinement; both reactions fall by about a fifth from `4^3` to `8^3`
+(the punch edge concentrates the plastic flow, so neither is near a converged value at `8^3`). So the ADR 0636 tolerances,
+fixed from elastic probes, do not transfer to a J2 material with rule L against F-bar; the runs do not say which element is
+wrong. It is not a property of the warm start: S gives the same numbers to `5.5e-13`.
+
+### Deviations
+
+- JB1, JB2 `e_R` missed; AS1 missed as a defective check (amendment 1); AS1c replaces it, met, disclosed as a regression check.
+- Arithmetic 4 expected rule L at or above F-bar (a stiffer stabilisation in the plastic zone); it is below. Arithmetic 6
+  ignored that committed plastic points sit on the yield surface.
+
+### Mutations (scratch copy of 6e62ac51, the default tests of `si_eas_hg9.rs`, each run once)
+
+| Id | Caught | By |
+|---|---|---|
+| MA1 (no cut of the record) | **yes** | AS1c (`9` increments on each block), AS2 (`1.055`, `1.040` above the number of points) |
+| MA2 (the cut one point short) | **yes** | AS1c (`9`, `10`) |
+| ME1 (the energy record cold) | **yes** | TE1 (`40`) |
+| MR1 (no extended restore) | **yes** | TS1 (refused) |
+| MR2 (extended restore whatever the opt-in) | **yes** | NCR |
+| MJ1 (the driver ignores the warm start) | **yes** | JL0, JL2, NCA, TT2, TE1, TE2, NCR |
+
+Six of six caught.
+
+### Not run
+
+Nothing registered was skipped. The whole rcfd-fem suite was not run (rule 7). Not run by design (Limits): J2 on the
+transient path (refused by the energy record), creep and viscoelastic materials with W, the arc-length and contact paths, the
+energy-momentum step with an Incompatible element, W with the line search.
+
+### Decision
+
+**partial**, by the registered rule: B6, S5, NCR met (no default bit changed); W runs with J2 on both blocks and on the
+transient path, the energy record is consistent with the driver's modes bit for bit (TE1, TE2), the transient state
+round-trips (TS1), the rotating path is unaffected (RO1), and all six mutations are caught; but JB1 and JB2 `e_R` missed (rule L
+with J2 is 17 and 12 per cent below F-bar, with or without the warm start), and AS1 missed, c5 being met only by the
+corrected check AS1c after an amendment.
+
+### Remaining questions
+
+1. **Rule L against F-bar with J2.** Options: (a) a follow-up with a refined reference (the `16^3` block, or the Hex20, with
+   J2) to see which element converges where; (b) register J2 tolerances of their own from such a reference; (c) accept the
+   elastic tolerances as not transferable and record the gap. Recommendation: (a), proposed below.
+2. **The creep reading of the committed modes.** `creep_increment` would index past the end of the short chunk of the modes
+   (a panic) with W and a creep material. Options: (a) cut to the material part as D1 does, behind the opt-in, with a check on
+   a small creep solve; (b) refuse W with a creep material. Recommendation: (a), proposed below.
+3. **Default.** W stays opt-in (ADR 0660 open question 2): open for the maintainer.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> Structural solver, intermediate tier. Follow-up of F-740 (ADR 0660). PARTIAL. ADR 0666, 2026-11-16: the warm start of the incompatible-mode iteration (the remedy W of ADR 0660: warm start, backtracking, decrease test) with a J2 material (E = 2.98e6, nu = 0.49, sigma_y = 6e4, H = 3e5) on the punch block of ADR 0636 (4^3) and on DB4 of ADR 0649, on the nonlinear transient path and on the rotating path; opt-in changes: the active-set record of ADR 0515 cuts each state to its material part with the warm start, the transient energy record starts from the committed modes (Integrator::strain_energy_modes for checks), and the transient restore accepts a warm state. Met: corner bulge within 1.0 and 6.3 per cent of F-bar, the committed modes converged (one local iterate for every element), the record equal to the cold S at the converged iterate of every increment, the transient tip deflection and strain energy within 2.3 and 2.2 per cent of F-bar, the energy record's modes the committed modes bit for bit and its energy equal to an independent sum, the transient state round-tripping through bytes, the rotating frequencies unchanged bit for bit (the path is linear). Missed: the punch reaction of rule L with J2 is 16.8 per cent (4^3) and 12.2 per cent (DB4) below F-bar against 0.15 and 0.10, identically with and without the warm start, and the gap grows to 20.0 per cent on the regular 8^3 block (the elastic tolerances do not transfer to J2); the registered record check compared first iterates, where committed plastic points on the yield surface are decided by 1e-12 perturbations (corrected by amendment). No default bit changed (the bit records, the rcfd-api baseline hashes pass). Six of six mutations of the new code caught. Not covered: J2 on the transient path (the energy record refuses history), creep and viscoelastic materials with W (creep_increment would read the modes as a short point), arc-length and contact paths, the line search with W.
+
+> F-740 (note, ADR 0666, 2026-11-16): W runs with a J2 material, on the transient path and on the rotating path (F-742); the reaction gap of rule L against F-bar with J2 is the element's, not the warm start's.
+
+> Follow-up proposed: Rule L against F-bar with a J2 material on a refined reference. Deps F-742. Acceptance: Every limit not stated here is registered in the ADR before the run. The punch block of ADR 0636 with the J2 material of ADR 0666 on 4^3, 8^3 and 16^3 (and the Hex20 on 8^3 if it runs), rule L and F-bar: the punch reaction and the corner bulge of each element against the finest reference with a registered order-of-convergence reading, a registered J2 tolerance derived from it, and the reason for the gap of ADR 0666 A1.2 identified or bounded; the default bits unchanged.
+
+> Follow-up proposed: The creep and viscoelastic readings of the committed modes of the warm start. Deps F-742. Acceptance: Every limit not stated here is registered in the ADR before the run. W of ADR 0660 with a creep material and a viscoelastic material on a small Incompatible block through the time-stepping path of ADR 0489: no reader of the element states (creep_increment and every other) reads the nine committed modes as a point, a solve that panics or reads them today shown first, the results equal to the cold S to a registered tolerance; the mutations of the new code caught by the item's own checks; the default bits unchanged.
