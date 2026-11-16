@@ -95,3 +95,14 @@ run, and what it must show is listed in the addendum.
 - D1 keeps working while the largest package's target paths stay below 32767 characters (today 20031 on the runner); rcfd-fem
   would need about 220 more test targets of the same path length to reach it.
 - The skip compares SHAs only; a green run on a commit whose tests are flaky is not re-run.
+
+## Amendment 1 (2026-11-16, before the corrected S5 and M2, M3 runs): the stub was not on PATH
+
+The first S5 run, and the M2 and M3 runs made with it, did not use the stub `gh`: the stub folder was prepended to `PATH` as
+`E:/projects/...`, and in Git Bash the colon after the drive letter splits that entry, so bash found the real `gh.exe`. Those
+runs therefore made read-only calls to the real API (all five cases printed `run=true`, `last_green=eef6c094...`, which is
+the S6 situation, not S5). They are recorded here as void, not as results of S5, M2 or M3. Correction: the stub folder is
+passed as `/e/projects/...` (the Git Bash form), and each case first asserts that `command -v gh` is the stub. Limits and
+expected results of S5, M2 and M3 are unchanged; the corrected runs are made once. Mutation M3 is also corrected in its text:
+the fail-open default is two edits (`|| ids=""` and `|| ok=0`); M3 removes both, so a failing `gh` must stop the step with
+an error (run not set) instead of `run=true`; S5 (d) "exit 0 with run=true" then fails.
