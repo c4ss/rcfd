@@ -25,6 +25,7 @@ import { projectActions, watchProjectState } from './door.js';
 import { caseHash } from '../case/hash.js';
 import { CaseRunButton, RunFailure } from '../runs/RunControls.js';
 import { ClaudePanel } from '../claude/ClaudePanel.js';
+import { requestCommand, useCommandFact, useCommandHandlers } from '../commands/host.js';
 import './project.css';
 
 let reported = false;
@@ -89,6 +90,12 @@ export function ProjectHome() {
             </Button>
           </div>
         )}
+        {/* F-831: the command palette, also from the pointer */}
+        <div className="ph-top-commands">
+          <Button variant="ghost" onPress={() => requestCommand('palette.open')} aria-keyshortcuts="Control+K">
+            Commands <span className="ph-top-key">Ctrl+K</span>
+          </Button>
+        </div>
       </header>
       <main className="ph-main">{project ? <OpenProject view={project} state={state!} /> : <NoProject state={state} />}</main>
       <footer className="ph-foot">
@@ -251,6 +258,18 @@ const DESCRIBE: Record<Exclude<Kind, 'all'>, string> = {
 
 type View = 'home' | 'runs';
 
+/** F-831: puts the focus on the first element that matches, once the view has changed (G8: the focus follows a command). */
+function focusLater(...selectors: string[]): void {
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => {
+      for (const sel of selectors) {
+        const el = document.querySelector<HTMLElement>(sel);
+        if (el) return el.focus();
+      }
+    }),
+  );
+}
+
 /**
  * An open project: two views under the header band, Home (the index of the folder, F-805) and Runs (F-806), and the
  * Claude Code panel beside them (F-814), whose run and file references open the run in Runs or the file on Home.
@@ -275,6 +294,21 @@ function OpenProject({ view, state }: { view: ProjectView; state: ProjectState }
     setFocus((f) => ({ path: p, n: (f?.n ?? 0) + 1 }));
     setTab('home');
   };
+  // F-831: the command palette's commands of these views (src/shared/commands/studio.ts), and the run selected in Runs
+  // for the palette to offer first
+  useCommandFact('selectedRun', run);
+  useCommandHandlers({
+    'go.home': { run: () => (setTab('home'), focusLater('.ph-views [role="tab"][aria-selected="true"]')) },
+    'go.runs': {
+      run: (a) => {
+        if (typeof a['run'] === 'string') setRun(a['run']);
+        setTab('runs');
+        focusLater('.ph-views [role="tab"][aria-selected="true"]');
+      },
+    },
+    'go.claude': { run: () => (setClaude(true), focusLater('.cc textarea', '.cc button')) },
+    'view.toggle_claude': { run: () => (setClaude(!claude), focusLater(claude ? '.cc-show button' : '.cc textarea', '.cc button')) },
+  });
   return (
     <div className="ph-work">
     <div className="ph-open">

@@ -17,6 +17,8 @@ import './design/tokens.css';
 import './base.css';
 import './ui/primitives.css';
 import { ProjectHome } from './project/ProjectHome';
+// F-831: the command palette and the global shortcuts, beside every route (the palette loads on first use)
+import { PaletteHost } from './commands/PaletteHost';
 
 const GALLERY_HASH = '#/dev/primitives';
 
@@ -94,5 +96,6 @@ if (!root) throw new Error('index.html has no #root element');
 createRoot(root).render(
   <StrictMode>
     <Root />
+    <PaletteHost />
   </StrictMode>,
 );
