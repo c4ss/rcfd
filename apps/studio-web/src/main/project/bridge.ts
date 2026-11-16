@@ -5,7 +5,7 @@
 //
 // No Electron import: the port is any object with postMessage and message and close callbacks (the unit tests use
 // Node's MessageChannel; src/main/index.ts adapts Electron's MessagePortMain).
-import type { ProjectError, ProjectPortMessage, ProjectReply, ProjectRequest, ProjectState } from '../../shared/project.js';
+import type { ProjectError, ProjectPortMessage, ProjectReply, ProjectRequest, ProjectState, RunActionResult } from '../../shared/project.js';
 import { HomeRefusal } from './home.js';
 
 export const MAX_PATH_CHARS = 4096;
@@ -27,6 +27,34 @@ export interface BridgeHome {
   close(): Promise<void>;
   refresh(): Promise<void>;
   dismiss(): void;
+  /** F-807: a run-control action (the home answers it; optional so that a home without run control refuses it). */
+  action?(id: string, params: Readonly<Record<string, unknown>>): Promise<RunActionResult>;
+}
+
+/** F-807: the longest action id the port accepts, and the most bytes of an action's parameters as JSON. */
+export const MAX_ACTION_CHARS = 64;
+export const MAX_ACTION_PARAMS_BYTES = 64 * 1024;
+
+/** Null when `v` is a plain object of JSON values (no functions, no class instances, nothing nested deeper than 8). */
+function jsonObjectProblem(v: unknown, depth = 0): string | null {
+  if (depth > 8) return 'nested too deep';
+  if (v === null || typeof v === 'boolean' || typeof v === 'string') return null;
+  if (typeof v === 'number') return Number.isFinite(v) ? null : 'not a finite number';
+  if (Array.isArray(v)) {
+    for (const x of v) {
+      const p = jsonObjectProblem(x, depth + 1);
+      if (p) return p;
+    }
+    return null;
+  }
+  if (isPlainObject(v)) {
+    for (const x of Object.values(v)) {
+      const p = jsonObjectProblem(x, depth + 1);
+      if (p) return p;
+    }
+    return null;
+  }
+  return 'not a JSON value';
 }
 
 const isPlainObject = (v: unknown): v is Record<string, unknown> => {
@@ -65,6 +93,19 @@ export function parseProjectRequest(raw: unknown): ParsedProject {
         return bad(`${op}: the path must be a non-empty string of at most ${MAX_PATH_CHARS} characters`);
       }
       return { ok: true, request: { op, id, path } };
+    }
+    case 'action': {
+      if (keys !== 'action,id,op,params') return bad('action: takes exactly an action and its params');
+      const action = raw['action'];
+      const params = raw['params'];
+      if (typeof action !== 'string' || !/^[a-z]+(\.[a-z_]+)+$/.test(action) || action.length > MAX_ACTION_CHARS) {
+        return bad(`action: the action must be an action id of at most ${MAX_ACTION_CHARS} characters`);
+      }
+      if (!isPlainObject(params)) return bad('action: params must be a plain object');
+      const problem = jsonObjectProblem(params);
+      if (problem) return bad(`action: params: ${problem}`);
+      if (JSON.stringify(params).length > MAX_ACTION_PARAMS_BYTES) return bad(`action: params are larger than ${MAX_ACTION_PARAMS_BYTES} bytes`);
+      return { ok: true, request: { op, id, action, params } };
     }
     default:
       return bad(`unknown op '${String(op).slice(0, 40)}'`);
@@ -143,6 +184,15 @@ export class ProjectPortBridge {
           break;
         case 'dismiss':
           this.home.dismiss();
+          break;
+        case 'action':
+          result = this.home.action
+            ? await this.home.action(r.action, r.params)
+            : ({
+                ok: false,
+                request: null,
+                failure: { code: 'engine', problem: 'This Studio has no run control.', recovery: 'Start a Studio built with F-807 or later.', engine: null },
+              } satisfies RunActionResult);
           break;
       }
       this.reply(r.id, { ok: true, result });

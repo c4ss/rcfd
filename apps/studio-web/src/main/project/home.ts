@@ -3,11 +3,14 @@
 // gets the whole state after every change.
 //
 // No Electron import: the folder dialog is passed in, so the unit tests drive the home with fakes.
+import { existsSync } from 'node:fs';
 import { stat } from 'node:fs/promises';
-import type { EngineStatus, OpenFailure, PickResult, ProjectState, ProjectView } from '../../shared/project.js';
+import path from 'node:path';
+import type { EngineStatus, OpenFailure, PickResult, ProjectState, ProjectView, RunActionResult } from '../../shared/project.js';
+import { ensureRunnerCli, type ControlDeps } from './control.js';
 import { filesUnder, type Names } from './listing.js';
 import { sameFolder, withExistence, withOpened, without, type StoredRecent } from './recent.js';
-import { ProjectServer, StartFailure, type ProjectServerLike } from './server.js';
+import { ProjectServer, START_TIMEOUT_MS, StartFailure, type ProjectServerLike } from './server.js';
 import { ProjectSession } from './session.js';
 
 export interface RecentLike {
@@ -25,7 +28,13 @@ export interface HomeDeps {
   isDirectory?(p: string): Promise<boolean>;
   now?(): string;
   pollMs?: number;
+  /** F-807: the run-control server (default: rcfd-mcp --project <folder>, not read-only, the engine's path). */
+  startControlServer?(exe: string, folder: string): Promise<ProjectServerLike>;
+  /** F-807: `rcfd-runner ensure` (default: the rcfd-runner beside the engine's project server). */
+  ensureRunner?(folder: string): ReturnType<ControlDeps['ensureRunner']>;
 }
+
+export const RUNNER_EXE = process.platform === 'win32' ? 'rcfd-runner.exe' : 'rcfd-runner';
 
 /** A request the home refuses (bridge.ts turns it into the reply's error). */
 export class HomeRefusal extends Error {
@@ -151,7 +160,13 @@ export class ProjectHome {
       session = await ProjectSession.open(
         folder,
         engine.path,
-        { startServer: (f) => start(engine.path, f), listFiles: this.deps.listFiles ?? filesUnder, now: this.now, ...(this.deps.pollMs ? { pollMs: this.deps.pollMs } : {}) },
+        {
+          startServer: (f) => start(engine.path, f),
+          listFiles: this.deps.listFiles ?? filesUnder,
+          now: this.now,
+          ...(this.deps.pollMs ? { pollMs: this.deps.pollMs } : {}),
+          control: this.controlDeps(engine.path),
+        },
         (view) => this.onView(session, view),
       );
     } catch (e) {
@@ -174,6 +189,33 @@ export class ProjectHome {
     await this.setRecent(withOpened(this.stored, folder, this.now()));
     this.emit();
     if (before) await before.close();
+  }
+
+  /** F-807: how run control reaches the engine for a project read by the project server at `exe`. */
+  private controlDeps(exe: string): ControlDeps {
+    const startControl = this.deps.startControlServer ?? ((e: string, f: string) => ProjectServer.start(e, f, START_TIMEOUT_MS, { readOnly: false }));
+    // the runner beside the project server, as the engine's run tools find it (docs/mcp-tools.md); never from PATH (D3)
+    const runner = path.join(path.dirname(exe), RUNNER_EXE);
+    const ensure =
+      this.deps.ensureRunner ??
+      ((folder: string) =>
+        existsSync(runner)
+          ? ensureRunnerCli(runner, folder)
+          : Promise.resolve({ ok: false as const, message: `there is no ${RUNNER_EXE} beside ${exe}; build it with cargo build --release -p rcfd-runner` }));
+    return { startControlServer: (f) => startControl(exe, f), ensureRunner: ensure, now: this.now };
+  }
+
+  /** F-807: a run-control action on the open project. */
+  async action(id: string, params: Readonly<Record<string, unknown>>): Promise<RunActionResult> {
+    const s = this.session;
+    if (!s) {
+      return {
+        ok: false,
+        request: null,
+        failure: { code: 'no_project', problem: 'No project is open, so there is no run to control.', recovery: 'Open a project folder first (Open project folder…).', engine: null },
+      };
+    }
+    return s.dispatch(id, params);
   }
 
   private onView(session: ProjectSession | null, _view: ProjectView): void {

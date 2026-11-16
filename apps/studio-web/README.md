@@ -207,6 +207,68 @@ by WebGL 2 (fallback: <why>)"). Until a project view hosts it (F-806), it is sho
   keyboard; screenshots at 1440 x 900 in `test-results-visual/f808/`).
 - `performance` marks: `rcfd:field:open` and the measure `rcfd:field:first-picture` (P7, `scripts/measure-field.mjs`).
 
+## Run control (F-807)
+
+Runs are started, queued, paused, resumed, stopped and cancelled from the window, and only through the project's runner
+(G7): the Studio asks the engine's project server (`start_run`, `pause_run`, `resume_run`, `cancel_run`), the server
+writes the request into the project, and `rcfd-runner` acts on it. Closing or killing the Studio leaves every run going.
+
+- Where: the run bar above the runs table (Start a run: the case, Run, Queue…, Start the runner); Run on each case of the
+  project home (switches to Runs with the new run selected); and Run control in the selected run's panel (Pause or
+  Resume, Stop… or Cancel…, Run again). Every control is reached and operated from the keyboard.
+- Actions: `src/shared/actions/runs.ts` names each one (`project.run_case`, `project.queue_case`, `project.pause_run`,
+  `project.resume_run`, `project.stop_run`, `project.cancel_run`, `project.start_runner`) with its parameters, when it
+  applies (with the reason when it does not), its confirmation, and its MCP and `rcfd-runner` equivalents (G16), shown
+  under each request. They are a registry of their own: the action registry of F-827 maps the service methods one to one.
+- Availability: a control that cannot apply is an unavailable chip whose tooltip says why and what to do (Stop on an
+  ended run: "there is nothing to stop. Run its case again for a new run."). The main process checks the same rules
+  again before anything reaches the engine (`src/main/project/control.ts`).
+- Confirmation (G18): Stop… and Cancel… open a confirmation strip in the panel that says what is lost (Stop: the steps
+  not computed yet; the run cannot be resumed; results so far stay in `runs/<id>/`; a solver that does not stop within
+  the runner's grace time is killed. Cancel of a queued run: no result is lost, only its place in the queue). The safe
+  button has the focus; Escape keeps the run and returns the focus to the control.
+- Feedback: the request shows in the run list at once (a note in the run's result cell: what was asked, when, and what it
+  waits for), the new run of a start shows from `start_run`'s answer before the list holds it, and the runner's own state
+  follows with the feed and the fast reads (every 100 ms for 5 s after an action, `RUN_BOOST_MS`).
+- Refusals (G19): each says the problem (with the engine's own words when the engine refused) and the recovery: a case
+  deleted outside the Studio, a run that ended before the request reached the runner, a run that is not there, a project
+  server that does not start, a runner that does not start.
+- No runner alive: the engine has no query for it, so a request the runner has not acted on after 3 s (`RUN_SLOW_MS`)
+  says the runner may not be running and offers Start the runner (`rcfd-runner ensure --project <folder>`, the runner
+  beside `rcfd-mcp`, never one from `PATH`). `start_run` itself starts a runner when none is alive.
+- P2, measured (`tests/e2e/run-control.spec.ts`, written to `test-results-visual/f807/p2.json`): from the main process's
+  engine answer to the renderer's state listener, under 1 ms (0.75 to 0.90 ms); to the run list's note in the DOM, 13 to
+  19 ms; for run, queue, cancel, pause, resume and stop, on the maintainer's machine. The test holds the arrival to P2
+  (20 ms) and the DOM commit to 50 ms.
+- Tests: `tests/unit/run-control.spec.ts` (each action against the engine's sources and inventory, availability,
+  confirmations, refusals, the session with a fake engine, the port, the run list's notes, the stylesheet),
+  `tests/e2e/run-control.spec.ts` (against the real `rcfd-mcp` and `rcfd-runner` on a copy of the quick-start project
+  holding one run at a time: each action by keyboard, a refused action in the window, past the page and by the engine,
+  no runner alive, and G7; screenshots in `test-results-visual/f807/`).
+
+Decisions taken in building F-807 (options, the recommendation followed; each reversible without touching the engine):
+
+- D1, the route to the runner: (a) a second project server for the project, not read-only, started on the first action
+  and used only for the four run tools; (b) run `rcfd-runner start|pause|resume|cancel` as child processes; (c) open the
+  one project server without `--read-only`. Taken: (a). The reading server stays read-only, the requests are journalled
+  by the engine (`rcfd-runner`'s own commands write no journal line), and the engine's error codes come back as they are.
+- D2, quick run and queue: (a) Run is `start_run` with the case only, and the new run is selected and followed; Queue…
+  is `start_run` with per-run priority, threads, memory and `--set` lines from a form under the run bar; both select the
+  new run. (b) one action with an optional form. Taken: (a). Neither makes a plan (`store: none`), as the CLI does not.
+- D3, stop and cancel: both are `cancel_run`; Stop… is offered for a launched run (it has a solver to stop) and Cancel…
+  for one that has not started (queued, or held before launch), each with its own words.
+- D4, a runner that is not alive: (a) mark a request after 3 s and offer Start the runner (`rcfd-runner ensure`);
+  (b) start a runner before every action; (c) add an engine query (needs Rust; not here). Taken: (a).
+- D5, confirmation: an inline strip in the run's panel (no dialog of `DESIGN.md` covers it yet), proposed for
+  `DESIGN.md` with the pending-request note and the run bar.
+- D6, the window's door: `window.studioRuns` (`dispatch(action, params)`) over the project port's new `action`
+  operation; only `src/renderer/project/door.ts` names it, and `window.studioProject` keeps its methods.
+- Coverage: `start_run`, `pause_run`, `resume_run`, `cancel_run`, `rcfd-runner start|pause|resume|cancel|ensure`,
+  `--project` and the start options `--priority`, `--threads`, `--mem-mb` and `--set` have UI paths.
+- Missing in the engine (no Rust change here): an MCP query of whether the project's runner is alive
+  (`RunService::runner_running`), and an MCP tool that starts the runner alone (Start the runner runs `rcfd-runner
+  ensure`, the only process the Studio starts for run control besides `rcfd-mcp`).
+
 ## Layout
 
 | Path | Process | Built by | Filled in by |
@@ -222,7 +284,8 @@ by WebGL 2 (fallback: <why>)"). Until a project view hosts it (F-806), it is sho
 | `src/renderer/` | Renderer (browser code only, no Node types): React, three.js, React Aria Components | `vite build` -> `dist/renderer/` | F-802 onwards |
 | `src/renderer/design/` | `tokens.ts`, the one source of the `DESIGN.md` tokens (colour roles, type ramp, spacing, sizes, lines, focus, motion, pictogram grid); `tokens.css`, generated from it | as above | F-802 |
 | `src/renderer/ui/` | The primitives of `DESIGN.md` Components on React Aria Components: buttons, toggles and segmented toggles, text and number fields, select, switch, tabs (sub and project), table, slider, tooltip, state pictograms and icons; `primitives.css` | as above | F-802 |
-| `src/renderer/project/` | The project home (`ProjectHome.tsx`, `project.css`) and its one door to `window.studioProject` (`door.ts`) | as above | F-805 |
+| `src/renderer/project/` | The project home (`ProjectHome.tsx`, `project.css`) and its one door to `window.studioProject` and `window.studioRuns` (`door.ts`) | as above | F-805, F-807 |
+| `src/renderer/runs/` | The Runs view (`RunsView.tsx`, `runs.css`, F-806) and run control (`RunControls.tsx`, `control-model.ts`, `control.css`, F-807) | as above | F-806, F-807 |
 | `src/renderer/dev/` | The primitives gallery at `#/dev/primitives` (loaded on demand): every primitive and the tokens, with sample labels only | as above | F-802 |
 | `src/renderer/settings/` | The case settings surface at `#/settings/<session>` (loaded on demand): `schema.ts` (the model of `settings.schema`, value encoding), `disclosure.ts` (learner-first tiers, search), the page, the surface, key rows and groups, `settings.css` | as above | F-825 |
 

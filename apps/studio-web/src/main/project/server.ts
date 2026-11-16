@@ -1,12 +1,15 @@
 // The engine's project server for one folder: `rcfd-mcp --project <folder> --read-only`, spoken to over its standard
 // streams (MCP: newline-delimited JSON-RPC 2.0, docs/mcp-tools.md). The tools are the queries of the project workspace
 // (crates/rcfd-workspace, ADR 0173): the same code Claude Code's project tools run, so the Studio and Claude Code see one
-// folder the same way. `--read-only` makes the server refuse every tool that writes; this item only reads.
+// folder the same way. `--read-only` makes the server refuse every tool that writes; the home only reads.
+// F-807: run control starts a second server for the same folder without `--read-only` (`{ readOnly: false }`), and
+// calls only the run-control tools on it (src/main/project/control.ts); the reading server stays read-only.
 //
 // No Electron import: the unit tests drive it with a stand-in executable.
 import { spawn, type ChildProcess } from 'node:child_process';
 import { RpcConnection, RpcError } from '../service/rpc.js';
 import type { ProjectTool } from '../../shared/project.js';
+import type { RunControlTool } from '../../shared/actions/runs.js';
 
 /** Time limits (ms). */
 export const START_TIMEOUT_MS = 15_000;
@@ -45,7 +48,7 @@ export interface ServerInfo {
 export interface ProjectServerLike {
   readonly info: ServerInfo;
   readonly exited: boolean;
-  call(tool: ProjectTool, args?: Record<string, unknown>): Promise<unknown>;
+  call(tool: ProjectTool | RunControlTool, args?: Record<string, unknown>): Promise<unknown>;
   /** Called once when the server process ends (with its exit code and the end of its standard error). */
   onExit(listener: (why: string) => void): void;
   close(): Promise<void>;
@@ -162,7 +165,7 @@ export class ProjectServer implements ProjectServerLike {
     else this.exitListeners.push(listener);
   }
 
-  async call(tool: ProjectTool, args: Record<string, unknown> = {}): Promise<unknown> {
+  async call(tool: ProjectTool | RunControlTool, args: Record<string, unknown> = {}): Promise<unknown> {
     return this.callTool(tool, args);
   }
 

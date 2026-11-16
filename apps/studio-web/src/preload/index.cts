@@ -35,6 +35,8 @@ import type {
   ProjectReply,
   ProjectRequest,
   ProjectState,
+  RunActionResult,
+  RunsBridge,
 } from '../shared/project.js';
 import type {
   DATA_PORT_CHANNEL as DataPortChannel,
@@ -284,6 +286,27 @@ const project: ProjectBridge = {
 };
 
 contextBridge.exposeInMainWorld('studioProject', project);
+
+// `window.studioRuns` (F-807): run-control actions over the same project port (op `action`), checked again in main
+// (src/main/project/bridge.ts, control.ts). A port that cannot answer gives a failure in words, never a rejection.
+const runs: RunsBridge = {
+  dispatch: async (action, params = {}) => {
+    const r = await projectSend<RunActionResult>({ op: 'action', id: nextProjectId++, action, params });
+    if (r.ok) return r.result;
+    return {
+      ok: false,
+      request: null,
+      failure: {
+        code: r.error.code === 'bad_request' ? 'bad_request' : 'disconnected',
+        problem: `The request did not reach the Studio's main process: ${r.error.message}`,
+        recovery: r.error.code === 'bad_request' ? 'Nothing was sent; the request had the wrong shape.' : 'Reload the window (Ctrl+R); runs are not affected.',
+        engine: null,
+      },
+    };
+  },
+};
+
+contextBridge.exposeInMainWorld('studioRuns', runs);
 
 // ---- the data port (F-804, src/shared/data.ts)
 //

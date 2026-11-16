@@ -15,6 +15,7 @@ import type {
   ProjectState,
   ProjectView,
   RecentProject,
+  RunActionResult,
 } from '../../shared/project.js';
 import { Button, IconButton, SegmentedToggle, StateMark, StatePictogram, Tabs, TextField, Unavailable } from '../ui/index.js';
 import { baseName, clock, dateTime, inFolder, kilobytes, plural, sourceWord } from './format.js';
@@ -22,6 +23,7 @@ import { RunsView } from '../runs/RunsView.js';
 import { runRows, shownState, timeText, unknownWord, type RunRow } from '../runs/model.js';
 import { projectActions, watchProjectState } from './door.js';
 import { caseHash } from '../case/hash.js';
+import { CaseRunButton, RunFailure } from '../runs/RunControls.js';
 import './project.css';
 
 let reported = false;
@@ -90,7 +92,7 @@ export function ProjectHome() {
       <main className="ph-main">{project ? <OpenProject view={project} state={state!} /> : <NoProject state={state} />}</main>
       <footer className="ph-foot">
         <span>Early-stage software. Not validated for engineering decisions or for safety-critical use. No warranty.</span>
-        <span className="ph-foot-right">{project ? 'Read through the engine, read-only' : 'rcfd Studio'}</span>
+        <span className="ph-foot-right">{project ? 'Read through the engine, read-only; runs started through the runner' : 'rcfd Studio'}</span>
       </footer>
     </div>
   );
@@ -253,6 +255,11 @@ function OpenProject({ view, state }: { view: ProjectView; state: ProjectState }
   const [tab, setTab] = useState<View>('home');
   // the selected run belongs to the project view, so it survives a switch of view; it is display state, not project state
   const [run, setRun] = useState<string | null>(null);
+  // F-807: a case run from the home is followed in the Runs view
+  const onStarted = (id: string) => {
+    setRun(id);
+    setTab('runs');
+  };
   return (
     <div className="ph-open">
       <Tabs
@@ -261,7 +268,7 @@ function OpenProject({ view, state }: { view: ProjectView; state: ProjectState }
         selected={tab}
         onChange={(t) => setTab(t as View)}
         items={[
-          { id: 'home', label: 'Home', panel: <HomeBody view={view} state={state} /> },
+          { id: 'home', label: 'Home', panel: <HomeBody view={view} state={state} onStarted={onStarted} /> },
           {
             id: 'runs',
             label: 'Runs',
@@ -279,8 +286,13 @@ function OpenProject({ view, state }: { view: ProjectView; state: ProjectState }
   );
 }
 
-function HomeBody({ view, state }: { view: ProjectView; state: ProjectState }) {
+function HomeBody({ view, state, onStarted }: { view: ProjectView; state: ProjectState; onStarted: (run: string) => void }) {
   const [kind, setKind] = useState<Kind>('all');
+  const [runFailure, setRunFailure] = useState<RunActionResult | null>(null);
+  const onRunResult = (r: RunActionResult) => {
+    if (r.ok && r.request.run) onStarted(r.request.run);
+    else setRunFailure(r);
+  };
   const [filter, setFilter] = useState('');
   const info = view.info;
   const changed = useMemo(() => changedAt(view.changes), [view.changes]);
@@ -327,6 +339,7 @@ function HomeBody({ view, state }: { view: ProjectView; state: ProjectState }) {
       )}
       {state.failure && <FailureNotice failure={state.failure} recent={state.recent} />}
       {!view.liveness.live && <NotLive view={view} />}
+      {runFailure && !runFailure.ok && <RunFailure failure={runFailure.failure} onDismiss={() => setRunFailure(null)} />}
       <div className="ph-tools">
         <TextField
           aria-label="Filter by name"
@@ -363,7 +376,7 @@ function HomeBody({ view, state }: { view: ProjectView; state: ProjectState }) {
           )}
           {shown('cases') && (
             <Group id="cases" title="Cases" listing={view.cases} engineCount={info?.counts.cases} shown={cases.length} filtered={q !== ''}>
-              {cases.length > 0 && <CasesTable cases={cases} changed={changed} />}
+              {cases.length > 0 && <CasesTable cases={cases} changed={changed} view={view} onRunResult={onRunResult} />}
               {view.cases.total === 0 && !view.cases.error && (
                 <Empty>
                   No cases yet. A case is a settings file (<span className="ph-file">.toml</span> or <span className="ph-file">.json</span>) in{' '}
@@ -389,8 +402,8 @@ function HomeBody({ view, state }: { view: ProjectView; state: ProjectState }) {
               {runs.length > 0 && <RunsTable runs={runRows(runs, view.runDetails, view.runDetailErrors)} changed={changed} />}
               {view.runs.total === 0 && !view.runs.error && (
                 <Empty>
-                  No runs yet. A run solves one case and keeps its results in <span className="ph-file">runs/</span>. The Studio cannot start runs
-                  yet; Claude Code can (<span className="ph-file">start_run</span>), and its runs appear here as they start.
+                  No runs yet. A run solves one case and keeps its results in <span className="ph-file">runs/</span>. Run a case from the list
+                  above; Claude Code (<span className="ph-file">start_run</span>) and the CLI start the same runs, and theirs appear here as they start.
                 </Empty>
               )}
               {view.skippedRuns.length > 0 && <SkippedRuns skipped={view.skippedRuns} />}
@@ -520,7 +533,17 @@ function Changed({ at }: { at: string | undefined }) {
   );
 }
 
-function CasesTable({ cases, changed }: { cases: readonly CaseEntry[]; changed: Map<string, string> }) {
+function CasesTable({
+  cases,
+  changed,
+  view,
+  onRunResult,
+}: {
+  cases: readonly CaseEntry[];
+  changed: Map<string, string>;
+  view: ProjectView;
+  onRunResult: (r: RunActionResult) => void;
+}) {
   return (
     <table className="ph-table">
       <thead>
@@ -535,6 +558,9 @@ function CasesTable({ cases, changed }: { cases: readonly CaseEntry[]; changed: 
           </th>
           <th scope="col">
             <span className="sr-only">Edit</span>
+          </th>
+          <th scope="col">
+            <span className="sr-only">Run</span>
           </th>
         </tr>
       </thead>
@@ -560,6 +586,9 @@ function CasesTable({ cases, changed }: { cases: readonly CaseEntry[]; changed: 
               <Button variant="chip" onPress={() => void (location.hash = caseHash.open(c.path))} aria-label={`Edit ${c.path}`}>
                 Edit
               </Button>
+            </td>
+            <td className="rc-case-run">
+              <CaseRunButton view={view} casePath={c.path} onResult={onRunResult} />
             </td>
           </tr>
         ))}
