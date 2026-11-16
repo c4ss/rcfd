@@ -311,3 +311,43 @@ SL and its values on the new seeds; the full records at `u_T` and `u_b`; the dis
    other flags: taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation).
 2. **Default.** Making W (or T) the default would change default results (and the length of the committed states): open for
    the maintainer, not taken.
+
+## Amendment 1 (2026-11-16, written after the single registered run and before any further run)
+
+The registered run (test commit 96496cff, log `run1.log` in the scratch folder; the five tests one after the other, 35 s, 25
+s, 77 s, 2 s, 21 s; an earlier invocation with a nightly-only harness flag was refused by the harness before any test started,
+`run0-flag-error.log`) met every check of `w_and_t_on_the_four_blocks`, `w_and_t_on_the_four_cantilevers` and
+`w_and_t_on_the_seeds_of_adr_0658` (W passes seeds `0xF739_0002` and `_0003`). Two tests did not:
+
+- **`local_records_at_the_stall_of_seed_3`: TR2 missed.** The T record from `alpha = 0` at `u_b` (the regular state) did not
+  converge: 18 accepted iterates, `|r|_2` from `1.056e5` to `99.03` and then constant, the gain ratio near `0.6` (so `lambda`
+  stayed at `2.6e-6`), and the step refused after 21 rejections at local iteration 17; the measure is NaN against `1e-7`. The
+  record at `u_T` behaves alike (stall at `97.74`). Every other check of that test (NCL, LW1, LW3, TR1 at both states) was met.
+- **`w_and_t_on_three_more_seeds`: a defective set-up.** The mesh constructor (`SolidMesh::add_block`, called by `rebuild`)
+  refuses the distorted mesh of the first seed tried (`InvertedElement { element: 434, local_node: 4, jacobian: -1.68e-6 }`)
+  and the test panics before M0 is evaluated, so the replacement rule of reading c1 (a mesh with a corner `det J <= 0` is not a
+  valid mesh of the family; the next seed is taken) could not act. No solve ran; no row of this test was measured.
+
+Records, as the house rules require: no limit is changed, and the registered rule gives **partial** whatever follows (a check
+missed, and a check met only after an amendment).
+
+### A1.1 The corrected seed test (registered now, run once)
+
+`w_and_t_on_three_more_seeds` is kept unchanged as the ignored record `w_and_t_on_three_more_seeds_defective`. The corrected
+test `w_and_t_on_three_more_seeds_corrected` is the same code and limits except the seed rule: a seed whose mesh the
+constructor refuses as inverted counts as failing M0 (the refusal is a corner Jacobian `<= 0`, the property M0 tests), is
+printed with the refusal and replaced by the next seed (`0xF740_0002`, ...), until three valid meshes are found. The seeds that
+enter are fixed by the meshes alone, before any solve.
+
+### A1.2 The met rows of the local records
+
+`local_records_at_the_stall_of_seed_3` is kept unchanged as the ignored record `local_records_at_the_stall_of_seed_3_known_miss`
+(the limit intact, the measured value in its ignore text). `local_records_at_the_stall_of_seed_3_met_rows` is the same code and
+limits for every row except TR2, which it prints instead of checking: a regression test of rows already met (as ADR 0658 A1.1),
+not a new registered run. It is the fast test on the path of W (LW1, LW3).
+
+### A1.3 The mutations
+
+The mutations are run, each once, on a scratch copy of the commit with the amendment 1 tests, so that every default test
+passes unmutated; "caught" is a default test of that copy that fails under the mutation (as ADR 0658 amendment 2). MT2, which
+was expected to be caught by TR2, can then be caught only by TR1 or by the solves of T (which bind no limit); that is recorded.
