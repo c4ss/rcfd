@@ -1449,3 +1449,13 @@ cannot be made, refusals, conflicts and the decision panel; a work in progress (
 - Under Components, settings rows: "a key's description, default and range are focus detail".
 - A line on the word budget: "each surface's budget of visible chrome words is in `src/shared/word-budget.ts`; raising
   one needs the maintainer's word (G22)".
+
+### Verification (2026-11-16, on studio-roadmap bfc2f381)
+
+- `npm ci`: exit 0. `npm run typecheck`: clean.
+- `npm test`: 586 passed, 1 failed, 3 did not run. The failure is `provenance.spec.ts:220` (focus back on the trigger
+  after Escape). Run alone, `provenance.spec.ts` fails at line 156 or 232 (the same focus-after-Escape check) on F-833
+  and equally on the unchanged studio-roadmap sources (bfc2f381 built and packaged: 3 runs, failing at 232, 156, 232),
+  so it is not F-833's. `tests/e2e/word-budget.spec.ts`: 10 passed.
+- `python scripts/third_party_licenses.py --check`: up to date.
+- `cargo test -p rcfd-cli --release --test docs_site --test workspace_graph`: 2 and 4 passed.
