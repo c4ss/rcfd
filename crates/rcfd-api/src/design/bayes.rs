@@ -29,7 +29,7 @@ fn norm_pdf(z: f64) -> f64 {
 /// `(f_min - m) Phi(z) + s phi(z)`, `z = (f_min - m) / s`; `max(f_min - m, 0)` when `sd = 0`.
 pub fn expected_improvement(mean: f64, sd: f64, incumbent: f64) -> f64 {
     let d = incumbent - mean;
-    if !(sd > 0.0) {
+    if sd.is_nan() || sd <= 0.0 {
         return d.max(0.0);
     }
     let z = d / sd;
@@ -38,7 +38,7 @@ pub fn expected_improvement(mean: f64, sd: f64, incumbent: f64) -> f64 {
 
 /// Probability that a constraint `c <= 0` holds under `N(mean, sd^2)`.
 pub fn prob_feasible(mean: f64, sd: f64) -> f64 {
-    if !(sd > 0.0) {
+    if sd.is_nan() || sd <= 0.0 {
         return if mean <= 0.0 { 1.0 } else { 0.0 };
     }
     norm_cdf(-mean / sd)

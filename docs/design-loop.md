@@ -18,7 +18,7 @@ exercised on small laminar cases and on analytic surrogates. The [glossary](glos
 * adjoint gradients for turbulent, transient or energy runs
 * adjoint gradients through studies, the service or MCP tools
 * RBF morphing
-* surrogate models
+* surrogate models other than the Gaussian process of ADR 0621 (library only, below); its study method and MCP tool
 * warm start for transient runs, the coupled solver and turbulence models other than k-epsilon and k-omega SST (they run
   cold); the warm start of energy and k-epsilon / k-omega SST runs exists in the library only (below)
 * any use with the real fan (the fan case belongs to the other wave 32 work and the milestone itself)
@@ -437,6 +437,30 @@ study store and the ledger sink run it unchanged:
 A typical first formulation: minimise `tone_a3_db` (or `tone1_db`) subject to a flow limit at every impedance point and a power
 cap. Every number is a model proxy: no measured fan data exists, so the objective ranks variants of the model, not real fans.
 
+## Gaussian-process surrogate and expected improvement (ADR 0621, library only)
+
+`design::surrogate` is ordinary kriging: a constant mean, a Matern 5/2 correlation (squared exponential opt-in) with one length
+scale per parameter on the unit cube, the mean and the process variance profiled out, the length scales (and, with
+`Noise::Fitted`, a nugget ratio) fitted by maximum likelihood from ten starts with the analytic gradient. A jitter of `1e-8`
+keeps near-duplicate points factorable. `Gp::predict` gives the mean and the standard deviation of the latent function,
+`Gp::loo` the leave-one-out residuals from one factorisation.
+
+`design::bayes` proposes the next variant by expected improvement over the best value so far:
+
+* `propose(bounds, observations, options)` is a deterministic function of the observations as a set (they are sorted first),
+  so the line order of a ledger does not matter, and of the options; any worker count gives the same bits. The first
+  `max(5 d, 10)` points are a Latin hypercube.
+* Failed evaluations are imputed at the predicted mean plus one standard deviation and also feed a failure model (a process on
+  the label ok / failed) whose probability of success multiplies the acquisition; constraints get a process each and their
+  probability of feasibility. Pending entries and the points of a batch are believed at their predicted mean.
+* `minimise` has the batch interface of the other optimisers; `run(spec, model, ledger)` drives a `ledger::Model` and appends
+  one entry per evaluation with the predicted mean and standard deviation in the provenance (`driver: gp_ei`), then a
+  `surrogate_summary` with the fitted model's identity (`fitted`) and its training entries (`parents`). A run resumes from the
+  entries already in the ledger; one fit takes one evaluator, version and fidelity level (the F-700 training-set query).
+
+Meant for evaluations that cost minutes or more: on Branin it reaches the minimum within 1 percent in a median of 28
+evaluations. For thousands of cheap evaluations CMA-ES stays the tool. On the reduced-order fan every result is a model proxy.
+
 ## Code map
 
 The code is `crates/rcfd-api/src/design/`:
@@ -458,6 +482,8 @@ The code is `crates/rcfd-api/src/design/`:
 | `uq` | tolerance / uncertainty study driver (ADR 0121): distributions, MC and replicated LHS, stopping rule, statistics, SRC |
 | `sensitivity` | first-order and total Sobol indices with standard errors (ADR 0240) |
 | `fan_objective` | fan objective over impedance points and tolerances, the reduced-order fan target (ADR 0620) |
+| `surrogate` | Gaussian-process regression: kernel, maximum-likelihood fit, prediction, leave-one-out (ADR 0621) |
+| `bayes` | expected-improvement proposal, failure model, batches, the driver over a ledger model (ADR 0621) |
 
 ## Where to go next
 

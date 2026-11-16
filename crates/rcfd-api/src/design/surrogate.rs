@@ -90,7 +90,7 @@ pub fn cholesky(a: &[f64], n: usize) -> Result<Vec<f64>, (usize, f64)> {
                 s -= l[i * n + k] * l[j * n + k];
             }
             if i == j {
-                if !(s > (i + 1) as f64 * f64::EPSILON * a[i * n + i].abs()) {
+                if s.is_nan() || s <= (i + 1) as f64 * f64::EPSILON * a[i * n + i].abs() {
                     return Err((i, s));
                 }
                 l[i * n + i] = s.sqrt();
