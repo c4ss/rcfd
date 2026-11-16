@@ -14755,7 +14755,10 @@ fixed by the item's registration ADR before any code.
     backtracking alone (6.9 and 3.8 per cent of F-bar), the same cause. One of five mutations of the backtracking caught
     by the registered checks (the others only change reported rows). Not covered: a sufficient-decrease test in the
     backtracking, the combination on other meshes and seeds, other materials. Follow-up F-739 (The line search with the
-    backtracking of the incompatible-mode update as a registered remedy on distorted meshes (ADR 0655 question 1)).
+    backtracking of the incompatible-mode update as a registered remedy on distorted meshes (ADR 0655 question 1)). ADR
+    0658 (F-739, 2026-11-16): the combination reported by ADR 0655 is registered and checked in F-739: it passes the
+    eight distorted meshes of ADR 0649 (DB4 at 7.5 and 2.9 per cent, positive definite) and one of three further seeds
+    of the 8^3 block at 0.25 h; the mutations of the backtracking that escaped ADR 0655 are all caught there.
 - [ ] **F-733** Basin restart on a second multimodal function and on the fan
   - depends on: F-715
   - acceptance: on Shekel 10 or a registered second multimodal function, and on the F-698 R1 fan set-up, the restart of
@@ -14810,7 +14813,7 @@ fixed by the item's registration ADR before any code.
     packed_bed, the settings hash tables and the goldens are re-registered with the maintainer's approval; and the 11
     tests of ADR 0650 B3 and the transient_sources t3d test that was not run are rerun with their limits.
   - note: Follow-up of F-712 (ADR 0650, 2026-11-16).
-- [ ] **F-739** The line search with the backtracking of the incompatible-mode update as a registered remedy on distorted meshes (ADR 0655 question 1)
+- [~] **F-739** The line search with the backtracking of the incompatible-mode update as a registered remedy on distorted meshes (ADR 0655 question 1)
   - depends on: F-732
   - acceptance: Every limit not stated here is registered in the ADR before the run. Rule L with
     NewtonOptions::line_search and the opt-in backtracking of ADR 0655 on the eight distorted meshes of ADR 0649 and on
@@ -14818,4 +14821,34 @@ fixed by the item's registration ADR before any code.
     shortening within the ADR 0636 tolerances of the F-bar Hex8 and the loaded state positive definite; a
     sufficient-decrease test of the mode update measured beside it on the same set-ups (does the backtracking alone then
     pass); the mutations of the backtracking caught by the item's own checks; the default bits unchanged.
-  - note: Follow-up of F-732 (ADR 0655, 2026-11-16).
+  - note: Structural solver, intermediate tier. Follow-up of F-732 (ADR 0655). PARTIAL. ADR 0658, 2026-11-16: rule L of
+    the stabilised incompatible-modes Hex8 with the driver's line search and the opt-in backtracking of the mode update
+    of ADR 0655 (the remedy R, now registered) on the eight distorted meshes of ADR 0649 and on the 8^3 block at 0.25 h
+    with three further seeds (0xF739_0001 to _0003), against the F-bar Hex8 on the same meshes with the ADR 0636
+    tolerances. Met on the eight meshes: punch reaction within 12.0, 12.8, 6.6 and 7.5 per cent (DB4, the ADR 0649 known
+    miss, now solved), corner bulge within 8.7 per cent, tip reaction within 5.8, 6.9, 2.0 and 3.0 per cent, shortening
+    within 0.6 per cent, loaded state positive definite; and on the first new seed (7.4 and 5.0 per cent). Missed on two
+    of the three new seeds: R fails at 94 and 86 per cent of the load (elements 420 and 476, the local mode iteration
+    not converged in 25 steps); diagnosed: the mode block is the exact Jacobian and the Newton direction a descent
+    direction, but on the way from alpha = 0 the mode block turns indefinite and near singular (smallest eigenvalue from
+    -3.8e4 to +48 against 5.2e7) and the iterate stagnates at a local minimum of the mode residual far from zero; the
+    default rule L fails on all three new seeds. New opt-in SolidModel::set_incompatible_mode_decrease (with the
+    backtracking, a step is also halved without the Armijo decrease of the mode residual, c = 1e-4): measured beside R
+    without the line search, it passes all eight meshes (DB4 in 10 increments without halving) and the first new seed
+    and fails on the same two seeds; at the trial state of ADR 0655 element 475 its record is monotone where the
+    backtracking alone rises by a factor 263. No default bit changed (the bit records of ADR 0506, 0608, 0614, 0630, the
+    ADR 0655 tests and the rcfd-api baseline hashes pass; the decrease flag without the backtracking is bitwise the
+    default). All five mutations of the ADR 0655 backtracking and two of three of the decrease test caught by the item's
+    own checks. Not covered: a warm start or a trust region for the modes, other materials, statistics beyond eleven
+    set-ups. Follow-up F-740 (A warm start of the incompatible-mode iteration from the committed modes, measured beside
+    a trust region on the mode step, for the seeds of ADR 0658 where the line search with the backtracking fails).
+- [ ] **F-740** A warm start of the incompatible-mode iteration from the committed modes, measured beside a trust region on the mode step, for the seeds of ADR 0658 where the line search with the backtracking fails
+  - depends on: F-739
+  - acceptance: Every limit not stated here is registered in the ADR before the run. Rule L on the eleven set-ups of ADR
+    0658 (the eight distorted meshes of ADR 0649 and the 8^3 block at 0.25 h with seeds 0xF739_0001 to _0003) and three
+    more registered seeds: an opt-in warm start of the local mode iteration from the modes of the committed state
+    (element state added only behind the opt-in), and a trust-region (Levenberg-Marquardt) mode step measured beside it
+    on the same set-ups; punch reaction, corner bulge, tip reaction and shortening within the ADR 0636 tolerances of the
+    F-bar Hex8 and the loaded state positive definite for the registered remedy; the mutations of the new update caught
+    by the item's own checks; the default bits unchanged.
+  - note: Follow-up of F-739 (ADR 0658, 2026-11-16).
