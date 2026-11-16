@@ -10,6 +10,7 @@
 //! `fan_objective` is the opt-in fan objective layer over impedance points and tolerances (ADR 0620).
 //! `surrogate` is a Gaussian-process regression and `bayes` the expected-improvement proposal of the next variant over it
 //! (ADR 0621), both opt-in.
+//! `fidelity` is the opt-in fidelity management driver: screen, confirm, correct (ADR 0622).
 //! `nsga2` is the multi-objective optimiser (ADR 0209). `cmaes` is CMA-ES with restarts of increasing population (ADR 0222).
 
 pub mod adjoint;
@@ -18,6 +19,7 @@ pub mod case_eval;
 pub mod cmaes;
 pub mod fan_objective;
 pub mod fan_rom_eval;
+pub mod fidelity;
 pub mod ledger;
 pub mod nsga2;
 pub mod opmap;
