@@ -133,8 +133,8 @@
   <text x="24" y="508" class="row">Studio desktop app</text>
   <g clip-path="url(#c13)">
     <rect x="262" y="497" width="154.3" height="14" fill="var(--done)"/>
-    <rect x="416.3" y="497" width="96.4" height="14" fill="url(#h)"/>
-    <rect x="512.7" y="497" width="109.3" height="14" fill="var(--todo)"/>
+    <rect x="416.3" y="497" width="102.9" height="14" fill="url(#h)"/>
+    <rect x="519.1" y="497" width="102.9" height="14" fill="var(--todo)"/>
   </g>
   <text x="636" y="508" class="num">24 of 56 done</text>
   <text x="24" y="552" class="fam">THE PROJECT</text>

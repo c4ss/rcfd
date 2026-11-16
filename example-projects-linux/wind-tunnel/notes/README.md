@@ -31,7 +31,7 @@ results equal those of the flow-rotated cases to about 1e-7 (`notes/naca0012.md`
 
 The Studio names many controls only in tooltips and accessible names; the names below are those.
 
-1. Home (Ctrl+1) lists the eight cases under `cases/`, the mesh under `meshes/`, the runs and the notes. Filter by name
+1. Home (Ctrl+1) lists the eight cases under `cases/`, the mesh under `meshes/`, the runs and the notes. The Filter field
    narrows the list. The design ledger `designs/variants.ledger.jsonl` is not listed there; open it in an editor.
 2. Edit on the row of a case (for example `cases/cylinder-re100.toml`) opens the case editor on its settings. Check the
    case runs the engine's check, and Check the mesh runs the engine's check of the mesh. The desktop Studio has no

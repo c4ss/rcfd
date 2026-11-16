@@ -112,7 +112,7 @@ cp -r example-projects-linux/quick-start ~/rcfd-quick-start
 ```
 
 In the Studio, choose Open project folder… (Ctrl+O) and pick the copy. The Home view (Ctrl+1) lists what the folder
-holds: four cases, their four finished runs, the meshes folder and the notes. Filter by name narrows the list. Reading a
+holds: four cases, their four finished runs, the meshes folder and the notes. The Filter field narrows the list. Reading a
 project writes nothing into it; the header says Live while the Studio follows the folder's changes.
 
 The project home with no project open also shows "A first result in four steps"; Explain the first steps says what they

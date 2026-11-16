@@ -14410,7 +14410,7 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     Cancel restores the screen exactly; field preparation, mesh layers and vector glyphs run in a worker. Full suite 573
     passed, 1 failed (provenance focus after Escape, fixed separately). Open: decision 7 (count only frames that blocked
     the renderer thread; recommendation keep).
-- [ ] **F-833** Electron Studio: quiet the built surfaces and lock a word budget per surface (G22)
+- [~] **F-833** Electron Studio: quiet the built surfaces and lock a word budget per surface (G22)
   - depends on: F-805, F-806, F-807, F-810, F-812, F-814, F-825, F-829, F-831
   - acceptance: One quieting pass over every built surface (project home, runs, settings, case editor, Claude Code
     panel, run workspace, command palette, undo and decision panels): normal states carry no visible words of their own;
@@ -14420,7 +14420,12 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     proposed per surface from before-and-after screenshots and approved by the maintainer; a test counts those words
     from the DOM per surface and fails past its budget; a view-and-report step.
   - note: ADR 0800 §8 (G22 added by the maintainer 2026-11-16; sweep as one item, option chosen by the maintainer).
-    Traces: G22, G8, G13, G6.
+    Traces: G22, G8, G13, G6. Partial 2026-11-16 (merge, ADR 0801 Addendum 11): every built surface quieted; chrome
+    words at rest before→after: home-open 167→49, case-editor 553→51, settings 144→23, workspace 111→17, runs 64→14,
+    claude 63→13, palette 31→4, compare 65→8, undo 6→0; tests/e2e/word-budget.spec.ts counts 17 surfaces from the DOM
+    against src/shared/word-budget.ts; tests moved from visible prose to role and accessible name (listed in the
+    addendum), no accessible name or palette title changed. Left: the maintainer approves the 17 proposed budgets, the
+    kept-visible list, and moving shortcut hints into descriptions (G20); proposed DESIGN.md lines; view-and-report.
 - [ ] **F-834** Engine tests that went with rcfd-studio, moved to rcfd-workspace
   - depends on: F-449
   - acceptance: The engine behaviour the deleted rcfd-studio tests checked is checked again in

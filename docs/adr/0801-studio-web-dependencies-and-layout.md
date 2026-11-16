@@ -1361,7 +1361,7 @@ tooltips (Compare runs, Side by side, Difference) on the 14-unit grid at 0, 45 a
 - `python scripts/third_party_licenses.py --check`: up to date.
 - `cargo test -p rcfd-cli --release --test docs_site --test workspace_graph`: 2 and 4 passed.
 
-## Addendum F-833: the Quiet Rule swept over the built surfaces, and a word budget per surface (2026-11-16)
+## Addendum 11: F-833, the Quiet Rule swept over the built surfaces, and a word budget per surface (2026-11-16)
 
 F-833 (G22, with G6, G8, G13, G18, G19, G20) quiets every built surface of the Studio and locks a budget of visible
 chrome words per surface. It adds **no dependency** and changes no Rust file, service method, reply shape, golden or
