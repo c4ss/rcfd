@@ -576,8 +576,11 @@ rotor is re-imaged one pitch back (ADR 0634); the monitor `sliding_image` counts
 get their wall velocity in the rotor's image; a non-zero fixed value on a patch with rotor faces must be axial (the only
 uniform vector periodic under the pitch rotation); the other conditions and refusals are those of the full annulus. Over two
 pitches the sector run stays within 1.2e-2 of the full-annulus run of the same pair (ADR 0646). A step that lands on a coincidence of rotor and
-stator nodes is not coupled on the sector path for a flow without the symmetry of the node sets (ADR 0640); choose the step
-so that the turned angle avoids multiples of the coincidence spacing.
+stator nodes is not coupled on the sector path by default for a flow without the symmetry of the node sets (ADR 0640); the
+optional table `[mesh.sliding.coincidences]` with `coupled = true` (F-730, ADR 0654; default false) couples it through
+`periodic_sliding_step_coupled` (ADR 0641) and writes the monitor `sliding_flux_residual` (the remapped old flux's
+divergence); off coincidences the run is the same bit for bit. The full annulus is coupled at coincidences always (F-710) and
+refuses the table. Without the table, choose the step so that the turned angle avoids multiples of the coincidence spacing.
 
 `annulus_3d_sector` (ADR 0116): `annulus_3d` cut to a sector `0 <= theta <= sector_angle` (degrees, strictly between 0 and
 360, required), `nx` chords around, `ny` radial (`grading` as `annulus_3d`), `nz` axial, height `lz` from z = 0. Patches

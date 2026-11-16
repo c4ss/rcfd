@@ -54,7 +54,11 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   "annulus_3d_sector_cylindrical_interface"` runs ADR 0634's turned loop (`mesh_turned`, `periodic_sliding_step`,
   `step_sliding_periodic`), the rotor's walls through `rcfd_fv::sliding_periodic::periodic_rotor_wall_conditions` (the wall
   velocity at the face as the mesh shows it, the old values of the rotor faces turned back on a re-imaging step). The
-  sector run is checked against the full-annulus tree run of F-303 over two pitches. The planar slider has no case key.
+  sector run is checked against the full-annulus tree run of F-303 over two pitches. Since F-730 (ADR 0654) the opt-in
+  table `[mesh.sliding.coincidences]` with `coupled = true` makes the sector loop call `periodic_sliding_step_coupled` (and
+  write the monitor `sliding_flux_residual`); without it the loop is unchanged. With ADR 0637's step `pitch / 8` (50
+  coincidence steps in 400) the remapped old flux stays divergence-free to `1e-13` and the sector stays within `1.25e-2` of
+  the full-annulus tree run; off coincidences the run is the same bit for bit. The planar slider has no case key.
 * Local remeshing of tetrahedral meshes is in the library since F-247 (ADR 0215), for the compressible solver in a box
   with planar walls; the case tree does not use it yet (ADR 0215 Q1).
 * Overset (chimera) meshes in the library only (F-134, ADR 0219): one component mesh moving rigidly over a static

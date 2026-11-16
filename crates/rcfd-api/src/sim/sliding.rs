@@ -16,7 +16,7 @@ use rcfd_core::settings::Schema;
 use rcfd_core::units::Dimension;
 use rcfd_fv::pimple::{PimpleSolver, StepInfo};
 use rcfd_fv::sliding::{rotor_wall_conditions, sliding_step};
-use rcfd_fv::sliding_periodic::{periodic_rotor_wall_conditions, periodic_sliding_step};
+use rcfd_fv::sliding_periodic::{periodic_rotor_wall_conditions, periodic_sliding_step, periodic_sliding_step_coupled};
 use rcfd_fv::FvGeometry;
 use rcfd_mesh::non_conformal::{interface_non_orthogonality, CYLINDRICAL_INTERFACE_MAX_NON_ORTHOGONALITY_DEG};
 use rcfd_mesh::sliding::{SlidingInterface, SlidingMesh};
@@ -49,6 +49,28 @@ pub fn schema() -> Schema {
             Schema::enumeration("rotating", &["rotating", "rest"])
                 .doc("No-slip walls of the rotor block (patches with rotor faces and velocity = fixed 0): rotating = they turn with the rotor (a hub); rest = at rest in the laboratory frame. Stator faces of the same patch are at rest"),
         )
+        .field(
+            "coincidences",
+            Schema::object()
+                .optional()
+                .doc("Node coincidences of the sector path (F-730, ADR 0654), annulus_3d_sector_cylindrical_interface only: on a step where rotor and stator nodes coincide the interface graph falls into parts; coupled = true couples them through the internal faces and seam pairs between them (periodic_sliding_step_coupled, ADR 0641) so that the remapped old flux stays divergence-free for flows without the node sets' symmetry, and writes the monitor sliding_flux_residual. Absent = the base periodic step. The full annulus is coupled always (F-710) and refuses this table")
+                .field(
+                    "coupled",
+                    Schema::boolean(false)
+                        .doc("Couple the parts of the sector's interface graph at node coincidences (ADR 0654 S1); off coincidences the step is the base step bit for bit"),
+                ),
+        )
+}
+
+/// Path of the coincidence table (F-730, ADR 0654 S1).
+const COINCIDENCES: &str = "mesh.sliding.coincidences";
+
+/// Whether the case writes `[mesh.sliding.coincidences]` (an optional table, ADR 0654 S1).
+fn coincidences_present(case: &Case) -> bool {
+    case.tree
+        .get("mesh")
+        .ok()
+        .is_some_and(|m| m.get("sliding").and_then(|s| s.get("coincidences")).is_some())
 }
 
 /// Whether the case writes the table (an absent optional table reads its defaults, so the data is looked at).
@@ -111,6 +133,13 @@ pub(crate) fn check(case: &Case) -> Vec<Diagnostic> {
             format!("the rotor sector of {SECTOR_GENERATOR} turns forwards only: angular_velocity >= 0 (the periodic sliding re-images the rotor one pitch forwards, ADR 0634, ADR 0646)"),
         ));
     }
+    // ADR 0654 S2: the full annulus is coupled at coincidences always (F-710)
+    if generator != SECTOR_GENERATOR && coincidences_present(case) {
+        out.push(at(
+            COINCIDENCES,
+            format!("[mesh.sliding.coincidences] is for {SECTOR_GENERATOR} only: the full annulus of {GENERATOR} is coupled at node coincidences always (F-710, ADR 0638); remove the table"),
+        ));
+    }
     out
 }
 
@@ -132,6 +161,8 @@ pub(crate) struct SlidingRun {
     omega: f64,
     wall_omega: f64,
     walls: Vec<String>,
+    /// The sector step is coupled at node coincidences (F-730, ADR 0654 S1).
+    coupled: bool,
 }
 
 /// `m` with the cell zone `rotor` of the generator (D2).
@@ -285,11 +316,13 @@ pub(crate) fn new_sliding(case: &Case) -> Result<Simulation, Vec<Diagnostic>> {
     } else {
         omega
     };
+    let coupled = sector && super::get_b(case, &format!("{COINCIDENCES}.coupled"));
     sim.sliding = Some(SlidingRun {
         pair,
         omega,
         wall_omega,
         walls,
+        coupled,
     });
     Ok(sim)
 }
@@ -302,6 +335,8 @@ pub(crate) struct SlidingRecord {
     pub non_orthogonality: f64,
     /// The image of a sector rotor (ADR 0646 P1); `None` for the full annulus.
     pub image: Option<i64>,
+    /// The remapped old flux's residual of a coupled sector step (ADR 0654 S3); `None` otherwise.
+    pub flux_residual: Option<f64>,
 }
 
 impl SlidingRun {
@@ -311,7 +346,15 @@ impl SlidingRun {
         let (iface, cur) = match &mut self.pair {
             Pair::Annulus { iface, cur } => (&*iface, cur),
             Pair::Sector { iface, cur } => {
-                return Self::step_sector(iface, cur, self.omega, self.wall_omega, &self.walls, s, dt)
+                return Self::step_sector(
+                    iface,
+                    cur,
+                    (self.omega, self.wall_omega),
+                    &self.walls,
+                    self.coupled,
+                    s,
+                    dt,
+                )
             }
         };
         let theta = self.omega * (s.time + dt);
@@ -348,19 +391,21 @@ impl SlidingRun {
                 gcl,
                 non_orthogonality: q.worst_deg,
                 image: None,
+                flux_residual: None,
             },
         ))
     }
 
     /// One step of ADR 0634's turned loop on the sector pair (ADR 0646 P1, P2): the joined mesh at the turned angle of the
     /// end of the step (any number of pitches, `mesh_turned`), the step data (re-imaging the rotor when the image changes),
-    /// the wall conditions of the rotor in its image, `step_sliding_periodic`.
+    /// the wall conditions of the rotor in its image, `step_sliding_periodic`. With `coupled` the step data are those of
+    /// `periodic_sliding_step_coupled` (ADR 0654 S1).
     fn step_sector(
         iface: &PeriodicSlidingInterface,
         cur: &mut PeriodicSlidingMesh,
-        omega: f64,
-        wall_omega: f64,
+        (omega, wall_omega): (f64, f64),
         walls: &[String],
+        coupled: bool,
         s: &mut PimpleSolver,
         dt: f64,
     ) -> Result<(StepInfo, SlidingRecord), String> {
@@ -379,8 +424,13 @@ impl SlidingRun {
                 q.message()
             ));
         }
-        let st = periodic_sliding_step(&s.geom, cur, &new, &s.phi, &s.u.values, dt)?;
+        let st = if coupled {
+            periodic_sliding_step_coupled(&s.geom, cur, &new, &s.phi, &s.u.values, dt)?
+        } else {
+            periodic_sliding_step(&s.geom, cur, &new, &s.phi, &s.u.values, dt)?
+        };
         let gcl = st.gcl_residual;
+        let flux_residual = coupled.then_some(st.flux_residual);
         let g = s.geom.clone();
         let dpdn = if walls.is_empty() {
             Vec::new()
@@ -399,6 +449,7 @@ impl SlidingRun {
                 gcl,
                 non_orthogonality: q.worst_deg,
                 image: Some(cur.image),
+                flux_residual,
             },
         ))
     }
