@@ -129,7 +129,11 @@ jobs:
         timeout-minutes: 290
         run: |
           mkdir -p gate-out
-          python scripts/gate_test.py --tsv gate-out/times.tsv > gate-out/test.log 2> gate-out/progress.log
+          # stderr (cargo's build output, phase markers, one line per finished test, a heartbeat every 5 min) goes both to
+          # progress.log and to this step's live log, so a run can be followed while it goes; stdout stays in test.log.
+          export PYTHONUNBUFFERED=1
+          set -o pipefail
+          { python scripts/gate_test.py --tsv gate-out/times.tsv --heartbeat 300 > gate-out/test.log; } 2>&1 | tee gate-out/progress.log
       - name: summary
         if: always()
         run: |

@@ -7,10 +7,13 @@ Usage (from the workspace root):
 --jobs     concurrent test processes (default RUST_TEST_THREADS, else 3): the same number of tests at once as one cargo test binary.
 --order    a TSV written by an earlier run: start its slowest tests first. Ordering only; every test still runs.
 --tsv      write binary, test, outcome, seconds, peak working set (MB) for every test.
+--heartbeat S  every S seconds (default 300; 0 off) write a progress line to stderr: tests done of total, failures so far,
+           elapsed, estimated time left, and the longest-running tests still going.
 --timeout-factor F, --timeout-min S, --timeout-max S (ADR 0129; defaults 5, 600, 3600): a test's time limit is
            clamp(F * its seconds in the --order TSV, min, max), max if it has no record; --timeout-max 0 turns the limit off. On expiry
            the test's process tree (never cargo) is killed and the test fails with outcome TIMEOUT; the other tests go on.
-Output keeps the libtest lines (`Running`, `test X ... ok`, `test result:`), so the gate's summing awk works unchanged. Afterwards
+Progress goes to stderr: phase markers, one `[k/N outcome seconds MB elapsed] binary::test` line per finished test and the
+heartbeat lines. Output keeps the libtest lines (`Running`, `test X ... ok`, `test result:`), so the gate's summing awk works unchanged. Afterwards
 `cargo test --doc` runs the doc-tests. Exit status 0 only if the build, every test and the doc-tests pass.
 """
 import argparse
@@ -25,6 +28,21 @@ import threading
 import time
 
 RESULT = re.compile(r"^test result: \w+\. (\d+) passed; (\d+) failed; (\d+) ignored", re.M)
+
+
+_PROGRESS = threading.Lock()
+
+
+def hms(sec):
+    sec = int(max(sec, 0))
+    return f"{sec // 3600:d}:{sec // 60 % 60:02d}:{sec % 60:02d}"
+
+
+def progress(msg):
+    """A progress line on stderr, flushed at once (the gate shows stderr live in the Actions log)."""
+    with _PROGRESS:  # one write per line, so the pool's threads never interleave within a line
+        sys.stderr.write(msg + "\n")
+        sys.stderr.flush()
 
 
 def limit_s(rec, factor, lo, hi):
@@ -156,6 +174,7 @@ def main():
     ap.add_argument("--jobs", type=int, default=int(os.environ.get("RUST_TEST_THREADS", "3")))
     ap.add_argument("--order")
     ap.add_argument("--tsv")
+    ap.add_argument("--heartbeat", type=float, default=300.0)
     ap.add_argument("--timeout-factor", type=float, default=5.0)
     ap.add_argument("--timeout-min", type=float, default=600.0)
     ap.add_argument("--timeout-max", type=float, default=3600.0)
@@ -163,6 +182,8 @@ def main():
     a = ap.parse_args()
     select = a.select or ["--workspace"]
 
+    t_build = time.time()
+    progress(f"gate_test: building test binaries ({' '.join(select)}, release)")
     build = subprocess.run(
         ["cargo", "test", *select, "--release", "--no-fail-fast", "--no-run", "--message-format=json-render-diagnostics"],
         stdout=subprocess.PIPE,
@@ -172,6 +193,7 @@ def main():
         m = json.loads(line) if line.startswith("{") else {}
         if m.get("reason") == "compiler-artifact" and m["profile"]["test"] and m.get("executable"):
             bins.append(m)
+    progress(f"gate_test: build finished in {hms(time.time() - t_build)}, {len(bins)} test binaries (exit {build.returncode})")
     if build.returncode != 0:
         print(f"gate_test: build failed (exit {build.returncode})")
         return build.returncode or 101
@@ -187,6 +209,7 @@ def main():
             raise SystemExit(f"gate_test: listing failed for {b['executable']}:\n{out}")
         return [ln[: -len(": test")] for ln in out.splitlines() if ln.endswith(": test")]
 
+    progress(f"gate_test: listing the tests of {len(bins)} binaries")
     with cf.ThreadPoolExecutor(a.jobs) as ex:
         alls = list(ex.map(listing, bins))
         ign = list(ex.map(lambda b: set(listing(b, "--ignored")), bins))
@@ -202,22 +225,52 @@ def main():
     stem = [os.path.basename(b["executable"]).rsplit("-", 1)[0] for b in bins]
     jobs = [(i, t) for i, names in enumerate(alls) for t in names if t not in ign[i]]
     jobs.sort(key=lambda j: -prev.get((stem[j[0]], j[1]), 0.0))
+    n_ign = sum(len(x) for x in ign)
+    progress(f"gate_test: {len(jobs)} tests to run ({n_ign} ignored) in {len(bins)} binaries, jobs={a.jobs}"
+             + (f", order from {a.order}" if prev else ""))
+    lock = threading.Lock()
+    state = {"done": 0, "failed": 0, "busy": 0.0}
+    running = {}
 
     def one(job):
         i, t = job
         b = bins[i]
         cwd = os.path.dirname(b["manifest_path"])
         lim = limit_s(prev.get((stem[i], t)), a.timeout_factor, a.timeout_min, a.timeout_max)
+        with lock:
+            running[job] = time.time()
         code, out, dt, mb, to = run([b["executable"], t, "--exact", "--test-threads=1"], cwd, dict(env, CARGO_MANIFEST_DIR=cwd),
                                     lim)
         r = RESULT.search(out)
         ok = "TIMEOUT" if to else "ok" if code == 0 and r is not None and r.groups() == ("1", "0", "0") else "FAILED"
-        print(f"[{ok} {dt:7.1f}s {mb:6.0f}MB] {stem[i]}::{t}", file=sys.stderr, flush=True)
+        with lock:
+            running.pop(job, None)
+            state["done"] += 1
+            state["failed"] += ok != "ok"
+            state["busy"] += dt
+            k = state["done"]
+        progress(f"[{k}/{len(jobs)} {ok} {dt:7.1f}s {mb:6.0f}MB {hms(time.time() - t0)}] {stem[i]}::{t}")
         return job, ok, out, dt, mb, lim
 
     t0 = time.time()
     stop, mem = threading.Event(), [0.0]
     threading.Thread(target=sample_memory, args=(stop, mem), daemon=True).start()
+
+    def heartbeat():
+        while not stop.wait(a.heartbeat):
+            now = time.time()
+            with lock:
+                done, failed, busy = state["done"], state["failed"], state["busy"]
+                live = sorted(((now - st, f"{stem[j[0]]}::{j[1]}") for j, st in running.items()), reverse=True)
+            el = now - t0
+            # estimate from the average process seconds per finished test, spread over the pool
+            left = (len(jobs) - done) * (busy / done) / a.jobs if done else 0.0
+            progress(f"gate_test: heartbeat {done}/{len(jobs)} done ({100.0 * done / max(len(jobs), 1):.1f}%), {failed} failed, "
+                     f"elapsed {hms(el)}, about {hms(left)} left, summed working set {mem[0]:.0f} MB peak; running: "
+                     + ("; ".join(f"{n} {hms(d)}" for d, n in live[:a.jobs]) or "none"))
+
+    if a.heartbeat > 0:
+        threading.Thread(target=heartbeat, daemon=True).start()
     with cf.ThreadPoolExecutor(a.jobs) as ex:
         res = {j: (ok, out, dt, mb, lim) for j, ok, out, dt, mb, lim in ex.map(one, jobs)}
     stop.set()
@@ -256,7 +309,10 @@ def main():
         open(a.tsv, "w", encoding="utf-8").write("\n".join(rows) + "\n")
 
     sys.stdout.flush()
+    progress(f"gate_test: tests finished in {hms(wall)}, {fails} failed; running the doc-tests")
+    t_doc = time.time()
     doc = subprocess.run(["cargo", "test", *select, "--release", "--no-fail-fast", "--doc"])
+    progress(f"gate_test: doc-tests finished in {hms(time.time() - t_doc)} (exit {doc.returncode})")
     return 101 if fails or doc.returncode else 0
 
 

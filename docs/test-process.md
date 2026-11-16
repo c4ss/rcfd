@@ -171,7 +171,10 @@ The last line of the test phase also gives the peak summed working set of the ru
 largest ratio of a test's time to its limit. Tests: `python -m unittest scripts/test_gate_test.py` (the end-to-end part needs
 `GATE_TEST_E2E=1` and a slot).
 
-`progress.log` gets one line per finished test (outcome, seconds, peak working set). `times.tsv` holds the same per test. The old
+`progress.log` (stderr) gets phase markers (build, listing, tests, doc-tests, each with its time), one line per finished test
+(`[k/N outcome seconds MB elapsed] binary::test`) and, every `--heartbeat` seconds (default 300, 0 off), a line with tests done of
+total, failures so far, elapsed and estimated time left, and the longest-running tests still going. In CI the gate tees it into the
+step's live log, so a run can be followed while it goes. `times.tsv` holds the per-test numbers. The old
 command stays valid as the reference: `cargo test --workspace --release --no-fail-fast`.
 
 ## 5. Results
