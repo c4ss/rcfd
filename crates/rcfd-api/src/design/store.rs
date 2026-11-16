@@ -373,3 +373,7 @@ mod tests {
         assert!(Store::open(&p, "a").unwrap_err().contains("line 1"));
     }
 }
+
+#[cfg(test)]
+#[path = "store_header_tests.rs"]
+mod header_tests;
