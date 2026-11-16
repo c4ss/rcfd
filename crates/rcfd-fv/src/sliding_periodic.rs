@@ -12,10 +12,15 @@
 //! (F-704, ADR 0634 R2): the old mesh is read in the new image, so the rotor's swept volumes are those of the motion from
 //! the old offset less one period, the rotor cells' old vectors are turned back by one period for the interpolations on the
 //! new faces, and [`PeriodicSlidingStep::reimage`] tells the solver to turn its rotor state likewise.
+//!
+//! At an offset where rotor and stator nodes coincide the graph of direct faces and wrap pairs falls into parts;
+//! [`periodic_sliding_step_coupled`] (opt-in, F-721, ADR 0641) then couples the parts through the internal faces and the
+//! seam pairs between them, as `sliding::sliding_step` does on the full annulus (ADR 0638), so that the remapped old flux
+//! stays divergence-free for flows without the parts' symmetry.
 
 use crate::convection::face_flux;
 use crate::geometry::FvGeometry;
-use crate::sliding::graph_balance;
+use crate::sliding::{graph_balance, InterfaceSolve};
 use rcfd_core::vec3::{self, Vec3};
 use rcfd_mesh::motion::{mat_vec, rotation_matrix};
 use rcfd_mesh::sliding_periodic::{PeriodicSlidingMesh, Periodicity, WRAP_A, WRAP_B};
@@ -85,6 +90,147 @@ pub fn periodic_sliding_step(
     phi_old: &[f64],
     u_old: &[Vec3],
     dt: f64,
+) -> Result<PeriodicSlidingStep, String> {
+    step_impl(old_geom, old, new, phi_old, u_old, dt, false)
+}
+
+/// [`periodic_sliding_step`] with the parts of the interface graph coupled at coinciding nodes (F-721, ADR 0641 D1, D2): when
+/// a connected part of the graph of direct faces and wrap pairs keeps a target mean above `1e-10` of the largest target
+/// (the GCL closure or the remap of the old flux), that solve is made on the graph together with the faces between the
+/// parts (internal faces and seam pairs), whose mapped values receive the correction, so that every cell's old flux is
+/// divergence-free also on the steps where rotor and stator nodes coincide. On every other step the result is that of
+/// [`periodic_sliding_step`] bit for bit. Opt-in (ADR 0641 Q1).
+pub fn periodic_sliding_step_coupled(
+    old_geom: &FvGeometry,
+    old: &PeriodicSlidingMesh,
+    new: &PeriodicSlidingMesh,
+    phi_old: &[f64],
+    u_old: &[Vec3],
+    dt: f64,
+) -> Result<PeriodicSlidingStep, String> {
+    step_impl(old_geom, old, new, phi_old, u_old, dt, true)
+}
+
+/// Relative size of a connected part's target mean above which the parts are coupled: the value of ADR 0638 D3
+/// (`sliding::PART_MEAN_TOL`).
+const PART_MEAN_TOL: f64 = 1e-10;
+
+/// The coupling edges of the periodic interface graph (ADR 0641 D1).
+#[derive(Debug, Clone, Default, PartialEq)]
+struct Coupling {
+    /// Internal faces between two parts (not direct interface faces), edges `(owner, neighbour)`.
+    faces: Vec<usize>,
+    /// Seam pairs `(f, g)` (periodic pairs that are not wrap pairs) between two parts, edges `(own[f], own[g])`, `+x` on `f`
+    /// and `-x` on `g`.
+    seams: Vec<(usize, usize)>,
+}
+
+impl Coupling {
+    fn is_empty(&self) -> bool {
+        self.faces.is_empty() && self.seams.is_empty()
+    }
+}
+
+/// ADR 0641 D1: the internal faces and the seam pairs whose cells are both cells of the graph `edges` and lie in different
+/// connected parts of it; `is_new(f)` marks the direct interface faces and the wrap faces.
+fn coupling_edges(
+    geom: &FvGeometry,
+    edges: &[(usize, usize)],
+    is_new: &dyn Fn(usize) -> bool,
+) -> Result<Coupling, String> {
+    let mesh = &geom.mesh;
+    let nc = mesh.n_cells();
+    let (own, nei) = (mesh.owner(), mesh.neighbour());
+    let mut parent: Vec<usize> = (0..nc).collect();
+    fn root(p: &mut [usize], mut i: usize) -> usize {
+        while p[i] != i {
+            p[i] = p[p[i]];
+            i = p[i];
+        }
+        i
+    }
+    let mut touched = vec![false; nc];
+    for &(a, b) in edges {
+        touched[a] = true;
+        touched[b] = true;
+        let (ra, rb) = (root(&mut parent, a), root(&mut parent, b));
+        if ra != rb {
+            parent[ra] = rb;
+        }
+    }
+    let mut between = |a: usize, b: usize| touched[a] && touched[b] && root(&mut parent, a) != root(&mut parent, b);
+    let faces: Vec<usize> = (0..mesh.n_internal_faces())
+        .filter(|&f| !is_new(f) && between(own[f], nei[f]))
+        .collect();
+    let pairs = geom.periodic_pairs().map_err(|e| e.to_string())?;
+    let seams: Vec<(usize, usize)> = pairs
+        .iter()
+        .filter(|p| !is_new(p.f) && !is_new(p.g) && between(own[p.f], own[p.g]))
+        .map(|p| (p.f, p.g))
+        .collect();
+    Ok(Coupling { faces, seams })
+}
+
+/// ADR 0641 D2: when the base solve `base` of `target` on the graph `edges` removed a part mean above [`PART_MEAN_TOL`] times
+/// the largest target over the graph's cells and coupling edges exist, the values of the solve on the edges "`edges`, the
+/// coupling faces, the seam pairs" (weights `weights`, then the face areas), in that order. `None` keeps the base solve. The
+/// coupling edges are found on first need and kept in `found`.
+fn coupled_solve(
+    geom: &FvGeometry,
+    edges: &[(usize, usize)],
+    weights: &[f64],
+    target: &[f64],
+    base: &InterfaceSolve,
+    is_new: &dyn Fn(usize) -> bool,
+    found: &mut Option<Coupling>,
+) -> Result<Option<Vec<f64>>, String> {
+    let tmax = edges
+        .iter()
+        .flat_map(|&(a, b)| [a, b])
+        .fold(0.0f64, |m, c| m.max(target[c].abs()));
+    if base.removed_mean.partial_cmp(&(PART_MEAN_TOL * tmax)) != Some(std::cmp::Ordering::Greater) {
+        return Ok(None);
+    }
+    if found.is_none() {
+        *found = Some(coupling_edges(geom, edges, is_new)?);
+    }
+    let cp = found.as_ref().expect("coupling edges just found");
+    if cp.is_empty() {
+        return Ok(None);
+    }
+    let mesh = &geom.mesh;
+    let (own, nei) = (mesh.owner(), mesh.neighbour());
+    let mut all = edges.to_vec();
+    all.extend(cp.faces.iter().map(|&f| (own[f], nei[f])));
+    all.extend(cp.seams.iter().map(|&(f, g)| (own[f], own[g])));
+    let mut w = weights.to_vec();
+    w.extend(cp.faces.iter().map(|&f| mesh.face_area(f)));
+    w.extend(cp.seams.iter().map(|&(f, _)| mesh.face_area(f)));
+    Ok(Some(graph_balance(&all, &w, target)?.values))
+}
+
+/// Adds the coupling-edge values `vals` (coupling faces, then seam pairs) to `x` (ADR 0641 D2).
+fn add_coupling(x: &mut [f64], cp: &Coupling, vals: &[f64]) {
+    let nf = cp.faces.len();
+    for (k, &f) in cp.faces.iter().enumerate() {
+        x[f] += vals[k];
+    }
+    for (k, &(f, g)) in cp.seams.iter().enumerate() {
+        x[f] += vals[nf + k];
+        x[g] -= vals[nf + k];
+    }
+}
+
+/// The body of [`periodic_sliding_step`] (`couple` false: the base, F-304 and F-704) and of
+/// [`periodic_sliding_step_coupled`] (`couple` true, ADR 0641).
+fn step_impl(
+    old_geom: &FvGeometry,
+    old: &PeriodicSlidingMesh,
+    new: &PeriodicSlidingMesh,
+    phi_old: &[f64],
+    u_old: &[Vec3],
+    dt: f64,
+    couple: bool,
 ) -> Result<PeriodicSlidingStep, String> {
     if !(dt > 0.0 && dt.is_finite()) {
         return Err(format!(
@@ -158,7 +304,21 @@ pub fn periodic_sliding_step(
         }
     }
     let gcl = graph_balance(&edges, &weights, &t)?;
-    put(&mut m, &gcl.values);
+    let mut found: Option<Coupling> = None;
+    let coupled_gcl = if couple {
+        coupled_solve(&geom, &edges, &weights, &t, &gcl, &is_new, &mut found)?
+    } else {
+        None
+    };
+    match coupled_gcl {
+        None => put(&mut m, &gcl.values),
+        // ADR 0641 D2: a part with a mean above rounding, coupled through the faces and seam pairs between the parts
+        Some(values) => {
+            put(&mut m, &values[..edges.len()]);
+            let cp = found.as_ref().expect("coupling edges of a coupled solve");
+            add_coupling(&mut m, cp, &values[edges.len()..]);
+        }
+    }
     let mut swept = vec![0.0; n];
     for f in 0..nf {
         swept[own[f]] += m[f] * dt;
@@ -234,8 +394,24 @@ pub fn periodic_sliding_step(
         e[b] += interp_edge[k];
     }
     let cor = graph_balance(&edges, &weights, &e)?;
-    let vals: Vec<f64> = interp_edge.iter().zip(&cor.values).map(|(a, b)| a + b).collect();
-    put(&mut phi, &vals);
+    let coupled_cor = if couple {
+        coupled_solve(&geom, &edges, &weights, &e, &cor, &is_new, &mut found)?
+    } else {
+        None
+    };
+    match coupled_cor {
+        None => {
+            let vals: Vec<f64> = interp_edge.iter().zip(&cor.values).map(|(a, b)| a + b).collect();
+            put(&mut phi, &vals);
+        }
+        // ADR 0641 D2: as for the mesh flux; the defect of a coupling face stays its mapped one
+        Some(values) => {
+            let vals: Vec<f64> = interp_edge.iter().zip(&values).map(|(a, b)| a + b).collect();
+            put(&mut phi, &vals);
+            let cp = found.as_ref().expect("coupling edges of a coupled solve");
+            add_coupling(&mut phi, cp, &values[edges.len()..]);
+        }
+    }
     let mut div = vec![0.0; n];
     for f in 0..nf {
         div[own[f]] += phi[f];
@@ -260,4 +436,79 @@ pub fn periodic_sliding_step(
         images,
         reimage,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    //! T1 of ADR 0641 (registered before this code ran).
+    use super::*;
+    use rcfd_mesh::gen::{annulus_sector, Grading};
+    use rcfd_mesh::sliding_periodic::PeriodicSlidingInterface;
+    use std::f64::consts::{FRAC_PI_3, PI};
+
+    fn pair_ss() -> PeriodicSlidingInterface {
+        let a = annulus_sector(24, 8, 1.0, 1.5, FRAC_PI_3, Grading::Uniform, 0.1).unwrap();
+        let b = annulus_sector(20, 8, 1.5, 2.0, FRAC_PI_3, Grading::Uniform, 0.1).unwrap();
+        PeriodicSlidingInterface::sector(a, "outer", b, "inner", vec3::ZERO, [0.0, 0.0, 1.0], FRAC_PI_3, 1e-8).unwrap()
+    }
+
+    /// T1: on SS at a coincidence (`r = pi/72`: one seam pair; `r = 0`: both seams coincide, two seam pairs) the coupling
+    /// edges are 8, and the coupled solve of a target with a zero total and part means of order one meets every target.
+    #[test]
+    fn t1_coupling_edges_and_coupled_solve_on_the_sector_at_coincidences() {
+        let sc = pair_ss();
+        for (r, seams_expected) in [(PI / 72.0, 1usize), (0.0, 2)] {
+            let m = sc.mesh_at(r).unwrap();
+            let geom = FvGeometry::new(Arc::new(m.mesh.clone())).unwrap();
+            let mesh = &geom.mesh;
+            let (own, nei) = (mesh.owner(), mesh.neighbour());
+            let faces = &m.report.join.interface_faces;
+            let pairs = &m.report.wrap_pairs;
+            let is_new = |f: usize| m.is_interface(f) || m.is_wrap(f);
+            let mut edges: Vec<(usize, usize)> = faces.iter().map(|&f| (own[f], nei[f])).collect();
+            edges.extend(pairs.iter().map(|&(fa, fb)| (own[fa], own[fb])));
+            let mut weights: Vec<f64> = faces.iter().map(|&f| mesh.face_area(f)).collect();
+            weights.extend(pairs.iter().map(|&(fa, _)| mesh.face_area(fa)));
+            let mut on = vec![false; mesh.n_cells()];
+            for &(a, b) in &edges {
+                on[a] = true;
+                on[b] = true;
+            }
+            let cells: Vec<usize> = (0..mesh.n_cells()).filter(|&c| on[c]).collect();
+            let mut t = vec![0.0; mesh.n_cells()];
+            for &c in &cells {
+                t[c] = (1.7 * c as f64).sin() + 0.3 * (c as f64 * 0.05).cos();
+            }
+            let mean = cells.iter().map(|&c| t[c]).sum::<f64>() / cells.len() as f64;
+            for &c in &cells {
+                t[c] -= mean;
+            }
+            let tmax = cells.iter().fold(0.0f64, |a, &c| a.max(t[c].abs()));
+            let base = graph_balance(&edges, &weights, &t).unwrap();
+            let mut found = None;
+            let values = coupled_solve(&geom, &edges, &weights, &t, &base, &is_new, &mut found)
+                .unwrap()
+                .expect("coupled");
+            let cp = found.unwrap();
+            let mut all = edges.clone();
+            all.extend(cp.faces.iter().map(|&f| (own[f], nei[f])));
+            all.extend(cp.seams.iter().map(|&(f, g)| (own[f], own[g])));
+            let mut d = vec![0.0; mesh.n_cells()];
+            for (k, &(a, b)) in all.iter().enumerate() {
+                d[a] += values[k];
+                d[b] -= values[k];
+            }
+            let res = cells.iter().fold(0.0f64, |a, &c| a.max((d[c] - t[c]).abs())) / tmax;
+            println!(
+                "T1 r = {r:.6}: base removed mean {:.3e}, coupling faces {}, seam pairs {} ({seams_expected}), residual \
+                 {res:.2e} max|t| (1e-12)",
+                base.removed_mean,
+                cp.faces.len(),
+                cp.seams.len()
+            );
+            assert_eq!(cp.faces.len() + cp.seams.len(), 8, "T1 r = {r}: coupling edges");
+            assert_eq!(cp.seams.len(), seams_expected, "T1 r = {r}: seam pairs");
+            assert!(res <= 1e-12, "T1 r = {r}: residual {res:.2e}");
+        }
+    }
 }
