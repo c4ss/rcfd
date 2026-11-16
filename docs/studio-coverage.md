@@ -19,13 +19,13 @@ Engine read: rcfd 0.1.0, service protocol rcfd-service/1 version 1.1, MCP server
 
 | Kind | Capabilities | UI path | Exemption | Exemption whose item does not name it |
 |---|---|---|---|---|
-| Service methods | 69 | 10 | 59 | 47 |
+| Service methods | 69 | 18 | 51 | 39 |
 | MCP tools | 56 | 20 | 36 | 27 |
 | CLI commands | 36 | 9 | 27 | 21 |
 | CLI options | 156 | 8 | 148 | 114 |
 | Case schema keys | 948 | 948 | 0 | 0 |
 | Monitor format keys | 6 | 6 | 0 | 0 |
-| **All** | **1271** | **1001** (78.8 %) | **270** | **209** |
+| **All** | **1271** | **1009** (79.4 %) | **262** | **201** |
 
 A case key stands for every value of its enumeration (the solver options of that key, listed in the inventory): the
 schema-driven surface of F-825 offers them all. A CLI option is mapped with its command. "Item does not name it" marks an
@@ -34,11 +34,11 @@ new item (see the last sections).
 
 ## Gaps by kind and target item
 
-### Service methods (59 without a UI path)
+### Service methods (51 without a UI path)
 
 | Item | Count | Capabilities |
 |---|---|---|
-| F-807 run control (quick run, stop, pause, queue) | 37 | `cosim.advance` (not named), `cosim.checkpoint` (not named), `cosim.describe` (not named), `cosim.forces` (not named), `cosim.list` (not named), `cosim.open` (not named), `cosim.restore` (not named), `cosim.time` (not named), `design.create_study` (not named), `design.create_variant` (not named), `design.evaluate` (not named), `design.ledger_append` (not named), `design.ledger_export` (not named), `design.propose` (not named), `design.record` (not named), `design.run_map` (not named), `design.run_study` (not named), `events.poll` (not named), `log.tail` (not named), `run.headless` (not named), `run.initialize` (not named), `run.pause` (not named), `run.resume` (not named), `run.start` (not named), `run.status` (not named), `run.step` (not named), `run.stop` (not named), `run.wait` (not named), `status.read` (not named), `workflow.create` (not named), `workflow.delete` (not named), `workflow.get` (not named), `workflow.insert` (not named), `workflow.list` (not named), `workflow.load` (not named), `workflow.run` (not named), `workflow.save` (not named) |
+| F-807 run control (quick run, stop, pause, queue) | 29 | `cosim.advance` (not named), `cosim.checkpoint` (not named), `cosim.describe` (not named), `cosim.forces` (not named), `cosim.list` (not named), `cosim.open` (not named), `cosim.restore` (not named), `cosim.time` (not named), `design.create_study` (not named), `design.create_variant` (not named), `design.evaluate` (not named), `design.ledger_append` (not named), `design.ledger_export` (not named), `design.propose` (not named), `design.record` (not named), `design.run_map` (not named), `design.run_study` (not named), `events.poll` (not named), `run.headless` (not named), `run.wait` (not named), `status.read` (not named), `workflow.create` (not named), `workflow.delete` (not named), `workflow.get` (not named), `workflow.insert` (not named), `workflow.list` (not named), `workflow.load` (not named), `workflow.run` (not named), `workflow.save` (not named) |
 | F-808 field viewport on three.js WebGPU | 6 | `field.export_vtk` (not named), `field.grid`, `field.slice`, `field.stats`, `render.glb`, `render.png` |
 | F-809 derived pictures (iso-surfaces, streamlines, cut planes, vectors) | 1 | `field.sample` |
 | F-810 run bands and linked time scrubbing | 1 | `panel.snapshot` |
@@ -108,12 +108,11 @@ holds the other way round). The reasons are in `coverage.json`.
 - Particle-tracking reports: no item names them; nearest home the plots (F-811). (F-811): `particles.report`.
 - Re-creating reports from a results folder (rcfd post): no item names it; nearest home the plots (F-811). (F-811): `rcfd post`, `rcfd post --*`.
 - Restarts from a checkpoint or another solution, headless runs under the run-control contract, status streams and the runner's shutdown: F-807 names quick run, stop, pause and queue only; nearest home F-807. (F-807): `run.headless`, `status.read`, `read_status_stream`, `run_headless`, `rcfd restart`, `rcfd-runner shutdown`, `rcfd restart --*`, `rcfd run --checkpoint`, `rcfd run --checkpoint-every`, `rcfd run --continue-from`, `rcfd run --interpolate-case`, `rcfd run --interpolate-checkpoint`, `rcfd run --interpolate-mode`, `rcfd run --method`, `rcfd run --restart-from`, `rcfd run --source-case`.
-- Runs of an in-memory service session (the run methods of a session, the MCP run and status tools): F-807 runs through the runner only, and whether the Studio also runs service sessions is open; nearest home F-807. (F-807): `run.initialize`, `run.pause`, `run.resume`, `run.start`, `run.status`, `run.step`, `run.stop`, `run.wait`, `run`, `status`.
+- Runs of an in-memory service session (the run methods of a session, the MCP run and status tools): F-807 runs through the runner only, and whether the Studio also runs service sessions is open; nearest home F-807. (F-807): `run.wait`, `run`, `status`.
 - Task workflows (the workflow methods, tools and commands): no Studio item covers them; nearest home run control (F-807). (F-807): `workflow.create`, `workflow.delete`, `workflow.get`, `workflow.insert`, `workflow.list`, `workflow.load`, `workflow.run`, `workflow.save`, `create_workflow`, `edit_workflow`, `list_workflow_tasks`, `run_workflow_task`, `rcfd workflow run`, `rcfd workflow show`, `rcfd workflow templates`, `rcfd workflow run --*`, `rcfd workflow show --*`.
 - The Claude Code panel (F-814) runs rcfd-mcp with the engine's defaults for case roots, the edit hook and the run and design limits; settings for them are not part of F-814. (F-814): `rcfd-mcp --*`.
 - The public validation-data pack (rcfd data): no Studio item covers it; nearest home provenance (F-828). (F-828): `rcfd data list`, `rcfd data provenance`, `rcfd data verify`, `rcfd data list --*`, `rcfd data provenance --*`, `rcfd data verify --*`.
 - The runner itself in the foreground: the Studio never runs serve directly; Start the runner runs rcfd-runner ensure, which starts serve detached (F-807). (F-807): `rcfd-runner serve`.
-- The solver log of a service session: no item names a log view, and the runs table (F-806) shows the runner's runs, not service sessions; nearest home run control (F-807). (F-807): `log.tail`.
 - Waiting for a run to end is a call for scripts: the Studio shows the end live in Project > Runs (F-806) and needs no waiting call; nearest home run control (F-807). (F-807): `wait_run`, `rcfd-runner wait`, `rcfd-runner wait --*`.
 - Writing notes: F-805 lists notes but names no editor; nearest home F-805. (F-805): `write_note`.
 

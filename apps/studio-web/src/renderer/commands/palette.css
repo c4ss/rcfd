@@ -1,0 +1,406 @@
+/* The command palette (F-831): a floating overlay of the system, so it takes the one lift DESIGN.md gives overlays (the
+   popover lift with a 1px ink edge) and nothing else. Square, white ground, ink rules for structure and silver hairlines
+   inside, Archivo with tabular figures; the focused command is the selected-row wash boxed by an inset orange focus
+   line. No scrim: the workspace stays as it is behind it. Every value is a token (design/tokens.css). */
+
+.cp-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: calc(var(--size-header) + var(--space-xxl));
+}
+
+.cp-modal {
+  width: 680px;
+  max-width: calc(100vw - 2 * var(--space-xxl));
+  max-height: calc(100vh - var(--size-header) - 2 * var(--space-xxl));
+  display: flex;
+  background: var(--role-popover);
+  border: 1px solid var(--role-popover-edge);
+  box-shadow: var(--shadow-popover);
+  border-radius: var(--radius-none);
+}
+
+.cp-dialog {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  outline: none;
+  color: var(--role-text);
+}
+
+.cp-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-md);
+  min-height: var(--size-tab-row);
+  padding: var(--space-md) var(--space-lg) var(--space-xs);
+}
+
+.cp-title {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: var(--type-title-sm-size);
+  font-weight: var(--type-title-sm-weight);
+}
+
+.cp-sub {
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+  color: var(--role-text-2);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cp-search {
+  display: flex;
+  padding: var(--space-xs) var(--space-lg) var(--space-md);
+  border-bottom: var(--line-rule);
+}
+
+.cp-input {
+  flex: 1;
+  width: 100%;
+}
+
+/* ---- the list */
+
+.cp-list {
+  flex: 1;
+  min-height: 0;
+  max-height: 440px;
+  overflow-y: auto;
+  outline: none;
+  padding: 0 0 var(--space-xs);
+}
+
+.cp-section + .cp-section {
+  border-top: var(--line-hair);
+}
+
+.cp-group {
+  padding: var(--space-md) var(--space-lg) var(--space-xs);
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-bold);
+  color: var(--role-text-2);
+}
+
+.cp-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-hair);
+  padding: var(--space-sm) var(--space-lg);
+  cursor: default;
+  outline: none;
+}
+
+.cp-item[data-hovered] {
+  background: var(--role-row-hover);
+}
+
+/* the focused command (virtual focus: the DOM focus stays in the search field) */
+.cp-item[data-focused] {
+  background: var(--role-row-selected);
+  outline: var(--focus-width) solid var(--role-focus-ring);
+  outline-offset: var(--focus-offset-inset);
+}
+
+.cp-item-line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-md);
+  min-width: 0;
+}
+
+.cp-item-title {
+  font-size: var(--type-body-size);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+}
+
+.cp-item-id {
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cp-item-side {
+  margin-left: auto;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.cp-item-group,
+.cp-item-mark {
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+}
+
+/* The Fade by Colour Rule: an unavailable command keeps full opacity and turns its title ink-2; its reason stays legible */
+.cp-item--unavailable .cp-item-title {
+  color: var(--role-text-2);
+}
+
+.cp-item-reason {
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+}
+
+.cp-item-reason:empty {
+  display: none;
+}
+
+.cp-unavailable-word {
+  color: var(--role-text);
+  font-weight: var(--font-weight-medium);
+}
+
+.cp-empty {
+  margin: 0;
+  padding: var(--space-lg);
+  color: var(--role-text-2);
+}
+
+/* ---- key caps: square silver hairline chips in label type */
+
+.cp-keys {
+  display: inline-flex;
+  gap: var(--space-hair);
+}
+
+.cp-kbd {
+  font-family: var(--font-family);
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-medium);
+  min-width: 18px;
+  height: 18px;
+  padding: 0 var(--space-xs);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: var(--line-hair);
+  border-radius: var(--radius-none);
+  background: var(--role-ground);
+  color: var(--role-text);
+}
+
+/* ---- the focused command's facts, the footer */
+
+.cp-detail {
+  border-top: var(--line-hair);
+  padding: var(--space-md) var(--space-lg);
+  min-height: 56px;
+}
+
+.cp-detail-text {
+  margin: 0 0 var(--space-xs);
+  max-width: 78ch;
+}
+
+.cp-detail-eq {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-hair);
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+}
+
+.cp-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-lg);
+  padding: var(--space-sm) var(--space-lg);
+  border-top: var(--line-rule);
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+}
+
+.cp-foot > span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+/* ---- the other steps */
+
+.cp-body {
+  padding: var(--space-xs) var(--space-lg) var(--space-md);
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.cp-body p {
+  margin: 0 0 var(--space-md);
+  max-width: 78ch;
+}
+
+.cp-reason {
+  font-size: var(--type-body-size);
+}
+
+.cp-confirm-body {
+  max-width: 70ch;
+}
+
+.cp-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-xs) var(--space-lg);
+  margin: 0;
+  padding-top: var(--space-md);
+  border-top: var(--line-hair);
+}
+
+.cp-facts dt {
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+}
+
+.cp-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.cp-fact-key {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-right: var(--space-lg);
+}
+
+.cp-reply {
+  margin: 0 0 var(--space-md);
+  padding: var(--space-md);
+  max-height: 260px;
+  overflow: auto;
+  border: var(--line-hair);
+  font-family: var(--font-family);
+  font-size: var(--type-label-size);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.cp-equivalents {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+  overflow-wrap: anywhere;
+}
+
+.cp-actions {
+  display: flex;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  border-top: var(--line-rule);
+}
+
+.cp-param-help {
+  margin: 0;
+  padding: var(--space-md) var(--space-lg);
+  border-top: var(--line-hair);
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+}
+
+.cp-form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.cp-form > .cp-field {
+  display: flex;
+  margin: 0 var(--space-lg) var(--space-md);
+}
+
+.cp-chosen {
+  margin: 0;
+  padding: var(--space-xs) var(--space-lg) var(--space-md);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-lg);
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+}
+
+.cp-chosen strong {
+  color: var(--role-text);
+  font-weight: var(--font-weight-medium);
+}
+
+/* ---- the shortcut listing */
+
+.cp-shortcuts {
+  overflow-y: auto;
+  min-height: 0;
+  max-height: 520px;
+  padding: 0 var(--space-lg) var(--space-md);
+}
+
+.cp-scope + .cp-scope {
+  border-top: var(--line-hair);
+}
+
+.cp-scope-title {
+  margin: 0;
+  padding: var(--space-md) 0 var(--space-xs);
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-bold);
+  color: var(--role-text-2);
+}
+
+.cp-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.cp-table th,
+.cp-table td {
+  text-align: left;
+  vertical-align: baseline;
+  padding: var(--space-xs) var(--space-lg) var(--space-xs) 0;
+  font-weight: var(--font-weight-regular);
+}
+
+.cp-table th {
+  width: 170px;
+}
+
+.cp-owner {
+  width: 200px;
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+}
+
+.cp-row--kept td:nth-child(2) {
+  color: var(--role-text-2);
+}
+
+.cp-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

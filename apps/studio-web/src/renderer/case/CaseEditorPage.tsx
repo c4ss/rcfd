@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import type { CaseDoorState, CaseSources, CaseStatus, ConflictView, CreatedCase, FileCheck, SaveOutcome } from '../../shared/case.js';
 import { CASE_ACTIONS } from '../../shared/case.js';
+import { useCommandHandlers } from '../commands/host.js';
 import type { JsonValue } from '../../shared/actions/params.js';
 import type { ProjectState } from '../../shared/project.js';
 import type { ServiceState } from '../../shared/service.js';
@@ -643,6 +644,28 @@ function CasePanel({ status, refresh }: { status: CaseStatus; refresh: () => Pro
 
   const file = status.file;
   const outside = file.state === 'changed' && notice?.kind !== 'conflict';
+
+  // F-831: the case actions of this file as commands of the palette (Ctrl+S stays the editor's own key, above)
+  useCommandHandlers({
+    'case.save': {
+      unavailable: () => saveReason ?? (busy !== null ? 'The editor is busy with another case action; wait for it.' : pending.count === 0 ? `Nothing to save: ${b.path} has no change since ${b.savedAt ? 'the last save' : 'it was opened'}.` : null),
+      run: () => save('opened'),
+    },
+    'case.check_file': {
+      unavailable: () => (file.state === 'missing' ? `${b.path} is not there: the saved file cannot be checked.` : busy !== null ? 'The editor is busy with another case action; wait for it.' : null),
+      run: () => checkFile(),
+    },
+    'case.duplicate': {
+      unavailable: () => (file.state === 'missing' ? `${b.path} is not there: duplicate needs the saved file.` : null),
+      // its form: the "Duplicate as" field of the case actions
+      run: () => document.querySelector<HTMLElement>('.ce-dup input')?.focus(),
+    },
+    'case.close': {
+      unavailable: () => (busy !== null ? 'The editor is busy with another case action; wait for it.' : null),
+      // asks first, naming the changes not saved, as the button does
+      run: () => close(),
+    },
+  });
 
   return (
     <>

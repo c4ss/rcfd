@@ -392,6 +392,7 @@ Decisions taken in building F-814 (options, the recommendation followed; each re
 | `src/renderer/runs/` | The Runs view (`RunsView.tsx`, `runs.css`, F-806) and run control (`RunControls.tsx`, `control-model.ts`, `control.css`, F-807) | as above | F-806, F-807 |
 
 | `src/renderer/project/` | The project home (`ProjectHome.tsx`, `project.css`) and its one door to `window.studioProject` (`door.ts`) | as above | F-805 |
+| `src/renderer/commands/` | The command palette (`CommandPalette.tsx`, `palette.css`, loaded on first use), its key listener (`PaletteHost.tsx`), what each command does (`run.ts`) and the surfaces' handlers (`host.ts`); `src/shared/commands/` holds the palette's model and the shortcut table | as above | F-831 |
 | `src/renderer/claude/` | The Claude Code panel (`ClaudePanel.tsx`, `claude.css`), reference links in a reply (`links.ts`) and its one door to `window.studioClaude` (`door.ts`) | as above | F-814 |
 | `src/renderer/dev/` | The primitives gallery at `#/dev/primitives` (loaded on demand): every primitive and the tokens, with sample labels only | as above | F-802 |
 | `src/renderer/settings/` | The case settings surface at `#/settings/<session>` (loaded on demand): `schema.ts` (the model of `settings.schema`, value encoding), `disclosure.ts` (learner-first tiers, search), the page, the surface, key rows and groups, `settings.css` | as above | F-825 |
@@ -621,6 +622,69 @@ Decisions taken in building F-829 (options, the recommendation followed; each ca
 - Open: whether an ordinary settings change on a session that holds results should also ask first (F-825 sends it at
   once; undo and redo ask). Options: (a) ask once before the first change that discards results, (b) keep as is.
   Recommended (a); not done here, it changes F-825's surface.
+
+## The command palette and keyboard shortcuts (F-831)
+
+Ctrl+K (or Ctrl+Shift+P, or "Commands" in the header band) opens the command palette on every page: every action of the
+registries and every Studio command, found by its name or its id, with its shortcut and its CLI and Claude Code
+equivalents (G20). Ctrl+/ (or "Show the keyboard shortcuts" in the palette) lists every shortcut by where it works.
+
+- The model (`src/shared/commands/palette.ts`) is generated from the registries, so nothing is left out: `ACTIONS`
+  (service methods, F-827), `RUN_ACTIONS` (run control, F-807), `CASE_ACTIONS` (case files, F-812) and `STUDIO_COMMANDS`
+  (`studio.ts`: going to Home, Runs, Case settings, the case editor and the Claude Code panel; the project folder of
+  F-805; the Claude Code panel's operations of F-814). The Studio commands make no result of their own (G16): a view
+  change has no engine call, and each says what it uses.
+- Search ranks exact title or id, then prefix, then the start of each word, then contained text, then a fuzzy
+  subsequence. Nothing typed lists every command by group, the frequent ones first.
+- An unavailable command stays in the list with its reason and the way out (G19); Enter on it shows the reason with the
+  command's facts. It is not disabled, so the arrow keys reach every command.
+- A value a command needs is chosen from what the engine or the main process lists: a session from `session.list`, a
+  case or a run from the project's lists (the run selected in Runs first), a folder from the recent list, a Claude Code
+  session from the panel's list. Each choice shows why the command cannot run on it, when it cannot. The other
+  parameters are a form made from the registry's schema; left empty, the engine's default applies. Nothing is made up.
+- An action whose form exists opens it: New case opens the case editor's form, Duplicate the case puts the focus in its
+  "Duplicate as" field, Go to Claude Code in the message field. Stop… and Cancel… of a run ask in the run actions' own
+  words, the safe choice focused (G18). A service action shows the engine's reply and the same request as
+  `rcfd call` and, where it has one, the MCP tool.
+- Commands that need a surface's state (Go to Runs, Save the case) are run by that surface: while mounted it registers a
+  handler (`src/renderer/commands/host.ts`, `useCommandHandlers`); with none, the command is unavailable and says what
+  to open first.
+- One shortcut table, `src/shared/commands/shortcuts.ts`, feeds the palette, the listing, the key listener and the
+  tests. Global: Ctrl+K and Ctrl+Shift+P palette, Ctrl+/ shortcuts, Ctrl+1 Home, Ctrl+2 Runs, Ctrl+L Claude Code message
+  field, Ctrl+O open a project folder, Ctrl+N new case, F5 run a case (asks which), Ctrl+. stop a project run (asks
+  which, then confirms). F5 and Ctrl+. are the egui Studio's Run and Stop keys. The table also lists the keys of the
+  surfaces (Ctrl+S in the case editor, Enter in the Claude Code field, the field view's keys) and the reserved keys:
+  the Electron default menu (reload, developer tools, zoom, clipboard, close), Chromium's text and focus keys, Windows'
+  menu keys, Ctrl+Z, Ctrl+Shift+Z and Ctrl+Y for undo and redo (F-829) and the time panel's arrows, Home and End (F-810).
+- Escape closes the palette from any step and the focus goes back where it was (React Aria's modal). The palette is
+  loaded on first use, so the project home's cold start (P10) does not carry it.
+- Tests: `tests/unit/commands-palette.spec.ts` (every registered action is in the model once, G20; each is found first by
+  its title and by its id; equivalents; choices; the stylesheet keeps to the tokens), `tests/unit/commands-shortcuts.spec.ts`
+  (no conflict within a scope or across scopes live together; no F-831 key takes a reserved one; F-829 and F-810 keys
+  reserved; the keys the surfaces bind are the table's; chords on any layout) and `tests/e2e/commands.spec.ts` (the
+  packaged Studio from the keyboard alone: open, find and run, Escape gives the focus back, every command reached with
+  the arrows, arguments asked, navigation, the listing, the running application menu's keys all reserved, F5 does not
+  reload). Screenshots at 1440 by 900: `test-results-visual/f831/`.
+
+Decisions taken in building F-831 (options, the recommendation followed; each reversible without touching the engine):
+
+- D1, the source of the palette: (a) generate it from the four registries as they are, with the Studio's own commands
+  in a fifth table; (b) fold every action into `ACTIONS` (its test requires exactly one action per service method, an
+  existing test). Taken: (a).
+- D2, the palette keys: Ctrl+K, with Ctrl+Shift+P as an alias: neither is bound by Electron's default menu (read from
+  the running app by the e2e test) and Electron has no browser keys. Ctrl+K stays free in text fields on Windows.
+- D3, F5 and Ctrl+.: (a) ask which case or run, the run selected in Runs offered first; (b) act on the case open in the
+  editor or the selected run directly (a run of the saved file while edits are unsaved, or a stop without a choice).
+  Taken: (a).
+- D4, unavailable commands: listed, focusable and explained, not disabled (a disabled option is skipped by the arrows).
+- D5, look: a floating overlay with the popover lift and an ink edge, no scrim; key caps as square silver hairline chips;
+  proposed for `DESIGN.md` with the listing.
+- D6, coverage: the service-session run methods and `log.tail`, whose exemptions said no item plans a surface, now
+  have a UI path through the palette (`capabilities/coverage.json`); the methods a planned item will show
+  (`field.stats` F-808, `reports.get` F-811, `service.info` and `journal.get` F-828, `panel.snapshot` F-810) keep their
+  exemptions.
+- D7, a pointer path: "Commands Ctrl+K" in the project home's header band; the case editor's and settings' headers do
+  not have it yet.
 
 ## Security (G10)
 
