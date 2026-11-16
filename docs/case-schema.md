@@ -50,7 +50,7 @@ On this page:
 - Design-loop files (not part of the case schema)
 
 The case file (TOML or JSON) is a settings tree. `rcfd schema` prints its JSON Schema, the
-service returns it from `settings.schema`, and the GUI settings editor and the assistant tools
+service returns it from `settings.schema`, and the Studio's case editor and the assistant tools
 read the same tree, so every key below is available everywhere. Validation errors from
 `rcfd validate` and `Case::parse_toml` name the offending key and, for TOML, its line:
 
@@ -478,8 +478,7 @@ when `nx = ny` and `lx = ly`. Before wave 11 it silently built an `nx` x `nx` ca
 
 `box_3d` (F-259, ADR 0191) is the uniform box `[0, lx] x [0, ly] x [0, lz]` of `nx` x `ny` x `nz` cells, with the patches
 `xmin`, `xmax`, `ymin`, `ymax`, `zmin` and `zmax`, all walls. It has no grading and no periodic pairs. It is the mesh of
-`dynamic_mesh.deformation = "layering"` and can also be used on its own. The older `rcfd-studio` gives no cell estimate for it yet
-(ADR 0191 Q4).
+`dynamic_mesh.deformation = "layering"` and can also be used on its own.
 
 The optional table `[mesh.box_3d]` (ADR 0257) has one key, `section`, the cells of the box: `"box"` (default) is the
 uniform box above; `"rectangles"` gives the same hexahedra in the face order of the extruded layer stack
@@ -711,8 +710,6 @@ while the rotation is not 0:
 - `dynamic_mesh`
 - the mixing plane
 - a geometric `decomposition`
-
-The Case > Validate of the older `rcfd-studio` shows errors only, so not these warnings.
 
 Periodic pairs: a translational pair stays matched (its shift is taken from the rotated patches). A rotationally
 periodic pair (`annulus_3d_sector`, `axial_fan_sector`, imported cyclic patches with a rotation) only allows a rotation

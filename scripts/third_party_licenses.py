@@ -37,20 +37,14 @@ data, see `NOTICE` and `validation-data/manifest.json`.
 
 A binary distribution of rcfd must carry the licence texts and notices of the packages it contains. These need particular care:
 
-* `epaint_default_fonts` (through `egui` 0.36, in the two desktop apps `rcfd-studio` and `rcfd-gui`): bundles egui's default
-  fonts and declares `(MIT OR Apache-2.0) AND OFL-1.1 AND Ubuntu-font-1.0`. The SIL Open Font License 1.1 and the Ubuntu Font
-  Licence 1.0 texts must ship with any binary that embeds those fonts. Which font carries which licence is recorded in the
-  package (not checked here: UNVERIFIED).
-* Unicode-3.0 (`unicode-ident` and the `icu_*`, `zerovec`, `yoke`, `tinystr`, `litemap`, `writeable`, `zerofrom` family): the
-  Unicode licence notice must accompany copies of the data.
+* Unicode-3.0 (`unicode-ident`): the Unicode licence notice must accompany copies of the data.
 * CDLA-Permissive-2.0 (`webpki-roots`, a bundle of certificate-authority data): the licence text must accompany the data.
 * `ring`: declares `Apache-2.0 AND ISC`. Its licence file may carry further notices for code derived from other projects; the
   full set was not read here (UNVERIFIED) and must be checked before a binary release.
 * BSD-2-Clause, BSD-3-Clause, ISC, Zlib, BSL-1.0, MIT and CC0-1.0 packages: keep their copyright and licence texts in binary
   distributions (CC0 asks for nothing but is listed for completeness).
 * Apache-2.0 packages: ship any `NOTICE` file a package provides (which packages have one was not checked: UNVERIFIED).
-* Packages with an `OR` licence (for example `r-efi`, which also offers LGPL-2.1-or-later) are used under their permissive
-  option.
+* Packages with an `OR` licence are used under their permissive option.
 
 For the npm packages of the Electron Studio (`apps/studio-web/`):
 

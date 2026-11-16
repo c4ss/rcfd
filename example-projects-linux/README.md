@@ -3,10 +3,7 @@
 These are the finished example projects of `../example-projects/` (ADR 0142, docs/adr/0142-wave48h-example-projects.md)
 with runs made on x86_64 Linux (ADR 0150, docs/adr/0150-job48p-linux-example-stores.md). No result in these folders is
 a validation (see each project's notes). Open these on Linux, and the ones in `../example-projects/` on Windows, with
-Open project folder… in the desktop Studio (`docs/tutorials/desktop-assistant.md`), or with the older, frozen
-`rcfd-studio`:
-
-    sh scripts/studio.sh example-projects-linux/wind-tunnel
+Open project folder… in the desktop Studio (`docs/tutorials/desktop-assistant.md`).
 
 | Folder | What is inside | Start with |
 |---|---|---|

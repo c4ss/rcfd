@@ -2,6 +2,8 @@
 
 Status: plan (2026-10-26), set by the user: restart the UI from scratch, wgpu renderer, project folders holding many runs, background and parallel runs, time scrubbing, a Claude Code chat inside the app, and the same project tools available from Claude Code itself. This is a plan, not a claim of capability.
 
+Update (2026-11-16): the two egui apps of this plan, `rcfd-studio` and the frozen `rcfd-gui`, were removed (roadmap item F-449) before the parity checks of section 6, by the maintainer's decision; the git history keeps them. The desktop Studio is now the Electron app in `apps/studio-web/` (ADR 0800). The rest of this page is the plan as it was set.
+
 This page is for the user and for contributors working on the Studio. Read section 5 first for the limits: what agents cannot check, what may not be possible, and what does not exist yet. Section 1 holds the first decisions. Section 8 holds the second round of decisions (how the chat sidebar treats open sessions and how tool approvals work) and the project folder contract that the new crates code against. For the computer-fan work that the Studio's later modes serve, see the [computer-fan project breakdown](fan-project-breakdown.md).
 
 The plan runs in [waves](glossary.md), numbered batches of work. Waves 48 and later start after the user has run the previous result and reported on it. `rcfd-gui` stays frozen and is kept building and tested until the new app reaches parity on the checks listed in section 6; its removal is a separate, explicitly requested step (default chosen by the lead; the user can change it). Stress and strain pictures need a structural solver that does not exist yet. Items marked NOT DOCUMENTED in section 7 must be checked on the installed build before any design depends on them.
@@ -118,6 +120,6 @@ Crates (all new, library first): `rcfd-project` (47A), `rcfd-runner` (47B), `rcf
 
 ## Where to go next
 
-- [Desktop assistant tutorial](tutorials/desktop-assistant.md) for the current, frozen GUI that the Studio replaces.
+- [Desktop assistant tutorial](tutorials/desktop-assistant.md) for the desktop Studio (the Electron app).
 - [MCP tools](mcp-tools.md) for the existing project tools that the planned plugin (layer L7) extends.
 - [Computer-fan project breakdown](fan-project-breakdown.md) for the fan work behind the later computer-fan modes.

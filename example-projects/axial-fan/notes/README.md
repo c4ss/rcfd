@@ -31,17 +31,12 @@ Studio draws it in 3D and the view can be turned.
    `RCFD_STUDIO_RCFD` set to the `rcfd` you built.
 3. Choose Open project folder… (Ctrl+O) and pick this folder.
 
-The older `rcfd-studio`, frozen until roadmap item F-449, still opens the folder: build it with
-`cargo build --release -p rcfd-studio -p rcfd-runner -p rcfd-cli`, then start `target\release\rcfd-studio.exe <this folder>`
-(on Linux `target/release/rcfd-studio`).
-
 ## What to look at, in order
 
 The Studio names many controls only in tooltips and accessible names; the names below are those.
 
 1. Home lists `cases/fan01-passage-upwind.toml` and its run. Edit on its row opens the case editor on its settings. The
-   desktop Studio has no picture of a mesh before a run; the older `rcfd-studio` shows the case's mesh in 3D before it is
-   run (see "Open it").
+   desktop Studio has no picture of a mesh before a run yet.
 2. Runs (Ctrl+2): select the run of the case, then Open in workspace. The field view shows `p` on the surfaces of the
    passage, in 3D. Drag turns the view, right drag pans and the wheel zooms; Reset view goes back. Choose `uz` (the axial
    velocity) or `nut` in Field, and point at the surface to read the value of a cell. Cut plane cuts the passage normal

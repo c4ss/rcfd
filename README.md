@@ -27,7 +27,7 @@ warranty of any kind (see the licences). The main gaps today:
   library has a first overset coupling of one moving component mesh
   (F-134, ADR 0219).
 * The desktop app is being rebuilt. The new Studio runs from a checkout and
-  has no installer yet; the two older desktop apps are frozen.
+  has no installer yet; the two older egui desktop apps were removed (F-449).
 
 ![Roadmap progress: done, partly done and not started items](docs/roadmap-progress.svg)
 
@@ -59,13 +59,11 @@ the `check` above).
 
 Prerequisites:
 
-* Rust 1.90 or later for the solver and libraries. The two older desktop
-  apps, `rcfd-studio` and `rcfd-gui` (both frozen), need Rust 1.95 or
-  later: their eframe 0.36 needs 1.95. With 1.90, CI type-checks the workspace
-  without the two desktop apps. With 1.99, it builds and tests everything.
-  Tests have not been run on 1.90. Each crate's `rust-version` states its own
-  minimum (1.75 to 1.95): 1.75, or the highest minimum its dependencies
-  declare if that is higher. Older toolchains are not tested.
+* Rust 1.90 or later. With 1.90, CI type-checks the whole workspace. With
+  1.99, it builds and tests everything. Tests have not been run on 1.90. Each
+  crate's `rust-version` states its own minimum (1.75 to 1.90): 1.75, or the
+  highest minimum its dependencies declare if that is higher. Older
+  toolchains are not tested.
 * The render crate uses the GPU through wgpu. Without a GPU or a software
   adapter its tests print a skip message and pass. CUDA support is an
   optional feature, off by default ([docs/gpu.md](docs/gpu.md)).
@@ -93,21 +91,16 @@ lines and the steps in the window):
     cd apps/studio-web && npm ci && npm run build
     RCFD_STUDIO_RCFD="$PWD/../../target/release/rcfd" npm start
 
-The older Studio, `rcfd-studio`, is frozen and stays until it is retired
-(roadmap item F-449). One line builds it with the programs it starts and
-opens it on a project folder (the folder is optional):
-
-    powershell -ExecutionPolicy Bypass -File scripts\studio.ps1 my-project
-    sh scripts/studio.sh my-project
+The older egui desktop apps, `rcfd-studio` and `rcfd-gui`, were removed
+(roadmap item F-449); the git history keeps them.
 
 Finished example projects that open straight to a picture are in
 `example-projects/` (runs made on Windows) and `example-projects-linux/` (the
 same projects, runs made on x86_64 Linux). Open the folder of your platform
-with Open project folder… in the Studio, or with the older one, for example
-`sh scripts/studio.sh example-projects-linux/wind-tunnel`. The cases of
-`wind-tunnel` and `quick-start` are 2D; `axial-fan` holds a 3D blade passage
-of an axial fan that both Studios show in a 3D view you can turn (for viewing
-only: a first-order run, not a validated fan prediction).
+with Open project folder… in the Studio. The cases of `wind-tunnel` and
+`quick-start` are 2D; `axial-fan` holds a 3D blade passage of an axial fan
+that the Studio shows in a 3D view you can turn (for viewing only: a
+first-order run, not a validated fan prediction).
 
 ## Where to go next
 

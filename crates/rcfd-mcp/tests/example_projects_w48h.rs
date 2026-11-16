@@ -425,7 +425,7 @@ fn text_validate(text: &str, base_dir: Option<&Path>) -> (bool, bool, String) {
     (true, v["ok"] == true, v["diagnostics"].to_string())
 }
 
-/// The Studio case editor's calls (`crates/rcfd-studio/src/case_edit.rs`): a default service, `session.create` with the
+/// The calls of the egui Studio's case editor (`crates/rcfd-studio/src/case_edit.rs`, removed by F-449): a default service, `session.create` with the
 /// text and the case's folder as `base_dir` (ADR 0144: relative paths resolve against the case's folder),
 /// `settings.validate`. Returns (opened, valid, diagnostics).
 fn editor_validate(text: &str, case_dir: &Path) -> (bool, bool, String) {

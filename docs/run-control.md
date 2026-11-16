@@ -215,19 +215,19 @@ steps (unlike `output.write_time_interval`).
 - Units: recorded for velocity (`m/s`) and `T` (`K`); other fields carry `unknown`.
 - Precision: `output.store_precision` is `"f64"` (default: every value bit-exact) or `"f32"` (opt-in, ADR 0133: each value
   rounded to the nearest single precision, half the size, error at most `|x| 2^-24 + 2^-150`; the run itself is unchanged; a
-  finite value beyond the single-precision range disables the store with a warning). The older `rcfd-studio` proposes `"f32"`
-  for the runs it starts.
+  finite value beyond the single-precision range disables the store with a warning). The start plan (below) proposes
+  `"f32"`.
 - Existing store: a fresh run replaces a store left in the same output directory; a continued run appends.
 - Located errors: `store_time_interval` on a steady algorithm, either key with `dynamic_mesh.enabled`. An unknown field name
   gives a warning and no store.
 - Library callers that step a `Simulation` themselves are not covered.
 
-Runs the older `rcfd-studio` starts (Run, F5, Runs > Start run...) store fields unless the case sets its own store. A store key
-counts as the case's own only when its value differs from its default: `store_interval` 0, `store_time_interval` 0.0,
-`store_fields` `[]`, `store_precision` `"f64"` (ADR 0152). A case saved by `rcfd-studio`, or written by `rcfd-api`'s writer,
-spells out every key at its default, so an explicit `store_interval = 0` cannot be told from the default and does not
-turn its store off. To start a run without stored fields, untick "Store fields" in Runs > Start run... (or give
-the override `output.store_interval=0` there); for an explicit `"f64"`, pick "f64 (exact)" there. Run and F5 always store.
+The start plan of the project workspace (`rcfd_workspace::plan`, ADR 0186 G4) stores fields unless the case sets its own
+store. A store key counts as the case's own only when its value differs from its default: `store_interval` 0,
+`store_time_interval` 0.0, `store_fields` `[]`, `store_precision` `"f64"` (ADR 0152). A case written by `rcfd-api`'s writer
+spells out every key at its default, so an explicit `store_interval = 0` cannot be told from the default and does not turn
+the plan's store off. The removed egui Studio `rcfd-studio` (F-449) used the same rule for every run it started, with a
+start dialog that could turn the store off or pick `"f64"`; the desktop Studio has no such dialog yet.
 `rcfd run`, `rcfd-runner submit` and Claude Code's `start_run` read the case as written: 0 is off. So do Run, Queue… and
 F5 of the desktop Studio (`apps/studio-web/`): they store only what the case asks for. Its first-path action Run the
 example asks `start_run` for the start plan, which stores the fields.

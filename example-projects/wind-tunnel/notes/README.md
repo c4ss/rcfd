@@ -27,10 +27,6 @@ results equal those of the flow-rotated cases to about 1e-7 (`notes/naca0012.md`
    `RCFD_STUDIO_RCFD` set to the `rcfd` you built.
 3. Choose Open project folder… (Ctrl+O) and pick this folder.
 
-The older `rcfd-studio`, frozen until roadmap item F-449, still opens the folder: build it with
-`cargo build --release -p rcfd-studio -p rcfd-runner -p rcfd-cli`, then start `target\release\rcfd-studio.exe <this folder>`
-(on Linux `target/release/rcfd-studio`).
-
 ## What to look at, in order
 
 The Studio names many controls only in tooltips and accessible names; the names below are those.
@@ -39,7 +35,7 @@ The Studio names many controls only in tooltips and accessible names; the names 
    narrows the list. The design ledger `designs/variants.ledger.jsonl` is not listed there; open it in an editor.
 2. Edit on the row of a case (for example `cases/cylinder-re100.toml`) opens the case editor on its settings. Check the
    case runs the engine's check, and Check the mesh runs the engine's check of the mesh. The desktop Studio has no
-   picture of a mesh before a run; the older `rcfd-studio` has one.
+   picture of a mesh before a run yet.
 3. Runs (Ctrl+2) lists the eight finished runs, one per case, with their state and step. Select the run of
    `cases/cylinder-re100.toml`, then Open in workspace.
 4. The field view shows the run's pressure field `p`. Choose another field in Field (`vorticity_z` for the cylinder), and
@@ -88,10 +84,8 @@ machine that made them. `designs/variants.ledger.jsonl` holds every value with i
   `notes/naca0012.md`.
 * The fields are stored in single precision (f32, ADR 0133): each stored value is within |x| 2^-24 of the solver's
   value. The solver itself runs in double precision.
-* The Case editor of the older `rcfd-studio` resolves relative paths against its working folder, not against the case's
-  folder (ADR 0131, question 3). The aerofoil cases name their mesh as `../meshes/naca0012-ogrid`, so its Case > Validate
-  reports the mesh as missing unless it was started in `cases/`. The desktop Studio's case editor opens a case file
-  through the solver service, which resolves relative paths against the case's folder. Runs are not affected: the run
-  service resolves the path against the case's folder.
+* The aerofoil cases name their mesh as `../meshes/naca0012-ogrid`, a path relative to the case's folder. The desktop
+  Studio's case editor opens a case file through the solver service, which resolves relative paths against the case's
+  folder, and the run service does the same for runs.
 * The run records hold the absolute paths of the machine that made them (`case_source`, `case_dir` in each `run.json`,
   paths in the solver events); they are information only.
