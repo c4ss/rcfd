@@ -417,3 +417,174 @@ results stay in the scratch folder, not committed.
   `RCFD_STUDIO_STARTUP_REPORT` does in addendum 1.
 - The renderer shows nothing of the service yet; F-802 onwards build the surfaces on `window.studioService`. The
   Studio's named actions (G16, G20) will sit on top of the allow-list, not replace the checks in main.
+
+## Addendum 3: F-804, bulk field data by R2 and R1 (2026-11-16)
+
+F-804 (bulk field data by the R2 reader and the R1 route, bit for bit; guardrails G2, G3 with P12, G9 with P4, G10,
+G21) adds **no dependency**: the readers use Node's `fs`, `zlib`, `net` and `worker_threads`, and Electron's
+`MessageChannelMain`. Section 2 and addenda 1 and 2 are unchanged, and `package-lock.json` did not change. No Rust file,
+service method, reply shape, golden or default changed (G4); the spike's example `crates/rcfd-api/examples/f447_bench.rs`
+was only built (`cargo build --release -p rcfd-api --example f447_bench`) and run, to make the data sets and to serve
+`data.*`. The spike's `bench/electron/io/tsstore.js` and `rpc.js` were ported, not imported; `bench/` is unchanged.
+
+### What F-804 built
+
+- **`src/main/data/tsstore.ts`** (route R2): the reader of `store.rts` (ADR 0124), ported from the spike and brought to
+  the checks of the Rust `Reader` (`crates/rcfd-tsstore/src/lib.rs`): the header; every frame head it reads; the payload
+  checksum of every SNAP, FOOT and DATA frame; the footer index with its consistency checks or, without a valid footer,
+  the same lenient scan of the frame heads (it stops at a short or damaged tail) and `refresh` for a live run; the
+  snapshot directory checks (`check_dir`, step and time against the index); the size limits of JSON and data frames;
+  raw and shuffle-deflate blocks, `f32` and `f64` precision, returned as `f32` (`as f32`, round to nearest). Two things
+  the spike left out (ADR 0350 addendum 1, QA2) are in: the scan of an unfinished store, and the payload checksum of the
+  MESH frame before `surface` uses it (streamed, once per open store). `surface` triangulates the boundary faces as
+  `data.surface` does. It does not rebuild the mesh's content hash (`Reader::mesh` does; that needs Rust's mesh code, G2).
+- **`src/main/data/worker.ts`, `local.ts`**: the reader runs in a `worker_threads` worker of the main process; requests
+  go to it one at a time, and results come back with their ArrayBuffers transferred (no copy between the threads).
+  Before each request the worker looks at the file again: a store that grew is refreshed, one that was replaced is
+  opened anew. `local.ts` only checks the path against the data roots and passes messages; the main thread never reads a
+  store.
+- **`src/main/data/roots.ts`**: which folders R2 may read. A local store is named by an absolute path and is read only
+  when its real path (links and junctions resolved) is inside a root. Roots: `RCFD_STUDIO_DATA_ROOTS` (the platform's
+  path delimiter), and `DataRoots.allow(dir)` for F-805 when a project is opened. Relative paths, `..` segments, NUL and
+  device paths are refused before the file system is asked.
+- **`src/main/data/remote.ts`** (route R1): `data.open`, `data.field` and `data.surface` through F-803's
+  `ServiceClient` (the call connection), and one more TCP connection, per service instance, to the data port that
+  `data.info` names. The bytes are checked against the sections the call announced (name, dtype, count, byte length); an
+  unknown ticket, a wrong length or a time-out closes the data connection, and the next request opens a new one. One
+  request at a time: the service keeps at most 8 tickets and drops the oldest. A service without `data.*` (`rcfd serve`
+  today) answers `no_data`.
+- **The renderer's way in** (`src/shared/data.ts`, `src/main/data/bridge.ts`, `port.ts`, `src/preload/index.cts`):
+  after each load of an app page the main process hands the preload script a second MessagePort, on
+  `studio.data-port`; the preload keeps it and exposes `window.studioData` (`open`, `field`, `surface`, `cancel`). Each
+  answers a value `{ok, result}` or `{ok: false, error: {code, message, data?}}`, never a thrown error; `field` gives a
+  `Float32Array`, `surface` a `Float32Array` and two `Uint32Array`s. A store is `{route: 'local' | 'service', path}`. The
+  main process checks every message: the exact fields of its operation, a known route, bounded strings, a non-negative
+  integer snapshot, a time limit from 1 ms to 10 min, at most 256 waiting requests per window. `cancel(tag)` answers
+  every waiting request with that tag `cancelled` at once; a queued one never runs, a running one finishes and its
+  result is dropped. `window.studio`, `window.studioService`, `SERVICE_METHODS` (`data.field` stays refused there) and
+  the shell's ipcMain channels are unchanged.
+- **Tests** (no human step; they make their data afresh on every run):
+  - `tests/unit/data-routes.spec.ts` (18 tests) makes the tiny box (120 cells) and the 1e5-cell box of ADR 0350 with
+    `f447_bench gen` (the raw store from the run path, the deflated copy from the Rust writer, and the reference bytes:
+    `Reader::read_field` cast to `f32`). In Node, R2 through its worker and R1 through a real service (`f447_bench
+    serve`) return every value of every field of every snapshot equal to the references bit for bit (XOR and population
+    count); the surfaces of R2 and R1 are equal bit for bit; NC2 (one block rotated by a byte is reported); M3 (a wrong
+    unshuffle stride makes all 80 deflated fields differ, in the reader and through the worker); a damaged header,
+    frame head, data payload and mesh payload are refused by both readers; four kinds of unfinished store (a torn tail,
+    a zero-filled tail, no footer, a damaged trailer) are scanned to the same snapshots as the Rust reader scans them; a
+    growing store is picked up as `Reader::refresh` does; a replaced store is read anew; errors carry their reason;
+    `rcfd serve` answers `no_data`.
+  - `tests/unit/data-bridge.spec.ts` (12 tests): the port's checks, the data roots (a junction out of a root is
+    refused), the queue's cancellation, the time limits, the pending limit.
+  - `tests/e2e/data.spec.ts` (8 tests, the packaged Studio attached to `f447_bench serve`): the bridge's exact shape;
+    both routes describe the same store; **P12 in the renderer**: all 80 fields of the 1e5 box by R2 and by R1, raw and
+    deflated (320 fields, 3.2e7 values), SHA-256 computed in the page equal to the references', and the differing bits
+    counted in the page for every snapshot of `p` (0), with NC2; the surfaces equal; the refusals (shape, outside the
+    roots, relative and `..` paths, the service's own sandbox: 1004); cancellation; a reload (a new port, never visible
+    to the page).
+  - 38 new tests; the 155 of `npm test` pass, the earlier ones unedited.
+- **Mutations** (applied in place, rebuilt, the unit file run, then restored): the reader's DATA payload checksum check
+  removed (the damaged-checksum test fails); the worker reading snapshot + 1 (the first P12 test fails).
+- **`scripts/measure-data.mjs`** (`npm run bench:data`): P4 and, with `--p12`, P12 over the 1e6 and 4e6 boxes, through
+  the packaged Studio; by hand only.
+
+### Decisions taken in F-804 (reversible; the maintainer may change them)
+
+- **D5, how field values reach the page.** Electron's `MessagePortMain.postMessage` transfers only ports, so an
+  ArrayBuffer from the main process to a renderer is always one structured-clone copy (ADR 0350 A1.3 measured with it).
+  (a) A second MessagePort per page, kept in the preload script, values as ArrayBuffers, handed to the page as typed
+  arrays through `contextBridge`, which copies once more inside the renderer process (done). (b) The data operations on
+  F-803's service port behind `window.studioService`: its exact seven-function shape is pinned by an existing test
+  (house rule 2), and 4 MB replies would queue with the event batches. (c) Transfer the port into the page's world, as
+  the spike did, which saves the `contextBridge` copy: the page would hold a raw port, against D1 of addendum 2 and its
+  test that the page never sees one. (d) A `SharedArrayBuffer`: needs cross-origin isolation and cannot be shared
+  between the main and the renderer process anyway. Recommendation: (a); P4 below is met with it, so the second copy
+  (about a millisecond for 4 MB) is not worth a weaker boundary. Inside the main process the worker-to-main hop is a
+  true transfer.
+- **D6, where R2 runs.** (a) A worker thread (done). (b) Asynchronous `fs` and `zlib` on the main thread: the FNV-1a
+  checksums and the unshuffle would still run there, 10 to 30 ms per 1e6 field and about 0.4 s for the mesh checksum at
+  1e6 (measured in Node on this machine, busy), stalling every window's IPC meanwhile. Recommendation: (a), G21.
+- **D7, which local folders R2 reads.** (a) Data roots: `RCFD_STUDIO_DATA_ROOTS` now, the project folder (F-805)
+  later, real paths compared (done). (b) Any absolute folder that holds a `store.rts`. (c) Only folders under the
+  service's root. Recommendation: (a): a compromised page reads no more than the open project's stores, and R2 works
+  without a service.
+- **D8, the mesh checksum in R2.** (a) Verify the MESH frame's payload checksum once per open store before its first
+  surface (done; about 0.4 s for the 195 MB frame of the 1e6 box, in the worker). (b) Skip it, as the spike did (its P7
+  by R2 was 55 ms). Recommendation: (a) (G3: a damaged mesh must not draw). If P7 (a later item) needs the time, a
+  checksum cached beside the store by the run path is ADR 0350 QA5's question.
+- **D9, R1 one request at a time.** (a) Serial, so the service's limit of 8 tickets never drops one of ours (done).
+  (b) Up to 7 calls in flight. Recommendation: (a) until scrubbing over R1 (P5) needs more.
+- Progress (G21): a field or a surface is one request; the page shows progress per request and cancels by tag. There
+  are no progress events inside a request (the surface of a large fan mesh may need them; a later item).
+
+### P4 through the product shell (run once by hand, house rule 7)
+
+Method of ADR 0350 A1.4 with the Studio's own data path in place of the spike's: `scripts/measure-data.mjs` launches
+the packaged Studio attached to the spike's server (`f447_bench serve`, `data.*` on) with `RCFD_STUDIO_DATA_ROOTS` on the
+data folder, makes a WebGPU device and one 4 MB storage buffer in the page before any timing, and times in the renderer
+`window.studioData.field(store, i mod 20, 'p')` on the 1e6-cell box, then `queue.writeBuffer` and
+`queue.onSubmittedWorkDone()`; 20 warm-up and 200 timed repeats per route and codec. The data sets were made afresh by
+`f447_bench gen` (the run path took 20 steps in 4.3 s, 119.8 s and 681.0 s for the 1e5, 1e6 and 4e6 boxes; raw stores
+51.6 MB, 514 MB and 2053 MB, deflated copies 43.2 MB, 418 MB and 1701 MB, as in ADR 0350; no non-finite value). Beside
+each line (G21, recorded, not judged): the longest gap of a 1 ms interval timer in the main process (17.3 ms when idle:
+the timer's own resolution on Windows) and the renderer's long tasks (over 50 ms).
+
+| Id | Limit | Measured (Electron 45.3.3, product shell) | Met | ADR 0350 (45.1.0, spike) |
+|---|---|---|---|---|
+| P4 R2 | p50 <= 30, p99 <= 60 ms | raw: p50 21.7, p99 32.5, max 34.7; deflated: p50 33.1, p99 71.1, max 210.1 | raw yes; deflated no | raw: p50 14.2, p99 22.4; deflated: p50 24.0, p99 30.9 |
+| P4 R1 | p50 <= 30, p99 <= 60 ms | raw: p50 47.0, p99 104.2, max 110.2; deflated: p50 62.5, p99 94.7, max 95.1 | **no** (both) | raw: p50 25.9, p99 57.7; deflated: p50 31.0, p99 66.1 |
+| G21 (recorded) | | main timer's longest gap: R2 18.1 (raw) and 21.5 (deflated), R1 36.8 and 32.4; renderer long tasks: none, except one of 50.0 ms during R1 raw | | not taken |
+| P12 | 0 differing bits | 0 differing fields of 400 (6.4e8 values): the 1e6 box, all four fields of all 20 snapshots, and `p` of the 4e6 box, by R2 and R1, raw and deflated; SHA-256 of the values the page received against SHA-256 of the Rust reader's reference bytes | yes | 0 of 6.72e8 values (bits counted) |
+
+**P4 is met through the product shell by route R2** (the limit is "R1 or R2", judged on the raw store, ADR 0350 §3 and
+A1.4), the route ADR 0350 QA2 (a) chose for projects on this machine. **R1 missed it in this run**, raw and deflated.
+Diagnosis (after the run, Node against the same server, 50 repeats, not a registered run): of R1's raw time, the
+`data.field` call (the Rust reader opening the store, decoding to `f64` and casting) took p50 10.8 ms, p99 13.6, and the
+4 MB over the data connection p50 16.9, p99 55.8; that is p50 27.3 and p99 67.0 before any IPC. So most of the miss is the
+service's side and the loopback transfer at full processor load; the spike's R1 met with little room (p99 57.7 at a
+load of 0.64), and this run had none. Two things the product adds to R1 over the spike, both small next to that: the data
+connection copies the 4 MB twice in Node (the chunks joined, then into a buffer of their own; the spike wrote the chunks
+into the destination once), and `contextBridge` copies once more in the renderer (D5). Nothing was tuned; the miss is
+recorded. R2 deflated missed too (p99 71.1 and one repeat of 210 ms); the spike met it, but the deflated store is not
+what the run path writes and is not judged.
+
+Set-up: 2026-11-16 14:27 UTC, Windows 11 (10.0.26300), AMD Ryzen 7 9800X3D (16 logical), 93.6 GB (26.8 GB free),
+launcher on Node 22.19.0, Electron 45.3.3 (Chromium 156.0.8078.100, Node 24.22.3), WebGPU adapter vendor `nvidia`,
+architecture `blackwell` (the RTX 5080), the window visible with a content area of 1264 x 735 (the Studio's window is
+1280 x 800 outside; the spike's content was 1280 x 800), `f447_bench` built from this branch. **Deviation:** the
+machine was fully busy: processor busy fraction 1.00 before the run with 9 `cargo`/`rustc`/`link` processes of other
+jobs, and 1.00 after it with 6 (ADR 0350's P4 ran at 0.64 with none). The numbers are an upper side of what an idle
+machine gives; the run was not repeated (a registered run is made once). The summary line of the script judged "both
+routes" when it ran; it was corrected afterwards to the registered rule ("R1 or R2"); the numbers come from its JSON
+output. The run appears in no test: `npm test` never times anything. The raw results stay in the scratch folder, not
+committed.
+
+### Notes for later items
+
+- **R1 at P4.** If R1 must meet P4 by itself (a remote service as the only source of a picture), the next steps, each to
+  be measured: read the data connection into the destination buffer directly (one copy less in Node); a cached `Reader`
+  per store in the service (a Rust change: `data.*` opens the store per call, A1.1); `f32` stores read without the `f64`
+  round trip (Rust as well).
+- **Scrubbing (P5) and the first picture (P7)** are later items' numbers; P7 by R2 now includes the mesh checksum (D8).
+- **No progress inside a request**, and no prefetch: a scrubbing surface asks for the next snapshots itself and cancels
+  by tag.
+
+### Open questions for the maintainer
+
+- **Q6, `rcfd serve --data` (ADR 0350 QA4).** Route R1 needs a service with `data.*` on, and `rcfd serve` has no
+  switch for it (a flag changes the CLI help golden, so it needs the maintainer). Until then R1 works against
+  `f447_bench serve` and any program that calls `Service::enable_data`, and answers `no_data` against `rcfd serve`.
+  (a) Add `--data` to `rcfd serve` (a Rust change, with the golden edit approved); (b) leave R1 to embedding programs.
+  Recommendation: (a), as ADR 0350 recommended. Not done here: F-804 changes no Rust.
+- **Q7, R1 for a service on another machine.** F-803's configuration accepts loopback addresses only (G10), so "R1 for
+  a remote service" reaches a service on this machine (or one behind an SSH tunnel). A service elsewhere needs a
+  decision on transport security: the data connection is plain TCP without authentication, like the call connection.
+  (a) Keep loopback only until that is designed; (b) allow other addresses now. Recommendation: (a).
+
+### Verification (2026-11-16, Windows 11, Node 22.19.0, npm 11.12.0)
+
+`npm ci` clean (72 packages added, 0 vulnerabilities; `package-lock.json` unchanged); `npm run typecheck` (the three
+type checks) exits 0; `npm test` (build, package, every Playwright test) 155 passed, none skipped (103 unit, 52 e2e;
+38 of them new); `python scripts/third_party_licenses.py --check` up to date; `cargo test -p rcfd-cli --release --test
+docs_site --test workspace_graph` passes (2 and 4). No Rust file, test, golden or default changed; no existing test was
+edited.

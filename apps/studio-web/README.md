@@ -22,12 +22,17 @@ an allow-list of methods. There is no project folder access and no surface yet. 
     npm run gallery           # open the packaged app on the primitives gallery at 1440x900 (view-and-report)
     npm run bench:cold-start  # P10, 10 cold starts of the packaged copy; a heavy record, run by hand only
     npm run bench:service -- --bench-server=<f447_bench>   # P1 and P2 through the shell; heavy, by hand only
+    npm run bench:data -- --bench-server=<f447_bench> --data=<folder> [--p12]   # P4 (and P12 at 1e6, 4e6); by hand only
     npm start                 # electron . (run npm run build first); downloads the Electron binary on first use
 
 `npm test` opens the Studio window for a few seconds on Windows (Electron has no headless mode there); it needs no input.
 On Linux it needs a display (CI uses a virtual one, F-823). The service tests of `tests/e2e/service.spec.ts` need the
 `rcfd` binary (`cargo build --release -p rcfd-cli`; found through `RCFD_BIN`, `$CARGO_TARGET_DIR/release` or a
-`target/release` above this folder); without it they are skipped and say why.
+`target/release` above this folder); without it they are skipped and say why. The bulk data tests
+(`tests/unit/data-routes.spec.ts`, `tests/e2e/data.spec.ts`) need the Rust example `f447_bench`
+(`cargo build --release -p rcfd-api --example f447_bench`; found through `RCFD_F447_BENCH`, `$CARGO_TARGET_DIR` or a
+`target/release/examples` above this folder), which makes their data sets afresh on every run; without it they are
+skipped and say why.
 
 ## The solver service (F-803)
 
@@ -52,6 +57,26 @@ Which service the Studio uses is set by its environment (`src/main/service/confi
   (`adopted: true`).
 - `RCFD_STUDIO_BENCH=1` (measurement only, `scripts/measure-service.mjs`): the client is reachable from Playwright's
   main-process evaluate. Unset, nothing is exposed.
+
+## Bulk field data (F-804)
+
+The page asks `window.studioData` (`src/shared/data.ts`) for a store's sizes and snapshots (`open`), one field of one
+snapshot as a `Float32Array` (`field`) or the boundary surface (`surface`), naming the store as `{route, path}`:
+
+| Route | What reads the store | `path` |
+|---|---|---|
+| `local` (R2 of ADR 0350) | the main process, in a worker thread: `src/main/data/tsstore.ts`, a port of the Rust reader of `crates/rcfd-tsstore` (footer or scan, every checksum it reads) | an absolute folder holding `store.rts`, inside a data root |
+| `service` (R1) | the service's opt-in `data.*` methods (`rcfd-data/1`, protocol 1.2): the call on the client's call connection, the bytes on one more TCP connection to its data port | the folder as the service takes it (its own sandbox applies) |
+
+- Every value the page receives equals the Rust reader's value cast to `f32`, bit for bit (G3, P12); the tests compare
+  against reference bytes written by the Rust reader.
+- `RCFD_STUDIO_DATA_ROOTS=<dir>[;<dir>...]`: the folders route `local` may read (real paths, links resolved). Without it
+  nothing local is read; F-805's project folder adds its own root.
+- `rcfd serve` does not switch `data.*` on (ADR 0350 QA4), so route `service` answers `no_data` there; the spike's server
+  `f447_bench serve` has it on.
+- Nothing blocks (G21): local reads run in a worker thread, the service route is asynchronous, every request has a time
+  limit and `cancel(tag)` answers waiting requests at once. Values cross from main to the renderer as one structured
+  clone of an ArrayBuffer over a second MessagePort, then once more through `contextBridge` (ADR 0801 addendum 3).
 
 ## Layout
 

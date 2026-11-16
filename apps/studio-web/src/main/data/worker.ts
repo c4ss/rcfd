@@ -1,0 +1,138 @@
+// The worker thread of route R2 (F-804): runs the synchronous reader of tsstore.ts so that no file read, checksum,
+// inflate or triangulation runs on the main process's thread (G21). One task at a time, sent by local.ts; results go
+// back with their ArrayBuffers transferred (zero copy between the threads).
+//
+// The worker keeps the stores it has opened (at most MAX_OPEN, least recently used closed first). Before each task it
+// looks at the file again: a store that grew is refreshed (a scanned index picks up the snapshots a live run committed),
+// a store that was replaced or changed otherwise is opened anew.
+import fs from 'node:fs';
+import { parentPort } from 'node:worker_threads';
+import type { FieldInfo, StoreInfo } from '../../shared/data.js';
+import { Store, StoreError, STORE_FILE } from './tsstore.js';
+import path from 'node:path';
+
+/** main -> worker */
+export type WorkerTask =
+  | { readonly id: number; readonly op: 'open'; readonly dir: string; readonly path: string }
+  | { readonly id: number; readonly op: 'field'; readonly dir: string; readonly snapshot: number; readonly field: string }
+  | { readonly id: number; readonly op: 'surface'; readonly dir: string }
+  | { readonly id: number; readonly op: 'hooks'; readonly wrongStride: boolean };
+
+/** worker -> main */
+export type WorkerReply =
+  | { readonly id: number; readonly ok: true; readonly result: WorkerResult }
+  | { readonly id: number; readonly ok: false; readonly store: boolean; readonly message: string };
+
+export type WorkerResult =
+  | { readonly kind: 'open'; readonly info: StoreInfo }
+  | { readonly kind: 'field'; readonly snapshot: number; readonly field: string; readonly values: ArrayBuffer }
+  | { readonly kind: 'surface'; readonly points: ArrayBuffer; readonly triangles: ArrayBuffer; readonly cells: ArrayBuffer }
+  | { readonly kind: 'hooks' };
+
+const MAX_OPEN = 16;
+
+interface Open {
+  readonly store: Store;
+  readonly ino: number;
+  readonly birth: number;
+}
+
+const open = new Map<string, Open>();
+let wrongStride = false;
+
+function closeOne(dir: string): void {
+  const o = open.get(dir);
+  open.delete(dir);
+  try {
+    o?.store.close();
+  } catch {
+    // already closed
+  }
+}
+
+function storeFor(dir: string): Store {
+  let st: fs.Stats;
+  try {
+    st = fs.statSync(path.join(dir, STORE_FILE));
+  } catch (e) {
+    closeOne(dir);
+    throw new StoreError(`cannot open ${path.join(dir, STORE_FILE)}: ${(e as NodeJS.ErrnoException).code ?? (e as Error).message}`);
+  }
+  let o = open.get(dir);
+  if (o && (o.ino !== st.ino || o.birth !== st.birthtimeMs || st.size < o.store.length)) {
+    closeOne(dir);
+    o = undefined;
+  }
+  if (o && st.size !== o.store.length) {
+    if (o.store.indexSource.kind === 'scanned') {
+      try {
+        o.store.refresh();
+      } catch {
+        closeOne(dir);
+        o = undefined;
+      }
+    } else {
+      closeOne(dir);
+      o = undefined;
+    }
+  }
+  if (!o) {
+    const store = new Store(dir);
+    o = { store, ino: st.ino, birth: st.birthtimeMs };
+    while (open.size >= MAX_OPEN) closeOne(open.keys().next().value as string);
+  } else open.delete(dir);
+  open.set(dir, o); // most recently used last
+  o.store.hooks = { wrongStride };
+  return o.store;
+}
+
+function info(s: Store, p: string): StoreInfo {
+  const fields: FieldInfo[] =
+    s.snapshots.length === 0
+      ? []
+      : s.fields(0).map((f) => ({ name: f.name, unit: f.unit, location: f.location, n: f.n, precision: f.precision, codec: f.codec }));
+  return {
+    route: 'local',
+    path: p,
+    nCells: s.nCells,
+    nPoints: s.nPoints,
+    meshHash: s.meshHash,
+    snapshots: s.snapshots.map((x) => ({ step: x.step, time: x.time })),
+    fields,
+    index: s.indexSource.kind,
+  };
+}
+
+function run(t: WorkerTask): { result: WorkerResult; transfer: ArrayBuffer[] } {
+  switch (t.op) {
+    case 'open':
+      return { result: { kind: 'open', info: info(storeFor(t.dir), t.path) }, transfer: [] };
+    case 'field': {
+      const values = storeFor(t.dir).field(t.snapshot, t.field);
+      return { result: { kind: 'field', snapshot: t.snapshot, field: t.field, values }, transfer: [values] };
+    }
+    case 'surface': {
+      const s = storeFor(t.dir).surface();
+      return { result: { kind: 'surface', ...s }, transfer: [s.points, s.triangles, s.cells] };
+    }
+    case 'hooks':
+      wrongStride = t.wrongStride;
+      return { result: { kind: 'hooks' }, transfer: [] };
+  }
+}
+
+const port = parentPort;
+if (port) {
+  port.on('message', (t: WorkerTask) => {
+    let reply: WorkerReply;
+    let transfer: ArrayBuffer[] = [];
+    try {
+      const r = run(t);
+      reply = { id: t.id, ok: true, result: r.result };
+      transfer = r.transfer;
+    } catch (e) {
+      reply = { id: t.id, ok: false, store: e instanceof StoreError, message: e instanceof Error ? e.message : String(e) };
+    }
+    port.postMessage(reply, transfer);
+  });
+}

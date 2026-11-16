@@ -2,6 +2,7 @@
 // contextBridge. The page never gets ipcRenderer, a generic invoke, a MessagePort or any Node object.
 //
 // - `window.studio`: the shell's channels of src/shared/ipc.ts (one function per channel, F-801).
+// - `window.studioData`: bulk field data (F-804, src/shared/data.ts), on a second port; see the end of this file.
 // - `window.studioService`: the solver service (F-803, src/shared/service.ts). The main process hands this script a
 //   MessagePort on SERVICE_PORT_CHANNEL after each load of the page; the port stays here. Each function below turns its
 //   arguments into one request on that port. The checks are the main process's (src/main/service/bridge.ts): this side
@@ -23,6 +24,16 @@ import type {
   ServiceReply,
   ServiceState,
 } from '../shared/service.js';
+import type {
+  DATA_PORT_CHANNEL as DataPortChannel,
+  DataBridge,
+  DataOptions,
+  DataPortMessage,
+  DataReply,
+  DataRequest,
+  DataWireResult,
+  DEFAULT_DATA_TIMEOUT_MS as DefaultDataTimeout,
+} from '../shared/data.js';
 
 const invoke = <T,>(channel: Channel): Promise<T> => ipcRenderer.invoke(channel) as Promise<T>;
 
@@ -163,3 +174,100 @@ const service: ServiceBridge = {
 };
 
 contextBridge.exposeInMainWorld('studioService', service);
+
+// ---- the data port (F-804, src/shared/data.ts)
+//
+// `window.studioData`: bulk field data by route R2 (`local`) or R1 (`service`). The main process hands this script a
+// second MessagePort on DATA_PORT_CHANNEL after each load; it stays here like the service port. Values arrive as
+// ArrayBuffers (one copy across the process boundary) and are handed to the page as typed arrays (contextBridge copies
+// them once more inside this process). As with the service, the checks are the main process's (src/main/data/bridge.ts).
+
+const DATA_PORT_CHANNEL: typeof DataPortChannel = 'studio.data-port';
+const DEFAULT_DATA_TIMEOUT_MS: typeof DefaultDataTimeout = 60_000;
+
+let dataPort: Port | null = null;
+let nextDataId = 1;
+const dataQueued: DataRequest[] = [];
+const dataPending = new Map<number, { resolve: (r: DataReply<DataWireResult>) => void; timer: ReturnType<typeof setTimeout> }>();
+
+const settleData = (id: number, reply: DataReply<DataWireResult>): void => {
+  const p = dataPending.get(id);
+  if (!p) return;
+  dataPending.delete(id);
+  clearTimeout(p.timer);
+  p.resolve(reply);
+};
+
+const postData = (req: DataRequest): void => {
+  try {
+    (dataPort as Port).postMessage(req);
+  } catch (e) {
+    settleData(req.id, { ok: false, error: { code: 'bad_request', message: `the request cannot be sent: ${String(e)}` } });
+  }
+};
+
+const sendData = (req: DataRequest): Promise<DataReply<DataWireResult>> =>
+  new Promise((resolve) => {
+    const own = req.op === 'cancel' ? 0 : typeof req.timeoutMs === 'number' ? req.timeoutMs : DEFAULT_DATA_TIMEOUT_MS;
+    const limit = own + GRACE_MS;
+    const timer = setTimeout(() => {
+      settleData(req.id, {
+        ok: false,
+        error: dataPort
+          ? { code: 'timeout', message: `no answer from the Studio's main process within ${limit} ms` }
+          : { code: 'no_port', message: 'the Studio has not connected this window to its data' },
+      });
+    }, limit);
+    dataPending.set(req.id, { resolve, timer });
+    if (dataPort) postData(req);
+    else dataQueued.push(req);
+  });
+
+ipcRenderer.on(DATA_PORT_CHANNEL, (event) => {
+  const p = event.ports[0];
+  if (!p) return;
+  dataPort?.close();
+  dataPort = p;
+  p.onmessage = (e: { data: unknown }) => {
+    const m = e.data as DataPortMessage;
+    if (m?.type === 'reply') settleData(m.id, m.reply);
+  };
+  for (const req of dataQueued.splice(0)) postData(req);
+});
+
+/** The parts of a request every operation shares; arguments are passed on as given (main checks them). */
+const dataCommon = (options: DataOptions | undefined): { tag?: string | number; timeoutMs?: number } => ({
+  ...(options?.tag !== undefined ? { tag: options.tag } : {}),
+  ...(options?.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
+});
+
+const unexpected = (kind: string): DataReply<never> => ({ ok: false, error: { code: 'internal', message: `unexpected reply '${kind}'` } });
+
+const data: DataBridge = {
+  open: async (store, options) => {
+    const r = await sendData({ op: 'open', id: nextDataId++, store, ...dataCommon(options) });
+    if (!r.ok) return r;
+    return r.result.kind === 'open' ? { ok: true, result: r.result.info } : unexpected(r.result.kind);
+  },
+  field: async (store, snapshot, field, options) => {
+    const r = await sendData({ op: 'field', id: nextDataId++, store, snapshot, field, ...dataCommon(options) });
+    if (!r.ok) return r;
+    const x = r.result;
+    if (x.kind !== 'field') return unexpected(x.kind);
+    return { ok: true, result: { snapshot: x.snapshot, field: x.field, values: new Float32Array(x.values) } };
+  },
+  surface: async (store, options) => {
+    const r = await sendData({ op: 'surface', id: nextDataId++, store, ...dataCommon(options) });
+    if (!r.ok) return r;
+    const x = r.result;
+    if (x.kind !== 'surface') return unexpected(x.kind);
+    return { ok: true, result: { points: new Float32Array(x.points), triangles: new Uint32Array(x.triangles), cells: new Uint32Array(x.cells) } };
+  },
+  cancel: async (tag) => {
+    const r = await sendData({ op: 'cancel', id: nextDataId++, tag });
+    if (!r.ok) return r;
+    return r.result.kind === 'cancel' ? { ok: true, result: r.result.cancelled } : unexpected(r.result.kind);
+  },
+};
+
+contextBridge.exposeInMainWorld('studioData', data);
