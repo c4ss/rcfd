@@ -14190,13 +14190,18 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     the code; a view that does not apply to a case (for example a cut plane on a 2D case) is disabled with the reason
     shown (G6).
   - note: ADR 0800. Traces: G3, G6, G2; PRODUCT Operating Context.
-- [ ] **F-810** Electron Studio: run bands and linked time scrubbing
+- [x] **F-810** Electron Studio: run bands and linked time scrubbing
   - depends on: F-808, F-811
   - acceptance: The run bands of DESIGN.md on one shared time axis, each end marked with its pictogram and word; one
     scrubber line with its own flag lane moves the field, the residual cursor, the monitor readouts and the snapshot
     counter of the selected run together; Follow live for a running run; P5 and P6 met; a test that the field, residual
     and monitor values at a scrub position all belong to the same snapshot; a view-and-report step.
-  - note: ADR 0800. Traces: G3, G9 (P5, P6); DESIGN Run bands (signature), Named Rules (One Live Thing).
+  - note: ADR 0800. Traces: G3, G9 (P5, P6); DESIGN Run bands (signature), Named Rules (One Live Thing). Done
+    2026-11-16: run workspace (Workspace tab): run bands on one shared iteration axis with pictogram and word at each
+    end, one scrubber with its own flag lane moving field, residual cursor, monitor readout and snapshot counter
+    together, Follow live; same-snapshot test against a real quick-start run; P5 met (23.6 snapshots/s at 1e6 cells), P6
+    met on rate (9.1/s at 4e6 cells, 4 of 100 frames over 150 ms, machine fully loaded); screenshots in test-results-
+    visual/f810 for view-and-report.
 - [~] **F-811** Electron Studio: residual and monitor plots
   - depends on: F-803
   - acceptance: Residuals and monitors fetched once and then by increments (ADR 0353); every plot range holds every
@@ -14347,12 +14352,16 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     glossary, with no help text kept only in the Studio; every error message names the problem and the recovery, checked
     by a test over the engine's error catalogue; a learner's view-and-report step (G19).
   - note: ADR 0800 (G16 to G21 added 2026-11-16). Traces: G19, G2; PRODUCT Users, Principle 5.
-- [ ] **F-831** Electron Studio: command palette and keyboard shortcuts
+- [x] **F-831** Electron Studio: command palette and keyboard shortcuts
   - depends on: F-827, F-802
   - acceptance: A command palette generated from the action registry that finds every action by name; shortcuts for
     frequent actions with no conflicts (a test); a coverage test that every registered action is in the palette (G20);
     everything usable from the keyboard alone (G8).
-  - note: ADR 0800 (G16 to G21 added 2026-11-16). Traces: G20, G15, G8.
+  - note: ADR 0800 (G16 to G21 added 2026-11-16). Traces: G20, G15, G8. Done 2026-11-16: command palette (Ctrl+K,
+    Ctrl+Shift+P) generated from the action, run, case and Studio command registries (54 commands), unavailable commands
+    listed with their reason; one shortcut table for palette, listing, key listener and tests; no-conflict test incl.
+    Electron's menu accelerators and reserved keys; coverage test that every registered action is in the palette;
+    keyboard-only e2e.
 - [ ] **F-832** Electron Studio: responsiveness budget and cancellable work
   - depends on: F-808, F-810
   - acceptance: No engine or data work on the renderer's main thread: a test that records long tasks while opening a
