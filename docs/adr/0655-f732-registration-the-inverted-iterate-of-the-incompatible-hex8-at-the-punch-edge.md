@@ -308,3 +308,131 @@ tests as registered), and since that remedy test already misses unmutated (P, T-
 passed in `run1-default.log` fails, or a row met there is missed, under the mutation. A mutation whose only effect is on rows
 that already missed, or on reported rows, is recorded as not caught (with what changed in the reported rows). No limit and no
 test is changed.
+
+## Addendum 1: results (2026-11-16)
+
+The registered run was made once on the test commit 5ae69e54 (`run1-default.log` in the scratch folder, 102 s, the four tests
+with `--test-threads=1`); the met rows of A1.1 once (`run2-met-rows.log`, every row identical to the registered run); the
+diagnosis of A1.2 once (`a1-diagnosis.log`); the mutations once each on a scratch copy of 5ae69e54 (amendment 2;
+`mutations.log`, `mut-MB*.log`); B6, S5, S7 once (`b6.log`, `s5-baseline.log`, `s7-lib.log`, `s7-tests.log`, `s7-tests2.log`).
+No limit, set-up, seed or measure was changed after a run.
+
+### Results
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| CA | exactly one of H1, H2, H3 | **H1** only (element 476; criteria below) | yes |
+| LS (c3) | measured | **fails as the default**: element 476 inverted, load factor `0.675` to `0.678`, after 5 halvings | measured |
+| DB4l, SLl | only if LS converges | not applicable | |
+| BT (c4) | measured | **fails**: passes `0.675`, then element 475, load factor `0.890625` to `0.89375`, the modes not converged in 25 local iterations (relative residual `1.07e-1`) | measured |
+| DB4b `e_R`, `e_w` | `<= 0.10` | NaN (no state) | **no** |
+| SLb | `0`; `> 0` | NaN | **no** |
+| P | one remedy passes | neither alone | **no** |
+| T-FD | `<= 1e-6` | NaN (no BT state); at the state of the two together `9.1e-10` (E2, reported) | **no** |
+| BA | the inversion error | no BT state; at the state of the two together the plain evaluation **converges** (E2) | **no** |
+| NC1 | fails, element 476, `[0.67, 0.68]` | fails, element 476, `0.675` (`det F = -8.05e-2`, as ADR 0649) | yes |
+| NC2 block `8^3` `0.1 h`, cantilever `10 x 2 x 2` `0.25 h` | 0 bits differ | `0`, `0` | yes |
+| NC3 | `<= 1e-6` | `8.9e-9`, `7.3e-8` | yes |
+| B6 | pass | the four bit records pass | yes |
+| S5 | pass | 3 passed, 1 ignored | yes |
+| S6 | clean | `cargo fmt -p rcfd-fem --check`, `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean | yes |
+| S7 | pass | `--lib` 14 passed; `si_eas_hg5` 3, `si_eas_hg3` 4, `si_hex8x` 8, `si_eas` 8 passed; also `si_eas_hg` 8, `si_eas_hg2` 3 (they exercise the transient energy and the rotating copy) | yes |
+
+**CA in numbers** (element 476, rule L; `dc`, `de`, `d1` at the punch `0.05`, `0.06`, `0.065`, `0.067`): the compatible field
+`dc = 0.907, 0.892, 0.886, 0.883`; the converged enhanced field `de = 0.984, 0.981, 0.980, 0.980`; the mode part `q = |F_m| /
+|H_c| = 0.37, 0.35, 0.34, 0.34`, `|alpha|_inf = 2.9e-3` to `3.4e-3`. Neither field approaches inversion along the path. The
+plain local iteration from `alpha = 0` is not monotone: at `0.067` its iterates have `det F` from `0.88` down to `0.878` and up
+again (10 iterates). At the trial `u_T` (punch `0.0678`): `dc = 0.882`, the first iterate `0.962`, **the second iterate
+`det F = -1.31`** (inverted), the library's plain evaluation fails (`det F = -0.746` at point 0, the same kind of value as the
+`-8.05e-2`, `-5.69e-2`, `-3.84` of ADR 0649); the backtracked replica converges in 12 iterates with one halving to `de = 0.980`
+(the converged modes are as valid as at `0.067`), and the library's backtracked evaluation converges. The replica agrees with
+the library's modes to `8.8e-11` at the path states. So the inverted point is a **Newton iterate of the local mode iteration
+overshooting** from a state at which both the compatible field and the converged enhanced field are far from inversion (`det
+F >= 0.88`), not an inverted compatible field (H2) and not an exhausted element (H3).
+
+**Reported (no limit).** The line search and the backtracking **together pass the load**: `R = 0.36787102`, `w_c =
+0.06573382`, `e_R = 0.0750`, `e_w = 0.0287` against F-bar (`0.34220247`, `0.06389947`; the probe of ADR 0649 predicted `0.0750`,
+`0.0287`), no negative eigenvalue of `K_ff`, lowest over max diagonal `1.81e-3` (F-bar `2.39e-3`); 11 increments, 2 halved, 3
+corrections searched (shortest step `0.105`). These are within the ADR 0636 tolerance and positive definite, but the
+combination was registered as reported, so it does not count as P.
+
+**c6, the plain element on `4^3` at `0.25 h`** (element 53; F-bar `R = 0.38316202`, `w_c = 0.07044819`): the default and the
+line search fail at `0.675` (element 53, `det F = -7.13e-2`); **the backtracking alone passes**: `e_R = 0.0687` (probe
+`0.0687`), `e_w = 0.0376`, no negative eigenvalue, lowest over max diagonal `7.35e-3` (11 increments, 2 halved); the two
+together the same values in 10 increments. Its cause is H1 too, and there the first iterate is the one that overshoots: `d1 =
+0.979, 0.912, 0.696, 0.320` along the path and `-0.059` at `u_T` while `dc >= 0.915` and `de >= 0.976`.
+
+**Diagnosis A1.2.** E1: the backtracking alone converges to the punch `0.088` and `0.089` (10 increments each, no halving). At
+`u_T` (punch `0.0892`) element 475 has `dc = 0.771`; the plain iteration inverts at its first iterate (`det F = -6.28`); the
+backtracked replica converges in **19 steps** (3 halvings), but not monotonically: after the first halved step its mode
+residual rises from `1.6e5` to `6.7e6` and `det F` falls to `0.024` for six iterates before the quadratic phase; the library's
+backtracked evaluation converges at `u_T`. So `u_T` is not the failing trial (none of the registered readings of E1 applies as
+written: the iteration converges, under the cap); the driver's failing trial is a global Newton iterate farther from
+equilibrium than `u_T`, where the same slow, non-monotone damped iteration needs more than 25 steps. E2: at the loaded state
+of the two together element 476's backtracked tangent matches the central differences of its force to `9.1e-10`, and **no
+element** needs the backtracking there: the plain evaluation converges on all 512 elements. The overshoot of the plain
+iteration is a band of the path (entered at `0.675` of the load and left before the end), not a half-line.
+
+### Deviations
+
+- **P, T-FD, BA, DB4b, SLb** (amendment 1): the backtracking alone fails at `0.89` of the load; the known-miss record is
+  `db4_line_search_and_backtracking_known_miss`, the met rows run as `db4_met_rows`.
+- **Arithmetic 2 and 3** were half right: the line search alone fails as predicted, but the backtracking alone does not pass;
+  the backtracking without a decrease test lets the damped local iteration wander (residual up by a factor 40, `det F` down
+  to `0.02`) and the cap of 25 steps is reached at a far global iterate. The line search keeps the global iterates nearer
+  equilibrium, where the damped iteration converges within the cap; together they pass.
+- **BA's premise** ("the converged state is beyond the threshold") was wrong: the threshold is a band.
+- **A naming slip in the registration**: BA was registered with `condensed_force_and_tangent_with`; the function is
+  `condensed_force_and_tangent` (it takes the rule). Same measure.
+- **c6**: the cause measures of element 53 were run with the plain element's own path (rule `Off`), as registered.
+
+### Mutations (scratch copy of 5ae69e54, the default tests of `si_eas_hg6.rs`, each run once; amendment 2)
+
+| Id | Caught | What changed |
+|---|---|---|
+| MB1 (the driver ignores the opt-in) | **no** | only rows that already missed (P, T-FD, BA) and reported rows: the backtracking runs fail at `0.675` like the default, the two together fail (element 476), the c6 backtracking fails (element 53) |
+| MB2 (the step not halved) | **no** | the same as MB1 (the rows that change are reported ones) |
+| MB3 (the backtracking always on) | **yes** | NC1: the default fails at element 475, load factor `0.8906` (not element 476 in `[0.67, 0.68]`); NC2 passes, as expected; c6's default now passes |
+| MB4 (the previous iterate returned as converged) | **no** | the backtracking runs fail at `0.675` with a singular global tangent (pivot `-3.1e5`); the two together and the c6 backtracking fail |
+| MB5 (the halving from the inverted iterate) | **no** | the backtracking runs fail at `0.675` (element 476, `det F = -3.53`); the two together and the c6 backtracking fail |
+
+One of five caught. Every mutation of the backtracking is visible in the reported rows (the two together and the c6
+backtracking stop passing), but the checks it was registered against are the ones that missed unmutated, and the passing
+combination was registered as reported only. The registered checks do not guard the remedy that works.
+
+### Not run
+
+Nothing registered was skipped. The whole rcfd-fem suite was not run (the daily gate runs it, rule 7): `si_eas_hg6.rs`, the
+lib tests, `si_eas_hg5`, `si_eas_hg3`, `si_hex8x`, `si_eas`, `si_eas_hg`, `si_eas_hg2`, B6 and S5.
+
+### Decision
+
+**partial**, by the registered rule: B6, S5, NC2 met (no default bit changed; the opt-in changes no bit where it is not
+needed), CA met (the cause located: H1, an overshooting Newton iterate of the local mode iteration from `alpha = 0`, with the
+compatible and the converged enhanced fields at `det F >= 0.88`), NC1, NC3 met, the line search and the backtracking each
+measured; but neither alone passes the load (P, T-FD, BA missed) and four of five mutations are not caught. The two together
+pass within the ADR 0636 tolerance (`e_R = 0.0750`, `e_w = 0.0287`) with a positive definite loaded state, reported, not counted.
+The plain element on `4^3` at `0.25 h` is reported: it passes with the backtracking alone (`e_R = 0.0687`).
+
+### Remaining questions
+
+1. **Which remedy to register.** Options: (a) a follow-up that registers the line search with the backtracking as the remedy
+   and checks it (with mutation-catching rows) on the eight distorted meshes of ADR 0649 and further seeds; (b) a sufficient
+   decrease test in the backtracking (halve also when the mode residual does not fall), so that the backtracking alone passes,
+   measured on the same set-up; (c) a warm start of the modes from the committed state (adds element state). Recommendation:
+   (a) with (b) measured beside it: (a) is what passed here; (b) addresses the slow damped iteration that E1 shows. Proposed
+   below.
+2. **Default.** The backtracking (and the line search) stay opt-in; making them the default would change default results
+   where a default solve fails today and where a failed attempt later converges. Open for the maintainer.
+3. **The registered checks do not guard the passing combination** (mutations). Recommendation: the follow-up of 1 registers
+   its checks on the combination, so the mutations of the backtracking are caught.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> Structural solver, intermediate tier. Follow-up of F-719 (ADR 0649 DB4). PARTIAL. ADR 0655, 2026-11-16: the inverted point of the stabilised incompatible-modes Hex8 (rule L) at the punch edge of the 8^3 block at 0.25 h (seed 0xF719_0008). Cause located: not the compatible field and not the converged enhanced field (both keep det F >= 0.88 along the path at element 476), but a Newton iterate of the element's local mode iteration from alpha = 0 overshooting into det F < 0 (the second iterate at -1.31 at the failing load), within a band of the path entered at 67.5 per cent of the load. New opt-in SolidModel::set_incompatible_mode_backtracking (default off; an inverted mode iterate halves its step, at most 20 times): no default bit changed (the bit records of ADR 0506, 0608, 0614, 0630 and the rcfd-api baseline hashes pass; with the opt-in, bitwise identical results on two set-ups that do not need it). Measured on the same set-up: the driver's line search alone fails as the default (0.675); the backtracking alone passes 0.675 but fails at 0.89 (element 475, the damped mode iteration not converged in 25 steps); the two together pass: punch reaction and corner displacement within 7.5 and 2.9 per cent of the F-bar Hex8, loaded state positive definite (reported, not a registered pass). The plain element on the 4^3 block at 0.25 h passes with the backtracking alone (6.9 and 3.8 per cent of F-bar), the same cause. One of five mutations of the backtracking caught by the registered checks (the others only change reported rows). Not covered: a sufficient-decrease test in the backtracking, the combination on other meshes and seeds, other materials.
+
+> F-719 (note, ADR 0655, 2026-11-16): the DB4 known miss is located (an overshooting local Newton iterate of the modes, not a loss of stability or an inverted compatible field); with the opt-in backtracking of ADR 0655 and the driver's line search together rule L passes the 8^3 block at 0.25 h within the ADR 0636 tolerance (7.5 and 2.9 per cent), reported.
+
+> Follow-up proposed: The line search with the backtracking of the incompatible-mode update as a registered remedy on distorted meshes (ADR 0655 question 1). Deps F-732. Acceptance: Every limit not stated here is registered in the ADR before the run. Rule L with NewtonOptions::line_search and the opt-in backtracking of ADR 0655 on the eight distorted meshes of ADR 0649 and on the 8^3 block at 0.25 h with three further registered seeds: punch reaction, corner bulge, tip reaction and shortening within the ADR 0636 tolerances of the F-bar Hex8 and the loaded state positive definite; a sufficient-decrease test of the mode update measured beside it on the same set-ups (does the backtracking alone then pass); the mutations of the backtracking caught by the item's own checks; the default bits unchanged.
