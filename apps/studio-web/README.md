@@ -9,7 +9,8 @@ project view inside the hardened shell of guardrail G10, with Playwright tests t
 tokens of `DESIGN.md` and the primitives (on React Aria Components) are in place, shown on a primitives gallery. The main
 process is a client of the solver service (`rcfd-service/1`): it attaches to a running `rcfd serve` or starts its own,
 long-polls its events and reconnects when it restarts; the renderer reaches it only through `window.studioService` and
-an allow-list of methods. There is no project folder access and no surface yet. Dependencies and layout: ADR 0801
+an allow-list of methods. F-805 adds the project home: a project folder opened through the main process's folder
+dialog, read through the engine's project server, and kept live (below). Dependencies and layout: ADR 0801
 (accepted), addendum 1 (F-801) and addendum 2 (F-803); F-802 added no dependency.
 
     npm ci                    # exact versions from package-lock.json
@@ -54,6 +55,58 @@ Which service the Studio uses is set by its environment (`src/main/service/confi
 - `RCFD_STUDIO_BENCH=1` (measurement only, `scripts/measure-service.mjs`): the client is reachable from Playwright's
   main-process evaluate. Unset, nothing is exposed.
 
+## The project home (F-805)
+
+The window opens on the project home. With no project open it says so (the first `h1` is "No project open"), offers the
+folder dialog and the recent list. An open project is one ruled index of its `cases/`, `meshes/`, `runs/` and `notes/`,
+filtered by kind and by name, and a lane of every change the engine's feed reports, newest first. Surface brief:
+`.impeccable/surfaces/web-src-renderer-project-projecthome-tsx-41df8cd1.md`.
+
+| Variable | Meaning |
+|---|---|
+| `RCFD_STUDIO_MCP=<path of rcfd-mcp>` | the engine's project server; for each open project the main process starts `rcfd-mcp --project <folder> --read-only` |
+| `RCFD_STUDIO_RCFD=<path of rcfd>` | (F-803) when `RCFD_STUDIO_MCP` is not set: the `rcfd-mcp` beside that `rcfd` |
+| `RCFD_STUDIO_RECENT=<file>` | where the recent list is kept; default `<user data>/recent-projects.json` |
+
+Neither set: the home says what to set, and "Open project folder" is unavailable with the reason.
+
+- Through the engine: the main process asks the project server `project_info`, `list_runs`, `list_meshes` and
+  `read_feed` (the workspace of ADR 0173, the tools Claude Code uses, so both see one folder the same way). The server
+  runs `--read-only`; the Studio writes nothing to the folder (G12; the e2e test compares a snapshot of every file).
+- Live: the main process reads the feed every 400 ms (`FEED_POLL_MS`); when it holds anything it reads the lists again
+  and pushes the new state. Edits from Claude Code, the CLI, the runner or an editor show within 2 s without a reload
+  (measured by `tests/e2e/project.spec.ts`: new case, new note, deleted note, new run folder). When the feed cannot be
+  read or the server stops, the header says "Not live", a notice says why and what is shown, and Reconnect starts a new
+  server.
+- The renderer reaches the home only through `window.studioProject` (`state`, `onState`, `offState`, `pick`, `open`,
+  `forget`, `close`, `refresh`, `dismiss`), from one module, `src/renderer/project/door.ts`. A second MessagePort on
+  `studio.project-port`, like the service port; `src/main/project/bridge.ts` checks every message (exact fields, a path
+  of at most 4096 characters). The page cannot name a folder: `open` takes only a folder of the recent list, and new
+  folders come from the main process's dialog. The ipcMain channels stay `app.info` and `app.ready`.
+- The recent list holds each folder's path and when it was last opened, nothing of the project (G12). It is never opened
+  on its own at start.
+
+Decisions taken in building F-805 (options, the recommendation followed; each can be changed later without touching the
+engine):
+
+- D1, the route to the folder: (a) the engine's project server `rcfd-mcp --project <folder> --read-only`, one per open
+  project, or (b) new project methods in `rcfd serve`'s protocol (a Rust change, outside this item). Taken: (a).
+- D2, case and note names: the engine has no query that lists them (`project_info` counts them; `list_meshes` names only
+  the cases that use a mesh or that it cannot read). (a) the main process lists the file names under `cases/` and
+  `notes/` the way the engine counts them (`src/main/project/listing.ts`; names only, never content), until the engine
+  has the query; (b) counts only; (c) add `list_cases` and `list_notes` workspace queries (Rust, a follow-up). Taken:
+  (a) now, (c) proposed. The page shows when a name count and the engine's count disagree.
+- D3, where the project server comes from: `RCFD_STUDIO_MCP`, else beside `RCFD_STUDIO_RCFD`; never from `PATH`. Where a
+  packaged Studio finds it is F-820's.
+- D4, the recent list: paths and times only, at most 10, in the user data; never opened on its own at start (the empty
+  window stays "No project open").
+- D5, which folders the page may open: only the dialog's choice or a folder of the recent list.
+- D6, paused and cancelled runs: `DESIGN.md` has no pictogram for them; shown as words only until F-806.
+- D7, where these decisions live: here, rather than an ADR 0801 addendum (F-805 adds no dependency); they can move into
+  an addendum if preferred.
+- The folder dialog, the recent list and the project server's queries are main-process operations behind the project
+  port, not service methods, so they have no entry in the action registry (F-827) yet (G16).
+
 ## Layout
 
 | Path | Process | Built by | Filled in by |
@@ -63,10 +116,13 @@ Which service the Studio uses is set by its environment (`src/main/service/confi
 | `src/main/security.ts` | The security policy as values and pure functions (CSP, own-URL and network rules, protocol path resolution), unit-tested without Electron | as above | F-801 |
 | `src/preload/` | Preload script (CommonJS `.cts`, because a sandboxed preload cannot be an ES module): `window.studio`, the IPC allow-list | `tsc -p tsconfig.node.json` -> `dist/preload/` | F-801, F-803 |
 | `src/shared/ipc.ts` | The typed IPC contract shared by all three processes: channel names, arguments, replies | `tsc -p tsconfig.node.json` -> `dist/shared/` | F-801 |
+| `src/main/project/` | The project home (no Electron import, unit-tested in Node): `server.ts` (the engine's project server over MCP), `session.ts` (one open folder: lists, feed, liveness), `home.ts` (recent list, opening, failures), `listing.ts` (case and note names, D2), `recent.ts`, `config.ts`, `bridge.ts` (the checks on the project port) | `tsc -p tsconfig.node.json` -> `dist/main/` | F-805 |
+| `src/shared/project.ts` | The project port's contract: what the home shows, the port messages, `window.studioProject` | as above | F-805 |
 | `src/shared/service.ts` | The service port's contract: the allow-list of service methods, the port messages, `window.studioService` | as above | F-803 |
 | `src/renderer/` | Renderer (browser code only, no Node types): React, three.js, React Aria Components | `vite build` -> `dist/renderer/` | F-802 onwards |
 | `src/renderer/design/` | `tokens.ts`, the one source of the `DESIGN.md` tokens (colour roles, type ramp, spacing, sizes, lines, focus, motion, pictogram grid); `tokens.css`, generated from it | as above | F-802 |
 | `src/renderer/ui/` | The primitives of `DESIGN.md` Components on React Aria Components: buttons, toggles and segmented toggles, text and number fields, select, switch, tabs (sub and project), table, slider, tooltip, state pictograms and icons; `primitives.css` | as above | F-802 |
+| `src/renderer/project/` | The project home (`ProjectHome.tsx`, `project.css`) and its one door to `window.studioProject` (`door.ts`) | as above | F-805 |
 | `src/renderer/dev/` | The primitives gallery at `#/dev/primitives` (loaded on demand): every primitive and the tokens, with sample labels only | as above | F-802 |
 | `tests/unit/` | Pure tests of `security.ts` and the built `index.html` (F-801); tokens against `DESIGN.md`, the pictogram grid (F-802); the service client against a fake service (F-803) | run by Playwright (project `unit`) | F-801, F-802, F-803 |
 | `tests/e2e/` | The packaged shell driven by Playwright's `_electron.launch`; the primitives (F-802); the service port's allow-list against a fake service, and the client against the real `rcfd serve` (F-803) | run by Playwright (project `electron`) | F-801 onwards |

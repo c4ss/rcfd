@@ -115,16 +115,3 @@ textarea {
   clip-path: inset(50%);
   white-space: nowrap;
 }
-
-/* The empty project view (F-801 placeholder until F-805). */
-.project-view {
-  padding: var(--space-xxl);
-  max-width: 60ch;
-}
-
-.project-view h1 {
-  font-size: var(--type-headline-size);
-  font-weight: var(--type-headline-weight);
-  letter-spacing: var(--type-headline-tracking);
-  margin: 0 0 var(--space-lg);
-}
