@@ -23,8 +23,11 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   `mesh.generator = "annulus_3d_cylindrical_interface"` runs it from a case file (see docs/case-schema.md); laminar
   constant-property piso / pimple with Euler only, no expression boundary values, no restart. A non-axisymmetric flow
   through the turning rotor (an m = 2 vortical field with every wall at rest) checks the rotor mesh flux: the sliding run
-  against the static join, after whole rotor pitches, cell for cell. On a step where rotor and stator nodes coincide (the interface drops
-  its zero-area overlaps) the uniform state is lost by about `2e-4` and decays afterwards (ADR 0637 amendment 2; open).
+  against the static join, after whole rotor pitches, cell for cell. On a step where rotor and stator nodes coincide the
+  interface drops its zero-area overlaps and its graph falls into parts; since F-710 (ADR 0638) the GCL closure and the
+  remap of the old flux are then solved on the interface faces together with the faces between the parts (only when a
+  part's targets do not sum to zero beyond rounding), so a uniform flow stays uniform to `1e-14` on those steps too; every
+  other step is bit-identical to before. The periodic (sector, planar) path is not changed by this.
 * Planar and sector sliding interfaces with periodic seams, library only (F-304, ADR 0629): a slider periodic in the slide
   direction, or a rotor sector against a stator sector of the same pitch (`rcfd_mesh::sliding_periodic`,
   `rcfd_fv::sliding_periodic`, `PimpleSolver::step_sliding_periodic`). The periodic join keeps the blocks' seam pairs; the

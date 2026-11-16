@@ -181,3 +181,82 @@ reported (no existing test is edited).
 - The GCL coupling is exercised by T1 only; on P its part means are rounding (symmetry), so UC does not trigger it.
 - Non-uniform flows at coincidence steps: the coupled remap changes their old flux on the coupling faces; no accuracy check
   beyond the existing F-303 non-axisymmetric checks (which run through coincidence steps and must still pass, B3) is made.
+
+## Addendum 1: results (2026-11-16)
+
+Measured against the limits registered above; no limit was changed. Release builds on Windows. The registration is 382f8d0c;
+the code and the tests fbe58e64. Each registered run was made once and every check was met in it. After that run two lint
+fixes demanded by clippy were made before the commit (`coupled_balance`'s return type named `Coupled`; its threshold test
+written as `partial_cmp(..) != Some(Greater)` in place of `!(a > b)`, the same result for every non-NaN value; the test
+helper `find` taking `&mut [usize]`); the new tests, `baseline_hashes` and `sliding_case_f303` were run once more on the
+committed code as a confirmation and printed the same numbers. No limit or set-up was chosen after a run.
+
+**Built as registered** (D1 to D4). `crates/rcfd-fv/src/sliding.rs` (shared solver file): module text, lines 15 to 18;
+`PART_MEAN_TOL`, `coupling_faces`, `Coupled`, `coupled_balance` (private), lines 221 to 283; the M3 assignment, lines 369 to
+383; the M4 assignment, lines 423 to 437; the unit test T1, lines 639 to 669. Nothing else changed; `graph_balance`,
+`interface_balance`, `sliding_periodic.rs`, `pimple/moving.rs` and `rcfd-mesh` are untouched (B4). Tests:
+`crates/rcfd-fv/tests/sliding_coincidence_f710.rs` (3: UC, B2, N1), `crates/rcfd-api/tests/sliding_coincidence_f710.rs` (1:
+A1t). Docs: `docs/dynamic-mesh.md` (the coincidence paragraph). No golden, no hash table, no existing test edited.
+
+### Results
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| A1 (a1) UC, 50 steps | `<= 1e-10` each | velocity `8.86e-15`, pressure `5.20e-14` | met |
+| A1c (a1) the 6 coincidence steps 8, ..., 48; the 6 regain steps 9, ..., 49 | `<= 1e-10` each | `8.86e-15`, `4.12e-14`; `6.86e-15`, `4.22e-14` | met |
+| A1t (a1, tree) UCt, 40 steps, coincidences at 8, ..., 40 | `<= 1e-10` each | velocity `6.05e-15`, pressure `3.23e-13` | met |
+| A2 (a2) cause registered before the fix | present | 382f8d0c, alone, before fbe58e64 | met |
+| B1 (a3) UC against the replica | bit-equal on the 44 others; differ exactly on 8, ..., 48 | as stated | met |
+| B2 (a3) U2 (100 steps), U3 (40), LP (20) against the replica | bit-equal every step | no step differs | met |
+| B3 (a3) existing suites, unedited | pass as before | `rcfd-fv` lib 109/6 (108 before plus T1), `sliding_interface_f250` 14/4, `_records` 3/0, `sliding_periodic_f304` 8/2, `sliding_reimaging_f704` 12/2; `rcfd-api` `sliding_case_f303` 7/4, `baseline_hashes` 3/1, `cylindrical_interface_w44b` 5/1, `dynamic_mesh` 5/1; `rcfd-cli` `sliding_case_f303` 2/0 (passed / ignored) | met |
+| B4 (a3) the periodic path, `graph_balance`, `moving.rs`, `rcfd-mesh` | no line changed | none | met |
+| S1 coincidence steps: flux residual, GCL residual | `<= 1e-12` each | `1.24e-15`, `1.05e-14` (base: `2.07e-3` flux) | met |
+| S2 coupling faces per coincidence step | 48 | 48 on each of the 6 | met |
+| T1 two parts, coupled solve residual | `<= 1e-14` | `0` (removed mean `0.5`, the one coupling face found) | met |
+| N1 UC with the base step (negative control) | `>= 1e-6` | `5.74e-4` (first above `1e-10` at step 8) | met |
+
+LP (equal axial layers) has 176 dropped overlaps and 2 graph parts on every step and stays on the base path (B2), which is
+what the threshold of D3 is for (MU3).
+
+### Mutations (scratch copy `w49i-work/f710-scratch/mut`, script `mutate.sh`, log `mutations.log`)
+
+| Mutation | Caught by |
+| --- | --- |
+| MU1 the coupled solve never used | A1 (`5.74e-4`), A1c, B1 (no step differs), S1 (`2.07e-3`) |
+| MU2 coupling-face values not added to `phi_old` | A1 (`4.55e-3`), A1c, S1 (`6.49e-2`) |
+| MU3 the threshold removed | B2 on LP (all 20 steps differ from the base) |
+| MU4 sign of the coupling-face value flipped | A1 (`9.11e-3`), A1c, S1 (`1.30e-1`) |
+
+Four of four caught. `cargo fmt -p rcfd-fv -p rcfd-api --check` clean; `cargo clippy -p rcfd-fv -p rcfd-api --all-targets --
+-D warnings` clean.
+
+### Decision
+
+By the registered rule: A1, A1c, A1t, B1 to B4, S1 and N1 met: **done**.
+
+Not covered (as registered): the periodic path of F-304 and F-704 at its own coincidences (not checked; it builds its own
+edge lists, the same loss is possible there); the GCL coupling runs only in T1 (on P the part means of the GCL targets are
+rounding by symmetry, so UC never takes that branch); non-uniform flows at coincidence steps are checked only through the
+F-303 non-axisymmetric checks that pass unedited (B3); a part with no coupling face keeps the base result.
+
+### Remaining questions
+
+1. ADR 0637's ignored record `utc_known_miss_coinciding_nodes` now meets its limit (A1t is that set-up). Options: (a) leave
+   it as the ignored record of the miss, as the house rules require, and note in the F-303 roadmap entry that F-710 resolves
+   it; (b) edit it. Recommendation (a), taken on the maintainer's standing instruction of 2026-11-11 (take the
+   recommendation); no existing test is edited.
+2. The periodic path. Options: (a) a follow-up item that checks a uniform flow through coincidences on the sector pair of
+   ADR 0629 and applies the same coupling to `periodic_sliding_step` if it misses; (b) apply it now unchecked. Recommendation
+   (a) (follow-up below).
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> ADR 0638, 2026-11-16: the sliding interface at coinciding nodes. Cause (diagnosed and registered before the fix): at a whole rotor pitch 24 rotor and stator nodes of ADR 0216's pair coincide, the join drops the 48 zero-area overlaps there and the interface graph falls into 24 parts; the remap of the old flux (ADR 0216 M4) removed each part's target mean, which is the old flux that crossed the vanished overlaps, so the old flux kept a divergence of 2.1e-3 and the uniform state was lost (2.4e-4). Fix in rcfd_fv::sliding::sliding_step: when a part's mean exceeds 1e-10 of the largest target, the GCL closure and the remap are solved on the interface faces together with the faces between the parts (48 per coincidence step), whose mapped values receive the correction; every other step runs the base code. Uniform flow on the pair with dt = rotor pitch / 8 over 50 steps: 8.9e-15 velocity, 5.2e-14 pressure (limit 1e-10), the 6 coincidence and 6 regain steps included; through the case tree (ADR 0637's UTc, 40 steps) 6.0e-15 and 3.2e-13; the base step as control 5.7e-4. sliding_step equals a replica of the base step bit for bit on every step without a coincidence (44 of 50; U2, U3 and an equal-axial-layer pair on every step); every F-250, F-304, F-704 and F-303 test and baseline_hashes pass unedited. Four of four mutations caught. Limits: the periodic (sector, planar) path is not changed; the GCL coupling is exercised by a unit test only.
+
+> F-303 note: replace "but 2.3e-4 on the steps where rotor and stator nodes coincide and the interface drops its zero-area overlaps (a defect of the F-250 step; follow-up)" with "and, since F-710 (ADR 0638), 6.0e-15 on the steps where rotor and stator nodes coincide (ADR 0637's ignored U1c record stays as the record of the miss)".
+
+> F-250 note: replace "the uniform state is lost on steps where rotor and stator nodes coincide (ADR 0637 amendment 2)" with "the uniform state at coinciding nodes is kept since F-710 (ADR 0638)".
+
+> Follow-up proposed: "Periodic sliding at coinciding nodes". Deps F-710, F-704. Acceptance: a uniform flow on the sector pair of ADR 0629 with a step that lands on node coincidences is kept to 1e-10 on every step through periodic_sliding_step, the same coupling of the interface graph's parts applied if the base misses; F-304 and F-704 results unchanged where no coincidence occurs.
