@@ -1,6 +1,8 @@
 # ADR 0622: F-699 proposal: fidelity management (H7): screen with the reduced-order fan model, confirm with a higher tier, log the disagreement and correct the screening
 
-Status: **DRAFT STUB 2026-11-15. Not registered, not accepted.** The maintainer answered the open questions on 2026-11-15 (section \"Maintainer decisions\"); the limits are still proposals until the implementing agent registers them. No code of F-699 exists and no check has run. Nothing in
+Status: **REGISTERED 2026-11-16 in amendment 1 (at the end), written before any code of F-699 and before any run of its
+checks.** Not yet accepted by the maintainer. Amendment 1 replaces the section "Registration (to be fixed before any code)"; the
+rest of this text is the stub as drafted. Stub status: **DRAFT STUB 2026-11-15. Not registered, not accepted.** The maintainer answered the open questions on 2026-11-15 (section \"Maintainer decisions\"); the limits are still proposals until the implementing agent registers them. No code of F-699 exists and no check has run. Nothing in
 this text is a result. Every number marked "proposed" is a starting value for the registration and may be changed until the
 registration is written; after that the house rule applies (limits fixed before the run, a miss becomes an ignored
 `*_known_miss` test with the limit intact). The open questions at the end are for the maintainer and are not taken here.
@@ -420,3 +422,273 @@ All from memory unless stated; equation and section numbers UNVERIFIED and to be
 
 See `roadmap-entry.json` next to this file (F-699, phase 9, deps F-268 and F-697, status todo). If Q3 (a) is taken, the
 acceptance is unchanged (it names no Gaussian-process clause) and a follow-up item for rung R3 is proposed after F-698.
+
+## Addenda
+
+Results, amendments and the gate line go here; nothing above is changed after a run.
+
+## Amendment 1 (2026-11-16): registration, before any code of F-699 and before any run of its checks
+
+REGISTERED 2026-11-16, written before any code of F-699 and before any run of its checks. Written by the implementing agent on
+branch `f699-work` (from 6400c929, the F-697 tip on F-700 and F-268), worktree `w49i-work/f699`, scratch `w49i-work/f699-scratch`.
+Before this text no library or test code of F-699 existed in the branch. This amendment replaces the section "Registration (to be
+fixed before any code)" above; where the two differ, this text holds. The maintainer answered the open questions (section
+"Maintainer decisions"); every further choice below is taken on the maintainer's standing instruction of 2026-11-11 (take the
+recommendation) and is marked "(standing instruction)".
+
+### What was read
+
+`AGENT_RULES.md`; the brief; F-699's roadmap acceptance and note (binding, quoted below); this ADR (stub and maintainer
+decisions); ADR 0620 (F-697: `FanObjective`; its `ObjectiveModel` is a `ledger::Model`); ADR 0623 (F-268: `FanRomModel`, the
+`ledger::Model` adapter of the reduced-order fan with the parameters `stagger_common_deg` [deg], `chord_rel` [1], `tip_gap_delta`
+[m]); ADR 0632 (F-700: `Fidelity::Measured`, `Ledger::private` with `repository_ancestor`, the public reader and append refusing
+measured content, `fidelity_pair`, `pair_by_params`, `Level`, `entry_ref`, `entry_hash`, the `fitted` and `parents` fields; its
+"not covered" gives this driver the public-path-inside-private-directory check and the rounded public aggregates); ADR 0136 and
+its 2026-11-15 amendment (the pair record is this ADR's); `docs/fan-project-breakdown.md` H7; `docs/fan-measurement-protocol.md`
+("Data delivery": the CSV header `point,rpm,flow_m3_s,dp_static_Pa,dp_side,supply_V,supply_A,p_amb_Pa,T_amb_K,rh,lwa_dB,notes`);
+`loop-drafts/decisions.md`. Source: `design/ledger.rs` (all public items), `design/fan_rom_eval.rs`, `design/uq.rs` (the pattern:
+`parallel_map`, entries appended in sample order from the calling thread), `design/sampling.rs` (`latin_hypercube`),
+`design/study.rs` (`parallel_map`, `Sense`), `rcfd_post::fan_rom::RomModel` (the loss constants and their defaults).
+
+The binding acceptance (clauses numbered as in the roadmap):
+
+> Every limit not stated here is registered in ADR 0622 before the run, and no check uses FAN-01 or any CFD run. An opt-in library driver screens at least 2000 candidates with a ledger::Model of the reduced-order tier, promotes at most 24 of them (4 rounds of 6) to a high-fidelity source, writes one pair entry per promoted candidate (low value, high value, difference, per metric) and one summary per round to the design ledger (ADR 0121), and fits a discrepancy correction that later rounds apply. With synthetic high-fidelity sources: (1) a high source equal to a * low + b + c . x is recovered with a, b, c within 1e-8 relative, and the published one-variable pair of Forrester et al. (2007) gives rho = 2, slope -20, intercept 20 within 1e-8; (2) on the reduced-order fan evaluator against a copy with perturbed loss constants, the corrected screening has a held-out RMSE at most 0.5 times the uncorrected one and the best promoted candidate is within 2 percent of the high-fidelity objective range of the true best of the screened set, while the registered negative control (random promotion, same budget) is not; (3) a high source that is the low model plus unstructured noise, and one that diverges at every point, both leave the correction untrusted and the screening bit-identical to the uncorrected one; (4) every query outside the calibrated region is flagged and gets the constant correction only; (5) with a source marked private, no measured value, no fitted correction and no corrected prediction appears in the public ledger (byte search of the file), aggregates appear only for at least 5 pairs, and a private path inside the repository tree is refused with a located error; (6) the same seed gives a byte-identical ledger for 1 and 8 workers, and no existing default-bits test changes.
+
+Interpretation (standing instruction): "one pair entry per promoted candidate" is one `fidelity_pair` per promoted candidate whose
+high evaluation is `ok`; a failed high evaluation cannot be paired (`ledger::fidelity_pair` refuses it), is recorded by its own
+`evaluation` entry with its verdict and reason, and is counted in the summary (Q11 (a)).
+
+### Disclosed: smoke runs and arithmetic before this registration
+
+All on seeds that no check below uses. A temporary test `crates/rcfd-api/tests/zz_f699_smoke.rs` (never committed, moved to
+`f699-scratch/zz_f699_smoke.rs`) ran the existing `FanRomModel` (set-up C of ADR 0119 as in `fan_rom_bands_f268.rs`: 7 blades,
+r_hub 0.030, r_tip 0.058, tip gap 1 mm, free-vortex design to 45 Pa at 0.045 m^3/s, 3000 rpm, system `k` through the design
+point, n_scan 100) with `RomModel::default()` (low) and with `tip_cd x 1.3`, `annulus_drag x 1.5`, `secondary_drag x 1.5` (high)
+on Latin hypercubes and a grid and wrote CSV files; a numpy prototype of the loop below (`f699-scratch/proto.py`, `b3.py`,
+`s4.py`, about 150 lines, written from this text, not rcfd code) read them. Findings:
+
+1. Cost: 4000 evaluations (2000 per tier) in 144 to 149 s with 4 workers, about 0.145 s per evaluation.
+2. Box 1 (stagger offset [-3, 3] deg, chord_rel [-0.25, 0.25], tip_gap_delta [-5e-4, 1.5e-3] m, LHS seed 11): every point ok in
+   both tiers; the best `eta_s` lies at a corner of the box. A 13 x 7 grid (stagger [-12, 6], chord_rel [-0.6, 0.6], gap delta 0)
+   shows an interior optimum of `eta_s` in stagger near -6 to -7.5 deg, a stall edge in chord near -0.4 to -0.6, and points ok
+   in the low tier and stalled in the high one. So the registered box is box 2.
+3. Box 2 (stagger [-10, 2] deg, chord_rel [-0.45, 0.3], tip_gap_delta [-5e-4, 1e-3] m), LHS seeds 12 and 13, 2000 points each:
+   low ok 1912 and 1915, both ok 1869 and 1868 (43 and 47 low-ok points stalled in the high tier). `eta_s` low range 0.160 to
+   0.199, high 0.140 to 0.184, `high - low` mean -0.0186, sd 0.0015; `dp_s` mean difference -0.325 Pa, sd 0.12 Pa. A global R2
+   fit leaves rms 3.8e-4 (`eta_s`) and 0.031 Pa (`dp_s`). Points within 2 % of the high range of the true best: 2 and 4 of about
+   1870, so random promotion of 24 hits with probability 0.025 and 0.050.
+4. Prototype of the registered rule (4 rounds of 4 exploit + 2 explore, the trust rule and region below, h_max 0.25): held-out
+   RMSE ratio (corrected over uncorrected, final correction) `dp_s` 0.288 and 0.315, `eta_s` 0.107 and 0.091; best promoted
+   candidate at gap 0 of the range (seeds 12, 13); random promotion (three seeds each) gaps 0.081 to 0.191; mean |high - pred| of
+   round 4 over round 1 (`eta_s`) 0.51 and 0.22; with h_max 0.25, 0.66 to 0.73 of the held-out candidates lie outside the
+   calibrated region and get the constant only. The uncorrected screening (correction off) also reaches gap 0: the perturbation
+   moves the level of the losses much more than the location of the best, so B2 cannot tell the correction from no correction on
+   this fan (risk 4 of the stub); the binding acceptance asks only that random promotion misses it, and the correction-off result
+   is recorded, not judged. The stub's B3 (share of the true top 5 % in the corrected top 10 %) was 1.0 with and without the
+   correction in both smokes, so it is dropped (it cannot discriminate).
+5. Noise source (prototype, 300 synthetic trials, sd 0.05 stated as the uncertainty): the registered rule trusted a correction in
+   0 of 300 trials in any round; with only the uncertainty condition off (k_u = 0) 0.11; with every guard off (in-sample errors, no
+   one-standard-error rule, k_u = 0) 0.64; with f_trust = 1 as well, the in-sample R2 error is never above R0's (nested least
+   squares), so some round is trusted with probability 1. NC2 is therefore registered with every guard off and f_trust 1.
+6. Arithmetic, S2. As written in the stub and the acceptance, `f_L = 0.5 f_H + 10 (x - 0.5) - 5`, so `f_H = 2 f_L - 20 x + 20`.
+   My recollection of the paper (from memory, UNVERIFIED; the repository does not hold it) is `f_L = A f_H + B (x - 0.5) - C` with
+   A = 0.5, B = 10, C = -5, which gives `f_L = 0.5 f_H + 10 x` and `f_H = 2 f_L - 20 x` (intercept 0). Both are exact affine
+   relations and both are checked (A2, A2b); A2 carries the acceptance's numbers. Which sign is the paper's is a remaining question.
+
+### Design (fixed now; names are the implementation's)
+
+New module `crates/rcfd-api/src/design/fidelity.rs`, test file `crates/rcfd-api/tests/f699_fidelity.rs`; one module line in
+`design/mod.rs` and one line of its doc comment. No other source file is edited. Docs: `docs/design-loop.md` (a section),
+`docs/fan-measurement-protocol.md` ("Data delivery": the `variant` column, decision B1), `docs/fan-project-breakdown.md` (H7 row).
+No existing path calls the module, so every default keeps its bits.
+
+* `HighSource: Sync` with `id()`, `version()`, `fidelity()`, `level() -> Option<String>` (written as `fidelity_level`),
+  `private() -> bool` (default false), `source() -> Option<ledger::Source>` (default None), `available(params) -> bool` (default
+  true), `observe(params) -> Observation { outcome: Outcome, uncertainty: Vec<Quantity> }`. `ModelSource { model: &dyn Model, id,
+  version, fidelity, level }` adapts any `ledger::Model` (public, uncertainty 0, always available); `ModelSource::of(model)` keeps
+  the model's identity. `MeasuredTable` (D7, decision B1) reads a CSV whose header holds a `variant` column and the caller's
+  columns: `MeasuredTable::read(path, columns: [(column, metric, unit, standard uncertainty)], variant_of: Fn(&[Quantity]) ->
+  Option<String>, id, version)`; `observe` gives the first row of the variant; `available` is true only for variants in the table;
+  tier `measured`, `private() = true`, `source() = {id, kind: measured}`. Every error of the table names the file, the 1-based
+  row and the column, never a cell's text.
+* `FidelitySpec { name, params: Vec<ParamBox { name, unit, lo, hi }>, candidates: Candidates::{List(raw points) | Lhs { n, seed
+  }}, metrics: Vec<CorrectedMetric { name, floor }>, objective, sense: study::Sense, rounds, promote_per_round, explore_per_round,
+  promotion: Promotion::{Rule | Random { seed }}, correct, trust: TrustRule, workers, privacy: Option<Privacy { path, id, n_pub,
+  digits, block }> }`. The objective is a metric of the low model; if it is a corrected metric it is ranked by its corrected
+  prediction, else by the low value (an F-697 `ObjectiveModel` can be the low model). Defaults: rounds 4, promote 6, explore 2
+  (Q5 (c)), `Rule`, correct true, workers 1, n_pub 5, digits 3, block 5.
+* `run(spec, low: &dyn Model, high: &dyn HighSource, public: &Ledger) -> Result<FidelityResult, String>`. Refused before any
+  evaluation, with located messages: a box not finite with `lo < hi`, a duplicate parameter, no metric, a metric twice, a floor not
+  finite and positive, rounds or promote 0, explore > promote, a `List` point of the wrong length, non-finite or outside the box,
+  `Lhs` with n 0, a private high source without `privacy`, `privacy` with `n_pub < 1`, `digits` outside 1..=17 or `block < 1`, the
+  low and high levels equal (fidelity and level), `Ledger::private(privacy.path)` refusing (the repository rule of ADR 0632), and a
+  public ledger path inside the private ledger's directory (D7; both made absolute with the nearest existing ancestor
+  canonicalised, as `ledger::repository_ancestor` does; "inside" is `Path::starts_with`).
+* The loop (D2). Round 1 screens every candidate with `low` (`parallel_map` over the candidates with `workers`); entries in
+  candidate order (variant `<name>#<i>`, provenance `{driver: fidelity, candidate: i}`) to the public ledger and, with privacy, to
+  the private ledger too. Then per round: predictions of every low-ok candidate with the current correction; promotion; the picks
+  evaluated with `high` (`parallel_map`, pick order); their `evaluation` entries (provenance `{driver, candidate, round, reason}`)
+  to the full ledger (the private one with privacy, else the public one); one `ledger::fidelity_pair` per ok pick (metrics in spec
+  order, the floors, `preds` = the predictions made before the high result) with provenance `{driver: fidelity, round, reason:
+  exploit | explore | random, candidate}`; refit on all ok pairs so far (when `correct`); one `fidelity_summary` (D6) to the full
+  ledger and, with privacy, one public summary. Every entry is stamped with `solver_version()` and the ledger's clock before it is
+  appended, so the in-memory mirror used for the pair references hashes as the file does (`entry_hash`); the mirror starts from the
+  ledger's existing entries. The driver stops early, without an error, when no candidate is available.
+* Promotion (D3). `Rule`: `promote - explore` exploit picks, best corrected objective first (ties: lower index) among low-ok, not
+  yet promoted, `available` candidates; then `explore` greedy max-min picks in the unit box against every candidate promoted so far
+  including this round's earlier picks and failed ones (ties: lower index; against an empty set: the lowest available index).
+  `Random { seed }`: `promote` picks by one `Rng::new(seed)` for the run, `below(len)` over the remaining available candidates in
+  index order. A failed high evaluation consumes its promotion (Q11 (a)).
+* Discrepancy model (D4, Q3 (a), Q4 (c)), per metric on the ok pairs `(u_i, yL_i, yH_i)`, `u` the parameters scaled to the unit
+  box, `d` parameters, `n` pairs, `e` the leave-one-out residuals:
+  - R0: `y_c = y_L`; `e_i = yH_i - yL_i`.
+  - R1add (n >= 3): `b = mean(yH - yL)`, `e_i = r_i n / (n - 1)`. R1mul (n >= 3, `sum yL^2 > 0`): `a = sum yL yH / sum yL^2`,
+    `h_i = yL_i^2 / sum yL^2`, `e_i = r_i / (1 - h_i)`.
+  - R2 (n >= d + 4): columns `[yL, 1, u_1..u_d]`, Householder QR least squares; `h_ii` the squared row norms of the thin Q,
+    `e_i = r_i / (1 - h_ii)`; skipped (reason in the summary) when some `|R_jj| <= 1e-12 max_k |R_kk|` or some `h_ii >= 1 - 1e-12`.
+    Coefficients in raw parameters: `rho`, `b0 = b0_u - sum_j b_j lo_j / (hi_j - lo_j)`, `c_j = b_j / (hi_j - lo_j)`; predictions
+    use `rho yL + b0 + c . x`.
+  - Levels 0 (R0), 1 (the R1 form with the smaller LOO MSE; ties additive), 2 (R2). `MSE = mean(e^2)`, `SE = sd(e^2) / sqrt(n)`
+    (divisor n - 1). One-standard-error rule (Hastie, Tibshirani and Friedman 2009, from memory): the lowest level whose MSE is at
+    most `MSE_min + SE_min`.
+* Trust (D5). The chosen rung is applied inside the calibrated region only when (t1) it is not R0; (t2) `sqrt(MSE_chosen) <=
+  f_trust rmse0`, `rmse0 = sqrt(mean((yH - yL)^2))`; (t3) `rmse0 > k_u u_rms`, `u_rms` the rms over the pairs of the high source's
+  stated standard uncertainty of the metric (a discrepancy at or below the stated noise is not corrected; new here, standing
+  instruction: the stub's coverage condition belonged to R3). The constant (R1add) is trusted when n >= 3 and t2, t3 hold for
+  R1add. Region (D5.4): the query's unit-box point lies in the pairs' bounding box grown by `margin` in every direction and within
+  distance `h_max` of the nearest pair point. Inside and trusted: the chosen rung; inside, untrusted: R0; outside: flagged
+  `extrapolated`, and the trusted constant is applied (`y_L + b`), else R0. `correct = false`: no fit, R0 everywhere. Values
+  (decision B3, from the calculation and the smokes above): `f_trust = 0.8`, `k_u = 2`, `margin = 0.05`, `h_max = 0.25`. Negative
+  control switches, documented as such: `in_sample` (in-sample residuals in place of `e`), `one_se = false` (smallest MSE wins).
+* `Correction { low (id, version), high (id, version), params, region (points, margin, h_max), fits per metric { metric, rung,
+  coef, constant, trusted, why, n, MSE per rung, rmse0, u_rms } }`; `fit(pairs, params, trust, identities)`; `to_json` /
+  `from_json` (numbers bit-exact); `predict(x, y_low) -> (values, flags)`; `predict_for(low_id, low_version, high_id, high_version,
+  x, y_low)` refuses another identity with a located message naming both versions (D5.5); `loo_residuals(metric, rung)` for checks.
+* Summary (D6): `fidelity_summary`, evaluator `rcfd.fidelity` version `1`, verdict ok, params empty, study `<name>`, variant
+  `<name>#round<r>`; metrics per corrected metric `m.n_pairs`, `m.rmse_before` (rmse0), `m.rmse_after` (sqrt LOO MSE of the chosen
+  rung), `m.bias` (mean diff), `m.max_abs_rel`, `m.trusted` (1 or 0), `m.n_extrapolated` (low-ok candidates flagged by the new
+  correction), `m.oos_rmse` (rms of `high - pred` over all pairs so far), and `n_promoted`, `n_failed_high`; settings `{round,
+  rungs: {m: {rung, why}}, correction: Correction::to_json()}`; `fitted` = `{id: rcfd.fidelity.correction, version: 1, hash: FNV-1a
+  64 of the correction text}` when a correction exists; `parents` = the round's pair entries; provenance `{driver: fidelity, round,
+  spec}`. Tier and level: the high source's. With n = 0 a metric's aggregates are written as 0 with `m.n_pairs` 0.
+* Privacy (D7, decision D3). With a private source the public ledger gets the low entries and, per round, a public summary (kind
+  `fidelity_summary`, tier the low one, settings `{round, private_source: <privacy.id>, public: true}`, metrics `n_promoted`,
+  `n_failed_high` and, only when the pair count `n >= n_pub` and `floor(n / block)` has grown since the last publication (risk 6),
+  per metric `m.n_pairs`, `m.rmse_before`, `m.rmse_after`, `m.bias`, `m.max_abs_rel`, `m.trusted`, each rounded to `digits`
+  significant digits (`format!("{:.*e}", digits - 1, v)` parsed back), with the rung names in settings). Nothing else: no high
+  value, pair, coefficient, region point, prediction or pick list. Everything else goes to the private ledger. `FidelityResult`
+  holds the private content in memory for the caller. With a public source there is no split.
+* `FidelityResult { candidates (raw), low (per candidate: the corrected metrics' low values or None), rounds: [Round { picks:
+  [(candidate, reason)], failed_high, predictions (per candidate per metric; NaN when the low failed), extrapolated, correction }],
+  pairs: [(candidate, round, reason, low, high, pred)], correction (the last), final_predictions, final_extrapolated }`.
+
+### Set-ups (fixed now)
+
+* **S1, exact affine.** `x1` [m] in [0, 1], `x2` [1] in [-1, 2], `x3` [s] in [10, 20]. Low (`analytic.s1` 1, tier analytic):
+  `f = sin(3 x1) + x2^2 + 0.1 x3` [Pa], `g = exp(0.5 x1) - x2 x3 / 20` [W]. High (`synthetic.s1` 1, tier analytic, level `high`):
+  `f_H = 1.7 f - 0.3 + 0.5 x1 - 2.0 x2 + 0.04 x3`, `g_H = 0.9 g + 1.25 - 0.1 x1 + 0.3 x2 - 0.02 x3`. Candidates `Lhs { 200, seed
+  699_001 }`, objective `f` Min, floors 1e-3, 4 rounds of 6 (2 explore).
+* **S2, the one-variable pair.** `x` [1] in [0, 1]; low `f_L = 0.5 f_H + 10 (x - 0.5) - 5`, `f_H = (6 x - 2)^2 sin(12 x - 4)`; high
+  `f_H` (level `high`). Candidates `List` of `x = i / 100`, i = 0..=100; objective `f` Min; 2 rounds of 6. **S2b**: low `f_L = 0.5
+  f_H + 10 x`; five pairs at `x = 0, 0.25, 0.5, 0.75, 1`, `Correction::fit` directly.
+* **S3, the reduced-order fan.** Low `FanRomModel` (set-up C as in the smoke, `RomModel::default()`, n_scan 100); high the same
+  with `tip_cd x 1.3`, `annulus_drag x 1.5`, `secondary_drag x 1.5`, through `ModelSource` with id `synthetic.fan_rom_perturbed`
+  version `1`, tier reduced_order, level `perturbed-losses`. Box 2. Metrics `dp_s` (floor 1 Pa) and `eta_s` (floor 1e-3); objective
+  `eta_s` Max; 4 rounds of 6 (2 explore); workers 4. Heavy: `Lhs { 2000, seed 699_301 }`; negative control `Promotion::Random {
+  seed 699_302 }`; and the run with `correct = false`. Truth: the test evaluates both models at every candidate once (4 workers);
+  the three driver runs get models that return these stored outcomes by exact parameter bits (same id, version, tier; the models
+  are deterministic, so this only saves time; disclosed). Fast: `Lhs { 200, seed 699_311 }` with the real models.
+* **S4, noise.** Low S1's model, metric `f` only; high `f + 0.05 z`, `z` standard normal by Box-Muller from `Rng::new(699_004 ^
+  bits)`, `bits` the FNV-1a 64 of the parameter bit patterns, stated uncertainty of `f` 0.05 (level `noisy`). Candidates `Lhs {
+  300, seed 699_041 }`, 4 rounds of 6.
+* **S5, always failing.** High returns `diverged`, reason `synthetic: the high tier diverged`, at every point (level `failing`).
+  S1's low, candidates and metrics.
+* **S6, identical.** High = S1's low through `ModelSource` with id `synthetic.s6` 1, level `copy`.
+* **S1h, the half box.** Low S1; high `f_H = f + 2.0 + 0.2 x1`, `g_H = g + 2.0 + 0.2 x1` (level `high`); candidates `List` of
+  `Lhs { 200, seed 699_051 }` with `x1` scaled to [0, 0.5]; queries `Lhs { 500, seed 699_052 }` with `x1` scaled to [0.6, 1] and
+  `x2`, `x3` over their boxes.
+* **S7, synthetic private table.** S1's low; the test writes `<temp>/rcfd_f699_<tag>_<pid>/table.csv` with the protocol header
+  plus `variant` and `eta_s` (`variant,point,rpm,flow_m3_s,dp_static_Pa,dp_side,supply_V,supply_A,p_amb_Pa,T_amb_K,rh,lwa_dB,
+  eta_s,notes`), one row per candidate (variant `v<i>`, `dp_static_Pa` = S1's `f_H`, `eta_s` = S1's `g_H`, the other columns fixed
+  numbers); columns `dp_static_Pa -> f [Pa]` (uncertainty 0.01), `eta_s -> g [W]` (0.001); `variant_of` finds the candidate by
+  its parameter bits. Private ledger `<temp>/.../private/ledger.jsonl`, public `<temp>/.../public/ledger.jsonl`. Candidates `Lhs {
+  200, seed 699_071 }`, 4 rounds of 6, `privacy.id` `rig-synthetic`.
+
+### Checks (limits fixed now)
+
+All in `crates/rcfd-api/tests/f699_fidelity.rs`, release, fixed clock `1_700_000_000_000` on every ledger.
+
+| Id | Clause | What | Limit |
+|---|---|---|---|
+| A1 | (1) | S1 through the driver: the final correction's rung for `f` and `g`, trust, and the coefficients (rho, b0, c1, c2, c3) against (1.7, -0.3, 0.5, -2.0, 0.04) and (0.9, 1.25, -0.1, 0.3, -0.02) | R2 and trusted, both; each coefficient relative error <= 1e-8 |
+| A2 | (1) | S2 through the driver: the final rung; rho, slope, intercept; the corrected prediction at the candidates not flagged | R2; rho 2, slope -20, intercept 20 within 1e-8 relative; RMSE over the unflagged candidates <= 1e-8 of the range of `f_H` on the 101 points |
+| A2b | (1) | S2b, direct fit | rho 2, slope -20 within 1e-8 relative; intercept within 1e-8 absolute |
+| A3 | — | the ledger of A1 read back: 0 skipped lines; 200 low `evaluation` entries, 24 high, 24 `fidelity_pair`, 4 `fidelity_summary`; every pair's `parents` resolve to its low and high entries (same candidate); `m.diff` = `m.high - m.low` bit for bit; `m.pred` equal to the round's prediction bit for bit; every summary's `fitted.hash` = FNV-1a 64 of its `settings.correction` text | all exact |
+| L1 | — | S4's final pairs: `loo_residuals` of R1add, R1mul and R2 against brute force (refit without pair i, predict pair i) computed in the test | relative <= 1e-9 each (absolute 1e-12 when below 1e-3 of the rms) |
+| E1 | — | A1's run: per round, reasons `exploit` x 4 then `explore` x 2; the explore picks equal the greedy max-min picks computed in the test from the earlier picks | exact |
+| B1 | (2) | S3 heavy: RMSE over the held-out candidates (low and high ok, not promoted) of the final corrected prediction against the uncorrected, per metric | ratio <= 0.5 for `dp_s` and for `eta_s` |
+| B2 | (2) | S3 heavy: `(best high eta_s of the screened set - best high eta_s of the promoted) / (high range of eta_s over the screened set)`, over candidates ok in both tiers | <= 0.02 |
+| NC1 | (2) | S3 heavy with `Promotion::Random { 699_302 }`: the same quantity | > 0.02 (the control must miss) |
+| B4 | — | S3 heavy: mean `abs(high - pred)` of `eta_s` over the round-4 pairs against round 1 | ratio <= 0.75 (smokes 0.51, 0.22) |
+| B5 | — | S3 heavy, structure: 2000 low entries, 24 high entries, one pair per ok high, 4 summaries; the correction-off run's B2 quantity | exact; correction-off recorded, no limit |
+| B6 | — | S3 fast (200, real models): counts as B5 with 200; public ledger bytes for workers 1 and 8 | exact; equal |
+| T1 | (3) | S4: every round's fit untrusted (rung and constant); every round's picks and predictions (bits) and the low entries' bytes equal to the run with `correct = false` | exact |
+| NC2 | (3) | S4 with `in_sample`, `one_se = false`, `k_u = 0`, `f_trust = 1` | at least one round trusted (the control must fail T1) |
+| T2 | (3) | S5: `Ok` result; 0 pairs; `n_failed_high` of the last summary 24; picks, predictions and low entry bytes equal to `correct = false` | exact |
+| T3 | (3) | S6: every pair's `f.diff`, `g.diff` exactly 0; every round's predictions bit-equal to the low values; final rung R0, untrusted | exact |
+| T4 | (4) | S1h: every one of the 500 queries flagged; the applied value equals `y_L + b` bit for bit for `f` and `g`, where `b` is the mean of `high - low` over the pairs computed in the test in pair order; the constant trusted | 500 of 500; exact |
+| T4b | (4) | A1's run: for every low-ok candidate in every round after round 1, the flag equals the region rule computed in the test; a flagged candidate's prediction is `y_L + b` (constant trusted) or `y_L` | exact |
+| T5 | — | A1's correction: `to_json` then `from_json` predicts bit-equal at 50 points; `predict_for` with low version `2` and with high version `9` | equal; both refused, each message names both versions |
+| P1 | (5) | S7: no private value in the public ledger bytes: every high value, `diff`, `rel` and `pred` of the private pairs, every coefficient and constant of every round's correction, every final prediction; each searched as Rust `{}` text and as serde_json text; only texts of at least 8 characters | 0 occurrences; at least 400 texts searched |
+| NC4 | (5) | S7 with the same table as a public source (`ModelSource`-like wrapper reporting tier analytic, privacy off): the same search | at least 1 occurrence (the control must fail P1) |
+| P2 | (5) | S7 with 1 round of 4 (explore 0): no `.n_pairs` metric in the public summary; 1 round of 5: present, `f.n_pairs` = 5, every aggregate bit-equal to its 3-digit rounding; 5 rounds of 2 (explore 0): aggregates in rounds 3 and 5 only | exact |
+| P3 | (5) | private path `CARGO_MANIFEST_DIR/target/f699_private/ledger.jsonl`; a public ledger inside the private directory | each refused, the message names the path, before any evaluation (low call counter 0, no ledger file created) |
+| P4 | (5) | a table with one malformed cell (`12.5x`), one with a missing mapped column, one with a missing `variant` column | refused; row and column (or column) named; no cell text of the table of at least 3 characters in the messages |
+| P5 | (5) | S7: the private ledger read with `Ledger::private` has 0 skipped lines, 24 pairs, 4 summaries; the public ledger read with `Ledger::new` has 0 skipped lines, 200 low entries, 4 summaries, no `measured` tier, no `fidelity_pair` | exact |
+| R1 | (6) | S7 and S1 runs at workers 1 and 8: public and private ledger bytes | equal |
+| R2 | (6) | existing: `cargo test -p rcfd-api --release --lib design::`, `--test f697_fan_objective`, `--test fan_rom_bands_f268`, `--test f249_default_bits`, `--test f260_default_bits`, `--test f297_default_bits`, `--test baseline_hashes`; rcfd-mcp `default_f1`, `tool_list_f275`, `project_list_f270`; `git diff 6400c929 -- crates/rcfd-mcp` | pass; empty diff; no existing test file edited |
+| R3 | — | `cargo fmt -p rcfd-api --check`, `cargo clippy -p rcfd-api --all-targets -- -D warnings` | clean |
+
+The S3 heavy test (about 150 s) is `#[ignore]`d as a heavy record and run once; B6 is its fast counterpart on the same code path.
+
+Mutations (scratch copy, one at a time, each must fail a registered check):
+
+| Id | Mutation | Expected to fail |
+|---|---|---|
+| M1 | the constant `b` computed as `mean(yL - yH)` | T4 |
+| M2 | the correction applied twice (`predict` on its own output) | A2 |
+| M3 | `rho` dropped at R2 (`yL` with coefficient 1, fit on `yH - yL`) | A1 |
+| M4 | leave-one-out factor dropped at R2 (`e_i = r_i`) | L1 |
+| M5 | stated uncertainty ignored (`u_rms` = 0) | T1 |
+| M6 | explore picks replaced by exploit picks | E1 |
+| M7 | `n >= n_pub` replaced by `n > n_pub` | P2 |
+| M8 | aggregates not rounded | P2 |
+| M9 | region test removed (every query inside) | T4 |
+| M10 | public-inside-private check removed | P3 |
+| M11 | public summary written with the full content | P1 |
+| M12 | low entries appended in completion order (workers push into a shared list) | R1 |
+
+### Decision rule
+
+* **done:** A1 to A3, L1, E1, B1, B2, NC1 (missing as it must), B4 to B6, T1 to T5, T4b, NC2 (trusted as it must), P1 to P5, NC4
+  (found as it must), R1 to R3 met, and every mutation fails a check.
+* **partial:** A, L, E, T, P and R met and a B limit missed (an ignored `*_known_miss` record with the limit intact), or NC1 does not
+  miss, or a mutation survives.
+* **todo** (the lead does not take the code): an A, L, E, T, P or R check missed.
+
+### Limits (not covered)
+
+* Library only (D1): no MCP tool, service method or case key (F-702).
+* Rungs R0 to R2 only; R3 (a Gaussian process on the R2 residual) reuses F-698 and is a follow-up (Q3 (a)).
+* Every check uses synthetic high sources. S3's high tier has the structure of the low one, so B shows the driver works, not that
+  the reduced-order model can be corrected to a real fan (risk 4). On S3 the perturbation moves the level of the losses, not the
+  location of the best, so B2 does not tell the correction from no correction (smoke 4).
+* With three parameters and h_max 0.25 most of the screened set lies outside the calibrated region and gets the constant only
+  (smoke 4); the box-and-distance region is crude (risk 2).
+* The privacy split is a path rule and a content rule of this driver, not access control (risk 7). The pick pattern is private,
+  but the public low entries show which variants were screened (risk 6). Public aggregates are published at most once per block
+  of 5 new pairs, so differencing two publications isolates at least 5 pairs, not one.
+* Corrected metrics are corrected independently; identities between them are not reported (the stub's D4 note is not built).
+* `MeasuredTable` maps a candidate to a row by a caller-given function; several rows per variant (it takes the first), matching by
+  tolerance and fan-law scaling between speeds (Q14) are not built.
+* No check runs the driver with an F-697 `ObjectiveModel` as the low model (it is a `ledger::Model`, so it plugs in; not run).
