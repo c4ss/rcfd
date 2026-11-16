@@ -257,7 +257,9 @@
   font-weight: var(--type-label-weight);
   color: var(--role-text);
 }
-.ph-open > .ph-notice {
+.ph-open > .ph-notice,
+.ph-home > .ph-notice,
+.ph-runs > .ph-notice {
   max-width: none;
   border-top: 0;
 }
@@ -265,6 +267,16 @@
 /* ---- an open project ---------------------------------------------------------------------------------------------- */
 
 .ph-open {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* F-806: the project's views (Home, Runs) as sub-tabs under the header band; each panel fills the rest of the page. */
+.ph-views,
+.ph-views > .ui-tabpanel,
+.ph-home,
+.ph-runs {
   flex: 1;
   min-height: 0;
   display: flex;

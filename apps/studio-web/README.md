@@ -107,6 +107,42 @@ engine):
 - The folder dialog, the recent list and the project server's queries are main-process operations behind the project
   port, not service methods, so they have no entry in the action registry (F-827) yet (G16).
 
+## The run list and run state (F-806)
+
+An open project has two views, Home (above) and Runs: the runs table of `DESIGN.md` (case and run, state pictogram and
+word, result; sorted by any column, filtered by text and by state) and, beside it, the selected run: its numbers, why it
+is in its state, and the state changes the runner recorded. Selecting a run fades the other rows by colour, never a
+failed one; Escape clears the selection. Surface brief: `.impeccable/surfaces/web-src-renderer-runs-runsview-tsx.md`.
+
+- Through the engine: `list_runs` and, for each run whose state or step changed, `run_status` (the last 50 events,
+  `RUN_EVENTS`), asked by the main process (`src/main/project/runs.ts`) of the same read-only project server. The runner
+  owns the runs (G7): closing or killing the Studio leaves them going, and the next start shows their true state
+  (`tests/e2e/runs.spec.ts` closes and kills the Studio during a run started from `rcfd-runner`, and checks the step
+  against the runner's own `status.json`).
+- Live: state changes come with the feed (400 ms); while a run is queued, running or paused the main process also reads
+  the run list every second (`RUN_POLL_MS`), since the feed reports state changes and not progress.
+- Time: shown only where it is a simulated time. A steady solver writes time 0, and the engine writes NaN as `null`; the
+  table says "none, steady", "none yet", "none" or "not known" instead (G3). The home's run list says the same.
+- Tests: `tests/unit/runs.spec.ts` (answers, table model, live reads, pictograms, stylesheet), `tests/e2e/runs.spec.ts`
+  (needs `rcfd-runner` beside `rcfd-mcp`, or `RCFD_RUNNER_BIN`; screenshots in `test-results-visual/f806/`).
+
+Decisions taken in building F-806 (options, the recommendation followed; each reversible without touching the engine):
+
+- D1, where the runs live: (a) a Runs tab beside Home, table left and the selected run right; (b) a larger runs group on
+  the home; (c) the prototype's run workspace with its columns still empty. Taken: (a).
+- D2, keeping progress live: (a) read the run list every second while a run is active, `run_status` only for changed
+  runs; (b) `wait_run` with a timeout (blocks the server for that time); (c) feed only (no progress). Taken: (a).
+- D3, Converged: a finished run is shown as Converged when the solver's finish event says converged, else Finished (the
+  reason says not converged or end time reached).
+- D4, paused and cancelled: drawn on the pictogram grid (`RUNNER_STATES` in `src/renderer/ui/pictogramPaths.ts`), ink
+  coloured, proposed for `DESIGN.md` and `design.json`; kept apart from the five recorded states until recorded.
+- D5, report values: shown in the number grid with the note that the engine gives no unit for them.
+- Coverage: `run_status`, `rcfd-runner list` and `rcfd-runner status` have UI paths; `wait_run`, `rcfd-runner wait`,
+  `events.poll` and `log.tail` now point at run control (F-807) as their nearest home (the table needs no waiting call
+  and shows the runner's runs, not service sessions).
+- Missing in the engine (no Rust change here): units of report values; a read-only query of whether the project's runner
+  is alive (`RunService::runner_running` has no MCP tool), so a queued run under no runner cannot be told apart.
+
 ## Layout
 
 | Path | Process | Built by | Filled in by |

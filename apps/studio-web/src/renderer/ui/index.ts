@@ -17,5 +17,5 @@ export { Slider } from './Slider.js';
 export type { SliderProps } from './Slider.js';
 export { Tooltip } from './Tooltip.js';
 export { Icon, StateMark, StatePictogram } from './Pictogram.js';
-export { ICON_NAMES, RUN_STATES, STATE_WORD } from './pictogramPaths.js';
-export type { IconName, RunState } from './pictogramPaths.js';
+export { ICON_NAMES, RUN_STATES, RUNNER_STATES, STATE_WORD, markWord } from './pictogramPaths.js';
+export type { IconName, MarkState, RunnerState, RunState } from './pictogramPaths.js';

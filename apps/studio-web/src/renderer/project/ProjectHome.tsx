@@ -15,10 +15,11 @@ import type {
   ProjectState,
   ProjectView,
   RecentProject,
-  RunEntry,
 } from '../../shared/project.js';
-import { Button, IconButton, SegmentedToggle, StateMark, StatePictogram, TextField, Unavailable } from '../ui/index.js';
-import { baseName, clock, dateTime, inFolder, kilobytes, plain, plural, runPictogram, runWord, sourceWord } from './format.js';
+import { Button, IconButton, SegmentedToggle, StateMark, StatePictogram, Tabs, TextField, Unavailable } from '../ui/index.js';
+import { baseName, clock, dateTime, inFolder, kilobytes, plural, sourceWord } from './format.js';
+import { RunsView } from '../runs/RunsView.js';
+import { runRows, shownState, timeText, unknownWord, type RunRow } from '../runs/model.js';
 import { projectActions, watchProjectState } from './door.js';
 import './project.css';
 
@@ -238,7 +239,40 @@ const DESCRIBE: Record<Exclude<Kind, 'all'>, string> = {
   notes: 'free text',
 };
 
+type View = 'home' | 'runs';
+
+/** An open project: two views under the header band, Home (the index of the folder, F-805) and Runs (F-806). */
 function OpenProject({ view, state }: { view: ProjectView; state: ProjectState }) {
+  const [tab, setTab] = useState<View>('home');
+  // the selected run belongs to the project view, so it survives a switch of view; it is display state, not project state
+  const [run, setRun] = useState<string | null>(null);
+  return (
+    <div className="ph-open">
+      <Tabs
+        aria-label="Project views"
+        className="ph-views"
+        selected={tab}
+        onChange={(t) => setTab(t as View)}
+        items={[
+          { id: 'home', label: 'Home', panel: <HomeBody view={view} state={state} /> },
+          {
+            id: 'runs',
+            label: 'Runs',
+            panel: (
+              <div className="ph-runs">
+                {state.failure && <FailureNotice failure={state.failure} recent={state.recent} />}
+                {!view.liveness.live && <NotLive view={view} />}
+                <RunsView view={view} selected={run} onSelect={setRun} />
+              </div>
+            ),
+          },
+        ]}
+      />
+    </div>
+  );
+}
+
+function HomeBody({ view, state }: { view: ProjectView; state: ProjectState }) {
   const [kind, setKind] = useState<Kind>('all');
   const [filter, setFilter] = useState('');
   const info = view.info;
@@ -258,7 +292,7 @@ function OpenProject({ view, state }: { view: ProjectView; state: ProjectState }
     (!shown('notes') || notes.length === 0);
   const total = view.cases.total + view.meshes.total + view.runs.total + view.notes.total;
   return (
-    <div className="ph-open">
+    <div className="ph-home">
       <section className="ph-strip" aria-labelledby="ph-name">
         <h1 id="ph-name" className="ph-name">
           {info?.name ?? baseName(view.folder)}
@@ -345,7 +379,7 @@ function OpenProject({ view, state }: { view: ProjectView; state: ProjectState }
           )}
           {shown('runs') && (
             <Group id="runs" title="Runs" listing={view.runs} engineCount={info?.counts.runs} shown={runs.length} filtered={q !== ''}>
-              {runs.length > 0 && <RunsTable runs={runs} changed={changed} />}
+              {runs.length > 0 && <RunsTable runs={runRows(runs, view.runDetails, view.runDetailErrors)} changed={changed} />}
               {view.runs.total === 0 && !view.runs.error && (
                 <Empty>
                   No runs yet. A run solves one case and keeps its results in <span className="ph-file">runs/</span>. The Studio cannot start runs
@@ -555,7 +589,7 @@ function MeshesTable({ meshes, changed }: { meshes: readonly MeshEntry[]; change
   );
 }
 
-function RunsTable({ runs, changed }: { runs: readonly RunEntry[]; changed: Map<string, string> }) {
+function RunsTable({ runs, changed }: { runs: readonly RunRow[]; changed: Map<string, string> }) {
   return (
     <table className="ph-table ph-table--runs">
       <thead>
@@ -576,7 +610,7 @@ function RunsTable({ runs, changed }: { runs: readonly RunEntry[]; changed: Map<
       </thead>
       <tbody>
         {runs.map((r) => {
-          const picto = runPictogram(r.state);
+          const picto = shownState(r);
           return (
             <tr key={r.id} data-run={r.id} className={r.state === 'failed' ? 'ph-row--failed' : undefined}>
               <th scope="row" className="ph-name-cell">
@@ -584,10 +618,11 @@ function RunsTable({ runs, changed }: { runs: readonly RunEntry[]; changed: Map<
                 <span className="ph-run-id">{r.id}</span>
               </th>
               <td>
-                {picto ? <StateMark state={picto} label={runWord(r.state)} /> : <span className="ui-state ph-state-word">{runWord(r.state)}</span>}
+                {picto ? <StateMark state={picto} /> : <span className="ui-state ph-state-word">{unknownWord(r.state)}</span>}
               </td>
               <td className="ph-num">{r.step}</td>
-              <td className="ph-num">{plain(r.time)}</td>
+              {/* F-806: a steady run's solver reports time 0, which is no simulated time; words where the engine has no number (G3) */}
+              <td className="ph-num">{timeText(r)}</td>
               <td>{dateTime(r.created)}</td>
               <td className="ph-change-cell">
                 <Changed at={changed.get(`run:${r.id}`)} />

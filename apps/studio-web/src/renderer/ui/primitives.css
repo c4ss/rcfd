@@ -633,6 +633,13 @@
 .ui-picto--failed {
   color: var(--role-state-failed);
 }
+/* F-806: paused and cancelled (proposed for DESIGN.md) take ink, like queued and finished: no hue gets a second job. */
+.ui-picto--paused {
+  color: var(--role-state-queued);
+}
+.ui-picto--cancelled {
+  color: var(--role-state-finished);
+}
 .ui-picto--faded {
   opacity: var(--fade-pictogram);
 }

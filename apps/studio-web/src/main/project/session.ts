@@ -7,6 +7,8 @@
 import {
   FEED_POLL_MS,
   MAX_CHANGES,
+  RUN_POLL_MS,
+  type RunDetail,
   type CaseEntry,
   type ChangeEntry,
   type Listing,
@@ -17,17 +19,29 @@ import {
   type RunEntry,
 } from '../../shared/project.js';
 import type { Names } from './listing.js';
+import { isActive, readRunDetail, readRuns, stale } from './runs.js';
 import type { ProjectServerLike } from './server.js';
 
 /** Pages the Studio reads of a paged list (100 entries each): the home shows at most 2000 runs and 2000 meshes. */
 export const MAX_PAGES = 20;
 const PAGE = 100;
 
+/** Run details read between two pushes of the view while many are read (the first read of a large project). */
+const DETAIL_BATCH = 25;
+
+/** What a pass of `refresh` reads: the run details only, the run list (and details), or every list (and details). */
+type ReadKind = 0 | 1 | 2;
+const DETAILS: ReadKind = 0;
+const RUNS: ReadKind = 1;
+const FULL: ReadKind = 2;
+
 export interface SessionDeps {
   startServer(folder: string): Promise<ProjectServerLike>;
   listFiles(root: string, top: string): Promise<Names>;
   now(): string;
   pollMs?: number;
+  /** F-806: the progress read of active runs (default RUN_POLL_MS). */
+  runPollMs?: number;
 }
 
 const message = (e: unknown): string => (e instanceof Error ? e.message : String(e));
@@ -78,22 +92,9 @@ export async function readLists(server: ProjectServerLike, root: string, listFil
   }
 
   let runs: Listing<RunEntry>;
-  const skippedRuns: { path: string; message: string }[] = [];
+  let skippedRuns: readonly { readonly path: string; readonly message: string }[] = [];
   try {
-    const items: RunEntry[] = [];
-    let total = 0;
-    let offset: number | null = 0;
-    for (let page = 0; page < MAX_PAGES && offset !== null; page++) {
-      const r = (await server.call('list_runs', { offset, limit: PAGE })) as Record<string, unknown>;
-      total = num(r['total']);
-      for (const x of (r['runs'] as unknown[] | undefined) ?? []) {
-        const o = x as Record<string, unknown>;
-        items.push({ id: str(o['id']), case: str(o['case']), created: str(o['created']), state: str(o['state']), step: num(o['step']), time: num(o['time']) });
-      }
-      if (page === 0) for (const s of (r['skipped'] as unknown[] | undefined) ?? []) skippedRuns.push({ path: str((s as Record<string, unknown>)['path']), message: str((s as Record<string, unknown>)['message']) });
-      offset = typeof r['next_offset'] === 'number' ? r['next_offset'] : null;
-    }
-    runs = { items, total, error: null };
+    ({ runs, skippedRuns } = await readRuns(server));
   } catch (e) {
     runs = empty(message(e));
   }
@@ -157,9 +158,13 @@ export class ProjectSession {
   private cursor = 0;
   private timer: NodeJS.Timeout | null = null;
   private refreshing: Promise<void> | null = null;
-  private again = false;
+  /** The widest read asked for while a pass runs (null: none). */
+  private wanted: ReadKind | null = null;
   private closed = false;
   private readonly pollMs: number;
+  private readonly runPollMs: number;
+  /** When the run list was last read (ms, Date.now()), for the progress read of active runs (RUN_POLL_MS). */
+  private runsReadAt = 0;
   view: ProjectView;
 
   private constructor(
@@ -174,11 +179,15 @@ export class ProjectSession {
     this.server = server;
     this.cursor = cursor;
     this.pollMs = deps.pollMs ?? FEED_POLL_MS;
+    this.runPollMs = deps.runPollMs ?? RUN_POLL_MS;
+    this.runsReadAt = Date.now();
     const now = deps.now();
     this.view = {
       folder,
       engine: { ...server.info, path: enginePath },
       ...lists,
+      runDetails: {},
+      runDetailErrors: {},
       changes: [],
       openedAt: now,
       readAt: now,
@@ -196,6 +205,8 @@ export class ProjectSession {
       const s = new ProjectSession(folder, enginePath, deps, onChange, server, lists, num(feed.cursor));
       s.watch(server);
       s.schedule();
+      // the runs' details after the first view is out, so a project with many runs opens at once (G21)
+      void s.read(DETAILS);
       return s;
     } catch (e) {
       await server.close();
@@ -255,6 +266,9 @@ export class ProjectSession {
       if (fresh.length > 0 || dropped > 0) {
         this.set({ changes: [...fresh.reverse(), ...this.view.changes].slice(0, MAX_CHANGES) });
         await this.refresh();
+      } else if (this.hasActiveRun() && Date.now() - this.runsReadAt >= this.runPollMs) {
+        // F-806: the feed reports state changes, not progress; an active run's step is read from its status.json
+        await this.read(RUNS);
       }
     } catch (e) {
       if (server === this.server && !this.closed && !server.exited) {
@@ -267,24 +281,82 @@ export class ProjectSession {
 
   /** Reads the lists again (coalesced: a request during a read makes one more read after it). */
   refresh(): Promise<void> {
-    if (this.refreshing) {
-      this.again = true;
-      return this.refreshing;
-    }
+    return this.read(FULL);
+  }
+
+  /** Whether a listed run is queued, running or paused (as last read, by its detail when that is newer). */
+  private hasActiveRun(): boolean {
+    return this.view.runs.items.some((r) => isActive(this.view.runDetails[r.id]?.state ?? r.state));
+  }
+
+  /**
+   * One coalesced read: every list (FULL), the run list (RUNS) or nothing but the run details (DETAILS), then the
+   * `run_status` of each run whose state or step changed since it was last read. A request during a pass makes one
+   * more pass after it, as wide as the widest request.
+   */
+  private read(kind: ReadKind): Promise<void> {
+    this.wanted = this.wanted === null ? kind : (Math.max(this.wanted, kind) as ReadKind);
+    if (this.refreshing) return this.refreshing;
     this.refreshing = (async () => {
       try {
-        do {
-          this.again = false;
+        while (this.wanted !== null) {
+          const k = this.wanted;
+          this.wanted = null;
           if (this.closed || this.server.exited) break;
-          const lists = await readLists(this.server, this.folder, this.deps.listFiles);
-          if (this.closed) break;
-          this.set({ ...lists, readAt: this.deps.now() });
-        } while (this.again);
+          if (k === FULL) {
+            const lists = await readLists(this.server, this.folder, this.deps.listFiles);
+            if (this.closed) break;
+            this.runsReadAt = Date.now();
+            this.set({ ...lists, readAt: this.deps.now() });
+          } else if (k === RUNS) {
+            let read: Awaited<ReturnType<typeof readRuns>> | null = null;
+            try {
+              read = await readRuns(this.server);
+            } catch (e) {
+              if (!this.closed) this.set({ runs: { items: [], total: 0, error: message(e) }, readAt: this.deps.now() });
+            }
+            if (this.closed) break;
+            this.runsReadAt = Date.now();
+            if (read) this.set({ runs: read.runs, skippedRuns: read.skippedRuns, readAt: this.deps.now() });
+          }
+          await this.readDetails(k === FULL);
+        }
       } finally {
         this.refreshing = null;
       }
     })();
     return this.refreshing;
+  }
+
+  /** `run_status` of each listed run whose state or step changed since its last answer; details of runs gone are dropped. */
+  private async readDetails(retryErrors: boolean): Promise<void> {
+    const items = this.view.runs.items;
+    const listed = new Set(items.map((r) => r.id));
+    const details: Record<string, RunDetail> = {};
+    const errors: Record<string, string> = {};
+    for (const [id, d] of Object.entries(this.view.runDetails)) if (listed.has(id)) details[id] = d;
+    for (const [id, m] of Object.entries(this.view.runDetailErrors)) if (listed.has(id)) errors[id] = m;
+    // a run the engine could not answer for is asked again when its state changes, when it is active, or on a full read
+    const todo = items.filter((r) => stale(r, details[r.id]) && (retryErrors || !(r.id in errors) || isActive(r.state)));
+    const pruned = Object.keys(details).length !== Object.keys(this.view.runDetails).length || Object.keys(errors).length !== Object.keys(this.view.runDetailErrors).length;
+    if (todo.length === 0) {
+      if (pruned) this.set({ runDetails: details, runDetailErrors: errors });
+      return;
+    }
+    const server = this.server;
+    let n = 0;
+    for (const r of todo) {
+      if (this.closed || server !== this.server || server.exited) return;
+      try {
+        details[r.id] = await readRunDetail(server, r.id, this.deps.now);
+        delete errors[r.id];
+      } catch (e) {
+        errors[r.id] = message(e);
+      }
+      if (++n % DETAIL_BATCH === 0) this.set({ runDetails: { ...details }, runDetailErrors: { ...errors } });
+    }
+    if (this.closed || server !== this.server) return;
+    this.set({ runDetails: details, runDetailErrors: errors });
   }
 
   get serverStopped(): boolean {
@@ -306,8 +378,10 @@ export class ProjectSession {
       this.cursor = num(feed.cursor);
       this.watch(server);
       const now = this.deps.now();
+      this.runsReadAt = Date.now();
       this.set({ ...lists, engine: { ...server.info, path: this.enginePath }, readAt: now, liveness: { live: true, since: now } });
       this.schedule();
+      void this.read(DETAILS);
     } catch (e) {
       await server.close();
       throw e;

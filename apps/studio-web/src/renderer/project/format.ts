@@ -1,6 +1,6 @@
 // How the project home writes times, sizes, names and run states. Display only: no unit conversion beyond bytes to
 // kilobytes for a file size, and every number keeps the engine's value.
-import { STATE_WORD, type RunState } from '../ui/index.js';
+import { markWord, type MarkState } from '../ui/index.js';
 
 const two = (n: number): string => String(n).padStart(2, '0');
 
@@ -33,15 +33,22 @@ export function baseName(p: string): string {
 /** A project-relative path without its top folder (`cases/a/b.toml` -> `a/b.toml`). */
 export const inFolder = (p: string, top: string): string => (p.startsWith(`${top}/`) ? p.slice(top.length + 1) : p);
 
-/** The runner's states that have a pictogram in DESIGN.md; paused and cancelled have none yet (word only). */
-const PICTOGRAM: Readonly<Record<string, RunState>> = { queued: 'queued', running: 'running', finished: 'finished', failed: 'failed' };
+/** The runner's states and their pictograms (paused and cancelled since F-806, proposed for DESIGN.md). */
+const PICTOGRAM: Readonly<Record<string, MarkState>> = {
+  queued: 'queued',
+  running: 'running',
+  paused: 'paused',
+  finished: 'finished',
+  failed: 'failed',
+  cancelled: 'cancelled',
+};
 
-export const runPictogram = (state: string): RunState | null => PICTOGRAM[state] ?? null;
+export const runPictogram = (state: string): MarkState | null => PICTOGRAM[state] ?? null;
 
 /** The word of a run state: DESIGN.md's word where there is one, else the engine's word with a capital. */
 export function runWord(state: string): string {
   const p = runPictogram(state);
-  if (p) return STATE_WORD[p];
+  if (p) return markWord(p);
   return state.length > 0 ? state[0]!.toUpperCase() + state.slice(1) : 'Unknown';
 }
 
