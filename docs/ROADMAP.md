@@ -14970,21 +14970,35 @@ fixed by the item's registration ADR before any code.
     objective runs in the loop, the number of CFD evaluations saved by the reduced-order pre-check measured on a
     registered set-up.
   - note: Follow-up of F-716 (ADR 0645, 2026-11-16).
-- [ ] **F-743** Implicit momentum coupling of periodic pairs
+- [x] **F-743** Implicit momentum coupling of periodic pairs
   - depends on: F-725
   - acceptance: an opt-in setting couples the two faces of every periodic pair implicitly in the momentum matrix (the
     partner's new value, as the pressure equation already does), with the defaults bit-identical; on ADR 0661's lockstep
     the sector's largest difference from the full annulus with one outer iteration is within a registered limit of ADR
     0661's six-outer-iteration variant V(6, 6) (6.0e-3) on every step, and ADR 0641's step-1 difference falls below a
     registered limit. Every limit not stated here is registered in the ADR before the run.
-  - note: Follow-up of F-725 (ADR 0661, 2026-11-16).
+  - note: ADR 0664, 2026-11-16: implicit momentum coupling of periodic pairs. The opt-in
+    PimpleSettings::rotational_periodic_implicit (default false) puts the rotated partner of every rotationally periodic
+    pair into the momentum predictor implicitly (translational pairs are implicit since ADR 0046): the partner term coef
+    (R u_partner)_k becomes the entries coef R_kj of one block system of the active components, its lagged value leaves
+    the right-hand side, the components are assembled from the same iterate and solved together (BiCGStab, ILU(0)), and
+    the correctors' H operator includes the links. On ADR 0661's lockstep (the sector SS against the full annulus, 400
+    steps from the start consistent with the inlet) one outer iteration with the setting stays within 2.4e-4 U_in of the
+    six-outer-iteration variant V(6, 6) on every step (limit 1.5e-3; field form 3.3e-4), largest difference 5.89e-3
+    against V(6, 6)'s 5.99e-3; ADR 0641's step-1 difference falls from 3.494e-2 to 6.7e-4 (limit 5e-3). Defaults
+    bit-identical: the default step reproduces ADR 0661's 3.494135e-2, the setting is a no-op bit for bit without
+    rotational pairs (Taylor-Green box, the annulus), baseline_hashes and the periodic and sliding suites pass. Four of
+    four mutations caught. No case key (golden); the default not changed (open); the pressure-lag estimate keeps the
+    lagged rotational coupling. Follow-up F-746 (Implicit rotational periodic pairs by default and as a case key).
 - [ ] **F-744** Non-orthogonal correction on coupled faces
   - depends on: F-743
   - acceptance: an opt-in explicit non-orthogonal correction on the coupled (wrap and seam) faces in the pressure
     equation and the momentum diffusion, defaults bit-identical; on ADR 0661's lockstep with the lag removed the
     sector's difference from the full annulus falls from 6.0e-3 to within a registered limit of ADR 0661's V(6, 0)
     (1.5e-4) on every step. Every limit not stated here is registered in the ADR before the run.
-  - note: Follow-up of F-725 (ADR 0661, 2026-11-16).
+  - note: Follow-up of F-725 (ADR 0661, 2026-11-16). with ADR 0664's setting the lag is removed in one outer iteration,
+    so F-744's lockstep can run its corrected variant with one outer iteration against ADR 0661's V(6, 0) at about a
+    sixth of the cost.
 - [ ] **F-745** Verifier-drawn re-run sample for hypotheses from evaluators outside the maintainer's control
   - depends on: F-727
   - acceptance: Every limit not stated here is registered in the ADR before the run. The verifier draws the k pairs from
@@ -14993,3 +15007,11 @@ fixed by the item's registration ADR before any code.
     while the F-727 sample misses it in all of them (negative control); every ADR 0624 and ADR 0662 check keeps its
     result.
   - note: Follow-up of F-727 (ADR 0662, 2026-11-16).
+- [ ] **F-746** Implicit rotational periodic pairs by default and as a case key
+  - depends on: F-743
+  - acceptance: the implicit rotational pair of ADR 0664 is the default of the transient step or selected by a case key
+    (the maintainer's choice), with the baseline hashes and the schema golden re-recorded by the maintainer; the
+    pressure-lag estimate and the adaptive corrector count use the same block solve, checked against a direct power
+    iteration of the step on a rotationally periodic case within a registered limit. Every limit not stated here is
+    registered in the ADR before the run.
+  - note: Follow-up of F-743 (ADR 0664, 2026-11-16).
