@@ -550,7 +550,8 @@ fn mode_residual(ext: &Extended) -> [f64; MODES] {
     std::array::from_fn(|k| ext.force[NODES + k])
 }
 
-/// The local Newton iteration of arithmetic 2 from `alpha = 0`: the converged modes and the extended element there.
+/// The local iteration of arithmetic 2 from `alpha = 0`: the converged modes and the extended element there. With
+/// `backtracking` (ADR 0655 D1, opt-in) a step whose iterate inverts a point is halved, at most [`MODE_HALVINGS`] times.
 fn converged(
     points: &[ModePoint],
     material: &Material,
@@ -558,14 +559,21 @@ fn converged(
     state: &ElementState,
     context: &PointContext,
     pen: Option<&Penalty>,
+    backtracking: bool,
 ) -> Result<([f64; MODES], Extended)> {
     let mut v = vec![0.0; ALL];
     v[..NODES].copy_from_slice(displacement);
     let mut alpha = [0.0; MODES];
     let mut last = f64::NAN;
+    // ADR 0655 D1: the iterate before the last step and the step, for the backtracking.
+    let mut step: Option<([f64; MODES], [f64; MODES])> = None;
     for it in 0..=LOCAL_ITERATIONS {
         v[NODES..].copy_from_slice(&alpha);
-        let ext = extended(points, material, &v, state, context, pen)?;
+        let ext = if backtracking {
+            backtracked(points, material, &mut v, &mut alpha, step.as_ref(), state, context, pen)?
+        } else {
+            extended(points, material, &v, state, context, pen)?
+        };
         let r = mode_residual(&ext);
         let rmax = r.iter().fold(0.0f64, |a, &b| a.max(b.abs()));
         if !rmax.is_finite() {
@@ -582,6 +590,9 @@ fn converged(
             break;
         }
         let delta = ModeFactor::new(&ext.tangent)?.solve(&r);
+        if backtracking {
+            step = Some((alpha, delta));
+        }
         for (a, d) in alpha.iter_mut().zip(&delta) {
             *a -= d;
         }
@@ -594,8 +605,46 @@ fn converged(
     })
 }
 
+/// The most halvings of one local step of the modes with the backtracking (ADR 0655 D1, arithmetic 3).
+pub const MODE_HALVINGS: usize = 20;
+
+/// ADR 0655 D1: the extended element at the iterate `alpha` (in `v`); if a point inverts, the last step `(alpha_j, delta)` is
+/// halved, `alpha = alpha_j - 2^-m delta`, `m = 1 ..= MODE_HALVINGS`, until it does not. Without a last step (at `alpha =
+/// 0`), after the halvings, or on any other error, the error is returned.
+#[allow(clippy::too_many_arguments)]
+fn backtracked(
+    points: &[ModePoint],
+    material: &Material,
+    v: &mut [f64],
+    alpha: &mut [f64; MODES],
+    step: Option<&([f64; MODES], [f64; MODES])>,
+    state: &ElementState,
+    context: &PointContext,
+    pen: Option<&Penalty>,
+) -> Result<Extended> {
+    let mut m = 0;
+    loop {
+        match extended(points, material, v, state, context, pen) {
+            Ok(ext) => return Ok(ext),
+            Err(e) => {
+                let inverted = matches!(&e, FemError::InvalidValue { key, .. } if *key == INVERSION_KEY);
+                match step {
+                    Some((base, delta)) if inverted && m < MODE_HALVINGS => {
+                        m += 1;
+                        let t = 0.5f64.powi(m as i32);
+                        *alpha = std::array::from_fn(|k| base[k] - t * delta[k]);
+                        v[NODES..].copy_from_slice(alpha);
+                    }
+                    _ => return Err(e),
+                }
+            }
+        }
+    }
+}
+
 /// The condensed element of ADR 0608 D2 for the driver; with a rule other than `Off` the element of ADR 0614 D1 with the
-/// coefficient of the rule (ADR 0630 D1).
+/// coefficient of the rule (ADR 0630 D1); with `backtracking` the local iteration of ADR 0655 D1.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn evaluate(
     coords: &[Vec3],
     material: &Material,
@@ -604,12 +653,21 @@ pub(crate) fn evaluate(
     want_tangent: bool,
     context: &PointContext,
     stabilised: IncompatibleStabilisation,
+    backtracking: bool,
 ) -> Result<Evaluation> {
     check_hex8_fields(coords, displacement)?;
     let points = mode_points(coords)?;
     check_state(material, state, points.len())?;
     let pen = penalty_if(stabilised, coords, &points, material, displacement, context)?;
-    let (_, ext) = converged(&points, material, displacement, state, context, pen.as_ref())?;
+    let (_, ext) = converged(
+        &points,
+        material,
+        displacement,
+        state,
+        context,
+        pen.as_ref(),
+        backtracking,
+    )?;
     let factor = ModeFactor::new(&ext.tangent)?;
     let kt = &ext.tangent;
     let y = factor.solve(&mode_residual(&ext));
@@ -671,11 +729,31 @@ pub fn modes_and_strains_with(
     context: &PointContext,
     stabilised: impl Into<IncompatibleStabilisation>,
 ) -> Result<([f64; MODES], Vec<[f64; 6]>)> {
-    let stabilised = stabilised.into();
+    modes_and_strains_opt(coords, material, displacement, state, context, stabilised.into(), false)
+}
+
+/// [`modes_and_strains_with`] with the backtracking of ADR 0655 D1 (`backtracking`, the model's opt-in) or without.
+pub(crate) fn modes_and_strains_opt(
+    coords: &[Vec3],
+    material: &Material,
+    displacement: &[f64],
+    state: &ElementState,
+    context: &PointContext,
+    stabilised: IncompatibleStabilisation,
+    backtracking: bool,
+) -> Result<([f64; MODES], Vec<[f64; 6]>)> {
     check_hex8_fields(coords, displacement)?;
     let points = mode_points(coords)?;
     let pen = penalty_if(stabilised, coords, &points, material, displacement, context)?;
-    let (alpha, ext) = converged(&points, material, displacement, state, context, pen.as_ref())?;
+    let (alpha, ext) = converged(
+        &points,
+        material,
+        displacement,
+        state,
+        context,
+        pen.as_ref(),
+        backtracking,
+    )?;
     Ok((alpha, ext.strain))
 }
 
@@ -690,8 +768,59 @@ pub fn condensed_force_and_tangent(
     context: &PointContext,
     stabilised: impl Into<IncompatibleStabilisation>,
 ) -> Result<(Vec<f64>, ElementMatrix, Vec<[f64; 6]>)> {
-    let ev = evaluate(coords, material, displacement, state, true, context, stabilised.into())?;
+    let ev = evaluate(
+        coords,
+        material,
+        displacement,
+        state,
+        true,
+        context,
+        stabilised.into(),
+        false,
+    )?;
     Ok((ev.force, ev.tangent.expect("tangent requested"), ev.stress))
+}
+
+/// [`condensed_force_and_tangent`] with the backtracking of the mode update of ADR 0655 D1 (for checks).
+pub fn condensed_force_and_tangent_backtracked(
+    coords: &[Vec3],
+    material: &Material,
+    displacement: &[f64],
+    state: &ElementState,
+    context: &PointContext,
+    stabilised: impl Into<IncompatibleStabilisation>,
+) -> Result<(Vec<f64>, ElementMatrix, Vec<[f64; 6]>)> {
+    let ev = evaluate(
+        coords,
+        material,
+        displacement,
+        state,
+        true,
+        context,
+        stabilised.into(),
+        true,
+    )?;
+    Ok((ev.force, ev.tangent.expect("tangent requested"), ev.stress))
+}
+
+/// The compatible displacement gradient `H_c` and the mode part `F_m` at a point (ADR 0655 reading c2).
+pub type PointGradients = ([[f64; 3]; 3], [[f64; 3]; 3]);
+
+/// Per point of the stiffness rule of an Incompatible Hex8 (ADR 0608 D1), the compatible displacement gradient `H_c = sum_a
+/// u_a (x) g_a` and the mode part `F_m = sum_k alpha_k (x) G_k` at the displacement and the modes, so that `F = I + H_c +
+/// F_m` (ADR 0655 reading c2; for checks).
+pub fn point_gradients(coords: &[Vec3], displacement: &[f64], modes: &[f64; MODES]) -> Result<Vec<PointGradients>> {
+    check_hex8_fields(coords, displacement)?;
+    let points = mode_points(coords)?;
+    Ok(points
+        .iter()
+        .map(|p| {
+            (
+                displacement_gradient(&p.grad, displacement),
+                displacement_gradient(&p.modes, modes),
+            )
+        })
+        .collect())
 }
 
 /// The coefficient `c` (Pa) of the stabilisation of ADR 0614 D1 of an element at its displacement.
