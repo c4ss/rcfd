@@ -14397,9 +14397,10 @@ fixed by the item's registration ADR before any code.
     and 0.46 (negative controls). Uniform axial flow 2.4e-14 through the re-imaging steps; mass across the interface
     1.2e-14, GCL 1.1e-14. Five of five mutations caught; defaults bit-identical (F-303 suites, baseline hashes, hash
     tables unchanged; no golden edit). Limits: sector about z, forward rotation, a non-zero fixed value on a rotor patch
-    must be axial, steps that land on node coincidences are not coupled on the sector path for flows without the node
-    sets' symmetry (ADR 0640), the refusals of F-303; planar sliding not in the tree. Follow-up F-729 (Planar periodic
-    sliding in the case tree). Follow-up F-730 (Sector sliding in the tree at node coincidences).
+    must be axial, steps that land on node coincidences are coupled on the sector path only with
+    [mesh.sliding.coincidences] coupled = true (F-730, ADR 0654), the refusals of F-303; planar sliding not in the tree.
+    Follow-up F-729 (Planar periodic sliding in the case tree). Follow-up F-730 (Sector sliding in the tree at node
+    coincidences).
 - [~] **F-712** Symmetry planes and a uniform in-plane flow on the annulus interface pair
   - acceptance: the uniform in-plane flow of ADR 0637 UT on the frozen join of annulus_3d_cylindrical_interface with
     zmin, zmax symmetry (2.4e-2 after one step) is diagnosed; either it is kept to 1e-10 with the cause fixed and every
@@ -14600,7 +14601,8 @@ fixed by the item's registration ADR before any code.
     relative to rounding-level targets). Every F-304, F-704, F-720 and F-710 test and baseline_hashes pass unedited.
     Five of five mutations caught (one by another check than registered). Open: making the coupling the default of
     periodic_sliding_step (changes F-720's N1 test; maintainer). Follow-up F-724 (Threshold scale of the coupled
-    interface solves). Follow-up F-725 (Sector against full annulus with a non-axisymmetric inlet).
+    interface solves). Follow-up F-725 (Sector against full annulus with a non-axisymmetric inlet). Case tree (sector,
+    opt-in [mesh.sliding.coincidences]): F-730 (ADR 0654).
 - [~] **F-722** Reduced-order reference fan in the schema
   - depends on: F-713
   - acceptance: Every limit not stated here is registered in the ADR before the run. A named ComputerFan constructor
@@ -14699,12 +14701,28 @@ fixed by the item's registration ADR before any code.
     including the re-imaging steps and a through-flow checked against a registered reference; defaults bit-identical.
     Every limit not stated here is registered in the ADR before the run.
   - note: Follow-up of F-711 (ADR 0646, 2026-11-16).
-- [ ] **F-730** Sector sliding in the tree at node coincidences
+- [~] **F-730** Sector sliding in the tree at node coincidences
   - depends on: F-711, F-721
   - acceptance: the FS set-up of ADR 0646 with ADR 0637's step pitch / 8 (a node coincidence every rotor pitch on both
     runs) through the coupled periodic step of F-721, the sector against the full-annulus tree run within a registered
     limit; the F-711 results unchanged where no coincidence occurs.
-  - note: Follow-up of F-711 (ADR 0646, 2026-11-16).
+  - note: ADR 0654, 2026-11-16: sector sliding in the case tree at node coincidences. New optional table
+    [mesh.sliding.coincidences] with coupled = true (default false; for mesh.generator =
+    "annulus_3d_sector_cylindrical_interface", refused on the full annulus, which is coupled always since F-710): the
+    sector loop takes its step data from F-721's periodic_sliding_step_coupled and writes the monitor
+    sliding_flux_residual; without the table the run is unchanged. ADR 0646's FS (the m = 6 vortical field, walls at
+    rest) with ADR 0637's step pitch / 8 over 400 steps (50 coincidence steps, re-imaging at 192 with offset exactly 0
+    and at 384): the remapped old flux divergence-free to 1.0e-13 on every step from the second (limit 1e-12; the base
+    step leaves 1.4e-4, at least 6.9e-3 of the speed, on the coincidence steps); the tree loop equals the library loop
+    bit for bit; against the full-annulus tree run within 1.25e-2 U0 (limit 2e-2), rms 4.0e-4 at the end; mass across
+    the interface 1.6e-14, GCL 1.8e-14. Off coincidences the coupled step data equal the base's bit for bit (350 of 350
+    steps); ADR 0646's FS, FW and US runs are bit-identical with the table; the default at coincidences unchanged;
+    baseline hashes and the F-303, F-710 and F-711 suites pass unedited; no golden or hash table edited. Five of five
+    mutations caught. One registered refusal test was defective (the parse refused the table at the key before the test
+    looked; the corrected test is met). Limits: opt-in (the default question is F-721's Q1 with F-724), FW and US not
+    run at pitch / 8, the sector limits of ADR 0646. Partial by the rule: the registered E1c test was defective (the
+    refusal was returned by Case::parse_toml before its assertion) and E1c was met only by the corrected E1cc of
+    amendment 1; every acceptance clause is met, so done is the maintainer's call.
 - [ ] **F-731** Moving immersed shapes at lock-in: a transversely oscillating cylinder shedding vortices
   - depends on: F-707
   - acceptance: Every limit not stated here is registered in the ADR before the run. A cylinder oscillating across a
