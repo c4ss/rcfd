@@ -13780,7 +13780,7 @@ fixed by the item's registration ADR before any code.
     Load::ShellTemperatureGradient; a shell model read from a case file gives the bits of the library call; existing
     keys, goldens and baseline hashes unchanged.
   - note: Follow-up of F-527 (ADR 0612, 2026-11-15).
-- [~] **F-689** Interaction integral on closed curved fronts and mirror-plane stations
+- [x] **F-689** Interaction integral on closed curved fronts and mirror-plane stations
   - depends on: F-682
   - acceptance: Every limit not stated here is registered in the ADR before the run. A closed (periodic) front without
     end stations and a mirror-plane option that zeroes the antisymmetric modes at stations on a mirror plane; a whole
@@ -13802,7 +13802,9 @@ fixed by the item's registration ADR before any code.
     within 1.1e-2 of Irwin; 8 of 8 mutations caught. Not run: the medium whole-penny record (about 240 000 unknowns;
     free RAM below the registered 16 GB). Not covered: spline fronts, mixed-mode elliptical cracks, the end-face
     exemption of the ring boundary test on closed fronts. No case-file key. Lead to run when 16 GB are free: cargo test
-    -p rcfd-fem --release --test sa_fracture_closed -- --ignored wm1_to_wm7 --nocapture, then addendum 2.
+    -p rcfd-fem --release --test sa_fracture_closed -- --ignored wm1_to_wm7 --nocapture, then addendum 2. Addendum 2
+    (2026-11-16, lead): the WM record run once with 65 GB free, WM1 to WM7 met (K_I 5.8e-4, K_II 1.6e-4, K_III 1.5e-3, J
+    1.8e-2); done.
 - [~] **F-690** Early acceptance at the rounding bound of the Newton residual (a stagnation test)
   - depends on: F-571
   - acceptance: Every limit not stated here is registered in the ADR before the run. A step at the rounding floor of ADR

@@ -373,11 +373,32 @@ Remaining questions:
    ADR 0610 remain from memory.
 4. A case-file key for fracture parameters: still open (it would change the schema golden; not taken).
 
+## Addendum 2: the WM record, run by the lead (2026-11-16)
+
+The registered heavy record `wm1_to_wm7` was run once by the lead on the branch tip d3bfd588 (`cargo test -p rcfd-fem --release
+--test sa_fracture_closed -- --ignored wm1_to_wm7 --nocapture`, 122 s) with 65 GB of free memory, above the registered 16 GB. The
+limits are those of the registration; nothing was changed before the run. Log: `w49i-work/f689-scratch/wm-lead.log`.
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| WM1 K_I against 2 sigma_nn sqrt(a/pi), every station | <= 3e-2 | 5.79e-4 | yes |
+| WM2 K_II against A_II cos(theta - psi), / A_II | <= 3e-2 | 1.59e-4 | yes |
+| WM3 K_III against A_III sin(theta - psi), / A_III | <= 3e-2 | 1.51e-3 | yes |
+| WM4 K_II, K_III relative where abs(K_ref) >= A/2 | <= 3e-2 | 1.52e-3 | yes |
+| WM5 spread over rings 2 to 4 / A_mode | <= 1e-2 | 1.27e-3 | yes |
+| WM6 J against the hat average of G | <= 4e-2 | 1.80e-2 | yes |
+| WM7 front mean of J against that of G | <= 2e-2 | 1.36e-2 | yes |
+
+Recorded, no limit: the domain term alone (WMR, ring 3) errs by 3.06e-2 in K_I, 1.35e-1 in K_II and 6.95e-2 in K_III, so the
+correction terms carry the medium mesh as they carried the coarse one. F1 (finite) met.
+
+Decision: every registered check is now met; by question 1 of this ADR, F-689 is **done**.
+
 ## For the lead: roadmap entries
 
 Proposed status of F-689: partial by the registered rule (question 1: done once the WM record is run and met).
 
-> Proposed status: partial.
+> Proposed status: done (after addendum 2).
 
 > Structural solver, advanced tier. Follow-up of F-682 (ADR 0610). ADR 0618, 2026-11-12: rcfd_fem::fracture gains closed (periodic) circular and elliptical crack fronts without end stations (CrackFront::closed: the node parameters unwrapped with the period, every station a full periodic hat, the weights of the closing edge included; j_integral and interaction_integral_curved take them), the mirror-plane option CrackFront::mirror_plane (K_III = 0 at stations on a mirror plane normal to the front, derived from the odd tearing displacement under the reflection; refused for a plane without a station, a plane not normal to the front, a closed front, and in interaction_integral), and penny_crack_whole_cylinder (the half cylinder of ADR 0610 reflected in x = 0). Defaults bit-identical: the results of ADR 0610's set-ups byte-identical to b61032f4 in a full {:?} dump, its tests and ADR 0605's unchanged. Met: a whole penny (66 174 unknowns, 16 stations) under tension inclined 45 deg towards psi = 35 deg, ring 2, K_I within 7.0e-4, K_II within 7.3e-4 A_II and K_III within 4.9e-3 A_III of the hat-averaged closed forms 2 sigma_nn sqrt(a/pi), A_II cos(theta - psi), A_III sin(theta - psi) at every station (limit 3 percent; ADR 0610's forms with the shear direction rotated, verified); the half model with the mirror option equal to the whole model within 2.2e-13 A (the end-face term it removes was -0.96 A_III); whole elliptical crack b/a = 0.5 mode I within 1.1e-2 of Irwin; 8 of 8 mutations caught. Not run: the medium whole-penny record (about 240 000 unknowns; free RAM below the registered 16 GB). Not covered: spline fronts, mixed-mode elliptical cracks, the end-face exemption of the ring boundary test on closed fronts. No case-file key.
 
