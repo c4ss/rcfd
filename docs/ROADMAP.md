@@ -14553,7 +14553,10 @@ fixed by the item's registration ADR before any code.
     the reference that escaped there (the F-bar ratio zeroed) and a tangent-only one are both caught by this file. Four
     of four mutations caught. Not covered: other materials and Poisson ratios, moved boundary nodes, statistics over
     seeds, the line search or a guard of the mode update at the punch edge. Follow-up F-732 (The inverted iterate of the
-    incompatible-modes Hex8 at the punch edge of a distorted mesh (ADR 0649 DB4)).
+    incompatible-modes Hex8 at the punch edge of a distorted mesh (ADR 0649 DB4)). ADR 0655 (F-732, 2026-11-16): the DB4
+    known miss is located (an overshooting local Newton iterate of the modes, not a loss of stability or an inverted
+    compatible field); with the opt-in backtracking of ADR 0655 and the driver's line search together rule L passes the
+    8^3 block at 0.25 h within the ADR 0636 tolerance (7.5 and 2.9 per cent), reported.
 - [x] **F-720** Periodic sliding at coinciding nodes
   - depends on: F-710, F-704
   - acceptance: a uniform flow on the sector pair of ADR 0629 with a step that lands on node coincidences is kept to
