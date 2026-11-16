@@ -290,3 +290,99 @@ at `latin_hypercube(100, 2, 718_052)` with `x1` scaled to [1.1, 1.5] (outside th
 point) and `x2` over its box. Limits unchanged (flagged values bit for bit, unflagged within 1e-12 relative, at least 1
 flagged; round trip bit-equal). `nd_corrected` stays as the ignored record `nd_corrected_known_miss`; the new test is
 `nd_corrected2`, run once.
+
+## Addendum 1: results (2026-11-16)
+
+Code: 70561b19 (R3, the registered tests), 57df8d5c (amendment 1: the rounding floor, the corrected tests), 8bd0c6a7 (amendment
+2: X1's outside queries); registration 901bd957 and amendments 75884136 and 8bd0c6a7 before their runs. Library change only in
+`crates/rcfd-api/src/design/fidelity.rs` (`TrustRule::r3`, `R3Rule`, `Rung::R3`, `MetricFit::r3` and `chosen_mse`, `R3Fit`,
+`R3Loo`, `r3_loo`, `r3_log_likelihood`, `R3_JITTER`; `apply` and the summary's `rmse_after` take R3); `surrogate.rs` is used, not
+edited. New `crates/rcfd-api/tests/f718_fidelity_r3.rs` (12 tests: 8 run, 4 ignored records). Docs: `docs/design-loop.md` (one
+bullet). No shared solver file, golden, hash table, case key or MCP tool.
+
+Runs (release profile throughout): the registered run `run1.log` (3 of 6 passed, amendment 1); the corrected tests once
+(`run2.log`; `nd_corrected` failed on X1, amendment 2); `nd_corrected2` once (`run3.log`). The prototype numbers of the
+registration came from numpy and other seeds; none is a check.
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| S1 one-SE (N1a, N1b, N2, N3, ND rounds 1 to 6) | rung = the rule recomputed in the test | equal in every fit (N1a R3, N1b R3, N2 R2, N3 R2 and R2, ND R2, R0, R2, R3, R3, R3) | yes |
+| S2 N1a, N1b: R3 chosen | as stated | R3, R3 | yes |
+| S2 N2: R3 not chosen | as stated | R2 (R3 MSE equal to R2's, process variance at its lower bound) | yes |
+| S2 N3, registered design | R2, coefficients bit-equal to `r3: None` | `f`: **R3** (MSE R2 2.2e-30, R3 1.6e-30, rounding) | **no** (amendment 1; record `n3_exact_affine_keeps_r2_known_miss`) |
+| S2 N3, with the floor (`n3_corrected`) | R2, bit-equal, R3 unavailable for rounding | R2 and R2, bit-equal, "the R2 residual is at the rounding level" | yes |
+| L3 closed vs brute force | `<= 1e-8 rms(r)` | N1a 2.5e-10, N1b 4.0e-14, N2 1.2e-13, ND final 1.7e-9 | yes |
+| L3s sd vs brute force | `<= 1e-8 rms(r)` | N1b 1.3e-14, N2 1.1e-15; **N1a 6.3e-8, ND final 1.6e-8** (noise-free, cancellation in `a^T C a`, amendment 1) | **no** for the two noise-free fits (records `n1_n2_choice_loo_and_coverage_known_miss`, `nd_driver_with_r3_known_miss`) |
+| C1 coverage | `>= 0.85` | N1a 1.000, N1b 0.950, ND final 1.000 | yes |
+| C2 RMSE ratio R3 / R2 | N1a `<= 0.2`, N1b `<= 0.5` | 0.0057, 0.274 | yes |
+| D1 ND final | R3, trusted | R3, trusted (R3 from round 4) | yes |
+| D2 held-out ratio | `<= 0.5` | 0.078 (264 candidates inside the region; RMSE 1.02e-2 against 1.31e-1 for the R2 fit) | yes |
+| D3 ledger | counts, hashes, `r3` objects | 300, 36, 36, 6; 0 skipped; hashes equal; `r3` in every round, available from round 4 | yes |
+| D4 workers 1 and 8 | bytes equal | 244740 bytes, equal | yes |
+| X1, registered queries | at least 1 flagged | **0 of 500** (the region covers the box) | set-up defect (amendment 2; record `nd_corrected_known_miss`) |
+| X1, corrected queries | flagged bit for bit; unflagged `<= 1e-12`; at least 1 flagged | 100 of 600 flagged, exact; unflagged 3.8e-16 | yes |
+| T6 round trip | bit-equal, hash equal | 600 of 600, `fnv1a64:11217d881a24ee8b` | yes |
+| NC-C | R3 chosen, untrusted, why names coverage | "leave-one-out 2-sigma coverage 1.000 below 1.01"; predictions = `y_L` | yes (fails trust as it must) |
+| K1 gradient | rel `<= 1e-5` | largest 4.6e-8 | yes |
+| P6 | 0 found, >= 50 texts | 0 of 128 in 163967 public bytes | yes |
+| NC-P | >= 1 found | 128 of 128 | yes (fails P6 as it must) |
+| K2 bytes at d40cd665 and at the tip | equal | S1 195021, S4 251074, S7 public 130872, private 201617 bytes: all equal | yes |
+| K3 ADR 0622 checks | pass | `f699_fidelity` 16 passed (3 ignored records); heavy `b_reduced_order_fan_heavy` passed (215.9 s) | yes |
+| R existing tests and diff | pass; empty | `design::` 76, `f698_surrogate` 19, `f697_fan_objective` 22, `fan_rom_bands_f268` 4, `f249_default_bits` 4, `f260_default_bits` 1, `f297_default_bits` 3, `baseline_hashes` 3; rcfd-mcp `default_f1` 2, `tool_list_f275` 7, `project_list_f270` 1; diff of rcfd-mcp, `surrogate.rs`, `f699_fidelity.rs` against d40cd665 empty | yes |
+| F fmt, clippy | clean | `cargo fmt -p rcfd-api --check` clean; `cargo clippy -p rcfd-api --all-targets -- -D warnings` clean | yes |
+
+Mutations (scratch copy `f718-scratch/mcopy` from `git archive 8bd0c6a7`, script `mutate.py`, runner `mut_run.sh`, the 8 fast
+tests of the new file plus K2 for the control and MR11; the unmutated copy passed 8 of 8 and K2):
+
+| Id | Expected | Caught by |
+|---|---|---|
+| MR1 R3 always when available | S1, S2 | S1 on N2 (`n2_corrected`) |
+| MR2 no refit term | L3 | L3 on N1a, N1b, N2 and ND |
+| MR3 nugget left out | L3 | L3 on N1b and N2 |
+| MR4 sd without the regression term | L3s | L3s on N1b and N2 |
+| MR5 `mu` not added | X1, D2 | D2 (X1 follows it in the test) |
+| MR6 trace term dropped | K1 | K1 |
+| MR7 R3 on flagged queries | X1 | X1 (flagged) |
+| MR8 correction in the public summary | P6 | P6 |
+| MR9 coverage condition removed | NC-C | NC-C |
+| MR11 R3 on by default | K2 | K2 (S1, S4 and the S7 private ledger differ) and D2 (its R2-only reference becomes R3) |
+
+Ten of ten caught.
+
+Deviations: amendments 1 and 2 (above). `R3Fit` has no `se_levels` field (D5 listed one); the test recomputes every level's MSE
+and SE from the public leave-one-out functions instead, which is the stronger form of S1. `nd_corrected2` keeps the original
+order of assertions except L3s (amendment 1 said every number is printed before any assertion; for ND only the L3s assertion
+was removed, and every later check ran because the earlier ones passed). The record `n3_exact_affine_keeps_r2_known_miss`
+would now pass, since the floor makes R3 unavailable there; it is kept as the record of the registered design. Not run: the
+whole workspace (the lead's gate).
+
+Decision by the registered rule: **partial**. The acceptance clauses are met on the corrected runs (S1 in every fit, L3 within
+1e-8 of rms(r) in every fit, C1 coverage 0.95 to 1.00 against 0.85, K2 bytes equal, K3 every ADR 0622 check keeps its result),
+every non-acceptance check is met except L3s on the two noise-free fits, and every mutation is caught. L3s is missed (a
+non-acceptance check), and the registered design itself missed S2 on N3 before the rounding floor of amendment 1, so the item is
+not reported as done.
+
+### Remaining questions (each with a recommendation)
+
+1. **Where the zero-mean process lives.** F-698's `Gp` profiles a constant mean and takes a nugget ratio, so R3 builds its own
+   zero-mean process with an absolute nugget in `fidelity.rs` from F-698's kernel and factorisation. Options: (a) keep; (b) after
+   F-715 merges, add a zero-mean, absolute-noise mode to `surrogate::Gp` and let R3 call it. Recommendation: (b), as a small
+   follow-up, so there is one Gaussian-process implementation.
+2. **Regression treated by REML or universal kriging.** The process is fitted to the OLS residual with the plain zero-mean
+   likelihood. Options: (a) keep (the acceptance's form); (b) the restricted likelihood. Recommendation: (a) until a real
+   discrepancy shows biased length scales.
+3. **L3s on noise-free fits.** The sd of a near-interpolating process loses about 1e-4 of its relative accuracy to cancellation
+   in `a^T C a`. Options: (a) accept and keep the records; (b) a follow-up that evaluates the variance through the factor
+   (`|L^T a|^2`) and checks it, registered before its run. Recommendation: (b); coverage is unaffected at these sizes.
+4. **R3 on the reduced-order fan.** With three parameters R3 needs 30 pairs, more than the 24 promotions of ADR 0622's fan
+   set-up. Options: (a) leave as is; (b) a follow-up run of S3 with 6 rounds. Recommendation: (a) until the CFD tier exists.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial
+
+> Follow-up of F-699 (ADR 0622, 2026-11-15). ADR 0652, 2026-11-16. PARTIAL (every acceptance clause met on the corrected runs; the leave-one-out standard deviation misses 1e-8 on the two noise-free fits). Library only, opt-in (TrustRule::r3, default None; no case key, no MCP tool): rung R3 of the fidelity driver is R2 plus a zero-mean Gaussian process (F-698's squared-exponential kernel and Cholesky factorisation) on the R2 residual, with the nugget from the high source's stated uncertainty, length scales and process variance fitted once per fit by maximum likelihood (analytic gradient, F-698's multi-start pattern) and held in every fold, and leave-one-out residuals from a closed form that includes the refit of the R2 coefficients, e3_i = ((G r)_i + e2_i (G P)_ii) / G_ii; R3 needs 10 d pairs and a residual above the rounding level, is chosen over R2 only by the one-standard-error rule (recomputed by the test in every fit), and is trusted only with 2-sigma leave-one-out coverage at least 0.8. Checks: leave-one-out residuals equal brute force (R2 refitted, the process re-solved) within 2.5e-10 to 4e-14 of the residual scale; coverage 0.95 to 1.00 against the registered 0.85 on a smooth nonlinear synthetic discrepancy with and without noise; R3 chosen on it (RMSE 0.006 and 0.27 of R2's), not chosen on unstructured noise or an exact affine source; through the driver (two parameters, 300 candidates, 36 promotions) R3 is chosen from round 4 and its held-out RMSE is 0.078 of the R2 fit's; flagged queries get the constant only, bit for bit; the correction round-trips bit for bit; no R3 number reaches the public ledger with a private source; with R3 off the S1, S4 and private S7 ledgers are byte-identical to before, and every ADR 0622 check (including the heavy fan record) keeps its result. Ten of ten mutations caught. Misses recorded: the registered design chose R3 on a rounding-level residual (fixed by a floor in amendment 1), and the predictive sd differs from brute force by 1.6e-8 and 6.3e-8 of the residual scale on noise-free fits (cancellation, limit 1e-8). Verified on synthetic sources only.
+
+> Follow-up proposed: Fidelity driver R3: the leave-one-out standard deviation through the Cholesky factor. Deps F-718. Acceptance: the predictive standard deviation of R3 is evaluated without the cancellation of a^T C a, it equals brute force within 1e-8 of the residual scale on the noise-free fits of ADR 0652 (N1a and the driver's final fit), and every ADR 0652 and ADR 0622 check keeps its result.
+
+> Follow-up proposed: A zero-mean, absolute-noise mode of F-698's Gaussian process used by R3. Deps F-718, F-715. Acceptance: surrogate::Gp gains an opt-in zero-mean mode with an absolute per-observation noise variance, R3 calls it in place of its own process, every ADR 0652 check keeps its result (fits bit-identical or within 1e-12), and every ADR 0621 check keeps its result.
