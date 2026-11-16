@@ -361,3 +361,43 @@ error of a field of `0.24 U0` at the interface (ADR 0216 R2 scaled: about `1e-4`
 The decision rule is unchanged, with NA2c, NA3c and U1c in place of NA2, NA3 and U1 among the checks; the decision by the
 rule as first registered is reported as well. The CLI check C1 ran on NA's text and was met; it is not re-run (it checks
 the binary against the in-process run, not the field).
+
+## Amendment 2 (2026-11-16, written after the run of amendment 1's corrected checks and before any further run)
+
+The corrected run (once, release, two threads, 53.5 s, the tests of 1daa0489 on the code of 2bcc8b0c) met N0c (`1.6e-15`),
+NA1c (`6.76e-4`), NA3c (`47.8`), L1c (exactly 0), M1c, X0c, C3c and U2c, and missed:
+
+| Id | Limit | Measured |
+| --- | --- | --- |
+| NA2c (negative control) | `>= 5e-2` | `3.23e-2` |
+| U1c | `<= 1e-10` each | velocity `2.28e-4`, pressure `3.76e-3` |
+
+Both stay as registered and become ignored `*_known_miss` records with their limits (no limit changes).
+
+**NA2c, diagnosis from the printed numbers.** NA0c's largest speed falls from `0.842` (start; the cell centres) to `0.333`
+at the end: the field slides along both walls at the start, and the no-slip walls remove that slip in diffusion layers, a
+decay that the registered estimate (`0.97`, the slowest mode) left out. Scaled by `0.333 / 0.842`, the estimate `0.12`
+becomes `0.047`, the size measured (`0.032`). The control is not blind: it raises `E` by a factor 48 (NA3c) and exceeds the
+limit of NA1c by a factor 3.2, so NA1c fails when the rotor mesh flux is dropped; only its own threshold, set from the
+estimate, was too high.
+
+**U1c, one diagnostic run after it** (a scratch test file `crates/rcfd-api/tests/zz_f303_diag2.rs`, deleted after the run,
+not committed; disclosed): UTc's deviation per step is `4e-15` to `6e-15` for steps 1 to 7, jumps to `2.0e-4` (pressure
+`3.8e-3`) at step 8 and decays to `3e-5` by step 15, and jumps again at steps 16, 24, 32 and 40; at exactly those steps the
+interface has 240 faces in place of 264. With `angular_velocity = 0` (240 faces every step) it stays at `1.1e-15`. Steps 8,
+16, ... are the whole rotor pitches, where rotor and stator nodes coincide (the registration's arithmetic), so 24 overlaps
+of zero area are dropped and come back on the next step. So the uniform state of ADR 0216 M4 is lost on a step whose
+interface loses or regains faces at coinciding nodes, in the library path that F-303 calls (`sliding_step`). ADR 0216's own
+uniform-flow set-ups (U2, U3, `dt = 0.005`) never met a coincidence after angle 0, so its checks could not see this. The
+cause inside `sliding_step` (a dropped overlap's share of the remap or of the GCL closure; the snapping of nearly
+coinciding nodes by the join's tolerance) is not diagnosed here; it is a remaining question and a proposed follow-up. The
+non-axisymmetric checks NA1c and M1c ran through the same coincidence steps and were met.
+
+Supporting check, registered here before it runs (once), to show that the tree path keeps the uniform state on steps
+without coincidences, as ADR 0216 U2 does in the library:
+
+| Id | Set-up | Check | Limit |
+| --- | --- | --- | --- |
+| U1d | UTd = UTc with `dt = 0.005` (ADR 0216's step; over 40 steps the rotor angle comes no closer than `9.3e-5` rad to a node coincidence, arith) | as U1 | `<= 1e-10` each |
+
+U1d does not replace U1c in the decision rule. By the rule, with NA2c and U1c missed, the outcome is **partial**.

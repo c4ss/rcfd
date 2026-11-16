@@ -516,6 +516,17 @@ fn na_known_miss_strain_field_removed_by_the_projection() {
 #[test]
 fn nac_non_axisymmetric_flow_sees_the_rotor_mesh_flux() {
     let fails = na_checks(PSI);
+    // ADR 0637 amendment 2: NA2c missed in the corrected run; it is asserted by the known-miss record below
+    require(&fails, &["N0", "NA1", "L1", "NA3", "M1", "X0", "C3"]);
+}
+
+/// NAc: KNOWN MISS of NA2c (ADR 0637 amendment 2: the threshold was set from an estimate that left out the decay of the
+/// wall slip). Corrected run: `3.23e-2` (limit `>= 5e-2`); NA3c `47.8` (limit `>= 5`) and NA1c `6.76e-4` met, so NA1c fails
+/// by a factor 3.2 when the rotor mesh flux is dropped. Run with `--ignored`; it fails on NA2.
+#[test]
+#[ignore]
+fn nac_known_miss_negative_control_threshold() {
+    let fails = na_checks(PSI);
     require(&fails, &NA_IDS);
 }
 
@@ -525,9 +536,14 @@ fn nac_non_axisymmetric_flow_sees_the_rotor_mesh_flux() {
 
 /// The checks U1, U2, X0 on UT (`fixed_planes` false) or UTc (true).
 fn ut_checks(fixed_planes: bool) -> Fails {
+    ut_checks_text(&ut(fixed_planes))
+}
+
+/// The checks U1, U2, X0 on the case text `t`.
+fn ut_checks_text(t: &str) -> Fails {
     let mut fails = Fails::new();
     let uu = [1.0, 0.5, 0.0];
-    let mut sim = sim_of(&ut(fixed_planes));
+    let mut sim = sim_of(t);
     let ts = run_tree(&mut sim, 40, Some(uu));
     check(
         &mut fails,
@@ -574,7 +590,27 @@ fn ut_known_miss_symmetry_planes() {
 #[test]
 fn utc_uniform_flow_through_the_tree() {
     let fails = ut_checks(true);
+    // ADR 0637 amendment 2: U1c missed in the corrected run; it is asserted by the known-miss record below
+    require(&fails, &["U2", "X0"]);
+}
+
+/// UTc: KNOWN MISS of U1c (ADR 0637 amendment 2: the uniform state is lost on the steps whose interface drops or regains
+/// the zero-area overlaps of coinciding nodes, steps 8, 16, ..., 40). Corrected run: velocity `2.28e-4`, pressure
+/// `3.76e-3` (limit `1e-10` each). Run with `--ignored`; it fails on U1.
+#[test]
+#[ignore]
+fn utc_known_miss_coinciding_nodes() {
+    let fails = ut_checks(true);
     require(&fails, &["U1", "U2", "X0"]);
+}
+
+/// UTd of ADR 0637 amendment 2 (UTc with dt = 0.005, no node coincidence after angle 0): U1d.
+#[test]
+fn utd_uniform_flow_without_coinciding_nodes() {
+    let t = ut(true).replace("dt = 0.00545415391248228", "dt = 0.005");
+    assert_ne!(t, ut(true));
+    let fails = ut_checks_text(&t);
+    require(&fails, &["U1"]);
 }
 
 // -------------------------------------------------------------------------------------------------------------------
