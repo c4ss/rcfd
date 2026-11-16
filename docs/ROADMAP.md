@@ -14700,14 +14700,28 @@ fixed by the item's registration ADR before any code.
     F-730 suites pass unedited. A registered flip count had a defective scope (corrected count 0). Five of five
     mutations caught. Open for the maintainer: FluxScale as the default of sliding_step, and switching
     periodic_sliding_step to the coupled path (changes F-720's N1 test and the sector default at coincidences).
-- [ ] **F-725** Sector against full annulus with a non-axisymmetric inlet
+- [~] **F-725** Sector against full annulus with a non-axisymmetric inlet
   - depends on: F-721
   - acceptance: the lockstep of ADR 0641 (sector SS and the full annulus of ADR 0216, inlet periodic in the pitch, steps
     through node coincidences) with a limit on the largest velocity difference derived before the run to include the
     start transient at the seams (or from a start state consistent with the inlet), met on every step; the seam faces'
     orthogonal coupling (ADR 0629 Q4) identified as the source of the remaining difference or ruled out. Every limit not
     stated here is registered in the ADR before the run.
-  - note: Follow-up of F-721 (ADR 0641, 2026-11-16).
+  - note: ADR 0661, 2026-11-16: sector against the full annulus with a non-axisymmetric inlet (tests only, no library
+    change). ADR 0641's lockstep (the 60-degree sector SS through periodic_sliding_step_coupled against the full annulus
+    of ADR 0216, inlet U_in (1 + 0.5 sin 6 theta) x_hat, dt = rotor pitch / 8, 400 steps, 50 coincidence steps, two
+    re-imagings) from a start consistent with the inlet (u0 = U_in (1 + 0.5 sin 6 theta) (r_i / r) x_hat,
+    divergence-free): largest velocity difference 1.98e-2 U_in on every step against a limit 3e-2 derived before the run
+    (step 1 1.9e-3), rms 8.6e-3 (limit 1.5e-2). An exact decomposition by variants (outer iterations, non-orthogonal
+    correctors) names the source: nearly all of it (2.0e-2) is the lagged partner value of the momentum equation on the
+    coupled seam and wrap faces, which six outer iterations remove (to 6.0e-3), and the same lag makes ADR 0641's step-1
+    miss (3.494e-2, reproduced); what remains after the lag is the orthogonal-only coupling of the wrap faces (ADR 0629
+    Q4): without a non-orthogonal corrector in either run 1.5e-4. On the seam pairs Q4 is zero to rounding (2.3e-14)
+    except at the two interface rings (9e-4). By the registered rule Q4 is neither the main source of the whole
+    difference (share 0.30, needed 0.5) nor ruled out (needed 0.1): undecided, so partial. A registered
+    seam-orthogonality check had a wrong premise (the join cuts the interface-ring cells; corrected check met). Four of
+    four mutations caught; baseline_hashes unchanged. Follow-up F-743 (Implicit momentum coupling of periodic pairs).
+    Follow-up F-744 (Non-orthogonal correction on coupled faces).
 - [ ] **F-726** camber_seam_h C-grid on strongly staggered blades
   - depends on: F-722
   - acceptance: Every limit not stated here is registered in the ADR before the run. The camber_seam_h C-grid (or a new
@@ -14926,3 +14940,18 @@ fixed by the item's registration ADR before any code.
     objective runs in the loop, the number of CFD evaluations saved by the reduced-order pre-check measured on a
     registered set-up.
   - note: Follow-up of F-716 (ADR 0645, 2026-11-16).
+- [ ] **F-743** Implicit momentum coupling of periodic pairs
+  - depends on: F-725
+  - acceptance: an opt-in setting couples the two faces of every periodic pair implicitly in the momentum matrix (the
+    partner's new value, as the pressure equation already does), with the defaults bit-identical; on ADR 0661's lockstep
+    the sector's largest difference from the full annulus with one outer iteration is within a registered limit of ADR
+    0661's six-outer-iteration variant V(6, 6) (6.0e-3) on every step, and ADR 0641's step-1 difference falls below a
+    registered limit. Every limit not stated here is registered in the ADR before the run.
+  - note: Follow-up of F-725 (ADR 0661, 2026-11-16).
+- [ ] **F-744** Non-orthogonal correction on coupled faces
+  - depends on: F-743
+  - acceptance: an opt-in explicit non-orthogonal correction on the coupled (wrap and seam) faces in the pressure
+    equation and the momentum diffusion, defaults bit-identical; on ADR 0661's lockstep with the lag removed the
+    sector's difference from the full annulus falls from 6.0e-3 to within a registered limit of ADR 0661's V(6, 0)
+    (1.5e-4) on every step. Every limit not stated here is registered in the ADR before the run.
+  - note: Follow-up of F-725 (ADR 0661, 2026-11-16).
