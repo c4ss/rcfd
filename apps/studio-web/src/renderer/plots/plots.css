@@ -227,3 +227,13 @@
 .plot-select {
   padding: var(--space-sm) var(--space-md) 0;
 }
+
+/* F-810: the cursor of a plot in the time panel (the scrubber's step): a deep ink line across the drawing. */
+.plot-cursor {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  border-left: var(--line-rule);
+  pointer-events: none;
+}

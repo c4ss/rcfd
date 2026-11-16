@@ -6,7 +6,7 @@
 import { existsSync } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
-import type { EngineStatus, OpenFailure, PickResult, ProjectState, ProjectView, RunActionResult } from '../../shared/project.js';
+import type { EngineStatus, OpenFailure, PickResult, ProjectState, ProjectTool, ProjectView, RunActionResult } from '../../shared/project.js';
 import { ensureRunnerCli, type ControlDeps } from './control.js';
 import { filesUnder, type Names } from './listing.js';
 import { sameFolder, withExistence, withOpened, without, type StoredRecent } from './recent.js';
@@ -257,6 +257,13 @@ export class ProjectHome {
       this.fail(openFailure(s.folder, e));
       this.emit();
     }
+  }
+
+  /** F-810: one read-only query of the open project's server (the run workspace); refused when no project is open. */
+  query(tool: ProjectTool, args: Record<string, unknown>): Promise<unknown> {
+    const s = this.session;
+    if (!s) return Promise.reject(new Error('no project is open'));
+    return s.query(tool, args);
   }
 
   dismiss(): void {

@@ -11,6 +11,8 @@
 //   PROJECT_PORT_CHANNEL in the same way; the checks are src/main/project/bridge.ts's.
 // - `window.studioCase`: the case editor's case files (F-812, src/shared/case.ts), on a port of its own on
 //   CASE_PORT_CHANNEL; the checks are src/main/case/bridge.ts's. See the end of this file.
+// - `window.studioRun`: a runner run's residual and monitor histories (F-810, src/shared/run.ts), on a port of its own on
+//   RUN_PORT_CHANNEL; the checks are src/main/run/bridge.ts's. See the end of this file.
 // - `window.studioClaude`: the Claude Code panel (F-814, src/shared/claude.ts), over a port on CLAUDE_PORT_CHANNEL in
 //   the same way; the checks are src/main/claude/bridge.ts's.
 //
@@ -59,6 +61,7 @@ import type {
   DEFAULT_DATA_TIMEOUT_MS as DefaultDataTimeout,
 } from '../shared/data.js';
 import type { CASE_PORT_CHANNEL as CaseChannel, CaseBridge, CasePortMessage, CaseReply, CaseRequest } from '../shared/case.js';
+import type { RUN_PORT_CHANNEL as RunChannel, RunBridge, RunPortMessage, RunReply, RunRequest } from '../shared/run.js';
 
 const invoke = <T,>(channel: Channel): Promise<T> => ipcRenderer.invoke(channel) as Promise<T>;
 
@@ -574,3 +577,66 @@ const claude: ClaudeBridge = {
 };
 
 contextBridge.exposeInMainWorld('studioClaude', claude);
+
+// ---- the run port (F-810, src/shared/run.ts)
+//
+// `window.studioRun`: requests and replies only, like the case port. The main process asks the open project's read-only
+// project server, which reads the run's residuals.jsonl on every call.
+
+const RUN_PORT_CHANNEL: typeof RunChannel = 'studio.run-port';
+const RUN_TIMEOUT_MS = 60_000;
+
+let runPort: Port | null = null;
+let nextRunId = 1;
+const runQueued: RunRequest[] = [];
+const runPending = new Map<number, { resolve: (r: RunReply) => void; timer: ReturnType<typeof setTimeout> }>();
+
+const runSettle = (id: number, reply: RunReply): void => {
+  const p = runPending.get(id);
+  if (!p) return;
+  runPending.delete(id);
+  clearTimeout(p.timer);
+  p.resolve(reply);
+};
+
+const runPost = (req: RunRequest): void => {
+  try {
+    (runPort as Port).postMessage(req);
+  } catch (e) {
+    runSettle(req.id, { ok: false, error: { code: 'bad_request', message: `the request cannot be sent: ${String(e)}` } });
+  }
+};
+
+const runSend = <T,>(req: RunRequest): Promise<RunReply<T>> =>
+  new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      runSettle(req.id, {
+        ok: false,
+        error: runPort
+          ? { code: 'timeout', message: `no answer from the Studio's main process within ${RUN_TIMEOUT_MS} ms` }
+          : { code: 'no_port', message: 'the Studio has not connected this window to the run histories' },
+      });
+    }, RUN_TIMEOUT_MS);
+    runPending.set(req.id, { resolve: resolve as (r: RunReply) => void, timer });
+    if (runPort) runPost(req);
+    else runQueued.push(req);
+  });
+
+ipcRenderer.on(RUN_PORT_CHANNEL, (event) => {
+  const p = event.ports[0];
+  if (!p) return;
+  runPort?.close();
+  runPort = p;
+  p.onmessage = (e: { data: unknown }) => {
+    const m = e.data as RunPortMessage;
+    if (m?.type === 'reply') runSettle(m.id, m.reply);
+  };
+  for (const req of runQueued.splice(0)) runPost(req);
+});
+
+const runHistories: RunBridge = {
+  series: (run) => runSend({ op: 'series', id: nextRunId++, run }),
+  at: (run, step) => runSend({ op: 'at', id: nextRunId++, run, step }),
+};
+
+contextBridge.exposeInMainWorld('studioRun', runHistories);

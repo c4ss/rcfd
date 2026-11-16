@@ -22,6 +22,7 @@ import {
   type ProjectInfo,
   type ProjectView,
   type RunEntry,
+  type ProjectTool,
 } from '../../shared/project.js';
 import { RunControl, settle, type ControlDeps } from './control.js';
 import type { Names } from './listing.js';
@@ -416,6 +417,16 @@ export class ProjectSession {
     }
     if (this.closed || server !== this.server) return;
     this.set({ runDetails: details, runDetailErrors: errors });
+  }
+
+  /**
+   * F-810: one query of this folder's read-only project server, for the run workspace (src/main/run/). Refused when
+   * the session is closed or its server stopped.
+   */
+  query(tool: ProjectTool, args: Record<string, unknown>): Promise<unknown> {
+    if (this.closed) return Promise.reject(new Error('the project was closed'));
+    if (this.server.exited) return Promise.reject(new Error("the engine's project server stopped; Reconnect starts a new one"));
+    return this.server.call(tool, args);
   }
 
   get serverStopped(): boolean {

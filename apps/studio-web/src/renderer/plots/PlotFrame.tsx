@@ -18,6 +18,13 @@ export interface PlotFrameProps {
   readonly height: number;
   /** What stands under the drawing (caption, legend, words), from what is drawn (null: nothing drawn yet). */
   readonly children?: (d: Drawn | null) => ReactNode;
+  /**
+   * F-810: a fixed abscissa axis (the time panel's shared axis), used when it holds every abscissa drawn; otherwise the
+   * axis is computed from what is drawn, as without it, so the range rule holds either way.
+   */
+  readonly xAxis?: Axis;
+  /** F-810: the abscissa of the cursor (the scrubber's step), drawn as a line across the plot; null or absent: none. */
+  readonly cursor?: number | null;
 }
 
 export interface Drawn {
@@ -32,7 +39,7 @@ type RendererState = { kind: 'starting' } | { kind: 'ready'; backend: Backend } 
 
 const pct = (v: number, a: Axis) => ((v - a.lo) / (a.hi - a.lo)) * 100;
 
-export function PlotFrame({ series, version, log, xCaption, height, children }: PlotFrameProps) {
+export function PlotFrame({ series, version, log, xCaption, height, children, xAxis, cursor = null }: PlotFrameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const areaRef = useRef<HTMLDivElement>(null);
   const plotRef = useRef<LinePlot | null>(null);
@@ -87,13 +94,14 @@ export function PlotFrame({ series, version, log, xCaption, height, children }: 
       setDrawn({ x: linearAxis(0, 1), y: log ? logAxis(0, 1) : linearAxis(0, 1), extent, perSeries });
       return;
     }
-    const x = linearAxis(extent.xlo, extent.xhi, Math.max(2, Math.min(10, Math.round(width / 110))));
+    const x =
+      xAxis && xAxis.lo <= extent.xlo && extent.xhi <= xAxis.hi ? xAxis : linearAxis(extent.xlo, extent.xhi, Math.max(2, Math.min(10, Math.round(width / 110))));
     const y = log ? logAxis(extent.ylo, extent.yhi) : linearAxis(extent.ylo, extent.yhi, 3);
     plot.setRange({ xlo: x.lo, xhi: x.hi, ylo: y.lo, yhi: y.hi });
     plot.requestDraw();
     setDrawn({ x, y, extent, perSeries });
     // `version` tells a change inside the same map
-  }, [series, version, log, renderer, width]);
+  }, [series, version, log, renderer, width, xAxis]);
 
   const shown = drawn && !drawn.extent.empty ? drawn : null;
   const inset = PLOT_INSET;
@@ -122,6 +130,14 @@ export function PlotFrame({ series, version, log, xCaption, height, children }: 
           ))}
         </div>
         <canvas ref={canvasRef} className="plot-canvas" aria-hidden="true" />
+        {shown && cursor !== null && cursor >= shown.x.lo && cursor <= shown.x.hi && (
+          <i
+            className="plot-cursor"
+            aria-hidden="true"
+            data-cursor={cursor}
+            style={{ left: `calc(${inset.left}px + (100% - ${inset.left + inset.right}px) * ${(cursor - shown.x.lo) / (shown.x.hi - shown.x.lo)})` }}
+          />
+        )}
         {renderer.kind === 'failed' && <p className="plot-failed">This plot cannot be drawn here: {renderer.reason}. The values are listed under it.</p>}
       </div>
       <div className="plot-xticks" aria-hidden="true">

@@ -43,9 +43,11 @@ export interface RunsViewProps {
   /** The selected run (kept by the project view, so it survives a switch of tab). */
   selected: string | null;
   onSelect: (id: string | null) => void;
+  /** F-810: opens the run workspace on the selected run (absent: no such button). */
+  onOpenWorkspace?: () => void;
 }
 
-export function RunsView({ view, selected, onSelect }: RunsViewProps) {
+export function RunsView({ view, selected, onSelect, onOpenWorkspace }: RunsViewProps) {
   const [filter, setFilter] = useState('');
   const [stateFilter, setStateFilter] = useState<StateFilter>('all');
   const [sort, setSort] = useState<Sort>({ column: 'case', direction: 'ascending' });
@@ -157,7 +159,7 @@ export function RunsView({ view, selected, onSelect }: RunsViewProps) {
           </ul>
         )}
       </section>
-      <SelectedRun row={picked} selected={selected} onClear={() => onSelect(null)} view={view} onSelect={onSelect} />
+      <SelectedRun row={picked} selected={selected} onClear={() => onSelect(null)} view={view} onSelect={onSelect} onOpenWorkspace={onOpenWorkspace} />
     </div>
   );
 }
@@ -223,12 +225,14 @@ function SelectedRun({
   onClear,
   view,
   onSelect,
+  onOpenWorkspace,
 }: {
   row: RunRow | null;
   selected: string | null;
   onClear: () => void;
   view: ProjectView;
   onSelect: (id: string | null) => void;
+  onOpenWorkspace?: () => void;
 }) {
   if (row === null) {
     return (
@@ -262,6 +266,11 @@ function SelectedRun({
           Clear selection
         </Button>
       </header>
+      {onOpenWorkspace && (
+        <div className="rv-open-workspace">
+          <Button onPress={onOpenWorkspace}>Open in workspace</Button>
+        </div>
+      )}
       {row.detailError !== null && (
         <div className="rv-error" role="alert">
           <StateMark state="failed" label="Failed to read the run’s status" />

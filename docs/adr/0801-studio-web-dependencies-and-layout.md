@@ -829,3 +829,105 @@ busy, processor busy fraction 1.00 before and after the run, with 4 `cargo`/`rus
 - The project view (F-806) hosts the viewport: `<FieldViewport store snapshot field />`; scrubbing (F-810) can change
   `snapshot` alone, which loads one field and rewrites one vertex attribute (the geometry and the pipeline stay).
 - Range modes, other colour maps, point fields (F808-D3) and cut planes are not in F-808.
+
+## Addendum 6: F-810, run bands and linked time scrubbing, the run workspace (2026-11-16)
+
+Item F-810 of `docs/ROADMAP.md`. Traces G3, G9 (P5, P6), G12; `DESIGN.md` Layout, Run bands, One Live Thing.
+
+### What F-810 built
+
+- **The run workspace**, a third view of an open project ("Workspace", beside Home and Runs; "Open in workspace" in the
+  Runs view's selected run brings the run there): the project's runs and the selected run's numbers on the left, its
+  field (the viewport of F-808, unchanged but for two optional props) on the right, and the 248 px time panel of
+  `DESIGN.md` under both: 200 px row labels | the shared axis | a 380 px monitor column.
+- **Run bands**: one 20 px band per run on one shared axis; each end carries its state's pictogram and word on a white
+  chip after the end, or inside it when there is no room. Sky iterating, a meadow end cap for converged, a red end cap
+  for failed, silver hatching for queued and for the not yet computed part of a running run; orange for one live run
+  only. The selected band is underlined in ink and its label bold; the others drop to 40% fill, a failure never. Grow-in
+  700 ms ease-out staggered 90 ms (tokens), none under reduced motion.
+- **One scrubber**: a deep ink line over bands, residual plot and axis, with its flag ("it 40", or "t = 1.25 s · it 145")
+  in its own 18 px lane, flipping to the right near the start; 2 px orange while dragged or focused. It is an ARIA slider
+  (arrow keys one stop, Page Up and Down ten, Home and End). It stops at the store's snapshots (a run without fields: at
+  its residual samples). Field, residual cursor (`PlotFrame`'s new `cursor` prop, on the shared axis by its new `xAxis`
+  prop), monitor readout (Display 30 px, unit from `output/monitors.json` or "no unit given") and snapshot counter move
+  together. Transport: first, previous, Play (next stop once the one before is drawn), next; Follow live for a running
+  run.
+- **The run port**, `window.studioRun` (`src/shared/run.ts`, `src/main/run/bridge.ts`, `series.ts`): `series(run)` and
+  `at(run, step)`, answered by the open project's read-only project server: `read_residuals` per series (at most 800
+  samples each, so a reply stays under the engine's 36 000-byte text budget and is never written to a file), `read_residuals
+  {since_step: step, max_points: 2}` for the exact values at the line, `read_project_file` for the units (at most 1 MB,
+  hash checked across pages). `workspace/door.ts` is the one renderer module naming it (unit-tested).
+- The open project folder is now a data root of the data door while it is open (`DataRoots.allow` was never called; the
+  field of a project's run could not be opened from the project view before).
+- `performance` marks `rcfd:scrub:request` and `rcfd:scrub:drawn`; `npm run bench:scrub` (`scripts/measure-scrub.mjs`).
+
+### Decisions taken in F-810 (reversible; the maintainer may change them)
+
+- F810-D1, the shared axis: (a) iterations (steps) for every run: the store's snapshots, `read_residuals` and
+  `status.json` share them; (b) simulated time: `read_residuals` gives no time per sample (engine gap below); (c) wall
+  time. Recommended and taken: (a); the flag and the band ends show the simulated time where the run has one.
+- F810-D2, the source of residuals and monitors: (a) `read_residuals` of the project server, each series under 800
+  samples, exact values at the line by `since_step`; (b) `output/monitors.json` through `read_project_file` (written
+  only at the end of a run); (c) a new engine query. Taken: (a), with the units from (b).
+- F810-D3, a fourth port `window.studioRun` instead of new operations on `window.studioProject`: the project port's key
+  set is pinned by `tests/e2e/project.spec.ts`, which F-810 may not change.
+- F810-D4, One Live Thing with several running runs: the selected run if it runs, else the newest running one; a paused
+  run is not live (ink, not orange).
+- F810-D5, converged and failed are drawn as 6 px end caps: the engine records no "converged since step".
+- F810-D6, the workspace is a third project tab sharing the selected run with Runs; the Claude Code column of the
+  prototype is left to F-814.
+- F810-D7, Follow live reads the running run's store again every 250 ms after the last open answered (the run list is
+  read once a second, `RUN_POLL_MS`); moving the line by hand stops following, the toggle brings it back.
+- F810-D8, a finished run opens on its newest snapshot.
+
+### P5 and P6 through the run workspace (run once by hand, house rule 7)
+
+`npm run bench:scrub -- --data=<folder>` once (CARGO_TARGET_DIR set to the shared target folder), after
+`f447_bench gen <folder> tiny 1e5 1e6 4e6` made afresh (the run path took 236.7 s for the 1e6 box, 1333.6 s for the 4e6
+box; raw stores of 514 MB and 2.05 GB). The script names each box as a run of a project (`runs/r-20261116T000000-<size>`
+with `run.json`, `status.json` and a `residuals.jsonl` of one line per stored step), opens it in the packaged Studio at
+1440 x 900 and scrubs in the run workspace. Method of ADR 0350 through the whole product path: a key on the scrubber ->
+the workspace's stop -> the viewport's read of field `p` of that snapshot through the data door (route R2) -> the GPU
+write -> the draw -> the GPU done -> the next animation frame (`rcfd:scrub:drawn`); the next request as soon as the one
+before is drawn. Each pass requests snapshot 1 (Home, from snapshot 20) and the 19 after it (ArrowRight); one warm-up
+pass first; rate = requests / total time, frame = request to next request. Every request is checked: the workspace, the
+counter and the residual cursor name the drawn snapshot's step (no error in any pass).
+
+| Id | Limit | Measured (Electron 45.3.3, packaged, WebGPU) | Met |
+|---|---|---|---|
+| P5, 1e6 cells | >= 10 snapshots per s, no frame > 150 ms (10 passes) | 23.6 per s over 200 requests; frame p50 41.5, p99 75.1, max 91.6 ms; passes 755 to 985 ms; warm-up pass 1556 ms | yes |
+| P6, 4e6 cells (recorded, not blocking) | >= 3 snapshots per s (5 passes) | 9.1 per s over 100 requests; frame p50 107.8, p99 159.2, max 175.5 ms; passes 2027 to 2465 ms; warm-up pass 2196 ms | yes (rate); 4 of 100 frames over 150 ms |
+| Follow live (recorded; the task text's "P6") | none | a running quick-start cavity (a snapshot every 5 iterations, 101 committed in 30 s under load): 65 drawn, a draw every 426 ms (p50; max 1018); commit to drawn p50 105, max 328 ms; the drawn snapshot was the newest in the store at every draw | |
+
+The live figures: commit = the snapshot seen in `store.rts` by the Studio's reader polling every 2 ms; drawn = the
+viewport done and the next frame. Before F810-D7 the workspace learnt of new snapshots only from the run list (once a
+second) and drew one in 1.3 s; with the 250 ms re-open it draws the newest snapshot every 0.26 to 0.43 s.
+
+Set-up: 2026-11-16 17:07 to 17:10 UTC, Windows 11 (10.0.26300), AMD Ryzen 7 9800X3D (16 logical), 93.6 GB (32.4 GB
+free), launcher on Node 22.19.0, Electron 45.3.3 (Chromium 156.0.8078.100, Node 24.22.3), WebGPU adapter vendor
+`nvidia`, architecture `blackwell`, window content 1440 x 900. **Deviation:** the machine was fully busy, processor
+busy fraction 1.00 before and after, with 6 to 7 `cargo`/`rustc`/`link` processes of other jobs. The raw results
+(`full.json`) stay in the scratch folder, not committed; `npm test` times nothing.
+
+### Missing in the engine (no Rust change here)
+
+- `read_residuals` gives no simulated time per sample and no units (the units are in `output/monitors.json`, written
+  when a run ends; a running run has none).
+- `read_residuals` over its text budget writes `runs/<id>/mcp/residuals-*.json` even on a `--read-only` server; the
+  Studio keeps every request under the budget and refuses a reply that names a file.
+- No query for every value over a step range without decimation (the cursor asks one step at a time).
+- No read-only query of whether the project's runner is alive (as F-806).
+
+### Proposed for `DESIGN.md` (not edited here)
+
+- Run bands: the paused and cancelled treatment (ink iterating segment, the runner pictograms of F-806); converged and
+  failed as end caps; the part of a running band not computed yet hatched to the axis end.
+- The flag's text for a steady run ("it 40"), and "t = … s · it N" for a transient one.
+- The scrubber as a keyboard slider (arrow keys, Page Up and Down, Home and End).
+- The monitor readout's unit line ("lid_drag, N · at it 40", or "no unit given").
+
+### Open questions for the maintainer
+
+- `service:panel.snapshot` keeps its exemption naming F-810: the workspace reads runner runs through the project server
+  and does not use a service session's panel; which item should own it?
+- The roadmap task text named P6 "live update latency"; ADR 0350's P6 is the 4e6-cell scrub. Both are recorded above.

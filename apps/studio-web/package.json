@@ -23,6 +23,7 @@
     "bench:data": "node scripts/measure-data.mjs",
     "bench:plots": "node scripts/measure-plots.mjs",
     "bench:field": "node scripts/measure-field.mjs",
+    "bench:scrub": "node --experimental-strip-types scripts/measure-scrub.mjs",
     "field": "node scripts/open-field.mjs",
     "start": "electron ."
   },
