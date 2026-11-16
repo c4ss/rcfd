@@ -16,6 +16,7 @@
     "test": "npm run build && npm run package:dir && playwright test",
     "test:unit": "playwright test --project=unit",
     "tokens:css": "node --experimental-strip-types scripts/write-tokens-css.mjs",
+    "capabilities": "node --experimental-strip-types scripts/write-capabilities.mjs",
     "gallery": "node scripts/open-gallery.mjs",
     "bench:cold-start": "node scripts/measure-cold-start.mjs",
     "bench:service": "node scripts/measure-service.mjs",
