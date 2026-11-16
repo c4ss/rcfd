@@ -330,9 +330,15 @@ test.describe('deletes of runs, results and cases', () => {
       const code = (await readFile(f, 'utf8')).replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`\\])\/\/.*$/gm, '$1');
       for (const m of code.matchAll(/\b(rm|rmSync|rmdir|rmdirSync|unlink|unlinkSync|rename|renameSync)\s*\(/g)) uses.push(`${path.relative(appRoot, f).split(path.sep).join('/')}: ${m[1]}`);
     }
-    // the only removals and renames: the Studio's own record of a service it started (user data) and the recent list's
-    // write-then-rename (user data); neither is in a project folder
-    expect(uses.sort()).toEqual(['src/main/project/recent.ts: rename', 'src/main/service/spawn.ts: rm']);
+    // the only removals and renames: the Studio's own record of a service it started (user data), the recent list's
+    // write-then-rename (user data), and the Claude Code panel's write-then-rename of its MCP config and its record of
+    // confirmed control files (F-814, user data; trust.ts refuses a store inside the project); none is in a project folder
+    expect(uses.sort()).toEqual([
+      'src/main/claude/panel.ts: rename',
+      'src/main/claude/trust.ts: rename',
+      'src/main/project/recent.ts: rename',
+      'src/main/service/spawn.ts: rm',
+    ]);
   });
 });
 
