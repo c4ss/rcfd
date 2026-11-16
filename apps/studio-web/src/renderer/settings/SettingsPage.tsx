@@ -10,7 +10,7 @@ import { dispatch, history, watchEvents, watchServiceState } from '../actions/in
 import { NO_INVERSE, statusFacts } from '../../shared/actions/loss.js';
 import { DecisionPanel } from '../history/DecisionPanel.js';
 import { UndoControls } from '../history/UndoControls.js';
-import { Button, Select } from '../ui/index.js';
+import { Button, IconButton, Quiet, Select } from '../ui/index.js';
 import { caseModel, type CaseModel } from './schema.js';
 import { SettingsSurface } from './SettingsSurface.js';
 import './settings.css';
@@ -154,7 +154,7 @@ export default function SettingsPage() {
   let body;
   if (!connected) {
     body = (
-      <div className="st-empty" role="status">
+      <div className="st-empty" role="status" data-words="exception">
         <h2>{service?.status === 'off' ? 'No rcfd service' : 'Not connected to the rcfd service'}</h2>
         <p>
           {service === null
@@ -167,7 +167,7 @@ export default function SettingsPage() {
     );
   } else if (schemaError) {
     body = (
-      <div className="st-empty" role="status">
+      <div className="st-empty" role="status" data-words="exception">
         <h2>The case schema could not be read</h2>
         <p>The engine answered: {schemaError}</p>
       </div>
@@ -214,9 +214,17 @@ export default function SettingsPage() {
         </div>
         <h1 className="st-title">Case settings</h1>
         <div className="st-top-right">
-          <span className="st-conn">{service ? `Service ${service.status}${service.address ? `, ${service.address}` : ''}` : ''}</span>
+          {/* G22: a connected service is the normal state and is said to readers; any other state is shown */}
+          {service && service.status !== 'connected' ? (
+            <span className="st-conn" data-words="exception">
+              Service {service.status}
+              {service.address ? `, ${service.address}` : ''}
+            </span>
+          ) : (
+            <Quiet>{service ? `Service ${service.status}${service.address ? `, ${service.address}` : ''}` : ''}</Quiet>
+          )}
           {connected && sessions !== null && sessions.length > 0 && (
-            <Select aria-label="Session" options={options} selected={known ? session : null} onChange={choose} onBand placeholder="Choose a session" />
+            <Select aria-label="Session" valueWords="data" options={options} selected={known ? session : null} onChange={choose} onBand placeholder="Choose a session" />
           )}
           {connected && (
             <Button variant="ghost" icon="plus" onPress={() => void create()}>
@@ -224,9 +232,7 @@ export default function SettingsPage() {
             </Button>
           )}
           {connected && known && (
-            <Button variant="ghost" icon="close" onPress={() => void askClose(session!)}>
-              Close session
-            </Button>
+            <IconButton variant="ghost" icon="close" label="Close session" onPress={() => void askClose(session!)} />
           )}
           {connected && <UndoControls scope={session} onRenamed={(_from, to) => choose(to)} />}
         </div>
@@ -251,11 +257,11 @@ export default function SettingsPage() {
       {/* the surface renders its own three columns; the states before it fill the body */}
       {known && connected && model !== null ? body : <div className="st-body st-body--single">{body}</div>}
       <footer className="st-foot">
-        <span>
+        <span data-words="disclaimer">
           rcfd is early-stage software. It is not validated for engineering decisions or for safety-critical use, and it
           comes with no warranty.
         </span>
-        <span className="st-foot-right">Values, defaults, ranges and messages come from the engine's schema and replies.</span>
+        <Quiet>Values, defaults, ranges and messages come from the engine's schema and replies.</Quiet>
       </footer>
     </div>
   );

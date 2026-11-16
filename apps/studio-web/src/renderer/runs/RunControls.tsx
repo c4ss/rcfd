@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from 'react';
 import { TextArea, TextField as AriaTextField, Label, Text } from 'react-aria-components';
 import { commandLine, type Confirmation, type RunActionId, type RunActionParams } from '../../shared/actions/runs.js';
 import type { ProjectView, RunActionFailure, RunActionResult, RunRequest } from '../../shared/project.js';
-import { Button, NumberField, Select, StateMark, Unavailable } from '../ui/index.js';
+import { Button, IconButton, NumberField, Quiet, Select, StateMark, Unavailable } from '../ui/index.js';
 import { runAction, runActionAvailability, runActionConfirmation } from '../project/door.js';
 import { latestFor, requestWords, setEntries } from './control-model.js';
 import { caseName, type RunRow } from './model.js';
@@ -45,6 +45,7 @@ function Control<Id extends RunActionId>({
   variant,
   icon,
   name,
+  iconOnly,
 }: {
   id: Id;
   params: Partial<RunActionParams<Id>>;
@@ -56,9 +57,12 @@ function Control<Id extends RunActionId>({
   icon?: 'play' | 'pause' | 'close' | 'plus';
   /** The accessible name when it differs from the label (a case's Run button names its case). */
   name?: string;
+  /** G22: the icon alone, the name its tooltip (a row's Run). An unavailable action still says its label and why. */
+  iconOnly?: boolean;
 }) {
   const av = runActionAvailability(id, params, view);
   if (!av.available) return <Unavailable label={label} reason={av.reason} />;
+  if (iconOnly && icon) return <IconButton variant={variant ?? 'default'} icon={icon} label={name ?? label} onPress={onPress} isDisabled={busy} data-action={id} />;
   return (
     <Button variant={variant ?? 'default'} icon={icon} onPress={onPress} isDisabled={busy} aria-label={name} data-action={id}>
       {busy ? `${label}…` : label}
@@ -69,7 +73,7 @@ function Control<Id extends RunActionId>({
 /** A refusal or failure: the problem, the way out, and the engine's own words when it gave them (G19). */
 export function RunFailure({ failure, onDismiss, onStartRunner }: { failure: RunActionFailure; onDismiss?: () => void; onStartRunner?: () => void }) {
   return (
-    <div className="rc-failure" role="alert" data-code={failure.code}>
+    <div className="rc-failure" role="alert" data-code={failure.code} data-words="exception">
       <StateMark state="failed" label="Refused" />
       <div className="rc-failure-text">
         <p className="rc-problem">{failure.problem}</p>
@@ -91,12 +95,15 @@ export function RunFailure({ failure, onDismiss, onStartRunner }: { failure: Run
 function Equivalents({ request }: { request: RunRequest }) {
   return (
     <p className="rc-equiv">
-      <span className="rc-equiv-caption">Same from the CLI, in the project folder</span>
-      <code className="rc-code">{commandLine(request.cli.argv)}</code>
+      <span className="rc-equiv-caption">CLI</span>
+      <Quiet>, in the project folder</Quiet>
+      <code className="rc-code" data-words="data">
+        {commandLine(request.cli.argv)}
+      </code>
       {request.mcp && (
         <>
-          <span className="rc-equiv-caption">from Claude Code</span>
-          <code className="rc-code">
+          <span className="rc-equiv-caption">Claude Code</span>
+          <code className="rc-code" data-words="data">
             {request.mcp.tool} {JSON.stringify(request.mcp.arguments)}
           </code>
         </>
@@ -130,6 +137,7 @@ function Feedback({
     <div className="rc-feedback">
       <p
         className={request.slow ? 'rc-status rc-status--slow' : 'rc-status'}
+        data-words={request.slow ? 'exception' : 'chrome'}
         role="status"
         data-request-seq={request.seq}
         data-settled={request.settled ? 'true' : 'false'}
@@ -138,7 +146,7 @@ function Feedback({
         {requestWords(request)}
       </p>
       {request.slow && (
-        <div className="rc-slow-actions">
+        <div className="rc-slow-actions" data-words="exception">
           <Button onPress={onStartRunner}>Start the runner</Button>
         </div>
       )}
@@ -165,10 +173,11 @@ export function RunBar({ view, onStarted }: { view: ProjectView; onStarted: (run
   return (
     <section className="rc-bar" aria-label="Start a run">
       <div className="rc-bar-row">
-        <span className="rc-bar-title">Start a run</span>
+        <span className="rc-bar-title sr-only">Start a run</span>
         {cases.length > 0 ? (
           <Select
             aria-label="Case to run"
+            valueWords="data"
             className="rc-case"
             options={cases.map((c) => ({ id: c, label: caseName(c) }))}
             selected={casePath}
@@ -303,6 +312,7 @@ function Confirm({ words, onConfirm, onKeep }: { words: Confirmation; onConfirm:
     <div
       className="rc-confirm"
       role="alertdialog"
+      data-words="exception"
       aria-labelledby="rc-confirm-title"
       aria-describedby="rc-confirm-body"
       ref={keep}
@@ -353,7 +363,7 @@ export function SelectedRunControls({ view, row, onStarted }: { view: ProjectVie
   const refocus = () => requestAnimationFrame(() => endRef.current?.querySelector<HTMLElement>('button, [role="button"]')?.focus());
   return (
     <section className="rv-block rc-run" aria-labelledby="rc-run-title">
-      <h3 id="rc-run-title" className="rv-block-title">
+      <h3 id="rc-run-title" className="rv-block-title sr-only">
         Run control
       </h3>
       <div className="rc-run-row">
@@ -420,6 +430,7 @@ export function CaseRunButton({ view, casePath, onResult }: { view: ProjectView;
       view={view}
       label="Run"
       icon="play"
+      iconOnly
       name={`Run ${caseName(casePath)}`}
       busy={busy}
       onPress={async () => {

@@ -79,7 +79,7 @@ function Explain({ name, children }: { name: string; children: ReactNode }) {
         {open ? 'Hide' : 'Explain'}
       </Button>
       {open && (
-        <div id={id} className="fp-explain-body" role="region" aria-label={`About ${name}`}>
+        <div id={id} className="fp-explain-body" role="region" aria-label={`About ${name}`} data-words="help">
           {children}
         </div>
       )}
@@ -127,7 +127,7 @@ function StepHelp({ step, children }: { step: StationId; children?: ReactNode })
 /** A failure on the path: always visible (G6, G22), with its pictogram, the problem and the way out. */
 function Problem({ title, problem, recovery }: { title: string; problem: string; recovery: string }) {
   return (
-    <div className="fp-problem" role="alert">
+    <div className="fp-problem" role="alert" data-words="exception">
       <p className="fp-problem-title">
         <StatePictogram state="failed" />
         {title}
@@ -175,7 +175,7 @@ export function NotAProjectYet({ failure }: { failure: OpenFailure }) {
   const st = failure.folderState;
   const holds = st?.entries == null ? '' : st.entries === 0 ? 'Empty folder: ' : `${st.entries === 1 ? '1 entry' : `${st.entries} entries`}, `;
   return (
-    <section className="fp fp--folder" aria-labelledby="fp-folder-title" data-folder-state={st ? (st.watching ? 'watching' : 'still') : 'unknown'}>
+    <section className="fp fp--folder" aria-labelledby="fp-folder-title" data-folder-state={st ? (st.watching ? 'watching' : 'still') : 'unknown'} data-words="exception">
       <h2 id="fp-folder-title" className="fp-title">
         This folder is not a project yet
       </h2>
@@ -381,8 +381,14 @@ function StateMark({ run }: { run: RunRow }) {
       <span className="fp-state-mark" role="img" aria-label={name} title={name}>
         {s.mark && <StatePictogram state={s.mark} size={18} />}
       </span>
-      {exception && <span className="fp-state-word">{s.word}</span>}
-      <span className="fp-state-run">{run.id}</span>
+      {exception && (
+        <span className="fp-state-word" data-words="exception">
+          {s.word}
+        </span>
+      )}
+      <span className="fp-state-run" data-words="data">
+        {run.id}
+      </span>
     </p>
   );
 }
@@ -399,11 +405,11 @@ function WatchStep({ view, step, nav }: { view: ProjectView; step: Extract<First
         <dl className="fp-grid" aria-label={`Progress of ${run.id}`}>
           <div className="fp-num">
             <dt>Rounds of calculation</dt>
-            <dd>{run.step}</dd>
+            <dd data-words="data">{run.step}</dd>
           </div>
         </dl>
         {slow && (
-          <div className="fp-problem fp-problem--blocked" role="status">
+          <div className="fp-problem fp-problem--blocked" role="status" data-words="exception">
             <p className="fp-problem-title">The runner has not picked the run up</p>
             <div className="fp-actions">
               <Button onPress={async () => setRunner(await runAction('project.start_runner', {}))}>Start the runner</Button>
@@ -455,9 +461,13 @@ function ResultStep({ view, step, nav }: { view: ProjectView; step: Extract<Firs
     <Step id="result" wide>
       <div className="fp-step-text">
         <StateMark run={run} />
-        {exception && <p className={`fp-outcome${failed ? ' fp-outcome--failed' : ''}`}>{outcomeSentence(run)}</p>}
+        {exception && (
+          <p className={`fp-outcome${failed ? ' fp-outcome--failed' : ''}`} data-words="exception">
+            {outcomeSentence(run)}
+          </p>
+        )}
         {exception && d?.reason && (
-          <p className="fp-engine">
+          <p className="fp-engine" data-words="exception">
             <Caption>The engine’s words</Caption>
             {d.reason}
           </p>
@@ -466,21 +476,23 @@ function ResultStep({ view, step, nav }: { view: ProjectView; step: Extract<Firs
           <dl className="fp-grid" aria-label={`Numbers of ${run.id}`}>
             <div className="fp-num">
               <dt>Rounds of calculation</dt>
-              <dd>{rounds}</dd>
+              <dd data-words="data">{rounds}</dd>
             </div>
             <div className="fp-num">
               <dt>Solver time, s</dt>
-              <dd>{d?.finish?.elapsed != null ? plain(d.finish.elapsed, 2) : 'not reported'}</dd>
+              <dd data-words={d?.finish?.elapsed != null ? 'data' : 'exception'}>{d?.finish?.elapsed != null ? plain(d.finish.elapsed, 2) : 'not reported'}</dd>
             </div>
             {reports.map(([k, v]) => (
               <div className="fp-num fp-num--wide" key={k}>
                 <dt>{REPORT_WORDS[k] ?? k}, no unit from the engine</dt>
-                <dd title={String(v)}>{report(v)}</dd>
+                <dd title={String(v)} data-words="data">
+                  {report(v)}
+                </dd>
               </div>
             ))}
           </dl>
         )}
-        <div className="fp-limits" role="note" aria-label="What this result is not">
+        <div className="fp-limits" role="note" aria-label="What this result is not" data-words="disclaimer">
           <p>{EXAMPLE_LIMITS}</p>
           <p>{DISCLAIMER}</p>
         </div>
@@ -548,7 +560,7 @@ function FirstPicture({ folder, run }: { folder: string; run: RunRow }) {
   if (info === null) return <div className="fp-picture fp-picture--empty" role="status" aria-label="Opening the run’s stored fields" aria-busy="true" />;
   if (!info.ok) {
     return (
-      <div className="fp-picture fp-picture--empty" role="status">
+      <div className="fp-picture fp-picture--empty" role="status" data-words="exception">
         <p className="fp-problem-title">No stored pictures for this run</p>
         <p title={info.message}>Run the example from here to store them; Run in Runs stores only what the case asks for.</p>
       </div>
@@ -562,7 +574,15 @@ function FirstPicture({ folder, run }: { folder: string; run: RunRow }) {
       {cells.length > 1 && (
         <SegmentedToggle aria-label="What the picture shows" options={cells.map((f) => ({ id: f.name, label: fieldWord(f.name) }))} selected={shown} onChange={setField} />
       )}
-      <div className="fp-view">{last >= 0 ? <FieldViewport store={store} snapshot={last} field={shown} /> : <p className="fp-problem-title">The store holds no snapshot</p>}</div>
+      <div className="fp-view">
+        {last >= 0 ? (
+          <FieldViewport store={store} snapshot={last} field={shown} />
+        ) : (
+          <p className="fp-problem-title" data-words="exception">
+            The store holds no snapshot
+          </p>
+        )}
+      </div>
     </div>
   );
 }

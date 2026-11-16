@@ -111,7 +111,9 @@ test('the runs table: case, id, state pictogram and word, result; a steady run h
   const converged = v.runs.items.filter((r) => r.state === 'finished');
   for (const r of converged) {
     const row = rowOf(page, r.id);
-    await expect(row.getByText('Converged', { exact: true })).toBeVisible();
+    // G22 (F-833): a normal state is its pictogram, the word its accessible name and tooltip
+    await expect(row.getByRole('img', { name: 'Converged', exact: true })).toBeVisible();
+    await expect(row.getByRole('img', { name: 'Converged', exact: true })).toHaveAttribute('title', 'Converged');
     await expect(row.locator('svg[data-state="converged"]')).toBeVisible();
     // G3: a steady run's solver reports time 0; it has no simulated time, and the result says iterations, not "t = 0"
     await expect(row.locator('.rv-head')).toHaveText(`${r.step} iterations`);
@@ -123,8 +125,13 @@ test('the runs table: case, id, state pictogram and word, result; a steady run h
   expect(await failed.locator('.ui-state-word').evaluate((e) => getComputedStyle(e).color)).toBe(FAIL);
   // the home's run list says the same, and no longer shows "0" for a steady run's time (the F-805 view)
   await page.getByRole('tab', { name: 'Home' }).click();
-  for (const r of converged) await expect(page.locator(`tr[data-run="${r.id}"] td`).nth(2)).toHaveText('none, steady');
-  await expect(page.locator(`tr[data-run="${failedRun}"] td`).nth(2)).toHaveText('none');
+  // G22 (F-833): a normal absence of a time is an en dash, its words for readers and in the tooltip
+  for (const r of converged) {
+    await expect(page.locator(`tr[data-run="${r.id}"] td`).nth(2).locator('.ui-dash')).toHaveAttribute('title', 'none, steady');
+    await expect(page.locator(`tr[data-run="${r.id}"] td`).nth(2).locator('.sr-only')).toHaveText('none, steady');
+  }
+  await expect(page.locator(`tr[data-run="${failedRun}"] td`).nth(2).locator('.ui-dash')).toHaveAttribute('title', 'none');
+  await expect(page.locator(`tr[data-run="${failedRun}"] td`).nth(2).locator('.sr-only')).toHaveText('none');
   await page.getByRole('tab', { name: 'Runs' }).click();
   await shot(page, '01-runs-table');
 });
@@ -229,7 +236,7 @@ test('G7: a run goes on when the Studio is closed and when it is killed; on each
   // the new run appears by itself (the feed), then runs, its step rising in the table as the runner writes it
   await expect(rowOf(page, longRun)).toBeVisible({ timeout: 5000 });
   await expect.poll(() => shownRunnerState(page, longRun!), { timeout: 30_000 }).toBe('running');
-  await expect(rowOf(page, longRun).getByText('Running', { exact: true })).toBeVisible();
+  await expect(rowOf(page, longRun).getByRole('img', { name: 'Running', exact: true })).toBeVisible();
   const a = await shownStep(page, longRun);
   await expect.poll(() => shownStep(page, longRun!), { timeout: 10_000 }).toBeGreaterThan(a);
   await rowOf(page, longRun).click();
@@ -252,7 +259,7 @@ test('G7: a run goes on when the Studio is closed and when it is killed; on each
   const p2 = studio.page;
   await expect(rowOf(p2, longRun)).toBeVisible();
   await expect.poll(() => shownRunnerState(p2, longRun!), { timeout: 10_000 }).toBe(r.status(longRun).state);
-  await expect(rowOf(p2, longRun).getByText('Running', { exact: true })).toBeVisible();
+  await expect(rowOf(p2, longRun).getByRole('img', { name: 'Running', exact: true })).toBeVisible();
   // the step shown is the runner's, between what status.json said just before and just after reading the page
   await expect
     .poll(
@@ -289,7 +296,7 @@ test('G7: a run goes on when the Studio is closed and when it is killed; on each
   // 3. the runner's other states, from its CLI, show in the table as it writes them: paused, running, cancelled
   r.cli('pause', longRun);
   await expect.poll(() => shownRunnerState(p3, longRun!), { timeout: 20_000 }).toBe('paused');
-  await expect(rowOf(p3, longRun).getByText('Paused', { exact: true })).toBeVisible();
+  await expect(rowOf(p3, longRun).getByRole('img', { name: 'Paused', exact: true })).toBeVisible();
   await expect(rowOf(p3, longRun).locator('svg[data-state="paused"]')).toBeVisible();
   expect(r.status(longRun).state).toBe('paused');
   await shot(p3, '07-paused');

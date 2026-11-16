@@ -11,6 +11,8 @@ export interface SegmentOption {
   id: string;
   label: string;
   icon?: IconName;
+  /** A count after the label ("Cases 4"): data, so it is not a chrome word (F-833, src/shared/word-budget.ts). */
+  count?: number;
 }
 
 export interface SegmentedToggleProps {
@@ -41,6 +43,12 @@ export function SegmentedToggle({ options, selected, onChange, unavailable = [],
           <ToggleButton key={o.id} id={o.id} className="ui-segment">
             {o.icon && <Icon name={o.icon} />}
             {o.label}
+            {o.count !== undefined && (
+              <>
+                {' '}
+                <span data-words="data">{o.count}</span>
+              </>
+            )}
           </ToggleButton>
         ))}
       </ToggleButtonGroup>

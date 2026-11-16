@@ -115,7 +115,7 @@ export function PlotFrame({ series, version, log, xCaption, height, children, xA
       data-skipped={drawn?.extent.skipped ?? 0}
     >
       <div className="plot-yticks" aria-hidden="true" style={{ height }}>
-        <div className="plot-ticks-inner" style={{ top: inset.top, bottom: inset.bottom }}>
+        <div className="plot-ticks-inner" style={{ top: inset.top, bottom: inset.bottom }} data-words="data">
           {shown?.y.ticks.map((t, i) => (
             <span key={t} className="plot-ytick" style={{ bottom: `${pct(t, shown.y)}%` }}>
               {shown.y.labels[i]}
@@ -138,10 +138,10 @@ export function PlotFrame({ series, version, log, xCaption, height, children, xA
             style={{ left: `calc(${inset.left}px + (100% - ${inset.left + inset.right}px) * ${(cursor - shown.x.lo) / (shown.x.hi - shown.x.lo)})` }}
           />
         )}
-        {renderer.kind === 'failed' && <p className="plot-failed">This plot cannot be drawn here: {renderer.reason}. The values are listed under it.</p>}
+        {renderer.kind === 'failed' && <p className="plot-failed" data-words="exception">This plot cannot be drawn here: {renderer.reason}. The values are listed under it.</p>}
       </div>
       <div className="plot-xticks" aria-hidden="true">
-        <div className="plot-ticks-inner" style={{ left: inset.left, right: inset.right }}>
+        <div className="plot-ticks-inner" style={{ left: inset.left, right: inset.right }} data-words="data">
           {shown?.x.ticks.map((t, i) => (
             <span key={t} className="plot-xtick" style={{ left: `${pct(t, shown.x)}%` }}>
               {shown.x.labels[i]}

@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import type { DataOptions, DataReply, FieldInfo, StoreInfo, StoreRef, SurfaceData } from '../../shared/data.js';
 import { cancelLoads, loadField, loadSurface, openStore } from '../data/door.js';
-import { Button, Toggle } from '../ui/index.js';
+import { Button, Quiet, Toggle } from '../ui/index.js';
 import { colourRange, f32Text, lutBytes, type ColourRange } from './colormap.js';
 import { FieldCanvas, type Backend, type FieldCanvasApi, type Pick } from './FieldCanvas.js';
 import { CutPanel, DerivedControls, useArrows } from './DerivedControls.js';
@@ -416,13 +416,14 @@ export function FieldViewport({
           />
         )}
         {arrows.kind === 'error' && (
-          <span className="fv-note fv-note--error" role="alert">
+          <span className="fv-note fv-note--error" role="alert" data-words="exception">
             {arrows.message}
           </span>
         )}
         <span className="fv-tools-gap" />
         {backend && (
-          <span className="fv-backend" data-backend={backend.kind}>
+          // G22: the normal renderer is said to readers; the fallback, a loss, is shown
+          <span className={backend.kind === 'webgpu' ? 'fv-backend sr-only' : 'fv-backend'} data-backend={backend.kind} data-words={backend.kind === 'webgpu' ? undefined : 'exception'}>
             {backend.kind === 'webgpu' ? 'Drawn by WebGPU' : `Drawn by WebGL 2 (fallback: ${backend.reason})`}
           </span>
         )}
@@ -469,7 +470,7 @@ export function FieldViewport({
         {hover?.by === 'keyboard' && <span className="fv-crosshair" aria-hidden="true" />}
         {/* F-832: a load's progress is WorkProgress's (above), shown after PROGRESS_AFTER_MS; this box is for errors */}
         {phase.kind === 'error' && (
-          <div className="fv-status" role="alert">
+          <div className="fv-status" role="alert" data-words="exception">
             <p>{phase.message}</p>
             <p className="fv-hint">{phase.hint}</p>
             <Button onPress={() => setAttempt((a) => a + 1)}>Try again</Button>
@@ -482,12 +483,28 @@ export function FieldViewport({
           <>
             {legend && drawnRange && <Legend lut={lut} quantity={quantity} unit={unit} lo={drawnRange.lo} hi={drawnRange.hi} />}
             <p className="fv-caption">
-              <b>{title ?? runName(shown.info.path)}</b> · {quantity}
-              {unit ? `, ${unit}` : ''} · snapshot {shown.snapshot + 1} of {shown.info.snapshots.length} · step {snap?.step} · t = {snap?.time} ·
-              {' '}{rangeProp ? 'viridis, one range for both runs' : 'viridis, range of the shown values'} · {shown.surface.cells.length} triangles of {shown.info.nCells} cells
+              <b data-words="data">{title ?? runName(shown.info.path)}</b> ·{' '}
+              <span data-words="data">
+                {quantity}
+                {unit ? `, ${unit}` : ''}
+              </span>{' '}
+              <Quiet>
+                · snapshot {shown.snapshot + 1} of {shown.info.snapshots.length}
+              </Quiet>{' '}
+              · step <span data-words="data">{snap?.step}</span> · t = <span data-words="data">{snap?.time}</span>
+              {/* G22: the colour map and the mesh size are said to readers (the legend shows the range) */}
+              <Quiet>
+                {' '}
+                · {rangeProp ? 'viridis, one range for both runs' : 'viridis, range of the shown values'} · {shown.surface.cells.length} triangles of {shown.info.nCells}{' '}
+                cells
+              </Quiet>
             </p>
             <div className="fv-readout" aria-live={hover?.by === 'keyboard' ? 'polite' : 'off'} data-pointer={pointerAt || undefined}>
-              <span className="fv-readout-label">{`${quantity} at the ${hover?.by === 'keyboard' ? 'centre' : 'cursor'}${unit ? `, ${unit}` : ''}`}</span>
+              <span className="fv-readout-label">
+                <span data-words="data">{quantity}</span>
+                <Quiet>{` at the ${hover?.by === 'keyboard' ? 'centre' : 'cursor'}`}</Quiet>
+                {unit ? <span data-words="data">{`, ${unit}`}</span> : ''}
+              </span>
               {hover ? (
                 <>
                   <output
@@ -519,12 +536,12 @@ export function FieldViewport({
                       {f32Text(hover.pick.value)}
                     </Provenance>
                   </output>
-                  <span className="fv-readout-where">
+                  <span className="fv-readout-where" data-words="data">
                     cell {hover.pick.cell} · triangle {hover.pick.triangle}
                   </span>
                 </>
               ) : (
-                <span className="fv-readout-where">Point at the surface to read the stored value.</span>
+                <Quiet>Point at the surface to read the stored value.</Quiet>
               )}
             </div>
           </>

@@ -666,3 +666,18 @@
 .ui-icon--filled {
   fill: currentColor;
 }
+
+/* The Quiet Rule (G22, F-833): an empty state is the "not yet" hatch, its sentence its name and tooltip (Quiet.tsx). */
+.ui-empty {
+  margin: 0;
+  padding: var(--space-sm) 0;
+}
+.ui-empty-hatch {
+  display: block;
+  width: 48px;
+  height: 8px;
+  background: var(--line-hatch);
+}
+.ui-dash {
+  color: var(--role-text-2);
+}

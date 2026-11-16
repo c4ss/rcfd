@@ -9,7 +9,7 @@ import { TextArea, TextField } from 'react-aria-components';
 import type { ClaudeError, ClaudeState, ClaudeView, FeedItem, SessionRow, TurnView } from '../../shared/claude.js';
 import { FLOOR_CAVEAT } from '../../shared/claude.js';
 import type { ProjectView } from '../../shared/project.js';
-import { Button, IconButton, StatePictogram, Unavailable } from '../ui/index.js';
+import { Button, IconButton, Quiet, StatePictogram, Unavailable } from '../ui/index.js';
 import { clock, dateTime } from '../project/format.js';
 import { claudeActions, watchClaudeState } from './door.js';
 import { findRefs, paragraphs, type Known, type Ref } from './links.js';
@@ -59,7 +59,7 @@ export function ClaudePanel({ project, onOpenRun, onOpenFile, onHide }: ClaudePa
           Claude Code
         </h2>
         <span className="cc-for" title={project.folder}>
-          · {name}
+          · <span data-words="data">{name}</span>
         </span>
         <span className="cc-head-actions">
           {view && (
@@ -104,7 +104,7 @@ function PanelBody({
   return (
     <>
       {!state.program.configured && (
-        <div className="cc-notice" role="note">
+        <div className="cc-notice" role="note" data-words="exception">
           <p className="cc-notice-title">Claude Code is not connected</p>
           <p>{state.program.reason}</p>
         </div>
@@ -127,15 +127,16 @@ function Sessions({ view, busy, onSelect }: { view: ClaudeView; busy: boolean; o
     <section className="cc-sessions" aria-labelledby="cc-sessions-title">
       <div className="cc-section-head">
         <h3 id="cc-sessions-title" className="cc-section-title">
-          Sessions {view.sessions.length}
+          Sessions <span data-words="data">{view.sessions.length}</span>
         </h3>
-        <span className="cc-read">{view.listedAt ? `listed ${clock(view.listedAt)}` : 'not listed yet'}</span>
+        {/* G22: when the list was read is said to readers */}
+        <Quiet>{view.listedAt ? ` listed ${clock(view.listedAt)}` : ' not listed yet'}</Quiet>
       </div>
       <ul className="cc-session-list" aria-label="Claude Code sessions of this project">
         <li>
           <SessionButton current={view.selected === null} disabledReason={reason} onPress={() => onSelect(null)} label="New chat">
             <span className="cc-session-name">New chat</span>
-            <span className="cc-session-state">starts a session in this folder</span>
+            <Quiet> starts a session in this folder</Quiet>
           </SessionButton>
         </li>
         {view.sessions.map((s) => (
@@ -146,19 +147,21 @@ function Sessions({ view, busy, onSelect }: { view: ClaudeView; busy: boolean; o
               onPress={() => onSelect(s.id)}
               label={`${s.name ?? s.title ?? `Session ${shortId(s.id)}`}, ${OPEN_WORD[s.open]}${s.pid !== null ? `, process ${s.pid}` : ''}`}
             >
-              <span className="cc-session-name">{s.name ?? s.title ?? `Session ${shortId(s.id)}`}</span>
+              <span className="cc-session-name" data-words="data">
+                {s.name ?? s.title ?? `Session ${shortId(s.id)}`}
+              </span>
               <span className={`cc-session-state cc-session-state--${s.open}`} data-open={s.open}>
                 {OPEN_WORD[s.open]}
-                {s.pid !== null ? ` · process ${s.pid}` : ''}
-                {s.modified ? ` · ${dateTime(s.modified)}` : ''}
+                {s.pid !== null ? <span data-words="data">{` · process ${s.pid}`}</span> : ''}
+                {s.modified ? <span data-words="data">{` · ${dateTime(s.modified)}`}</span> : ''}
               </span>
             </SessionButton>
           </li>
         ))}
       </ul>
-      {view.sessions.length === 0 && <p className="cc-line">No Claude Code session has been started in this folder yet.</p>}
+      {view.sessions.length === 0 && <Quiet>No Claude Code session has been started in this folder yet.</Quiet>}
       {view.warnings.length > 0 && (
-        <ul className="cc-warnings" aria-label="Problems listing the sessions">
+        <ul className="cc-warnings" aria-label="Problems listing the sessions" data-words="exception">
           {view.warnings.map((w) => (
             <li key={w}>{w}</li>
           ))}
@@ -223,13 +226,14 @@ function Feed({
   return (
     <div className="cc-feed-wrap">
       {row && row.readOnly && row.open !== 'studio' && (
-        <p className="cc-mirror" role="note">
+        <p className="cc-mirror" role="note" data-words="exception">
           <span className="cc-mirror-word">Mirror</span> {row.readOnly}
         </p>
       )}
       <ol className="cc-feed" role="log" aria-label={title}>
+        {/* G22: an empty transcript is the normal start: the composer's placeholder carries it, the rest is said to readers */}
         {view.feed.length === 0 && (
-          <li className="cc-line cc-feed-empty">
+          <li className="cc-feed-empty sr-only">
             {view.selected === null
               ? 'Ask about this project: its cases, runs and results. Claude Code works in the project folder with the project tools below.'
               : 'Nothing in this transcript yet.'}
@@ -240,7 +244,11 @@ function Feed({
         ))}
         <li ref={end} className="cc-feed-end" aria-hidden="true" />
       </ol>
-      {view.feedError && <p className="cc-line cc-line--fail">{view.feedError}</p>}
+      {view.feedError && (
+        <p className="cc-line cc-line--fail" data-words="exception">
+          {view.feedError}
+        </p>
+      )}
     </div>
   );
 }
@@ -249,7 +257,7 @@ function FeedEntry({ item, known, onOpenRun, onOpenFile }: { item: FeedItem; kno
   switch (item.kind) {
     case 'user':
       return (
-        <li className="cc-msg cc-msg--you" data-kind="user">
+        <li className="cc-msg cc-msg--you" data-kind="user" data-words="data">
           <div className="cc-who">You</div>
           <Text text={item.text} />
         </li>
@@ -257,7 +265,7 @@ function FeedEntry({ item, known, onOpenRun, onOpenFile }: { item: FeedItem; kno
     case 'assistant': {
       const refs = findRefs(item.text, known);
       return (
-        <li className="cc-msg cc-msg--claude" data-kind="assistant" data-provisional={item.provisional ? 'true' : undefined}>
+        <li className="cc-msg cc-msg--claude" data-kind="assistant" data-provisional={item.provisional ? 'true' : undefined} data-words="data">
           <div className="cc-who">Claude Code</div>
           <Text text={item.text} />
           {item.tools.length > 0 && <p className="cc-tools">Used {item.tools.join(', ')}</p>}
@@ -267,20 +275,20 @@ function FeedEntry({ item, known, onOpenRun, onOpenFile }: { item: FeedItem; kno
     }
     case 'tool':
       return (
-        <li className="cc-event" data-kind="tool">
+        <li className="cc-event" data-kind="tool" data-words="data">
           <span className="cc-event-word">Tool</span> {item.tools.join(', ')}
           {item.text && item.text !== '{}' && item.text !== 'null' ? <span className="cc-event-detail"> {item.text}</span> : null}
         </li>
       );
     case 'tool_result':
       return (
-        <li className="cc-event" data-kind="tool_result">
+        <li className="cc-event" data-kind="tool_result" data-words="data">
           <span className="cc-event-word">Result</span> <span className="cc-event-detail">{item.text}</span>
         </li>
       );
     case 'denied':
       return (
-        <li className="cc-event cc-event--denied" data-kind="denied">
+        <li className="cc-event cc-event--denied" data-kind="denied" data-words="exception">
           <span className="cc-event-word">Not allowed</span> {item.text}
           <span className="cc-event-detail">
             {item.suggestion
@@ -291,13 +299,13 @@ function FeedEntry({ item, known, onOpenRun, onOpenFile }: { item: FeedItem; kno
       );
     case 'note':
       return (
-        <li className="cc-event" data-kind="note">
+        <li className="cc-event" data-kind="note" data-words="data">
           {item.text}
         </li>
       );
     case 'unrecognised':
       return (
-        <li className="cc-event" data-kind="unrecognised">
+        <li className="cc-event" data-kind="unrecognised" data-words="data">
           {item.text}
         </li>
       );
@@ -341,7 +349,7 @@ function Trust({ view, onError }: { view: ClaudeView; onError: (e: ClaudeError |
   if (t.state === 'confirmed') return null;
   if (t.state === 'error') {
     return (
-      <div className="cc-notice cc-notice--failed" role="alert">
+      <div className="cc-notice cc-notice--failed" role="alert" data-words="exception">
         <p className="cc-notice-title">
           <StatePictogram state="failed" />
           Failed to check the folder
@@ -351,7 +359,7 @@ function Trust({ view, onError }: { view: ClaudeView; onError: (e: ClaudeError |
     );
   }
   return (
-    <section className="cc-notice" aria-labelledby="cc-trust-title">
+    <section className="cc-notice" aria-labelledby="cc-trust-title" data-words="exception">
       <p id="cc-trust-title" className="cc-notice-title">
         Confirm the Claude Code files of this folder
       </p>
@@ -392,12 +400,25 @@ function Approvals({ view }: { view: ClaudeView }) {
         <h3 id="cc-approvals-title" className="cc-section-title">
           Tool approvals
         </h3>
-        <Button variant="ghost" className="cc-disclose" aria-expanded={open} onPress={() => setOpen(!open)}>
-          {a.error ? 'Allow-list refused' : `${a.rules.length} allowed, everything else denied`}
+        {/* G22: the rule (everything else is denied) is said to readers and in the tooltip; a refused list speaks */}
+        <Button
+          variant="ghost"
+          className="cc-disclose"
+          aria-expanded={open}
+          onPress={() => setOpen(!open)}
+          aria-label={a.error ? 'Allow-list refused' : `${a.rules.length} allowed, everything else denied`}
+        >
+          {a.error ? (
+            <span data-words="exception">Allow-list refused</span>
+          ) : (
+            <span data-words="data" title={`${a.rules.length} allowed, everything else denied`}>
+              {a.rules.length}
+            </span>
+          )}
         </Button>
       </div>
       {a.error && (
-        <p className="cc-line cc-line--fail" role="alert">
+        <p className="cc-line cc-line--fail" role="alert" data-words="exception">
           <StatePictogram state="failed" /> Failed: {a.error}
         </p>
       )}
@@ -408,7 +429,7 @@ function Approvals({ view }: { view: ClaudeView }) {
             with permission mode dontAsk: a tool call no rule allows is denied, never asked and never approved.{' '}
             {view.mcp.server ? `Project tools come from ${view.mcp.server}.` : (view.mcp.note ?? '')}
           </p>
-          <ul className="cc-rules" aria-label="Allowed tools">
+          <ul className="cc-rules" aria-label="Allowed tools" data-words="data">
             {a.rules.map((r) => (
               <li key={r}>{r}</li>
             ))}
@@ -436,9 +457,13 @@ function TurnLine({ turn, error, version }: { turn: TurnView | null; error: Clau
   const failed = turn && (turn.status === 'failed' || turn.status === 'aborted');
   return (
     <div className="cc-turn" role="status">
-      {error && <p className="cc-line cc-line--note">Not done: {error.message}</p>}
+      {error && (
+        <p className="cc-line cc-line--note" data-words="exception">
+          Not done: {error.message}
+        </p>
+      )}
       {turn && !(error && turn.status === 'refused') && (
-        <p className={`cc-line${failed ? ' cc-line--fail' : ''}`} data-turn={turn.status}>
+        <p className={`cc-line${failed ? ' cc-line--fail' : ''}`} data-turn={turn.status} data-words={failed || turn.status === 'refused' ? 'exception' : 'chrome'}>
           {failed && <StatePictogram state="failed" />}
           {TURN_WORD[turn.status]}
           {turn.status === 'running' && turn.pid !== null ? ` (process ${turn.pid})` : ''}
@@ -446,7 +471,11 @@ function TurnLine({ turn, error, version }: { turn: TurnView | null; error: Clau
           {turn.message && turn.status !== 'finished' ? `: ${turn.message}` : ''}
         </p>
       )}
-      {version && <p className="cc-line cc-line--note">{version}</p>}
+      {version && (
+        <p className="cc-line cc-line--note" data-words="exception">
+          {version}
+        </p>
+      )}
     </div>
   );
 }
@@ -486,7 +515,7 @@ function Composer({ state, view, row, onError }: { state: ClaudeState; view: Cla
   };
   if (why && !running) {
     return (
-      <div className="cc-compose cc-compose--off">
+      <div className="cc-compose cc-compose--off" data-words="exception">
         <p className="cc-line">
           <span className="cc-mirror-word">Read-only</span> {why}
         </p>
@@ -503,10 +532,13 @@ function Composer({ state, view, row, onError }: { state: ClaudeState; view: Cla
       }}
     >
       <TextField className="cc-field" aria-label={`Message to Claude Code, ${target}`} value={draft} onChange={setDraft}>
-        <TextArea className="ui-input cc-input" placeholder="Ask about this project" rows={3} onKeyDown={onKey} />
+        <TextArea className="ui-input cc-input" placeholder="Ask about this project" rows={3} onKeyDown={onKey} aria-describedby="cc-keys" />
       </TextField>
       <div className="cc-compose-actions">
-        <span className="cc-hint">Enter sends, Shift+Enter starts a new line{running ? ', Escape stops' : ''}</span>
+        {/* G22: the keys are said to readers (the field's description) and listed in the palette's shortcuts */}
+        <span className="cc-hint sr-only" id="cc-keys">
+          Enter sends, Shift+Enter starts a new line{running ? ', Escape stops' : ''}
+        </span>
         {running ? (
           <Button onPress={stop}>Stop</Button>
         ) : draft.trim() === '' ? (

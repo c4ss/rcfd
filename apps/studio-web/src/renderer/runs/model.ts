@@ -85,6 +85,12 @@ export function timeNote(row: Pick<RunRow, 'state' | 'step' | 'time' | 'detail'>
 }
 
 /** The time column's text: the engine's number, or the words of timeNote. */
+/**
+ * The Quiet Rule (G22, F-833): a time that is normally absent (a steady run, a run not started) is an en dash named by
+ * its words; a time the engine did not report, or one that cannot be read, is a known miss and keeps its words.
+ */
+export const timeIsQuiet = (note: string | null): boolean => note === 'none, steady' || note === 'none yet' || note === 'none';
+
 export const timeText = (row: Pick<RunRow, 'state' | 'step' | 'time' | 'detail'>): string => timeNote(row) ?? plain(row.time!);
 
 /** Steps of a steady run are iterations. */

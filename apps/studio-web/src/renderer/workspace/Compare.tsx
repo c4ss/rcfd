@@ -84,6 +84,7 @@ export function CompareControls({
         <>
           <Select
             aria-label={COMPARE_NAME.other}
+            valueWords="data"
             className="cmp-other"
             options={others.map((r) => ({ id: r.id, label: `${caseName(r.case) || r.id} · ${r.id}` }))}
             selected={other}
@@ -128,7 +129,7 @@ export function useCounterpart(a: StoreInfo | null, aSteady: boolean | null, aSn
 /** A short exception in a view's place: a pictogram and its words (G22: shown because it is an exception). */
 function Refusal({ words, view }: { words: string; view: string }) {
   return (
-    <div className="cmp-refusal" role="status" data-view={view} data-refusal="">
+    <div className="cmp-refusal" role="status" data-view={view} data-refusal="" data-words="exception">
       <StatePictogram state="queued" size={20} />
       <p>{words}</p>
     </div>
@@ -330,7 +331,7 @@ export function useComparison(a: RunRow | null, b: RunRow | null): { comparison:
 export function CompareMetrics({ a, b, comparison, error }: { a: RunRow; b: RunRow; comparison: RunComparison | null; error: string | null }) {
   if (error !== null) {
     return (
-      <p className="ws-error cmp-metrics-error" role="alert">
+      <p className="ws-error cmp-metrics-error" role="alert" data-words="exception">
         <StatePictogram state="failed" /> Failed to compare the metrics: {error}
       </p>
     );
@@ -340,6 +341,7 @@ export function CompareMetrics({ a, b, comparison, error }: { a: RunRow; b: RunR
   return (
     <table
       className="cmp-metrics"
+      data-words="data"
       aria-label={`Metrics of ${name(a)} and ${name(b)}, and the difference ${b.id} minus ${a.id}, from the engine’s compare_runs; the engine gives no units for them`}
       data-baseline={comparison.baseline}
       data-compared={comparison.compared}

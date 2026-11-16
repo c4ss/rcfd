@@ -11,7 +11,7 @@
 .hi-button {
   max-width: 260px;
 }
-/* nothing to undo or redo: the words say it; the button stays a ghost on the band */
+/* nothing to undo or redo: the arrow alone, the words its name (G22); the button stays a ghost on the band */
 .hi-button[data-disabled] {
   background: transparent;
   border-color: transparent;

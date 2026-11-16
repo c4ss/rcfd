@@ -38,10 +38,12 @@ export function Disclosure({ id, title, notes, description, path, children }: Di
         <Icon name="caret-down" />
         <span className="st-disclosure-text">
           <span className="st-disclosure-line">
-            <span className="st-disclosure-name">{title}</span>
+            <span className="st-disclosure-name" data-words="data">
+              {title}
+            </span>
             {notes}
           </span>
-          {description && <span className="st-disclosure-desc">{description}</span>}
+          {description && <span className="st-disclosure-desc sr-only">{description}</span>}
         </span>
       </AriaButton>
       {open && (
@@ -103,7 +105,7 @@ export function NestedNode({ node, path }: { node: Group | Collection; path: str
   return (
     <Disclosure id={`group:${path}`} title={node.name} notes={notes} description={node.description} path={path}>
       <div className="st-nested">
-        {node.description && <p className="st-head-inline">{node.description}</p>}
+        {node.description && <p className="st-head-inline sr-only">{node.description}</p>}
         {node.kind === 'group' ? <GroupBody group={node} path={path} /> : <CollectionBody collection={node} path={path} />}
       </div>
     </Disclosure>

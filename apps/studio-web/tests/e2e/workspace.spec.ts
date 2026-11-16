@@ -118,10 +118,13 @@ test('the run bands: every run on one axis, each end with its pictogram and word
   await selectRun(page, CAVITY);
   const rows = page.locator('.tp-band-row');
   await expect(rows).toHaveCount(5);
-  // the converged quick-start runs end with the converged pictogram and "converged · it <last iteration>"
+  // the converged quick-start runs end with the converged pictogram and "it <last iteration>"; the state word is the end's
+  // name and tooltip, "converged · it <last iteration>" (G22, F-833)
   const status = JSON.parse(await readFile(path.join(quick, 'runs', CAVITY, 'status.json'), 'utf8')) as { step: number };
   const cavity = page.locator(`.tp-band-row[data-run="${CAVITY}"]`);
-  await expect(cavity.locator('.tp-end')).toHaveText(`converged · it ${status.step}`);
+  await expect(cavity.locator('.tp-end')).toHaveText(`it ${status.step}`);
+  await expect(cavity.locator('.tp-end')).toHaveAccessibleName(`converged · it ${status.step}`);
+  await expect(cavity.locator('.tp-end')).toHaveAttribute('title', `converged · it ${status.step}`);
   await expect(cavity.locator('.tp-end svg[data-state="converged"]')).toHaveCount(1);
   await expect(cavity.locator('.tp-seg--converged')).toHaveCount(1);
   await expect(cavity).toHaveClass(/tp-band-row--selected/);
@@ -134,13 +137,14 @@ test('the run bands: every run on one axis, each end with its pictogram and word
   // the failure: red cap, the failed pictogram and its word, never faded
   const failed = page.locator(`.tp-band-row[data-run="${failedRun}"]`);
   await expect(failed.locator('.tp-end')).toHaveText(/^failed · it \d+$/);
+  await expect(failed.locator('.tp-end')).toHaveAccessibleName(/^failed · it \d+$/);
   await expect(failed.locator('.tp-end svg[data-state="failed"]')).toHaveCount(1);
   expect(await failed.locator('.tp-seg--failed').evaluate((e) => getComputedStyle(e, '::before').opacity)).toBe('1');
   // the other bands drop to 40% fill
   const other = page.locator('.tp-band-row:not(.tp-band-row--selected) .tp-seg--iterating').first();
   expect(await other.evaluate((e) => getComputedStyle(e, '::before').opacity)).toBe('0.4');
   // one axis: every band's end lies inside it, in order of the runs' last iterations
-  const ends = await page.locator('.tp-end').evaluateAll((es) => es.map((e) => e.textContent ?? ''));
+  const ends = await page.locator('.tp-end').evaluateAll((es) => es.map((e) => e.getAttribute('aria-label') ?? ''));
   for (const e of ends) expect(e).toMatch(/^(converged|finished|failed|running|paused|cancelled|queued) · /);
   // no run is running: no orange
   await expect(page.locator('.tp-seg--live')).toHaveCount(0);
@@ -274,7 +278,8 @@ test('Follow live: the line stays on the running run’s newest snapshot; moving
   // One Live Thing: one orange segment, the running run's
   await expect(page.locator('.tp-seg--live')).toHaveCount(1);
   await expect(page.locator(`.tp-band-row[data-run="${longRun}"] .tp-seg--live`)).toHaveCount(1);
-  await expect(page.locator(`.tp-band-row[data-run="${longRun}"] .tp-end`)).toHaveText(/^running · it \d+$/);
+  await expect(page.locator(`.tp-band-row[data-run="${longRun}"] .tp-end`)).toHaveAccessibleName(/^running · it \d+$/);
+  await expect(page.locator(`.tp-band-row[data-run="${longRun}"] .tp-end`)).toHaveText(/^it \d+$/);
   const ws = page.locator('.ws');
   const counter = page.locator('.tp-counter');
   // following: the line is on the newest snapshot, and moves on as the runner writes more

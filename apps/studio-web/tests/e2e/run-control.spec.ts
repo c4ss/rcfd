@@ -234,7 +234,7 @@ test('quick run from the Runs view, by keyboard: the run shows at once, then que
   // the runner launches it and it ends; the table follows its state, and status.json says the same
   await expect.poll(() => shownState(page, id), { timeout: 60_000 }).toBe('finished');
   expect(runner!.status(id).state).toBe('finished');
-  await expect(rowOf(page, id).getByText('Converged', { exact: true })).toBeVisible();
+  await expect(rowOf(page, id).getByRole('img', { name: 'Converged', exact: true })).toBeVisible();
   await expect(status).toHaveAttribute('data-settled', 'true');
   await shot(page, '02-quick-run-ended');
 });

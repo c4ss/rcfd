@@ -99,7 +99,7 @@ test('without a session the page offers the service’s sessions and a new one f
   session = [...fake.sessions.keys()][0]!;
   await expect.poll(() => page.evaluate(() => location.hash)).toBe(`#/settings/${session}`);
   expect(fake.received.map((r) => r.method)).toEqual(expect.arrayContaining(['settings.schema', 'session.list', 'session.create', 'settings.get', 'run.status']));
-  await expect(page.getByText('Every key has its default.')).toBeVisible();
+  await expect(page.getByRole('note', { name: /^Every key has its default\./ })).toBeVisible();
   await page.evaluate(() => document.fonts.ready.then(() => undefined));
   await shot('set-in-this-case-empty');
 });

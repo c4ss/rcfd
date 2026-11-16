@@ -34,7 +34,12 @@ export interface TextFieldProps extends Omit<AriaTextFieldProps, 'className' | '
 export function TextField({ label, description, errorMessage, placeholder, className, ...rest }: TextFieldProps) {
   return (
     <AriaTextField {...rest} className={cx('ui-field', className)}>
-      {label && <Label className="ui-label">{label}</Label>}
+      {/* a label is chrome even in a field whose value and placeholder are data (F-833 word budget) */}
+      {label && (
+        <Label className="ui-label" data-words="chrome">
+          {label}
+        </Label>
+      )}
       <Input className="ui-input" placeholder={placeholder} />
       {description && (
         <Text slot="description" className="ui-description">

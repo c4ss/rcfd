@@ -7,7 +7,7 @@ import { ListBox, ListBoxItem, type Key } from 'react-aria-components';
 import type { JsonObject, JsonValue } from '../../shared/actions/params.js';
 import { availability, dispatch } from '../actions/index.js';
 import { equivalents, getAction } from '../../shared/actions/registry.js';
-import { Button, Icon, StatePictogram, Switch, TextField } from '../ui/index.js';
+import { Button, EmptyMark, Icon, Quiet, StatePictogram, Switch, TextField } from '../ui/index.js';
 import { Settings, useSettings, type SettingsContext } from './context.js';
 import { filledCollections, keyCount, search, sectionOf, sections, setCount, setKeys, type Section } from './disclosure.js';
 import { CollectionBody, GroupBody } from './Groups.js';
@@ -332,7 +332,7 @@ export function SettingsSurface({ model, session, address, settingsEpoch, stateE
           <div className="st-find">
             <TextField
               aria-label="Find a setting"
-              placeholder="Find a setting by name or description"
+              placeholder="Find a setting"
               value={query}
               onChange={setQuery}
               onKeyDown={(e) => {
@@ -365,17 +365,31 @@ export function SettingsSurface({ model, session, address, settingsEpoch, stateE
           >
             {(item) => (
               <ListBoxItem id={item.id} textValue={item.title} className={item.id === SET_ID ? 'st-index-item st-index-item--first' : 'st-index-item'}>
-                <span className="st-index-name">{item.title}</span>
-                <span className="st-index-count">{item.count > 0 ? `${item.count} set` : ''}</span>
+                <span className="st-index-name" data-words={item.id === SET_ID ? undefined : 'data'}>
+                  {item.title}
+                </span>
+                <span className="st-index-count">
+                  {item.count > 0 ? (
+                    <>
+                      <span data-words="data">{item.count}</span> set
+                    </>
+                  ) : (
+                    ''
+                  )}
+                </span>
               </ListBoxItem>
             )}
           </ListBox>
         </nav>
 
         <main className="st-col" ref={mainRef} aria-labelledby="st-view-title">
-          {!editable && setAvail.available === false && <div className="st-banner" role="status">{setAvail.reason} Values are shown read-only.</div>}
+          {!editable && setAvail.available === false && (
+            <div className="st-banner" role="status" data-words="exception">
+              {setAvail.reason} Values are shown read-only.
+            </div>
+          )}
           {loadError ? (
-            <div className="st-empty">
+            <div className="st-empty" data-words="exception">
               <h2 id="st-view-title">The settings could not be read</h2>
               <p>The engine answered: {loadError}</p>
               <Button onPress={() => void refresh()}>Read again</Button>
@@ -395,33 +409,45 @@ export function SettingsSurface({ model, session, address, settingsEpoch, stateE
 
         <aside className="st-col st-check" aria-label="Check and changes">
           {aside}
-          <section aria-labelledby="st-session-title">
-            <h2 id="st-session-title">Session {session}</h2>
+          {/* G22: the session's normal facts are said to readers (the session is named in the header band) */}
+          <section aria-labelledby="st-session-title" className="sr-only">
+            <h2 id="st-session-title">
+              Session <span data-words="data">{session}</span>
+            </h2>
             <dl className="st-facts">
               <dt>Run state</dt>
-              <dd>{runState ?? 'unknown'}</dd>
+              <dd data-words="data">{runState ?? 'unknown'}</dd>
               <dt>Keys set</dt>
               <dd>
-                {setList.length} of {model.leaves.length} in the schema
+                <span data-words="data">{setList.length}</span> of <span data-words="data">{model.leaves.length}</span> in the schema
               </dd>
               <dt>Service</dt>
-              <dd>{address ?? 'unknown address'}</dd>
+              <dd data-words="data">{address ?? 'unknown address'}</dd>
             </dl>
           </section>
           <section aria-labelledby="st-check-title">
-            <h2 id="st-check-title">Check the case</h2>
-            <p className="st-small">The engine checks the settings against its rules and builds the mesh (settings.validate).</p>
-            <Button variant="primary" onPress={() => void runCheck()} isDisabled={check === 'running'}>
+            <h2 id="st-check-title" className="sr-only">
+              Check the case
+            </h2>
+            <Quiet id="st-check-what">The engine checks the settings against its rules and builds the mesh (settings.validate).</Quiet>
+            <Button variant="primary" onPress={() => void runCheck()} isDisabled={check === 'running'} aria-describedby="st-check-what">
               {check === 'running' ? 'Checking' : 'Check the case'}
             </Button>
             <CheckView check={check} onGo={ctx.goTo} />
             {check !== null && check !== 'running' && changes > checkedAt && (
-              <p className="st-small">The settings changed after this check; check again for the engine's view of them now.</p>
+              <p className="st-small" data-words="exception">The settings changed after this check; check again for the engine's view of them now.</p>
             )}
           </section>
+          {/* G22: before the first change this section says nothing on the screen */}
           <section aria-labelledby="st-last-title">
-            <h2 id="st-last-title">Last change</h2>
-            {last ? <LastView last={last} address={address} /> : <p className="st-small">Changes made here are sent to the engine one key at a time; the command that repeats the last one appears here.</p>}
+            <h2 id="st-last-title" className={last ? undefined : 'sr-only'}>
+              Last change
+            </h2>
+            {last ? (
+              <LastView last={last} address={address} />
+            ) : (
+              <Quiet>Changes made here are sent to the engine one key at a time; the command that repeats the last one appears here.</Quiet>
+            )}
           </section>
         </aside>
       </div>
@@ -439,14 +465,16 @@ function SectionView({ section }: { section: Section }) {
   return (
     <>
       <header className="st-head">
-        <h2 id="st-view-title">{section.title}</h2>
-        <p className="st-head-counts">
+        <h2 id="st-view-title" data-words="data">
+          {section.title}
+        </h2>
+        <p className="st-head-counts sr-only">
           {node.kind === 'collection'
             ? `Named entries: ${plural(entryNames(tree, section.id).length, 'entry', 'entries')}, ${plural(keyCount(node.entry), 'key', 'keys')} each`
             : plural(keyCount(node), 'key', 'keys')}
           {n > 0 ? `, ${n} set` : ''}
         </p>
-        {node.description && <p>{node.description}</p>}
+        {node.description && <Quiet>{node.description}</Quiet>}
       </header>
       {node.kind === 'collection' ? <CollectionBody collection={node} path={section.id} /> : <GroupBody group={node} path={section.id} />}
     </>
@@ -470,7 +498,7 @@ function SearchView({ hits, query }: { hits: ReturnType<typeof search>; query: s
         h.path !== null ? (
           <KeyRow key={h.path} leaf={h.leaf} path={h.path} label={h.path} />
         ) : (
-          <div className="st-pending-key" key={h.leaf.pattern} data-pattern={h.leaf.pattern}>
+          <div className="st-pending-key" key={h.leaf.pattern} data-pattern={h.leaf.pattern} data-words="data">
             <strong>{h.leaf.pattern}</strong>
             <span>{h.collection} has no entry yet.</span>
             <Button onPress={() => c.goTo(h.collection ?? '')}>Go to {h.collection}</Button>
@@ -488,25 +516,20 @@ function SetView({ model, tree, rows }: { model: CaseModel; tree: unknown; rows:
     <>
       <header className="st-head">
         <h2 id="st-view-title">Set in this case</h2>
-        <p>
-          The keys whose value differs from the schema's default, and the lists that hold values. Every other key has the
-          engine's default.
-        </p>
+        <Quiet>The keys whose value differs from the schema's default, and the lists that hold values. Every other key has the engine's default.</Quiet>
       </header>
       {filled.map((f) => (
-        <div className="st-filled" key={f.path}>
+        <div className="st-filled" key={f.path} data-words="data">
           <strong>{f.path}</strong>
           <span>{f.entries.join(', ')}</span>
           <Button onPress={() => c.goTo(`${f.path}.${f.entries[0]}`)}>Go to {f.path}</Button>
         </div>
       ))}
       {rows.length === 0 && filled.length === 0 ? (
-        <div className="st-empty">
-          <p>
-            Every key has its default. A key you change appears here, wherever it sits in the schema; pick a section on the
-            left, or find a key by name.
-          </p>
-        </div>
+        <EmptyMark
+          className="st-empty"
+          text="Every key has its default. A key you change appears here, wherever it sits in the schema; pick a section on the left, or find a key by name."
+        />
       ) : (
         rows.map((r) => <KeyRow key={r.path} leaf={r.leaf} path={r.path} label={r.path} />)
       )}
@@ -518,7 +541,7 @@ function CheckView({ check, onGo }: { check: CheckResult | 'running' | { failed:
   if (check === null || check === 'running') return null;
   if ('failed' in check) {
     return (
-      <p className="st-verdict st-verdict--failed" role="status">
+      <p className="st-verdict st-verdict--failed" role="status" data-words="exception">
         <StatePictogram state="failed" />
         The check failed to run. {check.failed}
       </p>
@@ -534,11 +557,11 @@ function CheckView({ check, onGo }: { check: CheckResult | 'running' | { failed:
   }
   return (
     <>
-      <p className="st-verdict st-verdict--failed" role="status">
+      <p className="st-verdict st-verdict--failed" role="status" data-words="exception">
         <StatePictogram state="failed" />
         Check failed: {plural(check.diagnostics.length, 'problem', 'problems')}
       </p>
-      <ul className="st-diags" aria-label="Problems found by the engine">
+      <ul className="st-diags" aria-label="Problems found by the engine" data-words="exception">
         {check.diagnostics.map((d, i) => (
           <li key={`${d.path}:${i}`}>
             <span>{d.message}</span>
@@ -565,7 +588,9 @@ function LastView({ last, address }: { last: LastChange; address: string | null 
         {last.action === 'settings.remove' ? `Removed ${path}.` : `${path} is now ${formatValue(last.stored) || 'empty'} (the value the engine stored).`}
       </p>
       <p className="st-small">The same change from the command line:</p>
-      <pre className="st-cli">{eq.cli.map(sq).join(' ')}</pre>
+      <pre className="st-cli" data-words="data">
+        {eq.cli.map(sq).join(' ')}
+      </pre>
       {eq.mcp ? (
         <p className="st-small">From Claude Code: the MCP tool {eq.mcp.tool}.</p>
       ) : (
