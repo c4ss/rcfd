@@ -2,10 +2,14 @@
 // schema-driven surface for that session, and the disclaimer footer. It reads the engine's schema once per service
 // instance (settings.schema), lists the service's sessions (session.list), makes a session from the engine's defaults
 // (session.create), and passes the service's events on to the surface so a change made by another writer shows.
-// Loaded on demand from main.tsx.
+// Loaded on demand from main.tsx. F-829: undo and redo of the session's edits in the header band, and Close session,
+// which cannot be undone, asks first in words that name what is lost.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ServiceState } from '../../shared/service.js';
-import { dispatch, watchEvents, watchServiceState } from '../actions/index.js';
+import { dispatch, history, watchEvents, watchServiceState } from '../actions/index.js';
+import { NO_INVERSE, statusFacts } from '../../shared/actions/loss.js';
+import { DecisionPanel } from '../history/DecisionPanel.js';
+import { UndoControls } from '../history/UndoControls.js';
 import { Button, Select } from '../ui/index.js';
 import { caseModel, type CaseModel } from './schema.js';
 import { SettingsSurface } from './SettingsSurface.js';
@@ -34,6 +38,9 @@ export default function SettingsPage() {
   const [session, setSession] = useState<string | null>(() => sessionFromHash(location.hash));
   const [epochs, setEpochs] = useState({ settings: 0, state: 0 });
   const [createError, setCreateError] = useState<string | null>(null);
+  /** Close session asked: what closing loses, in words (F-829). */
+  const [closing, setClosing] = useState<{ session: string; loss: string } | null>(null);
+  const [closeError, setCloseError] = useState<string | null>(null);
 
   useEffect(() => {
     const onHash = () => setSession(sessionFromHash(location.hash));
@@ -123,6 +130,24 @@ export default function SettingsPage() {
     }
   };
 
+  const askClose = async (id: string) => {
+    setCloseError(null);
+    const st = await dispatch('run.status', { session: id });
+    const facts = { ...(st.ok ? statusFacts(st.result) : {}), edits: history().view(id).titles };
+    setClosing({ session: id, loss: NO_INVERSE['session.close']({ session: id }, facts) ?? '' });
+  };
+
+  const close = async (id: string) => {
+    setClosing(null);
+    const r = await dispatch('session.close', { session: id });
+    if (!r.ok && r.error.code !== 1001) {
+      setCloseError(r.error.message);
+      return;
+    }
+    await listSessions();
+    location.hash = SETTINGS_HASH;
+  };
+
   const options = useMemo(() => (sessions ?? []).map((s) => ({ id: s.session, label: `${s.session} (${s.state})` })), [sessions]);
   const known = session !== null && sessions !== null && sessions.some((s) => s.session === session);
 
@@ -198,8 +223,31 @@ export default function SettingsPage() {
               New session
             </Button>
           )}
+          {connected && known && (
+            <Button variant="ghost" icon="close" onPress={() => void askClose(session!)}>
+              Close session
+            </Button>
+          )}
+          {connected && <UndoControls scope={session} onRenamed={(_from, to) => choose(to)} />}
         </div>
       </header>
+      {closing && (
+        <DecisionPanel
+          title={`Close session ${closing.session}?`}
+          onCancel={() => setClosing(null)}
+          choices={[
+            { label: 'Keep the session', onPress: () => setClosing(null), safe: true },
+            { label: `Close ${closing.session} and lose it`, onPress: () => void close(closing.session) },
+          ]}
+        >
+          <p>{closing.loss}</p>
+        </DecisionPanel>
+      )}
+      {closeError && (
+        <DecisionPanel title="Failed to close the session" failed onCancel={() => setCloseError(null)} choices={[{ label: 'Dismiss', onPress: () => setCloseError(null), safe: true }]}>
+          <p>The engine answered: {closeError}</p>
+        </DecisionPanel>
+      )}
       {/* the surface renders its own three columns; the states before it fill the body */}
       {known && connected && model !== null ? body : <div className="st-body st-body--single">{body}</div>}
       <footer className="st-foot">

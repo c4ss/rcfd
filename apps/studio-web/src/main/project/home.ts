@@ -104,7 +104,18 @@ export class ProjectHome {
     this.recentView = await withExistence(this.stored);
   }
 
-  private async setRecent(list: StoredRecent[]): Promise<void> {
+  /**
+   * Applies one change to the recent list as the file holds it now, not as it was read at start: another Studio window
+   * may have written it since, and its entries are kept (F-829, G18: no silent overwrite of another writer's change).
+   */
+  private async setRecent(change: (list: StoredRecent[]) => StoredRecent[]): Promise<void> {
+    let latest = this.stored;
+    try {
+      latest = await this.deps.recent.load();
+    } catch {
+      // unreadable: the list as read before
+    }
+    const list = change(latest);
     this.stored = list;
     try {
       await this.deps.recent.save(list);
@@ -186,7 +197,7 @@ export class ProjectHome {
     this.session = session;
     this.opening = null;
     this.failure = null;
-    await this.setRecent(withOpened(this.stored, folder, this.now()));
+    await this.setRecent((l) => withOpened(l, folder, this.now()));
     this.emit();
     if (before) await before.close();
   }
@@ -223,7 +234,7 @@ export class ProjectHome {
   }
 
   async forget(path: string): Promise<void> {
-    await this.setRecent(without(this.stored, path));
+    await this.setRecent((l) => without(l, path));
     if (this.failure && sameFolder(this.failure.folder, path)) this.failure = null;
     this.emit();
   }
