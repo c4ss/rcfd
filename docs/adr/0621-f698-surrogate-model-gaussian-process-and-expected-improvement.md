@@ -745,3 +745,109 @@ The first P1 test stays in the file as the ignored record `p1_batch_and_pending_
 measured 0.0000 recorded). A corrected test `p1b_batch_and_pending_points_are_spread` with the same set-up and the same limits
 (`>= 1e-3` for the batch and for the pending point) is run once on the corrected code. The decision rule is unchanged, with
 P1b in the place of P1.
+
+## Addendum 1 (2026-11-16): results
+
+Code: commits 49f7f75e (surrogate, bayes, tests), e60fb3cc (the amendment 2 correction), 7a92c192 (clippy with the same
+bits, docs). Each registered check ran once. The logs are in `f698-scratch` (`run1.log`, `run_p1b.log`, `run_o2o3.log`,
+`run_r1r2.log`, `b1.log`, `mutations.log`, `mut_*.log`).
+
+### Results
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| G0 test functions | 1e-6 / 1e-5 | Branin 0.397887358 at all three; H3 -3.86277979, H6 -3.32236801 | yes |
+| G1a Cholesky | <= 1e-12; diag(1, -1) refused at row 1 | 8.2e-16; refused at row 1 | yes |
+| G1b duplicate point | factorises, jitter 1e-8 | jitter 1e-8 | yes |
+| G2 two-point closed form | rel <= 1e-12 | 2.7e-15 (both kernels) | yes |
+| G3 Branin interpolation (10 seeds) | <= 1e-2, sd <= 1e-2 | worst 1.12e-3, sd 1.0e-4 | yes |
+| G4 likelihood gradient | <= 1e-5 | 9.7e-10 | yes |
+| G5 medians | l in [0.133, 0.3], g in [0.00333, 0.03] | 0.1735, 1.467e-2 | yes |
+| G6a pooled coverage | [0.92, 0.98] | 0.9379 | yes |
+| NC2 (l = 3) | < 0.92 | 0.8646 | yes |
+| G6b each seed | coverage >= 0.90, rms <= 0.10 | worst 0.990, 0.0465 | yes |
+| G6c Hartmann 6 | recorded | coverage 0.890 to 0.946, rms/sd 0.50 to 0.74 | recorded |
+| G7 leave-one-out | <= 1e-9 | 1.9e-15 | yes |
+| E1 EI against quadrature | <= 1e-10, s = 0 exact | 2.8e-14, exact | yes |
+| E2 box and exclusion | 0 violations | 0 in every driver test | yes |
+| P1 batch (first run) | >= 1e-3 | 0.0000 (pending part 0.911) | **no**, see amendment 2 |
+| P1b batch, pending (corrected) | >= 1e-3 | 0.1604, 0.9085 | yes |
+| O1 Branin | >= 18/20, median <= 35 | 20/20, median 28 (23 to 32) | yes |
+| NC1 random search | <= 4/20 | 0/20 | yes |
+| O4 Nelder-Mead | recorded | 14/20 | recorded |
+| O2 Hartmann 6 | >= 5/10, largest <= 100, every best <= -3.15 | 6/10, largest 55, worst best -3.20316 | yes |
+| O3 against CMA-ES and DE | GP >= max + 2 | GP 6, CMA-ES 1, DE 0 | yes |
+| F1 failure disc | >= 18/20, each share <= 0.25 | 20/20, worst 0.080 (pooled 0.030) | yes |
+| F2 without imputation and classifier | pooled > F1 | 0.862 > 0.030 | yes |
+| N1 noisy Branin | >= 16/20 within 1 | 20/20 (worst true value 0.556) | yes |
+| K1 constraint | >= 9/10 within 1 percent | 10/10 (0.1800003 to 0.1800042) | yes |
+| R1 reduced-order fan | >= 9/10 within P_ref 1.01; failures located | 10/10, best / P_ref 0.9930 to 0.9935, reached by evaluation 18 to 22; all located | yes |
+| R2 CMA-ES, Nelder-Mead | recorded | 0/10, 8/10 | recorded |
+| L1 provenance, next point, resume | complete, bit-equal, lines equal | all true | yes |
+| L2 shuffled lines | bit-equal | true | yes |
+| L3 refusals, skips | mixed levels and mixed evaluators refused; 1 skipped | as stated | yes |
+| D1 workers 1 and 8 | bit-equal | true (O1 seed 1, F1 seed 1) | yes |
+| D2 replay | bit-equal | true | yes |
+| B1 existing tests | pass | lib design:: 76, f697 22, w46b 1, f249 4, f260 1, f297 3, baseline_hashes 3 | yes |
+| B2 rcfd-mcp | pass, diff empty | default_f1 2, tool_list_f275 7, project_list_f270 1; diff empty | yes |
+| B3 fmt, clippy | clean | clean after 7a92c192 | yes |
+
+The 21^3 reference (5129 of 9261 points feasible, P_ref 1.455477 W at stagger +3 deg, chord 0.86, camber 0.5, 516 s) is a
+grid optimum. Every GP run found a lower power (about 1.4455 W, 0.7 percent below), so the ratio is below 1. Of the 50
+evaluations of a fan run, 34 to 39 failed (stall), most of them in the initial design and next to the stall boundary, where
+the optimum sits.
+
+### Mutations
+
+| | Mutation | Caught by |
+|---|---|---|
+| M1 | EI sign | E1, O1 |
+| M2 | no mean-uncertainty term | G2 |
+| M3 | jitter 0 | G1b |
+| M4 | process variance divisor n - 1 | G2 |
+| M5 | Matern without sqrt 5 | G2 |
+| M6 | imputation at m - s | **survived** (registered doubt: the failure model steers away on its own) |
+| M7 | no canonical sort | L1 |
+| M8 | exclusion 0 | E2 (O1, F1, K1) |
+| M9 | trace term sign | G4 |
+| M10 | LOO without the mean term | G7 |
+| M11 | no believer | P1b |
+| M12 | classify_failures off by default | R1 (0 of 10, best / P_ref 1.14 to 1.37) |
+
+Control (the unmutated copy, all non-ignored tests): pass.
+
+### Deviations
+
+* P1 missed on the first run because the believer did not update the incumbent. Amendment 2 recorded the diagnosis and the
+  correction before the corrected run. P1 is kept as the ignored `p1_batch_and_pending_points_are_spread_known_miss`, and P1b
+  met. Only batches and pending entries reach the corrected code, so the bits of every other check are unchanged.
+* Clippy required `!(x > y)` to be written as `x.is_nan() || x <= y`, which gives the same values, NaN included.
+* M6 survived, as its registration expected might happen: F1 does not separate the two imputations while the classifier is on.
+
+### Decision
+
+**done**, by the decision rule of amendment 1 with P1b in the place of P1: every check met (O4, G6c and R2 recorded), and
+every mutation except M6 and M8 caught (M8 was caught too). The result holds only for the reduced-order tier: no fan result is
+checked against measured data.
+
+### Remaining questions (taken on the maintainer's standing instruction of 2026-11-11; the recommendation is given in each)
+
+1. A `gp_ei` study method and an MCP tool: recommend a follow-up after F-702 (Q1 b), not in this item.
+2. M6 is not separated: recommend a check with the classifier off and imputation alone (the F2 set-up) in a follow-up, with no
+   change here.
+3. High failure share on the fan (34 to 39 of 50): recommend an initial design filtered by a cheap stall pre-check of the
+   reduced-order model, in a follow-up. The classifier already keeps the later picks feasible.
+4. Hartmann 6 stuck at -3.20316 in 4 of 10 runs: recommend a follow-up for hyperparameter averaging or an exploration restart.
+5. Dense linear algebra now lives in `surrogate`: recommend the shared module of Q9 b only when a second user appears.
+
+## For the lead: roadmap entries
+
+> Proposed status: done
+
+> Fan breakdown part H3 (docs/fan-project-breakdown.md). ADR 0621, 2026-11-16. DONE (reduced-order tier only). Library only, opt-in (no case key, no MCP tool, no default changed): design::surrogate is ordinary kriging with a Matern 5/2 correlation (squared exponential opt-in), length scales and an optional nugget fitted by maximum likelihood from ten starts with the analytic gradient, a 1e-8 jitter, prediction with the mean-uncertainty term and leave-one-out from one factorisation; design::bayes proposes the next variant by expected improvement after a Latin-hypercube start, imputes failed points at m + s and multiplies by a failure model, takes constraints by feasibility probability, believes pending and batch points at their mean, sorts the observations so the ledger line order does not matter, and drives a ledger Model with the prediction in the provenance of each entry and a surrogate_summary entry naming the fitted model and its parents. Checks: two-point closed form within 2.7e-15, likelihood gradient within 1e-9, leave-one-out within 2e-15 of refits, EI within 3e-14 of quadrature; coverage 0.938 on prior draws (0.865 with a wrong length scale), hyperparameters recovered (median length scale 0.174 for 0.2); the Branin minimum within 1 percent on 20 of 20 seeds in a median of 28 evaluations (random search 0 of 20), Hartmann 6 on 6 of 10 within 55 evaluations against CMA-ES 1 and DE 0 at 200, a failure disc avoided (3 percent failed against 86 percent without the failure handling), noisy Branin 20 of 20, a constraint 10 of 10; on the reduced-order fan (stagger, chord and camber scales, power at three impedance points) 10 of 10 runs within 1 percent of a 9261-point grid optimum by evaluation 22, with every failure located; ledger resume, shuffled lines, worker counts and replay bit-equal; baseline_hashes and the design and tools-list tests unchanged. The batch believer first missed its spread check and was corrected under a recorded amendment. Eleven of twelve mutations caught (the imputation sign survived, as registered). Not covered: multi-fidelity joining (H7), multi-objective EI, the study method and the MCP tool; every number ranks variants of the model, not real fans (no measured data).
+
+> Follow-up proposed: Gaussian-process study method and MCP tool. Deps F-698, F-702. Acceptance: a study with method gp_ei runs through the study store and the design MCP tools with the same entries as bayes::run for the same spec and seed (bytes equal), the tools-list golden changes only by the listed addition, and every F-698 check keeps its result.
+
+> Follow-up proposed: Robust expected improvement on multimodal functions. Deps F-698. Acceptance: on Hartmann 6 (n0 30, budget 200, seeds 1 to 10) at least 9 of 10 runs within 1 percent of the minimum with hyperparameter averaging or a registered exploration restart, every F-698 check keeps its result, and a check with the failure classifier off separates imputation at m + s from m - s (the surviving mutation M6).
+
+> Follow-up proposed: Stall pre-check for the fan initial design. Deps F-698, F-697. Acceptance: on the F-698 R1 set-up the failed share of the 50 evaluations falls below 0.3 on every seed from 1 to 10 while R1 still holds on 9 of 10, with the pre-check evaluations of the reduced-order model counted in the ledger.
