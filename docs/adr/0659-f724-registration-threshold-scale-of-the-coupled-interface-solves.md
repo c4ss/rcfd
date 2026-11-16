@@ -389,3 +389,48 @@ such inputs too, the one-line fallback is to have `sliding_step` call `sliding_s
 > F-721 note: append "Threshold scale: F-724 (ADR 0659); periodic_sliding_step_coupled now equals the base on F-720's uniform flows."
 
 > F-710 note: append "Threshold relative to the targets' term magnitudes since F-724 (ADR 0659)."
+
+## Amendment 3 (2026-11-16, at the lead's request, written before the code change and before any further run)
+
+The lead does not accept the default change of addendum 1 (D3's branch "FluxScale as the default of `sliding_step`"): rule
+3 and the brief keep every default bit-identical, and a default change goes to the maintainer. No limit of any check is
+changed.
+
+**The default restored.** `sliding_step` calls `sliding_step_with(.., PartCoupling::LargestTarget)`: the decision of ADR 0638
+D3 with the same expression and the same operations, so every default result is that of main 14b155cd (whose `rcfd-fv` is
+that of adc8402f: `git diff adc8402f 14b155cd -- crates/rcfd-fv crates/rcfd-mesh` is empty). `FluxScale` stays reachable
+through `sliding_step_with` (opt-in). `periodic_sliding_step` (`Off`) and `periodic_sliding_step_coupled` (`FluxScale`,
+opt-in already) are unchanged. FL and FLc no longer decide anything (D3's branch is now the opt-in one); their numbers stay
+as recorded.
+
+**How the checks are read now.**
+
+- E1, E1u and E3, X3, NC2 were measured at e1ed0432, where `sliding_step` was `sliding_step_with(.., FluxScale)`: the same
+  code as today's opt-in `sliding_step_with(.., FluxScale)`. Their recorded numbers stand as the results of the opt-in path
+  against F-710's step (E1) and against the uncoupled step (E3). Their tests, which call `sliding_step`, become ignored
+  records of that run (E3's would now fail by design: the restored default couples AX's coincidence steps on rounding, as
+  NC2 showed). They are re-checked on the opt-in path by new tests with the same limits:
+  - **E1o**: ADR 0638's loop on UC, U2, U3, LP driven by `sliding_step_with(.., FluxScale)`; on every step
+    `LargestTarget` from the same inputs; bit-equal every step; on UC the limits of E1u (`1e-10`; `1e-12`) and NC3 (`Off`
+    differs exactly on 8, ..., 48).
+  - **E3o**: AX driven by `sliding_step_with(.., FluxScale)`; against `Off` bit-equal on all 48 steps, velocity `<= 1e-10`;
+    X3 (8 parts exactly on `n % 8 == 0`, 1 elsewhere); NC2 (`LargestTarget` differs from `Off` on at least one step).
+- K1, K1r, K2, E2, NC1 concern `periodic_sliding_step_coupled`, unchanged: read as before, not re-run.
+- **D0 (new, the lead's point 3)**: the default `sliding_step` against **R0**, a replica in the test file of main's
+  `sliding_step` (copied from `crates/rcfd-fv/src/sliding.rs` at adc8402f: its `sliding_step`, `coupling_faces` and
+  `coupled_balance`, the same operations in the same order, calling the public `interface_balance` and `graph_balance`);
+  ADR 0638's loop driven by the default `sliding_step` on UC (50), U2 (100), U3 (40), LP (20) and AX (48); every field of
+  the step data (`mesh_flux`, `phi_old`, `old_defect`, `vol_old`, both residuals, interface faces, angles) bit-equal on every
+  step. Limit: no step differs. **D0n** (its control): on AX, R0 against `sliding_step_with(.., FluxScale)` differs on at
+  least one step (the replica is the coupled rule of F-710, not the opt-in rule).
+
+**Runs.** Once each: the new tests E1o, E3o, D0 (with D0n) of `sliding_threshold_scale_f724`; `rcfd-api` `baseline_hashes`;
+the named sliding suites of B (`rcfd-fv` lib, `sliding_coincidence_f710`, `sliding_interface_f250`,
+`sliding_periodic_coincidence_f720`, `sliding_periodic_coupled_f721`, `sliding_periodic_f304`, `sliding_reimaging_f704`,
+`step_consistent_paths_f443`; `rcfd-api` `sliding_coincidence_f710`, `sliding_sector_coincidence_f730`,
+`sliding_sector_case_f711`, `sliding_case_f303`, `dynamic_mesh`, `wall_pressure_case_f358` au2). The mutations MU2 and MU5
+(which act on the FluxScale branch of `sliding_step`) were caught by E3 and E1 at e1ed0432 on the same branch code; they are
+not re-run.
+
+**Decision rule.** Unchanged, with E1o and E3o in place of E1 and E3 and with D0 added to the checks that must be met.
+`FluxScale` as the default of `sliding_step` moves to the open questions that need the maintainer (Q5, next to Q4).
