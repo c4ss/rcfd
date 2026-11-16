@@ -991,8 +991,9 @@ pub struct SolidModel {
     supports: Vec<ElasticSupport>,
     /// ADR 0584 D1: the linear paths take a hyperelastic material on Beam2, Shell4 and Shell3 elements (default `false`).
     hyperelastic_structures: bool,
-    /// ADR 0614 D2: the nonlinear driver evaluates an Incompatible Hex8 with the stabilisation of its modes (default `false`).
-    incompatible_stabilisation: bool,
+    /// ADR 0614 D2: the nonlinear driver evaluates an Incompatible Hex8 with the stabilisation of its modes (default `Off`);
+    /// ADR 0630 D3: by the rule of its coefficient.
+    incompatible_stabilisation: crate::nl_incompatible::IncompatibleStabilisation,
 }
 
 impl SolidModel {
@@ -1005,20 +1006,26 @@ impl SolidModel {
             loads: Vec::new(),
             supports: Vec::new(),
             hyperelastic_structures: false,
-            incompatible_stabilisation: false,
+            incompatible_stabilisation: crate::nl_incompatible::IncompatibleStabilisation::Off,
         }
     }
 
     /// Whether the nonlinear driver stabilises the modes of an Incompatible Hex8 (ADR 0614 D2).
     pub fn incompatible_stabilisation(&self) -> bool {
+        self.incompatible_stabilisation != crate::nl_incompatible::IncompatibleStabilisation::Off
+    }
+    /// The rule of the coefficient of the stabilisation of the modes of an Incompatible Hex8 (ADR 0630 D3; `Off` without the
+    /// opt-in).
+    pub fn incompatible_stabilisation_rule(&self) -> crate::nl_incompatible::IncompatibleStabilisation {
         self.incompatible_stabilisation
     }
     /// Opts in (`true`) to the stabilisation of the modes of the Incompatible Hex8 at finite strain (ADR 0614 D1, D2,
     /// [`crate::nl_incompatible`]): against the spurious hourglass mode of the element under large compression. Off (the
     /// default), the nonlinear driver evaluates the element of ADR 0608. The linear paths are the same either way (the
-    /// stabilisation vanishes at rest).
-    pub fn set_incompatible_stabilisation(&mut self, on: bool) {
-        self.incompatible_stabilisation = on;
+    /// stabilisation vanishes at rest). ADR 0630 D3: a rule of [`crate::nl_incompatible::IncompatibleStabilisation`] selects
+    /// the coefficient (`true` is `RestStress`, the coefficient of ADR 0614; `false` is `Off`).
+    pub fn set_incompatible_stabilisation(&mut self, on: impl Into<crate::nl_incompatible::IncompatibleStabilisation>) {
+        self.incompatible_stabilisation = on.into();
     }
 
     /// Whether the linear paths take a hyperelastic material on Beam2, Shell4 and Shell3 elements (ADR 0584 D1).

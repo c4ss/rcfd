@@ -1382,7 +1382,8 @@ impl Integrator {
             // ADR 0614 D4: a stabilised model's element at its stabilised modes, with the energy of the stabilisation.
             let opted = match crate::hex8x::opted(mesh, e) {
                 Some(crate::mesh::SolidFormulation::Incompatible) => {
-                    let stabilised = model.incompatible_stabilisation();
+                    // ADR 0630 D4: the modes and the energy of the model's rule.
+                    let stabilised = model.incompatible_stabilisation_rule();
                     let (modes, strains) = crate::nl_incompatible::modes_and_strains_with(
                         &coords,
                         material,
@@ -1391,8 +1392,10 @@ impl Integrator {
                         &context,
                         stabilised,
                     )?;
-                    if stabilised {
-                        w += crate::nl_incompatible::stabilisation_energy(&coords, material, &ue, &modes, &context)?;
+                    if stabilised != crate::nl_incompatible::IncompatibleStabilisation::Off {
+                        w += crate::nl_incompatible::stabilisation_energy_with(
+                            &coords, material, &ue, &modes, &context, stabilised,
+                        )?;
                     }
                     Some(strains)
                 }
