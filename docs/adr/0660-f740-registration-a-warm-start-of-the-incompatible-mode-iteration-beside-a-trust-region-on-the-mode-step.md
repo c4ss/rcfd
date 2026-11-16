@@ -351,3 +351,138 @@ not a new registered run. It is the fast test on the path of W (LW1, LW3).
 The mutations are run, each once, on a scratch copy of the commit with the amendment 1 tests, so that every default test
 passes unmutated; "caught" is a default test of that copy that fails under the mutation (as ADR 0658 amendment 2). MT2, which
 was expected to be caught by TR2, can then be caught only by TR1 or by the solves of T (which bind no limit); that is recorded.
+
+## Addendum 1: results (2026-11-16)
+
+The registered run was made once on the test commit 96496cff (`run1.log` in the scratch folder; 35 s, 25 s, 77 s, 2 s, 21 s);
+the corrected seed test and the met rows of amendment 1 once each on 504113c4 (`run2.log`; 46 s and 10 s, every row of the
+local records identical to the registered run); the mutations once each on a scratch copy of 504113c4 (A1.3; `mutations.log`,
+`mut-M*.log`); S5, S6, S7, B6 and `docs_site` once (`s5-baseline.log`, `fmt.log`, `clippy.log`, `s7-lib.log`, `s7-tests.log`,
+`b6.log`, `docs-site.log`). No limit, set-up, seed or measure was changed after a run. No test is a heavy record (the longest
+takes 77 s).
+
+### Results
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| M0 eight meshes | `> 0` | as ADR 0658 (block `0.6977`, `0.2179`, `0.6648`, `0.0762`; cantilever `0.8557`, `0.6113`, `0.6611`, `0.0773`) | yes |
+| M0 seeds of ADR 0658 | `> 0` | `0.0680`, `0.0957`, `0.1788` | yes |
+| M0 three more seeds (A1.1) | `> 0` | `0xF740_0001` `0.2024`, `0xF740_0002` `0.0486`, `0xF740_0004` `0.1598` (`0xF740_0003` refused by the constructor as inverted, replaced) | yes (after the amendment) |
+| M1 | `27`, `343`, `9`, `171`; `343` per seed | all as registered | yes |
+| FR3 (22 values) | `<= 1e-6` | every value within the printed digits (largest as ADR 0658, `7.3e-8`) | yes |
+| WB1 `e_R`, `e_w` | `<= 0.15` | `0.1202`, `0.0406` | yes |
+| WB2 | `<= 0.15` | `0.1278`, `0.0870` | yes |
+| WB3 | `<= 0.10` | `0.0664`, `0.0349` | yes |
+| WB4 (DB4) | `<= 0.10` | `0.0750`, `0.0287` (10 increments, no halving) | yes |
+| WC1 `e_P`, `e_d` | `<= 0.15` | `0.0580`, `0.0058` | yes |
+| WC2 | `<= 0.15` | `0.0694`, `0.0045` | yes |
+| WC3 | `<= 0.10` | `0.0203`, `0.0027` | yes |
+| WC4 | `<= 0.10` | `0.0297`, `0.0028` | yes |
+| WR1 (`0xF739_0001`) | `<= 0.10` | `0.0743`, `0.0495` | yes |
+| WR2 (`0xF739_0002`) | `<= 0.10` | **`0.0821`, `0.0441`** (11 increments, 2 halved; R and S fail here) | yes |
+| WR3 (`0xF739_0003`) | `<= 0.10` | **`0.0787`, `0.0490`** (10 increments, no halving; R and S fail here) | yes |
+| WR4 to WR6 (A1.1) | `<= 0.10` | `0.0787`, `0.0508`; `0.0753`, `0.0387`; `0.0814`, `0.0538` | yes (after the amendment) |
+| SLW, negative count | `0` | `0` on all fourteen set-ups | yes |
+| SLW, lowest / max diagonal | `> 0` | block `6.63e-3`, `6.01e-3`, `1.94e-3`, `1.81e-3`; cantilever `1.57e-5`, `1.53e-5`, `5.16e-6`, `4.54e-6`; seeds `1.74e-3`, `1.94e-3`, `1.50e-3`; `2.01e-3`, `1.49e-3`, `1.46e-3` | yes |
+| T (measured) | no limit | **passes** twelve of fourteen set-ups (the eight meshes, seed `0xF739_0001`, the three more seeds; values equal to W's within `5e-14`); **fails** on seeds `0xF739_0002` (element 420, 25 local iterations, load factor `0.9406`) and `_0003` (element 476, the step rejected 21 times, `0.8469`) | measured |
+| LW0 | `0` elements | `0` (all 512 warm records from the committed modes: exactly one iterate) | yes |
+| LW2 | `0` | `0` | yes |
+| NCL | fails | fails (stall at `|r|_2 = 223.1`, as ADR 0658 E1) | yes |
+| LW1 | converged within 25 | converged in 4 iterates (`|r|_2` `185`, `0.18`, `1.3e-5`, `8.1e-11`, no halving); the modes moved `0.52` per cent from `alpha_b` | yes |
+| LW3 | succeeds; `<= 1e-12` | succeeds; `0.0` | yes |
+| TR1 at `u_T`; at `u_b` | `< 1`; `> 1e-4` | `1 - O(1e-6)` (stall), smallest `rho` `0.573`; the same, `0.135` | yes |
+| TR2 | converged; `<= 1e-7` | **NaN: not converged** (18 iterates, `|r|_2` from `1.056e5` to `99.03`, then constant; `rho` near `0.6`, `lambda` `2.6e-6`; refused after 21 rejections) | **no** (known miss) |
+| NCS2 | S fails on each | fails on `0xF739_0002` (element 420) and `_0003` (element 476), as ADR 0658 | yes |
+| NCW0 | `0` | `0` | yes |
+| NCT | `> 0` | `240` | yes |
+| NCW1 | `> 0` | `252` | yes |
+| B6 | pass | the four bit records pass | yes |
+| S5 | pass | 3 passed, 1 ignored | yes |
+| S6 | clean | `cargo fmt -p rcfd-fem --check`, `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean | yes |
+| S7 | pass | `--lib` 14; `si_eas_hg7` 4, `si_eas_hg6` 4, `si_eas_hg5` 3, `si_eas_hg3` 4, `si_hex8x` 8, `si_eas` 8, `si_eas_hg` 8, `si_eas_hg2` 3 passed | yes |
+
+Reported (no limit). W against S where both converge: within `3.4e-14` (the same root; not bitwise, NCW1). S passes the three
+more seeds (as W and T): these new seeds need no remedy beyond S, so the seeds where the warm start is needed remain the two of
+ADR 0658. `docs_site` passes (2).
+
+**T, read.** On the regular states T reaches the root (twelve set-ups, the same values as W). Where the cold iteration has
+to cross the region that ADR 0658 E2 found (seeds 2 and 3), T fails too, and its local records show how: from `alpha = 0` at
+`u_T`, and even at the regular state `u_b` (whose root the backtracked Newton iteration finds), the LM iterates fall to `|r|_2
+~ 100` and stay there with gain ratios near `0.6`. That is the classical approach to a stationary point of the merit `|r|^2`
+with `r != 0`, which needs a near-singular `J` (arithmetic 6). Whether `J^T r` vanishes there was not measured; this is the
+reading of the record, not a verified diagnosis. The warm start avoids the region altogether: from the committed modes the
+same state is reached in four Newton steps without a halving (LW1).
+
+### Deviations
+
+- **TR2** (amendment 1): T from `alpha = 0` does not converge at `u_b`; the known-miss record is
+  `local_records_at_the_stall_of_seed_3_known_miss`, the met rows run as `..._met_rows`.
+- **The seed test of the three more seeds** was defective (amendment 1); the corrected test ran once. Amendment 1 says the
+  refused mesh was that of "the first seed tried"; it was the third, `0xF740_0003` (the test builds all three meshes before any
+  solve, so the panic came after seeds `0xF740_0001` and `_0002` had been built). The ignore text of the defective record
+  repeats the slip; the rule and the corrected test are unaffected.
+- **Arithmetic 6** left T's behaviour open; it is worse than hoped: T fails at a regular state where plain backtracked Newton
+  converges.
+- **MT2** was expected to be caught by TR2 (A1.3 noted that after the amendment only TR1 or NCT could catch it): it is caught
+  by both.
+
+### Mutations (scratch copy of 504113c4, the default tests of `si_eas_hg8.rs`, each run once; A1.3)
+
+| Id | Caught | By |
+|---|---|---|
+| MW1 (the driver ignores the warm start) | **yes** | LW2 (512), LW0 (512), NCW1 (`0` bits), WR2, WR3 and their SLW (W fails as S) |
+| MW2 (the start modes stored) | **yes** | LW0 (512), LW3 (`5.2e-3`), WR2 and its SLW |
+| MW3 (the start not read) | **yes** | LW3 (the warm evaluation fails), NCW1, WR2, WR3 and their SLW |
+| MW4 (no fallback to `alpha = 0`) | **no** (registered as possibly not caught) | every check passes: on these set-ups no failed warm iteration is rescued by the cold one |
+| MW5 (the warm start always on) | **yes** | NCW0 (40), NCW1, NCS2 on both seeds (the cold S becomes warm and passes) |
+| MT1 (the driver ignores the trust region) | **yes** | NCT (`0` bits) |
+| MT2 (the step's sign flipped) | **yes** | TR1 at both states (no accepted step), NCT (T fails) |
+| MT3 (`lambda` not increased on a rejection) | **no** (registered as possibly not caught) | every check passes: the records reach their stall either way |
+| MT4 (every trial accepted) | **yes** | TR1 at both states (`|r|` rises by factors `72` and `196`, `rho` down to `-4.1e4`) |
+
+Seven of nine caught: every mutation registered as catchable (MW1, MW2, MW3, MW5, MT1, MT2) and MT4; MW4 and MT3 were
+registered as possibly not caught and are not.
+
+### Not run
+
+Nothing registered was skipped. The whole rcfd-fem suite was not run (the daily gate runs it, rule 7): `si_eas_hg8.rs` (its
+default tests and its ignored records each once), the lib tests, `si_eas_hg7`, `si_eas_hg6`, `si_eas_hg5`, `si_eas_hg3`,
+`si_hex8x`, `si_eas`, `si_eas_hg`, `si_eas_hg2`, B6, S5, `docs_site`. Not run by design (Limits): the warm start with a history
+material, on the transient and rotating paths, or with the line search, and T with the warm start.
+
+### Decision
+
+**partial**, by the registered rule: B6, S5, NCW0 met (no default bit changed), and every row of the registered remedy W met
+on all fourteen set-ups (WB1 to WB4, WC1 to WC4, WR1 to WR6, SLW), with LW0 to LW3, NCL, TR1, NCS2, NCT, NCW1, S6, S7; every
+mutation registered as catchable caught; but TR2 missed (the trust-region step does not converge from `alpha = 0` at the
+regular state `u_b`), and WR4 to WR6 and the M0 rows of the three more seeds were met only after the amendment of a defective
+set-up. On the substance of F-740: the warm start passes the two seeds where the line search with the backtracking (R) and the
+decrease test (S) fail, with the loaded state positive definite; the trust region measured beside it does not.
+
+### Remaining questions
+
+1. **T.** Options: (a) record the LM step on the residual merit as measured and not recommended (it stalls at a nonzero
+   residual on the hard seeds and at a regular state), and keep it opt-in; (b) a follow-up measuring `J^T r` and the smallest
+   singular value of `J` at T's stall, to confirm the stationary-point reading; (c) an energy-based trust region (for a
+   hyperelastic material and fixed `u` the mode equations are the gradient of the element energy, so a trust region on the
+   energy could use the negative curvature of an indefinite `K_aa`); (d) remove the opt-in. Recommendation: (a); (c) only if
+   a case appears that W does not handle.
+2. **Default.** W stays opt-in; making it the default changes default results where a default solve fails today, and the
+   length of the committed element states (nine values per Incompatible Hex8). Open for the maintainer (not taken).
+3. **The recommended opt-in** for the incompatible element at finite strain on distorted meshes: W (warm start with the
+   backtracking and the decrease test, no line search) passed every set-up tried here; S and R each failed two.
+   Recommendation: document W as the preferred opt-in set, S as the stateless fallback.
+4. **History materials and the other paths.** The warm start is implemented for any material (the modes after the material
+   state) but run only on a hyperelastic one; the driver's active-set record would read the nine values as a further point; the
+   transient energy record stays cold. Recommendation: a follow-up, proposed below, before W is recommended beyond hyperelastic
+   static solves.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> Structural solver, intermediate tier. Follow-up of F-739 (ADR 0658). PARTIAL. ADR 0660, 2026-11-16: an opt-in warm start of the local mode iteration of the stabilised incompatible-modes Hex8 (rule L) from the modes of the committed state (SolidModel::set_incompatible_mode_warm_start: the nine converged modes kept after the material state of the element, only with the opt-in, committed and rolled back with it; a failed warm iteration falls back to alpha = 0), with the backtracking and decrease test of ADR 0658 and without the line search (the remedy W), on the eleven set-ups of ADR 0658 and three more seeds of the 8^3 block at 0.25 h (0xF740_0001, _0002, _0004; _0003 refused as an inverted mesh), against the F-bar Hex8 with the ADR 0636 tolerances. Met on all fourteen: punch reaction within 12.0, 12.8, 6.6, 7.5 per cent on the blocks and 7.4 to 8.2 per cent on the six seeds, corner bulge within 8.7 per cent, tip reaction within 6.9 per cent, shortening within 0.6 per cent, loaded state positive definite; in particular on seeds 0xF739_0002 and _0003, where the line search with the backtracking and the decrease test both fail (8.2 and 4.4, 7.9 and 4.9 per cent); at the stall state of ADR 0658 E1 the warm iteration converges in four Newton steps where the cold one stalls at |r| = 223. An opt-in trust-region (Levenberg-Marquardt) mode step (set_incompatible_mode_trust_region: QR of the damped least-squares step, gain-ratio acceptance) measured beside it from alpha = 0 passes twelve of fourteen set-ups and fails on the same two seeds; its record stalls at a nonzero residual (|r| ~ 99) even at a regular state where backtracked Newton converges (TR2 missed, a known miss). No default bit changed (the bit records of ADR 0506, 0608, 0614, 0630, the ADR 0655 and 0658 tests, the rcfd-api baseline hashes pass; a default model commits no modes). Seven of nine mutations of the two updates caught by the item's own checks (all those registered as catchable). Not covered: history materials, the transient and rotating paths and the line search with the warm start, the trust region with the warm start, statistics beyond fourteen set-ups.
+
+> F-739 (note, ADR 0660, 2026-11-16): the two seeds where R and S fail (0xF739_0002, _0003) are passed by the warm start of the mode iteration from the committed modes (F-740), at 8.2 and 7.9 per cent in the punch reaction, positive definite.
+
+> Follow-up proposed: The warm start of the incompatible-mode iteration on a history material and on the transient and rotating paths. Deps F-740. Acceptance: Every limit not stated here is registered in the ADR before the run. The remedy W of ADR 0660 with a J2 material on the punch block of ADR 0636 and on one distorted mesh of ADR 0649, and on the nonlinear transient path (its energy record from the committed modes): the results within the ADR 0636 tolerances of the F-bar Hex8 on the same set-ups, the active-set record of ADR 0515 unchanged by the committed modes, the energy record consistent with the driver's modes; the mutations of the new code caught by the item's own checks; the default bits unchanged.
