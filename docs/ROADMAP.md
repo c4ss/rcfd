@@ -9080,7 +9080,7 @@ fixed by the item's registration ADR before any code.
     maintainer's decision; questions QA1 to QA5 of addendum 1. P3 is met after F-456 (ADR 0353, 2026-11-12): median 82.6
     ms against 100; viability remains the maintainer's decision.
 - [ ] **F-448** Electron Studio to parity with rcfd-studio
-  - depends on: F-447
+  - depends on: F-447, F-824, F-825, F-827, F-828, F-829, F-830, F-831, F-832, F-801, F-802, F-803, F-804, F-805, F-806, F-807, F-808, F-809, F-810, F-811, F-812, F-813, F-814, F-816, F-817, F-822
   - acceptance: An Electron shell in TypeScript over the service and the bulk route chosen by F-447 passes every parity
     check of ADR 0350 section 5 (the docs/ui-restart-plan.md section 6 list and the Studio checks added since),
     automated with Playwright where a check can be automated and by the maintainer's view-and-report where it cannot;
@@ -14095,3 +14095,223 @@ fixed by the item's registration ADR before any code.
     on the same patch) reported for the ADR 0614 and the new coefficient; the ADR 0608 checks within their limits; the
     default bits unchanged.
   - note: Follow-up of F-693 (ADR 0628, 2026-11-15).
+
+## Electron Studio (F-800 to F-832)
+
+Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0800](adr/0800-electron-studio-roadmap.md)). The F-800 to F-849 block is reserved for this roadmap (maintainer, 2026-11-16). F-448 depends on the parity subset.
+
+- [ ] **F-800** Electron Studio: go-ahead and the apps/studio-web layout
+  - depends on: F-447
+  - acceptance: The maintainer's go-ahead for F-448 (given 2026-11-16, ADR 0800 Q1) is in ADR 0800; apps/studio-web/
+    exists outside the Cargo workspace with exact versions and a committed lock file; every dependency is listed with
+    its licence in THIRD_PARTY_LICENSES.md and justified in ADR 0800 or a follow-up ADR (G5); crates/rcfd-
+    cli/tests/workspace_graph.rs and every existing test pass unchanged.
+  - note: ADR 0800. Go-ahead given 2026-11-16; the dependency list is justified in this item. Traces: G5, G14; PRODUCT
+    Stack.
+- [ ] **F-801** Electron Studio: hardened shell and test harness
+  - depends on: F-800
+  - acceptance: An Electron main process, a sandboxed and context-isolated renderer with nodeIntegration off, a strict
+    Content Security Policy, no remote content and an allow-list of IPC calls through the preload script (G10); a
+    Playwright test that drives the packaged shell and asserts each of those settings; cold start to an empty project
+    view within the P10 limit of docs/studio-guardrails.md G9 on the maintainer's machine.
+  - note: ADR 0800. Traces: G9 (P10), G10, G13; PRODUCT Stack.
+- [ ] **F-802** Electron Studio: design tokens and accessible primitives from DESIGN.md
+  - depends on: F-801
+  - acceptance: The DESIGN.md tokens (colour, type ramp, rules, pictogram grid) as one CSS token file and a TypeScript
+    export of the same values; the primitives of DESIGN.md Components (buttons, segmented toggles, inputs, tabs, select,
+    switch, table, slider, pictograms) built on React Aria Components; a unit test that computes the contrast of every
+    text and graphic token pair against its ground and fails below WCAG 2.2 AA (G8); a keyboard test of each primitive;
+    a view-and-report step for the maintainer.
+  - note: ADR 0800. Traces: G1, G8; DESIGN Colors, Typography, Shapes, Components. The reference is apps/studio-
+    prototype/.
+- [ ] **F-803** Electron Studio: service client for control and events
+  - depends on: F-801
+  - acceptance: A TypeScript client of rcfd-service/1 in the main process (JSON-RPC over TCP or stdio, events.poll long-
+    poll), with reconnect after the service restarts; P1 and P2 of ADR 0350 met again through the product shell; no
+    existing service method, reply shape or golden changes (G4); a test that the renderer cannot reach the service
+    except through the IPC allow-list.
+  - note: ADR 0800. Traces: G2, G4, G7, G9 (P2); PRODUCT Operating Context.
+- [ ] **F-804** Electron Studio: bulk field data by the R2 reader and the R1 route, bit for bit
+  - depends on: F-803
+  - acceptance: The Node reader of store.rts (R2) for local projects and the opt-in data.* route (R1) for a remote
+    service, moved from bench/electron/io/ into the product with tests; every value the renderer receives equals the
+    Rust reader's value bit for bit for the ADR 0350 data sets (P12, G3); P4 met through the product shell.
+  - note: ADR 0800. Traces: G3, G9 (P4), G2; ADR 0350 addendum 1.
+- [ ] **F-805** Electron Studio: project home and the live project folder
+  - depends on: F-803, F-802
+  - acceptance: Open a project folder, list its cases, meshes, runs and notes through the engine (docs/ui-restart-
+    plan.md section 8, ADR 0173); an edit made outside the Studio (Claude Code, the CLI, a text editor) shows within 2 s
+    without a reload; the Studio keeps no project state of its own (G12); a Playwright test of each; a view-and-report
+    step.
+  - note: ADR 0800. Traces: G12; PRODUCT Operating Context. Surface not yet designed: shape it with impeccable inside
+    the DESIGN.md system before building.
+- [ ] **F-806** Electron Studio: run list and run state
+  - depends on: F-805
+  - acceptance: The runs table of DESIGN.md (case, id, state pictogram and word, result, sort and filter, selection that
+    fades the others by colour and never fades a failure); run state from the runner, updated live; a test that closes
+    and kills the Studio during a run and shows, on restart, that the run went on and its true state is displayed (G7);
+    a view-and-report step.
+  - note: ADR 0800. Traces: G6, G7, G8; DESIGN Runs table, Named Rules (Fade by Colour).
+- [ ] **F-807** Electron Studio: run control (quick run, stop, pause, queue)
+  - depends on: F-806
+  - acceptance: Start a case as a quick run, stop, pause and queue through the runner service only; each action shown in
+    the run list within P2; a test for each action and for a refused action (the error names the problem and the
+    recovery).
+  - note: ADR 0800. Traces: G2, G7; PRODUCT Capabilities (parity: quick run, stop).
+- [ ] **F-808** Electron Studio: field viewport on three.js WebGPU
+  - depends on: F-804, F-802
+  - acceptance: Mesh and fields on surfaces drawn by three.js WebGPURenderer with a TSL material that colours from the
+    raw scalar through a lookup table, with the WebGL2 fallback; the colour of every vertex equals rcfd-render's colour
+    map for the same value (G3, a test over the full range and the end points); the legend drawn from the same table;
+    hover shows the value at the cursor; a mesh-grid toggle; P7 and P8 met; a view-and-report step.
+  - note: ADR 0800. Traces: G3, G9 (P7, P8); DESIGN Field view, Named Rules (Data Owns the Field).
+- [ ] **F-809** Electron Studio: derived pictures (iso-surfaces, streamlines, cut planes, vectors)
+  - depends on: F-808
+  - acceptance: Each derived picture computed by the engine (rcfd-render or a registered opt-in service method) or, if
+    computed in the Studio, matched against the engine's reference value for value within a tolerance registered before
+    the code; a view that does not apply to a case (for example a cut plane on a 2D case) is disabled with the reason
+    shown (G6).
+  - note: ADR 0800. Traces: G3, G6, G2; PRODUCT Operating Context.
+- [ ] **F-810** Electron Studio: run bands and linked time scrubbing
+  - depends on: F-808, F-811
+  - acceptance: The run bands of DESIGN.md on one shared time axis, each end marked with its pictogram and word; one
+    scrubber line with its own flag lane moves the field, the residual cursor, the monitor readouts and the snapshot
+    counter of the selected run together; Follow live for a running run; P5 and P6 met; a test that the field, residual
+    and monitor values at a scrub position all belong to the same snapshot; a view-and-report step.
+  - note: ADR 0800. Traces: G3, G9 (P5, P6); DESIGN Run bands (signature), Named Rules (One Live Thing).
+- [ ] **F-811** Electron Studio: residual and monitor plots
+  - depends on: F-803
+  - acceptance: Residuals and monitors fetched once and then by increments (ADR 0353); every plot range holds every
+    value it draws; a run without a series says so in words with its pictogram, never with another run's data; P3 met.
+  - note: ADR 0800. Traces: G3, G6, G9 (P3); PRODUCT Principle 4.
+- [ ] **F-812** Electron Studio: case editor validated by the engine's schema
+  - depends on: F-805, F-825
+  - acceptance: Open, edit and save a case through the engine's own schema and validation (no copy of either in the
+    Studio, G2); invalid input names the key, the problem and the fix; learner defaults first with advanced keys one
+    step away (PRODUCT Principle 5); round-trip test against the CLI's reading of the same file; a view-and-report step.
+    The editor is the F-825 surface plus case-level actions; every case key is reachable (G15).
+  - note: ADR 0800. Traces: G2, G12; PRODUCT Principle 5. Surface not yet designed: shape it with impeccable first.
+- [ ] **F-813** Electron Studio: a learner's first path
+  - depends on: F-807, F-812
+  - acceptance: From an empty folder to a first honest result with the quick-start project, without CFD jargon on the
+    path; every empty state says what is missing and the next step; the disclaimers stay visible (G6); a Playwright walk
+    of the path; a view-and-report step by the maintainer as a first-time user. The short path hides nothing for good:
+    every capability stays one step away (G15).
+  - note: ADR 0800. Traces: G6; PRODUCT Users, Principle 5. Surface not yet designed: shape it with impeccable first.
+- [ ] **F-814** Electron Studio: Claude Code panel
+  - depends on: F-805
+  - acceptance: The Claude Code chat for the project through rcfd-claude: open sessions mirrored read-only, closed
+    sessions resumed and typed into, one writer per session, tool approvals by a conservative allow-list and never
+    approve-everything (G11); run ids and files in a reply link to the run or file in the Studio; a test for each rule.
+  - note: ADR 0800. Traces: G11; PRODUCT Positioning; DESIGN Claude Code panel.
+- [ ] **F-815** Electron Studio: compare two runs
+  - depends on: F-810
+  - acceptance: Two runs side by side or overlaid at the same time and the same colour range, with the difference field
+    where the meshes match and a stated refusal where they do not; a test that both views read the same snapshot time.
+  - note: ADR 0800. Traces: G3, G6; PRODUCT Operating Context.
+- [ ] **F-816** Electron Studio: WCAG 2.2 AA conformance, including the prototype's contrast debt
+  - depends on: F-806, F-808, F-810
+  - acceptance: Every parity check passable by keyboard alone with visible focus; names and roles for every control;
+    reduced motion respected; no text or state graphic below its WCAG 2.2 AA contrast; the debt recorded by the
+    DESIGN.md documenter fixed (running pictogram plain orange on white 2.51:1, text selection white on sky 2.28:1, the
+    residual u line sky on white 2.28:1); an automated check where a checker is approved under G5 and a written manual
+    pass otherwise.
+  - note: ADR 0800. Traces: G8; DESIGN Do's and Don'ts.
+- [ ] **F-817** Electron Studio: performance regression bench for the product shell
+  - depends on: F-808, F-810
+  - acceptance: A script anyone can run that repeats P2, P4, P5, P7, P8 and P10 of docs/studio-guardrails.md G9 against
+    the product shell and prints each against its limit; heavy cases run once by hand (house rule 7); results recorded
+    in ADR 0800.
+  - note: ADR 0800. Traces: G9.
+- [ ] **F-818** Electron Studio: dark theme
+  - depends on: F-802
+  - acceptance: A dark variant of every DESIGN.md token that keeps each hue's single job and passes the F-802 contrast
+    test; the field colour maps unchanged; DESIGN.md updated with the maintainer's approval.
+  - note: NEEDS THE USER: a dark theme is open in DESIGN.md; decide whether and when. Traces: G8; DESIGN Open.
+- [ ] **F-819** Electron Studio: large meshes and polyhedral fan meshes
+  - depends on: F-808, F-817
+  - acceptance: First picture, scrubbing and draw rate measured on a mesh of several million cells and on the FAN-01
+    polyhedral mesh with many patches; limits registered before the measurement; any miss stated with its numbers.
+  - note: ADR 0800. Traces: G9; PRODUCT Capabilities (large-mesh performance unmeasured), ADR 0350 section 6.
+- [ ] **F-820** Electron Studio: installers, signing and updates
+  - depends on: F-801
+  - acceptance: Packaged installers for the platforms the maintainer names, signed if the maintainer provides
+    certificates, with an update path that keeps the G10 settings; Electron on a supported release.
+  - note: NEEDS THE USER: packaging, signing and update policy are open in docs/studio-guardrails.md. Traces: G10.
+- [ ] **F-821** Electron Studio: Linux and macOS
+  - depends on: F-817
+  - acceptance: The F-817 bench and the parity tests run on Linux (and macOS if the maintainer asks), with WebGPU or the
+    WebGL2 fallback; misses stated with their numbers.
+  - note: NEEDS THE USER: platforms beyond Windows 11 are open in docs/studio-guardrails.md. Traces: G9.
+- [ ] **F-822** Electron Studio: tutorials that name the GUI
+  - depends on: F-813
+  - acceptance: Every tutorial that names rcfd-gui or rcfd-studio rewritten for the Electron Studio, or marked as CLI-
+    only; the docs site test passes.
+  - note: ADR 0800. Traces: G6; docs/ui-restart-plan.md section 6.
+- [ ] **F-823** Electron Studio: npm tests in CI
+  - depends on: F-801
+  - acceptance: The Studio's unit and Playwright tests run as a job in .github/workflows/ci.yml (ADR 0800 Q3, maintainer
+    2026-11-16), with npm ci from the committed lock file and Electron run headless; the job fails the workflow on any
+    test failure; docs/test-process.md names the job.
+  - note: ADR 0800 Q3 answered: in CI. Traces: G13.
+- [ ] **F-824** Electron Studio: capability inventory from the engine and a UI coverage test
+  - depends on: F-803
+  - acceptance: An inventory of every engine capability generated from the engine itself (settings.schema, the method
+    list of service.info, the MCP tool list, the CLI help), never kept by hand; a coverage report that maps each
+    capability to its UI path or to a recorded, dated exemption; a test that fails on an unmapped capability, run with
+    the Studio's tests (F-823); the first report lists today's gaps.
+  - note: ADR 0800 (G15 added 2026-11-16). Traces: G15, G2. Engine-side additions it needs (for example a stable list of
+    CLI commands) are additive and go through an ADR under G4.
+- [ ] **F-825** Electron Studio: schema-driven case and settings surface
+  - depends on: F-824, F-802
+  - acceptance: Every key of settings.schema gets a control generated from the schema (type, unit, range, enumeration,
+    default), laid out by learner-first disclosure: defaults and common keys first, advanced keys one step away and
+    never hidden for good; a new key added to the schema appears in the Studio with no Studio code change, shown by a
+    test that adds a key to a test schema; validation messages come from the engine.
+  - note: ADR 0800 (G15 added 2026-11-16). Traces: G15, G2, G8; PRODUCT Principle 5; DESIGN Inputs.
+- [ ] **F-826** Engine: UI metadata in the case schema (labels, units, ranges, advanced flag)
+  - depends on: F-824
+  - acceptance: Opt-in, additive metadata on settings.schema entries (human label, unit, recommended range, an advanced
+    flag, a one-line help text from the existing docs) so that F-825 lays keys out without a Studio-side table; no
+    existing key, golden, default or reply field changes (G4); docs/case-schema.md updated.
+  - note: ADR 0800, needs its own ADR before code (engine change, additive under G4). Traces: G15, G4.
+- [ ] **F-827** Electron Studio: one action layer for every UI action
+  - depends on: F-803
+  - acceptance: Every UI action is a typed, named action in one registry that calls the engine (a service method, an MCP
+    tool or a CLI command); a test that fails when a registered action has no engine equivalent (G16) or when a
+    component calls the engine outside the registry; the registry is the single source for the command palette (F-831),
+    undo (F-829) and action recording.
+  - note: ADR 0800 (G16 to G21 added 2026-11-16). Traces: G16, G20, G18, G2.
+- [ ] **F-828** Electron Studio: provenance inspector and reproduce-from-CLI
+  - depends on: F-810, F-827
+  - acceptance: Any number on screen opens its provenance (run id, snapshot, file, engine version, unit); every run
+    shows the CLI command that reproduces it; a test that a run started from the Studio and the same run started by that
+    command give bit-identical results on a quick-start case (G17); units come from the engine, never converted in the
+    Studio.
+  - note: ADR 0800 (G16 to G21 added 2026-11-16). Traces: G17, G3, G2; docs/provenance.md.
+- [ ] **F-829** Electron Studio: undo, safe deletes and edit conflicts
+  - depends on: F-827, F-805
+  - acceptance: Undo and redo for every edit made through the action layer; deleting a run, result or case is
+    recoverable (for example a project trash) or confirmed in words that name what is lost; a file changed by another
+    writer since the Studio read it is never overwritten silently, the conflict is shown with a choice; a test for each
+    (G18).
+  - note: ADR 0800 (G16 to G21 added 2026-11-16). Traces: G18, G11, G12.
+- [ ] **F-830** Electron Studio: explain in place from the engine's docs
+  - depends on: F-826, F-825
+  - acceptance: Help on every control, term and value taken from the engine's case schema help text (F-826), docs and
+    glossary, with no help text kept only in the Studio; every error message names the problem and the recovery, checked
+    by a test over the engine's error catalogue; a learner's view-and-report step (G19).
+  - note: ADR 0800 (G16 to G21 added 2026-11-16). Traces: G19, G2; PRODUCT Users, Principle 5.
+- [ ] **F-831** Electron Studio: command palette and keyboard shortcuts
+  - depends on: F-827, F-802
+  - acceptance: A command palette generated from the action registry that finds every action by name; shortcuts for
+    frequent actions with no conflicts (a test); a coverage test that every registered action is in the palette (G20);
+    everything usable from the keyboard alone (G8).
+  - note: ADR 0800 (G16 to G21 added 2026-11-16). Traces: G20, G15, G8.
+- [ ] **F-832** Electron Studio: responsiveness budget and cancellable work
+  - depends on: F-808, F-810
+  - acceptance: No engine or data work on the renderer's main thread: a test that records long tasks while opening a
+    run, loading fields and scrubbing and fails on any task over a limit registered before the measurement; every
+    operation longer than a registered threshold shows progress and can be cancelled, and cancelling leaves no partial
+    state (G21).
+  - note: ADR 0800 (G16 to G21 added 2026-11-16). Traces: G21, G9.

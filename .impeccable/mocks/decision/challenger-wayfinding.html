@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>rcfd Studio · run workspace · wayfinding</title>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#111;--g:#6E6E6E;--line:#D9D9D9;--y:#FFD200;--b:#2C7BE5}
+*{box-sizing:border-box}
+html,body{width:1440px;height:900px;overflow:hidden;margin:0}
+body{font:14px/1.35 "Hanken Grotesk","Segoe UI",sans-serif;color:var(--ink);background:#fff;font-variant-numeric:tabular-nums;display:grid;grid-template-rows:44px 96px 1fr 28px}
+button,select,input{font:inherit;color:inherit}
+button{border:1px solid var(--g);background:#fff;padding:5px 12px;border-radius:2px;cursor:pointer}
+button.p{background:var(--ink);color:#fff;border-color:var(--ink);font-weight:700}
+a{color:var(--b)}
+.sq{display:inline-grid;place-items:center;width:28px;height:28px;background:var(--ink);color:#fff;font-weight:800;font-size:15px;flex:none}
+header{display:flex;align-items:center;gap:6px;padding:0 16px;border-bottom:1px solid var(--line)}
+header b{font-size:16px;margin-right:18px}
+.proj{border:0;border-bottom:3px solid transparent;padding:12px 12px 9px;background:none;border-radius:0;color:var(--g)}
+.proj.on{border-color:var(--b);color:var(--ink);font-weight:700}
+header .r{margin-left:auto;display:flex;gap:10px;align-items:center;color:var(--g)}
+.band{background:var(--y);display:flex;align-items:center;gap:18px;padding:0 20px;border-bottom:3px solid var(--ink)}
+.band .sq{width:56px;height:56px;font-size:28px}
+.band .t{flex:1}.band .k{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.band .s{font-size:19px;font-weight:700}
+.band .s span{font-weight:500}
+.band .big{font-size:56px;font-weight:800;line-height:1;letter-spacing:-.02em}
+.band .id{font-size:12px;text-align:right}
+.band button.p{font-size:20px;padding:12px 24px}
+.band .hide{background:transparent;border-color:var(--ink);font-size:12px;padding:3px 8px}
+main{display:grid;grid-template-columns:430px 1fr 340px;min-height:0}
+section{min-height:0;border-right:1px solid var(--line)}
+.h{display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--line);font-weight:700}
+.h small{font-weight:400;color:var(--g);margin-left:auto}
+.th,.run{display:grid;grid-template-columns:1fr 100px 52px;gap:6px;padding:6px 14px}
+.th{font-size:12px;color:var(--g);border-bottom:1px solid var(--line)}
+.th button{border:0;padding:0;background:none;text-align:left;font-size:12px;color:var(--g)}
+.th button.s{color:var(--ink);font-weight:700}
+.run{border-bottom:1px solid var(--line);align-items:center}
+.run.sel{background:#EAF2FD;box-shadow:inset 4px 0 var(--b)}
+.run .c{font-weight:700;font-size:15px}.run .i{font-size:11px;color:var(--g);grid-column:1/-1}
+.st{display:flex;gap:6px;align-items:center;font-size:12px}
+.st .sq{width:18px;height:18px;font-size:11px}
+.n{text-align:right}
+.fail .c{text-decoration:underline wavy #111 1px;text-underline-offset:3px}
+.mid{display:grid;grid-template-rows:auto 1fr 200px;min-width:0;min-height:0}
+.tool{display:flex;gap:4px;padding:8px 14px;border-bottom:1px solid var(--line);align-items:center}
+.tool button.on{background:var(--b);border-color:var(--b);color:#fff}
+.tool label{margin-left:auto;display:flex;gap:6px;align-items:center}
+.vp{position:relative;margin:12px 14px;overflow:hidden;border:1px solid var(--ink)}
+.field{position:absolute;inset:0;background:linear-gradient(90deg,#00224e 0%,#35456c 10%,#666970 30%,#948e77 55%,#666970 75%,#35456c 100%)}
+.wake{position:absolute;left:36%;right:0;top:34%;height:32%;background:repeating-linear-gradient(90deg,rgba(0,34,78,0) 0 30px,rgba(0,34,78,.35) 30px 44px);border-radius:0 60px 60px 0}
+.cyl{position:absolute;left:30%;top:50%;width:84px;height:84px;margin:-42px;border-radius:50%;background:#F4F4F4;border:3px solid var(--ink)}
+.wall{position:absolute;left:0;right:0;height:10px;background:var(--ink)}
+.grid{position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgba(255,255,255,.35) 0 1px,transparent 1px 24px),repeating-linear-gradient(90deg,rgba(255,255,255,.35) 0 1px,transparent 1px 24px)}
+.legend{position:absolute;right:12px;bottom:18px;background:#fff;padding:8px 10px;border:1px solid var(--ink);width:260px;font-size:12px}
+.legend i{display:block;height:12px;margin:4px 0;background:linear-gradient(90deg,#00224e,#35456c,#666970,#948e77,#c3b369)}
+.legend div{display:flex;justify-content:space-between}
+.it{position:absolute;left:12px;top:14px;background:#fff;border:1px solid var(--ink);padding:6px 12px}
+.it b{font-size:64px;line-height:1;font-weight:800;letter-spacing:-.03em;display:block}.it span{font-size:12px;color:var(--g)}
+.syn{position:absolute;left:12px;bottom:18px;font-size:11px;color:#fff;background:rgba(17,17,17,.7);padding:2px 6px}
+.bot{border-top:1px solid var(--ink);display:grid;grid-template-columns:1fr 250px;grid-template-rows:auto 1fr;min-height:0}
+.scrub{grid-column:1/-1;display:flex;gap:12px;align-items:center;padding:8px 14px;border-bottom:1px solid var(--line)}
+.scrub input{flex:1;accent-color:var(--b)}
+.plot{padding:6px 14px;position:relative;min-height:0}.plot svg{width:100%;height:100%}
+.mon{padding:8px 14px;border-left:1px solid var(--line)}.mon b{font-size:34px;font-weight:800;display:block;line-height:1.1}
+.chat{display:flex;flex-direction:column;border-right:0}
+.msgs{flex:1;padding:12px 14px;display:flex;flex-direction:column;gap:12px;font-size:13px}
+.u{align-self:flex-end;background:var(--ink);color:#fff;padding:8px 12px;max-width:85%}
+.a{border-left:4px solid var(--b);padding-left:10px}.a small{color:var(--g);display:block}
+.in{display:flex;gap:6px;padding:10px 14px;border-top:1px solid var(--line)}.in input{flex:1;padding:6px 8px;border:1px solid var(--g)}
+footer{display:flex;align-items:center;padding:0 16px;background:var(--ink);color:#fff;font-size:12px;gap:20px}
+footer em{margin-left:auto;font-style:normal;color:#BDBDBD}
+</style></head><body>
+<header><b>rcfd Studio</b>
+<button class="proj on">wind-tunnel</button><button class="proj">quick-start</button><button class="proj">axial-fan</button>
+<div class="r"><label>Path <select><option>Learner: first cylinder run</option><option>Expert</option></select></label><button>Settings</button></div></header>
+
+<div class="band" role="region" aria-label="Next step">
+<span class="sq">&#9654;</span>
+<div class="t"><div class="k">Next step · learner path 3 of 4</div>
+<div class="s">cylinder-re200 <span>· Case checked · Mesh 8&#8239;000 cells →</span> Start run</div></div>
+<div class="id">Run<br><b>r-20261028T152128-db3f</b></div>
+<div class="big">≈ 30 s</div>
+<button class="p">Start run</button>
+<button class="hide" title="Collapses this band for experts">Hide guidance ▴</button></div>
+
+<main>
+<section><div class="h">Runs <small>5 in wind-tunnel</small><select><option>All states</option></select></div>
+<div class="th"><button class="s">Case ▲</button><button>State ⇅</button><button class="n">Iter ⇅</button></div>
+<div class="run"><div class="c">step-re400</div><div class="st"><span class="sq">✓</span>Converged</div><div class="n">429</div><div class="i">r-20261028T152128-37c8 · 13.2 s · res_u 9.07e-7</div></div>
+<div class="run"><div class="c">step-re800</div><div class="st"><span class="sq">✓</span>Finished</div><div class="n">612</div><div class="i">r-20261028T152128-806b · 19.8 s</div></div>
+<div class="run sel"><div class="c">cylinder-re100</div><div class="st"><span class="sq">▶</span>Running</div><div class="n">1840</div><div class="i">r-20261028T152128-d5cb · t = 12.40 s of 20.00 s</div></div>
+<div class="run"><div class="c">cylinder-re200</div><div class="st"><span class="sq" style="background:#fff;color:#111;border:2px solid #111">◷</span>Queued</div><div class="n">–</div><div class="i">r-20261028T152128-db3f · waiting to start</div></div>
+<div class="run fail"><div class="c">naca0012-aoa4</div><div class="st"><span class="sq">✕</span>Failed</div><div class="n">211</div><div class="i">r-20261029T230332-0566 · diverged at it 211</div></div>
+</section>
+
+<div class="mid"><div class="tool"><button class="on">Surface</button><button>Cut plane</button><button>Iso-surface</button><button>Streamlines</button>
+<select><option>|U| velocity magnitude</option></select><label><input type="checkbox" checked> Mesh grid</label></div>
+<div class="vp"><div class="field"></div><div class="wake"></div><div class="grid"></div><div class="wall" style="top:0"></div><div class="wall" style="bottom:0"></div><div class="cyl"></div>
+<div class="it"><span>cylinder-re100 · iteration</span><b>1840</b></div>
+<div class="legend"><b>velocity magnitude |U| m/s</b><i></i><div><span>0.00</span><span>0.92</span><span>1.84</span></div></div>
+<span class="syn">synthetic preview data</span></div>
+<div class="bot"><div class="scrub"><b>cylinder-re100</b><button>◀</button><button>▶</button><input type="range" min="1" max="100" value="62"><span>t = 12.40 s · snapshot 62/100</span></div>
+<div class="plot"><svg viewBox="0 0 700 120" preserveAspectRatio="none"><g stroke="#D9D9D9"><path d="M0 10H700M0 30H700M0 50H700M0 70H700M0 90H700M0 110H700"/></g>
+<polyline fill="none" stroke="#111" stroke-width="2" points="0,12 80,30 160,48 240,62 320,74 400,84 480,92 560,98 700,102"/>
+<polyline fill="none" stroke="#2C7BE5" stroke-width="2" stroke-dasharray="6 3" points="0,8 80,24 160,44 240,58 320,70 400,80 480,88 560,94 700,99"/>
+<polyline fill="none" stroke="#6E6E6E" stroke-width="2" stroke-dasharray="2 3" points="0,6 80,20 160,36 240,50 320,60 400,70 480,76 560,82 700,86"/></svg>
+<div style="position:absolute;right:20px;top:6px;font-size:11px;color:#6E6E6E">log residual 1e-1…1e-7 · <b style="color:#111">— continuity</b> <b style="color:#2C7BE5">- - u</b> <b>··· p</b></div></div>
+<div class="mon"><span style="color:#6E6E6E">Monitor · Cd</span><b>Cd = 1.34</b><svg viewBox="0 0 220 50" width="220" height="50"><polyline fill="none" stroke="#111" stroke-width="2" points="0,40 30,12 60,34 90,18 120,30 150,22 180,27 220,25"/></svg></div></div></div>
+
+<section class="chat"><div class="h">Claude Code · wind-tunnel</div>
+<div class="msgs"><div class="u">Why did naca0012-aoa4 diverge?</div>
+<div class="a"><small>Claude Code</small>The solution blew up at iteration 211. The Courant number passed 1 around iteration 205 and then grew each step, so the time step is too large for the cell size near the leading edge. Lower the time step or set a maximum Courant number, then rerun. <a href="#">Open iteration 211 log</a></div></div>
+<div class="in"><input placeholder="Ask about this project"><button class="p">Send</button></div></section>
+</main>
+<footer>Early-stage software. Not validated for engineering decisions.<em>Synthetic preview data</em></footer>
+</body></html>

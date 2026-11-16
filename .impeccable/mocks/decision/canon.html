@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>rcfd Studio - run workspace (canon)</title>
+<style>
+:root{--bg:#F4F5F7;--tx:#2B2F36;--sec:#8B929C;--ac:#2F6FEB;--ln:#D9DCE1;--pn:#fff}
+*{box-sizing:border-box}
+html,body{width:1440px;height:900px;overflow:hidden;margin:0}
+body{background:var(--bg);color:var(--tx);font:13px/1.35 "Segoe UI",system-ui,sans-serif;font-variant-numeric:tabular-nums;display:flex;flex-direction:column}
+button,input,select{font:inherit;color:var(--tx)}
+button{background:#fff;border:1px solid #C5C9D0;border-radius:4px;padding:3px 10px;height:26px}
+button.p{background:var(--ac);border-color:var(--ac);color:#fff}
+button.on{background:#E6EEFD;border-color:var(--ac);color:var(--ac)}
+input,select{border:1px solid #C5C9D0;border-radius:4px;background:#fff;height:26px;padding:2px 6px}
+.sec{color:var(--sec)}
+.menu{height:28px;display:flex;align-items:center;gap:18px;padding:0 12px;background:#fff;border-bottom:1px solid var(--ln);flex:none}
+.menu b{margin-right:8px}
+.menu .sp{margin-left:auto}
+.tool{height:38px;display:flex;align-items:center;gap:6px;padding:0 12px;background:var(--bg);border-bottom:1px solid var(--ln);flex:none}
+.tool .sep{width:1px;height:20px;background:var(--ln);margin:0 6px}
+.main{display:flex;height:548px;flex:none}
+.pane{background:var(--pn);border-right:1px solid var(--ln);display:flex;flex-direction:column;min-width:0}
+.ph{height:28px;display:flex;align-items:center;padding:0 10px;font-weight:600;font-size:12px;border-bottom:1px solid var(--ln);background:#FAFAFB;flex:none;gap:4px}
+.ph .sp{margin-left:auto}
+.tree{width:290px}.tree .b{padding:6px 0;overflow:hidden;font-size:12.5px}
+.tr{display:flex;align-items:center;height:22px;gap:6px}
+.tr.s{background:#E6EEFD;box-shadow:inset 2px 0 0 var(--ac)}
+.tr i{font-style:normal;color:var(--sec);width:10px;font-size:9px}
+.tr small{margin-left:auto;padding-right:10px;color:var(--sec);font-size:11px}
+.l1{padding-left:10px}.l2{padding-left:26px}.l3{padding-left:42px}.l4{padding-left:58px}
+.dot{width:8px;height:8px;border-radius:50%;flex:none}
+.centre{flex:1;background:var(--bg);display:flex;flex-direction:column;min-width:0}
+.vt{height:36px;display:flex;align-items:center;gap:6px;padding:0 10px;background:#fff;border-bottom:1px solid var(--ln);flex:none}
+.vt .sp{flex:1}
+.vp{flex:1;position:relative;background:#E9EBEF;margin:8px;border:1px solid var(--ln)}
+.leg{position:absolute;right:14px;top:14px;bottom:36px;display:flex;gap:6px;font-size:11px}
+.leg i{width:14px;background:linear-gradient(to top,#440154,#3b528b,#21918c,#5ec962,#fde725);border:1px solid #8B929C}
+.leg div{display:flex;flex-direction:column;justify-content:space-between}
+.vl{position:absolute;left:10px;bottom:8px;font-size:11px;color:var(--sec)}
+.right{width:340px;border-right:0}
+.tabs{display:flex;height:32px;border-bottom:1px solid var(--ln);background:#FAFAFB;flex:none}
+.tabs a{padding:0 14px;display:flex;align-items:center;border-bottom:2px solid transparent;color:var(--sec)}
+.tabs a.on{color:var(--tx);border-color:var(--ac);background:#fff;font-weight:600}
+.grid{font-size:12.5px;overflow:hidden}
+.g{display:flex;align-items:center;height:26px;border-bottom:1px solid #EDEEF1;padding:0 10px}
+.g.h{background:#F4F5F7;font-weight:600;font-size:11.5px;height:22px}
+.g span:first-child{width:130px;color:var(--sec)}.g.h span:first-child{color:var(--tx)}
+.chat{display:flex;flex-direction:column;gap:8px;padding:10px;flex:1}
+.m{padding:8px 10px;border-radius:6px;background:#EEF0F3}.m.u{background:#E6EEFD;align-self:flex-end;max-width:85%}
+.m small{display:block;color:var(--sec);font-size:11px;margin-bottom:2px}
+.dock{flex:1;display:flex;flex-direction:column;background:#fff;border-top:1px solid var(--ln);min-height:0}
+.dock .tabs{height:30px}
+.dbody{flex:1;display:flex;min-height:0}
+.con{width:560px;border-right:1px solid var(--ln);font:11.5px/1.5 Consolas,"Cascadia Mono",monospace;padding:6px 10px;overflow:hidden;color:#444A54}
+.con .e{color:#B3261E}
+.res{flex:1;position:relative}
+.sc{display:flex;align-items:center;gap:8px;padding:4px 10px;border-bottom:1px solid var(--ln);height:34px}
+.sc input[type=range]{flex:1;padding:0;height:18px}
+.mon{width:200px;border-left:1px solid var(--ln);padding:8px 12px}
+.mon .v{font-size:24px;font-weight:600}
+.thead{display:flex;height:26px;align-items:center;border-bottom:1px solid var(--ln);background:#F4F5F7;font-size:11.5px;font-weight:600}
+.thead span,.trow span{padding:0 8px}
+.trow{display:flex;height:26px;align-items:center;border-bottom:1px solid #EDEEF1;font-size:12px}
+.trow.s{background:#E6EEFD}.trow.f{color:var(--sec)}
+footer{height:22px;flex:none;background:#fff;border-top:1px solid var(--ln);display:flex;align-items:center;padding:0 12px;font-size:11.5px;color:var(--sec)}
+footer .r{margin-left:auto}
+</style></head><body>
+<div class="menu"><b>rcfd Studio</b><span>File</span><span>Edit</span><span>View</span><span>Solve</span><span>Window</span><span>Help</span><span class="sp sec">Project</span><select aria-label="project"><option>wind-tunnel</option><option>quick-start</option><option>axial-fan</option></select></div>
+<div class="tool"><button class="p">Run</button><button>Pause</button><button>Stop</button><span class="sep"></span><button>Reset view</button><button>Fit</button><span class="sep"></span><span class="sec">Case</span><select aria-label="case"><option>cylinder-re100</option></select><span class="sec">Solver</span><select aria-label="solver"><option>rcfd 0.9, CPU 8 threads</option></select></div>
+<div class="main">
+ <aside class="pane tree"><div class="ph">Outline<span class="sp sec">wind-tunnel</span></div>
+  <div class="b">
+   <div class="tr l1"><i>▾</i>wind-tunnel</div>
+   <div class="tr l2"><i>▸</i>Cases<small>5</small></div>
+   <div class="tr l2"><i>▸</i>Meshes<small>4</small></div>
+   <div class="tr l2"><i>▾</i>Runs<small>5</small></div>
+   <div class="tr l3"><span class="dot" style="background:var(--ac)"></span>step-re400<small>converged</small></div>
+   <div class="tr l3"><span class="dot" style="background:var(--ac)"></span>step-re800<small>finished</small></div>
+   <div class="tr l3 s"><span class="dot" style="background:#E0A100"></span>cylinder-re100<small>running</small></div>
+   <div class="tr l3"><span class="dot" style="border:1.5px solid var(--sec)"></span>cylinder-re200<small>queued</small></div>
+   <div class="tr l3"><span class="dot" style="background:#B3261E"></span>naca0012-aoa4<small>failed</small></div>
+   <div class="tr l2"><i>▸</i>Results<small>3</small></div>
+   <div class="tr l2"><i>▸</i>Reports</div>
+  </div>
+  <div class="ph" style="border-top:1px solid var(--ln)">Runs<span class="sp sec">sort: started ▼</span></div>
+  <div class="thead"><span style="width:104px">Case ▲</span><span style="width:84px">State ▲▼</span><span>Result ▲▼</span></div>
+  <div class="trow f"><span style="width:104px">step-re400</span><span style="width:84px">▲ conv.</span><span>429 it · 13.2 s</span></div>
+  <div class="trow f"><span style="width:104px">step-re800</span><span style="width:84px">● done</span><span>612 it · 19.8 s</span></div>
+  <div class="trow s"><span style="width:104px">cylinder-re100</span><span style="width:84px">▶ running</span><span>it 1840</span></div>
+  <div class="trow f"><span style="width:104px">cylinder-re200</span><span style="width:84px">○ queued</span><span>-</span></div>
+  <div class="trow"><span style="width:104px">naca0012-aoa4</span><span style="width:84px;color:#B3261E">✕ failed</span><span>diverged it 211</span></div>
+ </aside>
+ <section class="centre"><div class="vt"><button class="on">Surface</button><button>Cut plane</button><button>Iso-surface</button><button>Streamlines</button><span class="sp"></span><label><input type="checkbox"> Mesh grid</label><select aria-label="field"><option>Velocity |U|</option></select></div>
+  <div class="vp"><svg width="100%" height="100%" viewBox="0 0 720 440" preserveAspectRatio="xMidYMid meet" style="display:block"><defs>
+   <linearGradient id="g" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#3b528b"/><stop offset=".25" stop-color="#21918c"/><stop offset=".6" stop-color="#5ec962"/><stop offset="1" stop-color="#21918c"/></linearGradient>
+   <linearGradient id="w" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#440154" stop-opacity=".8"/><stop offset=".22" stop-color="#440154" stop-opacity="0"/><stop offset=".78" stop-color="#440154" stop-opacity="0"/><stop offset="1" stop-color="#440154" stop-opacity=".8"/></linearGradient></defs>
+   <rect x="20" y="50" width="610" height="340" fill="url(#g)" stroke="#2B2F36"/><rect x="20" y="50" width="610" height="340" fill="url(#w)"/>
+   <g fill="#fde725" opacity=".85"><ellipse cx="300" cy="190" rx="28" ry="14"/><ellipse cx="385" cy="262" rx="30" ry="15"/><ellipse cx="470" cy="190" rx="30" ry="15"/><ellipse cx="555" cy="262" rx="28" ry="14"/></g>
+   <g fill="#440154" opacity=".75"><ellipse cx="342" cy="262" rx="30" ry="16"/><ellipse cx="428" cy="190" rx="30" ry="16"/><ellipse cx="512" cy="262" rx="30" ry="16"/></g>
+   <circle cx="170" cy="225" r="44" fill="#440154" stroke="#2B2F36"/>
+   <text x="20" y="42" font-size="11" fill="#8B929C">inlet</text><text x="630" y="42" font-size="11" fill="#8B929C" text-anchor="end">outlet</text>
+   <path d="M20 410H80M20 405V415M80 405V415" stroke="#2B2F36"/><text x="90" y="414" font-size="11" fill="#2B2F36">0.5 m</text></svg>
+   <div class="leg"><i></i><div><span>1.84</span><span>0.92</span><span>0.00</span></div></div>
+   <div class="vl">|U| m/s, 0.00 to 1.84 · t = 12.40 s · viridis · synthetic preview data</div></div></section>
+ <aside class="pane right"><div class="tabs"><a>Properties</a><a class="on">Claude Code · wind-tunnel</a><a>Notes</a></div>
+  <div class="chat">
+   <div class="m u"><small>You</small>Why did naca0012-aoa4 diverge?</div>
+   <div class="m"><small>Claude Code</small>The run stopped at <b>iteration 211</b>. Residuals grew from it 190 and the maximum Courant number reached <b>3.4</b> (limit 1.0), so the time step is too large near the trailing edge. Try dt 5.0e-4 or CFL-adaptive stepping.</div>
+   <div style="margin-top:auto;display:flex;gap:6px"><input style="flex:1" placeholder="Ask about this project" aria-label="message"><button class="p">Send</button></div></div>
+  <div class="ph" style="border-top:1px solid var(--ln)">Properties · cylinder-re100</div>
+  <div class="grid"><div class="g h"><span>Property</span><span>Value</span></div>
+   <div class="g"><span>Run id</span><span>r-20261028T152128-d5cb</span></div><div class="g"><span>State</span><span>Running</span></div>
+   <div class="g"><span>Time step</span><span>5.0e-3 s</span></div><div class="g"><span>End time</span><span>20.00 s</span></div><div class="g"><span>Courant max</span><span>0.82</span></div></div>
+ </aside>
+</div>
+<section class="dock"><div class="tabs"><a class="on">Residuals</a><a>Console</a><a>Monitors</a><a>Warnings</a></div>
+ <div class="sc"><button>|&lt;</button><button>&lt;</button><button>&gt;</button><span class="sec">Time</span><input type="range" min="0" max="100" value="62" aria-label="time scrubber"><b>t = 12.40 s</b><span class="sec">snapshot 62/100 · cylinder-re100</span></div>
+ <div class="dbody">
+  <div class="res"><svg width="100%" height="100%" viewBox="0 0 880 150" preserveAspectRatio="none" style="display:block"><g stroke="#E3E5E9"><path d="M40 10H870M40 35H870M40 60H870M40 85H870M40 110H870M40 135H870"/></g>
+   <g font-size="10" fill="#8B929C"><text x="4" y="13">1e-1</text><text x="4" y="63">1e-3</text><text x="4" y="113">1e-5</text><text x="4" y="138">1e-7</text></g>
+   <path d="M40 15L150 30L260 45L370 58L480 66L545 70" fill="none" stroke="#2F6FEB" stroke-width="2"/><path d="M40 25L150 50L260 72L370 88L480 98L545 102" fill="none" stroke="#2B2F36" stroke-width="1.5"/><path d="M40 35L150 55L260 70L370 84L480 92L545 96" fill="none" stroke="#8B929C" stroke-width="1.5" stroke-dasharray="4 3"/>
+   <path d="M545 5V140" stroke="#2F6FEB" stroke-dasharray="2 2"/></svg>
+   <div style="position:absolute;right:10px;top:4px;font-size:11px;display:flex;gap:10px"><span style="color:#2F6FEB">━ continuity</span><span>━ u</span><span class="sec">╌ p</span></div></div>
+  <div class="mon"><div class="sec" style="font-size:11px">Monitor · drag coefficient</div><div class="v">Cd = 1.34</div>
+   <svg width="170" height="40" viewBox="0 0 170 40"><path d="M0 30L18 14L36 28L54 12L72 26L90 12L108 24L126 13L144 22L170 13" fill="none" stroke="#2F6FEB" stroke-width="1.8"/></svg></div>
+  <div class="con"><div class="sec">Console · cylinder-re100</div>it 1838 t=12.385 res_u 3.2e-5 res_p 8.8e-5<br>it 1839 t=12.390 res_u 3.1e-5 res_p 8.7e-5<br>it 1840 t=12.395 res_u 3.1e-5 res_p 8.7e-5<br>snapshot 62/100 written<br><span class="e">naca0012-aoa4: diverged at it 211 (Courant 3.4)</span></div>
+ </div></section>
+<footer><span>Early-stage software. Not validated for engineering decisions.</span><span class="r">synthetic preview data</span></footer>
+</body></html>
