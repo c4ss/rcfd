@@ -232,3 +232,97 @@ candidate instead of the first failing; **MA4** the bisect budget ignored. Each 
 Decision rule (F-723 as a whole): stage 1 done, T1 to T8 met and every mutation caught gives **done**, with the first GitHub
 run's items listed as follow-up checks; a missed T2, T3 or T4 limit is reported with its numbers and gives **partial**; the
 issues path and the bisect on CI are not run here (no push) and are listed.
+
+## Addendum 2: results of stage 2 (2026-11-16)
+
+Code: `scripts/adr_test_index.py`, `scripts/gate_attribute.py`, their tests `scripts/test_adr_test_index.py` (12 tests) and
+`scripts/test_gate_attribute.py` (10 tests and the end-to-end T6), `.github/workflows/gate.yml` (D5), and
+`docs/test-process.md` section 7 (D6). No Rust file and no golden changed; `baseline_hashes.rs` untouched; stdlib Python only.
+Logs and inputs are in `w49i-work/f723-scratch` (`t2_diff.json`, `t3_report.txt`, `t3_report_early.txt`, `t4_context.txt`,
+`t5_attribution.json`, `t5_summary.md`, `mutations.log`, `mutate.py`).
+
+| id | limit | measured | met |
+|---|---|---|---|
+| T1 | every unit test passes | `python -m unittest scripts/test_adr_test_index.py scripts/test_gate_attribute.py scripts/test_gate_test.py`: 26 run, OK, 4 skipped (the E2E tests behind `GATE_TEST_E2E`) | yes |
+| T2 | binaries of the eef6c094 `times.tsv` found in the static index: at least 99 %; rows found: at least 98 % | 501 of 501 binaries (100 %); 3590 of 3625 rows (99.03 %). All 35 missing rows come from tests made by macros, in three files: `validation_sod` 22, `validation_cylinder_re100_w31` 7, `w33b_stability` 6 (18 ok, 17 ignored). The index has 7 tests that the Ubuntu listing lacks (Windows-only or CUDA tests, `#[cfg]`) | yes |
+| T3 | integration-test binaries mapped: at least 50 %; all tests mapped: at least 40 % | binaries 1053 of 1134 (92.9 %); all tests 6986 of 7472 (93.5 %); non-ignored 5424 of 5856 (92.6 %); integration tests 6446 of 6897 (93.5 %); unit tests 540 of 575 (93.9 %); 17 tests map to an item only. Unit-test binaries 19 of 28: all 19 that have tests are mapped, and the other 9 have no tests. 90 binaries are unmapped (listed below) | yes |
+| T4 | at least 18 of 20 sampled binaries have a correct ADR | 20 of 20 (k = 52, list in `t4_context.txt`; each has the ADR that registered or described it, for example `sliding_coincidence_f710` 0638, `sb_static` 0275, `overset_f134_records` 0219, `tool_list_f275` 0195) | yes |
+| T5 | real failure: one failure with crate and ADRs, at least one candidate, every candidate touches the crate or a dependency | `rcfd-api/fan01_hub_mesh_w49r::w49r_default_meshes_are_bit_identical`, ADR 0181 (E2, E3); edb4839f is an ancestor; 19 first-parent commits; 11 candidates, each checked to touch `crates/rcfd-api` or a dependency of it. The second candidate is `a4e94027 c_grid_grading: hash-neutral default; H1 normalises it (ADR 0181)`, the same ADR the index gives | yes |
+| T6 | failing test `flaky: false`, flaky test `flaky: true`, JSON and summary written | `{'fails': ('FAILED', 'FAILED', False), 'flaky': ('FAILED', 'ok', True)}`, summary written | yes |
+| T7 | actionlint 0 findings; the fmt, clippy and tests `run` unchanged against d55c43c4 | 0 findings; every earlier step's `run` is unchanged. Checkout gained `fetch-depth: 0` and the tests step gained `id: tests` (no change to what is checked). New: the attribution step, its upload, the `issues` job and three dispatch inputs | yes |
+| T8 | `scripts/test_gate_test.py` passes | OK (1 run, 3 E2E skipped); `gate_test.py` unchanged | yes |
+
+| mutation | caught by |
+|---|---|
+| MI1 E4 dropped | `test_e4_roadmap_note`, `test_coverage` |
+| MI2 item regex anchored at the end only | `test_item_regex` |
+| MI3 nested `mod` not prefixed | 5 tests (`test_enumeration_names_and_ignored` and others) |
+| MA1 flaky inverted | `test_rerun_marks_flaky` |
+| MA2 dependency relation dropped | `test_candidates_direct_and_dependency`, `test_bisect_in_worktrees_with_probe_cmd` |
+| MA3 bisect returns the last passing candidate | `test_bisect_finds_first_failing`, `test_bisect_in_worktrees_with_probe_cmd` |
+| MA4 bisect budget ignored | `test_bisect_budget` |
+
+Unmapped integration-test binaries (81 with tests, 2 without): rcfd-api 19 (`bc_guarded_secant`, `cgrid_case_w34a`,
+`compressible_bc_case`, `convergence_wave17a`, `divergence_guard_w32c`, `library_api`, `mesh_params`, `non_conformal_case`,
+`physics_service`, `properties`, `radial_frame_w35c`, `runctl`, `scalars`, `sources`, `transient_energy`, `udf`, `w26c_reports`,
+`w37a_velocity_correction`, `workflow`); rcfd-assistant 7; rcfd-cli 5; rcfd-core 1 (`table_expr`); rcfd-fem 5
+(`sa_benasciutti_tovo`, `sa_broadband_default_bits`, `sa_random_stress_moments`, and `si_eas_hg3_rd` and `si_eas_hg3_rl` with
+0 tests found); rcfd-fv 12 (`guarded_secant`, `non_conformal`, `pseudo_control`, `sixdof`, `species`, the 7 `varden_*`); rcfd-gpu 6;
+rcfd-io 3; rcfd-post 3; rcfd-project 4; rcfd-reactor 1 (`cell`); rcfd-runner 1 (`contract_w48a`); rcfd-studio 12; rcfd-turb 2. The
+full list is in `t3_report.txt`. Most are early wave files whose ADR names the wave (`w34a`, `wave17a`), not the file.
+
+Deviations, all disclosed:
+
+1. **T3 was run early.** The first T3 run (`t3_report_early.txt`) was made by mistake on the first draft of the index, before
+   three clean-ups. The clean-ups were: the raw-string helper; targets with `test = false` skipped; the module folder of a target
+   root taken as its own folder. They also came before the two fixes that T1 found, the `#[path]` value and the parents of a
+   cited module path. Early numbers: integration binaries 1053 of 1134, all tests 6929 of 7427 (93.3 %), unit binaries 19 of 29.
+   The table gives the run on the final code. Both runs meet the limits, so no result was chosen between them.
+2. **T1 was run twice.** Its first run found the two parser defects named above. They were fixed and T1 was run again; the limits
+   did not change.
+3. **The dependency relation was narrowed after T5.** A dependency's own `tests/`, `benches/` and `examples/` are not compiled
+   into the failing test's binary, so files there no longer make a candidate. T5 had listed 2 such commits as dependency
+   candidates (both renamed STL files in rcfd-io tests). T5's limit held either way. A fixture merge for this case was added to
+   T1, which passes.
+
+Not run here: the workflow on GitHub (nobody can push from here), `--bisect` with the cargo probe on a real failure, and the
+`issues` job with a real token. The bisect and issues logic is covered by T1 with a probe command and a fake `gh`.
+
+**Decision by the registered rule:** stage 1 is done, T1 to T8 are met, and all 7 mutations of stage 2 were caught, so the rule
+gives **done**. The items that only the first GitHub run can show are listed below as follow-up checks.
+
+What the first run on GitHub must show (in this order):
+
+1. In the `decide` log, a real last-green SHA (eef6c094 until a new green run), and `run: true` on the first schedule after the
+   push.
+2. The fmt step prints 24 `fmt <package>` lines and passes on windows-latest.
+3. Checkout with `fetch-depth: 0` works on the Windows runner, and the clone time is acceptable.
+4. A schedule with no push since the last green run shows `run: false` and the gate job "skipped".
+5. On the first red run, the step "failure attribution" runs, puts the table in the job summary and uploads
+   `gate-attribution-...`. Check the re-run's executable paths (`D:\a\rcfd\rcfd\target\release\deps\...`) and `GATE_LAST_GREEN`.
+6. For a dispatch with `open_issues: true` after a red gate: `gh run download` of an artifact from the same, still-running workflow
+   run, and `gh issue create` with `issues: write`.
+7. For a dispatch with `bisect: true`: probe worktrees under `RUNNER_TEMP` building into the shared `target`, within
+   `bisect_minutes` and inside the attribution step's 40 min.
+
+Open questions, each taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation):
+
+- Q1: should a dispatch on a branch other than main count as green for the skip? Options: (a) only main counts (taken; the
+  query filters `branch=main`), (b) any branch. Recommendation: (a).
+- Q2: should the index rank its ADRs (the registering ADR first)? Options: (a) list all citing ADRs with their evidence (taken),
+  (b) add a `primary` ADR (the item ADR from E1, else the lowest-numbered citing ADR). Recommendation: (b), as a follow-up.
+- Q3: if the attribution step times out because the job is near its 340 min, should it move to a separate job that downloads
+  the logs? A separate job has no build, so it could not re-run or bisect. Recommendation: keep it in the gate job. The logs are
+  uploaded before it starts.
+
+## For the lead: roadmap entries
+
+Proposed status and note of F-723:
+
+> Proposed status: done.
+
+> Test process. Requested by the maintainer 2026-11-16. DONE. ADR 0653, 2026-11-16: the full gate runs daily in GitHub Actions and every failed test is attributed to ADRs and merges. Cause of the failed scheduled runs of 2026-11-08 and 2026-11-15: cargo fmt --all hands every target root (63802 characters on the runner) to one rustfmt process, above the Windows limit of 32767 (os error 206, reproduced locally); the fmt step now runs cargo fmt -p per workspace member (largest 20031 characters), with the same set of files checked. gate.yml: cron daily 02:00 UTC on main, workflow_dispatch kept; a decide job (actions: read) skips a scheduled run when the last run whose full gate, windows-latest job passed on main tested the same SHA, and runs the gate when the query fails. After a failed test step, scripts/gate_attribute.py re-runs each failed test once (flaky when it passes), looks it up in the test-to-ADR index, and lists the first-parent commits since the last green gate that touched the test's file or crate (direct) or a dependency's sources (dependency), with their F-items and ADRs. It can bisect over those commits (input bisect, time budget bisect_minutes), and it writes gate-out/attribution.json, a job-summary table and, with input open_issues, one issue per non-flaky failure from a separate job with issues: write. scripts/adr_test_index.py finds tests statically (501 of 501 binaries and 99.0 % of the rows of a real gate listing) and maps them by file-name item, ADR and roadmap citations of the file or function, and module path: 1053 of 1134 integration-test binaries (92.9 %) and 6986 of 7472 tests (93.5 %) map to an ADR, and 20 of 20 sampled binaries have a correct ADR. A dry run on the real failure of gate 42083992758 names ADR 0181 and its commit among 11 candidates. docs/test-process.md section 7 gives the per-merge check set (fmt and clippy of the touched packages, the ADR's tests from --adr, the touched crates' --lib tests, baseline_hashes, docs_site). 22 Python unit tests and one end-to-end test; 10 of 10 mutations caught. Not covered until the first GitHub run: the decide job's API permissions, the skip on a real schedule, the attribution, bisect and issues paths on the runner.
+
+> Follow-up proposed: First GitHub runs of the daily gate (ADR 0653 checks on the runner). Deps F-723. Acceptance: Every limit not stated here is registered in the ADR before the run. The first scheduled run after the push runs the gate with a non-empty last-green SHA and passes fmt with one line per package; a scheduled run with no push since a green run is skipped; a dispatch on a commit with one failing test (a test branch that is not merged) produces attribution.json with that test, its re-run, its ADRs and a candidate list, the bisect with input bisect finds the commit that broke it within bisect_minutes, and input open_issues opens one issue and no duplicate on a second run.
+
+> Follow-up proposed: Wave-tag mapping and a primary ADR in the test-to-ADR index. Deps F-723. Acceptance: Every limit not stated here is registered in the ADR before the run. The index maps wave-named test files (w34a, wave17a, w48a) to the ADRs named after their wave, and each test gets a primary ADR (the registering ADR); the integration-test binaries left unmapped in ADR 0653 addendum 2 (81) fall below a registered number; a registered sample of primary ADRs is checked by reading.
