@@ -379,9 +379,8 @@ fn k4_periodic_pairs_kept_by_the_join() {
 
 const PP_DT: f64 = 0.0049;
 
-/// P1 to P7, PN1 and X0p (PF) of ADR 0629.
-#[test]
-fn pf_planar_through_flow_conserves_mass_across_the_sliding_interface() {
+/// P1 to P7, PN1 and X0p (PF) of ADR 0629, and P1c, PN1c of its amendment 1.
+fn pf_checks() -> Fails {
     let sc = pair_pp();
     let inlet = |x: Vec3| [0.0, 0.5 * (1.0 + 0.5 * (2.0 * PI * x[0]).sin()), 0.0];
     let mut run = Sliding::new(
@@ -397,7 +396,7 @@ fn pf_planar_through_flow_conserves_mass_across_the_sliding_interface() {
         1.0,
         PP_DT,
     );
-    let (mut p1, mut p2, mut p6): (f64, f64, f64) = (0.0, 0.0, 0.0);
+    let (mut p1, mut p1c, mut p2, mut p6): (f64, f64, f64, f64) = (0.0, 0.0, 0.0, 0.0);
     let mut n_wrap = 0;
     for _ in 0..100 {
         run.step(&mut no_bc(), &mut no_alter());
@@ -407,6 +406,7 @@ fn pf_planar_through_flow_conserves_mass_across_the_sliding_interface() {
         let q_out = m.patch("ymax").unwrap().faces().map(|f| phi[f]).sum::<f64>();
         let (q_i, _, _) = run.interface_flux();
         p1 = p1.max((q_i - q_in).abs() / q_in);
+        p1c = p1c.max((q_i + q_in).abs() / q_in);
         p2 = p2.max((q_out - q_in).abs() / q_in);
         p6 = p6.max(run.pair_sum() / q_in);
         n_wrap = run.cur.report.wrap_pairs.len();
@@ -415,6 +415,7 @@ fn pf_planar_through_flow_conserves_mass_across_the_sliding_interface() {
     let q_in = -m.patch("ymin").unwrap().faces().map(|f| run.s.phi[f]).sum::<f64>();
     let (_, direct, _) = run.interface_flux();
     let pn1 = (direct - q_in).abs() / q_in;
+    let pn1c = (direct + q_in).abs() / q_in;
     let st = run.stats;
     println!("PF: printed, no limit: Q_in {q_in:.6e}, wrap pairs at the end {n_wrap}");
     let mut fails = Fails::new();
@@ -423,6 +424,12 @@ fn pf_planar_through_flow_conserves_mass_across_the_sliding_interface() {
         "P1",
         p1 <= 1e-10,
         format!("|Q_I - Q_in|/Q_in {p1:.2e} (1e-10)"),
+    );
+    check(
+        &mut fails,
+        "P1c",
+        p1c <= 1e-10,
+        format!("|Q_I + Q_in|/Q_in {p1c:.2e} (1e-10)"),
     );
     check(
         &mut fails,
@@ -469,8 +476,31 @@ fn pf_planar_through_flow_conserves_mass_across_the_sliding_interface() {
         pn1 >= 0.1,
         format!("direct faces alone {pn1:.3e} Q_in off (>= 0.1)"),
     );
+    check(
+        &mut fails,
+        "PN1c",
+        pn1c >= 0.1,
+        format!("direct faces alone, corrected sign, {pn1c:.3e} Q_in off (>= 0.1)"),
+    );
     x0(&mut fails, "X0p", "PF", &st, run.cur.offset, 1.0 / 16.0);
-    require(&fails, &["P1", "P2", "P3", "P4", "P5", "P6", "P7", "PN1", "X0p"]);
+    fails
+}
+
+/// PF of ADR 0629: the checks met in the registered run and P1c, PN1c of amendment 1.
+#[test]
+fn pf_planar_through_flow_conserves_mass_across_the_sliding_interface() {
+    require(
+        &pf_checks(),
+        &["P1c", "P2", "P3", "P4", "P5", "P6", "P7", "PN1c", "X0p"],
+    );
+}
+
+/// PF as registered: P1 2.00e0 (1e-10), the flux out of the slider measured against the inflow through the stator with the
+/// wrong sign (ADR 0629 amendment 1).
+#[test]
+#[ignore = "known miss: P1 2.00e0 (1e-10), the registered measure has the wrong sign for the planar set-up (ADR 0629 amendment 1)"]
+fn pf_known_miss_p1_sign_of_the_interface_flux() {
+    require(&pf_checks(), &["P1"]);
 }
 
 /// Largest `max_c |u_c - U|/|U|` and `max_c |p_c - p_0|/|U|^2` over the steps, the net interface flux measure and the
@@ -483,7 +513,7 @@ fn uniform_run(
     steps: usize,
     inflow: Option<&str>,
     alter: AlterHook,
-) -> (f64, f64, f64, Stats, f64) {
+) -> (f64, f64, (f64, f64), Stats, f64) {
     let names: Vec<String> = sc
         .mesh_at(0.0)
         .unwrap()
@@ -507,7 +537,7 @@ fn uniform_run(
         dt,
     );
     let un = vec3::norm(u0);
-    let (mut eu, mut ep, mut eq): (f64, f64, f64) = (0.0, 0.0, 0.0);
+    let (mut eu, mut ep, mut eq, mut eqc): (f64, f64, f64, f64) = (0.0, 0.0, 0.0, 0.0);
     for _ in 0..steps {
         run.step(&mut no_bc(), alter);
         eu = eu.max(
@@ -521,22 +551,23 @@ fn uniform_run(
         let p0 = run.s.p.values[0];
         ep = ep.max(run.s.p.values.iter().fold(0.0f64, |a, p| a.max((p - p0).abs())) / (un * un));
         let (q_i, _, area) = run.interface_flux();
-        eq = eq.max(match inflow {
+        let (a, b) = match inflow {
             Some(name) => {
                 let m = &run.s.geom.mesh;
                 let q_in = -m.patch(name).unwrap().faces().map(|f| run.s.phi[f]).sum::<f64>();
-                (q_i - q_in).abs() / q_in
+                ((q_i - q_in).abs() / q_in, (q_i + q_in).abs() / q_in)
             }
-            None => q_i.abs() / (un * area),
-        });
+            None => (q_i.abs() / (un * area), q_i.abs() / (un * area)),
+        };
+        eq = eq.max(a);
+        eqc = eqc.max(b);
     }
-    (eu, ep, eq, run.stats, run.cur.offset)
+    (eu, ep, (eq, eqc), run.stats, run.cur.offset)
 }
 
-/// P8, P9 and X0p (PU) of ADR 0629.
-#[test]
-fn pu_uniform_flow_stays_uniform_across_the_planar_slide() {
-    let (eu, ep, eq, st, off) = uniform_run(
+/// P8, P9 and X0p (PU) of ADR 0629, and P9c of its amendment 1.
+fn pu_checks() -> Fails {
+    let (eu, ep, (eq, eqc), st, off) = uniform_run(
         &pair_pp(),
         [1.0, 0.5, 0.0],
         1.0,
@@ -561,8 +592,30 @@ fn pu_uniform_flow_stays_uniform_across_the_planar_slide() {
             st.gcl, st.cont
         ),
     );
+    check(
+        &mut fails,
+        "P9c",
+        eqc <= 1e-10 && st.gcl <= 1e-12 && st.cont <= 1e-9,
+        format!(
+            "PU: |Q_I + Q_in|/Q_in {eqc:.2e} (1e-10), GCL {:.2e} (1e-12), continuity {:.2e} (1e-9)",
+            st.gcl, st.cont
+        ),
+    );
     x0(&mut fails, "X0p", "PU", &st, off, 1.0 / 16.0);
-    require(&fails, &["P8", "P9", "X0p"]);
+    fails
+}
+
+/// PU of ADR 0629: the checks met in the registered run and P9c of amendment 1.
+#[test]
+fn pu_uniform_flow_stays_uniform_across_the_planar_slide() {
+    require(&pu_checks(), &["P8", "P9c", "X0p"]);
+}
+
+/// PU as registered: P9's net flux 2.00e0 (1e-10), the sign of the measure (ADR 0629 amendment 1).
+#[test]
+#[ignore = "known miss: P9 net flux 2.00e0 (1e-10), the registered measure has the wrong sign for the planar set-up (ADR 0629 amendment 1)"]
+fn pu_known_miss_p9_sign_of_the_interface_flux() {
+    require(&pu_checks(), &["P9"]);
 }
 
 /// PN2 of ADR 0629 (negative control of P8).
@@ -715,7 +768,7 @@ fn sf_radial_source_flow_through_the_sector_sliding_interface() {
 /// S8, S9 and X0s (SU) of ADR 0629.
 #[test]
 fn su_uniform_axial_flow_stays_uniform_on_the_3d_sector_slide() {
-    let (eu, ep, eq, st, off) = uniform_run(&pair_s3(), [0.0, 0.0, 1.0], 1.0, 0.01, 40, None, &mut no_alter());
+    let (eu, ep, (eq, _), st, off) = uniform_run(&pair_s3(), [0.0, 0.0, 1.0], 1.0, 0.01, 40, None, &mut no_alter());
     let mut fails = Fails::new();
     check(
         &mut fails,
