@@ -178,6 +178,14 @@ pub struct PimpleSettings {
     /// (`PimpleSolver::max_cell_diffusion`), the estimate and the remedies. Not applied on a moving mesh or to the fractional
     /// step. Default `None` (bit-identical).
     pub lag_onset_refusal: Option<usize>,
+    /// F-743 (ADR 0664): make the rotated partner of the rotationally periodic pairs implicit in the momentum predictor, as
+    /// ADR 0046 D1 does for translational pairs. The partner term `coef (R u_partner)_k` of every rotational pair goes into
+    /// one block system of the active velocity components (entries `coef R_kj`), its lagged value is removed from the
+    /// right-hand side, and the three components are assembled from the same iterate and solved together (BiCGStab with
+    /// ILU(0), `momentum_solver`); the correctors' `H` operator, the relaxation and the consistent correctors' `H1` count the
+    /// links. Acts only where a rotational link exists (no-op otherwise); the pressure-lag estimate and the adaptive corrector
+    /// count keep the lagged coupling. Default `false` (bit-identical).
+    pub rotational_periodic_implicit: bool,
 }
 
 /// The outer iterations of one step with `PimpleSettings::outer_pressure_tolerance` (F-536, ADR 0458 C2).
@@ -1000,6 +1008,7 @@ impl PimpleSettings {
             outer_pressure_tolerance: None,
             outer_scale_window: None,
             lag_onset_refusal: None,
+            rotational_periodic_implicit: false,
         }
     }
 
@@ -1841,6 +1850,15 @@ impl PimpleSolver {
                 Some(a) => a.relative_flux(&phi_conv),
                 None => phi_conv,
             };
+            // F-743 (ADR 0664, opt-in): the rotational partner links; when any exists the component solves are deferred to
+            // one block solve, so that every component is assembled from the iterate `u_iter`
+            let rot = match (s.rotational_periodic_implicit, (0..3).find(|&k| g.active[k])) {
+                (true, Some(k0)) => {
+                    RotationalLinks::build(&g, &self.u, &phi_conv, &gamma_nu, &self.u.boundary_coeffs(&g, k0))
+                }
+                _ => RotationalLinks::default(),
+            };
+            let mut deferred: Vec<Option<FvMatrix>> = vec![None, None, None];
             for k in 0..3 {
                 if !g.active[k] {
                     continue;
@@ -1889,6 +1907,9 @@ impl PimpleSolver {
                 let lk = PeriodicLinks::build(&g, &self.u, &phi_conv, &gamma_nu, &bc);
                 let q_lag: Vec<f64> = u_iter.iter().map(|v| v[k]).collect();
                 lk.fix_rhs(&mut m, &q_lag);
+                if !rot.is_empty() {
+                    rot.fix_rhs(&mut m, k, &u_iter);
+                }
                 if let Some(sink) = &self.sink {
                     for c in 0..n {
                         m.a.diag[c] += sink[c] * vol[c];
@@ -1917,7 +1938,11 @@ impl PimpleSolver {
                     }
                 }
                 if alpha_u < 1.0 {
-                    lk.relax(&mut m, alpha_u, &cells);
+                    if rot.is_empty() {
+                        lk.relax(&mut m, alpha_u, &cells);
+                    } else {
+                        rot.relax(&lk, &mut m, k, alpha_u, &cells);
+                    }
                 }
                 let mut sys = m.clone();
                 for c in 0..n {
@@ -1926,21 +1951,45 @@ impl PimpleSolver {
                         sys.b[c] += vol[c] * bf.cell[c][k];
                     }
                 }
-                if outer == 0 {
-                    res_u = res_u.max(lk.residual(&sys, &cells));
+                if rot.is_empty() {
+                    if outer == 0 {
+                        res_u = res_u.max(lk.residual(&sys, &cells));
+                    }
+                    let mut x = cells;
+                    lk.solve(&sys, &mut x, &s.momentum_solver);
+                    for c in 0..n {
+                        self.u.values[c][k] = x[c];
+                    }
+                } else {
+                    deferred[k] = Some(sys);
                 }
-                let mut x = cells;
-                lk.solve(&sys, &mut x, &s.momentum_solver);
                 for c in 0..n {
-                    self.u.values[c][k] = x[c];
                     a_p[c] += m.a.diag[c];
                 }
                 if cf.enabled {
                     add_consistent_h1(&mut h1, &m, &lk, cf.periodic);
+                    if cf.periodic && !rot.is_empty() {
+                        rot.add_magnitudes(&mut h1, k);
+                    }
                 }
                 diag_k[k] = m.a.diag.clone();
                 mats[k] = Some(m);
                 links[k] = lk;
+            }
+            if !rot.is_empty() {
+                // F-743 (ADR 0664): the one block solve of the deferred components
+                let (a, b, mut x) = rot.block_system(&deferred, &links, &u_iter);
+                if outer == 0 {
+                    res_u = res_u.max(crate::simple::normalised_residual_csr(&a, &b, &x));
+                }
+                rcfd_linalg::bicgstab(&a, &b, &mut x, &rcfd_linalg::Ilu0::new(&a), &s.momentum_solver);
+                for k in 0..3 {
+                    if let Some(bk) = rot.block[k] {
+                        for c in 0..n {
+                            self.u.values[c][k] = x[bk * n + c];
+                        }
+                    }
+                }
             }
             if let Some((c, v)) = self.bad_velocity() {
                 return self.trip(
@@ -2041,7 +2090,10 @@ impl PimpleSolver {
                 for k in 0..3 {
                     if let Some(m) = &mats[k] {
                         let cells: Vec<f64> = self.u.values.iter().map(|v| v[k]).collect();
-                        let h = links[k].h_operator(m, &cells);
+                        let mut h = links[k].h_operator(m, &cells);
+                        if !rot.is_empty() {
+                            rot.fix_h(&mut h, k, &self.u.values);
+                        }
                         for c in 0..n {
                             hby_a[c][k] = if s.component_diagonal {
                                 (h[c] + (a_p[c] - diag_k[k][c]) * self.u.values[c][k]) / a_p[c]
@@ -2876,6 +2928,154 @@ impl PeriodicLinks {
         h
     }
 }
+/// Implicit partner links of the rotationally periodic faces in the momentum matrix (F-743, ADR 0664): the partner term
+/// `coef (R u_c)_k` of a coupled face (row = owner cell `r`, partner owner cell `c`, `R` the patch rotation, `coef` as in
+/// [`PeriodicLinks`]) couples component `k` of `r` to every active component `j` of `c` through `coef R_kj`, so the active
+/// components form one block system. Built only with `PimpleSettings::rotational_periodic_implicit`.
+#[derive(Debug, Clone, Default)]
+struct RotationalLinks {
+    /// (row, column, coefficient, rotation)
+    t: Vec<(usize, usize, f64, [[f64; 3]; 3])>,
+    /// Block index of every active component (`None` = inactive).
+    block: [Option<usize>; 3],
+}
+
+impl RotationalLinks {
+    /// The links of the rotational patches from the boundary coefficients `bc` of one active component (the face filter and
+    /// the coefficient of a periodic face do not depend on the component).
+    fn build(geom: &FvGeometry, u: &VectorField, flux: &[f64], gamma: &[f64], bc: &[crate::bc::FaceCoeffs]) -> Self {
+        let mesh = &geom.mesh;
+        let n_int = geom.n_internal;
+        let (own, sf) = (mesh.owner(), mesh.face_area_vectors());
+        let mut t = Vec::new();
+        for (pi, p) in mesh.patches().iter().enumerate() {
+            let (Some(map), Some(rot)) = (&geom.periodic_partner[pi], &geom.periodic_rot[pi]) else {
+                continue;
+            };
+            if !u.bc(pi).is_coupled() {
+                continue;
+            }
+            for (local, f) in p.faces().enumerate() {
+                if geom.empty[f] {
+                    continue;
+                }
+                let (row, col) = (own[f], own[map[local]]);
+                let co = &bc[f - n_int];
+                if row == col || !(co.a > 0.0 && co.a < 1.0) {
+                    continue;
+                }
+                let mut coef = gamma[f] * vec3::norm(sf[f]) * co.c;
+                if flux[f] < 0.0 {
+                    coef += flux[f];
+                }
+                if coef != 0.0 {
+                    t.push((row, col, coef, *rot));
+                }
+            }
+        }
+        let mut block = [None; 3];
+        let mut nb = 0;
+        for (k, b) in block.iter_mut().enumerate() {
+            if geom.active[k] {
+                *b = Some(nb);
+                nb += 1;
+            }
+        }
+        RotationalLinks { t, block }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.t.is_empty()
+    }
+
+    /// `sum_(j active) R_kj x_j` of the partner velocity `x`.
+    fn turned(&self, rot: &[[f64; 3]; 3], k: usize, x: Vec3) -> f64 {
+        (0..3)
+            .filter(|&j| self.block[j].is_some())
+            .map(|j| rot[k][j] * x[j])
+            .sum()
+    }
+
+    /// Remove the lagged partner term of the active components from the right-hand side of component `k` (`u` = the
+    /// iterate the assembly used).
+    fn fix_rhs(&self, m: &mut FvMatrix, k: usize, u: &[Vec3]) {
+        for (r, c, a, rot) in &self.t {
+            m.b[*r] += a * self.turned(rot, k, u[*c]);
+        }
+    }
+
+    /// The row magnitudes `|coef| sum_(j active) |R_kj|` of component `k`, added to `sums`.
+    fn add_magnitudes(&self, sums: &mut [f64], k: usize) {
+        for (r, _, a, rot) in &self.t {
+            let s: f64 = (0..3)
+                .filter(|&j| self.block[j].is_some())
+                .map(|j| rot[k][j].abs())
+                .sum();
+            sums[*r] += a.abs() * s;
+        }
+    }
+
+    /// Implicit under-relaxation of component `k` with the translational links `lk` and these links in the dominance sum.
+    fn relax(&self, lk: &PeriodicLinks, m: &mut FvMatrix, k: usize, alpha: f64, x_old: &[f64]) {
+        assert!(alpha > 0.0 && alpha <= 1.0, "relaxation factor must be in (0,1]");
+        let mut sums = m.a.off_diag_abs_sum();
+        for &(r, _, a) in &lk.t {
+            sums[r] += a.abs();
+        }
+        self.add_magnitudes(&mut sums, k);
+        for i in 0..m.a.diag.len() {
+            let d = m.a.diag[i].max(sums[i]);
+            let dr = d / alpha;
+            m.b[i] += (dr - m.a.diag[i]) * x_old[i];
+            m.a.diag[i] = dr;
+        }
+    }
+
+    /// Subtract the links of component `k` with the velocity `u` from the `H` numerator `h`.
+    fn fix_h(&self, h: &mut [f64], k: usize, u: &[Vec3]) {
+        for (r, c, a, rot) in &self.t {
+            h[*r] -= a * self.turned(rot, k, u[*c]);
+        }
+    }
+
+    /// The block system of the active components: the systems `sys[k]` with their translational links `lk[k]` on the
+    /// diagonal blocks and these links between the blocks; the right-hand side and the start vector from `u`.
+    fn block_system(
+        &self,
+        sys: &[Option<FvMatrix>],
+        lk: &[PeriodicLinks],
+        u: &[Vec3],
+    ) -> (rcfd_linalg::CsrMatrix, Vec<f64>, Vec<f64>) {
+        let n = u.len();
+        let nb = self.block.iter().filter(|b| b.is_some()).count();
+        let mut tr = Vec::new();
+        let (mut b, mut x) = (vec![0.0; nb * n], vec![0.0; nb * n]);
+        for k in 0..3 {
+            let (Some(bk), Some(m)) = (self.block[k], &sys[k]) else {
+                continue;
+            };
+            let csr = lk[k].csr(m);
+            for r in 0..n {
+                for e in csr.row_ptr[r]..csr.row_ptr[r + 1] {
+                    tr.push((bk * n + r, bk * n + csr.col[e], csr.val[e]));
+                }
+                b[bk * n + r] = m.b[r];
+                x[bk * n + r] = u[r][k];
+            }
+            for (r, c, a, rot) in &self.t {
+                for j in 0..3 {
+                    if let Some(bj) = self.block[j] {
+                        if rot[k][j] != 0.0 {
+                            tr.push((bk * n + r, bj * n + c, a * rot[k][j]));
+                        }
+                    }
+                }
+            }
+        }
+        (rcfd_linalg::CsrMatrix::from_triplets(nb * n, tr), b, x)
+    }
+}
+
 /// Add to `h1` the off-diagonal magnitudes of the momentum matrix `m` of one component (ADR 0214 F0) and, with `periodic`, the
 /// magnitudes of its implicit periodic link coefficients in their rows (ADR 0223 E2, ADR 0113 F1's rule). The step and the
 /// pressure-lag map both use it, so the estimate has the step's algebra.
@@ -3290,5 +3490,34 @@ mod tests {
         let tot = vol.iter().sum::<f64>();
         let mom: f64 = s.u.values.iter().zip(vol).map(|(u, v)| u[0] * v).sum::<f64>() / tot;
         assert!(mom.abs() < 1e-8, "{mom}");
+    }
+
+    /// D1 of ADR 0664 (F-743): on the doubly periodic Taylor-Green box (translational pairs only) the opt-in
+    /// `rotational_periodic_implicit` is a no-op: five PISO steps give the same velocity, pressure and flux bit for bit.
+    #[test]
+    fn rotational_periodic_implicit_is_a_no_op_without_rotational_pairs() {
+        let run = |on: bool| {
+            let mut s = taylor_green(16, 0.05, |mut st| {
+                st.convection = ConvScheme::Central;
+                st.rotational_periodic_implicit = on;
+                st
+            });
+            for _ in 0..5 {
+                s.step(0.02);
+            }
+            s
+        };
+        let (a, b) = (run(false), run(true));
+        let bits = |s: &PimpleSolver| -> Vec<u64> {
+            let mut v: Vec<u64> = s.u.values.iter().flat_map(|u| u.iter().map(|x| x.to_bits())).collect();
+            v.extend(s.p.values.iter().map(|x| x.to_bits()));
+            v.extend(s.phi.iter().map(|x| x.to_bits()));
+            v
+        };
+        assert_eq!(
+            bits(&a),
+            bits(&b),
+            "D1: the setting changed a run without rotational pairs"
+        );
     }
 }
