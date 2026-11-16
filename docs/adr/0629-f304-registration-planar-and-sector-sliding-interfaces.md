@@ -328,3 +328,116 @@ Corrected checks, registered here before they run (each run once, the set-ups un
 | PN1c (negative control of P1c) | PF | last step `abs(sum_direct phi + Q_in) / Q_in` | `>= 0.1` |
 
 The decision rule is unchanged, with P1c in place of P1 and P9c in place of P9.
+
+## Addendum 1: results (2026-11-16)
+
+Measured against the limits registered above and in amendment 1; no limit was changed. Release builds on Windows. The
+registration is 50c5cf0b; the code and the tests of the registered run are 28ecabcc; amendment 1 is 3c20eaec; the corrected
+checks and the known-miss records are bf19fe05. The K unit tests ran once (0.1 s), then the flow tests once (2.8 s, two
+threads), then amendment 1 was written and committed, then the two corrected planar tests ran once (1.1 s). The runs are
+deterministic; none was repeated to change a result.
+
+**Built as registered** (S1 to S4). `crates/rcfd-mesh/src/non_conformal.rs`: `Registry`, `Chart`, `clip_polygon`, `shoelace`
+made `pub(crate)` (visibility only). New `crates/rcfd-mesh/src/sliding_periodic.rs` (join, interface, mesh, and the K1, K2,
+K3/K5, K6 unit tests). `crates/rcfd-fv/src/sliding.rs`: `interface_balance` calls the new `graph_balance` with the same edges,
+weights and order. New `crates/rcfd-fv/src/sliding_periodic.rs`. `crates/rcfd-fv/src/pimple/moving.rs` lines 286 to 432: the
+body of `step_sliding` moved unchanged into the private `sliding_advance` (messages formatted with the caller's name, the same
+text for `step_sliding`), new `step_sliding_periodic`. New `crates/rcfd-fv/tests/sliding_periodic_f304.rs` (10 tests: 8 run,
+2 ignored known-miss records). One deviation: K4 and K4n need `FvGeometry::periodic_pairs`, which is in `rcfd-fv`, so they are
+in the flow test file, not in the `rcfd-mesh` unit tests. `docs/dynamic-mesh.md`: prose. No case-tree, CLI, schema, golden or
+hash-table change.
+
+### Results
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| K1 face map, PP and SS, four steps each | exact | exact | met |
+| K2 (i) planar slider faces `W = S . d` | `<= 1e-12` | `2.15e-14` (648 faces) | met |
+| K2 (ii) sector radial faces | `<= 1e-12` | `2.11e-14` (200 faces) | met |
+| K2 (iii) stator, interface, wrap faces | exact zero | zero | met |
+| K3 total volume, 12 meshes | `<= 1e-12` | `5.27e-15` worst (PP), `3.5e-16` (SS), `8.9e-16` (S3) | met |
+| K4 (c5) pairs kept: partners and transforms, count (16, 16, 20 seam pairs plus 0 to 84 wrap pairs), seam identity, wrap identity, wrap count, 12 meshes | exact | exact everywhere | met |
+| K4n (negative control) existing joins | `0` pairs | `0` (PP), `0` (SS) | held |
+| K5 tiling; closure | `<= 1e-12`; `<= 1e-13` | `2.98e-15`; `9.5e-17` | met |
+| K6 refusals | `Err`, named | offset (6 cases), `plane`, `period` | met |
+| P1 (registered) `abs(Q_I - Q_in) / Q_in` | `<= 1e-10` | `2.00e0` | **defective set-up** (sign, amendment 1) |
+| P1c (c1, amendment 1) `abs(Q_I + Q_in) / Q_in` | `<= 1e-10` | `4.41e-14` | met |
+| P2 outflow | `<= 1e-10` | `5.55e-16` | met |
+| P3 continuity | `<= 1e-9` | `2.05e-12` | met |
+| P4 GCL | `<= 1e-12` | `1.05e-14` | met |
+| P5 remapped old flux from step 2 | `<= 1e-9` | `5.13e-15` | met |
+| P6 periodic pair sums | `<= 1e-12` | `9.97e-16` | met |
+| P7 (set-up) pair changes | `>= 30` (derived 40) | 40 | held |
+| P8 (c2) uniform flow: velocity, pressure | `<= 1e-10` each | `9.21e-15`, `3.55e-13` | met |
+| P9 (registered) net flux part | `<= 1e-10` | `2.00e0` (GCL `1.05e-14`, continuity `5.83e-15` met) | **defective set-up** (sign) |
+| P9c (c1, amendment 1) | `1e-10`, `1e-12`, `1e-9` | `1.53e-15`, `1.05e-14`, `5.83e-15` | met |
+| PN1 / PN1c (negative control) direct faces alone | `>= 0.1` | `1.468` / `0.532` | held |
+| PN2 (negative control) wrap old flux zero | `>= 1e-6` | `1.56e-1` | held |
+| X0p PF, PU | `<= 70 deg`; one pitch | `41.94 deg`; 0.49 | held |
+| S1 (c3) `abs(Q_I - Q_in) / Q_in` | `<= 1e-10` | `1.06e-15` | met |
+| S2 outflow | `<= 1e-10` | `6.63e-16` | met |
+| S3 continuity | `<= 1e-9` | `3.39e-13` | met |
+| S4 GCL | `<= 1e-12` | `1.20e-14` | met |
+| S5 remapped old flux from step 2 | `<= 1e-9` | `2.57e-15` | met |
+| S6 periodic pair sums | `<= 1e-12` | `3.30e-15` | met |
+| S7 (set-up) pair changes | `>= 45` (derived 58) | 58 | held |
+| S8 (c4) uniform axial flow, 3-D sector: velocity, pressure | `<= 1e-10` each | `4.89e-15`, `3.26e-14` | met |
+| S9 (c3) net flux, GCL, continuity | `1e-10`, `1e-12`, `1e-9` | `4.83e-17`, `5.49e-15`, `1.63e-15` | met |
+| SN1 (negative control) direct faces alone | `>= 0.1` | `0.478` | held |
+| SN2 (negative control) interface and wrap mesh flux zero | `>= 1e-6` | `2.87e-3` | held |
+| X0s SF, SU | `<= 70 deg`; one pitch | `49.19 deg`, `54.81 deg`; 0.5, 0.4 rad | held |
+| E1 refusals of `step_sliding_periodic` | `Err`, unchanged | BDF2, another pair: both | met |
+| E2 refusal of `periodic_sliding_step` | `Err` | short flux: `Err` | met |
+| D1 `baseline_hashes` | pass | 3 passed, 1 ignored (as before) | met |
+| D2 existing suites | pass | `rcfd-mesh` lib 74 passed / 2 ignored; `rcfd-fv` lib 106 / 6; `sliding_interface_f250` 14 / 4; records R1 to R3 `e4bc6f7b23554262`, `77a3c29e4ad6f213`, `6378ceeeaacb6799` equal | met |
+
+Printed, no limit: SF velocity error against `U_in r_i / r` `7.61e-3 U_in` (ADR 0216 on the full annulus `6.19e-3`; the
+coupled wrap faces carry no non-orthogonal correction); wrap pairs at the end of PF 17 and of SF 21; PF `Q_in = 5.000000e-2`.
+
+### Mutations
+
+Each applied alone by an exact text replacement to a `git archive` copy of bf19fe05 in `w49i-work/f304-scratch/mut`
+(script `mutate.py`, target `f304-scratch/target-mut`), the named tests run once, the file restored and compared with the
+kept copy.
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 partners of merged patches not re-applied | K4 | caught: 0 seam pairs at every offset (16, 16, 20 expected), (a) and (c) false |
+| MU2 wrap transform sign flipped | K4 | caught: `FvGeometry::new` refuses the wrap patches (not matched by the periodic transform) |
+| MU3 stator copy's old flux `+x` | P5 or P8 | caught: P5 `1.49e0`, P8 velocity `1.02e0` |
+| MU4 rotor swept volumes zero | K2 | caught: K2 (i) and (ii) relative error `1.00e0` |
+| MU5 interface closure skipped | S8 or S9 | caught: S8 velocity `2.87e-3`, S9 GCL `2.61e-3` |
+
+Disclosure: the session running the mutations was killed while MU4 ran (MU1 to MU3 had finished and logged). The MU4 file of
+the scratch copy was restored from its kept copy (compared equal to the branch file), and MU4 and MU5 were run once after the
+kill; MU1 to MU3 were not re-run. Every registered check had finished before the kill. Five of five mutations caught.
+
+`cargo fmt -p rcfd-mesh --check`, `cargo fmt -p rcfd-fv --check`: clean. `cargo clippy -p rcfd-mesh -p rcfd-fv --all-targets
+-- -D warnings` (release): clean. Not run: the whole workspace suite (the lead's gate).
+
+### Decision
+
+By the registered rule with amendment 1: K4 (c5), P1c, P8, P9c (c1, c2), S1, S8, S9 (c3, c4), D1 and D2 (c6) met; the set-up
+checks and the negative controls held; five of five mutations caught. **Done** in the library, with the stated limit of one
+period of offset. P1 and P9 as registered were defective (the sign of the planar measure) and stay as ignored records.
+
+### Remaining questions
+
+- **Q3. A rotor turning beyond one period (re-imaging).** Options: (a) a follow-up item: re-image the rotor by one period when
+  the offset reaches `P` (the rotor's cell vectors and their history turned by `-Theta`, the old mesh rebuilt in the new image,
+  the face map as now), with a run of several pitches registered against these limits; (b) leave it to the case-tree wiring
+  F-303. Recommendation (a): a sector rotor of a fan must turn many pitches, and the solver operation is separate from the
+  tree.
+- **Q4. Non-orthogonal correction on coupled faces.** The wrap faces are coupled with the orthogonal pressure coefficient only
+  (read 5); SF's velocity error is `7.6e-3` against `6.2e-3` on the full annulus. Options: (a) leave it and measure it in the
+  re-imaging follow-up against the full annulus; (b) a solver change for coupled faces (touches every periodic case, so it
+  would change default results). Recommendation (a); (b) is left open for the maintainer.
+- **Q5. Sectors of different pitch** remain out of scope (refused); a pitch-change model is a separate item if wanted.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> CFD solver, moving meshes. Split from F-250 (ADR 0216 question 3). DONE in the library. ADR 0629, 2026-11-16: planar and sector sliding interfaces with periodic seams (rcfd_mesh::sliding_periodic, rcfd_fv::sliding_periodic, PimpleSolver::step_sliding_periodic). A periodic join keeps the blocks' seam pairs (partner, transform, face identity) and couples the part of the rotor beyond the stator's seam to the stator's periodic image by pairs of coupled boundary faces in two appended patches, whose mesh flux and old flux are antisymmetric; the GCL closure and the old-flux projection of ADR 0216 run on the graph of the direct faces and the wrap pairs. Planar slider (20 against 16 cells, periodic in x, 0.49 of the period): mass across the interface per step 4.4e-14 relative (limit 1e-10, 1e3 pressure-solver tolerances), a uniform flow held to 9.2e-15 (pressure 3.6e-13), GCL 1.1e-14, periodic pair sums 1.0e-15. Sector (60 deg, 24 against 20 cells, 0.5 rad): radial source flow mass 1.1e-15, continuity 3.4e-13; 3-D sector (12 against 10 cells, 2 against 3 layers) uniform axial flow held to 4.9e-15. Periodic pairs kept on 12 meshes: 16, 16 and 20 seam pairs plus 0 to 84 wrap pairs, identity exact; the existing joins keep 0 (negative control). Negative controls held, five of five mutations caught, baseline hashes and the F-250 suites unchanged. Amendment 1: the registered planar mass measure had the wrong sign (the inflow enters the stator); corrected before its run. Limits: offsets within one period (no re-imaging of the rotor), sectors of different pitch refused, no non-orthogonal correction on the coupled wrap faces, no case-file key (F-303).
+
+> Follow-up proposed: Sector and planar sliding beyond one period (re-imaging of the rotor). Deps F-304. Acceptance: Every limit not stated here is registered in the ADR before the run. A rotor sector turning at least three sector pitches and a planar slider at least three periods, re-imaged by one period whenever the offset reaches it, conserve mass and a uniform flow to round-off in every step including the re-imaging steps; the radial source flow on the sector against the full-annulus sliding run of ADR 0216 within a registered limit; defaults bit-identical.

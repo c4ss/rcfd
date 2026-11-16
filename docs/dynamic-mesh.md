@@ -19,7 +19,13 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
 * No turbulence, energy, scalars, particles, sources, rheology, statistics or restart.
 * Sliding interfaces in the library only (F-250, ADR 0216): a rotor block turning against a stator block across a
   cylinder, the interface rebuilt every step, in the PISO/PIMPLE path (`rcfd_fv::sliding`,
-  `PimpleSolver::step_sliding`). The tree does not use it yet (ADR 0216 Q1); no planar or sector slide.
+  `PimpleSolver::step_sliding`). The tree does not use it yet (ADR 0216 Q1).
+* Planar and sector sliding interfaces with periodic seams, library only (F-304, ADR 0629): a slider periodic in the slide
+  direction, or a rotor sector against a stator sector of the same pitch (`rcfd_mesh::sliding_periodic`,
+  `rcfd_fv::sliding_periodic`, `PimpleSolver::step_sliding_periodic`). The periodic join keeps the blocks' seam pairs; the
+  part of the rotor beyond the stator's seam meets the stator's periodic image through a pair of coupled boundary faces
+  (patches `sliding_wrap_a` / `sliding_wrap_b`, appended last). Offsets within one period only (no re-imaging of the rotor
+  yet); sectors of different pitch are refused; no case key (F-303).
 * Local remeshing of tetrahedral meshes is in the library since F-247 (ADR 0215), for the compressible solver in a box
   with planar walls; the case tree does not use it yet (ADR 0215 Q1).
 * Overset (chimera) meshes in the library only (F-134, ADR 0219): one component mesh moving rigidly over a static
