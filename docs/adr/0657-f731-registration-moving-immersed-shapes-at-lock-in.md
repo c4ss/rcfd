@@ -258,3 +258,143 @@ tested beyond the bracket. First-order forcing of ADR 0218. Items of D5a.
 - **Q2. The base limits.** They are wider than F-707's (lock-in lift is set by the near wake, resolved differently in the two
   meshes). Options: (a) as registered; (b) tighter, with a finer IB core. Taken (a) on the maintainer's standing instruction of
   2026-11-11 (take the recommendation).
+
+## Addendum 1: results (2026-11-16)
+
+Release builds on Windows. Registration c88a491e; the test file d23a9f4e, on which the fast tests and the heavy record were run
+once each. No amendment was written and no limit was changed. Logs in `w49i-work/f731-scratch/logs`: `fast_tests.log`,
+`heavy_record.log`, `mutations.log`, `clippy.log`. No library line changed (no solver file touched), so `baseline_hashes` was not
+run: the default bits are unchanged by construction. After the run the heavy record was renamed `f731_lockin_record_known_miss`
+with an ignore reason and a doc comment that record the measured numbers; its code and limits are as run.
+
+### The heavy record (run once, 15 427 s wall, nine threads on a shared machine)
+
+Every run finished (S1): largest step continuity 4.3e-10 (BF runs), 5.7e-10 (IB0), 4.5e-8 (IB), 1.1e-5 (N1); largest Courant
+1.45 (BF), 0.92 (IB), 1.02 (N1). Run times 2 455 s (BFc0) to 15 427 s (BF-), about twice the estimate of arithmetic 7 (the
+machine was shared, and the mutation builds ran beside the first hour).
+
+Fixed cylinders (window `t >= 80`, ten crossings each):
+
+| Run | `St = f0` | Halves of f (rel.) | Lift half range, halves | Mean drag (reported) |
+| --- | --- | --- | --- | --- |
+| BF0 (256 x 128) | 0.164794 | 4.6e-6 | 0.177620, 0.177623 | 0.6818 |
+| BFc0 (128 x 64) | 0.164154 | 5.6e-6 | 0.174522, 0.174524 | 0.6820 |
+| IB0 (D/40) | 0.164721 | 4.4e-6 | 0.179316, 0.179317 | 0.6828 |
+
+Forced runs (window: the last four periods; every per-period value of P1 equal to the printed digits in every run but N1, whose
+periods differ by 0.2 per cent in drag and 0.05 degree in phase):
+
+| Run | f | Mean drag | Lift harmonic (re, im) | Amplitude | Phase | L1 | L2 | `C_a`, `C_v` (reported) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| BF | 0.140000 | 0.818933 | (+0.010988, +0.046567) | 0.047846 | -103.28 deg | 1.9e-9 | 1.4e-4 | -0.036, 0.093 |
+| BF- | 0.136111 | 0.801596 | (+0.014063, +0.055023) | 0.056792 | -104.34 deg | 9.7e-10 | 9.8e-5 | -0.049, 0.110 |
+| BF+ | 0.144118 | 0.837997 | (+0.005343, +0.035982) | 0.036376 | -98.45 deg | 2.0e-9 | 2.0e-4 | -0.017, 0.072 |
+| BFc | 0.140000 | 0.822281 | (+0.014846, +0.048000) | 0.050244 | -107.19 deg | 1.7e-9 | 9.5e-5 | -0.049, 0.096 |
+| IB | 0.140000 | 0.821987 | (+0.006102, +0.054801) | 0.055140 | -96.35 deg | 1.0e-8 | 0.129 | -0.020, 0.110 |
+| N1 | 0.140000 | 0.836600 | (-0.893867, -0.470384) | 1.010079 | +27.76 deg | 9.7e-4 | 1.3e-2 | 2.94, -0.94 |
+
+Ratios: `r_BF = 0.84955`, `r_IB = 0.84992`, `r_BFc = 0.85286`, bracket 0.82595 to 0.87453 (F2, inside the expected [0.75,
+0.97]). Slopes (D4): `s_D = +0.915`, `s_A = -8.78`, `s_P = +121.2` deg, `s_C = 9.01`; `Delta r = +3.8e-4`, `Delta r_c =
++3.3e-3`.
+
+| Id | Check | Limit | Measured | Met |
+| --- | --- | --- | --- | --- |
+| F1 | fixed runs saturated, BF0 / BFc0 / IB0 | f 0.005, range 0.02 | 4.6e-6, 1.3e-5 / 5.6e-6, 1.1e-5 / 4.4e-6, 8.7e-6 | met |
+| F0 | `f0_IB/f0_BF - 1`; `f0_BFc/f0_BF - 1` | <= 0.045 | -4.4e-4; -3.9e-3 | met |
+| L1 | lock, lagged: IB, BF, BF-, BF+, BFc | <= 0.03 | 1.0e-8; 1.9e-9, 9.7e-10, 2.0e-9, 1.7e-9 | met |
+| L2 | lock, spectral: IB | <= 0.05 | **0.129** | **missed** |
+| L2 | lock, spectral: BF, BF-, BF+, BFc | <= 0.05 | 1.4e-4, 9.8e-5, 2.0e-4, 9.5e-5 | met |
+| X1 | L1 of the fixed BF0, IB0 at the forcing period | > 0.1 | 1.068, 1.066 | met |
+| J1 | phase change across the bracket | <= 25 deg | 5.89 deg | met |
+| J1 | amplitude change across the bracket over `abs(Lhat_BF)` | <= 0.25 | **0.427** | **missed** |
+| A1 | mean drag | <= 0.0403 | 3.73e-3 | met |
+| A2 | lift amplitude | <= 0.0833 | **0.152** | **missed** |
+| A3 | lift phase | <= 8.05 deg | 6.92 deg | met |
+| A4 | lift harmonic, complex | <= 0.1234 | **0.200** | **missed** |
+| A5 | mean lift over `abs(Lhat_BF)` | <= 0.05 | 4.3e-6 | met |
+| R1 | BFc against BF: drag; complex harmonic | <= 0.0330; <= 0.1098 | 4.09e-3; 8.60e-2 | met |
+| N1a | velocity left out: mean drag | > 0.0403 | **0.0216** | **missed (N1 does not miss the drag)** |
+| N1b | N1: lift amplitude | > 0.0833 | 20.1 | met (misses) |
+| N1c | N1: lift phase | > 8.05 deg | 131.0 deg | met (misses) |
+| N1d | N1: complex harmonic | > 0.1234 | 21.8 | met (misses) |
+| S1 | no stop | no stop | none stopped | met |
+
+Reported: IB against BF interpolated linearly to `r_IB`: drag 2.96e-3, amplitude 0.182, complex 0.212 (the allowance is
+negligible, `Delta r` being 4e-4).
+
+### Fast tests and mutations
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| T1 | as registered | far-field faces on the square within 1.8e-15; 64, 32, 16 faces on `x = -8`, all and only the inflow faces; smallest volumes 1.14e-4, 4.57e-4, 1.84e-3, positive at every pose | met |
+| T2 | 1e-12; 1e-9 deg; 1e-3; 1e-6; 1e-14 | 6.2e-15, 1.3e-14; 7.4e-13 deg; 1.1e-16; 0 (10 crossings); 0 | met |
+| T3 | 1e-3 | 6.43e-4 with and without the velocity | met |
+| T4 | 1e-6; 1e-12; bits | continuity 5.7e-11; centre to 1e-17; far field unchanged | met |
+| T5 | bits; 1e-12 | the solver mesh is the posed grid bit for bit, cylinder centre (-9e-18, -0.5), largest difference 0.5; the fixed specification starts on the unmoved points | met |
+| T6 | bits; 1e-3 | initial fields the perturbation bit for bit; IB solid cells 2.84e-4 after the first step | met |
+
+Nine of nine mutations caught (each run once on a scratch copy): M1 (BF solver on the unmoved grid, the F-707 survivor) by T5;
+M2 by T5; M3, M4, M5, M6 by T2; M7 by T6; M8 by T4 and T5; M9 (library) by T3.
+
+Deviation in T2: the sinusoid of the closed-form L1 check was written as `sin(2 pi f0 (t - t_c))` with `t_c` the centre of an
+8-period window (odd about the centre, so its window mean vanishes and the 7 summed periods hold exactly 8 cycles), not with the
+time origin at 0. This is a choice of the synthetic series' time origin, made in the code before any run; limit unchanged.
+
+### Diagnosis of the misses
+
+1. **The first lift harmonic nearly cancels at this forcing point (A2, A4, J1 amplitude).** The reference lift harmonic is 0.048,
+   against a lift half range of 0.178 for the fixed cylinder and a harmonic of 1.01 for N1; its part in phase with the
+   acceleration is nearly zero (`C_a = -0.04`) and its phase about -100 degrees. The added-mass part (`rho pi r^2 A omega^2 =
+   0.30` for `C_a = 1`) and the vortex lift almost cancel: the amplitude minimum of the total lift that goes with its phase
+   change. The framing (from memory) put the phase jump near or above the natural frequency and did not foresee a near
+   cancellation at `r = 0.85` for A/D 0.5. The phase changes slowly here (5.9 degrees across the bracket, J1 phase met), but the
+   amplitude changes by 43 per cent of itself, so every check normalised by `abs(Lhat_BF)` is ill-conditioned. In absolute terms
+   the IB and BF lift harmonics differ by 0.0096 (complex) and 0.0073 (amplitude): 5.4 and 4.1 per cent of the fixed cylinder's
+   lift half range, 3.2 and 2.4 per cent of the added-mass scale. The reference's own coarse-mesh difference (R1) is 0.0041 in
+   absolute terms, so the immersed difference is about 2.3 times the reference's resolution error, more than estimated. The drag
+   (0.37 per cent) and the phase (6.9 degrees, within 8) agree.
+2. **L2 of IB (0.129).** The IB lift is periodic at the forcing period to 1.0e-8 (L1), so the run is locked; L2 counts the
+   harmonics above the fifth. The staircase surface of the moving immersed cylinder changes by whole cells as it moves, and with a
+   first harmonic of only 0.055 those cell-crossing steps of the force, repeated every period, carry 13 per cent of the rms. The
+   body-fitted runs, with a smooth surface, give 1e-4. L2 is a lock measure only while the lift is dominated by its low
+   harmonics, which the cancellation removed. The force series were not saved (only their hashes), so the content above the
+   fifth harmonic is not shown by numbers; the cause is inferred from L1 and the BF values.
+3. **N1a (the negative control's drag differs by 2.2 per cent, not more than 4.0).** At Re 100 the mean drag is set mostly by
+   the wake, which N1 still sheds in lock (L1 9.7e-4); the part due to the body velocity in the forcing is smaller than at Re 20
+   (F-707: +10.8 per cent). The control misses the lift by a factor 21 and the phase by 131 degrees, but not the drag.
+
+### fmt, clippy, tests run
+
+`cargo fmt -p rcfd-fv --check` clean; `cargo clippy -p rcfd-fv --all-targets -- -D warnings` clean. Tests run (release): the
+`immersed_lockin_f731` file (the fast tests once before the record and once more after the rename; the heavy record once). No
+existing line of any other file changed.
+
+### What was not run
+
+The whole workspace suite and the rcfd-fv integration suite (the daily gate); `baseline_hashes` (no solver file changed); other
+amplitudes or frequencies; a map of the lock-in range and of the phase jump.
+
+### Decision by the registered rule
+
+F0, F1, L1, X1, J1 phase, A1, A3, A5, R1, N1b to N1d, S1 and T1 to T6 are met and nine of nine mutations caught, with no
+amendment. L2 of IB, J1 amplitude, A2 and A4 are missed, and N1a is not exceeded. By the rule: **partial**. Clauses c3 (locked:
+L1 met in every run), c4 (drag), c6 (phase) and c7 (start pose) are met; c5 (lift amplitude) is missed; c2 is met on the phase
+and missed on the amplitude; c8 holds for lift and phase but not for drag.
+
+### Remaining questions
+
+- **Q1 (open, from the registration).** A case-file key for moving immersed bodies. Open (schema golden).
+- **Q3. The next forcing point.** (a) a follow-up at a point where the first lift harmonic is not nearly cancelled (A/D 0.25 at
+  the same `r`, or `r` about 1.1), with lift limits stated against a fixed force scale (the fixed cylinder's lift half range or
+  the added-mass scale) beside the relative ones, and the force series written to the scratch folder for diagnosis; (b) accept
+  this record as the lock-in evidence. Recommendation (a); it needs a new registration.
+- **Q4. N1 at Re 100.** (a) take the lift and phase misses as the negative control (the drag is wake-dominated); (b) require
+  the drag as well in a follow-up. Recommendation (a), written into the proposed follow-up acceptance.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> Moving immersed shapes at lock-in, a transversely oscillating cylinder shedding vortices. Follow-up of F-707 (ADR 0648). PARTIAL (ADR 0657, 2026-11-16): test-only, no library change (the F-308 MovingImmersed; default bits unchanged by construction). Re 100, A/D 0.5, f D/U 0.14, in the square of half side 8 D with a Freestream far field, PISO with linear upwind, dt = T/700 for every run, 20 periods, window the last 4; immersed on a Cartesian D/40 core against the body-fitted swept-volume ALE run on a 256 x 128 O-grid mapped to the same square, started on the grid at the initial pose (fast test T5, which catches the F-707 survivor). Fixed cylinders give St 0.16479 (body-fitted) and 0.16472 (immersed): natural frequencies within 0.044 per cent, so f/f0 = 0.850 in both and the registered allowance (the slope from body-fitted runs at -2.8 and +2.9 per cent of the forcing frequency times the ratio difference) is negligible. Every forced run is locked (lift periodic with the forcing period to 1e-8). Met: mean drag 0.8220 against 0.8189 (0.37 per cent, limit 4.0), lift phase -96.4 against -103.3 degrees (6.9, limit 8.0), phase change across the bracket 5.9 degrees (limit 25), mean lift, the 128 x 64 reference within its limits; with the body velocity left out of the forcing the lift is 21 times larger and 131 degrees off. Missed (limits unchanged, known-miss record): lift amplitude 0.0551 against 0.0478 (15 per cent, limit 8.3) and complex harmonic 20 per cent (limit 12.3), because the first lift harmonic nearly cancels at this point (0.048 against 0.178 for the fixed cylinder; it changes by 43 per cent across the bracket, limit 25), absolute differences 0.007 to 0.010; the immersed lift's harmonics above the fifth hold 13 per cent of its rms (staircase cell crossings, limit 5); the negative control's mean drag differs by only 2.2 per cent (limit: more than 4.0). Six fast tests, nine of nine mutations caught. Not included: other amplitudes and frequencies, a map of the lock-in range and the phase jump, a case-file key (open, F-307 schema golden), rotating or deforming shapes, BDF2, three dimensions.
+
+> Follow-up proposed: Moving immersed shapes at lock-in where the lift does not cancel. Deps F-731. Acceptance: Every limit not stated here is registered in the ADR before the run. A cylinder oscillating across a uniform stream at Re 100 inside the lock-in range, at a forcing point where the first harmonic of the lift is at least half the fixed cylinder's lift amplitude in the body-fitted reference, gives the shedding locked to the forcing, the mean drag, the lift amplitude and the phase of the lift against a body-fitted moving-mesh run of this repository within registered limits that allow for the natural-frequency difference of the two discretisations, with the lift limits stated against a fixed force scale as well as relative; the force series are kept for diagnosis; a negative control with the body velocity left out of the forcing misses the lift amplitude and phase.

@@ -8,8 +8,8 @@
 //! measure with respect to `f / f0`, and each limit is a base plus that slope times the ratio difference (ADR 0657 D4).
 //!
 //! The limits, set-ups, measures and mutations were registered in ADR 0657 before this file existed. The fast tests T1 to T6 run
-//! by default; the heavy record `f731_lockin_record` (nine runs on nine threads, several hours in release) is ignored and was run
-//! once.
+//! by default; the heavy record `f731_lockin_record_known_miss` (nine runs on nine threads, about 4.3 hours in release) is ignored and
+//! was run once (as `f731_lockin_record`; renamed after its run with the registered limits intact, ADR 0657 addendum 1).
 
 use rcfd_core::vec3::{self, Vec3};
 use rcfd_fv::ale::{move_mesh, set_follow_conditions};
@@ -957,10 +957,14 @@ fn lift_parts(l: (f64, f64), first: usize, last: usize, spec: &Spec) -> (f64, f6
     (ca, cv)
 }
 
-/// ADR 0657: the registered heavy record (run once).
+/// ADR 0657: the registered heavy record (run once, 15 427 s). KNOWN MISS (ADR 0657 addendum 1; limits unchanged): L2 of IB
+/// 0.129 (limit 0.05; L1 1.0e-8, periodic), J1 amplitude 0.427 (limit 0.25), A2 0.152 (limit 0.0833), A4 0.200 (limit 0.1234),
+/// N1a 0.0216 (must exceed 0.0403). Met: F0, F1, X1, L1 of every run, L2 of the body-fitted runs, J1 phase 5.9 deg, A1 3.7e-3,
+/// A3 6.9 deg, A5, R1, N1b to N1d. Cause: the first lift harmonic nearly cancels at this forcing (0.048 against 0.178 for the
+/// fixed cylinder and 1.01 without the body velocity), so the relative lift measures are ill-conditioned.
 #[test]
-#[ignore = "heavy record (ADR 0657): nine runs, several hours in release"]
-fn f731_lockin_record() {
+#[ignore = "known miss (ADR 0657 addendum 1): L2 IB, J1 amplitude, A2, A4, N1a; heavy record, nine runs, about 4.3 h in release"]
+fn f731_lockin_record_known_miss() {
     let t0 = Instant::now();
     let jobs: Vec<(&str, Job)> = vec![
         ("BF0", Box::new(|| run_bf("BF0", 256, 128, Spec::fixed()))),
