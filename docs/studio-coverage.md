@@ -21,11 +21,11 @@ Engine read: rcfd 0.1.0, service protocol rcfd-service/1 version 1.1, MCP server
 |---|---|---|---|---|
 | Service methods | 69 | 8 | 61 | 47 |
 | MCP tools | 56 | 7 | 49 | 27 |
-| CLI commands | 36 | 2 | 34 | 20 |
-| CLI options | 156 | 0 | 156 | 99 |
+| CLI commands | 36 | 3 | 33 | 20 |
+| CLI options | 156 | 3 | 153 | 105 |
 | Case schema keys | 948 | 948 | 0 | 0 |
 | Monitor format keys | 6 | 6 | 0 | 0 |
-| **All** | **1271** | **971** (76.4 %) | **300** | **193** |
+| **All** | **1271** | **975** (76.7 %) | **296** | **199** |
 
 A case key stands for every value of its enumeration (the solver options of that key, listed in the inventory): the
 schema-driven surface of F-825 offers them all. A CLI option is mapped with its command. "Item does not name it" marks an
@@ -59,7 +59,7 @@ new item (see the last sections).
 | F-813 a learner's first path | 2 | `list_cases`, `new_case` |
 | F-815 compare two runs | 6 | `compare_runs`, `design_compare_variants` (not named), `design_get_metrics` (not named), `design_ledger_query` (not named), `design_ledger_rerun_check` (not named), `design_list_study` (not named) |
 
-### CLI commands (34 without a UI path)
+### CLI commands (33 without a UI path)
 
 | Item | Count | Capabilities |
 |---|---|---|
@@ -69,12 +69,11 @@ new item (see the last sections).
 | F-811 residual and monitor plots | 1 | `rcfd post` (not named) |
 | F-812 case editor validated by the engine's schema | 5 | `rcfd check`, `rcfd check-mesh`, `rcfd inflate` (not named), `rcfd partition` (not named), `rcfd validate` |
 | F-813 a learner's first path | 1 | `rcfd cases` |
-| F-814 Claude Code panel | 1 | `rcfd-mcp` |
 | F-825 schema-driven case and settings surface | 1 | `rcfd schema` |
 | F-827 one action layer for every UI action | 1 | `rcfd call` (not named) |
 | F-828 provenance inspector and reproduce-from-CLI | 3 | `rcfd data list` (not named), `rcfd data provenance` (not named), `rcfd data verify` (not named) |
 
-### CLI options (156 without a UI path)
+### CLI options (153 without a UI path)
 
 | Item | Count | Capabilities |
 |---|---|---|
@@ -84,7 +83,7 @@ new item (see the last sections).
 | F-811 residual and monitor plots | 2 | `rcfd post` (2) |
 | F-812 case editor validated by the engine's schema | 30 | `rcfd check` (2), `rcfd check-mesh` (1), `rcfd inflate` (12), `rcfd partition` (15) |
 | F-813 a learner's first path | 1 | `rcfd cases` (1) |
-| F-814 Claude Code panel | 9 | `rcfd-mcp` (9) |
+| F-814 Claude Code panel | 6 | `rcfd-mcp` (6) |
 | F-825 schema-driven case and settings surface | 1 | `rcfd schema` (1) |
 | F-827 one action layer for every UI action | 1 | `rcfd call` (1) |
 | F-828 provenance inspector and reproduce-from-CLI | 11 | `rcfd` (1), `rcfd data list` (3), `rcfd data provenance` (3), `rcfd data verify` (3), `rcfd run` (1) |
@@ -109,6 +108,7 @@ holds the other way round). The reasons are in `coverage.json`.
 - Restarts from a checkpoint or another solution, headless runs under the run-control contract, status streams and the runner's shutdown: F-807 names quick run, stop, pause and queue only; nearest home F-807. (F-807): `run.headless`, `status.read`, `read_status_stream`, `run_headless`, `rcfd restart`, `rcfd-runner shutdown`, `rcfd restart --*`, `rcfd run --checkpoint`, `rcfd run --checkpoint-every`, `rcfd run --continue-from`, `rcfd run --interpolate-case`, `rcfd run --interpolate-checkpoint`, `rcfd run --interpolate-mode`, `rcfd run --method`, `rcfd run --restart-from`, `rcfd run --source-case`.
 - Runs of an in-memory service session (the run methods of a session, the MCP run and status tools): F-807 runs through the runner only, and whether the Studio also runs service sessions is open; nearest home F-807. (F-807): `run.initialize`, `run.pause`, `run.resume`, `run.start`, `run.status`, `run.step`, `run.stop`, `run.wait`, `run`, `status`.
 - Task workflows (the workflow methods, tools and commands): no Studio item covers them; nearest home run control (F-807). (F-807): `workflow.create`, `workflow.delete`, `workflow.get`, `workflow.insert`, `workflow.list`, `workflow.load`, `workflow.run`, `workflow.save`, `create_workflow`, `edit_workflow`, `list_workflow_tasks`, `run_workflow_task`, `rcfd workflow run`, `rcfd workflow show`, `rcfd workflow templates`, `rcfd workflow run --*`, `rcfd workflow show --*`.
+- The Claude Code panel (F-814) runs rcfd-mcp with the engine's defaults for case roots, the edit hook and the run and design limits; settings for them are not part of F-814. (F-814): `rcfd-mcp --*`.
 - The public validation-data pack (rcfd data): no Studio item covers it; nearest home provenance (F-828). (F-828): `rcfd data list`, `rcfd data provenance`, `rcfd data verify`, `rcfd data list --*`, `rcfd data provenance --*`, `rcfd data verify --*`.
 - The solver log of a service session: no item names a log view, and the runs table (F-806) shows the runner's runs, not service sessions; nearest home run control (F-807). (F-807): `log.tail`.
 - Waiting for a run to end is a call for scripts: the Studio shows the end live in Project > Runs (F-806) and needs no waiting call; nearest home run control (F-807). (F-807): `wait_run`, `rcfd-runner wait`, `rcfd-runner wait --*`.

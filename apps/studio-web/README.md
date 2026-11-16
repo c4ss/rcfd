@@ -170,6 +170,71 @@ Decisions taken in building F-806 (options, the recommendation followed; each re
 - Missing in the engine (no Rust change here): units of report values; a read-only query of whether the project's runner
   is alive (`RunService::runner_running` has no MCP tool), so a queued run under no runner cannot be told apart.
 
+## The Claude Code panel (F-814)
+
+An open project has a Claude Code panel on the right of its views (DESIGN.md Layout): the project's Claude Code
+sessions, the transcript of the selected one, and a message field. A session another process has open (a terminal, the
+VS Code extension, another Studio) is mirrored read-only as its transcript grows; a closed one is resumed with
+`claude -p --resume <id>`; "New chat" starts one with `--session-id <uuid>`. Run ids and project files named in a reply
+are chips that open the run in Runs or the file on Home. The panel hides to a slim strip and shows again. Surface brief:
+`.impeccable/surfaces/web-src-renderer-claude-claudepanel-tsx.md`.
+
+- Which claude: only the program named by `RCFD_STUDIO_CLAUDE=<path>` (a `.mjs`, `.cjs` or `.js` path runs on the
+  Studio's own runtime). PATH is never searched. Unset, the sessions are still listed from their transcripts, read-only.
+  Claude Code's home is `CLAUDE_CONFIG_DIR`, else `~/.claude`; the Studio's own records (folder confirmations, the MCP
+  config it hands Claude Code) are in `RCFD_STUDIO_CLAUDE_STATE`, else `<userData>/claude`, never in the project.
+- Sessions: the transcripts under `<home>/projects/<folder>/` and `claude agents --json` (every 2 s, `DISCOVER_MS`;
+  the transcript every 500 ms, `MIRROR_MS`; the last 50 entries, `TAIL`). Open: listed with a live process. Closed: not
+  listed. Unknown (the listing failed): read-only. Studio: answered by this Studio now.
+- One writer per session (G11): the main process holds one lock for the whole turn, from before its checks to the
+  process's exit; a second message is refused (`busy`). Right before every resume it lists again, so a session opened
+  elsewhere since the last listing is refused (`read_only`). A running `claude -p` is listed by `claude agents --json`,
+  so another Studio or terminal sees the session open.
+- Spawn: from the main process, no shell, the project folder as the working folder, the message as one stream-json line
+  on stdin (never in the argument list): `-p --output-format stream-json --verbose --include-partial-messages
+  --input-format stream-json --strict-mcp-config --mcp-config <app-owned file> --permission-mode dontAsk
+  --permission-prompts none --allowedTools <rule>... --resume|--session-id <id>`. `checkArgs` checks the whole list
+  before every spawn and refuses any bypass or approve-everything flag, another permission mode, `--settings`,
+  `--add-dir`, `--permission-prompt-tool` and malformed rules. A turn whose `system/init` does not report `dontAsk` is
+  killed before any action. Stop kills the process tree.
+- Tool approvals: the allow-list file `.rcfd/claude-allow.json` (`{"version":1,"rules":[...]}`) when valid (one bad
+  rule refuses the whole file and no chat starts), else the conservative first list: the 15 read-class tools of the
+  engine's project server (`mcp__rcfd_project__project_info`, `list_runs`, `run_status`, `read_metrics`,
+  `read_residuals`, `field_summary`, `render_field`, `compare_runs`, `list_changes`, `read_project_file`, `wait_run`,
+  `read_feed`, `check_case_mesh`, `preview_mesh`, `list_meshes`). Everything else is denied without asking; a denied
+  call shows the narrowest rule that would allow it.
+- The project server Claude Code is given: `rcfd-mcp --project <folder> --root <folder>` (`RCFD_STUDIO_MCP`), in an MCP
+  config the Studio writes in its own state folder; with `--strict-mcp-config` no other server is loaded. Without
+  `RCFD_STUDIO_MCP` the config lists no server.
+- The folder's Claude Code control files (`.mcp.json`, `CLAUDE.md`, `.claude/`, `.claude-plugin/`, the allow-list file)
+  can run code or widen permissions, so the first chat in a folder that has them asks to confirm them by name and hash;
+  a change asks again.
+- The page sees `window.studioClaude` (`state`, `onState`, `offState`, `select`, `send`, `cancel`, `confirm`,
+  `refresh`) over a MessagePort; the main process checks every message (`src/main/claude/bridge.ts`): exact fields, a
+  session that is null or a UUID, a message of at most 20,000 characters. The page cannot name a program, a flag or a
+  path.
+- Tests: `tests/unit/claude.spec.ts` (configuration, allow-list and argument check, readers, discovery, port, links, the
+  panel driven against the fake claude, stylesheet) and `tests/e2e/claude.spec.ts` (packaged app, quick-start copy,
+  screenshots in `test-results-visual/f814/`). Both use `tests/support/fake-claude.mjs`, which records its argument
+  list and replays a canned stream; no test starts a real claude.
+
+Decisions taken in building F-814 (options, the recommendation followed; each reversible without touching the engine):
+
+- D1, session discovery: (a) port the discovery, transcript and allow-list logic of `rcfd-claude` to the main process
+  as a stopgap; (b) wait for an engine entry point. Taken: (a); the engine has none (see below).
+- D2, which claude: (a) `RCFD_STUDIO_CLAUDE` only, as F-805 takes `RCFD_STUDIO_MCP`; (b) search PATH. Taken: (a), which
+  also keeps automated tests off a real CLI; packaging the CLI path is F-820's.
+- D3, placement: (a) the right column of the workspace, hideable (DESIGN.md Layout); (b) a third tab. Taken: (a).
+- D4, folder confirmation: ported from `rcfd-claude` (names and sha256, recorded in the Studio's state, not the folder).
+- D5, approvals: the allow-list file if valid, else the first list; a denied call shows its rule, but the Studio does
+  not write the allow-list file (it writes nothing into the project, G12; that needs an engine entry point).
+- D6, a file link: opens Home filtered to the file, until the case editor (F-812) can open it.
+- D7, a new chat: allowed, with `--session-id` and a UUID chosen by the main process.
+- D8, MCP config: always `--strict-mcp-config` with an app-owned config (no server when there is no `rcfd-mcp`).
+- Missing in the engine (no Rust change here): a CLI, MCP or service entry point for Claude Code session discovery,
+  transcript reading, resume and writing the allow-list file (`rcfd-claude` has the code; only the frozen egui Studio
+  uses it).
+
 ## Layout
 
 | Path | Process | Built by | Filled in by |
@@ -181,11 +246,14 @@ Decisions taken in building F-806 (options, the recommendation followed; each re
 | `src/shared/ipc.ts` | The typed IPC contract shared by all three processes: channel names, arguments, replies | `tsc -p tsconfig.node.json` -> `dist/shared/` | F-801 |
 | `src/main/project/` | The project home (no Electron import, unit-tested in Node): `server.ts` (the engine's project server over MCP), `session.ts` (one open folder: lists, feed, liveness), `home.ts` (recent list, opening, failures), `listing.ts` (case and note names, D2), `recent.ts`, `config.ts`, `bridge.ts` (the checks on the project port) | `tsc -p tsconfig.node.json` -> `dist/main/` | F-805 |
 | `src/shared/project.ts` | The project port's contract: what the home shows, the port messages, `window.studioProject` | as above | F-805 |
+| `src/main/claude/` | The Claude Code panel (unit-tested in Node; only `port.ts` imports Electron): `config.ts` (which claude), `allow.ts` (rules, the allow-list file, `checkArgs`), `discover.ts`, `transcript.ts`, `stream.ts`, `trust.ts` (control-file confirmation), `driver.ts` (spawning `claude`), `panel.ts` (one project's sessions, the writer lock), `bridge.ts` and `port.ts` (the Claude port) | `tsc -p tsconfig.node.json` -> `dist/main/` | F-814 |
+| `src/shared/claude.ts` | The Claude port's contract: what the panel shows, the port messages, `window.studioClaude` | as above | F-814 |
 | `src/shared/service.ts` | The service port's contract: the allow-list of service methods, the port messages, `window.studioService` | as above | F-803 |
 | `src/renderer/` | Renderer (browser code only, no Node types): React, three.js, React Aria Components | `vite build` -> `dist/renderer/` | F-802 onwards |
 | `src/renderer/design/` | `tokens.ts`, the one source of the `DESIGN.md` tokens (colour roles, type ramp, spacing, sizes, lines, focus, motion, pictogram grid); `tokens.css`, generated from it | as above | F-802 |
 | `src/renderer/ui/` | The primitives of `DESIGN.md` Components on React Aria Components: buttons, toggles and segmented toggles, text and number fields, select, switch, tabs (sub and project), table, slider, tooltip, state pictograms and icons; `primitives.css` | as above | F-802 |
 | `src/renderer/project/` | The project home (`ProjectHome.tsx`, `project.css`) and its one door to `window.studioProject` (`door.ts`) | as above | F-805 |
+| `src/renderer/claude/` | The Claude Code panel (`ClaudePanel.tsx`, `claude.css`), reference links in a reply (`links.ts`) and its one door to `window.studioClaude` (`door.ts`) | as above | F-814 |
 | `src/renderer/dev/` | The primitives gallery at `#/dev/primitives` (loaded on demand): every primitive and the tokens, with sample labels only | as above | F-802 |
 | `src/renderer/settings/` | The case settings surface at `#/settings/<session>` (loaded on demand): `schema.ts` (the model of `settings.schema`, value encoding), `disclosure.ts` (learner-first tiers, search), the page, the surface, key rows and groups, `settings.css` | as above | F-825 |
 

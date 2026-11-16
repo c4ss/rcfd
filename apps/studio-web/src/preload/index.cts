@@ -9,6 +9,8 @@
 //   forwards, so a page cannot get round them by calling a function differently.
 // - `window.studioProject`: the project folder (F-805, src/shared/project.ts), over a second port on
 //   PROJECT_PORT_CHANNEL in the same way; the checks are src/main/project/bridge.ts's.
+// - `window.studioClaude`: the Claude Code panel (F-814, src/shared/claude.ts), over a port on CLAUDE_PORT_CHANNEL in
+//   the same way; the checks are src/main/claude/bridge.ts's.
 //
 // CommonJS (.cts, emitted as .cjs) because a sandboxed preload cannot be an ES module, and a single file because a
 // sandboxed preload can only require 'electron' and a few built-ins: the shared modules are imported for their types
@@ -34,6 +36,14 @@ import type {
   ProjectRequest,
   ProjectState,
 } from '../shared/project.js';
+import type {
+  CLAUDE_PORT_CHANNEL as ClaudeChannel,
+  ClaudeBridge,
+  ClaudePortMessage,
+  ClaudeReply,
+  ClaudeRequest,
+  ClaudeState,
+} from '../shared/claude.js';
 import type {
   DATA_PORT_CHANNEL as DataPortChannel,
   DataBridge,
@@ -378,3 +388,91 @@ const data: DataBridge = {
 };
 
 contextBridge.exposeInMainWorld('studioData', data);
+
+// ---- the Claude port (F-814, src/shared/claude.ts): the same pattern as the project port, its own ids and listeners
+
+const CLAUDE_PORT_CHANNEL: typeof ClaudeChannel = 'studio.claude-port';
+/** A send waits for the session check and the start of claude; the others are answered at once. */
+const CLAUDE_TIMEOUT_MS = 60_000;
+
+let claudePort: Port | null = null;
+let nextClaudeId = 1;
+let nextClaudeListener = 1;
+const claudeQueued: ClaudeRequest[] = [];
+const claudePending = new Map<number, { resolve: (r: ClaudeReply) => void; timer: ReturnType<typeof setTimeout> }>();
+const claudeListeners = new Map<number, (s: ClaudeState) => void>();
+
+const claudeSettle = (id: number, reply: ClaudeReply): void => {
+  const p = claudePending.get(id);
+  if (!p) return;
+  claudePending.delete(id);
+  clearTimeout(p.timer);
+  p.resolve(reply);
+};
+
+const claudePost = (req: ClaudeRequest): void => {
+  try {
+    (claudePort as Port).postMessage(req);
+  } catch (e) {
+    claudeSettle(req.id, { ok: false, error: { code: 'bad_request', message: `the request cannot be sent: ${String(e)}` } });
+  }
+};
+
+const claudeSend = <T,>(req: ClaudeRequest): Promise<ClaudeReply<T>> =>
+  new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      claudeSettle(req.id, {
+        ok: false,
+        error: claudePort
+          ? { code: 'timeout', message: `no answer from the Studio's main process within ${CLAUDE_TIMEOUT_MS} ms` }
+          : { code: 'no_port', message: 'the Studio has not connected this window to Claude Code' },
+      });
+    }, CLAUDE_TIMEOUT_MS);
+    claudePending.set(req.id, { resolve: resolve as (r: ClaudeReply) => void, timer });
+    if (claudePort) claudePost(req);
+    else claudeQueued.push(req);
+  });
+
+ipcRenderer.on(CLAUDE_PORT_CHANNEL, (event) => {
+  const p = event.ports[0];
+  if (!p) return;
+  claudePort?.close();
+  claudePort = p;
+  p.onmessage = (e: { data: unknown }) => {
+    const m = e.data as ClaudePortMessage;
+    if (m?.type === 'reply') claudeSettle(m.id, m.reply);
+    else if (m?.type === 'state') {
+      for (const l of claudeListeners.values()) {
+        try {
+          l(m.state);
+        } catch {
+          // the page's listener failed; others still run
+        }
+      }
+    }
+  };
+  for (const req of claudeQueued.splice(0)) claudePost(req);
+});
+
+const claude: ClaudeBridge = {
+  state: async () => {
+    const r = await claudeSend<ClaudeState>({ op: 'state', id: nextClaudeId++ });
+    if (r.ok) return r.result;
+    throw new Error(r.error.message);
+  },
+  onState: (listener) => {
+    const id = nextClaudeListener++;
+    if (typeof listener === 'function') claudeListeners.set(id, listener);
+    return id;
+  },
+  offState: (id) => {
+    claudeListeners.delete(id);
+  },
+  select: (session) => claudeSend({ op: 'select', id: nextClaudeId++, session }),
+  send: (session, text) => claudeSend({ op: 'send', id: nextClaudeId++, session, text }),
+  cancel: () => claudeSend({ op: 'cancel', id: nextClaudeId++ }),
+  confirm: (token) => claudeSend({ op: 'confirm', id: nextClaudeId++, token }),
+  refresh: () => claudeSend({ op: 'refresh', id: nextClaudeId++ }),
+};
+
+contextBridge.exposeInMainWorld('studioClaude', claude);
