@@ -450,6 +450,11 @@ scale per parameter on the unit cube, the mean and the process variance profiled
 keeps near-duplicate points factorable. `Gp::predict` gives the mean and the standard deviation of the latent function,
 `Gp::loo` the leave-one-out residuals from one factorisation.
 
+Opt-in zero-mean mode (ADR 0663): `Gp::fit_zero_mean(u, y, noise_var, &ZeroMeanOptions)` and `Gp::zero_mean_with_hyper` model
+`y ~ N(0, s_f^2 (R + 1e-8 I) + diag(v))` with an absolute noise variance `v_i` per observation (output units squared, not a
+ratio), the process variance a fitted hyperparameter in an absolute box, the outputs neither centred nor scaled, and a fixed
+jitter. `predict`, `loo` and the likelihood gradient follow the mode. Rung R3 of the fidelity driver runs on it.
+
 `design::bayes` proposes the next variant by expected improvement over the best value so far:
 
 * `propose(bounds, observations, options)` is a deterministic function of the observations as a set (they are sorted first),
@@ -485,7 +490,7 @@ fits a discrepancy correction that the next rounds use for their ranking:
   region (box of the pairs grown by 0.05 and within 0.25 of a pair, unit box); outside, a query is flagged and gets the trusted
   constant only.
 * Rung R3 (ADR 0652, opt-in with `TrustRule::r3 = Some(R3Rule::default())`): R2 plus a zero-mean Gaussian process
-  (squared exponential, F-698's kernel and factorisation) on the R2 residual, the nugget from the stated uncertainty, the
+  (squared exponential, F-698's zero-mean mode, ADR 0663) on the R2 residual, the nugget from the stated uncertainty, the
   hyperparameters fitted once per fit by maximum likelihood and held in every leave-one-out fold. Its leave-one-out residuals
   come from a closed form that includes the refit of the R2 coefficients, `e3_i = ((G r)_i + e2_i (G P)_ii) / G_ii`
   (`G = C^-1`, `P` the hat matrix), and its predictive standard deviation as the conditional variance `1 / G_ii` plus the
