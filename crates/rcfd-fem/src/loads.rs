@@ -17,7 +17,9 @@
 //! [`crate::shell::thermal_load_vector`] (ADR 0445). A Shell4 element of a Layup block (ADR 0502 D1) takes gravity and the
 //! centrifugal load as `m0 int N_i b dA` with the moment of the first mass moment `m1 int N_i (e_3 x b) dA`
 //! ([`crate::shell::layup_body_load_vector_at`]) and the nodal body-force field over its total thickness; one isotropic ply
-//! the call of its `Shell` twin. Shell3 elements take the same loads from [`crate::shell3`] (ADR 0454);
+//! the call of its `Shell` twin. On the opt-in [`crate::model::SolidModel::set_layup_first_moment_force`] (ADR 0635) the
+//! centrifugal load of a layup also takes the force of the first mass moment `m1 Omega^2 P e_3`
+//! ([`crate::shell::layup_body_load_vector_affine_at`]), torque-free about the axis on any flat facet. Shell3 elements take the same loads from [`crate::shell3`] (ADR 0454);
 //! [`Load::ShellPressureAngleWeighted`] shares each Shell3 element's pressure force by its angles (ADR 0461).
 //! [`Load::ShellPressureCurvature`] gives a Shell3 set the curvature-scaled area-gradient load of ADR 0567.
 //!
@@ -190,7 +192,7 @@ pub fn nodal_load_vector(model: &SolidModel, extra: &[NodalForceAt]) -> Result<V
                     mesh,
                     |e, _, _| Ok([rho[e] * g[0], rho[e] * g[1], rho[e] * g[2]]),
                     Some(&beam),
-                    Some(ShellBody::PerMass(&shell, rho)),
+                    Some(ShellBody::PerMass(&shell, rho, None)),
                 )?;
             }
             Load::Centrifugal { axis, origin, omega } => {
@@ -219,6 +221,19 @@ pub fn nodal_load_vector(model: &SolidModel, extra: &[NodalForceAt]) -> Result<V
                     let s = density * w2;
                     Ok([s * r[0], s * r[1], s * r[2]])
                 };
+                // ADR 0635 D2: on opt-in, the derivative of the acceleration along a direction, Omega^2 P v (density 1), for the
+                // force of a layup's first mass moment.
+                let along = |v: Vec3| -> Result<Vec3> {
+                    let len = norm(axis);
+                    let a = [axis[0] / len, axis[1] / len, axis[2] / len];
+                    let s = dot(v, a);
+                    Ok([w2 * (v[0] - s * a[0]), w2 * (v[1] - s * a[1]), w2 * (v[2] - s * a[2])])
+                };
+                let first_moment: Option<&ShellAlongRule> = if model.layup_first_moment_force() {
+                    Some(&along)
+                } else {
+                    None
+                };
                 add_body_load_with(
                     &mut f,
                     &dofs,
@@ -229,7 +244,7 @@ pub fn nodal_load_vector(model: &SolidModel, extra: &[NodalForceAt]) -> Result<V
                         Ok([s * r[0], s * r[1], s * r[2]])
                     },
                     Some(&beam),
-                    Some(ShellBody::PerMass(&shell, rho)),
+                    Some(ShellBody::PerMass(&shell, rho, first_moment)),
                 )?;
             }
             Load::BodyForceNodal { values } => {
@@ -486,11 +501,15 @@ type ShellRule<'a> = dyn Fn(usize, &[f64], Vec3) -> Result<Vec3> + 'a;
 /// functions there and the point (gravity, the centrifugal load; ADR 0502 D1).
 type ShellMassRule<'a> = dyn Fn(f64, &[f64], Vec3) -> Result<Vec3> + 'a;
 
+/// The derivative of the acceleration of a density-proportional body force along a direction (density 1; ADR 0635 D2).
+type ShellAlongRule<'a> = dyn Fn(Vec3) -> Result<Vec3> + 'a;
+
 /// The body load of a shell element (ADR 0502 D1): a force per unit volume (the nodal body-force field), or a force per unit
-/// volume proportional to the density, with the density of each element's block material.
+/// volume proportional to the density, with the density of each element's block material and, on the opt-in of ADR 0635, the
+/// derivative of its acceleration along a direction (the force of a layup's first mass moment).
 enum ShellBody<'a> {
     PerVolume(&'a ShellRule<'a>),
-    PerMass(&'a ShellMassRule<'a>, &'a [f64]),
+    PerMass(&'a ShellMassRule<'a>, &'a [f64], Option<&'a ShellAlongRule<'a>>),
 }
 
 /// The consistent nodal vector of the body load of shell element `e` (ADR 0435 D2): a `Shell` block (and Shell3) over its
@@ -504,7 +523,7 @@ fn shell_body_vector(mesh: &SolidMesh, e: usize, coords: &[Vec3], body: &ShellBo
                 let density = ply.density();
                 return match body {
                     ShellBody::PerVolume(rule) => crate::shell::body_load_vector_at(coords, t, |n, x| rule(e, n, x)),
-                    ShellBody::PerMass(rule, _) => {
+                    ShellBody::PerMass(rule, _, _) => {
                         crate::shell::body_load_vector_at(coords, t, |n, x| rule(density, n, x))
                     }
                 }
@@ -515,9 +534,16 @@ fn shell_body_vector(mesh: &SolidMesh, e: usize, coords: &[Vec3], body: &ShellBo
                 ShellBody::PerVolume(rule) => {
                     crate::shell::body_load_vector_at(coords, l.thickness, |n, x| rule(e, n, x))
                 }
-                ShellBody::PerMass(rule, _) => {
+                ShellBody::PerMass(rule, _, None) => {
                     crate::shell::layup_body_load_vector_at(coords, l.mass[0], l.mass[1], |n, x| rule(1.0, n, x))
                 }
+                ShellBody::PerMass(rule, _, Some(along)) => crate::shell::layup_body_load_vector_affine_at(
+                    coords,
+                    l.mass[0],
+                    l.mass[1],
+                    |n, x| rule(1.0, n, x),
+                    along,
+                ),
             }
             .map(|v| v.to_vec());
         }
@@ -526,7 +552,7 @@ fn shell_body_vector(mesh: &SolidMesh, e: usize, coords: &[Vec3], body: &ShellBo
     let at = |n: &[f64], x: Vec3| -> Result<Vec3> {
         match body {
             ShellBody::PerVolume(rule) => rule(e, n, x),
-            ShellBody::PerMass(rule, rho) => rule(rho[e], n, x),
+            ShellBody::PerMass(rule, rho, _) => rule(rho[e], n, x),
         }
     };
     if mesh.element_kind(e) == crate::mesh::ElementKind::Shell3 {

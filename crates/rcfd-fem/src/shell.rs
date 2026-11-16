@@ -1238,6 +1238,43 @@ where
     Ok(out)
 }
 
+/// [`layup_body_load_vector_at`] of an acceleration field affine in position, with the force of the first mass moment (ADR
+/// 0635 D1, D2): `along(v)` the derivative of the acceleration along the direction `v` (global components; the centrifugal
+/// field `Omega^2 P v`). The through-thickness integral of `rho(z) b(x + z e_3)` is `m0 b(x) + m1 along(e_3)`; the second
+/// term, constant on the facet, adds `m1 (int N_i dA) along(e_3)` to the force of node `i`, by the 2 x 2 rule at the points of
+/// the projected facet, carried to the nodes by `T^T`. The vector of [`layup_body_load_vector_at`] is computed unchanged and
+/// the term added to it.
+pub fn layup_body_load_vector_affine_at<B, G>(coords: &[Vec3], m0: f64, m1: f64, b: B, along: G) -> Result<[f64; 24]>
+where
+    B: Fn(&[f64; 4], Vec3) -> Result<Vec3>,
+    G: Fn(Vec3) -> Result<Vec3>,
+{
+    let mut out = layup_body_load_vector_at(coords, m0, m1, b)?;
+    let f = facet(coords)?;
+    let d = along(f.axes[2])?;
+    let dl = [dot(f.axes[0], d), dot(f.axes[1], d), dot(f.axes[2], d)];
+    let mut w = [0.0; 4];
+    for &xi in &GAUSS {
+        for &eta in &GAUSS {
+            let q = point(&f.local, xi, eta);
+            for (wi, ni) in w.iter_mut().zip(q.n.iter()) {
+                *wi += ni * q.det;
+            }
+        }
+    }
+    let mut gl = [0.0; 24];
+    for i in 0..4 {
+        for a in 0..3 {
+            gl[6 * i + a] = m1 * w[i] * dl[a];
+        }
+    }
+    let t = transformation(&f);
+    for (j, o) in out.iter_mut().enumerate() {
+        *o += (0..24).map(|i| t[i * 24 + j] * gl[i]).sum::<f64>();
+    }
+    Ok(out)
+}
+
 /// The consistent nodal load (forces and moments, global axes, the element's unknown order) of the membrane thermal strain
 /// `eps_th = alpha dT (1, 1, 0)` in local axes, uniform through the thickness, of the temperature changes `delta_t_nodal`
 /// (`T_i - T_ref` of the four nodes, interpolated by the facet's functions): `sum_gp det B_m^T A eps_th` at the 2 x 2 points

@@ -346,6 +346,8 @@ fn unit_centrifugal_model(model: &SolidModel, axis: Vec3, origin: Vec3) -> Resul
     copy.set_hyperelastic_structures(model.hyperelastic_structures());
     // ADR 0614 D4: and the stabilisation of the Incompatible Hex8 (default false, the copy of before); ADR 0630 D4: its rule.
     copy.set_incompatible_stabilisation(model.incompatible_stabilisation_rule());
+    // ADR 0635 D2: and the force of a layup's first mass moment (default false, the copy of before).
+    copy.set_layup_first_moment_force(model.layup_first_moment_force());
     let points = crate::mat_ortho::uses_point_materials(model);
     for (set, material) in model.materials() {
         if points {
