@@ -14328,13 +14328,19 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     command give bit-identical results on a quick-start case (G17); units come from the engine, never converted in the
     Studio.
   - note: ADR 0800 (G16 to G21 added 2026-11-16). Traces: G17, G3, G2; docs/provenance.md.
-- [ ] **F-829** Electron Studio: undo, safe deletes and edit conflicts
+- [~] **F-829** Electron Studio: undo, safe deletes and edit conflicts
   - depends on: F-827, F-805
   - acceptance: Undo and redo for every edit made through the action layer; deleting a run, result or case is
     recoverable (for example a project trash) or confirmed in words that name what is lost; a file changed by another
     writer since the Studio read it is never overwritten silently, the conflict is shown with a choice; a test for each
     (G18).
-  - note: ADR 0800 (G16 to G21 added 2026-11-16). Traces: G18, G11, G12.
+  - note: ADR 0800 (G16 to G21 added 2026-11-16). Traces: G18, G11, G12. Partial 2026-11-16: undo/redo for every action-
+    layer edit (one history per session, named Undo/Redo controls, Ctrl+Z/Ctrl+Shift+Z/Ctrl+Y), tested on the fake
+    service and real rcfd serve; actions without an inverse ask first naming what is lost; undo/redo and typed values
+    show a conflict instead of overwriting; case saves refuse a changed file (edit_case base_hash). Left: no engine
+    delete or trash for runs/results/cases, so the Studio offers none (engine tools
+    trash_run/trash_case/list_trash/restore_trash proposed, needs an ADR); engine compare-and-set for settings.set
+    proposed.
 - [ ] **F-830** Electron Studio: explain in place from the engine's docs
   - depends on: F-826, F-825
   - acceptance: Help on every control, term and value taken from the engine's case schema help text (F-826), docs and
