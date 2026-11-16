@@ -7391,9 +7391,9 @@
     "deps": [
       "F-801"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "The Studio's unit and Playwright tests run as a job in .github/workflows/ci.yml (ADR 0800 Q3, maintainer 2026-11-16), with npm ci from the committed lock file and Electron run headless; the job fails the workflow on any test failure; docs/test-process.md names the job. A weekly, grouped Dependabot npm entry for /apps/studio-web lands with the job (ADR 0801 Q2).",
-    "note": "ADR 0800 Q3 answered: in CI. Traces: G13."
+    "note": "ADR 0800 Q3, ADR 0801 Q2. studio-web job (ubuntu-24.04 + windows-latest, Node 22.19.0) and grouped weekly Dependabot npm entry written; all steps pass locally on Windows and in an Ubuntu 24.04 container; done when the job first runs green on GitHub Actions. Traces: G13."
   },
   {
     "id": "F-824",

@@ -14248,13 +14248,15 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
   - acceptance: Every tutorial that names rcfd-gui or rcfd-studio rewritten for the Electron Studio, or marked as CLI-
     only; the docs site test passes.
   - note: ADR 0800. Traces: G6; docs/ui-restart-plan.md section 6.
-- [ ] **F-823** Electron Studio: npm tests in CI
+- [~] **F-823** Electron Studio: npm tests in CI
   - depends on: F-801
   - acceptance: The Studio's unit and Playwright tests run as a job in .github/workflows/ci.yml (ADR 0800 Q3, maintainer
     2026-11-16), with npm ci from the committed lock file and Electron run headless; the job fails the workflow on any
     test failure; docs/test-process.md names the job. A weekly, grouped Dependabot npm entry for /apps/studio-web lands
     with the job (ADR 0801 Q2).
-  - note: ADR 0800 Q3 answered: in CI. Traces: G13.
+  - note: ADR 0800 Q3, ADR 0801 Q2. studio-web job (ubuntu-24.04 + windows-latest, Node 22.19.0) and grouped weekly
+    Dependabot npm entry written; all steps pass locally on Windows and in an Ubuntu 24.04 container; done when the job
+    first runs green on GitHub Actions. Traces: G13.
 - [ ] **F-824** Electron Studio: capability inventory from the engine and a UI coverage test
   - depends on: F-803
   - acceptance: An inventory of every engine capability generated from the engine itself (settings.schema, the method
