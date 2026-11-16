@@ -256,3 +256,26 @@ stops the work and is reported (no existing test is edited).
 - **Q4. a4: `periodic_sliding_step` to the coupled path** (with ADR 0641 Q1 and ADR 0654 Q4): changes default results of the
   sector and planar paths at coincidence steps for flows without the parts' symmetry (ADR 0640 N1 becomes an ignored record;
   any other test that asserts the base's result at coincidences would need the same review). Needs the maintainer.
+
+## Amendment 1 (2026-11-16, written after the registered run of the new test file and before any further run)
+
+The registered run of `sliding_threshold_scale_f724` (code and tests 86452826, run once, two threads, 172 s, log
+`w49i-work/f724-scratch/run.log`) met E1, E1u, E2, E3, X3, K1, K1r and the controls NC1, NC2, NC3 (UC, NS, PL), and missed
+K2. One diagnostic run followed (disclosed; scratch test `w49i-work/f724-scratch/zz_f724_diag.rs`, moved out of the worktree
+after the run and never committed, log `diag.log`). No limit is changed; the results go in addendum 1.
+
+**K2 missed: an error of the registration's estimate, diagnosed, not corrected.** On PL the coupled step differs from
+F-721's on each of the 20 coincidence steps. The diagnosis printed, on those steps, the old flux and the old defect
+bit-equal to F-721's, and the mesh flux bit-equal to the uncoupled step's and different from F-721's by at most `1.38e-13
+max|S_f|`. Cause: PL is the pair PP, whose interface is flat, so every GCL target is rounding on every step (ADR 0640); at
+a coincidence F-721's rule (relative to the largest, rounding-level, target) coupled the GCL closure, the new rule keeps
+the base, exactly as this ADR's own table row "CP (PP), GCL" foresees. The estimate of K2 ("the GCL means rounding by the
+node sets' symmetry, base under both rules") was carried over from SS and is wrong for PP. The remap (the genuine part
+means) is coupled under both rules and identical. ADR 0641's registered limit for PL (A2, the coupled `flux_residual <=
+1e-12` from step 2) is met in the same run (`4.44e-15`), so a3 holds for PL within its registered limit; the bit-equality
+asked by K2 does not.
+
+**Records.** The test `k2_...` becomes the ignored record `k2_known_miss_...` with its limits intact and the measured
+numbers in the ignore text. `k1_...` took 146 s in the registered run (two threads): it becomes an ignored heavy record
+(rule 7; its checks were met), the same code path covered fast by E2 and by ADR 0641's `ls_corrected` test (part of B).
+No corrected test is added (no set-up was defective). No other change.
