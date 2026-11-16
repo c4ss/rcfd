@@ -240,3 +240,90 @@ Mutations (scratch copy, one at a time; each must fail a registered fast check):
   memory; every formula used is derived above).
 * The finite-difference steps `sqrt(eps)` and `eps^(1/3)`: balance of truncation and rounding error (first principles, above).
 * First-order error propagation through the implicit function theorem: first principles, above.
+
+## Addendum 1: results (2026-11-16)
+
+Code: commit 5434a285 (registration d0def66c before it). `crates/rcfd-api/src/design/hypothesis.rs`: `MAX_HELD`, the validation
+with up to two holds for `register_with_floor` (duplicates, mixed targets), `params_for` with every compensating parameter,
+`eval_arm_coupled`, `solve_holds` (D1), `gauss_solve`, `HeldFloor`, `ArmFloor`, `held_floor`, `register_with_floor` (D2, D3), the
+floor rules in `check_member` and `verify_slot`, the per-hold loops in `check_member`, `member_result` and `run`, the statement of
+several holds, module doc lines. New `crates/rcfd-api/tests/f728_coupled_held.rs` (10 fast tests). `docs/design-loop.md`: one
+bullet. No other source file, no shared solver file, no golden, no hash table, no case key, no MCP tool.
+
+Runs (release profile throughout; logs in `f728-scratch/`): the registered run `cargo test -p rcfd-api --release --test
+f728_coupled_held -- --test-threads=2 --nocapture` (`run1.log`): 10 passed. Then one message text was corrected (the J4 (a)
+message carried a run of spaces from a broken line continuation; the words are the same) and the 10 tests ran once more
+(`run2_after_msgfix.log`, 10 passed, the same numbers). `f701_hypothesis` (`c1_fast.log`) and once `--ignored`
+(`c1_heavy.log`); `f727_rerun_sample` (`c2_fast.log`) and once `--ignored` (`c2_heavy.log`); `--lib` (`c3_lib.log`); rcfd-cli
+`docs_site` (`c3_docs.log`). Mutations on a `git archive` copy of 5434a285 with its own target directory (`mutate.py`,
+`mutate_summary.log`, one log per mutation and test; the unmutated control 10 of 10 and f727 8 of 8).
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| J1 (a) | 64 of 64 within 1e-6 (q), 1e-5 (n) | 64 of 64 | yes |
+| J1 (b) | `a`, `b` within twice the first-order bound | 64 of 64; largest error over the bound: b 7.0e-3, a 1.5e-5 | yes |
+| J1 (c) | at most 40 evaluations per arm | 10 | yes |
+| J1 (d) | `abs(mean - d*) <= F` = 2.0405e-6; confirmed; no problem, genuine | mean 0.024376059703020 against 0.024376068376068: 8.67e-9; confirmed; no problem; genuine (entry 65) | yes |
+| NCJ1 | `abs(q - 1) > 1e-6` at s = 0 and 1 | -8.76e-2 and -2.99e-1 | yes (fails J1 (a) as it must) |
+| NCJ2 | `abs(mean - d*) > 2.04e-4` | 6.49e-4 (mean 0.023728) | yes (the second hold matters) |
+| J2 | `F` relative <= 1e-6; `S_j` within 1e-6 max abs(S); two arms; `by` within the J1 (b) bound | stored = `held_floor` bit for bit, 2.040458119601e-6 against 2.040458119658e-6: 2.8e-11; `S` errors 1.7e-12, 2.2e-13 (low), 4.6e-11, 9.5e-13 (high); 2 arms; by 2 of 2 | yes |
+| J2b | relative <= 1e-6 of 3.8e-13 and 1.44e-13 | 1.9e-13 and 1.4e-13 (2 and 1 arms) | yes |
+| J2c | relative <= 1e-6; one arm (high) | 2.9e-13; one arm, high | yes |
+| J3 | refused with "min_effect", "held-tolerance floor", "0.00002" and the floor as printed; file unchanged; 2.1e-5 accepted at slot 1 | "min_effect: 0.00002 is below 10 times the held-tolerance floor 0.0000020404581196011228 of 'power' (...)"; unchanged; H-1 slot 1 | yes |
+| J4 | (a) to (e) as registered, 5 of 5 | (a) "registration of H-1 holds 2 metrics and carries no held-tolerance floor", `run` refused with it; (b) "min_effect 0.000021 of H-1 is below 10 times its stored held-tolerance floor 0.01"; (c) none without the model, "held-tolerance floor of H-1 stored 0.000002040458121641581, re-computed 0.0000020404581196011228 ...: not reproduced" with it; (d) "entry 7: ... compensating parameter 'a' = 150 outside the registered rule"; (e) parents resolve, void "pair 3 arm high: held metric 'n' = 50.001 not within 0.00001 of the target 50", result entry 65 flagged; 5 of 5 | yes |
+| J5 | accepted; void naming a pair, arm low and `'q'` or `'n'`; next slot 2 | "pair 0 arm low: held metric 'q' = 0.99207... not within 0.000001 of the target 1"; H-2 at slot 2 | yes |
+| J6 | 8 of 8 refused, field named, file unchanged | 8 of 8; unchanged | yes |
+| J7 | 32 high arms within tolerance of their low arm; `abs(mean - d*_low) <= 1.0317e-6`; confirmed | 32 of 32; 3.48e-12; confirmed | yes |
+| J8 | cuts 0, 1, 33, 63 byte-identical; workers 8 = workers 1 | 4 of 4; 63350 bytes equal | yes |
+| J9 | no problem, `Some(true)`, one row with both holds | as registered ("... with `q` held within 0.000001 m3/s by `b`, `n` held within 0.00001 1/s by `a` over the registered domain ...") | yes |
+| J0 | the smoke literals of c10a3519 | `Value(1)`: 34 entries, 29785 bytes, `aaefeee2393a6515`, `fnv1a64:8036707366931a92`, statement equal; `AsLowArm`: 34, 29351, `d0af079ac415b42b`, `fnv1a64:2ec4743bbbfe4537`, equal; no `held_floor` key | yes |
+| C1 | 19 fast pass; heavy S1 1, S2 1592 of 1595, NC1 400, NC2 61, S4 118 | 19 passed (2 ignored); heavy: S1 1, NC2 61, NC1 400, S2 1592 of 1595, S5 0, S3 0.047570, S4 118 | yes |
+| C2 | fast pass; heavy A1 394, NC6 0, NC7 116 | 8 passed (1 ignored); heavy: A1 394 of 400, A1b 400, A2 0 (re-run ok 400), A3 800 of 800 (pair counts 60 to 107), NC6 0 (None 400), NC7 116 | yes |
+| C3 | `--lib` and `docs_site` pass | `--lib` 141 passed (4 ignored); `docs_site` 2 passed | yes |
+| R3 | fmt and clippy clean | `cargo fmt -p rcfd-api --check` clean; `cargo clippy -p rcfd-api --all-targets -- -D warnings` clean (one `neg_cmp_op_on_partial_ord` fixed before the registered run) | yes |
+
+Mutations (each a one-place change, the tests run once; caught = at least one test fails):
+
+| Id | Mutation | Expected | Failing tests | Caught |
+|---|---|---|---|---|
+| M24 | one sweep of single-hold bisections in place of the coupled solve | J1 | the J1/J2/J4 (d, e)/J8 test, J2c/J7/J8, J3/J4, J5, J9 | yes |
+| M25 | the floor sums the first held metric only | J2 | the J1/J2 test (J2), J2c/J7 (J2c) | yes |
+| M26 | the value floor counts the high arm only | J2 | the J1/J2 test (J2), J2b, J3/J4 | yes |
+| M27 | the floor rule not applied | J3 | J3/J4 | yes |
+| M28 | `verify` does not require a stored floor | J4 (a) | J3/J4 | yes |
+| M29 | the floor not recomputed by `verify` | J4 (c) | J3/J4 | yes |
+| M30 | only the first compensating parameter checked | J4 (d) | the J1 test (J4 (d)) | yes |
+| M31 | only the first held tolerance in the recomputation | J4 (e) | the J1 test (J4 (e)) | yes |
+| M32 | `held_floor` written as null by plain `register` | J0 | J0; and ADR 0662's `c2_old_records_bit_identical` | yes |
+| M33 | `AsLowArm` high-arm targets reversed | J7 | J2c/J7/J8 | yes |
+| M34 | the backtracking removed | recorded | none (10 of 10 pass): on WC the full Newton step always decreases the scaled residual | recorded |
+
+Deviations: (1) the second run of the 10 tests after the message correction (same numbers; disclosed). (2) J1 (d)'s error 8.7e-9
+is larger than the prototype's 1e-9 estimate (Newton stops as soon as both holds are within tolerance, here with a q residual
+of order 1e-8 at s = 1); the registered limit, the floor 2.04e-6, holds with a factor 235. (3) J5's reason names `'q'`: when the
+speed cannot be reached, Newton stops on the bracket edge of `a` with both residuals off, and `q` is checked first. Not run: the
+whole workspace (the daily gate), rcfd-mcp tests (no MCP file touched), `baseline_hashes` (no shared solver file touched).
+
+Decision by the registered rule: **done**. Every registered check is met, NCJ1 and NCJ2 fail as stated, and M24 to M33 are all caught; M34 is recorded (it survives, as the registration expected it might). Every ADR 0624 check keeps its numbers (C1), and so does every ADR 0662 check (C2).
+
+### Remaining questions (each with a recommendation)
+
+1. **A floor for `register` with one hold.** `register` has no model, so a single hold registered through it carries no floor
+   (ADR 0624's behaviour, kept so every ADR 0624 check keeps its result). Options: (a) keep, the floor opt-in through
+   `register_with_floor`; (b) refuse a hold in `register`. Recommendation: (a) here; the MCP tool of F-702 should call
+   `register_with_floor` whenever a hold is given.
+2. **Where the floor is probed.** At the domain midpoint only. Options: (a) keep; (b) the largest floor over a registered sample
+   of design points (two solves and the differences per point). Recommendation: (b) as a follow-up (below), before a fan
+   hypothesis whose held sensitivity varies over its domain; WC and W3s have none that matters.
+3. **Three or more holds, mixed targets, batches with holds of two.** Refused. Recommendation: keep until a hypothesis needs
+   them.
+
+## For the lead: roadmap entries
+
+> Proposed status: done
+
+> Follow-up of F-701 (ADR 0624 question 4). ADR 0665, 2026-11-16. DONE. Library only, opt-in: design::hypothesis register_with_floor(ledger, h, model) registers a hypothesis with one or two held metrics; two are solved together in each arm by a damped, projected Newton iteration on the held residuals (forward-difference Jacobian, backtracking on the tolerance-scaled residual, inside the brackets; Dennis and Schnabel 1983, cited from memory), and the registration computes the held-tolerance floor (held_floor): at the domain midpoint, phi = sum_j |S_j| tol_j per solved arm with S = J^-T grad y by differences, summed over both arms for value targets and the high arm for as_low_arm targets, the first-order change of a paired difference that the tolerances allow; a min_effect below 10 times it is refused with both values named. The floor is stored in the registration entry (settings.held_floor), verify requires it for two holds and recomputes it with the evaluator. Checks on a synthetic flow-and-speed evaluator with closed forms (q = b n A, n = a B / (G (1 + 0.2 b)), power = a b C): 64 of 64 arms within the tolerances (1e-6, 1e-5) in 10 evaluations each, every solved parameter within twice its first-order bound of the closed-form joint solution, the mean change 0.0243761 within 8.7e-9 of the closed form (limit the floor 2.04e-6), confirmed; the floor within 2.8e-11 relative of the closed form (single hold 1.9e-13, as_low_arm 2.9e-13); min_effect 2e-5 below 10 x 2.04e-6 refused naming both, 2.1e-5 accepted; a decoupled sweep leaves q off by 0.088 and 0.30, holding the flow alone moves the answer by 6.5e-4 (negative controls); the floor removed, too large or edited, a second compensating parameter or held metric edited are each caught; void, resume and worker-count bytes as in ADR 0624. register and register_batch keep one hold and their bytes (single-hold ledgers byte-identical to the base); every ADR 0624 check keeps its numbers (S1 1, S2 1592 of 1595, NC1 400, NC2 61, S4 118) and every ADR 0662 one (A1 394, NC7 116). Ten of ten mutations caught (the backtracking one recorded, it survives). Not covered: three or more holds, mixed targets, batches with two holds, the floor away from the domain midpoint; no MCP tool (F-702).
+
+> Note for F-701 (append): ADR 0665 (F-728, 2026-11-16): two held metrics are solved together (register_with_floor) and the held-tolerance floor of the ADR 0624 stub is computed and enforced; every ADR 0624 check keeps its numbers.
+
+> Follow-up proposed: Held-tolerance floor over a sample of the design. Deps F-728. Acceptance: Every limit not stated here is registered in the ADR before the run. The floor of register_with_floor taken as the largest over a registered seeded sample of design points (both arms solved at each), against a closed form on a synthetic evaluator whose sensitivity to the held metrics varies over the domain so that the midpoint floor is exceeded at some point by a registered factor; a registration accepted by the midpoint floor and below the sample floor refused with both values named; registrations made by the midpoint rule keep their bytes; every ADR 0624, ADR 0662 and ADR 0665 check keeps its result.
