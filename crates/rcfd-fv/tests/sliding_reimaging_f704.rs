@@ -517,9 +517,10 @@ fn pu_uniform_flow_over_three_periods_of_the_planar_slide() {
     require(&fails, &["P7", "P8", "P9"]);
 }
 
-/// PN2 of ADR 0634 (negative control of P8: no re-imaging).
+/// PN2 of ADR 0634 (negative control of P8: no re-imaging), as registered: did not hold (amendment 2).
 #[test]
-fn pn2_uniform_flow_negative_control_no_re_imaging() {
+#[ignore = "known miss: PN2 8.71e-15 (>= 1e-6), a uniform flow does not see a rigid sweep, the control is defective by design (ADR 0634 amendment 2)"]
+fn pn2_known_miss_uniform_flow_negative_control_no_re_imaging() {
     let r = uniform_run(&pair_pp(), [1.0, 0.5, 0.0], PP_DT, PP_STEPS, Some("ymin"), true);
     let mut fails = Fails::new();
     check(
@@ -729,9 +730,10 @@ fn su_uniform_axial_flow_over_three_pitches_of_the_3d_sector() {
     require(&fails, &["S7", "S9", "S10"]);
 }
 
-/// SN2 of ADR 0634 (negative control of S9: no re-imaging).
+/// SN2 of ADR 0634 (negative control of S9: no re-imaging), as registered: did not hold (amendment 2).
 #[test]
-fn sn2_uniform_axial_flow_negative_control_no_re_imaging() {
+#[ignore = "known miss: SN2 6.22e-15 (>= 1e-6), a uniform flow does not see a rigid sweep, the control is defective by design (ADR 0634 amendment 2)"]
+fn sn2_known_miss_uniform_axial_flow_negative_control_no_re_imaging() {
     let r = uniform_run(&pair_s3(), [0.0, 0.0, 1.0], S3_DT, S3_STEPS, None, true);
     let mut fails = Fails::new();
     check(
@@ -1007,4 +1009,181 @@ fn d3_turned_offsets_within_one_period_are_bit_identical() {
         format!("u, p, phi and time after 20 steps equal bit for bit: {same}"),
     );
     require(&fails, &["D3"]);
+}
+
+// -------------------------------------------------------------------------------------------------------------------
+// Amendment 2: the rotor's sweep on every step (P10, S11) and its negative controls (PN2c, SN2c)
+// -------------------------------------------------------------------------------------------------------------------
+
+/// Whether face `f` of a step's mesh moves with the rotor (as `PeriodicSlidingMesh::is_rotor_face`).
+fn rotor_face(st: &PeriodicSlidingStep, nr: usize, f: usize, new_faces: &[bool]) -> bool {
+    let m = &st.geom.mesh;
+    if new_faces[f] {
+        return false;
+    }
+    let own = m.owner()[f];
+    if f < m.n_internal_faces() {
+        own < nr && m.neighbour()[f] < nr
+    } else {
+        own < nr
+    }
+}
+
+/// The largest sweep error of a step's rotor faces: planar `abs(dt m - (S . e1) d) / (abs(S) d)`; sector, over the faces
+/// in a plane through the axis, `abs(abs(dt m) - w) / w` with `w = h (r_2^2 - r_1^2) sin(d) / 2`; `d` the step's motion.
+fn sweep_error(st: &PeriodicSlidingStep, nr: usize, dt: f64, d: f64, planar: bool) -> (f64, usize) {
+    let m = &st.geom.mesh;
+    let mut new_faces = vec![false; m.n_faces()];
+    for &f in &st.interface_faces {
+        new_faces[f] = true;
+    }
+    for &(a, b) in &st.wrap_pairs {
+        new_faces[a] = true;
+        new_faces[b] = true;
+    }
+    let (mut e, mut n): (f64, usize) = (0.0, 0);
+    for f in 0..m.n_faces() {
+        if !rotor_face(st, nr, f, &new_faces) {
+            continue;
+        }
+        let s = m.face_area_vectors()[f];
+        let w = st.mesh_flux[f] * dt;
+        if planar {
+            e = e.max(finite_or_inf((w - s[0] * d).abs() / (vec3::norm(s) * d)));
+            n += 1;
+            continue;
+        }
+        let c = m.face_centres()[f];
+        if s[2].abs() > 1e-9 * vec3::norm(s) || vec3::dot(vec3::unit(s), xhat(c)).abs() > 1e-9 {
+            continue;
+        }
+        let pts: Vec<Vec3> = m.face_points(f).iter().map(|&q| m.points()[q]).collect();
+        let rs: Vec<f64> = pts.iter().map(|p| p[0].hypot(p[1])).collect();
+        let r1 = rs.iter().cloned().fold(f64::INFINITY, f64::min);
+        let r2 = rs.iter().cloned().fold(0.0, f64::max);
+        let z1 = pts.iter().map(|p| p[2]).fold(f64::INFINITY, f64::min);
+        let z2 = pts.iter().map(|p| p[2]).fold(f64::NEG_INFINITY, f64::max);
+        let ex = (z2 - z1) * (r2 * r2 - r1 * r1) * d.sin() / 2.0;
+        e = e.max(finite_or_inf((w.abs() - ex).abs() / ex));
+        n += 1;
+    }
+    (e, n)
+}
+
+/// PU (planar) or SU (sector) with the sweep error measured on every step's data before the solver step.
+fn sweep_run(planar: bool, no_reimage: bool) -> (Max, usize, Vec<usize>, Option<String>) {
+    let (sc, u0, dt, steps) = if planar {
+        (pair_pp(), [1.0, 0.5, 0.0], PP_DT, PP_STEPS)
+    } else {
+        (pair_s3(), [0.0, 0.0, 1.0], S3_DT, S3_STEPS)
+    };
+    let names: Vec<String> = sc
+        .mesh_at(0.0)
+        .unwrap()
+        .mesh
+        .patches()
+        .iter()
+        .filter(|p| p.kind != PatchKind::Empty && p.kind != PatchKind::Cyclic)
+        .map(|p| p.name.clone())
+        .collect();
+    let mut run = Turning::new(
+        &sc,
+        |g| {
+            let mut u = VectorField::uniform("U", &g, u0);
+            for n in &names {
+                u.set_bc(&g, n, Box::new(FixedValue::vector(u0))).unwrap();
+            }
+            let p = ScalarField::uniform("p", &g, 0.0);
+            PimpleSolver::new(g, u, p, settings(0.1))
+        },
+        1.0,
+        dt,
+    );
+    run.no_reimage = no_reimage;
+    let nr = sc.n_rotor_cells();
+    let mut e = Max::default();
+    let mut n_faces = 0;
+    let mut ended = None;
+    for _ in 0..steps {
+        let mut measure = |st: &mut PeriodicSlidingStep, reim: bool| {
+            let (x, n) = sweep_error(st, nr, dt, dt, planar);
+            e.put(x, reim);
+            n_faces = n_faces.max(n);
+        };
+        if let Err(err) = run.step(&mut no_bc(), &mut measure) {
+            ended = Some(err);
+            break;
+        }
+    }
+    (e, n_faces, run.stats.reimaged.clone(), ended)
+}
+
+/// P10 of ADR 0634 amendment 2.
+#[test]
+fn p10_planar_sweep_on_every_step() {
+    let (e, n, reim, ended) = sweep_run(true, false);
+    assert!(ended.is_none(), "{ended:?}");
+    let mut fails = Fails::new();
+    check(
+        &mut fails,
+        "P10",
+        e.within(1e-12) && n > 0,
+        format!(
+            "PU: slider sweep {} over {n} faces (1e-12); re-imaging steps {reim:?}",
+            e.show()
+        ),
+    );
+    require(&fails, &["P10"]);
+}
+
+/// PN2c of ADR 0634 amendment 2 (negative control of P10: no re-imaging).
+#[test]
+fn pn2c_planar_sweep_negative_control_no_re_imaging() {
+    let (e, _, _, ended) = sweep_run(true, true);
+    let mut fails = Fails::new();
+    check(
+        &mut fails,
+        "PN2c",
+        e.all >= 0.1,
+        format!(
+            "PU, no re-imaging: slider sweep {} (>= 0.1); ended early: {ended:?}",
+            e.show()
+        ),
+    );
+    require(&fails, &["PN2c"]);
+}
+
+/// S11 of ADR 0634 amendment 2.
+#[test]
+fn s11_sector_sweep_on_every_step() {
+    let (e, n, reim, ended) = sweep_run(false, false);
+    assert!(ended.is_none(), "{ended:?}");
+    let mut fails = Fails::new();
+    check(
+        &mut fails,
+        "S11",
+        e.within(1e-12) && n > 0,
+        format!(
+            "SU: rotor sweep {} over {n} faces (1e-12); re-imaging steps {reim:?}",
+            e.show()
+        ),
+    );
+    require(&fails, &["S11"]);
+}
+
+/// SN2c of ADR 0634 amendment 2 (negative control of S11: no re-imaging).
+#[test]
+fn sn2c_sector_sweep_negative_control_no_re_imaging() {
+    let (e, _, _, ended) = sweep_run(false, true);
+    let mut fails = Fails::new();
+    check(
+        &mut fails,
+        "SN2c",
+        e.all >= 0.1,
+        format!(
+            "SU, no re-imaging: rotor sweep {} (>= 0.1); ended early: {ended:?}",
+            e.show()
+        ),
+    );
+    require(&fails, &["SN2c"]);
 }
