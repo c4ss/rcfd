@@ -7549,9 +7549,9 @@
     "deps": [
       "F-743"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "an opt-in explicit non-orthogonal correction on the coupled (wrap and seam) faces in the pressure equation and the momentum diffusion, defaults bit-identical; on ADR 0661's lockstep with the lag removed the sector's difference from the full annulus falls from 6.0e-3 to within a registered limit of ADR 0661's V(6, 0) (1.5e-4) on every step. Every limit not stated here is registered in the ADR before the run.",
-    "note": "Follow-up of F-725 (ADR 0661, 2026-11-16). with ADR 0664's setting the lag is removed in one outer iteration, so F-744's lockstep can run its corrected variant with one outer iteration against ADR 0661's V(6, 0) at about a sixth of the cost."
+    "note": "ADR 0667, 2026-11-16: non-orthogonal correction on coupled faces. The opt-in PimpleSettings::coupled_non_orth (default false) treats every coupled (seam and wrap) pair as the internal face between the owner and the partner cell's image (rcfd_fv::pressure::CoupledNonOrth: d = (x_f - c_r) + R (c_c - x_g), k = S - d |S|^2/(S.d), face gradient w grad_r + (1 - w) R grad_c, the partner's velocity-gradient tensor rotated) and adds its explicit non-orthogonal part to the pressure equation, its flux and the momentum diffusion, with the partner-point least-squares gradient of ADR 0077 F-H0; the coupled faces' d and k equal the full annulus's internal faces to 1.5e-15 on 606 faces (the wrap pairs' |k|/|S| up to 1.1). On ADR 0661's lockstep with the lag removed by ADR 0664's implicit pair in one outer iteration, the sector's largest difference from the annulus falls from 5.89e-3 to 1.10e-4 U_in over 400 steps, within 3.8e-5 of V(6, 0) on every step (limit 3e-4; the first step equal to rounding, 3.8e-15). Defaults bit-identical (the annulus bit for bit with the setting on, ADR 0661's and ADR 0664's numbers reproduced, baseline_hashes and the periodic, sliding and non-orthogonal suites pass). Partial: two of four mutations caught; the pressure part of the correction is below the lockstep's resolution on this flow (at most 2.5e-4 of the coupled-face flux: the wrap faces' k is tangential and the pressure nearly radial), so its effect is not shown; the momentum part carries the result. No case key; the default not changed (open, with F-746). Follow-up F-752 (Pressure part of the non-orthogonal correction on coupled faces)."
   },
   {
     "id": "F-745",
@@ -7629,5 +7629,16 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. (1) f699_fidelity p4_table_errors_name_row_and_column_never_a_value: its leak search matched the cell '198' inside the runner's temp path (rcfd_f699_p4_1980); the old test made a record (ignored, limit intact) in favour of ADR 0642's P4c, which searches with the path removed, or the shared cause otherwise fixed, with no other test edited. (2) rcfd-project edit_lock_w48f two_writers_with_base_hashes_lose_no_update: fails 1 in 6 locally ('edit lock ... is held by another writer' returned to a cooperative writer); the cause located (lock retry or the test's expectation), fixed without changing a default result, and the test passing in 200 of 200 repeated runs; both shown by re-running the gate's per-test command.",
     "note": "First green-ish full gate since early November: 5872 passed, 2 failed, 1633 ignored, wall 4.1 h (run 43919555816 at d55c43c4). The f699 P4 failure is the pid flakiness of ADR 0624 R2 (the path held the cell's digits); the edit-lock failure reproduces locally 1 in 6."
+  },
+  {
+    "id": "F-752",
+    "title": "Pressure part of the non-orthogonal correction on coupled faces",
+    "phase": 9,
+    "deps": [
+      "F-744"
+    ],
+    "status": "todo",
+    "acceptance": "on a flow with a tangential pressure gradient across non-orthogonal coupled faces (a swirling inlet on ADR 0661's lockstep, or a skewed translational periodic channel against its unrolled twin) the opt-in of ADR 0667 brings the periodic run within a registered limit of the reference on every step where the setting without its pressure part does not, and the corrected flux is divergence-free per cell within a registered limit; defaults bit-identical. Every limit not stated here is registered in the ADR before the run.",
+    "note": "Follow-up of F-744 (ADR 0667, 2026-11-16)."
   }
 ]
