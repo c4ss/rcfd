@@ -14134,12 +14134,15 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
   - note: ADR 0800. Traces: G2, G4, G7, G9 (P2); PRODUCT Operating Context. Done 2026-11-16: main-process client (TCP,
     events.poll, reconnect), renderer via MessagePort + allow-list (window.studioService); P1 p99 0.30 ms, P2 p99 1.17
     ms (ADR 0801 addendum 2, decisions D1-D4 proceeded on recommendations, awaiting the maintainer's review).
-- [ ] **F-804** Electron Studio: bulk field data by the R2 reader and the R1 route, bit for bit
+- [x] **F-804** Electron Studio: bulk field data by the R2 reader and the R1 route, bit for bit
   - depends on: F-803
   - acceptance: The Node reader of store.rts (R2) for local projects and the opt-in data.* route (R1) for a remote
     service, moved from bench/electron/io/ into the product with tests; every value the renderer receives equals the
     Rust reader's value bit for bit for the ADR 0350 data sets (P12, G3); P4 met through the product shell.
-  - note: ADR 0800. Traces: G3, G9 (P4), G2; ADR 0350 addendum 1.
+  - note: ADR 0800. Traces: G3, G9 (P4), G2; ADR 0350 addendum 1. Done 2026-11-16 (ADR 0801 addendum 3): R2 reader in a
+    worker thread and R1 data.* route, values to the page over a data port; P12 bit-exact on 400 fields (6.4e8 values)
+    both routes; P4 met by R2 (raw p50 21.7 / p99 32.5 ms), R1 missed it at full machine load (p50 47.0 / p99 104.2 ms).
+    rcfd serve has no flag to enable data.* (Q6, maintainer).
 - [x] **F-805** Electron Studio: project home and the live project folder
   - depends on: F-803, F-802
   - acceptance: Open a project folder, list its cases, meshes, runs and notes through the engine (docs/ui-restart-
