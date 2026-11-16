@@ -4,9 +4,9 @@
 //
 // No Electron import: the folder dialog is passed in, so the unit tests drive the home with fakes.
 import { existsSync } from 'node:fs';
-import { stat } from 'node:fs/promises';
+import { readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
-import type { EngineStatus, OpenFailure, PickResult, ProjectState, ProjectTool, ProjectView, RunActionResult } from '../../shared/project.js';
+import { FIRST_WATCH_MS, type EngineStatus, type OpenFailure, type PickResult, type ProjectState, type ProjectTool, type ProjectView, type RunActionResult } from '../../shared/project.js';
 import { ensureRunnerCli, type ControlDeps } from './control.js';
 import { filesUnder, type Names } from './listing.js';
 import { sameFolder, withExistence, withOpened, without, type StoredRecent } from './recent.js';
@@ -32,6 +32,20 @@ export interface HomeDeps {
   startControlServer?(exe: string, folder: string): Promise<ProjectServerLike>;
   /** F-807: `rcfd-runner ensure` (default: the rcfd-runner beside the engine's project server). */
   ensureRunner?(folder: string): ReturnType<ControlDeps['ensureRunner']>;
+  /** F-813: how often a folder that is not a project is checked for its project file (default FIRST_WATCH_MS; 0: never). */
+  firstWatchMs?: number;
+}
+
+/** F-813: the project file whose appearance turns a folder into a project (rcfd_project's MANIFEST). */
+export const PROJECT_FILE = 'rcfd-project.json';
+
+/** F-813: entries at the top of `folder` (names only, nothing read), or null when it cannot be listed. */
+export async function countEntries(folder: string): Promise<number | null> {
+  try {
+    return (await readdir(folder)).length;
+  } catch {
+    return null;
+  }
 }
 
 export const RUNNER_EXE = process.platform === 'win32' ? 'rcfd-runner.exe' : 'rcfd-runner';
@@ -63,6 +77,8 @@ export class ProjectHome {
   private listeners = new Set<(s: ProjectState) => void>();
   private openSeq = 0;
   private readonly now: () => string;
+  /** F-813: the timer that checks a not-a-project folder for its project file, and that folder. */
+  private watch: { folder: string; timer: ReturnType<typeof setInterval> } | null = null;
 
   constructor(private readonly deps: HomeDeps) {
     this.now = deps.now ?? (() => new Date().toISOString());
@@ -139,7 +155,35 @@ export class ProjectHome {
   }
 
   private fail(f: OpenFailure): void {
+    this.stopWatch();
     this.failure = f;
+  }
+
+  /**
+   * F-813: a folder the engine refused as no project. Says what it holds (a count of names) and, when it has no project
+   * file at all, checks every FIRST_WATCH_MS whether one has appeared (made by Claude Code, the CLI, another program or
+   * by hand: the Studio cannot make one, the engine has no command for it) and then opens the folder. Nothing is written.
+   */
+  private async lookAt(folder: string, seq: number): Promise<void> {
+    const entries = await countEntries(folder);
+    const ms = this.deps.firstWatchMs ?? FIRST_WATCH_MS;
+    const watching = ms > 0 && !existsSync(path.join(folder, PROJECT_FILE));
+    const f = this.failure as OpenFailure | null;
+    if (seq !== this.openSeq || f === null || f.folder !== folder) return;
+    this.failure = { ...f, folderState: { entries, watching } };
+    if (!watching) return;
+    const timer = setInterval(() => {
+      if (!existsSync(path.join(folder, PROJECT_FILE))) return;
+      this.stopWatch();
+      if (this.opening === null && (this.failure as OpenFailure | null)?.folder === folder) void this.open(folder);
+    }, ms);
+    timer.unref?.();
+    this.watch = { folder, timer };
+  }
+
+  private stopWatch(): void {
+    if (this.watch) clearInterval(this.watch.timer);
+    this.watch = null;
   }
 
   /** Opens `folder`; the project open before stays open until the new one is open, and stays open if it fails. */
@@ -163,6 +207,7 @@ export class ProjectHome {
       return;
     }
     this.opening = folder;
+    this.stopWatch();
     this.failure = null;
     this.emit();
     const start = this.deps.startServer ?? ((exe: string, f: string) => ProjectServer.start(exe, f));
@@ -183,7 +228,9 @@ export class ProjectHome {
     } catch (e) {
       if (seq === this.openSeq) {
         this.opening = null;
-        this.fail(openFailure(folder, e));
+        const f = openFailure(folder, e);
+        this.fail(f);
+        if (f.kind === 'not_a_project') await this.lookAt(folder, seq);
         this.emit();
       }
       return;
@@ -235,7 +282,10 @@ export class ProjectHome {
 
   async forget(path: string): Promise<void> {
     await this.setRecent((l) => without(l, path));
-    if (this.failure && sameFolder(this.failure.folder, path)) this.failure = null;
+    if (this.failure && sameFolder(this.failure.folder, path)) {
+      this.stopWatch();
+      this.failure = null;
+    }
     this.emit();
   }
 
@@ -267,11 +317,13 @@ export class ProjectHome {
   }
 
   dismiss(): void {
+    this.stopWatch();
     this.failure = null;
     this.emit();
   }
 
   async shutdown(): Promise<void> {
+    this.stopWatch();
     this.openSeq++;
     const s = this.session;
     this.session = null;

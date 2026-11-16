@@ -20,6 +20,7 @@ import {
   runParamsProblem,
   type RegisteredRunAction,
 } from '../../shared/actions/runs.js';
+import { getFirstRunAction } from '../../shared/actions/first.js';
 import type { JsonObject } from '../../shared/actions/params.js';
 import { RUN_SLOW_MS, type ProjectView, type RunActionFailure, type RunActionResult, type RunRequest } from '../../shared/project.js';
 import { RpcError } from '../service/rpc.js';
@@ -41,6 +42,9 @@ const obj = (v: unknown): Obj => (typeof v === 'object' && v !== null && !Array.
 const strOrNull = (v: unknown): string | null => (typeof v === 'string' ? v : null);
 
 export const preciseNow = (): number => performance.timeOrigin + performance.now();
+
+/** A run-control action of F-807, or of the first path (F-813, src/shared/actions/first.ts). */
+const lookup = (id: string): RegisteredRunAction | undefined => getRunAction(id) ?? getFirstRunAction(id);
 
 /** What the action is about, for messages: "run r-...", "cases/cavity.toml", "the project". */
 const target = (p: Readonly<Record<string, unknown>>): string =>
@@ -145,7 +149,7 @@ export function settle(requests: readonly RunRequest[], view: ProjectView, nowMs
   let changed = false;
   const out = requests.map((r) => {
     if (r.settled) return r;
-    const a = getRunAction(r.action);
+    const a = lookup(r.action);
     let done = r.outcome === 'refused' || !a || a.expect === 'runner';
     if (!done && r.run) {
       const f = runFacts(view, r.run);
@@ -214,7 +218,7 @@ export class RunControl {
    * has no request; every action that was checked against the run list has one, accepted or refused.
    */
   async dispatch(id: string, params: Readonly<Record<string, unknown>>, view: ProjectView): Promise<RunActionResult> {
-    const a = getRunAction(id);
+    const a = lookup(id);
     if (!a) {
       return { ok: false, request: null, failure: { code: 'unknown_action', problem: `'${id}' is not a run-control action.`, recovery: 'Use one of the actions the Runs view offers.', engine: null } };
     }

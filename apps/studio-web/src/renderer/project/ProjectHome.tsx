@@ -26,6 +26,7 @@ import { caseHash } from '../case/hash.js';
 import { CaseRunButton, RunFailure } from '../runs/RunControls.js';
 import { ClaudePanel } from '../claude/ClaudePanel.js';
 import { requestCommand, useCommandFact, useCommandHandlers } from '../commands/host.js';
+import { FirstPath, FirstPathIntro, NotAProjectYet } from '../first/FirstPath.js';
 import './project.css';
 
 // F-810: the run workspace, loaded on demand (it brings three.js), so the project home costs nothing more at start
@@ -158,6 +159,8 @@ function NoProject({ state }: { state: ProjectState | null }) {
           </p>
         )}
         {state?.failure && <FailureNotice failure={state.failure} recent={state.recent} />}
+        {/* F-813: a learner's first path, from here to a first result */}
+        {engine?.configured !== false && !state?.failure && <FirstPathIntro />}
       </section>
       <section className="ph-recent" aria-labelledby="ph-recent-title">
         <h2 id="ph-recent-title" className="ph-section-title">
@@ -229,22 +232,26 @@ const FAILURE_TITLE: Record<OpenFailure['kind'], string> = {
 function FailureNotice({ failure, recent }: { failure: OpenFailure; recent: readonly RecentProject[] }) {
   const inRecent = recent.some((r) => r.path === failure.folder);
   return (
-    <Notice title={FAILURE_TITLE[failure.kind]} failed>
-      <p>{failure.message}</p>
-      {failure.detail && (
-        <p className="ph-detail">
-          <span className="ph-detail-caption">The engine said</span>
-          {failure.detail}
-        </p>
-      )}
-      <div className="ph-notice-actions">
-        {failure.kind !== 'not_configured' && <Button onPress={actions.pick}>Choose another folder…</Button>}
-        {failure.kind === 'not_found' && inRecent && <Button onPress={() => actions.forget(failure.folder)}>Forget this folder</Button>}
-        <Button variant="ghost" onPress={actions.dismiss}>
-          Dismiss
-        </Button>
-      </div>
-    </Notice>
+    <>
+      <Notice title={FAILURE_TITLE[failure.kind]} failed>
+        <p>{failure.message}</p>
+        {failure.detail && (
+          <p className="ph-detail">
+            <span className="ph-detail-caption">The engine said</span>
+            {failure.detail}
+          </p>
+        )}
+        <div className="ph-notice-actions">
+          {failure.kind !== 'not_configured' && <Button onPress={actions.pick}>Choose another folder…</Button>}
+          {failure.kind === 'not_found' && inRecent && <Button onPress={() => actions.forget(failure.folder)}>Forget this folder</Button>}
+          <Button variant="ghost" onPress={actions.dismiss}>
+            Dismiss
+          </Button>
+        </div>
+      </Notice>
+      {/* F-813: what the folder is missing and the next step, beside the failure */}
+      {failure.kind === 'not_a_project' && <NotAProjectYet failure={failure} />}
+    </>
   );
 }
 
@@ -430,6 +437,8 @@ function HomeBody({
       {state.failure && <FailureNotice failure={state.failure} recent={state.recent} />}
       {!view.liveness.live && <NotLive view={view} />}
       {runFailure && !runFailure.ok && <RunFailure failure={runFailure.failure} onDismiss={() => setRunFailure(null)} />}
+      {/* F-813: the first path while the project holds nothing but its example */}
+      <FirstPath view={view} nav={{ openRun: onStarted }} />
       <div className="ph-tools">
         <TextField
           aria-label="Filter by name"
