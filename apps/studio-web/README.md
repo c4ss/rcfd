@@ -4,9 +4,11 @@ The Electron desktop front end of rcfd: F-448 and the Studio roadmap of ADR 0800
 outside the Cargo workspace (ADR 0350 Q2, guardrail G5). The engine is Rust and stays Rust (G2); this app is a client of
 it.
 
-**State: F-801 hardened shell.** The window shows an empty project view and nothing else, inside the hardened shell of
-guardrail G10, with Playwright tests that drive the packaged app. There is no service client, no project folder access
-and no surface yet. Dependencies and layout: ADR 0801 (accepted) and its addendum 1 (F-801).
+**State: F-801 hardened shell, F-802 design tokens and primitives.** The window shows an empty project view inside the
+hardened shell of guardrail G10, with Playwright tests that drive the packaged app. The design tokens of `DESIGN.md` and
+the accessible primitives (on React Aria Components) are in place, shown on a primitives gallery. There is no service
+client, no project folder access and no surface yet. Dependencies and layout: ADR 0801 (accepted) and its addendum 1
+(F-801); F-802 added no dependency.
 
     npm ci                    # exact versions from package-lock.json
     npm run typecheck         # renderer (tsconfig.json), main + preload + shared (tsconfig.node.json), tests (tsconfig.test.json)
@@ -14,6 +16,8 @@ and no surface yet. Dependencies and layout: ADR 0801 (accepted) and its addendu
     npm test                  # build, package into out/packaged/, then every Playwright test (unit and e2e); no human step
     npm run test:unit         # the unit tests only (needs dist/ for the built index.html check)
     npm run package:dir       # package dist/ by hand into out/packaged/ (rcfd-studio.exe; resources/app)
+    npm run tokens:css        # regenerate src/renderer/design/tokens.css from tokens.ts (a unit test fails when stale)
+    npm run gallery           # open the packaged app on the primitives gallery at 1440x900 (view-and-report)
     npm run bench:cold-start  # P10, 10 cold starts of the packaged copy; a heavy record, run by hand only
     npm start                 # electron . (run npm run build first); downloads the Electron binary on first use
 
@@ -29,11 +33,30 @@ On Linux it needs a display (CI uses a virtual one, F-823).
 | `src/preload/` | Preload script (CommonJS `.cts`, because a sandboxed preload cannot be an ES module): `window.studio`, the IPC allow-list | `tsc -p tsconfig.node.json` -> `dist/preload/` | F-801, F-803 |
 | `src/shared/ipc.ts` | The typed IPC contract shared by all three processes: channel names, arguments, replies | `tsc -p tsconfig.node.json` -> `dist/shared/` | F-801, F-803 |
 | `src/renderer/` | Renderer (browser code only, no Node types): React, three.js, React Aria Components | `vite build` -> `dist/renderer/` | F-802 onwards |
-| `tests/unit/` | Pure tests of `security.ts` and the built `index.html` | run by Playwright (project `unit`) | F-801 |
+| `src/renderer/design/` | `tokens.ts`, the one source of the `DESIGN.md` tokens (colour roles, type ramp, spacing, sizes, lines, focus, motion, pictogram grid) and of its product deviations; `tokens.css`, generated from it; `contrast.ts`, the WCAG contrast of every token pair | as above | F-802 |
+| `src/renderer/ui/` | The primitives of `DESIGN.md` Components on React Aria Components: buttons, toggles and segmented toggles, text and number fields, select, switch, tabs (sub and project), table, slider, tooltip, state pictograms and icons; `primitives.css` | as above | F-802 |
+| `src/renderer/dev/` | The primitives gallery at `#/dev/primitives` (loaded on demand): every primitive, the tokens and the contrast table, with sample labels only | as above | F-802 |
+| `tests/unit/` | Pure tests of `security.ts` and the built `index.html` (F-801); tokens against `DESIGN.md`, the contrast of every token pair, the pictogram grid (F-802) | run by Playwright (project `unit`) | F-801, F-802 |
 | `tests/e2e/` | The packaged shell driven by Playwright's `_electron.launch` | run by Playwright (project `electron`) | F-801 onwards |
 | `scripts/` | `package-dir.mjs` (packaging by hand), `measure-cold-start.mjs` (P10) | run by Node | F-801 |
 
-`out/`, `dist/`, `test-results/` and `node_modules/` are build output and never committed.
+`out/`, `dist/`, `test-results/`, `test-results-visual/` and `node_modules/` are build output and never committed.
+
+## Design tokens and primitives (F-802)
+
+- The values come from `DESIGN.md` and `.impeccable/design.json`; `tests/unit/tokens.spec.ts` checks them against both,
+  checks that `tokens.css` is exactly `tokens.ts`'s output, and that the stylesheets use only defined tokens and no
+  colour literals. Components use roles (`--role-text`, `--role-focus-ring`), never palette names.
+- Where the product tokens differ from `DESIGN.md` to meet WCAG 2.2 AA (G8), `tokens.ts` lists the difference and why
+  (`PRODUCT_DEVIATIONS`): the two-colour focus ring, the orange-deep caret, ink-on-sky selection, the ink-2 field border,
+  the ink mark of a selected tab, the orange-deep running pictogram and ink-2 faded pictograms.
+- `tests/unit/contrast.spec.ts` computes the contrast of every text and graphic role on every ground it is used on and
+  fails below 4.5:1 (text) or 3:1 (graphics and UI states); every role must be tested, a ground, or exempt with a reason.
+- `tests/e2e/primitives.spec.ts` drives the gallery from the keyboard (focus visible, operable, role and name) and
+  checks the rendered page's contrast and that it raised no CSP violation, then writes screenshots at 1440x900 to
+  `test-results-visual/f802/` for the maintainer's view-and-report.
+- React Aria's `usePress` would inject a one-rule `<style>` element, which the CSP refuses; `main.tsx` puts a marker
+  element with its id in the head and the rule lives in `base.css`.
 
 ## Security (G10)
 
