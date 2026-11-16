@@ -491,8 +491,11 @@ fn e1_expected_improvement_against_quadrature() {
     assert_eq!(expected_improvement(1.0, 0.0, 2.0), 1.0, "E1 s = 0");
 }
 
+/// Ignored record (ADR 0621 amendment 2): on 49f7f75e the batch-4 picks had a minimum pairwise distance of 0.0000 (limit
+/// 1e-3); the pending part met its limit (0.911). The believer left the incumbent unchanged.
 #[test]
-fn p1_batch_and_pending_points_are_spread() {
+#[ignore = "known miss of P1 on 49f7f75e (ADR 0621 amendment 2), kept as a record"]
+fn p1_batch_and_pending_points_are_spread_known_miss() {
     let u = latin_hypercube(15, 2, 698_950);
     let obs: Vec<Observation> = u
         .iter()
@@ -538,6 +541,56 @@ fn p1_batch_and_pending_points_are_spread() {
     );
     assert!(dmin >= 1e-3, "P1 batch");
     assert!(dp >= 1e-3, "P1 pending");
+}
+
+/// P1b (ADR 0621 amendment 2): the same set-up and limits on the corrected believer.
+#[test]
+fn p1b_batch_and_pending_points_are_spread() {
+    let u = latin_hypercube(15, 2, 698_950);
+    let obs: Vec<Observation> = u
+        .iter()
+        .map(|p| {
+            let x = vec![-5.0 + 15.0 * p[0], 15.0 * p[1]];
+            Observation {
+                status: Status::Ok {
+                    f: branin(&x),
+                    c: vec![],
+                },
+                x,
+            }
+        })
+        .collect();
+    let uo = |x: &[f64]| vec![(x[0] + 5.0) / 15.0, x[1] / 15.0];
+    let dist = |a: &[f64], b: &[f64]| {
+        let (a, b) = (uo(a), uo(b));
+        ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2)).sqrt()
+    };
+    let o4 = BayesOptions {
+        batch: 4,
+        ..opts(698_951, 10)
+    };
+    let p = bayes::propose(&BRANIN_B, &obs, &o4).unwrap();
+    let mut dmin = f64::INFINITY;
+    for i in 0..4 {
+        for j in 0..i {
+            dmin = dmin.min(dist(&p.picks[i].x, &p.picks[j].x));
+        }
+    }
+    let o1 = opts(698_951, 10);
+    let p1 = bayes::propose(&BRANIN_B, &obs, &o1).unwrap();
+    let mut obs2 = obs.clone();
+    obs2.push(Observation {
+        x: p1.picks[0].x.clone(),
+        status: Status::Pending,
+    });
+    let p2 = bayes::propose(&BRANIN_B, &obs2, &o1).unwrap();
+    let dp = dist(&p2.picks[0].x, &p1.picks[0].x);
+    println!(
+        "P1b batch of 4: min pairwise distance {dmin:.4}; pending: {dp:.4}; kinds {:?}",
+        p.picks.iter().map(|k| k.kind).collect::<Vec<_>>()
+    );
+    assert!(dmin >= 1e-3, "P1b batch");
+    assert!(dp >= 1e-3, "P1b pending");
 }
 
 // ---------------------------------------------------------------- O: optimisation

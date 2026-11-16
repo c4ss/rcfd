@@ -384,13 +384,19 @@ impl Models {
         us.push(u.to_vec());
         fs.push(m);
         self.f = Gp::with_hyper(us, fs, self.f.kernel(), self.f.length_scales(), self.f.nugget())?;
+        let mut feasible = true;
         if !self.c.is_empty() {
             cus.push(u.to_vec());
             for (k, g) in self.c.iter_mut().enumerate() {
                 let (mc, _) = g.predict(u);
+                feasible &= mc <= 0.0;
                 cs[k].push(mc);
                 *g = Gp::with_hyper(cus, &cs[k], g.kernel(), g.length_scales(), g.nugget())?;
             }
+        }
+        // the believed value is data: it enters the incumbent (ADR 0621 amendment 2)
+        if feasible {
+            self.incumbent = Some(self.incumbent.map_or(m, |f| f.min(m)));
         }
         Ok(())
     }
