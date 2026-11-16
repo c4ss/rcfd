@@ -18,7 +18,7 @@ exercised on small laminar cases and on analytic surrogates. The [glossary](glos
 * adjoint gradients for turbulent, transient or energy runs
 * adjoint gradients through studies, the service or MCP tools
 * RBF morphing
-* surrogate models
+* surrogate models other than the Gaussian process of ADR 0621 (library only, below); its study method and MCP tool
 * warm start for transient runs, the coupled solver and turbulence models other than k-epsilon and k-omega SST (they run
   cold); the warm start of energy and k-epsilon / k-omega SST runs exists in the library only (below)
 * any use with the real fan (the fan case belongs to the other wave 32 work and the milestone itself)
@@ -369,6 +369,21 @@ evaluator and fidelity tier in one JSON-lines file, so the design history surviv
 * Re-run: an evaluator implements `ledger::Model` (id, version, tier, evaluate over named parameters); `ledger::rerun_check` refuses
   another id or version, re-evaluates from the stored parameters and compares metrics, units, verdict and geometry hash.
 
+Records for objectives, surrogates and multi-fidelity or measured data (ADR 0632, library only; no MCP tool until F-702):
+
+* Optional top-level keys, written only when set, so a ledger without them is byte-identical to the format above and older readers
+  keep the line (they ignore the keys): `parents` (references `{index, hash}`, the hash being FNV-1a 64 of the entry's line, see
+  `ledger::entry_ref` and `ledger::resolve`), `source` (`{id, kind: computed | measured | literature, citation, file_sha256}`),
+  `fidelity_level` (a finer level inside the tier), `uncertainty` (standard uncertainty of named metrics, in their units),
+  `objective` and `fitted` (`{id, version, hash}` of the objective that scored the entry, or of a fitted surrogate or correction).
+* The tier `measured` (`Fidelity::Measured`) and any entry with a `measured` source are written only to a private ledger
+  (`Ledger::private`, refused for a path inside a repository tree) and refused by a public one; a public reader skips such lines.
+  The MCP tools keep the three public tiers.
+* `ledger::fidelity_pair` builds the pair and discrepancy record of ADR 0622 (`m.low`, `m.high`, `m.diff`, `m.rel`, `m.pred`,
+  with both entries as `parents`); `ledger::pair_by_params` pairs `ok` entries of two levels with bit-identical parameters and
+  refuses mixed units; `ledger::training_set` returns the parameter and metric matrix with the failed points apart and refuses mixed
+  evaluators, versions, levels or units. `Filter` also selects by `variant` and by `condition`.
+
 ## Tolerance and uncertainty studies (ADR 0121, library only)
 
 The function `design::uq::run(spec, model, ledger)` samples named parameters with units from uniform, truncated normal or beta
@@ -399,6 +414,79 @@ interactions (`ST_i - S_i`) and non-monotone effects; an input the model does no
 evaluation is dropped as a whole. Every evaluation and a `sobol_summary` entry can be written to the ledger; the result does not
 depend on the worker count. It is opt-in, verified on the Ishigami function and a linear function, and has no MCP tool.
 
+## Fan objective over impedance points and tolerances (ADR 0620, library only)
+
+`design::fan_objective` states a fan objective once and builds an ordinary study from it, so Nelder-Mead, CMA-ES, NSGA-II, the
+study store and the ledger sink run it unchanged:
+
+* `FanObjective` holds the parameters (with units), the impedance points (`ImpedancePoint`: a system curve `dp = k Q^2 + l Q`
+  and a weight), the terms (`Term`: metric, sense, statistic over the tolerance specimens `TolStat`, combination over the points
+  `Over`, weight), the limits (`Limit`: held at every point, or on an aggregate over the points) and an optional
+  `TolerancePlan` (`n` specimens from one seed for every candidate, so the objective is deterministic; failed specimens are
+  dropped and counted up to `max_failed_fraction`, default 0).
+* The statistic is taken over the specimens at each point first (sample sd, divisor `n - 1`; `mean + k sd` of the minimised
+  quantity), the combination over the points second (`Robust` of the study, population sd). There is no default for either.
+* A model is a `SpecimenModel` (nominal and perturbed specimens, metrics at a point). `FanRomTarget` is the reduced-order fan of
+  ADR 0119 on a `ComputerFan`: flow, pressure rises, power, efficiencies, the first tone (`tone1_pa`, `tone1_db`), the
+  A-weighted sum of the first three tones (`tone_a3_db`), and the static-unbalance force of the specimen's blades
+  (`unbalance`, `unbalance_force`). Per-blade aero, eccentricity and roughness tolerances are refused.
+* Ledger: `ledger_sink` gives the study sink with every unit (one entry per candidate and point); `append_scores` writes one
+  `objective_score` entry per candidate with `objective` (id, version and hash of the objective record) and `parents` (its point
+  entries); `ObjectiveModel` re-runs a score entry for `rerun_check`.
+
+A typical first formulation: minimise `tone_a3_db` (or `tone1_db`) subject to a flow limit at every impedance point and a power
+cap. Every number is a model proxy: no measured fan data exists, so the objective ranks variants of the model, not real fans.
+
+## Gaussian-process surrogate and expected improvement (ADR 0621, library only)
+
+`design::surrogate` is ordinary kriging: a constant mean, a Matern 5/2 correlation (squared exponential opt-in) with one length
+scale per parameter on the unit cube, the mean and the process variance profiled out, the length scales (and, with
+`Noise::Fitted`, a nugget ratio) fitted by maximum likelihood from ten starts with the analytic gradient. A jitter of `1e-8`
+keeps near-duplicate points factorable. `Gp::predict` gives the mean and the standard deviation of the latent function,
+`Gp::loo` the leave-one-out residuals from one factorisation.
+
+`design::bayes` proposes the next variant by expected improvement over the best value so far:
+
+* `propose(bounds, observations, options)` is a deterministic function of the observations as a set (they are sorted first),
+  so the line order of a ledger does not matter, and of the options; any worker count gives the same bits. The first
+  `max(5 d, 10)` points are a Latin hypercube.
+* Failed evaluations are imputed at the predicted mean plus one standard deviation and also feed a failure model (a process on
+  the label ok / failed) whose probability of success multiplies the acquisition; constraints get a process each and their
+  probability of feasibility. Pending entries and the points of a batch are believed at their predicted mean.
+* `minimise` has the batch interface of the other optimisers; `run(spec, model, ledger)` drives a `ledger::Model` and appends
+  one entry per evaluation with the predicted mean and standard deviation in the provenance (`driver: gp_ei`), then a
+  `surrogate_summary` with the fitted model's identity (`fitted`) and its training entries (`parents`). A run resumes from the
+  entries already in the ledger; one fit takes one evaluator, version and fidelity level (the F-700 training-set query).
+
+Meant for evaluations that cost minutes or more: on Branin it reaches the minimum within 1 percent in a median of 28
+evaluations. For thousands of cheap evaluations CMA-ES stays the tool. On the reduced-order fan every result is a model proxy.
+
+## Fidelity management: screen, confirm, correct (ADR 0622, library only)
+
+`design::fidelity::run` screens a candidate set (a list, or a seeded Latin hypercube in a box) with a cheap `ledger::Model`,
+promotes a few candidates per round to a `HighSource` (a model through `ModelSource`, later CFD, or a measured table), and
+fits a discrepancy correction that the next rounds use for their ranking:
+
+* Promotion: per round `promote_per_round` picks, of them `explore_per_round` by greedy max-min distance in the unit box and the
+  rest by the corrected objective (`Promotion::Random` is the negative control). A failed high evaluation uses its pick.
+* Correction (`Correction`), per metric: R0 (none), R1 (additive or multiplicative constant), R2 (`rho y_L + b0 + c . x`),
+  chosen by leave-one-out error with the one-standard-error rule; trusted only when its leave-one-out RMSE is at most 0.8 of
+  the uncorrected one and the discrepancy exceeds twice the source's stated uncertainty; applied only inside the calibrated
+  region (box of the pairs grown by 0.05 and within 0.25 of a pair, unit box); outside, a query is flagged and gets the trusted
+  constant only. A Gaussian-process rung is a follow-up that reuses F-698.
+* Ledger: an `evaluation` entry for every low and high evaluation, one `fidelity_pair` (ADR 0632) per ok promotion with the
+  prediction made before the high result, one `fidelity_summary` per round (rung, RMSE before and after, bias, out-of-sample
+  RMSE, the correction with its hash in `fitted`).
+* Privacy: a private source (`MeasuredTable`, tier `measured`) needs `spec.privacy`. The private ledger (refused inside a
+  repository tree, and the public ledger is refused inside its directory) gets the measured values, pairs, corrections and
+  predictions; the public ledger gets the low entries and per-round summaries whose aggregates appear only for at least 5 pairs,
+  once per block of 5 new pairs, rounded to 3 significant digits. `MeasuredTable` reads the CSV of
+  [the measurement protocol](fan-measurement-protocol.md) with a `variant` column; its errors name row and column, never a value.
+
+Verified on synthetic high sources only (an exact affine source, the one-variable pair of Forrester et al., the reduced-order
+fan against a copy with larger loss constants, noise, a source that always fails, an identical source). It says nothing about
+how well the reduced-order model predicts a real fan.
+
 ## Code map
 
 The code is `crates/rcfd-api/src/design/`:
@@ -419,6 +507,10 @@ The code is `crates/rcfd-api/src/design/`:
 | `ledger` | design ledger across studies (ADR 0121): entries with units, verdicts, tiers, queries, export, re-run check |
 | `uq` | tolerance / uncertainty study driver (ADR 0121): distributions, MC and replicated LHS, stopping rule, statistics, SRC |
 | `sensitivity` | first-order and total Sobol indices with standard errors (ADR 0240) |
+| `fan_objective` | fan objective over impedance points and tolerances, the reduced-order fan target (ADR 0620) |
+| `surrogate` | Gaussian-process regression: kernel, maximum-likelihood fit, prediction, leave-one-out (ADR 0621) |
+| `bayes` | expected-improvement proposal, failure model, batches, the driver over a ledger model (ADR 0621) |
+| `fidelity` | fidelity management driver: screen, confirm, log the pairs, correct; measured table with the privacy split (ADR 0622) |
 
 ## Where to go next
 

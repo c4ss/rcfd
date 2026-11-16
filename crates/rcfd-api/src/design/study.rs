@@ -8,6 +8,7 @@ use super::optim::{self, Coefficients, DeOptions, Fitness, InitialSimplex, NmOpt
 use super::pareto;
 use super::sampling;
 use super::store::{key_of, CondResult, Record, Store};
+use super::study_ledger::{self, LedgerSink};
 use serde_json::Value;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -404,6 +405,16 @@ pub struct Study<'a> {
     propose_only: bool,
     /// New evaluations made through this object.
     pub evaluated: usize,
+    /// Opt-in ledger sink (ADR 0623 D1); `None` leaves every byte of the study as before.
+    sink: Option<LedgerSink<'a>>,
+    /// Test-only kill hook (ADR 0623 LG5): the 1-based write event at which `eval_points` stops before writing.
+    #[cfg(test)]
+    pub(crate) test_kill_at: Option<usize>,
+    /// Test-only: write events seen, and the file of the event that was killed.
+    #[cfg(test)]
+    pub(crate) test_events: AtomicUsize,
+    #[cfg(test)]
+    pub(crate) test_killed: Mutex<Option<&'static str>>,
 }
 
 fn sorted_params(def: &StudyDef, x: &[f64]) -> Vec<(String, f64)> {
@@ -423,7 +434,47 @@ impl<'a> Study<'a> {
             allowance: None,
             propose_only: false,
             evaluated: 0,
+            sink: None,
+            #[cfg(test)]
+            test_kill_at: None,
+            #[cfg(test)]
+            test_events: AtomicUsize::new(0),
+            #[cfg(test)]
+            test_killed: Mutex::new(None),
         })
+    }
+
+    /// Attach the opt-in ledger sink (ADR 0623 D1): every new evaluation of this study is then also written to the ledger,
+    /// one `evaluation` entry per (candidate, condition), after its store write. Refused (located, nothing written) when a
+    /// parameter, objective metric or constraint metric has no unit in the sink's maps. Then the ledger is reconciled with
+    /// the store: every (record, condition) pair of the store without an entry gets one. Returns the number appended.
+    pub fn set_ledger_sink(&mut self, sink: LedgerSink<'a>) -> Result<usize, String> {
+        sink.check(&self.def)?;
+        let n = study_ledger::reconcile(&self.def, &sink, self.store.records())?;
+        self.sink = Some(sink);
+        Ok(n)
+    }
+
+    /// Write the entries of the records at `range` of the store to the sink, when one is set.
+    fn log_records(&self, range: std::ops::Range<usize>) -> Result<(), String> {
+        let Some(sink) = &self.sink else {
+            return Ok(());
+        };
+        let entries = study_ledger::entries_of_records(&self.def, sink, &self.store.records()[range])
+            .map_err(|e| format!("ledger: {e}"))?;
+        #[cfg(test)]
+        self.test_event("ledger")?;
+        sink.ledger.append(&entries).map_err(|e| format!("ledger: {e}"))
+    }
+
+    #[cfg(test)]
+    fn test_event(&self, file: &'static str) -> Result<(), String> {
+        let k = self.test_events.fetch_add(1, Ordering::SeqCst) + 1;
+        if self.test_kill_at == Some(k) {
+            *self.test_killed.lock().unwrap_or_else(|e| e.into_inner()) = Some(file);
+            return Err(format!("test kill at write event {k} ({file})"));
+        }
+        Ok(())
     }
 
     /// Evaluate (or look up) a batch of candidates; returns the record positions in request order.
@@ -499,7 +550,15 @@ impl<'a> Study<'a> {
         if let Some(a) = &mut self.allowance {
             *a -= recs.len();
         }
+        let n_new = recs.len();
+        #[cfg(test)]
+        if n_new > 0 {
+            self.test_event("store").map_err(Stop::Error)?;
+        }
         self.store.append(recs).map_err(Stop::Error)?;
+        if n_new > 0 {
+            self.log_records(base..base + n_new).map_err(Stop::Error)?;
+        }
         if take < fresh.len() {
             return Err(Stop::Interrupted);
         }
@@ -793,6 +852,7 @@ impl<'a> Study<'a> {
             conditions,
             message: message.to_string(),
         }])?;
+        self.log_records(index..index + 1)?;
         Ok(index)
     }
 

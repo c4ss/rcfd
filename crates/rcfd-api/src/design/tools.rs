@@ -1577,6 +1577,7 @@ fn ledger_append(svc: &Service, p: &Value) -> Rpc {
             Some(v) => Some(v.as_u64().ok_or_else(|| bad("seed: expected a non-negative integer"))?),
         },
         provenance: p.get("provenance").cloned().unwrap_or(Value::Null),
+        ..Default::default()
     };
     e.validate().map_err(bad)?;
     l.append(&[e]).map_err(|m| RpcError::new(code::INTERNAL, m))?;
@@ -1598,6 +1599,7 @@ fn ledger_filter(p: &Value) -> Rpc<ledger::Filter> {
             None => None,
             Some(v) => Some(ledger::Fidelity::parse(v).ok_or_else(|| bad(format!("fidelity: '{v}' is unknown")))?),
         },
+        ..Default::default()
     })
 }
 

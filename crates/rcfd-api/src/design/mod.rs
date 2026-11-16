@@ -6,13 +6,20 @@
 //! `tools` holds the `design.*` service methods. `adjoint` gives shape sensitivities of laminar SIMPLE/SIMPLEC solutions with
 //! respect to free-form-deformation parameters (ADR 0091) for the gradient method `optim::projected_gradient`. `ledger` is the
 //! cross-study design ledger and `uq` the tolerance/uncertainty study driver (ADR 0121); `sensitivity` gives first-order
-//! and total Sobol indices (ADR 0240). `nsga2` is the multi-objective
-//! optimiser (ADR 0209). `cmaes` is CMA-ES with restarts of increasing population (ADR 0222).
+//! and total Sobol indices (ADR 0240). `study_ledger` is the opt-in ledger sink of design studies (ADR 0623).
+//! `fan_objective` is the opt-in fan objective layer over impedance points and tolerances (ADR 0620).
+//! `surrogate` is a Gaussian-process regression and `bayes` the expected-improvement proposal of the next variant over it
+//! (ADR 0621), both opt-in.
+//! `fidelity` is the opt-in fidelity management driver: screen, confirm, correct (ADR 0622).
+//! `nsga2` is the multi-objective optimiser (ADR 0209). `cmaes` is CMA-ES with restarts of increasing population (ADR 0222).
 
 pub mod adjoint;
+pub mod bayes;
 pub mod case_eval;
 pub mod cmaes;
+pub mod fan_objective;
 pub mod fan_rom_eval;
+pub mod fidelity;
 pub mod ledger;
 pub mod nsga2;
 pub mod opmap;
@@ -23,5 +30,7 @@ pub mod sampling;
 pub mod sensitivity;
 pub mod store;
 pub mod study;
+pub mod study_ledger;
+pub mod surrogate;
 pub mod tools;
 pub mod uq;

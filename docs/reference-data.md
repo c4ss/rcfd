@@ -2370,3 +2370,20 @@ Nonconservative Problems of the Theory of Elastic Stability, Pergamon 1963: NOT 
 | Quantity | Source | Value and use |
 |---|---|---|
 | Peak hoop stress at the hole edge of the ADR 0478 two-layer Hex20 plate (`r/W = 0.05`, length equal to width), per remote stress | computed in this repository, not a published value: the uniformly graded meshes of 24, 48 and 96 cells along the hole in ADR 0627 | `K_96 = 3.03697`; mesh error about 1.5e-5 relative. It is 1.23 percent above Kirsch's `3 sigma_0` (finite plate). The finite-width forms recorded above (Howland/Peterson, from memory, not read) bracket it but are not its source. Recorded on the maintainer's standing instruction (ADR 0627 Q5). |
+
+## F-698 Gaussian-process surrogate and expected improvement: sources (ADR 0621, docs/design-loop.md)
+
+Recorded 2026-11-16 for ADR 0621. No paper was opened (none is in the repository); no source listing of any Gaussian-process,
+kriging or Bayesian-optimisation code was opened. Every item is from memory and guarded by a check of its own.
+
+| What is used | Status | Source and guard |
+|---|---|---|
+| Kriging with a constant mean (GLS), profiled process variance, concentrated likelihood, predictive variance with the mean-uncertainty term | from memory, derived | Jones, Schonlau and Welch (1998), J. Global Optim. 13; Rasmussen and Williams (2006), ch. 2; NOT read; guarded by ADR 0621 G2 (two-point closed form derived in the ADR) |
+| Matern 5/2 and squared-exponential correlations | from memory | Rasmussen and Williams (2006), eq. 4.17; Stein (1999); NOT read; G2 writes the kernels out |
+| Gradient of the log likelihood `(a^T dK a / s2 - tr(K^-1 dK)) / 2` | derived | envelope theorem on the profiled likelihood (ADR 0621 amendment 1); G4 against central differences |
+| Leave-one-out from one factorisation with an estimated mean | from memory, derived | Dubrule (1983), Math. Geol. 15; NOT read; G7 against explicit refits |
+| Expected improvement `(f_min - m) Phi(z) + s phi(z)` | from memory, derived | Mockus, Tiesis and Zilinskas (1978); Jones et al. (1998) eq. 15; NOT read; E1 against Simpson's rule |
+| Imputation of failed points at `m + s` | from memory | Forrester, Sobester and Keane (2006), Proc. R. Soc. A 462; NOT read; F1, F2 |
+| Probability of feasibility; least-squares classification on +-1 labels | from memory | Schonlau, Welch and Jones (1998); Gardner et al. (2014); Rasmussen and Williams (2006) section 6.5; NOT read; K1, R1 |
+| Kriging believer | from memory | Ginsbourger, Le Riche and Carraro (2010); NOT read; P1b |
+| Branin, Hartmann 3 and 6 (constants, minima 0.397887, -3.86278, -3.32237) | from memory | Dixon and Szego (1978); NOT read; ADR 0621 G0 evaluates the functions at the stated minimisers (within 4e-7 and 2e-6) |

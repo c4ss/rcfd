@@ -351,6 +351,11 @@ pub struct UqResult {
 }
 
 fn mean_sd(y: &[f64]) -> (f64, f64) {
+    // a sample of bit-identical values: its mean is the value and its sd 0 exactly (ADR 0623 D4); every other sample takes
+    // the unchanged path below
+    if y.len() > 1 && y.iter().all(|v| v.to_bits() == y[0].to_bits()) {
+        return (y[0], 0.0);
+    }
     let n = y.len() as f64;
     let m = y.iter().sum::<f64>() / n;
     let v = if y.len() > 1 {
@@ -770,6 +775,113 @@ fn summary_entry(spec: &UqSpec, model: &dyn Model, res: &UqResult) -> Entry {
         seed: Some(spec.seed),
         provenance: result_json(spec, res),
         ..entry_of(model, Vec::new(), Outcome::default())
+    }
+}
+
+/// One standardised input of [`Standardized`]: the inner parameter `name` (in `unit`) is `offset + width z`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Affine {
+    /// Name of the inner model's parameter (the standardised input is `z.<name>`, unit `1`).
+    pub name: String,
+    /// Unit of the inner parameter.
+    pub unit: String,
+    /// Offset.
+    pub offset: f64,
+    /// Width (0: the input has no effect, the inner parameter is the offset).
+    pub width: f64,
+}
+
+/// A [`Model`] over standardised inputs `z.<name>` (unit `1`) of an inner model (ADR 0623 D2): the inner parameter is
+/// `offset + width z`. A zero width expresses a tolerance of zero width, which [`Dist`] cannot.
+pub struct Standardized<'m> {
+    inner: &'m dyn Model,
+    maps: Vec<Affine>,
+    id: String,
+    version: String,
+}
+
+impl<'m> Standardized<'m> {
+    /// Wrap `inner`; offsets and widths must be finite, widths >= 0, names unique and non-empty.
+    pub fn new(inner: &'m dyn Model, maps: Vec<Affine>) -> Result<Standardized<'m>, String> {
+        for (i, m) in maps.iter().enumerate() {
+            if m.name.is_empty() || m.unit.is_empty() {
+                return Err(format!("maps[{i}]: name and unit are required"));
+            }
+            if maps[..i].iter().any(|q| q.name == m.name) {
+                return Err(format!("map '{}': given twice", m.name));
+            }
+            if !(m.offset.is_finite() && m.width.is_finite() && m.width >= 0.0) {
+                return Err(format!(
+                    "map '{}': offset must be finite and width finite and >= 0 (got {}, {})",
+                    m.name, m.offset, m.width
+                ));
+            }
+        }
+        let version = std::iter::once(inner.version().to_string())
+            .chain(
+                maps.iter()
+                    .map(|m| format!("{}={:016x},{:016x}", m.name, m.offset.to_bits(), m.width.to_bits())),
+            )
+            .collect::<Vec<_>>()
+            .join("; ");
+        Ok(Standardized {
+            id: format!("{}+standardized", inner.id()),
+            inner,
+            maps,
+            version,
+        })
+    }
+
+    /// Name of the standardised input of inner parameter `name`.
+    pub fn input_name(name: &str) -> String {
+        format!("z.{name}")
+    }
+
+    /// The inner parameters of standardised inputs `params` (every map's input must be given once, unit `1`).
+    pub fn inner_params(&self, params: &[Quantity]) -> Result<Vec<Quantity>, String> {
+        if let Some(q) = params
+            .iter()
+            .find(|q| !self.maps.iter().any(|m| Self::input_name(&m.name) == q.name))
+        {
+            return Err(format!("param '{}': not a standardised input of this model", q.name));
+        }
+        self.maps
+            .iter()
+            .map(|m| {
+                let zn = Self::input_name(&m.name);
+                let mut it = params.iter().filter(|q| q.name == zn);
+                let z = it.next().ok_or_else(|| format!("param '{zn}': missing"))?;
+                if it.next().is_some() {
+                    return Err(format!("param '{zn}': given twice"));
+                }
+                if z.unit != "1" {
+                    return Err(format!("param '{zn}': unit must be \"1\" (got '{}')", z.unit));
+                }
+                Ok(Quantity::new(&m.name, m.offset + m.width * z.value, &m.unit))
+            })
+            .collect()
+    }
+}
+
+impl Model for Standardized<'_> {
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn version(&self) -> &str {
+        &self.version
+    }
+    fn fidelity(&self) -> super::ledger::Fidelity {
+        self.inner.fidelity()
+    }
+    fn evaluate(&self, params: &[Quantity]) -> Outcome {
+        match self.inner_params(params) {
+            Ok(p) => self.inner.evaluate(&p),
+            Err(reason) => Outcome {
+                verdict: Verdict::NotEvaluated,
+                reason,
+                ..Default::default()
+            },
+        }
     }
 }
 
