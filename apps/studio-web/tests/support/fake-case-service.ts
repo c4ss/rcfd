@@ -1,6 +1,6 @@
 // A stand-in for `rcfd serve` for the settings surface (F-825): newline-delimited JSON-RPC 2.0 over TCP with the
-// methods the surface calls (service.info, settings.schema, session.create/list, run.status, settings.get/set/remove/
-// validate) and a long-polled event log. Its case schema is a test schema with the shapes the engine's
+// methods the surface calls (service.info, settings.schema, session.create/list/close (close: F-829), run.status,
+// settings.get/set/remove/validate) and a long-polled event log. Its case schema is a test schema with the shapes the engine's
 // Schema::to_json_schema writes (crates/rcfd-core/src/settings.rs), and a test may change it while the Studio runs: that
 // is how the tests show a key added to the schema appearing with no Studio code change.
 //
@@ -227,6 +227,13 @@ export class FakeCaseService {
       case 'session.create': {
         const id = this.makeSession();
         return ok({ session: id });
+      }
+      case 'session.close': {
+        // F-829 (undo of a new session, Close session): the session and its tree are gone
+        if (!needSession()) return;
+        this.sessions.delete(String(p['session']));
+        this.emit(String(p['session']), 'closed', {});
+        return ok({ closed: String(p['session']) });
       }
       case 'session.list':
         return ok({ sessions: [...this.sessions].map(([session, x]) => ({ session, state: x.state })) });

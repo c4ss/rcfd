@@ -17,6 +17,7 @@ import { watchProjectState } from '../project/door.js';
 import { caseModel, formatValue, type CaseModel } from '../settings/schema.js';
 import { useSettings } from '../settings/context.js';
 import { SettingsSurface } from '../settings/SettingsSurface.js';
+import { UndoControls } from '../history/UndoControls.js';
 import { Button, Icon, SegmentedToggle, Select, StatePictogram, TextField } from '../ui/index.js';
 import { caseDoor } from './door.js';
 import { caseHash, caseRoute, replaceHash, type CaseRoute } from './hash.js';
@@ -119,6 +120,8 @@ export default function CaseEditorPage() {
           )}
         </div>
         <div className="st-top-right">
+          {/* F-829: undo and redo of this file's session edits; saving is the file's own step (hash guarded) */}
+          {editing && <UndoControls scope={route.session} />}
           {stateWord}
           <span className="st-conn">{engine.service ? `Service ${engine.service.status}${engine.service.address ? `, ${engine.service.address}` : ''}` : ''}</span>
         </div>

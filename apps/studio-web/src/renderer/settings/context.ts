@@ -28,6 +28,12 @@ export interface SettingsContext {
   readonly prefill: ReadonlyMap<string, string>;
   /** Shows a key wherever it sits: its section, every disclosure on its way, then focus on its control. */
   goTo(path: string): void;
+  /**
+   * The engine's value of a setting now (settings.get), null when the case holds none; `ok: false` when it could not be
+   * read. A typed value is checked against it before it is sent, so a value another writer set while the user typed is
+   * not overwritten silently (F-829, G18).
+   */
+  current?(path: string): Promise<{ readonly ok: true; readonly value: JsonValue } | { readonly ok: false }>;
 }
 
 export const Settings = createContext<SettingsContext | null>(null);

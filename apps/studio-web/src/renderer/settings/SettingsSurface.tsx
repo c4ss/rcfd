@@ -202,7 +202,11 @@ export function SettingsSurface({ model, session, address, settingsEpoch, stateE
         return false;
       }
       mark(key, true);
-      const r = await dispatch('settings.set', { session, path: seed.path, value: seed.value }, { context: ctxSession });
+      const made = `${collectionPath}.${name.trim()}`;
+      // F-829: the entry is made by its first key, which had no value before; undo removes the entry it made
+      const fresh = !entryNames(tree, collectionPath).includes(name.trim());
+      const undo = fresh ? { inverse: [{ action: 'settings.remove', params: { session, path: made } }], title: `add ${made}` } : {};
+      const r = await dispatch('settings.set', { session, path: seed.path, value: seed.value }, { context: ctxSession, undo });
       mark(key, false);
       if (!r.ok) {
         const msg = engineMessage(r.error, seed.path);
@@ -211,7 +215,6 @@ export function SettingsSurface({ model, session, address, settingsEpoch, stateE
         return false;
       }
       putError(key, null);
-      const made = `${collectionPath}.${name.trim()}`;
       setOpen((o) => new Set([...o, `entry:${made}`, `group:${collectionPath}`]));
       setPrefill((m) => {
         const n = new Map(m);
@@ -238,6 +241,12 @@ export function SettingsSurface({ model, session, address, settingsEpoch, stateE
       setAnnounce(`${path} removed.`);
       await refresh();
       return true;
+    },
+    current: async (path) => {
+      const r = await dispatch('settings.get', { session, path });
+      if (r.ok) return { ok: true, value: ((r.result as { value?: JsonValue }).value ?? null) as JsonValue };
+      // the engine answers -32602 for a path the case does not hold
+      return r.error.code === -32602 ? { ok: true, value: null } : { ok: false };
     },
     goTo: (path) => {
       setQuery('');

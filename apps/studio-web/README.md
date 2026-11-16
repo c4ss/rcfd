@@ -388,6 +388,68 @@ Decisions taken in building F-812 (options, the recommendation followed; each ca
 - D6, the sessions made in the main process to read the file as it is now (for the conflict table and the removal
   check) are short-lived, closed at once, and bypass the action log, which records the user's actions only.
 
+## Undo, safe deletes and edit conflicts (F-829, G18)
+
+- Undo and redo (`src/shared/actions/history.ts`): every edit dispatched through `src/renderer/actions/` that succeeds
+  and has an undo hook in the registry becomes a step of its session's history: `settings.set`, `settings.remove`, a
+  named entry made from its first key (the settings surface gives the inverse, removing the entry it made, because the
+  engine has no old value), and a new session made from the case settings page. Undo dispatches the registry's inverse
+  (origin `undo`), redo the step's own call (origin `redo`), so both are in the action log and replayable. Opening a
+  case file is not a step (`dispatch(..., { undo: false })`); Close the session is the way back.
+- Scope: one history per session. The case settings page (`#/settings/<id>`) and the case editor (`#/case/<id>`) show
+  the history of the session they edit; a closed session takes its history with it; a restarted service clears every
+  history. Redo of a new session makes a new session, and the history (and the page) follow its new id. A case save is
+  the file's own step: undo changes the session, never the file, and a save after an undo writes the restored value
+  (hash guarded as before). At most 200 steps per session.
+- Controls (`src/renderer/history/`): two ghost buttons in the header band that name the step ("Undo: set
+  solver.alpha_u", "Redo: remove boundaries.lid"; "Nothing to undo" when there is none), Ctrl+Z, Ctrl+Shift+Z and Ctrl+Y
+  (Cmd on macOS) from anywhere on the page. Inside a text field that holds typing not yet sent, Ctrl+Z is the field's own
+  undo of that typing; once the value is sent (Enter, or focus leaves) or dropped (Escape) it undoes the last edit.
+- Conflicts: before a step is undone or redone, the settings it left are read again; a value another writer (Claude
+  Code, the CLI, another window) changed since is shown with both values and three choices (undo anyway, replacing the
+  value now; keep the value now and drop this step; cancel), none preselected, and nothing is sent until one is chosen.
+  A typed value is checked the same way before it is sent: when the engine's value changed after the typing began,
+  the field says so and offers "Set mine" or "Keep" the other value. The F-812 case save already refuses a file changed
+  since it was read (`edit_case` with `base_hash`, conflict 1200) and was checked, not changed; `new_case` and duplicate
+  never replace a file. The recent list (user data) is read again before each write and the one change applied to it,
+  so another window's entries stay.
+- Losses (`src/shared/actions/loss.ts`): every change action has an inverse or words for what it loses
+  (`NO_INVERSE`; a unit test fails on one with neither). Close session (case settings page) and undoing a new session
+  ask first, in words that name the session, its settings that exist only in the service (with the edits made here),
+  its built mesh and fields and its results, with keeping as the focused default. An undo or redo of a settings change
+  on a session that holds results (an ended run, or steps taken) asks first too: the engine discards them. The words
+  for `run.start`, `run.step` and `run.initialize` on a session with results are there for run control (F-807).
+- Deletes: the engine has no delete or trash of a run, a result or a case (no service method, MCP tool or CLI command;
+  the F-824 inventory holds only `settings.remove` and `workflow.delete`, which touch no file). The Studio offers none
+  and never deletes a project file itself (G2, G12): `tests/unit/history.spec.ts` fails when the engine gains one (so
+  the Studio can offer it) and when Studio code removes a file other than its own service record.
+- Tests: `tests/unit/history.spec.ts` (fake service: round trips, conflicts on undo and redo, losses, the loss table,
+  rename on redo, no delete path, the recent list, history.css), `tests/e2e/undo-rcfd.spec.ts` (the same history on the
+  real `rcfd serve`, another writer on a second connection, results from `run.step`), `tests/e2e/undo.spec.ts`
+  (packaged Studio, fake service: buttons, keyboard, conflicts, typed-value conflict, confirmations, focus) and
+  `tests/e2e/undo-case.spec.ts` (packaged Studio, `rcfd serve` and `rcfd-mcp`: the case editor's history). Screenshots
+  at 1440 by 900: `test-results-visual/f829/`.
+
+Decisions taken in building F-829 (options, the recommendation followed; each can be reversed without an engine change):
+
+- D1, scope: (a) one history per session, (b) one per page, (c) one per surface. Taken: (a); a new session belongs to
+  the history of the session it made; opening a case file is not a step.
+- D2, conflict checks: the service has no compare-and-set, so (a) read again and compare before undo, redo and a typed
+  value is sent (a gap of a few milliseconds between read and write), (b) an engine `settings.set` that takes the
+  expected value (Rust, proposed), (c) none. Taken: (a), (b) proposed.
+- D3, deletes: (a) none in the Studio until the engine has one, the gap recorded and tested; (b) a Studio-side trash
+  that moves files (refused: G2, G12). Taken: (a); proposed engine entry points: project tools to move a run or a case
+  to a trash under `.rcfd/` with a journal line, list it, restore and empty it.
+- D4, Ctrl+Z in a text field: the field's own while it holds typing not yet sent, the Studio's otherwise.
+- D5, a named entry made from its first key: the surface passes the inverse (remove the entry) when the name was new;
+  the registry's inverse stays as F-827 tested it.
+- D6, the recent list: merged (read again, one change applied), not a conflict prompt: an entry is a path and a time.
+- D7, the decision panel's focus: shown always (the panel moves focus itself, also after Ctrl+Z, which does not count as
+  keyboard use for focus-visible).
+- Open: whether an ordinary settings change on a session that holds results should also ask first (F-825 sends it at
+  once; undo and redo ask). Options: (a) ask once before the first change that discards results, (b) keep as is.
+  Recommended (a); not done here, it changes F-825's surface.
+
 ## Security (G10)
 
 - The renderer is sandboxed (`app.enableSandbox()` and the window's settings), context-isolated, with Node integration

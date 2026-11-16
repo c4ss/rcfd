@@ -5,6 +5,7 @@ import { useId, useState, type KeyboardEvent } from 'react';
 import { Button, Select, StatePictogram, Switch, TextField } from '../ui/index.js';
 import { useSettings } from './context.js';
 import { encode, formatValue, isSet, rangeText, unitOf, valueAt, type Leaf } from './schema.js';
+import '../history/history.css';
 
 export interface KeyRowProps {
   readonly leaf: Leaf;
@@ -120,29 +121,57 @@ interface TextControlProps {
   readonly invalid: boolean;
 }
 
-/** A text field that sends on Enter or when focus leaves, and goes back to the engine's value on Escape. */
+/**
+ * A text field that sends on Enter or when focus leaves, and goes back to the engine's value on Escape. Before it sends,
+ * it reads the engine's value again: when another writer changed it after the typing began, nothing is sent and the
+ * field asks which to keep (F-829, G18).
+ */
 function TextControl({ leaf, path, shown, name, describedBy, invalid }: TextControlProps) {
   const c = useSettings();
   const [draft, setDraft] = useState<string | null>(null);
   const [refused, setRefused] = useState<string | null>(null);
+  /** The engine's value as text when the typing began. */
+  const [basis, setBasis] = useState<string | null>(null);
+  /** The engine's value now, when another writer changed it after the typing began. */
+  const [overtaken, setOvertaken] = useState<string | null>(null);
   const text = draft ?? shown;
+
+  const send = (sent: string) => {
+    void c.change(path, encode(leaf, sent)).then((ok) => {
+      if (ok) {
+        setDraft((d) => (d === sent ? null : d));
+        setRefused(null);
+        setBasis(null);
+      } else {
+        setRefused(sent);
+      }
+    });
+  };
 
   const commit = (force: boolean) => {
     if (draft === null) return;
     if (draft === shown && !invalid) {
       setDraft(null);
+      setBasis(null);
       return;
     }
-    if (!force && draft === refused) return;
+    if (!force && (draft === refused || overtaken !== null)) return;
     const sent = draft;
-    void c.change(path, encode(leaf, sent)).then((ok) => {
-      if (ok) {
-        setDraft((d) => (d === sent ? null : d));
-        setRefused(null);
-      } else {
-        setRefused(sent);
-      }
+    if (basis === null || !c.current) return send(sent);
+    const began = basis;
+    void c.current(path).then((now) => {
+      const nowText = now.ok ? formatValue(now.value ?? leaf.default) : null;
+      if (nowText !== null && nowText !== began) setOvertaken(nowText);
+      else send(sent);
     });
+  };
+
+  const keepTheirs = () => {
+    setDraft(null);
+    setRefused(null);
+    setBasis(null);
+    setOvertaken(null);
+    c.clearError(path);
   };
 
   const onKeyDown = (e: KeyboardEvent) => {
@@ -151,24 +180,47 @@ function TextControl({ leaf, path, shown, name, describedBy, invalid }: TextCont
       commit(true);
     } else if (e.key === 'Escape' && (draft !== null || invalid)) {
       e.preventDefault();
-      setDraft(null);
-      setRefused(null);
-      c.clearError(path);
+      keepTheirs();
     }
   };
 
   return (
-    <TextField
-      aria-label={name}
-      aria-describedby={describedBy}
-      value={text}
-      onChange={setDraft}
-      onKeyDown={onKeyDown}
-      onBlur={() => commit(false)}
-      isReadOnly={!c.editable}
-      isInvalid={invalid}
-      spellCheck="false"
-      autoComplete="off"
-    />
+    <>
+      <TextField
+        aria-label={name}
+        aria-describedby={describedBy}
+        value={text}
+        onChange={(t) => {
+          if (draft === null) setBasis(shown);
+          setDraft(t);
+        }}
+        onKeyDown={onKeyDown}
+        onBlur={() => commit(false)}
+        isReadOnly={!c.editable}
+        isInvalid={invalid}
+        spellCheck="false"
+        autoComplete="off"
+      />
+      {overtaken !== null && draft !== null && (
+        <div className="hi-overtaken" role="alert">
+          <p>
+            Not sent: {path} changed outside the Studio while you typed. It is now {overtaken || 'empty'} (it was {basis || 'empty'} when
+            you began).
+          </p>
+          <div className="hi-choices">
+            <Button
+              onPress={() => {
+                setBasis(overtaken);
+                setOvertaken(null);
+                send(draft);
+              }}
+            >
+              Set mine: {draft || 'empty'}
+            </Button>
+            <Button onPress={keepTheirs}>Keep {overtaken || 'empty'}</Button>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
