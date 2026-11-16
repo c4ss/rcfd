@@ -55,6 +55,10 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   annulus's to `2e-14` (old flux) and `1.6e-13` (mesh flux); off coincidences it is the base step bit for bit. The default
   `periodic_sliding_step` keeps the base path (ADR 0641 Q1). Since F-724 (ADR 0659) its threshold has the term-magnitude
   scale of the full annulus, so on F-720's uniform flows it equals the base on every step, coincidences included.
+  Against the full annulus with that inlet (F-725, ADR 0661), from a start consistent with the inlet the sector stays within
+  `2.0e-2 U_in` of the annulus over 400 steps; nearly all of it is the lagged partner value of the momentum equation on the
+  coupled (seam and wrap) faces, which outer iterations remove (`n_outer = 6`: `6.0e-3`), and what is left is the orthogonal
+  coupling of the wrap faces (ADR 0629 Q4: with no non-orthogonal corrector in either run `1.5e-4`).
   data set per face on rotor patches are the caller's to set on the new mesh; sectors of different pitch are refused. In the
   case tree since F-711 (ADR 0646) for the sector: `[mesh.sliding]` on `mesh.generator =
   "annulus_3d_sector_cylindrical_interface"` runs ADR 0634's turned loop (`mesh_turned`, `periodic_sliding_step`,
