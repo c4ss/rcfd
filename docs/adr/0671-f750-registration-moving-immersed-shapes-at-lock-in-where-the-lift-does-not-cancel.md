@@ -265,3 +265,23 @@ as ADR 0657. First-order forcing of ADR 0218. Items of D4.
   against `S` are reported.
 - **Q3. The screening of the negative control (S4).** Options: (a) as registered, the coarse N1 in the scan so that c9 can
   discriminate at the chosen point; (b) no screening. Taken (a) on the standing instruction, disclosed in arithmetic 3.
+
+## Amendment T3 (2026-11-16, written after the first run of the fast tests and before the corrected run)
+
+The fast tests were run once on the test file as first written (log `w49i-work/f750-scratch/logs/fast_tests_run1.log`): T1, T2,
+T4 to T8 passed; **T3 failed** at C3 (A/D 0.25, f 0.14, velocity in the forcing): the solid cells hold the body velocity within
+`1.29e-3 A omega`, against the registered `1e-3 A omega`. At C1 and C2 (A/D 0.5) the same measure is `6.36e-4` and `6.34e-4`.
+
+Diagnosis: the residual is the penalty error of the forcing, about `|u| / (K dt)` with `K dt = 1e6 x dt` of order 1e4 and `|u|`
+of order the free stream, so it is fixed in absolute terms: `6.36e-4 x 0.5 x 1.131 = 3.6e-4` (C1), `1.29e-3 x 0.25 x 0.880 =
+2.8e-4` (C3), and `6.43e-4 x 0.440 = 2.8e-4` in F-731's T3 at A/D 0.5, f 0.14. Normalised by the body speed `A omega` it doubles
+when the amplitude halves. The limit of T3 was carried over from ADR 0657 T3, where only A/D 0.5 was tested; its normalisation is
+defective for the smaller amplitude, not the forcing.
+
+Correction (registered now, before the corrected run): **T3b** is T3 with the limit `max |u_c - u_b| <= 1e-3 U` (absolute, the
+free stream speed `U = 1`) at every candidate, with and without the velocity; the estimate is 2.8e-4 to 3.6e-4. The quantity
+`max |u_c - u_b| / (A omega)` is still printed. The first T3 stays in the file as the ignored record
+`t3_immersed_smoke_at_the_candidates_known_miss` with its limit intact and the measured 1.29e-3 recorded. M10 is checked against
+T3b (with the motion velocity left out the solid cells hold 0 while the body moves at up to `A omega` = 0.22 to 0.60, far above
+1e-3). By the decision rule T3 counts as a check met only after an amendment (the rule's partial clause); this is stated here and
+not changed.
