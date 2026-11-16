@@ -7497,9 +7497,9 @@
       "F-808",
       "F-810"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "No engine or data work on the renderer's main thread: a test that records long tasks while opening a run, loading fields and scrubbing and fails on any task over a limit registered before the measurement; every operation longer than a registered threshold shows progress and can be cancelled, and cancelling leaves no partial state (G21).",
-    "note": "ADR 0800 (G16 to G21 added 2026-11-16). Traces: G21, G9."
+    "note": "ADR 0800 (G16 to G21 added 2026-11-16). Traces: G21, G9. Done 2026-11-16 (merge bfc2f381, ADR 0801 Addendum 9): long-task budget (100 ms per task, 150 ms per frame) checked by a test at 1e5/1e6 cells while opening a run, loading fields and scrubbing; opening, loading, checking and saving show progress after 300 ms with Cancel, and Cancel restores the screen exactly; field preparation, mesh layers and vector glyphs run in a worker. Full suite 573 passed, 1 failed (provenance focus after Escape, fixed separately). Open: decision 7 (count only frames that blocked the renderer thread; recommendation keep)."
   },
   {
     "id": "F-833",

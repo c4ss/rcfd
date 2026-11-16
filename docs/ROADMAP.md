@@ -14395,13 +14395,18 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     listed with their reason; one shortcut table for palette, listing, key listener and tests; no-conflict test incl.
     Electron's menu accelerators and reserved keys; coverage test that every registered action is in the palette;
     keyboard-only e2e.
-- [ ] **F-832** Electron Studio: responsiveness budget and cancellable work
+- [x] **F-832** Electron Studio: responsiveness budget and cancellable work
   - depends on: F-808, F-810
   - acceptance: No engine or data work on the renderer's main thread: a test that records long tasks while opening a
     run, loading fields and scrubbing and fails on any task over a limit registered before the measurement; every
     operation longer than a registered threshold shows progress and can be cancelled, and cancelling leaves no partial
     state (G21).
-  - note: ADR 0800 (G16 to G21 added 2026-11-16). Traces: G21, G9.
+  - note: ADR 0800 (G16 to G21 added 2026-11-16). Traces: G21, G9. Done 2026-11-16 (merge bfc2f381, ADR 0801 Addendum
+    9): long-task budget (100 ms per task, 150 ms per frame) checked by a test at 1e5/1e6 cells while opening a run,
+    loading fields and scrubbing; opening, loading, checking and saving show progress after 300 ms with Cancel, and
+    Cancel restores the screen exactly; field preparation, mesh layers and vector glyphs run in a worker. Full suite 573
+    passed, 1 failed (provenance focus after Escape, fixed separately). Open: decision 7 (count only frames that blocked
+    the renderer thread; recommendation keep).
 - [ ] **F-833** Electron Studio: quiet the built surfaces and lock a word budget per surface (G22)
   - depends on: F-805, F-806, F-807, F-810, F-812, F-814, F-825, F-829, F-831
   - acceptance: One quieting pass over every built surface (project home, runs, settings, case editor, Claude Code
