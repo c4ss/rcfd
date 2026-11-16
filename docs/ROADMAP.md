@@ -14189,7 +14189,9 @@ fixed by the item's registration ADR before any code.
     sweep does not respond; ledgers byte-identical for 1 and 8 workers. M15 (evidence parameters not compared) is
     recorded, not caught. Every confirmation is about the evaluator that produced it, never about a real fan. MCP
     exposure is F-702. Follow-up F-727 (Hypothesis record, seeded re-run sample and evidence-parameter guard). Follow-up
-    F-728 (Coupled held metrics and the held-tolerance resolution floor for hypotheses).
+    F-728 (Coupled held metrics and the held-tolerance resolution floor for hypotheses). ADR 0662 (F-727, 2026-11-16):
+    M15 is now caught by a check that edits one evidence parameter and rewrites the reference hashes; verify can re-run
+    a registered seeded sample of k pairs (k recorded in the result).
 - [ ] **F-702** MCP tools for the design loop (objective, surrogate, fidelity driver, hypothesis record, ledger logging), together with the tools of F-339
   - depends on: F-339, F-697, F-698, F-699, F-701
   - acceptance: Every limit not stated here is registered in an ADR before the run. Each library entry point of F-268
@@ -14546,7 +14548,8 @@ fixed by the item's registration ADR before any code.
     the leave-one-out standard deviation through the Cholesky factor). Follow-up F-735 (A zero-mean, absolute-noise mode
     of F-698's Gaussian process used by R3). The L3s misses recorded by ADR 0652 (6.3e-8 and 1.6e-8 of the residual
     scale) are errors of its double-precision brute-force reference; against a double-double reference the closed form
-    agreed within 1.3e-10 and 8.1e-10 (ADR 0656, 2026-11-16).
+    agreed within 1.3e-10 and 8.1e-10 (ADR 0656, 2026-11-16). R3's zero-mean process is now F-698's zero-mean mode (ADR
+    0663, 2026-11-16); its fits are bit-identical to before.
 - [~] **F-719** The stabilised incompatible-modes Hex8 (LinearStress) under load on distorted meshes
   - depends on: F-708
   - acceptance: Every limit not stated here is registered in the ADR before the run. The confined punch block and the
@@ -14730,13 +14733,29 @@ fixed by the item's registration ADR before any code.
     skewness and aspect limits, and the ADR 0079 and ADR 0083 cases keep their results; the h_slit mesh of the reference
     is measured against the same limits.
   - note: Follow-up of F-722 (ADR 0643, 2026-11-16).
-- [ ] **F-727** Hypothesis record, seeded re-run sample and evidence-parameter guard
+- [x] **F-727** Hypothesis record, seeded re-run sample and evidence-parameter guard
   - depends on: F-701
   - acceptance: verify with a registered sample of k evidence pairs (derived seed, k recorded in the result) catches an
     impostor evaluator on at least the registered share of synthetic worlds; a check that edits one evidence parameter
     and rewrites the reference hashes is refused only by the parameter comparison (the mutation parameters not compared
     fails it); every ADR 0624 check keeps its result.
-  - note: Follow-up of F-701 (ADR 0624, 2026-11-16).
+  - note: Follow-up of F-701 (ADR 0624 questions 3 and 5). ADR 0662, 2026-11-16. DONE. Library only, opt-in: a
+    hypothesis registration may carry a seeded re-run sample (design::hypothesis RerunSample: k pairs, rtol, atol),
+    drawn by a partial Fisher-Yates from a seed derived from the record hash and seed (rerun_seed, rerun_pairs); verify
+    re-runs both arms of exactly the sampled pairs with the trusted evaluator at analytic, reduced-order or cfd tier
+    (measured refused) and the result line records k, the seed and the pairs. rerun_sample_size gives the smallest k
+    from the hypergeometric miss probability C(n-b,k)/C(n,k); for 64 pairs and an evaluator wrong on 16 of them, k = 13
+    (miss 0.0147). Checks: on 400 synthetic worlds an impostor wrong on the high arm of 16 of 64 pairs is caught in 394
+    (limit 380, the registered share 0.95), the number of re-run problems equals the sampled corrupted pairs in 400 of
+    400, the honest evaluator is never flagged, without a sample at tier cfd it is caught in 0 and with k = 1 in 116 (66
+    to 134); editing one evidence parameter (a domain value, a factor level, a compensating parameter) and rewriting the
+    result's parent hash leaves exactly one problem, the parameter comparison, in 3 of 3, and the mutation that removes
+    the comparison (ADR 0624's M15, which survived there) now fails. Records without a sample keep their bytes (a ledger
+    of main's code reproduced byte for byte, the G1 hash unchanged) and are read as before; ADR 0624 code reading a new
+    record ignores the sample. Every ADR 0624 check keeps its numbers (S1 1, S2 1592 of 1595, NC1 400, NC2 61, NC3 75,
+    S4 118). Nine mutations caught. Not covered: the sample is derivable from the file, so it guards against mistakes
+    and version drift, not a deliberate forger; no MCP tool (F-702). Follow-up F-745 (Verifier-drawn re-run sample for
+    hypotheses from evaluators outside the maintainer's control).
 - [ ] **F-728** Coupled held metrics and the held-tolerance resolution floor for hypotheses
   - depends on: F-701
   - acceptance: two held metrics (flow and speed) solved together on a synthetic evaluator with a known joint solution
@@ -14834,12 +14853,23 @@ fixed by the item's registration ADR before any code.
     8.1e-10: the 6.3e-8 and 1.6e-8 misses of ADR 0652 came from that test's double-precision brute force (unit-vector
     solves at condition about 2e9), not from cancellation in the closed form. Verified on synthetic fits only (n up to
     40, two parameters).
-- [ ] **F-735** A zero-mean, absolute-noise mode of F-698's Gaussian process used by R3
+- [x] **F-735** A zero-mean, absolute-noise mode of F-698's Gaussian process used by R3
   - depends on: F-718, F-715
   - acceptance: surrogate::Gp gains an opt-in zero-mean mode with an absolute per-observation noise variance, R3 calls
     it in place of its own process, every ADR 0652 check keeps its result (fits bit-identical or within 1e-12), and
     every ADR 0621 check keeps its result.
-  - note: Follow-up of F-718 (ADR 0652, 2026-11-16).
+  - note: Follow-up of F-718 and F-715 (ADR 0652, ADR 0651). ADR 0663, 2026-11-16. DONE. Library only, opt-in:
+    surrogate::Gp gains a zero-mean mode (Gp::fit_zero_mean, Gp::zero_mean_with_hyper, ZeroMeanOptions) with y ~ N(0,
+    s_f^2 (R + 1e-8 I) + diag(v)), an absolute noise variance v_i per observation, the process variance a fitted
+    hyperparameter in an absolute box, no standardisation and a fixed jitter; predict, loo and the likelihood gradient
+    follow the mode (against brute force within 2e-13 of the process sd, gradient within 2.6e-7 of central differences,
+    both kernels). R3 of the fidelity driver now runs on this mode, and its own process code is removed from
+    fidelity.rs. Against a frozen copy of main's R3 process, all 6688 compared numbers on four fits (N1a, N1b, N2 and a
+    new heteroscedastic H1) are bit-equal, and the correction hashes and leave-one-out digests equal those recorded on
+    main before the change. F-698's existing modes give main's bits (four fits by digest), and every ADR 0652, ADR 0656,
+    ADR 0622 and ADR 0621 test passes (f718_fidelity_r3, f734_r3_sd, f699_fidelity, f698_surrogate, f715_robust_ei,
+    f697_fan_objective, --lib). Seven of seven decisive mutations caught. Verified on synthetic data only (n up to 40,
+    two parameters); R3 now inherits F-698's cap of 2000 observations.
 - [ ] **F-736** First GitHub runs of the daily gate (ADR 0653 checks on the runner)
   - depends on: F-723
   - acceptance: Every limit not stated here is registered in the ADR before the run. The first scheduled run after the
@@ -14955,3 +14985,11 @@ fixed by the item's registration ADR before any code.
     sector's difference from the full annulus falls from 6.0e-3 to within a registered limit of ADR 0661's V(6, 0)
     (1.5e-4) on every step. Every limit not stated here is registered in the ADR before the run.
   - note: Follow-up of F-725 (ADR 0661, 2026-11-16).
+- [ ] **F-745** Verifier-drawn re-run sample for hypotheses from evaluators outside the maintainer's control
+  - depends on: F-727
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The verifier draws the k pairs from
+    a seed not stored in the ledger before the check and records it after; an impostor that is honest exactly on the
+    pairs derivable from the file (the F-727 sample) is caught on at least the registered share of synthetic worlds,
+    while the F-727 sample misses it in all of them (negative control); every ADR 0624 and ADR 0662 check keeps its
+    result.
+  - note: Follow-up of F-727 (ADR 0662, 2026-11-16).
