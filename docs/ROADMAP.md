@@ -14523,7 +14523,9 @@ fixed by the item's registration ADR before any code.
     amendment 1), and the predictive sd differs from brute force by 1.6e-8 and 6.3e-8 of the residual scale on
     noise-free fits (cancellation, limit 1e-8). Verified on synthetic sources only. Follow-up F-734 (Fidelity driver R3:
     the leave-one-out standard deviation through the Cholesky factor). Follow-up F-735 (A zero-mean, absolute-noise mode
-    of F-698's Gaussian process used by R3).
+    of F-698's Gaussian process used by R3). The L3s misses recorded by ADR 0652 (6.3e-8 and 1.6e-8 of the residual
+    scale) are errors of its double-precision brute-force reference; against a double-double reference the closed form
+    agreed within 1.3e-10 and 8.1e-10 (ADR 0656, 2026-11-16).
 - [~] **F-719** The stabilised incompatible-modes Hex8 (LinearStress) under load on distorted meshes
   - depends on: F-708
   - acceptance: Every limit not stated here is registered in the ADR before the run. The confined punch block and the
@@ -14725,12 +14727,24 @@ fixed by the item's registration ADR before any code.
     a check decides whether the fresh process of the restart is needed (the surviving mutation R2), and a hash of the
     default proposal points of the F-698 O1 run pins the default bits.
   - note: Follow-up of F-715 (ADR 0651, 2026-11-16).
-- [ ] **F-734** Fidelity driver R3: the leave-one-out standard deviation through the Cholesky factor
+- [~] **F-734** Fidelity driver R3: the leave-one-out standard deviation through the Cholesky factor
   - depends on: F-718
   - acceptance: the predictive standard deviation of R3 is evaluated without the cancellation of a^T C a, it equals
     brute force within 1e-8 of the residual scale on the noise-free fits of ADR 0652 (N1a and the driver's final fit),
     and every ADR 0652 and ADR 0622 check keeps its result.
-  - note: Follow-up of F-718 (ADR 0652, 2026-11-16).
+  - note: Follow-up of F-718 (ADR 0652, 2026-11-16). ADR 0656, 2026-11-16. PARTIAL (every acceptance clause met; one
+    registered mutation survived because the replaced form proved accurate too). Library only, opt-in (behind
+    TrustRule::r3, default None): R3's leave-one-out predictive standard deviation is now evaluated as the conditional
+    variance 1/G_ii = 1/|L^-1 e_i|^2 plus the variance of the R2 refit |L^T q_i|^2 through the Cholesky factor (q_i from
+    the deletion formula of least squares), both sums of squares, instead of a_i^T C a_i; the ADR derives it from first
+    principles. Against a brute force in double-double arithmetic (about 32 digits) it agrees within 1.3e-10 (N1a) and
+    9.2e-10 (the driver's final fit) of the residual scale on the noise-free fits of ADR 0652 (limit 1e-8), and within
+    2e-15 with noise. Every ADR 0652 test and every ADR 0622 test (including the heavy fan record) passes, R3's
+    published numbers and coverage are unchanged, and default runs never reach the changed code. Four of five mutations
+    caught. The fifth, which restores ADR 0652's old a^T C a, also agrees with the double-double reference within
+    8.1e-10: the 6.3e-8 and 1.6e-8 misses of ADR 0652 came from that test's double-precision brute force (unit-vector
+    solves at condition about 2e9), not from cancellation in the closed form. Verified on synthetic fits only (n up to
+    40, two parameters).
 - [ ] **F-735** A zero-mean, absolute-noise mode of F-698's Gaussian process used by R3
   - depends on: F-718, F-715
   - acceptance: surrogate::Gp gains an opt-in zero-mean mode with an absolute per-observation noise variance, R3 calls
