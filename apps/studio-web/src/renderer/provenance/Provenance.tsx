@@ -12,6 +12,7 @@
 // run's from runs/<id>/run.json through the provenance door. A fact the engine did not record is said in words, never
 // filled in (G6); the reasons a command would not reproduce the run are the exception that speaks (G22).
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { flushSync } from 'react-dom';
 import { createRoot, type Root } from 'react-dom/client';
 import { Dialog, Popover } from 'react-aria-components';
 import {
@@ -63,6 +64,10 @@ registerProvenanceCommands();
 // The popover is drawn in a React root of its own, outside the tree of the surface the number sits in: a key pressed in
 // it (Escape, the arrows) then never reaches the surface's own handlers, as it would through a portal (React's events
 // follow the component tree), so closing the popover in a row of the runs table does not also clear the selection.
+// Closing (Escape, a click outside) unmounts it at once (`now`): while it is open React Aria makes the rest of the page
+// inert, and lifts that in an effect of this root; an ordinary render of this root would run that effect in a later
+// task, often after the next frame, and a focus given back to the number in that frame (ours, or React Aria's own
+// restore) would be refused by the inert page and left on the body.
 let popRoot: Root | null = null;
 let popOwner = 0;
 let popClose: (() => void) | null = null;
@@ -79,11 +84,13 @@ function showPopover(node: ReactNode, owner: number, close: () => void): void {
   popOwner = owner;
   popRoot.render(node);
 }
-function hidePopover(owner: number): void {
+function hidePopover(owner: number, now = false): void {
   if (popRoot && popOwner === owner) {
-    popRoot.render(null);
+    const root = popRoot;
     popOwner = 0;
     popClose = null;
+    if (now) flushSync(() => root.render(null));
+    else root.render(null);
   }
 }
 let owners = 0;
@@ -124,11 +131,16 @@ export function Provenance({ subject, children, tabStop = true, pkey, runOpener,
     const active = document.activeElement;
     back.current = tabStop ? ref.current : active instanceof HTMLElement && active !== document.body ? active : null;
     const close = () => {
+      // the popover and the page's inert are gone before the focus goes back (see popRoot above)
+      hidePopover(owner, true);
       setOpen(null);
-      requestAnimationFrame(() => {
+      const restore = () => {
         const a = document.activeElement;
         if (a === null || a === document.body || a.closest('.pv-host')) back.current?.focus();
-      });
+      };
+      restore();
+      // and once more on the next frame, should a close from inside React's own work have left the unmount for later
+      requestAnimationFrame(restore);
     };
     showPopover(<ProvenancePopover subject={open} triggerRef={ref} onClose={close} />, owner, () => setOpen(null));
     return () => hidePopover(owner);
