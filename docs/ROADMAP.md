@@ -14119,13 +14119,12 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
   - depends on: F-801
   - acceptance: The DESIGN.md tokens (colour, type ramp, rules, pictogram grid) as one CSS token file and a TypeScript
     export of the same values; the primitives of DESIGN.md Components (buttons, segmented toggles, inputs, tabs, select,
-    switch, table, slider, pictograms) built on React Aria Components; a unit test that computes the contrast of every
-    text and graphic token pair against its ground and fails below WCAG 2.2 AA (G8); a keyboard test of each primitive;
-    a view-and-report step for the maintainer.
-  - note: ADR 0800. Traces: G1, G8; DESIGN Colors, Typography, Shapes, Components. The reference is apps/studio-
-    prototype/. Done 2026-11-16: tokens.ts single source (tokens.css generated), primitives in src/renderer/ui/, gallery
-    at #/dev/primitives, 98-pair contrast test, keyboard e2e. Six contrast fixes made in product tokens; DESIGN.md edits
-    proposed, awaiting the maintainer.
+    switch, table, slider, pictograms) built on React Aria Components; a test that the tokens equal DESIGN.md; a
+    keyboard test of each primitive; a view-and-report step for the maintainer.
+  - note: ADR 0800. Traces: G1, G8; DESIGN Colors, Typography, Shapes, Components. Done 2026-11-16: tokens.ts single
+    source (tokens.css generated), primitives in src/renderer/ui/, gallery at #/dev/primitives, keyboard e2e. Contrast
+    requirement removed and contrast-driven token changes reverted to DESIGN.md (maintainer, 2026-11-16; ADR 0800
+    section 7).
 - [ ] **F-803** Electron Studio: service client for control and events
   - depends on: F-801
   - acceptance: A TypeScript client of rcfd-service/1 in the main process (JSON-RPC over TCP or stdio, events.poll long-
@@ -14211,13 +14210,11 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
   - acceptance: Two runs side by side or overlaid at the same time and the same colour range, with the difference field
     where the meshes match and a stated refusal where they do not; a test that both views read the same snapshot time.
   - note: ADR 0800. Traces: G3, G6; PRODUCT Operating Context.
-- [ ] **F-816** Electron Studio: WCAG 2.2 AA conformance, including the prototype's contrast debt
+- [ ] **F-816** Electron Studio: keyboard and assistive-technology pass
   - depends on: F-806, F-808, F-810
   - acceptance: Every parity check passable by keyboard alone with visible focus; names and roles for every control;
-    reduced motion respected; no text or state graphic below its WCAG 2.2 AA contrast; the debt recorded by the
-    DESIGN.md documenter fixed (running pictogram plain orange on white 2.51:1, text selection white on sky 2.28:1, the
-    residual u line sky on white 2.28:1); an automated check where a checker is approved under G5 and a written manual
-    pass otherwise.
+    reduced motion respected; state never carried by colour alone; an automated check where a checker is approved under
+    G5 and a written manual pass otherwise. No contrast requirement (maintainer, 2026-11-16).
   - note: ADR 0800. Traces: G8; DESIGN Do's and Don'ts.
 - [ ] **F-817** Electron Studio: performance regression bench for the product shell
   - depends on: F-808, F-810
@@ -14227,8 +14224,8 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
   - note: ADR 0800. Traces: G9.
 - [ ] **F-818** Electron Studio: dark theme
   - depends on: F-802
-  - acceptance: A dark variant of every DESIGN.md token that keeps each hue's single job and passes the F-802 contrast
-    test; the field colour maps unchanged; DESIGN.md updated with the maintainer's approval.
+  - acceptance: A dark variant of every DESIGN.md token that keeps each hue's single job; the field colour maps
+    unchanged; DESIGN.md updated with the maintainer's approval.
   - note: NEEDS THE USER: a dark theme is open in DESIGN.md; decide whether and when. Traces: G8; DESIGN Open.
 - [ ] **F-819** Electron Studio: large meshes and polyhedral fan meshes
   - depends on: F-808, F-817

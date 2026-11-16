@@ -21,7 +21,7 @@ Decided by the maintainer 2026-11-16:
   materials. The built-in WebGL2 fallback is the fallback.
 - React 19 + Vite + react-three-fiber (with drei where it earns its place) for the UI. Per-frame updates (scrubbing,
   live fields) mutate three.js objects outside React's render loop.
-- React Aria Components as the accessible base for widgets (WCAG 2.2 AA, guardrail G8). It gets styled by DESIGN.md
+- React Aria Components as the accessible base for widgets (keyboard, focus, names and roles; guardrail G8). It gets styled by DESIGN.md
   and is not used as a look.
 - Each dependency is pinned and justified in its ADR (guardrail G5).
 
@@ -100,5 +100,5 @@ Studio. Every number on screen comes from the solver and can be traced back to i
 
 ## Accessibility & Inclusion
 
-Standard: WCAG 2.2 AA (decided 2026-10-31). State is shown by shape and by words as well as by colour. Field display
+No WCAG contrast requirement (removed by the maintainer 2026-11-16; colours follow DESIGN.md). State is shown by shape and by words as well as by colour. Field display
 requires colour maps that are safe for colour-blind users. Keyboard access and visible focus are required throughout.

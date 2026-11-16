@@ -60,7 +60,8 @@ a run. When the Studio starts again it reconnects and shows the true state of ev
 
 ## G8. Accessibility
 
-WCAG 2.2 AA (decided 2026-10-31). Colour is never the only carrier of state: shape and words carry it as well. Field
+No WCAG contrast requirement (the maintainer removed it 2026-11-16; colour values follow DESIGN.md). Colour is never
+the only carrier of state: shape and words carry it as well. Field
 colour maps are safe for colour-blind users. Everything can be reached from the keyboard, focus is always visible, and
 reduced-motion settings are respected.
 

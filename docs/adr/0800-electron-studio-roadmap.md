@@ -18,7 +18,7 @@ The Electron Studio is planned from three documents, and every item below names 
 
 | Authority | File | Holds | Decided |
 |---|---|---|---|
-| Guardrails | `docs/studio-guardrails.md` | G1 to G14: what must not happen (clean room, Rust is the engine, bit-exact pictures, additive interfaces, dependencies, honesty, runs outlive the window, WCAG 2.2 AA, performance floor, Electron security, Claude Code, project folder contract, testable without eyes, rcfd-studio frozen); G15 to G21: what the Studio must do (everything the engine can do; no UI-only capability; reproducible with provenance; non-destructive; explain in place; every action a command; never block) | G1 to G14 approved as drafted, 2026-11-16; G15 to G21 asked for by the maintainer the same day |
+| Guardrails | `docs/studio-guardrails.md` | G1 to G14: what must not happen (clean room, Rust is the engine, bit-exact pictures, additive interfaces, dependencies, honesty, runs outlive the window, accessibility (keyboard, focus, state in words; no contrast requirement since 2026-11-16), performance floor, Electron security, Claude Code, project folder contract, testable without eyes, rcfd-studio frozen); G15 to G21: what the Studio must do (everything the engine can do; no UI-only capability; reproducible with provenance; non-destructive; explain in place; every action a command; never block) | G1 to G14 approved as drafted, 2026-11-16; G15 to G21 asked for by the maintainer the same day |
 | Product | `PRODUCT.md` | Users (learners first, engineers next), purpose, positioning, operating context, stack, principles | impeccable `init`, 2026-11-16; stack chosen by the maintainer |
 | Design | `DESIGN.md` (+ `.impeccable/design.json`) | The visual system: palette with one job per hue, Archivo with tabular figures, square hairline forms, state pictograms, run bands, field view | Recorded by impeccable's documenter from the shipped prototype `apps/studio-prototype/` |
 
@@ -71,7 +71,7 @@ F-822) and on the items that make G15 to G21 real (F-824, F-825, F-827 to F-832)
 | F-813 | A learner's first path | G6 | Users, Principle 5 |
 | F-814 | Claude Code panel | G11 | Positioning |
 | F-815 | Compare two runs | G3 | Operating Context |
-| F-816 | WCAG 2.2 AA conformance and the prototype's contrast debt | G8 | DESIGN Do's and Don'ts |
+| F-816 | Keyboard and assistive-technology pass | G8 | DESIGN Do's and Don'ts |
 | F-817 | Performance regression bench for the product shell | G9 | — |
 | F-818 | Dark theme | G8 | DESIGN Open |
 | F-819 | Large meshes and polyhedral fan meshes | G9 | Capabilities (unmeasured) |
@@ -106,3 +106,10 @@ F-822) and on the items that make G15 to G21 real (F-824, F-825, F-827 to F-832)
 - **Q2, the prototype:** keep `apps/studio-prototype/` as the design reference until F-448 passes, then remove it.
 - **Q3, where Studio npm tests run:** in CI, as a job in `.github/workflows/ci.yml` (not a local-only step, not inside
   `scripts/gate_test.py`).
+
+## 7. Change of 2026-11-16: no contrast requirement
+
+The maintainer removed every WCAG AA contrast requirement from the Studio (G8, PRODUCT.md, F-802, F-816, F-818) and chose
+to revert the eight contrast-driven token changes of F-802, so the product tokens equal DESIGN.md again. Keyboard
+access, visible focus, names and roles, state carried by shape and words as well as colour, colour-blind-safe field
+maps and reduced motion stay.
