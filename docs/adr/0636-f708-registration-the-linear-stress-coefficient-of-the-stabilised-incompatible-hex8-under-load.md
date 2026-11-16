@@ -236,3 +236,96 @@ Newton increments of every solve.
    (reading c2): taken on the same instruction.
 3. **Regular meshes for the load cases**: taken on the same instruction (the distortion is covered by the sweep and by R-*L).
 4. **Default.** Every rule stays opt-in; open for the maintainer, as ADR 0614, 0628, 0630.
+
+## Addendum 1: results (2026-11-16)
+
+Every registered check was run once, on the test commit 00d3351e (logs in the item's scratch directory: `run1-default.log`,
+`run1-heavy.log`, `run1-b6-rl-hf3.log`, `s5-baseline.log`, `s6-clippy.log`, `s6-fmt.log`, `mutations.log`, `mut-MU*.log`). No
+limit, set-up, seed or measure was changed after a run; no amendment was written. rcfd reproduced the probe of arithmetic 2 and 3
+to four or more digits in every rule L, F-bar and Full row.
+
+### Results
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| PB1 `e_R`, `e_w` (block `4^3`) | `<= 0.15` | `0.1214`, `0.0134` (`R_L = 0.43284`, `R_Fbar = 0.38598`) | yes |
+| PB2 `e_R`, `e_w` (block `8^3`) | `<= 0.10` | `0.0656`, `0.0407` (`R_L = 0.36660`, `R_Fbar = 0.34404`) | yes |
+| PC1 `e_P`, `e_d` (cantilever `10 x 2 x 2`) | `<= 0.15` | `0.0567`, `0.0062` | yes |
+| PC2 `e_P`, `e_d` (cantilever `20 x 4 x 4`) | `<= 0.10` | `0.0185`, `0.0024` | yes |
+| X1 (report) | report | block `R_L(4^3) / R_Fbar(8^3) - 1 = +0.258`; cantilever `+0.139` | reported |
+| N1 Full against F-bar | `>= 0.15`, `0.10`, `0.15`, `0.10` | `0.790`, `0.398` (block); `0.732`, `0.342` (cantilever) | yes |
+| SL block `4^3`, cantilever `10 x 2 x 2` | `> 0` | `6.467e-3`, `1.601e-5` | yes |
+| G5 `m_L`, six cases | `>= 0.5` | U30 `0.5590` (at 0.50), C30 `0.7272` (0.50), C45 `1.0051` (1.00), C49 `1.0555` (1.00), U45 `1.0032` (0.74), U49 `1.0553` (0.96) | yes, all six |
+| HF3 | passes | passes | yes |
+| R-*L (`si_eas_hg3_rl.rs`) | ADR 0608 limits | 6 of 6 tests pass | yes |
+| B5 | empty | `git diff fe2e58b0 -- crates/*/src`: 0 lines | yes |
+| B6 | pass | `si_eas_hg3_bits`, `si_eas_hg_default_bits`, `si_eas_default_bits`, `si_fbar_default_bits` pass | yes |
+| S5 | pass | 3 passed, 1 ignored | yes |
+| S6 | clean | `cargo fmt -p rcfd-fem --check` and `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean | yes |
+
+Reported (no limit): on the coarse block rule R `e_R = 0.148`, `e_w = 0.036`, the plain element `0.055`, `0.039`; on the
+coarse cantilever rule R `e_P = 0.0575`, plain `0.0519`. N2: `w_c` of the Full Hex8 within `0.096` (coarse) and `0.112`
+(refined) of F-bar, as registered (the corner displacement does not see locking; the reaction does).
+
+### Deviations
+
+- **N3 (the plain element under the load).** Registered expectation "converges in the probe". In rcfd the plain element on the
+  refined block **fails**: at load factor `0.93` the driver's factor finds a negative pivot (`-1.13e6` against a diagonal
+  `3.62e6`) after five halvings, so the tangent of the plain element loses positive definiteness under the punch: the
+  hourglass instability of ADR 0614 and 0628 under a real load. The probe's dense solve has no pivot test, which is why it
+  reported a number (`0.34855`, `pc_full_20x4_and_off_n8.log`). Rule L on the same mesh converges in 10 increments with no
+  halving. Recorded as a deviation of an expectation, not a check.
+- **MU21** was registered as "not caught by PB/PC"; it is also caught by PB2 (the same failure as N3).
+
+### Mutations (scratch copy, the default tests of `si_eas_hg4.rs`, `si_eas_hg3.rs`, `si_eas_hg3_rl.rs`, each run once)
+
+| Id | Caught | By |
+|---|---|---|
+| MU21 (rule L made `Off`) | yes | HF3 (`m_L` down to `-139` at C49 0.5), S3b L, E1L, and PB2 (the refined block solve fails, as N3) |
+| MU22 (rule L times 4) | yes | PB1 `e_R = 0.1770` (probe `0.177`), HF3 O2 (`m_L - m_R` up to `4.2e-2`), S3b L, E1L; not PC (as registered) |
+| MU23 (`b` term dropped) | yes | R-T1 L (b) `6.1e-5`, (e) `4.8e-5`, R-T3 L, R-Q1 L (7 of 14); not PB/PC (as registered) |
+| MU24 (F-bar `a2m1 = 0`) | **no** | PB1 `e_R` `0.1214 -> 0.1414`, PB2 `0.0656 -> 0.0804`, PC within `0.002`: every limit still met |
+
+Three of four caught. Diagnosis of MU24: with `a2m1 = 0` the F-bar point strain is the compatible one, but the force and the
+tangent keep the mean-dilatation operator `dbar` and the weights `omega` of ADR 0506, so the mutated element still relaxes the
+volumetric constraint and stays near F-bar (its reaction moves by 1.7 per cent on the coarse block, 1.4 per cent on the refined
+one), inside tolerances set at the scale of discretisation differences. The load checks compare elements to about ten per cent;
+they are not a test of the reference's implementation. Run once more as a diagnosis, outside the registration, against the ADR
+0506 tests (`si_fbar.rs`, `mut-MU24-diag-si_fbar.log`): SS2 (`1.9e-1` against `1e-5`), T1 (a) (`8.4e-4` against `1e-6`) and
+five other tests fail, so the reference is guarded by its own checks.
+
+### Not run
+
+Nothing registered was skipped. The heavy record G5 was run once (294 s) and not re-run for the mutations (HF3 is its fast
+companion).
+
+### Decision
+
+**partial**, by the registered rule: every check met in its single run (PB1, PB2, PC1, PC2, N1, SL, G5, HF3, R-*L, B5, B6, S5,
+S6), but one planned mutation (MU24) not caught by the tests it was run against. Every clause of the acceptance is met: rule L
+under a load is within `0.121` (coarse) and `0.066` (refined) of the F-bar reaction on the confined punch block at `nu = 0.49`
+and within `0.057` and `0.019` on the bending cantilever, where the Full Hex8 is `0.34` to `0.79` off; its lowest eigenvalue in
+the ADR 0628 sweep stays `>= 0.559 mu` in all six cases; the ADR 0608 checks hold; no library file changed. On the coarse block
+about half of rule L's difference from F-bar is the stiffness the stabilisation adds (the plain element is within `0.055`); on
+the refined block the plain element cannot be solved (N3).
+
+### Remaining questions
+
+1. **MU24 not caught.** Options: (a) accept: the reference is guarded by its own ADR 0506 checks (shown above) and the load
+   checks are about the element under test; (b) add a check of the F-bar reference against a registered value of its own in
+   this test file. Recommendation: (a); a frozen reference value would be a regression record of F-bar, which the ADR 0506
+   checks already are. If the lead reads the decision rule's mutation clause as satisfied by the diagnosis, the item is done.
+2. **Rule L's own stiffness under load** (coarse block `0.121` against the plain element's `0.055`). Options: (a) accept, it
+   halves under refinement (`0.066`); (b) a follow-up scaling of the coefficient. Recommendation: (a).
+3. **Default.** Every rule stays opt-in (as ADR 0614, 0628, 0630). Recommendation: keep; a default change would change default
+   results and is the maintainer's.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> Structural solver, intermediate tier. Follow-up of F-703 (ADR 0630). PARTIAL. ADR 0636, 2026-11-16: the LinearStress rule of ADR 0630 (opt-in, unchanged; tests only, no library file changed, the bit records of ADR 0506, 0608, 0614, 0630 and the rcfd-api baseline hashes pass) measured under load against the F-bar Hex8 of ADR 0506 on the same mesh. A confined block at nu = 0.49 in a die, compressed by a rigid punch on a quarter of its top (homogeneous confined compression is a patch test and could not fail): punch reaction within 12.1 per cent of F-bar on 4^3 and 6.6 per cent on 8^3 (tolerances 15 and 10 per cent), corner bulge within 1.3 and 4.1 per cent; the Full Hex8 reaction 79 and 40 per cent off (the locking control); the plain incompatible element loses positive definiteness under the punch on 8^3 and cannot be solved, rule L converges. A displacement-controlled cantilever at nu = 0.49 (tip 30 per cent of the length): tip reaction within 5.7 per cent of F-bar on 10 x 2 x 2 and 1.8 per cent on 20 x 4 x 4, shortening within 0.6 and 0.2 per cent; Full 73 and 34 per cent off. The ADR 0628 sweep of rule L keeps the lowest eigenvalue >= 0.559 mu in all six cases (limit 0.5 mu); the ADR 0608 checks hold. Three of four mutations caught; the one missed (the F-bar ratio zeroed in the reference) moves the reference by under 2 per cent and is caught by the ADR 0506 tests. Not covered: distorted meshes under load, other materials and Poisson ratios, tension and shear loads, a contact punch.
+
+> F-703 (note, ADR 0636, 2026-11-16): F-708 measures the LinearStress rule under load: within 12 per cent (coarse) and 7 per cent (refined) of the F-bar reaction on a confined punch block at nu = 0.49, where the plain element fails on the refined mesh.
+
+> Follow-up proposed: The stabilised incompatible-modes Hex8 (LinearStress) under load on distorted meshes. Deps F-708. Acceptance: Every limit not stated here is registered in the ADR before the run. The confined punch block and the displacement-controlled cantilever of ADR 0636 on meshes with the interior nodes moved by 0.1 h (2U - 1) and by 0.25 h (2U - 1), rule L against the F-bar Hex8 of ADR 0506 on the same meshes, reaction and displacement within registered tolerances; the stability of the loaded state reported; a negative control of the F-bar reference within the item's own tests; the default bits unchanged.
