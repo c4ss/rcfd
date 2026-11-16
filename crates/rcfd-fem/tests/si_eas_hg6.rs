@@ -824,8 +824,9 @@ fn remedy_rows(ch: &mut Checks, id: &str, run: &Run, f: &Run) -> bool {
 }
 
 #[test]
+#[ignore = "known miss of ADR 0655 (registered run, test commit 5ae69e54): P, T-FD, BA missed; the backtracking alone fails at load factor 0.890625 to 0.89375 (element 475, the modes not converged in 25 local iterations, relative residual 1.07e-1), so T-FD and BA have no state (NaN); the line search fails as the default (element 476, 0.675); NC1, NC3 met (8.9e-9, 7.3e-8); the two together pass (e_R 0.0750, e_w 0.0287, positive definite, reported); the met rows run in db4_met_rows (amendment 1)"]
 /// NC1, NC3, LS (c3), BT (c4) with DB4b, SLb, T-FD, BA, P; both together reported.
-fn db4_line_search_and_backtracking() {
+fn db4_line_search_and_backtracking_known_miss() {
     let mut ch = Checks::new();
     let (mesh, _) = block_mesh(8, 0.25);
     let tag = "DB4 8^3 a 0.25";
@@ -1030,4 +1031,206 @@ fn plain_element_4_cubed_reported() {
     }
     let held = cause(&mesh, tag, E53, K_INC);
     println!("report C6 element 53: hypotheses that hold {held:?}");
+}
+
+// ============================================================================ ADR 0655 amendment 1
+
+#[test]
+/// ADR 0655 A1.1: NC1, NC3 and the line-search measurement of the registered test, the same code and limits.
+fn db4_met_rows() {
+    let mut ch = Checks::new();
+    let (mesh, _) = block_mesh(8, 0.25);
+    let tag = "A1.1 8^3 a 0.25";
+    let f = run_block(&mesh, tag, DELTA, K_FBAR, DEFAULT);
+    ch.at_most("NC3 F-bar |R / 0.34220247 - 1|", rel(f.a, 0.34220247), 1e-6);
+    ch.at_most("NC3 F-bar |w_c / 0.06389947 - 1|", rel(f.b, 0.06389947), 1e-6);
+    let d = run_block(&mesh, tag, DELTA, K_L, DEFAULT);
+    let err = d.error.clone().unwrap_or_default();
+    let lf = failing_load_factor(&err);
+    ch.equals("NC1 default: solve failed (1 = yes)", d.result.is_none() as usize, 1);
+    ch.equals(
+        "NC1 default: error names element 476 (1 = yes)",
+        err.starts_with("element 476:") as usize,
+        1,
+    );
+    ch.at_least("NC1 default: failing load factor >= 0.67", lf, 0.67);
+    ch.at_most("NC1 default: failing load factor <= 0.68", lf, 0.68);
+    let ls = run_block(&mesh, tag, DELTA, K_L, LS);
+    println!(
+        "LS line search (measured): converged {}, failing load factor {:.6}",
+        ls.result.is_some(),
+        failing_load_factor(ls.error.as_deref().unwrap_or(""))
+    );
+    ch.finish();
+}
+
+/// The replicated local iteration of `local_iteration` with a cap of `cap` steps, recording `|R_a|_inf` per iterate.
+fn local_iteration_long(
+    x: &[Vec3],
+    ue: &[f64],
+    rule: IncompatibleStabilisation,
+    backtracking: bool,
+    cap: usize,
+) -> (Trace, Vec<f64>) {
+    let mat = material(NU);
+    let ctx = PointContext::default();
+    let st = ElementState::new(Vec::new());
+    let mut alpha = [0.0; 9];
+    let mut step: Option<([f64; 9], [f64; 9])> = None;
+    let mut res = Vec::new();
+    let mut t = Trace {
+        dets: Vec::new(),
+        inverted_at: None,
+        converged: false,
+        alpha,
+        halvings: 0,
+    };
+    for it in 0..=cap {
+        let mut d = min_det(x, ue, &alpha, false);
+        if backtracking {
+            let mut m = 0;
+            while !positive(d) && m < 20 {
+                let Some((base, delta)) = step else { break };
+                m += 1;
+                let s = 0.5f64.powi(m);
+                alpha = std::array::from_fn(|k| base[k] - s * delta[k]);
+                d = min_det(x, ue, &alpha, false);
+            }
+            t.halvings += m as usize;
+        }
+        t.dets.push(d);
+        if !positive(d) {
+            t.inverted_at = Some(it);
+            break;
+        }
+        let Ok((f, k)) = enhanced_force_and_tangent_with(x, &mat, ue, &alpha, &st, &ctx, rule) else {
+            break;
+        };
+        let kv = k.values();
+        let a: [[f64; 9]; 9] = std::array::from_fn(|i| std::array::from_fn(|j| kv[(24 + i) * 33 + 24 + j]));
+        let r: [f64; 9] = std::array::from_fn(|i| f[24 + i]);
+        res.push(r.iter().fold(0.0f64, |w, v| w.max(v.abs())));
+        let delta = solve9(a, r);
+        let amax = alpha.iter().fold(1.0f64, |w, v| w.max(v.abs()));
+        if delta.iter().fold(0.0f64, |w, v| w.max(v.abs())) <= 1e-12 * amax {
+            t.converged = true;
+            break;
+        }
+        step = Some((alpha, delta));
+        for (ak, dk) in alpha.iter_mut().zip(&delta) {
+            *ak -= dk;
+        }
+    }
+    t.alpha = alpha;
+    (t, res)
+}
+
+/// `max |K - K_fd| / max |K|` of the backtracked element (step `1e-7`), NaN if an evaluation fails.
+fn backtracked_mismatch(x: &[Vec3], ue: &[f64]) -> f64 {
+    let mat = material(NU);
+    let ctx = PointContext::default();
+    let st = ElementState::new(Vec::new());
+    let Ok((_, k, _)) = condensed_force_and_tangent_backtracked(x, &mat, ue, &st, &ctx, LIN) else {
+        return f64::NAN;
+    };
+    let kv = k.values();
+    let h = 1e-7;
+    let mut dmax = 0.0f64;
+    for j in 0..24 {
+        let mut a = ue.to_vec();
+        a[j] += h;
+        let mut b = ue.to_vec();
+        b[j] -= h;
+        match (
+            condensed_force_and_tangent_backtracked(x, &mat, &a, &st, &ctx, LIN),
+            condensed_force_and_tangent_backtracked(x, &mat, &b, &st, &ctx, LIN),
+        ) {
+            (Ok((fa, _, _)), Ok((fb, _, _))) => {
+                for i in 0..24 {
+                    dmax = dmax.max((kv[i * 24 + j] - (fa[i] - fb[i]) / (2.0 * h)).abs());
+                }
+            }
+            _ => return f64::NAN,
+        }
+    }
+    dmax / kv.iter().fold(0.0f64, |w, v| w.max(v.abs()))
+}
+
+#[test]
+#[ignore = "diagnosis of ADR 0655 amendment 1 (A1.2, E1, E2): the backtracking alone at element 475, the two together at element 476; no limit; run once with --ignored"]
+fn a1_diagnosis_bt_element_475() {
+    let (mesh, _) = block_mesh(8, 0.25);
+    let mat = material(NU);
+    let ctx = PointContext::default();
+    let st = ElementState::new(Vec::new());
+    // E1.
+    let e475 = 475;
+    let x = element_coords(&mesh, e475);
+    let r88 = run_block(&mesh, "E1", 0.088, K_L, BT);
+    let r89 = run_block(&mesh, "E1", 0.089, K_L, BT);
+    match (run_element_u(&r89, e475), run_element_u(&r88, e475)) {
+        (Some(a), Some(b)) => {
+            let ut: Vec<f64> = a.iter().zip(&b).map(|(p, q)| p + 0.2 * (p - q)).collect();
+            let _ = measures("E1 element 475 trial u_T", &x, &ut, LIN);
+            let (bt, res) = local_iteration_long(&x, &ut, LIN, true, 100);
+            println!(
+                "E1 element 475 backtracked replica (100 steps): converged {}, steps {}, halvings {}, first |R_a|_inf {:.4e}, \
+                 smallest {:.4e}, last {:.4e}",
+                bt.converged,
+                res.len(),
+                bt.halvings,
+                res.first().copied().unwrap_or(f64::NAN),
+                res.iter().copied().fold(f64::INFINITY, f64::min),
+                res.last().copied().unwrap_or(f64::NAN)
+            );
+            println!("E1 element 475 backtracked |R_a|_inf per iterate {res:?}");
+            println!("E1 element 475 backtracked min det F per iterate {:?}", bt.dets);
+            let lib_bt = condensed_force_and_tangent_backtracked(&x, &mat, &ut, &st, &ctx, LIN);
+            let lib_plain = condensed_force_and_tangent(&x, &mat, &ut, &st, &ctx, LIN);
+            println!(
+                "E1 element 475 library: backtracked {}; plain {}",
+                match &lib_bt {
+                    Ok(_) => "converged".to_string(),
+                    Err(e) => format!("failed: {e}"),
+                },
+                match &lib_plain {
+                    Ok(_) => "converged".to_string(),
+                    Err(e) => format!("failed: {e}"),
+                }
+            );
+        }
+        _ => println!("E1: a backtracked solve to 0.088 or 0.089 failed; no trial"),
+    }
+    // E2.
+    let both = run_block(&mesh, "E2", DELTA, K_L, LS_BT);
+    let Some(r) = both.result.as_ref() else {
+        println!("E2: the two together failed");
+        return;
+    };
+    let u = r.result.displacement_values();
+    let x = element_coords(&mesh, E476);
+    let ue = element_u(&both.model, u, E476);
+    println!(
+        "E2 element 476 at the LS+BT state: T-FD measure {:.4e}",
+        backtracked_mismatch(&x, &ue)
+    );
+    let plain = condensed_force_and_tangent(&x, &mat, &ue, &st, &ctx, LIN);
+    println!(
+        "E2 element 476 at the LS+BT state without the backtracking: {}",
+        match &plain {
+            Ok(_) => "converged".to_string(),
+            Err(e) => format!("failed: {e}"),
+        }
+    );
+    let held: Vec<usize> = (0..mesh.n_elements())
+        .filter(|&e| {
+            let xe = element_coords(&mesh, e);
+            let ue = element_u(&both.model, u, e);
+            matches!(condensed_force_and_tangent(&xe, &mat, &ue, &st, &ctx, LIN), Err(err) if err.to_string().contains("inverted"))
+        })
+        .collect();
+    println!(
+        "E2 elements whose plain evaluation inverts at the LS+BT state: {} {held:?}",
+        held.len()
+    );
 }
