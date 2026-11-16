@@ -14183,13 +14183,17 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     P7 met by R2 (median 71 ms; R1 2.0 s), P8 met (p99 frame 4.4 ms at 1e6 triangles); hover value bit-exact. Open: a
     256-entry table matches rcfd-render exactly only at its 256 points and within 3/255 elsewhere (F808-D1, maintainer:
     accept or switch to exact shader evaluation); view-and-report pending.
-- [ ] **F-809** Electron Studio: derived pictures (iso-surfaces, streamlines, cut planes, vectors)
+- [~] **F-809** Electron Studio: derived pictures (iso-surfaces, streamlines, cut planes, vectors)
   - depends on: F-808
   - acceptance: Each derived picture computed by the engine (rcfd-render or a registered opt-in service method) or, if
     computed in the Studio, matched against the engine's reference value for value within a tolerance registered before
     the code; a view that does not apply to a case (for example a cut plane on a 2D case) is disabled with the reason
     shown (G6).
-  - note: ADR 0800. Traces: G3, G6, G2; PRODUCT Operating Context.
+  - note: ADR 0800. Traces: G3, G6, G2; PRODUCT Operating Context. Partial 2026-11-16: field viewport has cut plane
+    (rcfd-render's clip rule, on the GPU) and vectors (overlay_vectors' rule, stored components unchanged), checked
+    against engine references with tolerances T1-T3 registered before the code (ADR 0801 Addendum 7); cut plane disabled
+    on 2D cases with the reason in name and tooltip (G22). Left: iso-surfaces and streamlines have no engine entry point
+    (shown unavailable); no CLI/MCP way to make the cut/arrows of a store (G16); no length unit for mesh coordinates.
 - [x] **F-810** Electron Studio: run bands and linked time scrubbing
   - depends on: F-808, F-811
   - acceptance: The run bands of DESIGN.md on one shared time axis, each end marked with its pictogram and word; one
@@ -14220,13 +14224,19 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     2026-11-16: case editor at #/case (src/renderer/case, src/main/case); opens via session.create, saves via edit_case
     with base_hash on a writable project server, comments kept; CLI round trip and conflict tests; screenshots for the
     maintainer's view-and-report in test-results-visual/f812.
-- [ ] **F-813** Electron Studio: a learner's first path
+- [~] **F-813** Electron Studio: a learner's first path
   - depends on: F-807, F-812
   - acceptance: From an empty folder to a first honest result with the quick-start project, without CFD jargon on the
     path; every empty state says what is missing and the next step; the disclaimers stay visible (G6); a Playwright walk
     of the path; a view-and-report step by the maintainer as a first-time user. The short path hides nothing for good:
     every capability stays one step away (G15).
   - note: ADR 0800. Traces: G6; PRODUCT Users, Principle 5. Surface not yet designed: shape it with impeccable first.
+    Partial 2026-11-16: first path in the project home from an empty folder to a first result (quick-start example,
+    start_run with stored fields, result numbers equal metrics.json and status.json, picture drawn, disclaimers
+    visible), quiet under G22 with words behind Explain; Playwright and keyboard walks against real rcfd binaries. Left:
+    no engine command creates a project (rcfd project init / MCP create_project wrapping Project::create proposed, needs
+    an ADR), so the walk's test writes rcfd-project.json in its place; the field caption still uses precise terms; the
+    result link goes to Runs, not yet the F-810 workspace; maintainer's first-time view-and-report.
 - [~] **F-814** Electron Studio: Claude Code panel
   - depends on: F-805
   - acceptance: The Claude Code chat for the project through rcfd-claude: open sessions mirrored read-only, closed

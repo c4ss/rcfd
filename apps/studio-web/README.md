@@ -245,6 +245,36 @@ by WebGL 2 (fallback: <why>)"). Until a project view hosts it (F-806), it is sho
   keyboard; screenshots at 1440 x 900 in `test-results-visual/f808/`).
 - `performance` marks: `rcfd:field:open` and the measure `rcfd:field:first-picture` (P7, `scripts/measure-field.mjs`).
 
+## Derived pictures (F-809)
+
+The field viewport's tool row has one pictogram per derived picture, named in its accessible name and tooltip (G22):
+cut plane, vectors, iso-surface, streamlines (`src/renderer/field/derived.ts`, `DerivedControls.tsx`). One that does
+not apply is a dashed chip that says why in its accessible name and in the tooltip its focus shows (G6), never as
+standing text. What the engine computes was read first (ADR 0801, addendum F-809), and the tolerances were registered
+there before the code (G3):
+
+- **Cut plane**: rcfd-render's own cut (`View::clip`, only points with `n . p <= d` are drawn), on the GPU for the
+  surface, the mesh grid and the arrows (`maskNode` of each TSL material), and in the pick, so the readout names what is
+  seen. A plane normal to x, y or z: axis, position (a slider in mesh coordinates; the store gives no length unit) and
+  the side kept, in a small panel in the frame's top left corner. Unavailable on a 2D case (one cell layer, the
+  engine's own test of `render_field`).
+- **Vectors**: the arrows of `render.png` (`rcfd_post::render::overlay_vectors`: a 24-per-axis lattice, the largest
+  arrow 0.8 of a step, the head 0.3 back and half that out) carried to the boundary surface: one arrow per lattice bin,
+  at the centroid of the first surface triangle in it, carrying its owner cell's stored components unchanged (on a 2D
+  case the in-plane components, on the face the view looks at). Deep ink. The components come through the data door
+  for the shown snapshot, with the view's tag.
+- **Iso-surface, streamlines**: unavailable everywhere: the engine has no entry point for either on a stored field, and
+  the Studio does not draw a picture it cannot check against the engine.
+- Tests: `tests/unit/field-derived.spec.ts` (the 2D verdict against `render_field` on the quick-start and axial-fan
+  runs; availability and reasons; the cut rule and the arrows' constants read from the Rust source; every arrow against
+  an independent recomputation, components bit for bit the Rust reader's; the pictograms on the grid) and
+  `tests/e2e/field-derived.spec.ts` (the packaged Studio: reasons by role and accessible name, tooltips on keyboard focus;
+  the cut plane pixel by pixel on the tiny and 1e5-cell boxes; the arrows change only pixels to deep ink and their number
+  is the recomputation's; keyboard; screenshots at 1440 x 900 in `test-results-visual/f809/`).
+- Missing in the engine (no Rust change here): an iso-surface of a stored cell field, streamlines, and a store-based
+  slice, sample or vector picture of a 3D case (`render_field` refuses 3D; `render.png`, `field.sample` and
+  `render_image` work on live sessions only).
+
 ## Run control (F-807)
 
 Runs are started, queued, paused, resumed, stopped and cancelled from the window, and only through the project's runner
@@ -407,6 +437,8 @@ Decisions taken in building F-814 (options, the recommendation followed; each re
 | `src/main/run/`, `src/shared/run.ts` | The run port: `bridge.ts` (the checks), `series.ts` (a run's residual and monitor series and their units through the project server) | `tsc -p tsconfig.node.json` | F-810 |
 
 | `src/renderer/first/` | A learner's first path: `FirstPath.tsx` (the intro, the not-a-project section, the four steps), `model.ts` (the step from the engine's lists), `words.ts` (disclaimer, limits, help, precise terms), `target.ts` (the result link), `first.css`; its run action is `src/shared/actions/first.ts` | as above | F-813 |
+
+| `src/renderer/provenance/`, `src/main/provenance/`, `src/shared/provenance.ts` | The provenance inspector: the trigger and popover (`Provenance.tsx`), which number Show provenance opens (`registry.ts`), each number's facts (`sources.ts`), its one door to `window.studioProvenance` (`door.ts`), `provenance.css`; in main the port's checks (`bridge.ts`) and the run record read through the project server (`record.ts`); the reproduce command (`shared/provenance.ts`) | `vite build`, `tsc -p tsconfig.node.json` | F-828 |
 | `tests/unit/` | Pure tests of `security.ts` and the built `index.html` (F-801); tokens against `DESIGN.md`, the pictogram grid (F-802); the service client against a fake service (F-803) | run by Playwright (project `unit`) | F-801, F-802, F-803 |
 | `tests/e2e/` | The packaged shell driven by Playwright's `_electron.launch`; the primitives (F-802); the service port's allow-list against a fake service, and the client against the real `rcfd serve` (F-803) | run by Playwright (project `electron`) | F-801 onwards |
 | `tests/support/` | The fake service, finding and starting `rcfd`, launching the packaged Studio | imported by the tests | F-803 |
@@ -778,6 +810,84 @@ Decisions taken in building F-813 (options, the recommendation followed; each re
   `$CARGO_TARGET_DIR`, `target/release` here or above).
 - Results: `out/bench/bench-<time>.json` (every line, the machine, the load, each script's own JSON). The bench is not
   part of `npm test` or CI; results are recorded by hand in ADR 0800 §9.
+
+## Provenance and reproduce from the CLI (F-828)
+
+Any number of the runs view, the run workspace, the time panel and the field readout opens where it came from, and every
+run shows the command that runs it again (G17). Code: `src/renderer/provenance/` (`Provenance.tsx`, `registry.ts`,
+`sources.ts`, `door.ts`, `provenance.css`), `src/main/provenance/` and `src/shared/provenance.ts`.
+
+- **Quiet (G22, The Quiet Rule)**: at rest a number looks as it did; the trigger takes the font and colour around it and
+  adds no word, mark, border or fill. Its words are its accessible name (`Provenance of lid_drag: -0.008166 N`,
+  `Provenance of run r-…`); hover and focus add only a dotted ink underline (focus keeps the orange outline). The facts
+  appear on demand: a click, Enter or Space on the number; Show provenance (Ctrl+I, or the palette) on the focused
+  number, the number inside the focused row (the runs table, whose numbers are not tab stops of their own), the number
+  the focused or pointed element names (the scrubber names the snapshot counter, the field view its readout), the
+  pointed number, else the selected run. Escape closes the popover and the focus goes back.
+- **What it shows**: the value (as shown and the engine's full value), the unit exactly as the engine wrote it (the
+  field's unit of `store.rts`, the series' unit of `runs/<id>/output/monitors.json`; an empty unit is said to be empty,
+  a missing one says why; nothing is converted or guessed, G2), the run, the snapshot (index of the store, step, time),
+  the file the number was read from, the reader (`read_residuals`, `list_runs`/`run_status`, the Studio's reader of
+  `store.rts` that equals rcfd-tsstore's bit for bit), the engine version that made the run (`solver_version` of
+  `run.json`) and, for the run, its record (`runs/<id>/run.json`, its hash, the settings verbatim, the case snapshot's
+  hash). Copy puts the provenance as text on the clipboard; Copy command the command alone. The clipboard is written by
+  the main process (`window.studioProvenance.copy`; every permission stays denied in the page, G10).
+- **The reproduce command is the record's** (`reproduceCommand`): `rcfd-runner start <case> --project <folder> --threads
+  <n> --priority <n> [--mem-mb <n>] [--set path=value]...`, with the case of `run.json` in the open folder and every
+  setting of `run.json` in its order. Nothing comes from the Studio's own settings. It names the case whole (rcfd-runner
+  reads a relative case against its working folder). The gaps are the exception that speaks, in words, in the popover
+  and beside a copied command: a settings key `rcfd-runner start` has no option for (`continue_from`, `max_steps` of ADR
+  0200, or any later key), a case file changed since the run (the engine's `read_project_file` hash of the case now
+  against `case_snapshot_hash`), a `case.snapshot` that does not match its record, a case outside the project (not
+  checkable), a mesh file the record names (not checkable), a run whose engine version is not recorded or differs from
+  the engine here (the project server's `serverInfo`, and the attached service's `service.info` when one answers). A
+  design study's labels (study, variant, condition) do not change the result and are left out.
+- **Through the engine only**: a fifth port, `window.studioProvenance` (`src/shared/provenance.ts`; the one renderer
+  module naming it is `provenance/door.ts`), asks the open project's read-only project server `read_project_file` for
+  `runs/<id>/run.json`, `runs/<id>/case.snapshot`, the case file and `runs/<id>/output/monitors.json`. The Studio reads
+  no file itself and writes none.
+- **Commands** (G20): Show provenance (`provenance.show`, Ctrl+I) and Copy reproduce command (`provenance.copy_command`,
+  asks which run, the selected one first) in the palette.
+
+The reproduce test (G17, `tests/e2e/provenance.spec.ts`), registered here before its code. A run of
+`cases/cavity-re100.toml` is started from the window (Runs, Run, by keyboard) in a copy of the quick-start project,
+with the real `rcfd-mcp`, `rcfd-runner` and `rcfd`; its command is copied from its provenance, run from a shell
+(PowerShell on Windows, `sh` elsewhere) with only `--project` changed to another, empty project folder, and the two run
+folders are compared:
+
+| Files | Compared | Why |
+|---|---|---|
+| `fields/store.rts`, `fields/index.json`, `residuals.jsonl`, `output/monitors.json`, `output/monitors.csv`, `output/report.html`, `output/restart.rcfd`, `output/solution.vtu`, `case.snapshot`, `check.json` | byte for byte | the results and their inputs; they hold no time, path or process id (checked by hand on 2026-11-16: two runs of the same case in two folders gave the same bytes) |
+| `metrics.json` | equal after removing `elapsed_s` and `wall_s` (wherever they are) | wall-clock times of the solver |
+| `status.json` | equal after removing `updated` and `pid` | when the runner wrote it, and the solver's process id |
+| `run.json` | `case_snapshot_hash`, `solver_version` and `settings` equal; `id`, `created`, `case`, `case_source` and `case_dir` excluded | the new run's own id and creation time; the case's path as seen from the other folder (it is outside that project, so the runner records it absolute) |
+| `solver-status.jsonl` | equal line by line after removing `wall_s` and the run folder's paths (`info.case`, the checkpoint's `path`) | wall-clock times; paths of the run's own folder |
+| `events.jsonl` | the sequence of event kinds equal; `t`, `pid`, `launch_seq`, paths and the solver lines (compared through `solver-status.jsonl`) excluded | times and process ids of the runner; `launch_seq` counts the runner's launches in its project |
+| `log.txt` | not compared | the solver's human-readable log names the run folder's absolute paths |
+
+Decisions taken in building F-828 (options, the recommendation followed; each reversible without touching the engine):
+
+- D1, the reproduce command: (a) `rcfd-runner start` with the record's case and settings, the CLI twin of `start_run`
+  that makes the same run folder (residuals, fields, status); (b) `rcfd run runs/<id>/case.snapshot --case-dir ...` with
+  the runner's launch flags (exact case bytes, but the launch argv is not recorded, so the Studio would write the
+  runner's flags from its source, and no `residuals.jsonl` comes out). Taken: (a), with the case's hash checked against
+  the record so that a changed case is said; (b) needs the engine to record its launch argv (proposed below).
+- D2, the case path: the record's project-relative case in the open folder (the record's absolute `case_source` goes
+  stale when a project moves, as in the shipped example projects).
+- D3, engine version: the run's `solver_version` is shown; another engine version here (project server or service) is a
+  gap in words, compared as `<name> <version>`, which is how `rcfd --version` prints it.
+- D4, the port: a fifth MessagePort (`studio.provenance-port`), since the run port's operations are fixed by F-810's test.
+- D5, the clipboard: written by the main process for Copy, so the page keeps no clipboard permission.
+- D6, Ctrl+I for Show provenance (free in the Electron default menu, Chromium and the table); Copy reproduce command has
+  no key.
+- Not covered: numbers of a service session (the settings page, the `#/dev/plots` route): their reproduce command would
+  be `rcfd call journal.get` then `rcfd run --journal`; `journal.get` keeps its exemption until a surface shows a
+  session's results. The axis ticks of the plots and the legend's ticks are scales, not values, and open nothing.
+- Missing in the engine (no Rust change here): `run.json` records neither the solver's launch argv nor a build id
+  (`solver_version` is a release name, so two builds of one release cannot be told apart); `rcfd-runner start` has no
+  options for `continue_from` and `max_steps` (`start_run` and the runner take them); no tool reruns a run from its own
+  snapshot (`rcfd-runner rerun <id>` or `start_run {from_run}`, proposed); `status.json` gives `time` with no unit, so
+  the Runs view's "Time, s" caption is the Studio's word, not the engine's (shown as such in the provenance).
 
 ## Security (G10)
 

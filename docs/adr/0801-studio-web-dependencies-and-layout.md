@@ -931,3 +931,188 @@ busy fraction 1.00 before and after, with 6 to 7 `cargo`/`rustc`/`link` processe
 - `service:panel.snapshot` keeps its exemption naming F-810: the workspace reads runner runs through the project server
   and does not use a service session's panel; which item should own it?
 - The roadmap task text named P6 "live update latency"; ADR 0350's P6 is the 4e6-cell scrub. Both are recorded above.
+
+## Addendum 7: F-809, derived pictures in the field viewport (2026-11-16)
+
+F-809 (iso-surfaces, streamlines, cut planes and vectors in the field viewport; guardrails G2, G3, G6, G8, G13, G22)
+adds **no dependency** and changes no Rust file, service method, reply shape, golden or default. No existing test was
+edited.
+
+### What the engine computes today (read before the code)
+
+| Picture | Engine entry point on a stored field | What exists only inside the libraries |
+|---|---|---|
+| Iso-surface | none | `rcfd_post::surfaces::cut_implicit` cuts by a function of position (marching tetrahedra), not by a cell field; `Surface::clip_by_values` clips a surface by its vertex values. Nothing turns a stored cell field into an iso-surface. |
+| Streamlines | none | none (no integrator anywhere in the workspace; `particles.report` tracks particles of a particle run, which is another thing) |
+| Cut plane | `render_field` (MCP, project) draws a 2D case only and refuses a 3D one; `render.png` (service, live session) draws the middle slice of the thinnest direction; `field.sample` (service, live session) samples a plane | rcfd-render's cut plane: `View::clip = (n, d)`, "only points with `n . p <= d` are drawn (clipped per fragment in the shader)" (`crates/rcfd-render/src/shader.wgsl`); `rcfd_post::render::render_scalar` with `axis` and `slice` |
+| Vectors | `render.png` with `vectors: true` and MCP `render_image` (live session only: an image of arrows on the middle slice) | `rcfd_post::render::overlay_vectors` (in-plane arrows on a lattice of `density` x `density`, 24 in `render.png`) |
+
+The viewport draws a run's **store** (F-804's data door). None of the entry points above takes a store and a 3D
+derived picture, and the Studio cannot add one (no Rust change). So:
+
+- **Cut plane**: computed in the Studio by rcfd-render's own rule, on the GPU, for the surface, the mesh grid and the
+  vectors, and in the CPU pick.
+- **Vectors**: computed in the Studio from the stored components, by the rule of `overlay_vectors` carried to the
+  boundary surface.
+- **Iso-surface** and **streamlines**: not drawn; each is shown as unavailable with the reason (G6), and recorded below
+  as a missing engine entry point.
+
+### Tolerances, registered before the code (G3)
+
+- **T1, which cases are 2D.** The engine's word for a 2D case is `render_field`'s: "one cell layer", the middle plane of
+  the thinnest direction cuts every cell. The Studio decides from the surface it already has: the thinnest direction of
+  the surface's bounding box is `a`; the case is 2D when every cell of the store owns a surface triangle lying in the
+  plane `p[a] = min[a]` and one lying in `p[a] = max[a]` (all three corners equal to the bound, in `f32`). Tolerance:
+  none; the verdict must equal `render_field`'s on real cases (the quick-start cavity, 2D; the axial-fan passage, 3D)
+  and be 3D for the f447 box.
+- **T2, cut plane.** rcfd-render keeps a point when `n . p <= d`. The Studio's planes are normal to an axis, `n = e_a`
+  (keep the side below `d`) or `n = -e_a` (keep the side above), so the test is `p[a] <= d` or `p[a] >= d`: exact in
+  `f32` and `f64` alike, no tolerance in the rule itself. `d` is held as an `f32`. On screen, a fragment's `p` is the
+  rasterised world position, so pixels within 2 CSS pixels of the plane's trace, or of a triangle edge, are not judged;
+  every other pixel must be either the viewport ground or exactly the table colour (F-808's 3-level bound to
+  rcfd-render's colour) of a cell whose picked point satisfies the rule, and a pixel whose unclipped point broke the
+  rule must have changed. The pick (hover readout) takes the nearest hit that satisfies the rule.
+- **T3, vectors.** Taken from `overlay_vectors` and `render.png` (read from the Rust source by the tests): a lattice of
+  `24` bins per axis over the bounding box, the first candidate in order per bin; the arrow of the largest vector is
+  `0.8` of a lattice step and an arrow's length is proportional to `|v| / max |v|`, the maximum over every cell of the
+  store; the head is two strokes back `0.3` of the length and out `0.5` of that to each side. Carried to a surface: a
+  candidate is a surface triangle (on a 2D case only the triangles of the face the fitted view looks at, and the
+  in-plane components, as `overlay_vectors` draws them); the anchor is the triangle's centroid; the lattice step is the
+  largest extent of the bounding box over 24; the head's side is the triangle's normal crossed with the arrow; a zero or
+  non-finite vector draws nothing (`overlay_vectors`' half-pixel floor is an image rule and is not taken). Tolerance:
+  every arrow carries its cell's stored components bit for bit (the Rust reader's reference bytes); the set of arrows
+  (triangle, cell) equals an independent `f64` recomputation exactly; every drawn point is within `2^-20` of the
+  largest extent of that recomputation (the `f32` rounding of the drawn positions); on screen the only pixels the
+  arrows change are deep ink.
+
+### What F-809 built
+
+- **`src/renderer/field/derived.ts`** (pure): which derived picture applies to a store and why not (`availability`),
+  the 2D verdict (`meshLayers`, T1), rcfd-render's cut (`clipPlane`, `keeps`, T2), the arrows (`vectorGlyphs`, T3),
+  and the four pictograms on the 14-unit grid.
+- **`src/renderer/field/DerivedControls.tsx`**: the controls in the viewport's tool row (pictograms; the name in the
+  accessible name and tooltip; an unavailable one a dashed, focusable chip whose accessible name and tooltip give the
+  reason), the cut plane's panel (axis, position, side kept) and `useArrows` (the stored components of the shown
+  snapshot through the data door, with the view's tag, then the arrows).
+- **`FieldCanvas.tsx`**: shared clip uniforms and a `maskNode` on the surface, mesh-grid and arrow materials (keep where
+  `dot(n, positionWorld) <= d`); the arrows as deep-ink line segments; the pick takes the nearest hit the cut keeps and
+  returns the hit point. **`FieldViewport.tsx`**: the controls, the panel, the arrows; the readout carries the hit point
+  and the pointer position it was taken at (`data-point`, `data-pointer`) and the frame the number of arrows
+  (`data-arrows`), for the tests. `field.css`: the controls and the panel, tokens only.
+- **Tests** (no human step, no existing test edited): `tests/unit/field-derived.spec.ts` (9) and
+  `tests/e2e/field-derived.spec.ts` (7), described in the README.
+
+### Decisions taken in F-809 (reversible; the maintainer may change them)
+
+- **F809-D1, pictures the engine cannot make.** (a) Show the iso-surface and streamlines as unavailable chips with the
+  engine's missing entry point as the reason (done); (b) leave them out until the engine has them. Recommendation: (a):
+  G6 asks for the limit to be said, and the chips cost no standing words (G22).
+- **F809-D2, what "cut plane" means.** (a) rcfd-render's cut: the surface beyond the plane is not drawn, the cut is not
+  filled (done; exactly the engine's rule, testable pixel by pixel); (b) a filled slice coloured by the cells it crosses,
+  as `render_scalar` draws a slice: needs the volume mesh through the data door and an engine reference on a store,
+  which no entry point gives for a 3D case. Recommendation: (a) now, (b) when the engine has a store-based slice.
+- **F809-D3, where the arrows stand.** (a) On the boundary surface, at triangle centroids, by overlay_vectors' lattice
+  (done); (b) at cell centres on the cut plane (needs (b) of D2). Recommendation: (a).
+- **F809-D4, the 2D verdict.** (a) Computed from the surface the viewport already has and tested against
+  `render_field`'s verdict on real runs (done); (b) ask `render_field` each time (only possible for a run of an open
+  project, not for a bare store). Recommendation: (a).
+- **F809-D5, the arrows on the main thread.** `vectorGlyphs` runs in the renderer's main thread, one pass over the
+  surface's triangles (26 000 on the 1e5-cell box; not timed); the mesh grid uses a worker. Recommendation: move it to a worker if a 1e6
+  store measures slow (G21); reversible.
+- **F809-D6, the first cut.** Normal to x, through the middle of the bounding box, keeping the side below (rcfd-render's
+  `n = e_x`). Any axis and side are one key away.
+- **F809-D7, capability coverage.** No capability of the inventory gains a UI path: the pictures draw stored fields
+  through the data port. The exemptions of `service:field.sample`, `cli:rcfd sample` and its options, which named F-809
+  "not built yet", now say what they are (samples of a live session or of a case run again), keep F-809 and are marked
+  unplanned. (a) Keep them so; (b) move them to an item that will show samples. Recommendation: (a) until the roadmap
+  names such an item.
+- **F809-D8, words on screen (G22, The Quiet Rule).** The controls are pictograms; names and reasons are in the accessible
+  name and the tooltip. Visible words are only the cut panel's position ("Plane at x", its value: a value the user acts
+  on) and the axis letters, and an error if the arrows' components cannot be read.
+
+### Missing in the engine (no Rust change here)
+
+- An iso-surface of a stored cell field (for example a point reconstruction plus `cut_implicit`, returning triangles and
+  their cells) as a service `data.*` method or an MCP tool.
+- Streamlines of a stored velocity field (an integrator; seeds; polylines with the cell of each point).
+- A slice or cut of a stored 3D field with values (`render_field` refuses 3D; `render.png` and `field.sample` work on a
+  live session only); `render_field` with `axis`, `slice` and `vectors` for a store would cover slices and arrows.
+- G16: a CLI or MCP way to draw the Studio's cut and arrows of a store (rcfd-render's `View::clip` is a library
+  feature only), so Claude Code can make the same picture.
+- The length unit of the stored mesh coordinates (the cut panel shows the position without a unit).
+
+### Proposed for `DESIGN.md` (not edited here)
+
+- Field view: the derived-picture controls as pictograms (cut plane, vectors, iso-surface, streamlines) on the 14-unit
+  grid, the name in the tooltip; an unavailable one as the dashed chip, its reason in the tooltip.
+- Vectors in deep ink, opaque, on the surface (with the iso-lines in ink and streamlines in white of today's list).
+- The cut plane's panel in the frame's top left corner, white inside an ink rule (Reset view keeps the top right).
+- The cut plane hides the surface beyond the plane and does not fill the cut (rcfd-render's cut).
+
+### Verification (2026-11-16, Windows 11)
+
+- `npm ci`: found 0 vulnerabilities. `npm run typecheck`: no errors.
+- `npm test`: 497 passed (13.7 min), the 16 of F-809 among them; nothing skipped.
+- `python scripts/third_party_licenses.py --check`: THIRD_PARTY_LICENSES.md is up to date.
+- `cargo test -p rcfd-cli --release --test docs_site --test workspace_graph`: 2 passed, 4 passed.
+
+## Addendum 8: F-828, provenance and reproduce from the CLI (2026-11-16)
+
+No new dependency. The popover is React Aria's `Popover` and `Dialog` (already a dependency), drawn in a React root of
+its own (`react-dom/client`, already a dependency) so that its keys do not reach the handlers of the row the number sits
+in. The clipboard is Electron's `clipboard` in the main process.
+
+### Layout
+
+- `src/shared/provenance.ts`: the provenance port's contract (`studio.provenance-port`, ops `run` and `copy`), the run
+  record's facts, a number's source (`NumberSource`), the reproduce command built from a record alone with its gaps
+  in words, and the facts shown.
+- `src/main/provenance/`: `record.ts` reads `runs/<id>/run.json` whole, the hashes of `runs/<id>/case.snapshot` and of
+  the case file now, and the units of `output/monitors.json`, all through the project server's read-only
+  `read_project_file`; `bridge.ts` checks each request (a run id, or a text of at most 16000 characters to copy).
+- `src/renderer/provenance/`: `Provenance.tsx` (the trigger, a button with the number's words as its accessible name,
+  or a passive span inside a grid row or a list option; the popover), `registry.ts` (which number Show provenance
+  opens; the palette commands `provenance.show` and `provenance.copy_command`), `sources.ts` (each surface's numbers),
+  `door.ts` (the one renderer module naming `window.studioProvenance`), `provenance.css`.
+- Wrapped: the time panel's residual values, monitor readout and snapshot counter (the scrubber names the counter);
+  the workspace's numbers and run ids; the Runs view's table result, the selected run's id and numbers and its report
+  values; the field view's readout (the field view names it). Ctrl+I is Show provenance (global, the shortcut table).
+
+### Decisions (options, the recommendation taken; each reversible without an engine change)
+
+- D1 the reproduce command: `rcfd-runner start <case> --project <folder> --threads --priority [--mem-mb] [--set]...`
+  from `run.json` (taken; the CLI twin of `start_run`, making the same run folder), against `rcfd run
+  runs/<id>/case.snapshot` with the runner's launch flags (not recorded, so the Studio would write them from the
+  runner's source). A changed case, a mismatched snapshot, settings with no `rcfd-runner start` option
+  (`continue_from`, `max_steps`), a mesh file, a case outside the project and an unknown or different engine version
+  are said in words beside the command.
+- D2 a fifth MessagePort rather than new operations on the run port (F-810's test fixes the run port's operations).
+- D3 Copy writes the clipboard in the main process (every permission of the page stays denied).
+- D4 Ctrl+I for Show provenance.
+- D5 the engine versions compared as `<name> <version>`, the form of `rcfd --version` and `solver_version`.
+
+### G17 measured
+
+`tests/e2e/provenance.spec.ts`: a run of `cases/cavity-re100.toml` started from the window, its command copied from its
+provenance and run from PowerShell with `--project` changed to an empty project: `fields/store.rts`,
+`fields/index.json`, `residuals.jsonl`, `output/monitors.json`, `output/monitors.csv`, `output/report.html`,
+`output/restart.rcfd`, `output/solution.vtu`, `case.snapshot` and `check.json` byte for byte equal; `metrics.json`,
+`status.json` and `solver-status.jsonl` equal without times, process ids and own paths; `run.json`'s
+`case_snapshot_hash`, `solver_version` and `settings` equal; the sequence of `events.jsonl` kinds equal (the README,
+F-828, registers the comparison).
+
+### Missing in the engine (no Rust change here)
+
+- `run.json` records neither the solver's launch argv nor a build id (`solver_version` is a release name).
+- `rcfd-runner start` has no options for `continue_from` and `max_steps`; no `rcfd-runner rerun <id>` or
+  `start_run {from_run}` reruns a run from its own `case.snapshot`.
+- `status.json`'s `time` has no unit (the Runs view's "Time, s" caption is the Studio's word).
+- No read-only hash of a mesh file a run names (the reproduce check cannot say whether it changed).
+- A service session has no reproduce surface yet (`journal.get` then `rcfd run --journal`).
+
+### Proposed for `DESIGN.md` (not edited here)
+
+- The provenance affordance: a number at rest unchanged; hover, focus and open add a 1px dotted ink underline at 3px
+  offset; focus keeps the orange outline.
+- The provenance popover: the popover lift, 480 px wide; a head (quantity, value, unit in ink-2), a two-column facts
+  list (labels ink-2), the command on the viewport fill, its gaps in medium weight, then Copy command and Copy.
