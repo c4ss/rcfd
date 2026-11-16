@@ -447,3 +447,85 @@ corrected and rerun. The first S7 run failed only because the scratch target had
 "build it: cargo build -p rcfd-cli"), not because of the mutation; after building it the mutated S7 passed.
 
 Test list (A5): no test was added, removed or edited, so the list is unchanged (checked again in the final gate).
+
+## 7. The daily gate in CI and failure attribution (ADR 0653)
+
+Decision record: [ADR 0653](adr/0653-f723-registration-daily-full-gate-with-failures-attributed-to-adrs.md).
+
+### 7.1 When it runs
+
+The `Full gate` workflow (`.github/workflows/gate.yml`) runs every day at 02:00 UTC on `main`, and on demand
+(`gh workflow run gate.yml --ref main`, with the inputs `os`, `bisect`, `bisect_minutes`, `open_issues`). A first job, `decide`,
+finds the last run on `main` whose job `full gate, windows-latest` passed (read-only API calls). A scheduled run whose commit is
+that run's commit is skipped. If the query fails, the gate runs. A run started by hand always runs. The gate checks the same
+things as before: fmt, clippy, then `scripts/gate_test.py` and the doc-tests. The only difference is that fmt runs package by
+package (`cargo fmt -p <package> -- --check` for each workspace member). `cargo fmt --all` hands every target's root file to one
+`rustfmt` process. Since November 2026 that command line is longer than the Windows limit of 32767 characters, and it fails with
+os error 206. The same happens on the local machine.
+
+### 7.2 What a failed run produces
+
+The gate logs (`times.tsv`, `test.log`, `progress.log`) are uploaded first, as the artifact `gate-<os>-<sha>`. Then, only if the
+test step failed, `scripts/gate_attribute.py` runs (at most 40 min). It writes:
+
+- **`gate-out/attribution.json`** (artifact `gate-attribution-<os>-<sha>`, for the roadmap loop). It has one record per failed or
+  timed-out test with these fields: crate, binary, file, outcome, `rerun` (the test run once more, alone, the way `gate_test.py`
+  runs it), `flaky` (true when the re-run passed), `adrs` and `items` from the index, `evidence`, and `candidates`. Candidates are
+  the first-parent commits between the last green gate (`base`) and this commit that touched the test's file or crate (`direct`),
+  or the non-test sources of a workspace crate it depends on, or the root `Cargo.toml` or `Cargo.lock` (`dependency`). Each
+  candidate has its subject's `F-NNN` and `ADR NNNN` and those items' ADRs. With the input `bisect`, a failure with more than one
+  candidate is bisected over its candidates. Each step builds and runs only that test in a git worktree, and the bisect stops when
+  `bisect_minutes` is used up. The record also lists failed doc-tests and a build failure. If `base` is not an ancestor of the
+  commit (for example after a history rewrite), the last 30 first-parent commits are used and `base_found` is false.
+- **A markdown table in the job summary**: test, outcome, re-run, ADRs, items, and candidates, oldest first.
+- **With the input `open_issues`**, one issue per failure that is not flaky. A separate job does this, and it is the only job
+  with `issues: write`. A failure is skipped when an open issue already has the same title.
+
+To run the attribution locally on a downloaded artifact:
+
+```bash
+python scripts/adr_test_index.py --out gate-out/adr_test_index.json
+python scripts/gate_attribute.py attribute --tsv gate-out/times.tsv --log gate-out/test.log \
+    --index gate-out/adr_test_index.json --base <last green sha> --head <sha> [--rerun] [--bisect --bisect-minutes 30]
+```
+
+### 7.3 The test-to-ADR index
+
+`scripts/adr_test_index.py` finds every `#[test]` of the workspace without a build. It follows `mod` declarations and nesting,
+so each test gets its libtest name, and it records `#[ignore]`. It maps each test to ADRs and roadmap items from five kinds of
+evidence:
+
+- E1: an item number in the file name (`*_f123.rs`).
+- E2: an ADR cites the file.
+- E3: an ADR cites a distinctive test function name.
+- E4: a roadmap note cites the file or the function.
+- E5: for unit tests, an ADR cites the module path.
+
+An item maps to an ADR through the ADR file names `NNNN-fMMM-...` and the `ADR NNNN` references in its note. `--report` prints the
+coverage and the unmapped binaries. `--adr NNNN` prints the cargo commands for that ADR's tests.
+
+Coverage at d40cd665 (ADR 0653 addendum 2):
+
+| what is mapped | mapped | share |
+|---|---|---|
+| integration-test binaries | 1053 of 1134 | 92.9 % |
+| unit-test binaries | 19 of 28 | 67.9 % |
+| all tests | 6986 of 7472 | 93.5 % |
+| non-ignored tests | 5424 of 5856 | 92.6 % |
+
+The index lists every ADR that cites a test, not only the ADR that registered it. A file named in a later ADR's list of
+unchanged tests therefore maps to that ADR too. Read `evidence` to tell the two apart.
+
+### 7.4 What to check per merge now that the full suites run daily
+
+For a merge of one ADR's branch, the lead runs these checks instead of the full suites:
+
+1. `cargo fmt -p <package> -- --check` for each package the merge touches, then
+   `cargo clippy -p <packages> --all-targets -- -D warnings`.
+2. The ADR's own registered tests: `python scripts/adr_test_index.py --adr <NNNN>` prints the cargo commands. Add the tests the
+   ADR names that the index does not map.
+3. The unit tests of the touched crates: `cargo test -p <crate> --release --lib`.
+4. `cargo test -p rcfd-api --release --test baseline_hashes`.
+5. `cargo test -p rcfd-cli --release --test docs_site`.
+
+Everything else waits for the next daily gate, which attributes any failure to the merges since the last green gate.
