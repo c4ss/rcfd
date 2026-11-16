@@ -210,3 +210,13 @@ D1 is the negative control of the a1 check: the same procedure that P must pass 
   about real 120 mm fans, whose stall lies outside what the ROM models (ADR 0119).
 - Other speeds than 3000 rpm: the strip equations are Reynolds-dependent only through the friction term, so the stall fraction
   moves little, but it is not checked.
+
+## Addenda
+
+### Amendment 1 (2026-11-16, written after the test code was written and compiled, before any run of it)
+
+One control added to P3, no limit changed: **P3-0**, the fifteen copied variants applied to the unchanged
+`ComputerFan::default()` must all hold (code found at the path, radius where given, NC1 in bounds, no `out_of_bounds`, blade 3
+only for "thin blade 3", C3 for the mould codes). It checks the verbatim copy of `bad_variants` against the ADR 0118 result.
+Limit: every variant holds. The tests are in `crates/rcfd-post/tests/f713_schema_fan_rom.rs` (rcfd-post depends on rcfd-mesh,
+so one file reaches the schema, the checker, the sector generators and the ROM).
