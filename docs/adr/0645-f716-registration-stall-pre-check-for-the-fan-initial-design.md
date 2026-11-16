@@ -221,3 +221,30 @@ and B1 cover the same code paths.
   crossings at the other points; A1 measures what is left.
 * Batch 1 only for the fallback; no tolerance plan in F3 (a plan's specimen failures are invisible to the nominal check).
 * Every number ranks variants of the reduced-order model, not real fans (no measured data).
+
+## Addenda
+
+## Amendment 1 (2026-11-16, after the first registered run of the fast tests, before any corrected run): the point set of E2
+
+The registered run of the fast tests (log `f716-scratch/run_fast.log`) met every limit it covers except one: **F1's E2**
+counts 18 violations (limit 0). F1's other clauses held: 18 evaluations, 0 failed, 68 pre-checks and 50 rejected (both equal in
+the ledger), fidelity and summary fields, every rejected reason names R3, every rejected point fails the objective at R3, every
+failure located, every evaluation after a passed pre-check. B1, F2, F3c, F4, F5, L1 and D1 were met (B1: digest
+`be4bc4aa0063bc33`, equal to the d40cd665 base).
+
+Diagnosis (from the test, no further run): the test's point set for E2 is every `evaluation` line of the ledger. A passed
+pre-check and the evaluation that follows it are the same proposal, at the same parameters by construction (D2). So each of
+the 18 evaluations sits at distance 0 from its own passed pre-check: 18 violations, one per evaluation. That is exactly what
+was measured. The check had the wrong set-up. The code did what the design says.
+
+Correction (registered now): E2 (F1) and A6 are taken over the **proposals**, in ledger order: every evaluation of the
+objective model and every **failed** pre-check. A passed pre-check is the same proposal as the evaluation that follows, and
+F1's clause "every objective entry has an earlier pre-check entry with verdict `ok` at the same parameters" already checks
+that pairing. Limits unchanged (0 violations). The first F1 test stays in the file as the ignored record
+`f1_fan_fast_path_defective_e2_record` (unchanged, with the measured 18 recorded). A corrected test `f1b_fan_fast_path`, with the
+same set-up and limits and the corrected point set, is run once. The heavy record has not been run. Its A6 uses the corrected
+point set from its first run. The decision rule is unchanged, with F1b in the place of F1.
+
+Also before the corrected run, with no effect on any check: the located refusal of D4 carried a run of spaces inside its
+message, from a broken string continuation. It now reads `... more than max_rejected = 5 (0 of 25 evaluations made)`. F3c checks
+only that it contains `max_rejected = 5`.
