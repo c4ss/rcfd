@@ -141,6 +141,12 @@ miss and 2 when a case could not run. The light set (default) runs in a few minu
 P2's full 300-event sample and adds P6 at 4e6 cells, the Follow-live latency and P12 over the 1e6 and 4e6 boxes, all
 recorded. The bench is not in `npm test` or CI.
 
+Window mode: the bench starts the Studio in the tests' mode, `RCFD_TEST_HEADLESS=1` (the window shown in place but
+transparent, opacity 0, click-through, unfocused, off the taskbar, background throttling off), so a run opens no
+visible window. `RCFD_TEST_HEADLESS=0` gives the normal window. The light and heavy runs below (18:36 to 19:42 UTC) were
+taken before that mode existed on this branch, with the normal window. The third run (19:48 UTC, after the merge of
+`studio-roadmap`) is in the test mode.
+
 Judging follows the per-item records of ADR 0801. P4 and P7 are met by route R1 or R2 (ADR 0350 §3), P4 on the raw
 store. P8's frame rate is the better of the vertically synced and the uncapped run, and its p99 frame comes from the
 synced run (F-808's reading). P2 also judges its sample size (at least 50 events, as `measure-service.mjs` does).
@@ -154,7 +160,7 @@ every run and every case (0.94 once). Other jobs' solver test binaries, `rustc` 
 throughout, with 4 to 10 `cargo`/`rustc`/`link` processes and about 33 GB of memory free. Nothing was retried to pass.
 The numbers say what the shell does under that load. They are not a baseline for an idle machine.
 
-### Light set (`npm run bench`, 18:36 to 18:56 UTC)
+### Light set (`npm run bench`, normal window, 18:36 to 18:56 UTC)
 
 | Id | Limit | Measured | Met |
 |---|---|---|---|
@@ -176,7 +182,7 @@ Studio instance on the machine, including other jobs' tests) logged cache-lock e
 service. P5 was run once more on its own (`--only=P5`, 18:57 UTC, processor busy 1.00) and missed, as the table shows.
 F-810 measured 23.6 per s with a longest frame of 91.6 ms on this machine, also under full load.
 
-### Heavy set (`npm run bench -- --heavy`, once by hand, 19:00 to 19:30 UTC)
+### Heavy set (`npm run bench -- --heavy`, normal window, once by hand, 19:00 to 19:30 UTC)
 
 | Id | Limit | Measured | Met |
 |---|---|---|---|
@@ -198,12 +204,34 @@ F-810 measured 23.6 per s with a longest frame of 91.6 ms on this machine, also 
 Verdict of the heavy run: 7 of 10 judged lines met. P10, P2 (sample size) and P5 (one 457 ms frame) missed (exit
 code 1).
 
-Reading: P4, P7 and P8 held their earlier records under full load (P4 R2 raw within the limit both times, P7 R2 at
-about 71 ms, P8 at the display's rate). The misses were P5 (once on the rate, once on a single frame), P10 in the heavy
-run and P2's starved sample. These checks wait on the processor or on Chromium's start-up while other jobs hold every
+P10 alone (`--only=P10`, normal window, 19:31 UTC, processor busy 1.00), run to check the final script: median
+40336 ms, first 40270, max 47063 (**no**).
+
+### Light set in the test mode (`npm run bench`, RCFD_TEST_HEADLESS=1, 19:48 to 20:10 UTC)
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| P10 | median <= 2.5 s | median 3581 ms; first 20805, max 30231; the ten: 20805, 26454, 27628, 2452, 2449, 12388, 30231, 1362, 2091, 3581 | **no** |
+| P2 | p99 <= 20 ms | 57 events in 120 s: p99 1.32 ms, but p50 -1.34 and clock drift 5.35 ms (the join's error grows with the load) | yes |
+| P4 R2 raw | p50 <= 30, p99 <= 60 ms | p50 29.1, p99 47.8, max 62.6 | yes |
+| P4 R1 raw (recorded) | as above | p50 53.9, p99 92.2 | no |
+| P4 deflated (recorded) | as above | R1 p50 66.9, p99 108; R2 p50 44.5, p99 71.8 | no |
+| P5 | >= 10 per s, no frame > 150 ms | 22.7 per s over 200 requests; frame p50 41.8, p99 71.0, max 76.4 ms | yes |
+| P7 R2 | median <= 1.5 s | median 102 ms; first 1136 | yes |
+| P7 R1 (recorded) | as above | median 5421 ms | no |
+| P8 frame rate | >= 60 per s | 235 per s (vertical sync); uncapped 54.4 (recorded) | yes |
+| P8 p99 frame | <= 25 ms | 8.20 ms (vertical sync); p50 4.20, max 20.7 | yes |
+
+Verdict: 8 of 9 judged lines met, P10 missed (exit code 1). The processor was busy 1.00 before and after every case.
+In this mode the window paints and its frames run (P8 at the display's rate, P5 met), so the test mode does not stop
+the frame-paced checks. It does not remove the load either, so this run does not establish a baseline.
+
+Reading: P4, P7 and P8 held their earlier records under full load in all three runs (P4 R2 raw within the limit, P7 R2
+at 71 to 102 ms, P8 at the display's rate). The misses were P5 (once on the rate, once on a single frame; met in the
+third run), P10 in the heavy and third runs, and P2's starved sample. These checks wait on the processor or on Chromium's start-up while other jobs hold every
 core, so the misses are recorded as taken under load. A run on an idle machine (Q4 below) settles whether any of them
-is a regression. P10 varied by a factor of 17 between two runs 25 minutes apart (median 1.2 s, then 20.5 s) at the same
-busy fraction. Its cause was not diagnosed. The shared Chromium profile (Q5) is one candidate.
+is a regression. P10's median ranged from 1.2 s to 40.3 s across four runs within 75 minutes, all at the same busy
+fraction of 1.00. Its cause was not diagnosed. The shared Chromium profile (Q5) is one candidate.
 
 ### Decisions taken in building F-817 (reversible)
 
@@ -220,6 +248,9 @@ busy fraction. Its cause was not diagnosed. The shared Chromium profile (Q5) is 
 - D4, load: the processor busy fraction, free memory and the busiest processes summed by name over 2 s, before and after
   the run. Each script also takes its own busy fraction. A case at 0.5 or more is marked `LOADED MACHINE` beside each of
   its lines.
+- D5, the window: the bench sets `RCFD_TEST_HEADLESS=1` for the scripts unless the environment sets it to `0`, as
+  `playwright.config.ts` does for the tests, so a run opens no visible window (asked for on 2026-11-16 while F-817 was
+  built). The mode is printed and kept in the results.
 
 ### Open questions for the maintainer
 
@@ -238,3 +269,7 @@ busy fraction. Its cause was not diagnosed. The shared Chromium profile (Q5) is 
   every Studio instance on the machine shares. (a) pass a scratch `--user-data-dir` from the measurement scripts (a cold
   GPU cache for each launch, which changes what P7's first open and P10 measure); (b) leave the scripts as they are.
   Recommendation: (b) for P10, which should measure the user's own start, and (a) for the other cases, decided with Q4.
+- Q6, the window mode of the bench: (a) the tests' transparent window by default, the normal window with
+  `RCFD_TEST_HEADLESS=0` (taken); (b) the normal window by default, since G9's limits describe what a user sees, with the
+  test mode by flag. Recommendation: (a), and the idle baseline of Q4 taken once in each mode, which shows whether the
+  mode moves any number.

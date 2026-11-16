@@ -808,6 +808,9 @@ Decisions taken in building F-813 (options, the recommendation followed; each re
   `measure-scrub.mjs` makes the folder a project the Studio opens (the boxes move into run folders, linked back).
   Binaries: `f447_bench` and `rcfd-mcp`, found as the tests find them (`RCFD_F447_BENCH`, `RCFD_MCP_BIN`,
   `$CARGO_TARGET_DIR`, `target/release` here or above).
+- Window: the Studio runs in the tests' mode, `RCFD_TEST_HEADLESS=1` (transparent, click-through, unfocused, off the
+  taskbar, background throttling off), so a run opens no visible window; `RCFD_TEST_HEADLESS=0 npm run bench` measures
+  with the normal window. The mode is printed and kept in the results.
 - Results: `out/bench/bench-<time>.json` (every line, the machine, the load, each script's own JSON). The bench is not
   part of `npm test` or CI; results are recorded by hand in ADR 0800 §9.
 

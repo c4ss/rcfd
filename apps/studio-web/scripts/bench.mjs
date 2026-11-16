@@ -34,6 +34,11 @@
 // s), its p99 frame is the vertically synced run's. Exit code 0 when every judged line is met, 1 when one is missed, 2
 // when a case could not run. The results (every line, every script's own JSON, the load) go to --out, else
 // out/bench/bench-<time>.json. Not part of npm test or CI (F-823 decides that).
+//
+// The Studio runs in the test mode of playwright.config.ts (RCFD_TEST_HEADLESS=1, src/main/index.ts: the window shown
+// in place but fully transparent, click-through, unfocused, off the taskbar, background throttling off), so that a run
+// opens no visible window; RCFD_TEST_HEADLESS=0 in the environment measures with the normal window. The mode is printed
+// and kept in the results.
 import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
@@ -161,7 +166,9 @@ if (missing.length) {
 }
 
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'rcfd-f817-'));
-const childEnv = { ...process.env, ...(mcp ? { RCFD_MCP_BIN: mcp } : {}) };
+const headless = (process.env.RCFD_TEST_HEADLESS ?? '1') === '1';
+const childEnv = { ...process.env, RCFD_TEST_HEADLESS: headless ? '1' : '0', ...(mcp ? { RCFD_MCP_BIN: mcp } : {}) };
+const modeText = headless ? 'test mode RCFD_TEST_HEADLESS=1 (window transparent, opacity 0, unfocused; background throttling off)' : 'normal window (RCFD_TEST_HEADLESS=0)';
 
 function runCase(c, outFile) {
   return new Promise((resolve) => {
@@ -259,6 +266,7 @@ function linesFor(c, r) {
 const started = new Date();
 console.log(`F-817 bench, ${heavy ? 'heavy (--heavy)' : 'light'} set, ${started.toISOString()}`);
 console.log(`machine: ${machine.cpu} (${machine.logical} logical), ${machine.totalMemGB} GB, ${machine.platform}; launcher Node ${process.version}`);
+console.log(`window: ${modeText}`);
 console.log(`packaged copy: ${executable} (${existsSync(executable) ? `packaged ${statSync(packagedJson).mtime.toISOString()}` : 'missing'})`);
 console.log(`data: ${data}${gen.seconds !== null ? ` (generated ${missing.join(', ')} in ${gen.seconds.toFixed(0)} s)` : ''}; f447_bench ${benchServer}; rcfd-mcp ${mcp ?? 'not found'}`);
 const loadBefore = await load(true);
@@ -310,6 +318,7 @@ const text = (l) =>
   `${l.id} ${l.what} ${fmt(l.value)} ${l.unit} limit ${l.limit.replace('Infinity', 'none')} ${l.met ? 'met' : 'MISSED'}${l.judged ? '' : ' (recorded)'}${l.note ? `; ${l.note}` : ''}${l.loaded ? `; LOADED MACHINE (processor busy ${busyFmt(l.load.before)} before, ${busyFmt(l.load.after)} after)` : ''}`;
 console.log(`\n==== F-817 bench (${heavy ? 'heavy' : 'light'}), ${started.toISOString()} to ${new Date().toISOString()}`);
 console.log(`machine: ${machine.cpu} (${machine.logical} logical), ${machine.totalMemGB} GB, ${machine.platform}`);
+console.log(`window: ${modeText}`);
 console.log(`load before: processor busy ${loadBefore.cpuBusyFraction.toFixed(2)}; ${procText(loadBefore)}`);
 console.log(`load after:  processor busy ${loadAfter.cpuBusyFraction.toFixed(2)}; ${procText(loadAfter)}`);
 for (const l of lines) console.log(text(l));
@@ -332,6 +341,7 @@ const results = {
   ended: new Date().toISOString(),
   machine,
   launcherNode: process.version,
+  window: { headless, RCFD_TEST_HEADLESS: headless ? '1' : '0', note: modeText },
   executable,
   data,
   generated: gen,
