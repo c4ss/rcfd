@@ -216,3 +216,76 @@ run, or a mutation not caught. **todo**: FS and RX not run.
 - An orthotropic sector with axes other than cylindrical about the cyclic axis stays refused (ADR 0462).
 - Sectors touching the axis, supported or constrained sectors with the opt-in (refused, ADR 0606), as ADR 0611.
 - The scope without stress stiffening (ADR 0611 NS1 to NS3) is not re-run on these families.
+
+## Addendum 1: results (2026-11-16)
+
+No library change (`git diff d9dd237f -- crates/*/src` is empty). The ADR 0606 code of `free_sector_unit_static` and the branch
+of `RotatingSector::new` take the curved Tet10 sector, the unsymmetric two-density Shell4 layup frustum and the cylindrical
+orthotropic Hex20 sector as they are (D1). Test file `crates/rcfd-fem/tests/sa_free_sector_prestress_tet_layup_ortho_f686.rs`
+(three tests, 1.8 s in release), committed in ae57fd21 before its run; the registered run (run 1, log `f686-scratch/run1.log`)
+was made once, with no amendment.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| FS opt-in pre-stress against the copy route | `1e-10` each | T10 `1.16e-13`, L2 `1.73e-15`, O20 `1.87e-13` | yes |
+| RX residual at the interior nodes over `max abs f` | `1e-10` each | T10 `1.19e-14`, L2 `2.32e-15`, O20 `2.01e-13` | yes |
+| RXc the copy route's residual | `1e-10` each | `1.22e-13`, `2.06e-15`, `2.11e-13` | yes |
+| OR `r_1`, `r_2` against the load | `1e-13` | `<= 8.0e-17` (all six) | yes |
+| GN gauge node interior, `rho_g / r_max - 1` | interior; `1e-12` | nodes 5, 1, 7, all interior; `<= 2.2e-16` | yes |
+| WS whirl frequencies, `k = 2`, `omega_1 / 2`, against the copy route | `1e-8`; counts, directions equal | T10 `1.51e-13`, L2 `0`, O20 `5.34e-14` (6 modes each); equal | yes |
+| NC0 free sectors without the opt-in | `SingularStiffness` | all three | yes |
+| RL3 Shell3 layup frustum, with and without the opt-in | `NotYetSupported` `"Layup"` | both (`block 0 (Shell3)`, package "a follow-up of ADR 0496") | yes |
+| OL torque of the layup load on a meridian facet | `1e-10`; `1e-12` | `1.54e-14`; `1.53e-14` (`r_2^T f = P = 1.173958e-2`) | yes |
+| DF default | `false` | `false` | yes |
+| B2 existing tests | pass | `sa_free_sector_prestress_f680` 5, `sa_free_sector_prestress_solids_shells_f683` 3 (2 ignored records), `--lib rotating` 6 | yes |
+| B3 diff of the sources | empty | empty (B1 `baseline_hashes` therefore not needed and not run) | yes |
+
+The largest FS and RX are those of O20 (`~ 2e-13`), as arithmetic 2 expected from the stiffness ratio of the orthotropic
+material, a factor 500 inside the limit. The copy route held other nodes than the library's gauge (T10 nodes 3 and 74, L2 1 and
+10, O20 4 and 67), so FS compares two gauges and confirms D1: on all three families the stress does not depend on the gauge and
+the gauge carries no reaction. On L2, OR `r_2` is `8.0e-17` with `m1 = 0.4375 kg/m != 0`: the mirror symmetry of the frustum
+facets cancels the torque of D1, as derived. OL confirms the finding of D1 on a facet in a plane through the axis: the library's
+layup centrifugal load has the torque `m1 A rho_c` about the axis, to `1.5e-14` relative.
+
+`cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings` clean.
+
+**Mutations** (a `git archive` copy of ae57fd21 per mutation, each with its own `CARGO_TARGET_DIR` and `Compiling rcfd-fem` in
+every log; `f686-scratch/mutate.py`, `run_mutations.sh`, `mut_M*.log`, `mut_summary.log`; each run once, `--no-fail-fast`):
+
+| Id | Caught by |
+|---|---|
+| M1 axial gauge constraint dropped | the FS test (the opt-in `RotatingSector::new` on T10 refused `SingularStiffness`: panics) |
+| M2 tangential gauge constraint dropped | as M1 |
+| M5 a third, radial gauge constraint | FS (`0.49 .. 2.2`), RX (`0.69 .. 1.9`), WS (`4.0e-2 .. 5.7e-2`) on all three models |
+| M6 default `true` | DF, NC0 (all three no longer refused) |
+| M7 gauge nearest the axis | GN on all three (`-0.67`, `-0.40`, `-0.67`); FS stayed met (T10 `1.11e-13`), as registered |
+
+**Deviations.** None: every check met in the registered run, no amendment, no limit changed.
+
+**Decision by the registered rule: done.** Every check FS to B3 met in the registered run and every mutation caught by one of its
+expected checks. Every clause of the acceptance is met: `RotatingSector::new` with `free_sector_prestress` on a free Tet10
+sector, a free Shell4 layup sector and a free orthotropic solid sector gives the pre-stress of a constrained-copy route within
+`1.9e-13` (limit `1e-10`) and a residual at the interior nodes within `2.0e-13` of the load (limit `1e-10`); the defaults are
+bit-identical (no source changed, DF, NC0).
+
+### Remaining questions
+
+1. **The layup centrifugal load (D1 finding).** The load of ADR 0502 D1 keeps `m0 b(x)` and `m1 e_3 x b(x)` and drops the force
+   term `m1 Omega^2 r_perp(e_3)` of the exact through-thickness integral; with `m1 != 0` its net torque about the axis is
+   `m1 Omega^2 int e_3 . (r_perp(x) x a) dA`, zero on meridian-symmetric facets, `m1 A rho_c Omega^2` on a facet in a meridian
+   plane (OL). Consequences: a clamped layup blade with `m1 != 0` gets a spurious torque of relative size `~ m1 / (m0 rho)`
+   (here `4e-3 m / 0.6 m ~ 7e-3` of the force times the radius), and a free layup sector of such facets has no reaction-free
+   gauge. Options: (a) add the term as an opt-in (defaults bit-identical); (b) correct the load for every layup (changes existing
+   results of layups with `m1 != 0`, needs the maintainer); (c) leave it and document it. Recommendation: (a), the follow-up
+   below; not taken here because it is a library change outside this acceptance, and (b) would change outputs.
+2. **The Shell3 layup** stays refused (RL3). Recommendation: leave until a Shell3 laminate is needed (ADR 0496 follow-up).
+3. **Tet4, wedges, the tabulated material** are not run; D1 holds by the same argument. Recommendation: no item unless a free
+   sector of one is needed.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> Structural solver, advanced tier. Follow-up of F-683 (ADR 0611). DONE. ADR 0633, 2026-11-16: the free-sector pre-stress on tetrahedral, layered-shell and orthotropic sectors. No library change: the ADR 0606 gauge removes the two cyclic rigid motions of a curved Tet10 sector, of an unsymmetric two-density Shell4 layup frustum (B != 0, first mass moment m1 != 0) and of a Hex20 sector of a cylindrical orthotropic material, all in an oblique frame (derived in the ADR). RotatingSector::new with free_sector_prestress gives the pre-stress of a constrained-copy route at two other nodes within 1.9e-13 (limit 1e-10), a residual at the interior nodes within 2.0e-13 of the load (limit 1e-10), and the whirl frequencies of the copy route within 1.5e-13; without the opt-in the three sectors are refused as singular; the defaults are bit-identical. A Shell3 layup is refused (NotYetSupported Layup), as registered. Five of five mutations caught. Finding: the layup centrifugal load of ADR 0502 D1 drops the force term m1 Omega^2 r_perp(e_3) and so has a net torque m1 Omega^2 int e_3 . (r_perp x a) dA about the axis, zero on the meridian-symmetric frustum but m1 A rho_c Omega^2 on a facet in a meridian plane (measured to 1.5e-14); a free sector of such facets with m1 != 0 has no reaction-free gauge. Not covered: Tet4, wedges, the tabulated material, Shell3 layups, layups with m1 != 0 on non-symmetric facets as free sectors.
+
+> Follow-up proposed: The torque-free centrifugal load of a layup with a first mass moment. Deps F-686. Acceptance: Every limit not stated here is registered in the ADR before the run. An opt-in adds the force term m1 Omega^2 r_perp(e_3) to the centrifugal load of a Shell4 layup; with it the load of a layup with m1 != 0 on a facet in a meridian plane has a torque about the axis within 1e-12 of zero relative to m1 A rho Omega^2, its force resultant matches the through-thickness integral of the exact body force within 1e-12, and a free layup sector of such facets with free_sector_prestress gives the pre-stress of a constrained-copy route within 1e-10; the defaults bit-identical.
