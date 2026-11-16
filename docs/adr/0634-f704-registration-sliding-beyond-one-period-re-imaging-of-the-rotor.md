@@ -287,3 +287,38 @@ interface face and no wrap face), limit `<= 1e-12` as registered; for every roto
 P)` equal bit for bit to that of `mesh_at` at the reduced offset it reports (the mesh is the one of that offset). The image and
 offset clauses of K2 are unchanged. The clause as registered is kept as an ignored `*_known_miss`-style record only if it is
 run; it is not run (its outcome follows from the read above), and the decision rule does not use K2.
+
+## Amendment 2 (2026-11-16, written after the registered run and before any corrected run)
+
+The registered run (once, release, two test threads, 35.4 s for the ten flow tests; the K unit tests before it, once, 0.08 s;
+code 85ac095f) met every acceptance and supporting check; two negative controls did not hold:
+
+| Id | Limit | Measured |
+| --- | --- | --- |
+| PN2 (negative control of P8, no re-imaging) | largest velocity `>= 1e-6`, or a refused or non-finite step | `8.71e-15` (620 steps run, none refused) |
+| SN2 (negative control of S9, no re-imaging) | as PN2 | `6.22e-15` (320 steps run, none refused) |
+
+Diagnosis (from the printed numbers and the read of the method; nothing re-run): R4's estimate is wrong. Building a
+re-imaging step as a step inside one image sweeps the rotor's faces back by `P - d` in place of forward by `d`; that is a rigid
+motion, so the rotor cells' volumes do not change and the swept volumes still close the GCL cell by cell, and ADR 0629 M5's
+closure leaves the interface as before. The convection of a uniform field by any face flux whose cell sums equal the volume
+change is zero (`sum_f F_f U = U sum_f F_f = 0`), and the relative flux enters the uniform-flow balance only through those
+cell sums. So a uniform flow cannot see a wrong rigid sweep, as ADR 0216 recorded for a zero rotor mesh flux ("no registered
+flow limit sees a zero rotor mesh flux"). The controls are defective by design (their premise, that P8 and S9 can see the
+sweep, is false), not a loss of the method: P8 and S9 remain valid round-off checks of the uniform state, but they do not
+check the re-imaging of the sweep. PN2 and SN2 stay as registered, as ignored `*_known_miss` records with their limits and
+measured numbers. The same blindness applies to mutation MU1, whose named checks are P8, P9, S9, S10: it is run as registered
+and its result recorded; the corrected checks below are added to the checks that may catch it.
+
+Corrected checks, registered here before they run (each run once; the set-ups PU on PP and SU on S3 unchanged, the measure
+taken on the step data before the solver step, so on every step including the re-imaging steps):
+
+| Id | Set-up | Check | Limit |
+| --- | --- | --- | --- |
+| P10 | PU (PP, 620 steps) | every step, every slider face (`is_rotor_face` of the new mesh): `abs(dt m_f - (S_f . e1) V dt) / (abs(S_f) V dt)` (a planar face translated by `d` sweeps `S . d`, ADR 0629 K2 (i)) | `<= 1e-12` (K3 (ii) of this ADR measured `2.88e-14` on the re-imaging step of the mesh) |
+| S11 | SU (S3, 320 steps) | every step, every rotor face whose area vector is radial-free and axial-free (a plane through the axis): `abs(abs(dt m_f) - h (r_2^2 - r_1^2) sin(Omega dt) / 2) / (h (r_2^2 - r_1^2) sin(Omega dt) / 2)`, `h` the face's axial extent, `r_1`, `r_2` its smallest and largest point radii (ADR 0629 K2 (ii), extended to a face of height `h`) | `<= 1e-12` |
+| PN2c (negative control of P10) | PU, no re-imaging (as PN2) | the largest P10 measure | `>= 0.1` (estimate: `abs(-(P - d) - d) / d = P / d = 203` on a re-imaging step) |
+| SN2c (negative control of S11) | SU, no re-imaging (as SN2) | the largest S11 measure | `>= 0.1` (estimate: `abs(sin(-(P - d)) / sin(d)) + 1 ~ 174`) |
+
+The decision rule: PN2c and SN2c in place of PN2 and SN2 among the negative controls; MU1 caught when P8, P9, S9, S10, P10
+or S11 fails. The decision by the rule as first registered (without this amendment) is reported as well.
