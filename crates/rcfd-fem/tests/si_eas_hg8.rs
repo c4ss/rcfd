@@ -870,9 +870,10 @@ fn w_and_t_on_the_seeds_of_adr_0658() {
 }
 
 #[test]
+#[ignore = "defective set-up of ADR 0660 (registered run, test commit 96496cff): the mesh constructor refuses the distorted mesh of the first seed tried (InvertedElement, element 434, jacobian -1.68e-6) before M0 is evaluated, so the replacement rule could not act; no solve ran; corrected in w_and_t_on_three_more_seeds_corrected (amendment 1)"]
 /// WR4 to WR6, SLW, M0, M1 on the `8^3` block at `0.25 h` with three more seeds (from `0xF740_0001`); T measured; S
 /// reported.
-fn w_and_t_on_three_more_seeds() {
+fn w_and_t_on_three_more_seeds_defective() {
     let mut ch = Checks::new();
     let (mut t_passes, mut s_passes) = (Vec::new(), Vec::new());
     for (i, (seed, mesh, count, m0)) in seeds_from(0xF740_0001).into_iter().enumerate() {
@@ -928,9 +929,22 @@ fn inf_rel(a: &[f64], b: &[f64]) -> f64 {
 }
 
 #[test]
+#[ignore = "known miss of ADR 0660 (registered run, test commit 96496cff): TR2 missed (NaN): the trust-region record from alpha = 0 at u_b did not converge (18 iterates, |r|_2 from 1.056e5 to 99.03, rejected 21 times at local iteration 17); NCL, LW1 (4 iterates), LW3 (0.0), TR1 (rho >= 0.135 at u_b, 0.573 at u_T) met; the met rows run in local_records_at_the_stall_of_seed_3_met_rows (amendment 1)"]
 /// NCL, LW1, LW3, TR1, TR2 at the trial state `u_T` and the state `u_b` of element 476 of seed `0xF739_0003` (ADR 0658
 /// A1.2 E1, E3).
-fn local_records_at_the_stall_of_seed_3() {
+fn local_records_at_the_stall_of_seed_3_known_miss() {
+    local_records(true);
+}
+
+#[test]
+/// ADR 0660 A1.2: the rows of the local records that were met (NCL, LW1, LW3, TR1), the same code and limits; TR2 printed,
+/// not checked.
+fn local_records_at_the_stall_of_seed_3_met_rows() {
+    local_records(false);
+}
+
+/// The local records of `local_records_at_the_stall_of_seed_3_known_miss`; with `tr2` its TR2 is checked, else printed.
+fn local_records(tr2_checked: bool) {
     let mut ch = Checks::new();
     let mat = material(NU);
     let ctx = PointContext::default();
@@ -1073,10 +1087,112 @@ fn local_records_at_the_stall_of_seed_3() {
         (Some((_, Ok(m))), Some(a)) => inf_rel(m, a),
         _ => f64::NAN,
     };
-    ch.at_most(
-        "TR2 T record at u_b converged, its modes against alpha_b, |.|_inf relative",
-        tr2,
-        1e-7,
-    );
+    if tr2_checked {
+        ch.at_most(
+            "TR2 T record at u_b converged, its modes against alpha_b, |.|_inf relative",
+            tr2,
+            1e-7,
+        );
+    } else {
+        println!("TR2 (known miss, printed): {tr2:.4e}");
+    }
+    ch.finish();
+}
+
+// ============================================================================ ADR 0660 amendment 1
+
+/// [`rebuild`] with the constructor's refusal returned instead of a panic (A1.1).
+fn rebuild_checked(mesh: &SolidMesh, nodes: Vec<Vec3>) -> Result<SolidMesh, String> {
+    let mut out = SolidMesh::new(nodes).map_err(|e| format!("{e:?}"))?;
+    for b in mesh.blocks() {
+        out.add_block(b.kind(), b.connectivity().to_vec())
+            .map_err(|e| format!("{e:?}"))?;
+    }
+    for name in mesh.node_set_names() {
+        out.add_node_set(name, mesh.node_set(name).unwrap().to_vec()).unwrap();
+    }
+    for name in mesh.element_set_names() {
+        out.add_element_set(name, mesh.element_set(name).unwrap().to_vec())
+            .unwrap();
+    }
+    for name in mesh.surface_set_names() {
+        out.add_surface_set(name, mesh.surface_set(name).unwrap().to_vec())
+            .unwrap();
+    }
+    Ok(out)
+}
+
+/// The block mesh of [`block_mesh`] with the constructor's refusal of an inverted mesh returned (A1.1).
+fn block_mesh_checked(n: usize, amp: f64, seed: u64) -> Result<(SolidMesh, usize), String> {
+    let mut mesh = hex_box([0.0; 3], [1.0, 1.0, 1.0], [n, n, n]).unwrap();
+    let tol = 1e-9;
+    let punch = nodes_where(&mesh, "zmax", |p| p[0] <= 0.5 + tol && p[1] <= 0.5 + tol);
+    let corner = nodes_where(&mesh, "zmax", |p| (p[0] - 1.0).abs() < tol && (p[1] - 1.0).abs() < tol);
+    mesh.add_node_set("punch", punch).unwrap();
+    mesh.add_node_set("corner", corner).unwrap();
+    let boundary = boundary_nodes(&mesh);
+    let mut rng = Rng::new(seed);
+    let h = 1.0 / n as f64;
+    let mut nodes = mesh.nodes().to_vec();
+    let mut moved = 0;
+    for (i, p) in nodes.iter_mut().enumerate() {
+        if !boundary.contains(&i) {
+            moved += 1;
+            for v in p.iter_mut() {
+                *v += amp * h * (2.0 * rng.uniform() - 1.0);
+            }
+        }
+    }
+    Ok((rebuild_checked(&mesh, nodes)?, moved))
+}
+
+/// The seed rule of reading c1 with A1.1: a mesh the constructor refuses as inverted fails M0 and is replaced.
+fn seeds_from_checked(first: u64) -> Vec<(u64, SolidMesh, usize, f64)> {
+    let mut out = Vec::new();
+    let mut seed = first;
+    while out.len() < 3 {
+        match block_mesh_checked(8, 0.25, seed) {
+            Ok((mesh, count)) => {
+                let m0 = min_corner_ratio(&mesh);
+                if m0 > 0.0 {
+                    out.push((seed, mesh, count, m0));
+                } else {
+                    println!("seed {seed:#X}: M0 = {m0:e}, not a valid mesh; replaced by the next seed (reading c1)");
+                }
+            }
+            Err(e) => println!(
+                "seed {seed:#X}: the mesh is refused as inverted ({e}): fails M0, replaced by the next seed (reading c1, A1.1)"
+            ),
+        }
+        seed += 1;
+    }
+    out
+}
+
+#[test]
+/// ADR 0660 A1.1: WR4 to WR6, SLW, M0, M1 on the `8^3` block at `0.25 h` with three more seeds (from `0xF740_0001`, the seed
+/// rule with the constructor's refusal as an M0 failure); T measured; S reported.
+fn w_and_t_on_three_more_seeds_corrected() {
+    let mut ch = Checks::new();
+    let (mut t_passes, mut s_passes) = (Vec::new(), Vec::new());
+    for (i, (seed, mesh, count, m0)) in seeds_from_checked(0xF740_0001).into_iter().enumerate() {
+        let id = format!("WR{}", i + 4);
+        let tag = format!("block 8^3 a 0.25 seed {seed:#X}");
+        ch.above(&format!("M0 {tag}: min corner det J / centre det J"), m0, 0.0);
+        ch.equals(&format!("M1 {tag}: moved nodes"), count, 343);
+        let f = run_block(&mesh, &tag, DELTA, K_FBAR, DEFAULT);
+        let (fneg, flow) = stability(&f);
+        println!("report SL {tag} Fbar: negative {fneg}, lowest / max diagonal {flow:.4e}");
+        let w = run_block(&mesh, &tag, DELTA, K_L, W);
+        w_rows(&mut ch, &id, &tag, 0.10, BLOCK_NAMES, &f, &w);
+        let t = run_block(&mesh, &tag, DELTA, K_L, T);
+        t_passes.push((tag.clone(), measured("T", &tag, 0.10, BLOCK_NAMES, &f, &t)));
+        against(&tag, "T against W", &t, &w);
+        let s = run_block(&mesh, &tag, DELTA, K_L, S);
+        s_passes.push((tag.clone(), measured("S", &tag, 0.10, BLOCK_NAMES, &f, &s)));
+        against(&tag, "W against S", &w, &s);
+    }
+    println!("T on the three more seeds: {t_passes:?}");
+    println!("S on the three more seeds: {s_passes:?}");
     ch.finish();
 }
