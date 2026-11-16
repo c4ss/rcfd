@@ -11357,7 +11357,9 @@ fixed by the item's registration ADR before any code.
     the error density on a plate graded uniformly along the hole). Follow-up F-696 (Run the heavy effectivity record of
     ADR 0616). ADR 0627 (2026-11-15) ran the hole criterion again on a plate with a uniform first ring and it missed by
     20 of 48. The density equidistributes on a mesh graded to the solution, so the hole criterion is not a property to
-    expect of it (ADR 0627 Q4 recommends retiring it).
+    expect of it (ADR 0627 Q4 recommends retiring it). Addendum 2 (2026-11-16, lead): heavy record E1 run once, met
+    (Hex20 0.0278 -> 0.0061 -> 0.0046, Tet10 0.0051 -> 0.0083 -> 0.0098 within the 1e-2 floor); stays partial for P3
+    only.
 - [~] **F-569** Static correction vectors for the split modes of a sector index
   - depends on: F-555
   - acceptance: Every limit not stated here is registered in the ADR before the run. The basis of
@@ -13910,13 +13912,14 @@ fixed by the item's registration ADR before any code.
     cells), +0.45 percent from Howland's factor by Peterson's polynomial (from memory, limit 0.5 percent) and +0.16
     percent from Heywood's; the recovered peak is +0.17 percent above it. No source file changed, and the F-432 and
     F-568 bit tests pass. Six of seven mutations caught (the tenth as floor(N/10) survives, as registered).
-- [ ] **F-696** Run the heavy effectivity record of ADR 0616
+- [x] **F-696** Run the heavy effectivity record of ADR 0616
   - depends on: F-568
   - acceptance: Every limit not stated here is registered in the ADR before the run. e1_criterion_near_one_heavy of
     sa_density.rs is run once, alone, with at least 10 GB free: abs(theta - 1) at n = 16 and n = 24 is at most
     max(abs(theta - 1) on the previous mesh, 1e-2) for Hex20 and Tet10, theta at n = 8 and 16 is within 1e-5 of the
     F-432 log, and the time and peak memory are recorded.
-  - note: Follow-up of F-568 (ADR 0616, 2026-11-15).
+  - note: Follow-up of F-568 (ADR 0616, 2026-11-15). DONE 2026-11-16: run by the lead, ADR 0616 addendum 2, every E1
+    check met.
 - [ ] **F-697** Fan objective layer (fan breakdown H1): flow at the system operating point over a set of impedances, tonal noise, power, unbalance vibration and robustness to tolerances, on the reduced-order fan
   - depends on: F-249, F-268, F-113, F-700
   - acceptance: Every limit not stated here is registered in ADR 0620 before any code. An opt-in library objective (no

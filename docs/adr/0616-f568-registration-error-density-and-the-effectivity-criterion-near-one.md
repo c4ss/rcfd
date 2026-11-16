@@ -287,6 +287,22 @@ Remaining questions:
   committed unchanged.
 - **Q1 of ADR 0478** (case-file block and output field): unchanged, not added.
 
+## Addendum 2: the heavy record E1, run by the lead (2026-11-16)
+
+The registered heavy record `e1_criterion_near_one_heavy` was run once by the lead with `f568-scratch/run_e1.ps1` on the binary
+built at the registered run (49.5 GB free at the start, above the registered 10 GB; peak working set 5.4 GB; 107 s). Limits as
+registered, nothing changed. Log: `w49i-work/f568-scratch/run_e1.log`.
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| E1 Hex20 abs(theta - 1), n = 8 -> 16 -> 24 | each at most max(previous, 1e-2) | 0.02782 -> 0.00608 -> 0.00461 | yes |
+| E1 Tet10 abs(theta - 1), n = 8 -> 16 -> 24 | each at most max(previous, 1e-2) | 0.00514 -> 0.00832 -> 0.00983 | yes |
+| E1r theta against the F-432 log (Hex20 and Tet10, n = 8, 16) | <= 1e-5 | <= 4.1e-6 | yes |
+| NC2 the literal reading without the floor fails on Tet10 8 -> 16 | fails | fails (0.00514 -> 0.00832) | as registered |
+
+Decision: the effectivity clause is now met. F-568 stays **partial** by the registered rule because P3 (the hole criterion)
+missed; ADR 0627 (F-695) found that criterion is not a property of the density on a graded mesh.
+
 ## For the lead: roadmap entries
 
 Proposed status and note of F-568:
