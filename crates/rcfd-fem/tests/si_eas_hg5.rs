@@ -755,6 +755,22 @@ fn a1_diagnosis_db4_rule_l() {
     );
 }
 
+#[test]
+#[ignore = "diagnosis of ADR 0649 amendment 2 (A2.1, D4): rule L and F-bar on the 8^3 block at a = 0.25 along the punch path; no limit; run once with --ignored"]
+fn a2_diagnosis_path_stability() {
+    let (mesh, _) = block_mesh(8, 0.25);
+    for delta in [0.05, 0.06, 0.065, 0.067] {
+        for kind in [K_L, K_FBAR] {
+            let run = run_block_with(&mesh, delta, 10, kind);
+            let (neg, low, _) = stability(&run, false);
+            println!(
+                "D4 delta {delta} {}: negative eigenvalues of K_ff {neg}, lowest / max diagonal {low:.4e}",
+                kind.name
+            );
+        }
+    }
+}
+
 // ============================================================================ DC: the cantilever (ADR 0636 reading c2)
 
 const CANT_L: f64 = 1.0;
