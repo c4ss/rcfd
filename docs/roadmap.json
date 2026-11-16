@@ -7315,9 +7315,9 @@
     "title": "Daily full gate in CI with failures attributed to ADRs",
     "phase": 9,
     "deps": [],
-    "status": "todo",
+    "status": "done",
     "acceptance": "The full gate runs daily on main in GitHub Actions (fmt step fixed, skipped when main has not moved since the last green run); every failed or timed-out test is attributed to an ADR through a test-to-ADR index, the merges since the last green gate that touched it and, where needed, a bisect over those merges re-running only that test, with flaky tests marked; the result is a job summary and a machine-readable file the roadmap loop reads; the per-merge check set is documented.",
-    "note": "Requested by the maintainer on 2026-11-16 (the repository is public, so hosted runners are free). ADR 0653. Found: the weekly gate has failed since early November at cargo fmt --all -- --check (about 30 s, usage text)."
+    "note": "Test process. Requested by the maintainer 2026-11-16. DONE. ADR 0653, 2026-11-16: the full gate runs daily in GitHub Actions and every failed test is attributed to ADRs and merges. Cause of the failed scheduled runs of 2026-11-08 and 2026-11-15: cargo fmt --all hands every target root (63802 characters on the runner) to one rustfmt process, above the Windows limit of 32767 (os error 206, reproduced locally); the fmt step now runs cargo fmt -p per workspace member (largest 20031 characters), with the same set of files checked. gate.yml: cron daily 02:00 UTC on main, workflow_dispatch kept; a decide job (actions: read) skips a scheduled run when the last run whose full gate, windows-latest job passed on main tested the same SHA, and runs the gate when the query fails. After a failed test step, scripts/gate_attribute.py re-runs each failed test once (flaky when it passes), looks it up in the test-to-ADR index, and lists the first-parent commits since the last green gate that touched the test's file or crate (direct) or a dependency's sources (dependency), with their F-items and ADRs. It can bisect over those commits (input bisect, time budget bisect_minutes), and it writes gate-out/attribution.json, a job-summary table and, with input open_issues, one issue per non-flaky failure from a separate job with issues: write. scripts/adr_test_index.py finds tests statically (501 of 501 binaries and 99.0 % of the rows of a real gate listing) and maps them by file-name item, ADR and roadmap citations of the file or function, and module path: 1053 of 1134 integration-test binaries (92.9 %) and 6986 of 7472 tests (93.5 %) map to an ADR, and 20 of 20 sampled binaries have a correct ADR. A dry run on the real failure of gate 42083992758 names ADR 0181 and its commit among 11 candidates. docs/test-process.md section 7 gives the per-merge check set (fmt and clippy of the touched packages, the ADR's tests from --adr, the touched crates' --lib tests, baseline_hashes, docs_site). 22 Python unit tests and one end-to-end test; 10 of 10 mutations caught. Not covered until the first GitHub run: the decide job's API permissions, the skip on a real schedule, the attribution, bisect and issues paths on the runner. Follow-up F-736 (First GitHub runs of the daily gate (ADR 0653 checks on the runner)). Follow-up F-737 (Wave-tag mapping and a primary ADR in the test-to-ADR index)."
   },
   {
     "id": "F-724",
@@ -7453,5 +7453,27 @@
     "status": "todo",
     "acceptance": "surrogate::Gp gains an opt-in zero-mean mode with an absolute per-observation noise variance, R3 calls it in place of its own process, every ADR 0652 check keeps its result (fits bit-identical or within 1e-12), and every ADR 0621 check keeps its result.",
     "note": "Follow-up of F-718 (ADR 0652, 2026-11-16)."
+  },
+  {
+    "id": "F-736",
+    "title": "First GitHub runs of the daily gate (ADR 0653 checks on the runner)",
+    "phase": 9,
+    "deps": [
+      "F-723"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The first scheduled run after the push runs the gate with a non-empty last-green SHA and passes fmt with one line per package; a scheduled run with no push since a green run is skipped; a dispatch on a commit with one failing test (a test branch that is not merged) produces attribution.json with that test, its re-run, its ADRs and a candidate list, the bisect with input bisect finds the commit that broke it within bisect_minutes, and input open_issues opens one issue and no duplicate on a second run.",
+    "note": "Follow-up of F-723 (ADR 0653, 2026-11-16)."
+  },
+  {
+    "id": "F-737",
+    "title": "Wave-tag mapping and a primary ADR in the test-to-ADR index",
+    "phase": 9,
+    "deps": [
+      "F-723"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The index maps wave-named test files (w34a, wave17a, w48a) to the ADRs named after their wave, and each test gets a primary ADR (the registering ADR); the integration-test binaries left unmapped in ADR 0653 addendum 2 (81) fall below a registered number; a registered sample of primary ADRs is checked by reading.",
+    "note": "Follow-up of F-723 (ADR 0653, 2026-11-16)."
   }
 ]

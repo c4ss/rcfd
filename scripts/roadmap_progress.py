@@ -35,7 +35,7 @@ CATEGORIES = [
     ("Use", "Claude and the MCP server", [90, 91, 92, 93, 94, 145, 146, 147, 148, 149, 150, 265, 267, 270, 271,
         272, 273, 274, 275, 287, 288]),
     ("Use", "Studio desktop app", [140, 141, 142, 143, 144, 151, 261, 262, 263, 264, 266, 293, 447, 448, 449, 456, 475]),
-    ("Project", "Quality, docs and validation", [1, 2, 4, 6, 96, 125, 269, 723]),
+    ("Project", "Quality, docs and validation", [1, 2, 4, 6, 96, 125, 269, 723, 736, 737]),
 ]
 
 seen = {}
