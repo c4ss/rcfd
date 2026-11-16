@@ -530,6 +530,13 @@ someone kept:
   scope (evaluator, version, tier), the model error of the tier (from a fidelity summary of ADR 0622, or declared, else unknown),
   staleness against the evaluator versions the caller holds now, and replicate links between tiers. Analytic results are never
   returned.
+* A registration may carry a seeded re-run sample (`rerun_sample`: k pairs, `rtol`, `atol`; ADR 0662). The k pairs are drawn from
+  the record hash and seed, `verify` re-runs both arms of exactly those pairs with the trusted evaluator (analytic, reduced-order or
+  cfd tier; measured is refused), and the result line records k, the seed and the pairs. `rerun_sample_size(n, b, miss)` gives the
+  smallest k that misses an evaluator wrong on b of n pairs with probability at most `miss` (hypergeometric); for 64 pairs, b = 16
+  and 0.02 it is 13. The sample is derivable from the file, so it guards against mistakes and version drift, not a deliberate
+  forger. Records without the key keep the bytes and hashes of ADR 0624 and are read as before; code of ADR 0624 reading a new
+  record ignores the key and re-runs all or none.
 * `explore` ranks parameter-metric pairs by Spearman correlation over existing entries; it is marked exploratory and never
   evidence.
 

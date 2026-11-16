@@ -11,7 +11,8 @@
 //!   the held metric matched by bisection on its compensating parameter) with a [`Model`], appends them as evidence entries in
 //!   pair order (whatever the worker count), resumes after a kill, and appends a `hypothesis_result` entry.
 //! * [`verify`] and [`lessons`] never trust a stored verdict: they recompute it from the registration and the evidence and
-//!   report every rule broken (order, alteration, evaluator version, pair count, design, an optional re-run).
+//!   report every rule broken (order, alteration, evaluator version, pair count, design, an optional re-run). A registration
+//!   may carry a seeded re-run sample of k pairs (ADR 0662): `verify` re-runs exactly those pairs and the result records them.
 //! * Verdicts: `confirmed` when the one-sided lower bound of the mean paired difference is at least the smallest effect that
 //!   matters, `refuted` when the upper bound is below it, `inconclusive` otherwise, `void` when too many pairs failed or a held
 //!   metric was not matched. A verdict is a statement about the evaluator at its tier, never about a product.
@@ -24,6 +25,7 @@ use super::sampling::latin_hypercube;
 use super::study::parallel_map;
 use super::uq::{beta_inv, binom_cdf, clopper_pearson};
 use rcfd_core::hash::fnv64;
+use rcfd_core::rng::Rng;
 use rcfd_reactor::mixfrac::reg_inc_beta;
 use serde_json::{json, Value};
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -473,6 +475,33 @@ pub enum Origin {
     },
 }
 
+/// A registered seeded re-run sample of the evidence (ADR 0662 D1): `pairs` pairs drawn from the record hash and seed, both arms
+/// re-evaluated by [`verify`] with the trusted model at the tolerances given.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RerunSample {
+    /// Number of pairs re-run (`1..=n_pairs`).
+    pub pairs: usize,
+    /// Relative tolerance of the re-run comparison.
+    pub rtol: f64,
+    /// Absolute tolerance of the re-run comparison.
+    pub atol: f64,
+}
+
+/// The re-run sample of a hypothesis as [`verify`] derives it (ADR 0662 D2, D4).
+#[derive(Debug, Clone, PartialEq)]
+pub struct RerunPlan {
+    /// Number of pairs.
+    pub k: usize,
+    /// Seed of the draw ([`rerun_seed`]).
+    pub seed: u64,
+    /// Sampled pairs, ascending.
+    pub pairs: Vec<usize>,
+    /// Relative tolerance.
+    pub rtol: f64,
+    /// Absolute tolerance.
+    pub atol: f64,
+}
+
 /// A hypothesis as registered.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Hypothesis {
@@ -508,6 +537,8 @@ pub struct Hypothesis {
     pub supersedes: Option<String>,
     /// The same claim at another tier or evaluator version.
     pub replicates: Option<String>,
+    /// Registered re-run sample (ADR 0662); `None` keeps the record of ADR 0624 bit for bit.
+    pub rerun_sample: Option<RerunSample>,
 }
 
 impl Hypothesis {
@@ -543,6 +574,7 @@ impl Hypothesis {
             },
             supersedes: None,
             replicates: None,
+            rerun_sample: None,
         }
     }
 
@@ -552,7 +584,7 @@ impl Hypothesis {
             HeldTarget::Value(v) => json!({"value": num(*v)}),
             HeldTarget::AsLowArm { at } => json!({"as_low_arm": num(*at)}),
         };
-        json!({
+        let mut v = json!({
             "claim_text": self.claim_text,
             "factor": {"name": self.factor.name, "unit": self.factor.unit, "low": num(self.factor.low), "high": num(self.factor.high)},
             "response": {"name": self.response.name, "unit": self.response.unit, "resolution": num(self.response.resolution)},
@@ -577,7 +609,15 @@ impl Hypothesis {
             },
             "supersedes": self.supersedes,
             "replicates": self.replicates,
-        })
+        });
+        // written only when registered, so a record without a sample keeps its text and hash (ADR 0662 D1)
+        if let (Some(r), Some(o)) = (&self.rerun_sample, v.as_object_mut()) {
+            o.insert(
+                "rerun_sample".into(),
+                json!({"pairs": r.pairs, "rtol": num(r.rtol), "atol": num(r.atol)}),
+            );
+        }
+        v
     }
 
     /// Parse [`Hypothesis::to_json`].
@@ -663,6 +703,17 @@ impl Hypothesis {
             k => return Err(format!("record: origin kind '{k}' unknown")),
         };
         let opt_id = |k: &str| v.get(k).and_then(Value::as_str).map(str::to_string);
+        let rerun_sample = match v.get("rerun_sample") {
+            None | Some(Value::Null) => None,
+            Some(r) => Some(RerunSample {
+                pairs: r
+                    .get("pairs")
+                    .and_then(Value::as_u64)
+                    .ok_or("record: rerun_sample pairs missing")? as usize,
+                rtol: f(r, "rtol")?,
+                atol: f(r, "atol")?,
+            }),
+        };
         Ok(Hypothesis {
             claim_text: s(v, "claim_text")?,
             factor: Factor {
@@ -708,6 +759,7 @@ impl Hypothesis {
             origin,
             supersedes: opt_id("supersedes"),
             replicates: opt_id("replicates"),
+            rerun_sample,
         })
     }
 
@@ -724,6 +776,64 @@ fn hash_text(t: &str) -> String {
 /// Design seed: FNV-1a 64 of `<record hash>:<seed>`.
 pub fn derived_seed(hash: &str, seed: u64) -> u64 {
     fnv64(format!("{hash}:{seed}").as_bytes())
+}
+
+/// Seed of the re-run sample: FNV-1a 64 of `<record hash>:rerun:<seed>` (ADR 0662 D2).
+pub fn rerun_seed(hash: &str, seed: u64) -> u64 {
+    fnv64(format!("{hash}:rerun:{seed}").as_bytes())
+}
+
+/// `k` distinct pairs of `0..n`, ascending: the first `k` steps of the Fisher-Yates shuffle with `Rng::new(seed)` (ADR 0662 D2).
+pub fn rerun_pairs(n: usize, k: usize, seed: u64) -> Vec<usize> {
+    let k = k.min(n);
+    let mut idx: Vec<usize> = (0..n).collect();
+    let mut r = Rng::new(seed);
+    for i in 0..k {
+        let j = i + r.below(n - i);
+        idx.swap(i, j);
+    }
+    let mut s = idx[..k].to_vec();
+    s.sort_unstable();
+    s
+}
+
+/// Probability that a uniform sample of `k` of `n` pairs contains none of `bad` pairs: `C(n - bad, k) / C(n, k)` as the product
+/// `prod_{i<k} (n - bad - i) / (n - i)` (ADR 0662 D3).
+pub fn rerun_miss_probability(n: usize, bad: usize, k: usize) -> f64 {
+    if k > n || bad > n {
+        return f64::NAN;
+    }
+    let mut p = 1.0;
+    for i in 0..k {
+        if n - i <= bad {
+            return 0.0;
+        }
+        p *= (n - bad - i) as f64 / (n - i) as f64;
+    }
+    p
+}
+
+/// Smallest `k` with [`rerun_miss_probability`]`(n, bad, k) <= miss`; `None` for `bad = 0`, `bad > n`, `n = 0` or `miss` outside
+/// `(0, 1)` (ADR 0662 D3).
+pub fn rerun_sample_size(n: usize, bad: usize, miss: f64) -> Option<usize> {
+    if n == 0 || bad == 0 || bad > n || !(miss > 0.0 && miss < 1.0) {
+        return None;
+    }
+    (1..=n).find(|&k| rerun_miss_probability(n, bad, k) <= miss)
+}
+
+/// The re-run plan of a registered record (`None` without a sample).
+fn rerun_plan(h: &Hypothesis, hash: &str) -> Option<RerunPlan> {
+    h.rerun_sample.map(|r| {
+        let seed = rerun_seed(hash, h.seed);
+        RerunPlan {
+            k: r.pairs,
+            seed,
+            pairs: rerun_pairs(h.n_pairs, r.pairs, seed),
+            rtol: r.rtol,
+            atol: r.atol,
+        }
+    })
 }
 
 /// The registered design: `n_pairs` points of the domain (a Latin hypercube from the derived seed, scaled to the bounds).
@@ -954,6 +1064,29 @@ fn validate(h: &Hypothesis, entries: &[Entry], regs: &[Registered]) -> Result<()
     if let Some((a, b)) = h.predicted_size {
         if !(a.is_finite() && b.is_finite() && a <= b) {
             return Err(format!("predicted_size: [{a}, {b}] must be finite with lo <= hi"));
+        }
+    }
+    if let Some(r) = &h.rerun_sample {
+        if r.pairs == 0 || r.pairs > h.n_pairs {
+            return Err(format!(
+                "rerun_sample: {} pairs; it must lie in 1..={} (the registered pairs)",
+                r.pairs, h.n_pairs
+            ));
+        }
+        if !(r.rtol.is_finite() && r.rtol >= 0.0 && r.atol.is_finite() && r.atol >= 0.0) {
+            return Err(format!(
+                "rerun_sample: tolerances rtol {} and atol {} must be finite and non-negative",
+                r.rtol, r.atol
+            ));
+        }
+        if h.evaluator.tier == Fidelity::Measured {
+            return Err("rerun_sample: tier measured cannot be re-run".into());
+        }
+        if !h.evaluator.deterministic && r.rtol == 0.0 && r.atol == 0.0 {
+            return Err(
+                "rerun_sample: the evaluator is not declared deterministic, so a re-run at zero tolerances cannot reproduce it"
+                    .into(),
+            );
         }
     }
     if let Origin::Exploratory { entries: refs } = &h.origin {
@@ -1293,8 +1426,11 @@ pub struct Verification {
     pub genuine: Option<usize>,
     /// Result entries of this id that are not genuine, with the reason.
     pub flagged: Vec<(usize, String)>,
-    /// `Some(true)` when every evidence entry was re-run and reproduced; `None` when not re-run.
+    /// `Some(true)` when every evidence entry was re-run and reproduced (with a registered sample: every entry of the sampled
+    /// pairs); `None` when not re-run.
     pub evidence_rerun: Option<bool>,
+    /// The registered re-run sample (ADR 0662), reported whether or not a model was given.
+    pub rerun_sample: Option<RerunPlan>,
 }
 
 struct Member {
@@ -1712,7 +1848,7 @@ fn result_entry(entries: &[Entry], m: &Member, r: &TestResult) -> Entry {
         let k = k.expect("complete");
         entry_ref(k, &entries[k])
     }));
-    Entry {
+    let mut e = Entry {
         kind: KIND_RESULT.into(),
         study: "hypothesis".into(),
         variant: m.reg.id.clone(),
@@ -1732,7 +1868,15 @@ fn result_entry(entries: &[Entry], m: &Member, r: &TestResult) -> Entry {
         parents,
         provenance: json!({"driver": "hypothesis", "hypothesis": m.reg.id, "hash": m.reg.hash}),
         ..Default::default()
+    };
+    // k recorded in the result (ADR 0662 D5); absent without a sample
+    if let (Some(p), Some(o)) = (rerun_plan(h, &m.reg.hash), e.settings.as_object_mut()) {
+        o.insert(
+            "rerun_sample".into(),
+            json!({"k": p.k, "seed": p.seed, "pairs": p.pairs, "rtol": num(p.rtol), "atol": num(p.atol)}),
+        );
     }
+    e
 }
 
 fn comparable(e: &Entry) -> Value {
@@ -1771,20 +1915,41 @@ fn verify_slot(
             members.iter_mut().for_each(|m| m.v.problems.push(msg.clone()));
         }
     }
-    // re-run (Q14 (b))
+    // re-run (Q14 (b)); with a registered sample, exactly the sampled pairs (ADR 0662 D4)
     for m in &mut members {
-        let (Some(model), Some(h)) = (rerun, &m.rec) else {
+        let Some(h) = &m.rec else {
             continue;
         };
-        if model.id() != h.evaluator.id
-            || model.version() != h.evaluator.version
-            || !matches!(h.evaluator.tier, Fidelity::Analytic | Fidelity::ReducedOrder)
-        {
+        let plan = rerun_plan(h, &m.reg.hash);
+        m.v.rerun_sample = plan.clone();
+        let Some(model) = rerun else {
+            continue;
+        };
+        let tier_ok = match &plan {
+            Some(_) => matches!(
+                h.evaluator.tier,
+                Fidelity::Analytic | Fidelity::ReducedOrder | Fidelity::Cfd
+            ),
+            None => matches!(h.evaluator.tier, Fidelity::Analytic | Fidelity::ReducedOrder),
+        };
+        if model.id() != h.evaluator.id || model.version() != h.evaluator.version || !tier_ok {
             continue;
         }
+        let (targets, rtol, atol): (Vec<usize>, f64, f64) = match &plan {
+            Some(p) => (
+                p.pairs
+                    .iter()
+                    .flat_map(|&q| [2 * q, 2 * q + 1])
+                    .filter_map(|s| m.v.evidence.get(s).copied().flatten())
+                    .collect(),
+                p.rtol,
+                p.atol,
+            ),
+            None => (m.v.evidence.iter().flatten().copied().collect(), 0.0, 0.0),
+        };
         let mut all = true;
-        for k in m.v.evidence.iter().flatten() {
-            let r = rerun_check(&entries[*k], model, 0.0, 0.0);
+        for k in &targets {
+            let r = rerun_check(&entries[*k], model, rtol, atol);
             if !r.pass {
                 all = false;
                 m.v.problems.push(format!(
