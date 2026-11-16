@@ -142,3 +142,93 @@ runs and jobs with `actions: read` (expected; a refusal shows as `last green ...
 (2) the first scheduled run after the push runs the gate (main has moved since eef6c094) and its fmt step prints 24 `fmt`
 lines and passes; (3) the next scheduled run, with no push between, is skipped (`run: false` in the decide log, gate job
 "skipped"); (4) the fmt step on `ubuntu-24.04` through a dispatch also passes (no path limit there).
+
+## Amendment 2 (2026-11-16): registration of stage 2, written before any code of stage 2
+
+Read before this text, in addition to the above: the artifact of the failed main gate 42083992758 (Ubuntu, eef6c094,
+downloaded read-only to `f723-scratch/dl42083992758`): `times.tsv` has 3625 rows (2823 ok, 801 ignored, 1 FAILED:
+`fan01_hub_mesh_w49r` / `w49r_default_meshes_are_bit_identical`), `test.log` 542 `Running` blocks; doc-test output goes to
+`test.log` after the `gate_test:` line. Counted from the file tree at d40cd665: 1134 `crates/*/tests/*.rs` files, 267 of
+them with an `fNNN` in the name; 634 ADR files, 371 of them named `NNNN-fMMM-...`. No index or attribution code was run.
+
+### D4 (s4) the index, `scripts/adr_test_index.py` (stdlib only)
+
+Tests are found statically, so the index needs no build: the targets come from `cargo metadata --no-deps`; each target's root
+file is read and `mod x;` declarations are followed (`x.rs`, `x/mod.rs`, `#[path]` honoured); comments, strings and char
+literals are blanked before braces are counted, so `mod m { ... }` nesting gives each `#[test]` function its libtest name
+(`a::b::name`); `#[ignore]` is recorded. A test's binary is the target name with `-` replaced by `_`, the stem `gate_test.py`
+writes in `times.tsv`. Evidence, each recorded with its kind:
+
+- **E1 item in the file name**: `f(\d{2,4})` delimited by `_` or the ends of the file stem (test file or source module) gives
+  item `F-NNN` (leading zeros to three digits).
+- **E2 ADR cites the file**: an ADR's text contains `<stem>.rs` (word boundary before) of the test's file; for unit tests, its
+  source path from `src/`.
+- **E3 ADR cites the test function**: an ADR contains the function name as a word, when the name is distinctive (contains `_`,
+  at least 12 characters, and the name of a test in one binary only).
+- **E4 roadmap note cites the file or function**: as E2 and E3 on each item's `note` in `docs/roadmap.json` gives the item.
+- **E5 module** (unit tests only): an ADR contains the module path `rcfd_xxx::a` (at least one module below the crate) of the
+  test's module or a parent of it below the crate root.
+
+Item to ADRs: ADR files named `NNNN-fMMM-...` and `ADR NNNN` in the item's note. ADR to items: the reverse. A test is
+"mapped" if the union of its evidence gives at least one ADR; "item only" if it gives items without an ADR. The JSON holds
+every test (crate, binary, kind, file, name, ignored, ADRs, items, evidence), per-binary and per-ADR tables and the coverage;
+`--report` prints coverage and the unmapped binaries; `--adr NNNN` prints that ADR's tests as `cargo test` commands (the
+per-merge "ADR's own registered tests").
+
+### D5 (s5) the attribution, `scripts/gate_attribute.py` (stdlib only, git and gh as tools)
+
+- Reads `times.tsv` (FAILED and TIMEOUT rows), `test.log` (the executable of each binary from its `Running` line, a
+  `gate_test: build failed` line, failed doc-tests `test <path> - <item> (line N) ... FAILED`).
+- `--rerun`: re-runs each failed test once, the way `gate_test.py` runs it (`<exe> <name> --exact --test-threads=1`, cwd the
+  crate folder, `CARGO_MANIFEST_DIR` set, a time limit); a pass marks it **flaky**.
+- Looks each test up in the index (ADRs, items, evidence).
+- Candidates: the first-parent commits in `base..head` (`base` = last green, `GATE_LAST_GREEN`); for each, the files it changed
+  against its first parent; relation **direct** if one is the test's file or under its crate's folder, **dependency** if under
+  the folder of a workspace crate the test's crate depends on (transitively, from `cargo metadata`) or is `Cargo.toml` /
+  `Cargo.lock` at the root; others are dropped. Each candidate carries the `F-NNN` and `ADR NNNN` of its subject and the ADRs
+  of those items from the index. A base that is empty or not an ancestor of head gives the last `--max-commits` (30)
+  first-parent commits, flagged `base_found: false`.
+- `--bisect` (off by default): when more than one candidate remains, binary search over the candidates in commit order for
+  the first at which the test fails, assuming it passes at base and fails at head; each probe checks the commit out in a
+  `git worktree` under the scratch folder, builds only that test's target (`cargo test -p <crate> --release --test <target>`
+  or `--lib`/`--bin`) and runs the one test; `--probe-cmd` replaces the build and run by a command (exit 0 = pass); stops
+  when `--bisect-minutes` is used up and reports the narrowed range.
+- Writes `gate-out/attribution.json`, a markdown summary (appended to `GITHUB_STEP_SUMMARY` in CI), and with `issues` (a
+  subcommand, run only when the dispatch input `open_issues` is true, in a separate job with `issues: write`) one issue per
+  non-flaky failure, skipped when an open issue with the same title exists.
+
+Workflow: the gate job checks out with `fetch-depth: 0` (the history is needed); a step uploads the gate logs before the
+attribution (so a slow attribution cannot lose them); the attribution step runs only when the tests step failed, with
+`timeout-minutes: 40`; it and the index go to a second artifact. Dispatch inputs `bisect` (false), `bisect_minutes` (30),
+`open_issues` (false). The checked commands of the gate are unchanged.
+
+### D6 (s6) docs
+
+`docs/test-process.md` gets a section on the daily gate, the attribution output and the per-merge check set: fmt and clippy of
+the touched packages, the ADR's registered tests (`--adr`), the touched crates' `--lib` tests, `rcfd-api` `baseline_hashes`,
+`rcfd-cli` `docs_site`.
+
+### Checks of stage 2
+
+| id | what | limit (fixed now) | estimate behind it |
+|---|---|---|---|
+| T1 | `python -m unittest scripts/test_adr_test_index.py scripts/test_gate_attribute.py` (fixture tree for the index: E1 to E5, module paths, nested `mod`, `#[ignore]`, comments and strings with braces; fake `times.tsv` / `test.log`; a temp git repo with merges for candidates and bisect; a fake re-run for flaky) | every test passes | written to the design |
+| T2 | static enumeration against a real listing: the index run on a `git archive eef6c094` copy against `times.tsv` of run 42083992758 at the same commit | binaries of `times.tsv` found in the index: at least 99 %; (binary, test) rows found: at least 98 % | the parser follows `mod` files; macro-made tests are the expected misses |
+| T3 | coverage at d40cd665 (non-ignored and all) | integration-test binaries mapped to an ADR: at least 50 %; all tests mapped: at least 40 %; reported with the unmapped list | 267 of 1134 test files carry an item; wave-named files are often cited by their ADR |
+| T4 | precision: 20 mapped integration-test binaries (sorted by crate and name, every k-th, k = floor(n / 20)), checked by reading the ADR | at least 18 of 20 have a correct ADR (the ADR registers or describes the file's tests) among their ADRs | |
+| T5 | dry run on the real failure: `gate_attribute.py` on the 42083992758 `times.tsv` / `test.log` with the index of T2, base edb4839f (the green gate before it), head eef6c094, no re-run | one failure listed with its crate and its ADRs from the index, and at least one candidate; every listed candidate's changed files checked with `git show --stat` to touch the crate or a dependency | the test is `w49r` (wave 49R, the fan hub mesh) |
+| T6 | end-to-end (with `GATE_TEST_E2E=1`): a temp crate with a passing, a failing and a flaky test (fails once, passes once a marker file exists) through `gate_test.py`, then `gate_attribute.py --rerun` | the failing test `flaky: false`, the flaky one `flaky: true`; JSON and summary written | |
+| T7 | `actionlint` on the new `gate.yml`; the gate's checked commands unchanged (YAML compare as S7, against d55c43c4) | 0 findings; the fmt, clippy and tests steps' `run` unchanged | |
+| T8 | `python -m unittest scripts/test_gate_test.py` (the existing tests) | passes | `scripts/gate_test.py` is not changed |
+
+T2 and T5 use a commit older than d40cd665 because only that commit has a real gate listing. If edb4839f is not an ancestor
+of eef6c094 (history rewrite), T5 runs with the fallback and records it.
+
+Mutations of stage 2 (scratch copies, each against T1): **MI1** E4 (roadmap notes) dropped; **MI2** the item regex anchored
+only at the end of the stem; **MI3** nested `mod` blocks not prefixed to the test name; **MA1** flaky inverted (a re-run pass
+marks not flaky); **MA2** the dependency relation dropped (only direct candidates); **MA3** bisect returns the last passing
+candidate instead of the first failing; **MA4** the bisect budget ignored. Each must make at least one test of T1 fail.
+
+Decision rule (F-723 as a whole): stage 1 done, T1 to T8 met and every mutation caught gives **done**, with the first GitHub
+run's items listed as follow-up checks; a missed T2, T3 or T4 limit is reported with its numbers and gives **partial**; the
+issues path and the bisect on CI are not run here (no push) and are listed.
