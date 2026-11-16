@@ -15,6 +15,7 @@
 //! At a rotor angle where rotor and stator nodes coincide the join drops the zero-area overlaps there and the interface
 //! graph falls into parts; when a part's targets do not sum to zero (beyond rounding) the two solves above are made on the
 //! interface faces together with the faces between the parts, whose mapped values receive the correction (ADR 0638).
+//! "Beyond rounding" is measured against the term magnitudes of the targets (F-724, ADR 0659 D1, [`PartCoupling`]).
 //!
 //! `PimpleSolver::step_sliding` advances one step with it. [`rotating_wall_conditions`] gives a wall on the rotor its
 //! velocity and the fixed-flux pressure gradient (M6).
@@ -254,6 +255,30 @@ fn coupling_faces(mesh: &Mesh, faces: &[usize]) -> Vec<usize> {
         .collect()
 }
 
+/// When the parts of an interface graph are coupled at coinciding nodes (ADR 0638 D2, ADR 0641 D2): the rule that decides
+/// whether a part's target mean is beyond rounding (ADR 0659 D2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PartCoupling {
+    /// Never: the uncoupled step (ADR 0216 M3, M4; ADR 0629 M5, M6).
+    Off,
+    /// A part mean above `1e-10` of the largest target over the graph's cells (ADR 0638 D3; the rule of F-710 and F-721).
+    LargestTarget,
+    /// A part mean above `1e-10` of the largest term magnitude `a_c` over the graph's cells (and not below the largest
+    /// target): `a_c` the sum of the absolute values of the terms of the cell's target, `(V1 + V0)/dt + sum |m_f|` for the
+    /// GCL closure and `sum |phi_f|` (the interpolated flux on the new faces) for the remap, which bounds the target's
+    /// rounding (F-724, ADR 0659 D1). A flow whose targets are all rounding stays on the uncoupled path.
+    FluxScale,
+}
+
+/// The largest `abs(a_c)` over the owners and neighbours of `faces`.
+fn largest_at(mesh: &Mesh, faces: &[usize], a: &[f64]) -> f64 {
+    let (own, nei) = (mesh.owner(), mesh.neighbour());
+    faces
+        .iter()
+        .flat_map(|&f| [own[f], nei[f]])
+        .fold(0.0f64, |m, c| m.max(a[c].abs()))
+}
+
 /// The coupling faces and the values of the coupled solve (interface faces first), or `None` for the base solve.
 type Coupled = Option<(Vec<usize>, Vec<f64>)>;
 
@@ -262,12 +287,20 @@ type Coupled = Option<(Vec<usize>, Vec<f64>)>;
 /// "`faces`, then the coupling faces" (weights the face areas): `Some((coupling faces, values))`, the values in that order.
 /// `None` keeps the base solve.
 fn coupled_balance(mesh: &Mesh, faces: &[usize], target: &[f64], base: &InterfaceSolve) -> Result<Coupled, String> {
+    let tmax = largest_at(mesh, faces, target);
+    coupled_balance_above(mesh, faces, target, base, PART_MEAN_TOL * tmax)
+}
+
+/// [`coupled_balance`] with the part-mean threshold `threshold` (ADR 0659 D2).
+fn coupled_balance_above(
+    mesh: &Mesh,
+    faces: &[usize],
+    target: &[f64],
+    base: &InterfaceSolve,
+    threshold: f64,
+) -> Result<Coupled, String> {
     let (own, nei) = (mesh.owner(), mesh.neighbour());
-    let tmax = faces
-        .iter()
-        .flat_map(|&f| [own[f], nei[f]])
-        .fold(0.0f64, |a, c| a.max(target[c].abs()));
-    if base.removed_mean.partial_cmp(&(PART_MEAN_TOL * tmax)) != Some(std::cmp::Ordering::Greater) {
+    if base.removed_mean.partial_cmp(&threshold) != Some(std::cmp::Ordering::Greater) {
         return Ok(None);
     }
     let coupling = coupling_faces(mesh, faces);
@@ -315,6 +348,9 @@ pub struct SlidingStep {
 /// The step data from the old joined mesh `old` (whose geometry the solver holds, `old_geom`, with the face flux `phi_old`
 /// and the cell velocity `u_old`) to the new joined mesh `new` of the same pair, for a step of size `dt` (ADR 0216 M2 to
 /// M4). Fails when the meshes are not of one pair, the sizes do not fit or the new mesh is not a valid geometry.
+///
+/// The parts of the interface graph at coinciding nodes are coupled by the rule [`PartCoupling::FluxScale`] (F-710, ADR
+/// 0638; the threshold scale of F-724, ADR 0659); [`sliding_step_with`] takes the rule.
 pub fn sliding_step(
     old_geom: &FvGeometry,
     old: &SlidingMesh,
@@ -322,6 +358,20 @@ pub fn sliding_step(
     phi_old: &[f64],
     u_old: &[Vec3],
     dt: f64,
+) -> Result<SlidingStep, String> {
+    sliding_step_with(old_geom, old, new, phi_old, u_old, dt, PartCoupling::FluxScale)
+}
+
+/// [`sliding_step`] with the coupling rule `coupling` at coinciding nodes (ADR 0659 D2): `Off` the uncoupled step of ADR
+/// 0216, `LargestTarget` the step of F-710 (ADR 0638 D3), `FluxScale` that of [`sliding_step`].
+pub fn sliding_step_with(
+    old_geom: &FvGeometry,
+    old: &SlidingMesh,
+    new: &SlidingMesh,
+    phi_old: &[f64],
+    u_old: &[Vec3],
+    dt: f64,
+    coupling: PartCoupling,
 ) -> Result<SlidingStep, String> {
     if !(dt > 0.0 && dt.is_finite()) {
         return Err(format!(
@@ -366,7 +416,25 @@ pub fn sliding_step(
         }
     }
     let gcl = interface_balance(mesh, &faces, &t)?;
-    match coupled_balance(mesh, &faces, &t, &gcl)? {
+    let coupled_gcl = match coupling {
+        PartCoupling::Off => None,
+        PartCoupling::LargestTarget => coupled_balance(mesh, &faces, &t, &gcl)?,
+        PartCoupling::FluxScale => {
+            // ADR 0659 D1: the term magnitudes of the GCL targets
+            let mut a: Vec<f64> = (0..n).map(|c| (vol_new[c].abs() + vol_old[c].abs()) / dt).collect();
+            for f in 0..nf {
+                if !new.is_interface(f) {
+                    a[own[f]] += m[f].abs();
+                    if f < ni {
+                        a[nei[f]] += m[f].abs();
+                    }
+                }
+            }
+            let scale = largest_at(mesh, &faces, &a).max(largest_at(mesh, &faces, &t));
+            coupled_balance_above(mesh, &faces, &t, &gcl, PART_MEAN_TOL * scale)?
+        }
+    };
+    match coupled_gcl {
         None => {
             for (k, &f) in faces.iter().enumerate() {
                 m[f] = gcl.values[k];
@@ -420,7 +488,24 @@ pub fn sliding_step(
         e[nei[f]] += interp_new[f];
     }
     let cor = interface_balance(mesh, &faces, &e)?;
-    match coupled_balance(mesh, &faces, &e, &cor)? {
+    let coupled_cor = match coupling {
+        PartCoupling::Off => None,
+        PartCoupling::LargestTarget => coupled_balance(mesh, &faces, &e, &cor)?,
+        PartCoupling::FluxScale => {
+            // ADR 0659 D1: the term magnitudes of the remap targets
+            let mut a = vec![0.0; n];
+            for f in 0..nf {
+                let x = if new.is_interface(f) { interp_new[f] } else { phi[f] };
+                a[own[f]] += x.abs();
+                if f < ni {
+                    a[nei[f]] += x.abs();
+                }
+            }
+            let scale = largest_at(mesh, &faces, &a).max(largest_at(mesh, &faces, &e));
+            coupled_balance_above(mesh, &faces, &e, &cor, PART_MEAN_TOL * scale)?
+        }
+    };
+    match coupled_cor {
         None => {
             for (k, &f) in faces.iter().enumerate() {
                 phi[f] = interp_new[f] + cor.values[k];

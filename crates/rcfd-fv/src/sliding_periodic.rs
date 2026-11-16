@@ -16,7 +16,8 @@
 //! At an offset where rotor and stator nodes coincide the graph of direct faces and wrap pairs falls into parts;
 //! [`periodic_sliding_step_coupled`] (opt-in, F-721, ADR 0641) then couples the parts through the internal faces and the
 //! seam pairs between them, as `sliding::sliding_step` does on the full annulus (ADR 0638), so that the remapped old flux
-//! stays divergence-free for flows without the parts' symmetry.
+//! stays divergence-free for flows without the parts' symmetry; a part mean counts as beyond rounding against the term
+//! magnitudes of the targets (F-724, ADR 0659, `sliding::PartCoupling::FluxScale`).
 //! [`periodic_rotor_wall_conditions`] gives the no-slip walls of a sector's rotor (and the stator faces of the same patches)
 //! their velocity and the fixed-flux pressure gradient of the step, in the rotor's current image (F-711, ADR 0646 P2).
 
@@ -24,7 +25,7 @@ use crate::bc::{FixedValue, Profile};
 use crate::convection::face_flux;
 use crate::field::VectorField;
 use crate::geometry::FvGeometry;
-use crate::sliding::{graph_balance, InterfaceSolve};
+use crate::sliding::{graph_balance, InterfaceSolve, PartCoupling};
 use rcfd_core::vec3::{self, Vec3};
 use rcfd_mesh::motion::{mat_vec, rotation_matrix};
 use rcfd_mesh::sliding_periodic::{PeriodicSlidingMesh, Periodicity, WRAP_A, WRAP_B};
@@ -95,15 +96,16 @@ pub fn periodic_sliding_step(
     u_old: &[Vec3],
     dt: f64,
 ) -> Result<PeriodicSlidingStep, String> {
-    step_impl(old_geom, old, new, phi_old, u_old, dt, false)
+    step_impl(old_geom, old, new, phi_old, u_old, dt, PartCoupling::Off)
 }
 
 /// [`periodic_sliding_step`] with the parts of the interface graph coupled at coinciding nodes (F-721, ADR 0641 D1, D2): when
-/// a connected part of the graph of direct faces and wrap pairs keeps a target mean above `1e-10` of the largest target
-/// (the GCL closure or the remap of the old flux), that solve is made on the graph together with the faces between the
-/// parts (internal faces and seam pairs), whose mapped values receive the correction, so that every cell's old flux is
-/// divergence-free also on the steps where rotor and stator nodes coincide. On every other step the result is that of
-/// [`periodic_sliding_step`] bit for bit. Opt-in (ADR 0641 Q1).
+/// a connected part of the graph of direct faces and wrap pairs keeps a target mean beyond rounding (the GCL closure or the
+/// remap of the old flux), that solve is made on the graph together with the faces between the parts (internal faces and
+/// seam pairs), whose mapped values receive the correction, so that every cell's old flux is divergence-free also on the
+/// steps where rotor and stator nodes coincide. "Beyond rounding": above `1e-10` of the largest term magnitude of the
+/// targets over the graph's cells ([`PartCoupling::FluxScale`], F-724, ADR 0659 D1). On every other step the result is
+/// that of [`periodic_sliding_step`] bit for bit. Opt-in (ADR 0641 Q1).
 pub fn periodic_sliding_step_coupled(
     old_geom: &FvGeometry,
     old: &PeriodicSlidingMesh,
@@ -112,7 +114,22 @@ pub fn periodic_sliding_step_coupled(
     u_old: &[Vec3],
     dt: f64,
 ) -> Result<PeriodicSlidingStep, String> {
-    step_impl(old_geom, old, new, phi_old, u_old, dt, true)
+    step_impl(old_geom, old, new, phi_old, u_old, dt, PartCoupling::FluxScale)
+}
+
+/// [`periodic_sliding_step`] with the coupling rule `coupling` at coinciding nodes (ADR 0659 D2): `Off` is
+/// [`periodic_sliding_step`], `LargestTarget` the coupled step of F-721 (ADR 0641 D2, the threshold relative to the largest
+/// target), `FluxScale` [`periodic_sliding_step_coupled`].
+pub fn periodic_sliding_step_with(
+    old_geom: &FvGeometry,
+    old: &PeriodicSlidingMesh,
+    new: &PeriodicSlidingMesh,
+    phi_old: &[f64],
+    u_old: &[Vec3],
+    dt: f64,
+    coupling: PartCoupling,
+) -> Result<PeriodicSlidingStep, String> {
+    step_impl(old_geom, old, new, phi_old, u_old, dt, coupling)
 }
 
 /// Relative size of a connected part's target mean above which the parts are coupled: the value of ADR 0638 D3
@@ -188,11 +205,31 @@ fn coupled_solve(
     is_new: &dyn Fn(usize) -> bool,
     found: &mut Option<Coupling>,
 ) -> Result<Option<Vec<f64>>, String> {
-    let tmax = edges
+    let tmax = largest_on(edges, target);
+    coupled_solve_above(geom, edges, weights, target, base, is_new, found, PART_MEAN_TOL * tmax)
+}
+
+/// The largest `abs(a_c)` over the cells of the graph `edges`.
+fn largest_on(edges: &[(usize, usize)], a: &[f64]) -> f64 {
+    edges
         .iter()
-        .flat_map(|&(a, b)| [a, b])
-        .fold(0.0f64, |m, c| m.max(target[c].abs()));
-    if base.removed_mean.partial_cmp(&(PART_MEAN_TOL * tmax)) != Some(std::cmp::Ordering::Greater) {
+        .flat_map(|&(p, q)| [p, q])
+        .fold(0.0f64, |m, c| m.max(a[c].abs()))
+}
+
+/// [`coupled_solve`] with the part-mean threshold `threshold` (ADR 0659 D2).
+#[allow(clippy::too_many_arguments)]
+fn coupled_solve_above(
+    geom: &FvGeometry,
+    edges: &[(usize, usize)],
+    weights: &[f64],
+    target: &[f64],
+    base: &InterfaceSolve,
+    is_new: &dyn Fn(usize) -> bool,
+    found: &mut Option<Coupling>,
+    threshold: f64,
+) -> Result<Option<Vec<f64>>, String> {
+    if base.removed_mean.partial_cmp(&threshold) != Some(std::cmp::Ordering::Greater) {
         return Ok(None);
     }
     if found.is_none() {
@@ -225,8 +262,8 @@ fn add_coupling(x: &mut [f64], cp: &Coupling, vals: &[f64]) {
     }
 }
 
-/// The body of [`periodic_sliding_step`] (`couple` false: the base, F-304 and F-704) and of
-/// [`periodic_sliding_step_coupled`] (`couple` true, ADR 0641).
+/// The body of [`periodic_sliding_step`] (`Off`: the base, F-304 and F-704), of [`periodic_sliding_step_coupled`]
+/// (`FluxScale`, ADR 0641, ADR 0659) and of [`periodic_sliding_step_with`].
 fn step_impl(
     old_geom: &FvGeometry,
     old: &PeriodicSlidingMesh,
@@ -234,7 +271,7 @@ fn step_impl(
     phi_old: &[f64],
     u_old: &[Vec3],
     dt: f64,
-    couple: bool,
+    coupling: PartCoupling,
 ) -> Result<PeriodicSlidingStep, String> {
     if !(dt > 0.0 && dt.is_finite()) {
         return Err(format!(
@@ -309,10 +346,23 @@ fn step_impl(
     }
     let gcl = graph_balance(&edges, &weights, &t)?;
     let mut found: Option<Coupling> = None;
-    let coupled_gcl = if couple {
-        coupled_solve(&geom, &edges, &weights, &t, &gcl, &is_new, &mut found)?
-    } else {
-        None
+    let coupled_gcl = match coupling {
+        PartCoupling::Off => None,
+        PartCoupling::LargestTarget => coupled_solve(&geom, &edges, &weights, &t, &gcl, &is_new, &mut found)?,
+        PartCoupling::FluxScale => {
+            // ADR 0659 D1: the term magnitudes of the GCL targets
+            let mut a: Vec<f64> = (0..n).map(|c| (vol_new[c].abs() + vol_old[c].abs()) / dt).collect();
+            for f in 0..nf {
+                if !is_new(f) {
+                    a[own[f]] += m[f].abs();
+                    if f < ni {
+                        a[nei[f]] += m[f].abs();
+                    }
+                }
+            }
+            let threshold = PART_MEAN_TOL * largest_on(&edges, &a).max(largest_on(&edges, &t));
+            coupled_solve_above(&geom, &edges, &weights, &t, &gcl, &is_new, &mut found, threshold)?
+        }
     };
     match coupled_gcl {
         None => put(&mut m, &gcl.values),
@@ -398,10 +448,27 @@ fn step_impl(
         e[b] += interp_edge[k];
     }
     let cor = graph_balance(&edges, &weights, &e)?;
-    let coupled_cor = if couple {
-        coupled_solve(&geom, &edges, &weights, &e, &cor, &is_new, &mut found)?
-    } else {
-        None
+    let coupled_cor = match coupling {
+        PartCoupling::Off => None,
+        PartCoupling::LargestTarget => coupled_solve(&geom, &edges, &weights, &e, &cor, &is_new, &mut found)?,
+        PartCoupling::FluxScale => {
+            // ADR 0659 D1: the term magnitudes of the remap targets (mapped faces, then the new edges at both cells)
+            let mut a = vec![0.0; n];
+            for f in 0..nf {
+                if !is_new(f) {
+                    a[own[f]] += phi[f].abs();
+                    if f < ni {
+                        a[nei[f]] += phi[f].abs();
+                    }
+                }
+            }
+            for (k, &(ca, cb)) in edges.iter().enumerate() {
+                a[ca] += interp_edge[k].abs();
+                a[cb] += interp_edge[k].abs();
+            }
+            let threshold = PART_MEAN_TOL * largest_on(&edges, &a).max(largest_on(&edges, &e));
+            coupled_solve_above(&geom, &edges, &weights, &e, &cor, &is_new, &mut found, threshold)?
+        }
     };
     match coupled_cor {
         None => {
