@@ -262,3 +262,18 @@ window and not compared. The wake is not compared. Items of D5.
   standing instruction of 2026-11-11: take the recommendation); (b) Re 100 at lock-in, the classic case, with the phase of the
   lift sensitive to the natural frequency of each discretisation; (c) both. Recommendation (a) here and (b) as a follow-up with
   limits that allow for the frequency sensitivity.
+
+## Amendment 1 (2026-11-16, before any test code was written or run): a sign slip in T2 and two set-up details
+
+Written after the registration commit and before any line of the test file existed. No limit, case number, mesh, window or run
+changes.
+
+- **T2, the phase of the acceleration.** The registration lists "`F = -yddot` 180 degrees". With `y_c = -A cos(omega t)`,
+  `yddot = A omega^2 cos(omega t) = -omega^2 y_c`, so `yddot` is at 180 degrees from the displacement and `-yddot` at 0 degrees;
+  the registered value has the sign of the series slipped. T2 checks `F = yddot` at 180 degrees and `F = -yddot` at 0 degrees
+  (limit unchanged, 1e-9 degree). By the decision rule T2 can be met only after this amendment, which makes the proposal partial
+  at most by the letter (see Q3 if it arises).
+- **T3, "the forcing's body centre".** `ImmersedForcing` does not store the shape. T3 checks that the forcing after step `n` equals
+  `MovingImmersed::forcing_at(geom, t_n)` exactly and that `bodies_at(t_n)` places the cylinder centre at `(0, -A cos(omega t_n),
+  0)` within 1e-14 (closed form, not the motion object), which is what the registered check meant.
+- **Time of a sample.** Step `n` (1-based) ends at `t_n = n dt`; the harmonics use these times, as in ADR 0631.
