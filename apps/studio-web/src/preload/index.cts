@@ -6,6 +6,8 @@
 //   MessagePort on SERVICE_PORT_CHANNEL after each load of the page; the port stays here. Each function below turns its
 //   arguments into one request on that port. The checks are the main process's (src/main/service/bridge.ts): this side
 //   forwards, so a page cannot get round them by calling a function differently.
+// - `window.studioProject`: the project folder (F-805, src/shared/project.ts), over a second port on
+//   PROJECT_PORT_CHANNEL in the same way; the checks are src/main/project/bridge.ts's.
 //
 // CommonJS (.cts, emitted as .cjs) because a sandboxed preload cannot be an ES module, and a single file because a
 // sandboxed preload can only require 'electron' and a few built-ins: the shared modules are imported for their types
@@ -23,6 +25,14 @@ import type {
   ServiceReply,
   ServiceState,
 } from '../shared/service.js';
+import type {
+  PROJECT_PORT_CHANNEL as ProjectChannel,
+  ProjectBridge,
+  ProjectPortMessage,
+  ProjectReply,
+  ProjectRequest,
+  ProjectState,
+} from '../shared/project.js';
 
 const invoke = <T,>(channel: Channel): Promise<T> => ipcRenderer.invoke(channel) as Promise<T>;
 
@@ -163,3 +173,100 @@ const service: ServiceBridge = {
 };
 
 contextBridge.exposeInMainWorld('studioService', service);
+
+// ---- the project port (F-805): the same pattern as the service port, its own ids and listeners
+
+const PROJECT_PORT_CHANNEL: typeof ProjectChannel = 'studio.project-port';
+/** The folder dialog waits for the user, so `pick` has no time limit of its own; the others are answered at once. */
+const PROJECT_TIMEOUT_MS = 120_000;
+
+let projectPort: Port | null = null;
+let nextProjectId = 1;
+let nextProjectListener = 1;
+const projectQueued: ProjectRequest[] = [];
+const projectPending = new Map<number, { resolve: (r: ProjectReply) => void; timer: ReturnType<typeof setTimeout> | null }>();
+const projectListeners = new Map<number, (s: ProjectState) => void>();
+
+const projectSettle = (id: number, reply: ProjectReply): void => {
+  const p = projectPending.get(id);
+  if (!p) return;
+  projectPending.delete(id);
+  if (p.timer) clearTimeout(p.timer);
+  p.resolve(reply);
+};
+
+const projectPost = (req: ProjectRequest): void => {
+  try {
+    (projectPort as Port).postMessage(req);
+  } catch (e) {
+    projectSettle(req.id, { ok: false, error: { code: 'bad_request', message: `the request cannot be sent: ${String(e)}` } });
+  }
+};
+
+const projectSend = <T,>(req: ProjectRequest): Promise<ProjectReply<T>> =>
+  new Promise((resolve) => {
+    const timer =
+      req.op === 'pick'
+        ? null
+        : setTimeout(() => {
+            projectSettle(req.id, {
+              ok: false,
+              error: projectPort
+                ? { code: 'timeout', message: `no answer from the Studio's main process within ${PROJECT_TIMEOUT_MS} ms` }
+                : { code: 'no_port', message: 'the Studio has not connected this window to the project home' },
+            });
+          }, PROJECT_TIMEOUT_MS);
+    projectPending.set(req.id, { resolve: resolve as (r: ProjectReply) => void, timer });
+    if (projectPort) projectPost(req);
+    else projectQueued.push(req);
+  });
+
+const onProjectMessage = (m: ProjectPortMessage): void => {
+  switch (m?.type) {
+    case 'reply':
+      projectSettle(m.id, m.reply);
+      return;
+    case 'state':
+      for (const l of projectListeners.values()) {
+        try {
+          l(m.state);
+        } catch {
+          // the page's listener failed; others still run
+        }
+      }
+      return;
+  }
+};
+
+ipcRenderer.on(PROJECT_PORT_CHANNEL, (event) => {
+  const p = event.ports[0];
+  if (!p) return;
+  projectPort?.close();
+  projectPort = p;
+  p.onmessage = (e: { data: unknown }) => onProjectMessage(e.data as ProjectPortMessage);
+  for (const req of projectQueued.splice(0)) projectPost(req);
+});
+
+const project: ProjectBridge = {
+  state: async () => {
+    const r = await projectSend<ProjectState>({ op: 'state', id: nextProjectId++ });
+    if (r.ok) return r.result;
+    throw new Error(r.error.message);
+  },
+  onState: (listener) => {
+    const id = nextProjectListener++;
+    if (typeof listener === 'function') projectListeners.set(id, listener);
+    return id;
+  },
+  offState: (id) => {
+    projectListeners.delete(id);
+  },
+  pick: () => projectSend({ op: 'pick', id: nextProjectId++ }),
+  open: (path) => projectSend({ op: 'open', id: nextProjectId++, path }),
+  forget: (path) => projectSend({ op: 'forget', id: nextProjectId++, path }),
+  close: () => projectSend({ op: 'close', id: nextProjectId++ }),
+  refresh: () => projectSend({ op: 'refresh', id: nextProjectId++ }),
+  dismiss: () => projectSend({ op: 'dismiss', id: nextProjectId++ }),
+};
+
+contextBridge.exposeInMainWorld('studioProject', project);

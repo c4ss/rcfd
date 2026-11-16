@@ -22,7 +22,7 @@ export interface IpcContract {
   /** The shell's name and versions. */
   'app.info': { args: []; reply: AppInfo };
   /**
-   * The renderer reports that the empty project view is in the document and one animation frame has passed. The main
+   * The renderer reports that the project home is in the document and one animation frame has passed. The main
    * process records the time; it writes it to a file only when RCFD_STUDIO_STARTUP_REPORT is set (the P10 measurement).
    */
   'app.ready': { args: []; reply: void };

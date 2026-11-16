@@ -1,10 +1,9 @@
-// Renderer entry. Browser code only: no Node, no direct file or network access (G10). The project home arrives with
-// F-805; until then the window shows the empty project view.
+// Renderer entry. Browser code only: no Node, no direct file or network access (G10).
 //
 // Routes (the location hash; navigation stays on app://studio/index.html):
-//   (none)             the empty project view
+//   (none)             the project home (F-805): no project open, or the open project folder
 //   #/dev/primitives   the primitives gallery (F-802), for development and the maintainer's view-and-report
-//                      (npm run gallery); loaded on demand, so it costs the project view nothing
+//                      (npm run gallery); loaded on demand, so it costs the project home nothing
 import { lazy, StrictMode, Suspense, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import '@fontsource/archivo/400.css';
@@ -13,7 +12,7 @@ import '@fontsource/archivo/700.css';
 import './design/tokens.css';
 import './base.css';
 import './ui/primitives.css';
-import { ProjectViewPlaceholder } from './ProjectViewPlaceholder';
+import { ProjectHome } from './project/ProjectHome';
 
 const GALLERY_HASH = '#/dev/primitives';
 
@@ -44,7 +43,7 @@ function Root() {
       </Suspense>
     );
   }
-  return <ProjectViewPlaceholder />;
+  return <ProjectHome />;
 }
 
 const root = document.getElementById('root');
