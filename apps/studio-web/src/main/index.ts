@@ -10,11 +10,30 @@
 // - IPC: one ipcMain.handle per channel of the allow-list in src/shared/ipc.ts, and only for senders that are our own
 //   pages.
 //
-// Service and file I/O will live in this process (F-803 onwards), never in the renderer.
-import { app, BrowserWindow, ipcMain, protocol, session, type IpcMainInvokeEvent, type WebContents } from 'electron';
+// - The solver service (F-803): this process holds the connections (src/main/service/); after each load of an app page
+//   the page's preload script gets one MessagePort on SERVICE_PORT_CHANNEL, and every message on it is checked against
+//   the service allow-list of src/shared/service.ts (src/main/service/bridge.ts). The renderer has no other way to it.
+//
+// Service and file I/O live in this process, never in the renderer.
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  MessageChannelMain,
+  protocol,
+  session,
+  type IpcMainInvokeEvent,
+  type MessagePortMain,
+  type WebContents,
+} from 'electron';
 import { readFile, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CHANNELS, type AppInfo, type Channel, type IpcContract } from '../shared/ipc.js';
+import { SERVICE_PORT_CHANNEL } from '../shared/service.js';
+import { PortBridge, type PortLike } from './service/bridge.js';
+import { ServiceClient } from './service/client.js';
+import { serviceConfig } from './service/config.js';
 import {
   APP_ENTRY,
   APP_SCHEME,
@@ -31,6 +50,11 @@ const PRELOAD = beside('../preload/index.cjs');
 
 /** P10 measurement only (scripts/measure-cold-start.mjs): write the ready time to this file, then quit. */
 const STARTUP_REPORT = process.env['RCFD_STUDIO_STARTUP_REPORT'] ?? '';
+
+/** The solver service (src/main/service/config.ts names the environment variables that choose it). */
+const service = new ServiceClient(serviceConfig(process.env, path.join(app.getPath('userData'), 'service')));
+/** P1 and P2 measurement only (scripts/measure-service.mjs): the client, reachable from Playwright's main-process evaluate. */
+if (process.env['RCFD_STUDIO_BENCH'] === '1') (globalThis as { rcfdStudioBench?: unknown }).rcfdStudioBench = { service };
 
 // Before ready: the scheme must be privileged to behave like a secure web origin (fetch, CSP 'self', module scripts).
 protocol.registerSchemesAsPrivileged([
@@ -141,6 +165,31 @@ function registerIpc(): void {
   }
 }
 
+/** The service port of each web contents: replaced on every load, closed when the contents go away. */
+const servicePorts = new Map<number, PortBridge>();
+
+const adaptPort = (p: MessagePortMain): PortLike => ({
+  postMessage: (m) => p.postMessage(m),
+  onMessage: (listener) => {
+    p.on('message', (e) => listener(e.data));
+  },
+  onClose: (listener) => {
+    p.on('close', listener);
+  },
+  close: () => p.close(),
+});
+
+/** After a load of one of our own pages: a new port for its preload script, and the old one closed. */
+function offerServicePort(contents: WebContents): void {
+  servicePorts.get(contents.id)?.dispose();
+  servicePorts.delete(contents.id);
+  if (contents.isDestroyed() || !isAppUrl(contents.getURL())) return;
+  const { port1, port2 } = new MessageChannelMain();
+  servicePorts.set(contents.id, new PortBridge(adaptPort(port1), service));
+  port1.start();
+  contents.postMessage(SERVICE_PORT_CHANNEL, null, [port2]);
+}
+
 function openWindow(): void {
   const win = new BrowserWindow({
     width: 1280,
@@ -161,6 +210,14 @@ function openWindow(): void {
       safeDialogs: true,
     },
   });
+  const contents = win.webContents;
+  const id = contents.id;
+  // dom-ready: the preload script has run and listens for the port; it queues the page's calls until then
+  contents.on('dom-ready', () => offerServicePort(contents));
+  contents.once('destroyed', () => {
+    servicePorts.get(id)?.dispose();
+    servicePorts.delete(id);
+  });
   win.once('ready-to-show', () => win.show());
   void win.loadURL(APP_ENTRY);
 }
@@ -168,6 +225,19 @@ function openWindow(): void {
 void app.whenReady().then(() => {
   hardenSession();
   registerIpc();
+  service.start();
   openWindow();
 });
 app.on('window-all-closed', () => app.quit());
+
+// Quitting: the client stops; a service the Studio started is stopped too unless it holds sessions (G7, client.ts).
+let serviceStopped = false;
+app.on('before-quit', (e) => {
+  if (serviceStopped) return;
+  e.preventDefault();
+  serviceStopped = true;
+  const atMost = new Promise((done) => setTimeout(done, 3000));
+  void Promise.race([service.shutdown(), atMost])
+    .catch(() => undefined)
+    .finally(() => app.quit());
+});

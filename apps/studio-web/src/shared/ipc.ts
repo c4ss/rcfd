@@ -1,7 +1,8 @@
 // The IPC allow-list of the Studio (docs/studio-guardrails.md G10): every channel the renderer can reach, with its
 // arguments and reply. The main process registers a handler for exactly these channels and the preload script exposes
 // one function per channel through contextBridge; nothing else crosses the bridge. Shared by all three processes, so
-// it uses neither Node nor DOM types. F-803 adds the service client's channels here.
+// it uses neither Node nor DOM types. The solver service has its own way in, a MessagePort with its own allow-list:
+// src/shared/service.ts (F-803).
 
 /** What `app.info` returns: the shell's identity and the versions it runs on. */
 export interface AppInfo {
