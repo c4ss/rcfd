@@ -14254,18 +14254,21 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
   - acceptance: The Studio's unit and Playwright tests run as a job in .github/workflows/ci.yml (ADR 0800 Q3, maintainer
     2026-11-16), with npm ci from the committed lock file and Electron run headless; the job fails the workflow on any
     test failure; docs/test-process.md names the job. A weekly, grouped Dependabot npm entry for /apps/studio-web lands
-    with the job (ADR 0801 Q2).
+    with the job (ADR 0801 Q2). The job builds rcfd-cli, rcfd-runner and rcfd-mcp first so the service e2e tests and the
+    F-824 inventory check do not skip.
   - note: ADR 0800 Q3, ADR 0801 Q2. studio-web job (ubuntu-24.04 + windows-latest, Node 22.19.0) and grouped weekly
     Dependabot npm entry written; all steps pass locally on Windows and in an Ubuntu 24.04 container; done when the job
     first runs green on GitHub Actions. Traces: G13.
-- [ ] **F-824** Electron Studio: capability inventory from the engine and a UI coverage test
+- [x] **F-824** Electron Studio: capability inventory from the engine and a UI coverage test
   - depends on: F-803
   - acceptance: An inventory of every engine capability generated from the engine itself (settings.schema, the method
     list of service.info, the MCP tool list, the CLI help), never kept by hand; a coverage report that maps each
     capability to its UI path or to a recorded, dated exemption; a test that fails on an unmapped capability, run with
     the Studio's tests (F-823); the first report lists today's gaps.
   - note: ADR 0800 (G15 added 2026-11-16). Traces: G15, G2. Engine-side additions it needs (for example a stable list of
-    CLI commands) are additive and go through an ADR under G4.
+    CLI commands) are additive and go through an ADR under G4. Done 2026-11-16: 1271 capabilities from the engine (69
+    service methods, 56 MCP tools, 36 CLI commands, 156 CLI options, 948 case keys, 6 monitor keys); 0 with a UI path,
+    all with dated exemptions, 189 flagged unplanned; docs/studio-coverage.md.
 - [ ] **F-825** Electron Studio: schema-driven case and settings surface
   - depends on: F-824, F-802
   - acceptance: Every key of settings.schema gets a control generated from the schema (type, unit, range, enumeration,
@@ -14279,13 +14282,16 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     flag, a one-line help text from the existing docs) so that F-825 lays keys out without a Studio-side table; no
     existing key, golden, default or reply field changes (G4); docs/case-schema.md updated.
   - note: ADR 0800, needs its own ADR before code (engine change, additive under G4). Traces: G15, G4.
-- [ ] **F-827** Electron Studio: one action layer for every UI action
+- [x] **F-827** Electron Studio: one action layer for every UI action
   - depends on: F-803
   - acceptance: Every UI action is a typed, named action in one registry that calls the engine (a service method, an MCP
     tool or a CLI command); a test that fails when a registered action has no engine equivalent (G16) or when a
     component calls the engine outside the registry; the registry is the single source for the command palette (F-831),
     undo (F-829) and action recording.
-  - note: ADR 0800 (G16 to G21 added 2026-11-16). Traces: G16, G20, G18, G2.
+  - note: ADR 0800 (G16 to G21 added 2026-11-16). Traces: G16, G20, G18, G2. Done 2026-11-16: registry
+    src/shared/actions (24 actions, one per allow-listed method, CLI and MCP equivalents, undo hooks), renderer door
+    src/renderer/actions, action log with JSON/sh export and replay; static check forbids window.studioService outside
+    the door.
 - [ ] **F-828** Electron Studio: provenance inspector and reproduce-from-CLI
   - depends on: F-810, F-827
   - acceptance: Any number on screen opens its provenance (run id, snapshot, file, engine version, unit); every run
