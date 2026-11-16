@@ -483,7 +483,14 @@ fits a discrepancy correction that the next rounds use for their ranking:
   chosen by leave-one-out error with the one-standard-error rule; trusted only when its leave-one-out RMSE is at most 0.8 of
   the uncorrected one and the discrepancy exceeds twice the source's stated uncertainty; applied only inside the calibrated
   region (box of the pairs grown by 0.05 and within 0.25 of a pair, unit box); outside, a query is flagged and gets the trusted
-  constant only. A Gaussian-process rung is a follow-up that reuses F-698.
+  constant only.
+* Rung R3 (ADR 0652, opt-in with `TrustRule::r3 = Some(R3Rule::default())`): R2 plus a zero-mean Gaussian process
+  (squared exponential, F-698's kernel and factorisation) on the R2 residual, the nugget from the stated uncertainty, the
+  hyperparameters fitted once per fit by maximum likelihood and held in every leave-one-out fold. Its leave-one-out residuals
+  come from a closed form that includes the refit of the R2 coefficients, `e3_i = ((G r)_i + e2_i (G P)_ii) / G_ii`
+  (`G = C^-1`, `P` the hat matrix), and its predictive standard deviation from the same linear map. R3 needs `10 d` pairs and a
+  residual above the rounding level, is chosen over R2 only by the one-standard-error rule, and is trusted only when, besides
+  the conditions above, its 2-sigma leave-one-out coverage is at least 0.8. With `r3: None` every byte is as before.
 * Ledger: an `evaluation` entry for every low and high evaluation, one `fidelity_pair` (ADR 0632) per ok promotion with the
   prediction made before the high result, one `fidelity_summary` per round (rung, RMSE before and after, bias, out-of-sample
   RMSE, the correction with its hash in `fitted`).
