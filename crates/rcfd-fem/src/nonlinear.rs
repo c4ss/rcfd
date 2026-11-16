@@ -1401,8 +1401,15 @@ struct Attempt {
     fint: Vec<f64>,
 }
 
-/// The points whose trial state differs bitwise from the committed one, element-major (ADR 0515 D2).
-fn yielded_points(layout: &StateLayout, committed: &[ElementState], trial: &[ElementState]) -> Vec<bool> {
+/// The points whose trial state differs bitwise from the committed one, element-major (ADR 0515 D2). With `modes_after`
+/// (the model's warm start, ADR 0660 D1) the values of an element are cut to its material part first (ADR 0666 D1: the
+/// committed modes after the material state are not points).
+fn yielded_points(
+    layout: &StateLayout,
+    committed: &[ElementState],
+    trial: &[ElementState],
+    modes_after: bool,
+) -> Vec<bool> {
     let mut out = Vec::new();
     for (e, (c, t)) in committed.iter().zip(trial).enumerate() {
         let k = layout.values_per_point(e);
@@ -1410,7 +1417,14 @@ fn yielded_points(layout: &StateLayout, committed: &[ElementState], trial: &[Ele
             out.extend(std::iter::repeat(false).take(layout.points(e)));
             continue;
         }
-        for (a, b) in c.values().chunks(k).zip(t.values().chunks(k)) {
+        let (cv, tv) = if modes_after {
+            let n = layout.points(e) * k;
+            let (cv, tv) = (c.values(), t.values());
+            (&cv[..n.min(cv.len())], &tv[..n.min(tv.len())])
+        } else {
+            (c.values(), t.values())
+        };
+        for (a, b) in cv.chunks(k).zip(tv.chunks(k)) {
             out.push(a.iter().zip(b).any(|(x, y)| x.to_bits() != y.to_bits()));
         }
     }
@@ -1812,7 +1826,7 @@ impl Problem<'_> {
             residuals.push(r);
             if o.record_active_set {
                 let layout = StateLayout::of(self.model).map_err(classify)?;
-                let set = yielded_points(&layout, states_c, &trial);
+                let set = yielded_points(&layout, states_c, &trial, self.model.incompatible_mode_warm_start());
                 yielded.push(set.iter().filter(|&&y| y).count());
                 set_changed.push(previous_set.as_ref().is_some_and(|p| *p != set));
                 previous_set = Some(set);
