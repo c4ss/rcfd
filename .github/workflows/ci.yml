@@ -110,3 +110,80 @@ jobs:
         with:
           python-version: "3.x"
       - run: python -m unittest scripts/test_gate_test.py scripts/test_limit_audit.py scripts/test_release_notes.py scripts/test_make_example_projects.py
+
+  # The Electron Studio (apps/studio-web, ADR 0800 Q3: its npm tests run here, not in scripts/gate_test.py). npm ci installs
+  # the committed lock file exactly; npm test builds, packages the app into out/packaged/ and runs every Playwright test
+  # (unit and e2e on the packaged app, ADR 0801 addendum 1). Any failed step or test fails the workflow.
+  # Both systems on every pull request: the job takes minutes, not the hour of the Rust unit tests, and Windows is the
+  # maintainer's platform and the one where the e2e test also reads the renderer's OS sandbox back (not on Linux).
+  studio-web:
+    name: studio-web (npm ci, type checks, build, Playwright on the packaged Studio), ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+        working-directory: apps/studio-web
+    env:
+      # The Node release the Studio was verified on (ADR 0801 sections 5 and addendum 1); package.json asks for >=22.12.0.
+      # Change it together with docs/test-process.md section 7.
+      STUDIO_NODE_VERSION: "22.19.0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.STUDIO_NODE_VERSION }}
+          # npm's download cache only, keyed on the lock file; node_modules, builds and test results are never cached.
+          cache: npm
+          cache-dependency-path: apps/studio-web/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      - name: let Chromium use its user-namespace sandbox (Ubuntu 24.04 AppArmor)
+        if: runner.os == 'Linux'
+        # Ubuntu 24.04 can forbid unprivileged user namespaces, which Chromium's sandbox needs. This changes the runner, not
+        # the app: the Studio keeps its sandbox on and the tests check that it does (guardrail G10; never --no-sandbox).
+        run: |
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+          command -v xvfb-run >/dev/null || { sudo apt-get update && sudo apt-get install -y xvfb; }
+      - name: npm test (unit and e2e on the packaged app)
+        # Linux has no display on the runner: Electron runs under a virtual one (xvfb). On Windows the window opens on the
+        # runner's desktop for a few seconds; no human step either way. The HTML report is for the failure upload below.
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            xvfb-run --auto-servernum npm test -- --reporter=list,html
+          else
+            npm test -- --reporter=list,html
+          fi
+      - name: upload the Playwright report and test results
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: studio-web-${{ matrix.os }}-${{ github.sha }}
+          path: |
+            apps/studio-web/playwright-report/
+            apps/studio-web/test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+      # THIRD_PARTY_LICENSES.md lists the npm lock file too (ADR 0801 Q4); the script reads Cargo.lock through
+      # `cargo metadata --offline`, so the registry is fetched first. Once is enough: the list does not depend on the runner.
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        if: runner.os == 'Linux'
+        with:
+          toolchain: ${{ env.RUST_GATE_TOOLCHAIN }}
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        if: runner.os == 'Linux'
+        with:
+          python-version: "3.x"
+      - name: third-party licence list is up to date
+        if: runner.os == 'Linux'
+        working-directory: .
+        run: |
+          cargo fetch --locked
+          python scripts/third_party_licenses.py --check
