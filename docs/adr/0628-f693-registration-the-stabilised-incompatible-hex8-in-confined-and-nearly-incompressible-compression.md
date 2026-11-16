@@ -265,3 +265,121 @@ test are not claimed).
 2. **The coefficient near incompressibility.** Whether `c` should take only the deviatoric part of the rest stress (so that the
    bulk modulus does not drive the element to the locking Full Hex8) changes the opt-in's results and is left open: a follow-up.
 3. **Default.** As ADR 0614: the stabilisation stays opt-in; open for the maintainer.
+
+## Addendum 1: results (2026-11-16)
+
+Registered runs, each made once at 490d2a86 (release, the test commit; no library file changed): the default tests of
+`si_eas_hg2.rs` (`f693-scratch/run1-default.log`, `--test-threads 2`, 3 passed in 1.1 s), the five heavy records with
+`--ignored` (`run1-heavy.log`, `--test-threads 3`, 5 passed in 332 s), B2 (`run1-b2.log`). No amendment was written.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| G0 U45; U49 | `<= 1e-12` | `1.01e-13`; `4.38e-13` | yes |
+| G1 `q_cf / mu`, every case | `>= 0.9` | `1.0000` (at rest; at 0.5: C30 `1.3966`, C45 `1.5036`, C49 `1.5664`, U45 `1.0068`, U49 `1.0005`) | yes |
+| G2 `(q_grid - q_cf) / q_cf` smallest; largest | `>= -1e-10`; `<= 1e-4` | `>= -1.2e-14`; C30 `3.8e-5`, C45 `1.0e-5`, C49 `3.4e-6`, U45 `8.5e-6`, U49 `2.1e-6` | yes |
+| G3 `m_Full - q_cf / mu` | `>= -1e-9` | C30 `9.4e-3`, C45 `3.1e-2`, C49 `7.6e-2`, U45 `3.8e-2`, U49 `0.118` | yes |
+| K0 `K_aa` positive definite; smallest over `mu h^3` | `> 0` | 51 of 51 stretches in every case; `156.6`, `156.6`, `143.1`, `156.6`, `155.6` | yes |
+| O1 `m_Inc - m_Stab`; `m_Stab - m_Full` | `<= 1e-9` | never positive at any of the 255 stretches (the aggregate starts at 0 and printed `0`) | yes |
+| S1 `m_Stab` | `>= 0.5` | C30 `0.9767`, C45 `1.0051`, C49 `1.0555`, U45 `1.0051`, U49 `1.0553` (at or next to rest) | yes |
+| Z `|lambda_s - probe|` | `<= 0.01` | C30 `0.6417912` (`1.2e-6`), C45 `0.8093661` (`3.9e-6`), C49 `0.9507467` (`3.3e-6`), U45 `0.5644384` (`1.6e-6`), U49 `0.5103290` (`1.0e-6`) | yes |
+| Z5 `q_cf / mu`; `m_Full` at `lambda_s` | `>= 0.9` | `>= 1.0007`; `>= 1.0584` | yes |
+| R1 | report | the table below | report |
+| HF2 (15 stretches, every row) | as registered | every row met; N2 `m_Inc` `-23.01` (C49 0.8), `-7.401` (C45 0.5), `-0.5795` (C30 0.5) | yes |
+| H3b C49; U49 | `<= 1e-10` | `8.7e-16`; `1.6e-14` | yes |
+| E0 | `<= 1e-12` | `1.8e-16` | yes |
+| E1s | `>= 1e-4` | `5.328e-4` (`Pi_s = 1.7266e-4 mu` of `0.32407 mu`) | yes |
+| E1 | `<= 1e-12` | `5.4e-16` | yes |
+| E3 | `<= 1e-6` | `2.0e-9` | yes |
+| B1 `git diff --stat 9cf95fc3 -- crates/*/src` | empty | empty | yes |
+| B2 `si_eas_default_bits`, `si_eas_hg_default_bits`, `si_eas_hg` | pass | 1, 1, 8 passed | yes |
+| S6 fmt; clippy | clean | `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean | yes |
+
+R1, the lowest eigenvalue over `mu` (selected rows of 51 per case; `s/f = m_Stab / m_Full`, `s/q = m_Stab / (q_cf / mu)`):
+
+| case | `lambda` | `q_cf/mu` | `m_Full` | `m_Inc` | `m_Stab` | `s/f` | `s/q` | `c/mu` |
+|---|---|---|---|---|---|---|---|---|
+| C30 | 1.00 | 1.0000 | 1.0095 | 0.9767 | 0.9767 | 0.9675 | 0.9767 | 0 |
+| C30 | 0.80 | 1.1475 | 1.1671 | 0.8608 | 1.0913 | 0.9351 | 0.9511 | 0.891 |
+| C30 | 0.50 | 1.3966 | 1.5271 | -1.2346 | 1.4699 | 0.9626 | 1.0525 | 14.72 |
+| C45 | 1.00 | 1.0000 | 1.0380 | 1.0051 | 1.0051 | 0.9683 | 1.0051 | 0 |
+| C45 | 0.80 | 1.1568 | 1.1883 | -0.1888 | 1.1731 | 0.9871 | 1.0140 | 15.05 |
+| C45 | 0.50 | 1.5036 | 1.5972 | -10.226 | 1.5928 | 0.9972 | 1.0593 | 248.7 |
+| C49 | 1.00 | 1.0000 | 1.1901 | 1.0555 | 1.0555 | 0.8869 | 1.0555 | 0 |
+| C49 | 0.95 | 1.0348 | 1.2145 | -0.0547 | 1.1689 | 0.9625 | 1.1296 | 19.55 |
+| C49 | 0.80 | 1.1597 | 1.3006 | -33.299 | 1.2919 | 0.9934 | 1.1141 | 393.8 |
+| C49 | 0.50 | 1.5664 | 1.6427 | -189.29 | 1.6402 | 0.9985 | 1.0471 | 6506.5 |
+| U45 | 0.80 | 1.0098 | 1.0482 | 0.9882 | 1.0097 | 0.9632 | 0.9999 | 0.502 |
+| U45 | 0.50 | 1.0068 | 1.0635 | -0.9868 | 1.0553 | 0.9923 | 1.0482 | 24.24 |
+| U49 | 0.80 | 1.0018 | 1.1792 | 1.0410 | 1.0763 | 0.9127 | 1.0743 | 1.024 |
+| U49 | 0.50 | 1.0005 | 1.1181 | -0.1445 | 1.1116 | 0.9943 | 1.1110 | 307.4 |
+
+The Full Hex8's locking excess at rest, `m_Full / m_Inc`: `1.0336` (`nu = 0.3`), `1.0327` (0.45), `1.1276` (0.49).
+
+With the stabilisation of ADR 0614 the lowest eigenvalue stays `>= 0.977 mu` over `[0.5, 1]` in all five new cases. It lies
+between the plain element and the Full Hex8, as arithmetic 3 says, and is above the closed-form bound `q` except at small
+compression at `nu = 0.3` (`s/q` down to `0.949`; a non-conforming element is not bound by `q`). The plain element has a
+spurious zero in every case. The zero comes much earlier in confined compression and near incompressibility: `lambda_s =
+0.9507` at C49 (5 per cent compression), and `m_Inc = -189` at 0.5. In confined compression at `nu >= 0.45`, and in deep
+uniaxial compression at `nu = 0.49`, the stabilised element is driven to within 0.15 to 0.6 per cent of the Full Hex8 (`c` up to
+`6507 mu`), and the Full Hex8 locks there. So the stabilisation removes the hourglass zero but gives up the element's
+locking-free behaviour in nearly incompressible compression. The measured numbers match the registered probes to their printed
+digits.
+
+### Deviations
+
+- None in the checks. MU11 also made the E test panic (an element inverted in the local mode iteration), so that test fails
+  too; HF2 is the registered catch.
+
+### Mutations
+
+Each on the scratch copy `f693-scratch/mut` (a git archive of 490d2a86), run once against the default tests of `si_eas_hg2.rs`,
+then reverted (`f693-scratch/mutate.py`, logs `mutations.log`, `mut-MU*.log`).
+
+| Id | Expected | Caught by | Caught |
+|---|---|---|---|
+| MU7 `strain_energy` without `Pi_s` | E1, E3 | E1 (`5.33e-4`), E3 (`3.56e-3`) | yes |
+| MU8 `Pi_s` for every Incompatible element | E0 | E0 (`9.45e-3`) | yes |
+| MU9 `Pi_s` without the factor 1/2 | E1, E3 | E1 (`5.33e-4`), E3 (`3.56e-3`) | yes |
+| MU10 plain modes in a stabilised model's energy | E1, E3 | E1 (`7.23e-3`), E3 (`3.92e-2`) | yes |
+| MU11 `c M` dropped from the modes' tangent | HF2 | HF2 (`m_Stab = -23.0` at C49 0.8, and four more rows); the E test (panic) | yes |
+| MU12 `c` from the Green strain | E1 | E1 (`2.63e-3`), E3 (`4.91e-4`) | yes |
+
+MU7 of ADR 0614 is caught by two registered checks, by margins of eight and three orders of magnitude.
+
+### What was not run
+
+Nothing registered was skipped. `cargo test -p rcfd-fem --release` as a whole and `baseline_hashes` were not run (no library
+file changed; registered so). The heavy records were not re-run under the mutations (registered so).
+
+### Decision by the registered rule
+
+**done.** Every check was met in its single registered run, the negative controls behaved as stated, all six planned mutations
+were caught (MU7 of ADR 0614 by E1 and E3), B1 and B2 were met, and no amendment was written. Every clause of the acceptance is
+met:
+
+- c1: the strain energy at a large strain against the test's own stabilisation energy, with MU7 caught.
+- c2, c3: the sweep for confined compression and for `nu = 0.45` and `0.49`.
+- c4: the lowest eigenvalue of the stabilised element reported against the Full Hex8, through the ordering O1 and the ratio,
+  with no accuracy limit where the Full Hex8 locks (as registered).
+- c5, c6: the same eigenvalue against the closed-form acoustic bound derived in arithmetic 2, over `[0.5, 1]`.
+- c7: defaults unchanged (no library change).
+
+### Remaining questions
+
+1. **Over-stabilisation near incompressibility.** Options: (a) a follow-up coefficient built from the deviatoric part of the rest
+   stress (or from the shear modulus only), checked against the probes' need and a locking measure; (b) leave the coefficient
+   and document that the stabilised element approaches the locking Full Hex8 in nearly incompressible compression.
+   Recommendation: (a), as a follow-up (it changes the opt-in's results, not the defaults). It needs a locking-free reference of
+   the compressed state, for example the repository's F-bar Hex8 on the same patch.
+2. **Default.** Recommendation: keep it opt-in, as ADR 0614. The plain element's zero at 5 per cent confined compression at `nu
+   = 0.49` is a strong argument for using the stabilisation, but turning it on by default changes results.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> Structural solver, intermediate tier. Follow-up of F-685 (ADR 0614). DONE. ADR 0628, 2026-11-16: the stabilised incompatible-modes Hex8 of ADR 0614 beyond its set-up, tests only (no library change; defaults unchanged by construction, the bit records of ADR 0608 and ADR 0614 pass). Strain energy at a large strain: Integrator::strain_energy of a stabilised 4 x 4 x 4 distorted neo-Hookean patch at 40 per cent confined compression with bending (stabilisation energy 5.3e-4 of the total) equals the test's own elastic plus stabilisation energy to 5.4e-16 (the plain model's to 1.8e-16) and is the potential of the stabilised internal force to 2.0e-9 (central difference); the missed mutation MU7 of ADR 0614 is now caught (by 5.3e-4 and 3.6e-3), and five more mutations are caught. The ADR 0614 sweep (6 x 6 x 6 patch, every boundary node fixed, 51 stretches on [0.5, 1]) repeated for confined compression at nu = 0.3, 0.45, 0.49 and uniaxial stress at nu = 0.45, 0.49, against a closed-form acoustic bound for the neo-Hookean energy at diag(t, t, lambda) derived in the ADR (q = min over the polar angle of mu J^-2/3 (1 + mu_-), equal to the numerical sphere minimum to 3.8e-5): the stabilised element's lowest eigenvalue stays >= 0.977 mu in every case and lies between the plain element and the Full Hex8 at every stretch (an ordering derived in the ADR, which holds whether or not the Full Hex8 locks); the Full Hex8 stays above q everywhere. The plain element has a spurious zero in every case: lambda_s = 0.6418 (confined, nu 0.3), 0.8094 (0.45), 0.9507 (0.49: 5 per cent compression), 0.5644 and 0.5103 (uniaxial, 0.45, 0.49). Finding: near incompressibility the coefficient (up to 6507 mu) drives the stabilised element to within 0.15 to 0.6 per cent of the Full Hex8, which locks there (at rest the Full Hex8 is 13 per cent stiffer than the plain element at nu = 0.49). Not covered: tension, shear and free boundaries, other materials, a locking-free reference of the compressed state, a coefficient without the bulk modulus.
+
+> F-685 (note, ADR 0628, 2026-11-16): F-693 catches the missed mutation MU7 and measures the stabilisation in confined and nearly incompressible compression (lowest eigenvalue >= 0.977 mu in five new cases; near incompressibility the element approaches the locking Full Hex8).
+
+> Follow-up proposed: A deviatoric coefficient for the stabilised incompatible-modes Hex8 near incompressibility. Deps F-693. Acceptance: Every limit not stated here is registered in the ADR before the run. An opt-in coefficient of the ADR 0614 stabilisation without the bulk modulus, from the published literature or derived in the ADR; the ADR 0628 sweep repeated for it in all six cases, the lowest eigenvalue kept above a registered positive limit over [0.5, 1]; a locking measure of the compressed state against a locking-free reference of the repository (an F-bar or mixed Hex8 on the same patch) reported for the ADR 0614 and the new coefficient; the ADR 0608 checks within their limits; the default bits unchanged.
