@@ -1098,7 +1098,7 @@ fn r3_search(u: &[Vec<f64>], r: &[f64], sig2: &[f64], rule: &R3Rule) -> Option<V
 pub struct R3Loo {
     /// Leave-one-out residuals `e3` (R2 refitted without the pair, the process with the fit's hyperparameters).
     pub e: Vec<f64>,
-    /// Their predictive standard deviations `sqrt(a_i^T C a_i)`.
+    /// Their predictive standard deviations `sqrt(a_i^T C a_i)`, evaluated as `sqrt(1 / G_ii + |L^T q_i|^2)` (ADR 0656).
     pub sd: Vec<f64>,
     /// In-sample residuals of R3, `r - s_f^2 R beta`.
     pub in_sample: Vec<f64>,
@@ -1171,13 +1171,16 @@ fn r3_core(
         - (0..n).map(|i| chol[i * n + i].ln()).sum::<f64>();
     // hat matrix, column by column: P e_k = e_k - (residual of regressing e_k on X)
     let mut p = vec![0.0; n * n];
+    // ADR 0656: the coefficients `b_k = H x_k` of the same regressions, `H = (X^T X)^-1 = sum_k b_k b_k^T`
+    let mut bk = Vec::with_capacity(n);
     for k in 0..n {
         let mut ek = vec![0.0; n];
         ek[k] = 1.0;
-        let (_, rk, _) = lstsq(&x, &ek).ok_or("R2 not available")?;
+        let (b, rk, _) = lstsq(&x, &ek).ok_or("R2 not available")?;
         for i in 0..n {
             p[i * n + k] = ek[i] - rk[i];
         }
+        bk.push(b);
     }
     let mut e = Vec::with_capacity(n);
     let mut sd = Vec::with_capacity(n);
@@ -1186,19 +1189,34 @@ fn r3_core(
         let gp_ii: f64 = (0..n).map(|j| g[i * n + j] * p[j * n + i]).sum();
         let e2 = rs[i] / (1.0 - h[i]);
         e.push(s * (alpha[i] + e2 * gp_ii) / gii);
-        // a_i = ((G M)_i,: + (GP_ii / (1 - h_ii)) M_i,:) / G_ii with M = I - P; var = a_i^T C a_i
-        let w = gp_ii / (1.0 - h[i]);
-        let a: Vec<f64> = (0..n)
-            .map(|k| {
-                let gm = g[i * n + k] - (0..n).map(|j| g[i * n + j] * p[j * n + k]).sum::<f64>();
-                let mik = if i == k { 1.0 } else { 0.0 } - p[i * n + k];
-                (gm + w * mik) / gii
-            })
+        // ADR 0656 D1: var(e3_i) = 1 / G_ii + q^T C q, both terms sums of squares (no cancellation of a^T C a):
+        // G_ii = |L^-1 e_i|^2; g = -(X^T G e_i) / G_ii; q_j = x_j^T H g + P_ji (x_i^T H g) / (1 - h_ii), q_i = 0
+        let mut ei = vec![0.0; n];
+        ei[i] = 1.0;
+        let v = surrogate::solve_lower(&chol, n, &ei);
+        let cond = 1.0 / v.iter().map(|t| t * t).sum::<f64>();
+        let gv: Vec<f64> = (0..x[0].len())
+            .map(|a| -(0..n).map(|j| x[j][a] * g[j * n + i]).sum::<f64>() / gii)
             .collect();
-        let var: f64 = (0..n)
-            .map(|k| a[k] * (0..n).map(|j| c[k * n + j] * a[j]).sum::<f64>())
+        let mut hg = vec![0.0; gv.len()];
+        for b in &bk {
+            let bg: f64 = b.iter().zip(&gv).map(|(s, t)| s * t).sum();
+            for (o, s) in hg.iter_mut().zip(b) {
+                *o += s * bg;
+            }
+        }
+        let t: Vec<f64> = x
+            .iter()
+            .map(|row| row.iter().zip(&hg).map(|(s, t)| s * t).sum())
+            .collect();
+        let ti = t[i] / (1.0 - h[i]);
+        let q: Vec<f64> = (0..n)
+            .map(|j| if j == i { 0.0 } else { t[j] + p[j * n + i] * ti })
+            .collect();
+        let refit: f64 = (0..n)
+            .map(|k| (k..n).map(|m| chol[m * n + k] * q[m]).sum::<f64>().powi(2))
             .sum();
-        sd.push(s * var.max(0.0).sqrt());
+        sd.push(s * (cond + refit).sqrt());
     }
     let in_sample: Vec<f64> = (0..n)
         .map(|i| {
