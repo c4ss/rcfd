@@ -14296,11 +14296,16 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
   - acceptance: The F-817 bench and the parity tests run on Linux (and macOS if the maintainer asks), with WebGPU or the
     WebGL2 fallback; misses stated with their numbers.
   - note: NEEDS THE USER: platforms beyond Windows 11 are open in docs/studio-guardrails.md. Traces: G9.
-- [ ] **F-822** Electron Studio: tutorials that name the GUI
+- [x] **F-822** Electron Studio: tutorials that name the GUI
   - depends on: F-813
   - acceptance: Every tutorial that names rcfd-gui or rcfd-studio rewritten for the Electron Studio, or marked as CLI-
     only; the docs site test passes.
-  - note: ADR 0800. Traces: G6; docs/ui-restart-plan.md section 6.
+  - note: ADR 0800. Traces: G6; docs/ui-restart-plan.md section 6. Done 2026-11-16: docs/tutorials/desktop-assistant.md
+    rewritten for the Electron Studio (start from a checkout, project home, case editor, run control, workspace,
+    compare, provenance, Claude Code panel, palette; controls named by accessible name or palette title per G22; gaps
+    stated) with a labelled section for the frozen rcfd-studio/rcfd-gui; example-project notes, READMEs and small doc
+    mentions updated; docs_site and tutorials tests pass. Left: the maintainer's walk-through against the running app;
+    parity_tutorials_name_the_gui_known_miss in rcfd-studio stays ignored until F-449.
 - [~] **F-823** Electron Studio: npm tests in CI
   - depends on: F-801
   - acceptance: The Studio's unit and Playwright tests run as a job in .github/workflows/ci.yml (ADR 0800 Q3, maintainer
