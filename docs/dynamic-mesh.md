@@ -24,8 +24,13 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   direction, or a rotor sector against a stator sector of the same pitch (`rcfd_mesh::sliding_periodic`,
   `rcfd_fv::sliding_periodic`, `PimpleSolver::step_sliding_periodic`). The periodic join keeps the blocks' seam pairs; the
   part of the rotor beyond the stator's seam meets the stator's periodic image through a pair of coupled boundary faces
-  (patches `sliding_wrap_a` / `sliding_wrap_b`, appended last). Offsets within one period only (no re-imaging of the rotor
-  yet); sectors of different pitch are refused; no case key (F-303).
+  (patches `sliding_wrap_a` / `sliding_wrap_b`, appended last). Beyond one period (F-704, ADR 0634):
+  `PeriodicSlidingInterface::mesh_turned(turned)` takes any turned offset `>= 0`, builds the mesh at the offset reduced to
+  one period and records the periods taken off in `PeriodicSlidingMesh::image`; the step whose image changes by one
+  re-images the rotor (its swept volumes from the old offset less one period, its cells' velocity and history turned back
+  by one pitch, in `periodic_sliding_step` and `step_sliding_periodic`). Steps of less than one period, forwards; boundary
+  data set per face on rotor patches are the caller's to set on the new mesh; sectors of different pitch are refused; no
+  case key (F-303).
 * Local remeshing of tetrahedral meshes is in the library since F-247 (ADR 0215), for the compressible solver in a box
   with planar walls; the case tree does not use it yet (ADR 0215 Q1).
 * Overset (chimera) meshes in the library only (F-134, ADR 0219): one component mesh moving rigidly over a static
