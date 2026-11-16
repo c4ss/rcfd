@@ -88,6 +88,9 @@ export const role = {
   'band-live': 'orange',
   'band-failed': 'fail',
   hatch: 'silver',
+  // The Claude Code panel (F-814; DESIGN.md Components, Claude Code panel): the user's message in sky-wash. Its meadow head
+  // has no role yet: tests/unit/tokens.spec.ts lists meadow's users, and adding one is the maintainer's call.
+  'chat-own': 'sky-wash',
   // Overlays
   tooltip: 'ink',
   'tooltip-text': 'white',

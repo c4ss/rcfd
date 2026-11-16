@@ -153,7 +153,7 @@
     {"id": "cli:rcfd workflow run", "exemption": {"item": "F-807", "date": "2026-11-16", "reason": "Task workflows (the workflow methods, tools and commands): no Studio item covers them; nearest home run control (F-807).", "unplanned": true}},
     {"id": "cli:rcfd workflow show", "exemption": {"item": "F-807", "date": "2026-11-16", "reason": "Task workflows (the workflow methods, tools and commands): no Studio item covers them; nearest home run control (F-807).", "unplanned": true}},
     {"id": "cli:rcfd workflow templates", "exemption": {"item": "F-807", "date": "2026-11-16", "reason": "Task workflows (the workflow methods, tools and commands): no Studio item covers them; nearest home run control (F-807).", "unplanned": true}},
-    {"id": "cli:rcfd-mcp", "exemption": {"item": "F-814", "date": "2026-11-16", "reason": "The Claude Code panel (F-814) runs the project's rcfd-mcp through the plugin; not built yet."}},
+    {"id": "cli:rcfd-mcp", "ui": "Project > Home (the project read through the server, read-only) and Project > Claude Code (the project tools Claude Code is given)"},
     {"id": "cli:rcfd-runner cancel", "ui": "Project > Runs > the selected run: Stop… and Cancel… (F-807, through cancel_run)"},
     {"id": "cli:rcfd-runner ensure", "ui": "Project > Runs: Start the runner (F-807, runs rcfd-runner ensure for the project)"},
     {"id": "cli:rcfd-runner list", "ui": "Project > Runs (the runner's runs, read through the engine's list_runs)"},
@@ -189,7 +189,7 @@
     {"prefix": "cli:rcfd study --", "exemption": {"item": "F-807", "date": "2026-11-16", "reason": "Design studies, operating maps and the design ledger: no Studio item covers them; nearest homes run control (F-807) for running and compare (F-815) for results.", "unplanned": true}},
     {"prefix": "cli:rcfd workflow run --", "exemption": {"item": "F-807", "date": "2026-11-16", "reason": "Task workflows (the workflow methods, tools and commands): no Studio item covers them; nearest home run control (F-807).", "unplanned": true}},
     {"prefix": "cli:rcfd workflow show --", "exemption": {"item": "F-807", "date": "2026-11-16", "reason": "Task workflows (the workflow methods, tools and commands): no Studio item covers them; nearest home run control (F-807).", "unplanned": true}},
-    {"prefix": "cli:rcfd-mcp --", "exemption": {"item": "F-814", "date": "2026-11-16", "reason": "The Claude Code panel (F-814) runs the project's rcfd-mcp through the plugin; not built yet."}},
+    {"prefix": "cli:rcfd-mcp --", "exemption": {"item": "F-814", "date": "2026-11-16", "reason": "The Claude Code panel (F-814) runs rcfd-mcp with the engine's defaults for case roots, the edit hook and the run and design limits; settings for them are not part of F-814.", "unplanned": true}},
     {"prefix": "cli:rcfd-runner ensure --", "exemption": {"item": "F-807", "date": "2026-11-16", "reason": "How the started runner logs and whether it stays attached (--foreground, --log-file, --quiet, --stdout): the Studio starts it detached with its defaults (F-807, Start the runner).", "unplanned": true}},
     {"prefix": "cli:rcfd-runner start --", "exemption": {"item": "F-807", "date": "2026-11-16", "reason": "Options of rcfd-runner start that the Studio does not set (--foreground, --log-file, --no-runner, --quiet, --stdout): it starts runs through start_run, which takes priority, threads, mem_mb and set (F-807).", "unplanned": true}},
     {"prefix": "cli:rcfd-runner wait --", "exemption": {"item": "F-807", "date": "2026-11-16", "reason": "Waiting for a run to end is a call for scripts: the Studio shows the end live in Project > Runs (F-806) and needs no waiting call; nearest home run control (F-807).", "unplanned": true}},
@@ -257,6 +257,9 @@
     {"id": "cli:rcfd-runner start --priority", "ui": "Project > Runs: Queue… > Priority (F-807)"},
     {"id": "cli:rcfd-runner start --threads", "ui": "Project > Runs: Queue… > Threads (F-807)"},
     {"id": "cli:rcfd-runner start --mem-mb", "ui": "Project > Runs: Queue… > Memory, MB (F-807)"},
-    {"id": "cli:rcfd-runner start --set", "ui": "Project > Runs: Queue… > Settings for this run, one path=value per line (F-807)"}
+    {"id": "cli:rcfd-runner start --set", "ui": "Project > Runs: Queue… > Settings for this run, one path=value per line (F-807)"},
+    {"id": "cli:rcfd-mcp --project", "ui": "Project > Home and Project > Claude Code (the server runs on the open project folder)"},
+    {"id": "cli:rcfd-mcp --read-only", "ui": "Project > Home (the Studio's own server refuses every tool that writes)"},
+    {"id": "cli:rcfd-mcp --root", "ui": "Project > Claude Code (the server Claude Code is given is rooted at the project folder)"}
   ]
 }

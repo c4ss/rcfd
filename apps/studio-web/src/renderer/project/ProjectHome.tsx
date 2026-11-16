@@ -24,6 +24,7 @@ import { runRows, shownState, timeText, unknownWord, type RunRow } from '../runs
 import { projectActions, watchProjectState } from './door.js';
 import { caseHash } from '../case/hash.js';
 import { CaseRunButton, RunFailure } from '../runs/RunControls.js';
+import { ClaudePanel } from '../claude/ClaudePanel.js';
 import './project.css';
 
 let reported = false;
@@ -250,7 +251,10 @@ const DESCRIBE: Record<Exclude<Kind, 'all'>, string> = {
 
 type View = 'home' | 'runs';
 
-/** An open project: two views under the header band, Home (the index of the folder, F-805) and Runs (F-806). */
+/**
+ * An open project: two views under the header band, Home (the index of the folder, F-805) and Runs (F-806), and the
+ * Claude Code panel beside them (F-814), whose run and file references open the run in Runs or the file on Home.
+ */
 function OpenProject({ view, state }: { view: ProjectView; state: ProjectState }) {
   const [tab, setTab] = useState<View>('home');
   // the selected run belongs to the project view, so it survives a switch of view; it is display state, not project state
@@ -260,7 +264,19 @@ function OpenProject({ view, state }: { view: ProjectView; state: ProjectState }
     setRun(id);
     setTab('runs');
   };
+  // F-814: a file a Claude Code reply named, shown on Home (n changes on every request), and whether the panel is shown
+  const [focus, setFocus] = useState<{ path: string; n: number } | null>(null);
+  const [claude, setClaude] = useState(true);
+  const openRun = (id: string) => {
+    setRun(id);
+    setTab('runs');
+  };
+  const openFile = (p: string) => {
+    setFocus((f) => ({ path: p, n: (f?.n ?? 0) + 1 }));
+    setTab('home');
+  };
   return (
+    <div className="ph-work">
     <div className="ph-open">
       <Tabs
         aria-label="Project views"
@@ -268,7 +284,7 @@ function OpenProject({ view, state }: { view: ProjectView; state: ProjectState }
         selected={tab}
         onChange={(t) => setTab(t as View)}
         items={[
-          { id: 'home', label: 'Home', panel: <HomeBody view={view} state={state} onStarted={onStarted} /> },
+          { id: 'home', label: 'Home', panel: <HomeBody view={view} state={state} onStarted={onStarted} focus={focus} /> },
           {
             id: 'runs',
             label: 'Runs',
@@ -283,10 +299,28 @@ function OpenProject({ view, state }: { view: ProjectView; state: ProjectState }
         ]}
       />
     </div>
+    {claude ? (
+      <ClaudePanel project={view} onOpenRun={openRun} onOpenFile={openFile} onHide={() => setClaude(false)} />
+    ) : (
+      <div className="cc-show">
+        <IconButton variant="ghost" icon="back" label="Show Claude Code" onPress={() => setClaude(true)} />
+      </div>
+    )}
+    </div>
   );
 }
 
-function HomeBody({ view, state, onStarted }: { view: ProjectView; state: ProjectState; onStarted: (run: string) => void }) {
+function HomeBody({
+  view,
+  state,
+  onStarted,
+  focus,
+}: {
+  view: ProjectView;
+  state: ProjectState;
+  onStarted: (run: string) => void;
+  focus?: { path: string; n: number } | null;
+}) {
   const [kind, setKind] = useState<Kind>('all');
   const [runFailure, setRunFailure] = useState<RunActionResult | null>(null);
   const onRunResult = (r: RunActionResult) => {
@@ -294,6 +328,12 @@ function HomeBody({ view, state, onStarted }: { view: ProjectView; state: Projec
     else setRunFailure(r);
   };
   const [filter, setFilter] = useState('');
+  // F-814: a file named in a Claude Code reply is shown by filtering the index to it
+  useEffect(() => {
+    if (!focus) return;
+    setKind('all');
+    setFilter(focus.path);
+  }, [focus]);
   const info = view.info;
   const changed = useMemo(() => changedAt(view.changes), [view.changes]);
   const q = filter.trim().toLowerCase();

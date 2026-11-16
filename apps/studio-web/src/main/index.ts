@@ -18,6 +18,8 @@
 // - The case editor (F-812): a third MessagePort on CASE_PORT_CHANNEL (src/main/case/), checked against
 //   src/shared/case.ts. Saving and making cases go through a project server started without --read-only, on which this
 //   process calls only the tools of CASE_TOOLS.
+// - Claude Code (F-814): a MessagePort on CLAUDE_PORT_CHANNEL (src/main/claude/), checked against src/shared/claude.ts;
+//   claude is started only here, with the project folder as its working folder.
 //
 // Service and file I/O live in this process, never in the renderer.
 import {
@@ -53,6 +55,9 @@ import { serviceConfig } from './service/config.js';
 import { DataPorts } from './data/port.js';
 import { DataRoots } from './data/roots.js';
 import { StudioData } from './data/studio-data.js';
+import { claudeConfig } from './claude/config.js';
+import { ClaudePanel } from './claude/panel.js';
+import { ClaudePorts } from './claude/port.js';
 import {
   APP_ENTRY,
   APP_SCHEME,
@@ -78,15 +83,18 @@ const dataPorts = new DataPorts(data);
 /** P1 and P2 measurement only (scripts/measure-service.mjs): the client, reachable from Playwright's main-process evaluate. */
 if (process.env['RCFD_STUDIO_BENCH'] === '1') (globalThis as { rcfdStudioBench?: unknown }).rcfdStudioBench = { service };
 
+const isFile = (p: string): boolean => {
+  try {
+    return statSync(p).isFile();
+  } catch {
+    return false;
+  }
+};
+const engine = engineConfig(process.env, isFile);
+
 /** The project home (F-805): the engine's project server from the environment (src/main/project/config.ts). */
 const projects = new ProjectHome({
-  engine: engineConfig(process.env, (p) => {
-    try {
-      return statSync(p).isFile();
-    } catch {
-      return false;
-    }
-  }),
+  engine,
   recent: new RecentStore(recentFile(process.env, app.getPath('userData'))),
   pickFolder: async () => {
     const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
@@ -107,6 +115,13 @@ const caseEditor = new CaseEditor({
   startServer: (exe, folder) => ProjectServer.start(exe, folder, undefined, { readOnly: false }),
 });
 projects.onState(() => caseEditor.projectChanged());
+/** The Claude Code panel (F-814): claude from RCFD_STUDIO_CLAUDE (src/main/claude/config.ts), for the open project. */
+const claude = new ClaudePanel({
+  config: claudeConfig(process.env, app.getPath('userData'), isFile, process.execPath),
+  rcfdMcp: engine.configured ? engine.path : null,
+});
+const claudePorts = new ClaudePorts(claude);
+projects.onState((s) => void claude.setProject(s.project?.folder ?? null));
 
 // Before ready: the scheme must be privileged to behave like a secure web origin (fetch, CSP 'self', module scripts).
 protocol.registerSchemesAsPrivileged([
@@ -318,9 +333,11 @@ function openWindow(): void {
     offerProjectPort(contents);
     offerCasePort(contents);
     dataPorts.offer(contents);
+    claudePorts.offer(contents);
   });
   contents.once('destroyed', () => {
     dataPorts.drop(id);
+    claudePorts.drop(id);
     servicePorts.get(id)?.dispose();
     servicePorts.delete(id);
     projectPorts.get(id)?.dispose();
@@ -349,7 +366,7 @@ app.on('before-quit', (e) => {
   serviceStopped = true;
   const atMost = new Promise((done) => setTimeout(done, 3000));
   // the project server of an open project ends with the Studio: it only reads, and holds no run (G7)
-  void Promise.race([Promise.all([service.shutdown(), projects.shutdown(), caseEditor.shutdown()]), atMost])
+  void Promise.race([Promise.all([service.shutdown(), projects.shutdown(), caseEditor.shutdown(), claude.shutdown()]), atMost])
     .catch(() => undefined)
     .finally(() => app.quit());
 });

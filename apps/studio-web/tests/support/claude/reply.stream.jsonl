@@ -1,0 +1,14 @@
+{"type": "system", "subtype": "init", "cwd": "{{CWD}}", "session_id": "{{SESSION}}", "tools": ["Bash", "Edit", "Read", "Write", "mcp__rcfd_project__list_runs"], "mcp_servers": [{"name": "rcfd_project", "status": "connected"}], "model": "claude-haiku-5-5", "permissionMode": "{{MODE}}", "claude_code_version": "2.1.310", "uuid": "00000000-0000-4000-8000-000000000901"}
+{"type": "system", "subtype": "status", "status": "requesting", "session_id": "{{SESSION}}"}
+{"type": "stream_event", "event": {"type": "message_start", "message": {"id": "msg_01Synthetic0000000000901"}}, "session_id": "{{SESSION}}"}
+{"type": "stream_event", "event": {"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}}, "session_id": "{{SESSION}}"}
+{"type": "stream_event", "event": {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "Run **r-20261028T152641-3900** converged in "}}, "session_id": "{{SESSION}}"}
+{"type": "stream_event", "event": {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "**412** iterations. Its case is cases/cavity-re100.toml; "}}, "session_id": "{{SESSION}}"}
+{"type": "stream_event", "event": {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "see notes/README.md. Run r-29991231T000000-dead is not in this project."}}, "session_id": "{{SESSION}}"}
+{"type": "stream_event", "event": {"type": "content_block_stop", "index": 0}, "session_id": "{{SESSION}}"}
+{"type": "assistant", "message": {"id": "msg_01Synthetic0000000000901", "role": "assistant", "content": [{"type": "text", "text": "(repeated by the full message; not shown)"}, {"type": "tool_use", "id": "toolu_01Synthetic0000000000901", "name": "mcp__rcfd_project__list_runs", "input": {}}]}, "session_id": "{{SESSION}}"}
+{"type": "user", "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "toolu_01Synthetic0000000000901", "content": "4 runs"}]}, "session_id": "{{SESSION}}"}
+{"type": "assistant", "message": {"id": "msg_01Synthetic0000000000902", "role": "assistant", "content": [{"type": "tool_use", "id": "toolu_01Synthetic0000000000902", "name": "Bash", "input": {"command": "echo hello > made_by_bash.txt"}}]}, "session_id": "{{SESSION}}"}
+{"type": "system", "subtype": "permission_denied", "tool_name": "Bash", "tool_use_id": "toolu_01Synthetic0000000000902", "message": "Permission to use Bash has been denied.", "session_id": "{{SESSION}}"}
+{"type": "rate_limit_event", "session_id": "{{SESSION}}"}
+{"type": "result", "subtype": "success", "is_error": false, "result": "Run r-20261028T152641-3900 converged.", "session_id": "{{SESSION}}", "total_cost_usd": 0.0031, "permission_denials": [{"tool_name": "Bash", "tool_use_id": "toolu_01Synthetic0000000000902", "tool_input": {"command": "echo hello > made_by_bash.txt"}}]}
