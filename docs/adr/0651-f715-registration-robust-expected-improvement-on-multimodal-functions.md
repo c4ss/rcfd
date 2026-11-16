@@ -160,3 +160,15 @@ A4 to A8 are the fast tests on the same code path (the restart fires on Branin a
 2. Default on or off: off (the acceptance and the brief: opt-in, F-698 unchanged); a change of default would change F-698's
    recorded results.
 3. Perturbations around the best points outside the basin: not taken (S5p: no gain).
+
+## Amendment 1 (2026-11-16, after the registered run of the fast tests, before any corrected run): A8 was vacuous
+
+The registered run of the fast tests (commit ed5e4bbf, log `f715-scratch/logs/run_fast.log`) met A3 to A8. A8 is met only
+vacuously: `bayes::run` with seed 1 made no restart pick within 60 evaluations (0 picks, 0 entries), so it does not exercise the
+ledger path of D1 item 4. The same log shows that seed 1 of A4 has no restart pick either, and seed 2 has 10. The set-up was
+defective (a seed without a restart), not the limit.
+
+Correction (registered now): a test `a8b_restart_picks_in_the_ledger_provenance_seed2`, the A8 set-up with seed 2, run once,
+with two limits: the count of restart picks in `BayesResult::picks` equals the count of entries with `"acquisition":
+"restart"`, and that count is at least 1. A8 stays as it is (met, recorded as vacuous). The decision rule is unchanged with A8b
+in the place of A8.
