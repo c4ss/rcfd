@@ -29,6 +29,14 @@ export class StartFailure extends Error {
   }
 }
 
+/**
+ * How the server is started. `readOnly` (default true) passes `--read-only`; only the case editor (F-812,
+ * src/main/case/server.ts) starts one without it, and calls the few tools of its own allow-list on it.
+ */
+export interface StartOptions {
+  readonly readOnly?: boolean;
+}
+
 export interface ServerInfo {
   readonly name: string;
   readonly version: string;
@@ -75,11 +83,12 @@ export class ProjectServer implements ProjectServerLike {
    * Starts the server for `folder` and completes the MCP handshake. Rejects with a StartFailure: `not_a_project` when
    * the engine refuses the folder (no rcfd-project.json, or one it cannot read), `engine` for anything else.
    */
-  static start(exe: string, folder: string, timeoutMs = START_TIMEOUT_MS): Promise<ProjectServer> {
+  static start(exe: string, folder: string, timeoutMs = START_TIMEOUT_MS, options: StartOptions = {}): Promise<ProjectServer> {
     return new Promise((resolve, reject) => {
       let child: ChildProcess;
+      const args = options.readOnly === false ? ['--project', folder] : ['--project', folder, '--read-only'];
       try {
-        child = spawn(exe, ['--project', folder, '--read-only'], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+        child = spawn(exe, args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
       } catch (e) {
         reject(new StartFailure('engine', `The engine's project server ${exe} could not be started: ${String(e)}`, null));
         return;
@@ -154,8 +163,19 @@ export class ProjectServer implements ProjectServerLike {
   }
 
   async call(tool: ProjectTool, args: Record<string, unknown> = {}): Promise<unknown> {
-    const r = await this.rpc.request('tools/call', { name: tool, arguments: args });
+    return this.callTool(tool, args);
+  }
+
+  /** Any tool by name; the caller's allow-list decides which (the case editor's, src/main/case/server.ts). */
+  async callTool(tool: string, args: Record<string, unknown> = {}, timeoutMs?: number): Promise<unknown> {
+    const r = await this.rpc.request('tools/call', { name: tool, arguments: args }, timeoutMs);
     return toolResult(tool, r);
+  }
+
+  /** The server's `tools/list`: each tool's name, description and input schema, as the engine declares them. */
+  async listTools(): Promise<readonly unknown[]> {
+    const r = (await this.rpc.request('tools/list', {})) as { tools?: unknown } | null;
+    return Array.isArray(r?.tools) ? r.tools : [];
   }
 
   /** Ends the server: its input is closed (it exits at end of input), and it is killed if it is still there after 2 s. */

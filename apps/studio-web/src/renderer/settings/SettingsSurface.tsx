@@ -2,7 +2,7 @@
 // Every key of settings.schema gets a control made from the schema at run time (schema.ts), laid out by learner-first
 // disclosure (disclosure.ts). Every read and change is an action of the F-827 registry dispatched through ../actions;
 // what a change did, or why it was refused, is the engine's reply, shown as the engine wrote it.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ListBox, ListBoxItem, type Key } from 'react-aria-components';
 import type { JsonObject, JsonValue } from '../../shared/actions/params.js';
 import { availability, dispatch } from '../actions/index.js';
@@ -23,6 +23,11 @@ export interface SettingsSurfaceProps {
   readonly settingsEpoch: number;
   /** Raised by the page when the session's run state may have changed. */
   readonly stateEpoch: number;
+  /**
+   * Sections put at the head of the right column, inside the surface's context (F-812's case file panel uses its goTo):
+   * the surface stays the same for every page that wraps it.
+   */
+  readonly aside?: ReactNode;
 }
 
 const SET_ID = 'set';
@@ -65,7 +70,7 @@ function withValue(tree: unknown, path: string, value: JsonValue | undefined): u
   return step(tree, 0);
 }
 
-export function SettingsSurface({ model, session, address, settingsEpoch, stateEpoch }: SettingsSurfaceProps) {
+export function SettingsSurface({ model, session, address, settingsEpoch, stateEpoch, aside }: SettingsSurfaceProps) {
   const list = useMemo(() => sections(model), [model]);
   const [tree, setTree] = useState<unknown>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -380,6 +385,7 @@ export function SettingsSurface({ model, session, address, settingsEpoch, stateE
         </main>
 
         <aside className="st-col st-check" aria-label="Check and changes">
+          {aside}
           <section aria-labelledby="st-session-title">
             <h2 id="st-session-title">Session {session}</h2>
             <dl className="st-facts">

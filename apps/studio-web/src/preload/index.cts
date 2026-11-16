@@ -9,6 +9,8 @@
 //   forwards, so a page cannot get round them by calling a function differently.
 // - `window.studioProject`: the project folder (F-805, src/shared/project.ts), over a second port on
 //   PROJECT_PORT_CHANNEL in the same way; the checks are src/main/project/bridge.ts's.
+// - `window.studioCase`: the case editor's case files (F-812, src/shared/case.ts), on a port of its own on
+//   CASE_PORT_CHANNEL; the checks are src/main/case/bridge.ts's. See the end of this file.
 //
 // CommonJS (.cts, emitted as .cjs) because a sandboxed preload cannot be an ES module, and a single file because a
 // sandboxed preload can only require 'electron' and a few built-ins: the shared modules are imported for their types
@@ -44,6 +46,7 @@ import type {
   DataWireResult,
   DEFAULT_DATA_TIMEOUT_MS as DefaultDataTimeout,
 } from '../shared/data.js';
+import type { CASE_PORT_CHANNEL as CaseChannel, CaseBridge, CasePortMessage, CaseReply, CaseRequest } from '../shared/case.js';
 
 const invoke = <T,>(channel: Channel): Promise<T> => ipcRenderer.invoke(channel) as Promise<T>;
 
@@ -378,3 +381,75 @@ const data: DataBridge = {
 };
 
 contextBridge.exposeInMainWorld('studioData', data);
+
+// ---- the case port (F-812, src/shared/case.ts)
+//
+// `window.studioCase`: requests and replies only (no pushed state). A save or a check asks the engine to validate the
+// case and may build its mesh, so a reply may take a while; the main process gives each tool call its own limit.
+
+const CASE_PORT_CHANNEL: typeof CaseChannel = 'studio.case-port';
+const CASE_TIMEOUT_MS = 300_000;
+
+let casePort: Port | null = null;
+let nextCaseId = 1;
+const caseQueued: CaseRequest[] = [];
+const casePending = new Map<number, { resolve: (r: CaseReply) => void; timer: ReturnType<typeof setTimeout> }>();
+
+const caseSettle = (id: number, reply: CaseReply): void => {
+  const p = casePending.get(id);
+  if (!p) return;
+  casePending.delete(id);
+  clearTimeout(p.timer);
+  p.resolve(reply);
+};
+
+const casePost = (req: CaseRequest): void => {
+  try {
+    (casePort as Port).postMessage(req);
+  } catch (e) {
+    caseSettle(req.id, { ok: false, error: { code: 'bad_request', message: `the request cannot be sent: ${String(e)}` } });
+  }
+};
+
+const caseSend = <T,>(req: CaseRequest): Promise<CaseReply<T>> =>
+  new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      caseSettle(req.id, {
+        ok: false,
+        error: casePort
+          ? { code: 'timeout', message: `no answer from the Studio's main process within ${CASE_TIMEOUT_MS} ms` }
+          : { code: 'no_port', message: 'the Studio has not connected this window to the case editor' },
+      });
+    }, CASE_TIMEOUT_MS);
+    casePending.set(req.id, { resolve: resolve as (r: CaseReply) => void, timer });
+    if (casePort) casePost(req);
+    else caseQueued.push(req);
+  });
+
+ipcRenderer.on(CASE_PORT_CHANNEL, (event) => {
+  const p = event.ports[0];
+  if (!p) return;
+  casePort?.close();
+  casePort = p;
+  p.onmessage = (e: { data: unknown }) => {
+    const m = e.data as CasePortMessage;
+    if (m?.type === 'reply') caseSettle(m.id, m.reply);
+  };
+  for (const req of caseQueued.splice(0)) casePost(req);
+});
+
+const caseFiles: CaseBridge = {
+  state: () => caseSend({ op: 'state', id: nextCaseId++ }),
+  sources: () => caseSend({ op: 'sources', id: nextCaseId++ }),
+  prepare: (path) => caseSend({ op: 'prepare', id: nextCaseId++, path }),
+  attach: (session, path, hash) => caseSend({ op: 'attach', id: nextCaseId++, session, path, hash }),
+  status: (session) => caseSend({ op: 'status', id: nextCaseId++, session }),
+  conflict: (session) => caseSend({ op: 'conflict', id: nextCaseId++, session }),
+  save: (session, onto) => caseSend({ op: 'save', id: nextCaseId++, session, onto }),
+  create: (name, source) => caseSend({ op: 'create', id: nextCaseId++, name, source }),
+  duplicate: (path, name) => caseSend({ op: 'duplicate', id: nextCaseId++, path, name }),
+  check: (path) => caseSend({ op: 'check', id: nextCaseId++, path }),
+  forget: (session) => caseSend({ op: 'forget', id: nextCaseId++, session }),
+};
+
+contextBridge.exposeInMainWorld('studioCase', caseFiles);

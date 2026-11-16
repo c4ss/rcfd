@@ -19,13 +19,13 @@ Engine read: rcfd 0.1.0, service protocol rcfd-service/1 version 1.1, MCP server
 
 | Kind | Capabilities | UI path | Exemption | Exemption whose item does not name it |
 |---|---|---|---|---|
-| Service methods | 69 | 7 | 62 | 46 |
-| MCP tools | 56 | 6 | 50 | 26 |
-| CLI commands | 36 | 0 | 36 | 19 |
+| Service methods | 69 | 9 | 60 | 46 |
+| MCP tools | 56 | 14 | 42 | 26 |
+| CLI commands | 36 | 1 | 35 | 19 |
 | CLI options | 156 | 0 | 156 | 98 |
 | Case schema keys | 948 | 948 | 0 | 0 |
 | Monitor format keys | 6 | 0 | 6 | 0 |
-| **All** | **1271** | **961** (75.6 %) | **310** | **189** |
+| **All** | **1271** | **972** (76.5 %) | **299** | **189** |
 
 A case key stands for every value of its enumeration (the solver options of that key, listed in the inventory): the
 schema-driven surface of F-825 offers them all. A CLI option is mapped with its command. "Item does not name it" marks an
@@ -34,7 +34,7 @@ new item (see the last sections).
 
 ## Gaps by kind and target item
 
-### Service methods (62 without a UI path)
+### Service methods (60 without a UI path)
 
 | Item | Count | Capabilities |
 |---|---|---|
@@ -44,24 +44,24 @@ new item (see the last sections).
 | F-809 derived pictures (iso-surfaces, streamlines, cut planes, vectors) | 1 | `field.sample` |
 | F-810 run bands and linked time scrubbing | 1 | `panel.snapshot` |
 | F-811 residual and monitor plots | 4 | `monitors.get`, `particles.report` (not named), `report.export` (not named), `reports.get` |
-| F-812 case editor validated by the engine's schema | 5 | `mesh.check`, `mesh.inflate` (not named), `mesh.partition` (not named), `run.check`, `session.close` |
+| F-812 case editor validated by the engine's schema | 3 | `mesh.inflate` (not named), `mesh.partition` (not named), `run.check` |
 | F-815 compare two runs | 5 | `design.compare` (not named), `design.get_metrics` (not named), `design.ledger_query` (not named), `design.ledger_rerun_check` (not named), `design.list_study` (not named) |
 | F-828 provenance inspector and reproduce-from-CLI | 3 | `journal.get`, `journal.replay`, `service.info` |
 
-### MCP tools (50 without a UI path)
+### MCP tools (42 without a UI path)
 
 | Item | Count | Capabilities |
 |---|---|---|
-| F-805 project home and the live project folder | 4 | `import_mesh` (not named), `list_changes`, `read_project_file`, `write_note` (not named) |
+| F-805 project home and the live project folder | 3 | `import_mesh` (not named), `list_changes`, `write_note` (not named) |
 | F-806 run list and run state | 2 | `run_status`, `wait_run` |
 | F-807 run control (quick run, stop, pause, queue) | 21 | `cancel_run`, `create_workflow` (not named), `design_create_study` (not named), `design_create_variant` (not named), `design_evaluate` (not named), `design_ledger_append` (not named), `design_ledger_export` (not named), `design_propose` (not named), `design_record` (not named), `design_run_operating_map` (not named), `design_run_study` (not named), `edit_workflow` (not named), `list_workflow_tasks` (not named), `pause_run`, `read_status_stream` (not named), `resume_run`, `run` (not named), `run_headless` (not named), `run_workflow_task` (not named), `start_run`, `status` (not named) |
 | F-808 field viewport on three.js WebGPU | 5 | `export_vtk` (not named), `field_summary`, `get_field_stats`, `render_field`, `render_image` |
 | F-811 residual and monitor plots | 3 | `get_residuals`, `read_metrics`, `read_residuals` |
-| F-812 case editor validated by the engine's schema | 7 | `check_case_headless`, `check_case_mesh`, `check_mesh`, `create_case`, `edit_case`, `load_mesh`, `preview_mesh` (not named) |
-| F-813 a learner's first path | 2 | `list_cases`, `new_case` |
+| F-812 case editor validated by the engine's schema | 1 | `preview_mesh` (not named) |
+| F-813 a learner's first path | 1 | `list_cases` |
 | F-815 compare two runs | 6 | `compare_runs`, `design_compare_variants` (not named), `design_get_metrics` (not named), `design_ledger_query` (not named), `design_ledger_rerun_check` (not named), `design_list_study` (not named) |
 
-### CLI commands (36 without a UI path)
+### CLI commands (35 without a UI path)
 
 | Item | Count | Capabilities |
 |---|---|---|
@@ -70,7 +70,7 @@ new item (see the last sections).
 | F-807 run control (quick run, stop, pause, queue) | 15 | `rcfd map` (not named), `rcfd reactor` (not named), `rcfd restart` (not named), `rcfd run`, `rcfd study` (not named), `rcfd workflow run` (not named), `rcfd workflow show` (not named), `rcfd workflow templates` (not named), `rcfd-runner cancel`, `rcfd-runner ensure`, `rcfd-runner pause`, `rcfd-runner resume`, `rcfd-runner serve`, `rcfd-runner shutdown` (not named), `rcfd-runner start` |
 | F-809 derived pictures (iso-surfaces, streamlines, cut planes, vectors) | 3 | `rcfd acoustics` (not named), `rcfd fwh` (not named), `rcfd sample` |
 | F-811 residual and monitor plots | 1 | `rcfd post` (not named) |
-| F-812 case editor validated by the engine's schema | 5 | `rcfd check`, `rcfd check-mesh`, `rcfd inflate` (not named), `rcfd partition` (not named), `rcfd validate` |
+| F-812 case editor validated by the engine's schema | 4 | `rcfd check`, `rcfd check-mesh`, `rcfd inflate` (not named), `rcfd partition` (not named) |
 | F-813 a learner's first path | 1 | `rcfd cases` |
 | F-814 Claude Code panel | 1 | `rcfd-mcp` |
 | F-825 schema-driven case and settings surface | 1 | `rcfd schema` |

@@ -15,6 +15,9 @@
 //   the service allow-list of src/shared/service.ts (src/main/service/bridge.ts). The renderer has no other way to it.
 // - The project folder (F-805): the same way, a second MessagePort on PROJECT_PORT_CHANNEL (src/main/project/), checked
 //   against src/shared/project.ts. The folder is read through the engine's project server (rcfd-mcp, read-only).
+// - The case editor (F-812): a third MessagePort on CASE_PORT_CHANNEL (src/main/case/), checked against
+//   src/shared/case.ts. Saving and making cases go through a project server started without --read-only, on which this
+//   process calls only the tools of CASE_TOOLS.
 //
 // Service and file I/O live in this process, never in the renderer.
 import {
@@ -36,6 +39,10 @@ import { fileURLToPath } from 'node:url';
 import { CHANNELS, type AppInfo, type Channel, type IpcContract } from '../shared/ipc.js';
 import { SERVICE_PORT_CHANNEL } from '../shared/service.js';
 import { PROJECT_PORT_CHANNEL } from '../shared/project.js';
+import { CASE_PORT_CHANNEL } from '../shared/case.js';
+import { CasePortBridge, type CasePortLike } from './case/bridge.js';
+import { CaseEditor } from './case/editor.js';
+import { ProjectServer } from './project/server.js';
 import { ProjectPortBridge, type ProjectPortLike } from './project/bridge.js';
 import { engineConfig, recentFile } from './project/config.js';
 import { ProjectHome } from './project/home.js';
@@ -88,6 +95,18 @@ const projects = new ProjectHome({
     return r.canceled ? null : (r.filePaths[0] ?? null);
   },
 });
+
+/** The case editor (F-812): sessions bound to case files of the open project, saved through the engine's edit_case. */
+const caseEditor = new CaseEditor({
+  project: () => {
+    const p = projects.state.project;
+    return p ? { folder: p.folder } : null;
+  },
+  engine: projects.state.engine,
+  service,
+  startServer: (exe, folder) => ProjectServer.start(exe, folder, undefined, { readOnly: false }),
+});
+projects.onState(() => caseEditor.projectChanged());
 
 // Before ready: the scheme must be privileged to behave like a secure web origin (fetch, CSP 'self', module scripts).
 protocol.registerSchemesAsPrivileged([
@@ -236,6 +255,30 @@ function offerProjectPort(contents: WebContents): void {
   contents.postMessage(PROJECT_PORT_CHANNEL, null, [port2]);
 }
 
+/** The case port of each web contents (F-812), like the project port. */
+const casePorts = new Map<number, CasePortBridge>();
+
+const adaptCasePort = (p: MessagePortMain): CasePortLike => ({
+  postMessage: (m) => p.postMessage(m),
+  onMessage: (listener) => {
+    p.on('message', (e) => listener(e.data));
+  },
+  onClose: (listener) => {
+    p.on('close', listener);
+  },
+  close: () => p.close(),
+});
+
+function offerCasePort(contents: WebContents): void {
+  casePorts.get(contents.id)?.dispose();
+  casePorts.delete(contents.id);
+  if (contents.isDestroyed() || !isAppUrl(contents.getURL())) return;
+  const { port1, port2 } = new MessageChannelMain();
+  casePorts.set(contents.id, new CasePortBridge(adaptCasePort(port1), caseEditor));
+  port1.start();
+  contents.postMessage(CASE_PORT_CHANNEL, null, [port2]);
+}
+
 /** After a load of one of our own pages: a new port for its preload script, and the old one closed. */
 function offerServicePort(contents: WebContents): void {
   servicePorts.get(contents.id)?.dispose();
@@ -273,6 +316,7 @@ function openWindow(): void {
   contents.on('dom-ready', () => {
     offerServicePort(contents);
     offerProjectPort(contents);
+    offerCasePort(contents);
     dataPorts.offer(contents);
   });
   contents.once('destroyed', () => {
@@ -281,6 +325,8 @@ function openWindow(): void {
     servicePorts.delete(id);
     projectPorts.get(id)?.dispose();
     projectPorts.delete(id);
+    casePorts.get(id)?.dispose();
+    casePorts.delete(id);
   });
   win.once('ready-to-show', () => win.show());
   void win.loadURL(APP_ENTRY);
@@ -303,7 +349,7 @@ app.on('before-quit', (e) => {
   serviceStopped = true;
   const atMost = new Promise((done) => setTimeout(done, 3000));
   // the project server of an open project ends with the Studio: it only reads, and holds no run (G7)
-  void Promise.race([Promise.all([service.shutdown(), projects.shutdown()]), atMost])
+  void Promise.race([Promise.all([service.shutdown(), projects.shutdown(), caseEditor.shutdown()]), atMost])
     .catch(() => undefined)
     .finally(() => app.quit());
 });
