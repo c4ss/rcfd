@@ -452,3 +452,32 @@ fn a8b_restart_picks_in_the_ledger_provenance_seed2() {
     assert_eq!(in_picks, in_entries, "A8b equal");
     assert!(in_picks >= 1, "A8b fired");
 }
+
+/// ADR 0651 amendment 2: the default options are the plain expected improvement of ADR 0621.
+#[test]
+fn a2d_default_options_are_the_plain_ei_of_adr_0621() {
+    assert!(BayesOptions::default().restart.is_none(), "A2d default");
+    let mut equal = true;
+    let mut differs = false;
+    for s in [1u64, 2] {
+        let dflt = BayesOptions {
+            seed: s,
+            n0: Some(10),
+            ..Default::default()
+        };
+        let none = BayesOptions {
+            restart: None,
+            ..dflt.clone()
+        };
+        let a = gp_run(&|x| Some(branin(x)), &BRANIN_B, &dflt, 60).0;
+        let b = gp_run(&|x| Some(branin(x)), &BRANIN_B, &none, 60).0;
+        equal &= bits(&a) == bits(&b);
+        if s == 2 {
+            let c = gp_run(&|x| Some(branin(x)), &BRANIN_B, &opts(2, 10, true), 60).0;
+            differs = bits(&a) != bits(&c);
+        }
+    }
+    println!("A2d: default restart None; default and explicit None bit-equal {equal}; seed 2 differs from the restart {differs}");
+    assert!(equal, "A2d equal");
+    assert!(differs, "A2d can fail");
+}
