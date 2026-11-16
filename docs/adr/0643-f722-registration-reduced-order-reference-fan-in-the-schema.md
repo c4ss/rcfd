@@ -172,3 +172,16 @@ l: 0 }, 1e-4, 0.12, 400)` succeeds", and `q_min` the flow of the operating point
   run on the reference; nothing in the repository reads it yet.
 - The meshes are the s4 smoke meshes (built, quality reported); no flow solve on them.
 - No ADR 0118 checker variant is re-based on the reference (they keep the default as base).
+
+## Addenda
+
+### Amendment 1 (2026-11-16, after the one registered run, before any further run)
+
+The registered run missed A5b (results in addendum 1). By rule 2 the A5 test becomes the ignored record
+`a5_the_reference_meshes_at_the_s4_specs_known_miss` with its limits intact. So that the met clauses of A5 keep running, one test
+is added, `a5_the_reference_meshes_at_the_s4_specs_met_limits`: the same code and the same limits for A5a and NC5, A5b only
+printed (the same deterministic computation, so its numbers are those of the registered run; it is run once to confirm that).
+No limit is changed. One diagnostic run after the miss (scratch `f722-scratch/zz_f722_diag.rs`, log `diag1.log`, never
+committed) locates the fold and evaluates camber_seam_h at other `front_gap` and `n_nose` inside the documented control range
+and on the reference with lower hub stagger; it is reported in addendum 1 as diagnosis, not as a check, and changes no station
+of `rom_reference()`.
