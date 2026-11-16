@@ -39,10 +39,22 @@ export function watchProjectState(listener: (s: ProjectState) => void): () => vo
   };
 }
 
+/**
+ * F-832 (G21): the function that cancels the opening asked for last (the project port's `cancel`, handed over by the
+ * preload script); the opening shows its progress and Cancel from the state's `opening`.
+ */
+let cancelLastOpen: (() => void) | null = null;
+const keepCancel = { onCancel: (cancel: () => void) => void (cancelLastOpen = cancel) };
+
+/** F-832: cancels the opening that is going (nothing when none is). */
+export function cancelOpening(): void {
+  cancelLastOpen?.();
+}
+
 /** The home's requests; each reply arrives as a new state, so the calls are fire and forget. */
 export const projectActions = {
-  pick: () => void bridge()?.pick(),
-  open: (path: string) => void bridge()?.open(path),
+  pick: () => void bridge()?.pick(keepCancel),
+  open: (path: string) => void bridge()?.open(path, keepCancel),
   forget: (path: string) => void bridge()?.forget(path),
   close: () => void bridge()?.close(),
   refresh: () => void bridge()?.refresh(),

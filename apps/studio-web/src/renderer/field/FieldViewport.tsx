@@ -17,7 +17,9 @@ import { Button, Toggle } from '../ui/index.js';
 import { colourRange, f32Text, lutBytes, type ColourRange } from './colormap.js';
 import { FieldCanvas, type Backend, type FieldCanvasApi, type Pick } from './FieldCanvas.js';
 import { Legend } from './Legend.js';
-import { shownRange } from './surface.js';
+import { FieldPrep, type PreparedSurface } from './prepare.js';
+import { beginWork } from '../work/work.js';
+import { WorkProgress } from '../work/WorkProgress.js';
 import './field.css';
 
 export interface FieldViewportProps {
@@ -34,6 +36,11 @@ export interface FieldViewportProps {
   readonly reopen?: number;
   /** F-810: called when the field of a snapshot is drawn, finished on the GPU and one animation frame has passed. */
   readonly onDrawn?: (snapshot: number) => void;
+  /**
+   * F-832 (G21): the user cancelled the load of `snapshot`; the picture shown before stays, untouched, and this names
+   * its snapshot (null when nothing was shown), so a host can put its line back there (no stale selection).
+   */
+  readonly onCancelled?: (shownSnapshot: number | null) => void;
 }
 
 type Phase =
@@ -46,14 +53,16 @@ interface Shown {
   readonly fieldInfo: FieldInfo;
   readonly surface: SurfaceData;
   readonly values: Float32Array;
+  /** F-832: the corner scalars, made off the main thread. */
+  readonly scalars: Float32Array;
   readonly range: ColourRange;
   readonly snapshot: number;
+  /** F-832: what it was loaded for (a repeated request for the same picture loads nothing). */
+  readonly key: string;
 }
 
 let views = 0;
 
-/** F-810: how long a new snapshot's load keeps the shown picture without the loading notice (ms). */
-const QUIET_MS = 300;
 
 /** The run a store belongs to: the folder above `fields` (runs/<id>/fields), else the last segment. */
 function runName(path: string): string {
@@ -62,12 +71,22 @@ function runName(path: string): string {
   return (i > 0 ? parts[i - 1] : parts[parts.length - 1]) ?? path;
 }
 
-export function FieldViewport({ store, snapshot, field, forceWebGL = false, reopen = 0, onDrawn: onDrawnSnapshot }: FieldViewportProps) {
+export function FieldViewport({ store, snapshot, field, forceWebGL = false, reopen = 0, onDrawn: onDrawnSnapshot, onCancelled }: FieldViewportProps) {
   const tagBase = useMemo(() => `field-view-${++views}`, []);
   const lut = useMemo(lutBytes, []);
+  // F-832 (G21): the arrays the GPU draws are made in a worker, one per view
+  const prep = useMemo(() => new FieldPrep(), []);
+  useEffect(() => () => prep.dispose(), [prep]);
+  const cancelledCb = useRef(onCancelled);
+  cancelledCb.current = onCancelled;
+  const shownRef = useRef<Shown | null>(null);
   const [phase, setPhase] = useState<Phase>({ kind: 'loading', what: 'Opening the store' });
-  const [opened, setOpened] = useState<{ key: string; info: StoreInfo; surface: SurfaceData } | null>(null);
-  const [shown, setShown] = useState<Shown | null>(null);
+  const [opened, setOpened] = useState<{ key: string; info: StoreInfo; surface: SurfaceData; prepared: PreparedSurface } | null>(null);
+  const [shown, setShownState] = useState<Shown | null>(null);
+  const setShown = useCallback((s: Shown | null) => {
+    shownRef.current = s;
+    setShownState(s);
+  }, []);
   const [backend, setBackend] = useState<Backend | null>(null);
   const [moved, setMoved] = useState(false);
   const [grid, setGrid] = useState(false);
@@ -77,8 +96,6 @@ export function FieldViewport({ store, snapshot, field, forceWebGL = false, reop
   const api = useRef<FieldCanvasApi>(null);
   const tag = useRef('');
   const firstPicture = useRef(false);
-  // F-810: while scrubbing, a new snapshot's load keeps the last picture without the loading notice for QUIET_MS
-  const [quiet, setQuiet] = useState(false);
   const reopened = useRef(reopen);
   const reopening = useRef(false);
   const drawnFor = useRef<number | null>(null);
@@ -99,24 +116,52 @@ export function FieldViewport({ store, snapshot, field, forceWebGL = false, reop
     setShown(null);
     setHover(null);
     setPhase({ kind: 'loading', what: 'Opening the store' });
+    // F-832: one work from the open to the surface's arrays; Cancel cancels the door's requests by their tag
+    const work = beginWork({
+      kind: 'field.load',
+      scope: tagBase,
+      label: `Opening the stored fields of ${runName(store.path)}`,
+      word: 'Opening',
+      onCancel: () => void cancelLoads(t),
+    });
+    const cancelled = () => {
+      setPhase({ kind: 'error', message: 'Opening was cancelled.', hint: 'Nothing was drawn; try again to open the store.' });
+    };
     void (async () => {
       const info = await openStore(store, { tag: t });
       if (!live) return;
+      if (work.cancelled) return cancelled();
       if (!info.ok) {
+        work.end();
         setPhase({ kind: 'error', message: `The store could not be opened: ${info.error.message}`, hint: 'Check the folder holds store.rts and is inside a data root, then try again.' });
         return;
       }
       setPhase({ kind: 'loading', what: `Reading the boundary surface of ${info.result.nCells} cells` });
       const surface = await loadSurface(store, { tag: t });
       if (!live) return;
+      if (work.cancelled) return cancelled();
       if (!surface.ok) {
+        work.end();
         setPhase({ kind: 'error', message: `The surface could not be read: ${surface.error.message}`, hint: 'The stored mesh may be damaged; the store’s run can be checked with rcfd.' });
         return;
       }
-      setOpened({ key: storeKey, info: info.result, surface: surface.result });
+      let prepared: PreparedSurface;
+      try {
+        prepared = await prep.surface(surface.result);
+      } catch (e) {
+        if (!live) return;
+        work.end();
+        setPhase({ kind: 'error', message: `The surface could not be prepared: ${e instanceof Error ? e.message : String(e)}`, hint: 'Try again to open the store.' });
+        return;
+      }
+      if (!live) return;
+      if (work.cancelled) return cancelled();
+      work.end();
+      setOpened({ key: storeKey, info: info.result, surface: surface.result, prepared });
     })();
     return () => {
       live = false;
+      work.end();
       void cancelLoads(t);
     };
     // the store is named by its key; a new object with the same route and path is the same store
@@ -181,14 +226,37 @@ export function FieldViewport({ store, snapshot, field, forceWebGL = false, reop
       setPhase({ kind: 'error', message: `The store has no snapshot ${snapshot + 1}.`, hint: `It holds ${info.snapshots.length} snapshots.` });
       return;
     }
+    // F-832: the same picture asked for again (a host putting its line back after a cancel) loads nothing
+    const key = `${storeKey}\u0000${snapshot}\u0000${field}\u0000${attempt}\u0000${info.snapshots.length}`;
+    const was = shownRef.current;
+    if (was && was.key === key && was.surface === surface) {
+      setPhase({ kind: 'ready' });
+      return;
+    }
     setPhase({ kind: 'loading', what: `Reading ${field} of snapshot ${snapshot + 1} of ${info.snapshots.length}` });
-    // a picture is shown: keep it without the loading notice for a moment (scrubbing loads one field after another)
-    setQuiet(true);
-    const quietTimer = setTimeout(() => setQuiet(false), QUIET_MS);
+    // F-810's quiet scrubbing (no notice for a load shorter than 300 ms) is now the work tracker's PROGRESS_AFTER_MS
+    // F-832: the load is a work, shown after PROGRESS_AFTER_MS with Cancel, which cancels the door's request by its tag
+    const work = beginWork({
+      kind: 'field.load',
+      scope: tagBase,
+      label: `Reading ${field} of snapshot ${snapshot + 1} of ${info.snapshots.length}`,
+      word: `Reading ${field}`,
+      onCancel: () => void cancelLoads(t),
+    });
+    const cancelled = () => {
+      // the picture shown before stays as it was (no half-drawn field); the host may put its line back on it
+      const before = shownRef.current;
+      const kept = before !== null && before.surface === surface;
+      if (kept) setPhase({ kind: 'ready' });
+      else setPhase({ kind: 'error', message: 'Loading was cancelled.', hint: 'Nothing was drawn; try again to load it.' });
+      cancelledCb.current?.(kept ? before.snapshot : null);
+    };
     void (async () => {
       const r = await loadField(store, snapshot, field, { tag: t });
       if (!live) return;
+      if (work.cancelled) return cancelled();
       if (!r.ok) {
+        work.end();
         setPhase({
           kind: 'error',
           message: r.error.code === 'cancelled' ? 'Loading was cancelled.' : `The field could not be read: ${r.error.message}`,
@@ -196,23 +264,35 @@ export function FieldViewport({ store, snapshot, field, forceWebGL = false, reop
         });
         return;
       }
-      const values = r.result.values;
-      if (values.length !== info.nCells) {
-        setPhase({ kind: 'error', message: `The field has ${values.length} values for ${info.nCells} cells.`, hint: 'The store does not match its mesh.' });
+      if (r.result.values.length !== info.nCells) {
+        work.end();
+        setPhase({ kind: 'error', message: `The field has ${r.result.values.length} values for ${info.nCells} cells.`, hint: 'The store does not match its mesh.' });
         return;
       }
-      const span = shownRange(surface.cells, values);
+      let made: Awaited<ReturnType<FieldPrep['field']>>;
+      try {
+        made = await prep.field(opened.prepared, r.result.values);
+      } catch (e) {
+        if (!live) return;
+        work.end();
+        setPhase({ kind: 'error', message: `The field could not be prepared: ${e instanceof Error ? e.message : String(e)}`, hint: 'Try again to load it.' });
+        return;
+      }
+      if (!live) return;
+      if (work.cancelled) return cancelled();
+      work.end();
+      const span = made.range;
       if (!span) {
         setPhase({ kind: 'error', message: 'The surface has no triangles to draw.', hint: 'The stored mesh has no boundary faces.' });
         return;
       }
       drawnFor.current = snapshot;
-      setShown({ info, fieldInfo: fi, surface, values, range: colourRange(span.lo, span.hi), snapshot });
+      setShown({ info, fieldInfo: fi, surface, values: made.values, scalars: made.scalars, range: colourRange(span.lo, span.hi), snapshot, key });
       setPhase({ kind: 'ready' });
     })();
     return () => {
       live = false;
-      clearTimeout(quietTimer);
+      work.end();
       void cancelLoads(t);
     };
     // `store` is named by storeKey; `reopen` is read to tell a snapshot not read yet from one that does not exist
@@ -239,7 +319,6 @@ export function FieldViewport({ store, snapshot, field, forceWebGL = false, reop
     const pick = api.current.pickCentre();
     setHover(pick ? { pick, by: 'keyboard' } : null);
   };
-  const loading = phase.kind === 'loading';
   const fi = shown?.fieldInfo;
   const quantity = fi?.name ?? field;
   const unit = fi?.unit ?? '';
@@ -287,27 +366,22 @@ export function FieldViewport({ store, snapshot, field, forceWebGL = false, reop
           onMoved={setMoved}
           onDrawn={onDrawn}
           onGridState={setGridState}
+          prepared={opened?.prepared ?? null}
+          scalars={shown?.scalars ?? null}
         />
+        <WorkProgress scope={tagBase} />
         {moved && shown && (
           <Button className="fv-reset" onPress={reset}>
             Reset view
           </Button>
         )}
         {hover?.by === 'keyboard' && <span className="fv-crosshair" aria-hidden="true" />}
-        {phase.kind !== 'ready' && !(phase.kind === 'loading' && quiet && shown) && (
-          <div className="fv-status" role={phase.kind === 'error' ? 'alert' : 'status'}>
-            {loading ? (
-              <>
-                <p>{phase.what}…</p>
-                <Button onPress={() => void cancelLoads(tag.current)}>Cancel</Button>
-              </>
-            ) : (
-              <>
-                <p>{phase.message}</p>
-                <p className="fv-hint">{phase.hint}</p>
-                <Button onPress={() => setAttempt((a) => a + 1)}>Try again</Button>
-              </>
-            )}
+        {/* F-832: a load's progress is WorkProgress's (above), shown after PROGRESS_AFTER_MS; this box is for errors */}
+        {phase.kind === 'error' && (
+          <div className="fv-status" role="alert">
+            <p>{phase.message}</p>
+            <p className="fv-hint">{phase.hint}</p>
+            <Button onPress={() => setAttempt((a) => a + 1)}>Try again</Button>
           </div>
         )}
       </div>

@@ -21,7 +21,8 @@ import { Button, IconButton, SegmentedToggle, StateMark, StatePictogram, Tabs, T
 import { baseName, clock, dateTime, inFolder, kilobytes, plural, sourceWord } from './format.js';
 import { RunsView } from '../runs/RunsView.js';
 import { runRows, shownState, timeText, unknownWord, type RunRow } from '../runs/model.js';
-import { projectActions, watchProjectState } from './door.js';
+import { cancelOpening, projectActions, watchProjectState } from './door.js';
+import { useWorkWhile, WorkProgress } from '../work/WorkProgress.js';
 import { caseHash } from '../case/hash.js';
 import { CaseRunButton, RunFailure } from '../runs/RunControls.js';
 import { ClaudePanel } from '../claude/ClaudePanel.js';
@@ -50,12 +51,21 @@ function useProjectState(): ProjectState | null {
 
 const actions = projectActions;
 
+/** F-832: the scope of the project home's works (opening a project) in the work tracker. */
+const WORK_SCOPE = 'project-home';
+
 const NOT_CONFIGURED_SHORT = 'The Studio was not told where the engine’s project server is.';
 
 export function ProjectHome() {
   useEffect(reportReady, []);
   const state = useProjectState();
   const project = state?.project ?? null;
+  // F-832 (G21): an opening shows its progress and Cancel after PROGRESS_AFTER_MS; Cancel keeps what was open before
+  useWorkWhile(
+    state?.opening != null,
+    { kind: 'project.open', scope: WORK_SCOPE, label: `Opening project ${state?.opening ?? ''}`, word: 'Opening project', onCancel: cancelOpening },
+    state?.opening ?? '',
+  );
   const canOpen = state === null || state.engine.configured;
   return (
     <div className="ph-page">
@@ -70,6 +80,7 @@ export function ProjectHome() {
         )}
         {project && (
           <div className="ph-top-actions">
+            <WorkProgress scope={WORK_SCOPE} placement="band" />
             {canOpen ? (
               <Button variant="ghost" icon="plus" onPress={actions.pick} isDisabled={state?.opening != null}>
                 Open project…
@@ -152,11 +163,7 @@ function NoProject({ state }: { state: ProjectState | null }) {
             <p>{engine.reason}</p>
           </Notice>
         )}
-        {state?.opening && (
-          <p className="ph-opening" role="status">
-            Opening {state.opening}…
-          </p>
-        )}
+        <WorkProgress scope={WORK_SCOPE} placement="inline" />
         {state?.failure && <FailureNotice failure={state.failure} recent={state.recent} />}
       </section>
       <section className="ph-recent" aria-labelledby="ph-recent-title">

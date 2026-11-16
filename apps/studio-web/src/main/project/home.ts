@@ -12,6 +12,7 @@ import { filesUnder, type Names } from './listing.js';
 import { sameFolder, withExistence, withOpened, without, type StoredRecent } from './recent.js';
 import { ProjectServer, START_TIMEOUT_MS, StartFailure, type ProjectServerLike } from './server.js';
 import { ProjectSession } from './session.js';
+import { testDelay } from '../work/delay.js';
 
 export interface RecentLike {
   load(): Promise<StoredRecent[]>;
@@ -165,6 +166,9 @@ export class ProjectHome {
     this.opening = folder;
     this.failure = null;
     this.emit();
+    // F-832: the tests' delay before the engine is asked (none outside them); a cancel during it starts nothing
+    await testDelay('projectOpen');
+    if (seq !== this.openSeq) return;
     const start = this.deps.startServer ?? ((exe: string, f: string) => ProjectServer.start(exe, f));
     let session: ProjectSession | null = null;
     try {
@@ -200,6 +204,19 @@ export class ProjectHome {
     await this.setRecent((l) => withOpened(l, folder, this.now()));
     this.emit();
     if (before) await before.close();
+  }
+
+  /**
+   * F-832 (G21): cancels the opening that is going. The project open before stays open and the recent list is not
+   * touched; the opening, overtaken, closes its session (and so its project server) when the engine answers. The
+   * engine has no way to stop a project server's start half way, so that one finishes and is then stopped.
+   */
+  cancelOpen(): boolean {
+    if (this.opening === null) return false;
+    this.openSeq++;
+    this.opening = null;
+    this.emit();
+    return true;
   }
 
   /** F-807: how run control reaches the engine for a project read by the project server at `exe`. */

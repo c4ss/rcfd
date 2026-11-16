@@ -62,6 +62,23 @@ import type {
 } from '../shared/data.js';
 import type { CASE_PORT_CHANNEL as CaseChannel, CaseBridge, CasePortMessage, CaseReply, CaseRequest } from '../shared/case.js';
 import type { RUN_PORT_CHANNEL as RunChannel, RunBridge, RunPortMessage, RunReply, RunRequest } from '../shared/run.js';
+import type { CancelOptions } from '../shared/work.js';
+
+/**
+ * F-832 (G21): hands the page the function that cancels one request, through the `onCancel` it passed (an AbortSignal
+ * cannot cross contextBridge; functions cross as proxies). Anything else in `options` is ignored.
+ */
+const offerCancel = (options: CancelOptions | undefined, cancel: () => void): void => {
+  const hook = options && typeof options === 'object' ? options.onCancel : undefined;
+  if (typeof hook !== 'function') return;
+  try {
+    hook(() => {
+      cancel();
+    });
+  } catch {
+    // the page's hook failed; the request goes on as if it had passed none
+  }
+};
 
 const invoke = <T,>(channel: Channel): Promise<T> => ipcRenderer.invoke(channel) as Promise<T>;
 
@@ -290,8 +307,14 @@ const project: ProjectBridge = {
   offState: (id) => {
     projectListeners.delete(id);
   },
-  pick: () => projectSend({ op: 'pick', id: nextProjectId++ }),
-  open: (path) => projectSend({ op: 'open', id: nextProjectId++, path }),
+  pick: (options) => {
+    offerCancel(options, () => void projectSend({ op: 'cancel', id: nextProjectId++ }));
+    return projectSend({ op: 'pick', id: nextProjectId++ });
+  },
+  open: (path, options) => {
+    offerCancel(options, () => void projectSend({ op: 'cancel', id: nextProjectId++ }));
+    return projectSend({ op: 'open', id: nextProjectId++, path });
+  },
   forget: (path) => projectSend({ op: 'forget', id: nextProjectId++, path }),
   close: () => projectSend({ op: 'close', id: nextProjectId++ }),
   refresh: () => projectSend({ op: 'refresh', id: nextProjectId++ }),
@@ -481,10 +504,18 @@ const caseFiles: CaseBridge = {
   attach: (session, path, hash) => caseSend({ op: 'attach', id: nextCaseId++, session, path, hash }),
   status: (session) => caseSend({ op: 'status', id: nextCaseId++, session }),
   conflict: (session) => caseSend({ op: 'conflict', id: nextCaseId++, session }),
-  save: (session, onto) => caseSend({ op: 'save', id: nextCaseId++, session, onto }),
+  save: (session, onto, options) => {
+    const id = nextCaseId++;
+    offerCancel(options, () => void caseSend({ op: 'cancel', id: nextCaseId++, target: id }));
+    return caseSend({ op: 'save', id, session, onto });
+  },
   create: (name, source) => caseSend({ op: 'create', id: nextCaseId++, name, source }),
   duplicate: (path, name) => caseSend({ op: 'duplicate', id: nextCaseId++, path, name }),
-  check: (path) => caseSend({ op: 'check', id: nextCaseId++, path }),
+  check: (path, options) => {
+    const id = nextCaseId++;
+    offerCancel(options, () => void caseSend({ op: 'cancel', id: nextCaseId++, target: id }));
+    return caseSend({ op: 'check', id, path });
+  },
   forget: (session) => caseSend({ op: 'forget', id: nextCaseId++, session }),
 };
 

@@ -20,7 +20,11 @@ import { Select, StateMark, StatePictogram } from '../ui/index.js';
 import { runSeries, runValuesAt } from './door.js';
 import { bandOf, defaultField, lastStep, liveRun, positionsOf, sampleAt, sharedAxis, storePath, type Position } from './model.js';
 import { TimePanel, type CursorValue } from './TimePanel.js';
+import { useWorkWhile, WorkProgress } from '../work/WorkProgress.js';
 import './workspace.css';
+
+/** F-832: the scope of the workspace's own works (opening a run) in the work tracker. */
+const WORK_SCOPE = 'workspace';
 
 export interface RunWorkspaceProps {
   readonly view: ProjectView;
@@ -139,16 +143,45 @@ function useCursorValues(run: string | null, series: RunSeries | null, step: num
 export default function RunWorkspace({ view, selected, onSelect }: RunWorkspaceProps) {
   const rows = useMemo(() => runRows(view.runs.items, view.runDetails, view.runDetailErrors), [view.runs.items, view.runDetails, view.runDetailErrors]);
   const live = liveRun(rows, selected);
+  // F-832: a cancelled first opening leaves nothing selected, and the workspace does not select again on its own
+  const [autoSelect, setAutoSelect] = useState(true);
+  useEffect(() => {
+    if (selected !== null) setAutoSelect(true);
+  }, [selected]);
   // with nothing selected the workspace brings forward the live run, else the newest run
   useEffect(() => {
-    if (selected !== null || rows.length === 0) return;
+    if (selected !== null || rows.length === 0 || !autoSelect) return;
     const newest = [...rows].sort((a, b) => (a.created < b.created ? 1 : -1))[0]!;
     onSelect(live ?? newest.id);
-  }, [selected, rows, live, onSelect]);
+  }, [selected, rows, live, onSelect, autoSelect]);
   const row = rows.find((r) => r.id === selected) ?? null;
   const steady = row?.detail?.steady ?? null;
   const store = useStore(view.folder, row);
   const { series, error: seriesError, version } = useSeries(row);
+
+  // F-832 (G21): opening a run (its store and its histories) is a work; Cancel goes back to the run selected before
+  // (or to none), and the hooks' own clean-ups cancel the store's request through the data door and drop the histories
+  const before = useRef<{ now: string | null; was: string | null }>({ now: selected, was: null });
+  if (before.current.now !== selected) before.current = { now: selected, was: before.current.now };
+  const opening = row !== null && row.state !== 'queued' && ((store.info === null && store.error === null) || (series === null && seriesError === null));
+  useWorkWhile(
+    opening,
+    {
+      kind: 'run.open',
+      scope: WORK_SCOPE,
+      label: `Opening run ${row?.id ?? ''}`,
+      word: 'Opening run',
+      onCancel: () => {
+        const back = before.current.was;
+        if (back !== null && back !== selected && rows.some((r) => r.id === back)) onSelect(back);
+        else {
+          setAutoSelect(false);
+          onSelect(null);
+        }
+      },
+    },
+    row?.id ?? '',
+  );
   const positions = useMemo(() => positionsOf(store.info, series, steady), [store.info, series, steady]);
   const running = row !== null && ACTIVE.has(row.state) && row.state !== 'queued';
 
@@ -208,6 +241,19 @@ export default function RunWorkspace({ view, selected, onSelect }: RunWorkspaceP
   useEffect(() => {
     if (position?.snapshot !== null && position?.snapshot !== undefined) performance.mark('rcfd:scrub:request', { detail: { run: row?.id, snapshot: position.snapshot, step: position.step } });
   }, [row?.id, position?.snapshot, position?.step]);
+  // F-832: a field load the user cancelled leaves the picture shown before; the line goes back to that snapshot
+  const onCancelled = useCallback(
+    (shownSnapshot: number | null) => {
+      if (!row || shownSnapshot === null) return;
+      const k = positions.findIndex((p) => p.snapshot === shownSnapshot);
+      if (k < 0) return;
+      moved.current = true;
+      setPlaying(false);
+      setFollow(false);
+      setStop({ run: row.id, index: k });
+    },
+    [row, positions],
+  );
   const onDrawn = useCallback(
     (snapshot: number) => {
       drawnAt.current = { run: row?.id, snapshot };
@@ -284,11 +330,19 @@ export default function RunWorkspace({ view, selected, onSelect }: RunWorkspaceP
                   {caseName(row.case)} · {row.id} · stored fields of runs/{row.id}/fields
                 </span>
               </div>
-              <FieldViewport store={store.ref} snapshot={position.snapshot} field={field} reopen={store.info.snapshots.length} onDrawn={onDrawn} />
+              <FieldViewport
+                store={store.ref}
+                snapshot={position.snapshot}
+                field={field}
+                reopen={store.info.snapshots.length}
+                onDrawn={onDrawn}
+                onCancelled={onCancelled}
+              />
             </>
           ) : (
             <NoField row={row} storeError={store.error} store={store.info} hasStops={positions.length > 0} />
           )}
+          <WorkProgress scope={WORK_SCOPE} />
         </section>
       </div>
       {row && (
@@ -394,7 +448,8 @@ function NoField({ row, storeError, store, hasStops }: { row: RunRow | null; sto
   else if (store && defaultField(store) === null) text = `${name} stores no cell field the viewport draws (${store.fields.map((f) => f.name).join(', ') || 'none'}).`;
   else if (storeError !== null)
     text = `${name} has no saved field: runs/${row.id}/fields cannot be read (${storeError}). A run stores fields when its case sets output.store_interval or output.store_time_interval.${hasStops ? ' Its residual and monitor samples are in the time panel below.' : ''}`;
-  else text = `Reading the stored fields of ${name}…`;
+  // F-832 (G22): reading is the normal state and says nothing; a long read shows the workspace's progress after 300 ms
+  else return <div className="ws-nofield" aria-busy="true" />;
   return (
     <div className="ws-nofield" role="status">
       {s && <StatePictogram state={s} size={28} />}

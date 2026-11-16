@@ -28,6 +28,10 @@ import type { EngineStatus } from '../../shared/project.js';
 import { RpcError } from '../service/rpc.js';
 import { journalEntries, pendingChanges, realRemovals, type JournalEntry } from './plan.js';
 import { CaseServer, type ToolServerLike } from './server.js';
+import { testDelay } from '../work/delay.js';
+
+/** F-832: the refusal of a save or check cancelled before it reached the engine (or, for a check, while it ran). */
+const cancelledBefore = (what: string): CaseRefusal => new CaseRefusal('cancelled', `The ${what} was cancelled before the engine was asked; nothing was written.`);
 
 /** Engine error codes the editor tells apart (docs/mcp-tools.md, docs/service-protocol.md). */
 export const CODE = { UNKNOWN_SESSION: 1001, INVALID: 1003, REFUSED: 1004, CONFLICT: 1200, NOT_FOUND: 1202 } as const;
@@ -364,8 +368,13 @@ export class CaseEditor {
     }
   }
 
-  save(session: string, onto: 'opened' | 'current'): Promise<SaveOutcome> {
+  /**
+   * F-832: `signal` cancels the save while nothing has been sent to the engine's `edit_case` (the refusal `cancelled`);
+   * once it has, the save completes: the engine writes the file whole or not at all.
+   */
+  save(session: string, onto: 'opened' | 'current', signal?: AbortSignal): Promise<SaveOutcome> {
     return this.serial(session, async () => {
+      if (signal?.aborted) throw cancelledBefore('save');
       const { b, entries } = await this.boundJournal(session);
       this.requireBindingProject(b);
       const server = await this.caseServer();
@@ -403,6 +412,9 @@ export class CaseEditor {
         if (!v.found) throw new CaseRefusal('engine', `The session holds no setting ${p} any more; open the case again.`);
         set[p] = v.value;
       }
+      // F-832: the tests' delay (none outside them), then the last moment a cancel stops the save: after it, the engine writes
+      await testDelay('caseSave', signal);
+      if (signal?.aborted) throw cancelledBefore('save');
       let r: { path?: unknown; old_hash?: unknown; new_hash?: unknown; form?: unknown; values?: unknown; mesh?: { ok?: unknown } };
       try {
         r = (await server.call('edit_case', { path: b.path, base_hash: base, set, reason: SAVE_REASON })) as typeof r;
@@ -481,13 +493,26 @@ export class CaseEditor {
     }
   }
 
-  async check(p: string): Promise<FileCheck> {
+  /**
+   * F-832: `signal` cancels the check: before the engine is asked nothing is sent; while it runs, the result is dropped
+   * (the project server has no way to stop a tool call; it finishes the check, which writes nothing).
+   */
+  async check(p: string, signal?: AbortSignal): Promise<FileCheck> {
     const rel = this.rel(p);
     const server = await this.caseServer();
+    await testDelay('caseCheck', signal);
+    if (signal?.aborted) throw cancelledBefore('check');
     let r: { ok?: unknown; exit_code?: unknown; event?: { diagnostics?: unknown; cells?: unknown; mesh?: { errors?: unknown; warnings?: unknown } } };
     try {
-      r = (await server.call('check_case_headless', { path: rel })) as typeof r;
+      const call = server.call('check_case_headless', { path: rel });
+      r = (await (signal
+        ? Promise.race([
+            call,
+            new Promise<never>((_, reject) => signal.addEventListener('abort', () => reject(new CaseRefusal('cancelled', 'The check was cancelled; its result is not shown.')), { once: true })),
+          ])
+        : call)) as typeof r;
     } catch (e) {
+      if (e instanceof CaseRefusal) throw e;
       throw engineError(e);
     }
     const ev = r?.event ?? {};
