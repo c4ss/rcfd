@@ -256,3 +256,26 @@ narrow-band update); its cost is not measured. Items of D5.
   item. Recommendation (a); open (a schema golden), not taken.
 - **Q2. The second-order flux faces with motion.** Taken on the maintainer's standing instruction of 2026-11-11 (take the
   recommendation): not in F-308 (first-order forcing only); proposed as a follow-up if the results ask for it.
+
+## Amendment 1 (2026-11-16, before any run of the heavy record): set-up details the registration left unstated
+
+Written after the library and the fast tests T1 to T7 were built and run once (all met; numbers in addendum 1) and before the
+heavy record was compiled into a run. No limit, case number, mesh, window or station changes. Fixed here because the
+registration did not state them:
+
+- **Solver settings of every heavy run.** `PimpleSettings::piso(0.01)` (implicit Euler, one outer iteration, two correctors, no
+  non-orthogonal correctors, momentum tolerance 1e-8 relative, pressure 1e-7 relative, pressure reference cell 0 at 0) with
+  central convection and `amg_pressure = true`; nothing else changed. The same in the immersed and the body-fitted runs.
+- **Penalty** `K = 1e6 /s` (`ImmersedSettings::new(1e6)`: modified forcing, `theta_min = 1e-2`): `K dt = 5000`, the ADR 0218
+  guideline of `K` well above `a_P / V` (here about `1/dt + 4 nu / h^2 = 264 /s`).
+- **Immersed domain.** `box_2d_coords` of the stretched axis on x and y (the same coordinates), depth 1; the four box walls
+  no-slip at rest (they lie in the solid of the inverted wall body); the moving cylinder is body 0, the wall body 1 (radius 8,
+  inverted, fixed). The stretched cells grow by 1.08 from `h` and are scaled to end on 8.4 (`stretched_axis` in the test).
+- **Body-fitted run.** `cylinder` and `farfield` start as fixed-value walls at rest; `set_follow_conditions` sets the cylinder's
+  velocity in every step; the point displacement is along x only, `x = x0 + x_c(t_{n+1}) w(|x0|)` from the initial points.
+- **Wake points** lie at mid-depth `z = 0.5`; the nearest cell is found in the x-y plane; only the x and y velocity components
+  enter the measures.
+- **The force reference point** is the body centre (it does not enter the force).
+- **The phase** of a harmonic is `atan2` of `(2/N) sum F exp(-i omega t_n)`, the A2 difference wrapped to `(-180, 180]` degrees.
+- **The five runs** BF, BFc, IB40 (G40), IB20 (G20) and N1 run on five threads of `f308_oscillating_cylinder_record`; a stopped
+  run (S1) ends the test before any other check is evaluated.
