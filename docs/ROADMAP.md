@@ -14205,13 +14205,16 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     monitor plots on three.js (SVG measured 30x slower per increment), fetched once then by increments with 0 resyncs
     against real rcfd, range holds every value; dev route #/dev/plots until F-810. P3 missed under full machine load
     (median 118.3 ms vs 100 ms); re-measure on an idle machine (Q-811-1).
-- [ ] **F-812** Electron Studio: case editor validated by the engine's schema
+- [x] **F-812** Electron Studio: case editor validated by the engine's schema
   - depends on: F-805, F-825
   - acceptance: Open, edit and save a case through the engine's own schema and validation (no copy of either in the
     Studio, G2); invalid input names the key, the problem and the fix; learner defaults first with advanced keys one
     step away (PRODUCT Principle 5); round-trip test against the CLI's reading of the same file; a view-and-report step.
     The editor is the F-825 surface plus case-level actions; every case key is reachable (G15).
-  - note: ADR 0800. Traces: G2, G12; PRODUCT Principle 5. Surface not yet designed: shape it with impeccable first.
+  - note: ADR 0800. Traces: G2, G12; PRODUCT Principle 5. Surface not yet designed: shape it with impeccable first. Done
+    2026-11-16: case editor at #/case (src/renderer/case, src/main/case); opens via session.create, saves via edit_case
+    with base_hash on a writable project server, comments kept; CLI round trip and conflict tests; screenshots for the
+    maintainer's view-and-report in test-results-visual/f812.
 - [ ] **F-813** Electron Studio: a learner's first path
   - depends on: F-807, F-812
   - acceptance: From an empty folder to a first honest result with the quick-start project, without CFD jargon on the

@@ -7265,9 +7265,9 @@
       "F-805",
       "F-825"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Open, edit and save a case through the engine's own schema and validation (no copy of either in the Studio, G2); invalid input names the key, the problem and the fix; learner defaults first with advanced keys one step away (PRODUCT Principle 5); round-trip test against the CLI's reading of the same file; a view-and-report step. The editor is the F-825 surface plus case-level actions; every case key is reachable (G15).",
-    "note": "ADR 0800. Traces: G2, G12; PRODUCT Principle 5. Surface not yet designed: shape it with impeccable first."
+    "note": "ADR 0800. Traces: G2, G12; PRODUCT Principle 5. Surface not yet designed: shape it with impeccable first. Done 2026-11-16: case editor at #/case (src/renderer/case, src/main/case); opens via session.create, saves via edit_case with base_hash on a writable project server, comments kept; CLI round trip and conflict tests; screenshots for the maintainer's view-and-report in test-results-visual/f812."
   },
   {
     "id": "F-813",
