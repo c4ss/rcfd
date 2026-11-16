@@ -3,3 +3,4 @@ dist/
 out/
 test-results/
 playwright-report/
+test-results-visual/

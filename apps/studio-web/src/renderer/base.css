@@ -1,21 +1,132 @@
-/* Base styles of the skeleton only. The design tokens of DESIGN.md arrive with F-802. */
+/* Global styles of the renderer, from the design tokens (design/tokens.css, generated from design/tokens.ts). The
+   browser surfaces nobody draws (selection, caret, scrollbars, focus) carry the design too. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 html,
 body {
   margin: 0;
-  font-family: Archivo, 'Helvetica Neue', Arial, sans-serif;
-  font-size: 12px;
-  line-height: 1.35;
-  background: #ffffff;
-  color: #1d3a5f;
+  background: var(--role-ground);
+  color: var(--role-text);
+  font-family: var(--font-family);
+  font-size: var(--type-body-size);
+  font-weight: var(--type-body-weight);
+  line-height: var(--type-body-line-height);
+  /* The Tabular Figures Rule: every number lines up and does not jitter while it changes. */
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
 }
 
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+  font-variant-numeric: inherit;
+}
+
+::selection {
+  background: var(--role-selection-bg);
+  color: var(--role-selection-text);
+}
+
+input,
+textarea {
+  caret-color: var(--role-caret);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--role-scrollbar) transparent;
+}
+
+/* Focus on every focusable element: a 2px orange ring next to the control with a 1px ink edge outside it, so one of
+   the two always contrasts with what is next to it (tokens.ts PRODUCT_DEVIATIONS, focus). The edge is an outline, so it
+   stays in forced-colours mode. ui/primitives.css applies the same ring to React Aria parts by [data-focus-visible], and
+   draws it inside the box where neighbours would hide it (tabs, table rows and cells, list options). */
+:focus-visible {
+  outline: var(--focus-edge-width) solid var(--role-focus-edge);
+  outline-offset: var(--focus-ring-width);
+  box-shadow: 0 0 0 var(--focus-ring-width) var(--role-focus-ring);
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* React Aria's usePress would add this rule as an inline <style> element, which the Content Security Policy refuses
+   (style-src 'self'); main.tsx marks it as present and the rule lives here instead. */
+[data-react-aria-pressable] {
+  touch-action: pan-x pan-y pinch-zoom;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* The type ramp of DESIGN.md as classes. */
+.type-display {
+  font-size: var(--type-display-size);
+  font-weight: var(--type-display-weight);
+  line-height: var(--type-display-line-height);
+  letter-spacing: var(--type-display-tracking);
+}
+.type-headline {
+  font-size: var(--type-headline-size);
+  font-weight: var(--type-headline-weight);
+  letter-spacing: var(--type-headline-tracking);
+}
+.type-title {
+  font-size: var(--type-title-size);
+  font-weight: var(--type-title-weight);
+  letter-spacing: var(--type-title-tracking);
+}
+.type-title-sm {
+  font-size: var(--type-title-sm-size);
+  font-weight: var(--type-title-sm-weight);
+}
+.type-body {
+  font-size: var(--type-body-size);
+  font-weight: var(--type-body-weight);
+  line-height: var(--type-body-line-height);
+}
+.type-label {
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+}
+.type-chart-micro {
+  font-size: var(--type-chart-micro-size);
+  font-weight: var(--type-chart-micro-weight);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The empty project view (F-801 placeholder until F-805). */
 .project-view {
-  padding: 24px;
+  padding: var(--space-xxl);
   max-width: 60ch;
 }
 
 .project-view h1 {
-  font-size: 22px;
-  font-weight: 700;
-  margin: 0 0 12px;
+  font-size: var(--type-headline-size);
+  font-weight: var(--type-headline-weight);
+  letter-spacing: var(--type-headline-tracking);
+  margin: 0 0 var(--space-lg);
 }
