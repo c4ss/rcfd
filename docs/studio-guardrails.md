@@ -1,6 +1,6 @@
 # Electron Studio guardrails
 
-Status: APPROVED by the maintainer 2026-11-16 (G1 to G14 as drafted; G15 to G21 added the same day at the maintainer's request). Written by the lead from the house rules, ADR 0350 and
+Status: APPROVED by the maintainer 2026-11-16 (G1 to G14 as drafted; G15 to G21 added the same day at the maintainer's request; G22 added the same day). Written by the lead from the house rules, ADR 0350 and
 `docs/ui-restart-plan.md`.
 
 These are the fixed limits of the Electron Studio (F-448 and its successors). Every item of the Studio roadmap names the
@@ -160,6 +160,16 @@ Studio is hard to master without being hard to learn.
 Engine work never runs on the renderer's main thread. Long operations (opening a run, loading fields, computing a
 derived picture) show progress and can be cancelled, and the window stays responsive while runs, loads and scrubbing
 happen.
+
+## G22. Implicit by default, explicit on exception
+
+What is normal and expected is carried by the pictogram, position and layout, with no visible words of its own. Visible
+words appear only for the exception: a failure, a loss, a conflict, something blocked or unavailable, or a value the user
+must act on. Everything G6, G8, G18 and G19 ask to be said in words is still said, but in the accessible name, a tooltip
+or focus detail, the help on demand or the command palette, not as standing text on the screen. Tests check those words
+by role and accessible name, so G13 holds without painting a sentence for the test to read. G6's disclaimers, failed
+runs and known misses stay visible: they are exceptions by definition. A surface that grows adds no standing prose for
+its normal state; a feature that needs a sentence to be understood at rest is redesigned, not annotated.
 
 ## Open (for the maintainer)
 

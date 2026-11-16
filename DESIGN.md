@@ -150,11 +150,13 @@ The Studio is drawn the way Otl Aicher drew the Munich 1972 Games: one strict pr
 
 The world is white ground, deep ink rules and flat colour fields. Density comes from hairlines rather than card padding: panels sit edge to edge, divided by 1px ink or silver lines, and the workspace reflows by whole modules instead of floating boxes. Selection pulls the chosen run's numbers forward while everything else fades. The one place the world gives way is the field view: there the data owns the colour, through a perceptual colour map, and the chrome stays ink and white around it.
 
+**The Quiet Rule (guardrail G22).** Normal is implicit; the exception speaks. A wayfinding program does not label the corridor, only the turn. At rest a surface carries its state in pictograms, position and layout, and shows visible words only for a failure, a loss, a conflict, something blocked, or a value the user must act on. Help, reasons and next steps are one step away (tooltip, focus detail, help, command palette), not standing on the screen. The disclaimer footer, failures and known misses always stay visible.
+
 It refuses the grey docked workbench with a single blue accent: no grey chrome, no black, no grey text, no rounded panels.
 
 **Key Characteristics:**
 - Flat colour fields with jobs (sky, meadow, orange, deep red) on white, ruled in deep ink.
-- State is always a pictogram plus a word; colour only reinforces it.
+- State is always a pictogram plus a word; colour only reinforces it. The word is the accessible name and tooltip for normal states, and visible text only for exceptions (The Quiet Rule).
 - Square corners everywhere; 1px rules and hairlines instead of cards and shadows.
 - One neo-grotesk (Archivo) with tabular figures throughout.
 - Hairline density, so many numbers fit on one screen, with selection bringing one run forward.
@@ -298,6 +300,8 @@ A 24px deep ink band with white label text that is always visible, with secondar
 - **Do** divide panels with 1px ink rules and silver hairlines, square-cornered, with no gutters.
 - **Do** set every number in tabular figures and put its unit in the caption.
 - **Do** keep the disclaimer footer visible on every surface.
+- **Do** let normal states be silent: pictogram, position and layout at rest; words in the accessible name, tooltip, help or palette.
+- **Do** show visible words for exceptions only: a failure, a loss, a conflict, something blocked or unavailable, a value to act on.
 - **Do** colour fields from the raw value through one table that also draws the legend.
 
 ### Don't:
@@ -308,6 +312,8 @@ A 24px deep ink band with white label text that is always visible, with secondar
 - **Don't** show deep red for anything but a failure, and never without its pictogram and word.
 - **Don't** tint the field with interface colours, or show a field without its legend and caption.
 - **Don't** add a second typeface or a monospace for numbers.
+- **Don't** add standing notes, hints, reasons or explanations for a normal state; if a control needs a sentence at rest to be understood, redesign the control.
+- **Don't** repeat in visible text what a pictogram, column heading or position already says.
 
 ## Open
 

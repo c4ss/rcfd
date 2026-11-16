@@ -530,6 +530,8 @@
       "**Do** divide panels with 1px ink rules and silver hairlines, square-cornered, with no gutters.",
       "**Do** set every number in tabular figures and put its unit in the caption.",
       "**Do** keep the disclaimer footer visible on every surface.",
+      "**Do** let normal states be silent: pictogram, position and layout at rest; words in the accessible name, tooltip, help or palette.",
+      "**Do** show visible words for exceptions only: a failure, a loss, a conflict, something blocked or unavailable, a value to act on.",
       "**Do** colour fields from the raw value through one table that also draws the legend."
     ],
     "donts": [
@@ -539,7 +541,9 @@
       "**Don't** use sky, meadow or orange as text on white; they are fields and fills that carry ink text.",
       "**Don't** show deep red for anything but a failure, and never without its pictogram and word.",
       "**Don't** tint the field with interface colours, or show a field without its legend and caption.",
-      "**Don't** add a second typeface or a monospace for numbers."
+      "**Don't** add a second typeface or a monospace for numbers.",
+      "**Don't** add standing notes, hints, reasons or explanations for a normal state; if a control needs a sentence at rest to be understood, redesign the control.",
+      "**Don't** repeat in visible text what a pictogram, column heading or position already says."
     ],
     "open": [
       "Dark theme",
