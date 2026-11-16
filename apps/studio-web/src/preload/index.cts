@@ -15,6 +15,8 @@
 //   RUN_PORT_CHANNEL; the checks are src/main/run/bridge.ts's. See the end of this file.
 // - `window.studioClaude`: the Claude Code panel (F-814, src/shared/claude.ts), over a port on CLAUDE_PORT_CHANNEL in
 //   the same way; the checks are src/main/claude/bridge.ts's.
+// - `window.studioProvenance`: a run's provenance and the clipboard of Copy (F-828, src/shared/provenance.ts), on a port of
+//   its own on PROVENANCE_PORT_CHANNEL; the checks are src/main/provenance/bridge.ts's. See the end of this file.
 //
 // CommonJS (.cts, emitted as .cjs) because a sandboxed preload cannot be an ES module, and a single file because a
 // sandboxed preload can only require 'electron' and a few built-ins: the shared modules are imported for their types
@@ -63,6 +65,13 @@ import type {
 } from '../shared/data.js';
 import type { CASE_PORT_CHANNEL as CaseChannel, CaseBridge, CasePortMessage, CaseReply, CaseRequest } from '../shared/case.js';
 import type { RUN_PORT_CHANNEL as RunChannel, RunBridge, RunPortMessage, RunReply, RunRequest } from '../shared/run.js';
+import type {
+  PROVENANCE_PORT_CHANNEL as ProvenanceChannel,
+  ProvenanceBridge,
+  ProvenancePortMessage,
+  ProvenanceReply,
+  ProvenanceRequest,
+} from '../shared/provenance.js';
 
 const invoke = <T,>(channel: Channel): Promise<T> => ipcRenderer.invoke(channel) as Promise<T>;
 
@@ -655,3 +664,66 @@ const runHistories: RunBridge = {
 };
 
 contextBridge.exposeInMainWorld('studioRunData', runHistories);
+
+// ---- the provenance port (F-828, src/shared/provenance.ts)
+//
+// `window.studioProvenance`: requests and replies only, like the run port. The main process reads a run's record through
+// the open project's read-only project server, and writes the clipboard for Copy.
+
+const PROVENANCE_PORT_CHANNEL: typeof ProvenanceChannel = 'studio.provenance-port';
+const PROVENANCE_TIMEOUT_MS = 60_000;
+
+let provenancePort: Port | null = null;
+let nextProvenanceId = 1;
+const provenanceQueued: ProvenanceRequest[] = [];
+const provenancePending = new Map<number, { resolve: (r: ProvenanceReply) => void; timer: ReturnType<typeof setTimeout> }>();
+
+const provenanceSettle = (id: number, reply: ProvenanceReply): void => {
+  const p = provenancePending.get(id);
+  if (!p) return;
+  provenancePending.delete(id);
+  clearTimeout(p.timer);
+  p.resolve(reply);
+};
+
+const provenancePost = (req: ProvenanceRequest): void => {
+  try {
+    (provenancePort as Port).postMessage(req);
+  } catch (e) {
+    provenanceSettle(req.id, { ok: false, error: { code: 'bad_request', message: `the request cannot be sent: ${String(e)}` } });
+  }
+};
+
+const provenanceSend = <T,>(req: ProvenanceRequest): Promise<ProvenanceReply<T>> =>
+  new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      provenanceSettle(req.id, {
+        ok: false,
+        error: provenancePort
+          ? { code: 'timeout', message: `no answer from the Studio's main process within ${PROVENANCE_TIMEOUT_MS} ms` }
+          : { code: 'no_port', message: 'the Studio has not connected this window to the provenance port' },
+      });
+    }, PROVENANCE_TIMEOUT_MS);
+    provenancePending.set(req.id, { resolve: resolve as (r: ProvenanceReply) => void, timer });
+    if (provenancePort) provenancePost(req);
+    else provenanceQueued.push(req);
+  });
+
+ipcRenderer.on(PROVENANCE_PORT_CHANNEL, (event) => {
+  const p = event.ports[0];
+  if (!p) return;
+  provenancePort?.close();
+  provenancePort = p;
+  p.onmessage = (e: { data: unknown }) => {
+    const m = e.data as ProvenancePortMessage;
+    if (m?.type === 'reply') provenanceSettle(m.id, m.reply);
+  };
+  for (const req of provenanceQueued.splice(0)) provenancePost(req);
+});
+
+const provenance: ProvenanceBridge = {
+  run: (run) => provenanceSend({ op: 'run', id: nextProvenanceId++, run }),
+  copy: (text) => provenanceSend({ op: 'copy', id: nextProvenanceId++, text }),
+};
+
+contextBridge.exposeInMainWorld('studioProvenance', provenance);

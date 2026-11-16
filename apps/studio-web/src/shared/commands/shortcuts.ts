@@ -106,6 +106,9 @@ export const SHORTCUTS: readonly Shortcut[] = [
   { keys: 'F5', scope: 'global', does: 'Run a case of the project (asks which)', command: 'project.run_case', owner: 'F-831' },
   { keys: 'Ctrl+.', scope: 'global', does: 'Stop a project run (asks which, then confirms)', command: 'project.stop_run', owner: 'F-831' },
 
+  // ---- F-828: provenance of the focused or pointed number (global)
+  { keys: 'Ctrl+I', scope: 'global', does: 'Show the provenance of the focused or pointed number (else of the selected run)', command: 'provenance.show', owner: 'F-828' },
+
   // ---- the command palette (F-831)
   { keys: 'ArrowDown', scope: 'palette', does: 'Next command or choice', command: null, owner: 'F-831' },
   { keys: 'ArrowUp', scope: 'palette', does: 'Previous command or choice', command: null, owner: 'F-831' },

@@ -96,6 +96,13 @@ function studioReason(id: string, env: PaletteEnv): string | null {
     case 'claude.stop':
       if (!view(env)) return NO_PROJECT;
       return turnRunning(env) ? null : 'No Claude Code reply is being written: there is nothing to stop.';
+    case 'provenance.show':
+    case 'provenance.copy_command': {
+      // F-828: run by the provenance module's handlers (src/renderer/provenance/registry.ts)
+      if (!view(env)) return NO_PROJECT;
+      const h = commandHandler(id);
+      return h ? (h.unavailable?.() ?? null) : 'Open Runs or the Workspace of the project first.';
+    }
     default:
       return null;
   }
@@ -157,6 +164,8 @@ export async function choicesFor(e: PaletteEntry, p: PaletteParam, values: Value
           value: r.id,
           label: r.id,
           detail: `${r.case} · ${r.state}${r.step > 0 ? ` · step ${r.step}` : ''}`,
+          // a Studio command on a run applies to every run (F-828's Copy reproduce command), except that Compare runs
+          // refuses the selected run (F-815)
           reason: e.source === 'run' ? runReason(e.id, { ...values, [p.name]: r.id }, v) : compareReason(e.id, r.id, selected),
           mark: r.id === selected ? 'selected in Runs' : null,
         })),
@@ -368,6 +377,17 @@ async function studio(e: PaletteEntry, values: Values): Promise<Outcome> {
     case 'claude.refresh': {
       const r = await claudeActions.refresh();
       return r.ok ? done(['The sessions were listed again; the panel shows them.']) : failed([r.error.message]);
+    }
+    case 'provenance.show': {
+      // F-828: the palette closes first, so the focus is back on the number it was opened from
+      const h = commandHandler(e.id);
+      return h ? close(() => h.run(values)) : failed(['Open Runs or the Workspace of the project first.']);
+    }
+    case 'provenance.copy_command': {
+      const h = commandHandler(e.id);
+      if (!h) return failed(['Open Runs or the Workspace of the project first.']);
+      const r = (await h.run(values)) as { ok: boolean; lines: string[] } | undefined;
+      return r?.ok ? done(r.lines) : failed(r?.lines ?? ['The command could not be copied.']);
     }
     default:
       return failed([`${e.id} is run by the palette itself.`]);

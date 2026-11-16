@@ -21,6 +21,8 @@ import { runSeries, runValuesAt } from './door.js';
 import { bandOf, defaultField, lastStep, liveRun, positionsOf, sampleAt, sharedAxis, storePath, type Position } from './model.js';
 import { TimePanel, type CursorValue } from './TimePanel.js';
 import { CompareControls, CompareFields, CompareMetrics, useComparison, type CompareState } from './Compare.js';
+import { Provenance, countValue, counterValue, statusValue } from '../provenance/index.js';
+import { READ_RESIDUALS, STORE_READER } from '../provenance/sources.js';
 import './workspace.css';
 
 export interface RunWorkspaceProps {
@@ -282,7 +284,7 @@ export default function RunWorkspace({ view, selected, onSelect, compareRequest 
           >
             {(r) => <RunItem row={r} faded={selected !== null && r.id !== selected} />}
           </ListBox>
-          {row && <RunNumbers row={row} store={store.info} storeError={store.error} series={series} seriesError={seriesError} position={position} />}
+          {row && <RunNumbers row={row} store={store.info} storeError={store.error} series={series} seriesError={seriesError} position={position} positionsCount={positions.length} />}
           {row && otherRow && <CompareMetrics a={row} b={otherRow} comparison={comparison.comparison} error={comparison.error} />}
         </section>
         <section className="ws-field" aria-label="Field view">
@@ -358,7 +360,11 @@ function RunItem({ row, faded }: { row: RunRow; faded: boolean }) {
       <span className="ws-item-case" data-run={row.id}>
         {caseName(row.case) || 'case not recorded'}
       </span>
-      <span className="ws-item-id">{row.id}</span>
+      <span className="ws-item-id">
+        <Provenance tabStop={false} runOpener subject={{ kind: 'run', run: row.id }}>
+          {row.id}
+        </Provenance>
+      </span>
       <span className="ws-item-state">{s ? <StateMark state={s} faded={faded} /> : <span className="ui-state">{unknownWord(row.state)}</span>}</span>
     </ListBoxItem>
   );
@@ -371,6 +377,7 @@ function RunNumbers({
   series,
   seriesError,
   position,
+  positionsCount,
 }: {
   row: RunRow;
   store: StoreInfo | null;
@@ -378,6 +385,7 @@ function RunNumbers({
   series: RunSeries | null;
   seriesError: string | null;
   position: Position | null;
+  positionsCount: number;
 }) {
   const decimated = series?.series.some((s) => s.decimated) ?? false;
   return (
@@ -385,19 +393,66 @@ function RunNumbers({
       <dl className="ws-grid">
         <div>
           <dt>{row.detail?.steady === true ? 'Iterations' : 'Steps'}</dt>
-          <dd>{row.step}</dd>
+          <dd>
+            <Provenance
+              subject={{
+                kind: 'number',
+                source: statusValue({ run: row.id, quantity: row.detail?.steady === true ? 'iterations' : 'steps', shown: String(row.step), value: row.step, unit: { why: 'a count of the solver’s steps, status.json step' } }),
+              }}
+            >
+              {row.step}
+            </Provenance>
+          </dd>
         </div>
         <div>
           <dt>Snapshots stored</dt>
-          <dd>{store ? store.snapshots.length : storeError ? 'none' : '…'}</dd>
+          <dd>
+            {store ? (
+              <Provenance
+                subject={{
+                  kind: 'number',
+                  source: countValue({ run: row.id, quantity: 'snapshots stored', shown: String(store.snapshots.length), file: `runs/${row.id}/fields/store.rts`, readBy: STORE_READER, what: 'a count of the store’s snapshots' }),
+                }}
+              >
+                {store.snapshots.length}
+              </Provenance>
+            ) : storeError ? (
+              'none'
+            ) : (
+              '…'
+            )}
+          </dd>
         </div>
         <div>
           <dt>Residual lines</dt>
-          <dd>{series ? series.lines : seriesError ? 'not read' : '…'}</dd>
+          <dd>
+            {series ? (
+              <Provenance
+                subject={{
+                  kind: 'number',
+                  source: countValue({ run: row.id, quantity: 'residual lines', shown: String(series.lines), file: `runs/${row.id}/residuals.jsonl`, readBy: READ_RESIDUALS, what: 'a count of residuals.jsonl’s lines' }),
+                }}
+              >
+                {series.lines}
+              </Provenance>
+            ) : seriesError ? (
+              'not read'
+            ) : (
+              '…'
+            )}
+          </dd>
         </div>
         <div>
           <dt>At the line, step</dt>
-          <dd>{position ? position.step : 'none'}</dd>
+          <dd>
+            {position ? (
+              <Provenance subject={{ kind: 'number', source: { ...counterValue({ run: row.id, shown: String(position.step), stop: { ...position, of: positionsCount } }), quantity: 'step' } }}>
+                {position.step}
+              </Provenance>
+            ) : (
+              'none'
+            )}
+          </dd>
         </div>
       </dl>
       <p className="ws-source">

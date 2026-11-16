@@ -213,6 +213,33 @@ export const STUDIO_COMMANDS: readonly StudioCommand[] = [
     note: 'Nothing to script: the folder is unchanged and the runner keeps every run.',
   },
 
+  // ---- provenance (F-828)
+  {
+    id: 'provenance.show',
+    title: 'Show provenance',
+    description:
+      'Where the focused or pointed number came from: its run, snapshot, file, the engine version that made it and its unit as the engine gave it, and the command that reproduces the run.',
+    group: 'Project runs',
+    effect: 'navigate',
+    params: [],
+    engine: 'read_project_file of runs/<id>/run.json, its case.snapshot and the case file (rcfd-mcp --project <folder> --read-only); service.info',
+    cli: 'rcfd-runner start <case> --project <folder> --threads <n> --priority <n> [--mem-mb <n>] [--set path=value]...',
+    mcp: 'read_project_file',
+    note: 'Reads only: the facts are the run record the runner wrote; the command is built from it, never from the Studio’s settings.',
+  },
+  {
+    id: 'provenance.copy_command',
+    title: 'Copy reproduce command',
+    description: 'Copy the command that runs a run again from its record (rcfd-runner start with the recorded case and settings), and say what it would not reproduce.',
+    group: 'Project runs',
+    effect: 'navigate',
+    params: [{ name: 'run', kind: 'run', optional: false, description: 'A run of the open project (the run selected in Runs first).' }],
+    engine: 'read_project_file of runs/<id>/run.json, its case.snapshot and the case file (rcfd-mcp --project <folder> --read-only)',
+    cli: 'rcfd-runner start <case> --project <folder> --threads <n> --priority <n> [--mem-mb <n>] [--set path=value]...',
+    mcp: 'read_project_file',
+    note: 'The command is the run record’s; the clipboard is written by the main process.',
+  },
+
   // ---- Claude Code (F-814)
   {
     id: 'claude.new_chat',

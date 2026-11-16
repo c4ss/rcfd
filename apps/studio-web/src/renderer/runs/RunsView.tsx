@@ -33,6 +33,7 @@ import {
 import { pendingByRun, requestWords, withStartedRuns } from './control-model.js';
 import { RunBar, SelectedRunControls } from './RunControls.js';
 import type { RunRequest } from '../../shared/project.js';
+import { Provenance, reportValue, statusValue } from '../provenance/index.js';
 import './runs.css';
 
 /** The order of the state filter's options. */
@@ -185,7 +186,17 @@ function RunTableRow({ row, faded, pending }: { row: RunRow; faded: boolean; pen
       </Cell>
       <Cell className="rv-cell-result">
         <span className="rv-head" data-step={row.step}>
-          {r.head}
+          {row.state === 'queued' || row.step === 0 ? (
+            r.head
+          ) : (
+            // F-828: not a tab stop (the rows take the arrow keys); a click, or Ctrl+I on the focused row, opens it
+            <Provenance
+              tabStop={false}
+              subject={{ kind: 'number', source: statusValue({ run: row.id, quantity: row.detail?.steady === true ? 'iterations' : 'steps', shown: r.head, value: row.step, unit: { why: 'a count of the solver’s steps, status.json step' } }) }}
+            >
+              {r.head}
+            </Provenance>
+          )}
         </span>
         <span className={failed ? 'rv-note rv-note--failed' : 'rv-note'}>{r.note}</span>
         {pending && (
@@ -261,7 +272,11 @@ function SelectedRun({
           {caseName(row.case) || 'case not recorded'}
         </h2>
         {s ? <StateMark state={s} /> : <span className="ui-state">{unknownWord(row.state)}</span>}
-        <span className="rv-id">{row.id}</span>
+        <span className="rv-id">
+          <Provenance runOpener subject={{ kind: 'run', run: row.id }}>
+            {row.id}
+          </Provenance>
+        </span>
         <Button variant="ghost" icon="close" onPress={onClear} className="rv-clear">
           Clear selection
         </Button>
@@ -280,25 +295,79 @@ function SelectedRun({
       )}
       <SelectedRunControls view={view} row={row} onStarted={onSelect} />
       <dl className="rv-grid" aria-label={`Numbers of ${row.id}`}>
-        <Num caption={steady === true ? 'Iterations' : 'Steps'}>{row.step}</Num>
+        <Num caption={steady === true ? 'Iterations' : 'Steps'}>
+          <Provenance subject={{ kind: 'number', source: statusValue({ run: row.id, quantity: steady === true ? 'iterations' : 'steps', shown: String(row.step), value: row.step, unit: { why: 'a count of the solver’s steps, status.json step' } }) }}>
+            {row.step}
+          </Provenance>
+        </Num>
         <Num caption="Time, s" word={timeNote(row) !== null}>
-          {timeText(row)}
+          {timeNote(row) === null ? (
+            <Provenance
+              subject={{
+                kind: 'number',
+                source: statusValue({ run: row.id, quantity: 'time', shown: timeText(row), value: row.time, unit: { why: 'status.json gives the time with no unit (the caption’s s is not the engine’s, F-828 gap)' } }),
+              }}
+            >
+              {timeText(row)}
+            </Provenance>
+          ) : (
+            timeText(row)
+          )}
         </Num>
         <Num caption="Solver time, s" word={d?.finish?.elapsed == null}>
-          {d?.finish?.elapsed != null ? plain(d.finish.elapsed, 2) : ended ? 'not reported' : 'not finished'}
+          {d?.finish?.elapsed != null ? (
+            <Provenance
+              subject={{
+                kind: 'number',
+                source: statusValue({
+                  run: row.id,
+                  quantity: 'solver time',
+                  shown: plain(d.finish.elapsed, 2),
+                  value: d.finish.elapsed,
+                  unit: { unit: 's', from: 'the key elapsed_s of the solver’s finish event' },
+                  file: `runs/${row.id}/events.jsonl`,
+                  readBy: 'run_status (rcfd-mcp, read-only), the solver’s finish event',
+                }),
+              }}
+            >
+              {plain(d.finish.elapsed, 2)}
+            </Provenance>
+          ) : ended ? (
+            'not reported'
+          ) : (
+            'not finished'
+          )}
         </Num>
         <Num caption="Solver process" word={d?.pid == null}>
-          {d?.pid ?? (d ? 'none' : '…')}
+          {d?.pid != null ? (
+            <Provenance subject={{ kind: 'number', source: statusValue({ run: row.id, quantity: 'solver process', shown: String(d.pid), value: d.pid, unit: { why: 'a process id, status.json pid' } }) }}>
+              {d.pid}
+            </Provenance>
+          ) : d ? (
+            'none'
+          ) : (
+            '…'
+          )}
         </Num>
         <Num caption="Exit code" word={d?.exitCode == null}>
-          {d?.exitCode ?? (ended ? 'none' : 'not ended')}
+          {d?.exitCode != null ? (
+            <Provenance subject={{ kind: 'number', source: statusValue({ run: row.id, quantity: 'exit code', shown: String(d.exitCode), value: d.exitCode, unit: { why: 'the solver’s exit code, status.json exit_code' } }) }}>
+              {d.exitCode}
+            </Provenance>
+          ) : ended ? (
+            'none'
+          ) : (
+            'not ended'
+          )}
         </Num>
         <Num caption="Updated" word>
           {d ? (sameDay(d.updated) ? clock(d.updated) : dateTime(d.updated)) : '…'}
         </Num>
         {reports.map(([k, v]) => (
           <Num key={k} caption={k}>
-            <span title={String(v)}>{report(v)}</span>
+            <span title={String(v)}>
+              <Provenance subject={{ kind: 'number', source: reportValue({ run: row.id, name: k, shown: report(v), value: v }) }}>{report(v)}</Provenance>
+            </span>
           </Num>
         ))}
       </dl>
