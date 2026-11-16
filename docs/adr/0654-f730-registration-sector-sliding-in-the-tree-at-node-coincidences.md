@@ -252,3 +252,105 @@ the panic message), so the test stopped before it could assert it. Corrected tes
 **Times.** The lockstep took 167 s and R1 172 s (four tests at once on a shared machine), above the two minutes of a heavy
 record: by the registration's own provision both are marked `#[ignore]` as heavy records (no limit changes, their results
 stand from the registered run), FT (2.6 s of solving) covering the code path fast.
+
+## Addendum 1: results (2026-11-16)
+
+Measured against the limits registered above and in amendment 1; no limit was changed. Release builds on Windows. The
+registration is 66e42f4e (alone, first); the code and the tests f3e57a2d (committed before their run); amendment 1, the
+heavy-record marks and the corrected test E1cc a5a991ae (committed before the corrected run). The registered run (four tests,
+four threads, log `w49i-work/f730-scratch/run.log`) was made once; the corrected E1cc ran once. The runs are deterministic;
+none was repeated and no diagnostic run was made.
+
+**Built as registered** (S1 to S4). Shared files: `crates/rcfd-api/src/sim/sliding.rs` (the import, lines 19 to 21; the
+optional sub-table `coincidences` in the schema with `COINCIDENCES` and `coincidences_present`, lines 52 to 73; the refusal
+on the full annulus in `check`, lines 136 to 142; the field `coupled` of `SlidingRun`, lines 164 to 165, and its reading in
+`new_sliding`, lines 319 and 325; the record's `flux_residual`, lines 338 to 339 and 394; `step_sector` with the flag and the
+branch, lines 349 to 357, 401 to 408, 427 to 433 and 452), `crates/rcfd-api/src/sim.rs` (the monitor push, lines 4360 to
+4363). No library file changed. New `crates/rcfd-api/tests/sliding_sector_coincidence_f730.rs` (the lockstep and R1 as heavy
+records, FT and E1cc as ordinary tests, E1c as the ignored record). Docs: `docs/case-schema.md`, `docs/dynamic-mesh.md`.
+**No golden, no hash table, no existing test edited; no golden diff is needed.**
+
+### Results
+
+| Check | Limit | Measured (every step; coincidence steps; re-imaging steps) | Verdict |
+| --- | --- | --- | --- |
+| **A1 (c1)** FC `sliding_flux_residual`, steps 2 to 400 | `<= 1e-12` | `1.04e-13`; `7.2e-14`; `3.3e-14` (step 1, the start flux: `2.58e-3`, printed) | **met** |
+| **L1c (c1)** FC tree against LC after 400 steps | `1e-12` each | velocity 0, flux 0 | **met** |
+| X1 (set-up) pieces 40 / 44, no wrap pair exactly at 192 and 384, annulus 240 / 264 | exact | every step as stated | held |
+| C3 (set-up) re-imaging steps; final angle, image | `{192, 384}`; `>= 2 pi/3`, 2 | `[192, 384]`; 2.181662 rad, image 2 | held |
+| X0 (set-up) interface non-orthogonality | `70 deg` | 48.56 deg (sector and annulus) | held |
+| M1 FC net interface flux, GCL, continuity | `1e-10`, `1e-12`, `1e-9` | `1.56e-14`, `1.85e-14`, `4.49e-12` | met |
+| N1 (control) LB `flux_residual / max abs(u)` on the 50 coincidence steps | `>= 1e-5` each | smallest `6.88e-3` (50 of 50; smallest absolute `1.40e-4`) | held |
+| F0 (set-up) cell match | `1e-9`, one-to-one | `7.4e-15`, one-to-one | held |
+| **F1 (c2)** FC against FC-A, `max abs(du) / U0` | `<= 2e-2` | `1.25e-2`; `1.25e-2`; `3.44e-3` | **met** |
+| F2 rms at the last step | `<= 1e-2` | `3.96e-4` | met |
+| **B1 (c3)** coupled = base step data off coincidences; differing on them | 350 equal, 50 differ | 350, 50 | **met** |
+| **R1 (c3)** ADR 0646's FS, FW, US with the table against without, 440 steps | bit-equal; monitor only with the table | bit-equal on every step (all three); monitor only with the table (largest value FS `9.8e-14`, FW `9.8e-14`, US `1.7e-16`) | **met** |
+| L1b FB (default) against LB at two coincidences | 0; no monitor | 0, 0; no monitor | met |
+| T1 FT: FC against LC; FC residual; LB ratio | `1e-12`; `1e-12`; `>= 1e-5` | 0, 0; `7.97e-14`; `6.88e-3` | met |
+| K0c data and text | as stated | as stated | met |
+| E1c (as registered) | `Err` at the key | the test panicked at the parse, whose error was the registered refusal at `mesh.sliding.coincidences` (line 18), printed: a defective test (amendment 1) | **test failed** (set-up) |
+| E1cc (amendment 1) | `Err` at the key | `Case::parse_toml` refuses at `mesh.sliding.coincidences` | met |
+| D1 (c3) `baseline_hashes` | pass | 3 passed, 1 ignored | met |
+| D2 (c3) the named suites, unedited | pass | `rcfd-api` lib 141/4, `sliding_sector_case_f711` 5/0, `sliding_case_f303` 7/4, `sliding_coincidence_f710` 1/0; `rcfd-cli` `sliding_sector_case_f711` 2/0, `sliding_case_f303` 2/0, `docs_site` 2/0 (passed / ignored) | met |
+
+Printed, no limit: the base sector LB against the annulus `1.31e-2` (coincidence steps `1.31e-2`, re-imaging steps
+`3.42e-3`); FC against LB `9.8e-4 U0` (the coupling's effect on the velocity); F1 before the first coincidence step
+`5.4e-3`; largest speed at the end `0.0169` (sector) and `0.0166` (annulus). Times: lockstep 167 s, R1 172 s (four tests in
+parallel on a shared machine), hence heavy records (amendment 1); FT 2.6 s, E1cc 0.01 s.
+
+### Mutations (scratch copy `w49i-work/f730-scratch/mut` of a5a991ae, script `mutate.py`, log `mutations.log`, target `target-mut`)
+
+| Mutation | Must fail | Caught by |
+| --- | --- | --- |
+| MU1 the base step taken with `coupled = true` | A1 or T1 | T1: FC's residual `4.9e-3`, FC against LC `6.8e-4` |
+| MU2 the coupled step whatever the key | L1b | L1b: FB against LB `6.8e-4` (velocity), `2.8e-4` (flux) |
+| MU3 the refusal on the full annulus removed | E1c | E1cc (the corrected test): no error from the check or `Simulation::new` |
+| MU4 the monitor on the default path too | L1b or R1 | L1b: FB writes `sliding_flux_residual` |
+| MU5 the library's coupled step calls the base body | A1 or T1 | T1: FC's residual `4.9e-3` |
+
+Five of five caught (MU3 by E1cc, which replaced E1c by amendment 1). Each file restored and compared.
+`cargo fmt -p rcfd-api --check`: clean. `cargo clippy --release -p rcfd-api --all-targets -- -D warnings`: clean. Not run:
+the whole workspace suite and whole-crate integration suites (the daily gate, ADR 0653).
+
+### Reading
+
+- c1 is met: the tree runs FS with ADR 0637's step through `periodic_sliding_step_coupled` (the tree loop equals the library
+  loop bit for bit), and the remapped old flux is divergence-free to `1.0e-13` on every step from the second, including the
+  50 coincidence steps and the re-imaging step 192 at offset exactly 0. The base step leaves `1.4e-4` there (at least
+  `6.9e-3` of the speed).
+- c2 is met: the sector stays within `1.25e-2 U0` of the full-annulus tree run over 2.08 pitches (F-711: `1.15e-2` at `dt =
+  0.005`), rms `4.0e-4` at the end. The coupling changes the velocity by about `1e-3 U0` (FC against LB), and the base
+  sector's difference from the annulus is `1.31e-2`, so at this field's size the velocity comparison alone could not tell
+  the two apart. That is why the control is on the residual, as registered.
+- c3 is met: off coincidences the coupled step data equal the base's bit for bit (350 of 350), ADR 0646's three runs are
+  bit-identical with the table, the default loop at coincidences is unchanged (L1b), and every named suite passes unedited.
+
+### Decision
+
+By the registered rule: A1, L1c, F1 with F0, B1, R1, L1b, K0c, D1, D2 met; X0, X1, C3 held; N1 held; five of five mutations
+caught; no golden or hash table edited. E1c's registered test failed because of a defect in the test: the case was refused at
+the key, as registered, one call earlier than the test expected (amendment 1). The corrected E1cc is met. Proposed status:
+**done**, with E1c's test defect disclosed; E1c is not an acceptance clause. If the lead counts the failed E1c test as a
+missed check under the rule, the status is partial.
+
+### Remaining questions
+
+- **Q4 (open, not taken): coupled by default on the sector path.** Options: (a) make `coupled` default true (or drop the
+  key) after F-724's threshold scale, together with F-721's Q1 (changes default results at coincidence steps and F-720's N1
+  test, so it needs the maintainer's approval); (b) keep it opt-in. Recommendation (a) after F-724, for consistency with the
+  full annulus.
+- **Q5. FW at `pitch / 8`.** Not asked by the acceptance (FS only). Options: (a) run ADR 0646's FW lockstep at `pitch / 8`
+  in a later item; (b) leave it, since R1 and B1 show the coupling acts only on coincidence steps and A1 is a property of the
+  step. Recommendation (b).
+- **Q6. The Studio preview** does not know the key (as ADR 0646 Q6). Recommendation: handle it with ADR 0646 Q6 in a UI item.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> ADR 0654, 2026-11-16: sector sliding in the case tree at node coincidences. New optional table [mesh.sliding.coincidences] with coupled = true (default false; for mesh.generator = "annulus_3d_sector_cylindrical_interface", refused on the full annulus, which is coupled always since F-710): the sector loop takes its step data from F-721's periodic_sliding_step_coupled and writes the monitor sliding_flux_residual; without the table the run is unchanged. ADR 0646's FS (the m = 6 vortical field, walls at rest) with ADR 0637's step pitch / 8 over 400 steps (50 coincidence steps, re-imaging at 192 with offset exactly 0 and at 384): the remapped old flux divergence-free to 1.0e-13 on every step from the second (limit 1e-12; the base step leaves 1.4e-4, at least 6.9e-3 of the speed, on the coincidence steps); the tree loop equals the library loop bit for bit; against the full-annulus tree run within 1.25e-2 U0 (limit 2e-2), rms 4.0e-4 at the end; mass across the interface 1.6e-14, GCL 1.8e-14. Off coincidences the coupled step data equal the base's bit for bit (350 of 350 steps); ADR 0646's FS, FW and US runs are bit-identical with the table; the default at coincidences unchanged; baseline hashes and the F-303, F-710 and F-711 suites pass unedited; no golden or hash table edited. Five of five mutations caught. One registered refusal test was defective (the parse refused the table at the key before the test looked; the corrected test is met). Limits: opt-in (the default question is F-721's Q1 with F-724), FW and US not run at pitch / 8, the sector limits of ADR 0646.
+
+> F-711 note: change its limit "steps that land on node coincidences are not coupled on the sector path for flows without the node sets' symmetry (ADR 0640)" to "steps that land on node coincidences are coupled on the sector path only with [mesh.sliding.coincidences] coupled = true (F-730, ADR 0654)".
+
+> F-721 note: append "Case tree (sector, opt-in [mesh.sliding.coincidences]): F-730 (ADR 0654)."
