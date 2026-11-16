@@ -446,6 +446,35 @@ fn rename_path(path: &str) -> String {
 }
 
 impl ComputerFan {
+    /// The reduced-order reference fan of ADR 0643 (F-722): the 120 mm, 7-blade [`ComputerFan::default`] with its stations
+    /// replaced by the ones the ADR 0639 rule gives (at span 0, 0.5 and 1 the zero-lift angle that puts the radius at 7.5 deg
+    /// of incidence at 40 percent of the free delivery in the ADR 0119 strip model at 3000 rpm), every section a symmetric
+    /// NACA 00xx so that the camber line runs downstream at every station (stagger 69.8 / 75.4 / 77.6 deg). A model fan of
+    /// low flow coefficient for the reduced-order tier (its stall window asks for it), not a measured fan; every field but
+    /// `stations` is the default's. Measured in ADR 0643 (`RomModel::default()`, 3000 rpm, rho 1.2): free delivery 0.02826
+    /// m^3/s, no stalled strip down to 0.31 of it, static characteristic peaking at 0.457 of it, so operating points against
+    /// `dp = k Q^2` exist for `k` up to 1.61e5 Pa s^2/m^6. h_slit meshes it; the camber_seam_h C-grid does not (ADR 0643).
+    pub fn rom_reference() -> Self {
+        let cp = |span, chord, stagger_deg, thickness, skew_deg| ControlPoint {
+            span,
+            chord,
+            stagger_deg,
+            camber: 0.0,
+            camber_pos: 0.4,
+            thickness,
+            sweep: 0.0,
+            skew_deg,
+        };
+        Self {
+            stations: vec![
+                cp(0.0, 0.016, 69.8, 0.055, 0.0),
+                cp(0.5, 0.029, 75.4, 0.042, 4.0),
+                cp(1.0, 0.036, 77.6, 0.035, 8.0),
+            ],
+            ..Self::default()
+        }
+    }
+
     /// Number of blades whose geometry differs (1 when the blades are identical).
     fn distinct_blades(&self) -> usize {
         match &self.deviation {
