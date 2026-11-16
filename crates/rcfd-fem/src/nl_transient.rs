@@ -1384,7 +1384,8 @@ impl Integrator {
                 Some(crate::mesh::SolidFormulation::Incompatible) => {
                     // ADR 0630 D4: the modes and the energy of the model's rule.
                     let stabilised = model.incompatible_stabilisation_rule();
-                    // ADR 0655 D1: with the model's backtracking of the modes (default false, the modes of before).
+                    // ADR 0655 D1: with the model's backtracking of the modes (default false, the modes of before); ADR 0658
+                    // D1: the model's local update.
                     let (modes, strains) = crate::nl_incompatible::modes_and_strains_opt(
                         &coords,
                         material,
@@ -1392,7 +1393,7 @@ impl Integrator {
                         &ElementState::new(Vec::new()),
                         &context,
                         stabilised,
-                        model.incompatible_mode_backtracking(),
+                        model.incompatible_mode_update(),
                     )?;
                     if stabilised != crate::nl_incompatible::IncompatibleStabilisation::Off {
                         w += crate::nl_incompatible::stabilisation_energy_with(

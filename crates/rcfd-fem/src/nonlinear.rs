@@ -1045,7 +1045,7 @@ pub(crate) fn internal_force_field(
                 false,
                 context,
                 model.incompatible_stabilisation_rule(),
-                model.incompatible_mode_backtracking(),
+                model.incompatible_mode_update(),
             )
             .map(|ev| ev.force)
         } else {
@@ -1143,7 +1143,7 @@ fn force_and_tangent(
                 true,
                 context,
                 model.incompatible_stabilisation_rule(),
-                model.incompatible_mode_backtracking(),
+                model.incompatible_mode_update(),
             )?
         } else {
             let el = crate::element::element_for(ctx.kind);

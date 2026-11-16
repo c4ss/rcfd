@@ -997,6 +997,9 @@ pub struct SolidModel {
     /// ADR 0655 D1: the local iteration of the modes of an Incompatible Hex8 halves a step that inverts a point (default
     /// `false`).
     incompatible_mode_backtracking: bool,
+    /// ADR 0658 D1: with the backtracking, a step of the modes is also halved without a sufficient decrease of the mode
+    /// residual (default `false`).
+    incompatible_mode_decrease: bool,
     /// ADR 0635 D2: the centrifugal load of a Shell4 layup takes the force of its first mass moment (default `false`).
     layup_first_moment_force: bool,
 }
@@ -1013,6 +1016,7 @@ impl SolidModel {
             hyperelastic_structures: false,
             incompatible_stabilisation: crate::nl_incompatible::IncompatibleStabilisation::Off,
             incompatible_mode_backtracking: false,
+            incompatible_mode_decrease: false,
             layup_first_moment_force: false,
         }
     }
@@ -1058,6 +1062,28 @@ impl SolidModel {
     /// ADR 0608, 0614 and 0630 unchanged.
     pub fn set_incompatible_mode_backtracking(&mut self, on: bool) {
         self.incompatible_mode_backtracking = on;
+    }
+
+    /// Whether the backtracking of the mode update also tests a sufficient decrease of the mode residual (ADR 0658 D1).
+    pub fn incompatible_mode_decrease(&self) -> bool {
+        self.incompatible_mode_decrease
+    }
+    /// Opts in (`true`) to the sufficient-decrease test of the backtracking of the mode update of the Incompatible Hex8 (ADR
+    /// 0658 D1): with [`SolidModel::set_incompatible_mode_backtracking`] on, a step of the modes whose iterate does not
+    /// satisfy `|r|_2^2 <= (1 - 2 c t) |r_j|_2^2` ([`crate::nl_incompatible::DECREASE_FRACTION`]) is halved as well. Without
+    /// the backtracking it has no effect. Off (the default), the backtracking of ADR 0655 D1 unchanged.
+    pub fn set_incompatible_mode_decrease(&mut self, on: bool) {
+        self.incompatible_mode_decrease = on;
+    }
+    /// The local update of the modes of an Incompatible Hex8 the nonlinear driver uses (ADR 0658 D1): `Plain` without the
+    /// backtracking (the default), `Backtracking` with it, `BacktrackingWithDecrease` with it and the decrease test.
+    pub fn incompatible_mode_update(&self) -> crate::nl_incompatible::IncompatibleModeUpdate {
+        use crate::nl_incompatible::IncompatibleModeUpdate as U;
+        match (self.incompatible_mode_backtracking, self.incompatible_mode_decrease) {
+            (false, _) => U::Plain,
+            (true, false) => U::Backtracking,
+            (true, true) => U::BacktrackingWithDecrease,
+        }
     }
 
     /// Whether the linear paths take a hyperelastic material on Beam2, Shell4 and Shell3 elements (ADR 0584 D1).
