@@ -163,3 +163,78 @@ The unmutated copy is run first as the control of the mutation runs.
 ## Addenda
 
 Results go here; nothing above is changed after a run.
+
+## Addendum 1: results (2026-11-16)
+
+Code: commit d314508c (registration a6869674 before it). Changed: `crates/rcfd-api/tests/f699_fidelity.rs` only: one
+`#[ignore = "superseded set-up record (ADR 0642): ..."]` line on the old P4 (body unchanged) and two appended tests
+(`g_uncertainty_guard_decides`, `p4c_table_errors_with_the_path_removed`) with the source `OffsetNoisy` (S8). No library file,
+no shared solver file, no golden, no hash table, no case key, no MCP tool.
+
+Runs (release profile throughout, each once): the registered run `cargo test -p rcfd-api --release --test f699_fidelity --
+--test-threads=2 --nocapture` (`f717-scratch/run1.log`): 17 passed, 4 ignored (the heavy record, ADR 0622's two set-up records,
+the old P4 now a set-up record). The heavy record once (`--ignored --exact b_reduced_order_fan_heavy`, `heavy.log`, 145.7 s).
+`--lib design::fidelity` matched 0 tests (the module has no unit tests; its tests are the integration file), so `--lib design::`
+was run once as well (`lib_design.log`; disclosed, not registered).
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| G1a | rung not R0, every round | R1add in rounds 1 to 4 | yes |
+| G1b | `loo <= 0.8 rmse0` for the rung and R1add | loo / rmse0 0.121, 0.119, 0.117, 0.138 (the rung is R1add, so both equal) | yes |
+| G1c | `rmse0 <= 2 u_rms` | rmse0 8.23e-2, 7.80e-2, 7.98e-2, 7.74e-2 against 2 u_rms = 0.1 | yes |
+| G1d | untrusted, constant untrusted | untrusted in all 4 rounds, both | yes |
+| G1e | `why` is the t3 message | "the discrepancy 8.225e-2 is not above 2 times the stated uncertainty 5.000e-2" (the same form in rounds 2 to 4) | yes |
+| G1f | picks, prediction bits, 300 low lines equal to correction off | equal | yes |
+| G2 | `k_u = 0`: same rung, `mse`, `rmse0` bits; trusted, constant trusted | equal; trusted in all 4 rounds, both | yes |
+| G3 | `1 < rmse0 / u_rms <= 2`; `k_u = 1` trusted | 1.645, 1.560, 1.595, 1.549; trusted in all 4 rounds | yes |
+| P4c | three refusals, wanted texts, path named, 0 cell texts after the strip | as registered; 2690 cells searched in 3 messages, 0 found | yes |
+| PC | at least 1 cell text in the unstripped messages | 3 (the directory `rcfd_f699_p4c_158_60964` holds the cell `158`, once per message) | yes (the old form fails on this set-up, as it must) |
+| R1 | every test passes; ADR 0622's 15 remaining fast tests pass | 17 passed (15 of ADR 0622 and the 2 new), 0 failed | yes |
+| R2 | heavy record passes with ADR 0622's printed numbers | passes; B1 0.3586 and 0.1152, B2 0.0000, NC1 0.0579, B4 0.0630, B5 2000, 24 (22 ok), 22 pairs, 4 summaries: equal to ADR 0622's `heavy.log` line for line | yes |
+| R3 | `git diff d40cd665 -- crates/rcfd-api/src crates/rcfd-mcp` empty | empty (0 lines) | yes |
+| R4 | only the `#[ignore]` line above the appended tests | hunks `@@ -1022,0 +1023 @@` (the one line) and `@@ -1403,0 +1405,195 @@` (appended) | yes |
+| R5 | lib tests pass; fmt and clippy clean | `design::fidelity` 0 tests (see above), `design::` 76 passed, 3 ignored (pre-existing); `cargo fmt -p rcfd-api --check` clean; `cargo clippy -p rcfd-api --all-targets -- -D warnings` clean | yes |
+
+Mutations (scratch copy `f717-scratch/mcopy` from `git archive` of d314508c, script `mutate.py`, own target directory `mtarget`,
+the fast tests of `f699_fidelity`, logs `mut_*.log`, summary `mutations.log`; the unmutated copy passed 17 of 17):
+
+| Id | Expected | Caught by |
+|---|---|---|
+| M5 stated uncertainty ignored (`u_rms` = 0) | G1 | G1 (G1c: `u_rms` 0) |
+| M5b t3 removed | G1 | G1 (G1d: trusted) |
+| M13 factor 2 dropped | G1 | G1 (G1d: trusted at rmse0 1.645 u_rms) |
+| M14 t3 inverted | G1 or G2, and A1 | G1, A1, A2, T1/NC2, T4, P1 corrected |
+| MP4a malformed cell text in the message | P4c | P4c (`12.5x`) |
+| MP4b a measured value of the row in the message | P4c | P4c (the stripped search found `2.002321223942883` and `122`) |
+| MP4c message without the path | P4c | P4c (the located assertion) |
+
+Seven of seven caught. M5, which survived ADR 0622, now fails G1.
+
+Deviations: none from the registration. Not run: the whole workspace (the lead's gate), `baseline_hashes` (no library or solver
+file changed, R3), rcfd-mcp tests (no rcfd-mcp change, R3).
+
+Decision by the registered rule: **done**. G1 to G3, P4c, PC and R1 to R5 met; every mutation fails a check. This answers ADR
+0622's remaining questions 1 (M5) and 3 (P4 and the process id).
+
+### Remaining questions (each with a recommendation)
+
+1. **F-699's status.** F-699 was partial only because M5 survived (ADR 0622 decision rule); M5 now fails a registered check of
+   this item, and every ADR 0622 check keeps its result. Options: (a) mark F-699 done with a note pointing to ADR 0642; (b) keep
+   F-699 partial and let F-717 carry the result. Recommendation: (a), the lead's call (note text below).
+2. **The other `MeasuredTable::read` messages** (field count, empty variant, not finite, unreadable file) are not searched for
+   cell texts, as before. Options: (a) keep; (b) extend P4c to them in a later item. Recommendation: (a); those messages are
+   built from row numbers, column names and counts only, which the source shows.
+
+## For the lead: roadmap entries
+
+Proposed status and note of F-717:
+
+> Proposed status: done.
+
+> Follow-up of F-699 (ADR 0622). ADR 0642, 2026-11-16. DONE. Test-only change, no library file edited (defaults and every ADR 0622 result keep their bits). The uncertainty guard of the fidelity driver is now isolated by a registered check on an offset-noise source S8 (high = low + 0.075 + 0.01 z, stated uncertainty 0.05): in all 4 rounds the one-standard-error rule picks R1add with a leave-one-out RMSE of 0.12 to 0.14 of the uncorrected one (limit 0.8), the discrepancy is 1.55 to 1.65 times the stated uncertainty, and the correction is untrusted only because it is not above twice that uncertainty (screening bit-identical to no correction); with the guard off (k_u 0) and with factor 1 the same fit is trusted in every round. The mutation "stated uncertainty ignored", which survived ADR 0622, fails it, as do the guard removed, the factor 2 dropped and the guard inverted. P4 now searches its messages with the table path removed and asserts the path is named, on a directory deliberately holding a cell text (the old form fails there; it stays as an ignored set-up record); it catches a malformed cell, a measured value and a missing path put into the message. All 15 remaining ADR 0622 fast tests and its heavy record pass with the same numbers (B1 0.359 and 0.115, B2 0, NC1 0.058, B4 0.063). Not covered: whether k_u = 2 suits a real rig or CFD tier, a structured discrepancy below twice the uncertainty, the other table messages.
+
+Proposed note change of F-699, if the lead takes remaining question 1 (a) (then F-699's proposed status is done):
+
+> Part H7 of docs/fan-project-breakdown.md. ADR 0622, 2026-11-16, completed by ADR 0642 (F-717). DONE. The note of ADR 0622 stands, except that the surviving mutation (stated uncertainty ignored) now fails a registered check of ADR 0642 on an offset-noise source on which only the uncertainty guard keeps the correction untrusted, and P4 searches its messages with the file path removed; every ADR 0622 check keeps its result.
+
+No follow-up proposed.
