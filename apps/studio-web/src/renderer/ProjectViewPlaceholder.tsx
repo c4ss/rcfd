@@ -18,7 +18,13 @@ export function ProjectViewPlaceholder() {
   return (
     <main className="project-view" aria-labelledby="project-view-title">
       <h1 id="project-view-title">No project open</h1>
-      <p>This early shell of rcfd Studio does not open project folders or talk to the rcfd service yet.</p>
+      <p>This early shell of rcfd Studio does not open project folders yet.</p>
+      <p>
+        {/* a plain button with the primitive's classes: React Aria stays out of the project view's first load (P10) */}
+        <button type="button" className="ui-button ui-button--default" onClick={() => void (location.hash = '#/settings')}>
+          Case settings of a service session
+        </button>
+      </p>
       <p className="disclaimer">
         rcfd is early-stage software. It is not validated for engineering decisions or for safety-critical use, and it
         comes with no warranty.

@@ -287,6 +287,9 @@ A meadow head with a square ink dot. Your messages sit in sky-wash on the right;
 ### Disclaimer footer
 A 24px deep ink band with white label text that is always visible, with secondary text in a light ink tint (#c7d3e2, 7.6:1).
 
+### Case settings (F-825)
+The schema-driven settings surface (`.impeccable/surfaces/apps-studio-web-src-renderer-settings.md`) uses the system as it is: under the header band, three columns divided by ink rules, a 264px section index (search, the Show every key switch, then a listbox of sections in the engine's order; the selected section is boxed like the selected run row), the keys in the middle, and a 360px check panel. Each key is a hairline stripe of three columns: the key's name with its unit after a comma and its path and the engine's description in ink-2 below (two lines, in full on hover and focus); the 26px control (switch, select or text field); the default and range as label captions, with "Set" in bold ink and a Reset button when the value differs from the default. Disclosures (more keys, nested objects, named entries) are 32px ruled rows with a caret and ink-2 counts; what they open is indented 16px behind a silver hairline. A refused change shows the failed pictogram and "Change failed." before the engine's message, in deep red, under the control.
+
 ## Do's and Don'ts
 
 ### Do:
