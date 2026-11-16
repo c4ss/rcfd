@@ -14264,12 +14264,17 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     reduced motion respected; state never carried by colour alone; an automated check where a checker is approved under
     G5 and a written manual pass otherwise. No contrast requirement (maintainer, 2026-11-16).
   - note: ADR 0800. Traces: G8; DESIGN Do's and Don'ts.
-- [ ] **F-817** Electron Studio: performance regression bench for the product shell
+- [~] **F-817** Electron Studio: performance regression bench for the product shell
   - depends on: F-808, F-810
   - acceptance: A script anyone can run that repeats P2, P4, P5, P7, P8 and P10 of docs/studio-guardrails.md G9 against
     the product shell and prints each against its limit; heavy cases run once by hand (house rule 7); results recorded
     in ADR 0800.
-  - note: ADR 0800. Traces: G9.
+  - note: ADR 0800. Traces: G9. Partial 2026-11-16: npm run bench repeats P2, P4, P5, P7, P8 and P10 against the
+    packaged Studio, light set by default and --heavy for 4e6/P6/P12, each line against its limit, exit code on a miss,
+    machine load recorded beside the numbers, never retried; results in ADR 0800 §9. All runs were on a fully loaded
+    machine: P4/P7 (R2) and P8 met every time; P10 missed in three of four runs (3.6-40.3 s vs 2.5 s, cause not
+    diagnosed; shared Chromium profile suspected); P5 met once, missed twice. Left: an idle-machine baseline (Q4) and
+    the maintainer's answers to Q1-Q6.
 - [ ] **F-818** Electron Studio: dark theme
   - depends on: F-802
   - acceptance: A dark variant of every DESIGN.md token that keeps each hue's single job; the field colour maps
