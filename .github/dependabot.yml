@@ -11,3 +11,28 @@ updates:
     directory: /
     schedule:
       interval: weekly
+  # The Electron Studio (ADR 0801 Q2, landed with the CI job studio-web of F-823). Every update changes package-lock.json,
+  # so THIRD_PARTY_LICENSES.md goes stale and the job's licence check fails until `python scripts/third_party_licenses.py`
+  # is run on the pull request. Groups follow the pairs of ADR 0801 section 4, which move together; every other package's
+  # minor and patch updates come as one pull request a week. A new major of one of those needs an ADR entry (section 4).
+  - package-ecosystem: npm
+    directory: /apps/studio-web
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      react:
+        patterns: [react, react-dom, "@types/react", "@types/react-dom"]
+      three:
+        patterns: [three, "@types/three"]
+      vite:
+        patterns: [vite, "@vitejs/plugin-react"]
+      electron:
+        patterns: [electron, "@types/node"]
+      minor-and-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    ignore:
+      # @types/node follows the Node major inside the pinned Electron (45: Node 24), not the newest Node (section 4).
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
