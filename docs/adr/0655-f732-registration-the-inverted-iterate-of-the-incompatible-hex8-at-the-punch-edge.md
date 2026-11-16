@@ -299,3 +299,12 @@ mesh at `a = 0.25`:
 - **E2**: at the loaded state of the two together, element 476: T-FD's measure and BA's (as registered for BT), and the number
   of elements whose plain evaluation at that state returns the inversion error (the elements whose modes the backtracking
   holds). Reported, not counted as T-FD or BA.
+
+## Amendment 2 (2026-11-16, written after the diagnosis of amendment 1 and before the mutation runs)
+
+The mutations of the registration were planned against the default tests of `si_eas_hg6.rs` of the test commit, in which the
+remedy test was a default test. They are run, each once, on a scratch copy of the **test commit 5ae69e54** (the registered
+tests as registered), and since that remedy test already misses unmutated (P, T-FD, BA), **"caught"** is read as: a test that
+passed in `run1-default.log` fails, or a row met there is missed, under the mutation. A mutation whose only effect is on rows
+that already missed, or on reported rows, is recorded as not caught (with what changed in the reported rows). No limit and no
+test is changed.
