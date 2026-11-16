@@ -142,3 +142,63 @@ fails.
 - Only the first append is covered by TH1; kills in later appends are LG5's (one fragment per event).
 - `Store::open_read` on a torn header keeps returning an empty store without repairing (unchanged).
 - Two processes appending to one store are not covered (unchanged).
+
+## Addendum 1: results (2026-11-16)
+
+Commits: 70c8a98b (this registration, alone), cb329680 (the test module `store_header_tests.rs` with the `mod` line in
+`store.rs`, library unchanged, SB1 digests zero), 7b2a57c0 (D1, the SB1 digests measured on cb329680, TH1 split into the heavy
+record and a fast test). Logs in `w49i-work/f705-scratch`: `nc1_sb1_unfixed.log` (NC1 and the SB1 reference, on cb329680),
+`checks_fixed.log` (TH1, TH1 fast, TH2, SB1 on 7b2a57c0, `--include-ignored`), `df1_lib.log`, `df1_int.log`, `df1_mcp2.log`,
+`baseline.log`, `clippy.log`, `mut_M1.log` to `mut_M4.log`. All in release, `--test-threads=1` for the store module.
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| TH1 (a1) | all `|T| + 1` points: open, resume `Ok`, header first, bytes = `B`, reopen with the reference's records, ledger 0 dup / 0 missing / 0 extra / same set / 0 skipped | `|T|` = 1353 bytes (header 60 + 3 records), 1354 points, 0 failing | yes |
+| TH1 fast | same at `p` in `0..=60` and `p = 1353` | 62 points, 0 failing | yes |
+| TH2 (a1) | every `p` in `0..|H'|` bytes equal to the absent-file case, 1 record on reopen | `|H'|` = 61 (signature `sig`), 0 failing | yes |
+| SB1 (a2) | 5 digests equal to the unchanged library's | S1 0x243132928430f7ff, S2 store 0xd04629e2d4b89b60, S2 ledger 0x62d3f21775a730f4, S3 and S4 0x57a502a8837e6f5f, all equal | yes |
+| DF1 (a2) | no existing test, golden or hash table edited; listed tests pass | `git diff d40cd665`: `store.rs` (D1 lines 291-305, the `mod` line 382-385), the new test file, this ADR, `docs/design-loop.md`; `design::` unit tests 79 passed, 4 ignored (heavy records, TH1 among them), 0 failed; LG5 28 events, 55 points, 0 failing; the 9 integration tests 81 passed, 0 failed; rcfd-mcp 89 passed, 0 failed (goldens included) | yes |
+| NC1 | TH1 fails at exactly `p = 0..=59`; TH2 at every `p` | on cb329680: TH1 60 failing, `p = 0..=59` ("no header; bytes differ (6895 vs 6955); reopen: ... not a design store"); TH2 61 of 61 failing | yes, as predicted |
+
+Mutations (scratch copy `f705-scratch/mut` of 7b2a57c0, `cargo test --lib design::store`, TH1 heavy not run):
+
+| Mutation | Caught by |
+|---|---|
+| M1 header on every append | TH1 fast, SB1, existing `round_trip_is_exact_and_partial_last_line_is_dropped` (TH2 passes: one header either way) |
+| M2 `Store::open` without repair | TH1 fast, TH2, SB1, existing round-trip test |
+| M3 header without newline | TH1 fast, TH2, SB1, both existing store tests |
+| M4 `fresh = !p.exists()` after the open | TH1 fast, TH2, SB1, both existing store tests |
+
+Four of four caught. `cargo fmt -p rcfd-api --check` clean; `cargo clippy -p rcfd-api --all-targets -- -D warnings` clean.
+`baseline_hashes` (no design store in it, grep): 3 passed, 1 ignored.
+
+Deviations, disclosed:
+
+- TH1 took most of the 140 s of the unfixed run, so it became the ignored heavy record with the fast test registered for that
+  case; it was run once after D1 with `--include-ignored`. The SB1 constants were written after the run on cb329680, as
+  registered.
+- The first rcfd-mcp run stopped at `adopt_f288` because the `rcfd` and `rcfd-runner` binaries were not built in the scratch
+  target (a set-up fault, not a result); after `cargo build --release -p rcfd-cli -p rcfd-runner` the whole crate was run once
+  with `--no-fail-fast`, all passed.
+- The test module hangs under `store.rs` (as registered) and copies the LG helpers of `study_ledger_tests.rs`, which are private.
+
+Not run: the whole workspace suite (the lead's gate).
+
+Decision by the registered rule: TH1, TH2, SB1 and DF1 met, NC1 as predicted, four of four mutations caught: **done**.
+
+Remaining questions:
+
+- Q1, LG5 (ii) at event 1. ADR 0623's LG5 still skips that point (the existing test is not edited). Options: (a) leave it,
+  TH1 covers it with every byte; (b) a new LG5 variant without the skip. Recommendation (a): TH1's `p = 16` is exactly that
+  fragment.
+- Q2, durability. The store neither `fsync`s nor survives a power loss that drops written bytes; a kill of the process is what is
+  covered. Options: (a) leave; (b) `sync_data` after each append (slower on a study of many small batches). Recommendation (a)
+  until a study is reported lost to a power cut; not taken here because it changes timing of every study.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> Design loop. ADR 0644, 2026-11-16: the design store header after a torn first write. Cause (diagnosed and registered before the fix): Store::append wrote the header only when the file did not exist, so a kill inside the first append left an empty file, or a torn header that Store::open truncates to 0 bytes, and the next append wrote records without a header, after which the store could no longer be opened. Fix: the header is written when the opened file is empty (length of the append handle). The LG5 Nelder-Mead study with the ledger sink killed at every byte of its first append (1354 points, |T| = 1353 bytes, header 60) reopens, resumes to the uninterrupted store's bytes with the header present and the ledger without duplicate or missing pairs at every point; on the unchanged library exactly the 60 header points failed. Store bytes of the existing paths unchanged (5 FNV digests measured before the fix), every existing store, study, ledger, design integration and rcfd-mcp test passes unedited, baseline hashes pass. Four of four mutations caught. Not covered: a real killed process, a power loss without fsync, two writers.
+
+> ADR 0623 note (F-268): replace "that one kill point is left out of LG5" with "that one kill point is left out of LG5 and covered at every byte of the first append by ADR 0644 (F-705)".

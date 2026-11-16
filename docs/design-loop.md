@@ -139,7 +139,9 @@ service method `design.create_study`) creates it:
 The store has one header line and one record per evaluated candidate (`index` in request order, `key` = exact bit pattern of the
 parameters, `params`, `source` (`evaluated` or `recorded`), the result of each condition with status, iterations and metrics,
 `message`). A re-run of the same study finds every earlier candidate in the store and continues where it stopped, so a killed run
-resumes and ends identical to an uninterrupted one. A truncated last line is dropped and that one evaluation is repeated. A store
+resumes and ends identical to an uninterrupted one. A truncated last line is dropped and that one evaluation is repeated; a
+kill inside the very first write (an empty file or a torn header) leaves an empty file, which gets the header on the next write
+(ADR 0644). A store
 belongs to a signature (base case fingerprint, parameters with targets, conditions, chaining, step cap): another definition refuses to
 open it.
 
