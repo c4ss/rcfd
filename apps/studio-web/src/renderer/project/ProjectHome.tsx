@@ -68,6 +68,9 @@ export function ProjectHome() {
             ) : (
               <Unavailable label="Open project…" reason={NOT_CONFIGURED_SHORT} />
             )}
+            <Button variant="ghost" onPress={() => void (location.hash = '#/settings')}>
+              Case settings
+            </Button>
           </div>
         )}
         {project && (

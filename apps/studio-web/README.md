@@ -149,6 +149,7 @@ snapshot as a `Float32Array` (`field`) or the boundary surface (`surface`), nami
 | `src/renderer/ui/` | The primitives of `DESIGN.md` Components on React Aria Components: buttons, toggles and segmented toggles, text and number fields, select, switch, tabs (sub and project), table, slider, tooltip, state pictograms and icons; `primitives.css` | as above | F-802 |
 | `src/renderer/project/` | The project home (`ProjectHome.tsx`, `project.css`) and its one door to `window.studioProject` (`door.ts`) | as above | F-805 |
 | `src/renderer/dev/` | The primitives gallery at `#/dev/primitives` (loaded on demand): every primitive and the tokens, with sample labels only | as above | F-802 |
+| `src/renderer/settings/` | The case settings surface at `#/settings/<session>` (loaded on demand): `schema.ts` (the model of `settings.schema`, value encoding), `disclosure.ts` (learner-first tiers, search), the page, the surface, key rows and groups, `settings.css` | as above | F-825 |
 | `tests/unit/` | Pure tests of `security.ts` and the built `index.html` (F-801); tokens against `DESIGN.md`, the pictogram grid (F-802); the service client against a fake service (F-803) | run by Playwright (project `unit`) | F-801, F-802, F-803 |
 | `tests/e2e/` | The packaged shell driven by Playwright's `_electron.launch`; the primitives (F-802); the service port's allow-list against a fake service, and the client against the real `rcfd serve` (F-803) | run by Playwright (project `electron`) | F-801 onwards |
 | `tests/support/` | The fake service, finding and starting `rcfd`, launching the packaged Studio | imported by the tests | F-803 |
@@ -203,6 +204,31 @@ the allow-list (24).
   (dispatch, log, export and replay against the fake service through the port bridge), and
   `tests/e2e/actions-rcfd.spec.ts` (the real `rcfd serve`: a recorded session replayed from JSON and from the shell gives
   the same journal hash and run status; the undo hooks restore what was there).
+
+## Case settings (F-825)
+
+The first surface: `#/settings` (from the empty project view, "Case settings of a service session"), then
+`#/settings/<session>`. Every key of the engine's `settings.schema` gets a control made from its schema node at run time
+(`src/renderer/settings/schema.ts`): a switch for a boolean, a select for an enumeration, a text field for numbers,
+strings and lists, a JSON field for any shape a later schema adds; its unit (`x-rcfd-unit`, or the SI dimension
+`x-rcfd-si-dimension`), range, default and description are the schema's. There is no list of keys in the Studio
+(`tests/unit/settings-static.spec.ts` fails on a string that names a case section or key path).
+
+- Learner-first disclosure (`disclosure.ts`, PRODUCT Principle 5) comes from the schema's structure until F-826 adds an
+  advanced flag: sections in the engine's declaration order; in each, the first 8 own keys (`COMMON_KEYS`), then "Show N
+  more keys"; nested objects, optional objects and named collections one step away; every key that differs from its
+  default always shown, and listed under "Set in this case"; search and "Show every key" reach everything.
+- Edits are actions (`dispatch('settings.set' | 'settings.remove' | 'settings.validate' ...)`). The Studio refuses no
+  value: a number is sent as a number, other text as text (the engine reads `36 km/h` or refuses), and the message of a
+  refused change or of the check is the engine's, shown as it came. The last change shows its `rcfd call` command.
+- Events: a `setting_changed` of the session, from the Studio or another writer, reloads the tree; a running session makes
+  the controls read-only with the action layer's reason.
+- Tests: `tests/unit/settings-schema.spec.ts` (the model from a test schema, a key and a section added with no code
+  change, encoding, disclosure; every key of the real schema against the F-824 inventory), `tests/e2e/settings.spec.ts`
+  (the packaged Studio against `tests/support/fake-case-service.ts`: controls, an added key, the service's words,
+  the check, live changes, read-only, keyboard and focus, screenshots) and `tests/e2e/settings-rcfd.spec.ts` (the real
+  `rcfd serve`: every one of the schema's keys has exactly one control in the window). Screenshots at 1440 by 900:
+  `test-results-visual/f825/`.
 
 ## Security (G10)
 

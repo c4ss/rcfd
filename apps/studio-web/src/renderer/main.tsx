@@ -4,6 +4,7 @@
 //   (none)             the project home (F-805): no project open, or the open project folder
 //   #/dev/primitives   the primitives gallery (F-802), for development and the maintainer's view-and-report
 //                      (npm run gallery); loaded on demand, so it costs the project home nothing
+//   #/settings[/<id>]  the case settings of a service session (F-825), loaded on demand
 import { lazy, StrictMode, Suspense, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import '@fontsource/archivo/400.css';
@@ -17,6 +18,9 @@ import { ProjectHome } from './project/ProjectHome';
 const GALLERY_HASH = '#/dev/primitives';
 
 const PrimitivesGallery = lazy(() => import('./dev/PrimitivesGallery'));
+
+const SETTINGS_HASH = '#/settings';
+const SettingsPage = lazy(() => import('./settings/SettingsPage'));
 
 // React Aria's usePress adds a one-rule <style> element unless an element with this id exists; the Content Security
 // Policy refuses inline style elements, so the rule is in base.css and this marker stands in for the element.
@@ -40,6 +44,13 @@ function Root() {
     return (
       <Suspense fallback={null}>
         <PrimitivesGallery />
+      </Suspense>
+    );
+  }
+  if (hash === SETTINGS_HASH || hash.startsWith(`${SETTINGS_HASH}/`)) {
+    return (
+      <Suspense fallback={null}>
+        <SettingsPage />
       </Suspense>
     );
   }
