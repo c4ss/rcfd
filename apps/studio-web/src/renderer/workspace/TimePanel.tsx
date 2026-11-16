@@ -15,6 +15,7 @@ import { caseName, type RunRow } from '../runs/model.js';
 import { Button, IconButton, Select, StatePictogram, Toggle } from '../ui/index.js';
 import '../plots/plots.css';
 import { counterText, flagText, fraction, labelAfter, nearestPosition, valueText, type Band, type Position } from './model.js';
+import { Provenance, counterValue, seriesValue, type StopFacts } from '../provenance/index.js';
 
 /** The value of one series at the line's step. */
 export type CursorValue =
@@ -90,6 +91,14 @@ export function TimePanel(props: TimePanelProps) {
   const monitorSeries = useSeriesMap(series, version, (n) => new Map(n.map((k) => [k, MONITOR_STYLE])), 'monitor', monitor);
   const monitorEntry = series?.series.find((s) => s.name === monitor) ?? null;
   const ownEnd = bands.find((b) => b.id === row.id)?.end ?? 0;
+  // F-828: the stop every number of the panel belongs to, for its provenance
+  const stop: StopFacts | null = position ? { ...position, of: positions.length } : null;
+  const valueProvenance = (n: string, v: CursorValue | undefined, shown: string, entryKind: 'residual' | 'monitor' | 'other') => {
+    const e = series?.series.find((x) => x.name === n);
+    return v?.kind === 'value'
+      ? seriesValue({ run: row.id, name: n, kind: entryKind, shown, value: v.value, stop, step: v.step, unit: e?.unit ?? null, unitsNote: series?.unitsNote ?? null })
+      : null;
+  };
 
   return (
     <section className="tp" aria-label={`Time of ${name}`}>
@@ -149,7 +158,9 @@ export function TimePanel(props: TimePanelProps) {
                     <li key={n} data-name={n} data-step={v?.step} data-value={v?.kind === 'value' ? String(v.value) : undefined}>
                       <Swatch style={style} />
                       <span className="tp-resid-name">{n}</span>
-                      <span className="tp-resid-value">{valueOf(v, fmtResidual)}</span>
+                      <span className="tp-resid-value">
+                        <ProvenanceOr source={valueProvenance(n, v, valueOf(v, fmtResidual), 'residual')}>{valueOf(v, fmtResidual)}</ProvenanceOr>
+                      </span>
                     </li>
                   );
                 })}
@@ -209,7 +220,9 @@ export function TimePanel(props: TimePanelProps) {
                 data-step={cursor.get(monitor)?.step}
                 data-value={cursor.get(monitor)?.kind === 'value' ? String((cursor.get(monitor) as { value: number }).value) : undefined}
               >
-                {valueOf(cursor.get(monitor), fmt)}
+                <ProvenanceOr source={valueProvenance(monitor, cursor.get(monitor), valueOf(cursor.get(monitor), fmt), monitorEntry.kind)}>
+                  {valueOf(cursor.get(monitor), fmt)}
+                </ProvenanceOr>
               </output>
             </div>
             <div className="tp-monitor-plot">
@@ -236,7 +249,13 @@ export function TimePanel(props: TimePanelProps) {
           )}
         </div>
         <output className="tp-counter" data-step={position?.step} data-snapshot={position?.snapshot ?? undefined} aria-live="off">
-          {counterText(index, positions, running)}
+          {stop ? (
+            <Provenance pkey="tp-counter" subject={{ kind: 'number', source: counterValue({ run: row.id, shown: counterText(index, positions, running), stop }) }}>
+              {counterText(index, positions, running)}
+            </Provenance>
+          ) : (
+            counterText(index, positions, running)
+          )}
         </output>
       </div>
     </section>
@@ -295,6 +314,7 @@ function Scrubber({
       aria-disabled={last < 0 ? true : undefined}
       data-step={p?.step}
       data-snapshot={p?.snapshot ?? undefined}
+      data-provenance="tp-counter"
       onKeyDown={onKeyDown}
       onPointerDown={(e) => {
         if (last < 0 || e.button !== 0) return;
@@ -318,4 +338,9 @@ function Scrubber({
       )}
     </div>
   );
+}
+
+/** F-828: a value with its provenance when it is one; words (no sample, reading) stay plain. */
+function ProvenanceOr({ source, children }: { source: ReturnType<typeof seriesValue> | null; children: React.ReactNode }) {
+  return source ? <Provenance subject={{ kind: 'number', source }}>{children}</Provenance> : <>{children}</>;
 }

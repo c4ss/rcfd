@@ -23,11 +23,15 @@
 //   makes its folder a data root, so the workspace reads its runs' stores (runs/<id>/fields) through route local.
 // - Claude Code (F-814): a MessagePort on CLAUDE_PORT_CHANNEL (src/main/claude/), checked against src/shared/claude.ts;
 //   claude is started only here, with the project folder as its working folder.
+// - Provenance (F-828): a MessagePort on PROVENANCE_PORT_CHANNEL (src/main/provenance/), checked against
+//   src/shared/provenance.ts; a run's record is read by the open project's read-only project server, and Copy writes the
+//   system clipboard here (the page has no clipboard permission).
 //
 // Service and file I/O live in this process, never in the renderer.
 import {
   app,
   BrowserWindow,
+  clipboard,
   dialog,
   ipcMain,
   MessageChannelMain,
@@ -47,6 +51,8 @@ import { PROJECT_PORT_CHANNEL } from '../shared/project.js';
 import { CASE_PORT_CHANNEL } from '../shared/case.js';
 import { RUN_PORT_CHANNEL } from '../shared/run.js';
 import { RunPortBridge, type RunPortLike } from './run/bridge.js';
+import { PROVENANCE_PORT_CHANNEL } from '../shared/provenance.js';
+import { ProvenancePortBridge, type ProvenancePortLike } from './provenance/bridge.js';
 import { CasePortBridge, type CasePortLike } from './case/bridge.js';
 import { CaseEditor } from './case/editor.js';
 import { ProjectServer } from './project/server.js';
@@ -340,6 +346,40 @@ function offerRunPort(contents: WebContents): void {
   contents.postMessage(RUN_PORT_CHANNEL, null, [port2]);
 }
 
+/** The provenance port of each web contents (F-828), like the run port. */
+const provenancePorts = new Map<number, ProvenancePortBridge>();
+
+const adaptProvenancePort = (p: MessagePortMain): ProvenancePortLike => ({
+  postMessage: (m) => p.postMessage(m),
+  onMessage: (listener) => {
+    p.on('message', (e) => listener(e.data));
+  },
+  onClose: (listener) => {
+    p.on('close', listener);
+  },
+  close: () => p.close(),
+});
+
+function offerProvenancePort(contents: WebContents): void {
+  provenancePorts.get(contents.id)?.dispose();
+  provenancePorts.delete(contents.id);
+  if (contents.isDestroyed() || !isAppUrl(contents.getURL())) return;
+  const { port1, port2 } = new MessageChannelMain();
+  provenancePorts.set(
+    contents.id,
+    new ProvenancePortBridge(adaptProvenancePort(port1), {
+      project: () => {
+        const v = projects.state.project;
+        return v ? { query: (tool, args) => projects.query(tool, args), folder: v.folder, engine: { name: v.engine.name, version: v.engine.version } } : null;
+      },
+      copy: (text) => clipboard.writeText(text),
+      now: () => new Date().toISOString(),
+    }),
+  );
+  port1.start();
+  contents.postMessage(PROVENANCE_PORT_CHANNEL, null, [port2]);
+}
+
 /** After a load of one of our own pages: a new port for its preload script, and the old one closed. */
 function offerServicePort(contents: WebContents): void {
   servicePorts.get(contents.id)?.dispose();
@@ -379,6 +419,7 @@ function openWindow(): void {
     offerProjectPort(contents);
     offerCasePort(contents);
     offerRunPort(contents);
+    offerProvenancePort(contents);
     dataPorts.offer(contents);
     claudePorts.offer(contents);
   });
@@ -393,6 +434,8 @@ function openWindow(): void {
     casePorts.delete(id);
     runPorts.get(id)?.dispose();
     runPorts.delete(id);
+    provenancePorts.get(id)?.dispose();
+    provenancePorts.delete(id);
   });
   win.once('ready-to-show', () => win.show());
   void win.loadURL(APP_ENTRY);

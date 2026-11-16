@@ -1,0 +1,138 @@
+/* The provenance inspector (F-828). At rest a number keeps the look of the text around it (G22, The Quiet Rule): the
+   trigger takes the font, size, weight and colour it sits in, with no border, fill or padding. Hover and focus add only
+   a dotted ink underline (focus keeps the product's orange outline). The popover is DESIGN.md's one lifted surface:
+   white, a 1px ink edge and the popover lift (.ui-popover), square. Tokens only, no colour literal. */
+
+.pv-num {
+  all: unset;
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  font-feature-settings: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  text-underline-offset: 3px;
+}
+
+.pv-num:hover,
+.pv-num:focus-visible,
+.pv-num[aria-expanded='true'] {
+  text-decoration: underline dotted var(--role-text);
+  text-decoration-thickness: 1px;
+}
+
+.pv-num:focus-visible {
+  outline: var(--focus-width) solid var(--role-focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.pv-pop {
+  width: 480px;
+  max-width: calc(100vw - var(--space-xxl));
+}
+
+.pv-dialog {
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  font-size: var(--type-body-size);
+  color: var(--role-text);
+  outline: none;
+}
+
+.pv-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+  padding-bottom: var(--space-sm);
+  border-bottom: var(--line-hair);
+}
+
+.pv-quantity {
+  font-size: var(--type-title-sm-size);
+  font-weight: var(--type-title-sm-weight);
+}
+
+.pv-value {
+  font-size: var(--type-title-sm-size);
+  font-feature-settings: 'tnum';
+}
+
+.pv-unit {
+  color: var(--role-text-2);
+}
+
+.pv-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: var(--space-lg);
+  row-gap: var(--space-xs);
+  margin: 0;
+}
+
+.pv-facts > div {
+  display: contents;
+}
+
+.pv-facts dt {
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+  color: var(--role-text-2);
+}
+
+.pv-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-feature-settings: 'tnum';
+}
+
+.pv-exception dd,
+.pv-exception dt {
+  color: var(--role-text);
+  font-weight: var(--font-weight-medium);
+}
+
+.pv-repro {
+  border-top: var(--line-hair);
+  padding-top: var(--space-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.pv-cmd {
+  margin: 0;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--role-viewport);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-feature-settings: 'tnum';
+}
+
+.pv-reading {
+  margin: 0;
+  color: var(--role-text-2);
+}
+
+.pv-gaps {
+  margin: 0;
+  padding-left: var(--space-lg);
+  font-weight: var(--font-weight-medium);
+}
+
+.pv-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.pv-copy-failed {
+  color: var(--role-text-fail);
+  font-size: var(--type-label-size);
+}
+
+/* inside a row of a grid or a list: the row keeps its own cursor and click; Ctrl+I opens the number */
+.pv-num--passive {
+  cursor: inherit;
+}
