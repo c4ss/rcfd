@@ -1,11 +1,12 @@
 # The full gate (docs/test-process.md): fmt, clippy, then every non-ignored test of the workspace in release, one process per
-# test, followed by the doc-tests. It takes hours, so it runs on a schedule and on demand, not on pull requests.
+# test, followed by the doc-tests. It takes hours, so it runs daily on main and on demand, not on pull requests (ADR 0653).
+# A scheduled run is skipped when the last green Windows gate on main tested the same commit.
 # What a green run does not prove is listed in docs/releasing.md.
 name: Full gate
 
 on:
   schedule:
-    - cron: "0 2 * * 0" # Sundays 02:00 UTC
+    - cron: "0 2 * * *" # daily 02:00 UTC; a schedule runs on the default branch (main) only
   workflow_dispatch:
     inputs:
       os:
@@ -28,10 +29,57 @@ env:
   RUST_TEST_THREADS: "3"
 
 jobs:
+  # Finds the last successful Windows gate on main (read-only API calls) and skips a scheduled run when it tested the same SHA.
+  # Any failure of the query runs the gate (fail open).
+  decide:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      run: ${{ steps.d.outputs.run }}
+      last_green: ${{ steps.d.outputs.last_green }}
+    steps:
+      - id: d
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          SHA: ${{ github.sha }}
+        run: |
+          last=""
+          ids=$(gh api "repos/$REPO/actions/workflows/gate.yml/runs?branch=main&status=success&per_page=20"                   --jq '.workflow_runs[].id') || ids=""
+          for id in $ids; do
+            ok=$(gh api "repos/$REPO/actions/runs/$id/jobs"                    --jq '[.jobs[] | select(.name == "full gate, windows-latest" and .conclusion == "success")] | length') || ok=0
+            if [ "$ok" != "0" ]; then
+              last=$(gh api "repos/$REPO/actions/runs/$id" --jq .head_sha) || last=""
+              break
+            fi
+          done
+          run=true
+          if [ "$EVENT" = "schedule" ]; then
+            if [ "$REF" != "refs/heads/main" ]; then
+              run=false
+            elif [ -n "$last" ] && [ "$last" = "$SHA" ]; then
+              run=false
+            fi
+          fi
+          echo "last green Windows gate on main: ${last:-none}; this run: $SHA ($EVENT, $REF); run: $run"
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          echo "last_green=$last" >> "$GITHUB_OUTPUT"
+
   gate:
+    needs: decide
+    if: needs.decide.outputs.run == 'true'
     name: full gate, ${{ inputs.os || 'windows-latest' }}
     runs-on: ${{ inputs.os || 'windows-latest' }}
     timeout-minutes: 340
+    env:
+      # SHA tested by the last successful Windows gate on main (empty if none); for the failure attribution (ADR 0653).
+      GATE_LAST_GREEN: ${{ needs.decide.outputs.last_green }}
     defaults:
       run:
         shell: bash
@@ -46,7 +94,18 @@ jobs:
           python-version: "3.x"
       # No build cache: the gate starts from an empty target folder.
       - name: fmt
-        run: cargo fmt --all -- --check
+        # Per package: `cargo fmt --all` hands every target's root file to one rustfmt process, whose command line is above
+        # the Windows limit of 32767 characters (os error 206, ADR 0653). The members are the same set `--all` formats.
+        run: |
+          pkgs=$(cargo metadata --no-deps --format-version 1 --locked |
+                 python -c "import json,sys; sys.stdout.write(' '.join(p['name'] for p in json.load(sys.stdin)['packages']))")
+          [ -n "$pkgs" ] || { echo "fmt: no packages listed"; exit 1; }
+          rc=0
+          for p in $pkgs; do
+            echo "fmt $p"
+            cargo fmt -p "$p" -- --check || rc=1
+          done
+          exit $rc
       - name: clippy
         timeout-minutes: 45
         run: cargo clippy --workspace --all-targets --locked -- -D warnings

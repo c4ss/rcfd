@@ -106,3 +106,39 @@ passed as `/e/projects/...` (the Git Bash form), and each case first asserts tha
 expected results of S5, M2 and M3 are unchanged; the corrected runs are made once. Mutation M3 is also corrected in its text:
 the fail-open default is two edits (`|| ids=""` and `|| ok=0`); M3 removes both, so a failing `gh` must stop the step with
 an error (run not set) instead of `run=true`; S5 (d) "exit 0 with run=true" then fails.
+
+## Addendum 1: results of stage 1 (2026-11-16)
+
+Each run made once (S5, M2 and M3 after amendment 1); logs and step texts in `w49i-work/f723-scratch` (`s1.log`, `s2.log`,
+`s3.log`, `m1.log`, `fmt_step.sh`, `decide_step.sh`, `m2.sh`, `m3.sh`, `stub/gh`). The step texts were taken from the
+workflow file with a YAML parse, so what ran is what the workflow runs.
+
+| id | limit | measured | met |
+|---|---|---|---|
+| S1 | `cargo fmt --all -- --check` exits non-zero with `os error 206` | exit 1, `The filename or extension is too long. (os error 206)`, then the usage text (the CI log's failure, reproduced) | yes |
+| S2 | the new fmt step exits 0, 24 packages | exit 0, 24 `fmt <package>` lines | yes |
+| S3 | mis-formatted line in rcfd-core: exit 1, file named, 24 packages checked | exit 1, `Diff in ...\crates\rcfd-core\src\lib.rs:24`, 24 packages | yes |
+| S4 | actionlint 0 findings | 0 findings, exit 0 | yes |
+| S5 | (a) `run=false`; (b), (c), (d) `run=true`; `last_green` stub SHA in (a), (b), empty in (c), (d) | (a) false, aaaa1111; (b) true, aaaa1111; (c) true, empty; (d) true, empty. Extra cases: a dispatch with equal SHA runs (true); a schedule on another ref does not (false) | yes |
+| S6 | real API: `last_green` eef6c094 (or edb4839f), `run=true` | `last_green=eef6c09479bbd8cfdf344a8342afcf048967a463` (run 42083180301, its job `full gate, windows-latest` success), `run=true` | yes |
+| S7 | every other gate step byte-identical; only fmt, the trigger, `decide`, `needs`/`if`, an `env` value added | YAML compare against d40cd665: checkout, toolchain, python, clippy, tests, summary, upload steps equal; `runs-on`, `timeout-minutes` (340), `defaults`, workflow `env`, `permissions`, `concurrency`, the dispatch input equal; only the fmt step differs | yes |
+
+| mutation | caught by | result |
+|---|---|---|
+| M1 the fmt loop forgets a failure (`|| true`) | S3 | exit 0 with the mis-formatted file: caught |
+| M2 decide compares with `!=` | S5 (a), (b) | (a) true, (b) false: caught |
+| M3 the fail-open defaults removed | S5 (d) | the step exits 1 (the decide job would fail and the gate be skipped): caught |
+
+Deviations: amendment 1 (the first S5 set-up did not use the stub). The fmt step lists packages with `cargo metadata
+--no-deps --format-version 1 --locked` and checks the list is not empty, so a failing `cargo metadata` fails the step instead of
+checking nothing; it writes the names without a trailing newline because on Windows Python's text output adds `\r`, which would
+glue to the last package's name. `docs/releasing.md` now says "daily on main" where it said "Sundays".
+
+Decision by the registered rule: every stage 1 check met and every mutation caught: **stage 1 done**. F-723 stays open until
+stage 2.
+
+What only the first run on GitHub can show (nobody can run the workflow from here): (1) the `decide` job is allowed to list
+runs and jobs with `actions: read` (expected; a refusal shows as `last green ...: none` in its log and the gate still runs);
+(2) the first scheduled run after the push runs the gate (main has moved since eef6c094) and its fmt step prints 24 `fmt`
+lines and passes; (3) the next scheduled run, with no push between, is skipped (`run: false` in the decide log, gate job
+"skipped"); (4) the fmt step on `ubuntu-24.04` through a dispatch also passes (no path limit there).
