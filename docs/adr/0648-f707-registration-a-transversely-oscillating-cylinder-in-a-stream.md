@@ -298,3 +298,114 @@ centre and the rigid velocity against the closed forms at `solver.time`; limits 
 unchanged as ignored records (`t1_..._first_run`, `t3_..._first_run`). The heavy record uses `t_n = n dt` for the harmonics
 (amendment 1) and the solver's own time for the poses (the IB library and, in the BF run, `(n + 1) dt`): the difference is
 round-off in the phase and is not a set-up change. By the decision rule T1 and T3 are met only after an amendment if they pass now.
+
+## Addendum 1: results (2026-11-16)
+
+Release builds on Windows. Registration f6df4464; amendment 1 b495325f; test file and amendment 2 e8d3c0ae (the first fast-test
+run was made on the uncommitted file, which e8d3c0ae keeps as the two ignored `*_first_run` records; the corrected fast tests and
+the heavy record were run once on e8d3c0ae). Logs in `w49i-work/f707-scratch`: `fast_tests.log` (first run),
+`fast_tests_corrected.log`, `heavy_record.log`, `mutations.log`, `clippy.log`. No limit was changed. No library line changed (no
+solver file touched), so `baseline_hashes` was not run: the default bits are unchanged by construction.
+
+### The heavy record (run once, 2992 s wall, five threads)
+
+Per run over periods 9 and 10, per unit depth.
+
+| Run | Cells | Mean drag | Lift amplitude | Lift phase | Mean lift | Max step continuity | Time |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| BF (256 x 96) | 24 576 | 1.244777 | 2.289150 | -25.150 deg | 5.8e-5 | 2.4e-10 | 1878 s |
+| BFc (128 x 48) | 6 144 | 1.246241 | 2.279661 | -25.276 deg | 6.3e-5 | 5.9e-10 | 455 s |
+| IB40 (D/40) | 45 600 | 1.247312 | 2.308009 | -24.926 deg | 5.2e-5 | 1.9e-4 | 2950 s |
+| IB20 (D/20) | 16 592 | 1.245727 | 2.309340 | -25.045 deg | 4.2e-5 | 7.2e-10 | 1280 s |
+| N1 (D/40, velocity left out) | 45 600 | 1.379294 | 0.939740 | +38.171 deg | 3.4e-4 | 1.7e-8 | 2991 s |
+
+Reported only: `C_a` 2.139 (BF), 2.160 (IB40); `C_v` 1.946, 1.945; drag second harmonic 0.2090 (BF), 0.2114 (IB40). P1: period
+9 against period 10 differ by at most 0.2 per cent in mean drag, 0.05 per cent in lift amplitude and 0.03 degree in phase in every
+run (close to periodic).
+
+| Id | Check | Limit | Measured | Met |
+| --- | --- | --- | --- | --- |
+| A1 | mean drag | <= 0.03 | 2.04e-3 | met |
+| A2 | lift amplitude | <= 0.04 | 8.24e-3 | met |
+| A3 | lift phase | <= 3 deg | 0.224 deg | met |
+| A4 | lift harmonic, complex | <= 0.06 | 9.12e-3 | met |
+| A5 | mean lift over the BF lift amplitude | <= 0.02 | 2.9e-6 | met |
+| R1 | BFc against BF: mean drag; lift harmonic | <= 0.02; <= 0.03 | 1.18e-3; 4.69e-3 | met |
+| N1a | velocity left out: mean drag | > 0.03 | 0.108 | met (N1 misses) |
+| N1b | N1: lift amplitude | > 0.04 | 0.589 | met (N1 misses) |
+| N1c | N1: lift phase | > 3 deg | 63.3 deg | met (N1 misses) |
+| N1d | N1: lift harmonic, complex | > 0.5 | 0.894 | met (N1 misses) |
+| S1 | no stop, finite | no stop | none stopped | met |
+| C1 | G20 larger than G40 (A1, A4), reported | larger | 7.6e-4 < 2.0e-3; 9.01e-3 < 9.12e-3 | not met (reported, not in the rule) |
+
+Against the arithmetic: the lift amplitude (2.29) is larger than the rough estimate 1.4 of arithmetic 2 (`C_a` about 2.1, not 1:
+viscous added mass at Re 20 and the confinement); the limits are relative and unaffected. N1 differs from arithmetic 3 in kind:
+its mean drag is 10.8 per cent *above* the reference (the estimate said below, by 5 to 12 per cent) and its lift amplitude is
+0.94, not a few hundredths. A solid that holds zero velocity while it changes place still displaces fluid through the pressure
+projection, and the cells that enter it each step are stopped (their momentum is the reaction), so N1 is not a fixed cylinder.
+Every miss is larger than its threshold. C1: the D/20 run is as close to the reference as D/40 (both within 0.2 per cent in drag,
+0.9 per cent in the lift harmonic): at Re 20 the forcing error at D/20 is already below the level the comparison resolves, so no
+trend shows. The remaining 0.8 per cent lift amplitude difference is common to both immersed meshes and is about twice the BFc to
+BF difference (0.4 per cent). IB40's largest step continuity of 1.9e-4 comes from one step or a few (the progress lines every 500
+steps show 1e-13 to 1e-10). Its cause was not diagnosed (no step-by-step record was kept), and it did not stop the run.
+
+### Fast tests
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| T1 (first run) | as registered | failed: faces selected by their centre (amendment 2) | defective record |
+| T1 (corrected) | as stated | far-field faces on the square within 1.8e-15; 64 (32) faces on x = -8, all and only the inflow faces, exact normals; box 200 inflow faces, all xmin; min volumes 2.19e-4, 8.87e-4 at every pose | met after amendment 2 |
+| T2 | 1e-12; 1e-9 deg | 5.4e-16, 3.8e-16, 1.5e-15; 1.1e-13 deg, 1.0e-14 deg | met (after amendment 1) |
+| T3 (first run) | as registered | failed at step 1: forcing compared at `n dt` (amendment 2) | defective record |
+| T3 (corrected) | 1e-3 | 4.85e-4 (with velocity), 4.84e-4 (left out) | met after amendment 2 |
+| T4 | 1e-6; 1e-12; bits | continuity 2.3e-10; centre to 1e-17; far field unchanged | met |
+
+### Mutations (run once each against the fast tests, scratch copy)
+
+Seven of eight caught: M1 by T1, M2 by T1, M3 by T4, M5 by T2 and T3, M6 by T2, M7 by T2, M8 (library) by T3. **M4 was not
+caught.** Starting the body-fitted solver on the unmoved grid (the F-308 defect) gives a jump of 0.44 D in the first step on the
+64 x 24 smoke mesh. The swept-volume step absorbs it without a continuity defect above 1e-6, and the later poses are correct, so
+T4 does not see it. The heavy record starts correctly (`bf_setup`). A fast check would compare the solver's initial points with
+the posed points; it was not added after the run (rule 2) and is proposed in the follow-up.
+
+### fmt, clippy, tests run
+
+`cargo fmt -p rcfd-fv --check` clean; `cargo clippy -p rcfd-fv --all-targets -- -D warnings` clean. Tests run (release): the
+`immersed_transverse_f707` file (the fast tests twice, as stated; the heavy record once). No existing line changed.
+
+### Deviations
+
+Amendment 1 (a sign slip in the T2 expectation, before any code) and amendment 2 (test-code defects of T1 and T3, after their
+first run). The heavy record took 50 minutes against the estimated 30 (0.59 s per immersed step on 45 600 cells, with five runs
+and other agents' builds on the machine).
+
+### What was not run
+
+The whole workspace suite (the lead runs the gate); `baseline_hashes` (no solver file changed); lock-in at Re 100, wake profiles,
+rotating bodies, BDF2, three dimensions (D5).
+
+### Decision by the registered rule
+
+A1 to A5 and R1 are met with margins of 4 to 15; N1 misses every measure; S1 holds; T1 to T4 pass; seven of eight mutations are
+caught; no library line changed. T1 and T3 were met only after amendment 2, and T2 only after amendment 1. The rule makes a check
+met only after an amendment partial. By the letter: **partial**. The amendments touch only fast tests of test helpers, and the
+heavy record ran once on the registered set-up.
+
+### Remaining questions
+
+- **Q1 (open, from the registration).** A case-file key for moving immersed bodies. Recommendation (a), with F-307. Open (schema
+  golden).
+- **Q2 (taken).** Re 20 was taken. Recommendation: the lock-in case at Re 100 as a follow-up (below).
+- **Q3. Status under the amendment rule.** (a) partial by the letter; (b) done, because the amendments corrected a sign slip and
+  two selection defects of fast tests, and every heavy check (the acceptance's own measures) was met in the one registered run.
+  Recommendation (b); the lead's call.
+- **Q4. The surviving mutation M4.** (a) a fast check that the body-fitted solver starts on the posed grid, in the follow-up; (b)
+  leave it (the heavy record covers the start through its force). Recommendation (a).
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> Moving immersed shapes, transverse oscillation in a stream. Follow-up of F-308 (ADR 0631). PARTIAL by the amendment rule (ADR 0648, 2026-11-16): every heavy check was met in the one registered run, but the fast tests T2 (a sign slip in the registered expectation, amendment 1 before any code) and T1, T3 (face selection and time in two test helpers, amendment 2 after their first run) were met only after amendments; the recommendation is done (ADR 0648 Q3, the lead's call). No library change: the F-308 MovingImmersed covers the case (opt-in; default bits unchanged by construction). Measured (limits registered before the code): a cylinder oscillating across a uniform stream, Re 20, A/D 0.5, f D/U 0.25, in the square of half side 8 D with a Freestream far field, PISO with linear upwind, 500 steps per period, 10 periods, window periods 9 and 10; immersed on a Cartesian D/40 core (45 600 cells) against the body-fitted swept-volume ALE run on a 256 x 96 O-grid mapped to the same square (exact square points, so both meshes have the same inflow faces), started at the initial pose: mean drag 1.2473 against 1.2448 (+0.20 %, limit 3 %), lift amplitude 2.3080 against 2.2892 (+0.82 %, limit 4 %), lift phase to the displacement -24.93 against -25.15 degrees (0.22 degree, limit 3), complex lift harmonic 0.91 % (limit 6 %), mean lift 2.9e-6 of the lift amplitude (limit 0.02). The reference on 128 x 48 is within 0.12 % in drag and 0.47 % in the lift harmonic. With the body velocity left out of the forcing every measure is missed (mean drag +10.8 %, lift amplitude -59 %, phase +63 degrees). D/20 is as close as D/40 (no mesh trend at this Re, reported). Fast tests T1 to T4; seven of eight mutations caught (the fast smoke does not see a body-fitted start on the unmoved grid). Not included: lock-in and shedding at Re 100; a case-file key (open, F-307 schema golden); rotating or deforming shapes; free motion; second-order flux faces with motion; BDF2; three dimensions; wake profiles in a stream.
+
+> Follow-up proposed: Moving immersed shapes at lock-in: a transversely oscillating cylinder shedding vortices. Deps F-707. Acceptance: Every limit not stated here is registered in the ADR before the run. A cylinder oscillating across a uniform stream at Re 100 inside the lock-in range, away from the phase jump, gives the shedding locked to the forcing, the mean drag, the lift amplitude and the phase of the lift against a body-fitted moving-mesh run of this repository within registered limits that allow for the natural-frequency difference of the two discretisations; a fast test checks that the body-fitted solver starts on the grid at the initial pose; a negative control with the body velocity left out of the forcing misses them.
