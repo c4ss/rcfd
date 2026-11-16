@@ -14163,12 +14163,15 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     (src/renderer/runs), live state from the runner feed plus 1 s re-read while a run is active; G7 close-and-kill e2e
     with a real rcfd-runner run; paused and cancelled pictograms drawn (DESIGN.md addition proposed); steady runs no
     longer show time 0 (engine reports 0 for steady runs; shown in words).
-- [ ] **F-807** Electron Studio: run control (quick run, stop, pause, queue)
+- [x] **F-807** Electron Studio: run control (quick run, stop, pause, queue)
   - depends on: F-806
   - acceptance: Start a case as a quick run, stop, pause and queue through the runner service only; each action shown in
     the run list within P2; a test for each action and for a refused action (the error names the problem and the
     recovery).
-  - note: ADR 0800. Traces: G2, G7; PRODUCT Capabilities (parity: quick run, stop).
+  - note: ADR 0800. Traces: G2, G7; PRODUCT Capabilities (parity: quick run, stop). Done 2026-11-16: run bar in the Runs
+    view and Run per case on the home; start_run/pause_run/resume_run/cancel_run on a writable project server (shared
+    with the F-812 case editor), rcfd-runner ensure to start the runner; confirmations name what is lost; P2 met for
+    every action (<= 19.4 ms to the painted frame).
 - [~] **F-808** Electron Studio: field viewport on three.js WebGPU
   - depends on: F-804, F-802
   - acceptance: Mesh and fields on surfaces drawn by three.js WebGPURenderer with a TSL material that colours from the
