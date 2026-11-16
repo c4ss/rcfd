@@ -201,3 +201,90 @@ Mutations (scratch copy, one at a time; each must fail a registered fast check):
 * ADR 0624 (F-701), ADR 0632 (F-700, `entry_hash`, `resolve`), ADR 0121 (the ledger).
 
 ## Addenda
+
+## Addendum 1: results (2026-11-16)
+
+Code: commits 4bc114b0 and b9950b53 (registration 08a4715b before them). `crates/rcfd-api/src/design/hypothesis.rs`: `RerunSample`
+and `RerunPlan`, the field `Hypothesis::rerun_sample` (written to the record JSON only when `Some`), its validation,
+`rerun_seed`, `rerun_pairs`, `rerun_miss_probability`, `rerun_sample_size`, `Verification::rerun_sample`, the sampled re-run in
+`verify_slot` and `settings.rerun_sample` in the result entry; the module doc. New `crates/rcfd-api/tests/f727_rerun_sample.rs`
+(9 tests: 8 fast, the heavy 400-world record ignored). `docs/design-loop.md`: one bullet in the hypothesis section. No other
+source file, no shared solver file, no golden, no hash table, no case key, no MCP tool; `bayes.rs` and `fan_objective.rs` not
+touched.
+
+Runs (release throughout): the registered fast run `cargo test -p rcfd-api --release --test f727_rerun_sample --
+--test-threads=2` (`f727-scratch/run1.log`, 8 passed); the heavy record once (`--ignored`, `heavy.log`, 56 s); C1 (`c1_fast.log`,
+`c1_heavy.log`); C3 (`lib.log`); clippy, which asked for two cosmetic changes in the test file (the constant `0xC0FF_EE` written as
+`0x00C0_FFEE`, the same value; a type alias for the B1 cases), after which the fast tests ran once more (`run2_after_clippy.log`, 8
+passed). Mutations on a `git archive` copy of 4bc114b0 with its own target directory (`mutate.py`, `mutate_summary.log`; the
+unmutated control M0 8 of 8).
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| K0 | 13, 30, 10; rel <= 1e-12; `None` | 13, 30, 10; P_miss(13) 1.468603e-2, relative 0; `None` for b = 0 and miss = 1 | yes |
+| K1 | 400 of 400 | 400 of 400 | yes |
+| A0 | (i) 13 problems on sampled high arms, `Some(false)`, 0 rows; (ii) 0, `Some(true)`, genuine, 1 row; (iii) 0, `None`, sample reported; (iv) k, seed, pairs recorded | (i) 13 of 13 on sampled high arms (pairs 3, 4, 8, 17, 24, 25, 35, 47, 48, 51, 52, 59, 60), `Some(false)`, 0 rows; (ii) 0 problems, `Some(true)`, genuine entry 129, 1 row; (iii) as stated; (iv) `{"k":13, "seed":18345222161845676084, "pairs":[...], "rtol":0, "atol":0}` equal to the verification | yes |
+| A1 | at least 380 of 400 | **394 of 400** (expected 400 x 0.98531 = 394.1) | yes |
+| A1b | 400 of 400 | 400 of 400 | yes |
+| A2 | 0 of 400; 400 `Some(true)` | 0; 400 | yes |
+| A3 | 800 of 800; counts in [50, 113] | 800 of 800; counts 60 to 107 | yes |
+| NC6 | caught 0 of 400, `None` 400 | 0; 400 | yes (fails A1 as it must) |
+| NC7 | 66 to 134 of 400 | 116 (expected 100, z +1.85) | yes (fails A1 as it must) |
+| A4 | rtol 1e-9: 0 problems, `Some(true)`; rtol 0: 8, `Some(false)` | as stated | yes |
+| A5 | 6 of 6 refused naming `rerun_sample`; file unchanged | 6 of 6; unchanged | yes |
+| A6 | 0 problems, `None`, sample reported | as stated | yes |
+| B1 | parents resolve; exactly one problem naming the entry and the parameter; `run` refused; 0 rows; 3 of 3 | 3 of 3: "entry 11: evidence of H-1 pair 5 arm low: parameter 'x1' = 0.93093... 1, the design has 'x1' = 0.92993... 1"; "entry 20: ... pair 9 arm high: parameter 'x0' = 0.7501 1, the design has 'x0' = 0.75 1"; "entry 7: ... pair 3 arm low: compensating parameter 'n' = 0.81 outside the registered rule" | yes |
+| NCB | result flagged and the parameter problem present | 1 parent reference does not resolve; result entry 33 flagged; parameter problem present | yes (see deviation 2) |
+| C1 | 19 fast pass; heavy S1 1, S2 1592 / 1595, NC1 400, NC2 61, S4 118 | 19 passed, every printed number equal to ADR 0624 addendum 1 (K1 1.33e-11, G1 hash, G2 to G5, V1 22 of 22, NC3 75, E1 to E3, F1 to F5, HB1, R1 2347886 and 56361 bytes); heavy: S1 1, S2 1592 / 1595, NC1 400, NC2 61, S5 0, S3 0.047570, S4 118 | yes |
+| C2 | the smoke literals; G1 hash; no key; genuine | 34 entries, 26298 bytes, `ef3add9a434918c6`, record, registration and result hashes equal; G1 `fnv1a64:4b58385209778c10`; no key; 0 problems, genuine 33 | yes |
+| C3 | pass | `--lib` 141 passed, 4 ignored | yes |
+| R3 | clean | `cargo fmt -p rcfd-api --check` clean; `cargo clippy -p rcfd-api --all-targets -- -D warnings` clean after the two cosmetic test changes | yes |
+
+Mutations (each a one-place change; caught = at least one fast test fails):
+
+| Id | Mutation | Expected | Failing tests | Caught |
+|---|---|---|---|---|
+| M15 | evidence parameters not compared (ADR 0624's M15) | B1 (a), (b) | b1_ncb_parameter_guard | yes |
+| M16 | compensating-parameter rule removed | B1 (c) | b1_ncb_parameter_guard | yes |
+| M17 | sample ignored in `verify` | A0 | a0_a6, a4, a_worlds_fast | yes |
+| M18 | sample = first k pairs | K1 | k1_sample_recipe | yes |
+| M19 | only the low arm re-run | A0 | a0_a6, a4, a_worlds_fast | yes |
+| M20 | `rerun_sample` not written in the result | A0 | a0_a6, a_worlds_fast | yes |
+| M21 | `rerun_sample: null` written without a sample | C2 | c2_old_records_bit_identical | yes |
+| M22 | tolerances ignored | A4 | a4_tolerances | yes |
+| M23 | refusal of tier measured removed | A5 | a5_refusals | yes |
+
+M23 note: without the refusal the registration is still refused on a public ledger, by the ledger's own rule for measured content
+(ADR 0632); A5 fails because that message does not name `rerun_sample`. On a private ledger the mutated code would register it.
+
+Deviations: (1) the fast tests ran twice (registered run and after the clippy changes), with the same result; the heavy record
+once. (2) NCB: under the parameter problem the result line is flagged for "no verified and complete evidence" whatever its
+hashes, so the flag alone does not isolate the reference guard; the test therefore also counts the parent references that do not
+resolve (1), which is the reference guard ADR 0624's M15 met. Registered limit unchanged and met. (3) C1 ran on the commit
+before the module-doc line was added (a comment; the f701 tests were rebuilt for it); C3 and clippy on b9950b53. Not run: the
+whole workspace and whole integration suites (the daily gate), `baseline_hashes` (no shared solver file touched), the f699 and
+rcfd-mcp tests (not touched; ADR 0624's R2 miss is not re-examined here). `docs_site` (rcfd-cli) ran for the
+`docs/design-loop.md` change: 2 passed (`docs_site.log`).
+
+Decision by the registered rule: **done.** Every check is met, NC6, NC7 and NCB fail as stated, M15 to M23 are all caught.
+
+### Remaining questions (each with a recommendation)
+
+1. **Secret samples.** The sample is derivable from the file, so a deliberate forger can be honest only on it. Options: (a) keep
+   (mistakes and version drift); (b) a verifier-drawn sample from a seed not in the ledger, recorded after the check. Recommendation:
+   (a) until evidence comes from evaluators outside the maintainer's control; then (b) as its own item.
+2. **Default k for the MCP tools of F-702.** Options: (a) no sample unless asked; (b) a default from `rerun_sample_size(n, n/4,
+   0.02)` for cfd-tier hypotheses. Recommendation: (b) for tier cfd only, decided with F-702 (it changes no existing default).
+3. **Statement text.** `lessons` reports `evidence_rerun = Some(true)` for a reproduced sample as for a full re-run. Options: (a)
+   keep, the plan is in `Verification::rerun_sample`; (b) add "k of n pairs re-run" to the generated statement. Recommendation: (b)
+   together with the statement wording change of ADR 0624 question 2, with F-702.
+
+## For the lead: roadmap entries
+
+> Proposed status: done
+
+> Follow-up of F-701 (ADR 0624 questions 3 and 5). ADR 0662, 2026-11-16. DONE. Library only, opt-in: a hypothesis registration may carry a seeded re-run sample (design::hypothesis RerunSample: k pairs, rtol, atol), drawn by a partial Fisher-Yates from a seed derived from the record hash and seed (rerun_seed, rerun_pairs); verify re-runs both arms of exactly the sampled pairs with the trusted evaluator at analytic, reduced-order or cfd tier (measured refused) and the result line records k, the seed and the pairs. rerun_sample_size gives the smallest k from the hypergeometric miss probability C(n-b,k)/C(n,k); for 64 pairs and an evaluator wrong on 16 of them, k = 13 (miss 0.0147). Checks: on 400 synthetic worlds an impostor wrong on the high arm of 16 of 64 pairs is caught in 394 (limit 380, the registered share 0.95), the number of re-run problems equals the sampled corrupted pairs in 400 of 400, the honest evaluator is never flagged, without a sample at tier cfd it is caught in 0 and with k = 1 in 116 (66 to 134); editing one evidence parameter (a domain value, a factor level, a compensating parameter) and rewriting the result's parent hash leaves exactly one problem, the parameter comparison, in 3 of 3, and the mutation that removes the comparison (ADR 0624's M15, which survived there) now fails. Records without a sample keep their bytes (a ledger of main's code reproduced byte for byte, the G1 hash unchanged) and are read as before; ADR 0624 code reading a new record ignores the sample. Every ADR 0624 check keeps its numbers (S1 1, S2 1592 of 1595, NC1 400, NC2 61, NC3 75, S4 118). Nine mutations caught. Not covered: the sample is derivable from the file, so it guards against mistakes and version drift, not a deliberate forger; no MCP tool (F-702).
+
+> Note for F-701 (append): ADR 0662 (F-727, 2026-11-16): M15 is now caught by a check that edits one evidence parameter and rewrites the reference hashes; verify can re-run a registered seeded sample of k pairs (k recorded in the result).
+
+> Follow-up proposed: Verifier-drawn re-run sample for hypotheses from evaluators outside the maintainer's control. Deps F-727. Acceptance: Every limit not stated here is registered in the ADR before the run. The verifier draws the k pairs from a seed not stored in the ledger before the check and records it after; an impostor that is honest exactly on the pairs derivable from the file (the F-727 sample) is caught on at least the registered share of synthetic worlds, while the F-727 sample misses it in all of them (negative control); every ADR 0624 and ADR 0662 check keeps its result.
