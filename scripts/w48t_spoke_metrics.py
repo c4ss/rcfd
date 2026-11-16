@@ -6,7 +6,8 @@ usage:
   python scripts/w48t_spoke_metrics.py compare-dumps <prefix a> <prefix b> [<field>]
   python scripts/w48t_spoke_metrics.py figures <out dir> <metrics.json> <label>=<dump prefix> ...
 
-Dumps are written by crates/rcfd-studio/tests/w48t_cylinder_spokes.rs (w48t_dump_stores): <prefix>.centres.f64 (cells x 3),
+Dumps are written by crates/rcfd-api/tests/w48v_adaptive_correctors.rs (w48v_dump_stores; first by w48t_dump_stores of
+crates/rcfd-studio, removed by F-449): <prefix>.centres.f64 (cells x 3),
 <prefix>.p.f64 (snapshots x cells), <prefix>.meta.json. Definitions (ADR 0154, "Metrics"): cells are grouped into rings by
 their centre radius (equal to 1e-9 relative) and ordered by angle; q = 0.5 (rho = 1, U = 1, kinematic p).
   M_hf   RMS over the band rings (centre radius in [0.55, 0.70]) of the part of p in the circumferential modes

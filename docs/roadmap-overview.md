@@ -38,7 +38,7 @@ Of the 190 roadmap items, 95 are done, 63 are partly done and 32 have not starte
 - FAN-01, the reference fan case, stalls. The steady rotating-frame solve of the reference fan does not reach the expected operating point. Several suspected causes have each been ruled out as the single cause, and the diagnosis is open. See [the fan milestone](milestone-fan.md).
 - There is no structural solver yet. Stress and strain pictures, and blade deformation, need one; its plan was approved on 2026-11-12 (crate `rcfd-fem`, ADR 0270, 0290 and 0310) and two of its pieces exist (a direct SPD solver and an eigensolver).
 - Sliding-mesh transient solves, needed for rotor-stator interaction and broadband noise, are not available.
-- The desktop app is being rebuilt. The old interface is frozen. The new one (an Electron app in `apps/studio-web`) runs from a checkout, with no installer yet; `docs/tutorials/desktop-assistant.md` shows how to start it.
+- The desktop app is being rebuilt. The old egui interface was removed (F-449). The new one (an Electron app in `apps/studio-web`) runs from a checkout, with no installer yet; `docs/tutorials/desktop-assistant.md` shows how to start it.
 
 ## What we are working on
 

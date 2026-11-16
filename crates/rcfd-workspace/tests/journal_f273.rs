@@ -3,7 +3,8 @@
 //! changes of a Studio save and the cut of long lists; C3-O lines written before F-273 read by the feed; C3-F the feed
 //! (an edit explained by its line, an outside write labelled `external`, the late line of J6, run events, nothing
 //! written, entries no longer kept). The two-process check C3 and the runs through the runner are
-//! `crates/rcfd-mcp/tests/feed_f273.rs`; the Studio's reactions `crates/rcfd-studio/tests/feed_f273.rs`.
+//! `crates/rcfd-mcp/tests/feed_f273.rs` (the egui Studio's reactions were in `crates/rcfd-studio/tests/feed_f273.rs`,
+//! removed with that crate by F-449).
 
 use rcfd_api::case::Case;
 use rcfd_project::records::{hash_bytes, EventKind, RunEvent, RunState};

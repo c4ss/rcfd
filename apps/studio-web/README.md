@@ -434,8 +434,8 @@ Decisions taken in building F-814 (options, the recommendation followed; each re
 - D7, a new chat: allowed, with `--session-id` and a UUID chosen by the main process.
 - D8, MCP config: always `--strict-mcp-config` with an app-owned config (no server when there is no `rcfd-mcp`).
 - Missing in the engine (no Rust change here): a CLI, MCP or service entry point for Claude Code session discovery,
-  transcript reading, resume and writing the allow-list file (`rcfd-claude` has the code; only the frozen egui Studio
-  uses it).
+  transcript reading, resume and writing the allow-list file (`rcfd-claude` has the code; its only user, the egui Studio
+  `rcfd-studio`, was removed by F-449).
 
 ## Layout
 
@@ -723,7 +723,7 @@ equivalents (G20). Ctrl+/ (or "Show the keyboard shortcuts" in the palette) list
 - One shortcut table, `src/shared/commands/shortcuts.ts`, feeds the palette, the listing, the key listener and the
   tests. Global: Ctrl+K and Ctrl+Shift+P palette, Ctrl+/ shortcuts, Ctrl+1 Home, Ctrl+2 Runs, Ctrl+L Claude Code message
   field, Ctrl+O open a project folder, Ctrl+N new case, F5 run a case (asks which), Ctrl+. stop a project run (asks
-  which, then confirms). F5 and Ctrl+. are the egui Studio's Run and Stop keys. The table also lists the keys of the
+  which, then confirms). F5 and Ctrl+. were the removed egui Studio's Run and Stop keys. The table also lists the keys of the
   surfaces (Ctrl+S in the case editor, Enter in the Claude Code field, the field view's keys) and the reserved keys:
   the Electron default menu (reload, developer tools, zoom, clipboard, close), Chromium's text and focus keys, Windows'
   menu keys, Ctrl+Z, Ctrl+Shift+Z and Ctrl+Y for undo and redo (F-829) and the time panel's arrows, Home and End (F-810).
@@ -789,10 +789,10 @@ lists every time (`model.ts`), and the result link is one function, `openFirstRe
 Runs today; repoint it there when F-810's run workspace lands).
 
 Missing engine entry point: no CLI, MCP or service call makes a project in an empty folder (only the library's
-`rcfd_project::Project::create`, used by the frozen `rcfd-studio`). Until one exists the Studio shows the folder as not a
-project yet, with "Make a project here" unavailable and the reason in its tooltip, watches the folder (every second, no
-writes) and opens it by itself when `rcfd-project.json` appears. Proposed: `rcfd project init <dir> [--name]` and an MCP
-`create_project` wrapping `Project::create`.
+`rcfd_project::Project::create`, used by the egui `rcfd-studio` removed by F-449). Until one exists the Studio shows the
+folder as not a project yet, with "Make a project here" unavailable and the reason in its tooltip, watches the folder
+(every second, no writes) and opens it by itself when `rcfd-project.json` appears. Proposed:
+`rcfd project init <dir> [--name]` and an MCP `create_project` wrapping `Project::create`.
 
 Decisions taken in building F-813 (options, the recommendation followed; each reversible without touching the engine):
 

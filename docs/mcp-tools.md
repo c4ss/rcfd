@@ -226,11 +226,11 @@ arguments cannot be used there. `initialize`'s first sentence then names no sess
 | `run_headless` | `start_run`; no equivalent for `continue_from`, interpolation, checkpoints, `out_dir` and `max_elapsed_s` |
 | `list_workflow_tasks`, `create_workflow`, `edit_workflow`, `run_workflow_task` | none yet |
 
-The Claude Code sidebar of the older `rcfd-studio` allows the project's read tools without asking: in a project whose
-allow-list file (`.rcfd/claude-allow.json`) it makes after this change, those are the 15 read-class project tools,
-`read_feed`, `check_case_mesh`, `preview_mesh` and `list_meshes` among them; an existing allow-list file is not changed
-(ADR 0195 P5). The Claude Code panel of the desktop Studio (`apps/studio-web/`) uses the allow-list file when it is
-valid, else the same 15 read-class tools, and refuses every other tool without asking; it never writes the file.
+The Claude Code panel of the desktop Studio (`apps/studio-web/`) allows the project's read tools without asking: it uses
+the allow-list file (`.rcfd/claude-allow.json`) when it is valid, else the 15 read-class project tools (`read_feed`,
+`check_case_mesh`, `preview_mesh` and `list_meshes` among them), and refuses every other tool without asking; it never
+writes the file. The removed egui Studio `rcfd-studio` (F-449) wrote that file with the same 15 tools when a project had
+none (ADR 0195 P5); the desktop Studio does not.
 
 ### The plugin's edit hook
 

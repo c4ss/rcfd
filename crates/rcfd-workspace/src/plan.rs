@@ -1,14 +1,15 @@
 //! The start plan of a run (ADR 0173 D7, ADR 0186 G4): the field store a run gets so that its fields can be scrubbed,
-//! the proposal of ADR 0140 that the Studio's start dialog makes (`rcfd_studio::runs::propose_store` and
-//! `StartPlan::set`), with the same rule, constants, entry text and order, snapshot count and size estimate. Only the
-//! store: the time settings (ADR 0153) and pressure correctors (ADR 0158) that the Studio's Run adds are not part of it.
+//! the proposal of ADR 0140 that the start dialog of the egui Studio made (`rcfd_studio::runs::propose_store` and
+//! `StartPlan::set`; that crate was removed by F-449), with the same rule, constants, entry text and order, snapshot
+//! count and size estimate. Only the store: the time settings (ADR 0153) and pressure correctors (ADR 0158) that the
+//! egui Studio's Run added are not part of it.
 //!
 //! The rule, for a case as `rcfd run` reads it: no store when the case sets `output.store_interval` or
 //! `output.store_time_interval` to a value other than its schema default (ADR 0152) or sets `dynamic_mesh.enabled`;
 //! a transient run (`piso`, `pimple`, `compressible` unless `compressible.mode = "steady"`) with an `end_time` gets
 //! `output.store_time_interval = end_time / 100`; every other run `output.store_interval = max(1, ceil(max_iterations /
-//! 100))`; and `output.store_precision = f32` unless the case sets the precision itself. The Studio keeps its own copy
-//! of the rule until it uses this one; a parity test of the Studio (`new_simulations_f271.rs`) pins the two equal.
+//! 100))`; and `output.store_precision = f32` unless the case sets the precision itself. The egui Studio kept its own
+//! copy of the rule, pinned equal by its parity test `new_simulations_f271.rs`, until it was removed (F-449).
 
 use rcfd_api::case::{Case, Diagnostic};
 use serde_json::Value;

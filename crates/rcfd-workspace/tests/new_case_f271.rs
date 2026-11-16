@@ -1,7 +1,7 @@
 //! ADR 0186 C-N: the workspace command `new_case` makes a case file from each of its five sources and refuses, with
 //! nothing written, what it must refuse; `start_run` with `new_case` and a malformed `set` entry writes no case and
 //! queues no run. Plus the start plan's values for hand-derived cases (`rcfd_workspace::plan`, ADR 0186 G4); its parity
-//! with the Studio's plan is `crates/rcfd-studio/tests/new_simulations_f271.rs`.
+//! with the egui Studio's plan was `crates/rcfd-studio/tests/new_simulations_f271.rs`, removed with that crate (F-449).
 
 use rcfd_api::case::Case;
 use rcfd_project::records::hash_bytes;

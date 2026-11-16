@@ -7,9 +7,9 @@ you want to script runs instead, start with the [quick start](quick-start-cli.md
 The Studio is the Electron app in `apps/studio-web/` of the repository (ADR 0800). It is a client of the engine: it reads a
 project folder through the engine's project server (`rcfd-mcp`), starts and stops runs through the project's runner
 (`rcfd-runner`), edits cases through the solver service (`rcfd serve`), and talks to Claude Code in a side panel. It is in
-development: there is no installer yet (roadmap F-820), so you run it from a checkout. The two older desktop apps,
-`rcfd-studio` and `rcfd-gui`, are frozen but still work until they are retired (F-449); the last section says what they
-have that the new Studio does not.
+development: there is no installer yet (roadmap F-820), so you run it from a checkout. The two older egui desktop apps,
+`rcfd-studio` and `rcfd-gui`, were removed (F-449); the section "What the Studio does not do yet" lists what they had that
+this Studio does not have yet.
 
 **What is and is not tested on this page.** The tutorial test executes only the command-line steps (writing and checking
 the case file). Every Studio step is marked `not-executed`: the tutorial test cannot click through a window. The Studio's
@@ -93,9 +93,9 @@ RCFD_STUDIO_RCFD="$PWD/../../target/release/rcfd" npm start
 ```
 
 `npm run package:dir` makes a packaged copy, `out/packaged/rcfd-studio.exe` (`out/packaged/rcfd-studio` on Linux), which
-takes the same variables; it is what the tests drive. Do not confuse it with the older app of the same name in
-`target/release/`. The other variables (where the recent list is kept, an already running service) are in
-`apps/studio-web/README.md`.
+takes the same variables; it is what the tests drive. An `rcfd-studio` program in `target/release/` left by an older build
+is the removed egui app (F-449), not this one. The other variables (where the recent list is kept, an already running
+service) are in `apps/studio-web/README.md`.
 
 Without `RCFD_STUDIO_RCFD` the window still opens, but Open project folder… is unavailable and the home says what to set.
 
@@ -264,37 +264,31 @@ Ctrl is Cmd on macOS.
 ## What the Studio does not do yet
 
 * No installer (F-820): it runs from a checkout as in step 2.
-* No new project: the engine has no command that makes one. Copy an example project, or make one with the older
-  `rcfd-studio` (below).
+* No new project: the engine has no command that makes one (`rcfd_project::Project::create` has no CLI or MCP entry
+  point). Copy an example project. The removed `rcfd-studio` had Project > New project....
 * No delete of a run, a result or a case: the engine has none, so the Studio offers none.
-* No picture of a case's mesh before a run, no iso-surfaces and no streamlines.
-* No model of your own choice: the panel talks to Claude Code only. `rcfd-gui` (below) has the local-model sidebar.
+* No picture of a case's mesh before a run (the removed `rcfd-studio` had one), no iso-surfaces and no streamlines.
+* No model of your own choice: the panel talks to Claude Code only. The removed `rcfd-gui` had an assistant sidebar for a
+  model you choose, with provider presets (`ollama`, `lm-studio`, `llama-cpp`, `vllm`, `openai`, `anthropic`), four quick
+  actions that need no model (Assess mesh, Validate case, Suggest BCs, Explain residuals) and an Approve writes mode; the
+  Studio has none of these yet.
 
-## The older desktop apps (frozen until F-449)
+The removed egui apps had more that this Studio does not have yet:
 
-`rcfd-studio` (egui on wgpu) and `rcfd-gui` (egui on OpenGL) keep building and passing their tests but get no new
-features. They are removed only after the new Studio reaches parity and the maintainer approves (F-448, F-449).
-
-`rcfd-studio` opens the same project folders, can make a new one (Project > New project...) and shows a case's mesh
-before it is run. One line builds it with the programs it starts and opens it on a folder:
-
-```console not-executed
-powershell -ExecutionPolicy Bypass -File scripts\studio.ps1 my-project
-sh scripts/studio.sh my-project
-```
-
-`rcfd-gui` opens one case file, not a project. Its assistant sidebar talks to a model you choose through the same tools
-as the [MCP server](mcp-design-loop.md), with four quick actions that need no model (Assess mesh, Validate case, Suggest
-BCs, Explain residuals) and an Approve writes mode that shows each tool call that changes the case as a card with Approve
-and Deny. Its provider presets are `ollama`, `lm-studio`, `llama-cpp` and `vllm` (local, OpenAI-compatible), `openai` and
-`anthropic`. Start it on the case of step 1:
-
-```console not-executed
-cargo run --release -p rcfd-gui -- --root . cavity.toml
-```
-
-Headless tests in `crates/rcfd-gui/tests/` cover its logic with a mock model; no real or local model has been run
-through it by the test suite (roadmap F-145, F-150).
+* Run (F5) of `rcfd-studio` chose the time step for a time span, switched on adaptive pressure correctors and stored
+  fields by its start plan; its Start run... dialog could turn the store off or change its interval. Run and Queue… here
+  start the case as written.
+* A runner budgets dialog (`max_runs`, `cpu_threads`, `mem_budget_mb` in `.rcfd/runner-config.json`); edit that file by
+  hand.
+* A log panel with the tail of a run's `log.txt`, and residual columns in the runs list.
+* Save PNG… of the field view, a 2D scale bar, and colour ranges over the whole run or fixed by hand (here: the shown
+  snapshot's range).
+* Refine x2 of a generator mesh, and Re-run with fields stored for a run that has none.
+* Opening a project folder given on the command line (`rcfd-studio <folder>`).
+* `rcfd-gui` opened and saved a single case file anywhere (Open…, Save as…), not only in a project, and showed the field
+  of a running in-process session live, with Step (one iteration), Pause and Stop.
+* A choice of the `claude` model in the Claude Code panel, and an Allow button that added a tool rule to
+  `.rcfd/claude-allow.json` (the Studio reads that file and never writes it).
 
 ## Where to go next
 

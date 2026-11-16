@@ -22,10 +22,6 @@ The design ledger `designs/variants.ledger.jsonl` (ADR 0121) holds the parameter
    `RCFD_STUDIO_RCFD` set to the `rcfd` you built.
 3. Choose Open project folder… (Ctrl+O) and pick this folder.
 
-The older `rcfd-studio`, frozen until roadmap item F-449, still opens the folder: build it with
-`cargo build --release -p rcfd-studio -p rcfd-runner -p rcfd-cli`, then start `target\release\rcfd-studio.exe <this folder>`
-(on Linux `target/release/rcfd-studio`).
-
 ## What to look at, in order
 
 The Studio names many controls only in tooltips and accessible names; the names below are those.

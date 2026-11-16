@@ -16,13 +16,11 @@ members = [
     "crates/rcfd-api",
     "crates/rcfd-mcp",
     "crates/rcfd-assistant",
-    "crates/rcfd-gui",
     "crates/rcfd-claude",
     "crates/rcfd-project",
     "crates/rcfd-runner",
     "crates/rcfd-render",
     "crates/rcfd-tsstore",
-    "crates/rcfd-studio",
     "crates/rcfd-workspace",
     "crates/rcfd-fem",
 ]

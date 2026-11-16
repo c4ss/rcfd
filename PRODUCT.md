@@ -25,7 +25,8 @@ Decided by the maintainer 2026-11-16:
   and is not used as a look.
 - Each dependency is pinned and justified in its ADR (guardrail G5).
 
-`rcfd-studio` (egui/wgpu) is frozen until parity and then retired (F-449). The legacy `rcfd-gui` is frozen and out of scope.
+The egui apps `rcfd-studio` (egui/wgpu) and `rcfd-gui` were removed on 2026-11-16 (F-449), before parity, by the maintainer's
+decision; the git history keeps them.
 
 ## Users
 

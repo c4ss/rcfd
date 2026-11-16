@@ -5,8 +5,8 @@ use serde_json::{json, Value};
 use std::collections::BTreeMap;
 
 /// Min/max decimation to at most `max_points`: first and last kept, the interior split into buckets that each keep
-/// their minimum and maximum. Copied from `rcfd-gui/src/monitors.rs` (`decimate_minmax`, ADR 0025 M3; the frozen GUI
-/// is not a dependency of this crate).
+/// their minimum and maximum. Copied from `rcfd-gui/src/monitors.rs` (`decimate_minmax`, ADR 0025 M3; that crate was
+/// removed by F-449).
 pub fn decimate_minmax(points: &[[f64; 2]], max_points: usize) -> Vec<[f64; 2]> {
     let n = points.len();
     if n <= max_points {

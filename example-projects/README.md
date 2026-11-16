@@ -15,10 +15,8 @@ the 3D example, drawn in a view you can turn.
 | `axial-fan/` | one periodic blade passage of the FAN-01 axial fan in 3D (k-omega SST, rotating frame) and one run with first-order `upwind`, for viewing the 3D geometry and flow pattern only: not a validated fan prediction (ADR 0176) | `axial-fan/notes/README.md` |
 
 Open a project with Open project folder… in the desktop Studio; `docs/tutorials/desktop-assistant.md` says how to start
-it from a checkout. The older `rcfd-studio`, frozen until roadmap item F-449, opens them too: build it with
-`cargo build --release -p rcfd-studio -p rcfd-runner -p rcfd-cli`, then start
-`target\release\rcfd-studio.exe example-projects\wind-tunnel`. To start runs of your own, copy the folder out of the
-repository first; new runs inside the checkout show up as untracked files (the checks below ignore them).
+it from a checkout. To start runs of your own, copy the folder out of the repository first; new runs inside the checkout
+show up as untracked files (the checks below ignore them).
 
 The real solver made the runs through the run service, with `scripts/make_example_projects.py`. That script also rebuilds
 them (`python scripts/make_example_projects.py`) and checks the committed folders against their case files

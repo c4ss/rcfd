@@ -44,7 +44,6 @@ fn all_required_crates_exist() {
         "api",
         "mcp",
         "assistant",
-        "gui",
     ] {
         assert!(g.contains_key(&format!("rcfd-{c}")), "missing crate rcfd-{c}");
     }
@@ -92,24 +91,11 @@ fn layering_matches_architecture_doc() {
         "rcfd-workspace" => 6,
         "rcfd-mcp" | "rcfd-cli" => 7,
         "rcfd-assistant" => 8,
-        "rcfd-gui" => 9,
-        "rcfd-studio" => 10,
         other => panic!("unknown crate {other}"),
     };
     for (c, deps) in &g {
         for d in deps {
             assert!(layer(d) < layer(c), "{c} must not depend on {d}");
         }
-    }
-}
-
-/// ADR 0173 C6, ADR 0185 A6: the Studio does not depend on the MCP server, the frozen GUI or the assistant (the
-/// architecture page's rule; the layer order alone would allow it).
-#[test]
-fn studio_does_not_depend_on_mcp_gui_or_assistant() {
-    let g = graph();
-    let studio = g.get("rcfd-studio").expect("rcfd-studio is a workspace crate");
-    for c in ["rcfd-mcp", "rcfd-gui", "rcfd-assistant"] {
-        assert!(!studio.contains(c), "rcfd-studio must not depend on {c}: {studio:?}");
     }
 }
