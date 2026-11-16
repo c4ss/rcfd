@@ -195,3 +195,91 @@ are both missed, or a2 fails (D0, D1, D2 or B1).
   component Gauss-Seidel sweeps with the own-component part `R_kk` implicit and the cross terms lagged, repeated until
   converged (no CSR of size `n_a n`, but an inner iteration count to choose). Taken (a) on the maintainer's standing instruction
   of 2026-11-11 (take the recommendation).
+
+## Addendum 1: results (2026-11-16)
+
+Measured against the limits registered above; no limit was changed and no amendment was needed. Release builds on Windows,
+on a machine shared with other building agents. The registration is 3d694a6e (alone, first); the library change and the tests
+8a9069cc (committed before their run). Each registered run was made once: the fast test (75 s), the heavy record (956 s,
+`--ignored --test-threads=1`; above the 550 s estimate, under load), the unit test D1 (in `--lib`). Logs in
+`w49i-work/f743-scratch` (`fast.log`, `heavy.log`, `lib.log`, `baseline.log`, `suites.log`, `mutations.log`).
+
+**Built as registered.** `PimpleSettings::rotational_periodic_implicit` (default `false`) and the private `RotationalLinks` in
+`crates/rcfd-fv/src/pimple.rs` (the settings field and its default; in `step_with`'s momentum predictor the links' build, the
+right-hand-side fix, the relaxation, the deferred component solves and the one block solve, `H1`, and the `H` operator of the
+correctors; one unit test D1); the new test file `crates/rcfd-fv/tests/sliding_annulus_inlet_f743.rs` (the fast test and the
+heavy record). With the setting off, or with no rotational link, every changed line of the step takes the previous arithmetic in
+the previous order. No case key, no golden, no hash table.
+
+### Results
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| K1s (a3) `abs(G_*(n) - G_(6,6)(n))`, every one of 400 steps from `u0` | `<= 1.5e-3` each step | `2.36e-4` (step 145; `G_*` larger) | met |
+| K1 (a3, field form) `max_c abs(delta_* - delta_(6,6))`, every step | `<= 1.5e-3` each step | `3.35e-4` | met |
+| J1 (a4) ADR 0641's step-1 difference with the setting | `<= 5e-3` | `6.74e-4` (default `3.494e-2`) | met |
+| K1J field form over J's 16 steps | `<= 2e-3` | `1.14e-4` | met |
+| D0 default `V(1, 6)` step 1 | `3.494135e-2` within `1e-8` | `3.494134721e-2` | met |
+| D1 Taylor-Green box (translational pairs), 5 steps, setting on against off | bit for bit | equal | met |
+| D2 the annulus with the setting on against off, 16 steps | bit for bit | equal on every step | met |
+| A1s C `flux_residual` of `V*(1, 6)` from step 2 | `<= 1e-12` | `4.97e-15` | met |
+| G0 cell match, every variant, every step | `<= 1e-9`, one-to-one | `1.45e-15` (J `9.5e-16`), yes | met |
+| NC1 (control) the K1J measure with the setting off | `>= 1e-2` | `3.49e-2` | held |
+| NC2 (control) the default's step 1 exceeds J1's limit | `>= 5e-3` | `3.494e-2` | held |
+| B1 `baseline_hashes`; the named suites | pass | 3 passed, 1 ignored; every named suite passed (below) | met |
+
+Printed, no limit: 400 steps from `u0`: `G_*` largest `5.891e-3` (step 102), `G_(6,6)` `5.987e-3` (step 101); step 1 `7.90e-4`
+and `8.61e-4`. J: `G_*` largest `1.850e-3`, `V(6, 6)` `1.911e-3`; step 1 `6.74e-4` and `6.85e-4`. Against the estimates: K1
+`3.3e-4` against `7.5e-4` estimated, J1 `6.7e-4` against `2.5e-3`, K1J `1.1e-4` against `6e-4`: the remainder after the lag
+changes with the outer count less than estimated. One outer iteration with the implicit pair is as close to the annulus as six
+outer iterations without it (`5.89e-3` against `5.99e-3`).
+
+The named existing suites (release, run once, all passed): `periodic` 3, `sliding_periodic_f304` 8,
+`sliding_periodic_coincidence_f720` 4, `sliding_periodic_coupled_f721` 2, `sliding_annulus_inlet_f725` 3,
+`sliding_threshold_scale_f724` 4, `sliding_reimaging_f704` 12, `mrf_cyclic_seams_w44c` 12, `rotating_seam_h1_w45c` 2,
+`consistent_periodic_f367` 13, `consistent_periodic_defaults_f367` 1, `seam_no_harm_f344` 6, `w35a_seam` 2 (their ignored
+records not run); `rcfd-fv --lib` 114 passed, 6 ignored; `rcfd-api` `baseline_hashes` 3 passed, 1 ignored.
+
+### Mutations (scratch copy `w49i-work/f743-scratch/mut` of 8a9069cc, script `mutate.py`, target `target-mut`; the fast test run once per mutation)
+
+| Mutation | Must fail | Caught by |
+| --- | --- | --- |
+| MX1 rotational links not in the block matrix | J1 or K1J | J1 (`1.47e-2`), K1J (`0.130`) |
+| MX2 `R^T` in the block matrix | J1 or K1J | J1 (`1.92e-2`), K1J (`0.174`) |
+| MX3 `H` operator without the rotational links | K1J or J1 | J1 (`0.160`), K1J (`0.784`) |
+| MX4 right-hand side not fixed | J1 or K1J | J1 (`0.176`), K1J (`3.11`) |
+
+Four of four caught; D0, D2, NC1, NC2 held under every mutation (the default path untouched). The file was restored and
+compared after each. `cargo fmt -p rcfd-fv --check` clean; `cargo clippy --release -p rcfd-fv --all-targets -- -D warnings`
+clean. Not run: the whole workspace or crate suites (the daily gate); `docs_site` (only `docs/` prose changed: this ADR and one
+paragraph of `docs/dynamic-mesh.md`; left to the daily gate).
+
+### Not covered
+
+As registered: relaxation (`alpha_u < 1`) and the consistent correctors with the setting are implemented but untested; the
+pressure-lag estimate, the adaptive corrector count and the lag preflight keep the lagged rotational coupling; the steady solver,
+the fractional step and the transposed stress are unchanged; no case key; Q4 untouched; one mesh pair, one step size, one inlet.
+
+### Decision
+
+By the registered rule: K1s and J1 met; K1J, D0, D1, D2, G0, NC1, NC2, B1 met; four of four mutations caught: **done**.
+
+### Remaining questions
+
+1. **The default (Q1, open).** Options: (a) keep the lagged default; (b) make the implicit pair the default for rotational
+   pairs (changes every rotationally periodic transient result; the baseline hashes of such cases re-recorded by the
+   maintainer). Recommendation (b), in its own change; the maintainer's call.
+2. **A case key (Q2, open).** Options: (a) none; (b) a key such as `solver.periodic_momentum = "implicit"` (the schema golden
+   changes). Recommendation (b) as a follow-up.
+3. **The lag estimate.** Options: (a) leave the pressure-lag estimate and the adaptive corrector count on the lagged rotational
+   coupling (as now); (b) give `lag_map` the block solve. Recommendation (b) together with Q1 (b); until then (a).
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> ADR 0664, 2026-11-16: implicit momentum coupling of periodic pairs. The opt-in PimpleSettings::rotational_periodic_implicit (default false) puts the rotated partner of every rotationally periodic pair into the momentum predictor implicitly (translational pairs are implicit since ADR 0046): the partner term coef (R u_partner)_k becomes the entries coef R_kj of one block system of the active components, its lagged value leaves the right-hand side, the components are assembled from the same iterate and solved together (BiCGStab, ILU(0)), and the correctors' H operator includes the links. On ADR 0661's lockstep (the sector SS against the full annulus, 400 steps from the start consistent with the inlet) one outer iteration with the setting stays within 2.4e-4 U_in of the six-outer-iteration variant V(6, 6) on every step (limit 1.5e-3; field form 3.3e-4), largest difference 5.89e-3 against V(6, 6)'s 5.99e-3; ADR 0641's step-1 difference falls from 3.494e-2 to 6.7e-4 (limit 5e-3). Defaults bit-identical: the default step reproduces ADR 0661's 3.494135e-2, the setting is a no-op bit for bit without rotational pairs (Taylor-Green box, the annulus), baseline_hashes and the periodic and sliding suites pass. Four of four mutations caught. No case key (golden); the default not changed (open); the pressure-lag estimate keeps the lagged rotational coupling.
+
+> Follow-up proposed: "Implicit rotational periodic pairs by default and as a case key". Deps F-743. Acceptance: the implicit rotational pair of ADR 0664 is the default of the transient step or selected by a case key (the maintainer's choice), with the baseline hashes and the schema golden re-recorded by the maintainer; the pressure-lag estimate and the adaptive corrector count use the same block solve, checked against a direct power iteration of the step on a rotationally periodic case within a registered limit. Every limit not stated here is registered in the ADR before the run.
+
+> Note for F-744 (non-orthogonal correction on coupled faces, deps F-743): with ADR 0664's setting the lag is removed in one outer iteration, so F-744's lockstep can run its corrected variant with one outer iteration against ADR 0661's V(6, 0) at about a sixth of the cost.

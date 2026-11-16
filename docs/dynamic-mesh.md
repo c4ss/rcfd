@@ -59,6 +59,10 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   `2.0e-2 U_in` of the annulus over 400 steps; nearly all of it is the lagged partner value of the momentum equation on the
   coupled (seam and wrap) faces, which outer iterations remove (`n_outer = 6`: `6.0e-3`), and what is left is the orthogonal
   coupling of the wrap faces (ADR 0629 Q4: with no non-orthogonal corrector in either run `1.5e-4`).
+  The opt-in `PimpleSettings::rotational_periodic_implicit` (F-743, ADR 0664) takes the rotated partner of the seam and wrap
+  pairs into the momentum matrix implicitly (one block system of the velocity components), so one outer iteration does what
+  six did: within `2.4e-4 U_in` of `n_outer = 6` on every step of the same lockstep, and ADR 0641's step-1 difference falls
+  from `3.5e-2` to `6.7e-4`. The default keeps the lagged partner.
   data set per face on rotor patches are the caller's to set on the new mesh; sectors of different pitch are refused. In the
   case tree since F-711 (ADR 0646) for the sector: `[mesh.sliding]` on `mesh.generator =
   "annulus_3d_sector_cylindrical_interface"` runs ADR 0634's turned loop (`mesh_turned`, `periodic_sliding_step`,
