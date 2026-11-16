@@ -14203,7 +14203,9 @@ fixed by the item's registration ADR before any code.
     edit, approved by the maintainer, and no other golden or baseline hash changes.
   - note: Decided by the maintainer 2026-11-15 (shared decision D1 of the design-loop drafts): the loop items stay
     library only, and their tools land in this one item together with F-339 so the goldens change once. NEEDS USER: the
-    tools-list golden edit. Size M.
+    tools-list golden edit. Size M. ADR 0670 (F-749, 2026-11-16): when a hold is given, the MCP tool should call
+    register_with_floor, and may pass floor_sample = n_pairs for a cheap evaluator (the floor then bounds every pair of
+    the design).
 - [~] **F-703** A deviatoric coefficient for the stabilised incompatible-modes Hex8 near incompressibility
   - depends on: F-693
   - acceptance: Every limit not stated here is registered in the ADR before the run. An opt-in coefficient of the ADR
@@ -14783,7 +14785,9 @@ fixed by the item's registration ADR before any code.
     every ADR 0624 check keeps its numbers (S1 1, S2 1592 of 1595, NC1 400, NC2 61, S4 118) and every ADR 0662 one (A1
     394, NC7 116). Ten of ten mutations caught (the backtracking one recorded, it survives). Not covered: three or more
     holds, mixed targets, batches with two holds, the floor away from the domain midpoint; no MCP tool (F-702).
-    Follow-up F-749 (Held-tolerance floor over a sample of the design).
+    Follow-up F-749 (Held-tolerance floor over a sample of the design). ADR 0670 (F-749, 2026-11-16): the held-tolerance
+    floor may be taken over a registered seeded sample of the design (floor_sample); midpoint registrations keep their
+    bytes and every ADR 0665 check keeps its numbers.
 - [ ] **F-729** Planar periodic sliding in the case tree
   - depends on: F-711
   - acceptance: a case file runs a planar slider against a stator of the same period beyond one period
@@ -15118,7 +15122,7 @@ fixed by the item's registration ADR before any code.
     ratio 1.859 against the closed form 1.865. No default bit changed (five bit records, the rcfd-api baseline hashes).
     Five of five mutations caught. Not covered: creep and viscoelastic with W on the nonlinear transient path (correct
     by reading), a distorted mesh, the Arrhenius factor.
-- [ ] **F-749** Held-tolerance floor over a sample of the design
+- [x] **F-749** Held-tolerance floor over a sample of the design
   - depends on: F-728
   - acceptance: Every limit not stated here is registered in the ADR before the run. The floor of register_with_floor
     taken as the largest over a registered seeded sample of design points (both arms solved at each), against a closed
@@ -15126,7 +15130,24 @@ fixed by the item's registration ADR before any code.
     floor is exceeded at some point by a registered factor; a registration accepted by the midpoint floor and below the
     sample floor refused with both values named; registrations made by the midpoint rule keep their bytes; every ADR
     0624, ADR 0662 and ADR 0665 check keeps its result.
-  - note: Follow-up of F-728 (ADR 0665, 2026-11-16).
+  - note: Follow-up of F-728 (ADR 0665 question 2). ADR 0670, 2026-11-16. DONE. Library only, opt-in: a hypothesis
+    record may carry floor_sample {points: k} (written only when given, so midpoint records keep their text and hash);
+    register_with_floor then takes the held-tolerance floor as the largest over the domain midpoint and the design
+    points of k of the registered pairs (drawn by the seeded Fisher-Yates of ADR 0662 from FNV-1a of "<record
+    hash>:floor:<seed>"), with both arms solved at each point exactly as their evidence would be; the stored
+    settings.held_floor gains a sample object (pairs, seed, per-pair values, midpoint, largest) that verify checks
+    against the record without a model and recomputes with one; register and register_batch refuse a floor sample.
+    Checks on a synthetic flow-and-speed evaluator whose sensitivity to the held metrics grows as G = 1 + 3 c^2 over the
+    domain (closed form F(c) = G(c) F_WC, F(1) / F(0.5) = 2.29): with 24 of 32 pairs every per-pair floor within 1.1e-9
+    of the closed form, the sample floor 7.94e-6 within 1.2e-10 of the closed-form maximum and 2.22 times the midpoint
+    floor (registered factor 1.5), the as_low_arm sample within 3e-12, and no inflation (0) on the evaluator without
+    variation; a min_effect of 5e-5, above 10 times the midpoint floor (3.57e-5) and below 10 times the sample floor
+    (7.88e-5), refused naming min_effect, the sample floor and the midpoint floor, and accepted by the midpoint rule; a
+    removed, edited or invented stored sample is caught; registrations made by the midpoint rule are byte-identical to
+    the base (three ledgers through register_with_floor and run); every ADR 0624 (S1 1, S2 1592 of 1595, NC1 400, NC2
+    61, S4 118), ADR 0662 (A1 394, NC7 116) and ADR 0665 check (10 of 10, J1 8.67e-9, J2 2.8e-11) keeps its numbers.
+    Eleven of eleven mutations caught. Not covered: a bound at unsampled pairs, a sample off the design, second order;
+    no MCP tool (F-702).
 - [ ] **F-750** Moving immersed shapes at lock-in where the lift does not cancel
   - depends on: F-731
   - acceptance: Every limit not stated here is registered in the ADR before the run. A cylinder oscillating across a
