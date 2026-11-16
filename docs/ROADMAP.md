@@ -14140,14 +14140,16 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     service, moved from bench/electron/io/ into the product with tests; every value the renderer receives equals the
     Rust reader's value bit for bit for the ADR 0350 data sets (P12, G3); P4 met through the product shell.
   - note: ADR 0800. Traces: G3, G9 (P4), G2; ADR 0350 addendum 1.
-- [ ] **F-805** Electron Studio: project home and the live project folder
+- [x] **F-805** Electron Studio: project home and the live project folder
   - depends on: F-803, F-802
   - acceptance: Open a project folder, list its cases, meshes, runs and notes through the engine (docs/ui-restart-
     plan.md section 8, ADR 0173); an edit made outside the Studio (Claude Code, the CLI, a text editor) shows within 2 s
     without a reload; the Studio keeps no project state of its own (G12); a Playwright test of each; a view-and-report
     step.
   - note: ADR 0800. Traces: G12; PRODUCT Operating Context. Surface not yet designed: shape it with impeccable inside
-    the DESIGN.md system before building.
+    the DESIGN.md system before building. Done 2026-11-16: project home (src/renderer/project), read through rcfd-mcp
+    --read-only per open project, live updates under 2 s (e2e), no Studio state in the folder; case and note names read
+    from the folder until the engine has list_cases/list_notes (README F-805 D2); decisions D1-D7 in the README.
 - [ ] **F-806** Electron Studio: run list and run state
   - depends on: F-805
   - acceptance: The runs table of DESIGN.md (case, id, state pictogram and word, result, sort and filter, selection that
