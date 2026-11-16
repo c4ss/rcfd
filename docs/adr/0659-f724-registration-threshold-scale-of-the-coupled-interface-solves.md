@@ -279,3 +279,20 @@ asked by K2 does not.
 numbers in the ignore text. `k1_...` took 146 s in the registered run (two threads): it becomes an ignored heavy record
 (rule 7; its checks were met), the same code path covered fast by E2 and by ADR 0641's `ls_corrected` test (part of B).
 No corrected test is added (no set-up was defective). No other change.
+
+## Amendment 2 (2026-11-16, written after the FL run, before the mutations and before any further run)
+
+FL was run once on the instrumented copy of e1ed0432 (`w49i-work/f724-scratch/fl`, script `fl_run.sh`, log `fl.log`). It
+counted **6** flips, all `remap old true new false`, all in the new file `sliding_threshold_scale_f724`: the 6 coincidence
+steps of AX, the run built to show such a flip (E3 and NC2; D3 names AX as the example of an input whose bits change).
+Every existing suite of FL's scope counted **0** (log sections: `rcfd-fv` lib, `sliding_coincidence_f710` (12 coupled
+remaps), `sliding_interface_f250`, `sliding_periodic_coupled_f721` (50, the annulus of LS), `sliding_reimaging_f704`,
+`step_consistent_paths_f443`; `rcfd-api` `baseline_hashes`, `sliding_coincidence_f710` (5), `sliding_sector_coincidence_f730`,
+`sliding_case_f303` (27), `dynamic_mesh`, `wall_pressure_case_f358` au2); no GCL decision was coupled under the new rule in
+any of them.
+
+**FL as registered is a defective set-up check:** its scope included the new file, whose AX run flips by design, while D3
+asks whether the *named* (existing) suites' default bits change. FL is recorded as missed as registered (6). The corrected
+check **FLc**: flips in the existing suites of FL's scope, limit 0, read from the per-suite sections of the same log (the
+run is deterministic and each suite is a separate section; no re-run is made, and the numbers are those printed above).
+D3's branch is decided on FLc. No other change.
