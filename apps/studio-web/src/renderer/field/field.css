@@ -162,3 +162,37 @@
   font-size: var(--type-label-size);
   color: var(--role-text-2);
 }
+
+/* F-809: the derived-picture controls in the tool row: pictograms only, the name in the accessible name and tooltip
+   (G22). An unavailable one is the dashed chip of DESIGN.md (Segmented toggles), its reason in the same places. */
+.fv-derived {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+.fv-derived .ui-segment,
+.fv-derived .ui-unavailable {
+  width: var(--size-control);
+  padding: 0;
+  justify-content: center;
+}
+.fv-note--error {
+  color: var(--role-text-fail);
+  font-weight: var(--font-weight-medium);
+}
+
+/* The cut plane's panel: in the frame's top left corner, white inside an ink rule (as the Reset view button). */
+.fv-cut {
+  position: absolute;
+  top: var(--space-lg);
+  left: var(--space-lg);
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-lg);
+  padding: var(--space-md);
+  background: var(--role-ground);
+  border: var(--line-rule);
+}
+.fv-cut-slider.ui-slider {
+  width: 200px;
+}

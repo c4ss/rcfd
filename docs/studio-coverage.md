@@ -19,13 +19,13 @@ Engine read: rcfd 0.1.0, service protocol rcfd-service/1 version 1.1, MCP server
 
 | Kind | Capabilities | UI path | Exemption | Exemption whose item does not name it |
 |---|---|---|---|---|
-| Service methods | 69 | 18 | 51 | 39 |
+| Service methods | 69 | 18 | 51 | 40 |
 | MCP tools | 56 | 20 | 36 | 27 |
-| CLI commands | 36 | 9 | 27 | 21 |
-| CLI options | 156 | 8 | 148 | 114 |
+| CLI commands | 36 | 9 | 27 | 22 |
+| CLI options | 156 | 8 | 148 | 121 |
 | Case schema keys | 948 | 948 | 0 | 0 |
 | Monitor format keys | 6 | 6 | 0 | 0 |
-| **All** | **1271** | **1009** (79.4 %) | **262** | **201** |
+| **All** | **1271** | **1009** (79.4 %) | **262** | **210** |
 
 A case key stands for every value of its enumeration (the solver options of that key, listed in the inventory): the
 schema-driven surface of F-825 offers them all. A CLI option is mapped with its command. "Item does not name it" marks an
@@ -40,7 +40,7 @@ new item (see the last sections).
 |---|---|---|
 | F-807 run control (quick run, stop, pause, queue) | 29 | `cosim.advance` (not named), `cosim.checkpoint` (not named), `cosim.describe` (not named), `cosim.forces` (not named), `cosim.list` (not named), `cosim.open` (not named), `cosim.restore` (not named), `cosim.time` (not named), `design.create_study` (not named), `design.create_variant` (not named), `design.evaluate` (not named), `design.ledger_append` (not named), `design.ledger_export` (not named), `design.propose` (not named), `design.record` (not named), `design.run_map` (not named), `design.run_study` (not named), `events.poll` (not named), `run.headless` (not named), `run.wait` (not named), `status.read` (not named), `workflow.create` (not named), `workflow.delete` (not named), `workflow.get` (not named), `workflow.insert` (not named), `workflow.list` (not named), `workflow.load` (not named), `workflow.run` (not named), `workflow.save` (not named) |
 | F-808 field viewport on three.js WebGPU | 6 | `field.export_vtk` (not named), `field.grid`, `field.slice`, `field.stats`, `render.glb`, `render.png` |
-| F-809 derived pictures (iso-surfaces, streamlines, cut planes, vectors) | 1 | `field.sample` |
+| F-809 derived pictures (iso-surfaces, streamlines, cut planes, vectors) | 1 | `field.sample` (not named) |
 | F-810 run bands and linked time scrubbing | 1 | `panel.snapshot` |
 | F-811 residual and monitor plots | 3 | `particles.report` (not named), `report.export` (not named), `reports.get` |
 | F-812 case editor validated by the engine's schema | 3 | `mesh.inflate` (not named), `mesh.partition` (not named), `run.check` |
@@ -65,7 +65,7 @@ new item (see the last sections).
 |---|---|---|
 | F-805 project home and the live project folder | 2 | `rcfd convert` (not named), `rcfd serve` (not named) |
 | F-807 run control (quick run, stop, pause, queue) | 11 | `rcfd map` (not named), `rcfd reactor` (not named), `rcfd restart` (not named), `rcfd run`, `rcfd study` (not named), `rcfd workflow run` (not named), `rcfd workflow show` (not named), `rcfd workflow templates` (not named), `rcfd-runner serve` (not named), `rcfd-runner shutdown` (not named), `rcfd-runner wait` (not named) |
-| F-809 derived pictures (iso-surfaces, streamlines, cut planes, vectors) | 3 | `rcfd acoustics` (not named), `rcfd fwh` (not named), `rcfd sample` |
+| F-809 derived pictures (iso-surfaces, streamlines, cut planes, vectors) | 3 | `rcfd acoustics` (not named), `rcfd fwh` (not named), `rcfd sample` (not named) |
 | F-811 residual and monitor plots | 1 | `rcfd post` (not named) |
 | F-812 case editor validated by the engine's schema | 4 | `rcfd check`, `rcfd check-mesh`, `rcfd inflate` (not named), `rcfd partition` (not named) |
 | F-813 a learner's first path | 1 | `rcfd cases` |
@@ -103,6 +103,7 @@ holds the other way round). The reasons are in `coverage.json`.
 - Events of the service's in-memory sessions: the runs table (F-806) follows the runner's runs through the project server; a run of a service session (quick run) would report through it; nearest home run control (F-807). (F-807): `events.poll`.
 - Exports to files (VTK, report files): no Studio item names them; nearest home the surface that shows the data. (F-808, F-811): `field.export_vtk`, `report.export`, `export_vtk`.
 - How the started runner logs and whether it stays attached (--foreground, --log-file, --quiet, --stdout): the Studio starts it detached with its defaults (F-807, Start the runner). (F-807): `rcfd-runner ensure --*`.
+- Line and plane samples of a live service session (field.sample) or of a case run again (rcfd sample). F-809's derived pictures (cut plane, vectors) draw a run's stored fields and do not sample; iso-surfaces and streamlines have no engine entry point (ADR 0801, addendum F-809). No Studio item names samples yet. (F-809): `field.sample`, `rcfd sample`, `rcfd sample --*`.
 - Mesh tools (partition, inflation layers, conversion, import, mesh preview): no Studio item names them; nearest homes the case editor (F-812) and project home (F-805). (F-805, F-812): `mesh.inflate`, `mesh.partition`, `import_mesh`, `preview_mesh`, `rcfd convert`, `rcfd inflate`, `rcfd partition`, `rcfd convert --*`, `rcfd inflate --*`, `rcfd partition --*`.
 - Options of rcfd-runner start that the Studio does not set (--foreground, --log-file, --no-runner, --quiet, --stdout): it starts runs through start_run, which takes priority, threads, mem_mb and set (F-807). (F-807): `rcfd-runner start --*`.
 - Particle-tracking reports: no item names them; nearest home the plots (F-811). (F-811): `particles.report`.
