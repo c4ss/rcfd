@@ -415,3 +415,40 @@ fn a8_restart_picks_in_the_ledger_provenance() {
     println!("A8: restart picks {in_picks}, entries with acquisition restart {in_entries}");
     assert_eq!(in_picks, in_entries, "A8");
 }
+
+/// ADR 0651 amendment 1: A8 at seed 2, where the restart fires within 60 evaluations.
+#[test]
+fn a8b_restart_picks_in_the_ledger_provenance_seed2() {
+    let model = FnModel {
+        id: "test.branin".into(),
+        version: "1".into(),
+        fidelity: Fidelity::Analytic,
+        f: |p: &[Quantity]| Outcome::ok(vec![Quantity::new("f", branin(&[p[0].value, p[1].value]), "1")]),
+    };
+    let param = |name: &str, lo: f64, hi: f64| BayesParam {
+        name: name.into(),
+        unit: "1".into(),
+        lo,
+        hi,
+    };
+    let spec = BayesSpec {
+        study: "a8b".into(),
+        params: vec![param("x1", -5.0, 10.0), param("x2", 0.0, 15.0)],
+        objective: "f".into(),
+        sense: Sense::Min,
+        constraints: vec![],
+        budget: 60,
+        options: opts(2, 10, true),
+        clock_ms: Some(1_700_000_000_000),
+    };
+    let r = bayes::run(&spec, &model, None).unwrap();
+    let in_picks = r.picks.iter().filter(|p| p.kind == PickKind::Restart).count();
+    let in_entries = r
+        .entries
+        .iter()
+        .filter(|e| e.provenance["acquisition"] == "restart")
+        .count();
+    println!("A8b: restart picks {in_picks}, entries with acquisition restart {in_entries}");
+    assert_eq!(in_picks, in_entries, "A8b equal");
+    assert!(in_picks >= 1, "A8b fired");
+}
