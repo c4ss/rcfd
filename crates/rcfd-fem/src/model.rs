@@ -994,6 +994,9 @@ pub struct SolidModel {
     /// ADR 0614 D2: the nonlinear driver evaluates an Incompatible Hex8 with the stabilisation of its modes (default `Off`);
     /// ADR 0630 D3: by the rule of its coefficient.
     incompatible_stabilisation: crate::nl_incompatible::IncompatibleStabilisation,
+    /// ADR 0655 D1: the local iteration of the modes of an Incompatible Hex8 halves a step that inverts a point (default
+    /// `false`).
+    incompatible_mode_backtracking: bool,
     /// ADR 0635 D2: the centrifugal load of a Shell4 layup takes the force of its first mass moment (default `false`).
     layup_first_moment_force: bool,
 }
@@ -1009,6 +1012,7 @@ impl SolidModel {
             supports: Vec::new(),
             hyperelastic_structures: false,
             incompatible_stabilisation: crate::nl_incompatible::IncompatibleStabilisation::Off,
+            incompatible_mode_backtracking: false,
             layup_first_moment_force: false,
         }
     }
@@ -1042,6 +1046,18 @@ impl SolidModel {
     /// the coefficient (`true` is `RestStress`, the coefficient of ADR 0614; `false` is `Off`).
     pub fn set_incompatible_stabilisation(&mut self, on: impl Into<crate::nl_incompatible::IncompatibleStabilisation>) {
         self.incompatible_stabilisation = on.into();
+    }
+
+    /// Whether the nonlinear driver backtracks the mode update of an Incompatible Hex8 (ADR 0655 D1).
+    pub fn incompatible_mode_backtracking(&self) -> bool {
+        self.incompatible_mode_backtracking
+    }
+    /// Opts in (`true`) to the backtracking of the local mode update of the Incompatible Hex8 at finite strain (ADR 0655 D1,
+    /// [`crate::nl_incompatible`]): a Newton step of the modes whose iterate makes `det F <= 0` at a point is halved, at most
+    /// [`crate::nl_incompatible::MODE_HALVINGS`] times, instead of refusing the evaluation. Off (the default), the element of
+    /// ADR 0608, 0614 and 0630 unchanged.
+    pub fn set_incompatible_mode_backtracking(&mut self, on: bool) {
+        self.incompatible_mode_backtracking = on;
     }
 
     /// Whether the linear paths take a hyperelastic material on Beam2, Shell4 and Shell3 elements (ADR 0584 D1).
