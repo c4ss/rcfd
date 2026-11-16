@@ -552,6 +552,12 @@ someone kept:
   (`settings.held_floor`), not in the record, so the record hash is the claim's; `verify` requires it for two holds and
   recomputes it with the evaluator at hand. `register` and `register_batch` keep one hold and write no new key; targets must be
   all values or all `as_low_arm`, and three or more holds are refused.
+* The floor over a sample of the design (ADR 0670): a record with `floor_sample: {points: k}` makes `register_with_floor` take
+  the largest floor over the domain midpoint and the design points of k of the registered pairs (drawn from the record hash and
+  seed, `floor_sample_pairs`), each with both arms solved as their evidence would be. Use it when the sensitivity of the
+  response to the held metrics varies over the domain; k = `n_pairs` covers the whole design. The refusal names `min_effect`,
+  the sample floor and the midpoint floor; the stored floor carries `sample` (pairs, per-pair values, midpoint, largest), which
+  `verify` checks against the record. A record without `floor_sample` keeps the midpoint rule and its bytes.
 * `explore` ranks parameter-metric pairs by Spearman correlation over existing entries; it is marked exploratory and never
   evidence.
 
