@@ -230,3 +230,117 @@ the same code and the same limits for P1a, P1b, P1d, P1e and P1f, without P1c (i
 its numbers are those of the registered run; it is run once to confirm that). No limit is changed. One diagnostic run after
 the miss (scratch `zz_f713_diag2.rs`, log `diag2.log`, never committed) located the rise of P1c and evaluated three system
 curves on P; it is reported in addendum 1 as diagnosis, not as a check.
+
+## Addendum 1: results (2026-11-16)
+
+One registered run (`f713-scratch/run1.log`, release, `cargo test -p rcfd-post --release --test f713_schema_fan_rom`), then
+after amendment 2 one run of the split tests (`run2.log`: 5 passed, 2 ignored; the numbers are those of run 1).
+
+| id | limit | measured | met |
+|---|---|---|---|
+| D1a | `q_f / 0.07650` in [0.99, 1.01] | 1.000014 (`q_f` 0.0765011 m^3/s) | yes |
+| D1b | stalled grid flows > 0 | 390 of 601 | yes |
+| D1c | `f_s` in [0.75, 0.80] | 0.790 | yes |
+| D1d | strips 0 to 9 attached at the highest stalled grid flow | stalled strips 27, 28, 29 at 0.789 `q_f` | yes |
+| D2a | incidence at `q_f` in [1, 7] deg | 2.128 to 6.045 deg | yes |
+| D2b | `(rho c_x^2/2) / dp_t` in [0.75, 0.90] | 0.8328 (`dp_t` 50.74 Pa) | yes |
+| D2c | tip inflow-angle rise >= 14 deg | 14.382 deg at `phi` 0.4642 | yes |
+| P1a | `operating_point` for `q_f` succeeds | ok, 0.0282657 m^3/s | yes |
+| P1b | stalled grid flows 0 | 0 of 601 | yes |
+| P1c | `dp_s` strictly decreasing along G | largest step +1.925e-2 Pa: `dp_s` rises from 26.308 Pa at 0.4 `q_f` to a peak of 26.838 Pa at 0.457 `q_f` | **no** (record `p1_..._known_miss`) |
+| P1d | `q_f / 0.028266` in [0.99, 1.01] | 0.999988 | yes |
+| P1e | largest incidence at 0.4 `q_f` within 0.15 deg of 8.228 | 8.2282 deg | yes |
+| P1f | `f_s` in [0.28, 0.34] | 0.310 | yes |
+| P1g | reported | `[q_f, 1.25 q_f]`: 0 of 101 stalled, smallest incidence -5.97 deg; on G incidence -2.99 to 8.23 deg; `dp_s` 26.31 / 20.11 Pa at 0.4 / 0.7 `q_f` | - |
+| P2a | P in bounds, no checker violation | in bounds, no violation | yes |
+| P2b | fields other than stations equal the default's | equal | yes |
+| P3-0 | every copied variant holds on the default | all fifteen hold (as ADR 0118 c2 / c3) | yes |
+| P3 | lost set on P exactly {"axial fit"}; C3 holds | {"axial fit"} (no `AxialFit` at all; on the default the value is 2.2853e-2 > 0.022 m); the other fourteen and C3 hold | yes |
+| P4 | h_slit and camber_seam_h build P blade 0 | both rejected at the hub layer r = 0.0215: h_slit "axial plane z = 3.19866e-2 misses the blade surface [3.2e-2, 3.58708e-2]", camber_seam_h "the camber line does not run downstream monotonically"; pursuit (reported) rejected, the wake line leaves the passage | **no** (record `p4_..._known_miss`) |
+| NC2 | stagger -8 deg: stalled grid flows > 0 | 156 of 601, highest stalled 0.555 (Python 0.556), `q_f` 0.043471 | yes |
+| NC3 | `cl_max` 0.8: stalled grid flows > 0 | 52 of 601, highest stalled 0.451 (Python 0.452) | yes |
+| B1 | diff lists only this ADR and the new test | `git diff --stat d40cd665`: the ADR and `crates/rcfd-post/tests/f713_schema_fan_rom.rs` | yes |
+
+Mutations (scratch copy `f713-scratch/mut`, `mutate.sh`, logs `mut_M*.log`): four of four caught.
+
+| id | mutation | caught by |
+|---|---|---|
+| M1 | stall threshold doubled | D1c (0.421), NC2 and NC3 (0 stalled), P1f |
+| M2 | `rho c_x^2 / 2` dropped from `dp_s` | D1a (1.382), D1c, D2a, D2b, P1d (1.078), P1e |
+| M3 | sign of `alpha_L0` flipped | D1a (0.751), D1c, D2a, D2c, NC2 and NC3 (no `q_f`: stalled), P1d, P1f |
+| M4 | `AxialOverlap` never pushed | P3-0 and P3 ("axial overlap" lost) |
+
+`cargo fmt -p rcfd-post --check`: clean. `cargo clippy -p rcfd-post --all-targets -- -D warnings`: clean. No library file was
+changed, so no existing test can change its result; `baseline_hashes` was not run (no shared solver file touched).
+
+### Diagnosis of the two misses
+
+- **P1c.** Every strip of P is attached on `[0.4, 1] q_f`, but the total-to-static characteristic peaks at 0.457 `q_f`. Between
+  0.457 and 0.4 `q_f` (`diag2.log`): `dp_t` rises 43.44 to 45.88 Pa, the exit axial dynamic pressure falls 1.21 to 0.92 Pa, and
+  the swirl kinetic energy lost at the free discharge (no stator) rises 15.40 to 18.65 Pa, so `dp_s` falls 26.84 to 26.31 Pa.
+  A high-stagger rotor puts most of its work into swirl. Consequence: `FanRom::operating_point` refuses a system that crosses
+  P's curve below 0.457 `q_f` ("rising fan characteristic: stall region") although no strip is stalled; against `dp = k Q^2`
+  P gives 0.705 `q_f` at `k` 5e4 and 0.563 `q_f` at 1e5, and refuses 2e5. The registered clause a1 ("runs unstalled", the strip
+  criterion) is met by P; the stricter P1c is not.
+- **P4.** At the hub, stagger 76 deg with NACA camber 0.06 at 0.4 makes the camber line's leading-edge direction `76 + atan(2 m /
+  p) = 92.7 deg` from the axis: the camber line runs upstream first, so camber_seam_h cannot carry its seams, and the h_slit
+  axial planes miss the very short hub section (axial extent about 3.9 mm). A meshable candidate needs `stagger + atan(2 m / p)`
+  below 90 deg with some margin at every section; at the hub that means camber below about 0.03 at 0.4, or none. This is a
+  second ADR 0118 result (s4) that P would change, which the registration did not predict.
+
+### Deviations
+
+None from the registration and amendments. The scratch diagnostic `zz_f713_diag2.rs` ran after the registered run, located the
+P1c rise and evaluated three system curves; it is reported above as diagnosis only.
+
+### Not run
+
+The ADR 0118 mass, ensemble and unbalance tests, the FEM blade tests (`sb_fan_blade*.rs`) and the F-697 / F-698 tests on P:
+they read `ComputerFan::default()`, which is not changed. The whole workspace (the lead's gate).
+
+### Decision by the registered rule
+
+**partial.** D1, D2 and B1 are met: the diagnosis holds (the default's free delivery is already loaded to 2 to 6 deg of the 10
+deg attached window, and its high flow coefficient at free delivery makes the tip inflow angle rise 14.4 deg down to 0.4 `q_f`;
+stall from 0.79 `q_f`, outer strips first). Clause a1 is not met by `ComputerFan::default()`, which this ADR does not change:
+a default that meets a1 changes ADR 0118 results. Measured on the derived candidate P: a1 is met (no stalled strip down to 0.31
+`q_f`), the checker accepts it and the `PARAMS` scalars are untouched, but the "axial fit" checker variant loses its violation
+(predicted) and neither sector generator meshes its hub (not predicted). a3: no golden or hash table holds a `ComputerFan`;
+none changes.
+
+### For the maintainer: what adopting P as `ComputerFan::default()` would change (not done)
+
+- `fan_design.rs` `Default for ComputerFan`: the three stations of set-up P (table in "Set-up P"); no other field, no `PARAMS`
+  entry.
+- `fan_design_w46a.rs`: the `c2` variant "axial fit" (`z_le_root` 0.006) finds no `AxialFit` on P; it needs a re-based edit (for
+  example a larger `z_le_root` or a hub sweep) and the maintainer's approval to edit an existing test. `s4` fails on P (both
+  generators); P's hub camber would have to change first, and then the collision and passage-gap variants, which keep the hub
+  camber, must be checked again. `i1` to `i4`, `e1` to `e3`, `s1` to `s3`, `c1`, `c4`, `c5`: not run on P.
+- The default's serialised bytes change (house rule 3), and with them the inputs of `sb_fan_blade.rs`, `sb_fan_blade_builder.rs`
+  (structural blade numerics) and of the F-697 set-up U (static unbalance); not run on P.
+- No golden, hash table or `baseline_hashes.rs` entry changes.
+
+### Remaining questions (each with options and a recommendation)
+
+1. **Where should a schema fan usable in the ROM live?** Options: (a) leave the default as it is and keep set-up F of ADR 0620
+   as the ROM's working row; (b) change `ComputerFan::default()` to a meshable variant of P and re-base the ADR 0118 "axial
+   fit" variant, the s4 meshes and the FEM blade tests (a default change with edits of existing tests: the maintainer's call);
+   (c) a named constructor next to the default (for example `ComputerFan::rom_reference()`) holding a meshable variant of P,
+   default unchanged. Recommendation: (c). The default is the reference of the checker variants and of the structural tests,
+   and the ROM needs a low-flow-coefficient blade that real 120 mm fans do not resemble. Not taken here: (b) changes a default
+   result, and (c) does not deliver what the item names (the default).
+2. **The rise of P's static characteristic below 0.457 `q_f` (P1c).** Options: (a) accept it (a1 asks for unstalled strips) and
+   state that operating points exist on `[0.46, 1] q_f`; (b) require a falling characteristic down to 0.4 `q_f` in the
+   follow-up, which needs less swirl at low flow (a lower design incidence, hence a still lower flow coefficient).
+   Recommendation: (a) for the ROM tier, with the usable operating range stated wherever the reference fan is documented.
+3. **Meshability of the high-stagger hub (P4).** Options: (a) hub camber 0 (zero-lift angle = stagger, 69.8 deg) in the
+   follow-up's fan, derived again by the same rule; (b) teach the sector generators camber lines that run upstream first.
+   Recommendation: (a); (b) is generator work for a blade no one asked to mesh.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial
+
+> Follow-up of F-697 (ADR 0620 question 2). ADR 0639, 2026-11-16. PARTIAL (diagnosis; the default is not changed). Why ComputerFan::default() stalls in the reduced-order model (registered, checked on the base code): at 3000 rpm its free delivery is 0.0765 m^3/s and is already loaded (free discharge needs dp_t = rho c_x^2 / 2 + swirl; 83 percent of dp_t is the exit dynamic pressure), so every strip sits at 2.1 to 6.0 deg of the 10.03 deg attached window (cl_max 1.1 / 2 pi); with its high flow coefficient (0.46 at the tip at free delivery) the tip inflow angle rises 14.4 deg down to 0.4 q_f, and the outer strips stall from 0.79 q_f. Neither from_axial_fan nor the model is at fault. A default meeting the acceptance needs a hub zero-lift angle of about 58 deg or more (lossless bound), which the ADR 0118 checker variants "axial fit" and "root off hub" do not allow together (estimate: hub stagger at most about 54 deg). Measured on the derived candidate P (stagger 76.0 / 75.4 / 77.6 deg, hub chord 0.016, hub camber 0.06, mid and tip camber 0, every other field the default's): no stalled strip at any of 601 flows on [0.4, 1] q_f (q_f 0.02827 m^3/s, largest incidence 8.23 deg, stall from 0.31 q_f, the Python derivation reproduced to 1.2e-5 in q_f), accepted by the checker; but the "axial fit" variant loses its violation (the other fourteen keep theirs), neither sector generator meshes its hub (the camber line runs upstream first), and its static characteristic peaks at 0.457 q_f (two known-miss records). Negative controls: stagger -8 deg stalls from 0.555 q_f, cl_max 0.8 from 0.451. Four of four mutations caught. No library file, golden or hash table changed. Open for the maintainer: whether a ROM-usable schema fan replaces the default (re-basing the ADR 0118 axial-fit variant, s4 and the FEM blade tests) or sits beside it (recommended).
+
+> Follow-up proposed: Reduced-order reference fan in the schema. Deps F-713. Acceptance: Every limit not stated here is registered in the ADR before the run. A named ComputerFan constructor beside the default (ComputerFan::default() and every existing test unchanged in bits and result) gives a 120 mm 7-blade fan, derived by the ADR 0639 rule with a hub section whose camber line runs downstream (stagger + atan(2 m / p) below 90 deg at every station), that runs unstalled in RomModel::default() at 3000 rpm for every flow in [0.4, 1] of its free delivery, passes ComputerFan::check with Limits::default(), and meshes with h_slit and the camber_seam_h C-grid at the ADR 0118 s4 specs; its usable operating range against quadratic systems is reported.
