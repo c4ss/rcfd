@@ -288,7 +288,6 @@ impl Store {
             }
         }
         if let Some(p) = &self.path {
-            let fresh = !p.exists();
             if let Some(dir) = p.parent() {
                 std::fs::create_dir_all(dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
             }
@@ -297,6 +296,13 @@ impl Store {
                 .append(true)
                 .open(p)
                 .map_err(|e| format!("cannot open {}: {e}", p.display()))?;
+            // the header goes into an empty file, not only a new one: a kill inside the first write leaves an empty file
+            // or a torn header that `open` truncates to 0 bytes, and neither holds a header (ADR 0644 D1)
+            let fresh = f
+                .metadata()
+                .map_err(|e| format!("cannot read {}: {e}", p.display()))?
+                .len()
+                == 0;
             let mut text = String::new();
             if fresh {
                 text.push_str(&json!({"format": FORMAT, "version": 1, "signature": self.signature}).to_string());

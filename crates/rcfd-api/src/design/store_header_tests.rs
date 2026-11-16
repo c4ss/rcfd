@@ -162,8 +162,21 @@ fn header_ok(text: &str, sig: &str) -> bool {
         && v.get("version").and_then(Value::as_u64) == Some(1)
 }
 
+/// TH1 at every byte (ADR 0644): about 130 s in release, so a heavy record run once; the fast test below covers the same
+/// path at the header bytes and the full first append.
 #[test]
+#[ignore = "heavy record (ADR 0644 TH1, about 130 s in release)"]
 fn th1_kill_at_every_byte_of_the_first_append_resumes_with_the_header() {
+    th1(&|_h, t| (0..=t).collect(), "TH1");
+}
+
+/// TH1 fast: `p` in `0..=|H|` and `p = |T|`.
+#[test]
+fn th1_fast_kill_in_the_header_and_after_the_first_append_resumes_with_the_header() {
+    th1(&|h, t| (0..=h).chain([t]).collect(), "TH1 fast");
+}
+
+fn th1(select: &dyn Fn(usize, usize) -> Vec<usize>, tag: &str) {
     // reference: the uninterrupted run
     let rdir = tmp("th1ref");
     assert_eq!(lg5_run(&rdir, None), None);
@@ -186,7 +199,8 @@ fn th1_kill_at_every_byte_of_the_first_append_resumes_with_the_header() {
     let ev = FnEvaluator(lg_eval);
     let mut points = 0;
     let mut bad = Vec::new();
-    for p in 0..=t.len() {
+    let ps = select(h, t.len());
+    for &p in &ps {
         points += 1;
         let dir = tmp("th1p");
         let store = dir.join("store.jsonl");
@@ -242,14 +256,14 @@ fn th1_kill_at_every_byte_of_the_first_append_resumes_with_the_header() {
     }
     let bad_p: Vec<usize> = bad.iter().map(|x| x.0).collect();
     eprintln!(
-        "TH1: |T| = {} bytes ({} lines, header {h} bytes), {points} kill points, {} failing at p = {bad_p:?}; first: {:?}",
+        "{tag}: |T| = {} bytes ({} lines, header {h} bytes), {points} kill points, {} failing at p = {bad_p:?}; first: {:?}",
         t.len(),
         t_lines,
         bad.len(),
         bad.first()
     );
     let _ = std::fs::remove_dir_all(&rdir);
-    assert_eq!(points, t.len() + 1);
+    assert_eq!(points, ps.len());
     assert!(bad.is_empty());
 }
 
@@ -292,8 +306,14 @@ fn th2_append_on_a_torn_or_empty_header_writes_the_header() {
     assert!(bad.is_empty());
 }
 
-/// ADR 0644 SB1 digests, measured on the library before D1 (commit of this file).
-const SB1_DIGESTS: [u64; 5] = [0, 0, 0, 0, 0];
+/// ADR 0644 SB1 digests, measured on the library before D1 (commit cb329680, log `f705-scratch/nc1_sb1_unfixed.log`).
+const SB1_DIGESTS: [u64; 5] = [
+    0x2431_3292_8430_f7ff,
+    0xd046_29e2_d4b8_9b60,
+    0x62d3_f217_75a7_30f4,
+    0x57a5_02a8_837e_6f5f,
+    0x57a5_02a8_837e_6f5f,
+];
 
 #[test]
 fn sb1_store_bytes_of_the_existing_paths_are_unchanged() {
