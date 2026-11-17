@@ -181,3 +181,87 @@ library, each run against the named tests:
   shorten that.
 * Linux and macOS: D1 to D3 are not compiled there (W); D4, D5, S1, S2 run there but are measured here on Windows 11 only.
 * The journal's own lock (`journal::lock`) is not changed (ADR 0669 remaining question 3).
+
+## Addendum 1: results (2026-11-17)
+
+Code at 2782c8a3 (committed before any run). Runs: release, `CARGO_TARGET_DIR=f755-scratch/target`, the gate's per-test command
+from the package directory with `CARGO_MANIFEST_DIR` set, counted by the gate's rule. The machine was shared with other building
+agents. Logs in `f755-scratch` (`run.log`, `e1.log`, `l1r.log`, `g1.txt`, `g1p.txt`, `mut_*.log`, `mut_summary.log`; scripts
+`mutate.py`, `e1.py`, `repeat.py`).
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| S1 | `LockBusy` in at least 9 of 10, each 2.0 to 30 s; no claim file | **10 of 10 `LockBusy`**, 2.0008 to 2.0144 s; 0 claim files | yes |
+| S2 | 10 of 10 accepted, each under 1.0 s; no claim left | 10 of 10, 158.8 to 176.4 ms; 0 claims left | yes |
+| D1 | edit `Ok`; lock present after the handle closed; second edit `LockBusy` after 2.0 to 30 s; no failure line | `Ok`; lock present; second edit `LockBusy` after 2.0014 s; 0 lines | yes |
+| D2 | edit `Ok`; lock absent at return, at least 300 ms after the handle opened; no failure line; second edit under 1.0 s | `Ok`; absent, returned 348.3 ms after the open; 0 lines; second edit accepted in 5.2 ms | yes |
+| D3 | edit `Ok`; one failure line (path, who, attempts 12, seq); lock present after the handle closed | `Ok`; one line, `attempts` 12, error `os error 32` (sharing violation), `seq` present; lock present | yes |
+| D4 | 3: removed, no line; 12: one line, attempts 12, lock present; old drop: lock present, no new line | as limited | yes |
+| D5 | edit `Ok`; no failure line; no lock | as limited (`.rcfd/locks` empty) | yes |
+| G1 | `cargo tree --workspace -e features -i rcfd-project` has no `test-hooks` | 25 lines, every edge `feature "default"`, 0 `test-hooks` | yes |
+| G1p | with `-p rcfd-project --features test-hooks` the text has `test-hooks` | `rcfd-project feature "test-hooks" (command-line)` | yes |
+| G2 | `test-hooks` only in `crates/rcfd-project/Cargo.toml` | only there (line 22) | yes |
+| G3 | the default `edit_lock_f755` binary lists 0 tests | 0 tests | yes |
+| E1 | every listed existing test passes, default build | **51 of 51 passed**: rcfd-project `edit_lock_f751` 5 (F2 68.4 s), `edit_lock_w48f` 4, `journal_f273` 4; rcfd-workspace `save_f270` 8, `journal_f273` 9, `mesh_f272` 7, `feed_replay_f275` 1; rcfd-mcp `edit_hook_f275` 1 (1 ignored record not run), `feed_f273` 3; rcfd-studio `workspace_f270` 4, `feed_f273` 3 (deviation 2); `rcfd-cli` `docs_site` 2; `rcfd-project --lib` 2 of 2 | yes |
+| E1f | with `--features test-hooks`: `edit_lock_w48f` 4, `edit_lock_f751` F1c, F3a, F3b | 7 of 7 passed | yes |
+| L1r | 200 of 200; median at most 15.14 s | **200 of 200 passed**; median 6.32 s (3.41 to 11.94 s) | yes |
+| E2 | fmt and clippy clean, with and without the feature | `cargo fmt -p rcfd-project --check` clean; `cargo clippy -p rcfd-project --all-targets -- -D warnings` clean, and with `--features test-hooks` clean | yes |
+| E3 | `docs_site` passes | 2 of 2 (in E1) | yes |
+
+Mutations (scratch copy `f755-scratch/mut`, a `git archive` of 2782c8a3, `CARGO_TARGET_DIR=f755-scratch/target-mut`):
+
+| | Mutation | Run against | Result |
+|---|---|---|---|
+| M1 | ADR 0669's M1 in the source (no claim, whatever the knob) | S2: **0 of 10 accepted**, every trial `LockBusy` after about 2.0 s | caught (ADR 0669's surviving mutation is now caught) |
+| M2 | the old drop in the source | D2 (lock present at return, 11.1 ms), D3 (no line), D4 (3: lock left) | caught |
+| M3 | retry kept, failure not logged | D3, D4 (12: no line) | caught |
+| M4 | `NotFound` logged as a failure | D5 (1 line) | caught |
+| M5 | the `claim_off` knob ignored | S1: 0 of 10 `LockBusy` | caught |
+| M6 | `before_attempt` never called | S1: 0 of 10 `LockBusy` (without the delay the old acquire is not starved by this holder, as in ADR 0669 F1c) | caught |
+| M7 | `fail_removals` ignored | D4 (12: lock absent, no line) | caught |
+
+Deviations:
+
+1. The registered run of S1 to D5 (`run.log`) added `--nocapture` to the gate's per-test command, so that the measured numbers
+   were printed; the pass rule is the gate's. E1, E1f, L1r and the mutation runs used the gate's command unchanged.
+2. E1 named `rcfd-workspace feed_f273`, copied from ADR 0669's list; no such file exists (`feed_f273.rs` is in `rcfd-mcp` and in
+   `rcfd-studio`). The `rcfd-studio` `feed_f273` (3 tests, which read the journal the change writes to) was run instead: 3 of 3.
+3. `docs_site` was run inside E1 (it is E3).
+
+What the measurements say:
+
+* Clauses a2 to a4: with the adversarial delay, the old acquire starved to `LockBusy` in 10 of 10 trials and the claim of ADR 0669
+  was accepted in 10 of 10 within 177 ms; ADR 0669's mutation M1, which survived F1 and F1c there, is caught by S2. The delay is a
+  forced schedule (the waiter makes its attempt only while the holder has at least 50 ms of hold left, unless it has yielded); it
+  shows that the old acquire can starve and the claim cannot, not how often the field starved (ADR 0669's NC0 and L1 remain that).
+* Clauses a5, a6: a handle without delete sharing on the lock made the old drop leave the lock (the next edit `LockBusy` until the
+  lock is 30 s old); the retried drop removed it 348 ms after the handle opened (about 300 ms of hold plus the next backoff step),
+  and a handle held past the 527 ms retry budget is logged as `edit_lock_remove_failed` with the sharing violation. This is the
+  alternative cause of `LockBusy` named in ADR 0669 amendment 1, now reproduced and mitigated; whether the gate's `LockBusy` had
+  this cause is still not known.
+* Clause a7: default builds have no hook code (G1 to G3); an ordinary edit's removal succeeds at the first attempt and logs
+  nothing, so its bytes are as before; every ADR 0135 and ADR 0669 test passed with the default build and with the feature, and
+  ADR 0669's L1 gave 200 of 200 again. Public additions only under the feature (`atomic::test_hooks`); the journal has one new kind,
+  `edit_lock_remove_failed`, documented in `docs/mcp-tools.md`.
+
+Decision by the registered rule: **done** (every check met, M1 to M7 caught).
+
+Remaining questions:
+
+1. The daily gate builds without `--features`, so `edit_lock_f755` has no tests there. Options: (a) add a gate step
+   `cargo test -p rcfd-project --release --features test-hooks --test edit_lock_f755` (about 30 s of tests); (b) leave the file run
+   by hand. Recommendation: (a), as the follow-up below; not done here because the gate's workflow and `gate_test.py` are the
+   lead's (ADR 0653).
+2. A lock left after the retries still blocks cooperating writers until it is 30 s old (`EDIT_LOCK_STALE`). Options: (a) a writer
+   that finds an `edit_lock_remove_failed` line for the lock breaks it at once; (b) leave the 30 s. Recommendation: (b) until the
+   gate or a user shows such a line: the retry already covers a handle shorter than half a second, and breaking a lock on a log
+   line adds a second, non-atomic path.
+3. ADR 0669 remaining question 3 (the journal's own lock) is unchanged; the same recommendation.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> Gate and test reliability. Follow-up of F-751 (ADR 0669). DONE. ADR 0676, 2026-11-17: a forced control of the edit lock's starvation and of a lock left behind. Test-only hooks in rcfd-project under the feature test-hooks (thread-local; off in every default build and enabled by no other crate, shown by cargo tree --workspace -e features): a delay before each attempt of the acquire, the old acquire by a claim_off knob (ADR 0669's M1), the old drop, a callback after the lock is held, synthetic removal failures, and on Windows a handle on the lock file without FILE_SHARE_DELETE (non-Windows: those three tests are not compiled; the retry is checked there with the synthetic error). Under a delay that lets the waiter try only while the holder has at least 50 ms of hold left, the old acquire starved to LockBusy in 10 of 10 trials and the claim was accepted in 10 of 10 within 177 ms; ADR 0669's surviving mutation M1 is now caught. EditLock::drop now retries a transient removal error with the default retry (527 ms) and logs edit_lock_remove_failed when it still fails: a handle held 300 ms left the lock behind with the old drop (the next edit LockBusy) and the new drop removed it 348 ms after the handle opened; a 2 s handle was logged with the sharing violation. Defaults unchanged (an ordinary edit's removal succeeds at once and logs nothing); every ADR 0135 and ADR 0669 test passed, ADR 0669's L1 200 of 200 again; seven of seven mutations caught. The daily gate does not build the feature, so the new tests run only by their own command.
+
+> Follow-up proposed: The daily gate runs the feature-gated edit-lock controls. Deps F-755, F-723. Acceptance: Every limit not stated here is registered in the ADR before the run. The daily gate runs cargo test -p rcfd-project --release --features test-hooks --test edit_lock_f755 as its own step with its failures attributed to ADR 0676, without enabling the feature in any other build step (cargo tree of the workspace step shows no test-hooks); the gate's other results unchanged.
