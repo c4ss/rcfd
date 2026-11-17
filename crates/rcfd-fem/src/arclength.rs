@@ -121,6 +121,13 @@ impl ArcLengthOptions {
                 reason: "the arc-length correction is not given the line search (ADR 0607 D1)".to_string(),
             });
         }
+        // ADR 0688 D3: nor the damping of the predictor.
+        if self.newton.predictor_damping {
+            return Err(FemError::InvalidValue {
+                key: "predictor_damping",
+                reason: "the arc-length correction is not given the damping of the predictor (ADR 0688 D3)".to_string(),
+            });
+        }
         self.newton.check()
     }
 }
