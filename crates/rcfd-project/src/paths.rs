@@ -17,6 +17,33 @@ fn refuse(input: &str, component: impl Into<String>, reason: &'static str) -> Pr
     }
 }
 
+/// The reason of the refusal of a path whose deepest existing ancestor canonicalizes outside the root.
+pub(crate) const OUTSIDE_ROOT: &str = "resolves outside the project root";
+
+/// The project-relative form of `rel` (`/` separators, `.` components dropped) as [`resolve_in`] would build it, formed from
+/// the text alone; `None` when `rel` has a component [`resolve_in`] refuses whatever the folder holds (empty, NUL, a prefix, a
+/// root, `..`, a colon). Equal to `rel_string(root, &resolve_in(root, rel)?)` whenever that resolve succeeds.
+pub(crate) fn lexical_rel(rel: &str) -> Option<String> {
+    if rel.trim().is_empty() || rel.contains('\0') {
+        return None;
+    }
+    let mut parts = Vec::new();
+    for c in Path::new(rel).components() {
+        match c {
+            Component::CurDir => {}
+            Component::Normal(s) => {
+                let s = s.to_string_lossy();
+                if s.contains(':') {
+                    return None;
+                }
+                parts.push(s.into_owned());
+            }
+            _ => return None,
+        }
+    }
+    (!parts.is_empty()).then(|| parts.join("/"))
+}
+
 /// Resolve `rel` (with `/` or the platform separator) under `root`, refusing any escape.
 pub fn resolve_in(root: &Path, rel: &str) -> Result<PathBuf> {
     if rel.trim().is_empty() {
@@ -78,11 +105,7 @@ pub fn resolve_in(root: &Path, rel: &str) -> Result<PathBuf> {
     }
     let canon = probe.canonicalize().map_err(crate::io_err("canonicalize", probe))?;
     if !canon.starts_with(&canon_root) {
-        return Err(refuse(
-            rel,
-            probe.to_string_lossy(),
-            "resolves outside the project root",
-        ));
+        return Err(refuse(rel, probe.to_string_lossy(), OUTSIDE_ROOT));
     }
     Ok(out)
 }
