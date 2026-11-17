@@ -20,9 +20,7 @@ use rcfd_fem::nonlinear::{
     LoadStep, NewtonOptions, StepControl,
 };
 use rcfd_fem::solve::DirectFactor;
-use rcfd_fem::{
-    BlockProperty, Constraint, ElementKind, FemError, Material, SolidFormulation, SolidMesh, SolidModel,
-};
+use rcfd_fem::{BlockProperty, Constraint, ElementKind, FemError, Material, SolidFormulation, SolidMesh, SolidModel};
 use rcfd_linalg::eigen::{lowest_eigenpairs, Factorisation, ResidualTest, Shift, SubspaceOptions};
 use rcfd_linalg::skyline::PivotRule;
 use rcfd_linalg::sparse_chol::{SparseOptions, SparseOrdering, SupernodalLdlt};
@@ -340,7 +338,11 @@ fn f797_fast() {
             bottom = bottom.min(p.load_factor);
         }
     }
-    ck.at_most("FC3: |max_{w<h} lambda / lambda_max - 1|", (top / l_max - 1.0).abs(), 5e-3);
+    ck.at_most(
+        "FC3: |max_{w<h} lambda / lambda_max - 1|",
+        (top / l_max - 1.0).abs(),
+        5e-3,
+    );
     ck.at_most(
         "FC3: |min_{h<w<1.8h} lambda / lambda_min - 1|",
         (bottom / l_min - 1.0).abs(),
@@ -358,11 +360,19 @@ fn f797_fast() {
         };
         if let Some(n) = want {
             if p.negative_pivots != n {
-                bad.push(format!("point {} w/h {:.4}: {} negative", k + 1, w / H, p.negative_pivots));
+                bad.push(format!(
+                    "point {} w/h {:.4}: {} negative",
+                    k + 1,
+                    w / H,
+                    p.negative_pivots
+                ));
             }
         }
     }
-    ck.holds(&format!("FC4: negative pivots 0, 1, 0 along the path {bad:?}"), bad.is_empty());
+    ck.holds(
+        &format!("FC4: negative pivots 0, 1, 0 along the path {bad:?}"),
+        bad.is_empty(),
+    );
     ck.at_most(
         "FC5: max |Du_F^2 + c Dlambda^2 - Ds^2| / Ds^2",
         constraint_error(&free, (&start0.displacement, 0.0), pts, path.load_scale),
@@ -381,7 +391,15 @@ fn f797_fast() {
                 pts[k].length == ds,
             );
             let mut never = |_: &PathPoint| false;
-            let first = trace_from(&model, &[], &[], &options.clone().max_points(k + 1), &[], &start0, &mut never);
+            let first = trace_from(
+                &model,
+                &[],
+                &[],
+                &options.clone().max_points(k + 1),
+                &[],
+                &start0,
+                &mut never,
+            );
             match first {
                 Ok(fp) if same_points(&fp.points, &pts[..=k], true) => {
                     let du: Vec<f64> = pts[k]
@@ -424,7 +442,15 @@ fn f797_fast() {
     let o480 = ArcLengthOptions::new(0.05 * H).max_points(50);
     let mut never = |_: &PathPoint| false;
     let a = trace(&t480, &[], &forces, &o480, &[], &mut never);
-    let b = trace_from(&t480, &[], &forces, &o480, &[], &PathStart::unloaded(&t480).unwrap(), &mut never);
+    let b = trace_from(
+        &t480,
+        &[],
+        &forces,
+        &o480,
+        &[],
+        &PathStart::unloaded(&t480).unwrap(),
+        &mut never,
+    );
     match (a, b) {
         (Ok(a), Ok(b)) => {
             println!("G0: {} and {} points", a.points.len(), b.points.len());
@@ -483,16 +509,20 @@ fn f797_fast() {
     ck.holds(
         "N4: trace_from refuses no load and no prescribed value (key 'arc length')",
         refused(
-            trace_from(&t480, &[], &[], &o480, &[], &PathStart::unloaded(&t480).unwrap(), &mut never),
+            trace_from(
+                &t480,
+                &[],
+                &[],
+                &o480,
+                &[],
+                &PathStart::unloaded(&t480).unwrap(),
+                &mut never,
+            ),
             "arc length",
             false,
         ),
     );
-    let short = PathStart::new(
-        0.0,
-        vec![0.0; dofs.n_equations() - 1],
-        initial_states(&model).unwrap(),
-    );
+    let short = PathStart::new(0.0, vec![0.0; dofs.n_equations() - 1], initial_states(&model).unwrap());
     ck.holds(
         "N5: trace_from refuses a short displacement (FieldLength, key 'arc-length start')",
         refused(
@@ -839,23 +869,13 @@ impl<'a> FemBranch<'a> {
     /// `solve_increment` with the indefinite tangent from a converged state to the load `to`.
     fn solve(&self, from: &St, to: f64) -> Result<St, String> {
         let zero = vec![0.0; self.m.dof_map().n_equations()];
-        solve_increment(
-            self.m,
-            &[],
-            &zero,
-            &from.u,
-            &from.states,
-            from.p,
-            to,
-            &self.opts,
-            &[],
-        )
-        .map(|eq| St {
-            p: to,
-            u: eq.u,
-            states: eq.states,
-        })
-        .map_err(|e| e.to_string())
+        solve_increment(self.m, &[], &zero, &from.u, &from.states, from.p, to, &self.opts, &[])
+            .map(|eq| St {
+                p: to,
+                u: eq.u,
+                states: eq.states,
+            })
+            .map_err(|e| e.to_string())
     }
     fn system(&self, s: &St) -> Sys {
         let kt = tangent(self.m, &s.u, &s.states, Some(4)).unwrap();
@@ -1019,14 +1039,20 @@ const LB: f64 = 0.9645;
 /// ADR 0700's `a*_pred` (the `Debug` form of its log line 81).
 const EPS_SWITCH: f64 = 2.7468713663317314e-5;
 /// ADR 0711's rungs 1 to 5 (`f789-scratch/run2-heavy.log`, lines 89 to 93): the loads and the slopes.
-const BT_LAMBDA: [f64; 5] = [0.964113319598, 0.963379741112, 0.962070119673, 0.960069738280, 0.958472223921];
+const BT_LAMBDA: [f64; 5] = [
+    0.964113319598,
+    0.963379741112,
+    0.962070119673,
+    0.960069738280,
+    0.958472223921,
+];
 const BT_SIGMA: [f64; 5] = [-2.808553e1, -3.695525e1, -4.454366e1, -4.163801e1, -5.382683e-1];
 const A_4: f64 = 1.530877696e-4;
 const A_5: f64 = 2.164988001e-4;
 
 #[test]
-#[ignore = "ADR 0726: the heavy record on 16^3 (D4), run once with --ignored"]
-fn f797_nh16_punch_branch_heavy() {
+#[ignore = "ADR 0726: the heavy record on 16^3 (D4), run once with --ignored (656.7 s), a known miss with its limits intact: OB, R0, R1, BT (ADR 0711 rungs 1 to 5 to 3.1e-13 in lambda), AL0, AL1 (29 points, 15 compared), AL2, AL5 met; AL3 met where the bordered reference converged (|Dlambda| 5.3e-10, |Du|/|u| 6.1e-10 at 16 points) but missed at 13 points where the bordered reference failed in element 3720 (plain local modes); AL4 missed, 2.6e-6 > 1e-10 (the measure rebuilt from stored displacements at arc lengths down to 6e-11, below its rounding); the trace lost at a 2.0584e-4, lambda 0.958535 (element 3720), before rung 5"]
+fn f797_nh16_punch_branch_heavy_known_miss() {
     let mut ch = Checks::new();
     let t_all = Instant::now();
     let mesh16 = block_mesh(16);
@@ -1178,7 +1204,10 @@ fn f797_nh16_punch_branch_heavy() {
         du0[eq] = -v;
     }
     let start1 = PathStart::new(LB, sb.u.clone(), sb.states.clone()).increment(du0, -1.0);
-    let o1 = ArcLengthOptions::new(ds1).load_scale(c).max_points(2).newton(newton.clone());
+    let o1 = ArcLengthOptions::new(ds1)
+        .load_scale(c)
+        .max_points(2)
+        .newton(newton.clone());
     let clock = RefCell::new(Instant::now());
     let report = |tag: &str, p: &PathPoint| {
         let a = amp(&phi, &free, &p.displacement);
@@ -1218,21 +1247,21 @@ fn f797_nh16_punch_branch_heavy() {
         p1.load_factor < LB && amp(&phi, &free, &p1.displacement) > a_b,
     );
     let (q1, q2) = (&path1.points[0], &path1.points[1]);
-    let du1: Vec<f64> = q2.displacement.iter().zip(&q1.displacement).map(|(x, y)| x - y).collect();
+    let du1: Vec<f64> = q2
+        .displacement
+        .iter()
+        .zip(&q1.displacement)
+        .map(|(x, y)| x - y)
+        .collect();
     let start2 = PathStart::new(q2.load_factor, q2.displacement.clone(), path1.states.clone())
         .increment(du1, q2.load_factor - q1.load_factor);
-    let o2 = ArcLengthOptions::new(2.0 * ds1).load_scale(c).max_points(40).newton(newton);
+    let o2 = ArcLengthOptions::new(2.0 * ds1)
+        .load_scale(c)
+        .max_points(40)
+        .newton(newton);
     let seen: RefCell<Vec<(f64, f64, usize)>> = RefCell::new(vec![
-        (
-            amp(&phi, &free, &q1.displacement),
-            q1.load_factor,
-            q1.negative_pivots,
-        ),
-        (
-            amp(&phi, &free, &q2.displacement),
-            q2.load_factor,
-            q2.negative_pivots,
-        ),
+        (amp(&phi, &free, &q1.displacement), q1.load_factor, q1.negative_pivots),
+        (amp(&phi, &free, &q2.displacement), q2.load_factor, q2.negative_pivots),
     ]);
     let fold_at: RefCell<Option<usize>> = RefCell::new(None);
     let stop_why: RefCell<String> = RefCell::new("the cap of 40 points".to_string());
@@ -1247,7 +1276,10 @@ fn f797_nh16_punch_branch_heavy() {
         let j = v.len() - 1;
         if fold_at.borrow().is_none() && decreasing_before && p.load_factor > pl && pn == 1 && p.negative_pivots == 0 {
             *fold_at.borrow_mut() = Some(j);
-            println!("AL READING: fold between a {pa:+.9e} (lambda {pl:.12}) and a {a:+.9e} (lambda {:.12})", p.load_factor);
+            println!(
+                "AL READING: fold between a {pa:+.9e} (lambda {pl:.12}) and a {a:+.9e} (lambda {:.12})",
+                p.load_factor
+            );
         }
         let why = if fold_at.borrow().is_some_and(|f| j >= f + 2) {
             Some("two points after the fold")
@@ -1305,7 +1337,11 @@ fn f797_nh16_punch_branch_heavy() {
         }
         compared += 1;
         in_last |= a > A_4;
-        ch.equals(&format!("AL2: negative pivots at point {}", j + 1), p.negative_pivots, 1);
+        ch.equals(
+            &format!("AL2: negative pivots at point {}", j + 1),
+            p.negative_pivots,
+            1,
+        );
         let Some(base) = bt.iter().rev().find(|b| b.a <= a) else {
             ch.holds(&format!("AL3: a reference state below point {}", j + 1), false);
             continue;

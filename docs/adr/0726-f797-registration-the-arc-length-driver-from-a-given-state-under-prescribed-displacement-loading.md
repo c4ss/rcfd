@@ -296,3 +296,126 @@ The heavy record is not run under the mutations.
    maintainer's standing instruction of 2026-11-11 (take the recommendation).
 2. **Whether `trace` should accept non-zero prescribed values by default** (it would change no default result, since it
    refuses them today, but it changes an error into a result): not taken; `trace` keeps the refusal.
+
+## Addendum 1: results (2026-11-17)
+
+Logs in `w49i-work/f797-scratch`: `run1-fast.log` (the registered fast run, 0.76 s, on cca6d830), `run2-heavy.log` (the
+registered heavy run, 656.7 s, on cca6d830), `mutations.log` and `mut-MU*.log`, `s7-tests.log`, `s1-baseline.log`,
+`s8-docs.log`, `fmt.log`, `clippy.log`; the hand arithmetic `scripts/toy.py`, the mutation script `scripts/mutate.py`. Each
+test was run once; no limit changed after a run; no amendment. After the heavy run the heavy test was renamed
+`f797_nh16_punch_branch_heavy_known_miss`, its measured numbers in the ignore text (limits intact), and `cargo fmt` was
+applied to the test file (layout only).
+
+**Library lines (shared solver files, against cea9dd0e).** `nonlinear.rs` 1947-1948 (the boolean read once per attempt),
+2133-2139 (the guarded column), 2195-2196 (the update guarded by `k == 0 || prescribed_load`), 2707-2737
+(`LoadFactorControl::prescribed_load` with default `false`, `prescribed_load_column`). `arclength.rs`: the module text,
+`PathStart` (189-230), the `Spherical` field and trait method, `trace_from` and the shared loop `run` (378-540); `trace` calls
+`run` with the unloaded start, no increment and `prescribed_load = false`.
+
+### The fast test (`f797_fast`)
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| FC1 | `1.0e-13` (126 points, 410 iterations, no halving) | `<= 1e-9` | met |
+| FC2 | stopped at `w = 1.809 h`, 126 points | holds | met |
+| FC3 | `6.6e-5`; `9.0e-5` (closed form `lambda_max = 0.313738897`, `lambda_min = 0.164375917`) | `<= 5e-3` each | met |
+| FC4 | 0, 1, 0 with no exception | each | met |
+| FC5 | `2.2e-14` | `<= 1e-10` | met |
+| FC6 | equal at every point | each | met |
+| GS | restart at point 84 (`w > h`, `lambda` decreasing, full length): its 20 points equal points 85 to 104 bit for bit | equal | met |
+| G0 | 50 points of `trace` and of `trace_from(unloaded)` equal (with the residuals and the load scale) | equal | met |
+| N1 to N5 | each refused with the registered key (`"arc length"`, `"arc-length start"`, `"indefinite_retry"`, `"indefinite_tangent"`, `"arc length"`, `FieldLength` `"arc-length start"`) | as registered | met |
+
+### The heavy record (`f797_nh16_punch_branch_heavy_known_miss`, 16^3)
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| OB | equal | equal | met |
+| R0 | the chain converges; `mu_1` bit-identical (`0`); `2.3e-12` | as registered | met |
+| R1 | `0`; `3.1e-14`, `2.3e-11`; `nu = 1` | as registered | met |
+| BT | rungs 1 to 5 accepted (3 to 4 iterations each); `lambda` within `1.4e-13` to `3.1e-13` of ADR 0711's log; `sigma` within `1.1e-7` | `<= 1e-11`; `<= 1e-6` | met |
+| AL0 | stage 1: `0.964249995` (`a = 4.905e-5`), `0.963999984` (`a = 5.804e-5`), 4 iterations each | holds | met |
+| AL1 | 29 points with `a_b < a <= a_5`, 20 of them in `(a_4, a_5]` | `>= 5`; `>= 1` | met |
+| AL2 | `a` strictly increasing; negative pivots `1` at all 29 | holds; each | met |
+| AL3 | at the 16 points whose bordered reference converged: `|Dlambda| <= 5.3e-10`, `|Du|_inf/|u|_inf <= 6.1e-10`; **at 13 points (stage-2 points 12 to 15 and 19 to 27) the bordered reference failed** in element 3720 ("the modes did not converge in 25 local iterations"), so nothing was compared there | `<= 1e-8`, `<= 1e-7` at every compared point | **missed** (13 references missing) |
+| AL4 | `2.6e-6` | `<= 1e-10` | **missed** |
+| AL5 | equal at every point | each | met |
+| AR | stage 2 lost at its 28th point at `a = 2.0584e-4`, `lambda = 0.9585350848`, after 5 halvings at `Ds = 3.9e-12`; no fold read | reported | reading |
+
+**The trace.** Stage 2 took steps of `Dlambda ~ 5e-4` (the registered `Ds_2`), 3 to 4 iterations a point (8 to 10 s with the
+envelope factor), to `a = 1.83e-4` (`lambda = 0.958999`), every state on ADR 0711's branch (AL3 to `1e-11` there, `5e-10`
+once). From `a ~ 1.6e-4` attempts began to fail in element 3720's local mode iteration and were halved; since `Ds` only
+doubles once per converged point, from `a = 2.0565e-4` each point needed 2 to 5 halvings and `Ds` fell from `8e-6` to `6e-11`;
+the 28th point of stage 2 failed after 5 halvings (its last attempt "not converged": residual `1e-14`, energy ratio `3e-8`, a
+step of rounding size). The trace is lost 5 per cent of `a_5` short of ADR 0711's rung 5 and of ADR 0723's fold (`a ~
+2.170e-4`).
+
+**Diagnosis of the misses.**
+- **AL3**: every failed reference is the test's bordered Newton (ADR 0711 D3 from the nearest rung state, plain local modes)
+  failing in element 3720 at the arc-length point's amplitude: the breakdown of the plain local iteration from `alpha = 0` at
+  regular states of this root that ADR 0718 found (4 of its 12 fine states) and that ADR 0723 removed with the warm start.
+  Where a reference exists the two algorithms agree 20 to 1000 times inside the limit; no disagreement was measured. The
+  registered check counts a missing reference as a miss.
+- **AL4**: the measure rebuilds `Du_F` from the stored displacements of consecutive points. At the points with `Ds` from `6e-11`
+  to `8e-6` the cancellation in `u_j - u_{j-1}` (components of size `0.1`, rounding `~1e-17` each, over about 13,000
+  equations) is of the order `1e-15` in `|Du|`, a relative error up to `~1e-5` of `Ds^2` at `Ds = 6e-11`. The limit `1e-10`
+  came from ADR 0480 A4 without a floor of the measure for very short arcs: a defect of the registered limit, not of the
+  constraint (FC5, on the same library code with arcs of full length, is `2.2e-14`). The run did not print the per-point
+  values, so the attribution of the maximum to the short arcs is an inference.
+- **The loss before rung 5**: the same local breakdown met at every state near `a ~ 2.06e-4`, which ADR 0711's amplitude rung
+  5 jumped over in one step.
+
+### Default bits and static checks
+
+| Id | Result |
+|---|---|
+| B1 | `cargo test -p rcfd-api --release --test baseline_hashes`: 3 pass, 1 ignored: met |
+| B2 | `git diff cea9dd0e -- crates/*/src`: `arclength.rs` and `nonlinear.rs` only; the `nonlinear.rs` lines as listed above: met |
+| B3 | G0 met |
+| S7 | `--lib` 15 pass; `sa_arclength` 2 pass; `sa_arclength_sphere_f649` 1 pass 2 ignored; `si_eas_hg17` 1 pass 1 ignored; `si_eas_hg19` 1 pass 1 ignored; `si_eas_hg20` 1 pass 1 ignored; `sa_arclength_given_state_f797` 1 pass 1 ignored (all release): met |
+| S6 | `cargo fmt -p rcfd-fem --check` clean (after formatting the test file); `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings` clean: met |
+| S8 | `cargo test -p rcfd-cli --release --test docs_site` on the results tree: 2 pass: met |
+| S9 | eff7e4aa (docs only), 4b62eaa8 (library, built), cca6d830 (tests, built and run), the results commit (fmt, renamed record): met |
+
+### Mutations (each on a scratch copy of cca6d830, run once against `f797_fast`)
+
+| Id | Caught by | Result |
+|---|---|---|
+| MU1 | FC (point 1 fails, "load scale 0: the load gives no displacement"; FC1 to FC6 not reached) | caught |
+| MU2 | FC (point 1 not converged in 20 iterations after 5 halvings) | caught |
+| MU3 | FC (point 1: "the arc-length constraint has no real root") | caught |
+| MU4 | GS (the restart differs from the continuing trace) | caught |
+| MU5 | GS (the restart fails at its point 1) | caught |
+
+MU1 to MU3 were registered as caught by FC1, FC2 (FC6); they are caught one step earlier, by the failure of the trace itself.
+
+### Deviations
+
+- None from the registered procedure. The heavy test was renamed `*_known_miss` after its run (rule 2) and the test file
+  formatted. The heavy run took 656.7 s, inside the registered estimate of 10 to 20 minutes.
+
+### Decision
+
+**partial** (by the registered rule): the library opt-in, the closed-form snap-back through both limit points, the restart,
+the equality of the default path and the refusals (FC, GS, G0, N1 to N5) are met, every mutation caught; on the block ADR
+0711's rungs are rebuilt exactly and the arc-length trace from the B state stays on the branch (`nu = 1`, `a` increasing) and
+agrees with the bordered Newton to `5e-10` wherever that reference converges, but AL3 (13 references missing) and AL4 (a
+measure without a floor for very short arcs) missed, and the trace is lost at `a = 2.058e-4`, before ADR 0711's rung 5, in
+element 3720's plain local iteration.
+
+### Remaining questions
+
+1. **Tracing past `a ~ 2.06e-4` and through ADR 0723's fold.** Options: (a) the same `trace_from` on the warm model (ADR 0660
+   D1; the driver already commits each point's trial states, so the warm modes are carried) with the bordered references on
+   the warm model; (b) leave it to F-843's extended system. Recommendation: (a), test-only and short.
+2. **The constraint measure on very short arcs (AL4).** Options: (a) a test with a floor `eps |u|_2 / Ds` on the measure;
+   (b) the converged increment returned in `PathPoint` (an API addition). Recommendation: (a), folded into the item of (1).
+3. **Whether `trace` should accept non-zero prescribed values by default**: open (it changes an error into a result).
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> F-797 (ADR 0726, 2026-11-17): a library opt-in, arclength::trace_from with PathStart, starts the arc-length trace of ADR 0480 from a given converged state, its committed element states and the increment that led to it, with the prescribed values (the model's and the list) scaled by the load factor after every iteration and their load column f_F - K_Fp v in the controlled correction (LoadFactorControl::prescribed_load, default false; trace unchanged and still refusing non-zero prescribed values; indefinite_retry, indefinite_tangent and the other refusals unchanged). Closed-form control: ADR 0480's two-bar truss with a soft series bar whose far end is prescribed, a snap-back under a prescribed displacement traced through both limit points (lambda within 1.0e-13 of the closed form over 126 points, the extrema within 9e-5, the inertia 0, 1, 0); a restart from a converged point with its increment reproduces the continuing trace bit for bit, and trace equals trace_from bit for bit at zero prescribed values. On rule L's 16^3 punch branch ADR 0711's bordered rungs are rebuilt to 3e-13 and the arc-length trace from the state at 0.9645 stays on the branch (nu = 1) and agrees with the bordered Newton to 5.3e-10 in lambda at 16 points; at 13 further points the bordered reference itself fails in element 3720 (plain local modes), the constraint measure missed its limit on arcs shrunk to 6e-11 (2.6e-6 > 1e-10, its rounding), and the trace is lost at a 2.058e-4, lambda 0.958535, short of rung 5 and of ADR 0723's fold, in the same local breakdown. baseline_hashes passes, default bits unchanged, five of five mutations caught, no amendment. Partial: the 16^3 reproduction is incomplete.
+
+> Follow-up proposed: The arc-length trace of rule L's 16^3 punch branch through its fold on the warm model. Deps F-797, F-841. Acceptance: Every limit not stated here is registered in the ADR before the run. arclength::trace_from from ADR 0711's state at 0.9645 on the model with the warm start of the incompatible modes (ADR 0660 D1), the committed element states carried by the driver, through ADR 0723's fold (a ~ 2.170e-4) to a registered cap: the fold read from the load factor and the inertia against ADR 0723's estimate, the states against a bordered reference on the warm model, the constraint measured with a floor for short arcs; the default bits unchanged.
