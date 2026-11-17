@@ -145,3 +145,130 @@ stays), in particular R10, R11 or R12 (the acceptance's 80 %); **todo** if R3, R
   with no `.rs` token) is not seen, as before.
 - Files read only by the implementing agent (single reader); the S45 readings repeat the ones of ADR 0690 by the same reader.
 - No git evidence is added (that is the second follow-up of ADR 0690, a different item).
+
+## Addendum 1: results (2026-11-17)
+
+Code: `scripts/adr_test_index.py` (`header_adr(..., by_path)`, `HEADER_ADR_PATH`, `RETRO_*`, `retro_units`, `retro_primaries`,
+`build(..., retro=None)`, the report line of `--report`), new tests `scripts/test_adr_test_index_retro.py` (15 tests, N1 to N7, P1 to
+P8; N7, a table row without a limit, was added after the first mutation run, see below). No existing file edited except
+`adr_test_index.py`; `gate_attribute.py` and `gate.yml` are byte-identical to 5a92bcd7 (checked with `git diff --quiet`). No Rust file,
+golden or hash table touched. Inputs and logs in `w49i-work/f772-scratch` (`meta.json`, `idx_base.json`, `idx_base2_{git,registered,p0679}.json`
+from the unchanged script, `idx_new_git2.json`, `idx_shallow.json`, `idx_archive.json`, `measure.py`, `samples.py`, `samples.json`,
+`reading.txt`, `mutate.py`, `mutations.log`, `mutations2.log`). The index code was final before every run below; each index run and each
+sample was made once. The N7 test was added after the mutation run (below); the index code did not change.
+
+| id | limit | measured | met |
+|---|---|---|---|
+| R1 | negative controls N1 to N7 pass | the 15 tests of the new file pass (N1 mention only, N2 other heading, N3 phrase in a unit that does not cite the file, N4 listing ADRs, N5 path after code / missing ADR / ADR 0679, N6 `ADR dddd` before a path, N7 a row without a limit) | yes |
+| R2 | positive tests P1 to P8 pass | pass (P7 on a fake git repository) | yes |
+| R3 | `registered` and `p0679` equal the unchanged script | both whole indexes equal to `idx_base2_registered.json` and `idx_base2_p0679.json` | yes |
+| R4 | data unchanged except the primary and the E0 evidence of H0 files | against `idx_base2_git.json` (unchanged script, same tree): 0 other differences; `binaries`, `crates`, `items`, `adrs[n].files`, `adrs[n].items` and every `coverage` key but `primary` equal; differing test fields: `primary_adr` 208, `primary_evidence` 211, and for the **7 H0 files (65 tests)** `adrs` 4, `items` 4, `evidence` 65; every test with a rule-G primary or non-E2 primary evidence keeps it, except `rotor_interface.rs` (G primary 0055 E2, now E0 0055: the same ADR); `adrs[n].tests` differs for the ADR of the H0 files | yes |
+| R5 | existing consumer tests pass, `gate_attribute.py` and `gate.yml` identical | 67 tests of the six named files OK (1 skipped); 0 bytes | yes |
+| R6 | shallow clone and git archive differ from the full run only in the `from_git` tests | shallow: 3 tests, all `discover.rs`, the `from_git` tests of this tree (ADR 0690 had 6; 3 of them are E0 now); archive: the same 3; history `shallow` / `none` | yes |
+| R7 | at most 2 git processes | 2 (counted by wrapping `subprocess.run`) | yes |
+| R8 | run time at most 37.1 s + 10 s | 16.8 s (`build`, saved metadata); the command line with `--report` 14.5 s (a quieter moment of the shared machine than the 37.1 s) | yes |
+| R9 | coverage record | tests with an ADR and no primary **559 before, 351 after**. E2 tests now 459 (the 65 E0 tests left the E2 set): `from_git` 3, `no_commit_rule` 454, `not_in_adrs` 2; retro: **h1 72, h2 20, h3 54 tests, 310 without**; files with a retro primary 32 (H1 19, H2 5, H3 8); H0 7 files; tests with a primary 7445 (E0 7296, E2 149) against 7237 | recorded |
+| R10 | S45 agreement at least 80 % over files with a primary; at least 5 files with a primary | **9 of 12 = 75 %**; 12 files with a primary (floor 5 met) | **no** |
+| R11 | S25 agreement at least 80 % | **15 of 16 = 93.8 %**; 16 files with a primary of 25 | yes |
+| R12 | S45 and S25 together at least 80 % | **24 of 28 = 85.7 %**; 28 files with a primary of 70; per rule below | yes |
+| R13 | `python -m unittest discover -s scripts`; `docs_site` | 132 run, OK, 4 skipped; `docs_site` see the last line | yes |
+
+Mutations (`mutations.log`, then `mutations2.log` after N7), on a scratch copy of `scripts/`: M1 path read in the whole file (N5); M2 path
+before `ADR dddd` (N6); M3 H1 without the heading (N2 and others); M4 H2 without the phrase (N1, N3); M4b the same for a table row
+(P5, counts); **M5 H3 without the limit cell: not caught in the first run** (no test had a row with the file and no limit), N7 was
+added and the second run catches it (N7, counts); M6 highest number in a tier (P6); M7 tiers reversed (P5); M8 listing exclusion
+dropped (N4); M9 H over a rule-G primary (P7); M11 retro on for `registered` (the control test). **M10 (H applied to every test
+without a primary) is not caught and is an equivalent mutant**: a registering unit has to cite the file's `.rs` key, and a citation by
+that key is E2 evidence, so a test that is not E2-only can have no candidate; recorded, not tested. 11 of 12 caught after N7, 1
+equivalent.
+
+**Samples.** Pool: 101 files with an E2-only test that rule G alone leaves without a primary, at the final tree (`retro=False`;
+`samples.json`); 44 of the 45 files of S45 are in it (the 45th, `discover.rs`, has a rule-G primary); minus the 45, 57 remain, and
+**S25** is 25 drawn once with `random.Random(7720).sample`. Of S45, 12 files have a primary now (1 from git, 11 from rule H); of S25,
+16.
+
+**S45, the 12 files with a primary** (the 33 others are below):
+
+| file | primary | rule | reading |
+|---|---|---|---|
+| `rcfd-claude/src/discover.rs` | 0126 | G | agree: as in ADR 0690 |
+| `rcfd-api/tests/mrf.rs` | 0008 | H0 | agree: the header says the checks M1-M7 of `docs/adr/0008-mrf.md` were fixed there |
+| `rcfd-api/tests/non_conformal_case.rs` | 0024 | H1 | agree: the note in ADR 0024 says F-114 was committed without an ADR and describes this file |
+| `rcfd-cli/tests/data.rs` | 0060 | H1 | agree: the same kind of note, the data-pack tests |
+| `rcfd-api/tests/mesh_params.rs` | 0685 | H2 | agree: no other ADR describes the generator parameters; 0685 is the one that states what it checks |
+| `rcfd-turb/tests/channel_wall_function.rs` | 0685 | H2 | agree: same |
+| `rcfd-assistant/tests/physics_workflow.rs` | 0685 | H2 | agree: same |
+| `rcfd-cli/tests/physics_cases.rs` | 0685 | H2 | agree: same |
+| `rcfd-fv/tests/cylinder.rs` | 0060 | H3 | agree (borderline): the first ADR to state its check and limits (St 0.165, 5 %, the recorded 0.1588), though in an audit table of an existing test |
+| `rcfd-fv/src/pimple.rs` | 0245 | H3 | **disagree**: the file is from the initial import; ADR 0245 is the F-344 registration of a BDF2 remainder and its row only names the file in a test list |
+| `rcfd-cli/tests/run_control.rs` | 0123 | H3 | **disagree**: row S6 of the run-service ADR uses the file as a reference run; the file's own contract (F-120, F-121) is not registered there (ADR 0690 read it as agree-null) |
+| `rcfd-fv/tests/cavity.rs` | 0060 | H3 | **disagree**: 0060's table is an audit of what was validated before; ADR 0047 describes `cavity_re100_simplec` with the Ghia limits earlier |
+
+S45 nulls (33): **28 agree-null** (initial-import files and files an ADR only lists, edits or runs: the same readings as ADR 0690) and **5
+disagree-null**: `natural_convection.rs` (ADR 0029 sets its checks), `rcfd-api/tests/interpolate.rs` (ADR 0099 has a section on it),
+`rcfd-project/src/time.rs` (ADR 0122, the crate ADR, does not cite the file), `channel_sst.rs` (ADR 0015 describes it, F-043 has no `-f043-`
+ADR file), `rcfd-runner/src/client.rs` (ADR 0123 registers the crate, not the file). Of the 13 disagree-null readings of ADR 0690,
+8 now have a primary (all agree), 5 are still null; 3 files that were agree-null now have a primary that disagrees (`pimple.rs`,
+`run_control.rs`, `cavity.rs`, all H3). Overall agreement of S45 counting agree-null as ADR 0690 did: 37 of 45 (82 %), for comparison only.
+
+**S25, the 16 files with a primary:** `rcfd-assistant/tests/full_loop.rs`, `keychain.rs` (0004, H1), `rcfd-assistant/tests/workflow.rs` (0067, H1),
+`rcfd-api/tests/udf.rs` (0088, H1), `rcfd-api/tests/workflow.rs` (0123, H1), `rcfd-cli/tests/interpolate.rs` (0031, H1),
+`rcfd-fv/tests/non_conformal.rs` (0024, H1), `rcfd-fv/tests/species.rs` (0027, H1), `rcfd-post/tests/gltf.rs` (0011, H1),
+`rcfd-io/tests/datapack.rs` (0060, H1), `rcfd-api/tests/properties.rs` (0036, H1): **agree** (the note of ADR 0685 in that ADR names
+the file, says it had no ADR or belongs to the ADR's item, and the ADR text describes the feature; ADR 0036 also cites the file in its
+own checks); `rcfd-io/tests/interchange.rs` (0011), `rcfd-fv/tests/compressible_bc.rs` (0006), `rcfd-api/tests/fan_sector.rs` (0065),
+`rcfd-api/tests/fan_cgrid_case.rs` (0068), all H0: **agree** (each header says its checks were registered in that ADR file);
+`rcfd-fv/tests/step_laminar.rs` (0060, H3): **disagree**, an audit row; ADR 0023 (P4) used the set-up earlier. 15 of 16 agree. The 9
+nulls (`channel_kepsilon.rs`, `step_kepsilon.rs`, `gradient.rs`, `workspace_graph.rs`, `integrals.rs`, `coupled.rs`, `fluids.rs`,
+`precond.rs`, `sst_schema.rs`) are all **agree-null**: initial-import or earlier files that ADRs list, edit or name as passing.
+
+**By rule, over the 28 files with a primary read:** H0 (header path) 5 of 5 (`mrf.rs`, `interchange.rs`, `compressible_bc.rs`,
+`fan_sector.rs`, `fan_cgrid_case.rs`); H1 (ADR 0685 note) 13 of 13; H2 (phrase) 4 of 4; H3 (table row with a limit) **1 of 5**; G 1
+of 1. All four disagreements are H3 rows (ADR 0060 twice, 0245, 0123). Without H3 the files read would give 23 of 23; that is a
+counterfactual and not a result of the registered run (the rule was run once with H3 in it).
+
+Deviations, all disclosed:
+
+1. **R10 missed**: S45 agreement 75 % (9 of 12) against 80 %. The cause is diagnosed and is one tier: H3 reads any table row with a
+   limit as a statement of checks, but the rows found are audit lists and test lists. The limit is kept, not tuned.
+2. The patterns were chosen knowing the 45 files (disclosed above). H0, H1 and H2 read 22 of 22 in S45 and S25 together; H3 (which I
+   added to cover `cylinder.rs`, "states the checks of a file it first registers") is the one that fails, in S45 and in S25 alike. The
+   fresh sample confirms that, it does not correct it.
+3. M5 first run not caught; N7 added and the mutations rerun (11 of 12 caught after N7, M10 equivalent). The index code did not change.
+4. The reader is the implementing agent (single reader, disclosed); borderline readings: `cylinder.rs` (agree, H3), `run_control.rs`
+   (disagree; agree would make S45 10 of 12 = 83 %, so the S45 verdict depends on this one reading) and the H1 readings of `species.rs`
+   and `properties.rs`, where the ADR describes the feature but F-053 has no registration ADR (counted agree, as the note says it first
+   describes the file).
+
+**Decision by the registered rule: partial.** R1 to R9, R11, R12, R13 are met and the mutations are caught (one equivalent); R10 is
+missed (75 % on S45); none of R3, R4, R5, R6 (the `todo` conditions) failed. The attribution data of the existing consumers are
+unchanged in shape and in every field except the primary of the E2-only tests and the E0 evidence of 7 header-path files. Tests with
+a primary grew from 7237 to 7445; tests with an ADR and no primary fell from 559 to 351.
+
+### Remaining questions
+
+1. Status. Options: (a) partial, as the rule gives; (b) done, arguing that the combined agreement (85.7 %) and the fresh sample (93.8 %)
+   meet the acceptance's 80 % and R10 is a sub-limit I registered. Recommendation: (a): R10 is a registered limit and the acceptance
+   reads "the 45 files ... are read with at least 80 % agreement"; S45 alone is 75 %.
+2. H3 (table row with a limit). Options: (a) leave it in (its 54 tests in 8 files had 1 right primary in the 5 files read); (b) a
+   follow-up removes it, or restricts it to ADRs that register the file, and re-reads; (c) take the 54 tests back to no primary.
+   Recommendation: (b), as the first follow-up below; until then the 8 H3 files (`pimple.rs`, `run_control.rs`, `cavity.rs`,
+   `step_laminar.rs`, `cylinder.rs` read, and 3 unread) are the doubtful primaries. The consumers print the whole ADR list for a test
+   next to the primary.
+3. ADR 0685 as a source (it is not in `LISTING_ADRS`; the four files it first describes take 0685 by H2). Options: (a) as now; (b) add
+   it to `RETRO_EXCLUDED`, those four files go null. Recommendation: (a): the reading says 0685 is the only ADR that states what they
+   check.
+
+## For the lead: roadmap entries
+
+Proposed status and note of F-772:
+
+> Proposed status: partial.
+
+> Test-to-ADR index, gate attribution. Follow-up of F-768 (ADR 0690, 2026-11-17). PARTIAL. ADR 0701, 2026-11-17: in `scripts/adr_test_index.py --primary git` a leading comment block with no `ADR dddd` but a `docs/adr/dddd-...md` path gives E0 evidence (7 files, 65 tests), and a file-citation-only test that rule G left without a primary takes the first ADR, by tier then number, with a registering unit that cites its file: H1 a unit in a `## Test files (added <date>, ADR dddd)` section (the notes of ADR 0685; 19 files), H2 a unit that says `without an ADR`, `ADR-less` or `no ADR describes` (5 files), H3 a table row with the file in one cell and a limit in another (8 files); units of ADRs 0653, 0679, 0684, 0690 and 0701 are not sources. Tests with an ADR and no primary fell from 559 to 351; `--primary registered` and `p0679` are bit-identical, the data of `gate_attribute.py` are unchanged in shape, 2 git processes, 16.8 s. Read by one reader: of the 45 files of ADR 0690, 12 have a primary and 9 agree (75 %, limit 80 % missed); of a fresh sample of 25 (seed 7720), 16 have a primary and 15 agree (93.8 %); together 24 of 28 (85.7 %). H0, H1 and H2 read 22 of 22, H3 1 of 5 (audit and test-list rows). Open: remove or restrict H3.
+
+> Follow-up proposed: Restrict or remove rule H3 of the retro-registration rule. Deps F-772. Acceptance: Every limit not stated here is registered in the ADR before the run. A table row that cites a file and has a limit in another cell takes the primary only where its ADR registers the file (the ADR file name carries `registration`, or the row is in a section the ADR names as the registration of the file's item), or rule H3 is removed; the 8 files of rule H3 of ADR 0701 and a fresh registered sample of at least 20 files with a primary under rules H0 to H3 as they stand are read with at least 90 % agreement counting only the files with a primary, and the number of files with a primary is reported next to the agreement; the attribution data of `gate_attribute.py` is unchanged for the existing consumers.
+
+> Follow-up proposed: A second reader for the primary-ADR samples of the test-to-ADR index. Deps F-772. Acceptance: Every limit not stated here is registered in the ADR before the run. The 28 files with a primary read in ADR 0701, with the five borderline readings (`cylinder.rs`, `run_control.rs`, `species.rs`, `properties.rs`, `cavity.rs`), are read by a reader who did not write the rule, against a written criterion registered before the reading, and agree with the first reading on at least 85 % of the files; the disagreements are listed with a reason; no limit of ADR 0684, 0690 or 0701 is changed by the second reading.
+
+`docs_site` on the final tree (`cargo test -q --release -p rcfd-cli --test docs_site`): 2 passed.
