@@ -96,3 +96,21 @@ The case is a 10 x 10 cavity (`nu = 0.01`, `simplec`, upwind, `max_iterations = 
 * Real model providers, the MCP server tools list (a golden, not edited), concurrency of two runs in one session (a comment of H24 mentions
   it; there is no assert).
 * Thresholds of `assess_mesh` and `explain_residuals`: rule of thumb (F-148 note); the tests only bracket them.
+
+## Addendum 1: corrections of rows (ADR 0717, 2026-11-17)
+
+Appended by [ADR 0717](0717-f795-registration-corrections-and-a-reading-of-the-18-unread-limit-rows-of-adrs-0706-to-0710.md)
+(F-795). Nothing above this heading was edited. For any reader, the corrected row below replaces the row of the same id in the
+table above. The other rows of this ADR stand: H1 and H6 were read by ADR 0705, ten rows by ADR 0715 and the remaining twelve
+(H5, H7, H9, H10, H11, H13, H14, H15, H17, H20, H21, H23) by ADR 0717, which found all twelve in agreement with the test files.
+
+**H22** (line 89). Wrong words: "an invalid boundary name fails the validate task with a message containing `nonexistent`". The
+test (`crates/rcfd-api/tests/workflow.rs`, lines 203 to 213) sets `boundaries.nonexistent.velocity = fixed` on a fresh session, runs
+the workflow, asserts `ok = false`, takes the first task of `ran` whose `ok` is false (line 212) and asserts that its message
+contains `nonexistent` (line 213). It does not assert which task that is. "The validate task" is the wording of the comment at line
+202; in the `mesh_to_results` template the task of kind `validate` has the id `setup`, and no assert of this test reads an id or a
+kind in this half. The first half of the row is right and is only spelled out. Corrected row:
+
+| id | test | kind | limit |
+|---|---|---|---|
+| H22 | `failing_tasks_stop_the_run_and_say_why` | exact | `workflow.run` of `report` with `max_steps = 5` returns `ok = false`; the last task that ran is `solve` and its message contains `step_limit`; `solve` is `failed` and `report` stays `not_run`. On a fresh session with the setting `boundaries.nonexistent.velocity = fixed`, `workflow.run` returns `ok = false` and the first failed task of the run has a message containing `nonexistent`; the test does not assert which task it is |
