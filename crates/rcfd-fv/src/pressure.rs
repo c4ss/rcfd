@@ -88,6 +88,26 @@ pub fn pressure_bc(geom: &FvGeometry, u: &VectorField, p: &ScalarField) -> Press
     }
 }
 
+/// Fixed-flux pressure condition under a body acceleration: where the normal velocity is prescribed (and the face is not
+/// coupled) the pressure gradient balances the body force, `dp/dn = bf.face / |S|` (as in the steady solver). Used by the
+/// PISO/PIMPLE step and, with `PimpleSettings::fractional_body_force`, by the fractional step (F-771, ADR 0691).
+pub fn apply_body_force_wall_gradient(geom: &FvGeometry, bf: &crate::simple::BodyForce, bc: &mut PressureBc) {
+    let sf = geom.mesh.face_area_vectors();
+    let n_int = geom.n_internal;
+    for i in 0..bc.coeffs.len() {
+        if bc.fixed_u[i] && bc.coupled[i].is_none() {
+            let f = n_int + i;
+            let gradient = bf.face[f] / vec3::norm(sf[f]).max(1e-300);
+            bc.coeffs[i] = FaceCoeffs {
+                a: 1.0,
+                b: geom.dn[i] * gradient,
+                c: 0.0,
+                d: gradient,
+            };
+        }
+    }
+}
+
 /// Boundary face values of a cell field under the pressure conditions, with
 /// periodic faces using the *current* partner cell value (not a lagged copy).
 pub fn boundary_values_pbc(geom: &FvGeometry, bc: &PressureBc, cells: &[f64]) -> Vec<f64> {
