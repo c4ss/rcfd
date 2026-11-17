@@ -128,6 +128,20 @@ impl ArcLengthOptions {
                 reason: "the arc-length correction is not given the damping of the predictor (ADR 0688 D3)".to_string(),
             });
         }
+        // ADR 0694 D2, D3: nor the indefinite tangent (the correction factors it already) or the backtracking.
+        if self.newton.indefinite_tangent {
+            return Err(FemError::InvalidValue {
+                key: "indefinite_tangent",
+                reason: "the arc-length correction factors the indefinite tangent already (ADR 0694 D2)".to_string(),
+            });
+        }
+        if self.newton.predictor_backtracking {
+            return Err(FemError::InvalidValue {
+                key: "predictor_backtracking",
+                reason: "the arc-length correction is not given the backtracking of the predictor (ADR 0694 D3)"
+                    .to_string(),
+            });
+        }
         self.newton.check()
     }
 }
