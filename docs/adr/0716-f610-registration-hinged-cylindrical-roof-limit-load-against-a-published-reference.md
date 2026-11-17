@@ -1,0 +1,152 @@
+# ADR 0716: F-610 registration: the hinged cylindrical roof limit load against a published reference
+
+Status: **REGISTERED 2026-11-17, written before any code of F-610 and before any run of its checks.** Written by the
+implementation agent on branch `f610-work` (from 80281ea9), worktree `w49i-work/f610`, scratch `w49i-work/f610-scratch`. Not
+yet accepted by the maintainer. Every choice below that the maintainer would normally be asked about is taken on the
+maintainer's standing instruction of 2026-11-11 (take the recommendation) and is marked "(standing instruction)".
+
+Roadmap item F-610 (deps F-585), the follow-up proposed by ADR 0522 (its remaining question Q1, option a). The dep is met: ADR
+0522 put Shell4 and Shell3 with the corotated element of ADR 0490 into `arclength::trace`, and recorded the quarter roof
+models and the Hex20 sequence. Test-only work: no library line changes. House rules (`w49i-work/AGENT_RULES.md`) apply: limits
+fixed here and not changed after the run, each run made once, no golden or hash table edit, ADR 0522 and its test file
+`crates/rcfd-fem/tests/sa_corot_shell_dyn.rs` not edited.
+
+## What F-610 asks
+
+> Every limit not stated here is registered in the ADR before the run. The tabulated limit load of the hinged cylindrical roof of Sze, Liu and Lo (2004) for t = 12.7 recorded in docs/reference-data.md from the paper; the Shell4 and Shell3 quarter models of ADR 0522 traced through the limit point by arc length within 2 percent of it; the Hex20 sequence of ADR 0522 kept as a record of the singular hinge.
+
+Clauses: (c1) the reference value recorded from the paper; (c2) Shell4 and Shell3 quarters through the limit point within 2
+percent of it; (c3) the Hex20 sequence kept as a record.
+
+## What was read (disclosed)
+
+`AGENT_RULES.md`; the brief; ADR 0522 in full (D5, amendments 3 and 4, addendum 1, its roadmap entries) and the roof part of
+`crates/rcfd-fem/tests/sa_corot_shell_dyn.rs` (lines 1 to 340 and 465 to 482: `roof_shell`, `roof_hex20`, `vertex`,
+`roof_limit`, `a2`, the two roof records and the fast roof test); the root choice in `crates/rcfd-fem/src/arclength.rs`
+(lines 197 to 252); the F-585 section of `docs/reference-data.md`; the form of ADRs 0572, 0573 and 0714.
+
+**The paper was read** (not a secondary source): K. Y. Sze, X. H. Liu and S. H. Lo, "Popular benchmark problems for geometric
+nonlinear analysis of shells", Finite Elements in Analysis and Design 40 (2004) 1551-1569, the authors' copy in the HKU
+Scholars Hub, `https://hub.hku.hk/bitstream/10722/54269/2/92945.pdf` (record `https://hub.hku.hk/handle/10722/54269`), 25 pages,
+2710426 bytes, SHA-256 `8eaeb6904eccc3d3f6c260c9564f51c64d6375ad3fb6e952178bdedff68d0bce`. How it was read: `curl` and the
+web fetch tool were refused by the site's bot check (HTTP 403); the PDF was opened in the user's Chrome on the record page and
+its text taken from the page content streams (inflated with the browser's own `DecompressionStream`, the strings of the text
+operators read in order; no external script). Only text was seen: the drawings of the figures and any equation set as
+graphics were not. Notes with the full Table 9a as read: `f610-scratch/source-notes.txt`. What was read of it:
+
+- Section 3.8 "Hinged cylindrical isotropic and laminated roofs": the roof under a central pinching force; isotropic and two
+  laminates at two thicknesses; the reference solutions by the Riks method in ABAQUS (the paper's reference is itself a
+  finite-element solution); a quarter modelled by symmetry; "Tables 9a to 9f list the data points"; with the Riks method a
+  solution cannot be placed at a preset load level, so the tabulated loads are the points the path happened to reach.
+- Figure 9a (its text): `R = 2540, L = 254`, `theta = 0.1 radian`, `h = 12.7 or 6.35`, `Pmax = 3000`, isotropic `E = 3102.75`,
+  `nu = 0.3`; caption "Hinged cylindrical roof subjected to a central pinching force"; the labels `L` (twice), `hinged` (twice),
+  `free` (twice), `C`. Units are not named ("unit thick"); consistent units, read here as N and mm as in ADR 0522.
+- **Table 9a**, "Deflections for the 12.7 unit thick isotropic hinged cylindrical shell (computed by using 16 x 16 S4R elements
+  and Riks method)", columns `P/Pmax` and `-W_C` (the deflection of the loaded point C), 36 points. The rising branch ends with
+  `(0.7246, 9.339)`, `(0.7412, 10.358)`, `(0.7421, 11.293)`, then `(0.7286, 12.141)`, `(0.7023, 12.903)` and on down to
+  `(0.1729, 19.852)`, then up again to `(1.0835, 29.374)`.
+
+**The registered reference.** The tabulated limit load is the largest tabulated `P/Pmax` before the snap, `0.7421`, times
+`Pmax = 3000`: **`P_ref = 2226.3` N** (the whole roof, the central point load). Arithmetic 1 (by a one-line Python evaluation,
+disclosed): the parabola through the three tabulated points around it, `(10.358, 0.7412)`, `(11.293, 0.7421)`, `(12.141,
+0.7286)`, has its vertex at `W_C = 10.876`, `P/Pmax = 0.74374`, `2231.2` N, `2.2e-3` above `P_ref`: the tabulated point lies a
+few `1e-3` below the peak of the paper's own path. `P_ref` is the registered value (it is what the paper tabulates); the
+vertex value is a record.
+
+**Geometry.** The figure text gives `L = 254` and two `L` labels; ADR 0522 models straight edges of `508` (a quarter of axial
+length `254`). Read as the half-length per label (`2L = 508`), consistent with ADR 0522; the drawing itself was not seen, so this
+reading is an assumption, supported by the secondary text of arXiv:2107.12483 (Section 3.3, read for this purpose only: the
+same panel with `L = 508 mm`, `R = 2540 mm`, `0.1 rad`, `12.7 mm`) and noted as such.
+
+**Known before the registration (disclosed).** ADR 0522 addendum 1 measured, on the same models with the same extraction,
+Shell4 `16 x 16` `2222.4` N, Shell4 `8 x 8` `2223.6` N, Shell3 `16 x 16` `2221.3` N (apex deflection at the limit about `10.8`).
+Against `P_ref` these are `-1.75e-3`, `-1.21e-3`, `-2.25e-3` (arithmetic 2). The outcome of the 2-percent clause is therefore
+expected from records; this registration fixes the reference and reruns the same models once against it. The reference value
+was not chosen with these numbers in view: it is the largest tabulated `P/Pmax` of Table 9a, a rule stated before the
+arithmetic 2 was done, and the alternative (the vertex, arithmetic 1) is recorded beside it.
+
+## Design
+
+### D1. The models and the extraction (unchanged from ADR 0522 D5)
+
+The quarter roof of ADR 0522 D5, copied into a new test file (a test file cannot import another): `R = 2540`, quarter axial
+length `254`, half-angle `0.1` rad, `t = 12.7`, `E = 3102.75`, `nu = 0.3`; node `(i, j)` at `s = 0.1 i/n`, `y = 254 j/n`,
+mid-surface `(R sin s, y, R cos s - R)`; held: on `s = 0` `u_x, theta_y, theta_z`; on `y = 0` `u_y, theta_x, theta_z`; on the
+hinge `s = 0.1` `u_x, u_y, u_z` (rotations free); `Load::nodal_force (0, 0, -250)` on the apex (a quarter of `P_0 = 1000` N).
+Shell4 `n x n`; Shell3 cuts each rectangle along its diagonal from the first to the third corner.
+
+**The limit-load extraction** (registered here, as ADR 0522 D5): `trace` with the load scale `c = |u_lin|^2` (`u_lin` from
+`solve_static` of the same model), the length `Ds = 0.03 sqrt(2 c)`, at most 300 points, `NewtonOptions::new(1)` (5 halvings as in ADR
+0522 D5); stop at the first point whose load factor is at most `0.8 lambda_max` (`lambda_max > 0` the largest load factor of an
+earlier point). `P_lim = P_0 lambda_v`, `lambda_v` the vertex of the parabola through `(w, lambda)` of the point of the largest
+load factor and its two neighbours (`w = -u_z` of the apex); if the parabola is not concave or the point is first or last, the
+largest load factor (recorded which). The point load on the quarter is a quarter of the whole roof's load, so `P_lim` is the
+whole-roof load, the quantity of Table 9a.
+
+**Meshes**: Shell4 and Shell3 `16 x 16` (the registered comparison, B1 and B2: the paper's own mesh size); Shell4 and Shell3
+`8 x 8` (the fast test, B5).
+
+### D2. The Hex20 record (c3)
+
+The Hex20 sequence of ADR 0522 (`2213.9, 2184.5, 2167.5` N at `n = 4, 8, 16`, point load; `2203.6, 2186.4` N patch load) is
+kept as a record: not rerun (each registered run is made once), its ignored tests in `sa_corot_shell_dyn.rs` left unedited, and
+its values entered in the F-610 section of `docs/reference-data.md` beside the published value, with the ratio to `P_ref`
+(arithmetic 3, by hand: `2167.5/2226.3 - 1 = -2.64e-2`, `2184.5/2226.3 - 1 = -1.88e-2`, `2213.9/2226.3 - 1 = -5.6e-3`), which
+shows the solid falling away from the published value as it is refined, consistent with the singular hinge of ADR 0522's
+diagnosis (not a proof of it).
+
+### D3. Tests
+
+A new file `crates/rcfd-fem/tests/sa_roof_published_f610.rs`:
+
+- `b1_b2_roof_16_against_sze_2004` (ignored, the registered record run once; about 35 s by ADR 0522's wall times, ignored
+  because the brief asks for heavy runs as records with a fast test): B1, B2, B3 on both traces, records.
+- `b5_fast_roof_8_against_sze_2004` (regular): B5 (Shell4 and Shell3 `8 x 8`), B3 on both, records.
+- `nc_roof_negative_controls` (regular): NC1 and NC2 on Shell4 `8 x 8`.
+
+## Checks (limits fixed now)
+
+| Id | Clause | Check | Limit | Estimate |
+|---|---|---|---|---|
+| R0 | c1 | `docs/reference-data.md` holds `P_ref = 0.7421 x 3000 = 2226.3` N with table, figure, URL, "the paper read"; the test's constant equals `0.7421 * 3000.0` | holds | holds |
+| B1 | c2 | `|P_lim(Shell4 16)/P_ref - 1|` | `<= 2e-2` | `1.75e-3` (ADR 0522 record) |
+| B2 | c2 | `|P_lim(Shell3 16)/P_ref - 1|` | `<= 2e-2` | `2.25e-3` (ADR 0522 record) |
+| B3 | c2 | every trace stopped by the rule (not the cap), a negative pivot at a point after the point of `lambda_max` (through the limit point), `P_lim` finite | holds | holds (ADR 0522 A2) |
+| B5 | c2 (fast) | `|P_lim(Shell4 8)/P_ref - 1|`, `|P_lim(Shell3 8)/P_ref - 1|` | each `<= 2e-2` | `1.2e-3`; Shell3 `8` not run before, within `1e-2` expected (the Shell3 `16` and Shell4 `8` differ from Shell4 `16` by `5e-4`) |
+| H1 | c3 | `git diff 80281ea9 -- crates/rcfd-fem/tests/sa_corot_shell_dyn.rs docs/adr/0522-*` empty at the tip; the Hex20 values and their ratios to `P_ref` in `docs/reference-data.md` | holds | holds |
+| NC1 | control | Shell4 `8` with `E x 1.05`: `|P_lim/P_ref - 1| > 2e-2` (the check bites on a 5 percent error), and `|P_lim(1.05 E)/(1.05 P_lim(E)) - 1| <= 1e-3` (static equilibrium of an elastic body scales with `E`; the path points differ through `Ds` and `c`, so only the vertex rule's discretisation remains) | `> 2e-2`; `<= 1e-3` | `4.9e-2`; `<= 1e-4` |
+| NC2 | control | Shell4 `8` with the hinge rotations also held (clamped straight edges): `|P_lim/P_ref - 1| > 2e-2` | `> 2e-2` | well above `0.1` (a clamped shallow arch carries far more than a hinged one); not estimated more closely |
+
+Records: `P_lim` of each mesh in N and over `P_ref`; over the vertex value `2231.2` N (arithmetic 1); the apex deflection at the
+limit against Table 9a's `11.293` (and the vertex `10.876`); the deflections of each trace at the tabulated rising-branch
+loads `P/Pmax = 0.1980, 0.3473, 0.4686, 0.5647, 0.6381, 0.6908, 0.7246` (linear interpolation in the trace) against Table 9a;
+points, halvings, wall times; NC2's stop reason.
+
+## Planned mutations (scratch copy by `git archive` of the tip, one at a time, the fast tests only)
+
+| Id | Mutation | Expected to be caught by |
+|---|---|---|
+| MU1 | the reference constant `3000` written `3090` (a 3 percent wrong reference) | B5 |
+| MU2 | the model thickness `12.7` written `12.0` | B5 |
+| MU3 | the hinge rotations held in the main builder (clamped) | B5 |
+| MU4 | `arclength.rs` root choice reversed (`score(roots[0]) < score(roots[1])`, ADR 0522 MU6) | B5 or B3 (the trace fails or doubles back) |
+| MU5 | the vertex rule disabled (the largest point taken) | not expected (a change below `1e-3`) |
+
+## Decision rule
+
+**done** if R0, B1, B2, B3, B5 and H1 are met and NC1 and NC2 behave as registered; **partial** if B1 or B2 misses (a known
+miss with a diagnosis) or a control misbehaves; **todo** if the reference could not be recorded (not the case: it was read).
+
+## Limits (not covered)
+
+- The reference is a 16 x 16 S4R finite-element solution of 2004, not an exact solution; its discretisation error is not known
+  here (the paper calls `8 x 8` adequate at this thickness). Agreement within 2 percent of it does not bound the error of rcfd
+  against the exact limit load more tightly than the reference's own error plus 2 percent.
+- Only the isotropic `t = 12.7` roof; the `6.35` roof (snap-back) and the laminates of Tables 9b to 9f are not covered.
+- The geometry reading `2L = 508` is from the figure text and a secondary source (above), not from the drawing.
+- Only the limit load is checked; the path at the tabulated points is a record.
+
+## Open questions
+
+- **Q1** (the thin roof, `t = 6.35`, one of Tables 9d to 9f, not read here) as a follow-up: proposed in the addendum only if the run gives
+  reason; recommendation: a follow-up, as it exercises the arc length through a snap-back, which this roof does not.
