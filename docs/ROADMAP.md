@@ -14366,7 +14366,8 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
   - acceptance: Opt-in, additive metadata on settings.schema entries (human label, unit, recommended range, an advanced
     flag, a one-line help text from the existing docs) so that F-825 lays keys out without a Studio-side table; no
     existing key, golden, default or reply field changes (G4); docs/case-schema.md updated.
-  - note: ADR 0800, needs its own ADR before code (engine change, additive under G4). Traces: G15, G4.
+  - note: ADR 0800, needs its own ADR before code (engine change, additive under G4). Traces: G15, G4. ADR 0730 proposed
+    (shared with F-830); awaiting the maintainer.
 - [x] **F-827** Electron Studio: one action layer for every UI action
   - depends on: F-803
   - acceptance: Every UI action is a typed, named action in one registry that calls the engine (a service method, an MCP
@@ -14408,7 +14409,8 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
   - acceptance: Help on every control, term and value taken from the engine's case schema help text (F-826), docs and
     glossary, with no help text kept only in the Studio; every error message names the problem and the recovery, checked
     by a test over the engine's error catalogue; a learner's view-and-report step (G19).
-  - note: ADR 0800 (G16 to G21 added 2026-11-16). Traces: G19, G2; PRODUCT Users, Principle 5.
+  - note: ADR 0800 (G16 to G21 added 2026-11-16). Traces: G19, G2; PRODUCT Users, Principle 5. ADR 0730 proposed (shared
+    with F-826); awaiting the maintainer.
 - [x] **F-831** Electron Studio: command palette and keyboard shortcuts
   - depends on: F-827, F-802
   - acceptance: A command palette generated from the action registry that finds every action by name; shortcuts for
@@ -14467,14 +14469,15 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
   - acceptance: An engine entry point creates a project (rcfd project init and an MCP create_project, through
     rcfd_project::Project::create, ADR first); the Studio's project home offers it (button and palette) and opens the
     new project; the learner's first path uses it instead of a copied example; e2e test.
-  - note: Lost with rcfd-studio (S/ui.rs). Traces: G14, G4, G15.
+  - note: Lost with rcfd-studio (S/ui.rs). Traces: G14, G4, G15. ADR 0731 proposed; awaiting the maintainer.
 - [ ] **F-836** Electron Studio: mesh preview before a run
   - depends on: F-449, F-812, F-808
   - acceptance: The case editor shows the mesh a case will build (generator and imported meshes, including a
     [mesh.adapt] mesh) with patch visibility, from an engine entry point that builds the mesh without solving (ADR first
     if none exists); the preview equals the solver's mesh (test replacing preview_g1 and adaptive_preview_f475); e2e
     test.
-  - note: Lost with rcfd-studio (preview.rs, preview_ui.rs). Traces: G14, G15.
+  - note: Lost with rcfd-studio (preview.rs, preview_ui.rs). Traces: G14, G15. ADR 0732 proposed; awaiting the
+    maintainer.
 - [~] **F-837** Electron Studio: run setup, logs and field-view extras from rcfd-studio
   - depends on: F-449, F-807, F-810
   - acceptance: Each capability the deleted rcfd-studio had and the Electron Studio lacks is built or recorded as
@@ -14493,7 +14496,8 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     unsaved mark, Claude model and session cost, project folder argument at start, seven palette commands; word budgets
     unchanged. Needs engine: simulate-N-s helper with correctors and Courant fix (case-facts query or start_run dry
     run), Refine x2 (refine_mesh), open/save one case file outside a project, store length unit. Not built:
-    save-or-discard on window close (proposed as an F-829 decision panel).
+    save-or-discard on window close (proposed as an F-829 decision panel). set_runner_config (runner writes its own
+    budgets): ADR 0733 proposed; awaiting the maintainer.
 - [ ] **F-838** Local-model assistant: keep, port or remove
   - depends on: F-449
   - acceptance: The maintainer decides what becomes of the local-model assistant that only rcfd-gui offered (presets
