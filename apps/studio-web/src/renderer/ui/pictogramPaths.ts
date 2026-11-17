@@ -92,6 +92,7 @@ export const ICON_NAMES = [
   'open-file',
   // ADR 0801 Addendum 22
   'reset-view',
+  'speed',
 ] as const;
 export type IconName = (typeof ICON_NAMES)[number];
 
@@ -143,4 +144,6 @@ export const ICON_PATHS: Record<IconName, { readonly path: string; readonly fill
   'open-file': { path: 'M3 1H8L11 4V13H3ZM8 1V4H11M7 11V6M5 8L7 6L9 8' },
   // ADR 0801 Addendum 22: Reset view (the whole domain framed by four corners, the three-quarter view's diamond in it)
   'reset-view': { path: 'M1 4V1H4M10 1H13V4M13 10V13H10M4 13H1V10M7 4L10 7L7 10L4 7Z' },
+  // ADR 0801 Addendum 22: Play speed (two forward marks, one after the other: faster or slower than one)
+  speed: { path: 'M2 3L6 7L2 11M7 3L11 7L7 11' },
 };

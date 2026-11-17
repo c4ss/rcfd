@@ -22,7 +22,7 @@ import {
   sub,
   type Vec3,
 } from '../../src/renderer/field/camera.js';
-import { PLAY_SAMPLE_MS, PLAY_SNAPSHOT_MS, playWait } from '../../src/renderer/workspace/model.js';
+import { PLAY_SAMPLE_MS, PLAY_SNAPSHOT_MS, PLAY_SPEEDS, playWait, speedText, speedWords } from '../../src/renderer/workspace/model.js';
 
 const BOX = { min: [0, 0, 0], max: [6, 5, 4] };
 const CENTRE: Vec3 = [3, 2.5, 2];
@@ -372,5 +372,20 @@ test.describe('Play: one stored snapshot per wall-clock second (ADR 0801 Addendu
     expect(playWait(false, 0, true, 500)).toBe(500);
     expect(playWait(true, 0, true, 500)).toBe(1000);
     expect(playWait(true, -5, false, 500)).toBe(1000);
+  });
+
+  test('Q-A22-3: the speeds 0.25x to 4x divide the pace; reduced motion still holds two stops a second', () => {
+    expect([...PLAY_SPEEDS]).toEqual([0.25, 0.5, 1, 2, 4]);
+    expect(playWait(true, 0, false, 500, 4)).toBe(250);
+    expect(playWait(true, 0, false, 500, 2)).toBe(500);
+    expect(playWait(true, 0, false, 500, 0.5)).toBe(2000);
+    expect(playWait(true, 0, false, 500, 0.25)).toBe(4000);
+    expect(playWait(true, 100, false, 500, 4)).toBe(150);
+    expect(playWait(false, 0, false, 500, 2)).toBe(PLAY_SAMPLE_MS / 2);
+    expect(playWait(true, 0, true, 500, 4)).toBe(500);
+    expect(speedText(0.25)).toBe('0.25×');
+    expect(speedWords(1)).toBe('Play speed 1×, one snapshot a second');
+    expect(speedWords(4)).toBe('Play speed 4×, 4 snapshots a second');
+    expect(speedWords(0.25)).toBe('Play speed 0.25×, one snapshot every 4 seconds');
   });
 });

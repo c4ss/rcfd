@@ -18,7 +18,7 @@ import { FieldViewport } from '../field/FieldViewport.js';
 import { caseName, runRows, shownState, unknownWord, type RunRow } from '../runs/model.js';
 import { EmptyMark, Quiet, Select, StateMark, StatePictogram } from '../ui/index.js';
 import { runSeries, runValuesAt } from './door.js';
-import { bandOf, defaultField, lastStep, liveRun, playWait, positionsOf, sampleAt, sharedAxis, storePath, type Position } from './model.js';
+import { bandOf, defaultField, lastStep, liveRun, playWait, positionsOf, sampleAt, sharedAxis, storePath, type PlaySpeed, type Position } from './model.js';
 import { TimePanel, type CursorValue } from './TimePanel.js';
 import { CompareControls, CompareFields, CompareMetrics, useComparison, type CompareState } from './Compare.js';
 import { Provenance, countValue, counterValue, statusValue } from '../provenance/index.js';
@@ -46,6 +46,12 @@ export function workspaceHeading(run: string | null, other: string | null): stri
 }
 
 const ACTIVE = new Set(['queued', 'running', 'paused']);
+
+/**
+ * ADR 0801 Addendum 22: Play's speed of each run (by project folder and run id), for as long as the Studio runs; a run
+ * not in it plays at 1x.
+ */
+const playSpeeds = new Map<string, PlaySpeed>();
 
 /** How soon a running run's store is opened again after the last open answered (Follow live sees new snapshots). */
 const LIVE_STORE_MS = 250;
@@ -242,6 +248,16 @@ export default function RunWorkspace({ view, selected, onSelect, compareRequest 
   const snap = position?.snapshot ?? null;
   const reduceMotion = usePrefersReducedMotion();
   const steppedAt = useRef(0);
+  const speedKey = `${view.folder}\u0000${row?.id ?? ''}`;
+  const [speedTick, setSpeedTick] = useState(0);
+  const speed: PlaySpeed = playSpeeds.get(speedKey) ?? 1;
+  const onSpeed = useCallback(
+    (s: PlaySpeed) => {
+      playSpeeds.set(speedKey, s);
+      setSpeedTick((n) => n + 1);
+    },
+    [speedKey],
+  );
   useEffect(() => {
     if (!playing) return;
     if (index >= last) {
@@ -249,13 +265,14 @@ export default function RunWorkspace({ view, selected, onSelect, compareRequest 
       return;
     }
     if (snap !== null && !(drawnAt.current?.run === row?.id && drawnAt.current?.snapshot === snap)) return; // its draw re-runs this
-    const wait = playWait(snap !== null, performance.now() - steppedAt.current, reduceMotion, REDUCED_PLAY_MS);
+    const wait = playWait(snap !== null, performance.now() - steppedAt.current, reduceMotion, REDUCED_PLAY_MS, speed);
     const t = setTimeout(() => {
       steppedAt.current = performance.now();
       moveTo(index + 1, 'play');
     }, wait);
     return () => clearTimeout(t);
-  }, [playing, index, last, snap, row?.id, moveTo, drawTick, reduceMotion]);
+    // `speedTick`: a new speed takes effect at once (the wait is counted again from the move to the stop shown)
+  }, [playing, index, last, snap, row?.id, moveTo, drawTick, reduceMotion, speed, speedTick]);
 
   // timing marks for P5 and P6 (scripts/measure-scrub.mjs): the stop asked for, and its field drawn
   useEffect(() => {
@@ -419,6 +436,8 @@ export default function RunWorkspace({ view, selected, onSelect, compareRequest 
             if (on) moveTo(last, 'play');
           }}
           playing={playing}
+          speed={speed}
+          onSpeed={onSpeed}
           onPlay={(on) => {
             // the stop shown when Play is pressed stays its whole second too
             if (on) steppedAt.current = performance.now();
