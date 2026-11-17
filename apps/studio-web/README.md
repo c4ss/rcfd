@@ -97,7 +97,8 @@ Neither set: the home says what to set, and "Open project folder" is unavailable
   `forget`, `close`, `refresh`, `dismiss`), from one module, `src/renderer/project/door.ts`. A second MessagePort on
   `studio.project-port`, like the service port; `src/main/project/bridge.ts` checks every message (exact fields, a path
   of at most 4096 characters). The page cannot name a folder: `open` takes only a folder of the recent list, and new
-  folders come from the main process's dialog. The ipcMain channels stay `app.info` and `app.ready`.
+  folders come from the main process's dialog. The ipcMain channels are `app.info`, `app.ready` and (F-837)
+  `app.closeAnswer`.
 - The recent list holds each folder's path and when it was last opened, nothing of the project (G12). It is never opened
   on its own at start.
 
@@ -606,12 +607,12 @@ the head of the right column. Surface brief: `.impeccable/surfaces/apps-studio-w
 - Case actions: New case (from the engine's templates, the shipped examples one step away, both lists from the
   project server's `new_case` schema), Duplicate as (byte-for-byte copy, `new_case {copy}`), Check the mesh (the
   `mesh.check` action), Check the saved file (`check_case_headless`, the check-only launch with its exit code), Close
-  the session (asks first with unsaved changes and names them). Each shows its Claude Code and CLI equivalents
+  the session (with unsaved changes it asks first, names them, and offers Save and close: F-837's close question). Each shows its Claude Code and CLI equivalents
   (`CASE_ACTIONS` in `src/shared/case.ts`).
 - The page reaches the case operations only through `window.studioCase` (`state`, `sources`, `prepare`, `attach`,
   `status`, `conflict`, `save`, `create`, `duplicate`, `check`, `forget`), from one module, `src/renderer/case/door.ts`;
   a third MessagePort on `studio.case-port`, checked by `src/main/case/bridge.ts` (exact fields, paths `cases/<...>.toml`
-  or `.json` without `..`). The ipcMain channels stay `app.info` and `app.ready`.
+  or `.json` without `..`). The ipcMain channels are `app.info`, `app.ready` and (F-837) `app.closeAnswer`.
 - Tests: `tests/unit/case-editor.spec.ts` (fake service and project server: what a save writes, conflicts, removals,
   refusals, bindings, the allow-list, the port's checks; no case key in the editor's code; tokens-only CSS) and
   `tests/e2e/case-editor.spec.ts` (the packaged Studio against `rcfd serve` and `rcfd-mcp`: open from the home, a key
@@ -844,7 +845,9 @@ Decisions taken in building F-813 (options, the recommendation followed; each re
 - Light: P2 on 100 iteration events of the 1e5 box, P4 at 1e6 with 200 repeats per route and codec, P5 at 1e6 with 10
   passes, P7 with 5 repeats per route, P8 with 1200 frames twice, P10 with 10 starts. `--heavy` takes P2's full 300 events
   and adds, recorded and not judged, P6 at 4e6, Follow live, and P12 over the 1e6 and 4e6 boxes.
-- Judging follows the records of ADR 0801: P4 and P7 by route R1 or R2 (ADR 0350 §3), P4 on the raw store; P8's frame
+- Judging follows the records of ADR 0801: P4 and P7 by route R1 or R2 (ADR 0350 §3), P4 on the raw store; P7 twice,
+  on the median of the 5 opens and on the first open of the store in the launch (F-819, the maintainer's answer of
+  2026-11-17), each against 1.5 s; P8's frame
   rate is the better of the vertically synced and the uncapped run, its p99 frame the synced run's. Lines marked
   `(recorded)` are not judged. Exit code 0 when every judged line is met, 1 on a miss, 2 when a case could not run.
 - Load: the processor busy fraction and the processes that use the processor (summed by name over 2 s, in cores) are
@@ -882,7 +885,8 @@ processor's busy fraction before and after it. Nothing is retried.
     npm run bench -- --heavy                                        # runs it once (--repeats=1), its lines recorded
 
 - First picture (P7): the development page's viewport, 5 opens per mesh after the tiny box, judged on the median as
-  `measure-field.mjs` does; the first open of each launch is printed with the others.
+  `measure-field.mjs` does, and (the maintainer's answer to Q-819b-1, 2026-11-17) on the first of them, the first open
+  of that store in the launch, against the same 1.5 s.
 - Scrubbing (P5): the run workspace, Home then ArrowRight through every snapshot of the run, about 200 requests per
   mesh, as `measure-scrub.mjs`; P6 (at least 3 per second) is printed beside it for the 4e6 box, recorded.
 - Draw rate (P8): a drag on the viewport, a trusted press and then one move of that pointer per animation frame, held
@@ -1112,9 +1116,12 @@ unavailable and why, a value to act on (changes not saved).
 
 Every built surface works from the keyboard alone, shows where the focus is, names every control, keeps still under
 reduced motion and never says a state by colour alone. No WCAG contrast rule applies (the maintainer removed it on
-2026-11-16); colour values follow `DESIGN.md`. No checker library was added (G5): the checks are written in
-`tests/support/a11y.ts` on the DOM, the keyboard and Chromium's own accessibility tree (read through the DevTools
-protocol).
+2026-11-16); colour values follow `DESIGN.md`. The checks are written in `tests/support/a11y.ts` on the DOM, the
+keyboard and Chromium's own accessibility tree (read through the DevTools protocol). On top of them, axe-core 4.14.0
+(a dev dependency, MPL-2.0, ADR 0801 Addendum 12, by the maintainer's word of 2026-11-17) runs on each surface of the
+walk (`tests/support/axe.ts`) and fails only on violations of impact serious or critical; `color-contrast` is off,
+and a rule whose fix would change `DESIGN.md` or a visible design goes in the documented `EXCLUDED` list there with
+its reason (empty today). It writes `test-results-visual/f816/axe.json`. This is not a full accessibility audit.
 
 `tests/e2e/a11y.spec.ts` opens the packaged Studio against the real engine (as `word-budget.spec.ts` does) and reaches
 every surface with keys only: Tab, Shift+Tab, the arrows, Enter, Space, Escape and the shortcuts (Ctrl+1, Ctrl+2, Ctrl+K,
@@ -1245,7 +1252,8 @@ Seven palette commands (G20): `runs.log`, `runs.report`, `runs.budgets` (group P
 - D4, the residual columns' heads. (a) The engine's names `u` and `p`, as data; (b) "Residual u" (a chrome word each).
   Taken: (a); the accessible name is "Last residual of u".
 - D5, designs/ on the home. (a) Headed by the folder's own name `designs/` as data; (b) a group title "Designs" (+1
-  chrome word on home-open, a maintainer decision). Taken: (a). A folder entry ends in `/`.
+  chrome word on home-open, a maintainer decision). Taken: (a). A folder entry ends in `/`. The maintainer confirmed
+  (a) on 2026-11-17: `designs/` stays the heading.
 - D6, the unsaved mark. (a) `*`, a link to the case-editor session that holds the changes (Edit opens the file in a new
   session, without them); (b) a word ("unsaved"). Taken: (a).
 - D7, the length unit. (a) Metres, from the engine's SI settings, with the reason as the tooltip; (b) no unit. Taken:
@@ -1273,12 +1281,33 @@ Seven palette commands (G20): `runs.log`, `runs.report`, `runs.budgets` (group P
   save to a path outside a project.
 - The store's length unit: needs a unit for the coordinates in the store's info.
 
-### Not built, no engine needed (open for the maintainer)
+### Save or discard before a close (F-837, approved by the maintainer 2026-11-17)
 
-- The egui Studio's save-or-discard question when the window closes with unsaved case changes: buildable from the case
-  port's pending changes, but it changes the quit path that G7 and `service.spec.ts` hold (a run goes on when the
-  Studio closes). Recommendation: a decision panel (F-829) on close only when a case-editor session has pending
-  changes, as a follow-up item.
+A close that would lose case-editor changes not saved asks first, with F-829's decision panel
+(`src/renderer/case/closeGuard.tsx`, mounted once in `main.tsx`); with nothing unsaved nothing asks.
+
+- What asks: Close the session (the button and the palette's `case.close`), Close project (the button and
+  `project.close`), and the window: its close button, Alt+F4 and the app's quit. The main process holds the window's
+  `close` event and sends the page a request (`studio.close-request`); the page answers `asking` at once on
+  `app.closeAnswer`, then `close` or `cancel`. A page that does not say `asking` within 3 s (hung, crashed, not loaded)
+  cannot hold the window; a page that crashes while asking lets it close; a reload ends the question as a cancel. The
+  quit asks every window before anything is stopped, and a cancel cancels the quit with nothing stopped.
+- The words name what is lost: the title (`Close cases/cavity-re100.toml with 1 change not saved?`, `Close <project>
+  with ...`, `Close rcfd Studio with ...`) and each file with its count and its first four setting paths. The panel is
+  an exception surface (G22: a loss speaks), so no word budget changes.
+- Choices: Save and close (each file through the engine, as Save; a refusal or another writer's change keeps the panel
+  open with the engine's words, and nothing closes), Close and lose them, Keep editing (the safe choice: focused, and
+  Escape). Tab stays in the panel; Keep editing gives the focus back where it was, a text field included. A value typed
+  but not committed is committed first, as Save does, so it is counted.
+- Close and lose them closes the session (Close the session) or the project's sessions with their changes (Close
+  project). On the window it closes nothing more than the quit did before: G7 holds (the Studio's quit stops no session
+  or run on the service).
+- Test mode (`RCFD_TEST_HEADLESS=1`) quits without asking, so Playwright's `close()` (which is `app.quit()`) never waits
+  for an answer; the window's own close still asks there. The P10 measurement's quit does not ask either.
+- Tests: `tests/e2e/close-guard.spec.ts` (each close, by the keyboard, Tab held, focus back, the window's close with
+  typing not yet committed, a page that does not answer, the test-mode quit with a change unsaved).
+- Decisions D13 to D16 (the safe choice, what Close and lose them closes, the test-mode quit, the wait for the page):
+  ADR 0801, Addendum 13.
 
 ## Security (G10)
 
@@ -1291,7 +1320,8 @@ Seven palette commands (G20): `runs.log`, `runs.report`, `runs.budgets` (group P
   with a test.
 - No remote content: requests to http, https, ws, wss, ftp and file are cancelled in the session; navigation away from
   `app://studio/` and every `window.open` are refused; `<webview>` cannot be attached; permission requests are denied.
-- IPC: the page sees only `window.studio` (today `app.info()` and `app.ready()`), one function per channel of
+- IPC: the page sees only `window.studio` (`app.info()`, `app.ready()`, and F-837's `app.onCloseRequest(listener)` and
+  `app.closeAnswer(request, answer)`, the window's close round trip), one function per channel of
   `src/shared/ipc.ts`. The main process registers exactly those channels and refuses calls from any frame that is not on
   `app://studio/`. New channels are added to the contract, the preload and the main handlers together, and the e2e
   test's allow-list.
@@ -1300,7 +1330,7 @@ Seven palette commands (G20): `runs.log`, `runs.report`, `runs.budgets` (group P
   each load of an app page; the preload keeps it and forwards. The main process checks every message on it
   (`src/main/service/bridge.ts`): the exact fields of each operation, a method on `SERVICE_METHODS`
   (`src/shared/service.ts`) and parameters of plain JSON values; anything else is refused before the service. The
-  shell's ipcMain channels stay `app.info` and `app.ready`. A method is added to the list with a test.
+  shell's ipcMain channels are `app.info`, `app.ready` and `app.closeAnswer`. A method is added to the list with a test.
 - The case editor (F-812): the page sees `window.studioCase`, a third MessagePort checked by `src/main/case/bridge.ts`;
   the project server that writes is called only with the four tools of `CASE_TOOLS`.
 - `RCFD_STUDIO_STARTUP_REPORT=<file>` (measurement only): the main process writes the time the project view was ready

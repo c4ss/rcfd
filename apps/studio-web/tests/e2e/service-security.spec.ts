@@ -178,8 +178,8 @@ test('the shell\'s ipcMain channels are still app.info and app.ready only: the s
       listeners: ipcMain.eventNames().map(String).filter((n) => n !== 'error'),
     };
   });
-  // F-818: the shell's channels are app.info, app.ready and the theme's two
-  expect(names).toEqual({ handlers: ['app.info', 'app.ready', 'theme.get', 'theme.set'], listeners: [] });
+  // F-818 and F-837: the shell's channels are app.info, app.ready, the close answer and the theme's two
+  expect(names).toEqual({ handlers: ['app.closeAnswer', 'app.info', 'app.ready', 'theme.get', 'theme.set'], listeners: [] });
 });
 
 test('events reach a subscriber, filtered by session when asked', async () => {

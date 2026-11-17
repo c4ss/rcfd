@@ -1561,7 +1561,7 @@ camera moves at once on a key (no easing, damping off).
 
 ### Open for the maintainer
 
-- D1: whether to add axe-core under G5 on top of the written checks.
+- D1: whether to add axe-core under G5 on top of the written checks. (Answered 2026-11-17: yes; see the follow-up below.)
 - The decision panel and the confirmation strip now hold Tab while open; if the maintainer wants to reach the page
   behind a decision without answering it, D4 (b) is the way back.
 - Observed, not changed: while the run workspace is open the page asks for animation frames continuously (743 in the
@@ -1580,6 +1580,63 @@ camera moves at once on a key (no easing, damping off).
   and `run-control.spec.ts` 23 passed.
 - `python scripts/third_party_licenses.py --check`: up to date.
 - `cargo test -p rcfd-cli --release --test docs_site --test workspace_graph`: 2 and 3 passed.
+
+### Follow-up (2026-11-17): axe-core, the maintainer's answer to D1
+
+The maintainer, 2026-11-17: "keep axe-core, but don't worry too much about full accessibility features". Also: Tab
+stays held inside open dialogs (D4 (a) stands; the decision panel and the confirmation strip keep `aria-modal` and
+contain Tab). So D1 is now (a) and (b): the written checks stay, and axe-core runs on top of them. This is not a full
+accessibility audit, and no further accessibility work was started.
+
+The new direct dependency (`devDependencies`, test only; nothing of it is in the built app):
+
+| Package | Version | Licence | Why it | Alternatives considered |
+|---|---|---|---|---|
+| `axe-core` | 4.14.0 (2026-10-05) | MPL-2.0 | The maintainer's word. Its rule set covers what the written checks do not (list structure, ARIA attributes allowed and required, label in name, scrollable regions). It has no dependencies; the test reads `axe.min.js` from the package and puts it into the page through the DevTools protocol, so the app's CSP and code are unchanged. 4.14.1 (2026-11-16) was one day old, under the two-week rule. | `@axe-core/playwright` 4.14.0 (2026-10-15): a thin wrapper that would pull `axe-core` `~4.14.0`, which resolves to 4.14.1 today, unless pinned again; one package more for a call the test makes in four lines. |
+
+What was built:
+
+- `tests/support/axe.ts`: `axeCheck(page)` runs axe on the whole window and sorts the violations into failing (impact
+  serious or critical), excluded (serious or critical, on the `EXCLUDED` list with a reason) and other (minor or
+  moderate, recorded only). `color-contrast` and `color-contrast-enhanced` are off: there is no WCAG contrast
+  requirement (the maintainer, 2026-11-16), and the colours of `DESIGN.md` change only with the maintainer's approval.
+- `tests/e2e/a11y.spec.ts`: every surface of the keyboard walk runs axe first, before the walk moves the focus (16
+  surface states: home with and without a project, the first path, the Claude Code panel, Runs, a selected run, the
+  provenance popover, the run workspace, its derived-picture controls, a select's list, compare mode, the command
+  palette, the case editor, its undo controls, case settings and the decision panel). A serious or critical
+  violation fails the surface's test; the last test checks that axe ran on every walked surface. The results go to
+  `test-results-visual/f816/axe.json`.
+
+Violations found (axe 4.14.0, first run) and fixed:
+
+| Rule (impact) | Where | Fix |
+|---|---|---|
+| `listitem` (serious) | The Claude Code transcript, on every surface with the panel open: `<ol role="log">` made its `li` items children of a log, not a list | `ClaudePanel.tsx`: the log role and name moved to a wrapping `div.cc-feed-log` with `display: contents` (`claude.css`), so the `ol` stays a list and lays out as before. Also clears the minor `aria-allowed-role` on the `ol`. |
+| `label-content-name-mismatch` (serious) | Runs and a selected run: the "Run again" button was named "Run cavity-re100.toml again" (the words shown are not in the name in order) | `RunControls.tsx`: named "Run again: cavity-re100.toml". The icon-only "with fields stored" button keeps its name (nothing shown to match). |
+| `label-content-name-mismatch` (serious) | The command palette: each option was named by its title alone while it shows the title, the command id and its keys | `CommandPalette.tsx`: the option is named by its content in the order shown (title, id, group while filtering, keys, the unavailable reason); the visually hidden description that repeated the id and keys is gone. Spaces between the parts and between the keys are text nodes inside flex boxes, so nothing drawn changes. Names still start with the title (`commands.spec.ts`, `f837.spec.ts` match on that). |
+| `scrollable-region-focusable` (serious) | The command palette's list scrolls but has no Tab stop: its field moves a virtual focus in it (`aria-activedescendant`) | `CommandPalette.tsx`: the field of the palette (and of a parameter's choice list) is `role="combobox"` with `aria-expanded="true"`, the ARIA pattern for a field over a list it controls; axe then reads the list as the combobox's popup. No Tab stop was added. |
+
+After the fixes, no serious or critical violation is left on any surface. The `EXCLUDED` list is empty: no fix
+needed a change to `DESIGN.md` or to a visible design. Left as recorded, not acted on (minor or moderate):
+`page-has-heading-one` (moderate) on the run workspace, compare mode, the case editor and its undo controls (no `h1`
+there; adding one is a visible change); in compare mode `landmark-unique` (two field views of the same name),
+`region` (React Aria's overlay container outside a landmark), both moderate, and `empty-table-header` (minor, the
+metric table's first header is named by `aria-label`, not by text).
+
+Decisions taken (each reversible):
+
+- D7, how axe is loaded. (a) `axe-core` alone, injected by the test; (b) `@axe-core/playwright`. Taken: (a), one
+  package and an exact pin. Recommendation: (a).
+- D8, where axe runs. (a) Inside the keyboard walk, on each of its 16 surface states; (b) a separate spec that reaches
+  the same surfaces again. Taken: (a), the surfaces are reached once and stay in step with the walk. Recommendation: (a).
+
+Open for the maintainer: none new. If the maintainer wants the moderate findings above acted on, `page-has-heading-one`
+is the one that would change what is shown.
+
+Verification of the follow-up (2026-11-17, on studio-f816b over studio-roadmap 0773c5e2): `npm run typecheck` clean;
+after `npm run build && npm run package:dir`, `a11y.spec.ts`, `claude.spec.ts`, `commands.spec.ts`, `f837.spec.ts` and
+`word-budget.spec.ts` 53 passed; full `npm test` 654 passed, none failed; `python scripts/third_party_licenses.py
+--check` up to date (axe-core added, 123 lock entries).
 
 ## Addendum 13: F-837, run logs, runner budgets and field-view extras from rcfd-studio (2026-11-17)
 
@@ -1647,6 +1704,79 @@ field-view extras from the egui Studio (F-837)".
   within its budget) and `f837.spec.ts` (14) passed in the full run.
 - `python scripts/third_party_licenses.py --check`: up to date.
 - `cargo test -p rcfd-cli --release --test docs_site --test workspace_graph`: 2 and 3 passed.
+
+### The maintainer's answers (2026-11-17)
+
+- Save or discard on close: approved, built below (it was "Not built, no engine needed" above).
+- `set_runner_config` (ADR 0733): not built; ADR 0733 stays proposed. The budgets panel keeps writing
+  `.rcfd/runner-config.json` itself (D1 (a)).
+- D5, `designs/` on the home: the maintainer confirmed (a), the folder's own name as the heading (data, no chrome word).
+
+### Save or discard before a close (F-837, on studio-f837b)
+
+What the egui Studio asked on exit, in the Electron Studio's own design. A close that would lose case-editor changes not
+saved asks first with F-829's decision panel (`src/renderer/case/closeGuard.tsx`, mounted once beside every route);
+with nothing unsaved nothing asks and the close goes on as before. No dependency, no Rust, no service method and no word
+budget changed; `DESIGN.md` is not edited.
+
+- The closes that ask: Close the session (the button and the palette's `case.close`), Close project (the button and the
+  palette's `project.close`), and the window: its close button, Alt+F4, the system's Close and the app's quit. The case
+  editor is a page with no tabs (its header names the file); closing that "tab" is Close the session, so no other tab
+  close exists to guard.
+- The window: the main process holds the window's `close` event and sends the page a request
+  (`studio.close-request`, main to page); the page answers on a new ipcMain channel, `app.closeAnswer(request,
+  answer)`: `asking` at once, then `close` or `cancel`. The preload exposes `app.onCloseRequest(listener)` and
+  `app.closeAnswer` (the bridge stays one function per channel, the shell's allow-list tests updated). A page that does
+  not say `asking` within 3 s (hung, crashed, not loaded) cannot hold the window; a renderer that crashes or goes away
+  while asking lets the window close; a reload ends the question as a cancel. The quit (`before-quit`) asks every
+  window before anything is stopped, and a window that cancels cancels the quit with nothing stopped; the shutdown that
+  follows is the one before (G7: the service, the project server, the case editor's server, claude, in at most 3 s).
+- The words name what is lost (G22: a loss speaks; the panel is an exception surface, its budget 0 chrome words
+  unchanged): the title (`Close cases/cavity-re100.toml with 1 change not saved?`, `Close <project> with ...`, `Close
+  rcfd Studio with ...`), then "Closing without saving loses them:" and each file with its count and its first four
+  setting paths.
+- Choices, in the wording of the editor's earlier close question: Save and close (each file through the engine as Save
+  does, onto the file as it was opened; a refusal, a removed entry or another writer's change keeps the panel open with
+  the engine's words as its title, and nothing closes), Close and lose them, Keep editing (the safe choice: focused when
+  the panel opens, and Escape). Tab and Shift+Tab stay in the panel (DecisionPanel, F-816); Keep editing gives the focus
+  back where it was, a text field the close blurred included. A value typed but not committed is committed first, as
+  Save does, so it is counted and named.
+- The case editor's inline close question (Close and lose them, Keep editing) is replaced by the panel, which adds Save
+  and close.
+
+Decisions (options, the recommendation taken; each reversible):
+
+- D13, the safe choice. (a) Keep editing, focused, and Escape (taken: F-829's rule, "a loss: keeping is the default",
+  and a press of Enter changes nothing); (b) Save and close focused, as many desktop programs do. Recommendation: (a).
+- D14, what Close and lose them closes. (a) The session (Close the session) and the project's sessions (Close project)
+  with their changes; on the window nothing more than the quit closed before (taken: G7, the Studio's quit stops no
+  session or run on the service, and the editor's bindings end with the Studio); (b) close every session with changes
+  on the window's close too (a case-editor session could hold a run that G7 keeps going). Recommendation: (a).
+- D15, the test-mode quit. (a) Under `RCFD_TEST_HEADLESS=1` the quit does not ask, while a close of the window itself
+  still asks (taken: Playwright's `close()` is `app.quit()`, and a test that leaves a change unsaved must not hang its
+  teardown; the tests close the window with `BrowserWindow.close()`, what the close button does); (b) ask in test mode
+  too and make every test save or discard before it ends. The P10 measurement's quit does not ask either.
+  Recommendation: (a).
+- D16, the wait for the page. (a) 3 s for `asking`, then no limit while the user decides (taken); (b) one limit for
+  the whole answer (a user reading the panel would see the window close under them). Recommendation: (a).
+
+Tests: `tests/e2e/close-guard.spec.ts` (4): Close the session (the panel's words, Tab held, Escape and the focus back,
+Save and close by the keyboard writes the file and closes the session); Close project (Keep editing keeps it, Close and
+lose them closes the session and the project, the file untouched; nothing unsaved closes at once); the window's own close
+(typing not yet committed is counted, Escape gives the focus back to the field, a second close asks again, Save and
+close writes the file and the app ends); nothing unsaved closes the window at once, a page with no listener cannot hold
+it, and the test-mode quit with a change unsaved does not hang. `case-editor.spec.ts`'s close test now answers the
+panel (its last close by the keyboard); `shell.spec.ts`, `project.spec.ts`, `data.spec.ts` and
+`service-security.spec.ts` list the new channel and bridge functions, and `shell.spec.ts` checks that a malformed answer
+is refused.
+
+### Verification (2026-11-17, on studio-f837b over studio-roadmap ccacac87)
+
+- `npm ci`: exit 0. `npm run typecheck`: clean. `python scripts/third_party_licenses.py --check`: up to date. No
+  dependency was added.
+- `npx playwright test tests/e2e/close-guard.spec.ts`: 4 passed. The touched specs together (shell, data, project,
+  service-security, close-guard, case-editor, a11y, word-budget, commands, first-path, f837, undo-case): 105 passed.
+- `npm test` (headless, built and packaged): 658 passed, 0 failed (8.7 min).
 
 ## Addendum 14: F-817b, drawing on demand at rest, and a scratch profile per bench case (2026-11-17)
 
@@ -1920,6 +2050,9 @@ move per frame.
 - Q-819-4: a FAN-01 mesh larger than F1, or a polyhedral one, needs the mesher (other counts, `h_slit`, or a reachable
   polyhedral dual, which needs Rust). Is one wanted for F-448? Recommendation: no. The FAN-01 surfaces are 30 to 100
   times smaller than the 1e6 box's, so the box cases bound them.
+- Answers (the maintainer, 2026-11-17): Q-819-1 yes (applied in Addendum 16 with fix (a), and judged since: Addendum 16,
+  "The maintainer's answers"); Q-819-2 and Q-819-3 applied in Addendum 16; Q-819-4 no, the polyhedral FAN-01 mesh is
+  skipped.
 - The display ran at 60 Hz in this session (238 Hz in F-817's runs). The synced rates and the fan scrubs are the
   display's, and the idle baseline of ADR 0800 §9 Q4 should state its display rate.
 
@@ -2193,6 +2326,27 @@ On 256 MiB in plain Node, the reference loop ran at 1.1 to 1.2 ns per byte and t
   set ran on a package built before one change that only narrows a TypeScript type in `FieldViewport` (a cast replaced
   by an `in` check) and does not change behaviour; `npm test` ran on the final tree.
 
+### The maintainer's answers (2026-11-17), and the first open judged (on studio-f837b)
+
+- Q-819-1 and Q-819b-1: yes, the first open of a store in a launch is judged as well, against the same 1.5 s. Built:
+  - `scripts/bench.mjs`: a judged P7 line "first picture of the 1e6 surface, <route>, first open of the launch", the
+    first of `measure-field.mjs`'s 5 opens (the first open of the 1e6 store in the Studio's launch, and in the bench
+    server's for R1, before the reader's worker remembers its mesh check). As the median line, it is judged on the better
+    route, R1 or R2 (ADR 0350 §3); the other route's first open is printed as recorded. The median line is unchanged.
+  - `scripts/measure-field.mjs`: says both verdicts on its P7 line and keeps `firstMet` in its JSON.
+  - `scripts/measure-large.mjs`: a fourth P7 entry in `LIMITS`, `firstOpen` ("first picture of the surface, first open
+    of the store in the launch", <= 1500 ms, judged), one line per mesh and repeat (each repeat is a launch of its own).
+    It was added on the maintainer's answer, with the limit unchanged; `measure-large.mjs` has not been run with it (a
+    heavy record, house rule 7). Addendum 16's three runs had the 4e6 first open at 858 to 944 ms.
+- Q-819-4: no FAN-01 mesh larger than F1 and no polyhedral one; the polyhedral FAN-01 mesh of F-819's acceptance is
+  skipped.
+- Q-819b-2 and Q-819b-3 had no answer in this round and stay open.
+
+Check of the new line (`npm run bench -- --only=P7,P8 --no-gen`, once, 2026-11-17, processor busy 0.69 to 0.72 from
+other jobs): P7 R2 median 41 ms, first open of the launch 289 ms (judged, met); R1 median 1328 ms, first open 1356 ms
+(recorded, met); P8 240 frames per s and p99 frame 4.3 ms with vertical sync (met); verdict 4 of 4 judged lines met. The
+uncapped P8 run gave 38.3 per s (recorded, not judged).
+
 ## Addendum 17: F-818, themes: Light, Dark, High contrast and System (2026-11-17)
 
 On 2026-11-17 the maintainer said: "theming in general is a good idea so create a dark mode plus one other theme for
@@ -2278,7 +2432,7 @@ tests pass untouched.
   field viewport's ground is the theme's silver-wash exactly, the plots' ground is the theme's ground, and the field's
   pixels inside the frame are the same in every theme wherever the ground does not show.
 - Changed for the new channels and file: `tests/e2e/shell.spec.ts` (the allow-list is now app.info, app.ready,
-  theme.get, theme.set, and `window.studio` has `theme`); `tests/unit/tokens.spec.ts` (the declared-once check reads
+  theme.get, theme.set, with F-837's app.closeAnswer after the merge, and `window.studio` has `theme`); `tests/unit/tokens.spec.ts` (the declared-once check reads
   the `:root` block); `tests/unit/history.spec.ts` (`src/main/theme.ts: rename`, the setting's write-then-rename in
   user data); `tests/e2e/data.spec.ts`, `project.spec.ts` and `service-security.spec.ts` (their "the shell's channels
   are unchanged" checks list the theme's two channels and `window.studio.theme`; the service, data and project ports

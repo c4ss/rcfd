@@ -11,7 +11,7 @@
 //   result     the engine's answer or its refusal in words, and the same request from the CLI and Claude Code
 //   detail     why a command cannot run now, and what to do
 //   shortcuts  the one shortcut table (src/shared/commands/shortcuts.ts), by where the keys work
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import {
   Autocomplete,
   Dialog,
@@ -317,10 +317,14 @@ export function Keys({ keys }: { keys: string }) {
   const parts = keys === '+' ? ['+'] : keys.endsWith('++') ? [...keys.slice(0, -2).split('+'), '+'] : keys.split('+');
   return (
     <span className="cp-keys" aria-label={keys}>
+      {/* the spaces between the keys are not drawn (flex items); they keep the keys apart as text (F-816) */}
       {parts.map((k, i) => (
-        <kbd key={i} className="cp-kbd" aria-hidden="true">
-          {chordLabel(k)}
-        </kbd>
+        <Fragment key={i}>
+          {i > 0 && ' '}
+          <kbd className="cp-kbd" aria-hidden="true">
+            {chordLabel(k)}
+          </kbd>
+        </Fragment>
       ))}
     </span>
   );
@@ -394,30 +398,25 @@ function CommandList({
         {({ isFocused }) => (
           <>
             <FocusReport focused={isFocused} id={e.id} report={setFocused} />
+            {/* F-816 (axe label-content-name-mismatch): the option is named by all it shows, in the order shown (title,
+                id, group, keys, the reason it is unavailable), so no slot names it by its title alone; the spaces
+                between the parts are not drawn (flex items) but keep the words apart in the name */}
             <span className="cp-item-line">
-              <Text slot="label" className="cp-item-title">
-                {e.title}
-              </Text>
-              <span className="cp-item-id">{e.id}</span>
+              <span className="cp-item-title">{e.title}</span>{' '}
+              <span className="cp-item-id">{e.id}</span>{' '}
               <span className="cp-item-side">
                 {query !== '' && <span className="cp-item-group">{e.group}</span>}
+                {query !== '' && e.shortcut && ' '}
                 {e.shortcut && <Keys keys={e.shortcut} />}
               </span>
-            </span>
-            <Text slot="description" className="cp-item-reason">
-              {reason ? (
-                <>
-                  <span data-words="exception">
-                    <span className="cp-unavailable-word">Unavailable:</span> {reason}
-                  </span>
-                </>
-              ) : (
-                <span className="cp-visually-hidden">
-                  {e.id}
-                  {e.shortcut ? `, ${e.shortcut}` : ''}
+            </span>{' '}
+            <span className="cp-item-reason">
+              {reason && (
+                <span data-words="exception">
+                  <span className="cp-unavailable-word">Unavailable:</span> {reason}
                 </span>
               )}
-            </Text>
+            </span>
           </>
         )}
       </ListBoxItem>
@@ -429,7 +428,9 @@ function CommandList({
       <StepHead title="Commands" sub={`${model.length} commands; ↑ ↓ to move, Enter to run, Esc to close`} quietSub />
       <Autocomplete inputValue={query} onInputChange={setQuery}>
         <AriaTextField aria-label="Find a command by its name or its id" className="cp-search" autoFocus>
-          <Input className="ui-input cp-input" placeholder="Command or id" />
+          {/* F-816 (axe scrollable-region-focusable): a field over a list it moves in is a combobox whose list is always
+              open; the list then needs no Tab stop of its own */}
+          <Input className="ui-input cp-input" placeholder="Command or id" role="combobox" aria-expanded={true} />
         </AriaTextField>
         <ListBox
           aria-label="Commands"
@@ -493,7 +494,7 @@ function ChoiceList({
       ) : (
         <Autocomplete inputValue={query} onInputChange={setQuery}>
           <AriaTextField aria-label={`Find ${word}`} className="cp-search" autoFocus>
-            <Input className="ui-input cp-input" placeholder={`Type to narrow the list of ${step.choices.choices.length}`} />
+            <Input className="ui-input cp-input" placeholder={`Type to narrow the list of ${step.choices.choices.length}`} role="combobox" aria-expanded={true} />
           </AriaTextField>
           <ListBox
             aria-label={`Choose ${word}`}

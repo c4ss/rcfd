@@ -395,7 +395,8 @@ export function SelectedRunControls({ view, row, onStarted }: { view: ProjectVie
             variant="ghost"
             busy={act.busy === 'project.run_case'}
             onPress={() => void act.run('project.run_case', { case: row.case.replace(/\\/g, '/') })}
-            name={`Run ${caseName(row.case)} again`}
+            // F-816 (axe label-content-name-mismatch): the name starts with the words shown
+            name={`Run again: ${caseName(row.case)}`}
           />
         )}
         {row.case && (

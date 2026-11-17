@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { APP_ENTRY, CSP_HEADER, CSP_META } from '../../src/main/security.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const ALLOWED_CHANNELS = ['app.info', 'app.ready', 'theme.get', 'theme.set'];
+const ALLOWED_CHANNELS = ['app.closeAnswer', 'app.info', 'app.ready', 'theme.get', 'theme.set'];
 
 let app: ElectronApplication;
 let page: Page;
@@ -94,7 +94,7 @@ test('the page has no Node: no require, process, module, Buffer or ipcRenderer',
   ]);
 });
 
-test('the bridge is the allow-list: window.studio.app.{info, ready}, window.studio.theme.{get, set} (F-818) and nothing else', async () => {
+test('the bridge is the allow-list: window.studio.app.{info, ready, onCloseRequest, closeAnswer}, window.studio.theme.{get, set} (F-818) and nothing else', async () => {
   const shape = await page.evaluate(() => {
     const s = window.studio as unknown as Record<string, Record<string, unknown>>;
     const app = s['app'] ?? {};
@@ -108,7 +108,13 @@ test('the bridge is the allow-list: window.studio.app.{info, ready}, window.stud
       frozen: Object.isFrozen(s) && Object.isFrozen(app) && Object.isFrozen(theme),
     };
   });
-  expect(shape).toEqual({ top: ['app', 'theme'], app: ['info', 'ready'], theme: ['get', 'set'], types: ['function', 'function', 'function', 'function'], frozen: true });
+  expect(shape).toEqual({
+    top: ['app', 'theme'],
+    app: ['closeAnswer', 'info', 'onCloseRequest', 'ready'],
+    theme: ['get', 'set'],
+    types: ['function', 'function', 'function', 'function', 'function', 'function'],
+    frozen: true,
+  });
 });
 
 test('the main process handles exactly the allow-listed channels and refuses foreign senders', async () => {
@@ -134,6 +140,10 @@ test('the main process handles exactly the allow-listed channels and refuses for
       foreign: await call('app.info', 'https://example.com/', []),
       otherHost: await call('app.info', 'app://other/index.html', []),
       withArgs: await call('app.info', 'app://studio/index.html', ['x']),
+      // F-837: a close answer is a request number and one of three words; nothing else gets through
+      badAnswer: await call('app.closeAnswer', 'app://studio/index.html', [1, 'quit']),
+      noRequest: await call('app.closeAnswer', 'app://studio/index.html', ['1', 'close']),
+      unknownRequest: await call('app.closeAnswer', 'app://studio/index.html', [987654, 'close']),
     };
   });
   expect(ipc.names).toEqual(ALLOWED_CHANNELS);
@@ -142,6 +152,9 @@ test('the main process handles exactly the allow-listed channels and refuses for
   expect(ipc.foreign).toContain('refused');
   expect(ipc.otherHost).toContain('refused');
   expect(ipc.withArgs).toContain('takes no arguments');
+  expect(ipc.badAnswer).toContain('takes a request number');
+  expect(ipc.noRequest).toContain('takes a request number');
+  expect(ipc.unknownRequest).toBe('ok');
 });
 
 test('the Content Security Policy is sent as a header and repeated in a meta element', async () => {

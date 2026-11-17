@@ -19,6 +19,8 @@ import './ui/primitives.css';
 import { ProjectHome } from './project/ProjectHome';
 // F-831: the command palette and the global shortcuts, beside every route (the palette loads on first use)
 import { PaletteHost } from './commands/PaletteHost';
+// F-837: save or discard before a close that would lose case changes (the window's close request included)
+import { CloseGuardHost } from './case/closeGuard';
 // F-818: the theme setting, drawn as soon as the main process answers (tokens.css follows the system until then)
 import { initTheme } from './theme/theme';
 
@@ -101,5 +103,6 @@ createRoot(root).render(
   <StrictMode>
     <Root />
     <PaletteHost />
+    <CloseGuardHost />
   </StrictMode>,
 );
