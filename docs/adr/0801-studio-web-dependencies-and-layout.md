@@ -3231,3 +3231,137 @@ notice is an exception surface (`data-words="exception"`), and the Unavailable r
 - `electron .` with no variable (a probe through Playwright): the engine is `from: 'checkout'` (this worktree's
   `target/release`) and the service is `waiting`. With `--no-engine`, both say the Studio was started without an engine.
   With a bad `--engine-dir`, both name the folder and the missing files.
+
+## Addendum 22: Viewport camera and playback (2026-11-17, branch camera over main 8e330d44)
+
+The maintainer, 2026-11-17, four requests:
+
+> the controls of the polar coordinate system camera is really awful - can we make it behave more like a camera
+> explorer in hammer/unity?
+
+They chose Unity's scene-view scheme.
+
+> for a 2d run can we setup and default to a flat face on display pls
+
+> make it so the button to reset to face on doesn't zoom all the way out - use a different button for a full reset, it
+> should just orient
+
+> when we press play, it should [advance] one snapshot per second i think
+
+### The camera (src/renderer/field/camera.ts)
+
+three.js OrbitControls (a spherical orbit about the domain's centre, clamped at the poles, right-drag pan) is gone. In
+its place is a small controller, `ViewCamera`, written as pure maths with no three.js, DOM or React, so that
+`tests/unit/field-camera.spec.ts` can check it without a window. Its state is an eye, an orientation (a unit
+quaternion), a pivot, and a projection: perspective, or orthographic for a 2D case. `FieldCanvas.tsx` turns pointer and
+key events into its calls and copies its state onto the three.js camera. The field view, both views of a comparison
+(each keeps its own camera, as before) and the case editor's mesh preview all draw through that canvas, so all of them
+get it.
+
+| Input | 3D | 2D (one cell thick) |
+|---|---|---|
+| Hold the right button | look: yaw about z and pitch about the camera's right, about the eye; the pivot turns with the view | pan |
+| W A S D, Q and E, while the right button is held | fly forward, left, back and right, down and up (z); Shift is 4 times faster; the speed is half the domain's diagonal a second | nothing |
+| Middle button | pan: what is under the cursor at the pivot's depth stays under it | pan |
+| Alt and the left button | orbit about the point of the drawn surface under the cursor (it becomes the pivot), else the pivot | nothing |
+| Wheel | dolly toward the point under the cursor, which stays where it is on screen (no surface there: the point of the pivot's plane) | zoom toward the cursor (the orthographic height, about that point) |
+| Double-click | the pivot goes to the point under the cursor; the view does not move | the same (harmless) |
+| Plain left button | the readout, as before: hover, and the value where the button is let go; it moves nothing | the same |
+| Arrow keys (the view focused) | orbit 5 degrees about the pivot | pan a twentieth of the view |
+| + and - | dolly toward the centre of the view, by 1.1 | zoom, by 1.1 |
+| F | frame the whole domain, the orientation kept | the same |
+| O, Face on | the nearest principal axis of the view direction, the up the nearest axis to the current up; the point at the centre and its distance kept | its thin axis (it is face on already; nothing moves) |
+| Home or 0, Reset view | the starting orientation (the three-quarter view, z up), the whole domain framed, the pivot at its centre | face on, framed |
+
+There is no pole lock. The rotation is a quaternion with yaw about the world's z and pitch about the camera's right, so
+the right stays level (no roll) and a pitch goes on past straight up or down. Past the pole the view is upside down.
+There the yaw turns the other way, so a drag to the right still turns the picture to the right. That is the sense in
+which "up" stays sensible.
+
+A 2D case is the one the mesh preview and the field view already detected: the preview's `two_d`, and the store's
+surface layers' `twoD` and `thin` (`./prepare.ts`). It opens orthographic, looking straight along the thin axis from the
+side that puts the other two axes in order (z thin: x right, y up; y thin: x right, z up; x thin: y right, z up),
+framed to the domain. The F-837 scale bar is therefore there from the start. The mesh preview no longer turns face on
+in its first draw; it passes the thin axis to the canvas. No control tilts a 2D case into 3D. Per the maintainer's
+instruction, that waits for their answer (Q-A22-1).
+
+The canvas carries the camera's state for the tests as data attributes: `data-camera` (`perspective` or
+`orthographic`), `data-camera-eye`, `-forward`, `-up`, `-pivot` (six significant digits), `-zoom` (the pivot's depth,
+or the orthographic height), `-moved`, and `-drag` during a drag. The P8 bench (#/dev/field?bench=p8) still orbits one
+turn per 600 frames: it drives the perspective camera itself with the input off, then resets the view.
+
+### Face on and Reset view
+
+Face on (`field.face_on`, the tool row's face-on icon, O) now only turns the view: the zoom and the point at the centre
+stay. It is offered for 3D cases too (to the nearest axis), named "View face on (along z)" in 2D and "View face on (the
+nearest axis)" in 3D. Reset view is the separate full reset: orientation, the whole domain framed, the pivot at its
+centre. It is now an icon button with its name as its tooltip, with a new pictogram `reset-view` on the 14-unit grid
+(four corners framing the three-quarter view's diamond). It still appears in the frame's top right corner once the view
+has moved, as DESIGN.md says. It is a palette command too, `field.reset_view` (Home and 0 in the field view). F, O and
+the fly keys are added to the shortcut table in the field-view scope. A key chord with Ctrl, Cmd or Alt is no longer
+taken by the view: Ctrl+0 was resetting it as well as sizing the window, and Ctrl+O would have turned it.
+
+### Playback (src/renderer/workspace/model.ts)
+
+Before this addendum, Play stepped to the next stop as soon as the field of the one shown was drawn: as fast as the
+fields drew. It paced only a run without fields (a residual sample every 150 ms) and reduced motion (no stop shorter
+than 500 ms). No speed control existed. Play now steps one stored snapshot per wall-clock second (`PLAY_SNAPSHOT_MS`,
+`playWait`). The second counts from the move to a stop, and never runs before that stop's field is drawn. The stop shown
+when Play is pressed also gets its second. The residual samples and the reduced-motion floor are as before. The
+alternative offered to the maintainer was one second of simulated time per second.
+
+### Decisions (options, the recommendation taken; each reversible)
+
+- **A22-D1, Q and E:** (a) down and up along the world's z, or (b) along the camera's up (Unity). Taken: (a). It keeps
+  "up" sensible.
+- **A22-D2, the look and orbit rates:** 0.004 and 0.008 radians per pixel. The fly speed is half the domain's diagonal
+  a second, times 4 with Shift. A wheel pixel scales the distance by 1.0015, so 100 pixels is about 16%.
+- **A22-D3, the face-on shortcut:** O ("orient"). F frames, as in Unity. Home and 0 reset, as before.
+- **A22-D4, Reset view's place:** (a) keep it in the frame's top right corner, shown once the view has moved (DESIGN.md
+  Field view), now an icon button; (b) a permanent button in the tool row. Taken: (a).
+- **A22-D5, Face on in 2D:** it stays, though a 2D view is always face on (the maintainer named its 2D behaviour), and
+  it does nothing there.
+- **A22-D6, the arrow keys in 2D:** they pan (a twentieth of the view), since a 2D case does not orbit.
+- **A22-D7, Play's first step:** one second after Play is pressed, not at once, so every stop gets the same second.
+- **A22-D8, no speed control:** none existed, and none was added (not asked for).
+
+### Open for the maintainer
+
+- **Q-A22-1, tilt a 2D case into 3D:** not built, as instructed. Options: (a) none; (b) a toggle in the tool row that
+  switches the 2D case to the perspective camera, the 3D controls and back. Recommended: (a) until a use is named.
+- **Q-A22-2, Alt and the left button on Windows:** Windows may move the focus to the menu bar when Alt is let go after
+  a drag, as it does for Alt pressed alone. The e2e tests send their input through the DevTools protocol, which never
+  reaches the menu bar, so they cannot show it. If it happens on the maintainer's machine, options: (a) the renderer
+  takes the Alt keyup while a drag is on; (b) a second orbit binding (for example Shift and the right button).
+- **Q-A22-3, a Play speed control:** (a) none (as now); (b) a choice of 0.5, 1, 2 and 5 snapshots a second beside Play
+  (it would cost chrome words in the workspace's budget).
+
+### DESIGN.md (not edited; the maintainer's approval first)
+
+- Field view: "a Reset view button appears in the top right corner" would read "a Reset view icon button (the full
+  reset: orientation, the whole domain, the pivot) appears in the top right corner". A sentence on the camera's inputs
+  (the table above) and the 2D case (orthographic, face on, pan and zoom only) would be added there. Nothing in
+  DESIGN.md describes Play's pace.
+
+### Verification (2026-11-17, on camera over main 8e330d44, Windows 11, RCFD_TEST_HEADLESS=1)
+
+- The engine was built in this worktree (`cargo build --release -p rcfd-cli -p rcfd-runner -p rcfd-mcp` and the
+  `f447_bench` example, its own `target/`). No Rust file changed.
+- `npm ci`, `npm run typecheck` clean; `npm run build && npm run package:dir` exit 0.
+- Unit: `tests/unit/field-camera.spec.ts` 14 new tests (look, fly, orbit about a pivot with no pole flip, the arrow
+  keys, dolly toward a point, pan, face on, frame, reset, the 2D orthographic case along each axis, the data attributes,
+  Play's pace). The whole unit project: 526 passed, 2 failed. Both failures are in `tests/unit/history.spec.ts`
+  (`mesh.refine` has no inverse words; `src/main/data/derive.ts` removes a file). They concern files this change does
+  not touch, and are left as found. `commands-shortcuts.spec.ts` was restated: the field view's keys are the
+  `key()` cases plus the fly keys.
+- e2e: field (16, of which 7 new or restated for the camera), f837 (14), f836 (5), compare (7), workspace (6, one
+  new: the 2D cavity orthographic, pan and zoom, Face on and Reset view, Play's stops 1 s apart), field-derived (10):
+  58 passed. a11y, word-budget, idle-frames and commands: 36 passed; every surface's word count is unchanged and at its
+  budget, so no budget was raised and none is too tight for this change. Tests that assumed OrbitControls (a plain
+  left drag orbited) now drag with the right button; the pixel checks (the reset restores every pixel) are kept.
+- P8 smoke (`scripts/measure-field.mjs --smoke`): 1e6 triangles orbiting, vertical sync p99 4.30 ms (met). Without a
+  rate limit it ran at 55.4 per s, as recorded before (54.4, "see below" in Addendum F-808). `scripts/measure-large.mjs`
+  now orbits with Alt and the left button. It was not run (a heavy record).
+- Screenshots: test-results-visual/f808 (camera-after-fly, camera-after-orbit, camera-face-on-3d), f810
+  (04a-2d-panned-zoomed), f815 (01b-side-by-side-one-view-moved), f836 (case-editor-preview, -panned), f837
+  (09-face-on-scale-bar).

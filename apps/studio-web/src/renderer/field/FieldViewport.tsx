@@ -555,6 +555,8 @@ export function FieldViewport({
     else readAt(e.clientX, e.clientY);
   };
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    // a chord with Ctrl, Cmd or Alt is someone else's (Ctrl+O opens a folder, Ctrl+0 is the actual size)
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (!api.current?.key(e.key)) return;
     e.preventDefault();
     const pick = api.current.pickCentre();
@@ -614,9 +616,8 @@ export function FieldViewport({
     return [`Saved ${r.result.path} (${r.result.width} by ${r.result.height} pixels).`];
   };
   const twoD = layers?.twoD === true;
-  const faceOn = () => {
-    if (layers) api.current?.faceOn(layers.thin);
-  };
+  // Addendum 22: Face on only turns the view (the centre and the zoom stay); Reset view is the full reset
+  const faceOn = () => api.current?.faceOn();
   const NOTHING = 'No field is drawn yet: open a run in the workspace and wait for its picture.';
   useCommandHandlers({
     'field.save_png': { unavailable: () => (shown ? null : NOTHING), run: savePng },
@@ -624,10 +625,8 @@ export function FieldViewport({
       unavailable: () => (!shown ? NOTHING : ranged ? null : 'In compare mode both views share one range; leave compare mode first.'),
       run: (args) => chooseRange((['snapshot', 'run', 'fixed'] as const).find((m) => m === args['mode']) ?? 'snapshot'),
     },
-    'field.face_on': {
-      unavailable: () => (!shown || !layers ? NOTHING : twoD ? null : 'The case is not 2D (one cell layer): there is no face to look at straight on.'),
-      run: faceOn,
-    },
+    'field.face_on': { unavailable: () => (shown ? null : NOTHING), run: faceOn },
+    'field.reset_view': { unavailable: () => (shown ? null : NOTHING), run: reset },
   });
   const outside =
     ranged && rangeMode === 'fixed' && shown && !('problem' in fixed)
@@ -680,7 +679,14 @@ export function FieldViewport({
             <IconToggle icon="range-fixed" label="Fixed colour range" isSelected={rangeMode === 'fixed'} onChange={() => chooseRange('fixed')} isDisabled={!shown} />
           </div>
         )}
-        {twoD && layers && <IconButton variant="ghost" icon="face-on" label={`View face on (along ${AXIS[layers.thin]})`} onPress={faceOn} isDisabled={!shown} className="fv-face-on" />}
+        <IconButton
+          variant="ghost"
+          icon="face-on"
+          label={twoD && layers ? `View face on (along ${AXIS[layers.thin]})` : 'View face on (the nearest axis)'}
+          onPress={faceOn}
+          isDisabled={!shown}
+          className="fv-face-on"
+        />
         <IconButton variant="ghost" icon="image" label="Save the view as PNG…" onPress={() => void savePng().catch(() => undefined)} isDisabled={!shown} className="fv-save-png" />
         {runRangeError && (
           <span className="fv-note fv-note--error" role="alert" data-words="exception">
@@ -704,7 +710,9 @@ export function FieldViewport({
         className="fv-frame"
         role="application"
         aria-roledescription="field view"
-        aria-label={`${quantity} on the boundary surface. Arrow keys orbit, plus and minus zoom, Home resets the view; the value at the centre is read out.`}
+        aria-label={`${quantity} on the boundary surface. ${
+          twoD ? 'Arrow keys pan' : 'Arrow keys orbit'
+        }, plus and minus zoom, F frames the domain, O turns the view face on, Home resets the view; the value at the centre is read out.`}
         tabIndex={shown ? 0 : -1}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -742,6 +750,7 @@ export function FieldViewport({
           onPictureDrawn={setPictureDrawn}
           prepared={opened?.prepared ?? null}
           scalars={shown?.scalars ?? null}
+          thin={twoD && layers ? layers.thin : null}
         />
         {(cut || isoOn || rake) && layers && shown && (
           <div className="fv-panels">
@@ -772,11 +781,7 @@ export function FieldViewport({
           </div>
         )}
         <WorkProgress scope={tagBase} />
-        {moved && shown && (
-          <Button className="fv-reset" onPress={reset}>
-            Reset view
-          </Button>
-        )}
+        {moved && shown && <IconButton icon="reset-view" label="Reset view" onPress={reset} className="fv-reset" />}
         {hover?.by === 'keyboard' && <span className="fv-crosshair" aria-hidden="true" />}
         {/* F-832: a load's progress is WorkProgress's (above), shown after PROGRESS_AFTER_MS; this box is for errors */}
         {phase.kind === 'error' && (

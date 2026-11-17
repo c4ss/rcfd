@@ -12,6 +12,10 @@
 //   the stated tolerance of rcfd-render's colour; the legend bar's pixels are the table;
 // - the hover readout equals the stored value (bit for bit, and its shortest text);
 // - the mesh grid toggle (keyboard), reset view (pointer and keyboard), keyboard orbit with the readout at the centre;
+// - ADR 0801 Addendum 22, the camera (Unity's scene view), read through the canvas's data-camera-* attributes: the right
+//   button looks about the eye and flies with W A S D, the middle button pans, Alt and the left button orbit about the
+//   point under the cursor, the wheel dollies toward it, a double-click sets the pivot there, F frames, O turns face on
+//   (zoom and centre kept), Home resets; the plain left button moves nothing (it is the readout's);
 // - screenshots at 1440 x 900 in test-results-visual/f808/ for the maintainer's view-and-report.
 //
 // Needs `f447_bench` (tests/support/f447.ts); without it these tests are skipped and say why. Nothing is timed here.
@@ -285,18 +289,66 @@ test('the mesh grid: a keyboard toggle; its lines are the boundary faces’ edge
   expect(await frameDiff(off, before)).toBe(0);
 });
 
-test('reset view: a drag moves the view and shows Reset view; pressing it from the keyboard restores every pixel', async () => {
+/** ADR 0801 Addendum 22: the camera's state, from the canvas's data attributes. */
+interface Cam {
+  mode: string;
+  eye: number[];
+  forward: number[];
+  up: number[];
+  pivot: number[];
+  zoom: number;
+  moved: boolean;
+}
+async function camera(): Promise<Cam> {
+  // one frame after the last input, so the attributes are the ones of the picture
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(done)));
+  return page.locator('.fv-frame canvas').evaluate((c) => {
+    const d = (c as HTMLElement).dataset;
+    const v = (s?: string) => (s ?? '').split(' ').map(Number);
+    return { mode: d['camera'] ?? '', eye: v(d['cameraEye']), forward: v(d['cameraForward']), up: v(d['cameraUp']), pivot: v(d['cameraPivot']), zoom: Number(d['cameraZoom']), moved: d['cameraMoved'] === 'true' };
+  });
+}
+const vsub = (a: number[], b: number[]) => a.map((x, i) => x - b[i]!);
+const vdot = (a: number[], b: number[]) => a.reduce((s, x, i) => s + x * b[i]!, 0);
+const vlen = (a: number[]) => Math.hypot(...a);
+/** Equal to the attributes' 6 significant digits (relative to the domain's size, about 1). */
+function near(a: number[], b: number[], eps = 2e-4): void {
+  expect(vlen(vsub(a, b)), `${a} vs ${b}`).toBeLessThan(eps * Math.max(1, vlen(b)));
+}
+/** Reset view from the keyboard (Home in the focused view). */
+async function home(): Promise<Cam> {
+  await page.mouse.move(10, 10);
+  await page.locator('.fv-frame').focus();
+  await page.keyboard.press('Home');
+  const c = await camera();
+  expect(c.moved).toBe(false);
+  return c;
+}
+/** The point of the surface under (x, y), as the readout names it. */
+async function pointAt(x: number, y: number): Promise<number[]> {
+  await page.mouse.move(x, y);
+  const out = page.locator('.fv-readout-value');
+  await expect(page.locator('.fv-readout')).toHaveAttribute('data-pointer', `${x},${y}`);
+  await expect(out).toHaveCount(1);
+  return ((await out.getAttribute('data-point')) ?? '').split(' ').map(Number);
+}
+
+test('reset view: a right-button drag moves the view and shows Reset view; pressing it from the keyboard restores every pixel', async () => {
   await page.mouse.move(10, 10);
   const before = await shot();
+  const c0 = await camera();
+  expect(c0.mode).toBe('perspective');
+  expect(c0.moved).toBe(false);
   const box = await frameBox();
   const cx = box.x + box.width / 2;
   const cy = box.y + box.height / 2;
   await page.mouse.move(cx, cy);
-  await page.mouse.down();
+  await page.mouse.down({ button: 'right' });
   await page.mouse.move(cx + 140, cy + 40, { steps: 8 });
-  await page.mouse.up();
+  await page.mouse.up({ button: 'right' });
   const reset = page.getByRole('button', { name: 'Reset view' });
   await expect(reset).toBeVisible();
+  expect((await camera()).moved).toBe(true);
   await page.mouse.move(10, 10);
   await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
   const moved = await shot();
@@ -307,9 +359,10 @@ test('reset view: a drag moves the view and shows Reset view; pressing it from t
   await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
   const after = await shot();
   expect(await frameDiff(after, before)).toBe(0);
+  expect(await camera()).toEqual(c0);
 });
 
-test('F-819b: no readout is taken while a button is held (an orbit); at the release it is the stored value under the cursor', async () => {
+test('F-819b: no readout is taken while a button is held (a look); at the release it is the stored value under the cursor', async () => {
   const box = await frameBox();
   const cx = Math.round(box.x + box.width / 2);
   const cy = Math.round(box.y + box.height / 2);
@@ -318,14 +371,14 @@ test('F-819b: no readout is taken while a button is held (an orbit); at the rele
   const h = await hoverAt(cx, cy);
   expect(h).not.toBeNull();
   await expect(where).toHaveAttribute('data-pointer', `${cx},${cy}`);
-  await page.mouse.down();
+  await page.mouse.down({ button: 'right' });
   await page.mouse.move(cx + 30, cy + 10, { steps: 6 });
   await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
-  // the view orbited, and nothing was read out on the way: no value, and the readout's point is still the press's
+  // the view turned, and nothing was read out on the way: no value, and the readout's point is still the press's
   await expect(page.getByRole('button', { name: 'Reset view' })).toBeVisible();
   await expect(readout).toHaveCount(0);
   await expect(where).toHaveAttribute('data-pointer', `${cx},${cy}`);
-  await page.mouse.up();
+  await page.mouse.up({ button: 'right' });
   await expect(where).toHaveAttribute('data-pointer', `${cx + 30},${cy + 10}`);
   await expect(readout).toHaveCount(1);
   const cell = Number(await readout.getAttribute('data-cell'));
@@ -345,15 +398,193 @@ test('keyboard: the view takes focus, arrow keys orbit, the readout shows the st
   await expect(frame).toBeFocused();
   expect(await frame.evaluate((el) => el.matches(':focus-visible'))).toBe(true);
   await expect(frame).toHaveAttribute('aria-label', /Arrow keys orbit/);
+  const c0 = await camera();
   await page.keyboard.press('ArrowLeft');
   await page.keyboard.press('ArrowUp');
   await expect(page.getByRole('button', { name: 'Reset view' })).toBeVisible();
+  // an orbit about the pivot: it stays, and so does the eye's distance to it
+  const c = await camera();
+  near(c.pivot, c0.pivot);
+  expect(vlen(vsub(c.eye, c.pivot))).toBeCloseTo(vlen(vsub(c0.eye, c0.pivot)), 3);
   await expect(page.locator('.fv-readout-label')).toHaveText(/^p at the centre/);
   const out = page.locator('.fv-readout-value');
   const cell = Number(await out.getAttribute('data-cell'));
   expect(await out.textContent()).toBe(f32Text(shown['tiny']!.values[cell]!));
+  // a chord with Ctrl is not the view's (Ctrl+0 is the window's actual size)
+  await page.keyboard.press('Control+0');
+  await expect(page.getByRole('button', { name: 'Reset view' })).toBeVisible();
   await page.keyboard.press('Home');
   await expect(page.getByRole('button', { name: 'Reset view' })).toHaveCount(0);
+});
+
+test('the plain left button moves nothing: a left drag keeps the camera, and the readout is taken where it is let go', async () => {
+  const c0 = await home();
+  const box = await frameBox();
+  const cx = Math.round(box.x + box.width / 2);
+  const cy = Math.round(box.y + box.height / 2);
+  await page.mouse.move(cx, cy);
+  await page.mouse.down();
+  await page.mouse.move(cx + 40, cy + 20, { steps: 6 });
+  await page.mouse.up();
+  expect(await camera()).toEqual(c0);
+  await expect(page.locator('.fv-readout')).toHaveAttribute('data-pointer', `${cx + 40},${cy + 20}`);
+  await expect(page.getByRole('button', { name: 'Reset view' })).toHaveCount(0);
+});
+
+test('Addendum 22: right-drag looks about the eye; W A S D fly while it is held, Shift faster; no pole lock', async () => {
+  const c0 = await home();
+  const box = await frameBox();
+  const cx = Math.round(box.x + box.width / 2);
+  const cy = Math.round(box.y + box.height / 2);
+  await page.mouse.move(cx, cy);
+  await page.mouse.down({ button: 'right' });
+  await page.mouse.move(cx + 60, cy, { steps: 4 });
+  let c = await camera();
+  // the eye stays, the view turned to the right (the new forward leans toward the old right)
+  near(c.eye, c0.eye);
+  const right0 = [c0.forward[1]! * c0.up[2]! - c0.forward[2]! * c0.up[1]!, c0.forward[2]! * c0.up[0]! - c0.forward[0]! * c0.up[2]!, c0.forward[0]! * c0.up[1]! - c0.forward[1]! * c0.up[0]!];
+  expect(vdot(c.forward, right0)).toBeGreaterThan(0.1);
+  // fly forward with W, held 400 ms (the canvas takes the fly keys while the button is held)
+  const f = c.forward;
+  const e0 = c.eye;
+  await page.keyboard.down('w');
+  await page.waitForTimeout(400);
+  await page.keyboard.up('w');
+  c = await camera();
+  const d = vsub(c.eye, e0);
+  expect(vdot(d, f)).toBeGreaterThan(0.9 * vlen(d)); // along the view
+  const slow = vlen(d);
+  expect(slow).toBeGreaterThan(0);
+  await page.keyboard.down('Shift');
+  await page.keyboard.down('S');
+  await page.waitForTimeout(400);
+  await page.keyboard.up('S');
+  await page.keyboard.up('Shift');
+  const c2 = await camera();
+  const back = vsub(c2.eye, c.eye);
+  expect(vdot(back, f)).toBeLessThan(0);
+  expect(vlen(back), 'Shift flies faster').toBeGreaterThan(1.5 * slow);
+  // a long look down goes on past straight down (no clamp at the pole): the view is upside down then
+  await page.mouse.move(cx + 60, cy + 600, { steps: 20 });
+  const c3 = await camera();
+  expect(c3.up[2]).toBeLessThan(0);
+  await page.mouse.up({ button: 'right' });
+  expect(c3.moved).toBe(true);
+  // the keys fly only while the button is held: W now does nothing to the camera
+  await page.locator('.fv-frame').focus();
+  await page.keyboard.press('w');
+  expect((await camera()).eye).toEqual(c3.eye);
+  await page.mouse.move(10, 10);
+  await shot('camera-after-fly');
+});
+
+test('Addendum 22: middle-drag pans (the view direction kept); Alt and the left button orbit about the point under the cursor', async () => {
+  let c0 = await home();
+  const box = await frameBox();
+  const cx = Math.round(box.x + box.width / 2);
+  const cy = Math.round(box.y + box.height / 2);
+  await page.mouse.move(cx, cy);
+  await page.mouse.down({ button: 'middle' });
+  await page.mouse.move(cx + 50, cy - 30, { steps: 5 });
+  await page.mouse.up({ button: 'middle' });
+  let c = await camera();
+  near(c.forward, c0.forward);
+  near(vsub(c.eye, c0.eye), vsub(c.pivot, c0.pivot));
+  expect(vlen(vsub(c.eye, c0.eye))).toBeGreaterThan(0.05);
+  expect(c.moved).toBe(true);
+
+  c0 = await home();
+  // a point of the surface off the centre
+  const x = Math.round(box.x + box.width * 0.42);
+  const y = Math.round(box.y + box.height * 0.55);
+  const p = await pointAt(x, y);
+  await page.keyboard.down('Alt');
+  await page.mouse.down();
+  await page.mouse.move(x + 80, y + 30, { steps: 6 });
+  await page.mouse.up();
+  await page.keyboard.up('Alt');
+  c = await camera();
+  near(c.pivot, p);
+  // the eye kept its distance to that point
+  expect(Math.abs(vlen(vsub(c.eye, p)) - vlen(vsub(c0.eye, p)))).toBeLessThan(1e-3 * vlen(vsub(c0.eye, p)));
+  expect(vdot(c.forward, c0.forward)).toBeLessThan(0.999);
+  await page.mouse.move(10, 10);
+  await shot('camera-after-orbit');
+});
+
+test('Addendum 22: the wheel dollies toward the point under the cursor; a double-click puts the pivot there', async () => {
+  let c0 = await home();
+  const box = await frameBox();
+  const x = Math.round(box.x + box.width * 0.45);
+  const y = Math.round(box.y + box.height * 0.6);
+  const p = await pointAt(x, y);
+  await page.mouse.wheel(0, -300);
+  let c = await camera();
+  // toward the point: the eye on the line from the point to the old eye, closer by the wheel's factor
+  const was = vsub(c0.eye, p);
+  const now = vsub(c.eye, p);
+  expect(vlen(now) / vlen(was)).toBeCloseTo(Math.pow(1.0015, -300), 2);
+  expect(vdot(now, was) / (vlen(now) * vlen(was))).toBeGreaterThan(0.99999);
+  near(c.forward, c0.forward);
+  // the same point is still under the cursor (it stayed where it was on screen)
+  await page.mouse.move(x + 1, y);
+  const q = await pointAt(x, y);
+  expect(vlen(vsub(q, p))).toBeLessThan(0.05);
+  // and out again
+  await page.mouse.wheel(0, 300);
+  near((await camera()).eye, c0.eye, 1e-3);
+
+  c0 = await home();
+  await page.mouse.dblclick(x, y);
+  c = await camera();
+  near(c.pivot, p);
+  near(c.eye, c0.eye);
+  expect(c.moved, 'a new pivot does not move the view').toBe(false);
+  // the next orbit turns about it
+  await page.locator('.fv-frame').focus();
+  await page.keyboard.press('ArrowLeft');
+  c = await camera();
+  near(c.pivot, p);
+  expect(Math.abs(vlen(vsub(c.eye, p)) - vlen(vsub(c0.eye, p)))).toBeLessThan(1e-3);
+});
+
+test('Addendum 22: F frames the domain (the orientation kept); O turns face on, keeping the zoom and the centre; Home resets all', async () => {
+  const c0 = await home();
+  const frame = page.locator('.fv-frame');
+  await frame.focus();
+  for (const k of ['ArrowLeft', 'ArrowLeft', 'ArrowUp', '+', '+']) await page.keyboard.press(k);
+  const box = await frameBox();
+  await page.mouse.move(Math.round(box.x + box.width * 0.4), Math.round(box.y + box.height * 0.5));
+  await page.mouse.down({ button: 'middle' });
+  await page.mouse.move(Math.round(box.x + box.width * 0.45), Math.round(box.y + box.height * 0.52), { steps: 3 });
+  await page.mouse.up({ button: 'middle' });
+  await frame.focus();
+  let c = await camera();
+  const turned = c.forward;
+  await page.keyboard.press('f');
+  c = await camera();
+  near(c.forward, turned);
+  near(c.pivot, c0.pivot);
+  expect(c.zoom).toBeCloseTo(c0.zoom, 3);
+  // face on: the nearest axis, the centre of the view and its distance kept
+  for (const k of ['ArrowLeft', '+']) await page.keyboard.press(k);
+  const b = await camera();
+  const centre = b.eye.map((e, i) => e + b.forward[i]! * b.zoom);
+  await page.keyboard.press('o');
+  c = await camera();
+  expect(Math.max(...c.forward.map(Math.abs))).toBe(1);
+  expect(c.forward.filter((v) => v === 0)).toHaveLength(2);
+  expect(c.zoom).toBeCloseTo(b.zoom, 4);
+  near(c.eye.map((e, i) => e + c.forward[i]! * c.zoom), centre);
+  // the button does the same, from its name
+  await page.getByRole('button', { name: 'View face on (the nearest axis)' }).click();
+  near((await camera()).eye, c.eye);
+  await page.mouse.move(10, 10);
+  await shot('camera-face-on-3d');
+  // Home: everything back
+  await frame.focus();
+  await page.keyboard.press('Home');
+  expect(await camera()).toEqual(c0);
 });
 
 test('the 1e5-cell box: the hover readout equals the stored value at every point of a grid, pixels too; screenshots', async () => {

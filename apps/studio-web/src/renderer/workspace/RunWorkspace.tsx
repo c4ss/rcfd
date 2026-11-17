@@ -18,7 +18,7 @@ import { FieldViewport } from '../field/FieldViewport.js';
 import { caseName, runRows, shownState, unknownWord, type RunRow } from '../runs/model.js';
 import { EmptyMark, Quiet, Select, StateMark, StatePictogram } from '../ui/index.js';
 import { runSeries, runValuesAt } from './door.js';
-import { bandOf, defaultField, lastStep, liveRun, positionsOf, sampleAt, sharedAxis, storePath, type Position } from './model.js';
+import { bandOf, defaultField, lastStep, liveRun, playWait, positionsOf, sampleAt, sharedAxis, storePath, type Position } from './model.js';
 import { TimePanel, type CursorValue } from './TimePanel.js';
 import { CompareControls, CompareFields, CompareMetrics, useComparison, type CompareState } from './Compare.js';
 import { Provenance, countValue, counterValue, statusValue } from '../provenance/index.js';
@@ -234,8 +234,9 @@ export default function RunWorkspace({ view, selected, onSelect, compareRequest 
     [row, last],
   );
 
-  // Play: one stop after another, each once the field of the one before is drawn (every 150 ms for a run without fields);
-  // under reduced motion (F-816, G8) no faster than one stop every REDUCED_PLAY_MS
+  // Play (ADR 0801 Addendum 22): one stored snapshot per wall-clock second (PLAY_SNAPSHOT_MS from the move to it, and
+  // never before its field is drawn); every PLAY_SAMPLE_MS for a run without fields; under reduced motion (F-816, G8) no
+  // faster than one stop every REDUCED_PLAY_MS
   const drawnAt = useRef<{ run: string | undefined; snapshot: number } | null>(null);
   const [drawTick, setDrawTick] = useState(0);
   const snap = position?.snapshot ?? null;
@@ -248,8 +249,7 @@ export default function RunWorkspace({ view, selected, onSelect, compareRequest 
       return;
     }
     if (snap !== null && !(drawnAt.current?.run === row?.id && drawnAt.current?.snapshot === snap)) return; // its draw re-runs this
-    const pace = snap === null ? 150 : 0;
-    const wait = reduceMotion ? Math.max(pace, REDUCED_PLAY_MS - (performance.now() - steppedAt.current)) : pace;
+    const wait = playWait(snap !== null, performance.now() - steppedAt.current, reduceMotion, REDUCED_PLAY_MS);
     const t = setTimeout(() => {
       steppedAt.current = performance.now();
       moveTo(index + 1, 'play');
@@ -419,7 +419,11 @@ export default function RunWorkspace({ view, selected, onSelect, compareRequest 
             if (on) moveTo(last, 'play');
           }}
           playing={playing}
-          onPlay={setPlaying}
+          onPlay={(on) => {
+            // the stop shown when Play is pressed stays its whole second too
+            if (on) steppedAt.current = performance.now();
+            setPlaying(on);
+          }}
           compare={otherRow ? { row: otherRow, series: otherSeries.series, version: otherSeries.version, cursor: otherCursor } : null}
         />
       )}

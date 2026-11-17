@@ -67,6 +67,23 @@ export function sampleAt(x: readonly number[], y: readonly number[], step: numbe
   return lo < x.length && x[lo] === step ? y[lo]! : null;
 }
 
+/**
+ * Play's pace (ADR 0801 Addendum 22, the maintainer's choice of 2026-11-17): one stored snapshot per wall-clock second.
+ * The alternative offered was one second of simulated time per second. A run without fields steps through its residual
+ * samples every PLAY_SAMPLE_MS, as before.
+ */
+export const PLAY_SNAPSHOT_MS = 1000;
+export const PLAY_SAMPLE_MS = 150;
+
+/**
+ * How long Play waits before the next stop, `sinceMs` after it moved to the one shown (whose field is drawn): a snapshot
+ * stays PLAY_SNAPSHOT_MS, a sample PLAY_SAMPLE_MS, and under reduced motion no stop is shorter than `reducedMs`.
+ */
+export function playWait(snapshot: boolean, sinceMs: number, reduceMotion: boolean, reducedMs: number): number {
+  const pace = snapshot ? PLAY_SNAPSHOT_MS : PLAY_SAMPLE_MS;
+  return Math.max(0, Math.max(pace, reduceMotion ? reducedMs : 0) - Math.max(0, sinceMs));
+}
+
 /** The last step a run reached, as the runner recorded it (status.json), and its stored or sampled steps. */
 export function lastStep(row: Pick<RunRow, 'step'>, positions: readonly Position[]): number {
   const p = positions.length > 0 ? positions[positions.length - 1]!.step : 0;
