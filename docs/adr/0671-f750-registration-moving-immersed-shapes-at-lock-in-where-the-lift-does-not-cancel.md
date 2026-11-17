@@ -318,3 +318,79 @@ The rule of D2:
 
 **No candidate qualifies.** By D2 no main record is run and the decision is partial; `SELECTED` stays `None` in the test file and
 `f750_lockin_record` stays ignored and not run. Nothing else of this registration changes.
+
+## Addendum 1: results (2026-11-17)
+
+Release builds on Windows. Registration fef1f787; amendment T3 e973910f; the test file 5616fa14, on which the fast tests and the
+scan record were run; amendment 1 7e6ae616. No limit was changed. Logs in `w49i-work/f750-scratch/logs`: `fast_tests_run1.log`
+(the first run, T3 failed), `fast_tests.log` (after amendment T3), `scan_record.log`, `mutations*.log`, `clippy.log`; the twelve
+force series in `w49i-work/f750-scratch/series`. Deviation, disclosed: a scripted edit of the test file after amendment T3
+failed to apply and the unchanged file's fast tests ran a second time (same numbers, T3 failed again at 1.29e-3); the corrected
+file was then run once. No library line changed (no solver file touched), so `baseline_hashes` was not run: the default bits are
+unchanged by construction.
+
+### Results
+
+| Id | Check | Limit | Measured | Met |
+| --- | --- | --- | --- | --- |
+| SS1, K1 | twelve scan runs: no stop; series written and read back bit for bit | as stated | none stopped; 12 of 12 bit for bit, hashes in amendment 1 | met |
+| D2 | a candidate qualifies | at least one | none (amendment 1) | **no** |
+| G1, F0, F1, L1, L2, L2I, X1, J1, A1 to A5, R1, N1b to N1d | the main record | as registered | not run (no point selected, D2) | not run |
+| T1 | meshes | as ADR 0657 T1 | within 1.8e-15; 64, 32, 16 inflow faces; smallest volumes 1.14e-4, 4.57e-4, 1.84e-3 at every pose | met |
+| T2 | specifications, measures | 1e-12; 1e-9 deg; 1e-3; 1e-6; 1e-14 | 6.6e-15, 1.6e-14; 7.4e-13 deg; 7.8e-16; 3.5e-16; 0 | met |
+| T3 | solid cells within `1e-3 A omega` | 1e-3 | **1.29e-3 at C3** (6.4e-4 at C1, C2) | **missed** (known-miss record) |
+| T3b | solid cells within `1e-3 U` (amendment T3) | 1e-3 | 2.8e-4 to 3.8e-4 at C1 to C4, with and without the velocity | met (after an amendment) |
+| T4 | BF smoke at C1, C3 | 1e-6; 1e-12; bits | continuity 8.0e-11, 6.0e-11; centre to 1e-17; far field unchanged | met |
+| T5 | start at the initial pose, A 0.5 and 0.25 | bits; 1e-12 | posed grid bit for bit, centres (-9e-18, -0.5) and (-9e-18, -0.25) | met |
+| T6 | fixed set-ups | bits; 1e-3 | perturbation bit for bit; solid cells 3.6e-4 | met |
+| T7 | series round trip | bits | 503 steps bit for bit, hash equal | met |
+| T8 | selection rule | exact | base, tie, S1, S2 (and just above), S3, S4, none as expected | met |
+
+Mutations, each run once on a scratch copy against the fast tests: **eleven of eleven caught.** M1 by T5; M2, M3, M4, M5 by T2;
+M6 by T7; M7, M8, M9 by T8; M10 (library) by T3b; M11 by T2, T3b and T5.
+
+`cargo fmt -p rcfd-fv --check` clean; `cargo clippy -p rcfd-fv --all-targets -- -D warnings` clean. Tests run (release): only
+`immersed_lockin_f750` (the fast tests and the scan record).
+
+### Diagnosis
+
+1. **A/D 0.5 above the natural frequency is not a well-conditioned locked point in this set-up.** The coarse reference's lift
+   harmonic jumps from 0.33 at f 0.18 to 1.11 at f 0.19 (`C_a` 0.62 to 1.97, phase +19.9 to -4.8 deg): the wake changes its
+   response between `r` 1.09 and 1.15, and from f 0.19 the lift is no longer periodic with the forcing within 0.01 (L1 1.9e-2 and
+   3.4e-2; per-period drag varying by 2 per cent). At f 0.18 the run itself is locked (L1 2.3e-3) but sits next to that change.
+2. **Where the added mass dominates, the negative control's phase is close to the reference's.** The coarse N1 has the phase
+   +28.7 deg at f 0.18 and 0.19 (its lift mostly in phase with the displacement, `C_a` 1.3 to 1.4), against +19.9 deg for the
+   reference at f 0.18: 8.9 deg, not three base limits. This is the concern of arithmetic 3, now measured: at such points the
+   phase clause of c9 cannot discriminate, although the amplitude clause would (N1 2.5 times the reference at f 0.18).
+3. **A/D 0.25 is locked everywhere scanned but its harmonic is small below the natural frequency.** 0.029, 0.052, 0.092, 0.154
+   (0.16 to 0.87 of S731) at f 0.13 to 0.16, phase -178.5, +148.8, +122.0, +97.0 deg: the added-mass and vortex parts cancel near
+   f 0.13 and the total grows steeply toward the natural frequency (40 to 80 per cent per 0.01 in f, 25 to 33 deg). Halving the
+   amplitude did not remove the cancellation near `r = 0.85` (C3: 0.29 of S731), it moved it. The best point in the data is f
+   0.16 (r 0.97, 0.87 of S731, locked to 3e-8), which was a neighbour, not a candidate, and changes by 40 per cent to f 0.15.
+4. **The registered conditioning step (0.01 in f) is wide** against the sensitivity found in both families; the main bracket is
+   +-3 per cent (0.005 at f 0.16).
+
+### Decision by the registered rule
+
+No candidate qualified at the scan, so no main record was run; T3 was met only after amendment T3. By the rule: **partial**. Met:
+c0 (every limit registered), c8 (the series kept: twelve of twelve written and read back, hashes recorded), the fast path (T1, T2,
+T3b, T4 to T8), eleven of eleven mutations, no library change. Not run: c1 to c7 and c9 at a compared point.
+
+### Remaining questions
+
+- **Q1 (open, from the registration).** A case-file key for moving immersed bodies. Open (schema golden).
+- **Q4. The next forcing point.** (a) a follow-up scan at A/D 0.25 at and just above the natural frequency (f 0.16, 0.165, 0.17,
+  0.175, 0.18), the conditioning measured over the main bracket (+-3 per cent) rather than 0.01, reusing this scan's f 0.15 and
+  0.16 runs as data, then the main record; (b) A/D 0.5 at f 0.17 to 0.18 with only the amplitude clause of the negative control
+  (changes the acceptance); (c) accept F-731 and this scan as the lock-in evidence. Recommendation (a).
+- **Q5. The phase clause of the negative control.** (a) keep it, and choose points where the reference phase is far from the
+  control's (the S4 screen); (b) state c9 on the amplitude and the complex harmonic only where the reference lift is in phase with
+  the displacement. Recommendation (a), as written into the proposed follow-up.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> Moving immersed shapes at lock-in where the lift does not cancel. Follow-up of F-731 (ADR 0657). PARTIAL (ADR 0671, 2026-11-12): test-only, no library change (default bits unchanged by construction). A registered body-fitted scan chose the forcing point: 128 x 64 O-grid runs at A/D 0.5 (f D/U 0.17 to 0.20) and A/D 0.25 (0.13 to 0.16), dt = T/700, 20 periods, with the negative control (body velocity left out of the forcing) on a D/20 immersed mesh at the four candidates, and a mechanical rule (locked within 0.01 with both neighbours, first lift harmonic at least 0.75 of the F-731 fixed lift, amplitude and phase changes to the neighbours within 25 per cent and 30 degrees, the control at least 24 degrees and 24 per cent off). No candidate qualified, so the compared immersed and body-fitted runs were not made: at A/D 0.5 the lift jumps from 0.33 to 1.11 between f 0.18 and 0.19 and is not locked within 0.01 from 0.19, and the control's phase (+28.7 degrees) lies only 8.9 degrees from the reference's at 0.18, where the added mass dominates; at A/D 0.25 every run is locked but the harmonic is 0.029 to 0.154 (0.16 to 0.87 of the fixed lift) and grows by 40 to 80 per cent per 0.01 of frequency, the cancellation moved rather than removed. Every force series is written to a file and read back bit for bit, hashes recorded. Lift limits are registered relative and against a fixed scale (fixed-cylinder lift plus the added-mass force amplitude) for the main record, which stays ignored and not run. Eight fast tests (one corrected by an amendment, the first kept as a known-miss record), eleven of eleven mutations caught. Not included: the comparison itself, other amplitudes, a map of the lock-in range, a case-file key (open, F-307 schema golden).
+
+> Follow-up proposed: Moving immersed shapes at lock-in near the natural frequency at the smaller amplitude. Deps F-750. Acceptance: Every limit not stated here is registered in the ADR before the run. A cylinder oscillating across a uniform stream at Re 100 with A/D 0.25, at a forcing point between the natural frequency and 10 per cent above it chosen by a registered body-fitted scan whose conditioning is measured over the comparison's own frequency bracket, where the first harmonic of the lift is at least half the fixed cylinder's lift amplitude in the body-fitted reference, gives the shedding locked to the forcing, the mean drag, the lift amplitude and the phase of the lift against a body-fitted moving-mesh run of this repository within registered limits that allow for the natural-frequency difference of the two discretisations, stated relative and against a fixed force scale; the force series are kept for diagnosis; a negative control with the body velocity left out of the forcing misses the lift amplitude and phase.
