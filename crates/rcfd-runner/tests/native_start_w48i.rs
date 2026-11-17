@@ -221,9 +221,7 @@ fn rs_files(dir: &Path, out: &mut Vec<PathBuf>) {
 fn n4_no_shell_in_the_start_path() {
     let crates = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().to_path_buf();
     let mut files = Vec::new();
-    for c in ["rcfd-runner"] {
-        rs_files(&crates.join(c).join("src"), &mut files);
-    }
+    rs_files(&crates.join("rcfd-runner").join("src"), &mut files);
     let mut found = Vec::new();
     for f in &files {
         for (line, text) in shell_lines(&std::fs::read_to_string(f).unwrap()) {
