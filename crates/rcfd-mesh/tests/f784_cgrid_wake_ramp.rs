@@ -524,7 +524,7 @@ fn r_construction_s_third_meshes_the_reference() {
 /// registration at the blade-line face C (45, 2) / (45, 3), layer 3 (84.688 deg on S' and S'', not a wake face), so written as an
 /// ignored record from the start and run once.
 #[test]
-#[ignore = "ADR 0702 R2-REF, predicted miss (registered): cargo test -p rcfd-mesh --release --test f784_cgrid_wake_ramp r2_ref -- --ignored --nocapture"]
+#[ignore = "ADR 0702 R2-REF, predicted miss (registered), measured 84.688 deg at the blade-line face C (45, 2) / (45, 3), layer 3 (limit 84.5): cargo test -p rcfd-mesh --release --test f784_cgrid_wake_ramp r2_ref -- --ignored --nocapture"]
 fn r2_ref_global_non_orthogonality_known_miss() {
     let m = build_cgrid_mesh_with(&reference(), &s4(), &s_third()).expect("S''' builds");
     let q = m.quality();

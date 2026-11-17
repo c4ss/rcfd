@@ -230,3 +230,104 @@ layer). The **first ramp face** is the face between C (56, 2) and C (56, 3) at l
   test file `f784_cgrid_wake_ramp.rs`) was compiled only (`--no-run`).
 - The rows of `D` are `j <= min(n_bl, n_side)` (the same set at s4, `n_bl` 2 < `n_side` 10).
 - The constants of HS'' in the test file are the base probe's values (`f784-scratch/probe.log`).
+
+## Addendum 1: results (2026-11-17)
+
+One registered run of the new test file (`f784-scratch/run1.log`, release, `cargo test -p rcfd-mesh --release --test
+f784_cgrid_wake_ramp -- --nocapture --test-threads 2`: 7 passed, 0 failed, 2 ignored, 41 s), one run of the ignored record R2-REF
+(`run_r2ref.log`, 5 s) and one run of the heavy scan record (`run_sc.log`, 54 s on three threads).
+
+| id | limit | measured | met |
+|---|---|---|---|
+| R1a | S''' builds REF, cells > 0 | 12 841 cells, construction step 5 (as predicted) | yes |
+| R1b | corner Jacobians of one sign, none zero; min volume > 0 | 100 096 of 100 096 negative, 0 zero; min volume 1.20e-13 m^3 | yes |
+| R1c | periodicity <= 1e-12 m | 1.96e-17 m | yes |
+| R2-REF | <= 84.5 deg | **84.688 deg** at the blade-line face C (45, 2) / (45, 3), layer 3 (as predicted: unchanged from S' and S'') | **no (predicted miss; ignored record `r2_ref_global_non_orthogonality_known_miss`)** |
+| R2-B2 | <= 84.5 deg | 84.218 deg (C (45, 2) / (45, 3), layer 5; as predicted) | yes |
+| R2w | wake-cell faces <= 84.5 deg | REF 84.397 (the first ramp face, layer 3; predicted about 84.40), B2 83.791 (C (56, 2) / (56, 3), layer 5; predicted about 83.81) | yes |
+| R2t | first ramp face S''' - S' <= 0.03 deg | REF +0.0074 (84.3896 -> 84.3970; predicted 0.004), B2 +0.0100 (83.5538 -> 83.5637; predicted 0.009). S'' was +0.563 / +0.918 | yes |
+| R3 | <= 4.0 | REF 2.7609, B2 2.8312 (outside the wake, unchanged) | yes |
+| R4 | <= 1000 | 525.6 / 551.7 | yes |
+| R5 | wake-stack spanwise skewness <= 1.0 | REF 0.4196, B2 0.3773, both at C (5, 1) between layers 8 and 9 (the tip cell `p` 2..3; predicted 0.3 to 0.8) | yes |
+| R6 | drift on lines p >= 3 <= 5e-6 m | REF 6.48e-7, B2 7.17e-7 m (cell 7, line 5, row 2; the S'' values) | yes |
+| R7 | nodes outside lines p = 1..3 equal in bits | 0 differ on both blades; p = 1, 2: 160 (REF) / 167 (B2) differ; p = 3: 0 differ | yes |
+| R8 | `L` REF in [6.5e-3, 7.5e-3], B2 in [7.2e-3, 8.2e-3] m | 6.968e-3 / 7.712e-3 m (predicted 6.97e-3 / 7.71e-3) | yes |
+| SC | per blade >= 9 of 12 build | 12 of 12 and 12 of 12, fold-free and periodic | yes |
+| SC0 | 24 of 24 inside the range | 24 of 24 | yes |
+| HS | S hash `0x0105a2fcca924d23` | equal | yes |
+| HS' | `0x0d257b2fcee093ca` / `0xefc53b8c413a845b` | equal | yes |
+| HS'' | `0x63011aa8288ac9c0` / `0x769e2e330b0cf295` | equal | yes |
+| HB1 | `cgrid_w35d` b1 tests | pass (whole non-ignored file: 7 passed, 15 ignored) | yes |
+| HB2 | `f726_cgrid_staggered` b2 | pass (whole non-ignored file: 7 passed, 1 ignored) | yes |
+| E1 | named tests | `f782_cgrid_wake_remap` 6 passed; `f777_cgrid_unstretched` 10 passed, 2 ignored; `f726` 7 / 1; `cgrid_w35d` 7 / 15; `fan_design_w46a` `s4_realised_default_meshes` passed; `fan01_p10_w36d` c2 passed; `f722_rom_reference_fan` 6 passed, 1 ignored | yes |
+| E2 | `--lib` 0 failed | 77 passed, 2 ignored | yes |
+| E3 | baseline_hashes | 3 passed, 1 ignored | yes |
+| NC-R2t | S'' first ramp face 84.953 / 84.472 (1e-3) | 84.95313 / 84.47189 | yes |
+| NC-R5 | S' 3.2404 / 4.0112 (1e-4) | 3.240429 / 4.011244 | yes |
+| NC-R7 | some node of p = 1, 2 differs | 160 / 167 | yes |
+| NC-R8 | S'' `wake_ramp_length` None | None on both | yes |
+
+Reported (Rep): `omega` measured from the node shifts (upper line, row 1): REF node layers 1 / 3 / 4 / 7 / 9: `p` 1: 0.0031 /
+0.0031 / 0.0063 / 0.0160 / 0.0160, `p` 2: 0.147 / 0.148 / 0.234 / 0.466 / 0.467, `p` 3: 1; B2 `p` 1: 0.0031 to 0.0157, `p` 2: 0.124
+to 0.380, `p` 3: 1 (the registered table). Thin-layer drift on line `p` = 1: REF 2.64e-5 m (S' 2.68e-5), B2 2.93e-5 (S' 2.98e-5);
+on `p` = 2: 1.53e-5 (S' 2.82e-5), 1.96e-5 (S' 3.12e-5). Scan quality (not a gate): within 84.5 / 4.0 / 1000 REF 2 of 12 (0.15 / 6,
+0.3 / 4) and B2 4 of 12 (0.15 / 4, 0.15 / 6, 0.3 / 4, 0.3 / 6); within 85 / 4.0 / 1000 REF 3 and B2 5 of 12 (S' of ADR 0696: 3
+and 0). `L` and the wake-stack spanwise skewness are the same at every scan point (0.4196 / 0.3773); the non-orthogonality grows
+with front_gap and with n_nose 9 (to 88.34 / 88.16 deg), and so does that of the wake-cell faces (to 87.80 / 87.43 deg), which the
+ramp does not set (those cells' far rows meet the seam, which follows front_gap).
+
+Also run: `cargo fmt -p rcfd-mesh --check` clean; `cargo clippy -p rcfd-mesh --all-targets -- -D warnings` clean; `cargo test -p
+rcfd-cli --release --test docs_site` passed (with this ADR and the `docs/meshing.md` paragraph).
+
+### Mutations (`f784-scratch/mut`, `mutate.py`, logs `mut_MU*.log`; each run once against the new test file, HB1 and HB2)
+
+| id | mutation | caught by |
+|---|---|---|
+| MU1 | field ignored (the S'' ramp) | R2t (0.564 / 0.918 deg), R2w on REF (84.953), NC-R7 (0 nodes differ), as predicted |
+| MU2 | `x_p = p x_1` | R5 (2.77 / 3.46), R6 (2.9e-5 / 3.2e-5 m), R7 (410 nodes outside differ), as predicted |
+| MU3 | `alpha` read as radians | R2t (0.50 / 1.23 deg), R2w (86.52 / 86.25), R2-B2, R8 (`L` 7.8e-5 / 8.6e-5 m), as predicted |
+| MU4 | linear ramp | R2t on both (0.089 / 0.126 deg), as predicted |
+| MU5 | ramp reversed | R5 (3.24 / 4.01), R6, R7, R2t, R2w, R3 on B2 (4.0112). Predicted also R1b: no fold (the build passed) |
+| MU6 | blend length 0.05 -> 0.051 chords | HS, HS' / HS'', HB1 (three hashes), HB2, also NC-R2t |
+
+Six of six caught.
+
+### Deviations
+
+- R2-REF missed as registered (predicted before the run, written as an ignored record from the start); the measured number is
+  written into its ignore text after the run, the limit unchanged.
+- MU5 did not fold the mesh (predicted "likely R1b"); it was caught by five other checks.
+- No development build; no other deviation. The predictions of `L`, `omega`, R2t, R2w and R5 held to the stated accuracy.
+
+### Not run
+
+The other ignored records of the named files; the whole `rcfd-mesh` integration suite and the workspace (the daily gate); flow
+solves on S''' meshes; other specs; a scan of `alpha`, `n_down`, `n_side`, `n_span`.
+
+### Decision by the registered rule
+
+**partial.** Every check is met except R2-REF, the predicted miss: the reference's global non-orthogonality stays 84.688 deg at
+the blade-line face C (45, 2) / (45, 3), layer 3, which no wake ramp can move (the same face and value on S' and S''). The part of
+the acceptance the ramp controls is met: the first ramp face is back within 0.01 deg of S' (REF 84.397, B2 83.564 against S''
+84.953 / 84.472), every wake-cell face is within 84.5 deg on both blades, the second blade is within 84.5 / 4.0 / 1000 overall
+(84.218 / 2.831 / 551.7), the wake-stack spanwise skewness is 0.420 / 0.377, the scan builds 24 of 24, and S, S', S'' and H are
+unchanged in bits.
+
+### Remaining questions (each with options and a recommendation)
+
+1. **The blade-line faces at 84.6 to 84.7 deg on the reference** (C (44..48, 2) / (.., 3) at layers 3 and 5: the face between the
+   first and second free cells next to the blade stack, at the thin-to-thick span transition). Options: (a) a follow-up item that
+   diagnoses and fixes them, registered on both blades; (b) relax the 84.5 clause to 85 for the reference; (c) leave it.
+   Recommendation: (a); (b) would change an acceptance the lead wrote.
+2. **A case value for S'''** needs a schema enum value and the schema golden (rule 6). Open for the maintainer, with F-778.
+3. **The scan's non-orthogonality at front_gap >= 0.6 and n_nose 9** (to 88.3 deg, wake-cell faces to 87.8 deg) is unchanged in
+   kind from ADR 0696. Recommendation: keep the documented S-family quality range front_gap <= 0.3 with n_nose <= 6
+   (`docs/meshing.md`).
+
+## For the lead: roadmap entries
+
+> Proposed status: partial
+
+> Follow-up of F-782 (ADR 0699 questions 1 and 3). ADR 0702, 2026-11-17. PARTIAL (the reference's 84.688 deg blade-line face, predicted in the registration, is outside the ramp's reach). New opt-in construction S''' = CGridOptions::camber_seam_s_wake_ramp_construction() = camber_seam_s_wake_remap + wake_ramp_from_spacing: the weight of the wake-stack remap is 1 - fade(x / L) with x the distance along the wake from the trailing edge and L = 1.5 D / tan(1 deg), D the largest shift of a wake-stack node (CGridMesh::wake_ramp_length reports L). Derived: the smooth step's slope is at most 1.5, so the ramp rotates an in-plane edge of any wake cell by at most 1 deg whatever the line spacing, and its flat start gives the shortest (first) wake cell a weight of about 0.003 instead of the 0.5 of S''. At the ADR 0118 s4 specs, L = 7.0e-3 / 7.7e-3 m; ComputerFan::rom_reference() blade 0 and the ADR 0696 second blade build with no folded cell, periodic; the first ramp face returns to within 0.01 deg of S' (84.397 / 83.564 deg against S'' 84.953 / 84.472), every wake-cell face is within 84.5 deg, the second blade is within 84.5 deg / 4.0 / 1000 overall (84.218 / 2.831 / 551.7), and the reference has skewness 2.761 and aspect 525.6 but a global 84.688 deg at the blade-line face C (45, 2) / (45, 3), layer 3 (MISSED against 84.5, unchanged from S' and S'', predicted). Wake-stack spanwise skewness 0.420 / 0.377 (within 1.0). A front_gap 0.15 to 1.0 x n_nose 4 / 6 / 9 scan builds 12 of 12 on each blade (limit 9 of 12). Locality: only the wake lines p = 1, 2 of the span layers change. camber_seam_h (cgrid_w35d B1, the ADR 0692 H hash), camber_seam_s, camber_seam_s_unstretched and camber_seam_s_wake_remap (hashes against the base) are unchanged in bits; f782, f777, f726, cgrid_w35d, f722, fan01_p10_w36d c2, fan_design_w46a s4, --lib and baseline_hashes pass. Six of six mutations caught. Library only; no case value.
+
+> Follow-up proposed: non-orthogonality of the blade-line faces next to the stack at the thin-to-thick span transition of S'''. Deps F-784. Acceptance: Every limit not stated here is registered in the ADR before the run. A new opt-in field of S''' builds the first free rows of the blade lines between the last thin and the first thick span layers so that, at the ADR 0118 s4 specs, ComputerFan::rom_reference() blade 0 and the ADR 0696 second blade build with no folded cell within 84.5 deg non-orthogonality (the 84.688 deg of ADR 0702 at C (45, 2) / (45, 3), layer 3 of the reference disclosed), skewness 4.0 and aspect 1000, the wake-stack spanwise skewness stays within 1.0, a registered front_gap and n_nose scan inside the camber_seam range builds a registered fraction, and camber_seam_h, camber_seam_s, camber_seam_s_unstretched, camber_seam_s_wake_remap and camber_seam_s_wake_ramp are unchanged in bits.
