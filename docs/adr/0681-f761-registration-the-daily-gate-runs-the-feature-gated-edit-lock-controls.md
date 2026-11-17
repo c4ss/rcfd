@@ -128,3 +128,56 @@ is a defective set-up. Corrected checks, replacing C4 and C5 (limits unchanged i
 - C5': control: `cargo tree --workspace --features rcfd-project/test-hooks -e features -i rcfd-project` has at least 1 line with
   `test-hooks` (probed once: its line is `rcfd-project feature "test-hooks" (command-line)`).
 - The step "feature isolation" greps the concatenation of both trees (D3 amended accordingly). The gate runs the same two commands.
+
+## Addendum 1: results (2026-11-17)
+
+Each check was run once after the amendment; the code is in the commit "gate: feature-gated edit-lock step ..." (gate.yml,
+gate_test.py, gate_attribute.py, the new `scripts/test_gate_hooks_f761.py`) and `docs/test-process.md`. Scratch: `w49i-work/f761-scratch`.
+
+| id | check | limit | measured | met |
+|---|---|---|---|---|
+| C1 | YAML parse and step list | parses; 9 named steps in order | PyYAML parses; job `gate` has 12 steps (3 `uses:` setup + fmt, clippy, feature isolation, tests, hooks, summary, upload logs, attribution, upload attribution); order checked by unit test w1 | yes |
+| C2 | lines removed from gate.yml | at most 6, none of fmt/clippy/tests | 2 removed (the attribution `if:` and its command line); fmt, clippy and tests steps unchanged | yes |
+| C3 | feature step through `gate_test.py --no-doc -- -p rcfd-project --features test-hooks --test edit_lock_f755` | exit 0; 7 processes, 7 ok, no doc run | exit 0; 7 of 7 ok (0.05 s to 22.45 s), wall 23 s, `times_hooks.tsv` 7 rows of `edit_lock_f755`, no `--doc` | yes |
+| C4' | forward and inverted `cargo tree --workspace --locked -e features` | 0 lines with `test-hooks` | 0 of 1768 lines (forward), 0 (inverted) | yes |
+| C5' | control with `--features rcfd-project/test-hooks` and `-i rcfd-project` | at least 1 line | 1 line, `rcfd-project feature "test-hooks" (command-line)`; the forward form shows 0 (the reason for amendment 1) | yes |
+| C6 | default-build artefacts before and after the feature build | features without `test-hooks`; same path, size, mtime | `rcfd_project-1241ec5a10457445.exe`, features `[default]`, 721408 bytes, mtime identical before and after | yes |
+| C7 | feature-build artefacts | `test-hooks` in features; paths differ | lib `librcfd_project-5c2389a9d4c0d10e.rlib` and `edit_lock_f755-04086aeaee21ee89.exe` with `[default, test-hooks]`; different file names from the default build | yes |
+| C8 | negative control (`assert!(false)` test appended in a scratch git copy) | step exit non-zero; 1 failure; `primary_adr` 0676; rerun FAILED; not flaky; row has `**0676**` | step exit 101; 1 failure `edit_lock_f755::zz_negative_control_deliberate_failure`; `primary_adr` "0676", `adrs` 0135, 0669, 0676, 0681; rerun FAILED (0.12 s); flaky false; row `**0676**, 0135, 0669, 0681`; candidates 2 | yes |
+| C9 | same run without the failing test | 0 failures | "No failed test."; 0 failures, 0 doc failures, no build failure | yes |
+| C10 | probe with and without the feature | `--features test-hooks` only with the option | unit test a3 | yes |
+| C11 | `python -m unittest discover -s scripts` from the committed tree | all pass, at least 91 run, skipped at most 4 | 93 run, OK, skipped 4 | yes |
+| C12 | defaults unchanged | the 85 old tests pass unedited; old rendering identical | 85 old tests pass; cell without `primary_adr` identical (test a2); `gate_test.py` without the new flag runs the doc-tests (test n2) | yes |
+| C13 | fmt, clippy | no Rust touched | not run | n/a |
+
+Mutations (on a scratch copy of the changed files): M1 (feature words dropped from the hooks step) caught by unit test w1 after
+I made the test ignore comment lines (the first version of w1 matched the same words in a comment and let M1 through; the test was
+corrected before it was committed, no registered limit involved); M2 (`steps.hooks.outcome` dropped from the attribution `if:`)
+caught by w2; M3 (first tsv only) caught by a1; M4 (probe ignores the feature) caught by a3; M5 (`--no-doc` ignored) caught by n1.
+Five of five. The C3 limit of 7 processes also catches M1 at run time (a gated binary compiled without the feature lists 0 tests).
+
+Deviations: (1) amendment 1 (forward tree blind to the feature, found by one set-up probe before the checks). (2) `gate_test.py`
+cannot take cargo options as bare arguments (argparse), so the step passes them after `--`; found by the first C3 attempt, which
+exited 2 at argument parsing before any build; the corrected command is the one measured above. (3) The ADR count of the negative
+control contains 0681 because the scratch copy holds this ADR, which cites the file.
+
+`docs_site` (docs/ touched): `cargo test -p rcfd-cli --release --test docs_site`, 2 passed, 0 failed.
+
+Decision by the rule: C1 to C12 met: **done by local evidence**. The real GitHub run (Windows runner, clean target folder, the
+Actions `if:` semantics) was not made and is left to the next daily gate.
+
+Not covered: the real runner (see Limits); a bisect over the gated binary (only the probe text); other gated test files.
+
+Open questions, taken on the standing instruction of 2026-11-11 (take the recommendation): (a) one `--features` step per gated file
+versus a generic list: taken the single named step (recommended while there is one gated file). (b) Whether the isolation grep
+should also run in CI on pull requests: not taken (the gate does not run on pull requests, ADR 0653); open, recommendation: leave.
+
+## For the lead: roadmap entries
+
+Proposed status and note of F-761:
+
+> Proposed status: done.
+
+> Gate, test infrastructure. Follow-up of F-755 (ADR 0676, 2026-11-17). DONE by local evidence. ADR 0681, 2026-11-17: the daily gate (.github/workflows/gate.yml) gets two steps. "feature isolation" before the workspace tests fails if `cargo tree --workspace -e features`, forward or inverted for rcfd-project, names test-hooks (0 of 1768 lines now; the forward tree cannot see a feature switched on from the command line, so the inverted tree is part of the check, control: 1 line with --features rcfd-project/test-hooks). "tests with the test-hooks feature" after the workspace step, also when it failed: `scripts/gate_test.py --no-doc --tsv gate-out/times_hooks.tsv -- -p rcfd-project --features test-hooks --test edit_lock_f755`, one separate cargo invocation, 7 of 7 tests ok in 23 s locally; the default build's artefact (features [default], same path, size and mtime) is unchanged by the feature build, which has its own file names. gate_test.py gains `--no-doc` (cargo test --doc cannot be combined with --test); gate_attribute.py takes several --tsv/--log files, copies the index's primary_adr into each failure record and shows it in bold first in the table, and `--feature-binary BINARY=FEATURE` makes the bisect probe build with the feature; all additive. Negative control in a scratch copy (a deliberately failing test in edit_lock_f755.rs): step exit 101, attribution.json one failure with primary_adr 0676 (adrs 0135, 0669, 0676), re-run FAILED, not flaky; the unchanged file gives no failure. 93 script unit tests pass (85 old unedited, 8 new; skipped 4), five of five mutations caught, docs_site passes. Not covered: the real GitHub run (Windows runner, clean target folder, Actions `if:` semantics) is left to the next daily gate; a bisect over the gated binary (probe text only); other feature-gated test files.
+
+> Follow-up proposed: Check the first real run of the feature-gated gate step. Deps F-761. Acceptance: Every limit not stated here is registered in the ADR before the run. In the first daily gate on main after ADR 0681 is merged, the steps "feature isolation" and "tests with the test-hooks feature" pass with 7 of 7 tests ok, the workspace step's results equal those of the previous green gate (same test counts), the uploaded `gate-out/` holds test_hooks.log and times_hooks.tsv, and a registered mutation (an edit_lock_f755 test made to fail on a scratch branch, run by the maintainer or a dispatched gate) produces an attribution.md row with ADR 0676 in bold.

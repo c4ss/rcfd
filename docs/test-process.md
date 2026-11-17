@@ -466,14 +466,26 @@ package (`cargo fmt -p <package> -- --check` for each workspace member). `cargo 
 `rustfmt` process. Since November 2026 that command line is longer than the Windows limit of 32767 characters, and it fails with
 os error 206. The same happens on the local machine.
 
+Two more steps belong to the feature-gated tests (ADR 0681). The test file `crates/rcfd-project/tests/edit_lock_f755.rs` (ADR
+0676) is compiled only with the feature `test-hooks`, so the workspace step builds it as an empty binary. The step **feature
+isolation** runs before the tests and fails if `cargo tree --workspace -e features`, forward or inverted for `rcfd-project`,
+names `test-hooks`. The step **tests with the test-hooks feature** runs after the workspace step, also when that step failed. It
+runs `python scripts/gate_test.py --no-doc --tsv gate-out/times_hooks.tsv -- -p rcfd-project --features test-hooks --test
+edit_lock_f755`, which is `cargo test -p rcfd-project --release --features test-hooks --test edit_lock_f755` with one process per
+test. It is a separate cargo invocation, so the feature is not unified into the workspace build, and the artefacts of both builds
+sit side by side in `target/` under different file names. Its logs are `gate-out/test_hooks.log` and `times_hooks.tsv`. A second
+file with a gated test needs its own `-p`, `--features` and `--test` words in that step and a `--feature-binary` in the
+attribution step.
+
 ### 7.2 What a failed run produces
 
-The gate logs (`times.tsv`, `test.log`, `progress.log`) are uploaded first, as the artifact `gate-<os>-<sha>`. Then, only if the
-test step failed, `scripts/gate_attribute.py` runs (at most 40 min). It writes:
+The gate logs (`times.tsv`, `test.log`, `progress.log`, and from the feature step `times_hooks.tsv`, `test_hooks.log`) are
+uploaded first, as the artifact `gate-<os>-<sha>`. Then, only if the test step or the feature step failed, `scripts/gate_attribute.py` runs (at most 40 min). It writes:
 
 - **`gate-out/attribution.json`** (artifact `gate-attribution-<os>-<sha>`, for the roadmap loop). It has one record per failed or
   timed-out test with these fields: crate, binary, file, outcome, `rerun` (the test run once more, alone, the way `gate_test.py`
-  runs it), `flaky` (true when the re-run passed), `adrs` and `items` from the index, `evidence`, and `candidates`. Candidates are
+  runs it), `flaky` (true when the re-run passed), `adrs`, `primary_adr` (the registering ADR, shown in bold first in the table;
+  a failure of the feature step names ADR 0676) and `items` from the index, `evidence`, and `candidates`. Candidates are
   the first-parent commits between the last green gate (`base`) and this commit that touched the test's file or crate (`direct`),
   or the non-test sources of a workspace crate it depends on, or the root `Cargo.toml` or `Cargo.lock` (`dependency`). Each
   candidate has its subject's `F-NNN` and `ADR NNNN` and those items' ADRs. With the input `bisect`, a failure with more than one
