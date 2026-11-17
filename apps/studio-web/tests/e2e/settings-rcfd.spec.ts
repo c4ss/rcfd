@@ -150,8 +150,10 @@ test('F-828: a number of the session opens its provenance: click on the key’s 
   await expect(fact('Engine')).toHaveText(`${info.name} ${info.version} (service.info)`);
   const journal = (await rpc.request('journal.get', { session })) as { entries: unknown[]; case_hash: string };
   await expect(fact('Journal')).toContainText(`case hash ${journal.case_hash} (journal.get)`);
-  // what the service does not record is said, not filled in
-  await expect(fact('Case file')).toHaveText(/^not recorded: /);
+  // the session's source as journal.get gives it (ADR 0735: this session was made from the engine's defaults, restated
+  // from "not recorded"); what the service does not record is said, not filled in: this service, started by the test
+  // without --journal-dir, keeps no journal file, so there is no reproduce command
+  await expect(fact('Case file')).toHaveText('none: the session was made from the engine’s defaults (journal.get)');
   await expect(d.getByText(/^Not recorded: a service session has no reproduce command/)).toBeVisible();
   await shot('provenance-setting');
   await page.keyboard.press('Escape');

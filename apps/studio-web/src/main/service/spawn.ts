@@ -6,6 +6,11 @@
 // that file. `service.json` in the state directory records the address and process id, so that the next start of the
 // Studio attaches to the same service instead of starting a second one.
 //
+// Session journals (F-828 E-828c, ADR 0735 decision D1): the service is started with `--journal-dir <state dir>/journals`,
+// so the engine keeps each session's journal (`<session>-<created>.journal.json`) that `rcfd run --journal` runs. The
+// Studio writes no journal file itself (D-L1). With a sandbox root (`--root`) that does not hold the state directory the
+// flag is left out, since the service would refuse a journal folder outside its sandbox; journal.get then has no file.
+//
 // No Electron import (unit-tested in Node).
 import { spawn, type ChildProcess } from 'node:child_process';
 import { closeSync, openSync } from 'node:fs';
@@ -45,6 +50,15 @@ export function parseListening(text: string): { host: string; port: number } | n
   return { host, port };
 }
 
+/** The folder the started service keeps its session journals in: `<stateDir>/journals`, or null when `root` is given
+ * and does not hold it (the service sandboxes the journal folder like every path). */
+export function journalDirFor(stateDir: string, root: string | null): string | null {
+  const dir = path.join(stateDir, 'journals');
+  if (root === null) return dir;
+  const rel = path.relative(path.resolve(root), path.resolve(dir));
+  return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel) ? dir : null;
+}
+
 /** True while a process of that id exists (signal 0 checks without touching it). */
 export function processAlive(pid: number): boolean {
   try {
@@ -78,7 +92,8 @@ export async function removeRecord(stateDir: string): Promise<void> {
 }
 
 /**
- * Starts `<rcfd> serve --addr 127.0.0.1:0 [--root <root>]` and resolves once it listens. Rejects if it exits first or
+ * Starts `<rcfd> serve --addr 127.0.0.1:0 [--root <root>] [--journal-dir <dir>]` (the dir of `journalDirFor`) and
+ * resolves once it listens. Rejects if it exits first or
  * prints no address within `timeoutMs`.
  */
 export async function startService(rcfd: string, root: string | null, stateDir: string, timeoutMs = 20_000): Promise<StartedService> {
@@ -87,7 +102,8 @@ export async function startService(rcfd: string, root: string | null, stateDir: 
   // Appended to, so an earlier service that still runs keeps its own lines; this start reads from here on.
   const from = await stat(log).then((s) => s.size, () => 0);
   const fd = openSync(log, 'a');
-  const args = ['serve', '--addr', '127.0.0.1:0', ...(root ? ['--root', root] : [])];
+  const journals = journalDirFor(stateDir, root);
+  const args = ['serve', '--addr', '127.0.0.1:0', ...(root ? ['--root', root] : []), ...(journals ? ['--journal-dir', journals] : [])];
   let child: ChildProcess;
   try {
     child = spawn(rcfd, args, { detached: true, windowsHide: true, stdio: ['ignore', fd, fd] });

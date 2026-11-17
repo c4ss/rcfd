@@ -38,6 +38,7 @@ pub mod runctl;
 pub mod scalars;
 pub mod schema;
 pub mod service;
+pub mod session_journal;
 pub mod sim;
 pub mod solid_case;
 pub mod solid_parallel;

@@ -252,6 +252,10 @@ struct SessionInner {
 
 struct Session {
     id: String,
+    /// `{kind, path, hash}` of the create entry's source (ADR 0735 Q1 (a)).
+    source: Value,
+    /// The session's journal file when the service keeps them (`--journal-dir`, ADR 0735 Q5 (a)).
+    file: Option<PathBuf>,
     inner: Mutex<SessionInner>,
     ctl: Arc<RunCtl>,
     worker: Mutex<Option<std::thread::JoinHandle<()>>>,
@@ -278,6 +282,8 @@ pub struct Service {
     pub(crate) cosim: crate::cosim_service::Hosts,
     /// The bulk data channel (F-447, ADR 0350); off unless the embedding program calls `enable_data`.
     pub(crate) data: crate::data_service::Channel,
+    /// The folder of the session journal files (ADR 0735); off unless `enable_journal_files` was called.
+    journal_dir: std::sync::OnceLock<PathBuf>,
 }
 
 fn s_param<'a>(p: &'a Value, key: &str) -> Rpc<&'a str> {
@@ -328,7 +334,47 @@ impl Service {
             }),
             cosim: crate::cosim_service::Hosts::default(),
             data: crate::data_service::Channel::default(),
+            journal_dir: std::sync::OnceLock::new(),
         })
+    }
+
+    /// Keep a journal file of every session made from now on in `dir` (`rcfd serve --journal-dir`, ADR 0735 P2): the
+    /// folder is sandboxed like every service path and made when missing. Returns its absolute path. Called once; a
+    /// second call is refused.
+    pub fn enable_journal_files(&self, dir: &str) -> Rpc<PathBuf> {
+        let d = crate::session_journal::absolute(&self.sandbox_path(dir)?);
+        std::fs::create_dir_all(&d).map_err(|e| {
+            RpcError::new(
+                code::INTERNAL,
+                format!("cannot make the journal folder {}: {e}", d.display()),
+            )
+        })?;
+        self.journal_dir
+            .set(d.clone())
+            .map_err(|_| RpcError::new(code::BAD_STATE, "journal files are already on"))?;
+        Ok(d)
+    }
+
+    /// The `journal.get` document of a session.
+    fn journal_doc(&self, s: &Session, inner: &SessionInner) -> Value {
+        json!({
+            "format": "rcfd-journal", "version": 1,
+            "entries": inner.journal,
+            "case_hash": format!("{:016x}", inner.case.tree.content_hash()),
+            "source": s.source,
+            "file": s.file.as_ref().map(|f| f.display().to_string()),
+        })
+    }
+
+    /// Replace the session's journal file, when it has one. A failed write does not fail the request that changed the
+    /// session (the change was accepted); it is said on standard error and in the session's log.
+    fn write_journal_file(&self, s: &Session, inner: &mut SessionInner) {
+        let Some(f) = &s.file else { return };
+        if let Err(e) = crate::session_journal::write_atomic(f, &self.journal_doc(s, inner)) {
+            let msg = format!("journal file {} not written: {e}", f.display());
+            eprintln!("rcfd serve: session {}: {msg}", s.id);
+            inner.log.push_back(msg);
+        }
     }
 
     /// The configuration.
@@ -424,6 +470,13 @@ impl Service {
                 });
                 // protocol 1.2 (ADR 0350): only a service whose data methods were switched on reports them
                 crate::data_service::extend_info(self, &mut info);
+                // ADR 0735: only a service with journal files on reports their folder and `journal.save`
+                if let Some(d) = self.journal_dir.get() {
+                    info["journal_dir"] = json!(d.display().to_string());
+                    if let Some(m) = info["methods"].as_array_mut() {
+                        m.push(json!(crate::session_journal::JOURNAL_SAVE));
+                    }
+                }
                 Ok(info)
             }
             "settings.schema" => Ok(json!({
@@ -436,7 +489,7 @@ impl Service {
                 let mut ids: Vec<&String> = s.keys().collect();
                 ids.sort();
                 Ok(
-                    json!({"sessions": ids.iter().map(|id| json!({"session": id, "state": s[*id].state().name()})).collect::<Vec<_>>()}),
+                    json!({"sessions": ids.iter().map(|id| json!({"session": id, "state": s[*id].state().name(), "source": s[*id].source})).collect::<Vec<_>>()}),
                 )
             }
             "session.close" => {
@@ -504,6 +557,7 @@ impl Service {
                 }
                 let stored = inner.case.get(path).unwrap_or(Value::Null);
                 inner.journal.push(json!({"op": "set", "path": path, "value": stored}));
+                self.write_journal_file(&s, &mut inner);
                 drop(inner);
                 if !live_turb {
                     s.set_state(RunState::Defined);
@@ -534,6 +588,7 @@ impl Service {
                     w.invalidate_all();
                 }
                 inner.journal.push(json!({"op": "remove", "path": path}));
+                self.write_journal_file(&s, &mut inner);
                 drop(inner);
                 s.set_state(RunState::Defined);
                 self.events.emit(&s.id, "setting_changed", json!({"path": path}));
@@ -912,11 +967,16 @@ impl Service {
             "journal.get" => {
                 let s = self.session(p)?;
                 let inner = lock(&s.inner);
-                Ok(json!({
-                    "format": "rcfd-journal", "version": 1,
-                    "entries": inner.journal,
-                    "case_hash": format!("{:016x}", inner.case.tree.content_hash()),
-                }))
+                Ok(self.journal_doc(&s, &inner))
+            }
+            // ADR 0735 P2: on a service with journal files on only
+            "journal.save" if self.journal_dir.get().is_some() => {
+                let s = self.session(p)?;
+                let path = self.sandbox_path(s_param(p, "path")?)?;
+                let doc = self.journal_doc(&s, &lock(&s.inner));
+                crate::session_journal::write_atomic(&path, &doc)
+                    .map_err(|e| RpcError::new(code::INTERNAL, format!("cannot write {}: {e}", path.display())))?;
+                Ok(json!({"path": path.display().to_string()}))
             }
             "journal.replay" => {
                 let j = p.get("journal").ok_or_else(|| RpcError::params("missing 'journal'"))?;
@@ -1461,6 +1521,12 @@ impl Service {
         };
         let mut case = if let Some(path) = p.get("path").and_then(Value::as_str) {
             let path = self.sandbox_path(path)?;
+            // ADR 0735 Q2 (a): the file the session read, by its resolved path and the hash of its bytes
+            if let Ok(bytes) = std::fs::read(&path) {
+                create_entry["source"]["resolved"] =
+                    json!(crate::session_journal::absolute(&path).display().to_string());
+                create_entry["source"]["hash"] = json!(crate::session_journal::hash_bytes(&bytes));
+            }
             Case::load_with(&path, self.cfg.root.as_deref()).map_err(RpcError::validation)?
         } else if let Some(text) = p.get("toml").and_then(Value::as_str) {
             Case::parse_toml_with(text, &text_base(), self.cfg.root.as_deref()).map_err(RpcError::validation)?
@@ -1478,8 +1544,17 @@ impl Service {
         }
         self.check_case_paths(&case)?;
         let id = format!("s{}", self.next.fetch_add(1, Ordering::SeqCst));
+        let source = crate::session_journal::source_summary(&create_entry);
+        let file = self.journal_dir.get().map(|d| {
+            d.join(crate::session_journal::file_name(
+                &id,
+                &crate::session_journal::stamp(std::time::SystemTime::now()),
+            ))
+        });
         let session = Arc::new(Session {
             id: id.clone(),
+            source,
+            file,
             inner: Mutex::new(SessionInner {
                 case,
                 sim: None,
@@ -1495,6 +1570,7 @@ impl Service {
             }),
             worker: Mutex::new(None),
         });
+        self.write_journal_file(&session, &mut lock(&session.inner));
         lock(&self.sessions).insert(id.clone(), session);
         self.events.emit(&id, "created", json!({}));
         Ok(json!({"session": id}))

@@ -324,20 +324,63 @@ export interface SessionNumberSource {
 }
 
 /**
- * What the service records about the file a session was made from: session.create reads a file, but neither
- * session.list nor journal.get names it (journal.get gives the tree's hash and the edits since). An engine follow-up.
+ * What an engine without ADR 0735 records about the file a session was made from: session.create reads a file, but
+ * neither session.list nor journal.get names it. An engine with ADR 0735 answers journal.get with `source`.
  */
 export const SESSION_FILE_NOT_RECORDED = 'not recorded: the service names no file for a session (session.list and journal.get carry none)';
 
-/** Why a session number has no reproduce command (an engine follow-up; ADR 0801, the engine follow-ups). */
+/** Why a session number has no reproduce command: the service keeps no journal file (`file` null or absent). */
 export const SESSION_NO_REPRODUCE =
   'Not recorded: a service session has no reproduce command. journal.get gives its edits, but the service writes no journal file for rcfd run --journal to read.';
+
+/** The session's journal as journal.get answers it (ADR 0735: `source` and `file`; absent from an older engine). */
+export interface SessionJournal {
+  readonly entries: number;
+  readonly caseHash: string;
+  /** `{kind, path, hash}` of the session's source; undefined when the engine gives none. */
+  readonly source?: { readonly kind: string; readonly path: string | null; readonly hash: string | null };
+  /** The journal file the service keeps (`rcfd serve --journal-dir`); null when it keeps none. */
+  readonly file?: string | null;
+}
+
+/** The session's journal from a journal.get reply, or why it cannot be read. */
+export function sessionJournal(reply: unknown): SessionJournal | { readonly error: string } {
+  const o = (reply ?? {}) as { entries?: unknown; case_hash?: unknown; source?: unknown; file?: unknown };
+  if (!Array.isArray(o.entries) || typeof o.case_hash !== 'string') return { error: 'journal.get answered without entries or case_hash' };
+  const src = o.source as { kind?: unknown; path?: unknown; hash?: unknown } | null | undefined;
+  const str = (v: unknown) => (typeof v === 'string' ? v : null);
+  return {
+    entries: o.entries.length,
+    caseHash: o.case_hash,
+    ...(src && typeof src.kind === 'string' ? { source: { kind: src.kind, path: str(src.path), hash: str(src.hash) } } : {}),
+    ...(o.file === undefined ? {} : { file: str(o.file) }),
+  };
+}
+
+/** The command that reproduces a session from the journal file the service keeps, or null when it keeps none. */
+export function sessionReproduce(journal: SessionJournal | { readonly error: string } | null): string | null {
+  if (journal === null || 'error' in journal || !journal.file) return null;
+  return shellLine(['rcfd', 'run', '--journal', journal.file]);
+}
+
+const SOURCE_KIND_WORDS: Readonly<Record<string, string>> = {
+  toml: 'none: the session was made from case text (journal.get)',
+  settings: 'none: the session was made from settings (journal.get)',
+  empty: 'none: the session was made from the engine’s defaults (journal.get)',
+};
+
+function caseFileFact(journal: SessionJournal | { readonly error: string } | null): string {
+  if (journal === null || 'error' in journal || journal.source === undefined) return SESSION_FILE_NOT_RECORDED;
+  const s = journal.source;
+  if (s.kind === 'path') return `${s.path ?? 'no path'}${s.hash ? `, hash ${s.hash}` : ''} (journal.get)`;
+  return SOURCE_KIND_WORDS[s.kind] ?? `none: the source is ${s.kind} (journal.get)`;
+}
 
 /** The facts of a session number, with the engine that answered (service.info) and the session's journal when read. */
 export function sessionFacts(
   src: SessionNumberSource,
   engine: { readonly name: string; readonly version: string } | null | 'reading',
-  journal: { readonly entries: number; readonly caseHash: string } | { readonly error: string } | null,
+  journal: SessionJournal | { readonly error: string } | null,
 ): Fact[] {
   const u = src.unit;
   const rows: Fact[] = [
@@ -346,10 +389,11 @@ export function sessionFacts(
     ['Session', src.session],
     ['Iteration', 'none' in src.at ? src.at.none : String(src.at.iteration)],
     ['Read by', src.readBy],
-    ['Case file', SESSION_FILE_NOT_RECORDED],
+    ['Case file', caseFileFact(journal)],
   ];
   if (journal !== null) {
     rows.push(['Journal', 'error' in journal ? `not read: ${journal.error}` : `${journal.entries} ${journal.entries === 1 ? 'edit' : 'edits'} since the session was made, case hash ${journal.caseHash} (journal.get)`]);
+    if (!('error' in journal) && journal.file) rows.push(['Journal file', `${journal.file} (the service keeps it)`]);
   }
   for (const m of src.more ?? []) rows.push(m);
   rows.push(['Engine', engine === 'reading' ? 'reading…' : engine ? `${versionLine(engine)} (service.info)` : 'not known: no service answered service.info']);

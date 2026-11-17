@@ -71,7 +71,9 @@ COMMANDS:
                                  run counts from its checkpoint); not with chain.sequence
         --threads <n>            worker threads (sets RAYON_NUM_THREADS; results do not depend on it)
         --precision double       only double precision is supported
-        --journal <file>         run the case recorded in a service journal (journal.get) instead of a file
+        --journal <file>         run the case recorded in a service journal (journal.get) instead of a file;
+                                 a case file it names must still have the recorded hash (exit 3 otherwise)
+        --journal-ignore-hash    with --journal: run even when that case file changed since it was recorded
         --set <path=json>        override a setting (repeatable), e.g. --set solver.dt=0.05; exit 2 if malformed,
                                  3 if the path or value is invalid
         --print-settings         print the resolved settings as JSON and exit (no run)
@@ -122,9 +124,11 @@ COMMANDS:
                                (XDMF + binary heavy data); an .stl input can only be re-encoded to .stl
     post <results-dir> [--format html|csv|json] [--out <file>]
                                re-create reports from <results-dir>/monitors.json written by `run`
-    serve [--addr <host:port>] [--root <dir>] [--stdio] [--cosim <case>]
+    serve [--addr <host:port>] [--root <dir>] [--stdio] [--cosim <case>] [--journal-dir <dir>]
                                start the solver service (JSON-RPC 2.0, newline-delimited); --cosim hosts the
-                               co-simulation fluid participant of the case's [cosim] table (protocol rcfd-cosim/1)
+                               co-simulation fluid participant of the case's [cosim] table (protocol rcfd-cosim/1);
+                               --journal-dir keeps each session's journal in <dir>/<session>-<created>.journal.json
+                               (inside --root when given), a file that `rcfd run` can run
     call [--addr <host:port>] <method> [<json-params>]
                                call one method of a running service; prints the JSON result
                                (exit 1 and the JSON error on stderr if the call fails)
@@ -426,6 +430,13 @@ fn cmd_run(args: &[String]) -> u8 {
         let base = Path::new(jp)
             .parent()
             .map_or_else(|| PathBuf::from("."), Path::to_path_buf);
+        // ADR 0735 Q3 (a): a case file that changed since the service read it is refused, unless asked otherwise
+        if !flag(args, "--journal-ignore-hash") {
+            if let Err(m) = rcfd_api::session_journal::check_source(&doc, &base) {
+                eprintln!("error: {jp}: {m}");
+                return INVALID;
+            }
+        }
         match runctl::case_from_journal(&doc, &base, None) {
             Ok(c) => (c, jp.to_string()),
             Err(diags) => {
@@ -858,6 +869,16 @@ fn cmd_serve(args: &[String]) -> u8 {
         ..Default::default()
     };
     let svc = Service::new(cfg);
+    // ADR 0735 P2: one journal file per session, only with the flag
+    if let Some(dir) = opt(args, "--journal-dir") {
+        match svc.enable_journal_files(dir) {
+            Ok(d) => eprintln!("session journals: {}", d.display()),
+            Err(e) => {
+                eprintln!("error: --journal-dir {dir}: {}", e.message);
+                return FAIL;
+            }
+        }
+    }
     // F-444, ADR 0380 D2: the co-simulation fluid participant of a case, built before the service listens
     if let Some(path) = opt(args, "--cosim") {
         let hosted = rcfd_api::case::Case::load(path).and_then(|case| rcfd_api::cosim_case::host(&svc, &case));

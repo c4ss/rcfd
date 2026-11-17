@@ -16639,6 +16639,8 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     chip plus the palette command) and A20-D2 (a rule is allowed only from a denied call; no palette command allows
     one). runner_config joined the first allow-list (ADR 0733, 16 tools). Optional engine follow-up E-814
     (session discovery): ADR 0735 proposed; awaiting the maintainer.
+    2026-11-17 (ADR 0735): E-814 declined by the maintainer; session discovery stays in the Studio
+    (apps/studio-web/src/main/claude/discover.ts), with no engine module, MCP tool or CLI command.
 - [x] **F-815** Electron Studio: compare two runs
   - depends on: F-810
   - acceptance: Two runs side by side or overlaid at the same time and the same colour range, with the difference field
@@ -16860,6 +16862,11 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     engine records a session's journal (E-828c), the Studio writes none; a session number's reproduce command stays said
     as not recorded until the engine gives one. 2026-11-17: engine follow-ups E-828a, E-828b, E-828d and E-828e:
     ADR 0734 proposed; E-828c: ADR 0735 proposed; awaiting the maintainer.
+    2026-11-17 (ADR 0735, accepted with Q4 declined): E-828c built: session.create records a case file's resolved
+    path and hash (`source` in journal.get and session.list); rcfd serve --journal-dir keeps one
+    `<session>-<created>.journal.json` per session; rcfd run --journal refuses a case file changed since
+    (--journal-ignore-hash); the Studio starts its service with `--journal-dir <state dir>/journals`, and a session
+    number's provenance names its case file and hash and shows and copies `rcfd run --journal <file>`.
 - [~] **F-829** Electron Studio: undo, safe deletes and edit conflicts
   - depends on: F-827, F-805
   - acceptance: Undo and redo for every edit made through the action layer; deleting a run, result or case is

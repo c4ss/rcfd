@@ -75,7 +75,16 @@ All session methods take `session`.
 - `log.tail {lines?}`
 - `field.grid {name, cols?, rows?}`: field averaged onto a coarse grid (first row is the top), `null` where empty
 - `panel.snapshot {since?, field?, cols?, rows?, log_lines?}`: status, new monitor samples, reports, log tail and optional grid in one call (used by the sidebar panel)
-- `journal.get`: returns `{format: "rcfd-journal", version: 1, entries, case_hash}` (create + accepted settings changes)
+- `journal.get`: returns `{format: "rcfd-journal", version: 1, entries, case_hash, source, file}` (create + accepted
+  settings changes). `source` is `{kind: "path" | "toml" | "settings" | "empty", path, hash}`; `path` and `hash` are null
+  unless the session was made from a case file. The create entry of such a session also records `source.resolved` (the
+  absolute path the service read) and `source.hash` (`fnv64:` of the file's bytes). `file` is the session's journal file,
+  null unless the service was started with `--journal-dir` (ADR 0735). `session.list` gives the same `source` per session
+- `rcfd serve --journal-dir <dir>` (sandboxed; ADR 0735): the service keeps one file per session,
+  `<dir>/<session>-<created yyyymmddThhmmss UTC>.journal.json`, holding the `journal.get` reply, replaced by
+  write-then-rename at `session.create` and after every accepted `settings.set` and `settings.remove`.
+  `rcfd run --journal <file>` runs it. Only such a service has `journal_dir` in `service.info` and `journal.save {path}`
+  (sandboxed; writes the document once) at the end of `methods`. Without the flag nothing is written
 - `journal.replay {journal}`: builds a new session and reports `matches` against the recorded hash
 - `workflow.create {template?|workflow?, name?}`, `workflow.list`, `workflow.get`, `workflow.run {task?, with_prerequisites?, max_steps?}`, `workflow.insert {task, after?}`, `workflow.delete {id}`, `workflow.save {path}`, `workflow.load {path}`: task-based workflow over the session (F-120; see `docs/run-control.md`). `workflow.run` blocks until the planned tasks ran or one failed and returns `{ok, ran: [{id, ok, message, result}], workflow}`
 - `run.check {session | path}`: check-only launch (`{ok, exit_code, event}`; exit code 0, 3 invalid, 4 bad mesh). `run.headless {max_steps?, max_elapsed_s?, stop_file?, continue_from?, interpolate_case?, interpolate_checkpoint?, interpolate_mode?, checkpoint?, checkpoint_every?, status_path?, status_every?, out_dir?}`: runs the session under the run-control driver and returns `{outcome, ok, events, status}`. `status.read {path}`: summarises an `rcfd-status` JSON-lines file (F-121). All paths are sandboxed; step and time limits of the service apply
