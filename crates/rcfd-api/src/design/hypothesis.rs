@@ -17,6 +17,9 @@
 //! * [`verify`] and [`lessons`] never trust a stored verdict: they recompute it from the registration and the evidence and
 //!   report every rule broken (order, alteration, evaluator version, pair count, design, an optional re-run). A registration
 //!   may carry a seeded re-run sample of k pairs (ADR 0662): `verify` re-runs exactly those pairs and the result records them.
+//! * [`verify_drawn`] (ADR 0693) re-runs k pairs drawn from a verifier's seed that is not in the file (caller-supplied or
+//!   [`entropy_seed`]) after the evidence exists, then appends the seed in a `hypothesis_drawn_check` record; an evaluator that
+//!   reads the file cannot be honest exactly on those pairs. [`drawn_record_problems`] redoes a recorded check.
 //! * Verdicts: `confirmed` when the one-sided lower bound of the mean paired difference is at least the smallest effect that
 //!   matters, `refuted` when the upper bound is below it, `inconclusive` otherwise, `void` when too many pairs failed or a held
 //!   metric was not matched. A verdict is a statement about the evaluator at its tier, never about a product.
@@ -2708,6 +2711,306 @@ pub fn verify(entries: &[Entry], id: &str, rerun: Option<&dyn Model>) -> Verific
         .find(|m| m.reg.id == id)
         .map(|m| m.v)
         .unwrap_or_default()
+}
+
+// ---------------------------------------------------------------- verifier-drawn re-run sample (ADR 0693)
+
+/// Kind of the record of a verifier-drawn re-run check (ADR 0693 D3).
+pub const KIND_DRAWN: &str = "hypothesis_drawn_check";
+
+/// Source of the verifier's seed (ADR 0693 D2): drawn after the ledger is read, never stored in it before the check.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DrawSeed {
+    /// Supplied by the caller (reproducible runs, or a verifier's own generator).
+    Given(u64),
+    /// [`entropy_seed`].
+    Entropy,
+}
+
+/// A seed from outside the file: std's `RandomState` (keys from the operating system's random source) hashing the system time,
+/// the process id and a process counter. Unpredictable to an evaluator outside the verifier's process; not a cryptographic
+/// generator (ADR 0693 D2).
+pub fn entropy_seed() -> u64 {
+    use std::hash::{BuildHasher, Hasher};
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let mut h = std::collections::hash_map::RandomState::new().build_hasher();
+    let t = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_nanos());
+    h.write_u128(t);
+    h.write_u32(std::process::id());
+    h.write_u64(COUNTER.fetch_add(1, Ordering::Relaxed));
+    h.finish()
+}
+
+/// What a verifier-drawn re-run check found (ADR 0693 D3).
+#[derive(Debug, Clone, PartialEq)]
+pub struct DrawnCheck {
+    /// Hypothesis id.
+    pub id: String,
+    /// Registration entry index.
+    pub registration: usize,
+    /// Number of pairs drawn.
+    pub k: usize,
+    /// The verifier's seed.
+    pub seed: u64,
+    /// `given` or `entropy` (`given` for [`check_drawn`]).
+    pub seed_source: &'static str,
+    /// Drawn pairs, ascending ([`rerun_pairs`] with the verifier's seed).
+    pub pairs: Vec<usize>,
+    /// Relative tolerance.
+    pub rtol: f64,
+    /// Absolute tolerance.
+    pub atol: f64,
+    /// Evidence entries re-run (both arms of each drawn pair), in pair and arm order.
+    pub rerun: Vec<usize>,
+    /// Re-run entries not reproduced.
+    pub mismatched: Vec<usize>,
+    /// One located problem per mismatched entry.
+    pub problems: Vec<String>,
+    /// Every re-run entry reproduced.
+    pub reproduced: bool,
+    /// Number of ledger entries the check read.
+    pub entries_seen: usize,
+    /// Index of the appended record ([`verify_drawn`]); `None` for [`check_drawn`].
+    pub record: Option<usize>,
+}
+
+/// Re-run both arms of `k` pairs drawn from the verifier's `seed` with the trusted `model` (ADR 0693 D2, D3); pure. Refused (the
+/// message names `drawn`): an unknown id, an unreadable record, `k` outside `1..=n_pairs`, tolerances not finite and
+/// non-negative, a model of another id or version, tier measured, a non-deterministic evaluator at zero tolerances, incomplete
+/// evidence.
+pub fn check_drawn(
+    entries: &[Entry],
+    id: &str,
+    model: &dyn Model,
+    sample: &RerunSample,
+    seed: u64,
+) -> Result<DrawnCheck, String> {
+    let regs = registrations(entries);
+    let reg = regs
+        .iter()
+        .find(|r| r.id == id)
+        .ok_or_else(|| format!("drawn check: no registration of {id} in the ledger"))?;
+    let h = reg
+        .record
+        .as_ref()
+        .map_err(|e| format!("drawn check: record of {id}: {e}"))?;
+    let n = h.n_pairs;
+    let k = sample.pairs;
+    if !(1..=n).contains(&k) {
+        return Err(format!(
+            "drawn check: {k} pairs; it must lie in 1..={n} (the registered pairs)"
+        ));
+    }
+    let (rtol, atol) = (sample.rtol, sample.atol);
+    if !(rtol.is_finite() && rtol >= 0.0 && atol.is_finite() && atol >= 0.0) {
+        return Err(format!(
+            "drawn check: tolerances rtol {rtol} and atol {atol} must be finite and non-negative"
+        ));
+    }
+    if model.id() != h.evaluator.id || model.version() != h.evaluator.version {
+        return Err(format!(
+            "drawn check: model {} version '{}', registered {} version '{}'",
+            model.id(),
+            model.version(),
+            h.evaluator.id,
+            h.evaluator.version
+        ));
+    }
+    if h.evaluator.tier == Fidelity::Measured {
+        return Err("drawn check: tier measured cannot be re-run".into());
+    }
+    if !h.evaluator.deterministic && rtol == 0.0 && atol == 0.0 {
+        return Err(
+            "drawn check: the evaluator is not declared deterministic, so a re-run at zero tolerances cannot reproduce it".into(),
+        );
+    }
+    let v = verify(entries, id, None);
+    if !v.complete {
+        return Err(format!(
+            "drawn check: the evidence of {id} is incomplete ({} of {} (pair, arm) entries)",
+            v.evidence.iter().filter(|x| x.is_some()).count(),
+            2 * n
+        ));
+    }
+    let pairs = rerun_pairs(n, k, seed);
+    let rerun: Vec<usize> = pairs
+        .iter()
+        .flat_map(|&q| [2 * q, 2 * q + 1])
+        .filter_map(|s| v.evidence.get(s).copied().flatten())
+        .collect();
+    let mut mismatched = Vec::new();
+    let mut problems = Vec::new();
+    for &e in &rerun {
+        let r = rerun_check(&entries[e], model, rtol, atol);
+        if !r.pass {
+            mismatched.push(e);
+            problems.push(format!(
+                "entry {e}: evidence of {id} not reproduced by a verifier-drawn re-run of {} {}: {}",
+                model.id(),
+                model.version(),
+                r.problems
+                    .iter()
+                    .cloned()
+                    .chain(
+                        r.metrics
+                            .iter()
+                            .filter(|x| !x.4)
+                            .map(|x| format!("'{}' stored {} re-run {}", x.0, x.1, x.2))
+                    )
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            ));
+        }
+    }
+    Ok(DrawnCheck {
+        id: id.into(),
+        registration: reg.index,
+        k,
+        seed,
+        seed_source: "given",
+        pairs,
+        rtol,
+        atol,
+        reproduced: mismatched.is_empty(),
+        rerun,
+        mismatched,
+        problems,
+        entries_seen: entries.len(),
+        record: None,
+    })
+}
+
+fn drawn_entry(entries: &[Entry], c: &DrawnCheck, model: &dyn Model) -> Entry {
+    let reg = &entries[c.registration];
+    let hash = reg
+        .provenance
+        .get("hash")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+    let mut parents = vec![entry_ref(c.registration, reg)];
+    parents.extend(c.rerun.iter().map(|&k| entry_ref(k, &entries[k])));
+    Entry {
+        kind: KIND_DRAWN.into(),
+        study: "hypothesis".into(),
+        variant: c.id.clone(),
+        evaluator: DRIVER_ID.into(),
+        evaluator_version: DRIVER_VERSION.into(),
+        fidelity: reg.fidelity,
+        verdict: Verdict::Ok,
+        metrics: vec![
+            Quantity::new("k", c.k as f64, "1"),
+            Quantity::new("n_rerun", c.rerun.len() as f64, "1"),
+            Quantity::new("n_mismatched", c.mismatched.len() as f64, "1"),
+        ],
+        settings: json!({
+            "seed": c.seed, "seed_source": c.seed_source, "k": c.k, "pairs": c.pairs,
+            "rtol": num(c.rtol), "atol": num(c.atol),
+            "rerun_by": {"id": model.id(), "version": model.version()},
+            "reproduced": c.reproduced, "mismatched": c.mismatched, "entries_seen": c.entries_seen,
+            "record_hash": hash,
+        }),
+        parents,
+        provenance: json!({"driver": "hypothesis_drawn", "hypothesis": c.id, "hash": hash}),
+        ..Default::default()
+    }
+}
+
+/// Read the ledger, draw the verifier's seed, run [`check_drawn`], then append one `hypothesis_drawn_check` record with the seed
+/// (ADR 0693 D3). Nothing is appended when the check is refused.
+pub fn verify_drawn(
+    ledger: &Ledger,
+    id: &str,
+    model: &dyn Model,
+    sample: &RerunSample,
+    seed: DrawSeed,
+) -> Result<DrawnCheck, String> {
+    let entries = ledger.read()?.entries;
+    let (s, source) = match seed {
+        DrawSeed::Given(s) => (s, "given"),
+        DrawSeed::Entropy => (entropy_seed(), "entropy"),
+    };
+    let mut d = check_drawn(&entries, id, model, sample, s)?;
+    d.seed_source = source;
+    let e = drawn_entry(&entries, &d, model);
+    ledger.append(&[e])?;
+    d.record = Some(entries.len());
+    Ok(d)
+}
+
+/// Re-check the drawn record at `index` with the trusted `model`: its parents resolve and [`check_drawn`] on the entries it saw,
+/// with its seed and sample, gives its pairs, mismatched entries and outcome (ADR 0693 D3). Empty when consistent.
+pub fn drawn_record_problems(entries: &[Entry], index: usize, model: &dyn Model) -> Vec<String> {
+    let at = format!("entry {index}");
+    let Some(e) = entries.get(index) else {
+        return vec![format!("{at}: no such entry")];
+    };
+    if e.kind != KIND_DRAWN {
+        return vec![format!("{at}: not a {KIND_DRAWN} record")];
+    }
+    let mut p = Vec::new();
+    for r in &e.parents {
+        if let Err(m) = resolve(entries, r) {
+            p.push(format!("{at}: parent {} does not resolve: {m}", r.index));
+        }
+    }
+    let s = &e.settings;
+    let uz = |key: &str| s.get(key).and_then(Value::as_u64);
+    let list = |key: &str| -> Option<Vec<usize>> {
+        s.get(key)
+            .and_then(Value::as_array)
+            .and_then(|a| a.iter().map(|q| q.as_u64().map(|q| q as usize)).collect())
+    };
+    let (Some(seed), Some(k), Some(seen), Some(rtol), Some(atol)) = (
+        uz("seed"),
+        uz("k"),
+        uz("entries_seen"),
+        s.get("rtol").and_then(Value::as_f64),
+        s.get("atol").and_then(Value::as_f64),
+    ) else {
+        p.push(format!(
+            "{at}: drawn record without seed, k, entries_seen or tolerances"
+        ));
+        return p;
+    };
+    let seen = seen as usize;
+    if seen > index {
+        p.push(format!(
+            "{at}: drawn record claims {seen} entries seen, it is entry {index}"
+        ));
+        return p;
+    }
+    let sample = RerunSample {
+        pairs: k as usize,
+        rtol,
+        atol,
+    };
+    match check_drawn(&entries[..seen], &e.variant, model, &sample, seed) {
+        Err(m) => p.push(format!("{at}: the recorded check cannot be redone: {m}")),
+        Ok(c) => {
+            if list("pairs") != Some(c.pairs.clone()) {
+                p.push(format!(
+                    "{at}: recorded pairs are not the draw of the recorded seed {seed}"
+                ));
+            }
+            if list("mismatched") != Some(c.mismatched.clone()) {
+                p.push(format!(
+                    "{at}: recorded mismatched entries differ from the re-run ({:?})",
+                    c.mismatched
+                ));
+            }
+            if s.get("reproduced").and_then(Value::as_bool) != Some(c.reproduced) {
+                p.push(format!(
+                    "{at}: recorded outcome differs from the re-run (reproduced {})",
+                    c.reproduced
+                ));
+            }
+        }
+    }
+    p
 }
 
 // ---------------------------------------------------------------- run
