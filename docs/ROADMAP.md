@@ -14437,7 +14437,7 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     against src/shared/word-budget.ts; tests moved from visible prose to role and accessible name (listed in the
     addendum), no accessible name or palette title changed. Left: the maintainer approves the 17 proposed budgets, the
     kept-visible list, and moving shortcut hints into descriptions (G20); proposed DESIGN.md lines; view-and-report.
-- [ ] **F-834** Engine tests that went with rcfd-studio, moved to rcfd-workspace
+- [x] **F-834** Engine tests that went with rcfd-studio, moved to rcfd-workspace
   - depends on: F-449
   - acceptance: The engine behaviour the deleted rcfd-studio tests checked is checked again in
     crates/rcfd-workspace/tests (or the crate that owns it): the start-plan record of 22 shipped cases
@@ -14445,7 +14445,13 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     parity over every shipped example (F-271), the end-to-end store checks (SF2, SF4, SF5, SF8, SF9), a clean stop
     writing its last snapshot with status.json cancelled and exit 7 (AA1), every schema leaf's default parsing, and no
     iteration lost while polling a live run; each restored test names the deleted test it replaces.
-  - note: Added 2026-11-16 when F-449 ran ahead of F-448 (ADR 0800 §10). Traces: G14, G17.
+  - note: Added 2026-11-16 when F-449 ran ahead of F-448 (ADR 0800 §10). Traces: G14, G17. Done 2026-11-17 (merge of
+    0fc9028a): 18 tests restored in crates/rcfd-workspace/tests (*_f834.rs) and crates/rcfd-api/tests
+    (schema_defaults_f834, service_poll_f834), each naming the deleted test it replaces; plans_6867e40.txt restored byte
+    for byte (blob 9fc69532), F-476 hash table matched unchanged; UI-only parts and Studio-only logic (start-dialog
+    estimates, time step, correctors) not ported, listed in the merge report. Open: process tests need release
+    rcfd-runner and rcfd built first (fail loudly, current); decimate_minmax lost its M3 check; DV1/DV5 default-key
+    checks.
 - [ ] **F-835** Electron Studio: new project
   - depends on: F-449, F-805
   - acceptance: An engine entry point creates a project (rcfd project init and an MCP create_project, through
