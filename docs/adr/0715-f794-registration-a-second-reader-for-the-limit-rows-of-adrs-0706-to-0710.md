@@ -218,3 +218,47 @@ it is".
 
 **Not run, not covered.** The eight test files were not run. The 18 unread rows (H5, H7, H9, H10, H11, H13, H14, H15, H17, H20,
 H21, H23, W6, W7, W8, C3, C6, T5) have no reading; the 10 rows of ADR 0705 have the author's only.
+
+## Addendum 2: the first reading, `docs_site`, decision (2026-11-17)
+
+Written after Addendum 1 was committed (cb0cdb9a). Only then were the readings of ADR 0705 (its lines 150 to 186) opened.
+
+**The first reading next to the second.** The first reader read H1, H6, W1, W2, C1, C2, M1, M4, T1, T2 and found 10 of 10, with a
+reservation on W1 (the row says "12-cell uniform channel mesh", the mesh is 4 x 12 cells). The two samples share no row, as
+registered, so there is no row on which the two readers can agree or differ. Taken together 30 of the 48 rows have been read once
+(10 by the author, 20 here), with 29 read as agreeing and one disagreement (H22).
+
+One remark for information, outside the sample and not counted: I then read row W1 (ADR 0707 line 36). Under clause D of this ADR
+(a number given for the mesh must equal the one the test builds) "12-cell" against a 48-cell mesh would be a disagreement, not a
+reservation; the same row says "20-cell mesh ... (3 x 20 cells)" for the graded one, so the author's "N-cell" means N cells across
+the channel, and the row is unclear, the limit 1e-13 right. The first reader's criterion had no mesh clause. This does not change
+R2: W1 is not in the sample.
+
+**R5.** `cargo test -q --release -p rcfd-cli --test docs_site` (target directory `f794-scratch/target`, 4 jobs), run once after
+Addendum 1: 2 passed, 0 failed. Met. Nothing else was run; no fmt or clippy because no crate was touched.
+
+**Decision by the registered rule: done.** R1, R3 and R5 hold and R2 is 19 of 20 (95 percent) against at least 18 of 20.
+
+**Remaining questions.**
+
+1. Row H22 of ADR 0706 (line 89) says more than the test asserts. Options: (a) an addendum to ADR 0706 that corrects the row to
+   the wording given above (the ADR's text above the addendum stays); (b) add the assert to the test (`bad["id"] == "setup"`), which
+   edits an existing test and is against the house rule; (c) leave it, recorded here. Recommendation: (a). Taken on the
+   maintainer's standing instruction of 2026-11-11 (take the recommendation) as the follow-up proposed below; not done here because
+   this item may not edit ADR 0706.
+2. Row W1 of ADR 0707 (line 36): "12-cell" for a 4 x 12 mesh, noted by both readers. Options: (a) correct it in the same addendum
+   pass as H22 ("a uniform 4 x 12 channel mesh"); (b) leave. Recommendation: (a).
+3. The 18 rows with no reading. Options: (a) read them all in the same follow-up (a census then, 48 of 48 read at least once); (b)
+   leave: 95 percent on 20 rows is the evidence asked for. Recommendation: (a), because it is small (eight files of 71 to 313
+   lines) and the one disagreement found is of a kind (a comment taken for an assert) that a sample cannot bound well: with 1 of 20
+   the 95 percent upper bound on the share of such rows is about 22 percent.
+
+## For the lead: roadmap entries
+
+Proposed status and note of F-794:
+
+> Proposed status: done.
+
+> Follow-up of F-769 (ADR 0705, 2026-11-16). DONE. ADR 0715, 2026-11-17: a reader who wrote neither the rows nor the tests read 20 limit rows of ADRs 0706 to 0710 against the test files and the roadmap notes of F-040 and F-043, by a criterion and a sample registered and committed before the draw (a row agrees if the test named exists, an assert checks what the row says, the number equals the code's after normalisation of percent, exponent and band forms, mesh and set-up numbers equal those the test builds, and a cited note contains what the row says it contains; rounding without "about" disagrees). Sample: `random.Random(794).sample` of the rows not read by ADR 0705, 10 of the 22 of 0706 (H2, H3, H4, H8, H12, H16, H18, H19, H22, H24), W3, W4, W5, C4, C5, C7, M2, M3, T3, T4; none of ADR 0705's ten. Result: 19 of 20 agree (95 percent, limit 90 percent met); by ADR 9 of 10, 3 of 3, 3 of 3, 2 of 2, 2 of 2; no reservation. The one disagreement: row H22 (ADR 0706 line 89) says an invalid boundary name "fails the validate task", but `rcfd-api/tests/workflow.rs` lines 212 and 213 assert only that the first failed task has a message containing `nonexistent`, not which task it is (the words come from the test's comment; the task of kind `validate` has the id `setup`). A literal search of every number of the 19 agreeing rows in the test files found all but the three derived y+ values of W3 (395/ny, in the F-040 note), `10 %` for `0.10` and a year. No test was needed for the reading; docs_site passes; no Rust file, script, golden or hash table and none of ADRs 0705 to 0710 edited. The samples of ADR 0705 and ADR 0715 share no row, so this is a reading of other rows, not a measure of two readers on the same row: 30 of 48 rows are read once, 18 are unread. Outside the sample, row W1 (ADR 0707 line 36) says "12-cell" for a 4 x 12 mesh (the first reader's reservation; a disagreement under the mesh clause of ADR 0715). Follow-up proposed below (correct H22 and W1 by addendum, read the 18 remaining rows).
+
+> Follow-up proposed: Correct rows H22 and W1 and read the 18 unread limit rows of ADRs 0706 to 0710. Deps F-794. Acceptance: Every limit not stated here is registered in the ADR before the run. An addendum to ADR 0706 corrects row H22 (the test asserts that the first failed task has a message containing `nonexistent`, not which task it is) and an addendum to ADR 0707 corrects row W1 (a uniform 4 x 12 mesh), with the text above each addendum unchanged; the 18 rows not read in ADR 0705 or ADR 0715 (H5, H7, H9, H10, H11, H13, H14, H15, H17, H20, H21, H23, W6, W7, W8, C3, C6, T5) are read by a reader other than the author of the rows against the criterion of ADR 0715, every disagreement is listed with the line and corrected by the same addenda, and at least 16 of the 18 agree; no Rust file is edited and docs_site passes.
