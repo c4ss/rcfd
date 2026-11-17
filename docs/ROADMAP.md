@@ -16048,7 +16048,9 @@ fixed by the item's registration ADR before any code.
     on the stable 8^3 block. Test-only, default bits unchanged; five of five mutations caught; no amendment. Partial:
     the arc-length driver was not used and the fold was not reached. Follow-up F-796 (The end of the subcritical branch
     of rule L's 16^3 punch path at amplitude 2.2e-4). Follow-up F-797 (The arc-length driver from a given state under
-    prescribed-displacement loading).
+    prescribed-displacement loading). ADR 0718 finds that the trace's end at amplitude 2.2e-4 is a breakdown of element
+    3720's plain local iteration from alpha = 0, not an imminent fold: in finer steps the branch keeps dlambda/da near
+    -38 and is lost at 1.65e-4.
 - [x] **F-790** Delete the dormant rule H3 code and its record tests after the second reading
   - depends on: F-786
   - acceptance: Every limit not stated here is registered in the ADR before the run. The constant `RETRO_H3`, the tier-3
@@ -16171,14 +16173,29 @@ fixed by the item's registration ADR before any code.
     corrected. The two corrected rows have only their writer's reading (the lead may read them at the merge: about 60
     lines). Remark, not a disagreement: row W8 calls the 4 cells of one height along the flow "a column", the code's
     name. No follow-up is proposed.
-- [ ] **F-796** The end of the subcritical branch of rule L's 16^3 punch path at amplitude 2.2e-4
+- [~] **F-796** The end of the subcritical branch of rule L's 16^3 punch path at amplitude 2.2e-4
   - depends on: F-789
   - acceptance: Every limit not stated here is registered in the ADR before the run. At the last state of ADR 0711's
     amplitude-controlled trace, whether the trace ends at a fold of the branch or at a breakdown of the local mode
     problem of element 3720: the eigenvalues of that element's mode tangent and the iterates of the failing attempts,
     the lowest pair and dlambda/da of the branch approached with smaller registered amplitude steps; a fast control on a
     closed-form fold and on a toy whose local problem loses its solution before the fold; the default bits unchanged.
-  - note: Follow-up of F-789 (ADR 0711, 2026-11-16).
+  - note: F-796 (ADR 0718, 2026-11-17): the end of ADR 0711's amplitude-controlled trace of rule L's 16^3 punch branch.
+    ADR 0711's rung 5 (a 2.165e-4, lambda 0.958472) rebuilt bit for bit and its five failing attempts re-run with the
+    same texts, all in element 3720. That element has the smallest l_min / l_max of the 4096 mode tangents K_aa (1.8e-3)
+    but a positive-definite K_aa (l_min 3.75e4). A test-side replica of the plain local Newton reproduces the library's
+    iterates bit for bit: from alpha = 0 the first step lands where K_aa is indefinite, then the iteration wanders or
+    overshoots and inverts a point, while from the last converged modes it converges in 3 to 7 iterations and the
+    continuation reaches every failing iterate. With finer amplitude steps from rung 4 (Da = (a_5 - a_4) / 8, halvings
+    reset on acceptance), the trace is lost at a = 1.650e-4, before rung 5, with dlambda/da -37.6 (no fold approached),
+    nu 1, the lowest pair -2.29e4 (64 per cent on element 3720), and element 3720's l_min 2.5e4 (rho 1.10). The
+    registered reading is "local breakdown: the local iteration", not a fold: ADR 0711's slope -0.54 and mu_1 -323 at
+    rung 5 are not those of the continued branch. Controls: a closed-form fold with a regular local problem (read as a
+    fold) and a toy whose local problem loses its root before the fold (read as a breakdown of the mode tangent, lost
+    within 7.8e-4 of the local fold), and the replica on one element. Test-only, default bits unchanged; six of six
+    mutations caught; one amendment (the element control's set-up). Partial: the element control was met only after the
+    amendment. Follow-up F-841 (The subcritical branch of rule L's 16^3 punch path past amplitude 1.65e-4 with the warm
+    start of the local modes).
 - [ ] **F-797** The arc-length driver from a given state under prescribed-displacement loading
   - depends on: F-789
   - acceptance: Every limit not stated here is registered in the ADR before the run. A library opt-in, off by default,
@@ -16186,7 +16203,9 @@ fixed by the item's registration ADR before any code.
     scaled by the load factor and their load column in the controlled correction; a closed-form control under a
     prescribed displacement through a limit point and ADR 0711's bordered trace of the 16^3 punch branch reproduced;
     baseline_hashes and the default-path bits unchanged.
-  - note: Follow-up of F-789 (ADR 0711, 2026-11-16).
+  - note: Follow-up of F-789 (ADR 0711, 2026-11-16). Lead (2026-11-17): ADR 0718 finds no fold at the end of the ADR
+    0711 trace (a breakdown of element 3720's local iteration from alpha = 0); F-797 was recommended only if a real fold
+    appears, so it waits on F-841.
 - [ ] **F-798** Hinged cylindrical roof of thickness 6.35 through its snap-back against the published table
   - depends on: F-610
   - acceptance: Every limit not stated here is registered in the ADR before the run. The tabulated path of the isotropic
@@ -16214,3 +16233,11 @@ fixed by the item's registration ADR before any code.
     E8b primary is read by a reader and a second reader with at least 80 % agreement, or the population is counted and
     the sample limit stated as missed by construction.
   - note: Follow-up of F-773 (ADR 0720, 2026-11-16).
+- [ ] **F-841** The subcritical branch of rule L's 16^3 punch path past amplitude 1.65e-4 with the warm start of the local modes
+  - depends on: F-796
+  - acceptance: Every limit not stated here is registered in the ADR before the run. ADR 0718's fine trace from rung 4
+    repeated with the model's warm start of the incompatible modes (ADR 0660 D1) and the element states committed along
+    the trace, to its fold if it folds or to a registered cap: dlambda/da, the lowest pairs and element 3720's mode
+    tangent along it, whether ADR 0711's rung 5 is reached on the same local root; a fast control on a toy whose plain
+    local iteration from zero fails while its root exists; the default bits unchanged.
+  - note: Follow-up of F-796 (ADR 0718, 2026-11-16).
