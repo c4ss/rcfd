@@ -332,7 +332,7 @@ for (const c of CASES) {
     l.load = entry.load;
     l.loaded = busy;
   }
-  const profileDone = entry.profile.mode === 'own' ? "the user's own profile" : `scratch profile, ${entry.profile.launches ?? '?'} launches, folder ${entry.profile.removed ? 'removed' : 'NOT removed'}`;
+  const profileDone = entry.profile.mode === 'own' ? "the user's own profile" : `scratch profile, ${entry.profile.launches ?? '?'} launch${entry.profile.launches === 1 ? '' : 'es'}, folder ${entry.profile.removed ? 'removed' : 'NOT removed'}`;
   console.log(`-- ${c.ids.join(', ')}: ${entry.notRun ? `NOT RUN (${entry.notRun})` : 'done'} in ${entry.wallS.toFixed(0)} s; processor busy ${busyFmt(lb)} before, ${busyFmt(la)} after; ${profileDone}`);
 }
 const loadAfter = await load(true);
