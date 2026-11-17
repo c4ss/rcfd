@@ -1554,7 +1554,7 @@ camera moves at once on a key (no easing, damping off).
 - `python scripts/third_party_licenses.py --check`: up to date.
 - `cargo test -p rcfd-cli --release --test docs_site --test workspace_graph`: 2 and 3 passed.
 
-## Addendum F-837: run logs, runner budgets and field-view extras from rcfd-studio (2026-11-17)
+## Addendum 13: F-837, run logs, runner budgets and field-view extras from rcfd-studio (2026-11-17)
 
 F-837 rebuilds, in the Electron Studio's own design, what the removed egui Studio (`crates/rcfd-studio`, read at
 44e63df8 for what it offered only) had beside its run list, field view and project view, where no new engine entry
