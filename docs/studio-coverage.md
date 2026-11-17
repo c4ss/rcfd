@@ -22,10 +22,10 @@ Engine read: rcfd 0.1.0, service protocol rcfd-service/1 version 1.1, MCP server
 | Service methods | 69 | 20 | 49 | 40 |
 | MCP tools | 69 | 34 | 35 | 26 |
 | CLI commands | 48 | 19 | 29 | 22 |
-| CLI options | 202 | 30 | 172 | 123 |
+| CLI options | 203 | 30 | 173 | 124 |
 | Case schema keys | 951 | 951 | 0 | 0 |
 | Monitor format keys | 6 | 6 | 0 | 0 |
-| **All** | **1345** | **1060** (78.8 %) | **285** | **211** |
+| **All** | **1346** | **1060** (78.8 %) | **286** | **212** |
 
 A case key stands for every value of its enumeration (the solver options of that key, listed in the inventory): the
 schema-driven surface of F-825 offers them all. A CLI option is mapped with its command. "Item does not name it" marks an
@@ -73,11 +73,11 @@ new item (see the last sections).
 | F-827 one action layer for every UI action | 1 | `rcfd call` (not named) |
 | F-828 provenance inspector and reproduce-from-CLI | 5 | `rcfd data list` (not named), `rcfd data provenance` (not named), `rcfd data verify` (not named), `rcfd project hash`, `rcfd version` |
 
-### CLI options (172 without a UI path)
+### CLI options (173 without a UI path)
 
 | Item | Count | Capabilities |
 |---|---|---|
-| F-805 project home and the live project folder | 9 | `rcfd convert` (3), `rcfd serve` (6) |
+| F-805 project home and the live project folder | 10 | `rcfd convert` (3), `rcfd serve` (7) |
 | F-807 run control (quick run, stop, pause, queue) | 69 | `rcfd map` (10), `rcfd reactor` (1), `rcfd restart` (4), `rcfd run` (28), `rcfd study` (8), `rcfd workflow run` (6), `rcfd workflow show` (2), `rcfd-runner ensure` (4), `rcfd-runner start` (5), `rcfd-runner wait` (1) |
 | F-809 derived pictures (iso-surfaces, streamlines, cut planes, vectors) | 26 | `rcfd acoustics` (3), `rcfd fwh` (9), `rcfd post derive` (7), `rcfd sample` (7) |
 | F-811 residual and monitor plots | 2 | `rcfd post` (2) |
