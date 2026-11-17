@@ -202,6 +202,19 @@
 .fv-cut-slider.ui-slider {
   width: 200px;
 }
+/* ADR 0738: the panels of the derived pictures (cut plane, iso-surface, streamlines) stack in the top left corner */
+.fv-panels {
+  position: absolute;
+  top: var(--space-lg);
+  left: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-md);
+}
+.fv-panels .fv-cut {
+  position: static;
+}
 
 /* F-837: the colour range modes, the face-on view and Save PNG in the tool row: pictograms only, as the derived
    controls (G22); the fixed range's two ends in the frame's top right corner, as the cut plane's panel; the scale bar of

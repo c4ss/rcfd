@@ -16544,7 +16544,7 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     maintainer answered F808-D1 with (a): the 256-entry table, exact at its 256 points and at and beyond both ends,
     within 3/255 per channel elsewhere, is written into the acceptance; with P7 and P8 met and the screenshots in
     test-results-visual/f808 for the view-and-report (the precedent of F-810 and F-812), the acceptance is met.
-- [~] **F-809** Electron Studio: derived pictures (iso-surfaces, streamlines, cut planes, vectors)
+- [x] **F-809** Electron Studio: derived pictures (iso-surfaces, streamlines, cut planes, vectors)
   - depends on: F-808
   - acceptance: Each derived picture computed by the engine (rcfd-render or a registered opt-in service method) or, if
     computed in the Studio, matched against the engine's reference value for value within a tolerance registered before
@@ -16562,6 +16562,11 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     (`cut_surface`, T2/T3's rules), by the project tool `derive_picture` and `rcfd post derive` (same bytes);
     `data.open` gains `length_unit: "m"`. Left: the field viewport drawing the engine's cut and arrows, iso-surface and
     streamline controls in the Studio; `render_field` with axis/slice/vectors and `rcfd post render` (ADR 0738 P3).
+    2026-11-17: Studio half of ADR 0738 built: the field viewport draws the engine's cut surface and arrows (`rcfd post
+    derive`, run by main over the data port; the readout names the source triangle), and the engine's iso-surfaces and
+    streamlines with their controls; every picture of a service-route store is disabled with the reason. Done: every
+    derived picture is the engine's. Left (not in the acceptance): `render_field` with axis/slice/vectors and `rcfd post
+    render` (ADR 0738 P3).
 - [x] **F-810** Electron Studio: run bands and linked time scrubbing
   - depends on: F-808, F-811
   - acceptance: The run bands of DESIGN.md on one shared time axis, each end marked with its pictogram and word; one

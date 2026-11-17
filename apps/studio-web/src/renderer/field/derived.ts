@@ -1,16 +1,17 @@
-// Derived pictures of the field viewport (F-809; guardrails G2, G3, G6): which apply to a store, and the two the Studio
-// draws. Pure: typed arrays in, typed arrays out, no three.js and no DOM, so the unit tests import it.
+// Derived pictures of the field viewport (F-809; guardrails G2, G3, G6): which apply to a store, and the rules the
+// engine draws them by. Pure: typed arrays in, typed arrays out, no three.js and no DOM, so the unit tests import it.
 //
-// What the engine computes for a stored field, read before this code (ADR 0801, addendum F-809):
-// - iso-surfaces and streamlines: no entry point at all (rcfd-post's `cut_implicit` cuts by a function of position, not
-//   by a cell field; there is no streamline integrator). The Studio does not draw a picture it cannot check against the
-//   engine, so both are unavailable, with the reason (G6), and recorded as missing engine entry points.
-// - the cut plane: rcfd-render's rule, `View::clip = (n, d)`: only points with `n . p <= d` are drawn, per fragment
-//   (`crates/rcfd-render/src/shader.wgsl`, removed by F-838). The Studio applies the same rule on the GPU and in the pick (T2).
+// ADR 0738 (accepted 2026-11-17): every derived picture is the engine's. Main runs `rcfd post derive` on the local store
+// (src/main/data/derive.ts) and the viewport draws the GLB it writes (./glb.ts): the cut surface and the arrows
+// (`cut_surface`, the engine's T2 and T3), iso-surfaces (marching tetrahedra on the cell field) and streamlines (RK4 on
+// the stored velocity). The rules below stay as the Studio's independent statement of T2 and T3: the unit tests check
+// the engine's geometry against them (G2, tests/unit/field-derived.spec.ts).
+// - the cut plane: rcfd-render's rule, `View::clip = (n, d)`: only points with `n . p <= d` are drawn (the removed
+//   rcfd-render's shader; now `rcfd_post::picture::clip_surface`, the mesh grid's mask on the GPU).
 // - vectors: rcfd-post's `overlay_vectors` (the arrows of the service's `render.png`), carried to the boundary surface
 //   (T3). The arrows carry the stored components unchanged.
 //
-// The tolerances T1 to T3 were written into the addendum before this file.
+// The tolerances T1 to T3 were written into ADR 0801's addendum F-809 before the first code.
 import type { FieldInfo } from '../../shared/data.js';
 import { bounds, type SurfaceArrays } from './surface.js';
 
@@ -80,12 +81,28 @@ export interface DerivedContext {
   readonly layers: Layers | null;
   readonly fields: readonly FieldInfo[];
   readonly nCells: number;
+  /** ADR 0738: the store's route (the engine makes derived pictures of a local store); absent: local. */
+  readonly route?: 'local' | 'service';
+  /** ADR 0738: the shown values are the stored cell field of that name (an iso-surface is of it); absent: none. */
+  readonly storedField?: string | null;
 }
 
-const ISO_REASON =
-  'The engine has no entry point that makes an iso-surface of a stored field (rcfd-post cuts by functions of position only), so the Studio has no reference to check one against and does not draw it.';
-const STREAM_REASON =
-  'The engine has no streamline integrator, so the Studio has no reference to check streamlines against and does not draw them.';
+function velocity(ctx: DerivedContext, layers: Layers, what: string): Availability {
+  const need = vectorComponents(layers).map((k) => COMPONENT_FIELD[k]);
+  const missing = need.filter((n) => !ctx.fields.some((f) => f.name === n && f.location === 'cell' && f.n === ctx.nCells));
+  if (missing.length > 0)
+    return {
+      ok: false,
+      reason: `The store holds no cell field ${missing.join(' or ')}; ${what} need ${need.join(', ')} (output.store_fields).`,
+    };
+  return { ok: true };
+}
+
+/** ADR 0738: why a derived picture of a store read through the service is not drawn (the engine reads local stores). */
+export const ENGINE_LOCAL_REASON =
+  'The engine makes derived pictures of a store on this machine (rcfd post derive); this store is read through the service, which has no derived pictures.';
+const ISO_NOT_STORED =
+  'The shown values are not one stored cell field (a difference of two runs), so the engine has no field to make an iso-surface of.';
 
 /** The velocity components a vector picture needs: the in-plane two on a 2D case, all three otherwise. */
 export function vectorComponents(layers: Layers): readonly Axis[] {
@@ -98,31 +115,56 @@ export const COMPONENT_FIELD = ['ux', 'uy', 'uz'] as const;
 /** Whether a derived picture applies to this store, and if not, why in words (G6). */
 export function availability(kind: DerivedKind, ctx: DerivedContext): Availability {
   const { layers } = ctx;
+  if (!layers) return { ok: false, reason: 'The surface is not read yet.' };
   switch (kind) {
     case 'iso':
-      return { ok: false, reason: layers?.twoD ? `A 2D case (one cell layer) has no volume for an iso-surface. ${ISO_REASON}` : ISO_REASON };
+      if (layers.twoD) return { ok: false, reason: 'A 2D case (one cell layer) has no volume for an iso-surface.' };
+      if (ctx.route === 'service') return { ok: false, reason: ENGINE_LOCAL_REASON };
+      if (!ctx.storedField) return { ok: false, reason: ISO_NOT_STORED };
+      return { ok: true };
     case 'streamlines':
-      return { ok: false, reason: STREAM_REASON };
+      if (ctx.route === 'service') return { ok: false, reason: ENGINE_LOCAL_REASON };
+      return velocity(ctx, layers, layers.twoD ? 'streamlines of a 2D case' : 'streamlines of a 3D case');
     case 'cut':
-      if (!layers) return { ok: false, reason: 'The surface is not read yet.' };
       if (layers.twoD)
         return {
           ok: false,
           reason: `This is a 2D case (one cell layer, thinnest along ${AXIS_NAME[layers.thin]}): it is drawn whole, and a cut plane would only hide part of it.`,
         };
+      if (ctx.route === 'service') return { ok: false, reason: ENGINE_LOCAL_REASON };
       return { ok: true };
-    case 'vectors': {
-      if (!layers) return { ok: false, reason: 'The surface is not read yet.' };
-      const need = vectorComponents(layers).map((k) => COMPONENT_FIELD[k]);
-      const missing = need.filter((n) => !ctx.fields.some((f) => f.name === n && f.location === 'cell' && f.n === ctx.nCells));
-      if (missing.length > 0)
-        return {
-          ok: false,
-          reason: `The store holds no cell field ${missing.join(' or ')}; ${layers.twoD ? 'in-plane arrows of a 2D case' : 'arrows of a 3D case'} need ${need.join(', ')} (output.store_fields).`,
-        };
-      return { ok: true };
-    }
+    case 'vectors':
+      if (ctx.route === 'service') return { ok: false, reason: ENGINE_LOCAL_REASON };
+      return velocity(ctx, layers, layers.twoD ? 'in-plane arrows of a 2D case' : 'arrows of a 3D case');
   }
+}
+
+/** ADR 0738: the rake streamlines start from: `n` seeds on the line through the box's middle along `axis`. */
+export interface Rake {
+  readonly axis: Axis;
+  readonly n: number;
+}
+
+/** The rake's two ends, 2% inside the box along `axis`, at the middle of the other two (the mid-plane of a 2D case). */
+export function rakeEnds(layers: Layers, rake: Rake): { p0: [number, number, number]; p1: [number, number, number] } {
+  const mid = [0, 1, 2].map((k) => 0.5 * (layers.min[k]! + layers.max[k]!)) as [number, number, number];
+  const p0 = [...mid] as [number, number, number];
+  const p1 = [...mid] as [number, number, number];
+  const a = rake.axis;
+  const span = layers.max[a]! - layers.min[a]!;
+  p0[a] = layers.min[a]! + 0.02 * span;
+  p1[a] = layers.max[a]! - 0.02 * span;
+  return { p0, p1 };
+}
+
+/** The first axis a rake runs along: the longest in-plane one. */
+export function startRake(layers: Layers): Rake {
+  const axes = ([0, 1, 2] as const).filter((k) => !layers.twoD || k !== layers.thin);
+  const ext = (k: Axis) => layers.max[k]! - layers.min[k]!;
+  const longest = axes.reduce((b, k) => (ext(k) > ext(b) ? k : b), axes[0]!);
+  // seeds across the flow's main direction: the in-plane axis other than the longest (2D), else the longest's next
+  const across = axes.find((k) => k !== longest) ?? longest;
+  return { axis: across, n: 15 };
 }
 
 // ---- T2, the cut plane ------------------------------------------------------------------------------------------

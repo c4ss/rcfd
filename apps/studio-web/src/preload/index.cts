@@ -58,6 +58,7 @@ import type {
   DATA_PORT_CHANNEL as DataPortChannel,
   CompareBridge,
   DataBridge,
+  DerivedBridge,
   DataOptions,
   DataPortMessage,
   DataReply,
@@ -528,6 +529,25 @@ const meshPreview: MeshPreviewBridge = {
 };
 
 contextBridge.exposeInMainWorld('studioMeshPreview', meshPreview);
+
+// ADR 0738 (F-809): a derived picture the engine makes of a stored snapshot (`rcfd post derive`, run by main), same port
+const derived: DerivedBridge = {
+  derive: async (store, snapshot, args, options) => {
+    const r = await sendData({ op: 'derive', id: nextDataId++, store, snapshot, args, ...dataCommon(options) });
+    if (!r.ok) return r;
+    const x = r.result;
+    if (x.kind !== 'derive') return unexpected(x.kind);
+    let summary: Record<string, unknown>;
+    try {
+      summary = JSON.parse(x.summary) as Record<string, unknown>;
+    } catch {
+      return { ok: false, error: { code: 'internal', message: 'the engine’s reply is not JSON' } };
+    }
+    return { ok: true, result: { glb: x.glb, summary } };
+  },
+};
+
+contextBridge.exposeInMainWorld('studioDerived', derived);
 
 // ---- the case port (F-812, src/shared/case.ts)
 //

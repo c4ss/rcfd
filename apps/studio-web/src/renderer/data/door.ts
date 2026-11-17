@@ -5,7 +5,7 @@
 //
 // The data port is a main-process read of a store (`local`, R2) or the service's `data.*` methods (`service`, R1), not a
 // service method of SERVICE_METHODS, so it has no entry in the action registry (G16; reported with F-804 and F-808).
-import type { DataOptions, DataReply, DifferenceData, FieldData, PatchSurfaceData, StoreInfo, StoreRef, SurfaceData, SurfaceFieldData } from '../../shared/data.js';
+import type { DataOptions, DataReply, DeriveArgs, DerivedData, DifferenceData, FieldData, PatchSurfaceData, StoreInfo, StoreRef, SurfaceData, SurfaceFieldData } from '../../shared/data.js';
 
 const bridge = () => window.studioData;
 
@@ -58,6 +58,13 @@ export function loadPatchSurface(store: StoreRef, options?: DataOptions): Promis
   // F-836: its own bridge over the same data port (window.studioMeshPreview)
   const b = window.studioMeshPreview as typeof window.studioMeshPreview | undefined;
   return b ? b.surface(store, options) : Promise.resolve(noBridge());
+}
+
+/** ADR 0738: a derived picture of one snapshot made by the engine (`rcfd post derive`, route local), as GLB bytes. */
+export function loadDerived(store: StoreRef, snapshot: number, args: DeriveArgs, options?: DataOptions): Promise<DataReply<DerivedData>> {
+  // ADR 0738: its own bridge over the same data port (window.studioDerived)
+  const b = window.studioDerived as typeof window.studioDerived | undefined;
+  return b ? b.derive(store, snapshot, args, options) : Promise.resolve(noBridge());
 }
 
 /** Cancels every waiting request with this tag (G21: a superseded load is dropped). */

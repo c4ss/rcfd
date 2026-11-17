@@ -8,9 +8,12 @@
 // The hover readout picks on the CPU against the same triangles (three's Raycaster on the drawn geometry): the triangle's
 // owner cell and its stored value. The mesh grid is computed in a worker (./grid.worker.ts) the first time it is shown.
 //
-// F-809: the cut plane is rcfd-render's (`View::clip`): every material keeps a fragment only where `n . p <= d`
-// (`maskNode`, the same test as the shader of the removed rcfd-render), and the pick takes the nearest hit the rule keeps.
-// The vector arrows (./derived.ts) are ink line segments over the surface, cut by the same plane.
+// F-809: the cut plane is rcfd-render's (`View::clip`): the mesh grid (and the `arrows` prop's segments) keep a fragment
+// only where `n . p <= d` (`maskNode`, the same test as the shader of the removed rcfd-render).
+// ADR 0738: the engine's pictures (`rcfd post derive`, ./glb.ts) are drawn as they come, unmasked: its cut surface in
+// place of the surface (coloured by the source triangle's value; the pick names that source triangle), its arrows, an
+// iso-surface in place of the surface (coloured by its level through the same table), and streamlines in ink over
+// everything. The mesh grid keeps the mask. Nothing here moves the camera.
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, type Ref } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import * as THREE from 'three/webgpu';
@@ -20,7 +23,8 @@ import type { SurfaceData } from '../../shared/data.js';
 import { palette } from '../design/tokens.js';
 import { onThemeChange, themeHex } from '../theme/theme.js';
 import { LUT_SIZE, lutBytes, type ColourRange } from './colormap.js';
-import { clipPlane, keeps, type Cut } from './derived.js';
+import { clipPlane, type Cut } from './derived.js';
+import type { EngineCut, EngineIso } from './glb.js';
 import { bounds, cornerPositions, cornerScalars, cornerScalarsOf, gridEdges } from './surface.js';
 import { drawOnDemand } from '../ui/onDemand.js';
 import type { PreparedSurface } from './prepare.js';
@@ -102,6 +106,16 @@ export interface FieldCanvasProps {
   readonly prepared?: PreparedSurface | null;
   /** F-832: the corner scalars of `values` made off the main thread (3 per triangle); else the canvas makes them. */
   readonly scalars?: Float32Array | null;
+  /** ADR 0738: the engine's cut surface, drawn in place of the surface (null: the surface as stored). */
+  readonly engineCut?: EngineCut | null;
+  /** ADR 0738: the engine's arrows (line segments), drawn unmasked (null: none). */
+  readonly engineArrows?: Float32Array<ArrayBuffer> | null;
+  /** ADR 0738: the engine's iso-surface, drawn in place of the surface (null: none). */
+  readonly iso?: EngineIso | null;
+  /** ADR 0738: the engine's streamlines (line segments), in ink over everything (null: none). */
+  readonly streamlines?: Float32Array<ArrayBuffer> | null;
+  /** ADR 0738: the engine's pictures above are drawn, finished on the GPU, and one animation frame has passed. */
+  readonly onPictureDrawn?: (picture: object | null) => void;
 }
 
 /** A colour of tokens.ts written to the canvas unchanged (the output does no colour space conversion). */
@@ -234,7 +248,7 @@ interface SceneProps extends Omit<FieldCanvasProps, 'forceWebGL' | 'onBackend'> 
 
 let gridIds = 0;
 
-function Scene({ surface, values, valuesPer = 'cell', range, grid, onMoved, onView, onDrawn, onGridState, cut = null, arrows = null, apiRef, prepared, scalars }: SceneProps) {
+function Scene({ surface, values, valuesPer = 'cell', range, grid, onMoved, onView, onDrawn, onGridState, cut = null, arrows = null, apiRef, prepared, scalars, engineCut = null, engineArrows = null, iso = null, streamlines = null, onPictureDrawn }: SceneProps) {
   // F-832: the arrays made off the main thread, when they belong to this surface
   const prep = prepared && prepared.surface === surface ? prepared : null;
   const box = prep ? { min: prep.min, max: prep.max } : undefined;
@@ -245,11 +259,8 @@ function Scene({ surface, values, valuesPer = 'cell', range, grid, onMoved, onVi
   const cam = camera as THREE.PerspectiveCamera;
   const lut = useMemo(lutTexture, []);
   const clip = useMemo(clipUniforms, []);
-  const mat = useMemo(() => {
-    const m = fieldMaterial(lut);
-    m.material.maskNode = clip.mask;
-    return m;
-  }, [lut, clip]);
+  // ADR 0738: the surface is not masked: a cut surface is the engine's (engineCut), drawn in its place
+  const mat = useMemo(() => fieldMaterial(lut), [lut]);
   const mesh = useMemo(() => new THREE.Mesh(new THREE.BufferGeometry(), mat.material), [mat]);
   // F-818: the overlays drawn on the field (mesh grid, arrows) keep DESIGN.md's light values in every theme: they sit
   // on the colour map, which is the same in every theme, not on the theme's ground
@@ -268,6 +279,37 @@ function Scene({ surface, values, valuesPer = 'cell', range, grid, onMoved, onVi
     l.visible = false;
     return l;
   }, [clip]);
+  // ADR 0738: the engine's pictures, unmasked (the engine cut them): its cut surface and iso-surface in the field's
+  // table, its arrows in deep ink, its streamlines in deep ink drawn over the surface (they run inside it)
+  const engineMat = useMemo(() => fieldMaterial(lut), [lut]);
+  const cutMesh = useMemo(() => {
+    const m = new THREE.Mesh(new THREE.BufferGeometry(), engineMat.material);
+    m.visible = false;
+    return m;
+  }, [engineMat]);
+  const isoMesh = useMemo(() => {
+    const m = new THREE.Mesh(new THREE.BufferGeometry(), engineMat.material);
+    m.visible = false;
+    return m;
+  }, [engineMat]);
+  const engineArrowLines = useMemo(() => {
+    const l = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicNodeMaterial({ color: raw(palette.ink) }));
+    l.visible = false;
+    return l;
+  }, []);
+  const streamLines = useMemo(() => {
+    const l = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicNodeMaterial({ color: raw(palette.ink), depthTest: false }));
+    l.renderOrder = 2;
+    l.visible = false;
+    return l;
+  }, []);
+  // the stored surface is hidden while the engine's cut or iso-surface stands in for it
+  const surfaceHidden = useRef(false);
+  surfaceHidden.current = !!engineCut || !!iso;
+  // the surface's values are in (set by the values effect, cleared by a new surface)
+  const surfaceReady = useRef(false);
+  const engineCutRef = useRef(engineCut);
+  engineCutRef.current = engineCut;
   // F-818: the viewport's ground follows the theme, drawn again at once
   useEffect(
     () =>
@@ -295,6 +337,17 @@ function Scene({ surface, values, valuesPer = 'cell', range, grid, onMoved, onVi
   const gridFor = useRef<SurfaceData | null>(null);
 
   useEffect(() => {
+    scene.add(cutMesh, isoMesh, engineArrowLines, streamLines);
+    return () => {
+      scene.remove(cutMesh, isoMesh, engineArrowLines, streamLines);
+      for (const o of [cutMesh, isoMesh, engineArrowLines, streamLines]) o.geometry.dispose();
+      engineMat.material.dispose();
+      engineArrowLines.material.dispose();
+      streamLines.material.dispose();
+    };
+  }, [scene, cutMesh, isoMesh, engineArrowLines, streamLines, engineMat]);
+
+  useEffect(() => {
     scene.add(mesh, lines, arrowLines);
     return () => {
       scene.remove(mesh, lines, arrowLines);
@@ -307,8 +360,6 @@ function Scene({ surface, values, valuesPer = 'cell', range, grid, onMoved, onVi
   }, [scene, mesh, lines, arrowLines, mat, lut]);
 
   // F-809: the cut plane's uniforms (rcfd-render's (n, d))
-  const cutRef = useRef<Cut | null>(cut);
-  cutRef.current = cut;
   useEffect(() => {
     if (cut) {
       const { n, d } = clipPlane(cut);
@@ -351,6 +402,7 @@ function Scene({ surface, values, valuesPer = 'cell', range, grid, onMoved, onVi
     gridFor.current = null;
     if (!surface) {
       mesh.visible = false;
+      surfaceReady.current = false;
       invalidate();
       return;
     }
@@ -370,6 +422,7 @@ function Scene({ surface, values, valuesPer = 'cell', range, grid, onMoved, onVi
     lines.geometry.dispose();
     lines.geometry = new THREE.BufferGeometry();
     mesh.visible = false; // until its values are in
+    surfaceReady.current = false;
     fit(cam, controls.current, surface, aspectRef.current, boxRef.current);
     moved.current(false);
     viewed();
@@ -386,7 +439,8 @@ function Scene({ surface, values, valuesPer = 'cell', range, grid, onMoved, onVi
     a.needsUpdate = true;
     mat.lo.value = range.loF32;
     mat.inv.value = range.invF32;
-    mesh.visible = true;
+    surfaceReady.current = true;
+    mesh.visible = !surfaceHidden.current;
     let live = true;
     renderer.render(scene, cam);
     void finished(renderer)
@@ -400,6 +454,68 @@ function Scene({ surface, values, valuesPer = 'cell', range, grid, onMoved, onVi
     };
     // onDrawn is read when the picture is done; a new callback alone does not redraw
   }, [surface, values, valuesPer, scalars, range, mesh, mat, renderer, scene, cam, invalidate]);
+
+  // ADR 0738: the engine's pictures. The cut surface's corners take the scalar of their source triangle (the values
+  // effect above wrote the surface's), so it is coloured as the surface it was cut from; the iso-surface's corners take
+  // the engine's value (its level) through the same range.
+  useEffect(() => {
+    const replace = (o: THREE.Mesh | THREE.LineSegments, g: THREE.BufferGeometry) => {
+      const old = o.geometry;
+      o.geometry = g;
+      old.dispose();
+    };
+    const drawable = !!surface && !!values && !!range;
+    if (range) {
+      engineMat.lo.value = range.loF32;
+      engineMat.inv.value = range.invF32;
+    }
+    if (engineCut && drawable) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(engineCut.positions, 3));
+      const main = mesh.geometry.getAttribute('scalar') as THREE.BufferAttribute | undefined;
+      const sc = new Float32Array(3 * engineCut.source.length);
+      if (main) {
+        const from = main.array as Float32Array;
+        for (let i = 0; i < engineCut.source.length; i++) sc.fill(from[3 * engineCut.source[i]!]!, 3 * i, 3 * i + 3);
+      }
+      g.setAttribute('scalar', new THREE.BufferAttribute(sc, 1));
+      g.computeBoundingSphere();
+      replace(cutMesh, g);
+    }
+    cutMesh.visible = !!engineCut && drawable && !iso;
+    if (iso && drawable) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(iso.positions, 3));
+      g.setAttribute('scalar', new THREE.BufferAttribute(iso.values, 1));
+      g.computeBoundingSphere();
+      replace(isoMesh, g);
+    }
+    isoMesh.visible = !!iso && drawable;
+    const lineGeometry = (seg: Float32Array<ArrayBuffer> | null) => {
+      const g = new THREE.BufferGeometry();
+      if (seg && seg.length > 0) g.setAttribute('position', new THREE.BufferAttribute(seg, 3));
+      return g;
+    };
+    replace(engineArrowLines, lineGeometry(engineArrows));
+    engineArrowLines.visible = !!engineArrows && engineArrows.length > 0 && drawable;
+    replace(streamLines, lineGeometry(streamlines));
+    streamLines.visible = !!streamlines && streamlines.length > 0 && drawable;
+    // the surface goes while the engine's picture stands in for it (it is shown once its values are in)
+    mesh.visible = surfaceReady.current && !surfaceHidden.current;
+    const picture = engineCut ?? iso ?? engineArrows ?? streamlines;
+    let live = true;
+    renderer.render(scene, cam);
+    void finished(renderer)
+      .then(nextFrame)
+      .then(() => {
+        if (live) onPictureDrawn?.(drawable ? picture : null);
+      });
+    invalidate();
+    return () => {
+      live = false;
+    };
+    // onPictureDrawn is read when the picture is done; `values` and `scalars` change the cut surface's colours
+  }, [engineCut, engineArrows, iso, streamlines, surface, values, scalars, range, mesh, cutMesh, isoMesh, engineArrowLines, streamLines, engineMat, renderer, scene, cam, invalidate]);
 
   // the mesh grid: computed once per surface, in a worker
   useEffect(() => {
@@ -467,13 +583,24 @@ function Scene({ surface, values, valuesPer = 'cell', range, grid, onMoved, onVi
     (): FieldCanvasApi => {
       const raycaster = new THREE.Raycaster();
       const pickNdc = (x: number, y: number): Pick | null => {
-        if (!surface || !values || !mesh.visible) return null;
+        if (!surface || !values) return null;
         raycaster.setFromCamera(new THREE.Vector2(x, y), cam);
-        // F-809: the nearest hit rcfd-render's cut plane keeps
-        const c = cutRef.current;
-        const hit = raycaster.intersectObject(mesh, false).find((h) => keeps(c, [h.point.x, h.point.y, h.point.z]));
-        if (!hit || hit.faceIndex == null) return null;
-        const triangle = hit.faceIndex;
+        let triangle: number;
+        let hit: THREE.Intersection | undefined;
+        const ec = engineCutRef.current;
+        if (ec && cutMesh.visible) {
+          // ADR 0738: the engine's cut surface; the readout names the surface triangle the hit piece was cut from
+          hit = raycaster.intersectObject(cutMesh, false)[0];
+          if (!hit || hit.faceIndex == null) return null;
+          const t = ec.source[hit.faceIndex];
+          if (t === undefined) return null;
+          triangle = t;
+        } else {
+          if (!mesh.visible) return null;
+          hit = raycaster.intersectObject(mesh, false)[0];
+          if (!hit || hit.faceIndex == null) return null;
+          triangle = hit.faceIndex;
+        }
         const cell = surface.cells[triangle];
         if (cell === undefined) return null;
         // F-819b: surface values are the owner cell's value at the triangle's index
@@ -627,7 +754,7 @@ function Scene({ surface, values, valuesPer = 'cell', range, grid, onMoved, onVi
         },
       };
     },
-    [cam, mesh, surface, values, valuesPer, renderer, scene, invalidate],
+    [cam, mesh, cutMesh, surface, values, valuesPer, renderer, scene, invalidate],
   );
 
   return null;
