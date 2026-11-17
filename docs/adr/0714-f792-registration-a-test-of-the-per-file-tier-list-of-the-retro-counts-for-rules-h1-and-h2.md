@@ -111,3 +111,58 @@ is not changed). Todo if the index differs and the cause is not diagnosed.
 * Only tiers 1 and 2 exist (ADR 0712). The `none` count and the tests of the real workspace are not asserted.
 * Rule G (git) interplay is covered only by the existing `RetroOnGit`, not by the new tests.
 * The equality of the indexes is checked on 68f66132 plus this ADR, not on any other state of the tree.
+
+## Addendum 1: results (2026-11-17)
+
+Commits on branch `f792-work`: 539e6f66 (this ADR alone, the registration), 97a2a574 (the test, one file, 20 insertions), and the
+commit of this addendum. The "before" indexes were made at 539e6f66, the "after" indexes at 97a2a574 (working tree equal to the
+commit), all with `f792-scratch/meta.json`, once each. Files in `f792-scratch`: `before_*.json`, `after_*.json`, `report_*.txt`.
+
+| id | check | limit | measured | met |
+|---|---|---|---|---|
+| C1 | `files` map | equal to the 5-entry dict | equal (`test_files_map_h1_h2` passes in the one run) | yes |
+| C2 | counts | `(2, 3, 0)`; tier counts of the map equal `h1`, `h2` | as limit (`test_retro_counts_agree_with_files` passes) | yes |
+| C3 | `--primary git` index | `cmp` identical | identical (11 889 642 bytes before and after) | yes |
+| C4 | `--primary registered`, `p0679` | `cmp` identical | identical (11 908 047 and 11 911 149 bytes) | yes |
+| C5 | `gate_attribute.py`, `adr_test_index.py` | diff empty | empty | yes |
+| C6 | `python -m unittest discover -s scripts` | OK; 138 tests; 4 skipped | `Ran 138 tests`, `OK (skipped=4)` | yes |
+| C7 | one commit, one file, insertions only | `test_adr_test_index_retro.py` | 1 file, 20 insertions, 0 deletions | yes |
+| C8 | `--report` output | 0 differing lines | identical for the three values of `--primary` | yes |
+| C9 | `docs_site` | passes | `cargo test -q --release -p rcfd-cli --test docs_site`: 2 passed, 0 failed (run after the commits, before this addendum) | yes |
+| C10 | mutations M1 to M5 | each caught by a new test | 5 of 5 caught, see below | yes |
+
+Mutations (scratch copy `f792-scratch/mut`, never in a commit; new tests alone, then the whole retro file of 15 tests):
+
+| mutation | new tests alone | whole file |
+|---|---|---|
+| M1 tier of `files` entry always 2 | 2 failures (files map and counts) | the same 2 only |
+| M2 tier written as `best[0] + 1` | 2 failures | the same 2 only |
+| M3 every file counted under `h2` | 1 failure (counts), files map unaffected as registered | the same 1 only |
+| M4 section unit emitted as tier 2 | 2 failures | 3 (also `test_p5_tier_beats_a_lower_number_of_a_lower_tier`) |
+| M5 `max` instead of `min` over candidates | 2 failures | 4 (also p5 and `test_p6_lowest_number_in_a_tier`) |
+
+M1, M2 and M3 are caught by no other test of the file: before F-792 a wrong tier or a wrong count in the `files` map or in `h1`/`h2`
+passed all tests. Deviation: the registration expected M1, M2 and M5 to be caught by the files-map test; the counts test catches
+them too (the tier counts of the map then disagree with `h1`/`h2` or the map changes), which is a stronger result, not a
+change of a limit. fmt and clippy do not apply (no Rust file touched).
+
+Not run: any solver crate test (no Rust file is touched). The map of the real repository is not asserted (Limits).
+
+**Decision by the registered rule: done.**
+
+### Remaining questions
+
+1. The tier of a `files` entry is asserted, but `none` is not (it depends on how the fixture's negative controls get an E2
+   primary). Options: (a) leave; (b) assert `none` = 6 on the fixture. Recommendation: (a); `none` has no consumer, and the
+   negative controls already assert `primary_adr is None` per test.
+2. `h3` key and the inert H3 fixtures (question 1 of ADR 0712). Recommendation: unchanged, (a).
+
+## For the lead: roadmap entries
+
+Proposed status and note of F-792:
+
+> Proposed status: done.
+
+> Test-to-ADR index, gate attribution. Follow-up of F-790 (ADR 0712), 2026-11-17. DONE. ADR 0714, 2026-11-17: two tests added to `scripts/test_adr_test_index_retro.py` (one commit, one file, 20 insertions, no change to `adr_test_index.py` or `gate_attribute.py`) that restore the assertion lost with `test_counts` (ADR 0712): the whole `files` map of `coverage.primary.retro` on the fake workspace equals five literal entries of tier and ADR (H1: `r_h1.rs` 0110, `r_tier_a.rs` 0130; H2: `r_h2.rs` 0115, `r_tier_b.rs` 0120, `r_low.rs` 0125), and the counts `(h1, h2, h3) == (2, 3, 0)` agree with the tiers of the map. The index of `--primary git`, `--primary registered` and `p0679` is byte-identical before and after (11 889 642, 11 908 047 and 11 911 149 bytes, `cmp`; the `--report` output too), `python -m unittest discover -s scripts` runs 138 tests (136 before), OK; 5 of 5 planted changes in `retro_primaries` and `retro_units` caught (3 of them, the wrong tier written to the map, always 2 and `best[0] + 1`, and the miscount under `h2`, by the new tests only). Not covered: the `files` map of the real repository, the `none` count.
+
+No follow-up is proposed (remaining question 1 recommends leaving `none` unasserted).
