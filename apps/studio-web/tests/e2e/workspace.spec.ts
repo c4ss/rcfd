@@ -284,7 +284,10 @@ test('Follow live: the line stays on the running run’s newest snapshot; moving
   const counter = page.locator('.tp-counter');
   // following: the line is on the newest snapshot, and moves on as the runner writes more
   const first = await settled(page);
-  await expect(counter).toHaveText(new RegExp(`^snapshot ${first.snapshot + 1} of ${first.snapshot + 1} computed so far$`));
+  // on the newest snapshot: "N of N" (the run may have written more since `first` when the renderer is slow, as with
+  // software WebGL on Linux, so N is not pinned to first.snapshot + 1)
+  await expect(counter).toHaveText(/^snapshot (\d+) of \1 computed so far$/);
+  expect(Number((await counter.textContent())!.match(/of (\d+)/)![1])).toBeGreaterThanOrEqual(first.snapshot + 1);
   await until(async () => ((await attr(ws, 'data-snapshot')) > first.snapshot + 2 ? true : null), 30_000, 'the line to follow new snapshots');
   const later = await settled(page);
   expect(later.snapshot).toBeGreaterThan(first.snapshot);

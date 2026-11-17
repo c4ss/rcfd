@@ -241,7 +241,8 @@ test('an empty project: every group says what is missing and the next step', asy
 test('close: back to no project open, with the recent list; a folder that went away says so and can be forgotten', async () => {
   const { page } = studio!;
   await page.getByRole('button', { name: 'Close project' }).click();
-  expect(await page.evaluate(() => document.querySelector('h1')?.textContent)).toBe('No project open');
+  // waited for: the close is asynchronous (a slow renderer, such as Linux without a GPU, shows it a moment later)
+  await expect(page.locator('h1')).toHaveText('No project open');
   const recent = page.getByRole('region', { name: 'Recent projects' }).or(page.locator('section.ph-recent'));
   await expect(recent.getByText('empty-project', { exact: true })).toBeVisible();
   await expect(recent.getByText('quick-start', { exact: true })).toBeVisible();
