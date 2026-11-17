@@ -1040,6 +1040,8 @@ derived picture, and the Studio cannot add one (no Rust change). So:
 - G16: a CLI or MCP way to draw the Studio's cut and arrows of a store (rcfd-render's `View::clip` is a library
   feature only), so Claude Code can make the same picture.
 - The length unit of the stored mesh coordinates (the cut panel shows the position without a unit).
+- (2026-11-17) Collected with the other items' engine needs in "Engine follow-ups of the Studio items" at the end of this
+  ADR, as E-809a to E-809e.
 
 ### Proposed for `DESIGN.md` (not edited here)
 
@@ -1109,6 +1111,11 @@ F-828, registers the comparison).
 - `status.json`'s `time` has no unit (the Runs view's "Time, s" caption is the Studio's word).
 - No read-only hash of a mesh file a run names (the reproduce check cannot say whether it changed).
 - A service session has no reproduce surface yet (`journal.get` then `rcfd run --journal`).
+
+Follow-up (2026-11-17, Addendum 17): the service-session numbers (settings, the dev plots), the field caption's step and
+time and the first path's result numbers now open their provenance; a session number says its file and its reproduce
+command as not recorded, and a snapshot's time its unit. The engine needs above are E-828a to E-828e of "Engine
+follow-ups of the Studio items" at the end of this ADR.
 
 ### Proposed for `DESIGN.md` (not edited here)
 
@@ -1682,6 +1689,8 @@ field-view extras from the egui Studio (F-837)".
   says why).
 - Proposed, not needed: `rcfd-runner config set` or an MCP `set_runner_config`, so the budgets are written by their
   owner, atomically.
+- (2026-11-17) Collected in "Engine follow-ups of the Studio items" at the end of this ADR, as E-837a to E-837d (the
+  length unit is E-809e).
 
 ### Not built, no engine needed
 
@@ -2346,3 +2355,120 @@ Check of the new line (`npm run bench -- --only=P7,P8 --no-gen`, once, 2026-11-1
 other jobs): P7 R2 median 41 ms, first open of the launch 289 ms (judged, met); R1 median 1328 ms, first open 1356 ms
 (recorded, met); P8 240 frames per s and p99 frame 4.3 ms with vertical sync (met); verdict 4 of 4 judged lines met. The
 uncapped P8 run gave 38.3 per s (recorded, not judged).
+
+## Addendum 17: the Studio-only leftovers of F-814, F-813 and F-828 (2026-11-17)
+
+No new dependency, no engine change, no change to a default. On studio-leftovers over studio-roadmap e7b6c43b.
+
+### F-814: a case file named in a reply opens in the case editor
+
+- `src/renderer/claude/links.ts`: `Known` carries the case files of the project (files of `cases/` ending `.toml` or
+  `.json`, the engine's rule of ADR 0148, `isCaseFile` of the home); `fileOpensIn(path, known)` says `case` or `home`.
+- `src/renderer/claude/ClaudePanel.tsx`: a case file's chip is "Edit <path> in the case editor" and goes to
+  `#/case/open/<path>`, as the home's Edit does (F-812 makes the session, binds it and shows the editor). A data file of
+  `cases/`, a mesh and a note keep the filtered Home ("Show <path> on the project home").
+- Tests: `tests/unit/claude.spec.ts` (where each kind opens), `tests/e2e/claude.spec.ts` (the note filters Home; the
+  case chip opens the editor on a session of `rcfd serve`, which the spec now starts; back on Home the transcript and
+  its chips are as before; the folder is still unchanged).
+- Still waiting for the maintainer, not touched: the claude-head colour role (DESIGN.md), and whether the Studio writes
+  `.rcfd/claude-allow.json`. Still the engine's: session discovery (the TypeScript stopgap stays).
+
+### F-813: the result opens the run workspace; the field caption for a learner
+
+- `src/renderer/first/target.ts`: the result's "Open the run" (accessible name "Open the run in the workspace") selects
+  the run and shows the run workspace (F-810); a run still going keeps "Follow it in Runs". The project view hands the
+  path `openWorkspace` beside `openRun`.
+- `FieldViewport` takes `learner: { quantity }`, which the first path passes with its plain word for the field. The
+  learner's caption at rest is the run, the plain word with the engine's unit, and "round <step>". The stored name,
+  the snapshot and its count, the step and t, the colour range and the cells are said to readers (G22), and the
+  readout's cell and triangle are too. The precise terms "round" (step) and "the picture" (the boundary surface's
+  triangles coloured by their cells) are added to the result's Explain (G19, PRODUCT Principle 5), and the full control
+  names the run workspace. The values and the picture do not change, and the other surfaces keep their caption.
+- Unchanged, as asked: the walk's test still writes `rcfd-project.json` itself, because no engine command makes a
+  project (ADR 0731, proposed).
+- Tests: `tests/e2e/first-path.spec.ts` (the visible caption has none of snapshot, step, t =, triangles, ux; the round
+  opens its provenance; the result and the keyboard walk open the workspace with the run drawn),
+  `tests/unit/first-path.spec.ts`.
+
+### F-828: the numbers that had no provenance
+
+- A session number is a third subject of the inspector (`{kind: 'session'}`, `SessionNumberSource` and `sessionFacts` in
+  `src/shared/provenance.ts`): value, unit as the engine gave it, session, iteration, the service method that answered,
+  the session's journal (`journal.get`: its edit count and case hash, read when the popover opens), and the engine of
+  `service.info`. There is no run behind it, so there is no run.json, snapshot or reproduce command. What the service
+  does not record is said as not recorded: the file a session was made from (neither `session.list` nor `journal.get`
+  names it) and a reproduce command (`journal.get` gives the edits, but no journal file exists for `rcfd run --journal`).
+- Settings (`KeyRow.tsx`, so the case editor too): a key whose value is a number, or a list of numbers, opens the
+  provenance of the engine's value (`settings.get`). Its unit is the schema's `x-rcfd-unit` or `x-rcfd-si-dimension`
+  and names which one, or says the schema names none. It opens by Ctrl+I or the palette while the key's field has the
+  focus (the row names it with `data-provenance`), or by a click on the key's name, which also puts the focus in the
+  field. The name is a passive trigger, as in the runs grid, so Tab and Enter stay the field's. F-816's walk is
+  unchanged, and no element is left that no key reaches (the a11y spec showed that a `tabindex="-1"` button would leave
+  one).
+- Dev plots (`ResidualPlot.tsx`, `MonitorPlot.tsx`, `PlotsDev.tsx`): the latest value of each residual and of the
+  monitor (`monitors.get`, its series unit) and the session's iteration (`run.status`) are buttons: click, Enter, Ctrl+I.
+  The feed's own counters (fetch counts and times) are the Studio's measurements, not solver numbers, and stay plain.
+- The field caption's step and t (the workspace, Compare, the dev field view) and the learner's round open the
+  snapshot's provenance (`snapshotFactValue`). The time's unit is said as not recorded, because store.rts gives a
+  snapshot's time without one.
+- The first path's result numbers (rounds, solver time, the report values) open theirs, with the same sources as Runs.
+- The palette's Show provenance now works off a project (a session number needs none; Copy reproduce command still
+  needs one). While the palette is open, the number meant is the one that had the focus before the palette opened.
+- Tests: `tests/unit/provenance.spec.ts` (the session facts, the not-recorded words, the trigger counts per surface),
+  `tests/e2e/settings-rcfd.spec.ts` (click, Ctrl+I, the palette on a real session; the schema's SI dimension named),
+  `tests/e2e/plots.spec.ts` (monitor by Enter, residual by click, iteration by Ctrl+I, against `monitors.get` of the
+  test's own), `tests/e2e/provenance.spec.ts` (the caption's step and time).
+- Numbers still without provenance (Studio work, no engine needed): the Runs table's residual columns u and p (F-837,
+  the value is in the tooltip), the compared run's residuals in the time panel (F-815), the legend's ticks, the domain
+  size and the scale bar (F-837), the runner budgets (F-837), the home's counts. F-828 stays partial on these.
+
+### Status after this addendum
+
+- F-814 stays partial: what is left is two maintainer decisions and the engine's session discovery (below).
+- F-813 stays partial: the engine's project command, and the maintainer's first-time view-and-report.
+- F-828 stays partial: the numbers listed above, and the engine's records (below).
+
+### Open for the maintainer
+
+- D-L1 (F-828): should the Studio write a session's journal (`journal.get`) to a file so that a session number gets a
+  reproduce command (`rcfd run --journal <file>`)? It would be the Studio writing a file the user did not ask for (G12).
+  Recommendation: no. Ask the engine to record the journal file itself (follow-up E-828c).
+- The two F-814 decisions are as before: the claude-head colour role, and writing `.rcfd/claude-allow.json`.
+
+### Verification (2026-11-17, on studio-leftovers over studio-roadmap e7b6c43b, RCFD_TEST_HEADLESS=1)
+
+- `npm run typecheck`, `npm run build`, `npm run package:dir`: clean.
+- Unit project: 434 passed.
+- The touched specs alone (claude, first-path, provenance, settings-rcfd, settings, plots), then word-budget and a11y
+  (axe), then case-editor: all passed. Every word budget is unchanged and held. The a11y spec first failed on the
+  settings names as `tabindex="-1"` buttons (elements no key reaches), which is why the names are passive triggers.
+- The full `npm test` once: 663 passed, none failed or flaky. After it, one reader-only word in the learner caption
+  changed ("the last stored picture" to "stored picture", because the viewport does not know that it is the last), and
+  first-path.spec.ts passed again on a new build (5 of 5).
+
+## Engine follow-ups of the Studio items (2026-11-17)
+
+Every engine entry point the partial Studio items wait for, in one place, so that one engine ADR can take them
+together. The Studio shows each one as unavailable or not recorded, and does not stand in for it (G2, G6, G16). Ids are
+local to this list.
+
+| Id | Item | What the engine needs to give | Today in the Studio |
+| --- | --- | --- | --- |
+| E-809a | F-809 | An iso-surface of a stored cell field (triangles with their cells), as a `data.*` method or an MCP tool | shown unavailable |
+| E-809b | F-809 | Streamlines of a stored velocity field (seeds, polylines with the cell of each point) | shown unavailable |
+| E-809c | F-809 | A cut or slice of a stored 3D field with values; `render_field` with `axis`, `slice` and `vectors` for a store | the cut and arrows are drawn by the Studio within tolerances T1 to T3 |
+| E-809d | F-809, G16 | A CLI or MCP way to draw the Studio's cut and arrows of a store, so Claude Code can make the same picture | none |
+| E-809e | F-809, F-837 | The length unit of the stored mesh coordinates | the cut position has no unit; the domain size and the scale bar say m from the SI settings, and say why |
+| E-813 | F-813 | A command that creates a project (`rcfd project init`, MCP `create_project` over `Project::create`; ADR 0731, proposed) | the empty folder says it is missing; the walk's test writes `rcfd-project.json` |
+| E-814 | F-814 | An engine entry point that lists a project's Claude Code sessions (rcfd-claude) | a TypeScript stopgap in the main process |
+| E-828a | F-828 | run.json records the solver's launch argv and a build id (`solver_version` is a release name) | the reproduce command is built from the runner's start options |
+| E-828b | F-828 | A unit for `status.json`'s `time`, and for a snapshot's time in store.rts | "Time, s" is the Studio's caption; the provenance says not recorded |
+| E-828c | F-828 | A service session's record: the file `session.create` read, and a journal file that `rcfd run --journal` can run | the provenance says not recorded, with no command |
+| E-828d | F-828 | `rcfd-runner start` options for `continue_from` and `max_steps`, or `rcfd-runner rerun <id>` / `start_run {from_run}` | said as a gap beside the command |
+| E-828e | F-828 | A read-only hash of a mesh file a run names | said as a gap beside the command |
+| E-829a | F-829 | Delete or trash for runs, results and cases (`trash_run`, `trash_case`, `list_trash`, `restore_trash`) | the Studio offers no delete |
+| E-829b | F-829 | Compare-and-set for `settings.set` (a base value or hash) | the Studio reads the value again before it sends |
+| E-837a | F-837 | A case-facts query (cell sizes, a velocity scale) or `start_run {dry_run: true}`, for "simulate N s", adaptive correctors and the Courant fix | not built |
+| E-837b | F-837 | A mesh refine entry point (`refine_mesh {mesh, factor}` or a service method), for Refine by 2 | not built |
+| E-837c | F-837 | A service save of a case session to a path outside a project, for one case file anywhere | not built |
+| E-837d | F-837 | `rcfd-runner config set` or MCP `set_runner_config` (ADR 0733, proposed) | the Studio writes `.rcfd/runner-config.json` conflict-safe, and the runner checks it |

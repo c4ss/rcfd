@@ -69,5 +69,5 @@ export const FULL_CONTROL = {
   make: 'New case in the header band offers every built-in template and shipped example; Edit on the case opens the case editor with every setting.',
   run: 'The run bar in Runs: Run, and Queue… with a priority, threads, a memory budget and settings for one run; Pause, Stop… and Cancel… on the selected run.',
   watch: 'Runs: the run list, sorted and filtered, with every number the runner recorded and its state changes.',
-  result: 'Runs: every number of the run; the case editor: every setting, to change one and run again; the Claude Code panel: ask about the run.',
+  result: 'The run workspace: every stored picture of the run with its residuals and monitors on one time line; Runs: every number of the run; the case editor: every setting, to change one and run again; the Claude Code panel: ask about the run.',
 } as const;

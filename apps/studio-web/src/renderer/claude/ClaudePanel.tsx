@@ -12,7 +12,9 @@ import type { ProjectView } from '../../shared/project.js';
 import { Button, IconButton, Quiet, StatePictogram, Unavailable } from '../ui/index.js';
 import { clock, dateTime } from '../project/format.js';
 import { claudeActions, watchClaudeState } from './door.js';
-import { findRefs, paragraphs, type Known, type Ref } from './links.js';
+import { fileOpensIn, findRefs, paragraphs, type Known, type Ref } from './links.js';
+import { caseHash } from '../case/hash.js';
+import { isCaseFile } from '../project/HomeExtras.js';
 import './claude.css';
 
 export interface ClaudePanelProps {
@@ -46,6 +48,7 @@ export function ClaudePanel({ project, onOpenRun, onOpenFile, onHide }: ClaudePa
     () => ({
       runs: new Set(project.runs.items.map((r) => r.id)),
       files: new Set([...project.cases.items, ...project.meshes.items, ...project.notes.items].map((x) => x.path)),
+      cases: new Set(project.cases.items.map((c) => c.path).filter(isCaseFile)),
       folder: project.folder,
     }),
     [project.runs.items, project.cases.items, project.meshes.items, project.notes.items, project.folder],
@@ -272,7 +275,7 @@ function FeedEntry({ item, known, onOpenRun, onOpenFile }: { item: FeedItem; kno
           <div className="cc-who">Claude Code</div>
           <Text text={item.text} />
           {item.tools.length > 0 && <p className="cc-tools">Used {item.tools.join(', ')}</p>}
-          {refs.length > 0 && <Refs refs={refs} onOpenRun={onOpenRun} onOpenFile={onOpenFile} />}
+          {refs.length > 0 && <Refs refs={refs} known={known} onOpenRun={onOpenRun} onOpenFile={onOpenFile} />}
         </li>
       );
     }
@@ -327,13 +330,28 @@ function Text({ text }: { text: string }) {
   );
 }
 
-function Refs({ refs, onOpenRun, onOpenFile }: { refs: readonly Ref[]; onOpenRun: (id: string) => void; onOpenFile: (path: string) => void }) {
+function Refs({
+  refs,
+  known,
+  onOpenRun,
+  onOpenFile,
+}: {
+  refs: readonly Ref[];
+  known: Known;
+  onOpenRun: (id: string) => void;
+  onOpenFile: (path: string) => void;
+}) {
   return (
     <div className="cc-refs" role="group" aria-label="References in this reply">
       {refs.map((r) =>
         r.kind === 'run' ? (
           <Button key={`run:${r.id}`} variant="chip" onPress={() => onOpenRun(r.id)} aria-label={`Open run ${r.id} in Runs`}>
             {r.id}
+          </Button>
+        ) : fileOpensIn(r.path, known) === 'case' ? (
+          // F-814 with F-812: a case file opens in the case editor, as the home's Edit does
+          <Button key={`file:${r.path}`} variant="chip" onPress={() => void (location.hash = caseHash.open(r.path))} aria-label={`Edit ${r.path} in the case editor`}>
+            {r.path}
           </Button>
         ) : (
           <Button key={`file:${r.path}`} variant="chip" onPress={() => onOpenFile(r.path)} aria-label={`Show ${r.path} on the project home`}>

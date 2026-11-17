@@ -307,7 +307,7 @@ function focusLater(...selectors: string[]): void {
 /**
  * An open project: three views under the header band, Home (the index of the folder, F-805), Runs (F-806) and the run
  * workspace (F-810), which share the selected run, and the Claude Code panel beside them (F-814), whose run and file
- * references open the run in Runs or the file on Home.
+ * references open the run in Runs, a case file in the case editor (F-812) or another file on Home.
  */
 function OpenProject({ view, state }: { view: ProjectView; state: ProjectState }) {
   const [tab, setTab] = useState<View>('home');
@@ -330,6 +330,10 @@ function OpenProject({ view, state }: { view: ProjectView; state: ProjectState }
   const openFile = (p: string) => {
     setFocus((f) => ({ path: p, n: (f?.n ?? 0) + 1 }));
     setTab('home');
+  };
+  const openWorkspace = (id: string) => {
+    setRun(id);
+    setTab('workspace');
   };
   // F-831: the command palette's commands of these views (src/shared/commands/studio.ts), and the run selected in Runs
   // for the palette to offer first
@@ -363,7 +367,7 @@ function OpenProject({ view, state }: { view: ProjectView; state: ProjectState }
         selected={tab}
         onChange={(t) => setTab(t as View)}
         items={[
-          { id: 'home', label: 'Home', panel: <HomeBody view={view} state={state} onStarted={onStarted} focus={focus} /> },
+          { id: 'home', label: 'Home', panel: <HomeBody view={view} state={state} onStarted={onStarted} onOpenWorkspace={openWorkspace} focus={focus} /> },
           {
             id: 'runs',
             label: 'Runs',
@@ -405,11 +409,14 @@ function HomeBody({
   view,
   state,
   onStarted,
+  onOpenWorkspace,
   focus,
 }: {
   view: ProjectView;
   state: ProjectState;
   onStarted: (run: string) => void;
+  /** F-813: the first path's result opens its run in the run workspace (F-810). */
+  onOpenWorkspace: (run: string) => void;
   focus?: { path: string; n: number } | null;
 }) {
   const [kind, setKind] = useState<Kind>('all');
@@ -491,7 +498,7 @@ function HomeBody({
       {!view.liveness.live && <NotLive view={view} />}
       {runFailure && !runFailure.ok && <RunFailure failure={runFailure.failure} onDismiss={() => setRunFailure(null)} />}
       {/* F-813: the first path while the project holds nothing but its example */}
-      <FirstPath view={view} nav={{ openRun: onStarted }} />
+      <FirstPath view={view} nav={{ openRun: onStarted, openWorkspace: onOpenWorkspace }} />
       <div className="ph-tools">
         <TextField
           aria-label="Filter by name"

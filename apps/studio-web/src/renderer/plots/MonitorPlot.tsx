@@ -13,6 +13,8 @@ import type { SeriesData } from './series.js';
 import { isResidual, MONITOR_STYLE, type LineStyle } from './style.js';
 import type { RunStatus } from './useRunFeed.js';
 import { noSeriesSentence, pictogramOf, runName } from './words.js';
+// F-828: the latest value opens its provenance (the session, monitors.get, the engine)
+import { Provenance, sessionSeriesValue } from '../provenance/index.js';
 
 export interface MonitorPlotProps {
   readonly session: string;
@@ -55,7 +57,20 @@ export function MonitorPlot({ session, feed, status, height = 64 }: MonitorPlotP
       )}
       <div className="plot-readout">
         <small>{last >= 0 ? `${label} at ${atAbscissa(feed!.xLabel, data.xAt(last))}, the latest sample` : label}</small>
-        <div className="plot-readout-value">{last >= 0 ? fmt(data.yAt(last)) : 'no samples'}</div>
+        <div className="plot-readout-value">
+          {last >= 0 ? (
+            <Provenance
+              subject={{
+                kind: 'session',
+                source: sessionSeriesValue({ session, name, shown: fmt(data.yAt(last)), value: data.yAt(last), x: data.xAt(last), xLabel: feed!.xLabel ?? 'x', unit: data.unit, residual: false }),
+              }}
+            >
+              {fmt(data.yAt(last))}
+            </Provenance>
+          ) : (
+            'no samples'
+          )}
+        </div>
       </div>
       <PlotFrame series={series} version={feed!.version} log={false} xCaption={xCaption} height={height}>
         {(d) => {

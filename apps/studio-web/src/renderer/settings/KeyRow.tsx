@@ -5,6 +5,7 @@ import { useId, useState, type KeyboardEvent } from 'react';
 import { Button, Select, StatePictogram, Switch, TextField } from '../ui/index.js';
 import { useSettings } from './context.js';
 import { encode, formatValue, isSet, rangeText, unitOf, valueAt, type Leaf } from './schema.js';
+import { openTrigger, Provenance, settingValue } from '../provenance/index.js';
 import '../history/history.css';
 
 export interface KeyRowProps {
@@ -35,6 +36,17 @@ export function KeyRow({ leaf, path, label }: KeyRowProps) {
   const name = label ?? (leaf.name === '*' ? (path.split('.').pop() ?? path) : leaf.name);
   const dimension = leaf.siDimension ?? leaf.item?.siDimension;
   const describedBy = [descId, error ? errId : null].filter(Boolean).join(' ');
+  // F-828: a number's provenance (the session, settings.get, the schema's unit, the engine): Show provenance (Ctrl+I, the
+  // palette) while its control has the focus, or a click on the key's name (which also puts the focus in the control);
+  // the name is not a tab stop of its own, so Tab and Enter stay the control's
+  const numeric = typeof shown === 'number' || (Array.isArray(shown) && shown.length > 0 && shown.every((x) => typeof x === 'number'));
+  const pkey = `st:${path}`;
+  const nameText = (
+    <>
+      {name}
+      {unit ? `, ${unit}` : ''}
+    </>
+  );
 
   let control;
   if (leaf.control === 'boolean') {
@@ -69,11 +81,49 @@ export function KeyRow({ leaf, path, label }: KeyRowProps) {
   }
 
   return (
-    <div className="st-key" data-path={path} data-pattern={leaf.pattern} data-control={leaf.control} data-set={set ? 'true' : 'false'} aria-busy={pending}>
+    <div
+      className="st-key"
+      data-path={path}
+      data-pattern={leaf.pattern}
+      data-control={leaf.control}
+      data-set={set ? 'true' : 'false'}
+      aria-busy={pending}
+      data-provenance={numeric ? pkey : undefined}
+      onClick={
+        numeric
+          ? (e) => {
+              const t = (e.target as Element).closest('[data-provenance-trigger]');
+              if (!t || !e.currentTarget.contains(t)) return;
+              e.currentTarget.querySelector<HTMLElement>('.st-key-control input')?.focus();
+              openTrigger(t);
+            }
+          : undefined
+      }
+    >
       <div className="st-key-head">
         <span className="st-key-name" data-words="data" title={leaf.description || undefined}>
-          {name}
-          {unit ? `, ${unit}` : ''}
+          {numeric ? (
+            <Provenance
+              tabStop={false}
+              pkey={pkey}
+              subject={() => ({
+                kind: 'session',
+                source: settingValue({
+                  session: c.session,
+                  path,
+                  shown: formatValue(shown),
+                  value: shown,
+                  pattern: leaf.pattern,
+                  unit: leaf.unit ? { unit: leaf.unit, kind: 'x-rcfd-unit' } : dimension ? { unit: dimension, kind: 'x-rcfd-si-dimension' } : null,
+                  set,
+                }),
+              })}
+            >
+              {nameText}
+            </Provenance>
+          ) : (
+            nameText
+          )}
         </span>
         {label === undefined && (
           <span className="st-key-path" data-words="data">

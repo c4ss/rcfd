@@ -32,7 +32,7 @@ import { FieldCanvas, type Backend, type FieldCanvasApi, type Pick } from './Fie
 import { CutPanel, DerivedControls, useArrows } from './DerivedControls.js';
 import { availability, middleCut, type Cut, type Glyphs, type Layers } from './derived.js';
 import { Legend } from './Legend.js';
-import { Provenance, cellValue } from '../provenance/index.js';
+import { Provenance, cellValue, snapshotFactValue } from '../provenance/index.js';
 import { FieldPrep, type PreparedSurface } from './prepare.js';
 import { beginWork } from '../work/work.js';
 import { WorkProgress } from '../work/WorkProgress.js';
@@ -66,6 +66,12 @@ export interface FieldViewportProps {
   readonly title?: string;
   /** F-815: the derived-picture controls (default on). */
   readonly derived?: boolean;
+  /**
+   * F-813: the learner's caption. `quantity` is the plain word for the stored field (`Velocity to the right`); the
+   * precise terms (the field's stored name, snapshot, step, time, the colour range, the cells) are said to readers, in
+   * the numbers' provenance and behind the first path's Explain (G22, G19, PRODUCT Principle 5). The values are the same.
+   */
+  readonly learner?: { readonly quantity: string };
   /**
    * F-832 (G21): the user cancelled the load of `snapshot`; the picture shown before stays, untouched, and this names
    * its snapshot (null when nothing was shown), so a host can put its line back there (no stale selection).
@@ -122,6 +128,7 @@ export function FieldViewport({
   title,
   derived = true,
   onCancelled,
+  learner,
 }: FieldViewportProps) {
   const tagBase = useMemo(() => `field-view-${++views}`, []);
   const lut = useMemo(lutBytes, []);
@@ -524,7 +531,26 @@ export function FieldViewport({
   // F-837: or the whole run's, or the fixed one
   const drawnRange = shown ? (rangeProp ?? modeRange ?? shown.range) : null;
   const unit = fi?.unit ?? '';
+  // F-813: the word a learner reads for the quantity (the stored name stays in the provenance and for readers)
+  const word = learner?.quantity ?? quantity;
   const snap = shown ? shown.info.snapshots[shown.snapshot] : undefined;
+  // F-828: the caption's step and time open their provenance (the store's snapshot record), as the time panel's do
+  const snapFact = (q: 'step' | 'time', v: number | null | undefined) =>
+    shown && snap
+      ? ({
+          kind: 'number',
+          source: snapshotFactValue({
+            run: runName(shown.info.path),
+            quantity: q,
+            shown: String(v),
+            value: v ?? null,
+            snapshot: shown.snapshot,
+            of: shown.info.snapshots.length,
+            step: snap.step,
+            time: snap.time ?? null,
+          }),
+        } as const)
+      : null;
   const reset = () => {
     api.current?.reset();
     setHover(null);
@@ -711,7 +737,31 @@ export function FieldViewport({
       <div className="fv-info">
         {shown && (
           <>
-            {legend && drawnRange && <Legend lut={lut} quantity={quantity} unit={unit} lo={drawnRange.lo} hi={drawnRange.hi} />}
+            {legend && drawnRange && <Legend lut={lut} quantity={word} unit={unit} lo={drawnRange.lo} hi={drawnRange.hi} />}
+            {learner ? (
+              // F-813: the learner's caption, plain at rest; the precise terms are said to readers and behind Explain
+              <p className="fv-caption" data-caption="learner">
+                <b data-words="data">{title ?? runName(shown.info.path)}</b> ·{' '}
+                <span data-words="data">
+                  {word}
+                  {unit ? `, ${unit}` : ''}
+                </span>
+                <Quiet>{` (stored as ${quantity})`}</Quiet> · round{' '}
+                <span data-words="data">
+                  <Provenance subject={() => snapFact('step', snap?.step)}>{snap?.step}</Provenance>
+                </span>
+                <Quiet>
+                  {' '}
+                  (step {snap?.step}, stored picture: snapshot {shown.snapshot + 1} of {shown.info.snapshots.length}, t = {snap?.time}) · {rangeWords} ·{' '}
+                  {shown.surface.cells.length} triangles of {shown.info.nCells} cells
+                </Quiet>
+                {outside && outside.outside > 0 && (
+                  <span data-words="exception" data-outside={outside.outside}>
+                    {` · ${outside.outside} of ${outside.of} surface cells outside the fixed range, drawn in its end colours`}
+                  </span>
+                )}
+              </p>
+            ) : (
             <p className="fv-caption">
               <b data-words="data">{title ?? runName(shown.info.path)}</b> ·{' '}
               <span data-words="data">
@@ -721,7 +771,14 @@ export function FieldViewport({
               <Quiet>
                 · snapshot {shown.snapshot + 1} of {shown.info.snapshots.length}
               </Quiet>{' '}
-              · step <span data-words="data">{snap?.step}</span> · t = <span data-words="data">{snap?.time}</span>
+              · step{' '}
+              <span data-words="data">
+                <Provenance subject={() => snapFact('step', snap?.step)}>{snap?.step}</Provenance>
+              </span>{' '}
+              · t ={' '}
+              <span data-words="data">
+                <Provenance subject={() => snapFact('time', snap?.time)}>{snap?.time}</Provenance>
+              </span>
               {/* G22: the colour map and the mesh size are said to readers (the legend shows the range) */}
               <Quiet>
                 {' '}
@@ -741,9 +798,10 @@ export function FieldViewport({
                 </span>
               )}
             </p>
+            )}
             <div className="fv-readout" aria-live={hover?.by === 'keyboard' ? 'polite' : 'off'} data-pointer={pointerAt || undefined}>
               <span className="fv-readout-label">
-                <span data-words="data">{quantity}</span>
+                <span data-words="data">{word}</span>
                 <Quiet>{` at the ${hover?.by === 'keyboard' ? 'centre' : 'cursor'}`}</Quiet>
                 {unit ? <span data-words="data">{`, ${unit}`}</span> : ''}
               </span>
@@ -778,9 +836,13 @@ export function FieldViewport({
                       {f32Text(hover.pick.value)}
                     </Provenance>
                   </output>
-                  <span className="fv-readout-where" data-words="data">
-                    cell {hover.pick.cell} · triangle {hover.pick.triangle}
-                  </span>
+                  {learner ? (
+                    <Quiet>{`cell ${hover.pick.cell} · triangle ${hover.pick.triangle}`}</Quiet>
+                  ) : (
+                    <span className="fv-readout-where" data-words="data">
+                      cell {hover.pick.cell} · triangle {hover.pick.triangle}
+                    </span>
+                  )}
                 </>
               ) : (
                 <Quiet>Point at the surface to read the stored value.</Quiet>

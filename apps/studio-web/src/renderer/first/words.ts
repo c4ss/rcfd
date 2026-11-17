@@ -29,6 +29,7 @@ export const STEP_HELP: Readonly<Record<'make' | 'run' | 'watch' | 'result', rea
   ],
   result: [
     'The numbers are the engine’s own: the rounds of calculation, the solver’s time, and the report the case asks for, the force of the fluid on the lid along its motion. The picture is the stored field at the end of the run; each colour is the value the legend gives it, and pointing at the box reads the value there.',
+    'Under the picture: the run, what the picture shows with its unit, and the round of calculation it was stored at. Clicking a number, or Ctrl+I on it, shows where the engine wrote it. Open the run shows every stored picture of the run, with its rounds and numbers moving together.',
   ],
 };
 
@@ -88,6 +89,16 @@ export const TERMS: Readonly<Record<'make' | 'run' | 'watch' | 'result', readonl
   result: [
     { plain: 'settled', precise: 'converged: the engine’s words “residual targets met”, with the residuals it reached', source: 'the run’s status.json' },
     { plain: 'velocity to the right', precise: 'ux: the x component of the velocity, as stored in the run’s field store (runs/<run id>/fields)', source: 'the store’s field list' },
+    {
+      plain: 'round, under the picture',
+      precise: 'step: the solver iteration at which the picture was stored, the last of the snapshots in the run’s field store (output.store_interval); the snapshot number and its time t are said to screen readers and in the number’s provenance',
+      source: 'docs/mcp-tools.md, start_run',
+    },
+    {
+      plain: 'the picture',
+      precise: 'the boundary surface of the mesh, drawn as triangles, each coloured by the stored value of the cell that owns it, on the viridis colour map from the lowest to the highest value shown',
+      source: 'docs/adr/0801-studio-web-dependencies-and-layout.md, Addendum 5 (the field viewport)',
+    },
     {
       plain: 'the force of the fluid on the lid',
       precise: 'lid_drag: the case’s report, the viscous force on the lid along x (reports.lid_drag); the engine gives no unit for report values',

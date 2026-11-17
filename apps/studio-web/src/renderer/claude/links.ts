@@ -1,5 +1,5 @@
 // Run ids and project files in Claude Code's replies (F-814): each one the open project holds becomes a reference chip
-// that opens the run in the Runs view or the file on the project home. Only what the engine listed for this project
+// that opens the run in the Runs view, a case file in the case editor (F-812), or any other file on the project home. Only what the engine listed for this project
 // links (its runs, cases, meshes and notes); a run id or path the project does not hold stays plain text, so a link
 // never leads nowhere. Pure, so the unit tests run it in Node.
 
@@ -10,6 +10,8 @@ export interface Known {
   readonly runs: ReadonlySet<string>;
   /** Project-relative, `/`-separated paths of its cases, meshes and notes. */
   readonly files: ReadonlySet<string>;
+  /** Those of `files` the engine reads as cases (files of cases/ ending .toml or .json, ADR 0148): they open in the editor. */
+  readonly cases?: ReadonlySet<string>;
   /** The project folder, to recognise absolute paths inside it. */
   readonly folder: string;
 }
@@ -53,6 +55,11 @@ export function findRefs(text: string, known: Known): Ref[] {
     .sort((a, b) => a.at - b.at)
     .filter((f) => (seen.has(f.key) ? false : (seen.add(f.key), true)))
     .map((f) => f.ref);
+}
+
+/** Where a file reference opens: a case file in the case editor, anything else on the project home (filtered to it). */
+export function fileOpensIn(path: string, known: Known): 'case' | 'home' {
+  return known.cases?.has(path) ? 'case' : 'home';
 }
 
 /** A reply's text as paragraphs of plain and bold runs (`**bold**`, the one mark the panel draws; DESIGN.md). */

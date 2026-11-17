@@ -14197,6 +14197,7 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     against engine references with tolerances T1-T3 registered before the code (ADR 0801 Addendum 7); cut plane disabled
     on 2D cases with the reason in name and tooltip (G22). Left: iso-surfaces and streamlines have no engine entry point
     (shown unavailable); no CLI/MCP way to make the cut/arrows of a store (G16); no length unit for mesh coordinates.
+    Engine needs listed in ADR 0801, "Engine follow-ups of the Studio items" (2026-11-17).
 - [x] **F-810** Electron Studio: run bands and linked time scrubbing
   - depends on: F-808, F-811
   - acceptance: The run bands of DESIGN.md on one shared time axis, each end marked with its pictogram and word; one
@@ -14236,10 +14237,12 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
   - note: ADR 0800. Traces: G6; PRODUCT Users, Principle 5. Surface not yet designed: shape it with impeccable first.
     Partial 2026-11-16: first path in the project home from an empty folder to a first result (quick-start example,
     start_run with stored fields, result numbers equal metrics.json and status.json, picture drawn, disclaimers
-    visible), quiet under G22 with words behind Explain; Playwright and keyboard walks against real rcfd binaries. Left:
-    no engine command creates a project (rcfd project init / MCP create_project wrapping Project::create proposed, needs
-    an ADR), so the walk's test writes rcfd-project.json in its place; the field caption still uses precise terms; the
-    result link goes to Runs, not yet the F-810 workspace; maintainer's first-time view-and-report.
+    visible), quiet under G22 with words behind Explain; Playwright and keyboard walks against real rcfd binaries.
+    2026-11-17 (ADR 0801 Addendum 17): the result opens the run in the F-810 run workspace; the field caption is plain
+    for a learner (the plain word, its unit, the round), with the stored name, snapshot, step, time, range and cells
+    said to readers and the precise terms behind Explain (G22, G19); the result's numbers open their provenance. Left:
+    no engine command creates a project (ADR 0731 proposed; E-813 of ADR 0801's engine follow-ups), so the walk's test
+    writes rcfd-project.json in its place; maintainer's first-time view-and-report.
 - [~] **F-814** Electron Studio: Claude Code panel
   - depends on: F-805
   - acceptance: The Claude Code chat for the project through rcfd-claude: open sessions mirrored read-only, closed
@@ -14247,9 +14250,11 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     approve-everything (G11); run ids and files in a reply link to the run or file in the Studio; a test for each rule.
   - note: ADR 0800. Traces: G11; PRODUCT Positioning; DESIGN Claude Code panel. Partial 2026-11-16: panel lists
     sessions, mirrors open ones read-only, resumes closed ones with claude -p --resume, single writer, conservative
-    allow-list asserted in argv (dontAsk, no approve-everything flag), run/file links; tests use a fake claude. Left: a
-    file link opens the case editor (F-812 now exists) instead of a filtered Home; claude-head colour role and writing
-    .rcfd/claude-allow.json wait for the maintainer; no engine entry point for session discovery (TypeScript stopgap).
+    allow-list asserted in argv (dontAsk, no approve-everything flag), run/file links; tests use a fake claude.
+    2026-11-17 (ADR 0801 Addendum 17): a case file named in a reply opens in the case editor (F-812); a data file, mesh
+    or note keeps the filtered Home; unit and e2e tests. Left: claude-head colour role and writing
+    .rcfd/claude-allow.json wait for the maintainer; no engine entry point for session discovery (TypeScript stopgap;
+    E-814 of ADR 0801's engine follow-ups).
 - [x] **F-815** Electron Studio: compare two runs
   - depends on: F-810
   - acceptance: Two runs side by side or overlaid at the same time and the same colour range, with the difference field
@@ -14395,8 +14400,15 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     provenance (run, snapshot, file, reader, engine version, unit as the engine gives it) by click, Enter, Ctrl+I or the
     palette, quiet at rest (G22); every runner run shows its reproduce command (rcfd-runner start from run.json) with
     Copy; G17 test: a Studio-started run and the copied command run from a shell give byte-identical store, fields,
-    residuals and monitors. Left: service-session numbers (settings, dev plots) and the field caption's repeated numbers
-    have no provenance; run.json records no launch argv or build id; status.json time has no unit.
+    residuals and monitors. 2026-11-17 (ADR 0801 Addendum 17): service-session numbers open their provenance (settings
+    values by Ctrl+I or the palette in the key's field or a click on its name; the dev plots' residual and monitor
+    values and the iteration by click, Enter, Ctrl+I): session, service method, journal, unit from the schema or
+    monitors.get, engine from service.info; the session's file and a reproduce command said as not recorded. The field
+    caption's step and time and the first path's numbers open theirs; a snapshot's time unit said as not recorded. Left
+    (Studio): the Runs residual columns, the compared run's residuals, legend ticks, domain size, scale bar, runner
+    budgets and home counts have no provenance. Left (engine, E-828a to E-828e of ADR 0801's engine follow-ups):
+    run.json records no launch argv or build id; status.json and store time have no unit; a session records no file or
+    journal file; no rerun options; no mesh hash.
 - [~] **F-829** Electron Studio: undo, safe deletes and edit conflicts
   - depends on: F-827, F-805
   - acceptance: Undo and redo for every edit made through the action layer; deleting a run, result or case is
@@ -14409,7 +14421,7 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     show a conflict instead of overwriting; case saves refuse a changed file (edit_case base_hash). Left: no engine
     delete or trash for runs/results/cases, so the Studio offers none (engine tools
     trash_run/trash_case/list_trash/restore_trash proposed, needs an ADR); engine compare-and-set for settings.set
-    proposed.
+    proposed. Engine needs listed in ADR 0801, "Engine follow-ups of the Studio items" (2026-11-17).
 - [ ] **F-830** Electron Studio: explain in place from the engine's docs
   - depends on: F-826, F-825
   - acceptance: Help on every control, term and value taken from the engine's case schema help text (F-826), docs and
@@ -14510,7 +14522,8 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     close, Close and lose them, Keep editing; the files and their changes named; Tab held, focus back on cancel); the
     window through the main process's close event and a page round trip (an unanswered page cannot hold it; the
     test-mode quit does not ask); e2e close-guard.spec.ts (4). The maintainer confirmed designs/ as the Home heading.
-    Not built: set_runner_config (runner writes its own budgets), ADR 0733 proposed.
+    Not built: set_runner_config (runner writes its own budgets), ADR 0733 proposed. Engine needs listed in ADR 0801,
+    "Engine follow-ups of the Studio items" (2026-11-17).
 - [ ] **F-838** Local-model assistant: keep, port or remove
   - depends on: F-449
   - acceptance: The maintainer decides what becomes of the local-model assistant that only rcfd-gui offered (presets

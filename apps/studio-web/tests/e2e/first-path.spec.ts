@@ -9,7 +9,7 @@
 //   is there. The test stands in for the missing engine command and writes what rcfd_project's Project::create writes.
 // - An empty project: Make the example (the engine's new_case), Run the example (start_run with the engine's start plan,
 //   through run control), and the result: the engine's numbers equal to the run's own records, the stored field drawn,
-//   the limits and the disclaimer visible (G6), the run opened in Runs (the result link).
+//   the limits and the disclaimer visible (G6), the run opened in the run workspace (the result link, F-810).
 // - The same walk by keyboard only, focus following each new step.
 // Screenshots at 1440 by 900 go to test-results-visual/f813/ for the maintainer's view-and-report (G13).
 import { expect, test, type Locator, type Page } from '@playwright/test';
@@ -195,7 +195,7 @@ test('an empty project: one action, the example made by the engine; the explanat
   await shot(page, '04-run-it');
 });
 
-test('run it, and the first honest result: the engine’s numbers, the stored picture, the limits and the disclaimer; the run in Runs', async () => {
+test('run it, and the first honest result: the engine’s numbers, the stored picture, the limits and the disclaimer; the run in the workspace', async () => {
   const { page } = studio!;
   const folder = folders[0]!;
   await path_(page).getByRole('button', { name: 'Run the example' }).click();
@@ -220,6 +220,32 @@ test('run it, and the first honest result: the engine’s numbers, the stored pi
   await expect(p.locator('.fv-frame[data-ready]')).toBeVisible({ timeout: 30_000 });
   await expect(p.getByText(/^Drawn by /)).toBeVisible({ timeout: 30_000 });
   await expect(p.locator('.fv-caption')).toContainText(id);
+  // the learner's caption (G22, PRODUCT Principle 5): plain words at rest; the stored name, snapshot, step and time
+  // are said to readers and behind Explain; the round opens its provenance like every number of the result
+  const caption = p.locator('.fv-caption');
+  await expect(caption).toHaveAttribute('data-caption', 'learner');
+  await expect(caption).toContainText('Velocity to the right');
+  const seen = await caption.evaluate((e) => {
+    const out: string[] = [];
+    const walk = (n: Node) => {
+      if (n.nodeType === Node.TEXT_NODE) {
+        const el = n.parentElement!;
+        if (!el.closest('.sr-only')) out.push(n.textContent ?? '');
+      } else n.childNodes.forEach(walk);
+    };
+    walk(e);
+    return out.join('');
+  });
+  for (const precise of [/snapshot/, /step/, /t =/, /triangles/, /ux/]) expect(seen).not.toMatch(precise);
+  expect(seen).toMatch(/round \d+/);
+  const round = caption.getByRole('button', { name: /^Provenance of step: \d+$/ });
+  await round.click();
+  const rp = page.getByRole('dialog', { name: 'Provenance of step' });
+  await expect(rp.locator('[data-fact="File"] dd')).toHaveText(`runs/${id}/fields/store.rts`);
+  await page.keyboard.press('Escape');
+  // the result's numbers open their provenance (F-828), as the same numbers do in Runs
+  await expect(grid.getByRole('button', { name: /^Provenance of lid_drag: / })).toHaveCount(1);
+  await expect(grid.getByRole('button', { name: /^Provenance of (iterations|steps): / })).toHaveCount(1);
   await expect(p.getByLabel('What the picture shows')).toBeVisible();
   expect(existsSync(path.join(folder, 'runs', id, 'fields', 'store.rts'))).toBe(true);
   // honest about limits (G6): the limits and the disclaimer stay visible on the result, and the footer too
@@ -239,12 +265,16 @@ test('run it, and the first honest result: the engine’s numbers, the stored pi
   await expect(about).toContainText(status.reason);
   await expect(about.locator('.fp-command')).toContainText(`rcfd-runner start ${FIRST_CASE} --set output.store_interval=`);
   await expect(about).toContainText('Runs: every number of the run');
+  await expect(about).toContainText('The run workspace: every stored picture of the run');
+  // the precise terms of the caption, one step away (G19)
+  await expect(about).toContainText('step: the solver iteration at which the picture was stored');
   await shot(page, '05b-result-explained');
-  // the result link: the run in Runs
-  await p.getByRole('button', { name: 'Open the run in Runs' }).click();
-  await expect(page.getByRole('tab', { name: 'Runs', selected: true })).toBeVisible();
-  await expect(page.locator(`aside.rv-run[data-run="${id}"]`)).toBeVisible();
-  await shot(page, '06-the-run-in-runs');
+  // the result link: the run in the run workspace (F-810)
+  await p.getByRole('button', { name: 'Open the run in the workspace' }).click();
+  await expect(page.getByRole('tab', { name: 'Workspace', selected: true })).toBeVisible();
+  await expect(page.locator('.ws')).toHaveAttribute('data-run', id, { timeout: 20_000 });
+  await expect(page.locator('.ws .fv-frame[data-ready]')).toBeVisible({ timeout: 30_000 });
+  await shot(page, '06-the-run-in-the-workspace');
   await page.getByRole('tab', { name: 'Home' }).click();
   expect((await projectState(page)).project?.runs.items.map((r) => r.id)).toEqual([id]);
 });
@@ -273,11 +303,11 @@ test('the same walk by keyboard only, the focus following each new step', async 
   await page.keyboard.press('Shift+Tab');
   await expect(path_(page).getByRole('button', { name: 'Run the example' })).toBeFocused();
   await page.keyboard.press('Enter');
-  await expect(path_(page).getByRole('button', { name: 'Open the run in Runs' })).toBeFocused({ timeout: 90_000 });
+  await expect(path_(page).getByRole('button', { name: 'Open the run in the workspace' })).toBeFocused({ timeout: 90_000 });
   await expect(path_(page).locator('.fv-frame[data-ready]')).toBeVisible({ timeout: 30_000 });
   await expect(path_(page).getByText(/^Drawn by /)).toBeVisible({ timeout: 30_000 });
   await shot(page, '07-keyboard-result');
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('tab', { name: 'Runs', selected: true })).toBeVisible();
-  await expect(page.locator('aside.rv-run[data-run]')).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Workspace', selected: true })).toBeVisible();
+  await expect(page.locator('.ws[data-run]')).toBeVisible({ timeout: 20_000 });
 });
