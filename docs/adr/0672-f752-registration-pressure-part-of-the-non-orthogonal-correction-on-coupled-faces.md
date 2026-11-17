@@ -237,3 +237,101 @@ cause diagnosed. **Todo** when P1 and D1 are both missed without a diagnosis, or
 - **Q3. The control as a setting.** (a) a field of `PimpleSettings` (taken: the only way to run the step without the pressure
   part; opt-in, default bits unchanged); (b) a test-only copy of the step (not possible from an integration test). Taken (a)
   on the standing instruction.
+
+## Addendum 1: results (2026-11-16)
+
+Measured against the limits registered above; no limit was changed and no amendment was made. Release builds on Windows, on a
+machine shared with other building agents. The registration is 94945ea5 (alone, first); the library change and the tests
+da10e704 (committed before their run). Each registered run was made once: the new test file (3 tests, 73 s; the lockstep 66 s,
+under the two-minute line, so no heavy record), `rcfd-fv --lib`, `baseline_hashes`, the named suites. Logs in
+`w49i-work/f752-scratch` (`fast.log`, `lib.log`, `baseline.log`, `suites.log`, `mutations.log`, `checks.log`).
+
+**Built as registered.** `PimpleSettings::coupled_non_orth_without_pressure` (default `false`) in `crates/rcfd-fv/src/pimple.rs`
+(the field and its doc, lines 199-203; its default, line 1028; the condition of `cn_p` in `step_with`, lines 2285-2286); the new
+test file `crates/rcfd-fv/tests/skewed_periodic_channel_f752.rs`. With the field `false` the step's operations are the previous
+ones. No case key, no golden, no hash table.
+
+### Results
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| P1 (a1) `G_F(n)`, every one of 200 steps | `<= 1e-8` each step | `5.81e-15` (step 33; step 1 `2.06e-15`) | met |
+| NC1 (a1, control) `G_M(n)`, every step | `>= 1e-4` each step | smallest `1.48e-3` (step 1), largest `1.92e-3` (step 7) | held |
+| P2 (supporting) pressure, every step | `<= 1e-8` each step | `5.25e-14` | met |
+| D1L (a2) `abs(div_PF - div_TF) / (U_ref h dz)`, every step | `<= 1e-9` each step | `5.94e-15` | met |
+| D1 (a2) converged flux (100 passes, 5 steps) | `<= 1e-10` | `3.56e-15` | met |
+| D2 `T_F` against `T_O`, every step | `<= 1e-10` each step | `0` (bit for bit) | met |
+| D3 `P_X` against `P_O`, every step | bit for bit | equal on every step | met |
+| G0 cell map `P` to `T` | `<= 1e-12`, one-to-one | `8.9e-16`, yes | met |
+| H1 coupled faces as twin faces | 32 and 32 faces, translational; centre, `S`, `d`, `k` `<= 1e-12`; `abs(k) / abs(S)` in `[0.25, 0.35]`; `T`'s `<= 1e-12` | 32, 32, translational; `6.7e-16`, `1.4e-17`, `8.8e-16`, `3.9e-17`; `0.2979`; `0` | met |
+| B1 `baseline_hashes`; `--lib`; the named suites | pass | see below | met |
+
+Printed, no limit: `G_O` (setting off) step 1 `1.48e-3`, equal to `G_M`'s (at step 1 the velocity gradients are zero, so the
+momentum part does nothing and the whole step-1 difference is the pressure part's), largest `1.33e-2` at step 200 (the momentum
+part's share grows with the Poiseuille profile); the control's pressure differs from the twin's by up to `2.80e-2` (estimate:
+the jump `J = 0.036`); the largest absolute lockstep divergence over the steps, in `U_ref h dz`: `P_F` `1.33e-10`, `T_F`
+`1.33e-10` (the six-pass mismatch of the default scheme, the same in both), `P_M`, `P_O`, `P_X` `1.35e-9`; D1 of `P_M`
+`6.1e-15` (the default pressure pair is consistent too, as registered: a2 alone does not discriminate, a1 does); `P_F`'s
+largest `u_x` at step 200 `0.855 U_ref` (estimate `0.86`). Against the estimates: NC1 `1.48e-3` against `1.4e-3` at step 1;
+P1 `5.8e-15` against up to `2e-11`.
+
+Suites (release, run once): `baseline_hashes` 3 passed, 1 ignored; `rcfd-fv --lib` 115 passed, 6 ignored;
+`consistent_periodic_f367` 13 (2 ignored), `gradient_pressure_f291` 3, `non_conformal` 2, `periodic` 3, `piso_thin_gap_f299` 18
+(2 ignored), `seam_no_harm_f344` 6 (1 ignored), `sliding_annulus_inlet_f743` 1 (1 ignored), `sliding_annulus_inlet_f744` 2 (1 ignored; ADR 0667's N1J `3.8008e-5` and D0J `7.896331e-4` reproduced), all passed; ignored records not run. `cargo fmt -p rcfd-fv --check` clean; `cargo clippy --release -p rcfd-fv --all-targets -- -D
+warnings` clean.
+
+### Mutations (scratch copy `w49i-work/f752-scratch/mut` of da10e704, script `mutate.py`, target `target-mut`; the new test file run once per mutation)
+
+| Mutation | Must fail | Result |
+| --- | --- | --- |
+| MN1 the pressure equation without the coupled correction | P1 or D1 or D1L | caught: D1 `2.88e-3`, D1L `2.88e-3`, P1 `2.06e-3`, P2 `1.40e-2` |
+| MN4 the coupled faces' flux correction with the opposite sign | D1 or D1L or P1 | caught: D1 `5.76e-3`, D1L `5.76e-3` (step 1), P1 `6.68e-4`, P2 `9.7e-4` |
+| MN3 the momentum correction with the opposite sign | P1 | caught: P1 `2.32e-2`, P2 `9.5e-2` |
+| MN5 the new field not read | NC1 | caught: NC1 `1.6e-15` (the control equals `F`) |
+| MN2 (diagnostic) plain least-squares gradient in the pressure part | none | P1 `1.41e-7`, P2 `1.71e-6` (both over their limits); D1, D1L, NC1 met |
+
+Four of four required mutations caught. ADR 0667's two uncaught ones (MN1, MN4) are now caught by three checks each, the
+divergence checks at the estimated size (MN1 `s`: `3e-3`; MN4 `2 s`: `6e-3`). D2, D3, H1 and G0 held under every mutation.
+The library was restored after each (equal to da10e704). MN2 shows that on this flow the face-value gradient in the pressure
+part costs `1.4e-7 U_ref`, four orders below the pressure part's own effect (`1.5e-3`) but above P1's limit: ADR 0667's Q1
+choice (the partner-point gradient) is the one that makes the coupled face the twin's internal face.
+
+### Deviations
+
+None from the registered set-up.
+
+### Not covered
+
+As registered: translational pairs only (the rotation `R` in the pressure part's face gradient is not exercised here);
+`ddt_correction` off and `coupled_body_pair_mean` on in every run; one mesh pair, one tilt, one body force, 2-D, the PISO step;
+no case key; the default unchanged. `docs_site` not run (only prose under `docs/`: this ADR and one sentence of
+`docs/dynamic-mesh.md`; left to the daily gate).
+
+### Decision
+
+By the registered rule: P1, NC1, D1, D1L, D2, D3, G0, H1 and B1 met, MN1, MN3, MN4 and MN5 caught: **done**.
+
+### Remaining questions
+
+1. **The pressure part on rotational pairs.** Options: (a) a follow-up item with a rotationally periodic sector against its
+   unrolled full annulus under a balanced body force whose potential has the sector's period and a tangential gradient on the
+   wrap faces (for example `phi = r^6 cos 6 theta` on a sixty-degree sector), with this item's checks; (b) rely on ADR 0667's
+   MN2 (the rotation of the partner's gradient, caught on the annulus through the momentum part) and this item.
+   Recommendation (a): cheap, and the rotation in `face_gradient` is the one term of the pressure part this item does not
+   reach.
+2. **`ddt_correction` on coupled faces (Q2).** The default Rhie-Chow `ddt_correction` acts on internal faces only, so a
+   periodic run differs from its twin by that term whatever the non-orthogonal setting. Options: (a) a follow-up giving the
+   coupled pairs the term behind an opt-in, checked by this item's lockstep with `ddt_correction` on; (b) leave it.
+   Recommendation (a); it changes no default.
+3. **The default (ADR 0667 Q2, open).** Unchanged recommendation: together with F-746 in one change, the hashes re-recorded by
+   the maintainer.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> ADR 0672, 2026-11-16: the pressure part of ADR 0667's non-orthogonal correction on coupled faces, on a periodic channel whose cut is tilted by 0.3 (|k|/|S| 0.298 on the 32 coupled faces) under a body force across it (a tangential pressure gradient on every coupled face), against its unrolled twin (the same cells with the cut where the faces are orthogonal; every coupled face of the channel is a twin internal face with S, d and k equal to 9e-16). With PimpleSettings::coupled_non_orth the channel stays within 5.8e-15 U_ref of the twin on every one of 200 steps (limit 1e-8); with the new opt-in PimpleSettings::coupled_non_orth_without_pressure (the momentum part only, a control; default false) it misses by 1.5e-3 to 1.9e-3 U_ref on every step (its pressure differs by up to 2.8e-2 at the cut). The corrected flux is divergence-free per cell: 3.6e-15 U_ref h dz with the explicit iteration converged (limit 1e-10), and equal to the twin's to 5.9e-15 per cell at six passes (limit 1e-9). ADR 0667's uncaught mutations MN1 (pressure equation without the coupled correction) and MN4 (flux correction sign) are caught by three checks each; with MN3 and the control's own mutation four of four. Defaults bit-identical (baseline_hashes and the periodic, sliding and non-orthogonal suites pass). Translational pairs only; ddt_correction off in the runs.
+
+> Follow-up proposed: "Pressure part of the coupled non-orthogonal correction on rotational pairs". Deps F-752. Acceptance: on a rotationally periodic sector against its unrolled full annulus under a balanced body force with the sector's period and a tangential pressure gradient across the wrap faces, ADR 0667's opt-in keeps the sector within a registered limit of the annulus on every step where the setting without its pressure part does not, and the corrected flux is divergence-free per cell within a registered limit; defaults bit-identical. Every limit not stated here is registered in the ADR before the run.
+
+> Follow-up proposed: "Rhie-Chow ddt correction on coupled faces". Deps F-752. Acceptance: an opt-in giving the coupled (periodic) pairs the ddt correction the internal faces carry, defaults bit-identical; on ADR 0672's channel against its twin with ddt_correction on, the periodic run is within a registered limit of the twin on every step where the run without the opt-in is not. Every limit not stated here is registered in the ADR before the run.
