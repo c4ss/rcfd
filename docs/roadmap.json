@@ -7472,9 +7472,9 @@
     "deps": [
       "F-723"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The index maps wave-named test files (w34a, wave17a, w48a) to the ADRs named after their wave, and each test gets a primary ADR (the registering ADR); the integration-test binaries left unmapped in ADR 0653 addendum 2 (81) fall below a registered number; a registered sample of primary ADRs is checked by reading.",
-    "note": "Follow-up of F-723 (ADR 0653, 2026-11-16)."
+    "note": "Test-to-ADR index, wave tags and a primary ADR (follow-up of F-723, ADR 0653). PARTIAL. ADR 0679, 2026-11-17: the index maps wave-named test files to the ADR named after their wave by an exact tag rule (`w34a` and `wave17a` to the ADRs `wave34a` and `wave17a`; a bare tag with several ADRs, `w31`, is listed as ambiguous and not mapped; 25 tags have no wave ADR), reads the first `ADR NNNN` of a test file's own header comment as evidence, and gives each test a `primary_adr` with its evidence (additive fields; `gate_attribute.py` and `gate.yml` unchanged and passing). Integration binaries unmapped with tests fell from 79 to 25 (limit 65); all tests mapped 93.7 % to 98.2 %; no test lost an ADR. Sample check by reading: the first rule (without the header tier) gave 11 of 20 and missed 17; the amended rule (Amendment 1) gave 17 of 20 on a fresh draw (limit 17). Missed: the share of tests that gained an ADR is 15.8 % (limit 12 %), and the evidence \"binary named in an ADR\" is not a registering ADR (1 of 4). 7 of 7 mutations caught. Follow-up F-759 (Primary ADR only from registering evidence in the test-to-ADR index). Follow-up F-760 (ADR text for the 25 integration-test binaries still unmapped in the test-to-ADR index)."
   },
   {
     "id": "F-738",
@@ -7706,5 +7706,27 @@
     "status": "todo",
     "acceptance": "with a trigger registered before the run that fires when the recent picks of plain expected improvement stay in the incumbent's basin (instead of on the size of the acquisition), the restart reaches the target on at least as many seeds as plain expected improvement on both Hartmann 6 (n0 30, budget 200, seeds 1 to 10) and Shekel 10 (n0 10, budget 150, seeds 1 to 20), every F-715 and F-733 check keeps its result, and the O1 points hash of ADR 0673 is unchanged.",
     "note": "Follow-up of F-733 (ADR 0673, 2026-11-16)."
+  },
+  {
+    "id": "F-759",
+    "title": "Primary ADR only from registering evidence in the test-to-ADR index",
+    "phase": 9,
+    "deps": [
+      "F-737"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The primary ADR is taken from the header ADR, the item's registration, the wave ADR and a file citation only, never from a binary named in an ADR's text or a list of tests run; the 7 tests whose primary was E7 and the E2-only source files named in ADR 0679 sample A' (`gen.rs`, `rheology.rs`, `transient_buoyancy.rs`) get the earliest ADR that names the file, or none, by a registered rule; a registered sample of at least 30 primary ADRs is read with at least 90 % agreement; the attribution JSON of `gate_attribute.py` is unchanged for the existing consumers.",
+    "note": "Follow-up of F-737 (ADR 0679, 2026-11-16)."
+  },
+  {
+    "id": "F-760",
+    "title": "ADR text for the 25 integration-test binaries still unmapped in the test-to-ADR index",
+    "phase": 9,
+    "deps": [
+      "F-737"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. Each of the 25 binaries listed in ADR 0679 addendum 1 is named in the ADR that registered or first described it, found by reading the code and the git history, with no Rust file edited; the index shows at most 5 unmapped integration binaries with tests; a registered sample of the new mappings is read.",
+    "note": "Follow-up of F-737 (ADR 0679, 2026-11-16)."
   }
 ]
