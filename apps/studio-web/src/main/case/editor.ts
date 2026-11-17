@@ -72,8 +72,10 @@ const codeOf = (e: unknown): RpcError['code'] | null => (e instanceof RpcError ?
 
 /** True when two absolute paths name the same file (letter case ignored on Windows, as the file system does). */
 export function samePath(a: string, b: string, platform: NodeJS.Platform = process.platform): boolean {
-  const ra = path.resolve(a);
-  const rb = path.resolve(b);
+  // the path rules of `platform`, not of the running system (on Windows `path` is `path.win32`: unchanged there)
+  const p = platform === 'win32' ? path.win32 : path.posix;
+  const ra = p.resolve(a);
+  const rb = p.resolve(b);
   return platform === 'win32' ? ra.toLowerCase() === rb.toLowerCase() : ra === rb;
 }
 

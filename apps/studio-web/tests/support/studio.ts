@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { ServiceState } from '../../src/shared/service.js';
 import { until } from './fake-service.js';
+import { launchArgs } from './launch.js';
 import { appRoot } from './rcfd.js';
 
 export interface Studio {
@@ -17,7 +18,7 @@ export async function launchStudio(serviceEnv: Record<string, string>): Promise<
   const { executable } = JSON.parse(readFileSync(path.join(appRoot, 'out', 'packaged.json'), 'utf8')) as { executable: string };
   const env: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env)) if (v !== undefined && !k.startsWith('RCFD_STUDIO_')) env[k] = v;
-  const app = await electron.launch({ executablePath: executable, args: [], env: { ...env, ...serviceEnv } });
+  const app = await electron.launch({ executablePath: executable, ...launchArgs(), env: { ...env, ...serviceEnv } });
   const page = await app.firstWindow();
   await page.waitForFunction(() => document.querySelector('h1')?.textContent === 'No project open');
   return { app, page };

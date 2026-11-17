@@ -4,3 +4,4 @@ out/
 test-results/
 playwright-report/
 test-results-visual/
+test-results-linux/

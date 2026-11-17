@@ -287,21 +287,28 @@ Pinned to exact versions in `apps/studio-web/package.json` and justified in ADR 
 | @vitejs/plugin-react | 6.3.0 | `MIT` | `devDependencies` |
 | axe-core | 4.14.0 | `MPL-2.0` | `devDependencies` |
 | electron | 45.3.3 | `MIT` | `devDependencies` |
+| electron-builder | 26.18.0 | `MIT` | `devDependencies` |
 | typescript | 7.0.2 | `Apache-2.0` | `devDependencies` |
 | vite | 8.3.8 | `MIT` | `devDependencies` |
 
-### Licence summary (123 packages in the lock file)
+### Licence summary (387 packages in the lock file)
 
 | Licence (as recorded) | Packages |
 |---|---|
-| `MIT` | 68 |
-| `Apache-2.0` | 35 |
+| `MIT` | 267 |
+| `Apache-2.0` | 40 |
+| `ISC` | 35 |
 | `MPL-2.0` | 13 |
-| `BSD-3-Clause` | 2 |
-| `ISC` | 2 |
+| `BSD-3-Clause` | 11 |
+| `BlueOak-1.0.0` | 9 |
+| `BSD-2-Clause` | 5 |
+| `(MIT OR CC0-1.0)` | 1 |
+| `(WTFPL OR MIT)` | 1 |
 | `0BSD` | 1 |
-| `BlueOak-1.0.0` | 1 |
 | `OFL-1.1` | 1 |
+| `Python-2.0` | 1 |
+| `WTFPL` | 1 |
+| `WTFPL OR ISC` | 1 |
 
 ### Packages
 
@@ -312,7 +319,15 @@ Development packages are build and test tools; the built app contains only the r
 | @babel/runtime | 7.29.14 | `MIT` | runtime |
 | @dimforge/rapier3d-compat | 0.12.0 | `Apache-2.0` | development |
 | @electron-internal/extract-zip | 1.0.8 | `MIT` | development |
+| @electron/asar | 3.4.1 | `MIT` | development |
+| @electron/fuses | 1.8.0 | `MIT` | development |
+| @electron/get | 3.1.0 | `MIT` | development |
 | @electron/get | 5.1.0 | `MIT` | development |
+| @electron/notarize | 2.5.0 | `MIT` | development |
+| @electron/osx-sign | 1.3.3 | `BSD-2-Clause` | development |
+| @electron/rebuild | 4.2.1 | `MIT` | development |
+| @electron/universal | 2.0.3 | `MIT` | development |
+| @electron/windows-sign | 1.2.2 | `BSD-2-Clause` | development, optional |
 | @emnapi/core | 2.0.0-beta.2 | `MIT` | development, optional |
 | @emnapi/runtime | 2.0.0-beta.2 | `MIT` | development, optional |
 | @emnapi/wasi-threads | 2.2.0 | `MIT` | development, optional |
@@ -320,8 +335,16 @@ Development packages are build and test tools; the built app contains only the r
 | @internationalized/date | 3.12.4 | `Apache-2.0` | runtime |
 | @internationalized/number | 3.6.9 | `Apache-2.0` | runtime |
 | @internationalized/string | 3.2.10 | `Apache-2.0` | runtime |
+| @isaacs/fs-minipass | 4.0.1 | `ISC` | development |
+| @malept/cross-spawn-promise | 2.0.0 | `Apache-2.0` | development |
+| @malept/flatpak-bundler | 0.4.0 | `MIT` | development |
 | @napi-rs/wasm-runtime | 1.2.6 | `MIT` | development, optional |
+| @noble/hashes | 1.8.0 | `MIT` | development |
 | @oxc-project/types | 0.156.0 | `MIT` | development |
+| @peculiar/asn1-schema | 2.11.1 | `MIT` | development |
+| @peculiar/json-schema | 1.1.12 | `MIT` | development |
+| @peculiar/utils | 2.0.3 | `MIT` | development |
+| @peculiar/webcrypto | 1.7.2 | `MIT` | development |
 | @playwright/test | 1.65.1 | `Apache-2.0` | development |
 | @react-three/fiber | 9.8.2 | `MIT` | runtime |
 | @react-types/shared | 3.37.0 | `Apache-2.0` | runtime |
@@ -342,13 +365,22 @@ Development packages are build and test tools; the built app contains only the r
 | @rolldown/binding-win32-arm64-msvc | 1.2.19 | `MIT` | development, optional (win32) |
 | @rolldown/binding-win32-x64-msvc | 1.2.19 | `MIT` | development, optional (win32) |
 | @rolldown/pluginutils | 1.1.1 | `MIT` | development |
+| @sindresorhus/is | 4.6.0 | `MIT` | development |
 | @swc/helpers | 0.5.24 | `Apache-2.0` | runtime |
+| @szmarczak/http-timer | 4.0.6 | `MIT` | development |
 | @tweenjs/tween.js | 23.1.3 | `MIT` | development |
 | @tybys/wasm-util | 0.10.5 | `MIT` | development, optional |
+| @types/cacheable-request | 6.0.3 | `MIT` | development |
+| @types/debug | 4.1.13 | `MIT` | development |
+| @types/fs-extra | 9.0.13 | `MIT` | development |
+| @types/http-cache-semantics | 4.2.0 | `MIT` | development |
+| @types/keyv | 3.1.4 | `MIT` | development |
+| @types/ms | 2.1.0 | `MIT` | development |
 | @types/node | 24.19.2 | `MIT` | development |
 | @types/react | 19.3.0 | `MIT` | runtime |
 | @types/react-dom | 19.3.0 | `MIT` | development |
 | @types/react-reconciler | 0.28.9 | `MIT` | runtime |
+| @types/responselike | 1.0.3 | `MIT` | development |
 | @types/stats.js | 0.17.4 | `MIT` | development |
 | @types/three | 0.187.0 | `MIT` | development |
 | @types/webxr | 0.5.24 | `MIT` | runtime |
@@ -373,23 +405,160 @@ Development packages are build and test tools; the built app contains only the r
 | @typescript/typescript-win32-arm64 | 7.0.2 | `Apache-2.0` | development, optional (win32) |
 | @typescript/typescript-win32-x64 | 7.0.2 | `Apache-2.0` | development, optional (win32) |
 | @vitejs/plugin-react | 6.3.0 | `MIT` | development |
+| @xmldom/xmldom | 0.8.15 | `MIT` | development |
+| abbrev | 4.0.0 | `ISC` | development |
+| agent-base | 7.1.4 | `MIT` | development |
+| ajv | 8.20.0 | `MIT` | development |
+| ansi-regex | 5.0.1 | `MIT` | development |
+| ansi-styles | 4.3.0 | `MIT` | development |
+| app-builder-lib | 26.18.0 | `MIT` | development |
+| argparse | 2.0.1 | `Python-2.0` | development |
 | aria-hidden | 1.2.6 | `MIT` | runtime |
+| asn1js | 3.1.0 | `BSD-3-Clause` | development |
+| async | 3.2.6 | `MIT` | development |
+| async-exit-hook | 2.0.1 | `MIT` | development |
+| asynckit | 0.4.0 | `MIT` | development |
+| at-least-node | 1.0.0 | `ISC` | development |
+| aws4 | 1.13.2 | `MIT` | development |
 | axe-core | 4.14.0 | `MPL-2.0` | development |
+| balanced-match | 1.0.2 | `MIT` | development |
+| balanced-match | 1.0.2 | `MIT` | development |
+| balanced-match | 1.0.2 | `MIT` | development |
+| balanced-match | 1.0.2 | `MIT` | development |
+| balanced-match | 1.0.2 | `MIT` | development |
+| balanced-match | 4.0.4 | `MIT` | development |
 | base64-js | 1.5.1 | `MIT` | runtime |
+| bluebird | 3.7.2 | `MIT` | development |
+| boolean | 3.2.0 | `MIT` | development, optional |
+| brace-expansion | 1.1.22 | `MIT` | development |
+| brace-expansion | 1.1.22 | `MIT` | development |
+| brace-expansion | 1.1.22 | `MIT` | development |
+| brace-expansion | 2.1.8 | `MIT` | development |
+| brace-expansion | 2.1.8 | `MIT` | development |
+| brace-expansion | 5.0.13 | `MIT` | development |
 | buffer | 6.0.3 | `MIT` | runtime |
+| buffer-from | 1.1.2 | `MIT` | development |
+| builder-util | 26.16.0 | `MIT` | development |
+| builder-util-runtime | 9.7.0 | `MIT` | development |
+| bytestreamjs | 2.0.1 | `BSD-3-Clause` | development |
+| cacheable-lookup | 5.0.4 | `MIT` | development |
+| cacheable-request | 7.0.4 | `MIT` | development |
+| call-bind-apply-helpers | 1.0.2 | `MIT` | development |
+| chalk | 4.1.2 | `MIT` | development |
+| chownr | 3.0.0 | `BlueOak-1.0.0` | development |
+| chromium-pickle-js | 0.2.0 | `MIT` | development |
+| ci-info | 4.3.1 | `MIT` | development |
+| ci-info | 4.5.0 | `MIT` | development |
 | client-only | 0.0.1 | `MIT` | runtime |
+| cliui | 8.0.1 | `ISC` | development |
+| clone-response | 1.0.3 | `MIT` | development |
 | clsx | 2.1.1 | `MIT` | runtime |
+| color-convert | 2.0.1 | `MIT` | development |
+| color-name | 1.1.4 | `MIT` | development |
+| combined-stream | 1.0.8 | `MIT` | development |
+| commander | 5.1.0 | `MIT` | development |
+| commander | 9.5.0 | `MIT` | development, optional |
+| compare-version | 0.1.2 | `MIT` | development |
+| concat-map | 0.0.1 | `MIT` | development |
+| core-util-is | 1.0.3 | `MIT` | development |
+| cross-dirname | 0.1.0 | `MIT` | development, optional |
+| cross-spawn | 7.0.6 | `MIT` | development |
 | csstype | 3.2.3 | `MIT` | runtime |
 | debug | 4.4.3 | `MIT` | development |
+| decompress-response | 6.0.0 | `MIT` | development |
+| defer-to-connect | 2.0.1 | `MIT` | development |
+| define-data-property | 1.1.4 | `MIT` | development, optional |
+| define-properties | 1.2.1 | `MIT` | development, optional |
+| delayed-stream | 1.0.0 | `MIT` | development |
 | detect-libc | 2.1.2 | `Apache-2.0` | development |
+| detect-node | 2.1.0 | `MIT` | development, optional |
+| dir-compare | 4.2.0 | `MIT` | development |
+| dmg-builder | 26.18.0 | `MIT` | development |
+| dotenv | 16.6.1 | `BSD-2-Clause` | development |
+| dotenv-expand | 11.0.7 | `BSD-2-Clause` | development |
+| dunder-proto | 1.0.1 | `MIT` | development |
+| duplexer2 | 0.1.4 | `BSD-3-Clause` | development |
+| ejs | 3.1.10 | `Apache-2.0` | development |
 | electron | 45.3.3 | `MIT` | development |
+| electron-builder | 26.18.0 | `MIT` | development |
+| electron-builder-squirrel-windows | 26.18.0 | `MIT` | development |
+| electron-publish | 26.18.0 | `MIT` | development |
+| electron-winstaller | 5.4.0 | `MIT` | development |
+| emoji-regex | 8.0.0 | `MIT` | development |
+| end-of-stream | 1.4.5 | `MIT` | development |
+| env-paths | 2.2.1 | `MIT` | development |
+| env-paths | 2.2.1 | `MIT` | development |
 | env-paths | 3.0.0 | `MIT` | development |
+| err-code | 2.0.3 | `MIT` | development |
+| es-define-property | 1.0.1 | `MIT` | development |
+| es-errors | 1.3.0 | `MIT` | development |
+| es-object-atoms | 1.1.2 | `MIT` | development |
+| es-set-tostringtag | 2.1.0 | `MIT` | development |
+| es6-error | 4.1.1 | `MIT` | development, optional |
+| escalade | 3.2.0 | `MIT` | development |
+| escape-string-regexp | 4.0.0 | `MIT` | development, optional |
+| exponential-backoff | 3.1.3 | `Apache-2.0` | development |
+| fast-deep-equal | 3.1.3 | `MIT` | development |
+| fast-uri | 3.1.9 | `BSD-3-Clause` | development |
 | fdir | 6.5.0 | `MIT` | development |
 | fflate | 0.8.3 | `MIT` | development |
+| filelist | 1.0.6 | `Apache-2.0` | development |
+| form-data | 4.0.6 | `MIT` | development |
+| fs-extra | 10.1.0 | `MIT` | development |
+| fs-extra | 11.3.1 | `MIT` | development |
+| fs-extra | 11.4.1 | `MIT` | development |
+| fs-extra | 11.4.1 | `MIT` | development, optional |
+| fs-extra | 7.0.1 | `MIT` | development |
+| fs-extra | 8.1.0 | `MIT` | development |
+| fs-extra | 9.1.0 | `MIT` | development |
+| fs-extra | 9.1.0 | `MIT` | development |
+| fs-extra | 9.1.0 | `MIT` | development |
+| fs.realpath | 1.0.0 | `ISC` | development |
 | fsevents | 2.3.3 | `MIT` | development, optional (darwin) |
+| function-bind | 1.1.2 | `MIT` | development |
+| get-caller-file | 2.0.5 | `ISC` | development |
+| get-intrinsic | 1.3.0 | `MIT` | development |
+| get-proto | 1.0.1 | `MIT` | development |
+| get-stream | 5.2.0 | `MIT` | development |
+| glob | 7.2.3 | `ISC` | development |
+| global-agent | 3.0.0 | `BSD-3-Clause` | development, optional |
+| globalthis | 1.0.4 | `MIT` | development, optional |
+| gopd | 1.2.0 | `MIT` | development |
+| got | 11.8.6 | `MIT` | development |
 | graceful-fs | 4.2.12 | `BlueOak-1.0.0` | development |
+| has-flag | 4.0.0 | `MIT` | development |
+| has-property-descriptors | 1.0.2 | `MIT` | development, optional |
+| has-symbols | 1.1.0 | `MIT` | development |
+| has-tostringtag | 1.0.2 | `MIT` | development |
+| hasown | 2.0.4 | `MIT` | development |
+| hosted-git-info | 4.1.0 | `ISC` | development |
+| http-cache-semantics | 4.3.0 | `BSD-2-Clause` | development |
+| http-proxy-agent | 7.0.2 | `MIT` | development |
+| http2-wrapper | 1.0.3 | `MIT` | development |
+| https-proxy-agent | 7.0.6 | `MIT` | development |
 | ieee754 | 1.2.1 | `BSD-3-Clause` | runtime |
+| inflight | 1.0.6 | `ISC` | development |
+| inherits | 2.0.4 | `ISC` | development |
+| is-fullwidth-code-point | 3.0.0 | `MIT` | development |
+| isarray | 1.0.0 | `MIT` | development |
+| isbinaryfile | 4.0.10 | `MIT` | development |
+| isbinaryfile | 5.0.7 | `MIT` | development |
+| isexe | 2.0.0 | `ISC` | development |
+| isexe | 3.1.5 | `BlueOak-1.0.0` | development |
+| isexe | 4.0.0 | `BlueOak-1.0.0` | development |
 | its-fine | 2.1.1 | `MIT` | runtime |
+| jake | 10.9.4 | `Apache-2.0` | development |
+| jiti | 2.7.0 | `MIT` | development |
+| js-yaml | 4.3.2 | `MIT` | development |
+| json-buffer | 3.0.1 | `MIT` | development |
+| json-schema-traverse | 1.0.0 | `MIT` | development |
+| json-stringify-safe | 5.0.1 | `ISC` | development, optional |
+| json5 | 2.2.3 | `MIT` | development |
+| jsonfile | 4.0.0 | `MIT` | development |
+| jsonfile | 4.0.0 | `MIT` | development |
+| jsonfile | 6.2.1 | `MIT` | development |
+| keyv | 4.5.4 | `MIT` | development |
+| lazy-val | 1.0.5 | `MIT` | development |
 | lightningcss | 1.33.0 | `MPL-2.0` | development |
 | lightningcss-android-arm64 | 1.33.0 | `MPL-2.0` | development, optional (android) |
 | lightningcss-darwin-arm64 | 1.33.0 | `MPL-2.0` | development, optional (darwin) |
@@ -402,33 +571,135 @@ Development packages are build and test tools; the built app contains only the r
 | lightningcss-linux-x64-musl | 1.33.0 | `MPL-2.0` | development, optional (linux) |
 | lightningcss-win32-arm64-msvc | 1.33.0 | `MPL-2.0` | development, optional (win32) |
 | lightningcss-win32-x64-msvc | 1.33.0 | `MPL-2.0` | development, optional (win32) |
+| lodash | 4.18.1 | `MIT` | development |
+| lowercase-keys | 2.0.0 | `MIT` | development |
+| lru-cache | 6.0.0 | `ISC` | development |
+| matcher | 3.0.0 | `MIT` | development, optional |
+| math-intrinsics | 1.1.0 | `MIT` | development |
 | meshoptimizer | 1.1.1 | `MIT` | development |
+| mime | 2.6.0 | `MIT` | development |
+| mime-db | 1.52.0 | `MIT` | development |
+| mime-types | 2.1.35 | `MIT` | development |
+| mimic-response | 1.0.1 | `MIT` | development |
+| mimic-response | 3.1.0 | `MIT` | development |
+| minimatch | 10.2.6 | `BlueOak-1.0.0` | development |
+| minimatch | 3.1.5 | `ISC` | development |
+| minimatch | 3.1.5 | `ISC` | development |
+| minimatch | 3.1.5 | `ISC` | development |
+| minimatch | 5.1.9 | `ISC` | development |
+| minimatch | 9.0.9 | `ISC` | development |
+| minimist | 1.2.8 | `MIT` | development |
+| minipass | 7.1.3 | `BlueOak-1.0.0` | development |
+| minizlib | 3.1.0 | `MIT` | development |
+| mkdirp | 0.5.6 | `MIT` | development |
 | ms | 2.1.3 | `MIT` | development |
 | nanoid | 3.3.20 | `MIT` | development |
+| node-abi | 4.40.0 | `MIT` | development |
+| node-api-version | 0.2.1 | `MIT` | development |
+| node-gyp | 12.4.0 | `MIT` | development |
+| node-int64 | 0.4.0 | `MIT` | development |
+| nopt | 9.0.0 | `ISC` | development |
+| normalize-url | 6.1.0 | `MIT` | development |
+| object-keys | 1.1.1 | `MIT` | development, optional |
+| once | 1.4.0 | `ISC` | development |
+| p-cancelable | 2.1.1 | `MIT` | development |
+| p-limit | 3.1.0 | `MIT` | development |
+| path-is-absolute | 1.0.1 | `MIT` | development |
+| path-key | 3.1.1 | `MIT` | development |
+| pe-library | 0.4.1 | `MIT` | development |
 | picocolors | 1.1.1 | `ISC` | development |
 | picomatch | 4.0.7 | `MIT` | development |
+| pkijs | 3.4.3 | `BSD-3-Clause` | development |
 | playwright | 1.65.1 | `Apache-2.0` | development |
 | playwright-core | 1.65.1 | `Apache-2.0` | development |
+| plist | 3.1.0 | `MIT` | development |
 | postcss | 8.5.33 | `MIT` | development |
+| postject | 1.0.0-alpha.6 | `MIT` | development, optional |
+| proc-log | 6.1.0 | `ISC` | development |
+| process-nextick-args | 2.0.1 | `MIT` | development |
 | progress | 2.0.3 | `MIT` | development |
+| promise-retry | 2.0.1 | `MIT` | development |
+| proper-lockfile | 4.1.2 | `MIT` | development |
+| pump | 3.0.4 | `MIT` | development |
+| pvtsutils | 1.3.6 | `MIT` | development |
+| pvutils | 1.2.0 | `MIT` | development |
+| quick-lru | 5.1.1 | `MIT` | development |
 | react | 19.3.1 | `MIT` | runtime |
 | react-aria | 3.53.1 | `Apache-2.0` | runtime |
 | react-aria-components | 1.22.1 | `Apache-2.0` | runtime |
 | react-dom | 19.3.1 | `MIT` | runtime |
 | react-stately | 3.51.0 | `Apache-2.0` | runtime |
 | react-use-measure | 2.1.7 | `MIT` | runtime |
+| read-binary-file-arch | 1.0.6 | `MIT` | development |
+| readable-stream | 2.3.8 | `MIT` | development |
+| require-directory | 2.1.1 | `MIT` | development |
+| require-from-string | 2.0.2 | `MIT` | development |
+| resedit | 1.7.2 | `MIT` | development |
+| resolve-alpn | 1.2.1 | `MIT` | development |
+| responselike | 2.0.1 | `MIT` | development |
+| retry | 0.12.0 | `MIT` | development |
+| rimraf | 2.6.3 | `ISC` | development |
+| roarr | 2.15.4 | `BSD-3-Clause` | development, optional |
 | rolldown | 1.2.19 | `MIT` | development |
+| safe-buffer | 5.1.2 | `MIT` | development |
+| sanitize-filename | 1.6.5 | `WTFPL OR ISC` | development |
+| sax | 1.6.1 | `BlueOak-1.0.0` | development |
 | scheduler | 0.28.0 | `MIT` | runtime |
+| semver | 5.7.3 | `ISC` | development |
+| semver | 6.3.2 | `ISC` | development |
+| semver | 7.7.4 | `ISC` | development |
 | semver | 7.8.6 | `ISC` | development |
+| semver-compare | 1.0.0 | `MIT` | development, optional |
+| serialize-error | 7.0.1 | `MIT` | development, optional |
+| shebang-command | 2.0.0 | `MIT` | development |
+| shebang-regex | 3.0.0 | `MIT` | development |
+| signal-exit | 3.0.7 | `ISC` | development |
+| simple-update-notifier | 2.0.0 | `MIT` | development |
+| source-map | 0.6.1 | `BSD-3-Clause` | development |
 | source-map-js | 1.2.2 | `BSD-3-Clause` | development |
+| source-map-support | 0.5.21 | `MIT` | development |
+| sprintf-js | 1.1.3 | `BSD-3-Clause` | development, optional |
+| stat-mode | 1.0.0 | `MIT` | development |
+| string-width | 4.2.3 | `MIT` | development |
+| string_decoder | 1.1.1 | `MIT` | development |
+| strip-ansi | 6.0.1 | `MIT` | development |
 | sumchecker | 3.0.1 | `Apache-2.0` | development |
+| supports-color | 7.2.0 | `MIT` | development |
 | suspend-react | 0.1.3 | `MIT` | runtime |
+| tar | 7.5.23 | `BlueOak-1.0.0` | development |
+| temp | 0.9.4 | `MIT` | development |
+| temp-file | 3.4.0 | `MIT` | development |
 | three | 0.187.0 | `MIT` | runtime |
+| tiny-async-pool | 1.3.0 | `MIT` | development |
 | tinyglobby | 0.2.17 | `MIT` | development |
+| tmp | 0.2.7 | `MIT` | development |
+| tmp-promise | 3.0.3 | `MIT` | development |
+| truncate-utf8-bytes | 1.0.2 | `WTFPL` | development |
 | tslib | 2.9.1 | `0BSD` | runtime |
+| type-fest | 0.13.1 | `(MIT OR CC0-1.0)` | development, optional |
 | typescript | 7.0.2 | `Apache-2.0` | development |
+| undici | 6.29.1 | `MIT` | development |
 | undici | 7.30.2 | `MIT` | development, optional |
 | undici-types | 7.24.6 | `MIT` | development |
+| universalify | 0.1.2 | `MIT` | development |
+| universalify | 0.1.2 | `MIT` | development |
+| universalify | 2.0.1 | `MIT` | development |
+| unzipper | 0.12.5 | `MIT` | development |
 | use-sync-external-store | 1.7.0 | `MIT` | runtime |
+| utf8-byte-length | 1.0.5 | `(WTFPL OR MIT)` | development |
+| util-deprecate | 1.0.2 | `MIT` | development |
 | vite | 8.3.8 | `MIT` | development |
+| webcrypto-core | 1.9.2 | `MIT` | development |
+| which | 2.0.2 | `ISC` | development |
+| which | 5.0.0 | `ISC` | development |
+| which | 6.0.1 | `ISC` | development |
+| wrap-ansi | 7.0.0 | `MIT` | development |
+| wrappy | 1.0.2 | `ISC` | development |
+| xmlbuilder | 15.1.1 | `MIT` | development |
+| y18n | 5.0.8 | `ISC` | development |
+| yallist | 4.0.0 | `ISC` | development |
+| yallist | 5.0.0 | `BlueOak-1.0.0` | development |
+| yargs | 17.7.3 | `MIT` | development |
+| yargs-parser | 21.1.1 | `ISC` | development |
+| yocto-queue | 0.1.0 | `MIT` | development |
 | zustand | 5.1.0 | `MIT` | runtime |

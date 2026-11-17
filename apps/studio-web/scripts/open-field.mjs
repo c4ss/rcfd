@@ -37,7 +37,7 @@ try {
 }
 const env = {};
 for (const [k, v] of Object.entries(process.env)) if (v !== undefined && !k.startsWith('RCFD_STUDIO_')) env[k] = v;
-const app = await electron.launch({ executablePath: executable, args: [], env: { ...env, RCFD_STUDIO_DATA_ROOTS: data } });
+const app = await electron.launch({ chromiumSandbox: true, executablePath: executable, args: [], env: { ...env, RCFD_STUDIO_DATA_ROOTS: data } });
 const page = await app.firstWindow();
 await page.waitForFunction(() => document.querySelector('h1')?.textContent === 'No project open');
 await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setContentSize(1440, 900));

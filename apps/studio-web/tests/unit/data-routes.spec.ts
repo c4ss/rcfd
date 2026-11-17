@@ -402,6 +402,9 @@ test('F-819b: a mesh frame verified in this process is not hashed again while it
   const at = 20 + 28 + 24 + 8 + 40;
   const was = statSync(file, { bigint: true });
   const poke = (b: (x: number) => number) => {
+    // Linux stamps a file's times from a coarse clock (a kernel tick, a few ms): a write within the tick of the last
+    // change keeps the change time. Wait past it, so that each poke is a change the memo can see (ADR 0801 Addendum 17).
+    if (process.platform !== 'win32') Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
     const fd = openSync(file, 'r+');
     const one = Buffer.alloc(1);
     readSync(fd, one, 0, 1, at);

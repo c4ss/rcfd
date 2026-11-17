@@ -13,6 +13,8 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.test.json",
     "build": "npm run typecheck && vite build && tsc -p tsconfig.node.json",
     "package:dir": "node scripts/package-dir.mjs",
+    "package:installers": "node scripts/package-installers.mjs",
+    "test:linux-docker": "node docker/linux-test/run.mjs",
     "test": "npm run build && npm run package:dir && playwright test",
     "test:unit": "playwright test --project=unit",
     "tokens:css": "node --experimental-strip-types scripts/write-tokens-css.mjs",
@@ -46,6 +48,7 @@
     "@vitejs/plugin-react": "6.3.0",
     "axe-core": "4.14.0",
     "electron": "45.3.3",
+    "electron-builder": "26.18.0",
     "typescript": "7.0.2",
     "vite": "8.3.8"
   }

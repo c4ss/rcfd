@@ -168,6 +168,7 @@ const state = mkdtempSync(path.join(os.tmpdir(), 'rcfd-f810-bench-'));
 
 async function openProject(folder) {
   const app = await electron.launch({
+    chromiumSandbox: true, // Playwright adds --no-sandbox on Linux otherwise (tests/support/launch.ts)
     executablePath: executable,
     args: [OCCLUSION, ...profileArgs()],
     env: { ...baseEnv, RCFD_STUDIO_MCP: mcp, RCFD_STUDIO_RECENT: path.join(state, 'recent.json'), RCFD_STUDIO_STATE_DIR: state },

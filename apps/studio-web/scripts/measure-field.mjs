@@ -90,7 +90,7 @@ for (const [k, v] of Object.entries(process.env)) if (v !== undefined && !k.star
 const OCCLUSION = '--disable-features=CalculateNativeWinOcclusion';
 
 async function launch(extraArgs, env) {
-  const app = await electron.launch({ executablePath: executable, args: [OCCLUSION, ...profileArgs(), ...extraArgs], env: { ...baseEnv, RCFD_STUDIO_DATA_ROOTS: data, RCFD_STUDIO_STATE_DIR: path.join(os.tmpdir(), 'rcfd-f808-state'), ...env } });
+  const app = await electron.launch({ chromiumSandbox: true, executablePath: executable, args: [OCCLUSION, ...profileArgs(), ...extraArgs], env: { ...baseEnv, RCFD_STUDIO_DATA_ROOTS: data, RCFD_STUDIO_STATE_DIR: path.join(os.tmpdir(), 'rcfd-f808-state'), ...env } });
   const page = await app.firstWindow();
   await page.waitForFunction(() => document.querySelector('h1')?.textContent === 'No project open');
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(1280, 800));

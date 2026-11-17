@@ -1,6 +1,7 @@
 // Packages the built app by hand into out/packaged/, the way ADR 0350 packaged the spike for P10: Electron's dist folder
 // copied, the executable renamed to rcfd-studio (so app.isPackaged is true), and the app in resources/app (package.json
-// and dist/). No packaging dependency; installers, signing and fuses are F-820's.
+// and dist/). No packaging dependency; the installers (F-820) are scripts/package-installers.mjs, which ships the same
+// app folder (runtimePackage() of scripts/installer-config.mjs, so the userData folder is the same too).
 //
 //   node scripts/package-dir.mjs        (after npm run build)
 //
@@ -10,6 +11,7 @@ import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeF
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { runtimePackage } from './installer-config.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..');
@@ -45,15 +47,7 @@ if (process.platform === 'darwin') {
 const app = path.join(resources, 'app');
 mkdirSync(app, { recursive: true });
 const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
-const runtimePkg = {
-  name: pkg.name,
-  productName: 'rcfd Studio',
-  version: pkg.version,
-  private: true,
-  license: pkg.license,
-  type: pkg.type,
-  main: pkg.main,
-};
+const runtimePkg = runtimePackage(pkg);
 writeFileSync(path.join(app, 'package.json'), JSON.stringify(runtimePkg, null, 2) + '\n');
 cpSync(path.join(root, 'dist'), path.join(app, 'dist'), { recursive: true });
 

@@ -347,6 +347,7 @@ const roots = [...new Set([data, fanProject, ...meshes.map((m) => path.dirname(p
 
 async function launch(extraArgs, size) {
   const app = await electron.launch({
+    chromiumSandbox: true, // Playwright adds --no-sandbox on Linux otherwise (tests/support/launch.ts)
     executablePath: executable,
     args: [OCCLUSION, ...profileArgs(), ...extraArgs],
     env: { ...baseEnv, RCFD_STUDIO_DATA_ROOTS: roots, RCFD_STUDIO_MCP: mcp, RCFD_STUDIO_RECENT: path.join(state, 'recent.json'), RCFD_STUDIO_STATE_DIR: state },

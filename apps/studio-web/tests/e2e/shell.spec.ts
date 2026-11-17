@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { APP_ENTRY, CSP_HEADER, CSP_META } from '../../src/main/security.js';
+import { launchArgs } from '../support/launch.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const ALLOWED_CHANNELS = ['app.info', 'app.ready'];
@@ -15,7 +16,7 @@ let page: Page;
 
 test.beforeAll(async () => {
   const { executable } = JSON.parse(readFileSync(path.join(root, 'out', 'packaged.json'), 'utf8')) as { executable: string };
-  app = await electron.launch({ executablePath: executable, args: [] });
+  app = await electron.launch({ executablePath: executable, ...launchArgs() });
   page = await app.firstWindow();
   await expect(page.getByRole('heading', { name: 'No project open' })).toBeVisible();
 });
@@ -55,12 +56,17 @@ test('the window is sandboxed and context-isolated, with Node integration off an
       allowRunningInsecureContent: p?.allowRunningInsecureContent,
       webviewTag: p?.webviewTag,
       experimentalFeatures: p?.experimentalFeatures,
-      // ProcessMetric.sandboxed is reported on Windows and macOS only.
-      osSandboxed: process.platform === 'linux' ? true : metric?.sandboxed,
+      // ProcessMetric.sandboxed is reported on Windows and macOS only; on Linux the renderer's seccomp mode is read below.
+      osSandboxed: metric?.sandboxed,
+      pid: metric?.pid,
       rendererType: metric?.type,
     };
   });
-  expect(prefs).toEqual({
+  const { pid, ...seen } = prefs;
+  // Linux: Chromium's sandbox puts the renderer under a seccomp-bpf filter (mode 2 in /proc/<pid>/status); with
+  // --no-sandbox the mode is 0. (Playwright adds --no-sandbox on Linux unless launchArgs() asks it not to.)
+  if (process.platform === 'linux') seen.osSandboxed = /^Seccomp:\s*2$/m.test(readFileSync(`/proc/${pid}/status`, 'utf8'));
+  expect(seen).toEqual({
     sandbox: true,
     contextIsolation: true,
     nodeIntegration: false,

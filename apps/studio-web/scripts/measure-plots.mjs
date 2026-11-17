@@ -118,7 +118,7 @@ const port = await new Promise((resolve, reject) => {
 const { executable } = JSON.parse(readFileSync(path.join(root, 'out', 'packaged.json'), 'utf8'));
 const env = {};
 for (const [k, v] of Object.entries(process.env)) if (v !== undefined && !k.startsWith('RCFD_STUDIO_')) env[k] = v;
-const app = await electron.launch({ executablePath: executable, args: [...profileArgs()], env: { ...env, RCFD_STUDIO_SERVICE: `127.0.0.1:${port}`, RCFD_STUDIO_BENCH: '1', RCFD_STUDIO_STATE_DIR: path.join(scratch, 'state') } });
+const app = await electron.launch({ chromiumSandbox: true, executablePath: executable, args: [...profileArgs()], env: { ...env, RCFD_STUDIO_SERVICE: `127.0.0.1:${port}`, RCFD_STUDIO_BENCH: '1', RCFD_STUDIO_STATE_DIR: path.join(scratch, 'state') } });
 let result;
 try {
   const page = await app.firstWindow();

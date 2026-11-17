@@ -5,6 +5,7 @@ import { _electron as electron, expect, test, type ElectronApplication, type Loc
 import { mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { launchArgs } from '../support/launch.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SHOTS = path.join(root, 'test-results-visual', 'f802');
@@ -16,7 +17,7 @@ const consoleErrors: string[] = [];
 
 test.beforeAll(async () => {
   const { executable } = JSON.parse(readFileSync(path.join(root, 'out', 'packaged.json'), 'utf8')) as { executable: string };
-  app = await electron.launch({ executablePath: executable, args: [] });
+  app = await electron.launch({ executablePath: executable, ...launchArgs() });
   page = await app.firstWindow();
   page.on('console', (m) => {
     if (m.type() === 'error') consoleErrors.push(m.text());

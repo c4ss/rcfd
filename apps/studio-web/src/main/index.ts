@@ -424,9 +424,9 @@ function offerServicePort(contents: WebContents): void {
 /**
  * Test runs only: RCFD_TEST_HEADLESS=1 (set by playwright.config.ts). Electron has no headless mode, a hidden window never
  * paints (screenshots wait for it) and an off-screen one gets other sizes, so the window is shown in place but fully
- * transparent, passing mouse input through, without a taskbar button and without taking the focus; background
- * throttling is off so its frames and timers run as in a window in front. Unset, the window and its settings are as
- * before.
+ * transparent (not on Linux, where a transparent window is not painted: there the tests run under xvfb), passing mouse
+ * input through, without a taskbar button and without taking the focus; background throttling is off so its frames and
+ * timers run as in a window in front. Unset, the window and its settings are as before.
  */
 const HEADLESS = process.env.RCFD_TEST_HEADLESS === '1';
 
@@ -435,7 +435,9 @@ function openWindow(): void {
     width: 1280,
     height: 800,
     show: false,
-    ...(HEADLESS ? { skipTaskbar: true, opacity: 0, focusable: true } : {}),
+    // opacity 0 only off Linux: Chromium on X11 takes a fully transparent window for a hidden one and stops painting it
+    // (screenshots time out, frames drop to one a second); Linux test runs use a virtual display (xvfb) instead
+    ...(HEADLESS ? { skipTaskbar: true, ...(process.platform === 'linux' ? {} : { opacity: 0 }), focusable: true } : {}),
     webPreferences: {
       ...(HEADLESS ? { backgroundThrottling: false } : {}),
       preload: PRELOAD,

@@ -1,0 +1,121 @@
+# The Electron Studio's installers (F-820, ADR 0801 Addendum 17): NSIS on Windows, AppImage and .deb on Linux, each with
+# the engine's release binaries (rcfd, rcfd-mcp, rcfd-runner) in <resources>/bin. On manual dispatch and on a version
+# tag. The installers are uploaded as workflow artifacts only: nothing is published or attached to a release (release.yml
+# opens the draft release; the maintainer decides what goes into it). macOS is not built (not asked for).
+#
+# Signing is wired but off: the Windows build is signed only when the repository variable RCFD_STUDIO_SIGNING is "on"
+# AND the secrets WIN_CSC_LINK (a .pfx, base64) and WIN_CSC_KEY_PASSWORD exist. Until the maintainer provides a
+# certificate, every installer is unsigned and the job summary says so.
+name: Studio installers
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: studio-installers-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: never
+  # The gate's toolchain (gate.yml) and the Studio's Node (ci.yml, studio-web job). Change them together.
+  RUST_GATE_TOOLCHAIN: "1.99.0"
+  STUDIO_NODE_VERSION: "22.19.0"
+
+jobs:
+  installers:
+    name: installers, ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: ${{ env.RUST_GATE_TOOLCHAIN }}
+      # No build cache: what ships is built from an empty target folder, as the gate is.
+      - name: engine (release)
+        run: cargo build --release --locked -p rcfd-cli -p rcfd-mcp -p rcfd-runner
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.STUDIO_NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: apps/studio-web/package-lock.json
+      - name: npm ci and build
+        working-directory: apps/studio-web
+        run: |
+          npm ci
+          npm run build
+      - name: Electron is on a supported major (G10)
+        # Electron supports its latest three stable majors (ADR 0801 section 4).
+        working-directory: apps/studio-web
+        run: |
+          pinned=$(node -p "require('./package.json').devDependencies.electron.split('.')[0]")
+          latest=$(npm view electron dist-tags.latest | cut -d. -f1)
+          echo "Electron: pinned major $pinned, latest stable major $latest"
+          if [ $((latest - pinned)) -gt 2 ]; then
+            echo "::error::Electron $pinned is out of support (latest stable is $latest): move to a supported major first"
+            exit 1
+          fi
+      - name: version
+        # A tag vX.Y.Z names the installers' version; a manual run keeps package.json's.
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then echo "STUDIO_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"; fi
+      - name: signing (off until the maintainer provides a certificate)
+        id: signing
+        env:
+          SIGNING: ${{ vars.RCFD_STUDIO_SIGNING }}
+          HAS_CERT: ${{ secrets.WIN_CSC_LINK != '' && secrets.WIN_CSC_KEY_PASSWORD != '' }}
+        run: |
+          if [ "$RUNNER_OS" = Windows ] && [ "$SIGNING" = on ] && [ "$HAS_CERT" = true ]; then
+            echo "sign=1" >> "$GITHUB_OUTPUT"; echo "signing: on"
+          else
+            echo "sign=0" >> "$GITHUB_OUTPUT"
+            echo "signing: off (RCFD_STUDIO_SIGNING='${SIGNING}', certificate secrets present: ${HAS_CERT}, runner ${RUNNER_OS})"
+          fi
+      - name: installers
+        working-directory: apps/studio-web
+        env:
+          RCFD_STUDIO_SIGN: ${{ steps.signing.outputs.sign }}
+          CSC_LINK: ${{ steps.signing.outputs.sign == '1' && secrets.WIN_CSC_LINK || '' }}
+          CSC_KEY_PASSWORD: ${{ steps.signing.outputs.sign == '1' && secrets.WIN_CSC_KEY_PASSWORD || '' }}
+        run: npm run package:installers -- --engine="$GITHUB_WORKSPACE/target/release" ${STUDIO_VERSION:+--version=$STUDIO_VERSION}
+      - name: check the installers carry the engine
+        working-directory: apps/studio-web/out/installers
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            for f in rcfd rcfd-mcp rcfd-runner; do dpkg-deb -c ./*.deb | grep -E "resources/bin/$f\$"; done
+            dpkg-deb --info ./*.deb
+          else
+            ls -l win-unpacked/resources/bin/rcfd.exe win-unpacked/resources/bin/rcfd-mcp.exe win-unpacked/resources/bin/rcfd-runner.exe
+          fi
+      - name: checksums and summary
+        working-directory: apps/studio-web/out/installers
+        run: |
+          sha256sum ./*.exe ./*.AppImage ./*.deb 2>/dev/null > SHA256SUMS.txt || true
+          {
+            echo "### Studio installers, ${{ matrix.os }}, ${GITHUB_SHA}"
+            echo "Signing: $([ '${{ steps.signing.outputs.sign }}' = 1 ] && echo on || echo 'off (unsigned)')"
+            echo '```'; cat SHA256SUMS.txt; echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: upload the installers (workflow artifacts only)
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: studio-installers-${{ matrix.os }}-${{ github.sha }}
+          path: |
+            apps/studio-web/out/installers/*.exe
+            apps/studio-web/out/installers/*.AppImage
+            apps/studio-web/out/installers/*.deb
+            apps/studio-web/out/installers/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30

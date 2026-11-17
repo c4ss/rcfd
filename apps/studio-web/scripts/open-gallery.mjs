@@ -19,7 +19,7 @@ try {
   process.exit(1);
 }
 
-const app = await electron.launch({ executablePath: executable, args: [] });
+const app = await electron.launch({ chromiumSandbox: true, executablePath: executable, args: [] });
 const page = await app.firstWindow();
 await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setContentSize(1440, 900));
 await page.evaluate(() => {
