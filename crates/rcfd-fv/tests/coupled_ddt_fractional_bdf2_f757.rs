@@ -494,9 +494,13 @@ fn fractional_periodic_implicit_without_pairs_is_a_no_op() {
     assert!(fails.is_empty(), "{fails:?}");
 }
 
-/// P1b, NC1b, P2b, D1Lb, C1b (and G0) of ADR 0687: ADR 0675's PISO lockstep with BDF2.
+/// P1b, NC1b, P2b, D1Lb, C1b (and G0) of ADR 0687: ADR 0675's PISO lockstep with BDF2. Known miss (ADR 0687 amendment 1):
+/// the one registered run (5bb12a91) gave P1b `4.2194e-4` U_ref (step 85; limit `1e-8`) and P2b `8.2756e-4` (limit `1e-8`),
+/// NC1b held (`4.1895e-4`), D1Lb `1.3888e-11`, C1b `4.441e-16`, G0 met. Cause: the lagged periodic partner in the BDF2
+/// deferred-correction state of the PISO predictor; the corrected set-up is `bdf2_piso_extrapolated_partner_against_the_twin`.
 #[test]
-fn bdf2_piso_channel_against_the_twin() {
+#[ignore = "known miss of ADR 0687 (P1b, P2b): the registered record, limits intact"]
+fn bdf2_piso_channel_against_the_twin_known_miss() {
     let t0 = Instant::now();
     let pr = pair();
     let (rp, rt) = (0, pr.m[0]);

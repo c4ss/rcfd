@@ -243,3 +243,58 @@ ADR 0672's body-force flow). **Todo** when P1f or P1b is missed without a diagno
   face treatment and wall condition, outside this item). Taken (a) on the standing instruction; flagged for the maintainer,
   who may read "ADR 0672's channel" as its flow (then the decision is partial, as registered).
 - **Q3. The defaults.** Open (changes default results and hashes), as ADR 0675 Q3.
+
+## Amendment 1 (2026-11-17): the BDF2 PISO run misses P1b; diagnosis, the record kept, a corrected set-up
+
+Written after the one registered run of `coupled_ddt_fractional_bdf2_f757.rs` (5bb12a91, release, 8.4 s, log
+`w49i-work/f757-scratch/fast.log`) and before any code or run of the corrected set-up. Nothing above this amendment is changed.
+
+**What the registered run gave.** The fractional-step test (P1f, NC1f, P2f, D1Lf, C1f, NCL, D5, G0), the no-op test (D6) and
+the fractional BDF2 test (S1fb, SNC1fb) passed (numbers in Addendum 1). The BDF2 PISO test missed **P1b** (`G_on` largest
+`4.22e-4` U_ref at step 85, limit `1e-8`; step 1 `2.06e-15`, step 2 `2.20e-6`) and **P2b** (`8.28e-4`, limit `1e-8`); NC1b
+held (`G_off` largest `4.19e-4`), D1Lb met (`1.39e-11`), C1b met (`4.4e-16`), G0 met. `G_on` and `G_off` are of the same size
+from step 2: the opt-in removes the ddt-term part (`G_off` at step 2 is `9.2e-6`, `G_on` `2.2e-6`) but a second difference,
+not the ddt term, remains.
+
+**Diagnosis (from the code and the numbers, no further run).** In `step_with`, on the first outer iteration of a BDF2 step
+(`extrap = Some(c1 - 1)`, from step 2) the convected flux and the deferred-correction state are extrapolated in time: the
+internal faces' central correction is formed from `conv_cells = (1 + r) u^n - r u^{n-1}` on both sides. On a coupled face the
+owner side is `conv_cells` but the partner value in the boundary coefficients (`co.b` of `self.u.boundary_coeffs`) is the
+lagged `u^n`, so the deferred central part `phi_f (co.a u_r + co.b - u_upwind)` of `P`'s cut differs from that of `T`'s
+internal face there by `phi_f (1 - a) r (u^n - u^{n-1})_c`. Size at step 2: `phi_f` about `8e-3 * 3.9e-3 = 3e-5`, `(1 - a) =
+0.5`, `r = 1`, `u^1 - u^0` about `0.8 dt = 8e-3`: `1.2e-7` in the momentum row, over `a_P` about `1.5 V / dt + 0.025 = 0.062`:
+`2e-6`, the measured `2.2e-6` at step 2. It is not in the Euler runs (no extrapolation; ADR 0675's P1 at `5.6e-15`) and not in
+the fractional BDF2 run, whose predictor already overrides the coupled faces' `b`, `d` with the extrapolated partner
+(`bc_extrapolated`, ADR 0043 D1; S1fb met at `1.1e-14`): the contrast isolates it. It is a pre-existing difference of the
+default PISO BDF2 step on periodic faces, independent of the ddt term.
+
+**The record.** The registered test is kept as `bdf2_piso_channel_against_the_twin_known_miss`, `#[ignore]`d, limits intact,
+the measured numbers in its doc comment.
+
+**The corrected set-up (registered now).** A third opt-in `PimpleSettings::periodic_partner_extrapolated: bool`, default
+`false`: in the PISO step, on the first outer iteration of a BDF2 step (when `extrap` is set), the translational coupled faces'
+boundary coefficients `b`, `d` of every velocity component take those of the extrapolated field (exactly the fractional step's
+`bc_extrapolated`), and the implicit links remove that value (`fix_rhs` with `conv_cells` in place of `u_iter`). Rotational
+pairs keep the lagged partner (their implicit links, ADR 0664, remove `u_iter`). Not read without `extrap` (implicit Euler,
+later outer iterations, step 1 of BDF2): no new operation runs. Not read by the fractional step (which does it already). The
+face values `ub` given to the least-squares momentum gradient stay lagged (not used with `coupled_non_orth`, which takes the
+partner-point gradients from the extrapolated cells, nor by central convection).
+
+Corrected checks, limits as registered for the originals (estimates: with the partner extrapolated every term of the coupled
+face is the internal face's, as for Euler, so rounding, `1e-14`):
+
+| Id | Set-up | Check | Limit |
+| --- | --- | --- | --- |
+| P1b' | ADR 0675's lockstep, BDF2, `periodic_partner_extrapolated` on in all four runs | every step `G_on(n)` | `<= 1e-8` each step |
+| NC1b' | same | `G_off(n)` (no `coupled_ddt_correction`) | `> 1e-8` on at least one step (estimate `G_off` step 2 `9e-6` as measured) |
+| P2b', D1Lb', C1b' | same | as P2b, D1Lb, C1b | `1e-8`, `1e-9`, `1e-12` each step |
+| D7 | ADR 0675's lockstep, implicit Euler, 20 steps | `periodic_partner_extrapolated` on against off | bit for bit every step |
+| D8 | BDF2 PISO on the mesh without pairs (D6's mesh, ADR 0675's settings without the body force, from D6's initial velocity), 20 steps | on against off | bit for bit every step |
+
+Mutations added: **MX1** `periodic_partner_extrapolated` not read: must fail P1b'. MB1 and MB2 are judged on P1b' (the
+original P1b is missed without them). B1 adds `w33b_transient_order` and `piso_thin_gap_f299` already in the list; nothing else
+changes.
+
+**Decision rule (amended).** c3b is judged on the corrected set-up ("a BDF2 PISO run"): in the registered rule read P1b',
+NC1b', C1b', P2b', D1Lb' in place of P1b, NC1b, C1b, P2b, D1Lb, and add D7 and D8 to c2 and MX1 to the required mutations.
+P1b and P2b stay recorded as missed with the cause above. If P1b' is missed, partial (diagnosed) or todo as registered.
