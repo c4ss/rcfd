@@ -693,6 +693,16 @@ results stay in the scratch folder, not committed.
   not read yet. Recommendation: the run list (F-806) hands the plots a reader of that file behind the same feed
   interface.
 
+
+### Idle record of P3 (2026-11-17, Q-811-1)
+
+`node scripts/measure-plots.mjs --profile-root=<scratch>` on the packaged Studio of main 916c4e72, machine quiet (processor
+busy 0.17 to 0.24, no cargo, rustc or link): the 4 x 4 x 4 lid-driven box stepped 1e5 times in 63.2 s, then
+`monitors.get {names}` of four series, request to parsed object in the renderer, 20 repeats: median 79.7 ms, p99 99.7 ms,
+min 68.1 ms, limit 100 ms: **met**. Recorded: the same request in the main process alone, median 64.1 ms; I1 (the last 100
+samples of each series by `since`), median 0.30 ms, p99 0.90 ms, limit 2 ms. The miss of 118.3 ms above was taken under full
+load. F-811 is done.
+
 ## Addendum 5 (F-808): the field viewport on three.js WebGPU (2026-11-16)
 
 F-808 (mesh and fields on surfaces drawn by `WebGPURenderer` with a TSL material, the WebGL 2 fallback; guardrails G3,

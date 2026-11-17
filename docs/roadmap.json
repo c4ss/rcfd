@@ -8412,9 +8412,9 @@
     "deps": [
       "F-803"
     ],
-    "status": "partial",
+    "status": "done",
     "acceptance": "Residuals and monitors fetched once and then by increments (ADR 0353); every plot range holds every value it draws; a run without a series says so in words with its pictogram, never with another run's data; P3 met.",
-    "note": "ADR 0800. Traces: G3, G6, G9 (P3); PRODUCT Principle 4. Partial 2026-11-16 (ADR 0801 addendum 4): residual and monitor plots on three.js (SVG measured 30x slower per increment), fetched once then by increments with 0 resyncs against real rcfd, range holds every value; dev route #/dev/plots until F-810. P3 missed under full machine load (median 118.3 ms vs 100 ms); re-measure on an idle machine (Q-811-1)."
+    "note": "ADR 0800. Traces: G3, G6, G9 (P3); PRODUCT Principle 4. Partial 2026-11-16 (ADR 0801 addendum 4): residual and monitor plots on three.js (SVG measured 30x slower per increment), fetched once then by increments with 0 resyncs against real rcfd, range holds every value; dev route #/dev/plots until F-810. P3 missed under full machine load (median 118.3 ms vs 100 ms); re-measure on an idle machine (Q-811-1). Done 2026-11-17: P3 on a quiet machine (load 0.24, no cargo; scratch profile), median 79.7 ms (limit 100; p99 99.7, min 68.1) over 20 repeats, main process alone 64.1 ms, I1 increments 0.30 ms (ADR 0801 Addendum 4, the idle record)."
   },
   {
     "id": "F-812",

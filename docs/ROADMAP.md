@@ -16563,7 +16563,7 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     together, Follow live; same-snapshot test against a real quick-start run; P5 met (23.6 snapshots/s at 1e6 cells), P6
     met on rate (9.1/s at 4e6 cells, 4 of 100 frames over 150 ms, machine fully loaded); screenshots in test-results-
     visual/f810 for view-and-report.
-- [~] **F-811** Electron Studio: residual and monitor plots
+- [x] **F-811** Electron Studio: residual and monitor plots
   - depends on: F-803
   - acceptance: Residuals and monitors fetched once and then by increments (ADR 0353); every plot range holds every
     value it draws; a run without a series says so in words with its pictogram, never with another run's data; P3 met.
@@ -16571,6 +16571,8 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     monitor plots on three.js (SVG measured 30x slower per increment), fetched once then by increments with 0 resyncs
     against real rcfd, range holds every value; dev route #/dev/plots until F-810. P3 missed under full machine load
     (median 118.3 ms vs 100 ms); re-measure on an idle machine (Q-811-1).
+    Done 2026-11-17: P3 on a quiet machine (load 0.24, no cargo; scratch profile), median 79.7 ms (limit 100; p99 99.7,
+    min 68.1) over 20 repeats, main process alone 64.1 ms, I1 increments 0.30 ms (ADR 0801 Addendum 4, the idle record).
 - [x] **F-812** Electron Studio: case editor validated by the engine's schema
   - depends on: F-805, F-825
   - acceptance: Open, edit and save a case through the engine's own schema and validation (no copy of either in the
