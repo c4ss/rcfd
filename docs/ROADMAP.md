@@ -15158,7 +15158,7 @@ fixed by the item's registration ADR before any code.
     the lift limits stated against a fixed force scale as well as relative; the force series are kept for diagnosis; a
     negative control with the body velocity left out of the forcing misses the lift amplitude and phase.
   - note: Follow-up of F-731 (ADR 0657, 2026-11-16).
-- [ ] **F-751** The two failures of the first daily gate (2026-11-16, run 43919555816)
+- [~] **F-751** The two failures of the first daily gate (2026-11-16, run 43919555816)
   - depends on: F-723
   - acceptance: Every limit not stated here is registered in the ADR before the run. (1) f699_fidelity
     p4_table_errors_name_row_and_column_never_a_value: its leak search matched the cell '198' inside the runner's temp
@@ -15168,9 +15168,22 @@ fixed by the item's registration ADR before any code.
     writer' returned to a cooperative writer); the cause located (lock retry or the test's expectation), fixed without
     changing a default result, and the test passing in 200 of 200 repeated runs; both shown by re-running the gate's
     per-test command.
-  - note: First green-ish full gate since early November: 5872 passed, 2 failed, 1633 ignored, wall 4.1 h (run
-    43919555816 at d55c43c4). The f699 P4 failure is the pid flakiness of ADR 0624 R2 (the path held the cell's digits);
-    the edit-lock failure reproduces locally 1 in 6.
+  - note: Gate and test reliability. Follow-up of F-723 (ADR 0653). PARTIAL. ADR 0669, 2026-11-16: the two failures of
+    the first daily gate (run 43919555816, commit d55c43c4). (1) f699_fidelity P4 matched the cell '198' in the runner's
+    temporary path: already fixed on main by F-717 (ADR 0642), P4 an ignored set-up record with its body unchanged and
+    P4c searching with the path removed; with the gate's command P4 is listed ignored and P4c passes; no test edited.
+    (2) edit_lock_w48f two_writers_with_base_hashes_lose_no_update: the cause is in rcfd-project's replace_if_hash, two
+    defects under a cooperating second writer: the path was resolved outside the edit lock, so the other writer's rename
+    made the canonical path fall under $Extend\$Deleted (refused as outside the root) or delete-pending (access denied),
+    and the lock was unfair (a waiter polling every 2 ms could miss every short release: the gate's LockBusy). Fixed by
+    a second resolve under the lock after a resolve error a rename can cause, and a claim file beside the lock that a
+    writer waiting 50 ms creates and the others respect (stale after 4 s); defaults unchanged (no claim and no second
+    resolve on an ordinary edit; errors, codes and timeouts unchanged; no caller changed). With the gate's per-test
+    command, 200 runs each: old code 59 failures (55 refused, 2 access denied, 2 LockBusy), fixed code 200 of 200
+    passed. New tests F1, F1c, F2, F3a, F3b met; mutations M2 to M6 caught; M1 (no claim) survived both
+    forced-contention controls (the old waiter slowed to 973 ms but never starved to 2 s), so the claim's share of the
+    fix rests on L1's statistics, and a lock left behind by a failed removal is not excluded as a cause of LockBusy.
+    Follow-up F-755 (A forced control of the edit lock's starvation and of a lock left behind).
 - [x] **F-752** Pressure part of the non-orthogonal correction on coupled faces
   - depends on: F-744
   - acceptance: on a flow with a tangential pressure gradient across non-orthogonal coupled faces (a swirling inlet on
@@ -15207,3 +15220,12 @@ fixed by the item's registration ADR before any code.
     registered limit of the twin on every step where the run without the opt-in is not. Every limit not stated here is
     registered in the ADR before the run.
   - note: Follow-up of F-752 (ADR 0672, 2026-11-16).
+- [ ] **F-755** A forced control of the edit lock's starvation and of a lock left behind
+  - depends on: F-751
+  - acceptance: Every limit not stated here is registered in the ADR before the run. Test-only hooks (feature-gated, off
+    in every default build) that delay a waiter's attempt and that hold a handle on the lock file without delete
+    sharing; with them the old acquire starves to LockBusy in a registered share of trials and the claim of ADR 0669
+    never does; the removal of the lock in EditLock::drop retried on a transient error with a logged failure, a lock
+    left behind shown before and removed after; the default bits and every ADR 0135 and ADR 0669 check keep their
+    results.
+  - note: Follow-up of F-751 (ADR 0669, 2026-11-16).
