@@ -218,3 +218,99 @@ fails (D3, D4 or B1).
   printed.
 - **Q3. The default.** Whether the opt-in should become the default for periodic runs changes default results and hashes: not
   taken, open for the maintainer.
+
+## Addendum 1: results (2026-11-17)
+
+Measured against the limits registered above; no limit was changed and no amendment was made. Release builds on Windows, on a
+machine shared with other building agents. The registration is 72461a43 (alone, first); the library change and the test file
+e533425d (committed before their run). Each registered run was made once: the new test file (2 tests, 31 s: the channel
+lockstep 22.9 s, the sector 8.0 s, so no heavy record), `rcfd-fv --lib`, `baseline_hashes`, the named files, `docs_site`.
+Logs in `w49i-work/f754-scratch` (`fast.log`, `lib.log`, `suites.log`, `baseline.log`, `mutations.log`, `docs_site.log`).
+
+**Built as registered.** `PimpleSettings::coupled_ddt_correction` (default `false`) in `crates/rcfd-fv/src/pimple.rs`: the
+field and its doc (lines 204-208), its default (line 1034), the term's list `ddt_cp` built once per outer iteration (lines
+2141-2143), its addition in the corrector after the internal faces' term (lines 2174-2176), the helper `coupled_ddt_term`
+(lines 3308-3354, using `boundary_hby_a` on the old velocities and `coupled_gamma`). The new test file
+`crates/rcfd-fv/tests/coupled_ddt_correction_f754.rs`. With the field `false` no new operation runs. No case key, no golden,
+no hash table. The `pressure.rs` code of `coupled_non_orth` is not touched.
+
+### Results
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| P1 (b3) `G_on(n)`, every one of 200 steps | `<= 1e-8` each step | `5.64e-15` (step 33; step 1 `2.06e-15`) | met |
+| NC1 (b3, control) `G_off(n)` | `> 1e-8` on at least one step | largest `1.44e-5` (step 11); every step from step 2 at least `5.13e-6`; step 1 `2.06e-15` (equal to `G_on`, as derived) | held |
+| P2 (supporting) pressure, every step | `<= 1e-8` each step | `4.60e-14` | met |
+| D1L `abs(div_Pon - div_Ton) / (U_ref h dz)`, every step | `<= 1e-9` each step | `6.0e-15` | met |
+| C1 `abs(phi_f + phi_g) / (U_ref h dz)` on `P_on`'s 16 pairs, every step | `<= 1e-12` each step | `3.3e-16` | met |
+| D3 `P_X` against `P_Y`, every step | bit for bit | equal on every step | met |
+| G0 cell maps | `1e-12`, one-to-one (bijection for `A`) | channel `8.9e-16`, yes; sector `2.3e-15`, yes, bijection | met |
+| S1 (supporting) `S_on` against `A_on`, six copies, every step | `<= 1e-8` each step | `7.12e-15` (step 45) | met |
+| SNC1 (supporting) `S_off` against `A_on` | `> 1e-8` on at least one step | largest `9.41e-5` (step 200); step 2 `2.12e-5`; step 1 `1.18e-15` | held |
+| SD1L (supporting) per-cell divergence, every step | `<= 1e-9` each step | `4.7e-15` | met |
+| D4 `A_on` against `A_off`, every step | bit for bit | equal on every step | met |
+| B1 `baseline_hashes`; `--lib`; the named files | pass | see below | met |
+
+Printed, no limit: the largest old-level defect on `T_on`'s internal faces at the images of `P`'s cut, `4.3e-5 U_ref h dz`
+(estimate `1e-7` to `1e-5`: a little above the high end), and on `A_on`'s faces at the images of `S`'s wrap faces, `4.3e-4
+U_ref dr dz` (estimate up to `3e-4`); `T_on` against `T_off` (the term on `T`'s own cut, in the rectangular band) `1.2e-8
+U_ref`; C1 of `P_off` `2.2e-16` (the default pair is antisymmetric too); `phi_f + phi_g` of `S_on` `2.5e-15 U_ref dr dz`.
+Against the estimates: `G_off` `5.1e-6` to `1.4e-5` against `5e-8` to `5e-6` (the high end, as the defect); `G_Soff` up to
+`9.4e-5` against up to `1e-4`.
+
+Suites (release, run once): `baseline_hashes` 3 passed, 1 ignored; `rcfd-fv --lib` 115 passed, 6 ignored;
+`consistent_periodic_f367` 13 (2 ignored), `non_conformal` 2, `periodic` 3, `piso_thin_gap_f299` 18 (2 ignored),
+`rotational_sector_pressure_part_f753` 3, `seam_no_harm_f344` 6 (1 ignored; 157 s), `skewed_periodic_channel_f752` 3,
+`sliding_annulus_inlet_f744` 2 (1 ignored), all passed; ignored records not run. `docs_site` (this ADR and one passage of
+`docs/dynamic-mesh.md`): 2 passed (run with the `dynamic-mesh.md` passage in place, before this addendum was written; the addendum adds no link). `cargo fmt -p rcfd-fv --check` clean; `cargo clippy --release -p rcfd-fv
+--all-targets -- -D warnings` clean.
+
+### Mutations (scratch copy `w49i-work/f754-scratch/mut` of e533425d, script `mutate.py`, target `target-mut`; the new test file run once per mutation)
+
+| Mutation | Must fail | Result |
+| --- | --- | --- |
+| M0 (harness check, not registered) the face value by the script's inline copy of `boundary_hby_a` | none | every number equal to the registered run |
+| MT1 the partner's old velocity from level `n-1` | P1 | caught: P1 `2.19e-3`, P2, D1L `1.4e-6`, C1 `4.1e-4`; S1 `1.05e-2`, SD1L |
+| MT2 the coupled term's sign flipped | P1 | caught: P1 `2.15e-5`, P2 `9.5e-5`; S1 `1.35e-4` (C1, D1L met: the flipped term is still antisymmetric) |
+| MT3 the owner's `rAU` in place of the pair mean | C1 or P1 | caught: C1 `3.1e-6`, P1 `1.36e-6`, P2, D1L `3.2e-7`; S1 `6.4e-6`, SD1L `2.1e-5` |
+| MT4 the rotation dropped in the partner's old velocity | S1 | caught: S1 `1.33` U_ref, SD1L `3.7`; the channel unchanged to the bit (`R = I`, as registered) |
+| MT5 the field not read | P1 | caught: P1 `1.44e-5` (equal to the control), P2; S1 `9.4e-5` |
+| MT6 (diagnostic) the weights swapped | none | P1 `5.3e-6`, P2; S1 `9.8e-4` (C1, D1L met) |
+
+Five of five required mutations caught (MT4 by the supporting S1, which is what the sector case was added for). D3 and D4 held
+under every mutation. The library of the copy was restored after each (equal to e533425d).
+
+### Deviations
+
+None from the registered set-up. The harness check M0 was added to the mutation script (not a registered check) to show that
+the script's inline face value, which MT1, MT4 and MT6 edit, is the library's.
+
+### Not covered
+
+As registered: the PISO step only (the fractional step's own defect unchanged); the field ignored on a moving mesh; not with
+`rhie_chow_step_consistent`; implicit Euler only (the BDF2 part of the coupled term written, not run); one channel and one
+sector, 2-D; no case key; the default unchanged (periodic runs with the default settings still lack the term on coupled
+faces).
+
+### Decision
+
+By the registered rule: P1, NC1, C1, D3 and B1 met, P2, D1L and G0 held, MT1, MT2, MT3 and MT5 caught; the supporting S1,
+SNC1, SD1L, D4 met and MT4 caught: **done**.
+
+### Remaining questions
+
+1. **The default (Q3, open).** Options: (a) make `coupled_ddt_correction` the default with `ddt_correction` (periodic runs
+   then match their unrolled twins; changes default periodic results and the baseline hashes, re-recorded by the maintainer);
+   (b) keep it opt-in. Recommendation (a), in one change with ADR 0667's default question (Q2 there) and F-746, since all three
+   make the coupled face the internal face; not taken here (it changes default results).
+2. **The fractional step and BDF2.** Options: (a) a follow-up giving the fractional step's copy of the defect the same
+   coupled term, checked on this channel with the fractional step, and running this item's channel with BDF2; (b) leave
+   them. Recommendation (a) if the fractional step is used on periodic cases; otherwise low priority.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> ADR 0675, 2026-11-17: the opt-in PimpleSettings::coupled_ddt_correction (default false) gives the coupled (periodic) pairs the transient Rhie-Chow term the internal faces carry, with the partner cell in the place of the neighbour (its old velocity rotated by R on a rotational pair) and the pair mean of rAU. On ADR 0672's skewed channel with ddt_correction on, the periodic run stays within 5.6e-15 U_ref of its unrolled twin on every one of 200 steps (limit 1e-8); without the opt-in it misses by 5.1e-6 to 1.4e-5 U_ref on every step from step 2 (at step 1 the defect is zero by construction); the pair fluxes stay opposite to 3.3e-16. Supporting: on ADR 0674's warped sector the run stays within 7.1e-15 of its annulus (without the opt-in up to 9.4e-5). Five of five mutations caught (partner from the wrong time level, sign, owner rAU, the field not read, and the rotation dropped, caught on the sector). Defaults bit-identical (baseline_hashes and the periodic, sliding and non-orthogonal suites pass). PISO only (not the fractional step), implicit Euler in the runs, not on a moving mesh or with rhie_chow_step_consistent; whether it becomes the default is open for the maintainer.
+
+> Follow-up proposed: "Rhie-Chow ddt correction on coupled faces in the fractional step and with BDF2". Deps F-754. Acceptance: the fractional step's ddt correction gives the coupled pairs the term behind the same opt-in, defaults bit-identical; on ADR 0672's channel against its twin with ddt_correction on, the fractional-step run and a BDF2 PISO run are each within a registered limit of the twin on every step where the run without the opt-in is not. Every limit not stated here is registered in the ADR before the run.
