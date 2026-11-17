@@ -11,6 +11,7 @@ import { TextArea, TextField as AriaTextField, Label, Text } from 'react-aria-co
 import { commandLine, type Confirmation, type RunActionId, type RunActionParams } from '../../shared/actions/runs.js';
 import type { ProjectView, RunActionFailure, RunActionResult, RunRequest } from '../../shared/project.js';
 import { Button, IconButton, NumberField, Quiet, Select, StateMark, Unavailable } from '../ui/index.js';
+import { containTab } from '../ui/containFocus.js';
 import { runAction, runActionAvailability, runActionConfirmation } from '../project/door.js';
 import { latestFor, requestWords, setEntries } from './control-model.js';
 import { caseName, type RunRow } from './model.js';
@@ -312,11 +313,14 @@ function Confirm({ words, onConfirm, onKeep }: { words: Confirmation; onConfirm:
     <div
       className="rc-confirm"
       role="alertdialog"
+      aria-modal="true"
       data-words="exception"
       aria-labelledby="rc-confirm-title"
       aria-describedby="rc-confirm-body"
       ref={keep}
       onKeyDown={(e) => {
+        // F-816 (G8): Tab stays in the strip while it asks
+        containTab(e);
         if (e.key === 'Escape') {
           e.stopPropagation();
           onKeep();

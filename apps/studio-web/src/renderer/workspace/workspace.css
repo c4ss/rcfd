@@ -266,6 +266,17 @@
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: default;
+  /* a button (F-816) that looks as the label did */
+  appearance: none;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  width: 100%;
+  min-width: 0;
+}
+/* inside the bands' scroll box, the ring is drawn inside the name */
+.tp-band-name:focus-visible {
+  outline-offset: var(--focus-offset-inset);
 }
 .tp-band-row--selected .tp-band-name {
   color: var(--role-text);
@@ -312,6 +323,17 @@
 }
 .tp-seg--live {
   --tp-fill: var(--role-band-live);
+}
+/* F-816 (G8, colour is never the only carrier): the live segment's growing end is a 2px ink edge, a shape no other
+   segment has; the band end's description and tooltip say "live" */
+.tp-seg--live::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: var(--space-hair);
+  background: var(--role-rule);
 }
 .tp-seg--failed {
   --tp-fill: var(--role-band-failed);

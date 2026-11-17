@@ -24,6 +24,7 @@ import { CompareControls, CompareFields, CompareMetrics, useComparison, type Com
 import { Provenance, countValue, counterValue, statusValue } from '../provenance/index.js';
 import { READ_RESIDUALS, STORE_READER } from '../provenance/sources.js';
 import { useWorkWhile, WorkProgress } from '../work/WorkProgress.js';
+import { REDUCED_PLAY_MS, usePrefersReducedMotion } from '../ui/motion.js';
 import './workspace.css';
 
 /** F-832: the scope of the workspace's own works (opening a run) in the work tracker. */
@@ -227,10 +228,13 @@ export default function RunWorkspace({ view, selected, onSelect, compareRequest 
     [row, last],
   );
 
-  // Play: one stop after another, each once the field of the one before is drawn (every 150 ms for a run without fields)
+  // Play: one stop after another, each once the field of the one before is drawn (every 150 ms for a run without fields);
+  // under reduced motion (F-816, G8) no faster than one stop every REDUCED_PLAY_MS
   const drawnAt = useRef<{ run: string | undefined; snapshot: number } | null>(null);
   const [drawTick, setDrawTick] = useState(0);
   const snap = position?.snapshot ?? null;
+  const reduceMotion = usePrefersReducedMotion();
+  const steppedAt = useRef(0);
   useEffect(() => {
     if (!playing) return;
     if (index >= last) {
@@ -238,9 +242,14 @@ export default function RunWorkspace({ view, selected, onSelect, compareRequest 
       return;
     }
     if (snap !== null && !(drawnAt.current?.run === row?.id && drawnAt.current?.snapshot === snap)) return; // its draw re-runs this
-    const t = setTimeout(() => moveTo(index + 1, 'play'), snap === null ? 150 : 0);
+    const pace = snap === null ? 150 : 0;
+    const wait = reduceMotion ? Math.max(pace, REDUCED_PLAY_MS - (performance.now() - steppedAt.current)) : pace;
+    const t = setTimeout(() => {
+      steppedAt.current = performance.now();
+      moveTo(index + 1, 'play');
+    }, wait);
     return () => clearTimeout(t);
-  }, [playing, index, last, snap, row?.id, moveTo, drawTick]);
+  }, [playing, index, last, snap, row?.id, moveTo, drawTick, reduceMotion]);
 
   // timing marks for P5 and P6 (scripts/measure-scrub.mjs): the stop asked for, and its field drawn
   useEffect(() => {

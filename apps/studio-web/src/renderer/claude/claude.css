@@ -170,6 +170,10 @@
 .cc-session[aria-disabled='true'] .cc-session-name {
   color: var(--role-text-2);
 }
+/* F-816 (G8): unavailable is a dashed hairline as on every unavailable control (DESIGN.md), not ink-2 alone */
+.cc-session[aria-disabled='true'] {
+  border: 1px dashed var(--role-hair);
+}
 .cc-session-name {
   font-weight: var(--font-weight-medium);
   max-width: 100%;
