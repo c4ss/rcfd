@@ -15171,11 +15171,39 @@ fixed by the item's registration ADR before any code.
   - note: First green-ish full gate since early November: 5872 passed, 2 failed, 1633 ignored, wall 4.1 h (run
     43919555816 at d55c43c4). The f699 P4 failure is the pid flakiness of ADR 0624 R2 (the path held the cell's digits);
     the edit-lock failure reproduces locally 1 in 6.
-- [ ] **F-752** Pressure part of the non-orthogonal correction on coupled faces
+- [x] **F-752** Pressure part of the non-orthogonal correction on coupled faces
   - depends on: F-744
   - acceptance: on a flow with a tangential pressure gradient across non-orthogonal coupled faces (a swirling inlet on
     ADR 0661's lockstep, or a skewed translational periodic channel against its unrolled twin) the opt-in of ADR 0667
     brings the periodic run within a registered limit of the reference on every step where the setting without its
     pressure part does not, and the corrected flux is divergence-free per cell within a registered limit; defaults
     bit-identical. Every limit not stated here is registered in the ADR before the run.
-  - note: Follow-up of F-744 (ADR 0667, 2026-11-16).
+  - note: ADR 0672, 2026-11-16: the pressure part of ADR 0667's non-orthogonal correction on coupled faces, on a
+    periodic channel whose cut is tilted by 0.3 (|k|/|S| 0.298 on the 32 coupled faces) under a body force across it (a
+    tangential pressure gradient on every coupled face), against its unrolled twin (the same cells with the cut where
+    the faces are orthogonal; every coupled face of the channel is a twin internal face with S, d and k equal to 9e-16).
+    With PimpleSettings::coupled_non_orth the channel stays within 5.8e-15 U_ref of the twin on every one of 200 steps
+    (limit 1e-8); with the new opt-in PimpleSettings::coupled_non_orth_without_pressure (the momentum part only, a
+    control; default false) it misses by 1.5e-3 to 1.9e-3 U_ref on every step (its pressure differs by up to 2.8e-2 at
+    the cut). The corrected flux is divergence-free per cell: 3.6e-15 U_ref h dz with the explicit iteration converged
+    (limit 1e-10), and equal to the twin's to 5.9e-15 per cell at six passes (limit 1e-9). ADR 0667's uncaught mutations
+    MN1 (pressure equation without the coupled correction) and MN4 (flux correction sign) are caught by three checks
+    each; with MN3 and the control's own mutation four of four. Defaults bit-identical (baseline_hashes and the
+    periodic, sliding and non-orthogonal suites pass). Translational pairs only; ddt_correction off in the runs.
+    Follow-up F-753 (Pressure part of the coupled non-orthogonal correction on rotational pairs). Follow-up F-754
+    (Rhie-Chow ddt correction on coupled faces).
+- [ ] **F-753** Pressure part of the coupled non-orthogonal correction on rotational pairs
+  - depends on: F-752
+  - acceptance: on a rotationally periodic sector against its unrolled full annulus under a balanced body force with the
+    sector's period and a tangential pressure gradient across the wrap faces, ADR 0667's opt-in keeps the sector within
+    a registered limit of the annulus on every step where the setting without its pressure part does not, and the
+    corrected flux is divergence-free per cell within a registered limit; defaults bit-identical. Every limit not stated
+    here is registered in the ADR before the run.
+  - note: Follow-up of F-752 (ADR 0672, 2026-11-16).
+- [ ] **F-754** Rhie-Chow ddt correction on coupled faces
+  - depends on: F-752
+  - acceptance: an opt-in giving the coupled (periodic) pairs the ddt correction the internal faces carry, defaults
+    bit-identical; on ADR 0672's channel against its twin with ddt_correction on, the periodic run is within a
+    registered limit of the twin on every step where the run without the opt-in is not. Every limit not stated here is
+    registered in the ADR before the run.
+  - note: Follow-up of F-752 (ADR 0672, 2026-11-16).
