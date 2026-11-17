@@ -1553,3 +1553,70 @@ camera moves at once on a key (no easing, damping off).
   and `run-control.spec.ts` 23 passed.
 - `python scripts/third_party_licenses.py --check`: up to date.
 - `cargo test -p rcfd-cli --release --test docs_site --test workspace_graph`: 2 and 3 passed.
+
+## Addendum F-837: run logs, runner budgets and field-view extras from rcfd-studio (2026-11-17)
+
+F-837 rebuilds, in the Electron Studio's own design, what the removed egui Studio (`crates/rcfd-studio`, read at
+44e63df8 for what it offered only) had beside its run list, field view and project view, where no new engine entry
+point is needed. It adds **no dependency**, changes no Rust file, service method, reply shape, golden or default, and
+no word budget (G22): every new control is a pictogram named by its tooltip and accessible name, a residual column is
+headed by the engine's equation name, designs/ by its folder name, a warning speaks as an exception. `DESIGN.md`,
+`docs/studio-guardrails.md` and `PRODUCT.md` are not edited. The full table, the twelve decisions (D1 to D12, options
+and the recommendation taken) and the tests are in `apps/studio-web/README.md`, "Run logs, runner budgets and
+field-view extras from the egui Studio (F-837)".
+
+### What F-837 built
+
+- Runs: the latest residuals of u and p (`run_status` `last_residual`); the selected run's warnings at rest, its log's
+  end and last 50 events on demand (`read_project_file`, `run_status {events}`), Open the report (`shell.openPath`
+  after the engine says the file is there), Run again with fields stored (`start_run {store: "plan"}`); the runner's
+  budgets (`.rcfd/runner-config.json`: the runner's checks, no write over another writer's change, undo of the last
+  write).
+- Field view: colour range of the whole run (every stored snapshot, a cancellable work) or fixed (the cells outside
+  counted and said); View face on for a 2D case with a scale bar in metres; the domain's extents in the caption; Save
+  the view as PNG (the window's picture of the view, legend and caption, to the file a save dialog names).
+- Run workspace: the monitor on a log scale (values not above zero counted and said, not drawn).
+- Project home: designs/ and its entries; the data files of cases/ apart from the case files; a `*` link on a case
+  file whose changes a case-editor session holds unsaved.
+- Claude Code panel: a finished turn's model and the summed cost of the session's turns sent from this Studio.
+- Start: a project folder named on the command line opens.
+- Run port (`studio.run-port`): `log`, `openReport`, `budgets`, `setBudgets`, `undoBudgets`, `savePng`, each checked
+  for its exact fields in the main process (`RUN_EXTRA_OPS`; F-810's and F-815's operations unchanged).
+- Palette (G20): `runs.log`, `runs.report`, `runs.budgets`, `field.save_png`, `field.range`, `field.face_on`,
+  `plots.monitor_log`; a new group, Run workspace. `project.queue_case` takes an optional `store`, default `none` as
+  before. Coverage (G15): `capabilities/coverage.json` names the F-837 uses of `read_project_file`, `run_status` and
+  `start_run`.
+
+### Needs the engine (not built)
+
+- needs engine: a case-facts query (cell sizes, a velocity scale) or `start_run {dry_run: true}` returning the plan and
+  its estimates, for the egui run setup's "simulate N s" helper, adaptive correctors and the Courant fix.
+- needs engine: a mesh refine entry point (`refine_mesh {mesh, factor}` or a service method), for Refine by 2.
+- needs engine: a service save of a case session to a path outside a project, for opening and saving one case file
+  anywhere.
+- needs engine: a length unit for the store's coordinates (the Studio says metres from the engine's SI settings, and
+  says why).
+- Proposed, not needed: `rcfd-runner config set` or an MCP `set_runner_config`, so the budgets are written by their
+  owner, atomically.
+
+### Not built, no engine needed
+
+- Save or discard unsaved case changes when the window closes (the egui Studio asked): it changes the quit path G7
+  holds. Recommendation: a decision panel (F-829) on close only while a case-editor session has pending changes, as a
+  follow-up item.
+
+### Found while building
+
+- `run_status`'s `events` has a maximum of 50 (its schema); a first version asked for 200 and every read was refused.
+  The e2e test with a solver warning in `events.jsonl` found it.
+- The case editor's Edit opens a file in a new session; the unsaved mark therefore links to the session that holds the
+  changes, not to Edit.
+
+### Verification (2026-11-17, on studio-f837 over studio-roadmap ca512d5f)
+
+- `npm ci`: exit 0. `npm run typecheck`: clean.
+- `npm test`: 629 passed, 1 failed, 1 did not run. The failure is `project.spec.ts:241` (close, read without waiting
+  on a loaded machine); `project.spec.ts` alone: 10 passed. `a11y.spec.ts` (11), `word-budget.spec.ts` (every surface
+  within its budget) and `f837.spec.ts` (14) passed in the full run.
+- `python scripts/third_party_licenses.py --check`: up to date.
+- `cargo test -p rcfd-cli --release --test docs_site --test workspace_graph`: 2 and 3 passed.

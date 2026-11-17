@@ -156,10 +156,17 @@ const SPECS = {
       threads: { type: 'integer', optional: true, minimum: 1, maximum: 256, description: 'Solver threads of the run (default 1).' },
       mem_mb: { type: 'integer', optional: true, minimum: 1, description: 'Memory the runner books for the run, MB (default: its estimate).' },
       set: { type: 'string-array', optional: true, description: 'Settings for this run only, each path=value (rcfd run --set), in order.' },
+      // F-837: the egui Studio's "Re-run with fields stored"; start_run's own store plan (ADR 0140), not the Studio's
+      store: {
+        type: 'string',
+        optional: true,
+        enum: ['none', 'plan'],
+        description: 'plan: the engine’s start plan stores the run’s fields (about 100 snapshots) unless the case or set gives the store; none (default): only what the case asks for.',
+      },
     },
     engine: { kind: 'mcp', tool: 'start_run' },
     mcpArgs: (p) => {
-      const out: Record<string, JsonValue> = { case: p.case, store: 'none' };
+      const out: Record<string, JsonValue> = { case: p.case, store: p.store ?? 'none' };
       if (p.priority !== undefined) out['priority'] = p.priority;
       if (p.threads !== undefined) out['threads'] = p.threads;
       if (p.mem_mb !== undefined) out['mem_mb'] = p.mem_mb;
@@ -177,7 +184,8 @@ const SPECS = {
         '--project',
         project,
       ),
-    cliNote: 'rcfd-runner start writes no line in the project journal; start_run does (who: start_run).',
+    cliNote:
+      'rcfd-runner start writes no line in the project journal; start_run does (who: start_run). rcfd-runner start has no store plan: with store plan, the settings the plan added are in start_run’s answer (store.set) and in the run’s run.json, to pass as --set.',
     unavailable: (ctx, p) => {
       const c = caseProblem(ctx, p.case);
       if (c) return c;

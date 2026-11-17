@@ -28,6 +28,7 @@ import { CaseRunButton, RunFailure } from '../runs/RunControls.js';
 import { ClaudePanel } from '../claude/ClaudePanel.js';
 import { requestCommand, useCommandFact, useCommandHandlers } from '../commands/host.js';
 import { FirstPath, FirstPathIntro, NotAProjectYet } from '../first/FirstPath.js';
+import { DataFiles, DesignsGroup, UnsavedMark, isCaseFile, useUnsavedCases } from './HomeExtras.js';
 import './project.css';
 
 // F-810: the run workspace, loaded on demand (it brings three.js), so the project home costs nothing more at start
@@ -427,6 +428,10 @@ function HomeBody({
   const meshes = view.meshes.items.filter((m) => match(m.path, ...m.used_by));
   const runs = view.runs.items.filter((r) => match(r.id, r.case, r.state));
   const notes = view.notes.items.filter((n) => match(n.path));
+  // F-837: the files of cases/ that are not case files are listed apart; the case editor's unsaved files are marked
+  const caseFiles = cases.filter((c) => isCaseFile(c.path));
+  const dataFiles = cases.filter((c) => !isCaseFile(c.path));
+  const unsaved = useUnsavedCases(view.folder);
   const shown = (k: Exclude<Kind, 'all'>) => kind === 'all' || kind === k;
   const nothing =
     q !== '' &&
@@ -528,7 +533,8 @@ function HomeBody({
           )}
           {shown('cases') && (
             <Group id="cases" title="Cases" listing={view.cases} engineCount={info?.counts.cases} shown={cases.length} filtered={q !== ''}>
-              {cases.length > 0 && <CasesTable cases={cases} changed={changed} view={view} onRunResult={onRunResult} />}
+              {caseFiles.length > 0 && <CasesTable cases={caseFiles} changed={changed} view={view} onRunResult={onRunResult} unsaved={unsaved} />}
+              <DataFiles files={dataFiles} changed={changed} />
               {view.cases.total === 0 && !view.cases.error && (
                 <Empty text="No cases yet. A case is a settings file (.toml or .json) in cases/. Ask Claude Code to make one (its new_case tool), or copy a case file into the folder; it appears here." />
               )}
@@ -551,6 +557,7 @@ function HomeBody({
               {view.skippedRuns.length > 0 && <SkippedRuns skipped={view.skippedRuns} />}
             </Group>
           )}
+          {kind === 'all' && view.designs && <DesignsGroup listing={view.designs} engineCount={info?.counts.designs} filter={(p) => match(p)} />}
           {shown('notes') && (
             <Group id="notes" title="Notes" listing={view.notes} engineCount={info?.counts.notes} shown={notes.length} filtered={q !== ''}>
               {notes.length > 0 && <NotesTable notes={notes} changed={changed} />}
@@ -689,11 +696,13 @@ function CasesTable({
   changed,
   view,
   onRunResult,
+  unsaved,
 }: {
   cases: readonly CaseEntry[];
   changed: Map<string, string>;
   view: ProjectView;
   onRunResult: (r: RunActionResult) => void;
+  unsaved: ReadonlyMap<string, string>;
 }) {
   return (
     <table className="ph-table">
@@ -720,6 +729,7 @@ function CasesTable({
           <tr key={c.path} data-path={c.path}>
             <th scope="row" className="ph-name-cell">
               {inFolder(c.path, 'cases')}
+              {unsaved.has(c.path) && <UnsavedMark path={c.path} session={unsaved.get(c.path)!} />}
               {c.unread && (
                 <span className="ph-unread" data-words="exception">
                   <StateMark state="failed" label="failed to read" />

@@ -471,6 +471,25 @@ function TurnLine({ turn, error, version }: { turn: TurnView | null; error: Clau
           {turn.message && turn.status !== 'finished' ? `: ${turn.message}` : ''}
         </p>
       )}
+      {turn && turn.status === 'finished' && (turn.model !== null || turn.sessionCostUsd !== null) && (
+        // F-837: the model the CLI said it used, and what this session's turns from this Studio cost
+        <p className="cc-line cc-line--meta" data-turn-meta="">
+          {turn.model !== null && (
+            <span data-words="data" data-model={turn.model} title="The model Claude Code reported for this turn">
+              {turn.model}
+            </span>
+          )}
+          {turn.sessionCostUsd !== null && (
+            <span data-session-cost={turn.sessionCostUsd} title="The costs Claude Code reported for this session’s turns sent from this Studio, summed">
+              {turn.model !== null ? ' · ' : ''}
+              {/* G22: the sum sign, not a word; its words are for readers and in the tooltip */}
+              <span aria-hidden="true">∑ </span>
+              <span className="sr-only">cost of this session: </span>
+              <span data-words="data">{turn.sessionCostUsd.toFixed(4)} USD</span>
+            </span>
+          )}
+        </p>
+      )}
       {version && (
         <p className="cc-line cc-line--note" data-words="exception">
           {version}

@@ -86,8 +86,17 @@ export function runDetail(id: string, answer: unknown, readAt: string): RunDetai
     steady,
     finish,
     history,
+    ...lastResidualOf(a['last_residual']),
     readAt,
   };
+}
+
+/** F-837: the finite residuals of run_status's `last_residual` (the last line of residuals.jsonl), when it has some. */
+function lastResidualOf(v: unknown): { lastResidual?: Readonly<Record<string, number>> } {
+  const r = obj(obj(v)['residuals']);
+  const out: Record<string, number> = {};
+  for (const [k, x] of Object.entries(r)) if (typeof x === 'number' && Number.isFinite(x)) out[k] = x;
+  return Object.keys(out).length > 0 ? { lastResidual: out } : {};
 }
 
 /** Whether a run's last `run_status` answer may no longer be what its status.json holds. */

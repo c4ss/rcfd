@@ -83,6 +83,8 @@ export class ClaudePanel {
   private feed: FeedItem[] = [];
   private feedError: string | null = null;
   private turn: TurnView | null = null;
+  /** F-837: the cost the CLI reported for each turn this Studio sent, summed by session (USD). */
+  private readonly costs = new Map<string, number>();
   private running: Turn | null = null;
   private writer: { session: string; pid: number | null } | null = null;
   private allow: AllowView = { source: 'initial', file: ALLOW_FILE, rules: AllowList.initial().values, error: null };
@@ -504,7 +506,7 @@ export class ClaudePanel {
   }
 
   private turnView(session: string, isNew: boolean, status: TurnView['status'], message: string | null, argv: readonly string[], pid: number | null = null): TurnView {
-    return { session, isNew, status, message, pid, argv, started: this.now(), exitCode: null, stderrTail: '', mode: null, version: null, model: null, costUsd: null };
+    return { session, isNew, status, message, pid, argv, started: this.now(), exitCode: null, stderrTail: '', mode: null, version: null, model: null, costUsd: null, sessionCostUsd: this.costs.get(session) ?? null };
   }
 
   private onTurnEvent(gen: number, session: string, e: TurnEvent): void {
@@ -545,7 +547,8 @@ export class ClaudePanel {
       }
       case 'result':
         this.textOpen = false;
-        this.turn = { ...t, costUsd: e.costUsd, status: e.isError ? 'failed' : t.status, message: e.isError ? (e.text ?? `the turn ended with ${e.subtype}`) : t.message };
+        if (e.costUsd !== null) this.costs.set(t.session, (this.costs.get(t.session) ?? 0) + e.costUsd);
+        this.turn = { ...t, costUsd: e.costUsd, sessionCostUsd: this.costs.get(t.session) ?? null, status: e.isError ? 'failed' : t.status, message: e.isError ? (e.text ?? `the turn ended with ${e.subtype}`) : t.message };
         break;
       case 'aborted':
         this.turn = { ...t, status: 'aborted', message: e.reason };

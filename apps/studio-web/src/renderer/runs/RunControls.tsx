@@ -6,11 +6,11 @@
 // availability and its reason come from the same registry and the run list's answer, and every reply or refusal is the
 // main process's, with the engine's words (G2, G19). Nothing here keeps run state (G7, G12): what a run is, is what the
 // runner wrote, pushed with the project view.
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { TextArea, TextField as AriaTextField, Label, Text } from 'react-aria-components';
 import { commandLine, type Confirmation, type RunActionId, type RunActionParams } from '../../shared/actions/runs.js';
 import type { ProjectView, RunActionFailure, RunActionResult, RunRequest } from '../../shared/project.js';
-import { Button, IconButton, NumberField, Quiet, Select, StateMark, Unavailable } from '../ui/index.js';
+import { Button, IconButton, NumberField, Quiet, Select, StateMark, Unavailable, type IconName } from '../ui/index.js';
 import { containTab } from '../ui/containFocus.js';
 import { runAction, runActionAvailability, runActionConfirmation } from '../project/door.js';
 import { latestFor, requestWords, setEntries } from './control-model.js';
@@ -55,7 +55,7 @@ function Control<Id extends RunActionId>({
   onPress: () => void;
   busy: boolean;
   variant?: 'primary' | 'default' | 'ghost';
-  icon?: 'play' | 'pause' | 'close' | 'plus';
+  icon?: IconName;
   /** The accessible name when it differs from the label (a case's Run button names its case). */
   name?: string;
   /** G22: the icon alone, the name its tooltip (a row's Run). An unavailable action still says its label and why. */
@@ -163,7 +163,7 @@ const current = (view: ProjectView, r: RunActionResult | null): RunRequest | nul
 // ---- the run bar of the Runs view
 
 /** Run or queue a case of the project, and start the runner (F-807). Above the runs table. */
-export function RunBar({ view, onStarted }: { view: ProjectView; onStarted: (run: string) => void }) {
+export function RunBar({ view, onStarted, lead }: { view: ProjectView; onStarted: (run: string) => void; lead?: ReactNode }) {
   const cases = view.cases.items.map((c) => c.path);
   const [picked, setPicked] = useState<string | null>(null);
   const casePath = picked !== null && cases.includes(picked) ? picked : (cases[0] ?? null);
@@ -175,6 +175,8 @@ export function RunBar({ view, onStarted }: { view: ProjectView; onStarted: (run
     <section className="rc-bar" aria-label="Start a run">
       <div className="rc-bar-row">
         <span className="rc-bar-title sr-only">Start a run</span>
+        {/* F-837: the runner's budgets first (the keys of F-807's bar keep their order: case, Run, Queue, Start the runner) */}
+        {lead}
         {cases.length > 0 ? (
           <Select
             aria-label="Case to run"
@@ -394,6 +396,21 @@ export function SelectedRunControls({ view, row, onStarted }: { view: ProjectVie
             busy={act.busy === 'project.run_case'}
             onPress={() => void act.run('project.run_case', { case: row.case.replace(/\\/g, '/') })}
             name={`Run ${caseName(row.case)} again`}
+          />
+        )}
+        {row.case && (
+          // F-837: the egui Studio's Re-run with fields stored: start_run's store plan (ADR 0140), the icon alone (G22)
+          <Control
+            id="project.queue_case"
+            params={{ case: row.case.replace(/\\/g, '/'), store: 'plan' }}
+            view={view}
+            label="Run again with fields stored"
+            icon="stored"
+            variant="ghost"
+            iconOnly
+            busy={act.busy === 'project.queue_case'}
+            onPress={() => void act.run('project.queue_case', { case: row.case.replace(/\\/g, '/'), store: 'plan' })}
+            name={`Run ${caseName(row.case)} again with fields stored`}
           />
         )}
       </div>

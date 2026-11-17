@@ -661,16 +661,16 @@ const runPost = (req: RunRequest): void => {
   }
 };
 
-const runSend = <T,>(req: RunRequest): Promise<RunReply<T>> =>
+const runSend = <T,>(req: RunRequest, waitMs = RUN_TIMEOUT_MS): Promise<RunReply<T>> =>
   new Promise((resolve) => {
     const timer = setTimeout(() => {
       runSettle(req.id, {
         ok: false,
         error: runPort
-          ? { code: 'timeout', message: `no answer from the Studio's main process within ${RUN_TIMEOUT_MS} ms` }
+          ? { code: 'timeout', message: `no answer from the Studio's main process within ${waitMs} ms` }
           : { code: 'no_port', message: 'the Studio has not connected this window to the run histories' },
       });
-    }, RUN_TIMEOUT_MS);
+    }, waitMs);
     runPending.set(req.id, { resolve: resolve as (r: RunReply) => void, timer });
     if (runPort) runPost(req);
     else runQueued.push(req);
@@ -692,6 +692,14 @@ const runHistories: RunBridge = {
   series: (run) => runSend({ op: 'series', id: nextRunId++, run }),
   at: (run, step) => runSend({ op: 'at', id: nextRunId++, run, step }),
   compare: (run, other) => runSend({ op: 'compare', id: nextRunId++, run, other }),
+  // F-837
+  log: (run) => runSend({ op: 'log', id: nextRunId++, run }),
+  openReport: (run) => runSend({ op: 'openReport', id: nextRunId++, run }),
+  budgets: () => runSend({ op: 'budgets', id: nextRunId++ }),
+  setBudgets: (values, base) => runSend({ op: 'setBudgets', id: nextRunId++, values, base }),
+  undoBudgets: (force) => runSend({ op: 'undoBudgets', id: nextRunId++, force }),
+  // the save dialog waits for the user: an hour
+  savePng: (rect, name) => runSend({ op: 'savePng', id: nextRunId++, rect, name }, 3_600_000),
 };
 
 contextBridge.exposeInMainWorld('studioRunData', runHistories);

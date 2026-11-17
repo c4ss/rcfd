@@ -79,8 +79,11 @@ export interface RunComparison {
 }
 
 export interface RunError {
-  /** `bad_request` (wrong shape), `no_project` (no project open), `engine` (the project server refused or failed). */
-  readonly code: 'bad_request' | 'no_project' | 'engine' | 'no_port' | 'timeout';
+  /**
+   * `bad_request` (wrong shape), `no_project` (no project open), `engine` (the project server refused or failed); F-837:
+   * `not_found` (no report.html), `io` (a file the main process reads or writes, or the system's program for it, failed).
+   */
+  readonly code: 'bad_request' | 'no_project' | 'engine' | 'no_port' | 'timeout' | 'not_found' | 'io';
   readonly message: string;
 }
 
@@ -90,13 +93,122 @@ export type RunReply<T = unknown> = { readonly ok: true; readonly result: T } | 
 export type RunRequest =
   | { readonly op: 'series'; readonly id: number; readonly run: string }
   | { readonly op: 'at'; readonly id: number; readonly run: string; readonly step: number }
-  | { readonly op: 'compare'; readonly id: number; readonly run: string; readonly other: string };
+  | { readonly op: 'compare'; readonly id: number; readonly run: string; readonly other: string }
+  // F-837
+  | { readonly op: 'log'; readonly id: number; readonly run: string }
+  | { readonly op: 'openReport'; readonly id: number; readonly run: string }
+  | { readonly op: 'budgets'; readonly id: number }
+  | { readonly op: 'setBudgets'; readonly id: number; readonly values: Readonly<Partial<Record<BudgetKey, number | null>>>; readonly base: string | null }
+  | { readonly op: 'undoBudgets'; readonly id: number; readonly force: boolean }
+  | { readonly op: 'savePng'; readonly id: number; readonly rect: PageRect; readonly name: string };
 
 export type RunOp = RunRequest['op'];
 /** The operations of F-810. */
 export const RUN_OPS = ['series', 'at'] as const satisfies readonly RunOp[];
 /** The operation F-815 added (kept apart so that F-810's list stays as its tests read it). */
 export const RUN_COMPARE_OPS = ['compare'] as const satisfies readonly RunOp[];
+/** The operations F-837 added (kept apart, as F-815's). */
+export const RUN_EXTRA_OPS = ['log', 'openReport', 'budgets', 'setBudgets', 'undoBudgets', 'savePng'] as const satisfies readonly RunOp[];
+/** The file name Save PNG proposes: letters, digits, `.`, `_` and `-`, ending in .png. */
+export const PNG_NAME = /^[A-Za-z0-9._-]{1,120}\.png$/;
+
+// ---- F-837: a run's log tail, its events with the solver's warnings, its report, the runner's budgets and the field view's PNG
+
+/** Bytes of the end of runs/<id>/log.txt the Studio reads (in one page of the engine's read_project_file). */
+export const LOG_TAIL_BYTES = 16_000;
+/** Lines of that tail it keeps (the last ones). */
+export const LOG_LINES = 200;
+/** Events of runs/<id>/events.jsonl it asks run_status for (the last ones): the most run_status gives (its schema's maximum). */
+export const LOG_EVENTS = 50;
+
+/** One line of a run's events.jsonl, in words: a state change, a warning (the runner's or the solver's), a stop, or another event. */
+export interface RunEventLine {
+  /** When the runner wrote it (RFC 3339); empty when the line has no time. */
+  readonly t: string;
+  /** The event's `kind` (`state`, `warning`, `stop`, `solver`, `estimate`, `launched`, ...). */
+  readonly kind: string;
+  /** `state queued -> running: launched`, `warning: <message>`, `stop: <reason>`, or the event's JSON cut at 160 characters. */
+  readonly text: string;
+  /** A warning of the runner (`kind: warning`) or of the solver (`kind: solver`, `solver.event: warning`). */
+  readonly warning: boolean;
+}
+
+/** What `log` answers: the end of runs/<id>/log.txt, the last events, and whether runs/<id>/output/report.html is there. */
+export interface RunLog {
+  readonly run: string;
+  /** The tail of log.txt (null when the run has none yet, or it could not be read: `logError`). */
+  readonly log: { readonly path: string; readonly size: number; readonly lines: readonly string[]; readonly cut: boolean } | null;
+  readonly logError: string | null;
+  /** The last LOG_EVENTS events, oldest first. */
+  readonly events: readonly RunEventLine[];
+  readonly eventsError: string | null;
+  /** runs/<id>/output/report.html (the solver's report, rcfd-api's standard result files), or null when it is not there. */
+  readonly report: { readonly path: string; readonly size: number } | null;
+  readonly readAt: string;
+}
+
+/**
+ * The runner's budgets, `.rcfd/runner-config.json` (rcfd-runner's `Config`, ADR 0123 section 6): every key optional,
+ * no other key allowed (the runner refuses the file then). The runner reads the file when it starts.
+ */
+export const BUDGET_KEYS = ['max_runs', 'cpu_threads', 'mem_budget_mb', 'mem_base_mb', 'mem_kb_per_cell', 'poll_ms', 'adopt_probe_ms', 'cancel_grace_ms'] as const;
+export type BudgetKey = (typeof BUDGET_KEYS)[number];
+
+/** A budget's kind as the runner reads it: a positive whole number, a whole number, or a number not below zero. */
+export const BUDGET_KIND: Readonly<Record<BudgetKey, 'positive' | 'count' | 'real'>> = {
+  max_runs: 'positive',
+  cpu_threads: 'positive',
+  mem_budget_mb: 'count',
+  mem_base_mb: 'real',
+  mem_kb_per_cell: 'real',
+  poll_ms: 'positive',
+  adopt_probe_ms: 'count',
+  cancel_grace_ms: 'count',
+};
+
+/** What `budgets` answers. */
+export interface RunnerBudgets {
+  /** `.rcfd/runner-config.json`, project-relative. */
+  readonly path: string;
+  /** False when the file is not there: the runner uses its defaults. */
+  readonly exists: boolean;
+  /** The file's values (keys the file sets); empty when it is absent or unreadable. */
+  readonly values: Readonly<Partial<Record<BudgetKey, number>>>;
+  /** sha256 of the file's bytes as read (null: no file): the base of the next write, which refuses a file changed since. */
+  readonly hash: string | null;
+  /** Why the runner would refuse the file (it is not JSON, an unknown key, a value of the wrong kind), or null. */
+  readonly problem: string | null;
+  /**
+   * The budgets the runner used when it last started (`.rcfd/runner.json`, `config`), and where it took them from
+   * (`config_source`); null when no runner has started in this project.
+   */
+  readonly inUse: { readonly values: Readonly<Partial<Record<BudgetKey, number>>>; readonly source: string; readonly started: string } | null;
+  /** True when this window wrote the file last and that write can be undone. */
+  readonly undo: boolean;
+}
+
+export type BudgetsOutcome =
+  | { readonly kind: 'written'; readonly budgets: RunnerBudgets }
+  /** Another writer changed the file since it was read: nothing written; `budgets` is the file now. */
+  | { readonly kind: 'conflict'; readonly budgets: RunnerBudgets }
+  /** A value the runner would refuse, or nothing to undo: nothing written. */
+  | { readonly kind: 'refused'; readonly message: string };
+
+/** A rectangle of the page in CSS pixels (the field view's frame and its legend, for Save PNG). */
+export interface PageRect {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/** What `savePng` answers: where the picture was written, or null when the dialog was cancelled. */
+export interface SavedPng {
+  readonly path: string | null;
+  readonly width: number;
+  readonly height: number;
+  readonly bytes: number;
+}
 
 /** Main -> preload. */
 export type RunPortMessage = { readonly type: 'reply'; readonly id: number; readonly reply: RunReply };
@@ -112,4 +224,16 @@ export interface RunBridge {
   at(run: string, step: number): Promise<RunReply<RunValuesAt>>;
   /** F-815: `compare_runs` of the baseline `run` and the compared run `other`. */
   compare(run: string, other: string): Promise<RunReply<RunComparison>>;
+  /** F-837: the end of the run's log.txt, its last events and whether its report.html is there. */
+  log(run: string): Promise<RunReply<RunLog>>;
+  /** F-837: opens the run's output/report.html in the system's program for it (a browser). */
+  openReport(run: string): Promise<RunReply<{ readonly path: string }>>;
+  /** F-837: the project's runner budgets (.rcfd/runner-config.json) and the ones the runner last started with. */
+  budgets(): Promise<RunReply<RunnerBudgets>>;
+  /** F-837: writes the budgets (null removes a key: the runner's default), only if the file still has `base`. */
+  setBudgets(values: Readonly<Partial<Record<BudgetKey, number | null>>>, base: string | null): Promise<RunReply<BudgetsOutcome>>;
+  /** F-837: puts back the file as it was before this window's last write (`force`: even when another writer changed it since). */
+  undoBudgets(force: boolean): Promise<RunReply<BudgetsOutcome>>;
+  /** F-837: saves a picture of a rectangle of the page (the field view) as a PNG file the user names in a dialog. */
+  savePng(rect: PageRect, name: string): Promise<RunReply<SavedPng>>;
 }
