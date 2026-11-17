@@ -15709,7 +15709,7 @@ fixed by the item's registration ADR before any code.
     in every field except the added `adrs`, `items`, `evidence` and the primary, a shallow clone gets no E8 evidence,
     and a fresh registered sample of at least 20 files with an E8 primary is read with at least 80 % agreement.
   - note: Follow-up of F-768 (ADR 0690, 2026-11-16).
-- [ ] **F-774** The corner element of rule L at the punch corner and the equilibrium past the predictor
+- [~] **F-774** The corner element of rule L at the punch corner and the equilibrium past the predictor
   - depends on: F-767
   - acceptance: Every limit not stated here is registered in the ADR before the run. On the punch block of ADR 0688
     (rule L, neo-Hookean, 16^3) at the converged state 0.9625 and along the predictor line of the failing attempt: det F
@@ -15718,7 +15718,13 @@ fixed by the item's registration ADR before any code.
     0.965625 by a path that accepts an indefinite tangent, with its inertia, against F-bar at the same load; a
     backtracking of the predictor from the full step on an inadmissible trial, opt-in, and whether the block then solves
     to full load; the default bits unchanged.
-  - note: Follow-up of F-767 (ADR 0688, 2026-11-16).
+  - note: Follow-up of F-767 (ADR 0688, 2026-11-16). ADR 0694 (2026-11-17): the probe inversions at the punch corner
+    come from the cold local Newton of rule L's modes jumping off a continuous, admissible branch (the warm and
+    continued solutions converge at all 81 points in the 18 elements around 3959). The equilibrium at 0.965625 exists
+    and is unstable (one negative eigenvalue, an hourglass mode in element 3720, 3.9 per cent from F-bar). The opt-in
+    `NewtonOptions::indefinite_tangent` solves the 16^3 block to full load (R/mu 0.33937627, w_c 0.06245308, `nu = 1`);
+    the opt-in `predictor_backtracking` alone does not (the half step is admissible, its tangent indefinite). Default
+    bits unchanged; partial because the column check was met only after amendment 1.
 - [ ] **F-775** Fractional-step coupled-face opt-ins as defaults
   - depends on: F-771, F-757
   - acceptance: the maintainer decides whether fractional_body_force, fractional_periodic_implicit and
@@ -15750,3 +15756,16 @@ fixed by the item's registration ADR before any code.
     check_mesh and the rules accept it on the reference fan; the schema golden is updated with the maintainer's
     approval; existing values and baseline hashes unchanged.
   - note: Follow-up of F-726 (ADR 0692, 2026-11-16).
+- [ ] **F-779** Where rule L's 16^3 punch path loses stability
+  - depends on: F-774
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The load between 0.9625 and
+    0.965625 where the inertia of rule L's 16^3 neo-Hookean punch path changes, bracketed to a registered width; a limit
+    point told from a bifurcation by a registered criterion (the load parameter's derivative and the critical mode's
+    projection on the load); F-bar's path at the same loads with its inertia; the default bits unchanged.
+  - note: Follow-up of F-774 (ADR 0694, 2026-11-17).
+- [ ] **F-780** Driver retry with the indefinite tangent after a refused factor
+  - depends on: F-774, F-779
+  - acceptance: Every limit not stated here is registered in the ADR before the run. An opt-in driver retry with
+    NewtonOptions::indefinite_tangent after a refused positive factor, reporting the inertia of every accepted state;
+    the 16^3 block of ADR 0694 solves to full load with it; off by default, the default bits unchanged.
+  - note: Follow-up of F-774 (ADR 0694, 2026-11-17); after F-779.
