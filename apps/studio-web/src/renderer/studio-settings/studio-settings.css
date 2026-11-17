@@ -114,3 +114,16 @@
 .ss-sites-error {
   color: var(--role-text-fail);
 }
+/* the sites file's path is its Open button (G22: the line is data) */
+.ss-sites-open {
+  max-width: 100%;
+  height: auto;
+  min-height: var(--size-control);
+  padding-inline: 0;
+  white-space: normal;
+  text-align: left;
+}
+/* the runner toggle (its section's name is for readers only) lines up with the controls of the titled sections */
+.ss-keep {
+  margin-left: calc(232px + var(--space-xl));
+}

@@ -6,16 +6,19 @@
 // name, the section's name and the four choices (word budget `studio-settings`, src/shared/word-budget.ts).
 //
 // G7 as amended 2026-11-17: the runner section, "Keep the runner going after the Studio closes" (off by default; the
-// main process keeps it, through runner.keep.get and runner.keep.set). The budget of 9 words is the page's count before
-// it, so the setting is an icon toggle with no word at rest (G22): its name is its accessible name and its tooltip, and
-// the section's name is for readers only. With --keep-runner the toggle is on and cannot be turned off here.
+// main process keeps it, through runner.keep.get and runner.keep.set). The maintainer's answer to Q-RL-1 (2026-11-17,
+// ADR 0801): the toggle shows a visible label of 5 words or fewer, KEEP_RUNNER_SHORT, and the page's budget is 14 (9
+// before it, plus 5). The full sentence stays its accessible name and its tooltip, and holds the short label (WCAG
+// 2.5.3); the section's name is for readers only. With --keep-runner the toggle is on and cannot be turned off here.
 //
 // F-848 (ADR 0739): the Sites section (SitesSection.tsx), there only while the user has a sites file.
 import { useEffect, useState } from 'react';
 import type { KeepRunnerState } from '../../shared/ipc.js';
 import { THEME_LABEL, THEME_SETTINGS, isThemeSetting } from '../../shared/theme.js';
 import { IconButton, Quiet, SegmentedToggle } from '../ui/index.js';
-import { IconToggle } from '../ui/IconToggle.js';
+import { TooltipTrigger } from 'react-aria-components';
+import { Toggle } from '../ui/Button.js';
+import { Tooltip } from '../ui/Tooltip.js';
 import { setTheme, useThemeSetting } from '../theme/theme.js';
 import { SitesSection } from './SitesSection.js';
 import './studio-settings.css';
@@ -29,6 +32,8 @@ function leave(): void {
 }
 
 export const KEEP_RUNNER_LABEL = 'Keep the runner going after the Studio closes';
+/** The toggle's visible label (Q-RL-1: 5 words or fewer), the start of its accessible name. */
+export const KEEP_RUNNER_SHORT = 'Keep the runner going';
 
 /** The runner setting, as the main process holds it (null until it answers). */
 function useKeepRunner(): [KeepRunnerState | null, (keep: boolean) => void] {
@@ -56,6 +61,7 @@ function useKeepRunner(): [KeepRunnerState | null, (keep: boolean) => void] {
 export default function StudioSettingsPage() {
   const theme = useThemeSetting();
   const [keep, setKeep] = useKeepRunner();
+  const keepName = keep?.switch ? `${KEEP_RUNNER_LABEL} (on: the Studio was started with --keep-runner)` : KEEP_RUNNER_LABEL;
   return (
     <div className="ss-page">
       <header className="ss-top">
@@ -87,13 +93,19 @@ export default function StudioSettingsPage() {
           <h2 className="sr-only" id="ss-runner">
             Runner
           </h2>
-          <IconToggle
-            icon="play"
-            label={keep?.switch ? `${KEEP_RUNNER_LABEL} (on: the Studio was started with --keep-runner)` : KEEP_RUNNER_LABEL}
-            isSelected={keep ? keep.setting || keep.switch : false}
-            isDisabled={keep === null || keep.switch}
-            onChange={setKeep}
-          />
+          <TooltipTrigger delay={600}>
+            <Toggle
+              icon="play"
+              className="ss-keep"
+              aria-label={keepName}
+              isSelected={keep ? keep.setting || keep.switch : false}
+              isDisabled={keep === null || keep.switch}
+              onChange={setKeep}
+            >
+              {KEEP_RUNNER_SHORT}
+            </Toggle>
+            <Tooltip>{keepName}</Tooltip>
+          </TooltipTrigger>
           <Quiet>
             Off: a runner the Studio started is shut down when the Studio closes, after asking about the runs it holds. On: it keeps going, and the next
             start finds it again.

@@ -1277,6 +1277,12 @@ unavailable and why, a value to act on (changes not saved).
 | undo controls | 6 | 0 | arrows named "Nothing to undo" and "Nothing to redo" |
 | decision panel | 0 | 0 | the whole panel is an exception |
 | progress rows | 3 | 3 | the work's name and Cancel (a work in progress is not at rest) |
+| Studio settings, no sites file | 9 | 14 | brand, Settings, Theme and its four choices, the runner toggle's label "Keep the runner going" (9 + at most 5, the maintainer 2026-11-17) |
+| Studio settings, the Sites section | 5 + 1 per site | 1 + 1 per site | the heading Sites and each site's Check; names, hosts, states and the file's path (the Open button) are data |
+
+The two Studio settings rows are the maintainer's answer of 2026-11-17 (ADR 0801, "Addendum: Runner closes with the
+Studio", Q-RL-1): the page is counted with no sites file, and the Sites section on its own, by `perItem` in
+`src/shared/word-budget.ts` (its budget with n sites is 1 + n).
 
 ## Keyboard and assistive technology (F-816, G8)
 

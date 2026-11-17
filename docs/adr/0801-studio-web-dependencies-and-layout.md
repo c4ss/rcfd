@@ -3482,6 +3482,25 @@ at a clean shutdown. `observeRunner` (`src/shared/runner-lifetime.ts`, pure) wor
   The specs service, run-control, runs, close-guard, f837, project, word-budget, shell, data, service-security and
   first-path were restated where they assumed survival. No process the tests started is left behind.
 
+### The maintainer's answers (2026-11-17, branch settings-owner over main 30352ff5)
+
+- **Q-RL-1, settled: a visible label, and the budget raised.** The studio-settings page with no sites file keeps its
+  9 words, and the setting "Keep the runner going after the Studio closes" gains a visible label of 5 words or fewer,
+  which makes the page's budget 14 (`src/shared/word-budget.ts`; the table in `apps/studio-web/README.md`). The label
+  is "Keep the runner going" (4 words), the toggle's own text beside its `play` icon. The full sentence stays the
+  accessible name and the tooltip, and starts with the label (WCAG 2.5.3, label in name). This replaces RL-D6.
+  The same answer settles the budget note of Addendum 24: the Sites section has its own budget,
+  `studio-settings-sites`, its heading plus one line per site (1 + n words with n sites, by the new `perItem` of a
+  budget). Site names, hosts and confirmed states count as data, so a site's line has one chrome word, Check.
+  To fit that rule, the sites file's line is now its path (data), and the path is the Open button. Its accessible
+  name is "Open the sites file <path>" and its tooltip "Open the sites file" (SR-D1 below, reversible).
+  `tests/e2e/word-budget.spec.ts` counts the page with no sites file (the Sites section excluded), then writes a
+  sites file of two ssh sites, counts the Sites section alone against 1 + 2, and removes the file before the project
+  surfaces.
+- **SR-D1 (recommendation taken; reversible), the sites file's Open button.** (a) The path is the button, named
+  "Open the sites file <path>". This is taken: the section then fits "its heading plus one line per site". (b) Keep the
+  worded "Open the sites file" button, which adds 4 chrome words to the section's budget.
+
 ## Addendum 24: Run sites in the Studio (2026-11-17, branch sites-studio over main 65c78c47)
 
 This addendum is numbered 24 because Addendum 23 is taken by the claude-mcp branch. It builds the Studio's part of
@@ -3560,6 +3579,8 @@ phase 1 of ADR 0739 (F-848, test S11). The engine part was already on main.
 - With sites listed, the Studio settings page counts 16 words against its at-rest budget of 9. The section adds
   "Sites", a "Check" per site and "Open the sites file". The budget is measured at rest, so it is not broken, but it
   is too tight for this section once the user has sites (for the maintainer, together with Q-RL-1).
+- Settled by the maintainer 2026-11-17 (see "Addendum: Runner closes with the Studio", the maintainer's answers): the
+  page's budget with no sites file is 14, and the Sites section has its own budget, its heading plus one line per site.
 
 ### Verification (headless, engine built in the worktree's own target)
 
