@@ -15329,7 +15329,7 @@ fixed by the item's registration ADR before any code.
     nothing); every ADR 0135 and ADR 0669 test passed, ADR 0669's L1 200 of 200 again; seven of seven mutations caught.
     The daily gate does not build the feature, so the new tests run only by their own command. Follow-up F-761 (The
     daily gate runs the feature-gated edit-lock controls).
-- [ ] **F-756** Moving immersed shapes at lock-in near the natural frequency at the smaller amplitude
+- [~] **F-756** Moving immersed shapes at lock-in near the natural frequency at the smaller amplitude
   - depends on: F-750
   - acceptance: Every limit not stated here is registered in the ADR before the run. A cylinder oscillating across a
     uniform stream at Re 100 with A/D 0.25, at a forcing point between the natural frequency and 10 per cent above it
@@ -15340,7 +15340,23 @@ fixed by the item's registration ADR before any code.
     natural-frequency difference of the two discretisations, stated relative and against a fixed force scale; the force
     series are kept for diagnosis; a negative control with the body velocity left out of the forcing misses the lift
     amplitude and phase.
-  - note: Follow-up of F-750 (ADR 0671, 2026-11-16).
+  - note: Moving immersed shapes at lock-in near the natural frequency at the smaller amplitude. Follow-up of F-750 (ADR
+    0671). PARTIAL (ADR 0677, 2026-11-17): test-only, no library change (default bits unchanged by construction). A
+    registered body-fitted scan at A/D 0.25 and Re 100 on the 128 x 64 O-grid (dt = T/700, 20 periods) at f D/U 0.17,
+    0.175 and 0.18 (1.03 to 1.09 of the natural frequency 0.1648), each with the two bracket runs of the comparison
+    itself (720 and 680 steps of the point's time step, -2.8 and +2.9 per cent), and the negative control (body velocity
+    left out of the forcing) on a D/20 immersed mesh, chose by a mechanical rule (locked within 0.01 at the point and
+    its bracket, first lift harmonic at least 0.75 of the fixed lift, amplitude change across the bracket at most 0.20
+    of itself and phase change at most 20 degrees, the control at least 24 degrees and 24 per cent off). No candidate
+    qualified, so the compared immersed and body-fitted runs were not made: the points are locked (L1 7e-5 to 2e-3) with
+    a first harmonic of 1.4 to 2.4 times the fixed lift and the control 33 to 60 degrees off, but the harmonic changes
+    by 49 to 73 per cent and the phase by 25 to 58 degrees across the bracket (with F-750's runs, d ln|Lhat| / d ln f is
+    7.7 to 10.5 everywhere from f 0.13 to 0.18 at this amplitude, as the added mass comes into phase with the vortex
+    lift), and f 0.185 is no longer locked within 0.01. The same frequency at three time steps agrees to 0.6 per cent.
+    Every force series (and the twelve reused F-750 series, hashes verified) is written to a file and read back bit for
+    bit. Eight fast tests, fourteen of fourteen mutations caught. Not included: the comparison itself, other amplitudes,
+    a map of the lock-in range, a case-file key (open, F-307 schema golden). Follow-up F-765 (Moving immersed shapes at
+    lock-in above the natural frequency with the frequency allowance bounded).
 - [ ] **F-757** Rhie-Chow ddt correction on coupled faces in the fractional step and with BDF2
   - depends on: F-754
   - acceptance: the fractional step's ddt correction gives the coupled pairs the term behind the same opt-in, defaults
@@ -15433,3 +15449,15 @@ fixed by the item's registration ADR before any code.
     holds test_hooks.log and times_hooks.tsv, and a registered mutation (an edit_lock_f755 test made to fail on a
     scratch branch, run by the maintainer or a dispatched gate) produces an attribution.md row with ADR 0676 in bold.
   - note: Follow-up of F-761 (ADR 0681, 2026-11-16).
+- [ ] **F-765** Moving immersed shapes at lock-in above the natural frequency with the frequency allowance bounded
+  - depends on: F-756
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A cylinder oscillating across a
+    uniform stream at Re 100 with A/D 0.25 at f D/U 0.17, where the coarse body-fitted scan of F-756 found the shedding
+    locked and the first lift harmonic 1.4 times the fixed cylinder's lift amplitude, gives the shedding locked to the
+    forcing, the mean drag, the lift amplitude and the phase of the lift against a body-fitted moving-mesh run of this
+    repository within registered limits stated relative and against a fixed force scale, each with an allowance for the
+    natural-frequency difference of the two discretisations that is measured from body-fitted bracket runs and is at
+    most half its base limit; the change across the bracket is reported; the first lift harmonic of the body-fitted
+    reference is at least half the fixed cylinder's lift amplitude; the force series are kept for diagnosis; a negative
+    control with the body velocity left out of the forcing misses the lift amplitude and phase.
+  - note: Follow-up of F-756 (ADR 0677, 2026-11-16).
