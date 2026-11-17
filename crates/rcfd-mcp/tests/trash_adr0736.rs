@@ -406,6 +406,11 @@ fn e_empty_trash_is_the_delete_class_and_removes_for_good() {
 #[test]
 fn a_no_allow_list_holds_the_delete_class() {
     use claude_allow::{is_delete_tool, AllowList, AllowRule, DELETE_TOOLS, PINNED_SERVER};
+    // a whole server would hold its delete-class tools too
+    for whole in [format!("mcp__{PINNED_SERVER}"), "mcp__plugin_rcfd_project".to_string()] {
+        let e = AllowRule::Tool(whole.clone()).validate().unwrap_err().to_string();
+        assert!(e.contains("delete"), "{whole}: {e}");
+    }
     let dir = project("a-0736");
     let s = server(&dir, Policy::default());
     let live = s.tool_list();

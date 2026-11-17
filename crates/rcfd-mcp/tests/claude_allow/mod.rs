@@ -194,6 +194,8 @@ impl AllowRule {
                     Err("this tool needs a pattern, e.g. Bash(cmd) or Edit(path)")
                 } else if is_delete_tool(n) {
                     Err("a tool of the class delete is never on an allow-list: the client asks for every call (ADR 0736)")
+                } else if is_whole_server(n) {
+                    Err("a rule naming a whole MCP server would allow its tools of the class delete: name each tool (ADR 0736)")
                 } else {
                     Ok(())
                 }
@@ -319,6 +321,12 @@ pub fn is_delete_tool(name: &str) -> bool {
     name.strip_prefix("mcp__")
         .and_then(|rest| rest.rsplit_once("__"))
         .is_some_and(|(_, tool)| DELETE_TOOLS.contains(&tool))
+}
+
+/// Is `name` a whole MCP server (`mcp__<server>`, no tool), which Claude Code reads as every tool of that server, the
+/// delete class included (ADR 0736)?
+pub fn is_whole_server(name: &str) -> bool {
+    name.strip_prefix("mcp__").is_some_and(|rest| !rest.contains("__"))
 }
 
 /// Format version of the allow-list file.

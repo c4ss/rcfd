@@ -16860,20 +16860,27 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     engine records a session's journal (E-828c), the Studio writes none; a session number's reproduce command stays said
     as not recorded until the engine gives one. 2026-11-17: engine follow-ups E-828a, E-828b, E-828d and E-828e:
     ADR 0734 proposed; E-828c: ADR 0735 proposed; awaiting the maintainer.
-- [~] **F-829** Electron Studio: undo, safe deletes and edit conflicts
+- [x] **F-829** Electron Studio: undo, safe deletes and edit conflicts
   - depends on: F-827, F-805
   - acceptance: Undo and redo for every edit made through the action layer; deleting a run, result or case is
     recoverable (for example a project trash) or confirmed in words that name what is lost; a file changed by another
     writer since the Studio read it is never overwritten silently, the conflict is shown with a choice; a test for each
     (G18).
-  - note: ADR 0800 (G16 to G21 added 2026-11-16). Traces: G18, G11, G12. Partial 2026-11-16: undo/redo for every action-
-    layer edit (one history per session, named Undo/Redo controls, Ctrl+Z/Ctrl+Shift+Z/Ctrl+Y), tested on the fake
-    service and real rcfd serve; actions without an inverse ask first naming what is lost; undo/redo and typed values
-    show a conflict instead of overwriting; case saves refuse a changed file (edit_case base_hash). Left: no engine
-    delete or trash for runs/results/cases, so the Studio offers none (engine tools
+  - note: ADR 0800 (G16 to G21 added 2026-11-16). Traces: G18, G11, G12. Partial 2026-11-16: undo/redo for every
+    action-layer edit (one history per session, named Undo/Redo controls, Ctrl+Z/Ctrl+Shift+Z/Ctrl+Y), tested on the
+    fake service and real rcfd serve; actions without an inverse ask first naming what is lost; undo/redo and typed
+    values show a conflict instead of overwriting; case saves refuse a changed file (edit_case base_hash). Left: no
+    engine delete or trash for runs/results/cases, so the Studio offers none (engine tools
     trash_run/trash_case/list_trash/restore_trash proposed, needs an ADR); engine compare-and-set for settings.set
     proposed. Engine needs listed in ADR 0801, "Engine follow-ups of the Studio items" (2026-11-17). 2026-11-17: engine
-    follow-ups E-829a and E-829b: ADR 0736 proposed; awaiting the maintainer.
+    follow-ups E-829a and E-829b: ADR 0736 proposed, then accepted. Done 2026-11-17 (ADR 0736 accepted and built):
+    deleting a run, its results or a case moves it to the engine's project trash (.rcfd/trash/; trash_run,
+    trash_results, trash_case, confirmed in words that name what moves) and Undo restores it as an F-829 history step
+    (restore_trash); the home lists the trash with Restore, and Empty trash (empty_trash, tool class delete, on no
+    allow-list) is behind the decision panel; the Studio itself never moves or removes a file. Every case settings write
+    sends base_value (compare-and-set, code 1007 shown as a conflict with Set mine or Keep), and undo/redo writes carry
+    the value they expect. Tests: tests/e2e/trash.spec.ts (the real engine), tests/unit/trash.spec.ts, history.spec.ts,
+    claude.spec.ts (no allow-list holds the delete class, also crates/rcfd-mcp/tests/trash_adr0736.rs).
 - [ ] **F-830** Electron Studio: explain in place from the engine's docs
   - depends on: F-826, F-825
   - acceptance: Help on every control, term and value taken from the engine's case schema help text (F-826), docs and

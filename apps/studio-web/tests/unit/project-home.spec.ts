@@ -275,8 +275,8 @@ test.describe('readLists and the session', () => {
     const broken = await readLists(s, '/f', names([], []));
     expect(broken.meshes).toEqual({ items: [], total: 0, error: 'meshes/ cannot be read' });
     expect(broken.runs.error).toBeNull();
-    // the Studio asks only read tools
-    expect(new Set(s.calls.map((c) => c.tool))).toEqual(new Set(['project_info', 'list_runs', 'list_meshes']));
+    // the Studio asks only read tools (ADR 0736: list_trash, the project trash)
+    expect(new Set(s.calls.map((c) => c.tool))).toEqual(new Set(['project_info', 'list_runs', 'list_meshes', 'list_trash']));
   });
 
   test('runs are paged to the end', async () => {

@@ -51,6 +51,7 @@ import type {
   ProjectRequest,
   ProjectState,
   RunActionResult,
+  TrashOutcome,
   RunsBridge,
 } from '../shared/project.js';
 import type {
@@ -378,6 +379,11 @@ const runs: RunsBridge = {
         engine: null,
       },
     };
+  },
+  // ADR 0736: the project trash through the engine; main checks `what` and the params again
+  trash: async (what, params) => {
+    const r = await projectSend<TrashOutcome>({ op: 'trash', id: nextProjectId++, what, params });
+    return r.ok ? r.result : { ok: false, code: r.error.code, message: `The request did not reach the Studio's main process: ${r.error.message}`, data: null };
   },
 };
 

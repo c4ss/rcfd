@@ -83,6 +83,8 @@ export const ICON_NAMES = [
   'settings',
   // F-835
   'new-project',
+  // ADR 0736
+  'trash',
 ] as const;
 export type IconName = (typeof ICON_NAMES)[number];
 
@@ -123,4 +125,5 @@ export const ICON_PATHS: Record<IconName, { readonly path: string; readonly fill
   settings: { path: 'M1 3H13M1 7H13M1 11H13M4 1V5M10 5V9M6 9V13' },
   // F-835: New project… (a folder with its tab, a plus inside)
   'new-project': { path: 'M1 3H5L6 4H13V12H1ZM7 6V10M5 8H9' },
+  trash: { path: 'M2 4H12M5 4V2H9V4M3 4V12H11V4M6 6V10M8 6V10' },
 };

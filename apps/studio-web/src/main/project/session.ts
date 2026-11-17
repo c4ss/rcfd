@@ -24,7 +24,16 @@ import {
   type ProjectView,
   type RunEntry,
   type ProjectTool,
+  RESULT_PARTS,
+  TRASH_OPS,
+  type TrashItem,
+  type TrashListing,
+  type TrashOutcome,
+  type TrashWhat,
 } from '../../shared/project.js';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { RpcError } from '../service/rpc.js';
 import { RunControl, settle, type ControlDeps } from './control.js';
 import { entriesOf, type Names } from './listing.js';
 import { isActive, readRunDetail, readRuns, stale } from './runs.js';
@@ -89,6 +98,8 @@ export interface Lists {
   readonly runs: Listing<RunEntry>;
   readonly notes: Listing<NoteEntry>;
   readonly designs: Listing<DesignEntry>;
+  /** ADR 0736: the project trash. */
+  readonly trash: TrashListing;
   readonly skippedRuns: readonly { readonly path: string; readonly message: string }[];
 }
 
@@ -170,8 +181,44 @@ export async function readLists(server: ProjectServerLike, root: string, listFil
     designs = empty(message(e));
   }
 
-  return { info, infoError, cases, meshes, runs, notes, designs, skippedRuns };
+  // ADR 0736: the project trash, newest first (the home shows the first TRASH_SHOWN; the total says how many in all)
+  let trash: TrashListing;
+  try {
+    const r = (await server.call('list_trash', { limit: TRASH_SHOWN })) as Record<string, unknown>;
+    trash = { items: ((r['items'] as unknown[] | undefined) ?? []).map(trashItem), total: num(r['total']), bytes: num(r['bytes']), error: null };
+  } catch (e) {
+    trash = { ...empty<TrashItem>(message(e)), bytes: 0 };
+  }
+
+  return { info, infoError, cases, meshes, runs, notes, designs, trash, skippedRuns };
 }
+
+/** Trash items the home reads (`list_trash` limit). */
+export const TRASH_SHOWN = 50;
+
+/** One item of `list_trash` as the home keeps it. */
+export function trashItem(x: unknown): TrashItem {
+  const o = (x ?? {}) as Record<string, unknown>;
+  return {
+    token: str(o['token']),
+    kind: str(o['kind']),
+    path: str(o['path']),
+    parts: ((o['parts'] as unknown[] | undefined) ?? []).map((p) => str(p)),
+    trashed: str(o['trashed']),
+    who: str(o['who']),
+    reason: typeof o['reason'] === 'string' ? o['reason'] : null,
+    bytes: num(o['bytes']),
+  };
+}
+
+/** The arguments each trash operation takes from the renderer (the engine checks their values). */
+const TRASH_KEYS: Readonly<Record<TrashWhat, readonly string[]>> = {
+  run: ['run', 'reason'],
+  results: ['run', 'parts', 'reason'],
+  case: ['path', 'reason'],
+  restore: ['token', 'reason'],
+  empty: ['tokens', 'older_than_days', 'reason'],
+};
 
 export class ProjectSession {
   private server: ProjectServerLike;
@@ -436,6 +483,41 @@ export class ProjectSession {
     if (this.closed) return Promise.reject(new Error('the project was closed'));
     this.control ??= new RunControl(this.folder, this.deps.control);
     return this.control.setRunnerConfig(args);
+  }
+
+  /**
+   * ADR 0736: a trash operation through the run-control server (made on first use, as for an action); the lists are
+   * read again after it. For a case file the engine's hash of it is read first (read_project_file) and sent as the
+   * base, so a file another writer changed since is refused (1200). Never rejects.
+   */
+  async trash(what: TrashWhat, params: Readonly<Record<string, unknown>>): Promise<TrashOutcome> {
+    const refused = (code: number | string, msg: string, data: unknown = null): TrashOutcome => ({ ok: false, code, message: msg, data });
+    if (!this.deps.control) return refused('unavailable', 'Run control is not set up in this Studio, so the engine’s trash cannot be reached.');
+    if (this.closed) return refused('no_project', 'The project was closed.');
+    const extra = Object.keys(params).filter((k) => !TRASH_KEYS[what].includes(k));
+    if (extra.length) return refused('bad_request', `${what}: takes ${TRASH_KEYS[what].join(', ')}, not ${extra.join(', ')}`);
+    this.control ??= new RunControl(this.folder, this.deps.control);
+    try {
+      const args: Record<string, unknown> = { ...params };
+      if (what === 'results' && params['parts'] === undefined) {
+        // the engine refuses a part the run does not hold: the parts there are named (names read, nothing written)
+        const run = params['run'];
+        if (typeof run !== 'string' || !/^[A-Za-z0-9_.-]+$/.test(run) || run.startsWith('.')) return refused(-32602, 'results: the run is a run id');
+        const parts = RESULT_PARTS.filter((p) => existsSync(join(this.folder, 'runs', run, p)));
+        if (parts.length === 0) return refused('nothing', `Run ${run} holds no stored fields and no output: there are no results to move.`);
+        args['parts'] = parts;
+      }
+      if (what === 'case') {
+        const read = (await this.server.call('read_project_file', { path: params['path'], limit: 1 })) as Record<string, unknown>;
+        args['base_hash'] = read['hash'];
+      }
+      const result = (await this.control.callTrash(TRASH_OPS[what], args)) as Record<string, unknown>;
+      if (!this.closed) void this.read(FULL);
+      return { ok: true, result: result ?? {} };
+    } catch (e) {
+      if (e instanceof RpcError) return refused(e.code, e.message, e.data ?? null);
+      return refused('engine', message(e));
+    }
   }
 
   /**
