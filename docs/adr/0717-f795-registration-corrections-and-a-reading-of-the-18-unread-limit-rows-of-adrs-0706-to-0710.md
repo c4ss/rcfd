@@ -146,3 +146,73 @@ only), never a whole crate's suite.
 * A row is not judged on what it leaves out (clause B).
 * One reader, who knows the totals of the two earlier readings and that H22 and W1 are wrong (disclosed above).
 * The corrected rows of the addenda are written by this reader and are not read by another.
+
+## Addendum 1: the reading (2026-11-17)
+
+Written after the registration was committed (a1cf7f66) and before any addendum of a group ADR was written and before the addenda
+of ADR 0715 were opened. Files read, all at 85313e53: the seven test files in full or in the part that holds the rows' tests
+(`physics_workflow.rs` lines 95 to 146, `workflow_engine.rs` all, assistant `workflow.rs` lines 1 to 150, api `workflow.rs` lines
+1 to 263, `channel_wall_function.rs` all, `physics_cases.rs` lines 1 to 107, `table_expr.rs` all); the note and acceptance of F-040
+in `docs/roadmap.json` (the only note a row of the 18 or W1 cites); `cases/wedge/wedge.toml`; the exit-code table of
+`docs/run-control.md` (lines 73 to 81); two lookups in source files for H22 and W8 (`crates/rcfd-api/src/workflow.rs` lines 143 and
+144, the doc comment at `crates/rcfd-mesh/src/gen.rs` line 321). No test was run: the only recorded values of the 18 rows (W7) are
+attributed to the F-040 note and were checked there under clause E. None of the seven files has an `#[ignore]` (`grep -c`: 0 each).
+
+Short names: PW = `crates/rcfd-assistant/tests/physics_workflow.rs`, WE = `crates/rcfd-assistant/tests/workflow_engine.rs`, AW =
+`crates/rcfd-assistant/tests/workflow.rs`, SW = `crates/rcfd-api/tests/workflow.rs`, CH =
+`crates/rcfd-turb/tests/channel_wall_function.rs`, PC = `crates/rcfd-cli/tests/physics_cases.rs`, TE =
+`crates/rcfd-core/tests/table_expr.rs`. "ADR line" is the line of the row in its group ADR.
+
+### The 18 rows
+
+| row | ADR line | test file and lines of the asserts | reading | reason |
+|---|---|---|---|---|
+| H5 | 0706:46 | PW 120 to 146 (asserts 129, 134, 135, 139, 144, 145) | agree | the laminar tree with and without `res_nut` has equal verdicts (129); the rising series is `1e-3 * 10^(i/5)`, `0..50`, on `k_epsilon` with `relax 0.7`, advice contains `res_nut` and the changes contain `turbulence.relax`; transient compressible verdict equal to the quoted string; steady with `steady_tolerance 1e-6`, first finding series `res_rho`, verdict `converged`. D: the last sample is 10^(-49/5) = 10^-9.8, as the row says |
+| H7 | 0706:59 | WE 126, 127, 129, 138, 139 | agree | `next == mesh_check`, 5 tasks, `exit_code == 0`, `ran` equal to the four ids in order, `ran[3]` outcome state `converged` |
+| H9 | 0706:61 | WE 152, 153, 155 to 158, 159, 160, 163 to 173 | agree | `max_steps 15` (75); outcome `step_limit`; `restart.rcfd` exists; the triple (`step_limit`, 15, true); the final text equal to the quoted sentence; 6 requests; seven tool names looked up in `reqs[0]` (count checked: seven) |
+| H10 | 0706:62 | WE 209, 210, 216 | agree | the assert of 210 sits in a branch on the tool name, but 216 asserts `saw_error`, which is only set in that branch, so the branch cannot be skipped (clause B) |
+| H11 | 0706:71 | AW 35 to 50 | agree | 60 samples `0.1 * 1.15^i` for both series; verdict and the pattern of `res_u` equal `diverging`; the three paths; `(0.05..0.9).contains` is the half-open band the row writes; `alpha_u 0.9` at AW 18 |
+| H13 | 0706:73 | AW 65 to 68 | agree | 80 samples, 1e-2 and 5e-2 alternating; pattern and verdict `oscillating` |
+| H14 | 0706:74 | AW 73 to 81 | agree | `decay(30, 0.3)` then 70 samples of 3e-4; tolerance 1e-6 at AW 19; pattern `stagnating`; a change at `solver.non_orthogonal_correctors` |
+| H15 | 0706:75 | AW 86 to 92 | agree | 60 samples at rate 0.1: `converging` and an empty list of changes; 200 at 0.2: `converged`; two samples: `not enough data` |
+| H17 | 0706:77 | AW 122 to 146 | agree | six patches (count checked); each of the seven statements of the row has its assert (134, 135, 136 to 139, 140, 141 and 142, 143, 145 and 146); `settings[1]` is the second setting |
+| H20 | 0706:87 | SW 72, 76, 83, 84, 97, 99, 100, 102, 113, 117, 118, 120, 129, 135 | agree | every clause of the row has its assert with the row's value (1 task at 117, 5 tasks at 135, `physics.nu 0.02` at 125) |
+| H21 | 0706:88 | SW 153, 158 to 162, 164, 167, 170, 177 to 179 | agree | insert after `mesh_check` with `mesh.nx 14` (144 to 146); delete refused with `depend`; value 14; `finer` done, `mesh_check` stale; after `report` and `finer` without prerequisites `report` and `solve` stale, `finer` done |
+| H23 | 0706:90 | SW 225, 226, 231, 236, 245, 251 | agree | format `rcfd-workflow`, 6 tasks written and 6 read, the two paths refused with `sandbox`, the cycle with `cycle`, `results/solution.vtu` exists after the task `export_results` |
+| W6 | 0707:41 | CH 161 | agree | `(u1 / want1 - 1).abs() < 5e-3`, `want1 = wc.u_plus(yplus1)`: relative, upper bound |
+| W7 | 0707:42 | CH 164 to 188; F-040 note | agree | cells with `p[1] < 1.0` and wall distance above `y1 * 1.001`; `l = 0.41 * y`, `tau = 1 - y` (h = 1); Simpson with `n = 4000` from `y1`; `worst < 0.03` relative. E: the F-040 note has "max deviation 2.1% / 2.3% / 2.4%, test tolerance 3%" for "ny = 8/12/16" and the sentence on the offset; the comment at CH 186 and 187 says what the row says it says |
+| W8 | 0707:43 | CH 190 to 193 | agree | `col0 = (c / 4) * 4`; the difference of the x velocity of cell `c` and cell `col0` is below 1e-7, absolute, for every cell. Remark (no clause fails): the group the code calls a column is the 4 cells of one height along the flow (cell index `i + nx j`, nx = 4, `gen.rs` 321), which is what streamwise uniformity needs |
+| C3 | 0708:25 | PC 63 to 65 | agree | exit code `Some(0)` and `solution.vtu` is a file; nothing reads the end time. The case has `end_time = 3.0` and exit 0 is "a transient run reached its end time" in `docs/run-control.md` line 73 |
+| C6 | 0708:28 | PC 99 to 106 | agree | `matches!(code, Some(0) | Some(5))` and `solution.vtu` is a file; the comment at PC 100 says what the bracket of the row says |
+| T5 | 0710:34 | TE 55 to 70 | agree | the four calls and the four message fragments, each as the row quotes it; `L` is a length (54); the bare table's input is `s` (63) |
+
+Clause A holds for all 18: each named function is a `#[test]` of the section's file, spelled as in the row, none ignored.
+
+**K2: 18 of 18 agree. No disagreement, no reservation, no row that could not be judged.** K1: the 18 rows of the acceptance, each
+read once. K3: no disagreement to list.
+
+### N1 (literal search)
+
+`f795-scratch/n1_literals.py` searched each numeric literal of the limit cell of the 18 rows as written in the test file. Found as
+written: all but seven. The seven, each explained, none changing a reading:
+
+| row | literal | explanation |
+|---|---|---|
+| H5 | `50` | in the file as the range `0..50` (PW 121, 131); the script's pattern does not match a number that follows a dot |
+| H5 | `1e-9` (of "1e-9.8") | a value the row derives and marks "about": 10^(-49/5), clause D above |
+| H11 | `1.15` | in the file as `1.15f64` (AW 35): the type suffix |
+| W7 | `2.1`, `2.3`, `2.4` | recorded values, attributed to the F-040 note and found there (clause E) |
+| W7 | `8` | in the file as `8usize` (CH 132): the type suffix |
+
+### H22 and W1 (not among the 18, read before their corrections)
+
+| row | ADR line | code | finding |
+|---|---|---|---|
+| H22 | 0706:89 | SW 183 to 213 | The first half holds: `max_steps 5` (190), `ok == false`, the last task of `ran` is `solve` (195) with a message containing `step_limit` (196), `solve` is `failed` and `report` `not_run` (198 to 201). The second half does not: the row says the invalid boundary name "fails the validate task". SW 212 takes the first task of `ran` whose `ok` is false and SW 213 asserts only that its message contains `nonexistent`; no assert reads its id or kind. The words come from the comment at SW 202. (For information: the template has no task with the id `validate`; the task of kind `validate` has the id `setup`, `crates/rcfd-api/src/workflow.rs` 144.) The source supports the acceptance; the correction is written |
+| W1 | 0707:36 | CH 95 to 126, 33 | The row says "the 12-cell uniform channel mesh". `run_channel(12, 1.0)` builds `box_2d_graded(4, ny, 1.0, 2.0, ...)` (CH 33): 4 x 12 = 48 cells, uniform, 12 across the height (clause D). The row's "20-cell mesh" is 3 x 20 = 60 cells (CH 107 to 115), which the row's own bracket "(3 x 20 cells, height 2)" already says. The limits hold: 1e-13 at CH 101, 119 and 124, `nope` at 126; the `xmin` and `nope` asserts are on the graded mesh. E holds: the F-040 note has "wall distance equals min(y, 2h-y) to 1e-13 on uniform and graded channel meshes and equals x for a side wall". The source supports the acceptance; the correction is written |
+
+### Observations (not counted, no correction by the registered rule)
+
+* The code comment at CH 189 announces "symmetry about the centre line"; no assert checks it. Row W8 does not claim it.
+* Row W8's word "column" (see its remark) follows the code's variable name; a reader who takes it geometrically reads it as the
+  cells across the height. Remaining question 1 of Addendum 2.
