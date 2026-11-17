@@ -141,3 +141,127 @@ changed result).
 - A first reader who is also the author of the rule; no second reader.
 - `adrs[n].tests` grows by the 271 new links; consumers that list the tests of an ADR (`--adr`, the gate's per-merge check) now
   include them. This is the extension the acceptance asks for, and it changes what `--adr` prints for 216 tests.
+
+## Addendum 1: results (2026-11-17)
+
+Code: `scripts/adr_test_index.py` (`e8_adrs`, `E8_TIERS`, `build(..., e8=False)`, the tier E8 in `primary_adr`, the command-line
+`--e8` / `--no-e8`, default on) in commit 4c7c588d, and the new tests `scripts/test_adr_test_index_e8.py` (11 tests, T1 to T11). No
+existing file edited except `adr_test_index.py` (67 insertions, 10 deletions); `gate_attribute.py`, `gate.yml` and every existing test
+file are byte-identical to 49e172f6. No Rust file, golden or hash table touched. Inputs and logs in `w49i-work/f773-scratch`
+(`meta.json`, `idx_base.json`, `idx_final_off.json`, `idx_final_on.json`, `idx_shallow_*.json`, `idx_archive_*.json`, `compare.py`,
+`compare.log`, `drive.py`, `mutate.py`, `mutations.log`, `samples_e8.json`, `gather.py`). The index code was final (4c7c588d) before
+every run below; each index run was made once, on that commit. One deviation in the tests: my first version of T11 expected `null`
+for `--primary registered` on `g_notcited`, but rule R gives the lowest citing ADR (0130); I corrected the expectation in the test
+before the commit (no registered run was involved).
+
+| id | limit | measured | met |
+|---|---|---|---|
+| E1 | 5695 tests, 950 files, 6089 links, 271 links, 216 tests | **5695, 950, 6089, 271, 216** (`coverage.primary.e8` and `compare.py`) | yes |
+| E2 | `--no-e8` against `--e8` on 4c7c588d: 0 differences outside the extended fields | 0 differences in every other test field (7847 tests), `binaries`, `crates`, top-level `items`, `adrs[n].files` and the keys of `adrs`, `coverage` except `primary`; 41 of the ADR entries differ in `items`, `tests`, `primary_tests`, all from the E8 links | yes |
+| E3 | supersets, added ADRs exactly the E8 ADRs, evidence equals old plus E8 | 0 violations in 7847 tests | yes |
+| E4 | other tests 0 differences; E8 primaries 5 tests in 2 files; `with_primary` 7475, E8 5, E2 150, E0 7320; retro 72, 78, none 318 | primary changed on exactly 5 tests: `discover.rs` 0126 E2 to E8 (3), `time.rs` none to 0122 E8 (2); `with_primary` 7475; `by_evidence` E0 7320, E2 150, E8 5; retro h1 72, h2 78, none 318, the `files` map equal; `from_git` 5, `not_in_adrs` 0 | yes |
+| E5 | shallow clone and git archive copy: 0 E8 entries, `--e8` equals `--no-e8` | `shallow` (depth-1 clone of 4c7c588d, `--is-shallow-repository` true) and `none`: 0 E8 entries, 0 E8 primaries, the `tests`, `adrs`, `binaries`, `crates`, `items` of the two runs equal, `coverage` equal but the new `e8` key (all zero); 1 git process | yes |
+| E6 | at most 2 git processes, none per file | 2 on the real tree (counted by wrapping `subprocess.run`, `git_calls` 2), 1 on the clone and the copy; T10 on the fake repository | yes |
+| E7 | files with an E8 primary read, at least 80 % agreement; at least 20 files | **2 files** (the whole population), **2 of 2 agree** (100 %); the sample of 20 files is not drawable | agreement yes, **20 files no (missed by construction, as registered)** |
+| E8 | supplementary: E8 right and E0 not in at least 16 of 20 | **1 of 20** (see below) | no (decision aid: E8 stays below E0) |
+| E9 | at most 44.7 s | 20.9 s with `--e8` (19.2 s with `--no-e8`; the base run of the registration, 34.7 s, was made at a busier moment of the shared machine, so the spread of the machine is larger than the difference) | yes |
+| E10 | `python -m unittest discover -s scripts`; `docs_site` | 149 tests, OK, 4 skipped (138 before plus the 11 new); `docs_site` see the last line | yes |
+| E11 | first E8 ADR equals the E0 primary on 919 of 948 files | 919 of 948 (29 differ) | yes |
+
+**Mutations** (`mutations.log`, on a scratch copy of `scripts/`, run with `test_adr_test_index_e8.py` and `test_adr_test_index_git.py`):
+11 of 11 caught. M1 item dropped (T2, T4); M2 tier after E2 (T1, T2, T6, T11); M3 tier before E0 (T6, T8); M4 coherence kept (T1 to
+T4, T11); M5 newest add (T3, and T13 and T6b of ADR 0690); M6 body read (T4, T5 and five tests of ADR 0690); M7 shallow check removed
+(T9, and T9 of ADR 0690); M8 command-line default off (T11); M9 `e8` off still adds (T1, T2, T6, T7, T11); M10 nonexistent ADR (T4);
+M11 last entry as primary (T2, T6).
+
+### E7: the two files with an E8 primary
+
+Reader: the implementing agent (the author of the rule), by the criterion of ADR 0704 with the two differences registered above; no
+second reader.
+
+| file | primary | verdict | reason |
+|---|---|---|---|
+| `crates/rcfd-claude/src/discover.rs` | 0126 (E2 before) | agree | added by 975f340d "session discovery, tolerant transcript tail (ADR 0126)"; ADR 0126 (Wave 47E, the bridge library) D1 lists the module, D6 states the two discovery sources and cites the file in four lines; same ADR as under ADR 0690 |
+| `crates/rcfd-project/src/time.rs` | 0122 (none before) | agree (borderline) | added by 46226203 "project folder library (Studio L1, ADR 0122)"; ADR 0122 does not name `time.rs`, but D4 says the UTC formatting uses the Hinnant civil-from-days algorithm that the file's header cites, and its check T1 (known dates, 100 000 consecutive days) is what the two tests of the file do (`known_dates`, `days_step_one_calendar_day_at_a_time`). ADR 0690 counted this file disagree-null because the ADR does not cite it by name; criterion (b) accepts a registration by content here |
+
+Borderline rows: 1. The 100 % rests on two files, one borderline; it cannot support the acceptance's 80 % on 20 files.
+
+### E8: the supplementary reading (20 of the 29 files whose first E8 ADR differs from the E0 primary)
+
+The 29 files and the 20 drawn with `random.Random(7730).sample` are in `samples_e8.json`. Read once, same reader, same criterion, for
+both ADRs of each file.
+
+- **E0 right, E8 first wrong: 19 of 20.** In most of them the commit subject names the ADR that the work builds on before the ADR
+  that registers it ("the reduction of ADR 0474 ... (ADR 0511 D4)", "the state form of ADR 0411 ... " with the header naming the
+  second ADR); `sb_loads.rs` names ADR 0281 (thermal strain) before its own ADR 0276; `mesh_transform_u.rs` names ADR 0133 (run control,
+  only a dated note) before ADR 0155; `w27c_registry.rs` was touched by an F-237 commit whose ADR 0244 only cites it as an existing test,
+  while the header's ADR 0051 registered its checks R1 and R2.
+- **E8 right, E0 wrong: 1 of 20**, `crates/rcfd-mcp/src/edit_hook.rs`: its header names ADR 0173 (D5 (b), the umbrella workspace
+  layer) first and ADR 0195 P6 second; ADR 0195 is the F-275 registration that lists the module and its checks, and the commit names
+  only 0195.
+- Over all 948 E0 files with E8: the first E8 ADR equals the E0 primary on 919 (96.9 %), the last on 898; the E0 primary is among
+  the E8 ADRs on 943. For the 29 that differ, the E0 primary is among the E8 ADRs on 24 and is the last on 22.
+
+Result: E8 is not better than E0 where they differ (1 of 20), so E8 stays below E0; the order registered is kept.
+
+The 20 files read (E0 primary, then the E8 ADRs in order):
+
+- `crates/rcfd-fem/tests/sa_cms_pattern_default_bits.rs` (E0 0511, E8 0474, 0511)
+- `crates/rcfd-fem/tests/sa_rotor.rs` (E0 0476, E8 0450, 0476, 0417)
+- `crates/rcfd-fem/tests/sb_modal.rs` (E0 0284, E8 0273, 0284)
+- `crates/rcfd-fem/tests/si_rotating_whirl_sparse.rs` (E0 0427, E8 0411, 0427)
+- `crates/rcfd-fem/tests/sa_prestress_mixed.rs` (E0 0486, E8 0473, 0486)
+- `crates/rcfd-fem/tests/sa_cms_enrich_default_bits.rs` (E0 0532, E8 0511, 0532)
+- `crates/rcfd-post/tests/sa_solid_rotor.rs` (E0 0476, E8 0450, 0476, 0417)
+- `crates/rcfd-studio/tests/mesh_transform_u.rs` (E0 0155, E8 0133, 0155)
+- `crates/rcfd-fem/src/rotating/whirl/state/arnoldi.rs` (E0 0428, E8 0416, 0428)
+- `crates/rcfd-fem/tests/si_knife_edge_closed_form.rs` (E0 0394, E8 0390, 0394)
+- `crates/rcfd-mcp/src/edit_hook.rs` (E0 0173, E8 0195)
+- `crates/rcfd-fem/tests/sa_gyro.rs` (E0 0472, E8 0450, 0472)
+- `crates/rcfd-fem/tests/sb_loads.rs` (E0 0276, E8 0281, 0276)
+- `crates/rcfd-fem/tests/sa_gyro_sector_split_schur_default_bits.rs` (E0 0527, E8 0492, 0527)
+- `crates/rcfd-fem/tests/sa_cms_residual.rs` (E0 0474, E8 0469, 0464, 0474)
+- `crates/rcfd-io/tests/w27c_registry.rs` (E0 0051, E8 0244)
+- `crates/rcfd-fem/tests/si_eas_hg3.rs` (E0 0630, E8 0614, 0630)
+- `crates/rcfd-fem/tests/si_rotating_whirl_state_sparse.rs` (E0 0428, E8 0416, 0428)
+- `crates/rcfd-fv/tests/coupled_ddt_fractional_bdf2_f757.rs` (E0 0687, E8 0675, 0687)
+- `crates/rcfd-fem/tests/si_modal_mpc.rs` (E0 0384, E8 0296, 0384)
+
+### What the numbers say
+
+- The extension works as asked and changes little in the primary: the index differs from ADR 0690 only in the five extended fields,
+  `adrs` grows by 271 links in 216 tests (all by ADRs the commits named), 5 tests change primary. The coherence step is gone and the
+  one commit that it dropped (`time.rs`, ADR 0122) is now read right.
+- The acceptance's sample of at least 20 E8-primary files cannot be drawn: 948 of the 950 files with an E8 candidate already have an
+  E0 primary, and the E2-only tests that have no E0 evidence have, in 468 of 473 tests, a first commit that names no ADR and no item with a
+  registration ADR (the initial import and F-numbered commits of items without a `-fNNN-` ADR). Moving E8 above E0 would give a
+  population of 950 files and would be wrong for 19 of 20 of those that differ.
+
+### Remaining questions
+
+1. Status. Options: (a) partial, because the sample of 20 is not drawable (2 files) and the acceptance's clause is not met; (b) done,
+   arguing that the mechanism and its 2 of 2 are as asked. Recommendation: (a).
+2. Where E8 sits: kept below E0, E1 and E6 and above E2 (registered). Option: above E0 would give a population of 950 files but, by
+   the reading E8, is wrong for 19 of 20 of the differing files. Recommendation: keep.
+3. The command-line default has E8 on, so the gate's `adrs` lists now include the 271 new links and `--adr` prints 216 more tests.
+   Options: (a) keep, taken here on the standing instruction (the acceptance asks for the extension); (b) default off and opt-in.
+   Recommendation: (a).
+4. The 468 E2 tests whose first commit names no ADR or item stay without primary (H1/H2 as before). Items named in such a subject
+   whose ADRs are named only in the roadmap note, not in a file name, could be E8 evidence too (the registration ADR is defined by
+   the file name, as in ADR 0690). Options: (a) a follow-up that counts it before the run; (b) leave. Recommendation: (a).
+5. A second reader for the 2 + 20 files read here (ADR 0704 found the first reader's agreement too high). Recommendation: a
+   follow-up, cheap, since the criterion is registered.
+
+## For the lead: roadmap entries
+
+Proposed status and note of F-773:
+
+> Proposed status: partial.
+
+> Test-to-ADR index, gate attribution. Follow-up of F-768 (ADR 0690, 2026-11-17). PARTIAL. ADR 0720, 2026-11-17: evidence of kind E8 in `scripts/adr_test_index.py` (command-line default on, `--no-e8` gives the output of ADR 0690, library default off): on a full git history the ADRs named in the subject of the commit that first adds a test's file (every `ADR dddd` that exists, then the registration ADR of every `F-ddd` that has one) extend `adrs`, `items` and `evidence` of its tests, with no coherence step; the primary tier order is E0 > E1 > E6 > E8 > E2 and the first E8 ADR is the primary. Counted before the code and met exactly: 5695 tests in 950 files, 6089 links, 271 links in 216 tests naming an ADR the test did not have. The index of the final tree differs from that of ADR 0690 in no field but the extended ones and the primary (0 differences in 7847 tests, 5 tests change primary: `discover.rs` 0126 and `time.rs` 0122); a shallow clone and a git archive copy get 0 E8 entries and the same index; 2 git processes, 20.9 s; 11 of 11 mutations caught; 149 unit tests OK. The acceptance's sample of at least 20 files with an E8 primary cannot be drawn: the population is 2 files (948 of the 950 files with E8 already have an E0 primary), both read agree by the implementing agent (no second reader). A supplementary reading of 20 of the 29 files whose first E8 ADR differs from the E0 primary found E8 right in 1 and E0 right in 19, so E8 stays below E0. Maintainer's question open: F-787, F-793.
+
+> Follow-up proposed: A second reader for the E8-primary files and the supplementary sample of ADR 0720. Deps F-773. Acceptance: Every limit not stated here is registered in the ADR before the reading. The 2 files with an E8 primary and the 20 files of the supplementary sample of ADR 0720 (`random.Random(7730)`, listed in its addendum) are read by a reader who did not write the rule, against the criterion of ADR 0704 registered before the reading, and agree with the first reading on at least 85 % of the files; the disagreements are listed with a reason; no limit of ADR 0720 is changed by the second reading.
+
+> Follow-up proposed: Items named in a commit subject whose ADRs are named only in the roadmap note as evidence of the files the commit adds. Deps F-773. Acceptance: Every limit not stated here is registered in the ADR before the run. The ADRs that the roadmap note of an item names (`ADR dddd` in the note, the mapping the index already uses for E4) are evidence of kind E8b of the tests of a file whose first commit names that item in its subject and whose item has no registration ADR by file name; the added evidence is counted before the run, the index of the final tree is compared with that of ADR 0720 in every field except the added `adrs`, `items`, `evidence` and the primary, a shallow clone gets no E8b evidence, the tier of E8b in the order is registered before the run, and a fresh registered sample of at least 20 files with an E8b primary is read by a reader and a second reader with at least 80 % agreement, or the population is counted and the sample limit stated as missed by construction.
+
+`docs_site` on the final tree (`cargo test -q --release -p rcfd-cli --test docs_site`): 2 passed.
