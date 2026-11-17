@@ -22,6 +22,8 @@
 //!   reads the file cannot be honest exactly on those pairs. [`drawn_record_problems`] redoes a recorded check.
 //! * [`lessons_drawn`] (ADR 0695) is [`lessons`] plus the drawn checks: a row whose latest consistent drawn record did not
 //!   reproduce is dropped, and every row reports the number of its drawn checks.
+//!   A drawn record is counted only when no evidence entry of its row is newer than the entries it saw (ADR 0698,
+//!   [`drawn_newer_evidence`]); the others are reported as stale.
 //! * Verdicts: `confirmed` when the one-sided lower bound of the mean paired difference is at least the smallest effect that
 //!   matters, `refuted` when the upper bound is below it, `inconclusive` otherwise, `void` when too many pairs failed or a held
 //!   metric was not matched. A verdict is a statement about the evaluator at its tier, never about a product.
@@ -3597,6 +3599,21 @@ pub struct DrawnRow {
     pub drawn_unchecked: usize,
     /// Entry index of the latest consistent drawn record.
     pub drawn_latest: Option<usize>,
+    /// Consistent drawn records of the hypothesis that are stale: evidence of the row is newer than the record (ADR 0698).
+    pub drawn_stale: usize,
+}
+
+/// A consistent drawn record ignored because evidence of its row is newer than the record (ADR 0698 D2).
+#[derive(Debug, Clone, PartialEq)]
+pub struct DrawnStale {
+    /// Hypothesis id.
+    pub id: String,
+    /// The drawn record.
+    pub record: usize,
+    /// Evidence entries the record saw.
+    pub entries_seen: usize,
+    /// First evidence entry of the row the record did not see.
+    pub newer: usize,
 }
 
 /// A row dropped because its latest consistent drawn record did not reproduce.
@@ -3623,6 +3640,8 @@ pub struct DrawnLessons {
     pub drawn_flags: Vec<Flag>,
     /// Rows dropped.
     pub dropped: Vec<DrawnDrop>,
+    /// Records ignored because evidence of their row is newer (ADR 0698).
+    pub stale: Vec<DrawnStale>,
 }
 
 impl DrawnLessons {
@@ -3633,6 +3652,19 @@ impl DrawnLessons {
             flagged: self.flagged.clone(),
         }
     }
+}
+
+/// The first evidence entry of the hypothesis of the drawn record at `index` that the record did not see: index `>= entries_seen`
+/// (ADR 0698 D1). `None` when there is none, or when `index` is not a drawn record with a readable `entries_seen`.
+pub fn drawn_newer_evidence(entries: &[Entry], index: usize) -> Option<usize> {
+    let e = entries.get(index).filter(|e| e.kind == KIND_DRAWN)?;
+    let seen = e.settings.get("entries_seen").and_then(Value::as_u64)? as usize;
+    entries
+        .iter()
+        .enumerate()
+        .skip(seen)
+        .find(|(_, x)| is_evidence_of(x, &e.variant))
+        .map(|(k, _)| k)
 }
 
 /// [`lessons`] (unchanged) followed by the verifier-drawn checks (ADR 0695 D2): a row whose latest consistent drawn record (ledger
@@ -3664,6 +3696,7 @@ pub fn lessons_drawn(entries: &[Entry], q: &LessonQuery, rerun: &[&dyn Model]) -
             drawn_ignored: 0,
             drawn_unchecked: 0,
             drawn_latest: None,
+            drawn_stale: 0,
         };
         let mut latest: Option<(usize, bool, Vec<usize>)> = None;
         for (k, e) in entries.iter().enumerate() {
@@ -3687,6 +3720,24 @@ pub fn lessons_drawn(entries: &[Entry], q: &LessonQuery, rerun: &[&dyn Model]) -
                     index: k,
                     hypothesis: row.lesson.id.clone(),
                     problem: format!("drawn record ignored: {}", why.join("; ")),
+                });
+                continue;
+            }
+            if let Some(newer) = drawn_newer_evidence(entries, k) {
+                let seen = e.settings.get("entries_seen").and_then(Value::as_u64).unwrap_or(0) as usize;
+                row.drawn_stale += 1;
+                out.drawn_flags.push(Flag {
+                    index: k,
+                    hypothesis: row.lesson.id.clone(),
+                    problem: format!(
+                        "drawn record ignored: stale, evidence entry {newer} of the row is newer than the {seen} entries it saw"
+                    ),
+                });
+                out.stale.push(DrawnStale {
+                    id: row.lesson.id.clone(),
+                    record: k,
+                    entries_seen: seen,
+                    newer,
                 });
                 continue;
             }
