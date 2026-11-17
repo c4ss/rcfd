@@ -521,3 +521,7 @@ checked by running `w19c_run_control` (7 pass) and `rules_w19c` only.
 * reading a solution back from result files (VTU)
 * registry `cases/*/case.json` descriptors are not evaluated by the rules
 * the rule `fix` suggestions are never applied
+
+## Test files (added 2026-11-17, ADR 0685)
+
+Added by ADR 0685 (F-760), by reading the code and the git history; nothing above this section is changed. Three files of 2026-10-13 are the first slices of items this ADR extends and have no ADR of their own. F-121, section D5: `crates/rcfd-api/tests/runctl.rs` (643caf54: checkpoint round trip, the exit codes of the drive outcomes, check-only, journal playback). F-115, the first slice named above (`rcfd-post::interpolate`): `crates/rcfd-post/tests/interpolate.rs` (b22ae2b4: the gradient-corrected transfer reproduces a linear field, no new extrema, the conservative mode keeps the average) and `crates/rcfd-cli/tests/interpolate.rs` (the `rcfd run --interpolate-*` start from a coarse-mesh checkpoint and its exit codes).

@@ -206,3 +206,7 @@ is moved to an ignored `*_known_miss` test with the original assertion.
   bit identical; sink non-zero exactly on the register cells, bit-exact zero elsewhere).
 - The expression register compares an SI value with `above` / `below`; lengths need unit literals.
 - X4: the XDMF check used VTK's `vtkXdmfReader` (XDMF2), not `vtkXdmf3Reader`; meshio was not used for XDMF.
+
+## Test files (added 2026-11-17, ADR 0685)
+
+Added by ADR 0685 (F-760), by reading the code and the git history; nothing above this section is changed. `crates/rcfd-io/tests/interchange.rs` (F-119, 2026-10-14, f6fa8721) says in its header that its checks were registered in this ADR before it was run (section 2: STL, Tecplot, Plot3D and XDMF round trips, malformed and hostile input). `crates/rcfd-post/tests/gltf.rs` (F-117, 2026-10-13, 49735b69) is the GLB export of coloured boundary surfaces whose container and structure check (`check_glb`) is the subject of section 4.

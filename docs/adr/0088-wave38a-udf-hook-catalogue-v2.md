@@ -191,3 +191,7 @@ writing it down; the first run had measured nothing (the module did not parse).
   `cargo test --workspace --release --no-fail-fast` was stopped by the host for low memory after 218 test binaries
   (1160 passed, 0 failed, 297 ignored at that point) and was not restarted. C9 itself passed in the scratch build
   (9 passed, 1 ignored in `udf_hooks_w38a.rs`). The last complete gate is the one of 70a9406 above.
+
+## Test files (added 2026-11-17, ADR 0685)
+
+Added by ADR 0685 (F-760), by reading the code and the git history; nothing above this section is changed. This ADR calls F-122 "ADR-less". `crates/rcfd-api/tests/udf.rs` (committed 2026-10-13 in f05fd7dc with `docs/udf-abi.md`) is its test file, the "F-122 tests `tests/udf.rs`" of the defaults check above: the constant and the curl-free momentum source, the viscosity and velocity-profile modules, the monitor, module isolation and the ABI checks, runaway and failing modules, and the case-level diagnostics.

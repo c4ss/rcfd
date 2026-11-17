@@ -349,3 +349,7 @@ S5 stays an ignored known miss. On Windows the runner also inherits the client's
 piped stdout reaches EOF only when the runner exits. ADR 0146 measured this (I1-I3) for null stdio, for files on all three
 handles and for an intermediate stage, and found no safe way around it on stable Rust. On Linux ADR 0146's C1 (S5's set-up with
 a 3 s limit) is met.
+
+## Test files (added 2026-11-17, ADR 0685)
+
+Added by ADR 0685 (F-760), by reading the code and the git history; nothing above this section is changed. This ADR names F-120 and F-121 (the run service rests on them). Their tests were committed on 2026-10-13 (643caf54, "workflow engine and headless run-control contract") without an ADR: `crates/rcfd-api/tests/workflow.rs` (the task-based workflow engine and the headless run methods of the service: template run end to end, stale tasks, failing tasks, the sandboxed workflow files, stop file, checkpoint and status file) and `crates/rcfd-assistant/tests/workflow_engine.rs` (the same engine driven through the assistant with the mock provider and the approval gate, and read back).

@@ -398,3 +398,7 @@ All numbers are from `cargo test --release --nocapture` on the final tree of thi
 * F-054 acceptance (a published-flame comparison) is NOT met: constant-density flow only, no compressible or variable-density
   species, no published reference verified. F-054 stays `partial`.
 * json.rs reads without silent defaults (a malformed `reversible`, `line` or Troe entry is an error; only a null fourth Troe entry means infinity).
+
+## Test files (added 2026-11-17, ADR 0685)
+
+Added by ADR 0685 (F-760), by reading the code and the git history; nothing above this section is changed. The species of this wave live in the constant-density incompressible solver of F-053 (committed 2026-10-13, e75d6470, without an ADR). Its mixing-layer tests are `crates/rcfd-fv/tests/species.rs` (three species with different diffusivities, the last closed by difference; conservation and the error-function similarity solution) and `crates/rcfd-api/tests/scalars.rs` (the same through the settings tree, and the diagnostics of invalid species settings); the convention of `scalars.rs` for stopping on a residual is already cited in the text above.
