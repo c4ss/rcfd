@@ -102,10 +102,13 @@ fn corner_jacobians(p: &[Vec3; 8]) -> [f64; 8] {
     out
 }
 
+/// A hex of the C or F block: `(block, a, b, k)`.
+type HexTag = (&'static str, usize, usize, usize);
+
 /// A1b: (positive, negative, zero) corner Jacobians over every C- and F-block hex, and the first hex with a corner of the minority
-/// sign or zero, as `(block, a, b, k)`.
-fn fold_count(m: &CGridMesh) -> (usize, usize, usize, Option<(&'static str, usize, usize, usize)>) {
-    let mut hexes: Vec<((&'static str, usize, usize, usize), [Vec3; 8])> = Vec::new();
+/// sign or zero.
+fn fold_count(m: &CGridMesh) -> (usize, usize, usize, Option<HexTag>) {
+    let mut hexes: Vec<(HexTag, [Vec3; 8])> = Vec::new();
     for k in 0..m.n_k {
         for j in 0..m.n_side() {
             for i in 0..m.n_i() {
