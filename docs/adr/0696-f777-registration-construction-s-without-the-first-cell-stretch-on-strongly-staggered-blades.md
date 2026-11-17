@@ -189,3 +189,118 @@ the file was met (numbers in addendum 1). By rule 2 the test `b2_construction_s_
 record `b2_construction_s_prime_meshes_the_second_blade_known_miss` with its limits intact, and one test is added,
 `b2_construction_s_prime_meshes_the_second_blade_met_limits`: the same code and limits for B2a to B2d and B2f, B2e printed only (the
 computation is deterministic; it is run once to confirm the numbers). The scan SC was run once as registered (`run_sc.log`).
+
+## Addendum 1: results (2026-11-17)
+
+One registered run of the new test file (`f777-scratch/run1.log`, release, `cargo test -p rcfd-mesh --release --test
+f777_cgrid_unstretched -- --nocapture --test-threads 2`: 9 passed, 1 failed, 1 ignored, 33 s), one registered run of the heavy scan
+(`run_sc.log`, `-- --ignored sc_the_scan`, 112 s), then after amendment 2 one run of the split file (`run2.log`: 10 passed, 2
+ignored; the numbers are those of run 1).
+
+| id | limit | measured | met |
+|---|---|---|---|
+| A1a | S' builds REF, cells > 0 | 12 841 cells, construction step 5 (the algebraic grid) | yes |
+| A1b | corner Jacobians of one sign, none zero; min volume > 0 | 100 096 of 100 096 negative (the layout's orientation), 0 zero; min volume 1.20e-13 m^3 | yes |
+| A1c | periodicity <= 1e-12 m | about 2e-17 m (printed 0.000000; the scan prints 1.5e-17 to 2.4e-17) | yes |
+| A2 | <= 85 deg | 84.688 deg (face between C (45, 2) and (45, 3), layer 3: the pressure side at the stack edge) | yes (seen before, MU4 of ADR 0692) |
+| A3 | <= 4.0 | 3.2404 (spanwise face between layers 8 and 9 of the wake-stack cell C (4, 1)) | yes (seen) |
+| A4 | <= 1000 | 525.6 (cell C (59, 9), layer 16, tip gap) | yes (seen) |
+| B2a | S' builds B2 | 12 841 cells, step 5; stations 68.8 / 74.4 / 76.6 deg, chord 0.0192 / 0.0348 / 0.0432 m | yes |
+| B2b | no folded cell | 100 096 of 100 096 negative, min volume 1.58e-13 m^3 | yes |
+| B2c | periodicity <= 1e-12 m | about 2e-17 m | yes |
+| B2d | <= 85 deg | 84.218 deg (C (45, 2) / (45, 3), layer 5) | yes |
+| B2e | <= 4.0 | **4.0112** (the same spanwise face as A3: C (4, 1) between layers 8 and 9) | **no** (record `b2_..._known_miss`) |
+| B2f | <= 1000 | 551.7 (C (59, 9), layer 16) | yes |
+| NR | dz <= 1e-12 m, ds <= 1e-9 m (absolute), every layer | both printed 0.000000 (at 1e-6 resolution; MU1 gives ds 2.77e-3 m, MU6 dz 2.3e-5 m, so the check resolves them) on 18 of 18 layers | yes |
+| NR2 | front edge one z, s increasing | 18 of 18 layers | yes |
+| A6 | ratio / growth within 1e-9 of 1 | printed 0.000000 (worst at layer 10, line 63) | yes |
+| NC-A6 | S off by more than 1 % somewhere | 8.06 (ratio 9.7 instead of 1.2, layer 10, line 45: the pressure side, `cos_t` about 0.11) | yes |
+| NC-NR | a moved nose seen (above 1e-6 m) | 1.05e-2 m | yes |
+| NC1' | H refuses B2 | refused, `front_gap`: "folded at layer 0 (r = 0.02150), C block around line 2, row 2 ..." | yes |
+| NC2' | S on B2 (reported; predicted builds, A2 or A3 missed) | 12 841 cells, step 5, **86.957 deg, skewness 7.013** (both at the stack edge of wake line 59, as on the reference), aspect 551.7 | as predicted |
+| SC | per blade at least 9 of 12 build fold-free and periodic | **REF 12 of 12, B2 12 of 12** (every combination at step 5) | yes |
+| SC (reported) | quality per combination | within 85 / 4.0 / 1000: REF 3 of 12 (front_gap 0.15 / n_nose 6, 0.3 / 4, 0.3 / 6), B2 0 of 12 (its skewness floor 4.0112 at every point). Non-orthogonality rises with front_gap (REF n_nose 6: 84.41, 84.69, 86.07, 87.44 deg at 0.15, 0.3, 0.6, 1.0) and with n_nose 9; the largest 88.34 deg / 6.12 (REF 1.0 / 9) and 88.16 deg / 8.42 (B2 1.0 / 9); aspect 480 to 820 | - |
+| SC0 | 24 of 24 inside the range | 24 of 24 | yes |
+| BS | S hash on REF equal to the base's | `0x0105a2fcca924d23` on the base copy and on the branch | yes |
+| B1 | the three `cgrid_w35d` b1 tests | pass (`b1_b3_w35d.log`) | yes |
+| B2h | `f726_cgrid_staggered` b2 (H hash) | pass (the whole non-ignored f726 file: 7 passed, 1 ignored, 26 s, `f726.log`) | yes |
+| B3 | named case tests | `cgrid_w35d` p1_p8, c1, control_range, r_g_out_of_range (with B1: 7 passed); `fan01_p10_w36d` c2 passed (rcfd-api); `fan_design_w46a` `s4_realised_default_meshes` passed; `f722_rom_reference_fan` (rcfd-post, the brief's "f722 test file") 6 passed, 1 ignored | yes |
+| B4 | `--lib` 77 passed, 2 ignored | 77 passed, 2 ignored | yes |
+| B5 | baseline_hashes | 3 passed, 1 ignored | yes |
+
+Also run: `cargo test -p rcfd-cli --release --test docs_site` (2 passed, with this ADR and the `docs/meshing.md` paragraph);
+`cargo fmt -p rcfd-mesh --check` clean; `cargo clippy -p rcfd-mesh --all-targets -- -D warnings` clean. The new test file takes
+about 31 s in release (the scan record about 112 s on three threads).
+
+### Diagnosis of the B2e miss (after the run; one diagnosis run, `f777-scratch/diag_b2e.log`, never committed; not a check)
+
+- The maximum is a **spanwise** face inside the lower wake stack near the outlet: the face between the cells C (4, 1) of layers 8
+  and 9 (radii 0.05789 to 0.05795 and 0.05795 to 0.05800 m, the two thin span layers below the tip); its mirror on the upper wake
+  line 59 and the row-0 face are within 1 % of it (B2: 4.0112, 4.0000, 3.9899, 3.9787; REF: 3.2404 to 3.2054).
+- Both cells are stack cells (rows 0 to 2 are inside the wake stack, `nb` = 2), so the first-cell rule of this item does not touch
+  them: the face has the same skewness under S and S' (3.2404 on REF, 4.0112 on B2 in both), and the same value at every one of
+  the 12 scan points of each blade (it does not depend on front_gap or n_nose).
+- Mechanism (from the printed node positions): the wake-stack nodes of line 4 move pitchwise by about 4e-5 m (`r theta`) per
+  span layer (B2: -0.067523, -0.067563, -0.067597 m at layers 8, 9, 10) while the layers are 5e-5 to 6e-5 m apart, so the
+  stack cells lean by about 34 deg against the radial direction across layers that are as thin as the stack cells themselves.
+  The pitchwise drift of the wake with radius grows with the chord (the wake offset `s_inf - s_te = sigma0 0.2 c` and the
+  trailing-edge position both scale with it), so B2's +20 % chord takes the reference's 3.24 to 4.01 (ratio 1.24). This is a
+  property of the wake stacks of H and S at thin end-wall layers, not of the stretch.
+
+### Mutations (`f777-scratch/mut`, `mutate.py`, logs `mut_MU*.log`; each run once against the new tests, B1 and B2h)
+
+| id | mutation | caught by |
+|---|---|---|
+| MU1 | ADR 0692 MU1 (axial turn kept upstream of the leading edge under `camber_front`) | **NR** (ds 2.77e-3 m against 1e-9; predicted 2.9e-3), also BS and B2d (85.85 deg) |
+| MU2 | the new field ignored (the stretch kept) | A6 (8.06), A2 / A3 on REF (86.97 / 7.43, ADR 0692's numbers), B2d (86.96) |
+| MU3 | the stretch removed for S too | BS, NC-A6 |
+| MU4 | first cell `0.5 d1 g^nb` under the new field | A6 (0.5), and A2 on REF (86.35) and B2 (85.94) |
+| MU5 | `lam_u` `/ 3` -> `/ 2.9` on the default path | B1 (`b1_construction_g_is_bit_identical`, `b1_construction_h_is_bit_identical`), B2h; the new tests pass (S' does not use `lam_u`) |
+| MU6 | `z_f` with `1.01 front_gap` | NR (dz 2.3e-5 m, ds 1.05e-4 m), BS |
+
+Six of six caught; the nose region (ADR 0692 MU1, which survived there) is now caught by NR.
+
+### Deviations
+
+- Amendment 2 (the B2 test split after the miss). No development build; the BS base hash computed on a reduced test file in the
+  base copy (amendment 1). The B2 skewness estimate (3 +- 1) held, but the value lies 0.3 % above the limit.
+- Nothing else.
+
+### Not run
+
+The ignored records of `cgrid_w35d`, `f726_cgrid_staggered` and `f722_rom_reference_fan` (records); the whole `rcfd-mesh`
+integration suite and the workspace (the daily gate); flow solves on S' meshes; a scan of `n_side`, `n_chord` or `n_span`.
+
+### Decision by the registered rule
+
+**partial.** BS and B1 to B5 are met (camber_seam_h and camber_seam_s unchanged in bits, every named existing test passes), and S'
+builds both blades fold-free and periodic (A1a to A1c, B2a to B2c). Also met: the reference within 85 deg / 4.0 / 1000 (84.69 deg /
+3.24 / 525.6, a number seen before), B2's non-orthogonality of 84.22 deg and aspect of 551.7, the nose-region check NR / NR2 (which now
+catches ADR 0692's MU1), the stack-growth check A6, and the scan (24 of 24 build). **Missed: B2e**, the second blade's skewness of 4.0112
+against 4.0, at a spanwise face of the wake stack between the two thin layers below the tip. The first-cell rule does not
+touch that face (diagnosis above). Clause c4 is therefore not met.
+
+### Remaining questions (each with options and a recommendation)
+
+1. **The spanwise skewness of the wake stacks at the thin end-wall layers (B2e).** Options: (a) a follow-up that builds the wake
+   stack nodes of the thin end-wall layers so that they drift pitchwise with the far grid (e.g. the wake-stack positions taken
+   from the `radial_remap` grid and blended to the true section only at the trailing edge), registered on REF and B2 with the
+   same limits; (b) accept 4.0112 (0.3 % above the repository's skewness warning threshold); (c) a skewness limit per face type.
+   Recommendation: (a). It touches only the wake stacks of S' (a new opt-in), and the measured faces give its target.
+2. **The non-orthogonality of the scan at larger front_gap and at n_nose 9** (up to 88.3 deg; 3 of 12 and 0 of 12 within the
+   limits). Not a gate here; the location was not printed. Options: (a) a follow-up that locates and registers it; (b) document
+   the S' quality range as front_gap <= 0.3 with n_nose <= 6. Recommendation: (b) now (done in `docs/meshing.md`), (a) only when
+   a case asks for a larger front gap.
+3. **The wall-normal growth jump on the blade sides** (the first free cell `cos_t` times the continued stack height, about 0.2 at
+   the tip): not measured by the three limits. Recommendation: leave it unless a flow solve (y+ or wall-function check) asks for
+   it.
+4. **A case value for S'** needs a schema enum value and the schema golden (rule 6): open for the maintainer, together with F-778
+   (the ADR 0692 case-value follow-up), best after question 1.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial
+
+> Follow-up of F-726 (ADR 0692 question 1). ADR 0696, 2026-11-17. PARTIAL (the second blade's skewness missed by 0.3 %). New opt-in construction S' = CGridOptions::camber_seam_s_unstretched_construction() = camber_seam_s + unstretched_first_cell (the first free cell of every straight line is the next stack height d1 g^nb, no 1/cos stretch; derived: the stretch continues the wall-normal growth only where neighbouring lines have nearly the same cosine, which fails in the turning wake and around the nose); no case value. At the ADR 0118 s4 specs: ComputerFan::rom_reference() blade 0 builds with no folded cell, periodic, 84.69 deg / skewness 3.24 / aspect 525.6 within 85 / 4.0 / 1000 (numbers seen before as ADR 0692 mutation MU4, disclosed); a second blade (the reference with the per-blade deviation stagger -1 deg, chord +20 %, outer stagger 76.6 deg) builds fold-free and periodic with 84.22 deg and aspect 551.7 but skewness 4.0112 against 4.0 (MISSED), at a spanwise face of the lower wake stack between the two thin layers below the tip, which the first-cell rule does not touch (same value under S; the reference's 3.24 maximum is the same face, growing with the chord). A front_gap 0.15 to 1.0 x n_nose 4 / 6 / 9 scan inside the camber_seam range builds 12 of 12 on each blade fold-free and periodic (limit 9 of 12); within the quality limits 3 of 12 and 0 of 12 (non-orthogonality rises with front_gap, up to 88.3 deg). New checks: the nose target on the extended camber line to 1e-9 m in every layer (catches ADR 0692's surviving MU1) and the first free cell equal to the next stack term to 1e-9. camber_seam_h and camber_seam_s unchanged in bits (cgrid_w35d B1 hashes, the ADR 0692 default-fan H hash, the S hash of the reference against the base); the ADR 0079 / 0083 case tests, f722, fan01_p10_w36d c2, fan_design_w46a s4, --lib and baseline_hashes pass. Six of six mutations caught.
+
+> Follow-up proposed: wake stacks of construction S' at the thin end-wall layers. Deps F-777. Acceptance: Every limit not stated here is registered in the ADR before the run. A new opt-in field of S' builds the wake-stack nodes of the thin end-wall layers so that the spanwise faces of the wake stack meet skewness 4.0 on ComputerFan::rom_reference() blade 0 and on the ADR 0696 second blade at the ADR 0118 s4 specs (the measured 3.24 and 4.0112 of ADR 0696 disclosed), with no folded cell within 85 deg non-orthogonality and aspect 1000 on both, and camber_seam_h, camber_seam_s and camber_seam_s_unstretched unchanged in bits.

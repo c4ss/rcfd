@@ -397,6 +397,17 @@ the same blade gives 85.37 deg / 16.7 / 827. Inherent to the seam topology (a se
 same chord station on both sides): a non-orthogonality floor of about the stagger, 77.6 deg at the reference tip. S also builds
 the default `ComputerFan` (82.9 deg / 2.54 / 193, where H gives 87.9 deg), blade B (S counts) and FAN-01-C; H is unchanged.
 
+**Construction S' (ADR 0696, library only: `CGridOptions::camber_seam_s_unstretched_construction()`).** S with
+`unstretched_first_cell`: the first free cell of every straight line is the next stack height `h1 g^nb` along the segment, so the
+first free row continues the stack's geometric series on every line (a check on the algebraic grid finds the ratio to the last
+stack cell equal to the growth to 1e-9; under S it is off by up to 8 times). Cost: on the blade sides, where the segments run at
+about `90 - stagger` from the wall, the wall-normal height of the first free cell drops to about `cos(stagger)` of the continued
+stack. At the s4 specs: the reference 84.69 deg / 3.24 / 525.6 (within 85 / 4.0 / 1000); a second blade (the reference with
+-1 deg stagger and +20 % chord per blade, outer stagger 76.6 deg) 84.22 deg / aspect 551.7 but skewness 4.011 against 4.0 (MISSED,
+at a spanwise face of the lower wake stack between the two layers below the tip, the same face as the reference's 3.24 maximum).
+A scan of `front_gap` 0.15 to 1.0 and `n_nose` 4 to 9 builds all 24 combinations of both blades fold-free and periodic; the quality
+limits hold on 3 of 12 (reference) and 0 of 12 (second blade): non-orthogonality grows with `front_gap` (to 88.3 deg at 1.0).
+
 ## Where to go next
 
 * [mesh-quality.md](mesh-quality.md): the quality report, its measures and the library mesh editing operations.
