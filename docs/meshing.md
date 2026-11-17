@@ -419,6 +419,15 @@ per layer and the wake stack is almost a radial extrusion there. At the s4 specs
 second blade 84.47 deg / 2.83 / 551.7, and the largest wake-stack spanwise skewness is 0.24 / 0.26. The non-orthogonality maximum
 moved to the cell next to the trailing-edge line at the start of the weight ramp (layer 3), 0.05 deg below 85 on the reference.
 
+**Construction S''' (ADR 0702, library only: `CGridOptions::camber_seam_s_wake_ramp_construction()`).** S'' with
+`wake_ramp_from_spacing`: the weight of the wake-stack remap rises with a smooth step over a length `L` along the wake instead of
+over a fixed count of wake lines. `L = 1.5 D / tan(1 deg)`, where `D` is the largest shift the remap makes to a wake-stack node in
+the span layers. The smooth step's slope is at most 1.5, so the ramp turns an in-plane edge of a wake cell by at most 1 deg,
+however short the cell. The ramp starts flat, so the shortest cell at the trailing edge gets a weight of about 0.003. S''
+jumped by 0.5 across that cell. At the s4 specs `L` is 7.0e-3 m (reference) and 7.7e-3 m (second blade). The first wake cell's
+face is back within 0.01 deg of S' (84.40 / 83.56 deg), the wake-stack spanwise skewness is 0.42 / 0.38, and the second blade's
+maximum is 84.22 deg. The reference's maximum stays at 84.69 deg on a blade line the ramp does not touch (layer 3, line 45).
+
 ## Where to go next
 
 * [mesh-quality.md](mesh-quality.md): the quality report, its measures and the library mesh editing operations.
