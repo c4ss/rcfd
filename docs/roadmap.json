@@ -8153,6 +8153,6 @@
     ],
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The tabulated path of the isotropic hinged cylindrical roof of Sze, Liu and Lo (2004) for t = 6.35 recorded in docs/reference-data.md from the paper; the Shell4 and Shell3 quarter models traced by arc length through its limit points and its snap-back, the two limit loads within 2 percent of the tabulated values and the deflection of the rising branch at the tabulated loads within a registered limit.",
-    "note": "Follow-up of F-610 (ADR 0716, 2026-11-16)."
+    "note": "Follow-up of F-610 (ADR 0716, 2026-11-16). HELD (2026-11-17): needs the 6.35 table of Sze, Liu and Lo (2004); the host refuses curl/WebFetch (403), and F-610 read it through the maintainer's Chrome. Ask the maintainer before another agent uses the browser, or have the maintainer save the PDF locally."
   }
 ]
