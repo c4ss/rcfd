@@ -26,6 +26,10 @@ ADRs 0653, 0679 and 0684 left out. The library call `build()` keeps rule P unles
 its primary from the first git commit that adds its file (renames followed): the first `ADR dddd` of the commit subject, else the
 registration ADR of the first `F-ddd` of the subject, and only when that ADR is one of the test's `adrs`; else no primary. On a
 shallow clone, outside a git repository or when git fails, those tests have no primary; `coverage.primary.git` says which.
+`--primary git` also applies rule H (ADR 0701): H0, a leading comment block with no `ADR dddd` but a `docs/adr/dddd-....md` path gives E0;
+H1 to H3, a file-citation-only test that rule G left without a primary takes the first ADR (tier, then number) with a registering unit
+that cites its file: H1 a unit in a `## Test files (added <date>, ADR dddd)` section, H2 a unit that says `without an ADR`, `ADR-less`
+or `no ADR describes ...`, H3 a table row with the file in one cell and a limit in another. `coverage.primary.retro` counts them.
 """
 import argparse
 import json
@@ -46,6 +50,10 @@ E7_MAX_ADRS, E7_MIN_LEN = 3, 10
 TIERS = ("E0", "E1", "E6", "E2", "E3", "E7", "E5", "E4")  # rule P of ADR 0679 (`--primary p0679`)
 REGISTERED_TIERS = ("E0", "E1", "E6", "E2")  # rule R of ADR 0684: the evidence that registers or first describes a file
 LISTING_ADRS = {"0653", "0679", "0684"}  # ADRs that list binaries or sample files: no E2 evidence for the primary (ADR 0684)
+RETRO_EXCLUDED = LISTING_ADRS | {"0690", "0701"}  # ADRs whose tables quote sample files: no source of rule H (ADR 0701)
+RETRO_SECTION = re.compile(r"^#{2,3}\s+Test files \(added \d{4}-\d{2}-\d{2}, ADR \d{4}\)\s*$")
+RETRO_PHRASE = re.compile(r"without an ADR|ADR-less|had no ADR|no ADR (?:describes|registers|registered|states|names|covers)", re.I)
+RETRO_LIMIT = re.compile(r"\d+(?:\.\d+)?\s*%|\d\.\d|[<>]=?\s*\d")
 WORD = re.compile(r"\b[A-Za-z_]\w*\b")
 ADR_IN_SUBJECT = re.compile(r"\bADRs? (\d{4})\b")
 ITEM_IN_SUBJECT = re.compile(r"\bF-(\d{2,4})\b")
@@ -56,11 +64,15 @@ def item_id(n):
     return f"F-{int(n):03d}"
 
 
-def header_adr(path, known, cache={}):
+HEADER_ADR_PATH = re.compile(r"\bdocs/adr/(\d{4})-[\w.-]+\.md")
+
+
+def header_adr(path, known, cache={}, by_path=False):
     """E0 (ADR 0679 amendment 1): the first `ADR NNNN` of the leading comment block of a Rust file (lines before the first line of
-    code), when that ADR exists and is not one of the ADRs that list test binaries."""
-    if path not in cache:
-        found = None
+    code), when that ADR exists and is not one of the ADRs that list test binaries. With `by_path` (ADR 0701 rule H0), a block without
+    an `ADR NNNN` falls back to the first `docs/adr/NNNN-....md` path of the block."""
+    if (path, by_path) not in cache:
+        found = via_path = None
         try:
             with open(path, encoding="utf-8", errors="replace") as fh:
                 for ln in fh:
@@ -71,10 +83,14 @@ def header_adr(path, known, cache={}):
                     if m:
                         found = m.group(1)
                         break
+                    if by_path and via_path is None:
+                        m = HEADER_ADR_PATH.search(st)
+                        if m:
+                            via_path = m.group(1)
         except OSError:
             pass
-        cache[path] = found
-    n = cache[path]
+        cache[(path, by_path)] = found or via_path
+    n = cache[(path, by_path)]
     return n if n in known and n not in NOT_EVIDENCE else None
 
 
@@ -258,6 +274,52 @@ class Text:
         self.words = set(WORD.findall(text))
 
 
+def retro_units(text):
+    """Rule H of ADR 0701: the registering units of one ADR text as (tier, keys): tier 1 a unit inside a `Test files (added ..., ADR dddd)`
+    section, 2 a paragraph or table row with a `without an ADR` phrase, 3 a table row that cites the file in one cell and has a limit in
+    another. keys are the .rs file keys the unit cites (rs_keys). A paragraph is the lines up to a blank line, a heading or a table row."""
+    out, para, in_section = [], [], False
+
+    def flush():
+        if para:
+            unit = " ".join(para)
+            keys = rs_keys(unit)
+            if keys:
+                if in_section:
+                    out.append((1, keys))
+                if RETRO_PHRASE.search(unit):
+                    out.append((2, keys))
+            para.clear()
+
+    for ln in text.splitlines():
+        st = ln.strip()
+        if st.startswith("#"):
+            flush()
+            if re.match(r"#{1,2}\s", st):
+                in_section = False
+            if RETRO_SECTION.match(st):
+                in_section = True
+        elif st.startswith("|"):
+            flush()
+            keys = rs_keys(st)
+            if keys:
+                if in_section:
+                    out.append((1, keys))
+                if RETRO_PHRASE.search(st):
+                    out.append((2, keys))
+                cells = st.strip("|").split("|")
+                for i, c in enumerate(cells):
+                    ck = rs_keys(c)
+                    if ck and any(RETRO_LIMIT.search(d) for j, d in enumerate(cells) if j != i):
+                        out.append((3, ck))
+        elif not st:
+            flush()
+        else:
+            para.append(st)
+    flush()
+    return out
+
+
 def load_docs(root):
     adr_dir = os.path.join(root, "docs", "adr")
     adrs = {}
@@ -267,7 +329,7 @@ def load_docs(root):
             continue
         text = open(os.path.join(adr_dir, fn), encoding="utf-8", errors="replace").read()
         items = sorted({item_id(x) for x in re.findall(r"f(\d+)", m.group(2))})
-        adrs.setdefault(m.group(1), {"files": [], "items": set(), "text": [], "waves": set()})
+        adrs.setdefault(m.group(1), {"files": [], "items": set(), "text": [], "waves": set(), "retro": []})
         a = adrs[m.group(1)]
         wm = WAVE_ADR.match(fn)
         if wm:
@@ -275,6 +337,8 @@ def load_docs(root):
         a["files"].append("docs/adr/" + fn)
         a["items"].update(items)
         a["text"].append(text)
+        if m.group(1) not in RETRO_EXCLUDED:
+            a["retro"].extend(retro_units(text))
     for a in adrs.values():
         a["cite"] = Text("\n".join(a.pop("text")))
     roadmap = {}
@@ -418,7 +482,10 @@ def rel(root, p):
     return os.path.relpath(p, root).replace("\\", "/")
 
 
-def build(root, meta, primary_rule="p0679"):
+def build(root, meta, primary_rule="p0679", retro=None):
+    """`retro` (ADR 0701): the header path as E0 (H0) and the retro-registration units (H1 to H3). Default on for rule `git`, off
+    otherwise; it has no effect on another rule."""
+    retro = (primary_rule == "git") if retro is None else (retro and primary_rule == "git")
     adrs, roadmap, item_adrs, adr_items = load_docs(root)
     ws_root = meta.get("workspace_root", root)
     pkgs = meta["packages"]
@@ -476,7 +543,7 @@ def build(root, meta, primary_rule="p0679"):
         for s in {stem, os.path.splitext(os.path.basename(binaries[t["binary"]][0]["file"]))[0]}:
             for it in items_in_stem(s):
                 ev.append({"kind": "E1", "item": it, "from": s})
-        h0 = header_adr(os.path.join(ws_root, t["file"]), adrs)
+        h0 = header_adr(os.path.join(ws_root, t["file"]), adrs, by_path=retro)
         if h0:
             ev.append({"kind": "E0", "adr": h0})
         fk = file_keys(t)
@@ -533,6 +600,7 @@ def build(root, meta, primary_rule="p0679"):
         reg = registration_adrs(adrs)
         gstat = {"history": state, "e2_tests": 0, "from_git": 0, "no_commit_rule": 0, "not_in_adrs": 0, "no_origin": 0,
                  "git_calls": calls}
+        e2_null = []
         for t in tests:
             if t["primary_evidence"] != "E2":
                 continue
@@ -545,7 +613,10 @@ def build(root, meta, primary_rule="p0679"):
                 t["primary_adr"] = cand
             else:
                 t["primary_adr"], t["primary_evidence"] = None, None
+                e2_null.append(t)
             gstat[why] += 1
+        if retro:
+            rstat = retro_primaries(adrs, e2_null, file_keys)
 
     by_adr, by_primary = {}, {}
     for t in tests:
@@ -578,7 +649,35 @@ def build(root, meta, primary_rule="p0679"):
     idx["coverage"]["primary"] = {"with_primary": sum(pe.values()), "by_evidence": dict(sorted(pe.items()))}
     if gstat:
         idx["coverage"]["primary"]["git"] = gstat
+        if retro:
+            idx["coverage"]["primary"]["retro"] = rstat
     return idx
+
+
+def retro_primaries(adrs, tests, file_keys):
+    """Rule H1 to H3 of ADR 0701 for the E2-only tests that rule G left without a primary: the first ADR, by tier then by number, with a
+    registering unit that cites the test's file. Sets `primary_adr` (evidence stays E2); returns the counts."""
+    by_key = {}
+    for n, a in adrs.items():
+        for tier, keys in a["retro"]:
+            for k in keys:
+                by_key.setdefault(k, set()).add((tier, n))
+    stat = {"h1": 0, "h2": 0, "h3": 0, "none": 0, "files": {}}
+    found = {}
+    for t in tests:
+        if t["file"] not in found:
+            cands = set()
+            for k in file_keys(t):
+                cands |= by_key.get(k, set())
+            found[t["file"]] = min(cands) if cands else None
+        best = found[t["file"]]
+        if best is None or best[1] not in t["adrs"]:
+            stat["none"] += 1
+            continue
+        t["primary_adr"], t["primary_evidence"] = best[1], "E2"
+        stat["h%d" % best[0]] += 1
+        stat["files"][t["file"]] = [best[0], best[1]]
+    return stat
 
 
 def coverage(idx):
@@ -661,6 +760,10 @@ def main(argv=None):
         print(f"primary ADR: {c['primary']['with_primary']} tests {c['primary']['by_evidence']}")
         if "git" in c["primary"]:
             print(f"primary from git: {c['primary']['git']}")
+        if "retro" in c["primary"]:
+            r = c["primary"]["retro"]
+            print(f"primary from retro rule H (ADR 0701): tests h1 {r['h1']}, h2 {r['h2']}, h3 {r['h3']}, none {r['none']}; "
+                  f"{len(r['files'])} files")
         print(f"unmapped binaries ({len(c['unmapped_binaries'])}):")
         for u in c["unmapped_binaries"]:
             print("  " + u)
